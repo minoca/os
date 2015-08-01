@@ -763,14 +763,14 @@ Return Value:
     ASSERT(BlockOffset < Child->BlockCount);
     ASSERT(BlockCount >= 1);
 
-    SdBlockIoDma(Child->Controller,
-                 BlockOffset,
-                 BlockCount,
-                 IoBuffer,
-                 0,
-                 Write,
-                 SdOmap4DmaCompletion,
-                 Child);
+    SdStandardBlockIoDma(Child->Controller,
+                         BlockOffset,
+                         BlockCount,
+                         IoBuffer,
+                         0,
+                         Write,
+                         SdOmap4DmaCompletion,
+                         Child);
 
     //
     // DMA transfers are self perpetuating, so after kicking off this
@@ -1321,8 +1321,8 @@ Return Value:
 
     if (Device->Controller == NULL) {
         RtlZeroMemory(&Parameters, sizeof(SD_INITIALIZATION_BLOCK));
-        Parameters.ControllerBase = Device->ControllerBase +
-                                    SD_OMAP4_CONTROLLER_SD_REGISTER_OFFSET;
+        Parameters.StandardControllerBase =
+               Device->ControllerBase + SD_OMAP4_CONTROLLER_SD_REGISTER_OFFSET;
 
         Parameters.Voltages = SD_VOLTAGE_29_30 |
                               SD_VOLTAGE_30_31 |
@@ -1357,7 +1357,7 @@ Return Value:
             goto StartDeviceEnd;
         }
 
-        SdSetInterruptHandle(Device->Controller, Device->InterruptHandle);
+        Device->Controller->InterruptHandle = Device->InterruptHandle;
     }
 
     Status = STATUS_SUCCESS;
@@ -1487,7 +1487,7 @@ Return Value:
         // Try to enable DMA, but it's okay if it doesn't succeed.
         //
 
-        Status = SdInitializeDma(Device->Controller);
+        Status = SdStandardInitializeDma(Device->Controller);
         if (KSUCCESS(Status)) {
             NewChild->Flags |= SD_OMAP4_CHILD_FLAG_DMA_SUPPORTED;
 
@@ -1761,8 +1761,7 @@ Return Value:
         return Status;
     }
 
-    Status = STATUS_SUCCESS;
-    return Status;
+    return STATUS_SUCCESS;
 }
 
 INTERRUPT_STATUS
@@ -1793,7 +1792,7 @@ Return Value:
     PSD_OMAP4_CONTEXT Device;
 
     Device = Context;
-    return SdInterruptService(Device->Controller);
+    return SdStandardInterruptService(Device->Controller);
 }
 
 VOID
@@ -1875,14 +1874,14 @@ Return Value:
         Write = TRUE;
     }
 
-    SdBlockIoDma(Child->Controller,
-                 BlockOffset,
-                 BlockCount,
-                 Irp->U.ReadWrite.IoBuffer,
-                 Irp->U.ReadWrite.IoBytesCompleted,
-                 Write,
-                 SdOmap4DmaCompletion,
-                 Child);
+    SdStandardBlockIoDma(Child->Controller,
+                         BlockOffset,
+                         BlockCount,
+                         Irp->U.ReadWrite.IoBuffer,
+                         Irp->U.ReadWrite.IoBytesCompleted,
+                         Write,
+                         SdOmap4DmaCompletion,
+                         Child);
 
     return;
 }

@@ -28,6 +28,13 @@ if test -z "$TASKDIR"; then
 fi
 
 . $TASKDIR/images/add_common.sh
+
+DRIVERS="$DRIVERS
+sdrk32xx.drv"
+
+BOOT_DRIVERS="$BOOT_DRIVERS
+sdrk32xx.drv"
+
 . $TASKDIR/images/assemble_common.sh
 . $TASKDIR/images/assemble_efi.sh
 

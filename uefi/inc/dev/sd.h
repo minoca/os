@@ -488,7 +488,7 @@ Structure Description:
 
 Members:
 
-    Initialize - Store a pointer to a function used to initialize the
+    InitializeController - Store a pointer to a function used to initialize the
         controller.
 
     ResetController - Stores a pointer to a function used to reset the
@@ -615,8 +615,8 @@ Members:
 
 typedef struct _EFI_SD_INITIALIZATION_BLOCK {
     VOID *StandardControllerBase;
-    VOID *ConsumerContext;
     PSD_FUNCTION_TABLE OverrideFunctionTable;
+    VOID *ConsumerContext;
     PSD_GET_CARD_DETECT_STATUS GetCardDetectStatus;
     PSD_GET_WRITE_PROTECT_STATUS GetWriteProtectStatus;
     UINT32 Voltages;

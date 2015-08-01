@@ -866,7 +866,7 @@ Return Value:
     Slot = &(Bus->Slot);
     Status = InterruptStatusNotClaimed;
     if (Slot->Controller != NULL) {
-        Status = SdInterruptService(Slot->Controller);
+        Status = SdStandardInterruptService(Slot->Controller);
     }
 
     return Status;
@@ -1429,7 +1429,7 @@ Return Value:
 
         RtlZeroMemory(&Parameters, sizeof(SD_INITIALIZATION_BLOCK));
         Parameters.ConsumerContext = Slot;
-        Parameters.ControllerBase = Slot->ControllerBase;
+        Parameters.StandardControllerBase = Slot->ControllerBase;
         Parameters.Voltages = SD_VOLTAGE_32_33 |
                               SD_VOLTAGE_33_34 |
                               SD_VOLTAGE_165_195;
@@ -1447,11 +1447,7 @@ Return Value:
             goto StartDeviceEnd;
         }
 
-        //
-        // Initialization may trigger an interrupt, so set the handler first.
-        //
-
-        SdSetInterruptHandle(Slot->Controller, Slot->Parent->InterruptHandle);
+        Slot->Controller->InterruptHandle = Slot->Parent->InterruptHandle;
     }
 
     Status = STATUS_SUCCESS;

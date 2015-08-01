@@ -182,9 +182,10 @@ EfipSdRk32FlushBlocks (
     EFI_BLOCK_IO_PROTOCOL *This
     );
 
-UINT32
+EFI_STATUS
 EfipSdRk32GetFundamentalClock (
-    PEFI_SD_RK32_CONTEXT Device
+    PEFI_SD_RK32_CONTEXT Device,
+    UINT32 *FundamentalClock
     );
 
 //
@@ -314,7 +315,10 @@ Return Value:
 
     DevicePath->Disk.ControllerBase = ControllerBase;
     Disk->DevicePath = (EFI_DEVICE_PATH_PROTOCOL *)DevicePath;
-    Disk->FundamentalClock = EfipSdRk32GetFundamentalClock(Disk);
+    Status = EfipSdRk32GetFundamentalClock(Disk, &(Disk->FundamentalClock));
+    if (EFI_ERROR(Status)) {
+        goto VeyronEnumerateSdEnd;
+    }
 
     //
     // Create the SD controller.
@@ -611,9 +615,10 @@ Return Value:
     return EFI_SUCCESS;
 }
 
-UINT32
+EFI_STATUS
 EfipSdRk32GetFundamentalClock (
-    PEFI_SD_RK32_CONTEXT Device
+    PEFI_SD_RK32_CONTEXT Device,
+    UINT32 *FundamentalClock
     )
 
 /*++
@@ -627,9 +632,12 @@ Arguments:
 
     Device - Supplies a pointer to this SD RK32 device.
 
+    FundamentalClock - Supplies a pointer that receives the frequency of the
+        fundamental clock, in Hertz.
+
 Return Value:
 
-    Returns the value of the fundamental clock frequency in Hertz.
+    Status code.
 
 --*/
 
@@ -758,7 +766,7 @@ Return Value:
     // by the divisor.
     //
 
-    Frequency /= Divisor;
-    return Frequency;
+    *FundamentalClock = Frequency / Divisor;
+    return EFI_SUCCESS;
 }
 

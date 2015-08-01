@@ -8,11 +8,11 @@ Module Name:
 
 Abstract:
 
-    This header contains definitions for the Rockchip 32xx ARMv7 SoC.
+    This header contains definitions for the Rockchip 32xx SoC.
 
 Author:
 
-    Evan Green 9-Jul-2015
+    Chris Stevens 30-Jul-2015
 
 --*/
 
@@ -37,57 +37,16 @@ Author:
 //
 
 //
-// Define the RK3288 register base map.
+// Define the signature of the RK32xx ACPI table: Rk32
 //
 
-#define RK32_SD_BASE 0xFF0C0000
-#define RK32_TIMER0_5_BASE 0xFF6B0000
-#define RK32_UART_DEBUG_BASE 0xFF690000
-#define RK32_SRAM_BASE 0xFF700000
-#define RK32_PMU_BASE 0xFF730000
-#define RK32_CRU_BASE 0xFF760000
-#define RK32_GRF_BASE 0xFF770000
-#define RK32_GPIO7_BASE 0xFF7E0000
-#define RK32_WATCHDOG_BASE 0xFF800000
-#define RK32_TIMER6_7_BASE 0xFF810000
-#define RK32_VOP_BIG_BASE 0xFF930000
-#define RK32_VOP_LITTLE_BASE 0xFF940000
-#define RK32_GIC_DISTRIBUTOR_BASE 0xFFC01000
-#define RK32_GIC_CPU_INTERFACE_BASE 0xFFC02000
+#define RK32XX_SIGNATURE 0x32336B52 // '23kR'
 
 //
-// Define the RK3288 interrupt map.
+// Define the number of timers in the SoC.
 //
 
-#define RK32_INTERRUPT_USBOTG 55
-#define RK32_INTERRUPT_EHCI   56
-#define RK32_INTERRUPT_SDMMC  64
-#define RK32_INTERRUPT_EMMC   67
-#define RK32_INTERRUPT_OHCI   73
-#define RK32_INTERRUPT_TIMER0 98
-#define RK32_INTERRUPT_TIMER1 99
-#define RK32_INTERRUPT_TIMER2 100
-#define RK32_INTERRUPT_TIMER3 101
-#define RK32_INTERRUPT_TIMER4 102
-#define RK32_INTERRUPT_TIMER5 103
-#define RK32_INTERRUPT_TIMER6 104
-#define RK32_INTERRUPT_TIMER7 105
-
-#define RK32_CRU_SIZE 0x1000
-
-//
-// Define the RK32 watchdog range.
-//
-
-#define RK32_WATCHDOG_MIN 0x0000FFFF
-#define RK32_WATCHDOG_MAX 0x7FFFFFFF
-
-//
-// Define timer parameters.
-//
-
-#define RK32_TIMER_FREQUENCY 24000000
-#define RK32_TIMER_REGISTER_STRIDE 0x00000020
+#define RK32_TIMER_COUNT 8
 
 //
 // Define the CRU codec PLL control 0 register bits.
@@ -172,23 +131,6 @@ Author:
 #define RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_SHIFT      0
 
 //
-// Define CRU global reset values.
-//
-
-#define RK32_GLOBAL_RESET1_VALUE 0x0000FDB9
-#define RK32_GLOBAL_RESET2_VALUE 0x0000ECA8
-
-//
-// Define CRU soft reset 0 register bits.
-//
-
-#define RK32_CRU_SOFT_RESET0_PROTECT_SHIFT 16
-#define RK32_CRU_SOFT_RESET0_CORE0 0x00000001
-#define RK32_CRU_SOFT_RESET0_CORE1 0x00000002
-#define RK32_CRU_SOFT_RESET0_CORE2 0x00000004
-#define RK32_CRU_SOFT_RESET0_CORE3 0x00000008
-
-//
 // Define CRU soft reset 8 register bits.
 //
 
@@ -196,97 +138,10 @@ Author:
 #define RK32_CRU_SOFT_RESET8_MMC0 0x00000001
 
 //
-// Define PMU power down control register bits.
-//
-
-#define RK32_PMU_POWER_DOWN_CONTROL_A17_0 0x00000001
-#define RK32_PMU_POWER_DOWN_CONTROL_A17_1 0x00000002
-#define RK32_PMU_POWER_DOWN_CONTROL_A17_2 0x00000004
-#define RK32_PMU_POWER_DOWN_CONTROL_A17_3 0x00000008
-
-//
-// Define PMU power down status register bits.
-//
-
-#define RK32_PMU_POWER_DOWN_STATUS_A17_0 0x00000001
-#define RK32_PMU_POWER_DOWN_STATUS_A17_1 0x00000002
-#define RK32_PMU_POWER_DOWN_STATUS_A17_2 0x00000004
-#define RK32_PMU_POWER_DOWN_STATUS_A17_3 0x00000008
-
-//
-// Define GRF I/O Vsel register bits.
-//
-
-#define RK32_GRF_IO_VSEL_LCD_V18 0x00000001
-#define RK32_GRF_IO_VSEL_PROTECT_SHIFT 16
-
-//
 // Define the GRF GPIO6C IOMUX value for SD/MMC.
 //
 
 #define RK32_GRF_GPIO6C_IOMUX_VALUE 0x2AAA1555
-
-//
-// Define the GRF GPIO7CH IOMUX initialization values.
-//
-
-#define RK32_GRF_GPIO7CH_IOMUX_VALUE 0x33001100
-
-//
-// Define LCD system control register bits.
-//
-
-#define RK32_LCD_SYSTEM_CONTROL_AUTO_GATING (1 << 23)
-#define RK32_LCD_SYSTEM_CONTROL_STANDBY     (1 << 22)
-#define RK32_LCD_SYSTEM_CONTROL_DMA_STOP    (1 << 21)
-#define RK32_LCD_SYSTEM_CONTROL_MMU_ENABLE  (1 << 20)
-#define RK32_LCD_SYSTEM_CONTROL_MIPI_OUT    (1 << 15)
-#define RK32_LCD_SYSTEM_CONTROL_EDP_OUT     (1 << 14)
-#define RK32_LCD_SYSTEM_CONTROL_HDMI_OUT    (1 << 13)
-#define RK32_LCD_SYSTEM_CONTROL_RGB_OUT     (1 << 12)
-
-//
-// Define LCD DSP Control 0 register bits.
-//
-
-#define RK32_LCD_DSP_CONTROL0_BLACK            (1 << 19)
-#define RK32_LCD_DSP_CONTROL0_BLANK            (1 << 18)
-#define RK32_LCD_DSP_CONTROL0_OUT_ZERO         (1 << 17)
-#define RK32_LCD_DSP_CONTROL0_DCLOCK_POLARITY  (1 << 7)
-#define RK32_LCD_DSP_CONTROL0_DENABLE_POLARITY (1 << 6)
-#define RK32_LCD_DSP_CONTROL0_VSYNC_POLARITY   (1 << 5)
-#define RK32_LCD_DSP_CONTROL0_HSYNC_POLARITY   (1 << 4)
-
-//
-// Define LCD DSP control 1 register bits.
-//
-
-#define RK32_LCD_DSP_CONTROL1_LAYER3_SEL_SHIFT   14
-#define RK32_LCD_DSP_CONTROL1_LAYER2_SEL_SHIFT   12
-#define RK32_LCD_DSP_CONTROL1_LAYER1_SEL_SHIFT   10
-#define RK32_LCD_DSP_CONTROL1_LAYER0_SEL_SHIFT   8
-#define RK32_LCD_DSP_CONTROL1_DITHER_UP          (1 << 6)
-#define RK32_LCD_DSP_CONTROL1_DITHER_DOWN_SELECT (1 << 4)
-#define RK32_LCD_DSP_CONTROL1_DITHER_DOWN_MODE   (1 << 3)
-#define RK32_LCD_DSP_CONTROL1_DITHER_DOWN        (1 << 2)
-#define RK32_LCD_DSP_CONTROL1_PRE_DITHER_DOWN    (1 << 1)
-
-//
-// Define the LCD display information register bits.
-//
-
-#define RK32_LCD_DSP_INFORMATION_HEIGHT_MASK  (0xFFF << 16)
-#define RK32_LCD_DSP_INFORMATION_HEIGHT_SHIFT 16
-#define RK32_LCD_DSP_INFORMATION_WIDTH_MASK   (0xFFF << 0)
-#define RK32_LCD_DSP_INFORMATION_WIDTH_SHIFT  0
-
-//
-// Define the UART parameters.
-//
-
-#define RK32_UART_BASE_BAUD 1497600
-#define RK32_UART_REGISTER_OFFSET 0
-#define RK32_UART_REGISTER_SHIFT 2
 
 //
 // Define the default frequency for the SD/MMC.
@@ -571,11 +426,23 @@ Author:
 #define RK32_SD_BUS_MODE_SOFTWARE_RESET               (1 << 0)
 
 //
-// Define the bits for the GPIO 7 data register.
+// Define the DMA descriptor control and status bits.
 //
 
-#define RK32_GPIO7_BACKLIGHT_ENABLE 0x00000001
-#define RK32_GPIO7_LCD_BACKLIGHT    0x00000004
+#define RK32_SD_DMA_DESCRIPTOR_CONTROL_OWN                             (1 << 31)
+#define RK32_SD_DMA_DESCRIPTOR_CONTROL_CARD_ERROR_SUMMARY              (1 << 30)
+#define RK32_SD_DMA_DESCRIPTOR_CONTROL_END_OF_RING                     (1 << 5)
+#define RK32_SD_DMA_DESCRIPTOR_CONTROL_SECOND_ADDRESS_CHAINED          (1 << 4)
+#define RK32_SD_DMA_DESCRIPTOR_CONTROL_FIRST_DESCRIPTOR                (1 << 3)
+#define RK32_SD_DMA_DESCRIPTOR_CONTROL_LAST_DESCRIPTOR                 (1 << 2)
+#define RK32_SD_DMA_DESCRIPTOR_CONTROL_DISABLE_INTERRUPT_ON_COMPLETION (1 << 1)
+
+//
+// Define the maximum buffer size for a DMA descriptor. Technically it is
+// 0x1FFF, but round down to the nearest page for better arithmetic.
+//
+
+#define RK32_SD_DMA_DESCRIPTOR_MAX_BUFFER_SIZE 0x1000
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -608,31 +475,11 @@ typedef enum _RK32_CRU_REGISTER {
     Rk32CruSoftReset11 = 0x1E4,
 } RK32_CRU_REGISTER, *PRK32_CRU_REGISTER;
 
-typedef enum _RK32_PMU_REGISTER {
-    Rk32PmuPowerDownControl = 0x08,
-    Rk32PmuPowerDownStatus = 0x0C
-} RK32_PMU_REGISTER, *PRK32_PMU_REGISTER;
-
 typedef enum _RK32_GRF_REGISTER {
     Rk32GrfGpio6cIomux = 0x64,
     Rk32GrfGpio7chIomux = 0x78,
     Rk32GrfIoVsel = 0x380,
 } RK32_GRF_REGISTER, *PRK32_GRF_REGISTER;
-
-typedef enum _RK32_LCD_REGISTER {
-    Rk32LcdConfigurationDone = 0x00,
-    Rk32LcdSystemControl = 0x08,
-    Rk32LcdSystemControl1 = 0x0C,
-    Rk32LcdDspControl0 = 0x10,
-    Rk32LcdDspControl1 = 0x14,
-    Rk32LcdBackground = 0x18,
-    Rk32LcdMcuControl = 0x1C,
-    Rk32LcdInterruptControl0 = 0x20,
-    Rk32LcdInterruptControl1 = 0x24,
-    Rk32LcdWin0YrgbFrameBufferBase = 0x40,
-    Rk32LcdWin0ActiveInformation = 0x48,
-    Rk32LcdWin0DisplayInformation = 0x4C,
-} RK32_LCD_REGISTER, *PRK32_LCD_REGISTER;
 
 typedef enum _RK32_SD_REGISTER {
     Rk32SdControl = 0x000,
@@ -666,20 +513,70 @@ typedef enum _RK32_SD_REGISTER {
     Rk32SdFifoBase = 0x200,
 } RK32_SD_REGISTER, *PRK32_SD_REGISTER;
 
-typedef enum _RK32_GPIO_REGISTER {
-    Rk32GpioPortAData = 0x00,
-    Rk32GpioPortADirection = 0x04,
-    Rk32GpioInterruptEnable = 0x30,
-    Rk32GpioInterrupMask = 0x34,
-    Rk32GpioInterruptLevel = 0x38,
-    Rk32GpioInterruptPolarity = 0x3C,
-    Rk32GpioInterruptStatus = 0x40,
-    Rk32GpioRawInterruptStatus = 0x44,
-    Rk32GpioDebounce = 0x48,
-    Rk32GpioClearInterrupt = 0x4C,
-    Rk32GpioPortAExternal = 0x50,
-    Rk32GpioLevelSensitiveSync = 0x60,
-} RK32_GPIO_REGISTER, *PRK32_GPIO_REGISTER;
+/*++
+
+Structure Description:
+
+    This structure defines the Rockchip RK32xx SD DMA descriptor.
+
+Members:
+
+    Control - Stores control and status bits for the descriptor. See
+        RK32_SD_DMA_DESCRIPTOR_CONTROL_* for definitions.
+
+    Size - Stores the size of the buffer.
+
+    Address - Stores the physical address of the data buffer to use for the DMA.
+
+    NextDescriptor - Stores the physical address of the next DMA descriptor.
+
+--*/
+
+typedef struct _RK32_SD_DMA_DESCRIPTOR {
+    ULONG Control;
+    ULONG Size;
+    ULONG Address;
+    ULONG NextDescriptor;
+} PACKED RK32_SD_DMA_DESCRIPTOR, *PRK32_SD_DMA_DESCRIPTOR;
+
+/*++
+
+Structure Description:
+
+    This structure describes the Rockchip RK32xx ACPI table.
+
+Members:
+
+    Header - Stores the standard ACPI table header. The signature here is
+        'Rk32'.
+
+    TimerBase - Stores the array of physical addresses of all the timers.
+
+    TimerGsi - Stores the array of Global System Interrupt numbers for each of
+        the timers.
+
+    TimerCountDownMask - Stores a mask of bits, one for each timer, where if a
+        bit is set that timer counts down. If the bit for a timer is clear, the
+        timer counts up.
+
+    TimerEnabledMask - Stores a bitfield of which timers are available for use
+        by the kernel.
+
+    CruBase - Stores the physical address of the clock and reset unit.
+
+    GrfBase - Stores the physical address of the general register files.
+
+--*/
+
+typedef struct _RK32XX_TABLE {
+    DESCRIPTION_HEADER Header;
+    ULONGLONG TimerBase[RK32_TIMER_COUNT];
+    ULONG TimerGsi[RK32_TIMER_COUNT];
+    ULONG TimerCountDownMask;
+    ULONG TimerEnabledMask;
+    ULONGLONG CruBase;
+    ULONGLONG GrfBase;
+} PACKED RK32XX_TABLE, *PRK32XX_TABLE;
 
 //
 // -------------------------------------------------------------------- Globals

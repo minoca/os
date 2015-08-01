@@ -247,7 +247,6 @@ Return Value:
     return;
 }
 
-
 EFI_STATUS
 EfiSdRkInitializeController (
     PEFI_SD_RK_CONTROLLER Controller,
@@ -503,10 +502,7 @@ Return Value:
         // interrupts.
         //
 
-        SD_RK_WRITE_REGISTER(RkController,
-                             Rk32SdInterruptMask,
-                             RK32_SD_INTERRUPT_MASK_DEFAULT);
-
+        SD_RK_WRITE_REGISTER(RkController, Rk32SdInterruptMask, 0);
         SD_RK_WRITE_REGISTER(RkController,
                              Rk32SdInterruptStatus,
                              RK32_SD_INTERRUPT_STATUS_ALL_MASK);

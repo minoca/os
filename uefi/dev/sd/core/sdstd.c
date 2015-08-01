@@ -34,7 +34,7 @@ Environment:
 //
 
 //
-// These macros read and write SD Rockchip controller registers.
+// These macros read and write SD controller registers.
 //
 
 #define SD_READ_REGISTER(_Controller, _Register) \
@@ -156,6 +156,7 @@ Return Value:
 
     UINT32 Capabilities;
     UINT32 HostControl;
+    SD_HOST_VERSION HostVersion;
     EFI_STATUS Status;
     UINT32 Value;
 
@@ -232,7 +233,9 @@ Return Value:
         //
 
         if (Controller->FundamentalClock == 0) {
-            if (Controller->HostVersion >= SdHostVersion3) {
+            Value = SD_READ_REGISTER(Controller, SdRegisterSlotStatusVersion);
+            HostVersion = (Value >> 16) & SD_HOST_VERSION_MASK;
+            if (HostVersion >= SdHostVersion3) {
                 Controller->FundamentalClock =
                   ((Capabilities >> SD_CAPABILITY_BASE_CLOCK_FREQUENCY_SHIFT) &
                    SD_CAPABILITY_V3_BASE_CLOCK_FREQUENCY_MASK) * 1000000;
@@ -732,7 +735,7 @@ Return Value:
         Result = Controller->FundamentalClock;
         Divisor = 1;
         while (Divisor < SD_V2_MAX_DIVISOR) {
-            if (Result <= Controller->ClockSpeed) {
+            if (Result <= *ClockSpeed) {
                 break;
             }
 
@@ -747,15 +750,13 @@ Return Value:
     //
 
     } else {
-        if (Controller->ClockSpeed >= Controller->FundamentalClock) {
+        if (*ClockSpeed >= Controller->FundamentalClock) {
             Divisor = 0;
 
         } else {
             Divisor = 2;
             while (Divisor < SD_V3_MAX_DIVISOR) {
-                if ((Controller->FundamentalClock / Divisor) <=
-                    Controller->ClockSpeed) {
-
+                if ((Controller->FundamentalClock / Divisor) <= *ClockSpeed) {
                     break;
                 }
 

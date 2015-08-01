@@ -21,6 +21,8 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
+#include <minoca/dev/rk32xx.h>
+
 //
 // --------------------------------------------------------------------- Macros
 //
@@ -30,18 +32,6 @@ Author:
 //
 
 #define RK32_ALLOCATION_TAG 0x32336B52 // '23kR'
-
-//
-// Define the signature of the RK32xx ACPI table: Rk32
-//
-
-#define RK32XX_SIGNATURE 0x32336B52
-
-//
-// Define the number of timers in the SoC.
-//
-
-#define RK32_TIMER_COUNT 8
 
 //
 // Define attributes of the timers.
@@ -66,39 +56,6 @@ Author:
 //
 // ------------------------------------------------------ Data Type Definitions
 //
-
-/*++
-
-Structure Description:
-
-    This structure describes the Rockchip RK32xx ACPI table.
-
-Members:
-
-    Header - Stores the standard ACPI table header. The signature here is
-        'Rk32'.
-
-    TimerBase - Stores the array of physical addresses of all the timers.
-
-    TimerGsi - Stores the array of Global System Interrupt numbers for each of
-        the timers.
-
-    TimerCountDownMask - Stores a mask of bits, one for each timer, where if a
-        bit is set that timer counts down. If the bit for a timer is clear, the
-        timer counts up.
-
-    TimerEnabledMask - Stores a bitfield of which timers are available for use
-        by the kernel.
-
---*/
-
-typedef struct _RK32XX_TABLE {
-    DESCRIPTION_HEADER Header;
-    ULONGLONG TimerBase[RK32_TIMER_COUNT];
-    ULONG TimerGsi[RK32_TIMER_COUNT];
-    ULONG TimerCountDownMask;
-    ULONG TimerEnabledMask;
-} PACKED RK32XX_TABLE, *PRK32XX_TABLE;
 
 //
 // Define the RK32xx timer register offsets, in bytes.

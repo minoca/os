@@ -153,8 +153,6 @@ Members:
 
     Version - Stores the specification revision of the card.
 
-    HostVersion - Stores the version of the host controller interface.
-
     HighCapacity - Stores a boolean indicating if the card is high capacity or
         not.
 
@@ -206,7 +204,6 @@ struct _EFI_SD_CONTROLLER {
     PSD_GET_WRITE_PROTECT_STATUS GetWriteProtectStatus;
     UINT32 Voltages;
     SD_VERSION Version;
-    SD_HOST_VERSION HostVersion;
     BOOLEAN HighCapacity;
     UINT16 CardAddress;
     UINT16 BusWidth;

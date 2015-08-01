@@ -32,16 +32,6 @@ Environment:
 //
 
 //
-// These macros read and write SD controller registers.
-//
-
-#define SD_READ_REGISTER(_Controller, _Register) \
-    HlReadRegister32((_Controller)->ControllerBase + (_Register))
-
-#define SD_WRITE_REGISTER(_Controller, _Register, _Value) \
-    HlWriteRegister32((_Controller)->ControllerBase + (_Register), (_Value))
-
-//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -52,11 +42,6 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-VOID
-SdpInterruptServiceDpc (
-    PDPC Dpc
-    );
 
 KSTATUS
 SdpSetBusParameters (
@@ -176,59 +161,12 @@ SdpWriteBlocksPolled (
     );
 
 KSTATUS
-SdpSendCommand (
-    PSD_CONTROLLER Controller,
-    PSD_COMMAND Command
-    );
-
-KSTATUS
-SdpReadData (
-    PSD_CONTROLLER Controller,
-    PVOID Data,
-    ULONG Size
-    );
-
-KSTATUS
-SdpWriteData (
-    PSD_CONTROLLER Controller,
-    PVOID Data,
-    ULONG Size
-    );
-
-KSTATUS
-SdpResetController (
-    PSD_CONTROLLER Controller,
-    ULONG ResetBit
-    );
-
-KSTATUS
-SdpErrorRecovery (
-    PSD_CONTROLLER Controller
-    );
-
-KSTATUS
 SdpSynchronousAbort (
     PSD_CONTROLLER Controller
     );
 
 KSTATUS
 SdpAsynchronousAbort (
-    PSD_CONTROLLER Controller
-    );
-
-KSTATUS
-SdpSendAbortCommand (
-    PSD_CONTROLLER Controller
-    );
-
-VOID
-SdpSetDmaInterrupts (
-    PSD_CONTROLLER Controller,
-    BOOL Enable
-    );
-
-ULONGLONG
-SdpQueryTimeCounter (
     PSD_CONTROLLER Controller
     );
 
@@ -271,13 +209,6 @@ Return Value:
     PSD_CONTROLLER Controller;
     KSTATUS Status;
 
-    if (Parameters->ControllerBase == NULL) {
-
-        ASSERT(FALSE);
-
-        return NULL;
-    }
-
     Controller = MmAllocateNonPagedPool(sizeof(SD_CONTROLLER),
                                         SD_ALLOCATION_TAG);
 
@@ -287,18 +218,77 @@ Return Value:
 
     RtlZeroMemory(Controller, sizeof(SD_CONTROLLER));
     KeInitializeSpinLock(&(Controller->InterruptLock));
-    Controller->ControllerBase = Parameters->ControllerBase;
     Controller->ConsumerContext = Parameters->ConsumerContext;
-    Controller->GetCardDetectStatus = Parameters->GetCardDetectStatus;
-    Controller->GetWriteProtectStatus = Parameters->GetWriteProtectStatus;
-    Controller->MediaChangeCallback = Parameters->MediaChangeCallback;
     Controller->Voltages = Parameters->Voltages;
     Controller->FundamentalClock = Parameters->FundamentalClock;
     Controller->HostCapabilities = Parameters->HostCapabilities;
-    Controller->InterruptDpc = KeCreateDpc(SdpInterruptServiceDpc, Controller);
-    if (Controller->InterruptDpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateControllerEnd;
+    RtlCopyMemory(&(Controller->FunctionTable),
+                  &(Parameters->FunctionTable),
+                  sizeof(SD_FUNCTION_TABLE));
+
+    //
+    // If this is a standard controller, then do some special initialization
+    // steps, including filling out the missing pieces of the function table.
+    //
+
+    if (Parameters->StandardControllerBase != NULL) {
+        Controller->ControllerBase = Parameters->StandardControllerBase;
+        Controller->InterruptDpc = KeCreateDpc(SdpInterruptServiceDpc,
+                                               Controller);
+
+        if (Controller->InterruptDpc == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto CreateControllerEnd;
+        }
+
+        //
+        // Fill in gaps that are not present in the supplied function table.
+        //
+
+        if (Controller->FunctionTable.InitializeController == NULL) {
+            Controller->FunctionTable.InitializeController =
+                                       SdStdFunctionTable.InitializeController;
+        }
+
+        if (Controller->FunctionTable.ResetController == NULL) {
+            Controller->FunctionTable.ResetController =
+                                            SdStdFunctionTable.ResetController;
+        }
+
+        if (Controller->FunctionTable.SendCommand == NULL) {
+            Controller->FunctionTable.SendCommand =
+                                                SdStdFunctionTable.SendCommand;
+        }
+
+        if (Controller->FunctionTable.GetSetBusWidth == NULL) {
+            Controller->FunctionTable.GetSetBusWidth =
+                                             SdStdFunctionTable.GetSetBusWidth;
+        }
+
+        if (Controller->FunctionTable.GetSetClockSpeed == NULL) {
+            Controller->FunctionTable.GetSetClockSpeed =
+                                           SdStdFunctionTable.GetSetClockSpeed;
+        }
+
+        if (Controller->FunctionTable.StopDataTransfer == NULL) {
+            Controller->FunctionTable.StopDataTransfer =
+                                           SdStdFunctionTable.StopDataTransfer;
+        }
+
+    //
+    // Make sure the required functions are present.
+    //
+
+    } else {
+        if ((Controller->FunctionTable.ResetController == NULL) ||
+            (Controller->FunctionTable.SendCommand == NULL) ||
+            (Controller->FunctionTable.GetSetBusWidth == NULL) ||
+            (Controller->FunctionTable.GetSetClockSpeed == NULL) ||
+            (Controller->FunctionTable.StopDataTransfer == NULL)) {
+
+            Status = STATUS_INVALID_PARAMETER;
+            goto CreateControllerEnd;
+        }
     }
 
     Status = STATUS_SUCCESS;
@@ -351,83 +341,6 @@ Return Value:
 }
 
 SD_API
-VOID
-SdSetInterruptHandle (
-    PSD_CONTROLLER Controller,
-    HANDLE Handle
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sets the interrupt handle of the SD controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    Handle - Supplies the interrupt handle.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    Controller->InterruptHandle = Handle;
-    return;
-}
-
-SD_API
-INTERRUPT_STATUS
-SdInterruptService (
-    PSD_CONTROLLER Controller
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the interrupt service routine for an SD controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-Return Value:
-
-    Returns whether or not the SD controller caused the interrupt.
-
---*/
-
-{
-
-    ULONG InterruptStatus;
-    ULONG MaskedStatus;
-    ULONG OriginalPendingStatus;
-
-    InterruptStatus = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
-    MaskedStatus = InterruptStatus & Controller->EnabledInterrupts;
-    if (MaskedStatus == 0) {
-        return InterruptStatusNotClaimed;
-    }
-
-    KeAcquireSpinLock(&(Controller->InterruptLock));
-    OriginalPendingStatus = Controller->PendingStatusBits;
-    Controller->PendingStatusBits |= MaskedStatus;
-    if (OriginalPendingStatus == 0) {
-        KeQueueDpc(Controller->InterruptDpc);
-    }
-
-    SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, MaskedStatus);
-    KeReleaseSpinLock(&(Controller->InterruptLock));
-    return InterruptStatusClaimed;
-}
-
-SD_API
 KSTATUS
 SdInitializeController (
     PSD_CONTROLLER Controller,
@@ -456,15 +369,13 @@ Return Value:
 {
 
     ULONG BusWidth;
-    ULONG Capabilities;
     UCHAR CardData[SD_MMC_MAX_BLOCK_SIZE];
     SD_CARD_IDENTIFICATION CardIdentification;
     BOOL CardPresent;
     ULONG ExtendedCardDataWidth;
-    ULONG HostControl;
+    PSD_INITIALIZE_CONTROLLER InitializeController;
     ULONG LoopIndex;
     KSTATUS Status;
-    ULONG Value;
 
     RtlAtomicAnd32(&(Controller->Flags), 0);
 
@@ -472,8 +383,9 @@ Return Value:
     // Start by checking for a card.
     //
 
-    if (Controller->GetCardDetectStatus != NULL) {
-        Status = Controller->GetCardDetectStatus(Controller,
+    if (Controller->FunctionTable.GetCardDetectStatus != NULL) {
+        Status = Controller->FunctionTable.GetCardDetectStatus(
+                                                 Controller,
                                                  Controller->ConsumerContext,
                                                  &CardPresent);
 
@@ -483,72 +395,32 @@ Return Value:
     }
 
     //
-    // Get the host controller version.
-    //
-
-    Value = SD_READ_REGISTER(Controller, SdRegisterSlotStatusVersion) >> 16;
-    Controller->HostVersion = Value & SD_HOST_VERSION_MASK;
-
-    //
     // Reset the controller and wait for the reset to finish.
     //
 
     if (ResetController != FALSE) {
-        Status = SdpResetController(Controller, SD_CLOCK_CONTROL_RESET_ALL);
+        Status = Controller->FunctionTable.ResetController(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   SD_RESET_FLAG_ALL);
+
         if (!KSUCCESS(Status)) {
-            return Status;
+            goto InitializeControllerEnd;
         }
     }
 
-    Capabilities = SD_READ_REGISTER(Controller, SdRegisterCapabilities);
-    if ((Capabilities & SD_CAPABILITY_ADMA2) != 0) {
-        Controller->HostCapabilities |= SD_MODE_ADMA2;
-    }
+    InitializeController = Controller->FunctionTable.InitializeController;
+    if (InitializeController != NULL) {
+        Status = InitializeController(Controller,
+                                      Controller->ConsumerContext,
+                                      0);
 
-    //
-    // Setup the voltage support if not supplied on creation.
-    //
-
-    if (Controller->Voltages == 0) {
-        if ((Capabilities & SD_CAPABILITY_VOLTAGE_1V8) != 0) {
-            Controller->Voltages |= SD_VOLTAGE_165_195;
-        }
-
-        if ((Capabilities & SD_CAPABILITY_VOLTAGE_3V0) != 0) {
-            Controller->Voltages |= SD_VOLTAGE_29_30 | SD_VOLTAGE_30_31;
-        }
-
-        if ((Capabilities & SD_CAPABILITY_VOLTAGE_3V3) != 0) {
-            Controller->Voltages |= SD_VOLTAGE_32_33 | SD_VOLTAGE_33_34;
+        if (!KSUCCESS(Status)) {
+            goto InitializeControllerEnd;
         }
     }
 
     if (Controller->Voltages == 0) {
-        Status = STATUS_DEVICE_NOT_CONNECTED;
-        goto InitializeControllerEnd;
-    }
-
-    //
-    // Get the host control power settings from the controller voltages. Some
-    // devices do not have a capabilities register.
-    //
-
-    if ((Controller->Voltages & (SD_VOLTAGE_32_33 | SD_VOLTAGE_33_34)) ==
-        (SD_VOLTAGE_32_33 | SD_VOLTAGE_33_34)) {
-
-        HostControl = SD_HOST_CONTROL_POWER_3V3;
-
-    } else if ((Controller->Voltages & (SD_VOLTAGE_29_30 | SD_VOLTAGE_30_31)) ==
-               (SD_VOLTAGE_29_30 | SD_VOLTAGE_30_31)) {
-
-        HostControl = SD_HOST_CONTROL_POWER_3V0;
-
-    } else if ((Controller->Voltages & SD_VOLTAGE_165_195) ==
-               SD_VOLTAGE_165_195) {
-
-        HostControl = SD_HOST_CONTROL_POWER_1V8;
-
-    } else {
         Status = STATUS_DEVICE_NOT_CONNECTED;
         goto InitializeControllerEnd;
     }
@@ -558,35 +430,6 @@ Return Value:
     //
 
     Controller->MaxBlocksPerTransfer = SD_MAX_BLOCK_COUNT;
-
-    //
-    // Set the base clock frequency if not supplied on creation.
-    //
-
-    if (Controller->FundamentalClock == 0) {
-        if (Controller->HostVersion >= SdHostVersion3) {
-            Controller->FundamentalClock =
-                ((Capabilities >> SD_CAPABILITY_BASE_CLOCK_FREQUENCY_SHIFT) &
-                 SD_CAPABILITY_V3_BASE_CLOCK_FREQUENCY_MASK) * 1000000;
-
-        } else {
-            Controller->FundamentalClock =
-                ((Capabilities >> SD_CAPABILITY_BASE_CLOCK_FREQUENCY_SHIFT) &
-                 SD_CAPABILITY_BASE_CLOCK_FREQUENCY_MASK) * 1000000;
-        }
-    }
-
-    if (Controller->FundamentalClock == 0) {
-        Status = STATUS_DEVICE_NOT_CONNECTED;
-        goto InitializeControllerEnd;
-    }
-
-    if ((Capabilities & SD_CAPABILITY_HIGH_SPEED) != 0) {
-        Controller->HostCapabilities |= SD_MODE_HIGH_SPEED |
-                                        SD_MODE_HIGH_SPEED_52MHZ;
-    }
-
-    SD_WRITE_REGISTER(Controller, SdRegisterHostControl, HostControl);
     Controller->BusWidth = 1;
     Controller->ClockSpeed = SdClock400kHz;
     Status = SdpSetBusParameters(Controller);
@@ -594,15 +437,19 @@ Return Value:
         goto InitializeControllerEnd;
     }
 
-    HostControl = SD_READ_REGISTER(Controller, SdRegisterHostControl);
-    HostControl |= SD_HOST_CONTROL_POWER_ENABLE;
-    SD_WRITE_REGISTER(Controller, SdRegisterHostControl, HostControl);
-    Value = SD_INTERRUPT_STATUS_ENABLE_DEFAULT_MASK;
-    SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatusEnable, Value);
-    Controller->EnabledInterrupts = SD_INTERRUPT_ENABLE_DEFAULT_MASK;
-    SD_WRITE_REGISTER(Controller,
-                      SdRegisterInterruptSignalEnable,
-                      Controller->EnabledInterrupts);
+    if (InitializeController != NULL) {
+        Status = InitializeController(Controller,
+                                      Controller->ConsumerContext,
+                                      1);
+
+        if (!KSUCCESS(Status)) {
+            goto InitializeControllerEnd;
+        }
+    }
+
+    //
+    // Begin the initialization sequence as described in the SD specification.
+    //
 
     Status = SdpWaitForCardToInitialize(Controller);
     if (!KSUCCESS(Status)) {
@@ -836,7 +683,7 @@ Return Value:
         }
 
         if (!KSUCCESS(Status)) {
-            SdpErrorRecovery(Controller);
+            SdErrorRecovery(Controller);
             break;
         }
 
@@ -915,333 +762,6 @@ Return Value:
     }
 
     return STATUS_SUCCESS;
-}
-
-SD_API
-KSTATUS
-SdInitializeDma (
-    PSD_CONTROLLER Controller
-    )
-
-/*++
-
-Routine Description:
-
-    This routine initializes DMA support in the host controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-Return Value:
-
-    STATUS_SUCCESS on success.
-
-    STATUS_NOT_SUPPORTED if the host controller does not support ADMA2.
-
-    STATUS_INSUFFICIENT_RESOURCES on allocation failure.
-
-    STATUS_NO_MEDIA if there is no card in the slot.
-
---*/
-
-{
-
-    PSD_ADMA2_DESCRIPTOR Descriptor;
-    ULONG Value;
-
-    if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) {
-        return STATUS_NO_MEDIA;
-    }
-
-    if ((Controller->HostCapabilities & SD_MODE_ADMA2) == 0) {
-        return STATUS_NOT_SUPPORTED;
-    }
-
-    if ((Controller->HostCapabilities & SD_MODE_AUTO_CMD12) == 0) {
-        return STATUS_NOT_SUPPORTED;
-    }
-
-    //
-    // Create the DMA descriptor table if not already done.
-    //
-
-    if (Controller->DmaDescriptorTable == NULL) {
-        Controller->DmaDescriptorTable = MmAllocateNonPagedIoBuffer(
-                                                0,
-                                                MAX_ULONG,
-                                                4,
-                                                SD_ADMA2_DESCRIPTOR_TABLE_SIZE,
-                                                TRUE,
-                                                FALSE,
-                                                TRUE);
-
-        if (Controller->DmaDescriptorTable == NULL) {
-            return STATUS_INSUFFICIENT_RESOURCES;
-        }
-
-        ASSERT(Controller->DmaDescriptorTable->FragmentCount == 1);
-    }
-
-    Descriptor = Controller->DmaDescriptorTable->Fragment[0].VirtualAddress;
-    RtlZeroMemory(Descriptor, SD_ADMA2_DESCRIPTOR_TABLE_SIZE);
-
-    //
-    // Enable ADMA2 in the host control register.
-    //
-
-    Value = SD_READ_REGISTER(Controller, SdRegisterHostControl);
-    Value &= ~SD_HOST_CONTROL_DMA_MODE_MASK;
-    Value |= SD_HOST_CONTROL_32BIT_ADMA2;
-    SD_WRITE_REGISTER(Controller, SdRegisterHostControl, Value);
-
-    //
-    // Read it to make sure the write stuck.
-    //
-
-    Value = SD_READ_REGISTER(Controller, SdRegisterHostControl);
-    if ((Value & SD_HOST_CONTROL_DMA_MODE_MASK) !=
-        SD_HOST_CONTROL_32BIT_ADMA2) {
-
-        return STATUS_NOT_SUPPORTED;
-    }
-
-    //
-    // Record that ADMA2 is enabled in the host controller.
-    //
-
-    RtlAtomicOr32(&(Controller->Flags), SD_CONTROLLER_FLAG_ADMA2_ENABLED);
-    return STATUS_SUCCESS;
-}
-
-SD_API
-VOID
-SdBlockIoDma (
-    PSD_CONTROLLER Controller,
-    ULONGLONG BlockOffset,
-    UINTN BlockCount,
-    PIO_BUFFER IoBuffer,
-    UINTN IoBufferOffset,
-    BOOL Write,
-    PSD_IO_COMPLETION_ROUTINE CompletionRoutine,
-    PVOID CompletionContext
-    )
-
-/*++
-
-Routine Description:
-
-    This routine performs a block I/O read or write using ADMA2.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    BlockOffset - Supplies the logical block address of the I/O.
-
-    BlockCount - Supplies the number of blocks to read or write.
-
-    IoBuffer - Supplies a pointer to the buffer containing the data to write
-        or where the read data should be returned.
-
-    IoBufferOffset - Supplies the offset from the beginning of the I/O buffer
-        where this I/O should begin. This is relative to the I/O buffer's
-        current offset.
-
-    Write - Supplies a boolean indicating if this is a read operation (FALSE)
-        or a write operation.
-
-    CompletionRoutine - Supplies a pointer to a function to call when the I/O
-        completes.
-
-    CompletionContext - Supplies a context pointer to pass as a parameter to
-        the completion routine.
-
-Return Value:
-
-    None. The status of the operation is returned when the completion routine
-    is called, which may be during the execution of this function in the case
-    of an early failure.
-
---*/
-
-{
-
-    ULONG BlockLength;
-    SD_COMMAND Command;
-    ULONG DescriptorCount;
-    UINTN DescriptorSize;
-    PSD_ADMA2_DESCRIPTOR DmaDescriptor;
-    PIO_BUFFER_FRAGMENT Fragment;
-    UINTN FragmentIndex;
-    UINTN FragmentOffset;
-    PHYSICAL_ADDRESS PhysicalAddress;
-    KSTATUS Status;
-    ULONG TableAddress;
-    UINTN TransferSize;
-    UINTN TransferSizeRemaining;
-
-    ASSERT(BlockCount != 0);
-
-    if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) {
-        Status = STATUS_NO_MEDIA;
-        goto BlockIoDmaEnd;
-    }
-
-    if (Write != FALSE) {
-        if (BlockCount > 1) {
-            Command.Command = SdCommandWriteMultipleBlocks;
-
-        } else {
-            Command.Command = SdCommandWriteSingleBlock;
-        }
-
-        BlockLength = Controller->WriteBlockLength;
-        TransferSize = BlockCount * BlockLength;
-
-        ASSERT(TransferSize != 0);
-
-    } else {
-        if (BlockCount > 1) {
-            Command.Command = SdCommandReadMultipleBlocks;
-
-        } else {
-            Command.Command = SdCommandReadSingleBlock;
-        }
-
-        BlockLength = Controller->ReadBlockLength;
-        TransferSize = BlockCount * BlockLength;
-
-        ASSERT(TransferSize != 0);
-
-    }
-
-    //
-    // Get to the correct spot in the I/O buffer.
-    //
-
-    IoBufferOffset += MmGetIoBufferCurrentOffset(IoBuffer);
-    FragmentIndex = 0;
-    FragmentOffset = 0;
-    while (IoBufferOffset != 0) {
-
-        ASSERT(FragmentIndex < IoBuffer->FragmentCount);
-
-        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-        if (IoBufferOffset < Fragment->Size) {
-            FragmentOffset = IoBufferOffset;
-            break;
-        }
-
-        IoBufferOffset -= Fragment->Size;
-        FragmentIndex += 1;
-    }
-
-    //
-    // Fill out the DMA descriptors.
-    //
-
-    DmaDescriptor = Controller->DmaDescriptorTable->Fragment[0].VirtualAddress;
-    DescriptorCount = 0;
-    TransferSizeRemaining = TransferSize;
-    while ((TransferSizeRemaining != 0) &&
-           (DescriptorCount < SD_ADMA2_DESCRIPTOR_COUNT - 1)) {
-
-        ASSERT(FragmentIndex < IoBuffer->FragmentCount);
-
-        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-
-        //
-        // This descriptor size is going to the the minimum of the total
-        // remaining size, the size that can fit in a DMA descriptor, and the
-        // remaining size of the fragment.
-        //
-
-        DescriptorSize = TransferSizeRemaining;
-        if (DescriptorSize > SD_ADMA2_MAX_TRANSFER_SIZE) {
-            DescriptorSize = SD_ADMA2_MAX_TRANSFER_SIZE;
-        }
-
-        if (DescriptorSize > Fragment->Size - FragmentOffset) {
-            DescriptorSize = Fragment->Size - FragmentOffset;
-        }
-
-        TransferSizeRemaining -= DescriptorSize;
-        PhysicalAddress = Fragment->PhysicalAddress + FragmentOffset;
-
-        //
-        // Assert that the buffer is within the first 4GB.
-        //
-
-        ASSERT(((ULONG)PhysicalAddress == PhysicalAddress) &&
-               ((ULONG)(PhysicalAddress + DescriptorSize) ==
-                PhysicalAddress + DescriptorSize));
-
-        DmaDescriptor->Address = PhysicalAddress;
-        DmaDescriptor->Attributes = SD_ADMA2_VALID |
-                                    SD_ADMA2_ACTION_TRANSFER |
-                                    (DescriptorSize << SD_ADMA2_LENGTH_SHIFT);
-
-        DmaDescriptor += 1;
-        DescriptorCount += 1;
-        FragmentOffset += DescriptorSize;
-        if (FragmentOffset >= Fragment->Size) {
-            FragmentIndex += 1;
-            FragmentOffset = 0;
-        }
-    }
-
-    //
-    // Mark the last DMA descriptor as the end of the transfer.
-    //
-
-    DmaDescriptor -= 1;
-    DmaDescriptor->Attributes |= SD_ADMA2_INTERRUPT | SD_ADMA2_END;
-    RtlMemoryBarrier();
-    Command.ResponseType = SD_RESPONSE_R1;
-    if ((Controller->Flags & SD_CONTROLLER_FLAG_HIGH_CAPACITY) != 0) {
-        Command.CommandArgument = BlockOffset;
-
-    } else {
-        Command.CommandArgument = BlockOffset * BlockLength;
-    }
-
-    ASSERT((TransferSize - TransferSizeRemaining) <= MAX_ULONG);
-
-    Command.BufferSize = (ULONG)(TransferSize - TransferSizeRemaining);
-    Command.BufferVirtual = NULL;
-    Command.BufferPhysical = INVALID_PHYSICAL_ADDRESS;
-    Command.Write = Write;
-    Command.Dma = TRUE;
-    Controller->IoCompletionRoutine = CompletionRoutine;
-    Controller->IoCompletionContext = CompletionContext;
-    Controller->IoRequestSize = Command.BufferSize;
-    TableAddress =
-          (ULONG)(Controller->DmaDescriptorTable->Fragment[0].PhysicalAddress);
-
-    SD_WRITE_REGISTER(Controller, SdRegisterAdmaAddressLow, TableAddress);
-    Status = SdpSendCommand(Controller, &Command);
-    if (!KSUCCESS(Status)) {
-        SdpErrorRecovery(Controller);
-        Controller->IoCompletionRoutine = NULL;
-        Controller->IoCompletionContext = NULL;
-        Controller->IoRequestSize = 0;
-        goto BlockIoDmaEnd;
-    }
-
-    Status = STATUS_SUCCESS;
-
-BlockIoDmaEnd:
-
-    //
-    // If this routine failed, call the completion routine back immediately.
-    //
-
-    if (!KSUCCESS(Status)) {
-        CompletionRoutine(Controller, CompletionContext, 0, Status);
-    }
-
-    return;
 }
 
 SD_API
@@ -1333,112 +853,84 @@ Return Value:
     return;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
-VOID
-SdpInterruptServiceDpc (
-    PDPC Dpc
+SD_API
+KSTATUS
+SdErrorRecovery (
+    PSD_CONTROLLER Controller
     )
 
 /*++
 
 Routine Description:
 
-    This routine implements the SD DPC that is queued when an interrupt fires.
+    This routine attempts to perform recovery after an error.
 
 Arguments:
 
-    Dpc - Supplies a pointer to the DPC that is running.
+    Controller - Supplies a pointer to the controller.
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
 {
 
-    PVOID CompletionContext;
-    PSD_IO_COMPLETION_ROUTINE CompletionRoutine;
-    PSD_CONTROLLER Controller;
-    BOOL Inserted;
-    RUNLEVEL OldRunLevel;
-    ULONG PendingBits;
-    BOOL Removed;
     KSTATUS Status;
 
-    Controller = (PSD_CONTROLLER)(Dpc->UserData);
-
     //
-    // Synchronize with interrupts to clear out the interrupt register.
-    //
-
-    OldRunLevel = IoRaiseToInterruptRunLevel(Controller->InterruptHandle);
-    KeAcquireSpinLock(&(Controller->InterruptLock));
-    PendingBits = Controller->PendingStatusBits;
-    Controller->PendingStatusBits = 0;
-    KeReleaseSpinLock(&(Controller->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-    if (PendingBits == 0) {
-        return;
-    }
-
-    //
-    // Process a media change.
+    // Perform an asychronous abort, which will clear any interrupts, abort the
+    // command and reset the command and data lines. This will also wait until
+    // the card has returned to the transfer state.
     //
 
-    Status = STATUS_DEVICE_IO_ERROR;
-    Inserted = FALSE;
-    Removed = FALSE;
-    if ((PendingBits & SD_INTERRUPT_STATUS_CARD_REMOVAL) != 0) {
-        Removed = TRUE;
-        Status = STATUS_NO_MEDIA;
-        RtlAtomicAnd32(&(Controller->Flags), ~SD_CONTROLLER_FLAG_MEDIA_PRESENT);
+    Status = SdpAsynchronousAbort(Controller);
+    if (!KSUCCESS(Status)) {
+        goto ErrorRecoveryEnd;
     }
 
-    if ((PendingBits & SD_INTERRUPT_STATUS_CARD_INSERTION) != 0) {
-        Inserted = TRUE;
-        Status = STATUS_NO_MEDIA;
-    }
-
-    //
-    // Process the I/O completion. The only other interrupt bits that are sent
-    // to the DPC are the error bits and the transfer complete bit.
-    //
-
-    if ((PendingBits & SD_INTERRUPT_ENABLE_ERROR_MASK) != 0) {
-        RtlDebugPrint("SD: Error status %x\n", PendingBits);
-        SdpErrorRecovery(Controller);
-        Status = STATUS_DEVICE_IO_ERROR;
-
-    } else if ((PendingBits & SD_INTERRUPT_STATUS_TRANSFER_COMPLETE) != 0) {
-        Status = STATUS_SUCCESS;
-    }
-
-    if (Controller->IoCompletionRoutine != NULL) {
-        CompletionRoutine = Controller->IoCompletionRoutine;
-        CompletionContext = Controller->IoCompletionContext;
-        Controller->IoCompletionRoutine = NULL;
-        Controller->IoCompletionContext = NULL;
-        CompletionRoutine(Controller,
-                          CompletionContext,
-                          Controller->IoRequestSize,
-                          Status);
-    }
-
-    if (((Inserted != FALSE) || (Removed != FALSE)) &&
-        (Controller->MediaChangeCallback != NULL)) {
-
-        Controller->MediaChangeCallback(Controller,
-                                        Controller->ConsumerContext,
-                                        Removed,
-                                        Inserted);
-    }
-
-    return;
+ErrorRecoveryEnd:
+    return Status;
 }
+
+SD_API
+ULONGLONG
+SdQueryTimeCounter (
+    PSD_CONTROLLER Controller
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a snap of the time counter. Depending on the mode of
+    the SD controller, this may be just a recent snap of the time counter or
+    the current value in the hardware.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+Return Value:
+
+    Returns the number of ticks that have elapsed since the system was booted,
+    or a recent tick value.
+
+--*/
+
+{
+
+    if ((Controller->Flags & SD_CONTROLLER_FLAG_CRITICAL_MODE) == 0) {
+        return KeGetRecentTimeCounter();
+    }
+
+    return HlQueryTimeCounter();
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 KSTATUS
 SdpSetBusParameters (
@@ -1463,16 +955,8 @@ Return Value:
 
 {
 
-    ULONG ClockControl;
     SD_COMMAND Command;
-    ULONG Divisor;
-    ULONGLONG Frequency;
-    ULONG Result;
     KSTATUS Status;
-    ULONGLONG Timeout;
-    ULONG Value;
-
-    Frequency = HlQueryTimeCounterFrequency();
 
     //
     // If going wide, let the card know first.
@@ -1483,7 +967,11 @@ Return Value:
         Command.Command = SdCommandApplicationSpecific;
         Command.ResponseType = SD_RESPONSE_R1;
         Command.CommandArgument = Controller->CardAddress << 16;
-        Status = SdpSendCommand(Controller, &Command);
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
         if (!KSUCCESS(Status)) {
             return Status;
         }
@@ -1494,7 +982,11 @@ Return Value:
         ASSERT(Controller->BusWidth == 4);
 
         Command.CommandArgument = 2;
-        Status = SdpSendCommand(Controller, &Command);
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
         if (!KSUCCESS(Status)) {
             return Status;
         }
@@ -1502,106 +994,24 @@ Return Value:
         HlBusySpin(2000);
     }
 
-    Value = SD_READ_REGISTER(Controller, SdRegisterHostControl);
-    Value &= ~SD_HOST_CONTROL_BUS_WIDTH_MASK;
-    switch (Controller->BusWidth) {
-    case 1:
-        Value |= SD_HOST_CONTROL_DATA_1BIT;
-        break;
-
-    case 4:
-        Value |= SD_HOST_CONTROL_DATA_4BIT;
-        break;
-
-    case 8:
-        Value |= SD_HOST_CONTROL_DATA_8BIT;
-        break;
-
-    default:
-        RtlDebugPrint("SD: Invalid bus width %d.\n", Controller->BusWidth);
-
-        ASSERT(FALSE);
-
-        return STATUS_INVALID_CONFIGURATION;
-    }
-
-    SD_WRITE_REGISTER(Controller, SdRegisterHostControl, Value);
-
-    ASSERT(Controller->FundamentalClock != 0);
-
-    //
-    // Find the right divisor, the highest frequency less than the desired
-    // clock. Older controllers must be a power of 2.
-    //
-
-    if (Controller->HostVersion < SdHostVersion3) {
-        Result = Controller->FundamentalClock;
-        Divisor = 1;
-        while (Divisor < SD_V2_MAX_DIVISOR) {
-            if (Result <= Controller->ClockSpeed) {
-                break;
-            }
-
-            Divisor <<= 1;
-            Result >>= 1;
-        }
-
-        Divisor >>= 1;
-
-    //
-    // Version 3 divisors are a multiple of 2.
-    //
-
-    } else {
-        if (Controller->ClockSpeed >= Controller->FundamentalClock) {
-            Divisor = 0;
-
-        } else {
-            Divisor = 2;
-            while (Divisor < SD_V3_MAX_DIVISOR) {
-                if ((Controller->FundamentalClock / Divisor) <=
-                    Controller->ClockSpeed) {
-
-                    break;
-                }
-
-                Divisor += 2;
-            }
-
-            Divisor >>= 1;
-        }
-    }
-
-    ClockControl = SD_CLOCK_CONTROL_DEFAULT_TIMEOUT <<
-                   SD_CLOCK_CONTROL_TIMEOUT_SHIFT;
-
-    SD_WRITE_REGISTER(Controller, SdRegisterClockControl, ClockControl);
-    ClockControl |= (Divisor & SD_CLOCK_CONTROL_DIVISOR_MASK) <<
-                    SD_CLOCK_CONTROL_DIVISOR_SHIFT;
-
-    ClockControl |= (Divisor & SD_CLOCK_CONTROL_DIVISOR_HIGH_MASK) >>
-                    SD_CLOCK_CONTROL_DIVISOR_HIGH_SHIFT;
-
-    ClockControl |= SD_CLOCK_CONTROL_INTERNAL_CLOCK_ENABLE;
-    SD_WRITE_REGISTER(Controller, SdRegisterClockControl, ClockControl);
-    SD_WRITE_REGISTER(Controller, SdRegisterClockControl, ClockControl);
-    Status = STATUS_TIMEOUT;
-    Timeout = KeGetRecentTimeCounter() + (Frequency * SD_CONTROLLER_TIMEOUT);
-    do {
-        Value = SD_READ_REGISTER(Controller, SdRegisterClockControl);
-        if ((Value & SD_CLOCK_CONTROL_CLOCK_STABLE) != 0) {
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-    } while (KeGetRecentTimeCounter() <= Timeout);
+    Status = Controller->FunctionTable.GetSetBusWidth(
+                                               Controller,
+                                               Controller->ConsumerContext,
+                                               TRUE);
 
     if (!KSUCCESS(Status)) {
         return Status;
     }
 
-    ClockControl |= SD_CLOCK_CONTROL_SD_CLOCK_ENABLE;
-    SD_WRITE_REGISTER(Controller, SdRegisterClockControl, ClockControl);
+    Status = Controller->FunctionTable.GetSetClockSpeed(
+                                               Controller,
+                                               Controller->ConsumerContext,
+                                               TRUE);
+
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
     return STATUS_SUCCESS;
 }
 
@@ -1636,7 +1046,10 @@ Return Value:
     Command.Command = SdCommandReset;
     Command.CommandArgument = 0;
     Command.ResponseType = SD_RESPONSE_NONE;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -1678,7 +1091,11 @@ Return Value:
         Command.Command = SdCommandSendInterfaceCondition;
         Command.CommandArgument = SD_COMMAND8_ARGUMENT;
         Command.ResponseType = SD_RESPONSE_R7;
-        Status = SdpSendCommand(Controller, &Command);
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
         if (KSUCCESS(Status)) {
             if ((Command.Response[0] & 0xFF) != (SD_COMMAND8_ARGUMENT & 0xFF)) {
                 Status = STATUS_DEVICE_IO_ERROR;
@@ -1757,7 +1174,11 @@ Return Value:
             Command.Command = SdCommandApplicationSpecific;
             Command.ResponseType = SD_RESPONSE_R1;
             Command.CommandArgument = 0;
-            Status = SdpSendCommand(Controller, &Command);
+            Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
             if (!KSUCCESS(Status)) {
                 return Status;
             }
@@ -1779,7 +1200,11 @@ Return Value:
                 }
             }
 
-            Status = SdpSendCommand(Controller, &Command);
+            Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
             if (!KSUCCESS(Status)) {
                 return Status;
             }
@@ -1814,7 +1239,11 @@ Return Value:
         Command.Command = SdCommandSpiReadOperatingCondition;
         Command.ResponseType = SD_RESPONSE_R3;
         Command.CommandArgument = 0;
-        Status = SdpSendCommand(Controller, &Command);
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
         if (!KSUCCESS(Status)) {
             return Status;
         }
@@ -1867,7 +1296,10 @@ Return Value:
     }
 
     Command.ResponseType = SD_RESPONSE_R1;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -1915,7 +1347,10 @@ Return Value:
 
     Command.ResponseType = SD_RESPONSE_R2;
     Command.CommandArgument = 0;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -1961,7 +1396,10 @@ Return Value:
     Command.Command = SdCommandSetRelativeAddress;
     Command.ResponseType = SD_RESPONSE_R6;
     Command.CommandArgument = Controller->CardAddress << 16;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -2006,7 +1444,10 @@ Return Value:
     Command.Command = SdCommandSendCardSpecificData;
     Command.ResponseType = SD_RESPONSE_R2;
     Command.CommandArgument = Controller->CardAddress << 16;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -2153,7 +1594,10 @@ Return Value:
     Command.Command = SdCommandSelectCard;
     Command.ResponseType = SD_RESPONSE_R1;
     Command.CommandArgument = Controller->CardAddress << 16;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -2375,7 +1819,10 @@ Return Value:
     Command.ResponseType = SD_RESPONSE_R1;
     Command.BufferVirtual = Data;
     Command.BufferSize = SD_MMC_MAX_BLOCK_SIZE;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -2423,7 +1870,10 @@ Return Value:
                               (Index << SD_MMC_SWITCH_INDEX_SHIFT) |
                               (Value << SD_MMC_SWITCH_VALUE_SHIFT);
 
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -2482,7 +1932,10 @@ Return Value:
     Command.CommandArgument |= Value << (Group * 4);
     Command.BufferVirtual = Response;
     Command.BufferSize = sizeof(ULONG) * 16;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -2525,11 +1978,15 @@ Return Value:
         Command.CommandArgument = Controller->CardAddress << 16;
     }
 
-    Timeout = SdpQueryTimeCounter(Controller) +
+    Timeout = SdQueryTimeCounter(Controller) +
               (HlQueryTimeCounterFrequency() * SD_CONTROLLER_STATUS_TIMEOUT);
 
     while (TRUE) {
-        Status = SdpSendCommand(Controller, &Command);
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
         if (KSUCCESS(Status)) {
 
             //
@@ -2561,7 +2018,7 @@ Return Value:
             break;
         }
 
-        if (SdpQueryTimeCounter(Controller) > Timeout) {
+        if (SdQueryTimeCounter(Controller) > Timeout) {
             Status = STATUS_TIMEOUT;
             break;
         }
@@ -2607,7 +2064,10 @@ Return Value:
         Command.CommandArgument = Controller->CardAddress << 16;
     }
 
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (KSUCCESS(Status)) {
         *CardStatus = Command.Response[0];
     }
@@ -2658,7 +2118,10 @@ Return Value:
     Command.Command = SdCommandApplicationSpecific;
     Command.ResponseType = SD_RESPONSE_R1;
     Command.CommandArgument = Controller->CardAddress << 16;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -2671,7 +2134,11 @@ Return Value:
     RetryCount = SD_CONFIGURATION_REGISTER_RETRY_COUNT;
     while (TRUE) {
         KeDelayExecution(FALSE, FALSE, 50000);
-        Status = SdpSendCommand(Controller, &Command);
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
         if (!KSUCCESS(Status)) {
             if (RetryCount == 0) {
                 return Status;
@@ -2881,7 +2348,10 @@ Return Value:
     Command.Command = SdCommandSetBlockLength;
     Command.ResponseType = SD_RESPONSE_R1;
     Command.CommandArgument = BlockLength;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -2946,7 +2416,10 @@ Return Value:
     Command.BufferPhysical = INVALID_PHYSICAL_ADDRESS;
     Command.Write = FALSE;
     Command.Dma = FALSE;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -2958,7 +2431,11 @@ Return Value:
         Command.CommandArgument = 0;
         Command.ResponseType = SD_RESPONSE_R1B;
         Command.BufferSize = 0;
-        Status = SdpSendCommand(Controller, &Command);
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
         if (!KSUCCESS(Status)) {
             return Status;
         }
@@ -3024,7 +2501,10 @@ Return Value:
     Command.BufferPhysical = INVALID_PHYSICAL_ADDRESS;
     Command.Write = TRUE;
     Command.Dma = FALSE;
-    Status = SdpSendCommand(Controller, &Command);
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -3042,615 +2522,16 @@ Return Value:
         Command.CommandArgument = 0;
         Command.ResponseType = SD_RESPONSE_R1B;
         Command.BufferSize = 0;
-        Status = SdpSendCommand(Controller, &Command);
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
         if (!KSUCCESS(Status)) {
             return Status;
         }
     }
 
-    return Status;
-}
-
-KSTATUS
-SdpSendCommand (
-    PSD_CONTROLLER Controller,
-    PSD_COMMAND Command
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sends the given command to the card.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    Command - Supplies a pointer to the command parameters.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ULONG BlockCount;
-    ULONG Flags;
-    ULONGLONG Frequency;
-    KSTATUS Status;
-    ULONGLONG Timeout;
-    ULONG Value;
-
-    //
-    // Set the DMA interrupts appropriately based on the command.
-    //
-
-    SdpSetDmaInterrupts(Controller, Command->Dma);
-
-    //
-    // Wait for the previous command to complete.
-    //
-
-    Frequency = HlQueryTimeCounterFrequency();
-    Timeout = SdpQueryTimeCounter(Controller) +
-              (Frequency * SD_CONTROLLER_TIMEOUT);
-
-    Status = STATUS_TIMEOUT;
-    do {
-        Value = SD_READ_REGISTER(Controller, SdRegisterPresentState);
-        if ((Value & (SD_STATE_DATA_INHIBIT | SD_STATE_COMMAND_INHIBIT)) == 0) {
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-    } while (SdpQueryTimeCounter(Controller) <= Timeout);
-
-    if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Data or commands inhibited: %x\n", Value);
-        goto SendCommandEnd;
-    }
-
-    //
-    // Clear any interrupts from the prevoius command before proceeding.
-    //
-
-    SD_WRITE_REGISTER(Controller,
-                      SdRegisterInterruptStatus,
-                      SD_INTERRUPT_STATUS_ALL_MASK);
-
-    //
-    // Set up the expected response flags.
-    //
-
-    Flags = 0;
-    if ((Command->ResponseType & SD_RESPONSE_PRESENT) != 0) {
-        if ((Command->ResponseType & SD_RESPONSE_136_BIT) != 0) {
-            Flags |= SD_COMMAND_RESPONSE_136;
-
-        } else if ((Command->ResponseType & SD_RESPONSE_BUSY) != 0) {
-            Flags |= SD_COMMAND_RESPONSE_48_BUSY;
-
-        } else {
-            Flags |= SD_COMMAND_RESPONSE_48;
-        }
-    }
-
-    //
-    // Set up the remainder of the command flags.
-    //
-
-    if ((Command->ResponseType & SD_RESPONSE_VALID_CRC) != 0) {
-        Flags |= SD_COMMAND_CRC_CHECK_ENABLE;
-    }
-
-    if ((Command->ResponseType & SD_RESPONSE_OPCODE) != 0) {
-        Flags |= SD_COMMAND_COMMAND_INDEX_CHECK_ENABLE;
-    }
-
-    //
-    // If there's a data buffer, program the block count.
-    //
-
-    if (Command->BufferSize != 0) {
-        if ((Command->Command == SdCommandReadMultipleBlocks) ||
-            (Command->Command == SdCommandWriteMultipleBlocks)) {
-
-            Flags |= SD_COMMAND_MULTIPLE_BLOCKS |
-                     SD_COMMAND_BLOCK_COUNT_ENABLE;
-
-            if ((Controller->HostCapabilities & SD_MODE_AUTO_CMD12) != 0) {
-                Flags |= SD_COMMAND_AUTO_COMMAND12_ENABLE;
-            }
-
-            BlockCount = Command->BufferSize / SD_BLOCK_SIZE;
-
-            ASSERT(BlockCount <= SD_MAX_BLOCK_COUNT);
-
-            Value = SD_BLOCK_SIZE | (BlockCount << 16);
-            SD_WRITE_REGISTER(Controller, SdRegisterBlockSizeCount, Value);
-
-        } else {
-
-            ASSERT(Command->BufferSize <= SD_BLOCK_SIZE);
-
-            Value = Command->BufferSize;
-            SD_WRITE_REGISTER(Controller, SdRegisterBlockSizeCount, Value);
-        }
-
-        Flags |= SD_COMMAND_DATA_PRESENT;
-        if (Command->Write != FALSE) {
-            Flags |= SD_COMMAND_TRANSFER_WRITE;
-
-        } else {
-            Flags |= SD_COMMAND_TRANSFER_READ;
-        }
-
-        if (Command->Dma != FALSE) {
-
-            ASSERT((Controller->Flags &
-                    SD_CONTROLLER_FLAG_ADMA2_ENABLED) != 0);
-
-            ASSERT((Controller->Flags &
-                    SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) != 0);
-
-            Flags |= SD_COMMAND_DMA_ENABLE;
-        }
-    }
-
-    SD_WRITE_REGISTER(Controller,
-                      SdRegisterArgument1,
-                      Command->CommandArgument);
-
-    Value = (Command->Command << SD_COMMAND_INDEX_SHIFT) | Flags;
-    SD_WRITE_REGISTER(Controller, SdRegisterCommand, Value);
-
-    //
-    // If this was a DMA command, just let it sail away.
-    //
-
-    if ((Flags & SD_COMMAND_DMA_ENABLE) != 0) {
-        Status = STATUS_SUCCESS;
-        goto SendCommandEnd;
-    }
-
-    //
-    // Worry about waiting for the status flag if the ISR is also clearing it.
-    //
-
-    ASSERT(Controller->EnabledInterrupts == SD_INTERRUPT_ENABLE_DEFAULT_MASK);
-    ASSERT((Controller->Flags &
-            SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) == 0);
-
-    Timeout = SdpQueryTimeCounter(Controller) +
-              (Frequency * SD_CONTROLLER_TIMEOUT);
-
-    Status = STATUS_TIMEOUT;
-    do {
-        Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
-        if (Value != 0) {
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-    } while (SdpQueryTimeCounter(Controller) <= Timeout);
-
-    if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Got no command complete\n");
-        goto SendCommandEnd;
-    }
-
-    if ((Value & SD_INTERRUPT_STATUS_COMMAND_TIMEOUT_ERROR) != 0) {
-        SdpResetController(Controller, SD_CLOCK_CONTROL_RESET_COMMAND_LINE);
-        Status = STATUS_TIMEOUT;
-        goto SendCommandEnd;
-
-    } else if ((Value & SD_INTERRUPT_STATUS_ERROR_INTERRUPT) != 0) {
-        RtlDebugPrint("SD: Error sending command %d: Status %x.\n",
-                      Command->Command,
-                      Value);
-
-        Status = STATUS_DEVICE_IO_ERROR;
-        goto SendCommandEnd;
-    }
-
-    if ((Value & SD_INTERRUPT_STATUS_COMMAND_COMPLETE) != 0) {
-        SD_WRITE_REGISTER(Controller,
-                          SdRegisterInterruptStatus,
-                          SD_INTERRUPT_STATUS_COMMAND_COMPLETE);
-
-        //
-        // Get the response if there is one.
-        //
-
-        if ((Command->ResponseType & SD_RESPONSE_PRESENT) != 0) {
-            if ((Command->ResponseType & SD_RESPONSE_136_BIT) != 0) {
-                Command->Response[3] = SD_READ_REGISTER(Controller,
-                                                        SdRegisterResponse10);
-
-                Command->Response[2] = SD_READ_REGISTER(Controller,
-                                                        SdRegisterResponse32);
-
-                Command->Response[1] = SD_READ_REGISTER(Controller,
-                                                        SdRegisterResponse54);
-
-                Command->Response[0] = SD_READ_REGISTER(Controller,
-                                                        SdRegisterResponse76);
-
-                if ((Controller->HostCapabilities &
-                     SD_MODE_RESPONSE136_SHIFTED) != 0) {
-
-                    Command->Response[0] =
-                                         (Command->Response[0] << 8) |
-                                         ((Command->Response[1] >> 24) & 0xFF);
-
-                    Command->Response[1] =
-                                         (Command->Response[1] << 8) |
-                                         ((Command->Response[2] >> 24) & 0xFF);
-
-                    Command->Response[2] =
-                                         (Command->Response[2] << 8) |
-                                         ((Command->Response[3] >> 24) & 0xFF);
-
-                    Command->Response[3] = Command->Response[3] << 8;
-                }
-
-            } else {
-                Command->Response[0] = SD_READ_REGISTER(Controller,
-                                                        SdRegisterResponse10);
-            }
-        }
-    }
-
-    if (Command->BufferSize != 0) {
-        if (Command->Write != FALSE) {
-            Status = SdpWriteData(Controller,
-                                  Command->BufferVirtual,
-                                  Command->BufferSize);
-
-        } else {
-            Status = SdpReadData(Controller,
-                                 Command->BufferVirtual,
-                                 Command->BufferSize);
-        }
-
-        if (!KSUCCESS(Status)) {
-            goto SendCommandEnd;
-        }
-    }
-
-    Status = STATUS_SUCCESS;
-
-SendCommandEnd:
-    return Status;
-}
-
-KSTATUS
-SdpReadData (
-    PSD_CONTROLLER Controller,
-    PVOID Data,
-    ULONG Size
-    )
-
-/*++
-
-Routine Description:
-
-    This routine reads polled data from the SD controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    Data - Supplies a pointer to the buffer where the data will be read into.
-
-    Size - Supplies the size in bytes. This must be a multiple of four bytes.
-        It is also assumed that the size is a multiple of the read data length.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PULONG Buffer32;
-    ULONG Count;
-    ULONGLONG Frequency;
-    ULONG IoIndex;
-    ULONG Mask;
-    KSTATUS Status;
-    ULONGLONG Timeout;
-    ULONG Value;
-
-    Buffer32 = (PULONG)Data;
-    Count = Size;
-    if (Count > SD_BLOCK_SIZE) {
-        Count = SD_BLOCK_SIZE;
-    }
-
-    Count /= sizeof(ULONG);
-
-    ASSERT(IS_ALIGNED(Size, sizeof(ULONG)) != FALSE);
-
-    Frequency = HlQueryTimeCounterFrequency();
-    while (Size != 0) {
-
-        //
-        // Get the interrupt status register.
-        //
-
-        Timeout = SdpQueryTimeCounter(Controller) +
-                  (Frequency * SD_CONTROLLER_TIMEOUT);
-
-        Status = STATUS_TIMEOUT;
-        do {
-            Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
-            if (Value != 0) {
-                Status = STATUS_SUCCESS;
-                break;
-            }
-
-        } while (SdpQueryTimeCounter(Controller) <= Timeout);
-
-        if (!KSUCCESS(Status)) {
-            return Status;
-        }
-
-        Mask = SD_INTERRUPT_STATUS_DATA_TIMEOUT_ERROR |
-               SD_INTERRUPT_STATUS_DATA_CRC_ERROR |
-               SD_INTERRUPT_STATUS_DATA_END_BIT_ERROR;
-
-        if ((Value & Mask) != 0) {
-            SdpResetController(Controller, SD_CLOCK_CONTROL_RESET_DATA_LINE);
-        }
-
-        if ((Value & SD_INTERRUPT_STATUS_ERROR_INTERRUPT) != 0) {
-            RtlDebugPrint("SD: Data error on read: Status %x\n", Value);
-            return STATUS_DEVICE_IO_ERROR;
-        }
-
-        if ((Value & SD_INTERRUPT_STATUS_BUFFER_READ_READY) != 0) {
-
-            //
-            // Acknowledge this batch of interrupts.
-            //
-
-            SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, Value);
-            Value = 0;
-            for (IoIndex = 0; IoIndex < Count; IoIndex += 1) {
-                *Buffer32 = SD_READ_REGISTER(Controller,
-                                             SdRegisterBufferDataPort);
-
-                Buffer32 += 1;
-            }
-
-            Size -= Count * sizeof(ULONG);
-        }
-    }
-
-    Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
-    Mask = SD_INTERRUPT_STATUS_BUFFER_WRITE_READY |
-           SD_INTERRUPT_STATUS_TRANSFER_COMPLETE;
-
-    if ((Value & Mask) != 0) {
-        SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, Value);
-    }
-
-    return STATUS_SUCCESS;
-}
-
-KSTATUS
-SdpWriteData (
-    PSD_CONTROLLER Controller,
-    PVOID Data,
-    ULONG Size
-    )
-
-/*++
-
-Routine Description:
-
-    This routine writes polled data to the SD controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    Data - Supplies a pointer to the buffer containing the data to write.
-
-    Size - Supplies the size in bytes. This must be a multiple of 4 bytes. It
-        is also assumed that the size is a multiple of the write data length.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PULONG Buffer32;
-    ULONG Count;
-    ULONGLONG Frequency;
-    ULONG IoIndex;
-    ULONG Mask;
-    KSTATUS Status;
-    ULONGLONG Timeout;
-    ULONG Value;
-
-    Buffer32 = (PULONG)Data;
-    Count = Size;
-    if (Count > SD_BLOCK_SIZE) {
-        Count = SD_BLOCK_SIZE;
-    }
-
-    Count /= sizeof(ULONG);
-
-    ASSERT(IS_ALIGNED(Size, sizeof(ULONG)) != FALSE);
-
-    Frequency = HlQueryTimeCounterFrequency();
-    while (Size != 0) {
-
-        //
-        // Get the interrupt status register.
-        //
-
-        Timeout = SdpQueryTimeCounter(Controller) +
-                  (Frequency * SD_CONTROLLER_TIMEOUT);
-
-        Status = STATUS_TIMEOUT;
-        do {
-            Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
-            if (Value != 0) {
-                Status = STATUS_SUCCESS;
-                break;
-            }
-
-        } while (SdpQueryTimeCounter(Controller) <= Timeout);
-
-        if (!KSUCCESS(Status)) {
-            return Status;
-        }
-
-        Mask = SD_INTERRUPT_STATUS_DATA_TIMEOUT_ERROR |
-               SD_INTERRUPT_STATUS_DATA_CRC_ERROR |
-               SD_INTERRUPT_STATUS_DATA_END_BIT_ERROR;
-
-        if ((Value & Mask) != 0) {
-            SdpResetController(Controller, SD_CLOCK_CONTROL_RESET_DATA_LINE);
-        }
-
-        if ((Value & SD_INTERRUPT_STATUS_ERROR_INTERRUPT) != 0) {
-            RtlDebugPrint("SD : Data error on write: Status %x\n", Value);
-            return STATUS_DEVICE_IO_ERROR;
-        }
-
-        if ((Value & SD_INTERRUPT_STATUS_BUFFER_WRITE_READY) != 0) {
-
-            //
-            // Acknowledge this batch of interrupts.
-            //
-
-            SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, Value);
-            Value = 0;
-            for (IoIndex = 0; IoIndex < Count; IoIndex += 1) {
-                SD_WRITE_REGISTER(Controller,
-                                  SdRegisterBufferDataPort,
-                                  *Buffer32);
-
-                Buffer32 += 1;
-            }
-
-            Size -= Count * sizeof(ULONG);
-        }
-    }
-
-    Mask = SD_INTERRUPT_STATUS_BUFFER_READ_READY |
-           SD_INTERRUPT_STATUS_TRANSFER_COMPLETE;
-
-    if ((Value & Mask) != 0) {
-        SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, Value);
-    }
-
-    return STATUS_SUCCESS;
-}
-
-KSTATUS
-SdpResetController (
-    PSD_CONTROLLER Controller,
-    ULONG ResetBit
-    )
-
-/*++
-
-Routine Description:
-
-    This routine performs a soft reset of the SD controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    ResetBit - Supplies the bit to apply to the clock control register to
-        cause the reset. See SD_CLOCK_CONTROL_RESET_* definitions.
-
-Return Value:
-
-    STATUS_SUCCESS on success.
-
-    STATUS_TIMEOUT if the reset bit became stuck on.
-
---*/
-
-{
-
-    ULONGLONG Frequency;
-    KSTATUS Status;
-    ULONGLONG Timeout;
-    ULONG Value;
-
-    Value = SD_READ_REGISTER(Controller, SdRegisterClockControl);
-    SD_WRITE_REGISTER(Controller, SdRegisterClockControl, Value | ResetBit);
-    Frequency = HlQueryTimeCounterFrequency();
-    Timeout = SdpQueryTimeCounter(Controller) +
-              (Frequency * SD_CONTROLLER_TIMEOUT);
-
-    Status = STATUS_TIMEOUT;
-    do {
-        Value = SD_READ_REGISTER(Controller, SdRegisterClockControl);
-        if ((Value & ResetBit) == 0) {
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-    } while (SdpQueryTimeCounter(Controller) <= Timeout);
-
-    Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
-    SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, Value);
-    return Status;
-}
-
-KSTATUS
-SdpErrorRecovery (
-    PSD_CONTROLLER Controller
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to perform recovery after an error.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    KSTATUS Status;
-
-    //
-    // Perform an asychronous abort, which will clear any interrupts, abort the
-    // command and reset the command and data lines. This will also wait until
-    // the card has returned to the transfer state.
-    //
-
-    Status = SdpAsynchronousAbort(Controller);
-    if (!KSUCCESS(Status)) {
-        goto ErrorRecoveryEnd;
-    }
-
-ErrorRecoveryEnd:
     return Status;
 }
 
@@ -3677,54 +2558,15 @@ Return Value:
 
 {
 
-    ULONGLONG Frequency;
     KSTATUS Status;
-    ULONGLONG Timeout;
-    ULONG Value;
 
-    SdpSetDmaInterrupts(Controller, FALSE);
-    SD_WRITE_REGISTER(Controller,
-                      SdRegisterInterruptStatus,
-                      SD_INTERRUPT_STATUS_ALL_MASK);
-
-    //
-    // Stop any current transfer at a block gap.
-    //
-
-    Value = SD_READ_REGISTER(Controller, SdRegisterHostControl);
-    Value |= SD_HOST_CONTROL_STOP_AT_BLOCK_GAP;
-    SD_WRITE_REGISTER(Controller, SdRegisterHostControl, Value);
-
-    //
-    // Wait for the transfer to complete.
-    //
-
-    Frequency = HlQueryTimeCounterFrequency();
-    Timeout = SdpQueryTimeCounter(Controller) +
-              (Frequency * SD_CONTROLLER_TIMEOUT);
-
-    Status = STATUS_TIMEOUT;
-    do {
-        Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
-        if ((Value & SD_INTERRUPT_STATUS_TRANSFER_COMPLETE) != 0) {
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-    } while (SdpQueryTimeCounter(Controller) <= Timeout);
+    Status = Controller->FunctionTable.StopDataTransfer(
+                                                  Controller,
+                                                  Controller->ConsumerContext);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SD: Stop at block gap timed out: 0x%08x\n", Value);
         goto SynchronousAbortEnd;
     }
-
-    //
-    // Clear the transfer complete.
-    //
-
-    SD_WRITE_REGISTER(Controller,
-                      SdRegisterInterruptStatus,
-                      SD_INTERRUPT_STATUS_TRANSFER_COMPLETE);
 
     //
     // Perform an asynchronous abort.
@@ -3765,12 +2607,15 @@ Return Value:
 {
 
     ULONG CardStatus;
+    SD_COMMAND Command;
     ULONGLONG Frequency;
-    ULONG Reset;
+    ULONG ResetFlags;
     KSTATUS Status;
     ULONGLONG Timeout;
 
-    SdpSetDmaInterrupts(Controller, FALSE);
+    RtlZeroMemory(&Command, sizeof(SD_COMMAND));
+    Command.Command = SdCommandStopTransmission;
+    Command.ResponseType = SD_RESPONSE_NONE;
 
     //
     // Attempt to send the abort command until the card enters the transfer
@@ -3778,11 +2623,15 @@ Return Value:
     //
 
     Frequency = HlQueryTimeCounterFrequency();
-    Timeout = SdpQueryTimeCounter(Controller) +
+    Timeout = SdQueryTimeCounter(Controller) +
               (Frequency * SD_CONTROLLER_STATUS_TIMEOUT);
 
     while (TRUE) {
-        Status = SdpSendAbortCommand(Controller);
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
         if (!KSUCCESS(Status)) {
             goto AsynchronousAbortEnd;
         }
@@ -3791,10 +2640,12 @@ Return Value:
         // Reset the command and data lines.
         //
 
-        Reset = SD_CLOCK_CONTROL_RESET_COMMAND_LINE |
-                SD_CLOCK_CONTROL_RESET_DATA_LINE;
+        ResetFlags = SD_RESET_FLAG_COMMAND_LINE | SD_RESET_FLAG_DATA_LINE;
+        Status = Controller->FunctionTable.ResetController(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   ResetFlags);
 
-        Status = SdpResetController(Controller, Reset);
         if (!KSUCCESS(Status)) {
             goto AsynchronousAbortEnd;
         }
@@ -3835,7 +2686,7 @@ Return Value:
             break;
         }
 
-        if (SdpQueryTimeCounter(Controller) > Timeout) {
+        if (SdQueryTimeCounter(Controller) > Timeout) {
             Status = STATUS_TIMEOUT;
             break;
         }
@@ -3852,253 +2703,5 @@ Return Value:
 
 AsynchronousAbortEnd:
     return Status;
-}
-
-KSTATUS
-SdpSendAbortCommand (
-    PSD_CONTROLLER Controller
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sends an abort command to the SD Controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ULONG Command;
-    ULONGLONG Frequency;
-    KSTATUS Status;
-    ULONGLONG Timeout;
-    ULONG Value;
-
-    //
-    // Wait for the previous command to complete.
-    //
-
-    Frequency = HlQueryTimeCounterFrequency();
-    Timeout = SdpQueryTimeCounter(Controller) +
-              (Frequency * SD_CONTROLLER_TIMEOUT);
-
-    Status = STATUS_TIMEOUT;
-    do {
-        Value = SD_READ_REGISTER(Controller, SdRegisterPresentState);
-        if ((Value & SD_STATE_COMMAND_INHIBIT) == 0) {
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-    } while (SdpQueryTimeCounter(Controller) <= Timeout);
-
-    if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SD: Abort commands inhibited: %x\n", Value);
-        goto SendAbortCommandEnd;
-    }
-
-    //
-    // Clear interrupts from the previous command.
-    //
-
-    SD_WRITE_REGISTER(Controller,
-                      SdRegisterInterruptStatus,
-                      SD_INTERRUPT_STATUS_ALL_MASK);
-
-    //
-    // Write the abort command. The Argument 1 register is not used for the
-    // stop transmission command.
-    //
-
-    Command = (SdCommandStopTransmission << SD_COMMAND_INDEX_SHIFT) |
-              SD_COMMAND_TYPE_ABORT;
-
-    SD_WRITE_REGISTER(Controller, SdRegisterCommand, Command);
-
-    //
-    // Wait for the abort command to complete.
-    //
-
-    Timeout = SdpQueryTimeCounter(Controller) +
-              (Frequency * SD_CONTROLLER_TIMEOUT);
-
-    Status = STATUS_TIMEOUT;
-    do {
-        Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
-        if (Value != 0) {
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-    } while (SdpQueryTimeCounter(Controller) <= Timeout);
-
-    if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SD: Abort command timed out: 0x%08x\n", Value);
-        goto SendAbortCommandEnd;
-    }
-
-    //
-    // Acknowledge the completion.
-    //
-
-    if ((Value & SD_INTERRUPT_STATUS_COMMAND_COMPLETE) != 0) {
-        SD_WRITE_REGISTER(Controller,
-                          SdRegisterInterruptStatus,
-                          SD_INTERRUPT_STATUS_COMMAND_COMPLETE);
-    }
-
-    //
-    // Handle any errors.
-    //
-
-    if ((Value & SD_INTERRUPT_STATUS_COMMAND_TIMEOUT_ERROR) != 0) {
-        SdpResetController(Controller, SD_CLOCK_CONTROL_RESET_COMMAND_LINE);
-        Status = STATUS_TIMEOUT;
-        goto SendAbortCommandEnd;
-
-    } else if ((Value & SD_INTERRUPT_STATUS_ERROR_INTERRUPT) != 0) {
-        RtlDebugPrint("SD: Error sending abort: Status %x.\n", Value);
-        Status = STATUS_DEVICE_IO_ERROR;
-        goto SendAbortCommandEnd;
-    }
-
-    Status = STATUS_SUCCESS;
-
-SendAbortCommandEnd:
-    return Status;
-}
-
-VOID
-SdpSetDmaInterrupts (
-    PSD_CONTROLLER Controller,
-    BOOL Enable
-    )
-
-/*++
-
-Routine Description:
-
-    This routine enables or disables interrupts necessary to perform block I/O
-    via DMA. It is assumed that the caller has synchronized disk access on this
-    controller and there are currently no DMA or polled operations in flight.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    Enable - Supplies a boolean indicating if the DMA interrupts are to be
-        enabled (TRUE) or disabled (FALSE).
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ULONG Flags;
-    ULONG Value;
-
-    Flags = Controller->Flags;
-
-    //
-    // Enable the interrupts for transfer completion so that DMA operations
-    // can complete asynchronously. Unless, of course, the DMA interrupts are
-    // already enabled.
-    //
-
-    if (Enable != FALSE) {
-        if ((Flags & SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) != 0) {
-            return;
-        }
-
-        Controller->EnabledInterrupts |= SD_INTERRUPT_ENABLE_ERROR_MASK |
-                                         SD_INTERRUPT_ENABLE_TRANSFER_COMPLETE;
-
-        RtlMemoryBarrier();
-        SD_WRITE_REGISTER(Controller,
-                          SdRegisterInterruptSignalEnable,
-                          Controller->EnabledInterrupts);
-
-        Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatusEnable);
-
-        ASSERT((Value & SD_INTERRUPT_ENABLE_TRANSFER_COMPLETE) != 0);
-
-        Value |= SD_INTERRUPT_ENABLE_ERROR_MASK;
-        SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatusEnable, Value);
-        RtlAtomicOr32(&(Controller->Flags),
-                      SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED);
-
-    //
-    // Disable the DMA interrupts so that they do not interfere with polled I/O
-    // attempts to check the transfer status. Do nothing if the DMA interrupts
-    // are disabled.
-    //
-
-    } else {
-        if ((Flags & SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) == 0) {
-            return;
-        }
-
-        Controller->EnabledInterrupts &=
-                                      ~(SD_INTERRUPT_ENABLE_ERROR_MASK |
-                                        SD_INTERRUPT_ENABLE_TRANSFER_COMPLETE);
-
-        RtlMemoryBarrier();
-        SD_WRITE_REGISTER(Controller,
-                          SdRegisterInterruptSignalEnable,
-                          Controller->EnabledInterrupts);
-
-        Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatusEnable);
-        Value &= ~SD_INTERRUPT_ENABLE_ERROR_MASK;
-        SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatusEnable, Value);
-        RtlAtomicAnd32(&(Controller->Flags),
-                       ~SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED);
-    }
-
-    return;
-}
-
-ULONGLONG
-SdpQueryTimeCounter (
-    PSD_CONTROLLER Controller
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns a snap of the time counter. Depending on the mode of
-    the SD controller, this may be just a recent snap of the time counter or
-    the current value in the hardware.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-Return Value:
-
-    Returns the number of ticks that have elapsed since the system was booted,
-    or a recent tick value.
-
---*/
-
-{
-
-    if ((Controller->Flags & SD_CONTROLLER_FLAG_CRITICAL_MODE) == 0) {
-        return KeGetRecentTimeCounter();
-    }
-
-    return HlQueryTimeCounter();
 }
 

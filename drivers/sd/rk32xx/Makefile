@@ -4,16 +4,15 @@
 #
 #   Module Name:
 #
-#       SD
+#       SD Rockchip 32xx
 #
 #   Abstract:
 #
-#       This module implements the Secure Digital host controller driver. It
-#       can be used as a standalone driver or imported as a support library.
+#       This module implements the Rockchip 32xx SD controller driver.
 #
 #   Author:
 #
-#       Evan Green 27-Feb-2014
+#       Chris Stevens 29-Jul-2015
 #
 #   Environment:
 #
@@ -21,17 +20,16 @@
 #
 ################################################################################
 
-BINARY = sd.drv
+BINARY = sdrk32xx.drv
 
 BINARYTYPE = so
 
 BINPLACE = bin
 
-OBJS = sd.o         \
-       sdlib.o      \
-       sdstd.o      \
+OBJS = sdrk32.o    \
 
 DYNLIBS = $(BINROOT)/kernel             \
+          $(BINROOT)/sd.drv             \
 
 include $(SRCROOT)/os/minoca.mk
 

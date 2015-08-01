@@ -40,7 +40,7 @@ DefinitionBlock (
         Device(EHCI) {
             Name(_HID, EISAID("PNP0D20"))
             Name(_UID, 0)
-            Method (_STA, 0, NotSerialized) {
+            Method(_STA, 0, NotSerialized) {
                 Return(0x0F)
             }
 
@@ -54,6 +54,26 @@ DefinitionBlock (
                             0x00000400)
 
                 Interrupt(, Level, ActiveHigh,) {56}
+            })
+        }
+
+        Device(SDMC) {
+            Name(_HID, "RK320D40")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0xFF0C0000,
+                            0xFF0C0FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {64}
             })
         }
     }

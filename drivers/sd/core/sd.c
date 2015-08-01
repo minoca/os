@@ -918,14 +918,14 @@ Return Value:
     ASSERT(BlockOffset < Disk->BlockCount);
     ASSERT(BlockCount >= 1);
 
-    SdBlockIoDma(Disk->Controller,
-                 BlockOffset,
-                 BlockCount,
-                 IoBuffer,
-                 0,
-                 Write,
-                 SdpDmaCompletion,
-                 Disk);
+    SdStandardBlockIoDma(Disk->Controller,
+                         BlockOffset,
+                         BlockCount,
+                         IoBuffer,
+                         0,
+                         Write,
+                         SdpDmaCompletion,
+                         Disk);
 
     //
     // DMA transfers are self perpetuating, so after kicking off this first
@@ -1117,7 +1117,7 @@ Return Value:
             break;
         }
 
-        Status = SdInterruptService(Slot->Controller);
+        Status = SdStandardInterruptService(Slot->Controller);
         if (Status != InterruptStatusNotClaimed) {
             TotalStatus = Status;
         }
@@ -1684,20 +1684,21 @@ Return Value:
     if (Slot->Controller == NULL) {
         RtlZeroMemory(&Parameters, sizeof(SD_INITIALIZATION_BLOCK));
         Parameters.ConsumerContext = Slot;
-        Parameters.ControllerBase = Slot->ControllerBase;
+        Parameters.StandardControllerBase = Slot->ControllerBase;
         Parameters.HostCapabilities = SD_MODE_AUTO_CMD12 |
                                       SD_MODE_4BIT |
                                       SD_MODE_RESPONSE136_SHIFTED;
 
-        Parameters.MediaChangeCallback = SdpMediaChangeEvent;
+        Parameters.FunctionTable.MediaChangeCallback = SdpMediaChangeEvent;
         Slot->Controller = SdCreateController(&Parameters);
         if (Slot->Controller == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto StartDeviceEnd;
         }
+
+        Slot->Controller->InterruptHandle = Slot->Parent->InterruptHandle;
     }
 
-    SdSetInterruptHandle(Slot->Controller, Slot->Parent->InterruptHandle);
     Status = STATUS_SUCCESS;
 
 StartDeviceEnd:
@@ -1833,7 +1834,7 @@ Return Value:
         // don't bother reporting the disk if it got removed.
         //
 
-        Status = SdInitializeDma(NewDisk->Controller);
+        Status = SdStandardInitializeDma(NewDisk->Controller);
         if (KSUCCESS(Status)) {
             NewDisk->Flags |= SD_DISK_FLAG_DMA_SUPPORTED;
 
@@ -2128,14 +2129,14 @@ Return Value:
         Write = TRUE;
     }
 
-    SdBlockIoDma(Disk->Controller,
-                 BlockOffset,
-                 BlockCount,
-                 Irp->U.ReadWrite.IoBuffer,
-                 Irp->U.ReadWrite.IoBytesCompleted,
-                 Write,
-                 SdpDmaCompletion,
-                 Disk);
+    SdStandardBlockIoDma(Disk->Controller,
+                         BlockOffset,
+                         BlockCount,
+                         Irp->U.ReadWrite.IoBuffer,
+                         Irp->U.ReadWrite.IoBytesCompleted,
+                         Write,
+                         SdpDmaCompletion,
+                         Disk);
 
     return;
 }

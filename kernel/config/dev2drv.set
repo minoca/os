@@ -61,6 +61,7 @@ DKTestDevice=ktestdrv.drv
 DVID_0424&PID_EC00=smsc95xx.drv
 DOMAP4501=sdomap4.drv
 DBCM0D40=sdbm2709.drv
+DRK320D40=sdrk32xx.drv
 DDWC0000=dwhci.drv
 DSMC91C1=smsc91c1.drv
 DSdSlot=null.drv
