@@ -1955,6 +1955,11 @@ Return Value:
     KSTATUS Status;
 
     NewHandle = (HANDLE)(UINTN)CopyDescriptor;
+    if (CopyDescriptor < 0) {
+        errno = EBADF;
+        return -1;
+    }
+
     Status = OsDuplicateHandle((HANDLE)(UINTN)FileDescriptor, &NewHandle, 0);
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);

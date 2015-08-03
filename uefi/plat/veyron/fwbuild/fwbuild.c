@@ -30,6 +30,7 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "uefifw.h"
 
@@ -537,6 +538,7 @@ Return Value:
     DataFile = NULL;
     DigestFile = NULL;
     SignatureBuffer = NULL;
+    SignatureBufferSize = 0;
     SignatureFile = NULL;
 
     //
