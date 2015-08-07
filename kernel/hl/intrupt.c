@@ -41,6 +41,14 @@ Environment:
 #define INTERRUPT_COMPLETION_TIMEOUT 5
 
 //
+// Pick a value for dynamic GSIs to start that's not expected to conflict with
+// any real interrupt controller lines.
+//
+
+#define DYNAMIC_GSI_BASE 0x8000
+#define DYNAMIC_GSI_LIMIT 0xA000
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -70,7 +78,7 @@ HlpInterruptReleaseLock (
 
 PINTERRUPT_CONTROLLER
 HlpInterruptGetControllerByIdentifier (
-    ULONGLONG Identifier
+    UINTN Identifier
     );
 
 KSTATUS
@@ -107,7 +115,14 @@ KSPIN_LOCK HlInterruptControllerLock;
 // Store the list of registered interrupt controller hardware.
 //
 
-LIST_ENTRY HlInterruptControllers;
+PINTERRUPT_CONTROLLER HlInterruptControllers[MAX_INTERRUPT_CONTROLLERS];
+ULONG HlInterruptControllerCount;
+
+//
+// Store the next GSI to be dynamically allocated.
+//
+
+ULONG HlNextDynamicGsi = DYNAMIC_GSI_BASE;
 
 //
 // Store the number of spurious interrupts that have occurred.
@@ -145,6 +160,317 @@ Return Value:
 {
 
     return InterruptModelApic;
+}
+
+KERNEL_API
+KSTATUS
+HlCreateInterruptController (
+    ULONG ParentGsi,
+    ULONG LineCount,
+    PINTERRUPT_CONTROLLER_DESCRIPTION Registration,
+    PINTERRUPT_CONTROLLER_INFORMATION ResultingInformation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates an interrupt controller outside of the normal hardware
+    module context. It is used primarily by GPIO controllers that function as a
+    kind of secondary interrupt controller.
+
+Arguments:
+
+    ParentGsi - Supplies the global system interrupt number of the interrupt
+        controller line this controller wires up to.
+
+    LineCount - Supplies the number of lines this interrupt controller contains.
+
+    Registration - Supplies a pointer to the interrupt controller information,
+        filled out correctly by the caller.
+
+    ResultingInformation - Supplies a pointer where the interrupt controller
+        handle and other information will be returned.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PINTERRUPT_CONTROLLER Controller;
+    ULONG Gsi;
+    INTERRUPT_LINES_DESCRIPTION Lines;
+    INTERRUPT_LINE OutputLine;
+    KSTATUS Status;
+    BOOL WasEnabled;
+
+    if ((LineCount == 0) || (Registration->ProcessorCount != 0)) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    //
+    // Find the controller this controller is hooked up to by converting its
+    // parent GSI to an interrupt controller and line.
+    //
+
+    OutputLine.Type = InterruptLineGsi;
+    OutputLine.Gsi = ParentGsi;
+    Status = HlpInterruptConvertLineToControllerSpecified(&OutputLine);
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    Status = HlpInterruptRegisterHardware(Registration, &Controller);
+    if (!KSUCCESS(Status)) {
+        goto CreateInterruptControllerEnd;
+    }
+
+    //
+    // Go find a GSI range for this controller.
+    //
+
+    Status = STATUS_SUCCESS;
+    Gsi = 0;
+    WasEnabled = HlpInterruptAcquireLock();
+    if (HlNextDynamicGsi + LineCount > DYNAMIC_GSI_LIMIT) {
+        Status = STATUS_RESOURCE_IN_USE;
+
+    } else {
+        Gsi = HlNextDynamicGsi;
+        HlNextDynamicGsi += LineCount;
+    }
+
+    HlpInterruptReleaseLock(WasEnabled);
+    if (!KSUCCESS(Status)) {
+        goto CreateInterruptControllerEnd;
+    }
+
+    //
+    // Register the output line of the controller as the input line of another.
+    //
+
+    RtlZeroMemory(&Lines, sizeof(INTERRUPT_LINES_DESCRIPTION));
+    Lines.Version = INTERRUPT_LINES_DESCRIPTION_VERSION;
+    Lines.Controller = Registration->Identifier;
+    Lines.Type = InterruptLinesOutput;
+    Lines.LineStart = OutputLine.Line;
+    Lines.LineEnd = Lines.LineStart + 1;
+    Lines.Gsi = INTERRUPT_LINES_GSI_NONE;
+    Lines.OutputControllerIdentifier = OutputLine.Controller;
+    Status = HlpInterruptRegisterLines(&Lines);
+    if (!KSUCCESS(Status)) {
+        goto CreateInterruptControllerEnd;
+    }
+
+    //
+    // Now register the input lines this controller has, on its dynamically
+    // allocated GSI.
+    //
+
+    Lines.Type = InterruptLinesStandardPin;
+    Lines.LineStart = 0;
+    Lines.LineEnd = LineCount;
+    Lines.Gsi = Gsi;
+    Status = HlpInterruptRegisterLines(&Lines);
+    if (!KSUCCESS(Status)) {
+        goto CreateInterruptControllerEnd;
+    }
+
+    ResultingInformation->Controller = Controller;
+    ResultingInformation->StartingGsi = Gsi;
+    ResultingInformation->LineCount = LineCount;
+    Status = STATUS_SUCCESS;
+
+CreateInterruptControllerEnd:
+    return Status;
+}
+
+KERNEL_API
+VOID
+HlDestroyInterruptController (
+    PINTERRUPT_CONTROLLER Controller
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys an interrupt controller, taking it offline and
+    releasing all resources associated with it.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINTN Count;
+    BOOL Enabled;
+    UINTN Index;
+
+    //
+    // Acquire the lock to synchronize with creation, but the array is still
+    // used by other cores servicing interrupts, so be careful.
+    //
+
+    Enabled = HlpInterruptAcquireLock();
+    Count = HlInterruptControllerCount;
+    for (Index = 0; Index < Count; Index += 1) {
+
+        //
+        // Replace this index with the last index, and shrink the array size.
+        // There will be a period where the same controller is visible in the
+        // array twice, but that causes no damage.
+        //
+
+        if (HlInterruptControllers[Index] == Controller) {
+            HlInterruptControllers[Index] = HlInterruptControllers[Count - 1];
+            HlInterruptControllerCount -= 1;
+            HlInterruptControllers[Count - 1] = NULL;
+            break;
+        }
+    }
+
+    HlpInterruptReleaseLock(Enabled);
+
+    ASSERT(Index != Count);
+
+    //
+    // Stall before returning to "ensure" that other cores servicing interrupts
+    // have completed. This is weak, but interrupt controllers aren't really
+    // expected to be coming and going. The memory and GSI range are leaked.
+    //
+
+    HlBusySpin(100000);
+    return;
+}
+
+KERNEL_API
+KSTATUS
+HlGetInterruptControllerInformation (
+    UINTN Identifier,
+    PINTERRUPT_CONTROLLER_INFORMATION Information
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns information about an interrupt controller with a
+    specific ID.
+
+Arguments:
+
+    Identifier - Supplies the identifier of the interrupt controller.
+
+    Information - Supplies a pointer where the interrupt controller information
+        will be returned on success.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NOT_FOUND if no interrupt controller matching the given identifier
+    exists in the system.
+
+--*/
+
+{
+
+    PINTERRUPT_CONTROLLER Controller;
+    BOOL Enabled;
+    PINTERRUPT_LINES Lines;
+    KSTATUS Status;
+
+    Status = STATUS_NOT_FOUND;
+    Information->StartingGsi = INTERRUPT_LINES_GSI_NONE;
+    Information->LineCount = 0;
+    Enabled = HlpInterruptAcquireLock();
+    Controller = HlpInterruptGetControllerByIdentifier(Identifier);
+    if (Controller != NULL) {
+        Status = STATUS_SUCCESS;
+        Information->Controller = Controller;
+        if (!LIST_EMPTY(&(Controller->LinesHead))) {
+            Lines = LIST_VALUE(Controller->LinesHead.Next,
+                               INTERRUPT_LINES,
+                               ListEntry);
+
+            Information->StartingGsi = Lines->Gsi;
+            Information->LineCount = Lines->LineEnd - Lines->LineStart;
+        }
+    }
+
+    HlpInterruptReleaseLock(Enabled);
+    return Status;
+}
+
+KERNEL_API
+INTERRUPT_STATUS
+HlSecondaryInterruptControllerService (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements a standard interrupt service routine for an
+    interrupt that is wired to another interrupt controller. It will call out
+    to determine what fired, and begin a new secondary interrupt.
+
+Arguments:
+
+    Context - Supplies the context, which must be a pointer to the secondary
+        interrupt controller that needs service.
+
+Return Value:
+
+    Returns an interrupt status indicating if this ISR is claiming the
+    interrupt, not claiming the interrupt, or needs the interrupt to be
+    masked temporarily.
+
+--*/
+
+{
+
+    INTERRUPT_CAUSE Cause;
+    PINTERRUPT_CONTROLLER Controller;
+    INTERRUPT_STATUS InterruptStatus;
+    ULONG MagicCandy;
+    ULONG Vector;
+
+    Controller = Context;
+    InterruptStatus = InterruptStatusClaimed;
+    Cause = HlpInterruptAcknowledge(&Controller, &Vector, &MagicCandy);
+    if (Cause == InterruptCauseLineFired) {
+
+        //
+        // Dispatch a new interrupt to the system.
+        //
+
+        RtlDebugPrint("TODO: Begin new interrupt %x %x\n", Vector, MagicCandy);
+
+        //
+        // Complete the inner interrupt.
+        //
+
+        Controller->FunctionTable.EndOfInterrupt(Controller->PrivateContext,
+                                                 MagicCandy);
+
+    } else if (Cause != InterruptCauseSpuriousInterrupt) {
+        InterruptStatus = InterruptStatusNotClaimed;
+    }
+
+    return InterruptStatus;
 }
 
 PKINTERRUPT
@@ -439,6 +765,7 @@ HlEnableInterruptLine (
     ULONGLONG GlobalSystemInterruptNumber,
     INTERRUPT_MODE TriggerMode,
     INTERRUPT_ACTIVE_LEVEL Polarity,
+    ULONG LineStateFlags,
     PKINTERRUPT Interrupt
     )
 
@@ -457,6 +784,9 @@ Arguments:
 
     Polarity - Supplies the polarity of the interrupt.
 
+    LineStateFlags - Supplies additional line state flags to set. The flags
+        INTERRUPT_LINE_STATE_FLAG_ENABLED will be ORed in automatically.
+
     Interrupt - Supplies a pointer to the interrupt structure this line will
         be connected to.
 
@@ -468,7 +798,6 @@ Return Value:
 
 {
 
-    ULONG Flags;
     INTERRUPT_LINE Line;
     RUNLEVEL OldRunLevel;
     INTERRUPT_LINE OutputLine;
@@ -481,8 +810,8 @@ Return Value:
     Line.Gsi = GlobalSystemInterruptNumber;
     Target.Target = ProcessorTargetAny;
     HlpInterruptGetStandardCpuLine(&OutputLine);
-    Flags = INTERRUPT_LINE_STATE_FLAG_ENABLED |
-            INTERRUPT_LINE_STATE_FLAG_LOWEST_PRIORITY;
+    LineStateFlags |= INTERRUPT_LINE_STATE_FLAG_ENABLED |
+                      INTERRUPT_LINE_STATE_FLAG_LOWEST_PRIORITY;
 
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     Status = HlpInterruptSetLineState(&Line,
@@ -491,7 +820,7 @@ Return Value:
                                       Interrupt,
                                       &Target,
                                       &OutputLine,
-                                      Flags);
+                                      LineStateFlags);
 
     KeLowerRunLevel(OldRunLevel);
     return Status;
@@ -584,7 +913,8 @@ Return Value:
 {
 
     PINTERRUPT_CONTROLLER Controller;
-    PLIST_ENTRY CurrentEntry;
+    ULONG ControllerCount;
+    ULONG ControllerIndex;
     ULONG Flags;
     PINTERRUPT_GET_MESSAGE_INFORMATION GetMessageInformation;
     INTERRUPT_LINE OutputLine;
@@ -615,9 +945,16 @@ Return Value:
     //
 
     Status = STATUS_NOT_SUPPORTED;
-    CurrentEntry = HlInterruptControllers.Next;
-    while (CurrentEntry != &HlInterruptControllers) {
-        Controller = LIST_VALUE(CurrentEntry, INTERRUPT_CONTROLLER, ListEntry);
+    ControllerCount = HlInterruptControllerCount;
+    for (ControllerIndex = 0;
+         ControllerIndex < ControllerCount;
+         ControllerIndex += 1) {
+
+        Controller = HlInterruptControllers[ControllerIndex];
+        if (Controller == NULL) {
+            continue;
+        }
+
         GetMessageInformation = Controller->FunctionTable.GetMessageInformation;
         if (GetMessageInformation != NULL) {
             Status = GetMessageInformation(Vector,
@@ -629,8 +966,6 @@ Return Value:
 
             break;
         }
-
-        CurrentEntry = CurrentEntry->Next;
     }
 
 GetMsiInformationEnd:
@@ -661,7 +996,8 @@ Return Value:
 {
 
     PINTERRUPT_CONTROLLER Controller;
-    PLIST_ENTRY CurrentEntry;
+    ULONG ControllerCount;
+    ULONG ControllerIndex;
     PPROCESSOR_BLOCK ProcessorBlock;
     KSTATUS Status;
 
@@ -678,7 +1014,6 @@ Return Value:
     //
 
     if (KeGetCurrentProcessorNumber() == 0) {
-        INITIALIZE_LIST_HEAD(&HlInterruptControllers);
         KeInitializeSpinLock(&HlInterruptControllerLock);
 
         //
@@ -694,13 +1029,16 @@ Return Value:
         // Initialize all controllers.
         //
 
-        CurrentEntry = HlInterruptControllers.Next;
-        while (CurrentEntry != &HlInterruptControllers) {
-            Controller = LIST_VALUE(CurrentEntry,
-                                    INTERRUPT_CONTROLLER,
-                                    ListEntry);
+        ControllerCount = HlInterruptControllerCount;
+        for (ControllerIndex = 0;
+             ControllerIndex < ControllerCount;
+             ControllerIndex += 1) {
 
-            CurrentEntry = CurrentEntry->Next;
+            Controller = HlInterruptControllers[ControllerIndex];
+            if (Controller == NULL) {
+                continue;
+            }
+
             Status = HlpInterruptInitializeController(Controller);
             if (!KSUCCESS(Status)) {
                 goto InitializeInterruptsEnd;
@@ -723,10 +1061,16 @@ Return Value:
     // set up the first time around, as IPIs weren't initialized.
     //
 
-    CurrentEntry = HlInterruptControllers.Next;
-    while (CurrentEntry != &HlInterruptControllers) {
-        Controller = LIST_VALUE(CurrentEntry, INTERRUPT_CONTROLLER, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
+    ControllerCount = HlInterruptControllerCount;
+    for (ControllerIndex = 0;
+         ControllerIndex < ControllerCount;
+         ControllerIndex += 1) {
+
+        Controller = HlInterruptControllers[ControllerIndex];
+        if (Controller == NULL) {
+            continue;
+        }
+
         Status = HlpInterruptInitializeLocalUnit(Controller);
         if (!KSUCCESS(Status)) {
             goto InitializeInterruptsEnd;
@@ -741,7 +1085,8 @@ InitializeInterruptsEnd:
 
 KSTATUS
 HlpInterruptRegisterHardware (
-    PINTERRUPT_CONTROLLER_DESCRIPTION ControllerDescription
+    PINTERRUPT_CONTROLLER_DESCRIPTION ControllerDescription,
+    PINTERRUPT_CONTROLLER *NewController
     )
 
 /*++
@@ -755,6 +1100,9 @@ Arguments:
 
     ControllerDescription - Supplies a pointer describing the new interrupt
         controller.
+
+    NewController - Supplies an optional pointer where a pointer to the
+        newly created interrupt controller will be returned on success.
 
 Return Value:
 
@@ -786,7 +1134,8 @@ Return Value:
     //
 
     if ((ControllerDescription->FunctionTable.InitializeIoUnit == NULL) ||
-        (ControllerDescription->FunctionTable.SetLineState == NULL)) {
+        (ControllerDescription->FunctionTable.SetLineState == NULL) ||
+        (ControllerDescription->FunctionTable.MaskLine == NULL)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto InterruptRegisterHardwareEnd;
@@ -855,10 +1204,20 @@ Return Value:
     // Insert the controller on the list.
     //
 
-    Enabled = HlpInterruptAcquireLock();
-    INSERT_BEFORE(&(Controller->ListEntry), &HlInterruptControllers);
-    HlpInterruptReleaseLock(Enabled);
     Status = STATUS_SUCCESS;
+    Enabled = HlpInterruptAcquireLock();
+    if (HlInterruptControllerCount < MAX_INTERRUPT_CONTROLLERS) {
+        HlInterruptControllers[HlInterruptControllerCount] = Controller;
+        HlInterruptControllerCount += 1;
+
+    } else {
+        Status = STATUS_BUFFER_FULL;
+    }
+
+    HlpInterruptReleaseLock(Enabled);
+    if (NewController != NULL) {
+        *NewController = Controller;
+    }
 
 InterruptRegisterHardwareEnd:
     if (!KSUCCESS(Status)) {
@@ -1281,17 +1640,11 @@ Return Value:
         if (Lines->State[LineOffset].ReferenceCount > 1) {
 
             //
-            // The line had better be in agreement with what's already
-            // there.
+            // The line had better already be programmed.
             //
 
-            ASSERT(Lines->State[LineOffset].PublicState.Mode == Mode);
-            ASSERT(Lines->State[LineOffset].PublicState.Polarity ==
-                                                             Polarity);
-
-            ASSERT(Lines->State[LineOffset].PublicState.Flags == Flags);
-            ASSERT(Lines->State[LineOffset].PublicState.Vector ==
-                                                        Interrupt->Vector);
+            ASSERT((Lines->State[LineOffset].PublicState.Flags &
+                    INTERRUPT_LINE_STATE_FLAG_ENABLED) != 0);
 
             //
             // For standard interrupt lines, there's no need to program
@@ -1454,7 +1807,8 @@ Return Value:
 
 {
 
-    PLIST_ENTRY CurrentEntry;
+    ULONG ControllerCount;
+    ULONG ControllerIndex;
     PLIST_ENTRY CurrentLinesEntry;
     PINTERRUPT_CONTROLLER LineController;
     PINTERRUPT_LINES LineSegment;
@@ -1467,13 +1821,17 @@ Return Value:
     // Loop through every controller in the system.
     //
 
-    CurrentEntry = HlInterruptControllers.Next;
-    while (CurrentEntry != &HlInterruptControllers) {
-        LineController = LIST_VALUE(CurrentEntry,
-                                    INTERRUPT_CONTROLLER,
-                                    ListEntry);
+    ControllerCount = HlInterruptControllerCount;
+    for (ControllerIndex = 0;
+         ControllerIndex < ControllerCount;
+         ControllerIndex += 1) {
 
-        CurrentEntry = CurrentEntry->Next;
+        LineController = HlInterruptControllers[ControllerIndex];
+        if ((LineController == NULL) ||
+            (LineController->Identifier != Line->Controller)) {
+
+            continue;
+        }
 
         //
         // Loop through every segment of interrupt lines in the current
@@ -1691,7 +2049,7 @@ Return Value:
 
 PINTERRUPT_CONTROLLER
 HlpInterruptGetControllerByIdentifier (
-    ULONGLONG Identifier
+    UINTN Identifier
     )
 
 /*++
@@ -1716,12 +2074,19 @@ Return Value:
 {
 
     PINTERRUPT_CONTROLLER Controller;
-    PLIST_ENTRY CurrentEntry;
+    ULONG ControllerCount;
+    ULONG ControllerIndex;
 
-    CurrentEntry = HlInterruptControllers.Next;
-    while (CurrentEntry != &HlInterruptControllers) {
-        Controller = LIST_VALUE(CurrentEntry, INTERRUPT_CONTROLLER, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
+    ControllerCount = HlInterruptControllerCount;
+    for (ControllerIndex = 0;
+         ControllerIndex < ControllerCount;
+         ControllerIndex += 1) {
+
+        Controller = HlInterruptControllers[ControllerIndex];
+        if (Controller == NULL) {
+            continue;
+        }
+
         if (Controller->Identifier == Identifier) {
             return Controller;
         }
@@ -1761,7 +2126,8 @@ Return Value:
 {
 
     PINTERRUPT_CONTROLLER Controller;
-    PLIST_ENTRY CurrentEntry;
+    ULONG ControllerCount;
+    ULONG ControllerIndex;
     PLIST_ENTRY CurrentLinesEntry;
     ULONG LineCount;
     PINTERRUPT_LINES Lines;
@@ -1786,10 +2152,15 @@ Return Value:
     // Loop through every controller in the system.
     //
 
-    CurrentEntry = HlInterruptControllers.Next;
-    while (CurrentEntry != &HlInterruptControllers) {
-        Controller = LIST_VALUE(CurrentEntry, INTERRUPT_CONTROLLER, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
+    ControllerCount = HlInterruptControllerCount;
+    for (ControllerIndex = 0;
+         ControllerIndex < ControllerCount;
+         ControllerIndex += 1) {
+
+        Controller = HlInterruptControllers[ControllerIndex];
+        if (Controller == NULL) {
+            continue;
+        }
 
         //
         // Loop through every segment of interrupt lines in the current

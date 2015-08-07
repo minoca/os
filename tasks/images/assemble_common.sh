@@ -45,13 +45,17 @@ if test "x$LIB_FILES" = "x"; then
     exit 1
 fi
 
+if test "x$APPS_DIR" = "x"; then
+    APPS_DIR=apps
+fi
+
 ROOT_DIRECTORY="minoca"
 DRIVERS_DIRECTORY="$ROOT_DIRECTORY/drivers"
 CONFIG_DIRECTORY="$ROOT_DIRECTORY/config"
 SYSTEM_DIRECTORY="$ROOT_DIRECTORY/system"
 SYSTEM_PCAT_DIRECTORY="$SYSTEM_DIRECTORY/pcat"
-LIB_DIRECTORY="apps/lib"
-BIN_DIRECTORY="apps/bin"
+LIB_DIRECTORY="$APPS_DIR/lib"
+BIN_DIRECTORY="$APPS_DIR/bin"
 
 if test "x$STRIP" = "x"; then
     echo "Error: STRIP must be set."
@@ -107,13 +111,13 @@ fi
 
 skel_dirs=`cd ./skel && find -type d`
 for dir in $skel_dirs; do
-    mkdir -p "./apps/$dir"
+    mkdir -p "$APPS_DIR/$dir"
 done
 
 skel_files=`cd ./skel && find -type f`
 for file in $skel_files; do
-    if test "./skel/$file" -nt "./apps/$file"; then
-        cp -p "./skel/$file" "./apps/$file"
+    if test "./skel/$file" -nt "$APPS_DIR/$file"; then
+        cp -p "./skel/$file" "$APPS_DIR/$file"
     fi
 done
 

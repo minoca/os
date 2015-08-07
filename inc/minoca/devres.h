@@ -47,13 +47,17 @@ Author:
 
 #define INTERRUPT_LINE_EDGE_TRIGGERED 0x00000001
 #define INTERRUPT_LINE_ACTIVE_LOW     0x00000002
+#define INTERRUPT_LINE_ACTIVE_HIGH    0x00000004
+#define INTERRUPT_LINE_WAKE           0x00000008
+#define INTERRUPT_LINE_DEBOUNCE       0x00000010
 
 //
 // Define interrupt vector characteristics.
 //
 
-#define INTERRUPT_VECTOR_EDGE_TRIGGERED 0x000000001
-#define INTERRUPT_VECTOR_ACTIVE_LOW     0x000000002
+#define INTERRUPT_VECTOR_EDGE_TRIGGERED 0x00000001
+#define INTERRUPT_VECTOR_ACTIVE_LOW     0x00000002
+#define INTERRUPT_VECTOR_ACTIVE_HIGH    0x00000004
 
 //
 // Define DMA characteristics.
@@ -77,8 +81,30 @@ Author:
 #define MEMORY_CHARACTERISTIC_PREFETCHABLE 0x00000100
 
 //
+// Define GPIO characteristics.
+//
+
+#define GPIO_CHARACTERISTIC_INTERRUPT       0x00000001
+#define GPIO_CHARACTERISTIC_INPUT           0x00000002
+#define GPIO_CHARACTERISTIC_OUTPUT          0x00000004
+#define GPIO_CHARACTERISTIC_WAKE            0x00000008
+#define GPIO_CHARACTERISTIC_ACTIVE_HIGH     0x00000010
+#define GPIO_CHARACTERISTIC_ACTIVE_LOW      0x00000020
+#define GPIO_CHARACTERISTIC_EDGE_TRIGGERED  0x00000040
+#define GPIO_CHARACTERISTIC_PULL_UP         0x00000080
+#define GPIO_CHARACTERISTIC_PULL_DOWN       0x00000100
+#define GPIO_CHARACTERISTIC_PULL_NONE \
+    (GPIO_CHARACTERISTIC_PULL_UP | GPIO_CHARACTERISTIC_PULL_DOWN)
+
+#define RESOURCE_GPIO_DATA_VERSION 1
+#define RESOURCE_GPIO_DEFAULT_DRIVE_STRENGTH ((ULONG)-1)
+#define RESOURCE_GPIO_DEFAULT_DEBOUNCE_TIMEOUT ((ULONG)-1)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
+
+typedef struct _DEVICE DEVICE, *PDEVICE;
 
 typedef enum _RESOURCE_TYPE {
     ResourceTypeInvalid,
@@ -89,6 +115,7 @@ typedef enum _RESOURCE_TYPE {
     ResourceTypeBusNumber,
     ResourceTypeDmaLine,
     ResourceTypeVendorSpecific,
+    ResourceTypeGpio,
     ResourceTypeCount,
 } RESOURCE_TYPE, *PRESOURCE_TYPE;
 
@@ -131,6 +158,15 @@ Members:
         whose allocation influences the allocation of this requirement (e.g.
         interrupt vector allocations can depend on interrupt line allocations).
 
+    Data - Stores a pointer to the additional data for this requirement. This
+        data is only required for some resource types (like GPIO).
+
+    DataSize - Stores the size of the additional data in bytes.
+
+    Provider - Stores an optional pointer to the device that provides the
+        resource. If NULL, then the provider will be automatically determined
+        by walking up the device's parents.
+
 --*/
 
 typedef struct _RESOURCE_REQUIREMENT RESOURCE_REQUIREMENT;
@@ -146,6 +182,9 @@ struct _RESOURCE_REQUIREMENT {
     ULONGLONG Characteristics;
     ULONGLONG Flags;
     PRESOURCE_REQUIREMENT OwningRequirement;
+    PVOID Data;
+    UINTN DataSize;
+    PDEVICE Provider;
 };
 
 /*++
@@ -215,6 +254,15 @@ Members:
         allocation dictates the allocation of this resource (e.g. interrupt
         vector allocations can depend on interrupt line allocations).
 
+    Data - Stores a pointer to the additional data for this requirement. This
+        data is only required for some resource types (like GPIO).
+
+    DataSize - Stores the size of the additional data in bytes.
+
+    Provider - Stores an optional pointer to the device providing the resource.
+        If NULL, then the provider will be automatically determined by walking
+        up the device's parents.
+
 --*/
 
 typedef struct _RESOURCE_ALLOCATION RESOURCE_ALLOCATION, *PRESOURCE_ALLOCATION;
@@ -226,6 +274,9 @@ struct _RESOURCE_ALLOCATION {
     ULONGLONG Characteristics;
     ULONGLONG Flags;
     PRESOURCE_ALLOCATION OwningAllocation;
+    PVOID Data;
+    UINTN DataSize;
+    PDEVICE Provider;
 };
 
 /*++
@@ -246,6 +297,38 @@ Members:
 typedef struct _RESOURCE_ALLOCATION_LIST {
     LIST_ENTRY AllocationListHead;
 } RESOURCE_ALLOCATION_LIST, *PRESOURCE_ALLOCATION_LIST;
+
+/*++
+
+Structure Description:
+
+    This structure defines the contents of the additional data stored along
+    with a GPIO resource.
+
+Members:
+
+    Version - Stores the constant RESOURCE_GPIO_DATA_VERSION.
+
+    OutputDriveStrength - Stores the output drive strength for the GPIO
+        resource in units of microamperes.
+
+    DebounceTimeout - Stores the debounce timeout value for the GPIO resource
+        in units of microseconds.
+
+    VendorData - Stores a pointer to the vendor data for this resource. This
+        data is probably immediately after the structure itself.
+
+    VendorDataSize - Stores the size of the vendor data for this resource.
+
+--*/
+
+typedef struct _RESOURCE_GPIO_DATA {
+    ULONG Version;
+    ULONG OutputDriveStrength;
+    ULONG DebounceTimeout;
+    PVOID VendorData;
+    UINTN VendorDataSize;
+} RESOURCE_GPIO_DATA, *PRESOURCE_GPIO_DATA;
 
 //
 // -------------------------------------------------------------------- Globals

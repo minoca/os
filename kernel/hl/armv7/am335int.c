@@ -114,6 +114,13 @@ HlpAm335InterruptSetLineState (
     PINTERRUPT_LINE_STATE State
     );
 
+VOID
+HlpAm335InterruptMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    );
+
 KSTATUS
 HlpAm335InterruptDescribeLines (
     PAM335_INTC_DATA Data
@@ -122,6 +129,21 @@ HlpAm335InterruptDescribeLines (
 //
 // -------------------------------------------------------------------- Globals
 //
+
+INTERRUPT_FUNCTION_TABLE HlAm335InterruptFunctionTable = {
+    HlpAm335InterruptInitializeIoUnit,
+    HlpAm335InterruptSetLineState,
+    HlpAm335InterruptMaskLine,
+    HlpAm335InterruptBegin,
+    NULL,
+    HlpAm335InterruptEndOfInterrupt,
+    HlpAm335InterruptRequestInterrupt,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -179,23 +201,9 @@ Return Value:
         //
 
         NewController.TableVersion = INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
-        NewController.FunctionTable.EnumerateProcessors = NULL;
-        NewController.FunctionTable.InitializeLocalUnit = NULL;
-        NewController.FunctionTable.InitializeIoUnit =
-                                             HlpAm335InterruptInitializeIoUnit;
-
-        NewController.FunctionTable.SetLocalUnitAddressing = NULL;
-        NewController.FunctionTable.FastEndOfInterrupt = NULL;
-        NewController.FunctionTable.BeginInterrupt = HlpAm335InterruptBegin;
-        NewController.FunctionTable.EndOfInterrupt =
-                                               HlpAm335InterruptEndOfInterrupt;
-
-        NewController.FunctionTable.RequestInterrupt =
-                                             HlpAm335InterruptRequestInterrupt;
-
-        NewController.FunctionTable.StartProcessor = NULL;
-        NewController.FunctionTable.SetLineState =
-                                                 HlpAm335InterruptSetLineState;
+        HlAm335KernelServices->CopyMemory(&(NewController.FunctionTable),
+                                          &HlAm335InterruptFunctionTable,
+                                          sizeof(INTERRUPT_FUNCTION_TABLE));
 
         Context = HlAm335KernelServices->AllocateMemory(
                                                     sizeof(AM335_INTC_DATA),
@@ -560,6 +568,57 @@ Return Value:
 
 Am335InterruptSetLineStateEnd:
     return Status;
+}
+
+VOID
+HlpAm335InterruptMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine masks or unmasks an interrupt line, leaving the rest of the
+    line state intact.
+
+Arguments:
+
+    Context - Supplies the pointer to the controller's context, provided by the
+        hardware module upon initialization.
+
+    Line - Supplies a pointer to the line to maek or unmask. This will always
+        be a controller specified line.
+
+    Enable - Supplies a boolean indicating whether to mask the interrupt,
+        preventing interrupts from coming through (FALSE), or enable the line
+        and allow interrupts to come through (TRUE).
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PAM335_INTC_DATA Data;
+    ULONG Index;
+    ULONG Value;
+
+    Data = Context;
+    Index = AM335_INTC_LINE_TO_INDEX(Line->Line);
+    Value = AM335_INTC_LINE_TO_MASK(Line->Line);
+    if (Enable != FALSE) {
+        AM335_INTC_WRITE(Data->Base, AM335_INTC_MASK_CLEAR(Index), Value);
+
+    } else {
+        AM335_INTC_WRITE(Data->Base, AM335_INTC_MASK_SET(Index), Value);
+    }
+
+    return;
 }
 
 KSTATUS

@@ -57,6 +57,126 @@ DefinitionBlock (
             })
         }
 
+        Device(GPI1) {
+            Name(_HID, "OMAP4502")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x4A310000,
+                            0x4A310FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {61}
+            })
+        }
+
+        Device(GPI2) {
+            Name(_HID, "OMAP4502")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x48055000,
+                            0x48055FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {62}
+            })
+        }
+
+        Device(GPI3) {
+            Name(_HID, "OMAP4502")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x48057000,
+                            0x48057FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {63}
+            })
+        }
+
+        Device(GPI4) {
+            Name(_HID, "OMAP4502")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x48059000,
+                            0x48059FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {64}
+            })
+        }
+
+        Device(GPI5) {
+            Name(_HID, "OMAP4502")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x4805B000,
+                            0x4805BFFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {65}
+            })
+        }
+
+        Device(GPI6) {
+            Name(_HID, "OMAP4502")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x4805D000,
+                            0x4805DFFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {66}
+            })
+        }
+
         Device(SDMC) {
             Name(_HID, "OMAP4501")
             Name(_UID, 0)
@@ -76,6 +196,7 @@ DefinitionBlock (
                 Interrupt(, Level, ActiveHigh,) {115}
             })
         }
+
     }
 
     Name(\_S3, Package (0x04) {

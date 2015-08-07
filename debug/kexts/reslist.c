@@ -781,6 +781,14 @@ Return Value:
         DbgOut(" NotShared");
     }
 
+    if (Requirement.Provider != NULL) {
+        DbgOut(", Provider %x", Requirement.Provider);
+    }
+
+    if (Requirement.DataSize != 0) {
+        DbgOut(", Data %x Size 0x%x", Requirement.Data, Requirement.DataSize);
+    }
+
     DbgOut("\n");
 
     //
@@ -1059,6 +1067,14 @@ Return Value:
 
     if ((Allocation.Flags & RESOURCE_FLAG_NOT_SHAREABLE) != 0) {
         DbgOut(" NotShared");
+    }
+
+    if (Allocation.Provider != NULL) {
+        DbgOut(", Provider %x", Allocation.Provider);
+    }
+
+    if (Allocation.DataSize != 0) {
+        DbgOut(", Data %x Size 0x%x", Allocation.Data, Allocation.DataSize);
     }
 
     DbgOut("\n");
@@ -1596,6 +1612,10 @@ Return Value:
 
     case ResourceTypeVendorSpecific:
         ResourceType = "Vendor Specific";
+        break;
+
+    case ResourceTypeGpio:
+        ResourceType = "GPIO";
         break;
 
     default:

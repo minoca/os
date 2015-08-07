@@ -2248,7 +2248,7 @@ Return Value:
             return NULL;
         }
 
-        DesiredName = *((PULONG)Name);
+        DesiredName = READ_UNALIGNED32(Name);
 
         //
         // Loop through all children of the current scope looking for the

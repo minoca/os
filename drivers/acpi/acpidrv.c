@@ -390,10 +390,12 @@ Return Value:
                                                         Irp);
 
                 if (!KSUCCESS(Status)) {
-                    RtlDebugPrint("ACPI: Failed to get device resources."
-                                  "Device 0x%08x, Status: 0x%08x\n",
-                                  Irp->Device,
-                                  Status);
+                    if (Status != STATUS_NOT_READY) {
+                        RtlDebugPrint("ACPI: Failed to get device resources."
+                                      "Device 0x%08x, Status: 0x%08x\n",
+                                      Irp->Device,
+                                      Status);
+                    }
                 }
 
                 IoCompleteIrp(AcpiDriver, Irp, Status);

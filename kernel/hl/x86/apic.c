@@ -180,6 +180,13 @@ HlpApicSetLineState (
     PINTERRUPT_LINE_STATE State
     );
 
+VOID
+HlpApicMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    );
+
 KSTATUS
 HlpApicGetMessageInformation (
     ULONGLONG Vector,
@@ -261,6 +268,25 @@ ULONG HlFirstIoApicId;
 //
 
 PHARDWARE_MODULE_KERNEL_SERVICES HlApicServices = NULL;
+
+//
+// Store the interrupt function table template.
+//
+
+INTERRUPT_FUNCTION_TABLE HlApicInterruptFunctionTable = {
+    HlpApicInitializeIoUnit,
+    HlpApicSetLineState,
+    HlpApicMaskLine,
+    NULL,
+    HlpApicFastEndOfInterrupt,
+    NULL,
+    HlpApicRequestInterrupt,
+    HlpApicEnumerateProcessors,
+    HlpApicInitializeLocalUnit,
+    HlpApicSetLocalUnitAddressing,
+    HlpApicStartProcessor,
+    HlpApicGetMessageInformation
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -389,28 +415,9 @@ Return Value:
             NewController.TableVersion =
                                        INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
 
-            NewController.FunctionTable.EnumerateProcessors =
-                                                    HlpApicEnumerateProcessors;
-
-            NewController.FunctionTable.InitializeLocalUnit =
-                                                    HlpApicInitializeLocalUnit;
-
-            NewController.FunctionTable.InitializeIoUnit =
-                                                       HlpApicInitializeIoUnit;
-
-            NewController.FunctionTable.SetLocalUnitAddressing =
-                                                 HlpApicSetLocalUnitAddressing;
-
-            NewController.FunctionTable.FastEndOfInterrupt =
-                                                     HlpApicFastEndOfInterrupt;
-
-            NewController.FunctionTable.RequestInterrupt =
-                                                       HlpApicRequestInterrupt;
-
-            NewController.FunctionTable.StartProcessor = HlpApicStartProcessor;
-            NewController.FunctionTable.SetLineState = HlpApicSetLineState;
-            NewController.FunctionTable.GetMessageInformation =
-                                                  HlpApicGetMessageInformation;
+            HlApicServices->CopyMemory(&(NewController.FunctionTable),
+                                       &HlApicInterruptFunctionTable,
+                                       sizeof(INTERRUPT_FUNCTION_TABLE));
 
             NewController.Context = IoApicData;
             NewController.Identifier = IoApic->IoApicId;
@@ -524,7 +531,12 @@ Return Value:
             }
 
             CurrentProcessor->Version = PROCESSOR_DESCRIPTION_VERSION;
-            CurrentProcessor->Identifier = LocalApic->ApicId;
+            CurrentProcessor->PhysicalId = LocalApic->ApicId;
+            CurrentProcessor->LogicalFlatId = 0;
+            if (LocalApic->ApicId < 8) {
+                CurrentProcessor->LogicalFlatId = 1 << LocalApic->ApicId;
+            }
+
             CurrentProcessor->FirmwareIdentifier = LocalApic->AcpiProcessorId;
             CurrentProcessor->Flags = 0;
             if ((LocalApic->Flags & MADT_LOCAL_APIC_FLAG_ENABLED) != 0) {
@@ -1176,6 +1188,58 @@ Return Value:
 
 ApicSetLineStateEnd:
     return Status;
+}
+
+VOID
+HlpApicMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine masks or unmasks an interrupt line, leaving the rest of the
+    line state intact.
+
+Arguments:
+
+    Context - Supplies the pointer to the controller's context, provided by the
+        hardware module upon initialization.
+
+    Line - Supplies a pointer to the line to maek or unmask. This will always
+        be a controller specified line.
+
+    Enable - Supplies a boolean indicating whether to mask the interrupt,
+        preventing interrupts from coming through (FALSE), or enable the line
+        and allow interrupts to come through (TRUE).
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONGLONG Entry;
+
+    Entry = HlpIoApicReadRedirectionTableEntry(
+                                             Context,
+                                             Line->Line - IO_APIC_LINE_OFFSET);
+
+    Entry &= ~APIC_RTE_MASKED;
+    if (Enable == FALSE) {
+        Entry |= APIC_RTE_MASKED;
+    }
+
+    HlpIoApicWriteRedirectionTableEntry(Context,
+                                        Line->Line - IO_APIC_LINE_OFFSET,
+                                        Entry);
+
+    return;
 }
 
 KSTATUS

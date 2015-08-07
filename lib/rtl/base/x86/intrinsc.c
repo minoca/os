@@ -302,7 +302,11 @@ Return Value:
 
 {
 
-    return RtlFindFirstSet64(Value);
+    if (Value == 0) {
+        return 0;
+    }
+
+    return RtlCountTrailingZeros64(Value) + 1;
 }
 
 RTL_API

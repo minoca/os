@@ -851,7 +851,6 @@ typedef ULONGLONG FILE_ID, *PFILE_ID;
 typedef ULONGLONG DEVICE_ID, *PDEVICE_ID;
 typedef struct _PATH_ENTRY PATH_ENTRY, *PPATH_ENTRY;
 typedef struct _MOUNT_POINT MOUNT_POINT, *PMOUNT_POINT;
-typedef struct _DEVICE DEVICE, *PDEVICE;
 typedef struct _VOLUME VOLUME, *PVOLUME;
 typedef struct _DRIVER DRIVER, *PDRIVER;
 typedef struct _IRP IRP, *PIRP;
@@ -6728,7 +6727,14 @@ Arguments:
 
 Return Value:
 
-    Status code.
+    STATUS_SUCCESS if the new arbiter was created.
+
+    STATUS_INVALID_PARAMETER if an invalid resource type was specified.
+
+    STATUS_INSUFFICIENT_RESOURCES on allocation failure.
+
+    STATUS_ALREADY_INITIALIZED if the device has already has a resource arbiter
+    of this type.
 
 --*/
 

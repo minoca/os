@@ -108,6 +108,7 @@ Return Value:
     INTERRUPT_ACTIVE_LEVEL InterruptPolarity;
     PRESOURCE_ALLOCATION LineAllocation;
     ULONGLONG LineCharacteristics;
+    ULONG LineState;
     PKINTERRUPT NewInterrupt;
     KSTATUS Status;
     PRESOURCE_ALLOCATION VectorAllocation;
@@ -227,14 +228,23 @@ Return Value:
     //
 
     if (LineNumber != INVALID_INTERRUPT_LINE) {
+        LineState = 0;
+        LineCharacteristics = LineAllocation->Characteristics;
 
         //
         // Set up the interrupt mode and polarity.
         //
 
-        InterruptPolarity = InterruptActiveHigh;
-        LineCharacteristics = LineAllocation->Characteristics;
-        if ((LineCharacteristics & INTERRUPT_LINE_ACTIVE_LOW) != 0) {
+        InterruptPolarity = InterruptActiveLevelUnknown;
+        if ((LineCharacteristics & INTERRUPT_LINE_ACTIVE_HIGH) != 0) {
+            if ((LineCharacteristics & INTERRUPT_LINE_ACTIVE_LOW) != 0) {
+                InterruptPolarity = InterruptActiveBoth;
+
+            } else {
+                InterruptPolarity = InterruptActiveHigh;
+            }
+
+        } else if ((LineCharacteristics & INTERRUPT_LINE_ACTIVE_LOW) != 0) {
             InterruptPolarity = InterruptActiveLow;
         }
 
@@ -244,12 +254,25 @@ Return Value:
         }
 
         //
+        // Set any other flags.
+        //
+
+        if ((LineCharacteristics & INTERRUPT_LINE_WAKE) != 0) {
+            LineState |= INTERRUPT_LINE_STATE_FLAG_WAKE;
+        }
+
+        if ((LineCharacteristics & INTERRUPT_LINE_DEBOUNCE) != 0) {
+            LineState |= INTERRUPT_LINE_STATE_FLAG_DEBOUNCE;
+        }
+
+        //
         // Now attempt to enable the interrupt line.
         //
 
         Status = HlEnableInterruptLine(LineNumber,
                                        InterruptMode,
                                        InterruptPolarity,
+                                       LineState,
                                        NewInterrupt);
 
         if (!KSUCCESS(Status)) {

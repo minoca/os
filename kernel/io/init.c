@@ -566,6 +566,15 @@ Return Value:
     }
 
     //
+    // Also create an empty GPIO arbiter.
+    //
+
+    Status = IoCreateResourceArbiter(IoRootDevice, ResourceTypeGpio);
+    if (!KSUCCESS(Status)) {
+        goto InitializeResourceAllocationEnd;
+    }
+
+    //
     // Perform any architecture specific initialization.
     //
 

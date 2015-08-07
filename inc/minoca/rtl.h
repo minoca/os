@@ -393,8 +393,6 @@ Author:
 #define RtlAtomicAdd RtlAtomicAdd64
 #define RtlAtomicOr RtlAtomicAdd64
 
-#define RtlFindFirstSet RtlFindFirstSet64
-#define RtlFindLastSet RtlFindLastSet64
 #define RtlCountLeadingZeros RtlCountLeadingZeros64
 #define RtlCountTrailingZeros RtlCountTrailingZeros64
 
@@ -405,8 +403,6 @@ Author:
 #define RtlAtomicAdd RtlAtomicAdd32
 #define RtlAtomicOr RtlAtomicAdd32
 
-#define RtlFindFirstSet RtlFindFirstSet32
-#define RtlFindLastSet RtlFindLastSet32
 #define RtlCountLeadingZeros RtlCountLeadingZeros32
 #define RtlCountTrailingZeros RtlCountTrailingZeros32
 
@@ -3383,102 +3379,6 @@ Arguments:
 Return Value:
 
     Returns the number of leading zero bits in the given value.
-
---*/
-
-RTL_API
-INT
-RtlFindFirstSet64 (
-    LONGLONG Value
-    );
-
-/*++
-
-Routine Description:
-
-    This routine finds the index of the least significant bit that is set to 1.
-
-Arguments:
-
-    Value - Supplies the value to get the first set bit of.
-
-Return Value:
-
-    Returns the first bit index set to 1.
-
-    0 if the value is zero.
-
---*/
-
-RTL_API
-INT
-RtlFindFirstSet32 (
-    LONG Value
-    );
-
-/*++
-
-Routine Description:
-
-    This routine finds the index of the least significant bit that is set to 1.
-
-Arguments:
-
-    Value - Supplies the value to get the first set bit of.
-
-Return Value:
-
-    Returns the first bit index set to 1.
-
-    0 if the value is zero.
-
---*/
-
-RTL_API
-INT
-RtlFindLastSet64 (
-    ULONGLONG Value
-    );
-
-/*++
-
-Routine Description:
-
-    This routine finds the index of the most significant bit that is set to 1.
-
-Arguments:
-
-    Value - Supplies the value to get the first set bit of.
-
-Return Value:
-
-    Returns the first bit index set to 1.
-
-    0 if the value is zero.
-
---*/
-
-RTL_API
-INT
-RtlFindLastSet32 (
-    ULONG Value
-    );
-
-/*++
-
-Routine Description:
-
-    This routine finds the index of the most significant bit that is set to 1.
-
-Arguments:
-
-    Value - Supplies the value to get the first set bit of.
-
-Return Value:
-
-    Returns the first bit index set to 1.
-
-    0 if the value is zero.
 
 --*/
 

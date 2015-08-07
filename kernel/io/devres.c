@@ -35,6 +35,12 @@ Environment:
 #define RESOURCE_ALLOCATION_TAG 0x4C736552 // 'LseR'
 
 //
+// Set a sane limit on how big these allocations can get.
+//
+
+#define RESOURCE_MAX_ADDITIONAL_DATA 0x1000
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -482,6 +488,10 @@ Return Value:
             LineCharacteristics = Requirement->Characteristics;
             if ((LineCharacteristics & INTERRUPT_LINE_ACTIVE_LOW) != 0) {
                 VectorCharacteristics |= INTERRUPT_VECTOR_ACTIVE_LOW;
+            }
+
+            if ((LineCharacteristics & INTERRUPT_LINE_ACTIVE_HIGH) != 0) {
+                VectorCharacteristics |= INTERRUPT_VECTOR_ACTIVE_HIGH;
             }
 
             if ((LineCharacteristics & INTERRUPT_LINE_EDGE_TRIGGERED) != 0) {
@@ -971,6 +981,8 @@ Return Value:
 
 {
 
+    UINTN AllocationSize;
+    UINTN DataSize;
     PRESOURCE_ALLOCATION NewAllocation;
     KSTATUS Status;
 
@@ -985,12 +997,19 @@ Return Value:
         goto CreateAndAddResourceAllocationEnd;
     }
 
+    DataSize = Allocation->DataSize;
+    if (DataSize > RESOURCE_MAX_ADDITIONAL_DATA) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto CreateAndAddResourceAllocationEnd;
+    }
+
     //
     // Create the new resource allocation.
     //
 
-    NewAllocation = MmAllocatePagedPool(sizeof(RESOURCE_ALLOCATION),
-                                         RESOURCE_ALLOCATION_TAG);
+    AllocationSize = sizeof(RESOURCE_ALLOCATION) + DataSize;
+    NewAllocation = MmAllocatePagedPool(AllocationSize,
+                                        RESOURCE_ALLOCATION_TAG);
 
     if (NewAllocation == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1004,6 +1023,11 @@ Return Value:
     NewAllocation->Characteristics = Allocation->Characteristics;
     NewAllocation->Flags = Allocation->Flags;
     NewAllocation->OwningAllocation = Allocation->OwningAllocation;
+    if (DataSize != 0) {
+        NewAllocation->Data = NewAllocation + 1;
+        NewAllocation->DataSize = DataSize;
+        RtlCopyMemory(NewAllocation->Data, Allocation->Data, DataSize);
+    }
 
     //
     // Add the allocation to the end of the list.
@@ -1619,7 +1643,8 @@ Arguments:
 
     RequirementTemplate - Supplies a pointer to the resource requirement to use
         as a template. The memory passed in will not actually be used, a copy of
-        the requirement will be created and initialized.
+        the requirement will be created and initialized. A copy of the
+        additional data is also made.
 
     NewRequirement - Supplies a pointer where the new resource requirement will
         be returned upon success.
@@ -1636,7 +1661,9 @@ Return Value:
 
 {
 
+    UINTN AllocationSize;
     PRESOURCE_REQUIREMENT CreatedRequirement;
+    UINTN DataSize;
     KSTATUS Status;
 
     CreatedRequirement = NULL;
@@ -1663,11 +1690,19 @@ Return Value:
         goto CreateAndInitializeResourceRequirementEnd;
     }
 
+    DataSize = RequirementTemplate->DataSize;
+    if (DataSize > RESOURCE_MAX_ADDITIONAL_DATA) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto CreateAndInitializeResourceRequirementEnd;
+    }
+
+    AllocationSize = sizeof(RESOURCE_REQUIREMENT) + DataSize;
+
     //
     // Create the new requirement.
     //
 
-    CreatedRequirement = MmAllocatePagedPool(sizeof(RESOURCE_REQUIREMENT),
+    CreatedRequirement = MmAllocatePagedPool(AllocationSize,
                                              RESOURCE_ALLOCATION_TAG);
 
     if (CreatedRequirement == NULL) {
@@ -1690,6 +1725,15 @@ Return Value:
     CreatedRequirement->Flags = RequirementTemplate->Flags;
     CreatedRequirement->OwningRequirement =
                                         RequirementTemplate->OwningRequirement;
+
+    if (DataSize != 0) {
+        CreatedRequirement->Data = CreatedRequirement + 1;
+        RtlCopyMemory(CreatedRequirement->Data,
+                      RequirementTemplate->Data,
+                      DataSize);
+
+        CreatedRequirement->DataSize = DataSize;
+    }
 
     Status = STATUS_SUCCESS;
 
@@ -1762,6 +1806,10 @@ Return Value:
 
     case ResourceTypeVendorSpecific:
         ResourceType = "Vendor Specific";
+        break;
+
+    case ResourceTypeGpio:
+        ResourceType = "GPIO";
         break;
 
     default:

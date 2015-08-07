@@ -117,6 +117,7 @@ BopHlReleaseLock (
 
 HARDWARE_MODULE_KERNEL_SERVICES HlHardwareModuleServices = {
     RtlZeroMemory,
+    RtlCopyMemory,
     HlReadRegister32,
     HlWriteRegister32,
     HlReadRegister8,

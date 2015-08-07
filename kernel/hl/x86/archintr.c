@@ -370,7 +370,7 @@ Return Value:
     return;
 }
 
-BOOL
+INTERRUPT_CAUSE
 HlpInterruptAcknowledge (
     PINTERRUPT_CONTROLLER *ProcessorController,
     PULONG Vector,
@@ -401,9 +401,7 @@ Arguments:
 
 Return Value:
 
-    TRUE if there was an interrupt and it should be processed.
-
-    FALSE if the interrupt was spurious.
+    Returns the cause of the interrupt.
 
 --*/
 
@@ -416,12 +414,10 @@ Return Value:
     //
 
     if (*ProcessorController == NULL) {
-        *ProcessorController = LIST_VALUE(HlInterruptControllers.Next,
-                                          INTERRUPT_CONTROLLER,
-                                          ListEntry);
+        *ProcessorController = HlInterruptControllers[0];
     }
 
-    return TRUE;
+    return InterruptCauseLineFired;
 }
 
 PKINTERRUPT

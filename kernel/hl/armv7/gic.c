@@ -396,6 +396,13 @@ HlpGicSetLineState (
     PINTERRUPT_LINE_STATE State
     );
 
+VOID
+HlpGicMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    );
+
 KSTATUS
 HlpGicResetLocalUnit (
     VOID
@@ -433,6 +440,25 @@ PMADT HlGicMadt = NULL;
 //
 
 PHARDWARE_MODULE_KERNEL_SERVICES HlGicKernelServices = NULL;
+
+//
+// Define the interrupt function table template.
+//
+
+INTERRUPT_FUNCTION_TABLE HlGicFunctionTable = {
+    HlpGicInitializeIoUnit,
+    HlpGicSetLineState,
+    HlpGicMaskLine,
+    HlpGicInterruptBegin,
+    NULL,
+    HlpGicEndOfInterrupt,
+    HlpGicRequestInterrupt,
+    HlpGicEnumerateProcessors,
+    HlpGicInitializeLocalUnit,
+    HlpGicSetLocalUnitAddressing,
+    HlpGicStartProcessor,
+    NULL
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -559,25 +585,10 @@ Return Value:
             NewController.TableVersion =
                                        INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
 
-            NewController.FunctionTable.EnumerateProcessors =
-                                                     HlpGicEnumerateProcessors;
+            HlGicKernelServices->CopyMemory(&(NewController.FunctionTable),
+                                            &HlGicFunctionTable,
+                                            sizeof(INTERRUPT_FUNCTION_TABLE));
 
-            NewController.FunctionTable.InitializeLocalUnit =
-                                                     HlpGicInitializeLocalUnit;
-
-            NewController.FunctionTable.InitializeIoUnit =
-                                                        HlpGicInitializeIoUnit;
-
-            NewController.FunctionTable.SetLocalUnitAddressing =
-                                                  HlpGicSetLocalUnitAddressing;
-
-            NewController.FunctionTable.BeginInterrupt = HlpGicInterruptBegin;
-            NewController.FunctionTable.EndOfInterrupt = HlpGicEndOfInterrupt;
-            NewController.FunctionTable.RequestInterrupt =
-                                                       HlpGicRequestInterrupt;
-
-            NewController.FunctionTable.StartProcessor = HlpGicStartProcessor;
-            NewController.FunctionTable.SetLineState = HlpGicSetLineState;
             NewController.Context = DistributorData;
             NewController.Identifier = DistributorData->Identifier;
             NewController.ProcessorCount = ProcessorCount;
@@ -691,7 +702,10 @@ Return Value:
             }
 
             CurrentProcessor->Version = PROCESSOR_DESCRIPTION_VERSION;
-            CurrentProcessor->Identifier = LocalGic->GicId;
+            CurrentProcessor->PhysicalId = LocalGic->GicId;
+            CurrentProcessor->LogicalFlatId =
+                                1 << (LocalGic->GicId & GIC_PROCESSOR_ID_MASK);
+
             CurrentProcessor->FirmwareIdentifier = LocalGic->AcpiProcessorId;
             CurrentProcessor->Flags = 0;
             if ((LocalGic->Flags & MADT_LOCAL_GIC_FLAG_ENABLED) != 0) {
@@ -899,10 +913,10 @@ Return Value:
 {
 
     KSTATUS Status;
-    UCHAR ThisProcessorTarget;
+    ULONG ThisProcessorTarget;
 
-    ThisProcessorTarget = 1 << (HlpGicGetProcessorIdRegister() &
-                                GIC_PROCESSOR_ID_MASK);
+    ThisProcessorTarget =
+                        HlpGicGetProcessorIdRegister() & ARM_PROCESSOR_ID_MASK;
 
     switch (Target->Addressing) {
     case InterruptAddressingLogicalClustered:
@@ -910,9 +924,7 @@ Return Value:
         break;
 
     case InterruptAddressingPhysical:
-        if ((Target->U.PhysicalId & GIC_PROCESSOR_ID_MASK) !=
-            ThisProcessorTarget) {
-
+        if (Target->U.PhysicalId != ThisProcessorTarget) {
             Status = STATUS_UNSUCCESSFUL;
             goto SetProcessorTargetingEnd;
         }
@@ -921,8 +933,8 @@ Return Value:
         break;
 
     case InterruptAddressingLogicalFlat:
-        if ((Target->U.LogicalFlatId & GIC_PROCESSOR_ID_MASK) !=
-            ThisProcessorTarget) {
+        if (Target->U.LogicalFlatId !=
+            (1 << (ThisProcessorTarget & GIC_PROCESSOR_ID_MASK))) {
 
             Status = STATUS_UNSUCCESSFUL;
             goto SetProcessorTargetingEnd;
@@ -1119,7 +1131,7 @@ Return Value:
         break;
 
     case InterruptAddressingLogicalFlat:
-        CommandValue |= (Target->U.LogicalFlatId & GIC_PROCESSOR_ID_MASK) <<
+        CommandValue |= Target->U.LogicalFlatId <<
                         GIC_DISTRIBUTOR_SOFTWARE_INTERRUPT_TARGET_SHIFT;
 
         break;
@@ -1363,6 +1375,57 @@ Return Value:
 
 GicSetLineStateEnd:
     return Status;
+}
+
+VOID
+HlpGicMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine masks or unmasks an interrupt line, leaving the rest of the
+    line state intact.
+
+Arguments:
+
+    Context - Supplies the pointer to the controller's context, provided by the
+        hardware module upon initialization.
+
+    Line - Supplies a pointer to the line to maek or unmask. This will always
+        be a controller specified line.
+
+    Enable - Supplies a boolean indicating whether to mask the interrupt,
+        preventing interrupts from coming through (FALSE), or enable the line
+        and allow interrupts to come through (TRUE).
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PGIC_DISTRIBUTOR_DATA Controller;
+    ULONG LineBit;
+    ULONG LineBlock;
+    GIC_DISTRIBUTOR_REGISTER Register;
+
+    Controller = (PGIC_DISTRIBUTOR_DATA)Context;
+    LineBlock = (Line->Line / 32) * 4;
+    LineBit = Line->Line % 32;
+    Register = GicDistributorEnableClear;
+    if (Enable != FALSE) {
+        Register = GicDistributorEnableSet;
+    }
+
+    WRITE_GIC_DISTRIBUTOR(Controller, Register + LineBlock, 1 << LineBit);
+    return;
 }
 
 KSTATUS

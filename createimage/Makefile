@@ -57,6 +57,7 @@ postbuild:
 	@cd $(BINROOT) && \
 	 sh $(SRCROOT)/os/tasks/images/build_install.sh && \
 	 sh $(SRCROOT)/os/tasks/images/build_pc.sh && \
+	 sh $(SRCROOT)/os/tasks/images/build_tinydemo.sh && \
 	 sh $(SRCROOT)/os/tasks/images/build_pcefi.sh
 
 endif

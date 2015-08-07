@@ -90,11 +90,11 @@ Return Value:
 
 {
 
+    INTERRUPT_CAUSE Cause;
     PVOID Context;
     PINTERRUPT_CONTROLLER Controller;
     PINTERRUPT_FAST_END_OF_INTERRUPT FastEndOfInterrupt;
     PKINTERRUPT Interrupt;
-    BOOL InterruptFired;
     RUNLEVEL InterruptRunLevel;
     PKINTERRUPT *InterruptTable;
     ULONG MagicCandy;
@@ -113,8 +113,8 @@ Return Value:
     // Determine the source of the interrupt.
     //
 
-    InterruptFired = HlpInterruptAcknowledge(&Controller, &Vector, &MagicCandy);
-    if (InterruptFired == FALSE) {
+    Cause = HlpInterruptAcknowledge(&Controller, &Vector, &MagicCandy);
+    if (Cause != InterruptCauseLineFired) {
         goto DispatchInterruptEnd;
     }
 

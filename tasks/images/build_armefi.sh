@@ -31,12 +31,14 @@ fi
 DRIVERS="$DRIVERS
 ramdisk.drv
 pl050.drv
+om4gpio.drv
 sdomap4.drv
 smsc91c1.drv
 smsc95xx.drv"
 
 BOOT_DRIVERS="$BOOT_DRIVERS
 ramdisk.drv
+om4gpio.drv
 sdomap4.drv"
 
 ##

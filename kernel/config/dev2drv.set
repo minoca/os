@@ -60,6 +60,7 @@ DAPL0050=pl050.drv
 DKTestDevice=ktestdrv.drv
 DVID_0424&PID_EC00=smsc95xx.drv
 DOMAP4501=sdomap4.drv
+DOMAP4502=om4gpio.drv
 DBCM0D40=sdbm2709.drv
 DRK320D40=sdrk32xx.drv
 DDWC0000=dwhci.drv

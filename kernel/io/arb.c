@@ -108,8 +108,9 @@ IopArbiterFindEntry (
     );
 
 VOID
-IopArbiterFindRelevantArbiters (
+IopArbiterAddRequirement (
     PARBITER_ALLOCATION_CONTEXT Context,
+    PRESOURCE_REQUIREMENT Requirement,
     PDEVICE Device
     );
 
@@ -263,13 +264,22 @@ Arguments:
 
 Return Value:
 
-    Status code.
+    STATUS_SUCCESS if the new arbiter was created.
+
+    STATUS_INVALID_PARAMETER if an invalid resource type was specified.
+
+    STATUS_INSUFFICIENT_RESOURCES on allocation failure.
+
+    STATUS_ALREADY_INITIALIZED if the device has already has a resource arbiter
+    of this type.
 
 --*/
 
 {
 
     PRESOURCE_ARBITER Arbiter;
+    PLIST_ENTRY CurrentEntry;
+    PRESOURCE_ARBITER Existing;
     KSTATUS Status;
 
     Arbiter = NULL;
@@ -278,6 +288,20 @@ Return Value:
 
         Status = STATUS_INVALID_PARAMETER;
         goto CreateResourceArbiterEnd;
+    }
+
+    //
+    // Look for an existing one.
+    //
+
+    CurrentEntry = Device->ArbiterListHead.Next;
+    while (CurrentEntry != &(Device->ArbiterListHead)) {
+        Existing = LIST_VALUE(CurrentEntry, RESOURCE_ARBITER, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        if (Existing->ResourceType == ResourceType) {
+            Status = STATUS_ALREADY_INITIALIZED;
+            goto CreateResourceArbiterEnd;
+        }
     }
 
     //
@@ -1214,6 +1238,7 @@ Return Value:
     ULONGLONG PotentialAllocation;
     PARBITER_ENTRY RequiredSpace;
     PRESOURCE_REQUIREMENT Requirement;
+    PARBITER_ALLOCATION_REQUIREMENT RequirementData;
     PRESOURCE_REQUIREMENT RootRequirement;
     KSTATUS Status;
 
@@ -1223,20 +1248,20 @@ Return Value:
     // If an alternative requirement was supplied, then use it.
     //
 
+    RootRequirement = Context->Requirements[RequirementIndex].Requirement;
     if (Alternative != NULL) {
 
-        ASSERT(Alternative->Type ==
-               Context->Requirement[RequirementIndex]->Type);
+        ASSERT(Alternative->Type == RootRequirement->Type);
 
         Requirement = Alternative;
 
     } else {
-        Requirement = Context->Requirement[RequirementIndex];
+        Requirement = RootRequirement;
     }
 
-    Device = Context->RequirementDevice[RequirementIndex];
-    RootRequirement = Context->Requirement[RequirementIndex];
-    Arbiter = Context->Arbiter[Requirement->Type];
+    RequirementData = &(Context->Requirements[RequirementIndex]);
+    Device = IOP_ARBITER_GET_DEVICE(Context, RequirementData);
+    Arbiter = IOP_ARBITER_GET_ARBITER(Context, RequirementData);
 
     ASSERT(Arbiter != NULL);
 
@@ -1248,7 +1273,7 @@ Return Value:
     OwningRequirementEntry = NULL;
     if (Requirement->OwningRequirement != NULL) {
         for (Index = 0; Index < Context->RequirementCount; Index += 1) {
-            ArbiterEntry = Context->Allocation[Index];
+            ArbiterEntry = Context->Requirements[Index].Allocation;
             if ((ArbiterEntry != NULL) &&
                 (ArbiterEntry->CorrespondingRequirement ==
                  Requirement->OwningRequirement)) {
@@ -1509,7 +1534,7 @@ ArbiterAllocateSpaceEnd:
             OwningRequirementEntry->DependentEntry = NewAllocation;
         }
 
-        Context->Allocation[RequirementIndex] = NewAllocation;
+        Context->Requirements[RequirementIndex].Allocation = NewAllocation;
     }
 
     return Status;
@@ -2000,8 +2025,9 @@ Return Value:
 }
 
 VOID
-IopArbiterFindRelevantArbiters (
+IopArbiterAddRequirement (
     PARBITER_ALLOCATION_CONTEXT Context,
+    PRESOURCE_REQUIREMENT Requirement,
     PDEVICE Device
     )
 
@@ -2009,65 +2035,127 @@ IopArbiterFindRelevantArbiters (
 
 Routine Description:
 
-    This routine attempts to find the arbiter that is in charge of each
-    resource type for the given device.
+    This routine adds a requirement to the arbiter allocation context. The
+    caller must have previously called resize arbiter context so that the
+    arrays are large enough.
 
 Arguments:
 
-    Context - Supplies a pointer to the allocation context. Pointers to the
-        arbiters will be filled into the context.
+    Context - Supplies a pointer to the initialized allocation context.
 
-    Device - Supplies a pointer to the device to find arbiters for.
+    Requirement - Supplies a pointer to the requirement to add.
+
+    Device - Supplies a pointer to the device that generated the requirement.
 
 Return Value:
 
-    None.
+    None. An arbiter is always found since the root device has empty ones for
+    each type.
 
 --*/
 
 {
 
     PRESOURCE_ARBITER Arbiter;
-    ARBITER_TYPE ArbiterIndex;
-    PDEVICE CurrentDevice;
+    UINTN ArbiterIndex;
+    UINTN DeviceIndex;
+    ULONG EmptySlot;
+    PLIST_ENTRY FirstConfigurationListEntry;
+    PDEVICE Provider;
+    PARBITER_ALLOCATION_REQUIREMENT RequirementData;
+    ULONG RequirementIndex;
 
-    for (ArbiterIndex = 1; ArbiterIndex < ArbiterTypeCount; ArbiterIndex += 1) {
-        CurrentDevice = Device->ParentDevice;
+    RequirementIndex = Context->RequirementCount;
+    RequirementData = &(Context->Requirements[RequirementIndex]);
+    RequirementData->Requirement = Requirement;
+    RequirementData->Allocation = NULL;
+
+    ASSERT((ARBITER_TYPE)Requirement->Type < ArbiterTypeCount);
+
+    //
+    // The arbiter comes from the device's parent unless a different provider
+    // was explicitly given.
+    //
+
+    Provider = Device->ParentDevice;
+    if (Requirement->Provider != NULL) {
+        Provider = Requirement->Provider;
+    }
+
+    //
+    // Walk up the chain of parents to find the arbiter for this requirement.
+    //
+
+    while (TRUE) {
+        Arbiter = IopArbiterFindArbiter(Provider, Requirement->Type);
 
         //
-        // Loop through every device up the tree between here and the root.
+        // If an arbiter was found, see if it's already in the arbiter array.
+        // Insert if not, or just set the index if it is.
         //
 
-        while (TRUE) {
+        if (Arbiter != NULL) {
+            for (ArbiterIndex = 0;
+                 ArbiterIndex < Context->ArbiterCount;
+                 ArbiterIndex += 1) {
 
-            //
-            // Search through every arbiter in the device.
-            //
-
-            Arbiter = IopArbiterFindArbiter(CurrentDevice,
-                                            (RESOURCE_TYPE)ArbiterIndex);
-
-            //
-            // Stop looking if an arbiter was found.
-            //
-
-            if (Arbiter != NULL) {
-                Context->Arbiter[ArbiterIndex] = Arbiter;
-                break;
+                if (Context->ArbiterData[ArbiterIndex].Arbiter == Arbiter) {
+                    break;
+                }
             }
 
-            //
-            // No arbiter was found, move to the parent device.
-            //
-
-            if (CurrentDevice->ParentDevice == NULL) {
-                break;
+            if (ArbiterIndex == Context->ArbiterCount) {
+                Context->ArbiterData[ArbiterIndex].Arbiter = Arbiter;
+                Context->ArbiterCount = ArbiterIndex + 1;
             }
 
-            CurrentDevice = CurrentDevice->ParentDevice;
+            RequirementData->ArbiterIndex = ArbiterIndex;
+            break;
+        }
+
+        Provider = Provider->ParentDevice;
+
+        ASSERT(Provider != NULL);
+    }
+
+    //
+    // Also find the device index for this requirement, or add the device if
+    // it's new. Try to reuse empty slots from removed devices.
+    //
+
+    EmptySlot = Context->DeviceCount;
+    for (DeviceIndex = 0;
+         DeviceIndex < Context->DeviceCount;
+         DeviceIndex += 1) {
+
+        if (Context->Device[DeviceIndex] == Device) {
+            break;
+        }
+
+        if (Context->Device[DeviceIndex] == NULL) {
+            EmptySlot = DeviceIndex;
         }
     }
 
+    if (DeviceIndex == Context->DeviceCount) {
+        DeviceIndex = EmptySlot;
+        Context->Device[EmptySlot] = Device;
+        FirstConfigurationListEntry =
+            Device->ResourceRequirements->RequirementListListHead.Next;
+
+        Context->CurrentDeviceConfiguration[EmptySlot] =
+                                        LIST_VALUE(FirstConfigurationListEntry,
+                                                   RESOURCE_REQUIREMENT_LIST,
+                                                   ListEntry);
+
+        if (EmptySlot == Context->DeviceCount) {
+            Context->DeviceCount += 1;
+        }
+    }
+
+    RequirementData->DeviceIndex = DeviceIndex;
+    RequirementData->Allocation = NULL;
+    Context->RequirementCount += 1;
     return;
 }
 
@@ -2108,7 +2196,6 @@ Return Value:
     PLIST_ENTRY FirstConfigurationListEntry;
     PRESOURCE_REQUIREMENT Requirement;
     ULONG RequirementCount;
-    ULONG RequirementIndex;
     KSTATUS Status;
 
     //
@@ -2124,7 +2211,6 @@ Return Value:
     }
 
     RtlZeroMemory(Context, sizeof(ARBITER_ALLOCATION_CONTEXT));
-    IopArbiterFindRelevantArbiters(Context, Device);
     if ((Device->ResourceRequirements == NULL) ||
         (LIST_EMPTY(&(Device->ResourceRequirements->RequirementListListHead)) !=
          FALSE)) {
@@ -2165,24 +2251,15 @@ Return Value:
         goto ArbiterInitializeAllocationContextEnd;
     }
 
-    Context->DeviceCount = 1;
-    Context->Device[0] = Device;
-    Context->CurrentDeviceConfiguration[0] = FirstConfiguration;
-    Context->RequirementCount = RequirementCount;
-
     //
     // Initialize the requirement list.
     //
 
-    RequirementIndex = 0;
     CurrentEntry = FirstConfiguration->RequirementListHead.Next;
     while (CurrentEntry != &(FirstConfiguration->RequirementListHead)) {
         Requirement = LIST_VALUE(CurrentEntry, RESOURCE_REQUIREMENT, ListEntry);
         CurrentEntry = CurrentEntry->Next;
-        Context->Requirement[RequirementIndex] = Requirement;
-        Context->RequirementDevice[RequirementIndex] = Device;
-        Context->Allocation[RequirementIndex] = NULL;
-        RequirementIndex += 1;
+        IopArbiterAddRequirement(Context, Requirement, Device);
     }
 
     Status = STATUS_SUCCESS;
@@ -2194,8 +2271,8 @@ ArbiterInitializeAllocationContextEnd:
                 MmFreePagedPool(Context->Device);
             }
 
-            if (Context->Requirement != NULL) {
-                MmFreePagedPool(Context->Requirement);
+            if (Context->Requirements != NULL) {
+                MmFreePagedPool(Context->Requirements);
             }
 
             MmFreePagedPool(Context);
@@ -2234,8 +2311,8 @@ Return Value:
         MmFreePagedPool(Context->Device);
     }
 
-    if (Context->Requirement != NULL) {
-        MmFreePagedPool(Context->Requirement);
+    if (Context->Requirements != NULL) {
+        MmFreePagedPool(Context->Requirements);
     }
 
     MmFreePagedPool(Context);
@@ -2273,15 +2350,20 @@ Return Value:
 
     BOOL AllocationFailed;
     PRESOURCE_ARBITER Arbiter;
+    PARBITER_ALLOCATION_ARBITER_DATA ArbiterData;
     ULONG ArbiterIndex;
     PRESOURCE_REQUIREMENT CurrentAlternative;
     PRESOURCE_REQUIREMENT Requirement;
+    PARBITER_ALLOCATION_REQUIREMENT RequirementData;
     ULONG RequirementIndex;
     KSTATUS Status;
 
     AllocationFailed = FALSE;
-    for (ArbiterIndex = 1; ArbiterIndex < ArbiterTypeCount; ArbiterIndex += 1) {
-        Context->AmountNotAllocated[ArbiterIndex] = 0;
+    for (ArbiterIndex = 0;
+         ArbiterIndex < Context->ArbiterCount;
+         ArbiterIndex += 1) {
+
+        Context->ArbiterData[ArbiterIndex].AmountNotAllocated = 0;
     }
 
     //
@@ -2308,8 +2390,10 @@ Return Value:
             continue;
         }
 
-        Requirement = Context->Requirement[RequirementIndex];
-        Arbiter = Context->Arbiter[Requirement->Type];
+        RequirementData = &(Context->Requirements[RequirementIndex]);
+        Requirement = RequirementData->Requirement;
+        ArbiterData = IOP_GET_ARBITER_DATA(Context, RequirementData);
+        Arbiter = ArbiterData->Arbiter;
 
         ASSERT(Arbiter != NULL);
 
@@ -2340,8 +2424,7 @@ Return Value:
 
         if (!KSUCCESS(Status)) {
             AllocationFailed = TRUE;
-            Context->AmountNotAllocated[Requirement->Type] +=
-                                                           Requirement->Length;
+            ArbiterData->AmountNotAllocated += Requirement->Length;
         }
     }
 
@@ -2391,12 +2474,11 @@ Return Value:
 {
 
     ULONG FastIndex;
-    PRESOURCE_REQUIREMENT FirstRequirement;
+    PARBITER_ALLOCATION_REQUIREMENT FirstRequirement;
     BOOL InWrongOrder;
-    PRESOURCE_REQUIREMENT SecondRequirement;
+    PARBITER_ALLOCATION_REQUIREMENT SecondRequirement;
     ULONG SlowIndex;
-    PARBITER_ENTRY SwapAllocation;
-    PDEVICE SwapDevice;
+    ARBITER_ALLOCATION_REQUIREMENT Swap;
 
     if (Context->RequirementCount == 0) {
         return;
@@ -2410,12 +2492,12 @@ Return Value:
          SlowIndex < Context->RequirementCount - 1;
          SlowIndex += 1) {
 
-        FirstRequirement = Context->Requirement[SlowIndex];
+        FirstRequirement = &(Context->Requirements[SlowIndex]);
         for (FastIndex = SlowIndex + 1;
              FastIndex < Context->RequirementCount;
              FastIndex += 1) {
 
-            SecondRequirement = Context->Requirement[FastIndex];
+            SecondRequirement = &(Context->Requirements[FastIndex]);
 
             //
             // The two are in the wrong order if the second requirement is
@@ -2423,24 +2505,26 @@ Return Value:
             //
 
             InWrongOrder = IopArbiterIsFirstRequirementHigherPriority(
-                                                             SecondRequirement,
-                                                             FirstRequirement);
+                                                SecondRequirement->Requirement,
+                                                FirstRequirement->Requirement);
 
             //
             // Swap the entries if they're in the wrong order.
             //
 
             if (InWrongOrder != FALSE) {
-                SwapDevice = Context->RequirementDevice[SlowIndex];
-                SwapAllocation = Context->Allocation[SlowIndex];
-                Context->Requirement[SlowIndex] = SecondRequirement;
-                Context->RequirementDevice[SlowIndex] =
-                                         Context->RequirementDevice[FastIndex];
+                RtlCopyMemory(&Swap,
+                              FirstRequirement,
+                              sizeof(ARBITER_ALLOCATION_REQUIREMENT));
 
-                Context->Allocation[SlowIndex] = Context->Allocation[FastIndex];
-                Context->Requirement[FastIndex] = FirstRequirement;
-                Context->RequirementDevice[FastIndex] = SwapDevice;
-                Context->Allocation[FastIndex] = SwapAllocation;
+                RtlCopyMemory(FirstRequirement,
+                              SecondRequirement,
+                              sizeof(ARBITER_ALLOCATION_REQUIREMENT));
+
+                RtlCopyMemory(SecondRequirement,
+                              &Swap,
+                              sizeof(ARBITER_ALLOCATION_REQUIREMENT));
+
                 FirstRequirement = SecondRequirement;
             }
         }
@@ -2559,11 +2643,8 @@ Return Value:
     PRESOURCE_ARBITER Arbiter;
     ULONG ArbiterIndex;
     PLIST_ENTRY CurrentEntry;
-    PDEVICE Device;
     ULONG DeviceCount;
-    ULONG DeviceIndex;
     PARBITER_ENTRY Entry;
-    PLIST_ENTRY FirstConfigurationListEntry;
     ULONG RequirementCount;
     KSTATUS Status;
 
@@ -2578,8 +2659,11 @@ Return Value:
 
     RequirementCount = Context->RequirementCount;
     DeviceCount = Context->DeviceCount;
-    for (ArbiterIndex = 1; ArbiterIndex < ArbiterTypeCount; ArbiterIndex += 1) {
-        Arbiter = Context->Arbiter[ArbiterIndex];
+    for (ArbiterIndex = 0;
+         ArbiterIndex < Context->ArbiterCount;
+         ArbiterIndex += 1) {
+
+        Arbiter = Context->ArbiterData[ArbiterIndex].Arbiter;
         if (Arbiter == NULL) {
             continue;
         }
@@ -2626,8 +2710,11 @@ Return Value:
     // given to a device driver.
     //
 
-    for (ArbiterIndex = 1; ArbiterIndex < ArbiterTypeCount; ArbiterIndex += 1) {
-        Arbiter = Context->Arbiter[ArbiterIndex];
+    for (ArbiterIndex = 0;
+         ArbiterIndex < Context->ArbiterCount;
+         ArbiterIndex += 1) {
+
+        Arbiter = Context->ArbiterData[ArbiterIndex].Arbiter;
         if (Arbiter == NULL) {
             continue;
         }
@@ -2644,42 +2731,9 @@ Return Value:
                 continue;
             }
 
-            Context->Requirement[Context->RequirementCount] =
-                                               Entry->CorrespondingRequirement;
-
-            Device = Entry->Device;
-            Context->RequirementDevice[Context->RequirementCount] = Device;
-            Context->RequirementCount += 1;
-
-            //
-            // Loop through every device to see if this is a new one.
-            //
-
-            for (DeviceIndex = 0;
-                 DeviceIndex < Context->DeviceCount;
-                 DeviceIndex += 1) {
-
-                if (Context->Device[DeviceIndex] == Device) {
-                    break;
-                }
-            }
-
-            //
-            // Add the new device if it was not previously found in the array.
-            //
-
-            if (DeviceIndex == Context->DeviceCount) {
-                Context->Device[Context->DeviceCount] = Device;
-                FirstConfigurationListEntry =
-                    Device->ResourceRequirements->RequirementListListHead.Next;
-
-                Context->CurrentDeviceConfiguration[Context->DeviceCount] =
-                                        LIST_VALUE(FirstConfigurationListEntry,
-                                                   RESOURCE_REQUIREMENT_LIST,
-                                                   ListEntry);
-
-                Context->DeviceCount += 1;
-            }
+            IopArbiterAddRequirement(Context,
+                                     Entry->CorrespondingRequirement,
+                                     Entry->Device);
 
             //
             // Remove the entry.
@@ -2722,22 +2776,27 @@ Return Value:
 
     ULONGLONG AmountNeeded;
     PRESOURCE_ARBITER Arbiter;
+    PARBITER_ALLOCATION_ARBITER_DATA ArbiterData;
     ULONG ArbiterIndex;
     ULONGLONG ArbiterSize;
     PLIST_ENTRY CurrentEntry;
     PARBITER_ENTRY Entry;
 
-    for (ArbiterIndex = 1; ArbiterIndex < ArbiterTypeCount; ArbiterIndex += 1) {
+    for (ArbiterIndex = 0;
+         ArbiterIndex < Context->ArbiterCount;
+         ArbiterIndex += 1) {
+
+        ArbiterData = &(Context->ArbiterData[ArbiterIndex]);
 
         //
         // If the arbiter doesn't have a problem, don't touch it.
         //
 
-        if (Context->AmountNotAllocated[ArbiterIndex] == 0) {
+        if (ArbiterData->AmountNotAllocated == 0) {
             continue;
         }
 
-        Arbiter = Context->Arbiter[ArbiterIndex];
+        Arbiter = ArbiterData->Arbiter;
 
         ASSERT(Arbiter != NULL);
 
@@ -2772,9 +2831,7 @@ Return Value:
         // allocated.
         //
 
-        AmountNeeded = ArbiterSize +
-                       (Context->AmountNotAllocated[ArbiterIndex] * 2);
-
+        AmountNeeded = ArbiterSize + (ArbiterData->AmountNotAllocated * 2);
         IopArbiterExpandSpace(Arbiter, AmountNeeded);
     }
 
@@ -2838,6 +2895,7 @@ Return Value:
 {
 
     PRESOURCE_ARBITER Arbiter;
+    PARBITER_ALLOCATION_ARBITER_DATA ArbiterData;
     ULONG ArbiterIndex;
     ULONGLONG BiggestRequirementAmount;
     ULONG BiggestRequirementIndex;
@@ -2846,11 +2904,11 @@ Return Value:
     PDEVICE Device;
     ULONG DeviceIndex;
     ULONG EndRequirementIndex;
-    ULONG LastDeviceIndex;
     PLIST_ENTRY NextConfigurationListEntry;
     BOOL RemoveDevice;
     PRESOURCE_REQUIREMENT Requirement;
     ULONG RequirementCount;
+    PARBITER_ALLOCATION_REQUIREMENT RequirementData;
     ULONG RequirementIndex;
     KSTATUS Status;
     PRESOURCE_ARBITER TightestArbiter;
@@ -2862,10 +2920,14 @@ Return Value:
 
     TightestArbiter = NULL;
     TightestArbiterAmount = 0;
-    for (ArbiterIndex = 1; ArbiterIndex < ArbiterTypeCount; ArbiterIndex += 1) {
-        Arbiter = Context->Arbiter[ArbiterIndex];
-        if (Context->AmountNotAllocated[ArbiterIndex] > TightestArbiterAmount) {
-            TightestArbiterAmount = Context->AmountNotAllocated[ArbiterIndex];
+    for (ArbiterIndex = 0;
+         ArbiterIndex < Context->ArbiterCount;
+         ArbiterIndex += 1) {
+
+        ArbiterData = &(Context->ArbiterData[ArbiterIndex]);
+        Arbiter = ArbiterData->Arbiter;
+        if (ArbiterData->AmountNotAllocated > TightestArbiterAmount) {
+            TightestArbiterAmount = ArbiterData->AmountNotAllocated;
             TightestArbiter = Arbiter;
 
             ASSERT(Arbiter != NULL);
@@ -2886,23 +2948,12 @@ Return Value:
          RequirementIndex < Context->RequirementCount;
          RequirementIndex += 1) {
 
-        Device = Context->RequirementDevice[RequirementIndex];
-        Requirement = Context->Requirement[RequirementIndex];
+        RequirementData = &(Context->Requirements[RequirementIndex]);
+        Device = IOP_ARBITER_GET_DEVICE(Context, RequirementData);
+        Requirement = RequirementData->Requirement;
+        DeviceIndex = RequirementData->DeviceIndex;
 
-        //
-        // Find the device in that other array.
-        //
-
-        for (DeviceIndex = 0;
-             DeviceIndex < Context->DeviceCount;
-             DeviceIndex += 1) {
-
-            if (Context->Device[DeviceIndex] == Device) {
-                break;
-            }
-        }
-
-        ASSERT(DeviceIndex != Context->DeviceCount);
+        ASSERT(DeviceIndex < Context->DeviceCount);
 
         //
         // Skip if it's the last configuration.
@@ -2937,23 +2988,12 @@ Return Value:
              RequirementIndex < Context->RequirementCount;
              RequirementIndex += 1) {
 
-            Device = Context->RequirementDevice[RequirementIndex];
-            Requirement = Context->Requirement[RequirementIndex];
+            RequirementData = &(Context->Requirements[RequirementIndex]);
+            Device = IOP_ARBITER_GET_DEVICE(Context, RequirementData);
+            Requirement = RequirementData->Requirement;
+            DeviceIndex = RequirementData->DeviceIndex;
 
-            //
-            // Find the device in that other array.
-            //
-
-            for (DeviceIndex = 0;
-                 DeviceIndex < Context->DeviceCount;
-                 DeviceIndex += 1) {
-
-                if (Context->Device[DeviceIndex] == Device) {
-                    break;
-                }
-            }
-
-            ASSERT(DeviceIndex != Context->DeviceCount);
+            ASSERT(DeviceIndex < Context->DeviceCount);
 
             //
             // Remember if it's the new big guy.
@@ -2973,7 +3013,9 @@ Return Value:
     // configuration.
     //
 
-    Device = Context->RequirementDevice[BiggestRequirementIndex];
+    RequirementData = &(Context->Requirements[BiggestRequirementIndex]);
+    Device = IOP_ARBITER_GET_DEVICE(Context, RequirementData);
+    DeviceIndex = RequirementData->DeviceIndex;
     for (RequirementIndex = 0;
          RequirementIndex < Context->RequirementCount;
          NOTHING) {
@@ -2983,19 +3025,17 @@ Return Value:
         // the end of the array on top of this one.
         //
 
-        if (Context->RequirementDevice[RequirementIndex] == Device) {
+        RequirementData = &(Context->Requirements[RequirementIndex]);
+        if (IOP_ARBITER_GET_DEVICE(Context, RequirementData) == Device) {
 
-            ASSERT(Context->Allocation[RequirementIndex] == NULL);
+            ASSERT(RequirementData->Allocation == NULL);
 
             EndRequirementIndex = Context->RequirementCount - 1;
-            Context->Requirement[RequirementIndex] =
-                                     Context->Requirement[EndRequirementIndex];
-
-            Context->RequirementDevice[RequirementIndex] =
-                               Context->RequirementDevice[EndRequirementIndex];
-
-            Context->Allocation[RequirementIndex] =
-                                      Context->Allocation[EndRequirementIndex];
+            if (EndRequirementIndex != RequirementIndex) {
+                RtlCopyMemory(RequirementData,
+                              &(Context->Requirements[EndRequirementIndex]),
+                              sizeof(ARBITER_ALLOCATION_REQUIREMENT));
+            }
 
             Context->RequirementCount -= 1;
 
@@ -3009,32 +3049,15 @@ Return Value:
         }
     }
 
-    //
-    // Find the index into the other array to get the device.
-    //
-
-    for (DeviceIndex = 0;
-         DeviceIndex < Context->DeviceCount;
-         DeviceIndex += 1) {
-
-        if (Context->Device[DeviceIndex] == Device) {
-            break;
-        }
-    }
-
-    ASSERT(DeviceIndex != Context->DeviceCount);
+    ASSERT(DeviceIndex < Context->DeviceCount);
 
     //
     // If it's getting desperate, remove the device itself.
     //
 
     if (RemoveDevice != FALSE) {
-        LastDeviceIndex = Context->DeviceCount - 1;
-        Context->Device[DeviceIndex] = Context->Device[LastDeviceIndex];
-        Context->CurrentDeviceConfiguration[DeviceIndex] =
-                          Context->CurrentDeviceConfiguration[LastDeviceIndex];
-
-        Context->DeviceCount -= 1;
+        Context->Device[DeviceIndex] = NULL;
+        Context->CurrentDeviceConfiguration[DeviceIndex] = NULL;
 
     //
     // Notch the configuration down a tick, and add all those requirements.
@@ -3082,7 +3105,6 @@ Return Value:
         // Loop through again and add the resource requirements.
         //
 
-        RequirementIndex = Context->RequirementCount;
         CurrentEntry = Configuration->RequirementListHead.Next;
         while (CurrentEntry != &(Configuration->RequirementListHead)) {
             Requirement = LIST_VALUE(CurrentEntry,
@@ -3090,13 +3112,8 @@ Return Value:
                                      ListEntry);
 
             CurrentEntry = CurrentEntry->Next;
-            Context->Requirement[RequirementIndex] = Requirement;
-            Context->RequirementDevice[RequirementIndex] = Device;
-            Context->Allocation[RequirementIndex] = NULL;
-            RequirementIndex += 1;
+            IopArbiterAddRequirement(Context, Requirement, Device);
         }
-
-        Context->RequirementCount = RequirementIndex;
     }
 
     Status = STATUS_SUCCESS;
@@ -3138,11 +3155,12 @@ Return Value:
 {
 
     ULONG AllocationSize;
-    PARBITER_ENTRY *NewAllocationArray;
+    UINTN CopySize;
+    PARBITER_ALLOCATION_ARBITER_DATA NewArbiterDataArray;
     PRESOURCE_REQUIREMENT_LIST *NewCurrentDeviceConfigurationArray;
     PDEVICE *NewDeviceArray;
-    PRESOURCE_REQUIREMENT *NewRequirementArray;
-    PDEVICE *NewRequirementDeviceArray;
+    PARBITER_ALLOCATION_REQUIREMENT NewRequirementArray;
+    ULONG OldRequirementCount;
     KSTATUS Status;
 
     NewDeviceArray = NULL;
@@ -3167,9 +3185,10 @@ Return Value:
     NewCurrentDeviceConfigurationArray =
                 (PRESOURCE_REQUIREMENT_LIST *)(NewDeviceArray + NewDeviceCount);
 
-    AllocationSize = (sizeof(PRESOURCE_REQUIREMENT) * NewRequirementCount) +
-                     (sizeof(PDEVICE) * NewRequirementCount) +
-                     (sizeof(PARBITER_ENTRY) * NewRequirementCount);
+    AllocationSize = (sizeof(ARBITER_ALLOCATION_REQUIREMENT) *
+                      NewRequirementCount) +
+                     (sizeof(ARBITER_ALLOCATION_ARBITER_DATA) *
+                      NewRequirementCount);
 
     NewRequirementArray = MmAllocatePagedPool(AllocationSize,
                                               ARBITER_ALLOCATION_TAG);
@@ -3180,11 +3199,9 @@ Return Value:
     }
 
     RtlZeroMemory(NewRequirementArray, AllocationSize);
-    NewRequirementDeviceArray =
-                        (PDEVICE *)(NewRequirementArray + NewRequirementCount);
-
-    NewAllocationArray =
-           (PARBITER_ENTRY *)(NewRequirementDeviceArray + NewRequirementCount);
+    NewArbiterDataArray =
+                       (PARBITER_ALLOCATION_ARBITER_DATA)(NewRequirementArray +
+                                                          NewRequirementCount);
 
     //
     // Copy the old arrays into the new arrays. The allocations are not
@@ -3204,17 +3221,15 @@ Return Value:
         MmFreePagedPool(Context->Device);
     }
 
-    if (Context->Requirement != NULL) {
-        RtlCopyMemory(
-                    NewRequirementArray,
-                    Context->Requirement,
-                    Context->RequirementCount * sizeof(PRESOURCE_REQUIREMENT));
+    if (Context->Requirements != NULL) {
+        OldRequirementCount = Context->RequirementCount;
+        CopySize = OldRequirementCount * sizeof(ARBITER_ALLOCATION_REQUIREMENT);
+        RtlCopyMemory(NewRequirementArray, Context->Requirements, CopySize);
+        CopySize = Context->ArbiterCount *
+                   sizeof(ARBITER_ALLOCATION_ARBITER_DATA);
 
-        RtlCopyMemory(NewRequirementDeviceArray,
-                      Context->RequirementDevice,
-                      Context->RequirementCount * sizeof(PDEVICE));
-
-        MmFreePagedPool(Context->Requirement);
+        RtlCopyMemory(NewArbiterDataArray, Context->ArbiterData, CopySize);
+        MmFreePagedPool(Context->Requirements);
     }
 
     //
@@ -3224,9 +3239,8 @@ Return Value:
 
     Context->Device = NewDeviceArray;
     Context->CurrentDeviceConfiguration = NewCurrentDeviceConfigurationArray;
-    Context->Requirement = NewRequirementArray;
-    Context->RequirementDevice = NewRequirementDeviceArray;
-    Context->Allocation = NewAllocationArray;
+    Context->Requirements = NewRequirementArray;
+    Context->ArbiterData = NewArbiterDataArray;
     Status = STATUS_SUCCESS;
 
 ArbiterResizeAllocationContextEnd:
@@ -3281,13 +3295,19 @@ Return Value:
 
 {
 
+    PDEVICE Device;
     ULONG DeviceIndex;
 
     for (DeviceIndex = 0;
          DeviceIndex < Context->DeviceCount;
          DeviceIndex += 1) {
 
-        Context->Device[DeviceIndex]->SelectedConfiguration =
+        Device = Context->Device[DeviceIndex];
+        if (Device == NULL) {
+            continue;
+        }
+
+        Device->SelectedConfiguration =
                               Context->CurrentDeviceConfiguration[DeviceIndex];
     }
 
@@ -3413,10 +3433,17 @@ Return Value:
 
 {
 
-    ResourceAllocation->Type = ArbiterEntry->CorrespondingRequirement->Type;
+    PRESOURCE_REQUIREMENT Requirement;
+
+    Requirement = ArbiterEntry->CorrespondingRequirement;
+    ResourceAllocation->Type = Requirement->Type;
     ResourceAllocation->Allocation = ArbiterEntry->Allocation;
     ResourceAllocation->Length = ArbiterEntry->Length;
     ResourceAllocation->Characteristics = ArbiterEntry->Characteristics;
+    ResourceAllocation->Flags = Requirement->Flags;
+    ResourceAllocation->Data = Requirement->Data;
+    ResourceAllocation->DataSize = Requirement->DataSize;
+    ResourceAllocation->Provider = Requirement->Provider;
     return;
 }
 
@@ -3616,11 +3643,13 @@ Return Value:
     PDEVICE Device;
     PARBITER_ENTRY NewEntry;
     PRESOURCE_REQUIREMENT Requirement;
+    PARBITER_ALLOCATION_REQUIREMENT RequirementData;
     KSTATUS Status;
 
-    Device = Context->RequirementDevice[RequirementIndex];
-    Requirement = Context->Requirement[RequirementIndex];
-    Arbiter = Context->Arbiter[Requirement->Type];
+    RequirementData = &(Context->Requirements[RequirementIndex]);
+    Requirement = RequirementData->Requirement;
+    Device = IOP_ARBITER_GET_DEVICE(Context, RequirementData);
+    Arbiter = IOP_ARBITER_GET_ARBITER(Context, RequirementData);
 
     ASSERT(Arbiter != NULL);
 
@@ -3754,7 +3783,7 @@ Return Value:
     // The space was successfully reserved, save it.
     //
 
-    Context->Allocation[RequirementIndex] = NewEntry;
+    Context->Requirements[RequirementIndex].Allocation = NewEntry;
     Status = STATUS_SUCCESS;
 
 ArbiterTryBootAllocationEnd:
@@ -3886,24 +3915,24 @@ Return Value:
 
     PRESOURCE_ARBITER Arbiter;
     PARBITER_ENTRY Entry;
-    PRESOURCE_REQUIREMENT Requirement;
+    PARBITER_ALLOCATION_REQUIREMENT RequirementData;
     ULONG RequirementIndex;
 
     for (RequirementIndex = 0;
          RequirementIndex < Context->RequirementCount;
          RequirementIndex += 1) {
 
-        Requirement = Context->Requirement[RequirementIndex];
-        Arbiter = Context->Arbiter[Requirement->Type];
+        RequirementData = &(Context->Requirements[RequirementIndex]);
+        Arbiter = IOP_ARBITER_GET_ARBITER(Context, RequirementData);
 
         ASSERT(Arbiter != NULL);
 
-        Entry = Context->Allocation[RequirementIndex];
+        Entry = RequirementData->Allocation;
         if (Entry != NULL) {
             IopArbiterFreeEntry(Arbiter, Entry);
         }
 
-        Context->Allocation[RequirementIndex] = NULL;
+        RequirementData->Allocation = NULL;
     }
 
     return;
@@ -3942,7 +3971,7 @@ Return Value:
          RequirementIndex < Context->RequirementCount;
          RequirementIndex += 1) {
 
-        Entry = Context->Allocation[RequirementIndex];
+        Entry = Context->Requirements[RequirementIndex].Allocation;
         if (Entry == NULL) {
             continue;
         }

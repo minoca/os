@@ -25,18 +25,19 @@ DIRS = acpi      \
        ata       \
        devrem    \
        fat       \
-       usrinput  \
+       gpio      \
        i8042     \
+       net       \
        null      \
        part      \
-       plat      \
        pci       \
+       plat      \
        ramdisk   \
        sd        \
        special   \
        term      \
        usb       \
-       net       \
+       usrinput  \
        videocon  \
 
 include $(SRCROOT)/os/minoca.mk

@@ -621,7 +621,6 @@ Return Value:
 
     ULONG Control;
     ULONG Flags;
-    INT Index;
     ULONGLONG MaxVectorCount;
     PPCI_MSI_CONTEXT MsiContext;
     ULONG Offset;
@@ -769,11 +768,7 @@ Return Value:
             // count is 2^x. Make sure that the exponent isn't too large.
             //
 
-            Index = RtlFindFirstSet64(Information->VectorCount);
-
-            ASSERT(Index != 0);
-
-            VectorCount = (ULONGLONG)(Index - 1);
+            VectorCount = RtlCountTrailingZeros64(Information->VectorCount);
             if (VectorCount > PCI_MSI_MAXIMUM_VECTOR_ENCODING) {
                 Status = STATUS_INVALID_PARAMETER;
                 goto MsiGetSetInformationEnd;

@@ -23,7 +23,10 @@
 ## does not exist, then try to fire up a shell directly.
 ##
 
-WORLD="$PWD/apps"
+if test -z "$WORLD"; then
+    WORLD="apps"
+fi
+
 if ! test -d "$WORLD"; then
     if test -z "$CONSOLE"; then
         CONSOLE=/Terminal/Slave0
@@ -40,8 +43,8 @@ fi
 ## Set up some working environment variables.
 ##
 
-export LD_LIBRARY_PATH="$PWD/apps/lib"
-export PATH="$PWD/apps/bin"
+export LD_LIBRARY_PATH="$PWD/$WORLD/lib"
+export PATH="$PWD/$WORLD/bin"
 
 ##
 ## Mount the special devices if needed.

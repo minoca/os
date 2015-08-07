@@ -238,6 +238,13 @@ HlpBcm2709InterruptSetLineState (
     PINTERRUPT_LINE_STATE State
     );
 
+VOID
+HlpBcm2709InterruptMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    );
+
 KSTATUS
 HlpBcm2709InterruptDescribeLines (
     VOID
@@ -282,6 +289,25 @@ HlBcm2709InterruptIrqBasicGpuTable[BCM2709_INTERRUPT_IRQ_BASIC_GPU_COUNT] = {
     56,
     57,
     62
+};
+
+//
+// Define the interrupt function table template.
+//
+
+INTERRUPT_FUNCTION_TABLE HlBcm2709InterruptFunctionTable = {
+    HlpBcm2709InterruptInitializeIoUnit,
+    HlpBcm2709InterruptSetLineState,
+    HlpBcm2709InterruptMaskLine,
+    HlpBcm2709InterruptBegin,
+    NULL,
+    HlpBcm2709InterruptEndOfInterrupt,
+    HlpBcm2709InterruptRequestInterrupt,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
 };
 
 //
@@ -352,17 +378,10 @@ Return Value:
                          sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
 
     NewController.TableVersion = INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
-    NewController.FunctionTable.InitializeIoUnit =
-                                           HlpBcm2709InterruptInitializeIoUnit;
+    HlBcm2709KernelServices->CopyMemory(&(NewController.FunctionTable),
+                                        &HlBcm2709InterruptFunctionTable,
+                                        sizeof(INTERRUPT_FUNCTION_TABLE));
 
-    NewController.FunctionTable.BeginInterrupt = HlpBcm2709InterruptBegin;
-    NewController.FunctionTable.EndOfInterrupt =
-                                             HlpBcm2709InterruptEndOfInterrupt;
-
-    NewController.FunctionTable.RequestInterrupt =
-                                           HlpBcm2709InterruptRequestInterrupt;
-
-    NewController.FunctionTable.SetLineState = HlpBcm2709InterruptSetLineState;
     NewController.Context = Context;
     NewController.Identifier = 0;
     NewController.ProcessorCount = 0;
@@ -902,6 +921,96 @@ Return Value:
 
 Bcm2709SetLineStateEnd:
     return Status;
+}
+
+VOID
+HlpBcm2709InterruptMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine masks or unmasks an interrupt line, leaving the rest of the
+    line state intact.
+
+Arguments:
+
+    Context - Supplies the pointer to the controller's context, provided by the
+        hardware module upon initialization.
+
+    Line - Supplies a pointer to the line to maek or unmask. This will always
+        be a controller specified line.
+
+    Enable - Supplies a boolean indicating whether to mask the interrupt,
+        preventing interrupts from coming through (FALSE), or enable the line
+        and allow interrupts to come through (TRUE).
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    BCM2709_INTERRUPT_REGISTER Register;
+    ULONG RegisterValue;
+    ULONG Shift;
+
+    //
+    // If the line is a GPU line, then determine which of the two
+    // disable/enable registers it belongs to.
+    //
+
+    if (Line->Line < BCM2709_INTERRUPT_GPU_LINE_COUNT) {
+        Shift = Line->Line;
+        if (Line->Line >= 32) {
+            Shift -= 32;
+        }
+
+        RegisterValue = 1 << Shift;
+        if (Enable == FALSE) {
+            if (Line->Line < 32) {
+                Register = Bcm2709InterruptIrqDisable1;
+
+            } else {
+                Register = Bcm2709InterruptIrqDisable2;
+            }
+
+        } else {
+            if (Line->Line < 32) {
+                Register = Bcm2709InterruptIrqEnable1;
+
+            } else {
+                Register = Bcm2709InterruptIrqEnable2;
+            }
+        }
+
+    //
+    // Otherwise the interrupt belongs to the basic enable and disable
+    // registers.
+    //
+
+    } else {
+        Shift = Line->Line - BCM2709_INTERRUPT_GPU_LINE_COUNT;
+        RegisterValue = 1 << Shift;
+
+        ASSERT((RegisterValue & BCM2709_INTERRUPT_IRQ_BASIC_MASK) != 0);
+
+        if (Enable == FALSE) {
+            Register = Bcm2709InterruptIrqDisableBasic;
+
+        } else {
+            Register = Bcm2709InterruptIrqEnableBasic;
+        }
+    }
+
+    WRITE_INTERRUPT_REGISTER(Register, RegisterValue);
+    return;
 }
 
 KSTATUS

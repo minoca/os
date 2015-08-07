@@ -117,6 +117,13 @@ HlpOmap3InterruptSetLineState (
     PINTERRUPT_LINE_STATE State
     );
 
+VOID
+HlpOmap3InterruptMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    );
+
 KSTATUS
 HlpOmap3InterruptDescribeLines (
     VOID
@@ -157,6 +164,21 @@ typedef enum _MPU_REGISTERS {
 //
 
 PVOID HlOmap3InterruptController = NULL;
+
+INTERRUPT_FUNCTION_TABLE HlOmap3InterruptFunctionTable = {
+    HlpOmap3InterruptInitializeIoUnit,
+    HlpOmap3InterruptSetLineState,
+    HlpOmap3InterruptMaskLine,
+    HlpOmap3InterruptBegin,
+    NULL,
+    HlpOmap3InterruptEndOfInterrupt,
+    HlpOmap3InterruptRequestInterrupt,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -217,23 +239,9 @@ Return Value:
         //
 
         NewController.TableVersion = INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
-        NewController.FunctionTable.EnumerateProcessors = NULL;
-        NewController.FunctionTable.InitializeLocalUnit = NULL;
-        NewController.FunctionTable.InitializeIoUnit =
-                                             HlpOmap3InterruptInitializeIoUnit;
-
-        NewController.FunctionTable.SetLocalUnitAddressing = NULL;
-        NewController.FunctionTable.FastEndOfInterrupt = NULL;
-        NewController.FunctionTable.BeginInterrupt = HlpOmap3InterruptBegin;
-        NewController.FunctionTable.EndOfInterrupt =
-                                               HlpOmap3InterruptEndOfInterrupt;
-
-        NewController.FunctionTable.RequestInterrupt =
-                                             HlpOmap3InterruptRequestInterrupt;
-
-        NewController.FunctionTable.StartProcessor = NULL;
-        NewController.FunctionTable.SetLineState =
-                                                 HlpOmap3InterruptSetLineState;
+        HlOmap3KernelServices->CopyMemory(&(NewController.FunctionTable),
+                                          &HlOmap3InterruptFunctionTable,
+                                          sizeof(INTERRUPT_FUNCTION_TABLE));
 
         NewController.Context = NULL;
         NewController.Identifier = 0;
@@ -573,6 +581,64 @@ Return Value:
 
 Omap3InterruptSetLineStateEnd:
     return Status;
+}
+
+VOID
+HlpOmap3InterruptMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine masks or unmasks an interrupt line, leaving the rest of the
+    line state intact.
+
+Arguments:
+
+    Context - Supplies the pointer to the controller's context, provided by the
+        hardware module upon initialization.
+
+    Line - Supplies a pointer to the line to maek or unmask. This will always
+        be a controller specified line.
+
+    Enable - Supplies a boolean indicating whether to mask the interrupt,
+        preventing interrupts from coming through (FALSE), or enable the line
+        and allow interrupts to come through (TRUE).
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG InterruptIndex;
+    ULONG InterruptOffset;
+    MPU_REGISTERS Register;
+
+    InterruptOffset = Line->Line / 32;
+    InterruptIndex = Line->Line - (InterruptOffset * 32);
+
+    //
+    // To disable, set the interrupt mask and clean the interrupt line.
+    //
+
+    if (Enable == FALSE) {
+        Register = MpuMaskSet;
+
+    } else {
+        Register = MpuMaskClear;
+    }
+
+    WRITE_INTERRUPT_REGISTER(Register + (8 * InterruptOffset),
+                             1 << InterruptIndex);
+
+    return;
 }
 
 KSTATUS

@@ -660,6 +660,10 @@ Return Value:
                     VectorCharacteristics |= INTERRUPT_VECTOR_ACTIVE_LOW;
                 }
 
+                if ((LineCharacteristics & INTERRUPT_LINE_ACTIVE_HIGH) != 0) {
+                    VectorCharacteristics |= INTERRUPT_VECTOR_ACTIVE_HIGH;
+                }
+
                 EdgeTriggered = LineCharacteristics &
                                 INTERRUPT_LINE_EDGE_TRIGGERED;
 

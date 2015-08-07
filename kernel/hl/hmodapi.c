@@ -102,6 +102,7 @@ HlpModReleaseLock (
 
 HARDWARE_MODULE_KERNEL_SERVICES HlHardwareModuleServices = {
     RtlZeroMemory,
+    RtlCopyMemory,
     HlReadRegister32,
     HlWriteRegister32,
     HlReadRegister8,
@@ -565,7 +566,7 @@ Return Value:
 
     switch (Type) {
     case HardwareModuleInterruptController:
-        Status = HlpInterruptRegisterHardware(Description);
+        Status = HlpInterruptRegisterHardware(Description, NULL);
         break;
 
     case HardwareModuleInterruptLines:

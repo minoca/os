@@ -408,7 +408,7 @@ Return Value:
     return;
 }
 
-BOOL
+INTERRUPT_CAUSE
 HlpInterruptAcknowledge (
     PINTERRUPT_CONTROLLER *ProcessorController,
     PULONG Vector,
@@ -439,9 +439,7 @@ Arguments:
 
 Return Value:
 
-    TRUE if there was an interrupt and it should be processed.
-
-    FALSE if the interrupt was spurious.
+    Returns the cause of the interrupt.
 
 --*/
 
@@ -449,7 +447,8 @@ Return Value:
 
     INTERRUPT_CAUSE Cause;
     PINTERRUPT_CONTROLLER Controller;
-    PLIST_ENTRY CurrentEntry;
+    ULONG ControllerCount;
+    ULONG ControllerIndex;
     INTERRUPT_LINE Line;
     PINTERRUPT_LINES Lines;
     ULONG Offset;
@@ -469,7 +468,7 @@ Return Value:
         if ((Cause == InterruptCauseSpuriousInterrupt) ||
             (Cause == InterruptCauseNoInterruptHere)) {
 
-            return FALSE;
+            return Cause;
         }
 
     //
@@ -478,11 +477,15 @@ Return Value:
     //
 
     } else {
-        CurrentEntry = HlInterruptControllers.Next;
-        while (CurrentEntry != &HlInterruptControllers) {
-            Controller = LIST_VALUE(CurrentEntry,
-                                    INTERRUPT_CONTROLLER,
-                                    ListEntry);
+        ControllerCount = HlInterruptControllerCount;
+        for (ControllerIndex = 0;
+             ControllerIndex < ControllerCount;
+             ControllerIndex += 1) {
+
+            Controller = HlInterruptControllers[ControllerIndex];
+            if (Controller == NULL) {
+                continue;
+            }
 
             Cause = Controller->FunctionTable.BeginInterrupt(
                                                      Controller->PrivateContext,
@@ -494,8 +497,8 @@ Return Value:
             }
         }
 
-        if (CurrentEntry == &HlInterruptControllers) {
-            return FALSE;
+        if (ControllerIndex == ControllerCount) {
+            return InterruptCauseNoInterruptHere;
         }
     }
 

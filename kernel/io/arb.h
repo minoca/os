@@ -21,6 +21,24 @@ Author:
 //
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// The arbiters themselves are doubly indirected because a deduplicated
+// array of arbiters is needed.
+//
+
+#define IOP_GET_ARBITER_DATA(_Context, _RequirementData) \
+    (&((_Context)->ArbiterData[(_RequirementData)->ArbiterIndex]))
+
+#define IOP_ARBITER_GET_ARBITER(_Context, _RequirementData) \
+    (IOP_GET_ARBITER_DATA(_Context, _RequirementData)->Arbiter)
+
+#define IOP_ARBITER_GET_DEVICE(_Context, _RequirementData) \
+    ((_Context)->Device[(_RequirementData)->DeviceIndex])
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -38,6 +56,7 @@ typedef enum _ARBITER_TYPE {
     ArbiterTypeInterruptVector = ResourceTypeInterruptVector,
     ArbiterTypeBusNumber = ResourceTypeBusNumber,
     ArbiterTypeVendorSpecific = ResourceTypeVendorSpecific,
+    ArbiterTypeGpio = ResourceTypeGpio,
     ArbiterTypeCount
 } ARBITER_TYPE, *PARBITER_TYPE;
 
@@ -149,18 +168,67 @@ typedef struct _RESOURCE_ARBITER {
 
 Structure Description:
 
+    This structure defines the data associated with an arbiter during an
+    allocation proceeding.
+
+Members:
+
+    Arbiter - Stores a pointer to the arbiter itself.
+
+    AmountNotAllocated - Stores the amount that could not be allocated from
+        this arbiter during an allocation.
+
+--*/
+
+typedef struct _ARBITER_ALLOCATION_ARBITER_DATA {
+    PRESOURCE_ARBITER Arbiter;
+    ULONGLONG AmountNotAllocated;
+} ARBITER_ALLOCATION_ARBITER_DATA, *PARBITER_ALLOCATION_ARBITER_DATA;
+
+/*++
+
+Structure Description:
+
+    This structure defines the data associated with a resource requirement
+    during an arbiter allocation session.
+
+Members:
+
+    Requirement - Stores a pointer to the actual resource requirement.
+
+    DeviceIndex - Stores the index into the array of context devices for the
+        device that generated this requirement.
+
+    Allocation - Stores a pointer to the arbiter allocation for the requirement.
+
+    ArbiterIndex - Stores the index into the arbiter data array where the
+        arbiter for this requirement can be found.
+
+--*/
+
+typedef struct _ARBITER_ALLOCATION_REQUIREMENT {
+    PRESOURCE_REQUIREMENT Requirement;
+    ULONG DeviceIndex;
+    PARBITER_ENTRY Allocation;
+    ULONG ArbiterIndex;
+} ARBITER_ALLOCATION_REQUIREMENT, *PARBITER_ALLOCATION_REQUIREMENT;
+
+/*++
+
+Structure Description:
+
     This structure defines an arbiter allocation context, a scratchpad of
     state used when trying to satisfy allocations of one or more devices.
 
 Members:
 
-    Arbiter - Stores an array of pointers to an arbiter of each resource type.
-        These represent the arbiters being allocated from for this set of
-        allocations.
+    ArbiterData - Stores an array of arbiter data structures, one for each
+        arbiter involved in this allocation. This array is always deduplicated.
+        Its capacity is always the resource requirement count for the worst
+        case where every requirement is a different arbiter.
 
-    AmountNotAllocated - Stores an array of the total amount of space not
-        successfully allocated in each arbiter. This array is used to determine
-        which arbiter is under the most pressure.
+    ArbiterCount - Stores the number of valid elements currently in the
+        arbiters array.
 
     Device - Stores an array of pointers to devices. These represent the
         devices involved in this set of allocations.
@@ -172,14 +240,8 @@ Members:
     DeviceCount - Stores the number of elements in the device and current
         configuration arrays.
 
-    Requirement - Stores an array of pointers to all the requirements that have
-        to be satisfied in this set.
-
-    RequirementDevice - Stores an array of pointers to devices that own each
-        of the requirements in the requirement array.
-
-    Allocation - Stores an array of pointers to arbiter allocations that
-        satisfy each of the requirements (the order corresponds one to one).
+    Requirements - Stores an array of resource requirements and their
+        associated data.
 
     RequirementCount - Stores the number of elements in the requirement and
         requirement device arrays.
@@ -187,14 +249,12 @@ Members:
 --*/
 
 typedef struct _ARBITER_ALLOCATION_CONTEXT {
-    PRESOURCE_ARBITER Arbiter[ArbiterTypeCount];
-    ULONGLONG AmountNotAllocated[ArbiterTypeCount];
+    PARBITER_ALLOCATION_ARBITER_DATA ArbiterData;
+    ULONG ArbiterCount;
     PDEVICE *Device;
     PRESOURCE_REQUIREMENT_LIST *CurrentDeviceConfiguration;
     ULONG DeviceCount;
-    PRESOURCE_REQUIREMENT *Requirement;
-    PDEVICE *RequirementDevice;
-    PARBITER_ENTRY *Allocation;
+    PARBITER_ALLOCATION_REQUIREMENT Requirements;
     ULONG RequirementCount;
 } ARBITER_ALLOCATION_CONTEXT, *PARBITER_ALLOCATION_CONTEXT;
 

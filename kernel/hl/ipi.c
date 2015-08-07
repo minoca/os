@@ -65,6 +65,8 @@ Members:
 
     PhysicalId - Stores the physical identifier of the processor.
 
+    LogicalFlatId - Stores the identifier of the processor in logical flat mode.
+
     Target - Stores the targeting information for the processor.
 
     Controller - Stores a pointer to the interrupt controller whose local unit
@@ -86,6 +88,7 @@ Members:
 
 typedef struct _PROCESSOR_ADDRESSING {
     ULONG PhysicalId;
+    ULONG LogicalFlatId;
     INTERRUPT_HARDWARE_TARGET Target;
     PINTERRUPT_CONTROLLER Controller;
     INTERRUPT_LINE IpiLine[MAX_IPI_LINE_COUNT];
@@ -515,7 +518,8 @@ Return Value:
 
     ULONG AllocationSize;
     PINTERRUPT_CONTROLLER Controller;
-    PLIST_ENTRY CurrentEntry;
+    ULONG ControllerCount;
+    ULONG ControllerIndex;
     PPROCESSOR_DESCRIPTION Descriptions;
     ULONG GlobalProcessorIndex;
     ULONG MaxProcessors;
@@ -538,10 +542,16 @@ Return Value:
 
     MaxProcessorsPerUnit = 0;
     MaxProcessors = 0;
-    CurrentEntry = HlInterruptControllers.Next;
-    while (CurrentEntry != &HlInterruptControllers) {
-        Controller = LIST_VALUE(CurrentEntry, INTERRUPT_CONTROLLER, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
+    ControllerCount = HlInterruptControllerCount;
+    for (ControllerIndex = 0;
+         ControllerIndex < ControllerCount;
+         ControllerIndex += 1) {
+
+        Controller = HlInterruptControllers[ControllerIndex];
+        if (Controller == NULL) {
+            continue;
+        }
+
         MaxProcessors += Controller->ProcessorCount;
         if (Controller->ProcessorCount > MaxProcessorsPerUnit) {
             MaxProcessorsPerUnit = Controller->ProcessorCount;
@@ -585,12 +595,14 @@ Return Value:
     // info from them.
     //
 
-    CurrentEntry = HlInterruptControllers.Next;
+    ControllerCount = HlInterruptControllerCount;
     NextProcessorIndex = 0;
-    while (CurrentEntry != &HlInterruptControllers) {
-        Controller = LIST_VALUE(CurrentEntry, INTERRUPT_CONTROLLER, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
-        if (Controller->ProcessorCount == 0) {
+    for (ControllerIndex = 0;
+         ControllerIndex < ControllerCount;
+         ControllerIndex += 1) {
+
+        Controller = HlInterruptControllers[ControllerIndex];
+        if ((Controller == NULL) || (Controller->ProcessorCount == 0)) {
             continue;
         }
 
@@ -629,7 +641,19 @@ Return Value:
             }
 
             HlProcessorTargets[GlobalProcessorIndex].PhysicalId =
-                                       Descriptions[ProcessorIndex].Identifier;
+                                       Descriptions[ProcessorIndex].PhysicalId;
+
+            HlProcessorTargets[GlobalProcessorIndex].LogicalFlatId =
+                                    Descriptions[ProcessorIndex].LogicalFlatId;
+
+            //
+            // If any processor reports a logical flat ID of 0, then logical
+            // flat mode is not supported.
+            //
+
+            if (HlProcessorTargets[GlobalProcessorIndex].LogicalFlatId == 0) {
+                HlLogicalFlatLimit = 0;
+            }
 
             if ((Descriptions[ProcessorIndex].Flags &
                  PROCESSOR_DESCRIPTION_FLAG_PRESENT) != 0) {
@@ -829,7 +853,9 @@ Return Value:
         ASSERT(HlLogicalFlatLimit <= 32);
 
         Targeting->Addressing = InterruptAddressingLogicalFlat;
-        Targeting->U.LogicalFlatId = 1 << ProcessorIndex;
+        Targeting->U.LogicalFlatId =
+                              HlProcessorTargets[ProcessorIndex].LogicalFlatId;
+
         Status = SetAddressing(PrivateContext, Targeting);
     }
 
@@ -841,8 +867,10 @@ Return Value:
         (ProcessorIndex < HlMaxClusters * HlMaxClusterSize)) {
 
         Targeting->Addressing = InterruptAddressingLogicalClustered;
-        Targeting->U.Cluster.Id = ProcessorIndex / HlMaxClusterSize;
-        Targeting->U.Cluster.Mask = 1 << (ProcessorIndex % HlMaxClusterSize);
+        Targeting->U.Cluster.Id = Targeting->U.PhysicalId / HlMaxClusterSize;
+        Targeting->U.Cluster.Mask =
+                             1 << (Targeting->U.PhysicalId % HlMaxClusterSize);
+
         Status = SetAddressing(PrivateContext, Targeting);
 
         //
@@ -959,34 +987,6 @@ Return Value:
     }
 
     return HlProcessorTargets[ProcessorIndex].Controller;
-}
-
-ULONG
-HlpInterruptGetProcessorIdentifierFromIndex (
-    ULONG ProcessorIndex
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the identifier of the local unit corresponding to the
-    given processor.
-
-Arguments:
-
-    ProcessorIndex - Supplies the zero-based index of the processor whose
-        local unit identifier is desired.
-
-Return Value:
-
-    Returns the identifier of the processor's local unit interrupt controller.
-
---*/
-
-{
-
-    return HlProcessorTargets[ProcessorIndex].PhysicalId;
 }
 
 KSTATUS

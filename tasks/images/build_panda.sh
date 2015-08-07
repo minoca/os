@@ -31,9 +31,11 @@ fi
 
 DRIVERS="$DRIVERS
 sdomap4.drv
-smsc95xx.drv"
+smsc95xx.drv
+om4gpio.drv"
 
 BOOT_DRIVERS="$BOOT_DRIVERS
+om4gpio.drv
 sdomap4.drv"
 
 . $TASKDIR/images/assemble_common.sh

@@ -42,6 +42,7 @@ OBJS = acpidrv.o    \
        namespce.o   \
        oprgn.o      \
        oprgnos.o    \
+       resdesc.o    \
 
 DYNLIBS = $(BINROOT)/kernel             \
 

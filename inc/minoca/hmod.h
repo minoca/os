@@ -69,7 +69,7 @@ Author:
 // Define the special controller identifier reserved for the CPU itself.
 //
 
-#define INTERRUPT_CPU_IDENTIFIER 0xFFFFFFFF
+#define INTERRUPT_CPU_IDENTIFIER ((UINTN)-1L)
 
 //
 // Define the PC CPU interrupt pins.
@@ -166,6 +166,12 @@ Author:
 #define TIMER_FEATURE_PROCESSOR_COUNTER 0x00000040
 
 //
+// Interrupt controller feature flags.
+//
+
+#define INTERRUPT_FEATURE_LOW_RUN_LEVEL 0x00000001
+
+//
 // Interrupt line state flags.
 //
 
@@ -181,6 +187,18 @@ Author:
 //
 
 #define INTERRUPT_LINE_STATE_FLAG_LOWEST_PRIORITY 0x00000002
+
+//
+// Set this flag if the interrupt is configured as a wake source.
+//
+
+#define INTERRUPT_LINE_STATE_FLAG_WAKE 0x00000004
+
+//
+// Set this flag to enable debouncing in the interrupt.
+//
+
+#define INTERRUPT_LINE_STATE_FLAG_DEBOUNCE 0x00000008
 
 //
 // Define the description table version numbers.
@@ -203,6 +221,9 @@ Author:
 //
 // ------------------------------------------------------ Data Type Definitions
 //
+
+typedef struct _INTERRUPT_CONTROLLER
+    INTERRUPT_CONTROLLER, *PINTERRUPT_CONTROLLER;
 
 typedef enum _HARDWARE_MODULE_TYPE {
     HardwareModuleInvalid,
@@ -232,6 +253,7 @@ typedef enum _INTERRUPT_ACTIVE_LEVEL {
     InterruptActiveLevelUnknown,
     InterruptActiveLow,
     InterruptActiveHigh,
+    InterruptActiveBoth
 } INTERRUPT_ACTIVE_LEVEL, *PINTERRUPT_ACTIVE_LEVEL;
 
 typedef enum _INTERRUPT_LINE_TYPE {
@@ -294,6 +316,29 @@ typedef struct _HARDWARE_MODULE_LOCK {
 
 Structure Description:
 
+    This structure is used to return information about an interrupt controller.
+
+Members:
+
+    Controller - Stores a pointer to the controller itself, a kind of handle.
+
+    StartingGsi - Stores the starting global system interrupt number of the
+        controller.
+
+    LineCount - Stores the number of lines in the interrupt controller.
+
+--*/
+
+typedef struct _INTERRUPT_CONTROLLER_INFORMATION {
+    PINTERRUPT_CONTROLLER Controller;
+    ULONG StartingGsi;
+    ULONG LineCount;
+} INTERRUPT_CONTROLLER_INFORMATION, *PINTERRUPT_CONTROLLER_INFORMATION;
+
+/*++
+
+Structure Description:
+
     This structure defines an interrupt target as actually supported by the
     interrupt controller hardware.
 
@@ -340,9 +385,13 @@ Members:
     Version - Stores the version number of this table as understood by the
         hardware module. Set this to PROCESSOR_DESCRIPTION_VERSION.
 
-    Identifier - Stores the processor identifier number. This number will be
+    PhysicalId - Stores the processor identifier number. This number will be
         referred to by the system when communicating with the hardware module
         about a processor.
+
+    LogicalFlatId - Stores the logical flat processor ID to use as a processor
+        target. Set to 0 if logical flat mode is not supported or not supported
+        for this processor.
 
     FirmwareIdentifier - Stores the processor identifier number used by the
         firmware. This number may or may not be the same as the hardware
@@ -358,7 +407,8 @@ Members:
 
 typedef struct _PROCESSOR_DESCRIPTION {
     ULONG Version;
-    ULONG Identifier;
+    ULONG PhysicalId;
+    ULONG LogicalFlatId;
     ULONG FirmwareIdentifier;
     ULONG Flags;
     PHYSICAL_ADDRESS ParkedPhysicalAddress;
@@ -402,11 +452,11 @@ Members:
 typedef struct _INTERRUPT_LINES_DESCRIPTION {
     ULONG Version;
     INTERRUPT_LINES_TYPE Type;
-    ULONG Controller;
+    UINTN Controller;
     LONG LineStart;
     LONG LineEnd;
     ULONG Gsi;
-    ULONG OutputControllerIdentifier;
+    UINTN OutputControllerIdentifier;
 } INTERRUPT_LINES_DESCRIPTION, *PINTERRUPT_LINES_DESCRIPTION;
 
 /*++
@@ -435,7 +485,7 @@ typedef struct _INTERRUPT_LINE {
     union {
         ULONG Gsi;
         struct {
-            ULONGLONG Controller;
+            UINTN Controller;
             LONG Line;
         };
     };
@@ -999,6 +1049,39 @@ Return Value:
 
 --*/
 
+typedef
+VOID
+(*PINTERRUPT_MASK_LINE) (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    );
+
+/*++
+
+Routine Description:
+
+    This routine masks or unmasks an interrupt line, leaving the rest of the
+    line state intact.
+
+Arguments:
+
+    Context - Supplies the pointer to the controller's context, provided by the
+        hardware module upon initialization.
+
+    Line - Supplies a pointer to the line to maek or unmask. This will always
+        be a controller specified line.
+
+    Enable - Supplies a boolean indicating whether to mask the interrupt,
+        preventing interrupts from coming through (FALSE), or enable the line
+        and allow interrupts to come through (TRUE).
+
+Return Value:
+
+    None.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -1009,19 +1092,14 @@ Structure Description:
 
 Members:
 
-    EnumerateProcessors - Stores a pointer to a function that describes a set of
-        processors to the system.
-
-    InitializeLocalUnit - Stores a pointer to a function that initializes the
-        processor-local portion of an interrupt controller. This routine is
-        called once on each processor during boot and after descructive idle
-        states.
-
     InitializeIoUnit - Stores a pointer to a function that initializes
         an interrupt controller.
 
-    SetLocalUnitAddressing - Stores a pointer to a function that sets the
-        destination addressing mode for the current processor.
+    SetLineState - Stores a pointer to a fucntion that configures an interrupt
+        line.
+
+    MaskLine - Stores a pointer to a function used to mask and unmask
+        interrupt lines (without altering the remaining line state).
 
     BeginInterrupt - Stores a pointer to a function that is called when an
         interrupt fires.
@@ -1040,25 +1118,38 @@ Members:
     RequestInterrupt - Stores a pointer to a function that requests a hardware
         interrupt on the given line.
 
+    EnumerateProcessors - Stores a pointer to a function that describes a set of
+        processors to the system.
+
+    InitializeLocalUnit - Stores a pointer to a function that initializes the
+        processor-local portion of an interrupt controller. This routine is
+        called once on each processor during boot and after descructive idle
+        states.
+
+    SetLocalUnitAddressing - Stores a pointer to a function that sets the
+        destination addressing mode for the current processor.
+
     StartProcessor - Stores a pointer to a function that starts another
         processor.
 
-    SetLineState - Stores a pointer to a fucntion that configures an interrupt
-        line.
+    GetMessageInformation - Stores a pointer to a function used to get MSI
+        message address and data pairs, for controllers that support Message
+        Signaled Interrupts.
 
 --*/
 
 typedef struct _INTERRUPT_FUNCTION_TABLE {
-    PINTERRUPT_ENUMERATE_PROCESSORS EnumerateProcessors;
-    PINTERRUPT_INITIALIZE_LOCAL_UNIT InitializeLocalUnit;
     PINTERRUPT_INITIALIZE_IO_UNIT InitializeIoUnit;
-    PINTERRUPT_SET_LOCAL_UNIT_ADDRESSING SetLocalUnitAddressing;
+    PINTERRUPT_SET_LINE_STATE SetLineState;
+    PINTERRUPT_MASK_LINE MaskLine;
     PINTERRUPT_BEGIN BeginInterrupt;
     PINTERRUPT_FAST_END_OF_INTERRUPT FastEndOfInterrupt;
     PINTERRUPT_END_OF_INTERRUPT EndOfInterrupt;
     PINTERRUPT_REQUEST_INTERRUPT RequestInterrupt;
+    PINTERRUPT_ENUMERATE_PROCESSORS EnumerateProcessors;
+    PINTERRUPT_INITIALIZE_LOCAL_UNIT InitializeLocalUnit;
+    PINTERRUPT_SET_LOCAL_UNIT_ADDRESSING SetLocalUnitAddressing;
     PINTERRUPT_START_PROCESSOR StartProcessor;
-    PINTERRUPT_SET_LINE_STATE SetLineState;
     PINTERRUPT_GET_MESSAGE_INFORMATION GetMessageInformation;
 } INTERRUPT_FUNCTION_TABLE, *PINTERRUPT_FUNCTION_TABLE;
 
@@ -1778,6 +1869,9 @@ Members:
         controller instance. This pointer will be passed back to the hardware
         module on each call.
 
+    Flags - Stores a bitfield of flags regarding this interrupt controller.
+        See INTERRUPT_FEATURE_* flags.
+
     Identifier - Stores the unique identifier of the interrupt controller.
         This is expected to be unique across all interrupt controllers in the
         system.
@@ -1795,7 +1889,8 @@ typedef struct _INTERRUPT_CONTROLLER_DESCRIPTION {
     ULONG TableVersion;
     INTERRUPT_FUNCTION_TABLE FunctionTable;
     PVOID Context;
-    ULONG Identifier;
+    ULONG Flags;
+    UINTN Identifier;
     ULONG ProcessorCount;
     ULONG PriorityCount;
 } INTERRUPT_CONTROLLER_DESCRIPTION, *PINTERRUPT_CONTROLLER_DESCRIPTION;
@@ -1984,6 +2079,35 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+typedef
+PVOID
+(*PHARDWARE_MODULE_COPY_MEMORY) (
+    PVOID Destination,
+    PVOID Source,
+    UINTN ByteCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine copies a section of memory.
+
+Arguments:
+
+    Destination - Supplies a pointer to the buffer where the memory will be
+        copied to.
+
+    Source - Supplies a pointer to the buffer to be copied.
+
+    ByteCount - Supplies the number of bytes to copy.
+
+Return Value:
+
+    Returns the destination pointer.
 
 --*/
 
@@ -2482,6 +2606,8 @@ Members:
 
     ZeroMemory - Stores a pointer to a function used to zero memory.
 
+    CopyMemory - Stores a pointer to a function used to copy memory.
+
     ReadRegister32 - Stores a pointer to a function used to perform a 32-bit
         hardware register read.
 
@@ -2545,6 +2671,7 @@ Members:
 
 typedef struct _HARDWARE_MODULE_KERNEL_SERVICES {
     PHARDWARE_MODULE_ZERO_MEMORY ZeroMemory;
+    PHARDWARE_MODULE_COPY_MEMORY CopyMemory;
     PHARDWARE_MODULE_READ_REGISTER32 ReadRegister32;
     PHARDWARE_MODULE_WRITE_REGISTER32 WriteRegister32;
     PHARDWARE_MODULE_READ_REGISTER8 ReadRegister8;

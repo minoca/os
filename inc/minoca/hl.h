@@ -121,9 +121,9 @@ Arguments:
 
 Return Value:
 
-    TRUE if an interrupt was serviced.
-
-    FALSE if no interrupt was serviced as a result of this call.
+    Returns an interrupt status indicating if this ISR is claiming the
+    interrupt, not claiming the interrupt, or needs the interrupt to be
+    masked temporarily.
 
 --*/
 
@@ -398,6 +398,122 @@ Arguments:
 Return Value:
 
     Returns the interrupt model in use.
+
+--*/
+
+KERNEL_API
+KSTATUS
+HlCreateInterruptController (
+    ULONG ParentGsi,
+    ULONG LineCount,
+    PINTERRUPT_CONTROLLER_DESCRIPTION Registration,
+    PINTERRUPT_CONTROLLER_INFORMATION ResultingInformation
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates an interrupt controller outside of the normal hardware
+    module context. It is used primarily by GPIO controllers that function as a
+    kind of secondary interrupt controller.
+
+Arguments:
+
+    ParentGsi - Supplies the global system interrupt number of the interrupt
+        controller line this controller wires up to.
+
+    LineCount - Supplies the number of lines this interrupt controller contains.
+
+    Registration - Supplies a pointer to the interrupt controller information,
+        filled out correctly by the caller.
+
+    ResultingInformation - Supplies a pointer where the interrupt controller
+        handle and other information will be returned.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KERNEL_API
+VOID
+HlDestroyInterruptController (
+    PINTERRUPT_CONTROLLER Controller
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys an interrupt controller, taking it offline and
+    releasing all resources associated with it.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
+KSTATUS
+HlGetInterruptControllerInformation (
+    UINTN Identifier,
+    PINTERRUPT_CONTROLLER_INFORMATION Information
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns information about an interrupt controller with a
+    specific ID.
+
+Arguments:
+
+    Identifier - Supplies the identifier of the interrupt controller.
+
+    Information - Supplies a pointer where the interrupt controller information
+        will be returned on success.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NOT_FOUND if no interrupt controller matching the given identifier
+    exists in the system.
+
+--*/
+
+KERNEL_API
+INTERRUPT_STATUS
+HlSecondaryInterruptControllerService (
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements a standard interrupt service routine for an
+    interrupt that is wired to another interrupt controller. It will call out
+    to determine what fired, and begin a new secondary interrupt.
+
+Arguments:
+
+    Context - Supplies the context, which must be a pointer to the secondary
+        interrupt controller that needs service.
+
+Return Value:
+
+    Returns an interrupt status indicating if this ISR is claiming the
+    interrupt, not claiming the interrupt, or needs the interrupt to be
+    masked temporarily.
 
 --*/
 
@@ -684,6 +800,7 @@ HlEnableInterruptLine (
     ULONGLONG GlobalSystemInterruptNumber,
     INTERRUPT_MODE TriggerMode,
     INTERRUPT_ACTIVE_LEVEL Polarity,
+    ULONG LineStateFlags,
     PKINTERRUPT Interrupt
     );
 
@@ -701,6 +818,9 @@ Arguments:
     TriggerMode - Supplies the trigger mode of the interrupt.
 
     Polarity - Supplies the polarity of the interrupt.
+
+    LineStateFlags - Supplies additional line state flags to set. The flags
+        INTERRUPT_LINE_STATE_FLAG_ENABLED will be ORed in automatically.
 
     Interrupt - Supplies a pointer to the interrupt structure this line will
         be connected to.

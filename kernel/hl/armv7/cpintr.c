@@ -92,6 +92,13 @@ HlpCpInterruptSetLineState (
     PINTERRUPT_LINE_STATE State
     );
 
+VOID
+HlpCpInterruptMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    );
+
 KSTATUS
 HlpCpInterruptDescribeLines (
     VOID
@@ -163,6 +170,25 @@ PHARDWARE_MODULE_KERNEL_SERVICES HlCpKernelServices = NULL;
 //
 
 PINTEGRATORCP_TABLE HlCpIntegratorTable = NULL;
+
+//
+// Define the interrupt function table template.
+//
+
+INTERRUPT_FUNCTION_TABLE HlCpInterruptFunctionTable = {
+    HlpCpInterruptInitializeIoUnit,
+    HlpCpInterruptSetLineState,
+    HlpCpInterruptMaskLine,
+    HlpCpInterruptBegin,
+    NULL,
+    HlpCpInterruptEndOfInterrupt,
+    HlpCpInterruptRequestInterrupt,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -246,22 +272,10 @@ Return Value:
         //
 
         NewController.TableVersion = INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
-        NewController.FunctionTable.EnumerateProcessors = NULL;
-        NewController.FunctionTable.InitializeLocalUnit = NULL;
-        NewController.FunctionTable.InitializeIoUnit =
-                                                HlpCpInterruptInitializeIoUnit;
+        HlCpKernelServices->CopyMemory(&(NewController.FunctionTable),
+                                       &HlCpInterruptFunctionTable,
+                                       sizeof(INTERRUPT_FUNCTION_TABLE));
 
-        NewController.FunctionTable.SetLocalUnitAddressing = NULL;
-        NewController.FunctionTable.BeginInterrupt = HlpCpInterruptBegin;
-        NewController.FunctionTable.FastEndOfInterrupt = NULL;
-        NewController.FunctionTable.EndOfInterrupt =
-                                                  HlpCpInterruptEndOfInterrupt;
-
-        NewController.FunctionTable.RequestInterrupt =
-                                                HlpCpInterruptRequestInterrupt;
-
-        NewController.FunctionTable.StartProcessor = NULL;
-        NewController.FunctionTable.SetLineState = HlpCpInterruptSetLineState;
         NewController.Context = InterruptData;
         NewController.Identifier = 0;
         NewController.ProcessorCount = 0;
@@ -615,6 +629,57 @@ Return Value:
 
 CpInterruptSetLineStateEnd:
     return Status;
+}
+
+VOID
+HlpCpInterruptMaskLine (
+    PVOID Context,
+    PINTERRUPT_LINE Line,
+    BOOL Enable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine masks or unmasks an interrupt line, leaving the rest of the
+    line state intact.
+
+Arguments:
+
+    Context - Supplies the pointer to the controller's context, provided by the
+        hardware module upon initialization.
+
+    Line - Supplies a pointer to the line to maek or unmask. This will always
+        be a controller specified line.
+
+    Enable - Supplies a boolean indicating whether to mask the interrupt,
+        preventing interrupts from coming through (FALSE), or enable the line
+        and allow interrupts to come through (TRUE).
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG BitMask;
+
+    //
+    // Calculate the bit to flip and flip it.
+    //
+
+    BitMask = 1 << Line->Line;
+    if (Enable != FALSE) {
+        WRITE_INTERRUPT_REGISTER(CpInterruptIrqEnable, BitMask);
+
+    } else {
+        WRITE_INTERRUPT_REGISTER(CpInterruptIrqDisable, BitMask);
+    }
+
+    return;
 }
 
 KSTATUS

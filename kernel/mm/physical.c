@@ -878,8 +878,8 @@ Return Value:
     MmPhysicalMemoryWarningCountMask =
               (MmTotalPhysicalPages * MEMORY_WARNING_COUNT_MASK_PERCENT) / 100;
 
-    LastBitIndex = RtlFindLastSet(MmPhysicalMemoryWarningCountMask);
-    MmPhysicalMemoryWarningCountMask = (UINTN)(1 << (LastBitIndex - 1)) - 1;
+    LastBitIndex = RtlCountLeadingZeros32(MmPhysicalMemoryWarningCountMask);
+    MmPhysicalMemoryWarningCountMask = (UINTN)(1 << LastBitIndex) - 1;
     Status = STATUS_SUCCESS;
 
 InitializePhysicalPageAllocator:

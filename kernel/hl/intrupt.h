@@ -61,6 +61,13 @@ Author:
 #define MAX_IPI_LINE_COUNT 5
 
 //
+// Define the maximum number of interrupt controllers that can be in the
+// system, including GPIO blocks.
+//
+
+#define MAX_INTERRUPT_CONTROLLERS 12
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -141,9 +148,6 @@ Structure Description:
 
 Members:
 
-    ListEntry - Stores pointers to the next and previous interrupt controllers
-        in the system.
-
     FunctionTable - Stores pointers to functions implemented by the hardware
         module abstracting this interrupt controller.
 
@@ -170,17 +174,16 @@ Members:
 
 --*/
 
-typedef struct _INTERRUPT_CONTROLLER {
-    LIST_ENTRY ListEntry;
+struct _INTERRUPT_CONTROLLER {
     INTERRUPT_FUNCTION_TABLE FunctionTable;
-    ULONG Identifier;
+    UINTN Identifier;
     ULONG Flags;
     PVOID PrivateContext;
     ULONG ProcessorCount;
     LIST_ENTRY LinesHead;
     LIST_ENTRY OutputLinesHead;
     ULONG PriorityCount;
-} INTERRUPT_CONTROLLER, *PINTERRUPT_CONTROLLER;
+};
 
 //
 // -------------------------------------------------------------------- Globals
@@ -196,7 +199,8 @@ extern ULONG HlFirstConfigurableVector;
 // Store the list of registered interrupt controller hardware.
 //
 
-extern LIST_ENTRY HlInterruptControllers;
+extern PINTERRUPT_CONTROLLER HlInterruptControllers[MAX_INTERRUPT_CONTROLLERS];
+extern ULONG HlInterruptControllerCount;
 
 //
 // Store the array of interrupts for each IPI type.
@@ -216,7 +220,8 @@ extern ULONG HlMaxProcessors;
 
 KSTATUS
 HlpInterruptRegisterHardware (
-    PINTERRUPT_CONTROLLER_DESCRIPTION ControllerDescription
+    PINTERRUPT_CONTROLLER_DESCRIPTION ControllerDescription,
+    PINTERRUPT_CONTROLLER *NewController
     );
 
 /*++
@@ -230,6 +235,9 @@ Arguments:
 
     ControllerDescription - Supplies a pointer describing the new interrupt
         controller.
+
+    NewController - Supplies an optional pointer where a pointer to the
+        newly created interrupt controller will be returned on success.
 
 Return Value:
 
@@ -395,7 +403,7 @@ Return Value:
 
 --*/
 
-BOOL
+INTERRUPT_CAUSE
 HlpInterruptAcknowledge (
     PINTERRUPT_CONTROLLER *ProcessorController,
     PULONG Vector,
@@ -426,9 +434,7 @@ Arguments:
 
 Return Value:
 
-    TRUE if there was an interrupt and it should be processed.
-
-    FALSE if the interrupt was spurious.
+    Returns the cause of the interrupt.
 
 --*/
 
@@ -639,29 +645,6 @@ Return Value:
     processor.
 
     NULL on a non-multiprocessor capable machine.
-
---*/
-
-ULONG
-HlpInterruptGetProcessorIdentifierFromIndex (
-    ULONG ProcessorIndex
-    );
-
-/*++
-
-Routine Description:
-
-    This routine returns the identifier of the local unit corresponding to the
-    given processor.
-
-Arguments:
-
-    ProcessorIndex - Supplies the zero-based index of the processor whose
-        local unit identifier is desired.
-
-Return Value:
-
-    Returns the identifier of the processor's local unit interrupt controller.
 
 --*/
 

@@ -18,7 +18,7 @@
 ##     Build.
 ##
 
-##
-## None so far.
-##
+DRIVERS=\
+"$DRIVERS
+gpio.drv"
 
