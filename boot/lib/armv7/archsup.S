@@ -109,7 +109,7 @@ BoInvalidateEntireCacheSkip:
     bgt     BoInvalidateEntireCacheLoop1
 
 BoInvalidateEntireCacheEnd:
-    mcr     p15, 0, %r0, %cr7, %cr5, 0   @ Write to ICIALLU
+    mcr     p15, 0, %r0, c7, c5, 0       @ Write to ICIALLU
     ldmia   %sp!, {%r4-%r11}             @ Restore non-volatile registers.
     dsb                                  @ Data Synchronization barrier.
     bx      %lr

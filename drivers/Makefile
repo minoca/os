@@ -44,4 +44,5 @@ include $(SRCROOT)/os/minoca.mk
 
 i8042 usb: usrinput
 ata usb: part
+net: usb
 

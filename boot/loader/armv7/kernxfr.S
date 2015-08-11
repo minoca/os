@@ -69,7 +69,7 @@ FUNCTION BoEnablePaging
     ## Write to CP15, register 8 to clear the entire instruction and data TLB.
     ##
 
-    mcr     p15, 0, %r0, %cr8, %cr7, 0
+    mcr     p15, 0, %r0, c8, c7, 0      @ TLBIALL, Clear entire TLB.
 
     ##
     ## Write to CONTEXTIDR to set the ASID to 0, which must be consistent
@@ -77,6 +77,11 @@ FUNCTION BoEnablePaging
     ##
 
     mcr     p15, 0, %r0, c13, c0, 1
+    mcr     p15, 0, %r0, c2, c0, 1      @ Clear TTBR1
+    mcr     p15, 0, %r0, c5, c0, 0      @ Clear DFSR
+    mcr     p15, 0, %r0, c5, c0, 1      @ Clear IFSR
+    mcr     p15, 0, %r0, c6, c0, 0      @ Clear DFAR
+    mcr     p15, 0, %r0, c6, c0, 2      @ Clear IFAR
 
     ##
     ## Write to CP15, register 3 to set up domain access control for domain 0
@@ -118,7 +123,7 @@ FUNCTION BoEnablePaging
     ## Invalidate instruction caches and flush the branch target cache.
     ##
 
-    mcr     p15, 0, %r0, %cr7, %cr5, 0  @ Write to ICIALLU, flush I-cache.
+    mcr     p15, 0, %r0, c7, c5, 0      @ Write to ICIALLU, flush I-cache.
 
     ##
     ## Paging is now enabled. Return.

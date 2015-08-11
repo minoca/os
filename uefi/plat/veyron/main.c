@@ -42,6 +42,11 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+VOID
+EfipVeyronConfigureArmPll (
+    VOID
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -142,16 +147,9 @@ Return Value:
             EfiPlatformSetWatchdogTimer(0, 0, 0, NULL);
         }
 
-        //
-        // TODO: Any power and clock initialization needed here?
-        //
+        EfipVeyronConfigureArmPll();
 
     } else if (Phase == 1) {
-
-        //
-        // TODO: Initialize USB.
-        //
-
         Status = EfipSmpInitialize();
         if (EFI_ERROR(Status)) {
             return Status;
@@ -218,4 +216,95 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+EfipVeyronConfigureArmPll (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine configures the ARM PLL, since the 1800MHz set by the firmware
+    actually seems to be too fast to run correctly.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINT32 Frequency;
+    UINT32 Nf;
+    UINT32 No;
+    UINT32 Nr;
+    UINT32 Value;
+
+    //
+    // Put the PLL in slow mode to bypass the PLL while it's being configured.
+    //
+
+    Value = (RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_MASK << 16) |
+            RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_SLOW;
+
+    RK32_WRITE_CRU(Rk32CruModeControl, Value);
+    Frequency = VEYRON_ARM_CPU_HERTZ;
+    Nr = 1;
+    No = 1;
+    Nf = (UINT32)((UINT64)Frequency * Nr * No / VEYRON_OSC_HERTZ);
+
+    //
+    // Reset the PLL.
+    //
+
+    Value = (RK32_PLL_RESET << 16) | RK32_PLL_RESET;
+    RK32_WRITE_CRU(Rk32CruArmPllConfiguration3, Value);
+
+    //
+    // Configure the PLL.
+    //
+
+    Value = ((RK32_PLL_NR_MASK | RK32_PLL_OD_MASK) << 16) |
+            ((Nr - 1) << RK32_PLL_NR_SHIFT) | (No - 1);
+
+    RK32_WRITE_CRU(Rk32CruArmPllConfiguration0, Value);
+    Value = (RK32_PLL_NF_MASK << 16) | (Nf - 1);
+    RK32_WRITE_CRU(Rk32CruArmPllConfiguration1, Value);
+    Value = (RK32_PLL_BWADJ_MASK << 16) | ((Nf >> 1) - 1);
+    RK32_WRITE_CRU(Rk32CruArmPllConfiguration2, Value);
+    EfiStall(10);
+
+    //
+    // Clear reset.
+    //
+
+    Value = RK32_PLL_RESET << 16;
+    RK32_WRITE_CRU(Rk32CruArmPllConfiguration3, Value);
+
+    //
+    // Wait for the PLL to lock itself.
+    //
+
+    do {
+        Value = RK32_READ_GRF(Rk32GrfSocStatus1);
+
+    } while ((Value & RK32_GRF_SOC_STATUS1_ARM_PLL_LOCK) == 0);
+
+    //
+    // Enter normal mode on the PLL.
+    //
+
+    Value = (RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_MASK << 16) |
+            RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_NORMAL;
+
+    RK32_WRITE_CRU(Rk32CruModeControl, Value);
+    return;
+}
 

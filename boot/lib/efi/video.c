@@ -552,9 +552,11 @@ Return Value:
                 continue;
             }
 
-            ChosenMode = Graphics->Mode->Info;
-            ChosenModeSize = Graphics->Mode->SizeOfInfo;
-            ChosenModeIndex = Graphics->Mode->Mode;
+            *MustFree = FALSE;
+            ChosenMode = Mode;
+            ChosenModeSize = ModeSize;
+            ChosenModeIndex = ModeIndex;
+            Mode = NULL;
             Status = STATUS_SUCCESS;
             goto EfiFindBestVideoModeEnd;
 

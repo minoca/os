@@ -107,7 +107,7 @@ ArCleanEntireCacheSkip:
     bgt     ArCleanEntireCacheLoop1
 
 ArCleanEntireCacheEnd:
-    mcr     p15, 0, %r0, %cr7, %cr5, 0  @ Write to ICIALLU
+    mcr     p15, 0, %r0, c7, c5, 0      @ Write to ICIALLU
     ldmia   %sp!, {%r4-%r11}            @ Restore non-volatile registers.
     dsb                                 @ Data Synchronization barrier.
     bx      %lr
@@ -184,7 +184,7 @@ ArCleanInvalidateEntireCacheSkip:
     bgt     ArCleanInvalidateEntireCacheLoop1
 
 ArCleanInvalidateEntireCacheEnd:
-    mcr     p15, 0, %r0, %cr7, %cr5, 0  @ Write to ICIALLU
+    mcr     p15, 0, %r0, c7, c5, 0      @ Write to ICIALLU
     dsb
     ldmia   %sp!, {%r4-%r11}            @ Restore non-volatile registers.
     bx      %lr
@@ -285,8 +285,8 @@ Return Value:
 
 FUNCTION ArInvalidateEntireTlb
     dsb                                         @ Ensure changes are visible.
-    mcr     p15, 0, %r0, %cr8, %cr7, 0          @ Invalidate the TLB.
-    mcr     p15, 0, %r0, %cr7, %cr5, 6          @ Write to BPIALL (branch pred).
+    mcr     p15, 0, %r0, c8, c7, 0              @ TLBIALL (invalidate TLB).
+    mcr     p15, 0, %r0, c7, c5, 6              @ Write to BPIALL (branch pred).
     dsb                                         @ Data synchronization barrier.
     isb                                         @ Instruction sync barrier.
     bx      %lr                                 @

@@ -80,7 +80,7 @@ HlpTrampolineCode:
     ## Clear the TLB.
     ##
 
-    mcr     p15, 0, %r0, c8, c7, 0      @ Clear the TLB.
+    mcr     p15, 0, %r0, c8, c7, 0      @ TLBIALL, clear entire TLB.
 
     ##
     ## Write to CONTEXTIDR to set the ASID to 0, which must be consistent
@@ -88,7 +88,12 @@ HlpTrampolineCode:
     ##
 
     mov     %r4, #0
-    mcr     p15, 0, %r4, c13, c0, 1
+    mcr     p15, 0, %r4, c13, c0, 1     @ Clear CONTEXTIDR.
+    mcr     p15, 0, %r4, c2, c0, 1      @ Clear TTBR1
+    mcr     p15, 0, %r4, c5, c0, 0      @ Clear DFSR
+    mcr     p15, 0, %r4, c5, c0, 1      @ Clear IFSR
+    mcr     p15, 0, %r4, c6, c0, 0      @ Clear DFAR
+    mcr     p15, 0, %r4, c6, c0, 2      @ Clear IFAR
 
     ##
     ## Stash R0 into R12 temporarily while this function is called. Normally
@@ -139,6 +144,8 @@ HlpTrampolineCode:
     mcr     p15, 0, %r1, c2, c0, 0      @ Load up TTBR0.
     mov     %r1, #0                     @ Load 0.
     mcr     p15, 0, %r1, c2, c0, 2      @ Set TTBCR to 0.
+    dsb                                 @ Ensure all writes have completed.
+    isb                                 @ Don't prefetch past here.
     mcr     p15, 0, %r2, c1, c0, 0      @ Load up SCTLR.
     dsb                                 @ Data Synchronization barrier.
     isb                                 @ Instruction Synchronization barrier.
@@ -150,7 +157,7 @@ HlpTrampolineCode:
 
     mcr     p15, 0, %r0, c7, c5, 0      @ ICIALLU, Invalidate I-Cache.
     mcr     p15, 0, %r0, c7, c5, 6      @ BPIALL, Invalidate Branch Predictor.
-    mcr     p15, 0, %r0, c8, c7, 0      @ Clear the TLB.
+    mcr     p15, 0, %r0, c8, c7, 0      @ Clear the TLB, TLBIALL.
     isb                                 @ Instruction syncrhonization barrier.
 
     ##

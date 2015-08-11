@@ -24,11 +24,29 @@ Author:
 #include "cpu/rk32xx.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+#define RK32_READ_CRU(_Register) \
+    EfiReadRegister32((VOID *)RK32_CRU_BASE + (_Register))
+
+#define RK32_WRITE_CRU(_Register, _Value) \
+    EfiWriteRegister32((VOID *)RK32_CRU_BASE + (_Register), (_Value))
+
+#define RK32_READ_GRF(_Register) \
+    EfiReadRegister32((VOID *)RK32_GRF_BASE + (_Register))
+
+#define RK32_WRITE_GRF(_Register, _Value) \
+    EfiWriteRegister32((VOID *)RK32_GRF_BASE + (_Register), (_Value))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
 #define VEYRON_RAM_START 0x00000000
 #define VEYRON_RAM_SIZE  0xFF000000
+#define VEYRON_OSC_HERTZ 24000000
+#define VEYRON_ARM_CPU_HERTZ 1704000000
 
 //
 // ------------------------------------------------------ Data Type Definitions

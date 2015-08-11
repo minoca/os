@@ -90,6 +90,17 @@ Author:
 #define RK32_TIMER_REGISTER_STRIDE 0x00000020
 
 //
+// Define generic PLL register bits.
+//
+
+#define RK32_PLL_RESET (1 << 5)
+#define RK32_PLL_OD_MASK 0x0F
+#define RK32_PLL_NR_MASK (0x3F << 8)
+#define RK32_PLL_NR_SHIFT 8
+#define RK32_PLL_NF_MASK 0x00001FFF
+#define RK32_PLL_BWADJ_MASK 0x00000FFF
+
+//
 // Define the CRU codec PLL control 0 register bits.
 //
 
@@ -153,6 +164,9 @@ Author:
 #define RK32_CRU_MODE_CONTROL_CODEC_PLL_MODE_SHIFT   8
 #define RK32_CRU_MODE_CONTROL_DDR_PLL_MODE_MASK      (0x3 << 4)
 #define RK32_CRU_MODE_CONTROL_DDR_PLL_MODE_SHIFT     4
+#define RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_SLOW      (0x0 << 0)
+#define RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_NORMAL    (0x1 << 0)
+#define RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_DEEP_SLOW (0x2 << 0)
 #define RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_MASK      (0x3 << 0)
 #define RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_SHIFT     0
 
@@ -219,6 +233,12 @@ Author:
 
 #define RK32_GRF_IO_VSEL_LCD_V18 0x00000001
 #define RK32_GRF_IO_VSEL_PROTECT_SHIFT 16
+
+//
+// Define GPIO SoC status 1 register bits.
+//
+
+#define RK32_GRF_SOC_STATUS1_ARM_PLL_LOCK (1 << 6)
 
 //
 // Define the GRF GPIO6C IOMUX value for SD/MMC.
@@ -582,6 +602,10 @@ Author:
 //
 
 typedef enum _RK32_CRU_REGISTER {
+    Rk32CruArmPllConfiguration0 = 0x00,
+    Rk32CruArmPllConfiguration1 = 0x04,
+    Rk32CruArmPllConfiguration2 = 0x08,
+    Rk32CruArmPllConfiguration3 = 0x0C,
     Rk32CruCodecPllControl0 = 0x20,
     Rk32CruCodecPllControl1 = 0x24,
     Rk32CruCodecPllControl2 = 0x28,
@@ -591,6 +615,7 @@ typedef enum _RK32_CRU_REGISTER {
     Rk32CruGeneralPllControl2 = 0x38,
     Rk32CruGeneralPllControl3 = 0x3C,
     Rk32CruModeControl = 0x50,
+    Rk32CruClockSelect0 = 0x60,
     Rk32CruClockSelect11 = 0x8C,
     Rk32CruGlobalReset1 = 0x1B0,
     Rk32CruGlobalReset2 = 0x1B4,
@@ -616,6 +641,8 @@ typedef enum _RK32_PMU_REGISTER {
 typedef enum _RK32_GRF_REGISTER {
     Rk32GrfGpio6cIomux = 0x64,
     Rk32GrfGpio7chIomux = 0x78,
+    Rk32GrfSocStatus0 = 0x280,
+    Rk32GrfSocStatus1 = 0x284,
     Rk32GrfIoVsel = 0x380,
 } RK32_GRF_REGISTER, *PRK32_GRF_REGISTER;
 

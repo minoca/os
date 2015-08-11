@@ -114,14 +114,15 @@ FUNCTION KepContextSwap
     ## Switch TTBs (page directory) if needed.
     ##
 
-    mrc     p15, 0, %r6, %cr2, %cr0, 0      @ Get the current TTB.
+    mrc     p15, 0, %r6, c2, c0, 0          @ Get TTBR0.
     cmp     %r6, %r2                        @ If they're the same
     beq     ContextSwapAfterTtb             @ don't set a new one.
-    mcr     p15, 0, %r2, %cr2, %cr0, 0      @ Set new TTB.
+    mcr     p15, 0, %r2, c2, c0, 0          @ Set TTBR0.
     mov     %r5, #0                         @ Get a zero register.
     dsb                                     @ Ensure everything finished.
-    mcr     p15, 0, %r5, %cr8, %cr7, 0      @ Invalidate entire TLB.
-    mcr     p15, 0, %r5, %cr7, %cr5, 0      @ Write to ICIALLU (I-Cache).
+    mcr     p15, 0, %r5, c8, c7, 0          @ TLBIALL, Invalidate entire TLB.
+    mcr     p15, 0, %r5, c7, c5, 0          @ ICIALLU, Invalidate I-Cache + BTB.
+    dsb                                     @ Ensure those operations finished.
     isb                                     @ Instruction synchronization.
 
 ContextSwapAfterTtb:

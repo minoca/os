@@ -478,6 +478,8 @@ typedef enum _RK32_CRU_REGISTER {
 typedef enum _RK32_GRF_REGISTER {
     Rk32GrfGpio6cIomux = 0x64,
     Rk32GrfGpio7chIomux = 0x78,
+    Rk32GrfSocStatus0 = 0x280,
+    Rk32GrfSocStatus1 = 0x284,
     Rk32GrfIoVsel = 0x380,
 } RK32_GRF_REGISTER, *PRK32_GRF_REGISTER;
 

@@ -114,9 +114,10 @@ EfipRk32ProcessorStartup:
 
     mrc     p15, 0, %r0, %cr1, %cr0, 1
     ldr     %r1, =CORTEX_A17_AUX_SMP_ENABLE
-    ldr     %r1, [%r1]
     orr     %r0, %r0, %r1
     mcr     p15, 0, %r0, %cr1, %cr0, 1
+    dsb
+    isb
 
     ##
     ## Initialize the local GIC CPU interface by setting the lowest priority

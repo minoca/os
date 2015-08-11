@@ -241,7 +241,8 @@ Author:
 #define TTBR_MP_KERNEL_MASK                    \
     (TTBR_SHAREABLE |                          \
      TTBR_MP_INNER_WRITE_BACK_WRITE_ALLOCATE | \
-     TTBR_OUTER_WRITE_BACK_WRITE_ALLOCATE)
+     TTBR_OUTER_WRITE_BACK_WRITE_ALLOCATE |    \
+     TTBR_NOT_OUTER_SHAREABLE)
 
 //
 // Page table sizes and alignments.
