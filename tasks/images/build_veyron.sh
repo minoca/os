@@ -30,7 +30,9 @@ fi
 . $TASKDIR/images/add_common.sh
 
 DRIVERS="$DRIVERS
-sdrk32xx.drv"
+dwhci.drv
+sdrk32xx.drv
+smsc95xx.drv"
 
 BOOT_DRIVERS="$BOOT_DRIVERS
 sdrk32xx.drv"

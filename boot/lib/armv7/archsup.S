@@ -117,6 +117,37 @@ BoInvalidateEntireCacheEnd:
 END_FUNCTION BoInvalidateEntireCache
 
 ##
+## VOID
+## ArSerializeExecution (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine acts a serializing instruction, preventing the processor
+    from speculatively executing beyond this point.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION ArSerializeExecution
+    dsb
+    isb
+    bx      %lr
+
+END_FUNCTION ArSerializeExecution
+
+##
 ## ULONG
 ## ArGetMultiprocessorIdRegister (
 ##     VOID

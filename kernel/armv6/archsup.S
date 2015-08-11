@@ -496,6 +496,40 @@ FUNCTION ArSetCycleCountRegister
 END_FUNCTION ArSetCycleCountRegister
 
 ##
+## VOID
+## ArWaitForInterrupt (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine halts the processor until the next interrupt comes in. This
+    routine should be called with interrupts disabled, and will return with
+    interrupts enabled.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION ArWaitForInterrupt
+    mov     %r1, #0
+    mcr     p15, 0, %r1, %cr7, %cr10, 4         @ Data Synchronization barrier.
+    wfi                                         @ Wait for interrupt.
+    cpsie   if                                  @ Enable interrupts.
+    bx      %lr
+
+END_FUNCTION ArWaitForInterrupt
+
+##
 ## --------------------------------------------------------- Internal Functions
 ##
 

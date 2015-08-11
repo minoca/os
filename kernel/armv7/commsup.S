@@ -591,39 +591,6 @@ END_FUNCTION ArProcessorYield
 
 ##
 ## VOID
-## ArWaitForInterrupt (
-##     VOID
-##     )
-##
-
-/*++
-
-Routine Description:
-
-    This routine halts the processor until the next interrupt comes in. This
-    routine should be called with interrupts disabled, and will return with
-    interrupts enabled.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-FUNCTION ArWaitForInterrupt
-    dsb                                         @ Ensure everything is done.
-    wfi                                         @ Wait for interrupt.
-    cpsie   if                                  @ Enable interrupts.
-    bx      %lr
-
-END_FUNCTION ArWaitForInterrupt
-
-##
-## VOID
 ## ArCpuid (
 ##     PARM_CPUID Features
 ##     )

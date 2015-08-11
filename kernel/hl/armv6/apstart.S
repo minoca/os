@@ -88,7 +88,12 @@ HlpTrampolineCode:
     ##
 
     mov     %r4, #0
-    mcr     p15, 0, %r4, c13, c0, 1
+    mcr     p15, 0, %r0, c13, c0, 1     @ Clear CONTEXTIDR
+    mcr     p15, 0, %r0, c2, c0, 1      @ Clear TTBR1
+    mcr     p15, 0, %r0, c5, c0, 0      @ Clear DFSR
+    mcr     p15, 0, %r0, c5, c0, 1      @ Clear IFSR
+    mcr     p15, 0, %r0, c6, c0, 0      @ Clear DFAR
+    mcr     p15, 0, %r0, c6, c0, 2      @ Clear IFAR
 
     ##
     ## Stash R0 into R12 temporarily while this function is called. Normally
@@ -139,6 +144,8 @@ HlpTrampolineCode:
     mcr     p15, 0, %r1, c2, c0, 0      @ Load up TTBR0.
     mov     %r1, #0                     @ Load 0.
     mcr     p15, 0, %r1, c2, c0, 2      @ Set TTBCR to 0.
+    mcr     p15, 0, %r1, %cr7, %cr10, 4 @ Data Synchronization barrier.
+    mcr     p15, 0, %r1, %cr7, %cr5, 4  @ Instruction Synchronization barrier.
     mcr     p15, 0, %r2, c1, c0, 0      @ Load up SCTLR.
     mcr     p15, 0, %r1, %cr7, %cr10, 4 @ Data Synchronization barrier.
     mcr     p15, 0, %r1, %cr7, %cr5, 4  @ Instruction Synchronization barrier.

@@ -76,7 +76,7 @@ FUNCTION BoEnablePaging
     ## across all processors.
     ##
 
-    mcr     p15, 0, %r0, c13, c0, 1
+    mcr     p15, 0, %r0, c13, c0, 1     @ Clear CONTEXTIDR
     mcr     p15, 0, %r0, c2, c0, 1      @ Clear TTBR1
     mcr     p15, 0, %r0, c5, c0, 0      @ Clear DFSR
     mcr     p15, 0, %r0, c5, c0, 1      @ Clear IFSR
@@ -117,7 +117,7 @@ FUNCTION BoEnablePaging
     ldr     %r0, =MmuValue
     ldr     %r0, [%r0]
     mcr     p15, 0, %r0, %cr1, %cr0, 0
-    isb
+    bl      ArSerializeExecution
 
     ##
     ## Invalidate instruction caches and flush the branch target cache.

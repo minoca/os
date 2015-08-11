@@ -255,6 +255,27 @@ Return Value:
 
 --*/
 
+VOID
+EfipVeyronUsbInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs any board-specific high speed USB initialization.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
 //
 // Runtime service functions
 //

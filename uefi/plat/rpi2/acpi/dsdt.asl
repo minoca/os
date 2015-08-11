@@ -39,6 +39,47 @@ DefinitionBlock (
         Device(DWHC) {
             Name(_HID, EISAID("DWC0000"))
             Name(_UID, 0)
+
+            /*
+             * Define the operation region to access the DWC configuration 
+             * space.
+             */
+
+            OperationRegion(DWCR, SystemMemory, 0x3F980000, 0x104)
+            Field(DWCR, DWordAcc, NoLock, Preserve) {
+                Offset(0x8),
+                SKP1, 1,
+                AHBB, 3,
+                AHBW, 1,
+                Offset(0x24),
+                RXFS, 16,
+                Offset(0x28),
+                NPFO, 16,
+                NPFS, 16,
+                Offset(0x100),
+                PDFO, 16,
+                PDFS, 16,
+            }
+
+            /*
+             * Set the AHB configuration register to have a single burst length
+             * and to wait on all writes. Also set the receive FIFO to 774 
+             * bytes, the non-periodic transmit FIFO to 256 bytes, and the
+             * periodic transmit FIFO to 512 bytes. The Raspberry Pi's DWC USB
+             * controller allows dynamic FIFO sizes and the maximum FIFO depth 
+             * is greater than the total FIFO sizes programmed here.
+             */       
+            
+            Method(_INI, 0) {                        
+                Store(0x306, RXFS)
+                Store(0x306, NPFO)
+                Store(0x100, NPFS)
+                Store(0x406, PDFO)
+                Store(0x200, PDFS)
+                Store(0x0, AHBB)
+                Store(0x1, AHBW)
+            }
+
             Method (_STA, 0, NotSerialized) {
                     Return(0x0F)
             }

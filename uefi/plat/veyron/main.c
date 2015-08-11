@@ -150,6 +150,7 @@ Return Value:
         EfipVeyronConfigureArmPll();
 
     } else if (Phase == 1) {
+        EfipVeyronUsbInitialize();
         Status = EfipSmpInitialize();
         if (EFI_ERROR(Status)) {
             return Status;

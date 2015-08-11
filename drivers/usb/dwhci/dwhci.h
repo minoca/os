@@ -287,6 +287,9 @@ Members:
     BlockAllocator - Stores a pointer to the block allocator used to allocate
          all transfers.
 
+    ControlStatusBuffer - Stores a pointer to an I/O buffer used for control
+        transfer status phase DMA.
+
     Speed - Stores the speed of the DWHCI controller.
 
     Lock - Stores the lock that protects access to all list entries under this
@@ -330,6 +333,7 @@ typedef struct _DWHCI_CONTROLLER {
     LIST_ENTRY NonPeriodicReadyListHead;
     LIST_ENTRY FreeChannelListHead;
     PBLOCK_ALLOCATOR BlockAllocator;
+    PIO_BUFFER ControlStatusBuffer;
     USB_DEVICE_SPEED Speed;
     KSPIN_LOCK Lock;
     HANDLE InterruptHandle;

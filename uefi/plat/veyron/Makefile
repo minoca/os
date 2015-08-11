@@ -50,6 +50,7 @@ OBJS += debug.o                 \
         smbios.o                \
         smp.o                   \
         timer.o                 \
+        usb.o                   \
         $(BINROOT)/veyrnfwv.o   \
         video.o                 \
 

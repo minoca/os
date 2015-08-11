@@ -1896,10 +1896,14 @@ Return Value:
 {
 
     ULONG AccessSizeRemainder;
+    ULONG ByteBitOffset;
+    UCHAR CurrentByte;
     UCHAR Data;
     PUCHAR DestinationBuffer;
     ULONGLONG DestinationOffset;
+    BOOL ExtraByte;
     UCHAR Mask;
+    UCHAR PreviousByteLeftovers;
     ULONG SaveBits;
     PUCHAR SourceBuffer;
     ULONGLONG SourceBufferSize;
@@ -1910,29 +1914,81 @@ Return Value:
     DestinationBuffer = ResultBuffer;
     StartBitOffset = ALIGN_RANGE_DOWN(BitOffset, AccessSize);
     AccessSizeRemainder = (BitOffset - StartBitOffset) / BITS_PER_BYTE;
+    ByteBitOffset = (BitOffset - StartBitOffset) & (BITS_PER_BYTE - 1);
 
     //
-    // Clip the source buffer size to the nearest byte of the field.
+    // Align the source buffer size up to the nearest byte of the field.
     //
 
     SourceBufferSize = ALIGN_RANGE_UP(BitLength, BITS_PER_BYTE) / BITS_PER_BYTE;
+
+    //
+    // Determine if there are more destination bytes to write than source bytes
+    // provided due to the shifting of the source bits.
+    //
+
+    ExtraByte = FALSE;
+    if ((ByteBitOffset != 0) &&
+        (ALIGN_RANGE_UP(BitLength, BITS_PER_BYTE) <
+         ALIGN_RANGE_UP(BitLength + ByteBitOffset, BITS_PER_BYTE))) {
+
+        ExtraByte = TRUE;
+    }
 
     //
     // Read the bits out of the value to write and put them in the result
     // buffer.
     //
 
+    PreviousByteLeftovers = 0;
     for (SourceIndex = 0; SourceIndex < SourceBufferSize; SourceIndex += 1) {
         Data = SourceBuffer[SourceIndex];
         Mask = 0xFF;
-        Data = Data << (StartBitOffset & (BITS_PER_BYTE - 1));
-        Mask = Mask << (StartBitOffset & (BITS_PER_BYTE - 1));
 
         //
-        // If this is the last byte in the source buffer, potentially clip it.
+        // If the byte's bit offset is not zero, then extra logic needs to
+        // apply to include the bits that may get left shifted away.
         //
 
-        if (SourceIndex * BITS_PER_BYTE > BitLength) {
+        if (ByteBitOffset != 0) {
+            CurrentByte = Data;
+            Data <<= ByteBitOffset;
+
+            //
+            // If this is the first byte in the source, there is no previous
+            // data to OR into it. Start the mask at the byte's bit offset.
+            //
+
+            if (SourceIndex == 0) {
+                Mask <<= ByteBitOffset;
+
+            //
+            // Otherwise, OR in the bits taken from the previous byte in the
+            // source buffer. The mask should be the full byte, unless this is
+            // the last byte to write (handled below).
+            //
+
+            } else {
+                Data |= PreviousByteLeftovers;
+            }
+
+            //
+            // Some of the bits may have been shifted out of this round. Save
+            // the leftovers.
+            //
+
+            PreviousByteLeftovers = CurrentByte >>
+                                    (BITS_PER_BYTE - ByteBitOffset);
+        }
+
+        //
+        // If this is the last byte in the source buffer, potentially clip the
+        // mask.
+        //
+
+        if ((ExtraByte == FALSE) &&
+            (((SourceIndex + 1) * BITS_PER_BYTE) > BitLength)) {
+
             SaveBits = (BitOffset + BitLength) & (BITS_PER_BYTE - 1);
             Mask &= (1 << SaveBits) - 1;
         }
@@ -1942,6 +1998,26 @@ Return Value:
         //
 
         DestinationOffset = SourceIndex + AccessSizeRemainder;
+
+        ASSERT(DestinationOffset < ResultBufferSize);
+
+        DestinationBuffer[DestinationOffset] =
+              (DestinationBuffer[DestinationOffset] & (~Mask)) | (Data & Mask);
+    }
+
+    //
+    // Write the extra byte if necessary. The bits are stored in the previous
+    // byte's leftovers.
+    //
+
+    if (ExtraByte != FALSE) {
+        Data = PreviousByteLeftovers;
+        SaveBits = (BitOffset + BitLength) & (BITS_PER_BYTE - 1);
+
+        ASSERT(SaveBits != 0);
+
+        Mask = 0xFF & ((1 << SaveBits) - 1);
+        DestinationOffset = SourceBufferSize + AccessSizeRemainder;
 
         ASSERT(DestinationOffset < ResultBufferSize);
 

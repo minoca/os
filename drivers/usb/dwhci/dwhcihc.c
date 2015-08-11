@@ -169,10 +169,10 @@ Environment:
 #define DWHCI_DMA_ALIGNMENT 0x8
 
 //
-// Define the default FIFO size.
+// Define the size of the control status buffer used as a bit bucket.
 //
 
-#define DWHCI_DEFAULT_FIFO_SIZE 0x400
+#define DWHCI_CONTROL_STATUS_BUFFER_SIZE 64
 
 //
 // Define the initial set of interrupts that the host controller is interested
@@ -403,7 +403,10 @@ DwhcipInitializeUsb (
 
 KSTATUS
 DwhcipInitializeHostMode (
-    PDWHCI_CONTROLLER Controller
+    PDWHCI_CONTROLLER Controller,
+    ULONG ReceiveFifoSize,
+    ULONG NonPeriodicTransmitFifoSize,
+    ULONG PeriodicTransmitFifoSize
     );
 
 VOID
@@ -537,6 +540,20 @@ Return Value:
         goto InitializeControllerStateEnd;
     }
 
+    Controller->ControlStatusBuffer = MmAllocateNonPagedIoBuffer(
+                                              0,
+                                              MAX_ULONG,
+                                              DWHCI_DMA_ALIGNMENT,
+                                              DWHCI_CONTROL_STATUS_BUFFER_SIZE,
+                                              TRUE,
+                                              FALSE,
+                                              FALSE);
+
+    if (Controller->ControlStatusBuffer == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeControllerStateEnd;
+    }
+
     //
     // Initialize the channels.
     //
@@ -598,6 +615,10 @@ Return Value:
 
     if (Controller->BlockAllocator != NULL) {
         MmDestroyBlockAllocator(Controller->BlockAllocator);
+    }
+
+    if (Controller->ControlStatusBuffer != NULL) {
+        MmFreeIoBuffer(Controller->ControlStatusBuffer);
     }
 
     MmFreeNonPagedPool(Controller);
@@ -693,18 +714,43 @@ Return Value:
 {
 
     ULONG AhbConfiguration;
+    ULONG BurstLength;
     ULONG CoreInterruptMask;
     ULONG Hardware2;
     ULONG Hardware4;
+    ULONG HostConfiguration;
+    ULONG NonPeriodicTransmitFifoSize;
+    ULONG PeriodicTransmitFifoSize;
+    ULONG ReceiveFifoSize;
     KSTATUS Status;
     ULONG UsbConfiguration;
 
     //
-    // Disable global interrupts.
+    // Before resetting the controller, save the FIFO sizes that may have been
+    // programmed by ACPI. The reset will undo any of the work done by ACPI.
+    //
+
+    ReceiveFifoSize = DWHCI_READ_REGISTER(Controller,
+                                          DwhciRegisterReceiveFifoSize);
+
+    NonPeriodicTransmitFifoSize = DWHCI_READ_REGISTER(
+                                             Controller,
+                                             DwhciRegisterNonPeriodicFifoSize);
+
+    PeriodicTransmitFifoSize = DWHCI_READ_REGISTER(
+                                                Controller,
+                                                DwhciRegisterPeriodicFifoSize);
+
+    //
+    // Save the burst length configured by ACPI in the AHB register and disable
+    // global interrupts.
     //
 
     AhbConfiguration = DWHCI_READ_REGISTER(Controller,
                                            DwhciRegisterAhbConfiguration);
+
+    BurstLength = (AhbConfiguration &
+                   DWHCI_AHB_CONFIGURATION_AXI_BURST_LENGTH_MASK);
 
     AhbConfiguration &= ~DWHCI_AHB_CONFIGURATION_INTERRUPT_ENABLE;
     DWHCI_WRITE_REGISTER(Controller,
@@ -730,7 +776,7 @@ Return Value:
 
     Status = DwhcipSoftReset(Controller);
     if (!KSUCCESS(Status)) {
-        goto ResetControllerEnd;
+        goto InitializeControllerEnd;
     }
 
     //
@@ -739,12 +785,11 @@ Return Value:
 
     Status = DwhcipInitializePhy(Controller);
     if (!KSUCCESS(Status)) {
-        goto ResetControllerEnd;
+        goto InitializeControllerEnd;
     }
 
     //
-    // The host controller driver currently only supports non-descriptor DMA
-    // mode.
+    // The host controller driver currently only supports internal DMA modes.
     //
 
     Hardware2 = DWHCI_READ_REGISTER(Controller, DwhciRegisterHardware2);
@@ -752,13 +797,22 @@ Return Value:
         DWHCI_HARDWARE2_ARCHITECTURE_INTERNAL_DMA) {
 
         Status = STATUS_NOT_SUPPORTED;
-        goto ResetControllerEnd;
+        goto InitializeControllerEnd;
     }
+
+    //
+    // The controller currently only supports non-descriptor DMA mode.
+    //
 
     Hardware4 = DWHCI_READ_REGISTER(Controller, DwhciRegisterHardware4);
     if ((Hardware4 & DWHCI_HARDWARE4_DMA_DESCRIPTOR_MODE) != 0) {
-        Status = STATUS_NOT_SUPPORTED;
-        goto ResetControllerEnd;
+        HostConfiguration = DWHCI_READ_REGISTER(Controller,
+                                                DwhciRegisterHostConfiguration);
+
+        HostConfiguration &= ~DWHCI_HOST_CONFIGURATION_ENABLE_DMA_DESCRIPTOR;
+        DWHCI_WRITE_REGISTER(Controller,
+                             DwhciRegisterHostConfiguration,
+                             HostConfiguration);
     }
 
     //
@@ -771,9 +825,7 @@ Return Value:
     AhbConfiguration |= DWHCI_AHB_CONFIGURATION_DMA_ENABLE;
     AhbConfiguration &= ~DWHCI_AHB_CONFIGURATION_DMA_REMAINDER_MODE_MASK;
     AhbConfiguration |= DWHCI_AHB_CONFIGURATION_DMA_REMAINDER_MODE_INCREMENTAL;
-    AhbConfiguration &= ~DWHCI_AHB_CONFIGURATION_AXI_BURST_LENGTH_MASK;
-    AhbConfiguration |= DWHCI_AHB_CONFIGURATION_AXI_BURST_LENGTH_4;
-    AhbConfiguration |= DWHCI_AHB_CONFIGURATION_WAIT_FOR_AXI_WRITES;
+    AhbConfiguration |= BurstLength;
     DWHCI_WRITE_REGISTER(Controller,
                          DwhciRegisterAhbConfiguration,
                          AhbConfiguration);
@@ -784,7 +836,7 @@ Return Value:
 
     Status = DwhcipInitializeUsb(Controller);
     if (!KSUCCESS(Status)) {
-        goto ResetControllerEnd;
+        goto InitializeControllerEnd;
     }
 
     //
@@ -792,9 +844,13 @@ Return Value:
     // Configure the controller to run in host mode.
     //
 
-    Status = DwhcipInitializeHostMode(Controller);
+    Status = DwhcipInitializeHostMode(Controller,
+                                      ReceiveFifoSize,
+                                      NonPeriodicTransmitFifoSize,
+                                      PeriodicTransmitFifoSize);
+
     if (!KSUCCESS(Status)) {
-        goto ResetControllerEnd;
+        goto InitializeControllerEnd;
     }
 
     //
@@ -821,7 +877,7 @@ Return Value:
                          DwhciRegisterAhbConfiguration,
                          AhbConfiguration);
 
-ResetControllerEnd:
+InitializeControllerEnd:
     return Status;
 }
 
@@ -3544,7 +3600,9 @@ Return Value:
     //
     // Do it backwards if this is the status phase. Status phases always have
     // a data toggle of 1 and the transfer direction is opposite that of the
-    // transfer.
+    // transfer. The exception is if there was no data phase for the control
+    // transfer - just the setup and status phases. In that case, the status
+    // phase is always in the IN direction.
     //
 
     } else if (StatusPhase != FALSE) {
@@ -3553,7 +3611,10 @@ Return Value:
                (Endpoint->TransferType == UsbTransferTypeControl));
 
         PidCode = DWHCI_PID_CODE_DATA_1;
-        if (Transfer->Public.Direction == UsbTransferDirectionIn) {
+        if (Offset == sizeof(USB_SETUP_PACKET)) {
+            DwhciTransfer->InTransfer = TRUE;
+
+        } else if (Transfer->Public.Direction == UsbTransferDirectionIn) {
             DwhciTransfer->InTransfer = FALSE;
 
         } else {
@@ -3562,6 +3623,9 @@ Return Value:
 
             DwhciTransfer->InTransfer = TRUE;
         }
+
+        DwhciTransfer->PhysicalAddress =
+                  Controller->ControlStatusBuffer->Fragment[0].PhysicalAddress;
 
     //
     // Not setup and not status, fill this out like a normal descriptor.
@@ -3933,7 +3997,6 @@ Return Value:
 
     PDWHCI_CHANNEL Channel;
     ULONG Control;
-    ULONG DmaAddress;
     ULONG Frame;
     ULONG Interrupts;
     ULONG SplitControl;
@@ -3982,13 +4045,48 @@ Return Value:
                          Interrupts);
 
     //
+    // If this is a full or low-speed device, then configure the split register.
+    //
+
+    Token = Transfer->Token;
+    SplitControl = Endpoint->SplitControl;
+    if (SplitControl != 0) {
+
+        ASSERT((Endpoint->Speed == UsbDeviceSpeedLow) ||
+               (Endpoint->Speed == UsbDeviceSpeedFull));
+
+        ASSERT((SplitControl & DWHCI_CHANNEL_SPLIT_CONTROL_ENABLE) != 0);
+
+        if (Transfer->CompleteSplitCount != 0) {
+            if (Transfer->InTransfer == FALSE) {
+                Token &= ~DWHCI_CHANNEL_TOKEN_TRANSFER_SIZE_MASK;
+            }
+
+            SplitControl |= DWHCI_CHANNEL_SPLIT_CONTROL_COMPLETE_SPLIT;
+
+        //
+        // Interrupt start splits are not allowed to be started in the 6th
+        // microframe.
+        //
+
+        } else if (Endpoint->TransferType == UsbTransferTypeInterrupt) {
+            Frame = DWHCI_READ_FRAME_NUMBER(Controller);
+            if ((Frame & 0x7) == 0x6) {
+                Status = STATUS_TRY_AGAIN;
+                goto ScheduleTransferEnd;
+            }
+
+            Endpoint->StartFrame = Frame;
+        }
+    }
+
+    //
     // Setup up the transfer register based on the transfer token. This
     // includes information on the transfer length, the PID, and number of
     // packets. If the PID is preset in the token, then use what is there,
     // otherwise use the current toggle pid stored in the endpoint.
     //
 
-    Token = Transfer->Token;
     if ((Transfer->Token & DWHCI_CHANNEL_TOKEN_PID_MASK) == 0) {
         Token |= (Endpoint->DataToggle << DWHCI_CHANNEL_TOKEN_PID_SHIFT) &
                  DWHCI_CHANNEL_TOKEN_PID_MASK;
@@ -4032,53 +4130,17 @@ Return Value:
     // Program the DMA register.
     //
 
-    if (Transfer->TransferLength != 0) {
-
-        ASSERT(Transfer->PhysicalAddress == (ULONG)Transfer->PhysicalAddress);
-
-        DmaAddress = (ULONG)Transfer->PhysicalAddress;
-
-        ASSERT(IS_ALIGNED(DmaAddress, DWHCI_DMA_ALIGNMENT) != FALSE);
-
-    } else {
-        DmaAddress = 0;
-    }
+    ASSERT(Transfer->PhysicalAddress == (ULONG)Transfer->PhysicalAddress);
+    ASSERT(IS_ALIGNED(Transfer->PhysicalAddress, DWHCI_DMA_ALIGNMENT) != FALSE);
 
     DWHCI_WRITE_CHANNEL_REGISTER(Controller,
                                  DwhciChannelRegisterDmaAddress,
                                  Channel->ChannelNumber,
-                                 DmaAddress);
+                                 (ULONG)Transfer->PhysicalAddress);
 
     //
-    // If this is a full or low-speed device, then configure the split register.
+    // Program the split control register.
     //
-
-    SplitControl = Endpoint->SplitControl;
-    if (SplitControl != 0) {
-
-        ASSERT((Endpoint->Speed == UsbDeviceSpeedLow) ||
-               (Endpoint->Speed == UsbDeviceSpeedFull));
-
-        ASSERT((SplitControl & DWHCI_CHANNEL_SPLIT_CONTROL_ENABLE) != 0);
-
-        if (Transfer->CompleteSplitCount != 0) {
-            SplitControl |= DWHCI_CHANNEL_SPLIT_CONTROL_COMPLETE_SPLIT;
-
-        //
-        // Interrupt start splits are not allowed to be started in the 6th
-        // microframe.
-        //
-
-        } else if (Endpoint->TransferType == UsbTransferTypeInterrupt) {
-            Frame = DWHCI_READ_FRAME_NUMBER(Controller);
-            if ((Frame & 0x7) == 0x6) {
-                Status = STATUS_TRY_AGAIN;
-                goto ScheduleTransferEnd;
-            }
-
-            Endpoint->StartFrame = Frame;
-        }
-    }
 
     DWHCI_WRITE_CHANNEL_REGISTER(Controller,
                                  DwhciChannelRegisterSplitControl,
@@ -4805,7 +4867,10 @@ Return Value:
 
 KSTATUS
 DwhcipInitializeHostMode (
-    PDWHCI_CONTROLLER Controller
+    PDWHCI_CONTROLLER Controller,
+    ULONG ReceiveFifoSize,
+    ULONG NonPeriodicTransmitFifoSize,
+    ULONG PeriodicTransmitFifoSize
     )
 
 /*++
@@ -4819,6 +4884,15 @@ Arguments:
     Controller - Supplies a pointer to the DWHCI controller state of the
         controller whose USB register is to be initialized.
 
+    ReceiveFifoSize - Supplies the receive FIFO size to set if the FIFO's are
+        dynamic.
+
+    NonPeriodicTransmitFifoSize - Supplies the non-periodic transmit FIFO size
+        to set if the FIFO's are dynamic. This includes the FIFO offset.
+
+    PeriodicTransmitFifoSize - Supplies the periodic transmit FIFO size to
+        set if the FIFO's are dynamic. This includes the FIFO offset.
+
 Return Value:
 
     Status code.
@@ -4829,7 +4903,6 @@ Return Value:
 
     PDWHCI_CHANNEL Channels;
     ULONG Control;
-    ULONG FifoSize;
     ULONG Hardware2;
     ULONG HostConfiguration;
     ULONG Index;
@@ -4858,43 +4931,24 @@ Return Value:
     }
 
     //
-    // If dynamic FIFO sizing is allowed, then set the default FIFO sizes and
-    // starting addresses. Otherwise use what is programmed in the registers.
+    // If dynamic FIFO sizing is allowed, then set the FIFO sizes and
+    // starting addresses using the provided values. Otherwise use what is
+    // programmed in the registers.
     //
 
     Hardware2 = DWHCI_READ_REGISTER(Controller, DwhciRegisterHardware2);
     if ((Hardware2 & DWHCI_HARDWARE2_DYNAMIC_FIFO) != 0) {
-        FifoSize = (DWHCI_DEFAULT_FIFO_SIZE <<
-                    DWHCI_RECEIVE_FIFO_SIZE_DEPTH_SHIFT) &
-                   DWHCI_RECEIVE_FIFO_SIZE_DEPTH_MASK;
-
         DWHCI_WRITE_REGISTER(Controller,
                              DwhciRegisterReceiveFifoSize,
-                             FifoSize);
-
-        FifoSize = (DWHCI_DEFAULT_FIFO_SIZE <<
-                    DWHCI_TRANSMIT_FIFO_SIZE_DEPTH_SHIFT) &
-                   DWHCI_TRANSMIT_FIFO_SIZE_DEPTH_MASK;
-
-        FifoSize |= (DWHCI_DEFAULT_FIFO_SIZE <<
-                     DWHCI_TRANSMIT_FIFO_SIZE_START_ADDRESS_SHIFT) &
-                    DWHCI_TRANSMIT_FIFO_SIZE_START_ADDRESS_MASK;
+                             ReceiveFifoSize);
 
         DWHCI_WRITE_REGISTER(Controller,
                              DwhciRegisterNonPeriodicFifoSize,
-                             FifoSize);
-
-        FifoSize = (DWHCI_DEFAULT_FIFO_SIZE <<
-                    DWHCI_TRANSMIT_FIFO_SIZE_DEPTH_SHIFT) &
-                   DWHCI_TRANSMIT_FIFO_SIZE_DEPTH_MASK;
-
-        FifoSize |= (2 * DWHCI_DEFAULT_FIFO_SIZE <<
-                     DWHCI_TRANSMIT_FIFO_SIZE_START_ADDRESS_SHIFT) &
-                    DWHCI_TRANSMIT_FIFO_SIZE_START_ADDRESS_MASK;
+                             NonPeriodicTransmitFifoSize);
 
         DWHCI_WRITE_REGISTER(Controller,
                              DwhciRegisterPeriodicFifoSize,
-                             FifoSize);
+                             PeriodicTransmitFifoSize);
     }
 
     //

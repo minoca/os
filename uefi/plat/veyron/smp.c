@@ -115,6 +115,7 @@ Return Value:
 {
 
     UINT32 Bit;
+    UINT32 CoreMask;
     VOID *Cpu;
     UINTN CpuIndex;
     VOID *Cru;
@@ -175,34 +176,31 @@ Return Value:
     // Assert reset on cores 1 through 3 before powering them down.
     //
 
-    Value = ((RK32_CRU_SOFT_RESET0_CORE1 |
-              RK32_CRU_SOFT_RESET0_CORE2 |
-              RK32_CRU_SOFT_RESET0_CORE3) << 16) |
-             (RK32_CRU_SOFT_RESET0_CORE1 |
-              RK32_CRU_SOFT_RESET0_CORE2 |
-              RK32_CRU_SOFT_RESET0_CORE3);
+    CoreMask = RK32_CRU_SOFT_RESET0_CORE1 |
+               RK32_CRU_SOFT_RESET0_CORE2 |
+               RK32_CRU_SOFT_RESET0_CORE3;
 
+    Value = (CoreMask << RK32_CRU_SOFT_RESET0_PROTECT_SHIFT) | CoreMask;
     EfiWriteRegister32(Cru + Rk32CruSoftReset0, Value);
 
     //
     // Power down the cores.
     //
 
+    CoreMask = RK32_PMU_POWER_DOWN_CONTROL_A17_1 |
+               RK32_PMU_POWER_DOWN_CONTROL_A17_2 |
+               RK32_PMU_POWER_DOWN_CONTROL_A17_3;
+
     Value = EfiReadRegister32(Pmu + Rk32PmuPowerDownControl);
-    Value |= RK32_PMU_POWER_DOWN_STATUS_A17_1 |
-             RK32_PMU_POWER_DOWN_STATUS_A17_2 |
-             RK32_PMU_POWER_DOWN_STATUS_A17_3;
-
+    Value |= CoreMask;
     EfiWriteRegister32(Pmu + Rk32PmuPowerDownControl, Value);
-    while (TRUE) {
-        if ((EfiReadRegister32(Pmu + Rk32PmuPowerDownStatus) &
-             (RK32_PMU_POWER_DOWN_STATUS_A17_1 |
-              RK32_PMU_POWER_DOWN_STATUS_A17_2 |
-              RK32_PMU_POWER_DOWN_STATUS_A17_3)) ==
-            (RK32_PMU_POWER_DOWN_STATUS_A17_1 |
-             RK32_PMU_POWER_DOWN_STATUS_A17_2 |
-             RK32_PMU_POWER_DOWN_STATUS_A17_3)) {
+    CoreMask = RK32_PMU_POWER_DOWN_STATUS_A17_1 |
+               RK32_PMU_POWER_DOWN_STATUS_A17_2 |
+               RK32_PMU_POWER_DOWN_STATUS_A17_3;
 
+    while (TRUE) {
+        Value = EfiReadRegister32(Pmu + Rk32PmuPowerDownStatus);
+        if ((Value & CoreMask) == CoreMask) {
             break;
         }
     }

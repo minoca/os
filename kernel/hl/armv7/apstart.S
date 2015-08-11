@@ -228,9 +228,10 @@ HlpTrampolineCodeAtOriginalLocation:
 
 Routine Description:
 
-    This routine invalidates the entire data cache by Set/Way. This "function"
-    requires no stack, but does corrupt non-volatile registers. This function
-    is taken from the ARM Architecture Reference Manual.
+    This routine invalidates the entire data cache by Set/Way up to the point
+    of unification inner-shareable. This "function" requires no stack, but does
+    corrupt non-volatile registers. This function is taken from the ARM
+    Architecture Reference Manual.
 
 Arguments:
 
@@ -244,8 +245,8 @@ Return Value:
 
 HlpInvalidateDataCache:
     mrc     p15, 1, %r0, c0, c0, 1      @ Read CLIDR into R0.
-    ands    %r3, %r0, #0x7000000        @
-    mov     %r3, %r3, LSR #23           @ Cache level value (naturally aligned).
+    ands    %r3, %r0, #0xE00000         @
+    mov     %r3, %r3, LSR #20           @ Cache level value (naturally aligned).
     beq     HlpInvalidateDataCacheEnd   @
     mov     %r10, #0                    @
 
