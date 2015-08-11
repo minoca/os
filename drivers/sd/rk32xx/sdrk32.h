@@ -21,6 +21,7 @@ Author:
 //
 
 #include <minoca/sd.h>
+#include <minoca/sddwc.h>
 #include <minoca/intrface/disk.h>
 #include <minoca/dev/rk32xx.h>
 
@@ -59,7 +60,7 @@ Author:
 
 #define SD_RK32_DMA_DESCRIPTOR_COUNT 0x100
 #define SD_RK32_DMA_DESCRIPTOR_TABLE_SIZE \
-    (SD_RK32_DMA_DESCRIPTOR_COUNT * sizeof(RK32_SD_DMA_DESCRIPTOR))
+    (SD_RK32_DMA_DESCRIPTOR_COUNT * sizeof(SD_DWC_DMA_DESCRIPTOR))
 
 //
 // Define the set of flags for the parent SD device.

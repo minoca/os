@@ -2,17 +2,18 @@
 #
 #   Copyright (c) 2015 Minoca Corp. All Rights Reserved
 #
-#   Module Name:
+#   Binary Name:
 #
-#       SD Devices
+#       SD DesignWare
 #
 #   Abstract:
 #
-#       This directory builds UEFI SD device support libraries.
+#       This library contains the DesignWare Secure Digital (card) controller
+#       device.
 #
 #   Author:
 #
-#       Chris Stevens 17-Jul-2015
+#       Chris Stevens 16-Jul-2015
 #
 #   Environment:
 #
@@ -20,8 +21,15 @@
 #
 ################################################################################
 
-DIRS += core        \
-        dwc         \
+include ../../common
+
+BINARY = sddwc.a
+
+BINARYTYPE = library
+
+BINPLACE = intlib
+
+OBJS = sddwc.o       \
 
 include $(SRCROOT)/os/minoca.mk
 

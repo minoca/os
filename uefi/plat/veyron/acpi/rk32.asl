@@ -78,9 +78,3 @@ Environment:
 
                                    UINT64 : 00000000FF760000
 
-//
-// The GRF physical address.
-//
-
-                                   UINT64 : 00000000FF770000
-

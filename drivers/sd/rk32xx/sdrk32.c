@@ -37,10 +37,10 @@ Environment:
 // These macros read and write SD controller registers.
 //
 
-#define SD_RK32_READ_REGISTER(_Device, _Register) \
+#define SD_DWC_READ_REGISTER(_Device, _Register) \
     HlReadRegister32((_Device)->ControllerBase + (_Register))
 
-#define SD_RK32_WRITE_REGISTER(_Device, _Register, _Value) \
+#define SD_DWC_WRITE_REGISTER(_Device, _Register, _Value) \
     HlWriteRegister32((_Device)->ControllerBase + (_Register), (_Value))
 
 //
@@ -729,9 +729,9 @@ Return Value:
         // Disable DMA mode.
         //
 
-        Value = SD_RK32_READ_REGISTER(Child->Parent, Rk32SdControl);
-        Value &= ~RK32_SD_CONTROL_USE_INTERNAL_DMAC;
-        SD_RK32_WRITE_REGISTER(Child->Parent, Rk32SdControl, Value);
+        Value = SD_DWC_READ_REGISTER(Child->Parent, SdDwcControl);
+        Value &= ~SD_DWC_CONTROL_USE_INTERNAL_DMAC;
+        SD_DWC_WRITE_REGISTER(Child->Parent, SdDwcControl, Value);
 
         //
         // Release the hold on the controller and complete any buffer
@@ -870,9 +870,9 @@ Return Value:
     // Set the controller into DMA mode.
     //
 
-    Value = SD_RK32_READ_REGISTER(Child->Parent, Rk32SdControl);
-    Value |= RK32_SD_CONTROL_USE_INTERNAL_DMAC;
-    SD_RK32_WRITE_REGISTER(Child->Parent, Rk32SdControl, Value);
+    Value = SD_DWC_READ_REGISTER(Child->Parent, SdDwcControl);
+    Value |= SD_DWC_CONTROL_USE_INTERNAL_DMAC;
+    SD_DWC_WRITE_REGISTER(Child->Parent, SdDwcControl, Value);
 
     //
     // Make sure the system isn't trying to do I/O off the end of the
@@ -1692,95 +1692,38 @@ Return Value:
 
 {
 
-    PVOID CruBase;
     ULONGLONG Frequency;
-    PVOID GrfBase;
-    ULONG PageSize;
     ULONG ResetMask;
-    PRK32XX_TABLE Rk32xxTable;
     KSTATUS Status;
     ULONGLONG Timeout;
     ULONG Value;
 
-    CruBase = NULL;
-    GrfBase = NULL;
-    PageSize = MmPageSize();
     Frequency = HlQueryTimeCounterFrequency();
-
-    //
-    // Find the RK32xx ACPI table in order to retrieve the physical addresses
-    // for the CRU and GRF.
-    //
-
-    Rk32xxTable = AcpiFindTable(RK32XX_SIGNATURE, NULL);
-    if (Rk32xxTable == NULL) {
-        Status = STATUS_NOT_SUPPORTED;
-        goto HardResetControllerEnd;
-    }
-
-    CruBase = MmMapPhysicalAddress(Rk32xxTable->CruBase,
-                                   PageSize,
-                                   TRUE,
-                                   FALSE,
-                                   TRUE);
-
-    if (CruBase == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto HardResetControllerEnd;
-    }
-
-    GrfBase = MmMapPhysicalAddress(Rk32xxTable->GrfBase,
-                                   PageSize,
-                                   TRUE,
-                                   FALSE,
-                                   TRUE);
-
-    if (GrfBase == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto HardResetControllerEnd;
-    }
 
     //
     // First perform a hardware reset on the SD card.
     //
 
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdPower, RK32_SD_POWER_DISABLE);
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdResetN, RK32_SD_RESET_ENABLE);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcPower, SD_DWC_POWER_DISABLE);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcResetN, SD_DWC_RESET_ENABLE);
     HlBusySpin(5000);
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdPower, RK32_SD_POWER_ENABLE);
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdResetN, 0);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcPower, SD_DWC_POWER_ENABLE);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcResetN, 0);
     HlBusySpin(1000);
-
-    //
-    // Reset the SD/MMC.
-    //
-
-    Value = RK32_CRU_SOFT_RESET8_MMC0 << RK32_CRU_SOFT_RESET8_PROTECT_SHIFT;
-    Value |= RK32_CRU_SOFT_RESET8_MMC0;
-    HlWriteRegister32(CruBase + Rk32CruSoftReset8, Value);
-    HlBusySpin(100);
-    Value &= ~RK32_CRU_SOFT_RESET8_MMC0;
-    HlWriteRegister32(CruBase + Rk32CruSoftReset8, Value);
-
-    //
-    // Reset the IOMUX to the correct value for SD/MMC.
-    //
-
-    Value = RK32_GRF_GPIO6C_IOMUX_VALUE;
-    HlWriteRegister32(GrfBase + Rk32GrfGpio6cIomux, Value);
 
     //
     // Perform a complete controller reset and wait for it to complete.
     //
 
-    ResetMask = RK32_SD_CONTROL_FIFO_RESET |
-                RK32_SD_CONTROL_CONTROLLER_RESET;
+    ResetMask = SD_DWC_CONTROL_FIFO_RESET |
+                SD_DWC_CONTROL_DMA_RESET |
+                SD_DWC_CONTROL_CONTROLLER_RESET;
 
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdControl, ResetMask);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcControl, ResetMask);
     Status = STATUS_TIMEOUT;
     Timeout = KeGetRecentTimeCounter() + (Frequency * SD_RK32_TIMEOUT);
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdControl);
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
         if ((Value & ResetMask) == 0) {
             Status = STATUS_SUCCESS;
             break;
@@ -1793,18 +1736,40 @@ Return Value:
     }
 
     //
+    // Reset the internal DMA.
+    //
+
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcBusMode);
+    Value |= SD_DWC_BUS_MODE_INTERNAL_DMA_RESET;
+    SD_DWC_WRITE_REGISTER(Device, SdDwcBusMode, Value);
+    Status = STATUS_TIMEOUT;
+    Timeout = KeGetRecentTimeCounter() + (Frequency * SD_RK32_TIMEOUT);
+    do {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcBusMode);
+        if ((Value & SD_DWC_BUS_MODE_INTERNAL_DMA_RESET) == 0) {
+            Status = STATUS_SUCCESS;
+            break;
+        }
+
+    } while (KeGetRecentTimeCounter() <= Timeout);
+
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    //
     // Clear interrupts.
     //
 
-    SD_RK32_WRITE_REGISTER(Device,
-                           Rk32SdInterruptStatus,
-                           RK32_SD_INTERRUPT_STATUS_ALL_MASK);
+    SD_DWC_WRITE_REGISTER(Device,
+                          SdDwcInterruptStatus,
+                          SD_DWC_INTERRUPT_STATUS_ALL_MASK);
 
     //
     // Set 3v3 volts in the UHS register.
     //
 
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdUhs, RK32_SD_UHS_VOLTAGE_3V3);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcUhs, SD_DWC_UHS_VOLTAGE_3V3);
 
     //
     // Set the clock to 400kHz in preparation for sending CMD0 with the
@@ -1821,11 +1786,11 @@ Return Value:
     // bit set.
     //
 
-    Value = RK32_SD_COMMAND_START |
-            RK32_SD_COMMAND_USE_HOLD_REGISTER |
-            RK32_SD_COMMAND_SEND_INITIALIZATION;
+    Value = SD_DWC_COMMAND_START |
+            SD_DWC_COMMAND_USE_HOLD_REGISTER |
+            SD_DWC_COMMAND_SEND_INITIALIZATION;
 
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdCommand, Value);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcCommand, Value);
 
     //
     // Wait for the command to complete.
@@ -1834,8 +1799,8 @@ Return Value:
     Status = STATUS_TIMEOUT;
     Timeout = KeGetRecentTimeCounter() + (Frequency * SD_RK32_TIMEOUT);
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdCommand);
-        if ((Value & RK32_SD_COMMAND_START) == 0) {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcCommand);
+        if ((Value & SD_DWC_COMMAND_START) == 0) {
             Status = STATUS_SUCCESS;
             break;
         }
@@ -1849,13 +1814,13 @@ Return Value:
     Status = STATUS_TIMEOUT;
     Timeout = KeGetRecentTimeCounter() + (Frequency * SD_RK32_TIMEOUT);
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdInterruptStatus);
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcInterruptStatus);
         if (Value != 0) {
-            if ((Value & RK32_SD_INTERRUPT_STATUS_COMMAND_DONE) != 0) {
+            if ((Value & SD_DWC_INTERRUPT_STATUS_COMMAND_DONE) != 0) {
                 Status = STATUS_SUCCESS;
 
             } else if ((Value &
-                        RK32_SD_INTERRUPT_STATUS_ERROR_RESPONSE_TIMEOUT) != 0) {
+                        SD_DWC_INTERRUPT_STATUS_ERROR_RESPONSE_TIMEOUT) != 0) {
 
                 Status = STATUS_NO_MEDIA;
 
@@ -1863,7 +1828,7 @@ Return Value:
                 Status = STATUS_DEVICE_IO_ERROR;
             }
 
-            SD_RK32_WRITE_REGISTER(Device, Rk32SdInterruptStatus, Value);
+            SD_DWC_WRITE_REGISTER(Device, SdDwcInterruptStatus, Value);
             break;
         }
 
@@ -1874,14 +1839,6 @@ Return Value:
     }
 
 HardResetControllerEnd:
-    if (CruBase != NULL) {
-        MmUnmapAddress(CruBase, PageSize);
-    }
-
-    if (GrfBase != NULL) {
-        MmUnmapAddress(GrfBase, PageSize);
-    }
-
     return Status;
 }
 
@@ -2096,7 +2053,7 @@ Return Value:
     ULONG OriginalPendingStatus;
 
     Device = (PSD_RK32_CONTEXT)Context;
-    MaskedStatus = SD_RK32_READ_REGISTER(Device, Rk32SdMaskedInterruptStatus);
+    MaskedStatus = SD_DWC_READ_REGISTER(Device, SdDwcMaskedInterruptStatus);
     if (MaskedStatus == 0) {
         return InterruptStatusNotClaimed;
     }
@@ -2109,7 +2066,7 @@ Return Value:
         KeQueueDpc(Controller->InterruptDpc);
     }
 
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdInterruptStatus, MaskedStatus);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcInterruptStatus, MaskedStatus);
     KeReleaseSpinLock(&(Controller->InterruptLock));
     return InterruptStatusClaimed;
 }
@@ -2171,7 +2128,7 @@ Return Value:
     Status = STATUS_DEVICE_IO_ERROR;
     Inserted = FALSE;
     Removed = FALSE;
-    if ((PendingBits & RK32_SD_INTERRUPT_STATUS_CARD_DETECT) != 0) {
+    if ((PendingBits & SD_DWC_INTERRUPT_STATUS_CARD_DETECT) != 0) {
 
         //
         // TODO: Hanndle RK32xx SD/MMC insertion and removal.
@@ -2185,13 +2142,13 @@ Return Value:
     // to the DPC are the error bits and the transfer complete bit.
     //
 
-    if ((PendingBits & RK32_SD_INTERRUPT_ERROR_MASK) != 0) {
+    if ((PendingBits & SD_DWC_INTERRUPT_ERROR_MASK) != 0) {
         RtlDebugPrint("SD RK32xx: Error status 0x%x\n", PendingBits);
         SdErrorRecovery(Controller);
         Status = STATUS_DEVICE_IO_ERROR;
 
     } else if ((PendingBits &
-                RK32_SD_INTERRUPT_STATUS_DATA_TRANSFER_OVER) != 0) {
+                SD_DWC_INTERRUPT_STATUS_DATA_TRANSFER_OVER) != 0) {
 
         Status = STATUS_SUCCESS;
     }
@@ -2510,10 +2467,10 @@ Return Value:
     // Make sure DMA mode is disabled.
     //
 
-    Value = SD_RK32_READ_REGISTER(Child->Parent, Rk32SdControl);
-    if ((Value & RK32_SD_CONTROL_USE_INTERNAL_DMAC) != 0) {
-        Value &= ~RK32_SD_CONTROL_USE_INTERNAL_DMAC;
-        SD_RK32_WRITE_REGISTER(Child->Parent, Rk32SdControl, Value);
+    Value = SD_DWC_READ_REGISTER(Child->Parent, SdDwcControl);
+    if ((Value & SD_DWC_CONTROL_USE_INTERNAL_DMAC) != 0) {
+        Value &= ~SD_DWC_CONTROL_USE_INTERNAL_DMAC;
+        SD_DWC_WRITE_REGISTER(Child->Parent, SdDwcControl, Value);
     }
 
     return Status;
@@ -2908,7 +2865,7 @@ Return Value:
 {
 
     PSD_CONTROLLER Controller;
-    PRK32_SD_DMA_DESCRIPTOR Descriptor;
+    PSD_DWC_DMA_DESCRIPTOR Descriptor;
     ULONG Value;
 
     Controller = Device->Controller;
@@ -2948,16 +2905,16 @@ Return Value:
     // Enable DMA in the control register.
     //
 
-    Value = SD_RK32_READ_REGISTER(Device, Rk32SdControl);
-    Value |= RK32_SD_CONTROL_DMA_ENABLE;
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdControl, Value);
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+    Value |= SD_DWC_CONTROL_DMA_ENABLE;
+    SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Value);
 
     //
     // Read it to make sure the write stuck.
     //
 
-    Value = SD_RK32_READ_REGISTER(Device, Rk32SdControl);
-    if ((Value & RK32_SD_CONTROL_DMA_ENABLE) == 0) {
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+    if ((Value & SD_DWC_CONTROL_DMA_ENABLE) == 0) {
         return STATUS_NOT_SUPPORTED;
     }
 
@@ -2965,16 +2922,16 @@ Return Value:
     // Enable internal DMA in the bus mode register.
     //
 
-    Value = SD_RK32_READ_REGISTER(Device, Rk32SdBusMode);
-    Value |= RK32_SD_BUS_MODE_IDMAC_ENABLE;
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdBusMode, Value);
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcBusMode);
+    Value |= SD_DWC_BUS_MODE_IDMAC_ENABLE;
+    SD_DWC_WRITE_REGISTER(Device, SdDwcBusMode, Value);
 
     //
     // Read it to make sure the write stuck.
     //
 
-    Value = SD_RK32_READ_REGISTER(Device, Rk32SdBusMode);
-    if ((Value & RK32_SD_BUS_MODE_IDMAC_ENABLE) == 0) {
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcBusMode);
+    if ((Value & SD_DWC_BUS_MODE_IDMAC_ENABLE) == 0) {
         return STATUS_NOT_SUPPORTED;
     }
 
@@ -3039,7 +2996,7 @@ Return Value:
     ULONG DescriptorCount;
     PHYSICAL_ADDRESS DescriptorPhysical;
     UINTN DescriptorSize;
-    PRK32_SD_DMA_DESCRIPTOR DmaDescriptor;
+    PSD_DWC_DMA_DESCRIPTOR DmaDescriptor;
     PIO_BUFFER DmaDescriptorTable;
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentIndex;
@@ -3130,8 +3087,8 @@ Return Value:
         //
 
         DescriptorSize = TransferSizeRemaining;
-        if (DescriptorSize > RK32_SD_DMA_DESCRIPTOR_MAX_BUFFER_SIZE) {
-            DescriptorSize = RK32_SD_DMA_DESCRIPTOR_MAX_BUFFER_SIZE;
+        if (DescriptorSize > SD_DWC_DMA_DESCRIPTOR_MAX_BUFFER_SIZE) {
+            DescriptorSize = SD_DWC_DMA_DESCRIPTOR_MAX_BUFFER_SIZE;
         }
 
         if (DescriptorSize > (Fragment->Size - FragmentOffset)) {
@@ -3152,16 +3109,16 @@ Return Value:
         DmaDescriptor->Address = PhysicalAddress;
         DmaDescriptor->Size = DescriptorSize;
         DmaDescriptor->Control =
-               RK32_SD_DMA_DESCRIPTOR_CONTROL_OWN |
-               RK32_SD_DMA_DESCRIPTOR_CONTROL_SECOND_ADDRESS_CHAINED |
-               RK32_SD_DMA_DESCRIPTOR_CONTROL_DISABLE_INTERRUPT_ON_COMPLETION;
+                 SD_DWC_DMA_DESCRIPTOR_CONTROL_OWN |
+                 SD_DWC_DMA_DESCRIPTOR_CONTROL_SECOND_ADDRESS_CHAINED |
+                 SD_DWC_DMA_DESCRIPTOR_CONTROL_DISABLE_INTERRUPT_ON_COMPLETION;
 
         if (DescriptorCount == 0) {
             DmaDescriptor->Control |=
-                               RK32_SD_DMA_DESCRIPTOR_CONTROL_FIRST_DESCRIPTOR;
+                                SD_DWC_DMA_DESCRIPTOR_CONTROL_FIRST_DESCRIPTOR;
         }
 
-        DescriptorPhysical += sizeof(RK32_SD_DMA_DESCRIPTOR);
+        DescriptorPhysical += sizeof(SD_DWC_DMA_DESCRIPTOR);
         DmaDescriptor->NextDescriptor = DescriptorPhysical;
         DmaDescriptor += 1;
         DescriptorCount += 1;
@@ -3178,10 +3135,10 @@ Return Value:
 
     DmaDescriptor -= 1;
     DmaDescriptor->Control &=
-             ~(RK32_SD_DMA_DESCRIPTOR_CONTROL_SECOND_ADDRESS_CHAINED |
-               RK32_SD_DMA_DESCRIPTOR_CONTROL_DISABLE_INTERRUPT_ON_COMPLETION);
+              ~(SD_DWC_DMA_DESCRIPTOR_CONTROL_SECOND_ADDRESS_CHAINED |
+                SD_DWC_DMA_DESCRIPTOR_CONTROL_DISABLE_INTERRUPT_ON_COMPLETION);
 
-    DmaDescriptor->Control |= RK32_SD_DMA_DESCRIPTOR_CONTROL_LAST_DESCRIPTOR;
+    DmaDescriptor->Control |= SD_DWC_DMA_DESCRIPTOR_CONTROL_LAST_DESCRIPTOR;
     DmaDescriptor->NextDescriptor = 0;
     RtlMemoryBarrier();
     Command.ResponseType = SD_RESPONSE_R1;
@@ -3203,7 +3160,7 @@ Return Value:
     Controller->IoCompletionContext = CompletionContext;
     Controller->IoRequestSize = Command.BufferSize;
     TableAddress = (ULONG)(DmaDescriptorTable->Fragment[0].PhysicalAddress);
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdDescriptorBaseAddress, TableAddress);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcDescriptorBaseAddress, TableAddress);
     Status = Controller->FunctionTable.SendCommand(Controller,
                                                    Controller->ConsumerContext,
                                                    &Command);
@@ -3282,51 +3239,49 @@ Return Value:
         // Set the default burst length.
         //
 
-        Value = (RK32_SD_BUS_MODE_BURST_LENGTH_16 <<
-                 RK32_SD_BUS_MODE_BURST_LENGTH_SHIFT) |
-                RK32_SD_BUS_MODE_FIXED_BURST;
+        Value = (SD_DWC_BUS_MODE_BURST_LENGTH_16 <<
+                 SD_DWC_BUS_MODE_BURST_LENGTH_SHIFT) |
+                SD_DWC_BUS_MODE_FIXED_BURST;
 
-        SD_RK32_WRITE_REGISTER(Device, Rk32SdBusMode, Value);
+        SD_DWC_WRITE_REGISTER(Device, SdDwcBusMode, Value);
 
         //
         // Set the default FIFO threshold.
         //
 
-        SD_RK32_WRITE_REGISTER(Device,
-                               Rk32SdFifoThreshold,
-                               RK32_SD_FIFO_THRESHOLD_DEFAULT);
+        SD_DWC_WRITE_REGISTER(Device,
+                              SdDwcFifoThreshold,
+                              SD_DWC_FIFO_THRESHOLD_DEFAULT);
 
         //
         // Set the default timeout.
         //
 
-        SD_RK32_WRITE_REGISTER(Device,
-                               Rk32SdTimeout,
-                               RK32_SD_TIMEOUT_DEFAULT);
+        SD_DWC_WRITE_REGISTER(Device, SdDwcTimeout, SD_DWC_TIMEOUT_DEFAULT);
 
         //
         // Set the voltages based on the supported values supplied when the
         // controller was created.
         //
 
-        Voltage = SD_RK32_READ_REGISTER(Device, Rk32SdUhs);
-        Voltage &= ~RK32_SD_UHS_VOLTAGE_MASK;
+        Voltage = SD_DWC_READ_REGISTER(Device, SdDwcUhs);
+        Voltage &= ~SD_DWC_UHS_VOLTAGE_MASK;
         if ((Controller->Voltages & (SD_VOLTAGE_32_33 | SD_VOLTAGE_33_34)) ==
             (SD_VOLTAGE_32_33 | SD_VOLTAGE_33_34)) {
 
-            Voltage |= RK32_SD_UHS_VOLTAGE_3V3;
+            Voltage |= SD_DWC_UHS_VOLTAGE_3V3;
 
         } else if ((Controller->Voltages & SD_VOLTAGE_165_195) ==
                    SD_VOLTAGE_165_195) {
 
-            Voltage |= RK32_SD_UHS_VOLTAGE_1V8;
+            Voltage |= SD_DWC_UHS_VOLTAGE_1V8;
 
         } else {
             Status = STATUS_DEVICE_NOT_CONNECTED;
             goto InitializeControllerEnd;
         }
 
-        SD_RK32_WRITE_REGISTER(Device, Rk32SdUhs, Voltage);
+        SD_DWC_WRITE_REGISTER(Device, SdDwcUhs, Voltage);
 
     //
     // Phase 1 happens right before the initialization command sequence is
@@ -3340,25 +3295,25 @@ Return Value:
         // Turn on the power.
         //
 
-        SD_RK32_WRITE_REGISTER(Device, Rk32SdPower, RK32_SD_POWER_ENABLE);
+        SD_DWC_WRITE_REGISTER(Device, SdDwcPower, SD_DWC_POWER_ENABLE);
 
         //
         // Set the interrupt mask, clear any pending state, and enable the
         // interrupts.
         //
 
-        Controller->EnabledInterrupts = RK32_SD_INTERRUPT_DEFAULT_MASK;
-        SD_RK32_WRITE_REGISTER(Device,
-                               Rk32SdInterruptMask,
-                               RK32_SD_INTERRUPT_DEFAULT_MASK);
+        Controller->EnabledInterrupts = SD_DWC_INTERRUPT_DEFAULT_MASK;
+        SD_DWC_WRITE_REGISTER(Device,
+                              SdDwcInterruptMask,
+                              SD_DWC_INTERRUPT_DEFAULT_MASK);
 
-        SD_RK32_WRITE_REGISTER(Device,
-                               Rk32SdInterruptStatus,
-                               RK32_SD_INTERRUPT_STATUS_ALL_MASK);
+        SD_DWC_WRITE_REGISTER(Device,
+                              SdDwcInterruptStatus,
+                              SD_DWC_INTERRUPT_STATUS_ALL_MASK);
 
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdControl);
-        Value |= RK32_SD_CONTROL_INTERRUPT_ENABLE;
-        SD_RK32_WRITE_REGISTER(Device, Rk32SdControl, Value);
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+        Value |= SD_DWC_CONTROL_INTERRUPT_ENABLE;
+        SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Value);
     }
 
     Status = STATUS_SUCCESS;
@@ -3405,21 +3360,24 @@ Return Value:
     ULONGLONG Timeout;
     ULONG Value;
 
+    Device = (PSD_RK32_CONTEXT)Context;
     Frequency = HlQueryTimeCounterFrequency();
 
     //
-    // Always reset the DMA and FIFO.
+    // Always reset the DMA, FIFO, and the controller.
     //
 
-    Device = (PSD_RK32_CONTEXT)Context;
-    ResetMask = RK32_SD_CONTROL_FIFO_RESET | RK32_SD_CONTROL_DMA_RESET;
-    Value = SD_RK32_READ_REGISTER(Device, Rk32SdControl);
+    ResetMask = SD_DWC_CONTROL_FIFO_RESET |
+                SD_DWC_CONTROL_DMA_RESET |
+                SD_DWC_CONTROL_CONTROLLER_RESET;
+
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
     Value |= ResetMask;
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdControl, Value);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Value);
     Status = STATUS_TIMEOUT;
     Timeout = SdQueryTimeCounter(Controller) + (Frequency * SD_RK32_TIMEOUT);
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdControl);
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
         if ((Value & ResetMask) == 0) {
             Status = STATUS_SUCCESS;
             break;
@@ -3432,21 +3390,60 @@ Return Value:
     }
 
     //
-    // Don't go any further unless a full software reset was requested.
+    // Wait for the DMA status to clear.
     //
 
-    if ((Flags & SD_RESET_FLAG_ALL) == 0) {
-        return STATUS_SUCCESS;
-    }
-
-    Value = SD_RK32_READ_REGISTER(Device, Rk32SdBusMode);
-    Value |= RK32_SD_BUS_MODE_SOFTWARE_RESET;
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdBusMode, Value);
     Status = STATUS_TIMEOUT;
     Timeout = SdQueryTimeCounter(Controller) + (Frequency * SD_RK32_TIMEOUT);
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdBusMode);
-        if ((Value & RK32_SD_BUS_MODE_SOFTWARE_RESET) == 0) {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcStatus);
+        if ((Value & SD_DWC_STATUS_DMA_REQUEST) == 0) {
+            Status = STATUS_SUCCESS;
+            break;
+        }
+
+    } while (SdQueryTimeCounter(Controller) <= Timeout);
+
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    //
+    // Reset the FIFO again.
+    //
+
+    ResetMask = SD_DWC_CONTROL_FIFO_RESET;
+    Device = (PSD_RK32_CONTEXT)Context;
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+    Value |= ResetMask;
+    SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Value);
+    Status = STATUS_TIMEOUT;
+    Timeout = SdQueryTimeCounter(Controller) + (Frequency * SD_RK32_TIMEOUT);
+    do {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+        if ((Value & ResetMask) == 0) {
+            Status = STATUS_SUCCESS;
+            break;
+        }
+
+    } while (SdQueryTimeCounter(Controller) <= Timeout);
+
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    //
+    // Reset the internal DMA.
+    //
+
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcBusMode);
+    Value |= SD_DWC_BUS_MODE_INTERNAL_DMA_RESET;
+    SD_DWC_WRITE_REGISTER(Device, SdDwcBusMode, Value);
+    Status = STATUS_TIMEOUT;
+    Timeout = SdQueryTimeCounter(Controller) + (Frequency * SD_RK32_TIMEOUT);
+    do {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcBusMode);
+        if ((Value & SD_DWC_BUS_MODE_INTERNAL_DMA_RESET) == 0) {
             Status = STATUS_SUCCESS;
             break;
         }
@@ -3509,25 +3506,25 @@ Return Value:
     //
 
     if (Command->Command == SdCommandStopTransmission) {
-        Flags = RK32_SD_COMMAND_STOP_ABORT;
+        Flags = SD_DWC_COMMAND_STOP_ABORT;
 
     } else {
-        Flags = RK32_SD_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
+        Flags = SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
 
         //
         // Wait for the FIFO to become empty command to complete.
         //
 
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdStatus);
-        if ((Value & RK32_SD_STATUS_FIFO_EMPTY) == 0) {
-            Value = SD_RK32_READ_REGISTER(Device, Rk32SdControl);
-            Value |= RK32_SD_CONTROL_FIFO_RESET;
-            SD_RK32_WRITE_REGISTER(Device, Rk32SdControl, Value);
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcStatus);
+        if ((Value & SD_DWC_STATUS_FIFO_EMPTY) == 0) {
+            Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+            Value |= SD_DWC_CONTROL_FIFO_RESET;
+            SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Value);
             Status = STATUS_SUCCESS;
             Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
             do {
-                Value = SD_RK32_READ_REGISTER(Device, Rk32SdControl);
-                if ((Value & RK32_SD_CONTROL_FIFO_RESET) == 0) {
+                Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+                if ((Value & SD_DWC_CONTROL_FIFO_RESET) == 0) {
                     Status = STATUS_SUCCESS;
                     break;
                 }
@@ -3549,8 +3546,8 @@ Return Value:
         Status = STATUS_SUCCESS;
         Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
         do {
-            Value = SD_RK32_READ_REGISTER(Device, Rk32SdStatus);
-            if ((Value & RK32_SD_STATUS_DATA_BUSY) == 0) {
+            Value = SD_DWC_READ_REGISTER(Device, SdDwcStatus);
+            if ((Value & SD_DWC_STATUS_DATA_BUSY) == 0) {
                 Status = STATUS_SUCCESS;
                 break;
             }
@@ -3566,9 +3563,9 @@ Return Value:
     // Clear any old interrupt status.
     //
 
-    SD_RK32_WRITE_REGISTER(Device,
-                           Rk32SdInterruptStatus,
-                           RK32_SD_INTERRUPT_STATUS_ALL_MASK);
+    SD_DWC_WRITE_REGISTER(Device,
+                          SdDwcInterruptStatus,
+                          SD_DWC_INTERRUPT_STATUS_ALL_MASK);
 
     //
     // Set up the response flags.
@@ -3576,10 +3573,10 @@ Return Value:
 
     if ((Command->ResponseType & SD_RESPONSE_PRESENT) != 0) {
         if ((Command->ResponseType & SD_RESPONSE_136_BIT) != 0) {
-            Flags |= RK32_SD_COMMAND_LONG_RESPONSE;
+            Flags |= SD_DWC_COMMAND_LONG_RESPONSE;
         }
 
-        Flags |= RK32_SD_COMMAND_RESPONSE_EXPECTED;
+        Flags |= SD_DWC_COMMAND_RESPONSE_EXPECTED;
     }
 
     //
@@ -3587,7 +3584,7 @@ Return Value:
     //
 
     if ((Command->ResponseType & SD_RESPONSE_VALID_CRC) != 0) {
-        Flags |= RK32_SD_COMMAND_CHECK_RESPONSE_CRC;
+        Flags |= SD_DWC_COMMAND_CHECK_RESPONSE_CRC;
     }
 
     //
@@ -3595,12 +3592,12 @@ Return Value:
     //
 
     if (Command->BufferSize != 0) {
-        Flags |= RK32_SD_COMMAND_DATA_EXPECTED;
+        Flags |= SD_DWC_COMMAND_DATA_EXPECTED;
         if (Command->Write != FALSE) {
-            Flags |= RK32_SD_COMMAND_WRITE;
+            Flags |= SD_DWC_COMMAND_WRITE;
 
         } else {
-            Flags |= RK32_SD_COMMAND_READ;
+            Flags |= SD_DWC_COMMAND_READ;
         }
 
         //
@@ -3613,16 +3610,11 @@ Return Value:
             (Command->Command == SdCommandWriteMultipleBlocks)) {
 
             if ((Controller->HostCapabilities & SD_MODE_AUTO_CMD12) != 0) {
-                Flags |= RK32_SD_COMMAND_SEND_AUTO_STOP;
+                Flags |= SD_DWC_COMMAND_SEND_AUTO_STOP;
             }
 
-            SD_RK32_WRITE_REGISTER(Device,
-                                   Rk32SdBlockSize,
-                                   SD_RK32_BLOCK_SIZE);
-
-            SD_RK32_WRITE_REGISTER(Device,
-                                   Rk32SdByteCount,
-                                   Command->BufferSize);
+            SD_DWC_WRITE_REGISTER(Device, SdDwcBlockSize, SD_RK32_BLOCK_SIZE);
+            SD_DWC_WRITE_REGISTER(Device, SdDwcByteCount, Command->BufferSize);
 
         //
         // Otherwise set the block size to total number of bytes to be
@@ -3630,13 +3622,8 @@ Return Value:
         //
 
         } else {
-            SD_RK32_WRITE_REGISTER(Device,
-                                 Rk32SdBlockSize,
-                                 Command->BufferSize);
-
-            SD_RK32_WRITE_REGISTER(Device,
-                                   Rk32SdByteCount,
-                                   Command->BufferSize);
+            SD_DWC_WRITE_REGISTER(Device, SdDwcBlockSize, Command->BufferSize);
+            SD_DWC_WRITE_REGISTER(Device, SdDwcByteCount, Command->BufferSize);
         }
     }
 
@@ -3645,31 +3632,31 @@ Return Value:
     //
 
     ASSERT((Command->Dma == FALSE) ||
-           (((SD_RK32_READ_REGISTER(Device, Rk32SdBusMode) &
-              RK32_SD_BUS_MODE_IDMAC_ENABLE) != 0) &&
-            ((SD_RK32_READ_REGISTER(Device, Rk32SdControl) &
-              RK32_SD_CONTROL_USE_INTERNAL_DMAC) != 0)));
+           (((SD_DWC_READ_REGISTER(Device, SdDwcBusMode) &
+              SD_DWC_BUS_MODE_IDMAC_ENABLE) != 0) &&
+            ((SD_DWC_READ_REGISTER(Device, SdDwcControl) &
+              SD_DWC_CONTROL_USE_INTERNAL_DMAC) != 0)));
 
     //
     // Write the command argument.
     //
 
-    SD_RK32_WRITE_REGISTER(Device,
-                           Rk32SdCommandArgument,
+    SD_DWC_WRITE_REGISTER(Device,
+                           SdDwcCommandArgument,
                            Command->CommandArgument);
 
     //
     // Set the command and wait for it to be accepted.
     //
 
-    CommandValue = (Command->Command << RK32_SD_COMMAND_INDEX_SHIFT) &
-                   RK32_SD_COMMAND_INDEX_MASK;
+    CommandValue = (Command->Command << SD_DWC_COMMAND_INDEX_SHIFT) &
+                   SD_DWC_COMMAND_INDEX_MASK;
 
-    CommandValue |= RK32_SD_COMMAND_START |
-                    RK32_SD_COMMAND_USE_HOLD_REGISTER |
+    CommandValue |= SD_DWC_COMMAND_START |
+                    SD_DWC_COMMAND_USE_HOLD_REGISTER |
                     Flags;
 
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdCommand, CommandValue);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcCommand, CommandValue);
 
     //
     // If this was a DMA command, just let it sail away.
@@ -3680,13 +3667,13 @@ Return Value:
         goto SendCommandEnd;
     }
 
-    ASSERT(Controller->EnabledInterrupts == RK32_SD_INTERRUPT_DEFAULT_MASK);
+    ASSERT(Controller->EnabledInterrupts == SD_DWC_INTERRUPT_DEFAULT_MASK);
 
     Status = STATUS_SUCCESS;
     Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdCommand);
-        if ((Value & RK32_SD_COMMAND_START) == 0) {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcCommand);
+        if ((Value & SD_DWC_COMMAND_START) == 0) {
             Status = STATUS_SUCCESS;
             break;
         }
@@ -3704,8 +3691,8 @@ Return Value:
     Status = STATUS_SUCCESS;
     Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdInterruptStatus);
-        if ((Value & RK32_SD_INTERRUPT_STATUS_COMMAND_DONE) != 0) {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcInterruptStatus);
+        if ((Value & SD_DWC_INTERRUPT_STATUS_COMMAND_DONE) != 0) {
             Status = STATUS_SUCCESS;
             break;
         }
@@ -3716,10 +3703,10 @@ Return Value:
         goto SendCommandEnd;
     }
 
-    if ((Value & RK32_SD_INTERRUPT_STATUS_ERROR_RESPONSE_TIMEOUT) != 0) {
-        SD_RK32_WRITE_REGISTER(Device,
-                               Rk32SdInterruptStatus,
-                               RK32_SD_INTERRUPT_STATUS_ALL_MASK);
+    if ((Value & SD_DWC_INTERRUPT_STATUS_ERROR_RESPONSE_TIMEOUT) != 0) {
+        SD_DWC_WRITE_REGISTER(Device,
+                              SdDwcInterruptStatus,
+                              SD_DWC_INTERRUPT_STATUS_ALL_MASK);
 
         SdRk32ResetController(Controller,
                               Context,
@@ -3728,10 +3715,10 @@ Return Value:
         Status = STATUS_SUCCESS;
         goto SendCommandEnd;
 
-    } else if ((Value & RK32_SD_INTERRUPT_STATUS_COMMAND_ERROR_MASK) != 0) {
-        SD_RK32_WRITE_REGISTER(Device,
-                               Rk32SdInterruptStatus,
-                               RK32_SD_INTERRUPT_STATUS_ALL_MASK);
+    } else if ((Value & SD_DWC_INTERRUPT_STATUS_COMMAND_ERROR_MASK) != 0) {
+        SD_DWC_WRITE_REGISTER(Device,
+                              SdDwcInterruptStatus,
+                              SD_DWC_INTERRUPT_STATUS_ALL_MASK);
 
         Status = STATUS_DEVICE_IO_ERROR;
         goto SendCommandEnd;
@@ -3741,9 +3728,9 @@ Return Value:
     // Acknowledge the completed command.
     //
 
-    SD_RK32_WRITE_REGISTER(Device,
-                           Rk32SdInterruptStatus,
-                           RK32_SD_INTERRUPT_STATUS_COMMAND_DONE);
+    SD_DWC_WRITE_REGISTER(Device,
+                          SdDwcInterruptStatus,
+                          SD_DWC_INTERRUPT_STATUS_COMMAND_DONE);
 
     //
     // Get the response if there is one.
@@ -3751,18 +3738,10 @@ Return Value:
 
     if ((Command->ResponseType & SD_RESPONSE_PRESENT) != 0) {
         if ((Command->ResponseType & SD_RESPONSE_136_BIT) != 0) {
-            Command->Response[3] = SD_RK32_READ_REGISTER(Device,
-                                                         Rk32SdResponse0);
-
-            Command->Response[2] = SD_RK32_READ_REGISTER(Device,
-                                                         Rk32SdResponse1);
-
-            Command->Response[1] = SD_RK32_READ_REGISTER(Device,
-                                                         Rk32SdResponse2);
-
-            Command->Response[0] = SD_RK32_READ_REGISTER(Device,
-                                                         Rk32SdResponse3);
-
+            Command->Response[3] = SD_DWC_READ_REGISTER(Device, SdDwcResponse0);
+            Command->Response[2] = SD_DWC_READ_REGISTER(Device, SdDwcResponse1);
+            Command->Response[1] = SD_DWC_READ_REGISTER(Device, SdDwcResponse2);
+            Command->Response[0] = SD_DWC_READ_REGISTER(Device, SdDwcResponse3);
             if ((Controller->HostCapabilities &
                  SD_MODE_RESPONSE136_SHIFTED) != 0) {
 
@@ -3779,8 +3758,7 @@ Return Value:
             }
 
         } else {
-            Command->Response[0] = SD_RK32_READ_REGISTER(Device,
-                                                         Rk32SdResponse0);
+            Command->Response[0] = SD_DWC_READ_REGISTER(Device, SdDwcResponse0);
         }
     }
 
@@ -3852,15 +3830,15 @@ Return Value:
     if (Set != FALSE) {
         switch (Controller->BusWidth) {
         case 1:
-            Value = RK32_SD_CARD_TYPE_1_BIT_WIDTH;
+            Value = SD_DWC_CARD_TYPE_1_BIT_WIDTH;
             break;
 
         case 4:
-            Value = RK32_SD_CARD_TYPE_4_BIT_WIDTH;
+            Value = SD_DWC_CARD_TYPE_4_BIT_WIDTH;
             break;
 
         case 8:
-            Value = RK32_SD_CARD_TYPE_8_BIT_WIDTH;
+            Value = SD_DWC_CARD_TYPE_8_BIT_WIDTH;
             break;
 
         default:
@@ -3872,14 +3850,14 @@ Return Value:
             return STATUS_INVALID_CONFIGURATION;
         }
 
-        SD_RK32_WRITE_REGISTER(Device, Rk32SdCardType, Value);
+        SD_DWC_WRITE_REGISTER(Device, SdDwcCardType, Value);
 
     } else {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdCardType);
-        if ((Value & RK32_SD_CARD_TYPE_8_BIT_WIDTH) != 0) {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcCardType);
+        if ((Value & SD_DWC_CARD_TYPE_8_BIT_WIDTH) != 0) {
             Controller->BusWidth = 8;
 
-        } else if ((Value & RK32_SD_CARD_TYPE_4_BIT_WIDTH) != 0) {
+        } else if ((Value & SD_DWC_CARD_TYPE_4_BIT_WIDTH) != 0) {
             Controller->BusWidth = 4;
 
         } else {
@@ -4054,7 +4032,7 @@ Return Value:
         Status = STATUS_SUCCESS;
         Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
         do {
-            Interrupts = SD_RK32_READ_REGISTER(Device, Rk32SdInterruptStatus);
+            Interrupts = SD_DWC_READ_REGISTER(Device, SdDwcInterruptStatus);
             if (Interrupts != 0) {
                 Status = STATUS_SUCCESS;
                 break;
@@ -4070,7 +4048,7 @@ Return Value:
         // Reset the controller if any error bits are set.
         //
 
-        if ((Interrupts & RK32_SD_INTERRUPT_STATUS_DATA_ERROR_MASK) != 0) {
+        if ((Interrupts & SD_DWC_INTERRUPT_STATUS_DATA_ERROR_MASK) != 0) {
             SdRk32ResetController(Controller, Context, SD_RESET_FLAG_DATA_LINE);
             return STATUS_DEVICE_IO_ERROR;
         }
@@ -4080,21 +4058,21 @@ Return Value:
         // register holds the number of 32-bit elements to be read.
         //
 
-        DataReadyMask = RK32_SD_INTERRUPT_STATUS_RECEIVE_FIFO_DATA_REQUEST;
+        DataReadyMask = SD_DWC_INTERRUPT_STATUS_RECEIVE_FIFO_DATA_REQUEST;
         if ((Interrupts & DataReadyMask) != 0) {
-            Count = SD_RK32_READ_REGISTER(Device, Rk32SdStatus);
-            Count = (Count & RK32_SD_STATUS_FIFO_COUNT_MASK) >>
-                    RK32_SD_STATUS_FIFO_COUNT_SHIFT;
+            Count = SD_DWC_READ_REGISTER(Device, SdDwcStatus);
+            Count = (Count & SD_DWC_STATUS_FIFO_COUNT_MASK) >>
+                    SD_DWC_STATUS_FIFO_COUNT_SHIFT;
 
             for (IoIndex = 0; IoIndex < Count; IoIndex += 1) {
-                *Buffer32 = SD_RK32_READ_REGISTER(Device, Rk32SdFifoBase);
+                *Buffer32 = SD_DWC_READ_REGISTER(Device, SdDwcFifoBase);
                 Buffer32 += 1;
             }
 
             Size -= Count;
-            SD_RK32_WRITE_REGISTER(Device,
-                                   Rk32SdInterruptStatus,
-                                   DataReadyMask);
+            SD_DWC_WRITE_REGISTER(Device,
+                                  SdDwcInterruptStatus,
+                                  DataReadyMask);
         }
 
         //
@@ -4102,15 +4080,15 @@ Return Value:
         // the bytes from the FIFO.
         //
 
-        if ((Interrupts & RK32_SD_INTERRUPT_STATUS_DATA_TRANSFER_OVER) != 0) {
+        if ((Interrupts & SD_DWC_INTERRUPT_STATUS_DATA_TRANSFER_OVER) != 0) {
             for (IoIndex = 0; IoIndex < Size; IoIndex += 1) {
-                *Buffer32 = SD_RK32_READ_REGISTER(Device, Rk32SdFifoBase);
+                *Buffer32 = SD_DWC_READ_REGISTER(Device, SdDwcFifoBase);
                 Buffer32 += 1;
             }
 
-            SD_RK32_WRITE_REGISTER(Device,
-                                   Rk32SdInterruptStatus,
-                                   RK32_SD_INTERRUPT_STATUS_DATA_TRANSFER_OVER);
+            SD_DWC_WRITE_REGISTER(Device,
+                                  SdDwcInterruptStatus,
+                                  SD_DWC_INTERRUPT_STATUS_DATA_TRANSFER_OVER);
 
             Size = 0;
             DataTransferOver = TRUE;
@@ -4127,9 +4105,9 @@ Return Value:
         Status = STATUS_SUCCESS;
         Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
         do {
-            Interrupts = SD_RK32_READ_REGISTER(Device, Rk32SdInterruptStatus);
+            Interrupts = SD_DWC_READ_REGISTER(Device, SdDwcInterruptStatus);
             if ((Interrupts &
-                 RK32_SD_INTERRUPT_STATUS_DATA_TRANSFER_OVER) != 0) {
+                 SD_DWC_INTERRUPT_STATUS_DATA_TRANSFER_OVER) != 0) {
 
                 Status = STATUS_SUCCESS;
                 break;
@@ -4141,22 +4119,22 @@ Return Value:
             return Status;
         }
 
-        SD_RK32_WRITE_REGISTER(Device,
-                               Rk32SdInterruptStatus,
-                               RK32_SD_INTERRUPT_STATUS_DATA_TRANSFER_OVER);
+        SD_DWC_WRITE_REGISTER(Device,
+                              SdDwcInterruptStatus,
+                              SD_DWC_INTERRUPT_STATUS_DATA_TRANSFER_OVER);
     }
 
     //
     // Wait until the state machine and data stop being busy.
     //
 
-    BusyMask = RK32_SD_STATUS_DATA_STATE_MACHINE_BUSY |
-               RK32_SD_STATUS_DATA_BUSY;
+    BusyMask = SD_DWC_STATUS_DATA_STATE_MACHINE_BUSY |
+               SD_DWC_STATUS_DATA_BUSY;
 
     Status = STATUS_SUCCESS;
     Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdStatus);
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcStatus);
         if ((Value & BusyMask) == 0) {
             Status = STATUS_SUCCESS;
             break;
@@ -4233,7 +4211,7 @@ Return Value:
         Status = STATUS_SUCCESS;
         Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
         do {
-            Interrupts = SD_RK32_READ_REGISTER(Device, Rk32SdInterruptStatus);
+            Interrupts = SD_DWC_READ_REGISTER(Device, SdDwcInterruptStatus);
             if (Interrupts != 0) {
                 Status = STATUS_SUCCESS;
                 break;
@@ -4249,7 +4227,7 @@ Return Value:
         // Reset the controller if any error bits are set.
         //
 
-        if ((Interrupts & RK32_SD_INTERRUPT_STATUS_DATA_ERROR_MASK) != 0) {
+        if ((Interrupts & SD_DWC_INTERRUPT_STATUS_DATA_ERROR_MASK) != 0) {
             SdRk32ResetController(Controller, Context, SD_RESET_FLAG_DATA_LINE);
             return STATUS_DEVICE_IO_ERROR;
         }
@@ -4261,32 +4239,32 @@ Return Value:
         // amount.
         //
 
-        DataRequestMask = RK32_SD_INTERRUPT_STATUS_TRANSMIT_FIFO_DATA_REQUEST;
+        DataRequestMask = SD_DWC_INTERRUPT_STATUS_TRANSMIT_FIFO_DATA_REQUEST;
         if ((Interrupts & DataRequestMask) != 0) {
-            Count = SD_RK32_READ_REGISTER(Device, Rk32SdStatus);
-            Count = (Count & RK32_SD_STATUS_FIFO_COUNT_MASK) >>
-                    RK32_SD_STATUS_FIFO_COUNT_SHIFT;
+            Count = SD_DWC_READ_REGISTER(Device, SdDwcStatus);
+            Count = (Count & SD_DWC_STATUS_FIFO_COUNT_MASK) >>
+                    SD_DWC_STATUS_FIFO_COUNT_SHIFT;
 
-            Count = (RK32_SD_FIFO_DEPTH / sizeof(ULONG)) - Count;
+            Count = (SD_DWC_FIFO_DEPTH / sizeof(ULONG)) - Count;
             for (IoIndex = 0; IoIndex < Count; IoIndex += 1) {
-                SD_RK32_WRITE_REGISTER(Device, Rk32SdFifoBase, *Buffer32);
+                SD_DWC_WRITE_REGISTER(Device, SdDwcFifoBase, *Buffer32);
                 Buffer32 += 1;
             }
 
             Size -= Count;
-            SD_RK32_WRITE_REGISTER(Device,
-                                   Rk32SdInterruptStatus,
-                                   DataRequestMask);
+            SD_DWC_WRITE_REGISTER(Device,
+                                  SdDwcInterruptStatus,
+                                  DataRequestMask);
         }
 
         //
         // Check for the transfer over bit. If it is set, then exit.
         //
 
-        if ((Interrupts & RK32_SD_INTERRUPT_STATUS_DATA_TRANSFER_OVER) != 0) {
-            SD_RK32_WRITE_REGISTER(Device,
-                                   Rk32SdInterruptStatus,
-                                   RK32_SD_INTERRUPT_STATUS_DATA_TRANSFER_OVER);
+        if ((Interrupts & SD_DWC_INTERRUPT_STATUS_DATA_TRANSFER_OVER) != 0) {
+            SD_DWC_WRITE_REGISTER(Device,
+                                  SdDwcInterruptStatus,
+                                  SD_DWC_INTERRUPT_STATUS_DATA_TRANSFER_OVER);
 
             Size = 0;
             DataTransferOver = TRUE;
@@ -4303,9 +4281,9 @@ Return Value:
         Status = STATUS_SUCCESS;
         Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
         do {
-            Interrupts = SD_RK32_READ_REGISTER(Device, Rk32SdInterruptStatus);
+            Interrupts = SD_DWC_READ_REGISTER(Device, SdDwcInterruptStatus);
             if ((Interrupts &
-                 RK32_SD_INTERRUPT_STATUS_DATA_TRANSFER_OVER) != 0) {
+                 SD_DWC_INTERRUPT_STATUS_DATA_TRANSFER_OVER) != 0) {
 
                 Status = STATUS_SUCCESS;
                 break;
@@ -4317,22 +4295,22 @@ Return Value:
             return Status;
         }
 
-        SD_RK32_WRITE_REGISTER(Device,
-                               Rk32SdInterruptStatus,
-                               RK32_SD_INTERRUPT_STATUS_DATA_TRANSFER_OVER);
+        SD_DWC_WRITE_REGISTER(Device,
+                              SdDwcInterruptStatus,
+                              SD_DWC_INTERRUPT_STATUS_DATA_TRANSFER_OVER);
     }
 
     //
     // Wait until the state machine and data stop being busy.
     //
 
-    BusyMask = RK32_SD_STATUS_DATA_STATE_MACHINE_BUSY |
-               RK32_SD_STATUS_DATA_BUSY;
+    BusyMask = SD_DWC_STATUS_DATA_STATE_MACHINE_BUSY |
+               SD_DWC_STATUS_DATA_BUSY;
 
     Status = STATUS_SUCCESS;
     Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdStatus);
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcStatus);
         if ((Value & BusyMask) == 0) {
             Status = STATUS_SUCCESS;
             break;
@@ -4392,8 +4370,8 @@ Return Value:
     Status = STATUS_TIMEOUT;
     Timeout = KeGetRecentTimeCounter() + (Frequency * SD_RK32_TIMEOUT);
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdStatus);
-        if ((Value & RK32_SD_STATUS_DATA_BUSY) == 0) {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcStatus);
+        if ((Value & SD_DWC_STATUS_DATA_BUSY) == 0) {
             Status = STATUS_SUCCESS;
             break;
         }
@@ -4408,23 +4386,23 @@ Return Value:
     // Disable all clocks.
     //
 
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdClockEnable, 0);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcClockEnable, 0);
 
     //
     // Send the command to indicate that the clock enable register is being
     // updated.
     //
 
-    Value = RK32_SD_COMMAND_START |
-            RK32_SD_COMMAND_UPDATE_CLOCK_REGISTERS |
-            RK32_SD_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
+    Value = SD_DWC_COMMAND_START |
+            SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS |
+            SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
 
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdCommand, Value);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcCommand, Value);
     Status = STATUS_TIMEOUT;
     Timeout = KeGetRecentTimeCounter() + (Frequency * SD_RK32_TIMEOUT);
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdCommand);
-        if ((Value & RK32_SD_COMMAND_START) == 0) {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcCommand);
+        if ((Value & SD_DWC_COMMAND_START) == 0) {
             Status = STATUS_SUCCESS;
             break;
         }
@@ -4444,7 +4422,7 @@ Return Value:
 
     } else {
         Divisor = 2;
-        while (Divisor < RK32_SD_MAX_DIVISOR) {
+        while (Divisor < SD_DWC_MAX_DIVISOR) {
             if ((Device->FundamentalClock / Divisor) <= ClockSpeed) {
                 break;
             }
@@ -4455,26 +4433,26 @@ Return Value:
         Divisor >>= 1;
     }
 
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdClockDivider, Divisor);
-    SD_RK32_WRITE_REGISTER(Device,
-                           Rk32SdClockSource,
-                           RK32_SD_CLOCK_SOURCE_DIVIDER_0);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcClockDivider, Divisor);
+    SD_DWC_WRITE_REGISTER(Device,
+                          SdDwcClockSource,
+                          SD_DWC_CLOCK_SOURCE_DIVIDER_0);
 
     //
     // Send the command to indicate that the clock source and divider are is
     // being updated.
     //
 
-    Value = RK32_SD_COMMAND_START |
-            RK32_SD_COMMAND_UPDATE_CLOCK_REGISTERS |
-            RK32_SD_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
+    Value = SD_DWC_COMMAND_START |
+            SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS |
+            SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
 
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdCommand, Value);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcCommand, Value);
     Status = STATUS_TIMEOUT;
     Timeout = KeGetRecentTimeCounter() + (Frequency * SD_RK32_TIMEOUT);
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdCommand);
-        if ((Value & RK32_SD_COMMAND_START) == 0) {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcCommand);
+        if ((Value & SD_DWC_COMMAND_START) == 0) {
             Status = STATUS_SUCCESS;
             break;
         }
@@ -4489,26 +4467,26 @@ Return Value:
     // Enable the clocks in lower power mode.
     //
 
-    SD_RK32_WRITE_REGISTER(Device,
-                           Rk32SdClockEnable,
-                           (RK32_SD_CLOCK_ENABLE_LOW_POWER |
-                            RK32_SD_CLOCK_ENABLE_ON));
+    SD_DWC_WRITE_REGISTER(Device,
+                          SdDwcClockEnable,
+                          (SD_DWC_CLOCK_ENABLE_LOW_POWER |
+                           SD_DWC_CLOCK_ENABLE_ON));
 
     //
     // Send the command to indicate that the clock is enable register being
     // updated.
     //
 
-    Value = RK32_SD_COMMAND_START |
-            RK32_SD_COMMAND_UPDATE_CLOCK_REGISTERS |
-            RK32_SD_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
+    Value = SD_DWC_COMMAND_START |
+            SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS |
+            SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
 
-    SD_RK32_WRITE_REGISTER(Device, Rk32SdCommand, Value);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcCommand, Value);
     Status = STATUS_TIMEOUT;
     Timeout = KeGetRecentTimeCounter() + (Frequency * SD_RK32_TIMEOUT);
     do {
-        Value = SD_RK32_READ_REGISTER(Device, Rk32SdCommand);
-        if ((Value & RK32_SD_COMMAND_START) == 0) {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcCommand);
+        if ((Value & SD_DWC_COMMAND_START) == 0) {
             Status = STATUS_SUCCESS;
             break;
         }
@@ -4570,12 +4548,12 @@ Return Value:
         }
 
         Controller->EnabledInterrupts |=
-                                    RK32_SD_INTERRUPT_MASK_DATA_TRANSFER_OVER |
-                                    RK32_SD_INTERRUPT_ERROR_MASK;
+                                     SD_DWC_INTERRUPT_MASK_DATA_TRANSFER_OVER |
+                                     SD_DWC_INTERRUPT_ERROR_MASK;
 
-        SD_RK32_WRITE_REGISTER(Device,
-                               Rk32SdInterruptMask,
-                               Controller->EnabledInterrupts);
+        SD_DWC_WRITE_REGISTER(Device,
+                              SdDwcInterruptMask,
+                              Controller->EnabledInterrupts);
 
         RtlAtomicOr32(&(Controller->Flags),
                       SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED);
@@ -4592,12 +4570,12 @@ Return Value:
         }
 
         Controller->EnabledInterrupts &=
-                                  ~(RK32_SD_INTERRUPT_MASK_DATA_TRANSFER_OVER |
-                                    RK32_SD_INTERRUPT_ERROR_MASK);
+                                   ~(SD_DWC_INTERRUPT_MASK_DATA_TRANSFER_OVER |
+                                     SD_DWC_INTERRUPT_ERROR_MASK);
 
-        SD_RK32_WRITE_REGISTER(Device,
-                               Rk32SdInterruptMask,
-                               Controller->EnabledInterrupts);
+        SD_DWC_WRITE_REGISTER(Device,
+                              SdDwcInterruptMask,
+                              Controller->EnabledInterrupts);
 
         RtlAtomicAnd32(&(Controller->Flags),
                        ~SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED);

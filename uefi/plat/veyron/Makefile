@@ -62,7 +62,7 @@ TEXT_ADDRESS = 0x020000A4
 TARGETLIBS += $(INTLIB)/os/uefi/dev/gic/gic.a               \
               $(INTLIB)/os/uefi/dev/ns16550/ns16550.a       \
               $(INTLIB)/os/uefi/dev/sd/core/sd.a            \
-              $(INTLIB)/os/uefi/dev/sd/rk/sdrk.a            \
+              $(INTLIB)/os/uefi/dev/sd/dwc/sddwc.a          \
 
 EXTRA_SRC_DIRS = armv7
 
