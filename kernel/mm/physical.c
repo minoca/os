@@ -775,7 +775,9 @@ Return Value:
     ULONG AllocationPageCount;
     ULONG AllocationSize;
     INIT_PHYSICAL_MEMORY_ITERATOR Context;
+    UINTN Count;
     ULONG LastBitIndex;
+    ULONG LeadingZeros;
     ULONG PageShift;
     ULONG PageSize;
     PUCHAR RawBuffer;
@@ -872,13 +874,16 @@ Return Value:
 
     //
     // Compute the mask for the allocate and free counters. Get the percentage
-    // and round it down to the nearest power of 2.
+    // and round it up to the nearest power of 2.
     //
 
-    MmPhysicalMemoryWarningCountMask =
-              (MmTotalPhysicalPages * MEMORY_WARNING_COUNT_MASK_PERCENT) / 100;
+    Count = (MmTotalPhysicalPages * MEMORY_WARNING_COUNT_MASK_PERCENT) / 100;
+    if (Count == 0) {
+        Count = 1;
+    }
 
-    LastBitIndex = RtlCountLeadingZeros32(MmPhysicalMemoryWarningCountMask);
+    LeadingZeros = RtlCountLeadingZeros(Count);
+    LastBitIndex = (sizeof(UINTN) * BITS_PER_BYTE) - LeadingZeros;
     MmPhysicalMemoryWarningCountMask = (UINTN)(1 << LastBitIndex) - 1;
     Status = STATUS_SUCCESS;
 
