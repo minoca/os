@@ -25,12 +25,22 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/types.h>
+#include <minoca/status.h>
+#include <minoca/acpitabs.h>
+#include <minoca/hmod.h>
 #include "integcp.h"
 
 //
 // ---------------------------------------------------------------- Definitions
 //
+
+//
+// Define the number of soft priority levels implemented in the interrupt
+// controller.
+//
+
+#define INTEGRATORCP_INTERRUPT_PRIORITY_COUNT 16
 
 //
 // --------------------------------------------------------------------- Macros
@@ -136,17 +146,23 @@ Members:
 
     PhysicalAddress - Stores the physical address of this controller.
 
-    LineRunLevel - Stores the run level for each interrupt line.
+    LinePriority - Stores the priority for each interrupt line.
 
-    RunLevelIrqMask - Stores the mask of interrupts to disable when an
-        interrupt of each priority (run level) fires.
+    CurrentPriority - Stores the current priority of the interrupt controller.
+
+    Masks - Stores the mask of interrupts to disable when an interrupt of each
+        priority fires.
+
+    EnabledMask - Stores the mask of interrupts enabled at any priority.
 
 --*/
 
 typedef struct _INTEGRATORCP_INTERRUPT_DATA {
     PHYSICAL_ADDRESS PhysicalAddress;
-    RUNLEVEL LineRunLevel[INTEGRATORCP_INTERRUPT_LINE_COUNT];
-    ULONG RunLevelIrqMask[MaxRunLevel];
+    UCHAR LinePriority[INTEGRATORCP_INTERRUPT_LINE_COUNT];
+    UCHAR CurrentPriority;
+    ULONG Masks[INTEGRATORCP_INTERRUPT_PRIORITY_COUNT];
+    ULONG EnabledMask;
 } INTEGRATORCP_INTERRUPT_DATA, *PINTEGRATORCP_INTERRUPT_DATA;
 
 //
@@ -244,53 +260,49 @@ Return Value:
     Services->ZeroMemory(&NewController,
                          sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
 
-    if (IntegratorTable->InterruptControllerPhysicalAddress !=
-                                                    INVALID_PHYSICAL_ADDRESS) {
+    //
+    // Allocate context needed for this Interrupt Controller.
+    //
 
-        //
-        // Allocate context needed for this Interrupt Controller.
-        //
+    InterruptData =
+               Services->AllocateMemory(sizeof(INTEGRATORCP_INTERRUPT_DATA),
+                                        INTEGRATOR_ALLOCATION_TAG,
+                                        FALSE,
+                                        NULL);
 
-        InterruptData =
-                   Services->AllocateMemory(sizeof(INTEGRATORCP_INTERRUPT_DATA),
-                                            INTEGRATOR_ALLOCATION_TAG,
-                                            FALSE,
-                                            NULL);
+    if (InterruptData == NULL) {
+        goto IntegratorCpInterruptModuleEntryEnd;
+    }
 
-        if (InterruptData == NULL) {
-            goto IntegratorCpInterruptModuleEntryEnd;
-        }
+    Services->ZeroMemory(InterruptData,
+                         sizeof(INTEGRATORCP_INTERRUPT_DATA));
 
-        Services->ZeroMemory(InterruptData,
-                             sizeof(INTEGRATORCP_INTERRUPT_DATA));
+    InterruptData->PhysicalAddress =
+                       IntegratorTable->InterruptControllerPhysicalAddress;
 
-        InterruptData->PhysicalAddress =
-                           IntegratorTable->InterruptControllerPhysicalAddress;
+    //
+    // Initialize the new controller structure.
+    //
 
-        //
-        // Initialize the new controller structure.
-        //
+    NewController.TableVersion = INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
+    HlCpKernelServices->CopyMemory(&(NewController.FunctionTable),
+                                   &HlCpInterruptFunctionTable,
+                                   sizeof(INTERRUPT_FUNCTION_TABLE));
 
-        NewController.TableVersion = INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
-        HlCpKernelServices->CopyMemory(&(NewController.FunctionTable),
-                                       &HlCpInterruptFunctionTable,
-                                       sizeof(INTERRUPT_FUNCTION_TABLE));
+    NewController.Context = InterruptData;
+    NewController.Identifier = 0;
+    NewController.ProcessorCount = 0;
+    NewController.PriorityCount = INTEGRATORCP_INTERRUPT_PRIORITY_COUNT;
 
-        NewController.Context = InterruptData;
-        NewController.Identifier = 0;
-        NewController.ProcessorCount = 0;
-        NewController.PriorityCount = 0;
+    //
+    // Register the controller with the system.
+    //
 
-        //
-        // Register the controller with the system.
-        //
+    Status = Services->Register(HardwareModuleInterruptController,
+                                &NewController);
 
-        Status = Services->Register(HardwareModuleInterruptController,
-                                    &NewController);
-
-        if (!KSUCCESS(Status)) {
-            goto IntegratorCpInterruptModuleEntryEnd;
-        }
+    if (!KSUCCESS(Status)) {
+        goto IntegratorCpInterruptModuleEntryEnd;
     }
 
 IntegratorCpInterruptModuleEntryEnd:
@@ -362,6 +374,8 @@ Return Value:
 
     WRITE_INTERRUPT_REGISTER(CpInterruptIrqDisable, 0xFFFFFFFF);
     WRITE_INTERRUPT_REGISTER(CpInterruptFiqDisable, 0xFFFFFFFF);
+    InterruptData->CurrentPriority = 0;
+    InterruptData->EnabledMask = 0;
     Status = STATUS_SUCCESS;
 
 CpInterruptInitializeIoUnitEnd:
@@ -409,7 +423,7 @@ Return Value:
     ULONG Index;
     PINTEGRATORCP_INTERRUPT_DATA InterruptData;
     ULONG Mask;
-    RUNLEVEL RunLevel;
+    UCHAR Priority;
     ULONG Status;
 
     InterruptData = (PINTEGRATORCP_INTERRUPT_DATA)Context;
@@ -432,15 +446,17 @@ Return Value:
     // Disable all interrupts at or below this run level.
     //
 
-    RunLevel = InterruptData->LineRunLevel[Index];
-    Mask = InterruptData->RunLevelIrqMask[RunLevel];
+    Priority = InterruptData->LinePriority[Index];
+    Mask = InterruptData->Masks[Priority];
     WRITE_INTERRUPT_REGISTER(CpInterruptIrqDisable, Mask);
 
     //
-    // Save the run level as the magic candy to re-enable these interrupts.
+    // Save the previous priority to know what to restore to when this
+    // interrupt ends.
     //
 
-    *MagicCandy = RunLevel;
+    *MagicCandy = InterruptData->CurrentPriority;
+    InterruptData->CurrentPriority = Priority;
 
     //
     // Return the interrupting line's information.
@@ -487,11 +503,14 @@ Return Value:
     ULONG Mask;
 
     //
-    // Enable all interrupts at or below this priority level.
+    // Re-enable interrupts at the previous priority level before this
+    // interrupt fired. The enabled mask prevents enabling interrupts that
+    // weren't enabled before.
     //
 
     InterruptData = (PINTEGRATORCP_INTERRUPT_DATA)Context;
-    Mask = InterruptData->RunLevelIrqMask[MagicCandy];
+    InterruptData->CurrentPriority = MagicCandy;
+    Mask = ~InterruptData->Masks[MagicCandy] & InterruptData->EnabledMask;
     WRITE_INTERRUPT_REGISTER(CpInterruptIrqEnable, Mask);
     return;
 }
@@ -574,7 +593,7 @@ Return Value:
     ULONG BitMask;
     ULONG Index;
     PINTEGRATORCP_INTERRUPT_DATA InterruptData;
-    RUNLEVEL RunLevel;
+    UCHAR Priority;
     KSTATUS Status;
 
     InterruptData = (PINTEGRATORCP_INTERRUPT_DATA)Context;
@@ -595,34 +614,42 @@ Return Value:
     }
 
     //
-    // Determine which run level this interrupt belongs to.
-    //
-
-    RunLevel = VECTOR_TO_RUN_LEVEL(State->Vector);
-
-    //
     // Calculate the bit to flip and flip it.
     //
 
     BitMask = 1 << Line->Line;
     if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) != 0) {
-        InterruptData->LineRunLevel[Line->Line] = RunLevel;
-        for (Index = 0; Index <= RunLevel; Index += 1) {
-            InterruptData->RunLevelIrqMask[Index] |= BitMask;
+        Priority = State->HardwarePriority;
+        InterruptData->LinePriority[Line->Line] = Priority;
+        InterruptData->EnabledMask |= BitMask;
+
+        //
+        // This interrupt gets masked at and above its priority level.
+        //
+
+        for (Index = Priority;
+             Index < INTEGRATORCP_INTERRUPT_PRIORITY_COUNT;
+             Index += 1) {
+
+            InterruptData->Masks[Index] |= BitMask;
         }
 
         WRITE_INTERRUPT_REGISTER(CpInterruptIrqEnable, BitMask);
 
     } else {
         WRITE_INTERRUPT_REGISTER(CpInterruptIrqDisable, BitMask);
+        InterruptData->EnabledMask &= ~BitMask;
 
-        ASSERT(InterruptData->LineRunLevel[Line->Line] == RunLevel);
+        //
+        // Remove this interrupt from the masks.
+        //
 
-        for (Index = 0; Index <= RunLevel; Index += 1) {
-            InterruptData->RunLevelIrqMask[Index] &= ~BitMask;
+        for (Index = 0;
+             Index < INTEGRATORCP_INTERRUPT_PRIORITY_COUNT;
+             Index += 1) {
+
+            InterruptData->Masks[Index] &= ~BitMask;
         }
-
-        InterruptData->LineRunLevel[Line->Line] = 0;
     }
 
     Status = STATUS_SUCCESS;

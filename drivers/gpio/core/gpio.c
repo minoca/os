@@ -292,7 +292,8 @@ GPIO_API
 KSTATUS
 GpioStartController (
     PGPIO_CONTROLLER Controller,
-    ULONGLONG InterruptLine
+    ULONGLONG InterruptLine,
+    ULONGLONG InterruptVector
     )
 
 /*++
@@ -309,6 +310,9 @@ Arguments:
         interrupt line that this controller is wired to. That is, the GSI of
         the line this controller tickles when it wants to generate an interrupt.
         Set to -1ULL if the controller has no interrupt resources.
+
+    InterruptVector - Supplies the interrupt vector number of the interrupt
+        line that this controller is wired to.
 
 Return Value:
 
@@ -369,6 +373,7 @@ Return Value:
     //
 
     Controller->InterruptLine = InterruptLine;
+    Controller->InterruptVector = InterruptVector;
     if (((Host->Features & GPIO_FEATURE_INTERRUPTS) != 0) &&
         (Controller->InterruptController == NULL) &&
         (Controller->InterruptLine != -1ULL)) {
@@ -399,6 +404,7 @@ Return Value:
 
         Registration.Identifier = (UINTN)(Host->Device);
         Status = HlCreateInterruptController(Controller->InterruptLine,
+                                             Controller->InterruptVector,
                                              Host->LineCount,
                                              &Registration,
                                              &Information);

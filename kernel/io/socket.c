@@ -273,14 +273,16 @@ Return Value:
 
     SOCKET_CREATION_PARAMETERS Parameters;
     FILE_PERMISSIONS Permissions;
+    PKPROCESS Process;
     PSOCKET Socket;
     KSTATUS Status;
 
+    Process = PsGetCurrentProcess();
     Parameters.Network = Network;
     Parameters.Type = Type;
     Parameters.Protocol = Protocol;
     Parameters.ExistingSocket = NULL;
-    Permissions = FILE_PERMISSION_USER_READ | FILE_PERMISSION_USER_WRITE;
+    Permissions = FILE_PERMISSION_ALL & ~(Process->Umask);
     Status = IopOpen(FALSE,
                      NULL,
                      NULL,

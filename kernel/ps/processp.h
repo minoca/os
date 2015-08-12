@@ -27,8 +27,7 @@ Author:
 
 #define PS_DEBUG_ALLOCATION_TAG 0x44707350 // 'DpsP'
 
-#define PS_DEFAULT_UMASK \
-    (FILE_PERMISSION_GROUP_WRITE | FILE_PERMISSION_OTHER_WRITE)
+#define PS_DEFAULT_UMASK FILE_PERMISSION_OTHER_WRITE
 
 //
 // Define the base OS library, which is loaded into every executable address

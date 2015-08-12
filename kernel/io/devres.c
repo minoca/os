@@ -498,6 +498,17 @@ Return Value:
                 VectorCharacteristics |= INTERRUPT_VECTOR_EDGE_TRIGGERED;
             }
 
+            //
+            // Secondary interrupt lines have run-levels that may not
+            // correspond in a direct way to their interrupt vector. These
+            // types of vectors cannot be shared as it might create a conflict
+            // of different run-levels for the same vector.
+            //
+
+            if ((LineCharacteristics & INTERRUPT_LINE_SECONDARY) != 0) {
+                VectorTemplate->Flags |= RESOURCE_FLAG_NOT_SHAREABLE;
+            }
+
             VectorTemplate->Characteristics = VectorCharacteristics;
             VectorTemplate->OwningRequirement = Requirement;
             Status = IoCreateAndAddResourceRequirement(VectorTemplate,

@@ -301,7 +301,7 @@ Return Value:
          DirectoryIndex < ((UINTN)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT);
          DirectoryIndex += 1) {
 
-        if (Directory[DirectoryIndex].Present != 0) {
+        if (Directory[DirectoryIndex].Entry != 0) {
             PhysicalAddress = (ULONG)(Directory[DirectoryIndex].Entry <<
                                       PAGE_SHIFT);
 
@@ -2364,6 +2364,84 @@ Return Value:
 }
 
 KSTATUS
+MmpPreallocatePageTables (
+    PVOID SourcePageDirectory,
+    PVOID DestinationPageDirectory
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates, but does not initialize nor fully map the page
+    tables for a process that is being forked. It is needed because physical
+    page allocations are not allowed while an image section lock is held.
+
+Arguments:
+
+    SourcePageDirectory - Supplies a pointer to the page directory to scan. A
+        page table is allocated but not initialized for every missing page
+        table in the destination.
+
+    DestinationPageDirectory - Supplies a pointer to the page directory that
+        will get page tables filled in.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INSUFFICIENT_RESOURCES on failure.
+
+--*/
+
+{
+
+    ULONG DeleteIndex;
+    PPTE Destination;
+    ULONG DirectoryIndex;
+    PHYSICAL_ADDRESS Physical;
+    PPTE Source;
+
+    Destination = DestinationPageDirectory;
+    Source = SourcePageDirectory;
+    for (DirectoryIndex = 0;
+         DirectoryIndex < ((UINTN)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT);
+         DirectoryIndex += 1) {
+
+        if (Source[DirectoryIndex].Present == 0) {
+            continue;
+        }
+
+        ASSERT(Destination[DirectoryIndex].Present == 0);
+
+        Physical = MmpAllocatePhysicalPages(1, 0);
+        if (Physical == INVALID_PHYSICAL_ADDRESS) {
+
+            //
+            // Clean up and fail.
+            //
+
+            for (DeleteIndex = 0;
+                 DeleteIndex < DirectoryIndex;
+                 DeleteIndex += 1) {
+
+                if (Source[DeleteIndex].Present != 0) {
+                    Physical = Destination[DeleteIndex].Entry << PAGE_SHIFT;
+                    Destination[DeleteIndex].Entry = 0;
+                    MmFreePhysicalPage(Physical);
+                }
+            }
+
+            return STATUS_INSUFFICIENT_RESOURCES;
+        }
+
+        Destination[DirectoryIndex].Entry = Physical >> PAGE_SHIFT;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
 MmpCopyAndChangeSectionMappings (
     PKPROCESS DestinationProcess,
     PVOID SourcePageDirectory,
@@ -2492,16 +2570,17 @@ Return Value:
         if (DestinationDirectory[DirectoryIndex].Present == 0) {
 
             //
-            // As the destination directory's process is not yet live and some
-            // portion of the new page table will be initialized from the
-            // source page table, do not use the normal page table allocation
-            // method. That would acquire unnecessary locks and do an extra
-            // round of map/unmap in order to zero-initialize the page.
+            // The preallocation step better have set up a page table to use.
+            // Allocations are not possible in this routine because an image
+            // section lock is held, which means the paging out thread could
+            // be blocked trying to get it, and there could be no free pages
+            // left.
             //
 
-            PageTable = MmpAllocatePhysicalPages(1, 0);
+            PageTable = DestinationDirectory[DirectoryIndex].Entry <<
+                        PAGE_SHIFT;
 
-            ASSERT(PageTable != INVALID_PHYSICAL_ADDRESS);
+            ASSERT(PageTable != 0);
 
             SourceTable = GET_PAGE_TABLE(DirectoryIndex);
             OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
@@ -2709,6 +2788,8 @@ Return Value:
         (MmKernelPageDirectory[DirectoryIndex].Entry !=
          Directory[DirectoryIndex].Entry)) {
 
+        ASSERT(Directory[DirectoryIndex].Entry == 0);
+
         Directory[DirectoryIndex] = MmKernelPageDirectory[DirectoryIndex];
     }
 
@@ -2728,7 +2809,13 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    NewPageTable = MmpAllocatePhysicalPages(1, 0);
+    if (Directory[DirectoryIndex].Entry != 0) {
+        NewPageTable = Directory[DirectoryIndex].Entry << PAGE_SHIFT;
+        Directory[DirectoryIndex].Entry = 0;
+
+    } else {
+        NewPageTable = MmpAllocatePhysicalPages(1, 0);
+    }
 
     ASSERT(NewPageTable != INVALID_PHYSICAL_ADDRESS);
 

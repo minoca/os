@@ -667,6 +667,7 @@ Return Value:
     PRESOURCE_ALLOCATION ControllerBase;
     PHYSICAL_ADDRESS EndAddress;
     ULONGLONG InterruptLine;
+    ULONGLONG InterruptVector;
     PRESOURCE_ALLOCATION LineAllocation;
     ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddress;
@@ -676,6 +677,7 @@ Return Value:
 
     ControllerBase = NULL;
     InterruptLine = -1ULL;
+    InterruptVector = -1ULL;
 
     //
     // Loop through the allocated resources to get the controller base and the
@@ -707,7 +709,8 @@ Return Value:
                 Device->InterruptLine = LineAllocation->Allocation;
                 Device->InterruptVector = Allocation->Allocation;
                 Device->InterruptResourcesFound = TRUE;
-                InterruptLine = LineAllocation->Allocation;
+                InterruptLine = Device->InterruptLine;
+                InterruptVector = Device->InterruptVector;
 
             } else {
 
@@ -829,7 +832,10 @@ Return Value:
     //
 
     Omap4GpioEnableController(Device);
-    Status = GpioStartController(Device->GpioController, InterruptLine);
+    Status = GpioStartController(Device->GpioController,
+                                 InterruptLine,
+                                 InterruptVector);
+
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }

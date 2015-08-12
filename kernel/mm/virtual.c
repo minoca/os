@@ -1172,6 +1172,18 @@ Return Value:
     KeAcquireQueuedLock(Source->QueuedLock);
 
     //
+    // Preallocate all the page tables in the destination process so that
+    // allocations don't occur while holding the image section lock.
+    //
+
+    Status = MmpPreallocatePageTables(Source->PageDirectory,
+                                      Destination->PageDirectory);
+
+    if (!KSUCCESS(Status)) {
+        goto CloneProcessAddressSpaceEnd;
+    }
+
+    //
     // Create a copy of every image section in the process.
     //
 

@@ -420,7 +420,7 @@ Return Value:
          FirstIndex < FLT_INDEX(KERNEL_VA_START);
          FirstIndex += 4) {
 
-        if (FirstLevelTable[FirstIndex].Format != FLT_UNMAPPED) {
+        if (FirstLevelTable[FirstIndex].Entry != 0) {
             PhysicalAddress =
                      (ULONG)FirstLevelTable[FirstIndex].Entry << SLT_ALIGNMENT;
 
@@ -2874,6 +2874,81 @@ Return Value:
 }
 
 KSTATUS
+MmpPreallocatePageTables (
+    PVOID SourcePageDirectory,
+    PVOID DestinationPageDirectory
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates, but does not initialize nor fully map the page
+    tables for a process that is being forked. It is needed because physical
+    page allocations are not allowed while an image section lock is held.
+
+Arguments:
+
+    SourcePageDirectory - Supplies a pointer to the page directory to scan. A
+        page table is allocated but not initialized for every missing page
+        table in the destination.
+
+    DestinationPageDirectory - Supplies a pointer to the page directory that
+        will get page tables filled in.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INSUFFICIENT_RESOURCES on failure.
+
+--*/
+
+{
+
+    ULONG DeleteIndex;
+    PFIRST_LEVEL_TABLE Destination;
+    ULONG Index;
+    PHYSICAL_ADDRESS Physical;
+    PFIRST_LEVEL_TABLE Source;
+
+    Destination = DestinationPageDirectory;
+    Source = SourcePageDirectory;
+    for (Index = 0; Index < FLT_INDEX(KERNEL_VA_START); Index += 1) {
+        if (Source[Index].Format != FLT_COARSE_PAGE_TABLE) {
+            continue;
+        }
+
+        ASSERT(Destination[Index].Format != FLT_COARSE_PAGE_TABLE);
+
+        Physical = MmpAllocatePhysicalPages(1, 0);
+        if (Physical == INVALID_PHYSICAL_ADDRESS) {
+
+            //
+            // Clean up and fail.
+            //
+
+            for (DeleteIndex = 0;
+                 DeleteIndex < Index;
+                 DeleteIndex += 1) {
+
+                if (Source[DeleteIndex].Format == FLT_COARSE_PAGE_TABLE) {
+                    Physical = Destination[DeleteIndex].Entry << PAGE_SHIFT;
+                    Destination[DeleteIndex].Entry = 0;
+                    MmFreePhysicalPage(Physical);
+                }
+            }
+
+            return STATUS_INSUFFICIENT_RESOURCES;
+        }
+
+        Destination[Index].Entry = Physical >> PAGE_SHIFT;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
 MmpCopyAndChangeSectionMappings (
     PKPROCESS DestinationProcess,
     PVOID SourcePageDirectory,
@@ -3008,16 +3083,16 @@ Return Value:
         if (DestinationDirectory[FirstIndex].Format == FLT_UNMAPPED) {
 
             //
-            // As the destination process is not yet live and some portion of
-            // the new page table will be initialized from the source page
-            // table, do not use the normal page table allocation method. That
-            // would acquire unnecessary locks and do an extra round of
-            // map/unmap in order to zero-initialize the page.
+            // The preallocation step better have set up a page table to use.
+            // Allocations are not possible in this routine because an image
+            // section lock is held, which means the paging out thread could
+            // be blocked trying to get it, and there could be no free pages
+            // left.
             //
 
-            PageTable = MmpAllocatePhysicalPages(1, 0);
+            PageTable = DestinationDirectory[FirstIndex].Entry << PAGE_SHIFT;
 
-            ASSERT(PageTable != INVALID_PHYSICAL_ADDRESS);
+            ASSERT(PageTable != 0);
 
             SourceTable = GET_PAGE_TABLE(FirstIndex);
             OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
@@ -3336,7 +3411,13 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    PageTablePhysical = MmpAllocatePhysicalPages(1, 0);
+    if (FirstLevelTable[FirstIndex].Entry != 0) {
+        PageTablePhysical = FirstLevelTable[FirstIndex].Entry << PAGE_SHIFT;
+        FirstLevelTable[FirstIndex].Entry = 0;
+
+    } else {
+        PageTablePhysical = MmpAllocatePhysicalPages(1, 0);
+    }
 
     ASSERT(PageTablePhysical != INVALID_PHYSICAL_ADDRESS);
 
@@ -3634,6 +3715,8 @@ Return Value:
     FirstIndex = FLT_INDEX(VirtualAddress);
     if (MmKernelFirstLevelTable[FirstIndex].Entry !=
         ProcessFirstLevelTable[FirstIndex].Entry) {
+
+        ASSERT(ProcessFirstLevelTable[FirstIndex].Entry == 0);
 
         FirstIndexDown = ALIGN_RANGE_DOWN(FirstIndex, 4);
         for (LoopIndex = FirstIndexDown;

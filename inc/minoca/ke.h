@@ -412,6 +412,35 @@ struct _SCHEDULER_DATA {
 
 Structure Description:
 
+    This structure contains the state for a pending interrupt on this processor.
+    Because new interrupts cause the interrupt controller to block all
+    interrupts at that priority and lower, there can only be at most one
+    pending interrupt per run level.
+
+Members:
+
+    Vector - Stores the interrupt vector.
+
+    MagicCandy - Stores the opaque value returned by the interrupt controller
+        when the interrupt was acknowledged. This is saved because it needs
+        to be returned to the interrupt controller in the end of interrupt
+        routine.
+
+    InterruptController - Stores a pointer to the interrupt controller that
+        generated the interrupt.
+
+--*/
+
+typedef struct _PENDING_INTERRUPT {
+    ULONG Vector;
+    ULONG MagicCandy;
+    PVOID InterruptController;
+} PENDING_INTERRUPT, *PPENDING_INTERRUPT;
+
+/*++
+
+Structure Description:
+
     This structure contains the state for this processor's dynamic tick
     management.
 
@@ -499,18 +528,11 @@ Members:
     PendingInterruptCount - Stores the number of interrupts that are currently
         queued to be replayed.
 
-    PendingInterruptVectors - Stores the queue of interrupt vectors that need
-        to be replayed. This array is the size of the number of hardware
-        levels that exist, and will always be sorted. It requires that interrupt
+    PendingInterrupts - Stores the queue of interrupts that need to be
+        replayed. This array is the size of the number of hardware levels that
+        exist, and will always be sorted. It requires that interrupt
         controllers never allow interrupts to get through that are less than
         or equal to the priority of the current interrupt in service.
-
-    PendingInterruptMagicCandy - Stores an array of the opaque interrupt tokens
-        returned by the hardware module when the interrupt was initialially
-        accepted.
-
-    PendingInterruptController - Stores an array of the interrupt controllers
-        that own each interrupt in the pending queue.
 
     PendingDispatchInterrupt - Stores a boolean indicating whether or not a
         dispatch level software interrupt is pending.
@@ -576,9 +598,7 @@ struct _PROCESSOR_BLOCK {
     LIST_ENTRY IpiListHead;
     KSPIN_LOCK IpiListLock;
     ULONG PendingInterruptCount;
-    ULONG PendingInterruptVectors[MaxRunLevel];
-    ULONG PendingInterruptMagicCandy[MaxRunLevel];
-    PVOID PendingInterruptController[MaxRunLevel];
+    PENDING_INTERRUPT PendingInterrupts[MaxRunLevel];
     UCHAR PendingDispatchInterrupt;
     UCHAR ExpectingSpuriousFreeze;
     PDPC DpcInProgress;

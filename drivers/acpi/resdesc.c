@@ -1910,7 +1910,16 @@ Return Value:
     RtlZeroMemory(&InterruptRequirement, sizeof(RESOURCE_REQUIREMENT));
     RtlZeroMemory(&GpioData, sizeof(RESOURCE_GPIO_DATA));
     GpioData.Version = RESOURCE_GPIO_DATA_VERSION;
+
+    //
+    // Set the secondary flag on the interrupt requirement since this is a GPIO
+    // line interrupt, not a primary interrupt controller interrupt. This flag
+    // indicates that the interrupt vector to run-level correlation may not
+    // be there.
+    //
+
     InterruptRequirement.Type = ResourceTypeInterruptLine;
+    InterruptRequirement.Characteristics = INTERRUPT_LINE_SECONDARY;
     Requirement.Type = ResourceTypeGpio;
 
     //

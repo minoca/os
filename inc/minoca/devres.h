@@ -50,6 +50,7 @@ Author:
 #define INTERRUPT_LINE_ACTIVE_HIGH    0x00000004
 #define INTERRUPT_LINE_WAKE           0x00000008
 #define INTERRUPT_LINE_DEBOUNCE       0x00000010
+#define INTERRUPT_LINE_SECONDARY      0x00000020
 
 //
 // Define interrupt vector characteristics.

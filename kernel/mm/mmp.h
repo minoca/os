@@ -921,6 +921,37 @@ Return Value:
 --*/
 
 KSTATUS
+MmpPreallocatePageTables (
+    PVOID SourcePageDirectory,
+    PVOID DestinationPageDirectory
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates, but does not initialize nor fully map the page
+    tables for a process that is being forked. It is needed because physical
+    page allocations are not allowed while an image section lock is held.
+
+Arguments:
+
+    SourcePageDirectory - Supplies a pointer to the page directory to scan. A
+        page table is allocated but not initialized for every missing page
+        table in the destination.
+
+    DestinationPageDirectory - Supplies a pointer to the page directory that
+        will get page tables filled in.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INSUFFICIENT_RESOURCES on failure.
+
+--*/
+
+KSTATUS
 MmpCopyAndChangeSectionMappings (
     PKPROCESS DestinationProcess,
     PVOID SourcePageDirectory,

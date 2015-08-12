@@ -201,11 +201,7 @@ Return Value:
     // Attempt to create an interrupt.
     //
 
-    NewInterrupt = HlCreateInterrupt(Vector,
-                                     VECTOR_TO_RUN_LEVEL(Vector),
-                                     ServiceRoutine,
-                                     Context);
-
+    NewInterrupt = HlCreateInterrupt(Vector, ServiceRoutine, Context);
     if (NewInterrupt == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto ConnectInterruptEnd;

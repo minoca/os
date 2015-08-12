@@ -317,7 +317,8 @@ GPIO_API
 KSTATUS
 GpioStartController (
     PGPIO_CONTROLLER Controller,
-    ULONGLONG InterruptLine
+    ULONGLONG InterruptLine,
+    ULONGLONG InterruptVector
     );
 
 /*++
@@ -334,6 +335,9 @@ Arguments:
         interrupt line that this controller is wired to. That is, the GSI of
         the line this controller tickles when it wants to generate an interrupt.
         Set to -1ULL if the controller has no interrupt resources.
+
+    InterruptVector - Supplies the interrupt vector number of the interrupt
+        line that this controller is wired to.
 
 Return Value:
 

@@ -125,6 +125,9 @@ Members:
     InterruptLine - Stores the interrupt line that this GPIO controller
         connects to.
 
+    InterruptVector - Stores the interrupt vector that this GPIO controller
+        connects to.
+
     GsiBase - Stores the global system interrupt base of this controller.
 
 --*/
@@ -137,6 +140,7 @@ struct _GPIO_CONTROLLER {
     BOOL ArbiterCreated;
     PINTERRUPT_CONTROLLER InterruptController;
     ULONGLONG InterruptLine;
+    ULONGLONG InterruptVector;
     ULONG GsiBase;
 };
 

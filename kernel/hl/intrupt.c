@@ -66,14 +66,14 @@ HlpInterruptInitializeLocalUnit (
     PINTERRUPT_CONTROLLER Controller
     );
 
-BOOL
+VOID
 HlpInterruptAcquireLock (
     VOID
     );
 
 VOID
 HlpInterruptReleaseLock (
-    BOOL Enabled
+    VOID
     );
 
 PINTERRUPT_CONTROLLER
@@ -104,12 +104,12 @@ HlpInterruptConvertRunLevelToHardwarePriority (
 //
 
 //
-// This high level lock guards against any simultaneous access to the
-// interrupt controller during initialization or line state changes. It is not
-// held during normal interrupt processing.
+// This low level lock synchronizes configuration changes to interrupt
+// controllers. It is obviously not acquired during interrupt dispatching and
+// processing.
 //
 
-KSPIN_LOCK HlInterruptControllerLock;
+PQUEUED_LOCK HlInterruptLock;
 
 //
 // Store the list of registered interrupt controller hardware.
@@ -166,6 +166,7 @@ KERNEL_API
 KSTATUS
 HlCreateInterruptController (
     ULONG ParentGsi,
+    ULONG ParentVector,
     ULONG LineCount,
     PINTERRUPT_CONTROLLER_DESCRIPTION Registration,
     PINTERRUPT_CONTROLLER_INFORMATION ResultingInformation
@@ -183,6 +184,9 @@ Arguments:
 
     ParentGsi - Supplies the global system interrupt number of the interrupt
         controller line this controller wires up to.
+
+    ParentVector - Supplies the vector of the interrupt that this interrupt
+        controller wires up to.
 
     LineCount - Supplies the number of lines this interrupt controller contains.
 
@@ -203,13 +207,16 @@ Return Value:
     PINTERRUPT_CONTROLLER Controller;
     ULONG Gsi;
     INTERRUPT_LINES_DESCRIPTION Lines;
+    PINTERRUPT_CONTROLLER OutputController;
     INTERRUPT_LINE OutputLine;
+    RUNLEVEL RunLevel;
     KSTATUS Status;
-    BOOL WasEnabled;
 
     if ((LineCount == 0) || (Registration->ProcessorCount != 0)) {
         return STATUS_INVALID_PARAMETER;
     }
+
+    HlpInterruptAcquireLock();
 
     //
     // Find the controller this controller is hooked up to by converting its
@@ -220,10 +227,30 @@ Return Value:
     OutputLine.Gsi = ParentGsi;
     Status = HlpInterruptConvertLineToControllerSpecified(&OutputLine);
     if (!KSUCCESS(Status)) {
-        return Status;
+        goto CreateInterruptControllerEnd;
     }
 
-    Status = HlpInterruptRegisterHardware(Registration, &Controller);
+    //
+    // If this controller wires to a real interrupt controller, then the
+    // run-level of all these secondary interrupts is related to the vector
+    // the source interrupt comes in on. If it's wired to a secondary
+    // interrupt controller, then the run-level of these interrupts is the same
+    // as its parent.
+    //
+
+    OutputController = HlpInterruptGetControllerByIdentifier(
+                                                        OutputLine.Controller);
+
+    ASSERT(OutputController != NULL);
+
+    if (OutputController->RunLevel == MaxRunLevel) {
+        RunLevel = VECTOR_TO_RUN_LEVEL(ParentVector);
+
+    } else {
+        RunLevel = OutputController->RunLevel;
+    }
+
+    Status = HlpInterruptRegisterHardware(Registration, RunLevel, &Controller);
     if (!KSUCCESS(Status)) {
         goto CreateInterruptControllerEnd;
     }
@@ -234,18 +261,13 @@ Return Value:
 
     Status = STATUS_SUCCESS;
     Gsi = 0;
-    WasEnabled = HlpInterruptAcquireLock();
     if (HlNextDynamicGsi + LineCount > DYNAMIC_GSI_LIMIT) {
         Status = STATUS_RESOURCE_IN_USE;
+        goto CreateInterruptControllerEnd;
 
     } else {
         Gsi = HlNextDynamicGsi;
         HlNextDynamicGsi += LineCount;
-    }
-
-    HlpInterruptReleaseLock(WasEnabled);
-    if (!KSUCCESS(Status)) {
-        goto CreateInterruptControllerEnd;
     }
 
     //
@@ -285,6 +307,7 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 CreateInterruptControllerEnd:
+    HlpInterruptReleaseLock();
     return Status;
 }
 
@@ -314,7 +337,6 @@ Return Value:
 {
 
     UINTN Count;
-    BOOL Enabled;
     UINTN Index;
 
     //
@@ -322,7 +344,7 @@ Return Value:
     // used by other cores servicing interrupts, so be careful.
     //
 
-    Enabled = HlpInterruptAcquireLock();
+    HlpInterruptAcquireLock();
     Count = HlInterruptControllerCount;
     for (Index = 0; Index < Count; Index += 1) {
 
@@ -340,7 +362,7 @@ Return Value:
         }
     }
 
-    HlpInterruptReleaseLock(Enabled);
+    HlpInterruptReleaseLock();
 
     ASSERT(Index != Count);
 
@@ -387,14 +409,13 @@ Return Value:
 {
 
     PINTERRUPT_CONTROLLER Controller;
-    BOOL Enabled;
     PINTERRUPT_LINES Lines;
     KSTATUS Status;
 
     Status = STATUS_NOT_FOUND;
     Information->StartingGsi = INTERRUPT_LINES_GSI_NONE;
     Information->LineCount = 0;
-    Enabled = HlpInterruptAcquireLock();
+    HlpInterruptAcquireLock();
     Controller = HlpInterruptGetControllerByIdentifier(Identifier);
     if (Controller != NULL) {
         Status = STATUS_SUCCESS;
@@ -409,7 +430,7 @@ Return Value:
         }
     }
 
-    HlpInterruptReleaseLock(Enabled);
+    HlpInterruptReleaseLock();
     return Status;
 }
 
@@ -446,25 +467,15 @@ Return Value:
     PINTERRUPT_CONTROLLER Controller;
     INTERRUPT_STATUS InterruptStatus;
     ULONG MagicCandy;
+    PPROCESSOR_BLOCK Processor;
     ULONG Vector;
 
     Controller = Context;
     InterruptStatus = InterruptStatusClaimed;
+    Processor = KeGetCurrentProcessorBlock();
     Cause = HlpInterruptAcknowledge(&Controller, &Vector, &MagicCandy);
     if (Cause == InterruptCauseLineFired) {
-
-        //
-        // Dispatch a new interrupt to the system.
-        //
-
-        RtlDebugPrint("TODO: Begin new interrupt %x %x\n", Vector, MagicCandy);
-
-        //
-        // Complete the inner interrupt.
-        //
-
-        Controller->FunctionTable.EndOfInterrupt(Controller->PrivateContext,
-                                                 MagicCandy);
+        HlpRunIsr(NULL, Processor, Vector);
 
     } else if (Cause != InterruptCauseSpuriousInterrupt) {
         InterruptStatus = InterruptStatusNotClaimed;
@@ -476,7 +487,6 @@ Return Value:
 PKINTERRUPT
 HlCreateInterrupt (
     ULONG Vector,
-    RUNLEVEL RunLevel,
     PINTERRUPT_SERVICE_ROUTINE ServiceRoutine,
     PVOID Context
     )
@@ -490,8 +500,6 @@ Routine Description:
 Arguments:
 
     Vector - Supplies the vector that the interrupt will come in on.
-
-    RunLevel - Supplies the run level that the interrupt will come in on.
 
     ServiceRoutine - Supplies a pointer to the function to call when this
         interrupt comes in.
@@ -531,7 +539,6 @@ Return Value:
 
     RtlZeroMemory(Interrupt, sizeof(KINTERRUPT));
     Interrupt->Vector = Vector;
-    Interrupt->RunLevel = RunLevel;
     Interrupt->ServiceRoutine = ServiceRoutine;
     Interrupt->Context = Context;
     Status = STATUS_SUCCESS;
@@ -606,7 +613,6 @@ Return Value:
 {
 
     ULONG ArrayIndex;
-    BOOL Enabled;
     PKINTERRUPT *InterruptTable;
     PPROCESSOR_BLOCK ProcessorBlock;
 
@@ -616,7 +622,7 @@ Return Value:
     //
 
     ArrayIndex = Interrupt->Vector - HlFirstConfigurableVector;
-    Enabled = HlpInterruptAcquireLock();
+    HlpInterruptAcquireLock();
     ProcessorBlock = KeGetCurrentProcessorBlock();
     InterruptTable = (PKINTERRUPT *)ProcessorBlock->InterruptTable;
     Interrupt->NextInterrupt = InterruptTable[ArrayIndex];
@@ -633,7 +639,7 @@ Return Value:
     //
 
     InterruptTable[ArrayIndex] = Interrupt;
-    HlpInterruptReleaseLock(Enabled);
+    HlpInterruptReleaseLock();
     return STATUS_SUCCESS;
 }
 
@@ -663,7 +669,6 @@ Return Value:
 {
 
     ULONG ArrayIndex;
-    BOOL Enabled;
     PKINTERRUPT *InterruptTable;
     PKINTERRUPT Previous;
     ULONG Processor;
@@ -679,7 +684,7 @@ Return Value:
     //
 
     ArrayIndex = Interrupt->Vector - HlFirstConfigurableVector;
-    Enabled = HlpInterruptAcquireLock();
+    HlpInterruptAcquireLock();
     ProcessorBlock = KeGetCurrentProcessorBlock();
     InterruptTable = (PKINTERRUPT *)ProcessorBlock->InterruptTable;
 
@@ -695,7 +700,7 @@ Return Value:
     }
 
     if (Search == NULL) {
-        HlpInterruptReleaseLock(Enabled);
+        HlpInterruptReleaseLock();
         KeCrashSystem(CRASH_HARDWARE_LAYER_FAILURE,
                       HL_CRASH_INVALID_INTERRUPT_DISCONNECT,
                       (UINTN)Interrupt,
@@ -714,7 +719,7 @@ Return Value:
         InterruptTable[ArrayIndex] = Interrupt->NextInterrupt;
     }
 
-    HlpInterruptReleaseLock(Enabled);
+    HlpInterruptReleaseLock();
 
     //
     // The current runlevel had better be at or below dispatch otherwise
@@ -799,7 +804,6 @@ Return Value:
 {
 
     INTERRUPT_LINE Line;
-    RUNLEVEL OldRunLevel;
     INTERRUPT_LINE OutputLine;
     KSTATUS Status;
     PROCESSOR_SET Target;
@@ -813,7 +817,7 @@ Return Value:
     LineStateFlags |= INTERRUPT_LINE_STATE_FLAG_ENABLED |
                       INTERRUPT_LINE_STATE_FLAG_LOWEST_PRIORITY;
 
-    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    HlpInterruptAcquireLock();
     Status = HlpInterruptSetLineState(&Line,
                                       TriggerMode,
                                       Polarity,
@@ -822,7 +826,7 @@ Return Value:
                                       &OutputLine,
                                       LineStateFlags);
 
-    KeLowerRunLevel(OldRunLevel);
+    HlpInterruptReleaseLock();
     return Status;
 }
 
@@ -852,11 +856,10 @@ Return Value:
 {
 
     ULONG Flags;
-    RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     Flags = 0;
-    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    HlpInterruptAcquireLock();
     Status = HlpInterruptSetLineState(&(Interrupt->Line),
                                       InterruptModeUnknown,
                                       InterruptActiveLevelUnknown,
@@ -865,7 +868,7 @@ Return Value:
                                       NULL,
                                       Flags);
 
-    KeLowerRunLevel(OldRunLevel);
+    HlpInterruptReleaseLock();
 
     //
     // Disconnecting shouldn't fail.
@@ -1014,7 +1017,11 @@ Return Value:
     //
 
     if (KeGetCurrentProcessorNumber() == 0) {
-        KeInitializeSpinLock(&HlInterruptControllerLock);
+        HlInterruptLock = KeCreateQueuedLock();
+        if (HlInterruptLock == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeInterruptsEnd;
+        }
 
         //
         // Perform architecture-specific initialization.
@@ -1086,6 +1093,7 @@ InitializeInterruptsEnd:
 KSTATUS
 HlpInterruptRegisterHardware (
     PINTERRUPT_CONTROLLER_DESCRIPTION ControllerDescription,
+    RUNLEVEL RunLevel,
     PINTERRUPT_CONTROLLER *NewController
     )
 
@@ -1101,6 +1109,10 @@ Arguments:
     ControllerDescription - Supplies a pointer describing the new interrupt
         controller.
 
+    RunLevel - Supplies the runlevel that all interrupts from this controller
+        come in on. Set to MaxRunLevel if this interrupt controller is wired
+        directly to the processor.
+
     NewController - Supplies an optional pointer where a pointer to the
         newly created interrupt controller will be returned on success.
 
@@ -1113,7 +1125,6 @@ Return Value:
 {
 
     PINTERRUPT_CONTROLLER Controller;
-    BOOL Enabled;
     KSTATUS Status;
 
     Controller = NULL;
@@ -1183,6 +1194,7 @@ Return Value:
     }
 
     RtlZeroMemory(Controller, sizeof(INTERRUPT_CONTROLLER));
+    Controller->RunLevel = RunLevel;
     INITIALIZE_LIST_HEAD(&(Controller->LinesHead));
     INITIALIZE_LIST_HEAD(&(Controller->OutputLinesHead));
 
@@ -1201,11 +1213,13 @@ Return Value:
     Controller->Flags = 0;
 
     //
-    // Insert the controller on the list.
+    // Insert the controller on the array. Synchronization here comes from the
+    // fact that 1) during early init everything is single threaded and
+    // 2) later calls coming from create interrupt controller are synchronized
+    // with the interrupt lock.
     //
 
     Status = STATUS_SUCCESS;
-    Enabled = HlpInterruptAcquireLock();
     if (HlInterruptControllerCount < MAX_INTERRUPT_CONTROLLERS) {
         HlInterruptControllers[HlInterruptControllerCount] = Controller;
         HlInterruptControllerCount += 1;
@@ -1214,7 +1228,6 @@ Return Value:
         Status = STATUS_BUFFER_FULL;
     }
 
-    HlpInterruptReleaseLock(Enabled);
     if (NewController != NULL) {
         *NewController = Controller;
     }
@@ -1448,11 +1461,13 @@ Return Value:
     // Create the interrupt.
     //
 
-    Interrupt = HlCreateInterrupt(Vector, RunLevel, ServiceRoutine, Context);
+    Interrupt = HlCreateInterrupt(Vector, ServiceRoutine, Context);
     if (Interrupt == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateAndConnectInternalInterruptEnd;
     }
+
+    Interrupt->RunLevel = RunLevel;
 
     //
     // Connect the interrupt, making it live.
@@ -1528,7 +1543,6 @@ Return Value:
     INTERRUPT_LINE_INTERNAL_STATE OldState;
     INTERRUPT_LINE SourceLine;
     KSTATUS Status;
-    BOOL WasEnabled;
 
     Controller = NULL;
     LineOffset = 0;
@@ -1612,13 +1626,11 @@ Return Value:
             Lines->State[LineOffset].PublicState.Flags &=
                                             ~INTERRUPT_LINE_STATE_FLAG_ENABLED;
 
-            WasEnabled = HlpInterruptAcquireLock();
             Status = Controller->FunctionTable.SetLineState(
                                       Controller->PrivateContext,
                                       &SourceLine,
                                       &(Lines->State[LineOffset].PublicState));
 
-            HlpInterruptReleaseLock(WasEnabled);
             if (!KSUCCESS(Status)) {
                 goto InterruptSetLineStateEnd;
             }
@@ -1629,6 +1641,24 @@ Return Value:
             ModifiedState = FALSE;
             goto InterruptSetLineStateEnd;
         }
+
+        //
+        // If this is a primary interrupt controller (like the APIC or the
+        // GIC), then the run-level is a function of the vector. If this is a
+        // secondary interrupt controller, then this interrupt comes in at the
+        // same run-level as its parent.
+        //
+
+        if (Controller->RunLevel == MaxRunLevel) {
+            Interrupt->RunLevel = VECTOR_TO_RUN_LEVEL(Interrupt->Vector);
+
+        } else {
+            Interrupt->RunLevel = Controller->RunLevel;
+        }
+
+        Interrupt->Mode = Mode;
+        Interrupt->LastTimestamp = 0;
+        Interrupt->InterruptCount = 0;
 
         //
         // This is an enable; adjust the reference count.
@@ -1658,7 +1688,7 @@ Return Value:
         }
 
         //
-        // Program the line.
+        // Determine the line configuration.
         //
 
         Lines->State[LineOffset].PublicState.Flags = Flags;
@@ -1708,13 +1738,11 @@ Return Value:
         // Program the line state.
         //
 
-        WasEnabled = HlpInterruptAcquireLock();
         Status = Controller->FunctionTable.SetLineState(
                                       Controller->PrivateContext,
                                       &SourceLine,
                                       &(Lines->State[LineOffset].PublicState));
 
-        HlpInterruptReleaseLock(WasEnabled);
         if (!KSUCCESS(Status)) {
             goto InterruptSetLineStateEnd;
         }
@@ -1983,7 +2011,7 @@ InterruptInitializeLocalUnitEnd:
     return Status;
 }
 
-BOOL
+VOID
 HlpInterruptAcquireLock (
     VOID
     )
@@ -2000,24 +2028,21 @@ Arguments:
 
 Return Value:
 
-    Returns a boolean that must be passed in to the release lock function.
-    Internally it represents whether interrupts were enabled when this routine
-    was called.
+    None.
 
 --*/
 
 {
 
-    BOOL Enabled;
+    ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    Enabled = ArDisableInterrupts();
-    KeAcquireSpinLock(&HlInterruptControllerLock);
-    return Enabled;
+    KeAcquireQueuedLock(HlInterruptLock);
+    return;
 }
 
 VOID
 HlpInterruptReleaseLock (
-    BOOL Enabled
+    VOID
     )
 
 /*++
@@ -2028,8 +2053,7 @@ Routine Description:
 
 Arguments:
 
-    Enabled - Supplies the boolean returned from the acquire routine,
-        representing whether or not interrupts were previously enabled.
+    None.
 
 Return Value:
 
@@ -2039,11 +2063,7 @@ Return Value:
 
 {
 
-    KeReleaseSpinLock(&HlInterruptControllerLock);
-    if (Enabled != FALSE) {
-        ArEnableInterrupts();
-    }
-
+    KeReleaseQueuedLock(HlInterruptLock);
     return;
 }
 
@@ -2316,4 +2336,3 @@ Return Value:
 
     return Controller->PriorityCount - (MaxRunLevel - RunLevel);
 }
-

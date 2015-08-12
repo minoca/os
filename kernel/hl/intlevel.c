@@ -91,14 +91,12 @@ Return Value:
 {
 
     INTERRUPT_CAUSE Cause;
-    PVOID Context;
     PINTERRUPT_CONTROLLER Controller;
     PINTERRUPT_FAST_END_OF_INTERRUPT FastEndOfInterrupt;
-    PKINTERRUPT Interrupt;
     RUNLEVEL InterruptRunLevel;
-    PKINTERRUPT *InterruptTable;
     ULONG MagicCandy;
     RUNLEVEL OldRunLevel;
+    PPENDING_INTERRUPT PendingInterrupt;
     ULONG PendingInterruptCount;
     PPROCESSOR_BLOCK ProcessorBlock;
     PKTHREAD Thread;
@@ -106,7 +104,7 @@ Return Value:
     ASSERT(ArAreInterruptsEnabled() == FALSE);
 
     ProcessorBlock = KeGetCurrentProcessorBlock();
-    Thread =  ProcessorBlock->RunningThread;
+    Thread = ProcessorBlock->RunningThread;
     Controller = HlpInterruptGetCurrentProcessorController();
 
     //
@@ -133,13 +131,12 @@ Return Value:
 
     if (ProcessorBlock->RunLevel >= InterruptRunLevel) {
         PendingInterruptCount = ProcessorBlock->PendingInterruptCount;
-        ProcessorBlock->PendingInterruptVectors[PendingInterruptCount] = Vector;
-        ProcessorBlock->PendingInterruptMagicCandy[PendingInterruptCount] =
-                                                                    MagicCandy;
+        PendingInterrupt =
+                   &(ProcessorBlock->PendingInterrupts[PendingInterruptCount]);
 
-        ProcessorBlock->PendingInterruptController[PendingInterruptCount] =
-                                                                    Controller;
-
+        PendingInterrupt->Vector = Vector;
+        PendingInterrupt->MagicCandy = MagicCandy;
+        PendingInterrupt->InterruptController = Controller;
         ProcessorBlock->PendingInterruptCount += 1;
         goto DispatchInterruptEnd;
     }
@@ -163,32 +160,7 @@ Return Value:
         ArEnableInterrupts();
     }
 
-    //
-    // Run all ISRs associated with this interrupt.
-    //
-
-    ASSERT(Vector >= HlFirstConfigurableVector);
-
-    InterruptTable = (PKINTERRUPT *)ProcessorBlock->InterruptTable;
-    Interrupt = InterruptTable[Vector - HlFirstConfigurableVector];
-    if (Interrupt == NULL) {
-        RtlDebugPrint("Unexpected Interrupt on vector 0x%x, processor %d\n",
-                      Vector,
-                      ProcessorBlock->ProcessorNumber);
-
-        ASSERT(FALSE);
-
-    } else {
-        while (Interrupt != NULL) {
-            Context = Interrupt->Context;
-            if (Context == INTERRUPT_CONTEXT_TRAP_FRAME) {
-                Context = TrapFrame;
-            }
-
-            Interrupt->ServiceRoutine(Context);
-            Interrupt = Interrupt->NextInterrupt;
-        }
-    }
+    HlpRunIsr(TrapFrame, ProcessorBlock, Vector);
 
     //
     // Disable interrupts at the processor core again to restore the state to
@@ -222,7 +194,9 @@ Return Value:
     // Check for any pending signals, the equivalent of a user mode interrupt.
     //
 
-    if ((OldRunLevel == RunLevelLow) && (Thread != NULL)) {
+    if ((OldRunLevel == RunLevelLow) &&
+        (ArIsTrapFrameFromPrivilegedMode(TrapFrame) == FALSE)) {
+
         ArEnableInterrupts();
         PsDispatchPendingSignals(Thread, TrapFrame);
         ArDisableInterrupts();
@@ -312,6 +286,122 @@ Return Value:
     return;
 }
 
+VOID
+HlpRunIsr (
+    PTRAP_FRAME TrapFrame,
+    PPROCESSOR_BLOCK Processor,
+    ULONG Vector
+    )
+
+/*++
+
+Routine Description:
+
+    This routine runs the interrupt services routines for a given interrupt
+    vector.
+
+Arguments:
+
+    TrapFrame - Supplies an optional pointer to the trap frame.
+
+    Processor - Supplies a pointer to the current processor block.
+
+    Vector - Supplies the vector that fired.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PVOID Context;
+    PKINTERRUPT Interrupt;
+    PKINTERRUPT *InterruptTable;
+    ULONGLONG LastTimestamp;
+    ULONGLONG Seconds;
+    INTERRUPT_STATUS Status;
+    ULONGLONG TimeCounter;
+
+    //
+    // Run all ISRs associated with this interrupt.
+    //
+
+    ASSERT(Vector >= HlFirstConfigurableVector);
+
+    InterruptTable = (PKINTERRUPT *)(Processor->InterruptTable);
+    Interrupt = InterruptTable[Vector - HlFirstConfigurableVector];
+    if (Interrupt == NULL) {
+        RtlDebugPrint("Unexpected Interrupt on vector 0x%x, processor %d.\n",
+                      Vector,
+                      Processor->ProcessorNumber);
+
+        ASSERT(FALSE);
+
+    } else {
+        while (Interrupt != NULL) {
+            Context = Interrupt->Context;
+            if (Context == INTERRUPT_CONTEXT_TRAP_FRAME) {
+                Context = TrapFrame;
+            }
+
+            ASSERT(Interrupt->RunLevel == Processor->RunLevel);
+
+            //
+            // Keep track of how many times this ISR has been called (not
+            // worrying too much about increment races on other cores). Every
+            // so often, take a time counter timestamp. If too many interrupts
+            // have happened too close together, print out a storm warning.
+            //
+
+            Interrupt->InterruptCount += 1;
+            if (((Interrupt->InterruptCount &
+                  INTERRUPT_STORM_COUNT_MASK) == 0) &&
+                (Interrupt->RunLevel <= RunLevelClock)) {
+
+                LastTimestamp = Interrupt->LastTimestamp;
+                TimeCounter = KeGetRecentTimeCounter();
+                Seconds = TimeCounter - LastTimestamp /
+                          HlQueryTimeCounterFrequency();
+
+                if ((LastTimestamp != 0) &&
+                    (Interrupt->LastTimestamp == LastTimestamp) &&
+                    (Seconds < INTERRUPT_STORM_DELTA_SECONDS)) {
+
+                    RtlDebugPrint("ISR: Possible storm on vector 0x%x, "
+                                  "KINTERRUPT %x\n",
+                                  Vector,
+                                  Interrupt);
+                }
+
+                Interrupt->LastTimestamp = TimeCounter;
+            }
+
+            //
+            // Run the ISR.
+            //
+
+            Status = Interrupt->ServiceRoutine(Context);
+
+            //
+            // If the interrupt is level triggered and someone claimed it, then
+            // there's no need to keep running ISRs.
+            //
+
+            if ((Status == InterruptStatusClaimed) &&
+                (Interrupt->Mode == InterruptModeLevel)) {
+
+                break;
+            }
+
+            Interrupt = Interrupt->NextInterrupt;
+        }
+    }
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -350,7 +440,7 @@ Return Value:
     ULONG HighestPendingVector;
     ULONG MagicCandy;
     ULONG PendingIndex;
-    PULONG PendingVectors;
+    PPENDING_INTERRUPT PendingInterrupts;
     PPROCESSOR_BLOCK ProcessorBlock;
 
     //
@@ -368,7 +458,8 @@ Return Value:
         goto LowerRunLevelEnd;
     }
 
-    PendingVectors = (PULONG)&(ProcessorBlock->PendingInterruptVectors);
+    PendingInterrupts =
+                      (PPENDING_INTERRUPT)&(ProcessorBlock->PendingInterrupts);
 
     //
     // Replay all interrupts greater than the run level being lowered to.
@@ -376,7 +467,7 @@ Return Value:
 
     while (ProcessorBlock->PendingInterruptCount != 0) {
         PendingIndex = ProcessorBlock->PendingInterruptCount - 1;
-        HighestPendingVector = PendingVectors[PendingIndex];
+        HighestPendingVector = PendingInterrupts[PendingIndex].Vector;
         HighestPendingRunLevel = VECTOR_TO_RUN_LEVEL(HighestPendingVector);
 
         //
@@ -392,8 +483,8 @@ Return Value:
         // Pop this off the queue and replay it.
         //
 
-        Controller = ProcessorBlock->PendingInterruptController[PendingIndex];
-        MagicCandy = ProcessorBlock->PendingInterruptMagicCandy[PendingIndex];
+        Controller = PendingInterrupts[PendingIndex].InterruptController;
+        MagicCandy = PendingInterrupts[PendingIndex].MagicCandy;
         ProcessorBlock->PendingInterruptCount = PendingIndex;
         ProcessorBlock->RunLevel = HighestPendingRunLevel;
         HlpInterruptReplay(Controller, HighestPendingVector, MagicCandy);
@@ -484,10 +575,7 @@ Return Value:
 
 {
 
-    PVOID Context;
     PINTERRUPT_FAST_END_OF_INTERRUPT FastEndOfInterrupt;
-    PKINTERRUPT Interrupt;
-    PKINTERRUPT *InterruptTable;
     PPROCESSOR_BLOCK ProcessorBlock;
 
     ASSERT(KeGetRunLevel() == VECTOR_TO_RUN_LEVEL(Vector));
@@ -505,32 +593,7 @@ Return Value:
         ArEnableInterrupts();
     }
 
-    //
-    // Run all ISRs associated with this interrupt.
-    //
-
-    ASSERT(Vector >= HlFirstConfigurableVector);
-
-    InterruptTable = (PKINTERRUPT *)ProcessorBlock->InterruptTable;
-    Interrupt = InterruptTable[Vector - HlFirstConfigurableVector];
-    if (Interrupt == NULL) {
-        RtlDebugPrint("Unexpected Interrupt on vector 0x%x, processor %d.\n",
-                      Vector,
-                      ProcessorBlock->ProcessorNumber);
-
-        ASSERT(FALSE);
-
-    } else {
-        while (Interrupt != NULL) {
-            Context = Interrupt->Context;
-            if (Context == INTERRUPT_CONTEXT_TRAP_FRAME) {
-                Context = NULL;
-            }
-
-            Interrupt->ServiceRoutine(Context);
-            Interrupt = Interrupt->NextInterrupt;
-        }
-    }
+    HlpRunIsr(NULL, ProcessorBlock, Vector);
 
     //
     // Disable interrupts again and send the EOI. The caller must deal with

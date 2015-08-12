@@ -24,7 +24,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/types.h>
+#include <minoca/status.h>
+#include <minoca/acpitabs.h>
+#include <minoca/hmod.h>
 #include "bcm2709.h"
 
 //
@@ -94,6 +97,13 @@ Environment:
 //
 
 #define BCM2709_INTERRUPT_GPU_LINE_COUNT 64
+
+//
+// Define the number of soft priorities implemented in the interrrupt
+// controller.
+//
+
+#define BCM2709_INTERRUPT_PRIORITY_COUNT 16
 
 //
 // --------------------------------------------------------------------- Macros
@@ -175,11 +185,11 @@ Members:
 
 --*/
 
-typedef struct _BCM2709_INTERRUPT_PRIORITY_LEVEL {
+typedef struct _BCM2709_INTERRUPT_MASK {
     ULONG IrqMaskBasic;
     ULONG IrqMask1;
     ULONG IrqMask2;
-} BCM2709_INTERRUPT_PRIORITY_LEVEL, *PBCM2709_INTERRUPT_PRIORITY_LEVEL;
+} BCM2709_INTERRUPT_MASK, *PBCM2709_INTERRUPT_MASK;
 
 /*++
 
@@ -192,13 +202,20 @@ Members:
 
     LinePriority - Stores the priority level for each interrupt line.
 
-    PriorityLevel - Stores an array of priority level information.
+    CurrentPriority - Stores the current priority level.
+
+    Masks - Stores an array of interrupt masks for each priority level.
+
+    EnabledMask - Stores the mask of interrupts enabled at any priority
+        level.
 
 --*/
 
 typedef struct _BCM2709_INTERRUPT_CONTROLLER {
-    RUNLEVEL LinePriority[Bcm2709InterruptLineCount];
-    BCM2709_INTERRUPT_PRIORITY_LEVEL PriorityLevel[MaxRunLevel];
+    UCHAR LinePriority[Bcm2709InterruptLineCount];
+    UCHAR CurrentPriority;
+    BCM2709_INTERRUPT_MASK Masks[BCM2709_INTERRUPT_PRIORITY_COUNT];
+    BCM2709_INTERRUPT_MASK EnabledMask;
 } BCM2709_INTERRUPT_CONTROLLER, *PBCM2709_INTERRUPT_CONTROLLER;
 
 //
@@ -365,9 +382,9 @@ Return Value:
         goto Bcm2709InterruptModuleEntryEnd;
     }
 
-    RtlZeroMemory(Context, sizeof(BCM2709_INTERRUPT_CONTROLLER));
+    Services->ZeroMemory(Context, sizeof(BCM2709_INTERRUPT_CONTROLLER));
     for (Index = 0; Index < Bcm2709InterruptLineCount; Index += 1) {
-        Context->LinePriority[Index] = MaxRunLevel;
+        Context->LinePriority[Index] = BCM2709_INTERRUPT_PRIORITY_COUNT;
     }
 
     //
@@ -385,7 +402,7 @@ Return Value:
     NewController.Context = Context;
     NewController.Identifier = 0;
     NewController.ProcessorCount = 0;
-    NewController.PriorityCount = 0;
+    NewController.PriorityCount = BCM2709_INTERRUPT_PRIORITY_COUNT;
 
     //
     // Register the controller with the system.
@@ -436,23 +453,25 @@ Return Value:
 
 {
 
-    PVOID InterruptController;
+    PBCM2709_INTERRUPT_CONTROLLER Controller;
+    PVOID ControllerBase;
     PHYSICAL_ADDRESS PhysicalAddress;
     KSTATUS Status;
 
+    Controller = Context;
     if (HlBcm2709InterruptController == NULL) {
         PhysicalAddress = HlBcm2709Table->InterruptControllerPhysicalAddress;
-        InterruptController = HlBcm2709KernelServices->MapPhysicalAddress(
+        ControllerBase = HlBcm2709KernelServices->MapPhysicalAddress(
                                                           PhysicalAddress,
                                                           Bcm2709InterruptSize,
                                                           TRUE);
 
-        if (InterruptController == NULL) {
+        if (ControllerBase == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto Bcm2709InterruptInitializeIoUnitEnd;
         }
 
-        HlBcm2709InterruptController = InterruptController;
+        HlBcm2709InterruptController = ControllerBase;
         Status = HlpBcm2709InterruptDescribeLines();
         if (!KSUCCESS(Status)) {
             goto Bcm2709InterruptInitializeIoUnitEnd;
@@ -467,6 +486,10 @@ Return Value:
     WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqDisable2, 0xFFFFFFFF);
     WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqDisableBasic, 0xFFFFFFFF);
     WRITE_INTERRUPT_REGISTER(Bcm2709InterruptFiqControl, 0);
+    Controller->CurrentPriority = 0;
+    Controller->EnabledMask.IrqMaskBasic = 0;
+    Controller->EnabledMask.IrqMask1 = 0;
+    Controller->EnabledMask.IrqMask2 = 0;
     Status = STATUS_SUCCESS;
 
 Bcm2709InterruptInitializeIoUnitEnd:
@@ -514,8 +537,8 @@ Return Value:
     ULONG Base;
     PBCM2709_INTERRUPT_CONTROLLER Controller;
     ULONG Index;
-    RUNLEVEL Priority;
-    PBCM2709_INTERRUPT_PRIORITY_LEVEL PriorityLevel;
+    PBCM2709_INTERRUPT_MASK Mask;
+    UCHAR Priority;
     ULONG Status;
 
     //
@@ -555,14 +578,9 @@ Return Value:
             Index += 1;
         }
 
-        ASSERT(Index < BCM2709_INTERRUPT_IRQ_BASIC_GPU_COUNT);
-
         Index = HlBcm2709InterruptIrqBasicGpuTable[Index];
 
     } else {
-
-        ASSERT((Status & BCM2709_INTERRUPT_IRQ_BASIC_PENDING_MASK) != 0);
-
         if ((Status & BCM2709_INTERRUPT_IRQ_BASIC_PENDING_1) != 0) {
             Status = READ_INTERRUPT_REGISTER(Bcm2709InterruptIrqPending1);
             Base = 0;
@@ -582,35 +600,26 @@ Return Value:
     }
 
     //
-    // Disable all interrupts at this priority level.
+    // Write the masks for this priority level, which masks all interrupts
+    // configured at or below this level.
     //
 
     Controller = (PBCM2709_INTERRUPT_CONTROLLER)Context;
     Priority = Controller->LinePriority[Index];
+    Mask = &(Controller->Masks[Priority]);
+    WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqDisableBasic,
+                             Mask->IrqMaskBasic);
 
-    ASSERT(Priority != MaxRunLevel);
-
-    PriorityLevel = &(Controller->PriorityLevel[Priority]);
-    if (PriorityLevel->IrqMaskBasic != 0) {
-        WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqDisableBasic,
-                                 PriorityLevel->IrqMaskBasic);
-    }
-
-    if (PriorityLevel->IrqMask1 != 0) {
-        WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqDisable1,
-                                 PriorityLevel->IrqMask1);
-    }
-
-    if (PriorityLevel->IrqMask2 != 0) {
-        WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqDisable2,
-                                 PriorityLevel->IrqMask2);
-    }
+    WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqDisable1, Mask->IrqMask1);
+    WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqDisable2, Mask->IrqMask2);
 
     //
-    // Save the priority as the magic candy to re-enable these interrupts.
+    // Save the previous priority to know where to get back to when this
+    // interrupt completes.
     //
 
-    *MagicCandy = Priority;
+    *MagicCandy = Controller->CurrentPriority;
+    Controller->CurrentPriority = Priority;
 
     //
     // Return the interrupt line information.
@@ -654,31 +663,26 @@ Return Value:
 {
 
     PBCM2709_INTERRUPT_CONTROLLER Controller;
-    RUNLEVEL Priority;
-    PBCM2709_INTERRUPT_PRIORITY_LEVEL PriorityLevel;
+    ULONG EnableMask;
+    PBCM2709_INTERRUPT_MASK Mask;
+    UCHAR PreviousPriority;
 
     //
-    // Enable all interrupts at this priority level.
+    // Set the interrupt masks to correspond to what they were before this
+    // interrupt began and raised the priority. Use the enable mask to avoid
+    // simply enabling every interrupt ever.
     //
 
     Controller = (PBCM2709_INTERRUPT_CONTROLLER)Context;
-    Priority = MagicCandy;
-    PriorityLevel = &(Controller->PriorityLevel[Priority]);
-    if (PriorityLevel->IrqMaskBasic != 0) {
-        WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqEnableBasic,
-                                 PriorityLevel->IrqMaskBasic);
-    }
-
-    if (PriorityLevel->IrqMask1 != 0) {
-        WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqEnable1,
-                                 PriorityLevel->IrqMask1);
-    }
-
-    if (PriorityLevel->IrqMask2 != 0) {
-        WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqEnable2,
-                                 PriorityLevel->IrqMask2);
-    }
-
+    PreviousPriority = MagicCandy;
+    Mask = &(Controller->Masks[PreviousPriority]);
+    Controller->CurrentPriority = PreviousPriority;
+    EnableMask = ~Mask->IrqMaskBasic & Controller->EnabledMask.IrqMaskBasic;
+    WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqEnableBasic, EnableMask);
+    EnableMask = ~Mask->IrqMask1 & Controller->EnabledMask.IrqMask1;
+    WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqEnable1, EnableMask);
+    EnableMask = ~Mask->IrqMask2 & Controller->EnabledMask.IrqMask2;
+    WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqEnable2, EnableMask);
     return;
 }
 
@@ -759,8 +763,8 @@ Return Value:
 
     PBCM2709_INTERRUPT_CONTROLLER Controller;
     ULONG Index;
-    RUNLEVEL Priority;
-    BCM2709_INTERRUPT_PRIORITY_LEVEL PriorityLevel;
+    BCM2709_INTERRUPT_MASK Mask;
+    UCHAR Priority;
     BCM2709_INTERRUPT_REGISTER Register;
     ULONG RegisterValue;
     ULONG Shift;
@@ -782,7 +786,7 @@ Return Value:
         goto Bcm2709SetLineStateEnd;
     }
 
-    RtlZeroMemory(&PriorityLevel, sizeof(BCM2709_INTERRUPT_PRIORITY_LEVEL));
+    HlBcm2709KernelServices->ZeroMemory(&Mask, sizeof(BCM2709_INTERRUPT_MASK));
 
     //
     // If the line is a GPU line, then determine which of the two
@@ -818,10 +822,10 @@ Return Value:
         //
 
         if (Line->Line < 32) {
-            PriorityLevel.IrqMask1 |= RegisterValue;
+            Mask.IrqMask1 |= RegisterValue;
 
         } else {
-            PriorityLevel.IrqMask2 |= RegisterValue;
+            Mask.IrqMask2 |= RegisterValue;
         }
 
     //
@@ -832,9 +836,6 @@ Return Value:
     } else {
         Shift = Line->Line - BCM2709_INTERRUPT_GPU_LINE_COUNT;
         RegisterValue = 1 << Shift;
-
-        ASSERT((RegisterValue & BCM2709_INTERRUPT_IRQ_BASIC_MASK) != 0);
-
         if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) == 0) {
             Register = Bcm2709InterruptIrqDisableBasic;
 
@@ -846,14 +847,8 @@ Return Value:
         // Set the mask in the priority level.
         //
 
-        PriorityLevel.IrqMaskBasic |= RegisterValue;
+        Mask.IrqMaskBasic |= RegisterValue;
     }
-
-    //
-    // Determine which priority level this interrupt belongs to.
-    //
-
-    Priority = VECTOR_TO_RUN_LEVEL(State->Vector);
 
     //
     // If the interrupt is about to be enabled, make sure the priority mask is
@@ -862,22 +857,23 @@ Return Value:
 
     Controller = (PBCM2709_INTERRUPT_CONTROLLER)Context;
     if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) != 0) {
+        Controller->EnabledMask.IrqMaskBasic |= Mask.IrqMaskBasic;
+        Controller->EnabledMask.IrqMask1 |= Mask.IrqMask1;
+        Controller->EnabledMask.IrqMask2 |= Mask.IrqMask2;
+        Priority = State->HardwarePriority;
         Controller->LinePriority[Line->Line] = Priority;
-        for (Index = 0; Index <= Priority; Index += 1) {
-            if (PriorityLevel.IrqMaskBasic != 0) {
-                Controller->PriorityLevel[Index].IrqMaskBasic |=
-                                                    PriorityLevel.IrqMaskBasic;
-            }
 
-            if (PriorityLevel.IrqMask1 != 0) {
-                Controller->PriorityLevel[Index].IrqMask1 |=
-                                                        PriorityLevel.IrqMask1;
-            }
+        //
+        // This interrupt should be masked for any priority at or above it.
+        //
 
-            if (PriorityLevel.IrqMask2 != 0) {
-                Controller->PriorityLevel[Index].IrqMask2 |=
-                                                        PriorityLevel.IrqMask2;
-            }
+        for (Index = Priority;
+             Index < BCM2709_INTERRUPT_PRIORITY_COUNT;
+             Index += 1) {
+
+            Controller->Masks[Index].IrqMaskBasic |= Mask.IrqMaskBasic;
+            Controller->Masks[Index].IrqMask1 |= Mask.IrqMask1;
+            Controller->Masks[Index].IrqMask2 |= Mask.IrqMask2;
         }
     }
 
@@ -894,27 +890,22 @@ Return Value:
     //
 
     if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) == 0) {
+        Controller->EnabledMask.IrqMaskBasic &= ~Mask.IrqMaskBasic;
+        Controller->EnabledMask.IrqMask1 &= ~Mask.IrqMask1;
+        Controller->EnabledMask.IrqMask2 &= ~Mask.IrqMask2;
 
-        ASSERT(Controller->LinePriority[Line->Line] == Priority);
+        //
+        // Remove the mask for this interrupt at any priority.
+        //
 
-        for (Index = 0; Index <= Priority; Index += 1) {
-            if (PriorityLevel.IrqMaskBasic != 0) {
-                Controller->PriorityLevel[Index].IrqMaskBasic &=
-                                                   ~PriorityLevel.IrqMaskBasic;
-            }
+        for (Index = 0;
+             Index < BCM2709_INTERRUPT_PRIORITY_COUNT;
+             Index += 1) {
 
-            if (PriorityLevel.IrqMask1 != 0) {
-                Controller->PriorityLevel[Index].IrqMask1 &=
-                                                       ~PriorityLevel.IrqMask1;
-            }
-
-            if (PriorityLevel.IrqMask2 != 0) {
-                Controller->PriorityLevel[Index].IrqMask2 &=
-                                                       ~PriorityLevel.IrqMask2;
-            }
+            Controller->Masks[Index].IrqMaskBasic &= ~Mask.IrqMaskBasic;
+            Controller->Masks[Index].IrqMask1 &= ~Mask.IrqMask1;
+            Controller->Masks[Index].IrqMask2 &= ~Mask.IrqMask2;
         }
-
-        Controller->LinePriority[Line->Line] = 0;
     }
 
     Status = STATUS_SUCCESS;
@@ -998,9 +989,6 @@ Return Value:
     } else {
         Shift = Line->Line - BCM2709_INTERRUPT_GPU_LINE_COUNT;
         RegisterValue = 1 << Shift;
-
-        ASSERT((RegisterValue & BCM2709_INTERRUPT_IRQ_BASIC_MASK) != 0);
-
         if (Enable == FALSE) {
             Register = Bcm2709InterruptIrqDisableBasic;
 

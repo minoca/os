@@ -18,6 +18,18 @@ Author:
 --*/
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This macro translates between a vector and its associated run level. Note
+// that this association only holds for primary interrupts (that is, interrupts
+// connected to the main interrupt controller).
+//
+
+#define VECTOR_TO_RUN_LEVEL(_Vector) ((_Vector) >> 4)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -66,6 +78,14 @@ Author:
 //
 
 #define MAX_INTERRUPT_CONTROLLERS 12
+
+//
+// Every once in awhile, figure out how long it took a batch of interrupts to
+// fire. If they seem to be coming in too fast, report a storm.
+//
+
+#define INTERRUPT_STORM_COUNT_MASK 0x0001FFFF
+#define INTERRUPT_STORM_DELTA_SECONDS 6
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -172,6 +192,11 @@ Members:
     PriorityCount - Stores the number of hardware priority levels exist in the
         interrupt controller.
 
+    RunLevel - Stores the run level that all interrupts occur at for this
+        controller. This only applies to secondary interrupt controllers. For
+        primary controllers (like the APIC and the GIC), this is set to
+        MaxRunLevel, indicating an invalid value.
+
 --*/
 
 struct _INTERRUPT_CONTROLLER {
@@ -183,6 +208,7 @@ struct _INTERRUPT_CONTROLLER {
     LIST_ENTRY LinesHead;
     LIST_ENTRY OutputLinesHead;
     ULONG PriorityCount;
+    RUNLEVEL RunLevel;
 };
 
 //
@@ -218,9 +244,38 @@ extern ULONG HlMaxProcessors;
 // -------------------------------------------------------- Function Prototypes
 //
 
+VOID
+HlpRunIsr (
+    PTRAP_FRAME TrapFrame,
+    PPROCESSOR_BLOCK Processor,
+    ULONG Vector
+    );
+
+/*++
+
+Routine Description:
+
+    This routine runs the interrupt services routines for a given interrupt
+    vector.
+
+Arguments:
+
+    TrapFrame - Supplies an optional pointer to the trap frame.
+
+    Processor - Supplies a pointer to the current processor block.
+
+    Vector - Supplies the vector that fired.
+
+Return Value:
+
+    None.
+
+--*/
+
 KSTATUS
 HlpInterruptRegisterHardware (
     PINTERRUPT_CONTROLLER_DESCRIPTION ControllerDescription,
+    RUNLEVEL RunLevel,
     PINTERRUPT_CONTROLLER *NewController
     );
 
@@ -235,6 +290,10 @@ Arguments:
 
     ControllerDescription - Supplies a pointer describing the new interrupt
         controller.
+
+    RunLevel - Supplies the runlevel that all interrupts from this controller
+        come in on. Set to MaxRunLevel if this interrupt controller is wired
+        directly to the processor.
 
     NewController - Supplies an optional pointer where a pointer to the
         newly created interrupt controller will be returned on success.

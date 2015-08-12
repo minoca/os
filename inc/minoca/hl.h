@@ -28,12 +28,6 @@ Author:
 //
 
 //
-// This macro translates between a vector and its associated run level.
-//
-
-#define VECTOR_TO_RUN_LEVEL(_Vector) ((_Vector) >> 4)
-
-//
 // This macro converts a Binary Coded Decimal value into a binary.
 //
 
@@ -139,10 +133,18 @@ Members:
 
     Line - Stores the interrupt line this interrupt is connected to.
 
+    Mode - Stores the mode of the interrupt (edge or level).
+
     ServiceRoutine - Stores the Interrupt Service Routine associated with this
         interrupt.
 
     Context - Stores the context to be passed in when this ISR is executed.
+
+    InterruptCount - Stores the number of interrupts received. This variable is
+        not synchronized, so the count may not be exact.
+
+    LastTimestamp - Stores the time counter value the last time this interrupt
+        was sampled. This is used for interrupt storm detection.
 
 --*/
 
@@ -150,10 +152,13 @@ typedef struct _KINTERRUPT KINTERRUPT, *PKINTERRUPT;
 struct _KINTERRUPT {
     PKINTERRUPT NextInterrupt;
     INTERRUPT_LINE Line;
+    INTERRUPT_MODE Mode;
     ULONG Vector;
     RUNLEVEL RunLevel;
     PINTERRUPT_SERVICE_ROUTINE ServiceRoutine;
     PVOID Context;
+    UINTN InterruptCount;
+    ULONGLONG LastTimestamp;
 };
 
 /*++
@@ -405,6 +410,7 @@ KERNEL_API
 KSTATUS
 HlCreateInterruptController (
     ULONG ParentGsi,
+    ULONG ParentVector,
     ULONG LineCount,
     PINTERRUPT_CONTROLLER_DESCRIPTION Registration,
     PINTERRUPT_CONTROLLER_INFORMATION ResultingInformation
@@ -422,6 +428,9 @@ Arguments:
 
     ParentGsi - Supplies the global system interrupt number of the interrupt
         controller line this controller wires up to.
+
+    ParentVector - Supplies the vector of the interrupt that this interrupt
+        controller wires up to.
 
     LineCount - Supplies the number of lines this interrupt controller contains.
 
@@ -696,7 +705,6 @@ Return Value:
 PKINTERRUPT
 HlCreateInterrupt (
     ULONG Vector,
-    RUNLEVEL RunLevel,
     PINTERRUPT_SERVICE_ROUTINE ServiceRoutine,
     PVOID Context
     );
@@ -710,8 +718,6 @@ Routine Description:
 Arguments:
 
     Vector - Supplies the vector that the interrupt will come in on.
-
-    RunLevel - Supplies the run level that the interrupt will come in on.
 
     ServiceRoutine - Supplies a pointer to the function to call when this
         interrupt comes in.

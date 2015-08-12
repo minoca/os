@@ -566,7 +566,7 @@ Return Value:
 
     switch (Type) {
     case HardwareModuleInterruptController:
-        Status = HlpInterruptRegisterHardware(Description, NULL);
+        Status = HlpInterruptRegisterHardware(Description, MaxRunLevel, NULL);
         break;
 
     case HardwareModuleInterruptLines:
