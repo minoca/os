@@ -719,6 +719,9 @@ Return Value:
     case MemoryTypePageTables:
         return "Page Tables";
 
+    case MemoryTypeBootPageTables:
+        return "Boot Page Tables";
+
     case MemoryTypeMmStructures:
         return "MM Init Structures";
 

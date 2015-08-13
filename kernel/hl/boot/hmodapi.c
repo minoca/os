@@ -135,7 +135,8 @@ HARDWARE_MODULE_KERNEL_SERVICES HlHardwareModuleServices = {
     NULL,
     BopHlInitializeLock,
     BopHlAcquireLock,
-    BopHlReleaseLock
+    BopHlReleaseLock,
+    RtlCountTrailingZeros32
 };
 
 //

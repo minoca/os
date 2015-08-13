@@ -208,6 +208,7 @@ Author:
 //
 
 #define BCM2709_MAILBOX_TAG_GET_CLOCK_RATE     0x00030002
+#define BCM2709_MAILBOX_TAG_SET_CLOCK_RATE     0x00038002
 #define BCM2709_MAILBOX_TAG_GET_CLOCK_MAX_RATE 0x00030004
 
 //
@@ -510,7 +511,7 @@ typedef struct _BCM2709_MAILBOX_DEVICE_STATE {
 
 Structure Description:
 
-    This structure defines the clock rate message for the BCM2709 mailbox.
+    This structure defines the get clock rate message for the BCM2709 mailbox.
 
 Members:
 
@@ -522,11 +523,38 @@ Members:
 
 --*/
 
-typedef struct _BCM2709_MAILBOX_CLOCK_RATE {
+typedef struct _BCM2709_MAILBOX_GET_CLOCK_RATE {
     BCM2709_MAILBOX_TAG TagHeader;
     UINT32 ClockId;
     UINT32 Rate;
-} BCM2709_MAILBOX_CLOCK_RATE, *PBCM2709_MAILBOX_CLOCK_RATE;
+} BCM2709_MAILBOX_GET_CLOCK_RATE, *PBCM2709_MAILBOX_GET_CLOCK_RATE;
+
+/*++
+
+Structure Description:
+
+    This structure defines the set clock rate message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    ClockId - Stores the identification number for the clock.
+
+    Rate - Stores the frequency of the clock in Hz.
+
+    SkipSettingTurbo - Stores a boolean indicating whether or not to skip
+        setting other high performance ("turbo") settings when the ARM
+        frequency is set above the default.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_SET_CLOCK_RATE {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 ClockId;
+    UINT32 Rate;
+    UINT32 SkipSettingTurbo;
+} BCM2709_MAILBOX_SET_CLOCK_RATE, *PBCM2709_MAILBOX_SET_CLOCK_RATE;
 
 /*++
 

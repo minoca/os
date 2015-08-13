@@ -109,13 +109,6 @@ MmpPrepareToAddAccountingDescriptor (
     PMEMORY_ACCOUNTING Accountant
     );
 
-BOOL
-MmpIsAccountingRangeAllocated (
-    PMEMORY_ACCOUNTING Accountant,
-    PVOID Address,
-    UINTN SizeInBytes
-    );
-
 VOID
 MmpInitializeKernelVaIterator (
     PMEMORY_DESCRIPTOR_LIST DescriptorList,
@@ -1058,7 +1051,6 @@ Return Value:
 
     MEMORY_DESCRIPTOR FreeRange;
     ULONG PageSize;
-    KSTATUS Status;
 
     PageSize = MmPageSize();
 
@@ -1069,8 +1061,7 @@ Return Value:
                        (UINTN)KERNEL_VA_START,
                        MemoryTypeFree);
 
-    Status = MmpAddAccountingDescriptor(Accountant, &FreeRange);
-    return Status;
+    return MmpAddAccountingDescriptor(Accountant, &FreeRange);
 }
 
 VOID
@@ -1412,8 +1403,6 @@ Return Value:
         goto AddAccountingDescriptorEnd;
     }
 
-    Status = STATUS_SUCCESS;
-
 AddAccountingDescriptorEnd:
     return Status;
 }
@@ -1673,6 +1662,66 @@ FreeAccountingRangeEnd:
         KeSignalEvent(MmVirtualMemoryWarningEvent, SignalOptionPulse);
     }
 
+    return Status;
+}
+
+KSTATUS
+MmpRemoveAccountingRange (
+    PMEMORY_ACCOUNTING Accountant,
+    ULONGLONG StartAddress,
+    ULONGLONG EndAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine removes the given address range from the memory accountant.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure.
+
+    StartAddress - Supplies the starting address of the range to remove.
+
+    EndAddress - Supplies the first address beyond the region being removed.
+        That is, the non-inclusive end address of the range.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    ASSERT(StartAddress < EndAddress);
+
+    MmpLockAccountant(Accountant, TRUE);
+
+    //
+    // Removing the memory range will potentially require allocating new
+    // descriptors if it splits an existing descriptor. Make sure the
+    // accountant's MDL is prepared for this.
+    //
+
+    Status = MmpPrepareToAddAccountingDescriptor(Accountant);
+    if (!KSUCCESS(Status)) {
+        goto RemoveAccountingRangeEnd;
+    }
+
+    Status = MmMdRemoveRangeFromList(&(Accountant->Mdl),
+                                     StartAddress,
+                                     EndAddress);
+
+    if (!KSUCCESS(Status)) {
+        goto RemoveAccountingRangeEnd;
+    }
+
+RemoveAccountingRangeEnd:
+    MmpUnlockAccountant(Accountant, TRUE);
     return Status;
 }
 
@@ -2215,6 +2264,159 @@ Return Value:
     }
 
     return FALSE;
+}
+
+BOOL
+MmpIsAccountingRangeInUse (
+    PMEMORY_ACCOUNTING Accountant,
+    PVOID Address,
+    ULONG SizeInBytes
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not any portion of the supplied range
+    is in use.
+
+Arguments:
+
+    Accountant - Supplies a pointer to a memory accounting structure.
+
+    Address - Supplies the base address of the range.
+
+    SizeInBytes - Supplies the size of the range, in bytes.
+
+Return Value:
+
+    Returns TRUE if a portion of the range is in use or FALSE otherwise.
+
+--*/
+
+{
+
+    ULONGLONG EndAddress;
+    PMEMORY_DESCRIPTOR ExistingAllocation;
+    ULONGLONG ExistingEndAddress;
+    ULONG PageCount;
+    ULONG PageShift;
+
+    PageShift = MmPageShift();
+    PageCount = ALIGN_RANGE_UP(SizeInBytes, MmPageSize()) >> PageShift;
+    EndAddress = (UINTN)Address + (PageCount << PageShift);
+
+    //
+    // Look up the descriptor containing this range. If no descriptor is found
+    // it means that the range is not in use.
+    //
+
+    ExistingAllocation = MmMdLookupDescriptor(&(Accountant->Mdl),
+                                              (UINTN)Address,
+                                              (UINTN)Address + SizeInBytes);
+
+    if (ExistingAllocation == NULL) {
+        return FALSE;
+    }
+
+    //
+    // If a descriptor is found and it is not free, then the region is in use.
+    //
+
+    if (ExistingAllocation->Type != MemoryTypeFree) {
+        return TRUE;
+    }
+
+    //
+    // As free regions are coalesced, if the found descriptor does not contain
+    // the entire region, then consider it in use. The corner case is that the
+    // rest of the region is actually not described by the MDL (i.e. it is
+    // technically not in use), but don't consider that case in order to avoid
+    // splitting off a portion of a free descriptor to merge with undescribed
+    // space.
+    //
+
+    ExistingEndAddress = ExistingAllocation->BaseAddress +
+                         ExistingAllocation->Size;
+
+    if ((ExistingAllocation->BaseAddress > (ULONGLONG)(UINTN)Address) ||
+        (ExistingEndAddress < EndAddress)) {
+
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+BOOL
+MmpIsAccountingRangeAllocated (
+    PMEMORY_ACCOUNTING Accountant,
+    PVOID Address,
+    ULONG SizeInBytes
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not the supplied range is currently
+    allocated in the given memory accountant.
+
+Arguments:
+
+    Accountant - Supplies a pointer to a memory accounting structure.
+
+    Address - Supplies the base address of the range.
+
+    SizeInBytes - Supplies the size of the range, in bytes.
+
+Return Value:
+
+    Returns TRUE if the range is completely allocated for a single memory type
+    or FALSE otherwise.
+
+--*/
+
+{
+
+    ULONGLONG EndAddress;
+    PMEMORY_DESCRIPTOR ExistingAllocation;
+    ULONGLONG ExistingEndAddress;
+    ULONG PageCount;
+    ULONG PageShift;
+
+    PageShift = MmPageShift();
+    PageCount = ALIGN_RANGE_UP(SizeInBytes, MmPageSize()) >> PageShift;
+    EndAddress = (UINTN)Address + (PageCount << PageShift);
+
+    //
+    // Look up the descriptor containing this allocation.
+    //
+
+    ExistingAllocation = MmMdLookupDescriptor(&(Accountant->Mdl),
+                                              (UINTN)Address,
+                                              (UINTN)Address + SizeInBytes);
+
+    if ((ExistingAllocation == NULL) ||
+        (ExistingAllocation->Type == MemoryTypeFree)) {
+
+        return FALSE;
+    }
+
+    //
+    // Ensure that the descriptor covers the whole allocation.
+    //
+
+    ExistingEndAddress = ExistingAllocation->BaseAddress +
+                         ExistingAllocation->Size;
+
+    if ((ExistingEndAddress < EndAddress) ||
+        (ExistingAllocation->BaseAddress > (ULONGLONG)(UINTN)Address)) {
+
+        return FALSE;
+    }
+
+    return TRUE;
 }
 
 PVOID
@@ -2860,86 +3062,6 @@ PrepareToAddAccountingDescriptorEnd:
     return Status;
 }
 
-BOOL
-MmpIsAccountingRangeAllocated (
-    PMEMORY_ACCOUNTING Accountant,
-    PVOID Address,
-    UINTN SizeInBytes
-    )
-
-/*++
-
-Routine Description:
-
-    This routine determines whether or not the supplied range is currently
-    allocated in the given memory accountant.
-
-Arguments:
-
-    Accountant - Supplies a pointer to a memory accounting structure.
-
-    Address - Supplies the base address of the range.
-
-    SizeInBytes - Supplies the size of the range, in bytes.
-
-Return Value:
-
-    Returns TRUE if the range is currently allocated or FALSE otherwise.
-
---*/
-
-{
-
-    ULONGLONG EndAddress;
-    PMEMORY_DESCRIPTOR ExistingAllocation;
-    ULONGLONG ExistingEndAddress;
-    UINTN PageCount;
-    ULONG PageShift;
-    KSTATUS Status;
-
-    PageShift = MmPageShift();
-    PageCount = ALIGN_RANGE_UP(SizeInBytes, MmPageSize()) >> PageShift;
-    EndAddress = (UINTN)Address + (PageCount << PageShift);
-
-    //
-    // Look up the descriptor containing this allocation.
-    //
-
-    ExistingAllocation = MmMdLookupDescriptor(&(Accountant->Mdl),
-                                              (UINTN)Address,
-                                              (UINTN)Address + SizeInBytes);
-
-    if ((ExistingAllocation == NULL) ||
-        (ExistingAllocation->Type == MemoryTypeFree)) {
-
-        Status = STATUS_INVALID_PARAMETER;
-        goto MmpIsAccountingRangeAllocatedEnd;
-    }
-
-    //
-    // Ensure that the descriptor covers the allocation.
-    //
-
-    ExistingEndAddress = ExistingAllocation->BaseAddress +
-                         ExistingAllocation->Size;
-
-    if (ExistingEndAddress < EndAddress) {
-        Status = STATUS_MEMORY_CONFLICT;
-        goto MmpIsAccountingRangeAllocatedEnd;
-    }
-
-    ASSERT(ExistingAllocation->BaseAddress <= (ULONGLONG)(UINTN)Address);
-
-    Status = STATUS_SUCCESS;
-
-MmpIsAccountingRangeAllocatedEnd:
-    if (!KSUCCESS(Status)) {
-        return FALSE;
-    }
-
-    return TRUE;
-}
-
 VOID
 MmpInitializeKernelVaIterator (
     PMEMORY_DESCRIPTOR_LIST DescriptorList,
@@ -2977,10 +3099,6 @@ Return Value:
 
     MemoryContext = Context;
     if (IS_MEMORY_FREE_TYPE(Descriptor->Type)) {
-        return;
-    }
-
-    if (Descriptor->BaseAddress < (UINTN)KERNEL_VA_START) {
         return;
     }
 

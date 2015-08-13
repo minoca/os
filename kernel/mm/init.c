@@ -548,10 +548,15 @@ Return Value:
     }
 
     //
+    // Once the unmapping completes, the parameters structure will not be
+    // accessible. Set it to NULL to make sure it is no longer used.
+    //
+
+    Parameters = NULL;
+
+    //
     // Loop through the virtual descriptors, unmapping the region in every
-    // descriptor that describes kernel virtual address space. User mode
-    // virtual addresses will be unmapped in bulk. Don't send the invalidate
-    // IPIs now, an entire TLB flush will be done at the end.
+    // descriptor.
     //
 
     for (DescriptorIndex = 0;
@@ -564,12 +569,15 @@ Return Value:
 
         ASSERT((PageCount << PageShift) == CurrentDescriptor->Size);
 
+        //
+        // Releasing the accounting range for user mode regions will decrement
+        // the resident set counter, but it never accounted for these pages
+        // as the descriptors were created before the kernel process was
+        // present.
+        //
+
         if (VirtualAddress < KERNEL_VA_START) {
-
-            ASSERT((VirtualAddress + CurrentDescriptor->Size) <=
-                   KERNEL_VA_START);
-
-            continue;
+            MmpUpdateResidentSetCounter(PsGetKernelProcess(), PageCount);
         }
 
         Status = MmpFreeAccountingRange(NULL,
@@ -585,11 +593,24 @@ Return Value:
     }
 
     //
-    // Perform architecture specific work, including zeroing out all the user
-    // space page directory entries.
+    // Make sure all user mode descriptors are removed from the kernel virtual
+    // space.
     //
 
-    Status = MmpArchInitialize(Parameters, 3);
+    Status = MmpRemoveAccountingRange(&MmKernelVirtualSpace,
+                                      0,
+                                      (UINTN)KERNEL_VA_START);
+
+    if (!KSUCCESS(Status)) {
+        goto FreeBootMappingsEnd;
+    }
+
+    //
+    // Perform architecture specific work, including releasing boot page tables
+    // that are no longer in use.
+    //
+
+    Status = MmpArchInitialize(NULL, 3);
     if (!KSUCCESS(Status)) {
         goto FreeBootMappingsEnd;
     }

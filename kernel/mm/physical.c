@@ -107,6 +107,7 @@ Environment:
      ((_Type) == MemoryTypeLoaderPermanent) ||                  \
      ((_Type) == MemoryTypeFirmwareTemporary) ||                \
      ((_Type) == MemoryTypePageTables) ||                       \
+     ((_Type) == MemoryTypeBootPageTables) ||                   \
      ((_Type) == MemoryTypeMmStructures))
 
 //
@@ -2147,7 +2148,7 @@ Return Value:
     ULONGLONG SpanCount;
     ULONGLONG SpanPageCount;
     PVOID VirtualAddress;
-    BOOL VirtualAddressFree;
+    BOOL VirtualAddressInUse;
 
     ASSERT(PageAlignment != 0);
 
@@ -2348,12 +2349,12 @@ Return Value:
                     VirtualAddress = (PVOID)(UINTN)(Segment->StartAddress +
                                                     (Offset << PageShift));
 
-                    VirtualAddressFree = MmpIsAccountingRangeFree(
+                    VirtualAddressInUse = MmpIsAccountingRangeInUse(
                                                          &MmKernelVirtualSpace,
                                                          VirtualAddress,
                                                          1 << PageShift);
 
-                    if (VirtualAddressFree == FALSE) {
+                    if (VirtualAddressInUse != FALSE) {
                         ExitCheck = TRUE;
                     }
                 }

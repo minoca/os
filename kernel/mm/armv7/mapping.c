@@ -422,7 +422,7 @@ Return Value:
 
         if (FirstLevelTable[FirstIndex].Entry != 0) {
             PhysicalAddress =
-                     (ULONG)FirstLevelTable[FirstIndex].Entry << SLT_ALIGNMENT;
+                   (ULONG)(FirstLevelTable[FirstIndex].Entry << SLT_ALIGNMENT);
 
             if (RunSize != 0) {
                 if ((RunPhysicalAddress + RunSize) == PhysicalAddress) {
@@ -487,20 +487,37 @@ Return Value:
     ULONG CurrentPage;
     ULONG Flags;
     PHYSICAL_ADDRESS PhysicalAddress;
+    KSTATUS Status;
 
     PhysicalAddress = MmpAllocateIdentityMappablePhysicalPages(PageCount, 0);
 
     ASSERT(PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
     ASSERT(PhysicalAddress == (UINTN)PhysicalAddress);
 
+    //
+    // If the physical address will be identity mapped in the kernel VA range,
+    // then reserve it while it is in use.
+    //
+
     *Allocation = (PVOID)(UINTN)PhysicalAddress;
-    MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                            PageCount << PAGE_SHIFT,
-                            PAGE_SIZE,
-                            MemoryTypeReserved,
-                            AllocationStrategyFixedAddress,
-                            FALSE,
-                            Allocation);
+    if (*Allocation >= KERNEL_VA_START) {
+        Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
+                                         PageCount << PAGE_SHIFT,
+                                         PAGE_SIZE,
+                                         MemoryTypeReserved,
+                                         AllocationStrategyFixedAddress,
+                                         FALSE,
+                                         Allocation);
+
+        ASSERT(KSUCCESS(Status));
+
+    } else {
+
+        ASSERT(MmpIsAccountingRangeInUse(&MmKernelVirtualSpace,
+                                         *Allocation,
+                                         PAGE_SIZE) == FALSE);
+
+    }
 
     //
     // Map the pages received.
@@ -549,12 +566,22 @@ Return Value:
     UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                  UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
-    MmpFreeAccountingRange(PsGetKernelProcess(),
-                           &MmKernelVirtualSpace,
-                           Allocation,
-                           PageCount << PAGE_SHIFT,
-                           FALSE,
-                           UnmapFlags);
+    //
+    // If the allocation was in the kernel VA space, then free the accounting
+    // range. Otherwise just directly unmap it.
+    //
+
+    if (Allocation >= KERNEL_VA_START) {
+        MmpFreeAccountingRange(PsGetKernelProcess(),
+                               &MmKernelVirtualSpace,
+                               Allocation,
+                               PageCount << PAGE_SHIFT,
+                               FALSE,
+                               UnmapFlags);
+
+    } else {
+        MmpUnmapPages(Allocation, PageCount, UnmapFlags, NULL);
+    }
 
     return;
 }
@@ -1013,11 +1040,19 @@ Return Value:
 {
 
     PBLOCK_ALLOCATOR BlockAllocator;
+    ULONG FirstIndex;
+    volatile FIRST_LEVEL_TABLE *FirstLevelTable;
     ULONG Flags;
+    BOOL FreePageTable;
     ULONG MultiprocessorIdRegister;
-    PSECOND_LEVEL_TABLE SelfMapPageTable;
+    PHYSICAL_ADDRESS PhysicalAddress;
+    PHYSICAL_ADDRESS RunPhysicalAddress;
+    UINTN RunSize;
+    ULONG SecondIndex;
+    volatile SECOND_LEVEL_TABLE *SecondLevelTable;
+    ULONG SelfMapIndex;
+    volatile SECOND_LEVEL_TABLE *SelfMapPageTable;
     KSTATUS Status;
-    ULONG ZeroSize;
 
     //
     // Phase 0 runs on the boot processor before the debugger is online.
@@ -1112,24 +1147,102 @@ Return Value:
     } else if (Phase == 3) {
 
         //
-        // Zero out the usermode portion of the kernel's first level table,
-        // effectively unlinking any user-mode page tables created by the boot
-        // environment.
-        //
-        // N.B. The page tables mapped in the user mode portion of the first
-        //      level table do not need to be released. They were marked as
-        //      loader temporary memory and get released by other means.
+        // By now, all boot mappings should have been unmapped. Loop over the
+        // kernel page table's user mode space looking for entries. If there
+        // are non-zero entries on a page table, keep the first and second
+        // level mappings and the page table. If the page table is entirely
+        // clean, free it and destroy the first level entry.
         //
 
-        ZeroSize = FLT_INDEX(KERNEL_VA_START) * sizeof(FIRST_LEVEL_TABLE);
-        RtlZeroMemory(MmKernelFirstLevelTable, ZeroSize);
-        MmpCleanPageTableCacheRegion(MmKernelFirstLevelTable, ZeroSize);
-        ZeroSize = (FLT_INDEX(KERNEL_VA_START) >> 2) *
-                   sizeof(SECOND_LEVEL_TABLE);
+        RunSize = 0;
+        RunPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+        FirstLevelTable  = MmKernelFirstLevelTable;
+        for (FirstIndex = 0;
+             FirstIndex < FLT_INDEX(KERNEL_VA_START);
+             FirstIndex += 4) {
 
-        SelfMapPageTable = GET_PAGE_TABLE(MmPageTablesFirstIndex);
-        RtlZeroMemory(SelfMapPageTable, ZeroSize);
-        MmpCleanPageTableCacheRegion(SelfMapPageTable, ZeroSize);
+            if (FirstLevelTable[FirstIndex].Entry == 0) {
+
+                ASSERT(FirstLevelTable[FirstIndex].Format == FLT_UNMAPPED);
+
+                continue;
+            }
+
+            //
+            // A second level table is present, check to see if it is all zeros.
+            // Be sure to check all four second level tables that use the same
+            // physical page.
+            //
+
+            FreePageTable = TRUE;
+            SecondLevelTable = GET_PAGE_TABLE(FirstIndex);
+            for (SecondIndex = 0;
+                 SecondIndex < ((SLT_SIZE * 4) / sizeof(SECOND_LEVEL_TABLE));
+                 SecondIndex += 1) {
+
+                if (SecondLevelTable[SecondIndex].Entry != 0) {
+                    FreePageTable = FALSE;
+                    break;
+                }
+
+                ASSERT(SecondLevelTable[SecondIndex].Format == SLT_UNMAPPED);
+            }
+
+            //
+            // Move to the next set of first level entries if this page table
+            // is in use.
+            //
+
+            if (FreePageTable == FALSE) {
+                continue;
+            }
+
+            //
+            // Otherwise, update the first level entries, the self map, and
+            // free the page table.
+            //
+
+            PhysicalAddress =
+                   (ULONG)(FirstLevelTable[FirstIndex].Entry << SLT_ALIGNMENT);
+
+            RtlZeroMemory((PVOID)&(FirstLevelTable[FirstIndex]),
+                          sizeof(FIRST_LEVEL_TABLE) * 4);
+
+            MmpCleanPageTableCacheRegion((PVOID)&(FirstLevelTable[FirstIndex]),
+                                         sizeof(FIRST_LEVEL_TABLE) * 4);
+
+            SelfMapPageTable = (PSECOND_LEVEL_TABLE)((PVOID)FirstLevelTable +
+                                                     FLT_SIZE);
+
+            SelfMapIndex = FirstIndex >> 2;
+            RtlZeroMemory((PVOID)&(SelfMapPageTable[SelfMapIndex]),
+                          sizeof(SECOND_LEVEL_TABLE));
+
+            MmpCleanPageTableCacheLine(
+                                     (PVOID)&(SelfMapPageTable[SelfMapIndex]));
+
+            if (RunSize != 0) {
+                if ((RunPhysicalAddress + RunSize) == PhysicalAddress) {
+                    RunSize += PAGE_SIZE;
+
+                } else {
+                    MmFreePhysicalPages(RunPhysicalAddress,
+                                        RunSize >> PAGE_SHIFT);
+
+                    RunPhysicalAddress = PhysicalAddress;
+                    RunSize = PAGE_SIZE;
+                }
+
+            } else {
+                RunPhysicalAddress = PhysicalAddress;
+                RunSize = PAGE_SIZE;
+            }
+        }
+
+        if (RunSize != 0) {
+            MmFreePhysicalPages(RunPhysicalAddress, RunSize >> PAGE_SHIFT);
+        }
+
         ArSerializeExecution();
         Status = STATUS_SUCCESS;
 
@@ -1434,7 +1547,7 @@ Return Value:
 
         } else {
             SecondLevelTablePhysical =
-                          (FirstLevelTable[FirstIndex].Entry << SLT_ALIGNMENT);
+                   (ULONG)(FirstLevelTable[FirstIndex].Entry << SLT_ALIGNMENT);
         }
 
         ASSERT(SecondLevelTablePhysical != INVALID_PHYSICAL_ADDRESS);
@@ -2263,8 +2376,8 @@ Return Value:
         return INVALID_PHYSICAL_ADDRESS;
     }
 
-    PageTablePhysical = ((ULONG)FirstLevelTable[FirstIndex].Entry <<
-                        SLT_ALIGNMENT) & (~PAGE_MASK);
+    PageTablePhysical = (ULONG)(FirstLevelTable[FirstIndex].Entry <<
+                                SLT_ALIGNMENT) & (~PAGE_MASK);
 
     //
     // Use the processor's swap page for this.
@@ -2365,8 +2478,8 @@ Return Value:
         goto UnmapPageInOtherProcessEnd;
     }
 
-    PageTablePhysical = ((ULONG)FirstLevelTable[FirstIndex].Entry <<
-                        SLT_ALIGNMENT) & (~PAGE_MASK);
+    PageTablePhysical = (ULONG)(FirstLevelTable[FirstIndex].Entry <<
+                                SLT_ALIGNMENT) & (~PAGE_MASK);
 
     FirstIndex = ALIGN_RANGE_DOWN(FirstIndex, 4);
     SecondIndex = SLT_INDEX(VirtualAddress);
@@ -2509,8 +2622,8 @@ Return Value:
         MmpCreatePageTable(FirstLevelTable, VirtualAddress);
     }
 
-    PageTablePhysical = ((ULONG)FirstLevelTable[FirstIndex].Entry <<
-                        SLT_ALIGNMENT) & (~PAGE_MASK);
+    PageTablePhysical = (ULONG)(FirstLevelTable[FirstIndex].Entry <<
+                                SLT_ALIGNMENT) & (~PAGE_MASK);
 
     FirstIndex = ALIGN_RANGE_DOWN(FirstIndex, 4);
     SecondIndex = SLT_INDEX(VirtualAddress);
@@ -2914,7 +3027,7 @@ Return Value:
 
     Destination = DestinationPageDirectory;
     Source = SourcePageDirectory;
-    for (Index = 0; Index < FLT_INDEX(KERNEL_VA_START); Index += 1) {
+    for (Index = 0; Index < FLT_INDEX(KERNEL_VA_START); Index += 4) {
         if (Source[Index].Format != FLT_COARSE_PAGE_TABLE) {
             continue;
         }
@@ -2930,10 +3043,12 @@ Return Value:
 
             for (DeleteIndex = 0;
                  DeleteIndex < Index;
-                 DeleteIndex += 1) {
+                 DeleteIndex += 4) {
 
                 if (Source[DeleteIndex].Format == FLT_COARSE_PAGE_TABLE) {
-                    Physical = Destination[DeleteIndex].Entry << PAGE_SHIFT;
+                    Physical = (ULONG)(Destination[DeleteIndex].Entry <<
+                                       SLT_ALIGNMENT);
+
                     Destination[DeleteIndex].Entry = 0;
                     MmFreePhysicalPage(Physical);
                 }
@@ -2942,7 +3057,7 @@ Return Value:
             return STATUS_INSUFFICIENT_RESOURCES;
         }
 
-        Destination[Index].Entry = Physical >> PAGE_SHIFT;
+        Destination[Index].Entry = (ULONG)Physical >> SLT_ALIGNMENT;
     }
 
     return STATUS_SUCCESS;
@@ -3090,7 +3205,8 @@ Return Value:
             // left.
             //
 
-            PageTable = DestinationDirectory[FirstIndex].Entry << PAGE_SHIFT;
+            PageTable = (ULONG)(DestinationDirectory[FirstIndex].Entry <<
+                                SLT_ALIGNMENT);
 
             ASSERT(PageTable != 0);
 
@@ -3207,7 +3323,8 @@ Return Value:
         //
 
         } else {
-            PageTable = DestinationDirectory[FirstIndex].Entry << SLT_ALIGNMENT;
+            PageTable = (ULONG)(DestinationDirectory[FirstIndex].Entry <<
+                                SLT_ALIGNMENT);
 
             ASSERT(PageTable != INVALID_PHYSICAL_ADDRESS);
 
@@ -3412,7 +3529,9 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     if (FirstLevelTable[FirstIndex].Entry != 0) {
-        PageTablePhysical = FirstLevelTable[FirstIndex].Entry << PAGE_SHIFT;
+        PageTablePhysical = (ULONG)(FirstLevelTable[FirstIndex].Entry <<
+                                    SLT_ALIGNMENT);
+
         FirstLevelTable[FirstIndex].Entry = 0;
 
     } else {
@@ -3513,9 +3632,6 @@ Return Value:
             SelfMapPageTable = GET_PAGE_TABLE(MmPageTablesFirstIndex);
 
         } else {
-
-            ASSERT(FirstLevelTable != MmKernelFirstLevelTable);
-
             SelfMapPageTable =
                       (PSECOND_LEVEL_TABLE)((PVOID)FirstLevelTable + FLT_SIZE);
         }

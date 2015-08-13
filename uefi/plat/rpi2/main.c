@@ -34,13 +34,56 @@ Environment:
 
 #define FIRMWARE_IMAGE_NAME "rpi2fw.elf"
 
+#define RPI2_DEFAULT_ARM_FREQUENCY 900000000
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
 
+/*++
+
+Structure Description:
+
+    This structure stores the data necessary to query the BCM2709 video core
+    for SMBIOS related information.
+
+Members:
+
+    Header - Stores a header that defines the total size of the messages being
+        sent to and received from the mailbox.
+
+    ModelMessage - Stores a message indicating that the board's model number is
+        being queried. Contains the model number on return.
+
+    RevisionMessage - Stores a message indicating that the board's revision is
+        being queried. Contains the revision on return.
+
+    SerialMessage - Stores a messagin indicating that the board's serial number
+        is being queried. Contains the serial number on return.
+
+    ArmClockRate - Stores a message requesting the ARM core's clock rate.
+
+    ArmMaxClockRate - Stores a message requesting the ARM core's maximum clock
+        rate.
+
+    EndTag - Stores the tag to denote the end of the mailbox message.
+
+--*/
+
+typedef struct _EFI_BCM2709_SET_CLOCK_RATE {
+    BCM2709_MAILBOX_HEADER Header;
+    BCM2709_MAILBOX_SET_CLOCK_RATE ArmClockRate;
+    UINT32 EndTag;
+} EFI_BCM2709_SET_CLOCK_RATE, *PEFI_BCM2709_SET_CLOCK_RATE;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+EFI_STATUS
+EfipBcm2836ConfigureArmClock (
+    VOID
+    );
 
 //
 // -------------------------------------------------------------------- Globals
@@ -53,6 +96,31 @@ Environment:
 
 extern INT8 _end;
 extern INT8 __executable_start;
+
+//
+// Store a template to set the Raspberry Pi 2's ARM clock frequency.
+//
+
+EFI_BCM2709_SET_CLOCK_RATE EfiRpi2SetClockTemplate = {
+    {
+        sizeof(EFI_BCM2709_SET_CLOCK_RATE),
+        0
+    },
+
+    {
+        {
+            BCM2709_MAILBOX_TAG_SET_CLOCK_RATE,
+            sizeof(UINT32) * 3,
+            sizeof(UINT32) * 3
+        },
+
+        BCM2709_MAILBOX_CLOCK_ID_ARM,
+        RPI2_DEFAULT_ARM_FREQUENCY,
+        0
+    },
+
+    0
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -133,9 +201,27 @@ Return Value:
 
     if (Phase == 0) {
         Status = EfipBcm2709Initialize((VOID *)BCM2836_BASE);
+        if (EFI_ERROR(Status)) {
+            return Status;
+        }
+
+        Status = EfipBcm2836SmpInitialize(0);
+        if (EFI_ERROR(Status)) {
+            return Status;
+        }
 
     } else if (Phase == 1) {
+        Status = EfipBcm2836ConfigureArmClock();
+        if (EFI_ERROR(Status)) {
+            return Status;
+        }
+
         Status = EfipBcm2709UsbInitialize();
+        if (EFI_ERROR(Status)) {
+            return Status;
+        }
+
+        Status = EfipBcm2836SmpInitialize(1);
         if (EFI_ERROR(Status)) {
             return Status;
         }
@@ -193,4 +279,44 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+EFI_STATUS
+EfipBcm2836ConfigureArmClock (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initialized the ARM clock since the firmware initializes it to
+    600Mhz, rather than the 900Mhz max.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    EFI_BCM2709_SET_CLOCK_RATE SetClockRate;
+    EFI_STATUS Status;
+
+    EfiCopyMem(&SetClockRate,
+               &EfiRpi2SetClockTemplate,
+               sizeof(EFI_BCM2709_SET_CLOCK_RATE));
+
+    Status = EfipBcm2709MailboxSendCommand(
+                                        BCM2709_MAILBOX_PROPERTIES_CHANNEL,
+                                        &SetClockRate,
+                                        sizeof(EFI_BCM2709_SET_CLOCK_RATE),
+                                        TRUE);
+
+    return Status;
+}
 

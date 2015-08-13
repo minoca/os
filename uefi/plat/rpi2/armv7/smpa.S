@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2014 Minoca Corp. All Rights Reserved
+Copyright (c) 2015 Minoca Corp. All Rights Reserved
 
 Module Name:
 
@@ -9,11 +9,11 @@ Module Name:
 Abstract:
 
     This module implements assembly routines necessary for booting the
-    second core on the OMAP4.
+    application processors on the BCM2836.
 
 Author:
 
-    Evan Green 31-Mar-2014
+    Chris Stevens 19-Apr-2015
 
 Environment:
 
@@ -43,56 +43,13 @@ ASSEMBLY_FILE_HEADER
 ## .globl allows these labels to be visible to the linker.
 ##
 
-.globl EfipOmap4ProcessorStartup
-.globl EfipOmap4ParkingLoop
-.globl EfipOmap4ParkingLoopEnd
-
-##
-## UINT32
-## EfipOmap4SmcCommand (
-##     UINT32 Argument1,
-##     UINT32 Argument2,
-##     UINT32 Command
-##     )
-##
-
-/*++
-
-Routine Description:
-
-    This routine executes an SMC command up to secure mode. The OMAP4 defines
-    a software interface for non-secure software to request certain services
-    using the SMC command.
-
-Arguments:
-
-    Argument1 - Supplies the 32-bit value to put into R0. This is dependent on
-        which command is issued.
-
-    Argument2 - Supplies the 32-bit value to put into R1. This is also
-        dependent on the command issued.
-
-    Command - Supplies the SMC command number to issue.
-
-Return Value:
-
-    Returns the result as passed back from the SMC command.
-
---*/
-
-FUNCTION EfipOmap4SmcCommand
-    stmdb   sp!, {%r4-%r12, %lr}    @ Save registers.
-    mov     %r12, %r2               @ Move command into place.
-    dsb                             @ Data synchronization barrier.
-    smc     #0                      @ Execute the SMC instruction.
-    ldmia   sp!, {%r4-%r12, %lr}    @ Restore registers.
-    bx      %lr
-
-END_FUNCTION EfipOmap4SmcCommand
+.globl EfipBcm2836ProcessorStartup
+.globl EfipBcm2836ParkingLoop
+.globl EfipBcm2836ParkingLoopEnd
 
 ##
 ## VOID
-## EfipOmap4SendEvent (
+## EfipBcm2836SendEvent (
 ##     VOID
 ##     )
 ##
@@ -114,16 +71,16 @@ Return Value:
 
 --*/
 
-FUNCTION EfipOmap4SendEvent
+FUNCTION EfipBcm2836SendEvent
     dsb                             @ Data Synchronization Barrier.
     sev                             @ Send Event.
     bx      %lr                     @ Return.
 
-END_FUNCTION EfipOmap4SendEvent
+END_FUNCTION EfipBcm2836SendEvent
 
 ##
 ## VOID
-## EfipOmap4ProcessorStartup (
+## EfipBcm2836ProcessorStartup (
 ##     VOID
 ##     )
 ##
@@ -147,22 +104,35 @@ Return Value:
 --*/
 
 .arm
-EfipOmap4ProcessorStartup:
-    mov     %r3, #0                         @ Clear out R3.
-    ldr     %r2, =EfiOmap4ProcessorId       @ Get the processor ID address.
-    ldr     %r0, [%r2]                      @ Get the value.
-    ldr     %r2, =EfiOmap4ProcessorJumpAddress  @ Get the jump destination.
-    ldr     %r4, [%r2]                      @ Get the value.
-    str     %r3, [%r2]                      @ Clear the value.
+.align 4
+EfipBcm2836ProcessorStartup:
+    mov     %r3, #0
+    ldr     %r1, =EfiBcm2836ProcessorId     @ Get the processor ID address.
+    ldr     %r0, [%r1]                      @ Get the value.
+    str     %r3, [%r1]                      @ Zero the value.
+
+EfipBcm2836ProcessorStartupLoop:
+    dsb                                     @ Data synchronization barrier.
+    ldr     %r2, [%r1]                      @ Load the processor ID.
+    cmp     %r0, %r2
+    beq     EfipBcm2836ProcessorStartupEnd  @ Move to the jump if it's real.
+    wfe                                     @ Wait for an event.
+    b       EfipBcm2836ProcessorStartupLoop @ Try again.
+
+EfipBcm2836ProcessorStartupEnd:
+    ldr     %r1, =EfiBcm2836JumpAddress     @ Get the jump address.
+    ldr     %r2, [%r1]                      @ Get the value.
+    str     %r3, [%r1]                      @ Store zero into jump address.
     ldr     %r3, =0xFFFFF000                @ Get the page mask.
-    and     %r1, %r4, %r3                   @ Set the parking location.
-    bx      %r4                             @ Jump to the destination.
+    and     %r1, %r2, %r3                   @ Set the parking location.
+    dsb                                     @ One final breath, then...
+    bx      %r2                             @ Jump head first into the abyss.
 
 .ltorg
 
 ##
 ## VOID
-## EfipOmap4ParkingLoop (
+## EfipBcm2836ParkingLoop (
 ##     UINT32 ProcessorId,
 ##     VOID *ParkingLocation
 ##     )
@@ -186,15 +156,15 @@ Return Value:
 
 --*/
 
-EfipOmap4ParkingLoop:
+EfipBcm2836ParkingLoop:
     dsb                                     @ Data synchronization barrier.
     ldr     %r2, [%r1]                      @ Read the processor ID.
     cmp     %r0, %r2                        @ Compare to this processor ID.
-    beq     EfipOmap4ParkingLoopJump        @ Move to the jump if it's real.
+    beq     EfipBcm2836ParkingLoopJump      @ Move to the jump if it's real.
     wfi                                     @ Wait for an interrupt.
-    b       EfipOmap4ParkingLoop            @ Try again.
+    b       EfipBcm2836ParkingLoop          @ Try again.
 
-EfipOmap4ParkingLoopJump:
+EfipBcm2836ParkingLoopJump:
     ldr     %r2, [%r1, #8]                  @ Get the jump address.
     mov     %r3, #0                         @ Clear R3.
     str     %r3, [%r1, #8]                  @ Store zero into jump address.
@@ -207,7 +177,7 @@ EfipOmap4ParkingLoopJump:
 
 .ltorg
 
-EfipOmap4ParkingLoopEnd:
+EfipBcm2836ParkingLoopEnd:
 
 ##
 ## --------------------------------------------------------- Internal Functions

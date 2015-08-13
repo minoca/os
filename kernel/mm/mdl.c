@@ -810,6 +810,178 @@ Return Value:
     return NULL;
 }
 
+KSTATUS
+MmMdRemoveRangeFromList (
+    PMEMORY_DESCRIPTOR_LIST Mdl,
+    ULONGLONG StartAddress,
+    ULONGLONG EndAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine removes all descriptors from the given list that are within
+    the given memory range. Overlapping descriptors are truncated.
+
+Arguments:
+
+    Mdl - Supplies a pointer to the descriptor list to remove from.
+
+    StartAddress - Supplies the first valid address of the region being removed.
+
+    EndAddress - Supplies the first address beyond the region being removed.
+        In other words, the end address is not inclusive.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PMEMORY_DESCRIPTOR AllocatedDescriptor;
+    ULONGLONG CurrentAddress;
+    PMEMORY_DESCRIPTOR Existing;
+    ULONGLONG ExistingBase;
+    ULONGLONG Reduction;
+    KSTATUS Status;
+
+    ASSERT(StartAddress < EndAddress);
+
+    CurrentAddress = EndAddress - 1;
+
+    //
+    // Loop removing descriptors from the range, starting from the end.
+    //
+
+    while (CurrentAddress >= StartAddress) {
+        Existing = MmpMdFindDescriptor(Mdl, CurrentAddress);
+
+        //
+        // If there is no descriptor for this address or lower, then the work
+        // is done.
+        //
+
+        if ((Existing == NULL) ||
+            ((Existing->BaseAddress + Existing->Size) <= StartAddress)) {
+
+            break;
+        }
+
+        ExistingBase = Existing->BaseAddress;
+
+        //
+        // If the descriptor goes off the end, clip it. This does not change
+        // the ordering in the tree since there are no overlapping regions.
+        //
+
+        if ((ExistingBase >= StartAddress) &&
+            ((ExistingBase + Existing->Size) > EndAddress)) {
+
+            Reduction = EndAddress - Existing->BaseAddress;
+            Existing->BaseAddress = EndAddress;
+            Existing->Size -= Reduction;
+            Mdl->TotalSpace -= Reduction;
+            if (IS_MEMORY_FREE_TYPE(Existing->Type)) {
+                Mdl->FreeSpace -= Reduction;
+                LIST_REMOVE(&(Existing->FreeListEntry));
+                MmpMdAddFreeDescriptor(Mdl, Existing);
+            }
+
+        //
+        // If the existing descriptor is completely inside the range, remove it.
+        //
+
+        } else if ((Existing->BaseAddress >= StartAddress) &&
+                   ((Existing->BaseAddress + Existing->Size) <= EndAddress)) {
+
+            MmMdRemoveDescriptorFromList(Mdl, Existing);
+
+        //
+        // The existing descriptor must start before the memory range.
+        //
+
+        } else {
+
+            ASSERT(ExistingBase < StartAddress);
+
+            //
+            // If the existing descriptor completely contains the range, then
+            // split it.
+            //
+
+            if ((ExistingBase + Existing->Size) > EndAddress) {
+
+                //
+                // Create the split one for the end.
+                //
+
+                AllocatedDescriptor = MmpMdAllocateDescriptor(Mdl);
+                if (AllocatedDescriptor == NULL) {
+                    Status = STATUS_INSUFFICIENT_RESOURCES;
+                    goto RemoveRangeFromListEnd;
+                }
+
+                Reduction = EndAddress - StartAddress;
+                AllocatedDescriptor->BaseAddress = EndAddress;
+                AllocatedDescriptor->Size = ExistingBase + Existing->Size -
+                                            EndAddress;
+
+                AllocatedDescriptor->Type = Existing->Type;
+                Existing->Size = StartAddress - ExistingBase;
+                if (IS_MEMORY_FREE_TYPE(Existing->Type)) {
+                    LIST_REMOVE(&(Existing->FreeListEntry));
+                    MmpMdAddFreeDescriptor(Mdl, Existing);
+                }
+
+                RtlRedBlackTreeInsert(&(Mdl->Tree),
+                                      &(AllocatedDescriptor->TreeNode));
+
+                Mdl->DescriptorCount += 1;
+                Mdl->TotalSpace -= Reduction;
+                if (IS_MEMORY_FREE_TYPE(AllocatedDescriptor->Type)) {
+                    MmpMdAddFreeDescriptor(Mdl, AllocatedDescriptor);
+                    Mdl->FreeSpace -= Reduction;
+                }
+
+            //
+            // The existing descriptor starts before but doesn't cover the
+            // range fully, so shrink the existing descriptor.
+            //
+
+            } else {
+                Reduction = ExistingBase + Existing->Size - StartAddress;
+                Existing->Size = StartAddress - ExistingBase;
+                Mdl->TotalSpace -= Reduction;
+                if (IS_MEMORY_FREE_TYPE(Existing->Type)) {
+                    Mdl->FreeSpace -= Reduction;
+                    LIST_REMOVE(&(Existing->FreeListEntry));
+                    MmpMdAddFreeDescriptor(Mdl, Existing);
+                }
+            }
+
+            break;
+        }
+
+        //
+        // If this was the minimum possible value, don't wrap.
+        //
+
+        if (ExistingBase == 0) {
+            break;
+        }
+
+        CurrentAddress = ExistingBase - 1;
+    }
+
+    Status = STATUS_SUCCESS;
+
+RemoveRangeFromListEnd:
+    return Status;
+}
+
 VOID
 MmMdRemoveDescriptorFromList (
     PMEMORY_DESCRIPTOR_LIST Mdl,
@@ -1498,6 +1670,9 @@ Return Value:
 
     case MemoryTypePageTables:
         return "Page Tables";
+
+    case MemoryTypeBootPageTables:
+        return "Boot Page Tables";
 
     case MemoryTypeMmStructures:
         return "MM Init Structures";

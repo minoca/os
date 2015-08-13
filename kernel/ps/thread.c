@@ -1576,13 +1576,14 @@ Return Value:
 
 {
 
-    PLIST_ENTRY CurrentEntry;
     LIST_ENTRY ListHead;
     RUNLEVEL OldRunLevel;
     PKTHREAD Thread;
 
     INITIALIZE_LIST_HEAD(&ListHead);
     while (TRUE) {
+
+        ASSERT(LIST_EMPTY(&ListHead) != FALSE);
 
         //
         // Raise to dispatch and wait for some action.
@@ -1595,20 +1596,13 @@ Return Value:
         KeWaitForEvent(PsDeadThreadsEvent, FALSE, WAIT_TIME_INDEFINITE);
 
         //
-        // Acquire the lock and loop through all threads on the list.
+        // Acquire the lock and move all the threads to the local list.
         //
 
         KeAcquireSpinLock(&PsDeadThreadsLock);
-        while (LIST_EMPTY(&PsDeadThreadsListHead) == FALSE) {
-
-            //
-            // Take the threads off the global list and put them onto a global
-            // list.
-            //
-
-            CurrentEntry = PsDeadThreadsListHead.Next;
-            LIST_REMOVE(CurrentEntry);
-            INSERT_BEFORE(CurrentEntry, &ListHead);
+        if (LIST_EMPTY(&PsDeadThreadsListHead) == FALSE) {
+            MOVE_LIST(&PsDeadThreadsListHead, &ListHead);
+            INITIALIZE_LIST_HEAD(&PsDeadThreadsListHead);
         }
 
         KeSignalEvent(PsDeadThreadsEvent, SignalOptionUnsignal);

@@ -100,7 +100,7 @@ Members:
 
 typedef struct _EFI_SD_BCM2709_GET_EMMC_CLOCK {
     BCM2709_MAILBOX_HEADER Header;
-    BCM2709_MAILBOX_CLOCK_RATE ClockRate;
+    BCM2709_MAILBOX_GET_CLOCK_RATE ClockRate;
     UINT32 EndTag;
 } EFI_SD_BCM2709_GET_EMMC_CLOCK, *PEFI_SD_BCM2709_GET_EMMC_CLOCK;
 
@@ -450,7 +450,7 @@ Return Value:
     }
 
     Length = GetClockRate.ClockRate.TagHeader.Length;
-    ExpectedLength = sizeof(BCM2709_MAILBOX_CLOCK_RATE) -
+    ExpectedLength = sizeof(BCM2709_MAILBOX_GET_CLOCK_RATE) -
                      sizeof(BCM2709_MAILBOX_TAG);
 
     if (BCM2709_MAILBOX_CHECK_TAG_LENGTH(Length, ExpectedLength) == FALSE) {

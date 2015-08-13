@@ -123,6 +123,31 @@ Return Value:
 
 --*/
 
+EFI_STATUS
+EfipBcm2836SmpInitialize (
+    UINT32 Phase
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes and parks the application processors on the
+    BCM2836.
+
+Arguments:
+
+    Phase - Supplies the iteration number this routine is being called on.
+        Phase zero occurs very early, just after the debugger comes up.
+        Phase one occurs a bit later, after timer, interrupt services, and the
+        memory core are initialized.
+
+Return Value:
+
+    EFI status code.
+
+--*/
+
 //
 // Runtime functions.
 //

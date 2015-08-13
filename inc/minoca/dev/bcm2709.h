@@ -31,8 +31,18 @@ Author:
 #define BCM2709_SIGNATURE 0x324D4342 // '2MCB'
 
 //
+// Define the flags for the CPU BCM2709 table entries.
+//
+
+#define BCM2709_CPU_FLAG_ENABLED 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
+
+typedef enum _BCM2709_ENTRY_TYPE {
+    Bcm2709EntryTypeCpu = 0x0,
+} BCM2709_ENTRY_TYPE, *PBCM2709_ENTRY_TYPE;
 
 /*++
 
@@ -77,6 +87,9 @@ Members:
     MailboxPhysicalAddress - Stores the physical address of the BCM2709 Mailbox
         register base.
 
+    CpuLocalPhysicalAddress - Stores the physical address of the processor
+        local registers.
+
 --*/
 
 typedef struct _BCM2709_TABLE {
@@ -92,7 +105,67 @@ typedef struct _BCM2709_TABLE {
     ULONGLONG SystemTimerFrequency;
     ULONG SystemTimerGsiBase;
     ULONGLONG MailboxPhysicalAddress;
+    ULONGLONG CpuLocalPhysicalAddress;
+    // ProcessorStructures[n].
 } PACKED BCM2709_TABLE, *PBCM2709_TABLE;
+
+/*++
+
+Structure Description:
+
+    This structure describes an entry in the BCM2709 table whose content is not
+    yet fully known.
+
+Members:
+
+    Type - Stores the type of entry, used to differentiate the various types
+        of entries.
+
+    Length - Stores the size of the entry, in bytes.
+
+--*/
+
+typedef struct _BCM2709_GENERIC_ENTRY {
+    UCHAR Type;
+    UCHAR Length;
+} PACKED BCM2709_GENERIC_ENTRY, *PBCM2709_GENERIC_ENTRY;
+
+/*++
+
+Structure Description:
+
+    This structure describes a BCM2709 CPU interface unit in the BCM2709 table.
+
+Members:
+
+    Type - Stores a value to indicate a BCM2709 CPU interface structure (0x0).
+
+    Length - Stores the size of this structure, 24.
+
+    Reserved - Stores a reserved value which must be zero.
+
+    ProcessorId - Stores the physical ID of the processor.
+
+    Flags - Stores flags governing this BCM2709 CPU interface. See
+        BCM2709_CPU_FLAG_*.
+
+    ParkingProtocolVersion - Stores the version of the ARM processor parking
+        protocol implemented.
+
+    ParkedAddress - Stores the physical address of the processor's parking
+        protocol mailbox.
+
+--*/
+
+typedef struct _BCM2709_CPU_ENTRY {
+    UCHAR Type;
+    UCHAR Length;
+    USHORT Reserved;
+    ULONG ProcessorId;
+    ULONG Flags;
+    ULONG ParkingProtocolVersion;
+    ULONGLONG ParkedAddress;
+} PACKED BCM2709_CPU_ENTRY, *PBCM2709_CPU_ENTRY;
 
 //
 // -------------------------------------------------------------------- Globals

@@ -1117,6 +1117,34 @@ Return Value:
 --*/
 
 KSTATUS
+MmpRemoveAccountingRange (
+    PMEMORY_ACCOUNTING Accountant,
+    ULONGLONG StartAddress,
+    ULONGLONG EndAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine removes the given address range from the memory accountant.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure.
+
+    StartAddress - Supplies the starting address of the range to remove.
+
+    EndAddress - Supplies the first address beyond the region being removed.
+        That is, the non-inclusive end address of the range.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
 MmpAllocateAddressRange (
     PMEMORY_ACCOUNTING Accountant,
     UINTN Size,
@@ -1284,6 +1312,63 @@ Return Value:
     TRUE if the given range is free.
 
     FALSE if at least part of the given range is in use.
+
+--*/
+
+BOOL
+MmpIsAccountingRangeInUse (
+    PMEMORY_ACCOUNTING Accountant,
+    PVOID Address,
+    ULONG SizeInBytes
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not any portion of the supplied range
+    is in use.
+
+Arguments:
+
+    Accountant - Supplies a pointer to a memory accounting structure.
+
+    Address - Supplies the base address of the range.
+
+    SizeInBytes - Supplies the size of the range, in bytes.
+
+Return Value:
+
+    Returns TRUE if a portion of the range is in use or FALSE otherwise.
+
+--*/
+
+BOOL
+MmpIsAccountingRangeAllocated (
+    PMEMORY_ACCOUNTING Accountant,
+    PVOID Address,
+    ULONG SizeInBytes
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not the supplied range is currently
+    allocated in the given memory accountant.
+
+Arguments:
+
+    Accountant - Supplies a pointer to a memory accounting structure.
+
+    Address - Supplies the base address of the range.
+
+    SizeInBytes - Supplies the size of the range, in bytes.
+
+Return Value:
+
+    Returns TRUE if the range is completely allocated for a single memory type
+    or FALSE otherwise.
 
 --*/
 

@@ -717,12 +717,12 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    if (TickCount >= MAX_ULONG) {
+    if (Mode == TimerModeOneShot) {
         return STATUS_INVALID_PARAMETER;
     }
 
-    if (Mode == TimerModeOneShot) {
-        return STATUS_INVALID_PARAMETER;
+    if (TickCount > MAX_ULONG) {
+        TickCount = MAX_ULONG;
     }
 
     switch (Timer->Type) {

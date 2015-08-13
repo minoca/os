@@ -93,8 +93,8 @@ typedef struct _EFI_BCM2709_GET_SMBIOS_INFORMATION {
     BCM2709_MAILBOX_BOARD_MODEL ModelMessage;
     BCM2709_MAILBOX_BOARD_REVISION RevisionMessage;
     BCM2709_MAILBOX_BOARD_SERIAL_NUMBER SerialMessage;
-    BCM2709_MAILBOX_CLOCK_RATE ArmClockRate;
-    BCM2709_MAILBOX_CLOCK_RATE ArmMaxClockRate;
+    BCM2709_MAILBOX_GET_CLOCK_RATE ArmClockRate;
+    BCM2709_MAILBOX_GET_CLOCK_RATE ArmMaxClockRate;
     UINT32 EndTag;
 } EFI_BCM2709_GET_SMBIOS_INFORMATION, *PEFI_BCM2709_GET_SMBIOS_INFORMATION;
 
@@ -331,7 +331,7 @@ Return Value:
     CHAR8 Version[28];
 
     //
-    // Query the BMC2835 mailbox to get version information and a serial number.
+    // Query the BMC2836 mailbox to get version information and a serial number.
     //
 
     EfiCopyMem(&BoardInformation,
@@ -373,7 +373,7 @@ Return Value:
     }
 
     Length = BoardInformation.ArmClockRate.TagHeader.Length;
-    ExpectedLength = sizeof(BCM2709_MAILBOX_CLOCK_RATE) -
+    ExpectedLength = sizeof(BCM2709_MAILBOX_GET_CLOCK_RATE) -
                      sizeof(BCM2709_MAILBOX_TAG);
 
     if (BCM2709_MAILBOX_CHECK_TAG_LENGTH(Length, ExpectedLength) == FALSE) {
@@ -381,7 +381,7 @@ Return Value:
     }
 
     Length = BoardInformation.ArmMaxClockRate.TagHeader.Length;
-    ExpectedLength = sizeof(BCM2709_MAILBOX_CLOCK_RATE) -
+    ExpectedLength = sizeof(BCM2709_MAILBOX_GET_CLOCK_RATE) -
                      sizeof(BCM2709_MAILBOX_TAG);
 
     if (BCM2709_MAILBOX_CHECK_TAG_LENGTH(Length, ExpectedLength) == FALSE) {

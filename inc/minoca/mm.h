@@ -253,6 +253,7 @@ typedef enum _MEMORY_TYPE {
     MemoryTypeLoaderTemporary,
     MemoryTypeLoaderPermanent,
     MemoryTypePageTables,
+    MemoryTypeBootPageTables,
     MemoryTypeMmStructures,
     MemoryTypeNonPagedPool,
     MemoryTypePagedPool,
@@ -2085,6 +2086,35 @@ Return Value:
     the given address range.
 
     NULL if entire specified range is not free.
+
+--*/
+
+KSTATUS
+MmMdRemoveRangeFromList (
+    PMEMORY_DESCRIPTOR_LIST Mdl,
+    ULONGLONG StartAddress,
+    ULONGLONG EndAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine removes all descriptors from the given list that are within
+    the given memory range. Overlapping descriptors are truncated.
+
+Arguments:
+
+    Mdl - Supplies a pointer to the descriptor list to remove from.
+
+    StartAddress - Supplies the first valid address of the region being removed.
+
+    EndAddress - Supplies the first address beyond the region being removed.
+        In other words, the end address is not inclusive.
+
+Return Value:
+
+    Status code.
 
 --*/
 

@@ -305,7 +305,7 @@ Return Value:
 
                 ASSERT(MemoryType == MemoryTypeLoaderTemporary);
 
-                PageTableMemoryType = MemoryTypeLoaderTemporary;
+                PageTableMemoryType = MemoryTypeBootPageTables;
             }
 
             Status = FwAllocatePages(&PageTablePhysical,

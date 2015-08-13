@@ -234,7 +234,7 @@ typedef struct _BCM2709_MAILBOX_POWER {
 
 Structure Description:
 
-    This structure defines the clock rate message for the BCM2709 mailbox.
+    This structure defines the get clock rate message for the BCM2709 mailbox.
 
 Members:
 
@@ -269,11 +269,12 @@ Members:
 
 --*/
 
-typedef struct _BCM2709_MAILBOX_GET_CLOCK_RATE {
+typedef struct _BCM2709_MAILBOX_GET_CLOCK_INFORMATION {
     BCM2709_MAILBOX_HEADER Header;
     BCM2709_MAILBOX_CLOCK_RATE ClockRate;
     ULONG EndTag;
-} BCM2709_MAILBOX_GET_CLOCK_RATE, *PBCM2709_MAILBOX_GET_CLOCK_RATE;
+} BCM2709_MAILBOX_GET_CLOCK_INFORMATION,
+    *PBCM2709_MAILBOX_GET_CLOCK_INFORMATION;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -332,9 +333,9 @@ BCM2709_MAILBOX_POWER Bcm2709EmmcPowerCommand = {
 // Define a template for the command to get the eMMC clock rate.
 //
 
-BCM2709_MAILBOX_GET_CLOCK_RATE Bcm2709EmmcGetClockRateCommand = {
+BCM2709_MAILBOX_GET_CLOCK_INFORMATION Bcm2709EmmcGetClockRateCommand = {
     {
-        sizeof(BCM2709_MAILBOX_GET_CLOCK_RATE),
+        sizeof(BCM2709_MAILBOX_GET_CLOCK_INFORMATION),
         0
     },
 
@@ -422,16 +423,16 @@ Return Value:
 {
 
     ULONG ExpectedLength;
-    PBCM2709_MAILBOX_GET_CLOCK_RATE GetClock;
+    PBCM2709_MAILBOX_GET_CLOCK_INFORMATION GetClockInformation;
     ULONG Length;
     PIO_BUFFER ResultIoBuffer;
     KSTATUS Status;
 
     *Frequency = 0;
     Status = Bcm2709EmmcpMailboxSendPropertiesChannelCommand(
-                                        &Bcm2709EmmcGetClockRateCommand,
-                                        sizeof(BCM2709_MAILBOX_GET_CLOCK_RATE),
-                                        &ResultIoBuffer);
+                                 &Bcm2709EmmcGetClockRateCommand,
+                                 sizeof(BCM2709_MAILBOX_GET_CLOCK_INFORMATION),
+                                 &ResultIoBuffer);
 
     if (!KSUCCESS(Status)) {
         goto EmmcGetClockFrequencyEnd;
@@ -441,8 +442,8 @@ Return Value:
     ASSERT(ResultIoBuffer->FragmentCount == 1);
     ASSERT(ResultIoBuffer->Fragment[0].VirtualAddress != NULL);
 
-    GetClock = ResultIoBuffer->Fragment[0].VirtualAddress;
-    Length = GetClock->ClockRate.TagHeader.Length;
+    GetClockInformation = ResultIoBuffer->Fragment[0].VirtualAddress;
+    Length = GetClockInformation->ClockRate.TagHeader.Length;
     ExpectedLength = sizeof(BCM2709_MAILBOX_CLOCK_RATE) -
                      sizeof(BCM2709_MAILBOX_TAG);
 
@@ -450,7 +451,7 @@ Return Value:
         Status = STATUS_DEVICE_IO_ERROR;
 
     } else {
-        *Frequency = GetClock->ClockRate.Rate;
+        *Frequency = GetClockInformation->ClockRate.Rate;
         Status = STATUS_SUCCESS;
     }
 

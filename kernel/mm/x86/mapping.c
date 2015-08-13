@@ -722,10 +722,17 @@ Return Value:
 {
 
     PBLOCK_ALLOCATOR BlockAllocator;
+    volatile PTE *Directory;
+    ULONG DirectoryIndex;
     ULONG Flags;
+    BOOL FreePageTable;
+    volatile PTE *PageTable;
+    PHYSICAL_ADDRESS PhysicalAddress;
     PPROCESSOR_BLOCK ProcessorBlock;
-    ULONG SizeToZero;
+    PHYSICAL_ADDRESS RunPhysicalAddress;
+    UINTN RunSize;
     KSTATUS Status;
+    ULONG TableIndex;
 
     //
     // Phase 0 runs on the boot processor before the debugger is online.
@@ -835,18 +842,83 @@ Return Value:
     } else if (Phase == 3) {
 
         //
-        // Zero out the usermode section of the page directory, wiping out all
-        // page tables in user mode that came from the boot environment.
-        //
-        // N.B. The page tables mapped in the user mode portion of the page
-        //      directory do not need to be released. They were marked as
-        //      loader temporary memory and get released by other means.
+        // By now, all boot mappings should have been unmapped. Loop over the
+        // kernel page table's user mode space looking for entries. If there
+        // are non-zero entries on a page table, keep the first and second
+        // level mappings and the page table. If the page table is entirely
+        // clean, free it and destroy the first level entry.
         //
 
-        SizeToZero = ((UINTN)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT) *
-                     sizeof(PTE);
+        RunSize = 0;
+        RunPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+        Directory = MmKernelPageDirectory;
+        for (DirectoryIndex = 0;
+             DirectoryIndex < (UINTN)KERNEL_VA_START >> PAGE_DIRECTORY_SHIFT;
+             DirectoryIndex += 1) {
 
-        RtlZeroMemory((PVOID)MmKernelPageDirectory, SizeToZero);
+            if (Directory[DirectoryIndex].Entry == 0) {
+
+                ASSERT(Directory[DirectoryIndex].Present == 0);
+
+                continue;
+            }
+
+            //
+            // A second level table is present, check to see if it is all zeros.
+            //
+
+            FreePageTable = TRUE;
+            PageTable = GET_PAGE_TABLE(DirectoryIndex);
+            for (TableIndex = 0;
+                 TableIndex < PAGE_SIZE / sizeof(PTE);
+                 TableIndex += 1) {
+
+                if (PageTable[TableIndex].Entry != 0) {
+                    FreePageTable = FALSE;
+                    break;
+                }
+
+                ASSERT(PageTable[TableIndex].Present == 0);
+            }
+
+            //
+            // Move to the next directory entry if this page table is in use.
+            //
+
+            if (FreePageTable == FALSE) {
+                continue;
+            }
+
+            //
+            // Otherwise, update the directory entry and free the page table.
+            //
+
+            PhysicalAddress = (ULONG)(Directory[DirectoryIndex].Entry <<
+                                      PAGE_SHIFT);
+
+            *((PULONG)(&(Directory[DirectoryIndex]))) = 0;
+            if (RunSize != 0) {
+                if ((RunPhysicalAddress + RunSize) == PhysicalAddress) {
+                    RunSize += PAGE_SIZE;
+
+                } else {
+                    MmFreePhysicalPages(RunPhysicalAddress,
+                                        RunSize >> PAGE_SHIFT);
+
+                    RunPhysicalAddress = PhysicalAddress;
+                    RunSize = PAGE_SIZE;
+                }
+
+            } else {
+                RunPhysicalAddress = PhysicalAddress;
+                RunSize = PAGE_SIZE;
+            }
+        }
+
+        if (RunSize != 0) {
+            MmFreePhysicalPages(RunPhysicalAddress, RunSize >> PAGE_SHIFT);
+        }
+
         Status = STATUS_SUCCESS;
 
     } else {
@@ -2426,7 +2498,9 @@ Return Value:
                  DeleteIndex += 1) {
 
                 if (Source[DeleteIndex].Present != 0) {
-                    Physical = Destination[DeleteIndex].Entry << PAGE_SHIFT;
+                    Physical = (ULONG)(Destination[DeleteIndex].Entry <<
+                                       PAGE_SHIFT);
+
                     Destination[DeleteIndex].Entry = 0;
                     MmFreePhysicalPage(Physical);
                 }
@@ -2435,7 +2509,7 @@ Return Value:
             return STATUS_INSUFFICIENT_RESOURCES;
         }
 
-        Destination[DirectoryIndex].Entry = Physical >> PAGE_SHIFT;
+        Destination[DirectoryIndex].Entry = (ULONG)Physical >> PAGE_SHIFT;
     }
 
     return STATUS_SUCCESS;
@@ -2577,8 +2651,8 @@ Return Value:
             // left.
             //
 
-            PageTable = DestinationDirectory[DirectoryIndex].Entry <<
-                        PAGE_SHIFT;
+            PageTable = (ULONG)(DestinationDirectory[DirectoryIndex].Entry <<
+                                PAGE_SHIFT);
 
             ASSERT(PageTable != 0);
 
@@ -2639,8 +2713,8 @@ Return Value:
         //
 
         } else {
-            PageTable = DestinationDirectory[DirectoryIndex].Entry <<
-                        PAGE_SHIFT;
+            PageTable = (ULONG)(DestinationDirectory[DirectoryIndex].Entry <<
+                                PAGE_SHIFT);
 
             ASSERT(PageTable != INVALID_PHYSICAL_ADDRESS);
 
@@ -2810,7 +2884,7 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     if (Directory[DirectoryIndex].Entry != 0) {
-        NewPageTable = Directory[DirectoryIndex].Entry << PAGE_SHIFT;
+        NewPageTable = (ULONG)(Directory[DirectoryIndex].Entry << PAGE_SHIFT);
         Directory[DirectoryIndex].Entry = 0;
 
     } else {

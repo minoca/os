@@ -2595,6 +2595,30 @@ Return Value:
 
 --*/
 
+typedef
+INT
+(*PHARDWARE_MODULE_COUNT_TRAILING_ZEROS32) (
+    ULONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines the number of trailing zero bits in the given
+    32-bit value.
+
+Arguments:
+
+    Value - Supplies the value to get the number of trailing zeros for. This
+        must not be zero.
+
+Return Value:
+
+    Returns the number of trailing zero bits in the given value.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -2667,6 +2691,9 @@ Members:
     ReleaseLock - Stores a pointer to a function used to release a previously
         acquired high level spinlock.
 
+    CountTrailingZeros32 - Stores a pointer to a function used to count the
+        trailing zeros present in a 32-bit value.
+
 --*/
 
 typedef struct _HARDWARE_MODULE_KERNEL_SERVICES {
@@ -2690,6 +2717,7 @@ typedef struct _HARDWARE_MODULE_KERNEL_SERVICES {
     PHARDWARE_MODULE_INITIALIZE_LOCK InitializeLock;
     PHARDWARE_MODULE_ACQUIRE_LOCK AcquireLock;
     PHARDWARE_MODULE_RELEASE_LOCK ReleaseLock;
+    PHARDWARE_MODULE_COUNT_TRAILING_ZEROS32 CountTrailingZeros32;
 } HARDWARE_MODULE_KERNEL_SERVICES, *PHARDWARE_MODULE_KERNEL_SERVICES;
 
 typedef

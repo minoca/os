@@ -105,13 +105,9 @@ Return Value:
     TrampolineCode = NULL;
 
     //
-    // Allocate and identity map two pages of physical memory, one for the code
-    // and one for the loaner stack (and processor block). Assert if the
-    // processor block ever gets too big so that someone knows to clean this
-    // up.
+    // Allocate and identity map one page of physical memory for the trampoline
+    // code.
     //
-
-    ASSERT(sizeof(PROCESSOR_BLOCK) <= 0x800);
 
     MmIdentityMapStartupStub(TRAMPOLINE_PAGE_COUNT,
                              &TrampolineCode,

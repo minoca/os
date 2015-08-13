@@ -926,7 +926,7 @@ Return Value:
     case InterruptAddressingPhysical:
         if (Target->U.PhysicalId != ThisProcessorTarget) {
             Status = STATUS_UNSUCCESSFUL;
-            goto SetProcessorTargetingEnd;
+            goto GicSetLocalUnitAddressingEnd;
         }
 
         Status = STATUS_SUCCESS;
@@ -937,7 +937,7 @@ Return Value:
             (1 << (ThisProcessorTarget & GIC_PROCESSOR_ID_MASK))) {
 
             Status = STATUS_UNSUCCESSFUL;
-            goto SetProcessorTargetingEnd;
+            goto GicSetLocalUnitAddressingEnd;
         }
 
         Status = STATUS_SUCCESS;
@@ -945,10 +945,10 @@ Return Value:
 
     default:
         Status = STATUS_INVALID_PARAMETER;
-        goto SetProcessorTargetingEnd;
+        goto GicSetLocalUnitAddressingEnd;
     }
 
-SetProcessorTargetingEnd:
+GicSetLocalUnitAddressingEnd:
     return Status;
 }
 

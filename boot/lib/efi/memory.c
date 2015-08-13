@@ -429,6 +429,7 @@ Return Value:
     //
 
     ASSERT((MemoryType == MemoryTypePageTables) ||
+           (MemoryType == MemoryTypeBootPageTables) ||
            (MemoryType == MemoryTypeLoaderTemporary) ||
            (MemoryType == MemoryTypeLoaderPermanent));
 
@@ -996,6 +997,7 @@ Return Value:
     //
 
     if ((Descriptor->Type != MemoryTypePageTables) &&
+        (Descriptor->Type != MemoryTypeBootPageTables) &&
         (Descriptor->Type != MemoryTypeLoaderTemporary) &&
         (Descriptor->Type != MemoryTypeLoaderPermanent)) {
 
@@ -1117,6 +1119,7 @@ Return Value:
         case MemoryTypeLoaderTemporary:
         case MemoryTypeLoaderPermanent:
         case MemoryTypePageTables:
+        case MemoryTypeBootPageTables:
             Agree = TRUE;
             break;
 

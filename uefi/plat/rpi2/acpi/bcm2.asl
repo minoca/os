@@ -25,7 +25,7 @@ Environment:
 //
 
 [0004]                          Signature : "BCM2"
-[0004]                       Table Length : 00000070
+[0004]                       Table Length : 000000D8
 [0001]                           Revision : 01
 [0001]                           Checksum : 00
 [0006]                             Oem ID : "Minoca"
@@ -99,3 +99,58 @@ Environment:
 //
 
                                    UINT64 : 000000003F00B880
+
+//
+// Local CPU physical address.
+//
+
+                                   UINT64 : 0000000040000000
+
+//
+// Processor 0 information. See BCM2709_CPU_ENTRY.
+//
+                                   
+                                    UINT8 : 00
+                                    UINT8 : 18
+                                   UINT16 : 0000
+                                   UINT32 : 00000F00
+                                   UINT32 : 00000001
+                                   UINT32 : 00000000
+                                   UINT64 : 0000000001FFA000
+
+//
+// Processor 1 information. See BCM2709_CPU_ENTRY.
+//
+                                   
+                                    UINT8 : 00
+                                    UINT8 : 18
+                                   UINT16 : 0000
+                                   UINT32 : 00000F01
+                                   UINT32 : 00000001
+                                   UINT32 : 00000000
+                                   UINT64 : 0000000001FFB000
+                                   
+//
+// Processor 2 information. See BCM2709_CPU_ENTRY.
+//
+                                   
+                                    UINT8 : 00
+                                    UINT8 : 18
+                                   UINT16 : 0000
+                                   UINT32 : 00000F02
+                                   UINT32 : 00000001
+                                   UINT32 : 00000000
+                                   UINT64 : 0000000001FFC000
+
+//
+// Processor 3 information. See BCM2709_CPU_ENTRY.
+//
+                                   
+                                    UINT8 : 00
+                                    UINT8 : 18
+                                   UINT16 : 0000
+                                   UINT32 : 00000F03
+                                   UINT32 : 00000001
+                                   UINT32 : 00000000
+                                   UINT64 : 0000000001FFD000
+

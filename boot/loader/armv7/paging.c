@@ -124,11 +124,11 @@ Return Value:
     }
 
     //
-    // Allocate a first level table.
+    // Allocate a first level table and self map.
     //
 
     Status = FwAllocatePages(&PhysicalAddress,
-                             FLT_SIZE,
+                             FLT_SIZE + PAGE_SIZE,
                              FLT_ALIGNMENT,
                              MemoryTypePageTables);
 
@@ -144,17 +144,10 @@ Return Value:
     RtlZeroMemory(BoFirstLevelTable, FLT_SIZE);
 
     //
-    // Allocate a page for the self map page tables.
+    // Initialize the self map page tables.
     //
 
-    Status = FwAllocatePages(&PhysicalAddress,
-                             PAGE_SIZE,
-                             PAGE_SIZE,
-                             MemoryTypePageTables);
-
-    if (!KSUCCESS(Status)) {
-        goto InitializePagingStructuresEnd;
-    }
+    PhysicalAddress += FLT_SIZE;
 
     ASSERT((UINTN)PhysicalAddress == PhysicalAddress);
     ASSERT(PhysicalAddress == ALIGN_RANGE_DOWN(PhysicalAddress, PAGE_SIZE));
@@ -356,7 +349,7 @@ Return Value:
 
                 ASSERT(MemoryType == MemoryTypeLoaderTemporary);
 
-                PageTableMemoryType = MemoryTypeLoaderTemporary;
+                PageTableMemoryType = MemoryTypeBootPageTables;
             }
 
             Status = FwAllocatePages(&PageTablePhysical,
@@ -811,13 +804,13 @@ Return Value:
     KSTATUS Status;
 
     //
-    // Map the page directory.
+    // Map the page directory and the appended self map.
     //
 
     *PageDirectoryVirtual = (PVOID)-1;
     Status = BoMapPhysicalAddress(PageDirectoryVirtual,
                                   PageDirectoryPhysical,
-                                  FLT_SIZE,
+                                  FLT_SIZE + PAGE_SIZE,
                                   MAP_FLAG_GLOBAL,
                                   MemoryTypePageTables);
 
@@ -948,8 +941,8 @@ Return Value:
 
     ASSERT(FirstLevelTable[FirstIndex].Format != FLT_UNMAPPED);
 
-    PageTablePhysical = (FirstLevelTable[FirstIndex].Entry << SLT_ALIGNMENT) &
-                        (~PAGE_MASK);
+    PageTablePhysical = (ULONG)(FirstLevelTable[FirstIndex].Entry <<
+                                SLT_ALIGNMENT) & (~PAGE_MASK);
 
     //
     // Unmap the page table stage.
