@@ -204,6 +204,7 @@ Return Value:
 
     UINTN AllocationSize;
     PGPIO_CONTROLLER NewController;
+    KSTATUS Status;
 
     if ((Registration->Version < GPIO_CONTROLLER_INFORMATION_VERSION) ||
         (Registration->Version > GPIO_CONTROLLER_INFORMATION_MAX_VERSION) ||
@@ -229,12 +230,40 @@ Return Value:
 
     NewController = MmAllocateNonPagedPool(AllocationSize, GPIO_ALLOCATION_TAG);
     if (NewController == NULL) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CreateControllerEnd;
     }
 
     RtlZeroMemory(NewController, AllocationSize);
     NewController->Magic = GPIO_CONTROLLER_MAGIC;
     NewController->InterruptLine = -1ULL;
+
+    //
+    // It's not yet known what runlevel the device will consume, so set it to
+    // the highest possible value to synchronize with an interrupt that
+    // comes in before the start controller routine has been fully processed.
+    //
+
+    NewController->RunLevel = RunLevelMaxDevice;
+    KeInitializeSpinLock(&(NewController->SpinLock));
+
+    //
+    // If the controller does not have interrupts or can only be accessed at
+    // low runlevel, then used a queued lock for synchronization.
+    //
+
+    if (((Registration->Features & GPIO_FEATURE_INTERRUPTS) == 0) ||
+        ((Registration->Features & GPIO_FEATURE_LOW_RUN_LEVEL) != 0)) {
+
+        NewController->QueuedLock = KeCreateQueuedLock();
+        if (NewController->QueuedLock == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto CreateControllerEnd;
+        }
+
+        NewController->RunLevel = RunLevelLow;
+    }
+
     NewController->Pins = (PGPIO_PIN_CONFIGURATION)(NewController + 1);
     RtlCopyMemory(&(NewController->Host),
                   Registration,
@@ -245,8 +274,22 @@ Return Value:
                   sizeof(GPIO_ACCESS_INTERFACE));
 
     INITIALIZE_LIST_HEAD(&(NewController->Interface.Handles));
+    Status = STATUS_SUCCESS;
+
+CreateControllerEnd:
+    if (!KSUCCESS(Status)) {
+        if (NewController != NULL) {
+            if (NewController->QueuedLock != NULL) {
+                KeDestroyQueuedLock(NewController->QueuedLock);
+            }
+
+            MmFreeNonPagedPool(NewController);
+            NewController = NULL;
+        }
+    }
+
     *Controller = NewController;
-    return STATUS_SUCCESS;
+    return Status;
 }
 
 GPIO_API
@@ -278,6 +321,11 @@ Return Value:
         Controller->InterruptController = NULL;
     }
 
+    if (Controller->QueuedLock != NULL) {
+        KeDestroyQueuedLock(Controller->QueuedLock);
+        Controller->QueuedLock = NULL;
+    }
+
     //
     // Ruin the magic (but in a way that's still identifiable to a human).
     //
@@ -300,7 +348,9 @@ GpioStartController (
 
 Routine Description:
 
-    This routine starts a GPIO controller.
+    This routine starts a GPIO controller. This routine should be serialized
+    externally, as it does not acquire the internal controller lock. Calling
+    it from the start IRP is sufficient.
 
 Arguments:
 
@@ -312,7 +362,8 @@ Arguments:
         Set to -1ULL if the controller has no interrupt resources.
 
     InterruptVector - Supplies the interrupt vector number of the interrupt
-        line that this controller is wired to.
+        line that this controller is wired to. Set to RunLevelLow if this GPIO
+        controller does not support interrupts.
 
 Return Value:
 
@@ -391,6 +442,14 @@ Return Value:
 
         if ((Host->Features & GPIO_FEATURE_LOW_RUN_LEVEL) != 0) {
             Registration.Flags |= INTERRUPT_FEATURE_LOW_RUN_LEVEL;
+
+        } else {
+
+            //
+            // Reset the controller's runlevel to the maximum it could be.
+            //
+
+            Controller->RunLevel = RunLevelMaxDevice;
         }
 
         Registration.Context = Controller;
@@ -434,7 +493,9 @@ GpioStopController (
 
 Routine Description:
 
-    This routine stops a GPIO controller.
+    This routine stops a GPIO controller. This routine should be serialized
+    externally, as it does not acquire the internal GPIO lock. Calling this
+    routine from state change IRPs should be sufficient.
 
 Arguments:
 
@@ -462,6 +523,40 @@ Return Value:
 
     ASSERT(LIST_EMPTY(&(Controller->Interface.Handles)));
 
+    return;
+}
+
+GPIO_API
+VOID
+GpioSetInterruptRunLevel (
+    PGPIO_CONTROLLER Controller,
+    RUNLEVEL RunLevel
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the internal runlevel of the GPIO lock.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    RunLevel - Supplies the runlevel that interrupts come in on for this
+        controller.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ASSERT(Controller->RunLevel >= RunLevel);
+
+    Controller->RunLevel = RunLevel;
     return;
 }
 
@@ -501,6 +596,98 @@ Return Value:
                                               Controller->InterruptController);
 
     return Result;
+}
+
+GPIO_API
+RUNLEVEL
+GpioLockController (
+    PGPIO_CONTROLLER Controller
+    )
+
+/*++
+
+Routine Description:
+
+    This routine acquires the GPIO controller lock. This routine is called
+    automatically by most interface routines.
+
+Arguments:
+
+    Controller - Supplies a pointer to the GPIO controller to acquire the lock
+        for.
+
+Return Value:
+
+    Returns the original runlevel, as this routine may have raised the runlevel.
+
+--*/
+
+{
+
+    RUNLEVEL OldRunLevel;
+
+    if (Controller->QueuedLock != NULL) {
+
+        ASSERT((Controller->RunLevel == RunLevelLow) &&
+               (KeGetRunLevel() == RunLevelLow));
+
+        OldRunLevel = RunLevelLow;
+        KeAcquireQueuedLock(Controller->QueuedLock);
+
+    } else {
+
+        ASSERT(Controller->RunLevel >= RunLevelDispatch);
+
+        OldRunLevel = KeRaiseRunLevel(Controller->RunLevel);
+        KeAcquireSpinLock(&(Controller->SpinLock));
+    }
+
+    return OldRunLevel;
+}
+
+GPIO_API
+VOID
+GpioUnlockController (
+    PGPIO_CONTROLLER Controller,
+    RUNLEVEL OldRunLevel
+    )
+
+/*++
+
+Routine Description:
+
+    This routine releases the GPIO controller lock. This routine is called
+    automatically by most interface routines.
+
+Arguments:
+
+    Controller - Supplies a pointer to the GPIO controller to release the lock
+        for.
+
+    OldRunLevel - Supplies the original runlevel to return to, as returned by
+        the acquire lock function.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (Controller->QueuedLock != NULL) {
+
+        ASSERT((Controller->RunLevel == RunLevelLow) &&
+               (KeGetRunLevel() == RunLevelLow));
+
+        KeReleaseQueuedLock(Controller->QueuedLock);
+
+    } else {
+        KeReleaseSpinLock(&(Controller->SpinLock));
+        KeLowerRunLevel(OldRunLevel);
+    }
+
+    return;
 }
 
 //
@@ -567,26 +754,31 @@ Return Value:
 
     PGPIO_CONTROLLER Controller;
     PGPIO_PIN_HANDLE_DATA Handle;
+    RUNLEVEL OldRunLevel;
     PGPIO_INTERFACE PrivateInterface;
+    KSTATUS Status;
 
     PrivateInterface = Interface->Context;
-    Controller = PARENT_STRUCTURE(PrivateInterface, GPIO_CONTROLLER, Interface);
-
-    ASSERT(Controller->Magic == GPIO_CONTROLLER_MAGIC);
-
-    if (Pin >= Controller->Host.LineCount) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    if ((Controller->Pins[Pin].Flags & GPIO_PIN_ACQUIRED) != 0) {
-        return STATUS_RESOURCE_IN_USE;
-    }
-
     Handle = MmAllocateNonPagedPool(sizeof(GPIO_PIN_HANDLE_DATA),
                                     GPIO_ALLOCATION_TAG);
 
     if (Handle == NULL) {
         return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    Controller = PARENT_STRUCTURE(PrivateInterface, GPIO_CONTROLLER, Interface);
+    OldRunLevel = GpioLockController(Controller);
+
+    ASSERT(Controller->Magic == GPIO_CONTROLLER_MAGIC);
+
+    if (Pin >= Controller->Host.LineCount) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto OpenPinEnd;
+    }
+
+    if ((Controller->Pins[Pin].Flags & GPIO_PIN_ACQUIRED) != 0) {
+        Status = STATUS_RESOURCE_IN_USE;
+        goto OpenPinEnd;
     }
 
     RtlZeroMemory(Handle, sizeof(GPIO_PIN_HANDLE_DATA));
@@ -596,8 +788,19 @@ Return Value:
     Handle->Pin = Pin;
     INSERT_BEFORE(&(Handle->ListEntry), &(PrivateInterface->Handles));
     Controller->Pins[Pin].Flags |= GPIO_PIN_ACQUIRED;
+    Status = STATUS_SUCCESS;
+
+OpenPinEnd:
+    GpioUnlockController(Controller, OldRunLevel);
+    if (!KSUCCESS(Status)) {
+        if (Handle != NULL) {
+            MmFreeNonPagedPool(Handle);
+            Handle = NULL;
+        }
+    }
+
     *PinHandle = (GPIO_PIN_HANDLE)Handle;
-    return STATUS_SUCCESS;
+    return Status;
 }
 
 VOID
@@ -628,6 +831,7 @@ Return Value:
 
     PGPIO_CONTROLLER Controller;
     PGPIO_PIN_HANDLE_DATA Handle;
+    RUNLEVEL OldRunLevel;
 
     Handle = (PGPIO_PIN_HANDLE_DATA)PinHandle;
 
@@ -635,10 +839,12 @@ Return Value:
     ASSERT(Handle->ListEntry.Next != NULL);
 
     Controller = Handle->Controller;
+    OldRunLevel = GpioLockController(Controller);
     LIST_REMOVE(&(Handle->ListEntry));
     Handle->ListEntry.Next = NULL;
     Controller->Pins[Handle->Pin].Flags &= ~GPIO_PIN_ACQUIRED;
     Handle->Magic += 1;
+    GpioUnlockController(Controller, OldRunLevel);
     MmFreeNonPagedPool(Handle);
     return;
 }
@@ -673,6 +879,7 @@ Return Value:
     PGPIO_CONTROLLER Controller;
     PGPIO_PIN_HANDLE_DATA Handle;
     PGPIO_CONTROLLER_INFORMATION Host;
+    RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     Handle = (PGPIO_PIN_HANDLE_DATA)PinHandle;
@@ -680,6 +887,7 @@ Return Value:
     ASSERT(Handle->Magic == GPIO_PIN_HANDLE_MAGIC);
 
     Controller = Handle->Controller;
+    OldRunLevel = GpioLockController(Controller);
     Host = &(Controller->Host);
     Status = Host->FunctionTable.SetConfiguration(Host->Context,
                                                   Handle->Pin,
@@ -694,6 +902,7 @@ Return Value:
                                        GPIO_PIN_ACQUIRED | GPIO_PIN_CONFIGURED;
     }
 
+    GpioUnlockController(Controller, OldRunLevel);
     return Status;
 }
 
@@ -728,6 +937,7 @@ Return Value:
     PGPIO_CONTROLLER Controller;
     PGPIO_PIN_HANDLE_DATA Handle;
     PGPIO_CONTROLLER_INFORMATION Host;
+    RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     Handle = (PGPIO_PIN_HANDLE_DATA)PinHandle;
@@ -735,11 +945,13 @@ Return Value:
     ASSERT(Handle->Magic == GPIO_PIN_HANDLE_MAGIC);
 
     Controller = Handle->Controller;
+    OldRunLevel = GpioLockController(Controller);
     Host = &(Controller->Host);
     Status = Host->FunctionTable.SetDirection(Host->Context,
                                               Handle->Pin,
                                               Flags);
 
+    GpioUnlockController(Controller, OldRunLevel);
     return Status;
 }
 
@@ -774,14 +986,17 @@ Return Value:
     PGPIO_CONTROLLER Controller;
     PGPIO_PIN_HANDLE_DATA Handle;
     PGPIO_CONTROLLER_INFORMATION Host;
+    RUNLEVEL OldRunLevel;
 
     Handle = (PGPIO_PIN_HANDLE_DATA)PinHandle;
 
     ASSERT(Handle->Magic == GPIO_PIN_HANDLE_MAGIC);
 
     Controller = Handle->Controller;
+    OldRunLevel = GpioLockController(Controller);
     Host = &(Controller->Host);
     Host->FunctionTable.SetValue(Host->Context, Handle->Pin, Value);
+    GpioUnlockController(Controller, OldRunLevel);
     return;
 }
 
@@ -816,14 +1031,19 @@ Return Value:
     PGPIO_CONTROLLER Controller;
     PGPIO_PIN_HANDLE_DATA Handle;
     PGPIO_CONTROLLER_INFORMATION Host;
+    RUNLEVEL OldRunLevel;
+    ULONG Result;
 
     Handle = (PGPIO_PIN_HANDLE_DATA)PinHandle;
 
     ASSERT(Handle->Magic == GPIO_PIN_HANDLE_MAGIC);
 
     Controller = Handle->Controller;
+    OldRunLevel = GpioLockController(Controller);
     Host = &(Controller->Host);
-    return Host->FunctionTable.GetValue(Host->Context, Handle->Pin);
+    Result = Host->FunctionTable.GetValue(Host->Context, Handle->Pin);
+    GpioUnlockController(Controller, OldRunLevel);
+    return Result;
 }
 
 KSTATUS
@@ -858,10 +1078,15 @@ Return Value:
 
     PGPIO_CONTROLLER Controller;
     PGPIO_CONTROLLER_INFORMATION Host;
+    RUNLEVEL OldRunLevel;
+    KSTATUS Status;
 
     Controller = Context;
     Host = &(Controller->Host);
-    return Host->FunctionTable.PrepareForInterrupts(Host->Context);
+    OldRunLevel = GpioLockController(Controller);
+    Status = Host->FunctionTable.PrepareForInterrupts(Host->Context);
+    GpioUnlockController(Controller, OldRunLevel);
+    return Status;
 }
 
 KSTATUS
@@ -897,10 +1122,12 @@ Return Value:
 
     PGPIO_CONTROLLER Controller;
     PGPIO_CONTROLLER_INFORMATION Host;
+    RUNLEVEL OldRunLevel;
     PGPIO_PIN_CONFIGURATION Pin;
     KSTATUS Status;
 
     Controller = Context;
+    OldRunLevel = GpioLockController(Controller);
     Host = &(Controller->Host);
     Pin = &(Controller->Pins[Line->Line]);
     if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) == 0) {
@@ -941,6 +1168,7 @@ Return Value:
         Pin->Flags &= ~GPIO_PIN_CONFIGURED;
     }
 
+    GpioUnlockController(Controller, OldRunLevel);
     return Status;
 }
 
@@ -980,10 +1208,13 @@ Return Value:
 
     PGPIO_CONTROLLER Controller;
     PGPIO_CONTROLLER_INFORMATION Host;
+    RUNLEVEL OldRunLevel;
 
     Controller = Context;
+    OldRunLevel = GpioLockController(Controller);
     Host = &(Controller->Host);
     Host->FunctionTable.MaskInterruptLine(Host->Context, Line, Enable);
+    GpioUnlockController(Controller, OldRunLevel);
     return;
 }
 
@@ -1027,14 +1258,17 @@ Return Value:
 
     PGPIO_CONTROLLER Controller;
     PGPIO_CONTROLLER_INFORMATION Host;
+    RUNLEVEL OldRunLevel;
     INTERRUPT_CAUSE Result;
 
     Controller = Context;
+    OldRunLevel = GpioLockController(Controller);
     Host = &(Controller->Host);
     Result = Host->FunctionTable.BeginInterrupt(Host->Context,
                                                 FiringLine,
                                                 MagicCandy);
 
+    GpioUnlockController(Controller, OldRunLevel);
     return Result;
 }
 
@@ -1071,10 +1305,13 @@ Return Value:
 
     PGPIO_CONTROLLER Controller;
     PGPIO_CONTROLLER_INFORMATION Host;
+    RUNLEVEL OldRunLevel;
 
     Controller = Context;
     Host = &(Controller->Host);
+    OldRunLevel = GpioLockController(Controller);
     Host->FunctionTable.EndOfInterrupt(Host->Context, MagicCandy);
+    GpioUnlockController(Controller, OldRunLevel);
     return;
 }
 
@@ -1116,15 +1353,18 @@ Return Value:
 
     PGPIO_CONTROLLER Controller;
     PGPIO_CONTROLLER_INFORMATION Host;
+    RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     Controller = Context;
+    OldRunLevel = GpioLockController(Controller);
     Host = &(Controller->Host);
     Status = Host->FunctionTable.RequestInterrupt(Host->Context,
                                                   Line,
                                                   Vector,
                                                   Target);
 
+    GpioUnlockController(Controller, OldRunLevel);
     return Status;
 }
 

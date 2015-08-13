@@ -99,6 +99,11 @@ HlpInterruptConvertRunLevelToHardwarePriority (
     RUNLEVEL RunLevel
     );
 
+INTERRUPT_STATUS
+HlpInterruptNullHandler (
+    PVOID Context
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -212,7 +217,9 @@ Return Value:
     RUNLEVEL RunLevel;
     KSTATUS Status;
 
-    if ((LineCount == 0) || (Registration->ProcessorCount != 0)) {
+    if ((LineCount == 0) || (Registration->ProcessorCount != 0) ||
+        (Registration->PriorityCount != 0)) {
+
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -243,7 +250,7 @@ Return Value:
 
     ASSERT(OutputController != NULL);
 
-    if (OutputController->RunLevel == MaxRunLevel) {
+    if (OutputController->RunLevel == RunLevelCount) {
         RunLevel = VECTOR_TO_RUN_LEVEL(ParentVector);
 
     } else {
@@ -434,60 +441,12 @@ Return Value:
     return Status;
 }
 
-KERNEL_API
-INTERRUPT_STATUS
-HlSecondaryInterruptControllerService (
-    PVOID Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements a standard interrupt service routine for an
-    interrupt that is wired to another interrupt controller. It will call out
-    to determine what fired, and begin a new secondary interrupt.
-
-Arguments:
-
-    Context - Supplies the context, which must be a pointer to the secondary
-        interrupt controller that needs service.
-
-Return Value:
-
-    Returns an interrupt status indicating if this ISR is claiming the
-    interrupt, not claiming the interrupt, or needs the interrupt to be
-    masked temporarily.
-
---*/
-
-{
-
-    INTERRUPT_CAUSE Cause;
-    PINTERRUPT_CONTROLLER Controller;
-    INTERRUPT_STATUS InterruptStatus;
-    ULONG MagicCandy;
-    PPROCESSOR_BLOCK Processor;
-    ULONG Vector;
-
-    Controller = Context;
-    InterruptStatus = InterruptStatusClaimed;
-    Processor = KeGetCurrentProcessorBlock();
-    Cause = HlpInterruptAcknowledge(&Controller, &Vector, &MagicCandy);
-    if (Cause == InterruptCauseLineFired) {
-        HlpRunIsr(NULL, Processor, Vector);
-
-    } else if (Cause != InterruptCauseSpuriousInterrupt) {
-        InterruptStatus = InterruptStatusNotClaimed;
-    }
-
-    return InterruptStatus;
-}
-
 PKINTERRUPT
 HlCreateInterrupt (
     ULONG Vector,
-    PINTERRUPT_SERVICE_ROUTINE ServiceRoutine,
+    PINTERRUPT_SERVICE_ROUTINE InterruptServiceRoutine,
+    PINTERRUPT_SERVICE_ROUTINE DispatchServiceRoutine,
+    PINTERRUPT_SERVICE_ROUTINE LowLevelServiceRoutine,
     PVOID Context
     )
 
@@ -501,8 +460,14 @@ Arguments:
 
     Vector - Supplies the vector that the interrupt will come in on.
 
-    ServiceRoutine - Supplies a pointer to the function to call when this
-        interrupt comes in.
+    InterruptServiceRoutine - Supplies a pointer to the function to call at
+        interrupt runlevel when this interrupt comes in.
+
+    DispatchServiceRoutine - Supplies a pointer to the function to call at
+        dispatch level when this interrupt comes in.
+
+    LowLevelServiceRoutine - Supplies a pointer to the function to call at
+        low runlevel when this interrupt comes in.
 
     Context - Supplies a pointer's worth of data that will be passed in to the
         service routine when it is called.
@@ -524,6 +489,17 @@ Return Value:
     ASSERT(KeGetRunLevel() <= RunLevelDispatch);
 
     //
+    // If the interrupt only runs at low level, assign a dummy handler that
+    // always returns the defer choice. This will be faster for the common case
+    // than putting a conditional around every ISR call in the common interrupt
+    // code.
+    //
+
+    if (InterruptServiceRoutine == NULL) {
+        InterruptServiceRoutine = HlpInterruptNullHandler;
+    }
+
+    //
     // Allocate space for the new interrupt.
     //
 
@@ -539,13 +515,44 @@ Return Value:
 
     RtlZeroMemory(Interrupt, sizeof(KINTERRUPT));
     Interrupt->Vector = Vector;
-    Interrupt->ServiceRoutine = ServiceRoutine;
     Interrupt->Context = Context;
+    Interrupt->InterruptServiceRoutine = InterruptServiceRoutine;
+    if ((DispatchServiceRoutine != NULL) || (LowLevelServiceRoutine != NULL)) {
+        Interrupt->DispatchServiceRoutine = DispatchServiceRoutine;
+        Interrupt->Dpc = KeCreateDpc(HlpInterruptServiceDpc, Interrupt);
+        if (Interrupt->Dpc == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto CreateInterruptEnd;
+        }
+
+        if (LowLevelServiceRoutine != NULL) {
+            Interrupt->LowLevelServiceRoutine = LowLevelServiceRoutine;
+            Interrupt->WorkItem = KeCreateWorkItem(NULL,
+                                                   WorkPriorityHigh,
+                                                   HlpInterruptServiceWorker,
+                                                   Interrupt,
+                                                   HL_POOL_TAG);
+
+            if (Interrupt->WorkItem == NULL) {
+                Status = STATUS_INSUFFICIENT_RESOURCES;
+                goto CreateInterruptEnd;
+            }
+        }
+    }
+
     Status = STATUS_SUCCESS;
 
 CreateInterruptEnd:
     if (!KSUCCESS(Status)) {
         if (Interrupt != NULL) {
+            if (Interrupt->Dpc != NULL) {
+                KeDestroyDpc(Interrupt->Dpc);
+            }
+
+            if (Interrupt->WorkItem != NULL) {
+                KeDestroyWorkItem(Interrupt->WorkItem);
+            }
+
             MmFreeNonPagedPool(Interrupt);
             Interrupt = NULL;
         }
@@ -582,6 +589,17 @@ Return Value:
     //
 
     ASSERT(Interrupt->NextInterrupt == NULL);
+    ASSERT((Interrupt->QueueFlags &
+            (INTERRUPT_QUEUE_DPC_QUEUED |
+             INTERRUPT_QUEUE_WORK_ITEM_QUEUED)) == 0);
+
+    if (Interrupt->Dpc != NULL) {
+        KeDestroyDpc(Interrupt->Dpc);
+    }
+
+    if (Interrupt->WorkItem != NULL) {
+        KeDestroyWorkItem(Interrupt->WorkItem);
+    }
 
     MmFreeNonPagedPool(Interrupt);
     return;
@@ -762,6 +780,14 @@ Return Value:
     //
 
     Interrupt->NextInterrupt = NULL;
+    if (Interrupt->Dpc != NULL) {
+        KeFlushDpc(Interrupt->Dpc);
+    }
+
+    if (Interrupt->WorkItem != NULL) {
+        KeFlushWorkItem(Interrupt->WorkItem);
+    }
+
     return;
 }
 
@@ -1110,7 +1136,7 @@ Arguments:
         controller.
 
     RunLevel - Supplies the runlevel that all interrupts from this controller
-        come in on. Set to MaxRunLevel if this interrupt controller is wired
+        come in on. Set to RunLevelCount if this interrupt controller is wired
         directly to the processor.
 
     NewController - Supplies an optional pointer where a pointer to the
@@ -1211,6 +1237,7 @@ Return Value:
     Controller->PrivateContext = ControllerDescription->Context;
     Controller->PriorityCount = ControllerDescription->PriorityCount;
     Controller->Flags = 0;
+    Controller->Features = ControllerDescription->Flags;
 
     //
     // Insert the controller on the array. Synchronization here comes from the
@@ -1461,7 +1488,7 @@ Return Value:
     // Create the interrupt.
     //
 
-    Interrupt = HlCreateInterrupt(Vector, ServiceRoutine, Context);
+    Interrupt = HlCreateInterrupt(Vector, ServiceRoutine, NULL, NULL, Context);
     if (Interrupt == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateAndConnectInternalInterruptEnd;
@@ -1649,7 +1676,7 @@ Return Value:
         // same run-level as its parent.
         //
 
-        if (Controller->RunLevel == MaxRunLevel) {
+        if (Controller->RunLevel == RunLevelCount) {
             Interrupt->RunLevel = VECTOR_TO_RUN_LEVEL(Interrupt->Vector);
 
         } else {
@@ -1659,6 +1686,7 @@ Return Value:
         Interrupt->Mode = Mode;
         Interrupt->LastTimestamp = 0;
         Interrupt->InterruptCount = 0;
+        Interrupt->Controller = Controller;
 
         //
         // This is an enable; adjust the reference count.
@@ -2330,9 +2358,38 @@ Return Value:
         return 0;
     }
 
-    if (MaxRunLevel - RunLevel > Controller->PriorityCount) {
+    if (RunLevelCount - RunLevel > Controller->PriorityCount) {
         return 0;
     }
 
-    return Controller->PriorityCount - (MaxRunLevel - RunLevel);
+    return Controller->PriorityCount - (RunLevelCount - RunLevel);
 }
+
+INTERRUPT_STATUS
+HlpInterruptNullHandler (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine represents an interrupt service routine that always returns
+    the defer option, used for interrupts that simply cannot query their
+    status without dropping down to low level.
+
+Arguments:
+
+    Context - Supplies an unused context pointer.
+
+Return Value:
+
+    InterruptStatusDefer always.
+
+--*/
+
+{
+
+    return InterruptStatusDefer;
+}
+

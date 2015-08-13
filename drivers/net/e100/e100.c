@@ -612,6 +612,7 @@ Return Value:
     ULONG AlignmentOffset;
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION ControllerBase;
     PHYSICAL_ADDRESS EndAddress;
     PRESOURCE_ALLOCATION LineAllocation;
@@ -728,13 +729,16 @@ Return Value:
 
     ASSERT(Device->InterruptHandle == INVALID_HANDLE);
 
-    Status = IoConnectInterrupt(Irp->Device,
-                                Device->InterruptLine,
-                                Device->InterruptVector,
-                                E100pInterruptService,
-                                Device,
-                                &(Device->InterruptHandle));
-
+    RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+    Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+    Connect.Device = Device->OsDevice;
+    Connect.LineNumber = Device->InterruptLine;
+    Connect.Vector = Device->InterruptVector;
+    Connect.InterruptServiceRoutine = E100pInterruptService;
+    Connect.LowLevelServiceRoutine = E100pInterruptServiceWorker;
+    Connect.Context = Device;
+    Connect.Interrupt = &(Device->InterruptHandle);
+    Status = IoConnectInterrupt2(&Connect);
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }

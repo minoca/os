@@ -31,6 +31,8 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
+#define IO_CONNECT_INTERRUPT_PARAMETERS_MAX_VERSION 0x1000
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -100,6 +102,58 @@ Return Value:
 
 {
 
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
+    KSTATUS Status;
+
+    //
+    // TODO: Remove this function and then rename IoConnectInterrupt2 to
+    // IoConnectInterrupt.
+    //
+
+    RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+    Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+    Connect.Device = Device;
+    Connect.LineNumber = LineNumber;
+    Connect.Vector = Vector;
+    Connect.InterruptServiceRoutine = ServiceRoutine;
+    Connect.Context = Context;
+    Connect.Interrupt = Interrupt;
+    Status = IoConnectInterrupt2(&Connect);
+    return Status;
+}
+
+KERNEL_API
+KSTATUS
+IoConnectInterrupt2 (
+    PIO_CONNECT_INTERRUPT_PARAMETERS Parameters
+    )
+
+/*++
+
+Routine Description:
+
+    This routine connects a device's interrupt.
+
+Arguments:
+
+    Parameters - Supplies a pointer to a versioned table containing the
+        parameters of the connection.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NOT_READY if the device has no resources or is not started.
+
+    STATUS_RESOURCE_IN_USE if the device attempts to connect to an interrupt
+    it does not own.
+
+    Other errors on failure.
+
+--*/
+
+{
+
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
     BOOL Connected;
@@ -118,7 +172,13 @@ Return Value:
     NewInterrupt = NULL;
     LineAllocation = NULL;
     VectorAllocation = NULL;
-    if (Device == NULL) {
+    if ((Parameters->Version < IO_CONNECT_INTERRUPT_PARAMETERS_VERSION) ||
+        (Parameters->Version >= IO_CONNECT_INTERRUPT_PARAMETERS_MAX_VERSION)) {
+
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (Parameters->Device == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -126,7 +186,7 @@ Return Value:
     // Ensure that the device has resources.
     //
 
-    AllocationList = Device->ProcessorLocalResources;
+    AllocationList = Parameters->Device->ProcessorLocalResources;
     if (AllocationList == NULL) {
         Status = STATUS_NOT_READY;
         goto ConnectInterruptEnd;
@@ -141,18 +201,20 @@ Return Value:
         if ((VectorAllocation == NULL) &&
             (Allocation->Type == ResourceTypeInterruptVector)) {
 
-            if ((Allocation->Allocation <= Vector) &&
-                (Allocation->Allocation + Allocation->Length > Vector)) {
+            if ((Allocation->Allocation <= Parameters->Vector) &&
+                (Allocation->Allocation + Allocation->Length >
+                 Parameters->Vector)) {
 
                 VectorAllocation = Allocation;
             }
 
-        } else if ((LineNumber != INVALID_INTERRUPT_LINE) &&
+        } else if ((Parameters->LineNumber != INVALID_INTERRUPT_LINE) &&
                    (LineAllocation == NULL) &&
                    (Allocation->Type == ResourceTypeInterruptLine)) {
 
-            if ((Allocation->Allocation <= LineNumber) &&
-                (Allocation->Allocation + Allocation->Length > LineNumber)) {
+            if ((Allocation->Allocation <= Parameters->LineNumber) &&
+                (Allocation->Allocation + Allocation->Length >
+                 Parameters->LineNumber)) {
 
                 LineAllocation = Allocation;
             }
@@ -163,7 +225,7 @@ Return Value:
         //
 
         if ((VectorAllocation != NULL) &&
-            ((LineNumber == INVALID_INTERRUPT_LINE) ||
+            ((Parameters->LineNumber == INVALID_INTERRUPT_LINE) ||
              (LineAllocation != NULL))) {
 
             break;
@@ -178,7 +240,7 @@ Return Value:
     //
 
     if ((VectorAllocation == NULL) ||
-        ((LineNumber != INVALID_INTERRUPT_LINE) &&
+        ((Parameters->LineNumber != INVALID_INTERRUPT_LINE) &&
          (LineAllocation == NULL))) {
 
         Status = STATUS_RESOURCE_IN_USE;
@@ -190,7 +252,7 @@ Return Value:
     // wrong. The line might not be targeting the correct vector.
     //
 
-    if ((LineNumber != INVALID_INTERRUPT_LINE) &&
+    if ((Parameters->LineNumber != INVALID_INTERRUPT_LINE) &&
         (VectorAllocation->OwningAllocation != LineAllocation)) {
 
         Status = STATUS_INVALID_PARAMETER;
@@ -201,7 +263,12 @@ Return Value:
     // Attempt to create an interrupt.
     //
 
-    NewInterrupt = HlCreateInterrupt(Vector, ServiceRoutine, Context);
+    NewInterrupt = HlCreateInterrupt(Parameters->Vector,
+                                     Parameters->InterruptServiceRoutine,
+                                     Parameters->DispatchServiceRoutine,
+                                     Parameters->LowLevelServiceRoutine,
+                                     Parameters->Context);
+
     if (NewInterrupt == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto ConnectInterruptEnd;
@@ -211,7 +278,7 @@ Return Value:
     // Attempt to wire up the ISR.
     //
 
-    *Interrupt = NewInterrupt;
+    *(Parameters->Interrupt) = NewInterrupt;
     Status = HlConnectInterrupt(NewInterrupt);
     if (!KSUCCESS(Status)) {
         goto ConnectInterruptEnd;
@@ -223,7 +290,7 @@ Return Value:
     // If a valid line number was supplied, then enable the interrupt line.
     //
 
-    if (LineNumber != INVALID_INTERRUPT_LINE) {
+    if (Parameters->LineNumber != INVALID_INTERRUPT_LINE) {
         LineState = 0;
         LineCharacteristics = LineAllocation->Characteristics;
 
@@ -265,7 +332,7 @@ Return Value:
         // Now attempt to enable the interrupt line.
         //
 
-        Status = HlEnableInterruptLine(LineNumber,
+        Status = HlEnableInterruptLine(Parameters->LineNumber,
                                        InterruptMode,
                                        InterruptPolarity,
                                        LineState,
@@ -294,7 +361,7 @@ ConnectInterruptEnd:
             HlDestroyInterrupt(NewInterrupt);
         }
 
-        *Interrupt = INVALID_HANDLE;
+        *(Parameters->Interrupt) = INVALID_HANDLE;
     }
 
     return Status;
@@ -380,6 +447,51 @@ Return Value:
 
     Interrupt = (PKINTERRUPT)InterruptHandle;
     return KeRaiseRunLevel(Interrupt->RunLevel);
+}
+
+KERNEL_API
+RUNLEVEL
+IoGetInterruptRunLevel (
+    PHANDLE Handles,
+    UINTN HandleCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines the highest runlevel between all of the
+    connected interrupt handles given.
+
+Arguments:
+
+    Handles - Supplies an pointer to an array of connected interrupt handles.
+
+    HandleCount - Supplies the number of elements in the array.
+
+Return Value:
+
+    Returns the highest runlevel between all connected interrupts. This is
+    the runlevel to synchronize to if trying to synchronize a device with
+    multiple interrupts.
+
+--*/
+
+{
+
+    UINTN Index;
+    PKINTERRUPT Interrupt;
+    RUNLEVEL Runlevel;
+
+    Runlevel = RunLevelLow;
+    for (Index = 0; Index < HandleCount; Index += 1) {
+        Interrupt = Handles[Index];
+        if (Interrupt->RunLevel > Runlevel) {
+            Runlevel = Interrupt->RunLevel;
+        }
+    }
+
+    return Runlevel;
 }
 
 //

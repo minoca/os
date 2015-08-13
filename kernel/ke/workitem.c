@@ -359,7 +359,7 @@ Return Value:
     BOOL DispatchLevel;
     RUNLEVEL OldRunLevel;
 
-    OldRunLevel = MaxRunLevel;
+    OldRunLevel = RunLevelCount;
 
     ASSERT((WorkQueue->State != WorkQueueStateInvalid) &&
            (WorkQueue->State != WorkQueueStateDestroying) &&
@@ -432,7 +432,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() <= RunLevelDispatch);
 
-    OldRunLevel = MaxRunLevel;
+    OldRunLevel = RunLevelCount;
     if (WorkQueue == NULL) {
         WorkQueue = KeSystemWorkQueue;
     }
@@ -695,7 +695,7 @@ Return Value:
     PWORK_QUEUE Queue;
     KSTATUS Status;
 
-    OldRunLevel = MaxRunLevel;
+    OldRunLevel = RunLevelCount;
 
     ASSERT(KeGetRunLevel() <= RunLevelDispatch);
 
@@ -896,7 +896,7 @@ Return Value:
     PWORK_QUEUE Queue;
     KSTATUS Status;
 
-    OldRunLevel = MaxRunLevel;
+    OldRunLevel = RunLevelCount;
 
     ASSERT(KeGetRunLevel() <= RunLevelDispatch);
 
@@ -1136,7 +1136,7 @@ Return Value:
     ULONG RemainingThreads;
     PWORK_ITEM WorkItem;
 
-    OldRunLevel = MaxRunLevel;
+    OldRunLevel = RunLevelCount;
     Queue = (PWORK_QUEUE)Parameter;
     RtlAtomicAdd32(&(Queue->CurrentThreadCount), 1);
     RaiseToDispatch = FALSE;

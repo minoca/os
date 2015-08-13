@@ -507,17 +507,6 @@ Members:
     LinkCheckTimer - Stores a pointer to the timer that fires periodically to
         see if the link is active.
 
-    Dpc - Stores a pointer to the DPC queued from the interrupt handler.
-
-    WorkItem - Stores a pointer to the work item queued from the DPC.
-
-    InterruptLock - Stores the spin lock, synchronized at the interrupt
-        run level, that synchronizes access to the pending status bits, DPC,
-        and work item.
-
-    WorkItemQueued - Stores a boolean indicating whether or not the work item
-        has been queued already.
-
     PendingStatusBits - Stores the bitfield of status bits that have yet to be
         dealt with by software.
 
@@ -549,10 +538,6 @@ typedef struct _E100_DEVICE {
     LIST_ENTRY TransmitPacketList;
     BOOL LinkActive;
     PKTIMER LinkCheckTimer;
-    PDPC Dpc;
-    PWORK_ITEM WorkItem;
-    KSPIN_LOCK InterruptLock;
-    BOOL WorkItemQueued;
     ULONG PendingStatusBits;
     ULONG EepromAddressBits;
     BYTE EepromMacAddress[ETHERNET_ADDRESS_SIZE];
@@ -695,6 +680,28 @@ Arguments:
     Context - Supplies the context pointer given to the system when the
         interrupt was connected. In this case, this points to the e100 device
         structure.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+INTERRUPT_STATUS
+E100pInterruptServiceWorker (
+    PVOID Parameter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine processes interrupts for the e100 controller at low level.
+
+Arguments:
+
+    Parameter - Supplies an optional parameter passed in by the creator of the
+        work item.
 
 Return Value:
 

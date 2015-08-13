@@ -134,6 +134,12 @@ Author:
 #define PATH_SEPARATOR '/'
 
 //
+// Define the current version of the IO_CONNECT_INTERRUPT_PARAMETERS structure.
+//
+
+#define IO_CONNECT_INTERRUPT_PARAMETERS_VERSION 1
+
+//
 // Set this bit to grant execute permissions to the given I/O handle.
 //
 
@@ -1308,6 +1314,58 @@ typedef struct _DRIVER_FUNCTION_TABLE {
     PDRIVER_DISPATCH DispatchSystemControl;
     PDRIVER_DISPATCH DispatchUserControl;
 } DRIVER_FUNCTION_TABLE, *PDRIVER_FUNCTION_TABLE;
+
+/*++
+
+Structure Description:
+
+    This structure defines the parameters to the IoConnectInterrupt function.
+
+Members:
+
+    Version - Stores the table version.
+
+    Device - Stores a pointer to the device whose interrupt is being connected.
+
+    LineNumber - Stores the Global System Interrupt number of the interrupt to
+        connect. The device must have this line in its resources.
+
+    Vector - Stores the software interrupt vector number to wire the interrupt
+        to. The device must have this vector it its resources.
+
+    InterruptServiceRoutine - Stores an optional pointer to a routine called
+        at an interrupt runlevel. This routine should be used simply to
+        query and quiesce the device. Actual processing of the interrupt should
+        be relegated to a lower level service routine. If this routine is not
+        supplied, then the lower level routines will be called back
+        automatically.
+
+    DispatchServiceRoutine - Stores an optional pointer to a routine to be
+        called at dispatch level to service the interrupt.
+
+    LowLevelServiceRoutine - Stores an optional pointer to a routine to be
+        called at low runlevel to service the interrupt. This routine will be
+        called from a work item on the system work queue, and therefore cannot
+        block on functions that wait for system work items to complete.
+
+    Context - Stores a context pointer that will be passed to each of the
+        service routines.
+
+    Interrupt - Stores a pointer where a handle will be returned on success.
+
+--*/
+
+typedef struct _IO_CONNECT_INTERRUPT_PARAMETERS {
+    ULONG Version;
+    PDEVICE Device;
+    ULONGLONG LineNumber;
+    ULONGLONG Vector;
+    PINTERRUPT_SERVICE_ROUTINE InterruptServiceRoutine;
+    PINTERRUPT_SERVICE_ROUTINE DispatchServiceRoutine;
+    PINTERRUPT_SERVICE_ROUTINE LowLevelServiceRoutine;
+    PVOID Context;
+    PHANDLE Interrupt;
+} IO_CONNECT_INTERRUPT_PARAMETERS, *PIO_CONNECT_INTERRUPT_PARAMETERS;
 
 typedef
 KSTATUS
@@ -6893,6 +6951,36 @@ Return Value:
 --*/
 
 KERNEL_API
+KSTATUS
+IoConnectInterrupt2 (
+    PIO_CONNECT_INTERRUPT_PARAMETERS Parameters
+    );
+
+/*++
+
+Routine Description:
+
+    This routine connects a device's interrupt.
+
+Arguments:
+
+    Parameters - Supplies a pointer to a versioned table containing the
+        parameters of the connection.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NOT_READY if the device has no resources or is not started.
+
+    STATUS_RESOURCE_IN_USE if the device attempts to connect to an interrupt
+    it does not own.
+
+    Other errors on failure.
+
+--*/
+
+KERNEL_API
 VOID
 IoDisconnectInterrupt (
     HANDLE InterruptHandle
@@ -6940,6 +7028,34 @@ Return Value:
 
     Returns the run level of the current processor immediately before it was
     raised by this function.
+
+--*/
+
+KERNEL_API
+RUNLEVEL
+IoGetInterruptRunLevel (
+    PHANDLE Handles,
+    UINTN HandleCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines the highest runlevel between all of the
+    connected interrupt handles given.
+
+Arguments:
+
+    Handles - Supplies an pointer to an array of connected interrupt handles.
+
+    HandleCount - Supplies the number of elements in the array.
+
+Return Value:
+
+    Returns the highest runlevel between all connected interrupts. This is
+    the runlevel to synchronize to if trying to synchronize a device with
+    multiple interrupts.
 
 --*/
 

@@ -130,12 +130,13 @@ Author:
 //
 
 typedef enum _RUNLEVEL {
-    RunLevelLow      = 0,
-    RunLevelDispatch = 2,
-    RunLevelClock    = 13,
-    RunLevelIpi      = 14,
-    RunLevelHigh     = 15,
-    MaxRunLevel      = 16
+    RunLevelLow       = 0,
+    RunLevelDispatch  = 2,
+    RunLevelMaxDevice = 11,
+    RunLevelClock     = 13,
+    RunLevelIpi       = 14,
+    RunLevelHigh      = 15,
+    RunLevelCount     = 16
 } RUNLEVEL, *PRUNLEVEL;
 
 typedef enum _WORK_PRIORITY {
@@ -598,7 +599,7 @@ struct _PROCESSOR_BLOCK {
     LIST_ENTRY IpiListHead;
     KSPIN_LOCK IpiListLock;
     ULONG PendingInterruptCount;
-    PENDING_INTERRUPT PendingInterrupts[MaxRunLevel];
+    PENDING_INTERRUPT PendingInterrupts[RunLevelCount];
     UCHAR PendingDispatchInterrupt;
     UCHAR ExpectingSpuriousFreeze;
     PDPC DpcInProgress;

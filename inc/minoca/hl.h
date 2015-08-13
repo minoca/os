@@ -82,7 +82,7 @@ typedef enum _IPI_TYPE {
 typedef enum _INTERRUPT_STATUS {
     InterruptStatusNotClaimed,
     InterruptStatusClaimed,
-    InterruptStatusLowLevelProcessingRequired
+    InterruptStatusDefer
 } INTERRUPT_STATUS, *PINTERRUPT_STATUS;
 
 typedef enum _INTERRUPT_MODEL {
@@ -135,8 +135,8 @@ Members:
 
     Mode - Stores the mode of the interrupt (edge or level).
 
-    ServiceRoutine - Stores the Interrupt Service Routine associated with this
-        interrupt.
+    InterruptServiceRoutine - Stores a pointer to the service routine to be
+        called at interrupt runlevel.
 
     Context - Stores the context to be passed in when this ISR is executed.
 
@@ -145,6 +145,22 @@ Members:
 
     LastTimestamp - Stores the time counter value the last time this interrupt
         was sampled. This is used for interrupt storm detection.
+
+    DispatchServiceRoutine - Stores an optiontl pointer to the function to
+        call at dispatch level to service the interrupt.
+
+    LowLevelServiceRoutine - Stores an optional pointer to the function to
+        call at low run level to service the interrupt.
+
+    Dpc - Stores a pointer to the DPC that is queued for this interrupt.
+
+    WorkItem - Stores a pointer to the work item that is queued for this
+        interrupt.
+
+    QueueStatus - Stores various queue flags. See INTERRUPT_QUEUE_* definitions.
+
+    Controller - Stores a pointer to the interrupt controller for this
+        interrupt.
 
 --*/
 
@@ -155,10 +171,16 @@ struct _KINTERRUPT {
     INTERRUPT_MODE Mode;
     ULONG Vector;
     RUNLEVEL RunLevel;
-    PINTERRUPT_SERVICE_ROUTINE ServiceRoutine;
+    PINTERRUPT_SERVICE_ROUTINE InterruptServiceRoutine;
     PVOID Context;
     UINTN InterruptCount;
     ULONGLONG LastTimestamp;
+    PINTERRUPT_SERVICE_ROUTINE DispatchServiceRoutine;
+    PINTERRUPT_SERVICE_ROUTINE LowLevelServiceRoutine;
+    PDPC Dpc;
+    PWORK_ITEM WorkItem;
+    volatile ULONG QueueFlags;
+    PINTERRUPT_CONTROLLER Controller;
 };
 
 /*++
@@ -705,7 +727,9 @@ Return Value:
 PKINTERRUPT
 HlCreateInterrupt (
     ULONG Vector,
-    PINTERRUPT_SERVICE_ROUTINE ServiceRoutine,
+    PINTERRUPT_SERVICE_ROUTINE InterruptServiceRoutine,
+    PINTERRUPT_SERVICE_ROUTINE DispatchServiceRoutine,
+    PINTERRUPT_SERVICE_ROUTINE LowLevelServiceRoutine,
     PVOID Context
     );
 
@@ -719,8 +743,14 @@ Arguments:
 
     Vector - Supplies the vector that the interrupt will come in on.
 
-    ServiceRoutine - Supplies a pointer to the function to call when this
-        interrupt comes in.
+    InterruptServiceRoutine - Supplies a pointer to the function to call at
+        interrupt runlevel when this interrupt comes in.
+
+    DispatchServiceRoutine - Supplies a pointer to the function to call at
+        dispatch level when this interrupt comes in.
+
+    LowLevelServiceRoutine - Supplies a pointer to the function to call at
+        low runlevel when this interrupt comes in.
 
     Context - Supplies a pointer's worth of data that will be passed in to the
         service routine when it is called.

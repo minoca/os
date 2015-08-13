@@ -325,7 +325,9 @@ GpioStartController (
 
 Routine Description:
 
-    This routine starts a GPIO controller.
+    This routine starts a GPIO controller. This routine should be serialized
+    externally, as it does not acquire the internal controller lock. Calling
+    it from the start IRP is sufficient.
 
 Arguments:
 
@@ -337,7 +339,8 @@ Arguments:
         Set to -1ULL if the controller has no interrupt resources.
 
     InterruptVector - Supplies the interrupt vector number of the interrupt
-        line that this controller is wired to.
+        line that this controller is wired to. Set to RunLevelLow if this GPIO
+        controller does not support interrupts.
 
 Return Value:
 
@@ -355,11 +358,39 @@ GpioStopController (
 
 Routine Description:
 
-    This routine stops a GPIO controller.
+    This routine stops a GPIO controller. This routine should be serialized
+    externally, as it does not acquire the internal GPIO lock. Calling this
+    routine from state change IRPs should be sufficient.
 
 Arguments:
 
     Controller - Supplies a pointer to the controller.
+
+Return Value:
+
+    None.
+
+--*/
+
+GPIO_API
+VOID
+GpioSetInterruptRunLevel (
+    PGPIO_CONTROLLER Controller,
+    RUNLEVEL RunLevel
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the internal runlevel of the GPIO lock.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    RunLevel - Supplies the runlevel that interrupts come in on for this
+        controller.
 
 Return Value:
 
@@ -392,3 +423,56 @@ Return Value:
     masked temporarily.
 
 --*/
+
+GPIO_API
+RUNLEVEL
+GpioLockController (
+    PGPIO_CONTROLLER Controller
+    );
+
+/*++
+
+Routine Description:
+
+    This routine acquires the GPIO controller lock. This routine is called
+    automatically by most interface routines.
+
+Arguments:
+
+    Controller - Supplies a pointer to the GPIO controller to acquire the lock
+        for.
+
+Return Value:
+
+    Returns the original runlevel, as this routine may have raised the runlevel.
+
+--*/
+
+GPIO_API
+VOID
+GpioUnlockController (
+    PGPIO_CONTROLLER Controller,
+    RUNLEVEL OldRunLevel
+    );
+
+/*++
+
+Routine Description:
+
+    This routine releases the GPIO controller lock. This routine is called
+    automatically by most interface routines.
+
+Arguments:
+
+    Controller - Supplies a pointer to the GPIO controller to release the lock
+        for.
+
+    OldRunLevel - Supplies the original runlevel to return to, as returned by
+        the acquire lock function.
+
+Return Value:
+
+    None.
+
+--*/
+

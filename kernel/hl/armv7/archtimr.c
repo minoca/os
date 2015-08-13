@@ -183,7 +183,6 @@ Return Value:
 
 {
 
-    PKINTERRUPT ClockInterrupt;
     UINTN ModuleCount;
     PHARDWARE_MODULE_ENTRY ModuleEntry;
     UINTN ModuleIndex;
@@ -193,13 +192,6 @@ Return Value:
     //
 
     if (KeGetCurrentProcessorNumber() == 0) {
-
-        //
-        // Wire up internal interrupt vectors.
-        //
-
-        ClockInterrupt = HlpInterruptGetClockKInterrupt();
-        ClockInterrupt->ServiceRoutine = HlpEarlyClockInterruptHandler;
 
         //
         // Loop through and initialize every built in hardware module.

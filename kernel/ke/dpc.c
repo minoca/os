@@ -565,7 +565,7 @@ Return Value:
         // switch doesn't happen before poking the clock.
         //
 
-        OldRunLevel = MaxRunLevel;
+        OldRunLevel = RunLevelCount;
         if (CurrentProcessor->RunLevel < RunLevelDispatch) {
             OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
         }
@@ -582,7 +582,7 @@ Return Value:
             KepSetClockToPeriodic(Processor);
         }
 
-        if (OldRunLevel != MaxRunLevel) {
+        if (OldRunLevel != RunLevelCount) {
             KeLowerRunLevel(OldRunLevel);
         }
     }

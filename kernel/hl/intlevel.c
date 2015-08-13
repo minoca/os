@@ -53,6 +53,31 @@ HlpInterruptReplay (
     ULONG MagicCandy
     );
 
+INTERRUPT_STATUS
+HlpRunIsr (
+    PTRAP_FRAME TrapFrame,
+    PPROCESSOR_BLOCK Processor,
+    ULONG Vector,
+    PINTERRUPT_CONTROLLER Controller
+    );
+
+VOID
+HlpDeferInterrupt (
+    PKINTERRUPT Interrupt,
+    PINTERRUPT_CONTROLLER Controller
+    );
+
+VOID
+HlpQueueInterruptDpc (
+    PKINTERRUPT Interrupt,
+    ULONG QueueFlags
+    );
+
+INTERRUPT_STATUS
+HlpContinueIsr (
+    PKINTERRUPT Interrupt
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -60,6 +85,78 @@ HlpInterruptReplay (
 //
 // ------------------------------------------------------------------ Functions
 //
+
+KERNEL_API
+INTERRUPT_STATUS
+HlSecondaryInterruptControllerService (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements a standard interrupt service routine for an
+    interrupt that is wired to another interrupt controller. It will call out
+    to determine what fired, and begin a new secondary interrupt.
+
+Arguments:
+
+    Context - Supplies the context, which must be a pointer to the secondary
+        interrupt controller that needs service.
+
+Return Value:
+
+    Returns an interrupt status indicating if this ISR is claiming the
+    interrupt, not claiming the interrupt, or needs the interrupt to be
+    masked temporarily.
+
+--*/
+
+{
+
+    INTERRUPT_CAUSE Cause;
+    PINTERRUPT_CONTROLLER Controller;
+    INTERRUPT_STATUS InterruptStatus;
+    ULONG MagicCandy;
+    PPROCESSOR_BLOCK Processor;
+    RUNLEVEL RunLevel;
+    ULONG Vector;
+
+    Controller = Context;
+    RunLevel = KeGetRunLevel();
+
+    //
+    // The low run level flag better match up with how this ISR is being called.
+    //
+
+    ASSERT((((Controller->Features & INTERRUPT_FEATURE_LOW_RUN_LEVEL) != 0) &&
+            (RunLevel == RunLevelLow)) ||
+           (((Controller->Features & INTERRUPT_FEATURE_LOW_RUN_LEVEL) == 0) &&
+            (RunLevel == Controller->RunLevel)));
+
+    InterruptStatus = InterruptStatusClaimed;
+    Cause = HlpInterruptAcknowledge(&Controller, &Vector, &MagicCandy);
+    if (Cause == InterruptCauseLineFired) {
+        if ((Controller->Features & INTERRUPT_FEATURE_LOW_RUN_LEVEL) != 0) {
+            RunLevel = KeRaiseRunLevel(Controller->RunLevel);
+        }
+
+        Processor = KeGetCurrentProcessorBlock();
+        HlpRunIsr(NULL, Processor, Vector, Controller);
+        if (Processor->RunLevel != RunLevel) {
+            KeLowerRunLevel(RunLevel);
+        }
+
+        Controller->FunctionTable.EndOfInterrupt(Controller->PrivateContext,
+                                                 MagicCandy);
+
+    } else if (Cause != InterruptCauseSpuriousInterrupt) {
+        InterruptStatus = InterruptStatusNotClaimed;
+    }
+
+    return InterruptStatus;
+}
 
 VOID
 HlDispatchInterrupt (
@@ -160,7 +257,7 @@ Return Value:
         ArEnableInterrupts();
     }
 
-    HlpRunIsr(TrapFrame, ProcessorBlock, Vector);
+    HlpRunIsr(TrapFrame, ProcessorBlock, Vector, Controller);
 
     //
     // Disable interrupts at the processor core again to restore the state to
@@ -287,26 +384,19 @@ Return Value:
 }
 
 VOID
-HlpRunIsr (
-    PTRAP_FRAME TrapFrame,
-    PPROCESSOR_BLOCK Processor,
-    ULONG Vector
+HlpInterruptServiceDpc (
+    PDPC Dpc
     )
 
 /*++
 
 Routine Description:
 
-    This routine runs the interrupt services routines for a given interrupt
-    vector.
+    This routine is called when an interrupt needs DPC service.
 
 Arguments:
 
-    TrapFrame - Supplies an optional pointer to the trap frame.
-
-    Processor - Supplies a pointer to the current processor block.
-
-    Vector - Supplies the vector that fired.
+    Dpc - Supplies a pointer to the DPC that is running.
 
 Return Value:
 
@@ -316,86 +406,106 @@ Return Value:
 
 {
 
-    PVOID Context;
     PKINTERRUPT Interrupt;
-    PKINTERRUPT *InterruptTable;
-    ULONGLONG LastTimestamp;
-    ULONGLONG Seconds;
+    ULONG OldFlags;
+
+    Interrupt = Dpc->UserData;
+
+    //
+    // Call the dispatch level ISR if requested.
+    //
+
+    if (Interrupt->DispatchServiceRoutine != NULL) {
+        Interrupt->DispatchServiceRoutine(Interrupt->Context);
+    }
+
+    //
+    // Deferred interrupts are only processed at low level, not dispatch.
+    //
+
+    ASSERT(((Interrupt->QueueFlags & INTERRUPT_QUEUE_DEFERRED) == 0) ||
+           (Interrupt->LowLevelServiceRoutine != NULL));
+
+    if (Interrupt->LowLevelServiceRoutine != NULL) {
+
+        //
+        // Set the work item queue flag before clearing the DPC queued flag so
+        // there's never a region where it looks like nothings queued but
+        // something is.
+        //
+
+        OldFlags = RtlAtomicOr32(&(Interrupt->QueueFlags),
+                                 INTERRUPT_QUEUE_WORK_ITEM_QUEUED);
+
+        RtlAtomicAnd32(&(Interrupt->QueueFlags), ~INTERRUPT_QUEUE_DPC_QUEUED);
+        if ((OldFlags & INTERRUPT_QUEUE_WORK_ITEM_QUEUED) == 0) {
+            KeQueueWorkItem(Interrupt->WorkItem);
+        }
+    }
+
+    return;
+}
+
+VOID
+HlpInterruptServiceWorker (
+    PVOID Parameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine contains the generic interrupt service work item handler,
+    which calls out to the low level service routine for the interrupt.
+
+Arguments:
+
+    Parameter - Supplies a context pointer, in this case a pointer to the
+        KINTERRUPT.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG ClearFlags;
+    PINTERRUPT_CONTROLLER Controller;
+    PKINTERRUPT Interrupt;
+    ULONG OldFlags;
     INTERRUPT_STATUS Status;
-    ULONGLONG TimeCounter;
+
+    Interrupt = Parameter;
+    ClearFlags = INTERRUPT_QUEUE_WORK_ITEM_QUEUED |
+                 INTERRUPT_QUEUE_DEFERRED;
+
+    OldFlags = RtlAtomicAnd32(&(Interrupt->QueueFlags), ~ClearFlags);
+    Status = Interrupt->LowLevelServiceRoutine(Interrupt->Context);
+
+    ASSERT(Status != InterruptStatusDefer);
 
     //
-    // Run all ISRs associated with this interrupt.
+    // If this is a deferred interrupt, continue calling ISRs.
     //
 
-    ASSERT(Vector >= HlFirstConfigurableVector);
+    if ((OldFlags & INTERRUPT_QUEUE_DEFERRED) != 0) {
+        if ((Status != InterruptStatusClaimed) ||
+            (Interrupt->Mode != InterruptModeLevel)) {
 
-    InterruptTable = (PKINTERRUPT *)(Processor->InterruptTable);
-    Interrupt = InterruptTable[Vector - HlFirstConfigurableVector];
-    if (Interrupt == NULL) {
-        RtlDebugPrint("Unexpected Interrupt on vector 0x%x, processor %d.\n",
-                      Vector,
-                      Processor->ProcessorNumber);
+            Status = HlpContinueIsr(Interrupt);
+        }
 
-        ASSERT(FALSE);
+        //
+        // Unmask the line if this interrupt is complete.
+        //
 
-    } else {
-        while (Interrupt != NULL) {
-            Context = Interrupt->Context;
-            if (Context == INTERRUPT_CONTEXT_TRAP_FRAME) {
-                Context = TrapFrame;
-            }
-
-            ASSERT(Interrupt->RunLevel == Processor->RunLevel);
-
-            //
-            // Keep track of how many times this ISR has been called (not
-            // worrying too much about increment races on other cores). Every
-            // so often, take a time counter timestamp. If too many interrupts
-            // have happened too close together, print out a storm warning.
-            //
-
-            Interrupt->InterruptCount += 1;
-            if (((Interrupt->InterruptCount &
-                  INTERRUPT_STORM_COUNT_MASK) == 0) &&
-                (Interrupt->RunLevel <= RunLevelClock)) {
-
-                LastTimestamp = Interrupt->LastTimestamp;
-                TimeCounter = KeGetRecentTimeCounter();
-                Seconds = TimeCounter - LastTimestamp /
-                          HlQueryTimeCounterFrequency();
-
-                if ((LastTimestamp != 0) &&
-                    (Interrupt->LastTimestamp == LastTimestamp) &&
-                    (Seconds < INTERRUPT_STORM_DELTA_SECONDS)) {
-
-                    RtlDebugPrint("ISR: Possible storm on vector 0x%x, "
-                                  "KINTERRUPT %x\n",
-                                  Vector,
-                                  Interrupt);
-                }
-
-                Interrupt->LastTimestamp = TimeCounter;
-            }
-
-            //
-            // Run the ISR.
-            //
-
-            Status = Interrupt->ServiceRoutine(Context);
-
-            //
-            // If the interrupt is level triggered and someone claimed it, then
-            // there's no need to keep running ISRs.
-            //
-
-            if ((Status == InterruptStatusClaimed) &&
-                (Interrupt->Mode == InterruptModeLevel)) {
-
-                break;
-            }
-
-            Interrupt = Interrupt->NextInterrupt;
+        if (Status != InterruptStatusDefer) {
+            Controller = Interrupt->Controller;
+            Controller->FunctionTable.MaskLine(Controller->PrivateContext,
+                                               &(Interrupt->Line),
+                                               TRUE);
         }
     }
 
@@ -593,7 +703,7 @@ Return Value:
         ArEnableInterrupts();
     }
 
-    HlpRunIsr(NULL, ProcessorBlock, Vector);
+    HlpRunIsr(NULL, ProcessorBlock, Vector, Controller);
 
     //
     // Disable interrupts again and send the EOI. The caller must deal with
@@ -611,5 +721,292 @@ Return Value:
     }
 
     return;
+}
+
+INTERRUPT_STATUS
+HlpRunIsr (
+    PTRAP_FRAME TrapFrame,
+    PPROCESSOR_BLOCK Processor,
+    ULONG Vector,
+    PINTERRUPT_CONTROLLER Controller
+    )
+
+/*++
+
+Routine Description:
+
+    This routine runs the interrupt services routines for a given interrupt
+    vector.
+
+Arguments:
+
+    TrapFrame - Supplies an optional pointer to the trap frame.
+
+    Processor - Supplies a pointer to the current processor block.
+
+    Vector - Supplies the vector that fired.
+
+    Controller - Supplies a pointer to the interrupt controller that fired.
+
+Return Value:
+
+    Returns an overall status from running some or all of the ISRs, depending
+    on the mode of the interrupt and the results returned from each ISR.
+
+--*/
+
+{
+
+    PVOID Context;
+    PKINTERRUPT Interrupt;
+    PKINTERRUPT *InterruptTable;
+    ULONGLONG LastTimestamp;
+    INTERRUPT_STATUS OverallStatus;
+    ULONGLONG Seconds;
+    INTERRUPT_STATUS Status;
+    ULONGLONG TimeCounter;
+
+    //
+    // Run all ISRs associated with this interrupt.
+    //
+
+    ASSERT(Vector >= HlFirstConfigurableVector);
+
+    OverallStatus = InterruptStatusNotClaimed;
+    InterruptTable = (PKINTERRUPT *)(Processor->InterruptTable);
+    Interrupt = InterruptTable[Vector - HlFirstConfigurableVector];
+    if (Interrupt == NULL) {
+        RtlDebugPrint("Unexpected Interrupt on vector 0x%x, processor %d.\n",
+                      Vector,
+                      Processor->ProcessorNumber);
+
+        ASSERT(FALSE);
+    }
+
+    while (Interrupt != NULL) {
+        Context = Interrupt->Context;
+        if (Context == INTERRUPT_CONTEXT_TRAP_FRAME) {
+            Context = TrapFrame;
+        }
+
+        ASSERT(Interrupt->RunLevel == Processor->RunLevel);
+
+        //
+        // Keep track of how many times this ISR has been called (not
+        // worrying too much about increment races on other cores). Every
+        // so often, take a time counter timestamp. If too many interrupts
+        // have happened too close together, print out a storm warning.
+        //
+
+        Interrupt->InterruptCount += 1;
+        if (((Interrupt->InterruptCount &
+              INTERRUPT_STORM_COUNT_MASK) == 0) &&
+            (Interrupt->RunLevel <= RunLevelClock)) {
+
+            LastTimestamp = Interrupt->LastTimestamp;
+            TimeCounter = KeGetRecentTimeCounter();
+            Seconds = TimeCounter - LastTimestamp /
+                      HlQueryTimeCounterFrequency();
+
+            if ((LastTimestamp != 0) &&
+                (Interrupt->LastTimestamp == LastTimestamp) &&
+                (Seconds < INTERRUPT_STORM_DELTA_SECONDS)) {
+
+                RtlDebugPrint("ISR: Possible storm on vector 0x%x, "
+                              "KINTERRUPT %x\n",
+                              Vector,
+                              Interrupt);
+            }
+
+            Interrupt->LastTimestamp = TimeCounter;
+        }
+
+        //
+        // Run the ISR.
+        //
+
+        Status = Interrupt->InterruptServiceRoutine(Context);
+        if (Status == InterruptStatusDefer) {
+            OverallStatus = Status;
+            HlpDeferInterrupt(Interrupt, Controller);
+            break;
+
+        } else if (Status == InterruptStatusClaimed) {
+            OverallStatus = Status;
+
+            //
+            // This interrupt has things to do. If there are lower level
+            // service routines to run, queue those up now.
+            //
+
+            if ((Interrupt->DispatchServiceRoutine != NULL) ||
+                (Interrupt->LowLevelServiceRoutine != NULL)) {
+
+                HlpQueueInterruptDpc(Interrupt, 0);
+            }
+
+            //
+            // For level triggered interrupts, stop calling ISRs after the
+            // first interrupt to respond. If it turns out multiple interrupt
+            // sources were occurring, the line will stay asserted and the
+            // interrupt will fire again.
+            //
+
+            if (Interrupt->Mode == InterruptModeLevel) {
+                break;
+            }
+        }
+
+        Interrupt = Interrupt->NextInterrupt;
+    }
+
+    return OverallStatus;
+}
+
+VOID
+HlpDeferInterrupt (
+    PKINTERRUPT Interrupt,
+    PINTERRUPT_CONTROLLER Controller
+    )
+
+/*++
+
+Routine Description:
+
+    This routine defers the given interrupt, masking it and queuing lover level
+    routines.
+
+Arguments:
+
+    Interrupt - Supplies a pointer to the interrupt to defer.
+
+    Controller - Supplies a pointer to the controller.
+
+Return Value:
+
+    Returns an overall status from running some or all of the ISRs, depending
+    on the mode of the interrupt and the results returned from each ISR.
+
+--*/
+
+{
+
+    //
+    // Mask the interrupt line.
+    //
+
+    ASSERT((Controller->Identifier == Interrupt->Line.Controller) &&
+           (Controller == Interrupt->Controller));
+
+    Controller->FunctionTable.MaskLine(Controller->PrivateContext,
+                                       &(Interrupt->Line),
+                                       FALSE);
+
+    HlpQueueInterruptDpc(Interrupt, INTERRUPT_QUEUE_DEFERRED);
+    return;
+}
+
+VOID
+HlpQueueInterruptDpc (
+    PKINTERRUPT Interrupt,
+    ULONG QueueFlags
+    )
+
+/*++
+
+Routine Description:
+
+    This routine queues the DPC for the interrupt if it has not yet been queued.
+
+Arguments:
+
+    Interrupt - Supplies a pointer to the interrupt to queue.
+
+    QueueFlags - Supplies any additional flags to OR in to the queue flags
+        mask (other than DPC queued, which will be ORed in automatically).
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldFlags;
+
+    ASSERT(KeGetRunLevel() == Interrupt->RunLevel);
+    ASSERT(Interrupt->Dpc != NULL);
+
+    OldFlags = RtlAtomicOr32(&(Interrupt->QueueFlags),
+                             QueueFlags | INTERRUPT_QUEUE_DPC_QUEUED);
+
+    if ((OldFlags & INTERRUPT_QUEUE_DPC_QUEUED) == 0) {
+        KeQueueDpc(Interrupt->Dpc);
+    }
+
+    return;
+}
+
+INTERRUPT_STATUS
+HlpContinueIsr (
+    PKINTERRUPT Interrupt
+    )
+
+/*++
+
+Routine Description:
+
+    This routine continues calling ISR routines after the given interrupt.
+
+Arguments:
+
+    Interrupt - Supplies a pointer to the interrupt that just completed its
+        service.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PVOID Context;
+    RUNLEVEL OldRunLevel;
+    INTERRUPT_STATUS OverallStatus;
+    RUNLEVEL RunLevel;
+    INTERRUPT_STATUS Status;
+
+    OverallStatus = InterruptStatusNotClaimed;
+    RunLevel = Interrupt->RunLevel;
+    OldRunLevel = KeRaiseRunLevel(RunLevel);
+    Interrupt = Interrupt->NextInterrupt;
+    while (Interrupt != NULL) {
+        Context = Interrupt->Context;
+        if (Context == INTERRUPT_CONTEXT_TRAP_FRAME) {
+            Context = NULL;
+        }
+
+        ASSERT(Interrupt->RunLevel == RunLevel);
+
+        Status = Interrupt->InterruptServiceRoutine(Context);
+        if (Status == InterruptStatusDefer) {
+            OverallStatus = Status;
+            HlpQueueInterruptDpc(Interrupt, INTERRUPT_QUEUE_DEFERRED);
+            break;
+
+        } else if (Status == InterruptStatusClaimed) {
+            OverallStatus = Status;
+            if (Interrupt->Mode == InterruptModeLevel) {
+                break;
+            }
+        }
+
+        Interrupt = Interrupt->NextInterrupt;
+    }
+
+    KeLowerRunLevel(OldRunLevel);
+    return OverallStatus;
 }
 

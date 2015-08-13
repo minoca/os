@@ -664,6 +664,7 @@ Return Value:
     ULONG AlignmentOffset;
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION ControllerBase;
     PHYSICAL_ADDRESS EndAddress;
     ULONGLONG InterruptLine;
@@ -672,6 +673,7 @@ Return Value:
     ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddress;
     GPIO_CONTROLLER_INFORMATION Registration;
+    RUNLEVEL RunLevel;
     ULONG Size;
     KSTATUS Status;
 
@@ -809,25 +811,6 @@ Return Value:
     }
 
     //
-    // Connect the interrupt, handing it to the GPIO library, which will
-    // eventually call back into the Begin Interrupt and End Interrupt routines
-    // here.
-    //
-
-    if (Device->InterruptHandle == INVALID_HANDLE) {
-        Status = IoConnectInterrupt(Irp->Device,
-                                    Device->InterruptLine,
-                                    Device->InterruptVector,
-                                    GpioInterruptService,
-                                    Device->GpioController,
-                                    &(Device->InterruptHandle));
-
-        if (!KSUCCESS(Status)) {
-            goto StartDeviceEnd;
-        }
-    }
-
-    //
     // Start up the controller.
     //
 
@@ -839,6 +822,30 @@ Return Value:
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }
+
+    //
+    // Connect the interrupt, handing it to the GPIO library, which will
+    // eventually call back into the Begin Interrupt and End Interrupt routines
+    // here.
+    //
+
+    if (Device->InterruptHandle == INVALID_HANDLE) {
+        RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+        Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+        Connect.Device = Irp->Device;
+        Connect.LineNumber = Device->InterruptLine;
+        Connect.Vector = Device->InterruptVector;
+        Connect.InterruptServiceRoutine = GpioInterruptService;
+        Connect.Context = Device->GpioController;
+        Connect.Interrupt = &(Device->InterruptHandle);
+        Status = IoConnectInterrupt2(&Connect);
+        if (!KSUCCESS(Status)) {
+            return Status;
+        }
+    }
+
+    RunLevel = IoGetInterruptRunLevel(&(Device->InterruptHandle), 1);
+    GpioSetInterruptRunLevel(Device->GpioController, RunLevel);
 
 StartDeviceEnd:
     if (!KSUCCESS(Status)) {

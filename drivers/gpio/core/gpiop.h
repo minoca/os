@@ -130,6 +130,14 @@ Members:
 
     GsiBase - Stores the global system interrupt base of this controller.
 
+    RunLevel - Stores the runlevel for this controller, if using the spin lock.
+
+    SpinLock - Stores the spin lock if this controller has interrupts and is
+        can access its registers at interrupt runlevel.
+
+    QueuedLock - Stores a pointer to the queued lock if this controller can
+        only be accessed at low runlevel.
+
 --*/
 
 struct _GPIO_CONTROLLER {
@@ -142,6 +150,9 @@ struct _GPIO_CONTROLLER {
     ULONGLONG InterruptLine;
     ULONGLONG InterruptVector;
     ULONG GsiBase;
+    RUNLEVEL RunLevel;
+    KSPIN_LOCK SpinLock;
+    PQUEUED_LOCK QueuedLock;
 };
 
 //

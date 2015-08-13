@@ -67,6 +67,29 @@ Author:
 #define INTERRUPT_LINE_INTERNAL_STATE_FLAG_RESERVED 0x00000001
 
 //
+// Define interrupt queue flags.
+//
+
+//
+// This flag is atomically set to try and queue the DPC.
+//
+
+#define INTERRUPT_QUEUE_DPC_QUEUED 0x00000001
+
+//
+// This flag is atomically set to race to queue the work item.
+//
+
+#define INTERRUPT_QUEUE_WORK_ITEM_QUEUED 0x00000002
+
+//
+// This flag is atomically set if the interrupt was deferred and needs to be
+// continued.
+//
+
+#define INTERRUPT_QUEUE_DEFERRED 0x00000004
+
+//
 // Define the maximum number of IPI lines any architecture will need.
 //
 
@@ -195,7 +218,10 @@ Members:
     RunLevel - Stores the run level that all interrupts occur at for this
         controller. This only applies to secondary interrupt controllers. For
         primary controllers (like the APIC and the GIC), this is set to
-        MaxRunLevel, indicating an invalid value.
+        RunLevelCount, indicating an invalid value.
+
+    Features - Stores the bitfield of interurpt controller features. See
+        INTERRUPT_FEATURE_* definitions.
 
 --*/
 
@@ -209,6 +235,7 @@ struct _INTERRUPT_CONTROLLER {
     LIST_ENTRY OutputLinesHead;
     ULONG PriorityCount;
     RUNLEVEL RunLevel;
+    ULONG Features;
 };
 
 //
@@ -245,26 +272,42 @@ extern ULONG HlMaxProcessors;
 //
 
 VOID
-HlpRunIsr (
-    PTRAP_FRAME TrapFrame,
-    PPROCESSOR_BLOCK Processor,
-    ULONG Vector
+HlpInterruptServiceDpc (
+    PDPC Dpc
     );
 
 /*++
 
 Routine Description:
 
-    This routine runs the interrupt services routines for a given interrupt
-    vector.
+    This routine is called when an interrupt needs DPC service.
 
 Arguments:
 
-    TrapFrame - Supplies an optional pointer to the trap frame.
+    Dpc - Supplies a pointer to the DPC that is running.
 
-    Processor - Supplies a pointer to the current processor block.
+Return Value:
 
-    Vector - Supplies the vector that fired.
+    None.
+
+--*/
+
+VOID
+HlpInterruptServiceWorker (
+    PVOID Parameter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine contains the generic interrupt service work item handler,
+    which calls out to the low level service routine for the interrupt.
+
+Arguments:
+
+    Parameter - Supplies a context pointer, in this case a pointer to the
+        KINTERRUPT.
 
 Return Value:
 
@@ -292,7 +335,7 @@ Arguments:
         controller.
 
     RunLevel - Supplies the runlevel that all interrupts from this controller
-        come in on. Set to MaxRunLevel if this interrupt controller is wired
+        come in on. Set to RunLevelCount if this interrupt controller is wired
         directly to the processor.
 
     NewController - Supplies an optional pointer where a pointer to the

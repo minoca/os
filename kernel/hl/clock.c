@@ -412,6 +412,7 @@ Return Value:
         //
 
         ClockInterrupt = HlpInterruptGetClockKInterrupt();
+        ClockInterrupt->InterruptServiceRoutine = HlpEarlyClockInterruptHandler;
         Status = HlpInterruptSetLineState(&(HlClockTimer->Interrupt.Line),
                                           HlClockTimer->Interrupt.TriggerMode,
                                           HlClockTimer->Interrupt.ActiveLevel,
@@ -550,7 +551,7 @@ Return Value:
 
     ClockInterrupt = HlpInterruptGetClockKInterrupt();
     Enabled = ArDisableInterrupts();
-    ClockInterrupt->ServiceRoutine = HlpClockInterruptHandler;
+    ClockInterrupt->InterruptServiceRoutine = HlpClockInterruptHandler;
     if (Enabled != FALSE) {
         ArEnableInterrupts();
     }

@@ -3509,7 +3509,7 @@ Return Value:
     ASSERT(KeGetRunLevel() <= RunLevelDispatch);
 
     FirstIndex = FLT_INDEX(VirtualAddress);
-    OldRunLevel = MaxRunLevel;
+    OldRunLevel = RunLevelCount;
     PageTablePhysical = INVALID_PHYSICAL_ADDRESS;
     MmpSyncKernelPageDirectory(FirstLevelTable, VirtualAddress);
 
