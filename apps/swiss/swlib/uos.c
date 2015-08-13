@@ -40,6 +40,7 @@ Environment:
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
+#include <termios.h>
 #include <time.h>
 #include <sys/times.h>
 #include <sys/time.h>
@@ -91,6 +92,12 @@ int
 SwpConvertPasswdToUserInformation (
     struct passwd *Passwd,
     PSWISS_USER_INFORMATION *UserInformation
+    );
+
+int
+SwpSetColors (
+    CONSOLE_COLOR Background,
+    CONSOLE_COLOR Foreground
     );
 
 //
@@ -147,6 +154,13 @@ int SwForkSupported = 1;
 //
 
 int SwSymlinkSupported = 1;
+
+//
+// Remember the original terminal settings.
+//
+
+struct termios SwOriginalTerminalSettings;
+char SwOriginalTerminalSettingsValid = 0;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -2093,6 +2107,54 @@ Return Value:
     return;
 }
 
+void
+SwMoveCursor (
+    void *Stream,
+    int XPosition,
+    int YPosition
+    )
+
+/*++
+
+Routine Description:
+
+    This routine moves the cursor to an absolute location.
+
+Arguments:
+
+    Stream - Supplies a pointer to the output file stream.
+
+    XPosition - Supplies the zero-based column number to move the cursor to.
+
+    YPosition - Supplies the zero-based row number to move the cursor to.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    TERMINAL_COMMAND_DATA Command;
+    BOOL Result;
+    CHAR Sequence[10];
+
+    memset(&Command, 0, sizeof(TERMINAL_COMMAND_DATA));
+    Command.Command = TerminalCommandCursorMove;
+    Command.ParameterCount = 2;
+    Command.Parameter[0] = YPosition + 1;
+    Command.Parameter[1] = XPosition + 1;
+    Result = TermCreateOutputSequence(&Command, Sequence, sizeof(Sequence));
+    if (Result != FALSE) {
+        Sequence[sizeof(Sequence) - 1] = '\0';
+        fwrite(Sequence, 1, strlen(Sequence), stdout);
+        fflush(stdout);
+    }
+
+    return;
+}
+
 int
 SwGetTerminalDimensions (
     int *XSize,
@@ -2180,61 +2242,13 @@ Return Value:
 {
 
     va_list ArgumentList;
-    TERMINAL_COMMAND_DATA CommandData;
-    int IsTty;
-    BOOL Result;
-    char Sequence[11];
 
     //
     // If standard out is not a terminal, don't print color codes.
     //
 
     fflush(NULL);
-    IsTty = isatty(STDOUT_FILENO);
-    if (IsTty == 0) {
-        va_start(ArgumentList, Format);
-        vprintf(Format, ArgumentList);
-        va_end(ArgumentList);
-        return 0;
-    }
-
-    memset(&CommandData, 0, sizeof(TERMINAL_COMMAND_DATA));
-    CommandData.Command = TerminalCommandSelectGraphicRendition;
-
-    //
-    // Bold background colors are not supported, just shift to the non-bold
-    // ones.
-    //
-
-    if (Background >= ConsoleColorBoldDefault) {
-        Background -= ConsoleColorBoldDefault;
-    }
-
-    if (Foreground >= ConsoleColorBoldDefault) {
-        Foreground -= ConsoleColorBoldDefault;
-        CommandData.Parameter[0] = TERMINAL_GRAPHICS_BOLD;
-        CommandData.ParameterCount += 1;
-    }
-
-    if (Foreground != ConsoleColorDefault) {
-        CommandData.Parameter[CommandData.ParameterCount] =
-                 TERMINAL_GRAPHICS_FOREGROUND + Foreground - ConsoleColorBlack;
-
-        CommandData.ParameterCount += 1;
-    }
-
-    if (Background != ConsoleColorDefault) {
-        CommandData.Parameter[CommandData.ParameterCount] =
-                 TERMINAL_GRAPHICS_BACKGROUND + Background - ConsoleColorBlack;
-
-        CommandData.ParameterCount += 1;
-    }
-
-    Result = TermCreateOutputSequence(&CommandData, Sequence, sizeof(Sequence));
-    if (Result != FALSE) {
-        Sequence[sizeof(Sequence) - 1] = '\0';
-        printf("%s", Sequence);
-    }
+    SwpSetColors(Background, Foreground);
 
     //
     // Now write the command.
@@ -2243,19 +2257,77 @@ Return Value:
     va_start(ArgumentList, Format);
     vprintf(Format, ArgumentList);
     va_end(ArgumentList);
+    SwpSetColors(ConsoleColorDefault, ConsoleColorDefault);
+    fflush(NULL);
+    return 0;
+}
 
-    //
-    // Reset the colors back to normal.
-    //
+int
+SwClearRegion (
+    CONSOLE_COLOR Background,
+    CONSOLE_COLOR Foreground,
+    int Column,
+    int Row,
+    int Width,
+    int Height
+    )
 
-    CommandData.ParameterCount = 0;
+/*++
+
+Routine Description:
+
+    This routine clears a region of the screen to the given foreground and
+    background colors.
+
+Arguments:
+
+    Background - Supplies the background color to set for the region.
+
+    Foreground - Supplies the foreground color to set for the region.
+
+    Column - Supplies the zero-based column number of the upper-left region
+        to clear.
+
+    Row - Supplies the zero-based row number of the upper-left corner of the
+        region to clear.
+
+    Width - Supplies the width of the region to clear. Supply -1 to clear the
+        whole width of the screen.
+
+    Height - Supplies the height of the region to clear. Supply -1 to clear the
+        whole height of the screen.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    TERMINAL_COMMAND_DATA CommandData;
+    INT Index;
+    BOOL Result;
+    char Sequence[11];
+
+    memset(&CommandData, 0, sizeof(TERMINAL_COMMAND_DATA));
+    CommandData.Command = TerminalCommandEraseCharacters;
+    CommandData.ParameterCount = 1;
+    CommandData.Parameter[0] = Width;
     Result = TermCreateOutputSequence(&CommandData, Sequence, sizeof(Sequence));
-    if (Result != FALSE) {
-        Sequence[sizeof(Sequence) - 1] = '\0';
+    if (Result == FALSE) {
+        return -1;
+    }
+
+    Sequence[sizeof(Sequence) - 1] = '\0';
+    SwpSetColors(Background, Foreground);
+    for (Index = 0; Index < Height; Index += 1) {
+        SwMoveCursor(stdout, Column, Row + Index);
         printf("%s", Sequence);
     }
 
-    fflush(NULL);
     return 0;
 }
 
@@ -2283,7 +2355,7 @@ Return Value:
 
 {
 
-    sleep(Microseconds / 1000000);
+    usleep(Microseconds);
     return;
 }
 
@@ -3096,6 +3168,130 @@ Return Value:
     return clock_gettime(CLOCK_MONOTONIC, Time);
 }
 
+int
+SwSetRawInputMode (
+    char *BackspaceCharacter,
+    char *KillCharacter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the terminal into raw input mode.
+
+Arguments:
+
+    BackspaceCharacter - Supplies an optional pointer where the backspace
+        character will be returned on success.
+
+    KillCharacter - Supplies an optional pointer where the kill character
+        will be returned on success.
+
+Return Value:
+
+    1 on success.
+
+    0 on failure.
+
+--*/
+
+{
+
+    int Result;
+    struct termios TerminalSettings;
+
+    Result = tcgetattr(STDIN_FILENO, &TerminalSettings);
+    if (Result != 0) {
+        return 0;
+    }
+
+    if (SwOriginalTerminalSettingsValid == 0) {
+        SwOriginalTerminalSettingsValid = 1;
+        memcpy(&SwOriginalTerminalSettings,
+               &TerminalSettings,
+               sizeof(struct termios));
+    }
+
+    //
+    // Disable break, CR to NL, parity check, strip characters, and output
+    // control.
+    //
+
+    TerminalSettings.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+
+    //
+    // Set 8 bit characters.
+    //
+
+    TerminalSettings.c_cflag |= CS8;
+
+    //
+    // Change the local mode to disable canonical mode, echo, erase, extended
+    // functions, and signal characters.
+    //
+
+    TerminalSettings.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG | ECHONL);
+
+    //
+    // Return immediately always.
+    //
+
+    TerminalSettings.c_cc[VMIN] = 1;
+    TerminalSettings.c_cc[VTIME] = 0;
+
+    //
+    // Set these new parameters.
+    //
+
+    Result = tcsetattr(STDIN_FILENO, TCSADRAIN, &TerminalSettings);
+    if (Result != 0) {
+        printf("Failed to set raw input mode.\n");
+        return 0;
+    }
+
+    if (BackspaceCharacter != NULL) {
+        *BackspaceCharacter = TerminalSettings.c_cc[VERASE];
+    }
+
+    if (KillCharacter != NULL) {
+        *KillCharacter = TerminalSettings.c_cc[VKILL];
+    }
+
+    return 1;
+}
+
+void
+SwRestoreInputMode (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine restores the terminal's input mode if it was put into raw mode
+    earlier. If it was not, this is a no-op.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (SwOriginalTerminalSettingsValid != 0) {
+        tcsetattr(STDIN_FILENO, TCSADRAIN, &SwOriginalTerminalSettings);
+    }
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -3340,6 +3536,89 @@ Return Value:
     }
 
     *UserInformation = User;
+    return 0;
+}
+
+int
+SwpSetColors (
+    CONSOLE_COLOR Background,
+    CONSOLE_COLOR Foreground
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a formatted message to the console in color.
+
+Arguments:
+
+    Background - Supplies the background color.
+
+    Foreground - Supplies the foreground color.
+
+    Format - Supplies the format string to print.
+
+    ... - Supplies the remainder of the print format arguments.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    TERMINAL_COMMAND_DATA CommandData;
+    int IsTty;
+    BOOL Result;
+    char Sequence[11];
+
+    IsTty = isatty(STDOUT_FILENO);
+    if (IsTty == 0) {
+        return 0;
+    }
+
+    memset(&CommandData, 0, sizeof(TERMINAL_COMMAND_DATA));
+    CommandData.Command = TerminalCommandSelectGraphicRendition;
+
+    //
+    // Bold background colors are not supported, just shift to the non-bold
+    // ones.
+    //
+
+    if (Background >= ConsoleColorBoldDefault) {
+        Background -= ConsoleColorBoldDefault;
+    }
+
+    if (Foreground >= ConsoleColorBoldDefault) {
+        Foreground -= ConsoleColorBoldDefault;
+        CommandData.Parameter[0] = TERMINAL_GRAPHICS_BOLD;
+        CommandData.ParameterCount += 1;
+    }
+
+    if (Foreground != ConsoleColorDefault) {
+        CommandData.Parameter[CommandData.ParameterCount] =
+                 TERMINAL_GRAPHICS_FOREGROUND + Foreground - ConsoleColorBlack;
+
+        CommandData.ParameterCount += 1;
+    }
+
+    if (Background != ConsoleColorDefault) {
+        CommandData.Parameter[CommandData.ParameterCount] =
+                 TERMINAL_GRAPHICS_BACKGROUND + Background - ConsoleColorBlack;
+
+        CommandData.ParameterCount += 1;
+    }
+
+    Result = TermCreateOutputSequence(&CommandData, Sequence, sizeof(Sequence));
+    if (Result != FALSE) {
+        Sequence[sizeof(Sequence) - 1] = '\0';
+        printf("%s", Sequence);
+    }
+
     return 0;
 }
 

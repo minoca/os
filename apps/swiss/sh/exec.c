@@ -342,10 +342,10 @@ Return Value:
     }
 
     if (Raw != FALSE) {
-        ShSetRawInputMode();
+        SwSetRawInputMode(&ShBackspaceCharacter, &ShKillLineCharacter);
 
     } else {
-        ShRestoreInputMode();
+        SwRestoreInputMode();
     }
 
     return;

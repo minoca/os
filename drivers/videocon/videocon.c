@@ -2168,7 +2168,6 @@ Return Value:
     LONG Row;
     LONG SavedBottomMargin;
     LONG SavedTopMargin;
-    ULONG ZeroSize;
 
     ASSERT((EndColumn < Console->Columns) && (EndRow < Console->ScreenRows));
 
@@ -2258,14 +2257,17 @@ Return Value:
         ASSERT(Column <= EndColumnThisRow);
 
         if (ResetAttributes != FALSE) {
-            ZeroSize = (EndColumnThisRow - Column + 1) *
-                       sizeof(BASE_VIDEO_CHARACTER);
+            while (Column <= EndColumnThisRow) {
+                Line->Character[Column].Data.Character = ' ';
+                Line->Character[Column].Data.Attributes =
+                                                       Console->TextAttributes;
 
-            RtlZeroMemory(&(Line->Character[Column]), ZeroSize);
+                Column += 1;
+            }
 
         } else {
             while (Column <= EndColumnThisRow) {
-                Line->Character[Column].AsUint32 = 0;
+                Line->Character[Column].Data.Character = ' ';
                 Column += 1;
             }
         }

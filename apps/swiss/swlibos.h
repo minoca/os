@@ -1628,6 +1628,33 @@ Return Value:
 --*/
 
 void
+SwMoveCursor (
+    void *Stream,
+    int XPosition,
+    int YPosition
+    );
+
+/*++
+
+Routine Description:
+
+    This routine moves the cursor to an absolute location.
+
+Arguments:
+
+    Stream - Supplies a pointer to the output file stream.
+
+    XPosition - Supplies the zero-based column number to move the cursor to.
+
+    YPosition - Supplies the zero-based row number to move the cursor to.
+
+Return Value:
+
+    None.
+
+--*/
+
+void
 SwScrollTerminal (
     int Rows
     );
@@ -1666,6 +1693,49 @@ Arguments:
     XSize - Supplies a pointer where the number of columns will be returned.
 
     YSize - Supplies a pointer where the number of rows will be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+int
+SwClearRegion (
+    CONSOLE_COLOR Background,
+    CONSOLE_COLOR Foreground,
+    int Column,
+    int Row,
+    int Width,
+    int Height
+    );
+
+/*++
+
+Routine Description:
+
+    This routine clears a region of the screen to the given foreground and
+    background colors.
+
+Arguments:
+
+    Background - Supplies the background color to set for the region.
+
+    Foreground - Supplies the foreground color to set for the region.
+
+    Column - Supplies the zero-based column number of the upper-left region
+        to clear.
+
+    Row - Supplies the zero-based row number of the upper-left corner of the
+        region to clear.
+
+    Width - Supplies the width of the region to clear. Supply -1 to clear the
+        whole width of the screen.
+
+    Height - Supplies the height of the region to clear. Supply -1 to clear the
+        whole height of the screen.
 
 Return Value:
 
@@ -2419,6 +2489,56 @@ Return Value:
     0 on success.
 
     Non-zero on failure.
+
+--*/
+
+int
+SwSetRawInputMode (
+    char *BackspaceCharacter,
+    char *KillCharacter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the terminal into raw input mode.
+
+Arguments:
+
+    BackspaceCharacter - Supplies an optional pointer where the backspace
+        character will be returned on success.
+
+    KillCharacter - Supplies an optional pointer where the kill character
+        will be returned on success.
+
+Return Value:
+
+    1 on success.
+
+    0 on failure.
+
+--*/
+
+void
+SwRestoreInputMode (
+    void
+    );
+
+/*++
+
+Routine Description:
+
+    This routine restores the terminal's input mode if it was put into raw mode
+    earlier. If it was not, this is a no-op.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
 
 --*/
 

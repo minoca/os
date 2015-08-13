@@ -165,13 +165,6 @@ PSTR ShNtExecutableExtensions[] = {
 int ShExecutableBitSupported = 0;
 
 //
-// Store the original console mode.
-//
-
-DWORD ShOriginalConsoleMode;
-BOOL ShConsoleModeSaved;
-
-//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -923,94 +916,6 @@ Return Value:
     signal(SIGSEGV, SIG_DFL);
     signal(SIGTERM, SIG_DFL);
     signal(SIGABRT, SIG_DFL);
-    return;
-}
-
-int
-ShSetRawInputMode (
-    void
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sets the shell into raw input mode.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    1 on success.
-
-    0 on failure.
-
---*/
-
-{
-
-    HANDLE Console;
-    DWORD OriginalMode;
-    DWORD RawMode;
-    BOOL Result;
-
-    Console = GetStdHandle(STD_INPUT_HANDLE);
-    Result = GetConsoleMode(Console, &OriginalMode);
-    if (Result == FALSE) {
-        return 0;
-    }
-
-    if (ShConsoleModeSaved == FALSE) {
-        ShOriginalConsoleMode = OriginalMode;
-        ShConsoleModeSaved = TRUE;
-    }
-
-    RawMode = OriginalMode;
-    RawMode &= ~(ENABLE_ECHO_INPUT | ENABLE_INSERT_MODE | ENABLE_LINE_INPUT);
-    RawMode |= ENABLE_EXTENDED_FLAGS | ENABLE_PROCESSED_INPUT |
-               ENABLE_QUICK_EDIT_MODE | ENABLE_INSERT_MODE;
-
-    Result = SetConsoleMode(Console, RawMode);
-    if (Result == FALSE) {
-        return 0;
-    }
-
-    return 1;
-}
-
-void
-ShRestoreInputMode (
-    void
-    )
-
-/*++
-
-Routine Description:
-
-    This routine restores the shell's input mode if it was put into raw mode
-    earlier. If it was not, this is a no-op.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    HANDLE Console;
-
-    if (ShConsoleModeSaved != FALSE) {
-        Console = GetStdHandle(STD_INPUT_HANDLE);
-        SetConsoleMode(Console, ShOriginalConsoleMode);
-    }
-
     return;
 }
 

@@ -668,37 +668,6 @@ ReadLineEnd:
     return Result;
 }
 
-void
-ShSetTerminalCharacters (
-    char Backspace,
-    char Kill
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sets the terminal editing control characters.
-
-Arguments:
-
-    Backspace - Supplies the backspace character.
-
-    Kill - Supplies the kill (line) character.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ShBackspaceCharacter = Backspace;
-    ShKillLineCharacter = Kill;
-    return;
-}
-
 //
 // --------------------------------------------------------- Internal Functions
 //

@@ -29,10 +29,11 @@ COMMON_OBJS = basename.o       \
               comm.o           \
               cp.o             \
               cut.o            \
+              date.o           \
               dd.o             \
               diff.o           \
-              date.o           \
               dirname.o        \
+              dw.o             \
               easy.o           \
               echo.o           \
               env.o            \

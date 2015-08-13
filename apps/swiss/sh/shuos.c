@@ -35,7 +35,6 @@ Environment:
 #include <pwd.h>
 #include <sys/times.h>
 #include <sys/wait.h>
-#include <termios.h>
 #include <errno.h>
 #include "shos.h"
 
@@ -75,13 +74,6 @@ long ShClockTicksPerSecond;
 
 struct sigaction ShOriginalSignalDispositions[ShellSignalCount];
 int ShOriginalSignalDispositionValid[ShellSignalCount];
-
-//
-// Remember the original terminal settings.
-//
-
-struct termios ShOriginalTerminalSettings;
-char ShOriginalTerminalSettingsValid = 0;
 
 //
 // Store a global that's non-zero if this OS supports an executable permission
@@ -818,120 +810,6 @@ Return Value:
                 ShOriginalSignalDispositionValid[SignalIndex] = 0;
             }
         }
-    }
-
-    return;
-}
-
-int
-ShSetRawInputMode (
-    void
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sets the shell into raw input mode.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    1 on success.
-
-    0 on failure.
-
---*/
-
-{
-
-    int Result;
-    struct termios TerminalSettings;
-
-    Result = tcgetattr(STDIN_FILENO, &TerminalSettings);
-    if (Result != 0) {
-        return 0;
-    }
-
-    if (ShOriginalTerminalSettingsValid == 0) {
-        ShOriginalTerminalSettingsValid = 1;
-        memcpy(&ShOriginalTerminalSettings,
-               &TerminalSettings,
-               sizeof(struct termios));
-    }
-
-    //
-    // Disable break, CR to NL, parity check, strip characters, and output
-    // control.
-    //
-
-    TerminalSettings.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
-
-    //
-    // Set 8 bit characters.
-    //
-
-    TerminalSettings.c_cflag |= CS8;
-
-    //
-    // Change the local mode to disable canonical mode, echo, erase, extended
-    // functions, and signal characters.
-    //
-
-    TerminalSettings.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG | ECHONL);
-
-    //
-    // Return immediately always.
-    //
-
-    TerminalSettings.c_cc[VMIN] = 1;
-    TerminalSettings.c_cc[VTIME] = 0;
-
-    //
-    // Set these new parameters.
-    //
-
-    Result = tcsetattr(STDIN_FILENO, TCSADRAIN, &TerminalSettings);
-    if (Result != 0) {
-        printf("Failed to set raw input mode.\n");
-        return 0;
-    }
-
-    ShSetTerminalCharacters(TerminalSettings.c_cc[VERASE],
-                            TerminalSettings.c_cc[VKILL]);
-
-    return 1;
-}
-
-void
-ShRestoreInputMode (
-    void
-    )
-
-/*++
-
-Routine Description:
-
-    This routine restores the shell's input mode if it was put into raw mode
-    earlier. If it was not, this is a no-op.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    if (ShOriginalTerminalSettingsValid != 0) {
-        tcsetattr(STDIN_FILENO, TCSADRAIN, &ShOriginalTerminalSettings);
     }
 
     return;

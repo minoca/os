@@ -197,30 +197,6 @@ Return Value:
 
 --*/
 
-void
-ShSetTerminalCharacters (
-    char Backspace,
-    char Kill
-    );
-
-/*++
-
-Routine Description:
-
-    This routine sets the terminal editing control characters.
-
-Arguments:
-
-    Backspace - Supplies the backspace character.
-
-    Kill - Supplies the kill (line) character.
-
-Return Value:
-
-    None.
-
---*/
-
 //
 // OS functions called by the common shell portion.
 //
@@ -568,51 +544,6 @@ Routine Description:
 
     This routine restores all the signal dispositions back to their original
     state.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-int
-ShSetRawInputMode (
-    void
-    );
-
-/*++
-
-Routine Description:
-
-    This routine sets the shell into raw input mode.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    1 on success.
-
-    0 on failure.
-
---*/
-
-void
-ShRestoreInputMode (
-    void
-    );
-
-/*++
-
-Routine Description:
-
-    This routine restores the shell's input mode if it was put into raw mode
-    earlier. If it was not, this is a no-op.
 
 Arguments:
 

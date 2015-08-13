@@ -185,6 +185,13 @@ ULONG SwCharacterIndex;
 ULONG SwCharacterRepeatCount;
 
 //
+// Store the original console mode.
+//
+
+DWORD SwOriginalConsoleMode;
+BOOL SwConsoleModeSaved;
+
+//
 // Store the conversion from the color enum to the console attributes.
 //
 
@@ -2117,6 +2124,49 @@ Return Value:
 }
 
 void
+SwMoveCursor (
+    void *Stream,
+    int XPosition,
+    int YPosition
+    )
+
+/*++
+
+Routine Description:
+
+    This routine moves the cursor to an absolute location.
+
+Arguments:
+
+    Stream - Supplies a pointer to the output file stream.
+
+    XPosition - Supplies the zero-based column number to move the cursor to.
+
+    YPosition - Supplies the zero-based row number to move the cursor to.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CONSOLE_SCREEN_BUFFER_INFO ConsoleInformation;
+    HANDLE Handle;
+
+    fflush(NULL);
+    Handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    GetConsoleScreenBufferInfo(Handle, &ConsoleInformation);
+    ConsoleInformation.dwCursorPosition.X = XPosition;
+    ConsoleInformation.dwCursorPosition.Y = ConsoleInformation.srWindow.Top +
+                                            YPosition;
+
+    SetConsoleCursorPosition(Handle, ConsoleInformation.dwCursorPosition);
+    return;
+}
+
+void
 SwScrollTerminal (
     int Rows
     )
@@ -2317,6 +2367,103 @@ Return Value:
 
     if (Result == FALSE) {
         return ENOSYS;
+    }
+
+    return 0;
+}
+
+int
+SwClearRegion (
+    CONSOLE_COLOR Background,
+    CONSOLE_COLOR Foreground,
+    int Column,
+    int Row,
+    int Width,
+    int Height
+    )
+
+/*++
+
+Routine Description:
+
+    This routine clears a region of the screen to the given foreground and
+    background colors.
+
+Arguments:
+
+    Background - Supplies the background color to set for the region.
+
+    Foreground - Supplies the foreground color to set for the region.
+
+    Column - Supplies the zero-based column number of the upper-left region
+        to clear.
+
+    Row - Supplies the zero-based row number of the upper-left corner of the
+        region to clear.
+
+    Width - Supplies the width of the region to clear. Supply -1 to clear the
+        whole width of the screen.
+
+    Height - Supplies the height of the region to clear. Supply -1 to clear the
+        whole height of the screen.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    DWORD ActualCount;
+    WORD Attributes;
+    CONSOLE_SCREEN_BUFFER_INFO ConsoleInformation;
+    HANDLE Handle;
+    int RowIndex;
+    COORD Start;
+    int TerminalHeight;
+    int TerminalWidth;
+
+    Attributes = 0;
+    if (Foreground < ConsoleColorCount) {
+        Attributes |= SwForegroundColors[Foreground];
+    }
+
+    if (Background < ConsoleColorCount) {
+        Attributes |= SwBackgroundColors[Background];
+    }
+
+    if ((Width == -1) || (Height == -1)) {
+        SwGetTerminalDimensions(&TerminalWidth, &TerminalHeight);
+        if (Width == -1) {
+            Width = TerminalWidth - Column;
+        }
+
+        if (Height == -1) {
+            Height = TerminalHeight - Row;
+        }
+    }
+
+    Handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    GetConsoleScreenBufferInfo(Handle, &ConsoleInformation);
+    Start.Y = ConsoleInformation.srWindow.Top + Row;
+    Start.X = Column;
+    for (RowIndex = 0; RowIndex < Height; RowIndex += 1) {
+        FillConsoleOutputAttribute(Handle,
+                                   Attributes,
+                                   Width,
+                                   Start,
+                                   &ActualCount);
+
+        FillConsoleOutputCharacter(Handle,
+                                   ' ',
+                                   Width,
+                                   Start,
+                                   &ActualCount);
+
+        Start.Y += 1;
     }
 
     return 0;
@@ -3502,6 +3649,99 @@ Return Value:
     Value.QuadPart -= (Time->tv_sec * Frequency.QuadPart);
     Time->tv_nsec = (Value.QuadPart * 1000000000ULL) / Frequency.QuadPart;
     return 0;
+}
+
+int
+SwSetRawInputMode (
+    char *BackspaceCharacter,
+    char *KillCharacter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the terminal into raw input mode.
+
+Arguments:
+
+    BackspaceCharacter - Supplies an optional pointer where the backspace
+        character will be returned on success.
+
+    KillCharacter - Supplies an optional pointer where the kill character
+        will be returned on success.
+
+Return Value:
+
+    1 on success.
+
+    0 on failure.
+
+--*/
+
+{
+
+    HANDLE Console;
+    DWORD OriginalMode;
+    DWORD RawMode;
+    BOOL Result;
+
+    Console = GetStdHandle(STD_INPUT_HANDLE);
+    Result = GetConsoleMode(Console, &OriginalMode);
+    if (Result == FALSE) {
+        return 0;
+    }
+
+    if (SwConsoleModeSaved == FALSE) {
+        SwOriginalConsoleMode = OriginalMode;
+        SwConsoleModeSaved = TRUE;
+    }
+
+    RawMode = OriginalMode;
+    RawMode &= ~(ENABLE_ECHO_INPUT | ENABLE_INSERT_MODE | ENABLE_LINE_INPUT);
+    RawMode |= ENABLE_EXTENDED_FLAGS | ENABLE_PROCESSED_INPUT |
+               ENABLE_QUICK_EDIT_MODE | ENABLE_INSERT_MODE;
+
+    Result = SetConsoleMode(Console, RawMode);
+    if (Result == FALSE) {
+        return 0;
+    }
+
+    return 1;
+}
+
+void
+SwRestoreInputMode (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine restores the terminal's input mode if it was put into raw mode
+    earlier. If it was not, this is a no-op.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    HANDLE Console;
+
+    if (SwConsoleModeSaved != FALSE) {
+        Console = GetStdHandle(STD_INPUT_HANDLE);
+        SetConsoleMode(Console, SwOriginalConsoleMode);
+    }
+
+    return;
 }
 
 int

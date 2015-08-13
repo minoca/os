@@ -800,6 +800,13 @@ extern BOOL ShUseSwissBuiltins;
 extern CHAR ShQuoteEscapeCharacters[];
 
 //
+// Define some editing characters that vary across systems and terminals.
+//
+
+extern CHAR ShBackspaceCharacter;
+extern CHAR ShKillLineCharacter;
+
+//
 // -------------------------------------------------------- Function Prototypes
 //
 

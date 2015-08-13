@@ -1487,7 +1487,7 @@ Return Value:
     // may still have standard in from a terminal.
     //
 
-    ShRestoreInputMode();
+    SwRestoreInputMode();
 
     //
     // Skip over the "read" argument.
