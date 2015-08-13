@@ -838,7 +838,7 @@ Return Value:
         Connect.InterruptServiceRoutine = GpioInterruptService;
         Connect.Context = Device->GpioController;
         Connect.Interrupt = &(Device->InterruptHandle);
-        Status = IoConnectInterrupt2(&Connect);
+        Status = IoConnectInterrupt(&Connect);
         if (!KSUCCESS(Status)) {
             return Status;
         }

@@ -517,6 +517,14 @@ Return Value:
     Interrupt->Vector = Vector;
     Interrupt->Context = Context;
     Interrupt->InterruptServiceRoutine = InterruptServiceRoutine;
+
+    //
+    // Assume the interrupt is coming in with the primary vector to runlevel
+    // mapping. The set line state function changes this value, but for MSI
+    // interrupts for instance set line state is never called.
+    //
+
+    Interrupt->RunLevel = VECTOR_TO_RUN_LEVEL(Vector);
     if ((DispatchServiceRoutine != NULL) || (LowLevelServiceRoutine != NULL)) {
         Interrupt->DispatchServiceRoutine = DispatchServiceRoutine;
         Interrupt->Dpc = KeCreateDpc(HlpInterruptServiceDpc, Interrupt);

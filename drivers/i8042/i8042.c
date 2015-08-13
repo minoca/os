@@ -145,17 +145,6 @@ Members:
 
     InterruptHandle - Stores the handle for the connected interrupt.
 
-    InteruptDpc - Stores a pointer to the DPC that's queued when an interrupt
-        occurs.
-
-    DpcQueued - Stores a boolean indicating whether or not the DPC is
-        currently in progress.
-
-    WorkItem - Stores a pointer to the work item that reports input events.
-
-    WorkItemQueued - Stores a boolean indicating whether or not the work item
-        is queued.
-
     UserInputDeviceHandle - Stores the handle returned by the User Input
         library.
 
@@ -182,10 +171,6 @@ typedef struct _I8042_DEVICE {
     ULONGLONG InterruptLine;
     BOOL InterruptResourcesFound;
     HANDLE InterruptHandle;
-    PDPC InterruptDpc;
-    BOOL DpcQueued;
-    PWORK_ITEM WorkItem;
-    BOOL WorkItemQueued;
     HANDLE UserInputDeviceHandle;
     KSPIN_LOCK InterruptLock;
     PQUEUED_LOCK ReadLock;
@@ -247,6 +232,11 @@ I8042InterruptService (
     PVOID Context
     );
 
+INTERRUPT_STATUS
+I8042InterruptServiceWorker (
+    PVOID Parameter
+    );
+
 KSTATUS
 I8042pProcessResourceRequirements (
     PIRP Irp,
@@ -263,16 +253,6 @@ KSTATUS
 I8042pEnableDevice (
     PVOID OsDevice,
     PI8042_DEVICE Device
-    );
-
-VOID
-I8042pInterruptServiceDpc (
-    PDPC Dpc
-    );
-
-VOID
-I8042pInterruptServiceWorker (
-    PVOID Parameter
     );
 
 KSTATUS
@@ -467,28 +447,10 @@ Return Value:
     }
 
     RtlZeroMemory(NewDevice, sizeof(I8042_DEVICE));
+    KeInitializeSpinLock(&(NewDevice->InterruptLock));
     NewDevice->InterruptHandle = INVALID_HANDLE;
     NewDevice->UserInputDeviceHandle = INVALID_HANDLE;
     NewDevice->IsMouse = DeviceIsMouse;
-    NewDevice->InterruptDpc = KeCreateDpc(I8042pInterruptServiceDpc, NewDevice);
-    if (NewDevice->InterruptDpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto AddDeviceEnd;
-    }
-
-    ASSERT(NewDevice->WorkItem == NULL);
-
-    NewDevice->WorkItem = KeCreateWorkItem(NULL,
-                                           WorkPriorityNormal,
-                                           I8042pInterruptServiceWorker,
-                                           NewDevice,
-                                           I8042_ALLOCATION_TAG);
-
-    if (NewDevice->WorkItem == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto AddDeviceEnd;
-    }
-
     NewDevice->ReadLock = KeCreateQueuedLock();
     if (NewDevice->ReadLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -503,14 +465,6 @@ Return Value:
 AddDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (NewDevice != NULL) {
-            if (NewDevice->InterruptDpc != NULL) {
-                KeDestroyDpc(NewDevice->InterruptDpc);
-            }
-
-            if (NewDevice->WorkItem != NULL) {
-                KeDestroyWorkItem(NewDevice->WorkItem);
-            }
-
             if (NewDevice->ReadLock != NULL) {
                 KeDestroyQueuedLock(NewDevice->ReadLock);
             }
@@ -830,15 +784,128 @@ Return Value:
         //
 
         Device->WriteIndex = WriteIndex;
-        if (Device->DpcQueued == FALSE) {
-            KeQueueDpc(Device->InterruptDpc);
-            Device->DpcQueued = TRUE;
-        }
-
         KeReleaseSpinLock(&(Device->InterruptLock));
     }
 
     return InterruptStatus;
+}
+
+INTERRUPT_STATUS
+I8042InterruptServiceWorker (
+    PVOID Parameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes interrupts for the e100 controller at low level.
+
+Arguments:
+
+    Parameter - Supplies an optional parameter passed in by the creator of the
+        work item.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+{
+
+    UCHAR Byte;
+    UCHAR Code1;
+    UCHAR Code2;
+    UCHAR Code3;
+    PI8042_DEVICE Device;
+    USER_INPUT_EVENT Event;
+    BOOL KeyUp;
+    ULONG ReadIndex;
+
+    Code1 = 0;
+    Code2 = 0;
+    Code3 = 0;
+    Device = (PI8042_DEVICE)Parameter;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    RtlZeroMemory(&Event, sizeof(USER_INPUT_EVENT));
+
+    //
+    // Pull as much data out of the buffer as there is.
+    //
+
+    KeAcquireQueuedLock(Device->ReadLock);
+    ReadIndex = Device->ReadIndex;
+    while (ReadIndex != Device->WriteIndex) {
+        Byte = Device->DataBuffer[ReadIndex];
+        ReadIndex += 1;
+        if (ReadIndex == I8042_BUFFER_SIZE) {
+            ReadIndex = 0;
+        }
+
+        //
+        // If the first byte read was the extended 2 code, then another 2 bytes
+        // should be coming in. Get those bytes.
+        //
+
+        if (Code1 == SCAN_CODE_1_EXTENDED_2_CODE) {
+            if (Code2 == 0) {
+                Code2 = Byte;
+                continue;
+            }
+
+            Code3 = Byte;
+
+        //
+        // If the first byte read was the extended (1) code, then another byte
+        // should be coming in. Get that byte.
+        //
+
+        } else if (Code1 == SCAN_CODE_1_EXTENDED_CODE) {
+            Code2 = Byte;
+
+        } else {
+            Code1 = Byte;
+            if ((Code1 == SCAN_CODE_1_EXTENDED_CODE) ||
+                (Code1 == SCAN_CODE_1_EXTENDED_2_CODE)) {
+
+                continue;
+            }
+        }
+
+        //
+        // Get the specifics of the event.
+        //
+
+        Event.U.Key = I8042ConvertScanCodeToKey(Code1, Code2, Code3, &KeyUp);
+        if (Event.U.Key != KeyboardKeyInvalid) {
+            if (KeyUp != FALSE) {
+                Event.EventType = UserInputEventKeyUp;
+
+            } else {
+                Event.EventType = UserInputEventKeyDown;
+            }
+
+            //
+            // Log the event.
+            //
+
+            InReportInputEvent(Device->UserInputDeviceHandle, &Event);
+        }
+
+        //
+        // A full key combination was read, move the read index forward.
+        //
+
+        Device->ReadIndex = ReadIndex;
+        Code1 = 0;
+        Code2 = 0;
+    }
+
+    KeReleaseQueuedLock(Device->ReadLock);
+    return InterruptStatusClaimed;
 }
 
 KSTATUS
@@ -930,6 +997,7 @@ Return Value:
 
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     BOOL ControlFound;
     BOOL DataFound;
     PRESOURCE_ALLOCATION LineAllocation;
@@ -1032,13 +1100,16 @@ Return Value:
 
     ASSERT(Device->InterruptHandle == INVALID_HANDLE);
 
-    Status = IoConnectInterrupt(Irp->Device,
-                                Device->InterruptLine,
-                                Device->InterruptVector,
-                                I8042InterruptService,
-                                Device,
-                                &(Device->InterruptHandle));
-
+    RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+    Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+    Connect.Device = Irp->Device;
+    Connect.LineNumber = Device->InterruptLine;
+    Connect.Vector = Device->InterruptVector;
+    Connect.InterruptServiceRoutine = I8042InterruptService;
+    Connect.LowLevelServiceRoutine = I8042InterruptServiceWorker;
+    Connect.Context = Device;
+    Connect.Interrupt = &(Device->InterruptHandle);
+    Status = IoConnectInterrupt(&Connect);
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }
@@ -1286,200 +1357,6 @@ Return Value:
 
 EnableDeviceEnd:
     return Status;
-}
-
-VOID
-I8042pInterruptServiceDpc (
-    PDPC Dpc
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the DPC routine that is run when an interrupt fires.
-
-Arguments:
-
-    Dpc - Supplies a pointer to the DPC that is running.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PI8042_DEVICE Device;
-    RUNLEVEL OldRunLevel;
-    BOOL QueueWorkItem;
-    KSTATUS Status;
-
-    Device = (PI8042_DEVICE)(Dpc->UserData);
-
-    //
-    // No processing is done at dispatch level. Queue the work item to drop
-    // to low level.
-    //
-
-    QueueWorkItem = FALSE;
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    if (Device->WorkItemQueued == FALSE) {
-        Device->WorkItemQueued = TRUE;
-        QueueWorkItem = TRUE;
-    }
-
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-
-    //
-    // Work items must be queued at low level, but the flag above (protected by
-    // the lock) ensures only one party gets it.
-    //
-
-    if (QueueWorkItem != FALSE) {
-        Status = KeQueueWorkItem(Device->WorkItem);
-
-        ASSERT(KSUCCESS(Status));
-
-    }
-
-    return;
-}
-
-VOID
-I8042pInterruptServiceWorker (
-    PVOID Parameter
-    )
-
-/*++
-
-Routine Description:
-
-    This routine processes interrupts for the e100 controller at low level.
-
-Arguments:
-
-    Parameter - Supplies an optional parameter passed in by the creator of the
-        work item.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    UCHAR Byte;
-    UCHAR Code1;
-    UCHAR Code2;
-    UCHAR Code3;
-    PI8042_DEVICE Device;
-    USER_INPUT_EVENT Event;
-    BOOL KeyUp;
-    RUNLEVEL OldRunLevel;
-    ULONG ReadIndex;
-
-    Code1 = 0;
-    Code2 = 0;
-    Code3 = 0;
-    Device = (PI8042_DEVICE)Parameter;
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
-    //
-    // Mark the DPC and work item as no longer queued.
-    //
-
-    if (Device->InterruptHandle == INVALID_HANDLE) {
-        return;
-    }
-
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    Device->WorkItemQueued = FALSE;
-    Device->DpcQueued = FALSE;
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-    RtlZeroMemory(&Event, sizeof(USER_INPUT_EVENT));
-
-    //
-    // Pull as much data out of the buffer as there is.
-    //
-
-    KeAcquireQueuedLock(Device->ReadLock);
-    ReadIndex = Device->ReadIndex;
-    while (ReadIndex != Device->WriteIndex) {
-        Byte = Device->DataBuffer[ReadIndex];
-        ReadIndex += 1;
-        if (ReadIndex == I8042_BUFFER_SIZE) {
-            ReadIndex = 0;
-        }
-
-        //
-        // If the first byte read was the extended 2 code, then another 2 bytes
-        // should be coming in. Get those bytes.
-        //
-
-        if (Code1 == SCAN_CODE_1_EXTENDED_2_CODE) {
-            if (Code2 == 0) {
-                Code2 = Byte;
-                continue;
-            }
-
-            Code3 = Byte;
-
-        //
-        // If the first byte read was the extended (1) code, then another byte
-        // should be coming in. Get that byte.
-        //
-
-        } else if (Code1 == SCAN_CODE_1_EXTENDED_CODE) {
-            Code2 = Byte;
-
-        } else {
-            Code1 = Byte;
-            if ((Code1 == SCAN_CODE_1_EXTENDED_CODE) ||
-                (Code1 == SCAN_CODE_1_EXTENDED_2_CODE)) {
-
-                continue;
-            }
-        }
-
-        //
-        // Get the specifics of the event.
-        //
-
-        Event.U.Key = I8042ConvertScanCodeToKey(Code1, Code2, Code3, &KeyUp);
-        if (Event.U.Key != KeyboardKeyInvalid) {
-            if (KeyUp != FALSE) {
-                Event.EventType = UserInputEventKeyUp;
-
-            } else {
-                Event.EventType = UserInputEventKeyDown;
-            }
-
-            //
-            // Log the event.
-            //
-
-            InReportInputEvent(Device->UserInputDeviceHandle, &Event);
-        }
-
-        //
-        // A full key combination was read, move the read index forward.
-        //
-
-        Device->ReadIndex = ReadIndex;
-        Code1 = 0;
-        Code2 = 0;
-    }
-
-    KeReleaseQueuedLock(Device->ReadLock);
-    return;
 }
 
 KSTATUS

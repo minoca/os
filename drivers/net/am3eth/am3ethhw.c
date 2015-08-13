@@ -43,13 +43,8 @@ Environment:
 //
 
 VOID
-A3epInterruptServiceDpc (
+A3epLinkCheckDpc (
     PDPC Dpc
-    );
-
-VOID
-A3epInterruptServiceWorker (
-    PVOID Parameter
     );
 
 KSTATUS
@@ -386,21 +381,14 @@ Return Value:
     // Create the various kernel objects used for synchronization and service.
     //
 
-    ASSERT(Device->InterruptDpc == NULL);
-
-    Device->InterruptDpc = KeCreateDpc(A3epInterruptServiceDpc, Device);
-    if (Device->InterruptDpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
-    }
-
     ASSERT(Device->WorkItem == NULL);
 
-    Device->WorkItem = KeCreateWorkItem(NULL,
-                                        WorkPriorityNormal,
-                                        A3epInterruptServiceWorker,
-                                        Device,
-                                        A3E_ALLOCATION_TAG);
+    Device->WorkItem = KeCreateWorkItem(
+                                NULL,
+                                WorkPriorityNormal,
+                                (PWORK_ITEM_ROUTINE)A3epInterruptServiceWorker,
+                                Device,
+                                A3E_ALLOCATION_TAG);
 
     if (Device->WorkItem == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -415,7 +403,7 @@ Return Value:
         goto InitializeDeviceStructuresEnd;
     }
 
-    Device->LinkCheckDpc = KeCreateDpc(A3epInterruptServiceDpc, Device);
+    Device->LinkCheckDpc = KeCreateDpc(A3epLinkCheckDpc, Device);
     if (Device->LinkCheckDpc == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceStructuresEnd;
@@ -474,11 +462,6 @@ InitializeDeviceStructuresEnd:
         if (Device->TransmitPacket != NULL) {
             MmFreeNonPagedPool(Device->TransmitPacket);
             Device->TransmitPacket = NULL;
-        }
-
-        if (Device->InterruptDpc != NULL) {
-            KeDestroyDpc(Device->InterruptDpc);
-            Device->InterruptDpc = NULL;
         }
 
         if (Device->WorkItem != NULL) {
@@ -794,7 +777,6 @@ Return Value:
     PA3E_DEVICE Device;
     INTERRUPT_STATUS InterruptStatus;
     RUNLEVEL OldRunLevel;
-    ULONG OriginalPendingBits;
     ULONG PendingBits;
 
     Device = (PA3E_DEVICE)Context;
@@ -808,13 +790,15 @@ Return Value:
     PendingBits = A3E_DMA_READ(Device, A3eDmaTxInterruptStatusMasked);
     if (PendingBits != 0) {
         InterruptStatus = InterruptStatusClaimed;
+        RtlAtomicOr32(&(Device->PendingStatusBits),
+                      A3E_PENDING_TRANSMIT_INTERRUPT);
 
         //
         // Since this interrupt synchronizes with another interrupt, raise to
-        // a priority that is known to be higher than both.
+        // a priority that is the maximum of the two.
         //
 
-        OldRunLevel = KeRaiseRunLevel(RunLevelClock);
+        OldRunLevel = KeRaiseRunLevel(Device->InterruptRunLevel);
         KeAcquireSpinLock(&(Device->InterruptLock));
 
         //
@@ -837,17 +821,6 @@ Return Value:
         //
 
         A3E_DMA_WRITE(Device, A3eDmaCpDmaEoiVector, A3E_CPDMA_EOI_TX_PULSE);
-        OriginalPendingBits = Device->PendingStatusBits;
-        Device->PendingStatusBits |= A3E_PENDING_TRANSMIT_INTERRUPT;
-
-        //
-        // Queue the DPC if the pending bits were previously clear.
-        //
-
-        if (OriginalPendingBits == 0) {
-            KeQueueDpc(Device->InterruptDpc);
-        }
-
         KeReleaseSpinLock(&(Device->InterruptLock));
         KeLowerRunLevel(OldRunLevel);
     }
@@ -885,7 +858,6 @@ Return Value:
     PA3E_DEVICE Device;
     INTERRUPT_STATUS InterruptStatus;
     RUNLEVEL OldRunLevel;
-    ULONG OriginalPendingBits;
     ULONG PendingBits;
 
     Device = (PA3E_DEVICE)Context;
@@ -899,13 +871,15 @@ Return Value:
     PendingBits = A3E_DMA_READ(Device, A3eDmaRxInterruptStatusMasked);
     if (PendingBits != 0) {
         InterruptStatus = InterruptStatusClaimed;
+        RtlAtomicOr32(&(Device->PendingStatusBits),
+                      A3E_PENDING_RECEIVE_INTERRUPT);
 
         //
         // Since this interrupt synchronizes with another interrupt, raise to
-        // a priority that is known to be higher than both.
+        // a priority that is the maximum of the two.
         //
 
-        OldRunLevel = KeRaiseRunLevel(RunLevelClock);
+        OldRunLevel = KeRaiseRunLevel(Device->InterruptRunLevel);
         KeAcquireSpinLock(&(Device->InterruptLock));
 
         //
@@ -928,17 +902,6 @@ Return Value:
         //
 
         A3E_DMA_WRITE(Device, A3eDmaCpDmaEoiVector, A3E_CPDMA_EOI_RX_PULSE);
-        OriginalPendingBits = Device->PendingStatusBits;
-        Device->PendingStatusBits |= A3E_PENDING_RECEIVE_INTERRUPT;
-
-        //
-        // Queue the DPC if the pending bits were previously clear.
-        //
-
-        if (OriginalPendingBits == 0) {
-            KeQueueDpc(Device->InterruptDpc);
-        }
-
         KeReleaseSpinLock(&(Device->InterruptLock));
         KeLowerRunLevel(OldRunLevel);
     }
@@ -946,74 +909,7 @@ Return Value:
     return InterruptStatus;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
-VOID
-A3epInterruptServiceDpc (
-    PDPC Dpc
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the TI CPSW Ethernet DPC that is queued when an
-    interrupt fires.
-
-Arguments:
-
-    Dpc - Supplies a pointer to the DPC that is running.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PA3E_DEVICE Device;
-    RUNLEVEL OldRunLevel;
-    BOOL QueueWorkItem;
-    KSTATUS Status;
-
-    Device = (PA3E_DEVICE)(Dpc->UserData);
-
-    //
-    // No processing is done at dispatch level. Queue the work item to drop
-    // to low level. Raise to a run-level that is at least as high as both the
-    // transmit and receive interrupts.
-    //
-
-    QueueWorkItem = FALSE;
-    OldRunLevel = KeRaiseRunLevel(RunLevelClock);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    if (Device->WorkItemQueued == FALSE) {
-        Device->WorkItemQueued = TRUE;
-        QueueWorkItem = TRUE;
-    }
-
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-
-    //
-    // Work items must be queued at low level, but the flag above (protected by
-    // the lock) ensures only one party gets it.
-    //
-
-    if (QueueWorkItem != FALSE) {
-        Status = KeQueueWorkItem(Device->WorkItem);
-
-        ASSERT(KSUCCESS(Status));
-
-    }
-
-    return;
-}
-
-VOID
+INTERRUPT_STATUS
 A3epInterruptServiceWorker (
     PVOID Parameter
     )
@@ -1040,7 +936,6 @@ Return Value:
 
     ULONGLONG CurrentTime;
     PA3E_DEVICE Device;
-    RUNLEVEL OldRunLevel;
     ULONG PendingBits;
 
     Device = (PA3E_DEVICE)(Parameter);
@@ -1051,13 +946,11 @@ Return Value:
     // Clear out the pending bits.
     //
 
-    OldRunLevel = KeRaiseRunLevel(RunLevelClock);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    PendingBits = Device->PendingStatusBits;
-    Device->WorkItemQueued = FALSE;
-    Device->PendingStatusBits = 0;
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
+    PendingBits = RtlAtomicExchange32(&(Device->PendingStatusBits), 0);
+    if (PendingBits == 0) {
+        return InterruptStatusNotClaimed;
+    }
+
     if ((PendingBits & A3E_PENDING_RECEIVE_INTERRUPT) != 0) {
         A3epReapReceivedFrames(Device);
     }
@@ -1072,10 +965,57 @@ Return Value:
         KeReleaseQueuedLock(Device->TransmitLock);
     }
 
-    CurrentTime = KeGetRecentTimeCounter();
-    if (CurrentTime > Device->NextLinkCheck) {
+    if ((PendingBits & A3E_PENDING_LINK_CHECK_TIMER) != 0) {
+        CurrentTime = KeGetRecentTimeCounter();
         Device->NextLinkCheck = CurrentTime + Device->LinkCheckInterval;
         A3epCheckLink(Device);
+    }
+
+    return InterruptStatusClaimed;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+VOID
+A3epLinkCheckDpc (
+    PDPC Dpc
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the TI CPSW Ethernet DPC that is queued when a
+    link check timer expires.
+
+Arguments:
+
+    Dpc - Supplies a pointer to the DPC that is running.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PA3E_DEVICE Device;
+    ULONG OldPendingBits;
+    KSTATUS Status;
+
+    Device = (PA3E_DEVICE)(Dpc->UserData);
+    OldPendingBits = RtlAtomicOr32(&(Device->PendingStatusBits),
+                                   A3E_PENDING_LINK_CHECK_TIMER);
+
+    if ((OldPendingBits & A3E_PENDING_LINK_CHECK_TIMER) == 0) {
+        Status = KeQueueWorkItem(Device->WorkItem);
+        if (!KSUCCESS(Status)) {
+            RtlAtomicAnd32(&(Device->PendingStatusBits),
+                           ~A3E_PENDING_LINK_CHECK_TIMER);
+        }
     }
 
     return;

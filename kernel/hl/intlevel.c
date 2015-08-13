@@ -441,6 +441,9 @@ Return Value:
         if ((OldFlags & INTERRUPT_QUEUE_WORK_ITEM_QUEUED) == 0) {
             KeQueueWorkItem(Interrupt->WorkItem);
         }
+
+    } else {
+        RtlAtomicAnd32(&(Interrupt->QueueFlags), ~INTERRUPT_QUEUE_DPC_QUEUED);
     }
 
     return;

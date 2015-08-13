@@ -277,11 +277,6 @@ Members:
     PendingStatusBits - Stores the bits in the USB status register that have
         not yet been addressed by the DPC.
 
-    InterruptLock - Stores the spin lock synchronizing access to the pending
-        status bits.
-
-    InterruptDpc - Stores a pointer to the DPC queued by the ISR.
-
     InterruptHandle - Stores the interrupt handle of the connected interrupt.
 
     InterruptTree - Stores an array of empty transfer queues at each level of
@@ -320,9 +315,7 @@ typedef struct _EHCI_CONTROLLER {
     KSPIN_LOCK Lock;
     HANDLE UsbCoreHandle;
     ULONG CommandRegister;
-    ULONG PendingStatusBits;
-    KSPIN_LOCK InterruptLock;
-    PDPC InterruptDpc;
+    volatile ULONG PendingStatusBits;
     HANDLE InterruptHandle;
     EHCI_TRANSFER_QUEUE InterruptTree[EHCI_PERIODIC_SCHEDULE_TREE_DEPTH];
     PWORK_ITEM DestroyQueuesWorkItem;
@@ -492,6 +485,28 @@ Arguments:
 Return Value:
 
     Interrupt status.
+
+--*/
+
+INTERRUPT_STATUS
+EhcipInterruptServiceDpc (
+    PVOID Parameter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the EHCI dispatch level interrupt service.
+
+Arguments:
+
+    Parameter - Supplies the context, in this case the EHCI controller
+        structure.
+
+Return Value:
+
+    None.
 
 --*/
 

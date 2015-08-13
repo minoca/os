@@ -279,10 +279,6 @@ Members:
     InterruptLock - Stores the spin lock synchronizing access to the pending
         status bits.
 
-    InterruptDpc - Stores a pointer to the DPC queued by the ISR.
-
-    InterruptWorkItem - Stores a pointer to the interrupt work item.
-
     Variant - Stores the variant type of 16550 controller.
 
     VendorId - Stores the PCI vendor ID of the device, or 0 if this was not a
@@ -314,8 +310,6 @@ typedef struct _SER16550_PARENT {
     BOOL InterruptResourcesFound;
     HANDLE InterruptHandle;
     KSPIN_LOCK InterruptLock;
-    PDPC InterruptDpc;
-    PWORK_ITEM InterruptWorkItem;
     SER16550_VARIANT Variant;
     USHORT VendorId;
     USHORT DeviceId;
@@ -325,8 +319,6 @@ typedef struct _SER16550_PARENT {
     ULONG RegisterShift;
     ULONG BaseBaud;
     BOOL Removed;
-    BOOL DpcQueued;
-    BOOL WorkItemQueued;
 } SER16550_PARENT, *PSER16550_PARENT;
 
 /*++
@@ -504,6 +496,16 @@ Ser16550DispatchUserControl (
     PVOID IrpContext
     );
 
+INTERRUPT_STATUS
+Ser16550InterruptService (
+    PVOID Context
+    );
+
+INTERRUPT_STATUS
+Ser16550InterruptServiceWorker (
+    PVOID Context
+    );
+
 KSTATUS
 Ser16550pParentProcessResourceRequirements (
     PIRP Irp,
@@ -556,16 +558,6 @@ VOID
 Ser16550pChildDispatchUserControl (
     PIRP Irp,
     PSER16550_CHILD Device
-    );
-
-VOID
-Ser16550pInterruptServiceDpc (
-    PDPC Dpc
-    );
-
-VOID
-Ser16550pInterruptServiceWorker (
-    PVOID Parameter
     );
 
 VOID
@@ -740,25 +732,6 @@ Return Value:
     Parent->Variant = Ser16550VariantGeneric;
     Parent->InterruptHandle = INVALID_HANDLE;
     KeInitializeSpinLock(&(Parent->InterruptLock));
-    Parent->InterruptDpc = KeCreateDpc(Ser16550pInterruptServiceDpc,
-                                       Parent);
-
-    if (Parent->InterruptDpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto AddDeviceEnd;
-    }
-
-    Parent->InterruptWorkItem = KeCreateWorkItem(
-                                               NULL,
-                                               WorkPriorityNormal,
-                                               Ser16550pInterruptServiceWorker,
-                                               Parent,
-                                               SER16550_ALLOCATION_TAG);
-
-    if (Parent->InterruptWorkItem == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto AddDeviceEnd;
-    }
 
     //
     // Detect variants by PCI vendor and device ID.
@@ -805,14 +778,6 @@ Return Value:
 AddDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Parent != NULL) {
-            if (Parent->InterruptDpc != NULL) {
-                KeDestroyDpc(Parent->InterruptDpc);
-            }
-
-            if (Parent->InterruptWorkItem != NULL) {
-                KeDestroyWorkItem(Parent->InterruptWorkItem);
-            }
-
             MmFreePagedPool(Parent);
         }
     }
@@ -1576,19 +1541,195 @@ Return Value:
         }
     }
 
-    if (InterruptStatus == InterruptStatusClaimed) {
-        KeAcquireSpinLock(&(Parent->InterruptLock));
+    return InterruptStatus;
+}
 
-        //
-        // Queue the DPC if it's not already queued.
-        //
+INTERRUPT_STATUS
+Ser16550InterruptServiceWorker (
+    PVOID Context
+    )
 
-        if (Parent->DpcQueued == FALSE) {
-            Parent->DpcQueued = TRUE;
-            KeQueueDpc(Parent->InterruptDpc);
+/*++
+
+Routine Description:
+
+    This routine processes interrupts for the 16550 UART at low level.
+
+Arguments:
+
+    Context - Supplies a context pointer, which in this case points to the
+        parent controller.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+{
+
+    UINTN BytesCompleted;
+    PSER16550_CHILD Child;
+    UINTN ChildIndex;
+    INTERRUPT_STATUS InterruptStatus;
+    PIO_BUFFER IoBuffer;
+    UINTN Next;
+    PSER16550_PARENT Parent;
+    UINTN ReceiveEnd;
+    KSTATUS Status;
+
+    Parent = Context;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    InterruptStatus = InterruptStatusNotClaimed;
+
+    //
+    // Loop over every serial port this interrupt services.
+    //
+
+    for (ChildIndex = 0; ChildIndex < Parent->ChildCount; ChildIndex += 1) {
+        Child = &(Parent->ChildObjects[ChildIndex]);
+        if (Child->InterruptWorkPending == FALSE) {
+            continue;
         }
 
-        KeReleaseSpinLock(&(Parent->InterruptLock));
+        Child->InterruptWorkPending = FALSE;
+        InterruptStatus = InterruptStatusClaimed;
+
+        //
+        // Signal the transmit ready event if some data was processed by now.
+        //
+
+        KeAcquireQueuedLock(Child->TransmitLock);
+        Next = Child->TransmitEnd + 1;
+        if (Next == Child->TransmitSize) {
+            Next = 0;
+        }
+
+        if (Next != Child->TransmitStart) {
+            KeSignalEvent(Child->TransmitReady, SignalOptionSignalAll);
+        }
+
+        KeReleaseQueuedLock(Child->TransmitLock);
+
+        //
+        // If there's a terminal, feed the terminal. Otherwise, maintain the
+        // event.
+        //
+
+        KeAcquireQueuedLock(Child->ReceiveLock);
+        ReceiveEnd = Child->ReceiveEnd;
+        if (Child->ReceiveStart != ReceiveEnd) {
+            if (Child->Terminal != NULL) {
+                while (ReceiveEnd < Child->ReceiveStart) {
+                    Status = MmCreateIoBuffer(
+                                    Child->ReceiveBuffer + Child->ReceiveStart,
+                                    Child->ReceiveSize - Child->ReceiveStart,
+                                    FALSE,
+                                    FALSE,
+                                    TRUE,
+                                    &IoBuffer);
+
+                    BytesCompleted = 0;
+                    if (KSUCCESS(Status)) {
+
+                        //
+                        // Perform a non-blocking write to the terminal master.
+                        // If user mode can't get it fast enough, then it's
+                        // lost.
+                        //
+
+                        Status = IoWrite(
+                                      Child->Terminal,
+                                      IoBuffer,
+                                      Child->ReceiveSize - Child->ReceiveStart,
+                                      0,
+                                      0,
+                                      &BytesCompleted);
+
+                        MmFreeIoBuffer(IoBuffer);
+                        if (!KSUCCESS(Status)) {
+                            RtlDebugPrint("Ser16550: Failed terminal write: "
+                                          "%x\n",
+                                          Status);
+                        }
+
+                        ASSERT(Child->ReceiveStart + BytesCompleted <=
+                               Child->ReceiveSize);
+
+                        Child->ReceiveStart += BytesCompleted;
+                        if (Child->ReceiveStart == Child->ReceiveSize) {
+                            Child->ReceiveStart = 0;
+                        }
+                    }
+
+                    if (BytesCompleted == 0) {
+                        break;
+                    }
+                }
+
+                //
+                // Write the portion that's in order.
+                //
+
+                while (Child->ReceiveStart < ReceiveEnd) {
+                    Status = MmCreateIoBuffer(
+                                    Child->ReceiveBuffer + Child->ReceiveStart,
+                                    ReceiveEnd - Child->ReceiveStart,
+                                    FALSE,
+                                    FALSE,
+                                    TRUE,
+                                    &IoBuffer);
+
+                    BytesCompleted = 0;
+                    if (KSUCCESS(Status)) {
+
+                        //
+                        // Perform a non-blocking write to the terminal master.
+                        // If user mode can't get it fast enough, then it's
+                        // lost.
+                        //
+
+                        Status = IoWrite(
+                                      Child->Terminal,
+                                      IoBuffer,
+                                      ReceiveEnd - Child->ReceiveStart,
+                                      0,
+                                      0,
+                                      &BytesCompleted);
+
+                        MmFreeIoBuffer(IoBuffer);
+                        if (!KSUCCESS(Status)) {
+                            RtlDebugPrint("Ser16550: Failed terminal write: "
+                                          "%x\n",
+                                          Status);
+                        }
+
+                        ASSERT(Child->ReceiveStart + BytesCompleted <=
+                               Child->ReceiveSize);
+
+                        Child->ReceiveStart += BytesCompleted;
+                        if (Child->ReceiveStart == Child->ReceiveSize) {
+                            Child->ReceiveStart = 0;
+                        }
+                    }
+
+                    if (BytesCompleted == 0) {
+                        break;
+                    }
+                }
+
+            //
+            // There is no terminal, signal the event.
+            //
+
+            } else {
+                KeSignalEvent(Child->ReceiveReady, SignalOptionSignalAll);
+            }
+        }
+
+        KeReleaseQueuedLock(Child->ReceiveLock);
     }
 
     return InterruptStatus;
@@ -1683,6 +1824,7 @@ Return Value:
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
     UINTN ChildCount;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION LineAllocation;
     KSTATUS Status;
 
@@ -1832,13 +1974,16 @@ Return Value:
     if ((Device->InterruptResourcesFound != FALSE) &&
         (Device->InterruptHandle == INVALID_HANDLE)) {
 
-        Status = IoConnectInterrupt(Irp->Device,
-                                    Device->InterruptLine,
-                                    Device->InterruptVector,
-                                    Ser16550InterruptService,
-                                    Device,
-                                    &(Device->InterruptHandle));
-
+        RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+        Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+        Connect.Device = Irp->Device;
+        Connect.LineNumber = Device->InterruptLine;
+        Connect.Vector = Device->InterruptVector;
+        Connect.InterruptServiceRoutine = Ser16550InterruptService;
+        Connect.LowLevelServiceRoutine = Ser16550InterruptServiceWorker;
+        Connect.Context = Device;
+        Connect.Interrupt = &(Device->InterruptHandle);
+        Status = IoConnectInterrupt(&Connect);
         if (!KSUCCESS(Status)) {
             goto ParentStartDeviceEnd;
         }
@@ -2770,262 +2915,6 @@ Return Value:
 }
 
 VOID
-Ser16550pInterruptServiceDpc (
-    PDPC Dpc
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the 16550 DPC that is queued when an interrupt
-    fires.
-
-Arguments:
-
-    Dpc - Supplies a pointer to the DPC that is running.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    RUNLEVEL OldRunLevel;
-    PSER16550_PARENT Parent;
-    BOOL QueueWorkItem;
-    KSTATUS Status;
-
-    Parent = Dpc->UserData;
-
-    //
-    // No processing is done at dispatch level. Queue the work item to drop
-    // to low level.
-    //
-
-    QueueWorkItem = FALSE;
-    OldRunLevel = IoRaiseToInterruptRunLevel(Parent->InterruptHandle);
-    KeAcquireSpinLock(&(Parent->InterruptLock));
-    Parent->DpcQueued = FALSE;
-    if (Parent->WorkItemQueued == FALSE) {
-        Parent->WorkItemQueued = TRUE;
-        QueueWorkItem = TRUE;
-    }
-
-    KeReleaseSpinLock(&(Parent->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-
-    //
-    // Work items must be queued at low level, but the flag above (protected by
-    // the lock) ensures only one party gets it.
-    //
-
-    if (QueueWorkItem != FALSE) {
-        Status = KeQueueWorkItem(Parent->InterruptWorkItem);
-
-        ASSERT(KSUCCESS(Status));
-
-    }
-
-    return;
-}
-
-VOID
-Ser16550pInterruptServiceWorker (
-    PVOID Parameter
-    )
-
-/*++
-
-Routine Description:
-
-    This routine processes interrupts for the 16550 UART at low level.
-
-Arguments:
-
-    Parameter - Supplies an optional parameter passed in by the creator of the
-        work item.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    UINTN BytesCompleted;
-    PSER16550_CHILD Child;
-    UINTN ChildIndex;
-    PIO_BUFFER IoBuffer;
-    UINTN Next;
-    PSER16550_PARENT Parent;
-    UINTN ReceiveEnd;
-    KSTATUS Status;
-
-    Parent = Parameter;
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
-    //
-    // Clear out the work item pending flag.
-    //
-
-    Parent->WorkItemQueued = FALSE;
-
-    //
-    // Loop over every serial port this interrupt services.
-    //
-
-    for (ChildIndex = 0; ChildIndex < Parent->ChildCount; ChildIndex += 1) {
-        Child = &(Parent->ChildObjects[ChildIndex]);
-        if (Child->InterruptWorkPending == FALSE) {
-            continue;
-        }
-
-        Child->InterruptWorkPending = FALSE;
-
-        //
-        // Signal the transmit ready event if some data was processed by now.
-        //
-
-        KeAcquireQueuedLock(Child->TransmitLock);
-        Next = Child->TransmitEnd + 1;
-        if (Next == Child->TransmitSize) {
-            Next = 0;
-        }
-
-        if (Next != Child->TransmitStart) {
-            KeSignalEvent(Child->TransmitReady, SignalOptionSignalAll);
-        }
-
-        KeReleaseQueuedLock(Child->TransmitLock);
-
-        //
-        // If there's a terminal, feed the terminal. Otherwise, maintain the
-        // event.
-        //
-
-        KeAcquireQueuedLock(Child->ReceiveLock);
-        ReceiveEnd = Child->ReceiveEnd;
-        if (Child->ReceiveStart != ReceiveEnd) {
-            if (Child->Terminal != NULL) {
-                while (ReceiveEnd < Child->ReceiveStart) {
-                    Status = MmCreateIoBuffer(
-                                    Child->ReceiveBuffer + Child->ReceiveStart,
-                                    Child->ReceiveSize - Child->ReceiveStart,
-                                    FALSE,
-                                    FALSE,
-                                    TRUE,
-                                    &IoBuffer);
-
-                    BytesCompleted = 0;
-                    if (KSUCCESS(Status)) {
-
-                        //
-                        // Perform a non-blocking write to the terminal master.
-                        // If user mode can't get it fast enough, then it's
-                        // lost.
-                        //
-
-                        Status = IoWrite(
-                                      Child->Terminal,
-                                      IoBuffer,
-                                      Child->ReceiveSize - Child->ReceiveStart,
-                                      0,
-                                      0,
-                                      &BytesCompleted);
-
-                        MmFreeIoBuffer(IoBuffer);
-                        if (!KSUCCESS(Status)) {
-                            RtlDebugPrint("Ser16550: Failed terminal write: "
-                                          "%x\n",
-                                          Status);
-                        }
-
-                        ASSERT(Child->ReceiveStart + BytesCompleted <=
-                               Child->ReceiveSize);
-
-                        Child->ReceiveStart += BytesCompleted;
-                        if (Child->ReceiveStart == Child->ReceiveSize) {
-                            Child->ReceiveStart = 0;
-                        }
-                    }
-
-                    if (BytesCompleted == 0) {
-                        break;
-                    }
-                }
-
-                //
-                // Write the portion that's in order.
-                //
-
-                while (Child->ReceiveStart < ReceiveEnd) {
-                    Status = MmCreateIoBuffer(
-                                    Child->ReceiveBuffer + Child->ReceiveStart,
-                                    ReceiveEnd - Child->ReceiveStart,
-                                    FALSE,
-                                    FALSE,
-                                    TRUE,
-                                    &IoBuffer);
-
-                    BytesCompleted = 0;
-                    if (KSUCCESS(Status)) {
-
-                        //
-                        // Perform a non-blocking write to the terminal master.
-                        // If user mode can't get it fast enough, then it's
-                        // lost.
-                        //
-
-                        Status = IoWrite(
-                                      Child->Terminal,
-                                      IoBuffer,
-                                      ReceiveEnd - Child->ReceiveStart,
-                                      0,
-                                      0,
-                                      &BytesCompleted);
-
-                        MmFreeIoBuffer(IoBuffer);
-                        if (!KSUCCESS(Status)) {
-                            RtlDebugPrint("Ser16550: Failed terminal write: "
-                                          "%x\n",
-                                          Status);
-                        }
-
-                        ASSERT(Child->ReceiveStart + BytesCompleted <=
-                               Child->ReceiveSize);
-
-                        Child->ReceiveStart += BytesCompleted;
-                        if (Child->ReceiveStart == Child->ReceiveSize) {
-                            Child->ReceiveStart = 0;
-                        }
-                    }
-
-                    if (BytesCompleted == 0) {
-                        break;
-                    }
-                }
-
-            //
-            // There is no terminal, signal the event.
-            //
-
-            } else {
-                KeSignalEvent(Child->ReceiveReady, SignalOptionSignalAll);
-            }
-        }
-
-        KeReleaseQueuedLock(Child->ReceiveLock);
-    }
-
-    return;
-}
-
-VOID
 Ser16550pStartTransmit (
     PSER16550_CHILD Device
     )
@@ -3356,8 +3245,6 @@ Return Value:
             Parent->ChildObjects = NULL;
         }
 
-        KeDestroyDpc(Parent->InterruptDpc);
-        KeDestroyWorkItem(Parent->InterruptWorkItem);
         Parent->Header.Type = Ser16550ObjectInvalid;
         MmFreeNonPagedPool(Parent);
         break;

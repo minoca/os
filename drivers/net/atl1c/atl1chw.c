@@ -42,16 +42,6 @@ Environment:
 //
 
 VOID
-AtlpInterruptServiceDpc (
-    PDPC Dpc
-    );
-
-VOID
-AtlpInterruptServiceWorker (
-    PVOID Parameter
-    );
-
-VOID
 AtlpReapCompletedTransmitDescriptors (
     PATL1C_DEVICE Device
     );
@@ -569,32 +559,6 @@ Return Value:
     Device->ReceiveNextToClean = 0;
     Device->TransmitNextToClean = 0;
     Device->TransmitNextToUse = 0;
-
-    //
-    // Create the various kernel objects used for synchronization.
-    //
-
-    ASSERT(Device->Dpc == NULL);
-
-    Device->Dpc = KeCreateDpc(AtlpInterruptServiceDpc, Device);
-    if (Device->Dpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
-    }
-
-    ASSERT(Device->WorkItem == NULL);
-
-    Device->WorkItem = KeCreateWorkItem(NULL,
-                                        WorkPriorityNormal,
-                                        AtlpInterruptServiceWorker,
-                                        Device,
-                                        ATL1C_ALLOCATION_TAG);
-
-    if (Device->WorkItem == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
-    }
-
     Device->TransmitDescriptorFreeEvent = KeCreateEvent(NULL);
     if (Device->TransmitDescriptorFreeEvent == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -612,16 +576,6 @@ InitializeDeviceStructuresEnd:
             Device->TransmitBuffer = NULL;
             Device->ReceiveSlot = NULL;
             Device->ReceivedPacket = NULL;
-        }
-
-        if (Device->Dpc != NULL) {
-            KeDestroyDpc(Device->Dpc);
-            Device->Dpc = NULL;
-        }
-
-        if (Device->WorkItem != NULL) {
-            KeDestroyWorkItem(Device->WorkItem);
-            Device->WorkItem = NULL;
         }
 
         if (Device->TransmitDescriptorFreeEvent != NULL) {
@@ -1021,7 +975,6 @@ Return Value:
 
     PATL1C_DEVICE Device;
     INTERRUPT_STATUS InterruptStatus;
-    ULONG OriginalPendingBits;
     ULONG PendingBits;
     USHORT Value;
 
@@ -1039,14 +992,14 @@ Return Value:
         return InterruptStatus;
     }
 
+    InterruptStatus = InterruptStatusClaimed;
+
     //
-    // There are interrupt bits set, so mark this interrupt as claimed and
-    // queue up the DPC.
+    // There are interrupt bits set, so mark this interrupt as claimed.
     //
 
     KeAcquireSpinLock(&(Device->InterruptLock));
-    OriginalPendingBits = Device->PendingInterrupts;
-    Device->PendingInterrupts |= PendingBits;
+    RtlAtomicOr32(&(Device->PendingInterrupts), PendingBits);
 
     //
     // The GPHY bit cannot be masked or cleared by the controller directly.
@@ -1062,90 +1015,15 @@ Return Value:
                                  &Value);
     }
 
-    //
-    // Queue the DPC if there were no interrupts in the midst of being
-    // service already.
-    //
-
-    if (OriginalPendingBits == 0) {
-        KeQueueDpc(Device->Dpc);
-    }
-
     ATL_WRITE_REGISTER32(Device,
                          AtlRegisterInterruptStatus,
-                         Device->PendingInterrupts | ATL_INTERRUPT_DISABLE);
+                         PendingBits | ATL_INTERRUPT_DISABLE);
 
     KeReleaseSpinLock(&(Device->InterruptLock));
     return InterruptStatus;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
-VOID
-AtlpInterruptServiceDpc (
-    PDPC Dpc
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the ATL1c DPC that is queued when an interrupt
-    fires.
-
-Arguments:
-
-    Dpc - Supplies a pointer to the DPC that is running.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PATL1C_DEVICE Device;
-    RUNLEVEL OldRunLevel;
-    BOOL QueueWorkItem;
-    KSTATUS Status;
-
-    Device = (PATL1C_DEVICE)(Dpc->UserData);
-
-    //
-    // No processing is done at dispatch level. Queue the work item to drop
-    // to low level.
-    //
-
-    QueueWorkItem = FALSE;
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    if (Device->WorkItemQueued == FALSE) {
-        Device->WorkItemQueued = TRUE;
-        QueueWorkItem = TRUE;
-    }
-
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-
-    //
-    // Work items must be queued at low leve, but the flag above (protected by
-    // the lock) ensures only one party gets it.
-    //
-
-    if (QueueWorkItem != FALSE) {
-        Status = KeQueueWorkItem(Device->WorkItem);
-
-        ASSERT(KSUCCESS(Status));
-
-    }
-
-    return;
-}
-
-VOID
+INTERRUPT_STATUS
 AtlpInterruptServiceWorker (
     PVOID Parameter
     )
@@ -1163,35 +1041,31 @@ Arguments:
 
 Return Value:
 
-    None.
+    Interrupt Status.
 
 --*/
 
 {
 
     PATL1C_DEVICE Device;
-    RUNLEVEL OldRunLevel;
     ULONG PendingBits;
+    INTERRUPT_STATUS Status;
 
     Device = (PATL1C_DEVICE)(Parameter);
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     //
-    // Clear out the pending bits and re-enable interrupts on the device.
+    // Clear out the pending bits.
     //
 
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    PendingBits = Device->PendingInterrupts;
-    Device->WorkItemQueued = FALSE;
-    Device->PendingInterrupts = 0;
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
+    PendingBits = RtlAtomicExchange32(&(Device->PendingInterrupts), 0);
     if (PendingBits == 0) {
+        Status = InterruptStatusNotClaimed;
         goto InterruptServiceWorkerEnd;
     }
 
+    Status = InterruptStatusClaimed;
     if ((PendingBits & ATL_INTERRUPT_BUFFER_ERROR_MASK) != 0) {
         RtlDebugPrint("ATL: Buffer Error 0x%08x.\n", PendingBits);
     }
@@ -1235,13 +1109,13 @@ Return Value:
     }
 
 InterruptServiceWorkerEnd:
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
     ATL_WRITE_REGISTER32(Device, AtlRegisterInterruptStatus, 0);
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-    return;
+    return Status;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 VOID
 AtlpReapCompletedTransmitDescriptors (

@@ -185,13 +185,9 @@ UhcipWaitForNextFrame (
     );
 
 VOID
-UhcipInterruptServiceDpc (
-    PDPC Dpc
-    );
-
-VOID
 UhcipProcessInterrupt (
-    PVOID Context
+    PUHCI_CONTROLLER Controller,
+    ULONG PendingStatus
     );
 
 VOID
@@ -309,14 +305,6 @@ Return Value:
     Controller->UsbCoreHandle = INVALID_HANDLE;
     Controller->InterruptHandle = INVALID_HANDLE;
     KeInitializeSpinLock(&(Controller->Lock));
-    KeInitializeSpinLock(&(Controller->InterruptLock));
-    Controller->InterruptDpc = KeCreateDpc(UhcipInterruptServiceDpc,
-                                           Controller);
-
-    if (Controller->InterruptDpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeControllerStateEnd;
-    }
 
     //
     // Allocate and initialize the buffer used to hold the UHCI schedule.
@@ -507,10 +495,6 @@ Return Value:
 --*/
 
 {
-
-    if (Controller->InterruptDpc != NULL) {
-        KeDestroyDpc(Controller->InterruptDpc);
-    }
 
     if (Controller->ScheduleIoBuffer != NULL) {
         MmFreeIoBuffer(Controller->ScheduleIoBuffer);
@@ -784,7 +768,6 @@ Return Value:
 
     PUHCI_CONTROLLER Controller;
     INTERRUPT_STATUS InterruptStatus;
-    USHORT OriginalPendingStatus;
     USHORT UsbStatus;
 
     Controller = (PUHCI_CONTROLLER)Context;
@@ -797,18 +780,49 @@ Return Value:
     UsbStatus = UHCI_READ_REGISTER(Controller, UhciRegisterUsbStatus);
     if (UsbStatus != 0) {
         InterruptStatus = InterruptStatusClaimed;
-        KeAcquireSpinLock(&(Controller->InterruptLock));
-        OriginalPendingStatus = Controller->PendingStatusBits;
-        Controller->PendingStatusBits |= UsbStatus;
-        if (OriginalPendingStatus == 0) {
-            KeQueueDpc(Controller->InterruptDpc);
-        }
-
         UHCI_WRITE_REGISTER(Controller, UhciRegisterUsbStatus, UsbStatus);
-        KeReleaseSpinLock(&(Controller->InterruptLock));
+        RtlAtomicOr32(&(Controller->PendingStatusBits), UsbStatus);
     }
 
     return InterruptStatus;
+}
+
+INTERRUPT_STATUS
+UhcipInterruptServiceDpc (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the dispatch level UHCI interrupt service routine.
+
+Arguments:
+
+    Context - Supplies the context pointer given to the system when the
+        interrupt was connected. In this case, this points to the UHCI
+        controller.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+{
+
+    PUHCI_CONTROLLER Controller;
+    ULONG PendingStatus;
+
+    Controller = Context;
+    PendingStatus = RtlAtomicExchange32(&(Controller->PendingStatusBits), 0);
+    if (PendingStatus == 0) {
+        return InterruptStatusNotClaimed;
+    }
+
+    UhcipProcessInterrupt(Controller, PendingStatus);
+    return InterruptStatusClaimed;
 }
 
 KSTATUS
@@ -2406,37 +2420,9 @@ Return Value:
 }
 
 VOID
-UhcipInterruptServiceDpc (
-    PDPC Dpc
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the UHCI DPC that is queued when an interrupt fires.
-
-Arguments:
-
-    Dpc - Supplies a pointer to the DPC that is running.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ASSERT(KeGetRunLevel() == RunLevelDispatch);
-
-    UhcipProcessInterrupt(Dpc->UserData);
-    return;
-}
-
-VOID
 UhcipProcessInterrupt (
-    PVOID Context
+    PUHCI_CONTROLLER Controller,
+    ULONG PendingStatus
     )
 
 /*++
@@ -2448,7 +2434,9 @@ Routine Description:
 
 Arguments:
 
-    Context - Supplies a pointer to the controller to service.
+    Controller - Supplies a pointer to the UHCI controller.
+
+    PendingStatus - Supplies the pending status bits to deal with.
 
 Return Value:
 
@@ -2458,36 +2446,12 @@ Return Value:
 
 {
 
-    PUHCI_CONTROLLER Controller;
     PLIST_ENTRY CurrentQueueEntry;
     PLIST_ENTRY CurrentTransferEntry;
     RUNLEVEL OldRunLevel;
     PUHCI_TRANSFER_QUEUE Queue;
     BOOL RemoveQueue;
     PUHCI_TRANSFER Transfer;
-
-    Controller = (PUHCI_CONTROLLER)Context;
-
-    //
-    // Collect the pending status bits and clear them to signal that another
-    // DPC will need to be queued for any subsequent interrupts. If the
-    // interrupt handle is not yet assigned, just raise to high. This will not
-    // result in a priority inversion problem, as this code always runs at
-    // dispatch, and thus cannot pre-empt the interrupt code while it has the
-    // lock.
-    //
-
-    if (Controller->InterruptHandle == INVALID_HANDLE) {
-        OldRunLevel = KeRaiseRunLevel(RunLevelHigh);
-
-    } else {
-        OldRunLevel = IoRaiseToInterruptRunLevel(Controller->InterruptHandle);
-    }
-
-    KeAcquireSpinLock(&(Controller->InterruptLock));
-    Controller->PendingStatusBits = 0;
-    KeReleaseSpinLock(&(Controller->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
 
     //
     // Lock the controller and loop until this routine has caught up with the

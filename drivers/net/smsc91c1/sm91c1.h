@@ -523,17 +523,9 @@ Members:
     InterruptHandle - Stores a pointer to the handle received when the
         interrupt was connected.
 
-    InteruptWorkItemQueued - Stores a boolean indicating whether or not the
-        work item has been queued already.
-
     InterruptLock - Stores the spin lock, synchronized at the interrupt
         run level, that synchronizes access to the pending status bits, DPC,
         and work item.
-
-    InterruptDpc - Stores a pointer to the DPC queued from the interrupt
-        handler.
-
-    InterruptWorkItem - Stores a pointer to the work item queued from the DPC.
 
     TransmitPacketListHead - Stores the head of the list of network packets to
         transfer.
@@ -574,16 +566,13 @@ typedef struct _SM91C1_DEVICE {
     ULONGLONG InterruptVector;
     BOOL InterruptResourcesFound;
     HANDLE InterruptHandle;
-    BOOL InterruptWorkItemQueued;
     KSPIN_LOCK InterruptLock;
-    PDPC InterruptDpc;
-    PWORK_ITEM InterruptWorkItem;
     LIST_ENTRY TransmitPacketListHead;
     PQUEUED_LOCK Lock;
     PIO_BUFFER ReceiveIoBuffer;
     USHORT PendingTransmitPacket;
-    USHORT PendingInterrupts;
-    USHORT PendingPhyInterrupts;
+    volatile ULONG PendingInterrupts;
+    volatile ULONG PendingPhyInterrupts;
     BOOL AllocateInProgress;
     KSPIN_LOCK BankLock;
     BYTE SelectedBank;
@@ -748,6 +737,29 @@ Arguments:
 
     Context - Supplies the context pointer given to the system when the
         interrupt was connected. In this case, this points to the e100 device
+        structure.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+INTERRUPT_STATUS
+Sm91c1pInterruptServiceWorker (
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the SM91C1 low level interrupt service routine.
+
+Arguments:
+
+    Context - Supplies the context pointer given to the system when the
+        interrupt was connected. In this case, this points to the SM91c1 device
         structure.
 
 Return Value:

@@ -201,6 +201,7 @@ Author:
 
 #define A3E_PENDING_RECEIVE_INTERRUPT 0x00000001
 #define A3E_PENDING_TRANSMIT_INTERRUPT 0x00000002
+#define A3E_PENDING_LINK_CHECK_TIMER 0x00000004
 
 //
 // Define descriptor flags. Some of these are common, others only apply to
@@ -675,17 +676,14 @@ Members:
     LinkCheckInterval - Stores the interval in time counter ticks that the
         link state should be polled.
 
-    InterruptDpc - Stores a pointer to the DPC queued from the interrupt
-        handler.
-
     WorkItem - Stores a pointer to the work item queued from the DPC.
 
     InterruptLock - Stores the spin lock, synchronized at the interrupt
         run level, that synchronizes access to the pending status bits, DPC,
         and work item.
 
-    WorkItemQueued - Stores a boolean indicating whether or not the work item
-        has been queued already.
+    InterruptRunLevel - Stores the runlevel that the interrupt lock should be
+        acquired at.
 
     PendingStatusBits - Stores the bitfield of status bits that have yet to be
         dealt with by software.
@@ -733,11 +731,10 @@ typedef struct _A3E_DEVICE {
     PDPC LinkCheckDpc;
     ULONGLONG NextLinkCheck;
     ULONGLONG LinkCheckInterval;
-    PDPC InterruptDpc;
     PWORK_ITEM WorkItem;
     KSPIN_LOCK InterruptLock;
-    BOOL WorkItemQueued;
-    ULONG PendingStatusBits;
+    RUNLEVEL InterruptRunLevel;
+    volatile ULONG PendingStatusBits;
     BOOL MacAddressAssigned;
     BYTE MacAddress[ETHERNET_ADDRESS_SIZE];
     ULONG PhyId;
@@ -906,6 +903,29 @@ Arguments:
 Return Value:
 
     Interrupt status.
+
+--*/
+
+INTERRUPT_STATUS
+A3epInterruptServiceWorker (
+    PVOID Parameter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine processes interrupts for the TI CPSW Ethernet controller at
+    low level.
+
+Arguments:
+
+    Parameter - Supplies an optional parameter passed in by the creator of the
+        work item.
+
+Return Value:
+
+    None.
 
 --*/
 

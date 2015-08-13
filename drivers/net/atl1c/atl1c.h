@@ -981,16 +981,9 @@ Members:
 
     LinkActive - Stores a boolean indicating if there is an active network link.
 
-    Dpc - Stores a pointer to the DPC queued from the interrupt handler.
-
-    WorkItem - Stores a pointer to the work item queued from the DPC.
-
     InterruptLock - Stores the spin lock, synchronized at the interrupt
         run level, that synchronizes access to the pending status bits, DPC,
         and work item.
-
-    WorkItemQueued - Stores a boolean indicating whether or not the work item
-        has been queued already.
 
     PendingInterrupts - Stores the bitfield of status bits that have yet to be
         dealt with by software.
@@ -1026,11 +1019,8 @@ typedef struct _ATL1C_DEVICE {
     PQUEUED_LOCK TransmitLock;
     PKEVENT TransmitDescriptorFreeEvent;
     BOOL LinkActive;
-    PDPC Dpc;
-    PWORK_ITEM WorkItem;
     KSPIN_LOCK InterruptLock;
-    BOOL WorkItemQueued;
-    ULONG PendingInterrupts;
+    volatile ULONG PendingInterrupts;
     ULONG EnabledInterrupts;
     ATL_SPEED Speed;
     ATL_DUPLEX_MODE Duplex;
@@ -1178,6 +1168,28 @@ Arguments:
 Return Value:
 
     Interrupt status.
+
+--*/
+
+INTERRUPT_STATUS
+AtlpInterruptServiceWorker (
+    PVOID Parameter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine processes interrupts for the ATL1c controller at low level.
+
+Arguments:
+
+    Parameter - Supplies an optional parameter passed in by the creator of the
+        work item.
+
+Return Value:
+
+    Interrupt Status.
 
 --*/
 

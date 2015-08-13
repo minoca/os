@@ -135,17 +135,6 @@ Members:
 
     InterruptHandle - Stores the handle for the connected interrupt.
 
-    InteruptDpc - Stores a pointer to the DPC that's queued when an interrupt
-        occurs.
-
-    DpcQueued - Stores a boolean indicating whether or not the DPC is
-        currently in progress.
-
-    WorkItem - Stores a pointer to the work item that reports input events.
-
-    WorkItemQueued - Stores a boolean indicating whether or not the work item
-        is queued.
-
     UserInputDeviceHandle - Stores the handle returned by the User Input
         library.
 
@@ -172,10 +161,6 @@ typedef struct _PL050_DEVICE {
     ULONGLONG InterruptLine;
     BOOL InterruptResourcesFound;
     HANDLE InterruptHandle;
-    PDPC InterruptDpc;
-    BOOL DpcQueued;
-    PWORK_ITEM WorkItem;
-    BOOL WorkItemQueued;
     HANDLE UserInputDeviceHandle;
     KSPIN_LOCK InterruptLock;
     PQUEUED_LOCK ReadLock;
@@ -237,6 +222,11 @@ Pl050InterruptService (
     PVOID Context
     );
 
+INTERRUPT_STATUS
+Pl050InterruptServiceWorker (
+    PVOID Parameter
+    );
+
 KSTATUS
 Pl050pProcessResourceRequirements (
     PIRP Irp,
@@ -258,16 +248,6 @@ Pl050pEnableDevice (
 KSTATUS
 Pl050pDisableDevice (
     PPL050_DEVICE Device
-    );
-
-VOID
-Pl050pInterruptServiceDpc (
-    PDPC Dpc
-    );
-
-VOID
-Pl050pInterruptServiceWorker (
-    PVOID Parameter
     );
 
 KSTATUS
@@ -408,27 +388,9 @@ Return Value:
     }
 
     RtlZeroMemory(NewDevice, sizeof(PL050_DEVICE));
+    KeInitializeSpinLock(&(NewDevice->InterruptLock));
     NewDevice->InterruptHandle = INVALID_HANDLE;
     NewDevice->UserInputDeviceHandle = INVALID_HANDLE;
-    NewDevice->InterruptDpc = KeCreateDpc(Pl050pInterruptServiceDpc, NewDevice);
-    if (NewDevice->InterruptDpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto AddDeviceEnd;
-    }
-
-    ASSERT(NewDevice->WorkItem == NULL);
-
-    NewDevice->WorkItem = KeCreateWorkItem(NULL,
-                                           WorkPriorityNormal,
-                                           Pl050pInterruptServiceWorker,
-                                           NewDevice,
-                                           PL050_ALLOCATION_TAG);
-
-    if (NewDevice->WorkItem == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto AddDeviceEnd;
-    }
-
     NewDevice->ReadLock = KeCreateQueuedLock();
     if (NewDevice->ReadLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -447,16 +409,8 @@ AddDeviceEnd:
                 InDestroyInputDevice(NewDevice->UserInputDeviceHandle);
             }
 
-            if (NewDevice->InterruptDpc != NULL) {
-                KeDestroyDpc(NewDevice->InterruptDpc);
-            }
-
-            if (NewDevice->WorkItem != NULL) {
-                KeDestroyWorkItem(NewDevice->WorkItem);
-            }
-
             if (NewDevice->ReadLock != NULL) {
-                KeDestroyWorkItem(NewDevice->WorkItem);
+                KeDestroyQueuedLock(NewDevice->ReadLock);
             }
 
             MmFreeNonPagedPool(NewDevice);
@@ -777,15 +731,141 @@ Return Value:
         //
 
         Device->WriteIndex = WriteIndex;
-        if (Device->DpcQueued == FALSE) {
-            KeQueueDpc(Device->InterruptDpc);
-            Device->DpcQueued = TRUE;
-        }
-
         KeReleaseSpinLock(&(Device->InterruptLock));
     }
 
     return InterruptStatus;
+}
+
+INTERRUPT_STATUS
+Pl050InterruptServiceWorker (
+    PVOID Parameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes interrupts for the Pl050 controller at low level.
+
+Arguments:
+
+    Parameter - Supplies an optional parameter passed in by the creator of the
+        work item.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+{
+
+    UCHAR Byte;
+    UCHAR Code1;
+    UCHAR Code2;
+    UCHAR Code3;
+    PPL050_DEVICE Device;
+    USER_INPUT_EVENT Event;
+    BOOL KeyUp;
+    ULONG ReadIndex;
+
+    Code1 = 0;
+    Code2 = 0;
+    Code3 = 0;
+    Device = (PPL050_DEVICE)Parameter;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    RtlZeroMemory(&Event, sizeof(USER_INPUT_EVENT));
+
+    //
+    // Pull as much data out of the buffer as there is.
+    //
+
+    KeAcquireQueuedLock(Device->ReadLock);
+    ReadIndex = Device->ReadIndex;
+    while (ReadIndex != Device->WriteIndex) {
+        Byte = Device->DataBuffer[ReadIndex];
+        ReadIndex += 1;
+        if (ReadIndex == PL050_BUFFER_SIZE) {
+            ReadIndex = 0;
+        }
+
+        if (Device->IsMouse != FALSE) {
+
+            //
+            // Eventually process the mouse events.
+            //
+
+        } else {
+
+            //
+            // If the first byte read was the extended 2 code, then another two
+            // bytes should be coming in. Get those bytes.
+            //
+
+            if (Code1 == SCAN_CODE_1_EXTENDED_2_CODE) {
+                if (Code2 == 0) {
+                    Code2 = Byte;
+                    continue;
+                }
+
+                Code3 = Byte;
+
+            //
+            // If the first byte read was the extended (1) code, then another
+            // byte should be coming in. Get that byte.
+            //
+
+            } else if (Code1 == SCAN_CODE_1_EXTENDED_CODE) {
+                Code2 = Byte;
+
+            } else {
+                Code1 = Byte;
+                if ((Code1 == SCAN_CODE_1_EXTENDED_CODE) ||
+                    (Code1 == SCAN_CODE_1_EXTENDED_2_CODE)) {
+
+                    continue;
+                }
+            }
+
+            //
+            // Get the specifics of the event.
+            //
+
+            Event.U.Key = I8042ConvertScanCodeToKey(Code1,
+                                                    Code2,
+                                                    Code3,
+                                                    &KeyUp);
+
+            if (Event.U.Key != KeyboardKeyInvalid) {
+                if (KeyUp != FALSE) {
+                    Event.EventType = UserInputEventKeyUp;
+
+                } else {
+                    Event.EventType = UserInputEventKeyDown;
+                }
+
+                //
+                // Log the event.
+                //
+
+                InReportInputEvent(Device->UserInputDeviceHandle, &Event);
+            }
+
+            //
+            // A full key combination was read, move the read index forward.
+            //
+
+            Device->ReadIndex = ReadIndex;
+            Code1 = 0;
+            Code2 = 0;
+        }
+    }
+
+    KeReleaseQueuedLock(Device->ReadLock);
+    return InterruptStatusClaimed;
 }
 
 KSTATUS
@@ -877,6 +957,7 @@ Return Value:
 
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION LineAllocation;
     BOOL RegistersFound;
     KSTATUS Status;
@@ -971,13 +1052,16 @@ Return Value:
 
     ASSERT(Device->InterruptHandle == INVALID_HANDLE);
 
-    Status = IoConnectInterrupt(Irp->Device,
-                                Device->InterruptLine,
-                                Device->InterruptVector,
-                                Pl050InterruptService,
-                                Device,
-                                &(Device->InterruptHandle));
-
+    RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+    Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+    Connect.Device = Irp->Device;
+    Connect.LineNumber = Device->InterruptLine;
+    Connect.Vector = Device->InterruptVector;
+    Connect.InterruptServiceRoutine = Pl050InterruptService;
+    Connect.LowLevelServiceRoutine = Pl050InterruptServiceWorker;
+    Connect.Context = Device;
+    Connect.Interrupt = &(Device->InterruptHandle);
+    Status = IoConnectInterrupt(&Connect);
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }
@@ -1199,213 +1283,6 @@ Return Value:
     }
 
     return ReturnStatus;
-}
-
-VOID
-Pl050pInterruptServiceDpc (
-    PDPC Dpc
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the DPC routine that is run when an interrupt fires.
-
-Arguments:
-
-    Dpc - Supplies a pointer to the DPC that is running.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PPL050_DEVICE Device;
-    RUNLEVEL OldRunLevel;
-    BOOL QueueWorkItem;
-    KSTATUS Status;
-
-    Device = (PPL050_DEVICE)(Dpc->UserData);
-
-    //
-    // No processing is done at dispatch level. Queue the work item to drop
-    // to low level.
-    //
-
-    QueueWorkItem = FALSE;
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    if (Device->WorkItemQueued == FALSE) {
-        Device->WorkItemQueued = TRUE;
-        QueueWorkItem = TRUE;
-    }
-
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-
-    //
-    // Work items must be queued at low level, but the flag above (protected by
-    // the lock) ensures only one party gets it.
-    //
-
-    if (QueueWorkItem != FALSE) {
-        Status = KeQueueWorkItem(Device->WorkItem);
-
-        ASSERT(KSUCCESS(Status));
-
-    }
-
-    return;
-}
-
-VOID
-Pl050pInterruptServiceWorker (
-    PVOID Parameter
-    )
-
-/*++
-
-Routine Description:
-
-    This routine processes interrupts for the Pl050 controller at low level.
-
-Arguments:
-
-    Parameter - Supplies an optional parameter passed in by the creator of the
-        work item.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    UCHAR Byte;
-    UCHAR Code1;
-    UCHAR Code2;
-    UCHAR Code3;
-    PPL050_DEVICE Device;
-    USER_INPUT_EVENT Event;
-    BOOL KeyUp;
-    RUNLEVEL OldRunLevel;
-    ULONG ReadIndex;
-
-    Code1 = 0;
-    Code2 = 0;
-    Code3 = 0;
-    Device = (PPL050_DEVICE)Parameter;
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
-    //
-    // Mark the DPC and work item as no longer queued.
-    //
-
-    if (Device->InterruptHandle == INVALID_HANDLE) {
-        return;
-    }
-
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    Device->WorkItemQueued = FALSE;
-    Device->DpcQueued = FALSE;
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-    RtlZeroMemory(&Event, sizeof(USER_INPUT_EVENT));
-
-    //
-    // Pull as much data out of the buffer as there is.
-    //
-
-    KeAcquireQueuedLock(Device->ReadLock);
-    ReadIndex = Device->ReadIndex;
-    while (ReadIndex != Device->WriteIndex) {
-        Byte = Device->DataBuffer[ReadIndex];
-        ReadIndex += 1;
-        if (ReadIndex == PL050_BUFFER_SIZE) {
-            ReadIndex = 0;
-        }
-
-        if (Device->IsMouse != FALSE) {
-
-            //
-            // Eventually process the mouse events.
-            //
-
-        } else {
-
-            //
-            // If the first byte read was the extended 2 code, then another two
-            // bytes should be coming in. Get those bytes.
-            //
-
-            if (Code1 == SCAN_CODE_1_EXTENDED_2_CODE) {
-                if (Code2 == 0) {
-                    Code2 = Byte;
-                    continue;
-                }
-
-                Code3 = Byte;
-
-            //
-            // If the first byte read was the extended (1) code, then another
-            // byte should be coming in. Get that byte.
-            //
-
-            } else if (Code1 == SCAN_CODE_1_EXTENDED_CODE) {
-                Code2 = Byte;
-
-            } else {
-                Code1 = Byte;
-                if ((Code1 == SCAN_CODE_1_EXTENDED_CODE) ||
-                    (Code1 == SCAN_CODE_1_EXTENDED_2_CODE)) {
-
-                    continue;
-                }
-            }
-
-            //
-            // Get the specifics of the event.
-            //
-
-            Event.U.Key = I8042ConvertScanCodeToKey(Code1,
-                                                    Code2,
-                                                    Code3,
-                                                    &KeyUp);
-
-            if (Event.U.Key != KeyboardKeyInvalid) {
-                if (KeyUp != FALSE) {
-                    Event.EventType = UserInputEventKeyUp;
-
-                } else {
-                    Event.EventType = UserInputEventKeyDown;
-                }
-
-                //
-                // Log the event.
-                //
-
-                InReportInputEvent(Device->UserInputDeviceHandle, &Event);
-            }
-
-            //
-            // A full key combination was read, move the read index forward.
-            //
-
-            Device->ReadIndex = ReadIndex;
-            Code1 = 0;
-            Code2 = 0;
-        }
-    }
-
-    KeReleaseQueuedLock(Device->ReadLock);
-    return;
 }
 
 KSTATUS

@@ -978,18 +978,6 @@ Members:
     InterruptHandle - Stores a pointer to the handle received when the
         interrupt was connected.
 
-    InteruptWorkItemQueued - Stores a boolean indicating whether or not the
-        work item has been queued already.
-
-    InterruptLock - Stores the spin lock, synchronized at the interrupt
-        run level, that synchronizes access to the pending status bits, DPC,
-        and work item.
-
-    InterruptDpc - Stores a pointer to the DPC queued from the interrupt
-        handler.
-
-    InterruptWorkItem - Stores a pointer to the work item queued from the DPC.
-
     TransmitLock - Stores a queued lock that protects access to the transmit
         packet list and various other values.
 
@@ -1032,17 +1020,13 @@ typedef struct _RTL81_DEVICE {
     ULONGLONG InterruptVector;
     BOOL InterruptResourcesFound;
     HANDLE InterruptHandle;
-    BOOL InterruptWorkItemQueued;
-    KSPIN_LOCK InterruptLock;
-    PDPC InterruptDpc;
-    PWORK_ITEM InterruptWorkItem;
     PQUEUED_LOCK TransmitLock;
     PQUEUED_LOCK ReceiveLock;
     USHORT TransmitInterruptMask;
     USHORT ReceiveInterruptMask;
     ULONG PciMsiFlags;
     INTERFACE_PCI_MSI PciMsiInterface;
-    USHORT PendingInterrupts;
+    volatile ULONG PendingInterrupts;
     BYTE MacAddress[ETHERNET_ADDRESS_SIZE];
     LIST_ENTRY PendingTransmitPacketListHead;
     ULONG ChecksumFlags;
@@ -1208,6 +1192,28 @@ Arguments:
     Context - Supplies the context pointer given to the system when the
         interrupt was connected. In this case, this points to the e100 device
         structure.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+INTERRUPT_STATUS
+Rtl81pInterruptServiceWorker (
+    PVOID Parameter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine processes interrupts for the RTL81xx controller at low level.
+
+Arguments:
+
+    Parameter - Supplies an optional parameter passed in by the creator of the
+        work item.
 
 Return Value:
 

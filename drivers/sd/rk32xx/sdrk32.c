@@ -146,9 +146,9 @@ SdRk32InterruptService (
     PVOID Context
     );
 
-VOID
-SdRk32InterruptServiceDpc (
-    PDPC Dpc
+INTERRUPT_STATUS
+SdRk32InterruptServiceDispatch (
+    PVOID Context
     );
 
 VOID
@@ -1328,8 +1328,8 @@ Return Value:
 
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION ControllerBase;
-    PDPC InterruptDpc;
     PRESOURCE_ALLOCATION LineAllocation;
     SD_INITIALIZATION_BLOCK Parameters;
     KSTATUS Status;
@@ -1455,15 +1455,6 @@ Return Value:
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto StartDeviceEnd;
         }
-
-        ASSERT(Device->Controller->InterruptDpc == NULL);
-
-        InterruptDpc = KeCreateDpc(SdRk32InterruptServiceDpc, Device);
-        if (InterruptDpc == NULL) {
-            goto StartDeviceEnd;
-        }
-
-        Device->Controller->InterruptDpc = InterruptDpc;
     }
 
     //
@@ -1472,13 +1463,16 @@ Return Value:
     //
 
     if (Device->InterruptHandle == INVALID_HANDLE) {
-        Status = IoConnectInterrupt(Irp->Device,
-                                    Device->InterruptLine,
-                                    Device->InterruptVector,
-                                    SdRk32InterruptService,
-                                    Device,
-                                    &(Device->InterruptHandle));
-
+        RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+        Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+        Connect.Device = Irp->Device;
+        Connect.LineNumber = Device->InterruptLine;
+        Connect.Vector = Device->InterruptVector;
+        Connect.InterruptServiceRoutine = SdRk32InterruptService;
+        Connect.DispatchServiceRoutine = SdRk32InterruptServiceDispatch;
+        Connect.Context = Device;
+        Connect.Interrupt = &(Device->InterruptHandle);
+        Status = IoConnectInterrupt(&Connect);
         if (!KSUCCESS(Status)) {
             goto StartDeviceEnd;
         }
@@ -2050,7 +2044,6 @@ Return Value:
     PSD_CONTROLLER Controller;
     PSD_RK32_CONTEXT Device;
     ULONG MaskedStatus;
-    ULONG OriginalPendingStatus;
 
     Device = (PSD_RK32_CONTEXT)Context;
     MaskedStatus = SD_DWC_READ_REGISTER(Device, SdDwcMaskedInterruptStatus);
@@ -2059,36 +2052,32 @@ Return Value:
     }
 
     Controller = Device->Controller;
-    KeAcquireSpinLock(&(Controller->InterruptLock));
-    OriginalPendingStatus = Controller->PendingStatusBits;
-    Controller->PendingStatusBits |= MaskedStatus;
-    if (OriginalPendingStatus == 0) {
-        KeQueueDpc(Controller->InterruptDpc);
-    }
-
     SD_DWC_WRITE_REGISTER(Device, SdDwcInterruptStatus, MaskedStatus);
-    KeReleaseSpinLock(&(Controller->InterruptLock));
+    RtlAtomicOr32(&(Controller->PendingStatusBits), MaskedStatus);
     return InterruptStatusClaimed;
 }
 
-VOID
-SdRk32InterruptServiceDpc (
-    PDPC Dpc
+INTERRUPT_STATUS
+SdRk32InterruptServiceDispatch (
+    PVOID Context
     )
 
 /*++
 
 Routine Description:
 
-    This routine implements the SD DPC that is queued when an interrupt fires.
+    This routine implements the RK32xx SD dispatch level interrupt service
+    routine.
 
 Arguments:
 
-    Dpc - Supplies a pointer to the DPC that is running.
+    Context - Supplies the context pointer given to the system when the
+        interrupt was connected. In this case, this points to the RK32xx SD
+        controller.
 
 Return Value:
 
-    None.
+    Interrupt status.
 
 --*/
 
@@ -2099,26 +2088,15 @@ Return Value:
     PSD_CONTROLLER Controller;
     PSD_RK32_CONTEXT Device;
     BOOL Inserted;
-    RUNLEVEL OldRunLevel;
     ULONG PendingBits;
     BOOL Removed;
     KSTATUS Status;
 
-    Device = (PSD_RK32_CONTEXT)(Dpc->UserData);
+    Device = (PSD_RK32_CONTEXT)Context;
     Controller = Device->Controller;
-
-    //
-    // Synchronize with interrupts to clear out the interrupt register.
-    //
-
-    OldRunLevel = IoRaiseToInterruptRunLevel(Controller->InterruptHandle);
-    KeAcquireSpinLock(&(Controller->InterruptLock));
-    PendingBits = Controller->PendingStatusBits;
-    Controller->PendingStatusBits = 0;
-    KeReleaseSpinLock(&(Controller->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
+    PendingBits = RtlAtomicExchange32(&(Controller->PendingStatusBits), 0);
     if (PendingBits == 0) {
-        return;
+        return InterruptStatusNotClaimed;
     }
 
     //
@@ -2174,7 +2152,7 @@ Return Value:
                                                    Inserted);
     }
 
-    return;
+    return InterruptStatusClaimed;
 }
 
 VOID

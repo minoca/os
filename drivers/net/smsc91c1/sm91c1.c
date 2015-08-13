@@ -618,6 +618,7 @@ Return Value:
     ULONG AlignmentOffset;
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION ControllerBase;
     PHYSICAL_ADDRESS EndAddress;
     BOOL Initialized;
@@ -747,13 +748,16 @@ Return Value:
 
     ASSERT(Device->InterruptHandle == INVALID_HANDLE);
 
-    Status = IoConnectInterrupt(Irp->Device,
-                                Device->InterruptLine,
-                                Device->InterruptVector,
-                                Sm91c1pInterruptService,
-                                Device,
-                                &(Device->InterruptHandle));
-
+    RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+    Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+    Connect.Device = Irp->Device;
+    Connect.LineNumber = Device->InterruptLine;
+    Connect.Vector = Device->InterruptVector;
+    Connect.InterruptServiceRoutine = Sm91c1pInterruptService;
+    Connect.LowLevelServiceRoutine = Sm91c1pInterruptServiceWorker;
+    Connect.Context = Device;
+    Connect.Interrupt = &(Device->InterruptHandle);
+    Status = IoConnectInterrupt(&Connect);
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }

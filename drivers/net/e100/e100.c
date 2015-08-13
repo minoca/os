@@ -738,7 +738,7 @@ Return Value:
     Connect.LowLevelServiceRoutine = E100pInterruptServiceWorker;
     Connect.Context = Device;
     Connect.Interrupt = &(Device->InterruptHandle);
-    Status = IoConnectInterrupt2(&Connect);
+    Status = IoConnectInterrupt(&Connect);
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }

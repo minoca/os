@@ -139,6 +139,11 @@ SdOmap4InterruptService (
     PVOID Context
     );
 
+INTERRUPT_STATUS
+SdOmap4InterruptServiceDispatch (
+    PVOID Context
+    );
+
 VOID
 SdOmap4DmaCompletion (
     PSD_CONTROLLER Controller,
@@ -1209,6 +1214,7 @@ Return Value:
 
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION ControllerBase;
     PRESOURCE_ALLOCATION LineAllocation;
     SD_INITIALIZATION_BLOCK Parameters;
@@ -1346,13 +1352,16 @@ Return Value:
     //
 
     if (Device->InterruptHandle == INVALID_HANDLE) {
-        Status = IoConnectInterrupt(Irp->Device,
-                                    Device->InterruptLine,
-                                    Device->InterruptVector,
-                                    SdOmap4InterruptService,
-                                    Device,
-                                    &(Device->InterruptHandle));
-
+        RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+        Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+        Connect.Device = Irp->Device;
+        Connect.LineNumber = Device->InterruptLine;
+        Connect.Vector = Device->InterruptVector;
+        Connect.InterruptServiceRoutine = SdOmap4InterruptService;
+        Connect.DispatchServiceRoutine = SdOmap4InterruptServiceDispatch;
+        Connect.Context = Device;
+        Connect.Interrupt = &(Device->InterruptHandle);
+        Status = IoConnectInterrupt(&Connect);
         if (!KSUCCESS(Status)) {
             goto StartDeviceEnd;
         }
@@ -1793,6 +1802,38 @@ Return Value:
 
     Device = Context;
     return SdStandardInterruptService(Device->Controller);
+}
+
+INTERRUPT_STATUS
+SdOmap4InterruptServiceDispatch (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the dispatch level OMAP4 SD interrupt service
+    routine.
+
+Arguments:
+
+    Context - Supplies the context pointer given to the system when the
+        interrupt was connected. In this case, this points to the OMAP4 SD
+        controller.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+{
+
+    PSD_OMAP4_CONTEXT Device;
+
+    Device = Context;
+    return SdStandardInterruptServiceDispatch(Device->Controller);
 }
 
 VOID

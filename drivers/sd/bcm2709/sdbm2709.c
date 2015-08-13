@@ -230,6 +230,11 @@ SdBcm2709BusInterruptService (
     PVOID Context
     );
 
+INTERRUPT_STATUS
+SdBcm2709BusInterruptServiceDispatch (
+    PVOID Context
+    );
+
 VOID
 SdBcm2709pBusDispatchStateChange (
     PIRP Irp,
@@ -872,6 +877,44 @@ Return Value:
     return Status;
 }
 
+INTERRUPT_STATUS
+SdBcm2709BusInterruptServiceDispatch (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the dispatch level interrupt service routine for an
+    SD bus.
+
+Arguments:
+
+    Context - Supplies a pointer to the device context.
+
+Return Value:
+
+    Returns whether or not the SD controller caused the interrupt.
+
+--*/
+
+{
+
+    PSD_BCM2709_BUS Bus;
+    PSD_BCM2709_SLOT Slot;
+    INTERRUPT_STATUS Status;
+
+    Bus = Context;
+    Slot = &(Bus->Slot);
+    Status = InterruptStatusNotClaimed;
+    if (Slot->Controller != NULL) {
+        Status = SdStandardInterruptServiceDispatch(Slot->Controller);
+    }
+
+    return Status;
+}
+
 VOID
 SdBcm2709pBusDispatchStateChange (
     PIRP Irp,
@@ -1206,6 +1249,7 @@ Return Value:
 
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION LineAllocation;
     KSTATUS Status;
 
@@ -1262,13 +1306,16 @@ Return Value:
     //
 
     if (Bus->InterruptHandle == INVALID_HANDLE) {
-        Status = IoConnectInterrupt(Irp->Device,
-                                    Bus->InterruptLine,
-                                    Bus->InterruptVector,
-                                    SdBcm2709BusInterruptService,
-                                    Bus,
-                                    &(Bus->InterruptHandle));
-
+        RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+        Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+        Connect.Device = Irp->Device;
+        Connect.LineNumber = Bus->InterruptLine;
+        Connect.Vector = Bus->InterruptVector;
+        Connect.InterruptServiceRoutine = SdBcm2709BusInterruptService;
+        Connect.DispatchServiceRoutine = SdBcm2709BusInterruptServiceDispatch;
+        Connect.Context = Bus;
+        Connect.Interrupt = &(Bus->InterruptHandle);
+        Status = IoConnectInterrupt(&Connect);
         if (!KSUCCESS(Status)) {
             goto StartDeviceEnd;
         }

@@ -331,6 +331,36 @@ typedef struct _PARTITION_TYPE_GUID_MAPPING {
 // -------------------------------------------------------- Function Prototypes
 //
 
+PVOID
+PartpAllocateIo (
+    PPARTITION_CONTEXT Context,
+    UINTN Size,
+    PVOID *AlignedAllocation
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates a region that will be used for I/O.
+
+Arguments:
+
+    Context - Supplies a pointer to the initialized partition context.
+
+    Size - Supplies the required size of the allocation.
+
+    AlignedAllocation - Supplies a pointer where the aligned buffer will be
+        returned.
+
+Return Value:
+
+    Returns the actual buffer to be passed to the free function on success.
+
+    NULL on failure.
+
+--*/
+
 BOOL
 PartpGptIsProtectiveMbr (
     PARTITION_TABLE_ENTRY Entry[PARTITION_TABLE_SIZE]

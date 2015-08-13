@@ -217,7 +217,6 @@ Return Value:
     }
 
     RtlZeroMemory(Controller, sizeof(SD_CONTROLLER));
-    KeInitializeSpinLock(&(Controller->InterruptLock));
     Controller->ConsumerContext = Parameters->ConsumerContext;
     Controller->Voltages = Parameters->Voltages;
     Controller->FundamentalClock = Parameters->FundamentalClock;
@@ -233,13 +232,6 @@ Return Value:
 
     if (Parameters->StandardControllerBase != NULL) {
         Controller->ControllerBase = Parameters->StandardControllerBase;
-        Controller->InterruptDpc = KeCreateDpc(SdpInterruptServiceDpc,
-                                               Controller);
-
-        if (Controller->InterruptDpc == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
-            goto CreateControllerEnd;
-        }
 
         //
         // Fill in gaps that are not present in the supplied function table.
@@ -296,10 +288,6 @@ Return Value:
 CreateControllerEnd:
     if (!KSUCCESS(Status)) {
         if (Controller != NULL) {
-            if (Controller->InterruptDpc != NULL) {
-                KeDestroyDpc(Controller->InterruptDpc);
-            }
-
             MmFreeNonPagedPool(Controller);
             Controller = NULL;
         }
@@ -331,10 +319,6 @@ Return Value:
 --*/
 
 {
-
-    if (Controller->InterruptDpc != NULL) {
-        KeDestroyDpc(Controller->InterruptDpc);
-    }
 
     MmFreeNonPagedPool(Controller);
     return;

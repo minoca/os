@@ -617,8 +617,10 @@ Return Value:
     ULONG AlignmentOffset;
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION ControllerBase;
     PHYSICAL_ADDRESS EndAddress;
+    HANDLE InterruptHandles[2];
     PRESOURCE_ALLOCATION LineAllocation;
     ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddress;
@@ -743,31 +745,38 @@ Return Value:
     // Attempt to connect the interrupts.
     //
 
+    Device->InterruptRunLevel = RunLevelMaxDevice;
+
     ASSERT(Device->TxInterruptHandle == INVALID_HANDLE);
 
-    Status = IoConnectInterrupt(Irp->Device,
-                                Device->TxInterruptLine,
-                                Device->TxInterruptVector,
-                                A3epTxInterruptService,
-                                Device,
-                                &(Device->TxInterruptHandle));
-
+    RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+    Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+    Connect.Device = Irp->Device;
+    Connect.LineNumber = Device->TxInterruptLine;
+    Connect.Vector = Device->TxInterruptVector;
+    Connect.InterruptServiceRoutine = A3epTxInterruptService;
+    Connect.LowLevelServiceRoutine = A3epInterruptServiceWorker;
+    Connect.Context = Device;
+    Connect.Interrupt = &(Device->TxInterruptHandle);
+    Status = IoConnectInterrupt(&Connect);
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }
 
     ASSERT(Device->RxInterruptHandle == INVALID_HANDLE);
 
-    Status = IoConnectInterrupt(Irp->Device,
-                                Device->RxInterruptLine,
-                                Device->RxInterruptVector,
-                                A3epRxInterruptService,
-                                Device,
-                                &(Device->RxInterruptHandle));
-
+    Connect.LineNumber = Device->RxInterruptLine;
+    Connect.Vector = Device->RxInterruptVector;
+    Connect.InterruptServiceRoutine = A3epRxInterruptService;
+    Connect.Interrupt = &(Device->RxInterruptHandle);
+    Status = IoConnectInterrupt(&Connect);
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }
+
+    InterruptHandles[0] = Device->TxInterruptHandle;
+    InterruptHandles[1] = Device->RxInterruptHandle;
+    Device->InterruptRunLevel = IoGetInterruptRunLevel(InterruptHandles, 2);
 
     //
     // Start up the controller.

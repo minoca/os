@@ -65,16 +65,6 @@ Rtl81pInitializePhy (
     );
 
 VOID
-Rtl81pInterruptServiceDpc (
-    PDPC Dpc
-    );
-
-VOID
-Rtl81pInterruptServiceWorker (
-    PVOID Parameter
-    );
-
-VOID
 Rtl81pCheckLinkState (
     PRTL81_DEVICE Device
     );
@@ -360,8 +350,6 @@ Return Value:
     KSTATUS Status;
     ULONG Version;
 
-    KeInitializeSpinLock(&(Device->InterruptLock));
-
     ASSERT(Device->TransmitLock == NULL);
 
     Device->TransmitLock = KeCreateQueuedLock();
@@ -374,27 +362,6 @@ Return Value:
 
     Device->ReceiveLock = KeCreateQueuedLock();
     if (Device->ReceiveLock == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
-    }
-
-    ASSERT(Device->InterruptDpc == NULL);
-
-    Device->InterruptDpc = KeCreateDpc(Rtl81pInterruptServiceDpc, Device);
-    if (Device->InterruptDpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
-    }
-
-    ASSERT(Device->InterruptWorkItem == NULL);
-
-    Device->InterruptWorkItem = KeCreateWorkItem(NULL,
-                                                 WorkPriorityNormal,
-                                                 Rtl81pInterruptServiceWorker,
-                                                 Device,
-                                                 RTL81_ALLOCATION_TAG);
-
-    if (Device->InterruptWorkItem == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceStructuresEnd;
     }
@@ -659,14 +626,6 @@ Return Value:
 
     if (Device->ReceiveLock != NULL) {
         KeDestroyQueuedLock(Device->ReceiveLock);
-    }
-
-    if (Device->InterruptDpc != NULL) {
-        KeDestroyDpc(Device->InterruptDpc);
-    }
-
-    if (Device->InterruptWorkItem != NULL) {
-        KeDestroyWorkItem(Device->InterruptWorkItem);
     }
 
     if ((Device->Flags & RTL81_FLAG_TRANSMIT_MODE_LEGACY) != 0) {
@@ -967,7 +926,6 @@ Return Value:
 {
 
     PRTL81_DEVICE Device;
-    ULONG OriginalPendingBits;
     USHORT PendingBits;
 
     Device = (PRTL81_DEVICE)Context;
@@ -982,36 +940,91 @@ Return Value:
         return InterruptStatusNotClaimed;
     }
 
-    RTL81_WRITE_REGISTER16(Device, Rtl81RegisterInterruptMask, 0);
-
-    //
-    // There are interrupt bits set, so mark this interrupt as claimed and
-    // queue up the DPC.
-    //
-
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    OriginalPendingBits = Device->PendingInterrupts;
-    Device->PendingInterrupts |= PendingBits;
-
-    //
-    // Queue the DPC if there were no interrupts in the midst of being serviced
-    // already.
-    //
-
-    if (OriginalPendingBits == 0) {
-        KeQueueDpc(Device->InterruptDpc);
-    }
-
     //
     // Clear the status bits and then reset the interrupt mask.
     //
 
     RTL81_WRITE_REGISTER16(Device, Rtl81RegisterInterruptStatus, PendingBits);
-    RTL81_WRITE_REGISTER16(Device,
-                           Rtl81RegisterInterruptMask,
-                           RTL81_DEFAULT_INTERRUPT_MASK);
+    RtlAtomicOr32(&(Device->PendingInterrupts), PendingBits);
+    return InterruptStatusClaimed;
+}
 
-    KeReleaseSpinLock(&(Device->InterruptLock));
+INTERRUPT_STATUS
+Rtl81pInterruptServiceWorker (
+    PVOID Parameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes interrupts for the RTL81xx controller at low level.
+
+Arguments:
+
+    Parameter - Supplies an optional parameter passed in by the creator of the
+        work item.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+{
+
+    PRTL81_DEVICE Device;
+    ULONG PendingBits;
+
+    Device = (PRTL81_DEVICE)(Parameter);
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    //
+    // Clear out the pending bits.
+    //
+
+    PendingBits = RtlAtomicExchange32(&(Device->PendingInterrupts), 0);
+    if (PendingBits == 0) {
+        return InterruptStatusNotClaimed;
+    }
+
+    //
+    // Check to see if the link has changed.
+    //
+
+    if ((PendingBits & RTL81_INTERRUPT_LINK_CHANGE) != 0) {
+        Rtl81pCheckLinkState(Device);
+    }
+
+    //
+    // Communicate to the debugger if there were any receive errors.
+    //
+
+    if (((PendingBits & RTL81_INTERRUPT_RECEIVE_FIFO_OVERFLOW) != 0) ||
+        ((PendingBits & RTL81_INTERRUPT_RECEIVE_ERROR) != 0) ||
+        ((PendingBits & RTL81_INTERRUPT_RECEIVE_OVERFLOW) != 0)) {
+
+        RtlDebugPrint("RTL81xx: Receive packet error 0x%x.\n", PendingBits);
+    }
+
+    //
+    // If a packet was received, process it.
+    //
+
+    if ((PendingBits & Device->ReceiveInterruptMask) != 0) {
+        Rtl81pReapReceivedFrames(Device);
+    }
+
+    //
+    // If there was a transmit error or a successful transmit, then go through
+    // and reap the packets.
+    //
+
+    if ((PendingBits & Device->TransmitInterruptMask) != 0) {
+        Rtl81pReapTransmitDescriptors(Device);
+    }
+
     return InterruptStatusClaimed;
 }
 
@@ -1158,153 +1171,6 @@ Return Value:
 
 InitializePhyEnd:
     return Status;
-}
-
-VOID
-Rtl81pInterruptServiceDpc (
-    PDPC Dpc
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the RTL81xx DPC that is queued when an interrupt
-    fires.
-
-Arguments:
-
-    Dpc - Supplies a pointer to the DPC that is running.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PRTL81_DEVICE Device;
-    RUNLEVEL OldRunLevel;
-    BOOL QueueWorkItem;
-    KSTATUS Status;
-
-    Device = (PRTL81_DEVICE)Dpc->UserData;
-
-    //
-    // No processing is done at dispatch level. Queue the work item to drop
-    // to low level.
-    //
-
-    QueueWorkItem = FALSE;
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    if (Device->InterruptWorkItemQueued == FALSE) {
-        Device->InterruptWorkItemQueued = TRUE;
-        QueueWorkItem = TRUE;
-    }
-
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-
-    //
-    // Work items must be queued at dispatch or lower, but the flag above
-    // (protected by the lock) ensures only one party gets it.
-    //
-
-    if (QueueWorkItem != FALSE) {
-        Status = KeQueueWorkItem(Device->InterruptWorkItem);
-
-        ASSERT(KSUCCESS(Status));
-    }
-
-    return;
-}
-
-VOID
-Rtl81pInterruptServiceWorker (
-    PVOID Parameter
-    )
-
-/*++
-
-Routine Description:
-
-    This routine processes interrupts for the RTL81xx controller at low level.
-
-Arguments:
-
-    Parameter - Supplies an optional parameter passed in by the creator of the
-        work item.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PRTL81_DEVICE Device;
-    RUNLEVEL OldRunLevel;
-    USHORT PendingBits;
-
-    Device = (PRTL81_DEVICE)(Parameter);
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
-    //
-    // Clear out the pending bits.
-    //
-
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    PendingBits = Device->PendingInterrupts;
-    Device->InterruptWorkItemQueued = FALSE;
-    Device->PendingInterrupts = 0;
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-    if (PendingBits == 0) {
-        return;
-    }
-
-    //
-    // Check to see if the link has changed.
-    //
-
-    if ((PendingBits & RTL81_INTERRUPT_LINK_CHANGE) != 0) {
-        Rtl81pCheckLinkState(Device);
-    }
-
-    //
-    // Communicate to the debugger if there were any receive errors.
-    //
-
-    if (((PendingBits & RTL81_INTERRUPT_RECEIVE_FIFO_OVERFLOW) != 0) ||
-        ((PendingBits & RTL81_INTERRUPT_RECEIVE_ERROR) != 0) ||
-        ((PendingBits & RTL81_INTERRUPT_RECEIVE_OVERFLOW) != 0)) {
-
-        RtlDebugPrint("RTL81xx: Receive packet error 0x%x.\n", PendingBits);
-    }
-
-    //
-    // If a packet was received, process it.
-    //
-
-    if ((PendingBits & Device->ReceiveInterruptMask) != 0) {
-        Rtl81pReapReceivedFrames(Device);
-    }
-
-    //
-    // If there was a transmit error or a successful transmit, then go through
-    // and reap the packets.
-    //
-
-    if ((PendingBits & Device->TransmitInterruptMask) != 0) {
-        Rtl81pReapTransmitDescriptors(Device);
-    }
-
-    return;
 }
 
 VOID

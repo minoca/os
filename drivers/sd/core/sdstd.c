@@ -162,7 +162,6 @@ Return Value:
 
     ULONG InterruptStatus;
     ULONG MaskedStatus;
-    ULONG OriginalPendingStatus;
 
     InterruptStatus = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
     MaskedStatus = InterruptStatus & Controller->EnabledInterrupts;
@@ -170,15 +169,104 @@ Return Value:
         return InterruptStatusNotClaimed;
     }
 
-    KeAcquireSpinLock(&(Controller->InterruptLock));
-    OriginalPendingStatus = Controller->PendingStatusBits;
-    Controller->PendingStatusBits |= MaskedStatus;
-    if (OriginalPendingStatus == 0) {
-        KeQueueDpc(Controller->InterruptDpc);
+    SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, MaskedStatus);
+    RtlAtomicOr32(&(Controller->PendingStatusBits), MaskedStatus);
+    return InterruptStatusClaimed;
+}
+
+SD_API
+INTERRUPT_STATUS
+SdStandardInterruptServiceDispatch (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the interrupt handler that is called at dispatch
+    level.
+
+Arguments:
+
+    Context - Supplies a context pointer, which in this case is a pointer to
+        the SD controller.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PVOID CompletionContext;
+    PSD_IO_COMPLETION_ROUTINE CompletionRoutine;
+    PSD_CONTROLLER Controller;
+    BOOL Inserted;
+    ULONG PendingBits;
+    BOOL Removed;
+    KSTATUS Status;
+
+    Controller = (PSD_CONTROLLER)(Context);
+    PendingBits = RtlAtomicExchange32(&(Controller->PendingStatusBits), 0);
+    if (PendingBits == 0) {
+        return InterruptStatusNotClaimed;
     }
 
-    SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, MaskedStatus);
-    KeReleaseSpinLock(&(Controller->InterruptLock));
+    //
+    // Process a media change.
+    //
+
+    Status = STATUS_DEVICE_IO_ERROR;
+    Inserted = FALSE;
+    Removed = FALSE;
+    if ((PendingBits & SD_INTERRUPT_STATUS_CARD_REMOVAL) != 0) {
+        Removed = TRUE;
+        Status = STATUS_NO_MEDIA;
+        RtlAtomicAnd32(&(Controller->Flags), ~SD_CONTROLLER_FLAG_MEDIA_PRESENT);
+    }
+
+    if ((PendingBits & SD_INTERRUPT_STATUS_CARD_INSERTION) != 0) {
+        Inserted = TRUE;
+        Status = STATUS_NO_MEDIA;
+    }
+
+    //
+    // Process the I/O completion. The only other interrupt bits that are sent
+    // to the DPC are the error bits and the transfer complete bit.
+    //
+
+    if ((PendingBits & SD_INTERRUPT_ENABLE_ERROR_MASK) != 0) {
+        RtlDebugPrint("SD: Error status %x\n", PendingBits);
+        SdErrorRecovery(Controller);
+        Status = STATUS_DEVICE_IO_ERROR;
+
+    } else if ((PendingBits & SD_INTERRUPT_STATUS_TRANSFER_COMPLETE) != 0) {
+        Status = STATUS_SUCCESS;
+    }
+
+    if (Controller->IoCompletionRoutine != NULL) {
+        CompletionRoutine = Controller->IoCompletionRoutine;
+        CompletionContext = Controller->IoCompletionContext;
+        Controller->IoCompletionRoutine = NULL;
+        Controller->IoCompletionContext = NULL;
+        CompletionRoutine(Controller,
+                          CompletionContext,
+                          Controller->IoRequestSize,
+                          Status);
+    }
+
+    if (((Inserted != FALSE) || (Removed != FALSE)) &&
+        (Controller->FunctionTable.MediaChangeCallback != NULL)) {
+
+        Controller->FunctionTable.MediaChangeCallback(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   Removed,
+                                                   Inserted);
+    }
+
     return InterruptStatusClaimed;
 }
 
@@ -1338,110 +1426,6 @@ Return Value:
 
 StopDataTransferEnd:
     return Status;
-}
-
-VOID
-SdpInterruptServiceDpc (
-    PDPC Dpc
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the SD DPC that is queued when an interrupt fires.
-
-Arguments:
-
-    Dpc - Supplies a pointer to the DPC that is running.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PVOID CompletionContext;
-    PSD_IO_COMPLETION_ROUTINE CompletionRoutine;
-    PSD_CONTROLLER Controller;
-    BOOL Inserted;
-    RUNLEVEL OldRunLevel;
-    ULONG PendingBits;
-    BOOL Removed;
-    KSTATUS Status;
-
-    Controller = (PSD_CONTROLLER)(Dpc->UserData);
-
-    //
-    // Synchronize with interrupts to clear out the interrupt register.
-    //
-
-    OldRunLevel = IoRaiseToInterruptRunLevel(Controller->InterruptHandle);
-    KeAcquireSpinLock(&(Controller->InterruptLock));
-    PendingBits = Controller->PendingStatusBits;
-    Controller->PendingStatusBits = 0;
-    KeReleaseSpinLock(&(Controller->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-    if (PendingBits == 0) {
-        return;
-    }
-
-    //
-    // Process a media change.
-    //
-
-    Status = STATUS_DEVICE_IO_ERROR;
-    Inserted = FALSE;
-    Removed = FALSE;
-    if ((PendingBits & SD_INTERRUPT_STATUS_CARD_REMOVAL) != 0) {
-        Removed = TRUE;
-        Status = STATUS_NO_MEDIA;
-        RtlAtomicAnd32(&(Controller->Flags), ~SD_CONTROLLER_FLAG_MEDIA_PRESENT);
-    }
-
-    if ((PendingBits & SD_INTERRUPT_STATUS_CARD_INSERTION) != 0) {
-        Inserted = TRUE;
-        Status = STATUS_NO_MEDIA;
-    }
-
-    //
-    // Process the I/O completion. The only other interrupt bits that are sent
-    // to the DPC are the error bits and the transfer complete bit.
-    //
-
-    if ((PendingBits & SD_INTERRUPT_ENABLE_ERROR_MASK) != 0) {
-        RtlDebugPrint("SD: Error status %x\n", PendingBits);
-        SdErrorRecovery(Controller);
-        Status = STATUS_DEVICE_IO_ERROR;
-
-    } else if ((PendingBits & SD_INTERRUPT_STATUS_TRANSFER_COMPLETE) != 0) {
-        Status = STATUS_SUCCESS;
-    }
-
-    if (Controller->IoCompletionRoutine != NULL) {
-        CompletionRoutine = Controller->IoCompletionRoutine;
-        CompletionContext = Controller->IoCompletionContext;
-        Controller->IoCompletionRoutine = NULL;
-        Controller->IoCompletionContext = NULL;
-        CompletionRoutine(Controller,
-                          CompletionContext,
-                          Controller->IoRequestSize,
-                          Status);
-    }
-
-    if (((Inserted != FALSE) || (Removed != FALSE)) &&
-        (Controller->FunctionTable.MediaChangeCallback != NULL)) {
-
-        Controller->FunctionTable.MediaChangeCallback(
-                                                   Controller,
-                                                   Controller->ConsumerContext,
-                                                   Removed,
-                                                   Inserted);
-    }
-
-    return;
 }
 
 //

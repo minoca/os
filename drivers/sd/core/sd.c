@@ -267,6 +267,11 @@ SdBusInterruptService (
     PVOID Context
     );
 
+INTERRUPT_STATUS
+SdBusInterruptServiceDispatch (
+    PVOID Context
+    );
+
 VOID
 SdpBusDispatchStateChange (
     PIRP Irp,
@@ -1126,6 +1131,53 @@ Return Value:
     return TotalStatus;
 }
 
+INTERRUPT_STATUS
+SdBusInterruptServiceDispatch (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the dispatch level interrupt service routine for an
+    SD bus.
+
+Arguments:
+
+    Context - Supplies a pointer to the device context.
+
+Return Value:
+
+    Returns whether or not the SD controller caused the interrupt.
+
+--*/
+
+{
+
+    PSD_BUS Bus;
+    PSD_SLOT Slot;
+    UINTN SlotIndex;
+    INTERRUPT_STATUS Status;
+    INTERRUPT_STATUS TotalStatus;
+
+    Bus = Context;
+    TotalStatus = InterruptStatusNotClaimed;
+    for (SlotIndex = 0; SlotIndex < MAX_SD_SLOTS; SlotIndex += 1) {
+        Slot = &(Bus->Slots[SlotIndex]);
+        if (Slot->Controller == NULL) {
+            break;
+        }
+
+        Status = SdStandardInterruptServiceDispatch(Slot->Controller);
+        if (Status != InterruptStatusNotClaimed) {
+            TotalStatus = Status;
+        }
+    }
+
+    return TotalStatus;
+}
+
 VOID
 SdpBusDispatchStateChange (
     PIRP Irp,
@@ -1460,6 +1512,7 @@ Return Value:
 
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION LineAllocation;
     UINTN SlotIndex;
     KSTATUS Status;
@@ -1524,13 +1577,16 @@ Return Value:
     //
 
     if (Bus->InterruptHandle == INVALID_HANDLE) {
-        Status = IoConnectInterrupt(Irp->Device,
-                                    Bus->InterruptLine,
-                                    Bus->InterruptVector,
-                                    SdBusInterruptService,
-                                    Bus,
-                                    &(Bus->InterruptHandle));
-
+        RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+        Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+        Connect.Device = Irp->Device;
+        Connect.LineNumber = Bus->InterruptLine;
+        Connect.Vector = Bus->InterruptVector;
+        Connect.InterruptServiceRoutine = SdBusInterruptService;
+        Connect.DispatchServiceRoutine = SdBusInterruptServiceDispatch;
+        Connect.Context = Bus;
+        Connect.Interrupt = &(Bus->InterruptHandle);
+        Status = IoConnectInterrupt(&Connect);
         if (!KSUCCESS(Status)) {
             goto StartDeviceEnd;
         }

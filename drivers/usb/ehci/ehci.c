@@ -678,6 +678,7 @@ Return Value:
 
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PEHCI_CONTROLLER Controller;
     PRESOURCE_ALLOCATION ControllerBase;
     PDEBUG_HANDOFF_DATA HandoffData;
@@ -866,13 +867,16 @@ Return Value:
 
     ASSERT(Device->InterruptHandle == INVALID_HANDLE);
 
-    Status = IoConnectInterrupt(Irp->Device,
-                                Device->InterruptLine,
-                                Device->InterruptVector,
-                                EhcipInterruptService,
-                                Device->Controller,
-                                &(Device->InterruptHandle));
-
+    RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+    Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+    Connect.Device = Irp->Device;
+    Connect.LineNumber = Device->InterruptLine;
+    Connect.Vector = Device->InterruptVector;
+    Connect.InterruptServiceRoutine = EhcipInterruptService;
+    Connect.DispatchServiceRoutine = EhcipInterruptServiceDpc;
+    Connect.Context = Device->Controller;
+    Connect.Interrupt = &(Device->InterruptHandle);
+    Status = IoConnectInterrupt(&Connect);
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }

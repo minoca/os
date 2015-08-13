@@ -1160,10 +1160,6 @@ Members:
 
     PendingStatusBits - Stores the mask of pending interrupt status bits.
 
-    InterruptLock - Stores the spin lock held at device interrupt runlevel.
-
-    InterruptDpc - Stores the DPC queued when an interrupt occurs.
-
 --*/
 
 struct _SD_CONTROLLER {
@@ -1196,9 +1192,7 @@ struct _SD_CONTROLLER {
     PSD_IO_COMPLETION_ROUTINE IoCompletionRoutine;
     PVOID IoCompletionContext;
     UINTN IoRequestSize;
-    ULONG PendingStatusBits;
-    KSPIN_LOCK InterruptLock;
-    PDPC InterruptDpc;
+    volatile ULONG PendingStatusBits;
 };
 
 /*++
@@ -1332,6 +1326,30 @@ Arguments:
 Return Value:
 
     Returns whether or not the SD controller caused the interrupt.
+
+--*/
+
+SD_API
+INTERRUPT_STATUS
+SdStandardInterruptServiceDispatch (
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the interrupt handler that is called at dispatch
+    level.
+
+Arguments:
+
+    Context - Supplies a context pointer, which in this case is a pointer to
+        the SD controller.
+
+Return Value:
+
+    None.
 
 --*/
 

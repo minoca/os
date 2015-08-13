@@ -489,6 +489,10 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
+    if (TickCount < 2) {
+        TickCount = 2;
+    }
+
     //
     // Start the timer ticking.
     //

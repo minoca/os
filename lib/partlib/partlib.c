@@ -148,8 +148,8 @@ Routine Description:
 
     This routine initializes a partition context. The caller is expected to
     have filled in pointers to the allocate, free, and read sector functions.
-    The caller is also expected to have filled in the block size and disk
-    geometry information (if needed).
+    The caller is also expected to have filled in the block size, disk
+    geometry information, and alignment (if needed).
 
 Arguments:
 
@@ -167,11 +167,16 @@ Return Value:
 
 {
 
+    if (Context->Alignment == 1) {
+        Context->Alignment = 0;
+    }
+
     if ((Context->AllocateFunction == NULL) ||
         (Context->FreeFunction == NULL) ||
         (Context->ReadFunction == NULL) ||
         (Context->BlockSize < MINIMUM_BLOCK_SIZE) ||
-        (!POWER_OF_2(Context->BlockSize))) {
+        (!POWER_OF_2(Context->BlockSize)) ||
+        ((Context->Alignment != 0) && (!POWER_OF_2(Context->Alignment)))) {
 
         return STATUS_INVALID_PARAMETER;
     }
@@ -249,6 +254,7 @@ Return Value:
 {
 
     PUCHAR Block;
+    PVOID BlockAllocation;
     ULONG Capacity;
     PPARTITION_TABLE_ENTRY Entry;
     ULONG EntryIndex;
@@ -277,8 +283,11 @@ Return Value:
     // Allocate a block for reading.
     //
 
-    Block = Context->AllocateFunction(Context->BlockSize);
-    if (Block == NULL) {
+    BlockAllocation = PartpAllocateIo(Context,
+                                      Context->BlockSize,
+                                      (PVOID *)&Block);
+
+    if (BlockAllocation == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto EnumeratePartitionsEnd;
     }
@@ -498,8 +507,8 @@ EnumeratePartitionsEnd:
     }
 
     Context->Partitions = Information;
-    if (Block != NULL) {
-        Context->FreeFunction(Block);
+    if (BlockAllocation != NULL) {
+        Context->FreeFunction(BlockAllocation);
     }
 
     return Status;
@@ -675,6 +684,56 @@ Return Value:
     return PartitionType;
 }
 
+PVOID
+PartpAllocateIo (
+    PPARTITION_CONTEXT Context,
+    UINTN Size,
+    PVOID *AlignedAllocation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates a region that will be used for I/O.
+
+Arguments:
+
+    Context - Supplies a pointer to the initialized partition context.
+
+    Size - Supplies the required size of the allocation.
+
+    AlignedAllocation - Supplies a pointer where the aligned buffer will be
+        returned.
+
+Return Value:
+
+    Returns the actual buffer to be passed to the free function on success.
+
+    NULL on failure.
+
+--*/
+
+{
+
+    PVOID Allocation;
+
+    Allocation = Context->AllocateFunction(Size + Context->Alignment);
+    if (Allocation == NULL) {
+        return NULL;
+    }
+
+    if (Context->Alignment == 0) {
+        *AlignedAllocation = Allocation;
+
+    } else {
+        *AlignedAllocation = (PVOID)(UINTN)ALIGN_RANGE_UP((UINTN)Allocation,
+                                                          Context->Alignment);
+    }
+
+    return Allocation;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -715,6 +774,7 @@ Return Value:
 {
 
     PVOID Block;
+    PVOID BlockAllocation;
     ULONG BlockIndex;
     ULONG FirstPartition;
     PARTITION_TABLE_ENTRY MbrEntries[PARTITION_TABLE_SIZE];
@@ -723,7 +783,7 @@ Return Value:
     ULONG PartitionIndex;
     KSTATUS Status;
 
-    Block = NULL;
+    BlockAllocation = NULL;
     RtlZeroMemory(MbrEntries, sizeof(MbrEntries));
 
     //
@@ -793,8 +853,8 @@ Return Value:
         goto WriteMbrPartitionLayoutEnd;
     }
 
-    Block = Context->AllocateFunction(Context->BlockSize);
-    if (Block == NULL) {
+    BlockAllocation = PartpAllocateIo(Context, Context->BlockSize, &Block);
+    if (BlockAllocation == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto WriteMbrPartitionLayoutEnd;
     }
@@ -865,8 +925,8 @@ Return Value:
     }
 
 WriteMbrPartitionLayoutEnd:
-    if (Block != NULL) {
-        Context->FreeFunction(Block);
+    if (BlockAllocation != NULL) {
+        Context->FreeFunction(BlockAllocation);
     }
 
     return Status;

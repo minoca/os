@@ -630,17 +630,7 @@ Members:
     LinkCheckInterval - Stores the interval in time counter ticks that the
         link state should be polled.
 
-    InterruptDpc - Stores a pointer to the DPC queued from the interrupt
-        handler.
-
     WorkItem - Stores a pointer to the work item queued from the DPC.
-
-    InterruptLock - Stores the spin lock, synchronized at the interrupt
-        run level, that synchronizes access to the pending status bits, DPC,
-        and work item.
-
-    WorkItemQueued - Stores a boolean indicating whether or not the work item
-        has been queued already.
 
     PendingStatusBits - Stores the bitfield of status bits that have yet to be
         dealt with by software.
@@ -686,11 +676,8 @@ typedef struct _DWE_DEVICE {
     PDPC LinkCheckDpc;
     ULONGLONG NextLinkCheck;
     ULONGLONG LinkCheckInterval;
-    PDPC InterruptDpc;
     PWORK_ITEM WorkItem;
-    KSPIN_LOCK InterruptLock;
-    BOOL WorkItemQueued;
-    ULONG PendingStatusBits;
+    volatile ULONG PendingStatusBits;
     BOOL MacAddressAssigned;
     BYTE MacAddress[ETHERNET_ADDRESS_SIZE];
     ULONG PhyId;
@@ -831,6 +818,29 @@ Arguments:
     Context - Supplies the context pointer given to the system when the
         interrupt was connected. In this case, this points to the e100 device
         structure.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+INTERRUPT_STATUS
+DwepInterruptServiceWorker (
+    PVOID Parameter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine processes interrupts for the DesignWare Ethernet controller at
+    low level.
+
+Arguments:
+
+    Parameter - Supplies an optional parameter passed in by the creator of the
+        work item.
 
 Return Value:
 

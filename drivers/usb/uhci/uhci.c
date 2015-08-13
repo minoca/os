@@ -637,6 +637,7 @@ Return Value:
 
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PUHCI_CONTROLLER Controller;
     PRESOURCE_ALLOCATION ControllerBase;
     PRESOURCE_ALLOCATION LineAllocation;
@@ -768,13 +769,16 @@ Return Value:
 
     ASSERT(Device->InterruptHandle == INVALID_HANDLE);
 
-    Status = IoConnectInterrupt(Irp->Device,
-                                Device->InterruptLine,
-                                Device->InterruptVector,
-                                UhcipInterruptService,
-                                Device->Controller,
-                                &(Device->InterruptHandle));
-
+    RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+    Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+    Connect.Device = Irp->Device;
+    Connect.LineNumber = Device->InterruptLine;
+    Connect.Vector = Device->InterruptVector;
+    Connect.InterruptServiceRoutine = UhcipInterruptService;
+    Connect.DispatchServiceRoutine = UhcipInterruptServiceDpc;
+    Connect.Context = Device->Controller;
+    Connect.Interrupt = &(Device->InterruptHandle);
+    Status = IoConnectInterrupt(&Connect);
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
     }

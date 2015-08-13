@@ -251,6 +251,9 @@ Members:
 
     BlockShift - Stores the power of two of the block size.
 
+    Alignment - Stores the required alignment of buffers that do I/O. Zero or
+        one specifies no alignment requirement.
+
     BlockCount - Stores the number of blocks in the disk (one beyond the last
         valid LBA).
 
@@ -279,6 +282,7 @@ struct _PARTITION_CONTEXT {
     PPARTITION_FILL_RANDOM FillRandomFunction;
     ULONG BlockSize;
     ULONG BlockShift;
+    ULONG Alignment;
     ULONGLONG BlockCount;
     ULONG SectorsPerHead;
     ULONG HeadsPerCylinder;

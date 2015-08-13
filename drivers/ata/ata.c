@@ -76,11 +76,6 @@ Return Value:
 //
 
 VOID
-AtapInterruptServiceDpc (
-    PDPC Dpc
-    );
-
-VOID
 AtapServiceInterruptForChannel (
     PATA_CHANNEL Channel,
     ULONG PendingBits
@@ -132,6 +127,11 @@ AtaDispatchSystemControl (
 
 INTERRUPT_STATUS
 AtaInterruptService (
+    PVOID Context
+    );
+
+INTERRUPT_STATUS
+AtaInterruptServiceDpc (
     PVOID Context
     );
 
@@ -422,7 +422,6 @@ Return Value:
     }
 
     RtlZeroMemory(Controller, sizeof(ATA_CONTROLLER));
-    KeInitializeSpinLock(&(Controller->InterruptLock));
     KeInitializeSpinLock(&(Controller->DpcLock));
     Controller->Type = AtaControllerContext;
     Controller->PrimaryInterruptHandle = INVALID_HANDLE;
@@ -482,18 +481,6 @@ Return Value:
         }
     }
 
-    //
-    // Create the interrupt DPC and work item.
-    //
-
-    Controller->InterruptDpc = KeCreateDpc(AtapInterruptServiceDpc,
-                                           Controller);
-
-    if (Controller->InterruptDpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto AddDeviceEnd;
-    }
-
     Status = IoAttachDriverToDevice(Driver, DeviceToken, Controller);
     if (!KSUCCESS(Status)) {
         goto AddDeviceEnd;
@@ -512,10 +499,6 @@ AddDeviceEnd:
 
             if (Controller->PrdtIoBuffer != NULL) {
                 MmFreeIoBuffer(Controller->PrdtIoBuffer);
-            }
-
-            if (Controller->InterruptDpc != NULL) {
-                KeDestroyDpc(Controller->InterruptDpc);
             }
 
             MmFreeNonPagedPool(Controller);
@@ -935,8 +918,6 @@ Return Value:
     ULONG BusMasterStatus;
     PATA_CONTROLLER Controller;
     INTERRUPT_STATUS InterruptStatus;
-    RUNLEVEL OldRunLevel;
-    ULONG OriginalPendingStatus;
 
     InterruptStatus = InterruptStatusNotClaimed;
     Controller = (PATA_CONTROLLER)Context;
@@ -958,8 +939,6 @@ Return Value:
                           AtaRegisterBusMasterCommand,
                           0);
 
-        InterruptStatus = InterruptStatusClaimed;
-
     //
     // Try the secondary one.
     //
@@ -979,53 +958,37 @@ Return Value:
                               0);
 
             BusMasterStatus <<= BITS_PER_BYTE;
-            InterruptStatus = InterruptStatusClaimed;
         }
     }
 
-    //
-    // OR in the status bits. Raise to high level to find a runlevel that is
-    // common to potentially both the primary and secondary interrupts.
-    //
-
-    if (InterruptStatus == InterruptStatusClaimed) {
-        OldRunLevel = KeRaiseRunLevel(RunLevelHigh);
-        KeAcquireSpinLock(&(Controller->InterruptLock));
-        OriginalPendingStatus = Controller->PendingStatusBits;
-        Controller->PendingStatusBits |= BusMasterStatus;
-        if (OriginalPendingStatus == 0) {
-            KeQueueDpc(Controller->InterruptDpc);
-        }
-
-        KeReleaseSpinLock(&(Controller->InterruptLock));
-        KeLowerRunLevel(OldRunLevel);
+    if (BusMasterStatus != 0) {
+        RtlAtomicOr32(&(Controller->PendingStatusBits), BusMasterStatus);
+        InterruptStatus = InterruptStatusClaimed;
     }
 
     return InterruptStatus;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
-VOID
-AtapInterruptServiceDpc (
-    PDPC Dpc
+INTERRUPT_STATUS
+AtaInterruptServiceDpc (
+    PVOID Context
     )
 
 /*++
 
 Routine Description:
 
-    This routine implements the ATA DPC that is queued when an interrupt fires.
+    This routine implements the ATA dispatch-level interrupt service routine.
 
 Arguments:
 
-    Dpc - Supplies a pointer to the DPC that is running.
+    Context - Supplies the context pointer given to the system when the
+        interrupt was connected. In this case, this points to the ATA
+        controller.
 
 Return Value:
 
-    None.
+    Interrupt status.
 
 --*/
 
@@ -1033,23 +996,17 @@ Return Value:
 
     UCHAR BusMasterMask;
     PATA_CONTROLLER Device;
-    RUNLEVEL OldRunLevel;
     ULONG PendingBits;
 
-    Device = (PATA_CONTROLLER)(Dpc->UserData);
+    Device = (PATA_CONTROLLER)Context;
 
     //
     // Clear out the pending bits.
     //
 
-    OldRunLevel = KeRaiseRunLevel(RunLevelHigh);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    PendingBits = Device->PendingStatusBits;
-    Device->PendingStatusBits = 0;
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
+    PendingBits = RtlAtomicExchange32(&(Device->PendingStatusBits), 0);
     if (PendingBits == 0) {
-        return;
+        return InterruptStatusNotClaimed;
     }
 
     KeAcquireSpinLock(&(Device->DpcLock));
@@ -1075,8 +1032,12 @@ Return Value:
     }
 
     KeReleaseSpinLock(&(Device->DpcLock));
-    return;
+    return InterruptStatusClaimed;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 VOID
 AtapServiceInterruptForChannel (
@@ -1780,6 +1741,7 @@ Return Value:
 
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
+    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     UINTN Index;
     BOOL LineSkipped;
     BOOL PrimaryInterruptConnected;
@@ -1952,17 +1914,20 @@ Return Value:
         goto StartDeviceEnd;
     }
 
+    RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+    Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+    Connect.Device = Irp->Device;
+    Connect.InterruptServiceRoutine = AtaInterruptService;
+    Connect.DispatchServiceRoutine = AtaInterruptServiceDpc;
+    Connect.Context = Controller;
     if ((PrimaryInterruptConnected == FALSE) &&
         (Controller->PrimaryInterruptFound != FALSE) &&
         (Controller->Channel[0].BusMasterBase != (USHORT)-1)) {
 
-        Status = IoConnectInterrupt(Irp->Device,
-                                    Controller->PrimaryInterruptLine,
-                                    Controller->PrimaryInterruptVector,
-                                    AtaInterruptService,
-                                    Controller,
-                                    &(Controller->PrimaryInterruptHandle));
-
+        Connect.LineNumber = Controller->PrimaryInterruptLine;
+        Connect.Vector = Controller->PrimaryInterruptVector;
+        Connect.Interrupt = &(Controller->PrimaryInterruptHandle);
+        Status = IoConnectInterrupt(&Connect);
         if (!KSUCCESS(Status)) {
             goto StartDeviceEnd;
         }
@@ -1972,13 +1937,10 @@ Return Value:
         (Controller->SecondaryInterruptFound != FALSE) &&
         (Controller->Channel[1].BusMasterBase != (USHORT)-1)) {
 
-        Status = IoConnectInterrupt(Irp->Device,
-                                    Controller->SecondaryInterruptLine,
-                                    Controller->SecondaryInterruptVector,
-                                    AtaInterruptService,
-                                    Controller,
-                                    &(Controller->SecondaryInterruptHandle));
-
+        Connect.LineNumber = Controller->SecondaryInterruptLine;
+        Connect.Vector = Controller->SecondaryInterruptVector;
+        Connect.Interrupt = &(Controller->SecondaryInterruptHandle);
+        Status = IoConnectInterrupt(&Connect);
         if (!KSUCCESS(Status)) {
             goto StartDeviceEnd;
         }

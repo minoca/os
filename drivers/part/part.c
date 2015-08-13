@@ -1134,6 +1134,7 @@ Return Value:
     PartitionContext->ReadFunction = PartpRead;
     PartitionContext->BlockSize = DiskOffsetAlignment;
     PartitionContext->BlockCount = DiskCapacity / PartitionContext->BlockSize;
+    PartitionContext->Alignment = MmGetIoBufferAlignment();
     Status = PartInitialize(PartitionContext);
     if (!KSUCCESS(Status)) {
         PartitionContext->BlockSize = 0;

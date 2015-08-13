@@ -43,6 +43,7 @@ PartpGptReadEntries (
     PPARTITION_CONTEXT Context,
     PVOID Block,
     PGPT_PARTITION_ENTRY *Entries,
+    PVOID *EntriesAllocation,
     PULONG EntryCount,
     PULONG ValidCount
     );
@@ -175,6 +176,7 @@ Return Value:
 
     ULONG AllocationSize;
     PVOID Block;
+    PVOID BlockAllocation;
     ULONG BlockSize;
     ULONG EntryCount;
     ULONG EntryIndex;
@@ -185,14 +187,15 @@ Return Value:
     ULONG InformationIndex;
     PPARTITION_INFORMATION Partition;
     PGPT_PARTITION_ENTRY PartitionEntries;
+    PVOID PartitionEntriesAllocation;
     KSTATUS Status;
     ULONG ValidCount;
 
     BlockSize = Context->BlockSize;
     Information = NULL;
-    PartitionEntries = NULL;
-    Block = Context->AllocateFunction(BlockSize);
-    if (Block == NULL) {
+    PartitionEntriesAllocation = NULL;
+    BlockAllocation = PartpAllocateIo(Context, BlockSize, &Block);
+    if (BlockAllocation == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto GptEnumeratePartitionsEnd;
     }
@@ -215,6 +218,7 @@ Return Value:
     Status = PartpGptReadEntries(Context,
                                  Block,
                                  &PartitionEntries,
+                                 &PartitionEntriesAllocation,
                                  &EntryCount,
                                  &ValidCount);
 
@@ -228,6 +232,7 @@ Return Value:
         Status = PartpGptReadEntries(Context,
                                      Block,
                                      &PartitionEntries,
+                                     &PartitionEntriesAllocation,
                                      &EntryCount,
                                      &ValidCount);
     }
@@ -315,16 +320,16 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 GptEnumeratePartitionsEnd:
-    if (PartitionEntries != NULL) {
-        Context->FreeFunction(PartitionEntries);
+    if (PartitionEntriesAllocation != NULL) {
+        Context->FreeFunction(PartitionEntriesAllocation);
     }
 
     if (Information != NULL) {
         Context->FreeFunction(Information);
     }
 
-    if (Block != NULL) {
-        Context->FreeFunction(Block);
+    if (BlockAllocation != NULL) {
+        Context->FreeFunction(BlockAllocation);
     }
 
     return Status;
@@ -380,8 +385,9 @@ Return Value:
     PUSHORT Pointer16;
     KSTATUS Status;
     PVOID Table;
+    PVOID TableAllocation;
 
-    Table = NULL;
+    TableAllocation = NULL;
     if (Context->BlockCount < 12) {
         Status = STATUS_INVALID_CONFIGURATION;
         goto GptWritePartitionLayoutEnd;
@@ -423,8 +429,11 @@ Return Value:
     // Allocate space for the entire table.
     //
 
-    Table = Context->AllocateFunction(FirstUsableBlock * BlockSize);
-    if (Table == NULL) {
+    TableAllocation = PartpAllocateIo(Context,
+                                      FirstUsableBlock * BlockSize,
+                                      &Table);
+
+    if (TableAllocation == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto GptWritePartitionLayoutEnd;
     }
@@ -597,8 +606,8 @@ Return Value:
     }
 
 GptWritePartitionLayoutEnd:
-    if (Table != NULL) {
-        Context->FreeFunction(Table);
+    if (TableAllocation != NULL) {
+        Context->FreeFunction(TableAllocation);
     }
 
     return Status;
@@ -657,6 +666,7 @@ PartpGptReadEntries (
     PPARTITION_CONTEXT Context,
     PVOID Block,
     PGPT_PARTITION_ENTRY *Entries,
+    PVOID *EntriesAllocation,
     PULONG EntryCount,
     PULONG ValidCount
     )
@@ -676,6 +686,10 @@ Arguments:
 
     Entries - Supplies a pointer where a pointer will be returned to the
         GPT partition entries on success.
+
+    EntriesAllocation - Supplies a pointer where a pointer to the actual
+        entries allocation will be returned. This is what should be passed to
+        the free function.
 
     EntryCount - Supplies a pointer where the number of GPT entries in the
         array will be returned.
@@ -706,6 +720,7 @@ Return Value:
     PGPT_HEADER Header;
     ULONG HeaderCrc;
     PGPT_PARTITION_ENTRY PartitionEntries;
+    PVOID PartitionEntriesAllocation;
     ULONG PartitionEntryCount;
     KSTATUS Status;
     ULONG ValidPartitionCount;
@@ -713,7 +728,7 @@ Return Value:
     Status = STATUS_NO_ELIGIBLE_DEVICES;
     BlockSize = Context->BlockSize;
     Header = (PGPT_HEADER)Block;
-    PartitionEntries = NULL;
+    PartitionEntriesAllocation = NULL;
     PartitionEntryCount = 0;
     ValidPartitionCount = 0;
     if (Header->Signature != GPT_HEADER_SIGNATURE) {
@@ -771,8 +786,11 @@ Return Value:
     }
 
     AllocationSize = ALIGN_RANGE_UP(AllocationSize, BlockSize);
-    PartitionEntries = Context->AllocateFunction(AllocationSize);
-    if (PartitionEntries == NULL) {
+    PartitionEntriesAllocation = PartpAllocateIo(Context,
+                                                 AllocationSize,
+                                                 (PVOID *)&PartitionEntries);
+
+    if (PartitionEntriesAllocation == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto GptValidateHeaderEnd;
     }
@@ -824,9 +842,10 @@ Return Value:
 
 GptValidateHeaderEnd:
     if (!KSUCCESS(Status)) {
-        if (PartitionEntries != NULL) {
-            Context->FreeFunction(PartitionEntries);
+        if (PartitionEntriesAllocation != NULL) {
+            Context->FreeFunction(PartitionEntriesAllocation);
             PartitionEntries = NULL;
+            PartitionEntriesAllocation = NULL;
         }
 
         PartitionEntryCount = 0;
@@ -834,6 +853,7 @@ GptValidateHeaderEnd:
     }
 
     *Entries = PartitionEntries;
+    *EntriesAllocation = PartitionEntriesAllocation;
     *EntryCount = PartitionEntryCount;
     *ValidCount = ValidPartitionCount;
     return Status;

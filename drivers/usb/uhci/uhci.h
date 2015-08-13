@@ -207,11 +207,6 @@ Members:
     PendingStatusBits - Stores the bits in the USB status register that have
         not yet been addressed by the DPC.
 
-    InterruptLock - Stores the spin lock synchronizing access to the pending
-        status bits.
-
-    InterruptDpc - Stores a pointer to the DPC queued by the ISR.
-
     InterruptHandle - Stores the interrupt handle of the connected interrupt.
 
     PortStatusTimer - Stores a pointer to a timer that periodically fires to
@@ -233,9 +228,7 @@ typedef struct _UHCI_CONTROLLER {
     PBLOCK_ALLOCATOR BlockAllocator;
     KSPIN_LOCK Lock;
     HANDLE UsbCoreHandle;
-    USHORT PendingStatusBits;
-    KSPIN_LOCK InterruptLock;
-    PDPC InterruptDpc;
+    volatile ULONG PendingStatusBits;
     HANDLE InterruptHandle;
     PKTIMER PortStatusTimer;
     PDPC PortStatusDpc;
@@ -403,6 +396,29 @@ Arguments:
     Context - Supplies the context pointer given to the system when the
         interrupt was connected. In this case, this points to the UHCI device
         context.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+INTERRUPT_STATUS
+UhcipInterruptServiceDpc (
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the dispatch level UHCI interrupt service routine.
+
+Arguments:
+
+    Context - Supplies the context pointer given to the system when the
+        interrupt was connected. In this case, this points to the UHCI
+        controller.
 
 Return Value:
 

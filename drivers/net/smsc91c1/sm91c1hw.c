@@ -60,16 +60,6 @@ Environment:
 //
 
 VOID
-Sm91c1pInterruptServiceDpc (
-    PDPC Dpc
-    );
-
-VOID
-Sm91c1pInterruptServiceWorker (
-    PVOID Parameter
-    );
-
-VOID
 Sm91c1pSendPacket (
     PSM91C1_DEVICE Device,
     PNET_PACKET_BUFFER Packet
@@ -379,27 +369,6 @@ Return Value:
         goto InitializeDeviceStructuresEnd;
     }
 
-    ASSERT(Device->InterruptDpc == NULL);
-
-    Device->InterruptDpc = KeCreateDpc(Sm91c1pInterruptServiceDpc, Device);
-    if (Device->InterruptDpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
-    }
-
-    ASSERT(Device->InterruptWorkItem == NULL);
-
-    Device->InterruptWorkItem = KeCreateWorkItem(NULL,
-                                                 WorkPriorityNormal,
-                                                 Sm91c1pInterruptServiceWorker,
-                                                 Device,
-                                                 SM91C1_ALLOCATION_TAG);
-
-    if (Device->InterruptWorkItem == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
-    }
-
     Device->ReceiveIoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                          MAX_ULONGLONG,
                                                          0,
@@ -442,14 +411,6 @@ Return Value:
 --*/
 
 {
-
-    if (Device->InterruptDpc != NULL) {
-        KeDestroyDpc(Device->InterruptDpc);
-    }
-
-    if (Device->InterruptWorkItem != NULL) {
-        KeDestroyWorkItem(Device->InterruptWorkItem);
-    }
 
     if (Device->ReceiveIoBuffer == NULL) {
         MmFreeIoBuffer(Device->ReceiveIoBuffer);
@@ -666,7 +627,6 @@ Return Value:
     USHORT Interrupts;
     USHORT InterruptsMask;
     INTERRUPT_STATUS InterruptStatus;
-    USHORT OriginalPendingInterrupts;
     USHORT PacketNumber;
     USHORT PhyInterrupts;
 
@@ -682,6 +642,7 @@ Return Value:
     InterruptsMask = Sm91c1pReadRegister(Device, Sm91c1RegisterInterruptMask);
     Interrupts &= InterruptsMask;
     if (Interrupts != 0) {
+        KeAcquireSpinLock(&(Device->InterruptLock));
 
         //
         // If the MD interrupt bit is set, then gather the interrupt state from
@@ -736,17 +697,14 @@ Return Value:
         }
 
         InterruptStatus = InterruptStatusClaimed;
-        KeAcquireSpinLock(&(Device->InterruptLock));
-        OriginalPendingInterrupts = Device->PendingInterrupts;
+        RtlAtomicOr32(&(Device->PendingInterrupts), Interrupts);
+        RtlAtomicOr32(&(Device->PendingPhyInterrupts), PhyInterrupts);
         if ((Interrupts & SM91C1_INTERRUPT_TRANSMIT) != 0) {
             Device->PendingTransmitPacket = PacketNumber;
         }
 
         Device->PendingInterrupts |= Interrupts;
         Device->PendingPhyInterrupts |= PhyInterrupts;
-        if (OriginalPendingInterrupts == 0) {
-            KeQueueDpc(Device->InterruptDpc);
-        }
 
         //
         // Clear the pending interrupt bits that can be acknowledged through
@@ -764,90 +722,26 @@ Return Value:
     return InterruptStatus;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
-VOID
-Sm91c1pInterruptServiceDpc (
-    PDPC Dpc
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the SM91C1 DPC that is queued when an interrupt
-    fires.
-
-Arguments:
-
-    Dpc - Supplies a pointer to the DPC that is running.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PSM91C1_DEVICE Device;
-    RUNLEVEL OldRunLevel;
-    BOOL QueueWorkItem;
-    KSTATUS Status;
-
-    Device = (PSM91C1_DEVICE)Dpc->UserData;
-
-    //
-    // No processing is done at dispatch level. Queue the work item to drop
-    // to low level.
-    //
-
-    QueueWorkItem = FALSE;
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    if (Device->InterruptWorkItemQueued == FALSE) {
-        Device->InterruptWorkItemQueued = TRUE;
-        QueueWorkItem = TRUE;
-    }
-
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-
-    //
-    // Work items must be queued at dispatch or lower, but the flag above
-    // (protected by the lock) ensures only one party gets it.
-    //
-
-    if (QueueWorkItem != FALSE) {
-        Status = KeQueueWorkItem(Device->InterruptWorkItem);
-
-        ASSERT(KSUCCESS(Status));
-    }
-
-    return;
-}
-
-VOID
+INTERRUPT_STATUS
 Sm91c1pInterruptServiceWorker (
-    PVOID Parameter
+    PVOID Context
     )
 
 /*++
 
 Routine Description:
 
-    This routine processes interrupts for the SM91C1 controller at low level.
+    This routine implements the SM91C1 low level interrupt service routine.
 
 Arguments:
 
-    Parameter - Supplies an optional parameter passed in by the creator of the
-        work item.
+    Context - Supplies the context pointer given to the system when the
+        interrupt was connected. In this case, this points to the SM91c1 device
+        structure.
 
 Return Value:
 
-    None.
+    Interrupt status.
 
 --*/
 
@@ -855,18 +749,18 @@ Return Value:
 
     PSM91C1_DEVICE Device;
     PLIST_ENTRY FirstEntry;
-    USHORT Interrupts;
+    ULONG Interrupts;
     USHORT InterruptsMask;
     USHORT MmuCommand;
     RUNLEVEL OldRunLevel;
     PNET_PACKET_BUFFER Packet;
     USHORT PendingPacket;
-    USHORT PhyInterrupts;
+    ULONG PhyInterrupts;
     USHORT PointerValue;
     USHORT StatusWord;
     USHORT Value;
 
-    Device = (PSM91C1_DEVICE)Parameter;
+    Device = (PSM91C1_DEVICE)Context;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
@@ -874,19 +768,11 @@ Return Value:
     // Clear out the pending bits.
     //
 
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    Interrupts = Device->PendingInterrupts;
-    PhyInterrupts = Device->PendingPhyInterrupts;
+    Interrupts = RtlAtomicExchange32(&(Device->PendingInterrupts), 0);
+    PhyInterrupts = RtlAtomicExchange32(&(Device->PendingPhyInterrupts), 0);
     PendingPacket = Device->PendingTransmitPacket;
-    Device->InterruptWorkItemQueued = FALSE;
-    Device->PendingInterrupts = 0;
-    Device->PendingPhyInterrupts = 0;
-    Device->PendingTransmitPacket = -1;
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-    if (Interrupts == 0) {
-        return;
+    if ((Interrupts == 0) && (PhyInterrupts == 0)) {
+        return InterruptStatusNotClaimed;
     }
 
     ASSERT((PhyInterrupts == 0) ||
@@ -897,7 +783,11 @@ Return Value:
     //
 
     if ((Interrupts & SM91C1_INTERRUPT_MD) != 0) {
+        OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
+        KeAcquireSpinLock(&(Device->InterruptLock));
         Value = Sm91c1pReadMdio(Device, Sm91c1MiiRegisterBasicStatus);
+        KeReleaseSpinLock(&(Device->InterruptLock));
+        KeLowerRunLevel(OldRunLevel);
         if ((Value & SM91C1_MII_BASIC_STATUS_LINK_STATUS) != 0) {
             if ((Value & SM91C1_MII_BASIC_STATUS_AUTONEGOTIATE_COMPLETE) != 0) {
 
@@ -1042,8 +932,12 @@ Return Value:
         }
     }
 
-    return;
+    return InterruptStatusClaimed;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 VOID
 Sm91c1pSendPacket (

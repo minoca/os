@@ -512,6 +512,8 @@ Return Value:
     UINTN BytesCompleted;
     UINTN BytesToComplete;
     PRAM_DISK_DEVICE Disk;
+    PIO_BUFFER_FRAGMENT Fragment;
+    UINTN FragmentIndex;
     PIO_BUFFER IoBuffer;
     ULONGLONG IoOffset;
     KSTATUS Status;
@@ -551,6 +553,26 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         goto DispatchIoEnd;
+    }
+
+    //
+    // If reading, wow that the data is valid, flush it so it makes it to the
+    // point of unification.
+    //
+
+    if (ToIoBuffer != FALSE) {
+        Status = MmMapIoBuffer(IoBuffer, FALSE, FALSE, FALSE);
+        if (!KSUCCESS(Status)) {
+            goto DispatchIoEnd;
+        }
+
+        for (FragmentIndex = 0;
+             FragmentIndex < IoBuffer->FragmentCount;
+             FragmentIndex += 1) {
+
+            Fragment = &(IoBuffer->Fragment[FragmentIndex]);
+            MmFlushBufferForDataOut(Fragment->VirtualAddress, Fragment->Size);
+        }
     }
 
     BytesCompleted = BytesToComplete;

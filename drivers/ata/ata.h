@@ -460,13 +460,8 @@ Members:
     PrdtIoBuffer - Stores a pointer to the I/O buffer containing the
         physical region descriptor table.
 
-    InterruptLock - Stores the spin lock synchronizing the ISR to the work
-        item.
-
     PendingStatus - Stores the pending bus master status register bits. The
         secondary controller's bits are shifted left by 8.
-
-    InterruptDpc - Stores a pointer to the interrupt DPC.
 
 --*/
 
@@ -490,9 +485,7 @@ struct _ATA_CONTROLLER {
     BOOL RegisteredForPciConfigInterfaces;
     USHORT Interface;
     PIO_BUFFER PrdtIoBuffer;
-    KSPIN_LOCK InterruptLock;
-    ULONG PendingStatusBits;
-    PDPC InterruptDpc;
+    volatile ULONG PendingStatusBits;
 };
 
 /*++

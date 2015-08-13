@@ -35,6 +35,12 @@ Environment:
 //
 
 //
+// Borrow an unused bit in the status register for the software link check.
+//
+
+#define DWE_STATUS_LINK_CHECK (1 << 11)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -43,13 +49,8 @@ Environment:
 //
 
 VOID
-DwepInterruptServiceDpc (
+DwepLinkCheckDpc (
     PDPC Dpc
-    );
-
-VOID
-DwepInterruptServiceWorker (
-    PVOID Parameter
     );
 
 KSTATUS
@@ -427,8 +428,6 @@ Return Value:
     ULONG ReceiveSize;
     KSTATUS Status;
 
-    KeInitializeSpinLock(&(Device->InterruptLock));
-
     //
     // Initialize the transmit and receive list locks.
     //
@@ -528,25 +527,14 @@ Return Value:
 
     RtlZeroMemory(Device->TransmitPacket, AllocationSize);
 
-    //
-    // Create the various kernel objects used for synchronization and service.
-    //
-
-    ASSERT(Device->InterruptDpc == NULL);
-
-    Device->InterruptDpc = KeCreateDpc(DwepInterruptServiceDpc, Device);
-    if (Device->InterruptDpc == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
-    }
-
     ASSERT(Device->WorkItem == NULL);
 
-    Device->WorkItem = KeCreateWorkItem(NULL,
-                                        WorkPriorityNormal,
-                                        DwepInterruptServiceWorker,
-                                        Device,
-                                        DWE_ALLOCATION_TAG);
+    Device->WorkItem = KeCreateWorkItem(
+                                NULL,
+                                WorkPriorityNormal,
+                                (PWORK_ITEM_ROUTINE)DwepInterruptServiceWorker,
+                                Device,
+                                DWE_ALLOCATION_TAG);
 
     if (Device->WorkItem == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -561,7 +549,7 @@ Return Value:
         goto InitializeDeviceStructuresEnd;
     }
 
-    Device->LinkCheckDpc = KeCreateDpc(DwepInterruptServiceDpc, Device);
+    Device->LinkCheckDpc = KeCreateDpc(DwepLinkCheckDpc, Device);
     if (Device->LinkCheckDpc == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceStructuresEnd;
@@ -668,11 +656,6 @@ InitializeDeviceStructuresEnd:
         if (Device->TransmitPacket != NULL) {
             MmFreeNonPagedPool(Device->TransmitPacket);
             Device->TransmitPacket = NULL;
-        }
-
-        if (Device->InterruptDpc != NULL) {
-            KeDestroyDpc(Device->InterruptDpc);
-            Device->InterruptDpc = NULL;
         }
 
         if (Device->WorkItem != NULL) {
@@ -923,7 +906,6 @@ Return Value:
 
     PDWE_DEVICE Device;
     INTERRUPT_STATUS InterruptStatus;
-    ULONG OriginalPendingBits;
     ULONG PendingBits;
 
     Device = (PDWE_DEVICE)Context;
@@ -937,31 +919,84 @@ Return Value:
     PendingBits = DWE_READ(Device, DweRegisterStatus);
     if (PendingBits != 0) {
         InterruptStatus = InterruptStatusClaimed;
-        KeAcquireSpinLock(&(Device->InterruptLock));
+        RtlAtomicOr32(&(Device->PendingStatusBits), PendingBits);
 
         //
         // Read the more detailed status register, and clear the bits.
         //
 
         DWE_WRITE(Device, DweRegisterStatus, PendingBits);
-        OriginalPendingBits = Device->PendingStatusBits;
-        Device->PendingStatusBits |= PendingBits;
         if ((PendingBits & DWE_STATUS_ERROR_MASK) != 0) {
             RtlDebugPrint("DWE Error: %08x\n", PendingBits);
         }
-
-        //
-        // Queue the DPC if the pending bits were previously clear.
-        //
-
-        if (OriginalPendingBits == 0) {
-            KeQueueDpc(Device->InterruptDpc);
-        }
-
-        KeReleaseSpinLock(&(Device->InterruptLock));
     }
 
     return InterruptStatus;
+}
+
+INTERRUPT_STATUS
+DwepInterruptServiceWorker (
+    PVOID Parameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes interrupts for the DesignWare Ethernet controller at
+    low level.
+
+Arguments:
+
+    Parameter - Supplies an optional parameter passed in by the creator of the
+        work item.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+{
+
+    ULONGLONG CurrentTime;
+    PDWE_DEVICE Device;
+    ULONG PendingBits;
+
+    Device = (PDWE_DEVICE)(Parameter);
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    //
+    // Clear out the pending bits.
+    //
+
+    PendingBits = RtlAtomicExchange32(&(Device->PendingStatusBits), 0);
+    if (PendingBits == 0) {
+        return InterruptStatusNotClaimed;
+    }
+
+    if ((PendingBits & DWE_STATUS_RECEIVE_INTERRUPT) != 0) {
+        DwepReapReceivedFrames(Device);
+    }
+
+    //
+    // If the command unit finished what it was up to, reap that memory.
+    //
+
+    if ((PendingBits & DWE_STATUS_TRANSMIT_INTERRUPT) != 0) {
+        KeAcquireQueuedLock(Device->TransmitLock);
+        DwepReapCompletedTransmitDescriptors(Device);
+        KeReleaseQueuedLock(Device->TransmitLock);
+    }
+
+    if ((PendingBits & DWE_STATUS_LINK_CHECK) != 0) {
+        CurrentTime = KeGetRecentTimeCounter();
+        Device->NextLinkCheck = CurrentTime + Device->LinkCheckInterval;
+        DwepCheckLink(Device);
+    }
+
+    return InterruptStatusClaimed;
 }
 
 //
@@ -969,7 +1004,7 @@ Return Value:
 //
 
 VOID
-DwepInterruptServiceDpc (
+DwepLinkCheckDpc (
     PDPC Dpc
     )
 
@@ -993,106 +1028,19 @@ Return Value:
 {
 
     PDWE_DEVICE Device;
-    RUNLEVEL OldRunLevel;
-    BOOL QueueWorkItem;
+    ULONG OldPendingStatus;
     KSTATUS Status;
 
     Device = (PDWE_DEVICE)(Dpc->UserData);
+    OldPendingStatus = RtlAtomicOr32(&(Device->PendingStatusBits),
+                                     DWE_STATUS_LINK_CHECK);
 
-    //
-    // No processing is done at dispatch level. Queue the work item to drop
-    // to low level.
-    //
-
-    QueueWorkItem = FALSE;
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    if (Device->WorkItemQueued == FALSE) {
-        Device->WorkItemQueued = TRUE;
-        QueueWorkItem = TRUE;
-    }
-
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-
-    //
-    // Work items must be queued at low level, but the flag above (protected by
-    // the lock) ensures only one party gets it.
-    //
-
-    if (QueueWorkItem != FALSE) {
+    if ((OldPendingStatus & DWE_STATUS_LINK_CHECK) == 0) {
         Status = KeQueueWorkItem(Device->WorkItem);
-
-        ASSERT(KSUCCESS(Status));
-
-    }
-
-    return;
-}
-
-VOID
-DwepInterruptServiceWorker (
-    PVOID Parameter
-    )
-
-/*++
-
-Routine Description:
-
-    This routine processes interrupts for the DesignWare Ethernet controller at
-    low level.
-
-Arguments:
-
-    Parameter - Supplies an optional parameter passed in by the creator of the
-        work item.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ULONGLONG CurrentTime;
-    PDWE_DEVICE Device;
-    RUNLEVEL OldRunLevel;
-    ULONG PendingBits;
-
-    Device = (PDWE_DEVICE)(Parameter);
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
-    //
-    // Clear out the pending bits.
-    //
-
-    OldRunLevel = IoRaiseToInterruptRunLevel(Device->InterruptHandle);
-    KeAcquireSpinLock(&(Device->InterruptLock));
-    PendingBits = Device->PendingStatusBits;
-    Device->WorkItemQueued = FALSE;
-    Device->PendingStatusBits = 0;
-    KeReleaseSpinLock(&(Device->InterruptLock));
-    KeLowerRunLevel(OldRunLevel);
-    if ((PendingBits & DWE_STATUS_RECEIVE_INTERRUPT) != 0) {
-        DwepReapReceivedFrames(Device);
-    }
-
-    //
-    // If the command unit finished what it was up to, reap that memory.
-    //
-
-    if ((PendingBits & DWE_STATUS_TRANSMIT_INTERRUPT) != 0) {
-        KeAcquireQueuedLock(Device->TransmitLock);
-        DwepReapCompletedTransmitDescriptors(Device);
-        KeReleaseQueuedLock(Device->TransmitLock);
-    }
-
-    CurrentTime = KeGetRecentTimeCounter();
-    if (CurrentTime > Device->NextLinkCheck) {
-        Device->NextLinkCheck = CurrentTime + Device->LinkCheckInterval;
-        DwepCheckLink(Device);
+        if (!KSUCCESS(Status)) {
+            RtlAtomicAnd32(&(Device->PendingStatusBits),
+                           ~DWE_STATUS_LINK_CHECK);
+        }
     }
 
     return;
