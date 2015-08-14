@@ -347,11 +347,10 @@ UINTN MmPhysicalMemoryAllocationCount;
 UINTN MmPhysicalMemoryFreeCount;
 
 //
-// Store a boolean indicating whether or not physical page zero has been
-// allocated by the kernel.
+// Store a boolean indicating whether or not physical page zero is available.
 //
 
-BOOL MmPhysicalPageZeroAllocated = FALSE;
+BOOL MmPhysicalPageZeroAvailable = FALSE;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -631,16 +630,33 @@ Return Value:
     }
 
     //
-    // The page was not found. This probably indicates a serious memory
-    // corruption. Consider crashing the system altogether. This could be
-    // spurious if the physical pages were forcefully truncated by the kernel.
+    // The page was not found. If the total number of physical pages was
+    // truncated, then these may be boot allocations being released. Trust that
+    // these were valid pages and decrement the total number of physical pages,
+    // the total number of allocated pages, and the number of non-paged
+    // physical pages.
     //
 
-    RtlDebugPrint("Error: Attempt to free non-existant physical page "
-                  "0x%I64x.\n",
-                  PhysicalAddress);
+    if ((MmLimitTotalPhysicalPages != 0) ||
+        (MmLowestPhysicalPage != 0) ||
+        (MmMaximumPhysicalAddress <= PhysicalAddress)) {
 
-    ASSERT(FALSE);
+        MmTotalAllocatedPhysicalPages -= PageCount;
+        MmTotalPhysicalPages -= PageCount;
+        MmNonPagedPhysicalPages -= PageCount;
+
+    //
+    // Otherwise this probably indicates a serious memory corruption. Consider
+    // crashing the system altogether.
+    //
+
+    } else {
+        RtlDebugPrint("Error: Attempt to free non-existant physical page "
+                      "0x%I64x.\n",
+                      PhysicalAddress);
+
+        ASSERT(FALSE);
+    }
 
 FreePhysicalPageEnd:
     if (MmPhysicalPageLock != NULL) {
@@ -2467,17 +2483,60 @@ Return Value:
 
 {
 
+    ULONGLONG BaseAddress;
     PPHYSICAL_MEMORY_SEGMENT CurrentSegment;
     BOOL FreePage;
     PHYSICAL_ADDRESS LowestPhysicalAddress;
     PINIT_PHYSICAL_MEMORY_ITERATOR MemoryContext;
+    ULONGLONG OutOfBoundsAllocatedPageCount;
     ULONGLONG PageCount;
-    UINTN PageMask;
     UINTN PageShift;
     UINTN PageSize;
+    ULONGLONG TrimmedSize;
+    ULONGLONG TruncatePageCount;
 
+    LowestPhysicalAddress = 0;
     MemoryContext = Context;
+    PageSize = MmPageSize();
+    PageShift = MmPageShift();
     if (!IS_PHYSICAL_MEMORY_TYPE(Descriptor->Type)) {
+        return;
+    }
+
+    //
+    // Remove page zero from the memory map if it exists. This needs to be done
+    // ASAP to prevent the early memory allocator from grabbing it. If there
+    // are no memory constraints and it is a free or temporary mapping, mark it
+    // as available. The memory manager will use it once the boot allocations
+    // are release.
+    //
+
+    if (Descriptor->BaseAddress == 0) {
+
+        ASSERT(MmPhysicalPageZeroAvailable == FALSE);
+
+        if ((MmLowestPhysicalPage == 0) &&
+            ((IS_MEMORY_FREE_TYPE(Descriptor->Type)) ||
+             (Descriptor->Type == MemoryTypeLoaderTemporary) ||
+             (Descriptor->Type == MemoryTypeFirmwareTemporary))) {
+
+            MmPhysicalPageZeroAvailable = TRUE;
+        }
+
+        Descriptor->BaseAddress += PageSize;
+        Descriptor->Size -= PageSize;
+        DescriptorList->TotalSpace -= PageSize;
+        if (IS_MEMORY_FREE_TYPE(Descriptor->Type)) {
+            DescriptorList->FreeSpace -= PageSize;
+        }
+    }
+
+    //
+    // If the descriptor has no size, skip it. This could be the original page
+    // zero descriptor, or some bogus descriptor.
+    //
+
+    if (Descriptor->Size == 0) {
         return;
     }
 
@@ -2486,26 +2545,29 @@ Return Value:
     // initialized, don't go any further.
     //
 
+    OutOfBoundsAllocatedPageCount = 0;
     if ((MemoryContext->TotalMemoryPages != 0) &&
         (MemoryContext->PagesInitialized == MemoryContext->TotalMemoryPages)) {
 
-         return;
+        //
+        // Memory was artificially limited. Record any allocated descriptors
+        // that are fully out of bounds.
+        //
+
+        if (!IS_MEMORY_FREE_TYPE(Descriptor->Type)) {
+            OutOfBoundsAllocatedPageCount += Descriptor->Size >> PageShift;
+        }
+
+        goto InitializePhysicalAllocatorIterationRoutineEnd;
     }
 
-    PageSize = MmPageSize();
-    PageMask = PageSize - 1;
-    PageShift = MmPageShift();
-    LowestPhysicalAddress = MmLowestPhysicalPage << PageShift;
-
     //
-    // Skip the descriptor if it's entirely below the lowest allowable
-    // physical page.
+    // Record the descriptor size and potentially trim it due to maximum
+    // physical memory constraints.
     //
 
-    if (Descriptor->BaseAddress + Descriptor->Size < LowestPhysicalAddress) {
-        return;
-    }
-
+    BaseAddress = Descriptor->BaseAddress;
+    TrimmedSize = Descriptor->Size;
     if (MmMaximumPhysicalAddress != 0) {
 
         //
@@ -2513,19 +2575,59 @@ Return Value:
         // address.
         //
 
-        if (Descriptor->BaseAddress >= MmMaximumPhysicalAddress) {
-            return;
+        if (BaseAddress >= MmMaximumPhysicalAddress) {
+
+            //
+            // If the total memory pages is valid, the routine should not have
+            // made it this far.
+            //
+
+            ASSERT(MemoryContext->TotalMemoryPages == 0);
+
+            goto InitializePhysicalAllocatorIterationRoutineEnd;
         }
 
         //
-        // Trim the descriptor if it goes above the maximum address.
+        // Trim the descriptor size if it goes above the maximum address.
         //
 
-        if (Descriptor->BaseAddress + Descriptor->Size >
-            MmMaximumPhysicalAddress) {
+        if ((BaseAddress + TrimmedSize) > MmMaximumPhysicalAddress) {
+            TrimmedSize = MmMaximumPhysicalAddress - BaseAddress;
+        }
+    }
 
-            Descriptor->Size = MmMaximumPhysicalAddress -
-                               Descriptor->BaseAddress;
+    //
+    // If memory is clipped on the low end, potentially trim the size further.
+    //
+
+    if (MmLowestPhysicalPage != 0) {
+        LowestPhysicalAddress = MmLowestPhysicalPage << PageShift;
+
+        //
+        // Skip the descriptor entirely if it is below the lower bound.
+        //
+
+        if ((Descriptor->BaseAddress + TrimmedSize) < LowestPhysicalAddress) {
+
+            //
+            // Memory was artificially limited. Record any allocated
+            // descriptors that are fully out of bounds.
+            //
+
+            if (!IS_MEMORY_FREE_TYPE(Descriptor->Type)) {
+                OutOfBoundsAllocatedPageCount += TrimmedSize >> PageShift;
+            }
+
+            goto InitializePhysicalAllocatorIterationRoutineEnd;
+        }
+
+        //
+        // Trim the size if this descriptor straddles the low bound.
+        //
+
+        if (BaseAddress < LowestPhysicalAddress) {
+            TrimmedSize -= LowestPhysicalAddress - BaseAddress;
+            BaseAddress = LowestPhysicalAddress;
         }
     }
 
@@ -2535,29 +2637,12 @@ Return Value:
     // issues when allocating physical page accounting structures.
     //
 
-    ASSERT((Descriptor->BaseAddress & PageMask) == 0);
-    ASSERT((Descriptor->Size & PageMask) == 0);
+    ASSERT(IS_ALIGNED(Descriptor->BaseAddress, PageSize) != FALSE);
+    ASSERT(IS_ALIGNED(Descriptor->Size, PageSize) != FALSE);
+    ASSERT(IS_ALIGNED(BaseAddress, PageSize) != FALSE);
+    ASSERT(IS_ALIGNED(TrimmedSize, PageSize) != FALSE);
 
-    //
-    // If the descriptor includes page zero and it is free, then truncate the
-    // descriptor and record page zero as "allocated". It will be reused wisely
-    // by MM initialization. It doesn't do well in the normal memory pool.
-    //
-
-    if ((Descriptor->BaseAddress == 0) &&
-        (IS_MEMORY_FREE_TYPE(Descriptor->Type))) {
-
-        ASSERT(MmPhysicalPageZeroAllocated == FALSE);
-
-        MmPhysicalPageZeroAllocated = TRUE;
-        Descriptor->BaseAddress += PageSize;
-        Descriptor->Size -= PageSize;
-        if (Descriptor->Size == 0) {
-            return;
-        }
-    }
-
-    MemoryContext->TotalMemoryBytes += Descriptor->Size;
+    MemoryContext->TotalMemoryBytes += TrimmedSize;
 
     //
     // If the last memory descriptor and this one are not contiguous,
@@ -2565,7 +2650,7 @@ Return Value:
     //
 
     if ((MemoryContext->LastEnd == 0) ||
-        (MemoryContext->LastEnd != Descriptor->BaseAddress)) {
+        (MemoryContext->LastEnd != BaseAddress)) {
 
         MemoryContext->TotalSegments += 1;
         if (MemoryContext->CurrentPage != NULL) {
@@ -2575,7 +2660,7 @@ Return Value:
             INSERT_BEFORE(&(CurrentSegment->ListEntry),
                           &(MmPhysicalSegmentListHead));
 
-            CurrentSegment->StartAddress = Descriptor->BaseAddress;
+            CurrentSegment->StartAddress = BaseAddress;
             CurrentSegment->EndAddress = CurrentSegment->StartAddress;
             CurrentSegment->FreePages = 0;
             MemoryContext->CurrentSegment = CurrentSegment;
@@ -2583,14 +2668,40 @@ Return Value:
         }
     }
 
+    //
+    // If the current page is set up, add the descriptor to the physical memory
+    // segment. Use the real (non trimmed) descriptor size here. The recorded
+    // total memory pages will make sure that only the trimmed amount actually
+    // get set in the segments, but the remainder potentially needs to get
+    // marked as allocated. Also use the original base address as allocated
+    // pages truncated on the low end need to be accounted for.
+    //
+
     if (MemoryContext->CurrentPage != NULL) {
         CurrentSegment = MemoryContext->CurrentSegment;
         PageCount = Descriptor->Size >> PageShift;
+        FreePage = FALSE;
+        if (IS_MEMORY_FREE_TYPE(Descriptor->Type)) {
+            FreePage = TRUE;
+        }
+
         if (Descriptor->BaseAddress < LowestPhysicalAddress) {
             CurrentSegment->StartAddress = LowestPhysicalAddress;
             CurrentSegment->EndAddress = CurrentSegment->StartAddress;
-            PageCount -= (LowestPhysicalAddress -
-                          CurrentSegment->StartAddress) >> PageShift;
+            TruncatePageCount = (LowestPhysicalAddress -
+                                 Descriptor->BaseAddress) >> PageShift;
+
+            PageCount -= TruncatePageCount;
+
+            //
+            // Physical memory must be artificially limited. If the descriptor
+            // is not free, add these truncated pages to the total memory
+            // counts.
+            //
+
+            if (FreePage == FALSE) {
+                OutOfBoundsAllocatedPageCount += TruncatePageCount;
+            }
         }
 
         //
@@ -2600,11 +2711,6 @@ Return Value:
         while ((PageCount != 0) &&
                (MemoryContext->PagesInitialized <
                 MemoryContext->TotalMemoryPages)) {
-
-            FreePage = FALSE;
-            if (IS_MEMORY_FREE_TYPE(Descriptor->Type)) {
-                FreePage = TRUE;
-            }
 
             //
             // If the page is not free, mark it as non-paged.
@@ -2632,10 +2738,44 @@ Return Value:
             MemoryContext->PagesInitialized += 1;
         }
 
+        ASSERT(CurrentSegment->EndAddress <= MmMaximumPhysicalAddress);
+
+        //
+        // If total physical memory was limited and there are pages left over,
+        // add them to the total number of allocated pages if the descriptor is
+        // not free.
+        //
+
+        if ((PageCount != 0) && (FreePage == FALSE)) {
+            OutOfBoundsAllocatedPageCount += PageCount;
+        }
+
         MemoryContext->LastEnd = CurrentSegment->EndAddress;
 
+    //
+    // Otherwise use the trimmed size and updated base address as only the
+    // trimmed amount is really being reported back to the caller.
+    //
+
     } else {
-        MemoryContext->LastEnd = Descriptor->BaseAddress + Descriptor->Size;
+        MemoryContext->LastEnd = BaseAddress + TrimmedSize;
+    }
+
+InitializePhysicalAllocatorIterationRoutineEnd:
+
+    //
+    // Record any allocated pages that were found to be beyond the bounds of
+    // artificial memory limits. Only do this when the total memory page count
+    // is valid.
+    //
+
+    if ((OutOfBoundsAllocatedPageCount != 0) &&
+        (MemoryContext->TotalMemoryPages != 0)) {
+
+        MmTotalAllocatedPhysicalPages += OutOfBoundsAllocatedPageCount;
+        MmNonPagedPhysicalPages += OutOfBoundsAllocatedPageCount;
+        MemoryContext->TotalMemoryPages += OutOfBoundsAllocatedPageCount;
+        MemoryContext->PagesInitialized += OutOfBoundsAllocatedPageCount;
     }
 
     return;

@@ -354,6 +354,16 @@ Return Value:
         if (!KSUCCESS(Status)) {
             goto InitializeEnd;
         }
+
+        //
+        // If physical page zero exists, it was removed from the memory map
+        // during physical page initialization. If it was free or a temporary
+        // boot allocation, it is now available for wise reuse.
+        //
+
+        if (MmPhysicalPageZeroAvailable != FALSE) {
+            MmpAddPageZeroDescriptorsToMdl(&MmKernelVirtualSpace);
+        }
     }
 
 InitializeEnd:
@@ -507,8 +517,6 @@ Return Value:
     ULONG DescriptorIndex;
     ULONG PageCount;
     ULONG PageShift;
-    ULONG PageSize;
-    BOOL PageZeroFound;
     PHYSICAL_ADDRESS PhysicalAddress;
     ULONG PhysicalDescriptorCount;
     PMEMORY_DESCRIPTOR PhysicalDescriptors;
@@ -521,7 +529,6 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     PageShift = MmPageShift();
-    PageSize = MmPageSize();
 
     //
     // Create an array of the virtual boot memory descriptors.
@@ -631,7 +638,6 @@ Return Value:
     // every region.
     //
 
-    PageZeroFound = FALSE;
     for (DescriptorIndex = 0;
          DescriptorIndex < PhysicalDescriptorCount;
          DescriptorIndex += 1) {
@@ -642,52 +648,7 @@ Return Value:
 
         ASSERT((PageCount << PageShift) == CurrentDescriptor->Size);
 
-        //
-        // Record the fact that page zero was found and do not release it. It
-        // will be repurposed below.
-        //
-
-        if (PhysicalAddress == 0) {
-
-            ASSERT(PageZeroFound == FALSE);
-
-            PageZeroFound = TRUE;
-            PhysicalAddress += PageSize;
-            PageCount -= 1;
-        }
-
-        //
-        // Do not release pages that are greater than the allowed maximum.
-        //
-
-        if (MmMaximumPhysicalAddress != 0) {
-            if (PhysicalAddress >= MmMaximumPhysicalAddress) {
-                PageCount = 0;
-
-            } else if ((PhysicalAddress + (PageCount << PageShift)) >
-                       MmMaximumPhysicalAddress) {
-
-                PageCount = (MmMaximumPhysicalAddress - PhysicalAddress) >>
-                            PageShift;
-            }
-        }
-
-        if (PageCount != 0) {
-            MmFreePhysicalPages(PhysicalAddress, PageCount);
-        }
-    }
-
-    //
-    // If page zero was found in the boot mappings, then it was skipped above.
-    // Repurpose it for memory descriptors.
-    //
-
-    if (PageZeroFound != FALSE) {
-
-        ASSERT(MmPhysicalPageZeroAllocated == FALSE);
-
-        MmPhysicalPageZeroAllocated = TRUE;
-        MmpAddPageZeroDescriptorsToMdl(&MmKernelVirtualSpace);
+        MmFreePhysicalPages(PhysicalAddress, PageCount);
     }
 
     Status = STATUS_SUCCESS;
@@ -842,8 +803,9 @@ Return Value:
     PBOOT_DESCRIPTOR_ITERATOR_CONTEXT IteratorContext;
 
     IteratorContext = Context;
-    if ((Descriptor->Type == MemoryTypeLoaderTemporary) ||
-        (Descriptor->Type == MemoryTypeFirmwareTemporary)) {
+    if ((Descriptor->Size != 0) &&
+        ((Descriptor->Type == MemoryTypeLoaderTemporary) ||
+         (Descriptor->Type == MemoryTypeFirmwareTemporary))) {
 
         if (IteratorContext->Array != NULL) {
 

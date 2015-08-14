@@ -240,11 +240,11 @@ extern PHYSICAL_ADDRESS MmMaximumPhysicalAddress;
 extern PQUEUED_LOCK MmPhysicalPageLock;
 
 //
-// Store a boolean indicating whether or not physical page zero has been
-// allocated by the kernel.
+// Store a boolean indicating whether or not physical page zero is available.
+//
 //
 
-extern BOOL MmPhysicalPageZeroAllocated;
+extern BOOL MmPhysicalPageZeroAvailable;
 
 //
 // Stores the event used to signal a memory warnings when there is a warning

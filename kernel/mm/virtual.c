@@ -2177,15 +2177,6 @@ Return Value:
     }
 
     //
-    // If physical page zero was allocated during physical page initialization,
-    // then reuse it for memory descriptors.
-    //
-
-    if (MmPhysicalPageZeroAllocated != FALSE) {
-        MmpAddPageZeroDescriptorsToMdl(&MmKernelVirtualSpace);
-    }
-
-    //
     // Set up the virtual memory warning trigger and retreat values depending
     // on the total size of system virtual memory. There are really only two
     // buckets here: system VA less than 4GB and the expansive amount of system
@@ -2876,7 +2867,7 @@ Return Value:
     ULONG PageSize;
     PVOID VirtualAddress;
 
-    ASSERT(MmPhysicalPageZeroAllocated != FALSE);
+    ASSERT(MmPhysicalPageZeroAvailable != FALSE);
 
     //
     // Map physical page zero. If this fails then physical page zero is just
