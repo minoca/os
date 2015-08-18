@@ -51,6 +51,10 @@ DefinitionBlock (
                 SKP1, 1,
                 AHBB, 3,
                 AHBW, 1,
+                Offset(0xC),
+                SKP2, 8,
+                USRP, 1,
+                UHNP, 1,
                 Offset(0x24),                 
                 RXFS, 16,
                 Offset(0x28),
@@ -67,7 +71,8 @@ DefinitionBlock (
              * bytes, the non-periodic transmit FIFO to 256 bytes, and the
              * periodic transmit FIFO to 512 bytes. The Raspberry Pi's DWC USB
              * controller allows dynamic FIFO sizes and the maximum FIFO depth 
-             * is greater than the total FIFO sizes programmed here.
+             * is greater than the total FIFO sizes programmed here. Lastly,
+             * the host is both SRP and HNP capable.
              */       
             
             Method(_INI, 0) {                        
@@ -76,6 +81,8 @@ DefinitionBlock (
                 Store(0x100, NPFS)
                 Store(0x406, PDFO)
                 Store(0x200, PDFS)
+                Store(0x1, USRP)
+                Store(0x1, UHNP)
                 Store(0x0, AHBB)
                 Store(0x1, AHBW)
             }

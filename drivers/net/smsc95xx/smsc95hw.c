@@ -386,6 +386,19 @@ Return Value:
 
     ASSERT(Transfer == Device->InterruptTransfer);
 
+    //
+    // If the transfer failed, don't bother with the data. If it was cancelled,
+    // just exit immediately. The device was likely removed.
+    //
+
+    if (!KSUCCESS(Transfer->Status)) {
+        if (Transfer->Status == STATUS_OPERATION_CANCELLED) {
+            return;
+        }
+
+        goto InterruptTransferCompletionEnd;
+    }
+
     if (Transfer->LengthTransferred != sizeof(ULONG)) {
         RtlDebugPrint("SM95: Got weird interrupt transfer of size %d.\n",
                       Transfer->LengthTransferred);
@@ -595,7 +608,10 @@ Return Value:
         }
 
         Packet.Buffer = Data + sizeof(ULONG) + SM95_RECEIVE_DATA_OFFSET;
-        Packet.BufferPhysicalAddress = PhysicalAddress + sizeof(ULONG);
+        Packet.BufferPhysicalAddress = PhysicalAddress +
+                                       sizeof(ULONG) +
+                                       SM95_RECEIVE_DATA_OFFSET;
+
         Packet.BufferSize = PacketLength - sizeof(ULONG);
         Packet.DataSize = Packet.BufferSize;
         Packet.DataOffset = 0;
@@ -998,6 +1014,46 @@ InitializeEnd:
     return Status;
 }
 
+VOID
+Sm95pDestroyBulkOutTransfers (
+    PSM95_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys the SMSC95xx device's bulk out tranfers.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSM95_BULK_OUT_TRANSFER Sm95Transfer;
+
+    while (LIST_EMPTY(&(Device->BulkOutFreeTransferList)) == FALSE) {
+        Sm95Transfer = LIST_VALUE(Device->BulkOutFreeTransferList.Next,
+                                 SM95_BULK_OUT_TRANSFER,
+                                 ListEntry);
+
+        ASSERT(Sm95Transfer->Packet == NULL);
+
+        LIST_REMOVE(&(Sm95Transfer->ListEntry));
+        UsbDestroyTransfer(Sm95Transfer->UsbTransfer);
+        MmFreePagedPool(Sm95Transfer);
+    }
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -1030,6 +1086,7 @@ Return Value:
 
     Sm95Transfer = Transfer->UserData;
     NetFreeBuffer(Sm95Transfer->Packet);
+    Sm95Transfer->Packet = NULL;
     Sm95pFreeBulkOutTransfer(Sm95Transfer);
     return;
 }
@@ -1981,6 +2038,7 @@ Return Value:
             UsbTransfer->UserData = Sm95Transfer;
             Sm95Transfer->Device = Device;
             Sm95Transfer->UsbTransfer = UsbTransfer;
+            Sm95Transfer->Packet = NULL;
 
         } else {
             KeAcquireQueuedLock(Device->BulkOutListLock);

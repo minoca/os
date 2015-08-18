@@ -1597,6 +1597,7 @@ Return Value:
             ((BlockAlignedOffset + BlockAlignedSize) > FileSize)) {
 
             BlockAlignedSize = FileSize - BlockAlignedOffset;
+            BlockAlignedSize = ALIGN_RANGE_UP(BlockAlignedSize, PageSize);
         }
 
         ASSERT(IS_ALIGNED(_128KB, PageSize) != FALSE);

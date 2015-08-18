@@ -108,6 +108,12 @@ Sm95pStartDevice (
     PSM95_DEVICE Device
     );
 
+KSTATUS
+Sm95pStopDevice (
+    PIRP Irp,
+    PSM95_DEVICE Device
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -275,6 +281,16 @@ Return Value:
                 IoCompleteIrp(Sm95Driver, Irp, Status);
             }
 
+            break;
+
+        case IrpMinorRemoveDevice:
+            Status = Sm95pStopDevice(Irp, DeviceContext);
+            if (!KSUCCESS(Status)) {
+                IoCompleteIrp(Sm95Driver, Irp, Status);
+                break;
+            }
+
+            Sm95pDestroyDeviceStructures(DeviceContext);
             break;
 
         default:
@@ -745,9 +761,20 @@ Return Value:
 
     ULONG Index;
 
-    if (Device->InterfaceClaimed != FALSE) {
-        UsbReleaseInterface(Device->UsbCoreHandle, Device->InterfaceNumber);
+    //
+    // Detach the device. This will cancel all transfer attached to the device,
+    // including the in-flight bulk out transfers that this driver does not
+    // track.
+    //
+
+    if (Device->UsbCoreHandle != INVALID_HANDLE) {
+        UsbDetachDevice(Device->UsbCoreHandle);
     }
+
+    //
+    // Destroy all the allocated transfers. For good measure, make sure they
+    // are cancelled.
+    //
 
     for (Index = 0; Index < SM95_BULK_IN_TRANSFER_COUNT; Index += 1) {
         if (Device->BulkInTransfer[Index] != NULL) {
@@ -764,6 +791,10 @@ Return Value:
     if (Device->InterruptTransfer != NULL) {
         UsbCancelTransfer(Device->InterruptTransfer, TRUE);
         UsbDestroyTransfer(Device->InterruptTransfer);
+    }
+
+    if (Device->InterfaceClaimed != FALSE) {
+        UsbReleaseInterface(Device->UsbCoreHandle, Device->InterfaceNumber);
     }
 
     if (Device->UsbCoreHandle != INVALID_HANDLE) {
@@ -783,8 +814,12 @@ Return Value:
         Device->NetworkLink = NULL;
     }
 
-    ASSERT(LIST_EMPTY(&(Device->BulkOutFreeTransferList)) != FALSE);
+    //
+    // There should be no active bulk out transfers, so destroy all the free
+    // transfers.
+    //
 
+    Sm95pDestroyBulkOutTransfers(Device);
     if (Device->BulkOutListLock != NULL) {
         KeDestroyQueuedLock(Device->BulkOutListLock);
     }
@@ -996,5 +1031,35 @@ Return Value:
 
 StartDeviceEnd:
     return Status;
+}
+
+KSTATUS
+Sm95pStopDevice (
+    PIRP Irp,
+    PSM95_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine stops the SMSC95xx LAN device.
+
+Arguments:
+
+    Irp - Supplies a pointer to the removal IRP.
+
+    Device - Supplies a pointer to the device information.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    NetSetLinkState(Device->NetworkLink, FALSE, 0);
+    return STATUS_SUCCESS;
 }
 

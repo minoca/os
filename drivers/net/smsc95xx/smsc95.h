@@ -221,14 +221,20 @@ Author:
 // Define receive packet flags.
 //
 
-#define SM95_RECEIVE_FLAG_CRC_ERROR       0x00000002
-#define SM95_RECEIVE_FLAG_MII_ERROR       0x00000080
-#define SM95_RECEIVE_FLAG_MULTICAST_FRAME 0x00000400
-#define SM95_RECEIVE_FLAG_LENGTH_ERROR    0x00001000
-#define SM95_RECEIVE_FLAG_BROADCAST_FRAME 0x00002000
-#define SM95_RECEIVE_FLAG_ERROR_SUMMARY   0x00008000
-#define SM95_RECEIVE_FRAME_LENGTH_MASK    0x3FFF0000
-#define SM95_RECEIVE_FRAME_LENGTH_SHIFT   16
+#define SM95_RECEIVE_FLAG_CRC_ERROR        0x00000002
+#define SM95_RECEIVE_FLAG_DRIBBLING_BIT    0x00000004
+#define SM95_RECEIVE_FLAG_MII_ERROR        0x00000008
+#define SM95_RECEIVE_FLAG_WATCHDOG_TIMEOUT 0x00000010
+#define SM95_RECEIVE_FLAG_ETHERNET_FRAME   0x00000020
+#define SM95_RECEIVE_FLAG_COLLISION        0x00000040
+#define SM95_RECEIVE_FLAG_FRAME_TOO_LONG   0x00000080
+#define SM95_RECEIVE_FLAG_MULTICAST_FRAME  0x00000400
+#define SM95_RECEIVE_FLAG_RUNT_FRAME       0x00000800
+#define SM95_RECEIVE_FLAG_LENGTH_ERROR     0x00001000
+#define SM95_RECEIVE_FLAG_BROADCAST_FRAME  0x00002000
+#define SM95_RECEIVE_FLAG_ERROR_SUMMARY    0x00008000
+#define SM95_RECEIVE_FRAME_LENGTH_MASK     0x3FFF0000
+#define SM95_RECEIVE_FRAME_LENGTH_SHIFT    16
 
 //
 // Define the number of bulk IN transfer to allocate.
@@ -483,6 +489,27 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+VOID
+Sm95pDestroyBulkOutTransfers (
+    PSM95_DEVICE Device
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys the SMSC95xx device's bulk out tranfers.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
 
 --*/
 

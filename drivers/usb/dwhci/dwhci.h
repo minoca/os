@@ -316,6 +316,8 @@ Members:
 
     PortCount - Stores the number of ports on the DWHCI host controller.
 
+    PortConnected - Stores a boolean indicating if the host port is connected.
+
     NextFrame - Stores the frame number for which the next periodic transfer is
         scheduled.
 
@@ -344,6 +346,7 @@ typedef struct _DWHCI_CONTROLLER {
     ULONG MaxTransferSize;
     ULONG MaxPacketCount;
     ULONG PortCount;
+    BOOL PortConnected;
     ULONG NextFrame;
     DWHCI_CHANNEL Channel[ANYSIZE_ARRAY];
 } DWHCI_CONTROLLER, *PDWHCI_CONTROLLER;

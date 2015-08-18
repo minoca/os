@@ -2257,8 +2257,6 @@ Return Value:
     volatile SECOND_LEVEL_TABLE *SecondLevelEntry;
     volatile SECOND_LEVEL_TABLE *SecondLevelTable;
 
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
     if (Attributes != NULL) {
         *Attributes = MAP_FLAG_DIRTY;
     }

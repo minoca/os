@@ -2259,6 +2259,8 @@ Return Value:
     PUSB_TRANSFER_PRIVATE CompleteTransfer;
     PUSB_TRANSFER_COMPLETION_QUEUE CompletionQueue;
     PUSB_HOST_CONTROLLER Controller;
+    ULONG FlushAlignment;
+    ULONG FlushLength;
     RUNLEVEL OldRunLevel;
     USB_TRANSFER_STATE OldState;
     ULONG PrivateFlags;
@@ -2269,6 +2271,27 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelDispatch);
     ASSERT(CompleteTransfer->CompletionListEntry.Next == NULL);
+
+    //
+    // For any transfer that read data (i.e. all but the out transfers),
+    // invalidate the data cache again so that the consumer reads the correct
+    // data.
+    //
+
+    if (Transfer->Public.Direction != UsbTransferDirectionOut) {
+
+        ASSERT((Transfer->Public.Direction == UsbTransferDirectionIn) ||
+               (Transfer->Public.Direction == UsbTransferBidirectional));
+
+        FlushAlignment = MmGetIoBufferAlignment();
+
+        ASSERT(POWER_OF_2(FlushAlignment) != FALSE);
+
+        FlushLength = ALIGN_RANGE_UP(Transfer->Public.LengthTransferred,
+                                     FlushAlignment);
+
+        MmFlushBufferForDataIn(Transfer->Public.Buffer, FlushLength);
+    }
 
     //
     // For synchronous transfers, fire the event.

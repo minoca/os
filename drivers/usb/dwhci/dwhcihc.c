@@ -398,7 +398,8 @@ DwhcipInitializePhy (
 
 KSTATUS
 DwhcipInitializeUsb (
-    PDWHCI_CONTROLLER Controller
+    PDWHCI_CONTROLLER Controller,
+    ULONG UsbMode
     );
 
 KSTATUS
@@ -723,6 +724,7 @@ Return Value:
     ULONG PeriodicTransmitFifoSize;
     ULONG ReceiveFifoSize;
     KSTATUS Status;
+    ULONG UsbCapabilities;
     ULONG UsbConfiguration;
 
     //
@@ -763,6 +765,14 @@ Return Value:
 
     UsbConfiguration = DWHCI_READ_REGISTER(Controller,
                                            DwhciRegisterUsbConfiguration);
+
+    //
+    // Save the USB capability bits in the USB configuration register. These do
+    // not always agree with the mode set in the hardware 2 register.
+    //
+
+    UsbCapabilities = UsbConfiguration & (DWHCI_USB_CONFIGURATION_SRP_CAPABLE |
+                                          DWHCI_USB_CONFIGURATION_HNP_CAPABLE);
 
     UsbConfiguration &= ~DWHCI_USB_CONFIGURATION_ULPI_DRIVER_EXTERNAL_VBUS;
     UsbConfiguration &= ~DWHCI_USB_CONFIGURATION_TS_DLINE_PULSE_ENABLE;
@@ -834,7 +844,7 @@ Return Value:
     // Perform the necessary steps to initialize the USB configuration.
     //
 
-    Status = DwhcipInitializeUsb(Controller);
+    Status = DwhcipInitializeUsb(Controller, UsbCapabilities);
     if (!KSUCCESS(Status)) {
         goto InitializeControllerEnd;
     }
@@ -1974,6 +1984,7 @@ Return Value:
 
     PDWHCI_CONTROLLER Controller;
     PDWHCI_ENDPOINT Endpoint;
+    BOOL FirstSet;
     PDWHCI_TRANSFER_SET FirstTransferSet;
     BOOL Halted;
     RUNLEVEL OldRunLevel;
@@ -2025,9 +2036,18 @@ Return Value:
 
     ASSERT(LIST_EMPTY(&(Endpoint->TransferSetListHead)) == FALSE);
 
+    //
+    // Only move the endpoint forward if removing the first transfer set.
+    //
+
     FirstTransferSet = LIST_VALUE(Endpoint->TransferSetListHead.Next,
                                   DWHCI_TRANSFER_SET,
                                   EndpointListEntry);
+
+    FirstSet = FALSE;
+    if (TransferSet == FirstTransferSet) {
+        FirstSet = TRUE;
+    }
 
     //
     // Set the error state for the channel. It will either get pulled out of
@@ -2041,11 +2061,13 @@ Return Value:
     //
     // If the transfer set is active on the endpoint, the endpoint has been
     // assigned a channel and the endpoint is actually scheduled on the channel,
-    // then halt the channel.
+    // then halt the channel. Halting a channel is not supported if the root
+    // port is not connected. Just remove the transfer set.
     //
 
     RemoveSet = TRUE;
-    if ((FirstTransferSet == TransferSet) &&
+    if ((Controller->PortConnected != FALSE) &&
+        (FirstSet != FALSE) &&
         (Endpoint->Channel != NULL) &&
         (Endpoint->Scheduled != FALSE)) {
 
@@ -2064,8 +2086,11 @@ Return Value:
     if (RemoveSet != FALSE) {
         DwhcipRemoveTransferSet(Controller, TransferSet);
         UsbHostProcessCompletedTransfer(Transfer);
-        DwhcipAdvanceEndpoint(Controller, Endpoint);
-        DwhcipProcessSchedule(Controller, FALSE);
+        if (FirstSet != FALSE) {
+            DwhcipAdvanceEndpoint(Controller, Endpoint);
+            DwhcipProcessSchedule(Controller, FALSE);
+        }
+
         Status = STATUS_SUCCESS;
 
     } else {
@@ -2148,6 +2173,11 @@ Return Value:
 
             break;
         }
+
+        Controller->PortConnected = TRUE;
+
+    } else {
+        Controller->PortConnected = FALSE;
     }
 
     if ((HardwareStatus & DWHCI_HOST_PORT_ENABLE) != 0) {
@@ -4638,6 +4668,7 @@ Return Value:
 
 {
 
+    ULONG FullSpeedType;
     ULONG Hardware2;
     ULONG HighSpeedType;
     ULONG HostConfiguration;
@@ -4645,6 +4676,14 @@ Return Value:
     ULONG UsbConfiguration;
     ULONG UsbFlags;
     ULONG UtmiWidth;
+
+    //
+    // Get the high speed type and the full speed type.
+    //
+
+    Hardware2 = DWHCI_READ_REGISTER(Controller, DwhciRegisterHardware2);
+    HighSpeedType = Hardware2 & DWHCI_HARDWARE2_HIGH_SPEED_MASK;
+    FullSpeedType = Hardware2 & DWHCI_HARDWARE2_FULL_SPEED_MASK;
 
     //
     // If this is a full speed controller, then initialize portions of physical
@@ -4698,14 +4737,6 @@ Return Value:
     } else {
 
         ASSERT(Controller->Speed == UsbDeviceSpeedHigh);
-
-        //
-        // Get the high speed type.
-        //
-
-        Hardware2 = DWHCI_READ_REGISTER(Controller, DwhciRegisterHardware2);
-        HighSpeedType = Hardware2 & DWHCI_HARDWARE2_HIGH_SPEED_MASK;
-
         ASSERT(HighSpeedType != DWHCI_HARDWARE2_HIGH_SPEED_NOT_SUPPORTED);
 
         //
@@ -4783,7 +4814,15 @@ Return Value:
     UsbFlags = DWHCI_USB_CONFIGURATION_ULPI_FULL_SPEED_LOW_SPEED_SELECT |
                DWHCI_USB_CONFIGURATION_ULPI_CLOCK_SUSPEND_MODE;
 
-    UsbConfiguration &= ~UsbFlags;
+    if ((HighSpeedType == DWHCI_HARDWARE2_HIGH_SPEED_ULPI) &&
+        (FullSpeedType == DWHCI_HARDWARE2_FULL_SPEED_DEDICATED)) {
+
+        UsbConfiguration |= UsbFlags;
+
+    } else {
+        UsbConfiguration &= ~UsbFlags;
+    }
+
     DWHCI_WRITE_REGISTER(Controller,
                          DwhciRegisterUsbConfiguration,
                          UsbConfiguration);
@@ -4794,7 +4833,8 @@ InitializePhysicalLayerEnd:
 
 KSTATUS
 DwhcipInitializeUsb (
-    PDWHCI_CONTROLLER Controller
+    PDWHCI_CONTROLLER Controller,
+    ULONG UsbCapabilities
     )
 
 /*++
@@ -4808,6 +4848,9 @@ Arguments:
     Controller - Supplies a pointer to the DWHCI controller state of the
         controller whose USB register is to be initialized.
 
+    UsbCapabilities - Supplies USB capability bits saved from the USB
+        configuration register before the reset.
+
 Return Value:
 
     Status code.
@@ -4817,24 +4860,34 @@ Return Value:
 {
 
     ULONG Hardware2;
+    ULONG Mask;
     ULONG Mode;
     KSTATUS Status;
     ULONG UsbConfiguration;
 
+    Mask = DWHCI_USB_CONFIGURATION_HNP_CAPABLE |
+           DWHCI_USB_CONFIGURATION_SRP_CAPABLE;
+
+    ASSERT((UsbCapabilities & ~Mask) == 0);
+
     UsbConfiguration = DWHCI_READ_REGISTER(Controller,
                                            DwhciRegisterUsbConfiguration);
 
-    UsbConfiguration &= ~(DWHCI_USB_CONFIGURATION_HNP_CAPABLE |
-                          DWHCI_USB_CONFIGURATION_SRP_CAPABLE);
-
+    UsbConfiguration &= ~Mask;
     Hardware2 = DWHCI_READ_REGISTER(Controller, DwhciRegisterHardware2);
     Mode = Hardware2 & DWHCI_HARDWARE2_MODE_MASK;
     Status = STATUS_SUCCESS;
     switch (Mode) {
-        case DWHCI_HARDWARE2_MODE_HNP_SRP:
-            UsbConfiguration |= (DWHCI_USB_CONFIGURATION_HNP_CAPABLE |
-                                 DWHCI_USB_CONFIGURATION_SRP_CAPABLE);
 
+        //
+        // Not all controllers are made equal. Some that advertise HNP/SRP do
+        // not actually support it and these bits must remain zero. Leave it up
+        // to ACPI to set these bits. The supplied capabilities should hold the
+        // values set by ACPI.
+        //
+
+        case DWHCI_HARDWARE2_MODE_HNP_SRP:
+            UsbConfiguration |= UsbCapabilities;
             break;
 
         case DWHCI_HARDWARE2_MODE_SRP_ONLY:
@@ -5199,19 +5252,6 @@ Return Value:
     ASSERT(Channel->Endpoint != NULL);
 
     //
-    // If the channel is not currently enabled, then it is not active. There
-    // should be no need to halt it.
-    //
-
-    ChannelControl = DWHCI_READ_CHANNEL_REGISTER(Controller,
-                                                 DwhciChannelRegisterControl,
-                                                 Channel->ChannelNumber);
-
-    if ((ChannelControl & DWHCI_CHANNEL_CONTROL_ENABLE) == 0) {
-        return TRUE;
-    }
-
-    //
     // Make sure that the channel will only interrupt if it is halted.
     //
 
@@ -5228,6 +5268,19 @@ Return Value:
                                  DwhciChannelRegisterInterrupt,
                                  Channel->ChannelNumber,
                                  ~DWHCI_CHANNEL_INTERRUPT_HALTED);
+
+    //
+    // If the channel is not currently enabled, then it is not active. There
+    // should be no need to halt it.
+    //
+
+    ChannelControl = DWHCI_READ_CHANNEL_REGISTER(Controller,
+                                                 DwhciChannelRegisterControl,
+                                                 Channel->ChannelNumber);
+
+    if ((ChannelControl & DWHCI_CHANNEL_CONTROL_ENABLE) == 0) {
+        return TRUE;
+    }
 
     //
     // Enable host level interrupts for this channel.
