@@ -35,6 +35,12 @@ Environment:
 #define FIRMWARE_IMAGE_NAME "veyronfw.elf"
 
 //
+// The I2C PMU defaults to run at 400KHz.
+//
+
+#define RK32_I2C_PMU_FREQUENCY 400000
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -44,6 +50,11 @@ Environment:
 
 VOID
 EfipVeyronConfigureArmPll (
+    VOID
+    );
+
+EFI_STATUS
+EfipVeyronConfigureI2cClock (
     VOID
     );
 
@@ -60,10 +71,12 @@ extern INT8 _end;
 extern INT8 __executable_start;
 
 //
-// Store a boolean used for debugging that disables the watchdog timer.
+// Disable the RK3288 watchdog by default. Once it is started, it cannot be
+// stopped. So, it is essentially useless unless a keep-alive method is
+// implemented.
 //
 
-BOOLEAN EfiDisableWatchdog = FALSE;
+BOOLEAN EfiDisableWatchdog = TRUE;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -149,6 +162,16 @@ Return Value:
 
         EfipVeyronConfigureArmPll();
 
+        //
+        // Initialize the I2C clock so that the clock frequency querying code
+        // does not need to be present in the runtime core.
+        //
+
+        Status = EfipVeyronConfigureI2cClock();
+        if (EFI_ERROR(Status)) {
+            return Status;
+        }
+
     } else if (Phase == 1) {
         EfipVeyronUsbInitialize();
         Status = EfipSmpInitialize();
@@ -214,6 +237,137 @@ Return Value:
     return EFI_SUCCESS;
 }
 
+EFI_STATUS
+EfipRk32GetPllClockFrequency (
+    RK32_PLL_TYPE PllType,
+    UINT32 *Frequency
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the base PLL clock frequency of the given type.
+
+Arguments:
+
+    PllType - Supplies the type of the PLL clock whose frequency is being
+        queried.
+
+    Frequency - Supplies a pointer that receives the PLL clock's frequency in
+        Hertz.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    RK32_CRU_REGISTER Configuration0;
+    RK32_CRU_REGISTER Configuration1;
+    VOID *CruBase;
+    UINT32 Mode;
+    UINT32 Nf;
+    UINT32 No;
+    UINT32 Nr;
+    UINT32 Value;
+
+    CruBase = (VOID *)RK32_CRU_BASE;
+    *Frequency = 0;
+
+    //
+    // The CRU mode control register encodes the clock mode for each of the PLL
+    // clocks.
+    //
+
+    Mode = EfiReadRegister32(CruBase + Rk32CruModeControl);
+    switch (PllType) {
+    case Rk32PllNew:
+        Mode = (Mode & RK32_CRU_MODE_CONTROL_NEW_PLL_MODE_MASK) >>
+                RK32_CRU_MODE_CONTROL_NEW_PLL_MODE_SHIFT;
+
+        Configuration0 = Rk32CruNewPllConfiguration0;
+        Configuration1 = Rk32CruNewPllConfiguration1;
+        break;
+
+    case Rk32PllCodec:
+        Mode = (Mode & RK32_CRU_MODE_CONTROL_CODEC_PLL_MODE_MASK) >>
+                RK32_CRU_MODE_CONTROL_CODEC_PLL_MODE_SHIFT;
+
+        Configuration0 = Rk32CruCodecPllConfiguration0;
+        Configuration1 = Rk32CruCodecPllConfiguration1;
+        break;
+
+    case Rk32PllGeneral:
+        Mode = (Mode & RK32_CRU_MODE_CONTROL_GENERAL_PLL_MODE_MASK) >>
+                RK32_CRU_MODE_CONTROL_GENERAL_PLL_MODE_SHIFT;
+
+        Configuration0 = Rk32CruGeneralPllConfiguration0;
+        Configuration1 = Rk32CruGeneralPllConfiguration1;
+        break;
+
+    case Rk32PllDdr:
+        Mode = (Mode & RK32_CRU_MODE_CONTROL_DDR_PLL_MODE_MASK) >>
+                RK32_CRU_MODE_CONTROL_DDR_PLL_MODE_SHIFT;
+
+        Configuration0 = Rk32CruDdrPllConfiguration0;
+        Configuration1 = Rk32CruDdrPllConfiguration1;
+        break;
+
+    case Rk32PllArm:
+        Mode = (Mode & RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_MASK) >>
+                RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_SHIFT;
+
+        Configuration0 = Rk32CruArmPllConfiguration0;
+        Configuration1 = Rk32CruArmPllConfiguration1;
+        break;
+
+    default:
+        return EFI_UNSUPPORTED;
+    }
+
+    //
+    // Calculate the frequency based on the mode.
+    //
+
+    if (Mode == RK32_CRU_MODE_CONTROL_SLOW_MODE) {
+        *Frequency = RK32_CRU_PLL_SLOW_MODE_FREQUENCY;
+
+    } else if (Mode == RK32_CRU_MODE_CONTROL_NORMAL_MODE) {
+
+        //
+        // Calculate the clock speed based on the formula described in
+        // section 3.9 of the RK3288 TRM.
+        //
+
+        Value = EfiReadRegister32(CruBase + Configuration0);
+        No = (Value & RK32_PLL_CONFIGURATION0_OD_MASK) >>
+             RK32_PLL_CONFIGURATION0_OD_SHIFT;
+
+        No += 1;
+        Nr = (Value & RK32_PLL_CONFIGURATION0_NR_MASK) >>
+             RK32_PLL_CONFIGURATION0_NR_SHIFT;
+
+        Nr += 1;
+        Value = EfiReadRegister32(CruBase + Configuration1);
+        Nf = (Value & RK32_PLL_CONFIGURATION1_NF_MASK) >>
+             RK32_PLL_CONFIGURATION1_NF_SHIFT;
+
+        Nf += 1;
+        *Frequency = RK32_CRU_PLL_COMPUTE_CLOCK_FREQUENCY(Nf, Nr, No);
+
+    } else if (Mode == RK32_CRU_MODE_CONTROL_DEEP_SLOW_MODE) {
+        *Frequency = RK32_CRU_PLL_DEEP_SLOW_MODE_FREQUENCY;
+
+    } else {
+        return EFI_DEVICE_ERROR;
+    }
+
+    return EFI_SUCCESS;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -265,20 +419,23 @@ Return Value:
     // Reset the PLL.
     //
 
-    Value = (RK32_PLL_RESET << 16) | RK32_PLL_RESET;
+    Value = (RK32_PLL_CONFIGURATION3_RESET << 16) |
+            RK32_PLL_CONFIGURATION3_RESET;
+
     RK32_WRITE_CRU(Rk32CruArmPllConfiguration3, Value);
 
     //
     // Configure the PLL.
     //
 
-    Value = ((RK32_PLL_NR_MASK | RK32_PLL_OD_MASK) << 16) |
-            ((Nr - 1) << RK32_PLL_NR_SHIFT) | (No - 1);
+    Value = ((RK32_PLL_CONFIGURATION0_NR_MASK |
+              RK32_PLL_CONFIGURATION0_OD_MASK) << 16) |
+            ((Nr - 1) << RK32_PLL_CONFIGURATION0_NR_SHIFT) | (No - 1);
 
     RK32_WRITE_CRU(Rk32CruArmPllConfiguration0, Value);
-    Value = (RK32_PLL_NF_MASK << 16) | (Nf - 1);
+    Value = (RK32_PLL_CONFIGURATION1_NF_MASK << 16) | (Nf - 1);
     RK32_WRITE_CRU(Rk32CruArmPllConfiguration1, Value);
-    Value = (RK32_PLL_BWADJ_MASK << 16) | ((Nf >> 1) - 1);
+    Value = (RK32_PLL_CONFIGURATION2_BWADJ_MASK << 16) | ((Nf >> 1) - 1);
     RK32_WRITE_CRU(Rk32CruArmPllConfiguration2, Value);
     EfiStall(10);
 
@@ -286,7 +443,7 @@ Return Value:
     // Clear reset.
     //
 
-    Value = RK32_PLL_RESET << 16;
+    Value = RK32_PLL_CONFIGURATION3_RESET << 16;
     RK32_WRITE_CRU(Rk32CruArmPllConfiguration3, Value);
 
     //
@@ -307,5 +464,108 @@ Return Value:
 
     RK32_WRITE_CRU(Rk32CruModeControl, Value);
     return;
+}
+
+EFI_STATUS
+EfipVeyronConfigureI2cClock (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine configures the I2C clock to 400Khz. This is done outside the
+    runtime core to avoid pulling in the clock querying code and divide
+    intrinsics.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINT32 AclkPllFrequency;
+    UINT32 BusAclkDivider;
+    UINT32 BusAclkDivider1;
+    UINT32 BusAclkFrequency;
+    UINT32 BusPclkDivider;
+    UINT32 BusPclkFrequency;
+    UINT32 Divisor;
+    UINT32 DivisorHigh;
+    UINT32 DivisorLow;
+    VOID *I2cPmuBase;
+    RK32_PLL_TYPE PllType;
+    VOID *PmuBase;
+    EFI_STATUS Status;
+    UINT32 Value;
+
+    I2cPmuBase = (VOID *)RK32_I2C_PMU_BASE;
+    PmuBase = (VOID *)RK32_PMU_BASE;
+    EfiWriteRegister32(PmuBase + Rk32PmuIomuxI2c0Sda,
+                       RK32_PMU_IOMUX_I2C0_SDA_DEFAULT);
+
+    EfiWriteRegister32(PmuBase + Rk32PmuIomuxI2c0Scl,
+                       RK32_PMU_IOMUX_I2C0_SCL_DEFAULT);
+
+    //
+    // Get the frequency of the bus PCLK. The bus's ACLK must first be
+    // calculated.
+    //
+
+    PllType = Rk32PllCodec;
+    Value = EfiReadRegister32((VOID *)RK32_CRU_BASE + Rk32CruClockSelect1);
+    if ((Value & RK32_CRU_CLOCK_SELECT1_GENERAL_PLL) != 0) {
+        PllType = Rk32PllGeneral;
+    }
+
+    Status = EfipRk32GetPllClockFrequency(PllType, &AclkPllFrequency);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    BusAclkDivider = (Value & RK32_CRU_CLOCK_SELECT1_ACLK_DIVIDER_MASK) >>
+                     RK32_CRU_CLOCK_SELECT1_ACLK_DIVIDER_SHIFT;
+
+    BusAclkDivider += 1;
+    BusAclkDivider1 = (Value & RK32_CRU_CLOCK_SELECT1_ACLK_DIVIDER1_MASK) >>
+                      RK32_CRU_CLOCK_SELECT1_ACLK_DIVIDER1_SHIFT;
+
+    BusAclkDivider1 += 1;
+    BusAclkFrequency = AclkPllFrequency / (BusAclkDivider * BusAclkDivider1);
+
+    //
+    // Now divide the ACLK by the PCLK's divider to get the PCLK frequency.
+    //
+
+    BusPclkDivider = (Value & RK32_CRU_CLOCK_SELECT1_PCLK_DIVIDER_MASK) >>
+                     RK32_CRU_CLOCK_SELECT1_PCLK_DIVIDER_SHIFT;
+
+    BusPclkDivider += 1;
+    BusPclkFrequency = BusAclkFrequency / BusPclkDivider;
+
+    //
+    // Set the clock divisor to run at 400Mhz.
+    //
+
+    Divisor = (BusPclkFrequency + (8 * RK32_I2C_PMU_FREQUENCY - 1)) /
+              (8 * RK32_I2C_PMU_FREQUENCY);
+
+    DivisorHigh = ((Divisor * 3) / 7) - 1;
+    DivisorLow = Divisor - DivisorHigh - 2;
+    Value = (DivisorHigh << RK32_I2C_CLOCK_DIVISOR_HIGH_SHIFT) &
+            RK32_I2C_CLOCK_DIVISOR_HIGH_MASK;
+
+    Value |= (DivisorLow << RK32_I2C_CLOCK_DIVISOR_LOW_SHIFT) &
+             RK32_I2C_CLOCK_DIVISOR_LOW_MASK;
+
+    EfiWriteRegister32(I2cPmuBase + Rk32I2cClockDivisor, Value);
+    return EFI_SUCCESS;
 }
 

@@ -41,6 +41,7 @@ Author:
 //
 
 #define RK32_SD_BASE 0xFF0C0000
+#define RK32_I2C_PMU_BASE 0xFF650000
 #define RK32_TIMER0_5_BASE 0xFF6B0000
 #define RK32_UART_DEBUG_BASE 0xFF690000
 #define RK32_SRAM_BASE 0xFF700000
@@ -55,6 +56,9 @@ Author:
 #define RK32_VOP_LITTLE_BASE 0xFF940000
 #define RK32_GIC_DISTRIBUTOR_BASE 0xFFC01000
 #define RK32_GIC_CPU_INTERFACE_BASE 0xFFC02000
+
+#define RK32_I2C_PMU_SIZE 0x1000
+#define RK32_CRU_SIZE 0x1000
 
 //
 // Define the RK3288 interrupt map.
@@ -74,8 +78,6 @@ Author:
 #define RK32_INTERRUPT_TIMER6 104
 #define RK32_INTERRUPT_TIMER7 105
 
-#define RK32_CRU_SIZE 0x1000
-
 //
 // Define the RK32 watchdog range.
 //
@@ -91,51 +93,21 @@ Author:
 #define RK32_TIMER_REGISTER_STRIDE 0x00000020
 
 //
-// Define generic PLL register bits.
+// Define generic PLL register bits, organized by configuration register.
 //
 
-#define RK32_PLL_RESET (1 << 5)
-#define RK32_PLL_OD_MASK 0x0F
-#define RK32_PLL_NR_MASK (0x3F << 8)
-#define RK32_PLL_NR_SHIFT 8
-#define RK32_PLL_NF_MASK 0x00001FFF
-#define RK32_PLL_BWADJ_MASK 0x00000FFF
+#define RK32_PLL_CONFIGURATION0_NR_MASK  (0x3F << 8)
+#define RK32_PLL_CONFIGURATION0_NR_SHIFT 8
+#define RK32_PLL_CONFIGURATION0_OD_MASK  (0xF << 0)
+#define RK32_PLL_CONFIGURATION0_OD_SHIFT 0
 
-//
-// Define the CRU codec PLL control 0 register bits.
-//
+#define RK32_PLL_CONFIGURATION1_NF_MASK  (0x1FFF << 0)
+#define RK32_PLL_CONFIGURATION1_NF_SHIFT 0
 
-#define RK32_CRU_CODEC_PLL_CONTROL0_PROTECT_SHIFT 16
-#define RK32_CRU_CODEC_PLL_CONTROL0_CLKR_MASK     (0x3F << 8)
-#define RK32_CRU_CODEC_PLL_CONTROL0_CLKR_SHIFT    8
-#define RK32_CRU_CODEC_PLL_CONTROL0_CLKOD_MASK    (0xF << 0)
-#define RK32_CRU_CODEC_PLL_CONTROL0_CLKOD_SHIFT   0
+#define RK32_PLL_CONFIGURATION2_BWADJ_MASK  (0xFFF << 0)
+#define RK32_PLL_CONFIGURATION2_BWADJ_SHIFT 0
 
-//
-// Define the CRU codec PLL control 1 register bits.
-//
-
-#define RK32_CRU_CODEC_PLL_CONTROL1_LOCK       (1 << 31)
-#define RK32_CRU_CODEC_PLL_CONTROL1_CLKF_MASK  (0x1FFF << 0)
-#define RK32_CRU_CODEC_PLL_CONTROL1_CLKF_SHIFT 0
-
-//
-// Define the CRU general PLL control 0 register bits.
-//
-
-#define RK32_CRU_GENERAL_PLL_CONTROL0_PROTECT_SHIFT 16
-#define RK32_CRU_GENERAL_PLL_CONTROL0_CLKR_MASK     (0x3F << 8)
-#define RK32_CRU_GENERAL_PLL_CONTROL0_CLKR_SHIFT    8
-#define RK32_CRU_GENERAL_PLL_CONTROL0_CLKOD_MASK    (0xF << 0)
-#define RK32_CRU_GENERAL_PLL_CONTROL0_CLKOD_SHIFT   0
-
-//
-// Define the CRU general PLL control 1 register bits.
-//
-
-#define RK32_CRU_GENERAL_PLL_CONTROL1_LOCK       (1 << 31)
-#define RK32_CRU_GENERAL_PLL_CONTROL1_CLKF_MASK  (0x1FFF << 0)
-#define RK32_CRU_GENERAL_PLL_CONTROL1_CLKF_SHIFT 0
+#define RK32_PLL_CONFIGURATION3_RESET (1 << 5)
 
 //
 // Define the PLL clock mode frequencies.
@@ -172,6 +144,21 @@ Author:
 #define RK32_CRU_MODE_CONTROL_ARM_PLL_MODE_SHIFT     0
 
 //
+// Define the CRU clock select 1 register bits.
+//
+
+#define RK32_CRU_CLOCK_SELECT1_PROTECT_SHIFT       16
+#define RK32_CRU_CLOCK_SELECT1_GENERAL_PLL         (1 << 15)
+#define RK32_CRU_CLOCK_SELECT1_PCLK_DIVIDER_MASK   (0x7 << 12)
+#define RK32_CRU_CLOCK_SELECT1_PCLK_DIVIDER_SHIFT  12
+#define RK32_CRU_CLOCK_SELECT1_HCLK_DIVIDER_MASK   (0x3 << 8)
+#define RK32_CRU_CLOCK_SELECT1_HCLK_DIVIDER_SHIFT  8
+#define RK32_CRU_CLOCK_SELECT1_ACLK_DIVIDER_MASK   (0x1F << 3)
+#define RK32_CRU_CLOCK_SELECT1_ACLK_DIVIDER_SHIFT  3
+#define RK32_CRU_CLOCK_SELECT1_ACLK_DIVIDER1_MASK  (0x7 << 0)
+#define RK32_CRU_CLOCK_SELECT1_ACLK_DIVIDER1_SHIFT 0
+
+//
 // Define the CRU clock select 11 register bits.
 //
 
@@ -185,6 +172,16 @@ Author:
 #define RK32_CRU_CLOCK_SELECT11_MMC0_CLOCK_SHIFT        6
 #define RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_MASK       (0x3F << 0)
 #define RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_SHIFT      0
+
+//
+// Define the CRU clock select 33 register bits.
+//
+
+#define RK32_CRU_CLOCK_SELECT33_PROTECT_SHIFT            16
+#define RK32_CRU_CLOCK_SELECT33_ALIVE_PCLK_DIVIDER_MASK  (0x1F << 8)
+#define RK32_CRU_CLOCK_SELECT33_ALIVE_PCLK_DIVIDER_SHIFT 8
+#define RK32_CRU_CLOCK_SELECT33_PMU_PCLK_DIVIDER_MASK    (0x1F << 0)
+#define RK32_CRU_CLOCK_SELECT33_PMU_PCLK_DIVIDER_SHIFT   0
 
 //
 // Define CRU global reset values.
@@ -227,6 +224,13 @@ Author:
 #define RK32_PMU_POWER_DOWN_STATUS_A17_1 0x00000002
 #define RK32_PMU_POWER_DOWN_STATUS_A17_2 0x00000004
 #define RK32_PMU_POWER_DOWN_STATUS_A17_3 0x00000008
+
+//
+// Define the default values for the I2C PMU iomux.
+//
+
+#define RK32_PMU_IOMUX_I2C0_SDA_DEFAULT (1 << 14)
+#define RK32_PMU_IOMUX_I2C0_SCL_DEFAULT (1 << 0)
 
 //
 // Define GRF I/O Vsel register bits.
@@ -323,6 +327,94 @@ Author:
 #define RK32_GPIO7_LCD_BACKLIGHT    0x00000004
 
 //
+// Define the bits for the I2C control register.
+//
+
+#define RK32_I2C_CONTROL_STOP_ON_NAK           (1 << 6)
+#define RK32_I2C_CONTROL_SEND_NAK              (1 << 5)
+#define RK32_I2C_CONTROL_STOP                  (1 << 4)
+#define RK32_I2C_CONTROL_START                 (1 << 3)
+#define RK32_I2C_CONTROL_MODE_TRANSMIT         (0x0 << 1)
+#define RK32_I2C_CONTROL_MODE_TRANSMIT_RECEIVE (0x1 << 1)
+#define RK32_I2C_CONTROL_MODE_RECEIVE          (0x2 << 1)
+#define RK32_I2C_CONTROL_MODE_MASK             (0x3 << 1)
+#define RK32_I2C_CONTROL_MODE_SHIFT            1
+#define RK32_I2C_CONTROL_ENABLE                (1 << 0)
+
+//
+// Define the bits for the I2C clock divisor register.
+//
+
+#define RK32_I2C_CLOCK_DIVISOR_HIGH_MASK  (0xFFFF << 16)
+#define RK32_I2C_CLOCK_DIVISOR_HIGH_SHIFT 16
+#define RK32_I2C_CLOCK_DIVISOR_LOW_MASK   (0xFFFF << 0)
+#define RK32_I2C_CLOCK_DIVISOR_LOW_SHIFT  0
+
+//
+// Define the bits for the I2C master receive slave address register.
+//
+
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_ADDRESS_HIGH_BYTE_VALID   (1 << 26)
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_ADDRESS_MIDDLE_BYTE_VALID (1 << 25)
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_ADDRESS_LOW_BYTE_VALID    (1 << 24)
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_ADDRESS_MASK              (0x7FFFFF << 1)
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_ADDRESS_SHIFT             1
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_ADDRESS_WRITE             (0 << 0)
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_ADDRESS_READ              (1 << 0)
+
+//
+// Define the bits for the I2C master receive slave register.
+//
+
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_REGISTER_HIGH_BYTE_VALID   (1 << 26)
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_REGISTER_MIDDLE_BYTE_VALID (1 << 25)
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_REGISTER_LOW_BYTE_VALID    (1 << 24)
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_REGISTER_MASK              (0xFFFFFF << 0)
+#define RK32_I2C_MASTER_RECEIVE_SLAVE_REGISTER_SHIFT             0
+
+//
+// Define the bits for the I2C master transmit count register.
+//
+
+#define RK32_I2C_MASTER_TRANSMIT_COUNT_MASK  (0x3F << 0)
+#define RK32_I2C_MASTER_TRANSMIT_COUNT_SHIFT 0
+
+//
+// Define the bits for the I2C master receive count register.
+//
+
+#define RK32_I2C_MASTER_RECEIVE_COUNT_MASK  (0x3F << 0)
+#define RK32_I2C_MASTER_RECEIVE_COUNT_SHIFT 0
+
+//
+// Define the bits for the I2C interrupt registers.
+//
+
+#define RK32_I2C_INTERRUPT_NAK                      (1 << 6)
+#define RK32_I2C_INTERRUPT_STOP                     (1 << 5)
+#define RK32_I2C_INTERRUPT_START                    (1 << 4)
+#define RK32_I2C_INTERRUPT_MASTER_RECEIVE_FINISHED  (1 << 3)
+#define RK32_I2C_INTERRUPT_MASTER_TRANSMIT_FINISHED (1 << 2)
+#define RK32_I2C_INTERRUPT_BYTE_RECEIVE_FINISHED    (1 << 1)
+#define RK32_I2C_INTERRUPT_BYTE_TRANSMIT_FINISHED   (1 << 0)
+
+#define RK32_I2C_INTERRUPT_MASK                    \
+    (RK32_I2C_INTERRUPT_NAK |                      \
+     RK32_I2C_INTERRUPT_STOP |                     \
+     RK32_I2C_INTERRUPT_START |                    \
+     RK32_I2C_INTERRUPT_MASTER_RECEIVE_FINISHED |  \
+     RK32_I2C_INTERRUPT_MASTER_TRANSMIT_FINISHED | \
+     RK32_I2C_INTERRUPT_BYTE_RECEIVE_FINISHED |         \
+     RK32_I2C_INTERRUPT_BYTE_TRANSMIT_FINISHED)
+
+//
+// Define the bits for the I2C finished count register.
+//
+
+#define RK32_I2C_FINISHED_COUNT_MASK  (0x3F << 0)
+#define RK32_I2C_FINISHED_COUNT_SHIFT 0
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -331,17 +423,27 @@ typedef enum _RK32_CRU_REGISTER {
     Rk32CruArmPllConfiguration1 = 0x04,
     Rk32CruArmPllConfiguration2 = 0x08,
     Rk32CruArmPllConfiguration3 = 0x0C,
-    Rk32CruCodecPllControl0 = 0x20,
-    Rk32CruCodecPllControl1 = 0x24,
-    Rk32CruCodecPllControl2 = 0x28,
-    Rk32CruCodecPllControl3 = 0x2C,
-    Rk32CruGeneralPllControl0 = 0x30,
-    Rk32CruGeneralPllControl1 = 0x34,
-    Rk32CruGeneralPllControl2 = 0x38,
-    Rk32CruGeneralPllControl3 = 0x3C,
+    Rk32CruDdrPllConfiguration0 = 0x10,
+    Rk32CruDdrPllConfiguration1 = 0x14,
+    Rk32CruDdrPllConfiguration2 = 0x18,
+    Rk32CruDdrPllConfiguration3 = 0x1C,
+    Rk32CruCodecPllConfiguration0 = 0x20,
+    Rk32CruCodecPllConfiguration1 = 0x24,
+    Rk32CruCodecPllConfiguration2 = 0x28,
+    Rk32CruCodecPllConfiguration3 = 0x2C,
+    Rk32CruGeneralPllConfiguration0 = 0x30,
+    Rk32CruGeneralPllConfiguration1 = 0x34,
+    Rk32CruGeneralPllConfiguration2 = 0x38,
+    Rk32CruGeneralPllConfiguration3 = 0x3C,
+    Rk32CruNewPllConfiguration0 = 0x40,
+    Rk32CruNewPllConfiguration1 = 0x44,
+    Rk32CruNewPllConfiguration2 = 0x48,
+    Rk32CruNewPllConfiguration3 = 0x4C,
     Rk32CruModeControl = 0x50,
     Rk32CruClockSelect0 = 0x60,
+    Rk32CruClockSelect1 = 0x64,
     Rk32CruClockSelect11 = 0x8C,
+    Rk32CruClockSelect33 = 0xE4,
     Rk32CruGlobalReset1 = 0x1B0,
     Rk32CruGlobalReset2 = 0x1B4,
     Rk32CruSoftReset0 = 0x1B8,
@@ -358,9 +460,19 @@ typedef enum _RK32_CRU_REGISTER {
     Rk32CruSoftReset11 = 0x1E4,
 } RK32_CRU_REGISTER, *PRK32_CRU_REGISTER;
 
+typedef enum RK32_PLL_TYPE {
+    Rk32PllNew,
+    Rk32PllGeneral,
+    Rk32PllCodec,
+    Rk32PllDdr,
+    Rk32PllArm
+} RK32_PLL_TYPE, *PRK32_PLL_TYPE;
+
 typedef enum _RK32_PMU_REGISTER {
     Rk32PmuPowerDownControl = 0x08,
-    Rk32PmuPowerDownStatus = 0x0C
+    Rk32PmuPowerDownStatus = 0x0C,
+    Rk32PmuIomuxI2c0Sda = 0x88,
+    Rk32PmuIomuxI2c0Scl = 0x8C
 } RK32_PMU_REGISTER, *PRK32_PMU_REGISTER;
 
 typedef enum _RK32_GRF_REGISTER {
@@ -400,6 +512,34 @@ typedef enum _RK32_GPIO_REGISTER {
     Rk32GpioPortAExternal = 0x50,
     Rk32GpioLevelSensitiveSync = 0x60,
 } RK32_GPIO_REGISTER, *PRK32_GPIO_REGISTER;
+
+typedef enum _RK32_I2C_REGISTER {
+    Rk32I2cControl = 0x00,
+    Rk32I2cClockDivisor = 0x04,
+    Rk32I2cMasterReceiveSlaveAddress = 0x08,
+    Rk32I2cMasterReceiveSlaveRegister = 0x0C,
+    Rk32I2cMasterTransmitCount = 0x10,
+    Rk32I2cMasterReceiveCount = 0x14,
+    Rk32I2cInterruptEnable = 0x18,
+    Rk32I2cInterruptPending = 0x1C,
+    Rk32I2cFinishedCount = 0x20,
+    Rk32I2cTransmitData0 = 0x100,
+    Rk32I2cTransmitData1 = 0x104,
+    Rk32I2cTransmitData2 = 0x108,
+    Rk32I2cTransmitData3 = 0x10C,
+    Rk32I2cTransmitData4 = 0x110,
+    Rk32I2cTransmitData5 = 0x114,
+    Rk32I2cTransmitData6 = 0x118,
+    Rk32I2cTransmitData7 = 0x11C,
+    Rk32I2cReceiveData0 = 0x200,
+    Rk32I2cReceiveData1 = 0x204,
+    Rk32I2cReceiveData2 = 0x208,
+    Rk32I2cReceiveData3 = 0x20C,
+    Rk32I2cReceiveData4 = 0x210,
+    Rk32I2cReceiveData5 = 0x214,
+    Rk32I2cReceiveData6 = 0x218,
+    Rk32I2cReceiveData7 = 0x21C
+} RK32_I2C_REGISTER, *PRK32_I2C_REGISTER;
 
 //
 // -------------------------------------------------------------------- Globals

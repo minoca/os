@@ -64,6 +64,15 @@ EFI_MEMORY_DESCRIPTOR EfiVeyronMemoryMap[] = {
     {
         EfiRuntimeServicesData,
         0,
+        RK32_I2C_PMU_BASE,
+        0,
+        EFI_SIZE_TO_PAGES(RK32_I2C_PMU_SIZE),
+        EFI_MEMORY_UC | EFI_MEMORY_RUNTIME
+    },
+
+    {
+        EfiRuntimeServicesData,
+        0,
         RK32_CRU_BASE,
         0,
         EFI_SIZE_TO_PAGES(RK32_CRU_SIZE),

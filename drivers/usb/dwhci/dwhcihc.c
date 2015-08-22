@@ -207,6 +207,13 @@ Environment:
 #define DWHCI_SPLIT_NOT_YET_FRAME_WINDOW 5
 
 //
+// Define the DWHCI host controller revision that first handled automatic PING
+// processing for bulk and control transfers.
+//
+
+#define DWHCI_AUTOMATIC_PING_REVISION_MININUM 0x4f54271a
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -314,11 +321,13 @@ DwhcipProcessChannelInterrupt (
     PULONG ChannelInterruptBits
     );
 
-BOOL
+VOID
 DwhcipProcessPotentiallyCompletedTransfer (
     PDWHCI_CONTROLLER Controller,
     PDWHCI_TRANSFER Transfer,
-    ULONG Interrupts
+    ULONG Interrupts,
+    PBOOL RemoveSet,
+    PBOOL AdvanceEndpoint
     );
 
 VOID
@@ -450,7 +459,8 @@ DwhcipInitializeControllerState (
     ULONG ChannelCount,
     USB_DEVICE_SPEED Speed,
     ULONG MaxTransferSize,
-    ULONG MaxPacketCount
+    ULONG MaxPacketCount,
+    ULONG Revision
     )
 
 /*++
@@ -473,6 +483,8 @@ Arguments:
 
     MaxPacketCount - Supplies the maximum packet count for the DWHCI host
         controller.
+
+    Revision - Supplies the revision of the DWHCI host controller.
 
 Return Value:
 
@@ -516,6 +528,7 @@ Return Value:
     KeInitializeSpinLock(&(Controller->Lock));
     KeInitializeSpinLock(&(Controller->InterruptLock));
     Controller->PortCount = DWHCI_HOST_PORT_COUNT;
+    Controller->Revision = Revision;
     Controller->Speed = Speed;
     Controller->MaxTransferSize = MaxTransferSize;
     Controller->MaxPacketCount = MaxPacketCount;
@@ -2852,6 +2865,7 @@ Return Value:
 
 {
 
+    BOOL AdvanceEndpoint;
     PDWHCI_CHANNEL Channels;
     PDWHCI_ENDPOINT Endpoint;
     ULONG Index;
@@ -2914,9 +2928,11 @@ Return Value:
 
         ASSERT(Transfer != NULL);
 
-        RemoveSet = DwhcipProcessPotentiallyCompletedTransfer(Controller,
-                                                              Transfer,
-                                                              Interrupts);
+        DwhcipProcessPotentiallyCompletedTransfer(Controller,
+                                                  Transfer,
+                                                  Interrupts,
+                                                  &RemoveSet,
+                                                  &AdvanceEndpoint);
 
         if (RemoveSet != FALSE) {
             DwhcipRemoveTransferSet(Controller, Transfer->Set);
@@ -2927,8 +2943,10 @@ Return Value:
         // Prepare the endpoint to move onto its next transfer.
         //
 
-        DwhcipAdvanceEndpoint(Controller, Endpoint);
-        ProcessSchedule = TRUE;
+        if (AdvanceEndpoint != FALSE) {
+            DwhcipAdvanceEndpoint(Controller, Endpoint);
+            ProcessSchedule = TRUE;
+        }
     }
 
     //
@@ -2943,11 +2961,13 @@ Return Value:
     return;
 }
 
-BOOL
+VOID
 DwhcipProcessPotentiallyCompletedTransfer (
     PDWHCI_CONTROLLER Controller,
     PDWHCI_TRANSFER Transfer,
-    ULONG Interrupts
+    ULONG Interrupts,
+    PBOOL RemoveSet,
+    PBOOL AdvanceEndpoint
     )
 
 /*++
@@ -2966,12 +2986,17 @@ Arguments:
 
     Interrupts - Supplies the interrupt status for this transfer's channel.
 
+    RemoveSet - Supplies a pointer to a boolean that receives TRUE if the
+        transfer's set should be removed from the active list due to completion
+        or failure, or FALSE otherwise.
+
+    AdvanceEndpoint - Supplies a pointer to a boolean that receives TRUE if the
+        transfer's endpoint should be advanced to the next transfer, or FALSE
+        otherwise.
+
 Return Value:
 
-    TRUE if the transfer set should be removed from the list because the
-        transfer has failed.
-
-    FALSE if the transfer set should not be removed from the list.
+    None.
 
 --*/
 
@@ -2981,8 +3006,8 @@ Return Value:
     PDWHCI_CHANNEL Channel;
     PDWHCI_ENDPOINT Endpoint;
     ULONG Errors;
+    BOOL Halted;
     ULONG LengthTransferred;
-    BOOL RemoveSet;
     BOOL RemoveTransfer;
     PDWHCI_TRANSFER StatusTransfer;
     ULONG Token;
@@ -2994,7 +3019,8 @@ Return Value:
     Endpoint = Transfer->Set->Endpoint;
     LengthTransferred = 0;
     RemoveTransfer = FALSE;
-    RemoveSet = FALSE;
+    *RemoveSet = FALSE;
+    *AdvanceEndpoint = TRUE;
     TransferShorted = FALSE;
     UsbTransfer = &(Transfer->Set->UsbTransfer->Public);
 
@@ -3039,7 +3065,17 @@ Return Value:
 
         ASSERT(UsbTransfer->Status == STATUS_OPERATION_CANCELLED);
 
-        RemoveSet = TRUE;
+        *RemoveSet = TRUE;
+        goto ProcessPotentiallyCompletedTransferEnd;
+    }
+
+    //
+    // If a device I/O error is set in the transfer, then this is just the
+    // channel halt operation completing. The AHB error was already handled.
+    //
+
+    if (UsbTransfer->Error == UsbErrorTransferDeviceIo) {
+        *RemoveSet = TRUE;
         goto ProcessPotentiallyCompletedTransferEnd;
     }
 
@@ -3050,6 +3086,7 @@ Return Value:
 
     Errors = Interrupts & DWHCI_CHANNEL_INTERRUPT_ERROR_MASK;
     if (Errors != 0) {
+        *RemoveSet = TRUE;
         UsbTransfer->Status = STATUS_DEVICE_IO_ERROR;
         if ((Errors & DWHCI_CHANNEL_INTERRUPT_STALL) != 0) {
             UsbTransfer->Error = UsbErrorTransferStalled;
@@ -3061,16 +3098,18 @@ Return Value:
             UsbTransfer->Error = UsbErrorTransferBabbleDetected;
 
         } else if ((Errors &
-                    DWHCI_CHANNEL_INTERRUPT_DMA_BUFFER_NOT_AVAILABLE) !=
-                   0) {
+                    DWHCI_CHANNEL_INTERRUPT_DMA_BUFFER_NOT_AVAILABLE) != 0) {
 
             UsbTransfer->Error = UsbErrorTransferDataBuffer;
 
-        } else {
-            UsbTransfer->Error = UsbErrorTransferStalled;
+        } else if ((Errors & DWHCI_CHANNEL_INTERRUPT_AHB_ERROR) != 0) {
+            UsbTransfer->Error = UsbErrorTransferDeviceIo;
+            Halted = DwhcipHaltChannel(Controller, Channel);
+            if (Halted == FALSE) {
+                *RemoveSet = FALSE;
+                *AdvanceEndpoint = FALSE;
+            }
         }
-
-        RemoveSet = TRUE;
     }
 
     //
@@ -3108,9 +3147,9 @@ Return Value:
         // and/or its set.
         //
 
-        if (RemoveSet == FALSE) {
+        if (*RemoveSet == FALSE) {
             if (Transfer->LastTransfer != FALSE) {
-                RemoveSet = TRUE;
+                *RemoveSet = TRUE;
 
             } else if (LengthTransferred != Transfer->TransferLength) {
                 TransferShorted = TRUE;
@@ -3128,7 +3167,7 @@ Return Value:
 
     if (TransferShorted != FALSE) {
         if (Endpoint->TransferType == UsbTransferTypeControl) {
-            RemoveSet = FALSE;
+            *RemoveSet = FALSE;
 
             //
             // The last entry in the transfer set should be the status transfer.
@@ -3154,7 +3193,7 @@ Return Value:
                           &(TransferSet->TransferListHead));
 
         } else {
-            RemoveSet = TRUE;
+            *RemoveSet = TRUE;
         }
 
     //
@@ -3166,7 +3205,7 @@ Return Value:
     }
 
 ProcessPotentiallyCompletedTransferEnd:
-    return RemoveSet;
+    return;
 }
 
 VOID
@@ -3451,6 +3490,14 @@ Return Value:
     //
 
     if (TransferSet->UsbTransfer->Public.Direction == UsbTransferDirectionIn) {
+        return;
+    }
+
+    //
+    // Newer revisions do not require manual handling of the PING protocol.
+    //
+
+    if (Controller->Revision >= DWHCI_AUTOMATIC_PING_REVISION_MININUM) {
         return;
     }
 

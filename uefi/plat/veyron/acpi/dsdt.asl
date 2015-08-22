@@ -67,7 +67,7 @@ DefinitionBlock (
 
             /*
              * Set the AHB configuration register to have a burst length of 16,
-             * the receive FIFO to 520 bytes, the non-periodic transmit FIFO to
+             * the receive FIFO to 516 bytes, the non-periodic transmit FIFO to
              * 128 bytes, and the periodic transmit FIFO to 256 bytes. The
              * Veyron's DWC USB controller allows dynamic FIFO sizes and the
              * maximum FIFO depth is greater than the total FIFO sizes 
@@ -77,8 +77,8 @@ DefinitionBlock (
              */
             
             Method(_INI, 0) {                        
-                Store(0x208, RXFS)
-                Store(0x208, NPFO)
+                Store(0x204, RXFS)
+                Store(0x204, NPFO)
                 Store(0x80, NPFS)
                 Store(0x288, PDFO)
                 Store(0x100, PDFS)
@@ -135,7 +135,7 @@ DefinitionBlock (
 
             /*
              * Set the AHB configuration register to have a burst length of 16,
-             * the receive FIFO to 520 bytes, the non-periodic transmit FIFO to
+             * the receive FIFO to 516 bytes, the non-periodic transmit FIFO to
              * 128 bytes, and the periodic transmit FIFO to 256 bytes. The
              * Veyron's DWC USB controller allows dynamic FIFO sizes and the
              * maximum FIFO depth is greater than the total FIFO sizes 
@@ -144,8 +144,8 @@ DefinitionBlock (
              */
             
             Method(_INI, 0) {                        
-                Store(0x208, RXFS)
-                Store(0x208, NPFO)
+                Store(0x204, RXFS)
+                Store(0x204, NPFO)
                 Store(0x80, NPFS)
                 Store(0x288, PDFO)
                 Store(0x100, PDFS)

@@ -43,8 +43,13 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
+//
+// Do not use the last 16MB of RAM as it causes AHB errors during DMA
+// transations.
+//
+
 #define VEYRON_RAM_START 0x00000000
-#define VEYRON_RAM_SIZE  0xFF000000
+#define VEYRON_RAM_SIZE  0xFE000000
 #define VEYRON_OSC_HERTZ 24000000
 #define VEYRON_ARM_CPU_HERTZ 1704000000
 
@@ -57,13 +62,6 @@ Author:
 //
 
 //
-// Define the APB bus clock frequency, which is a function of the PLLs and the
-// divisors.
-//
-
-extern UINT32 EfiRk32ApbFrequency;
-
-//
 // Store a boolean used for debugging that disables the watchdog timer.
 //
 
@@ -74,6 +72,12 @@ extern BOOLEAN EfiDisableWatchdog;
 //
 
 extern VOID *EfiRk32CruBase;
+
+//
+// The runtime stores a pointer to the I2C PMU for the RTC.
+//
+
+extern VOID *EfiRk32I2cPmuBase;
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -105,6 +109,32 @@ Arguments:
 Return Value:
 
     EFI Status code.
+
+--*/
+
+EFI_STATUS
+EfipRk32GetPllClockFrequency (
+    RK32_PLL_TYPE PllType,
+    UINT32 *Frequency
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the base PLL clock frequency of the given type.
+
+Arguments:
+
+    PllType - Supplies the type of the PLL clock whose frequency is being
+        queried.
+
+    Frequency - Supplies a pointer that receives the PLL clock's frequency in
+        Hertz.
+
+Return Value:
+
+    Status code.
 
 --*/
 
@@ -273,6 +303,213 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+EFI_STATUS
+EfipRk32I2cInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the I2C device.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+EFI_STATUS
+EfipRk32I2cWrite (
+    UINT8 Chip,
+    UINT32 Address,
+    UINT32 AddressLength,
+    VOID *Buffer,
+    UINT32 Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes the given buffer out to the given i2c device.
+
+Arguments:
+
+    Chip - Supplies the device to write to.
+
+    Address - Supplies the address.
+
+    AddressLength - Supplies the width of the address. Valid values are zero
+        through two.
+
+    Buffer - Supplies the buffer containing the data to write.
+
+    Length - Supplies the length of the buffer in bytes.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+EFI_STATUS
+EfipRk32I2cRead (
+    UINT8 Chip,
+    UINT32 Address,
+    UINT32 AddressLength,
+    VOID *Buffer,
+    UINT32 Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads from the given i2c device into the given buffer.
+
+Arguments:
+
+    Chip - Supplies the device to read from.
+
+    Address - Supplies the address.
+
+    AddressLength - Supplies the width of the address. Valid values are zero
+        through two.
+
+    Buffer - Supplies a pointer to the buffer where the read data will be
+        returned.
+
+    Length - Supplies the length of the buffer in bytes.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+EFI_STATUS
+EfipRk808InitializeRtc (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine enables the MMC power rails controlled by the TWL4030.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+EFI_STATUS
+EfipRk808ReadRtc (
+    EFI_TIME *Time
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads the current time from the RK808.
+
+Arguments:
+
+    Time - Supplies a pointer where the time is returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+EFI_STATUS
+EfipRk808ReadRtcWakeupTime (
+    BOOLEAN *Enabled,
+    BOOLEAN *Pending,
+    EFI_TIME *Time
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads the wake alarm time from the RK808.
+
+Arguments:
+
+    Enabled - Supplies a pointer where a boolean will be returned indicating if
+        the wake time interrupt is enabled.
+
+    Pending - Supplies a pointer where a boolean will be returned indicating if
+        the wake alarm interrupt is pending and requires service.
+
+    Time - Supplies a pointer where the time is returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+EFI_STATUS
+EfipRk808WriteRtc (
+    EFI_TIME *Time
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes the current time to the RK808.
+
+Arguments:
+
+    Time - Supplies a pointer to the new time to set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+EFI_STATUS
+EfipRk808WriteRtcWakeupTime (
+    BOOLEAN Enable,
+    EFI_TIME *Time
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes the alarm time to the RK808.
+
+Arguments:
+
+    Enable - Supplies a boolean enabling or disabling the wakeup timer.
+
+    Time - Supplies an optional pointer to the time to set. This parameter is
+        only optional if the enable parameter is FALSE.
+
+Return Value:
+
+    Status code.
 
 --*/
 

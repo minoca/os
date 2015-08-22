@@ -793,6 +793,37 @@ Return Value:
         Disk->Irp = NULL;
         KeReleaseQueuedLock(Disk->ControllerLock);
         OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
+
+        //
+        // The I/O buffer needs to be invalidated. It was invalidated before
+        // the DMA so that dirty data did not clobber the DMA, but clean,
+        // prefetched data could be sitting in the cache preventing access to
+        // the read data.
+        //
+
+        if ((Write == FALSE) && (Irp->U.ReadWrite.IoBytesCompleted != 0)) {
+            BytesCompleted = Irp->U.ReadWrite.IoBytesCompleted;
+            for (FragmentIndex = 0;
+                 FragmentIndex < IoBuffer->FragmentCount;
+                 FragmentIndex += 1) {
+
+                Fragment = &(IoBuffer->Fragment[FragmentIndex]);
+                MmFlushBufferForDataIn(Fragment->VirtualAddress,
+                                       Fragment->Size);
+
+                if (BytesCompleted < Fragment->Size) {
+                    break;
+                }
+
+                BytesCompleted -= Fragment->Size;
+            }
+        }
+
+        //
+        // If the IRP's buffer was not used directly for the DMA, copy the
+        // contents back into the IRP's buffer.
+        //
+
         if (IoBuffer != OriginalIoBuffer) {
             if ((Write == FALSE) && (Irp->U.ReadWrite.IoBytesCompleted != 0)) {
                 Status = MmCopyIoBuffer(OriginalIoBuffer,
@@ -882,15 +913,12 @@ Return Value:
          FragmentIndex < IoBuffer->FragmentCount;
          FragmentIndex += 1) {
 
+        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
         if (Write != FALSE) {
-            MmFlushBufferForDataOut(
-                          IoBuffer->Fragment[FragmentIndex].VirtualAddress,
-                          IoBuffer->Fragment[FragmentIndex].Size);
+            MmFlushBufferForDataOut(Fragment->VirtualAddress, Fragment->Size);
 
         } else {
-            MmFlushBufferForDataIn(
-                          IoBuffer->Fragment[FragmentIndex].VirtualAddress,
-                          IoBuffer->Fragment[FragmentIndex].Size);
+            MmFlushBufferForDataIn(Fragment->VirtualAddress, Fragment->Size);
         }
     }
 

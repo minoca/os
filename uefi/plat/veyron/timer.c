@@ -169,6 +169,11 @@ EfipRk32TimerAcknowledgeInterrupt (
     PRK32_TIMER_DATA Context
     );
 
+EFI_STATUS
+EfipRk32QueryApbAlivePclkFrequency (
+    UINT32 *Frequency
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -177,10 +182,11 @@ RK32_TIMER_DATA EfiVeyronClockTimer;
 RK32_TIMER_DATA EfiVeyronTimeCounter;
 
 //
-// TODO: Calculate the APB Frequency for the RK3288.
+// The watchdog timer runs on the APB Alive APB PCLK, whose frequency is
+// calculated from the general PLL.
 //
 
-UINT32 EfiRk32ApbFrequency = 0;
+UINT32 EfiRk32ApbAlivePclkFrequency = 0;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -229,9 +235,24 @@ Return Value:
     UINT32 Control;
     UINT32 CurrentCount;
     UINT64 DesiredCount;
+    UINT32 Frequency;
     UINT32 RangeIndex;
+    EFI_STATUS Status;
 
-    DesiredCount = (Timeout * EfiRk32ApbFrequency);
+    //
+    // Query the APB Alive PCLK frequency if necessary.
+    //
+
+    if (EfiRk32ApbAlivePclkFrequency == 0) {
+        Status = EfipRk32QueryApbAlivePclkFrequency(&Frequency);
+        if (EFI_ERROR(Status)) {
+            return Status;
+        }
+
+        EfiRk32ApbAlivePclkFrequency = Frequency;
+    }
+
+    DesiredCount = (Timeout * EfiRk32ApbAlivePclkFrequency);
     if (DesiredCount > RK32_WATCHDOG_MAX) {
         DesiredCount = RK32_WATCHDOG_MAX;
     }
@@ -677,5 +698,51 @@ Return Value:
 
     WRITE_TIMER_REGISTER(Context->Base, Rk32TimerInterruptStatus, 1);
     return;
+}
+
+EFI_STATUS
+EfipRk32QueryApbAlivePclkFrequency (
+    UINT32 *Frequency
+    )
+
+/*++
+
+Routine Description:
+
+    This routine queries the APB Alive PCLK frequency.
+
+Arguments:
+
+    Frequency - Supplies a pointer that receives the current frequency.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINT32 Divisor;
+    UINT32 GeneralPllFrequency;
+    EFI_STATUS Status;
+    UINT32 Value;
+
+    //
+    // The APB Alive PCLK timer is taken from the General PLL and divided by
+    // the value stored in clock select register 33.
+    //
+
+    Status = EfipRk32GetPllClockFrequency(Rk32PllGeneral, &GeneralPllFrequency);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    Value = EfiReadRegister32((VOID *)RK32_CRU_BASE + Rk32CruClockSelect33);
+    Divisor = (Value & RK32_CRU_CLOCK_SELECT33_ALIVE_PCLK_DIVIDER_MASK) >>
+              RK32_CRU_CLOCK_SELECT33_ALIVE_PCLK_DIVIDER_SHIFT;
+
+    *Frequency = GeneralPllFrequency / (Divisor + 1);
+    return EFI_SUCCESS;
 }
 

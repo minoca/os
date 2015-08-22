@@ -75,6 +75,18 @@ Return Value:
 
 {
 
+    EFI_STATUS Status;
+
+    Status = EfipRk32I2cInitialize();
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    Status = EfipRk808InitializeRtc();
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
     //
     // Take over the runtime services. The runtime library recomputes the
     // CRC so there's no need to do it here.
@@ -225,6 +237,7 @@ Return Value:
     // Convert the CRU base for reset.
     //
 
+    EfiConvertPointer(0, &EfiRk32I2cPmuBase);
     EfiConvertPointer(0, &EfiRk32CruBase);
     return;
 }

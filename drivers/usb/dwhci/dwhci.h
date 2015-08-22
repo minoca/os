@@ -316,6 +316,8 @@ Members:
 
     PortCount - Stores the number of ports on the DWHCI host controller.
 
+    Revision - Stores the DWHCI host controller revision.
+
     PortConnected - Stores a boolean indicating if the host port is connected.
 
     NextFrame - Stores the frame number for which the next periodic transfer is
@@ -346,6 +348,7 @@ typedef struct _DWHCI_CONTROLLER {
     ULONG MaxTransferSize;
     ULONG MaxPacketCount;
     ULONG PortCount;
+    ULONG Revision;
     BOOL PortConnected;
     ULONG NextFrame;
     DWHCI_CHANNEL Channel[ANYSIZE_ARRAY];
@@ -367,7 +370,8 @@ DwhcipInitializeControllerState (
     ULONG ChannelCount,
     USB_DEVICE_SPEED Speed,
     ULONG MaxTransferSize,
-    ULONG MaxPacketCount
+    ULONG MaxPacketCount,
+    ULONG Revision
     );
 
 /*++
@@ -390,6 +394,8 @@ Arguments:
 
     MaxPacketCount - Supplies the maximum packet count for the DWHCI host
         controller.
+
+    Revision - Supplies the revision of the DWHCI host controller.
 
 Return Value:
 

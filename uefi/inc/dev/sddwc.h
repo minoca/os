@@ -258,12 +258,12 @@ Author:
 #define SD_DWC_FIFO_THRESHOLD_DEFAULT                              \
     ((SD_DWC_FIFO_THRESHOLD_DMA_MULTIPLE_TRANSACTION_SIZE_16 <<    \
       SD_DWC_FIFO_THRESHOLD_DMA_MULTIPLE_TRANSACTION_SIZE_SHIFT) | \
-      ((((SD_DWC_FIFO_DEPTH / 2) - 1) <<                           \
-        SD_DWC_FIFO_THRESHOLD_RECEIVE_WATERMARK_SHIFT) &           \
-       SD_DWC_FIFO_THRESHOLD_RECEIVE_WATERMARK_MASK) |             \
-      (((SD_DWC_FIFO_DEPTH / 2) <<                                 \
-        SD_DWC_FIFO_THRESHOLD_RECEIVE_WATERMARK_SHIFT) &           \
-       SD_DWC_FIFO_THRESHOLD_RECEIVE_WATERMARK_MASK))
+     ((((SD_DWC_FIFO_DEPTH / 2) - 1) <<                            \
+       SD_DWC_FIFO_THRESHOLD_RECEIVE_WATERMARK_SHIFT) &            \
+      SD_DWC_FIFO_THRESHOLD_RECEIVE_WATERMARK_MASK) |              \
+     (((SD_DWC_FIFO_DEPTH / 2) <<                                  \
+       SD_DWC_FIFO_THRESHOLD_TRANSMIT_WATERMARK_SHIFT) &           \
+      SD_DWC_FIFO_THRESHOLD_TRANSMIT_WATERMARK_MASK))
 
 #define SD_DWC_FIFO_DEPTH 0x100
 

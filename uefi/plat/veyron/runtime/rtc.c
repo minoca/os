@@ -8,7 +8,8 @@ Module Name:
 
 Abstract:
 
-    This module implements stubs for the system time on the Veyron hardware.
+    This module implements support for speaking to the RTC module on the RK808
+    PMIC of the RK32xx Veyron Board.
 
 Author:
 
@@ -80,7 +81,13 @@ Return Value:
 
 {
 
-    return EFI_UNSUPPORTED;
+    if (Capabilities != NULL) {
+        Capabilities->Resolution = 1;
+        Capabilities->Accuracy = 0;
+        Capabilities->SetsToZero = FALSE;
+    }
+
+    return EfipRk808ReadRtc(Time);
 }
 
 EFIAPI
@@ -111,7 +118,7 @@ Return Value:
 
 {
 
-    return EFI_UNSUPPORTED;
+    return EfipRk808WriteRtc(Time);
 }
 
 EFIAPI
@@ -152,7 +159,7 @@ Return Value:
 
 {
 
-    return EFI_UNSUPPORTED;
+    return EfipRk808ReadRtcWakeupTime(Enabled, Pending, Time);;
 }
 
 EFIAPI
@@ -189,7 +196,7 @@ Return Value:
 
 {
 
-    return EFI_UNSUPPORTED;
+    return EfipRk808WriteRtcWakeupTime(Enable, Time);
 }
 
 //

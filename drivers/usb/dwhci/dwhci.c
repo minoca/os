@@ -79,6 +79,8 @@ Members:
     MaxPacketCount - Store the maximum packet count for the DWHCI host
         controller.
 
+    Revision - Stores the revision of the DWHCI host controller.
+
 --*/
 
 typedef struct _DWHCI_CONTROLLER_CONTEXT {
@@ -93,6 +95,7 @@ typedef struct _DWHCI_CONTROLLER_CONTEXT {
     USB_DEVICE_SPEED Speed;
     ULONG MaxTransferSize;
     ULONG MaxPacketCount;
+    ULONG Revision;
 } DWHCI_CONTROLLER_CONTEXT, *PDWHCI_CONTROLLER_CONTEXT;
 
 //
@@ -718,7 +721,8 @@ Return Value:
                                                  Device->ChannelCount,
                                                  Device->Speed,
                                                  Device->MaxTransferSize,
-                                                 Device->MaxPacketCount);
+                                                 Device->MaxPacketCount,
+                                                 Device->Revision);
 
     if (Controller == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -966,6 +970,14 @@ Return Value:
         goto GatherControllerParametersEnd;
     }
 
+    //
+    // Query the revision.
+    //
+
+    RegisterAddress = ControllerContext->RegisterBase +
+                      DwhciRegisterCoreId;
+
+    ControllerContext->Revision = HlReadRegister32(RegisterAddress);
     Status = STATUS_SUCCESS;
 
 GatherControllerParametersEnd:

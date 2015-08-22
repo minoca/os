@@ -32,7 +32,9 @@ INCLUDES += $(SRCROOT)/os/uefi/inc;$(SRCDIR)/..;
 
 BINPLACE = bin
 
-OBJS += rtc.o       \
+OBJS += i2c.o       \
+        pmic.o      \
+        rtc.o       \
         reboot.o    \
         runtime.o   \
 

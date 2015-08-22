@@ -4200,12 +4200,15 @@ Return Value:
     // If the data IN or data OUT portion completed and the command block was
     // successful, submit the status transfer. The status transfer needs to be
     // received even if the other transfers failed or were cancelled. If this
-    // submission fails, it will be handled below.
+    // submission fails, it will be handled below. If, however, a device I/O
+    // error occurred during the data phase, just skip the status transfer. The
+    // endpoint will go through reset recovery below.
     //
 
     if (((Transfer == Transfers->DataInTransfer) ||
          (Transfer == Transfers->DataOutTransfer)) &&
-        (KSUCCESS(Transfers->CommandTransfer->Status))) {
+        (Transfer->Error != UsbErrorTransferDeviceIo) &&
+        KSUCCESS(Transfers->CommandTransfer->Status)) {
 
         Disk->OutstandingTransfers += 1;
         Disk->StatusTransferAttempts += 1;
@@ -4230,9 +4233,6 @@ Return Value:
     //
 
     if (Irp == NULL) {
-
-        ASSERT(Transfer != Transfers->CommandTransfer);
-
         KeSignalEvent(Disk->Event, SignalOptionSignalAll);
         return;
     }

@@ -414,6 +414,7 @@ typedef enum _USB_ERROR {
     UsbErrorTransferMissedMicroFrame,
     UsbErrorTransferBufferNotAligned,
     UsbErrorTransferDeviceNotConnected,
+    UsbErrorTransferDeviceIo,
     UsbErrorShortPacket,
     UsbErrorCount
 } USB_ERROR, *PUSB_ERROR;

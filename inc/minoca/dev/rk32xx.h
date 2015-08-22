@@ -154,14 +154,14 @@ Author:
 //
 
 typedef enum _RK32_CRU_REGISTER {
-    Rk32CruCodecPllControl0 = 0x20,
-    Rk32CruCodecPllControl1 = 0x24,
-    Rk32CruCodecPllControl2 = 0x28,
-    Rk32CruCodecPllControl3 = 0x2C,
-    Rk32CruGeneralPllControl0 = 0x30,
-    Rk32CruGeneralPllControl1 = 0x34,
-    Rk32CruGeneralPllControl2 = 0x38,
-    Rk32CruGeneralPllControl3 = 0x3C,
+    Rk32CruCodecPllConfiguration0 = 0x20,
+    Rk32CruCodecPllConfiguration1 = 0x24,
+    Rk32CruCodecPllConfiguration2 = 0x28,
+    Rk32CruCodecPllConfiguration3 = 0x2C,
+    Rk32CruGeneralPllConfiguration0 = 0x30,
+    Rk32CruGeneralPllConfiguration1 = 0x34,
+    Rk32CruGeneralPllConfiguration2 = 0x38,
+    Rk32CruGeneralPllConfiguration3 = 0x3C,
     Rk32CruModeControl = 0x50,
     Rk32CruClockSelect11 = 0x8C,
     Rk32CruGlobalReset1 = 0x1B0,

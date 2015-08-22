@@ -514,6 +514,7 @@ typedef enum _DWHCI_REGISTER {
     DwhciRegisterReceiveFifoSize          = 0x24,
     DwhciRegisterNonPeriodicFifoSize      = 0x28,
     DwhciRegisterNonPeriodicFifoStatus    = 0x2c,
+    DwhciRegisterCoreId                   = 0x40,
     DwhciRegisterHardware1                = 0x44,
     DwhciRegisterHardware2                = 0x48,
     DwhciRegisterHardware3                = 0x4C,

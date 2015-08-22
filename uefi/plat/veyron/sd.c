@@ -678,10 +678,7 @@ Return Value:
     VOID *CruBase;
     UINT32 Divisor;
     UINT32 Frequency;
-    UINT32 Mode;
-    UINT32 Nf;
-    UINT32 No;
-    UINT32 Nr;
+    EFI_STATUS Status;
     UINT32 Value;
 
     CruBase = (VOID *)RK32_CRU_BASE;
@@ -705,81 +702,17 @@ Return Value:
 
     switch (ClockSource) {
     case RK32_CRU_CLOCK_SELECT11_MMC0_CODEC_PLL:
-        Mode = EfiReadRegister32(CruBase + Rk32CruModeControl);
-        Mode = (Mode & RK32_CRU_MODE_CONTROL_CODEC_PLL_MODE_MASK) >>
-                RK32_CRU_MODE_CONTROL_CODEC_PLL_MODE_SHIFT;
-
-        if (Mode == RK32_CRU_MODE_CONTROL_SLOW_MODE) {
-            Frequency = RK32_CRU_PLL_SLOW_MODE_FREQUENCY;
-
-        } else if (Mode == RK32_CRU_MODE_CONTROL_NORMAL_MODE) {
-
-            //
-            // Calculate the clock speed based on the formula described in
-            // section 3.9 of the RK3288 TRM.
-            //
-
-            Value = EfiReadRegister32(CruBase + Rk32CruCodecPllControl0);
-            No = (Value & RK32_CRU_CODEC_PLL_CONTROL0_CLKOD_MASK) >>
-                 RK32_CRU_CODEC_PLL_CONTROL0_CLKOD_SHIFT;
-
-            No += 1;
-            Nr = (Value & RK32_CRU_CODEC_PLL_CONTROL0_CLKR_MASK) >>
-                 RK32_CRU_CODEC_PLL_CONTROL0_CLKR_SHIFT;
-
-            Nr += 1;
-            Value = EfiReadRegister32(CruBase + Rk32CruCodecPllControl1);
-            Nf = (Value & RK32_CRU_CODEC_PLL_CONTROL1_CLKF_MASK) >>
-                 RK32_CRU_CODEC_PLL_CONTROL1_CLKF_SHIFT;
-
-            Nf += 1;
-            Frequency = RK32_CRU_PLL_COMPUTE_CLOCK_FREQUENCY(Nf, Nr, No);
-
-        } else if (Mode == RK32_CRU_MODE_CONTROL_DEEP_SLOW_MODE) {
-            Frequency = RK32_CRU_PLL_DEEP_SLOW_MODE_FREQUENCY;
-
-        } else {
-            return EFI_DEVICE_ERROR;
+        Status = EfipRk32GetPllClockFrequency(Rk32PllCodec, &Frequency);
+        if (EFI_ERROR(Status)) {
+            return Status;
         }
 
         break;
 
     case RK32_CRU_CLOCK_SELECT11_MMC0_GENERAL_PLL:
-        Mode = EfiReadRegister32(CruBase + Rk32CruModeControl);
-        Mode = (Mode & RK32_CRU_MODE_CONTROL_GENERAL_PLL_MODE_MASK) >>
-                RK32_CRU_MODE_CONTROL_GENERAL_PLL_MODE_SHIFT;
-
-        if (Mode == RK32_CRU_MODE_CONTROL_SLOW_MODE) {
-            Frequency = RK32_CRU_PLL_SLOW_MODE_FREQUENCY;
-
-        } else if (Mode == RK32_CRU_MODE_CONTROL_NORMAL_MODE) {
-
-            //
-            // Calculate the clock speed based on the formula described in
-            // section 3.9 of the RK3288 TRM.
-            //
-
-            Value = EfiReadRegister32(CruBase + Rk32CruGeneralPllControl0);
-            No = (Value & RK32_CRU_GENERAL_PLL_CONTROL0_CLKOD_MASK) >>
-                 RK32_CRU_GENERAL_PLL_CONTROL0_CLKOD_SHIFT;
-
-            No += 1;
-            Nr = (Value & RK32_CRU_GENERAL_PLL_CONTROL0_CLKR_MASK) >>
-                 RK32_CRU_GENERAL_PLL_CONTROL0_CLKR_SHIFT;
-
-            Nr += 1;
-            Value = EfiReadRegister32(CruBase + Rk32CruGeneralPllControl1);
-            Nf = (Value & RK32_CRU_GENERAL_PLL_CONTROL1_CLKF_MASK) >>
-                 RK32_CRU_GENERAL_PLL_CONTROL1_CLKF_SHIFT;
-
-            Nf += 1;
-            Frequency = RK32_CRU_PLL_COMPUTE_CLOCK_FREQUENCY(Nf, Nr, No);
-
-        } else if (Mode == RK32_CRU_MODE_CONTROL_DEEP_SLOW_MODE) {
-            Frequency = RK32_CRU_PLL_DEEP_SLOW_MODE_FREQUENCY;
-
-        } else {
-            return EFI_DEVICE_ERROR;
+        Status = EfipRk32GetPllClockFrequency(Rk32PllGeneral, &Frequency);
+        if (EFI_ERROR(Status)) {
+            return Status;
         }
 
         break;

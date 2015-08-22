@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2014 Minoca Corp. All rights reserved.
+Copyright (c) 2015 Minoca Corp. All rights reserved.
 
 Module Name:
 
@@ -8,12 +8,12 @@ Module Name:
 
 Abstract:
 
-    This module implements support for the TWL4030 PMIC that usually
-    accompanies the TI OMAP4.
+    This module implements support for the RK808 PMIC that usually accompanies
+    the Rk32xx.
 
 Author:
 
-    Evan Green 13-Mar-2014
+    Chris Stevens 20-Aug-2015
 
 Environment:
 
@@ -26,19 +26,70 @@ Environment:
 //
 
 #include <uefifw.h>
-#include "twl6030.h"
-#include "pandafw.h"
+#include "veyronfw.h"
 
 //
 // ---------------------------------------------------------------- Definitions
 //
 
-#define OMAP4_SYSCTRL_PADCONF_CORE_BASE 0x4A100000
-#define OMAP4_SYSTEM_CONTROL_PBIASLITE 0x600
+#define RK808_CHIP 0x1b
 
-#define OMAP4_MMC1_VMODE (1 << 21)
-#define OMAP4_MMC1_PBIASLITE_PWRDNZ (1 << 22)
-#define OMAP4_MMC1_PWRDNZ (1 << 26)
+//
+// Define the RK808 registers.
+//
+
+#define RK808_RTC_SECONDS             0x00
+#define RK808_RTC_MINUTES             0x01
+#define RK808_RTC_HOURS               0x02
+#define RK808_RTC_DAYS                0x03
+#define RK808_RTC_MONTHS              0x04
+#define RK808_RTC_YEARS               0x05
+#define RK808_RTC_WEEKS               0x06
+#define RK808_RTC_ALARM_SECONDS       0x08
+#define RK808_RTC_ALARM_MINUTES       0x09
+#define RK808_RTC_ALARM_HOURS         0x0A
+#define RK808_RTC_ALARM_DAYS          0x0B
+#define RK808_RTC_ALARM_MONTHS        0x0C
+#define RK808_RTC_ALARM_YEARS         0x0D
+#define RK808_RTC_CONTROL             0x10
+#define RK808_RTC_STATUS              0x11
+#define RK808_RTC_INTERRUPTS          0x12
+#define RK808_RTC_COMPENSATION_LOW    0x13
+#define RK808_RTC_COMPENSATION_HIGH   0x14
+#define RK808_RTC_RESET_STATUS        0x16
+
+//
+// RTC status bits.
+//
+
+#define RK808_RTC_STATUS_RUNNING          0x02
+#define RK808_RTC_STATUS_1_SECOND_EVENT   0x04
+#define RK808_RTC_STATUS_1_MINUTE_EVENT   0x08
+#define RK808_RTC_STATUS_1_HOUR_EVENT     0x10
+#define RK808_RTC_STATUS_1_DAY_EVENT      0x20
+#define RK808_RTC_STATUS_ALARM            0x40
+#define RK808_RTC_STATUS_RESET            0x80
+
+//
+// RTC control bits.
+//
+
+#define RK808_RTC_CONTROL_STOP                0x01
+#define RK808_RTC_CONTROL_GET_TIME            0x40
+#define RK808_RTC_CONTROL_READ_SHADOWED       0x80
+
+//
+// RTC interrupt bits.
+//
+
+#define RK808_RTC_INTERRUPT_PERIODIC_MASK     0x03
+#define RK808_RTC_INTERRUPT_EVERY_SECOND      0x00
+#define RK808_RTC_INTERRUPT_EVERY_MINUTE      0x01
+#define RK808_RTC_INTERRUPT_EVERY_HOUR        0x02
+#define RK808_RTC_INTERRUPT_EVERY_DAY         0x03
+#define RK808_RTC_INTERRUPT_PERIODIC          0x04
+#define RK808_RTC_INTERRUPT_ALARM             0x08
+#define RK808_RTC_INTERRUPT_MASK_DURING_SLEEP 0x10
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -49,14 +100,24 @@ Environment:
 //
 
 EFI_STATUS
-Omap4Twl6030I2cWrite8 (
+EfipRk808RtcStart (
+    VOID
+    );
+
+EFI_STATUS
+EfipRk808RtcStop (
+    VOID
+    );
+
+EFI_STATUS
+EfipRk808I2cWrite8 (
     UINT8 ChipNumber,
     UINT8 Register,
     UINT8 Value
     );
 
 EFI_STATUS
-Omap4Twl6030I2cRead8 (
+EfipRk808I2cRead8 (
     UINT8 ChipNumber,
     UINT8 Register,
     UINT8 *Value
@@ -71,7 +132,7 @@ Omap4Twl6030I2cRead8 (
 //
 
 EFI_STATUS
-Omap4Twl6030InitializeMmcPower (
+EfipRk808InitializeRtc (
     VOID
     )
 
@@ -93,79 +154,15 @@ Return Value:
 
 {
 
-    volatile UINT32 *PbiasLite;
-    EFI_STATUS Status;
-    VOID *SystemControlBase;
-    UINT32 Value;
-
-    SystemControlBase = (VOID *)OMAP4_SYSCTRL_PADCONF_CORE_BASE;
-    PbiasLite = SystemControlBase + OMAP4_SYSTEM_CONTROL_PBIASLITE;
-    Value = *PbiasLite;
-    Value &= ~(OMAP4_MMC1_PBIASLITE_PWRDNZ | OMAP4_MMC1_PWRDNZ);
-    *PbiasLite = Value;
-
     //
-    // Set VMMC1 to 3.00 Volts.
+    // Start the RTC running.
     //
 
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM,
-                                   VMMC_CFG_VOLTAGE,
-                                   VMMC_VOLTAGE_3V0);
-
-    if (EFI_ERROR(Status)) {
-        return Status;
-    }
-
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM, VMMC_CFG_STATE, 0x21);
-    if (!EFI_ERROR(Status)) {
-        Value = *PbiasLite;
-        Value |= OMAP4_MMC1_PBIASLITE_PWRDNZ | OMAP4_MMC1_PWRDNZ |
-                 OMAP4_MMC1_VMODE;
-
-        *PbiasLite = Value;
-    }
-
-    return Status;
+    return EfipRk808RtcStart();
 }
 
 EFI_STATUS
-Omap4Twl6030InitializeRtc (
-    VOID
-    )
-
-/*++
-
-Routine Description:
-
-    This routine enables the RTC controlled by the TWL4030.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    EFI_STATUS Status;
-    UINT8 Value;
-
-    //
-    // Write to the RTC control register to start the counter ticking if it
-    // isn't already.
-    //
-
-    Value = TWL6030_RTC_CONTROL_RUN;
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM, TWL6030_RTC_CONTROL, Value);
-    return Status;
-}
-
-EFI_STATUS
-Omap4Twl6030ReadRtc (
+EfipRk808ReadRtc (
     EFI_TIME *Time
     )
 
@@ -173,7 +170,7 @@ Omap4Twl6030ReadRtc (
 
 Routine Description:
 
-    This routine reads the current time from the TWL6030.
+    This routine reads the current time from the RK808.
 
 Arguments:
 
@@ -194,15 +191,12 @@ Return Value:
     // Read and clear the power up status and alarm bits.
     //
 
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM,
-                                  TWL6030_RTC_STATUS,
-                                  &Value);
-
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_STATUS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM, TWL6030_RTC_STATUS, Value);
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_STATUS, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
@@ -212,55 +206,55 @@ Return Value:
     // registers.
     //
 
-    Value = TWL6030_RTC_CONTROL_READ_SHADOWED | TWL6030_RTC_CONTROL_RUN;
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM,
-                                   TWL6030_RTC_CONTROL,
-                                   Value);
-
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_CONTROL, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
-    Value |= TWL6030_RTC_CONTROL_GET_TIME;
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM,
-                                   TWL6030_RTC_CONTROL,
-                                   Value);
-
+    Value &= ~RK808_RTC_CONTROL_GET_TIME;
+    Value |= RK808_RTC_CONTROL_READ_SHADOWED;
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_CONTROL, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM, TWL6030_RTC_SECONDS, &Value);
+    Value |= RK808_RTC_CONTROL_GET_TIME;
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_CONTROL, Value);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_SECONDS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Time->Second = EFI_BCD_TO_BINARY(Value);
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM, TWL6030_RTC_MINUTES, &Value);
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_MINUTES, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Time->Minute = EFI_BCD_TO_BINARY(Value);
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM, TWL6030_RTC_HOURS, &Value);
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_HOURS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Time->Hour = EFI_BCD_TO_BINARY(Value);
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM, TWL6030_RTC_DAYS, &Value);
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_DAYS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Time->Day = EFI_BCD_TO_BINARY(Value);
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM, TWL6030_RTC_MONTHS, &Value);
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_MONTHS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Time->Month = EFI_BCD_TO_BINARY(Value);
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM, TWL6030_RTC_YEARS, &Value);
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_YEARS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
@@ -273,7 +267,7 @@ Return Value:
 }
 
 EFI_STATUS
-Omap4Twl6030ReadRtcWakeupTime (
+EfipRk808ReadRtcWakeupTime (
     BOOLEAN *Enabled,
     BOOLEAN *Pending,
     EFI_TIME *Time
@@ -283,7 +277,7 @@ Omap4Twl6030ReadRtcWakeupTime (
 
 Routine Description:
 
-    This routine reads the wake alarm time from the TWL6030.
+    This routine reads the wake alarm time from the RK808.
 
 Arguments:
 
@@ -308,76 +302,55 @@ Return Value:
 
     *Enabled = FALSE;
     *Pending = FALSE;
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM,
-                                  TWL6030_RTC_INTERRUPTS,
-                                  &Value);
-
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_INTERRUPTS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
-    if ((Value & TWL6030_RTC_INTERRUPT_ALARM) != 0) {
+    if ((Value & RK808_RTC_INTERRUPT_ALARM) != 0) {
         *Enabled = TRUE;
     }
 
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM, TWL6030_RTC_STATUS, &Value);
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_STATUS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
-    if ((Value & TWL6030_RTC_STATUS_ALARM) != 0) {
+    if ((Value & RK808_RTC_STATUS_ALARM) != 0) {
         *Pending = TRUE;
     }
 
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM,
-                                  TWL6030_RTC_ALARM_SECONDS,
-                                  &Value);
-
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_ALARM_SECONDS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Time->Second = EFI_BCD_TO_BINARY(Value);
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM,
-                                  TWL6030_RTC_ALARM_MINUTES,
-                                  &Value);
-
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_ALARM_MINUTES, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Time->Minute = EFI_BCD_TO_BINARY(Value);
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM,
-                                  TWL6030_RTC_ALARM_HOURS,
-                                  &Value);
-
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_ALARM_HOURS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Time->Hour = EFI_BCD_TO_BINARY(Value);
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM,
-                                  TWL6030_RTC_ALARM_DAYS,
-                                  &Value);
-
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_ALARM_DAYS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Time->Day = EFI_BCD_TO_BINARY(Value);
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM,
-                                  TWL6030_RTC_ALARM_MONTHS,
-                                  &Value);
-
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_ALARM_MONTHS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Time->Month = EFI_BCD_TO_BINARY(Value);
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM,
-                                  TWL6030_RTC_ALARM_YEARS,
-                                  &Value);
-
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_ALARM_YEARS, &Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
@@ -390,7 +363,7 @@ Return Value:
 }
 
 EFI_STATUS
-Omap4Twl6030WriteRtc (
+EfipRk808WriteRtc (
     EFI_TIME *Time
     )
 
@@ -398,7 +371,7 @@ Omap4Twl6030WriteRtc (
 
 Routine Description:
 
-    This routine writes the current time to the TWL6030.
+    This routine writes the current time to the RK808.
 
 Arguments:
 
@@ -419,37 +392,37 @@ Return Value:
     // Stop the clock while programming.
     //
 
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM, TWL6030_RTC_CONTROL, 0);
+    Status = EfipRk808RtcStop();
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Value = EFI_BINARY_TO_BCD(Time->Second);
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM, TWL6030_RTC_SECONDS, Value);
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_SECONDS, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Value = EFI_BINARY_TO_BCD(Time->Minute);
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM, TWL6030_RTC_MINUTES, Value);
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_MINUTES, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Value = EFI_BINARY_TO_BCD(Time->Hour);
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM, TWL6030_RTC_HOURS, Value);
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_HOURS, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Value = EFI_BINARY_TO_BCD(Time->Day);
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM, TWL6030_RTC_DAYS, Value);
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_DAYS, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Value = EFI_BINARY_TO_BCD(Time->Month);
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM, TWL6030_RTC_MONTHS, Value);
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_MONTHS, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
@@ -461,7 +434,7 @@ Return Value:
         Value = EFI_BINARY_TO_BCD(Time->Year - 2000);
     }
 
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM, TWL6030_RTC_YEARS, Value);
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_YEARS, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
@@ -470,8 +443,7 @@ Return Value:
     // Fire the clock back up.
     //
 
-    Value = TWL6030_RTC_CONTROL_RUN;
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM, TWL6030_RTC_CONTROL, Value);
+    Status = EfipRk808RtcStart();
     if (EFI_ERROR(Status)) {
         return Status;
     }
@@ -480,7 +452,7 @@ Return Value:
 }
 
 EFI_STATUS
-Omap4Twl6030WriteRtcWakeupTime (
+EfipRk808WriteRtcWakeupTime (
     BOOLEAN Enable,
     EFI_TIME *Time
     )
@@ -489,7 +461,7 @@ Omap4Twl6030WriteRtcWakeupTime (
 
 Routine Description:
 
-    This routine writes the alarm time to the TWL6030.
+    This routine writes the alarm time to the RK808.
 
 Arguments:
 
@@ -514,19 +486,13 @@ Return Value:
     // Clear the interrupt first.
     //
 
-    Status = Omap4Twl6030I2cRead8(TWL6030_CHIP_PM,
-                                  TWL6030_RTC_INTERRUPTS,
-                                  &Interrupts);
-
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_INTERRUPTS, &Interrupts);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
-    Interrupts &= ~TWL6030_RTC_INTERRUPT_ALARM;
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM,
-                                   TWL6030_RTC_INTERRUPTS,
-                                   Interrupts);
-
+    Interrupts &= ~RK808_RTC_INTERRUPT_ALARM;
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_INTERRUPTS, Interrupts);
     if (EFI_ERROR(Status)) {
         return Status;
     }
@@ -544,46 +510,31 @@ Return Value:
     //
 
     Value = EFI_BINARY_TO_BCD(Time->Second);
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM,
-                                   TWL6030_RTC_ALARM_SECONDS,
-                                   Value);
-
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_ALARM_SECONDS, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Value = EFI_BINARY_TO_BCD(Time->Minute);
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM,
-                                   TWL6030_RTC_ALARM_MINUTES,
-                                   Value);
-
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_ALARM_MINUTES, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Value = EFI_BINARY_TO_BCD(Time->Hour);
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM,
-                                   TWL6030_RTC_ALARM_HOURS,
-                                   Value);
-
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_ALARM_HOURS, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Value = EFI_BINARY_TO_BCD(Time->Day);
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM,
-                                   TWL6030_RTC_ALARM_DAYS,
-                                   Value);
-
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_ALARM_DAYS, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
     Value = EFI_BINARY_TO_BCD(Time->Month);
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM,
-                                   TWL6030_RTC_ALARM_MONTHS,
-                                   Value);
-
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_ALARM_MONTHS, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
@@ -595,10 +546,7 @@ Return Value:
         Value = EFI_BINARY_TO_BCD(Time->Year - 2000);
     }
 
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM,
-                                   TWL6030_RTC_ALARM_YEARS,
-                                   Value);
-
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_ALARM_YEARS, Value);
     if (EFI_ERROR(Status)) {
         return Status;
     }
@@ -607,11 +555,8 @@ Return Value:
     // Enable the interrupt.
     //
 
-    Interrupts |= TWL6030_RTC_INTERRUPT_ALARM;
-    Status = Omap4Twl6030I2cWrite8(TWL6030_CHIP_PM,
-                                   TWL6030_RTC_INTERRUPTS,
-                                   Interrupts);
-
+    Interrupts |= RK808_RTC_INTERRUPT_ALARM;
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_INTERRUPTS, Interrupts);
     if (EFI_ERROR(Status)) {
         return Status;
     }
@@ -624,7 +569,79 @@ Return Value:
 //
 
 EFI_STATUS
-Omap4Twl6030I2cWrite8 (
+EfipRk808RtcStart (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine starts the RK808 RTC.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    EFI_STATUS Status;
+    UINT8 Value;
+
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_CONTROL, &Value);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    Value &= ~RK808_RTC_CONTROL_STOP;
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_CONTROL, Value);
+    return Status;
+}
+
+EFI_STATUS
+EfipRk808RtcStop (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine stops the RK808 RTC.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    EFI_STATUS Status;
+    UINT8 Value;
+
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_RTC_CONTROL, &Value);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    Value |= RK808_RTC_CONTROL_STOP;
+    Status = EfipRk808I2cWrite8(RK808_CHIP, RK808_RTC_CONTROL, Value);
+    return Status;
+}
+
+EFI_STATUS
+EfipRk808I2cWrite8 (
     UINT8 ChipNumber,
     UINT8 Register,
     UINT8 Value
@@ -634,11 +651,11 @@ Omap4Twl6030I2cWrite8 (
 
 Routine Description:
 
-    This routine writes a register on the TWL6030.
+    This routine writes a register on the RK808.
 
 Arguments:
 
-    ChipNumber - Supplies the device address of the TWL4030 on the I2C bus.
+    ChipNumber - Supplies the device address of the RK808 on the I2C bus.
 
     Register - Supplies the register number to write.
 
@@ -652,11 +669,11 @@ Return Value:
 
 {
 
-    return EfipOmapI2cWrite(ChipNumber, Register, 1, &Value, 1);
+    return EfipRk32I2cWrite(ChipNumber, Register, 1, &Value, 1);
 }
 
 EFI_STATUS
-Omap4Twl6030I2cRead8 (
+EfipRk808I2cRead8 (
     UINT8 ChipNumber,
     UINT8 Register,
     UINT8 *Value
@@ -666,11 +683,11 @@ Omap4Twl6030I2cRead8 (
 
 Routine Description:
 
-    This routine reads a register on the TWL6030.
+    This routine reads a register on the RK808.
 
 Arguments:
 
-    ChipNumber - Supplies the device address of the TWL4030 on the I2C bus.
+    ChipNumber - Supplies the device address of the RK808 on the I2C bus.
 
     Register - Supplies the register number to write.
 
@@ -684,6 +701,6 @@ Return Value:
 
 {
 
-    return EfipOmapI2cRead(ChipNumber, Register, 1, Value, 1);
+    return EfipRk32I2cRead(ChipNumber, Register, 1, Value, 1);
 }
 

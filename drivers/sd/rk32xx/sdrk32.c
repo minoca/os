@@ -743,6 +743,37 @@ Return Value:
         Child->Irp = NULL;
         KeReleaseQueuedLock(Child->ControllerLock);
         OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
+
+        //
+        // The I/O buffer needs to be invalidated. It was invalidated before
+        // the DMA so that dirty data did not clobber the DMA, but clean,
+        // prefetched data could be sitting in the cache preventing access to
+        // the read data.
+        //
+
+        if ((Write == FALSE) && (Irp->U.ReadWrite.IoBytesCompleted != 0)) {
+            BytesCompleted = Irp->U.ReadWrite.IoBytesCompleted;
+            for (FragmentIndex = 0;
+                 FragmentIndex < IoBuffer->FragmentCount;
+                 FragmentIndex += 1) {
+
+                Fragment = &(IoBuffer->Fragment[FragmentIndex]);
+                MmFlushBufferForDataIn(Fragment->VirtualAddress,
+                                       Fragment->Size);
+
+                if (BytesCompleted < Fragment->Size) {
+                    break;
+                }
+
+                BytesCompleted -= Fragment->Size;
+            }
+        }
+
+        //
+        // If the IRP's buffer was not used directly for the DMA, copy the
+        // contents back into the IRP's buffer.
+        //
+
         if (IoBuffer != OriginalIoBuffer) {
             if ((Write == FALSE) && (Irp->U.ReadWrite.IoBytesCompleted != 0)) {
                 Status = MmCopyIoBuffer(OriginalIoBuffer,
@@ -832,15 +863,12 @@ Return Value:
          FragmentIndex < IoBuffer->FragmentCount;
          FragmentIndex += 1) {
 
+        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
         if (Write != FALSE) {
-            MmFlushBufferForDataOut(
-                          IoBuffer->Fragment[FragmentIndex].VirtualAddress,
-                          IoBuffer->Fragment[FragmentIndex].Size);
+            MmFlushBufferForDataOut(Fragment->VirtualAddress, Fragment->Size);
 
         } else {
-            MmFlushBufferForDataIn(
-                          IoBuffer->Fragment[FragmentIndex].VirtualAddress,
-                          IoBuffer->Fragment[FragmentIndex].Size);
+            MmFlushBufferForDataIn(Fragment->VirtualAddress, Fragment->Size);
         }
     }
 
@@ -1927,7 +1955,7 @@ Return Value:
             // section 3.9 of the RK3288 TRM.
             //
 
-            Value = HlReadRegister32(CruBase + Rk32CruCodecPllControl0);
+            Value = HlReadRegister32(CruBase + Rk32CruCodecPllConfiguration0);
             No = (Value & RK32_CRU_CODEC_PLL_CONTROL0_CLKOD_MASK) >>
                  RK32_CRU_CODEC_PLL_CONTROL0_CLKOD_SHIFT;
 
@@ -1936,7 +1964,7 @@ Return Value:
                  RK32_CRU_CODEC_PLL_CONTROL0_CLKR_SHIFT;
 
             Nr += 1;
-            Value = HlReadRegister32(CruBase + Rk32CruCodecPllControl1);
+            Value = HlReadRegister32(CruBase + Rk32CruCodecPllConfiguration1);
             Nf = (Value & RK32_CRU_CODEC_PLL_CONTROL1_CLKF_MASK) >>
                  RK32_CRU_CODEC_PLL_CONTROL1_CLKF_SHIFT;
 
@@ -1968,7 +1996,7 @@ Return Value:
             // section 3.9 of the RK3288 TRM.
             //
 
-            Value = HlReadRegister32(CruBase + Rk32CruGeneralPllControl0);
+            Value = HlReadRegister32(CruBase + Rk32CruGeneralPllConfiguration0);
             No = (Value & RK32_CRU_GENERAL_PLL_CONTROL0_CLKOD_MASK) >>
                  RK32_CRU_GENERAL_PLL_CONTROL0_CLKOD_SHIFT;
 
@@ -1977,7 +2005,7 @@ Return Value:
                  RK32_CRU_GENERAL_PLL_CONTROL0_CLKR_SHIFT;
 
             Nr += 1;
-            Value = HlReadRegister32(CruBase + Rk32CruGeneralPllControl1);
+            Value = HlReadRegister32(CruBase + Rk32CruGeneralPllConfiguration1);
             Nf = (Value & RK32_CRU_GENERAL_PLL_CONTROL1_CLKF_MASK) >>
                  RK32_CRU_GENERAL_PLL_CONTROL1_CLKF_SHIFT;
 
@@ -3207,7 +3235,7 @@ Return Value:
 
     //
     // Phase 0 is an early initialization phase that happens after the
-    // controller has been set. It is used to gather capabilities and set
+    // controller has been reset. It is used to gather capabilities and set
     // certain parameters in the hardware.
     //
 
@@ -3620,8 +3648,8 @@ Return Value:
     //
 
     SD_DWC_WRITE_REGISTER(Device,
-                           SdDwcCommandArgument,
-                           Command->CommandArgument);
+                          SdDwcCommandArgument,
+                          Command->CommandArgument);
 
     //
     // Set the command and wait for it to be accepted.
