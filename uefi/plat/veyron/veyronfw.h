@@ -68,10 +68,10 @@ Author:
 extern BOOLEAN EfiDisableWatchdog;
 
 //
-// The runtime stores a pointer to the CRU for system reset purposes.
+// The runtime stores a pointer to GPIO0 for system reset purposes.
 //
 
-extern VOID *EfiRk32CruBase;
+extern VOID *EfiRk32Gpio0Base;
 
 //
 // The runtime stores a pointer to the I2C PMU for the RTC.
@@ -506,6 +506,27 @@ Arguments:
 
     Time - Supplies an optional pointer to the time to set. This parameter is
         only optional if the enable parameter is FALSE.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+EFI_STATUS
+EfipRk808Shutdown (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a system shutdown using the RK808.
+
+Arguments:
+
+    None.
 
 Return Value:
 

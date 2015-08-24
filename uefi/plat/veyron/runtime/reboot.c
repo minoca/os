@@ -31,6 +31,8 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
+#define RK32_GPIO0_HARD_RESET (1 << 13)
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -43,7 +45,7 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-VOID *EfiRk32CruBase = (VOID *)RK32_CRU_BASE;
+VOID *EfiRk32Gpio0Base = (VOID *)RK32_GPIO0_BASE;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -84,24 +86,28 @@ Return Value:
 
 {
 
-    volatile UINT32 *ResetRegister;
-    UINT32 ResetValue;
+    volatile UINT32 *GpioRegister;
+    UINT32 Value;
 
     //
     // Attempt to flush non-volatile variable data out to storage.
     //
 
     EfiCoreFlushVariableData();
-    if (ResetType == EfiResetWarm) {
-        ResetRegister = (UINT32 *)(EfiRk32CruBase + Rk32CruGlobalReset1);
-        ResetValue = RK32_GLOBAL_RESET1_VALUE;
+    if ((ResetType == EfiResetCold) || (ResetType == EfiResetWarm)) {
+        GpioRegister = (UINT32 *)(EfiRk32Gpio0Base + Rk32GpioPortADirection);
+        Value = *GpioRegister;
+        Value |= RK32_GPIO0_HARD_RESET;
+        *GpioRegister = Value;
+        GpioRegister = (UINT32 *)(EfiRk32Gpio0Base + Rk32GpioPortAData);
+        Value = *GpioRegister;
+        Value |= RK32_GPIO0_HARD_RESET;
+        *GpioRegister = Value;
 
     } else {
-        ResetRegister = (UINT32 *)(EfiRk32CruBase + Rk32CruGlobalReset2);
-        ResetValue = RK32_GLOBAL_RESET2_VALUE;
+        EfipRk808Shutdown();
     }
 
-    *ResetRegister = ResetValue;
     while (TRUE) {
         NOTHING;
     }

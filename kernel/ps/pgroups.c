@@ -266,16 +266,18 @@ Return Value:
 {
 
     PPROCESS_GROUP ProcessGroup;
+    KSTATUS Status;
 
+    Status = STATUS_NOT_FOUND;
     KeAcquireQueuedLock(PsProcessGroupListLock);
     ProcessGroup = PspLookupProcessGroup(ProcessGroupId);
-    if (ProcessGroup == NULL) {
-        return STATUS_NOT_FOUND;
+    if (ProcessGroup != NULL) {
+        PspSignalProcessGroup(ProcessGroup, SignalNumber);
+        Status = STATUS_SUCCESS;
     }
 
-    PspSignalProcessGroup(ProcessGroup, SignalNumber);
     KeReleaseQueuedLock(PsProcessGroupListLock);
-    return STATUS_SUCCESS;
+    return Status;
 }
 
 KSTATUS
@@ -422,7 +424,8 @@ Return Value:
     //
 
     if (IS_SESSION_LEADER(Process)) {
-        return STATUS_PERMISSION_DENIED;
+        Status = STATUS_PERMISSION_DENIED;
+        goto JoinProcessGroupEnd;
     }
 
     //
@@ -608,12 +611,18 @@ Return Value:
                                             ProcessGroup);
     }
 
-    KeReleaseQueuedLock(PsProcessGroupListLock);
-    GroupLockHeld = FALSE;
     ProcessGroup = NULL;
     Status = STATUS_SUCCESS;
 
 JoinProcessGroupEnd:
+    if (ProcessLockHeld != FALSE) {
+        KeReleaseQueuedLock(Process->QueuedLock);
+    }
+
+    if (GroupLockHeld != FALSE) {
+        KeReleaseQueuedLock(PsProcessGroupListLock);
+    }
+
     if (NewGroup != NULL) {
         PspProcessGroupReleaseReference(NewGroup);
     }
@@ -623,14 +632,6 @@ JoinProcessGroupEnd:
         ASSERT(ProcessGroup != NewGroup);
 
         PspProcessGroupReleaseReference(ProcessGroup);
-    }
-
-    if (ProcessLockHeld != FALSE) {
-        KeReleaseQueuedLock(Process->QueuedLock);
-    }
-
-    if (GroupLockHeld != FALSE) {
-        KeReleaseQueuedLock(PsProcessGroupListLock);
     }
 
     if (OriginalGroup != NULL) {

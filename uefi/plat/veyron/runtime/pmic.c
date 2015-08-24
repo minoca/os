@@ -57,6 +57,7 @@ Environment:
 #define RK808_RTC_COMPENSATION_LOW    0x13
 #define RK808_RTC_COMPENSATION_HIGH   0x14
 #define RK808_RTC_RESET_STATUS        0x16
+#define RK808_DEVICE_CONTROL          0x4b
 
 //
 // RTC status bits.
@@ -90,6 +91,12 @@ Environment:
 #define RK808_RTC_INTERRUPT_PERIODIC          0x04
 #define RK808_RTC_INTERRUPT_ALARM             0x08
 #define RK808_RTC_INTERRUPT_MASK_DURING_SLEEP 0x10
+
+//
+// Device control register bits.
+//
+
+#define RK808_DEVICE_CONTROL_SHUTDOWN (1 << 3)
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -562,6 +569,41 @@ Return Value:
     }
 
     return Status;
+}
+
+EFI_STATUS
+EfipRk808Shutdown (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a system shutdown using the RK808.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    EFI_STATUS Status;
+    UINT8 Value;
+
+    Status = EfipRk808I2cRead8(RK808_CHIP, RK808_DEVICE_CONTROL, &Value);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    Value |= RK808_DEVICE_CONTROL_SHUTDOWN;
+    return EfipRk808I2cWrite8(RK808_CHIP, RK808_DEVICE_CONTROL, Value);
 }
 
 //

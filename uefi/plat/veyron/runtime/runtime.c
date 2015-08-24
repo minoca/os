@@ -234,11 +234,11 @@ Return Value:
 {
 
     //
-    // Convert the CRU base for reset.
+    // Convert the platform bases for reset and the RTC.
     //
 
     EfiConvertPointer(0, &EfiRk32I2cPmuBase);
-    EfiConvertPointer(0, &EfiRk32CruBase);
+    EfiConvertPointer(0, &EfiRk32Gpio0Base);
     return;
 }
 
