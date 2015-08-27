@@ -4,15 +4,15 @@
 #
 #   Module Name:
 #
-#       GPIO
+#       SPI
 #
 #   Abstract:
 #
-#       This directory contains drivers related to General Purpose Input/Output.
+#       This directory contains drivers related to SPI peripherals.
 #
 #   Author:
 #
-#       Evan Green 4-Aug-2015
+#       Evan Green 14-Aug-2015
 #
 #   Environment:
 #
@@ -20,13 +20,7 @@
 #
 ################################################################################
 
-GPIO_DRIVERS = rockchip \
-               ti       \
-
-DIRS = core             \
-       $(GPIO_DRIVERS)  \
+DIRS = rk32spi          \
 
 include $(SRCROOT)/os/minoca.mk
-
-$(GPIO_DRIVERS): core
 

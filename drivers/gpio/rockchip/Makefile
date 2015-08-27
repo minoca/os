@@ -4,15 +4,15 @@
 #
 #   Module Name:
 #
-#       GPIO
+#       RockChip
 #
 #   Abstract:
 #
-#       This directory contains drivers related to General Purpose Input/Output.
+#       This directory contains GPIO drivers for RockChip SoCs.
 #
 #   Author:
 #
-#       Evan Green 4-Aug-2015
+#       Evan Green 25-Aug-2015
 #
 #   Environment:
 #
@@ -20,13 +20,7 @@
 #
 ################################################################################
 
-GPIO_DRIVERS = rockchip \
-               ti       \
-
-DIRS = core             \
-       $(GPIO_DRIVERS)  \
+DIRS = rk32 \
 
 include $(SRCROOT)/os/minoca.mk
-
-$(GPIO_DRIVERS): core
 

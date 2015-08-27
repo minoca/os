@@ -566,10 +566,15 @@ Return Value:
     }
 
     //
-    // Also create an empty GPIO arbiter.
+    // Also create an empty GPIO arbiter and an empty simple bus arbiter.
     //
 
     Status = IoCreateResourceArbiter(IoRootDevice, ResourceTypeGpio);
+    if (!KSUCCESS(Status)) {
+        goto InitializeResourceAllocationEnd;
+    }
+
+    Status = IoCreateResourceArbiter(IoRootDevice, ResourceTypeSimpleBus);
     if (!KSUCCESS(Status)) {
         goto InitializeResourceAllocationEnd;
     }

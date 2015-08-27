@@ -34,6 +34,7 @@ DIRS = acpi      \
        plat      \
        ramdisk   \
        sd        \
+       spb       \
        special   \
        term      \
        usb       \
@@ -45,4 +46,5 @@ include $(SRCROOT)/os/minoca.mk
 i8042 usb: usrinput
 ata usb: part
 net: usb
+plat: usrinput spb
 

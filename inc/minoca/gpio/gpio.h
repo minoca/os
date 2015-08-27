@@ -317,7 +317,7 @@ Return Value:
 
 Structure Description:
 
-    This structure defines the pin configuration for a GPIO pin.
+    This structure defines the interface to a GPIO pin.
 
 Members:
 

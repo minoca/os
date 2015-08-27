@@ -460,7 +460,7 @@ typedef enum _RK32_CRU_REGISTER {
     Rk32CruSoftReset11 = 0x1E4,
 } RK32_CRU_REGISTER, *PRK32_CRU_REGISTER;
 
-typedef enum RK32_PLL_TYPE {
+typedef enum _RK32_PLL_TYPE {
     Rk32PllNew,
     Rk32PllGeneral,
     Rk32PllCodec,
@@ -502,7 +502,7 @@ typedef enum _RK32_GPIO_REGISTER {
     Rk32GpioPortAData = 0x00,
     Rk32GpioPortADirection = 0x04,
     Rk32GpioInterruptEnable = 0x30,
-    Rk32GpioInterrupMask = 0x34,
+    Rk32GpioInterruptMask = 0x34,
     Rk32GpioInterruptLevel = 0x38,
     Rk32GpioInterruptPolarity = 0x3C,
     Rk32GpioInterruptStatus = 0x40,

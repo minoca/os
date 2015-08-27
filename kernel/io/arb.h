@@ -57,6 +57,7 @@ typedef enum _ARBITER_TYPE {
     ArbiterTypeBusNumber = ResourceTypeBusNumber,
     ArbiterTypeVendorSpecific = ResourceTypeVendorSpecific,
     ArbiterTypeGpio = ResourceTypeGpio,
+    ArbiterTypeSimpleBus = ResourceTypeSimpleBus,
     ArbiterTypeCount
 } ARBITER_TYPE, *PARBITER_TYPE;
 

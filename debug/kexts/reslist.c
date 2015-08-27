@@ -1618,6 +1618,10 @@ Return Value:
         ResourceType = "GPIO";
         break;
 
+    case ResourceTypeSimpleBus:
+        ResourceType = "SPB";
+        break;
+
     default:
         ResourceType = "INVALID RESOURCE TYPE";
         break;

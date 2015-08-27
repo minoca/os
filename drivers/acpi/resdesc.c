@@ -32,6 +32,18 @@ Environment:
 #include "resdesc.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+#define ASSERT_SPB_UART_CONTROL_LINES_EQUIVALENT()                          \
+    ASSERT((ACPI_SPB_UART_CONTROL_DTD == RESOURCE_SPB_UART_CONTROL_DTD) &&  \
+           (ACPI_SPB_UART_CONTROL_RI == RESOURCE_SPB_UART_CONTROL_RI) &&    \
+           (ACPI_SPB_UART_CONTROL_DSR == RESOURCE_SPB_UART_CONTROL_DSR) &&  \
+           (ACPI_SPB_UART_CONTROL_DTR == RESOURCE_SPB_UART_CONTROL_DTR) &&  \
+           (ACPI_SPB_UART_CONTROL_CTS == RESOURCE_SPB_UART_CONTROL_CTS) &&  \
+           (ACPI_SPB_UART_CONTROL_RTS == RESOURCE_SPB_UART_CONTROL_RTS))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -79,6 +91,43 @@ AcpipParseGpioDescriptor (
     PVOID Buffer,
     ULONG BufferLength,
     PRESOURCE_REQUIREMENT_LIST RequirementList
+    );
+
+KSTATUS
+AcpipParseSpbDescriptor (
+    PACPI_OBJECT NamespaceStart,
+    PVOID Buffer,
+    ULONG BufferLength,
+    PRESOURCE_REQUIREMENT_LIST RequirementList
+    );
+
+KSTATUS
+AcpipParseSpbI2cDescriptor (
+    USHORT TypeSpecificFlags,
+    UCHAR TypeSpecificRevisionId,
+    USHORT TypeDataLength,
+    PUCHAR Buffer,
+    PRESOURCE_REQUIREMENT Requirement,
+    PRESOURCE_SPB_I2C Descriptor
+    );
+
+KSTATUS
+AcpipParseSpbSpiDescriptor (
+    USHORT TypeSpecificFlags,
+    UCHAR TypeSpecificRevisionId,
+    USHORT TypeDataLength,
+    PUCHAR Buffer,
+    PRESOURCE_REQUIREMENT Requirement,
+    PRESOURCE_SPB_SPI Descriptor
+    );
+
+KSTATUS
+AcpipParseSpbUartDescriptor (
+    USHORT TypeSpecificFlags,
+    UCHAR TypeSpecificRevisionId,
+    USHORT TypeDataLength,
+    PUCHAR Buffer,
+    PRESOURCE_SPB_UART Descriptor
     );
 
 //
@@ -603,6 +652,18 @@ Return Value:
                                                   Buffer,
                                                   DescriptorLength,
                                                   CurrentConfiguration);
+
+                if (!KSUCCESS(Status)) {
+                    goto ConvertFromAcpiResourceBufferEnd;
+                }
+
+                break;
+
+            case LARGE_RESOURCE_TYPE_SPB:
+                Status = AcpipParseSpbDescriptor(Device,
+                                                 Buffer,
+                                                 DescriptorLength,
+                                                 CurrentConfiguration);
 
                 if (!KSUCCESS(Status)) {
                     goto ConvertFromAcpiResourceBufferEnd;
@@ -1859,7 +1920,8 @@ Return Value:
     UCHAR ConnectionType;
     PRESOURCE_REQUIREMENT CreatedRequirement;
     USHORT DebounceTimeout;
-    RESOURCE_GPIO_DATA GpioData;
+    PRESOURCE_GPIO_DATA GpioData;
+    UINTN GpioDataSize;
     INTERRUPT_CONTROLLER_INFORMATION InterruptController;
     RESOURCE_REQUIREMENT InterruptRequirement;
     USHORT IoFlags;
@@ -1879,6 +1941,7 @@ Return Value:
 
     BufferPointer = (PUCHAR)Buffer;
     CreatedRequirement = NULL;
+    GpioData = NULL;
     if (BufferLength < 0x14) {
         Status = STATUS_MALFORMED_DATA_STREAM;
         goto ParseGpioDescriptorEnd;
@@ -1908,8 +1971,15 @@ Return Value:
     PinCount = (ResourceSourceNameOffset - PinTableOffset) / 2;
     RtlZeroMemory(&Requirement, sizeof(RESOURCE_REQUIREMENT));
     RtlZeroMemory(&InterruptRequirement, sizeof(RESOURCE_REQUIREMENT));
-    RtlZeroMemory(&GpioData, sizeof(RESOURCE_GPIO_DATA));
-    GpioData.Version = RESOURCE_GPIO_DATA_VERSION;
+    GpioDataSize = sizeof(RESOURCE_GPIO_DATA) + VendorDataLength;
+    GpioData = MmAllocatePagedPool(GpioDataSize, ACPI_RESOURCE_ALLOCATION_TAG);
+    if (GpioData == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto ParseGpioDescriptorEnd;
+    }
+
+    RtlZeroMemory(GpioData, GpioDataSize);
+    GpioData->Version = RESOURCE_GPIO_DATA_VERSION;
 
     //
     // Set the secondary flag on the interrupt requirement since this is a GPIO
@@ -1932,26 +2002,26 @@ Return Value:
 
     switch (ConnectionType) {
     case ACPI_GPIO_CONNECTION_INTERRUPT:
-        Requirement.Characteristics |= GPIO_CHARACTERISTIC_INTERRUPT;
+        GpioData->Flags |= RESOURCE_GPIO_INTERRUPT;
         if ((IoFlags & ACPI_GPIO_WAKE) != 0) {
-            Requirement.Characteristics |= GPIO_CHARACTERISTIC_WAKE;
+            GpioData->Flags |= RESOURCE_GPIO_WAKE;
             InterruptRequirement.Characteristics |= INTERRUPT_LINE_WAKE;
         }
 
         switch (IoFlags & ACPI_GPIO_POLARITY_MASK) {
         case ACPI_GPIO_POLARITY_ACTIVE_HIGH:
-            Requirement.Characteristics |= GPIO_CHARACTERISTIC_ACTIVE_HIGH;
+            GpioData->Flags |= RESOURCE_GPIO_ACTIVE_HIGH;
             InterruptRequirement.Characteristics |= INTERRUPT_LINE_ACTIVE_HIGH;
             break;
 
         case ACPI_GPIO_POLARITY_ACTIVE_LOW:
-            Requirement.Characteristics |= GPIO_CHARACTERISTIC_ACTIVE_LOW;
+            GpioData->Flags |= RESOURCE_GPIO_ACTIVE_LOW;
             InterruptRequirement.Characteristics |= INTERRUPT_LINE_ACTIVE_LOW;
             break;
 
         case ACPI_GPIO_POLARITY_ACTIVE_BOTH:
-            Requirement.Characteristics |= GPIO_CHARACTERISTIC_ACTIVE_HIGH |
-                                           GPIO_CHARACTERISTIC_ACTIVE_HIGH;
+            GpioData->Flags |= RESOURCE_GPIO_ACTIVE_HIGH |
+                               RESOURCE_GPIO_ACTIVE_LOW;
 
             InterruptRequirement.Characteristics |= INTERRUPT_LINE_ACTIVE_HIGH |
                                                     INTERRUPT_LINE_ACTIVE_LOW;
@@ -1966,7 +2036,7 @@ Return Value:
         }
 
         if ((IoFlags & ACPI_GPIO_EDGE_TRIGGERED) != 0) {
-            Requirement.Characteristics |= GPIO_CHARACTERISTIC_EDGE_TRIGGERED;
+            GpioData->Flags |= RESOURCE_GPIO_EDGE_TRIGGERED;
             InterruptRequirement.Characteristics |=
                                                  INTERRUPT_LINE_EDGE_TRIGGERED;
         }
@@ -1977,17 +2047,15 @@ Return Value:
         switch (IoFlags & ACPI_GPIO_IO_RESTRICTION_MASK) {
         case ACPI_GPIO_IO_RESTRICTION_IO:
         case ACPI_GPIO_IO_RESTRICTION_IO_PRESERVE:
-            Requirement.Characteristics |= GPIO_CHARACTERISTIC_INPUT |
-                                           GPIO_CHARACTERISTIC_OUTPUT;
-
+            GpioData->Flags |= RESOURCE_GPIO_INPUT | RESOURCE_GPIO_OUTPUT;
             break;
 
         case ACPI_GPIO_IO_RESTRICTION_INPUT:
-            Requirement.Characteristics |= GPIO_CHARACTERISTIC_INPUT;
+            GpioData->Flags |= RESOURCE_GPIO_INPUT;
             break;
 
         case ACPI_GPIO_IO_RESTRICTION_OUTPUT:
-            Requirement.Characteristics |= GPIO_CHARACTERISTIC_OUTPUT;
+            GpioData->Flags |= RESOURCE_GPIO_OUTPUT;
             break;
 
         default:
@@ -2012,36 +2080,37 @@ Return Value:
         break;
 
     case ACPI_GPIO_PIN_PULL_UP:
-        Requirement.Characteristics |= GPIO_CHARACTERISTIC_PULL_UP;
+        GpioData->Flags |= RESOURCE_GPIO_PULL_UP;
         break;
 
     case ACPI_GPIO_PIN_PULL_DOWN:
-        Requirement.Characteristics |= GPIO_CHARACTERISTIC_PULL_DOWN;
+        GpioData->Flags |= RESOURCE_GPIO_PULL_DOWN;
         break;
 
     case ACPI_GPIO_PIN_PULL_NONE:
-        Requirement.Characteristics |= GPIO_CHARACTERISTIC_PULL_NONE;
+        GpioData->Flags |= RESOURCE_GPIO_PULL_NONE;
         break;
     }
 
     if (OutputDrive == ACPI_GPIO_OUTPUT_DRIVE_DEFAULT) {
-        GpioData.OutputDriveStrength = RESOURCE_GPIO_DEFAULT_DRIVE_STRENGTH;
+        GpioData->OutputDriveStrength = RESOURCE_GPIO_DEFAULT_DRIVE_STRENGTH;
 
     } else {
-        GpioData.OutputDriveStrength = OutputDrive * 10;
+        GpioData->OutputDriveStrength = OutputDrive * 10;
     }
 
     if (DebounceTimeout == ACPI_GPIO_DEBOUNCE_TIMEOUT_DEFAULT) {
-        GpioData.DebounceTimeout = RESOURCE_GPIO_DEFAULT_DEBOUNCE_TIMEOUT;
+        GpioData->DebounceTimeout = RESOURCE_GPIO_DEFAULT_DEBOUNCE_TIMEOUT;
 
     } else {
-        GpioData.DebounceTimeout = DebounceTimeout * 10;
+        GpioData->DebounceTimeout = DebounceTimeout * 10;
     }
 
-    GpioData.VendorData = VendorData;
-    GpioData.VendorDataSize = VendorDataLength;
-    Requirement.Data = &GpioData;
-    Requirement.DataSize = sizeof(RESOURCE_GPIO_DATA) + VendorDataLength;
+    RtlCopyMemory(GpioData + 1, VendorData, VendorDataLength);
+    GpioData->VendorDataOffset = sizeof(RESOURCE_GPIO_DATA);
+    GpioData->VendorDataSize = VendorDataLength;
+    Requirement.Data = GpioData;
+    Requirement.DataSize = GpioDataSize;
 
     //
     // Find the device providing the GPIO resource.
@@ -2114,9 +2183,7 @@ Return Value:
         // have interrupts serviced via GPIO.
         //
 
-        if ((Requirement.Characteristics &
-             GPIO_CHARACTERISTIC_INTERRUPT) != 0) {
-
+        if ((GpioData->Flags & RESOURCE_GPIO_INTERRUPT) != 0) {
             InterruptRequirement.Length = Requirement.Length;
             InterruptRequirement.Flags = Requirement.Flags;
 
@@ -2158,6 +2225,539 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 ParseGpioDescriptorEnd:
+    if (GpioData != NULL) {
+        MmFreePagedPool(GpioData);
+    }
+
     return Status;
+}
+
+KSTATUS
+AcpipParseSpbDescriptor (
+    PACPI_OBJECT NamespaceStart,
+    PVOID Buffer,
+    ULONG BufferLength,
+    PRESOURCE_REQUIREMENT_LIST RequirementList
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts an ACPI Simple Peripheral Bus resource descriptor
+    into a resource requirement, and puts that requirement on the given
+    requirement list.
+
+Arguments:
+
+    NamespaceStart - Supplies a pointer to the starting point for namespace
+        traversals.
+
+    Buffer - Supplies a pointer to the SPB descriptor buffer, pointing after
+        the length bytes.
+
+    BufferLength - Supplies the length of the descriptor buffer.
+
+    RequirementList - Supplies a pointer to the resource requirement list to
+        put the descriptor on.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PUCHAR BufferPointer;
+    UCHAR BusType;
+    UCHAR GeneralFlags;
+    RESOURCE_SPB_I2C I2cDescriptor;
+    PACPI_OBJECT Provider;
+    RESOURCE_REQUIREMENT Requirement;
+    PSTR SourceName;
+    PVOID SpbData;
+    PRESOURCE_SPB_DATA SpbDataSource;
+    UINTN SpbDataSourceSize;
+    RESOURCE_SPB_SPI SpiDescriptor;
+    KSTATUS Status;
+    USHORT TypeDataLength;
+    USHORT TypeSpecificFlags;
+    UCHAR TypeSpecificRevisionId;
+    RESOURCE_SPB_UART UartDescriptor;
+    PVOID VendorData;
+    ULONG VendorDataLength;
+
+    BufferPointer = Buffer;
+    SpbData = NULL;
+    if (BufferLength < 0x0F) {
+        Status = STATUS_MALFORMED_DATA_STREAM;
+        goto ParseSpbDescriptorEnd;
+    }
+
+    RtlZeroMemory(&Requirement, sizeof(RESOURCE_REQUIREMENT));
+
+    //
+    // Check the revision.
+    //
+
+    if (*BufferPointer < 1) {
+        Status = STATUS_MALFORMED_DATA_STREAM;
+        goto ParseSpbDescriptorEnd;
+    }
+
+    BusType = *(BufferPointer + 2);
+    GeneralFlags = *(BufferPointer + 3);
+    TypeSpecificFlags = READ_UNALIGNED16(BufferPointer + 4);
+    TypeSpecificRevisionId = *(BufferPointer + 6);
+    TypeDataLength = READ_UNALIGNED16(BufferPointer + 7);
+    SourceName = (PSTR)(BufferPointer + 9 + TypeDataLength);
+    if (BufferLength < 9 + TypeDataLength) {
+        Status = STATUS_MALFORMED_DATA_STREAM;
+        goto ParseSpbDescriptorEnd;
+    }
+
+    switch (BusType) {
+    case ACPI_SPB_BUS_I2C:
+        VendorData = BufferPointer + 9 + ACPI_SPB_I2C_TYPE_DATA_LENGTH;
+        VendorDataLength = TypeDataLength - ACPI_SPB_I2C_TYPE_DATA_LENGTH;
+        Status = AcpipParseSpbI2cDescriptor(TypeSpecificFlags,
+                                            TypeSpecificRevisionId,
+                                            TypeDataLength,
+                                            Buffer + 9,
+                                            &Requirement,
+                                            &I2cDescriptor);
+
+        SpbDataSource = &(I2cDescriptor.Header);
+        SpbDataSourceSize = sizeof(RESOURCE_SPB_I2C);
+        break;
+
+    case ACPI_SPB_BUS_SPI:
+        VendorData = BufferPointer + 9 + ACPI_SPB_SPI_TYPE_DATA_LENGTH;
+        VendorDataLength = TypeDataLength - ACPI_SPB_SPI_TYPE_DATA_LENGTH;
+        Status = AcpipParseSpbSpiDescriptor(TypeSpecificFlags,
+                                            TypeSpecificRevisionId,
+                                            TypeDataLength,
+                                            Buffer + 9,
+                                            &Requirement,
+                                            &SpiDescriptor);
+
+        SpbDataSource = &(SpiDescriptor.Header);
+        SpbDataSourceSize = sizeof(RESOURCE_SPB_SPI);
+        break;
+
+    case ACPI_SPB_BUS_UART:
+        VendorData = BufferPointer + 9 + ACPI_SPB_UART_TYPE_DATA_LENGTH;
+        VendorDataLength = TypeDataLength - ACPI_SPB_UART_TYPE_DATA_LENGTH;
+        Status = AcpipParseSpbUartDescriptor(TypeSpecificFlags,
+                                             TypeSpecificRevisionId,
+                                             TypeDataLength,
+                                             Buffer + 9,
+                                             &UartDescriptor);
+
+        SpbDataSource = &(UartDescriptor.Header);
+        SpbDataSourceSize = sizeof(RESOURCE_SPB_UART);
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        Status = STATUS_MALFORMED_DATA_STREAM;
+        break;
+    }
+
+    if (!KSUCCESS(Status)) {
+        goto ParseSpbDescriptorEnd;
+    }
+
+    //
+    // Parse the general flags, which are not specific to any bus type.
+    //
+
+    if ((GeneralFlags & ACPI_SPB_FLAG_SLAVE) != 0) {
+        SpbDataSource->Flags |= RESOURCE_SPB_DATA_SLAVE;
+    }
+
+    SpbDataSource->VendorDataOffset = SpbDataSourceSize;
+    SpbDataSource->VendorDataSize = VendorDataLength;
+
+    //
+    // Find the device providing the resource.
+    //
+
+    Provider = AcpipGetNamespaceObject(SourceName, NamespaceStart);
+    if (Provider == NULL) {
+        RtlDebugPrint("ACPI: Failed to find SPB device '%s'\n", SourceName);
+        Status = STATUS_INVALID_CONFIGURATION;
+        goto ParseSpbDescriptorEnd;
+    }
+
+    if (Provider->Type != AcpiObjectDevice) {
+
+        ASSERT(FALSE);
+
+        Status = STATUS_INVALID_CONFIGURATION;
+        goto ParseSpbDescriptorEnd;
+    }
+
+    //
+    // If the SPB device is not yet started, then fail for now and try again
+    // when it's ready.
+    //
+
+    if (Provider->U.Device.IsDeviceStarted == FALSE) {
+        Status = STATUS_NOT_READY;
+        goto ParseSpbDescriptorEnd;
+    }
+
+    Requirement.Type = ResourceTypeSimpleBus;
+    Requirement.Provider = Provider->U.Device.OsDevice;
+
+    ASSERT(Requirement.Provider != NULL);
+
+    SpbData = MmAllocatePagedPool(SpbDataSourceSize + VendorDataLength,
+                                  ACPI_RESOURCE_ALLOCATION_TAG);
+
+    if (SpbData == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto ParseSpbDescriptorEnd;
+    }
+
+    RtlCopyMemory(SpbData, SpbDataSource, SpbDataSourceSize);
+    if (VendorDataLength != 0) {
+        RtlCopyMemory(SpbData + SpbDataSourceSize,
+                      VendorData,
+                      VendorDataLength);
+    }
+
+    Requirement.Data = SpbData;
+    Requirement.DataSize = SpbDataSourceSize + VendorDataLength;
+    Status = IoCreateAndAddResourceRequirement(&Requirement,
+                                               RequirementList,
+                                               NULL);
+
+    if (!KSUCCESS(Status)) {
+        goto ParseSpbDescriptorEnd;
+    }
+
+    Status = STATUS_SUCCESS;
+
+ParseSpbDescriptorEnd:
+    if (SpbData != NULL) {
+        MmFreePagedPool(SpbData);
+    }
+
+    return Status;
+}
+
+KSTATUS
+AcpipParseSpbI2cDescriptor (
+    USHORT TypeSpecificFlags,
+    UCHAR TypeSpecificRevisionId,
+    USHORT TypeDataLength,
+    PUCHAR Buffer,
+    PRESOURCE_REQUIREMENT Requirement,
+    PRESOURCE_SPB_I2C Descriptor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine parses the bus type specific contents of an I2C resource
+    descriptor.
+
+Arguments:
+
+    TypeSpecificFlags - Supplies the type specific flags.
+
+    TypeSpecificRevisionId - Supplies the type specific revision identifier.
+
+    TypeDataLength - Supplies the type data length.
+
+    Buffer - Supplies a pointer to the descriptor buffer, pointing to the type
+        specific data.
+
+    Requirement - Supplies a pointer to the resource requirement.
+
+    Descriptor - Supplies a pointer where the descriptor will be returned on
+        success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    //
+    // Check the revision.
+    //
+
+    if ((TypeSpecificRevisionId < 1) ||
+        (TypeDataLength < ACPI_SPB_I2C_TYPE_DATA_LENGTH)) {
+
+        return STATUS_MALFORMED_DATA_STREAM;
+    }
+
+    RtlZeroMemory(Descriptor, sizeof(RESOURCE_SPB_I2C));
+    Descriptor->Header.Version = RESOURCE_SPB_DATA_VERSION;
+    Descriptor->Header.Size = sizeof(RESOURCE_SPB_I2C);
+    Descriptor->Header.BusType = ResourceSpbBusI2c;
+    Descriptor->Speed = READ_UNALIGNED32(Buffer);
+    Descriptor->SlaveAddress = READ_UNALIGNED16(Buffer + 4);
+    if ((TypeSpecificFlags & ACPI_SPB_I2C_10_BIT_ADDRESSING) != 0) {
+        Descriptor->Flags |= RESOURCE_SPB_I2C_10_BIT_ADDRESSING;
+    }
+
+    Requirement->Minimum = Descriptor->SlaveAddress;
+    Requirement->Maximum = Requirement->Minimum + 1;
+    Requirement->Length = 1;
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+AcpipParseSpbSpiDescriptor (
+    USHORT TypeSpecificFlags,
+    UCHAR TypeSpecificRevisionId,
+    USHORT TypeDataLength,
+    PUCHAR Buffer,
+    PRESOURCE_REQUIREMENT Requirement,
+    PRESOURCE_SPB_SPI Descriptor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine parses the bus type specific contents of an SPI resource
+    descriptor.
+
+Arguments:
+
+    TypeSpecificFlags - Supplies the type specific flags.
+
+    TypeSpecificRevisionId - Supplies the type specific revision identifier.
+
+    TypeDataLength - Supplies the type data length.
+
+    Buffer - Supplies a pointer to the descriptor buffer, pointing to the type
+        specific data.
+
+    Requirement - Supplies a pointer to the resource requirement.
+
+    Descriptor - Supplies a pointer where the descriptor will be returned on
+        success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UCHAR Phase;
+    UCHAR Polarity;
+
+    //
+    // Check the revision.
+    //
+
+    if ((TypeSpecificRevisionId < 1) ||
+        (TypeDataLength < ACPI_SPB_SPI_TYPE_DATA_LENGTH)) {
+
+        return STATUS_MALFORMED_DATA_STREAM;
+    }
+
+    RtlZeroMemory(Descriptor, sizeof(RESOURCE_SPB_SPI));
+    Descriptor->Header.Version = RESOURCE_SPB_DATA_VERSION;
+    Descriptor->Header.Size = sizeof(RESOURCE_SPB_SPI);
+    Descriptor->Header.BusType = ResourceSpbBusSpi;
+    Descriptor->Speed = READ_UNALIGNED32(Buffer);
+    Descriptor->WordSize = *(Buffer + 4);
+    Phase = *(Buffer + 5);
+    Polarity = *(Buffer + 6);
+    Descriptor->DeviceSelect = READ_UNALIGNED16(Buffer + 7);
+    if (Phase == ACPI_SPB_SPI_PHASE_SECOND) {
+        Descriptor->Flags |= RESOURCE_SPB_SPI_SECOND_PHASE;
+    }
+
+    if (Polarity == ACPI_SPB_SPI_POLARITY_START_HIGH) {
+        Descriptor->Flags |= RESOURCE_SPB_SPI_START_HIGH;
+    }
+
+    if ((TypeSpecificFlags & ACPI_SPB_SPI_3_WIRES) != 0) {
+        Descriptor->Flags |= RESOURCE_SPB_SPI_3_WIRES;
+    }
+
+    if ((TypeSpecificFlags & ACPI_SPB_SPI_DEVICE_SELECT_ACTIVE_HIGH) != 0) {
+        Descriptor->Flags |= RESOURCE_SPB_SPI_DEVICE_SELECT_ACTIVE_HIGH;
+    }
+
+    if (Descriptor->DeviceSelect != 0) {
+        Requirement->Minimum =
+                             RtlCountTrailingZeros32(Descriptor->DeviceSelect);
+
+        Requirement->Maximum = Requirement->Minimum + 1;
+        Requirement->Length = 1;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+AcpipParseSpbUartDescriptor (
+    USHORT TypeSpecificFlags,
+    UCHAR TypeSpecificRevisionId,
+    USHORT TypeDataLength,
+    PUCHAR Buffer,
+    PRESOURCE_SPB_UART Descriptor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine parses the bus type specific contents of a UART resource
+    descriptor.
+
+Arguments:
+
+    TypeSpecificFlags - Supplies the type specific flags.
+
+    TypeSpecificRevisionId - Supplies the type specific revision identifier.
+
+    TypeDataLength - Supplies the type data length.
+
+    Buffer - Supplies a pointer to the descriptor buffer, pointing to the type
+        specific data.
+
+    Descriptor - Supplies a pointer where the descriptor will be returned on
+        success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UCHAR Parity;
+
+    //
+    // Check the revision.
+    //
+
+    if ((TypeSpecificRevisionId < 1) ||
+        (TypeDataLength < ACPI_SPB_UART_TYPE_DATA_LENGTH)) {
+
+        return STATUS_MALFORMED_DATA_STREAM;
+    }
+
+    RtlZeroMemory(Descriptor, sizeof(RESOURCE_SPB_UART));
+    Descriptor->Header.Version = RESOURCE_SPB_DATA_VERSION;
+    Descriptor->Header.Size = sizeof(RESOURCE_SPB_UART);
+    Descriptor->Header.BusType = ResourceSpbBusUart;
+    Descriptor->BaudRate = READ_UNALIGNED32(Buffer);
+    Descriptor->RxFifoSize = READ_UNALIGNED16(Buffer + 4);
+    Descriptor->TxFifoSize = READ_UNALIGNED16(Buffer + 6);
+    Parity = *(Buffer + 8);
+
+    //
+    // The ACPI control line definitions happen to match up to the OS
+    // definitions.
+    //
+
+    ASSERT_SPB_UART_CONTROL_LINES_EQUIVALENT();
+
+    Descriptor->ControlLines = *(Buffer + 9);
+    switch (Parity) {
+    case ACPI_SPB_UART_PARITY_NONE:
+        break;
+
+    case ACPI_SPB_UART_PARITY_EVEN:
+        Descriptor->Flags |= RESOURCE_SPB_UART_PARITY_EVEN;
+        break;
+
+    case ACPI_SPB_UART_PARITY_ODD:
+        Descriptor->Flags |= RESOURCE_SPB_UART_PARITY_ODD;
+        break;
+
+    case ACPI_SPB_UART_PARITY_MARK:
+        Descriptor->Flags |= RESOURCE_SPB_UART_PARITY_MARK;
+        break;
+
+    case ACPI_SPB_UART_PARITY_SPACE:
+        Descriptor->Flags |= RESOURCE_SPB_UART_PARITY_SPACE;
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        break;
+    }
+
+    if ((TypeSpecificFlags & ACPI_SPB_UART_BIG_ENDIAN) != 0) {
+        Descriptor->Flags |= RESOURCE_SPB_UART_BIG_ENDIAN;
+    }
+
+    switch (TypeSpecificFlags & ACPI_SPB_UART_FLOW_CONTROL_MASK) {
+    case ACPI_SPB_UART_FLOW_CONTROL_NONE:
+        break;
+
+    case ACPI_SPB_UART_FLOW_CONTROL_HARDWARE:
+        Descriptor->Flags |= RESOURCE_SPB_UART_FLOW_CONTROL_HARDWARE;
+        break;
+
+    case ACPI_SPB_UART_FLOW_CONTROL_SOFTWARE:
+        Descriptor->Flags |= RESOURCE_SPB_UART_FLOW_CONTROL_SOFTWARE;
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        break;
+    }
+
+    switch (TypeSpecificFlags & ACPI_SPB_UART_STOP_BITS_MASK) {
+    case ACPI_SPB_UART_STOP_BITS_NONE:
+        Descriptor->Flags |= RESOURCE_SPB_UART_STOP_BITS_NONE;
+        break;
+
+    case ACPI_SPB_UART_STOP_BITS_1:
+        Descriptor->Flags |= RESOURCE_SPB_UART_STOP_BITS_1;
+        break;
+
+    case ACPI_SPB_UART_STOP_BITS_1_5:
+        Descriptor->Flags |= RESOURCE_SPB_UART_STOP_BITS_1_5;
+        break;
+
+    case ACPI_SPB_UART_STOP_BITS_2:
+        Descriptor->Flags |= RESOURCE_SPB_UART_STOP_BITS_2;
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        break;
+    }
+
+    //
+    // The data bits values just go 5-9 in increasing order, so just use that
+    // value directly (with an offset of 5 of course).
+    //
+
+    Descriptor->DataBits = ((TypeSpecificFlags &
+                             ACPI_SPB_UART_DATA_BITS_MASK) >>
+                            ACPI_SPB_UART_DATA_BITS_SHIFT) + 5;
+
+    return STATUS_SUCCESS;
 }
 

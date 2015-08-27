@@ -20,6 +20,8 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
+#define GPIO_API DLLEXPORT
+
 #include <minoca/gpio/gpiohost.h>
 
 //

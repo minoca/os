@@ -27,7 +27,17 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define ACPI_ALLOCATION_TAG 0x49504341 // 'IPCA'
+//
+// Define the ACPI allocation tag: ACPI.
+//
+
+#define ACPI_ALLOCATION_TAG 0x49504341
+
+//
+// Define the ACPI resource allocation tag: AcpR.
+//
+
+#define ACPI_RESOURCE_ALLOCATION_TAG 0x52706341
 
 //
 // ------------------------------------------------------ Data Type Definitions

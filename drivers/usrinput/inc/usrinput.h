@@ -306,11 +306,18 @@ Structure Description:
 
 Members:
 
-    Type - Stores the device type.
+    EventIdentifier - Stores a unique event ID, assigned when the event is
+        reported.
 
-    Identifier - Stores the unique identifier assigned to the device.
+    DeviceIdentifier - Stores the unique identifier assigned to the device.
 
-    Device - Stores a pointer to the OS device associated with this context.
+    DeviceType - Stores the type of device reporting the event.
+
+    EventType - Stores the type of event occurring.
+
+    U - Stores the union of possible event data.
+
+        Key - Stores the keyboard key being affected.
 
 --*/
 
@@ -392,7 +399,8 @@ Members:
 
     Type - Stores the type of user input device being described.
 
-    InterfaceVersion - Stores the version of the device interface.
+    InterfaceVersion - Stores the version of the device interface. For
+        keyboards, set to USER_INPUT_KEYBOARD_DEVICE_INTERFACE_VERSION.
 
     KeyboardInterface - Stores the interface (function table) for a keyboard
         user input device.

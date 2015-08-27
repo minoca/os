@@ -32,7 +32,10 @@ fi
 DRIVERS="$DRIVERS
 dwhci.drv
 sdrk32xx.drv
-smsc95xx.drv"
+smsc95xx.drv
+rk32spi.drv
+goec.drv
+rk32gpio.drv"
 
 BOOT_DRIVERS="$BOOT_DRIVERS
 sdrk32xx.drv"

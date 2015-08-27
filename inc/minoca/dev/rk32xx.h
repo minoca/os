@@ -154,6 +154,14 @@ Author:
 //
 
 typedef enum _RK32_CRU_REGISTER {
+    Rk32CruArmPllConfiguration0 = 0x00,
+    Rk32CruArmPllConfiguration1 = 0x04,
+    Rk32CruArmPllConfiguration2 = 0x08,
+    Rk32CruArmPllConfiguration3 = 0x0C,
+    Rk32CruDdrPllConfiguration0 = 0x10,
+    Rk32CruDdrPllConfiguration1 = 0x14,
+    Rk32CruDdrPllConfiguration2 = 0x18,
+    Rk32CruDdrPllConfiguration3 = 0x1C,
     Rk32CruCodecPllConfiguration0 = 0x20,
     Rk32CruCodecPllConfiguration1 = 0x24,
     Rk32CruCodecPllConfiguration2 = 0x28,
@@ -162,8 +170,15 @@ typedef enum _RK32_CRU_REGISTER {
     Rk32CruGeneralPllConfiguration1 = 0x34,
     Rk32CruGeneralPllConfiguration2 = 0x38,
     Rk32CruGeneralPllConfiguration3 = 0x3C,
+    Rk32CruNewPllConfiguration0 = 0x40,
+    Rk32CruNewPllConfiguration1 = 0x44,
+    Rk32CruNewPllConfiguration2 = 0x48,
+    Rk32CruNewPllConfiguration3 = 0x4C,
     Rk32CruModeControl = 0x50,
+    Rk32CruClockSelect0 = 0x60,
+    Rk32CruClockSelect1 = 0x64,
     Rk32CruClockSelect11 = 0x8C,
+    Rk32CruClockSelect33 = 0xE4,
     Rk32CruGlobalReset1 = 0x1B0,
     Rk32CruGlobalReset2 = 0x1B4,
     Rk32CruSoftReset0 = 0x1B8,
@@ -187,6 +202,21 @@ typedef enum _RK32_GRF_REGISTER {
     Rk32GrfSocStatus1 = 0x284,
     Rk32GrfIoVsel = 0x380,
 } RK32_GRF_REGISTER, *PRK32_GRF_REGISTER;
+
+typedef enum _RK32_GPIO_REGISTER {
+    Rk32GpioPortAData = 0x00,
+    Rk32GpioPortADirection = 0x04,
+    Rk32GpioInterruptEnable = 0x30,
+    Rk32GpioInterruptMask = 0x34,
+    Rk32GpioInterruptLevel = 0x38,
+    Rk32GpioInterruptPolarity = 0x3C,
+    Rk32GpioInterruptStatus = 0x40,
+    Rk32GpioRawInterruptStatus = 0x44,
+    Rk32GpioDebounce = 0x48,
+    Rk32GpioClearInterrupt = 0x4C,
+    Rk32GpioPortAExternal = 0x50,
+    Rk32GpioLevelSensitiveSync = 0x60,
+} RK32_GPIO_REGISTER, *PRK32_GPIO_REGISTER;
 
 /*++
 

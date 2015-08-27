@@ -522,6 +522,34 @@ Return Value:
 --*/
 
 KERNEL_API
+VOID
+HlContinueInterrupt (
+    HANDLE InterruptHandle,
+    INTERRUPT_STATUS Status
+    );
+
+/*++
+
+Routine Description:
+
+    This routine continues an interrupt that was previously deferred at low
+    level.
+
+Arguments:
+
+    InterruptHandle - Supplies the connected interrupt handle.
+
+    Status - Supplies the final interrupt status that would have been returned
+        had the interrupt not been deferred. This must either be claimed or
+        not claimed.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
 INTERRUPT_STATUS
 HlSecondaryInterruptControllerService (
     PVOID Context

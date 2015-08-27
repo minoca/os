@@ -1605,211 +1605,186 @@ Return Value:
 
     RtlCopyMemory(&(Interrupt->Line), &SourceLine, sizeof(INTERRUPT_LINE));
 
+    ASSERT(SourceLine.Type == InterruptLineControllerSpecified);
+
     //
-    // Loop through chains of interrupt controllers until the desired output
-    // line is reached.
+    // Get the controller and line segment associated with these lines.
     //
 
-    while (TRUE) {
+    Status = HlpInterruptFindLines(&SourceLine,
+                                   &Controller,
+                                   &Lines,
+                                   &LineOffset);
 
-        ASSERT(SourceLine.Type == InterruptLineControllerSpecified);
+    if (!KSUCCESS(Status)) {
+        goto InterruptSetLineStateEnd;
+    }
 
-        //
-        // Get the controller and line segment associated with these lines.
-        //
+    //
+    // Save the old state and mark that it needs to be reverted if failed.
+    //
 
-        Status = HlpInterruptFindLines(&SourceLine,
-                                       &Controller,
-                                       &Lines,
-                                       &LineOffset);
+    RtlCopyMemory(&OldState,
+                  &(Lines->State[LineOffset]),
+                  sizeof(INTERRUPT_LINE_INTERNAL_STATE));
 
-        if (!KSUCCESS(Status)) {
+    ModifiedState = TRUE;
+
+    //
+    // The interrupt is being disabled. Unless this is the last one,
+    // just decrement the reference count and return.
+    //
+
+    if (InterruptEnabled == FALSE) {
+
+        ASSERT(Lines->State[LineOffset].ReferenceCount > 0);
+
+        Lines->State[LineOffset].ReferenceCount -= 1;
+        if ((Lines->State[LineOffset].ReferenceCount > 0) &&
+            (Lines->Type == InterruptLinesStandardPin)) {
+
+            Status = STATUS_SUCCESS;
             goto InterruptSetLineStateEnd;
         }
 
         //
-        // Save the old state and mark that it needs to be reverted if failed.
+        // If this was the last reference, re-program the line.
         //
 
-        RtlCopyMemory(&OldState,
-                      &(Lines->State[LineOffset]),
-                      sizeof(INTERRUPT_LINE_INTERNAL_STATE));
-
-        ModifiedState = TRUE;
-
-        //
-        // The interrupt is being disabled. Unless this is the last one,
-        // just decrement the reference count and return.
-        //
-
-        if (InterruptEnabled == FALSE) {
-
-            ASSERT(Lines->State[LineOffset].ReferenceCount > 0);
-
-            Lines->State[LineOffset].ReferenceCount -= 1;
-            if ((Lines->State[LineOffset].ReferenceCount > 0) &&
-                (Lines->Type == InterruptLinesStandardPin)) {
-
-                Status = STATUS_SUCCESS;
-                goto InterruptSetLineStateEnd;
-            }
-
-            //
-            // If this was the last reference, re-program the line.
-            //
-
-            Lines->State[LineOffset].PublicState.Flags &=
-                                            ~INTERRUPT_LINE_STATE_FLAG_ENABLED;
-
-            Status = Controller->FunctionTable.SetLineState(
-                                      Controller->PrivateContext,
-                                      &SourceLine,
-                                      &(Lines->State[LineOffset].PublicState));
-
-            if (!KSUCCESS(Status)) {
-                goto InterruptSetLineStateEnd;
-            }
-
-            RtlZeroMemory(&(Lines->State[LineOffset]),
-                          sizeof(INTERRUPT_LINE_INTERNAL_STATE));
-
-            ModifiedState = FALSE;
-            goto InterruptSetLineStateEnd;
-        }
-
-        //
-        // If this is a primary interrupt controller (like the APIC or the
-        // GIC), then the run-level is a function of the vector. If this is a
-        // secondary interrupt controller, then this interrupt comes in at the
-        // same run-level as its parent.
-        //
-
-        if (Controller->RunLevel == RunLevelCount) {
-            Interrupt->RunLevel = VECTOR_TO_RUN_LEVEL(Interrupt->Vector);
-
-        } else {
-            Interrupt->RunLevel = Controller->RunLevel;
-        }
-
-        Interrupt->Mode = Mode;
-        Interrupt->LastTimestamp = 0;
-        Interrupt->InterruptCount = 0;
-        Interrupt->Controller = Controller;
-
-        //
-        // This is an enable; adjust the reference count.
-        //
-
-        ASSERT(Lines->State[LineOffset].ReferenceCount >= 0);
-
-        Lines->State[LineOffset].ReferenceCount += 1;
-        if (Lines->State[LineOffset].ReferenceCount > 1) {
-
-            //
-            // The line had better already be programmed.
-            //
-
-            ASSERT((Lines->State[LineOffset].PublicState.Flags &
-                    INTERRUPT_LINE_STATE_FLAG_ENABLED) != 0);
-
-            //
-            // For standard interrupt lines, there's no need to program
-            // them again.
-            //
-
-            if (Lines->Type == InterruptLinesStandardPin) {
-                Status = STATUS_SUCCESS;
-                goto InterruptSetLineStateEnd;
-            }
-        }
-
-        //
-        // Determine the line configuration.
-        //
-
-        Lines->State[LineOffset].PublicState.Flags = Flags;
-        Lines->State[LineOffset].PublicState.Vector = Interrupt->Vector;
-        Lines->State[LineOffset].PublicState.Mode = Mode;
-        Lines->State[LineOffset].PublicState.Polarity = Polarity;
-        Lines->State[LineOffset].Flags |=
-                                   INTERRUPT_LINE_INTERNAL_STATE_FLAG_RESERVED;
-
-        //
-        // Figure out the output pin this interrupt line should go to.
-        //
-
-        Status = HlpInterruptDetermineRouting(
-                               Controller,
-                               OutputLine,
-                               &(Lines->State[LineOffset].PublicState.Output));
-
-        if (!KSUCCESS(Status)) {
-            goto InterruptSetLineStateEnd;
-        }
-
-        //
-        // Convert the processor set to an interrupt target that the controller
-        // can understand.
-        //
-
-        Status = HlpInterruptConvertProcessorSetToInterruptTarget(
-                               Target,
-                               &(Lines->State[LineOffset].PublicState.Target));
-
-        if (!KSUCCESS(Status)) {
-            goto InterruptSetLineStateEnd;
-        }
-
-        //
-        // Get the hardware priority level corresponding to this run level
-        // (inferred from the vector).
-        //
-
-        Lines->State[LineOffset].PublicState.HardwarePriority =
-                            HlpInterruptConvertRunLevelToHardwarePriority(
-                                                          Controller,
-                                                          Interrupt->RunLevel);
-
-        //
-        // Program the line state.
-        //
+        Lines->State[LineOffset].PublicState.Flags &=
+                                        ~INTERRUPT_LINE_STATE_FLAG_ENABLED;
 
         Status = Controller->FunctionTable.SetLineState(
-                                      Controller->PrivateContext,
-                                      &SourceLine,
-                                      &(Lines->State[LineOffset].PublicState));
+                                  Controller->PrivateContext,
+                                  &SourceLine,
+                                  &(Lines->State[LineOffset].PublicState));
 
         if (!KSUCCESS(Status)) {
             goto InterruptSetLineStateEnd;
         }
 
-        //
-        // The state is now consistent with the controller, so forget the need
-        // to undo.
-        //
+        RtlZeroMemory(&(Lines->State[LineOffset]),
+                      sizeof(INTERRUPT_LINE_INTERNAL_STATE));
 
         ModifiedState = FALSE;
-
-        //
-        // If the line was programmed successfully to the destination, then
-        // the operation is complete. Otherwise, set the line to be programmed
-        // to the output line and march (hopefully) towards the actual
-        // destination.
-        //
-
-        ASSERT(Lines->State[LineOffset].PublicState.Output.Type ==
-                                             InterruptLineControllerSpecified);
-
-        if ((Lines->State[LineOffset].PublicState.Output.Controller ==
-             OutputLine->Controller) &&
-            (Lines->State[LineOffset].PublicState.Output.Line ==
-             OutputLine->Line)) {
-
-            break;
-        }
-
-        SourceLine = Lines->State[LineOffset].PublicState.Output;
+        goto InterruptSetLineStateEnd;
     }
+
+    //
+    // If this is a primary interrupt controller (like the APIC or the
+    // GIC), then the run-level is a function of the vector. If this is a
+    // secondary interrupt controller, then this interrupt comes in at the
+    // same run-level as its parent.
+    //
+
+    if (Controller->RunLevel == RunLevelCount) {
+        Interrupt->RunLevel = VECTOR_TO_RUN_LEVEL(Interrupt->Vector);
+
+    } else {
+        Interrupt->RunLevel = Controller->RunLevel;
+    }
+
+    Interrupt->Mode = Mode;
+    Interrupt->LastTimestamp = 0;
+    Interrupt->InterruptCount = 0;
+    Interrupt->Controller = Controller;
+
+    //
+    // This is an enable; adjust the reference count.
+    //
+
+    ASSERT(Lines->State[LineOffset].ReferenceCount >= 0);
+
+    Lines->State[LineOffset].ReferenceCount += 1;
+    if (Lines->State[LineOffset].ReferenceCount > 1) {
+
+        //
+        // The line had better already be programmed.
+        //
+
+        ASSERT((Lines->State[LineOffset].PublicState.Flags &
+                INTERRUPT_LINE_STATE_FLAG_ENABLED) != 0);
+
+        //
+        // For standard interrupt lines, there's no need to program
+        // them again.
+        //
+
+        if (Lines->Type == InterruptLinesStandardPin) {
+            Status = STATUS_SUCCESS;
+            goto InterruptSetLineStateEnd;
+        }
+    }
+
+    //
+    // Determine the line configuration.
+    //
+
+    Lines->State[LineOffset].PublicState.Flags = Flags;
+    Lines->State[LineOffset].PublicState.Vector = Interrupt->Vector;
+    Lines->State[LineOffset].PublicState.Mode = Mode;
+    Lines->State[LineOffset].PublicState.Polarity = Polarity;
+    Lines->State[LineOffset].Flags |=
+                               INTERRUPT_LINE_INTERNAL_STATE_FLAG_RESERVED;
+
+    //
+    // Figure out the output pin this interrupt line should go to.
+    //
+
+    Status = HlpInterruptDetermineRouting(
+                           Controller,
+                           OutputLine,
+                           &(Lines->State[LineOffset].PublicState.Output));
+
+    if (!KSUCCESS(Status)) {
+        goto InterruptSetLineStateEnd;
+    }
+
+    //
+    // Convert the processor set to an interrupt target that the controller
+    // can understand.
+    //
+
+    Status = HlpInterruptConvertProcessorSetToInterruptTarget(
+                           Target,
+                           &(Lines->State[LineOffset].PublicState.Target));
+
+    if (!KSUCCESS(Status)) {
+        goto InterruptSetLineStateEnd;
+    }
+
+    //
+    // Get the hardware priority level corresponding to this run level
+    // (inferred from the vector).
+    //
+
+    Lines->State[LineOffset].PublicState.HardwarePriority =
+                        HlpInterruptConvertRunLevelToHardwarePriority(
+                                                      Controller,
+                                                      Interrupt->RunLevel);
+
+    //
+    // Program the line state.
+    //
+
+    Status = Controller->FunctionTable.SetLineState(
+                                  Controller->PrivateContext,
+                                  &SourceLine,
+                                  &(Lines->State[LineOffset].PublicState));
+
+    if (!KSUCCESS(Status)) {
+        goto InterruptSetLineStateEnd;
+    }
+
+    //
+    // The state is now consistent with the controller, so forget the need
+    // to undo.
+    //
+
+    ModifiedState = FALSE;
+
+    ASSERT(Lines->State[LineOffset].PublicState.Output.Type ==
+                                         InterruptLineControllerSpecified);
 
     Status = STATUS_SUCCESS;
 

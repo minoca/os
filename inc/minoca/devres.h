@@ -85,21 +85,73 @@ Author:
 // Define GPIO characteristics.
 //
 
-#define GPIO_CHARACTERISTIC_INTERRUPT       0x00000001
-#define GPIO_CHARACTERISTIC_INPUT           0x00000002
-#define GPIO_CHARACTERISTIC_OUTPUT          0x00000004
-#define GPIO_CHARACTERISTIC_WAKE            0x00000008
-#define GPIO_CHARACTERISTIC_ACTIVE_HIGH     0x00000010
-#define GPIO_CHARACTERISTIC_ACTIVE_LOW      0x00000020
-#define GPIO_CHARACTERISTIC_EDGE_TRIGGERED  0x00000040
-#define GPIO_CHARACTERISTIC_PULL_UP         0x00000080
-#define GPIO_CHARACTERISTIC_PULL_DOWN       0x00000100
-#define GPIO_CHARACTERISTIC_PULL_NONE \
-    (GPIO_CHARACTERISTIC_PULL_UP | GPIO_CHARACTERISTIC_PULL_DOWN)
+#define RESOURCE_GPIO_INTERRUPT       0x00000001
+#define RESOURCE_GPIO_INPUT           0x00000002
+#define RESOURCE_GPIO_OUTPUT          0x00000004
+#define RESOURCE_GPIO_WAKE            0x00000008
+#define RESOURCE_GPIO_ACTIVE_HIGH     0x00000010
+#define RESOURCE_GPIO_ACTIVE_LOW      0x00000020
+#define RESOURCE_GPIO_EDGE_TRIGGERED  0x00000040
+#define RESOURCE_GPIO_PULL_UP         0x00000080
+#define RESOURCE_GPIO_PULL_DOWN       0x00000100
+#define RESOURCE_GPIO_PULL_NONE \
+    (RESOURCE_GPIO_PULL_UP | RESOURCE_GPIO_PULL_DOWN)
 
 #define RESOURCE_GPIO_DATA_VERSION 1
 #define RESOURCE_GPIO_DEFAULT_DRIVE_STRENGTH ((ULONG)-1)
 #define RESOURCE_GPIO_DEFAULT_DEBOUNCE_TIMEOUT ((ULONG)-1)
+
+//
+// Defie Simple Peripheral Bus characteristics.
+//
+
+#define RESOURCE_SPB_DATA_VERSION 1
+
+#define RESOURCE_SPB_DATA_SLAVE 0x00000001
+
+#define RESOURCE_SPB_I2C_10_BIT_ADDRESSING 0x00000001
+
+#define RESOURCE_SPB_SPI_DEVICE_SELECT_ACTIVE_HIGH 0x00000001
+#define RESOURCE_SPB_SPI_3_WIRES 0x00000002
+
+//
+// The CPHA bit determines whether to sample data on the first phase of the
+// clock or the second phase of the clock.
+//
+
+#define RESOURCE_SPB_SPI_SECOND_PHASE 0x00000004
+
+//
+// The CPOL bit determines whether the clock is low or high during the first
+// phase.
+//
+
+#define RESOURCE_SPB_SPI_START_HIGH 0x00000008
+
+#define RESOURCE_SPB_UART_STOP_BITS_NONE (0x0 << 0)
+#define RESOURCE_SPB_UART_STOP_BITS_1 (0x1 << 0)
+#define RESOURCE_SPB_UART_STOP_BITS_1_5 (0x2 << 0)
+#define RESOURCE_SPB_UART_STOP_BITS_2 (0x3 << 0)
+#define RESOURCE_SPB_UART_STOP_BITS_MASK (0x3 << 0)
+
+#define RESOURCE_SPB_UART_FLOW_CONTROL_HARDWARE 0x00000004
+#define RESOURCE_SPB_UART_FLOW_CONTROL_SOFTWARE 0x00000008
+
+#define RESOURCE_SPB_UART_PARITY_MASK (0xF << 4)
+#define RESOURCE_SPB_UART_PARITY_NONE (0xF << 4)
+#define RESOURCE_SPB_UART_PARITY_EVEN (0xF << 4)
+#define RESOURCE_SPB_UART_PARITY_ODD (0xF << 4)
+#define RESOURCE_SPB_UART_PARITY_MARK (0xF << 4)
+#define RESOURCE_SPB_UART_PARITY_SPACE (0xF << 4)
+
+#define RESOURCE_SPB_UART_BIG_ENDIAN 0x00000100
+
+#define RESOURCE_SPB_UART_CONTROL_DTD (1 << 2)
+#define RESOURCE_SPB_UART_CONTROL_RI (1 << 3)
+#define RESOURCE_SPB_UART_CONTROL_DSR (1 << 4)
+#define RESOURCE_SPB_UART_CONTROL_DTR (1 << 5)
+#define RESOURCE_SPB_UART_CONTROL_CTS (1 << 6)
+#define RESOURCE_SPB_UART_CONTROL_RTS (1 << 7)
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -117,8 +169,17 @@ typedef enum _RESOURCE_TYPE {
     ResourceTypeDmaLine,
     ResourceTypeVendorSpecific,
     ResourceTypeGpio,
+    ResourceTypeSimpleBus,
     ResourceTypeCount,
 } RESOURCE_TYPE, *PRESOURCE_TYPE;
+
+typedef enum _RESOURCE_SPB_BUS_TYPE {
+    ResourceSpbBusInvalid,
+    ResourceSpbBusI2c,
+    ResourceSpbBusSpi,
+    ResourceSpbBusUart,
+    ResourceSpbBusTypeCount
+} RESOURCE_SPB_BUS_TYPE, *PRESOURCE_SPB_BUS_TYPE;
 
 /*++
 
@@ -316,8 +377,11 @@ Members:
     DebounceTimeout - Stores the debounce timeout value for the GPIO resource
         in units of microseconds.
 
-    VendorData - Stores a pointer to the vendor data for this resource. This
-        data is probably immediately after the structure itself.
+    Flags - Stores the GPIO pin configuration and characteristics. See
+        RESOURCE_GPIO_* definitions.
+
+    VendorDataOffset - Stores the offset from the beginning of this structure
+        where the vendor data resides.
 
     VendorDataSize - Stores the size of the vendor data for this resource.
 
@@ -327,9 +391,137 @@ typedef struct _RESOURCE_GPIO_DATA {
     ULONG Version;
     ULONG OutputDriveStrength;
     ULONG DebounceTimeout;
-    PVOID VendorData;
+    ULONG Flags;
+    UINTN VendorDataOffset;
     UINTN VendorDataSize;
 } RESOURCE_GPIO_DATA, *PRESOURCE_GPIO_DATA;
+
+/*++
+
+Structure Description:
+
+    This structure defines the contents of the additional data stored along
+    with a Simple Peripheral Bus resource, or at least the common header of it.
+
+Members:
+
+    Version - Stores the constant RESOURCE_SPB_DATA_VERSION.
+
+    Size - Stores the total size of the resource data, including this
+        structure, the parent structure, and the vendor data.
+
+    BusType - Stores the bus type for this resource, which determines the
+        format of the data at the end of this structure.
+
+    Flags - Stores generic flags for the bus data. See RESOURCE_SPB_DATA_*
+        definitions.
+
+    VendorDataOffset - Stores the offset from the beginning of this structure
+        where the vendor data resides.
+
+    VendorDataSize - Stores the size of the vendor data for this resource.
+
+--*/
+
+typedef struct _RESOURCE_SPB_DATA {
+    ULONG Version;
+    UINTN Size;
+    RESOURCE_SPB_BUS_TYPE BusType;
+    ULONG Flags;
+    UINTN VendorDataOffset;
+    UINTN VendorDataSize;
+} RESOURCE_SPB_DATA, *PRESOURCE_SPB_DATA;
+
+/*++
+
+Structure Description:
+
+    This structure defines the contents of the i2C resource data.
+
+Members:
+
+    Header - Stores the common header.
+
+    Flags - Stores a bitfield of flags. See RESOURCE_SPB_I2C_* definitions.
+
+    Speed - Stores the maximum speed of the bus connection in Hertz.
+
+    SlaveAddress - Stores the slave address of the device on the i2C bus.
+
+--*/
+
+typedef struct _RESOURCE_SPB_I2C {
+    RESOURCE_SPB_DATA Header;
+    ULONG Flags;
+    ULONG Speed;
+    USHORT SlaveAddress;
+} RESOURCE_SPB_I2C, *PRESOURCE_SPB_I2C;
+
+/*++
+
+Structure Description:
+
+    This structure defines the contents of the i2C resource data.
+
+Members:
+
+    Header - Stores the common header.
+
+    Flags - Stores a bitfield of flags. See RESOURCE_SPB_SPI_* definitions.
+
+    Speed - Stores the maximum speed of the bus connection in Hertz.
+
+    WordSize - Stores the size of a word in bits on the bus. When dealing with
+        actual data buffers, this size is rounded up to the nearest power of 2.
+
+    DeviceSelect - Stores the device select bitmask needed to address this
+        device specifically on the SPI bus.
+
+--*/
+
+typedef struct _RESOURCE_SPB_SPI {
+    RESOURCE_SPB_DATA Header;
+    ULONG Flags;
+    ULONG Speed;
+    ULONG WordSize;
+    ULONG DeviceSelect;
+} RESOURCE_SPB_SPI, *PRESOURCE_SPB_SPI;
+
+/*++
+
+Structure Description:
+
+    This structure defines the contents of the UART resource data.
+
+Members:
+
+    Header - Stores the common header.
+
+    DataBits - Stores the number of bits per byte. Valid values are usually
+        five through nine.
+
+    Flags - Stores a bitfield of flags. See RESOURCE_SPB_UART_* definitions.
+
+    BaudRate - Stores the default baud rate of the connection.
+
+    RxFifoSize - Stores the maximum size of a receive buffer, in bytes.
+
+    TxFifoSize - Stoers the maximum size of a transmit buffer, in bytes.
+
+    ControlLines - Stores the control lines to enable. See
+        RESOURCE_SPB_UART_CONTROL_* definitions.
+
+--*/
+
+typedef struct _RESOURCE_SPB_UART {
+    RESOURCE_SPB_DATA Header;
+    ULONG DataBits;
+    ULONG Flags;
+    ULONG BaudRate;
+    USHORT RxFifoSize;
+    USHORT TxFifoSize;
+    USHORT ControlLines;
+} RESOURCE_SPB_UART, *PRESOURCE_SPB_UART;
 
 //
 // -------------------------------------------------------------------- Globals

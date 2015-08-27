@@ -20,5 +20,6 @@
 
 DRIVERS=\
 "$DRIVERS
-gpio.drv"
+gpio.drv
+spb.drv"
 

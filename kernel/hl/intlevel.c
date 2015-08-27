@@ -87,6 +87,67 @@ HlpContinueIsr (
 //
 
 KERNEL_API
+VOID
+HlContinueInterrupt (
+    HANDLE InterruptHandle,
+    INTERRUPT_STATUS Status
+    )
+
+/*++
+
+Routine Description:
+
+    This routine continues an interrupt that was previously deferred at low
+    level.
+
+Arguments:
+
+    InterruptHandle - Supplies the connected interrupt handle.
+
+    Status - Supplies the final interrupt status that would have been returned
+        had the interrupt not been deferred. This must either be claimed or
+        not claimed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PINTERRUPT_CONTROLLER Controller;
+    PKINTERRUPT Interrupt;
+
+    Interrupt = InterruptHandle;
+
+    ASSERT(Status != InterruptStatusDefer);
+
+    //
+    // If this is a deferred interrupt, continue calling ISRs.
+    //
+
+    if ((Status != InterruptStatusClaimed) ||
+        (Interrupt->Mode != InterruptModeLevel)) {
+
+        Status = HlpContinueIsr(Interrupt);
+    }
+
+    //
+    // Unmask the line if this interrupt is complete.
+    //
+
+    if (Status != InterruptStatusDefer) {
+        Controller = Interrupt->Controller;
+        Controller->FunctionTable.MaskLine(Controller->PrivateContext,
+                                           &(Interrupt->Line),
+                                           TRUE);
+    }
+
+    return;
+}
+
+KERNEL_API
 INTERRUPT_STATUS
 HlSecondaryInterruptControllerService (
     PVOID Context
@@ -475,7 +536,6 @@ Return Value:
 {
 
     ULONG ClearFlags;
-    PINTERRUPT_CONTROLLER Controller;
     PKINTERRUPT Interrupt;
     ULONG OldFlags;
     INTERRUPT_STATUS Status;
@@ -486,30 +546,16 @@ Return Value:
 
     OldFlags = RtlAtomicAnd32(&(Interrupt->QueueFlags), ~ClearFlags);
     Status = Interrupt->LowLevelServiceRoutine(Interrupt->Context);
-
-    ASSERT(Status != InterruptStatusDefer);
+    if (Status == InterruptStatusDefer) {
+        return;
+    }
 
     //
     // If this is a deferred interrupt, continue calling ISRs.
     //
 
     if ((OldFlags & INTERRUPT_QUEUE_DEFERRED) != 0) {
-        if ((Status != InterruptStatusClaimed) ||
-            (Interrupt->Mode != InterruptModeLevel)) {
-
-            Status = HlpContinueIsr(Interrupt);
-        }
-
-        //
-        // Unmask the line if this interrupt is complete.
-        //
-
-        if (Status != InterruptStatusDefer) {
-            Controller = Interrupt->Controller;
-            Controller->FunctionTable.MaskLine(Controller->PrivateContext,
-                                               &(Interrupt->Line),
-                                               TRUE);
-        }
+        HlContinueInterrupt(Interrupt, Status);
     }
 
     return;
