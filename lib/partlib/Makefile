@@ -26,7 +26,7 @@ BINARYTYPE = library
 
 BINPLACE = intlib
 
-include sources
+include $(SRCDIR)/sources
 
 DIRS = build
 

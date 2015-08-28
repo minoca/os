@@ -1470,9 +1470,9 @@ typedef struct _SYSTEM_VERSION_INFORMATION {
 
 #if DEBUG
 
-#define ASSERT(_Expression)                                      \
-    if ((_Expression) == FALSE) {                                \
-        RtlRaiseAssertion(#_Expression, __FILE__, __LINE__);     \
+#define ASSERT(_Condition)                                      \
+    if ((_Condition) == FALSE) {                                \
+        RtlRaiseAssertion(#_Condition, __FILE__, __LINE__);     \
     }
 
 #else
@@ -2271,6 +2271,43 @@ Arguments:
 Return Value:
 
     Returns a pointer to the first instance of the character on success.
+
+    NULL if the character could not be found in the string.
+
+--*/
+
+RTL_API
+PSTR
+RtlStringSearch (
+    PSTR InputString,
+    UINTN InputStringLength,
+    PSTR QueryString,
+    UINTN QueryStringLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine searches a string for the first instance of the given string
+    within it.
+
+Arguments:
+
+    InputString - Supplies a pointer to the string to search.
+
+    InputStringLength - Supplies the length of the string, in bytes, including
+        the NULL terminator.
+
+    QueryString - Supplies a pointer to the null terminated string to search
+        for.
+
+    QueryStringLength - Supplies the length of the query string in bytes
+        including the null terminator.
+
+Return Value:
+
+    Returns a pointer to the first instance of the string on success.
 
     NULL if the character could not be found in the string.
 

@@ -31,7 +31,7 @@ INCLUDES += $(SRCROOT)/os/apps/inc;             \
 
 VPATH += $(SRCDIR)/..:
 
-include ../sources
+include $(SRCDIR)/../sources
 
 OBJS = $(COMMON_OBJS)   \
        io.o             \

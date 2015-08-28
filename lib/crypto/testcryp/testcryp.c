@@ -70,6 +70,11 @@ TestMd5 (
     VOID
     );
 
+ULONG
+TestRsa (
+    VOID
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -303,6 +308,64 @@ UCHAR TestCrypMd5Answers[][MD5_HASH_SIZE] = {
      0x1A, 0x32, 0xA5, 0xB3, 0x3F, 0x66, 0x61, 0x67},
 };
 
+PSTR TestCrypRsaPrivateKey =
+    "-----BEGIN RSA PRIVATE KEY-----\n"
+    "Proc-Type: 4,ENCRYPTED\n"
+    "DEK-Info: AES-256-CBC,A3231074D89629B652B04C0ED96F7246\n"
+    "\n"
+    "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\n"
+    "-----END RSA PRIVATE KEY-----\n";
+
+PSTR TestCrypRsaPrivateKeyPassword = "1234";
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -344,6 +407,7 @@ Return Value:
     TestsFailed += TestSha256();
     TestsFailed += TestSha512();
     TestsFailed += TestMd5();
+    TestsFailed += TestRsa();
     if (TestsFailed != 0) {
         printf("\n*** %d failures in Crypto test. ***\n", TestsFailed);
         return 1;
@@ -624,6 +688,100 @@ Return Value:
 
             Failures += 1;
         }
+    }
+
+    return Failures;
+}
+
+ULONG
+TestRsa (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine tests the RSA crypto routines.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the number of test failures.
+
+--*/
+
+{
+
+    UCHAR CipherBuffer[512];
+    ULONG Failures;
+    UINTN Index;
+    UCHAR PlainBuffer[512];
+    RSA_CONTEXT RsaContext;
+    INTN Size;
+    KSTATUS Status;
+
+    Failures = 0;
+    RtlZeroMemory(&RsaContext, sizeof(RSA_CONTEXT));
+    RsaContext.BigIntegerContext.AllocateMemory = (PCY_ALLOCATE_MEMORY)malloc;
+    RsaContext.BigIntegerContext.ReallocateMemory =
+                                                (PCY_REALLOCATE_MEMORY)realloc;
+
+    RsaContext.BigIntegerContext.FreeMemory = (PCY_FREE_MEMORY)free;
+    Status = CyRsaInitializeContext(&RsaContext);
+    if (!KSUCCESS(Status)) {
+        Failures += 1;
+        return Failures;
+    }
+
+    Status = CyRsaAddPemFile(&RsaContext,
+                             TestCrypRsaPrivateKey,
+                             RtlStringLength(TestCrypRsaPrivateKey) + 1,
+                             TestCrypRsaPrivateKeyPassword);
+
+    if (!KSUCCESS(Status)) {
+        Failures += 1;
+        goto TestRsaEnd;
+    }
+
+    Size = CyRsaEncrypt(&RsaContext,
+                        TestCrypSha512Answers[0],
+                        SHA512_HASH_SIZE,
+                        CipherBuffer,
+                        TRUE);
+
+    if (Size != 512) {
+        Failures += 1;
+        goto TestRsaEnd;
+    }
+
+    //
+    // Compare to the correct answer.
+    //
+
+    Size = CyRsaDecrypt(&RsaContext, CipherBuffer, PlainBuffer, FALSE);
+    if (Size != SHA512_HASH_SIZE) {
+        Failures += 1;
+        goto TestRsaEnd;
+    }
+
+    for (Index = 0; Index < SHA512_HASH_SIZE; Index += 1) {
+        if (PlainBuffer[Index] != TestCrypSha512Answers[0][Index]) {
+            Failures += 1;
+            printf("RSA %d: %02x %02x",
+                   Index,
+                   PlainBuffer[Index],
+                   TestCrypSha512Answers[0][Index]);
+        }
+    }
+
+TestRsaEnd:
+    CyRsaDestroyContext(&RsaContext);
+    if (Failures != 0) {
+        printf("%d failures in RSA test.\n");
     }
 
     return Failures;

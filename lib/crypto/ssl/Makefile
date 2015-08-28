@@ -4,31 +4,31 @@
 #
 #   Binary Name:
 #
-#       NS 16550 UART
+#       SSL Library
 #
 #   Abstract:
 #
-#       This library contains the NS 16550 UART controller library.
+#       This library contains a limited SSL support library.
 #
 #   Author:
 #
-#       Chris Stevens 10-Jul-2015
+#       Evan Green 22-Jul-2015
 #
 #   Environment:
 #
-#       Firmware
+#       Any
 #
 ################################################################################
 
-include $(SRCDIR)/../common
-
-BINARY = ns16550.a
+BINARY = ssl.a
 
 BINARYTYPE = library
 
 BINPLACE = intlib
 
-OBJS = ns16550.o     \
+include $(SRCDIR)/sources
+
+DIRS = build
 
 include $(SRCROOT)/os/minoca.mk
 

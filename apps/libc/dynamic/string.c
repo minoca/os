@@ -1404,78 +1404,22 @@ Return Value:
 
 {
 
-    size_t BadCharacterShift[UCHAR_MAX + 1];
-    int Character;
     size_t InputStringLength;
-    size_t LastIndex;
     size_t QueryStringLength;
-    size_t ScanIndex;
+    char *Result;
 
     if ((QueryString == NULL) || (InputString == NULL)) {
         return NULL;
     }
 
-    InputStringLength = strlen(InputString);
-    QueryStringLength = strlen(QueryString);
-    if (QueryStringLength == 0) {
-        return (char *)InputString;
-    }
+    InputStringLength = strlen(InputString) + 1;
+    QueryStringLength = strlen(QueryString) + 1;
+    Result =  RtlStringSearch((PSTR)InputString,
+                              InputStringLength,
+                              (PSTR)QueryString,
+                              QueryStringLength);
 
-    if (InputStringLength < QueryStringLength) {
-        return NULL;
-    }
-
-    //
-    // Initialize the bad shift table assuming that no character exists in the
-    // query string, and thus the search can be advanced by the entire query
-    // string.
-    //
-
-    for (ScanIndex = 0; ScanIndex <= UCHAR_MAX; ScanIndex += 1) {
-        BadCharacterShift[ScanIndex] = QueryStringLength;
-    }
-
-    //
-    // Now find the last occurrence of each character and save it in the shift
-    // table.
-    //
-
-    LastIndex = QueryStringLength - 1;
-    for (ScanIndex = 0; ScanIndex < LastIndex; ScanIndex += 1) {
-        Character = (unsigned char)(QueryString[ScanIndex]);
-        BadCharacterShift[Character] = LastIndex - ScanIndex;
-    }
-
-    //
-    // Search the query string.
-    //
-
-    while (InputStringLength >= QueryStringLength) {
-
-        //
-        // Scan from the end.
-        //
-
-        ScanIndex = LastIndex;
-        while (InputString[ScanIndex] == QueryString[ScanIndex]) {
-            if (ScanIndex == 0) {
-                return (char *)InputString;
-            }
-
-            ScanIndex -= 1;
-        }
-
-        //
-        // Move on to a new position. Skip based on the last character of the
-        // input no matter where the mismatch is.
-        //
-
-        Character = (unsigned char)(InputString[LastIndex]);
-        InputStringLength -= BadCharacterShift[Character];
-        InputString += BadCharacterShift[Character];
-    }
-
-    return NULL;
+    return Result;
 }
 
 LIBC_API

@@ -36,7 +36,7 @@ DYNLIBS = -lminocaos
 
 VPATH += $(SRCDIR)/..:
 
-include ../sources
+include $(SRCDIR)/../sources
 
 OBJS = $(COMMON_OBJS)   \
        cmdln.o          \

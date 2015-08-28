@@ -29,9 +29,10 @@ BUILD = yes
 
 BINPLACE = testbin
 
-TARGETLIBS = $(INTLIB)/os/lib/rtl/base/build/basertl.a     \
-             $(INTLIB)/os/lib/rtl/build/rtlstubs.a         \
-             $(INTLIB)/os/lib/crypto/build/crypto.a        \
+TARGETLIBS = $(INTLIB)/os/lib/rtl/base/build/basertl.a          \
+             $(INTLIB)/os/lib/rtl/build/rtlstubs.a              \
+             $(INTLIB)/os/lib/crypto/build/crypto.a             \
+             $(INTLIB)/os/lib/crypto/ssl/build/ssl.a            \
 
 OBJS = testcryp.o \
 

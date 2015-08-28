@@ -20,7 +20,7 @@
 #
 ################################################################################
 
-include ../common
+include $(SRCDIR)/../common
 
 BINARY := pandafw.elf
 
@@ -136,7 +136,7 @@ postbuild: pandafw pandafw.bin
 pandafw: pandafw.bin
 	@cd $(BINROOT) && mkuboot -c -a arm -f legacy -l $(TEXT_ADDRESS) \
 	    -e $(TEXT_ADDRESS) -o $@ $^
-    
+
 pandafw.bin: $(BINARY)
 	@cd $(BINROOT) && $(OBJCOPY) -O binary $^ $@
 
@@ -149,7 +149,7 @@ postbuild: pandafw_usb pandafw_usb.bin
 pandafw_usb: pandafw_usb.bin
 	@cd $(BINROOT) && mkuboot -c -a arm -f legacy -l $(TEXT_ADDRESS) \
 	    -e $(TEXT_ADDRESS) -o $@ $^
-    
+
 pandafw_usb.bin: $(BINARY)
 	@cd $(BINROOT) && $(OBJCOPY) -O binary $^ $@
 

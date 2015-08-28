@@ -40,7 +40,7 @@ VPATH += $(SRCDIR)/..:$(SRCDIR)/../..:
 
 ifeq ($(ARCH), x86)
 
-include ../../sources
+include $(SRCDIR)/../../sources
 
 X86_OBJS += $(COMMON_OBJS)   \
             debugres.rsc \

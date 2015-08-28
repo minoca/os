@@ -38,7 +38,7 @@ if test -z "$BINROOT"; then
 fi
 
 make -C $SRCROOT/os/uefi/plat/panda RAMDISK=$BINROOT/armefi.img \
-    BINARY=pandafw_usb.elf
+    BINARY=pandafw_usb.elf SRCDIR=$SRCROOT/os/uefi/plat/panda
 
 cp -p pandafw_usb "$OUTPUT"
 echo "Created $OUTPUT"

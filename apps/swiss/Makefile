@@ -29,7 +29,7 @@ BINARYTYPE = app
 
 INCLUDES += $(SRCDIR)/;$(SRCROOT)/os/apps/inc/libc;$(SRCROOT)/os/apps/inc;
 
-include sources
+include $(SRCDIR)/sources
 
 OBJS = $(COMMON_OBJS)   \
        chown.o          \

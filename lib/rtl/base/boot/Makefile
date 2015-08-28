@@ -31,7 +31,7 @@ INCLUDES += $(SRCDIR)/../..;
 
 VPATH += $(SRCDIR)/..:
 
-include ../sources
+include $(SRCDIR)/../sources
 
 ARMV6_OBJS = armv7/rtlcomm.o       \
              armv7/rtlmem.o        \

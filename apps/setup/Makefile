@@ -29,7 +29,7 @@ BINARYTYPE = app
 INCLUDES += $(SRCROOT)/os/apps/inc;             \
             $(SRCROOT)/os/apps/inc/libc;
 
-include sources
+include $(SRCDIR)/sources
 
 OBJS = $(COMMON_OBJS)   \
        minoca/io.o      \

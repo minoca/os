@@ -76,6 +76,12 @@ Author:
 #define FORTUNA_POOL_COUNT 23
 
 //
+// Define big integer parameters.
+//
+
+#define BIG_INTEGER_MODULO_COUNT 3
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -287,6 +293,358 @@ typedef struct _FORTUNA_CONTEXT {
     ULONGLONG TimeCounterFrequency;
     ULONGLONG LastReseedTime;
 } FORTUNA_CONTEXT, *PFORTUNA_CONTEXT;
+
+//
+// Define functions called by the big integer library.
+//
+
+typedef
+PVOID
+(*PCY_ALLOCATE_MEMORY) (
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called when the crypto library needs to allocate memory.
+
+Arguments:
+
+    Size - Supplies the size of the allocation request, in bytes.
+
+Return Value:
+
+    Returns a pointer to the allocation if successful, or NULL if the
+    allocation failed.
+
+--*/
+
+typedef
+PVOID
+(*PCY_REALLOCATE_MEMORY) (
+    PVOID Allocation,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called when the crypto library needs to adjust the size of
+    a previous allocation.
+
+Arguments:
+
+    Allocation - Supplies the allocation to resize.
+
+    Size - Supplies the size of the allocation request, in bytes.
+
+Return Value:
+
+    Returns a pointer to the allocation if successful, or NULL if the
+    allocation failed.
+
+--*/
+
+typedef
+VOID
+(*PCY_FREE_MEMORY) (
+    PVOID Memory
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called when the crypto library needs to free allocated
+    memory.
+
+Arguments:
+
+    Memory - Supplies the allocation returned by the allocation routine.
+
+Return Value:
+
+    None.
+
+--*/
+
+typedef ULONG BIG_INTEGER_COMPONENT, *PBIG_INTEGER_COMPONENT;
+typedef ULONGLONG BIG_INTEGER_LONG_COMPONENT, *PBIG_INTEGER_LONG_COMPONENT;
+typedef struct _BIG_INTEGER BIG_INTEGER, *PBIG_INTEGER;
+
+/*++
+
+Structure Description:
+
+    This structure stores a very large integer indeed.
+
+Members:
+
+    Next - Stores an optional pointer to the next big integer if this
+        integer is on a list.
+
+    Size - Stores the number of components in this integer.
+
+    Capacity - Stores the number of components this allocation can
+        sustain before the integer needs to be reallocated.
+
+    ReferenceCount - Stores the reference count of the integer.
+
+    Components - Stores a pointer to an array of integer components
+        that make up the big integer.
+
+--*/
+
+struct _BIG_INTEGER {
+    PBIG_INTEGER Next;
+    USHORT Size;
+    USHORT Capacity;
+    LONG ReferenceCount;
+    PBIG_INTEGER_COMPONENT Components;
+};
+
+/*++
+
+Structure Description:
+
+    This structure stores a big integer context, which maintains a
+    cache of reusable big integers.
+
+Members:
+
+    AllocateMemory - Stores a pointer to a function used for heap
+        allocations when more big integers are needed. This must be
+        filled in when initialized.
+
+    ReallocateMemory - Stores a pointer to a function used to
+        reallocate memory. This must be filled in before the context
+        is initialized.
+
+    FreeMemory - Stores a pointer to a function used to free
+        previously allocated memory. This must be filled in before
+        the context is initialized.
+
+    ActiveList - Stores a pointer to the outstanding big integers.
+
+    FreeList - Stores a pointer to recently used but currently unused
+        big integers.
+
+    Radix - Stores a pointer to the radix used in the computation.
+
+    Modulus - Stores the modulus used in the computation.
+
+    R2ModM - Stores the cached R^2 mod m values used in the Montgomery
+        reduction.
+
+    RModM - Stores the cached R mod m values used in the Montgomery
+        reduction.
+
+    N0Dash - Stores the cached N0 dash values used in the Montgomery
+        reduction.
+
+    Mu - Stores the mu values used in Barrett reduction.
+
+    NormalizedMod - Stores the normalized modulo values.
+
+    ExponentTable - Stores an array of pointers to integers representing
+        pre-computed exponentiations of the working value.
+
+    WindowSize - Stores the size of the sliding window.
+
+    ActiveCount - Stores the number of integers on the active list.
+
+    FreeCount - Stores the number of integers on the free list.
+
+    UseClassical - Stores a boolean indicating if classical reduction
+        should be used instead of optimal reduction techniques.
+
+    ModOffset - Stores the modulo offset in use.
+
+--*/
+
+typedef struct _BIG_INTEGER_CONTEXT {
+    PCY_ALLOCATE_MEMORY AllocateMemory;
+    PCY_REALLOCATE_MEMORY ReallocateMemory;
+    PCY_FREE_MEMORY FreeMemory;
+    PBIG_INTEGER ActiveList;
+    PBIG_INTEGER FreeList;
+    PBIG_INTEGER Radix;
+    PBIG_INTEGER Modulus[BIG_INTEGER_MODULO_COUNT];
+#ifdef MONTGOMERY
+    PBIG_INTEGER R2ModM[BIG_INTEGER_MODULO_COUNT];
+    PBIG_INTEGER RModM[BIG_INTEGER_MODULO_COUNT];
+    BIG_INTEGER_COMPONENT N0Dash[BIG_INTEGER_MODULO_COUNT];
+#endif
+    PBIG_INTEGER Mu[BIG_INTEGER_MODULO_COUNT];
+    PBIG_INTEGER NormalizedMod[BIG_INTEGER_MODULO_COUNT];
+    PBIG_INTEGER *ExponentTable;
+    ULONG WindowSize;
+    INTN ActiveCount;
+    INTN FreeCount;
+    BOOL UseClassical;
+    UCHAR ModOffset;
+} BIG_INTEGER_CONTEXT, *PBIG_INTEGER_CONTEXT;
+
+typedef
+PVOID
+(*PCY_FILL_RANDOM) (
+    PVOID Buffer,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called when the crypto library needs to fill a buffer with
+    random bytes.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to fill with random bytes.
+
+    Size - Supplies the number of bytes of random data to return.
+
+Return Value:
+
+    None.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure stores the context used during encryption or decryption via
+    RSA.
+
+Members:
+
+    BigIntegerContext - Stores the big integer context used to manage the
+        values used during computation. It is expected that when the context
+        is initialized the caller will have filled in the allocate, reallocate,
+        and free memory functions in this structure.
+
+    FillRandom - Stores a pointer to a function called to fill a buffer with
+        random bytes. This function pointer must be filled in to do
+        encryption with padding.
+
+    Modulus - Stores the public modulus, p * q.
+
+    PublicExponent - Stores the public exponent e.
+
+    PrivateExponent - Stores the private exponent d.
+
+    PValue - Stores one of the primes, p.
+
+    QValue - Stores one the other prime, q.
+
+    DpValue - Stores d mod (p - 1).
+
+    DqValue - Stores d mod (q - 1).
+
+    QInverse - Stores q^-1 mod p.
+
+    ModulusSize - Stores the size of the modulus, in bytes.
+
+--*/
+
+typedef struct _RSA_CONTEXT {
+    BIG_INTEGER_CONTEXT BigIntegerContext;
+    PCY_FILL_RANDOM FillRandom;
+    PBIG_INTEGER Modulus;
+    PBIG_INTEGER PublicExponent;
+    PBIG_INTEGER PrivateExponent;
+    PBIG_INTEGER PValue;
+    PBIG_INTEGER QValue;
+    PBIG_INTEGER DpValue;
+    PBIG_INTEGER DqValue;
+    PBIG_INTEGER QInverse;
+    UINTN ModulusSize;
+} RSA_CONTEXT, *PRSA_CONTEXT;
+
+/*++
+
+Structure Description:
+
+    This structure stores the raw values needed for a public key transfer.
+
+Members:
+
+    Modulus - Stores a pointer to the modulus value, the product of the two
+        primes.
+
+    ModulusLength - Stores the length of the modulus value in bytes.
+
+    PublicExponent - Stores a pointer to the public key exponent.
+
+    PublicExponentLength - Stores the length of the the public key exponent in
+        bytes.
+
+--*/
+
+typedef struct _RSA_PUBLIC_KEY_COMPONENTS {
+    PVOID Modulus;
+    UINTN ModulusLength;
+    PVOID PublicExponent;
+    UINTN PublicExponentLength;
+} RSA_PUBLIC_KEY_COMPONENTS, *PRSA_PUBLIC_KEY_COMPONENTS;
+
+/*++
+
+Structure Description:
+
+    This structure stores the raw values needed for a private key transfer.
+
+Members:
+
+    PublicKey - Stores the public key components.
+
+    PrivateExponent - Stores a pointer to the private key exponent.
+
+    PrivateExponentLength - Stores the length of the private key exponent in
+        bytes.
+
+    PValue - Stores a pointer to one of the primes.
+
+    PValueLength - Stores the length of the p value in bytes.
+
+    QValue - Stores a pointer to the other prime.
+
+    QValueLength - Stores the length of the q value in bytes.
+
+    DpValue - Stores a pointer to the value d mod (p - 1).
+
+    DpValueLength - Stores the length of the dP value in bytes.
+
+    DqValue - Stores a pointer to the value d mod (q - 1).
+
+    DqValueLength - Stores the length of the dQ value in bytes.
+
+    QInverse - Stores a pointer to the value q^-1 mod p.
+
+    QInverseLength - Stores the length of the q inverse value in bytes.
+
+--*/
+
+typedef struct _RSA_PRIVATE_KEY_COMPONENTS {
+    RSA_PUBLIC_KEY_COMPONENTS PublicKey;
+    PVOID PrivateExponent;
+    UINTN PrivateExponentLength;
+    PVOID PValue;
+    UINTN PValueLength;
+    PVOID QValue;
+    UINTN QValueLength;
+    PVOID DpValue;
+    UINTN DpValueLength;
+    PVOID DqValue;
+    UINTN DqValueLength;
+    PVOID QInverse;
+    UINTN QInverseLength;
+} RSA_PRIVATE_KEY_COMPONENTS, *PRSA_PRIVATE_KEY_COMPONENTS;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -920,6 +1278,334 @@ Arguments:
     Data - Supplies a pointer to the data to add.
 
     Size - Supplies the number of bytes of randomness in the data buffer.
+
+Return Value:
+
+    None.
+
+--*/
+
+CRYPTO_API
+KSTATUS
+CyRsaInitializeContext (
+    PRSA_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes an RSA context. The caller must have filled out
+    the allocate, reallocate, and free memory routine pointers in the big
+    integer context, and zeroed the rest of the structure.
+
+Arguments:
+
+    Context - Supplies a pointer to the context to initialize.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+CRYPTO_API
+VOID
+CyRsaDestroyContext (
+    PRSA_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys a previously intialized RSA context.
+
+Arguments:
+
+    Context - Supplies a pointer to the context to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+CRYPTO_API
+KSTATUS
+CyRsaLoadPrivateKey (
+    PRSA_CONTEXT Context,
+    PRSA_PRIVATE_KEY_COMPONENTS PrivateKey
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds private key information to the given RSA context.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    PrivateKey - Supplies a pointer to the private key information. All fields
+        are required, including the public key ones.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+CRYPTO_API
+KSTATUS
+CyRsaLoadPublicKey (
+    PRSA_CONTEXT Context,
+    PRSA_PUBLIC_KEY_COMPONENTS PublicKey
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds public key information to the given RSA context.
+    This routine should not be called if private key information was already
+    added.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    PublicKey - Supplies a pointer to the public key information. All fields
+        are required.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+CRYPTO_API
+INTN
+CyRsaDecrypt (
+    PRSA_CONTEXT Context,
+    PVOID Ciphertext,
+    PVOID Plaintext,
+    BOOL IsDecryption
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs RSA decryption.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    Ciphertext - Supplies a pointer to the ciphertext, which must be less than
+        the size of the modulus minus 11.
+
+    Plaintext - Supplies a pointer where the plaintext will be returned.
+
+    IsDecryption - Supplies a boolean indicating if this is a decryption
+        operation (TRUE) or a verify operation (FALSE).
+
+Return Value:
+
+    Returns the number of bytes that were originally encrypted on success.
+
+    -1 on allocation failure.
+
+--*/
+
+CRYPTO_API
+INTN
+CyRsaEncrypt (
+    PRSA_CONTEXT Context,
+    PVOID Plaintext,
+    UINTN PlaintextLength,
+    PVOID Ciphertext,
+    BOOL IsSigning
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs RSA encryption.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    Plaintext - Supplies a pointer to the plaintext to encrypt.
+
+    PlaintextLength - Supplies the length of the plaintext buffer in bytes.
+
+    Ciphertext - Supplies a pointer where the ciphertext will be returned.
+        This buffer must be the size of the modulus.
+
+    IsSigning - Supplies a boolean indicating whether this is a signing
+        operation (TRUE) and should therefore use the private key, or
+        whether this is an encryption operation (FALSE) and should use the
+        public key.
+
+Return Value:
+
+    Returns the number of bytes that were originally encrypted on success. This
+    is the same as the modulus size.
+
+    -1 on allocation failure.
+
+--*/
+
+CRYPTO_API
+KSTATUS
+CyRsaAddPemFile (
+    PRSA_CONTEXT RsaContext,
+    PVOID PemFile,
+    UINTN PemFileLength,
+    PSTR Password
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to add a private key to the given RSA context.
+
+Arguments:
+
+    RsaContext - Supplies a pointer to the previously initialized RSA context.
+
+    PemFile - Supplies a pointer to the PEM file contents.
+
+    PemFileLength - Supplies the length of the PEM file contents.
+
+    Password - Supplies an optional pointer to a password to decrypt the
+        private key if needed.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+CRYPTO_API
+UINTN
+CyBase64GetDecodedLength (
+    UINTN EncodedDataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the buffer size needed for a decode buffer with a
+    given encoded buffer length. This may not be the actual decoded data size,
+    but is a worst-case approximation.
+
+Arguments:
+
+    EncodedDataLength - Supplies the length of the encoded data, in bytes, not
+        including a null terminator.
+
+Return Value:
+
+    Returns the appropriate size of the decoded data buffer.
+
+--*/
+
+CRYPTO_API
+UINTN
+CyBase64GetEncodedLength (
+    UINTN DataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the buffer size needed for a Base64 encoded buffer
+    given a raw data buffer of the given size. This may not be the actual
+    encoded data size, but is a worst-case approximation.
+
+Arguments:
+
+    DataLength - Supplies the length of the raw data to encode, in bytes.
+
+Return Value:
+
+    Returns the appropriate size of the encoded data buffer, including space
+    for a null terminator.
+
+--*/
+
+CRYPTO_API
+BOOL
+CyBase64Decode (
+    PSTR EncodedData,
+    UINTN EncodedDataLength,
+    PUCHAR Data,
+    PUINTN DataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine decodes the given Base64 encoded data.
+
+Arguments:
+
+    EncodedData - Supplies a pointer to the encoded data string.
+
+    EncodedDataLength - Supplies the length of the encoded data in bytes,
+        not including a null terminator.
+
+    Data - Supplies a pointer where the decoded data will be returned. It is
+        assumed this buffer is big enough.
+
+    DataLength - Supplies a pointer where the final length of the returned data
+        will be returned.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if there was a data decoding error at the end.
+
+--*/
+
+CRYPTO_API
+VOID
+CyBase64Encode (
+    PUCHAR Data,
+    UINTN DataLength,
+    PSTR EncodedData,
+    PUINTN EncodedDataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine encodes the given data in Base64 format.
+
+Arguments:
+
+    Data - Supplies a pointer to the data to encode.
+
+    DataLength - Supplies the length of the data to encode in bytes.
+
+    EncodedData - Supplies a pointer where the encoded data will be returned.
+        It is assumed this buffer is big enough to hold the encoded data.
+
+    EncodedDataLength - Supplies a pointer where the actual length of the
+        encoded data, including the null terminator, will be returned on
+        success.
 
 Return Value:
 

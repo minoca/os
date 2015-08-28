@@ -276,17 +276,17 @@ Return Value:
             WorkingKey = ((ULONG)CyAesSbox[KeyValue & 0xFF] << 8) |
                          ((ULONG)CyAesSbox[(KeyValue >> 8) & 0xFF] << 16) |
                          ((ULONG)CyAesSbox[(KeyValue >> 16) & 0xFF] << 24) |
-                         (CyAesSbox[(KeyValue >> 24) & 0xFF]);
+                         ((ULONG)CyAesSbox[(KeyValue >> 24) & 0xFF]);
 
             KeyValue = WorkingKey ^ (((ULONG)*CurrentRcon) << 24);
             CurrentRcon += 1;
         }
 
         if ((Words == 8) && ((Index % Words) == 4)) {
-            WorkingKey = ((ULONG)CyAesSbox[KeyValue & 0xFF] << 8) |
-                         ((ULONG)CyAesSbox[(KeyValue >> 8) & 0xFF] << 16) |
-                         ((ULONG)CyAesSbox[(KeyValue >> 16) & 0xFF] << 24) |
-                         (CyAesSbox[(KeyValue >> 24) & 0xFF]);
+            WorkingKey = ((ULONG)CyAesSbox[KeyValue & 0xFF]) |
+                         ((ULONG)CyAesSbox[(KeyValue >> 8) & 0xFF] << 8) |
+                         ((ULONG)CyAesSbox[(KeyValue >> 16) & 0xFF] << 16) |
+                         ((ULONG)CyAesSbox[(KeyValue >> 24) & 0xFF]) << 24;
 
             KeyValue = WorkingKey;
         }

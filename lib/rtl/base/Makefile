@@ -29,7 +29,7 @@ BINPLACE = intlib
 
 INCLUDES += $(SRCDIR)/..;
 
-include sources
+include $(SRCDIR)/sources
 
 EXTRA_SRC_DIRS = x86 x64 armv7 armv6
 

@@ -21,16 +21,14 @@
 #
 ################################################################################
 
-DIRS = core      \
-       bcm2709   \
-       omap4     \
-       rk32xx    \
+SD_CONTROLLERS = bcm2709    \
+                 omap4      \
+                 rk32xx     \
+
+DIRS = core                 \
+       $(SD_CONTROLLERS)    \
 
 include $(SRCROOT)/os/minoca.mk
 
-bcm2835: core
-
-omap4: core
-
-rk32xx: core
+$(SD_CONTROLLERS): core
 

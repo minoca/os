@@ -31,7 +31,7 @@ INCLUDES += $(SRCROOT)/os/apps/libc/dynamic/wincsup/inc;$(SRCDIR)/..;
 
 VPATH += $(SRCDIR)/..:
 
-include ../sources
+include $(SRCDIR)/../sources
 
 X86_OBJS = $(COMMON_OBJS)   \
            swiss.rsc        \

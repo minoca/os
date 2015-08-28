@@ -27,13 +27,14 @@ BINARYTYPE = library
 
 BINPLACE = intlib
 
-include sources
+include $(SRCDIR)/sources
 
-DIRS = build
+DIRS = build    \
+       ssl
 
 TESTDIRS = testcryp
 
 include $(SRCROOT)/os/minoca.mk
 
-testcryp: build
+testcryp: build ssl
 

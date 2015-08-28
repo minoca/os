@@ -376,7 +376,7 @@ $(DIRS):
 	@$(CECHO_CYAN) Entering Directory: $(SRCROOT)/$(THISDIR)/$@ && \
 	[ -d $@ ] || mkdir -p $@ && \
 	$(MAKE) --no-print-directory -C $@ -f $(SRCDIR)/$@/Makefile \
-	    -I$(SRCDIR)/$@ $(MAKECMDGOALS) SRCDIR=$(SRCDIR)/$@ && \
+	    $(MAKECMDGOALS) SRCDIR=$(SRCDIR)/$@ && \
 	$(CECHO_CYAN) Leaving Directory: $(SRCROOT)/$(THISDIR)/$@
 
 $(TESTDIRS): $(BINARY)

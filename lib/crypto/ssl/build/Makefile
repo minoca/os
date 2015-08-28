@@ -1,19 +1,19 @@
 ################################################################################
 #
-#   Copyright (c) 2012 Minoca Corp. All Rights Reserved
+#   Copyright (c) 2015 Minoca Corp. All Rights Reserved
 #
 #   Binary Name:
 #
-#       Base Runtime Library (Build)
+#       SSL Library (Build)
 #
 #   Abstract:
 #
-#       This library contains the base Runtime Library that is shared between
-#       kernel and user modes, compiled to target the build machine.
+#       This library contains a limited SSL support library for the build
+#       environment.
 #
 #   Author:
 #
-#       Evan Green 26-Jul-2012
+#       Evan Green 22-Jul-2015
 #
 #   Environment:
 #
@@ -21,7 +21,7 @@
 #
 ################################################################################
 
-BINARY = basertl.a
+BINARY = ssl.a
 
 BINARYTYPE = library
 
@@ -29,13 +29,9 @@ BUILD = yes
 
 BINPLACE = intlib
 
-INCLUDES += $(SRCDIR)/../..;
-
 VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
-
-EXTRA_SRC_DIRS = x86 x64 armv7 armv6
 
 include $(SRCROOT)/os/minoca.mk
 

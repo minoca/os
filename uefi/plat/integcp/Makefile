@@ -20,7 +20,7 @@
 #
 ################################################################################
 
-include ../common
+include $(SRCDIR)/../common
 
 BINARY := integfw.elf
 

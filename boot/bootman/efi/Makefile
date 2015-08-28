@@ -21,7 +21,7 @@
 #
 ################################################################################
 
-include ../sources
+include $(SRCDIR)/../sources
 
 BINARY := bootmefi.elf
 

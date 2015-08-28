@@ -34,7 +34,7 @@ if test -z "$BINROOT"; then
 fi
 
 make -C $SRCROOT/os/uefi/plat/integcp RAMDISK=$BINROOT/armefi.img \
-    BINARY=$OUTPUT
+    BINARY=$OUTPUT SRCDIR=$SRCROOT/os/uefi/plat/integcp
 
 echo "Created $OUTPUT"
 rm -rf $ROOT_DIRECTORY EFI

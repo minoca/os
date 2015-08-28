@@ -30,7 +30,7 @@ BINPLACE = intlib
 
 VPATH += $(SRCDIR)/..:
 
-include ../sources
+include $(SRCDIR)/../sources
 
 include $(SRCROOT)/os/minoca.mk
 
