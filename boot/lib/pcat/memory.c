@@ -74,6 +74,13 @@ typedef struct _E820_DESCRIPTOR {
 //
 
 //
+// Define the statically allocated memory descriptors used to represent the
+// memory map.
+//
+
+MEMORY_DESCRIPTOR FwMemoryMapDescriptors[MAX_E820_DESCRIPTORS];
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -121,7 +128,10 @@ Return Value:
     DescriptorsFound = 0;
     FirstCall = TRUE;
     PageSize = MmPageSize();
-    MmMdInitDescriptorList(MdlOut, MdlAllocationSourceInit);
+    MmMdInitDescriptorList(MdlOut, MdlAllocationSourceNone);
+    MmMdAddFreeDescriptorsToMdl(MdlOut,
+                                FwMemoryMapDescriptors,
+                                sizeof(FwMemoryMapDescriptors));
 
     //
     // Create a standard BIOS call context.

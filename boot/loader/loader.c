@@ -66,7 +66,7 @@ BopAcpiMemoryIteratorRoutine (
 
 KSTATUS
 BopLoadDrivers (
-    PLOADER_FILE BootDriverFile
+    PLOADER_BUFFER BootDriverFile
     );
 
 KSTATUS
@@ -105,6 +105,26 @@ BopAddSystemMemoryResource (
     UINTN Size,
     SYSTEM_MEMORY_RESOURCE_TYPE Type,
     ULONG MapFlags
+    );
+
+KSTATUS
+BopAddMmInitMemory (
+    PKERNEL_INITIALIZATION_BLOCK Parameters
+    );
+
+VOID
+BopMmInitMemoryMapIterationRoutine (
+    PMEMORY_DESCRIPTOR_LIST DescriptorList,
+    PMEMORY_DESCRIPTOR Descriptor,
+    PVOID Context
+    );
+
+KSTATUS
+BopAllocateKernelBuffer (
+    UINTN Size,
+    ULONG MapFlags,
+    PPHYSICAL_ADDRESS PhysicalAddress,
+    PLOADER_BUFFER BufferOut
     );
 
 //
@@ -213,7 +233,7 @@ Return Value:
     PVOID AlignedLoaderStart;
     PBOOT_CONFIGURATION_CONTEXT BootConfiguration;
     PBOOT_VOLUME BootDevice;
-    LOADER_FILE BootDriversFile;
+    LOADER_BUFFER BootDriversFile;
     PBOOT_ENTRY BootEntry;
     FILE_ID ConfigurationDirectory;
     PDEBUG_DEVICE_DESCRIPTION DebugDevice;
@@ -532,11 +552,11 @@ Return Value:
     }
 
     LoaderStep += 1;
-    KernelParameters->KernelStack = (PVOID)-1;
-    KernelParameters->KernelStackSize = DEFAULT_KERNEL_STACK_SIZE;
-    Status = BoMapPhysicalAddress(&(KernelParameters->KernelStack),
+    KernelParameters->KernelStack.Buffer = (PVOID)-1;
+    KernelParameters->KernelStack.Size = DEFAULT_KERNEL_STACK_SIZE;
+    Status = BoMapPhysicalAddress(&(KernelParameters->KernelStack.Buffer),
                                   KernelStackPhysical,
-                                  KernelParameters->KernelStackSize,
+                                  KernelParameters->KernelStack.Size,
                                   MAP_FLAG_GLOBAL,
                                   MemoryTypeLoaderPermanent);
 
@@ -590,8 +610,8 @@ Return Value:
     Status = BoLoadFile(BootDevice,
                         &ConfigurationDirectory,
                         BOOT_DRIVER_FILE,
-                        &(BootDriversFile.File),
-                        &(BootDriversFile.FileSize),
+                        &(BootDriversFile.Buffer),
+                        &(BootDriversFile.Size),
                         NULL);
 
     if (!KSUCCESS(Status)) {
@@ -602,8 +622,8 @@ Return Value:
     Status = BoLoadFile(BootDevice,
                         &ConfigurationDirectory,
                         DEVICE_TO_DRIVER_FILE,
-                        &(KernelParameters->DeviceToDriverFile.File),
-                        &(KernelParameters->DeviceToDriverFile.FileSize),
+                        &(KernelParameters->DeviceToDriverFile.Buffer),
+                        &(KernelParameters->DeviceToDriverFile.Size),
                         NULL);
 
     if (!KSUCCESS(Status)) {
@@ -614,8 +634,8 @@ Return Value:
     Status = BoLoadFile(BootDevice,
                         &ConfigurationDirectory,
                         DEVICE_MAP_FILE,
-                        &(KernelParameters->DeviceMapFile.File),
-                        &(KernelParameters->DeviceMapFile.FileSize),
+                        &(KernelParameters->DeviceMapFile.Buffer),
+                        &(KernelParameters->DeviceMapFile.Size),
                         NULL);
 
     if (!KSUCCESS(Status)) {
@@ -677,11 +697,15 @@ Return Value:
     KernelParameters->LoaderModule = LoaderModule;
 
     //
-    // Add the remaining free init memory descriptors to the boot memory map.
+    // Allocate some memory for the kernel memory manager to bootstrap with.
     //
 
+    Status = BopAddMmInitMemory(KernelParameters);
+    if (!KSUCCESS(Status)) {
+        goto MainEnd;
+    }
+
     LoaderStep += 1;
-    MmMdAddFreeInitDescriptorsToMdl(&BoMemoryMap);
 
     //
     // Get the boot time as close as possible to the actual kernel launch time
@@ -740,8 +764,8 @@ Return Value:
     // Transfer execution to the kernel. This should not return.
     //
 
-    StackEnd = KernelParameters->KernelStack +
-               KernelParameters->KernelStackSize;
+    StackEnd = KernelParameters->KernelStack.Buffer +
+               KernelParameters->KernelStack.Size;
 
     BoTransferToKernelAsm(KernelParameters, KernelModule->EntryPoint, StackEnd);
     LoaderStep += 1;
@@ -1569,7 +1593,7 @@ Return Value:
 
 KSTATUS
 BopLoadDrivers (
-    PLOADER_FILE BootDriverFile
+    PLOADER_BUFFER BootDriverFile
     )
 
 /*++
@@ -1598,9 +1622,9 @@ Return Value:
     PSTR StringEnd;
     ULONG StringLength;
 
-    StringEnd = (PSTR)(BootDriverFile->File) + BootDriverFile->FileSize;
-    DriverName = (PSTR)(BootDriverFile->File);
-    StringLength = BootDriverFile->FileSize;
+    StringEnd = (PSTR)(BootDriverFile->Buffer) + BootDriverFile->Size;
+    DriverName = (PSTR)(BootDriverFile->Buffer);
+    StringLength = BootDriverFile->Size;
     while (TRUE) {
 
         //
@@ -1986,8 +2010,8 @@ Return Value:
         goto LoadTimeZoneDataEnd;
     }
 
-    Parameters->TimeZoneData = DataVirtual;
-    Parameters->TimeZoneDataSize = DataSize;
+    Parameters->TimeZoneData.Buffer = DataVirtual;
+    Parameters->TimeZoneData.Size = DataSize;
 
 LoadTimeZoneDataEnd:
     return;
@@ -2063,6 +2087,7 @@ Return Value:
 
 {
 
+    LOADER_BUFFER Buffer;
     PSYSTEM_RESOURCE_MEMORY MemoryResource;
     KSTATUS Status;
 
@@ -2076,26 +2101,16 @@ Return Value:
     MemoryResource->Header.Type = SystemResourceMemory;
     MemoryResource->MemoryType = Type;
     MemoryResource->Header.Size = HARDWARE_MODULE_INITIAL_ALLOCATION_SIZE;
-    Status = FwAllocatePages(&(MemoryResource->Header.PhysicalAddress),
-                             MemoryResource->Header.Size,
-                             0,
-                             MemoryTypeLoaderPermanent);
+    Status = BopAllocateKernelBuffer(Size,
+                                     MapFlags,
+                                     &(MemoryResource->Header.PhysicalAddress),
+                                     &Buffer);
 
     if (!KSUCCESS(Status)) {
         goto AddSystemMemoryResourceEnd;
     }
 
-    MemoryResource->Header.VirtualAddress = (PVOID)-1;
-    Status = BoMapPhysicalAddress(&(MemoryResource->Header.VirtualAddress),
-                                  MemoryResource->Header.PhysicalAddress,
-                                  MemoryResource->Header.Size,
-                                  MapFlags,
-                                  MemoryTypeLoaderPermanent);
-
-    if (!KSUCCESS(Status)) {
-        goto AddSystemMemoryResourceEnd;
-    }
-
+    MemoryResource->Header.VirtualAddress = Buffer.Buffer;
     INSERT_BEFORE(&(MemoryResource->Header.ListEntry),
                   &(Parameters->SystemResourceListHead));
 
@@ -2106,6 +2121,190 @@ AddSystemMemoryResourceEnd:
         }
     }
 
+    return Status;
+}
+
+KSTATUS
+BopAddMmInitMemory (
+    PKERNEL_INITIALIZATION_BLOCK Parameters
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates and maps the memory that the memory manager uses to
+    bootstrap itself.
+
+Arguments:
+
+    Parameters - Supplies a pointer to the kernel initialization block.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INSUFFICIENT_RESOURCES on allocation failure.
+
+--*/
+
+{
+
+    UINTN AllocationSize;
+    UINTN DescriptorCount;
+    ULONG FirmwarePermanentCount;
+    ULONG PageShift;
+    ULONG PageSize;
+    PHYSICAL_ADDRESS PhysicalAddress;
+    KSTATUS Status;
+
+    //
+    // Determine how many descriptors the final virtual memory map is going to
+    // need. This value is the current virtual map, plus any runtime services
+    // regions in the physical map (that will get virtualized later).
+    //
+
+    DescriptorCount = BoVirtualMap.DescriptorCount +
+                      FREE_SYSTEM_DESCRIPTORS_REQUIRED_FOR_REFILL;
+
+    FirmwarePermanentCount = 0;
+    MmMdIterate(&BoMemoryMap,
+                BopMmInitMemoryMapIterationRoutine,
+                &FirmwarePermanentCount);
+
+    DescriptorCount += FirmwarePermanentCount;
+    PageShift = MmPageShift();
+    PageSize = MmPageSize();
+
+    //
+    // The memory manager needs space for all the virtual descriptors.
+    //
+
+    AllocationSize = DescriptorCount * sizeof(MEMORY_DESCRIPTOR);
+
+    //
+    // It also needs a word for each physical page, plus an extra page for the
+    // physical memory segments.
+    // Note: if the loader continues to be 32-bit for a 64-bit kernel, then
+    // this ULONG calculation is off.
+    //
+
+    AllocationSize += sizeof(ULONG) * (BoMemoryMap.TotalSpace >> PageShift);
+    AllocationSize += PageSize;
+    AllocationSize = ALIGN_RANGE_UP(AllocationSize, PageSize);
+    Status = BopAllocateKernelBuffer(AllocationSize,
+                                     MAP_FLAG_GLOBAL,
+                                     &PhysicalAddress,
+                                     &(Parameters->MmInitMemory));
+
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    Parameters->MmInitMemory.Size = AllocationSize;
+    return Status;
+}
+
+VOID
+BopMmInitMemoryMapIterationRoutine (
+    PMEMORY_DESCRIPTOR_LIST DescriptorList,
+    PMEMORY_DESCRIPTOR Descriptor,
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called once for each descriptor in the physical memory map.
+
+Arguments:
+
+    DescriptorList - Supplies a pointer to the descriptor list being iterated
+        over.
+
+    Descriptor - Supplies a pointer to the current descriptor.
+
+    Context - Supplies a context pointer, which in this case just points to a
+        count of how many firmware permanent descriptors were seen.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PULONG Count;
+
+    Count = Context;
+    if (Descriptor->Type == MemoryTypeFirmwarePermanent) {
+        *Count += 1;
+    }
+
+    return;
+}
+
+KSTATUS
+BopAllocateKernelBuffer (
+    UINTN Size,
+    ULONG MapFlags,
+    PPHYSICAL_ADDRESS PhysicalAddress,
+    PLOADER_BUFFER BufferOut
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates and maps a memory of region for the kernel.
+
+Arguments:
+
+    Size - Supplies the requested size of the resource.
+
+    MapFlags - Supplies the flags to map the memory with.
+
+    PhysicalAddress - Supplies a pointer where the physical address of the
+        allocation will be returned.
+
+    BufferOut - Supplies a pointer where the buffer virtual address and size
+        will be returned.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INSUFFICIENT_RESOURCES on allocation failure.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    Status = FwAllocatePages(PhysicalAddress,
+                             Size,
+                             0,
+                             MemoryTypeLoaderPermanent);
+
+    if (!KSUCCESS(Status)) {
+        goto AllocateKernelBufferEnd;
+    }
+
+    BufferOut->Buffer = (PVOID)-1;
+    Status = BoMapPhysicalAddress(&(BufferOut->Buffer),
+                                  *PhysicalAddress,
+                                  Size,
+                                  MapFlags,
+                                  MemoryTypeLoaderPermanent);
+
+    if (!KSUCCESS(Status)) {
+        goto AllocateKernelBufferEnd;
+    }
+
+AllocateKernelBufferEnd:
     return Status;
 }
 

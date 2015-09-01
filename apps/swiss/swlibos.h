@@ -1371,34 +1371,6 @@ Return Value:
 
 --*/
 
-int
-SwGetTimeString (
-    time_t Time,
-    char *String
-    );
-
-/*++
-
-Routine Description:
-
-    This routine creates a string from the given time in the locale's
-    preferred format.
-
-Arguments:
-
-    Time - Supplies the time to convert.
-
-    String - Supplies a pointer to a string at least 26 characters large where
-        the time will be returned.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
 pid_t
 SwFork (
     VOID
@@ -1980,34 +1952,6 @@ Return Value:
     Returns the effective group ID.
 
     -1 on failure.
-
---*/
-
-int
-SwGetGroups (
-    int Size,
-    id_t List[]
-    );
-
-/*++
-
-Routine Description:
-
-    This routine returns the list of supplementary groups the current user is
-    a member of.
-
-Arguments:
-
-    Size - Supplies the number of elements in the given list. Supply 0 to
-        simply get the number of supplementary groups the user is a member of.
-
-    List - Supplies a list where the group IDs will be returned.
-
-Return Value:
-
-    Returns the number of supplementary groups on success.
-
-    -1 on failure, and errno is set to contain more information.
 
 --*/
 

@@ -301,7 +301,9 @@ extern KSPIN_LOCK MmInvalidateIpiLock;
 
 KSTATUS
 MmpInitializePhysicalPageAllocator (
-    PMEMORY_DESCRIPTOR_LIST MemoryMap
+    PMEMORY_DESCRIPTOR_LIST MemoryMap,
+    PVOID *InitMemory,
+    PULONG InitMemorySize
     );
 
 /*++
@@ -315,6 +317,14 @@ Routine Description:
 Arguments:
 
     MemoryMap - Supplies a pointer to the current memory layout of the system.
+
+    InitMemory - Supplies a pointer where a pointer to the initialization
+        memory provided by the loader is given on input. On output, this
+        pointer is advanced beyond what this routine allocated from it.
+
+    InitMemorySize - Supplies a pointer that on input contains the size of the
+        init memory region. On output, this will be advanced beyond what was
+        allocated by this function.
 
 Return Value:
 
@@ -642,61 +652,6 @@ Return Value:
 
     Returns TRUE if the update resolved the page fault, or FALSE if the fault
     requires further attention.
-
---*/
-
-PVOID
-MmpEarlyAllocateMemory (
-    PMEMORY_DESCRIPTOR_LIST MemoryMap,
-    ULONG PageCount,
-    ULONGLONG PhysicalAlignment
-    );
-
-/*++
-
-Routine Description:
-
-    This routine allocates memory for MM init routines. It is used when MM is
-    bootstrapping and the facilities required for allocating memory need memory
-    for themselves.
-
-Arguments:
-
-    MemoryMap - Supplies a pointer to the system memory map.
-
-    PageCount - Supplies the number of pages needed.
-
-    PhysicalAlignment - Supplies the required alignment of the physical memory
-        allocation, in bytes. Valid values are powers of 2. Values of 0 or 1
-        indicate no physical alignment requirement.
-
-Return Value:
-
-    Returns a pointer to the memory on success, or NULL on failure.
-
---*/
-
-KSTATUS
-MmpReserveCurrentMappings (
-    PMEMORY_ACCOUNTING Accountant
-    );
-
-/*++
-
-Routine Description:
-
-    This routine is called during MM initialization. It scans through the
-    page tables and marks everything currently mapped as reserved, syncing the
-    virtual allocator to the current state of the machine.
-
-Arguments:
-
-    Accountant - Supplies a pointer to the structure that keeps track of the
-        current VA usage.
-
-Return Value:
-
-    Status code.
 
 --*/
 

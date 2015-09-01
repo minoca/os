@@ -146,6 +146,11 @@ Return Value:
 
     ASSERT((KTestDriver == NULL) && (KTestDevice == NULL));
 
+    Status = KTestInitializeTestSupport();
+    if (!KSUCCESS(Status)) {
+        goto DriverEntryEnd;
+    }
+
     KTestDriver = Driver;
     RtlZeroMemory(&FunctionTable, sizeof(DRIVER_FUNCTION_TABLE));
     FunctionTable.Version = DRIVER_FUNCTION_TABLE_VERSION;

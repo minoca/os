@@ -852,41 +852,6 @@ Return Value:
 }
 
 int
-ShCreateThread (
-    PSH_THREAD_ROUTINE Routine,
-    void *Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine creates and runs a new thread.
-
-Arguments:
-
-    Routine - Supplies the routine to run on the new thread.
-
-    Context - Supplies a pointer's worth of context to be passed to the thread.
-
-Return Value:
-
-    Zero on success (the thread was launched).
-
-    Non-zero on failure (the thread was not launched).
-
---*/
-
-{
-
-    //
-    // This is not needed on POSIX because fork works.
-    //
-
-    return -1;
-}
-
-int
 ShSetDescriptorFlags (
     int FileDescriptor,
     int Inheritable

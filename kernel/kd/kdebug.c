@@ -754,33 +754,6 @@ Return Value:
     return;
 }
 
-PLOADED_MODULE
-KdGetKernelModule (
-    VOID
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the loaded module information for the kernel process.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    Returns a pointer to the kernel module information, or NULL if debugging
-    is not enabled.
-
---*/
-
-{
-
-    return (PLOADED_MODULE)&KdKernelModuleBuffer;
-}
-
 VOID
 KdPollForBreakRequest (
     VOID

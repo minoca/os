@@ -229,7 +229,8 @@ endif
 
 EXTRA_CPPFLAGS_FOR_BUILD := $(EXTRA_CPPFLAGS)
 
-EXTRA_CFLAGS += -fno-builtin -fno-omit-frame-pointer -gstabs+ -save-temps=obj
+EXTRA_CFLAGS += -fno-builtin -fno-omit-frame-pointer -gstabs+ -save-temps=obj \
+                -ffunction-sections -fdata-sections -fvisibility=hidden
 
 EXTRA_CFLAGS_FOR_BUILD := $(EXTRA_CFLAGS)
 
@@ -239,16 +240,11 @@ ifeq ($(BINARYTYPE), $(filter so app dll library,$(BINARYTYPE)))
 EXTRA_CFLAGS += -fPIC
 endif
 
-ifeq (armv7, $(ARCH))
-EXTRA_CFLAGS += -fvisibility=hidden
-endif
-
 ##
 ## Restrict ARMv6 to armv6zk instructions to support the arm1176jzf-s.
 ##
 
 ifeq (armv6, $(ARCH))
-EXTRA_CFLAGS += -fvisibility=hidden
 ifneq ($(BINARYTYPE), $(filter ntconsole win32 dll,$(BINARYTYPE)))
 EXTRA_CFLAGS += -march=armv6zk
 endif
@@ -321,6 +317,7 @@ endif
 EXTRA_LDFLAGS += -Wl,-e$(ENTRY)                             \
                  -Wl,-u$(ENTRY)                             \
                  -Wl,-Map=$(BINARY).map                     \
+                 -Wl,--gc-sections                          \
 
 ifeq ($(BINARYTYPE),so)
 EXTRA_LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib

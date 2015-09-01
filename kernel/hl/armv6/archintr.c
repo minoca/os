@@ -228,40 +228,6 @@ Return Value:
 }
 
 ULONG
-HlpInterruptGetVectorForIpiLineIndex (
-    ULONG IpiLineIndex
-    )
-
-/*++
-
-Routine Description:
-
-    This routine maps an IPI line as reserved at boot to an interrupt vector.
-    This routine is needed so that IPI support can know what vector to
-    set the line state to for a given IPI line.
-
-Arguments:
-
-    IpiLineIndex - Supplies the index of the reserved IPI line.
-
-Return Value:
-
-    Returns the vector corresponding to the given index.
-
---*/
-
-{
-
-    //
-    // Implement this if SMP support is available for ARMv6.
-    //
-
-    ASSERT(FALSE);
-
-    return 0;
-}
-
-ULONG
 HlpInterruptGetIpiLineIndex (
     IPI_TYPE IpiType
     )

@@ -36,6 +36,7 @@ EXTRA_SRC_DIRS = x86 x64 armv7 armv6
 DIRS = boot     \
        build    \
        intrins  \
+       wide     \
 
 include $(SRCROOT)/os/minoca.mk
 

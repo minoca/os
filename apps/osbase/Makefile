@@ -76,6 +76,7 @@ EXTRA_LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib -Wl,-whole-archive
 EXTRA_SRC_DIRS = x86 x64 armv7
 
 TARGETLIBS = $(INTLIB)/os/lib/rtl/base/basertl.a        \
+             $(INTLIB)/os/lib/rtl/base/wide/basertlw.a  \
              $(INTLIB)/os/lib/im/im.a                   \
              $(INTLIB)/os/apps/osbase/urtl/urtl.a       \
              $(INTLIB)/os/lib/crypto/crypto.a           \

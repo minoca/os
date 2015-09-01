@@ -263,8 +263,7 @@ typedef enum _MEMORY_TYPE {
 
 typedef enum _MDL_ALLOCATION_SOURCE {
     MdlAllocationSourceInvalid,
-    MdlAllocationSourceInit,
-    MdlAllocationSourceSystem,
+    MdlAllocationSourceNone,
     MdlAllocationSourceNonPagedPool,
     MdlAllocationSourcePagedPool
 } MDL_ALLOCATION_SOURCE, *PMDL_ALLOCATION_SOURCE;
@@ -2257,52 +2256,6 @@ Arguments:
 
     Context - Supplies an optional opaque context passed to the iteration
         routine.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
-MmMdAddInitDescriptorsToMdl (
-    PMEMORY_DESCRIPTOR_LIST Mdl
-    );
-
-/*++
-
-Routine Description:
-
-    This routine adds the init memory descriptors to the given descriptor list
-    as free descriptors.
-
-Arguments:
-
-    Mdl - Supplies a pointer to the descriptor list to which the init
-        descriptors will be added.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
-MmMdAddFreeInitDescriptorsToMdl (
-    PMEMORY_DESCRIPTOR_LIST Mdl
-    );
-
-/*++
-
-Routine Description:
-
-    This routine adds the remaining free init memory descriptors to the given
-    descriptor list.
-
-Arguments:
-
-    Mdl - Supplies a pointer to the descriptor list to which the free init
-        descriptors will be added.
 
 Return Value:
 

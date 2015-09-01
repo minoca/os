@@ -208,7 +208,11 @@ Return Value:
             // Initialize the physical memory allocator.
             //
 
-            Status = MmpInitializePhysicalPageAllocator(Parameters->MemoryMap);
+            Status = MmpInitializePhysicalPageAllocator(
+                                            Parameters->MemoryMap,
+                                            &(Parameters->MmInitMemory.Buffer),
+                                            &(Parameters->MmInitMemory.Size));
+
             if (!KSUCCESS(Status)) {
                 goto InitializeEnd;
             }

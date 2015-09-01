@@ -43,6 +43,12 @@ Environment:
     (PVOID)((ULONG)INITIAL_PAGE_TABLE_STAGE - PAGE_SIZE)
 
 //
+// Define the maximum number of descriptors in the virtual map.
+//
+
+#define BO_VIRTUAL_MAP_DESCRIPTOR_COUNT 100
+
+//
 // ----------------------------------------------- Internal Function Prototypes
 //
 
@@ -56,6 +62,7 @@ Environment:
 
 PFIRST_LEVEL_TABLE BoFirstLevelTable;
 MEMORY_DESCRIPTOR_LIST BoVirtualMap;
+MEMORY_DESCRIPTOR BoVirtualMapDescriptors[BO_VIRTUAL_MAP_DESCRIPTOR_COUNT];
 PSECOND_LEVEL_TABLE BoSelfMapPageTable;
 SECOND_LEVEL_TABLE BoSecondLevelInitialValue;
 ULONG BoTtbrCacheAttributes;
@@ -112,7 +119,11 @@ Return Value:
     // Initialize the virtual memory map.
     //
 
-    MmMdInitDescriptorList(&BoVirtualMap, MdlAllocationSourceInit);
+    MmMdInitDescriptorList(&BoVirtualMap, MdlAllocationSourceNone);
+    MmMdAddFreeDescriptorsToMdl(&BoVirtualMap,
+                                BoVirtualMapDescriptors,
+                                sizeof(BoVirtualMapDescriptors));
+
     MmMdInitDescriptor(&KernelSpace,
                        (ULONG)KERNEL_VA_START,
                        KERNEL_VA_END,

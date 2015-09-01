@@ -241,8 +241,9 @@ Return Value:
             // Initialize time zone support.
             //
 
-            Status = KepInitializeTimeZoneSupport(Parameters->TimeZoneData,
-                                                  Parameters->TimeZoneDataSize);
+            Status = KepInitializeTimeZoneSupport(
+                                               Parameters->TimeZoneData.Buffer,
+                                               Parameters->TimeZoneData.Size);
 
             if (!KSUCCESS(Status)) {
                 goto InitializeEnd;

@@ -174,6 +174,33 @@ Return Value:
     return PAGE_SIZE;
 }
 
+ULONG
+MmPageShift (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the amount to shift by to truncate an address to a
+    page number.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the amount to shift to reach page granularity.
+
+--*/
+
+{
+
+    return PAGE_SHIFT;
+}
+
 VOID
 BoInitializeProcessor (
     VOID

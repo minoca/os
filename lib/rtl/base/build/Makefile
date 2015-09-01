@@ -35,6 +35,17 @@ VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
+OBJS := $(OBJS)      \
+        $(OBJS_WIDE) \
+
+##
+## Make sure softfp is in there. On an ARM build system it would be.
+##
+
+ifeq (, $(filter softfp.o,$(OBJS)))
+OBJS += softfp.o
+endif
+
 EXTRA_SRC_DIRS = x86 x64 armv7 armv6
 
 include $(SRCROOT)/os/minoca.mk

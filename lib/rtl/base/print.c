@@ -2695,7 +2695,16 @@ Return Value:
         StringLength = 1;
 
     } else {
-        StringLength = RtlStringLengthWide(String);
+
+        //
+        // Do a manual string length calculation to avoid adding references to
+        // wide string functions if they're not currently included.
+        //
+
+        StringLength = 0;
+        while (String[StringLength] != WIDE_STRING_TERMINATOR) {
+            StringLength += 1;
+        }
     }
 
     if ((Precision >= 0) && (StringLength > Precision)) {

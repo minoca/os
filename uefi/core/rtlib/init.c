@@ -504,3 +504,29 @@ Return Value:
     return;
 }
 
+VOID
+RtlDebugBreak (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine causes a break into the debugger.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return;
+}
+

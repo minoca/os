@@ -73,6 +73,10 @@ Environment:
 #define X86_PREFIX_LOCK 0xF0
 #define X86_PREFIX_REP1 0xF2
 #define X86_PREFIX_REP2 0xF3
+#define X86_PREFIX_CS 0x2E
+#define X86_PREFIX_DS 0x3E
+#define X86_PREFIX_ES 0x26
+#define X86_PREFIX_SS 0x36
 
 //
 // This mask/value combination covers the FS prefix, GS prefix, Operand
@@ -1935,7 +1939,11 @@ Return Value:
            (*InstructionStream == X86_PREFIX_REP1) ||
            (*InstructionStream == X86_PREFIX_REP2) ||
            ((*InstructionStream & X86_PREFIX_FS_GS_OVERRIDE_MASK) ==
-            X86_PREFIX_FS_GS_OVERRIDE_VALUE)) {
+            X86_PREFIX_FS_GS_OVERRIDE_VALUE) ||
+           (*InstructionStream == X86_PREFIX_CS) ||
+           (*InstructionStream == X86_PREFIX_DS) ||
+           (*InstructionStream == X86_PREFIX_ES) ||
+           (*InstructionStream == X86_PREFIX_SS)) {
 
         if (*InstructionStream == X86_OPERAND_OVERRIDE) {
             Instruction->OperandOverride = TRUE;

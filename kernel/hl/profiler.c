@@ -52,8 +52,6 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-volatile ULONG HlEarlyProfilerInterruptCount = 0;
-
 //
 // Store a variable indicating whether profiler interrupts are broadcasted.
 //

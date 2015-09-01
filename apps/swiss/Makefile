@@ -73,6 +73,6 @@ EXTRA_CFLAGS += -ftls-model=initial-exec
 postbuild:
 	@mkdir -p $(BINROOT)/skel/bin
 	@if test $(BINROOT)/$(BINARY) -nt $(BINROOT)/skel/bin/sh; then \
-	    cp $(BINROOT)/$(BINARY) $(BINROOT)/skel/bin/sh ; \
+	    $(STRIP) -o $(BINROOT)/skel/bin/sh $(BINROOT)/$(BINARY); \
 	fi
 

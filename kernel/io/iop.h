@@ -1735,37 +1735,6 @@ Return Value:
 
 --*/
 
-BOOL
-IopGetMountPointFileId (
-    PMOUNT_POINT Parent,
-    PPATH_ENTRY PathEntry,
-    PFILE_ID FileId
-    );
-
-/*++
-
-Routine Description:
-
-    This routine gets the file ID associated with the given path entry if it is
-    a child mount point of the given mount point.
-
-Arguments:
-
-    Parent - Supplies a pointer to a parent mount point whose children are
-        searched for a mount point that matches the path entry.
-
-    PathEntry - Supplies a pointer to a path entry to search for.
-
-    FileId - Supplies a pointer that receives the file ID of the object mounted
-        at the mount point, if found.
-
-Return Value:
-
-    Returns TRUE if a mount point was found for the given path entry, or FALSE
-    otherwise.
-
---*/
-
 PMOUNT_POINT
 IopGetMountPointParent (
     PMOUNT_POINT MountPoint

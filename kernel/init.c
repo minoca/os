@@ -293,8 +293,8 @@ Return Value:
 
     Status = PsInitialize(0,
                           Parameters,
-                          Parameters->KernelStack,
-                          Parameters->KernelStackSize);
+                          Parameters->KernelStack.Buffer,
+                          Parameters->KernelStack.Size);
 
     if (!KSUCCESS(Status)) {
         FailingSubsystem = KernelSubsystemProcess;

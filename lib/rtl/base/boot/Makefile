@@ -39,6 +39,7 @@ ARMV6_OBJS = armv7/rtlcomm.o       \
              armv7/intrinsc.o      \
              boot/armv6/rtlarch.o  \
              boot/armv7/commsup.o  \
+             softfp.o              \
 
 ARMV7_OBJS = armv7/rtlcomm.o       \
              armv7/rtlmem.o        \
@@ -46,6 +47,7 @@ ARMV7_OBJS = armv7/rtlcomm.o       \
              armv7/intrinsc.o      \
              boot/armv7/commsup.o  \
              boot/armv7/rtlarch.o  \
+             softfp.o              \
 
 EXTRA_SRC_DIRS = x86 x64 armv7 boot/armv6 boot/armv7
 

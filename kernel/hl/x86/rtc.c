@@ -186,11 +186,6 @@ HlpRtcWriteCalendarTime (
     PHARDWARE_MODULE_TIME NewTime
     );
 
-ULONGLONG
-HlpRtcGetInterruptFrequency (
-    VOID
-    );
-
 KSTATUS
 HlpRtcSetInterruptFrequency (
     ULONG Frequency
@@ -894,40 +889,6 @@ ReadCalendarTimeEnd:
     HlRtcSystemServices->WritePort8(CMOS_SELECT_PORT, OriginalSelection);
     HlRtcSystemServices->ReleaseLock(&(RtcContext->Lock));
     return Status;
-}
-
-ULONGLONG
-HlpRtcGetInterruptFrequency (
-    VOID
-    )
-
-/*++
-
-Routine Description:
-
-    This routine gets the frequency of the RTC interrupts. This routine assumes
-    the RTC lock is already held.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    Returns the frequency of the RTC.
-
---*/
-
-{
-
-    ULONGLONG Frequency;
-    BYTE Rate;
-    BYTE RegisterA;
-
-    RegisterA = HlpRtcReadRegister(CMOS_REGISTER_A);
-    Rate = RegisterA & CMOS_REGISTER_A_RATE_MASK;
-    Frequency = RTC_TIMER_FIXED_FREQUENCY >> (Rate - 1);
-    return Frequency;
 }
 
 KSTATUS

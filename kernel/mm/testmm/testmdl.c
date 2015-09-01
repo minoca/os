@@ -37,6 +37,7 @@ Environment:
 
 #define MDL_PRINT printf
 
+#define TEST_MDL_DESCRIPTOR_COUNT 100
 #define MDL_TEST_ALLOCATION_COUNT 50000
 
 //
@@ -99,6 +100,8 @@ typedef struct _MDL_VALIDATION_CONTEXT {
 // -------------------------------------------------------------------- Globals
 //
 
+MEMORY_DESCRIPTOR TestMdlDescriptors[TEST_MDL_DESCRIPTOR_COUNT];
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -141,7 +144,10 @@ Return Value:
     PageShift = MmPageShift();
     PageSize = MmPageSize();
     TestsFailed = 0;
-    MmMdInitDescriptorList(&Mdl, MdlAllocationSourceInit);
+    MmMdInitDescriptorList(&Mdl, MdlAllocationSourceNone);
+    MmMdAddFreeDescriptorsToMdl(&Mdl,
+                                TestMdlDescriptors,
+                                sizeof(TestMdlDescriptors));
 
     //
     // Just insert a bunch of MDLs that don't overlap.

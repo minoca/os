@@ -27,27 +27,30 @@ OBJS = crc32.o    \
        print.o    \
        rbtree.o   \
        scan.o     \
-       softfp.o   \
        string.o   \
        time.o     \
        timezone.o \
        version.o  \
        wchar.o    \
-       wprint.o   \
-       wscan.o    \
-       wstring.o  \
+
+OBJS_WIDE = wprint.o   \
+            wscan.o    \
+            wstring.o  \
+            wtime.o    \
 
 ARMV7_OBJS = armv7/intrinsa.o \
              armv7/intrinsc.o \
              armv7/rtlarch.o  \
              armv7/rtlcomm.o  \
              armv7/rtlmem.o   \
+             softfp.o         \
 
 ARMV6_OBJS = armv6/rtlarch.o  \
              armv7/intrinsa.o \
              armv7/intrinsc.o \
              armv7/rtlcomm.o  \
              armv7/rtlmem.o   \
+             softfp.o         \
 
 X86_OBJS = x86/intrinsc.o \
            x86/rtlarch.o  \

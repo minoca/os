@@ -166,7 +166,7 @@ Return Value:
     EfiPageCount = 0;
     LoaderDescriptorAllocation = INVALID_PHYSICAL_ADDRESS;
     LoaderDescriptorPageCount = 0;
-    MmMdInitDescriptorList(&BoMemoryMap, MdlAllocationSourceInit);
+    MmMdInitDescriptorList(&BoMemoryMap, MdlAllocationSourceNone);
 
     //
     // Get the memory map size.

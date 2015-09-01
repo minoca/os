@@ -28,6 +28,7 @@ Environment:
 #include <minoca/x86.h>
 #include "firmware.h"
 #include "paging.h"
+#include "bootlib.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -39,6 +40,12 @@ Environment:
 //
 
 #define INITIAL_PAGE_TABLE_STAGE (PVOID)(MAX_ULONG - PAGE_SIZE + 1)
+
+//
+// Define the maximum number of descriptors in the virtual map.
+//
+
+#define BO_VIRTUAL_MAP_DESCRIPTOR_COUNT 100
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -54,6 +61,7 @@ Environment:
 
 PPTE BoPageDirectory;
 MEMORY_DESCRIPTOR_LIST BoVirtualMap;
+MEMORY_DESCRIPTOR BoVirtualMapDescriptors[BO_VIRTUAL_MAP_DESCRIPTOR_COUNT];
 
 //
 // ------------------------------------------------------------------ Functions
@@ -89,7 +97,11 @@ Return Value:
     PHYSICAL_ADDRESS PhysicalAddress;
     KSTATUS Status;
 
-    MmMdInitDescriptorList(&BoVirtualMap, MdlAllocationSourceInit);
+    MmMdInitDescriptorList(&BoVirtualMap, MdlAllocationSourceNone);
+    MmMdAddFreeDescriptorsToMdl(&BoVirtualMap,
+                                BoVirtualMapDescriptors,
+                                sizeof(BoVirtualMapDescriptors));
+
     MmMdInitDescriptor(&KernelSpace,
                        (UINTN)KERNEL_VA_START,
                        KERNEL_VA_END,

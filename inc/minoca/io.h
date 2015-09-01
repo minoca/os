@@ -6409,38 +6409,6 @@ Return Value:
 --*/
 
 KSTATUS
-IoGetCurrentDirectory (
-    PKPROCESS Process,
-    PSTR *Path,
-    PULONG PathSize
-    );
-
-/*++
-
-Routine Description:
-
-    This routine returns the current directory path for the given process.
-    This data is stale as soon as it is returned.
-
-Arguments:
-
-    Process - Supplies a pointer to the process to get the current directory
-        of.
-
-    Path - Supplies a pointer where a pointer to a string will be returned
-        containing the full path. The caller is responsible for freeing this
-        memory from paged pool.
-
-    PathSize - Supplies a pointer where the size of the path buffer including
-        the null terminator will be returned on success.
-
-Return Value:
-
-    Status code.
-
---*/
-
-KSTATUS
 IoPathAppend (
     PSTR Prefix,
     ULONG PrefixSize,

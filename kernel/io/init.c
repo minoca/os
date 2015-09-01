@@ -713,8 +713,8 @@ Return Value:
     // Loop through every entry in the file.
     //
 
-    Device = Parameters->DeviceToDriverFile.File;
-    FileSize = Parameters->DeviceToDriverFile.FileSize;
+    Device = Parameters->DeviceToDriverFile.Buffer;
+    FileSize = Parameters->DeviceToDriverFile.Size;
     FileEnd = Device + FileSize;
     while (TRUE) {
         Driver = NULL;
@@ -851,8 +851,8 @@ Return Value:
     // Loop through every entry in the file.
     //
 
-    Device = Parameters->DeviceMapFile.File;
-    FileSize = Parameters->DeviceMapFile.FileSize;
+    Device = Parameters->DeviceMapFile.Buffer;
+    FileSize = Parameters->DeviceMapFile.Size;
     FileEnd = Device + FileSize;
     while (TRUE) {
 

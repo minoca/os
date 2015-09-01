@@ -25,6 +25,7 @@ Environment:
 //
 
 #include "rtlp.h"
+#include "time.h"
 #include <minoca/tzfmt.h>
 
 //

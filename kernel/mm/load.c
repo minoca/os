@@ -44,13 +44,6 @@ Environment:
 //
 
 //
-// Define a global flag that ignores all file mapping VA requests, and simply
-// places the VA anywhere.
-//
-
-BOOL MmpIgnoreFileMappingAddressRequests = TRUE;
-
-//
 // ------------------------------------------------------------------ Functions
 //
 

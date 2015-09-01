@@ -81,7 +81,13 @@ i8042.drv"
 BOOT_DRIVERS=\
 "$BOOT_DRIVERS
 ata.drv
-pci.drv"
+pci.drv
+e100.drv
+netcore.drv
+i8042.drv
+part.drv
+null.drv
+i8042.drv"
 
 PCAT_FILES=\
 "$PCAT_FILES
@@ -106,6 +112,8 @@ rm $APPS_DIR/bin/sh
 rm $APPS_DIR/lib/libminocaos.so.1
 $STRIP $APPS_DIR/lib/libc.so.1
 $STRIP $APPS_DIR/lib/libcrypt.so.1
+$STRIP $APPS_DIR/bin/swiss
+$STRIP $APPS_DIR/bin/mount
 
 echo -n "$SYSTEM_DIRECTORY/libminocaos.so.1 --library-path $APPS_DIR/lib \
 $APPS_DIR/bin/swiss sh $CONFIG_DIRECTORY/init.sh" >$CONFIG_DIRECTORY/init.set

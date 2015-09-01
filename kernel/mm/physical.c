@@ -761,7 +761,9 @@ SetPageCacheEntryForPhysicalAddressEnd:
 
 KSTATUS
 MmpInitializePhysicalPageAllocator (
-    PMEMORY_DESCRIPTOR_LIST MemoryMap
+    PMEMORY_DESCRIPTOR_LIST MemoryMap,
+    PVOID *InitMemory,
+    PULONG InitMemorySize
     )
 
 /*++
@@ -776,6 +778,14 @@ Arguments:
 
     MemoryMap - Supplies a pointer to the current memory layout of the system.
 
+    InitMemory - Supplies a pointer where a pointer to the initialization
+        memory provided by the loader is given on input. On output, this
+        pointer is advanced beyond what this routine allocated from it.
+
+    InitMemorySize - Supplies a pointer that on input contains the size of the
+        init memory region. On output, this will be advanced beyond what was
+        allocated by this function.
+
 Return Value:
 
     STATUS_SUCCESS on success.
@@ -789,19 +799,16 @@ Return Value:
 
 {
 
-    ULONG AllocationPageCount;
     ULONG AllocationSize;
     INIT_PHYSICAL_MEMORY_ITERATOR Context;
     UINTN Count;
     ULONG LastBitIndex;
     ULONG LeadingZeros;
     ULONG PageShift;
-    ULONG PageSize;
     PUCHAR RawBuffer;
     KSTATUS Status;
 
     PageShift = MmPageShift();
-    PageSize = MmPageSize();
     Status = STATUS_SUCCESS;
     INITIALIZE_LIST_HEAD(&MmPhysicalSegmentListHead);
 
@@ -829,12 +836,14 @@ Return Value:
     AllocationSize = (Context.TotalMemoryPages * sizeof(PHYSICAL_PAGE)) +
                      (Context.TotalSegments * sizeof(PHYSICAL_MEMORY_SEGMENT));
 
-    AllocationPageCount = ALIGN_RANGE_UP(AllocationSize, PageSize) >> PageShift;
-    RawBuffer = MmpEarlyAllocateMemory(MemoryMap, AllocationPageCount, 0);
-    if (RawBuffer == NULL) {
+    if (*InitMemorySize < AllocationSize) {
         Status = STATUS_NO_MEMORY;
-        goto InitializePhysicalPageAllocator;
+        goto InitializePhysicalPageAllocatorEnd;
     }
+
+    RawBuffer = *InitMemory;
+    *InitMemory += AllocationSize;
+    *InitMemorySize -= AllocationSize;
 
     //
     // Loop through the descriptors again and set up the physical memory
@@ -904,7 +913,7 @@ Return Value:
     MmPhysicalMemoryWarningCountMask = (UINTN)(1 << LastBitIndex) - 1;
     Status = STATUS_SUCCESS;
 
-InitializePhysicalPageAllocator:
+InitializePhysicalPageAllocatorEnd:
     return Status;
 }
 

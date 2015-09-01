@@ -36,12 +36,6 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-//
-// Define the number of static descriptors to keep around.
-//
-
-#define MAX_INIT_DESCRIPTORS 100
-
 #define DESCRIPTOR_BATCH 0x20
 #define MDL_PRINT RtlDebugPrint
 
@@ -195,8 +189,6 @@ typedef struct _MDL_ITERATE_CONTEXT {
 // -------------------------------------------------------------------- Globals
 //
 
-MEMORY_DESCRIPTOR MmInitDescriptors[MAX_INIT_DESCRIPTORS];
-
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -314,11 +306,11 @@ Return Value:
         switch (Mdl->AllocationSource) {
 
         //
-        // Init and system descriptors cannot be freed.
+        // If there was no allocation source, the descriptors came from
+        // somewheres unknown.
         //
 
-        case MdlAllocationSourceInit:
-        case MdlAllocationSourceSystem:
+        case MdlAllocationSourceNone:
             break;
 
         //
@@ -1023,18 +1015,8 @@ Return Value:
         Mdl->FreeSpace -= Descriptor->Size;
     }
 
-    //
-    // Since init descriptors are a global pool shared among all MDLs, removing
-    // the Used flag makes them look free for the taking by other MDLs. It
-    // would be bad to put the descriptor on this free list only to have it
-    // consumed by other MDLs.
-    //
-
-    if (Mdl->AllocationSource != MdlAllocationSourceInit) {
-        INSERT_AFTER(&(Descriptor->FreeListEntry), &(Mdl->UnusedListHead));
-        Mdl->UnusedDescriptorCount += 1;
-    }
-
+    INSERT_AFTER(&(Descriptor->FreeListEntry), &(Mdl->UnusedListHead));
+    Mdl->UnusedDescriptorCount += 1;
     Descriptor->Flags &= ~DESCRIPTOR_FLAG_USED;
     return;
 }
@@ -1439,15 +1421,6 @@ Return Value:
     BytesUsed = 0;
     CurrentDescriptor = NewDescriptor;
     while (BytesUsed + sizeof(MEMORY_DESCRIPTOR) <= Size) {
-
-        //
-        // If the supplied descriptors are the init descriptors, then they
-        // better not be in use.
-        //
-
-        ASSERT((NewDescriptor != MmInitDescriptors) ||
-               ((CurrentDescriptor->Flags & DESCRIPTOR_FLAG_USED) == 0));
-
         CurrentDescriptor->Flags = 0;
         INSERT_BEFORE(&(CurrentDescriptor->FreeListEntry),
                       &(Mdl->UnusedListHead));
@@ -1455,77 +1428,6 @@ Return Value:
         Mdl->UnusedDescriptorCount += 1;
         BytesUsed += sizeof(MEMORY_DESCRIPTOR);
         CurrentDescriptor += 1;
-    }
-
-    return;
-}
-
-VOID
-MmMdAddInitDescriptorsToMdl (
-    PMEMORY_DESCRIPTOR_LIST Mdl
-    )
-
-/*++
-
-Routine Description:
-
-    This routine adds the init memory descriptors to the given descriptor list
-    as free descriptors.
-
-Arguments:
-
-    Mdl - Supplies a pointer to the descriptor list to which the init
-        descriptors will be added.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ULONG InitDescriptorsSize;
-
-    InitDescriptorsSize = MAX_INIT_DESCRIPTORS * sizeof(MEMORY_DESCRIPTOR);
-    MmMdAddFreeDescriptorsToMdl(Mdl, MmInitDescriptors, InitDescriptorsSize);
-    return;
-}
-
-VOID
-MmMdAddFreeInitDescriptorsToMdl (
-    PMEMORY_DESCRIPTOR_LIST Mdl
-    )
-
-/*++
-
-Routine Description:
-
-    This routine adds the remaining free init memory descriptors to the given
-    descriptor list as free descriptors.
-
-Arguments:
-
-    Mdl - Supplies a pointer to the descriptor list to which the free init
-        descriptors will be added.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ULONG Index;
-
-    for (Index = 0; Index < MAX_INIT_DESCRIPTORS; Index += 1) {
-        if ((MmInitDescriptors[Index].Flags & DESCRIPTOR_FLAG_USED) == 0) {
-            INSERT_BEFORE(&(MmInitDescriptors[Index].FreeListEntry),
-                          &(Mdl->UnusedListHead));
-
-            Mdl->UnusedDescriptorCount += 1;
-        }
     }
 
     return;
@@ -1721,7 +1623,6 @@ Return Value:
 
     ULONG AllocationSize;
     PLIST_ENTRY Entry;
-    ULONG Index;
     PMEMORY_DESCRIPTOR NewDescriptor;
 
     AllocationSize = 0;
@@ -1750,27 +1651,10 @@ Return Value:
     switch (Mdl->AllocationSource) {
 
     //
-    // With init descriptors, search the global list for a free one. The free
-    // list cache continues to remain empty.
+    // With no allocation source, there's nothing that can be done.
     //
 
-    case MdlAllocationSourceInit:
-        for (Index = 0; Index < MAX_INIT_DESCRIPTORS; Index += 1) {
-            if ((MmInitDescriptors[Index].Flags & DESCRIPTOR_FLAG_USED) == 0) {
-                AllocationSize = sizeof(MEMORY_DESCRIPTOR);
-                NewDescriptor = &(MmInitDescriptors[Index]);
-                break;
-            }
-        }
-
-        break;
-
-    //
-    // With system backed descriptors, it's too late to be allocating them
-    // here.
-    //
-
-    case MdlAllocationSourceSystem:
+    case MdlAllocationSourceNone:
 
         ASSERT(FALSE);
 

@@ -202,21 +202,21 @@ typedef struct _FIRMWARE_TABLE_DIRECTORY {
 
 Structure Description:
 
-    This structure stores information about a file loaded directly into memory
-    by the boot loader.
+    This structure stores information about a buffer provided by the loader to
+    the kernel.
 
 Members:
 
-    File - Stores a pointer to the buffer containing the file.
+    Buffer - Stores a pointer to the data buffer.
 
-    FileSize - Stores the size of the file, in bytes.
+    Size - Stores the size of the buffer, in bytes.
 
 --*/
 
-typedef struct _LOADER_FILE {
-    PVOID File;
-    ULONG FileSize;
-} LOADER_FILE, *PLOADER_FILE;
+typedef struct _LOADER_BUFFER {
+    PVOID Buffer;
+    ULONG Size;
+} LOADER_BUFFER, *PLOADER_BUFFER;
 
 /*++
 
@@ -252,6 +252,9 @@ Members:
         The mapping for this virtual does *not* correspond to any valid memory,
         but a page table has been set up for this VA to prevent infinite loops.
 
+    MmInitMemory - Stores a buffer of memory that the memory manager can use
+        to initialize itself. This memory is mapped as loader permanent.
+
     ImageList - Stores the head of the list of images loaded by the kernel.
         Entries on this list are of type LOADED_IMAGE.
 
@@ -261,11 +264,7 @@ Members:
     LoaderModule - Stores a pointer to the module information for the OS
         loader. This data should also be in the loaded modules list.
 
-    KernelStack - Stores a pointer to the top of the kernel stack. The actual
-        stack pointer received by the kernel may be less than this due to
-        parameters already pushed on by the loader.
-
-    KernelStackSize - Stores the total size of the kernel stack, in bytes.
+    KernelStack - Stores the kernel stack buffer that processor 0 should use.
 
     DeviceToDriverFile - Stores the location of the file containing the mapping
         between devices and drivers.
@@ -278,8 +277,6 @@ Members:
         SYSTEM_RESOURCE_HEADER.
 
     TimeZoneData - Stores a pointer to the initial time zone data.
-
-    TimeZoneDataSize - Stores the size of the time zone data in bytes.
 
     BootEntry - Stores a pointer to the boot entry that was launched.
 
@@ -305,16 +302,15 @@ typedef struct _KERNEL_INITIALIZATION_BLOCK {
     PVOID PageDirectory;
     PVOID PageTables;
     PVOID PageTableStage;
+    LOADER_BUFFER MmInitMemory;
     LIST_ENTRY ImageList;
     PLOADED_MODULE KernelModule;
     PLOADED_MODULE LoaderModule;
-    PVOID KernelStack;
-    ULONG KernelStackSize;
-    LOADER_FILE DeviceToDriverFile;
-    LOADER_FILE DeviceMapFile;
+    LOADER_BUFFER KernelStack;
+    LOADER_BUFFER DeviceToDriverFile;
+    LOADER_BUFFER DeviceMapFile;
     LIST_ENTRY SystemResourceListHead;
-    PVOID TimeZoneData;
-    ULONG TimeZoneDataSize;
+    LOADER_BUFFER TimeZoneData;
     PVOID BootEntry;
     SYSTEM_TIME BootTime;
     SYSTEM_FIRMWARE_TYPE FirmwareType;

@@ -977,7 +977,7 @@ Return Value:
     ASSERT((Flags & ~MEMORY_ACCOUNTING_FLAG_MASK) == 0);
 
     if ((Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0) {
-        Source = MdlAllocationSourceSystem;
+        Source = MdlAllocationSourceNone;
 
     } else if ((Flags & MEMORY_ACCOUNTING_FLAG_USER) != 0) {
         Source = MdlAllocationSourcePagedPool;
@@ -2121,6 +2121,7 @@ Return Value:
 
     INITIALIZE_KERNEL_VA_CONTEXT Context;
     MEMORY_DESCRIPTOR Descriptor;
+    ULONG DescriptorSize;
     KSTATUS Status;
 
     Status = MmInitializeMemoryAccounting(&MmKernelVirtualSpace,
@@ -2131,12 +2132,33 @@ Return Value:
     }
 
     //
-    // Add the init descriptors to the newly initialized memory descriptor
-    // list. It is system backed, but the init descriptors are just sitting
-    // around unused in the kernel environment.
+    // Add enough room for the initial memory map's worth of descriptors from
+    // the MM init memory provided by the loader.
     //
 
-    MmMdAddInitDescriptorsToMdl(&(MmKernelVirtualSpace.Mdl));
+    DescriptorSize = (Parameters->VirtualMap->DescriptorCount +
+                      FREE_SYSTEM_DESCRIPTORS_REQUIRED_FOR_REFILL) *
+                     sizeof(MEMORY_DESCRIPTOR);
+
+    if (Parameters->MmInitMemory.Size < DescriptorSize) {
+
+        ASSERT(FALSE);
+
+        Status = STATUS_NO_MEMORY;
+        goto InitializeKernelVaEnd;
+    }
+
+    //
+    // Actually add all the rest of the init memory.
+    //
+
+    DescriptorSize = Parameters->MmInitMemory.Size;
+    MmMdAddFreeDescriptorsToMdl(&(MmKernelVirtualSpace.Mdl),
+                                Parameters->MmInitMemory.Buffer,
+                                DescriptorSize);
+
+    Parameters->MmInitMemory.Buffer += DescriptorSize;
+    Parameters->MmInitMemory.Size -= DescriptorSize;
 
     //
     // Add the entire kernel address space as free.
@@ -2163,16 +2185,6 @@ Return Value:
 
     if (!KSUCCESS(Context.Status)) {
         Status = Context.Status;
-        goto InitializeKernelVaEnd;
-    }
-
-    //
-    // Synchronize the virtual allocator with the current memory map of the
-    // system. Any page currently mapped will be marked as occupied.
-    //
-
-    Status = MmpReserveCurrentMappings(&MmKernelVirtualSpace);
-    if (!KSUCCESS(Status)) {
         goto InitializeKernelVaEnd;
     }
 
