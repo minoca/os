@@ -77,6 +77,13 @@ Environment:
 #define USB_MASS_STATUS_TRANSFER_ATTEMPT_LIMIT 2
 
 //
+// Define the number of times to retry an I/O request before giving up on the
+// IRP.
+//
+
+#define USB_MASS_IO_REQUEST_RETRY_COUNT 3
+
+//
 // Define the SCSI command block and command status signatures.
 //
 
@@ -317,8 +324,8 @@ Members:
     Device - Stores a pointer back to the device that this logical disk lives
         on.
 
-    OutstandingTransfers - Stores the number of tranfers that have yet to
-        complete.
+    IoRequestAttempts - Stores the number of attempts that have been made
+        to complete the current I/O request.
 
     StatusTransferAttempts - Stores the number of attempts that have been made
         to receive the status transfer.
@@ -361,7 +368,7 @@ typedef struct _USB_DISK {
     UCHAR LunNumber;
     PUSB_MASS_STORAGE_DEVICE Device;
     USB_MASS_STORAGE_TRANSFERS Transfers;
-    ULONG OutstandingTransfers;
+    ULONG IoRequestAttempts;
     ULONG StatusTransferAttempts;
     PKEVENT Event;
     PIRP Irp;
@@ -1432,6 +1439,7 @@ Return Value:
     // Fire the first I/O request off to the disk.
     //
 
+    Disk->IoRequestAttempts = 0;
     Status = UsbMasspSendNextIoRequest(Irp, Disk, IoBuffer);
     if (!KSUCCESS(Status)) {
         goto DispatchIoEnd;
@@ -3933,20 +3941,10 @@ Return Value:
 
 {
 
-    BOOL CommandSubmitted;
-    BOOL DataInSubmitted;
-    BOOL DataOutSubmitted;
     KSTATUS Status;
-    BOOL StatusSubmitted;
-
-    CommandSubmitted = FALSE;
-    DataInSubmitted = FALSE;
-    DataOutSubmitted = FALSE;
-    StatusSubmitted = FALSE;
 
     ASSERT((Disk->Irp == NULL) || (Disk->Irp == Irp));
     ASSERT((Disk->IoBuffer == NULL) || (Disk->IoBuffer == IoBuffer));
-    ASSERT(Disk->OutstandingTransfers == 0);
     ASSERT(KeIsQueuedLockHeld(Disk->Device->Lock) != FALSE);
     ASSERT(((Irp == NULL) && (IoBuffer == NULL)) ||
            ((Irp != NULL) && (IoBuffer != NULL)));
@@ -3962,73 +3960,12 @@ Return Value:
     Disk->StatusTransferAttempts = 0;
 
     //
-    // Determine how many transfers will be issued by this routine. This must
-    // be calculated before submitting the command transfer because it may
-    // complete before the data or status transfer can be issued.
-    // Conventiently, this routine will always submit two transfers.
-    //
-
-    Disk->OutstandingTransfers = 2;
-
-    //
     // Send the Command Block Wrapper.
     //
 
     Status = UsbSubmitTransfer(Disk->Transfers.CommandTransfer);
     if (!KSUCCESS(Status)) {
-        Disk->OutstandingTransfers -= 1;
         goto SendCommandEnd;
-    }
-
-    CommandSubmitted = TRUE;
-
-    //
-    // If there's data, submit that transfer.
-    //
-
-    Disk->Transfers.DataInTransfer->Error = UsbErrorNone;
-    Disk->Transfers.DataOutTransfer->Error = UsbErrorNone;
-    if (Disk->Transfers.DataInTransfer->Length != 0) {
-
-        ASSERT(Disk->Transfers.DataOutTransfer->Length == 0);
-
-        Status = UsbSubmitTransfer(Disk->Transfers.DataInTransfer);
-        if (!KSUCCESS(Status)) {
-            Disk->OutstandingTransfers -= 1;
-            goto SendCommandEnd;
-        }
-
-        DataInSubmitted = TRUE;
-
-    } else if (Disk->Transfers.DataOutTransfer->Length != 0) {
-        Status = UsbSubmitTransfer(Disk->Transfers.DataOutTransfer);
-        if (!KSUCCESS(Status)) {
-            Disk->OutstandingTransfers -= 1;
-            goto SendCommandEnd;
-        }
-
-        DataOutSubmitted = TRUE;
-
-    //
-    // Otherwise submit the transfer to the the status word. If there is data
-    // then the status transfer will be submitted when the data portion is
-    // done.
-    //
-
-    } else {
-
-        ASSERT((Disk->Transfers.DataInTransfer->Length == 0) &&
-               (Disk->Transfers.DataOutTransfer->Length == 0));
-
-        Disk->StatusTransferAttempts += 1;
-        Status = UsbSubmitTransfer(Disk->Transfers.StatusTransfer);
-        if (!KSUCCESS(Status)) {
-            Disk->StatusTransferAttempts -= 1;
-            Disk->OutstandingTransfers -= 1;
-            goto SendCommandEnd;
-        }
-
-        StatusSubmitted = TRUE;
     }
 
     //
@@ -4049,30 +3986,6 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 SendCommandEnd:
-    if (!KSUCCESS(Status)) {
-
-        //
-        // Cancel the transfers. These all wait until the transfer becomes
-        // inactive.
-        //
-
-        if (CommandSubmitted != FALSE) {
-            UsbCancelTransfer(Disk->Transfers.CommandTransfer, TRUE);
-        }
-
-        if (DataInSubmitted != FALSE) {
-            UsbCancelTransfer(Disk->Transfers.DataInTransfer, TRUE);
-        }
-
-        if (DataOutSubmitted != FALSE) {
-            UsbCancelTransfer(Disk->Transfers.DataOutTransfer, TRUE);
-        }
-
-        if (StatusSubmitted != FALSE) {
-            UsbCancelTransfer(Disk->Transfers.StatusTransfer, TRUE);
-        }
-    }
-
     return Status;
 }
 
@@ -4102,128 +4015,145 @@ Return Value:
     ULONG BytesTransferred;
     BOOL CompleteIrp;
     PUSB_DISK Disk;
+    UCHAR Endpoint;
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentIndex;
     PIO_BUFFER IoBuffer;
     PIRP Irp;
     PIO_BUFFER OriginalIoBuffer;
     KSTATUS Status;
+    BOOL SubmitStatusTransfer;
     PUSB_MASS_STORAGE_TRANSFERS Transfers;
+    BOOL TransferSent;
 
     CompleteIrp = FALSE;
     Disk = (PUSB_DISK)Transfer->UserData;
     IoBuffer = Disk->IoBuffer;
     Irp = Disk->Irp;
+    SubmitStatusTransfer = FALSE;
     Transfers = &(Disk->Transfers);
+    TransferSent = FALSE;
 
     ASSERT((Disk != NULL) && (Disk->Type == UsbMassStorageLogicalDisk));
-    ASSERT(Disk->OutstandingTransfers != 0);
     ASSERT(KeIsQueuedLockHeld(Disk->Device->Lock) != FALSE);
-
-    //
-    // Transfer callbacks are handled serially, this is a safe operation even
-    // though there may be multiple transfers out.
-    //
-
-    Disk->OutstandingTransfers -= 1;
 
     //
     // Handle stall failures according to the transfer type. All other failures
     // should just roll through until the command status transfer is returned.
-    // Do not handle any stall errors here if the command transfer failed. A
-    // reset recovery needs to be performed, which is handled later.
     //
 
-    if (!KSUCCESS(Transfer->Status) &&
-        KSUCCESS(Transfers->CommandTransfer->Status) &&
+    if ((Transfer != Transfers->CommandTransfer) &&
+        !KSUCCESS(Transfer->Status) &&
         (Transfer->Error == UsbErrorTransferStalled)) {
 
-        ASSERT(Transfer != Transfers->CommandTransfer);
-
         //
-        // When receiving data, the host accepts the data and clears the
-        // IN endpoint.
+        // Pick the correct endpoint to clear. The status and data IN transfers
+        // clear the IN endpoint. The data OUT transfer clears the out endpoint.
         //
 
-        if (Transfer == Transfers->DataInTransfer) {
-            UsbMasspClearEndpoint(Disk->Device,
-                                  Disk->Device->InEndpoint,
-                                  FALSE);
+        Endpoint = Disk->Device->InEndpoint;
+        if (Transfer == Transfers->DataOutTransfer) {
+            Endpoint = Disk->Device->OutEndpoint;
+        }
+
+        UsbMasspClearEndpoint(Disk->Device, Endpoint, FALSE);
 
         //
-        // When sending data, the host clears the OUT endpoint.
+        // Attempt to receive another command status wrapper if allowed.
         //
 
-        } else if (Transfer == Transfers->DataOutTransfer) {
-            UsbMasspClearEndpoint(Disk->Device,
-                                  Disk->Device->OutEndpoint,
-                                  FALSE);
+        if ((Transfer == Transfers->StatusTransfer) &&
+            (Disk->StatusTransferAttempts <
+             USB_MASS_STATUS_TRANSFER_ATTEMPT_LIMIT)) {
 
-        //
-        // When receiving the command status wrapper, clear the IN endpoint
-        // and attempt to receive the command status wrapper again.
-        //
+            SubmitStatusTransfer = TRUE;
+        }
+    }
 
-        } else {
+    //
+    // If this is a successful command transfer completing, then fire off the
+    // next transfer in the set. If the command transfer fails, this I/O
+    // request is toast.
+    //
 
-            ASSERT(Transfer == Transfers->StatusTransfer);
+    if (Transfer == Transfers->CommandTransfer) {
+        if (KSUCCESS(Transfer->Status)) {
 
             //
-            // If more attempts to receive the command status wrapper are
-            // allowed, then submit another transfer. Otherwise the system
-            // will move forward with a reset recovery.
+            // If there's data, submit the appropriate data transfer.
             //
 
-            if (Disk->StatusTransferAttempts <
-                USB_MASS_STATUS_TRANSFER_ATTEMPT_LIMIT) {
+            Disk->Transfers.DataInTransfer->Error = UsbErrorNone;
+            Disk->Transfers.DataOutTransfer->Error = UsbErrorNone;
+            if (Disk->Transfers.DataInTransfer->Length != 0) {
 
-                UsbMasspClearEndpoint(Disk->Device,
-                                      Disk->Device->InEndpoint,
-                                      FALSE);
+                ASSERT(Disk->Transfers.DataOutTransfer->Length == 0);
 
-                //
-                // Failure to re-submit gets handled below with a reset.
-                //
-
-                Disk->OutstandingTransfers += 1;
-                Disk->StatusTransferAttempts += 1;
-                Status = UsbSubmitTransfer(Transfers->StatusTransfer);
+                TransferSent = TRUE;
+                Status = UsbSubmitTransfer(Disk->Transfers.DataInTransfer);
                 if (!KSUCCESS(Status)) {
-                    Disk->StatusTransferAttempts -= 1;
-                    Disk->OutstandingTransfers -= 1;
+                    TransferSent = FALSE;
                 }
+
+            } else if (Disk->Transfers.DataOutTransfer->Length != 0) {
+                TransferSent = TRUE;
+                Status = UsbSubmitTransfer(Disk->Transfers.DataOutTransfer);
+                if (!KSUCCESS(Status)) {
+                    TransferSent = FALSE;
+                }
+
+            //
+            // Otherwise submit the transfer for the status word. If there is
+            // data then the status transfer will be submitted when the data
+            // portion is done.
+            //
+
+            } else {
+
+                ASSERT((Disk->Transfers.DataInTransfer->Length == 0) &&
+                       (Disk->Transfers.DataOutTransfer->Length == 0));
+
+                SubmitStatusTransfer = TRUE;
             }
         }
+
+    //
+    // If the data IN or data OUT portion completed, submit the status transfer.
+    // The status transfer needs to be received even if the data transfer
+    // failed (or was cancelled). If the submission fails, it will be handled
+    // below with a reset. If a device I/O error occurred during the data
+    // portion, just skip the status transfer; the endpoint will go through
+    // reset recovery.
+    //
+
+    } else if ((Transfer != Transfers->StatusTransfer) &&
+               (Transfer->Error != UsbErrorTransferDeviceIo)) {
+
+        ASSERT((Transfer == Transfers->DataInTransfer) ||
+               (Transfer == Transfers->DataOutTransfer));
+
+        SubmitStatusTransfer = TRUE;
     }
 
     //
-    // If the data IN or data OUT portion completed and the command block was
-    // successful, submit the status transfer. The status transfer needs to be
-    // received even if the other transfers failed or were cancelled. If this
-    // submission fails, it will be handled below. If, however, a device I/O
-    // error occurred during the data phase, just skip the status transfer. The
-    // endpoint will go through reset recovery below.
+    // If the status transfer needs to be submitted or resubmitted, fire it off.
     //
 
-    if (((Transfer == Transfers->DataInTransfer) ||
-         (Transfer == Transfers->DataOutTransfer)) &&
-        (Transfer->Error != UsbErrorTransferDeviceIo) &&
-        KSUCCESS(Transfers->CommandTransfer->Status)) {
-
-        Disk->OutstandingTransfers += 1;
+    if (SubmitStatusTransfer != FALSE) {
+        TransferSent = TRUE;
         Disk->StatusTransferAttempts += 1;
-        Status = UsbSubmitTransfer(Transfers->StatusTransfer);
+        Status = UsbSubmitTransfer(Disk->Transfers.StatusTransfer);
         if (!KSUCCESS(Status)) {
             Disk->StatusTransferAttempts -= 1;
-            Disk->OutstandingTransfers -= 1;
+            TransferSent = FALSE;
         }
     }
 
     //
-    // Do not do any processing until all IRPs have been received.
+    // Do not do any processing if another transfer was sent.
     //
 
-    if (Disk->OutstandingTransfers != 0) {
+    if (TransferSent != FALSE) {
         return;
     }
 
@@ -4254,19 +4184,36 @@ Return Value:
     ASSERT(Disk->CurrentBytesTransferred <= Irp->U.ReadWrite.IoSizeInBytes);
 
     //
-    // If the command was not successful or all the bytes needed have been
-    // transferred, complete the IRP.
+    // If the command succeeded and all the bytes have been transferred, then
+    // complete the IRP.
     //
 
-    if ((!KSUCCESS(Status)) ||
-        (Disk->CurrentBytesTransferred == Irp->U.ReadWrite.IoSizeInBytes)) {
+    if (KSUCCESS(Status)) {
+        if (Disk->CurrentBytesTransferred == Irp->U.ReadWrite.IoSizeInBytes) {
+            CompleteIrp = TRUE;
+            goto TransferCompletionCallbackEnd;
+        }
 
-        CompleteIrp = TRUE;
-        goto TransferCompletionCallbackEnd;
+        Disk->IoRequestAttempts = 0;
+
+    //
+    // If it failed, prep to try the command again, unless it has been
+    // attempted too many times.
+    //
+
+    } else {
+        Disk->IoRequestAttempts += 1;
+        if (Disk->IoRequestAttempts > USB_MASS_IO_REQUEST_RETRY_COUNT) {
+            CompleteIrp = TRUE;
+            goto TransferCompletionCallbackEnd;
+        }
     }
 
     //
-    // Request the next batch of stuff. If this fails, complete the IRP.
+    // Request the next batch of stuff (it could also be retry of the same
+    // batch). If this fails, complete the IRP. Do not attempt any retries, as
+    // failure here indicates a more serious failure (e.g. the command transfer
+    // failed to even be submitted).
     //
 
     Status = UsbMasspSendNextIoRequest(Irp, Disk, IoBuffer);
@@ -4716,7 +4663,9 @@ ResetRecoveryEnd:
     //
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("USB MASS: Failed reset recovery operation!\n");
+        RtlDebugPrint("USB MASS: Failed reset recovery on device 0x%08x!\n",
+                      Device);
+
         if (PolledIo == FALSE) {
             IoSetDeviceDriverError(UsbGetDeviceToken(Device->UsbCoreHandle),
                                    UsbMassDriver,

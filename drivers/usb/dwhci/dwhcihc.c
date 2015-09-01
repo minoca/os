@@ -1193,10 +1193,10 @@ Return Value:
     ASSERT(NewEndpoint->SplitControl == 0);
 
     if ((Controller->Speed == UsbDeviceSpeedHigh) &&
+        (Endpoint->HubAddress != 0) &&
         ((NewEndpoint->Speed == UsbDeviceSpeedLow) ||
          (NewEndpoint->Speed == UsbDeviceSpeedFull))) {
 
-        ASSERT(Endpoint->HubAddress != 0);
         ASSERT(Endpoint->HubPortNumber != 0);
 
         PortAddress = (Endpoint->HubPortNumber <<

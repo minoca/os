@@ -64,8 +64,8 @@ Environment:
 // virtual memory resources.
 //
 
-#define PAGE_CACHE_SMALL_VIRTUAL_HEADROOM_TRIGGER_BYTES (200 * _1MB)
-#define PAGE_CACHE_SMALL_VIRTUAL_HEADROOM_RETREAT_BYTES (300 * _1MB)
+#define PAGE_CACHE_SMALL_VIRTUAL_HEADROOM_TRIGGER_BYTES (512 * _1MB)
+#define PAGE_CACHE_SMALL_VIRTUAL_HEADROOM_RETREAT_BYTES (896 * _1MB)
 #define PAGE_CACHE_LARGE_VIRTUAL_HEADROOM_TRIGGER_BYTES (1 * (UINTN)_1GB)
 #define PAGE_CACHE_LARGE_VIRTUAL_HEADROOM_RETREAT_BYTES (3 * (UINTN)_1GB)
 
@@ -433,6 +433,12 @@ volatile UINTN IoPageCacheDirtyPageCount = 0;
 //
 
 volatile UINTN IoPageCacheMappedPageCount = 0;
+
+//
+// Stores the number of dirty page cache entries that are currently mapped.
+//
+
+volatile UINTN IoPageCacheMappedDirtyPageCount = 0;
 
 //
 // Store the target number of free virtual pages in the system the page cache
@@ -919,6 +925,10 @@ Return Value:
         ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0);
 
         RtlAtomicAdd(&IoPageCacheDirtyPageCount, 1);
+        if (PageCacheEntry->VirtualAddress != NULL) {
+            RtlAtomicAdd(&IoPageCacheMappedDirtyPageCount, 1);
+        }
+
         MarkedDirty = TRUE;
 
         //
@@ -2910,6 +2920,9 @@ Return Value:
     if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
         if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0) {
             RtlAtomicAdd(&IoPageCacheDirtyPageCount, (UINTN)-1);
+            if (PageCacheEntry->VirtualAddress != NULL) {
+                RtlAtomicAdd(&IoPageCacheMappedDirtyPageCount, (UINTN)-1);
+            }
         }
 
         MarkedClean = TRUE;
@@ -3283,13 +3296,16 @@ Return Value:
     UINTN FreePages;
     UINTN IdealSize;
     UINTN MaxDirty;
+    BOOL TooDirty;
 
     //
     // The page cache thread is allowed to make all the pages dirty.
     //
 
+    TooDirty = FALSE;
     if (KeGetCurrentThread() == IoPageCacheThread) {
-        return IopIsPageCacheTooBig(NULL);
+        TooDirty = IopIsPageCacheTooBig(NULL);
+        goto IsPageCacheTooDirtyEnd;
     }
 
     //
@@ -3312,10 +3328,16 @@ Return Value:
 
     MaxDirty = IdealSize >> PAGE_CACHE_MAX_DIRTY_SHIFT;
     if (IoPageCacheDirtyPageCount >= MaxDirty) {
-        return TRUE;
+        TooDirty = TRUE;
+        goto IsPageCacheTooDirtyEnd;
     }
 
-    return FALSE;
+IsPageCacheTooDirtyEnd:
+    if (TooDirty == FALSE) {
+        TooDirty = IopIsPageCacheTooMapped(NULL);
+    }
+
+    return TooDirty;
 }
 
 COMPARISON_RESULT
@@ -4356,6 +4378,9 @@ FlushPageCacheBufferEnd:
             if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
                 if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0) {
                     RtlAtomicAdd(&IoPageCacheDirtyPageCount, 1);
+                    if (CacheEntry->VirtualAddress != NULL) {
+                        RtlAtomicAdd(&IoPageCacheMappedDirtyPageCount, 1);
+                    }
                 }
 
                 //
@@ -4808,6 +4833,7 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PPAGE_CACHE_ENTRY FirstWithReference;
     UINTN FreeVirtualPages;
+    UINTN MappedCleanPageCount;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
     UINTN TargetUnmapCount;
@@ -4832,8 +4858,11 @@ Return Value:
     TargetUnmapCount = IoPageCacheHeadroomVirtualPagesRetreat -
                        FreeVirtualPages;
 
-    if (TargetUnmapCount > IoPageCacheMappedPageCount) {
-        TargetUnmapCount = IoPageCacheMappedPageCount;
+    MappedCleanPageCount = IoPageCacheMappedPageCount -
+                           IoPageCacheMappedDirtyPageCount;
+
+    if (TargetUnmapCount > MappedCleanPageCount) {
+        TargetUnmapCount = MappedCleanPageCount;
         if (TargetUnmapCount == 0) {
             return;
         }

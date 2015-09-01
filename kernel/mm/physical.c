@@ -110,6 +110,11 @@ Environment:
      ((_Type) == MemoryTypeBootPageTables) ||                   \
      ((_Type) == MemoryTypeMmStructures))
 
+#define IS_BOOT_TEMPORARY_MEMORY_TYPE(_Type)                    \
+    (((_Type) == MemoryTypeLoaderTemporary) ||                  \
+     ((_Type) == MemoryTypeFirmwareTemporary) ||                \
+     ((_Type) == MemoryTypeBootPageTables))
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -632,25 +637,14 @@ Return Value:
     //
     // The page was not found. If the total number of physical pages was
     // truncated, then these may be boot allocations being released. Trust that
-    // these were valid pages and decrement the total number of physical pages,
-    // the total number of allocated pages, and the number of non-paged
-    // physical pages.
+    // these were valid pages. If no truncation was possible, then report the
+    // missing page and assert.
     //
 
-    if ((MmLimitTotalPhysicalPages != 0) ||
-        (MmLowestPhysicalPage != 0) ||
-        (MmMaximumPhysicalAddress <= PhysicalAddress)) {
+    if ((MmLimitTotalPhysicalPages == 0) &&
+        (MmLowestPhysicalPage == 0) &&
+        (MmMaximumPhysicalAddress > PhysicalAddress)) {
 
-        MmTotalAllocatedPhysicalPages -= PageCount;
-        MmTotalPhysicalPages -= PageCount;
-        MmNonPagedPhysicalPages -= PageCount;
-
-    //
-    // Otherwise this probably indicates a serious memory corruption. Consider
-    // crashing the system altogether.
-    //
-
-    } else {
         RtlDebugPrint("Error: Attempt to free non-existant physical page "
                       "0x%I64x.\n",
                       PhysicalAddress);
@@ -2525,9 +2519,8 @@ Return Value:
         ASSERT(MmPhysicalPageZeroAvailable == FALSE);
 
         if ((MmLowestPhysicalPage == 0) &&
-            ((IS_MEMORY_FREE_TYPE(Descriptor->Type)) ||
-             (Descriptor->Type == MemoryTypeLoaderTemporary) ||
-             (Descriptor->Type == MemoryTypeFirmwareTemporary))) {
+            (IS_MEMORY_FREE_TYPE(Descriptor->Type) ||
+             IS_BOOT_TEMPORARY_MEMORY_TYPE(Descriptor->Type))) {
 
             MmPhysicalPageZeroAvailable = TRUE;
         }
@@ -2559,11 +2552,13 @@ Return Value:
         (MemoryContext->PagesInitialized == MemoryContext->TotalMemoryPages)) {
 
         //
-        // Memory was artificially limited. Record any allocated descriptors
-        // that are fully out of bounds.
+        // Memory was artificially limited. Record any allocated, non-temporary
+        // descriptors that are fully out of bounds.
         //
 
-        if (!IS_MEMORY_FREE_TYPE(Descriptor->Type)) {
+        if (!IS_MEMORY_FREE_TYPE(Descriptor->Type) &&
+            !IS_BOOT_TEMPORARY_MEMORY_TYPE(Descriptor->Type)) {
+
             OutOfBoundsAllocatedPageCount += Descriptor->Size >> PageShift;
         }
 
@@ -2619,11 +2614,13 @@ Return Value:
         if ((Descriptor->BaseAddress + TrimmedSize) < LowestPhysicalAddress) {
 
             //
-            // Memory was artificially limited. Record any allocated
-            // descriptors that are fully out of bounds.
+            // Memory was artificially limited. Record any non-temporary,
+            // allocated descriptors that are fully out of bounds.
             //
 
-            if (!IS_MEMORY_FREE_TYPE(Descriptor->Type)) {
+            if (!IS_MEMORY_FREE_TYPE(Descriptor->Type) &&
+                !IS_BOOT_TEMPORARY_MEMORY_TYPE(Descriptor->Type)) {
+
                 OutOfBoundsAllocatedPageCount += TrimmedSize >> PageShift;
             }
 
@@ -2708,7 +2705,9 @@ Return Value:
             // counts.
             //
 
-            if (FreePage == FALSE) {
+            if ((FreePage == FALSE) &&
+                !IS_BOOT_TEMPORARY_MEMORY_TYPE(Descriptor->Type)) {
+
                 OutOfBoundsAllocatedPageCount += TruncatePageCount;
             }
         }
@@ -2755,7 +2754,10 @@ Return Value:
         // not free.
         //
 
-        if ((PageCount != 0) && (FreePage == FALSE)) {
+        if ((PageCount != 0) &&
+            (FreePage == FALSE) &&
+            !IS_BOOT_TEMPORARY_MEMORY_TYPE(Descriptor->Type)) {
+
             OutOfBoundsAllocatedPageCount += PageCount;
         }
 

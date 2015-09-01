@@ -712,6 +712,16 @@ Return Value:
     }
 
 PerformCachedReadEnd:
+
+    //
+    // If the routine was not successful and did not read directly into the
+    // destination buffer, then none of the requested work was done.
+    //
+
+    if (!KSUCCESS(Status) && (DestinationIoBuffer != PageAlignedIoBuffer)) {
+        TotalBytesRead = 0;
+    }
+
     if (PageCacheEntry != NULL) {
         IoPageCacheEntryReleaseReference(PageCacheEntry);
     }

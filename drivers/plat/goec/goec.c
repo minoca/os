@@ -48,9 +48,11 @@ Environment:
 
 //
 // Define the amount of time in seconds to wait for the response to come back.
+// This should really be 1 second, but allow extra time in case other devices
+// are trying to come online at the same time (e.g. USB mass storage).
 //
 
-#define GOEC_RESPONSE_TIMEOUT 1
+#define GOEC_RESPONSE_TIMEOUT 10
 
 //
 // ------------------------------------------------------ Data Type Definitions

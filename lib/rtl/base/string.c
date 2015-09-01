@@ -485,13 +485,11 @@ Return Value:
     size_t LastIndex;
     size_t ScanIndex;
 
-    if ((QueryString == NULL) || (InputString == NULL) ||
-        (InputStringLength < 1)) {
-
+    if ((QueryString == NULL) || (InputString == NULL)) {
         return NULL;
     }
 
-    if (QueryStringLength < 1) {
+    if (QueryStringLength <= 1) {
         return (char *)InputString;
     }
 
