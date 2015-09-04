@@ -509,7 +509,7 @@ Return Value:
 
     PKPROCESS CurrentProcess;
     PIO_HANDLE HandleValue;
-    PIO_BUFFER IoBuffer;
+    IO_BUFFER IoBuffer;
     PSYSTEM_CALL_PERFORM_IO Parameters;
     UINTN Size;
     KSTATUS Status;
@@ -519,7 +519,6 @@ Return Value:
     Parameters = (PSYSTEM_CALL_PERFORM_IO)SystemCallParameter;
     Size = Parameters->Size;
     Parameters->Size = 0;
-    IoBuffer = NULL;
     HandleValue = ObGetHandleValue(CurrentProcess->HandleTable,
                                    Parameters->Handle,
                                    NULL);
@@ -546,17 +545,20 @@ Return Value:
     ASSERT(SYS_WAIT_TIME_INDEFINITE == WAIT_TIME_INDEFINITE);
 
     //
-    // Allocate an I/O buffer for this user mode buffer. Keep it in paged-pool,
-    // and not pinned for now. If the particular I/O requests something more
-    // serious, it will lock the buffer.
+    // Hopefully this I/O buffer will never reach a driver and only be used by
+    // the cache. As such, don't pin down the pages just yet, allowing the
+    // opportunity to stack-allocate the I/O buffer structure. If this buffer
+    // does make it to a driver, a new I/O buffer structure will be temporarily
+    // allocated to pin down the pages.
     //
 
-    Status = MmCreateIoBuffer(Parameters->Buffer,
-                              Size,
-                              FALSE,
-                              FALSE,
-                              FALSE,
-                              &IoBuffer);
+    Status = MmInitializeIoBuffer(&IoBuffer,
+                                  Parameters->Buffer,
+                                  INVALID_PHYSICAL_ADDRESS,
+                                  Size,
+                                  FALSE,
+                                  FALSE,
+                                  FALSE);
 
     if (!KSUCCESS(Status)) {
         goto SysPerformIoEnd;
@@ -568,7 +570,7 @@ Return Value:
 
     if ((Parameters->Flags & SYS_IO_FLAG_WRITE) != 0) {
         Status = IoWriteAtOffset(HandleValue,
-                                 IoBuffer,
+                                 &IoBuffer,
                                  Parameters->Offset,
                                  Size,
                                  0,
@@ -585,7 +587,7 @@ Return Value:
 
     } else {
         Status = IoReadAtOffset(HandleValue,
-                                IoBuffer,
+                                &IoBuffer,
                                 Parameters->Offset,
                                 Size,
                                 0,
@@ -599,10 +601,6 @@ Return Value:
     }
 
 SysPerformIoEnd:
-    if (IoBuffer != NULL) {
-        MmFreeIoBuffer(IoBuffer);
-    }
-
     if (HandleValue != NULL) {
         IoIoHandleReleaseReference(HandleValue);
     }

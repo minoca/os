@@ -32,12 +32,12 @@ Environment:
 //
 
 //
-// This flag indicates that the underlying buffer being described was created
-// with this structure. When the structure is destroyed, the memory will be
-// freed as well.
+// This flag indicates that the underlying physical memory being described was
+// created with this structure. When the structure is destroyed, the memory
+// will be freed as well.
 //
 
-#define IO_BUFFER_FLAG_MEMORY_OWNED 0x00000001
+#define IO_BUFFER_FLAG_PHYSICAL_MEMORY_OWNED 0x00000001
 
 //
 // This flag is set when the structure was not allocated by these routines.
@@ -65,30 +65,23 @@ Environment:
 #define IO_BUFFER_FLAG_PAGE_CACHE_BACKED 0x00000010
 
 //
-// This flag is set if the buffer represents a single fragment of another I/O
-// buffer.
-//
-
-#define IO_BUFFER_FLAG_FRAGMENT 0x00000020
-
-//
 // This flag is set if the I/O buffer represents a region in user mode.
 //
 
-#define IO_BUFFER_FLAG_USER_MODE 0x00000040
+#define IO_BUFFER_FLAG_USER_MODE 0x00000020
 
 //
 // This flag is set if the I/O buffer is completely mapped. It does not have to
 // be virtually contiguous.
 //
 
-#define IO_BUFFER_FLAG_MAPPED 0x00000080
+#define IO_BUFFER_FLAG_MAPPED 0x00000040
 
 //
 // This flag is set if the I/O buffer is mapped virtually contiguous.
 //
 
-#define IO_BUFFER_FLAG_VIRTUALLY_CONTIGUOUS 0x00000100
+#define IO_BUFFER_FLAG_VIRTUALLY_CONTIGUOUS 0x00000080
 
 //
 // This flag is set if the I/O buffer needs to be unmapped on free. An I/O
@@ -96,14 +89,14 @@ Environment:
 // the virtual addresses were allocated by I/O buffer routines.
 //
 
-#define IO_BUFFER_FLAG_UNMAP_ON_FREE 0x00000200
+#define IO_BUFFER_FLAG_UNMAP_ON_FREE 0x00000100
 
 //
 // This flag is set if the I/O buffer can be extended by appending physical
 // pages, page cache entries, or by allocating new physical memory.
 //
 
-#define IO_BUFFER_FLAG_EXTENDABLE 0x00000400
+#define IO_BUFFER_FLAG_EXTENDABLE 0x00000200
 
 //
 // Store the number of I/O vectors to place on the stack before needed to
@@ -152,6 +145,11 @@ MmpExtendIoBuffer (
     UINTN Alignment,
     UINTN Size,
     BOOL PhysicallyContiguous
+    );
+
+KSTATUS
+MmpLockIoBuffer (
+    PIO_BUFFER *IoBuffer
     );
 
 //
@@ -297,7 +295,7 @@ Return Value:
 
     RtlZeroMemory(IoBuffer, AllocationSize);
     IoBuffer->Internal.MaxFragmentCount = FragmentCount;
-    IoBuffer->Internal.PageCount = PageCount;
+    IoBuffer->Internal.PageCacheEntryCount = PageCount;
     IoBuffer->Internal.TotalSize = AlignedSize;
     IoBuffer->Fragment = (PVOID)IoBuffer + sizeof(IO_BUFFER);
     IoBuffer->Internal.PageCacheEntries = (PVOID)IoBuffer +
@@ -406,7 +404,7 @@ Return Value:
 
     IoBuffer->Internal.Flags = IO_BUFFER_FLAG_NON_PAGED |
                                IO_BUFFER_FLAG_UNMAP_ON_FREE |
-                               IO_BUFFER_FLAG_MEMORY_OWNED |
+                               IO_BUFFER_FLAG_PHYSICAL_MEMORY_OWNED |
                                IO_BUFFER_FLAG_MEMORY_LOCKED |
                                IO_BUFFER_FLAG_MAPPED |
                                IO_BUFFER_FLAG_VIRTUALLY_CONTIGUOUS;
@@ -463,24 +461,18 @@ Return Value:
     UINTN AllocationSize;
     PIO_BUFFER IoBuffer;
 
-    AllocationSize = sizeof(IO_BUFFER) +
-                     sizeof(IO_BUFFER_FRAGMENT) +
-                     Size;
-
+    AllocationSize = sizeof(IO_BUFFER) + Size;
     IoBuffer = MmAllocatePagedPool(AllocationSize, MM_IO_ALLOCATION_TAG);
     if (IoBuffer == NULL) {
         return NULL;
     }
 
     RtlZeroMemory(IoBuffer, AllocationSize);
-    IoBuffer->Fragment = (PVOID)IoBuffer + sizeof(IO_BUFFER);
+    IoBuffer->Fragment = &(IoBuffer->Internal.Fragment);
     IoBuffer->FragmentCount = 1;
     IoBuffer->Internal.TotalSize = Size;
     IoBuffer->Internal.MaxFragmentCount = 1;
-    IoBuffer->Fragment[0].VirtualAddress = (PVOID)IoBuffer +
-                                           sizeof(IO_BUFFER) +
-                                           sizeof(IO_BUFFER_FRAGMENT);
-
+    IoBuffer->Fragment[0].VirtualAddress = (PVOID)IoBuffer + sizeof(IO_BUFFER);
     IoBuffer->Fragment[0].Size = Size;
     IoBuffer->Fragment[0].PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
     IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_VIRTUALLY_CONTIGUOUS |
@@ -535,11 +527,10 @@ Return Value:
 
     IoBuffer = MmAllocateNonPagedPool(AllocationSize, MM_IO_ALLOCATION_TAG);
     if (IoBuffer == NULL) {
-        goto AllocateUninitializedIoBufferEnd;
+        return NULL;
     }
 
     RtlZeroMemory(IoBuffer, AllocationSize);
-    IoBuffer->Internal.PageCount = PageCount;
     IoBuffer->Internal.MaxFragmentCount = PageCount;
     IoBuffer->Fragment = (PVOID)IoBuffer + sizeof(IO_BUFFER);
     IoBuffer->Internal.Flags = IO_BUFFER_FLAG_NON_PAGED |
@@ -549,12 +540,12 @@ Return Value:
         IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_PAGE_CACHE_BACKED |
                                     IO_BUFFER_FLAG_MEMORY_LOCKED;
 
+        IoBuffer->Internal.PageCacheEntryCount = PageCount;
         IoBuffer->Internal.PageCacheEntries = (PVOID)IoBuffer +
                                               sizeof(IO_BUFFER) +
                                               FragmentSize;
     }
 
-AllocateUninitializedIoBufferEnd:
     return IoBuffer;
 }
 
@@ -563,8 +554,6 @@ KSTATUS
 MmCreateIoBuffer (
     PVOID Buffer,
     UINTN SizeInBytes,
-    BOOL NonPaged,
-    BOOL LockMemory,
     BOOL KernelMode,
     PIO_BUFFER *NewIoBuffer
     )
@@ -583,12 +572,6 @@ Arguments:
 
     SizeInBytes - Supplies the size of the buffer, in bytes.
 
-    NonPaged - Supplies a boolean indicating whether or not the I/O buffer
-        structure should be non-paged.
-
-    LockMemory - Supplies a boolean indicating whether or not the buffer's
-        memory needs to be locked.
-
     KernelMode - Supplies a boolean indicating whether or not this buffer is
         a kernel mode buffer (TRUE) or a user mode buffer (FALSE). If it is a
         user mode buffer, this routine will fail if a non-user mode address
@@ -605,267 +588,54 @@ Return Value:
 
 {
 
-    UINTN AllocationSize;
-    UINTN BytesLocked;
-    PVOID CurrentAddress;
-    PVOID EndAddress;
-    UINTN FragmentIndex;
-    UINTN FragmentSize;
-    PIMAGE_SECTION ImageSection;
     PIO_BUFFER IoBuffer;
-    IO_BUFFER LockedBuffer;
-    PVOID NextAddress;
-    PPAGE_CACHE_ENTRY PageCacheEntry;
-    UINTN PageCount;
-    UINTN PageIndex;
-    UINTN PageOffset;
-    ULONG PageShift;
-    ULONG PageSize;
-    PHYSICAL_ADDRESS PhysicalAddress;
-    PKPROCESS Process;
-    PVOID SectionEnd;
-    KSTATUS Status;
-
-    BytesLocked = 0;
-    ImageSection = NULL;
-    PageShift = MmPageShift();
-    PageSize = MmPageSize();
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    EndAddress = Buffer + SizeInBytes;
-    PageCount = (ALIGN_RANGE_UP((UINTN)EndAddress, PageSize) -
-                 ALIGN_RANGE_DOWN((UINTN)Buffer, PageSize)) >> PageShift;
-
-    //
-    // Create an I/O buffer structure. If the memory is to be locked, assume
-    // that locked memory is backed by the page cache.
-    //
-
-    if (LockMemory != FALSE) {
-        AllocationSize = sizeof(IO_BUFFER) +
-                         (PageCount * sizeof(IO_BUFFER_FRAGMENT)) +
-                         (PageCount * sizeof(PPAGE_CACHE_ENTRY));
-
-    } else {
-        AllocationSize = sizeof(IO_BUFFER) + sizeof(IO_BUFFER_FRAGMENT);
-    }
-
-    if (NonPaged != FALSE) {
-        IoBuffer = MmAllocateNonPagedPool(AllocationSize, MM_IO_ALLOCATION_TAG);
-
-    } else {
-        IoBuffer = MmAllocatePagedPool(AllocationSize, MM_IO_ALLOCATION_TAG);
-    }
-
-    if (IoBuffer == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateIoBufferEnd;
-    }
-
-    RtlZeroMemory(IoBuffer, AllocationSize);
-    IoBuffer->Fragment = (PVOID)IoBuffer + sizeof(IO_BUFFER);
-
-    //
-    // Record that the meta-data is non-paged so that it can be properly
-    // released. Also record that all pages in the buffer are locked. It is
-    // necessary to do this here in case the locking process fails; previously
-    // locked pages need to be cleaned up.
-    //
-
-    if (NonPaged != FALSE) {
-        IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_NON_PAGED;
-    }
-
+    *NewIoBuffer = NULL;
     if (KernelMode != FALSE) {
-        Process = PsGetKernelProcess();
 
         ASSERT((Buffer >= KERNEL_VA_START) && (Buffer + SizeInBytes >= Buffer));
 
     } else {
-        Process = PsGetCurrentProcess();
 
-        ASSERT(Process != PsGetKernelProcess());
+        ASSERT(PsGetCurrentProcess() != PsGetKernelProcess());
 
         if ((Buffer + SizeInBytes > KERNEL_VA_START) ||
             (Buffer + SizeInBytes < Buffer)) {
 
-            Status = STATUS_ACCESS_VIOLATION;
-            goto CreateIoBufferEnd;
+            return STATUS_ACCESS_VIOLATION;
         }
+    }
 
+    //
+    // Build the I/O buffer with one fragment and only fill in the virtual
+    // address. If it needs to be pinned later a new I/O buffer structure will
+    // need to be created as this one is in paged pool and may not account for
+    // all the different physical pages.
+    //
+
+    IoBuffer = MmAllocatePagedPool(sizeof(IO_BUFFER), MM_IO_ALLOCATION_TAG);
+    if (IoBuffer == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    RtlZeroMemory(IoBuffer, sizeof(IO_BUFFER));
+    IoBuffer->Fragment = &(IoBuffer->Internal.Fragment);
+    IoBuffer->Internal.TotalSize = SizeInBytes;
+    if (KernelMode == FALSE) {
         IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_USER_MODE;
     }
 
-    IoBuffer->Internal.TotalSize = SizeInBytes;
     IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_MAPPED |
                                 IO_BUFFER_FLAG_VIRTUALLY_CONTIGUOUS;
 
-    //
-    // If the memory is not meant to be locked, just build the I/O buffer with
-    // one fragment and only fill in the virtual address.
-    //
-
-    if (LockMemory == FALSE) {
-        IoBuffer->Internal.MaxFragmentCount = 1;
-        IoBuffer->FragmentCount = 1;
-        IoBuffer->Fragment[0].VirtualAddress = Buffer;
-        IoBuffer->Fragment[0].Size = SizeInBytes;
-        IoBuffer->Fragment[0].PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
-        Status = STATUS_SUCCESS;
-        goto CreateIoBufferEnd;
-    }
-
-    //
-    // Initialize the page cache entry array.
-    //
-
-    IoBuffer->Internal.MaxFragmentCount = PageCount;
-    IoBuffer->Internal.PageCount = PageCount;
-    IoBuffer->Internal.PageCacheEntries = (PVOID)IoBuffer +
-                                          sizeof(IO_BUFFER) +
-                                          (PageCount *
-                                           sizeof(IO_BUFFER_FRAGMENT));
-
-    //
-    // Make sure the entire buffer is in memory, and lock it down there.
-    //
-
-    CurrentAddress = Buffer;
-    FragmentIndex = 0;
-    PageIndex = 0;
-    SectionEnd = NULL;
-    while (CurrentAddress < EndAddress) {
-
-        //
-        // Attempt to grab the next section if a section boundary was just
-        // crossed or there has been no section up to this point. If there
-        // is no section, assume the memory is non-paged.
-        //
-
-        if (SectionEnd <= CurrentAddress) {
-            if (ImageSection != NULL) {
-                MmpImageSectionReleaseReference(ImageSection);
-                ImageSection = NULL;
-            }
-
-            Status = MmpLookupSection(CurrentAddress,
-                                      Process,
-                                      &ImageSection,
-                                      &PageOffset);
-
-            if (KSUCCESS(Status)) {
-                SectionEnd = ImageSection->VirtualAddress + ImageSection->Size;
-            }
-        }
-
-        //
-        // If there is an image section, then page the data in and lock it down
-        // at the same time.
-        //
-
-        if (ImageSection != NULL) {
-            Status = MmpPageIn(ImageSection, PageOffset, &LockedBuffer);
-            if (Status == STATUS_TRY_AGAIN) {
-                continue;
-            }
-
-            if (!KSUCCESS(Status)) {
-                goto CreateIoBufferEnd;
-            }
-
-            //
-            // Get the locked physical address and page cache entry from the
-            // returned I/O buffer. Transfer the reference taken on the page
-            // cache entry to the new I/O buffer.
-            //
-
-            PhysicalAddress = MmGetIoBufferPhysicalAddress(&LockedBuffer, 0);
-            PageCacheEntry = MmGetIoBufferPageCacheEntry(&LockedBuffer, 0);
-            if (PageCacheEntry != NULL) {
-                IoBuffer->Internal.PageCacheEntries[PageIndex] = PageCacheEntry;
-                IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_PAGE_CACHE_BACKED;
-            }
-
-        //
-        // If there is no image section, then the page better be non-paged and
-        // the caller should not release it until this I/O buffer is done using
-        // it.
-        //
-
-        } else {
-            PhysicalAddress = MmpVirtualToPhysical(CurrentAddress, NULL);
-            if (PhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
-                Status = STATUS_INVALID_PARAMETER;
-                goto CreateIoBufferEnd;
-            }
-        }
-
-        //
-        // Determine the size of this fragment. If this is the beginning of
-        // the buffer, then go up to the next page boundary. Clip if that goes
-        // beyond the end. This makes sure all fragments are page aligned
-        // except for the beginning and end.
-        //
-
-        NextAddress = (PVOID)(UINTN)ALIGN_RANGE_UP((UINTN)CurrentAddress + 1,
-                                                   PageSize);
-
-        if (NextAddress > EndAddress) {
-            NextAddress = EndAddress;
-        }
-
-        FragmentSize = (UINTN)NextAddress - (UINTN)CurrentAddress;
-
-        ASSERT(FragmentSize != 0);
-
-        //
-        // If this buffer is contiguous with the last one, then just up the
-        // size of this fragment. Otherwise, add a new fragment.
-        //
-
-        if ((IoBuffer->FragmentCount != 0) &&
-            ((IoBuffer->Fragment[FragmentIndex - 1].PhysicalAddress +
-              IoBuffer->Fragment[FragmentIndex - 1].Size) == PhysicalAddress)) {
-
-            IoBuffer->Fragment[FragmentIndex - 1].Size += FragmentSize;
-
-        } else {
-            IoBuffer->Fragment[FragmentIndex].VirtualAddress = CurrentAddress;
-            IoBuffer->Fragment[FragmentIndex].PhysicalAddress = PhysicalAddress;
-            IoBuffer->Fragment[FragmentIndex].Size = FragmentSize;
-            IoBuffer->FragmentCount += 1;
-            FragmentIndex += 1;
-        }
-
-        BytesLocked += FragmentSize;
-        CurrentAddress += FragmentSize;
-        PageOffset += 1;
-        PageIndex += 1;
-    }
-
-    Status = STATUS_SUCCESS;
-
-CreateIoBufferEnd:
-    if (LockMemory != FALSE) {
-        if (ImageSection != NULL) {
-            MmpImageSectionReleaseReference(ImageSection);
-        }
-
-        if (BytesLocked != 0) {
-            IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_MEMORY_LOCKED;
-        }
-    }
-
-    if (!KSUCCESS(Status)) {
-        if (IoBuffer != NULL) {
-            MmFreeIoBuffer(IoBuffer);
-            IoBuffer = NULL;
-        }
-    }
-
+    IoBuffer->Internal.MaxFragmentCount = 1;
+    IoBuffer->FragmentCount = 1;
+    IoBuffer->Fragment[0].VirtualAddress = Buffer;
+    IoBuffer->Fragment[0].Size = SizeInBytes;
     *NewIoBuffer = IoBuffer;
-    return Status;
+    return STATUS_SUCCESS;
 }
 
 KSTATUS
@@ -1039,6 +809,7 @@ Return Value:
 
     IoBuffer->Internal.TotalSize = TotalSize;
     IoBuffer->FragmentCount = FragmentIndex;
+    IoBuffer->Internal.MaxFragmentCount = FragmentIndex;
     Status = STATUS_SUCCESS;
 
 CreateIoBufferFromVectorEnd:
@@ -1057,14 +828,15 @@ CreateIoBufferFromVectorEnd:
     return Status;
 }
 
-VOID
+KSTATUS
 MmInitializeIoBuffer (
     PIO_BUFFER IoBuffer,
     PVOID VirtualAddress,
     PHYSICAL_ADDRESS PhysicalAddress,
     UINTN SizeInBytes,
     BOOL CacheBacked,
-    BOOL MemoryLocked
+    BOOL MemoryLocked,
+    BOOL KernelMode
     )
 
 /*++
@@ -1072,9 +844,9 @@ MmInitializeIoBuffer (
 Routine Description:
 
     This routine initializes an I/O buffer based on the given virtual and
-    physical address and the size. It is assumed that the range of bytes is
-    both virtually and physically contiguous so that it can be contained in
-    one fragment.
+    physical address and the size. If a physical address is supplied, it is
+    assumed that the range of bytes is both virtually and physically contiguous
+    so that it can be contained in one fragment.
 
 Arguments:
 
@@ -1092,26 +864,27 @@ Arguments:
     MemoryLocked - Supplies a boolean if the physical address supplied is
         locked in memory.
 
+    KernelMode - Supplies a boolean indicating whether or not this buffer is
+        a kernel mode buffer (TRUE) or a user mode buffer (FALSE). If it is a
+        user mode buffer, this routine will fail if a non-user mode address
+        was passed in.
+
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
 {
 
-    UINTN Address;
-    ULONG PageSize;
-
-    Address = (UINTN)VirtualAddress;
-    PageSize = MmPageSize();
-
     //
-    // Assert that this buffer only spans one page.
+    // Assert that this buffer only spans one physical page. Multiple virtual
+    // pages are OK.
     //
 
-    ASSERT(ALIGN_RANGE_UP(Address + SizeInBytes, PageSize) -
-           ALIGN_RANGE_DOWN(Address, PageSize) <= PageSize);
+    ASSERT((PhysicalAddress == INVALID_PHYSICAL_ADDRESS) ||
+           (ALIGN_RANGE_UP(PhysicalAddress + SizeInBytes, MmPageSize()) -
+            ALIGN_RANGE_DOWN(PhysicalAddress, MmPageSize()) <= MmPageSize()));
 
     //
     // Note that the I/O buffer structure is not owned so that it is not
@@ -1136,41 +909,63 @@ Return Value:
         IoBuffer->Internal.PageCacheEntries =
                                           &(IoBuffer->Internal.PageCacheEntry);
 
-        IoBuffer->Internal.PageCount = 1;
+        IoBuffer->Internal.PageCacheEntryCount = 1;
     }
 
     //
     // Record that the memory is locked so that the physical pages get unlocked
-    // when the buffer is released.
+    // when the buffer is released. The caller better have supplied a physical
+    // address.
     //
 
     if (MemoryLocked != FALSE) {
+
+        ASSERT(PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
+
         IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_MEMORY_LOCKED;
     }
 
     //
-    // Find the physical address if it was not supplied and a virtual address
-    // was supplied.
+    // Validate the virtual address if it was supplied.
     //
 
     if (VirtualAddress != NULL) {
+
+        //
+        // Validate that the buffer does not cross the user mode boundary.
+        //
+
+        if (KernelMode != FALSE) {
+
+            ASSERT((VirtualAddress >= KERNEL_VA_START) &&
+                   (VirtualAddress + SizeInBytes >= VirtualAddress));
+
+        } else {
+
+            ASSERT(PsGetCurrentProcess() != PsGetKernelProcess());
+
+            if ((VirtualAddress + SizeInBytes > KERNEL_VA_START) ||
+                (VirtualAddress + SizeInBytes < VirtualAddress)) {
+
+                return STATUS_ACCESS_VIOLATION;
+            }
+
+            IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_USER_MODE;
+        }
+
         IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_MAPPED |
                                     IO_BUFFER_FLAG_VIRTUALLY_CONTIGUOUS;
-
-        if (PhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
-            PhysicalAddress = MmpVirtualToPhysical(VirtualAddress, NULL);
-
-            ASSERT(PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
-        }
     }
 
     //
-    // If a physical address is now present, set up the first and only fragment.
+    // Fill out the fragment if a virtual or physical address was supplied. A
+    // non-zero size is a good indicator of that.
     //
 
-    if (PhysicalAddress != INVALID_PHYSICAL_ADDRESS) {
+    if (SizeInBytes != 0) {
 
-        ASSERT(SizeInBytes != 0);
+        ASSERT((PhysicalAddress != INVALID_PHYSICAL_ADDRESS) ||
+               (VirtualAddress != NULL));
 
         IoBuffer->Internal.TotalSize = SizeInBytes;
         IoBuffer->Fragment[0].VirtualAddress = VirtualAddress;
@@ -1179,7 +974,7 @@ Return Value:
         IoBuffer->FragmentCount = 1;
     }
 
-    return;
+    return STATUS_SUCCESS;
 }
 
 KERNEL_API
@@ -1279,7 +1074,7 @@ Return Value:
 
     if (IoBuffer->Internal.PageCacheEntries != NULL) {
         RtlZeroMemory(IoBuffer->Internal.PageCacheEntries,
-                      IoBuffer->Internal.PageCount * sizeof(PVOID));
+                      IoBuffer->Internal.PageCacheEntryCount * sizeof(PVOID));
     }
 
     return;
@@ -2118,17 +1913,17 @@ Return Value:
     PHYSICAL_ADDRESS PhysicalAddressStart;
     KSTATUS Status;
 
-    AllocateIoBuffer = FALSE;
     Buffer = *IoBuffer;
     if (Buffer == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
 
+    AllocateIoBuffer = FALSE;
     Status = STATUS_SUCCESS;
 
     //
     // If the I/O buffer won't be able to fit the data and it is not
-    // extendable,  then do not re-allocate a different buffer, just fail.
+    // extendable, then do not re-allocate a different buffer, just fail.
     //
 
     if (((Buffer->Internal.Flags & IO_BUFFER_FLAG_EXTENDABLE) == 0) &&
@@ -2149,8 +1944,18 @@ Return Value:
     }
 
     //
+    // If the I/O buffer does not have the backing memory locked in place, then
+    // a new buffer with pinned pages needs to be allocated.
+    //
+
+    if ((Buffer->Internal.Flags & IO_BUFFER_FLAG_MEMORY_LOCKED) == 0) {
+        AllocateIoBuffer = TRUE;
+        goto ValidateIoBufferEnd;
+    }
+
+    //
     // Validate that the physical pages starting at the I/O buffer's offset are
-    // in the specified range, aligned and that they are physically contigous,
+    // in the specified range, aligned and that they are physically contiguous,
     // if necessary.
     //
 
@@ -2500,11 +2305,12 @@ Return Value:
         // count.
         //
 
-        ASSERT(IoBuffer->FragmentCount <= IoBuffer->Internal.PageCount);
+        ASSERT(IoBuffer->FragmentCount <=
+               IoBuffer->Internal.PageCacheEntryCount);
 
         PageIndex = IoBuffer->Internal.TotalSize >> MmPageShift();
 
-        ASSERT(PageIndex < IoBuffer->Internal.PageCount);
+        ASSERT(PageIndex < IoBuffer->Internal.PageCacheEntryCount);
         ASSERT(IoBuffer->Internal.PageCacheEntries[PageIndex] == NULL);
         ASSERT((IoBuffer->Internal.Flags &
                 IO_BUFFER_FLAG_PAGE_CACHE_BACKED) != 0);
@@ -2566,7 +2372,7 @@ Return Value:
     // at the given offset better match what's in the page cache entry.
     //
 
-    ASSERT(PageIndex < IoBuffer->Internal.PageCount);
+    ASSERT(PageIndex < IoBuffer->Internal.PageCacheEntryCount);
     ASSERT(IoBuffer->Internal.PageCacheEntries[PageIndex] == NULL);
     ASSERT(MmGetIoBufferPhysicalAddress(IoBuffer, IoBufferOffset) ==
            IoGetPageCacheEntryPhysicalAddress(PageCacheEntry));
@@ -2622,7 +2428,7 @@ Return Value:
 
     PageIndex = IoBufferOffset >> MmPageShift();
 
-    ASSERT(PageIndex < IoBuffer->Internal.PageCount);
+    ASSERT(PageIndex < IoBuffer->Internal.PageCacheEntryCount);
 
     return IoBuffer->Internal.PageCacheEntries[PageIndex];
 }
@@ -2868,7 +2674,7 @@ Return Value:
     // page cache entries, iterate over the I/O buffer, releasing each fragment.
     //
 
-    if (((Flags & IO_BUFFER_FLAG_MEMORY_OWNED) != 0) ||
+    if (((Flags & IO_BUFFER_FLAG_PHYSICAL_MEMORY_OWNED) != 0) ||
         ((Flags & IO_BUFFER_FLAG_PAGE_CACHE_BACKED) != 0)) {
 
         PageCacheEntry = NULL;
@@ -2916,7 +2722,9 @@ Return Value:
                 // the physical page.
                 //
 
-                } else if ((Flags & IO_BUFFER_FLAG_MEMORY_OWNED) != 0) {
+                } else if ((Flags &
+                            IO_BUFFER_FLAG_PHYSICAL_MEMORY_OWNED) != 0) {
+
                     MmFreePhysicalPage(PhysicalAddress);
 
                 //
@@ -2942,7 +2750,7 @@ Return Value:
     // page in the buffer.
     //
 
-    } else if (((Flags & IO_BUFFER_FLAG_MEMORY_OWNED) == 0) &&
+    } else if (((Flags & IO_BUFFER_FLAG_PHYSICAL_MEMORY_OWNED) == 0) &&
                ((Flags & IO_BUFFER_FLAG_MEMORY_LOCKED) != 0)) {
 
         //
@@ -2951,7 +2759,7 @@ Return Value:
         // Loop over the buffer and decide what to do for each page.
         //
 
-        ASSERT(IoBuffer->Internal.PageCount > 0);
+        ASSERT(IoBuffer->Internal.PageCacheEntryCount > 0);
         ASSERT(IoBuffer->Internal.PageCacheEntries != NULL);
 
         CacheEntryIndex = 0;
@@ -3248,7 +3056,7 @@ Return Value:
             CurrentAddress = Fragment->VirtualAddress + FragmentOffset;
             for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
 
-                ASSERT(PageCacheIndex < IoBuffer->Internal.PageCount);
+                ASSERT(PageCacheIndex < IoBuffer->Internal.PageCacheEntryCount);
 
                 PageCacheEntry = PageCacheEntries[PageCacheIndex];
                 FragmentOffset += PageSize;
@@ -3641,10 +3449,291 @@ Return Value:
     //
 
     IoBuffer->Internal.Flags &= ~IO_BUFFER_FLAG_MAPPED;
-    IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_MEMORY_OWNED;
+    IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_PHYSICAL_MEMORY_OWNED;
     Status = STATUS_SUCCESS;
 
 ExtendIoBufferEnd:
+    return Status;
+}
+
+KSTATUS
+MmpLockIoBuffer (
+    PIO_BUFFER *IoBuffer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine locks the memory described by the given I/O buffer,
+    potentially allocating and handing back a new I/O buffer structure that is
+    also locked in memory.
+
+Arguments:
+
+    IoBuffer - Supplies a pointer to the I/O buffer to be locked. On return, it
+        may receive a pointer to a newly allocated I/O buffer.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINTN AllocationSize;
+    UINTN BytesLocked;
+    PVOID CurrentAddress;
+    PVOID EndAddress;
+    PIO_BUFFER_FRAGMENT Fragment;
+    UINTN FragmentIndex;
+    UINTN FragmentSize;
+    PIMAGE_SECTION ImageSection;
+    PIO_BUFFER LockedIoBuffer;
+    PVOID NextAddress;
+    PPAGE_CACHE_ENTRY PageCacheEntry;
+    UINTN PageCount;
+    IO_BUFFER PagedInBuffer;
+    UINTN PageIndex;
+    UINTN PageOffset;
+    ULONG PageShift;
+    ULONG PageSize;
+    PHYSICAL_ADDRESS PhysicalAddress;
+    PKPROCESS Process;
+    PVOID SectionEnd;
+    PVOID StartAddress;
+    KSTATUS Status;
+    PIO_BUFFER UnlockedIoBuffer;
+    ULONG UnlockedIoBufferFlags;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    UnlockedIoBuffer = *IoBuffer;
+    UnlockedIoBufferFlags = UnlockedIoBuffer->Internal.Flags;
+    if ((UnlockedIoBufferFlags & IO_BUFFER_FLAG_MEMORY_LOCKED) != 0) {
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // Locking down user mode memory is not allowed.
+    //
+
+    if ((UnlockedIoBufferFlags & IO_BUFFER_FLAG_USER_MODE) != 0) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    //
+    // The I/O buffer better be mapped (and contiguously at that) or else there
+    // is no way to know which pages to lock. Besides, if the buffer is not
+    // mapped but filled with physical pages, they are pinned due to the fact
+    // that they are not in paged pool! Paged pool is always mapped.
+    //
+
+    ASSERT((UnlockedIoBufferFlags & IO_BUFFER_FLAG_MAPPED) != 0);
+    ASSERT((UnlockedIoBufferFlags & IO_BUFFER_FLAG_VIRTUALLY_CONTIGUOUS) != 0);
+
+    //
+    // There should only be one fragment on an unlocked I/O buffer.
+    //
+
+    ASSERT(UnlockedIoBuffer->FragmentCount == 1);
+
+    BytesLocked = 0;
+    ImageSection = NULL;
+    PageShift = MmPageShift();
+    PageSize = MmPageSize();
+
+    //
+    // Determine the total number of physical pages that could need to be
+    // locked. The I/O buffer may not be big enough.
+    //
+
+    StartAddress = UnlockedIoBuffer->Fragment[0].VirtualAddress;
+    EndAddress = StartAddress + UnlockedIoBuffer->Fragment[0].Size;
+    PageCount = (ALIGN_POINTER_UP(EndAddress, PageSize) -
+                 ALIGN_POINTER_DOWN(StartAddress, PageSize)) >> PageShift;
+
+    //
+    // Allocate a new I/O buffer that can handle all the potential fragments in
+    // the worst case where none of the physical pages are contiguous.
+    //
+
+    AllocationSize = sizeof(IO_BUFFER) +
+                     (PageCount * sizeof(IO_BUFFER_FRAGMENT)) +
+                     (PageCount * sizeof(PPAGE_CACHE_ENTRY));
+
+    LockedIoBuffer = MmAllocateNonPagedPool(AllocationSize,
+                                         MM_IO_ALLOCATION_TAG);
+
+    if (LockedIoBuffer == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto LockIoBufferEnd;
+    }
+
+    RtlZeroMemory(LockedIoBuffer, AllocationSize);
+    LockedIoBuffer->Fragment = (PVOID)LockedIoBuffer + sizeof(IO_BUFFER);
+    LockedIoBuffer->Internal.MaxFragmentCount = PageCount;
+    LockedIoBuffer->Internal.PageCacheEntryCount = PageCount;
+    LockedIoBuffer->Internal.PageCacheEntries = (PVOID)LockedIoBuffer +
+                                             sizeof(IO_BUFFER) +
+                                             (PageCount *
+                                              sizeof(IO_BUFFER_FRAGMENT));
+
+    LockedIoBuffer->Internal.Flags = IO_BUFFER_FLAG_NON_PAGED |
+                                     IO_BUFFER_FLAG_MAPPED |
+                                     IO_BUFFER_FLAG_VIRTUALLY_CONTIGUOUS;
+
+    LockedIoBuffer->Internal.CurrentOffset =
+                                      UnlockedIoBuffer->Internal.CurrentOffset;
+
+    LockedIoBuffer->Internal.TotalSize = UnlockedIoBuffer->Internal.TotalSize;
+
+    //
+    // Make sure the entire buffer is in memory, and lock it down there.
+    //
+
+    Process = PsGetKernelProcess();
+    CurrentAddress = StartAddress;
+    Fragment = NULL;
+    FragmentIndex = 0;
+    PageIndex = 0;
+    SectionEnd = NULL;
+    while (CurrentAddress < EndAddress) {
+
+        //
+        // Attempt to grab the next section if a section boundary was just
+        // crossed or there has been no section up to this point. If there
+        // is no section, assume the memory is non-paged.
+        //
+
+        if (SectionEnd <= CurrentAddress) {
+            if (ImageSection != NULL) {
+                MmpImageSectionReleaseReference(ImageSection);
+                ImageSection = NULL;
+            }
+
+            Status = MmpLookupSection(CurrentAddress,
+                                      Process,
+                                      &ImageSection,
+                                      &PageOffset);
+
+            if (KSUCCESS(Status)) {
+                SectionEnd = ImageSection->VirtualAddress + ImageSection->Size;
+            }
+        }
+
+        //
+        // If there is an image section, then page the data in and lock it down
+        // at the same time.
+        //
+
+        if (ImageSection != NULL) {
+            Status = MmpPageIn(ImageSection, PageOffset, &PagedInBuffer);
+            if (Status == STATUS_TRY_AGAIN) {
+                continue;
+            }
+
+            if (!KSUCCESS(Status)) {
+                goto LockIoBufferEnd;
+            }
+
+            //
+            // Get the locked physical address and page cache entry from the
+            // returned I/O buffer. Transfer the reference taken on the page
+            // cache entry to the new I/O buffer.
+            //
+
+            PhysicalAddress = MmGetIoBufferPhysicalAddress(&PagedInBuffer, 0);
+            PageCacheEntry = MmGetIoBufferPageCacheEntry(&PagedInBuffer, 0);
+            if (PageCacheEntry != NULL) {
+                LockedIoBuffer->Internal.Flags |=
+                                              IO_BUFFER_FLAG_PAGE_CACHE_BACKED;
+
+                LockedIoBuffer->Internal.PageCacheEntries[PageIndex] =
+                                                                PageCacheEntry;
+            }
+
+        //
+        // If there is no image section, then the page better be non-paged and
+        // the owner should not release it until this I/O buffer is done using
+        // it. There is no way to prevent the owner from called free on the
+        // non-paged pool region, for instance, so there is some level of trust
+        // here.
+        //
+
+        } else {
+            PhysicalAddress = MmpVirtualToPhysical(CurrentAddress, NULL);
+            if (PhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
+                Status = STATUS_INVALID_PARAMETER;
+                goto LockIoBufferEnd;
+            }
+        }
+
+        //
+        // Determine the size of this fragment. If this is the beginning of
+        // the buffer, then go up to the next page boundary. Clip if that goes
+        // beyond the end. This makes sure all fragments are page aligned
+        // except for the beginning and end.
+        //
+
+        NextAddress = (PVOID)(UINTN)ALIGN_RANGE_UP((UINTN)CurrentAddress + 1,
+                                                   PageSize);
+
+        if (NextAddress > EndAddress) {
+            NextAddress = EndAddress;
+        }
+
+        FragmentSize = (UINTN)NextAddress - (UINTN)CurrentAddress;
+
+        ASSERT(FragmentSize != 0);
+
+        //
+        // If this buffer is contiguous with the last one, then just up the
+        // size of this fragment. Otherwise, add a new fragment.
+        //
+
+        if ((Fragment != NULL) &&
+            ((Fragment->PhysicalAddress + Fragment->Size) == PhysicalAddress)) {
+
+            Fragment->Size += FragmentSize;
+
+        } else {
+            Fragment = &(LockedIoBuffer->Fragment[FragmentIndex]);
+            Fragment->VirtualAddress = CurrentAddress;
+            Fragment->PhysicalAddress = PhysicalAddress;
+            Fragment->Size = FragmentSize;
+            LockedIoBuffer->FragmentCount += 1;
+            FragmentIndex += 1;
+        }
+
+        BytesLocked += FragmentSize;
+        CurrentAddress += FragmentSize;
+        PageOffset += 1;
+        PageIndex += 1;
+    }
+
+    Status = STATUS_SUCCESS;
+
+LockIoBufferEnd:
+    if (ImageSection != NULL) {
+        MmpImageSectionReleaseReference(ImageSection);
+    }
+
+    if (BytesLocked != 0) {
+        LockedIoBuffer->Internal.Flags |= IO_BUFFER_FLAG_MEMORY_LOCKED;
+    }
+
+    if (!KSUCCESS(Status)) {
+        if (LockedIoBuffer != NULL) {
+            MmFreeIoBuffer(LockedIoBuffer);
+            LockedIoBuffer = NULL;
+        }
+
+    } else {
+        *IoBuffer = LockedIoBuffer;
+    }
+
     return Status;
 }
 

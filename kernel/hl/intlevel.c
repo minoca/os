@@ -473,14 +473,6 @@ Return Value:
     Interrupt = Dpc->UserData;
 
     //
-    // Call the dispatch level ISR if requested.
-    //
-
-    if (Interrupt->DispatchServiceRoutine != NULL) {
-        Interrupt->DispatchServiceRoutine(Interrupt->Context);
-    }
-
-    //
     // Deferred interrupts are only processed at low level, not dispatch.
     //
 
@@ -505,6 +497,14 @@ Return Value:
 
     } else {
         RtlAtomicAnd32(&(Interrupt->QueueFlags), ~INTERRUPT_QUEUE_DPC_QUEUED);
+    }
+
+    //
+    // Call the dispatch level ISR if requested.
+    //
+
+    if (Interrupt->DispatchServiceRoutine != NULL) {
+        Interrupt->DispatchServiceRoutine(Interrupt->Context);
     }
 
     return;

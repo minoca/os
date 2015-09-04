@@ -127,7 +127,7 @@ Return Value:
     PIO_BUFFER IoBuffer;
     KSTATUS Status;
 
-    Status = MmCreateIoBuffer(Buffer, Size, FALSE, FALSE, TRUE, &IoBuffer);
+    Status = MmCreateIoBuffer(Buffer, Size, TRUE, &IoBuffer);
     if (!KSUCCESS(Status)) {
         return NULL;
     }

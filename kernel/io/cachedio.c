@@ -228,9 +228,6 @@ Return Value:
             Status = IopPerformCachedWrite(FileObject, IoContext);
 
         } else {
-
-            ASSERT(Handle->DeviceContext != NULL);
-
             Status = IopPerformNonCachedWrite(FileObject,
                                               IoContext,
                                               Handle->DeviceContext,
@@ -257,9 +254,6 @@ Return Value:
             Status = IopPerformCachedRead(FileObject, IoContext);
 
         } else {
-
-            ASSERT(Handle->DeviceContext != NULL);
-
             Status = IopPerformNonCachedRead(FileObject,
                                              IoContext,
                                              Handle->DeviceContext);
@@ -338,7 +332,6 @@ Return Value:
     case IoObjectSharedMemoryObject:
         Status = IopPerformSharedMemoryIoOperation(FileObject,
                                                    IoContext,
-                                                   DeviceContext,
                                                    FALSE);
 
         break;
@@ -409,7 +402,6 @@ Return Value:
     case IoObjectSharedMemoryObject:
         Status = IopPerformSharedMemoryIoOperation(FileObject,
                                                    IoContext,
-                                                   DeviceContext,
                                                    UpdateFileSize);
 
         break;
@@ -1130,12 +1122,17 @@ Return Value:
         // entry from the read.
         //
 
-        MmInitializeIoBuffer(&PageCacheBuffer,
-                             NULL,
-                             INVALID_PHYSICAL_ADDRESS,
-                             0,
-                             TRUE,
-                             FALSE);
+        Status = MmInitializeIoBuffer(&PageCacheBuffer,
+                                      NULL,
+                                      INVALID_PHYSICAL_ADDRESS,
+                                      0,
+                                      TRUE,
+                                      FALSE,
+                                      TRUE);
+
+        if (!KSUCCESS(Status)) {
+            goto HandleCacheWriteMissEnd;
+        }
 
         PageCacheBufferInitialized = TRUE;
 

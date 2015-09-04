@@ -1308,6 +1308,7 @@ Return Value:
     UINTN FragmentOffset;
     PIO_BUFFER IoBuffer;
     UINTN IoBufferOffset;
+    KSTATUS IrpStatus;
     BOOL LockHeld;
     PIO_BUFFER OriginalIoBuffer;
     KSTATUS Status;
@@ -1317,7 +1318,52 @@ Return Value:
 
     ASSERT(Disk->Type == UsbMassStorageLogicalDisk);
 
+    //
+    // Handle the IRP coming back up the stack. It has already been completed,
+    // so just release the lock and if the IRP's buffer was not used directly
+    // for the I/O, copy the contents back into the IRP's buffer.
+    //
+
     if (Irp->Direction != IrpDown) {
+
+        ASSERT(Irp == Disk->Irp);
+
+        IoBuffer = Disk->IoBuffer;
+        Disk->IoBuffer = NULL;
+        Disk->Irp = NULL;
+        KeReleaseQueuedLock(Disk->Device->Lock);
+        OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
+        if (OriginalIoBuffer != IoBuffer) {
+            if ((Irp->MinorCode == IrpMinorIoRead) &&
+                (Irp->U.ReadWrite.IoBytesCompleted != 0)) {
+
+                Status = MmCopyIoBuffer(OriginalIoBuffer,
+                                        0,
+                                        IoBuffer,
+                                        0,
+                                        Irp->U.ReadWrite.IoBytesCompleted);
+
+                if (!KSUCCESS(Status)) {
+                    Irp->U.ReadWrite.IoBytesCompleted = 0;
+                    IrpStatus = IoGetIrpStatus(Irp);
+                    if (KSUCCESS(IrpStatus)) {
+                        IoCompleteIrp(UsbMassDriver, Irp, Status);
+                    }
+
+                } else {
+                    for (FragmentIndex = 0;
+                         FragmentIndex < OriginalIoBuffer->FragmentCount;
+                         FragmentIndex += 1) {
+
+                        Fragment = &(OriginalIoBuffer->Fragment[FragmentIndex]);
+                        MmFlushBuffer(Fragment->VirtualAddress, Fragment->Size);
+                    }
+                }
+            }
+
+            MmFreeIoBuffer(IoBuffer);
+        }
+
         return;
     }
 
@@ -3627,8 +3673,9 @@ Return Value:
     }
 
     if (POWER_OF_2(BlockSize) == FALSE) {
-
-        ASSERT(POWER_OF_2(BlockSize) != FALSE);
+        RtlDebugPrint("USB MASS: Invalid block size 0x%08x for device 0x%08x\n",
+                      BlockSize,
+                      Disk->OsDevice);
 
         Status = STATUS_INVALID_CONFIGURATION;
         goto ReadFormatCapacitiesEnd;
@@ -3725,8 +3772,9 @@ Return Value:
     }
 
     if (POWER_OF_2(BlockSize) == FALSE) {
-
-        ASSERT(POWER_OF_2(BlockSize) != FALSE);
+        RtlDebugPrint("USB MASS: Invalid block size 0x%08x for device 0x%08x\n",
+                      BlockSize,
+                      Disk->OsDevice);
 
         Status = STATUS_INVALID_CONFIGURATION;
         goto ReadCapacityEnd;
@@ -4016,11 +4064,8 @@ Return Value:
     BOOL CompleteIrp;
     PUSB_DISK Disk;
     UCHAR Endpoint;
-    PIO_BUFFER_FRAGMENT Fragment;
-    UINTN FragmentIndex;
     PIO_BUFFER IoBuffer;
     PIRP Irp;
-    PIO_BUFFER OriginalIoBuffer;
     KSTATUS Status;
     BOOL SubmitStatusTransfer;
     PUSB_MASS_STORAGE_TRANSFERS Transfers;
@@ -4228,37 +4273,6 @@ TransferCompletionCallbackEnd:
         ASSERT(Disk->Irp != NULL);
 
         Irp->U.ReadWrite.IoBytesCompleted = Disk->CurrentBytesTransferred;
-        Disk->Irp = NULL;
-        Disk->IoBuffer = NULL;
-        KeReleaseQueuedLock(Disk->Device->Lock);
-        OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
-        if (OriginalIoBuffer != IoBuffer) {
-            if ((Irp->MinorCode == IrpMinorIoRead) &&
-                (Irp->U.ReadWrite.IoBytesCompleted != 0)) {
-
-                Status = MmCopyIoBuffer(OriginalIoBuffer,
-                                        0,
-                                        IoBuffer,
-                                        0,
-                                        Irp->U.ReadWrite.IoBytesCompleted);
-
-                if (!KSUCCESS(Status)) {
-                    Irp->U.ReadWrite.IoBytesCompleted = 0;
-
-                } else {
-                    for (FragmentIndex = 0;
-                         FragmentIndex < OriginalIoBuffer->FragmentCount;
-                         FragmentIndex += 1) {
-
-                        Fragment = &(OriginalIoBuffer->Fragment[FragmentIndex]);
-                        MmFlushBuffer(Fragment->VirtualAddress, Fragment->Size);
-                    }
-                }
-            }
-
-            MmFreeIoBuffer(IoBuffer);
-        }
-
         Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset +
                                        Irp->U.ReadWrite.IoBytesCompleted;
 

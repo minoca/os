@@ -1626,8 +1626,6 @@ Return Value:
                     Status = MmCreateIoBuffer(
                                     Child->ReceiveBuffer + Child->ReceiveStart,
                                     Child->ReceiveSize - Child->ReceiveStart,
-                                    FALSE,
-                                    FALSE,
                                     TRUE,
                                     &IoBuffer);
 
@@ -1677,8 +1675,6 @@ Return Value:
                     Status = MmCreateIoBuffer(
                                     Child->ReceiveBuffer + Child->ReceiveStart,
                                     ReceiveEnd - Child->ReceiveStart,
-                                    FALSE,
-                                    FALSE,
                                     TRUE,
                                     &IoBuffer);
 

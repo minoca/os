@@ -324,14 +324,13 @@ Return Value:
     PSTR Command;
     PIO_HANDLE File;
     ULONGLONG FileSize;
-    PIO_BUFFER IoBuffer;
+    IO_BUFFER IoBuffer;
     PKPROCESS Process;
     KSTATUS Status;
     PIO_HANDLE Volume;
 
     Command = NULL;
     File = NULL;
-    IoBuffer = NULL;
     Volume = NULL;
 
     //
@@ -468,13 +467,20 @@ Return Value:
         goto VolumeArrivalEnd;
     }
 
-    Status = MmCreateIoBuffer(Command, FileSize, FALSE, FALSE, TRUE, &IoBuffer);
+    Status = MmInitializeIoBuffer(&IoBuffer,
+                                  Command,
+                                  INVALID_PHYSICAL_ADDRESS,
+                                  FileSize,
+                                  FALSE,
+                                  FALSE,
+                                  TRUE);
+
     if (!KSUCCESS(Status)) {
         goto VolumeArrivalEnd;
     }
 
     Status = IoRead(File,
-                    IoBuffer,
+                    &IoBuffer,
                     (UINTN)FileSize,
                     0,
                     WAIT_TIME_INDEFINITE,
@@ -517,10 +523,6 @@ Return Value:
 VolumeArrivalEnd:
     if (Volume != NULL) {
         IoClose(Volume);
-    }
-
-    if (IoBuffer != NULL) {
-        MmFreeIoBuffer(IoBuffer);
     }
 
     if (File != NULL) {

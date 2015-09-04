@@ -893,7 +893,7 @@ Return Value:
 
     //
     // Otherwise, flush the data for the specific handle. If the data for the
-    // handle is not in the cache because it's not cacheable, just exit.
+    // handle is not in the cache because it's not cacheable, exit successfully.
     //
 
     FileObject = Handle->PathPoint.PathEntry->FileObject;
@@ -919,7 +919,7 @@ Return Value:
         }
 
     } else {
-        Status = STATUS_INVALID_PARAMETER;
+        Status = STATUS_SUCCESS;
         goto FlushEnd;
     }
 
@@ -2248,11 +2248,10 @@ Return Value:
     UINTN BytesCompleted;
     ULONG Flags;
     PIO_HANDLE Handle;
-    PIO_BUFFER IoBuffer;
+    IO_BUFFER IoBuffer;
     KSTATUS Status;
 
     Handle = NULL;
-    IoBuffer = NULL;
     Flags = OPEN_FLAG_CREATE | OPEN_FLAG_FAIL_IF_EXISTS | OPEN_FLAG_TRUNCATE |
             OPEN_FLAG_SYMBOLIC_LINK;
 
@@ -2271,19 +2270,20 @@ Return Value:
         goto CreateSymbolicLinkEnd;
     }
 
-    Status = MmCreateIoBuffer(LinkTarget,
-                              LinkTargetSize,
-                              FALSE,
-                              FALSE,
-                              TRUE,
-                              &IoBuffer);
+    Status = MmInitializeIoBuffer(&IoBuffer,
+                                  LinkTarget,
+                                  INVALID_PHYSICAL_ADDRESS,
+                                  LinkTargetSize,
+                                  FALSE,
+                                  FALSE,
+                                  TRUE);
 
     if (!KSUCCESS(Status)) {
         goto CreateSymbolicLinkEnd;
     }
 
     Status = IoWriteAtOffset(Handle,
-                             IoBuffer,
+                             &IoBuffer,
                              0,
                              LinkTargetSize,
                              0,
@@ -2298,10 +2298,6 @@ Return Value:
 CreateSymbolicLinkEnd:
     if (Handle != NULL) {
         IoClose(Handle);
-    }
-
-    if (IoBuffer != NULL) {
-        MmFreeIoBuffer(IoBuffer);
     }
 
     return Status;
@@ -2353,13 +2349,12 @@ Return Value:
 
     UINTN BytesCompleted;
     FILE_PROPERTIES FileProperties;
-    PIO_BUFFER IoBuffer;
+    IO_BUFFER IoBuffer;
     ULONGLONG Size;
     KSTATUS Status;
     PSTR TargetBuffer;
     UINTN TargetBufferSize;
 
-    IoBuffer = NULL;
     TargetBuffer = NULL;
 
     //
@@ -2395,19 +2390,20 @@ Return Value:
         goto ReadSymbolicLinkEnd;
     }
 
-    Status = MmCreateIoBuffer(TargetBuffer,
-                              TargetBufferSize,
-                              FALSE,
-                              FALSE,
-                              TRUE,
-                              &IoBuffer);
+    Status = MmInitializeIoBuffer(&IoBuffer,
+                                  TargetBuffer,
+                                  INVALID_PHYSICAL_ADDRESS,
+                                  TargetBufferSize,
+                                  FALSE,
+                                  FALSE,
+                                  TRUE);
 
     if (!KSUCCESS(Status)) {
         goto ReadSymbolicLinkEnd;
     }
 
     Status = IoReadAtOffset(Handle,
-                            IoBuffer,
+                            &IoBuffer,
                             0,
                             TargetBufferSize,
                             0,
@@ -2436,10 +2432,6 @@ ReadSymbolicLinkEnd:
         }
 
         TargetBufferSize = 0;
-    }
-
-    if (IoBuffer != NULL) {
-        MmFreeIoBuffer(IoBuffer);
     }
 
     *LinkTarget = TargetBuffer;

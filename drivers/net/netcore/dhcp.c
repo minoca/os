@@ -832,8 +832,6 @@ Return Value:
     DhcpContext->ScratchPacketSize = DHCP_SCRATCH_PACKET_SIZE;
     Status = MmCreateIoBuffer(DhcpContext->ScratchPacket,
                               DhcpContext->ScratchPacketSize,
-                              FALSE,
-                              FALSE,
                               TRUE,
                               &(DhcpContext->ScratchPacketIoBuffer));
 
@@ -1188,8 +1186,6 @@ Return Value:
     DhcpContext->ScratchPacketSize = DHCP_SCRATCH_PACKET_SIZE;
     Status = MmCreateIoBuffer(DhcpContext->ScratchPacket,
                               DhcpContext->ScratchPacketSize,
-                              FALSE,
-                              FALSE,
                               TRUE,
                               &(DhcpContext->ScratchPacketIoBuffer));
 
@@ -1467,8 +1463,6 @@ Return Value:
     DhcpContext->ScratchPacketSize = DHCP_SCRATCH_PACKET_SIZE;
     Status = MmCreateIoBuffer(DhcpContext->ScratchPacket,
                               DhcpContext->ScratchPacketSize,
-                              FALSE,
-                              FALSE,
                               TRUE,
                               &(DhcpContext->ScratchPacketIoBuffer));
 

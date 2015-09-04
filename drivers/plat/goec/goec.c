@@ -423,8 +423,6 @@ Return Value:
 
     Status = MmCreateIoBuffer(Controller->RequestBuffer,
                               GOEC_PROTO3_MAX_PACKET_SIZE,
-                              FALSE,
-                              FALSE,
                               TRUE,
                               &(Controller->RequestIoBuffer));
 
@@ -435,8 +433,6 @@ Return Value:
 
     Status = MmCreateIoBuffer(Controller->ResponseBuffer,
                               GOEC_PROTO3_MAX_PACKET_SIZE,
-                              FALSE,
-                              FALSE,
                               TRUE,
                               &(Controller->ResponseIoBuffer));
 

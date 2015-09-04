@@ -2997,12 +2997,17 @@ Return Value:
     // additional reference on the page cache entry.
     //
 
-    MmInitializeIoBuffer(&PageCacheBuffer,
-                         NULL,
-                         INVALID_PHYSICAL_ADDRESS,
-                         0,
-                         TRUE,
-                         FALSE);
+    Status = MmInitializeIoBuffer(&PageCacheBuffer,
+                                  NULL,
+                                  INVALID_PHYSICAL_ADDRESS,
+                                  0,
+                                  TRUE,
+                                  FALSE,
+                                  TRUE);
+
+    if (!KSUCCESS(Status)) {
+        goto CopyIoBufferToPageCacheEntryEnd;
+    }
 
     MmIoBufferAppendPage(&PageCacheBuffer,
                          PageCacheEntry,

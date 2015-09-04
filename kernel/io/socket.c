@@ -1647,7 +1647,7 @@ Return Value:
 
 {
 
-    PIO_BUFFER IoBuffer;
+    IO_BUFFER IoBuffer;
     PIO_HANDLE IoHandle;
     SOCKET_IO_PARAMETERS IoParameters;
     PSYSTEM_CALL_SOCKET_PERFORM_IO Parameters;
@@ -1656,7 +1656,6 @@ Return Value:
 
     ASSERT(SystemCallNumber == SystemCallSocketPerformIo);
 
-    IoBuffer = NULL;
     Parameters = (PSYSTEM_CALL_SOCKET_PERFORM_IO)SystemCallParameter;
     Process = PsGetCurrentProcess();
 
@@ -1677,12 +1676,13 @@ Return Value:
     }
 
     IoParameters.IoFlags &= SYS_IO_FLAG_MASK;
-    Status = MmCreateIoBuffer(Parameters->Buffer,
-                              IoParameters.Size,
-                              FALSE,
-                              FALSE,
-                              FALSE,
-                              &IoBuffer);
+    Status = MmInitializeIoBuffer(&IoBuffer,
+                                  Parameters->Buffer,
+                                  INVALID_PHYSICAL_ADDRESS,
+                                  IoParameters.Size,
+                                  FALSE,
+                                  FALSE,
+                                  FALSE);
 
     if (!KSUCCESS(Status)) {
         goto SysSocketPerformIoEnd;
@@ -1697,7 +1697,7 @@ Return Value:
     }
 
     if ((IoParameters.IoFlags & SYS_IO_FLAG_WRITE) != 0) {
-        Status = IoSocketSendData(FALSE, IoHandle, &IoParameters, IoBuffer);
+        Status = IoSocketSendData(FALSE, IoHandle, &IoParameters, &IoBuffer);
 
         //
         // Send a pipe signal if the returning status was "broken pipe".
@@ -1711,7 +1711,7 @@ Return Value:
         }
 
     } else {
-        Status = IoSocketReceiveData(FALSE, IoHandle, &IoParameters, IoBuffer);
+        Status = IoSocketReceiveData(FALSE, IoHandle, &IoParameters, &IoBuffer);
     }
 
     if (!KSUCCESS(Status)) {
@@ -1719,10 +1719,6 @@ Return Value:
     }
 
 SysSocketPerformIoEnd:
-    if (IoBuffer != NULL) {
-        MmFreeIoBuffer(IoBuffer);
-    }
-
     MmCopyToUserMode(Parameters->Parameters,
                      &IoParameters,
                      sizeof(SOCKET_IO_PARAMETERS));

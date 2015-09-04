@@ -1167,8 +1167,6 @@ Return Value:
 
     Status = MmCreateIoBuffer(ReadBuffer,
                               VIDEO_CONSOLE_READ_BUFFER_SIZE,
-                              FALSE,
-                              FALSE,
                               TRUE,
                               &IoBuffer);
 

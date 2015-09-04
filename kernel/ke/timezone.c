@@ -129,7 +129,7 @@ Return Value:
     PVOID FilteredData;
     ULONG FilteredDataSize;
     PIO_HANDLE Handle;
-    PIO_BUFFER IoBuffer;
+    IO_BUFFER IoBuffer;
     ULONG NameSize;
     PSTR NonPagedName;
     PVOID OldData;
@@ -141,7 +141,6 @@ Return Value:
     DataBuffer = NULL;
     FilteredData = NULL;
     Handle = INVALID_HANDLE;
-    IoBuffer = NULL;
 
     //
     // Create a non-paged pool copy of the name as required for running at
@@ -234,19 +233,20 @@ Return Value:
                     &Handle);
 
     if (KSUCCESS(Status)) {
-        Status = MmCreateIoBuffer(FilteredData,
-                                  FilteredDataSize,
-                                  FALSE,
-                                  FALSE,
-                                  TRUE,
-                                  &IoBuffer);
+        Status = MmInitializeIoBuffer(&IoBuffer,
+                                      FilteredData,
+                                      INVALID_PHYSICAL_ADDRESS,
+                                      FilteredDataSize,
+                                      FALSE,
+                                      FALSE,
+                                      TRUE);
 
         if (!KSUCCESS(Status)) {
             goto SetSystemTimeZoneEnd;
         }
 
         Status = IoWrite(Handle,
-                         IoBuffer,
+                         &IoBuffer,
                          FilteredDataSize,
                          0,
                          WAIT_TIME_INDEFINITE,
@@ -289,10 +289,6 @@ SetSystemTimeZoneEnd:
 
     if (DataBuffer != NULL) {
         MmFreePagedPool(DataBuffer);
-    }
-
-    if (IoBuffer != NULL) {
-        MmFreeIoBuffer(IoBuffer);
     }
 
     if (FilteredData != NULL) {
@@ -895,13 +891,12 @@ Return Value:
     ULONG DataSize;
     ULONGLONG FileSize;
     PIO_HANDLE Handle;
-    PIO_BUFFER IoBuffer;
+    IO_BUFFER IoBuffer;
     KSTATUS Status;
 
     DataBuffer = NULL;
     DataSize = 0;
     Handle = INVALID_HANDLE;
-    IoBuffer = NULL;
 
     //
     // Load the master time zone file.
@@ -943,12 +938,13 @@ Return Value:
         goto ReadTimeZoneAlmanacEnd;
     }
 
-    Status = MmCreateIoBuffer(DataBuffer,
-                              DataSize,
-                              FALSE,
-                              FALSE,
-                              TRUE,
-                              &IoBuffer);
+    Status = MmInitializeIoBuffer(&IoBuffer,
+                                  DataBuffer,
+                                  INVALID_PHYSICAL_ADDRESS,
+                                  DataSize,
+                                  FALSE,
+                                  FALSE,
+                                  TRUE);
 
     if (!KSUCCESS(Status)) {
         goto ReadTimeZoneAlmanacEnd;
@@ -959,7 +955,7 @@ Return Value:
     //
 
     Status = IoRead(Handle,
-                    IoBuffer,
+                    &IoBuffer,
                     DataSize,
                     0,
                     WAIT_TIME_INDEFINITE,
@@ -977,10 +973,6 @@ Return Value:
 ReadTimeZoneAlmanacEnd:
     if (Handle != INVALID_HANDLE) {
         IoClose(Handle);
-    }
-
-    if (IoBuffer != NULL) {
-        MmFreeIoBuffer(IoBuffer);
     }
 
     *Buffer = DataBuffer;

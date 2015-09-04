@@ -1571,13 +1571,7 @@ Return Value:
            (Parent->IoHandle != NULL) &&
            (Context->BlockSize != 0));
 
-    Status = MmCreateIoBuffer(Buffer,
-                              Context->BlockSize,
-                              FALSE,
-                              FALSE,
-                              TRUE,
-                              &IoBuffer);
-
+    Status = MmCreateIoBuffer(Buffer, Context->BlockSize, TRUE, &IoBuffer);
     if (!KSUCCESS(Status)) {
         goto ReadEnd;
     }

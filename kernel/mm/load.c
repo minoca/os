@@ -590,11 +590,13 @@ Return Value:
             }
 
             //
-            // The I/O handle must be cacheable to support mapping image
+            // The I/O handle must be cacheable to support mapping shared image
             // sections.
             //
 
-            if (IoIoHandleIsCacheable(IoHandle) == FALSE) {
+            if (((MapFlags & SYS_MAP_FLAG_SHARED) != 0) &&
+                (IoIoHandleIsCacheable(IoHandle) == FALSE)) {
+
                 Status = STATUS_NO_ELIGIBLE_DEVICES;
                 goto SysMapOrUnmapMemoryEnd;
             }

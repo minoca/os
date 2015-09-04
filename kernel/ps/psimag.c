@@ -1271,7 +1271,7 @@ Return Value:
     PVOID FileRegion;
     UINTN FileRegionSize;
     UINTN FileSize;
-    PIO_BUFFER IoBuffer;
+    IO_BUFFER IoBuffer;
     UINTN IoSize;
     BOOL KernelMode;
     PKPROCESS KernelProcess;
@@ -1305,7 +1305,6 @@ Return Value:
     ASSERT((FileSize == Segment->FileSize) &&
            (MemorySize == Segment->MemorySize));
 
-    IoBuffer = NULL;
     Reservation = AddressSpaceHandle;
     KernelMode = FALSE;
     KernelProcess = PsGetKernelProcess();
@@ -1378,19 +1377,20 @@ Return Value:
                 IoSize = RegionSize;
             }
 
-            Status = MmCreateIoBuffer((PVOID)SegmentAddress,
-                                      IoSize,
-                                      FALSE,
-                                      FALSE,
-                                      KernelMode,
-                                      &IoBuffer);
+            Status = MmInitializeIoBuffer(&IoBuffer,
+                                          (PVOID)SegmentAddress,
+                                          INVALID_PHYSICAL_ADDRESS,
+                                          IoSize,
+                                          FALSE,
+                                          FALSE,
+                                          KernelMode);
 
             if (!KSUCCESS(Status)) {
                 goto MapImageSegmentEnd;
             }
 
             Status = IoReadAtOffset(FileHandle,
-                                    IoBuffer,
+                                    &IoBuffer,
                                     FileOffset,
                                     IoSize,
                                     0,
@@ -1398,8 +1398,6 @@ Return Value:
                                     &BytesCompleted,
                                     NULL);
 
-            MmFreeIoBuffer(IoBuffer);
-            IoBuffer = NULL;
             if (!KSUCCESS(Status)) {
                 goto MapImageSegmentEnd;
             }
@@ -1495,19 +1493,20 @@ Return Value:
         //
 
         if (IoSize != 0) {
-            Status = MmCreateIoBuffer((PVOID)SegmentAddress,
-                                      IoSize,
-                                      FALSE,
-                                      FALSE,
-                                      KernelMode,
-                                      &IoBuffer);
+            Status = MmInitializeIoBuffer(&IoBuffer,
+                                          (PVOID)SegmentAddress,
+                                          INVALID_PHYSICAL_ADDRESS,
+                                          IoSize,
+                                          FALSE,
+                                          FALSE,
+                                          KernelMode);
 
             if (!KSUCCESS(Status)) {
                 goto MapImageSegmentEnd;
             }
 
             Status = IoReadAtOffset(FileHandle,
-                                    IoBuffer,
+                                    &IoBuffer,
                                     FileOffset,
                                     IoSize,
                                     0,
@@ -1515,8 +1514,6 @@ Return Value:
                                     &BytesCompleted,
                                     NULL);
 
-            MmFreeIoBuffer(IoBuffer);
-            IoBuffer = NULL;
             if (!KSUCCESS(Status)) {
                 goto MapImageSegmentEnd;
             }

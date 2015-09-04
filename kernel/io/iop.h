@@ -3690,7 +3690,6 @@ KSTATUS
 IopPerformSharedMemoryIoOperation (
     PFILE_OBJECT FileObject,
     PIO_CONTEXT IoContext,
-    PVOID DeviceContext,
     BOOL UpdateFileSize
     );
 
@@ -3708,9 +3707,6 @@ Arguments:
     FileObject - Supplies a pointer to the file object for the device or file.
 
     IoContext - Supplies a pointer to the I/O context.
-
-    DeviceContext - Supplies a pointer to the device context to use when
-        writing to the backing device.
 
     UpdateFileSize - Supplies a boolean indicating whether or not this routine
         should update the file size in the file object. Only the page cache

@@ -517,8 +517,8 @@ Members:
 
     TotalSize - Stores the total size of the I/O buffer.
 
-    PageCount - Store the maximum number of pages that the I/O buffer might
-        contain.
+    PageCacheEntryCount - Store the maximum number of page cache entries that
+        the I/O buffer can contain.
 
     PageCacheEntry - Stores a pointer to a page cache entry used for
         stack-allocated I/O buffers that only require one page.
@@ -536,7 +536,7 @@ typedef struct _IO_BUFFER_INTERNAL {
     UINTN CurrentOffset;
     UINTN MaxFragmentCount;
     UINTN TotalSize;
-    UINTN PageCount;
+    UINTN PageCacheEntryCount;
     PVOID PageCacheEntry;
     PVOID *PageCacheEntries;
     IO_BUFFER_FRAGMENT Fragment;
@@ -855,8 +855,6 @@ KSTATUS
 MmCreateIoBuffer (
     PVOID Buffer,
     UINTN SizeInBytes,
-    BOOL NonPaged,
-    BOOL LockMemory,
     BOOL KernelMode,
     PIO_BUFFER *NewIoBuffer
     );
@@ -874,12 +872,6 @@ Arguments:
         buffer.
 
     SizeInBytes - Supplies the size of the buffer, in bytes.
-
-    NonPaged - Supplies a boolean indicating whether or not the I/O buffer
-        structure should be non-paged.
-
-    LockMemory - Supplies a boolean indicating whether or not the buffer's
-        memory needs to be locked.
 
     KernelMode - Supplies a boolean indicating whether or not this buffer is
         a kernel mode buffer (TRUE) or a user mode buffer (FALSE). If it is a
@@ -937,14 +929,15 @@ Return Value:
 
 --*/
 
-VOID
+KSTATUS
 MmInitializeIoBuffer (
     PIO_BUFFER IoBuffer,
     PVOID VirtualAddress,
     PHYSICAL_ADDRESS PhysicalAddress,
     UINTN SizeInBytes,
     BOOL CacheBacked,
-    BOOL MemoryLocked
+    BOOL MemoryLocked,
+    BOOL KernelMode
     );
 
 /*++
@@ -952,9 +945,9 @@ MmInitializeIoBuffer (
 Routine Description:
 
     This routine initializes an I/O buffer based on the given virtual and
-    phsyical address and the size. It is assumed that the range of bytes is
-    both virtually and physically contiguous so that it can be contained in
-    one fragment.
+    phsyical address and the size. If a physical address is supplied, it is
+    assumed that the range of bytes is both virtually and physically contiguous
+    so that it can be contained in one fragment.
 
 Arguments:
 
@@ -972,9 +965,14 @@ Arguments:
     MemoryLocked - Supplies a boolean if the physical address supplied is
         locked in memory.
 
+    KernelMode - Supplies a boolean indicating whether or not this buffer is
+        a kernel mode buffer (TRUE) or a user mode buffer (FALSE). If it is a
+        user mode buffer, this routine will fail if a non-user mode address
+        was passed in.
+
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 

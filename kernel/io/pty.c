@@ -1896,7 +1896,7 @@ Return Value:
     KSTATUS HardwareStatus;
     UINTN Index;
     BOOL InSession;
-    PIO_BUFFER IoBuffer;
+    IO_BUFFER IoBuffer;
     INT ModemStatus;
     TERMINAL_SETTINGS_OLD OldSettings;
     PTERMINAL PreviousTerminal;
@@ -2140,23 +2140,23 @@ Return Value:
         break;
 
     case TerminalControlInsertInInputQueue:
-        Status = MmCreateIoBuffer(ContextBuffer,
-                                  1,
-                                  FALSE,
-                                  FALSE,
-                                  FromKernelMode,
-                                  &IoBuffer);
+        Status = MmInitializeIoBuffer(&IoBuffer,
+                                      ContextBuffer,
+                                      INVALID_PHYSICAL_ADDRESS,
+                                      1,
+                                      FALSE,
+                                      FALSE,
+                                      FromKernelMode);
 
         if (!KSUCCESS(Status)) {
             break;
         }
 
-        Context.IoBuffer = IoBuffer;
+        Context.IoBuffer = &IoBuffer;
         Context.SizeInBytes = 1;
         Context.Flags = 0;
         Context.TimeoutInMilliseconds = WAIT_TIME_INDEFINITE;
         Status = IopTerminalMasterWrite(Terminal->MasterFileObject, &Context);
-        MmFreeIoBuffer(IoBuffer);
         break;
 
     case TerminalControlGetWindowSize:
@@ -5304,7 +5304,7 @@ Return Value:
 {
 
     UINTN BytesWritten;
-    PIO_BUFFER IoBuffer;
+    IO_BUFFER IoBuffer;
     UINTN Size;
     KSTATUS Status;
 
@@ -5325,27 +5325,26 @@ Return Value:
 
         if (Terminal->OutputBufferEnd < Terminal->OutputBufferStart) {
             Size = TERMINAL_OUTPUT_BUFFER_SIZE - Terminal->OutputBufferStart;
-            Status = MmCreateIoBuffer(
+            Status = MmInitializeIoBuffer(
+                          &IoBuffer,
                           Terminal->OutputBuffer + Terminal->OutputBufferStart,
+                          INVALID_PHYSICAL_ADDRESS,
                           Size,
                           FALSE,
                           FALSE,
-                          TRUE,
-                          &IoBuffer);
+                          TRUE);
 
             if (!KSUCCESS(Status)) {
                 return Status;
             }
 
             Status = IoWrite(Terminal->HardwareHandle,
-                             IoBuffer,
+                             &IoBuffer,
                              Size,
                              0,
                              WAIT_TIME_INDEFINITE,
                              &BytesWritten);
 
-            MmFreeIoBuffer(IoBuffer);
-            IoBuffer = NULL;
             if (!KSUCCESS(Status)) {
                 return Status;
             }
@@ -5367,27 +5366,26 @@ Return Value:
         }
 
         Size = Terminal->OutputBufferEnd - Terminal->OutputBufferStart;
-        Status = MmCreateIoBuffer(
-                      Terminal->OutputBuffer + Terminal->OutputBufferStart,
-                      Size,
-                      FALSE,
-                      FALSE,
-                      TRUE,
-                      &IoBuffer);
+        Status = MmInitializeIoBuffer(
+                          &IoBuffer,
+                          Terminal->OutputBuffer + Terminal->OutputBufferStart,
+                          INVALID_PHYSICAL_ADDRESS,
+                          Size,
+                          FALSE,
+                          FALSE,
+                          TRUE);
 
         if (!KSUCCESS(Status)) {
             return Status;
         }
 
         Status = IoWrite(Terminal->HardwareHandle,
-                         IoBuffer,
+                         &IoBuffer,
                          Size,
                          0,
                          WAIT_TIME_INDEFINITE,
                          &BytesWritten);
 
-        MmFreeIoBuffer(IoBuffer);
-        IoBuffer = NULL;
         if (!KSUCCESS(Status)) {
             return Status;
         }

@@ -2760,12 +2760,13 @@ PageInAnonymousSectionEnd:
                 }
 
                 if (KSUCCESS(Status)) {
-                    MmInitializeIoBuffer(LockedIoBuffer,
-                                         NULL,
-                                         ExistingPhysicalAddress,
-                                         PageSize,
-                                         FALSE,
-                                         TRUE);
+                    Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                                  NULL,
+                                                  ExistingPhysicalAddress,
+                                                  PageSize,
+                                                  FALSE,
+                                                  TRUE,
+                                                  TRUE);
                 }
             }
 
@@ -2782,22 +2783,25 @@ PageInAnonymousSectionEnd:
             LockPage = FALSE;
             if (LockedIoBuffer != NULL) {
                 LockPage = TRUE;
-                MmInitializeIoBuffer(LockedIoBuffer,
-                                     NULL,
-                                     Context.PhysicalAddress,
-                                     PageSize,
-                                     FALSE,
-                                     TRUE);
+                Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                              NULL,
+                                              Context.PhysicalAddress,
+                                              PageSize,
+                                              FALSE,
+                                              TRUE,
+                                              TRUE);
             }
 
-            MmpMapPageInSection(OwningSection,
-                                PageOffset,
-                                Context.PhysicalAddress,
-                                Context.PagingEntry,
-                                LockPage);
+            if (KSUCCESS(Status)) {
+                MmpMapPageInSection(OwningSection,
+                                    PageOffset,
+                                    Context.PhysicalAddress,
+                                    Context.PagingEntry,
+                                    LockPage);
 
-            Context.PagingEntry = NULL;
-            Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+                Context.PagingEntry = NULL;
+                Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+            }
         }
     }
 
@@ -2945,12 +2949,17 @@ Return Value:
 
         } else {
             IoBuffer = &IoBufferData;
-            MmInitializeIoBuffer(IoBuffer,
-                                 NULL,
-                                 INVALID_PHYSICAL_ADDRESS,
-                                 0,
-                                 TRUE,
-                                 FALSE);
+            Status = MmInitializeIoBuffer(IoBuffer,
+                                          NULL,
+                                          INVALID_PHYSICAL_ADDRESS,
+                                          0,
+                                          TRUE,
+                                          FALSE,
+                                          TRUE);
+
+            if (!KSUCCESS(Status)) {
+                goto PageInSharedSectionEnd;
+            }
         }
 
         //
@@ -3117,17 +3126,20 @@ PageInSharedSectionEnd:
             ASSERT((ExistingPhysicalAddress == INVALID_PHYSICAL_ADDRESS) ||
                    (ExistingPhysicalAddress == PhysicalAddress));
 
-            MmInitializeIoBuffer(LockedIoBuffer,
-                                 NULL,
-                                 INVALID_PHYSICAL_ADDRESS,
-                                 0,
-                                 TRUE,
-                                 FALSE);
+            Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                          NULL,
+                                          INVALID_PHYSICAL_ADDRESS,
+                                          0,
+                                          TRUE,
+                                          FALSE,
+                                          TRUE);
 
-            MmIoBufferAppendPage(LockedIoBuffer,
-                                 PageCacheEntry,
-                                 NULL,
-                                 INVALID_PHYSICAL_ADDRESS);
+            if (KSUCCESS(Status)) {
+                MmIoBufferAppendPage(LockedIoBuffer,
+                                     PageCacheEntry,
+                                     NULL,
+                                     INVALID_PHYSICAL_ADDRESS);
+            }
         }
     }
 
@@ -3266,12 +3278,17 @@ Return Value:
 
             } else {
                 IoBuffer = &IoBufferData;
-                MmInitializeIoBuffer(IoBuffer,
-                                     NULL,
-                                     INVALID_PHYSICAL_ADDRESS,
-                                     0,
-                                     TRUE,
-                                     FALSE);
+                Status = MmInitializeIoBuffer(IoBuffer,
+                                              NULL,
+                                              INVALID_PHYSICAL_ADDRESS,
+                                              0,
+                                              TRUE,
+                                              FALSE,
+                                              TRUE);
+
+                if (!KSUCCESS(Status)) {
+                    goto PageInCacheBackedSectionEnd;
+                }
             }
 
             Status = MmpReadBackingImage(ImageSection, PageOffset, IoBuffer);
@@ -3306,12 +3323,17 @@ Return Value:
 
             } else {
                 LockedPageCacheIoBuffer = &LockedPageCacheIoBufferData;
-                MmInitializeIoBuffer(LockedPageCacheIoBuffer,
-                                     NULL,
-                                     INVALID_PHYSICAL_ADDRESS,
-                                     0,
-                                     TRUE,
-                                     FALSE);
+                Status = MmInitializeIoBuffer(LockedPageCacheIoBuffer,
+                                              NULL,
+                                              INVALID_PHYSICAL_ADDRESS,
+                                              0,
+                                              TRUE,
+                                              FALSE,
+                                              TRUE);
+
+                if (!KSUCCESS(Status)) {
+                    goto PageInCacheBackedSectionEnd;
+                }
             }
 
             //
@@ -3451,12 +3473,17 @@ Return Value:
 
         } else {
             IoBuffer = &IoBufferData;
-            MmInitializeIoBuffer(IoBuffer,
-                                 NULL,
-                                 INVALID_PHYSICAL_ADDRESS,
-                                 0,
-                                 TRUE,
-                                 FALSE);
+            Status = MmInitializeIoBuffer(IoBuffer,
+                                          NULL,
+                                          INVALID_PHYSICAL_ADDRESS,
+                                          0,
+                                          TRUE,
+                                          FALSE,
+                                          TRUE);
+
+            if (!KSUCCESS(Status)) {
+                goto PageInCacheBackedSectionEnd;
+            }
         }
 
         //
@@ -3495,12 +3522,17 @@ Return Value:
 
             } else {
                 LockedPageCacheIoBuffer = &LockedPageCacheIoBufferData;
-                MmInitializeIoBuffer(LockedPageCacheIoBuffer,
-                                     NULL,
-                                     INVALID_PHYSICAL_ADDRESS,
-                                     0,
-                                     TRUE,
-                                     FALSE);
+                Status = MmInitializeIoBuffer(LockedPageCacheIoBuffer,
+                                              NULL,
+                                              INVALID_PHYSICAL_ADDRESS,
+                                              0,
+                                              TRUE,
+                                              FALSE,
+                                              TRUE);
+
+                if (!KSUCCESS(Status)) {
+                    goto PageInCacheBackedSectionEnd;
+                }
             }
 
             MmIoBufferAppendPage(LockedPageCacheIoBuffer,
@@ -3637,12 +3669,13 @@ PageInCacheBackedSectionEnd:
                 }
 
                 if (KSUCCESS(Status)) {
-                    MmInitializeIoBuffer(LockedIoBuffer,
-                                         NULL,
-                                         ExistingPhysicalAddress,
-                                         PageSize,
-                                         FALSE,
-                                         TRUE);
+                    Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                                  NULL,
+                                                  ExistingPhysicalAddress,
+                                                  PageSize,
+                                                  FALSE,
+                                                  TRUE,
+                                                  TRUE);
                 }
 
             //
@@ -3685,23 +3718,26 @@ PageInCacheBackedSectionEnd:
                     LockedPageCacheIoBuffer = NULL;
 
                 } else {
-                    MmInitializeIoBuffer(LockedIoBuffer,
-                                         NULL,
-                                         Context.PhysicalAddress,
-                                         PageSize,
-                                         FALSE,
-                                         TRUE);
+                    Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                                  NULL,
+                                                  Context.PhysicalAddress,
+                                                  PageSize,
+                                                  FALSE,
+                                                  TRUE,
+                                                  TRUE);
                 }
             }
 
-            MmpMapPageInSection(OwningSection,
-                                PageOffset,
-                                Context.PhysicalAddress,
-                                Context.PagingEntry,
-                                LockPage);
+            if (KSUCCESS(Status)) {
+                MmpMapPageInSection(OwningSection,
+                                    PageOffset,
+                                    Context.PhysicalAddress,
+                                    Context.PagingEntry,
+                                    LockPage);
 
-            Context.PagingEntry = NULL;
-            Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+                Context.PagingEntry = NULL;
+                Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+            }
         }
     }
 
@@ -4044,9 +4080,16 @@ Return Value:
             goto PageInDefaultSectionEnd;
         }
 
-        MmpImageSectionAddImageBackingReference(ImageSection);
+        ASSERT((OwningSection->Flags & IMAGE_SECTION_DESTROYED) == 0);
 
-        ASSERT(ImageSection->ImageBacking.DeviceHandle != INVALID_HANDLE);
+        //
+        // Only the owning section should have a handle to the original backing
+        // device.
+        //
+
+        ASSERT(OwningSection->ImageBacking.DeviceHandle != INVALID_HANDLE);
+
+        MmpImageSectionAddImageBackingReference(OwningSection);
 
         //
         // Release the lock to perform a read from the file.
@@ -4065,7 +4108,7 @@ Return Value:
             Context.Flags |= PAGE_IN_CONTEXT_FLAG_ALLOCATE_PAGE;
             Status = MmpAllocatePageInStructures(ImageSection, &Context);
             if (!KSUCCESS(Status)) {
-                MmpImageSectionReleaseImageBackingReference(ImageSection);
+                MmpImageSectionReleaseImageBackingReference(OriginalOwner);
                 goto PageInDefaultSectionEnd;
             }
         }
@@ -4075,8 +4118,21 @@ Return Value:
         //
 
         if (IoBuffer != NULL) {
-            MmFreeIoBuffer(IoBuffer);
-            IoBuffer = NULL;
+            MmResetIoBuffer(IoBuffer);
+
+        //
+        // Otherwise allocate an uninitialized I/O buffer than can handle up to
+        // 2 pages. Default sections are not backed by the page cache as a
+        // result of not being cache-aligned. So, two pages may need to be read
+        // from the cache to get the apppropriate data.
+        //
+
+        } else {
+            IoBuffer = MmAllocateUninitializedIoBuffer(2 * PageSize, TRUE);
+            if (IoBuffer == NULL) {
+                Status = STATUS_INSUFFICIENT_RESOURCES;
+                goto PageInDefaultSectionEnd;
+            }
         }
 
         //
@@ -4085,13 +4141,11 @@ Return Value:
         // order to make a cache-aligned read.
         //
 
-        Status = MmpReadBackingImage(ImageSection, PageOffset, IoBuffer);
-        MmpImageSectionReleaseImageBackingReference(ImageSection);
+        Status = MmpReadBackingImage(OriginalOwner, PageOffset, IoBuffer);
+        MmpImageSectionReleaseImageBackingReference(OriginalOwner);
         if (!KSUCCESS(Status)) {
             goto PageInDefaultSectionEnd;
         }
-
-        ASSERT(IoBuffer != NULL);
 
         //
         // Map the I/O buffer before the lock is reacquired.
@@ -4169,14 +4223,16 @@ Return Value:
         // the temporary mapping.
         //
 
+        ASSERT(IoGetCacheEntryDataSize() == PageSize);
+
         ReadOffset = OwningSection->ImageBacking.Offset +
                      (PageOffset << PageShift);
 
         BufferOffset = REMAINDER(ReadOffset, PageSize);
-
-        ASSERT(BufferOffset != 0);
-
         if (IoBuffer->FragmentCount == 2) {
+
+            ASSERT(BufferOffset != 0);
+
             CopySize = PageSize - BufferOffset;
             RtlCopyMemory(SwapSpace + CopySize,
                           IoBuffer->Fragment[1].VirtualAddress,
@@ -4264,12 +4320,13 @@ PageInDefaultSectionEnd:
             }
 
             if (KSUCCESS(Status)) {
-                MmInitializeIoBuffer(LockedIoBuffer,
-                                     NULL,
-                                     ExistingPhysicalAddress,
-                                     PageSize,
-                                     FALSE,
-                                     TRUE);
+                Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                              NULL,
+                                              ExistingPhysicalAddress,
+                                              PageSize,
+                                              FALSE,
+                                              TRUE,
+                                              TRUE);
             }
 
         //
@@ -4285,22 +4342,25 @@ PageInDefaultSectionEnd:
             LockPage = FALSE;
             if (LockedIoBuffer != NULL) {
                 LockPage = TRUE;
-                MmInitializeIoBuffer(LockedIoBuffer,
-                                     NULL,
-                                     Context.PhysicalAddress,
-                                     PageSize,
-                                     FALSE,
-                                     TRUE);
+                Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                              NULL,
+                                              Context.PhysicalAddress,
+                                              PageSize,
+                                              FALSE,
+                                              TRUE,
+                                              TRUE);
             }
 
-            MmpMapPageInSection(OwningSection,
-                                PageOffset,
-                                Context.PhysicalAddress,
-                                Context.PagingEntry,
-                                LockPage);
+            if (KSUCCESS(Status)) {
+                MmpMapPageInSection(OwningSection,
+                                    PageOffset,
+                                    Context.PhysicalAddress,
+                                    Context.PagingEntry,
+                                    LockPage);
 
-            Context.PagingEntry = NULL;
-            Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+                Context.PagingEntry = NULL;
+                Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+            }
         }
     }
 
@@ -4533,12 +4593,17 @@ Return Value:
     SwapSpace = RootSection->SwapSpace->VirtualBase;
     MmpMapPage(Context->PhysicalAddress, SwapSpace, MAP_FLAG_PRESENT);
     IoBuffer = &IoBufferData;
-    MmInitializeIoBuffer(IoBuffer,
-                         SwapSpace,
-                         Context->PhysicalAddress,
-                         PageSize,
-                         FALSE,
-                         FALSE);
+    Status = MmInitializeIoBuffer(IoBuffer,
+                                  SwapSpace,
+                                  Context->PhysicalAddress,
+                                  PageSize,
+                                  FALSE,
+                                  FALSE,
+                                  TRUE);
+
+    if (!KSUCCESS(Status)) {
+        goto ReadPageFileEnd;
+    }
 
     //
     // Read the page in from the backing store of the owning section. Note that
@@ -4573,6 +4638,7 @@ Return Value:
         MmFlushDataCache(SwapSpace, PageSize, TRUE);
     }
 
+ReadPageFileEnd:
     MmpUnmapPages(SwapSpace, 1, UNMAP_FLAG_SEND_INVALIDATE_IPI, NULL);
     return Status;
 }
@@ -4628,10 +4694,10 @@ Return Value:
     // round down the offset and read two pages that are cache-aligned.
     //
 
-    if ((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) {
+    ASSERT(IoGetCacheEntryDataSize() == PageSize);
 
-        ASSERT(IoGetCacheEntryDataSize() == PageSize);
-        ASSERT(IS_ALIGNED(ReadOffset, PageSize) == FALSE);
+    if (((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) == 0) &&
+        (IS_ALIGNED(ReadOffset, PageSize) == FALSE)) {
 
         ReadSize = 2 << PageShift;
         ReadOffset = ALIGN_RANGE_DOWN(ReadOffset, PageSize);

@@ -597,17 +597,23 @@ Return Value:
     //
 
     ASSERT(Interrupt->NextInterrupt == NULL);
-    ASSERT((Interrupt->QueueFlags &
-            (INTERRUPT_QUEUE_DPC_QUEUED |
-             INTERRUPT_QUEUE_WORK_ITEM_QUEUED)) == 0);
+
+    //
+    // Once the DPC and work items are destroyed, they should no longer be
+    // queued.
+    //
 
     if (Interrupt->Dpc != NULL) {
         KeDestroyDpc(Interrupt->Dpc);
     }
 
+    ASSERT((Interrupt->QueueFlags & INTERRUPT_QUEUE_DPC_QUEUED) == 0);
+
     if (Interrupt->WorkItem != NULL) {
         KeDestroyWorkItem(Interrupt->WorkItem);
     }
+
+    ASSERT((Interrupt->QueueFlags & INTERRUPT_QUEUE_WORK_ITEM_QUEUED) == 0);
 
     MmFreeNonPagedPool(Interrupt);
     return;
