@@ -125,16 +125,6 @@ CypBiMultiplyStandard (
     INTN OuterPartial
     );
 
-#ifdef MONTGOMERY
-
-BIG_INTEGER_COMPONENT
-CypBiModularInverse (
-    PBIG_INTEGER_CONTEXT Context,
-    PBIG_INTEGER Value
-    );
-
-#endif
-
 PBIG_INTEGER
 CypBiDivideComponent (
     PBIG_INTEGER_CONTEXT Context,
@@ -165,16 +155,6 @@ CypBiTestBit (
     PBIG_INTEGER Value,
     UINTN BitIndex
     );
-
-#ifdef MONTGOMERY
-
-PBIG_INTEGER
-CypBiPerformMontgomeryReduction (
-    PBIG_INTEGER_CONTEXT Context,
-    PBIG_INTEGER Value
-    );
-
-#endif
 
 PBIG_INTEGER
 CypBiPerformBarrettReduction (
@@ -403,27 +383,11 @@ Return Value:
 
     BIG_INTEGER_COMPONENT DValue;
     PBIG_INTEGER RadixCopy;
-
-#ifdef MONTGOMERY
-
-    PBIG_INTEGER R2Value;
-    PBIG_INTEGER RValue;
-
-#endif
-
     PBIG_INTEGER ShiftedRadix;
     UINTN Size;
     KSTATUS Status;
 
     RadixCopy = NULL;
-
-#ifdef MONTGOMERY
-
-    RValue = NULL;
-    R2Value = NULL;
-
-#endif
-
     Size = Value->Size;
     Status = STATUS_INSUFFICIENT_RESOURCES;
     DValue = BIG_INTEGER_RADIX / (Value->Components[Size - 1] + 1);
@@ -444,57 +408,6 @@ Return Value:
     }
 
     CypBiMakePermanent(Context->NormalizedMod[ModOffset]);
-
-#ifdef MONTGOMERY
-
-    RadixCopy = CypBiClone(Context, Context->Radix);
-    if (RadixCopy == NULL) {
-        goto BiCalculateModuliEnd;
-    }
-
-    RValue = CypBiLeftShiftComponent(Context, RadixCopy, Size - 1);
-    if (RValue == NULL) {
-        goto BiCalculateModuliEnd;
-    }
-
-    RadixCopy = CypBiClone(Context, Context->Radix);
-    if (RadixCopy == NULL) {
-        goto BiCalculateModuliEnd;
-    }
-
-    R2Value = CypBiLeftShiftComponent(Context, RadixCopy, (Size * 2) - 1);
-    if (R2Value == NULL) {
-        goto BiCalculateModuliEnd;
-    }
-
-    RadixCopy = NULL;
-
-    //
-    // Compute R mod M, R^2 mod M, and N0' for Montgomery reduction.
-    //
-
-    ASSERT((Context->R2ModM[ModOffset] == NULL) &&
-           (Context->RModM[ModOffset] == NULL));
-
-    Context->R2ModM[ModOffset] = CypBiModulo(Context, R2Value);
-    if (Context->R2ModM == NULL) {
-        goto BiCalculateModuliEnd;
-    }
-
-    R2Value = NULL;
-    Context->RModM[ModOffset] = CypBiModulo(Context, RValue);
-    if (Context->RModM == NULL) {
-        goto BiCalculateModuliEnd;
-    }
-
-    RValue = NULL;
-    CypBiMakePermanent(Context->R2ModM[ModOffset]);
-    CypBiMakePermanent(Context->RModM[ModOffset]);
-    Context->N0Dash[ModOffset] = CypBiModularInverse(
-                                                  Context,
-                                                  Context->Modulus[ModOffset]);
-
-#endif
 
     //
     // Compute Mu for Barrett reduction.
@@ -526,19 +439,6 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 BiCalculateModuliEnd:
-
-#ifdef MONTGOMERY
-
-    if (RValue != NULL) {
-        CypBiReleaseReference(Context, RValue);
-    }
-
-    if (R2Value != NULL) {
-        CypBiReleaseReference(Context, R2Value);
-    }
-
-#endif
-
     if (RadixCopy != NULL) {
         CypBiReleaseReference(Context, RadixCopy);
     }
@@ -581,24 +481,6 @@ Return Value:
         CypBiReleaseReference(Context, *Pointer);
         *Pointer = NULL;
     }
-
-#ifdef MONTGOMERY
-
-    Pointer = &(Context->R2ModM[ModOffset]);
-    if (*Pointer != NULL) {
-        CypBiMakeNonPermanent(*Pointer);
-        CypBiReleaseReference(Context, *Pointer);
-        *Pointer = NULL;
-    }
-
-    Pointer = &(Context->RModM[ModOffset]);
-    if (*Pointer != NULL) {
-        CypBiMakeNonPermanent(*Pointer);
-        CypBiReleaseReference(Context, *Pointer);
-        *Pointer = NULL;
-    }
-
-#endif
 
     Pointer = &(Context->Mu[ModOffset]);
     if (*Pointer != NULL) {
@@ -653,25 +535,12 @@ Return Value:
     INTN BitIndex;
     UINTN Index;
     INTN LeadingBit;
-
-#ifdef MONTGOMERY
-
-    UINTN ModOffset;
-
-#endif
-
     PBIG_INTEGER NewValue;
     INTN NextBit;
     INTN PartialExponent;
     PBIG_INTEGER Result;
     KSTATUS Status;
     INTN WindowSize;
-
-#ifdef MONTGOMERY
-
-    PBIG_INTEGER ValuePrime;
-
-#endif
 
     WindowSize = 1;
     LeadingBit = CypBiFindLeadingBit(Exponent);
@@ -684,29 +553,6 @@ Return Value:
     }
 
     Status = STATUS_INSUFFICIENT_RESOURCES;
-
-#ifdef MONTGOMERY
-
-    ModOffset = Context->ModOffset;
-    if (Context->UseClassical == FALSE) {
-        ValuePrime = CypBiMultiply(Context, Value, Context->R2ModM[ModOffset]);
-        if (ValuePrime == NULL) {
-            goto BiExponentiateModuloEnd;
-        }
-
-        NewValue = CypBiPerformMontgomeryReduction(Context, ValuePrime);
-        if (NewValue == NULL) {
-            CypBiReleaseReference(Context, ValuePrime);
-            goto BiExponentiateModuloEnd;
-        }
-
-        ASSERT(NewValue == ValuePrime);
-
-        CypBiReleaseReference(Context, Result);
-        Result = ValuePrime;
-    }
-
-#endif
 
     //
     // Work out a reasonable window size.
@@ -822,19 +668,6 @@ Return Value:
 
     } while (LeadingBit >= 0);
 
-#ifdef MONTGOMERY
-
-    if (Context->UseClassical == FALSE) {
-        NewValue = CypBiPerformMontgomeryReduction(Context, Result);
-        if (NewValue == NULL) {
-            goto BiExponentiateModuloEnd;
-        }
-
-        ASSERT(NewValue == Result);
-    }
-
-#endif
-
     CypBiReleaseReference(Context, Value);
     CypBiReleaseReference(Context, Exponent);
     Status = STATUS_SUCCESS;
@@ -921,13 +754,6 @@ Return Value:
     PBIG_INTEGER M2;
     PBIG_INTEGER NewValue;
     UCHAR OriginalModOffset;
-
-#ifdef MONTGOMERY
-
-    BOOL OriginalUseClassical;
-
-#endif
-
     PBIG_INTEGER Result;
 
     HValue = NULL;
@@ -935,19 +761,6 @@ Return Value:
     M2 = NULL;
     Result = NULL;
     OriginalModOffset = Context->ModOffset;
-
-#ifdef MONTGOMERY
-
-    //
-    // Montgomery reduction requires that x > 0 and y < m, which does not hold
-    // here, so disable Montgomery reduction while doing this.
-    //
-
-    OriginalUseClassical = Context->UseClassical;
-    Context->UseClassical = TRUE;
-
-#endif
-
     Context->ModOffset = BIG_INTEGER_P_OFFSET;
     CypBiAddReference(Value);
     CypBiAddReference(DpValue);
@@ -1023,13 +836,6 @@ Return Value:
     CypBiReleaseReference(Context, Value);
 
 BiChineseRemainderTheoremEnd:
-
-#ifdef MONTGOMERY
-
-    Context->UseClassical = OriginalUseClassical;
-
-#endif
-
     Context->ModOffset = OriginalModOffset;
     if (M1 != NULL) {
         CypBiReleaseReference(Context, M1);
@@ -1545,6 +1351,11 @@ Return Value:
         *NegativeResult = Carry;
     }
 
+    //
+    // Put the right side back to what it was.
+    //
+
+    CypBiTrim(Right);
     CypBiReleaseReference(Context, Right);
     CypBiTrim(Left);
     return Left;
@@ -2188,61 +1999,6 @@ Return Value:
     return Result;
 }
 
-#ifdef MONTGOMERY
-
-BIG_INTEGER_COMPONENT
-CypBiModularInverse (
-    PBIG_INTEGER_CONTEXT Context,
-    PBIG_INTEGER Value
-    )
-
-/*++
-
-Routine Description:
-
-    This routine computes the modular inverse of a given value, used in
-    Montgomery-Dusse-Kaliski reduction.
-
-Arguments:
-
-    Context - Supplies a pointer to the big integer context.
-
-    Value - Supplies a pointer to the value to find the modular inverse of.
-
-Return Value:
-
-    Returns the inverse as a big integer component.
-
---*/
-
-{
-
-    BIG_INTEGER_COMPONENT Component;
-    UINTN Index;
-    BIG_INTEGER_COMPONENT Inverse;
-    BIG_INTEGER_LONG_COMPONENT TwoToIndex;
-    BIG_INTEGER_COMPONENT TwoToIndexMinusOne;
-
-    Component = Value->Components[0];
-    Inverse = 1;
-    TwoToIndexMinusOne = 2;
-    TwoToIndex = 4;
-    for (Index = 2; Index < BIG_INTEGER_COMPONENT_BITS; Index += 1) {
-        if ((BIG_INTEGER_LONG_COMPONENT)Component * Inverse * TwoToIndex >=
-            TwoToIndexMinusOne) {
-
-            Inverse += TwoToIndexMinusOne;
-        }
-
-        TwoToIndexMinusOne <<= 1;
-        TwoToIndex <<= 1;
-    }
-
-    return BIG_INTEGER_RADIX - Inverse;
-}
-
-#endif
-
 PBIG_INTEGER
 CypBiDivideComponent (
     PBIG_INTEGER_CONTEXT Context,
@@ -2508,103 +2264,6 @@ Return Value:
 
     return FALSE;
 }
-
-#ifdef MONTGOMERY
-
-PBIG_INTEGER
-CypBiPerformMontgomeryReduction (
-    PBIG_INTEGER_CONTEXT Context,
-    PBIG_INTEGER Value
-    )
-
-/*++
-
-Routine Description:
-
-    This routine performs a single Montgomery reduction.
-
-Arguments:
-
-    Context - Supplies a pointer to the big integer context.
-
-    Value - Supplies a pointer to the value to reduce. This is also the
-        destination.
-
-Return Value:
-
-    Returns a pointer to the value on success.
-
-    NULL on allocation failure.
-
---*/
-
-{
-
-    INTN Index;
-    BIG_INTEGER_COMPONENT Inverse;
-    UINT ModOffset;
-    PBIG_INTEGER Modulus;
-    PBIG_INTEGER NewValue;
-    INTN Size;
-    PBIG_INTEGER Working;
-
-    ModOffset = Context->ModOffset;
-    Modulus = Context->Modulus[ModOffset];
-    Inverse = Context->N0Dash[ModOffset];
-    if (Context->UseClassical != FALSE) {
-        return CypBiModulo(Context, Value);
-    }
-
-    Size = Value->Size;
-    Index = 0;
-    do {
-        Working = CypBiMultiplyComponent(Context,
-                                         Modulus,
-                                         Value->Components[Index] * Inverse);
-
-        if (Working == NULL) {
-            return NULL;
-        }
-
-        NewValue = CypBiLeftShiftComponent(Context, Working, Index);
-        if (NewValue == NULL) {
-            return NULL;
-        }
-
-        ASSERT(NewValue == Working);
-
-        NewValue = CypBiAdd(Context, Value, Working);
-        if (NewValue == NULL) {
-            return NULL;
-        }
-
-        ASSERT(NewValue == Value);
-
-        Working = NULL;
-        Index += 1;
-
-    } while (Index < Size);
-
-    NewValue = CypBiRightShiftComponent(Value, Size);
-    if (NewValue == NULL) {
-        return NULL;
-    }
-
-    ASSERT(NewValue == Value);
-
-    if (CypBiCompare(Value, Modulus) >= 0) {
-        NewValue = CypBiSubtract(Context, Value, Modulus, NULL);
-        if (NewValue == NULL) {
-            return NULL;
-        }
-
-        ASSERT(NewValue == Value);
-    }
-
-    return Value;
-}
-
-#endif
 
 PBIG_INTEGER
 CypBiPerformBarrettReduction (

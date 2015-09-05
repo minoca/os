@@ -25,14 +25,19 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+#define CRYPTO_API DLLEXPORT
+
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
-#include "uefifw.h"
+#include <minoca/types.h>
+#include <minoca/status.h>
+#include <minoca/crypto.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -43,6 +48,16 @@ Environment:
 #define VERIFIED_BOOT_PREAMBLE_IMAGE_VERSION 1
 
 #define VERIFIED_BOOT_IMAGE_ALIGNMENT 0x10000
+
+#define VERIFIED_BOOT_MAX_SIGNATURE_SIZE 256
+
+#define VERIFIED_BOOT_SHA_HEADER_LENGTH 19
+
+//
+// The signature is large enough for a 2048-bit RSA key.
+//
+
+#define VERIFIED_BOOT_SIGNATURE_SIZE 0x100
 
 //
 // Define the set of commands and temporary files used to sign data.
@@ -58,10 +73,6 @@ Environment:
 #define SHA256_SIGN_COMMAND_FORMAT \
     "openssl rsautl -sign -inkey %s -keyform PEM -in " \
     SHA256_DIGEST_FILE " > " SHA256_SIGNATURE_FILE
-
-#define SHA256_DIGEST_HEADER_LENGTH 19
-
-#define SHA256_SIGNATURE_SIZE 0x100
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -86,9 +97,9 @@ Members:
 --*/
 
 typedef struct _VERIFIED_BOOT_SIGNATURE {
-    UINT64 SignatureOffset;
-    UINT64 SignatureSize;
-    UINT64 DataSize;
+    ULONGLONG SignatureOffset;
+    ULONGLONG SignatureSize;
+    ULONGLONG DataSize;
 } PACKED VERIFIED_BOOT_SIGNATURE, *PVERIFIED_BOOT_SIGNATURE;
 
 /*++
@@ -123,14 +134,14 @@ Members:
 --*/
 
 typedef struct _VERIFIED_BOOT_PREAMBLE_HEADER {
-    UINT64 PreambleSize;
+    ULONGLONG PreambleSize;
     VERIFIED_BOOT_SIGNATURE PreambleSignature;
-    UINT32 HeaderVersionMajor;
-    UINT32 HeaderVersionMinor;
-    UINT64 ImageVersion;
-    UINT64 ImageLoadAddress;
-    UINT64 BootLoaderAddress;
-    UINT64 BootLoaderSize;
+    ULONG HeaderVersionMajor;
+    ULONG HeaderVersionMinor;
+    ULONGLONG ImageVersion;
+    ULONGLONG ImageLoadAddress;
+    ULONGLONG BootLoaderAddress;
+    ULONGLONG BootLoaderSize;
     VERIFIED_BOOT_SIGNATURE ImageSignature;
 } PACKED VERIFIED_BOOT_PREAMBLE_HEADER, *PVERIFIED_BOOT_PREAMBLE_HEADER;
 
@@ -141,10 +152,10 @@ typedef struct _VERIFIED_BOOT_PREAMBLE_HEADER {
 int
 SignData (
     void *Data,
-    UINT32 DataSize,
-    void **Signature,
-    UINT32 *SignatureSize,
-    CHAR8 *PrivateKeyFilePath
+    ULONG DataSize,
+    PVOID *Signature,
+    PULONG SignatureSize,
+    PSTR PrivateKeyFilePath
     );
 
 //
@@ -156,7 +167,7 @@ SignData (
 // signing.
 //
 
-unsigned char Sha256DigestHeader[SHA256_DIGEST_HEADER_LENGTH] = {
+UCHAR VerifiedBootShaHeader[VERIFIED_BOOT_SHA_HEADER_LENGTH] = {
     0x30, 0x31, 0x30, 0x0D, 0x06, 0x09, 0x60, 0x86,
     0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05,
     0x00, 0x04, 0x20,
@@ -169,7 +180,7 @@ unsigned char Sha256DigestHeader[SHA256_DIGEST_HEADER_LENGTH] = {
 int
 main (
     int ArgumentCount,
-    CHAR8 **Arguments
+    char **Arguments
     )
 
 /*++
@@ -197,30 +208,30 @@ Return Value:
 
 {
 
-    CHAR8 *AfterScan;
-    void *Buffer;
+    PSTR AfterScan;
+    PVOID Buffer;
     size_t BytesDone;
     FILE *FirmwareImage;
-    void *FirmwareImageBuffer;
-    CHAR8 *FirmwareImagePath;
-    void *FirmwareImageSignature;
-    UINT32 FirmwareImageSignatureSize;
-    UINT64 FirmwareImageSize;
-    void *ImageSignature;
+    PVOID FirmwareImageBuffer;
+    PSTR FirmwareImagePath;
+    PVOID FirmwareImageSignature;
+    ULONG FirmwareImageSignatureSize;
+    ULONGLONG FirmwareImageSize;
+    PVOID ImageSignature;
     FILE *KeyBlockFile;
-    CHAR8 *KeyBlockFilePath;
-    UINT32 KeyBlockSize;
-    UINT32 LoadAddress;
+    PSTR KeyBlockFilePath;
+    ULONG KeyBlockSize;
+    ULONG LoadAddress;
     FILE *OutputImage;
-    CHAR8 *OutputImagePath;
+    PSTR OutputImagePath;
     PVERIFIED_BOOT_PREAMBLE_HEADER PreambleHeader;
-    void *PreambleSignature;
-    void *PreambleSignatureBuffer;
-    UINT32 PreambleSignatureBufferSize;
-    UINT64 PreambleSize;
-    CHAR8 *PrivateKeyFilePath;
+    PVOID PreambleSignature;
+    PVOID PreambleSignatureBuffer;
+    ULONG PreambleSignatureBufferSize;
+    ULONGLONG PreambleSize;
+    PSTR PrivateKeyFilePath;
     int Result;
-    UINT64 TotalSize;
+    ULONGLONG TotalSize;
 
     Result = 0;
     Buffer = NULL;
@@ -284,7 +295,7 @@ Return Value:
     //
 
     fseek(KeyBlockFile, 0, SEEK_END);
-    KeyBlockSize = (UINT32)ftell(KeyBlockFile);
+    KeyBlockSize = ftell(KeyBlockFile);
     fseek(KeyBlockFile, 0, SEEK_SET);
     Buffer = malloc(KeyBlockSize);
     if (Buffer == NULL) {
@@ -312,7 +323,7 @@ Return Value:
     //
 
     fseek(FirmwareImage, 0, SEEK_END);
-    FirmwareImageSize = (UINT32)ftell(FirmwareImage);
+    FirmwareImageSize = ftell(FirmwareImage);
     fseek(FirmwareImage, 0, SEEK_SET);
     FirmwareImageBuffer = malloc(FirmwareImageSize);
     if (FirmwareImageBuffer == NULL) {
@@ -348,10 +359,10 @@ Return Value:
     //
 
     PreambleSize = sizeof(VERIFIED_BOOT_PREAMBLE_HEADER) +
-                   (SHA256_SIGNATURE_SIZE * 2);
+                   (VERIFIED_BOOT_SIGNATURE_SIZE * 2);
 
     TotalSize = KeyBlockSize + PreambleSize;
-    TotalSize = ALIGN_VALUE(TotalSize, VERIFIED_BOOT_IMAGE_ALIGNMENT);
+    TotalSize = ALIGN_RANGE_UP(TotalSize, VERIFIED_BOOT_IMAGE_ALIGNMENT);
     PreambleSize = TotalSize - KeyBlockSize;
 
     //
@@ -367,8 +378,8 @@ Return Value:
 
     memset(Buffer, 0, PreambleSize);
     PreambleHeader = (PVERIFIED_BOOT_PREAMBLE_HEADER)Buffer;
-    ImageSignature = (CHAR8 *)(PreambleHeader + 1);
-    PreambleSignature = (CHAR8 *)(ImageSignature + SHA256_SIGNATURE_SIZE);
+    ImageSignature = (PSTR)(PreambleHeader + 1);
+    PreambleSignature = (PSTR)(ImageSignature + VERIFIED_BOOT_SIGNATURE_SIZE);
     PreambleHeader->PreambleSize = PreambleSize;
     PreambleHeader->HeaderVersionMajor =
                                    VERIFIED_BOOT_PREAMBLE_HEADER_VERSION_MAJOR;
@@ -381,7 +392,9 @@ Return Value:
     PreambleHeader->PreambleSignature.SignatureOffset =
               PreambleSignature - (void *)&(PreambleHeader->PreambleSignature);
 
-    PreambleHeader->PreambleSignature.SignatureSize = SHA256_SIGNATURE_SIZE;
+    PreambleHeader->PreambleSignature.SignatureSize =
+                                                  VERIFIED_BOOT_SIGNATURE_SIZE;
+
     PreambleHeader->PreambleSignature.DataSize =
                                         sizeof(VERIFIED_BOOT_PREAMBLE_HEADER) +
                                         FirmwareImageSignatureSize;
@@ -486,11 +499,11 @@ mainEnd:
 
 int
 SignData (
-    void *Data,
-    UINT32 DataSize,
-    void **Signature,
-    UINT32 *SignatureSize,
-    CHAR8 *PrivateKeyFilePath
+    PVOID Data,
+    ULONG DataSize,
+    PVOID *Signature,
+    PULONG SignatureSize,
+    PSTR PrivateKeyFilePath
     )
 
 /*++
@@ -524,22 +537,62 @@ Return Value:
 {
 
     size_t BytesDone;
-    CHAR8 *CommandBuffer;
-    UINT32 CommandBufferSize;
+    PSTR CommandBuffer;
+    ULONG CommandBufferSize;
     FILE *DataFile;
     FILE *DigestFile;
+    PUCHAR HashBuffer;
+    FILE *KeyFile;
+    PUCHAR KeyFileBuffer;
+    ULONG KeyFileSize;
+    KSTATUS KStatus;
     int Result;
-    void *SignatureBuffer;
-    UINT32 SignatureBufferSize;
+    RSA_CONTEXT RsaContext;
+    UCHAR ShaCheckBuffer[VERIFIED_BOOT_SHA_HEADER_LENGTH + SHA256_HASH_SIZE];
+    SHA256_CONTEXT ShaContext;
+    PVOID SignatureBuffer;
+    ULONG SignatureBufferSize;
+    PVOID SignatureData;
+    INTN SignatureDataSize;
     FILE *SignatureFile;
+    struct stat Stat;
     int Status;
 
     CommandBuffer = NULL;
     DataFile = NULL;
     DigestFile = NULL;
+    KeyFile = NULL;
+    KeyFileBuffer = NULL;
+    HashBuffer = NULL;
     SignatureBuffer = NULL;
     SignatureBufferSize = 0;
+    SignatureData = NULL;
     SignatureFile = NULL;
+    memset(&RsaContext, 0, sizeof(RSA_CONTEXT));
+    RsaContext.BigIntegerContext.AllocateMemory = malloc;
+    RsaContext.BigIntegerContext.ReallocateMemory = realloc;
+    RsaContext.BigIntegerContext.FreeMemory = free;
+    KStatus = CyRsaInitializeContext(&RsaContext);
+    if (!KSUCCESS(KStatus)) {
+        Result = EINVAL;
+        goto SignDataEnd;
+    }
+
+    //
+    // Allocate space for the header and the SHA256 hash.
+    //
+
+    HashBuffer = malloc(VERIFIED_BOOT_SHA_HEADER_LENGTH + SHA256_HASH_SIZE);
+    if (HashBuffer == NULL) {
+        Result = ENOMEM;
+        goto SignDataEnd;
+    }
+
+    //
+    // Copy in the fixed header.
+    //
+
+    memcpy(HashBuffer, VerifiedBootShaHeader, VERIFIED_BOOT_SHA_HEADER_LENGTH);
 
     //
     // Take the data and write it to the temporary data file.
@@ -572,12 +625,12 @@ Return Value:
         goto SignDataEnd;
     }
 
-    BytesDone = fwrite(&(Sha256DigestHeader[0]),
+    BytesDone = fwrite(&(VerifiedBootShaHeader[0]),
                        1,
-                       SHA256_DIGEST_HEADER_LENGTH,
+                       VERIFIED_BOOT_SHA_HEADER_LENGTH,
                        DigestFile);
 
-    if (BytesDone != SHA256_DIGEST_HEADER_LENGTH) {
+    if (BytesDone != VERIFIED_BOOT_SHA_HEADER_LENGTH) {
         Result = EIO;
         goto SignDataEnd;
     }
@@ -592,6 +645,117 @@ Return Value:
     Status = system(SHA256_DIGEST_COMMAND);
     if (Status != 0) {
         Result = EAGAIN;
+        goto SignDataEnd;
+    }
+
+    //
+    // Create a SHA-256 hash of the data.
+    //
+
+    CySha256Initialize(&ShaContext);
+    CySha256AddContent(&ShaContext, Data, DataSize);
+    CySha256GetHash(&ShaContext,
+                    &(HashBuffer[VERIFIED_BOOT_SHA_HEADER_LENGTH]));
+
+    //
+    // Compare against openssl.
+    //
+
+    DigestFile = fopen(SHA256_DIGEST_FILE, "rb");
+    fread(ShaCheckBuffer,
+          1,
+          VERIFIED_BOOT_SHA_HEADER_LENGTH + SHA256_HASH_SIZE,
+          DigestFile);
+
+    fclose(DigestFile);
+    DigestFile = NULL;
+    if (memcmp(ShaCheckBuffer,
+               HashBuffer,
+               VERIFIED_BOOT_SHA_HEADER_LENGTH + SHA256_HASH_SIZE) != 0) {
+
+        fprintf(stderr, "ERROR: HASHES Disagree!\n");
+
+    } else {
+        printf("SHA256 checks out!\n");
+    }
+
+    //
+    // Read in the private key in PEM format. It's assumed there's no password
+    // on it.
+    //
+
+    KeyFile = fopen(PrivateKeyFilePath, "rb");
+    if (KeyFile == NULL) {
+        Result = errno;
+        fprintf(stderr,
+                "Cannot open private key file %s.\n",
+                PrivateKeyFilePath);
+
+        goto SignDataEnd;
+    }
+
+    Status = stat(PrivateKeyFilePath, &Stat);
+    if (Status != 0) {
+        Result = errno;
+        fprintf(stderr, "Cannot stat %s.\n", PrivateKeyFilePath);
+        goto SignDataEnd;
+    }
+
+    KeyFileSize = Stat.st_size;
+    KeyFileBuffer = malloc(KeyFileSize + 1);
+    if (KeyFileBuffer == NULL) {
+        Result = ENOMEM;
+        goto SignDataEnd;
+    }
+
+    BytesDone = fread(KeyFileBuffer, 1, KeyFileSize, KeyFile);
+    if (BytesDone != KeyFileSize) {
+        Result = EIO;
+        goto SignDataEnd;
+    }
+
+    KeyFileBuffer[KeyFileSize] = '\0';
+
+    //
+    // Load the private key into the RSA context.
+    //
+
+    KStatus = CyRsaAddPemFile(&RsaContext, KeyFileBuffer, KeyFileSize, NULL);
+    if (!KSUCCESS(KStatus)) {
+        fprintf(stderr,
+                "Failed to load PEM: %s: %x\n",
+                PrivateKeyFilePath,
+                KStatus);
+
+        Result = EINVAL;
+        goto SignDataEnd;
+    }
+
+    if (RsaContext.ModulusSize > VERIFIED_BOOT_MAX_SIGNATURE_SIZE) {
+        Result = EINVAL;
+        goto SignDataEnd;
+    }
+
+    SignatureData = malloc(VERIFIED_BOOT_MAX_SIGNATURE_SIZE);
+    if (SignatureData == NULL) {
+        Result = ENOMEM;
+        goto SignDataEnd;
+    }
+
+    //
+    // Sign the header + hash.
+    //
+
+    SignatureDataSize = CyRsaEncrypt(
+                            &RsaContext,
+                            HashBuffer,
+                            VERIFIED_BOOT_SHA_HEADER_LENGTH + SHA256_HASH_SIZE,
+                            SignatureData,
+                            TRUE);
+
+    if (SignatureDataSize == -1) {
+        Result = ENOMEM;
+        fprintf(stderr, "Failed to sign data: %x\n", KStatus);
         goto SignDataEnd;
     }
 
@@ -640,10 +804,10 @@ Return Value:
     }
 
     fseek(SignatureFile, 0, SEEK_END);
-    SignatureBufferSize = (UINT32)ftell(SignatureFile);
+    SignatureBufferSize = ftell(SignatureFile);
     fseek(SignatureFile, 0, SEEK_SET);
 
-    assert(SignatureBufferSize == SHA256_SIGNATURE_SIZE);
+    assert(SignatureBufferSize == VERIFIED_BOOT_SIGNATURE_SIZE);
 
     SignatureBuffer = malloc(SignatureBufferSize);
     if (SignatureBuffer == NULL) {
@@ -657,9 +821,47 @@ Return Value:
         goto SignDataEnd;
     }
 
+    //
+    // Compare the RSA signature against openssl.
+    //
+
+    if (SignatureBufferSize != SignatureDataSize) {
+        printf("RSA sizes disagree! %d %d\n",
+               SignatureBufferSize,
+               SignatureDataSize);
+
+    } else {
+        if (memcmp(SignatureBuffer, SignatureData, SignatureDataSize) != 0) {
+            printf("RSA signatures differ!\n");
+
+        } else {
+            printf("RSA checks out!\n");
+        }
+    }
+
     Result = 0;
 
 SignDataEnd:
+    if (Result != 0) {
+        if (SignatureData != NULL) {
+            free(SignatureData);
+            SignatureData = NULL;
+        }
+    }
+
+    CyRsaDestroyContext(&RsaContext);
+    if (KeyFile != NULL) {
+        fclose(KeyFile);
+    }
+
+    if (KeyFileBuffer != NULL) {
+        free(KeyFileBuffer);
+    }
+
+    if (HashBuffer != NULL) {
+        free(HashBuffer);
+    }
+
     if (DataFile != NULL) {
         fclose(DataFile);
     }

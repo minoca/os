@@ -118,6 +118,7 @@ Return Value:
     PUCHAR PemData;
     UINTN PemSize;
     CY_PEM_TYPE PemType;
+    BOOL Result;
     PSTR Search;
     PSTR Start;
     UINTN StartLength;
@@ -204,8 +205,9 @@ Return Value:
             //
 
             if (Match == NULL) {
-                Status = CyBase64Decode(Start, PemSize, PemData, &PemSize);
-                if (!KSUCCESS(Status)) {
+                Result = CyBase64Decode(Start, PemSize, PemData, &PemSize);
+                if (Result == FALSE) {
+                    Status = STATUS_INVALID_PARAMETER;
                     goto RsaAddPemFileEnd;
                 }
             }

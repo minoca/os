@@ -436,15 +436,6 @@ Members:
 
     Modulus - Stores the modulus used in the computation.
 
-    R2ModM - Stores the cached R^2 mod m values used in the Montgomery
-        reduction.
-
-    RModM - Stores the cached R mod m values used in the Montgomery
-        reduction.
-
-    N0Dash - Stores the cached N0 dash values used in the Montgomery
-        reduction.
-
     Mu - Stores the mu values used in Barrett reduction.
 
     NormalizedMod - Stores the normalized modulo values.
@@ -458,9 +449,6 @@ Members:
 
     FreeCount - Stores the number of integers on the free list.
 
-    UseClassical - Stores a boolean indicating if classical reduction
-        should be used instead of optimal reduction techniques.
-
     ModOffset - Stores the modulo offset in use.
 
 --*/
@@ -473,18 +461,12 @@ typedef struct _BIG_INTEGER_CONTEXT {
     PBIG_INTEGER FreeList;
     PBIG_INTEGER Radix;
     PBIG_INTEGER Modulus[BIG_INTEGER_MODULO_COUNT];
-#ifdef MONTGOMERY
-    PBIG_INTEGER R2ModM[BIG_INTEGER_MODULO_COUNT];
-    PBIG_INTEGER RModM[BIG_INTEGER_MODULO_COUNT];
-    BIG_INTEGER_COMPONENT N0Dash[BIG_INTEGER_MODULO_COUNT];
-#endif
     PBIG_INTEGER Mu[BIG_INTEGER_MODULO_COUNT];
     PBIG_INTEGER NormalizedMod[BIG_INTEGER_MODULO_COUNT];
     PBIG_INTEGER *ExponentTable;
     ULONG WindowSize;
     INTN ActiveCount;
     INTN FreeCount;
-    BOOL UseClassical;
     UCHAR ModOffset;
 } BIG_INTEGER_CONTEXT, *PBIG_INTEGER_CONTEXT;
 
