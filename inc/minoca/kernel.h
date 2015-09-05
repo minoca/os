@@ -42,6 +42,7 @@ Author:
 #include <minoca/hl.h>
 #include <minoca/acpi.h>
 #include <minoca/io.h>
+#include <minoca/pm.h>
 #include <minoca/sp.h>
 #include <minoca/knet.h>
 #include <minoca/syscall.h>

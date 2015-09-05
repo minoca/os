@@ -1578,6 +1578,9 @@ typedef enum _IRP_MINOR_CODE {
     IrpMinorQueryChildren,
     IrpMinorQueryInterface,
     IrpMinorRemoveDevice,
+    IrpMinorIdle,
+    IrpMinorSuspend,
+    IrpMinorResume,
     IrpMinorOpenInvalid = 0x2000,
     IrpMinorOpen,
     IrpMinorCloseInvalid = 0x3000,
@@ -1698,6 +1701,23 @@ typedef struct _IRP_QUERY_INTERFACE {
     PVOID InterfaceBuffer;
     ULONG InterfaceBufferSize;
 } IRP_QUERY_INTERFACE, *PIRP_QUERY_INTERFACE;
+
+/*++
+
+Structure Description:
+
+    This structure defines the parameters for an idle request IRP.
+
+Members:
+
+    ExpectedDuration - Stores the expected duration of the idle period, in
+        time counter ticks.
+
+--*/
+
+typedef struct _IRP_IDLE {
+    ULONGLONG ExpectedDuration;
+} IRP_IDLE, *PIRP_IDLE;
 
 /*++
 
@@ -1886,6 +1906,8 @@ Members:
     QueryInterface - Stores the parameters and results from a Query Interface
         IRP.
 
+    Idle - Stores the parameters for an Idle IRP.
+
     Open - Stores the parameters and results from an Open IRP.
 
     Close - Stores the parameters from a Close IRP.
@@ -1913,6 +1935,7 @@ struct _IRP {
         IRP_START_DEVICE StartDevice;
         IRP_QUERY_CHILDREN QueryChildren;
         IRP_QUERY_INTERFACE QueryInterface;
+        IRP_IDLE Idle;
         IRP_OPEN Open;
         IRP_CLOSE Close;
         IRP_READ_WRITE ReadWrite;
@@ -3418,6 +3441,32 @@ Routine Description:
 Arguments:
 
     Irp - Supplies a pointer to the IRP to free.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
+VOID
+IoInitializeIrp (
+    PIRP Irp
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes an IRP and prepares it to be sent to a device.
+    This routine does not mean that IRPs can be allocated randomly from pool
+    and initialized here; IRPs must still be allocated from IoAllocateIrp. This
+    routine just resets an IRP back to its initialized state.
+
+Arguments:
+
+    Irp - Supplies a pointer to the initialized IRP to initialize. This IRP
+        must already have a valid object header.
 
 Return Value:
 

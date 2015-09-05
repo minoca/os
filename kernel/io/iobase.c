@@ -5088,7 +5088,7 @@ Return Value:
     ASSERT(Context->IoBuffer != NULL);
     ASSERT(IS_ALIGNED(Context->SizeInBytes, MmPageSize()) != FALSE);
 
-    IopInitializeIrp(Irp);
+    IoInitializeIrp(Irp);
 
     ASSERT(Irp->MajorCode == IrpMajorIo);
 

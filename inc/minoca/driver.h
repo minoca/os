@@ -35,6 +35,7 @@ Author:
 #include <minoca/hl.h>
 #include <minoca/ioport.h>
 #include <minoca/io.h>
+#include <minoca/pm.h>
 #include <minoca/knet.h>
 #include <minoca/syscall.h>
 

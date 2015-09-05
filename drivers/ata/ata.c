@@ -188,7 +188,7 @@ AtapPerformDmaIo (
     BOOL HaveDpcLock
     );
 
-VOID
+KSTATUS
 AtapPerformPolledIo (
     PIRP Irp,
     PATA_CHILD Device
@@ -691,6 +691,7 @@ Return Value:
 
 {
 
+    BOOL CompleteIrp;
     PATA_CHILD Device;
     PIO_BUFFER IoBuffer;
     KSTATUS IrpStatus;
@@ -704,6 +705,9 @@ Return Value:
         return;
     }
 
+    CompleteIrp = FALSE;
+    IoBuffer = NULL;
+
     //
     // Polled I/O is shared by a few code paths and validates the I/O buffer
     // further down the stack. It should also only be hit in the down direction
@@ -714,8 +718,9 @@ Return Value:
 
         ASSERT(Irp->Direction == IrpDown);
 
-        AtapPerformPolledIo(Irp, Device);
-        return;
+        CompleteIrp = TRUE;
+        Status = AtapPerformPolledIo(Irp, Device);
+        goto DispatchIoEnd;
     }
 
     //
@@ -725,10 +730,8 @@ Return Value:
     //
 
     if (Irp->Direction == IrpUp) {
-        if (Irp != Device->Channel->Irp) {
-            return;
-        }
 
+        ASSERT(Irp == Device->Channel->Irp);
         ASSERT(Device == Device->Channel->OwningChild);
         ASSERT(KeIsQueuedLockHeld(Device->Channel->Lock) != FALSE);
         ASSERT(Device->Channel->IoBuffer != NULL);
@@ -737,6 +740,7 @@ Return Value:
         Device->Channel->IoBuffer = NULL;
         Device->Channel->OwningChild = NULL;
         Device->Channel->Irp = NULL;
+        PmDeviceReleaseReference(Device->OsDevice);
         KeReleaseQueuedLock(Device->Channel->Lock);
         OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
 
@@ -757,6 +761,11 @@ Return Value:
                                         0,
                                         Irp->U.ReadWrite.IoBytesCompleted);
 
+                //
+                // If the IRP succeeded but this final copy failed,
+                // re-complete the IRP with a failing status.
+                //
+
                 if (!KSUCCESS(Status)) {
                     Irp->U.ReadWrite.IoBytesCompleted = 0;
                     Irp->U.ReadWrite.NewIoOffset =
@@ -769,80 +778,92 @@ Return Value:
                 }
             }
 
-            MmFreeIoBuffer(IoBuffer);
+        } else {
+            IoBuffer = NULL;
         }
-
-        return;
-    }
 
     //
     // Start the DMA on the way down.
     //
 
-    Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
+    } else {
+        Status = PmDeviceAddReference(Device->OsDevice);
+        if (!KSUCCESS(Status)) {
+            IoCompleteIrp(AtaDriver, Irp, Status);
+            goto DispatchIoEnd;
+        }
 
-    //
-    // Before acquiring the channel's lock and starting the DMA,
-    // validate that the I/O buffer is good for ATA (i.e. it must use
-    // physical addresses that are less than 4GB and be sector size
-    // aligned).
-    //
+        Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
 
-    OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
-    IoBuffer = OriginalIoBuffer;
-    Status = MmValidateIoBuffer(0,
-                                MAX_ULONG,
-                                ATA_SECTOR_SIZE,
-                                Irp->U.ReadWrite.IoSizeInBytes,
-                                FALSE,
-                                &IoBuffer);
+        //
+        // Before acquiring the channel's lock and starting the DMA,
+        // validate that the I/O buffer is good for ATA (i.e. it must use
+        // physical addresses that are less than 4GB and be sector size
+        // aligned).
+        //
 
-    if (!KSUCCESS(Status)) {
-        goto DispatchIoEnd;
-    }
-
-    //
-    // Copy the bytes into the valid I/O buffer, if necessary.
-    //
-
-    if ((OriginalIoBuffer != IoBuffer) &&
-        (Irp->MinorCode == IrpMinorIoWrite)) {
-
-        Status = MmCopyIoBuffer(IoBuffer,
-                                0,
-                                OriginalIoBuffer,
-                                0,
-                                Irp->U.ReadWrite.IoSizeInBytes);
+        OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
+        IoBuffer = OriginalIoBuffer;
+        Status = MmValidateIoBuffer(0,
+                                    MAX_ULONG,
+                                    ATA_SECTOR_SIZE,
+                                    Irp->U.ReadWrite.IoSizeInBytes,
+                                    FALSE,
+                                    &IoBuffer);
 
         if (!KSUCCESS(Status)) {
+            IoBuffer = NULL;
             goto DispatchIoEnd;
+        }
+
+        //
+        // Copy the bytes into the valid I/O buffer, if necessary.
+        //
+
+        if ((OriginalIoBuffer != IoBuffer) &&
+            (Irp->MinorCode == IrpMinorIoWrite)) {
+
+            Status = MmCopyIoBuffer(IoBuffer,
+                                    0,
+                                    OriginalIoBuffer,
+                                    0,
+                                    Irp->U.ReadWrite.IoSizeInBytes);
+
+            if (!KSUCCESS(Status)) {
+                goto DispatchIoEnd;
+            }
+        }
+
+        //
+        // Fire off the DMA. If this succeeds, then return with the lock held.
+        //
+
+        KeAcquireQueuedLock(Device->Channel->Lock);
+        Device->Channel->Irp = Irp;
+        Device->Channel->OwningChild = Device;
+        Device->Channel->IoBuffer = IoBuffer;
+        Status = AtapPerformDmaIo(Irp, Device, FALSE);
+        if (!KSUCCESS(Status)) {
+            Device->Channel->IoBuffer = NULL;
+            Device->Channel->OwningChild = NULL;
+            Device->Channel->Irp = NULL;
+            KeReleaseQueuedLock(Device->Channel->Lock);
+
+        } else {
+            IoBuffer = NULL;
         }
     }
 
-    //
-    // Fire off the DMA. If this succeeds, then return with the lock held.
-    //
-
-    KeAcquireQueuedLock(Device->Channel->Lock);
-    Device->Channel->Irp = Irp;
-    Device->Channel->OwningChild = Device;
-    Device->Channel->IoBuffer = IoBuffer;
-    Status = AtapPerformDmaIo(Irp, Device, FALSE);
-    if (KSUCCESS(Status)) {
-        return;
-    }
-
-    Device->Channel->IoBuffer = NULL;
-    Device->Channel->OwningChild = NULL;
-    Device->Channel->Irp = NULL;
-    KeReleaseQueuedLock(Device->Channel->Lock);
-
 DispatchIoEnd:
-    if (OriginalIoBuffer != IoBuffer) {
+    if (IoBuffer != NULL) {
         MmFreeIoBuffer(IoBuffer);
     }
 
-    IoCompleteIrp(AtaDriver, Irp, Status);
+    if (CompleteIrp != FALSE) {
+        PmDeviceReleaseReference(Device->OsDevice);
+        IoCompleteIrp(AtaDriver, Irp, Status);
+    }
+
     return;
 }
 
@@ -1192,6 +1213,9 @@ Return Value:
             AtapEnumerateDrives(Irp, Controller);
             break;
 
+        case IrpMinorIdle:
+        case IrpMinorSuspend:
+        case IrpMinorResume:
         default:
             break;
         }
@@ -1231,6 +1255,12 @@ Return Value:
     if (Irp->Direction == IrpDown) {
         switch (Irp->MinorCode) {
         case IrpMinorStartDevice:
+            Child->OsDevice = Irp->Device;
+            Status = PmInitialize(Irp->Device);
+            if (!KSUCCESS(Status)) {
+                IoCompleteIrp(AtaDriver, Irp, Status);
+                break;
+            }
 
             //
             // Publish the disk interface.
@@ -1259,6 +1289,18 @@ Return Value:
 
         case IrpMinorQueryResources:
         case IrpMinorQueryChildren:
+            IoCompleteIrp(AtaDriver, Irp, STATUS_SUCCESS);
+            break;
+
+        case IrpMinorIdle:
+            IoCompleteIrp(AtaDriver, Irp, STATUS_SUCCESS);
+            break;
+
+        case IrpMinorSuspend:
+            IoCompleteIrp(AtaDriver, Irp, STATUS_SUCCESS);
+            break;
+
+        case IrpMinorResume:
             IoCompleteIrp(AtaDriver, Irp, STATUS_SUCCESS);
             break;
 
@@ -1375,7 +1417,14 @@ Return Value:
     //
 
     case IrpMinorSystemControlSynchronize:
+        Status = PmDeviceAddReference(Device->OsDevice);
+        if (!KSUCCESS(Status)) {
+            IoCompleteIrp(AtaDriver, Irp, Status);
+            break;
+        }
+
         Status = AtapSynchronizeDevice(Device);
+        PmDeviceReleaseReference(Device->OsDevice);
         IoCompleteIrp(AtaDriver, Irp, Status);
         break;
 
@@ -1759,6 +1808,15 @@ Return Value:
 
     Index = 0;
     LineSkipped = FALSE;
+    Status = PmInitialize(Irp->Device);
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    Status = PmDeviceAddReference(Irp->Device);
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
 
     //
     // Loop through the allocated resources to get the controller base and the
@@ -1911,7 +1969,7 @@ Return Value:
 
     Status = AtapResetController(Controller);
     if (!KSUCCESS(Status)) {
-        goto StartDeviceEnd;
+        goto StartControllerEnd;
     }
 
     RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
@@ -1929,7 +1987,7 @@ Return Value:
         Connect.Interrupt = &(Controller->PrimaryInterruptHandle);
         Status = IoConnectInterrupt(&Connect);
         if (!KSUCCESS(Status)) {
-            goto StartDeviceEnd;
+            goto StartControllerEnd;
         }
     }
 
@@ -1942,13 +2000,14 @@ Return Value:
         Connect.Interrupt = &(Controller->SecondaryInterruptHandle);
         Status = IoConnectInterrupt(&Connect);
         if (!KSUCCESS(Status)) {
-            goto StartDeviceEnd;
+            goto StartControllerEnd;
         }
     }
 
     Status = STATUS_SUCCESS;
 
-StartDeviceEnd:
+StartControllerEnd:
+    PmDeviceReleaseReference(Irp->Device);
     return Status;
 }
 
@@ -2050,6 +2109,12 @@ Return Value:
     PDEVICE Children[4];
     KSTATUS Status;
 
+    Status = PmDeviceAddReference(Irp->Device);
+    if (!KSUCCESS(Status)) {
+        IoCompleteIrp(AtaDriver, Irp, Status);
+        return;
+    }
+
     ChildCount = 0;
     for (ChildIndex = 0; ChildIndex < ATA_CHILD_COUNT; ChildIndex += 1) {
         Child = &(Controller->ChildContexts[ChildIndex]);
@@ -2094,7 +2159,9 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 EnumerateDrivesEnd:
+    PmDeviceReleaseReference(Irp->Device);
     IoCompleteIrp(AtaDriver, Irp, Status);
+    return;
 }
 
 KSTATUS
@@ -2470,7 +2537,7 @@ PerformDmaIoEnd:
     return Status;
 }
 
-VOID
+KSTATUS
 AtapPerformPolledIo (
     PIRP Irp,
     PATA_CHILD Device
@@ -2490,7 +2557,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -2529,8 +2596,7 @@ Return Value:
     BytesCompleted = BlocksCompleted * ATA_SECTOR_SIZE;
     Irp->U.ReadWrite.IoBytesCompleted = BytesCompleted;
     Irp->U.ReadWrite.NewIoOffset = IoOffset + BytesCompleted;
-    IoCompleteIrp(AtaDriver, Irp, Status);
-    return;
+    return Status;
 }
 
 KSTATUS

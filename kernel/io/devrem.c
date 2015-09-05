@@ -26,6 +26,7 @@ Environment:
 
 #include <minoca/kernel.h>
 #include "iop.h"
+#include "pmp.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -248,6 +249,12 @@ Return Value:
     //
 
     KeAcquireSharedExclusiveLockExclusive(Device->Lock);
+
+    //
+    // Clean up the power management state.
+    //
+
+    PmpRemoveDevice(Device);
 
     //
     // Send the removal IRP to the device. If this fails, the removal process
@@ -681,6 +688,12 @@ Return Value:
     ASSERT(LIST_EMPTY(&(Device->Header.ChildListHead)) != FALSE);
     ASSERT(LIST_EMPTY(&(Device->ActiveChildListHead)) != FALSE);
     ASSERT(Device->ActiveListEntry.Next == NULL);
+
+    //
+    // Clean up the power management state.
+    //
+
+    PmpDestroyDevice(Device);
 
     //
     // Delete the arbiter list and the various resource lists.

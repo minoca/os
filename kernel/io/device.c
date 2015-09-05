@@ -26,6 +26,7 @@ Environment:
 
 #include <minoca/kernel.h>
 #include "iop.h"
+#include "pmp.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -92,7 +93,7 @@ IopQueryChildren (
 VOID
 IopProcessReportedChildren (
     PDEVICE Device,
-    PIRP QueryChildrenIrp
+    PIRP_QUERY_CHILDREN Result
     );
 
 PSTR
@@ -2218,6 +2219,10 @@ Return Value:
         IopRemoveDevice(Device, Work);
         break;
 
+    case DeviceActionPowerTransition:
+        PmpDevicePowerTransition(Device);
+        break;
+
     default:
 
         ASSERT(FALSE);
@@ -2253,8 +2258,8 @@ Return Value:
 {
 
     BOOL Breakout;
-    PIRP QueryResourcesIrp;
-    PIRP StartIrp;
+    IRP_QUERY_RESOURCES QueryResources;
+    IRP_START_DEVICE StartDevice;
     KSTATUS Status;
 
     //
@@ -2291,42 +2296,14 @@ Return Value:
         //
 
         case DeviceDriversAdded:
-            QueryResourcesIrp = IoCreateIrp(Device, IrpMajorStateChange, 0);
-            if (QueryResourcesIrp == NULL) {
-                IopSetDeviceProblem(Device,
-                                    DeviceProblemIrpAllocationFailure,
-                                    STATUS_INSUFFICIENT_RESOURCES);
+            QueryResources.ResourceRequirements = NULL;
+            QueryResources.BootAllocation = NULL;
+            Status = IopSendStateChangeIrp(Device,
+                                           IrpMinorQueryResources,
+                                           &QueryResources,
+                                           sizeof(QueryResources));
 
-                Breakout = TRUE;
-                break;
-            }
-
-            QueryResourcesIrp->MinorCode = IrpMinorQueryResources;
-            QueryResourcesIrp->U.QueryResources.ResourceRequirements = NULL;
-            QueryResourcesIrp->U.QueryResources.BootAllocation = NULL;
-
-            //
-            // Send the IRP synchronously.
-            //
-
-            Status = IoSendSynchronousIrp(QueryResourcesIrp);
             if (!KSUCCESS(Status)) {
-                IoDestroyIrp(QueryResourcesIrp);
-                IopSetDeviceProblem(Device,
-                                    DeviceProblemIrpSendFailure,
-                                    Status);
-
-                Breakout = TRUE;
-                break;
-            }
-
-            //
-            // If the IRP was not succeeded, stop processing the device.
-            //
-
-            Status = IoGetIrpStatus(QueryResourcesIrp);
-            if (!KSUCCESS(Status)) {
-                IoDestroyIrp(QueryResourcesIrp);
                 IopSetDeviceProblem(Device,
                                     DeviceProblemFailedQueryResources,
                                     Status);
@@ -2335,21 +2312,8 @@ Return Value:
                 break;
             }
 
-            //
-            // Validate and set the device resources and boot allocation.
-            //
-
-            Device->ResourceRequirements =
-                      QueryResourcesIrp->U.QueryResources.ResourceRequirements;
-
-            Device->BootResources =
-                            QueryResourcesIrp->U.QueryResources.BootAllocation;
-
-            //
-            // Advance the state.
-            //
-
-            IoDestroyIrp(QueryResourcesIrp);
+            Device->ResourceRequirements = QueryResources.ResourceRequirements;
+            Device->BootResources = QueryResources.BootAllocation;
             IopSetDeviceState(Device, DeviceResourcesQueried);
             break;
 
@@ -2379,51 +2343,20 @@ Return Value:
         //
 
         case DeviceResourcesAssigned:
-            StartIrp = IoCreateIrp(Device, IrpMajorStateChange, 0);
-            if (StartIrp == NULL) {
-                IopSetDeviceProblem(Device,
-                                    DeviceProblemIrpAllocationFailure,
-                                    STATUS_INSUFFICIENT_RESOURCES);
-
-                Breakout = TRUE;
-                break;
-            }
-
-            StartIrp->MinorCode = IrpMinorStartDevice;
-            StartIrp->U.StartDevice.ProcessorLocalResources =
+            StartDevice.ProcessorLocalResources =
                                                Device->ProcessorLocalResources;
 
-            StartIrp->U.StartDevice.BusLocalResources =
-                                                     Device->BusLocalResources;
+            StartDevice.BusLocalResources = Device->BusLocalResources;
+            Status = IopSendStateChangeIrp(Device,
+                                           IrpMinorStartDevice,
+                                           &StartDevice,
+                                           sizeof(StartDevice));
 
-            //
-            // Send the IRP synchronously.
-            //
-
-            Status = IoSendSynchronousIrp(StartIrp);
             if (!KSUCCESS(Status)) {
-                IoDestroyIrp(StartIrp);
-                IopSetDeviceProblem(Device,
-                                    DeviceProblemIrpSendFailure,
-                                    Status);
-
-                Breakout = TRUE;
-                break;
-            }
-
-            //
-            // If the IRP was not successful, stop processing the device.
-            //
-
-            Status = IoGetIrpStatus(StartIrp);
-            if (!KSUCCESS(Status)) {
-                IoDestroyIrp(StartIrp);
                 IopSetDeviceProblem(Device, DeviceProblemFailedStart, Status);
                 Breakout = TRUE;
                 break;
             }
-
-            IoDestroyIrp(StartIrp);
 
             //
             // Set the device state to awaiting enumeration and queue child
@@ -2758,41 +2691,15 @@ Return Value:
 
 {
 
-    PIRP QueryChildrenIrp;
+    IRP_QUERY_CHILDREN QueryChildren;
     KSTATUS Status;
 
-    //
-    // Create an IRP and fill it out.
-    //
+    RtlZeroMemory(&QueryChildren, sizeof(QueryChildren));
+    Status = IopSendStateChangeIrp(Device,
+                                   IrpMinorQueryChildren,
+                                   &QueryChildren,
+                                   sizeof(QueryChildren));
 
-    QueryChildrenIrp = IoCreateIrp(Device, IrpMajorStateChange, 0);
-    if (QueryChildrenIrp == NULL) {
-        IopSetDeviceProblem(Device,
-                            DeviceProblemIrpAllocationFailure,
-                            STATUS_INSUFFICIENT_RESOURCES);
-
-        goto QueryChildrenEnd;
-    }
-
-    QueryChildrenIrp->MinorCode = IrpMinorQueryChildren;
-    QueryChildrenIrp->U.QueryChildren.Children = NULL;
-    QueryChildrenIrp->U.QueryChildren.ChildCount = 0;
-
-    //
-    // Send the IRP synchronously.
-    //
-
-    Status = IoSendSynchronousIrp(QueryChildrenIrp);
-    if (!KSUCCESS(Status)) {
-        IopSetDeviceProblem(Device, DeviceProblemIrpSendFailure, Status);
-        goto QueryChildrenEnd;
-    }
-
-    //
-    // If the IRP was not successful, set the problem state.
-    //
-
-    Status = IoGetIrpStatus(QueryChildrenIrp);
     if (!KSUCCESS(Status)) {
         IopSetDeviceProblem(Device, DeviceProblemFailedQueryChildren, Status);
         goto QueryChildrenEnd;
@@ -2803,9 +2710,9 @@ Return Value:
     // IRP.
     //
 
-    IopProcessReportedChildren(Device, QueryChildrenIrp);
-    if (QueryChildrenIrp->U.QueryChildren.Children != NULL) {
-        MmFreePagedPool(QueryChildrenIrp->U.QueryChildren.Children);
+    IopProcessReportedChildren(Device, &QueryChildren);
+    if (QueryChildren.Children != NULL) {
+        MmFreePagedPool(QueryChildren.Children);
     }
 
     //
@@ -2825,17 +2732,13 @@ Return Value:
     }
 
 QueryChildrenEnd:
-    if (QueryChildrenIrp != NULL) {
-        IoDestroyIrp(QueryChildrenIrp);
-    }
-
     return;
 }
 
 VOID
 IopProcessReportedChildren (
     PDEVICE Device,
-    PIRP QueryChildrenIrp
+    PIRP_QUERY_CHILDREN Result
     )
 
 /*++
@@ -2851,7 +2754,7 @@ Arguments:
     Device - Supplies a pointer to the device that just completed the
         enumeration.
 
-    QueryChildrenIrp - Supplies a pointer to the completed IRP to process.
+    Result - Supplies a pointer to the query children data.
 
 Return Value:
 
@@ -2897,11 +2800,8 @@ Return Value:
     // brand new children.
     //
 
-    ChildArray = QueryChildrenIrp->U.QueryChildren.Children;
-    for (ChildIndex = 0;
-         ChildIndex < QueryChildrenIrp->U.QueryChildren.ChildCount;
-         ChildIndex += 1) {
-
+    ChildArray = Result->Children;
+    for (ChildIndex = 0; ChildIndex < Result->ChildCount; ChildIndex += 1) {
         if ((ChildArray != NULL) && (ChildArray[ChildIndex] != NULL)) {
 
             //

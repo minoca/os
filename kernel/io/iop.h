@@ -303,6 +303,8 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef struct _DEVICE_POWER DEVICE_POWER, *PDEVICE_POWER;
+
 /*++
 
 Structure Description:
@@ -691,6 +693,9 @@ Values:
 
     DeviceActionRemove - Indicates that the device should be removed.
 
+    DeviceActionPowerTransition - Indicates that the device will undergo a
+        power state change.
+
 --*/
 
 typedef enum _DEVICE_ACTION {
@@ -698,7 +703,8 @@ typedef enum _DEVICE_ACTION {
     DeviceActionStart,
     DeviceActionQueryChildren,
     DeviceActionPrepareRemove,
-    DeviceActionRemove
+    DeviceActionRemove,
+    DeviceActionPowerTransition
 } DEVICE_ACTION, *PDEVICE_ACTION;
 
 /*++
@@ -792,9 +798,7 @@ typedef enum _DEVICE_PROBLEM {
     DeviceProblemNoAddDevice,
     DeviceProblemNoFileSystem,
     DeviceProblemFailedAddDevice,
-    DeviceProblemIrpAllocationFailure,
     DeviceProblemInvalidState,
-    DeviceProblemIrpSendFailure,
     DeviceProblemFailedToQueueResourceAssignmentWork,
     DeviceProblemFailedQueryResources,
     DeviceProblemResourceConflict,
@@ -937,6 +941,8 @@ Members:
     BootResources - Stores a pointer to the resources the BIOS assigned to the
         device at boot.
 
+    Power - Stores the power management information for the device.
+
 --*/
 
 struct _DEVICE {
@@ -967,6 +973,7 @@ struct _DEVICE {
     PRESOURCE_ALLOCATION_LIST BusLocalResources;
     PRESOURCE_ALLOCATION_LIST ProcessorLocalResources;
     PRESOURCE_ALLOCATION_LIST BootResources;
+    PDEVICE_POWER Power;
 };
 
 /*++
@@ -4345,28 +4352,35 @@ Return Value:
 
 --*/
 
-VOID
-IopInitializeIrp (
-    PIRP Irp
+KSTATUS
+IopSendStateChangeIrp (
+    PDEVICE Device,
+    IRP_MINOR_CODE MinorCode,
+    PVOID IrpBody,
+    UINTN IrpBodySize
     );
 
 /*++
 
 Routine Description:
 
-    This routine initializes an IRP and prepares it to be sent to a device.
-    This routine does not mean that IRPs can be allocated randomly from pool
-    and initialized here; IRPs must still be allocated from IoAllocateIrp. This
-    routine just resets an IRP back to its initialized state.
+    This routine sends a state change IRP.
 
 Arguments:
 
-    Irp - Supplies a pointer to the initialized IRP to initialize. This IRP
-        must already have a valid object header.
+    Device - Supplies a pointer to the device to send the IRP to.
+
+    MinorCode - Supplies the IRP minor code.
+
+    IrpBody - Supplies a pointer to a buffer that will be copied into the IRP
+        data union on input. On output, this buffer will receive the altered
+        data.
+
+    IrpBodySize - Supplies the size of the IRP body in bytes.
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 

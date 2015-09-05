@@ -469,7 +469,7 @@ Return Value:
     }
 
     RtlZeroMemory(Irp->Stack, AllocationSize);
-    IopInitializeIrp((PIRP)Irp);
+    IoInitializeIrp(&(Irp->Public));
 
     //
     // Loop through every device in the IRP stack.
@@ -652,6 +652,53 @@ Return Value:
 }
 
 KERNEL_API
+VOID
+IoInitializeIrp (
+    PIRP Irp
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes an IRP and prepares it to be sent to a device.
+    This routine does not mean that IRPs can be allocated randomly from pool
+    and initialized here; IRPs must still be allocated from IoAllocateIrp. This
+    routine just resets an IRP back to its initialized state.
+
+Arguments:
+
+    Irp - Supplies a pointer to the initialized IRP to initialize. This IRP
+        must already have a valid object header.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PIRP_INTERNAL InternalIrp;
+
+    InternalIrp = (PIRP_INTERNAL)Irp;
+    InternalIrp->Public.Direction = IrpDown;
+
+    ASSERT(InternalIrp->Device == InternalIrp->Public.Device);
+    ASSERT(InternalIrp->MajorCode == InternalIrp->Public.MajorCode);
+    ASSERT(InternalIrp->Device != NULL);
+
+    InternalIrp->Public.Status = STATUS_NOT_HANDLED;
+    InternalIrp->Flags &= ~(IRP_COMPLETE |
+                            IRP_PENDING |
+                            IRP_DRIVER_STACK_COMPLETE);
+
+    InternalIrp->Public.CompletionRoutine = NULL;
+    InternalIrp->StackIndex = 0;
+    return;
+}
+
+KERNEL_API
 KSTATUS
 IoSendSynchronousIrp (
     PIRP Irp
@@ -773,50 +820,64 @@ SendSynchronousIrpEnd:
     return Status;
 }
 
-VOID
-IopInitializeIrp (
-    PIRP Irp
+KSTATUS
+IopSendStateChangeIrp (
+    PDEVICE Device,
+    IRP_MINOR_CODE MinorCode,
+    PVOID IrpBody,
+    UINTN IrpBodySize
     )
 
 /*++
 
 Routine Description:
 
-    This routine initializes an IRP and prepares it to be sent to a device.
-    This routine does not mean that IRPs can be allocated randomly from pool
-    and initialized here; IRPs must still be allocated from IoAllocateIrp. This
-    routine just resets an IRP back to its initialized state.
+    This routine sends a state change IRP.
 
 Arguments:
 
-    Irp - Supplies a pointer to the initialized IRP to initialize. This IRP
-        must already have a valid object header.
+    Device - Supplies a pointer to the device to send the IRP to.
+
+    MinorCode - Supplies the IRP minor code.
+
+    IrpBody - Supplies a pointer to a buffer that will be copied into the IRP
+        data union on input. On output, this buffer will receive the altered
+        data.
+
+    IrpBodySize - Supplies the size of the IRP body in bytes.
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
 {
 
-    PIRP_INTERNAL InternalIrp;
+    PIRP Irp;
+    KSTATUS Status;
 
-    InternalIrp = (PIRP_INTERNAL)Irp;
-    InternalIrp->Public.Direction = IrpDown;
+    Irp = IoCreateIrp(Device, IrpMajorStateChange, 0);
+    if (Irp == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
 
-    ASSERT(InternalIrp->Device == InternalIrp->Public.Device);
-    ASSERT(InternalIrp->MajorCode == InternalIrp->Public.MajorCode);
-    ASSERT(InternalIrp->Device != NULL);
+    Irp->MinorCode = MinorCode;
+    if (IrpBodySize != 0) {
+        RtlCopyMemory(&(Irp->U), IrpBody, IrpBodySize);
+    }
 
-    InternalIrp->Public.Status = STATUS_NOT_HANDLED;
-    InternalIrp->Flags &= ~(IRP_COMPLETE |
-                            IRP_PENDING |
-                            IRP_DRIVER_STACK_COMPLETE);
+    Status = IoSendSynchronousIrp(Irp);
+    if (KSUCCESS(Status)) {
+        if (IrpBodySize != 0) {
+            RtlCopyMemory(IrpBody, &(Irp->U), IrpBodySize);
+        }
 
-    InternalIrp->Public.CompletionRoutine = NULL;
-    InternalIrp->StackIndex = 0;
-    return;
+        Status = IoGetIrpStatus(Irp);
+    }
+
+    IoDestroyIrp(Irp);
+    return Status;
 }
 
 KSTATUS

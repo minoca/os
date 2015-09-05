@@ -370,6 +370,8 @@ Members:
 
     Channel - Stores a pointer to the channel context.
 
+    OsDevice - Stores a pointer to the OS device.
+
     Slave - Stores whether or not this device is the slave device or the master
         device.
 
@@ -389,6 +391,7 @@ struct _ATA_CHILD {
     ATA_CONTEXT_TYPE Type;
     PATA_CONTROLLER Controller;
     PATA_CHANNEL Channel;
+    PDEVICE OsDevice;
     UCHAR Slave;
     BOOL DmaSupported;
     BOOL Lba48Supported;

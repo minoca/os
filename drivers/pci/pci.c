@@ -557,6 +557,27 @@ Return Value:
 
             break;
 
+        case IrpMinorIdle:
+            if (PciDevice->Type == PciDeviceFunction) {
+                IoCompleteIrp(PciDriver, Irp, STATUS_SUCCESS);
+            }
+
+            break;
+
+        case IrpMinorSuspend:
+            if (PciDevice->Type == PciDeviceFunction) {
+                IoCompleteIrp(PciDriver, Irp, STATUS_SUCCESS);
+            }
+
+            break;
+
+        case IrpMinorResume:
+            if (PciDevice->Type == PciDeviceFunction) {
+                IoCompleteIrp(PciDriver, Irp, STATUS_SUCCESS);
+            }
+
+            break;
+
         //
         // If the IRP is unknown, don't touch it.
         //
