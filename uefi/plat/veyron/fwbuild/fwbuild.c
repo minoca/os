@@ -60,21 +60,6 @@ Environment:
 #define VERIFIED_BOOT_SIGNATURE_SIZE 0x100
 
 //
-// Define the set of commands and temporary files used to sign data.
-//
-
-#define SHA256_DATA_FILE "data.tmp"
-#define SHA256_DIGEST_FILE "data.dgst"
-#define SHA256_SIGNATURE_FILE "data.sig"
-
-#define SHA256_DIGEST_COMMAND \
-    "openssl dgst -sha256 -binary " SHA256_DATA_FILE " >> " SHA256_DIGEST_FILE
-
-#define SHA256_SIGN_COMMAND_FORMAT \
-    "openssl rsautl -sign -inkey %s -keyform PEM -in " \
-    SHA256_DIGEST_FILE " > " SHA256_SIGNATURE_FILE
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -537,10 +522,6 @@ Return Value:
 {
 
     size_t BytesDone;
-    PSTR CommandBuffer;
-    ULONG CommandBufferSize;
-    FILE *DataFile;
-    FILE *DigestFile;
     PUCHAR HashBuffer;
     FILE *KeyFile;
     PUCHAR KeyFileBuffer;
@@ -548,26 +529,17 @@ Return Value:
     KSTATUS KStatus;
     int Result;
     RSA_CONTEXT RsaContext;
-    UCHAR ShaCheckBuffer[VERIFIED_BOOT_SHA_HEADER_LENGTH + SHA256_HASH_SIZE];
     SHA256_CONTEXT ShaContext;
-    PVOID SignatureBuffer;
-    ULONG SignatureBufferSize;
     PVOID SignatureData;
     INTN SignatureDataSize;
-    FILE *SignatureFile;
     struct stat Stat;
     int Status;
 
-    CommandBuffer = NULL;
-    DataFile = NULL;
-    DigestFile = NULL;
     KeyFile = NULL;
     KeyFileBuffer = NULL;
     HashBuffer = NULL;
-    SignatureBuffer = NULL;
-    SignatureBufferSize = 0;
     SignatureData = NULL;
-    SignatureFile = NULL;
+    SignatureDataSize = 0;
     memset(&RsaContext, 0, sizeof(RSA_CONTEXT));
     RsaContext.BigIntegerContext.AllocateMemory = malloc;
     RsaContext.BigIntegerContext.ReallocateMemory = realloc;
@@ -595,60 +567,6 @@ Return Value:
     memcpy(HashBuffer, VerifiedBootShaHeader, VERIFIED_BOOT_SHA_HEADER_LENGTH);
 
     //
-    // Take the data and write it to the temporary data file.
-    //
-
-    DataFile = fopen(SHA256_DATA_FILE, "wb+");
-    if (DataFile == NULL) {
-        fprintf(stderr, "Error: Failed to open %s.\n", SHA256_DATA_FILE);
-        Result = errno;
-        goto SignDataEnd;
-    }
-
-    BytesDone = fwrite(Data, 1, DataSize, DataFile);
-    if (BytesDone != DataSize) {
-        Result = EIO;
-        goto SignDataEnd;
-    }
-
-    fclose(DataFile);
-    DataFile = NULL;
-
-    //
-    // Open the digest file and write the header to it.
-    //
-
-    DigestFile = fopen(SHA256_DIGEST_FILE, "wb+");
-    if (DigestFile == NULL) {
-        fprintf(stderr, "Error: Failed to open %s.\n", SHA256_DIGEST_FILE);
-        Result = errno;
-        goto SignDataEnd;
-    }
-
-    BytesDone = fwrite(&(VerifiedBootShaHeader[0]),
-                       1,
-                       VERIFIED_BOOT_SHA_HEADER_LENGTH,
-                       DigestFile);
-
-    if (BytesDone != VERIFIED_BOOT_SHA_HEADER_LENGTH) {
-        Result = EIO;
-        goto SignDataEnd;
-    }
-
-    fclose(DigestFile);
-    DigestFile = NULL;
-
-    //
-    // Append the data's digest to the digest file.
-    //
-
-    Status = system(SHA256_DIGEST_COMMAND);
-    if (Status != 0) {
-        Result = EAGAIN;
-        goto SignDataEnd;
-    }
-
-    //
     // Create a SHA-256 hash of the data.
     //
 
@@ -656,28 +574,6 @@ Return Value:
     CySha256AddContent(&ShaContext, Data, DataSize);
     CySha256GetHash(&ShaContext,
                     &(HashBuffer[VERIFIED_BOOT_SHA_HEADER_LENGTH]));
-
-    //
-    // Compare against openssl.
-    //
-
-    DigestFile = fopen(SHA256_DIGEST_FILE, "rb");
-    fread(ShaCheckBuffer,
-          1,
-          VERIFIED_BOOT_SHA_HEADER_LENGTH + SHA256_HASH_SIZE,
-          DigestFile);
-
-    fclose(DigestFile);
-    DigestFile = NULL;
-    if (memcmp(ShaCheckBuffer,
-               HashBuffer,
-               VERIFIED_BOOT_SHA_HEADER_LENGTH + SHA256_HASH_SIZE) != 0) {
-
-        fprintf(stderr, "ERROR: HASHES Disagree!\n");
-
-    } else {
-        printf("SHA256 checks out!\n");
-    }
 
     //
     // Read in the private key in PEM format. It's assumed there's no password
@@ -759,86 +655,6 @@ Return Value:
         goto SignDataEnd;
     }
 
-    //
-    // Create the command to sign the digest using the private key file.
-    //
-
-    CommandBufferSize = strlen(PrivateKeyFilePath) +
-                        sizeof(SHA256_SIGN_COMMAND_FORMAT);
-
-    CommandBuffer = malloc(CommandBufferSize);
-    if (CommandBuffer == NULL) {
-        Result = ENOMEM;
-        goto SignDataEnd;
-    }
-
-    Result = snprintf(CommandBuffer,
-                      CommandBufferSize,
-                      SHA256_SIGN_COMMAND_FORMAT,
-                      PrivateKeyFilePath);
-
-    if (Result < 0) {
-        Result = EINVAL;
-        goto SignDataEnd;
-    }
-
-    //
-    // Sign the digest file.
-    //
-
-    Status = system(CommandBuffer);
-    if (Status != 0) {
-        Result = EAGAIN;
-        goto SignDataEnd;
-    }
-
-    //
-    // Allocate a buffer and read the signature file into the buffer.
-    //
-
-    SignatureFile = fopen(SHA256_SIGNATURE_FILE, "rb");
-    if (SignatureFile == NULL) {
-        fprintf(stderr, "Error: Failed to open %s.\n", SHA256_SIGNATURE_FILE);
-        Result = errno;
-        goto SignDataEnd;
-    }
-
-    fseek(SignatureFile, 0, SEEK_END);
-    SignatureBufferSize = ftell(SignatureFile);
-    fseek(SignatureFile, 0, SEEK_SET);
-
-    assert(SignatureBufferSize == VERIFIED_BOOT_SIGNATURE_SIZE);
-
-    SignatureBuffer = malloc(SignatureBufferSize);
-    if (SignatureBuffer == NULL) {
-        Result = ENOMEM;
-        goto SignDataEnd;
-    }
-
-    BytesDone = fread(SignatureBuffer, 1, SignatureBufferSize, SignatureFile);
-    if (BytesDone != SignatureBufferSize) {
-        Result = EIO;
-        goto SignDataEnd;
-    }
-
-    //
-    // Compare the RSA signature against openssl.
-    //
-
-    if (SignatureBufferSize != SignatureDataSize) {
-        printf("RSA sizes disagree! %d %d\n",
-               SignatureBufferSize,
-               SignatureDataSize);
-
-    } else {
-        if (memcmp(SignatureBuffer, SignatureData, SignatureDataSize) != 0) {
-            printf("RSA signatures differ!\n");
-
-        } else {
-            printf("RSA checks out!\n");
-        }
-    }
-
     Result = 0;
 
 SignDataEnd:
@@ -846,6 +662,7 @@ SignDataEnd:
         if (SignatureData != NULL) {
             free(SignatureData);
             SignatureData = NULL;
+            SignatureDataSize = 0;
         }
     }
 
@@ -862,35 +679,8 @@ SignDataEnd:
         free(HashBuffer);
     }
 
-    if (DataFile != NULL) {
-        fclose(DataFile);
-    }
-
-    if (DigestFile != NULL) {
-        fclose(DigestFile);
-    }
-
-    if (SignatureFile != NULL) {
-        fclose(SignatureFile);
-    }
-
-    if (CommandBuffer != NULL) {
-        free(CommandBuffer);
-    }
-
-    if (Result != 0) {
-        if (SignatureBuffer != NULL) {
-            free(SignatureBuffer);
-            SignatureBuffer = NULL;
-            SignatureBufferSize = 0;
-        }
-    }
-
-    unlink(SHA256_DATA_FILE);
-    unlink(SHA256_DIGEST_FILE);
-    unlink(SHA256_SIGNATURE_FILE);
-    *Signature = SignatureBuffer;
-    *SignatureSize = SignatureBufferSize;
+    *Signature = SignatureData;
+    *SignatureSize = SignatureDataSize;
     return Result;
 }
 
