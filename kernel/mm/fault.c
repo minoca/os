@@ -208,7 +208,7 @@ Return Value:
         //
 
         } else if ((FaultFlags & FAULT_FLAG_PAGE_NOT_PRESENT) != 0) {
-            Status = MmpPageIn(ImageSection, PageOffset, NULL);
+            Status = MmpPageIn(ImageSection, PageOffset);
 
             //
             // If the image section shrunk in the meantime, try the whole thing

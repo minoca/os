@@ -32,13 +32,6 @@ Environment:
 //
 
 //
-// Define the number of concurrent lock requests that can exist before callers
-// start getting rejected.
-//
-
-#define MAX_PHYSICAL_PAGE_LOCK_COUNT 15
-
-//
 // Define the flags for the physical page array.
 //
 
@@ -575,8 +568,6 @@ Return Value:
 
                 if ((PagingEntry->U.Flags &
                      PAGING_ENTRY_FLAG_PAGING_OUT) == 0) {
-
-                    ASSERT(PagingEntry->U.LockCount == 0);
 
                     PhysicalPage->U.Free = PHYSICAL_PAGE_FREE;
                     ReleasedPhysicalPage = TRUE;
@@ -1329,8 +1320,7 @@ VOID
 MmpEnablePagingOnPhysicalAddress (
     PHYSICAL_ADDRESS PhysicalAddress,
     ULONG PageCount,
-    PPAGING_ENTRY *PagingEntries,
-    BOOL LockPages
+    PPAGING_ENTRY *PagingEntries
     )
 
 /*++
@@ -1350,9 +1340,6 @@ Arguments:
         space.
 
     PagingEntries - Supplies an array of paging entries for each page.
-
-    LockPages - Supplies a boolean indicating if these pageable pages should
-        start locked.
 
 Return Value:
 
@@ -1425,16 +1412,7 @@ Return Value:
                 ASSERT((PagingEntries[PageIndex]->Section->Flags &
                         IMAGE_SECTION_DESTROYED) == 0);
 
-                if (LockPages != FALSE) {
-
-                    ASSERT(PhysicalPage->U.PagingEntry->U.LockCount == 0);
-
-                    PhysicalPage->U.PagingEntry->U.LockCount = 1;
-
-                } else {
-                    MmNonPagedPhysicalPages -= 1;
-                }
-
+                MmNonPagedPhysicalPages -= 1;
                 PhysicalPage += 1;
             }
 
@@ -1446,256 +1424,6 @@ Return Value:
         KeReleaseQueuedLock(MmPhysicalPageLock);
     }
 
-    return;
-}
-
-KSTATUS
-MmpLockPhysicalPages (
-    PHYSICAL_ADDRESS PhysicalAddress,
-    ULONG PageCount
-    )
-
-/*++
-
-Routine Description:
-
-    This routine locks a set of physical pages in memory.
-
-Arguments:
-
-    PhysicalAddress - Supplies the physical address to lock.
-
-    PageCount - Supplies the number of consecutive physical pages to lock. 0 is
-        not a valid value.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PLIST_ENTRY CurrentEntry;
-    UINTN Flags;
-    ULONGLONG MaxOffset;
-    ULONGLONG Offset;
-    ULONG PageIndex;
-    ULONG PageShift;
-    PPAGING_ENTRY PagingEntry;
-    PPHYSICAL_PAGE PhysicalPage;
-    PPHYSICAL_MEMORY_SEGMENT Segment;
-    KSTATUS Status;
-
-    PageIndex = 0;
-    PageShift = MmPageShift();
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
-    if (MmPhysicalPageLock != NULL) {
-        KeAcquireQueuedLock(MmPhysicalPageLock);
-    }
-
-    //
-    // Loop through every segment looking for the one that owns these pages.
-    //
-
-    CurrentEntry = MmPhysicalSegmentListHead.Next;
-    while (CurrentEntry != &MmPhysicalSegmentListHead) {
-        Segment = LIST_VALUE(CurrentEntry, PHYSICAL_MEMORY_SEGMENT, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
-        if ((PhysicalAddress >= Segment->StartAddress) &&
-            (PhysicalAddress < Segment->EndAddress)) {
-
-            Offset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
-            MaxOffset = (Segment->EndAddress - Segment->StartAddress) >>
-                        PageShift;
-
-            PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
-            PhysicalPage += Offset;
-
-            //
-            // Loop through the number of contiguous pages requested, and mark
-            // each one as locked if it was marked as pagable.
-            //
-
-            for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
-
-                ASSERT((Offset + PageIndex) < MaxOffset);
-                ASSERT(PhysicalPage[PageIndex].U.Free != PHYSICAL_PAGE_FREE);
-
-                //
-                // If there is no paging entry and this is just a non-paged
-                // allocation, then it is already locked down.
-                //
-
-                Flags = PhysicalPage[PageIndex].U.Flags;
-                if ((Flags & PHYSICAL_PAGE_FLAG_NON_PAGED) != 0) {
-                    continue;
-                }
-
-                PagingEntry = PhysicalPage[PageIndex].U.PagingEntry;
-
-                ASSERT(PagingEntry != NULL);
-
-                //
-                // Locking a pageable page should only happen with the
-                // section's lock held.
-                //
-
-                ASSERT(KeIsQueuedLockHeld(PagingEntry->Section->Lock) != FALSE);
-
-                //
-                // Fail if too many callers have attempted to lock this page.
-                //
-
-                if (PagingEntry->U.LockCount == MAX_PHYSICAL_PAGE_LOCK_COUNT) {
-                    Status = STATUS_RESOURCE_IN_USE;
-                    goto LockPhysicalPagesEnd;
-                }
-
-                //
-                // If this is the first request to lock the page, then
-                // increment the non-paged physical page count.
-                //
-
-                if (PagingEntry->U.LockCount == 0) {
-                    MmNonPagedPhysicalPages += 1;
-                }
-
-                PagingEntry->U.LockCount += 1;
-            }
-
-            Status = STATUS_SUCCESS;
-            goto LockPhysicalPagesEnd;
-        }
-    }
-
-    //
-    // The page was not found. This probably indicates a serious memory
-    // corruption. Consider crashing the system altogether.
-    //
-
-    ASSERT(FALSE);
-
-    Status = STATUS_NOT_FOUND;
-
-LockPhysicalPagesEnd:
-    if (MmPhysicalPageLock != NULL) {
-        KeReleaseQueuedLock(MmPhysicalPageLock);
-    }
-
-    //
-    // Undo what was done on failure.
-    //
-
-    if (!KSUCCESS(Status)) {
-        if (PageIndex != 0) {
-            MmpUnlockPhysicalPages(PhysicalAddress, PageIndex);
-        }
-    }
-
-    return Status;
-}
-
-VOID
-MmpUnlockPhysicalPages (
-    PHYSICAL_ADDRESS PhysicalAddress,
-    ULONG PageCount
-    )
-
-/*++
-
-Routine Description:
-
-    This routine unlocks a set of physical pages in memory.
-
-Arguments:
-
-    PhysicalAddress - Supplies the physical address to unlock.
-
-    PageCount - Supplies the number of consecutive physical pages to unlock.
-        Zero is not a valid value.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PLIST_ENTRY CurrentEntry;
-    UINTN Flags;
-    ULONGLONG MaxOffset;
-    ULONGLONG Offset;
-    ULONG PageIndex;
-    ULONG PageShift;
-    PPAGING_ENTRY PagingEntry;
-    PPHYSICAL_PAGE PhysicalPage;
-    PPHYSICAL_MEMORY_SEGMENT Segment;
-
-    PageShift = MmPageShift();
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
-    KeAcquireQueuedLock(MmPhysicalPageLock);
-    CurrentEntry = MmPhysicalSegmentListHead.Next;
-    while (CurrentEntry != &MmPhysicalSegmentListHead) {
-        Segment = LIST_VALUE(CurrentEntry, PHYSICAL_MEMORY_SEGMENT, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
-        if ((PhysicalAddress >= Segment->StartAddress) &&
-            (PhysicalAddress < Segment->EndAddress)) {
-
-            Offset = (PhysicalAddress - Segment->StartAddress) >> PageShift;
-            MaxOffset = (Segment->EndAddress - Segment->StartAddress) >>
-                                                                     PageShift;
-
-            PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
-            PhysicalPage += Offset;
-
-            //
-            // Loop through and unlock the number of contiguous pages requested.
-            //
-
-            for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
-
-                ASSERT((Offset + PageIndex) < MaxOffset);
-                ASSERT(PhysicalPage[PageIndex].U.Free != PHYSICAL_PAGE_FREE);
-
-                //
-                // If this is a non-paged physical page, then skip it.
-                //
-
-                Flags = PhysicalPage[PageIndex].U.Flags;
-                if ((Flags & PHYSICAL_PAGE_FLAG_NON_PAGED) != 0) {
-                    continue;
-                }
-
-                PagingEntry = PhysicalPage[PageIndex].U.PagingEntry;
-
-                ASSERT(PagingEntry != NULL);
-                ASSERT(PagingEntry->U.LockCount != 0);
-
-                PagingEntry->U.LockCount -= 1;
-                if (PagingEntry->U.LockCount == 0) {
-                    MmNonPagedPhysicalPages -= 1;
-                }
-            }
-
-            goto UnlockPhysicalPageEnd;
-        }
-    }
-
-    //
-    // The page was not found. This probably indicates a serious memory
-    // corruption. Consider crashing the system altogether.
-    //
-
-    ASSERT(FALSE);
-
-UnlockPhysicalPageEnd:
-    KeReleaseQueuedLock(MmPhysicalPageLock);
     return;
 }
 
@@ -2334,20 +2062,11 @@ Return Value:
                             IMAGE_SECTION_DESTROYED) == 0);
 
                     //
-                    // If the paging entry is locked, it cannot be paged out.
+                    // Mark that the page is being paged out so that it does
+                    // not get released in the middle of use.
                     //
 
-                    if (PagingEntry->U.LockCount != 0) {
-                        ExitCheck = TRUE;
-
-                    //
-                    // Otherwise mark that the page is being paged out so that
-                    // it does not get released in the middle of use.
-                    //
-
-                    } else {
-                        PagingEntry->U.Flags |= PAGING_ENTRY_FLAG_PAGING_OUT;
-                    }
+                    PagingEntry->U.Flags |= PAGING_ENTRY_FLAG_PAGING_OUT;
                 }
 
                 break;
