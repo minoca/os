@@ -177,6 +177,9 @@ Members:
     SectionOffset - Stores the number of pages from the beginning of the
         section to the virtual address corresponding to this physical page.
 
+    LockCount - Stores the number of concurrent requests to lock the page in
+        memory. It is protected by the physical page lock.
+
     Flags - Stores a bitmask of flags for the paging entry. See
         PAGING_ENTRY_FLAG_* for definitions. This is only modified by the
         paging thread.
@@ -191,6 +194,7 @@ typedef struct _PAGING_ENTRY {
     union {
         struct {
             UINTN SectionOffset;
+            USHORT LockCount;
             USHORT Flags;
         };
 
@@ -460,7 +464,8 @@ VOID
 MmpEnablePagingOnPhysicalAddress (
     PHYSICAL_ADDRESS PhysicalAddress,
     ULONG PageCount,
-    PPAGING_ENTRY *PagingEntries
+    PPAGING_ENTRY *PagingEntries,
+    BOOL LockPages
     );
 
 /*++
@@ -480,6 +485,59 @@ Arguments:
         space.
 
     PagingEntries - Supplies an array of paging entries for each page.
+
+    LockPages - Supplies a boolean indicating if these pageable pages should
+        start locked.
+
+Return Value:
+
+    None.
+
+--*/
+
+KSTATUS
+MmpLockPhysicalPages (
+    PHYSICAL_ADDRESS PhysicalAddress,
+    ULONG PageCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine locks a set of physical pages in memory.
+
+Arguments:
+
+    PhysicalAddress - Supplies the physical address to lock.
+
+    PageCount - Supplies the number of consecutive physical pages to lock. 0 is
+        not a valid value.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+VOID
+MmpUnlockPhysicalPages (
+    PHYSICAL_ADDRESS PhysicalAddress,
+    ULONG PageCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine unlocks a set of physical pages in memory.
+
+Arguments:
+
+    PhysicalAddress - Supplies the physical address to unlock.
+
+    PageCount - Supplies the number of consecutive physical pages to unlock.
+        Zero is not a valid value.
 
 Return Value:
 
@@ -1969,7 +2027,8 @@ Return Value:
 KSTATUS
 MmpPageIn (
     PIMAGE_SECTION ImageSection,
-    UINTN PageOffset
+    UINTN PageOffset,
+    PIO_BUFFER LockedIoBuffer
     );
 
 /*++
@@ -1986,6 +2045,10 @@ Arguments:
 
     PageOffset - Supplies the offset, in pages, from the beginning of the
         section.
+
+    LockedIoBuffer - Supplies an optional pointer to an uninitialized I/O
+        buffer that will be initialized with the the paged in page, effectively
+        locking the page until the I/O buffer is released.
 
 Return Value:
 

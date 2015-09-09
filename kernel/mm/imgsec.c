@@ -966,7 +966,7 @@ Return Value:
         ((Flags & IMAGE_SECTION_ACCESS_MASK) != 0)) {
 
         for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
-            Status = MmpPageIn(NewSection, PageIndex);
+            Status = MmpPageIn(NewSection, PageIndex, NULL);
             if (!KSUCCESS(Status)) {
 
                 ASSERT(Status != STATUS_TRY_AGAIN);
@@ -2114,7 +2114,8 @@ Return Value:
 
         MmpEnablePagingOnPhysicalAddress(ChildPhysicalAddress,
                                          1,
-                                         &ChildPagingEntry);
+                                         &ChildPagingEntry,
+                                         FALSE);
 
         ChildPagingEntry = NULL;
         ChildPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
@@ -2223,7 +2224,8 @@ Return Value:
 
             MmpEnablePagingOnPhysicalAddress(PhysicalAddress,
                                              1,
-                                             &PagingEntry);
+                                             &PagingEntry,
+                                             FALSE);
         }
 
         ASSERT(Section->InheritPageBitmap != NULL);

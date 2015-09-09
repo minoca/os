@@ -195,25 +195,38 @@ MmpPagingThread (
 KSTATUS
 MmpPageInAnonymousSection (
     PIMAGE_SECTION ImageSection,
-    UINTN PageOffset
+    UINTN PageOffset,
+    PIO_BUFFER LockedIoBuffer
     );
 
 KSTATUS
 MmpPageInSharedSection (
     PIMAGE_SECTION ImageSection,
-    UINTN PageOffset
+    UINTN PageOffset,
+    PIO_BUFFER LockedIoBuffer
     );
 
 KSTATUS
 MmpPageInCacheBackedSection (
     PIMAGE_SECTION ImageSection,
-    UINTN PageOffset
+    UINTN PageOffset,
+    PIO_BUFFER LockedIoBuffer
+    );
+
+KSTATUS
+MmpCheckExistingMapping (
+    PIMAGE_SECTION Section,
+    ULONG PageOffset,
+    BOOL LockPage,
+    PIO_BUFFER LockedIoBuffer,
+    PPHYSICAL_ADDRESS ExistingPhysicalAddress
     );
 
 KSTATUS
 MmpPageInDefaultSection (
     PIMAGE_SECTION ImageSection,
-    UINTN PageOffset
+    UINTN PageOffset,
+    PIO_BUFFER LockedIoBuffer
     );
 
 KSTATUS
@@ -243,7 +256,8 @@ MmpMapPageInSection (
     PIMAGE_SECTION OwningSection,
     UINTN PageOffset,
     PHYSICAL_ADDRESS PhysicalAddress,
-    PPAGING_ENTRY PagingEntry
+    PPAGING_ENTRY PagingEntry,
+    BOOL LockPage
     );
 
 KSTATUS
@@ -954,7 +968,8 @@ Return Value:
 KSTATUS
 MmpPageIn (
     PIMAGE_SECTION ImageSection,
-    UINTN PageOffset
+    UINTN PageOffset,
+    PIO_BUFFER LockedIoBuffer
     )
 
 /*++
@@ -971,6 +986,10 @@ Arguments:
 
     PageOffset - Supplies the offset, in pages, from the beginning of the
         section.
+
+    LockedIoBuffer - Supplies an optional pointer to an uninitialized I/O
+        buffer that will be initialized with the the paged in page, effectively
+        locking the page until the I/O buffer is released.
 
 Return Value:
 
@@ -994,21 +1013,27 @@ Return Value:
     //
 
     if ((ImageSection->Flags & IMAGE_SECTION_NO_IMAGE_BACKING) != 0) {
-        Status = MmpPageInAnonymousSection(ImageSection, PageOffset);
+        Status = MmpPageInAnonymousSection(ImageSection,
+                                           PageOffset,
+                                           LockedIoBuffer);
 
     //
     // Handle shared image sections.
     //
 
     } else if ((ImageSection->Flags & IMAGE_SECTION_SHARED) != 0) {
-        Status = MmpPageInSharedSection(ImageSection, PageOffset);
+        Status = MmpPageInSharedSection(ImageSection,
+                                        PageOffset,
+                                        LockedIoBuffer);
 
     //
     // Handle image sections backed by page cache pages.
     //
 
     } else if ((ImageSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0) {
-        Status = MmpPageInCacheBackedSection(ImageSection, PageOffset);
+        Status = MmpPageInCacheBackedSection(ImageSection,
+                                             PageOffset,
+                                             LockedIoBuffer);
 
     //
     // Otherwise handle default image sections. These have a backing image, but
@@ -1016,7 +1041,9 @@ Return Value:
     //
 
     } else {
-        Status = MmpPageInDefaultSection(ImageSection, PageOffset);
+        Status = MmpPageInDefaultSection(ImageSection,
+                                         PageOffset,
+                                         LockedIoBuffer);
     }
 
     return Status;
@@ -1094,7 +1121,7 @@ Return Value:
         // loop back and try to trap the mapping.
         //
 
-        Status = MmpPageIn(Section, PageOffset);
+        Status = MmpPageIn(Section, PageOffset, NULL);
         if (!KSUCCESS(Status)) {
             goto PageInAndLockEnd;
         }
@@ -1216,6 +1243,17 @@ Return Value:
         PagingEntry = NULL;
         MmFreePhysicalPage(PhysicalAddress);
         Status = STATUS_SUCCESS;
+        goto PageOutEnd;
+    }
+
+    //
+    // If the page has been locked since it was selected for page out, skip it.
+    // A pageable page's lock count can only increment if the section lock is
+    // held.
+    //
+
+    if (PagingEntry->U.LockCount != 0) {
+        Status = STATUS_RESOURCE_IN_USE;
         goto PageOutEnd;
     }
 
@@ -2461,7 +2499,8 @@ Return Value:
 KSTATUS
 MmpPageInAnonymousSection (
     PIMAGE_SECTION ImageSection,
-    UINTN PageOffset
+    UINTN PageOffset,
+    PIO_BUFFER LockedIoBuffer
     )
 
 /*++
@@ -2479,6 +2518,10 @@ Arguments:
     PageOffset - Supplies the offset, in pages, from the beginning of the
         section.
 
+    LockedIoBuffer - Supplies an optional pointer to an uninitialized I/O
+        buffer that will be initialized with the the paged in page, effectively
+        locking the page until the I/O buffer is released.
+
 Return Value:
 
     Status code.
@@ -2494,8 +2537,10 @@ Return Value:
     BOOL Dirty;
     PHYSICAL_ADDRESS ExistingPhysicalAddress;
     BOOL LockHeld;
+    BOOL LockPage;
     PIMAGE_SECTION OwningSection;
     ULONG PageShift;
+    ULONG PageSize;
     PIMAGE_SECTION RootSection;
     KSTATUS Status;
     PVOID VirtualAddress;
@@ -2513,6 +2558,7 @@ Return Value:
     LockHeld = FALSE;
     OwningSection = NULL;
     PageShift = MmPageShift();
+    PageSize = MmPageSize();
     RootSection = NULL;
     VirtualAddress = ImageSection->VirtualAddress + (PageOffset << PageShift);
 
@@ -2698,22 +2744,65 @@ PageInAnonymousSectionEnd:
         ASSERT(LockHeld != FALSE);
 
         //
-        // Unless the mapping was already there, map the page to its rightful
-        // spot. Other processors may begin touching it immediately.
+        // Handle the case where the page was already mapped.
         //
 
-        if (ExistingPhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
+        if (ExistingPhysicalAddress != INVALID_PHYSICAL_ADDRESS) {
+
+            //
+            // Lock the page if requested. Do not do this for non-paged
+            // sections. They should not need to lock a page for the second
+            // time. It's already locked.
+            //
+
+            if (LockedIoBuffer != NULL) {
+                if ((ImageSection->Flags & IMAGE_SECTION_NON_PAGED) == 0) {
+                    Status = MmpLockPhysicalPages(ExistingPhysicalAddress, 1);
+                }
+
+                if (KSUCCESS(Status)) {
+                    Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                                  NULL,
+                                                  ExistingPhysicalAddress,
+                                                  PageSize,
+                                                  FALSE,
+                                                  TRUE,
+                                                  TRUE);
+                }
+            }
+
+        //
+        // Otherwise, map the page to its rightful spot. Other processors may
+        // begin touching it immediately.
+        //
+
+        } else {
 
             ASSERT(OwningSection != NULL);
             ASSERT(KeIsQueuedLockHeld(OwningSection->Lock) != FALSE);
 
-            MmpMapPageInSection(OwningSection,
-                                PageOffset,
-                                Context.PhysicalAddress,
-                                Context.PagingEntry);
+            LockPage = FALSE;
+            if (LockedIoBuffer != NULL) {
+                LockPage = TRUE;
+                Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                              NULL,
+                                              Context.PhysicalAddress,
+                                              PageSize,
+                                              FALSE,
+                                              TRUE,
+                                              TRUE);
+            }
 
-            Context.PagingEntry = NULL;
-            Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+            if (KSUCCESS(Status)) {
+                MmpMapPageInSection(OwningSection,
+                                    PageOffset,
+                                    Context.PhysicalAddress,
+                                    Context.PagingEntry,
+                                    LockPage);
+
+                Context.PagingEntry = NULL;
+                Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+            }
         }
     }
 
@@ -2740,7 +2829,8 @@ PageInAnonymousSectionEnd:
 KSTATUS
 MmpPageInSharedSection (
     PIMAGE_SECTION ImageSection,
-    UINTN PageOffset
+    UINTN PageOffset,
+    PIO_BUFFER LockedIoBuffer
     )
 
 /*++
@@ -2757,6 +2847,10 @@ Arguments:
 
     PageOffset - Supplies the offset, in pages, from the beginning of the
         section.
+
+    LockedIoBuffer - Supplies an optional pointer to an uninitialized I/O
+        buffer that will be initialized with the the paged in page, effectively
+        locking the page until the I/O buffer is released.
 
 Return Value:
 
@@ -2808,18 +2902,22 @@ Return Value:
 
     //
     // While the lock was released, another thread may have paged in this page
-    // so check for an existing mapping.
+    // so check for an existing mapping. Skip this if the page needs to be
+    // locked as the page cache entry needs to be retrieved via read in order
+    // to lock the page.
     //
 
-    ExistingPhysicalAddress = MmpVirtualToPhysical(VirtualAddress,
-                                                   &Attributes);
+    if (LockedIoBuffer == NULL) {
+        ExistingPhysicalAddress = MmpVirtualToPhysical(VirtualAddress,
+                                                       &Attributes);
 
-    if (ExistingPhysicalAddress != INVALID_PHYSICAL_ADDRESS) {
+        if (ExistingPhysicalAddress != INVALID_PHYSICAL_ADDRESS) {
 
-        ASSERT((Attributes & MAP_FLAG_PRESENT) != 0);
+            ASSERT((Attributes & MAP_FLAG_PRESENT) != 0);
 
-        Status = STATUS_SUCCESS;
-        goto PageInSharedSectionEnd;
+            Status = STATUS_SUCCESS;
+            goto PageInSharedSectionEnd;
+        }
     }
 
     //
@@ -2902,13 +3000,16 @@ Return Value:
         //
         // While the lock was released, another thread may have paged it in.
         // Check for an existing mapping and break out of the loop if the page
-        // does not need to be locked.
+        // does not need to be locked. If it needs to be locked then the page
+        // cache entry must match the existing physical address. This is not
+        // a guarantee.
         //
 
         ExistingPhysicalAddress = MmpVirtualToPhysical(VirtualAddress,
                                                        &Attributes);
 
-        if (ExistingPhysicalAddress != INVALID_PHYSICAL_ADDRESS) {
+        if ((LockedIoBuffer == NULL) &&
+            (ExistingPhysicalAddress != INVALID_PHYSICAL_ADDRESS)) {
 
             ASSERT((Attributes & MAP_FLAG_PRESENT) != 0);
 
@@ -3011,6 +3112,36 @@ PageInSharedSectionEnd:
 
             MmpMapPage(PhysicalAddress, VirtualAddress, MapFlags);
         }
+
+        //
+        // If the locked I/O buffer needs to be filled in, do so with the
+        // saved page cache entry. This will take a reference on the page cache
+        // entry and, therefore, touch paged pool. This is OK to do under the
+        // image section lock given that shared image sections are not eligible
+        // for paging out.
+        //
+
+        if (LockedIoBuffer != NULL) {
+
+            ASSERT(PageCacheEntry != NULL);
+            ASSERT((ExistingPhysicalAddress == INVALID_PHYSICAL_ADDRESS) ||
+                   (ExistingPhysicalAddress == PhysicalAddress));
+
+            Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                          NULL,
+                                          INVALID_PHYSICAL_ADDRESS,
+                                          0,
+                                          TRUE,
+                                          FALSE,
+                                          TRUE);
+
+            if (KSUCCESS(Status)) {
+                MmIoBufferAppendPage(LockedIoBuffer,
+                                     PageCacheEntry,
+                                     NULL,
+                                     INVALID_PHYSICAL_ADDRESS);
+            }
+        }
     }
 
     //
@@ -3032,7 +3163,8 @@ PageInSharedSectionEnd:
 KSTATUS
 MmpPageInCacheBackedSection (
     PIMAGE_SECTION ImageSection,
-    UINTN PageOffset
+    UINTN PageOffset,
+    PIO_BUFFER LockedIoBuffer
     )
 
 /*++
@@ -3050,6 +3182,10 @@ Arguments:
     PageOffset - Supplies the offset, in pages, from the beginning of the
         section.
 
+    LockedIoBuffer - Supplies an optional pointer to an uninitialized I/O
+        buffer that will be initialized with the the paged in page, effectively
+        locking the page until the I/O buffer is released.
+
 Return Value:
 
     Status code.
@@ -3063,18 +3199,23 @@ Return Value:
     PAGE_IN_CONTEXT Context;
     BOOL Dirty;
     PHYSICAL_ADDRESS ExistingPhysicalAddress;
+    PULONG InheritPageBitmap;
     PIO_BUFFER IoBuffer;
     IO_BUFFER IoBufferData;
+    PIO_BUFFER LockedPageCacheIoBuffer;
+    IO_BUFFER LockedPageCacheIoBufferData;
     BOOL LockHeld;
+    BOOL LockPage;
+    BOOL LockPageCacheEntry;
     PIMAGE_SECTION OriginalOwner;
     PIMAGE_SECTION OwningSection;
     PHYSICAL_ADDRESS PageCacheAddress;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     UINTN PageShift;
+    UINTN PageSize;
     PIMAGE_SECTION RootSection;
     KSTATUS Status;
     ULONG TruncateCount;
-    PVOID VirtualAddress;
 
     BitmapIndex = IMAGE_SECTION_BITMAP_INDEX(PageOffset);
     BitmapMask = IMAGE_SECTION_BITMAP_MASK(PageOffset);
@@ -3085,14 +3226,26 @@ Return Value:
     ExistingPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
     IoBuffer = NULL;
     LockHeld = FALSE;
+    LockPageCacheEntry = FALSE;
+    LockedPageCacheIoBuffer = NULL;
     OwningSection = NULL;
     PageCacheAddress = INVALID_PHYSICAL_ADDRESS;
     PageCacheEntry = NULL;
     PageShift = MmPageShift();
+    PageSize = MmPageSize();
     RootSection = NULL;
-    VirtualAddress = ImageSection->VirtualAddress + (PageOffset << PageShift);
 
     ASSERT((ImageSection->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
+
+    //
+    // The presence of a locked I/O buffer indicates that the page should be
+    // locked.
+    //
+
+    LockPage = FALSE;
+    if (LockedIoBuffer != NULL) {
+        LockPage = TRUE;
+    }
 
     //
     // Loop trying to page into the section.
@@ -3107,16 +3260,117 @@ Return Value:
         }
 
         //
+        // Lock the page cache entry if requested. The page cache entry is
+        // found by reading the backing image at the given offset.
+        //
+
+        if (LockPageCacheEntry != FALSE) {
+            LockPageCacheEntry = FALSE;
+
+            ASSERT(LockPage != FALSE);
+
+            //
+            // Release any resources from the previous read or initialize
+            // resources for first time use.
+            //
+
+            if (IoBuffer != NULL) {
+                MmResetIoBuffer(IoBuffer);
+
+            } else {
+                IoBuffer = &IoBufferData;
+                Status = MmInitializeIoBuffer(IoBuffer,
+                                              NULL,
+                                              INVALID_PHYSICAL_ADDRESS,
+                                              0,
+                                              TRUE,
+                                              FALSE,
+                                              TRUE);
+
+                if (!KSUCCESS(Status)) {
+                    goto PageInCacheBackedSectionEnd;
+                }
+            }
+
+            Status = MmpReadBackingImage(ImageSection, PageOffset, IoBuffer);
+            MmpImageSectionReleaseImageBackingReference(ImageSection);
+            if (!KSUCCESS(Status)) {
+
+                ASSERT(MmGetIoBufferPageCacheEntry(IoBuffer, 0) == NULL);
+
+                goto PageInCacheBackedSectionEnd;
+            }
+
+            //
+            // Get the page cache entry that was just read.
+            //
+
+            ASSERT(IoBuffer != NULL);
+            ASSERT(IoBuffer->FragmentCount == 1);
+            ASSERT(IoBuffer->Fragment[0].Size == MmPageSize());
+
+            PageCacheEntry = MmGetIoBufferPageCacheEntry(IoBuffer, 0);
+            PageCacheAddress = IoBuffer->Fragment[0].PhysicalAddress;
+
+            ASSERT(PageCacheAddress ==
+                   IoGetPageCacheEntryPhysicalAddress(PageCacheEntry));
+
+            //
+            // Reset or initialize the locked page cache I/O buffer for use.
+            //
+
+            if (LockedPageCacheIoBuffer != NULL) {
+                MmResetIoBuffer(LockedPageCacheIoBuffer);
+
+            } else {
+                LockedPageCacheIoBuffer = &LockedPageCacheIoBufferData;
+                Status = MmInitializeIoBuffer(LockedPageCacheIoBuffer,
+                                              NULL,
+                                              INVALID_PHYSICAL_ADDRESS,
+                                              0,
+                                              TRUE,
+                                              FALSE,
+                                              TRUE);
+
+                if (!KSUCCESS(Status)) {
+                    goto PageInCacheBackedSectionEnd;
+                }
+            }
+
+            //
+            // Store the page cache entry in the locked I/O buffer. This takes
+            // a reference on the page cache entry.
+            //
+
+            MmIoBufferAppendPage(LockedPageCacheIoBuffer,
+                                 PageCacheEntry,
+                                 NULL,
+                                 INVALID_PHYSICAL_ADDRESS);
+        }
+
+        //
         // Acquire the image section lock to check for an existing mapping and
         // whether the page is dirty or clean.
         //
 
         KeAcquireQueuedLock(ImageSection->Lock);
         LockHeld = TRUE;
-        ExistingPhysicalAddress = MmpVirtualToPhysical(VirtualAddress, NULL);
-        if (ExistingPhysicalAddress != INVALID_PHYSICAL_ADDRESS) {
-            Status = STATUS_SUCCESS;
+        Status = MmpCheckExistingMapping(ImageSection,
+                                         PageOffset,
+                                         LockPage,
+                                         LockedPageCacheIoBuffer,
+                                         &ExistingPhysicalAddress);
+
+        if (KSUCCESS(Status)) {
             break;
+        }
+
+        if (Status == STATUS_TRY_AGAIN) {
+            MmpImageSectionAddImageBackingReference(ImageSection);
+            KeReleaseQueuedLock(ImageSection->Lock);
+            LockHeld = FALSE;
+            LockPageCacheEntry = TRUE;
+            continue;
         }
 
         //
@@ -3177,15 +3431,6 @@ Return Value:
         }
 
         //
-        // Check to ensure the section covers the region.
-        //
-
-        if ((ImageSection->Size >> PageShift) <= PageOffset) {
-            Status = STATUS_TRY_AGAIN;
-            break;
-        }
-
-        //
         // The page is not dirty, increment the reference count on the image
         // backing handle while the lock is still held.
         //
@@ -3196,6 +3441,15 @@ Return Value:
         }
 
         ASSERT(ImageSection->ImageBacking.DeviceHandle != INVALID_HANDLE);
+
+        //
+        // Also check to ensure the section covers the region.
+        //
+
+        if ((ImageSection->Size >> PageShift) <= PageOffset) {
+            Status = STATUS_TRY_AGAIN;
+            break;
+        }
 
         MmpImageSectionAddImageBackingReference(ImageSection);
 
@@ -3260,6 +3514,35 @@ Return Value:
                IoGetPageCacheEntryPhysicalAddress(PageCacheEntry));
 
         //
+        // Store the page cache entry in the locked I/O buffer.
+        //
+
+        if (LockPage != FALSE) {
+            if (LockedPageCacheIoBuffer != NULL) {
+                MmResetIoBuffer(LockedPageCacheIoBuffer);
+
+            } else {
+                LockedPageCacheIoBuffer = &LockedPageCacheIoBufferData;
+                Status = MmInitializeIoBuffer(LockedPageCacheIoBuffer,
+                                              NULL,
+                                              INVALID_PHYSICAL_ADDRESS,
+                                              0,
+                                              TRUE,
+                                              FALSE,
+                                              TRUE);
+
+                if (!KSUCCESS(Status)) {
+                    goto PageInCacheBackedSectionEnd;
+                }
+            }
+
+            MmIoBufferAppendPage(LockedPageCacheIoBuffer,
+                                 PageCacheEntry,
+                                 NULL,
+                                 INVALID_PHYSICAL_ADDRESS);
+        }
+
+        //
         // Acquire the image section lock.
         //
 
@@ -3270,10 +3553,24 @@ Return Value:
         // While the lock was released, another thread may have paged it in.
         //
 
-        ExistingPhysicalAddress = MmpVirtualToPhysical(VirtualAddress, NULL);
-        if (ExistingPhysicalAddress != INVALID_PHYSICAL_ADDRESS) {
-            Status = STATUS_SUCCESS;
+        Status = MmpCheckExistingMapping(ImageSection,
+                                         PageOffset,
+                                         LockPage,
+                                         LockedPageCacheIoBuffer,
+                                         &ExistingPhysicalAddress);
+
+        if (KSUCCESS(Status)) {
             break;
+        }
+
+        if (Status == STATUS_TRY_AGAIN) {
+            MmpImageSectionAddImageBackingReference(ImageSection);
+            KeReleaseQueuedLock(ImageSection->Lock);
+            MmpImageSectionReleaseReference(OriginalOwner);
+            LockHeld = FALSE;
+            LockPageCacheEntry = TRUE;
+            OriginalOwner = NULL;
+            continue;
         }
 
         //
@@ -3349,21 +3646,99 @@ PageInCacheBackedSectionEnd:
         ASSERT(LockHeld != FALSE);
 
         //
+        // Handle the case where an existing mapping was found and it needs to
+        // be locked.
+        //
+
+        if ((ExistingPhysicalAddress != INVALID_PHYSICAL_ADDRESS) &&
+            (LockPage != FALSE)) {
+
+            if (OwningSection == NULL) {
+                OwningSection = MmpGetOwningSection(ImageSection, PageOffset);
+            }
+
+            //
+            // If the owning section does not inherit from the page cache, then
+            // initialize the locked I/O buffer via physical address, locking
+            // the address for non-paged sections.
+            //
+
+            InheritPageBitmap = OwningSection->InheritPageBitmap;
+            if ((InheritPageBitmap[BitmapIndex] & BitmapMask) == 0) {
+                if ((OwningSection->Flags & IMAGE_SECTION_NON_PAGED) == 0) {
+                    Status = MmpLockPhysicalPages(ExistingPhysicalAddress, 1);
+                }
+
+                if (KSUCCESS(Status)) {
+                    Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                                  NULL,
+                                                  ExistingPhysicalAddress,
+                                                  PageSize,
+                                                  FALSE,
+                                                  TRUE,
+                                                  TRUE);
+                }
+
+            //
+            // Otherwise a local locked I/O buffer was initialized above when
+            // the image section lock was not held. Copy it to the locked I/O
+            // buffer supplied by the caller.
+            //
+
+            } else {
+
+                ASSERT(PageCacheEntry != NULL);
+                ASSERT(PageCacheAddress == ExistingPhysicalAddress);
+                ASSERT(LockedPageCacheIoBuffer != NULL);
+
+                RtlCopyMemory(LockedIoBuffer,
+                              LockedPageCacheIoBuffer,
+                              sizeof(IO_BUFFER));
+
+                LockedPageCacheIoBuffer = NULL;
+            }
+
+        //
         // Handle new mappings.
         //
 
-        if (ExistingPhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
+        } else if (ExistingPhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
 
             ASSERT(OwningSection != NULL);
             ASSERT(Context.PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
 
-            MmpMapPageInSection(OwningSection,
-                                PageOffset,
-                                Context.PhysicalAddress,
-                                Context.PagingEntry);
+            if (LockPage != FALSE) {
+                if (Context.PhysicalAddress == PageCacheAddress) {
 
-            Context.PagingEntry = NULL;
-            Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+                    ASSERT(LockedPageCacheIoBuffer != NULL);
+
+                    RtlCopyMemory(LockedIoBuffer,
+                                  LockedPageCacheIoBuffer,
+                                  sizeof(IO_BUFFER));
+
+                    LockedPageCacheIoBuffer = NULL;
+
+                } else {
+                    Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                                  NULL,
+                                                  Context.PhysicalAddress,
+                                                  PageSize,
+                                                  FALSE,
+                                                  TRUE,
+                                                  TRUE);
+                }
+            }
+
+            if (KSUCCESS(Status)) {
+                MmpMapPageInSection(OwningSection,
+                                    PageOffset,
+                                    Context.PhysicalAddress,
+                                    Context.PagingEntry,
+                                    LockPage);
+
+                Context.PagingEntry = NULL;
+                Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+            }
         }
     }
 
@@ -3387,6 +3762,10 @@ PageInCacheBackedSectionEnd:
         MmpImageSectionReleaseReference(RootSection);
     }
 
+    if (LockedPageCacheIoBuffer != NULL) {
+        MmFreeIoBuffer(LockedPageCacheIoBuffer);
+    }
+
     if (IoBuffer != NULL) {
         MmFreeIoBuffer(IoBuffer);
     }
@@ -3396,9 +3775,137 @@ PageInCacheBackedSectionEnd:
 }
 
 KSTATUS
+MmpCheckExistingMapping (
+    PIMAGE_SECTION Section,
+    ULONG PageOffset,
+    BOOL LockPage,
+    PIO_BUFFER LockedIoBuffer,
+    PPHYSICAL_ADDRESS ExistingPhysicalAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine checks for an existing mapping in a page cache backed section.
+
+Arguments:
+
+    Section - Supplies a pointer to the faulting image section.
+
+    PageOffset - Supplies the offset, in pages, from the beginning of the
+        section.
+
+    LockPage - Supplies a boolean indicating if the page should be locked.
+
+    LockedIoBuffer - Supplies an optional pointer to an I/O buffer that
+        contains any pages that have been locked for the mapping.
+
+    ExistingPhysicalAddress - Supplies a pointer that receives the physical
+        address used in the existing mapping if it exists.
+
+Return Value:
+
+    Returns STATUS_SUCCESS if there is an existing mapping and all necessary
+    locking steps were taken.
+
+    Returns STATUS_NOT_FOUND if there is no existing mapping.
+
+    Returns STATUS_TRY_AGAIN if there is an existing mapping, but a lock
+    request was made with the wrong previously locked address.
+
+--*/
+
+{
+
+    UINTN BitmapIndex;
+    ULONG BitmapMask;
+    PHYSICAL_ADDRESS LockedPhysicalAddress;
+    PIMAGE_SECTION OwningSection;
+    ULONG PageShift;
+    KSTATUS Status;
+    PVOID VirtualAddress;
+
+    ASSERT(KeIsQueuedLockHeld(Section->Lock) != FALSE);
+    ASSERT((Section->Flags & IMAGE_SECTION_PAGE_CACHE_BACKED) != 0);
+
+    OwningSection = NULL;
+    PageShift = MmPageShift();
+    VirtualAddress = Section->VirtualAddress + (PageOffset << PageShift);
+
+    //
+    // Check the mapping in case another processor has resolved the page
+    // fault.
+    //
+
+    *ExistingPhysicalAddress = MmpVirtualToPhysical(VirtualAddress, NULL);
+    if (*ExistingPhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
+        Status = STATUS_NOT_FOUND;
+        goto CheckExistingMappingEnd;
+    }
+
+    //
+    // If there is no request to lock the page, then return successfully.
+    //
+
+    if (LockPage == FALSE) {
+        Status = STATUS_SUCCESS;
+        goto CheckExistingMappingEnd;
+    }
+
+    //
+    // Get the physical page that has been locked for this mapping. The invalid
+    // physical page indicates that no page has been locked.
+    //
+
+    LockedPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+    if (LockedIoBuffer != NULL) {
+        LockedPhysicalAddress = MmGetIoBufferPhysicalAddress(LockedIoBuffer, 0);
+    }
+
+    //
+    // Get the owning section to determine if the page comes from the page
+    // cache or not.
+    //
+
+    OwningSection = MmpGetOwningSection(Section, PageOffset);
+
+    ASSERT(OwningSection->InheritPageBitmap != NULL);
+
+    //
+    // If the page is not inherited from the page cache or it maps the already
+    // locked page, then exit successfully.
+    //
+
+    BitmapIndex = IMAGE_SECTION_BITMAP_INDEX(PageOffset);
+    BitmapMask = IMAGE_SECTION_BITMAP_MASK(PageOffset);
+    if (((OwningSection->InheritPageBitmap[BitmapIndex] & BitmapMask) == 0) ||
+        (*ExistingPhysicalAddress == LockedPhysicalAddress)) {
+
+        Status = STATUS_SUCCESS;
+        goto CheckExistingMappingEnd;
+    }
+
+    //
+    // Otherwise there was an existing mapping, but the physical address was
+    // not appropriately locked. The caller has to try again.
+    //
+
+    Status = STATUS_TRY_AGAIN;
+
+CheckExistingMappingEnd:
+    if (OwningSection != NULL) {
+        MmpImageSectionReleaseReference(OwningSection);
+    }
+
+    return Status;
+}
+
+KSTATUS
 MmpPageInDefaultSection (
     PIMAGE_SECTION ImageSection,
-    UINTN PageOffset
+    UINTN PageOffset,
+    PIO_BUFFER LockedIoBuffer
     )
 
 /*++
@@ -3415,6 +3922,10 @@ Arguments:
 
     PageOffset - Supplies the offset, in pages, from the beginning of the
         section.
+
+    LockedIoBuffer - Supplies an optional pointer to an uninitialized I/O
+        buffer that will be initialized with the the paged in page, effectively
+        locking the page until the I/O buffer is released.
 
 Return Value:
 
@@ -3434,6 +3945,7 @@ Return Value:
     PHYSICAL_ADDRESS ExistingPhysicalAddress;
     PIO_BUFFER IoBuffer;
     BOOL LockHeld;
+    BOOL LockPage;
     RUNLEVEL OldRunLevel;
     PIMAGE_SECTION OriginalOwner;
     PIMAGE_SECTION OwningSection;
@@ -3795,22 +4307,64 @@ PageInDefaultSectionEnd:
         ASSERT(LockHeld != FALSE);
 
         //
+        // Handle the case where an existing mapping was found and it needs to
+        // be locked.
+        //
+
+        if ((ExistingPhysicalAddress != INVALID_PHYSICAL_ADDRESS) &&
+            (LockedIoBuffer != NULL)) {
+
+            //
+            // Only lock paged sections. Non-paged sections always remain
+            // pinned.
+            //
+
+            if ((ImageSection->Flags & IMAGE_SECTION_NON_PAGED) == 0) {
+                Status = MmpLockPhysicalPages(ExistingPhysicalAddress, 1);
+            }
+
+            if (KSUCCESS(Status)) {
+                Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                              NULL,
+                                              ExistingPhysicalAddress,
+                                              PageSize,
+                                              FALSE,
+                                              TRUE,
+                                              TRUE);
+            }
+
+        //
         // Handle new mappings.
         //
 
-        if (ExistingPhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
+        } else if (ExistingPhysicalAddress == INVALID_PHYSICAL_ADDRESS) {
 
             ASSERT(Context.PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
             ASSERT(OwningSection != NULL);
             ASSERT(KeIsQueuedLockHeld(OwningSection->Lock) != FALSE);
 
-            MmpMapPageInSection(OwningSection,
-                                PageOffset,
-                                Context.PhysicalAddress,
-                                Context.PagingEntry);
+            LockPage = FALSE;
+            if (LockedIoBuffer != NULL) {
+                LockPage = TRUE;
+                Status = MmInitializeIoBuffer(LockedIoBuffer,
+                                              NULL,
+                                              Context.PhysicalAddress,
+                                              PageSize,
+                                              FALSE,
+                                              TRUE,
+                                              TRUE);
+            }
 
-            Context.PagingEntry = NULL;
-            Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+            if (KSUCCESS(Status)) {
+                MmpMapPageInSection(OwningSection,
+                                    PageOffset,
+                                    Context.PhysicalAddress,
+                                    Context.PagingEntry,
+                                    LockPage);
+
+                Context.PagingEntry = NULL;
+                Context.PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+            }
         }
     }
 
@@ -4177,7 +4731,8 @@ MmpMapPageInSection (
     PIMAGE_SECTION OwningSection,
     UINTN PageOffset,
     PHYSICAL_ADDRESS PhysicalAddress,
-    PPAGING_ENTRY PagingEntry
+    PPAGING_ENTRY PagingEntry,
+    BOOL LockPage
     )
 
 /*++
@@ -4202,6 +4757,9 @@ Arguments:
 
     PagingEntry - Supplies an optional pointer to a paging entry to be used if
         to make the physical page pageable.
+
+    LockPage - Supplies a boolean indicating whether or not the page should be
+        locked.
 
 Return Value:
 
@@ -4236,7 +4794,10 @@ Return Value:
         ASSERT((OwningSection->Flags & IMAGE_SECTION_DESTROYED) == 0);
 
         MmpInitializePagingEntry(PagingEntry, OwningSection, PageOffset);
-        MmpEnablePagingOnPhysicalAddress(PhysicalAddress, 1, &PagingEntry);
+        MmpEnablePagingOnPhysicalAddress(PhysicalAddress,
+                                         1,
+                                         &PagingEntry,
+                                         LockPage);
     }
 
     return;
