@@ -82,14 +82,37 @@ Environment:
 // Define bits for the PL11 UART Flags Register.
 //
 
-#define PL11_UART_FLAG_TRANSMIT_BUSY 0x08
-#define PL11_UART_FLAG_RECEIVE_EMPTY 0x10
+#define PL11_UART_FLAG_CLEAR_TO_SEND       0x001
+#define PL11_UART_FLAG_DATA_SET_READY      0x002
+#define PL11_UART_FLAG_DATA_CARRIER_DETECT 0x004
+#define PL11_UART_FLAG_TRANSMIT_BUSY       0x008
+#define PL11_UART_FLAG_RECEIVE_EMPTY       0x010
+#define PL11_UART_FLAG_TRANSMIT_FULL       0x020
+#define PL11_UART_FLAG_RECEIVE_FULL        0x040
+#define PL11_UART_FLAG_TRANSMIT_EMPTY      0x080
+#define PL11_UART_FLAG_RING_INDICATOR      0x100
 
 //
 // Define bits for the PL11 UART Receive Status register.
 //
 
-#define PL11_UART_RECEIVE_STATUS_LINE_ERRORS 0xF
+#define PL11_UART_RECEIVE_STATUS_FRAMING_ERROR 0x0001
+#define PL11_UART_RECEIVE_STATUS_PARITY_ERROR  0x0002
+#define PL11_UART_RECEIVE_STATUS_BREAK_ERROR   0x0004
+#define PL11_UART_RECEIVE_STATUS_OVERRUN_ERROR 0x0008
+#define PL11_UART_RECEIVE_STATUS_ERROR_MASK    0x000F
+#define PL11_UART_RECEIVE_STATUS_ERROR_CLEAR   0xFF00
+
+//
+// Define the bits for the PL11 UART data register.
+//
+
+#define PL11_UART_DATA_BYTE_MASK     0x00FF
+#define PL11_UART_DATA_FRAMING_ERROR 0x0100
+#define PL11_UART_DATA_PARITY_ERROR  0x0200
+#define PL11_UART_DATA_BREAK_ERROR   0x0400
+#define PL11_UART_DATA_OVERRUN_ERROR 0x0800
+#define PL11_UART_DATA_ERROR_MASK    0x0F00
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -560,9 +583,9 @@ Return Value:
 
         do {
             if ((READ_SERIAL_REGISTER(UartReceiveStatus) &
-                 PL11_UART_RECEIVE_STATUS_LINE_ERRORS) != 0) {
+                 PL11_UART_RECEIVE_STATUS_ERROR_MASK) != 0) {
 
-                return STATUS_SERIAL_HARDWARE_ERROR;
+                return STATUS_DEVICE_IO_ERROR;
             }
 
         } while ((READ_SERIAL_REGISTER(UartFlags) &
@@ -620,26 +643,43 @@ Return Value:
     ULONG ByteCount;
     ULONG ByteIndex;
     PUCHAR Bytes;
+    ULONG DataRegister;
     KSTATUS Status;
 
     ByteCount = *Size;
     Bytes = Data;
     Status = STATUS_NO_DATA_AVAILABLE;
+
+    //
+    // The receive status register contains the break, framing, and parity
+    // error status for the character read prior to the read of the status. The
+    // overrun error is set as soon as an overrun occurs. As a result, read the
+    // data register rather than the status register; the data register also
+    // returns the status bits.
+    //
+
     for (ByteIndex = 0; ByteIndex < ByteCount; ByteIndex += 1) {
-        if ((READ_SERIAL_REGISTER(UartReceiveStatus) &
-             PL11_UART_RECEIVE_STATUS_LINE_ERRORS) != 0) {
-
-            Status = STATUS_DEVICE_IO_ERROR;
-            break;
-        }
-
         if ((READ_SERIAL_REGISTER(UartFlags) &
              PL11_UART_FLAG_RECEIVE_EMPTY) != 0) {
 
             break;
         }
 
-        Bytes[ByteIndex] = READ_SERIAL_REGISTER(UartDataBuffer);
+        DataRegister = READ_SERIAL_REGISTER(UartDataBuffer);
+        if ((DataRegister & PL11_UART_DATA_ERROR_MASK) != 0) {
+
+            //
+            // Clear the errors and return.
+            //
+
+            WRITE_SERIAL_REGISTER(UartReceiveStatus,
+                                  PL11_UART_RECEIVE_STATUS_ERROR_CLEAR);
+
+            Status = STATUS_DEVICE_IO_ERROR;
+            break;
+        }
+
+        Bytes[ByteIndex] = DataRegister & PL11_UART_DATA_BYTE_MASK;
         Status = STATUS_SUCCESS;
     }
 

@@ -882,7 +882,10 @@ Return Value:
 
     if ((IoContext->Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
         CacheBufferSize = ALIGN_RANGE_UP(PageAlignedSize, PageSize);
-        CacheIoBuffer = MmAllocateUninitializedIoBuffer(CacheBufferSize, TRUE);
+        CacheIoBuffer = MmAllocateUninitializedIoBuffer(CacheBufferSize,
+                                                        TRUE,
+                                                        TRUE);
+
         if (CacheIoBuffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto PerformCachedWriteEnd;
@@ -1617,7 +1620,10 @@ Return Value:
     // Validation will back the I/O buffer with memory.
     //
 
-    ReadIoBuffer = MmAllocateUninitializedIoBuffer(BlockAlignedSize, TRUE);
+    ReadIoBuffer = MmAllocateUninitializedIoBuffer(BlockAlignedSize,
+                                                   TRUE,
+                                                   TRUE);
+
     if (ReadIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto HandleDefaultCacheReadMissEnd;
@@ -1913,6 +1919,7 @@ Return Value:
         (IS_ALIGNED(SizeInBytes, BlockSize) == FALSE)) {
 
         BlockAlignedIoBuffer = MmAllocateUninitializedIoBuffer(BlockAlignedSize,
+                                                               TRUE,
                                                                TRUE);
 
         if (BlockAlignedIoBuffer == NULL) {
@@ -2280,7 +2287,7 @@ Return Value:
     ASSERT(IS_DEVICE_OR_VOLUME(Device));
 
     BlockSize = FileObject->Properties.BlockSize;
-    AlignedIoBuffer = MmAllocateUninitializedIoBuffer(BlockSize, TRUE);
+    AlignedIoBuffer = MmAllocateUninitializedIoBuffer(BlockSize, TRUE, TRUE);
     if (AlignedIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto PerformDefaultPartialWriteEnd;

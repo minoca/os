@@ -93,7 +93,7 @@ Return Value:
 
     PIO_BUFFER IoBuffer;
 
-    IoBuffer = MmAllocateUninitializedIoBuffer(Size, TRUE);
+    IoBuffer = MmAllocateUninitializedIoBuffer(Size, TRUE, TRUE);
     return (PFAT_IO_BUFFER)IoBuffer;
 }
 

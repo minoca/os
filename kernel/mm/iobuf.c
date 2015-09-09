@@ -480,7 +480,8 @@ KERNEL_API
 PIO_BUFFER
 MmAllocateUninitializedIoBuffer (
     UINTN Size,
-    BOOL CacheBacked
+    BOOL CacheBacked,
+    BOOL Locked
     )
 
 /*++
@@ -498,6 +499,9 @@ Arguments:
 
     CacheBacked - Supplies a boolean indicating if the buffer is to be backed
         by page cache entries or not.
+
+    Locked - Supplies a boolean indicating if the buffer is to be backed by
+        pages locked in memory.
 
 Return Value:
 
@@ -539,6 +543,9 @@ Return Value:
         IoBuffer->Internal.PageCacheEntries = (PVOID)IoBuffer +
                                               sizeof(IO_BUFFER) +
                                               FragmentSize;
+
+    } else if (Locked != FALSE) {
+        IoBuffer->Internal.Flags |= IO_BUFFER_FLAG_MEMORY_LOCKED;
     }
 
     return IoBuffer;
@@ -2158,7 +2165,7 @@ Return Value:
 ValidateIoBufferForCachedIoEnd:
     if (AllocateIoBuffer != FALSE) {
         SizeInBytes = ALIGN_RANGE_UP(SizeInBytes, Alignment);
-        Buffer = MmAllocateUninitializedIoBuffer(SizeInBytes, TRUE);
+        Buffer = MmAllocateUninitializedIoBuffer(SizeInBytes, TRUE, TRUE);
         if (Buffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
 

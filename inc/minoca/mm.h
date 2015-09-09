@@ -825,7 +825,8 @@ KERNEL_API
 PIO_BUFFER
 MmAllocateUninitializedIoBuffer (
     UINTN Size,
-    BOOL CacheBacked
+    BOOL CacheBacked,
+    BOOL Locked
     );
 
 /*++
@@ -843,6 +844,9 @@ Arguments:
 
     CacheBacked - Supplies a boolean indicating if the buffer is to be backed
         by page cache entries or not.
+
+    Locked - Supplies a boolean indicating if the buffer is to be backed by
+        pages locked in memory.
 
 Return Value:
 

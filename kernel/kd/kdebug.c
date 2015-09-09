@@ -1826,7 +1826,7 @@ Return Value:
     HeaderSize = sizeof(DEBUG_PACKET_HEADER);
     Retries = 10;
     Status = STATUS_SUCCESS;
-    while (Status != STATUS_TIMEOUT) {
+    while (TRUE) {
 
         //
         // Attempt to synchronize on the magic field.
@@ -1834,8 +1834,12 @@ Return Value:
 
         Magic = 0;
         Status = KdpReceiveBuffer(&Magic, 1, Timeout);
+        if (Status == STATUS_TIMEOUT) {
+            break;
+        }
+
         if (!KSUCCESS(Status)) {
-            continue;
+            goto ReceivePacketRetry;
         }
 
         if (Magic != DEBUG_PACKET_MAGIC_BYTE1) {
@@ -1844,8 +1848,12 @@ Return Value:
 
         Magic = 0;
         Status = KdpReceiveBuffer(&Magic, 1, Timeout);
+        if (Status == STATUS_TIMEOUT) {
+            break;
+        }
+
         if (!KSUCCESS(Status)) {
-            continue;
+            goto ReceivePacketRetry;
         }
 
         if (Magic != DEBUG_PACKET_MAGIC_BYTE2) {
@@ -1898,10 +1906,7 @@ ReceivePacketRetry:
                                         sizeof(DEBUG_PACKET_HEADER));
 
         Acknowledge.Checksum = Checksum;
-        Status = KdpReceiveBuffer(&Acknowledge,
-                                  sizeof(DEBUG_PACKET_HEADER),
-                                  Timeout);
-
+        Status = KdpTransmitBytes(&Acknowledge, sizeof(DEBUG_PACKET_HEADER));
         if (!KSUCCESS(Status)) {
             break;
         }

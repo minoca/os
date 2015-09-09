@@ -381,6 +381,7 @@ Return Value:
     UINTN AllocationSize;
     PKINTERRUPT ClockInterrupt;
     ULONGLONG GiveUpTime;
+    ULONG Index;
     INTERRUPT_LINE OutputLine;
     ULONG Processor;
     KSTATUS Status;
@@ -404,7 +405,14 @@ Return Value:
                 goto InitializeClockEnd;
             }
 
+            //
+            // Start all clocks in periodic mode.
+            //
+
             RtlZeroMemory(HlClockRequests, AllocationSize);
+            for (Index = 0; Index < HlMaxProcessors; Index += 1) {
+                HlClockRequests[Index].Mode = ClockTimerPeriodic;
+            }
         }
 
         //

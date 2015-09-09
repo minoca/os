@@ -1794,8 +1794,7 @@ Return Value:
 
             if (PageCountSinceEvent >= PAGING_EVENT_SIGNAL_PAGE_COUNT) {
                 PageCountSinceEvent = 0;
-                KeSignalEvent(MmPagingFreePagesEvent,
-                              SignalOptionSignalAll);
+                KeSignalEvent(MmPagingFreePagesEvent, SignalOptionSignalAll);
             }
 
         } else if (Status != STATUS_RESOURCE_IN_USE) {

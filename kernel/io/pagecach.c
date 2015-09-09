@@ -1802,7 +1802,10 @@ Return Value:
     // Allocate a buffer to support the maximum allowed flush size.
     //
 
-    FlushBuffer = MmAllocateUninitializedIoBuffer(PAGE_CACHE_FLUSH_MAX, TRUE);
+    FlushBuffer = MmAllocateUninitializedIoBuffer(PAGE_CACHE_FLUSH_MAX,
+                                                  TRUE,
+                                                  TRUE);
+
     if (FlushBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto FlushPageCacheEntriesEnd;

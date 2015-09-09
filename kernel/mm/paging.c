@@ -2375,7 +2375,10 @@ Return Value:
     // range for it.
     //
 
-    IoBuffer = MmAllocateUninitializedIoBuffer(PAGE_OUT_CHUNK_SIZE, FALSE);
+    IoBuffer = MmAllocateUninitializedIoBuffer(PAGE_OUT_CHUNK_SIZE,
+                                               FALSE,
+                                               TRUE);
+
     if (IoBuffer == NULL) {
         return;
     }
@@ -2447,9 +2450,7 @@ Return Value:
         MmPagingFreeTarget = 0;
         KeReleaseSpinLock(&MmPagingLock);
         KeLowerRunLevel(OldRunLevel);
-        MmpPageOutPhysicalPages(FreePagesTarget,
-                                IoBuffer,
-                                SwapRegion);
+        MmpPageOutPhysicalPages(FreePagesTarget, IoBuffer, SwapRegion);
     }
 
     MmFreeIoBuffer(IoBuffer);
@@ -3616,7 +3617,10 @@ Return Value:
         //
 
         } else {
-            IoBuffer = MmAllocateUninitializedIoBuffer(2 * PageSize, TRUE);
+            IoBuffer = MmAllocateUninitializedIoBuffer(2 * PageSize,
+                                                       TRUE,
+                                                       TRUE);
+
             if (IoBuffer == NULL) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;
                 goto PageInDefaultSectionEnd;
