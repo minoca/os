@@ -416,7 +416,7 @@ Return Value:
         while (CurrentEntry != &HlTimers) {
             Timer = LIST_VALUE(CurrentEntry, HARDWARE_TIMER, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            if (((Timer->Features & TIMER_FEATURE_SPEED_VARIES) != 0) &&
+            if (((Timer->Features & TIMER_FEATURE_VARIANT) != 0) &&
                 ((Timer->Features & TIMER_FEATURE_PER_PROCESSOR) != 0)) {
 
                 AllocationSize = ProcessorCount * sizeof(ULONGLONG);
@@ -678,7 +678,7 @@ Return Value:
 
     CounterArrayNeeded = FALSE;
     AllocationSize = sizeof(HARDWARE_TIMER);
-    if (((TimerDescription->Features & TIMER_FEATURE_SPEED_VARIES) != 0) &&
+    if (((TimerDescription->Features & TIMER_FEATURE_VARIANT) != 0) &&
         ((TimerDescription->Features & TIMER_FEATURE_PER_PROCESSOR) != 0)) {
 
         ProcessorCount = HlGetMaximumProcessorCount();
@@ -1428,7 +1428,7 @@ Return Value:
     //
 
     RequiredNonFeatures = TIMER_FEATURE_PER_PROCESSOR |
-                          TIMER_FEATURE_SPEED_VARIES;
+                          TIMER_FEATURE_VARIANT;
 
     Timer = HlpTimerFind(TIMER_FEATURE_PERIODIC, RequiredNonFeatures, 0);
     return Timer;
@@ -1467,7 +1467,7 @@ Return Value:
     //
 
     Timer = HlpTimerFind(TIMER_FEATURE_PER_PROCESSOR | TIMER_FEATURE_READABLE,
-                         TIMER_FEATURE_SPEED_VARIES,
+                         TIMER_FEATURE_VARIANT,
                          0);
 
     if (Timer != NULL) {
@@ -1478,7 +1478,7 @@ Return Value:
     // Attempt to find any readable timer.
     //
 
-    Timer = HlpTimerFind(TIMER_FEATURE_READABLE, TIMER_FEATURE_SPEED_VARIES, 0);
+    Timer = HlpTimerFind(TIMER_FEATURE_READABLE, TIMER_FEATURE_VARIANT, 0);
     if (Timer != NULL) {
         return Timer;
     }

@@ -492,6 +492,15 @@ Return Value:
 
         break;
 
+    case SystemInformationPm:
+        Status = PmGetSetSystemInformation(FromKernelMode,
+                                           InformationType,
+                                           Data,
+                                           DataSize,
+                                           Set);
+
+        break;
+
     default:
         Status = STATUS_INVALID_PARAMETER;
         *DataSize = 0;

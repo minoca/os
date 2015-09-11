@@ -234,6 +234,12 @@ Author:
 #define PAGE_CACHE_CLEAN_DELAY_MIN (5000 * MICROSECONDS_PER_MILLISECOND)
 
 //
+// The resource allocation work is currently assigned to the system work queue.
+//
+
+#define IoResourceAllocationWorkQueue NULL
+
+//
 // --------------------------------------------------------------------- Macros
 //
 
@@ -1067,6 +1073,12 @@ extern LIST_ENTRY IoDeviceClassDatabaseHead;
 extern PQUEUED_LOCK IoDeviceDatabaseLock;
 
 //
+// Store a pointer to the device work queue.
+//
+
+extern PWORK_QUEUE IoDeviceWorkQueue;
+
+//
 // Define the object that roots the device tree.
 //
 
@@ -1131,13 +1143,6 @@ extern POBJECT_HEADER IoPipeDirectory;
 //
 
 extern POBJECT_HEADER IoSharedMemoryObjectDirectory;
-
-//
-// Store a pointer to the work queue that resource allocation requests are
-// placed on.
-//
-
-extern PWORK_QUEUE IoResourceAllocationWorkQueue;
 
 //
 // Store the saved boot information.

@@ -25,11 +25,12 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/types.h>
-#include <minoca/status.h>
-#include <minoca/acpitabs.h>
-#include <minoca/hmod.h>
-#include <minoca/arch.h>
+//
+// This module should not have kernel.h included, except that the cycle counter
+// is always builtin and will not be separated out into a dynamic module.
+//
+
+#include <minoca/kernel.h>
 #include <minoca/x86.h>
 
 //
@@ -55,9 +56,9 @@ HlpTscWrite (
     ULONGLONG NewCount
     );
 
-KSTATUS
+ULONG
 HlpTscDetermineCharacteristics (
-    PBOOL Invariant
+    VOID
     );
 
 //
@@ -100,7 +101,6 @@ Return Value:
 {
 
     KSTATUS Status;
-    BOOL TscInvariant;
     TIMER_DESCRIPTION TscTimer;
 
     HlTscSystemServices = Services;
@@ -124,14 +124,7 @@ Return Value:
     // Determine if the TSC varies with processor power management states.
     //
 
-    Status = HlpTscDetermineCharacteristics(&TscInvariant);
-    if (!KSUCCESS(Status)) {
-        goto TscTimerModuleEntryEnd;
-    }
-
-    if (TscInvariant == FALSE) {
-        TscTimer.Features |= TIMER_FEATURE_SPEED_VARIES;
-    }
+    TscTimer.Features |= HlpTscDetermineCharacteristics();
 
     //
     // The timer's frequency is not hardcoded, as it runs at the main CPU speed,
@@ -224,9 +217,9 @@ Return Value:
     return;
 }
 
-KSTATUS
+ULONG
 HlpTscDetermineCharacteristics (
-    PBOOL Invariant
+    VOID
     )
 
 /*++
@@ -234,17 +227,15 @@ HlpTscDetermineCharacteristics (
 Routine Description:
 
     This routine queries the characterics of the TSC counter with respect to
-    whether or not the counter stops during deep idle states.
+    whether or not the counter stops during C-states and P-states.
 
 Arguments:
 
-    Invariant - Supplies a pointer where a boolean will be returned indicating
-        whether or not the TSC is invariant (meaning it runs in all deep idle
-        states).
+    None.
 
 Return Value:
 
-    STATUS_SUCCESS always.
+    Returns a mask of TIMER_FEATURE_* values to OR in to the existing features.
 
 --*/
 
@@ -254,15 +245,51 @@ Return Value:
     ULONG Ebx;
     ULONG Ecx;
     ULONG Edx;
+    ULONG Family;
+    ULONG Features;
+    ULONG Model;
+    PPROCESSOR_BLOCK Processor;
+    ULONG Vendor;
 
-    *Invariant = FALSE;
-    Eax = X86_CPUID_ADVANCED_POWER_MANAGEMENT;
+    Features = TIMER_FEATURE_C_STATE_VARIANT | TIMER_FEATURE_P_STATE_VARIANT;
+    Eax = X86_CPUID_IDENTIFICATION;
     Ebx = 0;
     Ecx = 0;
     Edx = 0;
-    HlTscSystemServices->Cpuid(&Eax, &Ebx, &Ecx, &Edx);
-    if ((Edx & X86_CPUID_ADVANCED_POWER_EDX_TSC_INVARIANT) != 0) {
-        *Invariant = TRUE;
+    ArCpuid(&Eax, &Ebx, &Ecx, &Edx);
+
+    //
+    // Use the CPUID function to determine if the TSC is completely invariant.
+    // This is the right thing to do going forward.
+    //
+
+    if (Eax >= X86_CPUID_ADVANCED_POWER_MANAGEMENT) {
+        Eax = X86_CPUID_ADVANCED_POWER_MANAGEMENT;
+        Ebx = 0;
+        Ecx = 0;
+        Edx = 0;
+        ArCpuid(&Eax, &Ebx, &Ecx, &Edx);
+        if ((Edx & X86_CPUID_ADVANCED_POWER_EDX_TSC_INVARIANT) != 0) {
+            Features = 0;
+            return Features;
+        }
+    }
+
+    //
+    // Okay, either that leaf doesn't exist or it claims no support.
+    // Look at some specific revisions to tease out details.
+    //
+
+    Processor = KeGetCurrentProcessorBlock();
+    Vendor = Processor->CpuVersion.Vendor;
+    Family = Processor->CpuVersion.Family;
+    Model = Processor->CpuVersion.Model;
+    if (Vendor == X86_VENDOR_INTEL) {
+        if (((Family == 0xF) && (Model >= 0x3)) ||
+            ((Family == 0x6) && (Model >= 0xE))) {
+
+            Features &= ~TIMER_FEATURE_P_STATE_VARIANT;
+        }
     }
 
     return STATUS_SUCCESS;

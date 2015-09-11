@@ -107,10 +107,16 @@ IopGetUniqueDeviceId (
 //
 
 //
+// Store a pointer to the device work queue.
+//
+
+PWORK_QUEUE IoDeviceWorkQueue;
+
+//
 // Define the object that roots the device tree.
 //
 
-PDEVICE IoRootDevice = NULL;
+PDEVICE IoRootDevice;
 LIST_ENTRY IoDeviceList;
 PQUEUED_LOCK IoDeviceListLock;
 
@@ -1719,7 +1725,7 @@ Return Value:
 
     if (NewWorkItemNeeded != FALSE) {
         RtlAtomicAdd(&IoDeviceWorkItemsQueued, 1);
-        Status = KeCreateAndQueueWorkItem(NULL,
+        Status = KeCreateAndQueueWorkItem(IoDeviceWorkQueue,
                                           WorkPriorityNormal,
                                           IopDeviceWorker,
                                           Device);
@@ -2412,7 +2418,7 @@ Return Value:
 
             if (Device->Header.Type == ObjectVolume) {
                 ObAddReference(Device);
-                Status = KeCreateAndQueueWorkItem(NULL,
+                Status = KeCreateAndQueueWorkItem(IoDeviceWorkQueue,
                                                   WorkPriorityNormal,
                                                   IopVolumeArrival,
                                                   Device);

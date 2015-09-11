@@ -24,6 +24,11 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+//
+// This module should not have kernel.h included, except that the cycle counter
+// is always builtin and will not be separated out into a dynamic module.
+//
+
 #include <minoca/kernel.h>
 #include <minoca/arm.h>
 
@@ -137,7 +142,8 @@ Return Value:
     CycleCounter.Features = TIMER_FEATURE_PER_PROCESSOR |
                             TIMER_FEATURE_READABLE |
                             TIMER_FEATURE_WRITABLE |
-                            TIMER_FEATURE_SPEED_VARIES |
+                            TIMER_FEATURE_P_STATE_VARIANT |
+                            TIMER_FEATURE_C_STATE_VARIANT |
                             TIMER_FEATURE_PROCESSOR_COUNTER;
 
     //

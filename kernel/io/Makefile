@@ -52,7 +52,9 @@ OBJS = arb.o      \
        path.o     \
        perm.o     \
        pipe.o     \
+       pminfo.o   \
        power.o    \
+       pstate.o   \
        pty.o      \
        pwropt.o   \
        shmemobj.o \

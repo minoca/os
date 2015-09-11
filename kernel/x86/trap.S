@@ -49,8 +49,9 @@ Environment:
 .code32
 
 .globl HlVectorStart
-.globl HlVectorMidpoint
 .globl HlVectorEnd
+.hidden HlVectorStart
+.hidden HlVectorEnd
 
 ##
 ## VOID
@@ -826,45 +827,60 @@ END_FUNCTION(ArRestoreTrapFrame)
 ## MinimumVector and MaximumVector.
 ##
 
-.macro HlInterruptVectors MinimumVector, MaximumVector
+.macro InterruptVector _Vector
 
-    pushl   $0                      # Push a dummy error code.
-    call    ArGenerateTrapFrame     # Create a local trap frame.
-    pushl   %ebx                    # Push a pointer to it as a parameter.
-    pushl   $\MinimumVector         # Push the vector number.
-    call    KeDispatchException     # Dispatch the interrupt.
-    addl    $8, %esp                # Pop the parameters.
-    call    ArRestoreTrapFrame      # Restore state.
-    addl    $4, %esp                # Pop the error code.
-    iret                            # Return from the exception.
+    ##
+    ## 0x6A xx is the instruction for push imm8, except the immediate is sign
+    ## extended. The assembler will use the longer form for numbers >= 0x80
+    ## since those should not be sign extended. Use the shorter form directly
+    ## here to save space, and deal with it using a cast in the C code.
+    ##
 
-##
-## Stamp out the next vector.
-##
+    .byte   0x6A
+    .byte   (\_Vector)
+    jmp     KeInterruptEntry
 
-.if \MaximumVector-\MinimumVector
-HlInterruptVectors (\MinimumVector+1),\MaximumVector
-.endif
+.endm
+
+.macro InterruptVectors16 _Vector
+    InterruptVector (\_Vector)
+    InterruptVector (\_Vector + 1)
+    InterruptVector (\_Vector + 2)
+    InterruptVector (\_Vector + 3)
+    InterruptVector (\_Vector + 4)
+    InterruptVector (\_Vector + 5)
+    InterruptVector (\_Vector + 6)
+    InterruptVector (\_Vector + 7)
+    InterruptVector (\_Vector + 8)
+    InterruptVector (\_Vector + 9)
+    InterruptVector (\_Vector + 10)
+    InterruptVector (\_Vector + 11)
+    InterruptVector (\_Vector + 12)
+    InterruptVector (\_Vector + 13)
+    InterruptVector (\_Vector + 14)
+    InterruptVector (\_Vector + 15)
+
 .endm
 
 ##
-## Now actually instantiate the macro. Unfortunately to avoid a "Macros nested
-## too deeply" error this has to be done in stages from MINIMUM_VECTOR to
-## MAXIMUM_VECTOR.
+## Now actually instantiate the macro to create the vector code.
 ##
 
 HlVectorStart:
 
-HlInterruptVectors 0x30, 0x7F
-
-##
-## Unfortunately the instructions get larger here.
-##
-
-HlVectorMidpoint:
-
-HlInterruptVectors 0x80, 0xBF
-HlInterruptVectors 0xC0, 0xFF
+InterruptVectors16 0x30
+InterruptVectors16 0x40
+InterruptVectors16 0x50
+InterruptVectors16 0x60
+InterruptVectors16 0x70
+InterruptVectors16 0x80
+InterruptVectors16 0x90
+InterruptVectors16 0xA0
+InterruptVectors16 0xB0
+InterruptVectors16 0xC0
+InterruptVectors16 0xD0
+InterruptVectors16 0xE0
+InterruptVectors16 0xF0
 
 HlVectorEnd:
 
@@ -992,4 +1008,21 @@ GenerateTrapFrameEnd:
     jmp     *%edi                           # Return
 
 END_FUNCTION(ArGenerateTrapFrame)
+
+##
+## Define the common interrupt entry code. At this point the vector number has
+## been pushed into the error code slot, but nothing else has been done. Note
+## that this code needs to be far enough away from the vectors themselves so
+## that none of the jumps in the vectors turn into shorter instructions
+## (distance >= 0x100).
+##
+
+KeInterruptEntry:
+    call    ArGenerateTrapFrame     # Create a local trap frame.
+    pushl   %ebx                    # Push a pointer to it as a parameter.
+    call    KeDispatchInterrupt     # Dispatch the interrupt.
+    addl    $4, %esp                # Pop the parameters.
+    call    ArRestoreTrapFrame      # Restore state.
+    addl    $4, %esp                # Pop the error code.
+    iret                            # Return from the exception.
 

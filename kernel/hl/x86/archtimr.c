@@ -95,6 +95,40 @@ PHARDWARE_MODULE_ENTRY HlBuiltinTimerModules[] = {
 // ------------------------------------------------------------------ Functions
 //
 
+KSTATUS
+HlGetProcessorCounterInformation (
+    PHL_PROCESSOR_COUNTER_INFORMATION Information
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns information about the cycle counter built into the
+    processor.
+
+Arguments:
+
+    Information - Supplies a pointer where the processor counter information
+        will be returned on success.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NOT_SUPPORTED if the processor does not have a processor cycle
+    counter.
+
+--*/
+
+{
+
+    Information->Frequency = HlProcessorCounter->CounterFrequency;
+    Information->Multiplier = 1;
+    Information->Features = HlProcessorCounter->Features;
+    return STATUS_SUCCESS;
+}
+
 VOID
 HlpArchInitializeTimersPreDebugger (
     VOID

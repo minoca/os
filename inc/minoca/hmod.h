@@ -151,11 +151,20 @@ Author:
 #define TIMER_FEATURE_ONE_SHOT 0x00000010
 
 //
-// Set this flag if the timer's frequency varies with processor power
-// management states.
+// Set this flag if the timer's frequency varies with processor performance
+// changes, such as frequency scaling.
 //
 
-#define TIMER_FEATURE_SPEED_VARIES 0x00000020
+#define TIMER_FEATURE_P_STATE_VARIANT 0x00000020
+
+//
+// Set this flag if the timer stops when the processor is halted.
+//
+
+#define TIMER_FEATURE_C_STATE_VARIANT 0x00000040
+
+#define TIMER_FEATURE_VARIANT \
+    (TIMER_FEATURE_P_STATE_VARIANT | TIMER_FEATURE_C_STATE_VARIANT)
 
 //
 // Set this flag only if this timer represents the official processor counter.
@@ -163,7 +172,7 @@ Author:
 // counter.
 //
 
-#define TIMER_FEATURE_PROCESSOR_COUNTER 0x00000040
+#define TIMER_FEATURE_PROCESSOR_COUNTER 0x00000080
 
 //
 // Interrupt controller feature flags.
@@ -217,6 +226,9 @@ Author:
 //
 
 #define CACHE_CONTROLLER_PROPERTIES_VERSION 1
+
+#define HL_CACHE_FLAG_CLEAN 0x00000001
+#define HL_CACHE_FLAG_INVALIDATE 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -2487,46 +2499,6 @@ Return Value:
 
 typedef
 VOID
-(*PHARDWARE_MODULE_CPUID) (
-    PULONG Eax,
-    PULONG Ebx,
-    PULONG Ecx,
-    PULONG Edx
-    );
-
-/*++
-
-Routine Description:
-
-    This routine executes the CPUID instruction to get processor architecture
-    information. This routine is only valid for PC architectures.
-
-Arguments:
-
-    Eax - Supplies a pointer to the value that EAX should be set to when the
-        CPUID instruction is executed. On output, contains the contents of
-        EAX immediately after the CPUID instruction.
-
-    Ebx - Supplies a pointer to the value that EBX should be set to when the
-        CPUID instruction is executed. On output, contains the contents of
-        EAX immediately after the CPUID instruction.
-
-    Ecx - Supplies a pointer to the value that ECX should be set to when the
-        CPUID instruction is executed. On output, contains the contents of
-        EAX immediately after the CPUID instruction.
-
-    Edx - Supplies a pointer to the value that EDX should be set to when the
-        CPUID instruction is executed. On output, contains the contents of
-        EAX immediately after the CPUID instruction.
-
-Return Value:
-
-    None.
-
---*/
-
-typedef
-VOID
 (*PHARDWARE_MODULE_INITIALIZE_LOCK) (
     PHARDWARE_MODULE_LOCK Lock
     );
@@ -2677,11 +2649,6 @@ Members:
         relevant to the system regardless of whether or not that hardware
         module is initialized and used.
 
-    Cpuid - Stores a pointer to a helper function that presents a C interface
-        to the CPUID instruction. This function is only valid on PC
-        architectures, for all other architectures this function pointer will
-        be NULL.
-
     InitializeLock - Stores a pointer to a function that initializes a
         hardware lock structure.
 
@@ -2713,7 +2680,6 @@ typedef struct _HARDWARE_MODULE_KERNEL_SERVICES {
     PHARDWARE_MODULE_UNMAP_ADDRESS UnmapAddress;
     PHARDWARE_MODULE_REGISTER Register;
     PHARDWARE_MODULE_REPORT_PHYSICAL_ADDRESS_USAGE ReportPhysicalAddressUsage;
-    PHARDWARE_MODULE_CPUID Cpuid;
     PHARDWARE_MODULE_INITIALIZE_LOCK InitializeLock;
     PHARDWARE_MODULE_ACQUIRE_LOCK AcquireLock;
     PHARDWARE_MODULE_RELEASE_LOCK ReleaseLock;

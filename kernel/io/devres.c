@@ -82,13 +82,6 @@ PDEVICE *IoDelayedDevices;
 UINTN IoDelayedDeviceCount;
 
 //
-// Store a pointer to the work queue that resource allocation requests are
-// placed on.
-//
-
-PWORK_QUEUE IoResourceAllocationWorkQueue = NULL;
-
-//
 // ------------------------------------------------------------------ Functions
 //
 

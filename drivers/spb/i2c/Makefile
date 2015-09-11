@@ -1,18 +1,18 @@
 ################################################################################
 #
-#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#   Copyright (c) 2015 Minoca Corp. All Rights Reserved
 #
 #   Module Name:
 #
-#       Platform
+#       I2C
 #
 #   Abstract:
 #
-#       This directory platform support drivers.
+#       This directory contains drivers related to I2C peripherals.
 #
 #   Author:
 #
-#       Evan Green 4-Dec-2014
+#       Evan Green 7-Sep-2015
 #
 #   Environment:
 #
@@ -20,9 +20,7 @@
 #
 ################################################################################
 
-DIRS = goec      \
-       quark     \
-       ti        \
+DIRS = am3i2c           \
 
 include $(SRCROOT)/os/minoca.mk
 

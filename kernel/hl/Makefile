@@ -62,7 +62,6 @@ ARMV7_OBJS = armv7/am335int.o \
              armv7/cycsupc.o  \
              armv7/gic.o      \
              armv7/gicid.o    \
-             armv7/hmodarch.o \
              armv7/omapintr.o \
              armv7/omap3pwr.o \
              armv7/omap3tmr.o \
@@ -91,7 +90,6 @@ ARMV6_OBJS = armv6/apstart.o  \
              armv7/b2709int.o \
              armv7/b2709tmr.o \
              armv7/cyccnt.o   \
-             armv7/hmodarch.o \
              armv7/regacces.o \
              armv7/uartpl11.o \
 
@@ -106,7 +104,6 @@ X86_OBJS = ns16550.o      \
            x86/archsup.o  \
            x86/archrst.o  \
            x86/archtimr.o \
-           x86/hmodarch.o \
            x86/ioport.o   \
            x86/pmtimer.o  \
            x86/regacces.o \

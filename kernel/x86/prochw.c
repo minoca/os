@@ -118,7 +118,7 @@ ArpInitializeInterrupts (
 
 VOID
 ArpSetProcessorFeatures (
-    VOID
+    PPROCESSOR_BLOCK ProcessorBlock
     );
 
 //
@@ -159,7 +159,6 @@ BOOL ArTranslationEnabled = FALSE;
 //
 
 extern UCHAR HlVectorStart;
-extern UCHAR HlVectorMidpoint;
 extern UCHAR HlVectorEnd;
 
 //
@@ -436,7 +435,7 @@ Return Value:
     ArpInitializeGdt(Gdt, ProcessorBlock, Tss, DoubleFaultTss, NmiTss);
     ArLoadTr(KERNEL_TSS);
     ArpInitializeInterrupts(PhysicalMode, BootProcessor, Idt);
-    ArpSetProcessorFeatures();
+    ArpSetProcessorFeatures(ProcessorBlock);
 
     //
     // Initialize the FPU, then disable access to it again.
@@ -1475,37 +1474,18 @@ Return Value:
         //
         // Initialize the device vectors of the IDT. The vector dispatch code
         // is a bunch of copies of the same code, the only difference is which
-        // vector number they push as a parameter. This has to be done because
-        // the code length for a vector changes after 0x80 (push 0x80 is larger
-        // than push 0x7f).
+        // vector number they push as a parameter.
         //
 
-        DispatchCodeLength = (ULONG)(&HlVectorMidpoint - &HlVectorStart) /
-                             (MIDPOINT_VECTOR - MINIMUM_VECTOR);
+        DispatchCodeLength = (ULONG)(&HlVectorEnd - &HlVectorStart) /
+                             (MAXIMUM_VECTOR - MINIMUM_VECTOR);
 
         for (IdtIndex = MINIMUM_VECTOR;
-             IdtIndex < MIDPOINT_VECTOR;
+             IdtIndex < MAXIMUM_VECTOR;
              IdtIndex += 1) {
 
             ServiceRoutine = &HlVectorStart + ((IdtIndex - MINIMUM_VECTOR) *
                                                DispatchCodeLength);
-
-            ArpCreateGate(IdtTable + IdtIndex,
-                          ServiceRoutine,
-                          KERNEL_CS,
-                          INTERRUPT_GATE_TYPE,
-                          SEGMENT_PRIVILEGE_KERNEL);
-        }
-
-        DispatchCodeLength = (ULONG)(&HlVectorEnd - &HlVectorMidpoint) /
-                             (MAXIMUM_VECTOR - MIDPOINT_VECTOR + 1);
-
-        for (IdtIndex = MIDPOINT_VECTOR;
-             IdtIndex <= MAXIMUM_VECTOR;
-             IdtIndex += 1) {
-
-            ServiceRoutine = &HlVectorMidpoint + ((IdtIndex - MIDPOINT_VECTOR) *
-                                                  DispatchCodeLength);
 
             ArpCreateGate(IdtTable + IdtIndex,
                           ServiceRoutine,
@@ -1629,7 +1609,7 @@ Return Value:
 
 VOID
 ArpSetProcessorFeatures (
-    VOID
+    PPROCESSOR_BLOCK ProcessorBlock
     )
 
 /*++
@@ -1640,7 +1620,7 @@ Routine Description:
 
 Arguments:
 
-    None.
+    ProcessorBlock - Supplies a pointer to the processor block.
 
 Return Value:
 
@@ -1655,6 +1635,13 @@ Return Value:
     ULONG Ebx;
     ULONG Ecx;
     ULONG Edx;
+    ULONG ExtendedFamily;
+    ULONG ExtendedModel;
+    ULONG Family;
+    PPROCESSOR_IDENTIFICATION Identification;
+    ULONG Model;
+
+    Identification = &(ProcessorBlock->CpuVersion);
 
     //
     // First call CPUID to find out the highest supported value.
@@ -1662,12 +1649,54 @@ Return Value:
 
     Eax = X86_CPUID_IDENTIFICATION;
     ArCpuid(&Eax, &Ebx, &Ecx, &Edx);
+    Identification->Vendor = Ebx;
     if (Eax < X86_CPUID_BASIC_INFORMATION) {
         return;
     }
 
     Eax = X86_CPUID_BASIC_INFORMATION;
     ArCpuid(&Eax, &Ebx, &Ecx, &Edx);
+
+    //
+    // Tease out the family, model, and stepping information.
+    //
+
+    Family = (Eax & X86_CPUID_BASIC_EAX_BASE_FAMILY_MASK) >>
+             X86_CPUID_BASIC_EAX_BASE_FAMILY_SHIFT;
+
+    Model = (Eax & X86_CPUID_BASIC_EAX_BASE_MODEL_MASK) >>
+            X86_CPUID_BASIC_EAX_BASE_MODEL_SHIFT;
+
+    ExtendedFamily = (Eax & X86_CPUID_BASIC_EAX_EXTENDED_FAMILY_MASK) >>
+                     X86_CPUID_BASIC_EAX_EXTENDED_FAMILY_SHIFT;
+
+    ExtendedModel = (Eax & X86_CPUID_BASIC_EAX_EXTENDED_MODEL_MASK) >>
+                    X86_CPUID_BASIC_EAX_EXTENDED_MODEL_SHIFT;
+
+    Identification->Family = Family;
+    Identification->Model = Model;
+    Identification->Stepping = Eax & X86_CPUID_BASIC_EAX_STEPPING_MASK;
+
+    //
+    // Certain well-known vendors have minor quirks about how their family and
+    // model values are computed.
+    //
+
+    if (Identification->Vendor == X86_VENDOR_INTEL) {
+        if (Family == 0xF) {
+            Identification->Family = Family + ExtendedFamily;
+        }
+
+        if ((Family == 0xF) || (Family == 0x6)) {
+            Identification->Model = (ExtendedModel << 4) + Model;
+        }
+
+    } else if (Identification->Vendor == X86_VENDOR_AMD) {
+        Identification->Family = Family + ExtendedFamily;
+        if (Model == 0xF) {
+            Identification->Model = (ExtendedModel << 4) + Model;
+        }
+    }
 
     //
     // If FXSAVE and FXRSTOR are supported, set the bits in CR4 to enable them.

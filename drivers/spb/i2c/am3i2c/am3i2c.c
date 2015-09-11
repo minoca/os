@@ -4,16 +4,15 @@ Copyright (c) 2015 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    rk32spi.c
+    am3i2c.c
 
 Abstract:
 
-    This module implements support for the SPI controllers on the RockChip
-    RK3288 SoC.
+    This module implements support for the TI AM335x I2C controller driver.
 
 Author:
 
-    Evan Green 24-Aug-2015
+    Evan Green 7-Sep-2015
 
 Environment:
 
@@ -27,136 +26,144 @@ Environment:
 
 #include <minoca/driver.h>
 #include <minoca/spb/spbhost.h>
+#include <minoca/acpitabs.h>
+#include <minoca/dev/am335x.h>
 
 //
 // --------------------------------------------------------------------- Macros
 //
 
-#define RK32_READ_SPI(_Controller, _Register) \
+#define AM3_READ_I2C(_Controller, _Register) \
     HlReadRegister32((_Controller)->ControllerBase + (_Register))
 
-#define RK32_WRITE_SPI(_Controller, _Register, _Value) \
+#define AM3_WRITE_I2C(_Controller, _Register, _Value) \
     HlWriteRegister32((_Controller)->ControllerBase + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
 //
 
-#define RK32_SPI_ALLOCATION_TAG 0x53336B52
-#define RK32_SPI_INPUT_CLOCK 99000000
-#define RK32_SPI_FIFO_DEPTH 32
+#define AM335_I2C_ALLOCATION_TAG 0x32493341
 
 //
-// Define control register 0 bits.
+// Define I2C control register bits.
 //
 
-#define RK32_SPI_CONTROL0_DATA_FRAME_4 (0x0 << 0)
-#define RK32_SPI_CONTROL0_DATA_FRAME_8 (0x1 << 0)
-#define RK32_SPI_CONTROL0_DATA_FRAME_16 (0x2 << 0)
-#define RK32_SPI_CONTROL0_CONTROL_FRAME_SIZE_MASK (0xF << 2)
-#define RK32_SPI_CONTROL0_CLOCK_PHASE (1 << 6)
-#define RK32_SPI_CONTROL0_CLOCK_INACTIVE_HIGH (1 << 7)
-#define RK32_SPI_CONTROL0_CHIP_SELECT_KEEP_LOW (0x0 << 8)
-#define RK32_SPI_CONTROL0_CHIP_SELECT_HIGH_HALF (0x1 << 8)
-#define RK32_SPI_CONTROL0_CHIP_SELECT_HIGH_FULL (0x2 << 8)
-#define RK32_SPI_CONTROL0_SS_CLK_DELAY_FULL_CLOCK (1 << 10)
-#define RK32_SPI_CONTROL0_BIG_ENDIAN (1 << 11)
-#define RK32_SPI_CONTROL0_LSB_FIRST (1 << 12)
-#define RK32_SPI_CONTROL0_APB_8BIT (1 << 13)
-#define RK32_SPI_CONTROL0_DELAY_CYCLE_SHIFT 14
-#define RK32_SPI_CONTROL0_FRAME_MOTOROLA (0x0 << 16)
-#define RK32_SPI_CONTROL0_FRAME_TI_SSP (0x1 << 16)
-#define RK32_SPI_CONTROL0_FRAME_NS_MICROWIRE (0x2 << 16)
-#define RK32_SPI_CONTROL0_TRANSMIT_AND_RECEIVE (0x0 << 18)
-#define RK32_SPI_CONTROL0_TRANSMIT_ONLY (0x1 << 18)
-#define RK32_SPI_CONTROL0_RECEIVE_ONLY (0x2 << 18)
-#define RK32_SPI_CONTROL0_TRANSCEIVE_MASK (0x3 << 18)
-#define RK32_SPI_CONTROL0_SLAVE_MODE (1 << 20)
-#define RK32_SPI_CONTROL0_MICROWIRE_SEQUENTIAL (1 << 21)
+#define AM335_I2C_CONTROL_START (1 << 0)
+#define AM335_I2C_CONTROL_STOP (1 << 1)
+#define AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_3 (1 << 4)
+#define AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_2 (1 << 5)
+#define AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_1 (1 << 6)
+#define AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_0 (1 << 7)
+#define AM335_I2C_CONTROL_EXPAND_SLAVE_ADDRESS (1 << 8)
+#define AM335_I2C_CONTROL_TRANSMIT (1 << 9)
+#define AM335_I2C_CONTROL_MASTER (1 << 10)
+#define AM335_I2C_CONTROL_START_BYTE_MODE (1 << 11)
+#define AM335_I2C_CONTROL_ENABLE (1 << 15)
 
 //
-// Define SPI enable register bits.
+// I2C system control register bits.
 //
 
-#define RK32_SPI_ENABLE (1 << 0)
+#define AM335_I2C_SYSTEM_CONTROL_AUTO_IDLE 0x00000001
+#define AM335_I2C_SYSTEM_CONTROL_SOFT_RESET 0x00000002
 
 //
-// Define SPI status register bits.
+// Define I2C buffer (FIFO) control bits.
 //
 
-#define RK32_SPI_STATUS_SPI_BUSY (1 << 0)
-#define RK32_SPI_STATUS_TX_FIFO_FULL (1 << 1)
-#define RK32_SPI_STATUS_TX_FIFO_EMPTY (1 << 2)
-#define RK32_SPI_STATUS_RX_FIFO_EMPTY (1 << 3)
-#define RK32_SPI_STATUS_RX_FIFO_FULL (1 << 4)
+#define AM335_I2C_BUFFER_TX_THRESHOLD_SHIFT 0
+#define AM335_I2C_BUFFER_TX_FIFO_CLEAR (1 << 6)
+#define AM335_I2C_BUFFER_TX_DMA_ENABLE (1 << 7)
+#define AM335_I2C_BUFFER_RX_THRESHOLD_SHIFT 8
+#define AM335_I2C_BUFFER_RX_FIFO_CLEAR (1 << 14)
+#define AM335_I2C_BUFFER_RX_DMA_ENABLE (1 << 15)
 
 //
-// Define SPI interrupt polarity bits.
+// Define buffer status register bits.
 //
 
-#define RK32_SPI_INTERRUPT_POLARITY_LOW (1 << 0)
+#define AM335_I2C_BUFFER_STATUS_TX_MASK (0x3F << 0)
+#define AM335_I2C_BUFFER_STATUS_TX_SHIFT 0
+#define AM335_I2C_BUFFER_STATUS_RX_MASK (0x3F << 8)
+#define AM335_I2C_BUFFER_STATUS_RX_SHIFT 8
+#define AM335_I2C_BUFFER_STATUS_DEPTH_8 (0x0 << 14)
+#define AM335_I2C_BUFFER_STATUS_DEPTH_16 (0x1 << 14)
+#define AM335_I2C_BUFFER_STATUS_DEPTH_32 (0x2 << 14)
+#define AM335_I2C_BUFFER_STATUS_DEPTH_64 (0x3 << 14)
+#define AM335_I2C_BUFFER_STATUS_DEPTH_MASK (0x3 << 14)
+
+#define AM335_I2C_MAX_FIFO_DEPTH 64
 
 //
-// Define SPI interrupt register bits.
+// Define I2C interrupt status/enable register bits.
 //
 
-#define RK32_SPI_INTERRUPT_TX_EMPTY (1 << 0)
-#define RK32_SPI_INTERRUPT_TX_OVERFLOW (1 << 1)
-#define RK32_SPI_INTERRUPT_RX_UNDERFLOW (1 << 2)
-#define RK32_SPI_INTERRUPT_RX_OVERFLOW (1 << 3)
-#define RK32_SPI_INTERRUPT_RX_FULL (1 << 4)
-#define RK32_SPI_INTERRUPT_MASK                                             \
-    (RK32_SPI_INTERRUPT_TX_EMPTY | RK32_SPI_INTERRUPT_TX_OVERFLOW |         \
-     RK32_SPI_INTERRUPT_RX_UNDERFLOW | RK32_SPI_INTERRUPT_RX_OVERFLOW |     \
-     RK32_SPI_INTERRUPT_RX_FULL)
+#define AM335_I2C_INTERRUPT_ARBITRATION_LOST 0x00000001
+#define AM335_I2C_INTERRUPT_NACK 0x00000002
+#define AM335_I2C_INTERRUPT_ACCESS_READY 0x00000004
+#define AM335_I2C_INTERRUPT_RX_READY 0x00000008
+#define AM335_I2C_INTERRUPT_TX_READY 0x00000010
+#define AM335_I2C_INTERRUPT_GENERAL_CALL 0x00000020
+#define AM335_I2C_INTERRUPT_START 0x00000040
+#define AM335_I2C_INTERRUPT_ACCESS_ERROR 0x00000080
+#define AM335_I2C_INTERRUPT_BUS_FREE 0x00000100
+#define AM335_I2C_INTERRUPT_ADDRESS_RECOGNIZED 0x00000200
+#define AM335_I2C_INTERRUPT_TX_UNDERFLOW 0x00000400
+#define AM335_I2C_INTERRUPT_RX_OVERFLOW 0x00000800
+#define AM335_I2C_INTERRUPT_BUS_BUSY 0x00001000
+#define AM335_I2C_INTERRUPT_RX_DRAIN 0x00002000
+#define AM335_I2C_INTERRUPT_TX_DRAIN 0x00004000
 
-#define RK32_SPI_INTERRUPT_ERROR_MASK                                       \
-    (RK32_SPI_INTERRUPT_TX_OVERFLOW | RK32_SPI_INTERRUPT_RX_UNDERFLOW |     \
-     RK32_SPI_INTERRUPT_RX_OVERFLOW)
+#define AM335_I2C_INTERRUPT_ERROR_MASK \
+    (AM335_I2C_INTERRUPT_ACCESS_ERROR | AM335_I2C_INTERRUPT_RX_OVERFLOW)
 
-#define RK32_SPI_INTERRUPT_DEFAULT_MASK                                     \
-    (RK32_SPI_INTERRUPT_TX_OVERFLOW | RK32_SPI_INTERRUPT_RX_UNDERFLOW |     \
-     RK32_SPI_INTERRUPT_RX_OVERFLOW | RK32_SPI_INTERRUPT_RX_FULL)
-
-//
-// Define DMA control register bits.
-//
-
-#define RK32_SPI_DMA_RX_ENABLE (1 << 0)
-#define RK32_SPI_DMA_TX_ENABLE (1 << 1)
+#define AM335_I2C_INTERRUPT_DEFAULT_MASK \
+    (AM335_I2C_INTERRUPT_NACK | AM335_I2C_INTERRUPT_ACCESS_ERROR)
 
 //
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef enum _RK32_SPI_REGISTER {
-    Rk32SpiControl0 = 0x00,
-    Rk32SpiControl1 = 0x04,
-    Rk32SpiEnable = 0x08,
-    Rk32SpiSlaveEnable = 0x0C,
-    Rk32SpiBaudRateSelect = 0x10,
-    Rk32SpiTxFifoThreshold = 0x14,
-    Rk32SpiRxFifoThreshold = 0x18,
-    Rk32SpiTxFifoLevel = 0x1C,
-    Rk32SpiRxFifoLevel = 0x20,
-    Rk32SpiSpiStatus = 0x24,
-    Rk32SpiInterruptPolarity = 0x28,
-    Rk32SpiInterruptMask = 0x2C,
-    Rk32SpiInterruptStatus = 0x30,
-    Rk32SpiRawInterruptStatus = 0x34,
-    Rk32SpiInterruptClear = 0x38,
-    Rk32SpiDmaControl = 0x3C,
-    Rk32SpiDmaTxDataLevel = 0x40,
-    Rk32SpiDmaRxDataLevel = 0x44,
-    Rk32SpiTxFifoData = 0x400,
-    Rk32SpiRxFifoData = 0x800
-} RK32_SPI_REGISTER, *PRK32_SPI_REGISTER;
+typedef enum _AM335_I2C_REGISTER {
+    Am3I2cRevisionLow = 0x00,
+    Am3I2cRevisionHigh = 0x04,
+    Am3I2cSysControl = 0x10,
+    Am3I2cInterruptStatusRaw = 0x24,
+    Am3I2cInterruptStatus = 0x28,
+    Am3I2cInterruptEnableSet = 0x2C,
+    Am3I2cInterruptEnableClear = 0x30,
+    Am3I2cWakeEnable = 0x34,
+    Am3I2cDmaRxEnableSet = 0x38,
+    Am3I2cDmaTxEnableSet = 0x3C,
+    Am3I2cDmaRxEnableClear = 0x40,
+    Am3I2cDmaTxEnableClear = 0x44,
+    Am3I2cDmaRxWakeEnable = 0x48,
+    Am3I2cDmaTxWakeEnable = 0x4C,
+    Am3I2cSysStatus = 0x90,
+    Am3I2cBuffer = 0x94,
+    Am3I2cCount = 0x98,
+    Am3I2cData = 0x9C,
+    Am3I2cControl = 0xA4,
+    Am3I2cOwnAddress = 0xA8,
+    Am3I2cSlaveAddress = 0xAC,
+    Am3I2cPrescale = 0xB0,
+    Am3I2cSclLowTime = 0xB4,
+    Am3I2cSclHighTime = 0xB8,
+    Am3I2cSysTest = 0xBC,
+    Am3I2cBufferStatus = 0xC0,
+    Am3I2cOwnAddress1 = 0xC4,
+    Am3I2cOwnAddress2 = 0xC8,
+    Am3I2cOwnAddress3 = 0xCC,
+    Am3I2cActiveOwnAddress = 0xD0,
+    Am3I2cClockBlock = 0xD4,
+} AM335_I2C_REGISTER, *PAM335_I2C_REGISTER;
 
 /*++
 
 Structure Description:
 
-    This structure defines the context for an RK32 SPI controller.
+    This structure defines the context for an AM335x I2C controller.
 
 Members:
 
@@ -175,24 +182,27 @@ Members:
         interrupt was connected.
 
     ControllerBase - Stores the virtual address of the memory mapping to the
-        SPI controller registers.
+        I2C controller registers.
 
     SpbController - Stores a pointer to the library Simple Peripheral Bus
         controller.
-
-    Control - Stores a shadow copy of the current control 0 register.
 
     Transfer - Stores the current transfer being worked on.
 
     PendingInterrupts - Stores a bitfield of pending interrupts.
 
-    InterruptMask - Stores a shadow copy of the current interrupt mask.
+    Control - Stores a shadow copy of the control register.
 
     Lock - Stores a pointer to a lock serializing access to the controller.
 
+    FifoDepth - Stores the depth of the transmit and receive FIFOs.
+
+    FifoThreshold - Stores the FIFO threshold value that causes TX/RX ready
+        interrupts to fire.
+
 --*/
 
-typedef struct _RK32_SPI_CONTROLLER {
+typedef struct _AM3_I2C_CONTROLLER {
     PDEVICE OsDevice;
     ULONGLONG InterruptLine;
     ULONGLONG InterruptVector;
@@ -200,19 +210,20 @@ typedef struct _RK32_SPI_CONTROLLER {
     HANDLE InterruptHandle;
     PVOID ControllerBase;
     PSPB_CONTROLLER SpbController;
-    ULONG Control;
     PSPB_TRANSFER Transfer;
     ULONG PendingInterrupts;
-    ULONG InterruptMask;
+    ULONG Control;
     PQUEUED_LOCK Lock;
-} RK32_SPI_CONTROLLER, *PRK32_SPI_CONTROLLER;
+    ULONG FifoDepth;
+    ULONG FifoThreshold;
+} AM3_I2C_CONTROLLER, *PAM3_I2C_CONTROLLER;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
 
 KSTATUS
-Rk32SpiAddDevice (
+Am3I2cAddDevice (
     PVOID Driver,
     PSTR DeviceId,
     PSTR ClassId,
@@ -221,113 +232,113 @@ Rk32SpiAddDevice (
     );
 
 VOID
-Rk32SpiDispatchStateChange (
+Am3I2cDispatchStateChange (
     PIRP Irp,
     PVOID DeviceContext,
     PVOID IrpContext
     );
 
 VOID
-Rk32SpiDispatchOpen (
+Am3I2cDispatchOpen (
     PIRP Irp,
     PVOID DeviceContext,
     PVOID IrpContext
     );
 
 VOID
-Rk32SpiDispatchClose (
+Am3I2cDispatchClose (
     PIRP Irp,
     PVOID DeviceContext,
     PVOID IrpContext
     );
 
 VOID
-Rk32SpiDispatchIo (
+Am3I2cDispatchIo (
     PIRP Irp,
     PVOID DeviceContext,
     PVOID IrpContext
     );
 
 VOID
-Rk32SpiDispatchSystemControl (
+Am3I2cDispatchSystemControl (
     PIRP Irp,
     PVOID DeviceContext,
     PVOID IrpContext
     );
 
 INTERRUPT_STATUS
-Rk32SpiInterruptService (
+Am3I2cInterruptService (
     PVOID Context
     );
 
 INTERRUPT_STATUS
-Rk32SpiInterruptServiceWorker (
+Am3I2cInterruptServiceWorker (
     PVOID Context
     );
 
 KSTATUS
-Rk32SpiProcessResourceRequirements (
+Am3I2cProcessResourceRequirements (
     PIRP Irp
     );
 
 KSTATUS
-Rk32SpiStartDevice (
+Am3I2cStartDevice (
     PIRP Irp,
-    PRK32_SPI_CONTROLLER Device
+    PAM3_I2C_CONTROLLER Device
     );
 
 KSTATUS
-Rk32SpiConfigureBus (
+Am3I2cInitializeController (
+    PAM3_I2C_CONTROLLER Controller
+    );
+
+KSTATUS
+Am3I2cConfigureBus (
     PVOID Context,
     PRESOURCE_SPB_DATA Configuration
     );
 
 KSTATUS
-Rk32SpiSubmitTransfer (
+Am3I2cSubmitTransfer (
     PVOID Context,
     PSPB_TRANSFER Transfer
     );
 
-VOID
-Rk32SpiLockBus (
-    PVOID Context,
-    PRESOURCE_SPB_DATA Configuration
-    );
-
-VOID
-Rk32SpiUnlockBus (
-    PVOID Context
-    );
-
 KSTATUS
-Rk32SpiSetupTransfer (
-    PRK32_SPI_CONTROLLER Controller,
+Am3I2cSetupTransfer (
+    PAM3_I2C_CONTROLLER Controller,
     PSPB_TRANSFER Transfer
     );
 
 KSTATUS
-Rk32SpiTransferData (
-    PRK32_SPI_CONTROLLER Controller,
-    PSPB_TRANSFER Transfer
+Am3I2cTransferData (
+    PAM3_I2C_CONTROLLER Controller,
+    PSPB_TRANSFER Transfer,
+    ULONG InterruptStatus
     );
 
 VOID
-Rk32SpiEnableController (
-    PRK32_SPI_CONTROLLER Controller,
+Am3I2cEnableController (
+    PAM3_I2C_CONTROLLER Controller,
     BOOL Enable
+    );
+
+VOID
+Am3I2cSendStop (
+    PAM3_I2C_CONTROLLER Controller
     );
 
 //
 // -------------------------------------------------------------------- Globals
 //
 
-PDRIVER Rk32SpiDriver;
+PDRIVER Am3I2cDriver;
 
-SPB_FUNCTION_TABLE Rk32SpiFunctionTableTemplate = {
-    Rk32SpiConfigureBus,
-    Rk32SpiSubmitTransfer,
-    Rk32SpiLockBus,
-    Rk32SpiUnlockBus
+SPB_FUNCTION_TABLE Am3I2cFunctionTableTemplate = {
+    Am3I2cConfigureBus,
+    Am3I2cSubmitTransfer,
+    NULL,
+    NULL
 };
 
 //
@@ -343,7 +354,7 @@ DriverEntry (
 
 Routine Description:
 
-    This routine is the entry point for the RK32 SPI driver. It registers
+    This routine is the entry point for the AM335x I2C driver. It registers
     its other dispatch functions, and performs driver-wide initialization.
 
 Arguments:
@@ -363,21 +374,21 @@ Return Value:
     DRIVER_FUNCTION_TABLE FunctionTable;
     KSTATUS Status;
 
-    Rk32SpiDriver = Driver;
+    Am3I2cDriver = Driver;
     RtlZeroMemory(&FunctionTable, sizeof(DRIVER_FUNCTION_TABLE));
     FunctionTable.Version = DRIVER_FUNCTION_TABLE_VERSION;
-    FunctionTable.AddDevice = Rk32SpiAddDevice;
-    FunctionTable.DispatchStateChange = Rk32SpiDispatchStateChange;
-    FunctionTable.DispatchOpen = Rk32SpiDispatchOpen;
-    FunctionTable.DispatchClose = Rk32SpiDispatchClose;
-    FunctionTable.DispatchIo = Rk32SpiDispatchIo;
-    FunctionTable.DispatchSystemControl = Rk32SpiDispatchSystemControl;
+    FunctionTable.AddDevice = Am3I2cAddDevice;
+    FunctionTable.DispatchStateChange = Am3I2cDispatchStateChange;
+    FunctionTable.DispatchOpen = Am3I2cDispatchOpen;
+    FunctionTable.DispatchClose = Am3I2cDispatchClose;
+    FunctionTable.DispatchIo = Am3I2cDispatchIo;
+    FunctionTable.DispatchSystemControl = Am3I2cDispatchSystemControl;
     Status = IoRegisterDriverFunctions(Driver, &FunctionTable);
     return Status;
 }
 
 KSTATUS
-Rk32SpiAddDevice (
+Am3I2cAddDevice (
     PVOID Driver,
     PSTR DeviceId,
     PSTR ClassId,
@@ -417,17 +428,17 @@ Return Value:
 
 {
 
-    PRK32_SPI_CONTROLLER Controller;
+    PAM3_I2C_CONTROLLER Controller;
     KSTATUS Status;
 
-    Controller = MmAllocateNonPagedPool(sizeof(RK32_SPI_CONTROLLER),
-                                        RK32_SPI_ALLOCATION_TAG);
+    Controller = MmAllocateNonPagedPool(sizeof(AM3_I2C_CONTROLLER),
+                                        AM335_I2C_ALLOCATION_TAG);
 
     if (Controller == NULL) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
-    RtlZeroMemory(Controller, sizeof(RK32_SPI_CONTROLLER));
+    RtlZeroMemory(Controller, sizeof(AM3_I2C_CONTROLLER));
     Controller->OsDevice = DeviceToken;
     Controller->InterruptHandle = INVALID_HANDLE;
     Controller->Lock = KeCreateQueuedLock();
@@ -453,7 +464,7 @@ AddDeviceEnd:
 }
 
 VOID
-Rk32SpiDispatchStateChange (
+Am3I2cDispatchStateChange (
     PIRP Irp,
     PVOID DeviceContext,
     PVOID IrpContext
@@ -491,17 +502,17 @@ Return Value:
     if (Irp->Direction == IrpUp) {
         switch (Irp->MinorCode) {
         case IrpMinorQueryResources:
-            Status = Rk32SpiProcessResourceRequirements(Irp);
+            Status = Am3I2cProcessResourceRequirements(Irp);
             if (!KSUCCESS(Status)) {
-                IoCompleteIrp(Rk32SpiDriver, Irp, Status);
+                IoCompleteIrp(Am3I2cDriver, Irp, Status);
             }
 
             break;
 
         case IrpMinorStartDevice:
-            Status = Rk32SpiStartDevice(Irp, DeviceContext);
+            Status = Am3I2cStartDevice(Irp, DeviceContext);
             if (!KSUCCESS(Status)) {
-                IoCompleteIrp(Rk32SpiDriver, Irp, Status);
+                IoCompleteIrp(Am3I2cDriver, Irp, Status);
             }
 
             break;
@@ -515,7 +526,7 @@ Return Value:
 }
 
 VOID
-Rk32SpiDispatchOpen (
+Am3I2cDispatchOpen (
     PIRP Irp,
     PVOID DeviceContext,
     PVOID IrpContext
@@ -550,7 +561,7 @@ Return Value:
 }
 
 VOID
-Rk32SpiDispatchClose (
+Am3I2cDispatchClose (
     PIRP Irp,
     PVOID DeviceContext,
     PVOID IrpContext
@@ -585,7 +596,7 @@ Return Value:
 }
 
 VOID
-Rk32SpiDispatchIo (
+Am3I2cDispatchIo (
     PIRP Irp,
     PVOID DeviceContext,
     PVOID IrpContext
@@ -620,7 +631,7 @@ Return Value:
 }
 
 VOID
-Rk32SpiDispatchSystemControl (
+Am3I2cDispatchSystemControl (
     PIRP Irp,
     PVOID DeviceContext,
     PVOID IrpContext
@@ -661,7 +672,7 @@ Return Value:
 }
 
 INTERRUPT_STATUS
-Rk32SpiInterruptService (
+Am3I2cInterruptService (
     PVOID Context
     )
 
@@ -669,7 +680,7 @@ Rk32SpiInterruptService (
 
 Routine Description:
 
-    This routine implements the interrupt service routine for the RK32 SPI
+    This routine implements the interrupt service routine for the AM335x I2C
     controller.
 
 Arguments:
@@ -687,13 +698,28 @@ Return Value:
 
 {
 
-    PRK32_SPI_CONTROLLER Controller;
+    PAM3_I2C_CONTROLLER Controller;
+    ULONG ReadyStatus;
     ULONG Status;
 
     Controller = Context;
-    Status = RK32_READ_SPI(Controller, Rk32SpiInterruptStatus);
+    Status = AM3_READ_I2C(Controller, Am3I2cInterruptStatus);
     if (Status != 0) {
-        RK32_WRITE_SPI(Controller, Rk32SpiInterruptClear, Status);
+
+        //
+        // Disable receive interrupts since they would just keep firing
+        // until the FIFO was handled. The transfer data function will always
+        // re-enable them if needed.
+        //
+
+        ReadyStatus = Status & (AM335_I2C_INTERRUPT_RX_READY |
+                                AM335_I2C_INTERRUPT_RX_DRAIN);
+
+        if (ReadyStatus != 0) {
+            AM3_WRITE_I2C(Controller, Am3I2cInterruptEnableClear, ReadyStatus);
+        }
+
+        AM3_WRITE_I2C(Controller, Am3I2cInterruptStatus, Status);
         RtlAtomicOr32(&(Controller->PendingInterrupts), Status);
         return InterruptStatusClaimed;
     }
@@ -702,7 +728,7 @@ Return Value:
 }
 
 INTERRUPT_STATUS
-Rk32SpiInterruptServiceWorker (
+Am3I2cInterruptServiceWorker (
     PVOID Context
     )
 
@@ -711,7 +737,7 @@ Rk32SpiInterruptServiceWorker (
 Routine Description:
 
     This routine represents the low level interrupt service routine for the
-    RK32 SPI controller.
+    AM335x I2c controller.
 
 Arguments:
 
@@ -728,7 +754,7 @@ Return Value:
 
 {
 
-    PRK32_SPI_CONTROLLER Controller;
+    PAM3_I2C_CONTROLLER Controller;
     ULONG InterruptBits;
     KSTATUS Status;
     PSPB_TRANSFER Transfer;
@@ -746,51 +772,44 @@ Return Value:
     }
 
     //
-    // Loop processing transfers.
+    // If an error came in, fail the current transfer.
     //
 
-    while (TRUE) {
+    if ((InterruptBits & AM335_I2C_INTERRUPT_ERROR_MASK) != 0) {
+        RtlDebugPrint("AM3 I2C: Error %08x\n", InterruptBits);
+        Status = STATUS_DEVICE_IO_ERROR;
 
-        //
-        // If an error came in, fail the current transfer.
-        //
+    //
+    // Transfer more data. If the transfer fills the FIFOs, then
+    // break out and wait for the interrupt to fire to put more data in.
+    //
 
-        if ((InterruptBits & RK32_SPI_INTERRUPT_ERROR_MASK) != 0) {
-            RtlDebugPrint("RK32 SPI: Error %08x\n", InterruptBits);
-            Status = STATUS_DEVICE_IO_ERROR;
-
-        //
-        // Transfer more data. If the transfer fills the FIFOs, then
-        // break out and wait for the interrupt to fire to put more data in.
-        //
-
-        } else {
-            Status = Rk32SpiTransferData(Controller, Transfer);
-            if (Status == STATUS_MORE_PROCESSING_REQUIRED) {
-                break;
-            }
+    } else {
+        Status = Am3I2cTransferData(Controller, Transfer, InterruptBits);
+        if (Status == STATUS_MORE_PROCESSING_REQUIRED) {
+            goto InterruptServiceWorkerEnd;
         }
+    }
 
-        //
-        // The interrupt bits apply only to the first iteration of the loop.
-        //
+    //
+    // If this was the last transfer, send the stop.
+    //
 
-        InterruptBits = 0;
+    if ((Transfer->Flags & SPB_TRANSFER_FLAG_LAST) != 0) {
+        Am3I2cSendStop(Controller);
+    }
 
-        //
-        // The transfer completed entirely, so complete this one and go get a
-        // new one.
-        //
+    //
+    // The transfer completed entirely, so complete this one and go get a
+    // new one.
+    //
 
-        Transfer = SpbTransferCompletion(Controller->SpbController,
-                                         Transfer,
-                                         Status);
+    Transfer = SpbTransferCompletion(Controller->SpbController,
+                                     Transfer,
+                                     Status);
 
-        if (Transfer == NULL) {
-            break;
-        }
-
-        Rk32SpiSetupTransfer(Controller, Transfer);
+    if (Transfer != NULL) {
+        Am3I2cSetupTransfer(Controller, Transfer);
     }
 
 InterruptServiceWorkerEnd:
@@ -803,7 +822,7 @@ InterruptServiceWorkerEnd:
 //
 
 KSTATUS
-Rk32SpiProcessResourceRequirements (
+Am3I2cProcessResourceRequirements (
     PIRP Irp
     )
 
@@ -812,7 +831,7 @@ Rk32SpiProcessResourceRequirements (
 Routine Description:
 
     This routine filters through the resource requirements presented by the
-    bus for an RK32 SPI controller. It adds an interrupt vector requirement
+    bus for an AM335x I2C controller. It adds an interrupt vector requirement
     for any interrupt line requested.
 
 Arguments:
@@ -861,16 +880,16 @@ ProcessResourceRequirementsEnd:
 }
 
 KSTATUS
-Rk32SpiStartDevice (
+Am3I2cStartDevice (
     PIRP Irp,
-    PRK32_SPI_CONTROLLER Device
+    PAM3_I2C_CONTROLLER Device
     )
 
 /*++
 
 Routine Description:
 
-    This routine starts the RK32 SPI device.
+    This routine starts the AM335x I2C device.
 
 Arguments:
 
@@ -1014,10 +1033,10 @@ Return Value:
         Registration.Version = SPB_CONTROLLER_INFORMATION_VERSION;
         Registration.Context = Device;
         Registration.Device = Device->OsDevice;
-        Registration.MaxFrequency = RK32_SPI_INPUT_CLOCK / 2;
-        Registration.BusType = ResourceSpbBusSpi;
+        Registration.MaxFrequency = AM335_I2C_INTERNAL_CLOCK_SPEED;
+        Registration.BusType = ResourceSpbBusI2c;
         RtlCopyMemory(&(Registration.FunctionTable),
-                      &Rk32SpiFunctionTableTemplate,
+                      &Am3I2cFunctionTableTemplate,
                       sizeof(SPB_FUNCTION_TABLE));
 
         Status = SpbCreateController(&Registration, &(Device->SpbController));
@@ -1045,14 +1064,19 @@ Return Value:
         Connect.Device = Irp->Device;
         Connect.LineNumber = Device->InterruptLine;
         Connect.Vector = Device->InterruptVector;
-        Connect.InterruptServiceRoutine = Rk32SpiInterruptService;
-        Connect.LowLevelServiceRoutine = Rk32SpiInterruptServiceWorker;
+        Connect.InterruptServiceRoutine = Am3I2cInterruptService;
+        Connect.LowLevelServiceRoutine = Am3I2cInterruptServiceWorker;
         Connect.Context = Device;
         Connect.Interrupt = &(Device->InterruptHandle);
         Status = IoConnectInterrupt(&Connect);
         if (!KSUCCESS(Status)) {
             return Status;
         }
+    }
+
+    Status = Am3I2cInitializeController(Device);
+    if (!KSUCCESS(Status)) {
+        goto StartDeviceEnd;
     }
 
 StartDeviceEnd:
@@ -1072,7 +1096,107 @@ StartDeviceEnd:
 }
 
 KSTATUS
-Rk32SpiConfigureBus (
+Am3I2cInitializeController (
+    PAM3_I2C_CONTROLLER Controller
+    )
+
+/*++
+
+Routine Description:
+
+    This routine resets and initializes the given I2C controller.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller to reset.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG BufferStatus;
+    ULONG Prescaler;
+    ULONG Value;
+
+    //
+    // Disable the I2C controller.
+    //
+
+    Value = AM3_READ_I2C(Controller, Am3I2cControl);
+    Value &= ~AM335_I2C_CONTROL_ENABLE;
+    AM3_WRITE_I2C(Controller, Am3I2cControl, Value);
+
+    //
+    // Reset the controller.
+    //
+
+    Value = AM3_READ_I2C(Controller, Am3I2cSysControl);
+    Value |= AM335_I2C_SYSTEM_CONTROL_SOFT_RESET;
+    AM3_WRITE_I2C(Controller, Am3I2cSysControl, Value);
+    do {
+        Value = AM3_READ_I2C(Controller, Am3I2cSysControl);
+
+    } while ((Value & AM335_I2C_SYSTEM_CONTROL_SOFT_RESET) != 0);
+
+    //
+    // Enable auto idle.
+    //
+
+    Value &= ~AM335_I2C_SYSTEM_CONTROL_AUTO_IDLE;
+    AM3_WRITE_I2C(Controller, Am3I2cSysControl, Value);
+
+    //
+    // Compute the prescaler value.
+    //
+
+    Prescaler = (AM335_I2C_SYSTEM_CLOCK_SPEED /
+                 AM335_I2C_INTERNAL_CLOCK_SPEED) - 1;
+
+    AM3_WRITE_I2C(Controller, Am3I2cPrescale, Prescaler);
+
+    //
+    // Figure out the FIFO size.
+    //
+
+    BufferStatus = AM3_READ_I2C(Controller, Am3I2cBufferStatus);
+    switch (BufferStatus & AM335_I2C_BUFFER_STATUS_DEPTH_MASK) {
+    case AM335_I2C_BUFFER_STATUS_DEPTH_8:
+        Controller->FifoDepth = 8;
+        break;
+
+    case AM335_I2C_BUFFER_STATUS_DEPTH_16:
+        Controller->FifoDepth = 16;
+        break;
+
+    case AM335_I2C_BUFFER_STATUS_DEPTH_32:
+        Controller->FifoDepth = 32;
+        break;
+
+    case AM335_I2C_BUFFER_STATUS_DEPTH_64:
+        Controller->FifoDepth = 64;
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        break;
+    }
+
+    //
+    // Disable all interrupts.
+    //
+
+    AM3_WRITE_I2C(Controller, Am3I2cInterruptEnableClear, 0xFFFFFFFF);
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+Am3I2cConfigureBus (
     PVOID Context,
     PRESOURCE_SPB_DATA Configuration
     )
@@ -1097,75 +1221,75 @@ Return Value:
 
 {
 
+    ULONG Address;
+    ULONG BitTime;
     ULONG Control;
-    PRK32_SPI_CONTROLLER Controller;
-    ULONG Divisor;
-    PRESOURCE_SPB_SPI Spi;
+    PAM3_I2C_CONTROLLER Controller;
+    PRESOURCE_SPB_I2C I2c;
+    ULONG Threshold;
     ULONG Value;
 
     Controller = Context;
-    if (Configuration->BusType != ResourceSpbBusSpi) {
+    if (Configuration->BusType != ResourceSpbBusI2c) {
         return STATUS_INVALID_PARAMETER;
     }
 
-    Spi = PARENT_STRUCTURE(Configuration, RESOURCE_SPB_SPI, Header);
-    Control = RK32_SPI_CONTROL0_SS_CLK_DELAY_FULL_CLOCK |
-              RK32_SPI_CONTROL0_APB_8BIT;
-
-    if (Spi->WordSize == 4) {
-        Control |= RK32_SPI_CONTROL0_DATA_FRAME_4;
-
-    } else if (Spi->WordSize == 8) {
-        Control |= RK32_SPI_CONTROL0_DATA_FRAME_8;
-
-    } else if (Spi->WordSize == 16) {
-        Control |= RK32_SPI_CONTROL0_DATA_FRAME_16;
-
-    } else {
-        return STATUS_INVALID_CONFIGURATION;
-    }
-
-    if ((Spi->Flags & RESOURCE_SPB_SPI_SECOND_PHASE) != 0) {
-        Control |= RK32_SPI_CONTROL0_CLOCK_PHASE;
-    }
-
-    if ((Spi->Flags & RESOURCE_SPB_SPI_START_HIGH) != 0) {
-        Control |= RK32_SPI_CONTROL0_CLOCK_INACTIVE_HIGH;
-    }
-
-    if ((Spi->Header.Flags & RESOURCE_SPB_DATA_SLAVE) != 0) {
-        Control |= RK32_SPI_CONTROL0_SLAVE_MODE;
+    I2c = PARENT_STRUCTURE(Configuration, RESOURCE_SPB_I2C, Header);
+    Control = 0;
+    if ((I2c->Flags & RESOURCE_SPB_I2C_10_BIT_ADDRESSING) != 0) {
+        Control |= AM335_I2C_CONTROL_EXPAND_SLAVE_ADDRESS |
+                   AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_0 |
+                   AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_1 |
+                   AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_2 |
+                   AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_3;
     }
 
     KeAcquireQueuedLock(Controller->Lock);
-    Rk32SpiEnableController(Controller, FALSE);
-    RK32_WRITE_SPI(Controller, Rk32SpiControl0, Control);
+
+    //
+    // The controller must be disabled while reconfiguring.
+    //
+
+    Am3I2cEnableController(Controller, FALSE);
+    Address = I2c->SlaveAddress;
+    if ((I2c->Header.Flags & RESOURCE_SPB_DATA_SLAVE) == 0) {
+        Control |= AM335_I2C_CONTROL_MASTER;
+        AM3_WRITE_I2C(Controller, Am3I2cSlaveAddress, Address);
+
+    } else {
+        AM3_WRITE_I2C(Controller, Am3I2cOwnAddress, Address);
+    }
+
+    AM3_WRITE_I2C(Controller, Am3I2cControl, Control);
     Controller->Control = Control;
-    Value = (RK32_SPI_FIFO_DEPTH / 2) - 1;
-    RK32_WRITE_SPI(Controller, Rk32SpiTxFifoThreshold, Value);
 
     //
-    // Trigger an interrupt as soon as there is any data in the RX FIFO.
+    // Set the FIFO thresholds and clear the FIFO as well.
     //
 
-    RK32_WRITE_SPI(Controller, Rk32SpiRxFifoThreshold, 0);
+    Threshold = Controller->FifoDepth / 2;;
+    Controller->FifoThreshold = Threshold;
+    Value = ((Threshold - 1) << AM335_I2C_BUFFER_RX_THRESHOLD_SHIFT) |
+            ((Threshold - 1) << AM335_I2C_BUFFER_TX_THRESHOLD_SHIFT) |
+            AM335_I2C_BUFFER_RX_FIFO_CLEAR |
+            AM335_I2C_BUFFER_TX_FIFO_CLEAR;
+
+    AM3_WRITE_I2C(Controller, Am3I2cBuffer, Value);
 
     //
-    // Determine the divisor. Make sure it's even by rounding up, as devices
-    // can usually handle speeds that are a little too slow, but not a little
-    // too fast.
+    // Configure the low and high bit times.
     //
 
-    Divisor = RK32_SPI_INPUT_CLOCK / Spi->Speed;
-    Divisor = (Divisor + 1) & ~0x1;
-    RK32_WRITE_SPI(Controller, Rk32SpiBaudRateSelect, Divisor);
-    RK32_WRITE_SPI(Controller, Rk32SpiSlaveEnable, Spi->DeviceSelect);
+    BitTime = (AM335_I2C_INTERNAL_CLOCK_SPEED / I2c->Speed) / 2;
+    AM3_WRITE_I2C(Controller, Am3I2cSclLowTime, BitTime - 7);
+    AM3_WRITE_I2C(Controller, Am3I2cSclHighTime, BitTime - 5);
+    Am3I2cEnableController(Controller, TRUE);
     KeReleaseQueuedLock(Controller->Lock);
     return STATUS_SUCCESS;
 }
 
 KSTATUS
-Rk32SpiSubmitTransfer (
+Am3I2cSubmitTransfer (
     PVOID Context,
     PSPB_TRANSFER Transfer
     )
@@ -1195,136 +1319,24 @@ Return Value:
 
 {
 
-    PRK32_SPI_CONTROLLER Controller;
+    PAM3_I2C_CONTROLLER Controller;
     KSTATUS Status;
-    KSTATUS TotalStatus;
 
     Controller = Context;
     KeAcquireQueuedLock(Controller->Lock);
-    TotalStatus = STATUS_SUCCESS;
-    do {
-        Rk32SpiSetupTransfer(Controller, Transfer);
+    Status = Am3I2cSetupTransfer(Controller, Transfer);
+    if (!KSUCCESS(Status)) {
+        goto SubmitTransferEnd;
+    }
 
-        //
-        // Begin transferring data. If the transfer fills the FIFOs, then
-        // break out and wait for the interrupt to fire to put more data in.
-        //
-
-        Status = Rk32SpiTransferData(Controller, Transfer);
-        if (Status == STATUS_MORE_PROCESSING_REQUIRED) {
-            break;
-        }
-
-        ASSERT(Controller->Transfer == NULL);
-
-        //
-        // The transfer completed entirely, so complete this one and go get a
-        // new one.
-        //
-
-        Transfer = SpbTransferCompletion(Controller->SpbController,
-                                         Transfer,
-                                         Status);
-
-        if (!KSUCCESS(Status)) {
-            if (KSUCCESS(TotalStatus)) {
-                TotalStatus = Status;
-            }
-        }
-
-    } while (Transfer != NULL);
-
+SubmitTransferEnd:
     KeReleaseQueuedLock(Controller->Lock);
-    return TotalStatus;
-}
-
-VOID
-Rk32SpiLockBus (
-    PVOID Context,
-    PRESOURCE_SPB_DATA Configuration
-    )
-
-/*++
-
-Routine Description:
-
-    This routine is called when the bus is being locked for a particular
-    transfer set or directly via the interface. The software synchronization
-    portion of locking the bus is handled by the SPB library, this routine
-    only needs to do hardware-specific actions (like selecting or deselecting
-    device lines).
-
-Arguments:
-
-    Context - Supplies the host controller context.
-
-    Configuration - Supplies a pointer to the configuration of the handle that
-        locked this bus. The configure bus function will still be called, this
-        is only passed for reference if bus-specific actions need to be
-        performed (like selecting or deselecting the device).
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PRK32_SPI_CONTROLLER Controller;
-    PRESOURCE_SPB_SPI SpiData;
-
-    Controller = Context;
-    SpiData = PARENT_STRUCTURE(Configuration, RESOURCE_SPB_SPI, Header);
-
-    ASSERT(SpiData->Header.BusType == ResourceSpbBusSpi);
-
-    //
-    // Select the device.
-    //
-
-    RK32_WRITE_SPI(Controller, Rk32SpiSlaveEnable, SpiData->DeviceSelect);
-    return;
-}
-
-VOID
-Rk32SpiUnlockBus (
-    PVOID Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine is called when the bus is being unlocked.
-
-Arguments:
-
-    Context - Supplies the host controller context.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PRK32_SPI_CONTROLLER Controller;
-
-    Controller = Context;
-
-    //
-    // Deselect the device.
-    //
-
-    RK32_WRITE_SPI(Controller, Rk32SpiSlaveEnable, 0);
-    return;
+    return Status;
 }
 
 KSTATUS
-Rk32SpiSetupTransfer (
-    PRK32_SPI_CONTROLLER Controller,
+Am3I2cSetupTransfer (
+    PAM3_I2C_CONTROLLER Controller,
     PSPB_TRANSFER Transfer
     )
 
@@ -1354,28 +1366,33 @@ Return Value:
 {
 
     ULONG Control;
+    ULONG Mask;
+    ULONG RawStatus;
+    ULONG Size;
 
     Transfer->ReceiveSizeCompleted = 0;
     Transfer->TransmitSizeCompleted = 0;
-    Rk32SpiEnableController(Controller, FALSE);
+    Am3I2cEnableController(Controller, FALSE);
+    Mask = AM335_I2C_INTERRUPT_DEFAULT_MASK;
 
     //
     // Set up the transfer direction.
     //
 
     Control = Controller->Control;
-    Control &= ~RK32_SPI_CONTROL0_TRANSCEIVE_MASK;
+    Control &= ~AM335_I2C_CONTROL_TRANSMIT;
     switch (Transfer->Direction) {
     case SpbTransferDirectionIn:
-        Control |= RK32_SPI_CONTROL0_RECEIVE_ONLY;
+        Mask |= AM335_I2C_INTERRUPT_RX_READY |
+                AM335_I2C_INTERRUPT_RX_DRAIN;
+
         break;
 
     case SpbTransferDirectionOut:
-        Control |= RK32_SPI_CONTROL0_TRANSMIT_ONLY;
-        break;
+        Mask |= AM335_I2C_INTERRUPT_TX_READY |
+                AM335_I2C_INTERRUPT_TX_DRAIN;
 
-    case SpbTransferDirectionBoth:
-        Control |= RK32_SPI_CONTROL0_TRANSMIT_AND_RECEIVE;
+        Control |= AM335_I2C_CONTROL_TRANSMIT;
         break;
 
     default:
@@ -1385,41 +1402,77 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    if (Control != Controller->Control) {
-        RK32_WRITE_SPI(Controller, Rk32SpiControl0, Control);
-        Controller->Control = Control;
+    AM3_WRITE_I2C(Controller, Am3I2cControl, Control);
+    Controller->Control = Control;
+    Size = Transfer->Size;
+    if (Size == 0x10000) {
+        Size = 0;
+
+    } else if ((Size == 0) || (Size > 0x10000)) {
+        return STATUS_INVALID_PARAMETER;
     }
 
-    RK32_WRITE_SPI(Controller, Rk32SpiControl1, Transfer->Size - 1);
+    AM3_WRITE_I2C(Controller, Am3I2cCount, Size & 0x0000FFFF);
 
     ASSERT(Controller->Transfer == NULL);
 
+    //
+    // Clear any old interrupts.
+    //
+
+    AM3_WRITE_I2C(Controller, Am3I2cInterruptStatus, 0xFFFFFFFF);
     Controller->Transfer = Transfer;
-    Rk32SpiEnableController(Controller, TRUE);
+    Am3I2cEnableController(Controller, TRUE);
+
+    //
+    // Send the start.
+    //
+
+    Control = AM3_READ_I2C(Controller, Am3I2cControl);
+    Control |= AM335_I2C_CONTROL_START;
+    AM3_WRITE_I2C(Controller, Am3I2cControl, Control);
+    do {
+        RawStatus = AM3_READ_I2C(Controller, Am3I2cInterruptStatusRaw);
+
+    } while ((RawStatus & AM335_I2C_INTERRUPT_BUS_BUSY) == 0);
+
+    //
+    // Delay if needed.
+    //
+
     if (Transfer->MicrosecondDelay != 0) {
         KeDelayExecution(FALSE, FALSE, Transfer->MicrosecondDelay);
     }
 
+    //
+    // Enable the interrupts.
+    //
+
+    Mask |= AM335_I2C_INTERRUPT_ACCESS_READY | AM335_I2C_INTERRUPT_ACCESS_ERROR;
+    AM3_WRITE_I2C(Controller, Am3I2cInterruptEnableSet, Mask);
     return STATUS_SUCCESS;
 }
 
 KSTATUS
-Rk32SpiTransferData (
-    PRK32_SPI_CONTROLLER Controller,
-    PSPB_TRANSFER Transfer
+Am3I2cTransferData (
+    PAM3_I2C_CONTROLLER Controller,
+    PSPB_TRANSFER Transfer,
+    ULONG InterruptStatus
     )
 
 /*++
 
 Routine Description:
 
-    This routine transfers data to and from the SPI controller.
+    This routine transfers data to and from the I2C controller.
 
 Arguments:
 
     Controller - Supplies a pointer to the controller.
 
     Transfer - Supplies a pointer to the transfer to execute.
+
+    InterruptStatus - Supplies the current interrupt status.
 
 Return Value:
 
@@ -1434,9 +1487,11 @@ Return Value:
 
 {
 
-    UCHAR Buffer[RK32_SPI_FIFO_DEPTH];
+    UCHAR Buffer[AM335_I2C_MAX_FIFO_DEPTH];
+    ULONG BufferStatus;
     SPB_TRANSFER_DIRECTION Direction;
     ULONG Index;
+    ULONG Mask;
     UINTN Offset;
     ULONG Size;
     KSTATUS Status;
@@ -1450,25 +1505,40 @@ Return Value:
     // Send some data if needed.
     //
 
-    if ((Direction == SpbTransferDirectionOut) ||
-        (Direction == SpbTransferDirectionBoth)) {
-
-        Size = RK32_SPI_FIFO_DEPTH -
-               RK32_READ_SPI(Controller, Rk32SpiTxFifoLevel);
+    if (Direction == SpbTransferDirectionOut) {
 
         //
-        // If the transfer has completed, finish it now that everything is out
-        // on the wire.
+        // If the TX ready interrupt is set, then it's known how many bytes are
+        // free in the buffer. Otherwise if the drain interrupt is set, find
+        // out how many remaining bytes to fill.
         //
 
-        if ((Transfer->TransmitSizeCompleted == Transfer->Size) &&
-            (Size == RK32_SPI_FIFO_DEPTH)) {
+        if ((InterruptStatus & AM335_I2C_INTERRUPT_TX_DRAIN) != 0) {
+            Size = AM3_READ_I2C(Controller, Am3I2cBufferStatus);
+            Size = (Size & AM335_I2C_BUFFER_STATUS_TX_MASK) >>
+                   AM335_I2C_BUFFER_STATUS_TX_SHIFT;
 
-            if (Direction == SpbTransferDirectionOut) {
-                TransferDone = TRUE;
-                goto TransferDataEnd;
+        } else if ((InterruptStatus & AM335_I2C_INTERRUPT_TX_READY) != 0) {
+            Size = Controller->FifoDepth - Controller->FifoThreshold;
+
+        } else {
+
+            //
+            // If an access ready interrupt occurred, the transfer is probably
+            // done.
+            //
+
+            if ((InterruptStatus & AM335_I2C_INTERRUPT_ACCESS_READY) != 0) {
+                if (Transfer->TransmitSizeCompleted == Transfer->Size) {
+                    TransferDone = TRUE;
+                    goto TransferDataEnd;
+                }
             }
+
+            goto TransferDataEnd;
         }
+
+        ASSERT(Size <= AM335_I2C_MAX_FIFO_DEPTH);
 
         if (Size > Transfer->Size - Transfer->TransmitSizeCompleted) {
             Size = Transfer->Size - Transfer->TransmitSizeCompleted;
@@ -1487,79 +1557,76 @@ Return Value:
         }
 
         for (Index = 0; Index < Size; Index += 1) {
-            RK32_WRITE_SPI(Controller,
-                           Rk32SpiTxFifoData,
-                           Buffer[Transfer->TransmitSizeCompleted + Index]);
+            AM3_WRITE_I2C(Controller,
+                          Am3I2cData,
+                          Buffer[Transfer->TransmitSizeCompleted + Index]);
         }
 
         Transfer->TransmitSizeCompleted += Size;
 
-        //
-        // Fire an interrupt when the transmit queue is empty again, as
-        // more things need to be sent.
-        //
-
-        Controller->InterruptMask |= RK32_SPI_INTERRUPT_TX_EMPTY;
-        RK32_WRITE_SPI(Controller,
-                       Rk32SpiInterruptMask,
-                       Controller->InterruptMask);
-    }
-
     //
-    // Receive some data if needed.
+    // Receive some data.
     //
 
-    if ((Direction == SpbTransferDirectionIn) ||
-        (Direction == SpbTransferDirectionBoth)) {
+    } else {
 
-        Size = RK32_READ_SPI(Controller, Rk32SpiRxFifoLevel);
-        while (Size != 0) {
-            if (Size > RK32_SPI_FIFO_DEPTH) {
-                Size = RK32_SPI_FIFO_DEPTH;
-            }
+        ASSERT(Direction == SpbTransferDirectionIn);
 
-            if (Size > Transfer->Size - Transfer->ReceiveSizeCompleted) {
-                Size = Transfer->Size - Transfer->ReceiveSizeCompleted;
-            }
+        BufferStatus = AM3_READ_I2C(Controller, Am3I2cBufferStatus);
+        Size = (BufferStatus & AM335_I2C_BUFFER_STATUS_RX_MASK) >>
+               AM335_I2C_BUFFER_STATUS_RX_SHIFT;
 
-            for (Index = 0; Index < Size; Index += 1) {
-                Buffer[Index] = RK32_READ_SPI(Controller, Rk32SpiRxFifoData);
-            }
+        ASSERT(Size < AM335_I2C_MAX_FIFO_DEPTH);
 
-            Offset = Transfer->Offset + Transfer->ReceiveSizeCompleted;
-            Status = MmCopyIoBufferData(Transfer->IoBuffer,
-                                        Buffer,
-                                        Offset,
-                                        Size,
-                                        TRUE);
-
-            if (!KSUCCESS(Status)) {
-                TransferDone = TRUE;
-                goto TransferDataEnd;
-            }
-
-            Transfer->ReceiveSizeCompleted += Size;
-            if (Transfer->ReceiveSizeCompleted >= Transfer->Size) {
-                TransferDone = TRUE;
-                goto TransferDataEnd;
-            }
-
-            Size = RK32_READ_SPI(Controller, Rk32SpiRxFifoLevel);
+        if (Size > Transfer->Size - Transfer->ReceiveSizeCompleted) {
+            Size = Transfer->Size - Transfer->ReceiveSizeCompleted;
         }
+
+        for (Index = 0; Index < Size; Index += 1) {
+            Buffer[Index] = AM3_READ_I2C(Controller, Am3I2cData);
+        }
+
+        Offset = Transfer->Offset + Transfer->ReceiveSizeCompleted;
+        Status = MmCopyIoBufferData(Transfer->IoBuffer,
+                                    Buffer,
+                                    Offset,
+                                    Size,
+                                    TRUE);
+
+        if (!KSUCCESS(Status)) {
+            TransferDone = TRUE;
+            goto TransferDataEnd;
+        }
+
+        Transfer->ReceiveSizeCompleted += Size;
+        if (Transfer->ReceiveSizeCompleted >= Transfer->Size) {
+
+            //
+            // If all the data has been transferred and the access ready
+            // interrupt occurred, then the transfer is complete.
+            //
+
+            if ((InterruptStatus & AM335_I2C_INTERRUPT_ACCESS_READY) != 0) {
+                TransferDone = TRUE;
+            }
+
+            goto TransferDataEnd;
+        }
+
+        //
+        // There are more bytes to receive, so clear and enable the RX ready
+        // and RX drain interrupts.
+        //
+
+        Mask = AM335_I2C_INTERRUPT_RX_READY |
+               AM335_I2C_INTERRUPT_RX_DRAIN;
+
+        AM3_WRITE_I2C(Controller, Am3I2cInterruptStatus, Mask);
+        AM3_WRITE_I2C(Controller, Am3I2cInterruptEnableSet, Mask);
     }
 
 TransferDataEnd:
     if (TransferDone != FALSE) {
-
-        //
-        // Disable the TX-empty interrupt, otherwise it would just keep firing.
-        //
-
-        Controller->InterruptMask &= ~RK32_SPI_INTERRUPT_TX_EMPTY;
-        RK32_WRITE_SPI(Controller,
-                       Rk32SpiInterruptMask,
-                       Controller->InterruptMask);
-
         Controller->Transfer = NULL;
     }
 
@@ -1571,8 +1638,8 @@ TransferDataEnd:
 }
 
 VOID
-Rk32SpiEnableController (
-    PRK32_SPI_CONTROLLER Controller,
+Am3I2cEnableController (
+    PAM3_I2C_CONTROLLER Controller,
     BOOL Enable
     )
 
@@ -1580,14 +1647,14 @@ Rk32SpiEnableController (
 
 Routine Description:
 
-    This routine makes sure that the SPI controller is enabled and active.
+    This routine makes sure that the I2C controller is enabled and active.
 
 Arguments:
 
-    Controller - Supplies a pointer to the controller to initialize.
+    Controller - Supplies a pointer to the controller.
 
     Enable - Supplies a boolean indicating whether to enable (TRUE) or disable
-        (FALSE) SPI bus access.
+        (FALSE) I2C bus access.
 
 Return Value:
 
@@ -1597,15 +1664,66 @@ Return Value:
 
 {
 
-    RK32_WRITE_SPI(Controller, Rk32SpiEnable, Enable);
-    if (Enable != FALSE) {
-        Controller->InterruptMask = RK32_SPI_INTERRUPT_DEFAULT_MASK;
+    ULONG Value;
 
-    } else {
-        Controller->InterruptMask = 0;
+    Value = AM3_READ_I2C(Controller, Am3I2cControl);
+    Value &= ~AM335_I2C_CONTROL_ENABLE;
+    if (Enable != FALSE) {
+        Value |= AM335_I2C_CONTROL_ENABLE;
     }
 
-    RK32_WRITE_SPI(Controller, Rk32SpiInterruptMask, Controller->InterruptMask);
+    AM3_WRITE_I2C(Controller, Am3I2cControl, Value);
+    if (Enable == FALSE) {
+        AM3_WRITE_I2C(Controller, Am3I2cInterruptEnableClear, 0xFFFFFFFF);
+        AM3_WRITE_I2C(Controller, Am3I2cInterruptStatus, 0xFFFFFFFF);
+    }
+
+    return;
+}
+
+VOID
+Am3I2cSendStop (
+    PAM3_I2C_CONTROLLER Controller
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends a stop condition out on the I2C bus.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Control;
+    ULONG RawStatus;
+
+    Control = AM3_READ_I2C(Controller, Am3I2cControl);
+
+    //
+    // The master sends the stop. If this is slave, do nothing.
+    //
+
+    if ((Control & AM335_I2C_CONTROL_MASTER) == 0) {
+        return;
+    }
+
+    Control |= AM335_I2C_CONTROL_STOP;
+    AM3_WRITE_I2C(Controller, Am3I2cControl, Control);
+    do {
+        RawStatus = AM3_READ_I2C(Controller, Am3I2cInterruptStatusRaw);
+
+    } while ((RawStatus & AM335_I2C_INTERRUPT_BUS_FREE) == 0);
+
     return;
 }
 

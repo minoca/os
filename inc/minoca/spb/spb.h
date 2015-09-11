@@ -33,6 +33,32 @@ Author:
     {{0xC56A4C6F, 0xA81547D7, 0xA8DE4E74, 0x0853B3D5}}
 
 //
+// Define flags that go on an individual SPB transfer.
+//
+
+//
+// This flag is set automatically by the SPB library on the first transfer of
+// a transfer set.
+//
+
+#define SPB_TRANSFER_FLAG_FIRST 0x00000001
+
+//
+// This flag is set automatically by the SPB library on the last transfer of
+// a transfer set.
+//
+
+#define SPB_TRANSFER_FLAG_LAST 0x00000002
+
+//
+// Define the set of SPB transfer flags that are set automatically by the SPB
+// library.
+//
+
+#define SPB_TRANSFER_FLAG_AUTO_MASK \
+    (SPB_TRANSFER_FLAG_FIRST | SPB_TRANSFER_FLAG_LAST)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -140,6 +166,9 @@ Members:
 
     IoBuffer - Stores a pointer to the I/O buffer.
 
+    Offset - Stores the offset within the I/O buffer for this data transfer
+        portion.
+
     Size - Stores the size of the transfer in bytes. It is an error if this
         size does not translate evenly to bus sized words (where each word is
         rounded up to its next power of 2).
@@ -163,6 +192,7 @@ typedef struct _SPB_TRANSFER {
     LIST_ENTRY ListEntry;
     SPB_TRANSFER_DIRECTION Direction;
     PIO_BUFFER IoBuffer;
+    UINTN Offset;
     UINTN Size;
     UINTN ReceiveSizeCompleted;
     UINTN TransmitSizeCompleted;

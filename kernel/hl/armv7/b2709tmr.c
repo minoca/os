@@ -24,7 +24,16 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+//
+// Avoid including kernel.h as this module may be isolated out into a dynamic
+// library and will be restricted to a very limited API (as presented through
+// the kernel sevices table).
+//
+
+#include <minoca/types.h>
+#include <minoca/status.h>
+#include <minoca/acpitabs.h>
+#include <minoca/hmod.h>
 #include "bcm2709.h"
 
 //
@@ -345,7 +354,7 @@ Return Value:
     Timer.Context = Context;
     Timer.Features = TIMER_FEATURE_READABLE |
                      TIMER_FEATURE_PERIODIC |
-                     TIMER_FEATURE_SPEED_VARIES;
+                     TIMER_FEATURE_P_STATE_VARIANT;
 
     Timer.CounterBitWidth = 32;
     Timer.CounterFrequency = Frequency;
@@ -377,7 +386,7 @@ Return Value:
     Context->Data = Predivider;
     Timer.Context = Context;
     Timer.CounterBitWidth = 32;
-    Timer.Features = TIMER_FEATURE_READABLE | TIMER_FEATURE_SPEED_VARIES;
+    Timer.Features = TIMER_FEATURE_READABLE | TIMER_FEATURE_P_STATE_VARIANT;
     Timer.CounterFrequency = Frequency;
     Timer.Interrupt.Line.Type = InterruptLineInvalid;
     Status = HlBcm2709KernelServices->Register(HardwareModuleTimer, &Timer);
@@ -592,10 +601,8 @@ Return Value:
         break;
 
     default:
-
-        ASSERT(FALSE);
-
-        break;
+        Status = STATUS_INVALID_PARAMETER;
+        goto Bcm2709TimerInitializeEnd;
     }
 
     Status = STATUS_SUCCESS;
@@ -661,9 +668,6 @@ Return Value:
         break;
 
     default:
-
-        ASSERT(FALSE);
-
         Value = 0;
         break;
     }
@@ -775,10 +779,7 @@ Return Value:
         break;
 
     default:
-
-        ASSERT(FALSE);
-
-        break;
+        return STATUS_INVALID_PARAMETER;
     }
 
     return STATUS_SUCCESS;
@@ -850,9 +851,6 @@ Return Value:
         break;
 
     default:
-
-        ASSERT(FALSE);
-
         break;
     }
 
@@ -932,9 +930,6 @@ Return Value:
         break;
 
     default:
-
-        ASSERT(FALSE);
-
         break;
     }
 

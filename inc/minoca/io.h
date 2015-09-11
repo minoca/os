@@ -2452,9 +2452,9 @@ Structure Description:
 
 Members:
 
-    PathEntry - Supplies a pointer to a path entry.
+    PathEntry - Stores a pointer to a path entry.
 
-    MountPoint - Supplies a pointer to the mount point that governs the path
+    MountPoint - Stores a pointer to the mount point that governs the path
         entry.
 
 --*/

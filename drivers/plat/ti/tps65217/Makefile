@@ -4,15 +4,16 @@
 #
 #   Module Name:
 #
-#       Simple Peripheral Bus
+#       TPS65217
 #
 #   Abstract:
 #
-#       This directory contains drivers related to Simple Peripheral Busses.
+#       This module is the driver for the TPS65217 Power Management IC used in
+#       platforms like the BeagleBone Black.
 #
 #   Author:
 #
-#       Evan Green 14-Aug-2015
+#       Evan Green 8-Sep-2015
 #
 #   Environment:
 #
@@ -20,11 +21,15 @@
 #
 ################################################################################
 
-DIRS = core      \
-       i2c       \
-       spi       \
+BINARY = tps65217.drv
+
+BINARYTYPE = so
+
+BINPLACE = bin
+
+OBJS = tps65217.o   \
+
+DYNLIBS = $(BINROOT)/kernel              \
 
 include $(SRCROOT)/os/minoca.mk
-
-spi i2c: core
 

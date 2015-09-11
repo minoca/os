@@ -25,7 +25,16 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+//
+// Avoid including kernel.h as this module may be isolated out into a dynamic
+// library and will be restricted to a very limited API (as presented through
+// the kernel sevices table).
+//
+
+#include <minoca/types.h>
+#include <minoca/status.h>
+#include <minoca/acpitabs.h>
+#include <minoca/hmod.h>
 #include "omap4.h"
 #include "pl310.h"
 
@@ -275,9 +284,6 @@ Return Value:
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto Pl310CacheInitializeEnd;
         }
-
-        ASSERT(IS_ALIGNED((UINTN)HlOmap4Pl310RegistersBase,
-                          PL310_REGISTER_BASE_ALIGNMENT));
     }
 
     //
@@ -306,8 +312,6 @@ Return Value:
     Value = READ_CACHE_REGISTER(Pl310CacheId);
     Value = (Value & PL310_CACHE_ID_RTL_RELEASE_MASK) >>
             PL310_CACHE_ID_RTL_RELEASE_SHIFT;
-
-    ASSERT(Value == (UCHAR)Value);
 
     Pl310CacheData->CacheRelease = (UCHAR)Value;
 
@@ -464,9 +468,6 @@ Return Value:
             WayMask = PL310_CACHE_MAINTENANCE_INVALIDATE_WAY_8;
 
         } else {
-
-            ASSERT(Pl310CacheData->WayCount == 16);
-
             WayMask = PL310_CACHE_MAINTENANCE_INVALIDATE_WAY_16;
         }
 
@@ -477,11 +478,6 @@ Return Value:
                 break;
             }
         }
-
-    } else {
-
-        ASSERT(FALSE);
-
     }
 
     //
@@ -534,7 +530,15 @@ Return Value:
     PL310_REGISTER SyncRegister;
     ULONG Value;
 
-    ASSERT(IS_ALIGNED(Address, PL310_DATA_CACHE_LINE_SIZE) != FALSE);
+    //
+    // It will probably be more noticable to refuse to flush an unaligned
+    // address than to quietly flush it and potentially corrupt the tip of some
+    // other buffer.
+    //
+
+    if (IS_ALIGNED(Address, PL310_DATA_CACHE_LINE_SIZE) == FALSE) {
+        return;
+    }
 
     Pl310CacheData = (PPL310_CACHE_DATA)Context;
     if (((Flags & HL_CACHE_FLAG_CLEAN) != 0) &&
@@ -549,9 +553,6 @@ Return Value:
         Register = Pl310InvalidatePhysical;
 
     } else {
-
-        ASSERT(FALSE);
-
         return;
     }
 
@@ -634,8 +635,6 @@ Return Value:
         Properties->InstructionCacheLineSize =
                                              PL310_INSTRUCTION_CACHE_LINE_SIZE;
 
-        ASSERT(Properties->Version <= CACHE_CONTROLLER_PROPERTIES_VERSION);
-
         Status = STATUS_SUCCESS;
         break;
 
@@ -646,9 +645,6 @@ Return Value:
     //
 
     default:
-
-        ASSERT(Properties->Version > CACHE_CONTROLLER_PROPERTIES_VERSION);
-
         Status = STATUS_VERSION_MISMATCH;
         break;
     }
@@ -690,9 +686,6 @@ Return Value:
     ULONG SetIndex;
     ULONG Value;
     UCHAR WayIndex;
-
-    ASSERT((Register == Pl310CleanInvalidateIndex) ||
-           (Register == Pl310CleanIndex));
 
     SetCount = CacheData->WaySize / PL310_DATA_CACHE_LINE_SIZE;
     for (WayIndex = 0; WayIndex < CacheData->WayCount; WayIndex += 1) {

@@ -69,7 +69,13 @@ pl050.drv
 ramdisk.drv
 smsc91c1.drv
 smsc95xx.drv
-sdbm2709.drv"
+sdbm2709.drv
+rk32gpio.drv
+rk32spi.drv
+sdrk32xx.drv
+am3i2c.drv
+tps65217.drv
+am3soc.drv"
 
     BOOT_DRIVERS="$BOOT_DRIVERS
 dwhci.drv
@@ -78,7 +84,10 @@ usbcomp.drv
 usbhub.drv
 usbmass.drv
 sd.drv
-sdbm2709.drv"
+sdbm2709.drv
+sdrk32xx.drv
+sdomap4.drv
+am3soc.drv"
 
 fi
 

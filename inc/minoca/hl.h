@@ -57,9 +57,6 @@ Author:
 #define MICROSECONDS_PER_MILLISECOND 1000ULL
 #define NANOSECONDS_PER_MICROSECOND 1000ULL
 
-#define HL_CACHE_FLAG_CLEAN 0x00000001
-#define HL_CACHE_FLAG_INVALIDATE 0x00000002
-
 //
 // Define the default system clock rate at system boot, in 100ns units.
 //
@@ -236,6 +233,32 @@ typedef struct _HL_EFI_VARIABLE_INFORMATION {
     ULONG Attributes;
     UINTN DataSize;
 } HL_EFI_VARIABLE_INFORMATION, *PHL_EFI_VARIABLE_INFORMATION;
+
+/*++
+
+Structure Description:
+
+    This structure defines information about the processor counter.
+
+Members:
+
+    Frequency - Stores the frequency of the processor counter in Hertz. This
+        is usually the maximum sustainable frequency, which is also the
+        frequency at which the system was booted.
+
+    Multiplier - Stores the multiplier to translate between this timer's speed
+        and the actual processor execution speed.
+
+    Features - Stores a bitfield of timer features. See TIMER_FEATURE_*
+        definitions.
+
+--*/
+
+typedef struct _HL_PROCESSOR_COUNTER_INFORMATION {
+    ULONGLONG Frequency;
+    ULONG Multiplier;
+    ULONG Features;
+} HL_PROCESSOR_COUNTER_INFORMATION, *PHL_PROCESSOR_COUNTER_INFORMATION;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -1019,6 +1042,32 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+KSTATUS
+HlGetProcessorCounterInformation (
+    PHL_PROCESSOR_COUNTER_INFORMATION Information
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns information about the cycle counter built into the
+    processor.
+
+Arguments:
+
+    Information - Supplies a pointer where the processor counter information
+        will be returned on success.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NOT_SUPPORTED if the processor does not have a processor cycle
+    counter.
 
 --*/
 

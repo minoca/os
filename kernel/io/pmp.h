@@ -26,6 +26,8 @@ Author:
 //
 
 #define PM_ALLOCATION_TAG 0x21727750
+#define PM_DEVICE_ALLOCATION_TAG 0x44727750
+#define PM_PSTATE_ALLOCATION_TAG 0x50727750
 
 //
 // Define idle history flags.
@@ -322,6 +324,55 @@ Arguments:
 Return Value:
 
     Returns the average idle duration.
+
+--*/
+
+KSTATUS
+PmpGetSetPerformanceStateHandlers (
+    BOOL FromKernelMode,
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the performance state handlers. In this case
+    the data pointer is used directly (so the interface structure must not
+    disappear after the call). This can only be set, can only be set once, and
+    can only be set from kernel mode for obvious reasons.
+
+Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether or not this request
+        (and the buffer associated with it) originates from user mode (FALSE)
+        or kernel mode (TRUE).
+
+    Data - Supplies a pointer to the data buffer where the data is either
+        returned for a get operation or given for a set operation.
+
+    DataSize - Supplies a pointer that on input contains the size of the
+        data buffer. On output, contains the required size of the data buffer.
+
+    Set - Supplies a boolean indicating if this is a get operation (FALSE) or
+        a set operation (TRUE).
+
+Return Value:
+
+    STATUS_SUCCESS if the performance state information was initialized.
+
+    STATUS_NOT_SUPPORTED for a get operation.
+
+    STATUS_PERMISSION_DENIED if this is a user mode request.
+
+    STATUS_DATA_LENGTH_MISMATCH if the data size is not the size of the
+    PM_PERFORMANCE_STATE_INTERFACE structure.
+
+    STATUS_TOO_LATE if performance state handlers have already been registered.
+
+    Other errors if the performance state runtime could not be initialized.
 
 --*/
 

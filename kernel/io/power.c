@@ -599,7 +599,7 @@ Return Value:
     PDEVICE_POWER State;
     KSTATUS Status;
 
-    State = MmAllocatePagedPool(sizeof(DEVICE_POWER), PM_ALLOCATION_TAG);
+    State = MmAllocatePagedPool(sizeof(DEVICE_POWER), PM_DEVICE_ALLOCATION_TAG);
     if (State == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
     }
@@ -612,18 +612,18 @@ Return Value:
                        PM_INITIAL_IDLE_DELAY_SECONDS;
 
     State->ActiveEvent = KeCreateEvent(NULL);
-    State->IdleTimer = KeCreateTimer(PM_ALLOCATION_TAG);
+    State->IdleTimer = KeCreateTimer(PM_DEVICE_ALLOCATION_TAG);
 
     //
-    // This work item should go on the same work queue as the pnp thread to
-    // avoid an extra context switch.
+    // This work item should go on the same work queue as the device worker
+    // thread to avoid an extra context switch.
     //
 
-    State->IdleTimerWorkItem = KeCreateWorkItem(NULL,
+    State->IdleTimerWorkItem = KeCreateWorkItem(IoDeviceWorkQueue,
                                                 WorkPriorityNormal,
                                                 PmpDeviceIdleWorker,
                                                 Device,
-                                                PM_ALLOCATION_TAG);
+                                                PM_DEVICE_ALLOCATION_TAG);
 
     State->IdleTimerDpc = KeCreateDpc(PmpDeviceIdleTimerDpc,
                                       State->IdleTimerWorkItem);

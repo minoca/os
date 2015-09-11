@@ -470,6 +470,13 @@ Return Value:
         NextTransfer = LIST_VALUE(Transfer->ListEntry.Next,
                                   SPB_TRANSFER,
                                   ListEntry);
+
+        NextTransfer->Flags &= ~SPB_TRANSFER_FLAG_AUTO_MASK;
+        if (NextTransfer->ListEntry.Next ==
+            &(Controller->CurrentSet->TransferList)) {
+
+            NextTransfer->Flags |= SPB_TRANSFER_FLAG_LAST;
+        }
     }
 
     return NextTransfer;
@@ -1092,6 +1099,8 @@ Return Value:
                               SPB_TRANSFER,
                               ListEntry);
 
+        Transfer->Flags &= ~SPB_TRANSFER_FLAG_AUTO_MASK;
+        Transfer->Flags |= SPB_TRANSFER_FLAG_FIRST;
         Status = Controller->Host.FunctionTable.SubmitTransfer(
                                                       Controller->Host.Context,
                                                       Transfer);

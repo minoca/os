@@ -31,9 +31,13 @@ fi
 
 DRIVERS="$DRIVERS
 sdomap4.drv
-am3eth.drv"
+am3eth.drv
+am3i2c.drv
+tps65217.drv
+am3soc.drv"
 
 BOOT_DRIVERS="$BOOT_DRIVERS
+am3soc.drv
 sdomap4.drv"
 
 . $TASKDIR/images/assemble_common.sh

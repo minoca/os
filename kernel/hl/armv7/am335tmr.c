@@ -24,8 +24,17 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include "am335x.h"
+//
+// Avoid including kernel.h as this module may be isolated out into a dynamic
+// library and will be restricted to a very limited API (as presented through
+// the kernel sevices table).
+//
+
+#include <minoca/types.h>
+#include <minoca/status.h>
+#include <minoca/acpitabs.h>
+#include <minoca/hmod.h>
+#include <minoca/dev/am335x.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -182,7 +191,7 @@ Return Value:
         // Skip the timer if it has no address.
         //
 
-        if (HlAm335Table->TimerBase[TimerIndex] == INVALID_PHYSICAL_ADDRESS) {
+        if (HlAm335Table->TimerBase[TimerIndex] == 0) {
             continue;
         }
 

@@ -52,6 +52,12 @@ if test -d "./bin/packages"; then
 fi
 
 ##
+## Remove unimportant stuff from the archive.
+##
+
+rm -rf ./bin/dep
+
+##
 ## Archive the bin folder.
 ##
 

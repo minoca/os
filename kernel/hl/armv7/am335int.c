@@ -25,8 +25,17 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include "am335x.h"
+//
+// Avoid including kernel.h as this module may be isolated out into a dynamic
+// library and will be restricted to a very limited API (as presented through
+// the kernel sevices table).
+//
+
+#include <minoca/types.h>
+#include <minoca/status.h>
+#include <minoca/acpitabs.h>
+#include <minoca/hmod.h>
+#include <minoca/dev/am335x.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -194,7 +203,7 @@ Return Value:
     Services->ZeroMemory(&NewController,
                          sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
 
-    if (HlAm335Table->InterruptControllerBase != INVALID_PHYSICAL_ADDRESS) {
+    if (HlAm335Table->InterruptControllerBase != 0) {
 
         //
         // Initialize the new controller structure.

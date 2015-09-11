@@ -1,18 +1,18 @@
 ################################################################################
 #
-#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#   Copyright (c) 2015 Minoca Corp. All Rights Reserved
 #
 #   Module Name:
 #
-#       Platform
+#       AM335x SoC
 #
 #   Abstract:
 #
-#       This directory platform support drivers.
+#       This module implements the TI AM335x SoC support driver.
 #
 #   Author:
 #
-#       Evan Green 4-Dec-2014
+#       Evan Green 9-Sep-2015
 #
 #   Environment:
 #
@@ -20,9 +20,15 @@
 #
 ################################################################################
 
-DIRS = goec      \
-       quark     \
-       ti        \
+BINARY = am3soc.drv
+
+BINARYTYPE = so
+
+BINPLACE = bin
+
+OBJS = am3soc.o   \
+
+DYNLIBS = $(BINROOT)/kernel              \
 
 include $(SRCROOT)/os/minoca.mk
 

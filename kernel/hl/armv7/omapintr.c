@@ -25,7 +25,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/types.h>
+#include <minoca/status.h>
+#include <minoca/acpitabs.h>
+#include <minoca/hmod.h>
 #include "omap3.h"
 
 //
@@ -231,8 +234,7 @@ Return Value:
     Services->ZeroMemory(&NewController,
                          sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
 
-    if (HlOmap3Table->InterruptControllerPhysicalAddress !=
-                                                    INVALID_PHYSICAL_ADDRESS) {
+    if (HlOmap3Table->InterruptControllerPhysicalAddress != 0) {
 
         //
         // Initialize the new controller structure.

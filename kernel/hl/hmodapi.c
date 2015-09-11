@@ -117,7 +117,6 @@ HARDWARE_MODULE_KERNEL_SERVICES HlHardwareModuleServices = {
     HlpModUnmapAddress,
     HlpModRegisterHardware,
     HlpModReportPhysicalAddressUsage,
-    NULL,
     HlpModInitializeLock,
     HlpModAcquireLock,
     HlpModReleaseLock,
@@ -243,8 +242,6 @@ Return Value:
             HlModPoolDevicePhysical = PoolDevice->Header.PhysicalAddress;
             HlModPoolDeviceSize = PoolDevice->Header.Size;
         }
-
-        HlpModArchInitialize(0);
     }
 
     if (Parameters != NULL) {

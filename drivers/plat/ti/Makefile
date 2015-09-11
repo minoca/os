@@ -1,18 +1,19 @@
 ################################################################################
 #
-#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#   Copyright (c) 2015 Minoca Corp. All Rights Reserved
 #
 #   Module Name:
 #
-#       Platform
+#       Texas Instruments
 #
 #   Abstract:
 #
-#       This directory platform support drivers.
+#       This directory contains platform and SoC support drivers for Texas
+#       Instruments devices.
 #
 #   Author:
 #
-#       Evan Green 4-Dec-2014
+#       Evan Green 9-Sep-2015
 #
 #   Environment:
 #
@@ -20,9 +21,8 @@
 #
 ################################################################################
 
-DIRS = goec      \
-       quark     \
-       ti        \
+DIRS = am3soc    \
+       tps65217  \
 
 include $(SRCROOT)/os/minoca.mk
 

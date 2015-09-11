@@ -189,6 +189,7 @@ typedef enum _SYSTEM_INFORMATION_SUBSYSTEM {
     SystemInformationPs,
     SystemInformationHl,
     SystemInformationSp,
+    SystemInformationPm
 } SYSTEM_INFORMATION_SUBSYSTEM, *PSYSTEM_INFORMATION_SUBSYSTEM;
 
 typedef enum _KE_INFORMATION_TYPE {
@@ -484,6 +485,32 @@ typedef struct _CLOCK_TIMER_DATA {
 
 Structure Description:
 
+    This structure contains the processor identification information.
+
+Members:
+
+    Vendor - Stores the CPU vendor. For x86, this contains the EBX portion of
+        CPUID, function 1. For ARM, this contains the implementor code.
+
+    Family - Stores the CPU family ID.
+
+    Model - Stores the CPU model ID.
+
+    Stepping - Stores the CPU stepping ID.
+
+--*/
+
+typedef struct _PROCESSOR_IDENTIFICATION {
+    ULONG Vendor;
+    USHORT Family;
+    USHORT Model;
+    USHORT Stepping;
+} PROCESSOR_IDENTIFICATION, *PPROCESSOR_IDENTIFICATION;
+
+/*++
+
+Structure Description:
+
     This structure stores the current running state of a processor.
 
 Members:
@@ -580,6 +607,8 @@ Members:
 
     NmiCount - Stores a count of nested NMIs this processor has taken.
 
+    CpuVersion - Stores the processor identification information for this CPU.
+
 --*/
 
 typedef struct _PROCESSOR_BLOCK PROCESSOR_BLOCK, *PPROCESSOR_BLOCK;
@@ -616,6 +645,7 @@ struct _PROCESSOR_BLOCK {
     volatile ULONGLONG IdleCycles;
     PVOID SwapPage;
     UINTN NmiCount;
+    PROCESSOR_IDENTIFICATION CpuVersion;
 };
 
 /*++

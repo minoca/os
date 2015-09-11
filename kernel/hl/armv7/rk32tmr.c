@@ -24,7 +24,16 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+//
+// Avoid including kernel.h as this module may be isolated out into a dynamic
+// library and will be restricted to a very limited API (as presented through
+// the kernel sevices table).
+//
+
+#include <minoca/types.h>
+#include <minoca/status.h>
+#include <minoca/acpitabs.h>
+#include <minoca/hmod.h>
 #include "rk32xx.h"
 
 //
@@ -177,7 +186,7 @@ Return Value:
         // Skip the timer if it has no address or is not enabled.
         //
 
-        if ((HlRk32Table->TimerBase[TimerIndex] == INVALID_PHYSICAL_ADDRESS) ||
+        if ((HlRk32Table->TimerBase[TimerIndex] == 0) ||
             (((1 << TimerIndex) & HlRk32Table->TimerEnabledMask) == 0)) {
 
             continue;

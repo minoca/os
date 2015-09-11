@@ -49,8 +49,7 @@ Environment:
 //
 
 VOID
-KeDispatchException (
-    ULONG Vector,
+KeDispatchInterrupt (
     PTRAP_FRAME TrapFrame
     )
 
@@ -80,7 +79,13 @@ Return Value:
     ASSERT(ArAreInterruptsEnabled() == FALSE);
 
     PreviousPeriod = KeBeginCycleAccounting(CycleAccountInterrupt);
-    HlDispatchInterrupt(Vector, TrapFrame);
+
+    //
+    // The vector byte was sign extended, so cast back down to get rid of the
+    // high bytes.
+    //
+
+    HlDispatchInterrupt((UCHAR)(TrapFrame->ErrorCode), TrapFrame);
     KeBeginCycleAccounting(PreviousPeriod);
     return;
 }

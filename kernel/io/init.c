@@ -62,6 +62,11 @@ typedef struct _IO_INIT_PHYSICAL_MAP_ITERATOR {
 //
 
 KSTATUS
+IopInitializeDeviceSupport (
+    VOID
+    );
+
+KSTATUS
 IopInitializeResourceAllocation (
     PKERNEL_INITIALIZATION_BLOCK Parameters
     );
@@ -328,24 +333,8 @@ Return Value:
         goto InitializeEnd;
     }
 
-    //
-    // Create and initialize the root device.
-    //
-
-    Status = IoCreateDevice(NULL,
-                            NULL,
-                            NULL,
-                            "Device",
-                            NULL,
-                            NULL,
-                            &IoRootDevice);
-
+    Status = IopInitializeDeviceSupport();
     if (!KSUCCESS(Status)) {
-        goto InitializeEnd;
-    }
-
-    if (IoRootDevice == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeEnd;
     }
 
@@ -385,6 +374,59 @@ InitializeEnd:
 //
 
 KSTATUS
+IopInitializeDeviceSupport (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for devices.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    IoDeviceWorkQueue = KeCreateWorkQueue(0, "IoDeviceWorker");
+    if (IoDeviceWorkQueue == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceSupportEnd;
+    }
+
+    //
+    // Create and initialize the root device.
+    //
+
+    Status = IoCreateDevice(NULL,
+                            NULL,
+                            NULL,
+                            "Device",
+                            NULL,
+                            NULL,
+                            &IoRootDevice);
+
+    if (!KSUCCESS(Status)) {
+        goto InitializeDeviceSupportEnd;
+    }
+
+    ASSERT(IoRootDevice != NULL);
+
+InitializeDeviceSupportEnd:
+    return Status;
+}
+
+KSTATUS
 IopInitializeResourceAllocation (
     PKERNEL_INITIALIZATION_BLOCK Parameters
     )
@@ -409,16 +451,6 @@ Return Value:
 
     IO_INIT_PHYSICAL_MAP_ITERATOR Context;
     KSTATUS Status;
-
-    //
-    // Create the resource allocation work queue.
-    //
-
-    IoResourceAllocationWorkQueue = KeCreateWorkQueue(0, "IopResourceWorker");
-    if (IoResourceAllocationWorkQueue == NULL) {
-        Status = STATUS_UNSUCCESSFUL;
-        goto InitializeResourceAllocationEnd;
-    }
 
     //
     // Create the physical address arbiter.

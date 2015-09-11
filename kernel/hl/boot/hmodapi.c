@@ -132,7 +132,6 @@ HARDWARE_MODULE_KERNEL_SERVICES HlHardwareModuleServices = {
     BopHlUnmapAddress,
     BopHlRegisterHardware,
     BopHlReportPhysicalAddressUsage,
-    NULL,
     BopHlInitializeLock,
     BopHlAcquireLock,
     BopHlReleaseLock,

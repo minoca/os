@@ -83,6 +83,46 @@ PHARDWARE_MODULE_ENTRY HlBuiltinTimerModules[] = {
 // ------------------------------------------------------------------ Functions
 //
 
+KSTATUS
+HlGetProcessorCounterInformation (
+    PHL_PROCESSOR_COUNTER_INFORMATION Information
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns information about the cycle counter built into the
+    processor.
+
+Arguments:
+
+    Information - Supplies a pointer where the processor counter information
+        will be returned on success.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NOT_SUPPORTED if the processor does not have a processor cycle
+    counter.
+
+--*/
+
+{
+
+    Information->Frequency = HlProcessorCounter->CounterFrequency;
+
+    //
+    // The ARM cycle counter is configured to divide actual cycles by 64, since
+    // it's only a 32 bit value and can roll over quickly.
+    //
+
+    Information->Multiplier = 64;
+    Information->Features = HlProcessorCounter->Features;
+    return STATUS_SUCCESS;
+}
+
 VOID
 HlpArchInitializeTimersPreDebugger (
     VOID

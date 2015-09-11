@@ -2798,7 +2798,11 @@ Return Value:
 
         Packet->Header.Checksum = HeaderChecksum;
         if (HeaderChecksum != CalculatedChecksum) {
-            DbgOut("Error: Checksum mismatch on received packet!\n");
+            DbgOut("Error: Checksum mismatch on received packet!\n"
+                   "Calculated %x Header %x\n",
+                   CalculatedChecksum,
+                   HeaderChecksum);
+
             goto KdReceivePacketHeaderRetry;
         }
 
