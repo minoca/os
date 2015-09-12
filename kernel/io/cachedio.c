@@ -1943,7 +1943,7 @@ Return Value:
         Parameters.DeviceContext = FileObject->DeviceContext;
     }
 
-    Parameters.Flags = IoContext->Flags;
+    Parameters.IoFlags = IoContext->Flags;
     Parameters.TimeoutInMilliseconds = IoContext->TimeoutInMilliseconds;
     Parameters.FileProperties = &(FileObject->Properties);
     Parameters.IoOffset = BlockAlignedOffset;
@@ -2135,7 +2135,7 @@ Return Value:
             Parameters.DeviceContext = FileObject->DeviceContext;
         }
 
-        Parameters.Flags = IoContext->Flags;
+        Parameters.IoFlags = IoContext->Flags;
         Parameters.TimeoutInMilliseconds = IoContext->TimeoutInMilliseconds;
         Parameters.FileProperties = &(FileObject->Properties);
         Parameters.IoOffset = AlignedOffset;
@@ -2306,7 +2306,7 @@ Return Value:
         Parameters.DeviceContext = FileObject->DeviceContext;
     }
 
-    Parameters.Flags = IoContext->Flags;
+    Parameters.IoFlags = IoContext->Flags;
     Parameters.TimeoutInMilliseconds = IoContext->TimeoutInMilliseconds;
     Parameters.FileProperties = &(FileObject->Properties);
     Parameters.IoOffset = AlignedOffset;

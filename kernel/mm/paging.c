@@ -2035,7 +2035,7 @@ Return Value:
 
     PageFile->PagingOutIrp = IoCreateIrp(Device,
                                          IrpMajorIo,
-                                         IRP_FLAG_NO_ALLOCATE);
+                                         IRP_CREATE_FLAG_NO_ALLOCATE);
 
     if (PageFile->PagingOutIrp == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -4639,7 +4639,7 @@ Return Value:
     //
 
     if ((OwningSection->Flags & IMAGE_SECTION_EXECUTABLE) != 0) {
-        MmFlushDataCache(SwapSpace, PageSize, TRUE);
+        MmFlushDataCache(SwapSpace, PageSize, FALSE);
     }
 
 ReadPageFileEnd:
@@ -4885,7 +4885,7 @@ Return Value:
 
         Context->Irp = IoCreateIrp(Context->IrpDevice,
                                    IrpMajorIo,
-                                   IRP_FLAG_NO_ALLOCATE);
+                                   IRP_CREATE_FLAG_NO_ALLOCATE);
 
         if (Context->Irp == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

@@ -238,6 +238,12 @@ MmpInitializePhysicalAllocatorIterationRoutine (
     PVOID Context
     );
 
+BOOL
+MmpUpdatePhysicalMemoryStatistics (
+    ULONGLONG PageCount,
+    BOOL Allocation
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -505,7 +511,7 @@ Return Value:
     PPAGING_ENTRY PagingEntry;
     LIST_ENTRY PagingEntryList;
     PPHYSICAL_PAGE PhysicalPage;
-    BOOL ReleasedPhysicalPage;
+    ULONGLONG ReleasedCount;
     PPHYSICAL_MEMORY_SEGMENT Segment;
     BOOL SignalEvent;
 
@@ -514,7 +520,7 @@ Return Value:
     PageShift = MmPageShift();
     PagingEntry = NULL;
     INITIALIZE_LIST_HEAD(&PagingEntryList);
-    ReleasedPhysicalPage = FALSE;
+    ReleasedCount = 0;
     SignalEvent = FALSE;
     if (MmPhysicalPageLock != NULL) {
         KeAcquireQueuedLock(MmPhysicalPageLock);
@@ -560,7 +566,7 @@ Return Value:
             if ((PhysicalPage->U.Flags & PHYSICAL_PAGE_FLAG_NON_PAGED) != 0) {
                 PhysicalPage->U.Free = PHYSICAL_PAGE_FREE;
                 MmNonPagedPhysicalPages -= 1;
-                ReleasedPhysicalPage = TRUE;
+                ReleasedCount += 1;
 
             //
             // For physical pages that might be paged, check the paging entry
@@ -576,59 +582,29 @@ Return Value:
                 if ((PagingEntry->U.Flags &
                      PAGING_ENTRY_FLAG_PAGING_OUT) == 0) {
 
-                    ASSERT(PagingEntry->U.LockCount == 0);
+                    if (PagingEntry->U.LockCount == 0) {
+                        PhysicalPage->U.Free = PHYSICAL_PAGE_FREE;
+                        ReleasedCount += 1;
+                        INSERT_BEFORE(&(PagingEntry->U.ListEntry),
+                                      &PagingEntryList);
 
-                    PhysicalPage->U.Free = PHYSICAL_PAGE_FREE;
-                    ReleasedPhysicalPage = TRUE;
-                    INSERT_BEFORE(&(PagingEntry->U.ListEntry),
-                                  &PagingEntryList);
-                }
-            }
-
-            //
-            // If the page was set free, then update the appropriate metrics.
-            //
-
-            if (ReleasedPhysicalPage != FALSE) {
-                MmTotalAllocatedPhysicalPages -= 1;
-
-                ASSERT(MmTotalAllocatedPhysicalPages <= MmTotalPhysicalPages);
-
-                Segment->FreePages += 1;
-
-                //
-                // Periodically check to see if memory warnings should be
-                // signaled.
-                //
-
-                MmPhysicalMemoryFreeCount += 1;
-                if ((SignalEvent == FALSE) &&
-                    ((MmPhysicalMemoryFreeCount &
-                      MmPhysicalMemoryWarningCountMask) == 0)) {
-
-                    //
-                    // Check levels from the lowest page count to the highest.
-                    //
-
-                    if ((MmPhysicalMemoryWarningLevel == MemoryWarningLevel2) &&
-                        (MmTotalAllocatedPhysicalPages <
-                         MmPhysicalMemoryWarningLevel2LowPages)) {
-
-                        SignalEvent = TRUE;
-                        MmPhysicalMemoryWarningLevel = MemoryWarningLevelNone;
-
-                    } else if ((MmPhysicalMemoryWarningLevel ==
-                                MemoryWarningLevel1) &&
-                               (MmTotalAllocatedPhysicalPages <
-                                MmPhysicalMemoryWarningLevel1LowPages)) {
-
-                        SignalEvent = TRUE;
-                        MmPhysicalMemoryWarningLevel = MemoryWarningLevel2;
+                    } else {
+                        PagingEntry->U.Flags |= PAGING_ENTRY_FLAG_FREED;
                     }
                 }
             }
 
             PhysicalPage += 1;
+        }
+
+        //
+        // If any pages were set free, then update the appropriate metrics.
+        //
+
+        if (ReleasedCount != 0) {
+            Segment->FreePages += ReleasedCount;
+            SignalEvent = MmpUpdatePhysicalMemoryStatistics(ReleasedCount,
+                                                            FALSE);
         }
 
         goto FreePhysicalPageEnd;
@@ -943,7 +919,7 @@ Return Value:
 
 PHYSICAL_ADDRESS
 MmpAllocatePhysicalPages (
-    ULONG PageCount,
+    ULONGLONG PageCount,
     ULONGLONG Alignment
     )
 
@@ -975,7 +951,7 @@ Return Value:
 
     ULONGLONG FreePageTarget;
     BOOL LockHeld;
-    UINTN PageIndex;
+    ULONGLONG PageIndex;
     ULONG PageShift;
     volatile PPHYSICAL_PAGE PhysicalPage;
     PPHYSICAL_MEMORY_SEGMENT Segment;
@@ -1032,45 +1008,12 @@ Return Value:
 
                 ASSERT(PhysicalPage->U.Free == PHYSICAL_PAGE_FREE);
 
-                Segment->FreePages -= 1;
-                MmTotalAllocatedPhysicalPages += 1;
-                MmNonPagedPhysicalPages += 1;
                 PhysicalPage->U.Flags = PHYSICAL_PAGE_FLAG_NON_PAGED;
                 PhysicalPage += 1;
             }
 
-            ASSERT(MmTotalAllocatedPhysicalPages <= MmTotalPhysicalPages);
-
-            //
-            // Periodically check to see if memory warnings should be signaled.
-            //
-
-            MmPhysicalMemoryAllocationCount += 1;
-            if (((MmPhysicalMemoryAllocationCount &
-                  MmPhysicalMemoryWarningCountMask) == 0) ||
-                (PageCount >= MmPhysicalMemoryWarningCountMask)) {
-
-                //
-                // Check the levels from highest page count to the lowest.
-                //
-
-                if ((MmPhysicalMemoryWarningLevel != MemoryWarningLevel1) &&
-                    (MmTotalAllocatedPhysicalPages >=
-                     MmPhysicalMemoryWarningLevel1HighPages)) {
-
-                    MmPhysicalMemoryWarningLevel = MemoryWarningLevel1;
-                    SignalEvent = TRUE;
-
-                } else if ((MmPhysicalMemoryWarningLevel !=
-                            MemoryWarningLevel2) &&
-                           (MmTotalAllocatedPhysicalPages >=
-                            MmPhysicalMemoryWarningLevel2HighPages)) {
-
-                    MmPhysicalMemoryWarningLevel = MemoryWarningLevel2;
-                    SignalEvent = TRUE;
-                }
-            }
-
+            Segment->FreePages -= PageCount;
+            SignalEvent = MmpUpdatePhysicalMemoryStatistics(PageCount, TRUE);
             goto AllocatePhysicalPagesEnd;
         }
 
@@ -1632,10 +1575,16 @@ Return Value:
     ULONG PageIndex;
     ULONG PageShift;
     PPAGING_ENTRY PagingEntry;
+    LIST_ENTRY PagingEntryList;
     PPHYSICAL_PAGE PhysicalPage;
+    ULONGLONG ReleasedCount;
     PPHYSICAL_MEMORY_SEGMENT Segment;
+    BOOL SignalEvent;
 
     PageShift = MmPageShift();
+    INITIALIZE_LIST_HEAD(&PagingEntryList);
+    ReleasedCount = 0;
+    SignalEvent = FALSE;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
@@ -1680,7 +1629,19 @@ Return Value:
                 PagingEntry->U.LockCount -= 1;
                 if (PagingEntry->U.LockCount == 0) {
                     MmNonPagedPhysicalPages -= 1;
+                    if ((PagingEntry->U.Flags & PAGING_ENTRY_FLAG_FREED) != 0) {
+                        PhysicalPage[PageIndex].U.Free = PHYSICAL_PAGE_FREE;
+                        ReleasedCount += 1;
+                        INSERT_BEFORE(&(PagingEntry->U.ListEntry),
+                                      &PagingEntryList);
+                    }
                 }
+            }
+
+            if (ReleasedCount != 0) {
+                Segment->FreePages += ReleasedCount;
+                SignalEvent = MmpUpdatePhysicalMemoryStatistics(ReleasedCount,
+                                                                FALSE);
             }
 
             goto UnlockPhysicalPageEnd;
@@ -1696,6 +1657,22 @@ Return Value:
 
 UnlockPhysicalPageEnd:
     KeReleaseQueuedLock(MmPhysicalPageLock);
+    while (LIST_EMPTY(&PagingEntryList) == FALSE) {
+        PagingEntry = LIST_VALUE(PagingEntryList.Next,
+                                 PAGING_ENTRY,
+                                 U.ListEntry);
+
+        LIST_REMOVE(&(PagingEntry->U.ListEntry));
+        MmpDestroyPagingEntry(PagingEntry);
+    }
+
+    if (SignalEvent != FALSE) {
+
+        ASSERT(MmPhysicalMemoryWarningEvent != NULL);
+
+        KeSignalEvent(MmPhysicalMemoryWarningEvent, SignalOptionPulse);
+    }
+
     return;
 }
 
@@ -2789,5 +2766,114 @@ InitializePhysicalAllocatorIterationRoutineEnd:
     }
 
     return;
+}
+
+BOOL
+MmpUpdatePhysicalMemoryStatistics (
+    ULONGLONG PageCount,
+    BOOL Allocation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates the physical memory allocation statistics. The
+    physical page lock must be held.
+
+Arguments:
+
+    PageCount - Supplies the number of pages allocated or freed during the
+        update period.
+
+    Allocation - Supplies a boolean indicating whether or not to upddate the
+        statistics for an allocation (TRUE) or a free (FALSE).
+
+Return Value:
+
+    Returns TRUE if a significant memory update occurred that requires the
+    physical memory event to be signaled. Returns FALSE otherwise.
+
+--*/
+
+{
+
+    BOOL SignalEvent;
+
+    SignalEvent = FALSE;
+    if (Allocation != FALSE) {
+        MmTotalAllocatedPhysicalPages += PageCount;
+        MmNonPagedPhysicalPages += PageCount;
+
+        ASSERT(MmTotalAllocatedPhysicalPages <= MmTotalPhysicalPages);
+
+        //
+        // Periodically check to see if memory warnings should be signaled.
+        //
+
+        MmPhysicalMemoryAllocationCount += PageCount;
+        if (((MmPhysicalMemoryAllocationCount &
+              MmPhysicalMemoryWarningCountMask) == 0) ||
+            (PageCount >= MmPhysicalMemoryWarningCountMask)) {
+
+            //
+            // Check the levels from highest page count to the lowest.
+            //
+
+            if ((MmPhysicalMemoryWarningLevel != MemoryWarningLevel1) &&
+                (MmTotalAllocatedPhysicalPages >=
+                 MmPhysicalMemoryWarningLevel1HighPages)) {
+
+                MmPhysicalMemoryWarningLevel = MemoryWarningLevel1;
+                SignalEvent = TRUE;
+
+            } else if ((MmPhysicalMemoryWarningLevel !=
+                        MemoryWarningLevel2) &&
+                       (MmTotalAllocatedPhysicalPages >=
+                        MmPhysicalMemoryWarningLevel2HighPages)) {
+
+                MmPhysicalMemoryWarningLevel = MemoryWarningLevel2;
+                SignalEvent = TRUE;
+            }
+        }
+
+    } else {
+        MmTotalAllocatedPhysicalPages -= PageCount;
+
+        ASSERT(MmTotalAllocatedPhysicalPages <= MmTotalPhysicalPages);
+
+        //
+        // Periodically check to see if memory warnings should be
+        // signaled.
+        //
+
+        MmPhysicalMemoryFreeCount += PageCount;
+        if (((MmPhysicalMemoryFreeCount &
+              MmPhysicalMemoryWarningCountMask) == 0) ||
+            (PageCount >= MmPhysicalMemoryWarningCountMask)) {
+
+            //
+            // Check levels from the lowest page count to the highest.
+            //
+
+            if ((MmPhysicalMemoryWarningLevel == MemoryWarningLevel2) &&
+                (MmTotalAllocatedPhysicalPages <
+                 MmPhysicalMemoryWarningLevel2LowPages)) {
+
+                SignalEvent = TRUE;
+                MmPhysicalMemoryWarningLevel = MemoryWarningLevelNone;
+
+            } else if ((MmPhysicalMemoryWarningLevel ==
+                        MemoryWarningLevel1) &&
+                       (MmTotalAllocatedPhysicalPages <
+                        MmPhysicalMemoryWarningLevel1LowPages)) {
+
+                SignalEvent = TRUE;
+                MmPhysicalMemoryWarningLevel = MemoryWarningLevel2;
+            }
+        }
+    }
+
+    return SignalEvent;
 }
 

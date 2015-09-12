@@ -626,7 +626,7 @@ Arguments:
     IrpContext - Supplies a pointer where the driver can provide context
         associated with this specific IRP.
 
-    Flags - Supplies a bitmask of IRP creation flags. See IRP_FLAG_* for
+    Flags - Supplies a bitmask of IRP creation flags. See IRP_CREATE_FLAG_* for
         definitions.
 
 Return Value:
@@ -654,7 +654,7 @@ Return Value:
     // an IRP for the underlying device transfer.
     //
 
-    if ((Flags & IRP_FLAG_NO_ALLOCATE) != 0) {
+    if ((Flags & IRP_CREATE_FLAG_NO_ALLOCATE) != 0) {
         Transfer = MmAllocateNonPagedPool(sizeof(FATFS_TRANSFER),
                                           FAT_TRANSFER_ALLOCATION_TAG);
 
@@ -672,7 +672,7 @@ Return Value:
 
         Transfer->DeviceIrp = IoCreateIrp(DiskDevice,
                                           IrpMajorIo,
-                                          IRP_FLAG_NO_ALLOCATE);
+                                          IRP_CREATE_FLAG_NO_ALLOCATE);
 
         if (Transfer->DeviceIrp == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1005,7 +1005,7 @@ Return Value:
     FileProperties = NULL;
     FatFile = (PFATFS_FILE)(Irp->U.ReadWrite.DeviceContext);
     if (((FatFile->Flags & FATFS_FLAG_PAGE_FILE) == 0) ||
-        ((Irp->U.ReadWrite.Flags & IO_FLAG_NO_ALLOCATE) == 0)) {
+        ((Irp->U.ReadWrite.IoFlags & IO_FLAG_NO_ALLOCATE) == 0)) {
 
         FileProperties = Irp->U.ReadWrite.FileProperties;
     }
@@ -1087,7 +1087,7 @@ Return Value:
     RtlZeroMemory(&FatSeekInformation, sizeof(FAT_SEEK_INFORMATION));
     Status = FatFileSeek(FatFile->FileToken,
                          DiskIrp,
-                         Irp->U.ReadWrite.Flags,
+                         Irp->U.ReadWrite.IoFlags,
                          SeekCommandFromBeginning,
                          IoOffset,
                          &FatSeekInformation);
@@ -1122,7 +1122,7 @@ Return Value:
             if (CurrentOffset > FileSize) {
                 Status = FatFileSeek(FatFile->FileToken,
                                      DiskIrp,
-                                     Irp->U.ReadWrite.Flags,
+                                     Irp->U.ReadWrite.IoFlags,
                                      SeekCommandFromBeginning,
                                      FileSize,
                                      &FatSeekInformation);
@@ -1179,7 +1179,7 @@ Return Value:
                                       &FatSeekInformation,
                                       (PFAT_IO_BUFFER)ZeroIoBuffer,
                                       BytesToCompleteThisRound,
-                                      Irp->U.ReadWrite.Flags,
+                                      Irp->U.ReadWrite.IoFlags,
                                       DiskIrp,
                                       &BytesCompletedThisRound);
 
@@ -1207,7 +1207,7 @@ Return Value:
                              &FatSeekInformation,
                              (PFAT_IO_BUFFER)IoBuffer,
                              Irp->U.ReadWrite.IoSizeInBytes,
-                             Irp->U.ReadWrite.Flags,
+                             Irp->U.ReadWrite.IoFlags,
                              DiskIrp,
                              &BytesCompleted);
 
@@ -1219,7 +1219,7 @@ Return Value:
                               &FatSeekInformation,
                               (PFAT_IO_BUFFER)IoBuffer,
                               Irp->U.ReadWrite.IoSizeInBytes,
-                              Irp->U.ReadWrite.Flags,
+                              Irp->U.ReadWrite.IoFlags,
                               DiskIrp,
                               &BytesCompleted);
 

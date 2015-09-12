@@ -170,6 +170,42 @@ Return Value:
 
 KERNEL_API
 VOID
+IoUpdateIrpStatus (
+    PIRP Irp,
+    KSTATUS StatusCode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates the IRP's completion status if the current completion
+    status indicates success.
+
+Arguments:
+
+    Irp - Supplies a pointer to the IRP to query.
+
+    StatusCode - Supplies a status code to associate with the completed IRP.
+        This will be returned back to the caller requesting the IRP.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (KSUCCESS(Irp->Status)) {
+        Irp->Status = StatusCode;
+    }
+
+    return;
+}
+
+KERNEL_API
+VOID
 IoCompleteIrp (
     PDRIVER Driver,
     PIRP Irp,
@@ -195,7 +231,7 @@ Arguments:
         completed.
 
     StatusCode - Supplies a status code to associated with the completed IRP.
-        This will be returned back to the person requesting the IRP.
+        This will be returned back to the caller requesting the IRP.
 
 Return Value:
 
@@ -820,6 +856,318 @@ SendSynchronousIrpEnd:
     return Status;
 }
 
+KERNEL_API
+KSTATUS
+IoPrepareReadWriteIrp (
+    PIRP_READ_WRITE IrpReadWrite,
+    UINTN Alignment,
+    PHYSICAL_ADDRESS MinimumPhysicalAddress,
+    PHYSICAL_ADDRESS MaximumPhysicalAddress,
+    ULONG Flags
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prepares the given read/write IRP context for I/O based on the
+    given physical address, physical alignment, and flag requirements. It will
+    ensure that the IRP's I/O buffer is sufficient and preform any necessary
+    flushing that is needed to prepare for the I/O.
+
+Arguments:
+
+    IrpReadWrite - Supplies a pointer to the IRP read/write context that needs
+        to be prepared for data transfer.
+
+    Alignment - Supplies the required physical alignment of the I/O buffer.
+
+    MinimumPhysicalAddress - Supplies the minimum allowed physical address for
+        the I/O buffer.
+
+    MaximumPhysicalAddress - Supplies the maximum allowed physical address for
+        the I/O buffer.
+
+    Flags - Supplies a bitmask of flags for the preparation. See
+        IRP_READ_WRITE_FLAG_* for definitions.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PIO_BUFFER_FRAGMENT Fragment;
+    UINTN FragmentIndex;
+    BOOL LockedCopy;
+    PIO_BUFFER OriginalIoBuffer;
+    BOOL PhysicallyContiguous;
+    KSTATUS Status;
+    PIO_BUFFER ValidIoBuffer;
+
+    //
+    // Clobber the current buffer state. It should not be in use, but not every
+    // initialization of IRP read/write state bothers to zero-initialize the
+    // structure.
+    //
+
+    IrpReadWrite->IoBufferState.IoBuffer = NULL;
+    IrpReadWrite->IoBufferState.Flags = 0;
+
+    //
+    // If this is not a polled I/O transfer, then make sure the buffer is
+    // aligned up to a cache line.
+    //
+
+    if ((Flags & IRP_READ_WRITE_FLAG_POLLED) == 0) {
+        if (Alignment == 0) {
+            Alignment = 1;
+        }
+
+        Alignment = ALIGN_RANGE_UP(Alignment, MmGetIoBufferAlignment());
+    }
+
+    //
+    // Validate the I/O buffer to make sure it is suitable for the supplied
+    // constraints.
+    //
+
+    PhysicallyContiguous = FALSE;
+    if ((Flags & IRP_READ_WRITE_FLAG_PHYSICALLY_CONTIGUOUS) != 0) {
+        PhysicallyContiguous = TRUE;
+    }
+
+    OriginalIoBuffer = IrpReadWrite->IoBuffer;
+    ValidIoBuffer = OriginalIoBuffer;
+    Status = MmValidateIoBuffer(MinimumPhysicalAddress,
+                                MaximumPhysicalAddress,
+                                Alignment,
+                                IrpReadWrite->IoSizeInBytes,
+                                PhysicallyContiguous,
+                                &ValidIoBuffer,
+                                &LockedCopy);
+
+    if (!KSUCCESS(Status)) {
+        goto PrepareReadWriteIrpEnd;
+    }
+
+    //
+    // If the original buffer was deemed invalid and not just because it needed
+    // to be locked, copy the contents from the original buffer to the valid
+    // buffer.
+    //
+
+    if ((ValidIoBuffer != OriginalIoBuffer) &&
+        (LockedCopy == FALSE) &&
+        ((Flags & IRP_READ_WRITE_FLAG_WRITE) != 0)) {
+
+        Status = MmCopyIoBuffer(ValidIoBuffer,
+                                0,
+                                OriginalIoBuffer,
+                                0,
+                                IrpReadWrite->IoSizeInBytes);
+
+        if (!KSUCCESS(Status)) {
+            goto PrepareReadWriteIrpEnd;
+        }
+    }
+
+    //
+    // If the valid buffer will be used for DMA, then it needs to be cleaned or
+    // invalidated depending on whether it is a read or a write.
+    //
+
+    if ((Flags & IRP_READ_WRITE_FLAG_DMA) != 0) {
+
+        //
+        // TODO: Remove this map request when cache cleanliness is fixed.
+        //
+
+        Status = MmMapIoBuffer(ValidIoBuffer, FALSE, FALSE, FALSE);
+        if (!KSUCCESS(Status)) {
+            goto PrepareReadWriteIrpEnd;
+        }
+
+        for (FragmentIndex = 0;
+             FragmentIndex < ValidIoBuffer->FragmentCount;
+             FragmentIndex += 1) {
+
+            Fragment = &(ValidIoBuffer->Fragment[FragmentIndex]);
+            if ((Flags & IRP_READ_WRITE_FLAG_WRITE) != 0) {
+                MmFlushBufferForDataOut(Fragment->VirtualAddress,
+                                        Fragment->Size);
+
+            } else {
+                MmFlushBufferForDataIn(Fragment->VirtualAddress,
+                                       Fragment->Size);
+            }
+        }
+    }
+
+PrepareReadWriteIrpEnd:
+    if (ValidIoBuffer != OriginalIoBuffer) {
+        if (!KSUCCESS(Status)) {
+            MmFreeIoBuffer(ValidIoBuffer);
+
+        } else {
+            IrpReadWrite->IoBufferState.IoBuffer = OriginalIoBuffer;
+            IrpReadWrite->IoBuffer = ValidIoBuffer;
+            if (LockedCopy != FALSE) {
+                IrpReadWrite->IoBufferState.Flags |=
+                                          IRP_IO_BUFFER_STATE_FLAG_LOCKED_COPY;
+            }
+        }
+    }
+
+    return Status;
+}
+
+KERNEL_API
+KSTATUS
+IoCompleteReadWriteIrp (
+    PIRP_READ_WRITE IrpReadWrite,
+    ULONG Flags
+    )
+
+/*++
+
+Routine Description:
+
+    This routine handles read/write IRP completion. It will perform any
+    necessary flushes based on the type of I/O (as indicated by the flags) and
+    destroy any temporary I/O buffers created for the operation during the
+    prepare step.
+
+Arguments:
+
+    IrpReadWrite - Supplies a pointer to the read/write context for the
+        completed IRP.
+
+    Flags - Supplies a bitmask of flags for the completion. See
+        IRP_READ_WRITE_FLAG_* for definitions.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PIO_BUFFER Buffer;
+    PIRP_IO_BUFFER_STATE BufferState;
+    UINTN BytesToFlush;
+    BOOL FlushOriginal;
+    PIO_BUFFER_FRAGMENT Fragment;
+    UINTN FragmentIndex;
+    PIO_BUFFER OriginalBuffer;
+    ULONG StateFlags;
+    KSTATUS Status;
+
+    Buffer = IrpReadWrite->IoBuffer;
+    BufferState = &(IrpReadWrite->IoBufferState);
+    FlushOriginal = FALSE;
+    OriginalBuffer = BufferState->IoBuffer;
+    StateFlags = BufferState->Flags;
+    Status = STATUS_SUCCESS;
+    if (OriginalBuffer == NULL) {
+        OriginalBuffer = Buffer;
+    }
+
+    //
+    // An I/O buffer used for DMA read needs to be invalidated. It was
+    // invalidated before the DMA so that dirty data did not clobber the DMA,
+    // but clean, prefetched data could be sitting in the cache preventing
+    // access to the read data.
+    //
+
+    if (((Flags & IRP_READ_WRITE_FLAG_DMA) != 0) &&
+        ((Flags & IRP_READ_WRITE_FLAG_WRITE) == 0) &&
+        (IrpReadWrite->IoBytesCompleted != 0)) {
+
+        BytesToFlush = IrpReadWrite->IoBytesCompleted;
+        for (FragmentIndex = 0;
+             FragmentIndex < Buffer->FragmentCount;
+             FragmentIndex += 1) {
+
+            Fragment = &(Buffer->Fragment[FragmentIndex]);
+            MmFlushBufferForDataIn(Fragment->VirtualAddress, Fragment->Size);
+            if (BytesToFlush < Fragment->Size) {
+                break;
+            }
+
+            BytesToFlush -= Fragment->Size;
+        }
+    }
+
+    //
+    // Free the buffer used for I/O if it differs from the original.
+    //
+
+    if (OriginalBuffer != Buffer) {
+
+        //
+        // On a read operation, potentially copy the data back into the
+        // original I/O buffer.
+        //
+
+        if (((Flags & IRP_READ_WRITE_FLAG_WRITE) == 0) &&
+            ((StateFlags & IRP_IO_BUFFER_STATE_FLAG_LOCKED_COPY) == 0) &&
+            (IrpReadWrite->IoBytesCompleted != 0)) {
+
+            Status = MmCopyIoBuffer(OriginalBuffer,
+                                    0,
+                                    Buffer,
+                                    0,
+                                    IrpReadWrite->IoBytesCompleted);
+
+            if (!KSUCCESS(Status)) {
+                IrpReadWrite->IoBytesCompleted = 0;
+
+            } else {
+                FlushOriginal = TRUE;
+            }
+        }
+
+        MmFreeIoBuffer(Buffer);
+        IrpReadWrite->IoBuffer = OriginalBuffer;
+        BufferState->IoBuffer = NULL;
+        BufferState->Flags = 0;
+    }
+
+    //
+    // The original I/O buffer always needs to be flushed for polled reads.
+    // This is true even if a locked copy was created for the bounce buffer.
+    //
+
+    if (((Flags & IRP_READ_WRITE_FLAG_POLLED) != 0) &&
+        ((Flags & IRP_READ_WRITE_FLAG_WRITE) == 0) &&
+        (IrpReadWrite->IoBytesCompleted != 0)) {
+
+        FlushOriginal = TRUE;
+    }
+
+    //
+    // Flush the original I/O buffer to the point of unification. This is
+    // necessary for polled reads and for all reads done to a bounce buffer in
+    // case the original buffer is destined for execution.
+    //
+
+    if (FlushOriginal != FALSE) {
+        for (FragmentIndex = 0;
+             FragmentIndex < OriginalBuffer->FragmentCount;
+             FragmentIndex += 1) {
+
+            Fragment = &(OriginalBuffer->Fragment[FragmentIndex]);
+            MmFlushDataCache(Fragment->VirtualAddress, Fragment->Size, TRUE);
+        }
+    }
+
+    return Status;
+}
+
 KSTATUS
 IopSendStateChangeIrp (
     PDEVICE Device,
@@ -1055,7 +1403,7 @@ Return Value:
     // number of hard page faults.
     //
 
-    if ((Request->Flags & IO_FLAG_SERVICING_FAULT) != 0) {
+    if ((Request->IoFlags & IO_FLAG_SERVICING_FAULT) != 0) {
         Thread->ResourceUsage.HardPageFaults += 1;
     }
 

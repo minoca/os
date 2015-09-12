@@ -155,8 +155,6 @@ Members:
 
     Irp - Stores a pointer to the current IRP being processed.
 
-    IoBuffer - Stores a pointer to the current I/O buffer being processed.
-
     Flags - Stores a bitmask of flags for the disk. See SD_OMAP4_CHILD_FLAG_*
         for definitions.
 
@@ -176,7 +174,6 @@ typedef struct _SD_OMAP4_CHILD {
     PSD_CONTROLLER Controller;
     PQUEUED_LOCK ControllerLock;
     PIRP Irp;
-    PIO_BUFFER IoBuffer;
     ULONG Flags;
     ULONG BlockShift;
     ULONGLONG BlockCount;

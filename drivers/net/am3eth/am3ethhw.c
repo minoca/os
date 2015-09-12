@@ -290,6 +290,7 @@ Return Value:
     ULONG FrameIndex;
     ULONG NextDescriptorPhysical;
     ULONG ReceiveFrameData;
+    ULONG ReceiveFrameDataSize;
     ULONG ReceiveSize;
     KSTATUS Status;
 
@@ -312,6 +313,8 @@ Return Value:
         goto InitializeDeviceStructuresEnd;
     }
 
+    Device->DataAlignment = MmGetIoBufferAlignment();
+
     //
     // Allocate the receive buffers. This is allocated as non-write though and
     // cacheable, which means software must be careful when the frame is
@@ -319,7 +322,10 @@ Return Value:
     // link pointers, but after the receive is complete it's normal memory.
     //
 
-    ReceiveSize = A3E_RECEIVE_FRAME_DATA_SIZE * A3E_RECEIVE_FRAME_COUNT;
+    ReceiveFrameDataSize = ALIGN_RANGE_UP(A3E_RECEIVE_FRAME_DATA_SIZE,
+                                          Device->DataAlignment);
+
+    ReceiveSize = ReceiveFrameDataSize * A3E_RECEIVE_FRAME_COUNT;
 
     ASSERT(Device->ReceiveDataIoBuffer == NULL);
 
@@ -339,8 +345,7 @@ Return Value:
     ASSERT(Device->ReceiveDataIoBuffer->FragmentCount == 1);
     ASSERT(Device->ReceiveDataIoBuffer->Fragment[0].VirtualAddress != NULL);
 
-    Device->ReceiveData =
-                       Device->ReceiveDataIoBuffer->Fragment[0].VirtualAddress;
+    Device->ReceiveFrameDataSize = ReceiveFrameDataSize;
 
     //
     // There's 8 kilobytes of RAM in there, use it for descriptors.
@@ -433,9 +438,9 @@ Return Value:
         }
 
         Descriptor->Buffer = ReceiveFrameData;
-        Descriptor->BufferLengthOffset = A3E_RECEIVE_FRAME_DATA_SIZE;
+        Descriptor->BufferLengthOffset = ReceiveFrameDataSize;
         Descriptor->PacketLengthFlags = A3E_DESCRIPTOR_HARDWARE_OWNED;
-        ReceiveFrameData += A3E_RECEIVE_FRAME_DATA_SIZE;
+        ReceiveFrameData += ReceiveFrameDataSize;
         NextDescriptorPhysical += sizeof(A3E_DESCRIPTOR);
     }
 
@@ -456,7 +461,6 @@ InitializeDeviceStructuresEnd:
         if (Device->ReceiveDataIoBuffer != NULL) {
             MmFreeIoBuffer(Device->ReceiveDataIoBuffer);
             Device->ReceiveDataIoBuffer = NULL;
-            Device->ReceiveData = NULL;
         }
 
         if (Device->TransmitPacket != NULL) {
@@ -1243,6 +1247,7 @@ Return Value:
     ULONG DescriptorIndex;
     ULONG HeadDescriptor;
     PNET_PACKET_BUFFER Packet;
+    UINTN PacketSize;
     ULONG Port;
     PA3E_DESCRIPTOR PreviousDescriptor;
     ULONG PreviousIndex;
@@ -1267,8 +1272,9 @@ Return Value:
         }
 
         LIST_REMOVE(&(Packet->ListEntry));
-        MmFlushBufferForDataOut(Packet->Buffer,
-                                ALIGN_RANGE_UP(Packet->FooterOffset, 64));
+        PacketSize = Packet->FooterOffset;
+        PacketSize = ALIGN_RANGE_UP(PacketSize, Device->DataAlignment);
+        MmFlushBufferForDataOut(Packet->Buffer, PacketSize);
 
         //
         // Success, a free descriptor. Let's fill it out!
@@ -1369,6 +1375,7 @@ Return Value:
     UINTN Begin;
     PA3E_DESCRIPTOR Descriptor;
     USHORT Flags;
+    BOOL PacketReaped;
 
     ASSERT(KeIsQueuedLockHeld(Device->TransmitLock) != FALSE);
 
@@ -1403,6 +1410,7 @@ Return Value:
         NetFreeBuffer(Device->TransmitPacket[Begin]);
         Device->TransmitPacket[Begin] = NULL;
         Descriptor->PacketLengthFlags = 0;
+        PacketReaped = TRUE;
 
         //
         // Move the beginning of the list forward.
@@ -1414,6 +1422,14 @@ Return Value:
         } else {
             Device->TransmitBegin = Begin + 1;
         }
+    }
+
+    //
+    // If at least one packet was reaped, attempt to pump more packets through.
+    //
+
+    if (PacketReaped != FALSE) {
+        A3epSendPendingPackets(Device);
     }
 
     return;
@@ -1447,6 +1463,7 @@ Return Value:
     ULONG DescriptorPhysical;
     ULONG Flags;
     NET_PACKET_BUFFER Packet;
+    ULONG PacketSize;
     PA3E_DESCRIPTOR PreviousDescriptor;
     ULONG PreviousIndex;
     ULONG ReceivePhysical;
@@ -1486,15 +1503,15 @@ Return Value:
         if ((Flags & A3E_DESCRIPTOR_RX_PACKET_ERROR_MASK) == 0) {
             Packet.IoBuffer = NULL;
             Packet.Buffer = ReceiveVirtual +
-                            (Begin * A3E_RECEIVE_FRAME_DATA_SIZE);
+                            (Begin * Device->ReceiveFrameDataSize);
 
             Packet.BufferPhysicalAddress =
-                       ReceivePhysical + (Begin * A3E_RECEIVE_FRAME_DATA_SIZE);
+                      ReceivePhysical + (Begin * Device->ReceiveFrameDataSize);
 
             ASSERT(((Flags & A3E_DESCRIPTOR_START_OF_PACKET) != 0) &&
                    ((Flags & A3E_DESCRIPTOR_END_OF_PACKET) != 0));
 
-            Packet.BufferSize = A3E_RECEIVE_FRAME_DATA_SIZE;
+            Packet.BufferSize = Device->ReceiveFrameDataSize;
             Packet.DataSize = Descriptor->BufferLengthOffset &
                               A3E_DESCRIPTOR_BUFFER_LENGTH_MASK;
 
@@ -1503,9 +1520,9 @@ Return Value:
 
             Packet.FooterOffset = Packet.DataSize;
             Packet.Flags = 0;
-            MmFlushBufferForDataIn(Packet.Buffer,
-                                   ALIGN_RANGE_UP(Packet.DataSize, 64));
-
+            PacketSize = Packet.DataSize;
+            PacketSize = ALIGN_RANGE_UP(PacketSize, Device->DataAlignment);
+            MmFlushBufferForDataIn(Packet.Buffer, PacketSize);
             NetProcessReceivedPacket(Device->NetworkLink, &Packet);
 
         } else {
@@ -1517,7 +1534,7 @@ Return Value:
         //
 
         Descriptor->NextDescriptor = A3E_DESCRIPTOR_NEXT_NULL;
-        Descriptor->BufferLengthOffset = A3E_RECEIVE_FRAME_DATA_SIZE;
+        Descriptor->BufferLengthOffset = Device->ReceiveFrameDataSize;
         Descriptor->PacketLengthFlags = A3E_DESCRIPTOR_HARDWARE_OWNED;
         if (Begin == 0) {
             PreviousIndex = A3E_RECEIVE_FRAME_COUNT - 1;

@@ -156,42 +156,6 @@ Return Value:
     return;
 }
 
-KERNEL_API
-VOID
-MmFlushBuffer (
-    PVOID Buffer,
-    UINTN SizeInBytes
-    )
-
-/*++
-
-Routine Description:
-
-    This routine flushes a buffer to the point of unification.
-
-Arguments:
-
-    Buffer - Supplies the virtual address of the buffer to flush. This buffer
-        must be cache-line aligned.
-
-    SizeInBytes - Supplies the size of the buffer to flush, in bytes. This
-        size must also be cache-line aligned.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    //
-    // The x86 is cache coherent with all observers of memory.
-    //
-
-    return;
-}
-
 VOID
 MmSysFlushCache (
     ULONG SystemCallNumber,

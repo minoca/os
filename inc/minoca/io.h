@@ -321,7 +321,7 @@ Author:
 // result none of the data or code it touches can be pagable.
 //
 
-#define IRP_FLAG_NO_ALLOCATE 0x00000001
+#define IRP_CREATE_FLAG_NO_ALLOCATE 0x00000001
 
 //
 // Set this flag if the flush operation should flush all data.
@@ -847,6 +847,21 @@ Author:
 //
 
 #define IO_OFFSET_NONE (-1ULL)
+
+//
+// Define the set of flags used for read/write IRP preparation and completion.
+//
+
+#define IRP_READ_WRITE_FLAG_PHYSICALLY_CONTIGUOUS 0x00000001
+#define IRP_READ_WRITE_FLAG_WRITE                 0x00000002
+#define IRP_READ_WRITE_FLAG_DMA                   0x00000004
+#define IRP_READ_WRITE_FLAG_POLLED                0x00000008
+
+//
+// Define the set of flags describing an I/O request's saved I/O buffer state.
+//
+
+#define IRP_IO_BUFFER_STATE_FLAG_LOCKED_COPY 0x00000001
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -1775,6 +1790,26 @@ typedef struct _IRP_CLOSE {
 
 Structure Description:
 
+    This structure defines an I/O request's saved I/O buffer state.
+
+Members:
+
+    IoBuffer - Stores a pointer to the saved I/O buffer.
+
+    Flags - Stores a bitmask of flags describing the type of I/O buffer saved.
+        See IRP_IO_BUFFER_STATE_FLAG_* for definitions.
+
+--*/
+
+typedef struct _IRP_IO_BUFFER_STATE {
+    PIO_BUFFER IoBuffer;
+    ULONG Flags;
+} IRP_IO_BUFFER_STATE, *PIRP_IO_BUFFER_STATE;
+
+/*++
+
+Structure Description:
+
     This structure defines an I/O request in an IRP.
 
 Members:
@@ -1786,7 +1821,7 @@ Members:
     IoBuffer - Stores a pointer to the read or write buffer supplied by the
         caller.
 
-    Flags - Stores flags governing the behavior of the I/O. See
+    IoFlags - Stores flags governing the behavior of the I/O. See
         IO_FLAG_* definitions.
 
     TimeoutInMilliseconds - Supplies the number of milliseconds that the I/O
@@ -1813,7 +1848,8 @@ Members:
 typedef struct _IRP_READ_WRITE {
     PVOID DeviceContext;
     PIO_BUFFER IoBuffer;
-    ULONG Flags;
+    IRP_IO_BUFFER_STATE IoBufferState;
+    ULONG IoFlags;
     ULONG TimeoutInMilliseconds;
     ULONGLONG IoOffset;
     UINTN IoSizeInBytes;
@@ -3129,6 +3165,33 @@ Return Value:
 
 KERNEL_API
 VOID
+IoUpdateIrpStatus (
+    PIRP Irp,
+    KSTATUS StatusCode
+    );
+
+/*++
+
+Routine Description:
+
+    This routine updates the IRP's completion status if the current completion
+    status indicates success.
+
+Arguments:
+
+    Irp - Supplies a pointer to the IRP to query.
+
+    StatusCode - Supplies a status code to associate with the completed IRP.
+        This will be returned back to the caller requesting the IRP.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
+VOID
 IoCompleteIrp (
     PDRIVER Driver,
     PIRP Irp,
@@ -3154,7 +3217,7 @@ Arguments:
         completed.
 
     StatusCode - Supplies a status code to associated with the completed IRP.
-        This will be returned back to the person requesting the IRP.
+        This will be returned back to the caller requesting the IRP.
 
 Return Value:
 
@@ -3220,6 +3283,188 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+KERNEL_API
+PIRP
+IoCreateIrp (
+    PDEVICE Device,
+    IRP_MAJOR_CODE MajorCode,
+    ULONG Flags
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates and initializes an IRP. This routine must be called
+    at or below dispatch level.
+
+Arguments:
+
+    Device - Supplies a pointer to the device the IRP will be sent to.
+
+    MajorCode - Supplies the major code of the IRP, which cannot be changed
+        once an IRP is allocated (or else disaster ensues).
+
+    Flags - Supplies a bitmask of IRP creation flags. See IRP_FLAG_* for
+        definitions.
+
+Return Value:
+
+    Returns a pointer to the newly allocated IRP on success, or NULL on
+    failure.
+
+--*/
+
+KERNEL_API
+VOID
+IoDestroyIrp (
+    PIRP Irp
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys an IRP, freeing all memory associated with it. This
+    routine must be called at or below dispatch level.
+
+Arguments:
+
+    Irp - Supplies a pointer to the IRP to free.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
+VOID
+IoInitializeIrp (
+    PIRP Irp
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes an IRP and prepares it to be sent to a device.
+    This routine does not mean that IRPs can be allocated randomly from pool
+    and initialized here; IRPs must still be allocated from IoAllocateIrp. This
+    routine just resets an IRP back to its initialized state.
+
+Arguments:
+
+    Irp - Supplies a pointer to the initialized IRP to initialize. This IRP
+        must already have a valid object header.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
+KSTATUS
+IoSendSynchronousIrp (
+    PIRP Irp
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends an initialized IRP down the device stack and does not
+    return until the IRP completed. This routine must be called at or below
+    dispatch level.
+
+Arguments:
+
+    Irp - Supplies a pointer to the initialized IRP to send. All parameters
+        should already be filled out and ready to go.
+
+Return Value:
+
+    STATUS_SUCCESS if the IRP was actually sent properly. This says nothing of
+    the completion status of the IRP, which may have failed spectacularly.
+
+    STATUS_INVALID_PARAMETER if the IRP was not properly initialized.
+
+    STATUS_INSUFFICIENT_RESOURCES if memory could not be allocated.
+
+--*/
+
+KERNEL_API
+KSTATUS
+IoPrepareReadWriteIrp (
+    PIRP_READ_WRITE IrpReadWrite,
+    UINTN Alignment,
+    PHYSICAL_ADDRESS MinimumPhysicalAddress,
+    PHYSICAL_ADDRESS MaximumPhysicalAddress,
+    ULONG Flags
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prepares the given read/write IRP context for I/O based on the
+    given physical address, physical alignment, and flag requirements. It will
+    ensure that the IRP's I/O buffer is sufficient and preform any necessary
+    flushing that is needed to prepare for the I/O.
+
+Arguments:
+
+    IrpReadWrite - Supplies a pointer to the IRP read/write context that needs
+        to be prepared for data transfer.
+
+    Alignment - Supplies the required physical alignment of the I/O buffer.
+
+    MinimumPhysicalAddress - Supplies the minimum allowed physical address for
+        the I/O buffer.
+
+    MaximumPhysicalAddress - Supplies the maximum allowed physical address for
+        the I/O buffer.
+
+    Flags - Supplies a bitmask of flags for the preparation. See
+        IRP_READ_WRITE_FLAG_* for definitions.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KERNEL_API
+KSTATUS
+IoCompleteReadWriteIrp (
+    PIRP_READ_WRITE IrpReadWrite,
+    ULONG Flags
+    );
+
+/*++
+
+Routine Description:
+
+    This routine handles read/write IRP completion. It will perform any
+    necessary flushes based on the type of I/O (as indicated by the flags) and
+    destroy any temporary I/O buffers created for the operation during the
+    prepare step.
+
+Arguments:
+
+    IrpReadWrite - Supplies a pointer to the read/write context for the
+        completed IRP.
+
+    Flags - Supplies a bitmask of flags for the completion. See
+        IRP_READ_WRITE_FLAG_* for definitions.
+
+Return Value:
+
+    Status code.
 
 --*/
 
@@ -3390,117 +3635,6 @@ Return Value:
 
     STATUS_NOT_FOUND if no interface listener was found for the given callback
         routine on the given UUID.
-
---*/
-
-KERNEL_API
-PIRP
-IoCreateIrp (
-    PDEVICE Device,
-    IRP_MAJOR_CODE MajorCode,
-    ULONG Flags
-    );
-
-/*++
-
-Routine Description:
-
-    This routine creates and initializes an IRP. This routine must be called
-    at or below dispatch level.
-
-Arguments:
-
-    Device - Supplies a pointer to the device the IRP will be sent to.
-
-    MajorCode - Supplies the major code of the IRP, which cannot be changed
-        once an IRP is allocated (or else disaster ensues).
-
-    Flags - Supplies a bitmask of IRP creation flags. See IRP_FLAG_* for
-        definitions.
-
-Return Value:
-
-    Returns a pointer to the newly allocated IRP on success, or NULL on
-    failure.
-
---*/
-
-KERNEL_API
-VOID
-IoDestroyIrp (
-    PIRP Irp
-    );
-
-/*++
-
-Routine Description:
-
-    This routine destroys an IRP, freeing all memory associated with it. This
-    routine must be called at or below dispatch level.
-
-Arguments:
-
-    Irp - Supplies a pointer to the IRP to free.
-
-Return Value:
-
-    None.
-
---*/
-
-KERNEL_API
-VOID
-IoInitializeIrp (
-    PIRP Irp
-    );
-
-/*++
-
-Routine Description:
-
-    This routine initializes an IRP and prepares it to be sent to a device.
-    This routine does not mean that IRPs can be allocated randomly from pool
-    and initialized here; IRPs must still be allocated from IoAllocateIrp. This
-    routine just resets an IRP back to its initialized state.
-
-Arguments:
-
-    Irp - Supplies a pointer to the initialized IRP to initialize. This IRP
-        must already have a valid object header.
-
-Return Value:
-
-    None.
-
---*/
-
-KERNEL_API
-KSTATUS
-IoSendSynchronousIrp (
-    PIRP Irp
-    );
-
-/*++
-
-Routine Description:
-
-    This routine sends an initialized IRP down the device stack and does not
-    return until the IRP completed. This routine must be called at or below
-    dispatch level.
-
-Arguments:
-
-    Irp - Supplies a pointer to the initialized IRP to send. All parameters
-        should already be filled out and ready to go.
-
-Return Value:
-
-    STATUS_SUCCESS if the IRP was actually sent properly. This says nothing of
-    the completion status of the IRP, which may have failed spectacularly.
-
-    STATUS_INVALID_PARAMETER if the IRP was not properly initialized.
-
-    STATUS_INSUFFICIENT_RESOURCES if memory could not be allocated.
 
 --*/
 

@@ -327,8 +327,6 @@ Members:
 
     Irp - Stores a pointer to the I/O IRP actively running on the channel.
 
-    IoBuffer - Stores a pointer to the I/O buffer to use for the active IRP.
-
     IoSize - Stores the size of this I/O operation.
 
     OwningChild - Stores a pointer to the child that has the channel locked.
@@ -348,7 +346,6 @@ typedef struct _ATA_CHANNEL {
     UCHAR SelectedDevice;
     PQUEUED_LOCK Lock;
     PIRP Irp;
-    PIO_BUFFER IoBuffer;
     UINTN IoSize;
     PATA_CHILD OwningChild;
     PATA_PRDT Prdt;

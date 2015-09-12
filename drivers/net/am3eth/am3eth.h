@@ -617,7 +617,7 @@ Members:
     ReceiveDataIoBuffer - Stores a pointer to the I/O buffer associated with
         the receive frames.
 
-    ReceiveData - Stores the pointer to the array of receive frames.
+    ReceiveFrameDataSize - Stores the size of each receive frame's data.
 
     ReceiveBegin - Stores the index of the beginning of the list, which is
         the oldest received frame and the first one to dispatch.
@@ -695,6 +695,8 @@ Members:
 
     PhyId - Stores the address of the PHY.
 
+    DataAlignment - Stores the required alignment of all data packets.
+
     GigabitCapable - Stores a boolean indicating if this device can do 1000Mbps.
 
 --*/
@@ -712,7 +714,7 @@ typedef struct _A3E_DEVICE {
     ULONG ControllerBasePhysical;
     PNET_LINK NetworkLink;
     PIO_BUFFER ReceiveDataIoBuffer;
-    PVOID ReceiveData;
+    ULONG ReceiveFrameDataSize;
     ULONG ReceiveBegin;
     PQUEUED_LOCK ReceiveLock;
     PA3E_DESCRIPTOR TransmitDescriptors;
@@ -738,6 +740,7 @@ typedef struct _A3E_DEVICE {
     BOOL MacAddressAssigned;
     BYTE MacAddress[ETHERNET_ADDRESS_SIZE];
     ULONG PhyId;
+    ULONG DataAlignment;
     BOOL GigabitCapable;
 } A3E_DEVICE, *PA3E_DEVICE;
 

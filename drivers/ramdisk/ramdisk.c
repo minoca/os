@@ -509,25 +509,26 @@ Return Value:
 
 {
 
-    UINTN BytesCompleted;
     UINTN BytesToComplete;
+    KSTATUS CompletionStatus;
     PRAM_DISK_DEVICE Disk;
-    PIO_BUFFER_FRAGMENT Fragment;
-    UINTN FragmentIndex;
     PIO_BUFFER IoBuffer;
     ULONGLONG IoOffset;
+    ULONG IrpReadWriteFlags;
+    BOOL ReadWriteIrpPrepared;
     KSTATUS Status;
     BOOL ToIoBuffer;
 
     ASSERT(Irp->Direction == IrpDown);
 
     Disk = Irp->U.ReadWrite.DeviceContext;
+    ReadWriteIrpPrepared = FALSE;
 
     ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset, RAM_DISK_SECTOR_SIZE));
     ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoSizeInBytes, RAM_DISK_SECTOR_SIZE));
     ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
 
-    BytesCompleted = 0;
+    Irp->U.ReadWrite.IoBytesCompleted = 0;
     IoOffset = Irp->U.ReadWrite.IoOffset;
     IoBuffer = Irp->U.ReadWrite.IoBuffer;
     if (IoOffset >= Disk->Size) {
@@ -540,10 +541,32 @@ Return Value:
         BytesToComplete = Disk->Size - Irp->U.ReadWrite.IoOffset;
     }
 
-    ToIoBuffer = FALSE;
-    if (Irp->MinorCode == IrpMinorIoRead) {
-        ToIoBuffer = TRUE;
+    ToIoBuffer = TRUE;
+    IrpReadWriteFlags = IRP_READ_WRITE_FLAG_POLLED;
+    if (Irp->MinorCode == IrpMinorIoWrite) {
+        ToIoBuffer = FALSE;
+        IrpReadWriteFlags |= IRP_READ_WRITE_FLAG_WRITE;
     }
+
+    //
+    // Prepare the I/O buffer for polled I/O.
+    //
+
+    Status = IoPrepareReadWriteIrp(&(Irp->U.ReadWrite),
+                                   1,
+                                   0,
+                                   MAX_ULONGLONG,
+                                   IrpReadWriteFlags);
+
+    if (!KSUCCESS(Status)) {
+        goto DispatchIoEnd;
+    }
+
+    ReadWriteIrpPrepared = TRUE;
+
+    //
+    // Transfer the data between the disk and I/O buffer.
+    //
 
     Status = MmCopyIoBufferData(IoBuffer,
                                 (PUCHAR)Disk->Buffer + IoOffset,
@@ -555,31 +578,19 @@ Return Value:
         goto DispatchIoEnd;
     }
 
-    //
-    // If reading, wow that the data is valid, flush it so it makes it to the
-    // point of unification.
-    //
+    Irp->U.ReadWrite.IoBytesCompleted = BytesToComplete;
 
-    if (ToIoBuffer != FALSE) {
-        Status = MmMapIoBuffer(IoBuffer, FALSE, FALSE, FALSE);
-        if (!KSUCCESS(Status)) {
-            goto DispatchIoEnd;
-        }
+DispatchIoEnd:
+    if (ReadWriteIrpPrepared != FALSE) {
+        CompletionStatus = IoCompleteReadWriteIrp(&(Irp->U.ReadWrite),
+                                                  IrpReadWriteFlags);
 
-        for (FragmentIndex = 0;
-             FragmentIndex < IoBuffer->FragmentCount;
-             FragmentIndex += 1) {
-
-            Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-            MmFlushBufferForDataOut(Fragment->VirtualAddress, Fragment->Size);
+        if (!KSUCCESS(CompletionStatus) && KSUCCESS(Status)) {
+            Status = CompletionStatus;
         }
     }
 
-    BytesCompleted = BytesToComplete;
-
-DispatchIoEnd:
-    Irp->U.ReadWrite.IoBytesCompleted = BytesCompleted;
-    Irp->U.ReadWrite.NewIoOffset = IoOffset + BytesCompleted;
+    Irp->U.ReadWrite.NewIoOffset = IoOffset + Irp->U.ReadWrite.IoBytesCompleted;
     IoCompleteIrp(RamDiskDriver, Irp, Status);
     return;
 }

@@ -1355,6 +1355,14 @@ Return Value:
     PVOID SourceVirtualAddress;
     KSTATUS Status;
 
+    //
+    // If the byte count is zero, there is no work to do.
+    //
+
+    if (ByteCount == 0) {
+        return STATUS_SUCCESS;
+    }
+
     DestinationOffset += Destination->Internal.CurrentOffset;
     SourceOffset += Source->Internal.CurrentOffset;
 
@@ -1857,7 +1865,6 @@ Return Value:
     return IoBufferAlignment;
 }
 
-KERNEL_API
 KSTATUS
 MmValidateIoBuffer (
     PHYSICAL_ADDRESS MinimumPhysicalAddress,
@@ -1865,7 +1872,8 @@ MmValidateIoBuffer (
     UINTN Alignment,
     UINTN SizeInBytes,
     BOOL PhysicallyContiguous,
-    PIO_BUFFER *IoBuffer
+    PIO_BUFFER *IoBuffer,
+    PBOOL LockedCopy
     )
 
 /*++
@@ -1877,7 +1885,9 @@ Routine Description:
     requirements will be returned. This new I/O buffer will not contain the
     same data as the originally supplied I/O buffer. It is up to the caller to
     decide which further actions need to be taken if a different buffer is
-    returned.
+    returned. The exception is if the locked parameter is returned as true. In
+    that case a new I/O buffer was created, but is backed by the same physical
+    pages, now locked in memory.
 
 Arguments:
 
@@ -1898,6 +1908,9 @@ Arguments:
         contains a pointer to the I/O buffer to be validated. On exit, it may
         point to a newly allocated I/O buffer that the caller must free.
 
+    LockedCopy - Supplies a pointer to a boolean that receives whether or not
+        the validated I/O buffer is a locked copy of the original.
+
 Return Value:
 
     Status code.
@@ -1907,7 +1920,6 @@ Return Value:
 {
 
     BOOL AllocateIoBuffer;
-    PIO_BUFFER Buffer;
     UINTN BufferOffset;
     UINTN CurrentOffset;
     UINTN EndOffset;
@@ -1916,47 +1928,108 @@ Return Value:
     UINTN FragmentIndex;
     UINTN FragmentOffset;
     UINTN FragmentSize;
+    PIO_BUFFER LockedBuffer;
+    PIO_BUFFER NewBuffer;
+    PIO_BUFFER OriginalBuffer;
+    ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddressEnd;
     PHYSICAL_ADDRESS PhysicalAddressStart;
     KSTATUS Status;
+    PVOID VirtualAddress;
 
-    Buffer = *IoBuffer;
-    if (Buffer == NULL) {
+    *LockedCopy = FALSE;
+    OriginalBuffer = *IoBuffer;
+    if (OriginalBuffer == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
 
     AllocateIoBuffer = FALSE;
+    LockedBuffer = OriginalBuffer;
+    NewBuffer = NULL;
     Status = STATUS_SUCCESS;
+    if (Alignment == 0) {
+        Alignment = 1;
+    }
 
     //
     // If the I/O buffer won't be able to fit the data and it is not
     // extendable, then do not re-allocate a different buffer, just fail.
     //
 
-    if (((Buffer->Internal.Flags & IO_BUFFER_FLAG_EXTENDABLE) == 0) &&
-        ((Buffer->Internal.CurrentOffset + SizeInBytes) >
-          Buffer->Internal.TotalSize)) {
+    if (((OriginalBuffer->Internal.Flags & IO_BUFFER_FLAG_EXTENDABLE) == 0) &&
+        ((OriginalBuffer->Internal.CurrentOffset + SizeInBytes) >
+          OriginalBuffer->Internal.TotalSize)) {
 
         Status = STATUS_BUFFER_TOO_SMALL;
         goto ValidateIoBufferEnd;
     }
 
     //
-    // DMA cannot be done to a user mode buffer.
+    // Do a quick virtual alignment check to avoid locking down a bunch of
+    // physical pages to only find out that they are not aligned. If the
+    // physical alignment is more than a page, the virtual addresses don't help
+    // as they might not be aligned even though the physical pages are. But if
+    // the alignment is less than a page and the virtual address is not
+    // properly aligned, then the physical address will not be properly aligned
+    // either.
     //
 
-    if ((Buffer->Internal.Flags & IO_BUFFER_FLAG_USER_MODE) != 0) {
-        AllocateIoBuffer = TRUE;
-        goto ValidateIoBufferEnd;
+    PageSize = MmPageSize();
+    BufferOffset = OriginalBuffer->Internal.CurrentOffset;
+    if (((OriginalBuffer->Internal.Flags & IO_BUFFER_FLAG_MAPPED) != 0) &&
+        (Alignment != 1) &&
+        (Alignment < PageSize) &&
+        (BufferOffset != OriginalBuffer->Internal.TotalSize)) {
+
+        FragmentIndex = 0;
+        CurrentOffset = 0;
+        EndOffset = BufferOffset + SizeInBytes;
+        if (EndOffset > OriginalBuffer->Internal.TotalSize) {
+            EndOffset = OriginalBuffer->Internal.TotalSize;
+        }
+
+        PhysicalAddressEnd = INVALID_PHYSICAL_ADDRESS;
+        while (BufferOffset < EndOffset) {
+            Fragment = &(OriginalBuffer->Fragment[FragmentIndex]);
+            if (BufferOffset >= (CurrentOffset + Fragment->Size)) {
+                CurrentOffset += Fragment->Size;
+                FragmentIndex += 1;
+                continue;
+            }
+
+            FragmentOffset = BufferOffset - CurrentOffset;
+            VirtualAddress = Fragment->VirtualAddress + FragmentOffset;
+            FragmentSize = Fragment->Size - FragmentOffset;
+
+            //
+            // The size and virtual address better be aligned.
+            //
+
+            if ((IS_POINTER_ALIGNED(VirtualAddress, Alignment) == FALSE) ||
+                (IS_ALIGNED(FragmentSize, Alignment) == FALSE)) {
+
+                AllocateIoBuffer = TRUE;
+                goto ValidateIoBufferEnd;
+            }
+
+            BufferOffset += FragmentSize;
+            CurrentOffset += Fragment->Size;
+
+            ASSERT(BufferOffset == CurrentOffset);
+
+            FragmentIndex += 1;
+        }
     }
 
     //
-    // If the I/O buffer does not have the backing memory locked in place, then
-    // a new buffer with pinned pages needs to be allocated.
+    // Make sure the I/O buffer is locked in place as the physical addresses
+    // need to be validated.
     //
 
-    if ((Buffer->Internal.Flags & IO_BUFFER_FLAG_MEMORY_LOCKED) == 0) {
-        AllocateIoBuffer = TRUE;
+    ASSERT(LockedBuffer == OriginalBuffer);
+
+    Status = MmpLockIoBuffer(&LockedBuffer);
+    if (!KSUCCESS(Status)) {
         goto ValidateIoBufferEnd;
     }
 
@@ -1966,18 +2039,18 @@ Return Value:
     // if necessary.
     //
 
-    BufferOffset = Buffer->Internal.CurrentOffset;
-    if (BufferOffset != Buffer->Internal.TotalSize) {
+    BufferOffset = LockedBuffer->Internal.CurrentOffset;
+    if (BufferOffset != LockedBuffer->Internal.TotalSize) {
         FragmentIndex = 0;
         CurrentOffset = 0;
         EndOffset = BufferOffset + SizeInBytes;
-        if (EndOffset > Buffer->Internal.TotalSize) {
-            EndOffset = Buffer->Internal.TotalSize;
+        if (EndOffset > LockedBuffer->Internal.TotalSize) {
+            EndOffset = LockedBuffer->Internal.TotalSize;
         }
 
         PhysicalAddressEnd = INVALID_PHYSICAL_ADDRESS;
         while (BufferOffset < EndOffset) {
-            Fragment = &(Buffer->Fragment[FragmentIndex]);
+            Fragment = &(LockedBuffer->Fragment[FragmentIndex]);
             if (BufferOffset >= (CurrentOffset + Fragment->Size)) {
                 CurrentOffset += Fragment->Size;
                 FragmentIndex += 1;
@@ -2032,9 +2105,16 @@ Return Value:
     // if necessary and possible.
     //
 
-    if (((Buffer->Internal.Flags & IO_BUFFER_FLAG_EXTENDABLE) != 0) &&
-        ((Buffer->Internal.CurrentOffset + SizeInBytes) >
-         Buffer->Internal.TotalSize)) {
+    if (((LockedBuffer->Internal.Flags & IO_BUFFER_FLAG_EXTENDABLE) != 0) &&
+        ((LockedBuffer->Internal.CurrentOffset + SizeInBytes) >
+         LockedBuffer->Internal.TotalSize)) {
+
+        //
+        // An extensible buffer should always be initialized with locked pages
+        // from the beginning.
+        //
+
+        ASSERT(LockedBuffer == OriginalBuffer);
 
         //
         // If the buffer must be physically contiguous, there is no guarantee
@@ -2043,16 +2123,17 @@ Return Value:
         //
 
         if ((PhysicallyContiguous != FALSE) &&
-            (Buffer->Internal.CurrentOffset != Buffer->Internal.TotalSize)) {
+            (LockedBuffer->Internal.CurrentOffset !=
+             LockedBuffer->Internal.TotalSize)) {
 
             AllocateIoBuffer = TRUE;
             goto ValidateIoBufferEnd;
         }
 
-        ExtensionSize = (Buffer->Internal.CurrentOffset + SizeInBytes) -
-                        Buffer->Internal.TotalSize;
+        ExtensionSize = (LockedBuffer->Internal.CurrentOffset + SizeInBytes) -
+                        LockedBuffer->Internal.TotalSize;
 
-        Status = MmpExtendIoBuffer(Buffer,
+        Status = MmpExtendIoBuffer(LockedBuffer,
                                    MinimumPhysicalAddress,
                                    MaximumPhysicalAddress,
                                    Alignment,
@@ -2064,20 +2145,35 @@ Return Value:
 
 ValidateIoBufferEnd:
     if (AllocateIoBuffer != FALSE) {
-        Buffer = MmAllocateNonPagedIoBuffer(MinimumPhysicalAddress,
-                                            MaximumPhysicalAddress,
-                                            Alignment,
-                                            SizeInBytes,
-                                            PhysicallyContiguous,
-                                            FALSE,
-                                            FALSE);
 
-        if (Buffer == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
+        //
+        // If the buffer was locked down and then found to be useless, release
+        // it now.
+        //
 
-        } else {
-            *IoBuffer = Buffer;
+        if (OriginalBuffer != LockedBuffer) {
+            MmFreeIoBuffer(LockedBuffer);
         }
+
+        NewBuffer = MmAllocateNonPagedIoBuffer(MinimumPhysicalAddress,
+                                               MaximumPhysicalAddress,
+                                               Alignment,
+                                               SizeInBytes,
+                                               PhysicallyContiguous,
+                                               FALSE,
+                                               FALSE);
+
+        if (NewBuffer == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+        }
+
+    } else if (OriginalBuffer != LockedBuffer) {
+        NewBuffer = LockedBuffer;
+        *LockedCopy = TRUE;
+    }
+
+    if (NewBuffer != NULL) {
+        *IoBuffer = NewBuffer;
     }
 
     return Status;
@@ -2838,9 +2934,11 @@ Return Value:
 
 {
 
+    ULONG ByteOffset;
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentIndex;
     UINTN FragmentSize;
+    PVOID FragmentVirtualAddress;
     PVOID *PageCacheEntries;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     UINTN PageIndex;
@@ -2859,7 +2957,9 @@ Return Value:
     PageSize = MmPageSize();
 
     //
-    // Determine the size of the fragments to be mapped.
+    // Determine the size of the fragments to be mapped. Align all fragments up
+    // to a page size so that the first and last fragments, which might not be
+    // full pages, get their own VA space.
     //
 
     Size = 0;
@@ -2868,7 +2968,9 @@ Return Value:
          FragmentIndex += 1) {
 
         Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-        Size += Fragment->Size;
+        ByteOffset = REMAINDER(Fragment->PhysicalAddress, PageSize);
+        FragmentSize = Fragment->Size + ByteOffset;
+        Size += ALIGN_RANGE_UP(FragmentSize, PageSize);
     }
 
     ASSERT(Size != 0);
@@ -2926,18 +3028,36 @@ Return Value:
          FragmentIndex += 1) {
 
         Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-        Fragment->VirtualAddress = VirtualAddress;
+
+        //
+        // If the physical address is not page aligned, then the stored virtual
+        // address should account for the page byte offset. This should only
+        // happen on the first fragment.
+        //
+
+        FragmentVirtualAddress = VirtualAddress;
         PhysicalAddress = Fragment->PhysicalAddress;
         FragmentSize = Fragment->Size;
+        ByteOffset = REMAINDER(PhysicalAddress, PageSize);
+
+        ASSERT((ByteOffset == 0) || (FragmentIndex == 0));
+
+        FragmentVirtualAddress += ByteOffset;
+        FragmentSize += ByteOffset;
+        PhysicalAddress -= ByteOffset;
+
+        //
+        // If the size is not aligned, align it up. This can only happen on the
+        // first and last fragments.
+        //
+
+        ASSERT((IS_ALIGNED(FragmentSize, PageSize) != FALSE) ||
+               (FragmentIndex == 0) ||
+               (FragmentIndex == (IoBuffer->FragmentCount - 1)));
+
+        FragmentSize = ALIGN_RANGE_UP(FragmentSize, PageSize);
+        Fragment->VirtualAddress = FragmentVirtualAddress;
         while (FragmentSize != 0) {
-
-            //
-            // The physical address and size should be page-aligned.
-            //
-
-            ASSERT(IS_ALIGNED(PhysicalAddress, PageSize) != FALSE);
-            ASSERT(IS_ALIGNED(FragmentSize, PageSize) != FALSE);
-
             MmpMapPage(PhysicalAddress, VirtualAddress, MapFlags);
 
             //
@@ -2993,6 +3113,7 @@ Return Value:
 
 {
 
+    ULONG ByteOffset;
     BOOL CacheMatch;
     PVOID CurrentAddress;
     PVOID EndAddress;
@@ -3059,8 +3180,12 @@ Return Value:
 
         if (PageCacheEntries != NULL) {
             FragmentSize = Fragment->Size - FragmentOffset;
-            PageCount = FragmentSize >> PageShift;
             CurrentAddress = Fragment->VirtualAddress + FragmentOffset;
+
+            ASSERT(IS_ALIGNED((UINTN)CurrentAddress, PageSize) != FALSE);
+            ASSERT(IS_ALIGNED(FragmentSize, PageSize) != FALSE);
+
+            PageCount = FragmentSize >> PageShift;
             for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
 
                 ASSERT(PageCacheIndex < IoBuffer->Internal.PageCacheEntryCount);
@@ -3156,12 +3281,31 @@ Return Value:
                 StartAddress = NULL;
             }
 
+            FragmentSize = Fragment->Size;
             if (StartAddress == NULL) {
                 StartAddress = Fragment->VirtualAddress;
-                EndAddress = Fragment->VirtualAddress;
+
+                //
+                // The virtual address of the first fragment may not be
+                // page-aligned. Align it down so that whole pages are unmapped.
+                //
+
+                ByteOffset = REMAINDER((UINTN)StartAddress, PageSize);
+
+                ASSERT((ByteOffset == 0) || (FragmentIndex == 0));
+
+                FragmentSize += ByteOffset;
+                StartAddress -= ByteOffset;
+                EndAddress = StartAddress;
             }
 
-            EndAddress += Fragment->Size;
+            //
+            // The fragment size may not be page aligned for the first and last
+            // segments. Align it up to a page so that whole pages are unmapped,
+            // to match the whole pages that were reserved.
+            //
+
+            EndAddress += ALIGN_RANGE_UP(FragmentSize, PageSize);
             FragmentIndex += 1;
         }
 
@@ -3490,6 +3634,7 @@ Return Value:
 {
 
     UINTN AllocationSize;
+    ULONG ByteOffset;
     UINTN BytesLocked;
     PVOID CurrentAddress;
     PVOID EndAddress;
@@ -3520,14 +3665,6 @@ Return Value:
     UnlockedIoBufferFlags = UnlockedIoBuffer->Internal.Flags;
     if ((UnlockedIoBufferFlags & IO_BUFFER_FLAG_MEMORY_LOCKED) != 0) {
         return STATUS_SUCCESS;
-    }
-
-    //
-    // Locking down user mode memory is not allowed.
-    //
-
-    if ((UnlockedIoBufferFlags & IO_BUFFER_FLAG_USER_MODE) != 0) {
-        return STATUS_NOT_SUPPORTED;
     }
 
     //
@@ -3587,9 +3724,22 @@ Return Value:
                                              (PageCount *
                                               sizeof(IO_BUFFER_FRAGMENT));
 
-    LockedIoBuffer->Internal.Flags = IO_BUFFER_FLAG_NON_PAGED |
-                                     IO_BUFFER_FLAG_MAPPED |
-                                     IO_BUFFER_FLAG_VIRTUALLY_CONTIGUOUS;
+    LockedIoBuffer->Internal.Flags = IO_BUFFER_FLAG_NON_PAGED;
+
+    //
+    // The mappings are not saved if a user mode buffer is being locked. Also
+    // get the appropriate process for section lookup.
+    //
+
+    if ((UnlockedIoBufferFlags & IO_BUFFER_FLAG_USER_MODE) == 0) {
+        LockedIoBuffer->Internal.Flags |= IO_BUFFER_FLAG_MAPPED |
+                                          IO_BUFFER_FLAG_VIRTUALLY_CONTIGUOUS;
+
+        Process = PsGetKernelProcess();
+
+    } else {
+        Process = PsGetCurrentProcess();
+    }
 
     LockedIoBuffer->Internal.CurrentOffset =
                                       UnlockedIoBuffer->Internal.CurrentOffset;
@@ -3600,7 +3750,6 @@ Return Value:
     // Make sure the entire buffer is in memory, and lock it down there.
     //
 
-    Process = PsGetKernelProcess();
     CurrentAddress = StartAddress;
     Fragment = NULL;
     FragmentIndex = 0;
@@ -3684,9 +3833,7 @@ Return Value:
         // except for the beginning and end.
         //
 
-        NextAddress = (PVOID)(UINTN)ALIGN_RANGE_UP((UINTN)CurrentAddress + 1,
-                                                   PageSize);
-
+        NextAddress = ALIGN_POINTER_UP(CurrentAddress + 1, PageSize);
         if (NextAddress > EndAddress) {
             NextAddress = EndAddress;
         }
@@ -3696,8 +3843,16 @@ Return Value:
         ASSERT(FragmentSize != 0);
 
         //
+        // The virtual address is not necessary page-aligned. Modify the
+        // physical address to match the virtual address.
+        //
+
+        ByteOffset = REMAINDER((UINTN)CurrentAddress, PageSize);
+        PhysicalAddress += ByteOffset;
+
+        //
         // If this buffer is contiguous with the last one, then just up the
-        // size of this fragment. Otherwise, add a new fragment.
+        // size of this fragment.
         //
 
         if ((Fragment != NULL) &&
@@ -3705,9 +3860,17 @@ Return Value:
 
             Fragment->Size += FragmentSize;
 
+        //
+        // Otherwise, add a new fragment, but do not fill in the virtual
+        // address if the original, unlocked buffer was from user mode.
+        //
+
         } else {
             Fragment = &(LockedIoBuffer->Fragment[FragmentIndex]);
-            Fragment->VirtualAddress = CurrentAddress;
+            if ((UnlockedIoBufferFlags & IO_BUFFER_FLAG_USER_MODE) == 0) {
+                Fragment->VirtualAddress = CurrentAddress;
+            }
+
             Fragment->PhysicalAddress = PhysicalAddress;
             Fragment->Size = FragmentSize;
             LockedIoBuffer->FragmentCount += 1;

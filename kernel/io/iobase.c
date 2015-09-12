@@ -4449,7 +4449,7 @@ IoWriteFileBlocks (
 
 Routine Description:
 
-    This routine write data directly to a file's disk blocks, bypassing the
+    This routine writes data directly to a file's disk blocks, bypassing the
     filesystem. It is meant for critical code paths, such as writing out the
     crash dump file during a system failure.
 
@@ -5108,7 +5108,7 @@ Return Value:
 
     Irp->U.ReadWrite.IoBuffer = Context->IoBuffer;
     Irp->U.ReadWrite.DeviceContext = Handle->DeviceContext;
-    Irp->U.ReadWrite.Flags = Context->Flags;
+    Irp->U.ReadWrite.IoFlags = Context->Flags;
     Irp->U.ReadWrite.TimeoutInMilliseconds = WAIT_TIME_INDEFINITE;
     Irp->U.ReadWrite.IoOffset = Context->Offset;
     Irp->U.ReadWrite.IoSizeInBytes = Context->SizeInBytes;
@@ -5190,7 +5190,7 @@ Return Value:
 
     Parameters.IoBuffer = Context->IoBuffer;
     Parameters.DeviceContext = Handle->DeviceContext;
-    Parameters.Flags = Context->Flags;
+    Parameters.IoFlags = Context->Flags;
     Parameters.TimeoutInMilliseconds = Context->TimeoutInMilliseconds;
     Parameters.IoSizeInBytes = Context->SizeInBytes;
     Parameters.IoBytesCompleted = 0;
@@ -5305,7 +5305,7 @@ Return Value:
 
     Parameters.IoBuffer = Context->IoBuffer;
     Parameters.DeviceContext = Handle->DeviceContext;
-    Parameters.Flags = Context->Flags;
+    Parameters.IoFlags = Context->Flags;
     Parameters.TimeoutInMilliseconds = Context->TimeoutInMilliseconds;
     Parameters.IoSizeInBytes = Context->SizeInBytes;
     Parameters.FileProperties = &(FileObject->Properties);

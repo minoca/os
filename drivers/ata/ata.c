@@ -190,8 +190,10 @@ AtapPerformDmaIo (
 
 KSTATUS
 AtapPerformPolledIo (
-    PIRP Irp,
-    PATA_CHILD Device
+    PIRP_READ_WRITE Irp,
+    PATA_CHILD Device,
+    BOOL Write,
+    BOOL CriticalMode
     );
 
 KSTATUS
@@ -215,17 +217,6 @@ AtapBlockWrite (
     ULONGLONG BlockAddress,
     UINTN BlockCount,
     PUINTN BlocksCompleted
-    );
-
-KSTATUS
-AtapPerformBlockPolledIo (
-    PATA_CHILD Device,
-    PIO_BUFFER IoBuffer,
-    ULONGLONG BlockAddress,
-    UINTN BlocksToComplete,
-    PUINTN BlocksCompleted,
-    BOOL Write,
-    BOOL CriticalMode
     );
 
 KSTATUS
@@ -693,10 +684,10 @@ Return Value:
 
     BOOL CompleteIrp;
     PATA_CHILD Device;
-    PIO_BUFFER IoBuffer;
-    KSTATUS IrpStatus;
-    PIO_BUFFER OriginalIoBuffer;
+    ULONG IrpReadWriteFlags;
+    BOOL PmReferenceAdded;
     KSTATUS Status;
+    BOOL Write;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
@@ -705,11 +696,28 @@ Return Value:
         return;
     }
 
-    CompleteIrp = FALSE;
-    IoBuffer = NULL;
+    CompleteIrp = TRUE;
+    Write = FALSE;
+    if (Irp->MinorCode == IrpMinorIoWrite) {
+        Write = TRUE;
+    }
 
     //
-    // Polled I/O is shared by a few code paths and validates the I/O buffer
+    // If this IRP is on the way down, always add a power management reference.
+    //
+
+    PmReferenceAdded = FALSE;
+    if (Irp->Direction == IrpDown) {
+        Status = PmDeviceAddReference(Device->OsDevice);
+        if (!KSUCCESS(Status)) {
+            goto DispatchIoEnd;
+        }
+
+        PmReferenceAdded = TRUE;
+    }
+
+    //
+    // Polled I/O is shared by a few code paths and prepares the IRP for I/O
     // further down the stack. It should also only be hit in the down direction
     // path as it always completes the IRP.
     //
@@ -718,68 +726,38 @@ Return Value:
 
         ASSERT(Irp->Direction == IrpDown);
 
-        CompleteIrp = TRUE;
-        Status = AtapPerformPolledIo(Irp, Device);
+        Status = AtapPerformPolledIo(&(Irp->U.ReadWrite), Device, Write, FALSE);
         goto DispatchIoEnd;
     }
 
     //
-    // If the IRP is on the way up, then clean up after the DMA if this IRP is
-    // still sitting in the channel. Always return from here as the end of this
-    // routine completes the IRP. An IRP going up is already complete.
+    // Set the IRP read/write flags for the preparation and completion steps.
+    //
+
+    IrpReadWriteFlags = IRP_READ_WRITE_FLAG_DMA;
+    if (Write != FALSE) {
+        IrpReadWriteFlags |= IRP_READ_WRITE_FLAG_WRITE;
+    }
+
+    //
+    // If the IRP is on the way up, then clean up after the DMA as this IRP is
+    // still sitting in the channel. An IRP going up is already complete.
     //
 
     if (Irp->Direction == IrpUp) {
+        CompleteIrp = FALSE;
 
         ASSERT(Irp == Device->Channel->Irp);
         ASSERT(Device == Device->Channel->OwningChild);
         ASSERT(KeIsQueuedLockHeld(Device->Channel->Lock) != FALSE);
-        ASSERT(Device->Channel->IoBuffer != NULL);
 
-        IoBuffer = Device->Channel->IoBuffer;
-        Device->Channel->IoBuffer = NULL;
         Device->Channel->OwningChild = NULL;
         Device->Channel->Irp = NULL;
-        PmDeviceReleaseReference(Device->OsDevice);
         KeReleaseQueuedLock(Device->Channel->Lock);
-        OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
-
-        //
-        // Release the buffer used for the I/O if it is different from the
-        // IRP's I/O buffer. Also, if this is a read operation, copy the
-        // bytes back to the original I/O buffer. If this fails, act like
-        // none of the I/O succeeded and fail the operation.
-        //
-
-        if (OriginalIoBuffer != IoBuffer) {
-            if ((Irp->MinorCode == IrpMinorIoRead) &&
-                (Irp->U.ReadWrite.IoBytesCompleted != 0)) {
-
-                Status = MmCopyIoBuffer(OriginalIoBuffer,
-                                        0,
-                                        IoBuffer,
-                                        0,
-                                        Irp->U.ReadWrite.IoBytesCompleted);
-
-                //
-                // If the IRP succeeded but this final copy failed,
-                // re-complete the IRP with a failing status.
-                //
-
-                if (!KSUCCESS(Status)) {
-                    Irp->U.ReadWrite.IoBytesCompleted = 0;
-                    Irp->U.ReadWrite.NewIoOffset =
-                                                 Irp->U.ReadWrite.IoOffset;
-
-                    IrpStatus = IoGetIrpStatus(Irp);
-                    if (KSUCCESS(IrpStatus)) {
-                        IoCompleteIrp(AtaDriver, Irp, Status);
-                    }
-                }
-            }
-
-        } else {
-            IoBuffer = NULL;
+        PmDeviceReleaseReference(Device->OsDevice);
+        Status = IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
+        if (!KSUCCESS(Status)) {
+            IoUpdateIrpStatus(Irp, Status);
         }
 
     //
@@ -787,80 +765,49 @@ Return Value:
     //
 
     } else {
-        Status = PmDeviceAddReference(Device->OsDevice);
-        if (!KSUCCESS(Status)) {
-            IoCompleteIrp(AtaDriver, Irp, Status);
-            goto DispatchIoEnd;
-        }
-
         Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
 
         //
-        // Before acquiring the channel's lock and starting the DMA,
-        // validate that the I/O buffer is good for ATA (i.e. it must use
-        // physical addresses that are less than 4GB and be sector size
-        // aligned).
+        // Before acquiring the channel's lock and starting the DMA, prepare
+        // the I/O context for ATA (i.e. it must use physical addresses that
+        // are less than 4GB and be sector size aligned).
         //
 
-        OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
-        IoBuffer = OriginalIoBuffer;
-        Status = MmValidateIoBuffer(0,
-                                    MAX_ULONG,
-                                    ATA_SECTOR_SIZE,
-                                    Irp->U.ReadWrite.IoSizeInBytes,
-                                    FALSE,
-                                    &IoBuffer);
+        Status = IoPrepareReadWriteIrp(&(Irp->U.ReadWrite),
+                                       ATA_SECTOR_SIZE,
+                                       0,
+                                       MAX_ULONG,
+                                       IrpReadWriteFlags);
 
         if (!KSUCCESS(Status)) {
-            IoBuffer = NULL;
             goto DispatchIoEnd;
         }
 
         //
-        // Copy the bytes into the valid I/O buffer, if necessary.
-        //
-
-        if ((OriginalIoBuffer != IoBuffer) &&
-            (Irp->MinorCode == IrpMinorIoWrite)) {
-
-            Status = MmCopyIoBuffer(IoBuffer,
-                                    0,
-                                    OriginalIoBuffer,
-                                    0,
-                                    Irp->U.ReadWrite.IoSizeInBytes);
-
-            if (!KSUCCESS(Status)) {
-                goto DispatchIoEnd;
-            }
-        }
-
-        //
-        // Fire off the DMA. If this succeeds, then return with the lock held.
+        // Fire off the DMA. If this succeeds, it will have pended the IRP.
+        // Return with the lock held.
         //
 
         KeAcquireQueuedLock(Device->Channel->Lock);
         Device->Channel->Irp = Irp;
         Device->Channel->OwningChild = Device;
-        Device->Channel->IoBuffer = IoBuffer;
+        CompleteIrp = FALSE;
         Status = AtapPerformDmaIo(Irp, Device, FALSE);
         if (!KSUCCESS(Status)) {
-            Device->Channel->IoBuffer = NULL;
             Device->Channel->OwningChild = NULL;
             Device->Channel->Irp = NULL;
             KeReleaseQueuedLock(Device->Channel->Lock);
-
-        } else {
-            IoBuffer = NULL;
+            IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
+            CompleteIrp = TRUE;
         }
     }
 
 DispatchIoEnd:
-    if (IoBuffer != NULL) {
-        MmFreeIoBuffer(IoBuffer);
-    }
-
     if (CompleteIrp != FALSE) {
-        PmDeviceReleaseReference(Device->OsDevice);
+        if (PmReferenceAdded != FALSE) {
+            PmDeviceReleaseReference(Device->OsDevice);
+        }
+
         IoCompleteIrp(AtaDriver, Irp, Status);
     }
 
@@ -1139,7 +1086,7 @@ Return Value:
 
             if ((Status == STATUS_SUCCESS) &&
                 (Irp->MinorCode == IrpMinorIoWrite) &&
-                ((Irp->U.ReadWrite.Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0)) {
+                ((Irp->U.ReadWrite.IoFlags & IO_FLAG_DATA_SYNCHRONIZED) != 0)) {
 
                 Status = AtapExecuteCacheFlush(Channel->OwningChild, FALSE);
 
@@ -2316,9 +2263,9 @@ Return Value:
 
     ASSERT(Device->Channel->Irp == Irp);
     ASSERT(Device->Channel->OwningChild == Device);
-    ASSERT(Device->Channel->IoBuffer != NULL);
+    ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
 
-    IoBuffer = Device->Channel->IoBuffer;
+    IoBuffer = Irp->U.ReadWrite.IoBuffer;
     BytesPreviouslyCompleted = Irp->U.ReadWrite.IoBytesCompleted;
     BytesToComplete = Irp->U.ReadWrite.IoSizeInBytes;
     IoOffset = Irp->U.ReadWrite.NewIoOffset;
@@ -2520,7 +2467,14 @@ Return Value:
         DmaCommand |= ATA_BUS_MASTER_COMMAND_DMA_READ;
     }
 
-    IoPendIrp(AtaDriver, Irp);
+    //
+    // If this is the first set of DMA for the IRP, pend it.
+    //
+
+    if (BytesPreviouslyCompleted == 0) {
+        IoPendIrp(AtaDriver, Irp);
+    }
+
     AtapWriteRegister(Device->Channel,
                       AtaRegisterBusMasterStatus,
                       IDE_STATUS_INTERRUPT | IDE_STATUS_ERROR);
@@ -2539,8 +2493,10 @@ PerformDmaIoEnd:
 
 KSTATUS
 AtapPerformPolledIo (
-    PIRP Irp,
-    PATA_CHILD Device
+    PIRP_READ_WRITE IrpReadWrite,
+    PATA_CHILD Device,
+    BOOL Write,
+    BOOL CriticalMode
     )
 
 /*++
@@ -2551,9 +2507,16 @@ Routine Description:
 
 Arguments:
 
-    Irp - Supplies a pointer to the I/O request packet.
+    IrpReadWrite - Supplies a pointer to the I/O request read/write packet.
 
     Device - Supplies a pointer to the ATA child device.
+
+    Write - Supplies a boolean indicating if this is a read operation (TRUE) or
+        a write operation (FALSE).
+
+    CriticalMode - Supplies a boolean indicating if this I/O operation is in
+        a critical code path (TRUE), such as a crash dump I/O request, or in
+        the default code path.
 
 Return Value:
 
@@ -2563,39 +2526,149 @@ Return Value:
 
 {
 
-    ULONGLONG BlockAddress;
-    UINTN BlocksCompleted;
-    UINTN BlocksToComplete;
-    UINTN BytesCompleted;
-    UINTN BytesToComplete;
-    ULONGLONG IoOffset;
+    UINTN BlockCount;
+    ULONGLONG BlockOffset;
+    UINTN BytesRemaining;
+    UINTN BytesThisRound;
+    KSTATUS CompletionStatus;
+    PIO_BUFFER_FRAGMENT Fragment;
+    UINTN FragmentIndex;
+    UINTN FragmentOffset;
+    PIO_BUFFER IoBuffer;
+    UINTN IoBufferOffset;
+    ULONG IrpReadWriteFlags;
+    BOOL ReadWriteIrpPrepared;
     KSTATUS Status;
-    BOOL Write;
+    PVOID VirtualAddress;
 
-    IoOffset = Irp->U.ReadWrite.IoOffset;
-    BytesToComplete = Irp->U.ReadWrite.IoSizeInBytes;
+    IrpReadWrite->IoBytesCompleted = 0;
+    ReadWriteIrpPrepared = FALSE;
 
-    ASSERT(IS_ALIGNED(IoOffset, ATA_SECTOR_SIZE) != FALSE);
-    ASSERT(IS_ALIGNED(BytesToComplete, ATA_SECTOR_SIZE) != FALSE);
+    //
+    // All requests should be block aligned.
+    //
 
-    Write = FALSE;
-    if (Irp->MinorCode == IrpMinorIoWrite) {
-        Write = TRUE;
+    ASSERT(IrpReadWrite->IoBuffer != NULL);
+    ASSERT(IS_ALIGNED(IrpReadWrite->IoSizeInBytes, ATA_SECTOR_SIZE) != FALSE);
+    ASSERT(IS_ALIGNED(IrpReadWrite->IoOffset, ATA_SECTOR_SIZE) != FALSE);
+
+    //
+    // Prepare the I/O buffer for the polled I/O operation.
+    //
+
+    IrpReadWriteFlags = IRP_READ_WRITE_FLAG_POLLED;
+    if (Write != FALSE) {
+        IrpReadWriteFlags |= IRP_READ_WRITE_FLAG_WRITE;
     }
 
-    BlockAddress = IoOffset / ATA_SECTOR_SIZE;
-    BlocksToComplete = BytesToComplete / ATA_SECTOR_SIZE;
-    Status = AtapPerformBlockPolledIo(Device,
-                                      Irp->U.ReadWrite.IoBuffer,
-                                      BlockAddress,
-                                      BlocksToComplete,
-                                      &BlocksCompleted,
-                                      Write,
-                                      FALSE);
+    Status = IoPrepareReadWriteIrp(IrpReadWrite,
+                                   ATA_SECTOR_SIZE,
+                                   0,
+                                   MAX_ULONGLONG,
+                                   IrpReadWriteFlags);
 
-    BytesCompleted = BlocksCompleted * ATA_SECTOR_SIZE;
-    Irp->U.ReadWrite.IoBytesCompleted = BytesCompleted;
-    Irp->U.ReadWrite.NewIoOffset = IoOffset + BytesCompleted;
+    if (!KSUCCESS(Status)) {
+        goto PerformPolledIoEnd;
+    }
+
+    ReadWriteIrpPrepared = TRUE;
+
+    //
+    // Make sure the I/O buffer is mapped before use. ATA currently depends on
+    // the buffer being mapped.
+    //
+
+    IoBuffer = IrpReadWrite->IoBuffer;
+    Status = MmMapIoBuffer(IoBuffer, FALSE, FALSE, FALSE);
+    if (!KSUCCESS(Status)) {
+        goto PerformPolledIoEnd;
+    }
+
+    //
+    // Find the starting fragment based on the current offset.
+    //
+
+    IoBufferOffset = MmGetIoBufferCurrentOffset(IoBuffer);
+    FragmentIndex = 0;
+    FragmentOffset = 0;
+    while (IoBufferOffset != 0) {
+
+        ASSERT(FragmentIndex < IoBuffer->FragmentCount);
+
+        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
+        if (IoBufferOffset < Fragment->Size) {
+            FragmentOffset = IoBufferOffset;
+            break;
+        }
+
+        IoBufferOffset -= Fragment->Size;
+        FragmentIndex += 1;
+    }
+
+    //
+    // Loop reading in or writing out each fragment in the I/O buffer.
+    //
+
+    BlockOffset = IrpReadWrite->IoOffset / ATA_SECTOR_SIZE;
+    BytesRemaining = IrpReadWrite->IoSizeInBytes;
+    while (BytesRemaining != 0) {
+
+        ASSERT(FragmentIndex < IoBuffer->FragmentCount);
+
+        Fragment = (PIO_BUFFER_FRAGMENT)&(IoBuffer->Fragment[FragmentIndex]);
+        VirtualAddress = Fragment->VirtualAddress + FragmentOffset;
+        BytesThisRound = Fragment->Size - FragmentOffset;
+        if (BytesRemaining < BytesThisRound) {
+            BytesThisRound = BytesRemaining;
+        }
+
+        ASSERT(IS_ALIGNED(BytesThisRound, ATA_SECTOR_SIZE) != FALSE);
+
+        BlockCount = BytesThisRound / ATA_SECTOR_SIZE;
+
+        //
+        // Make sure the system isn't trying to do I/O off the end of the disk.
+        //
+
+        ASSERT(BlockOffset < Device->TotalSectors);
+        ASSERT(BlockCount >= 1);
+
+        Status = AtapReadWriteSectorsPio(Device,
+                                         BlockOffset,
+                                         BlockCount,
+                                         VirtualAddress,
+                                         Write,
+                                         CriticalMode);
+
+        if (!KSUCCESS(Status)) {
+            goto PerformPolledIoEnd;
+        }
+
+        BlockOffset += BlockCount;
+        BytesRemaining -= BytesThisRound;
+        FragmentOffset += BytesThisRound;
+        IrpReadWrite->IoBytesCompleted += BytesThisRound;
+        if (FragmentOffset >= Fragment->Size) {
+            FragmentIndex += 1;
+            FragmentOffset = 0;
+        }
+    }
+
+    Status = STATUS_SUCCESS;
+
+PerformPolledIoEnd:
+    if (ReadWriteIrpPrepared != FALSE) {
+        CompletionStatus = IoCompleteReadWriteIrp(IrpReadWrite,
+                                                  IrpReadWriteFlags);
+
+        if (!KSUCCESS(CompletionStatus) && KSUCCESS(Status)) {
+            Status = CompletionStatus;
+        }
+    }
+
+    IrpReadWrite->NewIoOffset = IrpReadWrite->IoOffset +
+                                IrpReadWrite->IoBytesCompleted;
+
     return Status;
 }
 
@@ -2676,6 +2749,7 @@ Return Value:
 
 {
 
+    IRP_READ_WRITE IrpReadWrite;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelHigh);
@@ -2687,14 +2761,11 @@ Return Value:
     // dead lock as all other processors and threads are likely frozen.
     //
 
-    Status = AtapPerformBlockPolledIo(DiskToken,
-                                      IoBuffer,
-                                      BlockAddress,
-                                      BlockCount,
-                                      BlocksCompleted,
-                                      FALSE,
-                                      TRUE);
-
+    IrpReadWrite.IoBuffer = IoBuffer;
+    IrpReadWrite.IoOffset = BlockAddress * ATA_SECTOR_SIZE;
+    IrpReadWrite.IoSizeInBytes = BlockCount * ATA_SECTOR_SIZE;
+    Status = AtapPerformPolledIo(&IrpReadWrite, DiskToken, FALSE, TRUE);
+    *BlocksCompleted = IrpReadWrite.IoBytesCompleted / ATA_SECTOR_SIZE;
     return Status;
 }
 
@@ -2740,6 +2811,7 @@ Return Value:
 
 {
 
+    IRP_READ_WRITE IrpReadWrite;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelHigh);
@@ -2751,217 +2823,11 @@ Return Value:
     // dead lock as all other processors and threads are likely frozen.
     //
 
-    Status = AtapPerformBlockPolledIo(DiskToken,
-                                      IoBuffer,
-                                      BlockAddress,
-                                      BlockCount,
-                                      BlocksCompleted,
-                                      TRUE,
-                                      TRUE);
-
-    return Status;
-}
-
-KSTATUS
-AtapPerformBlockPolledIo (
-    PATA_CHILD Device,
-    PIO_BUFFER IoBuffer,
-    ULONGLONG BlockAddress,
-    UINTN BlocksToComplete,
-    PUINTN BlocksCompleted,
-    BOOL Write,
-    BOOL CriticalMode
-    )
-
-/*++
-
-Routine Description:
-
-    This routine performs polled I/O data transfers.
-
-Arguments:
-
-    Device - Supplies a pointer to the ATA child device.
-
-    IoBuffer - Supplies a pointer to the I/O buffer to use for read or write.
-
-    BlockAddress - Supplies the block number to read from or write to (LBA).
-
-    BlocksToComplete - Supplies the number of blocks to read or write.
-
-    BlocksCompleted - Supplies a pointer that receives the total number of
-        blocks read or written.
-
-    Write - Supplies a boolean indicating if this is a read operation (TRUE) or
-        a write operation (FALSE).
-
-    CriticalMode - Supplies a boolean indicating if this I/O operation is in
-        a critical code path (TRUE), such as a crash dump I/O request, or in
-        the default code path.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    UINTN BlockCount;
-    ULONGLONG BlockOffset;
-    UINTN BlocksComplete;
-    PIO_BUFFER_FRAGMENT Fragment;
-    UINTN FragmentIndex;
-    UINTN FragmentOffset;
-    UINTN FragmentSize;
-    UINTN IoBufferOffset;
-    PIO_BUFFER OriginalIoBuffer;
-    PHYSICAL_ADDRESS PhysicalAddress;
-    KSTATUS Status;
-    PVOID VirtualAddress;
-
-    FragmentIndex = 0;
-    BlocksComplete = 0;
-
-    ASSERT(IoBuffer != NULL);
-
-    OriginalIoBuffer = IoBuffer;
-    Status = MmValidateIoBuffer(0,
-                                MAX_ULONGLONG,
-                                ATA_SECTOR_SIZE,
-                                BlocksToComplete * ATA_SECTOR_SIZE,
-                                FALSE,
-                                &IoBuffer);
-
-    if (!KSUCCESS(Status)) {
-        goto PerformPolledBlockIoEnd;
-    }
-
-    ASSERT((CriticalMode == FALSE) || (OriginalIoBuffer == IoBuffer));
-
-    //
-    // Make sure the I/O buffer is mapped before use. ATA currently depends on
-    // the buffer being mapped.
-    //
-
-    Status = MmMapIoBuffer(IoBuffer, FALSE, FALSE, FALSE);
-    if (!KSUCCESS(Status)) {
-        goto PerformPolledBlockIoEnd;
-    }
-
-    //
-    // If this is a write operation and a new I/O buffer was allocated, then
-    // copy the data into the new buffer.
-    //
-
-    if ((Write != FALSE) && (OriginalIoBuffer != IoBuffer)) {
-        Status = MmCopyIoBuffer(IoBuffer,
-                                0,
-                                OriginalIoBuffer,
-                                0,
-                                BlocksToComplete * ATA_SECTOR_SIZE);
-
-        if (!KSUCCESS(Status)) {
-            goto PerformPolledBlockIoEnd;
-        }
-    }
-
-    //
-    // Find the starting fragment based on the current offset.
-    //
-
-    IoBufferOffset = MmGetIoBufferCurrentOffset(IoBuffer);
-    FragmentIndex = 0;
-    FragmentOffset = 0;
-    while (IoBufferOffset != 0) {
-
-        ASSERT(FragmentIndex < IoBuffer->FragmentCount);
-
-        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-        if (IoBufferOffset < Fragment->Size) {
-            FragmentOffset = IoBufferOffset;
-            break;
-        }
-
-        IoBufferOffset -= Fragment->Size;
-        FragmentIndex += 1;
-    }
-
-    //
-    // Loop reading in or writing out each fragment in the I/O buffer.
-    //
-
-    BlockOffset = BlockAddress;
-    while (BlocksComplete != BlocksToComplete) {
-
-        ASSERT(FragmentIndex < IoBuffer->FragmentCount);
-
-        Fragment = (PIO_BUFFER_FRAGMENT)&(IoBuffer->Fragment[FragmentIndex]);
-        VirtualAddress = Fragment->VirtualAddress + FragmentOffset;
-        PhysicalAddress = Fragment->PhysicalAddress + FragmentOffset;
-        FragmentSize = Fragment->Size - FragmentOffset;
-
-        ASSERT(IS_ALIGNED(PhysicalAddress, ATA_SECTOR_SIZE) != FALSE);
-        ASSERT(IS_ALIGNED(FragmentSize, ATA_SECTOR_SIZE) != FALSE);
-
-        BlockCount = FragmentSize / ATA_SECTOR_SIZE;
-        if ((BlocksToComplete - BlocksComplete) < BlockCount) {
-            BlockCount = BlocksToComplete - BlocksComplete;
-        }
-
-        //
-        // Make sure the system isn't trying to do I/O off the end of the disk.
-        //
-
-        ASSERT(BlockOffset < Device->TotalSectors);
-        ASSERT(BlockCount >= 1);
-
-        Status = AtapReadWriteSectorsPio(Device,
-                                         BlockOffset,
-                                         BlockCount,
-                                         VirtualAddress,
-                                         Write,
-                                         CriticalMode);
-
-        if (!KSUCCESS(Status)) {
-            goto PerformPolledBlockIoEnd;
-        }
-
-        BlockOffset += BlockCount;
-        BlocksComplete += BlockCount;
-        FragmentOffset += BlockCount * ATA_SECTOR_SIZE;
-        if (FragmentOffset >= Fragment->Size) {
-            FragmentIndex += 1;
-            FragmentOffset = 0;
-        }
-    }
-
-    Status = STATUS_SUCCESS;
-
-PerformPolledBlockIoEnd:
-
-    //
-    // If blocks were processed, but not to the original I/O buffer, then copy
-    // them into the original. If this fails, act like nothing worked.
-    //
-
-    if (OriginalIoBuffer != IoBuffer) {
-        if ((Write == FALSE) && (BlocksComplete != 0)) {
-            Status = MmCopyIoBuffer(OriginalIoBuffer,
-                                    0,
-                                    IoBuffer,
-                                    0,
-                                    BlocksComplete * ATA_SECTOR_SIZE);
-
-            if (!KSUCCESS(Status)) {
-                BlocksComplete = 0;
-            }
-        }
-
-        MmFreeIoBuffer(IoBuffer);
-    }
-
-    *BlocksCompleted = BlocksComplete;
+    IrpReadWrite.IoBuffer = IoBuffer;
+    IrpReadWrite.IoOffset = BlockAddress * ATA_SECTOR_SIZE;
+    IrpReadWrite.IoSizeInBytes = BlockCount * ATA_SECTOR_SIZE;
+    Status = AtapPerformPolledIo(&IrpReadWrite, DiskToken, TRUE, TRUE);
+    *BlocksCompleted = IrpReadWrite.IoBytesCompleted / ATA_SECTOR_SIZE;
     return Status;
 }
 

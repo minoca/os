@@ -38,6 +38,7 @@ Author:
 //
 
 #define PAGING_ENTRY_FLAG_PAGING_OUT 0x0001
+#define PAGING_ENTRY_FLAG_FREED      0x0002
 
 //
 // Define flags for flushing image sections.
@@ -361,7 +362,7 @@ Return Value:
 
 PHYSICAL_ADDRESS
 MmpAllocatePhysicalPages (
-    ULONG PageCount,
+    ULONGLONG PageCount,
     ULONGLONG Alignment
     );
 

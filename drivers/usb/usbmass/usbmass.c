@@ -337,10 +337,6 @@ Members:
         Whether this is NULL or non-NULL also serves to tell the callback
         routine whether to signal the IRP or the event.
 
-    IoBuffer - Stores a pointer to the I/O buffer that the disk is currently
-        processing. There must be an associated IRP filled in when this is not
-        NULL.
-
     BlockCount - Stores the maximum number of blocks in the device.
 
     BlockShift - Stores the number of bits to shift to convert from bytes to
@@ -372,7 +368,6 @@ typedef struct _USB_DISK {
     ULONG StatusTransferAttempts;
     PKEVENT Event;
     PIRP Irp;
-    PIO_BUFFER IoBuffer;
     ULONG BlockCount;
     ULONG BlockShift;
     UINTN CurrentFragment;
@@ -770,9 +765,7 @@ UsbMasspSetupCommand (
 
 KSTATUS
 UsbMasspSendCommand (
-    PUSB_DISK Disk,
-    PIRP Irp,
-    PIO_BUFFER IoBuffer
+    PUSB_DISK Disk
     );
 
 VOID
@@ -790,9 +783,7 @@ UsbMasspEvaluateCommandStatus (
 
 KSTATUS
 UsbMasspSendNextIoRequest (
-    PIRP Irp,
-    PUSB_DISK Disk,
-    PIO_BUFFER IoBuffer
+    PUSB_DISK Disk
     );
 
 KSTATUS
@@ -845,11 +836,8 @@ UsbMasspBlockIoWrite (
 
 KSTATUS
 UsbMasspPerformPolledIo (
+    PIRP_READ_WRITE IrpReadWrite,
     PUSB_DISK Disk,
-    PIO_BUFFER IoBuffer,
-    ULONGLONG BlockAddress,
-    UINTN BlocksToComplete,
-    PUINTN BlocksCompleted,
     BOOL Write
     );
 
@@ -1302,204 +1290,165 @@ Return Value:
 
 {
 
+    BOOL CompleteIrp;
     PUSB_DISK Disk;
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentIndex;
     UINTN FragmentOffset;
     PIO_BUFFER IoBuffer;
     UINTN IoBufferOffset;
-    KSTATUS IrpStatus;
+    ULONG IrpReadWriteFlags;
     BOOL LockHeld;
-    PIO_BUFFER OriginalIoBuffer;
+    BOOL ReadWriteIrpPrepared;
     KSTATUS Status;
 
+    CompleteIrp = TRUE;
     Disk = (PUSB_DISK)DeviceContext;
     LockHeld = FALSE;
+    ReadWriteIrpPrepared = FALSE;
 
     ASSERT(Disk->Type == UsbMassStorageLogicalDisk);
 
     //
-    // Handle the IRP coming back up the stack. It has already been completed,
-    // so just release the lock and if the IRP's buffer was not used directly
-    // for the I/O, copy the contents back into the IRP's buffer.
+    // Set the read/write flags for preparation. As USB mass storage does not
+    // do DMA directly, nor does it do polled I/O, don't set either flag.
+    //
+
+    IrpReadWriteFlags = 0;
+    if (Irp->MinorCode == IrpMinorIoWrite) {
+        IrpReadWriteFlags |= IRP_READ_WRITE_FLAG_WRITE;
+    }
+
+    //
+    // If the IRP is on the way up, then clean up after the DMA as this IRP is
+    // still sitting in the channel. An IRP going up is already complete.
     //
 
     if (Irp->Direction != IrpDown) {
+        CompleteIrp = FALSE;
 
         ASSERT(Irp == Disk->Irp);
 
-        IoBuffer = Disk->IoBuffer;
-        Disk->IoBuffer = NULL;
         Disk->Irp = NULL;
         KeReleaseQueuedLock(Disk->Device->Lock);
-        OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
-        if (OriginalIoBuffer != IoBuffer) {
-            if ((Irp->MinorCode == IrpMinorIoRead) &&
-                (Irp->U.ReadWrite.IoBytesCompleted != 0)) {
-
-                Status = MmCopyIoBuffer(OriginalIoBuffer,
-                                        0,
-                                        IoBuffer,
-                                        0,
-                                        Irp->U.ReadWrite.IoBytesCompleted);
-
-                if (!KSUCCESS(Status)) {
-                    Irp->U.ReadWrite.IoBytesCompleted = 0;
-                    IrpStatus = IoGetIrpStatus(Irp);
-                    if (KSUCCESS(IrpStatus)) {
-                        IoCompleteIrp(UsbMassDriver, Irp, Status);
-                    }
-
-                } else {
-                    for (FragmentIndex = 0;
-                         FragmentIndex < OriginalIoBuffer->FragmentCount;
-                         FragmentIndex += 1) {
-
-                        Fragment = &(OriginalIoBuffer->Fragment[FragmentIndex]);
-                        MmFlushBuffer(Fragment->VirtualAddress, Fragment->Size);
-                    }
-                }
-            }
-
-            MmFreeIoBuffer(IoBuffer);
+        Status = IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
+        if (!KSUCCESS(Status)) {
+            IoUpdateIrpStatus(Irp, Status);
         }
 
-        return;
-    }
+    } else {
 
-    //
-    // If the device is not connected, make a best effort to fail calls early.
-    //
+        ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
 
-    if (Disk->Connected == FALSE) {
-        IoCompleteIrp(UsbMassDriver, Irp, STATUS_DEVICE_NOT_CONNECTED);
-        return;
-    }
+        //
+        // Before acquiring the device's lock and starting the transfer,
+        // prepare the I/O context for USB Mass Storage (i.e. it must use
+        // physical addresses that are less than 4GB and be cache aligned).
+        //
 
-    ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
-
-    //
-    // Validate the I/O buffer. Limit the physical address range to 4GB as some
-    // host controllers do not support higher physical addresses.
-    //
-
-    OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
-    IoBuffer = OriginalIoBuffer;
-    Status = MmValidateIoBuffer(0,
-                                MAX_ULONG,
-                                MmGetIoBufferAlignment(),
-                                Irp->U.ReadWrite.IoSizeInBytes,
-                                FALSE,
-                                &IoBuffer);
-
-    if (!KSUCCESS(Status)) {
-        goto DispatchIoEnd;
-    }
-
-    //
-    // If the I/O buffer was not valid and a new I/O buffer was created, copy
-    // the data to write into the I/O buffer that will be used for the
-    // transfers.
-    //
-
-    if ((Irp->MinorCode == IrpMinorIoWrite) && (IoBuffer != OriginalIoBuffer)) {
-        Status = MmCopyIoBuffer(IoBuffer,
-                                0,
-                                OriginalIoBuffer,
-                                0,
-                                Irp->U.ReadWrite.IoSizeInBytes);
+        Status = IoPrepareReadWriteIrp(&(Irp->U.ReadWrite),
+                                       1 << Disk->BlockShift,
+                                       0,
+                                       MAX_ULONG,
+                                       IrpReadWriteFlags);
 
         if (!KSUCCESS(Status)) {
             goto DispatchIoEnd;
         }
-    }
 
-    //
-    // Map the I/O buffer.
-    //
-    // TODO: Make sure USB Mass does not need the I/O buffer mapped.
-    //
+        ReadWriteIrpPrepared = TRUE;
+        IoBuffer = Irp->U.ReadWrite.IoBuffer;
 
-    Status = MmMapIoBuffer(IoBuffer, FALSE, FALSE, FALSE);
-    if (!KSUCCESS(Status)) {
-        goto DispatchIoEnd;
-    }
+        //
+        // Map the I/O buffer.
+        //
+        // TODO: Make sure USB Mass does not need the I/O buffer mapped.
+        //
 
-    //
-    // Find the starting fragment based on the current offset.
-    //
-
-    IoBufferOffset = MmGetIoBufferCurrentOffset(IoBuffer);
-    FragmentIndex = 0;
-    FragmentOffset = 0;
-    while (IoBufferOffset != 0) {
-
-        ASSERT(FragmentIndex < IoBuffer->FragmentCount);
-
-        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-        if (IoBufferOffset < Fragment->Size) {
-            FragmentOffset = IoBufferOffset;
-            break;
+        Status = MmMapIoBuffer(IoBuffer, FALSE, FALSE, FALSE);
+        if (!KSUCCESS(Status)) {
+            goto DispatchIoEnd;
         }
 
-        IoBufferOffset -= Fragment->Size;
-        FragmentIndex += 1;
-    }
+        //
+        // Find the starting fragment based on the current offset.
+        //
 
-    //
-    // Lock the disk to serialize all I/O access to the device.
-    //
+        IoBufferOffset = MmGetIoBufferCurrentOffset(IoBuffer);
+        FragmentIndex = 0;
+        FragmentOffset = 0;
+        while (IoBufferOffset != 0) {
 
-    KeAcquireQueuedLock(Disk->Device->Lock);
-    LockHeld = TRUE;
+            ASSERT(FragmentIndex < IoBuffer->FragmentCount);
 
-    //
-    // Do not accept I/O requests to disconnected disks.
-    //
+            Fragment = &(IoBuffer->Fragment[FragmentIndex]);
+            if (IoBufferOffset < Fragment->Size) {
+                FragmentOffset = IoBufferOffset;
+                break;
+            }
 
-    if (Disk->Connected == FALSE) {
-        Status = STATUS_DEVICE_NOT_CONNECTED;
-        goto DispatchIoEnd;
-    }
+            IoBufferOffset -= Fragment->Size;
+            FragmentIndex += 1;
+        }
 
-    //
-    // Otherwise start the I/O on a connected device.
-    //
+        //
+        // Lock the disk to serialize all I/O access to the device.
+        //
 
-    Disk->CurrentFragment = FragmentIndex;
-    Disk->CurrentFragmentOffset = FragmentOffset;
-    Disk->CurrentBytesTransferred = 0;
+        KeAcquireQueuedLock(Disk->Device->Lock);
+        LockHeld = TRUE;
+        if (Disk->Connected == FALSE) {
+            Status = STATUS_DEVICE_NOT_CONNECTED;
+            goto DispatchIoEnd;
+        }
 
-    ASSERT(Irp->U.ReadWrite.IoSizeInBytes != 0);
-    ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoSizeInBytes, (1 << Disk->BlockShift)));
-    ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset, (1 << Disk->BlockShift)));
+        //
+        // Otherwise start the I/O on a connected device.
+        //
 
-    //
-    // Pend the IRP first so that the request can't complete in between
-    // submitting it and marking it pended.
-    //
+        Disk->CurrentFragment = FragmentIndex;
+        Disk->CurrentFragmentOffset = FragmentOffset;
+        Disk->CurrentBytesTransferred = 0;
+        Disk->Irp = Irp;
 
-    IoPendIrp(UsbMassDriver, Irp);
+        ASSERT(Irp->U.ReadWrite.IoSizeInBytes != 0);
+        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoSizeInBytes,
+                          (1 << Disk->BlockShift)));
 
-    //
-    // Fire the first I/O request off to the disk.
-    //
+        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset, (1 << Disk->BlockShift)));
 
-    Disk->IoRequestAttempts = 0;
-    Status = UsbMasspSendNextIoRequest(Irp, Disk, IoBuffer);
-    if (!KSUCCESS(Status)) {
-        goto DispatchIoEnd;
+        //
+        // Pend the IRP first so that the request can't complete in between
+        // submitting it and marking it pended.
+        //
+
+        CompleteIrp = FALSE;
+        IoPendIrp(UsbMassDriver, Irp);
+
+        //
+        // Fire the first I/O request off to the disk. If this fails, expect to
+        // get called on the way up, as the IRP has already been pended. Thus,
+        // act like the lock is not held and the context was not prepared.
+        //
+
+        Disk->IoRequestAttempts = 0;
+        Status = UsbMasspSendNextIoRequest(Disk);
+        if (!KSUCCESS(Status)) {
+            CompleteIrp = TRUE;
+            LockHeld = FALSE;
+            ReadWriteIrpPrepared = FALSE;
+            goto DispatchIoEnd;
+        }
     }
 
 DispatchIoEnd:
-    if (!KSUCCESS(Status)) {
-        Disk->Irp = NULL;
+    if (CompleteIrp != FALSE) {
         if (LockHeld != FALSE) {
             KeReleaseQueuedLock(Disk->Device->Lock);
         }
 
-        if (IoBuffer != OriginalIoBuffer) {
-            MmFreeIoBuffer(IoBuffer);
+        if (ReadWriteIrpPrepared != FALSE) {
+            IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
         }
 
         IoCompleteIrp(UsbMassDriver, Irp, Status);
@@ -3278,6 +3227,8 @@ Return Value:
     PUCHAR InquiryCommand;
     KSTATUS Status;
 
+    ASSERT(Disk->Irp == NULL);
+
     BytesTransferred = 0;
     *ResultBuffer = NULL;
 
@@ -3310,7 +3261,7 @@ Return Value:
     // Send the command.
     //
 
-    Status = UsbMasspSendCommand(Disk, NULL, NULL);
+    Status = UsbMasspSendCommand(Disk);
     if (!KSUCCESS(Status)) {
         goto SendInquiryEnd;
     }
@@ -3368,6 +3319,8 @@ Return Value:
     KSTATUS Status;
     PUCHAR TestUnitReadyCommand;
 
+    ASSERT(Disk->Irp == NULL);
+
     BytesTransferred = 0;
 
     //
@@ -3400,7 +3353,7 @@ Return Value:
     // Send the command.
     //
 
-    Status = UsbMasspSendCommand(Disk, NULL, NULL);
+    Status = UsbMasspSendCommand(Disk);
     if (!KSUCCESS(Status)) {
         goto TestUnitReadyEnd;
     }
@@ -3451,6 +3404,8 @@ Return Value:
     PUCHAR RequestSenseCommand;
     KSTATUS Status;
 
+    ASSERT(Disk->Irp == NULL);
+
     BytesTransferred = 0;
 
     //
@@ -3484,7 +3439,7 @@ Return Value:
     // Send the command.
     //
 
-    Status = UsbMasspSendCommand(Disk, NULL, NULL);
+    Status = UsbMasspSendCommand(Disk);
     if (!KSUCCESS(Status)) {
         goto RequestSenseEnd;
     }
@@ -3534,6 +3489,8 @@ Return Value:
     PUCHAR RequestSenseCommand;
     KSTATUS Status;
 
+    ASSERT(Disk->Irp == NULL);
+
     BytesTransferred = 0;
 
     //
@@ -3568,7 +3525,7 @@ Return Value:
     // Send the command.
     //
 
-    Status = UsbMasspSendCommand(Disk, NULL, NULL);
+    Status = UsbMasspSendCommand(Disk);
     if (!KSUCCESS(Status)) {
         goto ModeSenseEnd;
     }
@@ -3618,6 +3575,8 @@ Return Value:
     PUSB_TRANSFER DataInTransfer;
     KSTATUS Status;
 
+    ASSERT(Disk->Irp == NULL);
+
     Command = UsbMasspSetupCommand(
                                  Disk,
                                  0,
@@ -3645,7 +3604,7 @@ Return Value:
     // Send the command.
     //
 
-    Status = UsbMasspSendCommand(Disk, NULL, NULL);
+    Status = UsbMasspSendCommand(Disk);
     if (!KSUCCESS(Status)) {
         goto ReadFormatCapacitiesEnd;
     }
@@ -3718,6 +3677,8 @@ Return Value:
     PUCHAR Command;
     KSTATUS Status;
 
+    ASSERT(Disk->Irp == NULL);
+
     Command = UsbMasspSetupCommand(Disk,
                                    0,
                                    sizeof(SCSI_CAPACITY),
@@ -3742,7 +3703,7 @@ Return Value:
     // Send the command.
     //
 
-    Status = UsbMasspSendCommand(Disk, NULL, NULL);
+    Status = UsbMasspSendCommand(Disk);
     if (!KSUCCESS(Status)) {
         goto ReadCapacityEnd;
     }
@@ -3955,9 +3916,7 @@ Return Value:
 
 KSTATUS
 UsbMasspSendCommand (
-    PUSB_DISK Disk,
-    PIRP Irp,
-    PIO_BUFFER IoBuffer
+    PUSB_DISK Disk
     )
 
 /*++
@@ -3976,9 +3935,6 @@ Arguments:
         completes. If this is NULL, the transfer will be completed
         synchronously.
 
-    IoBuffer - Supplies a pointer to the I/O buffer to use for the transfer.
-        This should only be set when the IRP is set.
-
 Return Value:
 
     Status code. This status code may represent a failure to send, communicate,
@@ -3991,17 +3947,9 @@ Return Value:
 
     KSTATUS Status;
 
-    ASSERT((Disk->Irp == NULL) || (Disk->Irp == Irp));
-    ASSERT((Disk->IoBuffer == NULL) || (Disk->IoBuffer == IoBuffer));
     ASSERT(KeIsQueuedLockHeld(Disk->Device->Lock) != FALSE);
-    ASSERT(((Irp == NULL) && (IoBuffer == NULL)) ||
-           ((Irp != NULL) && (IoBuffer != NULL)));
 
-    if (Irp != NULL) {
-        Disk->Irp = Irp;
-        Disk->IoBuffer = IoBuffer;
-
-    } else {
+    if (Disk->Irp == NULL) {
         KeSignalEvent(Disk->Event, SignalOptionUnsignal);
     }
 
@@ -4020,7 +3968,7 @@ Return Value:
     // If there's an IRP, return immediately.
     //
 
-    if (Irp != NULL) {
+    if (Disk->Irp != NULL) {
         Status = STATUS_SUCCESS;
         goto SendCommandEnd;
     }
@@ -4064,7 +4012,6 @@ Return Value:
     BOOL CompleteIrp;
     PUSB_DISK Disk;
     UCHAR Endpoint;
-    PIO_BUFFER IoBuffer;
     PIRP Irp;
     KSTATUS Status;
     BOOL SubmitStatusTransfer;
@@ -4073,7 +4020,6 @@ Return Value:
 
     CompleteIrp = FALSE;
     Disk = (PUSB_DISK)Transfer->UserData;
-    IoBuffer = Disk->IoBuffer;
     Irp = Disk->Irp;
     SubmitStatusTransfer = FALSE;
     Transfers = &(Disk->Transfers);
@@ -4212,8 +4158,6 @@ Return Value:
         return;
     }
 
-    ASSERT(IoBuffer != NULL);
-
     //
     // Evaluate the result of the transfer and continue the IRP.
     //
@@ -4261,7 +4205,7 @@ Return Value:
     // failed to even be submitted).
     //
 
-    Status = UsbMasspSendNextIoRequest(Irp, Disk, IoBuffer);
+    Status = UsbMasspSendNextIoRequest(Disk);
     if (!KSUCCESS(Status)) {
         CompleteIrp = TRUE;
         goto TransferCompletionCallbackEnd;
@@ -4443,9 +4387,7 @@ EvaluateCommandStatusEnd:
 
 KSTATUS
 UsbMasspSendNextIoRequest (
-    PIRP Irp,
-    PUSB_DISK Disk,
-    PIO_BUFFER IoBuffer
+    PUSB_DISK Disk
     )
 
 /*++
@@ -4457,11 +4399,7 @@ Routine Description:
 
 Arguments:
 
-    Irp - Supplies a pointer to the I/O request.
-
     Disk - Supplies a pointer to the disk to transfer to or from.
-
-    IoBuffer - Supplies a pointer to the I/O buffer to use for the transfer.
 
 Return Value:
 
@@ -4478,12 +4416,19 @@ Return Value:
     PUCHAR CommandBuffer;
     BOOL CommandIn;
     UCHAR CommandLength;
+    PIO_BUFFER IoBuffer;
+    PIRP Irp;
     PHYSICAL_ADDRESS PhysicalAddress;
     UINTN RequestSize;
     KSTATUS Status;
     PUSB_TRANSFER UsbDataTransfer;
     PVOID VirtualAddress;
 
+    Irp = Disk->Irp;
+    IoBuffer = Irp->U.ReadWrite.IoBuffer;
+
+    ASSERT(Irp != NULL);
+    ASSERT(IoBuffer != NULL);
     ASSERT(Disk->CurrentBytesTransferred < Irp->U.ReadWrite.IoSizeInBytes);
     ASSERT(Disk->CurrentFragment < IoBuffer->FragmentCount);
     ASSERT(Disk->CurrentFragmentOffset <=
@@ -4610,7 +4555,7 @@ Return Value:
     *(CommandBuffer + 7) = (UCHAR)(BlockCount >> 8);
     *(CommandBuffer + 8) = (UCHAR)BlockCount;
     UsbDataTransfer->Length = (ULONG)RequestSize;
-    Status = UsbMasspSendCommand(Disk, Irp, IoBuffer);
+    Status = UsbMasspSendCommand(Disk);
     if (!KSUCCESS(Status)) {
         goto SendNextIoRequestEnd;
     }
@@ -5016,17 +4961,18 @@ Return Value:
 
 {
 
+    PUSB_DISK Disk;
+    IRP_READ_WRITE IrpReadWrite;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelHigh);
 
-    Status = UsbMasspPerformPolledIo(DiskToken,
-                                     IoBuffer,
-                                     BlockAddress,
-                                     BlockCount,
-                                     BlocksCompleted,
-                                     FALSE);
-
+    Disk = (PUSB_DISK)DiskToken;
+    IrpReadWrite.IoBuffer = IoBuffer;
+    IrpReadWrite.IoOffset = BlockAddress << Disk->BlockShift;
+    IrpReadWrite.IoSizeInBytes = BlockCount << Disk->BlockShift;
+    Status = UsbMasspPerformPolledIo(&IrpReadWrite, Disk, FALSE);
+    *BlocksCompleted = IrpReadWrite.IoBytesCompleted >> Disk->BlockShift;
     return Status;
 }
 
@@ -5072,27 +5018,25 @@ Return Value:
 
 {
 
+    PUSB_DISK Disk;
+    IRP_READ_WRITE IrpReadWrite;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelHigh);
 
-    Status = UsbMasspPerformPolledIo(DiskToken,
-                                     IoBuffer,
-                                     BlockAddress,
-                                     BlockCount,
-                                     BlocksCompleted,
-                                     TRUE);
-
+    Disk = (PUSB_DISK)DiskToken;
+    IrpReadWrite.IoBuffer = IoBuffer;
+    IrpReadWrite.IoOffset = BlockAddress << Disk->BlockShift;
+    IrpReadWrite.IoSizeInBytes = BlockCount << Disk->BlockShift;
+    Status = UsbMasspPerformPolledIo(&IrpReadWrite, Disk, TRUE);
+    *BlocksCompleted = IrpReadWrite.IoBytesCompleted >> Disk->BlockShift;
     return Status;
 }
 
 KSTATUS
 UsbMasspPerformPolledIo (
+    PIRP_READ_WRITE IrpReadWrite,
     PUSB_DISK Disk,
-    PIO_BUFFER IoBuffer,
-    ULONGLONG BlockAddress,
-    UINTN BlocksToComplete,
-    PUINTN BlocksCompleted,
     BOOL Write
     )
 
@@ -5104,16 +5048,9 @@ Routine Description:
 
 Arguments:
 
+    IrpReadWrite - Supplies a pointer to the IRP's read/write context.
+
     Disk - Supplies a pointer to a USB disk.
-
-    IoBuffer - Supplies a pointer to an I/O buffer to read to or write from.
-
-    BlockAddress - Supplies the block index to read from or write to (LBA).
-
-    BlocksToComplete - Supplies the number of blocks to read or write.
-
-    BlocksCompleted - Supplies a pointer that receives the total number of
-        blocks read or written.
 
     Write - Supplies a boolean indicating if this is a read (FALSE) or write
         (TRUE) operation.
@@ -5128,28 +5065,33 @@ Return Value:
 
     UINTN BlockCount;
     ULONGLONG BlockOffset;
-    UINTN BlocksComplete;
-    UINTN BytesCompleted;
+    ULONG BytesCompleted;
+    UINTN BytesRemaining;
     UINTN BytesThisRound;
     UCHAR Command;
     PUCHAR CommandBuffer;
     BOOL CommandIn;
     UCHAR CommandLength;
+    KSTATUS CompletionStatus;
     PUSB_MASS_STORAGE_DEVICE Device;
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentIndex;
     UINTN FragmentOffset;
+    PIO_BUFFER IoBuffer;
     UINTN IoBufferOffset;
-    PIO_BUFFER OriginalIoBuffer;
+    ULONG IrpReadWriteFlags;
     PHYSICAL_ADDRESS PhysicalAddress;
+    BOOL ReadWriteIrpPrepared;
     KSTATUS Status;
     PUSB_TRANSFER UsbDataTransfer;
     PVOID VirtualAddress;
 
     ASSERT(KeGetRunLevel() == RunLevelHigh);
+    ASSERT(IrpReadWrite->IoBuffer != NULL);
 
-    BlocksComplete = 0;
+    IrpReadWrite->IoBytesCompleted = 0;
     Device = Disk->Device;
+    ReadWriteIrpPrepared = FALSE;
 
     //
     // The polled I/O transfers better be initialized.
@@ -5159,7 +5101,8 @@ Return Value:
 
         ASSERT(Device->PolledIoState != NULL);
 
-        return STATUS_NOT_INITIALIZED;
+        Status = STATUS_NOT_INITIALIZED;
+        goto PerformPolledIoEnd;
     }
 
     //
@@ -5179,21 +5122,25 @@ Return Value:
     }
 
     //
-    // The buffer better be mapped and valid.
+    // Prepare for the I/O. This is not polled I/O in the normal sense, as
+    // USB transfers are still handling the work. So do not note it as polled.
     //
 
-    ASSERT(IoBuffer != NULL);
+    IrpReadWriteFlags = 0;
+    if (Write != FALSE) {
+        IrpReadWriteFlags |= IRP_READ_WRITE_FLAG_WRITE;
+    }
 
-    OriginalIoBuffer = IoBuffer;
-    Status = MmValidateIoBuffer(0,
-                                MAX_ULONG,
-                                MmGetIoBufferAlignment(),
-                                BlocksToComplete << Disk->BlockShift,
-                                FALSE,
-                                &IoBuffer);
+    Status = IoPrepareReadWriteIrp(IrpReadWrite,
+                                   1 << Disk->BlockShift,
+                                   0,
+                                   MAX_ULONG,
+                                   IrpReadWriteFlags);
 
-    ASSERT(KSUCCESS(Status) && (IoBuffer == OriginalIoBuffer));
+    ASSERT(KSUCCESS(Status));
 
+    ReadWriteIrpPrepared = TRUE;
+    IoBuffer = IrpReadWrite->IoBuffer;
     Status = MmMapIoBuffer(IoBuffer, FALSE, FALSE, FALSE);
 
     ASSERT(KSUCCESS(Status));
@@ -5240,8 +5187,13 @@ Return Value:
     // Loop reading in or writing out each fragment in the I/O buffer.
     //
 
-    BlockOffset = BlockAddress;
-    while (BlocksComplete != BlocksToComplete) {
+    BytesRemaining = IrpReadWrite->IoSizeInBytes;
+
+    ASSERT(IS_ALIGNED(BytesRemaining, 1 << Disk->BlockShift) != FALSE);
+    ASSERT(IS_ALIGNED(IrpReadWrite->IoOffset, 1 << Disk->BlockShift) != FALSE);
+
+    BlockOffset = IrpReadWrite->IoOffset >> Disk->BlockShift;
+    while (BytesRemaining != 0) {
 
         ASSERT(FragmentIndex < IoBuffer->FragmentCount);
 
@@ -5249,6 +5201,9 @@ Return Value:
         VirtualAddress = Fragment->VirtualAddress + FragmentOffset;
         PhysicalAddress = Fragment->PhysicalAddress + FragmentOffset;
         BytesThisRound = Fragment->Size - FragmentOffset;
+        if (BytesRemaining < BytesThisRound) {
+            BytesThisRound = BytesRemaining;
+        }
 
         //
         // Transfer the rest of the fragment, but cap it to the max of what the
@@ -5261,7 +5216,7 @@ Return Value:
         }
 
         ASSERT(BytesThisRound != 0);
-        ASSERT(IS_ALIGNED(BytesThisRound, MmGetIoBufferAlignment()) != FALSE);
+        ASSERT(IS_ALIGNED(BytesThisRound, 1 << Disk->BlockShift) != FALSE);
 
         BlockCount = BytesThisRound >> Disk->BlockShift;
 
@@ -5319,13 +5274,25 @@ Return Value:
         }
 
         BlockOffset += BlockCount;
-        BlocksComplete += BlockCount;
+        BytesRemaining -= BytesCompleted;
+        IrpReadWrite->IoBytesCompleted += BytesCompleted;
     }
 
     Status = STATUS_SUCCESS;
 
 PerformPolledIoEnd:
-    *BlocksCompleted = BlocksComplete;
+    if (ReadWriteIrpPrepared != FALSE) {
+        CompletionStatus = IoCompleteReadWriteIrp(IrpReadWrite,
+                                                  IrpReadWriteFlags);
+
+        if (!KSUCCESS(CompletionStatus) && KSUCCESS(Status)) {
+            Status = CompletionStatus;
+        }
+    }
+
+    IrpReadWrite->NewIoOffset = IrpReadWrite->IoOffset +
+                                IrpReadWrite->IoBytesCompleted;
+
     return Status;
 }
 
@@ -5401,16 +5368,13 @@ Return Value:
 
     UsbSubmitPolledTransfer(Transfers->StatusTransfer);
 
+PerformPolledIoEnd:
+
     //
     // Now analyze the status from the transfer to see if it worked.
     //
 
     Status = UsbMasspEvaluateCommandStatus(Disk, TRUE, TRUE, BytesCompleted);
-    if (!KSUCCESS(Status)) {
-        goto PerformPolledIoEnd;
-    }
-
-PerformPolledIoEnd:
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("USBMASS: Polled I/O failed 0x%08x.\n", Status);
     }

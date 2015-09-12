@@ -105,8 +105,6 @@ Members:
 
     Irp - Stores a pointer to the current IRP running on this disk.
 
-    IoBuffer - Stores a pointer to the I/O buffer in use by the running IRP.
-
     Flags - Stores a bitmask of flags describing the disk state. See
         SD_DISK_FLAG_* for definitions;
 
@@ -126,7 +124,6 @@ typedef struct _SD_DISK {
     PSD_CONTROLLER Controller;
     PQUEUED_LOCK ControllerLock;
     PIRP Irp;
-    PIO_BUFFER IoBuffer;
     ULONG Flags;
     ULONG BlockShift;
     ULONGLONG BlockCount;
@@ -385,12 +382,9 @@ SdpDiskBlockIoWrite (
     );
 
 KSTATUS
-SdpPerformBlockIoPolled (
+SdpPerformIoPolled (
+    PIRP_READ_WRITE IrpReadWrite,
     PSD_DISK Disk,
-    PIO_BUFFER IoBuffer,
-    ULONGLONG BlockAddress,
-    UINTN BlocksToComplete,
-    PUINTN BlocksCompleted,
     BOOL Write,
     BOOL LockRequired
     );
@@ -711,16 +705,11 @@ Return Value:
 
     UINTN BlockCount;
     ULONGLONG BlockOffset;
-    UINTN BlocksCompleted;
-    UINTN BytesCompleted;
     UINTN BytesToComplete;
+    BOOL CompleteIrp;
     PSD_DISK Disk;
-    PIO_BUFFER_FRAGMENT Fragment;
-    UINTN FragmentIndex;
-    PIO_BUFFER IoBuffer;
     ULONGLONG IoOffset;
-    KSTATUS IrpStatus;
-    PIO_BUFFER OriginalIoBuffer;
+    ULONG IrpReadWriteFlags;
     KSTATUS Status;
     BOOL Write;
 
@@ -734,248 +723,136 @@ Return Value:
         return;
     }
 
+    CompleteIrp = TRUE;
     Write = FALSE;
     if (Irp->MinorCode == IrpMinorIoWrite) {
         Write = TRUE;
     }
 
-    BytesToComplete = Irp->U.ReadWrite.IoSizeInBytes;
-    IoOffset = Irp->U.ReadWrite.IoOffset;
-    OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
-    IoBuffer = OriginalIoBuffer;
-    if ((Disk->Flags & SD_DISK_FLAG_MEDIA_PRESENT) == 0) {
-        Status = STATUS_NO_MEDIA;
-        goto DispatchIoEnd;
-    }
-
-    ASSERT((Disk->BlockCount != 0) && (Disk->BlockShift != 0));
-    ASSERT(IoBuffer != NULL);
-    ASSERT(IS_ALIGNED(IoOffset, 1 << Disk->BlockShift) != FALSE);
-    ASSERT(IS_ALIGNED(BytesToComplete, 1 << Disk->BlockShift) != FALSE);
-
     //
-    // Handle polled I/O first as that shares code with the block I/O interface.
+    // Polled I/O is shared by a few code paths and prepares the IRP for I/O
+    // further down the stack. It should also only be hit in the down direction
+    // path as it always completes the IRP.
     //
 
     if ((Disk->Flags & SD_DISK_FLAG_DMA_SUPPORTED) == 0) {
 
         ASSERT(Irp->Direction == IrpDown);
 
-        BlockOffset = IoOffset >> Disk->BlockShift;
-        BlockCount = BytesToComplete >> Disk->BlockShift;
-        Status = SdpPerformBlockIoPolled(Disk,
-                                         IoBuffer,
-                                         BlockOffset,
-                                         BlockCount,
-                                         &BlocksCompleted,
-                                         Write,
-                                         TRUE);
-
-        BytesCompleted = BlocksCompleted << Disk->BlockShift;
-        Irp->U.ReadWrite.IoBytesCompleted = BytesCompleted;
-        Irp->U.ReadWrite.NewIoOffset = IoOffset + BytesCompleted;
+        Status = SdpPerformIoPolled(&(Irp->U.ReadWrite), Disk, Write, TRUE);
         goto DispatchIoEnd;
     }
 
     //
-    // The remainder of the routine is dedicated to DMA. Handle any clean up
-    // that may be required on the way up first. Always return from here as
-    // the end of this routine completes the IRP.
+    // Set the IRP read/write flags for the preparation and completion steps.
+    //
+
+    IrpReadWriteFlags = IRP_READ_WRITE_FLAG_DMA;
+    if (Write != FALSE) {
+        IrpReadWriteFlags |= IRP_READ_WRITE_FLAG_WRITE;
+    }
+
+    //
+    // If the IRP is on the way up, then clean up after the DMA as this IRP is
+    // still sitting in the channel. An IRP going up is already complete.
     //
 
     if (Irp->Direction == IrpUp) {
-        if (Irp != Disk->Irp) {
-            return;
-        }
+        CompleteIrp = FALSE;
 
-        IoBuffer = Disk->IoBuffer;
-        Disk->IoBuffer = NULL;
+        ASSERT (Irp == Disk->Irp);
+
         Disk->Irp = NULL;
         KeReleaseQueuedLock(Disk->ControllerLock);
-        OriginalIoBuffer = Irp->U.ReadWrite.IoBuffer;
-
-        //
-        // The I/O buffer needs to be invalidated. It was invalidated before
-        // the DMA so that dirty data did not clobber the DMA, but clean,
-        // prefetched data could be sitting in the cache preventing access to
-        // the read data.
-        //
-
-        if ((Write == FALSE) && (Irp->U.ReadWrite.IoBytesCompleted != 0)) {
-            BytesCompleted = Irp->U.ReadWrite.IoBytesCompleted;
-            for (FragmentIndex = 0;
-                 FragmentIndex < IoBuffer->FragmentCount;
-                 FragmentIndex += 1) {
-
-                Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-                MmFlushBufferForDataIn(Fragment->VirtualAddress,
-                                       Fragment->Size);
-
-                if (BytesCompleted < Fragment->Size) {
-                    break;
-                }
-
-                BytesCompleted -= Fragment->Size;
-            }
+        Status = IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
+        if (!KSUCCESS(Status)) {
+            IoUpdateIrpStatus(Irp, Status);
         }
 
+    //
+    // Start the DMA on the way down.
+    //
+
+    } else {
+        BytesToComplete = Irp->U.ReadWrite.IoSizeInBytes;
+        IoOffset = Irp->U.ReadWrite.IoOffset;
+        Irp->U.ReadWrite.IoBytesCompleted = 0;
+
+        ASSERT((Disk->BlockCount != 0) && (Disk->BlockShift != 0));
+        ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
+        ASSERT(IS_ALIGNED(IoOffset, 1 << Disk->BlockShift) != FALSE);
+        ASSERT(IS_ALIGNED(BytesToComplete, 1 << Disk->BlockShift) != FALSE);
+
         //
-        // If the IRP's buffer was not used directly for the DMA, copy the
-        // contents back into the IRP's buffer.
+        // Before acquiring the controller's lock and starting the DMA, prepare
+        // the I/O context for SD (i.e. it must use physical addresses that
+        // are less than 4GB and be sector size aligned).
         //
 
-        if (IoBuffer != OriginalIoBuffer) {
-            if ((Write == FALSE) && (Irp->U.ReadWrite.IoBytesCompleted != 0)) {
-                Status = MmCopyIoBuffer(OriginalIoBuffer,
-                                        0,
-                                        IoBuffer,
-                                        0,
-                                        Irp->U.ReadWrite.IoBytesCompleted);
-
-                if (!KSUCCESS(Status)) {
-                    Irp->U.ReadWrite.IoBytesCompleted = 0;
-                    IrpStatus = IoGetIrpStatus(Irp);
-                    if (KSUCCESS(IrpStatus)) {
-                        IoCompleteIrp(SdDriver, Irp, Status);
-                    }
-
-                //
-                // On success, flush the original I/O buffer to the point of
-                // unification. This is necessary in case the pages in the
-                // original I/O buffer will be executed.
-                //
-
-                } else {
-                    for (FragmentIndex = 0;
-                         FragmentIndex < OriginalIoBuffer->FragmentCount;
-                         FragmentIndex += 1) {
-
-                        Fragment = &(OriginalIoBuffer->Fragment[FragmentIndex]);
-                        MmFlushBuffer(Fragment->VirtualAddress, Fragment->Size);
-                    }
-                }
-            }
-
-            MmFreeIoBuffer(IoBuffer);
-        }
-
-        return;
-    }
-
-    //
-    // Otherwise go through the process of kicking off the first set of DMA.
-    //
-
-    Irp->U.ReadWrite.IoBytesCompleted = 0;
-
-    //
-    // Validate that the I/O buffer has the right alignment and is in the first
-    // 4GB.
-    //
-
-    Status = MmValidateIoBuffer(0,
-                                MAX_ULONG,
-                                1 << Disk->BlockShift,
-                                BytesToComplete,
-                                FALSE,
-                                &IoBuffer);
-
-    if (!KSUCCESS(Status)) {
-        goto DispatchIoEnd;
-    }
-
-    if ((IoBuffer != OriginalIoBuffer) && (Write != FALSE)) {
-        Status = MmCopyIoBuffer(IoBuffer,
-                                0,
-                                OriginalIoBuffer,
-                                0,
-                                BytesToComplete);
+        Status = IoPrepareReadWriteIrp(&(Irp->U.ReadWrite),
+                                       1 << Disk->BlockShift,
+                                       0,
+                                       MAX_ULONG,
+                                       IrpReadWriteFlags);
 
         if (!KSUCCESS(Status)) {
             goto DispatchIoEnd;
         }
-    }
 
-    //
-    // TODO: Remove this when other issues (ie cache cleanliness) are fixed.
-    //
+        //
+        // Lock the controller to serialize access to the hardware.
+        //
 
-    Status = MmMapIoBuffer(IoBuffer, FALSE, FALSE, FALSE);
-    if (!KSUCCESS(Status)) {
-        goto DispatchIoEnd;
-    }
-
-    //
-    // Flush the I/O buffer.
-    //
-
-    for (FragmentIndex = 0;
-         FragmentIndex < IoBuffer->FragmentCount;
-         FragmentIndex += 1) {
-
-        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-        if (Write != FALSE) {
-            MmFlushBufferForDataOut(Fragment->VirtualAddress, Fragment->Size);
-
-        } else {
-            MmFlushBufferForDataIn(Fragment->VirtualAddress, Fragment->Size);
+        KeAcquireQueuedLock(Disk->ControllerLock);
+        if ((Disk->Flags & SD_DISK_FLAG_MEDIA_PRESENT) == 0) {
+            KeReleaseQueuedLock(Disk->ControllerLock);
+            IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
+            Status = STATUS_NO_MEDIA;
+            goto DispatchIoEnd;
         }
+
+        //
+        // Pend the IRP and fire up the DMA.
+        //
+
+        Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
+        Disk->Irp = Irp;
+        BlockOffset = IoOffset >> Disk->BlockShift;
+        BlockCount = BytesToComplete >> Disk->BlockShift;
+        CompleteIrp = FALSE;
+        IoPendIrp(SdDriver, Irp);
+
+        //
+        // Make sure the system isn't trying to do I/O off the end of the disk.
+        //
+
+        ASSERT(BlockOffset < Disk->BlockCount);
+        ASSERT(BlockCount >= 1);
+
+        SdStandardBlockIoDma(Disk->Controller,
+                             BlockOffset,
+                             BlockCount,
+                             Irp->U.ReadWrite.IoBuffer,
+                             0,
+                             Write,
+                             SdpDmaCompletion,
+                             Disk);
+
+        //
+        // DMA transfers are self perpetuating, so after kicking off this first
+        // transfer, return. This returns with the lock held because I/O is
+        // still in progress.
+        //
+
+        ASSERT(KeIsQueuedLockHeld(Disk->ControllerLock) != FALSE);
+        ASSERT(CompleteIrp == FALSE);
     }
-
-    //
-    // Lock the controller to serialize access to the hardware.
-    //
-
-    KeAcquireQueuedLock(Disk->ControllerLock);
-    if ((Disk->Flags & SD_DISK_FLAG_MEDIA_PRESENT) == 0) {
-        KeReleaseQueuedLock(Disk->ControllerLock);
-        Status = STATUS_NO_MEDIA;
-        goto DispatchIoEnd;
-    }
-
-    //
-    // Pend the IRP and fire up the DMA.
-    //
-
-    Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
-    IoPendIrp(SdDriver, Irp);
-    Disk->Irp = Irp;
-    Disk->IoBuffer = IoBuffer;
-    BlockOffset = IoOffset >> Disk->BlockShift;
-    BlockCount = BytesToComplete >> Disk->BlockShift;
-
-    //
-    // Make sure the system isn't trying to do I/O off the end of the disk.
-    //
-
-    ASSERT(BlockOffset < Disk->BlockCount);
-    ASSERT(BlockCount >= 1);
-
-    SdStandardBlockIoDma(Disk->Controller,
-                         BlockOffset,
-                         BlockCount,
-                         IoBuffer,
-                         0,
-                         Write,
-                         SdpDmaCompletion,
-                         Disk);
-
-    //
-    // DMA transfers are self perpetuating, so after kicking off this first
-    // transfer, return. This returns with the lock held because I/O is still
-    // in progress.
-    //
-
-    ASSERT(KeIsQueuedLockHeld(Disk->ControllerLock) != FALSE);
-
-    return;
 
 DispatchIoEnd:
-    if (OriginalIoBuffer != IoBuffer) {
-        MmFreeIoBuffer(IoBuffer);
+    if (CompleteIrp != FALSE) {
+        IoCompleteIrp(SdDriver, Irp, Status);
     }
 
-    IoCompleteIrp(SdDriver, Irp, Status);
     return;
 }
 
@@ -2421,9 +2298,16 @@ Return Value:
 
 {
 
+    PSD_DISK Disk;
+    IRP_READ_WRITE IrpReadWrite;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelHigh);
+
+    Disk = (PSD_DISK)DiskToken;
+    IrpReadWrite.IoBuffer = IoBuffer;
+    IrpReadWrite.IoOffset = BlockAddress << Disk->BlockShift;
+    IrpReadWrite.IoSizeInBytes = BlockCount << Disk->BlockShift;
 
     //
     // As this read routine is meant for critical code paths (crash dump),
@@ -2432,14 +2316,8 @@ Return Value:
     // dead lock as all other processors and threads are likely frozen.
     //
 
-    Status = SdpPerformBlockIoPolled(DiskToken,
-                                     IoBuffer,
-                                     BlockAddress,
-                                     BlockCount,
-                                     BlocksCompleted,
-                                     FALSE,
-                                     FALSE);
-
+    Status = SdpPerformIoPolled(&IrpReadWrite, Disk, FALSE, FALSE);
+    *BlocksCompleted = IrpReadWrite.IoBytesCompleted >> Disk->BlockShift;
     return Status;
 }
 
@@ -2485,9 +2363,16 @@ Return Value:
 
 {
 
+    PSD_DISK Disk;
+    IRP_READ_WRITE IrpReadWrite;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelHigh);
+
+    Disk = (PSD_DISK)DiskToken;
+    IrpReadWrite.IoBuffer = IoBuffer;
+    IrpReadWrite.IoOffset = BlockAddress << Disk->BlockShift;
+    IrpReadWrite.IoSizeInBytes = BlockCount << Disk->BlockShift;
 
     //
     // As this write routine is meant for critical code paths (crash dump),
@@ -2496,24 +2381,15 @@ Return Value:
     // dead lock as all other processors and threads are likely frozen.
     //
 
-    Status = SdpPerformBlockIoPolled(DiskToken,
-                                     IoBuffer,
-                                     BlockAddress,
-                                     BlockCount,
-                                     BlocksCompleted,
-                                     TRUE,
-                                     FALSE);
-
+    Status = SdpPerformIoPolled(&IrpReadWrite, Disk, TRUE, FALSE);
+    *BlocksCompleted = IrpReadWrite.IoBytesCompleted >> Disk->BlockShift;
     return Status;
 }
 
 KSTATUS
-SdpPerformBlockIoPolled (
+SdpPerformIoPolled (
+    PIRP_READ_WRITE IrpReadWrite,
     PSD_DISK Disk,
-    PIO_BUFFER IoBuffer,
-    ULONGLONG BlockAddress,
-    UINTN BlocksToComplete,
-    PUINTN BlocksCompleted,
     BOOL Write,
     BOOL LockRequired
     )
@@ -2526,16 +2402,9 @@ Routine Description:
 
 Arguments:
 
+    IrpReadWrite - Supplies a pointer to an IRP read/write context.
+
     Disk - Supplies a pointer to the SD disk device.
-
-    IoBuffer - Supplies a pointer to the I/O buffer to use for read or write.
-
-    BlockAddress - Supplies the block number to read from or write to (LBA).
-
-    BlocksToComplete - Supplies the number of blocks to read or write.
-
-    BlocksCompleted - Supplies a pointer that receives the total number of
-        blocks read or written.
 
     Write - Supplies a boolean indicating if this is a read operation (TRUE) or
         a write operation (FALSE).
@@ -2553,60 +2422,57 @@ Return Value:
 
     UINTN BlockCount;
     ULONGLONG BlockOffset;
-    UINTN BlocksComplete;
+    UINTN BytesRemaining;
+    UINTN BytesThisRound;
+    KSTATUS CompletionStatus;
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentIndex;
     UINTN FragmentOffset;
-    UINTN FragmentSize;
+    PIO_BUFFER IoBuffer;
     UINTN IoBufferOffset;
+    ULONG IrpReadWriteFlags;
     BOOL LockHeld;
-    PIO_BUFFER OriginalIoBuffer;
-    PHYSICAL_ADDRESS PhysicalAddress;
+    BOOL ReadWriteIrpPrepared;
     KSTATUS Status;
     PVOID VirtualAddress;
 
-    BlocksComplete = 0;
+    IrpReadWrite->IoBytesCompleted = 0;
     LockHeld = FALSE;
+    ReadWriteIrpPrepared = FALSE;
 
-    ASSERT(IoBuffer != NULL);
+    ASSERT(IrpReadWrite->IoBuffer != NULL);
     ASSERT((Disk->BlockCount != 0) && (Disk->BlockShift != 0));
 
     //
     // Validate the supplied I/O buffer is aligned and big enough.
     //
 
-    OriginalIoBuffer = IoBuffer;
-    Status = MmValidateIoBuffer(0,
-                                MAX_ULONGLONG,
-                                1 << Disk->BlockShift,
-                                BlocksToComplete << Disk->BlockShift,
-                                FALSE,
-                                &IoBuffer);
+    IrpReadWriteFlags = IRP_READ_WRITE_FLAG_POLLED;
+    if (Write != FALSE) {
+        IrpReadWriteFlags |= IRP_READ_WRITE_FLAG_WRITE;
+    }
+
+    Status = IoPrepareReadWriteIrp(IrpReadWrite,
+                                   1 << Disk->BlockShift,
+                                   0,
+                                   MAX_ULONGLONG,
+                                   IrpReadWriteFlags);
 
     if (!KSUCCESS(Status)) {
-        goto PerformBlockIoPolledEnd;
+        goto PerformIoPolledEnd;
     }
 
-    if ((IoBuffer != OriginalIoBuffer) && (Write != FALSE)) {
-        Status = MmCopyIoBuffer(IoBuffer,
-                                0,
-                                OriginalIoBuffer,
-                                0,
-                                BlocksToComplete << Disk->BlockShift);
-
-        if (!KSUCCESS(Status)) {
-            goto PerformBlockIoPolledEnd;
-        }
-    }
+    ReadWriteIrpPrepared = TRUE;
 
     //
     // Make sure the I/O buffer is mapped before use. SD depends on the buffer
     // being mapped.
     //
 
+    IoBuffer = IrpReadWrite->IoBuffer;
     Status = MmMapIoBuffer(IoBuffer, FALSE, FALSE, FALSE);
     if (!KSUCCESS(Status)) {
-        goto PerformBlockIoPolledEnd;
+        goto PerformIoPolledEnd;
     }
 
     //
@@ -2637,30 +2503,33 @@ Return Value:
 
     if ((Disk->Flags & SD_DISK_FLAG_MEDIA_PRESENT) == 0) {
         Status = STATUS_NO_MEDIA;
-        goto PerformBlockIoPolledEnd;
+        goto PerformIoPolledEnd;
     }
 
     //
     // Loop reading in or writing out each fragment in the I/O buffer.
     //
 
-    BlockOffset = BlockAddress;
-    while (BlocksComplete != BlocksToComplete) {
+    BytesRemaining = IrpReadWrite->IoSizeInBytes;
+
+    ASSERT(IS_ALIGNED(BytesRemaining, 1 << Disk->BlockShift) != FALSE);
+    ASSERT(IS_ALIGNED(IrpReadWrite->IoOffset, 1 << Disk->BlockShift) != FALSE);
+
+    BlockOffset = IrpReadWrite->IoOffset >> Disk->BlockShift;
+    while (BytesRemaining != 0) {
 
         ASSERT(FragmentIndex < IoBuffer->FragmentCount);
 
         Fragment = (PIO_BUFFER_FRAGMENT)&(IoBuffer->Fragment[FragmentIndex]);
         VirtualAddress = Fragment->VirtualAddress + FragmentOffset;
-        PhysicalAddress = Fragment->PhysicalAddress + FragmentOffset;
-        FragmentSize = Fragment->Size - FragmentOffset;
-
-        ASSERT(IS_ALIGNED(PhysicalAddress, (1 << Disk->BlockShift)) != FALSE);
-        ASSERT(IS_ALIGNED(FragmentSize, (1 << Disk->BlockShift)) != FALSE);
-
-        BlockCount = FragmentSize >> Disk->BlockShift;
-        if ((BlocksToComplete - BlocksComplete) < BlockCount) {
-            BlockCount = BlocksToComplete - BlocksComplete;
+        BytesThisRound = Fragment->Size - FragmentOffset;
+        if (BytesRemaining < BytesThisRound) {
+            BytesThisRound = BytesRemaining;
         }
+
+        ASSERT(IS_ALIGNED(BytesThisRound, (1 << Disk->BlockShift)) != FALSE);
+
+        BlockCount = BytesThisRound >> Disk->BlockShift;
 
         //
         // Make sure the system isn't trying to do I/O off the end of the disk.
@@ -2676,12 +2545,13 @@ Return Value:
                                  Write);
 
         if (!KSUCCESS(Status)) {
-            goto PerformBlockIoPolledEnd;
+            goto PerformIoPolledEnd;
         }
 
         BlockOffset += BlockCount;
-        BlocksComplete += BlockCount;
-        FragmentOffset += BlockCount << Disk->BlockShift;
+        BytesRemaining -= BytesThisRound;
+        IrpReadWrite->IoBytesCompleted += BytesThisRound;
+        FragmentOffset += BytesThisRound;
         if (FragmentOffset >= Fragment->Size) {
             FragmentIndex += 1;
             FragmentOffset = 0;
@@ -2690,57 +2560,23 @@ Return Value:
 
     Status = STATUS_SUCCESS;
 
-PerformBlockIoPolledEnd:
+PerformIoPolledEnd:
     if (LockHeld != FALSE) {
         KeReleaseQueuedLock(Disk->ControllerLock);
     }
 
-    //
-    // Free the buffer used for I/O if it differs from the original.
-    //
+    if (ReadWriteIrpPrepared != FALSE) {
+        CompletionStatus = IoCompleteReadWriteIrp(IrpReadWrite,
+                                                  IrpReadWriteFlags);
 
-    if (OriginalIoBuffer != IoBuffer) {
-
-        //
-        // On a read operation, potentially copy the data back into the
-        // original I/O buffer.
-        //
-
-        if ((Write == FALSE) && (BlocksComplete != 0)) {
-            Status = MmCopyIoBuffer(OriginalIoBuffer,
-                                    0,
-                                    IoBuffer,
-                                    0,
-                                    BlocksComplete << Disk->BlockShift);
-
-            if (!KSUCCESS(Status)) {
-                BlocksComplete = 0;
-            }
-        }
-
-        MmFreeIoBuffer(IoBuffer);
-    }
-
-    //
-    // For polled reads, the data must be brought to the point of
-    // unification in case it is to be executed. This responsibility is
-    // pushed on the driver because DMA does not need to do it and the
-    // kernel does not know whether an individual read was done with DMA or
-    // not. The downside is that data regions also get flushed, and not
-    // just the necessary code regions.
-    //
-
-    if ((Write == FALSE) && (BlocksComplete != 0)) {
-        for (FragmentIndex = 0;
-             FragmentIndex < OriginalIoBuffer->FragmentCount;
-             FragmentIndex += 1) {
-
-            Fragment = &(OriginalIoBuffer->Fragment[FragmentIndex]);
-            MmFlushBuffer(Fragment->VirtualAddress, Fragment->Size);
+        if (!KSUCCESS(CompletionStatus) && KSUCCESS(Status)) {
+            Status = CompletionStatus;
         }
     }
 
-    *BlocksCompleted = BlocksComplete;
+    IrpReadWrite->NewIoOffset = IrpReadWrite->IoOffset +
+                                IrpReadWrite->IoBytesCompleted;
+
     return Status;
 }
 

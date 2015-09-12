@@ -1202,7 +1202,6 @@ Return Value:
 
 --*/
 
-KERNEL_API
 KSTATUS
 MmValidateIoBuffer (
     PHYSICAL_ADDRESS MinimumPhysicalAddress,
@@ -1210,7 +1209,8 @@ MmValidateIoBuffer (
     UINTN Alignment,
     UINTN SizeInBytes,
     BOOL PhysicallyContiguous,
-    PIO_BUFFER *IoBuffer
+    PIO_BUFFER *IoBuffer,
+    PBOOL LockedCopy
     );
 
 /*++
@@ -1222,7 +1222,9 @@ Routine Description:
     requirements will be returned. This new I/O buffer will not contain the
     same data as the originally supplied I/O buffer. It is up to the caller to
     decide which further actions need to be taken if a different buffer is
-    returned.
+    returned. The exception is if the locked parameter is returned as true. In
+    that case a new I/O buffer was created, but is backed by the same physical
+    pages, now locked in memory.
 
 Arguments:
 
@@ -1242,6 +1244,9 @@ Arguments:
     IoBuffer - Supplies a pointer to a pointer to an I/O buffer. On entry, this
         contains a pointer to the I/O buffer to be validated. On exit, it may
         point to a newly allocated I/O buffer that the caller must free.
+
+    LockedCopy - Supplies a pointer to a boolean that receives whether or not
+        the validated I/O buffer is a locked copy of the original.
 
 Return Value:
 
@@ -3574,33 +3579,6 @@ Routine Description:
     This routine flushes a buffer in preparation for data that is both
     incoming and outgoing (ie the buffer is read from and written to by an
     external device).
-
-Arguments:
-
-    Buffer - Supplies the virtual address of the buffer to flush. This buffer
-        must be cache-line aligned.
-
-    SizeInBytes - Supplies the size of the buffer to flush, in bytes. This
-        size must also be cache-line aligned.
-
-Return Value:
-
-    None.
-
---*/
-
-KERNEL_API
-VOID
-MmFlushBuffer (
-    PVOID Buffer,
-    UINTN SizeInBytes
-    );
-
-/*++
-
-Routine Description:
-
-    This routine flushes a buffer to the point of unification.
 
 Arguments:
 

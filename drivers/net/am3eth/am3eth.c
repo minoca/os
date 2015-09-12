@@ -483,9 +483,9 @@ Return Value:
 
     RtlZeroMemory(&Properties, sizeof(NET_LINK_PROPERTIES));
     Properties.Version = NET_LINK_PROPERTIES_VERSION;
-    Properties.TransmitAlignment = 1;
+    Properties.TransmitAlignment = Device->DataAlignment;
     Properties.DriverContext = Device;
-    Properties.MaxPacketSize = A3E_RECEIVE_FRAME_DATA_SIZE;
+    Properties.MaxPacketSize = Device->ReceiveFrameDataSize;
     Properties.MaxPhysicalAddress = MAX_ULONG;
     Properties.PhysicalAddress.Network = SocketNetworkPhysical;
 

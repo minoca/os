@@ -1614,7 +1614,7 @@ Return Value:
         // cannot be done before processing the wait list entry because
         // removing the wait list entry from the local list (under the queue's
         // lock) and setting it's next pointer to NULL (under both the queue's
-        // lock and the wait block's lock) and neatly synchronized with wait
+        // lock and the wait block's lock) are neatly synchronized with wait
         // block clean-up. Releasing the queue's lock before setting the next
         // pointer to NULL would be bad and the next pointer needs to be set
         // to NULL with the wait block's lock held.
