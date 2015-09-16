@@ -556,9 +556,7 @@ Return Value:
                                   Parameters->Buffer,
                                   INVALID_PHYSICAL_ADDRESS,
                                   Size,
-                                  FALSE,
-                                  FALSE,
-                                  FALSE);
+                                  0);
 
     if (!KSUCCESS(Status)) {
         goto SysPerformIoEnd;

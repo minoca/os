@@ -288,6 +288,7 @@ Return Value:
     ULONG AllocationSize;
     PA3E_DESCRIPTOR Descriptor;
     ULONG FrameIndex;
+    ULONG IoBufferFlags;
     ULONG NextDescriptorPhysical;
     ULONG ReceiveFrameData;
     ULONG ReceiveFrameDataSize;
@@ -329,13 +330,12 @@ Return Value:
 
     ASSERT(Device->ReceiveDataIoBuffer == NULL);
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Device->ReceiveDataIoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                              MAX_ULONG,
                                                              0,
                                                              ReceiveSize,
-                                                             TRUE,
-                                                             FALSE,
-                                                             FALSE);
+                                                             IoBufferFlags);
 
     if (Device->ReceiveDataIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

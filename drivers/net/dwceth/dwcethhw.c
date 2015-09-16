@@ -423,6 +423,7 @@ Return Value:
     ULONG DescriptorPhysical;
     ULONG DescriptorSize;
     ULONG FrameIndex;
+    ULONG IoBufferFlags;
     ULONG NextDescriptorPhysical;
     ULONG ReceiveFrameData;
     ULONG ReceiveSize;
@@ -455,13 +456,12 @@ Return Value:
 
     ASSERT(Device->ReceiveDataIoBuffer == NULL);
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Device->ReceiveDataIoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                              MAX_ULONG,
                                                              16,
                                                              ReceiveSize,
-                                                             TRUE,
-                                                             FALSE,
-                                                             FALSE);
+                                                             IoBufferFlags);
 
     if (Device->ReceiveDataIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -484,13 +484,12 @@ Return Value:
 
     ASSERT(Device->DescriptorIoBuffer == NULL);
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Device->DescriptorIoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                             MAX_ULONG,
                                                             16,
                                                             DescriptorSize,
-                                                            TRUE,
-                                                            FALSE,
-                                                            FALSE);
+                                                            IoBufferFlags);
 
     if (Device->DescriptorIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

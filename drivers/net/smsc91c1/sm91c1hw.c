@@ -354,6 +354,7 @@ Return Value:
 
 {
 
+    ULONG IoBufferFlags;
     KSTATUS Status;
 
     KeInitializeSpinLock(&(Device->InterruptLock));
@@ -369,13 +370,12 @@ Return Value:
         goto InitializeDeviceStructuresEnd;
     }
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Device->ReceiveIoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                          MAX_ULONGLONG,
                                                          0,
                                                          SM91C1_MAX_PACKET_SIZE,
-                                                         TRUE,
-                                                         FALSE,
-                                                         FALSE);
+                                                         IoBufferFlags);
 
     if (Device->ReceiveIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

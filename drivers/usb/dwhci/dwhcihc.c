@@ -500,6 +500,7 @@ Return Value:
     PDWHCI_CHANNEL Channels;
     PDWHCI_CONTROLLER Controller;
     ULONG Index;
+    ULONG IoBufferFlags;
     KSTATUS Status;
 
     //
@@ -554,14 +555,13 @@ Return Value:
         goto InitializeControllerStateEnd;
     }
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Controller->ControlStatusBuffer = MmAllocateNonPagedIoBuffer(
                                               0,
                                               MAX_ULONG,
                                               DWHCI_DMA_ALIGNMENT,
                                               DWHCI_CONTROL_STATUS_BUFFER_SIZE,
-                                              TRUE,
-                                              FALSE,
-                                              FALSE);
+                                              IoBufferFlags);
 
     if (Controller->ControlStatusBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

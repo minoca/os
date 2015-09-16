@@ -229,6 +229,7 @@ Return Value:
     UINTN BufferSize;
     PUSB_DEVICE Device;
     PVOID HubStatus;
+    ULONG IoBufferFlags;
     ULONG MaxControlTransferSize;
     ULONG MaxInterruptSize;
     PUSB_HUB NewHub;
@@ -261,13 +262,12 @@ Return Value:
                                       BufferAlignment);
 
     BufferSize = MaxControlTransferSize + MaxInterruptSize;
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     NewHub->IoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                   MAX_ULONG,
                                                   BufferAlignment,
                                                   BufferSize,
-                                                  TRUE,
-                                                  FALSE,
-                                                  FALSE);
+                                                  IoBufferFlags);
 
     if (NewHub->IoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

@@ -832,7 +832,7 @@ Return Value:
     DhcpContext->ScratchPacketSize = DHCP_SCRATCH_PACKET_SIZE;
     Status = MmCreateIoBuffer(DhcpContext->ScratchPacket,
                               DhcpContext->ScratchPacketSize,
-                              TRUE,
+                              IO_BUFFER_FLAG_KERNEL_MODE_DATA,
                               &(DhcpContext->ScratchPacketIoBuffer));
 
     if (!KSUCCESS(Status)) {
@@ -1186,7 +1186,7 @@ Return Value:
     DhcpContext->ScratchPacketSize = DHCP_SCRATCH_PACKET_SIZE;
     Status = MmCreateIoBuffer(DhcpContext->ScratchPacket,
                               DhcpContext->ScratchPacketSize,
-                              TRUE,
+                              IO_BUFFER_FLAG_KERNEL_MODE_DATA,
                               &(DhcpContext->ScratchPacketIoBuffer));
 
     if (!KSUCCESS(Status)) {
@@ -1463,7 +1463,7 @@ Return Value:
     DhcpContext->ScratchPacketSize = DHCP_SCRATCH_PACKET_SIZE;
     Status = MmCreateIoBuffer(DhcpContext->ScratchPacket,
                               DhcpContext->ScratchPacketSize,
-                              TRUE,
+                              IO_BUFFER_FLAG_KERNEL_MODE_DATA,
                               &(DhcpContext->ScratchPacketIoBuffer));
 
     if (!KSUCCESS(Status)) {

@@ -237,9 +237,7 @@ Return Value:
                                       FilteredData,
                                       INVALID_PHYSICAL_ADDRESS,
                                       FilteredDataSize,
-                                      FALSE,
-                                      FALSE,
-                                      TRUE);
+                                      IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
         if (!KSUCCESS(Status)) {
             goto SetSystemTimeZoneEnd;
@@ -942,9 +940,7 @@ Return Value:
                                   DataBuffer,
                                   INVALID_PHYSICAL_ADDRESS,
                                   DataSize,
-                                  FALSE,
-                                  FALSE,
-                                  TRUE);
+                                  IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
     if (!KSUCCESS(Status)) {
         goto ReadTimeZoneAlmanacEnd;

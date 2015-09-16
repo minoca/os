@@ -325,6 +325,7 @@ Return Value:
 
 {
 
+    ULONG IoBufferFlags;
     ULONG PageSize;
 
     INITIALIZE_LIST_HEAD(&KeCrashDumpListHead);
@@ -333,13 +334,12 @@ Return Value:
 
     ASSERT(PageSize >= sizeof(CRASH_DUMP_HEADER));
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     KeCrashDumpScratchBuffer = MmAllocateNonPagedIoBuffer(0,
                                                           MAX_ULONGLONG,
                                                           0,
                                                           PageSize,
-                                                          TRUE,
-                                                          FALSE,
-                                                          FALSE);
+                                                          IoBufferFlags);
 
     if (KeCrashDumpScratchBuffer == NULL) {
         return STATUS_INSUFFICIENT_RESOURCES;

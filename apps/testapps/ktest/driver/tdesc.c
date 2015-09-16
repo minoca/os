@@ -231,9 +231,7 @@ Return Value:
                                                           MAX_ULONGLONG,
                                                           BlockSize,
                                                           BlockSize,
-                                                          FALSE,
-                                                          FALSE,
-                                                          FALSE);
+                                                          0);
 
         if (IoBuffers[Iteration] == NULL) {
             Failures += 1;

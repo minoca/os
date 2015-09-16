@@ -578,6 +578,7 @@ Return Value:
     ULONG BufferAlignment;
     PSM95_DEVICE Device;
     ULONG Index;
+    ULONG IoBufferFlags;
     UINTN IoBufferSize;
     ULONG MaxControlSize;
     ULONG MaxHighSpeedBurstSize;
@@ -634,13 +635,12 @@ Return Value:
     IoBufferSize = (MaxHighSpeedBurstSize * SM95_BULK_IN_TRANSFER_COUNT) +
                    MaxControlSize + MaxInterruptSize;
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Device->IoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                   MAX_ULONG,
                                                   BufferAlignment,
                                                   IoBufferSize,
-                                                  TRUE,
-                                                  FALSE,
-                                                  FALSE);
+                                                  IoBufferFlags);
 
     if (Device->IoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

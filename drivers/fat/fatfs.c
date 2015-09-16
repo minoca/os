@@ -1143,7 +1143,7 @@ Return Value:
                 ZeroBufferSize = FAT_ZERO_BUFFER_SIZE;
             }
 
-            ZeroIoBuffer = MmAllocatePagedIoBuffer(ZeroBufferSize);
+            ZeroIoBuffer = MmAllocatePagedIoBuffer(ZeroBufferSize, 0);
             if (ZeroIoBuffer == NULL) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;
                 goto DispatchIoEnd;

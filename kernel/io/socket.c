@@ -1680,9 +1680,7 @@ Return Value:
                                   Parameters->Buffer,
                                   INVALID_PHYSICAL_ADDRESS,
                                   IoParameters.Size,
-                                  FALSE,
-                                  FALSE,
-                                  FALSE);
+                                  0);
 
     if (!KSUCCESS(Status)) {
         goto SysSocketPerformIoEnd;

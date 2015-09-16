@@ -107,6 +107,7 @@ Return Value:
     ULONGLONG BufferSize;
     PLIST_ENTRY CurrentEntry;
     ULONG DataSize;
+    ULONG IoBufferFlags;
     BOOL LockHeld;
     PHYSICAL_ADDRESS MaximumPhysicalAddress;
     KSTATUS Status;
@@ -192,13 +193,12 @@ Return Value:
     // A buffer will need to be allocated.
     //
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Buffer->IoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                   MaximumPhysicalAddress,
                                                   Alignment,
                                                   TotalSize,
-                                                  TRUE,
-                                                  FALSE,
-                                                  FALSE);
+                                                  IoBufferFlags);
 
     if (Buffer->IoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

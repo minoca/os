@@ -1167,7 +1167,7 @@ Return Value:
 
     Status = MmCreateIoBuffer(ReadBuffer,
                               VIDEO_CONSOLE_READ_BUFFER_SIZE,
-                              TRUE,
+                              IO_BUFFER_FLAG_KERNEL_MODE_DATA,
                               &IoBuffer);
 
     if (!KSUCCESS(Status)) {

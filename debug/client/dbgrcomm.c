@@ -8449,8 +8449,8 @@ Return Value:
                 Result = EINVAL;
             }
 
-            DbgOut("Error reading memory at %I64u. Expected %d bytes and read "
-                   "%d bytes\n",
+            DbgOut("Error reading memory at 0x%I64x. Expected %d bytes and "
+                   "read %d bytes\n",
                    PointerValue,
                    RelativeSize,
                    BytesRead);

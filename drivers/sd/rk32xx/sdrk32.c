@@ -2709,6 +2709,7 @@ Return Value:
 
     PSD_CONTROLLER Controller;
     PSD_DWC_DMA_DESCRIPTOR Descriptor;
+    ULONG IoBufferFlags;
     ULONG Value;
 
     Controller = Device->Controller;
@@ -2725,14 +2726,15 @@ Return Value:
     //
 
     if (Controller->DmaDescriptorTable == NULL) {
+        IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS |
+                        IO_BUFFER_FLAG_MAP_NON_CACHED;
+
         Controller->DmaDescriptorTable = MmAllocateNonPagedIoBuffer(
                                              0,
                                              MAX_ULONG,
                                              4,
                                              SD_RK32_DMA_DESCRIPTOR_TABLE_SIZE,
-                                             TRUE,
-                                             FALSE,
-                                             TRUE);
+                                             IoBufferFlags);
 
         if (Controller->DmaDescriptorTable == NULL) {
             return STATUS_INSUFFICIENT_RESOURCES;

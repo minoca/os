@@ -595,6 +595,7 @@ Return Value:
     USER_INPUT_DEVICE_DESCRIPTION Description;
     PIO_BUFFER_FRAGMENT Fragment;
     PIO_BUFFER IoBuffer;
+    ULONG IoBufferFlags;
     USB_SETUP_PACKET Setup;
     KSTATUS Status;
     HANDLE UserInputHandle;
@@ -682,13 +683,12 @@ Return Value:
         // Allocate an I/O buffer.
         //
 
+        IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
         IoBuffer = MmAllocateNonPagedIoBuffer(0,
                                               MAX_ULONG,
                                               Alignment,
                                               AlignedMaxTransferSize,
-                                              TRUE,
-                                              FALSE,
-                                              FALSE);
+                                              IoBufferFlags);
 
         if (IoBuffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1349,6 +1349,7 @@ Return Value:
     ULONG Alignment;
     PIO_BUFFER_FRAGMENT Fragment;
     PIO_BUFFER IoBuffer;
+    ULONG IoBufferFlags;
     USB_SETUP_PACKET Setup;
     KSTATUS Status;
     PUSB_TRANSFER Transfer;
@@ -1413,13 +1414,12 @@ Return Value:
         // Allocate an I/O buffer.
         //
 
+        IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
         IoBuffer = MmAllocateNonPagedIoBuffer(0,
                                               MAX_ULONG,
                                               Alignment,
                                               AlignedMaxTransferSize,
-                                              TRUE,
-                                              FALSE,
-                                              FALSE);
+                                              IoBufferFlags);
 
         if (IoBuffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

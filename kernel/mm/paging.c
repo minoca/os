@@ -2399,27 +2399,40 @@ Return Value:
 
 {
 
+    ULONG AllocationSize;
     ULONGLONG FreePagesTarget;
     PIO_BUFFER IoBuffer;
     RUNLEVEL OldRunLevel;
+    UINTN PageCount;
     PKEVENT PhysicalMemoryWarningEvent;
     PVOID SignalingObject;
+    UINTN Size;
     KSTATUS Status;
     PMEMORY_RESERVATION SwapRegion;
     PVOID WaitObjectArray[2];
 
     //
     // Create the I/O buffer used to page out in chunks, and allocate a VA
-    // range for it.
+    // range for it. Allocate it locally in order to avoid allocating the array
+    // for the page cache entries, as this I/O buffer will never be backed by
+    // page cache entries.
     //
 
-    IoBuffer = MmAllocateUninitializedIoBuffer(PAGE_OUT_CHUNK_SIZE,
-                                               FALSE,
-                                               TRUE);
-
+    Size = ALIGN_RANGE_UP(PAGE_OUT_CHUNK_SIZE, MmPageSize());
+    PageCount = Size >> MmPageShift();
+    AllocationSize = sizeof(IO_BUFFER);
+    AllocationSize += (PageCount * sizeof(IO_BUFFER_FRAGMENT));
+    IoBuffer = MmAllocateNonPagedPool(AllocationSize, MM_IO_ALLOCATION_TAG);
     if (IoBuffer == NULL) {
         return;
     }
+
+    RtlZeroMemory(IoBuffer, AllocationSize);
+    IoBuffer->Internal.MaxFragmentCount = PageCount;
+    IoBuffer->Fragment = (PVOID)(IoBuffer + 1);
+    IoBuffer->Internal.Flags = IO_BUFFER_INTERNAL_FLAG_NON_PAGED |
+                               IO_BUFFER_INTERNAL_FLAG_EXTENDABLE |
+                               IO_BUFFER_INTERNAL_FLAG_MEMORY_LOCKED;
 
     SwapRegion = MmCreateMemoryReservation(NULL, PAGE_OUT_CHUNK_SIZE, TRUE);
     if (SwapRegion == NULL) {
@@ -2536,8 +2549,10 @@ Return Value:
     PAGE_IN_CONTEXT Context;
     BOOL Dirty;
     PHYSICAL_ADDRESS ExistingPhysicalAddress;
+    ULONG IoBufferFlags;
     BOOL LockHeld;
     BOOL LockPage;
+    BOOL NonPaged;
     PIMAGE_SECTION OwningSection;
     ULONG PageShift;
     ULONG PageSize;
@@ -2756,18 +2771,31 @@ PageInAnonymousSectionEnd:
             //
 
             if (LockedIoBuffer != NULL) {
+                NonPaged = TRUE;
                 if ((ImageSection->Flags & IMAGE_SECTION_NON_PAGED) == 0) {
+                    NonPaged = FALSE;
                     Status = MmpLockPhysicalPages(ExistingPhysicalAddress, 1);
                 }
 
                 if (KSUCCESS(Status)) {
+                    IoBufferFlags = IO_BUFFER_FLAG_KERNEL_MODE_DATA |
+                                    IO_BUFFER_FLAG_MEMORY_LOCKED;
+
                     Status = MmInitializeIoBuffer(LockedIoBuffer,
                                                   NULL,
                                                   ExistingPhysicalAddress,
                                                   PageSize,
-                                                  FALSE,
-                                                  TRUE,
-                                                  TRUE);
+                                                  IoBufferFlags);
+
+                    //
+                    // On success, pass the lock off to the I/O buffer so that
+                    // when the caller releases it, the page gets unlocked.
+                    //
+
+                    if (KSUCCESS(Status) && (NonPaged == FALSE)) {
+                        LockedIoBuffer->Internal.Flags |=
+                                            IO_BUFFER_INTERNAL_FLAG_LOCK_OWNED;
+                    }
                 }
             }
 
@@ -2784,13 +2812,24 @@ PageInAnonymousSectionEnd:
             LockPage = FALSE;
             if (LockedIoBuffer != NULL) {
                 LockPage = TRUE;
+                IoBufferFlags = IO_BUFFER_FLAG_KERNEL_MODE_DATA |
+                                IO_BUFFER_FLAG_MEMORY_LOCKED;
+
                 Status = MmInitializeIoBuffer(LockedIoBuffer,
                                               NULL,
                                               Context.PhysicalAddress,
                                               PageSize,
-                                              FALSE,
-                                              TRUE,
-                                              TRUE);
+                                              IoBufferFlags);
+
+                //
+                // Pass the lock off to the I/O buffer so that when the caller
+                // releases it, the page gets unlocked.
+                //
+
+                if (KSUCCESS(Status) && (Context.PagingEntry != NULL)) {
+                    LockedIoBuffer->Internal.Flags |=
+                                            IO_BUFFER_INTERNAL_FLAG_LOCK_OWNED;
+                }
             }
 
             if (KSUCCESS(Status)) {
@@ -2954,9 +2993,7 @@ Return Value:
                                           NULL,
                                           INVALID_PHYSICAL_ADDRESS,
                                           0,
-                                          TRUE,
-                                          FALSE,
-                                          TRUE);
+                                          IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
             if (!KSUCCESS(Status)) {
                 goto PageInSharedSectionEnd;
@@ -3127,13 +3164,19 @@ PageInSharedSectionEnd:
             ASSERT((ExistingPhysicalAddress == INVALID_PHYSICAL_ADDRESS) ||
                    (ExistingPhysicalAddress == PhysicalAddress));
 
+            //
+            // Initialize the I/O buffer for locked kernel memory. When page
+            // cache entries are appended to I/O buffers, an extra reference
+            // is taken, automatically locking them. When the I/O buffer is
+            // released, the reference count is decremented and the page cache
+            // entry is essentially unlocked.
+            //
+
             Status = MmInitializeIoBuffer(LockedIoBuffer,
                                           NULL,
                                           INVALID_PHYSICAL_ADDRESS,
                                           0,
-                                          TRUE,
-                                          FALSE,
-                                          TRUE);
+                                          IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
             if (KSUCCESS(Status)) {
                 MmIoBufferAppendPage(LockedIoBuffer,
@@ -3202,11 +3245,13 @@ Return Value:
     PULONG InheritPageBitmap;
     PIO_BUFFER IoBuffer;
     IO_BUFFER IoBufferData;
+    ULONG IoBufferFlags;
     PIO_BUFFER LockedPageCacheIoBuffer;
     IO_BUFFER LockedPageCacheIoBufferData;
     BOOL LockHeld;
     BOOL LockPage;
     BOOL LockPageCacheEntry;
+    BOOL NonPaged;
     PIMAGE_SECTION OriginalOwner;
     PIMAGE_SECTION OwningSection;
     PHYSICAL_ADDRESS PageCacheAddress;
@@ -3283,9 +3328,7 @@ Return Value:
                                               NULL,
                                               INVALID_PHYSICAL_ADDRESS,
                                               0,
-                                              TRUE,
-                                              FALSE,
-                                              TRUE);
+                                              IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
                 if (!KSUCCESS(Status)) {
                     goto PageInCacheBackedSectionEnd;
@@ -3328,9 +3371,7 @@ Return Value:
                                               NULL,
                                               INVALID_PHYSICAL_ADDRESS,
                                               0,
-                                              TRUE,
-                                              FALSE,
-                                              TRUE);
+                                              IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
                 if (!KSUCCESS(Status)) {
                     goto PageInCacheBackedSectionEnd;
@@ -3478,9 +3519,7 @@ Return Value:
                                           NULL,
                                           INVALID_PHYSICAL_ADDRESS,
                                           0,
-                                          TRUE,
-                                          FALSE,
-                                          TRUE);
+                                          IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
             if (!KSUCCESS(Status)) {
                 goto PageInCacheBackedSectionEnd;
@@ -3527,9 +3566,7 @@ Return Value:
                                               NULL,
                                               INVALID_PHYSICAL_ADDRESS,
                                               0,
-                                              TRUE,
-                                              FALSE,
-                                              TRUE);
+                                              IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
                 if (!KSUCCESS(Status)) {
                     goto PageInCacheBackedSectionEnd;
@@ -3665,18 +3702,32 @@ PageInCacheBackedSectionEnd:
 
             InheritPageBitmap = OwningSection->InheritPageBitmap;
             if ((InheritPageBitmap[BitmapIndex] & BitmapMask) == 0) {
+                NonPaged = TRUE;
                 if ((OwningSection->Flags & IMAGE_SECTION_NON_PAGED) == 0) {
+                    NonPaged = FALSE;
                     Status = MmpLockPhysicalPages(ExistingPhysicalAddress, 1);
                 }
 
+                //
+                // Initialize the I/O buffer with the locked page and transfer
+                // ownership of the lock to the I/O buffer so that it is
+                // unlocked when the I/O buffer is released.
+                //
+
                 if (KSUCCESS(Status)) {
+                    IoBufferFlags = IO_BUFFER_FLAG_KERNEL_MODE_DATA |
+                                    IO_BUFFER_FLAG_MEMORY_LOCKED;
+
                     Status = MmInitializeIoBuffer(LockedIoBuffer,
                                                   NULL,
                                                   ExistingPhysicalAddress,
                                                   PageSize,
-                                                  FALSE,
-                                                  TRUE,
-                                                  TRUE);
+                                                  IoBufferFlags);
+
+                    if (KSUCCESS(Status) && (NonPaged == FALSE)) {
+                        LockedIoBuffer->Internal.Flags |=
+                                            IO_BUFFER_INTERNAL_FLAG_LOCK_OWNED;
+                    }
                 }
 
             //
@@ -3719,13 +3770,19 @@ PageInCacheBackedSectionEnd:
                     LockedPageCacheIoBuffer = NULL;
 
                 } else {
+                    IoBufferFlags = IO_BUFFER_FLAG_KERNEL_MODE_DATA |
+                                    IO_BUFFER_FLAG_MEMORY_LOCKED;
+
                     Status = MmInitializeIoBuffer(LockedIoBuffer,
                                                   NULL,
                                                   Context.PhysicalAddress,
                                                   PageSize,
-                                                  FALSE,
-                                                  TRUE,
-                                                  TRUE);
+                                                  IoBufferFlags);
+
+                    if (KSUCCESS(Status) && (Context.PagingEntry != NULL)) {
+                        LockedIoBuffer->Internal.Flags |=
+                                            IO_BUFFER_INTERNAL_FLAG_LOCK_OWNED;
+                    }
                 }
             }
 
@@ -3944,6 +4001,7 @@ Return Value:
     BOOL Dirty;
     PHYSICAL_ADDRESS ExistingPhysicalAddress;
     PIO_BUFFER IoBuffer;
+    ULONG IoBufferFlags;
     BOOL LockHeld;
     BOOL LockPage;
     RUNLEVEL OldRunLevel;
@@ -4129,10 +4187,7 @@ Return Value:
         //
 
         } else {
-            IoBuffer = MmAllocateUninitializedIoBuffer(2 * PageSize,
-                                                       TRUE,
-                                                       TRUE);
-
+            IoBuffer = MmAllocateUninitializedIoBuffer(2 * PageSize, 0);
             if (IoBuffer == NULL) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;
                 goto PageInDefaultSectionEnd;
@@ -4323,14 +4378,28 @@ PageInDefaultSectionEnd:
                 Status = MmpLockPhysicalPages(ExistingPhysicalAddress, 1);
             }
 
+            //
+            // Initialize the I/O buffer with the locked page and transfer
+            // ownership of the lock to the I/O buffer so that it is unlocked
+            // when the buffer is freed.
+            //
+
             if (KSUCCESS(Status)) {
+                IoBufferFlags = IO_BUFFER_FLAG_KERNEL_MODE_DATA |
+                                IO_BUFFER_FLAG_MEMORY_LOCKED;
+
                 Status = MmInitializeIoBuffer(LockedIoBuffer,
                                               NULL,
                                               ExistingPhysicalAddress,
                                               PageSize,
-                                              FALSE,
-                                              TRUE,
-                                              TRUE);
+                                              IoBufferFlags);
+
+                if (KSUCCESS(Status) &&
+                    ((ImageSection->Flags & IMAGE_SECTION_NON_PAGED) == 0)) {
+
+                    LockedIoBuffer->Internal.Flags |=
+                                            IO_BUFFER_INTERNAL_FLAG_LOCK_OWNED;
+                }
             }
 
         //
@@ -4346,13 +4415,25 @@ PageInDefaultSectionEnd:
             LockPage = FALSE;
             if (LockedIoBuffer != NULL) {
                 LockPage = TRUE;
+                IoBufferFlags = IO_BUFFER_FLAG_KERNEL_MODE_DATA |
+                                IO_BUFFER_FLAG_MEMORY_LOCKED;
+
+                //
+                // Initialize the I/O buffer with the soon-to-be locked page
+                // and transfer ownership of the lock to the I/O buffer so that
+                // it is unlocked when the buffer is freed.
+                //
+
                 Status = MmInitializeIoBuffer(LockedIoBuffer,
                                               NULL,
                                               Context.PhysicalAddress,
                                               PageSize,
-                                              FALSE,
-                                              TRUE,
-                                              TRUE);
+                                              IoBufferFlags);
+
+                if (KSUCCESS(Status) && (Context.PagingEntry != NULL)) {
+                    LockedIoBuffer->Internal.Flags |=
+                                            IO_BUFFER_INTERNAL_FLAG_LOCK_OWNED;
+                }
             }
 
             if (KSUCCESS(Status)) {
@@ -4601,9 +4682,7 @@ Return Value:
                                   SwapSpace,
                                   Context->PhysicalAddress,
                                   PageSize,
-                                  FALSE,
-                                  FALSE,
-                                  TRUE);
+                                  IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
     if (!KSUCCESS(Status)) {
         goto ReadPageFileEnd;

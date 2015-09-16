@@ -290,6 +290,7 @@ Return Value:
     PVOID Allocation;
     UINTN AllocationSize;
     PIO_BUFFER IoBuffer;
+    ULONG IoBufferFlags;
 
     Allocation = NULL;
     Size = ALIGN_RANGE_UP(Size, 8);
@@ -301,13 +302,14 @@ Return Value:
 
         if (Size > HlModPoolDeviceSize) {
             AllocationSize = ALIGN_RANGE_UP(Size, MmPageSize());
+            IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS |
+                            IO_BUFFER_FLAG_MAP_NON_CACHED;
+
             IoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                   MAX_ULONGLONG,
                                                   0,
                                                   AllocationSize,
-                                                  TRUE,
-                                                  FALSE,
-                                                  TRUE);
+                                                  IoBufferFlags);
 
             if (IoBuffer != NULL) {
                 HlModPoolDevice = IoBuffer->Fragment[0].VirtualAddress;
@@ -339,13 +341,12 @@ Return Value:
 
         if (Size > HlModPoolSize) {
             AllocationSize = ALIGN_RANGE_UP(Size, MmPageSize());
+            IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
             IoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                   MAX_ULONGLONG,
                                                   0,
                                                   AllocationSize,
-                                                  TRUE,
-                                                  FALSE,
-                                                  FALSE);
+                                                  IoBufferFlags);
 
             if (IoBuffer != NULL) {
                 HlModPool = IoBuffer->Fragment[0].VirtualAddress;

@@ -205,6 +205,16 @@ Author:
 #define MmUserRead MmUserRead32
 
 //
+// Define the bitmask of flags used to initialize or allocate an I/O buffer.
+//
+
+#define IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS 0x00000001
+#define IO_BUFFER_FLAG_MAP_NON_CACHED        0x00000002
+#define IO_BUFFER_FLAG_MAP_WRITE_THROUGH     0x00000004
+#define IO_BUFFER_FLAG_MEMORY_LOCKED         0x00000008
+#define IO_BUFFER_FLAG_KERNEL_MODE_DATA      0x00000010
+
+//
 // --------------------------------------------------------------------- Macros
 //
 
@@ -757,9 +767,7 @@ MmAllocateNonPagedIoBuffer (
     PHYSICAL_ADDRESS MaximumPhysicalAddress,
     UINTN Alignment,
     UINTN Size,
-    BOOL PhysicallyContiguous,
-    BOOL WriteThrough,
-    BOOL NonCached
+    ULONG Flags
     );
 
 /*++
@@ -781,17 +789,8 @@ Arguments:
 
     Size - Supplies the minimum size of the buffer, in bytes.
 
-    PhysicallyContiguous - Supplies a boolean indicating whether or not the
-        requested buffer should be physically contiguous.
-
-    WriteThrough - Supplies a boolean indicating if the I/O buffer virtual
-        addresses should be mapped write through (TRUE) or the default
-        write back (FALSE). If you're not sure, supply FALSE.
-
-    NonCached - Supplies a boolean indicating if the I/O buffer virtual
-        addresses should be mapped non-cached (TRUE) or the default, which is
-        to map is as normal cached memory (FALSE). If you're not sure, supply
-        FALSE.
+    Flags - Supplies a bitmask of flags used to allocate the I/O buffer. See
+        IO_BUFFER_FLAG_* for definitions.
 
 Return Value:
 
@@ -802,7 +801,8 @@ Return Value:
 KERNEL_API
 PIO_BUFFER
 MmAllocatePagedIoBuffer (
-    UINTN Size
+    UINTN Size,
+    ULONG Flags
     );
 
 /*++
@@ -815,6 +815,9 @@ Arguments:
 
     Size - Supplies the minimum size of the buffer, in bytes.
 
+    Flags - Supplies a bitmask of flags used to allocate the I/O buffer. See
+        IO_BUFFER_FLAG_* for definitions.
+
 Return Value:
 
     Returns a pointer to the I/O buffer on success, or NULL on failure.
@@ -825,8 +828,7 @@ KERNEL_API
 PIO_BUFFER
 MmAllocateUninitializedIoBuffer (
     UINTN Size,
-    BOOL CacheBacked,
-    BOOL Locked
+    ULONG Flags
     );
 
 /*++
@@ -842,11 +844,8 @@ Arguments:
     Size - Supplies the minimum size of the buffer, in bytes. This size is
         rounded up (always) to a page, but does assume page alignment.
 
-    CacheBacked - Supplies a boolean indicating if the buffer is to be backed
-        by page cache entries or not.
-
-    Locked - Supplies a boolean indicating if the buffer is to be backed by
-        pages locked in memory.
+    Flags - Supplies a bitmask of flags used to allocate the I/O buffer. See
+        IO_BUFFER_FLAG_* for definitions.
 
 Return Value:
 
@@ -859,7 +858,7 @@ KSTATUS
 MmCreateIoBuffer (
     PVOID Buffer,
     UINTN SizeInBytes,
-    BOOL KernelMode,
+    ULONG Flags,
     PIO_BUFFER *NewIoBuffer
     );
 
@@ -877,10 +876,8 @@ Arguments:
 
     SizeInBytes - Supplies the size of the buffer, in bytes.
 
-    KernelMode - Supplies a boolean indicating whether or not this buffer is
-        a kernel mode buffer (TRUE) or a user mode buffer (FALSE). If it is a
-        user mode buffer, this routine will fail if a non-user mode address
-        was passed in.
+    Flags - Supplies a bitmask of flags used to allocate the I/O buffer. See
+        IO_BUFFER_FLAG_* for definitions.
 
     NewIoBuffer - Supplies a pointer where a pointer to the new I/O buffer
         will be returned on success.
@@ -939,9 +936,7 @@ MmInitializeIoBuffer (
     PVOID VirtualAddress,
     PHYSICAL_ADDRESS PhysicalAddress,
     UINTN SizeInBytes,
-    BOOL CacheBacked,
-    BOOL MemoryLocked,
-    BOOL KernelMode
+    ULONG Flags
     );
 
 /*++
@@ -963,16 +958,8 @@ Arguments:
 
     SizeInBytes - Supplies the size of the I/O buffer, in bytes.
 
-    CacheBacked - Supplies a boolean indicating if the I/O buffer will be
-        backed by page cache entries.
-
-    MemoryLocked - Supplies a boolean if the physical address supplied is
-        locked in memory.
-
-    KernelMode - Supplies a boolean indicating whether or not this buffer is
-        a kernel mode buffer (TRUE) or a user mode buffer (FALSE). If it is a
-        user mode buffer, this routine will fail if a non-user mode address
-        was passed in.
+    Flags - Supplies a bitmask of flags used to initialize the I/O buffer. See
+        IO_BUFFER_FLAG_* for definitions.
 
 Return Value:
 

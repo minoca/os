@@ -499,6 +499,7 @@ Return Value:
 {
 
     PBCM2709_MAILBOX_HEADER Header;
+    ULONG IoBufferFlags;
     PVOID MailboxBase;
     ULONG PageSize;
     PHYSICAL_ADDRESS ReceivePhysicalAddress;
@@ -530,13 +531,14 @@ Return Value:
     // Allocate and map an aligned I/O buffer for sending the data.
     //
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS |
+                    IO_BUFFER_FLAG_MAP_NON_CACHED;
+
     SendIoBuffer = MmAllocateNonPagedIoBuffer(0,
                                               MAX_ULONG,
                                               BCM2709_MAILBOX_DATA_ALIGNMENT,
                                               CommandBufferSize,
-                                              TRUE,
-                                              FALSE,
-                                              TRUE);
+                                              IoBufferFlags);
 
     if (SendIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

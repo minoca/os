@@ -345,6 +345,7 @@ Return Value:
     ULONG Flags;
     ULONG Index;
     PIO_BUFFER IoBuffer;
+    ULONG IoBufferFlags;
     PHYSICAL_ADDRESS PhysicalAddress;
     ULONGLONG Size;
     KSTATUS Status;
@@ -442,14 +443,13 @@ Return Value:
     //
 
     if ((Flags & RTL81_FLAG_TRANSMIT_MODE_LEGACY) != 0) {
+        IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
         IoBuffer = MmAllocateNonPagedIoBuffer(
                                          0,
                                          MAX_ULONG,
                                          RTL81_RECEIVE_RING_BUFFER_ALIGNMENT,
                                          RTL81_RECEIVE_RING_BUFFER_PADDED_SIZE,
-                                         TRUE,
-                                         FALSE,
-                                         FALSE);
+                                         IoBufferFlags);
 
         if (IoBuffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -490,13 +490,12 @@ Return Value:
                          (DefaultData->ReceiveDescriptorCount *
                           RTL81_RECEIVE_BUFFER_DATA_SIZE);
 
+        IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
         IoBuffer = MmAllocateNonPagedIoBuffer(0,
                                               MAX_ULONGLONG,
                                               RTL81_DESCRIPTOR_ALIGNMENT,
                                               AllocationSize,
-                                              TRUE,
-                                              FALSE,
-                                              FALSE);
+                                              IoBufferFlags);
 
         if (IoBuffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

@@ -284,6 +284,7 @@ Return Value:
     ULONG Flags;
     ULONG Frame;
     PHYSICAL_ADDRESS InterruptQueuePhysicalAddress;
+    ULONG IoBufferFlags;
     KSTATUS Status;
 
     //
@@ -310,14 +311,13 @@ Return Value:
     // Allocate and initialize the buffer used to hold the UHCI schedule.
     //
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Controller->ScheduleIoBuffer = MmAllocateNonPagedIoBuffer(
                                                      0,
                                                      MAX_ULONG,
                                                      UHCI_FRAME_LIST_ALIGNMENT,
                                                      sizeof(UHCI_SCHEDULE),
-                                                     TRUE,
-                                                     FALSE,
-                                                     FALSE);
+                                                     IoBufferFlags);
 
     if (Controller->ScheduleIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

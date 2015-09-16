@@ -882,10 +882,7 @@ Return Value:
 
     if ((IoContext->Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
         CacheBufferSize = ALIGN_RANGE_UP(PageAlignedSize, PageSize);
-        CacheIoBuffer = MmAllocateUninitializedIoBuffer(CacheBufferSize,
-                                                        TRUE,
-                                                        TRUE);
-
+        CacheIoBuffer = MmAllocateUninitializedIoBuffer(CacheBufferSize, 0);
         if (CacheIoBuffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto PerformCachedWriteEnd;
@@ -1129,9 +1126,7 @@ Return Value:
                                       NULL,
                                       INVALID_PHYSICAL_ADDRESS,
                                       0,
-                                      TRUE,
-                                      FALSE,
-                                      TRUE);
+                                      IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
         if (!KSUCCESS(Status)) {
             goto HandleCacheWriteMissEnd;
@@ -1241,9 +1236,7 @@ Return Value:
                                                          MAX_ULONGLONG,
                                                          PageSize,
                                                          PageSize,
-                                                         FALSE,
-                                                         FALSE,
-                                                         FALSE);
+                                                         0);
 
             if (ScratchIoBuffer == NULL) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1620,10 +1613,7 @@ Return Value:
     // Validation will back the I/O buffer with memory.
     //
 
-    ReadIoBuffer = MmAllocateUninitializedIoBuffer(BlockAlignedSize,
-                                                   TRUE,
-                                                   TRUE);
-
+    ReadIoBuffer = MmAllocateUninitializedIoBuffer(BlockAlignedSize, 0);
     if (ReadIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto HandleDefaultCacheReadMissEnd;
@@ -1919,8 +1909,7 @@ Return Value:
         (IS_ALIGNED(SizeInBytes, BlockSize) == FALSE)) {
 
         BlockAlignedIoBuffer = MmAllocateUninitializedIoBuffer(BlockAlignedSize,
-                                                               TRUE,
-                                                               TRUE);
+                                                               0);
 
         if (BlockAlignedIoBuffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -2287,7 +2276,7 @@ Return Value:
     ASSERT(IS_DEVICE_OR_VOLUME(Device));
 
     BlockSize = FileObject->Properties.BlockSize;
-    AlignedIoBuffer = MmAllocateUninitializedIoBuffer(BlockSize, TRUE, TRUE);
+    AlignedIoBuffer = MmAllocateUninitializedIoBuffer(BlockSize, 0);
     if (AlignedIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto PerformDefaultPartialWriteEnd;

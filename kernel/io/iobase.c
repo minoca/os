@@ -2274,9 +2274,7 @@ Return Value:
                                   LinkTarget,
                                   INVALID_PHYSICAL_ADDRESS,
                                   LinkTargetSize,
-                                  FALSE,
-                                  FALSE,
-                                  TRUE);
+                                  IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
     if (!KSUCCESS(Status)) {
         goto CreateSymbolicLinkEnd;
@@ -2394,9 +2392,7 @@ Return Value:
                                   TargetBuffer,
                                   INVALID_PHYSICAL_ADDRESS,
                                   TargetBufferSize,
-                                  FALSE,
-                                  FALSE,
-                                  TRUE);
+                                  IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
     if (!KSUCCESS(Status)) {
         goto ReadSymbolicLinkEnd;

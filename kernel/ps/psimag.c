@@ -1272,6 +1272,7 @@ Return Value:
     UINTN FileRegionSize;
     UINTN FileSize;
     IO_BUFFER IoBuffer;
+    ULONG IoBufferFlags;
     UINTN IoSize;
     BOOL KernelMode;
     PKPROCESS KernelProcess;
@@ -1295,6 +1296,7 @@ Return Value:
     FileRegion = NULL;
     FileRegionSize = 0;
     FileHandle = NULL;
+    IoBufferFlags = 0;
     if (File != NULL) {
         FileHandle = File->Handle;
     }
@@ -1326,6 +1328,7 @@ Return Value:
     if (Reservation->Process == KernelProcess) {
         KernelMode = TRUE;
         MapFlags |= IMAGE_SECTION_NON_PAGED;
+        IoBufferFlags |= IO_BUFFER_FLAG_KERNEL_MODE_DATA;
     }
 
     //
@@ -1381,9 +1384,7 @@ Return Value:
                                           (PVOID)SegmentAddress,
                                           INVALID_PHYSICAL_ADDRESS,
                                           IoSize,
-                                          FALSE,
-                                          FALSE,
-                                          KernelMode);
+                                          IoBufferFlags);
 
             if (!KSUCCESS(Status)) {
                 goto MapImageSegmentEnd;
@@ -1497,9 +1498,7 @@ Return Value:
                                           (PVOID)SegmentAddress,
                                           INVALID_PHYSICAL_ADDRESS,
                                           IoSize,
-                                          FALSE,
-                                          FALSE,
-                                          KernelMode);
+                                          IoBufferFlags);
 
             if (!KSUCCESS(Status)) {
                 goto MapImageSegmentEnd;

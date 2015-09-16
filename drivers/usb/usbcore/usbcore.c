@@ -1660,6 +1660,7 @@ Return Value:
     UINTN BufferAlignment;
     PUSB_DEVICE Device;
     PIO_BUFFER IoBuffer;
+    ULONG IoBufferFlags;
     KSTATUS Status;
     PUSB_TRANSFER Transfer;
     PVOID TransferBuffer;
@@ -1680,13 +1681,12 @@ Return Value:
     TransferLength = BufferLength + sizeof(USB_SETUP_PACKET);
     BufferAlignment = MmGetIoBufferAlignment();
     AllocationSize = ALIGN_RANGE_UP(TransferLength, BufferAlignment);
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     IoBuffer = MmAllocateNonPagedIoBuffer(0,
                                           MAX_ULONG,
                                           BufferAlignment,
                                           AllocationSize,
-                                          TRUE,
-                                          FALSE,
-                                          FALSE);
+                                          IoBufferFlags);
 
     if (IoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

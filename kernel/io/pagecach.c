@@ -1802,10 +1802,7 @@ Return Value:
     // Allocate a buffer to support the maximum allowed flush size.
     //
 
-    FlushBuffer = MmAllocateUninitializedIoBuffer(PAGE_CACHE_FLUSH_MAX,
-                                                  TRUE,
-                                                  TRUE);
-
+    FlushBuffer = MmAllocateUninitializedIoBuffer(PAGE_CACHE_FLUSH_MAX, 0);
     if (FlushBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto FlushPageCacheEntriesEnd;
@@ -3004,9 +3001,7 @@ Return Value:
                                   NULL,
                                   INVALID_PHYSICAL_ADDRESS,
                                   0,
-                                  TRUE,
-                                  FALSE,
-                                  TRUE);
+                                  IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
     if (!KSUCCESS(Status)) {
         goto CopyIoBufferToPageCacheEntryEnd;

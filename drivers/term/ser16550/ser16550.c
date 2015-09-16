@@ -1626,7 +1626,7 @@ Return Value:
                     Status = MmCreateIoBuffer(
                                     Child->ReceiveBuffer + Child->ReceiveStart,
                                     Child->ReceiveSize - Child->ReceiveStart,
-                                    TRUE,
+                                    IO_BUFFER_FLAG_KERNEL_MODE_DATA,
                                     &IoBuffer);
 
                     BytesCompleted = 0;
@@ -1675,7 +1675,7 @@ Return Value:
                     Status = MmCreateIoBuffer(
                                     Child->ReceiveBuffer + Child->ReceiveStart,
                                     ReceiveEnd - Child->ReceiveStart,
-                                    TRUE,
+                                    IO_BUFFER_FLAG_KERNEL_MODE_DATA,
                                     &IoBuffer);
 
                     BytesCompleted = 0;

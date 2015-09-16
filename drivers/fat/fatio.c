@@ -93,7 +93,7 @@ Return Value:
 
     PIO_BUFFER IoBuffer;
 
-    IoBuffer = MmAllocateUninitializedIoBuffer(Size, TRUE, TRUE);
+    IoBuffer = MmAllocateUninitializedIoBuffer(Size, 0);
     return (PFAT_IO_BUFFER)IoBuffer;
 }
 
@@ -127,7 +127,11 @@ Return Value:
     PIO_BUFFER IoBuffer;
     KSTATUS Status;
 
-    Status = MmCreateIoBuffer(Buffer, Size, TRUE, &IoBuffer);
+    Status = MmCreateIoBuffer(Buffer,
+                              Size,
+                              IO_BUFFER_FLAG_KERNEL_MODE_DATA,
+                              &IoBuffer);
+
     if (!KSUCCESS(Status)) {
         return NULL;
     }

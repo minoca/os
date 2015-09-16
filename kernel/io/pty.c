@@ -1897,6 +1897,7 @@ Return Value:
     UINTN Index;
     BOOL InSession;
     IO_BUFFER IoBuffer;
+    ULONG IoBufferFlags;
     INT ModemStatus;
     TERMINAL_SETTINGS_OLD OldSettings;
     PTERMINAL PreviousTerminal;
@@ -2140,13 +2141,16 @@ Return Value:
         break;
 
     case TerminalControlInsertInInputQueue:
+        IoBufferFlags = 0;
+        if (FromKernelMode != FALSE) {
+            IoBufferFlags |= IO_BUFFER_FLAG_KERNEL_MODE_DATA;
+        }
+
         Status = MmInitializeIoBuffer(&IoBuffer,
                                       ContextBuffer,
                                       INVALID_PHYSICAL_ADDRESS,
                                       1,
-                                      FALSE,
-                                      FALSE,
-                                      FromKernelMode);
+                                      IoBufferFlags);
 
         if (!KSUCCESS(Status)) {
             break;
@@ -5330,9 +5334,7 @@ Return Value:
                           Terminal->OutputBuffer + Terminal->OutputBufferStart,
                           INVALID_PHYSICAL_ADDRESS,
                           Size,
-                          FALSE,
-                          FALSE,
-                          TRUE);
+                          IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
             if (!KSUCCESS(Status)) {
                 return Status;
@@ -5371,9 +5373,7 @@ Return Value:
                           Terminal->OutputBuffer + Terminal->OutputBufferStart,
                           INVALID_PHYSICAL_ADDRESS,
                           Size,
-                          FALSE,
-                          FALSE,
-                          TRUE);
+                          IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
         if (!KSUCCESS(Status)) {
             return Status;

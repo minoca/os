@@ -238,6 +238,7 @@ Return Value:
     PE100_RECEIVE_FRAME Frame;
     ULONG FrameBasePhysical;
     ULONG FrameIndex;
+    ULONG IoBufferFlags;
     ULONG NextFrameAddress;
     ULONG ReceiveSize;
     KSTATUS Status;
@@ -269,13 +270,12 @@ Return Value:
 
     ASSERT(Device->ReceiveFrameIoBuffer == NULL);
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Device->ReceiveFrameIoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                               MAX_ULONG,
                                                               16,
                                                               ReceiveSize,
-                                                              TRUE,
-                                                              FALSE,
-                                                              FALSE);
+                                                              IoBufferFlags);
 
     if (Device->ReceiveFrameIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -301,13 +301,12 @@ Return Value:
 
     ASSERT(Device->CommandIoBuffer == NULL);
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Device->CommandIoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                          MAX_ULONG,
                                                          16,
                                                          CommandSize,
-                                                         TRUE,
-                                                         FALSE,
-                                                         FALSE);
+                                                         IoBufferFlags);
 
     if (Device->CommandIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

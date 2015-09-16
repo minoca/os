@@ -400,6 +400,7 @@ Return Value:
 
     PATA_CONTROLLER Controller;
     UINTN Index;
+    ULONG IoBufferFlags;
     PVOID Prdt;
     PHYSICAL_ADDRESS PrdtPhysical;
     KSTATUS Status;
@@ -422,13 +423,14 @@ Return Value:
     // Allocate a page for the PRDT.
     //
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS |
+                    IO_BUFFER_FLAG_MAP_NON_CACHED;
+
     Controller->PrdtIoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                           MAX_ULONG,
                                                           ATA_PRDT_TOTAL_SIZE,
                                                           ATA_PRDT_TOTAL_SIZE,
-                                                          TRUE,
-                                                          FALSE,
-                                                          TRUE);
+                                                          IoBufferFlags);
 
     if (Controller->PrdtIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

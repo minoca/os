@@ -2264,6 +2264,7 @@ Return Value:
 
     ULONG Alignment;
     PIO_BUFFER IoBuffer;
+    ULONG IoBufferFlags;
     ULONG MaxTransferLength;
     PUSB_SETUP_PACKET Setup;
     KSTATUS Status;
@@ -2280,13 +2281,12 @@ Return Value:
     Alignment = MmGetIoBufferAlignment();
     TransferLength = sizeof(USB_SETUP_PACKET) + sizeof(UCHAR);
     MaxTransferLength = ALIGN_RANGE_UP(TransferLength, Alignment);
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     IoBuffer = MmAllocateNonPagedIoBuffer(0,
                                           MAX_ULONG,
                                           Alignment,
                                           MaxTransferLength,
-                                          TRUE,
-                                          FALSE,
-                                          FALSE);
+                                          IoBufferFlags);
 
     if (IoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -2685,6 +2685,7 @@ Return Value:
     PIO_BUFFER CommandBuffer;
     PUSB_TRANSFER CommandTransfer;
     PUSB_TRANSFER DataOutTransfer;
+    ULONG IoBufferFlags;
     ULONG MaxCommandBlockSize;
     ULONG MaxCommandBufferSize;
     ULONG MaxCommandStatusSize;
@@ -2700,13 +2701,12 @@ Return Value:
     MaxCommandBufferSize = ALIGN_RANGE_UP(USB_MASS_COMMAND_BUFFER_SIZE,
                                           Alignment);
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Transfers->CommandBuffer = MmAllocateNonPagedIoBuffer(0,
                                                           MAX_ULONG,
                                                           Alignment,
                                                           MaxCommandBufferSize,
-                                                          TRUE,
-                                                          FALSE,
-                                                          FALSE);
+                                                          IoBufferFlags);
 
     if (Transfers->CommandBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

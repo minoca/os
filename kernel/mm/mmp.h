@@ -54,6 +54,80 @@ Author:
 #define UNMAP_FLAG_FREE_PHYSICAL_PAGES 0x00000002
 
 //
+// This flag indicates that the underlying physical memory being described was
+// created with this structure. When the structure is destroyed, the memory
+// will be freed as well.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_PA_OWNED 0x00000001
+
+//
+// This flag is set when the structure was not allocated by these routines.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_STRUCTURE_NOT_OWNED 0x00000002
+
+//
+// This flag is set when the I/O buffer's memory is locked.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_MEMORY_LOCKED 0x00000004
+
+//
+// This flag is set when the I/O buffer meta-data is non-paged.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_NON_PAGED 0x00000008
+
+//
+// This flag is set if the buffer is meant to be filled with physical pages
+// from page cache entries.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_CACHE_BACKED 0x00000010
+
+//
+// This flag is set if the I/O buffer represents a region in user mode.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_USER_MODE 0x00000020
+
+//
+// This flag is set if the I/O buffer is completely mapped. It does not have to
+// be virtually contiguous.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_MAPPED 0x00000040
+
+//
+// This flag is set if the I/O buffer is mapped virtually contiguous.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_VA_CONTIGUOUS 0x00000080
+
+//
+// This flag is set if the I/O buffer needs to be unmapped on free. An I/O
+// buffer may have valid virtual addresses, but only needs to be unmapped if
+// the virtual addresses were allocated by I/O buffer routines.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_VA_OWNED 0x00000100
+
+//
+// This flag is set if the I/O buffer can be extended by appending physical
+// pages, page cache entries, or by allocating new physical memory.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_EXTENDABLE 0x00000200
+
+//
+// This flag is set when the I/O buffer's memory by the I/O buffer internals
+// and thus needs to be unlocked when the buffer is released.
+//
+
+#define IO_BUFFER_INTERNAL_FLAG_LOCK_OWNED 0x00000400
+
+//
 // --------------------------------------------------------------------- Macros
 //
 

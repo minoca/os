@@ -510,7 +510,7 @@ Return Value:
         }
 
         Device->Power = NULL;
-        MmFreePagedPool(State);
+        MmFreeNonPagedPool(State);
     }
 
     return;
@@ -599,7 +599,9 @@ Return Value:
     PDEVICE_POWER State;
     KSTATUS Status;
 
-    State = MmAllocatePagedPool(sizeof(DEVICE_POWER), PM_DEVICE_ALLOCATION_TAG);
+    State = MmAllocateNonPagedPool(sizeof(DEVICE_POWER),
+                                   PM_DEVICE_ALLOCATION_TAG);
+
     if (State == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
     }
@@ -629,7 +631,9 @@ Return Value:
                                       State->IdleTimerWorkItem);
 
     State->Irp = IoCreateIrp(Device, IrpMajorStateChange, 0);
-    State->History = PmpCreateIdleHistory(0, PM_DEVICE_HISTORY_SIZE_SHIFT);
+    State->History = PmpCreateIdleHistory(IDLE_HISTORY_NON_PAGED,
+                                          PM_DEVICE_HISTORY_SIZE_SHIFT);
+
     if ((State->ActiveEvent == NULL) || (State->IdleTimer == NULL) ||
         (State->IdleTimerDpc == NULL) || (State->IdleTimerWorkItem == NULL) ||
         (State->Irp == NULL) || (State->History == NULL)) {
@@ -1007,7 +1011,7 @@ Return Value:
     }
 
     //
-    // If needed, actually queue the work request.
+    // If a request is needed, set the state correctly while the lock is held.
     //
 
     if (QueueRequest != FALSE) {
@@ -1016,13 +1020,21 @@ Return Value:
         }
 
         State->State = DevicePowerStateTransitioning;
+    }
+
+    KeReleaseSharedExclusiveLockExclusive(Device->Lock);
+
+    //
+    // If needed, actually queue the work request now that the lock is released.
+    //
+
+    if (QueueRequest != FALSE) {
         Status = IopQueueDeviceWork(Device,
                                     DeviceActionPowerTransition,
                                     NULL,
                                     0);
     }
 
-    KeReleaseSharedExclusiveLockExclusive(Device->Lock);
     return Status;
 }
 

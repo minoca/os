@@ -299,6 +299,7 @@ Return Value:
     ULONG Flags;
     ULONG Frame;
     ULONG FrameBits;
+    ULONG IoBufferFlags;
     PEHCI_TRANSFER_QUEUE PreviousTransferQueue;
     PEHCI_QUEUE_HEAD QueueHead;
     PHYSICAL_ADDRESS QueueHeadPhysicalAddress;
@@ -362,14 +363,13 @@ Return Value:
     // uncached).
     //
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Controller->PeriodicScheduleIoBuffer = MmAllocateNonPagedIoBuffer(
                                                 0,
                                                 MAX_ULONG,
                                                 EHCI_FRAME_LIST_ALIGNMENT,
                                                 sizeof(EHCI_PERIODIC_SCHEDULE),
-                                                TRUE,
-                                                FALSE,
-                                                FALSE);
+                                                IoBufferFlags);
 
     if (Controller->PeriodicScheduleIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

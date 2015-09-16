@@ -453,6 +453,7 @@ Return Value:
 {
 
     ULONG AllocationSize;
+    ULONG IoBufferFlags;
     PHYSICAL_ADDRESS PhysicalAddress;
     ULONG Size;
     ULONG SlotIndex;
@@ -496,13 +497,12 @@ Return Value:
 
     ASSERT(Device->DescriptorIoBuffer == NULL);
 
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
     Device->DescriptorIoBuffer = MmAllocateNonPagedIoBuffer(0,
                                                             MAX_ULONG,
                                                             8,
                                                             AllocationSize,
-                                                            TRUE,
-                                                            FALSE,
-                                                            FALSE);
+                                                            IoBufferFlags);
 
     if (Device->DescriptorIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

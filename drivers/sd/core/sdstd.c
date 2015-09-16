@@ -301,6 +301,7 @@ Return Value:
 {
 
     PSD_ADMA2_DESCRIPTOR Descriptor;
+    ULONG IoBufferFlags;
     ULONG Value;
 
     //
@@ -332,14 +333,15 @@ Return Value:
     //
 
     if (Controller->DmaDescriptorTable == NULL) {
+        IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS |
+                        IO_BUFFER_FLAG_MAP_NON_CACHED;
+
         Controller->DmaDescriptorTable = MmAllocateNonPagedIoBuffer(
                                                 0,
                                                 MAX_ULONG,
                                                 4,
                                                 SD_ADMA2_DESCRIPTOR_TABLE_SIZE,
-                                                TRUE,
-                                                FALSE,
-                                                TRUE);
+                                                IoBufferFlags);
 
         if (Controller->DmaDescriptorTable == NULL) {
             return STATUS_INSUFFICIENT_RESOURCES;

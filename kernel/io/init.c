@@ -397,8 +397,10 @@ Return Value:
 {
 
     KSTATUS Status;
+    ULONG WorkQueueFlags;
 
-    IoDeviceWorkQueue = KeCreateWorkQueue(0, "IoDeviceWorker");
+    WorkQueueFlags = WORK_QUEUE_FLAG_SUPPORT_DISPATCH_LEVEL;
+    IoDeviceWorkQueue = KeCreateWorkQueue(WorkQueueFlags, "IoDeviceWorker");
     if (IoDeviceWorkQueue == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceSupportEnd;

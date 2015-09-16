@@ -471,9 +471,7 @@ Return Value:
                                   Command,
                                   INVALID_PHYSICAL_ADDRESS,
                                   FileSize,
-                                  FALSE,
-                                  FALSE,
-                                  TRUE);
+                                  IO_BUFFER_FLAG_KERNEL_MODE_DATA);
 
     if (!KSUCCESS(Status)) {
         goto VolumeArrivalEnd;

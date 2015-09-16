@@ -1571,7 +1571,11 @@ Return Value:
            (Parent->IoHandle != NULL) &&
            (Context->BlockSize != 0));
 
-    Status = MmCreateIoBuffer(Buffer, Context->BlockSize, TRUE, &IoBuffer);
+    Status = MmCreateIoBuffer(Buffer,
+                              Context->BlockSize,
+                              IO_BUFFER_FLAG_KERNEL_MODE_DATA,
+                              &IoBuffer);
+
     if (!KSUCCESS(Status)) {
         goto ReadEnd;
     }

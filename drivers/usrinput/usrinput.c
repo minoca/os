@@ -836,7 +836,11 @@ Return Value:
     // Create an I/O buffer for the write.
     //
 
-    Status = MmCreateIoBuffer(Event, sizeof(USER_INPUT_EVENT), TRUE, &IoBuffer);
+    Status = MmCreateIoBuffer(Event,
+                              sizeof(USER_INPUT_EVENT),
+                              IO_BUFFER_FLAG_KERNEL_MODE_DATA,
+                              &IoBuffer);
+
     if (!KSUCCESS(Status)) {
         goto ProcessInputEventEnd;
     }
@@ -1192,7 +1196,7 @@ Return Value:
         if (InLocalTerminal != NULL) {
             Status = MmCreateIoBuffer(Characters,
                                       CharacterCount,
-                                      TRUE,
+                                      IO_BUFFER_FLAG_KERNEL_MODE_DATA,
                                       &IoBuffer);
 
             if (!KSUCCESS(Status)) {
