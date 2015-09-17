@@ -289,6 +289,12 @@ Return Value:
     KeReleaseQueuedLock(IoDeviceListLock);
 
     //
+    // Officially close the work queue.
+    //
+
+    Device->QueueState = DeviceQueueClosed;
+
+    //
     // Release the device lock to let everyone else waiting on the state see
     // that it has now switched to removed.
     //
@@ -351,13 +357,10 @@ Return Value:
     KeAcquireSharedExclusiveLockExclusive(ParentDevice->Lock);
 
     //
-    // With the device officially removed, close the work queue, and remove it
-    // from its parent's list of active children.
+    // With the device officially removed, remove it from its parent's list of
+    // active children.
     //
 
-    KeAcquireSpinLock(&(Device->QueueLock));
-    Device->QueueState = DeviceQueueClosed;
-    KeReleaseSpinLock(&(Device->QueueLock));
     LIST_REMOVE(&(Device->ActiveListEntry));
     Device->ActiveListEntry.Next = NULL;
 
@@ -515,15 +518,13 @@ Return Value:
             PreviousStateIndex = DEVICE_STATE_HISTORY - 1;
         }
 
-        PreviousState = CurrentDevice->StateHistory[PreviousStateIndex];
-        IopSetDeviceState(CurrentDevice, PreviousState);
-
         //
         // Modify the device's queue back to the correct state. This depends on
         // the current queue state and the previous device state.
         //
 
-        KeAcquireSpinLock(&(CurrentDevice->QueueLock));
+        PreviousState = CurrentDevice->StateHistory[PreviousStateIndex];
+        IopSetDeviceState(CurrentDevice, PreviousState);
 
         //
         // Devices with closed queues should never need to be rolled back.
@@ -553,8 +554,6 @@ Return Value:
                 CurrentDevice->QueueState = DeviceQueueOpen;
             }
         }
-
-        KeReleaseSpinLock(&(CurrentDevice->QueueLock));
 
         //
         // Signal anyone waiting on this device's removal state. It will no

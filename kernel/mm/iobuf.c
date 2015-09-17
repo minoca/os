@@ -3418,14 +3418,17 @@ Return Value:
     //
     // This better be the first extension or the buffer better already contain
     // locked and owned pages. Mixing and matching is not allowed and this
-    // routine sets the ownership and locked flags below.
+    // routine sets the ownership and locked flags below. Page cache pages,
+    // however, are acceptable.
     //
 
     ASSERT((IoBuffer->FragmentCount == 0) ||
            (((IoBuffer->Internal.Flags &
-              IO_BUFFER_INTERNAL_FLAG_PA_OWNED) != 0) &&
-            ((IoBuffer->Internal.Flags &
-              IO_BUFFER_INTERNAL_FLAG_MEMORY_LOCKED) != 0)));
+              IO_BUFFER_INTERNAL_FLAG_MEMORY_LOCKED) != 0) &&
+            (((IoBuffer->Internal.Flags &
+               IO_BUFFER_INTERNAL_FLAG_PA_OWNED) != 0) ||
+             ((IoBuffer->Internal.Flags &
+               IO_BUFFER_INTERNAL_FLAG_CACHE_BACKED) != 0))));
 
     PageShift = MmPageShift();
     PageSize = MmPageSize();

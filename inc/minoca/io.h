@@ -3353,7 +3353,7 @@ Routine Description:
 
     This routine initializes an IRP and prepares it to be sent to a device.
     This routine does not mean that IRPs can be allocated randomly from pool
-    and initialized here; IRPs must still be allocated from IoAllocateIrp. This
+    and initialized here; IRPs must still be allocated from IoCreateIrp. This
     routine just resets an IRP back to its initialized state.
 
 Arguments:

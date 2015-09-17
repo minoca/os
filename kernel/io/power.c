@@ -94,7 +94,8 @@ PmpDeviceQueuePowerTransition (
 
 KSTATUS
 PmpDeviceResume (
-    PDEVICE Device
+    PDEVICE Device,
+    DEVICE_POWER_REQUEST Request
     );
 
 VOID
@@ -181,15 +182,7 @@ Return Value:
 
 {
 
-    KSTATUS Status;
-
-    Status = PmpDeviceAddReference(Device, DevicePowerRequestResume);
-    if (!KSUCCESS(Status)) {
-        return Status;
-    }
-
-    KeWaitForEvent(Device->Power->ActiveEvent, FALSE, WAIT_TIME_INDEFINITE);
-    return Status;
+    return PmpDeviceAddReference(Device, DevicePowerRequestResume);
 }
 
 KERNEL_API
@@ -227,14 +220,13 @@ Return Value:
 
     ASSERT(PreviousCount < 0x10000000);
 
-    Status = STATUS_SUCCESS;
-    if (PreviousCount == 0) {
-        Status = PmpDeviceQueuePowerTransition(Device,
-                                               DevicePowerRequestResume);
+    if (PreviousCount != 0) {
+        return STATUS_SUCCESS;
+    }
 
-        if (!KSUCCESS(Status)) {
-            RtlAtomicAdd(&(State->ReferenceCount), -1);
-        }
+    Status = PmpDeviceQueuePowerTransition(Device, DevicePowerRequestResume);
+    if (!KSUCCESS(Status)) {
+        RtlAtomicAdd(&(State->ReferenceCount), -1);
     }
 
     return Status;
@@ -368,7 +360,7 @@ Return Value:
         break;
 
     case DevicePowerStateSuspended:
-        KeAcquireSharedExclusiveLockExclusive(Device->Lock);
+        KeAcquireQueuedLock(State->Lock);
         if (State->State == DevicePowerStateRemoved) {
             Status = STATUS_DEVICE_NOT_CONNECTED;
 
@@ -384,7 +376,7 @@ Return Value:
             State->Request = DevicePowerRequestNone;
         }
 
-        KeReleaseSharedExclusiveLockExclusive(Device->Lock);
+        KeReleaseQueuedLock(State->Lock);
         break;
 
     case DevicePowerStateIdle:
@@ -424,6 +416,7 @@ Return Value:
 
 {
 
+    DEVICE_POWER_STATE OldPreviousState;
     DEVICE_POWER_STATE OldState;
     PDEVICE_POWER State;
 
@@ -432,16 +425,33 @@ Return Value:
         return;
     }
 
+    //
+    // A transition to the removed state is effective immediately, but must be
+    // synchronized with all other transitions.
+    //
+
+    KeAcquireQueuedLock(State->Lock);
     OldState = State->State;
+    OldPreviousState = State->PreviousState;
     State->State = DevicePowerStateRemoved;
     State->Request = DevicePowerRequestNone;
     RtlAtomicExchange32(&(State->TimerQueued), 1);
     KeCancelTimer(State->IdleTimer);
     KeCancelDpc(State->IdleTimerDpc);
     KeCancelWorkItem(State->IdleTimerWorkItem);
+    if (OldState != DevicePowerStateTransitioning) {
+        State->PreviousState = OldState;
+    }
+
+    KeReleaseQueuedLock(State->Lock);
+
+    //
+    // If an active child was just removed, decrement the parent's count.
+    //
+
     if ((OldState == DevicePowerStateActive) ||
-        ((State->State == DevicePowerStateTransitioning) &&
-         (State->PreviousState == DevicePowerStateActive))) {
+        ((OldState == DevicePowerStateTransitioning) &&
+         (OldPreviousState == DevicePowerStateActive))) {
 
         PmpDeviceDecrementActiveChildren(Device->ParentDevice);
     }
@@ -501,6 +511,10 @@ Return Value:
             KeDestroyEvent(State->ActiveEvent);
         }
 
+        if (State->Lock != NULL) {
+            KeDestroyQueuedLock(State->Lock);
+        }
+
         if (State->Irp != NULL) {
             IoDestroyIrp(State->Irp);
         }
@@ -553,15 +567,19 @@ Return Value:
             PmpDeviceSuspend(Device);
             break;
 
+        //
+        // It is OK to do a second unprotected read of the state's request.
+        // When a resume or activate request is set, no other request can trump
+        // it, not even another resume or active (as only one thread grabs the
+        // first reference on the device and starts the resume process).
+        //
+
         case DevicePowerRequestResume:
         case DevicePowerRequestMarkActive:
-            PmpDeviceResume(Device);
+            PmpDeviceResume(Device, State->Request);
             break;
 
         default:
-
-            ASSERT(FALSE);
-
             break;
         }
     }
@@ -596,52 +614,62 @@ Return Value:
 
 {
 
-    PDEVICE_POWER State;
+    PDEVICE_POWER Power;
     KSTATUS Status;
 
-    State = MmAllocateNonPagedPool(sizeof(DEVICE_POWER),
+    Power = MmAllocateNonPagedPool(sizeof(DEVICE_POWER),
                                    PM_DEVICE_ALLOCATION_TAG);
 
-    if (State == NULL) {
+    if (Power == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
     }
 
-    RtlZeroMemory(State, sizeof(DEVICE_POWER));
-    Device->Power = State;
-    State->State = DevicePowerStateSuspended;
-    State->Request = DevicePowerRequestNone;
-    State->IdleDelay = HlQueryTimeCounterFrequency() *
+    RtlZeroMemory(Power, sizeof(DEVICE_POWER));
+    Device->Power = Power;
+    Power->State = DevicePowerStateSuspended;
+    Power->IdleDelay = HlQueryTimeCounterFrequency() *
                        PM_INITIAL_IDLE_DELAY_SECONDS;
 
-    State->ActiveEvent = KeCreateEvent(NULL);
-    State->IdleTimer = KeCreateTimer(PM_DEVICE_ALLOCATION_TAG);
+    Power->Lock = KeCreateQueuedLock();
+    Power->ActiveEvent = KeCreateEvent(NULL);
+    Power->IdleTimer = KeCreateTimer(PM_DEVICE_ALLOCATION_TAG);
 
     //
     // This work item should go on the same work queue as the device worker
     // thread to avoid an extra context switch.
     //
 
-    State->IdleTimerWorkItem = KeCreateWorkItem(IoDeviceWorkQueue,
+    Power->IdleTimerWorkItem = KeCreateWorkItem(IoDeviceWorkQueue,
                                                 WorkPriorityNormal,
                                                 PmpDeviceIdleWorker,
                                                 Device,
                                                 PM_DEVICE_ALLOCATION_TAG);
 
-    State->IdleTimerDpc = KeCreateDpc(PmpDeviceIdleTimerDpc,
-                                      State->IdleTimerWorkItem);
+    Power->IdleTimerDpc = KeCreateDpc(PmpDeviceIdleTimerDpc,
+                                      Power->IdleTimerWorkItem);
 
-    State->Irp = IoCreateIrp(Device, IrpMajorStateChange, 0);
-    State->History = PmpCreateIdleHistory(IDLE_HISTORY_NON_PAGED,
+    Power->Irp = IoCreateIrp(Device, IrpMajorStateChange, 0);
+    Power->History = PmpCreateIdleHistory(IDLE_HISTORY_NON_PAGED,
                                           PM_DEVICE_HISTORY_SIZE_SHIFT);
 
-    if ((State->ActiveEvent == NULL) || (State->IdleTimer == NULL) ||
-        (State->IdleTimerDpc == NULL) || (State->IdleTimerWorkItem == NULL) ||
-        (State->Irp == NULL) || (State->History == NULL)) {
+    if ((Power->Lock == NULL) ||
+        (Power->ActiveEvent == NULL) ||
+        (Power->IdleTimer == NULL) ||
+        (Power->IdleTimerDpc == NULL) ||
+        (Power->IdleTimerWorkItem == NULL) ||
+        (Power->Irp == NULL) ||
+        (Power->History == NULL)) {
 
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeDeviceEnd;
     }
 
+    //
+    // Start the active event as unsignaled since the device is in the
+    // suspended state.
+    //
+
+    KeSignalEvent(Power->ActiveEvent, SignalOptionUnsignal);
     Status = STATUS_SUCCESS;
 
 InitializeDeviceEnd:
@@ -832,7 +860,8 @@ Return Value:
     ASSERT((PreviousCount != 0) && (PreviousCount < 0x10000000));
 
     //
-    // If this is the first active child, add a power reference on this device.
+    // If this is the first active child, release a power reference on this
+    // device.
     //
 
     if (PreviousCount == 1) {
@@ -874,24 +903,33 @@ Return Value:
     PDEVICE_POWER State;
     KSTATUS Status;
 
+    Status = STATUS_SUCCESS;
     State = Device->Power;
     PreviousCount = RtlAtomicAdd(&(State->ReferenceCount), 1);
 
     ASSERT(PreviousCount < 0x10000000);
 
     //
-    // If there are already other references or active children, the device is
-    // already active.
+    // Attempt to the resume the device if this is the first reference.
     //
 
-    if (PreviousCount != 0) {
-        return STATUS_SUCCESS;
-    }
+    if (PreviousCount == 0) {
+        Status = PmpDeviceResume(Device, Request);
+        if (!KSUCCESS(Status)) {
+            RtlAtomicAdd(&(State->ReferenceCount), -1);
+        }
 
-    State->Request = Request;
-    Status = PmpDeviceResume(Device);
-    if (!KSUCCESS(Status)) {
-        RtlAtomicAdd(&(State->ReferenceCount), -1);
+    //
+    // All subsequent references need to wait for the active event and then
+    // check the state to see if the resume succeeded.
+    //
+
+    } else {
+        KeWaitForEvent(Device->Power->ActiveEvent, FALSE, WAIT_TIME_INDEFINITE);
+        if (Device->Power->State != DevicePowerStateActive) {
+            RtlAtomicAdd(&(State->ReferenceCount), -1);
+            Status = STATUS_NOT_READY;
+        }
     }
 
     return Status;
@@ -945,8 +983,8 @@ Return Value:
     // requests, also exit.
     //
 
-    KeAcquireSharedExclusiveLockExclusive(Device->Lock);
     QueueRequest = FALSE;
+    KeAcquireQueuedLock(State->Lock);
 
     //
     // Don't bother if the same request is already queued.
@@ -967,7 +1005,6 @@ Return Value:
             if (State->State != DevicePowerStateActive) {
                 State->Request = Request;
                 QueueRequest = TRUE;
-                KeSignalEvent(State->ActiveEvent, SignalOptionUnsignal);
             }
 
             break;
@@ -1022,7 +1059,7 @@ Return Value:
         State->State = DevicePowerStateTransitioning;
     }
 
-    KeReleaseSharedExclusiveLockExclusive(Device->Lock);
+    KeReleaseQueuedLock(State->Lock);
 
     //
     // If needed, actually queue the work request now that the lock is released.
@@ -1033,6 +1070,40 @@ Return Value:
                                     DeviceActionPowerTransition,
                                     NULL,
                                     0);
+
+        //
+        // If queueing the work fails, then attempt to transition the state
+        // back to what it was. There may already be an item on the queue and
+        // the request may still run, but there is no guarantee of that. The
+        // state must be rolled back.
+        //
+
+        if (!KSUCCESS(Status)) {
+            KeAcquireQueuedLock(State->Lock);
+
+            //
+            // If the request is still set, then roll back the state. If it's
+            // not, then there is a subsequent attempt at queueing action that
+            // may well succeed.
+            //
+
+            if (Request == State->Request) {
+                State->State = State->PreviousState;
+            }
+
+            KeReleaseQueuedLock(State->Lock);
+
+            //
+            // If this is a failed resume action, then signal the event. Other
+            // threads may be waiting on the event for the resume to succeed.
+            //
+
+            if ((Request == DevicePowerRequestResume) ||
+                (Request == DevicePowerRequestMarkActive)) {
+
+                KeSignalEvent(State->ActiveEvent, SignalOptionSignalAll);
+            }
+        }
     }
 
     return Status;
@@ -1040,7 +1111,8 @@ Return Value:
 
 KSTATUS
 PmpDeviceResume (
-    PDEVICE Device
+    PDEVICE Device,
+    DEVICE_POWER_REQUEST Request
     )
 
 /*++
@@ -1053,6 +1125,8 @@ Arguments:
 
     Device - Supplies a pointer to the device to resume.
 
+    Request - Supplies the type of resume to request.
+
 Return Value:
 
     Status code.
@@ -1064,35 +1138,37 @@ Return Value:
     ULONGLONG CurrentTime;
     ULONGLONG Duration;
     PIRP Irp;
+    BOOL LockHeld;
     PDEVICE Parent;
     PDEVICE_POWER ParentState;
     UINTN PreviousCount;
-    DEVICE_POWER_REQUEST Request;
     PDEVICE_POWER State;
     KSTATUS Status;
-
-    //
-    // Do a quick exit if this request is stale.
-    //
-
-    State = Device->Power;
-    Request = State->Request;
-    State->Request = DevicePowerRequestNone;
-    if (State->State == DevicePowerStateActive) {
-        return STATUS_SUCCESS;
-    }
-
-    CurrentTime = HlQueryTimeCounter();
-
-    //
-    // Nothing should override a resume request.
-    //
 
     ASSERT((Request == DevicePowerRequestResume) ||
            (Request == DevicePowerRequestMarkActive));
 
     //
-    // First resume the parent recursively.
+    // If the state isn't already active, then the caller won the race to
+    // transition it out of an idle or suspended state by being the first to
+    // increment the device's reference count. As such, other threads may be
+    // waiting on the active event. Except for this case where the device is
+    // already active, this routine always needs to release others waiting on
+    // the resume transition.
+    //
+
+    State = Device->Power;
+    if (State->State == DevicePowerStateActive) {
+        return STATUS_SUCCESS;
+    }
+
+    LockHeld = FALSE;
+    CurrentTime = HlQueryTimeCounter();
+
+    //
+    // First resume the parent recursively. Always resume the parent, even if
+    // the initiali request was to mark the device active. The parent is not
+    // necessarily resumed.
     //
 
     Parent = Device->ParentDevice;
@@ -1113,33 +1189,43 @@ Return Value:
             ASSERT(PreviousCount < 0x10000000);
 
             //
-            // If this was the first power reference on this device, resume that
-            // device, recursing up parents as needed.
+            // If this was the first power reference on this device, resume
+            // that device, recursing up parents as needed.
             //
 
             if (PreviousCount == 0) {
-                Parent->Power->Request = DevicePowerRequestResume;
-                Status = PmpDeviceResume(Parent);
+                Status = PmpDeviceResume(Parent, DevicePowerRequestResume);
                 if (!KSUCCESS(Status)) {
-
-                    //
-                    // This may not work all the way, leaving the reference
-                    // counts screwy.
-                    //
-
-                    PmpDeviceDecrementActiveChildren(Device->ParentDevice);
-                    RtlDebugPrint("PM: Failed to resume %x: %x\n",
-                                  Parent,
-                                  Status);
-
-                    return Status;
+                    goto DeviceResumeEnd;
                 }
             }
         }
+
+        //
+        // Wait until the parent's state settles. If this thread does not set
+        // the active child count to 1 or the reference count to 1, then
+        // another thread is doing the work and the device is not resumed until
+        // the active event is signaled. Fail the resume transition if the
+        // parent doesn't make it into the resumed state.
+        //
+
+        KeWaitForEvent(ParentState->ActiveEvent, FALSE, WAIT_TIME_INDEFINITE);
+        if (ParentState->State != DevicePowerStateActive) {
+            Status = STATUS_NOT_READY;
+            goto DeviceResumeEnd;
+        }
     }
 
-    State = Device->Power;
-    KeAcquireSharedExclusiveLockExclusive(Device->Lock);
+    //
+    // Synchronize the transition to the active state with other requests and
+    // work items that might be trying to send the device to idle or suspend.
+    //
+
+    KeAcquireQueuedLock(State->Lock);
+    LockHeld = TRUE;
+
+    ASSERT(State->State != DevicePowerStateActive);
+
     if (State->State == DevicePowerStateRemoved) {
         Status = STATUS_DEVICE_NOT_CONNECTED;
         goto DeviceResumeEnd;
@@ -1176,7 +1262,7 @@ Return Value:
     }
 
     if (PmDebugPowerTransitions != FALSE) {
-        RtlDebugPrint("PM: %x Active: %x\n", Device, Status);
+        RtlDebugPrint("PM: 0x%08x Active: 0x%08x\n", Device, Status);
     }
 
     if (KSUCCESS(Status)) {
@@ -1194,25 +1280,65 @@ Return Value:
             PmpIdleHistoryAddDataPoint(State->History, Duration);
         }
 
+        if (State->State != DevicePowerStateTransitioning) {
+            State->PreviousState = State->State;
+        }
+
         State->State = DevicePowerStateActive;
         State->TransitionTime = CurrentTime;
 
+        //
+        // Smash any outstanding request state. Now that the device is active
+        // again, any request associated with a transition is stale.
+        //
+
+        State->Request = DevicePowerRequestNone;
+
+    //
+    // On failure, the state is either transitioning (with a request), idle, or
+    // suspended. Let the device stay idle or suspended and keep any pending
+    // transition unless it is a resume transition.
+    //
+
     } else {
-        RtlDebugPrint("PM: Failed to resume %x: %x\n", Device, Status);
-        State->State = DevicePowerStateSuspended;
+
+        ASSERT((State->State == DevicePowerStateIdle) ||
+               (State->State == DevicePowerStateSuspended) ||
+               ((State->State == DevicePowerStateTransitioning) &&
+                (State->Request != DevicePowerRequestNone)));
+
+        if ((State->State == DevicePowerStateTransitioning) &&
+            ((State->Request == DevicePowerRequestResume) ||
+             (State->Request == DevicePowerRequestMarkActive))) {
+
+            ASSERT(State->PreviousState != DevicePowerStateTransitioning);
+            ASSERT(State->PreviousState != DevicePowerStateActive);
+
+            State->State = State->PreviousState;
+            State->Request = DevicePowerRequestNone;
+        }
     }
 
-    KeSignalEvent(State->ActiveEvent, SignalOptionSignalAll);
-
 DeviceResumeEnd:
-    KeReleaseSharedExclusiveLockExclusive(Device->Lock);
+    if (LockHeld != FALSE) {
+        KeReleaseQueuedLock(State->Lock);
+    }
+
+    //
+    // Signal the event to release any threads waiting on the resume transition.
+    // They need to check the state when they wake up in case the resume
+    // failed.
+    //
+
+    KeSignalEvent(State->ActiveEvent, SignalOptionSignalAll);
 
     //
     // If it failed, release the references taken on the parent.
     //
 
     if (!KSUCCESS(Status)) {
-        PmpDeviceDecrementActiveChildren(Device->ParentDevice);
+        RtlDebugPrint("PM: Failed to resume 0x%08x: 0x%08x\n", Device, Status);
+        PmpDeviceDecrementActiveChildren(Parent);
     }
 
     return Status;
@@ -1242,24 +1368,27 @@ Return Value:
 {
 
     ULONGLONG CurrentTime;
+    BOOL DecrementParent;
     PIRP Irp;
     ULONG Milliseconds;
     PDEVICE_POWER State;
     KSTATUS Status;
 
+    State = Device->Power;
+
     //
-    // Exit quickly if there are references now, which there often will be.
+    // Exit quickly if there are references now, which there often will be. The
+    // state should be active or about to become active.
     //
 
-    State = Device->Power;
     if (State->ReferenceCount != 0) {
         return;
     }
 
+    DecrementParent = FALSE;
     Status = STATUS_UNSUCCESSFUL;
-    KeAcquireSharedExclusiveLockExclusive(Device->Lock);
+    KeAcquireQueuedLock(State->Lock);
     if (State->State == DevicePowerStateRemoved) {
-        Status = STATUS_DEVICE_NOT_CONNECTED;
         goto DeviceIdleEnd;
     }
 
@@ -1283,11 +1412,6 @@ Return Value:
         (State->Request != DevicePowerRequestIdle) ||
         (State->ReferenceCount != 0)) {
 
-        if (State->State == DevicePowerStateActive) {
-            KeSignalEvent(State->ActiveEvent, SignalOptionSignalAll);
-        }
-
-        Status = STATUS_SUCCESS;
         goto DeviceIdleEnd;
     }
 
@@ -1310,22 +1434,46 @@ Return Value:
                       Status);
     }
 
-    State->Request = DevicePowerRequestNone;
+    ASSERT(State->PreviousState == DevicePowerStateActive);
+
     if (KSUCCESS(Status)) {
         CurrentTime = HlQueryTimeCounter();
         State->State = DevicePowerStateIdle;
         State->TransitionTime = CurrentTime;
+        DecrementParent = TRUE;
+
+    } else {
+        State->State = State->PreviousState;
     }
 
+    //
+    // Success or failure, this request is old news. No additional idle
+    // requests could have been queued while this one was in flight. And this
+    // routine bails earlier if the request type is anything other than idle.
+    //
+
+    State->Request = DevicePowerRequestNone;
+
 DeviceIdleEnd:
-    KeReleaseSharedExclusiveLockExclusive(Device->Lock);
+
+    //
+    // If the device is active because a resume happened before the idle or the
+    // idle failed, wake up everything waiting on the active event.
+    //
+
+    if (State->State == DevicePowerStateActive) {
+        KeSignalEvent(State->ActiveEvent, SignalOptionSignalAll);
+    }
+
+    KeReleaseQueuedLock(State->Lock);
 
     //
     // If the device was put down, then decrement the active child count of
-    // the parent.
+    // the parent. It moved to the idle state from the active state, which held
+    // a reference on the parent.
     //
 
-    if (KSUCCESS(Status)) {
+    if (DecrementParent != FALSE) {
         PmpDeviceDecrementActiveChildren(Device->ParentDevice);
     }
 
@@ -1355,18 +1503,15 @@ Return Value:
 
 {
 
+    BOOL DecrementParent;
     PIRP Irp;
     PDEVICE_POWER State;
     KSTATUS Status;
 
-    //
-    // Exit quickly if there are references now, which there often will be.
-    //
-
+    DecrementParent = FALSE;
     State = Device->Power;
-    KeAcquireSharedExclusiveLockExclusive(Device->Lock);
+    KeAcquireQueuedLock(State->Lock);
     if (State->State == DevicePowerStateRemoved) {
-        Status = STATUS_DEVICE_NOT_CONNECTED;
         goto DeviceSuspendEnd;
     }
 
@@ -1379,11 +1524,6 @@ Return Value:
     if ((State->State != DevicePowerStateTransitioning) ||
         (State->Request != DevicePowerRequestSuspend)) {
 
-        if (State->State == DevicePowerStateActive) {
-            KeSignalEvent(State->ActiveEvent, SignalOptionSignalAll);
-        }
-
-        Status = STATUS_SUCCESS;
         goto DeviceSuspendEnd;
     }
 
@@ -1399,20 +1539,49 @@ Return Value:
         RtlDebugPrint("PM: %x Suspend: %x\n", Device, Status);
     }
 
-    State->Request = DevicePowerRequestNone;
+    ASSERT((State->PreviousState == DevicePowerStateActive) ||
+           (State->PreviousState == DevicePowerStateIdle));
+
     if (KSUCCESS(Status)) {
         State->State = DevicePowerStateSuspended;
+        if (State->PreviousState == DevicePowerStateActive) {
+            DecrementParent = TRUE;
+        }
+
+    } else {
+        State->State = State->PreviousState;
     }
 
+    //
+    // Success or failure, this request is old news. No additional suspend
+    // requests could have been queued while this one was in flight. And this
+    // routine bails earlier if the request type is anything other than suspend.
+    //
+
+    State->Request = DevicePowerRequestNone;
+
 DeviceSuspendEnd:
-    KeReleaseSharedExclusiveLockExclusive(Device->Lock);
+
+    //
+    // If the device is active because a resume happened before the suspend or
+    // the suspend failed to transition from active to suspended, wake up
+    // everything waiting on the active event.
+    //
+
+    if (State->State == DevicePowerStateActive) {
+        KeSignalEvent(State->ActiveEvent, SignalOptionSignalAll);
+    }
+
+    KeReleaseQueuedLock(State->Lock);
 
     //
     // If the device was put down, then decrement the active child count of
-    // the parent.
+    // the parent. This only needs to happen if the previous state was the
+    // active state. The device may have already been idle, in which case it
+    // would not have held a reference on its parent.
     //
 
-    if (KSUCCESS(Status)) {
+    if (DecrementParent != FALSE) {
         PmpDeviceDecrementActiveChildren(Device->ParentDevice);
     }
 

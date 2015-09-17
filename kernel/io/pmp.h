@@ -91,12 +91,15 @@ Structure Description:
 
 Members:
 
-    State - Stores the current device's power state.
+    State - Stores the current device's power state. This is protected by the
+        power state's queued lock.
 
-    PreviousState - Stores the previous device power state.
+    PreviousState - Stores the previous device power state. This is protected
+        by the power state's queued lock.
 
     Request - Stores the current device power request, if the device's power
-        state is transitioning.
+        state is transitioning. This is protected by the power state's queued
+        lock.
 
     ReferenceCount - Stores the number of power references on this device.
 
@@ -106,6 +109,9 @@ Members:
 
     TimerQueued - Stores an atomic boolean indicating whether or not the timer
         is currently queued.
+
+    Lock - Stores a pointer to a queued lock that protects the state
+        transitions and the idle history.
 
     ActiveEvent - Stores a pointer to an event that can be waited on for a
         device to become active.
@@ -141,6 +147,7 @@ struct _DEVICE_POWER {
     volatile UINTN ReferenceCount;
     volatile UINTN ActiveChildren;
     volatile ULONG TimerQueued;
+    PQUEUED_LOCK Lock;
     PKEVENT ActiveEvent;
     PKTIMER IdleTimer;
     ULONGLONG IdleDelay;

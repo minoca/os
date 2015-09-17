@@ -901,9 +901,6 @@ Members:
     CompatibleIds - Stores a pointer to a string containing the compatible IDs
         for this device.
 
-    QueueLock - Stores a spinlock that protects access to the device's
-        queue and the QueueStopped variable.
-
     QueueState - Stores the state of the work queue, describing whether or not
         it is accepting new requests. Writes of this variable are protected by
         the QueueLock.
@@ -966,7 +963,6 @@ struct _DEVICE {
     PSTR ClassId;
     PSTR CompatibleIds;
     DEVICE_QUEUE_STATE QueueState;
-    KSPIN_LOCK QueueLock;
     LIST_ENTRY WorkQueue;
     LIST_ENTRY DriverStackHead;
     ULONG DriverStackSize;

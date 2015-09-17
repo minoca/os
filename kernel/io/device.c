@@ -1400,7 +1400,6 @@ Return Value:
     // Initialize the device queue.
     //
 
-    KeInitializeSpinLock(&(Device->QueueLock));
     INITIALIZE_LIST_HEAD(&(Device->WorkQueue));
 
     ASSERT(Device->DriverStackSize == 0);
@@ -1619,6 +1618,8 @@ Return Value:
     BOOL Result;
     KSTATUS Status;
 
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
     //
     // Attempts to queue the remove action should also close the queue.
     //
@@ -1679,7 +1680,7 @@ Return Value:
     //
 
     NewWorkItemNeeded = TRUE;
-    KeAcquireSpinLock(&(Device->QueueLock));
+    KeAcquireSharedExclusiveLockExclusive(Device->Lock);
     OldQueueState = Device->QueueState;
     if (Device->QueueState == DeviceQueueActiveClosing) {
         Status = STATUS_DEVICE_QUEUE_CLOSING;
@@ -1713,7 +1714,7 @@ Return Value:
         Status = STATUS_NO_ELIGIBLE_DEVICES;
     }
 
-    KeReleaseSpinLock(&(Device->QueueLock));
+    KeReleaseSharedExclusiveLockExclusive(Device->Lock);
     if (!KSUCCESS(Status)) {
         goto QueueDeviceWorkEnd;
     }
@@ -1739,7 +1740,7 @@ Return Value:
             // create a work item.
             //
 
-            KeAcquireSpinLock(&(Device->QueueLock));
+            KeAcquireSharedExclusiveLockExclusive(Device->Lock);
 
             //
             // If the queue was active and work item creation failed, revert to
@@ -1757,7 +1758,7 @@ Return Value:
             //
 
             LIST_REMOVE(&(NewEntry->ListEntry));
-            KeReleaseSpinLock(&(Device->QueueLock));
+            KeReleaseSharedExclusiveLockExclusive(Device->Lock);
             goto QueueDeviceWorkEnd;
         }
     }
@@ -2033,7 +2034,7 @@ Return Value:
         //
 
         QueueClosed = FALSE;
-        KeAcquireSpinLock(&(Device->QueueLock));
+        KeAcquireSharedExclusiveLockExclusive(Device->Lock);
 
         //
         // If the queue is empty, this work item is finished.
@@ -2079,7 +2080,7 @@ Return Value:
             }
         }
 
-        KeReleaseSpinLock(&(Device->QueueLock));
+        KeReleaseSharedExclusiveLockExclusive(Device->Lock);
 
         //
         // If no work was found, end this work item.
