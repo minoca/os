@@ -996,12 +996,16 @@ Return Value:
 
             Fragment = &(ValidIoBuffer->Fragment[FragmentIndex]);
             if ((Flags & IRP_READ_WRITE_FLAG_WRITE) != 0) {
-                MmFlushBufferForDataOut(Fragment->VirtualAddress,
-                                        Fragment->Size);
+                Status = MmFlushBufferForDataOut(Fragment->VirtualAddress,
+                                                 Fragment->Size);
 
             } else {
-                MmFlushBufferForDataIn(Fragment->VirtualAddress,
-                                       Fragment->Size);
+                Status = MmFlushBufferForDataIn(Fragment->VirtualAddress,
+                                                Fragment->Size);
+            }
+
+            if (!KSUCCESS(Status)) {
+                goto PrepareReadWriteIrpEnd;
             }
         }
     }
@@ -1065,13 +1069,14 @@ Return Value:
     PIO_BUFFER OriginalBuffer;
     ULONG StateFlags;
     KSTATUS Status;
+    KSTATUS TotalStatus;
 
     Buffer = IrpReadWrite->IoBuffer;
     BufferState = &(IrpReadWrite->IoBufferState);
     FlushOriginal = FALSE;
     OriginalBuffer = BufferState->IoBuffer;
     StateFlags = BufferState->Flags;
-    Status = STATUS_SUCCESS;
+    TotalStatus = STATUS_SUCCESS;
     if (OriginalBuffer == NULL) {
         OriginalBuffer = Buffer;
     }
@@ -1093,7 +1098,13 @@ Return Value:
              FragmentIndex += 1) {
 
             Fragment = &(Buffer->Fragment[FragmentIndex]);
-            MmFlushBufferForDataIn(Fragment->VirtualAddress, Fragment->Size);
+            Status = MmFlushBufferForDataIn(Fragment->VirtualAddress,
+                                            Fragment->Size);
+
+            if (!KSUCCESS(Status)) {
+                TotalStatus = Status;
+            }
+
             if (BytesToFlush < Fragment->Size) {
                 break;
             }
@@ -1125,6 +1136,7 @@ Return Value:
 
             if (!KSUCCESS(Status)) {
                 IrpReadWrite->IoBytesCompleted = 0;
+                TotalStatus = Status;
 
             } else {
                 FlushOriginal = TRUE;
@@ -1161,11 +1173,16 @@ Return Value:
              FragmentIndex += 1) {
 
             Fragment = &(OriginalBuffer->Fragment[FragmentIndex]);
-            MmFlushDataCache(Fragment->VirtualAddress, Fragment->Size, TRUE);
+            Status = MmSyncCacheRegion(Fragment->VirtualAddress,
+                                       Fragment->Size);
+
+            if (!KSUCCESS(Status)) {
+                TotalStatus = Status;
+            }
         }
     }
 
-    return Status;
+    return TotalStatus;
 }
 
 KSTATUS

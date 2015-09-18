@@ -1,19 +1,19 @@
 /*++
 
-Copyright (c) 2014 Minoca Corp. All Rights Reserved
+Copyright (c) 2015 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    archsupc.c
+    archcomc.c
 
 Abstract:
 
-    This module contains architecture-specific support functions for the kernel
-    memory manager.
+    This module implements architecture specific C support routines common to
+    ARMv6 and ARMv7.
 
 Author:
 
-    Evan Green 4-Nov-2014
+    Evan Green 16-Sep-2015
 
 Environment:
 
@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <minoca/kernel.h>
-#include <minoca/x86.h>
+#include <minoca/arm.h>
 #include "../mmp.h"
 
 //
@@ -45,9 +45,27 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-ULONG MmDataCacheLineSize = 1;
+//
+// Define the address to jump to if a fault occurred in one of the user mode
+// memory access routines.
+//
 
 extern CHAR MmpUserModeMemoryReturn;
+
+//
+// Define cache line sizes for the CPU L1 caches.
+//
+
+ULONG MmDataCacheLineSize;
+ULONG MmInstructionCacheLineSize;
+
+//
+// Store whether or not the instruction caches are virtually indexed. If it is,
+// then whenever a mapping is changed that may be executable, it needs to be
+// invalidated in the instruction cache.
+//
+
+BOOL MmVirtuallyIndexedInstructionCache;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -80,12 +98,12 @@ Return Value:
 
     PVOID InstructionPointer;
 
-    InstructionPointer = (PVOID)(TrapFrame->Eip);
+    InstructionPointer = (PVOID)(TrapFrame->Pc);
     if ((InstructionPointer >= (PVOID)MmpCopyUserModeMemory) &&
         (InstructionPointer < (PVOID)&MmpUserModeMemoryReturn)) {
 
-        TrapFrame->Eip = (UINTN)&MmpUserModeMemoryReturn;
-        TrapFrame->Eax = FALSE;
+        TrapFrame->Pc = (UINTN)&MmpUserModeMemoryReturn;
+        TrapFrame->R0 = FALSE;
         return TRUE;
     }
 

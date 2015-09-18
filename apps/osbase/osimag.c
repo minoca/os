@@ -615,7 +615,7 @@ GetLibrarySymbolAddressEnd:
 }
 
 OS_API
-VOID
+KSTATUS
 OsFlushCache (
     PVOID Address,
     UINTN Size
@@ -636,7 +636,9 @@ Arguments:
 
 Return Value:
 
-    Status code.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the given address was not valid.
 
 --*/
 
@@ -647,7 +649,7 @@ Return Value:
     Parameters.Address = Address;
     Parameters.Size = Size;
     OsSystemCall(SystemCallFlushCache, &Parameters);
-    return;
+    return Parameters.Status;
 }
 
 OS_API
@@ -1320,7 +1322,10 @@ Return Value:
                               RegionSize - IoSize);
             }
 
-            OsFlushCache((PVOID)SegmentAddress, RegionSize);
+            Status = OsFlushCache((PVOID)SegmentAddress, RegionSize);
+
+            ASSERT(KSUCCESS(Status));
+
             FileOffset += IoSize;
             FileSize -= IoSize;
             MemorySize -= RegionSize;
@@ -1453,7 +1458,9 @@ Return Value:
                 goto MapImageSegmentEnd;
             }
 
-            OsFlushCache((PVOID)SegmentAddress, IoSize);
+            Status = OsFlushCache((PVOID)SegmentAddress, IoSize);
+
+            ASSERT(KSUCCESS(Status));
         }
 
         SegmentAddress += FileSize;
@@ -1467,7 +1474,10 @@ Return Value:
         NextPage = ALIGN_RANGE_UP(SegmentAddress, PageSize);
         if (NextPage - SegmentAddress != 0) {
             RtlZeroMemory((PVOID)SegmentAddress, NextPage - SegmentAddress);
-            OsFlushCache((PVOID)SegmentAddress, NextPage - SegmentAddress);
+            Status = OsFlushCache((PVOID)SegmentAddress,
+                                  NextPage - SegmentAddress);
+
+            ASSERT(KSUCCESS(Status));
         }
 
         if (NextPage >= SegmentAddress + MemorySize) {
@@ -1755,7 +1765,12 @@ Return Value:
 
 {
 
-    OsFlushCache(Address, Size);
+    KSTATUS Status;
+
+    Status = OsFlushCache(Address, Size);
+
+    ASSERT(KSUCCESS(Status));
+
     return;
 }
 

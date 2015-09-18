@@ -2725,7 +2725,7 @@ Return Value:
     }
 
     if ((Section->Flags & IMAGE_SECTION_EXECUTABLE) != 0) {
-        MmFlushDataCache(ProcessorBlock->SwapPage, PageSize, FALSE);
+        MmpSyncSwapPage(ProcessorBlock->SwapPage, PageSize);
     }
 
     //

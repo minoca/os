@@ -34,7 +34,8 @@ sdomap4.drv
 am3eth.drv
 am3i2c.drv
 tps65217.drv
-am3soc.drv"
+am3soc.drv
+am3usb.drv"
 
 BOOT_DRIVERS="$BOOT_DRIVERS
 am3soc.drv

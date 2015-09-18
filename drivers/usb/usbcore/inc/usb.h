@@ -408,7 +408,7 @@ typedef enum _USB_ERROR {
     UsbErrorTransferStalled,
     UsbErrorTransferDataBuffer,
     UsbErrorTransferBabbleDetected,
-    UsbErrorTransferNakReceieved,
+    UsbErrorTransferNakReceived,
     UsbErrorTransferCrcOrTimeoutError,
     UsbErrorTransferBitstuff,
     UsbErrorTransferMissedMicroFrame,

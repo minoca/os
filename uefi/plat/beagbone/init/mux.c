@@ -50,6 +50,11 @@ EfipAm335InitializeEthernet (
     );
 
 VOID
+EfipAm335InitializeUsb1 (
+    VOID
+    );
+
+VOID
 EfipBeagleBoneBlackInitializeDdr3Phy (
     VOID
     );
@@ -89,6 +94,7 @@ Return Value:
 
     EfipAm335InitializeMmcSd();
     EfipAm335InitializeEthernet();
+    EfipAm335InitializeUsb1();
 
     //
     // Set the mux for CLKOUT1 which acts as the clock for the HDMI framer.
@@ -640,6 +646,40 @@ Return Value:
 
     } while ((Value & AM335_CM_PER_CPSW_CLOCK_STATE_CPSW_125MHZ_GCLK) == 0);
 
+    return;
+}
+
+VOID
+EfipAm335InitializeUsb1 (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets up the clocking and pin muxing for the USB controller.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINT32 Register;
+    UINT32 Value;
+
+    Register = AM335_SOC_CONTROL_REGISTERS + AM335_SOC_CONTROL_USB_CONTROL1;
+    Value = AM335_SOC_USB_CONTROL_SESSION_END_DETECT |
+            AM335_SOC_USB_CONTROL_VBUS_DETECT;
+
+    AM3_WRITE32(Register, Value);
     return;
 }
 

@@ -39,22 +39,28 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+BOOL
+MmpCleanInvalidateCacheRegion (
+    PVOID Address,
+    UINTN Size
+    );
+
+BOOL
+MmpInvalidateCacheRegion (
+    PVOID Address,
+    UINTN Size
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
-
-//
-// Remember the size of the data cache line.
-//
-
-ULONG MmDataCacheLineSize;
 
 //
 // ------------------------------------------------------------------ Functions
 //
 
 KERNEL_API
-VOID
+KSTATUS
 MmFlushBufferForDataIn (
     PVOID Buffer,
     UINTN SizeInBytes
@@ -76,13 +82,18 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the region was user mode and an address in the
+    region was not valid. Kernel mode addresses are always expected to be
+    valid.
 
 --*/
 
 {
 
     PHYSICAL_ADDRESS PhysicalAddress;
+    BOOL Result;
 
     //
     // Invalidate the data in any second level cache followed by the first
@@ -91,14 +102,22 @@ Return Value:
 
     PhysicalAddress = MmpVirtualToPhysical(Buffer, NULL);
     ArSerializeExecution();
-    ArInvalidateCacheRegion(Buffer, SizeInBytes);
+    Result = MmpInvalidateCacheRegion(Buffer, SizeInBytes);
+    if (Result == FALSE) {
+        return STATUS_ACCESS_VIOLATION;
+    }
+
     HlFlushCacheRegion(PhysicalAddress, SizeInBytes, HL_CACHE_FLAG_INVALIDATE);
-    ArInvalidateCacheRegion(Buffer, SizeInBytes);
-    return;
+    Result = MmpInvalidateCacheRegion(Buffer, SizeInBytes);
+    if (Result == FALSE) {
+        return STATUS_ACCESS_VIOLATION;
+    }
+
+    return STATUS_SUCCESS;
 }
 
 KERNEL_API
-VOID
+KSTATUS
 MmFlushBufferForDataOut (
     PVOID Buffer,
     UINTN SizeInBytes
@@ -120,13 +139,18 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the region was user mode and an address in the
+    region was not valid. Kernel mode addresses are always expected to be
+    valid.
 
 --*/
 
 {
 
     PHYSICAL_ADDRESS PhysicalAddress;
+    BOOL Result;
 
     //
     // Clean the data in the first level cache followed by any second level
@@ -136,13 +160,17 @@ Return Value:
 
     PhysicalAddress = MmpVirtualToPhysical(Buffer, NULL);
     ArSerializeExecution();
-    ArCleanCacheRegion(Buffer, SizeInBytes);
+    Result = MmpCleanCacheRegion(Buffer, SizeInBytes);
+    if (Result == FALSE) {
+        return STATUS_ACCESS_VIOLATION;
+    }
+
     HlFlushCacheRegion(PhysicalAddress, SizeInBytes, HL_CACHE_FLAG_CLEAN);
-    return;
+    return STATUS_SUCCESS;
 }
 
 KERNEL_API
-VOID
+KSTATUS
 MmFlushBufferForDataIo (
     PVOID Buffer,
     UINTN SizeInBytes
@@ -166,7 +194,11 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the region was user mode and an address in the
+    region was not valid. Kernel mode addresses are always expected to be
+    valid.
 
 --*/
 
@@ -174,6 +206,7 @@ Return Value:
 
     ULONG Flags;
     PHYSICAL_ADDRESS PhysicalAddress;
+    BOOL Result;
 
     //
     // Data is both going out to the device and coming in from the device, so
@@ -185,10 +218,80 @@ Return Value:
     Flags = HL_CACHE_FLAG_CLEAN | HL_CACHE_FLAG_INVALIDATE;
     PhysicalAddress = MmpVirtualToPhysical(Buffer, NULL);
     ArSerializeExecution();
-    ArCleanCacheRegion(Buffer, SizeInBytes);
+    Result = MmpCleanCacheRegion(Buffer, SizeInBytes);
+    if (Result == FALSE) {
+        return STATUS_ACCESS_VIOLATION;
+    }
+
     HlFlushCacheRegion(PhysicalAddress, SizeInBytes, Flags);
-    ArInvalidateCacheRegion(Buffer, SizeInBytes);
-    return;
+    Result = MmpInvalidateCacheRegion(Buffer, SizeInBytes);
+    if (Result == FALSE) {
+        return STATUS_ACCESS_VIOLATION;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+KERNEL_API
+KSTATUS
+MmSyncCacheRegion (
+    PVOID Address,
+    UINTN Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unifies the instruction and data caches for the given region,
+    probably after a region of executable code was modified. This does not
+    necessarily flush data to the point where it's observable to device DMA
+    (called the point of coherency).
+
+Arguments:
+
+    Address - Supplies the address to flush.
+
+    Size - Supplies the number of bytes in the region to flush.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if one of the addresses in the given range was not
+    valid.
+
+--*/
+
+{
+
+    PVOID AlignedAddress;
+    ULONG DataLineSize;
+    BOOL Result;
+    KSTATUS Status;
+
+    //
+    // Clean the data cache, then clean the instruction cache. Ensure each
+    // page is mapped before touching it.
+    //
+
+    DataLineSize = MmDataCacheLineSize;
+    AlignedAddress = ALIGN_POINTER_DOWN(Address, DataLineSize);
+    Size += REMAINDER((UINTN)Address, DataLineSize);
+    Size = ALIGN_RANGE_UP(Size, DataLineSize);
+    Status = STATUS_SUCCESS;
+    ArSerializeExecution();
+    Result = MmpCleanCacheRegion(AlignedAddress, Size);
+    if (Result != FALSE) {
+        Result = MmpInvalidateInstructionCacheRegion(AlignedAddress, Size);
+    }
+
+    if (Result == FALSE) {
+        Status = STATUS_ACCESS_VIOLATION;
+    }
+
+    ArSerializeExecution();
+    return Status;
 }
 
 VOID
@@ -247,12 +350,111 @@ Return Value:
         Size = KERNEL_VA_START - Address;
     }
 
-    MmFlushInstructionCache(Address, Size);
+    Parameters->Status = MmSyncCacheRegion(Address, Size);
     return;
 }
 
 VOID
-MmFlushInstructionCache (
+MmpSyncSwapPage (
+    PVOID SwapPage,
+    ULONG PageSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine cleans the data cache but does not invalidate the instruction
+    cache for the given kernel region. It is used by the paging code for a
+    temporary mapping that is going to get marked executable, but this mapping
+    itself does not need an instruction cache flush.
+
+Arguments:
+
+    SwapPage - Supplies a pointer to the swap page.
+
+    PageSize - Supplies the size of a page.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    BOOL Result;
+
+    //
+    // Make sure all the previous writes have finished.
+    //
+
+    ArSerializeExecution();
+    Result = MmpCleanCacheRegion(SwapPage, PageSize);
+
+    ASSERT(Result != FALSE);
+
+    ArSerializeExecution();
+    return;
+}
+
+BOOL
+MmpInvalidateInstructionCacheRegion (
+    PVOID Address,
+    ULONG Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine invalidates the given region of virtual address space in the
+    instruction cache.
+
+Arguments:
+
+    Address - Supplies the virtual address of the region to invalidate.
+
+    Size - Supplies the number of bytes to invalidate.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if one of the addresses in the region caused a bad page fault.
+
+--*/
+
+{
+
+    ULONG CacheLineSize;
+    PVOID CurrentAddress;
+    BOOL Result;
+
+    Result = TRUE;
+    CacheLineSize = MmInstructionCacheLineSize;
+    CurrentAddress = ALIGN_POINTER_DOWN(Address, CacheLineSize);
+    Size += REMAINDER((UINTN)Address, CacheLineSize);
+    Size = ALIGN_RANGE_UP(Size, CacheLineSize);
+    while (Size != 0) {
+        Result = MmpInvalidateInstructionCacheLine(CurrentAddress);
+        if (Result == FALSE) {
+
+            ASSERT((Address < KERNEL_VA_START) &&
+                   (Address + Size <= KERNEL_VA_START));
+
+            break;
+        }
+
+        CurrentAddress += CacheLineSize;
+        Size -= CacheLineSize;
+    }
+
+    return Result;
+}
+
+BOOL
+MmpCleanCacheRegion (
     PVOID Address,
     UINTN Size
     )
@@ -261,144 +463,190 @@ MmFlushInstructionCache (
 
 Routine Description:
 
-    This routine flushes the given cache region and invalidates the
-    instruction cache.
+    This routine cleans the given region of virtual address space in the first
+    level data cache.
 
 Arguments:
 
-    Address - Supplies the address to flush.
+    Address - Supplies the virtual address of the region to clean.
 
-    Size - Supplies the number of bytes in the region to flush.
+    Size - Supplies the number of bytes to clean.
 
 Return Value:
 
-    None.
+    TRUE on success.
+
+    FALSE if one of the addresses in the region caused a bad page fault.
 
 --*/
 
 {
 
-    ULONG Attributes;
-    PVOID CurrentAddress;
-    ULONG DataLineSize;
-    UINTN PageSize;
-    UINTN ThisRegionSize;
+    ULONG CacheLineSize;
+    BOOL Result;
 
-    //
-    // Clean the data cache, then clean the instruction cache. Ensure each
-    // page is mapped before touching it.
-    //
-
-    DataLineSize = MmDataCacheLineSize;
-    if (DataLineSize == 0) {
-        DataLineSize = ArGetDataCacheLineSize();
-        MmDataCacheLineSize = DataLineSize;
+    Result = TRUE;
+    CacheLineSize = MmDataCacheLineSize;
+    if (CacheLineSize == 0) {
+        return Result;
     }
 
-    CurrentAddress = ALIGN_POINTER_DOWN(Address, DataLineSize);
-    Size += REMAINDER((UINTN)Address, DataLineSize);
-    Size = ALIGN_RANGE_UP(Size, DataLineSize);
-    PageSize = MmPageSize();
-    ArSerializeExecution();
+    //
+    // It is not possible to flush half a cache line. Being asked to do so is
+    // definitely trouble (as it could be the boundary of two distinct I/O
+    // buffers.
+    //
+
+    ASSERT(ALIGN_RANGE_DOWN(Size, CacheLineSize) == Size);
+    ASSERT(ALIGN_RANGE_DOWN((UINTN)Address, CacheLineSize) == (UINTN)Address);
+
     while (Size != 0) {
-        ThisRegionSize = PageSize;
-        ThisRegionSize -= REMAINDER((UINTN)CurrentAddress, PageSize);
-        if (ThisRegionSize > Size) {
-            ThisRegionSize = Size;
+        Result = MmpCleanCacheLine(Address);
+        if (Result == FALSE) {
+
+            ASSERT((Address < KERNEL_VA_START) &&
+                   (Address + Size <= KERNEL_VA_START));
+
+            break;
         }
 
-        if ((MmpVirtualToPhysical(CurrentAddress, &Attributes) !=
-             INVALID_PHYSICAL_ADDRESS) &&
-            ((Attributes & MAP_FLAG_PRESENT) != 0)) {
-
-            ArCleanCacheRegion(CurrentAddress, ThisRegionSize);
-            ArInvalidateInstructionCacheRegion(CurrentAddress, ThisRegionSize);
-        }
-
-        CurrentAddress += ThisRegionSize;
-        Size -= ThisRegionSize;
+        Address += CacheLineSize;
+        Size -= CacheLineSize;
     }
 
-    ArSerializeExecution();
-    return;
+    return Result;
 }
 
-VOID
-MmFlushDataCache (
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+BOOL
+MmpCleanInvalidateCacheRegion (
     PVOID Address,
-    UINTN Size,
-    BOOL ValidateAddress
+    UINTN Size
     )
 
 /*++
 
 Routine Description:
 
-    This routine flushes the given date cache region.
+    This routine cleans and invalidates the given region of virtual address
+    space in the first level data cache.
 
 Arguments:
 
-    Address - Supplies the address to flush.
+    Address - Supplies the virtual address of the region to clean.
 
-    Size - Supplies the number of bytes in the region to flush.
-
-    ValidateAddress - Supplies a boolean indicating whether or not to make sure
-        the given address is mapped before flushing.
+    Size - Supplies the number of bytes to clean.
 
 Return Value:
 
-    None.
+    TRUE on success.
+
+    FALSE if one of the addresses in the region caused a bad page fault.
 
 --*/
 
 {
 
-    ULONG Attributes;
-    PVOID CurrentAddress;
-    ULONG DataLineSize;
-    UINTN PageSize;
-    UINTN ThisRegionSize;
+    ULONG CacheLineSize;
+    BOOL Result;
 
-    //
-    // Clean the data cache, then clean the instruction cache. Ensure each
-    // page is mapped before touching it.
-    //
-
-    DataLineSize = MmDataCacheLineSize;
-    if (DataLineSize == 0) {
-        DataLineSize = ArGetDataCacheLineSize();
-        MmDataCacheLineSize = DataLineSize;
+    Result = TRUE;
+    CacheLineSize = MmDataCacheLineSize;
+    if (CacheLineSize == 0) {
+        return Result;
     }
 
-    CurrentAddress = ALIGN_POINTER_DOWN(Address, DataLineSize);
-    Size += REMAINDER((UINTN)Address, DataLineSize);
-    Size = ALIGN_RANGE_UP(Size, DataLineSize);
-    PageSize = MmPageSize();
-    ArSerializeExecution();
+    //
+    // It is not possible to flush half a cache line. Being asked to do so is
+    // definitely trouble (as it could be the boundary of two distinct I/O
+    // buffers.
+    //
+
+    ASSERT(ALIGN_RANGE_DOWN(Size, CacheLineSize) == Size);
+    ASSERT(ALIGN_RANGE_DOWN((UINTN)Address, CacheLineSize) == (UINTN)Address);
+
     while (Size != 0) {
-        ThisRegionSize = PageSize;
-        ThisRegionSize -= REMAINDER((UINTN)CurrentAddress, PageSize);
-        if (ThisRegionSize > Size) {
-            ThisRegionSize = Size;
+        Result = MmpCleanInvalidateCacheLine(Address);
+        if (Result == FALSE) {
+
+            ASSERT((Address < KERNEL_VA_START) &&
+                   (Address + Size <= KERNEL_VA_START));
+
+            break;
         }
 
-        if ((ValidateAddress == FALSE) ||
-            ((MmpVirtualToPhysical(CurrentAddress, &Attributes) !=
-             INVALID_PHYSICAL_ADDRESS) &&
-             ((Attributes & MAP_FLAG_PRESENT) != 0))) {
-
-            ArCleanCacheRegion(CurrentAddress, ThisRegionSize);
-        }
-
-        CurrentAddress += ThisRegionSize;
-        Size -= ThisRegionSize;
+        Address += CacheLineSize;
+        Size -= CacheLineSize;
     }
 
-    ArSerializeExecution();
-    return;
+    return Result;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
+BOOL
+MmpInvalidateCacheRegion (
+    PVOID Address,
+    UINTN Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine invalidates the region of virtual address space in the first
+    level data cache. This routine is very dangerous, as any dirty data in the
+    cache will be lost and gone.
+
+Arguments:
+
+    Address - Supplies the virtual address of the region to clean.
+
+    Size - Supplies the number of bytes to clean.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if one of the addresses in the region caused a bad page fault.
+
+--*/
+
+{
+
+    ULONG CacheLineSize;
+    BOOL Result;
+
+    Result = TRUE;
+    CacheLineSize = MmDataCacheLineSize;
+    if (CacheLineSize == 0) {
+        return Result;
+    }
+
+    //
+    // It is not possible to flush half a cache line. Being asked to do so is
+    // definitely trouble (as it could be the boundary of two distinct I/O
+    // buffers.
+    //
+
+    ASSERT(ALIGN_RANGE_DOWN(Size, CacheLineSize) == Size);
+    ASSERT(ALIGN_RANGE_DOWN((UINTN)Address, CacheLineSize) == (UINTN)Address);
+
+    while (Size != 0) {
+        Result = MmpInvalidateCacheLine(Address);
+        if (Result == FALSE) {
+
+            ASSERT((Address < KERNEL_VA_START) &&
+                   (Address + Size <= KERNEL_VA_START));
+
+            break;
+        }
+
+        Address += CacheLineSize;
+        Size -= CacheLineSize;
+    }
+
+    return Result;
+}
 

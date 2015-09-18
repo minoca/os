@@ -43,12 +43,14 @@ OBJS = block.o    \
        virtual.o  \
        fault.o    \
 
-ARMV7_OBJS = armv7/archsupc.o \
+ARMV7_OBJS = armv7/archcomc.o \
+             armv7/archsupc.o \
              armv7/flush.o    \
              armv7/mapping.o  \
              armv7/usermem.o  \
 
 ARMV6_OBJS = armv6/archsupc.o \
+             armv7/archcomc.o \
              armv7/flush.o    \
              armv7/mapping.o  \
              armv7/usermem.o  \

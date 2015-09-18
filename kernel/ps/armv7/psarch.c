@@ -599,7 +599,10 @@ Return Value:
             return Status;
         }
 
-        MmFlushInstructionCache(Address, Length);
+        Status = MmSyncCacheRegion(Address, Length);
+        if (!KSUCCESS(Status)) {
+            return Status;
+        }
     }
 
     //
@@ -655,7 +658,11 @@ Return Value:
             return Status;
         }
 
-        MmFlushInstructionCache(Address, Length);
+        Status = MmSyncCacheRegion(Address, Length);
+        if (!KSUCCESS(Status)) {
+            return Status;
+        }
+
         DebugData->DebugSingleStepAddress = NextPc;
         Status = STATUS_SUCCESS;
     }

@@ -1913,15 +1913,18 @@ Structure Description:
 
 Members:
 
-    Address - Supplies the starting address of the region that was modified.
+    Address - Stores the starting address of the region that was modified.
 
-    Size - Supplies the size of the region that was modified in bytes.
+    Size - Stores the size of the region that was modified in bytes.
+
+    Status - Stores the resulting status code from the kernel.
 
 --*/
 
 typedef struct _SYSTEM_CALL_FLUSH_CACHE {
     PVOID Address;
     UINTN Size;
+    KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_FLUSH_CACHE, *PSYSTEM_CALL_FLUSH_CACHE;
 
 /*++

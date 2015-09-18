@@ -40,6 +40,12 @@ Environment:
 ASSEMBLY_FILE_HEADER
 
 ##
+## Warning: Don't add functions above MmpCopyUserModeMemory without also
+## adjusting the fault detection code, as this function is used as the lower
+## border of the user mode functions.
+##
+
+##
 ## BOOL
 ## MmpCopyUserModeMemory (
 ##     PVOID Destination,
@@ -501,6 +507,147 @@ FUNCTION MmUserWrite32
     bx      %lr                     @ Return.
 
 END_FUNCTION MmUserWrite32
+
+##
+## BOOL
+## MmpInvalidateCacheLine (
+##     PVOID Address
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine invalidates the cache line associated with the given virtual
+    address. Note that if there was dirty data in the cache line, it will be
+    destroyed.
+
+Arguments:
+
+    Address - Supplies the address whose associated cache line will be
+        invalidated.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if the address was a user mode one and accessing it caused a bad
+    fault.
+
+--*/
+
+FUNCTION MmpInvalidateCacheLine
+    mcr     p15, 0, %r0, %cr7, %cr6, 1          @ Write to DCIMVAC.
+    mov     %r0, #1                             @ Set success status.
+    bx      %lr                                 @
+
+END_FUNCTION MmpInvalidateCacheLine
+
+##
+## BOOL
+## MmpCleanCacheLine (
+##     PVOID Address
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine flushes a cache line, writing any dirty bits back to the next
+    level cache.
+
+Arguments:
+
+    Address - Supplies the address whose associated cache line will be
+        cleaned.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if the address was a user mode one and accessing it caused a bad
+    fault.
+
+--*/
+
+FUNCTION MmpCleanCacheLine
+    mcr     p15, 0, %r0, %cr7, %cr10, 1         @ Write to DCCMVAC.
+    mov     %r0, #1                             @ Set success status.
+    bx      %lr                                 @
+
+END_FUNCTION MmpCleanCacheLine
+
+##
+## BOOL
+## MmpCleanInvalidateCacheLine (
+##     PVOID Address
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine cleans a cache line to the point of coherency and invalidates
+    the cache line associated with this address.
+
+Arguments:
+
+    Address - Supplies the address whose associated cache line will be
+        cleaned and invalidated.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if the address was a user mode one and accessing it caused a bad
+    fault.
+
+--*/
+
+FUNCTION MmpCleanInvalidateCacheLine
+    mcr     p15, 0, %r0, %cr7, %cr14, 1         @ Write to DCCIMVAC.
+    mov     %r0, #1                             @ Set success status.
+    bx      %lr                                 @ Return.
+
+END_FUNCTION MmpCleanInvalidateCacheLine
+
+##
+## BOOL
+## MmpInvalidateInstructionCacheLine (
+##     PVOID Address
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine invalidates a line in the instruction cache by virtual address.
+
+Arguments:
+
+    Address - Supplies the address whose associated instruction cache line will
+        be invalidated.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if the address was a user mode one and accessing it caused a bad
+    fault.
+
+--*/
+
+FUNCTION MmpInvalidateInstructionCacheLine
+    mcr     p15, 0, %r0, %cr7, %cr5, 1          @ Write to ICIMVAU.
+    mcr     p15, 0, %r0, %cr7, %cr5, 7          @ Write to BPIMVA
+    mov     %r0, #1                             @ Set success status.
+    bx      %lr                                 @ Return.
+
+END_FUNCTION MmpInvalidateInstructionCacheLine
 
 ##
 ## This epilog can be used for any of the user mode memory functions. It may

@@ -2896,7 +2896,7 @@ Return Value:
             } else if ((HardwareStatus &
                        UHCI_TRANSFER_DESCRIPTOR_STATUS_NAK) != 0) {
 
-                UsbTransfer->Error = UsbErrorTransferNakReceieved;
+                UsbTransfer->Error = UsbErrorTransferNakReceived;
 
             } else if ((HardwareStatus & CrcOrTimeoutError) != 0) {
                 UsbTransfer->Error = UsbErrorTransferCrcOrTimeoutError;

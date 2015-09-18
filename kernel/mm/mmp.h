@@ -371,6 +371,14 @@ extern PKEVENT MmPagingFreePagesEvent;
 extern KSPIN_LOCK MmInvalidateIpiLock;
 
 //
+// Define cache line sizes for the CPU L1 caches.
+//
+
+extern ULONG MmDataCacheLineSize;
+extern ULONG MmInstructionCacheLineSize;
+extern BOOL MmVirtuallyIndexedInstructionCache;
+
+//
 // -------------------------------------------------------- Function Prototypes
 //
 
@@ -2555,6 +2563,212 @@ Return Value:
     TRUE if the buffers are valid.
 
     FALSE if the buffers are not valid.
+
+--*/
+
+VOID
+MmpInitializeCpuCaches (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the system's processor cache infrastructure.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+BOOL
+MmpInvalidateCacheLine (
+    PVOID Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine invalidates the cache line associated with the given virtual
+    address. Note that if there was dirty data in the cache line, it will be
+    destroyed.
+
+Arguments:
+
+    Address - Supplies the address whose associated cache line will be
+        invalidated.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if the address was a user mode one and accessing it caused a bad
+    fault.
+
+--*/
+
+BOOL
+MmpCleanCacheLine (
+    PVOID Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine flushes a cache line, writing any dirty bits back to the next
+    level cache.
+
+Arguments:
+
+    Address - Supplies the address whose associated cache line will be
+        cleaned.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if the address was a user mode one and accessing it caused a bad
+    fault.
+
+--*/
+
+BOOL
+MmpCleanInvalidateCacheLine (
+    PVOID Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine cleans a cache line to the point of coherency and invalidates
+    the cache line associated with this address.
+
+Arguments:
+
+    Address - Supplies the address whose associated cache line will be
+        cleaned and invalidated.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if the address was a user mode one and accessing it caused a bad
+    fault.
+
+--*/
+
+BOOL
+MmpInvalidateInstructionCacheLine (
+    PVOID Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine invalidates a line in the instruction cache by virtual address.
+
+Arguments:
+
+    Address - Supplies the address whose associated instruction cache line will
+        be invalidated.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if the address was a user mode one and accessing it caused a bad
+    fault.
+
+--*/
+
+VOID
+MmpSyncSwapPage (
+    PVOID SwapPage,
+    ULONG PageSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine cleans the data cache but does not invalidate the instruction
+    cache for the given kernel region. It is used by the paging code for a
+    temporary mapping that is going to get marked executable, but this mapping
+    itself does not need an instruction cache flush.
+
+Arguments:
+
+    SwapPage - Supplies a pointer to the swap page.
+
+    PageSize - Supplies the size of a page.
+
+Return Value:
+
+    None.
+
+--*/
+
+BOOL
+MmpInvalidateInstructionCacheRegion (
+    PVOID Address,
+    ULONG Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine invalidates the given region of virtual address space in the
+    instruction cache.
+
+Arguments:
+
+    Address - Supplies the virtual address of the region to invalidate.
+
+    Size - Supplies the number of bytes to invalidate.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if one of the addresses in the region caused a bad page fault.
+
+--*/
+
+BOOL
+MmpCleanCacheRegion (
+    PVOID Address,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine cleans the given region of virtual address space in the first
+    level data cache.
+
+Arguments:
+
+    Address - Supplies the virtual address of the region to clean.
+
+    Size - Supplies the number of bytes to clean.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if one of the addresses in the region caused a bad page fault.
 
 --*/
 

@@ -22,17 +22,24 @@
 #
 ################################################################################
 
-DIRS = dwhci     \
-       ehci      \
-       onering   \
-       usbcore   \
-       uhci      \
-       usbcomp   \
-       usbhub    \
-       usbkbd    \
-       usbmass   \
+USB_HOST_CONTROLLERS = am3usb  \
+                       dwhci   \
+                       ehci    \
+                       uhci    \
+
+USB_CLASS_DRIVERS = usbcomp    \
+                    usbhub     \
+                    usbmass    \
+
+USB_DEVICE_DRIVERS = onering   \
+                     usbkbd    \
+
+DIRS = usbcore                 \
+       $(USB_CLASS_DRIVERS)    \
+       $(USB_DEVICE_DRIVERS)   \
+       $(USB_HOST_CONTROLLERS) \
 
 include $(SRCROOT)/os/minoca.mk
 
-dwhci uhci ehci usbcomp usbhub usbkbd usbmass onering: usbcore
+$(USB_HOST_CONTROLLERS) $(USB_CLASS_DRIVERS) $(USB_DEVICE_DRIVERS): usbcore
 

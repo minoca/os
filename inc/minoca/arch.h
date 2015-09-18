@@ -42,103 +42,6 @@ typedef struct _FPU_CONTEXT FPU_CONTEXT, *PFPU_CONTEXT;
 // -------------------------------------------------------- Function Prototypes
 //
 
-ULONG
-ArGetDataCacheLineSize (
-    VOID
-    );
-
-/*++
-
-Routine Description:
-
-    This routine gets the size of a line in the L1 data cache.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    Returns the L1 data cache line size, in bytes.
-
---*/
-
-VOID
-ArCleanCacheRegion (
-    PVOID Address,
-    UINTN Size
-    );
-
-/*++
-
-Routine Description:
-
-    This routine cleans the given region of virtual address space in the first
-    level data cache.
-
-Arguments:
-
-    Address - Supplies the virtual address of the region to clean.
-
-    Size - Supplies the number of bytes to clean.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
-ArCleanInvalidateCacheRegion (
-    PVOID Address,
-    UINTN Size
-    );
-
-/*++
-
-Routine Description:
-
-    This routine cleans and invalidates the given region of virtual address
-    space in the first level data cache.
-
-Arguments:
-
-    Address - Supplies the virtual address of the region to clean.
-
-    Size - Supplies the number of bytes to clean.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
-ArInvalidateCacheRegion (
-    PVOID Address,
-    UINTN Size
-    );
-
-/*++
-
-Routine Description:
-
-    This routine invalidates the region of virtual address space in the first
-    level data cache. This routine is very dangerous, as any dirty data in the
-    cache will be lost and gone.
-
-Arguments:
-
-    Address - Supplies the virtual address of the region to clean.
-
-    Size - Supplies the number of bytes to clean.
-
-Return Value:
-
-    None.
-
---*/
-
 VOID
 ArInitializeProcessor (
     BOOL PhysicalMode,
@@ -433,31 +336,6 @@ Routine Description:
 Arguments:
 
     TrapFrame - Supplies a pointer to the trap frame not modify.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
-ArInvalidateInstructionCacheRegion (
-    PVOID Address,
-    ULONG Size
-    );
-
-/*++
-
-Routine Description:
-
-    This routine invalidates the given region of virtual address space in the
-    instruction cache.
-
-Arguments:
-
-    Address - Supplies the virtual address of the region to invalidate.
-
-    Size - Supplies the number of bytes to invalidate.
 
 Return Value:
 

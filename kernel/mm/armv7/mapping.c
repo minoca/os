@@ -83,15 +83,6 @@ MmpCleanPageTableCacheLine (
     );
 
 //
-// Internal, architecture-specific C routines.
-//
-
-BOOL
-MmpGetInstructionCacheType (
-    VOID
-    );
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -134,14 +125,6 @@ ULONG MmTtbrCacheAttributes;
 //
 
 SECOND_LEVEL_TABLE MmSecondLevelInitialValue;
-
-//
-// Store whether or not the instruction caches are virtually indexed. If it is,
-// then whenever a mapping is changed that may be executable, it needs to be
-// invalidated in the instruction cache.
-//
-
-BOOL MmVirtuallyIndexedInstructionCache;
 
 //
 // Store whether or not the multiprocessing extensions are supported.
@@ -1091,7 +1074,7 @@ Return Value:
             MmTtbrCacheAttributes = TTBR_NO_MP_KERNEL_MASK;
         }
 
-        MmVirtuallyIndexedInstructionCache = MmpGetInstructionCacheType();
+        MmpInitializeCpuCaches();
         Status = STATUS_SUCCESS;
 
     //
@@ -1529,7 +1512,7 @@ Return Value:
     //
 
     if ((Flags & MAP_FLAG_EXECUTE) != 0) {
-        ArInvalidateInstructionCacheRegion(VirtualAddress, PAGE_SIZE);
+        MmpInvalidateInstructionCacheRegion(VirtualAddress, PAGE_SIZE);
     }
 
     return;
@@ -3460,7 +3443,7 @@ Return Value:
     // Align the given range up and down to cache line boundaries.
     //
 
-    CacheLineSize = ArGetDataCacheLineSize();
+    CacheLineSize = MmDataCacheLineSize;
     if (CacheLineSize == 0) {
         return;
     }
@@ -3468,7 +3451,7 @@ Return Value:
     Size += REMAINDER((UINTN)PageTable, CacheLineSize);
     PageTable = (PVOID)(UINTN)ALIGN_RANGE_DOWN((UINTN)PageTable, CacheLineSize);
     Size = ALIGN_RANGE_UP(Size, CacheLineSize);
-    ArCleanCacheRegion(PageTable, Size);
+    MmpCleanCacheRegion(PageTable, Size);
     return;
 }
 

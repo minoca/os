@@ -1800,7 +1800,7 @@ Return Value:
         // controllers.
         //
 
-        L1DataCacheLineSize = ArGetDataCacheLineSize();
+        L1DataCacheLineSize = MmDataCacheLineSize;
         IoBufferAlignment = HlGetDataCacheLineSize();
         if (L1DataCacheLineSize > IoBufferAlignment) {
             IoBufferAlignment = L1DataCacheLineSize;
@@ -3626,13 +3626,13 @@ Return Value:
     ULONG UnlockedFlags;
     PIO_BUFFER UnlockedIoBuffer;
 
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
     UnlockedIoBuffer = *IoBuffer;
     UnlockedFlags = UnlockedIoBuffer->Internal.Flags;
     if ((UnlockedFlags & IO_BUFFER_INTERNAL_FLAG_MEMORY_LOCKED) != 0) {
         return STATUS_SUCCESS;
     }
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
 
     //
     // If the unlocked I/O buffer is empty, then there is nothing to lock. It

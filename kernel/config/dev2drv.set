@@ -71,6 +71,7 @@ DSMC91C1=smsc91c1.drv
 DSdSlot=null.drv
 DTEX3001=am3i2c.drv
 DTEX3002=tps65217.drv
+DTEX3003=am3usb.drv
 DTEX3359=am3soc.drv
 DVEN_10EC&DEV_8136=rtl81xx.drv
 DVEN_10EC&DEV_8139=rtl81xx.drv

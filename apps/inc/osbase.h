@@ -3377,7 +3377,7 @@ Return Value:
 --*/
 
 OS_API
-VOID
+KSTATUS
 OsFlushCache (
     PVOID Address,
     UINTN Size
@@ -3398,7 +3398,9 @@ Arguments:
 
 Return Value:
 
-    Status code.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the given address was not valid.
 
 --*/
 

@@ -3901,6 +3901,17 @@ Return Value:
 
                 UsbTransfer->Error = UsbErrorTransferDataBuffer;
             }
+
+        //
+        // Also check for short packets.
+        //
+
+        } else if ((LengthTransferred != Transfer->TransferLength) &&
+                   ((UsbTransfer->Flags &
+                     USB_TRANSFER_FLAG_NO_SHORT_TRANSFERS) != 0)) {
+
+            UsbTransfer->Status = STATUS_DATA_LENGTH_MISMATCH;
+            UsbTransfer->Error = UsbErrorShortPacket;
         }
 
         //

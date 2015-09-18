@@ -4317,12 +4317,11 @@ Return Value:
         // Unmap the page from the temporary space.
         //
 
-        RtlMemoryBarrier();
         if ((OwningSection->Flags & IMAGE_SECTION_EXECUTABLE) != 0) {
 
             ASSERT(CopySize <= PageSize);
 
-            MmFlushDataCache(SwapSpace, PageSize, FALSE);
+            MmpSyncSwapPage(SwapSpace, PageSize);
         }
 
         MmpUnmapPages(SwapSpace, 1, 0, NULL);
@@ -4718,7 +4717,7 @@ Return Value:
     //
 
     if ((OwningSection->Flags & IMAGE_SECTION_EXECUTABLE) != 0) {
-        MmFlushDataCache(SwapSpace, PageSize, FALSE);
+        MmpSyncSwapPage(SwapSpace, PageSize);
     }
 
 ReadPageFileEnd:

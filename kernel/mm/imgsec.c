@@ -719,7 +719,7 @@ Return Value:
 
     Status = MmCopyToUserMode(UserDestination, KernelBuffer, Size);
     if (KSUCCESS(Status)) {
-        MmFlushInstructionCache(UserDestination, Size);
+        Status = MmSyncCacheRegion(UserDestination, Size);
         return Status;
     }
 
@@ -759,7 +759,11 @@ Return Value:
             return Status;
         }
 
-        MmFlushInstructionCache(UserDestination, SizeThisRound);
+        Status = MmSyncCacheRegion(UserDestination, SizeThisRound);
+        if (!KSUCCESS(Status)) {
+            return Status;
+        }
+
         KernelBuffer += SizeThisRound;
         UserDestination += SizeThisRound;
         Size -= SizeThisRound;

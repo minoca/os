@@ -813,28 +813,6 @@ Return Value:
 --*/
 
 VOID
-ArInvalidateInstructionCacheLine (
-    PVOID Address
-    );
-
-/*++
-
-Routine Description:
-
-    This routine invalidates a line in the instruction cache by virtual address.
-
-Arguments:
-
-    Address - Supplies the address whose associated instruction cache line will
-        be invalidated.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
 ArCleanEntireCache (
     VOID
     );
@@ -928,32 +906,6 @@ Arguments:
     ExceptionStacksBase - Supplies a pointer to the lowest address that should
         be used for exception stacks. Each stack takes up 16 bytes and there are
         4 modes, so at least 64 bytes are needed.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
-ArpInitializeCaches (
-    PULONG DataCacheLineSize,
-    PULONG InstructionCacheLineSize
-    );
-
-/*++
-
-Routine Description:
-
-    This routine initializes the system's processor cache infrastructure.
-
-Arguments:
-
-    DataCacheLineSize - Supplies a pointer that receives the size of a data
-        cache line.
-
-    InstructionCacheLineSize - Supplies a pointer that receives the size of a
-        data cache line.
 
 Return Value:
 

@@ -74,59 +74,6 @@ Return Value:
 }
 
 VOID
-ArpInitializeCaches (
-    PULONG DataCacheLineSize,
-    PULONG InstructionCacheLineSize
-    )
-
-/*++
-
-Routine Description:
-
-    This routine initializes the system's processor cache infrastructure.
-
-Arguments:
-
-    DataCacheLineSize - Supplies a pointer that receives the size of a data
-        cache line.
-
-    InstructionCacheLineSize - Supplies a pointer that receives the size of a
-        data cache line.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ULONG CacheTypeRegister;
-    ULONG LengthField;
-
-    //
-    // The Cache Type Register stores an off-by-one shift of the number of
-    // words in the smallest data and instruction cache lines. On ARM, a word
-    // is fixed at 32-bits so multiply (1 << (x + 1)) by the size of a ULONG.
-    //
-
-    CacheTypeRegister = ArGetCacheTypeRegister();
-
-    ASSERT((CacheTypeRegister & ARMV6_CACHE_TYPE_SEPARATE_MASK) != 0);
-
-    LengthField = (CacheTypeRegister &
-                   ARMV6_CACHE_TYPE_DATA_CACHE_LENGTH_MASK) >>
-                  ARMV6_CACHE_TYPE_DATA_CACHE_LENGTH_SHIFT;
-
-    *DataCacheLineSize = (1 << (LengthField + 1)) * sizeof(ULONG);
-    LengthField = CacheTypeRegister &
-                  ARMV6_CACHE_TYPE_INSTRUCTION_CACHE_LENGTH_MASK;
-
-    *InstructionCacheLineSize = (1 << (LengthField + 1)) * sizeof(ULONG);
-    return;
-}
-
-VOID
 ArpInitializePerformanceMonitor (
     VOID
     )

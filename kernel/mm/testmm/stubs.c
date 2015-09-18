@@ -51,13 +51,14 @@ Environment:
 //
 
 PVOID ArpPageFaultHandlerAsm;
+ULONG MmDataCacheLineSize;
 
 //
 // ------------------------------------------------------------------ Functions
 //
 
-VOID
-MmFlushInstructionCache (
+KSTATUS
+MmSyncCacheRegion (
     PVOID Address,
     UINTN Size
     )
@@ -66,8 +67,10 @@ MmFlushInstructionCache (
 
 Routine Description:
 
-    This routine flushes the given cache region and invalidates the
-    instruction cache.
+    This routine unifies the instruction and data caches for the given region,
+    probably after a region of executable code was modified. This does not
+    necessarily flush data to the point where it's observable to device DMA
+    (called the point of coherency).
 
 Arguments:
 
@@ -77,36 +80,38 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if one of the addresses in the given range was not
+    valid.
 
 --*/
 
 {
 
-    return;
+    return STATUS_SUCCESS;
 }
 
 VOID
-MmFlushDataCache (
-    PVOID Address,
-    UINTN Size,
-    BOOL ValidateAddress
+MmpSyncSwapPage (
+    PVOID SwapPage,
+    ULONG PageSize
     )
 
 /*++
 
 Routine Description:
 
-    This routine flushes the given date cache region.
+    This routine cleans the data cache but does not invalidate the instruction
+    cache for the given kernel region. It is used by the paging code for a
+    temporary mapping that is going to get marked executable, but this mapping
+    itself does not need an instruction cache flush.
 
 Arguments:
 
-    Address - Supplies the address to flush.
+    SwapPage - Supplies a pointer to the swap page.
 
-    Size - Supplies the number of bytes in the region to flush.
-
-    ValidateAddress - Supplies a boolean indicating whether or not to make sure
-        the given address is mapped before flushing.
+    PageSize - Supplies the size of a page.
 
 Return Value:
 
@@ -239,36 +244,6 @@ Arguments:
 Return Value:
 
     None.
-
---*/
-
-{
-
-    return FALSE;
-}
-
-BOOL
-MmpGetInstructionCacheType (
-    VOID
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns a boolean indicating whether or not the instruction
-    cache is virtually indexed.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    TRUE if the instruction cache is virtually indexed.
-
-    FALSE if the instruction cache is physically indexed (and presumably
-    physically tagged).
 
 --*/
 
@@ -658,181 +633,6 @@ Routine Description:
 Arguments:
 
     None.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    return;
-}
-
-ULONG
-ArGetDataCacheLineSize (
-    VOID
-    )
-
-/*++
-
-Routine Description:
-
-    This routine gets the size of a line in the L1 data cache.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    Returns the L1 data cache line size, in bytes.
-
---*/
-
-{
-
-    return 1;
-}
-
-VOID
-ArCleanCacheLine (
-    PVOID Address
-    )
-
-/*++
-
-Routine Description:
-
-    This routine flushes a cache line, writing any dirty bits back to the next
-    level cache.
-
-Arguments:
-
-    Address - Supplies the address whose associated cache line will be
-        cleaned.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    return;
-}
-
-VOID
-ArCleanCacheRegion (
-    PVOID Address,
-    UINTN Size
-    )
-
-/*++
-
-Routine Description:
-
-    This routine cleans the given region of virtual address space in the first
-    level data cache.
-
-Arguments:
-
-    Address - Supplies the virtual address of the region to clean.
-
-    Size - Supplies the number of bytes to clean.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    return;
-}
-
-VOID
-ArCleanInvalidateCacheRegion (
-    PVOID Address,
-    UINTN Size
-    )
-
-/*++
-
-Routine Description:
-
-    This routine cleans and invalidates the given region of virtual address
-    space in the first level data cache.
-
-Arguments:
-
-    Address - Supplies the virtual address of the region to clean.
-
-    Size - Supplies the number of bytes to clean.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    return;
-}
-
-VOID
-ArInvalidateInstructionCacheRegion (
-    PVOID Address,
-    ULONG Size
-    )
-
-/*++
-
-Routine Description:
-
-    This routine invalidates the given region of virtual address space in the
-    instruction cache.
-
-Arguments:
-
-    Address - Supplies the virtual address of the region to invalidate.
-
-    Size - Supplies the number of bytes to invalidate.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    return;
-}
-
-VOID
-ArInvalidateCacheRegion (
-    PVOID Address,
-    UINTN Size
-    )
-
-/*++
-
-Routine Description:
-
-    This routine invalidates the region of virtual address space in the first
-    level data cache. This routine is very dangerous, as any dirty data in the
-    cache will be lost and gone.
-
-Arguments:
-
-    Address - Supplies the virtual address of the region to clean.
-
-    Size - Supplies the number of bytes to clean.
 
 Return Value:
 

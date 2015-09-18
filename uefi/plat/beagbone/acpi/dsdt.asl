@@ -106,6 +106,28 @@ DefinitionBlock (
             })
         }
 
+        Device(USB0) {
+            Name(_HID, "TEX3003")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x47400000,
+                            0x47404FFF,
+                            0x00000000,
+                            0x00005000)
+
+                Interrupt(, Level, ActiveHigh,) {17}
+                Interrupt(, Level, ActiveHigh,) {18}
+                Interrupt(, Level, ActiveHigh,) {19}
+            })
+        }
+
         Device(I2C0) {
             Name(_HID, "TEX3001")
             Name(_UID, 0)

@@ -44,14 +44,12 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-extern CHAR MmpUserModeMemoryReturn;
-
 //
 // ------------------------------------------------------------------ Functions
 //
 
-BOOL
-MmpGetInstructionCacheType (
+VOID
+MmpInitializeCpuCaches (
     VOID
     )
 
@@ -59,47 +57,11 @@ MmpGetInstructionCacheType (
 
 Routine Description:
 
-    This routine returns a boolean indicating whether or not the instruction
-    cache is virtually indexed.
+    This routine initializes the system's processor cache infrastructure.
 
 Arguments:
 
     None.
-
-Return Value:
-
-    TRUE if the instruction cache is virtually indexed.
-
-    FALSE if the instruction cache is physically indexed (and presumably
-    physically tagged).
-
---*/
-
-{
-
-    //
-    // ARMv6 is always high maintenance.
-    //
-
-    return TRUE;
-}
-
-BOOL
-MmpCheckUserModeCopyRoutines (
-    PTRAP_FRAME TrapFrame
-    )
-
-/*++
-
-Routine Description:
-
-    This routine determines if a given fault occurred inside a user mode memory
-    manipulation function, and adjusts the instruction pointer if so.
-
-Arguments:
-
-    TrapFrame - Supplies a pointer to the state of the machine when the page
-        fault occurred.
 
 Return Value:
 
@@ -109,18 +71,35 @@ Return Value:
 
 {
 
-    PVOID InstructionPointer;
+    ULONG CacheTypeRegister;
+    ULONG LengthField;
 
-    InstructionPointer = (PVOID)(TrapFrame->Pc);
-    if ((InstructionPointer >= (PVOID)MmpCopyUserModeMemory) &&
-        (InstructionPointer < (PVOID)&MmpUserModeMemoryReturn)) {
+    //
+    // The Cache Type Register stores an off-by-one shift of the number of
+    // words in the smallest data and instruction cache lines. On ARM, a word
+    // is fixed at 32-bits so multiply (1 << (x + 1)) by the size of a ULONG.
+    //
 
-        TrapFrame->Pc = (UINTN)&MmpUserModeMemoryReturn;
-        TrapFrame->R0 = FALSE;
-        return TRUE;
-    }
+    CacheTypeRegister = ArGetCacheTypeRegister();
 
-    return FALSE;
+    ASSERT((CacheTypeRegister & ARMV6_CACHE_TYPE_SEPARATE_MASK) != 0);
+
+    LengthField = (CacheTypeRegister &
+                   ARMV6_CACHE_TYPE_DATA_CACHE_LENGTH_MASK) >>
+                  ARMV6_CACHE_TYPE_DATA_CACHE_LENGTH_SHIFT;
+
+    MmDataCacheLineSize = (1 << (LengthField + 1)) * sizeof(ULONG);
+    LengthField = CacheTypeRegister &
+                  ARMV6_CACHE_TYPE_INSTRUCTION_CACHE_LENGTH_MASK;
+
+    MmInstructionCacheLineSize = (1 << (LengthField + 1)) * sizeof(ULONG);
+
+    //
+    // ARMv6 instruction caches are always assumed to be virtually indexed.
+    //
+
+    MmVirtuallyIndexedInstructionCache = TRUE;
+    return;
 }
 
 //

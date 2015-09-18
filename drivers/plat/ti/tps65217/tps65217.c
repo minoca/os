@@ -459,7 +459,7 @@ Return Value:
 
     Status = MmCreateIoBuffer(Controller->RequestBuffer,
                               TPS65217_MAX_PACKET_SIZE,
-                              TRUE,
+                              IO_BUFFER_FLAG_KERNEL_MODE_DATA,
                               &(Controller->RequestIoBuffer));
 
     if (!KSUCCESS(Status)) {

@@ -47,7 +47,7 @@ Environment:
 //
 
 KERNEL_API
-VOID
+KSTATUS
 MmFlushBufferForDataIn (
     PVOID Buffer,
     UINTN SizeInBytes
@@ -69,7 +69,11 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the region was user mode and an address in the
+    region was not valid. Kernel mode addresses are always expected to be
+    valid.
 
 --*/
 
@@ -79,11 +83,11 @@ Return Value:
     // The x86 is cache coherent with all observers of memory.
     //
 
-    return;
+    return STATUS_SUCCESS;
 }
 
 KERNEL_API
-VOID
+KSTATUS
 MmFlushBufferForDataOut (
     PVOID Buffer,
     UINTN SizeInBytes
@@ -105,7 +109,11 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the region was user mode and an address in the
+    region was not valid. Kernel mode addresses are always expected to be
+    valid.
 
 --*/
 
@@ -115,11 +123,11 @@ Return Value:
     // The x86 is cache coherent with all observers of memory.
     //
 
-    return;
+    return STATUS_SUCCESS;
 }
 
 KERNEL_API
-VOID
+KSTATUS
 MmFlushBufferForDataIo (
     PVOID Buffer,
     UINTN SizeInBytes
@@ -143,7 +151,11 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the region was user mode and an address in the
+    region was not valid. Kernel mode addresses are always expected to be
+    valid.
 
 --*/
 
@@ -153,7 +165,47 @@ Return Value:
     // The x86 is cache coherent with all observers of memory.
     //
 
-    return;
+    return STATUS_SUCCESS;
+}
+
+KERNEL_API
+KSTATUS
+MmSyncCacheRegion (
+    PVOID Address,
+    UINTN Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unifies the instruction and data caches for the given region,
+    probably after a region of executable code was modified. This does not
+    necessarily flush data to the point where it's observable to device DMA
+    (called the point of coherency).
+
+Arguments:
+
+    Address - Supplies the address to flush.
+
+    Size - Supplies the number of bytes in the region to flush.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if one of the addresses in the given range was not
+    valid.
+
+--*/
+
+{
+
+    //
+    // The x86 is cache coherent with all observers of memory.
+    //
+
+    return STATUS_SUCCESS;
 }
 
 VOID
@@ -195,31 +247,37 @@ Return Value:
 
 {
 
+    PSYSTEM_CALL_FLUSH_CACHE Parameters;
+
     //
     // The x86 is cache coherent with all observers of memory.
     //
 
+    Parameters = SystemCallParameter;
+    Parameters->Status = STATUS_SUCCESS;
     return;
 }
 
 VOID
-MmFlushInstructionCache (
-    PVOID Address,
-    UINTN Size
+MmpSyncSwapPage (
+    PVOID SwapPage,
+    ULONG PageSize
     )
 
 /*++
 
 Routine Description:
 
-    This routine flushes the given cache region and invalidates the
-    instruction cache.
+    This routine cleans the data cache but does not invalidate the instruction
+    cache for the given kernel region. It is used by the paging code for a
+    temporary mapping that is going to get marked executable, but this mapping
+    itself does not need an instruction cache flush.
 
 Arguments:
 
-    Address - Supplies the address to flush.
+    SwapPage - Supplies a pointer to the swap page.
 
-    Size - Supplies the number of bytes in the region to flush.
+    PageSize - Supplies the size of a page.
 
 Return Value:
 
@@ -228,47 +286,6 @@ Return Value:
 --*/
 
 {
-
-    //
-    // The x86 is cache coherent with all observers of memory.
-    //
-
-    return;
-}
-
-VOID
-MmFlushDataCache (
-    PVOID Address,
-    UINTN Size,
-    BOOL ValidateAddress
-    )
-
-/*++
-
-Routine Description:
-
-    This routine flushes the given date cache region.
-
-Arguments:
-
-    Address - Supplies the address to flush.
-
-    Size - Supplies the number of bytes in the region to flush.
-
-    ValidateAddress - Supplies a boolean indicating whether or not to make sure
-        the given address is mapped before flushing.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    //
-    // The x86 is cache coherent with all observers of memory.
-    //
 
     return;
 }

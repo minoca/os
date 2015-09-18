@@ -1413,7 +1413,10 @@ Return Value:
                               RegionSize - IoSize);
             }
 
-            MmFlushInstructionCache((PVOID)SegmentAddress, RegionSize);
+            Status = MmSyncCacheRegion((PVOID)SegmentAddress, RegionSize);
+
+            ASSERT(KSUCCESS(Status));
+
             FileOffset += IoSize;
             FileSize -= IoSize;
             MemorySize -= RegionSize;
@@ -1522,7 +1525,9 @@ Return Value:
                 goto MapImageSegmentEnd;
             }
 
-            MmFlushInstructionCache((PVOID)SegmentAddress, IoSize);
+            Status = MmSyncCacheRegion((PVOID)SegmentAddress, IoSize);
+
+            ASSERT(KSUCCESS(Status));
         }
 
         SegmentAddress += FileSize;
@@ -1536,8 +1541,10 @@ Return Value:
         NextPage = ALIGN_RANGE_UP(SegmentAddress, PageSize);
         if (NextPage - SegmentAddress != 0) {
             RtlZeroMemory((PVOID)SegmentAddress, NextPage - SegmentAddress);
-            MmFlushInstructionCache((PVOID)SegmentAddress,
-                                    NextPage - SegmentAddress);
+            Status = MmSyncCacheRegion((PVOID)SegmentAddress,
+                                       NextPage - SegmentAddress);
+
+            ASSERT(KSUCCESS(Status));
         }
 
         if (NextPage >= SegmentAddress + MemorySize) {
@@ -1823,7 +1830,12 @@ Return Value:
 
 {
 
-    MmFlushInstructionCache(Address, Size);
+    KSTATUS Status;
+
+    Status = MmSyncCacheRegion(Address, Size);
+
+    ASSERT(KSUCCESS(Status));
+
     return;
 }
 

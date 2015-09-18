@@ -3499,7 +3499,7 @@ Return Value:
 --*/
 
 KERNEL_API
-VOID
+KSTATUS
 MmFlushBufferForDataIn (
     PVOID Buffer,
     UINTN SizeInBytes
@@ -3521,12 +3521,16 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the region was user mode and an address in the
+    region was not valid. Kernel mode addresses are always expected to be
+    valid.
 
 --*/
 
 KERNEL_API
-VOID
+KSTATUS
 MmFlushBufferForDataOut (
     PVOID Buffer,
     UINTN SizeInBytes
@@ -3548,12 +3552,16 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the region was user mode and an address in the
+    region was not valid. Kernel mode addresses are always expected to be
+    valid.
 
 --*/
 
 KERNEL_API
-VOID
+KSTATUS
 MmFlushBufferForDataIo (
     PVOID Buffer,
     UINTN SizeInBytes
@@ -3577,7 +3585,42 @@ Arguments:
 
 Return Value:
 
-    None.
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the region was user mode and an address in the
+    region was not valid. Kernel mode addresses are always expected to be
+    valid.
+
+--*/
+
+KERNEL_API
+KSTATUS
+MmSyncCacheRegion (
+    PVOID Address,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine unifies the instruction and data caches for the given region,
+    probably after a region of executable code was modified. This does not
+    necessarily flush data to the point where it's observable to device DMA
+    (called the point of coherency).
+
+Arguments:
+
+    Address - Supplies the address to flush.
+
+    Size - Supplies the number of bytes in the region to flush.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if one of the addresses in the given range was not
+    valid.
 
 --*/
 
@@ -3611,59 +3654,6 @@ Arguments:
         size of the parameter structure to be copied back to user mode. The
         value returned here must be no larger than the original parameter
         structure size. The default is the original size of the parameters.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
-MmFlushInstructionCache (
-    PVOID Address,
-    UINTN Size
-    );
-
-/*++
-
-Routine Description:
-
-    This routine flushes the given cache region and invalidates the
-    instruction cache.
-
-Arguments:
-
-    Address - Supplies the address to flush.
-
-    Size - Supplies the number of bytes in the region to flush.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
-MmFlushDataCache (
-    PVOID Address,
-    UINTN Size,
-    BOOL ValidateAddress
-    );
-
-/*++
-
-Routine Description:
-
-    This routine flushes the given date cache region.
-
-Arguments:
-
-    Address - Supplies the address to flush.
-
-    Size - Supplies the number of bytes in the region to flush.
-
-    ValidateAddress - Supplies a boolean indicating whether or not to make sure
-        the given address is mapped before flushing.
 
 Return Value:
 

@@ -44,14 +44,12 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-extern CHAR MmpUserModeMemoryReturn;
-
 //
 // ------------------------------------------------------------------ Functions
 //
 
-BOOL
-MmpGetInstructionCacheType (
+VOID
+MmpInitializeCpuCaches (
     VOID
     )
 
@@ -59,8 +57,7 @@ MmpGetInstructionCacheType (
 
 Routine Description:
 
-    This routine returns a boolean indicating whether or not the instruction
-    cache is virtually indexed.
+    This routine initializes the system's processor cache infrastructure.
 
 Arguments:
 
@@ -68,64 +65,43 @@ Arguments:
 
 Return Value:
 
-    TRUE if the instruction cache is virtually indexed.
-
-    FALSE if the instruction cache is physically indexed (and presumably
-    physically tagged).
+    None.
 
 --*/
 
 {
 
     ULONG CacheTypeRegister;
+    ULONG Log2CacheLineSize;
+
+    //
+    // The Cache Type Register stores Log base 2 of the number of words in the
+    // smallest data and instruction cache lines. On ARM, a word is fixed at
+    // 32-bits so multiply 2^x by the size of a ULONG.
+    //
 
     CacheTypeRegister = ArGetCacheTypeRegister();
-    if ((CacheTypeRegister & ARMV7_CACHE_TYPE_INSTRUCTION_CACHE_TYPE_MASK) ==
+    Log2CacheLineSize = (CacheTypeRegister &
+                         ARMV7_CACHE_TYPE_DATA_CACHE_SIZE_MASK) >>
+                        ARMV7_CACHE_TYPE_DATA_CACHE_SIZE_SHIFT;
+
+    MmDataCacheLineSize = (1 << Log2CacheLineSize) * sizeof(ULONG);
+    Log2CacheLineSize = CacheTypeRegister &
+                        ARMV7_CACHE_TYPE_INSTRUCTION_CACHE_SIZE_MASK;
+
+    MmInstructionCacheLineSize = (1 << Log2CacheLineSize) * sizeof(ULONG);
+
+    //
+    // Also determine whether or not the I-cache is virtually indexed.
+    //
+
+    if ((CacheTypeRegister & ARMV7_CACHE_TYPE_INSTRUCTION_CACHE_TYPE_MASK) !=
         ARMV7_CACHE_TYPE_INSTRUCTION_CACHE_TYPE_PIPT) {
 
-        return FALSE;
+        MmVirtuallyIndexedInstructionCache = TRUE;
     }
 
-    return TRUE;
-}
-
-BOOL
-MmpCheckUserModeCopyRoutines (
-    PTRAP_FRAME TrapFrame
-    )
-
-/*++
-
-Routine Description:
-
-    This routine determines if a given fault occurred inside a user mode memory
-    manipulation function, and adjusts the instruction pointer if so.
-
-Arguments:
-
-    TrapFrame - Supplies a pointer to the state of the machine when the page
-        fault occurred.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PVOID InstructionPointer;
-
-    InstructionPointer = (PVOID)(TrapFrame->Pc);
-    if ((InstructionPointer >= (PVOID)MmpCopyUserModeMemory) &&
-        (InstructionPointer < (PVOID)&MmpUserModeMemoryReturn)) {
-
-        TrapFrame->Pc = (UINTN)&MmpUserModeMemoryReturn;
-        TrapFrame->R0 = FALSE;
-        return TRUE;
-    }
-
-    return FALSE;
+    return;
 }
 
 //

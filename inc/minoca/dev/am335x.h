@@ -391,6 +391,32 @@ Author:
 #define AM335_DISP_PLL_M2 1
 
 //
+// Define the size of the entire USB subsystem region.
+//
+
+#define AM335_USB_REGION_SIZE 0x5000
+
+//
+// Define register offsets within the USB subsystem.
+//
+
+#define AM3_USB_USBSS_OFFSET 0x0000
+#define AM3_USB_USB0_OFFSET 0x1000
+#define AM3_USB_USB0_PHY_OFFSET 0x1300
+#define AM3_USB_USB0_CORE_OFFSET 0x1400
+#define AM3_USB_USB1_OFFSET 0x1800
+#define AM3_USB_USB1_PHY_OFFSET 0x1B00
+#define AM3_USB_USB1_CORE_OFFSET 0x1C00
+#define AM3_USB_CPPI_DMA_OFFSET 0x2000
+#define AM3_USB_CPPI_DMA_SCHEDULER_OFFSET 0x3000
+
+//
+// USBSS sysconfig register bits
+//
+
+#define AM335_USBSS_SYSCONFIG_SOFT_RESET 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
