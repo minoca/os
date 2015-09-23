@@ -109,24 +109,3 @@ extern SD_FUNCTION_TABLE SdStdFunctionTable;
 // -------------------------------------------------------- Function Prototypes
 //
 
-VOID
-SdpInterruptServiceDpc (
-    PDPC Dpc
-    );
-
-/*++
-
-Routine Description:
-
-    This routine implements the SD DPC that is queued when an interrupt fires.
-
-Arguments:
-
-    Dpc - Supplies a pointer to the DPC that is running.
-
-Return Value:
-
-    None.
-
---*/
-

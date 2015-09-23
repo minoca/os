@@ -117,15 +117,6 @@ Author:
 #define IRP_ACTIVE 0x00000004
 
 //
-// This flag is set when the IRP is done with the driver stack, having gone
-// down until completion and then back up. The IRP, however, may still be
-// active and being processed by the last driver in the stack in the up
-// direction.
-//
-
-#define IRP_DRIVER_STACK_COMPLETE 0x00000008
-
-//
 // This flag is used during processing Query Children to mark pre-existing
 // devices and notice missing ones.
 //
@@ -901,6 +892,9 @@ Members:
     CompatibleIds - Stores a pointer to a string containing the compatible IDs
         for this device.
 
+    QueueLock - Stores a pointer to a queued lock that protects the work
+        queue's state and list.
+
     QueueState - Stores the state of the work queue, describing whether or not
         it is accepting new requests. Writes of this variable are protected by
         the QueueLock.
@@ -962,6 +956,7 @@ struct _DEVICE {
     PDEVICE TargetDevice;
     PSTR ClassId;
     PSTR CompatibleIds;
+    PQUEUED_LOCK QueueLock;
     DEVICE_QUEUE_STATE QueueState;
     LIST_ENTRY WorkQueue;
     LIST_ENTRY DriverStackHead;

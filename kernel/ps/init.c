@@ -614,6 +614,8 @@ Return Value:
     CurrentThread->State = ThreadStateRunning;
     CurrentThread->SchedulerEntry.Type = SchedulerEntryThread;
     CurrentThread->SchedulerEntry.Parent = &(Processor->Scheduler.Group.Entry);
+    INITIALIZE_LIST_HEAD(&(CurrentThread->TpcContext.ListHead));
+    KeInitializeSpinLock(&(CurrentThread->TpcContext.Lock));
     CurrentThread->ThreadPointer = PsInitialThreadPointer;
     CurrentThread->BuiltinWaitBlock = ObCreateWaitBlock(0);
     if (CurrentThread->BuiltinWaitBlock == NULL) {

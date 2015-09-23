@@ -649,7 +649,7 @@ Return Value:
     ULONG Value;
     BOOL Write;
 
-    ASSERT(KeGetRunLevel() == RunLevelLow);
+    ASSERT(KeGetRunLevel() < RunLevelDispatch);
 
     Child = DeviceContext;
     if (Child->Type != SdRk32Child) {

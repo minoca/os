@@ -37,8 +37,8 @@ Environment:
 #define WAIT_BLOCK_FLAG_ACTIVE 0x80000000
 
 //
-// This bit is set if the wait that the thread just came out of was due to
-// an interruption (versus an actual satisfaction of the wait).
+// This bit is set if the thread came out of the wait due to an interruption
+// (versus an actual satisfaction of the wait).
 //
 
 #define WAIT_BLOCK_FLAG_INTERRUPTED 0x40000000
@@ -50,12 +50,25 @@ Environment:
 #define WAIT_BLOCK_MAX_CAPACITY MAX_USHORT
 
 //
+// Define the constant, in time ticks, to indicate wait routines should not
+// time out.
+//
+
+#define WAIT_TIME_INDEFINITE_TICKS MAX_ULONGLONG
+
+//
 // ----------------------------------------------- Internal Function Prototypes
 //
 
 BOOL
 ObpWaitFast (
     PWAIT_QUEUE WaitQueue
+    );
+
+KSTATUS
+ObpExecuteWaitBlock (
+    PWAIT_BLOCK WaitBlock,
+    PULONGLONG TimeoutInTimeTicks
     );
 
 VOID
@@ -851,237 +864,29 @@ Return Value:
 
 {
 
-    BOOL Block;
-    ULONG Count;
-    ULONGLONG DueTime;
-    ULONG Index;
-    BOOL LockHeld;
-    RUNLEVEL OldRunLevel;
-    PWAIT_QUEUE Queue;
     KSTATUS Status;
-    PKTHREAD Thread;
-    BOOL TimerQueued;
-    PWAIT_BLOCK_ENTRY WaitEntry;
-
-    ASSERT((WaitBlock->Capacity != 0) &&
-           (WaitBlock->Count <= WaitBlock->Capacity));
-
-    ASSERT(WaitBlock->UnsignaledCount == 0);
-    ASSERT(WaitBlock->Entry[0].Queue == NULL);
-    ASSERT((WaitBlock->Flags & WAIT_BLOCK_FLAG_ACTIVE) == 0);
-    ASSERT(KeGetRunLevel() <= RunLevelDispatch);
-    ASSERT(WaitBlock->Thread == NULL);
-
-    Block = TRUE;
-    Count = WaitBlock->Count;
-    Thread = KeGetCurrentThread();
-    TimerQueued = FALSE;
-    Status = STATUS_SUCCESS;
+    ULONGLONG TimeoutInMicroseconds;
+    ULONGLONG TimeoutInTimeTicks;
 
     //
-    // Acquire the wait block lock and loop through each object in the array.
+    // Convert the milliseconds to time ticks. This makes it easier to maintain
+    // the decreasing timeout length if the wait needs to try again.
     //
 
-    LockHeld = TRUE;
-    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
-    KeAcquireSpinLock(&(WaitBlock->Lock));
-    WaitBlock->SignalingQueue = NULL;
-    for (Index = 0; Index < Count; Index += 1) {
+    TimeoutInTimeTicks = WAIT_TIME_INDEFINITE_TICKS;
+    if (TimeoutInMilliseconds != WAIT_TIME_INDEFINITE) {
+        TimeoutInMicroseconds = TimeoutInMilliseconds *
+                                MICROSECONDS_PER_MILLISECOND;
 
-        //
-        // Tweak the order a bit, adding all the non-timer objects first and
-        // then the timer at the end. This optimizes for cases where a timed
-        // wait is immediately satisfied.
-        //
-
-        if (Index == (Count - 1)) {
-            WaitEntry = &(WaitBlock->Entry[0]);
-            WaitEntry->Queue = NULL;
-            if (TimeoutInMilliseconds == WAIT_TIME_INDEFINITE) {
-                continue;
-            }
-
-            DueTime = HlQueryTimeCounter() +
-                      KeConvertMicrosecondsToTimeTicks(
-                         TimeoutInMilliseconds * MICROSECONDS_PER_MILLISECOND);
-
-            Status = KeQueueTimer(Thread->BuiltinTimer,
-                                  TimerQueueSoftWake,
-                                  DueTime,
-                                  0,
-                                  0,
-                                  NULL);
-
-            if (!KSUCCESS(Status)) {
-                goto WaitEnd;
-            }
-
-            TimerQueued = TRUE;
-            Queue = &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue);
-            WaitEntry->Queue = Queue;
-
-        } else {
-            WaitEntry = &(WaitBlock->Entry[Index + 1]);
-        }
-
-        Queue = WaitEntry->Queue;
-
-        ASSERT(Queue != NULL);
-        ASSERT(WaitEntry->WaitListEntry.Next == NULL);
-
-        WaitEntry->WaitBlock = WaitBlock;
-
-        //
-        // Add the wait entry onto the queue's waiters list. The normal rule
-        // of locks is that they must be acquired in the same order, and one
-        // might think this acquire here breaks the rule, since all other
-        // acquires go Queue then WaitBlock. In this case however, since the
-        // queue has not yet been added to the wait block, there is no
-        // scenario in which other code could attempt to acquire Queue then
-        // WaitBlock, as the wait block would need to be queued on the queue
-        // for those paths to run. So this is safe with this caveat.
-        //
-
-        KeAcquireSpinLock(&(Queue->Lock));
-        if (ObpWaitFast(Queue) == FALSE) {
-            INSERT_BEFORE(&(WaitEntry->WaitListEntry), &(Queue->Waiters));
-
-            //
-            // The built-in timer does not count towards a wait-all attempt so
-            // do not increment the unsignaled count for that queue.
-            //
-
-            if (Index != (Count - 1)) {
-                WaitBlock->UnsignaledCount += 1;
-            }
-
-        //
-        // If the queue has already been signaled, then determine if this setup
-        // loop can exit early.
-        //
-
-        } else {
-
-            //
-            // If this is not the last queue, then setup can exit if not all
-            // queues need to be waited on or if this is the second to last
-            // queue and there are no unsignaled queues.
-            //
-
-            if (Index != (Count - 1)) {
-                if (((WaitBlock->Flags & WAIT_FLAG_ALL) == 0) ||
-                    ((Index == (Count - 2)) &&
-                     (WaitBlock->UnsignaledCount == 0))) {
-
-                    KeReleaseSpinLock(&(Queue->Lock));
-                    WaitBlock->SignalingQueue = Queue;
-                    Block = FALSE;
-                    break;
-                }
-
-            //
-            // Otherwise this is the last queue - the built-in timer - and it
-            // expired. As the wait block lock is still held, none of the other
-            // queues have had a chance to satisfy this wait, so count this as
-            // a timeout. The loop should exit the next time around.
-            //
-
-            } else {
-                Block = FALSE;
-                WaitBlock->SignalingQueue = Queue;
-                TimerQueued = FALSE;
-                Status = STATUS_TIMEOUT;
-            }
-        }
-
-        KeReleaseSpinLock(&(Queue->Lock));
+        TimeoutInTimeTicks = KeConvertMicrosecondsToTimeTicks(
+                                                        TimeoutInMicroseconds);
     }
 
-    //
-    // Count the wait block as active, even if it won't block.
-    //
+    do {
+        Status = ObpExecuteWaitBlock(WaitBlock, &TimeoutInTimeTicks);
 
-    WaitBlock->Flags |= WAIT_BLOCK_FLAG_ACTIVE;
+    } while (Status == STATUS_TRY_AGAIN);
 
-    //
-    // If blocking, set the thread to wake so that if something is waiting to
-    // acquire the wait block lock and wake the thread, it knows which thread
-    // to wake.
-    //
-
-    if (Block != FALSE) {
-        WaitBlock->Thread = Thread;
-    }
-
-    KeReleaseSpinLock(&(WaitBlock->Lock));
-    LockHeld = FALSE;
-
-    //
-    // Block the thread if the wait condition was not satisfied above.
-    //
-
-    if (Block != FALSE) {
-
-        ASSERT(Status == STATUS_SUCCESS);
-
-        Thread->WaitBlock = WaitBlock;
-        KeSchedulerEntry(SchedulerReasonThreadBlocking);
-        Thread->WaitBlock = NULL;
-
-        //
-        // Check to see if this thread has resumed due to a signal.
-        //
-
-        if ((WaitBlock->Flags & WAIT_BLOCK_FLAG_INTERRUPTED) != 0) {
-            Status = STATUS_INTERRUPTED;
-
-        //
-        // If it wasn't an interruption, then one of the objects actually being
-        // waited on must have caused execution to resume.
-        //
-
-        } else {
-
-            ASSERT(WaitBlock->SignalingQueue != NULL);
-
-            if (WaitBlock->SignalingQueue ==
-                &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue)) {
-
-                Status = STATUS_TIMEOUT;
-                TimerQueued = FALSE;
-            }
-        }
-
-    //
-    // Otherwise a queue signaled during initialization. Success better be on
-    // horizon unless it was a timeout and the built-in timer signaled.
-    //
-
-    } else {
-
-        ASSERT(WaitBlock->SignalingQueue != NULL);
-        ASSERT(KSUCCESS(Status) ||
-               ((Status == STATUS_TIMEOUT) &&
-                (WaitBlock->SignalingQueue ==
-                 &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue))));
-    }
-
-    if (TimerQueued != FALSE) {
-        KeCancelTimer(Thread->BuiltinTimer);
-    }
-
-WaitEnd:
-    if (LockHeld != FALSE) {
-        KeReleaseSpinLock(&(WaitBlock->Lock));
-    }
-
-    //
-    // Clean up the wait block. The index stores how many wait entries were
-    // initialized above.
-    //
-
-    ObpCleanUpWaitBlock(WaitBlock, Index);
-    KeLowerRunLevel(OldRunLevel);
     return Status;
 }
 
@@ -1227,7 +1032,7 @@ Return Value:
 
     for (ObjectIndex = 0; ObjectIndex < ObjectCount; ObjectIndex += 1) {
 
-        ASSERT(WaitBlock->Entry[ObjectIndex].WaitListEntry.Next == NULL);
+        ASSERT(WaitBlock->Entry[ObjectIndex + 1].WaitListEntry.Next == NULL);
 
         WaitBlock->Entry[ObjectIndex + 1].Queue =
                                    &(TypedObjectArray[ObjectIndex]->WaitQueue);
@@ -1409,6 +1214,7 @@ Return Value:
     SIGNAL_STATE PreviousState;
     LIST_ENTRY ReleaseList;
     PKTHREAD Thread;
+    BOOL ThreadWoken;
     PWAIT_BLOCK WaitBlock;
     PWAIT_BLOCK_ENTRY WaitEntry;
 
@@ -1495,162 +1301,220 @@ Return Value:
     KeAcquireSpinLock(&(Queue->Lock));
 
     //
-    // If only signaled for one, then the state needs to be adjusted. The
-    // state is not signaled with waiters, so the wait function won't change
-    // that, and neither will setting it to unsignaled. The remaining things
-    // to race with are setting it to signaled or signaled for one.
+    // Loop attempting to run the waiters. If only signalling for one, the
+    // first selected waiter may not be waiting by the time it's wait block
+    // gets inspected. As a result, this routine must loop around to adjust the
+    // queue's state or to pick another waiter.
     //
 
-    if (Signal == SignalOptionSignalOne) {
+    while (TRUE) {
 
         //
-        // If once here there actually isn't anyone waiting, then try to set
-        // the signal state to signaled for one. This may race with another
-        // entity signaling it (for all or one). It's fine if it loses.
+        // Attempt to pull one waiter off of the list or to set the correct
+        // state if there are no more waiters.
         //
 
-        if (LIST_EMPTY(&(Queue->Waiters)) != FALSE) {
-            OldState = RtlAtomicCompareExchange32(&(Queue->State),
-                                                  SignaledForOne,
-                                                  OldState);
-
-        } else {
-            Entry = Queue->Waiters.Next;
-            LIST_REMOVE(Entry);
-            INSERT_BEFORE(Entry, &ReleaseList);
+        if (Signal == SignalOptionSignalOne) {
 
             //
-            // If the list is now empty, then the state needs to move from
-            // not signaled with waiters to just not signaled. Again, this may
-            // race with someone signaling for all or one, but nothing else.
+            // If there are no more waiters, then try to set the signal state
+            // to signaled for one. This may race with another entity signaling
+            // it (for all or one). It's fine if it loses in those cases. But
+            // it may also be racing with a waking thread trying to change the
+            // state from not signaled with waiters to not signaled. It is not
+            // OK to lose in that case. Try again until it's in some signaled
+            // state.
             //
 
             if (LIST_EMPTY(&(Queue->Waiters)) != FALSE) {
-                OldState = RtlAtomicCompareExchange32(&(Queue->State),
-                                                      NotSignaled,
-                                                      OldState);
-            }
-        }
+                do {
+                    PreviousState = OldState;
+                    OldState = RtlAtomicCompareExchange32(&(Queue->State),
+                                                          SignaledForOne,
+                                                          OldState);
 
-    //
-    // Everybody gets to run.
-    //
-
-    } else {
-
-        ASSERT((Signal == SignalOptionSignalAll) ||
-               (Signal == SignalOptionPulse));
-
-        if (LIST_EMPTY(&(Queue->Waiters)) == FALSE) {
-            MOVE_LIST(&(Queue->Waiters), &ReleaseList);
-            INITIALIZE_LIST_HEAD(&(Queue->Waiters));
-        }
-    }
-
-    //
-    // Update the wait blocks of every item on the local list. The queue's lock
-    // must still be held to protect the local list's use of each wait block
-    // entry's list entry. However, as soon as the last thread has been set
-    // ready, the queue may be destroyed. So, drop the queue's lock when the
-    // list is found to be empty, but before setting the thread ready. If the
-    // last wait block has already been satisfied by another queue, that wait
-    // block's thread will not destroy this queue until it has acquired this
-    // queue's lock to remove the wait block entry off this local list.
-    //
-
-    while (LIST_EMPTY(&ReleaseList) == FALSE) {
-        Entry = ReleaseList.Next;
-        LIST_REMOVE(Entry);
-        WaitEntry = LIST_VALUE(Entry, WAIT_BLOCK_ENTRY, WaitListEntry);
-        WaitBlock = WaitEntry->WaitBlock;
-        KeAcquireSpinLock(&(WaitBlock->Lock));
-
-        //
-        // After setting the next entry to NULL, the hold on the lock is the
-        // only thing keeping the wait block from getting released or reused.
-        //
-
-        WaitEntry->WaitListEntry.Next = NULL;
-
-        ASSERT(WaitEntry->Queue == Queue);
-
-        //
-        // The built-in timer does not count towards signaling all.
-        //
-
-        if (WaitEntry != &(WaitBlock->Entry[0])) {
-
-            ASSERT(WaitBlock->UnsignaledCount != 0);
-
-            WaitBlock->UnsignaledCount -= 1;
-        }
-
-        //
-        // Determine if the signaling of this queue satisfies the wait block.
-        // The wait block must still have its thread set, indicating that no
-        // other queue has satisfied the wait and that it has not been
-        // interrrupted. If this is the built-in timer, then the wait is
-        // satisfied without a need to check the unsignaled count. Finally
-        // either all queues must have signaled or the wait block is just
-        // waiting for the first queue to do so.
-        //
-
-        Thread = NULL;
-        if ((WaitBlock->Thread != NULL) &&
-            ((WaitEntry == &(WaitBlock->Entry[0])) ||
-             ((WaitBlock->Flags & WAIT_FLAG_ALL) == 0) ||
-             (WaitBlock->UnsignaledCount == 0))) {
-
-            WaitBlock->SignalingQueue = Queue;
-            Thread = WaitBlock->Thread;
-            WaitBlock->Thread = NULL;
-        }
-
-        KeReleaseSpinLock(&(WaitBlock->Lock));
-
-        //
-        // If the local list is now empty, release the queue lock before
-        // letting the last thread go and do not touch the queue again. This
-        // cannot be done before processing the wait list entry because
-        // removing the wait list entry from the local list (under the queue's
-        // lock) and setting it's next pointer to NULL (under both the queue's
-        // lock and the wait block's lock) are neatly synchronized with wait
-        // block clean-up. Releasing the queue's lock before setting the next
-        // pointer to NULL would be bad and the next pointer needs to be set
-        // to NULL with the wait block's lock held.
-        //
-
-        if (LIST_EMPTY(&ReleaseList) != FALSE) {
-            KeReleaseSpinLock(&(Queue->Lock));
-            LockHeld = FALSE;
-        }
-
-        //
-        // If the wait was satisfied, as indicated by the local thread being
-        // set, fire off the thread. This must wait until it can transition
-        // the thread into the waking state as it might be competing with
-        // attempts to signal the thread.
-        //
-
-        if (Thread != NULL) {
-            while (TRUE) {
-                while (TRUE) {
-                    if (Thread->State == ThreadStateBlocked) {
+                    if (OldState == PreviousState) {
                         break;
                     }
 
-                    ArProcessorYield();
-                }
+                } while ((OldState == NotSignaledWithWaiters) ||
+                         (OldState == NotSignaled));
 
-                OldThreadState = RtlAtomicCompareExchange32(&(Thread->State),
-                                                            ThreadStateWaking,
-                                                            ThreadStateBlocked);
+                //
+                // There is no work to be done if there is nothing to wake.
+                // Break out of the loop.
+                //
 
-                if (OldThreadState == ThreadStateBlocked) {
-                    KeSetThreadReady(Thread);
-                    break;
-                }
+                break;
+
+            //
+            // Otherwise, rip an entry off the wait list. There is no guarantee
+            // that this queue will actually wake the entry. The entry could be
+            // in the process of being woken up by a different queue.
+            //
+
+            } else {
+                Entry = Queue->Waiters.Next;
+                LIST_REMOVE(Entry);
+                INSERT_BEFORE(Entry, &ReleaseList);
             }
+
+        //
+        // Everybody gets to run.
+        //
+
+        } else {
+
+            ASSERT((Signal == SignalOptionSignalAll) ||
+                   (Signal == SignalOptionPulse));
+
+            if (LIST_EMPTY(&(Queue->Waiters)) == FALSE) {
+                MOVE_LIST(&(Queue->Waiters), &ReleaseList);
+                INITIALIZE_LIST_HEAD(&(Queue->Waiters));
+            }
+        }
+
+        //
+        // Update the wait blocks of every item on the local list. The queue's
+        // lock must still be held to protect the local list's use of each wait
+        // block entry's list entry. However, as soon as the last thread has
+        // been set ready, the queue may be destroyed. So, drop the queue's
+        // lock when the list is found to be empty, but before setting the
+        // thread ready. If the last wait block has already been satisfied by
+        // another queue, that wait block's thread will not destroy this queue
+        // until it has acquired this queue's lock to remove the wait block
+        // entry off this local list.
+        //
+
+        ThreadWoken = FALSE;
+        while (LIST_EMPTY(&ReleaseList) == FALSE) {
+            Entry = ReleaseList.Next;
+            LIST_REMOVE(Entry);
+            WaitEntry = LIST_VALUE(Entry, WAIT_BLOCK_ENTRY, WaitListEntry);
+            WaitBlock = WaitEntry->WaitBlock;
+            KeAcquireSpinLock(&(WaitBlock->Lock));
+
+            //
+            // After setting the next entry to NULL, the hold on the lock is
+            // the only thing keeping the wait block from getting released or
+            // reused.
+            //
+
+            WaitEntry->WaitListEntry.Next = NULL;
+
+            ASSERT(WaitEntry->Queue == Queue);
+
+            //
+            // The built-in timer does not count towards signaling all.
+            //
+
+            if (WaitEntry != &(WaitBlock->Entry[0])) {
+
+                ASSERT(WaitBlock->UnsignaledCount != 0);
+
+                WaitBlock->UnsignaledCount -= 1;
+            }
+
+            //
+            // Determine if the signaling of this queue satisfies the wait
+            // block. The wait block must still have its thread set, indicating
+            // that no other queue has satisfied the wait and that it has not
+            // been interrrupted. If this is the built-in timer, then the wait
+            // is satisfied without a need to check the unsignaled count.
+            // Finally either all queues must have signaled or the wait block
+            // is just waiting for the first queue to do so.
+            //
+
+            Thread = NULL;
+            if ((WaitBlock->Thread != NULL) &&
+                ((WaitEntry == &(WaitBlock->Entry[0])) ||
+                 ((WaitBlock->Flags & WAIT_FLAG_ALL) == 0) ||
+                 (WaitBlock->UnsignaledCount == 0))) {
+
+                WaitBlock->SignalingQueue = Queue;
+                Thread = WaitBlock->Thread;
+                WaitBlock->Thread = NULL;
+            }
+
+            KeReleaseSpinLock(&(WaitBlock->Lock));
+
+            //
+            // If the wait was satisfied, as indicated by the local thread
+            // being set, fire off the thread.
+            //
+
+            if (Thread != NULL) {
+
+                //
+                // If the local list is now empty, release the queue lock
+                // before letting the last thread go and do not touch the queue
+                // again.
+                //
+
+                if (LIST_EMPTY(&ReleaseList) != FALSE) {
+
+                    //
+                    // If signaling for one and there are no more waiters, try
+                    // to transition the state from not signaled with waiters
+                    // to not signaled. This may race with an attempt to signal
+                    // all. It's OK to lose in that case.
+                    //
+
+                    if ((Signal == SignalOptionSignalOne) &&
+                        (LIST_EMPTY(&(Queue->Waiters)) != FALSE)) {
+
+                        RtlAtomicCompareExchange32(&(Queue->State),
+                                                   NotSignaled,
+                                                   OldState);
+                    }
+
+                    KeReleaseSpinLock(&(Queue->Lock));
+                    LockHeld = FALSE;
+                }
+
+                //
+                // This must wait until it can transition the thread into the
+                // waking state as it might be competing with attempts to
+                // signal the thread.
+                //
+
+                while (TRUE) {
+                    while (Thread->State != ThreadStateBlocked) {
+                        ArProcessorYield();
+                    }
+
+                    OldThreadState = RtlAtomicCompareExchange32(
+                                                           &(Thread->State),
+                                                           ThreadStateWaking,
+                                                           ThreadStateBlocked);
+
+                    if (OldThreadState == ThreadStateBlocked) {
+                        KeSetThreadReady(Thread);
+                        break;
+                    }
+                }
+
+                ThreadWoken = TRUE;
+            }
+        }
+
+        //
+        // Signal all or pulse attempts are done after the first loop. The list
+        // of waiters was emptied.
+        //
+
+        if (Signal != SignalOptionSignalOne) {
+            break;
+        }
+
+        //
+        // In the signal for one case, the thread of the selected wait block
+        // may not have actually been woken. In that case, this routine needs
+        // to try to wake another waiter. Otherwise, exit the loop.
+        //
+
+        if (ThreadWoken != FALSE) {
+            break;
         }
     }
 
@@ -1705,13 +1569,6 @@ Return Value:
     Thread = (PKTHREAD)ThreadToWake;
 
     //
-    // The owning process's queued lock better be held to synchronize multiple
-    // attempts to wake the thread.
-    //
-
-    ASSERT(KeIsQueuedLockHeld(Thread->OwningProcess->QueuedLock) != FALSE);
-
-    //
     // Make sure the thread moves out of one of the transitioning states
     // before attempting to wake it. The state will be checked again below
     // in case it moved to a state other than blocked or suspended.
@@ -1758,12 +1615,12 @@ Return Value:
             WaitBlock = Thread->WaitBlock;
 
             //
-            // If the wait block is interruptible, then try to wake the thread.
+            // All wait blocks are interruptible. Try to wake the thread. It
+            // may decide later to go back to waiting if it doesn't like the
+            // reason it was awoken.
             //
 
-            if ((WaitBlock->Thread != NULL) &&
-                ((WaitBlock->Flags & WAIT_FLAG_INTERRUPTIBLE) != 0)) {
-
+            if (WaitBlock->Thread != NULL) {
                 KeAcquireSpinLock(&(WaitBlock->Lock));
                 if (WaitBlock->Thread != NULL) {
                     WaitBlock->Flags |= WAIT_BLOCK_FLAG_INTERRUPTED;
@@ -1796,8 +1653,13 @@ Return Value:
 
         ASSERT(Thread->WaitBlock == NULL);
 
-        WakeThread = TRUE;
-        Thread->State = ThreadStateWaking;
+        OldThreadState = RtlAtomicCompareExchange32(&(Thread->State),
+                                                    ThreadStateWaking,
+                                                    ThreadStateSuspended);
+
+        if (OldThreadState == ThreadStateSuspended) {
+            WakeThread = TRUE;
+        }
     }
 
     //
@@ -1861,9 +1723,7 @@ Return Value:
         ASSERT(Thread->WaitBlock != NULL);
 
         WaitBlock = Thread->WaitBlock;
-        if ((WaitBlock->Thread != NULL) &&
-            ((WaitBlock->Flags & WAIT_FLAG_INTERRUPTIBLE) != 0)) {
-
+        if (WaitBlock->Thread != NULL) {
             KeAcquireSpinLock(&(WaitBlock->Lock));
             if (WaitBlock->Thread != NULL) {
                 WaitBlock->Flags |= WAIT_BLOCK_FLAG_INTERRUPTED;
@@ -2404,6 +2264,305 @@ Return Value:
     return FALSE;
 }
 
+KSTATUS
+ObpExecuteWaitBlock (
+    PWAIT_BLOCK WaitBlock,
+    PULONGLONG TimeoutInTimeTicks
+    )
+
+/*++
+
+Routine Description:
+
+    This routine executes a wait block, waiting on the given list of wait
+    queues for the specified amount of time.
+
+Arguments:
+
+    WaitBlock - Supplies a pointer to the wait block to wait for.
+
+    TimeoutInTimeTicks - Supplies a pointer to the number of time ticks
+        that the given queues should be waited on before timing out.
+        Use WAIT_TIME_INDEFINITE_TICKS to wait forever. If this routine needs
+        to be tried again, then on return this value contains the remaining
+        time to wait in time ticks.
+
+Return Value:
+
+    STATUS_SUCCESS if the wait completed successfully.
+
+    STATUS_TIMEOUT if the wait timed out.
+
+    STATUS_INTERRUPTED if the wait timed out early due to a signal.
+
+    STATUS_TRY_AGAIN if the wait was interrupted, but needs to wait again.
+
+--*/
+
+{
+
+    BOOL Block;
+    ULONG Count;
+    ULONGLONG DueTime;
+    ULONG Index;
+    BOOL LockHeld;
+    RUNLEVEL OldRunLevel;
+    PWAIT_QUEUE Queue;
+    KSTATUS Status;
+    PKTHREAD Thread;
+    BOOL TimerQueued;
+    PWAIT_BLOCK_ENTRY WaitEntry;
+
+    ASSERT((WaitBlock->Capacity != 0) &&
+           (WaitBlock->Count <= WaitBlock->Capacity));
+
+    ASSERT(WaitBlock->UnsignaledCount == 0);
+    ASSERT(WaitBlock->Entry[0].Queue == NULL);
+    ASSERT((WaitBlock->Flags & WAIT_BLOCK_FLAG_ACTIVE) == 0);
+    ASSERT(KeGetRunLevel() <= RunLevelDispatch);
+    ASSERT(WaitBlock->Thread == NULL);
+
+    Block = TRUE;
+    Count = WaitBlock->Count;
+    Thread = KeGetCurrentThread();
+    TimerQueued = FALSE;
+    Status = STATUS_SUCCESS;
+
+    //
+    // Acquire the wait block lock and loop through each object in the array.
+    //
+
+    LockHeld = TRUE;
+    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    KeAcquireSpinLock(&(WaitBlock->Lock));
+    WaitBlock->SignalingQueue = NULL;
+    for (Index = 0; Index < Count; Index += 1) {
+
+        //
+        // Tweak the order a bit, adding all the non-timer objects first and
+        // then the timer at the end. This optimizes for cases where a timed
+        // wait is immediately satisfied.
+        //
+
+        if (Index == (Count - 1)) {
+            WaitEntry = &(WaitBlock->Entry[0]);
+            WaitEntry->Queue = NULL;
+            if (*TimeoutInTimeTicks == WAIT_TIME_INDEFINITE_TICKS) {
+                continue;
+            }
+
+            DueTime = HlQueryTimeCounter() + *TimeoutInTimeTicks;
+            Status = KeQueueTimer(Thread->BuiltinTimer,
+                                  TimerQueueSoftWake,
+                                  DueTime,
+                                  0,
+                                  0,
+                                  NULL);
+
+            if (!KSUCCESS(Status)) {
+                goto WaitEnd;
+            }
+
+            TimerQueued = TRUE;
+            Queue = &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue);
+            WaitEntry->Queue = Queue;
+
+        } else {
+            WaitEntry = &(WaitBlock->Entry[Index + 1]);
+        }
+
+        Queue = WaitEntry->Queue;
+
+        ASSERT(Queue != NULL);
+        ASSERT(WaitEntry->WaitListEntry.Next == NULL);
+
+        WaitEntry->WaitBlock = WaitBlock;
+
+        //
+        // Add the wait entry onto the queue's waiters list. The normal rule
+        // of locks is that they must be acquired in the same order, and one
+        // might think this acquire here breaks the rule, since all other
+        // acquires go Queue then WaitBlock. In this case however, since the
+        // queue has not yet been added to the wait block, there is no
+        // scenario in which other code could attempt to acquire Queue then
+        // WaitBlock, as the wait block would need to be queued on the queue
+        // for those paths to run. So this is safe with this caveat.
+        //
+
+        KeAcquireSpinLock(&(Queue->Lock));
+        if (ObpWaitFast(Queue) == FALSE) {
+            INSERT_BEFORE(&(WaitEntry->WaitListEntry), &(Queue->Waiters));
+
+            //
+            // The built-in timer does not count towards a wait-all attempt so
+            // do not increment the unsignaled count for that queue.
+            //
+
+            if (Index != (Count - 1)) {
+                WaitBlock->UnsignaledCount += 1;
+            }
+
+        //
+        // If the queue has already been signaled, then determine if this setup
+        // loop can exit early.
+        //
+
+        } else {
+
+            //
+            // If this is not the last queue, then setup can exit if not all
+            // queues need to be waited on or if this is the second to last
+            // queue and there are no unsignaled queues.
+            //
+
+            if (Index != (Count - 1)) {
+                if (((WaitBlock->Flags & WAIT_FLAG_ALL) == 0) ||
+                    ((Index == (Count - 2)) &&
+                     (WaitBlock->UnsignaledCount == 0))) {
+
+                    KeReleaseSpinLock(&(Queue->Lock));
+                    WaitBlock->SignalingQueue = Queue;
+                    Block = FALSE;
+                    break;
+                }
+
+            //
+            // Otherwise this is the last queue - the built-in timer - and it
+            // expired. As the wait block lock is still held, none of the other
+            // queues have had a chance to satisfy this wait, so count this as
+            // a timeout. The loop should exit the next time around.
+            //
+
+            } else {
+                Block = FALSE;
+                WaitBlock->SignalingQueue = Queue;
+                TimerQueued = FALSE;
+                Status = STATUS_TIMEOUT;
+            }
+        }
+
+        KeReleaseSpinLock(&(Queue->Lock));
+    }
+
+    //
+    // Count the wait block as active, even if it won't block.
+    //
+
+    WaitBlock->Flags |= WAIT_BLOCK_FLAG_ACTIVE;
+
+    //
+    // If blocking, set the thread to wake so that if something is waiting to
+    // acquire the wait block lock and wake the thread, it knows which thread
+    // to wake.
+    //
+
+    if (Block != FALSE) {
+        WaitBlock->Thread = Thread;
+    }
+
+    KeReleaseSpinLock(&(WaitBlock->Lock));
+    LockHeld = FALSE;
+
+    //
+    // Block the thread if the wait condition was not satisfied above.
+    //
+
+    if (Block != FALSE) {
+
+        ASSERT(Status == STATUS_SUCCESS);
+
+        Thread->WaitBlock = WaitBlock;
+        KeSchedulerEntry(SchedulerReasonThreadBlocking);
+        Thread->WaitBlock = NULL;
+
+        //
+        // The wait may have been interrupted for a few reasons. Tease out
+        // those reasons in order of severity (i.e. how much waking they
+        // will actually do).
+        //
+
+        if ((WaitBlock->Flags & WAIT_BLOCK_FLAG_INTERRUPTED) != 0) {
+
+            ASSERT(WaitBlock->SignalingQueue == NULL);
+
+            WaitBlock->Flags &= ~ WAIT_BLOCK_FLAG_INTERRUPTED;
+
+            //
+            // If the wait was interruptible and a signal came in, then
+            // consider it interrupted and go handle the signal.
+            //
+
+            if (((WaitBlock->Flags & WAIT_FLAG_INTERRUPTIBLE) != 0) &&
+                (Thread->SignalPending == ThreadSignalPending)) {
+
+                Status = STATUS_INTERRUPTED;
+
+            //
+            // Otherwise a TPC or signal may be pending, but should not wake
+            // the thread. Try the wait again allowing TPCs to run when the run
+            // level is lowered below.
+            //
+
+            } else {
+                Status = STATUS_TRY_AGAIN;
+            }
+
+        //
+        // If it wasn't an interruption, then one of the objects actually
+        // being waited on must have caused execution to resume.
+        //
+
+        } else {
+
+            ASSERT(WaitBlock->SignalingQueue != NULL);
+
+            if (WaitBlock->SignalingQueue ==
+                &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue)) {
+
+                Status = STATUS_TIMEOUT;
+                TimerQueued = FALSE;
+            }
+        }
+
+    //
+    // Otherwise a queue signaled during initialization. Success better be on
+    // horizon unless it was a timeout and the built-in timer signaled.
+    //
+
+    } else {
+
+        ASSERT(WaitBlock->SignalingQueue != NULL);
+        ASSERT(KSUCCESS(Status) ||
+               ((Status == STATUS_TIMEOUT) &&
+                (WaitBlock->SignalingQueue ==
+                 &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue))));
+    }
+
+    if (TimerQueued != FALSE) {
+        KeCancelTimer(Thread->BuiltinTimer);
+        if (Status == STATUS_TRY_AGAIN) {
+            *TimeoutInTimeTicks = DueTime - HlQueryTimeCounter();
+            if (*TimeoutInTimeTicks > DueTime) {
+                *TimeoutInTimeTicks = 0;
+            }
+        }
+    }
+
+WaitEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseSpinLock(&(WaitBlock->Lock));
+    }
+
+    //
+    // Clean up the wait block. The index stores how many wait entries were
+    // initialized above.
+    //
+
+    ObpCleanUpWaitBlock(WaitBlock, Index);
+    KeLowerRunLevel(OldRunLevel);
+    return Status;
+}
+
 VOID
 ObpCleanUpWaitBlock (
     PWAIT_BLOCK WaitBlock,
@@ -2549,7 +2708,6 @@ Return Value:
 
     ASSERT(WaitBlock->UnsignaledCount == 0);
 
-    WaitBlock->Count = 0;
     WaitBlock->Entry[0].Queue = NULL;
     WaitBlock->Flags &= ~WAIT_BLOCK_FLAG_ACTIVE;
     return;

@@ -195,7 +195,7 @@ Return Value:
     // It is illegal for a DPC routine to block.
     //
 
-    if (Processor->DpcInProgress != FALSE) {
+    if (Processor->DpcInProgress != NULL) {
         KeCrashSystem(CRASH_DPC_FAILURE,
                       DpcCrashDpcBlocked,
                       (UINTN)(Processor->DpcInProgress),

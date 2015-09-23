@@ -647,7 +647,7 @@ Return Value:
     KSTATUS Status;
     BOOL Write;
 
-    ASSERT(KeGetRunLevel() == RunLevelLow);
+    ASSERT(KeGetRunLevel() < RunLevelDispatch);
     ASSERT(Irp->Direction == IrpDown);
 
     Disk = DeviceContext;

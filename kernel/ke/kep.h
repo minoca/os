@@ -217,7 +217,8 @@ Routine Description:
 
     This routine executes any pending DPCs on the current processor. This
     routine should only be executed internally by the scheduler. It must be
-    called at dispatch level.
+    called at dispatch level. Interrupts must be disabled upon entry, but will
+    be enabled on exit.
 
 Arguments:
 
@@ -540,6 +541,29 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+VOID
+KepExecutePendingTpcs (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine executes the current thread's pending TPCs. It must be called
+    with interrupts disabled, but will temporarily enable interrupts while
+    executing the TPCs.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
 
 --*/
 

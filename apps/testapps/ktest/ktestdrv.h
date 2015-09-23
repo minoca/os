@@ -58,6 +58,7 @@ typedef enum _KTEST_TYPE {
     KTestDescriptorStress,
     KTestPagedBlockStress,
     KTestNonPagedBlockStress,
+    KTestTpcStress,
     KTestCount
 } KTEST_TYPE, *PKTEST_TYPE;
 

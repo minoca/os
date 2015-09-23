@@ -843,7 +843,8 @@ KeDispatchSoftwareInterrupt (
 Routine Description:
 
     This routine handles a software interrupt. Consider it the ISR for
-    software interrupts.
+    software interrupts. On entry, interrupts are disabled. This routine may
+    enable interrupts, but must exit with the interrupts disabled.
 
 Arguments:
 
@@ -861,24 +862,39 @@ Return Value:
 
 {
 
+    PPROCESSOR_BLOCK ProcessorBlock;
     ULONGLONG TimeCounter;
 
     if (RunLevel == RunLevelDispatch) {
 
         //
-        // Expire any timers. Do this before the DPCs because timers often kick
-        // off DPCs.
+        // While interrupts are disabled, collect a recent snap of the time
+        // counter.
         //
 
-        TimeCounter = KeGetRecentTimeCounter();
-        KepDispatchTimers(TimeCounter);
+        ProcessorBlock = KeGetCurrentProcessorBlock();
+        TimeCounter = ProcessorBlock->Clock.CurrentTime;
 
         //
-        // Run any pending DPCs.
+        // Run any pending DPCs. This routine enters with interrupts disabled
+        // and exits with them enabled.
         //
 
         KepExecutePendingDpcs();
+
+        //
+        // Expire any timers. This does not need to be before DPCs, because any
+        // DPC queued by a timer will run immediately as the processor's run
+        // level is dispatch and the timers will queue the DPCs on the current
+        // processor.
+        //
+
+        KepDispatchTimers(TimeCounter);
         KeSchedulerEntry(SchedulerReasonDispatchInterrupt);
+        ArDisableInterrupts();
+
+    } else if (RunLevel == RunLevelTpc) {
+        KepExecutePendingTpcs();
 
     //
     // Other types of software interrupts are not known.
@@ -1062,7 +1078,9 @@ Return Value:
             //
 
             ThreadWasWoken = FALSE;
-            if (PreviousThread->SignalPending == ThreadSignalPending) {
+            if ((PreviousThread->SignalPending == ThreadSignalPending) ||
+                (LIST_EMPTY(&(PreviousThread->TpcContext.ListHead)) == FALSE)) {
+
                 ThreadWasWoken = ObWakeBlockingThread(PreviousThread);
             }
 
@@ -1087,7 +1105,9 @@ Return Value:
             // again.
             //
 
-            if (PreviousThread->SignalPending >= ThreadChildSignalPending) {
+            if ((PreviousThread->SignalPending >= ThreadChildSignalPending) ||
+                (LIST_EMPTY(&(PreviousThread->TpcContext.ListHead)) == FALSE)) {
+
                 ThreadWasWoken = ObWakeBlockingThread(PreviousThread);
 
                 ASSERT(ThreadWasWoken != FALSE);

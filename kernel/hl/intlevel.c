@@ -601,6 +601,7 @@ Return Value:
     ULONG PendingIndex;
     PPENDING_INTERRUPT PendingInterrupts;
     PPROCESSOR_BLOCK ProcessorBlock;
+    PKTHREAD Thread;
 
     //
     // Disable interrupts both to prevent scheduling to another core in the case
@@ -663,18 +664,49 @@ Return Value:
         (RunLevel < RunLevelDispatch) &&
         ((ProcessorBlock->RunLevel > RunLevelDispatch) || (Enabled != FALSE))) {
 
+        //
+        // Loop dispatching software interrupts. This must be done in a loop
+        // because interrupts will be enabled allowing new DPCs to arrive.
+        // Without the loop, the new arrivals would have to wait a clock period
+        // to run. This is unnecessarily slow.
+        //
+
         ProcessorBlock->RunLevel = RunLevelDispatch;
         while (ProcessorBlock->PendingDispatchInterrupt != FALSE) {
             ProcessorBlock->PendingDispatchInterrupt = FALSE;
-            ArEnableInterrupts();
             KeDispatchSoftwareInterrupt(RunLevelDispatch, TrapFrame);
-            ArDisableInterrupts();
+
+            //
+            // A dispatch interrupt may cause the scheduler to be invoked,
+            // causing a switch to another processor. Reload the processor
+            // block to avoid setting some other processor's runlevel.
+            //
+
+            ProcessorBlock = KeGetCurrentProcessorBlock();
+        }
+    }
+
+    //
+    // If the thread has any pending software interrupts (i.e. TPCs), then kick
+    // those off when lowering to a something less than dispatch from greater
+    // than or equal to dispatch. The same scheduler case applies here - where
+    // a request to lower the run level happens with interrupts disabled. Do
+    // not dispatch software interrupts.
+    //
+
+    Thread = ProcessorBlock->RunningThread;
+    if ((Thread != NULL) &&
+        (LIST_EMPTY(&(Thread->TpcContext.ListHead)) == FALSE) &&
+        (RunLevel < RunLevelDispatch) &&
+        ((ProcessorBlock->RunLevel > RunLevelDispatch) || (Enabled != FALSE))) {
+
+        ProcessorBlock->RunLevel = RunLevelTpc;
+        while (LIST_EMPTY(&Thread->TpcContext.ListHead) == FALSE) {
+            KeDispatchSoftwareInterrupt(RunLevelTpc, TrapFrame);
         }
 
         //
-        // A dispatch interrupt may cause the scheduler to be invoked, causing
-        // a switch to another processor. Reload the processor block to avoid
-        // setting some other processor's runlevel.
+        // Interrupts may have been enabled, causing a switch to another core.
         //
 
         ProcessorBlock = KeGetCurrentProcessorBlock();

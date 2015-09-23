@@ -77,18 +77,20 @@ Members:
     Magic - Stores a magic value used to validate that drivers are not
         attempting to create IRPs outside the system routines for doing so.
 
-    Device - Stores a copy of the device that the IRP was created for, used to
-        ensure that drivers aren't changing the device after an IRP is created.
-
     MajorCode - Stores a copy of the major code the IRP was created with, used
         to ensure that drivers aren't changing the major code after an IRP
         is allocated.
+
+    Device - Stores a copy of the device that the IRP was created for, used to
+        ensure that drivers aren't changing the device after an IRP is created.
 
     Stack - Stores the IRP stack for this IRP.
 
     StackIndex - Stores the current index into the IRP stack.
 
     StackSize - Stores the number of elements in the IRP stack.
+
+    Tpc - Stores the embedded TPC used to complete a pended IRP.
 
     Flags - Stores a set of informational flags about the IRP. See IRP_*
         definitions.
@@ -98,17 +100,24 @@ Members:
 typedef struct _IRP_INTERNAL {
     IRP Public;
     USHORT Magic;
-    PDEVICE Device;
     IRP_MAJOR_CODE MajorCode;
+    PDEVICE Device;
     PIRP_STACK_ENTRY Stack;
     ULONG StackIndex;
     ULONG StackSize;
+    TPC Tpc;
     ULONG Flags;
 } IRP_INTERNAL, *PIRP_INTERNAL;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+VOID
+IopSynchronousIrpCompletionRoutine (
+    PIRP Irp,
+    PVOID Context
+    );
 
 VOID
 IopPumpIrpThroughStack (
@@ -120,9 +129,14 @@ IopCallDriver (
     PIRP_INTERNAL Irp
     );
 
-VOID
+BOOL
 IopAdvanceIrpStackLocation (
     PIRP_INTERNAL Irp
+    );
+
+VOID
+IopProcessIrpTpcRoutine (
+    PTPC Tpc
     );
 
 //
@@ -261,12 +275,14 @@ Return Value:
         Irp->Status = StatusCode;
 
         //
-        // If the IRP is pending, nothing else is driving it. Signal the IRP
-        // to wake the sending thread to continue driving the IRP.
+        // If the IRP is pending, nothing else is driving it. Queue a TPC on
+        // the thread that pended the IRP to it can keep driving towards
+        // completion.
         //
 
         if ((InternalIrp->Flags & IRP_PENDING) != 0) {
-            ObSignalObject(Irp, SignalOptionSignalAll);
+            InternalIrp->Flags &= ~IRP_PENDING;
+            KeQueueTpc(&(InternalIrp->Tpc), NULL);
         }
     }
 
@@ -321,6 +337,7 @@ Return Value:
 
     if (DriverStackEntry->Driver == Driver) {
         InternalIrp->Flags |= IRP_PENDING;
+        KePrepareTpc(&(InternalIrp->Tpc), NULL, TRUE);
     }
 
     return;
@@ -340,9 +357,9 @@ Routine Description:
     This routine is called by a driver to continue processing an IRP that was
     previously marked pending. This function can only be called from a driver's
     dispatch routine when the driver owns the IRP and has previously called
-    IoPendIrp. The system will continue to move in the same direction it was
-    previously moving to the next location in the driver stack. This routine
-    must be called at or below dispatch level.
+    IoPendIrp. When the dispatch routine returns, the system will continue to
+    move in the same direction it was previously moving to the next location in
+    the driver stack. This routine must be called at or below dispatch level.
 
 Arguments:
 
@@ -380,8 +397,8 @@ Return Value:
     //
 
     if (DriverStackEntry->Driver == Driver) {
-        IopAdvanceIrpStackLocation(InternalIrp);
-        ObSignalObject(Irp, SignalOptionSignalAll);
+        InternalIrp->Flags &= ~IRP_PENDING;
+        KePrepareTpc(&(InternalIrp->Tpc), NULL, FALSE);
     }
 
     return;
@@ -470,13 +487,20 @@ Return Value:
     }
 
     Irp->Magic = IRP_MAGIC_VALUE;
-    Irp->Device = Device;
     Irp->MajorCode = MajorCode;
+    Irp->Device = Device;
     Irp->Public.Device = Device;
     Irp->Public.MajorCode = MajorCode;
     Irp->Flags = 0;
     Irp->Stack = NULL;
     Irp->StackIndex = 0;
+
+    //
+    // Initialize the embedded TPC to call the IRP tpc routine with the
+    // internal IRP as context.
+    //
+
+    KeInitializeTpc(&(Irp->Tpc), IopProcessIrpTpcRoutine, Irp);
 
     //
     // Figure out the size of the IRP stack, which is a chain of all the
@@ -725,10 +749,7 @@ Return Value:
     ASSERT(InternalIrp->Device != NULL);
 
     InternalIrp->Public.Status = STATUS_NOT_HANDLED;
-    InternalIrp->Flags &= ~(IRP_COMPLETE |
-                            IRP_PENDING |
-                            IRP_DRIVER_STACK_COMPLETE);
-
+    InternalIrp->Flags &= ~(IRP_COMPLETE | IRP_PENDING);
     InternalIrp->Public.CompletionRoutine = NULL;
     InternalIrp->StackIndex = 0;
     return;
@@ -808,9 +829,7 @@ Return Value:
         goto SendSynchronousIrpEnd;
     }
 
-    ASSERT((InternalIrp->Flags & (IRP_COMPLETE |
-                                  IRP_PENDING |
-                                  IRP_DRIVER_STACK_COMPLETE)) == 0);
+    ASSERT((InternalIrp->Flags & (IRP_COMPLETE | IRP_PENDING)) == 0);
 
     //
     // Initialize the event that this routine is going to be waiting on.
@@ -819,38 +838,28 @@ Return Value:
     ObSignalObject(Irp, SignalOptionUnsignal);
 
     //
-    // Pump the IRP through its driver stack.
+    // Set the IRP's completion routine to the synchronous completion routine
+    // that signals the event this function will be waiting on.
+    //
+
+    Irp->CompletionRoutine = IopSynchronousIrpCompletionRoutine;
+    Irp->CompletionContext = NULL;
+
+    //
+    // Send the IRP as far down as possible, and wait on the event indicating
+    // that it's complete.
     //
 
     InternalIrp->Flags |= IRP_ACTIVE;
-    while ((InternalIrp->Flags & IRP_DRIVER_STACK_COMPLETE) == 0) {
-        IopPumpIrpThroughStack(InternalIrp);
-
-        //
-        // If the IRP is marked pending, then wait for the event to be signaled
-        // as an indicator that it is ready to move forward.
-        //
-
-        if ((InternalIrp->Flags & IRP_PENDING) != 0) {
-            Status = ObWaitOnObject(Irp, 0, WAIT_TIME_INDEFINITE);
-            if (!KSUCCESS(Status)) {
-
-                ASSERT(FALSE);
-
-                InternalIrp->Flags &= ~IRP_ACTIVE;
-                goto SendSynchronousIrpEnd;
-            }
-
-            InternalIrp->Flags &= ~IRP_PENDING;
-        }
-    }
-
-    ASSERT(((InternalIrp->Flags & IRP_COMPLETE) != 0) ||
-           (Irp->Status == STATUS_NOT_HANDLED));
-
-    ASSERT((InternalIrp->Flags & IRP_PENDING) == 0);
-
+    IopPumpIrpThroughStack(InternalIrp);
+    Status = ObWaitOnObject(Irp, 0, WAIT_TIME_INDEFINITE);
     InternalIrp->Flags &= ~IRP_ACTIVE;
+    if (!KSUCCESS(Status)) {
+
+        ASSERT(FALSE);
+
+        goto SendSynchronousIrpEnd;
+    }
 
 SendSynchronousIrpEnd:
     return Status;
@@ -1706,6 +1715,37 @@ SendUserControlIrpEnd:
 //
 
 VOID
+IopSynchronousIrpCompletionRoutine (
+    PIRP Irp,
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when a synchronous IRP completes. It simply sets an
+    event, waking the thread that was waiting on the IRP to complete.
+
+Arguments:
+
+    Irp - Supplies a pointer to the IRP that completed.
+
+    Context - Supplies a pointer to the event to set.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ObSignalObject(Irp, SignalOptionSignalAll);
+    return;
+}
+
+VOID
 IopPumpIrpThroughStack (
     PIRP_INTERNAL Irp
     )
@@ -1730,9 +1770,12 @@ Return Value:
 
 {
 
-    ASSERT(KeGetRunLevel() == RunLevelLow);
+    BOOL IrpDone;
 
-    while ((Irp->Flags & IRP_DRIVER_STACK_COMPLETE) == 0) {
+    ASSERT(KeGetRunLevel() <= RunLevelTpc);
+
+    IrpDone = FALSE;
+    while (IrpDone == FALSE) {
 
         //
         // Call the driver at the current stack location.
@@ -1752,24 +1795,22 @@ Return Value:
         // Advance to the next driver.
         //
 
-        IopAdvanceIrpStackLocation(Irp);
+        IrpDone = IopAdvanceIrpStackLocation(Irp);
     }
 
     //
     // If the IRP is complete, call the completion routine.
     //
 
-    if ((Irp->Flags & IRP_DRIVER_STACK_COMPLETE) != 0) {
+    if (IrpDone != FALSE) {
 
         ASSERT(((Irp->Flags & IRP_COMPLETE) != 0) ||
                (Irp->Public.Status == STATUS_NOT_HANDLED));
 
         ASSERT((Irp->Flags & IRP_PENDING) == 0);
 
-        if (Irp->Public.CompletionRoutine != NULL) {
-            Irp->Public.CompletionRoutine((PIRP)Irp,
-                                          Irp->Public.CompletionContext);
-        }
+        Irp->Public.CompletionRoutine((PIRP)Irp,
+                                      Irp->Public.CompletionContext);
     }
 
     return;
@@ -1869,7 +1910,7 @@ Return Value:
     return;
 }
 
-VOID
+BOOL
 IopAdvanceIrpStackLocation (
     PIRP_INTERNAL Irp
     )
@@ -1879,9 +1920,7 @@ IopAdvanceIrpStackLocation (
 Routine Description:
 
     This routine determines what the next driver stack entry would be for the
-    given IRP, and advances the IRP's state. If there are no more driver stack
-    entries to be processed, it sets the IRP_DRIVER_STACK_COMPLETE flag in the
-    IRP.
+    given IRP, and advances the IRP's state.
 
 Arguments:
 
@@ -1890,7 +1929,9 @@ Arguments:
 
 Return Value:
 
-    None.
+    TRUE if the IRP has completed its round trip.
+
+    FALSE if the IRP still has more stack entries to go through.
 
 --*/
 
@@ -1911,7 +1952,7 @@ Return Value:
             Irp->Public.Direction = IrpUp;
         }
 
-        return;
+        return FALSE;
     }
 
     //
@@ -1922,11 +1963,41 @@ Return Value:
     ASSERT(Irp->Public.Direction == IrpUp);
 
     if (Irp->StackIndex == 0) {
-        Irp->Flags |= IRP_DRIVER_STACK_COMPLETE;
-        return;
+        return TRUE;
     }
 
     Irp->StackIndex -= 1;
+    return FALSE;
+}
+
+VOID
+IopProcessIrpTpcRoutine (
+    PTPC Tpc
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is used to process an IRP through the rest of its stack if it
+    were ever pended and then completed.
+
+Arguments:
+
+    Tpc - Supplies a pointer to the TPC that is running.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PIRP_INTERNAL InternalIrp;
+
+    InternalIrp = Tpc->UserData;
+    IopPumpIrpThroughStack(InternalIrp);
     return;
 }
 

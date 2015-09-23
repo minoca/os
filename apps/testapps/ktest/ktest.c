@@ -71,7 +71,8 @@ Environment:
     "  -p, --threads <count> -- Set the number of threads to spin up.\n"       \
     "  -t, --test -- Set the test to perform. Valid values are all, \n"        \
     "      pagedpoolstress, nonpagedpoolstress, workstress, threadstress, \n"  \
-    "      descriptorstress, pagedblockstress and nonpagedblockstress.\n"      \
+    "      descriptorstress, pagedblockstress, nonpagedblockstress and \n"     \
+    "      tpcstress.\n"                                                       \
     "  --debug -- Print lots of information about what's happening.\n"         \
     "  --quiet -- Print only errors.\n"                                        \
     "  --no-cleanup -- Leave test files around for debugging.\n"               \
@@ -126,6 +127,11 @@ KTestSendStartRequest (
     PINT HandleCount
     );
 
+void
+KTestSignalHandler (
+    int Signal
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -166,6 +172,7 @@ PSTR KTestNames[KTestCount] = {
     "descriptorstress",
     "pagedblockstress",
     "nonpagedblockstress",
+    "tpcstress",
 };
 
 //
@@ -173,6 +180,12 @@ PSTR KTestNames[KTestCount] = {
 //
 
 UUID KTestTestDeviceInformationUuid = TEST_DEVICE_INFORMATION_UUID;
+
+//
+// Stores a boolean indicating if a cancellation request was received.
+//
+
+BOOL KTestCancelAllTests = FALSE;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -210,13 +223,16 @@ Return Value:
     PSTR AfterScan;
     BOOL AllDone;
     BOOL AnyProgress;
+    KTEST_CANCEL_TEST Cancel;
     INT DriverHandle;
     INT Failures;
     INT HandleCount;
     INT HandleIndex;
     INT Option;
+    struct sigaction OriginalSigIntAction;
     ULONGLONG Percent;
     KTEST_POLL Poll;
+    struct sigaction SigIntAction;
     KTEST_START_TEST Start;
     INT Status;
     KSTATUS StatusCode;
@@ -455,6 +471,18 @@ Return Value:
         }
     }
 
+    if ((Test == KTestAll) || (Test == KTestTpcStress)) {
+        Status = KTestSendStartRequest(DriverHandle,
+                                       KTestTpcStress,
+                                       &Start,
+                                       &HandleCount);
+
+        if (Status != 0) {
+            PRINT_ERROR("Failed to send start request.\n");
+            Failures += 1;
+        }
+    }
+
     //
     // Poll the tests until they are all complete.
     //
@@ -462,6 +490,22 @@ Return Value:
     if (HandleCount == 0) {
         PRINT_ERROR("Error: No tests were started.\n");
         Failures += 1;
+        goto MainEnd;
+    }
+
+    //
+    // Handle cancellation signals.
+    //
+
+    memset(&SigIntAction, 0, sizeof(struct sigaction));
+    SigIntAction.sa_handler = KTestSignalHandler;
+    Status = sigaction(SIGINT, &SigIntAction, &OriginalSigIntAction);
+    if (Status != 0) {
+        PRINT_ERROR("Error: Failed to set SIGINT handler: %s.\n",
+                    strerror(errno));
+
+        Failures += 1;
+        KTestCancelAllTests = TRUE;
         goto MainEnd;
     }
 
@@ -536,6 +580,7 @@ Return Value:
                 case KTestWorkStress:
                 case KTestThreadStress:
                 case KTestDescriptorStress:
+                case KTestTpcStress:
                     break;
 
                 case KTestPagedBlockStress:
@@ -566,10 +611,45 @@ Return Value:
             sleep(1);
         }
 
+        //
+        // Kick out of the loop of all tests need to be canceled.
+        //
+
+        if (KTestCancelAllTests != FALSE) {
+            break;
+        }
+
     } while (AllDone == FALSE);
+
+    Status = sigaction(SIGINT, &OriginalSigIntAction, NULL);
+    if (Status != 0) {
+        PRINT_ERROR("Error: Failed to restore SIGINT action: %s.\n",
+                    strerror(errno));
+
+        Failures += 1;
+    }
 
 MainEnd:
     PRINT("\n");
+    if (KTestCancelAllTests != FALSE) {
+        for (HandleIndex = 0; HandleIndex < HandleCount; HandleIndex += 1) {
+            Cancel.Handle = KTestProgress[HandleIndex].Handle;
+            Cancel.Status = STATUS_SUCCESS;
+            Status = ioctl(DriverHandle, KTestRequestCancelTest, &Cancel);
+            if (Status != 0) {
+                PRINT_ERROR("Error: Failed to cacnel: %s.\n", strerror(errno));
+                Failures += 1;
+                continue;
+            }
+
+            if (!KSUCCESS(Cancel.Status)) {
+                PRINT_ERROR("Error: Cancel returned %x.\n", Cancel.Status);
+                Failures += 1;
+                continue;
+            }
+        }
+    }
+
     if (DriverHandle != -1) {
         Status = ioctl(DriverHandle, KTestRequestUnload, NULL);
         if (Status != 0) {
@@ -869,5 +949,34 @@ Return Value:
     KTestProgress[*HandleCount].PreviousPercent = 0;
     *HandleCount += 1;
     return 0;
+}
+
+void
+KTestSignalHandler (
+    int Signal
+    )
+
+/*++
+
+Routine Description:
+
+    This routine handles the SIGINT signal while running the kernel test.
+
+Arguments:
+
+    Signal - Supplies the signal number that fired.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    assert(Signal == SIGINT);
+
+    KTestCancelAllTests = TRUE;
+    return;
 }
 

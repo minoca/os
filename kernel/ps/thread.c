@@ -1227,6 +1227,20 @@ Return Value:
     Process = Thread->OwningProcess;
 
     //
+    // This thread is going down. Ignore any already pending signals (like the
+    // kill signal that possibly caused the termination).
+    //
+
+    Thread->SignalPending = ThreadNoSignalPending;
+
+    //
+    // Flush any outstanding TPCs. These need all of the thread's state to
+    // complete.
+    //
+
+    KeFlushTpcs();
+
+    //
     // Free the user mode stack before decrementing the thread count.
     //
 
@@ -1438,6 +1452,8 @@ Return Value:
     NewThread->SchedulerEntry.Type = SchedulerEntryThread;
     NewThread->SchedulerEntry.Parent = CurrentThread->SchedulerEntry.Parent;
     NewThread->ThreadPointer = PsInitialThreadPointer;
+    INITIALIZE_LIST_HEAD(&(NewThread->TpcContext.ListHead));
+    KeInitializeSpinLock(&(NewThread->TpcContext.Lock));
 
     //
     // Add an extra reference if desired. This is used so that the creator can

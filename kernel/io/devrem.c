@@ -292,7 +292,9 @@ Return Value:
     // Officially close the work queue.
     //
 
+    KeAcquireQueuedLock(Device->QueueLock);
     Device->QueueState = DeviceQueueClosed;
+    KeReleaseQueuedLock(Device->QueueLock);
 
     //
     // Release the device lock to let everyone else waiting on the state see
@@ -518,13 +520,15 @@ Return Value:
             PreviousStateIndex = DEVICE_STATE_HISTORY - 1;
         }
 
+        PreviousState = CurrentDevice->StateHistory[PreviousStateIndex];
+        IopSetDeviceState(CurrentDevice, PreviousState);
+
         //
         // Modify the device's queue back to the correct state. This depends on
         // the current queue state and the previous device state.
         //
 
-        PreviousState = CurrentDevice->StateHistory[PreviousStateIndex];
-        IopSetDeviceState(CurrentDevice, PreviousState);
+        KeAcquireQueuedLock(Device->QueueLock);
 
         //
         // Devices with closed queues should never need to be rolled back.
@@ -554,6 +558,8 @@ Return Value:
                 CurrentDevice->QueueState = DeviceQueueOpen;
             }
         }
+
+        KeReleaseQueuedLock(Device->QueueLock);
 
         //
         // Signal anyone waiting on this device's removal state. It will no

@@ -157,3 +157,28 @@ Return Value:
 
 --*/
 
+KSTATUS
+KTestTpcStressStart (
+    PKTEST_START_TEST Command,
+    PKTEST_ACTIVE_TEST Test
+    );
+
+/*++
+
+Routine Description:
+
+    This routine starts a new invocation of the Thread Procedure Call (TPC)
+    stress test.
+
+Arguments:
+
+    Command - Supplies a pointer to the start command.
+
+    Test - Supplies a pointer to the active test structure to initialize.
+
+Return Value:
+
+    Status code.
+
+--*/
+

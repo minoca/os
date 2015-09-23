@@ -34,6 +34,7 @@ OBJS = ktestdrv.o    \
        testsup.o     \
        tpool.o       \
        tthread.o     \
+       ttpc.o        \
        twork.o       \
 
 DYNLIBS = $(BINROOT)/kernel             \

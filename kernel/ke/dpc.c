@@ -328,8 +328,6 @@ Return Value:
 
 {
 
-    volatile ULONG *UseCount;
-
     //
     // If the runlevel were dispatch or higher and the DPC was queued on this
     // processor, it would never run. It's OK if the runlevel is dispatch and
@@ -340,8 +338,7 @@ Return Value:
            ((KeGetRunLevel() == RunLevelDispatch) &&
             (Dpc->Processor != KeGetCurrentProcessorNumber())));
 
-    UseCount = &(Dpc->UseCount);
-    while (*UseCount != 0) {
+    while (Dpc->UseCount != 0) {
         ArProcessorYield();
     }
 
@@ -359,7 +356,8 @@ Routine Description:
 
     This routine executes any pending DPCs on the current processor. This
     routine should only be executed internally by the scheduler. It must be
-    called at dispatch level.
+    called at dispatch level. Interrupts must be disabled upon entry, but will
+    be enabled on exit.
 
 Arguments:
 
@@ -375,7 +373,6 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PDPC Dpc;
-    BOOL Enabled;
     LIST_ENTRY LocalList;
     CYCLE_ACCOUNT PreviousPeriod;
     PPROCESSOR_BLOCK ProcessorBlock;
@@ -389,6 +386,7 @@ Return Value:
     //
 
     if (LIST_EMPTY(&(ProcessorBlock->DpcList)) != FALSE) {
+        ArEnableInterrupts();
         return;
     }
 
@@ -400,7 +398,6 @@ Return Value:
     // list and mark that each entry is no longer queued on said list.
     //
 
-    Enabled = ArDisableInterrupts();
     KeAcquireSpinLock(&(ProcessorBlock->DpcLock));
     if (LIST_EMPTY(&(ProcessorBlock->DpcList)) == FALSE) {
         MOVE_LIST(&(ProcessorBlock->DpcList), &LocalList);
@@ -414,9 +411,14 @@ Return Value:
     }
 
     KeReleaseSpinLock(&(ProcessorBlock->DpcLock));
-    if (Enabled != FALSE) {
-        ArEnableInterrupts();
-    }
+    ArEnableInterrupts();
+
+    //
+    // Set the clock to periodic mode before executing the DPCs. A DPC may
+    // depend on the clock making forward progress (e.g. a timeout may be
+    // implemented using recent snaps of the time counter rather than querying
+    // the hardware directly).
+    //
 
     if (LIST_EMPTY(&LocalList) == FALSE) {
         KepSetClockToPeriodic(ProcessorBlock);
@@ -539,6 +541,7 @@ Return Value:
         (Processor->RunLevel <= RunLevelDispatch) &&
         (Enabled != FALSE)) {
 
+        RtlAtomicAdd32(&(Dpc->UseCount), 1);
         OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
         if (Enabled != FALSE) {
             ArEnableInterrupts();
@@ -546,6 +549,7 @@ Return Value:
 
         Dpc->DpcRoutine(Dpc);
         KeLowerRunLevel(OldRunLevel);
+        RtlAtomicAdd32(&(Dpc->UseCount), -1);
 
     //
     // Really queue the DPC on the destination processor.
@@ -589,3 +593,4 @@ Return Value:
 
     return;
 }
+

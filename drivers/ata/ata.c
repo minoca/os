@@ -691,7 +691,7 @@ Return Value:
     KSTATUS Status;
     BOOL Write;
 
-    ASSERT(KeGetRunLevel() == RunLevelLow);
+    ASSERT(KeGetRunLevel() < RunLevelDispatch);
 
     Device = (PATA_CHILD)Irp->U.ReadWrite.DeviceContext;
     if (Device->Type != AtaChildContext) {

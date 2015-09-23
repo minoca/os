@@ -1367,6 +1367,12 @@ Return Value:
         goto CreateDeviceEnd;
     }
 
+    Device->QueueLock = KeCreateQueuedLock();
+    if (Device->QueueLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CreateDeviceEnd;
+    }
+
     //
     // Initialize the active child list.
     //
@@ -1680,7 +1686,7 @@ Return Value:
     //
 
     NewWorkItemNeeded = TRUE;
-    KeAcquireSharedExclusiveLockExclusive(Device->Lock);
+    KeAcquireQueuedLock(Device->QueueLock);
     OldQueueState = Device->QueueState;
     if (Device->QueueState == DeviceQueueActiveClosing) {
         Status = STATUS_DEVICE_QUEUE_CLOSING;
@@ -1714,7 +1720,7 @@ Return Value:
         Status = STATUS_NO_ELIGIBLE_DEVICES;
     }
 
-    KeReleaseSharedExclusiveLockExclusive(Device->Lock);
+    KeReleaseQueuedLock(Device->QueueLock);
     if (!KSUCCESS(Status)) {
         goto QueueDeviceWorkEnd;
     }
@@ -1740,7 +1746,7 @@ Return Value:
             // create a work item.
             //
 
-            KeAcquireSharedExclusiveLockExclusive(Device->Lock);
+            KeAcquireQueuedLock(Device->QueueLock);
 
             //
             // If the queue was active and work item creation failed, revert to
@@ -1758,7 +1764,7 @@ Return Value:
             //
 
             LIST_REMOVE(&(NewEntry->ListEntry));
-            KeReleaseSharedExclusiveLockExclusive(Device->Lock);
+            KeReleaseQueuedLock(Device->QueueLock);
             goto QueueDeviceWorkEnd;
         }
     }
@@ -2034,7 +2040,7 @@ Return Value:
         //
 
         QueueClosed = FALSE;
-        KeAcquireSharedExclusiveLockExclusive(Device->Lock);
+        KeAcquireQueuedLock(Device->QueueLock);
 
         //
         // If the queue is empty, this work item is finished.
@@ -2080,7 +2086,7 @@ Return Value:
             }
         }
 
-        KeReleaseSharedExclusiveLockExclusive(Device->Lock);
+        KeReleaseQueuedLock(Device->QueueLock);
 
         //
         // If no work was found, end this work item.
