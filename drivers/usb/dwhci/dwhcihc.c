@@ -545,7 +545,6 @@ Return Value:
     Controller->BlockAllocator = MmCreateBlockAllocator(
                                          sizeof(DWHCI_TRANSFER),
                                          DWHCI_BLOCK_ALLOCATOR_ALIGNMENT,
-                                         TRUE,
                                          DWHCI_BLOCK_ALLOCATOR_EXPANSION_COUNT,
                                          BLOCK_ALLOCATOR_FLAG_NON_PAGED,
                                          DWHCI_BLOCK_ALLOCATION_TAG);

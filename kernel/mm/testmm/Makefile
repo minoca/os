@@ -53,7 +53,7 @@ OBJS = stubs.o    \
 
 ARMV7_OBJS = armv7/mapping.o  \
 
-ARMV6_OBJS = armv7/mapping.o \
+ARMV6_OBJS = armv7/mapping.o  \
 
 X86_OBJS = x86/mapping.o  \
 
@@ -61,7 +61,7 @@ X86_OBJS = x86/mapping.o  \
 ## TODO: Use the x64 mapping.o once mm is implemented.
 ##
 
-X64_OBJS = x86/mapping.o 
+X64_OBJS = x86/mapping.o
 
 EXTRA_SRC_DIRS = x86 armv7
 

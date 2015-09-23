@@ -1110,7 +1110,6 @@ Return Value:
         BlockAllocator = MmCreateBlockAllocator(
                              FLT_SIZE + PAGE_SIZE,
                              FLT_ALIGNMENT,
-                             TRUE,
                              MM_PAGE_DIRECTORY_BLOCK_ALLOCATOR_EXPANSION_COUNT,
                              Flags,
                              MM_PAGE_DIRECTORY_BLOCK_ALLOCATION_TAG);
@@ -3487,7 +3486,7 @@ Return Value:
         return;
     }
 
-    ArCleanCacheLine(PageTableEntry);
+    MmpCleanCacheLine(PageTableEntry);
     return;
 }
 

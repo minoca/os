@@ -3187,7 +3187,7 @@ Return Value:
             ASSERT(CompleteTransfer->Protected.Type < UsbTransferTypeCount);
 
             RtlDebugPrint(
-                     "USB: Transfer (0x%08x) %s device %x, EP%x, %s, "
+                     "USB: Transfer (0x%08x) %s dev %x, EP%x, %s, "
                      "Buffer %x, Length 0x%x\n",
                      Transfer,
                      UsbTransferDirectionStrings[Transfer->Direction],
@@ -3339,8 +3339,8 @@ SubmitTransferEnd:
                  CompleteTransfer->Protected.DeviceAddress)) {
 
             RtlDebugPrint(
-                     "USB: Failure: Did not submit transfer (0x%08x) %s "
-                     "device %d, EP%d, %s, Buffer %x, Length %x. Status 0x%x\n",
+                     "USB: Submit failed, transfer (0x%08x) %s "
+                     "dev %d, EP%x, %s, Buffer %x, Len %x. Status 0x%x\n",
                      Transfer,
                      UsbTransferDirectionStrings[Transfer->Direction],
                      CompleteTransfer->Protected.DeviceAddress,

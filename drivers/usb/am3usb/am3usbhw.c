@@ -46,6 +46,12 @@ Environment:
     HlWriteRegister32((_Controller)->ControllerBase + (_Register), (_Value))
 
 //
+// This macro shifts the given mode out for the given endpoint.
+//
+
+#define AM3_USB_MODE(_Mode, _Endpoint) ((_Mode) << ((_Endpoint) * 2))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -60,6 +66,19 @@ Environment:
 //
 
 #define AM3_USB_INTERRUPT1_MENTOR 0x00000200
+#define AM3_USB_INTERRUPT1_VBUS_CHANGE 0x00000100
+
+#define AM3_USB_INTERRUPT1_MENTOR_COMPATIBLE_MASK 0x000000FF
+
+//
+// Define TX/RX mode modes.
+//
+
+#define AM3_USB_MODE_TRANSPARENT 0x0
+#define AM3_USB_MODE_RNDIS 0x1
+#define AM3_USB_MODE_CDC 0x2
+#define AM3_USB_MODE_GENERIC_RNDIS 0x3
+#define AM3_USB_MODE_MASK 0x3
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -139,7 +158,8 @@ typedef enum _AM3_USB_CONTROL_REGISTER {
 KSTATUS
 Am3UsbssInitializeControllerState (
     PAM3_USBSS_CONTROLLER Controller,
-    PVOID RegisterBase
+    PVOID RegisterBase,
+    PCPPI_DMA_CONTROLLER CppiDma
     )
 
 /*++
@@ -156,6 +176,8 @@ Arguments:
     RegisterBase - Supplies the virtual address of the registers for the
         device.
 
+    CppiDma - Supplies a pointer to the CPPI DMA controller.
+
 Return Value:
 
     Status code.
@@ -165,6 +187,7 @@ Return Value:
 {
 
     Controller->ControllerBase = RegisterBase;
+    Controller->CppiDma = CppiDma;
     return STATUS_SUCCESS;
 }
 
@@ -234,10 +257,10 @@ Return Value:
     } while ((Value & AM335_USBSS_SYSCONFIG_SOFT_RESET) != 0);
 
     //
-    // Disable all interrupts.
+    // Enable interrupts for DMA completion.
     //
 
-    AM3_WRITE_USBSS(Controller, Am3UsbssInterruptEnableClear, 0xFFFFFFFF);
+    AM3_WRITE_USBSS(Controller, Am3UsbssInterruptEnableSet, 0xFFFFFFFF);
     AM3_WRITE_USBSS(Controller, Am3UsbssInterruptDmaEnable0, 0);
     AM3_WRITE_USBSS(Controller, Am3UsbssInterruptDmaEnable1, 0);
     AM3_WRITE_USBSS(Controller, Am3UsbssInterruptFrameEnable0, 0);
@@ -270,8 +293,51 @@ Return Value:
 
 {
 
-    RtlDebugPrint("UsbSS interrupt!\n");
-    return InterruptStatusNotClaimed;
+    PAM3_USBSS_CONTROLLER Controller;
+    INTERRUPT_STATUS InterruptStatus;
+    ULONG Status;
+
+    InterruptStatus = InterruptStatusNotClaimed;
+    Controller = Context;
+    Status = AM3_READ_USBSS(Controller, Am3UsbssInterruptStatus);
+    if (Status != 0) {
+        InterruptStatus = InterruptStatusClaimed;
+        AM3_WRITE_USBSS(Controller, Am3UsbssInterruptStatus, Status);
+    }
+
+    return InterruptStatus;
+}
+
+INTERRUPT_STATUS
+Am3UsbssInterruptServiceDpc (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the USBSS dispatch level interrupt service routine.
+
+Arguments:
+
+    Context - Supplies the context pointer given to the system when the
+        interrupt was connected. In this case, this points to the EHCI
+        controller.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+{
+
+    PAM3_USBSS_CONTROLLER Controller;
+
+    Controller = Context;
+    CppiInterruptServiceDispatch(Controller->CppiDma);
+    return InterruptStatusClaimed;
 }
 
 INTERRUPT_STATUS
@@ -317,7 +383,21 @@ Return Value:
             AM3_WRITE_USBCTRL(Controller, Am3UsbInterruptStatus1, Status1);
         }
 
-        InterruptStatus = MusbInterruptService(&(Controller->MentorUsb));
+        //
+        // This is ordinarily where the Mentor interrupt service routine would
+        // be called. Since the AM3 USB Control module is not in legacy mode,
+        // those interrupts show up here rather than in the Mentor registers.
+        // Feed them directly into the Mentor controller structure and then let
+        // the Mentor code process them at dispatch level.
+        //
+
+        RtlAtomicOr32(&(Controller->MentorUsb.PendingEndpointInterrupts),
+                      Status0);
+
+        RtlAtomicOr32(&(Controller->MentorUsb.PendingUsbInterrupts),
+                      Status1 & AM3_USB_INTERRUPT1_MENTOR_COMPATIBLE_MASK);
+
+        InterruptStatus = InterruptStatusClaimed;
     }
 
     return InterruptStatus;
@@ -379,26 +459,83 @@ Return Value:
     KSTATUS Status;
 
     //
-    // Set legacy mode so that the mentor registers get the interrupt bits.
+    // Set non-legacy mode so that the USB Control module gets the interrupts.
+    // This also disables global RNDIS mode.
     //
 
-    AM3_WRITE_USBCTRL(Controller,
-                      Am3UsbControl,
-                      AM3_USB_CONTROL_LEGACY_INTERRUPTS);
+    AM3_WRITE_USBCTRL(Controller, Am3UsbControl, 0);
 
     //
     // Enable all interrupts.
     //
 
     AM3_WRITE_USBCTRL(Controller, Am3UsbInterruptEnableSet0, 0xFFFFFFFF);
-    AM3_WRITE_USBCTRL(Controller, Am3UsbInterruptEnableSet1, 0xFFFFFFFF);
+    AM3_WRITE_USBCTRL(Controller,
+                      Am3UsbInterruptEnableSet1,
+                      AM3_USB_INTERRUPT1_MENTOR_COMPATIBLE_MASK);
+
     Status = MusbResetController(&(Controller->MentorUsb));
     if (!KSUCCESS(Status)) {
         goto ControlResetEnd;
     }
 
+    //
+    // Set all DMA modes to transparent.
+    //
+
+    AM3_WRITE_USBCTRL(Controller, Am3UsbTxMode, 0);
+    AM3_WRITE_USBCTRL(Controller, Am3UsbRxMode, 0);
+
 ControlResetEnd:
     return Status;
+}
+
+VOID
+Am3UsbRequestTeardown (
+    PCPPI_DMA_CONTROLLER CppiDma,
+    ULONG Instance,
+    ULONG Endpoint,
+    BOOL Transmit
+    )
+
+/*++
+
+Routine Description:
+
+    This routine requests a teardown in the USBOTG control module.
+
+Arguments:
+
+    CppiDma - Supplies a pointer to the CPPI DMA controller.
+
+    Instance - Supplies the USB instance number requesting a teardown.
+
+    Endpoint - Supplies the zero-based DMA endpoint to tear down.
+
+    Transmit - Supplies a boolean indicating whether this is a transmit (TRUE)
+        or receive (FALSE) operation.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PAM3_USB_CONTROL Control;
+    PAM3_USB_CONTROLLER Controller;
+    ULONG Value;
+
+    Controller = PARENT_STRUCTURE(CppiDma, AM3_USB_CONTROLLER, CppiDma);
+    Control = &(Controller->Usb[Instance]);
+    Value = 1 << CPPI_DMA_ENDPOINT_TO_USB(Endpoint);
+    if (Transmit != FALSE) {
+        Value <<= 16;
+    }
+
+    AM3_WRITE_USBCTRL(Control, Am3UsbTearDown, Value);
+    return;
 }
 
 //

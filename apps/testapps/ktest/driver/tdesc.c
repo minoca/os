@@ -183,7 +183,6 @@ Return Value:
 
     NonPagedAllocator = MmCreateBlockAllocator(BlockSize,
                                                1,
-                                               TRUE,
                                                1,
                                                Flags,
                                                KTEST_ALLOCATION_TAG);

@@ -61,6 +61,8 @@ Members:
 
     ControllerBase - Stores the virtual address of the hardware registers.
 
+    CppiDma - Stores a pointer to the CPPI DMA controller.
+
 --*/
 
 typedef struct _AM3_USBSS_CONTROLLER {
@@ -68,6 +70,7 @@ typedef struct _AM3_USBSS_CONTROLLER {
     ULONGLONG InterruptVector;
     HANDLE InterruptHandle;
     PVOID ControllerBase;
+    PCPPI_DMA_CONTROLLER CppiDma;
 } AM3_USBSS_CONTROLLER, *PAM3_USBSS_CONTROLLER;
 
 /*++
@@ -112,6 +115,8 @@ Members:
 
     UsbSs - Stores the USBSS controller.
 
+    CppiDma - Stores the CPPI DMA controller.
+
     Usb - Stores the USB control definitions.
 
     UsbCore - Stores the two Mentor USB controller contexts.
@@ -120,6 +125,7 @@ Members:
 
 typedef struct _AM3_USB_CONTROLLER {
     AM3_USBSS_CONTROLLER UsbSs;
+    CPPI_DMA_CONTROLLER CppiDma;
     AM3_USB_CONTROL Usb[AM3_USB_COUNT];
     MUSB_CONTROLLER UsbCore[AM3_USB_COUNT];
 } AM3_USB_CONTROLLER, *PAM3_USB_CONTROLLER;
@@ -135,7 +141,8 @@ typedef struct _AM3_USB_CONTROLLER {
 KSTATUS
 Am3UsbssInitializeControllerState (
     PAM3_USBSS_CONTROLLER Controller,
-    PVOID RegisterBase
+    PVOID RegisterBase,
+    PCPPI_DMA_CONTROLLER CppiDma
     );
 
 /*++
@@ -151,6 +158,8 @@ Arguments:
 
     RegisterBase - Supplies the virtual address of the registers for the
         device.
+
+    CppiDma - Supplies a pointer to the CPPI DMA controller.
 
 Return Value:
 
@@ -212,6 +221,29 @@ Am3UsbssInterruptService (
 Routine Description:
 
     This routine implements the USBSS interrupt service routine.
+
+Arguments:
+
+    Context - Supplies the context pointer given to the system when the
+        interrupt was connected. In this case, this points to the EHCI
+        controller.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+INTERRUPT_STATUS
+Am3UsbssInterruptServiceDpc (
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the USBSS dispatch level interrupt service routine.
 
 Arguments:
 

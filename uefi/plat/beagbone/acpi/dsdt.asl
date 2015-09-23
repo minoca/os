@@ -118,9 +118,9 @@ DefinitionBlock (
                             NonCacheable, ReadWrite,
                             0x00000000,
                             0x47400000,
-                            0x47404FFF,
+                            0x47407FFF,
                             0x00000000,
-                            0x00005000)
+                            0x00008000)
 
                 Interrupt(, Level, ActiveHigh,) {17}
                 Interrupt(, Level, ActiveHigh,) {18}

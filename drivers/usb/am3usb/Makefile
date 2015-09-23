@@ -28,6 +28,7 @@ BINPLACE = bin
 
 OBJS = am3usb.o       \
        am3usbhw.o     \
+       cppi.o         \
        musb.o         \
 
 INCLUDES += ..;$(SRCROOT)/os/drivers/usb/usbcore/inc;

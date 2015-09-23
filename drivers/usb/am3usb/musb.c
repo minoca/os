@@ -57,6 +57,13 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+VOID
+MusbpCppiDmaCompletionCallback (
+    PVOID Context,
+    ULONG DmaEndpoint,
+    BOOL Transmit
+    );
+
 KSTATUS
 MusbpCreateEndpoint (
     PVOID HostControllerContext,
@@ -276,7 +283,7 @@ MusbpReleaseLock (
 // Set this boolean to disable DMA. This must be set before endpoint creation.
 //
 
-BOOL MusbDisableDma = TRUE;
+BOOL MusbDisableDma = FALSE;
 
 USB_HOST_CONTROLLER_INTERFACE MusbUsbHostInterfaceTemplate = {
     USB_HOST_CONTROLLER_INTERFACE_VERSION,
@@ -340,7 +347,9 @@ MusbInitializeControllerState (
     PMUSB_CONTROLLER Controller,
     PVOID RegisterBase,
     PDRIVER Driver,
-    PHYSICAL_ADDRESS PhysicalBase
+    PHYSICAL_ADDRESS PhysicalBase,
+    PCPPI_DMA_CONTROLLER DmaController,
+    UCHAR Instance
     )
 
 /*++
@@ -362,6 +371,11 @@ Arguments:
 
     PhysicalBase - Supplies the physical address of the controller.
 
+    DmaController - Supplies an optional pointer to the DMA controller to use.
+
+    Instance - Supplies the instance ID to pass into the potentially shared
+        DMA controller.
+
 Return Value:
 
     Status code.
@@ -378,11 +392,20 @@ Return Value:
     Controller->Driver = Driver;
     Controller->PhysicalBase = PhysicalBase;
     Controller->NextEndpointAssignment = 1;
+    Controller->CppiDma = DmaController;
+    Controller->Instance = Instance;
     KeInitializeSpinLock(&(Controller->Lock));
     for (Index = 0; Index < MUSB_MAX_ENDPOINTS; Index += 1) {
         Endpoint = &(Controller->Endpoints[Index]);
         INITIALIZE_LIST_HEAD(&(Endpoint->TransferList));
         Endpoint->CurrentEndpoint = NULL;
+    }
+
+    if (DmaController != NULL) {
+        CppiRegisterCompletionCallback(DmaController,
+                                       Instance,
+                                       MusbpCppiDmaCompletionCallback,
+                                       Controller);
     }
 
     Status = STATUS_SUCCESS;
@@ -683,6 +706,54 @@ Return Value:
 // --------------------------------------------------------- Internal Functions
 //
 
+VOID
+MusbpCppiDmaCompletionCallback (
+    PVOID Context,
+    ULONG DmaEndpoint,
+    BOOL Transmit
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when CPPI receives an interrupt telling it that a
+    queue completion occurred.
+
+Arguments:
+
+    Context - Supplies an opaque pointer's worth of context for the callback
+        routine.
+
+    DmaEndpoint - Supplies the zero-based DMA endpoint number. Add 1 to get
+        to a USB endpoint number.
+
+    Transmit - Supplies a boolean indicating if this is a transmit completion
+        (TRUE) or a receive completion (FALSE).
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PMUSB_CONTROLLER Controller;
+    ULONG Endpoint;
+    ULONG Mask;
+
+    Controller = Context;
+    Endpoint = CPPI_DMA_ENDPOINT_TO_USB(DmaEndpoint);
+    Mask = 1 << Endpoint;
+    if (Transmit == FALSE) {
+        Mask <<= 16;
+    }
+
+    MusbpProcessEndpointInterrupts(Controller, Mask);
+    return;
+}
+
 KSTATUS
 MusbpCreateEndpoint (
     PVOID HostControllerContext,
@@ -735,9 +806,11 @@ Return Value:
         ((Endpoint->Speed == UsbDeviceSpeedFull) &&
          (Endpoint->Type == UsbTransferTypeIsochronous))) {
 
-        PollRate = RtlCountTrailingZeros32(PollRate) + 1;
-        if (PollRate > 16) {
-            PollRate = 16;
+        if (PollRate != 0) {
+            PollRate = RtlCountTrailingZeros32(PollRate) + 1;
+            if (PollRate > 16) {
+                PollRate = 16;
+            }
         }
     }
 
@@ -823,10 +896,11 @@ Return Value:
         SoftEndpoint->Direction = UsbTransferDirectionOut;
 
     } else {
-        if (MusbDisableDma == FALSE) {
+        if ((MusbDisableDma == FALSE) && (Controller->CppiDma != NULL)) {
             Control = 0;
             if (Endpoint->Direction == UsbTransferDirectionOut) {
-                Control |= MUSB_TX_CONTROL_DMA_ENABLE;
+                Control |= MUSB_TX_CONTROL_DMA_ENABLE |
+                           MUSB_TX_CONTROL_DMA_MODE;
 
             } else {
 
@@ -1177,11 +1251,15 @@ Return Value:
 {
 
     UINTN AllocationSize;
+    PMUSB_CONTROLLER Controller;
+    ULONG Index;
     PMUSB_SOFT_ENDPOINT SoftEndpoint;
     KSTATUS Status;
+    PMUSB_TRANSFER Transfer;
     ULONG TransferCount;
     PMUSB_TRANSFER_SET TransferSet;
 
+    Controller = HostControllerContext;
     SoftEndpoint = EndpointContext;
     TransferCount = 0;
 
@@ -1214,11 +1292,39 @@ Return Value:
     RtlZeroMemory(TransferSet, AllocationSize);
     TransferSet->MaxCount = TransferCount;
     TransferSet->Transfers = (PMUSB_TRANSFER)(TransferSet + 1);
+    if ((SoftEndpoint->HardwareIndex != 0) &&
+        (MusbDisableDma == FALSE) &&
+        (Controller->CppiDma != NULL)) {
+
+        Transfer = TransferSet->Transfers;
+        for (Index = 0; Index < TransferCount; Index += 1) {
+            Status = CppiCreateDescriptor(Controller->CppiDma,
+                                          Controller->Instance,
+                                          &(Transfer->DmaData));
+
+            if (!KSUCCESS(Status)) {
+                goto CreateTransferEnd;
+            }
+
+            Transfer += 1;
+        }
+    }
+
     Status = STATUS_SUCCESS;
 
 CreateTransferEnd:
     if (!KSUCCESS(Status)) {
         if (TransferSet != NULL) {
+            Transfer = TransferSet->Transfers;
+            for (Index = 0; Index < TransferCount; Index += 1) {
+                if (Transfer->DmaData.Descriptor != NULL) {
+                    CppiDestroyDescriptor(Controller->CppiDma,
+                                          &(Transfer->DmaData));
+                }
+
+                Transfer += 1;
+            }
+
             MmFreeNonPagedPool(TransferSet);
             TransferSet = NULL;
         }
@@ -1262,9 +1368,24 @@ Return Value:
 
 {
 
+    PMUSB_CONTROLLER Controller;
+    ULONG Index;
+    PMUSB_TRANSFER Transfer;
+    ULONG TransferCount;
     PMUSB_TRANSFER_SET TransferSet;
 
+    Controller = HostControllerContext;
     TransferSet = TransferContext;
+    TransferCount = TransferSet->MaxCount;
+    Transfer = TransferSet->Transfers;
+    for (Index = 0; Index < TransferCount; Index += 1) {
+        if (Transfer->DmaData.Descriptor != NULL) {
+            CppiDestroyDescriptor(Controller->CppiDma, &(Transfer->DmaData));
+        }
+
+        Transfer += 1;
+    }
+
     MmFreeNonPagedPool(TransferSet);
     return;
 }
@@ -1309,15 +1430,24 @@ Return Value:
 
     PMUSB_CONTROLLER Controller;
     PMUSB_HARD_ENDPOINT HardEndpoint;
-    BOOL LockHeld;
     PMUSB_SOFT_ENDPOINT SoftEndpoint;
     KSTATUS Status;
     PMUSB_TRANSFER_SET TransferSet;
 
     Controller = HostControllerContext;
-    LockHeld = FALSE;
     SoftEndpoint = EndpointContext;
     TransferSet = TransferContext;
+    MusbpAcquireLock(Controller);
+    if (Controller->Connected == FALSE) {
+        Status = STATUS_DEVICE_NOT_CONNECTED;
+        goto SubmitTransferEnd;
+    }
+
+    //
+    // Assign a hardware endpoint and fill out all the descriptors.
+    //
+
+    MusbpAssignEndpoint(Controller, SoftEndpoint);
     Status = MusbpInitializeTransfer(Controller,
                                      SoftEndpoint,
                                      Transfer,
@@ -1327,14 +1457,6 @@ Return Value:
         goto SubmitTransferEnd;
     }
 
-    MusbpAcquireLock(Controller);
-    LockHeld = TRUE;
-    if (Controller->Connected == FALSE) {
-        Status = STATUS_DEVICE_NOT_CONNECTED;
-        goto SubmitTransferEnd;
-    }
-
-    MusbpAssignEndpoint(Controller, SoftEndpoint);
     HardEndpoint = &(Controller->Endpoints[SoftEndpoint->HardwareIndex]);
     if (Transfer->DeviceAddress != SoftEndpoint->Device) {
 
@@ -1365,10 +1487,7 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 SubmitTransferEnd:
-    if (LockHeld != FALSE) {
-        MusbpReleaseLock(Controller);
-    }
-
+    MusbpReleaseLock(Controller);
     return Status;
 }
 
@@ -1438,6 +1557,7 @@ Return Value:
         }
     }
 
+    MusbpAssignEndpoint(Controller, SoftEndpoint);
     Status = MusbpInitializeTransfer(Controller,
                                      SoftEndpoint,
                                      Transfer,
@@ -1842,7 +1962,8 @@ MusbpInitializeTransfer (
 Routine Description:
 
     This routine initializes the necessary transfer structures in preparation
-    for executing a new USB transfer.
+    for executing a new USB transfer. The hardware endpoint must be assigned
+    prior to this routine.
 
 Arguments:
 
@@ -1863,9 +1984,11 @@ Return Value:
 {
 
     ULONG BufferOffset;
+    ULONG DmaEndpoint;
     PMUSB_TRANSFER MusbTransfer;
     ULONG TransferIndex;
     ULONG TransferSize;
+    BOOL Transmit;
 
     ASSERT(((Transfer->Type == UsbTransferTypeControl) &&
             (SoftEndpoint->HardwareIndex == 0)) ||
@@ -1874,10 +1997,12 @@ Return Value:
 
     ASSERT(Transfer->EndpointNumber == SoftEndpoint->EndpointNumber);
 
+    Transmit = TRUE;
     Transfer->Public.Status = STATUS_SUCCESS;
     Transfer->Public.Error = UsbErrorNone;
     TransferSet->SoftEndpoint = SoftEndpoint;
     TransferSet->CurrentIndex = 0;
+    DmaEndpoint = CPPI_USB_ENDPOINT_TO_DMA(SoftEndpoint->HardwareIndex);
 
     //
     // Go around and fill out the transfers.
@@ -1910,11 +2035,13 @@ Return Value:
             MusbTransfer->Flags = 0;
             if (Transfer->Public.Direction == UsbTransferDirectionOut) {
                 MusbTransfer->Flags |= MUSB_TRANSFER_OUT;
+                Transmit = TRUE;
                 if ((SoftEndpoint->Control & MUSB_TX_CONTROL_DMA_ENABLE) != 0) {
                     MusbTransfer->Flags |= MUSB_TRANSFER_DMA;
                 }
 
             } else {
+                Transmit = FALSE;
                 if ((SoftEndpoint->Control & MUSB_RX_CONTROL_DMA_ENABLE) != 0) {
                     MusbTransfer->Flags |= MUSB_TRANSFER_DMA;
                 }
@@ -1925,6 +2052,22 @@ Return Value:
         MusbTransfer->BufferPhysical =
                                    Transfer->Public.BufferPhysicalAddress +
                                    BufferOffset;
+
+        //
+        // Initialize the DMA descriptor if there is one.
+        //
+
+        if (MusbTransfer->DmaData.Descriptor != NULL) {
+
+            ASSERT(SoftEndpoint->HardwareIndex != 0);
+
+            CppiInitializeDescriptor(Controller->CppiDma,
+                                     &(MusbTransfer->DmaData),
+                                     DmaEndpoint,
+                                     Transmit,
+                                     MusbTransfer->BufferPhysical,
+                                     MusbTransfer->Size);
+        }
 
         BufferOffset += MusbTransfer->Size;
         MusbTransfer += 1;
@@ -1999,29 +2142,32 @@ Return Value:
 
     SoftEndpoint = TransferSet->SoftEndpoint;
     HardwareIndex = SoftEndpoint->HardwareIndex;
-
-    //
-    // Configure the hardware endpoint to match this USB endpoint.
-    //
-
-    if (TransferSet->CurrentIndex == 0) {
-        MusbpConfigureHardwareEndpoint(Controller, SoftEndpoint);
-    }
-
+    MusbpConfigureHardwareEndpoint(Controller, SoftEndpoint);
     Transfer = &(TransferSet->Transfers[TransferSet->CurrentIndex]);
 
     //
-    // If this is an out transfer and DMA is not being used, fill the FIFO with
-    // the data.
+    // In DMA mode, enqueue the packet into the DMA controller. This actually
+    // kicks off the DMA.
     //
 
-    if (((Transfer->Flags & MUSB_TRANSFER_OUT) != 0) &&
-        ((Transfer->Flags & MUSB_TRANSFER_DMA) == 0)) {
+    if ((Transfer->Flags & MUSB_TRANSFER_DMA) != 0) {
 
-        MusbpWriteFifo(Controller,
-                       HardwareIndex,
-                       Transfer->BufferVirtual,
-                       Transfer->Size);
+        ASSERT(Transfer->DmaData.Descriptor != NULL);
+
+        CppiSubmitDescriptor(Controller->CppiDma, &(Transfer->DmaData));
+
+    } else {
+
+        //
+        // If this is an out transfer, fill the FIFO with the data.
+        //
+
+        if ((Transfer->Flags & MUSB_TRANSFER_OUT) != 0) {
+            MusbpWriteFifo(Controller,
+                           HardwareIndex,
+                           Transfer->BufferVirtual,
+                           Transfer->Size);
+        }
     }
 
     //
@@ -2039,6 +2185,17 @@ Return Value:
         MUSB_WRITE16(Controller,
                      MusbInterruptEnableRx,
                      Controller->RxInterruptEnable);
+    }
+
+    //
+    // For outbound DMA transfers, there's no need to write the TX ready bit,
+    // so just return.
+    //
+
+    if ((Transfer->Flags & (MUSB_TRANSFER_OUT | MUSB_TRANSFER_DMA)) ==
+        (MUSB_TRANSFER_OUT | MUSB_TRANSFER_DMA)) {
+
+        return;
     }
 
     //
@@ -2120,7 +2277,7 @@ Return Value:
     ULONG ControlRegister;
     PMUSB_HARD_ENDPOINT HardEndpoint;
     ULONG Register;
-    USHORT RxCount;
+    ULONG RxCount;
     PMUSB_SOFT_ENDPOINT SoftEndpoint;
     PMUSB_TRANSFER Transfer;
     PMUSB_TRANSFER_SET TransferSet;
@@ -2271,11 +2428,23 @@ Return Value:
         Control = MUSB_READ16(Controller, ControlRegister);
 
         //
-        // If the packet is still in progress, skip this interrupt.
+        // In DMA mode, spin waiting for the FIFO to clear out.
         //
 
-        if ((Control & MUSB_TX_CONTROL_PACKET_READY) != 0) {
-            return NULL;
+        if ((Transfer->Flags & MUSB_TRANSFER_DMA) != 0) {
+            while ((Control & MUSB_TX_CONTROL_PACKET_READY) != 0) {
+                Control = MUSB_READ16(Controller, ControlRegister);
+            }
+
+        //
+        // In non-DMA mode, there's a FIFO empty interrupt, so if the FIFO is
+        // not currently empty just wait for that.
+        //
+
+        } else {
+            if ((Control & MUSB_TX_CONTROL_PACKET_READY) != 0) {
+                return NULL;
+            }
         }
 
         if ((Control & MUSB_TX_CONTROL_ERROR_MASK) != 0) {
@@ -2306,6 +2475,11 @@ Return Value:
 
         } else {
             UsbTransfer->LengthTransferred += Transfer->Size;
+            if ((Transfer->Flags & MUSB_TRANSFER_DMA) != 0) {
+                CppiReapCompletedDescriptor(Controller->CppiDma,
+                                            &(Transfer->DmaData),
+                                            NULL);
+            }
         }
 
         //
@@ -2327,59 +2501,24 @@ Return Value:
         Control = MUSB_READ16(Controller, ControlRegister);
 
         //
-        // If no packet is ready, skip this interrupt.
+        // Incoming NAK timeouts aren't actually errors (except on isochronous
+        // channels.
         //
 
-        if ((Control &
-             (MUSB_RX_CONTROL_PACKET_READY |
-              MUSB_RX_CONTROL_ERROR_MASK)) == 0) {
+        if ((Control & MUSB_RX_CONTROL_DATA_ERROR_NAK_TIMEOUT) != 0) {
+            if ((TransferSet->UsbTransfer->Type !=
+                 UsbTransferTypeIsochronous) &&
+                (SoftEndpoint->Interval == 0)) {
 
-            ASSERT((Control & MUSB_RX_CONTROL_REQUEST_PACKET) != 0);
-
-            return NULL;
-        }
-
-        //
-        // Get the data out if it was a successful packet.
-        //
-
-        if ((Control & MUSB_RX_CONTROL_PACKET_READY) != 0) {
-            Register = MUSB_ENDPOINT_CONTROL(MusbCount, HardwareIndex);
-            RxCount = MUSB_READ16(Controller, Register);
-
-            //
-            // If the RX count is more than the transfer size, then it means
-            // the RX max packet size was programmed incorrectly.
-            //
-
-            ASSERT(RxCount <= Transfer->Size);
-
-            if (RxCount >= Transfer->Size) {
-                RxCount = Transfer->Size;
-            }
-
-            UsbTransfer->LengthTransferred += RxCount;
-            if ((Transfer->Flags & MUSB_TRANSFER_DMA) == 0) {
-                MusbpReadFifo(Controller,
-                              HardwareIndex,
-                              Transfer->BufferVirtual,
-                              RxCount);
-            }
-
-            //
-            // Account for a shorted transfer.
-            //
-
-            if (RxCount < Transfer->Size) {
-                CompleteSet = TRUE;
-                if ((UsbTransfer->Flags &
-                     USB_TRANSFER_FLAG_NO_SHORT_TRANSFERS) != 0) {
-
-                    UsbTransfer->Status = STATUS_DATA_LENGTH_MISMATCH;
-                    UsbTransfer->Error = UsbErrorShortPacket;
-                }
+                Control &= ~MUSB_RX_CONTROL_DATA_ERROR_NAK_TIMEOUT;
+                MUSB_WRITE16(Controller, ControlRegister, Control);
+                return NULL;
             }
         }
+
+        //
+        // Handle errors first.
+        //
 
         if ((Control & MUSB_RX_CONTROL_ERROR_MASK) != 0) {
             CompleteSet = TRUE;
@@ -2414,6 +2553,59 @@ Return Value:
 
                 ASSERT(FALSE);
 
+            }
+
+        //
+        // There are no errors. If the request packet flag is clear and either
+        // this is DMA or the packet ready flag is set, go get the data.
+        //
+
+        } else if (((Control & MUSB_RX_CONTROL_REQUEST_PACKET) == 0) &&
+                   (((Transfer->Flags & MUSB_TRANSFER_DMA) != 0) ||
+                    ((Control & MUSB_RX_CONTROL_PACKET_READY) != 0))) {
+
+            Register = MUSB_ENDPOINT_CONTROL(MusbCount, HardwareIndex);
+            if ((Transfer->Flags & MUSB_TRANSFER_DMA) != 0) {
+                CppiReapCompletedDescriptor(Controller->CppiDma,
+                                            &(Transfer->DmaData),
+                                            &RxCount);
+
+                ASSERT(RxCount <= Transfer->Size);
+
+            } else {
+                RxCount = MUSB_READ16(Controller, Register);
+
+                //
+                // If the RX count is more than the transfer size, then it means
+                // the RX max packet size was programmed incorrectly.
+                //
+
+                ASSERT(RxCount <= Transfer->Size);
+
+                if (RxCount >= Transfer->Size) {
+                    RxCount = Transfer->Size;
+                }
+
+                MusbpReadFifo(Controller,
+                              HardwareIndex,
+                              Transfer->BufferVirtual,
+                              RxCount);
+            }
+
+            UsbTransfer->LengthTransferred += RxCount;
+
+            //
+            // Account for a shorted transfer.
+            //
+
+            if (RxCount < Transfer->Size) {
+                CompleteSet = TRUE;
+                if ((UsbTransfer->Flags &
+                     USB_TRANSFER_FLAG_NO_SHORT_TRANSFERS) != 0) {
+
+                    UsbTransfer->Status = STATUS_DATA_LENGTH_MISMATCH;
+                    UsbTransfer->Error = UsbErrorShortPacket;
+                }
             }
         }
 
@@ -2652,8 +2844,9 @@ Return Value:
 
 {
 
-    UCHAR Control;
+    USHORT Control;
     ULONG ControlRegister;
+    KSTATUS Status;
 
     if ((Transfer->Flags & MUSB_TRANSFER_OUT) != 0) {
 
@@ -2664,12 +2857,19 @@ Return Value:
         MusbpFlushFifo(Controller, HardwareIndex, TRUE);
         MusbpFlushFifo(Controller, HardwareIndex, TRUE);
         if ((Transfer->Flags & MUSB_TRANSFER_DMA) != 0) {
+            ControlRegister = MUSB_ENDPOINT_CONTROL(MusbTxControlStatus,
+                                                    HardwareIndex);
 
-            //
-            // TODO: Dma cancellation.
-            //
+            Control = MUSB_READ16(Controller, ControlRegister);
+            Control &= ~MUSB_TX_CONTROL_DMA_ENABLE;
+            MUSB_WRITE16(Controller, ControlRegister, Control);
 
-            ASSERT(FALSE);
+            ASSERT(Transfer->DmaData.Descriptor != NULL);
+
+            Status = CppiTearDownDescriptor(Controller->CppiDma,
+                                            &(Transfer->DmaData));
+
+            ASSERT(KSUCCESS(Status));
         }
 
     } else {
@@ -2692,10 +2892,27 @@ Return Value:
         if ((Transfer->Flags & MUSB_TRANSFER_DMA) != 0) {
 
             //
-            // TODO: Dma cancellation.
+            // Clear the request packet and DMA enable flags. If a packet
+            // squeaked in, flush the FIFO. Then tear down the DMA descriptor.
             //
 
-            ASSERT(FALSE);
+            Control = MUSB_READ16(Controller, ControlRegister);
+            Control &= ~(MUSB_RX_CONTROL_REQUEST_PACKET |
+                         MUSB_RX_CONTROL_DMA_ENABLE);
+
+            MUSB_WRITE16(Controller, ControlRegister, Control);
+            HlBusySpin(250);
+            Control = MUSB_READ16(Controller, ControlRegister);
+            if ((Control & MUSB_RX_CONTROL_PACKET_READY) != 0) {
+                Control |= MUSB_RX_CONTROL_FLUSH_FIFO;
+            }
+
+            Control |= MUSB_RX_CONTROL_ERROR_MASK;
+            MUSB_WRITE16(Controller, ControlRegister, Control);
+            Status = CppiTearDownDescriptor(Controller->CppiDma,
+                                            &(Transfer->DmaData));
+
+            ASSERT(KSUCCESS(Status));
 
         //
         // Abort a non-DMA transfer.

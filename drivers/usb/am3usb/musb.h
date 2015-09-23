@@ -22,6 +22,7 @@ Author:
 //
 
 #include "musbhw.h"
+#include "cppi.h"
 
 //
 // --------------------------------------------------------------------- Macros
@@ -167,6 +168,9 @@ Members:
 
     UsbInterruptEnable - Stores the mask of enabled USB interrupts.
 
+    Instance - Stores the instance number of this controller, which is passed
+        in to the potentially common DMA controller.
+
     Lock - Stores the spin lock used to serialize access to the device.
 
     OldRunLevel - Stores the runlevel to return to when the lock is released.
@@ -189,6 +193,9 @@ Members:
     UsbCoreHandle - Stores the handle to the USB core representing this
         controller.
 
+    CppiDma - Stores an optional pointer to the CPPI DMA controller to use for
+        DMA.
+
 --*/
 
 typedef struct _MUSB_CONTROLLER {
@@ -203,6 +210,7 @@ typedef struct _MUSB_CONTROLLER {
     UCHAR CurrentIndex;
     UCHAR NextEndpointAssignment;
     UCHAR UsbInterruptEnable;
+    UCHAR Instance;
     KSPIN_LOCK Lock;
     RUNLEVEL OldRunLevel;
     USHORT TxInterruptEnable;
@@ -211,6 +219,7 @@ typedef struct _MUSB_CONTROLLER {
     ULONG PendingEndpointInterrupts;
     BOOL Connected;
     HANDLE UsbCoreHandle;
+    PCPPI_DMA_CONTROLLER CppiDma;
 } MUSB_CONTROLLER, *PMUSB_CONTROLLER;
 
 /*++
@@ -252,6 +261,8 @@ Members:
 
     BufferPhysical - Stores the physical address of the buffer.
 
+    DmaData - Stores the DMA information for this transfer.
+
 --*/
 
 typedef struct _MUSB_TRANSFER {
@@ -259,6 +270,7 @@ typedef struct _MUSB_TRANSFER {
     USHORT Flags;
     PUCHAR BufferVirtual;
     ULONG BufferPhysical;
+    CPPI_DESCRIPTOR_DATA DmaData;
 } MUSB_TRANSFER, *PMUSB_TRANSFER;
 
 /*++
@@ -313,7 +325,9 @@ MusbInitializeControllerState (
     PMUSB_CONTROLLER Controller,
     PVOID RegisterBase,
     PDRIVER Driver,
-    PHYSICAL_ADDRESS PhysicalBase
+    PHYSICAL_ADDRESS PhysicalBase,
+    PCPPI_DMA_CONTROLLER DmaController,
+    UCHAR Instance
     );
 
 /*++
@@ -334,6 +348,11 @@ Arguments:
     Driver - Supplies a pointer to the driver that owns this device.
 
     PhysicalBase - Supplies the physical address of the controller.
+
+    DmaController - Supplies an optional pointer to the DMA controller to use.
+
+    Instance - Supplies the instance ID to pass into the potentially shared
+        DMA controller.
 
 Return Value:
 

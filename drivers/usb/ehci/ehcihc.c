@@ -403,7 +403,6 @@ Return Value:
     Controller->BlockAllocator = MmCreateBlockAllocator(
                                           BlockSize,
                                           EHCI_BLOCK_ALLOCATOR_ALIGNMENT,
-                                          TRUE,
                                           EHCI_BLOCK_ALLOCATOR_EXPANSION_COUNT,
                                           Flags,
                                           EHCI_BLOCK_ALLOCATION_TAG);

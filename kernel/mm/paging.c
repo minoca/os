@@ -697,7 +697,6 @@ Return Value:
         BlockAllocator = MmCreateBlockAllocator(
                                sizeof(PAGING_ENTRY),
                                MM_PAGING_ENTRY_BLOCK_ALLOCATOR_ALIGNMENT,
-                               TRUE,
                                MM_PAGING_ENTRY_BLOCK_ALLOCATOR_EXPANSION_COUNT,
                                (BLOCK_ALLOCATOR_FLAG_NON_PAGED |
                                 BLOCK_ALLOCATOR_FLAG_TRIM),

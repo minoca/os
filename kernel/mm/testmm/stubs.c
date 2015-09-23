@@ -161,6 +161,127 @@ Return Value:
 }
 
 BOOL
+MmpCleanCacheRegion (
+    PVOID Address,
+    UINTN Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine cleans the given region of virtual address space in the first
+    level data cache.
+
+Arguments:
+
+    Address - Supplies the virtual address of the region to clean.
+
+    Size - Supplies the number of bytes to clean.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if one of the addresses in the region caused a bad page fault.
+
+--*/
+
+{
+
+    return TRUE;
+}
+
+BOOL
+MmpCleanCacheLine (
+    PVOID Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine flushes a cache line, writing any dirty bits back to the next
+    level cache.
+
+Arguments:
+
+    Address - Supplies the address whose associated cache line will be
+        cleaned.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if the address was a user mode one and accessing it caused a bad
+    fault.
+
+--*/
+
+{
+
+    return TRUE;
+}
+
+VOID
+MmpInitializeCpuCaches (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes the system's processor cache infrastructure.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return;
+}
+
+BOOL
+MmpInvalidateInstructionCacheRegion (
+    PVOID Address,
+    ULONG Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine invalidates the given region of virtual address space in the
+    instruction cache.
+
+Arguments:
+
+    Address - Supplies the virtual address of the region to invalidate.
+
+    Size - Supplies the number of bytes to invalidate.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE if one of the addresses in the region caused a bad page fault.
+
+--*/
+
+{
+
+    return TRUE;
+}
+
+BOOL
 MmpTouchUserModeMemoryForRead (
     PVOID Buffer,
     UINTN Size

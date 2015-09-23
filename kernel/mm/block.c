@@ -200,7 +200,6 @@ PBLOCK_ALLOCATOR
 MmCreateBlockAllocator (
     ULONG BlockSize,
     ULONG Alignment,
-    BOOL Expand,
     ULONG ExpansionCount,
     ULONG Flags,
     ULONG Tag
@@ -221,9 +220,6 @@ Arguments:
     Alignment - Supplies the required address alignment, in bytes, for each
         allocation. Valid values are powers of 2. Set to 1 or 0 to specify no
         alignment requirement.
-
-    Expand - Supplies a boolean indicating whether or not to expand the pool
-        immediately upon creation.
 
     ExpansionCount - Supplies the number of blocks to expand the pool by when
         out of free blocks.
@@ -318,14 +314,14 @@ Return Value:
     }
 
     //
-    // Fill the allocator with the initial allocation if requested.
+    // Fill the allocator with the an initial allocation.
     //
 
-    if (Expand != FALSE) {
-        Status = MmpExpandBlockAllocator(Allocator, FALSE);
-        if (!KSUCCESS(Status)) {
-            goto CreateBlockAllocatorEnd;
-        }
+    Allocator->Flags &= ~BLOCK_ALLOCATOR_FLAG_NO_EXPANSION;
+    Status = MmpExpandBlockAllocator(Allocator, FALSE);
+    Allocator->Flags = Flags;
+    if (!KSUCCESS(Status)) {
+        goto CreateBlockAllocatorEnd;
     }
 
     Status = STATUS_SUCCESS;
@@ -862,6 +858,14 @@ Return Value:
 
     UINTN ExpansionSize;
     KSTATUS Status;
+
+    //
+    // If the block allocator is prevented from expanding, just fail.
+    //
+
+    if ((Allocator->Flags & BLOCK_ALLOCATOR_FLAG_NO_EXPANSION) != 0) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
 
     //
     // Try doubling the previous expansion. Don't go below the minimum size.

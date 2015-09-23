@@ -790,6 +790,7 @@ Return Value:
     Connect.LineNumber = UsbSs->InterruptLine;
     Connect.Vector = UsbSs->InterruptVector;
     Connect.InterruptServiceRoutine = Am3UsbssInterruptService;
+    Connect.DispatchServiceRoutine = Am3UsbssInterruptServiceDpc;
     Connect.Context = UsbSs;
     Connect.Interrupt = &(UsbSs->InterruptHandle);
     Status = IoConnectInterrupt(&Connect);
@@ -942,9 +943,18 @@ Return Value:
 
     KSTATUS Status;
 
+    Status = CppiInitializeControllerState(
+                                       &(Controller->CppiDma),
+                                       RegisterBase + AM3_USB_CPPI_DMA_OFFSET);
+
+    if (!KSUCCESS(Status)) {
+        goto InitializeControllerStateEnd;
+    }
+
     Status = Am3UsbssInitializeControllerState(
                                           &(Controller->UsbSs),
-                                          RegisterBase + AM3_USB_USBSS_OFFSET);
+                                          RegisterBase + AM3_USB_USBSS_OFFSET,
+                                          &(Controller->CppiDma));
 
     if (!KSUCCESS(Status)) {
         goto InitializeControllerStateEnd;
@@ -955,7 +965,9 @@ Return Value:
                                       &(Controller->Usb[0].MentorUsb),
                                       RegisterBase + AM3_USB_USB0_CORE_OFFSET,
                                       Am3UsbDriver,
-                                      PhysicalBase + AM3_USB_USB0_CORE_OFFSET);
+                                      PhysicalBase + AM3_USB_USB0_CORE_OFFSET,
+                                      &(Controller->CppiDma),
+                                      0);
 
     if (!KSUCCESS(Status)) {
         goto InitializeControllerStateEnd;
@@ -966,7 +978,9 @@ Return Value:
                                       &(Controller->Usb[1].MentorUsb),
                                       RegisterBase + AM3_USB_USB1_CORE_OFFSET,
                                       Am3UsbDriver,
-                                      PhysicalBase + AM3_USB_USB1_CORE_OFFSET);
+                                      PhysicalBase + AM3_USB_USB1_CORE_OFFSET,
+                                      &(Controller->CppiDma),
+                                      1);
 
     if (!KSUCCESS(Status)) {
         goto InitializeControllerStateEnd;
@@ -1001,9 +1015,10 @@ Return Value:
 
 {
 
-    Am3UsbssDestroyControllerState(&(Controller->UsbSs));
     MusbDestroyControllerState(&(Controller->Usb[0].MentorUsb));
     MusbDestroyControllerState(&(Controller->Usb[1].MentorUsb));
+    CppiDestroyControllerState(&(Controller->CppiDma));
+    Am3UsbssDestroyControllerState(&(Controller->UsbSs));
     return;
 }
 
@@ -1034,6 +1049,11 @@ Return Value:
     KSTATUS Status;
 
     Status = Am3UsbssResetController(&(Controller->UsbSs));
+    if (!KSUCCESS(Status)) {
+        goto ResetControllerEnd;
+    }
+
+    Status = CppiResetController(&(Controller->CppiDma));
     if (!KSUCCESS(Status)) {
         goto ResetControllerEnd;
     }

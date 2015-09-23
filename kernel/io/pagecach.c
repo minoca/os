@@ -1026,7 +1026,6 @@ Return Value:
     BlockAllocator = MmCreateBlockAllocator(
                                     sizeof(PAGE_CACHE_ENTRY),
                                     0,
-                                    TRUE,
                                     PAGE_CACHE_BLOCK_ALLOCATOR_EXPANSION_COUNT,
                                     BLOCK_ALLOCATOR_FLAG_TRIM,
                                     PAGE_CACHE_ALLOCATION_TAG);

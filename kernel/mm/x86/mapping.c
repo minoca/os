@@ -822,7 +822,6 @@ Return Value:
         BlockAllocator = MmCreateBlockAllocator(
                              PAGE_SIZE,
                              PAGE_SIZE,
-                             TRUE,
                              MM_PAGE_DIRECTORY_BLOCK_ALLOCATOR_EXPANSION_COUNT,
                              Flags,
                              MM_PAGE_DIRECTORY_BLOCK_ALLOCATION_TAG);

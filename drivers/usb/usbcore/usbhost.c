@@ -366,9 +366,8 @@ Return Value:
             ASSERT(Transfer->Public.Error < UsbErrorCount);
 
             RtlDebugPrint(
-                       "USB: Transfer (0x%08x) %s device %x endpoint %x "
-                       "finished with status %x (error %s), length 0x%x of "
-                       "0x%x.\n",
+                       "USB: Transfer (0x%08x) %s dev %x EP%x status %x (%s), "
+                       "len 0x%x of 0x%x\n",
                        Transfer,
                        UsbTransferDirectionStrings[Transfer->Public.Direction],
                        Transfer->DeviceAddress,

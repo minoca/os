@@ -222,7 +222,6 @@ Return Value:
 
     BlockAllocator = MmCreateBlockAllocator(BlockSize,
                                             Alignment,
-                                            TRUE,
                                             ExpansionCount,
                                             Flags,
                                             KTEST_ALLOCATION_TAG);

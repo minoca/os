@@ -394,7 +394,7 @@ Author:
 // Define the size of the entire USB subsystem region.
 //
 
-#define AM335_USB_REGION_SIZE 0x5000
+#define AM335_USB_REGION_SIZE 0x8000
 
 //
 // Define register offsets within the USB subsystem.

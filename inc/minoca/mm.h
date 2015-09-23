@@ -182,6 +182,7 @@ Author:
 #define BLOCK_ALLOCATOR_FLAG_NON_CACHED            0x00000002
 #define BLOCK_ALLOCATOR_FLAG_PHYSICALLY_CONTIGUOUS 0x00000004
 #define BLOCK_ALLOCATOR_FLAG_TRIM                  0x00000008
+#define BLOCK_ALLOCATOR_FLAG_NO_EXPANSION          0x00000010
 
 //
 // Define user mode virtual address for the user shared data page.
@@ -1689,7 +1690,6 @@ PBLOCK_ALLOCATOR
 MmCreateBlockAllocator (
     ULONG BlockSize,
     ULONG Alignment,
-    BOOL Expand,
     ULONG ExpansionCount,
     ULONG Flags,
     ULONG Tag
@@ -1704,15 +1704,12 @@ Routine Description:
 
 Arguments:
 
-    BlockSize - Supplies the size of allocations that this block allocator doles
-        out.
+    BlockSize - Supplies the size of allocations that this block allocator
+        doles out.
 
     Alignment - Supplies the required address alignment, in bytes, for each
         allocation. Valid values are powers of 2. Set to 1 or 0 to specify no
         alignment requirement.
-
-    Expand - Supplies a boolean indicating whether or not to expand the pool
-        immediately upon creation.
 
     ExpansionCount - Supplies the number of blocks to expand the pool by when
         out of free blocks.
