@@ -53,6 +53,13 @@ extern BOOLEAN EfiDisableWatchdog;
 extern VOID *EfiAm335PrmDeviceBase;
 
 //
+// Define the pointer to the RTC base, which will get virtualized when going
+// to runtime.
+//
+
+extern VOID *EfiAm335RtcBase;
+
+//
 // -------------------------------------------------------- Function Prototypes
 //
 
@@ -335,6 +342,28 @@ Return Value:
 
 --*/
 
+VOID
+EfipBeagleBoneBlackInitializeRtc (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine fires up the RTC in the AM335x for the BeagleBone Black, if it
+    is not already running.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
 EFIAPI
 VOID
 EfipAm335ResetSystem (
@@ -368,3 +397,127 @@ Return Value:
 
 --*/
 
+EFIAPI
+EFI_STATUS
+EfipAm335GetTime (
+    EFI_TIME *Time,
+    EFI_TIME_CAPABILITIES *Capabilities
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the current time and dat information, and
+    timekeeping capabilities of the hardware platform.
+
+Arguments:
+
+    Time - Supplies a pointer where the current time will be returned.
+
+    Capabilities - Supplies an optional pointer where the capabilities will be
+        returned on success.
+
+Return Value:
+
+    EFI_SUCCESS on success.
+
+    EFI_INVALID_PARAMETER if the time parameter was NULL.
+
+    EFI_DEVICE_ERROR if there was a hardware error accessing the device.
+
+--*/
+
+EFIAPI
+EFI_STATUS
+EfipAm335SetTime (
+    EFI_TIME *Time
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the current local time and date information.
+
+Arguments:
+
+    Time - Supplies a pointer to the time to set.
+
+Return Value:
+
+    EFI_SUCCESS on success.
+
+    EFI_INVALID_PARAMETER if a time field is out of range.
+
+    EFI_DEVICE_ERROR if there was a hardware error accessing the device.
+
+--*/
+
+EFIAPI
+EFI_STATUS
+EfipAm335GetWakeupTime (
+    BOOLEAN *Enabled,
+    BOOLEAN *Pending,
+    EFI_TIME *Time
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the current wake alarm setting.
+
+Arguments:
+
+    Enabled - Supplies a pointer that receives a boolean indicating if the
+        alarm is currently enabled or disabled.
+
+    Pending - Supplies a pointer that receives a boolean indicating if the
+        alarm signal is pending and requires acknowledgement.
+
+    Time - Supplies a pointer that receives the current wake time.
+
+Return Value:
+
+    EFI_SUCCESS on success.
+
+    EFI_INVALID_PARAMETER if any parameter is NULL.
+
+    EFI_DEVICE_ERROR if there was a hardware error accessing the device.
+
+    EFI_UNSUPPORTED if the wakeup timer is not supported on this platform.
+
+--*/
+
+EFIAPI
+EFI_STATUS
+EfipAm335SetWakeupTime (
+    BOOLEAN Enable,
+    EFI_TIME *Time
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the current wake alarm setting.
+
+Arguments:
+
+    Enable - Supplies a boolean enabling or disabling the wakeup timer.
+
+    Time - Supplies an optional pointer to the time to set. This parameter is
+        only optional if the enable parameter is FALSE.
+
+Return Value:
+
+    EFI_SUCCESS on success.
+
+    EFI_INVALID_PARAMETER if a time field is out of range.
+
+    EFI_DEVICE_ERROR if there was a hardware error accessing the device.
+
+    EFI_UNSUPPORTED if the wakeup timer is not supported on this platform.
+
+--*/

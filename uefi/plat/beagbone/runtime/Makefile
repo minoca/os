@@ -33,6 +33,7 @@ INCLUDES += $(SRCROOT)/os/uefi/inc;$(SRCDIR)/..;
 BINPLACE = bin
 
 OBJS += reboot.o    \
+        rtc.o       \
         runtime.o   \
 
 VPATH += $(BINROOT):

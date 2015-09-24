@@ -70,6 +70,15 @@ EFI_MEMORY_DESCRIPTOR EfiBeagleBoneBlackMemoryMap[] = {
         EFI_SIZE_TO_PAGES(AM335_PRCM_SIZE),
         EFI_MEMORY_UC | EFI_MEMORY_RUNTIME
     },
+    {
+        EfiRuntimeServicesData,
+        0,
+        AM335_RTC_BASE,
+        0,
+        EFI_SIZE_TO_PAGES(AM335_RTC_SIZE),
+        EFI_MEMORY_UC | EFI_MEMORY_RUNTIME
+    },
+
 };
 
 //

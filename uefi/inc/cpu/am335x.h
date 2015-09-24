@@ -102,6 +102,7 @@ Author:
 #define AM335_I2C_0_BASE 0x44E0B000
 #define AM335_DMTIMER1_BASE 0x44E31000
 #define AM335_WATCHDOG_BASE 0x44E35000
+#define AM335_RTC_BASE 0x44E3E000
 #define AM335_DMTIMER2_BASE 0x48040000
 #define AM335_DMTIMER3_BASE 0x48042000
 #define AM335_DMTIMER4_BASE 0x48044000
@@ -115,6 +116,8 @@ Author:
 #define AM335_HSMMC_1_BASE 0x481D8000
 #define AM335_INTC_BASE 0x48200000
 #define AM335_LCD_REGISTERS 0x4830E000
+
+#define AM335_RTC_SIZE 0x1000
 
 //
 // Define PRCM bases.
@@ -1441,8 +1444,104 @@ Author:
 #define AM335_CPSW_PORT2_SOURCE_ADDRESS_HIGH 0x224
 
 //
+// Define RTC control register bits.
+//
+
+#define AM335_RTC_CONTROL_RUN 0x00000001
+#define AM335_RTC_CONTROL_ROUND_30S 0x00000002
+#define AM335_RTC_CONTROL_AUTO_COMPENSATION 0x00000004
+#define AM335_RTC_CONTROL_12_HOUR_MODE 0x00000008
+#define AM335_RTC_CONTROL_TEST_MODE 0x00000010
+#define AM335_RTC_CONTROL_SET_32_MOUNTER 0x00000020
+#define AM335_RTC_CONTROL_RTC_DISABLE 0x00000040
+
+//
+// Define RTC status register bits.
+//
+
+#define AM335_RTC_STATUS_BUSY 0x00000001
+#define AM335_RTC_STATUS_RUN 0x00000002
+#define AM335_RTC_STATUS_SECOND_EVENT 0x00000004
+#define AM335_RTC_STATUS_MINUTE_EVENT 0x00000008
+#define AM335_RTC_STATUS_HOUR_EVENT 0x00000010
+#define AM335_RTC_STATUS_DAY_EVENT 0x00000020
+#define AM335_RTC_STATUS_ALARM 0x00000040
+#define AM335_RTC_STATUS_ALARM2 0x00000080
+
+//
+// Define RTC interrupt enable bits.
+//
+
+#define AM335_RTC_INTERRUPT_EVERY_SECOND 0x0
+#define AM335_RTC_INTERRUPT_EVERY_MINUTE 0x1
+#define AM335_RTC_INTERRUPT_EVERY_HOUR 0x2
+#define AM335_RTC_INTERRUPT_EVERY_DAY 0x3
+#define AM335_RTC_INTERRUPT_EVERY_MASK 0x3
+#define AM335_RTC_INTERRUPT_TIMER 0x00000004
+#define AM335_RTC_INTERRUPT_ALARM 0x00000008
+#define AM335_RTC_INTERRUPT_ALARM2 0x00000010
+
+#define AM335_RTC_HOURS_PM 0x80
+
+//
+// Define the kick values to write to enable write access to the RTC.
+//
+
+#define AM335_RTC_KICK0_KEY 0x83E70B13
+#define AM335_RTC_KICK1_KEY 0x95A4F1E0
+
+//
+// Define RTC oscillator register bits.
+//
+
+#define AM335_RTC_OSCILLATOR_SW1 0x00000001
+#define AM335_RTC_OSCILLATOR_SW2 0x00000002
+#define AM335_RTC_OSCILLATOR_EXTERNAL_RESISTOR 0x00000004
+#define AM335_RTC_OSCILLATOR_SOURCE_EXTERNAL 0x00000008
+#define AM335_RTC_OSCILLATOR_DISABLE_OSCILLATOR 0x00000010
+#define AM335_RTC_OSCILLATOR_ENABLE 0x00000040
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
+
+typedef enum _AM335_RTC_REGISTER {
+    Am335RtcSeconds = 0x00,
+    Am335RtcMinutes = 0x04,
+    Am335RtcHours = 0x08,
+    Am335RtcDays = 0x0C,
+    Am335RtcMonths = 0x10,
+    Am335RtcYears = 0x14,
+    Am335RtcWeekdays = 0x18,
+    Am335RtcAlarmSeconds = 0x20,
+    Am335RtcAlarmMinutes = 0x24,
+    Am335RtcAlarmHours = 0x28,
+    Am335RtcAlarmDays = 0x2C,
+    Am335RtcAlarmMonths = 0x30,
+    Am335RtcAlarmYears = 0x34,
+    Am335RtcControl = 0x40,
+    Am335RtcStatus = 0x44,
+    Am335RtcInterruptEnable = 0x48,
+    Am335RtcCompensationLow = 0x4C,
+    Am335RtcCompensationHigh = 0x50,
+    Am335RtcOscillator = 0x54,
+    Am335RtcScratch0 = 0x60,
+    Am335RtcScratch1 = 0x64,
+    Am335RtcScratch2 = 0x68,
+    Am335RtcKick0 = 0x6C,
+    Am335RtcKick1 = 0x70,
+    Am335RtcRevision = 0x74,
+    Am335RtcSysConfig = 0x78,
+    Am335RtcWakeEnable = 0x7C,
+    Am335RtcAlarm2Seconds = 0x80,
+    Am335RtcAlarm2Minutes = 0x84,
+    Am335RtcAlarm2Hours = 0x88,
+    Am335RtcAlarm2Days = 0x8C,
+    Am335RtcAlarm2Months = 0x90,
+    Am335RtcAlarm2Years = 0x94,
+    Am335RtcPmic = 0x98,
+    Am335RtcDebounce = 0x9C
+} AM335_RTC_REGISTER, *PAM335_RTC_REGISTER;
 
 //
 // -------------------------------------------------------------------- Globals

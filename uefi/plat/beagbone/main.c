@@ -158,6 +158,7 @@ Return Value:
         }
 
         EfipAm335InitializePowerAndClocks();
+        EfipBeagleBoneBlackInitializeRtc();
 
     } else if (Phase == 1) {
         Status = EfipBeagleBoneCreateSmbiosTables();

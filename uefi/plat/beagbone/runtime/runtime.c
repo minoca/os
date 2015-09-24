@@ -76,6 +76,10 @@ Return Value:
 
 {
 
+    EfiRuntimeServices->GetTime = EfipAm335GetTime;
+    EfiRuntimeServices->SetTime = EfipAm335SetTime;
+    EfiRuntimeServices->GetWakeupTime = EfipAm335GetWakeupTime;
+    EfiRuntimeServices->SetWakeupTime = EfipAm335SetWakeupTime;
     EfiRuntimeServices->ResetSystem = EfipAm335ResetSystem;
     return EFI_SUCCESS;
 }
@@ -219,6 +223,7 @@ Return Value:
 {
 
     EfiConvertPointer(0, &EfiAm335PrmDeviceBase);
+    EfiConvertPointer(0, &EfiAm335RtcBase);
     return;
 }
 

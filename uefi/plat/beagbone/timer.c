@@ -60,6 +60,16 @@ Environment:
     EfiWriteRegister32((VOID *)AM335_WATCHDOG_BASE + (_Register), (_Value))
 
 //
+// These macros read from and write to the RTC.
+//
+
+#define AM3_READ_RTC(_Register) \
+        *(volatile UINT32 *)(AM335_RTC_BASE + (_Register))
+
+#define AM3_WRITE_RTC(_Register, _Value) \
+        *((volatile UINT32 *)(AM335_RTC_BASE + (_Register))) = (_Value)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -405,6 +415,93 @@ Return Value:
 {
 
     EfipAm335TimerDisarm(&EfiBeagleBoneClockTimer);
+    return;
+}
+
+VOID
+EfipBeagleBoneBlackInitializeRtc (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine fires up the RTC in the AM335x for the BeagleBone Black, if it
+    is not already running.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINT32 Control;
+    UINT32 Status;
+    UINT32 Value;
+
+    //
+    // If the RTC is already running, then it's been set up from a previous
+    // boot.
+    //
+
+    Status = AM3_READ_RTC(Am335RtcStatus);
+    if ((Status & AM335_RTC_STATUS_RUN) != 0) {
+        goto BeagleBoneBlackInitializeRtcEnd;
+    }
+
+    //
+    // If the RTC has been disabled by a previous boot, leave it alone, as the
+    // spec seems to indicate there's no turning it back on once it's off.
+    //
+
+    Control = AM3_READ_RTC(Am335RtcControl);
+    if ((Control & AM335_RTC_CONTROL_RTC_DISABLE) != 0) {
+        return;
+    }
+
+    //
+    // Unlock the RTC to program it.
+    //
+
+    AM3_WRITE_RTC(Am335RtcKick0, AM335_RTC_KICK0_KEY);
+    AM3_WRITE_RTC(Am335RtcKick1, AM335_RTC_KICK1_KEY);
+
+    //
+    // Select the internal clock source, and enable inputs.
+    //
+
+    Value = AM3_READ_RTC(Am335RtcOscillator);
+    Value &= ~AM335_RTC_OSCILLATOR_SOURCE_EXTERNAL;
+    AM3_WRITE_RTC(Am335RtcOscillator, Value);
+    Value |= AM335_RTC_OSCILLATOR_ENABLE;
+    AM3_WRITE_RTC(Am335RtcOscillator, Value);
+
+    //
+    // Start the RTC running in 24 hour mode.
+    //
+
+    Value = AM335_RTC_CONTROL_RUN;
+    AM3_WRITE_RTC(Am335RtcControl, Value);
+    do {
+        Value = AM3_READ_RTC(Am335RtcStatus);
+
+    } while ((Value & AM335_RTC_STATUS_RUN) == 0);
+
+    //
+    // Lock the RTC to prevent accidental writes.
+    //
+
+    AM3_WRITE_RTC(Am335RtcKick0, AM335_RTC_KICK0_KEY);
+    AM3_WRITE_RTC(Am335RtcKick1, 0xFFFFFFFF);
+
+BeagleBoneBlackInitializeRtcEnd:
     return;
 }
 
