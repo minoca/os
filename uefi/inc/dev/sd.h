@@ -115,6 +115,20 @@ Author:
     (SD_RESPONSE_PRESENT | SD_RESPONSE_VALID_CRC | SD_RESPONSE_OPCODE)
 
 //
+// Define the R1 response bits.
+//
+
+#define SD_RESPONSE_R1_IDLE 0x01
+#define SD_RESPONSE_R1_ERASE_RESET 0x02
+#define SD_RESPONSE_R1_ILLEGAL_COMMAND 0x04
+#define SD_RESPONSE_R1_CRC_ERROR 0x08
+#define SD_RESPONSE_R1_ERASE_SEQUENCE_ERROR 0x10
+#define SD_RESPONSE_R1_ADDRESS_ERROR 0x20
+#define SD_RESPONSE_R1_PARAMETER_ERROR 0x40
+
+#define SD_RESPONSE_R1_ERROR_MASK 0x7E
+
+//
 // Define the SD CMD8 check argument.
 //
 
@@ -124,11 +138,14 @@ Author:
 // Define Card Specific Data (CSD) fields coming out of the response words.
 //
 
+#define SD_CARD_SPECIFIC_DATA_0_FREQUENCY_BASE_MASK          0x7
+#define SD_CARD_SPECIFIC_DATA_0_FREQUENCY_MULTIPLIER_SHIFT   3
+#define SD_CARD_SPECIFIC_DATA_0_FREQUENCY_MULTIPLIER_MASK    0xF
 #define SD_CARD_SPECIFIC_DATA_0_MMC_VERSION_SHIFT            26
 #define SD_CARD_SPECIFIC_DATA_0_MMC_VERSION_MASK             0xF
 #define SD_CARD_SPECIFIC_DATA_1_READ_BLOCK_LENGTH_SHIFT      16
 #define SD_CARD_SPECIFIC_DATA_1_READ_BLOCK_LENGTH_MASK       0x0F
-#define SD_CARD_SPECIFIC_DATA_1_WRITE_BLOCK_LENGTH_SHIFT     16
+#define SD_CARD_SPECIFIC_DATA_1_WRITE_BLOCK_LENGTH_SHIFT     22
 #define SD_CARD_SPECIFIC_DATA_1_WRITE_BLOCK_LENGTH_MASK      0x0F
 #define SD_CARD_SPECIFIC_DATA_1_HIGH_CAPACITY_MASK           0x3F
 #define SD_CARD_SPECIFIC_DATA_1_HIGH_CAPACITY_SHIFT          16
@@ -138,7 +155,7 @@ Author:
 #define SD_CARD_SPECIFIC_DATA_1_CAPACITY_MASK                0x3FF
 #define SD_CARD_SPECIFIC_DATA_1_CAPACITY_SHIFT               2
 #define SD_CARD_SPECIFIC_DATA_2_CAPACITY_MASK                0xC0000000
-#define SD_CARD_SPECIFIC_DATA_2_CAPACITY_SHIFT               15
+#define SD_CARD_SPECIFIC_DATA_2_CAPACITY_SHIFT               30
 #define SD_CARD_SPECIFIC_DATA_2_CAPACITY_MULTIPLIER_MASK     0x00038000
 #define SD_CARD_SPECIFIC_DATA_2_CAPACITY_MULTIPLIER_SHIFT    15
 #define SD_CARD_SPECIFIC_DATA_2_ERASE_GROUP_SIZE_MASK        0x00007C00
@@ -258,6 +275,7 @@ Author:
 
 typedef enum _SD_COMMAND_VALUE {
     SdCommandReset                           = 0,
+    SdCommandSendMmcOperatingCondition       = 1,
     SdCommandAllSendCardIdentification       = 2,
     SdCommandSetRelativeAddress              = 3,
     SdCommandSwitch                          = 6,
@@ -277,7 +295,7 @@ typedef enum _SD_COMMAND_VALUE {
     SdCommandEraseGroupStart                 = 35,
     SdCommandEraseGroupEnd                   = 36,
     SdCommandErase                           = 38,
-    SdCommandSendOperatingCondition          = 41,
+    SdCommandSendSdOperatingCondition        = 41,
     SdCommandSendSdConfigurationRegister     = 51,
     SdCommandApplicationSpecific             = 55,
     SdCommandSpiReadOperatingCondition       = 58,

@@ -64,6 +64,11 @@ EfipSdWaitForCardToInitialize (
     );
 
 EFI_STATUS
+EfipSdWaitForMmcCardToInitialize (
+    PEFI_SD_CONTROLLER Controller
+    );
+
+EFI_STATUS
 EfipSdSetCrc (
     PEFI_SD_CONTROLLER Controller,
     BOOLEAN Enable
@@ -183,6 +188,25 @@ EfipSdByteSwap32 (
 //
 // -------------------------------------------------------------------- Globals
 //
+
+UINT8 EfiSdFrequencyMultipliers[16] = {
+    0,
+    10,
+    12,
+    13,
+    15,
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    70,
+    80
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -438,7 +462,7 @@ Return Value:
         goto InitializeControllerEnd;
     }
 
-    if (SD_IS_CONTROLLER_SD(Controller)) {
+    if (SD_IS_CARD_SD(Controller)) {
         Status = EfipSdSetSdFrequency(Controller);
 
     } else {
@@ -456,7 +480,7 @@ Return Value:
     //
 
     Controller->CardCapabilities &= Controller->HostCapabilities;
-    if (SD_IS_CONTROLLER_SD(Controller)) {
+    if (SD_IS_CARD_SD(Controller)) {
         if ((Controller->CardCapabilities & SD_MODE_4BIT) != 0) {
            Controller->BusWidth = 4;
         }
@@ -524,12 +548,11 @@ Return Value:
             goto InitializeControllerEnd;
         }
 
-        Controller->ClockSpeed = SdClock25MHz;
         if ((Controller->CardCapabilities & SD_MODE_HIGH_SPEED_52MHZ) != 0) {
             Controller->ClockSpeed = SdClock52MHz;
 
         } else if ((Controller->CardCapabilities & SD_MODE_HIGH_SPEED) != 0) {
-            Controller->ClockSpeed = SdClock50MHz;
+            Controller->ClockSpeed = SdClock26MHz;
         }
 
         Status = EfipSdSetBusParameters(Controller);
@@ -722,30 +745,41 @@ Return Value:
     // If going wide, let the card know first.
     //
 
-    if ((SD_IS_CONTROLLER_SD(Controller)) && (Controller->BusWidth != 1)) {
-        EfiSetMem(&Command, sizeof(SD_COMMAND), 0);
-        Command.Command = SdCommandApplicationSpecific;
-        Command.ResponseType = SD_RESPONSE_R1;
-        Command.CommandArgument = Controller->CardAddress << 16;
-        Status = Controller->FunctionTable.SendCommand(
+    if (Controller->BusWidth != 1) {
+        if (SD_IS_CARD_SD(Controller)) {
+            EfiSetMem(&Command, sizeof(SD_COMMAND), 0);
+            Command.Command = SdCommandApplicationSpecific;
+            Command.ResponseType = SD_RESPONSE_R1;
+            Command.CommandArgument = Controller->CardAddress << 16;
+            Status = Controller->FunctionTable.SendCommand(
                                                    Controller,
                                                    Controller->ConsumerContext,
                                                    &Command);
 
-        if (EFI_ERROR(Status)) {
-            return Status;
-        }
+            if (EFI_ERROR(Status)) {
+                return Status;
+            }
 
-        Command.Command = SdCommandSetBusWidth;
-        Command.ResponseType = SD_RESPONSE_R1;
-        Command.CommandArgument = 2;
-        Status = Controller->FunctionTable.SendCommand(
+            Command.Command = SdCommandSetBusWidth;
+            Command.ResponseType = SD_RESPONSE_R1;
+            Command.CommandArgument = 2;
+            Status = Controller->FunctionTable.SendCommand(
                                                    Controller,
                                                    Controller->ConsumerContext,
                                                    &Command);
 
-        if (EFI_ERROR(Status)) {
-            return Status;
+            if (EFI_ERROR(Status)) {
+                return Status;
+            }
+
+        } else {
+            Status = EfipSdMmcSwitch(Controller,
+                                     SD_MMC_EXTENDED_CARD_DATA_BUS_WIDTH,
+                                     Controller->BusWidth);
+
+            if (EFI_ERROR(Status)) {
+                return Status;
+            }
         }
 
         EfiStall(2000);
@@ -858,20 +892,17 @@ Return Value:
 
         EfiStall(50);
         if (!EFI_ERROR(Status)) {
-            if ((Command.Response[0] & 0xFF) != (SD_COMMAND8_ARGUMENT & 0xFF)) {
-                Status = EFI_DEVICE_ERROR;
+            if ((Command.Response[0] & 0xFF) == (SD_COMMAND8_ARGUMENT & 0xFF)) {
+                Controller->Version = SdVersion2;
 
             } else {
-                break;
+                Controller->Version = SdVersion1p0;
             }
+
+            break;
         }
     }
 
-    if (EFI_ERROR(Status)) {
-        return Status;
-    }
-
-    Controller->Version = SdVersion2;
     return Status;
 }
 
@@ -912,13 +943,10 @@ Return Value:
 
         Status = EfipSdResetCard(Controller);
         if (EFI_ERROR(Status)) {
-            return Status;
+            goto WaitForCardToInitializeEnd;
         }
 
-        Status = EfipSdGetInterfaceCondition(Controller);
-        if (EFI_ERROR(Status)) {
-            return Status;
-        }
+        EfipSdGetInterfaceCondition(Controller);
 
         //
         // The first iteration gets the operating condition register (as no
@@ -932,6 +960,10 @@ Return Value:
                 break;
             }
 
+            //
+            // ACMD41 consists of CMD55+CMD41.
+            //
+
             Command.Command = SdCommandApplicationSpecific;
             Command.ResponseType = SD_RESPONSE_R1;
             Command.CommandArgument = 0;
@@ -941,10 +973,17 @@ Return Value:
                                                    &Command);
 
             if (EFI_ERROR(Status)) {
-                return Status;
+
+                //
+                // The card didn't like CMD55. This might be an MMC card. Let's
+                // try the old fashioned CMD1 for MMC.
+                //
+
+                Status = EfipSdWaitForMmcCardToInitialize(Controller);
+                goto WaitForCardToInitializeEnd;
             }
 
-            Command.Command = SdCommandSendOperatingCondition;
+            Command.Command = SdCommandSendSdOperatingCondition;
             Command.ResponseType = SD_RESPONSE_R3;
             Command.CommandArgument = Ocr;
             if (Retry != 0) {
@@ -967,7 +1006,7 @@ Return Value:
                                                    &Command);
 
             if (EFI_ERROR(Status)) {
-                return Status;
+                goto WaitForCardToInitializeEnd;
             }
 
             EfiStall(SD_CARD_DELAY);
@@ -1015,7 +1054,102 @@ Return Value:
         Controller->HighCapacity = TRUE;
     }
 
-    return EFI_SUCCESS;
+    Status = EFI_SUCCESS;
+
+WaitForCardToInitializeEnd:
+    return Status;
+}
+
+EFI_STATUS
+EfipSdWaitForMmcCardToInitialize (
+    PEFI_SD_CONTROLLER Controller
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends attempts to wait for the MMC card to initialize by
+    sending CMD1.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    SD_COMMAND Command;
+    UINT32 Ocr;
+    UINT32 Retry;
+    EFI_STATUS Status;
+
+    EfiSetMem(&Command, sizeof(SD_COMMAND), 0);
+    Retry = 0;
+    Ocr = 0;
+    while (TRUE) {
+        if (Retry == SD_CARD_OPERATING_CONDITION_RETRY_COUNT) {
+            break;
+        }
+
+        Command.Command = SdCommandSendMmcOperatingCondition;
+        Command.ResponseType = SD_RESPONSE_R3;
+        Command.CommandArgument = Ocr;
+        Command.Response[0] = 0xFFFFFFFF;
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
+        if (EFI_ERROR(Status)) {
+            goto WaitForMmcCardToInitializeEnd;
+        }
+
+        if (Ocr == 0) {
+
+            //
+            // If the operating condition register has never been programmed,
+            // write it now and do the whole thing again. If it has been
+            // successfully programmed, exit.
+            //
+
+            Ocr = Command.Response[0];
+            Ocr &= (Controller->Voltages &
+                    SD_OPERATING_CONDITION_VOLTAGE_MASK) |
+                   SD_OPERATING_CONDITION_ACCESS_MODE;
+
+            Status = EfipSdResetCard(Controller);
+            if (EFI_ERROR(Status)) {
+                goto WaitForMmcCardToInitializeEnd;
+            }
+
+        } else if ((Command.Response[0] & SD_OPERATING_CONDITION_BUSY) != 0) {
+            Controller->Version = SdMmcVersion3;
+            Status = EFI_SUCCESS;
+            if ((Command.Response[0] &
+                 SD_OPERATING_CONDITION_HIGH_CAPACITY) != 0) {
+
+                Controller->HighCapacity = TRUE;
+            }
+
+            goto WaitForMmcCardToInitializeEnd;
+
+        } else {
+            Retry += 1;
+        }
+
+        EfiStall(SD_CARD_DELAY);
+    }
+
+    Status = EFI_NOT_READY;
+
+WaitForMmcCardToInitializeEnd:
+    return Status;
 }
 
 EFI_STATUS
@@ -1164,7 +1298,7 @@ Return Value:
         return Status;
     }
 
-    if (SD_IS_CONTROLLER_SD(Controller)) {
+    if (SD_IS_CARD_SD(Controller)) {
         Controller->CardAddress = (Command.Response[0] >> 16) & 0xFFFF;
     }
 
@@ -1197,6 +1331,9 @@ Return Value:
     UINT64 CapacityBase;
     UINT32 CapacityShift;
     SD_COMMAND Command;
+    UINT32 Frequency;
+    UINT32 FrequencyExponent;
+    UINT32 FrequencyMultiplierIndex;
     UINT32 MmcVersion;
     EFI_STATUS Status;
 
@@ -1246,6 +1383,28 @@ Return Value:
     }
 
     //
+    // Compute the clock speed. This gets clobbered completely for SD cards and
+    // may get clobbered for MMC cards.
+    //
+
+    FrequencyExponent = Command.Response[0] &
+                        SD_CARD_SPECIFIC_DATA_0_FREQUENCY_BASE_MASK;
+
+    Frequency = 10000;
+    while (FrequencyExponent != 0) {
+        Frequency *= 10;
+        FrequencyExponent -= 1;
+    }
+
+    FrequencyMultiplierIndex =
+                         (Command.Response[0] >>
+                          SD_CARD_SPECIFIC_DATA_0_FREQUENCY_MULTIPLIER_SHIFT) &
+                          SD_CARD_SPECIFIC_DATA_0_FREQUENCY_MULTIPLIER_MASK;
+
+    Controller->ClockSpeed =
+               Frequency * EfiSdFrequencyMultipliers[FrequencyMultiplierIndex];
+
+    //
     // Compute the read and write block lengths.
     //
 
@@ -1254,7 +1413,7 @@ Return Value:
                SD_CARD_SPECIFIC_DATA_1_READ_BLOCK_LENGTH_SHIFT) &
               SD_CARD_SPECIFIC_DATA_1_READ_BLOCK_LENGTH_MASK);
 
-    if (SD_IS_CONTROLLER_SD(Controller)) {
+    if (SD_IS_CARD_SD(Controller)) {
         Controller->WriteBlockLength = Controller->ReadBlockLength;
 
     } else {
@@ -1399,7 +1558,7 @@ Return Value:
 
     Controller->EraseGroupSize = 1;
     Controller->PartitionConfiguration = SD_MMC_PARTITION_NONE;
-    if ((SD_IS_CONTROLLER_SD(Controller)) ||
+    if ((SD_IS_CARD_SD(Controller)) ||
         (Controller->Version < SdMmcVersion4)) {
 
         return EFI_SUCCESS;

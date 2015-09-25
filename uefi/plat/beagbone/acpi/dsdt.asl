@@ -65,8 +65,8 @@ DefinitionBlock (
     }
 
     Scope(\_SB.SOCD) {
-        Device(SDMC) {
-            Name(_HID, "TISD4502")
+        Device(MMC0) {
+            Name(_HID, "TEX3004")
             Name(_UID, 0)
             Method(_STA, 0, NotSerialized) {
                 Return(0x0F)
@@ -85,8 +85,28 @@ DefinitionBlock (
             })
         }
 
+        Device(MMC1) {
+            Name(_HID, "TEX3004")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x481D8000,
+                            0x481D8FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {28}
+            })
+        }
+
         Device(NIC0) {
-            Name(_HID, "TIET3350")
+            Name(_HID, "TEX3005")
             Name(_UID, 0)
             Method(_STA, 0, NotSerialized) {
                 Return(0x0F)

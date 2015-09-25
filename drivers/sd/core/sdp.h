@@ -31,11 +31,11 @@ Author:
 //
 
 //
-// This macro determines if the given controller is an SD controller. It
-// returns non-zero if it is an SD controller, or 0 if it is an MMC controller.
+// This macro determines if the given card is an SD card. It returns non-zero
+// if it is an SD card, or 0 if it is an MMC card.
 //
 
-#define SD_IS_CONTROLLER_SD(_Controller) \
+#define SD_IS_CARD_SD(_Controller) \
     ((_Controller)->Version < SdVersionMaximum)
 
 //
@@ -43,16 +43,23 @@ Author:
 //
 
 //
-// Define the amount of time to wait in seconds for the controller to respond.
+// Define the amount of time to wait in milliseconds for the controller to
+// respond.
 //
 
-#define SD_CONTROLLER_TIMEOUT 1
+#define SD_CONTROLLER_TIMEOUT_MS 300
 
 //
 // Define the amount of time to wait in seconds for the status to go green.
 //
 
 #define SD_CONTROLLER_STATUS_TIMEOUT 60
+
+//
+// Defien the amount of time to wait for an MMC card to initialize.
+//
+
+#define SD_CMD1_TIMEOUT 5
 
 //
 // Define the amount of time to wait for the card to initialize, in
@@ -70,7 +77,7 @@ Author:
 #define SD_CARD_OPERATING_CONDITION_RETRY_COUNT 1000
 #define SD_CONFIGURATION_REGISTER_RETRY_COUNT 3
 #define SD_SWITCH_RETRY_COUNT 4
-#define SD_INTERFACE_CONDITION_RETRY_COUNT 10
+#define SD_INTERFACE_CONDITION_RETRY_COUNT 3
 #define SD_SET_BLOCK_LENGTH_RETRY_COUNT 10
 
 //

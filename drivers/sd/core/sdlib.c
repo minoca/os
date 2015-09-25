@@ -64,6 +64,11 @@ SdpWaitForCardToInitialize (
     );
 
 KSTATUS
+SdpWaitForMmcCardToInitialize (
+    PSD_CONTROLLER Controller
+    );
+
+KSTATUS
 SdpSetCrc (
     PSD_CONTROLLER Controller,
     BOOL Enable
@@ -173,6 +178,25 @@ SdpAsynchronousAbort (
 //
 // -------------------------------------------------------------------- Globals
 //
+
+UCHAR SdFrequencyMultipliers[16] = {
+    0,
+    10,
+    12,
+    13,
+    15,
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    70,
+    80
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -364,6 +388,13 @@ Return Value:
     RtlAtomicAnd32(&(Controller->Flags), 0);
 
     //
+    // Compute the timeout delay in time counter ticks.
+    //
+
+    Controller->Timeout = (HlQueryTimeCounterFrequency() *
+                           SD_CONTROLLER_TIMEOUT_MS) / MILLISECONDS_PER_SECOND;
+
+    //
     // Start by checking for a card.
     //
 
@@ -472,7 +503,7 @@ Return Value:
         goto InitializeControllerEnd;
     }
 
-    if (SD_IS_CONTROLLER_SD(Controller)) {
+    if (SD_IS_CARD_SD(Controller)) {
         Status = SdpSetSdFrequency(Controller);
 
     } else {
@@ -490,7 +521,7 @@ Return Value:
     //
 
     Controller->CardCapabilities &= Controller->HostCapabilities;
-    if (SD_IS_CONTROLLER_SD(Controller)) {
+    if (SD_IS_CARD_SD(Controller)) {
         if ((Controller->CardCapabilities & SD_MODE_4BIT) != 0) {
            Controller->BusWidth = 4;
         }
@@ -561,12 +592,11 @@ Return Value:
             goto InitializeControllerEnd;
         }
 
-        Controller->ClockSpeed = SdClock25MHz;
         if ((Controller->CardCapabilities & SD_MODE_HIGH_SPEED_52MHZ) != 0) {
             Controller->ClockSpeed = SdClock52MHz;
 
         } else if ((Controller->CardCapabilities & SD_MODE_HIGH_SPEED) != 0) {
-            Controller->ClockSpeed = SdClock50MHz;
+            Controller->ClockSpeed = SdClock26MHz;
         }
 
         Status = SdpSetBusParameters(Controller);
@@ -946,33 +976,44 @@ Return Value:
     // If going wide, let the card know first.
     //
 
-    if ((SD_IS_CONTROLLER_SD(Controller)) && (Controller->BusWidth != 1)) {
-        RtlZeroMemory(&Command, sizeof(SD_COMMAND));
-        Command.Command = SdCommandApplicationSpecific;
-        Command.ResponseType = SD_RESPONSE_R1;
-        Command.CommandArgument = Controller->CardAddress << 16;
-        Status = Controller->FunctionTable.SendCommand(
+    if (Controller->BusWidth != 1) {
+        if (SD_IS_CARD_SD(Controller)) {
+            RtlZeroMemory(&Command, sizeof(SD_COMMAND));
+            Command.Command = SdCommandApplicationSpecific;
+            Command.ResponseType = SD_RESPONSE_R1;
+            Command.CommandArgument = Controller->CardAddress << 16;
+            Status = Controller->FunctionTable.SendCommand(
                                                    Controller,
                                                    Controller->ConsumerContext,
                                                    &Command);
 
-        if (!KSUCCESS(Status)) {
-            return Status;
-        }
+            if (!KSUCCESS(Status)) {
+                return Status;
+            }
 
-        Command.Command = SdCommandSetBusWidth;
-        Command.ResponseType = SD_RESPONSE_R1;
+            Command.Command = SdCommandSetBusWidth;
+            Command.ResponseType = SD_RESPONSE_R1;
 
-        ASSERT(Controller->BusWidth == 4);
+            ASSERT(Controller->BusWidth == 4);
 
-        Command.CommandArgument = 2;
-        Status = Controller->FunctionTable.SendCommand(
+            Command.CommandArgument = 2;
+            Status = Controller->FunctionTable.SendCommand(
                                                    Controller,
                                                    Controller->ConsumerContext,
                                                    &Command);
 
-        if (!KSUCCESS(Status)) {
-            return Status;
+            if (!KSUCCESS(Status)) {
+                return Status;
+            }
+
+        } else {
+            Status = SdpMmcSwitch(Controller,
+                                  SD_MMC_EXTENDED_CARD_DATA_BUS_WIDTH,
+                                  Controller->BusWidth);
+
+            if (!KSUCCESS(Status)) {
+                return Status;
+            }
         }
 
         HlBusySpin(2000);
@@ -1081,20 +1122,17 @@ Return Value:
                                                    &Command);
 
         if (KSUCCESS(Status)) {
-            if ((Command.Response[0] & 0xFF) != (SD_COMMAND8_ARGUMENT & 0xFF)) {
-                Status = STATUS_DEVICE_IO_ERROR;
+            if ((Command.Response[0] & 0xFF) == (SD_COMMAND8_ARGUMENT & 0xFF)) {
+                Controller->Version = SdVersion2;
 
             } else {
-                break;
+                Controller->Version = SdVersion1p0;
             }
+
+            break;
         }
     }
 
-    if (!KSUCCESS(Status)) {
-        return Status;
-    }
-
-    Controller->Version = SdVersion2;
     return Status;
 }
 
@@ -1135,13 +1173,10 @@ Return Value:
 
         Status = SdpResetCard(Controller);
         if (!KSUCCESS(Status)) {
-            return Status;
+            goto WaitForCardToInitializeEnd;
         }
 
-        Status = SdpGetInterfaceCondition(Controller);
-        if (!KSUCCESS(Status)) {
-            return Status;
-        }
+        SdpGetInterfaceCondition(Controller);
 
         //
         // The first iteration gets the operating condition register (as no
@@ -1155,6 +1190,10 @@ Return Value:
                 break;
             }
 
+            //
+            // ACMD41 consists of CMD55+CMD41.
+            //
+
             Command.Command = SdCommandApplicationSpecific;
             Command.ResponseType = SD_RESPONSE_R1;
             Command.CommandArgument = 0;
@@ -1164,10 +1203,17 @@ Return Value:
                                                    &Command);
 
             if (!KSUCCESS(Status)) {
-                return Status;
+
+                //
+                // The card didn't like CMD55. This might be an MMC card. Let's
+                // try the old fashioned CMD1 for MMC.
+                //
+
+                Status = SdpWaitForMmcCardToInitialize(Controller);
+                goto WaitForCardToInitializeEnd;
             }
 
-            Command.Command = SdCommandSendOperatingCondition;
+            Command.Command = SdCommandSendSdOperatingCondition;
             Command.ResponseType = SD_RESPONSE_R3;
             Command.CommandArgument = Ocr;
             if (Retry != 0) {
@@ -1190,7 +1236,7 @@ Return Value:
                                                    &Command);
 
             if (!KSUCCESS(Status)) {
-                return Status;
+                goto WaitForCardToInitializeEnd;
             }
 
             HlBusySpin(SD_CARD_DELAY);
@@ -1216,7 +1262,8 @@ Return Value:
     }
 
     if (LoopIndex == SD_CARD_INITIALIZE_RETRY_COUNT) {
-        return STATUS_NOT_READY;
+        Status = STATUS_NOT_READY;
+        goto WaitForCardToInitializeEnd;
     }
 
     if ((Controller->HostCapabilities & SD_MODE_SPI) != 0) {
@@ -1239,7 +1286,104 @@ Return Value:
         RtlAtomicOr32(&(Controller->Flags), SD_CONTROLLER_FLAG_HIGH_CAPACITY);
     }
 
-    return STATUS_SUCCESS;
+    Status = STATUS_SUCCESS;
+
+WaitForCardToInitializeEnd:
+    return Status;
+}
+
+KSTATUS
+SdpWaitForMmcCardToInitialize (
+    PSD_CONTROLLER Controller
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends attempts to wait for the MMC card to initialize by
+    sending CMD1.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    SD_COMMAND Command;
+    ULONG Ocr;
+    KSTATUS Status;
+    ULONGLONG Timeout;
+
+    RtlZeroMemory(&Command, sizeof(SD_COMMAND));
+    Timeout = SdQueryTimeCounter(Controller) +
+              (HlQueryTimeCounterFrequency() * SD_CMD1_TIMEOUT);
+
+    Ocr = 0;
+    while (TRUE) {
+        Command.Command = SdCommandSendMmcOperatingCondition;
+        Command.ResponseType = SD_RESPONSE_R3;
+        Command.CommandArgument = Ocr;
+        Command.Response[0] = 0xFFFFFFFF;
+        Status = Controller->FunctionTable.SendCommand(
+                                           Controller,
+                                           Controller->ConsumerContext,
+                                           &Command);
+
+        if (!KSUCCESS(Status)) {
+            goto WaitForMmcCardToInitializeEnd;
+        }
+
+        if (Ocr == 0) {
+
+            //
+            // If the operating condition register has never been programmed,
+            // write it now and do the whole thing again. If it has been
+            // successfully programmed, exit.
+            //
+
+            Ocr = Command.Response[0];
+            Ocr &= (Controller->Voltages &
+                    SD_OPERATING_CONDITION_VOLTAGE_MASK) |
+                   SD_OPERATING_CONDITION_ACCESS_MODE;
+
+            Status = SdpResetCard(Controller);
+            if (!KSUCCESS(Status)) {
+                goto WaitForMmcCardToInitializeEnd;
+            }
+
+        } else if ((Command.Response[0] & SD_OPERATING_CONDITION_BUSY) != 0) {
+            Controller->Version = SdMmcVersion3;
+            Status = STATUS_SUCCESS;
+
+            ASSERT((Controller->Flags & SD_CONTROLLER_FLAG_HIGH_CAPACITY) == 0);
+
+            if ((Command.Response[0] &
+                 SD_OPERATING_CONDITION_HIGH_CAPACITY) != 0) {
+
+                RtlAtomicOr32(&(Controller->Flags),
+                              SD_CONTROLLER_FLAG_HIGH_CAPACITY);
+            }
+
+            goto WaitForMmcCardToInitializeEnd;
+
+        } else {
+            if (SdQueryTimeCounter(Controller) >= Timeout) {
+                break;
+            }
+        }
+    }
+
+    Status = STATUS_TIMEOUT;
+
+WaitForMmcCardToInitializeEnd:
+    return Status;
 }
 
 KSTATUS
@@ -1388,7 +1532,7 @@ Return Value:
         return Status;
     }
 
-    if (SD_IS_CONTROLLER_SD(Controller)) {
+    if (SD_IS_CARD_SD(Controller)) {
         Controller->CardAddress = (Command.Response[0] >> 16) & 0xFFFF;
     }
 
@@ -1421,6 +1565,9 @@ Return Value:
     ULONGLONG CapacityBase;
     ULONG CapacityShift;
     SD_COMMAND Command;
+    ULONG Frequency;
+    ULONG FrequencyExponent;
+    ULONG FrequencyMultiplierIndex;
     ULONG MmcVersion;
     KSTATUS Status;
 
@@ -1441,7 +1588,7 @@ Return Value:
         return Status;
     }
 
-    if (Controller->Version == SdVersionInvalid) {
+    if (!SD_IS_CARD_SD(Controller)) {
         MmcVersion = (Command.Response[0] >>
                       SD_CARD_SPECIFIC_DATA_0_MMC_VERSION_SHIFT) &
                      SD_CARD_SPECIFIC_DATA_0_MMC_VERSION_MASK;
@@ -1470,6 +1617,28 @@ Return Value:
     }
 
     //
+    // Compute the clock speed. This gets clobbered completely for SD cards and
+    // may get clobbered for MMC cards.
+    //
+
+    FrequencyExponent = Command.Response[0] &
+                        SD_CARD_SPECIFIC_DATA_0_FREQUENCY_BASE_MASK;
+
+    Frequency = 10000;
+    while (FrequencyExponent != 0) {
+        Frequency *= 10;
+        FrequencyExponent -= 1;
+    }
+
+    FrequencyMultiplierIndex =
+                         (Command.Response[0] >>
+                          SD_CARD_SPECIFIC_DATA_0_FREQUENCY_MULTIPLIER_SHIFT) &
+                          SD_CARD_SPECIFIC_DATA_0_FREQUENCY_MULTIPLIER_MASK;
+
+    Controller->ClockSpeed = Frequency *
+                             SdFrequencyMultipliers[FrequencyMultiplierIndex];
+
+    //
     // Compute the read and write block lengths.
     //
 
@@ -1478,7 +1647,7 @@ Return Value:
                SD_CARD_SPECIFIC_DATA_1_READ_BLOCK_LENGTH_SHIFT) &
               SD_CARD_SPECIFIC_DATA_1_READ_BLOCK_LENGTH_MASK);
 
-    if (SD_IS_CONTROLLER_SD(Controller)) {
+    if (SD_IS_CARD_SD(Controller)) {
         Controller->WriteBlockLength = Controller->ReadBlockLength;
 
     } else {
@@ -1527,7 +1696,6 @@ Return Value:
 
     //
     // There are currently assumptions about the block lengths both being 512.
-    // This will change when MMC is supported.
     //
 
     ASSERT(Controller->ReadBlockLength == SD_BLOCK_SIZE);
@@ -1631,7 +1799,7 @@ Return Value:
 
     Controller->EraseGroupSize = 1;
     Controller->PartitionConfiguration = SD_MMC_PARTITION_NONE;
-    if ((SD_IS_CONTROLLER_SD(Controller)) ||
+    if ((SD_IS_CARD_SD(Controller)) ||
         (Controller->Version < SdMmcVersion4)) {
 
         return STATUS_SUCCESS;

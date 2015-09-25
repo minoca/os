@@ -31,8 +31,8 @@ Author:
 // Define the recognized device IDs.
 //
 
-#define SD_OMAP4_DEVICE_ID "OMAP4501"
-#define SD_AM335_DEVICE_ID "TISD4502"
+#define SD_OMAP4_DEVICE_ID "TEX4004"
+#define SD_AM335_DEVICE_ID "TEX3004"
 
 //
 // Define the minimum expected length of the HSMMC block.
@@ -77,6 +77,7 @@ Author:
 //
 
 #define SD_OMAP4_CON_INIT           (1 << 1)
+#define SD_OMAP4_CON_8BIT           (1 << 5)
 #define SD_OMAP4_CON_DEBOUNCE_MASK  (0x3 << 9)
 #define SD_OMAP4_CON_DMA_MASTER     (1 << 20)
 

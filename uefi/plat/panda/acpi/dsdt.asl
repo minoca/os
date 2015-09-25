@@ -58,7 +58,7 @@ DefinitionBlock (
         }
 
         Device(GPI1) {
-            Name(_HID, "OMAP4502")
+            Name(_HID, "TEX4006")
             Name(_UID, 0)
             Method(_STA, 0, NotSerialized) {
                 Return(0x0F)
@@ -78,7 +78,7 @@ DefinitionBlock (
         }
 
         Device(GPI2) {
-            Name(_HID, "OMAP4502")
+            Name(_HID, "TEX4006")
             Name(_UID, 0)
             Method(_STA, 0, NotSerialized) {
                 Return(0x0F)
@@ -98,7 +98,7 @@ DefinitionBlock (
         }
 
         Device(GPI3) {
-            Name(_HID, "OMAP4502")
+            Name(_HID, "TEX4006")
             Name(_UID, 0)
             Method(_STA, 0, NotSerialized) {
                 Return(0x0F)
@@ -118,7 +118,7 @@ DefinitionBlock (
         }
 
         Device(GPI4) {
-            Name(_HID, "OMAP4502")
+            Name(_HID, "TEX4006")
             Name(_UID, 0)
             Method(_STA, 0, NotSerialized) {
                 Return(0x0F)
@@ -138,7 +138,7 @@ DefinitionBlock (
         }
 
         Device(GPI5) {
-            Name(_HID, "OMAP4502")
+            Name(_HID, "TEX4006")
             Name(_UID, 0)
             Method(_STA, 0, NotSerialized) {
                 Return(0x0F)
@@ -158,7 +158,7 @@ DefinitionBlock (
         }
 
         Device(GPI6) {
-            Name(_HID, "OMAP4502")
+            Name(_HID, "TEX4006")
             Name(_UID, 0)
             Method(_STA, 0, NotSerialized) {
                 Return(0x0F)
@@ -178,7 +178,7 @@ DefinitionBlock (
         }
 
         Device(SDMC) {
-            Name(_HID, "OMAP4501")
+            Name(_HID, "TEX4004")
             Name(_UID, 0)
             Method(_STA, 0, NotSerialized) {
                 Return(0x0F)

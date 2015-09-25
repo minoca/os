@@ -371,6 +371,20 @@ Author:
     (SD_RESPONSE_PRESENT | SD_RESPONSE_VALID_CRC | SD_RESPONSE_OPCODE)
 
 //
+// Define the R1 response bits.
+//
+
+#define SD_RESPONSE_R1_IDLE 0x01
+#define SD_RESPONSE_R1_ERASE_RESET 0x02
+#define SD_RESPONSE_R1_ILLEGAL_COMMAND 0x04
+#define SD_RESPONSE_R1_CRC_ERROR 0x08
+#define SD_RESPONSE_R1_ERASE_SEQUENCE_ERROR 0x10
+#define SD_RESPONSE_R1_ADDRESS_ERROR 0x20
+#define SD_RESPONSE_R1_PARAMETER_ERROR 0x40
+
+#define SD_RESPONSE_R1_ERROR_MASK 0x7E
+
+//
 // Define the SD CMD8 check argument.
 //
 
@@ -380,11 +394,14 @@ Author:
 // Define Card Specific Data (CSD) fields coming out of the response words.
 //
 
+#define SD_CARD_SPECIFIC_DATA_0_FREQUENCY_BASE_MASK             0x7
+#define SD_CARD_SPECIFIC_DATA_0_FREQUENCY_MULTIPLIER_SHIFT      3
+#define SD_CARD_SPECIFIC_DATA_0_FREQUENCY_MULTIPLIER_MASK       0xF
 #define SD_CARD_SPECIFIC_DATA_0_MMC_VERSION_SHIFT               26
 #define SD_CARD_SPECIFIC_DATA_0_MMC_VERSION_MASK                0xF
 #define SD_CARD_SPECIFIC_DATA_1_READ_BLOCK_LENGTH_SHIFT         16
 #define SD_CARD_SPECIFIC_DATA_1_READ_BLOCK_LENGTH_MASK          0x0F
-#define SD_CARD_SPECIFIC_DATA_1_WRITE_BLOCK_LENGTH_SHIFT        16
+#define SD_CARD_SPECIFIC_DATA_1_WRITE_BLOCK_LENGTH_SHIFT        22
 #define SD_CARD_SPECIFIC_DATA_1_WRITE_BLOCK_LENGTH_MASK         0x0F
 #define SD_CARD_SPECIFIC_DATA_1_HIGH_CAPACITY_MASK              0x3F
 #define SD_CARD_SPECIFIC_DATA_1_HIGH_CAPACITY_SHIFT             16
@@ -394,7 +411,7 @@ Author:
 #define SD_CARD_SPECIFIC_DATA_1_CAPACITY_MASK                   0x3FF
 #define SD_CARD_SPECIFIC_DATA_1_CAPACITY_SHIFT                  2
 #define SD_CARD_SPECIFIC_DATA_2_CAPACITY_MASK                   0xC0000000
-#define SD_CARD_SPECIFIC_DATA_2_CAPACITY_SHIFT                  15
+#define SD_CARD_SPECIFIC_DATA_2_CAPACITY_SHIFT                  30
 #define SD_CARD_SPECIFIC_DATA_2_CAPACITY_MULTIPLIER_MASK        0x00038000
 #define SD_CARD_SPECIFIC_DATA_2_CAPACITY_MULTIPLIER_SHIFT       15
 #define SD_CARD_SPECIFIC_DATA_2_ERASE_GROUP_SIZE_MASK           0x00007C00
@@ -529,7 +546,7 @@ Author:
 #define SD_RESET_FLAG_DATA_LINE    0x00000004
 
 //
-// Define the bitmaks of SD controller flags.
+// Define the bitmask of SD controller flags.
 //
 
 #define SD_CONTROLLER_FLAG_HIGH_CAPACITY          0x00000001
@@ -575,6 +592,7 @@ typedef enum _SD_REGISTER {
 
 typedef enum _SD_COMMAND_VALUE {
     SdCommandReset                           = 0,
+    SdCommandSendMmcOperatingCondition       = 1,
     SdCommandAllSendCardIdentification       = 2,
     SdCommandSetRelativeAddress              = 3,
     SdCommandSwitch                          = 6,
@@ -594,7 +612,7 @@ typedef enum _SD_COMMAND_VALUE {
     SdCommandEraseGroupStart                 = 35,
     SdCommandEraseGroupEnd                   = 36,
     SdCommandErase                           = 38,
-    SdCommandSendOperatingCondition          = 41,
+    SdCommandSendSdOperatingCondition        = 41,
     SdCommandSendSdConfigurationRegister     = 51,
     SdCommandApplicationSpecific             = 55,
     SdCommandSpiReadOperatingCondition       = 58,
@@ -632,6 +650,7 @@ typedef enum _SD_CLOCK_SPEED {
     SdClockInvalid,
     SdClock400kHz = 400000,
     SdClock25MHz = 25000000,
+    SdClock26MHz = 26000000,
     SdClock50MHz = 50000000,
     SdClock52MHz = 52000000,
 } SD_CLOCK_SPEED, *PSD_CLOCK_SPEED;
@@ -1160,6 +1179,8 @@ Members:
 
     PendingStatusBits - Stores the mask of pending interrupt status bits.
 
+    Timeout - Stores the timeout duration, in time counter ticks.
+
 --*/
 
 struct _SD_CONTROLLER {
@@ -1193,6 +1214,7 @@ struct _SD_CONTROLLER {
     PVOID IoCompletionContext;
     UINTN IoRequestSize;
     volatile ULONG PendingStatusBits;
+    ULONGLONG Timeout;
 };
 
 /*++
@@ -1308,52 +1330,6 @@ Return Value:
 --*/
 
 SD_API
-INTERRUPT_STATUS
-SdStandardInterruptService (
-    PSD_CONTROLLER Controller
-    );
-
-/*++
-
-Routine Description:
-
-    This routine implements the interrupt service routine for an SD controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-Return Value:
-
-    Returns whether or not the SD controller caused the interrupt.
-
---*/
-
-SD_API
-INTERRUPT_STATUS
-SdStandardInterruptServiceDispatch (
-    PVOID Context
-    );
-
-/*++
-
-Routine Description:
-
-    This routine implements the interrupt handler that is called at dispatch
-    level.
-
-Arguments:
-
-    Context - Supplies a context pointer, which in this case is a pointer to
-        the SD controller.
-
-Return Value:
-
-    None.
-
---*/
-
-SD_API
 KSTATUS
 SdInitializeController (
     PSD_CONTROLLER Controller,
@@ -1444,85 +1420,6 @@ Return Value:
     STATUS_SUCCESS on success.
 
     STATUS_NO_MEDIA if there is no card in the slot.
-
---*/
-
-SD_API
-KSTATUS
-SdStandardInitializeDma (
-    PSD_CONTROLLER Controller
-    );
-
-/*++
-
-Routine Description:
-
-    This routine initializes standard DMA support in the host controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-Return Value:
-
-    STATUS_SUCCESS on success.
-
-    STATUS_NOT_SUPPORTED if the host controller does not support ADMA2.
-
-    STATUS_INSUFFICIENT_RESOURCES on allocation failure.
-
-    STATUS_NO_MEDIA if there is no card in the slot.
-
---*/
-
-SD_API
-VOID
-SdStandardBlockIoDma (
-    PSD_CONTROLLER Controller,
-    ULONGLONG BlockOffset,
-    UINTN BlockCount,
-    PIO_BUFFER IoBuffer,
-    UINTN IoBufferOffset,
-    BOOL Write,
-    PSD_IO_COMPLETION_ROUTINE CompletionRoutine,
-    PVOID CompletionContext
-    );
-
-/*++
-
-Routine Description:
-
-    This routine performs a block I/O read or write using standard ADMA2.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    BlockOffset - Supplies the logical block address of the I/O.
-
-    BlockCount - Supplies the number of blocks to read or write.
-
-    IoBuffer - Supplies a pointer to the buffer containing the data to write
-        or where the read data should be returned.
-
-    IoBufferOffset - Supplies the offset from the beginning of the I/O buffer
-        where this I/O should begin. This is relative to the I/O buffer's
-        current offset.
-
-    Write - Supplies a boolean indicating if this is a read operation (FALSE)
-        or a write operation.
-
-    CompletionRoutine - Supplies a pointer to a function to call when the I/O
-        completes.
-
-    CompletionContext - Supplies a context pointer to pass as a parameter to
-        the completion routine.
-
-Return Value:
-
-    None. The status of the operation is returned when the completion routine
-    is called, which may be during the execution of this function in the case
-    of an early failure.
 
 --*/
 
@@ -1627,6 +1524,314 @@ Return Value:
 
     Returns the number of ticks that have elapsed since the system was booted,
     or a recent tick value.
+
+--*/
+
+//
+// Standard SD host controller functions
+//
+
+SD_API
+INTERRUPT_STATUS
+SdStandardInterruptService (
+    PSD_CONTROLLER Controller
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the interrupt service routine for a standard SD
+    controller.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+Return Value:
+
+    Returns whether or not the SD controller caused the interrupt.
+
+--*/
+
+SD_API
+INTERRUPT_STATUS
+SdStandardInterruptServiceDispatch (
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the interrupt handler that is called at dispatch
+    level.
+
+Arguments:
+
+    Context - Supplies a context pointer, which in this case is a pointer to
+        the SD controller.
+
+Return Value:
+
+    None.
+
+--*/
+
+SD_API
+KSTATUS
+SdStandardInitializeDma (
+    PSD_CONTROLLER Controller
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes standard DMA support in the host controller.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NOT_SUPPORTED if the host controller does not support ADMA2.
+
+    STATUS_INSUFFICIENT_RESOURCES on allocation failure.
+
+    STATUS_NO_MEDIA if there is no card in the slot.
+
+--*/
+
+SD_API
+VOID
+SdStandardBlockIoDma (
+    PSD_CONTROLLER Controller,
+    ULONGLONG BlockOffset,
+    UINTN BlockCount,
+    PIO_BUFFER IoBuffer,
+    UINTN IoBufferOffset,
+    BOOL Write,
+    PSD_IO_COMPLETION_ROUTINE CompletionRoutine,
+    PVOID CompletionContext
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a block I/O read or write using standard ADMA2.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    BlockOffset - Supplies the logical block address of the I/O.
+
+    BlockCount - Supplies the number of blocks to read or write.
+
+    IoBuffer - Supplies a pointer to the buffer containing the data to write
+        or where the read data should be returned.
+
+    IoBufferOffset - Supplies the offset from the beginning of the I/O buffer
+        where this I/O should begin. This is relative to the I/O buffer's
+        current offset.
+
+    Write - Supplies a boolean indicating if this is a read operation (FALSE)
+        or a write operation.
+
+    CompletionRoutine - Supplies a pointer to a function to call when the I/O
+        completes.
+
+    CompletionContext - Supplies a context pointer to pass as a parameter to
+        the completion routine.
+
+Return Value:
+
+    None. The status of the operation is returned when the completion routine
+    is called, which may be during the execution of this function in the case
+    of an early failure.
+
+--*/
+
+SD_API
+KSTATUS
+SdStandardInitializeController (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    ULONG Phase
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs any controller specific initialization steps.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Phase - Supplies the phase of initialization. Phase 0 happens after the
+        initial software reset and Phase 1 happens after the bus width has been
+        set to 1 and the speed to 400KHz.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+SD_API
+KSTATUS
+SdStandardResetController (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    ULONG Flags
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a soft reset of the SD controller.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Flags - Supplies a bitmask of reset flags. See SD_RESET_FLAG_* for
+        definitions.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+SD_API
+KSTATUS
+SdStandardSendCommand (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    PSD_COMMAND Command
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends the given command to the card.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Command - Supplies a pointer to the command parameters.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+SD_API
+KSTATUS
+SdStandardGetSetBusWidth (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the controller's bus width. The bus width is
+    stored in the controller structure.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Set - Supplies a boolean indicating whether the bus width should be queried
+        or set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+SD_API
+KSTATUS
+SdStandardGetSetClockSpeed (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the controller's clock speed. The clock speed is
+    stored in the controller structure.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Set - Supplies a boolean indicating whether the bus width should be queried
+        or set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+SD_API
+KSTATUS
+SdStandardStopDataTransfer (
+    PSD_CONTROLLER Controller,
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine stops any current data transfer on the controller.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+Return Value:
+
+    Status code.
 
 --*/
 

@@ -29,11 +29,11 @@ Author:
 //
 
 //
-// This macro determines if the given controller is an SD controller. It
-// returns non-zero if it is an SD controller, or 0 if it is an MMC controller.
+// This macro determines if the given card is an SD card. It returns non-zero
+// if it is an SD card, or 0 if it is an MMC card.
 //
 
-#define SD_IS_CONTROLLER_SD(_Controller) \
+#define SD_IS_CARD_SD(_Controller) \
     ((_Controller)->Version < SdVersionMaximum)
 
 //
@@ -120,6 +120,7 @@ typedef enum _SD_CLOCK_SPEED {
     SdClockInvalid,
     SdClock400kHz = 400000,
     SdClock25MHz = 25000000,
+    SdClock26MHz = 26000000,
     SdClock50MHz = 50000000,
     SdClock52MHz = 52000000,
 } SD_CLOCK_SPEED, *PSD_CLOCK_SPEED;

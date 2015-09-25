@@ -55,47 +55,6 @@ Environment:
 //
 
 KSTATUS
-SdpInitializeController (
-    PSD_CONTROLLER Controller,
-    PVOID Context,
-    ULONG Phase
-    );
-
-KSTATUS
-SdpResetController (
-    PSD_CONTROLLER Controller,
-    PVOID Context,
-    ULONG Flags
-    );
-
-KSTATUS
-SdpSendCommand (
-    PSD_CONTROLLER Controller,
-    PVOID Context,
-    PSD_COMMAND Command
-    );
-
-KSTATUS
-SdpGetSetBusWidth (
-    PSD_CONTROLLER Controller,
-    PVOID Context,
-    BOOL Set
-    );
-
-KSTATUS
-SdpGetSetClockSpeed (
-    PSD_CONTROLLER Controller,
-    PVOID Context,
-    BOOL Set
-    );
-
-KSTATUS
-SdpStopDataTransfer (
-    PSD_CONTROLLER Controller,
-    PVOID Context
-    );
-
-KSTATUS
 SdpReadData (
     PSD_CONTROLLER Controller,
     PVOID Data,
@@ -120,12 +79,12 @@ SdpSetDmaInterrupts (
 //
 
 SD_FUNCTION_TABLE SdStdFunctionTable = {
-    SdpInitializeController,
-    SdpResetController,
-    SdpSendCommand,
-    SdpGetSetBusWidth,
-    SdpGetSetClockSpeed,
-    SdpStopDataTransfer,
+    SdStandardInitializeController,
+    SdStandardResetController,
+    SdStandardSendCommand,
+    SdStandardGetSetBusWidth,
+    SdStandardGetSetClockSpeed,
+    SdStandardStopDataTransfer,
     NULL,
     NULL,
     NULL
@@ -381,6 +340,7 @@ Return Value:
     return STATUS_SUCCESS;
 }
 
+SD_API
 VOID
 SdStandardBlockIoDma (
     PSD_CONTROLLER Controller,
@@ -614,8 +574,9 @@ BlockIoDmaEnd:
     return;
 }
 
+SD_API
 KSTATUS
-SdpInitializeController (
+SdStandardInitializeController (
     PSD_CONTROLLER Controller,
     PVOID Context,
     ULONG Phase
@@ -779,8 +740,9 @@ InitializeControllerEnd:
     return Status;
 }
 
+SD_API
 KSTATUS
-SdpResetController (
+SdStandardResetController (
     PSD_CONTROLLER Controller,
     PVOID Context,
     ULONG Flags
@@ -810,7 +772,6 @@ Return Value:
 
 {
 
-    ULONGLONG Frequency;
     ULONG ResetBits;
     KSTATUS Status;
     ULONGLONG Timeout;
@@ -831,10 +792,7 @@ Return Value:
 
     Value = SD_READ_REGISTER(Controller, SdRegisterClockControl);
     SD_WRITE_REGISTER(Controller, SdRegisterClockControl, Value | ResetBits);
-    Frequency = HlQueryTimeCounterFrequency();
-    Timeout = SdQueryTimeCounter(Controller) +
-              (Frequency * SD_CONTROLLER_TIMEOUT);
-
+    Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
     Status = STATUS_TIMEOUT;
     do {
         Value = SD_READ_REGISTER(Controller, SdRegisterClockControl);
@@ -850,8 +808,9 @@ Return Value:
     return Status;
 }
 
+SD_API
 KSTATUS
-SdpSendCommand (
+SdStandardSendCommand (
     PSD_CONTROLLER Controller,
     PVOID Context,
     PSD_COMMAND Command
@@ -882,7 +841,6 @@ Return Value:
 
     ULONG BlockCount;
     ULONG Flags;
-    ULONGLONG Frequency;
     ULONG InhibitMask;
     KSTATUS Status;
     ULONGLONG Timeout;
@@ -909,16 +867,16 @@ Return Value:
     // Wait for the previous command to complete.
     //
 
-    Frequency = HlQueryTimeCounterFrequency();
-    Timeout = SdQueryTimeCounter(Controller) +
-              (Frequency * SD_CONTROLLER_TIMEOUT);
-
+    Timeout = 0;
     Status = STATUS_TIMEOUT;
     do {
         Value = SD_READ_REGISTER(Controller, SdRegisterPresentState);
         if ((Value & InhibitMask) == 0) {
             Status = STATUS_SUCCESS;
             break;
+
+        } else if (Timeout == 0) {
+            Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
         }
 
     } while (SdQueryTimeCounter(Controller) <= Timeout);
@@ -1039,9 +997,7 @@ Return Value:
     ASSERT((Controller->Flags &
             SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) == 0);
 
-    Timeout = SdQueryTimeCounter(Controller) +
-              (Frequency * SD_CONTROLLER_TIMEOUT);
-
+    Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
     Status = STATUS_TIMEOUT;
     do {
         Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
@@ -1053,7 +1009,6 @@ Return Value:
     } while (SdQueryTimeCounter(Controller) <= Timeout);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Got no command complete\n");
         goto SendCommandEnd;
     }
 
@@ -1145,8 +1100,9 @@ SendCommandEnd:
     return Status;
 }
 
+SD_API
 KSTATUS
-SdpGetSetBusWidth (
+SdStandardGetSetBusWidth (
     PSD_CONTROLLER Controller,
     PVOID Context,
     BOOL Set
@@ -1220,8 +1176,9 @@ Return Value:
     return STATUS_SUCCESS;
 }
 
+SD_API
 KSTATUS
-SdpGetSetClockSpeed (
+SdStandardGetSetClockSpeed (
     PSD_CONTROLLER Controller,
     PVOID Context,
     BOOL Set
@@ -1254,7 +1211,6 @@ Return Value:
 
     ULONG ClockControl;
     ULONG Divisor;
-    ULONGLONG Frequency;
     ULONG Result;
     KSTATUS Status;
     ULONGLONG Timeout;
@@ -1328,10 +1284,7 @@ Return Value:
     SD_WRITE_REGISTER(Controller, SdRegisterClockControl, ClockControl);
     SD_WRITE_REGISTER(Controller, SdRegisterClockControl, ClockControl);
     Status = STATUS_TIMEOUT;
-    Frequency = HlQueryTimeCounterFrequency();
-    Timeout = SdQueryTimeCounter(Controller) +
-              (Frequency * SD_CONTROLLER_TIMEOUT);
-
+    Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
     do {
         Value = SD_READ_REGISTER(Controller, SdRegisterClockControl);
         if ((Value & SD_CLOCK_CONTROL_CLOCK_STABLE) != 0) {
@@ -1350,8 +1303,9 @@ Return Value:
     return STATUS_SUCCESS;
 }
 
+SD_API
 KSTATUS
-SdpStopDataTransfer (
+SdStandardStopDataTransfer (
     PSD_CONTROLLER Controller,
     PVOID Context
     )
@@ -1377,7 +1331,6 @@ Return Value:
 
 {
 
-    ULONGLONG Frequency;
     KSTATUS Status;
     ULONGLONG Timeout;
     ULONG Value;
@@ -1399,10 +1352,7 @@ Return Value:
     // Wait for the transfer to complete.
     //
 
-    Frequency = HlQueryTimeCounterFrequency();
-    Timeout = SdQueryTimeCounter(Controller) +
-              (Frequency * SD_CONTROLLER_TIMEOUT);
-
+    Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
     Status = STATUS_TIMEOUT;
     do {
         Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
@@ -1466,7 +1416,6 @@ Return Value:
 
     PULONG Buffer32;
     ULONG Count;
-    ULONGLONG Frequency;
     ULONG IoIndex;
     ULONG Mask;
     KSTATUS Status;
@@ -1483,16 +1432,13 @@ Return Value:
 
     ASSERT(IS_ALIGNED(Size, sizeof(ULONG)) != FALSE);
 
-    Frequency = HlQueryTimeCounterFrequency();
     while (Size != 0) {
 
         //
         // Get the interrupt status register.
         //
 
-        Timeout = SdQueryTimeCounter(Controller) +
-                  (Frequency * SD_CONTROLLER_TIMEOUT);
-
+        Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
         Status = STATUS_TIMEOUT;
         do {
             Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
@@ -1585,7 +1531,6 @@ Return Value:
 
     PULONG Buffer32;
     ULONG Count;
-    ULONGLONG Frequency;
     ULONG IoIndex;
     ULONG Mask;
     KSTATUS Status;
@@ -1602,16 +1547,13 @@ Return Value:
 
     ASSERT(IS_ALIGNED(Size, sizeof(ULONG)) != FALSE);
 
-    Frequency = HlQueryTimeCounterFrequency();
     while (Size != 0) {
 
         //
         // Get the interrupt status register.
         //
 
-        Timeout = SdQueryTimeCounter(Controller) +
-                  (Frequency * SD_CONTROLLER_TIMEOUT);
-
+        Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
         Status = STATUS_TIMEOUT;
         do {
             Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);

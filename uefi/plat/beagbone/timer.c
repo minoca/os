@@ -447,6 +447,13 @@ Return Value:
     UINT32 Value;
 
     //
+    // Set the RTC to smart idle wakeup-capable.
+    //
+
+    Value = AM335_RTC_SYS_CONFIG_IDLE_MODE_SMART_WAKEUP;
+    AM3_WRITE_RTC(Am335RtcSysConfig, Value);
+
+    //
     // If the RTC is already running, then it's been set up from a previous
     // boot.
     //

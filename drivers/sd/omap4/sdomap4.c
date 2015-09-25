@@ -203,6 +203,13 @@ SdOmap4PerformIoPolled (
     BOOL LockRequired
     );
 
+KSTATUS
+SdOmap4GetSetBusWidth (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    BOOL Set
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -1243,10 +1250,13 @@ Return Value:
                               SD_VOLTAGE_165_195;
 
         Parameters.HostCapabilities = SD_MODE_4BIT |
+                                      SD_MODE_8BIT |
                                       SD_MODE_HIGH_SPEED |
                                       SD_MODE_AUTO_CMD12;
 
         Parameters.FundamentalClock = SD_OMAP4_FUNDAMENTAL_CLOCK_SPEED;
+        Parameters.FunctionTable.GetSetBusWidth = SdOmap4GetSetBusWidth;
+        Parameters.ConsumerContext = Device;
         Device->Controller = SdCreateController(&Parameters);
         if (Device->Controller == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -2347,5 +2357,69 @@ PerformIoPolledEnd:
                                 IrpReadWrite->IoBytesCompleted;
 
     return Status;
+}
+
+KSTATUS
+SdOmap4GetSetBusWidth (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    BOOL Set
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the controller's bus width. The bus width is
+    stored in the controller structure.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Set - Supplies a boolean indicating whether the bus width should be queried
+        or set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PSD_OMAP4_CONTEXT Device;
+    KSTATUS Status;
+    ULONG Value;
+
+    Device = Context;
+    Status = SdStandardGetSetBusWidth(Controller, Context, Set);
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    Value = SD_OMAP4_READ_REGISTER(Device, SD_OMAP4_CON_REGISTER);
+    switch (Controller->BusWidth) {
+    case 1:
+    case 4:
+        Value &= ~SD_OMAP4_CON_8BIT;
+        break;
+
+    case 8:
+        Value |= SD_OMAP4_CON_8BIT;
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    SD_OMAP4_WRITE_REGISTER(Device, SD_OMAP4_CON_REGISTER, Value);
+    return STATUS_SUCCESS;
 }
 
