@@ -713,7 +713,7 @@ Return Value:
     KSTATUS Status;
     BOOL Write;
 
-    ASSERT(KeGetRunLevel() < RunLevelDispatch);
+    ASSERT(KeGetRunLevel() == RunLevelLow);
 
     Disk = DeviceContext;
     if (Disk->Type != SdDeviceDisk) {

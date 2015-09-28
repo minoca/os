@@ -90,7 +90,6 @@ KTEST_FUNCTION_TABLE KTestFunctionTable[KTestCount] = {
     {KTestDescriptorStressStart},
     {KTestBlockStressStart},
     {KTestBlockStressStart},
-    {KTestTpcStressStart},
 };
 
 //

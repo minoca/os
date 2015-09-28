@@ -544,26 +544,3 @@ Return Value:
 
 --*/
 
-VOID
-KepExecutePendingTpcs (
-    VOID
-    );
-
-/*++
-
-Routine Description:
-
-    This routine executes the current thread's pending TPCs. It must be called
-    with interrupts disabled, but will temporarily enable interrupts while
-    executing the TPCs.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-

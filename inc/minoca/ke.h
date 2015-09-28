@@ -131,7 +131,6 @@ Author:
 
 typedef enum _RUNLEVEL {
     RunLevelLow       = 0,
-    RunLevelTpc       = 1,
     RunLevelDispatch  = 2,
     RunLevelMaxDevice = 11,
     RunLevelClock     = 13,
@@ -172,14 +171,6 @@ typedef enum _DPC_CRASH_REASON {
     DpcCrashReasonNullRoutine,
     DpcCrashReasonCorrupt,
 } DPC_CRASH_REASON, *PDPC_CRASH_REASON;
-
-typedef enum _TPC_CRASH_REASON {
-    TpcCrashReasonInvalid,
-    TpcCrashReasonDoubleQueueTpc,
-    TpcCrashReasonNullRoutine,
-    TpcCrashReasonNoThread,
-    TpcCrashReasonBadThread
-} TPC_CRASH_REASON, *PTPC_CRASH_REASON;
 
 typedef enum _SCHEDULER_REASON {
     SchedulerReasonInvalid,
@@ -258,7 +249,6 @@ typedef struct _SCHEDULER_GROUP_ENTRY
 
 typedef struct _SCHEDULER_GROUP SCHEDULER_GROUP, *PSCHEDULER_GROUP;
 typedef struct _DPC DPC, *PDPC;
-typedef struct _TPC TPC, *PTPC;
 
 typedef
 VOID
@@ -900,56 +890,6 @@ struct _DPC {
     ULONG Processor;
     volatile ULONG UseCount;
     ULONG Flags;
-};
-
-typedef
-VOID
-(*PTPC_ROUTINE) (
-    PTPC Tpc
-    );
-
-/*++
-
-Routine Description:
-
-    This routine prototype represents a function that gets called when a TPC
-    (Thread Procedure Call) is executed. When this routine is called, it
-    is safe to requeue or destroy the TPC.
-
-Arguments:
-
-    Tpc - Supplies a pointer to the TPC that is running.
-
-Return Value:
-
-    None.
-
---*/
-
-/*++
-
-Structure Description:
-
-    This structure defines a Thread Procedure Call object.
-
-Members:
-
-    ListEntry - Stores pointers to the next and previous TPCs in the queue.
-
-    TpcRoutine - Stores a pointer to the routine to call when the TPC fires.
-
-    Thread - Stores the thread the TPC needs to run on.
-
-    UserData - Stores an opaque pointer that the creator of the TPC can use to
-        store context.
-
---*/
-
-struct _TPC {
-    LIST_ENTRY ListEntry;
-    PTPC_ROUTINE TpcRoutine;
-    PKTHREAD Thread;
-    PVOID UserData;
 };
 
 /*++
@@ -3404,190 +3344,6 @@ Arguments:
 
     Register - Supplies a boolean indicating if the page file is registering
         (TRUE) or de-registering (FALSE).
-
-Return Value:
-
-    None.
-
---*/
-
-KERNEL_API
-VOID
-KeInitializeTpc (
-    PTPC Tpc,
-    PTPC_ROUTINE TpcRoutine,
-    PVOID UserData
-    );
-
-/*++
-
-Routine Description:
-
-    This routine initializes the given TPC with the routine and context data.
-
-Arguments:
-
-    Tpc - Supplies a pointer to the TPC to be initialized.
-
-    TpcRoutine - Supplies a pointer to the routine to call when the TPC fires.
-
-    UserData - Supplies a context pointer that can be passed to the routine via
-        the TPC when it is called.
-
-Return Value:
-
-    None.
-
---*/
-
-KERNEL_API
-PTPC
-KeCreateTpc (
-    PTPC_ROUTINE TpcRoutine,
-    PVOID UserData
-    );
-
-/*++
-
-Routine Description:
-
-    This routine creates a new TPC with the given routine and context data.
-
-Arguments:
-
-    TpcRoutine - Supplies a pointer to the routine to call when the TPC fires.
-
-    UserData - Supplies a context pointer that can be passed to the routine via
-        the TPC when it is called.
-
-Return Value:
-
-    Returns a pointer to the allocated and initialized (but not queued) TPC.
-
---*/
-
-KERNEL_API
-VOID
-KeDestroyTpc (
-    PTPC Tpc
-    );
-
-/*++
-
-Routine Description:
-
-    This routine destroys a TPC. It will flush the TPC if it is queued, and
-    wait for it to finish if it is running. This routine must be called from
-    low level.
-
-Arguments:
-
-    Tpc - Supplies a pointer to the TPC to destroy.
-
-Return Value:
-
-    None.
-
---*/
-
-KERNEL_API
-VOID
-KeQueueTpc (
-    PTPC Tpc,
-    PKTHREAD Thread
-    );
-
-/*++
-
-Routine Description:
-
-    This routine queues the given TPC on the supplied thread. The caller,
-    presumably not the target thread, should have already incremented the
-    target thread's expected TPC count in order to synchronize with thread
-    destruction.
-
-Arguments:
-
-    Tpc - Supplies a pointer to the TPC to be queued on the given thread.
-
-    Thread - Supplies a pointer to thread on which the TPC should be queued.
-
-Return Value:
-
-    Status code.
-
---*/
-
-KERNEL_API
-VOID
-KePrepareTpc (
-    PTPC Tpc,
-    PKTHREAD Thread,
-    BOOL Set
-    );
-
-/*++
-
-Routine Description:
-
-    This routine prepares a TPC to run on the given thread at some point in the
-    future.
-
-Arguments:
-
-    Tpc - Supplies a pointer to the TPC that is to be pended for later use.
-
-    Thread - Supplies an optional pointer to the target thread. If NULL is
-        supplied, the TPC will be prepared to run on the current thread.
-
-    Set - Supplies a boolean indicating whether the TPC should be prepared or
-        unprepared.
-
-Return Value:
-
-    None.
-
---*/
-
-KERNEL_API
-VOID
-KeFlushTpc (
-    PTPC Tpc
-    );
-
-/*++
-
-Routine Description:
-
-    This routine does not return until the given TPC is out of the system. This
-    means that the TPC is neither queued nor running. This routine can only be
-    called below dispatch level.
-
-Arguments:
-
-    Tpc - Supplies a pointer to the TPC to flush.
-
-Return Value:
-
-    Status code.
-
---*/
-
-VOID
-KeFlushTpcs (
-    VOID
-    );
-
-/*++
-
-Routine Description:
-
-    This routine flushes all of the current thread's outstanding TPC's. It does
-    not return until they have been executed.
-
-Arguments:
-
-    None.
 
 Return Value:
 

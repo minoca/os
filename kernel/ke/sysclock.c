@@ -893,9 +893,6 @@ Return Value:
         KeSchedulerEntry(SchedulerReasonDispatchInterrupt);
         ArDisableInterrupts();
 
-    } else if (RunLevel == RunLevelTpc) {
-        KepExecutePendingTpcs();
-
     //
     // Other types of software interrupts are not known.
     //
@@ -1078,9 +1075,7 @@ Return Value:
             //
 
             ThreadWasWoken = FALSE;
-            if ((PreviousThread->SignalPending == ThreadSignalPending) ||
-                (LIST_EMPTY(&(PreviousThread->TpcContext.ListHead)) == FALSE)) {
-
+            if (PreviousThread->SignalPending == ThreadSignalPending) {
                 ThreadWasWoken = ObWakeBlockingThread(PreviousThread);
             }
 
@@ -1105,9 +1100,7 @@ Return Value:
             // again.
             //
 
-            if ((PreviousThread->SignalPending >= ThreadChildSignalPending) ||
-                (LIST_EMPTY(&(PreviousThread->TpcContext.ListHead)) == FALSE)) {
-
+            if (PreviousThread->SignalPending >= ThreadChildSignalPending) {
                 ThreadWasWoken = ObWakeBlockingThread(PreviousThread);
 
                 ASSERT(ThreadWasWoken != FALSE);

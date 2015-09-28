@@ -601,7 +601,6 @@ Return Value:
     ULONG PendingIndex;
     PPENDING_INTERRUPT PendingInterrupts;
     PPROCESSOR_BLOCK ProcessorBlock;
-    PKTHREAD Thread;
 
     //
     // Disable interrupts both to prevent scheduling to another core in the case
@@ -684,32 +683,6 @@ Return Value:
 
             ProcessorBlock = KeGetCurrentProcessorBlock();
         }
-    }
-
-    //
-    // If the thread has any pending software interrupts (i.e. TPCs), then kick
-    // those off when lowering to a something less than dispatch from greater
-    // than or equal to dispatch. The same scheduler case applies here - where
-    // a request to lower the run level happens with interrupts disabled. Do
-    // not dispatch software interrupts.
-    //
-
-    Thread = ProcessorBlock->RunningThread;
-    if ((Thread != NULL) &&
-        (LIST_EMPTY(&(Thread->TpcContext.ListHead)) == FALSE) &&
-        (RunLevel < RunLevelDispatch) &&
-        ((ProcessorBlock->RunLevel > RunLevelDispatch) || (Enabled != FALSE))) {
-
-        ProcessorBlock->RunLevel = RunLevelTpc;
-        while (LIST_EMPTY(&Thread->TpcContext.ListHead) == FALSE) {
-            KeDispatchSoftwareInterrupt(RunLevelTpc, TrapFrame);
-        }
-
-        //
-        // Interrupts may have been enabled, causing a switch to another core.
-        //
-
-        ProcessorBlock = KeGetCurrentProcessorBlock();
     }
 
     //

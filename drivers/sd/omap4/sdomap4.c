@@ -563,7 +563,7 @@ Return Value:
     KSTATUS Status;
     BOOL Write;
 
-    ASSERT(KeGetRunLevel() < RunLevelDispatch);
+    ASSERT(KeGetRunLevel() == RunLevelLow);
 
     Child = DeviceContext;
     if (Child->Type != SdOmap4Child) {

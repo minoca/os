@@ -1382,30 +1382,6 @@ struct _SCHEDULER_ENTRY {
 
 Structure Description:
 
-    This structure defines a threads TPC context.
-
-Members:
-
-    ListHead - Stores the head of the list of pending TPCs.
-
-    Lock - Stores a high level spin lock that synchronizes the TPC list. It
-        must be acquired with interrupts disabled.
-
-    OutstandingCount - Stores the number of outstanding TPCs that are expected
-        to be scheduled and/or run on the thread.
-
---*/
-
-typedef struct _THREAD_TPC_CONTEXT {
-    LIST_ENTRY ListHead;
-    KSPIN_LOCK Lock;
-    volatile ULONG OutstandingCount;
-} THREAD_TPC_CONTEXT, *PTHREAD_TPC_CONTEXT;
-
-/*++
-
-Structure Description:
-
     This structure defines system or user thread of execution.
 
 Members:
@@ -1498,8 +1474,6 @@ Members:
     ProcessEntry - Stores pointers to the previous and next threads in the
         process that owns this thread.
 
-    TpcContext - Stores the Thread Procedure Call (TPC) context of the thread.
-
 --*/
 
 struct _KTHREAD {
@@ -1534,7 +1508,6 @@ struct _KTHREAD {
     THREAD_ID ThreadId;
     PTHREAD_ID ThreadIdPointer;
     LIST_ENTRY ProcessEntry;
-    THREAD_TPC_CONTEXT TpcContext;
 };
 
 /*++

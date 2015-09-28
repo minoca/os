@@ -71,8 +71,7 @@ Environment:
     "  -p, --threads <count> -- Set the number of threads to spin up.\n"       \
     "  -t, --test -- Set the test to perform. Valid values are all, \n"        \
     "      pagedpoolstress, nonpagedpoolstress, workstress, threadstress, \n"  \
-    "      descriptorstress, pagedblockstress, nonpagedblockstress and \n"     \
-    "      tpcstress.\n"                                                       \
+    "      descriptorstress, pagedblockstress and nonpagedblockstress.\n"      \
     "  --debug -- Print lots of information about what's happening.\n"         \
     "  --quiet -- Print only errors.\n"                                        \
     "  --no-cleanup -- Leave test files around for debugging.\n"               \
@@ -172,7 +171,6 @@ PSTR KTestNames[KTestCount] = {
     "descriptorstress",
     "pagedblockstress",
     "nonpagedblockstress",
-    "tpcstress",
 };
 
 //
@@ -471,18 +469,6 @@ Return Value:
         }
     }
 
-    if ((Test == KTestAll) || (Test == KTestTpcStress)) {
-        Status = KTestSendStartRequest(DriverHandle,
-                                       KTestTpcStress,
-                                       &Start,
-                                       &HandleCount);
-
-        if (Status != 0) {
-            PRINT_ERROR("Failed to send start request.\n");
-            Failures += 1;
-        }
-    }
-
     //
     // Poll the tests until they are all complete.
     //
@@ -580,7 +566,6 @@ Return Value:
                 case KTestWorkStress:
                 case KTestThreadStress:
                 case KTestDescriptorStress:
-                case KTestTpcStress:
                     break;
 
                 case KTestPagedBlockStress:

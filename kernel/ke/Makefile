@@ -45,7 +45,6 @@ OBJS = crash.o    \
        sysres.o   \
        timer.o    \
        timezone.o \
-       tpc.o      \
        version.o  \
        workitem.o \
 

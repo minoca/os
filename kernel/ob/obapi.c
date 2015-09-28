@@ -50,25 +50,12 @@ Environment:
 #define WAIT_BLOCK_MAX_CAPACITY MAX_USHORT
 
 //
-// Define the constant, in time ticks, to indicate wait routines should not
-// time out.
-//
-
-#define WAIT_TIME_INDEFINITE_TICKS MAX_ULONGLONG
-
-//
 // ----------------------------------------------- Internal Function Prototypes
 //
 
 BOOL
 ObpWaitFast (
     PWAIT_QUEUE WaitQueue
-    );
-
-KSTATUS
-ObpExecuteWaitBlock (
-    PWAIT_BLOCK WaitBlock,
-    PULONGLONG TimeoutInTimeTicks
     );
 
 VOID
@@ -864,29 +851,237 @@ Return Value:
 
 {
 
+    BOOL Block;
+    ULONG Count;
+    ULONGLONG DueTime;
+    ULONG Index;
+    BOOL LockHeld;
+    RUNLEVEL OldRunLevel;
+    PWAIT_QUEUE Queue;
     KSTATUS Status;
-    ULONGLONG TimeoutInMicroseconds;
-    ULONGLONG TimeoutInTimeTicks;
+    PKTHREAD Thread;
+    BOOL TimerQueued;
+    PWAIT_BLOCK_ENTRY WaitEntry;
+
+    ASSERT((WaitBlock->Capacity != 0) &&
+           (WaitBlock->Count <= WaitBlock->Capacity));
+
+    ASSERT(WaitBlock->UnsignaledCount == 0);
+    ASSERT(WaitBlock->Entry[0].Queue == NULL);
+    ASSERT((WaitBlock->Flags & WAIT_BLOCK_FLAG_ACTIVE) == 0);
+    ASSERT(KeGetRunLevel() <= RunLevelDispatch);
+    ASSERT(WaitBlock->Thread == NULL);
+
+    Block = TRUE;
+    Count = WaitBlock->Count;
+    Thread = KeGetCurrentThread();
+    TimerQueued = FALSE;
+    Status = STATUS_SUCCESS;
 
     //
-    // Convert the milliseconds to time ticks. This makes it easier to maintain
-    // the decreasing timeout length if the wait needs to try again.
+    // Acquire the wait block lock and loop through each object in the array.
     //
 
-    TimeoutInTimeTicks = WAIT_TIME_INDEFINITE_TICKS;
-    if (TimeoutInMilliseconds != WAIT_TIME_INDEFINITE) {
-        TimeoutInMicroseconds = TimeoutInMilliseconds *
-                                MICROSECONDS_PER_MILLISECOND;
+    LockHeld = TRUE;
+    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    KeAcquireSpinLock(&(WaitBlock->Lock));
+    WaitBlock->SignalingQueue = NULL;
+    for (Index = 0; Index < Count; Index += 1) {
 
-        TimeoutInTimeTicks = KeConvertMicrosecondsToTimeTicks(
-                                                        TimeoutInMicroseconds);
+        //
+        // Tweak the order a bit, adding all the non-timer objects first and
+        // then the timer at the end. This optimizes for cases where a timed
+        // wait is immediately satisfied.
+        //
+
+        if (Index == (Count - 1)) {
+            WaitEntry = &(WaitBlock->Entry[0]);
+            WaitEntry->Queue = NULL;
+            if (TimeoutInMilliseconds == WAIT_TIME_INDEFINITE) {
+                continue;
+            }
+
+            DueTime = HlQueryTimeCounter() +
+                      KeConvertMicrosecondsToTimeTicks(
+                         TimeoutInMilliseconds * MICROSECONDS_PER_MILLISECOND);
+
+            Status = KeQueueTimer(Thread->BuiltinTimer,
+                                  TimerQueueSoftWake,
+                                  DueTime,
+                                  0,
+                                  0,
+                                  NULL);
+
+            if (!KSUCCESS(Status)) {
+                goto WaitEnd;
+            }
+
+            TimerQueued = TRUE;
+            Queue = &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue);
+            WaitEntry->Queue = Queue;
+
+        } else {
+            WaitEntry = &(WaitBlock->Entry[Index + 1]);
+        }
+
+        Queue = WaitEntry->Queue;
+
+        ASSERT(Queue != NULL);
+        ASSERT(WaitEntry->WaitListEntry.Next == NULL);
+
+        WaitEntry->WaitBlock = WaitBlock;
+
+        //
+        // Add the wait entry onto the queue's waiters list. The normal rule
+        // of locks is that they must be acquired in the same order, and one
+        // might think this acquire here breaks the rule, since all other
+        // acquires go Queue then WaitBlock. In this case however, since the
+        // queue has not yet been added to the wait block, there is no
+        // scenario in which other code could attempt to acquire Queue then
+        // WaitBlock, as the wait block would need to be queued on the queue
+        // for those paths to run. So this is safe with this caveat.
+        //
+
+        KeAcquireSpinLock(&(Queue->Lock));
+        if (ObpWaitFast(Queue) == FALSE) {
+            INSERT_BEFORE(&(WaitEntry->WaitListEntry), &(Queue->Waiters));
+
+            //
+            // The built-in timer does not count towards a wait-all attempt so
+            // do not increment the unsignaled count for that queue.
+            //
+
+            if (Index != (Count - 1)) {
+                WaitBlock->UnsignaledCount += 1;
+            }
+
+        //
+        // If the queue has already been signaled, then determine if this setup
+        // loop can exit early.
+        //
+
+        } else {
+
+            //
+            // If this is not the last queue, then setup can exit if not all
+            // queues need to be waited on or if this is the second to last
+            // queue and there are no unsignaled queues.
+            //
+
+            if (Index != (Count - 1)) {
+                if (((WaitBlock->Flags & WAIT_FLAG_ALL) == 0) ||
+                    ((Index == (Count - 2)) &&
+                     (WaitBlock->UnsignaledCount == 0))) {
+
+                    KeReleaseSpinLock(&(Queue->Lock));
+                    WaitBlock->SignalingQueue = Queue;
+                    Block = FALSE;
+                    break;
+                }
+
+            //
+            // Otherwise this is the last queue - the built-in timer - and it
+            // expired. As the wait block lock is still held, none of the other
+            // queues have had a chance to satisfy this wait, so count this as
+            // a timeout. The loop should exit the next time around.
+            //
+
+            } else {
+                Block = FALSE;
+                WaitBlock->SignalingQueue = Queue;
+                TimerQueued = FALSE;
+                Status = STATUS_TIMEOUT;
+            }
+        }
+
+        KeReleaseSpinLock(&(Queue->Lock));
     }
 
-    do {
-        Status = ObpExecuteWaitBlock(WaitBlock, &TimeoutInTimeTicks);
+    //
+    // Count the wait block as active, even if it won't block.
+    //
 
-    } while (Status == STATUS_TRY_AGAIN);
+    WaitBlock->Flags |= WAIT_BLOCK_FLAG_ACTIVE;
 
+    //
+    // If blocking, set the thread to wake so that if something is waiting to
+    // acquire the wait block lock and wake the thread, it knows which thread
+    // to wake.
+    //
+
+    if (Block != FALSE) {
+        WaitBlock->Thread = Thread;
+    }
+
+    KeReleaseSpinLock(&(WaitBlock->Lock));
+    LockHeld = FALSE;
+
+    //
+    // Block the thread if the wait condition was not satisfied above.
+    //
+
+    if (Block != FALSE) {
+
+        ASSERT(Status == STATUS_SUCCESS);
+
+        Thread->WaitBlock = WaitBlock;
+        KeSchedulerEntry(SchedulerReasonThreadBlocking);
+        Thread->WaitBlock = NULL;
+
+        //
+        // Check to see if this thread has resumed due to a signal.
+        //
+
+        if ((WaitBlock->Flags & WAIT_BLOCK_FLAG_INTERRUPTED) != 0) {
+            Status = STATUS_INTERRUPTED;
+
+        //
+        // If it wasn't an interruption, then one of the objects actually
+        // being waited on must have caused execution to resume.
+        //
+
+        } else {
+
+            ASSERT(WaitBlock->SignalingQueue != NULL);
+
+            if (WaitBlock->SignalingQueue ==
+                &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue)) {
+
+                Status = STATUS_TIMEOUT;
+                TimerQueued = FALSE;
+            }
+        }
+
+    //
+    // Otherwise a queue signaled during initialization. Success better be on
+    // horizon unless it was a timeout and the built-in timer signaled.
+    //
+
+    } else {
+
+        ASSERT(WaitBlock->SignalingQueue != NULL);
+        ASSERT(KSUCCESS(Status) ||
+               ((Status == STATUS_TIMEOUT) &&
+                (WaitBlock->SignalingQueue ==
+                 &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue))));
+    }
+
+    if (TimerQueued != FALSE) {
+        KeCancelTimer(Thread->BuiltinTimer);
+    }
+
+WaitEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseSpinLock(&(WaitBlock->Lock));
+    }
+
+    //
+    // Clean up the wait block. The index stores how many wait entries were
+    // initialized above.
+    //
+
+    ObpCleanUpWaitBlock(WaitBlock, Index);
+    KeLowerRunLevel(OldRunLevel);
     return Status;
 }
 
@@ -1615,12 +1810,12 @@ Return Value:
             WaitBlock = Thread->WaitBlock;
 
             //
-            // All wait blocks are interruptible. Try to wake the thread. It
-            // may decide later to go back to waiting if it doesn't like the
-            // reason it was awoken.
+            // If the wait block is interruptible, then try to wake the thread.
             //
 
-            if (WaitBlock->Thread != NULL) {
+            if ((WaitBlock->Thread != NULL) &&
+                ((WaitBlock->Flags & WAIT_FLAG_INTERRUPTIBLE) != 0)) {
+
                 KeAcquireSpinLock(&(WaitBlock->Lock));
                 if (WaitBlock->Thread != NULL) {
                     WaitBlock->Flags |= WAIT_BLOCK_FLAG_INTERRUPTED;
@@ -1723,7 +1918,9 @@ Return Value:
         ASSERT(Thread->WaitBlock != NULL);
 
         WaitBlock = Thread->WaitBlock;
-        if (WaitBlock->Thread != NULL) {
+        if ((WaitBlock->Thread != NULL) &&
+            ((WaitBlock->Flags & WAIT_FLAG_INTERRUPTIBLE) != 0)) {
+
             KeAcquireSpinLock(&(WaitBlock->Lock));
             if (WaitBlock->Thread != NULL) {
                 WaitBlock->Flags |= WAIT_BLOCK_FLAG_INTERRUPTED;
@@ -2264,305 +2461,6 @@ Return Value:
     return FALSE;
 }
 
-KSTATUS
-ObpExecuteWaitBlock (
-    PWAIT_BLOCK WaitBlock,
-    PULONGLONG TimeoutInTimeTicks
-    )
-
-/*++
-
-Routine Description:
-
-    This routine executes a wait block, waiting on the given list of wait
-    queues for the specified amount of time.
-
-Arguments:
-
-    WaitBlock - Supplies a pointer to the wait block to wait for.
-
-    TimeoutInTimeTicks - Supplies a pointer to the number of time ticks
-        that the given queues should be waited on before timing out.
-        Use WAIT_TIME_INDEFINITE_TICKS to wait forever. If this routine needs
-        to be tried again, then on return this value contains the remaining
-        time to wait in time ticks.
-
-Return Value:
-
-    STATUS_SUCCESS if the wait completed successfully.
-
-    STATUS_TIMEOUT if the wait timed out.
-
-    STATUS_INTERRUPTED if the wait timed out early due to a signal.
-
-    STATUS_TRY_AGAIN if the wait was interrupted, but needs to wait again.
-
---*/
-
-{
-
-    BOOL Block;
-    ULONG Count;
-    ULONGLONG DueTime;
-    ULONG Index;
-    BOOL LockHeld;
-    RUNLEVEL OldRunLevel;
-    PWAIT_QUEUE Queue;
-    KSTATUS Status;
-    PKTHREAD Thread;
-    BOOL TimerQueued;
-    PWAIT_BLOCK_ENTRY WaitEntry;
-
-    ASSERT((WaitBlock->Capacity != 0) &&
-           (WaitBlock->Count <= WaitBlock->Capacity));
-
-    ASSERT(WaitBlock->UnsignaledCount == 0);
-    ASSERT(WaitBlock->Entry[0].Queue == NULL);
-    ASSERT((WaitBlock->Flags & WAIT_BLOCK_FLAG_ACTIVE) == 0);
-    ASSERT(KeGetRunLevel() <= RunLevelDispatch);
-    ASSERT(WaitBlock->Thread == NULL);
-
-    Block = TRUE;
-    Count = WaitBlock->Count;
-    Thread = KeGetCurrentThread();
-    TimerQueued = FALSE;
-    Status = STATUS_SUCCESS;
-
-    //
-    // Acquire the wait block lock and loop through each object in the array.
-    //
-
-    LockHeld = TRUE;
-    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
-    KeAcquireSpinLock(&(WaitBlock->Lock));
-    WaitBlock->SignalingQueue = NULL;
-    for (Index = 0; Index < Count; Index += 1) {
-
-        //
-        // Tweak the order a bit, adding all the non-timer objects first and
-        // then the timer at the end. This optimizes for cases where a timed
-        // wait is immediately satisfied.
-        //
-
-        if (Index == (Count - 1)) {
-            WaitEntry = &(WaitBlock->Entry[0]);
-            WaitEntry->Queue = NULL;
-            if (*TimeoutInTimeTicks == WAIT_TIME_INDEFINITE_TICKS) {
-                continue;
-            }
-
-            DueTime = HlQueryTimeCounter() + *TimeoutInTimeTicks;
-            Status = KeQueueTimer(Thread->BuiltinTimer,
-                                  TimerQueueSoftWake,
-                                  DueTime,
-                                  0,
-                                  0,
-                                  NULL);
-
-            if (!KSUCCESS(Status)) {
-                goto WaitEnd;
-            }
-
-            TimerQueued = TRUE;
-            Queue = &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue);
-            WaitEntry->Queue = Queue;
-
-        } else {
-            WaitEntry = &(WaitBlock->Entry[Index + 1]);
-        }
-
-        Queue = WaitEntry->Queue;
-
-        ASSERT(Queue != NULL);
-        ASSERT(WaitEntry->WaitListEntry.Next == NULL);
-
-        WaitEntry->WaitBlock = WaitBlock;
-
-        //
-        // Add the wait entry onto the queue's waiters list. The normal rule
-        // of locks is that they must be acquired in the same order, and one
-        // might think this acquire here breaks the rule, since all other
-        // acquires go Queue then WaitBlock. In this case however, since the
-        // queue has not yet been added to the wait block, there is no
-        // scenario in which other code could attempt to acquire Queue then
-        // WaitBlock, as the wait block would need to be queued on the queue
-        // for those paths to run. So this is safe with this caveat.
-        //
-
-        KeAcquireSpinLock(&(Queue->Lock));
-        if (ObpWaitFast(Queue) == FALSE) {
-            INSERT_BEFORE(&(WaitEntry->WaitListEntry), &(Queue->Waiters));
-
-            //
-            // The built-in timer does not count towards a wait-all attempt so
-            // do not increment the unsignaled count for that queue.
-            //
-
-            if (Index != (Count - 1)) {
-                WaitBlock->UnsignaledCount += 1;
-            }
-
-        //
-        // If the queue has already been signaled, then determine if this setup
-        // loop can exit early.
-        //
-
-        } else {
-
-            //
-            // If this is not the last queue, then setup can exit if not all
-            // queues need to be waited on or if this is the second to last
-            // queue and there are no unsignaled queues.
-            //
-
-            if (Index != (Count - 1)) {
-                if (((WaitBlock->Flags & WAIT_FLAG_ALL) == 0) ||
-                    ((Index == (Count - 2)) &&
-                     (WaitBlock->UnsignaledCount == 0))) {
-
-                    KeReleaseSpinLock(&(Queue->Lock));
-                    WaitBlock->SignalingQueue = Queue;
-                    Block = FALSE;
-                    break;
-                }
-
-            //
-            // Otherwise this is the last queue - the built-in timer - and it
-            // expired. As the wait block lock is still held, none of the other
-            // queues have had a chance to satisfy this wait, so count this as
-            // a timeout. The loop should exit the next time around.
-            //
-
-            } else {
-                Block = FALSE;
-                WaitBlock->SignalingQueue = Queue;
-                TimerQueued = FALSE;
-                Status = STATUS_TIMEOUT;
-            }
-        }
-
-        KeReleaseSpinLock(&(Queue->Lock));
-    }
-
-    //
-    // Count the wait block as active, even if it won't block.
-    //
-
-    WaitBlock->Flags |= WAIT_BLOCK_FLAG_ACTIVE;
-
-    //
-    // If blocking, set the thread to wake so that if something is waiting to
-    // acquire the wait block lock and wake the thread, it knows which thread
-    // to wake.
-    //
-
-    if (Block != FALSE) {
-        WaitBlock->Thread = Thread;
-    }
-
-    KeReleaseSpinLock(&(WaitBlock->Lock));
-    LockHeld = FALSE;
-
-    //
-    // Block the thread if the wait condition was not satisfied above.
-    //
-
-    if (Block != FALSE) {
-
-        ASSERT(Status == STATUS_SUCCESS);
-
-        Thread->WaitBlock = WaitBlock;
-        KeSchedulerEntry(SchedulerReasonThreadBlocking);
-        Thread->WaitBlock = NULL;
-
-        //
-        // The wait may have been interrupted for a few reasons. Tease out
-        // those reasons in order of severity (i.e. how much waking they
-        // will actually do).
-        //
-
-        if ((WaitBlock->Flags & WAIT_BLOCK_FLAG_INTERRUPTED) != 0) {
-
-            ASSERT(WaitBlock->SignalingQueue == NULL);
-
-            WaitBlock->Flags &= ~ WAIT_BLOCK_FLAG_INTERRUPTED;
-
-            //
-            // If the wait was interruptible and a signal came in, then
-            // consider it interrupted and go handle the signal.
-            //
-
-            if (((WaitBlock->Flags & WAIT_FLAG_INTERRUPTIBLE) != 0) &&
-                (Thread->SignalPending == ThreadSignalPending)) {
-
-                Status = STATUS_INTERRUPTED;
-
-            //
-            // Otherwise a TPC or signal may be pending, but should not wake
-            // the thread. Try the wait again allowing TPCs to run when the run
-            // level is lowered below.
-            //
-
-            } else {
-                Status = STATUS_TRY_AGAIN;
-            }
-
-        //
-        // If it wasn't an interruption, then one of the objects actually
-        // being waited on must have caused execution to resume.
-        //
-
-        } else {
-
-            ASSERT(WaitBlock->SignalingQueue != NULL);
-
-            if (WaitBlock->SignalingQueue ==
-                &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue)) {
-
-                Status = STATUS_TIMEOUT;
-                TimerQueued = FALSE;
-            }
-        }
-
-    //
-    // Otherwise a queue signaled during initialization. Success better be on
-    // horizon unless it was a timeout and the built-in timer signaled.
-    //
-
-    } else {
-
-        ASSERT(WaitBlock->SignalingQueue != NULL);
-        ASSERT(KSUCCESS(Status) ||
-               ((Status == STATUS_TIMEOUT) &&
-                (WaitBlock->SignalingQueue ==
-                 &(((POBJECT_HEADER)(Thread->BuiltinTimer))->WaitQueue))));
-    }
-
-    if (TimerQueued != FALSE) {
-        KeCancelTimer(Thread->BuiltinTimer);
-        if (Status == STATUS_TRY_AGAIN) {
-            *TimeoutInTimeTicks = DueTime - HlQueryTimeCounter();
-            if (*TimeoutInTimeTicks > DueTime) {
-                *TimeoutInTimeTicks = 0;
-            }
-        }
-    }
-
-WaitEnd:
-    if (LockHeld != FALSE) {
-        KeReleaseSpinLock(&(WaitBlock->Lock));
-    }
-
-    //
-    // Clean up the wait block. The index stores how many wait entries were
-    // initialized above.
-    //
-
-    ObpCleanUpWaitBlock(WaitBlock, Index);
-    KeLowerRunLevel(OldRunLevel);
-    return Status;
-}
-
 VOID
 ObpCleanUpWaitBlock (
     PWAIT_BLOCK WaitBlock,
@@ -2708,6 +2606,7 @@ Return Value:
 
     ASSERT(WaitBlock->UnsignaledCount == 0);
 
+    WaitBlock->Count = 0;
     WaitBlock->Entry[0].Queue = NULL;
     WaitBlock->Flags &= ~WAIT_BLOCK_FLAG_ACTIVE;
     return;
