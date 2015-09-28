@@ -52,17 +52,8 @@ Environment:
 VOID
 MmpCreatePageTable (
     volatile FIRST_LEVEL_TABLE *FirstLevelTable,
-    PVOID VirtualAddress
-    );
-
-PSECOND_LEVEL_TABLE
-MmpMapPageTable (
-    PHYSICAL_ADDRESS PhysicalAddress
-    );
-
-VOID
-MmpUnmapPageTable (
-    volatile SECOND_LEVEL_TABLE *SecondLevelTable
+    PVOID VirtualAddress,
+    BOOL CurrentProcess
     );
 
 VOID
@@ -1396,7 +1387,7 @@ Return Value:
     //
 
     if (FirstLevelTable[FirstIndex].Format == FLT_UNMAPPED) {
-        MmpCreatePageTable(FirstLevelTable, VirtualAddress);
+        MmpCreatePageTable(FirstLevelTable, VirtualAddress, TRUE);
     }
 
     SecondLevelTable = GET_PAGE_TABLE(FirstIndex);
@@ -1904,14 +1895,6 @@ Return Value:
     ULONG SecondIndex;
     volatile SECOND_LEVEL_TABLE *SecondLevelTable;
 
-    //
-    // Assert that this is called at low level. If it ever needs to be called
-    // at dispatch, then all acquisitions of the page table spin lock will need
-    // to be changed to raise to dispatch before acquiring.
-    //
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
     ProcessFirstLevelTable = PageDirectory;
     FirstIndex = FLT_INDEX(VirtualAddress);
     if (VirtualAddress >= KERNEL_VA_START) {
@@ -2151,14 +2134,6 @@ Return Value:
     volatile SECOND_LEVEL_TABLE *SecondLevelTable;
     PKPROCESS TypedProcess;
 
-    //
-    // Assert that this is called at low level. If it ever needs to be called
-    // at dispatch, then all acquisitions of the page table spin lock will need
-    // to be changed to raise to dispatch before acquiring.
-    //
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
     TypedProcess = Process;
     FirstLevelTable = (PFIRST_LEVEL_TABLE)(TypedProcess->PageDirectory);
     FirstIndex = FLT_INDEX(VirtualAddress);
@@ -2168,7 +2143,7 @@ Return Value:
     //
 
     if (FirstLevelTable[FirstIndex].Format == FLT_UNMAPPED) {
-        MmpCreatePageTable(FirstLevelTable, VirtualAddress);
+        MmpCreatePageTable(FirstLevelTable, VirtualAddress, FALSE);
     }
 
     PageTablePhysical = (ULONG)(FirstLevelTable[FirstIndex].Entry <<
@@ -3003,7 +2978,8 @@ Return Value:
     while (FirstIndex <= FirstIndexEnd) {
         if (FirstLevelTable[FirstIndex].Format == FLT_UNMAPPED) {
             MmpCreatePageTable(FirstLevelTable,
-                               (PVOID)(FirstIndex << FLT_INDEX_SHIFT));
+                               (PVOID)(FirstIndex << FLT_INDEX_SHIFT),
+                               TRUE);
         }
 
         FirstIndex += 1;
@@ -3019,7 +2995,8 @@ Return Value:
 VOID
 MmpCreatePageTable (
     volatile FIRST_LEVEL_TABLE *FirstLevelTable,
-    PVOID VirtualAddress
+    PVOID VirtualAddress,
+    BOOL CurrentProcess
     )
 
 /*++
@@ -3037,6 +3014,10 @@ Arguments:
     VirtualAddress - Supplies the virtual address that the page table will
         eventually service.
 
+    CurrentProcess - Supplies a boolean indicating if the current process is
+        requesting the page to be created (TRUE) or if the work is happening on
+        behalf of another process.
+
 Return Value:
 
     None.
@@ -3051,6 +3032,7 @@ Return Value:
     ULONG LoopIndex;
     RUNLEVEL OldRunLevel;
     PHYSICAL_ADDRESS PageTablePhysical;
+    PPROCESSOR_BLOCK ProcessorBlock;
     volatile SECOND_LEVEL_TABLE *SecondLevelTable;
     ULONG SelfMapIndex;
     volatile SECOND_LEVEL_TABLE *SelfMapPageTable;
@@ -3058,7 +3040,6 @@ Return Value:
     ASSERT(KeGetRunLevel() <= RunLevelDispatch);
 
     FirstIndex = FLT_INDEX(VirtualAddress);
-    OldRunLevel = RunLevelCount;
     PageTablePhysical = INVALID_PHYSICAL_ADDRESS;
     MmpSyncKernelPageDirectory(FirstLevelTable, VirtualAddress);
 
@@ -3121,27 +3102,77 @@ Return Value:
                (MmKernelFirstLevelTable[FirstIndex].Format == FLT_UNMAPPED));
 
         //
-        // Zero out the new page and set up the mappings in the first level
-        // table. If the page tables are in the kernel VA region, then update
-        // the kernel's first level table as well. It is guaranteed that cache
-        // operations complete before page table changes become visible,
-        // meaning it is safe to clean the page table region and then proceed
-        // to unmap it without an intervening serialization.
+        // If the page table is destined for a user mode address of another
+        // process, then the self map cannot be used to zero the page. Do it
+        // the hard way.
         //
 
-        OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
-        SecondLevelTable = MmpMapPageTable(PageTablePhysical);
-        RtlZeroMemory((PVOID)SecondLevelTable, PAGE_SIZE);
-        MmpCleanPageTableCacheRegion((PVOID)SecondLevelTable, PAGE_SIZE);
-        MmpUnmapPageTable(SecondLevelTable);
-        KeLowerRunLevel(OldRunLevel);
+        if ((VirtualAddress < KERNEL_VA_START) && (CurrentProcess == FALSE)) {
+            OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+            ProcessorBlock = KeGetCurrentProcessorBlock();
+            MmpMapPage(PageTablePhysical,
+                       ProcessorBlock->SwapPage,
+                       MAP_FLAG_PRESENT);
+
+            RtlZeroMemory(ProcessorBlock->SwapPage, PAGE_SIZE);
+            MmpUnmapPages(ProcessorBlock->SwapPage, 1, 0, NULL);
+            KeLowerRunLevel(OldRunLevel);
+        }
+
+        //
+        // Fix up the self map first. As soon as another thread observes a
+        // valid first level table entry, it will assume that the self map is
+        // valid and ready to use. In user mode, the self map page table is
+        // allocated right after the page directory.
+        //
+
+        if (VirtualAddress >= KERNEL_VA_START) {
+            SelfMapPageTable = GET_PAGE_TABLE(MmPageTablesFirstIndex);
+
+        } else {
+            SelfMapPageTable =
+                      (PSECOND_LEVEL_TABLE)((PVOID)FirstLevelTable + FLT_SIZE);
+        }
+
+        SelfMapIndex = FirstIndex >> 2;
+        Entry = (ULONG)PageTablePhysical >> PAGE_SHIFT;
+        SelfMapPageTable[SelfMapIndex] = MmSecondLevelInitialValue;
+        SelfMapPageTable[SelfMapIndex].Entry = Entry;
+        if (VirtualAddress >= KERNEL_VA_START) {
+            SelfMapPageTable[SelfMapIndex].NotGlobal = 0;
+
+        } else {
+            SelfMapPageTable[SelfMapIndex].NotGlobal = 1;
+        }
+
+        SelfMapPageTable[SelfMapIndex].AccessExtension = 0;
+        SelfMapPageTable[SelfMapIndex].CacheTypeExtension = 1;
+        SelfMapPageTable[SelfMapIndex].Access = SLT_ACCESS_SUPERVISOR;
+        SelfMapPageTable[SelfMapIndex].CacheAttributes = SLT_WRITE_BACK;
+        SelfMapPageTable[SelfMapIndex].Format = SLT_SMALL_PAGE_NO_EXECUTE;
+        MmpCleanPageTableCacheLine((PVOID)&(SelfMapPageTable[SelfMapIndex]));
+        ArSerializeExecution();
+
+        //
+        // The page is now mapped in the self map, but not live in the real
+        // page tables. Nothing should be touching it. If this is for a kernel
+        // region or belongs to the current process use the self map to zero
+        // the page.
+        //
+
+        FirstIndexDown = ALIGN_RANGE_DOWN(FirstIndex, 4);
+        if ((VirtualAddress >= KERNEL_VA_START) || (CurrentProcess != FALSE)) {
+            SecondLevelTable = GET_PAGE_TABLE(FirstIndexDown);
+            RtlZeroMemory((PVOID)SecondLevelTable, PAGE_SIZE);
+            MmpCleanPageTableCacheRegion((PVOID)SecondLevelTable, PAGE_SIZE);
+            ArSerializeExecution();
+        }
 
         //
         // Map all 4 page tables at once, since at minimum page tables can
         // only be allocated in groups of 4.
         //
 
-        FirstIndexDown = ALIGN_RANGE_DOWN(FirstIndex, 4);
         for (LoopIndex = FirstIndexDown;
              LoopIndex < FirstIndexDown + 4;
              LoopIndex += 1) {
@@ -3172,36 +3203,6 @@ Return Value:
                                    4 * sizeof(FIRST_LEVEL_TABLE));
         }
 
-        //
-        // Also fix up the self map. In user mode, the self map page table
-        // is allocated right after the page directory.
-        //
-
-        if (VirtualAddress >= KERNEL_VA_START) {
-            SelfMapPageTable = GET_PAGE_TABLE(MmPageTablesFirstIndex);
-
-        } else {
-            SelfMapPageTable =
-                      (PSECOND_LEVEL_TABLE)((PVOID)FirstLevelTable + FLT_SIZE);
-        }
-
-        SelfMapIndex = FirstIndex >> 2;
-        Entry = (ULONG)PageTablePhysical >> PAGE_SHIFT;
-        SelfMapPageTable[SelfMapIndex] = MmSecondLevelInitialValue;
-        SelfMapPageTable[SelfMapIndex].Entry = Entry;
-        if (VirtualAddress >= KERNEL_VA_START) {
-            SelfMapPageTable[SelfMapIndex].NotGlobal = 0;
-
-        } else {
-            SelfMapPageTable[SelfMapIndex].NotGlobal = 1;
-        }
-
-        SelfMapPageTable[SelfMapIndex].AccessExtension = 0;
-        SelfMapPageTable[SelfMapIndex].CacheTypeExtension = 1;
-        SelfMapPageTable[SelfMapIndex].Access = SLT_ACCESS_SUPERVISOR;
-        SelfMapPageTable[SelfMapIndex].CacheAttributes = SLT_WRITE_BACK;
-        SelfMapPageTable[SelfMapIndex].Format = SLT_SMALL_PAGE_NO_EXECUTE;
-        MmpCleanPageTableCacheLine((PVOID)&(SelfMapPageTable[SelfMapIndex]));
         ArSerializeExecution();
         PageTablePhysical = INVALID_PHYSICAL_ADDRESS;
     }
@@ -3218,125 +3219,6 @@ Return Value:
         MmFreePhysicalPage(PageTablePhysical);
     }
 
-    return;
-}
-
-PSECOND_LEVEL_TABLE
-MmpMapPageTable (
-    PHYSICAL_ADDRESS PhysicalAddress
-    )
-
-/*++
-
-Routine Description:
-
-    This routine temporarily maps a page table so it can be initialized or
-    modified.
-
-Arguments:
-
-    PhysicalAddress - Supplies the physical address of the page table to be
-        mapped.
-
-Return Value:
-
-    Returns a pointer to the virtual address that now points to that physical
-    page.
-
---*/
-
-{
-
-    PSECOND_LEVEL_TABLE PageTable;
-    PPROCESSOR_BLOCK ProcessorBlock;
-    ULONG SecondIndex;
-
-    ASSERT(KeGetRunLevel() == RunLevelDispatch);
-    ASSERT((MmPageTableLock == NULL) ||
-           (KeIsQueuedLockHeld(MmPageTableLock) != FALSE));
-
-    ProcessorBlock = KeGetCurrentProcessorBlock();
-    SecondIndex = SLT_INDEX(ProcessorBlock->SwapPage);
-    PageTable = GET_PAGE_TABLE(FLT_INDEX(ProcessorBlock->SwapPage));
-
-    ASSERT(PageTable[SecondIndex].Format == SLT_UNMAPPED);
-
-    //
-    // Simply set the entry up and invalidate the TLB.
-    //
-
-    PageTable[SecondIndex] = MmSecondLevelInitialValue;
-    PageTable[SecondIndex].Entry = (ULONG)PhysicalAddress >> PAGE_SHIFT;
-    PageTable[SecondIndex].NotGlobal = 0;
-    PageTable[SecondIndex].AccessExtension = 0;
-    PageTable[SecondIndex].CacheTypeExtension = 1;
-    PageTable[SecondIndex].Access = SLT_ACCESS_SUPERVISOR;
-    PageTable[SecondIndex].CacheAttributes = SLT_WRITE_BACK;
-    PageTable[SecondIndex].Format = SLT_SMALL_PAGE_NO_EXECUTE;
-    MmpCleanPageTableCacheLine(&(PageTable[SecondIndex]));
-
-    ASSERT(((UINTN)(ProcessorBlock->SwapPage) & PAGE_MASK) == 0);
-
-    ArSerializeExecution();
-    return ProcessorBlock->SwapPage;
-}
-
-VOID
-MmpUnmapPageTable (
-    volatile SECOND_LEVEL_TABLE *SecondLevelTable
-    )
-
-/*++
-
-Routine Description:
-
-    This routine unmaps a page mapped temporarily for manipulating page tables.
-
-Arguments:
-
-    SecondLevelTable - Supplies the second level page table to be unmapped.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PSECOND_LEVEL_TABLE PageTable;
-    PPROCESSOR_BLOCK ProcessorBlock;
-    ULONG SecondIndex;
-
-    ASSERT(KeGetRunLevel() == RunLevelDispatch);
-    ASSERT((MmPageTableLock == NULL) ||
-           (KeIsQueuedLockHeld(MmPageTableLock) != FALSE));
-
-    ProcessorBlock = KeGetCurrentProcessorBlock();
-
-    ASSERT((PVOID)((UINTN)SecondLevelTable & ~PAGE_MASK) ==
-           ProcessorBlock->SwapPage);
-
-    SecondIndex = SLT_INDEX(ProcessorBlock->SwapPage);
-    PageTable = GET_PAGE_TABLE(FLT_INDEX(ProcessorBlock->SwapPage));
-
-    ASSERT(PageTable[SecondIndex].Format != SLT_UNMAPPED);
-
-    //
-    // Unmap the page table from the stage, clean that page table to actually
-    // flush the table, and then invalidate the stage's TLB entry.
-    //
-
-    *(PULONG)&(PageTable[SecondIndex]) = 0;
-    MmpCleanPageTableCacheLine(&(PageTable[SecondIndex]));
-
-    ASSERT(((UINTN)(ProcessorBlock->SwapPage) & PAGE_MASK) == 0);
-
-    //
-    // The TLB entry invalidation routine also serializes execution.
-    //
-
-    ArInvalidateTlbEntry(ProcessorBlock->SwapPage);
     return;
 }
 

@@ -1034,16 +1034,13 @@ Return Value:
 
         //
         // Not enough free memory could be found laying around. Schedule the
-        // paging worker to notify it that memory is a little tight.
+        // paging worker to notify it that memory is a little tight. If it gets
+        // scheduled, wait for it to free some pages.
         //
 
-        MmRequestPagingOut(FreePageTarget);
-
-        //
-        // Now wait until the paging worker signals that memory is free.
-        //
-
-        KeWaitForEvent(MmPagingFreePagesEvent, FALSE, WAIT_TIME_INDEFINITE);
+        if (MmRequestPagingOut(FreePageTarget) != FALSE) {
+            KeWaitForEvent(MmPagingFreePagesEvent, FALSE, WAIT_TIME_INDEFINITE);
+        }
 
         //
         // If this is the first time around, set the timeout timer to decide

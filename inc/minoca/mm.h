@@ -2946,7 +2946,7 @@ Return Value:
 
 --*/
 
-VOID
+BOOL
 MmRequestPagingOut (
     ULONGLONG FreePageTarget
     );
@@ -2967,7 +2967,8 @@ Arguments:
 
 Return Value:
 
-    None.
+    Returns TRUE if a request was submitted or FALSE otherwise (e.g. paging is
+    not enabled).
 
 --*/
 

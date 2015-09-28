@@ -2007,7 +2007,7 @@ Return Value:
 
 KSTATUS
 MmpInitializePaging (
-    ULONG Phase
+    VOID
     );
 
 /*++
@@ -2015,12 +2015,11 @@ MmpInitializePaging (
 Routine Description:
 
     This routine initializes the paging infrastructure, preparing for the
-    arrival of a page file. In phase 1, it also initializes the background
-    thread that handles paging memory out.
+    arrival of a page file.
 
 Arguments:
 
-    Phase - Supplies the phase of initialization. Valid values are 0 through 1.
+    None.
 
 Return Value:
 

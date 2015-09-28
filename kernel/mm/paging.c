@@ -313,6 +313,7 @@ PQUEUED_LOCK MmPageFileListLock = NULL;
 // Store the paging thread and paging related events.
 //
 
+BOOL MmPagingThreadCreated = FALSE;
 PKTHREAD MmPagingThread;
 PKEVENT MmPagingEvent;
 PKEVENT MmPagingFreePagesEvent;
@@ -329,7 +330,7 @@ PBLOCK_ALLOCATOR MmPagingEntryBlockAllocator;
 // ------------------------------------------------------------------ Functions
 //
 
-VOID
+BOOL
 MmRequestPagingOut (
     ULONGLONG FreePageTarget
     )
@@ -350,7 +351,8 @@ Arguments:
 
 Return Value:
 
-    None.
+    Returns TRUE if a request was submitted or FALSE otherwise (e.g. paging is
+    not enabled).
 
 --*/
 
@@ -359,6 +361,14 @@ Return Value:
     RUNLEVEL OldRunLevel;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    //
+    // There is nothing to be done if paging is not enabled.
+    //
+
+    if (MmPagingEnabled == FALSE) {
+        return FALSE;
+    }
 
     //
     // Set the supplied page count if it is larger than the current value.
@@ -392,7 +402,7 @@ Return Value:
     //
 
     KeSignalEvent(MmPagingEvent, SignalOptionSignalAll);
-    return;
+    return TRUE;
 }
 
 VOID
@@ -547,11 +557,11 @@ Return Value:
     Status = STATUS_UNSUCCESSFUL;
 
     //
-    // If paging is forcefully disabled, then a page file was never opened on
-    // this volume.
+    // If paging is forcefully disabled or simply not enabled, then a page file
+    // was never opened on this volume.
     //
 
-    if (MmPagingForceDisable != FALSE) {
+    if ((MmPagingForceDisable != FALSE) || (MmPagingEnabled == FALSE)) {
         Status = STATUS_SUCCESS;
         goto VolumeRemovalEnd;
     }
@@ -598,8 +608,17 @@ Return Value:
                           0);
         }
 
-        LIST_REMOVE(&(PageFile->ListEntry));
         KeReleaseQueuedLock(PageFile->Lock);
+        LIST_REMOVE(&(PageFile->ListEntry));
+    }
+
+    //
+    // If the list is now empty, then paging is effectively disabled. Don't
+    // bother to destroy the paging thread. It may still be in use.
+    //
+
+    if (LIST_EMPTY(&MmPageFileListHead) != FALSE) {
+        MmPagingEnabled = FALSE;
     }
 
     KeReleaseQueuedLock(MmPageFileListLock);
@@ -626,7 +645,7 @@ VolumeRemovalEnd:
 
 KSTATUS
 MmpInitializePaging (
-    ULONG Phase
+    VOID
     )
 
 /*++
@@ -634,12 +653,11 @@ MmpInitializePaging (
 Routine Description:
 
     This routine initializes the paging infrastructure, preparing for the
-    arrival of a page file. In phase 1, it also initializes the background
-    thread that handles paging memory out.
+    arrival of a page file.
 
 Arguments:
 
-    Phase - Supplies the phase of initialization. Valid values are 0 through 1.
+    None.
 
 Return Value:
 
@@ -653,82 +671,61 @@ Return Value:
     KSTATUS Status;
 
     //
-    // Phase 0 is called before the first paged pool allocation, but after
-    // non-paged pool has been initialized. Allocate any necessary structures
-    // used to support paging and paged pool.
+    // Initialize the structure necessary to maintain a list of page files.
     //
 
-    if (Phase == 0) {
-
-        //
-        // Initialize the structure necessary to maintain a list of page files.
-        //
-
-        INITIALIZE_LIST_HEAD(&MmPageFileListHead);
-        MmPageFileListLock = KeCreateQueuedLock();
-        if (MmPageFileListLock == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
-            goto InitializePagingEnd;
-        }
-
-        //
-        // Initialize the structures necessary to run a background thread that
-        // handles paging and releasing memory pressure.
-        //
-
-        KeInitializeSpinLock(&MmPagingLock);
-        MmPagingFreePagesEvent = KeCreateEvent(NULL);
-        if (MmPagingFreePagesEvent == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
-            goto InitializePagingEnd;
-        }
-
-        MmPagingEvent = KeCreateEvent(NULL);
-        if (MmPagingEvent == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
-            goto InitializePagingEnd;
-        }
-
-        //
-        // Initialize the block allocator from which paging entries will be
-        // allocated.
-        //
-
-        BlockAllocator = MmCreateBlockAllocator(
-                               sizeof(PAGING_ENTRY),
-                               MM_PAGING_ENTRY_BLOCK_ALLOCATOR_ALIGNMENT,
-                               MM_PAGING_ENTRY_BLOCK_ALLOCATOR_EXPANSION_COUNT,
-                               (BLOCK_ALLOCATOR_FLAG_NON_PAGED |
-                                BLOCK_ALLOCATOR_FLAG_TRIM),
-                               MM_PAGING_ENTRY_BLOCK_ALLOCATION_TAG);
-
-        if (BlockAllocator == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
-            goto InitializePagingEnd;
-        }
-
-        MmPagingEntryBlockAllocator = BlockAllocator;
-        Status = STATUS_SUCCESS;
-
-    //
-    // Phase 1 runs after the system is prepared to handle multiple threads.
-    // Kick off the background paging thread that does the actual work of
-    // paging out data.
-    //
-
-    } else {
-
-        ASSERT(Phase == 1);
-
-        Status = PsCreateKernelThread(MmpPagingThread, NULL, "MmpPagingThread");
-        if (!KSUCCESS(Status)) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
-            goto InitializePagingEnd;
-        }
+    INITIALIZE_LIST_HEAD(&MmPageFileListHead);
+    MmPageFileListLock = KeCreateQueuedLock();
+    if (MmPageFileListLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializePagingEnd;
     }
+
+    //
+    // Initialize the structures necessary to run a background thread that
+    // handles paging and releasing memory pressure.
+    //
+
+    KeInitializeSpinLock(&MmPagingLock);
+    MmPagingFreePagesEvent = KeCreateEvent(NULL);
+    if (MmPagingFreePagesEvent == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializePagingEnd;
+    }
+
+    MmPagingEvent = KeCreateEvent(NULL);
+    if (MmPagingEvent == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializePagingEnd;
+    }
+
+    //
+    // Initialize the block allocator from which paging entries will be
+    // allocated.
+    //
+
+    BlockAllocator = MmCreateBlockAllocator(
+                           sizeof(PAGING_ENTRY),
+                           MM_PAGING_ENTRY_BLOCK_ALLOCATOR_ALIGNMENT,
+                           MM_PAGING_ENTRY_BLOCK_ALLOCATOR_EXPANSION_COUNT,
+                           (BLOCK_ALLOCATOR_FLAG_NON_PAGED |
+                            BLOCK_ALLOCATOR_FLAG_TRIM),
+                           MM_PAGING_ENTRY_BLOCK_ALLOCATION_TAG);
+
+    if (BlockAllocator == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializePagingEnd;
+    }
+
+    MmPagingEntryBlockAllocator = BlockAllocator;
+    Status = STATUS_SUCCESS;
 
 InitializePagingEnd:
     if (!KSUCCESS(Status)) {
+        if (MmPageFileListLock != NULL) {
+            KeDestroyQueuedLock(MmPageFileListLock);
+        }
+
         if (MmPagingFreePagesEvent != NULL) {
             KeDestroyEvent(MmPagingFreePagesEvent);
         }
@@ -740,8 +737,6 @@ InitializePagingEnd:
         if (MmPagingEntryBlockAllocator != NULL) {
             MmDestroyBlockAllocator(MmPagingEntryBlockAllocator);
         }
-
-        ASSERT(MmPagingThread == NULL);
     }
 
     return Status;
@@ -1972,6 +1967,7 @@ Return Value:
 
     ULONG AllocationSize;
     PDEVICE Device;
+    BOOL LockHeld;
     ULONGLONG PageCount;
     PPAGE_FILE PageFile;
     ULONG PageShift;
@@ -1980,6 +1976,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    LockHeld = FALSE;
     PageFile = NULL;
     PageShift = MmPageShift();
     PageSize = MmPageSize();
@@ -2050,6 +2047,33 @@ Return Value:
     KeRegisterCrashDumpFile(Handle, TRUE);
 
     //
+    // Synchronize with the arrival of other page files. The first arriving
+    // page file should create all necessary events if they aren't already
+    // allocated.
+    //
+
+    LockHeld = TRUE;
+    KeAcquireQueuedLock(MmPageFileListLock);
+
+    //
+    // If the paging thread has not yet been created, attempt to create the
+    // thread.
+    //
+
+    if (MmPagingThreadCreated == FALSE) {
+        Status = PsCreateKernelThread(MmpPagingThread,
+                                      NULL,
+                                      "MmpPagingThread");
+
+        if (!KSUCCESS(Status)) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto CreatePagingDeviceEnd;
+        }
+
+        MmPagingThreadCreated = TRUE;
+    }
+
+    //
     // With success on the horizon, transfer the handle to the page file. This
     // is a paging device handle so there is no reference count. Because it is
     // caller supplied, the caller will destroy it in all failure cases, so
@@ -2063,13 +2087,15 @@ Return Value:
     // Officially add it to the list of paging devices.
     //
 
-    KeAcquireQueuedLock(MmPageFileListLock);
     INSERT_BEFORE(&(PageFile->ListEntry), &MmPageFileListHead);
     MmPagingEnabled = TRUE;
-    KeReleaseQueuedLock(MmPageFileListLock);
     Status = STATUS_SUCCESS;
 
 CreatePagingDeviceEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseQueuedLock(MmPageFileListLock);
+    }
+
     if (!KSUCCESS(Status)) {
         if (PageFile != NULL) {
             MmpDestroyPageFile(PageFile);
@@ -4607,6 +4633,7 @@ Return Value:
     UINTN BytesRead;
     PIO_BUFFER IoBuffer;
     IO_BUFFER IoBufferData;
+    ULONG IoBufferFlags;
     PIRP Irp;
     PPAGE_FILE PageFile;
     ULONG PageShift;
@@ -4676,11 +4703,14 @@ Return Value:
     SwapSpace = RootSection->SwapSpace->VirtualBase;
     MmpMapPage(Context->PhysicalAddress, SwapSpace, MAP_FLAG_PRESENT);
     IoBuffer = &IoBufferData;
+    IoBufferFlags = IO_BUFFER_FLAG_KERNEL_MODE_DATA |
+                    IO_BUFFER_FLAG_MEMORY_LOCKED;
+
     Status = MmInitializeIoBuffer(IoBuffer,
                                   SwapSpace,
                                   Context->PhysicalAddress,
                                   PageSize,
-                                  IO_BUFFER_FLAG_KERNEL_MODE_DATA);
+                                  IoBufferFlags);
 
     if (!KSUCCESS(Status)) {
         goto ReadPageFileEnd;

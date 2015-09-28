@@ -317,7 +317,7 @@ Return Value:
         // first paged pool allocation.
         //
 
-        Status = MmpInitializePaging(0);
+        Status = MmpInitializePaging();
         if (!KSUCCESS(Status)) {
             goto InitializeEnd;
         }
@@ -330,29 +330,13 @@ Return Value:
         Status = STATUS_SUCCESS;
 
     //
-    // Kick off any helper threads as this runs after all cores are set up and
-    // ready for true multi-threading.
+    // In phase 3, free all loader temporary space, the kernel is on its own
+    // now.
     //
-
-    } else if (Phase == 3) {
-
-        //
-        // Finish initializing the paging infrastructure by kicking of the
-        // paging helper thread.
-        //
-
-        Status = MmpInitializePaging(1);
-        if (!KSUCCESS(Status)) {
-            goto InitializeEnd;
-        }
 
     } else {
 
-        ASSERT(Phase == 4);
-
-        //
-        // Free all loader temporary space, the kernel is on its own now.
-        //
+        ASSERT(Phase == 3);
 
         Status = MmpFreeBootMappings(Parameters);
         if (!KSUCCESS(Status)) {

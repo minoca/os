@@ -45,6 +45,27 @@ Environment:
 #define THREAD_LIST_FUDGE_FACTOR 2
 
 //
+// Define the number of threads the reaper attempts to clean up in one pass.
+//
+
+#define THREAD_DEFAULT_REAP_COUNT 16
+
+//
+// Define the number of dead threads that are allowed to sit on the dead
+// threads list before thread creation starts to kick in helping to destroy
+// threads.
+//
+
+#define THREAD_CREATE_DEAD_THREAD_THRESHOLD 50
+
+//
+// Define the number of threads that thread creation will reap if the number of
+// dead threads has exceeded the threshold.
+//
+
+#define THREAD_CREATE_REAP_COUNT 2
+
+//
 // ----------------------------------------------- Internal Function Prototypes
 //
 
@@ -61,6 +82,11 @@ PspCreateThread (
 VOID
 PspReaperThread (
     PVOID Parameter
+    );
+
+VOID
+PspReapThreads (
+    UINTN ReapCount
     );
 
 VOID
@@ -106,6 +132,7 @@ volatile THREAD_ID PsNextThreadId = 0;
 
 KSPIN_LOCK PsDeadThreadsLock;
 LIST_ENTRY PsDeadThreadsListHead;
+UINTN PsDeadThreadsCount;
 PKEVENT PsDeadThreadsEvent;
 
 //
@@ -787,6 +814,7 @@ Return Value:
     ASSERT(Thread->SchedulerEntry.ListEntry.Next == NULL);
 
     INSERT_AFTER(&(Thread->SchedulerEntry.ListEntry), &PsDeadThreadsListHead);
+    PsDeadThreadsCount += 1;
     KeSignalEvent(PsDeadThreadsEvent, SignalOptionSignalAll);
     KeReleaseSpinLock(&PsDeadThreadsLock);
     KeLowerRunLevel(OldRunLevel);
@@ -957,6 +985,7 @@ Return Value:
     KSTATUS Status;
 
     ASSERT(KeGetCurrentProcessorNumber() == 0);
+    ASSERT(PsDeadThreadsCount == 0);
 
     KeInitializeSpinLock(&PsDeadThreadsLock);
     INITIALIZE_LIST_HEAD(&PsDeadThreadsListHead);
@@ -1389,6 +1418,16 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
     ASSERT((Flags & ~THREAD_FLAG_CREATION_MASK) == 0);
 
+    //
+    // Before creating a new thread, make sure there aren't too many dead
+    // threads hanging around. If there are dead threads, attempt to help the
+    // system out be reaping some before creating a new thread.
+    //
+
+    if (PsDeadThreadsCount > THREAD_CREATE_DEAD_THREAD_THRESHOLD) {
+        PspReapThreads(THREAD_CREATE_REAP_COUNT);
+    }
+
     CurrentThread = KeGetCurrentThread();
     UserMode = FALSE;
     if ((Flags & THREAD_FLAG_USER_MODE) != 0) {
@@ -1566,9 +1605,9 @@ PspReaperThread (
 
 Routine Description:
 
-    This routine checks for any threads that need to be cleaned up, dequeues
-    them, and then frees the threads and all associated memory. This routine
-    runs at Low level.
+    This routine waits on the dead thread event and when the event is signaled
+    it attempts to reap the default number of threads until the event is no
+    longer signaled.
 
 Arguments:
 
@@ -1583,81 +1622,119 @@ Return Value:
 
 {
 
+    while (TRUE) {
+        KeWaitForEvent(PsDeadThreadsEvent, FALSE, WAIT_TIME_INDEFINITE);
+        PspReapThreads(THREAD_DEFAULT_REAP_COUNT);
+    }
+
+    return;
+}
+
+VOID
+PspReapThreads (
+    UINTN TargetReapCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine checks for any threads that need to be cleaned up, dequeues
+    them, and then frees the threads and all associated memory. This routine
+    runs at low level.
+
+Arguments:
+
+    TargetReapCount - Supplies the maximum number of threads to reap.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
     LIST_ENTRY ListHead;
     RUNLEVEL OldRunLevel;
+    UINTN ReapCount;
     PKTHREAD Thread;
 
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    //
+    // Acquire the lock and move up to the requested number of threads to the
+    // local list.
+    //
+
+    ReapCount = 0;
     INITIALIZE_LIST_HEAD(&ListHead);
-    while (TRUE) {
+    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    KeAcquireSpinLock(&PsDeadThreadsLock);
+    while ((LIST_EMPTY(&PsDeadThreadsListHead) == FALSE) &&
+           (ReapCount < TargetReapCount)) {
 
-        ASSERT(LIST_EMPTY(&ListHead) != FALSE);
+        CurrentEntry = PsDeadThreadsListHead.Next;
+        LIST_REMOVE(CurrentEntry);
+        INSERT_BEFORE(CurrentEntry, &ListHead);
+        ReapCount += 1;
+    }
 
-        //
-        // Raise to dispatch and wait for some action.
-        //
+    PsDeadThreadsCount -= ReapCount;
 
-        OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    //
+    // Only unsignal the event if there are no threads left to reap.
+    //
 
-        ASSERT(OldRunLevel == RunLevelLow);
-
-        KeWaitForEvent(PsDeadThreadsEvent, FALSE, WAIT_TIME_INDEFINITE);
-
-        //
-        // Acquire the lock and move all the threads to the local list.
-        //
-
-        KeAcquireSpinLock(&PsDeadThreadsLock);
-        if (LIST_EMPTY(&PsDeadThreadsListHead) == FALSE) {
-            MOVE_LIST(&PsDeadThreadsListHead, &ListHead);
-            INITIALIZE_LIST_HEAD(&PsDeadThreadsListHead);
-        }
-
+    if (LIST_EMPTY(&PsDeadThreadsListHead) != FALSE) {
         KeSignalEvent(PsDeadThreadsEvent, SignalOptionUnsignal);
-        KeReleaseSpinLock(&PsDeadThreadsLock);
-        KeLowerRunLevel(OldRunLevel);
+    }
+
+    KeReleaseSpinLock(&PsDeadThreadsLock);
+    KeLowerRunLevel(OldRunLevel);
+
+    //
+    // Now that execution is running back at passive, calmly walk the local
+    // list, signal anyone waiting on the thread exiting, and destroy the
+    // threads.
+    //
+
+    while (LIST_EMPTY(&ListHead) == FALSE) {
+        Thread = LIST_VALUE(ListHead.Next,
+                            KTHREAD,
+                            SchedulerEntry.ListEntry);
+
+        LIST_REMOVE(&(Thread->SchedulerEntry.ListEntry));
+        Thread->SchedulerEntry.ListEntry.Next = NULL;
 
         //
-        // Now that execution is running back at passive, calmly walk the local
-        // list, signal anyone waiting on the thread exiting, and destroy the
-        // threads.
+        // Remove the thread from the process before the reference count
+        // drops to zero so that acquiring the process lock and adding
+        // a reference synchronizes against the thread destroying itself
+        // during or after that process lock is released.
         //
 
-        while (LIST_EMPTY(&ListHead) == FALSE) {
-            Thread = LIST_VALUE(ListHead.Next,
-                                KTHREAD,
-                                SchedulerEntry.ListEntry);
+        KeAcquireQueuedLock(Thread->OwningProcess->QueuedLock);
+        LIST_REMOVE(&(Thread->ProcessEntry));
+        Thread->ProcessEntry.Next = NULL;
 
-            LIST_REMOVE(&(Thread->SchedulerEntry.ListEntry));
-            Thread->SchedulerEntry.ListEntry.Next = NULL;
+        //
+        // The thread has been removed from the process's thread list. Add
+        // its resource usage to the process' counts.
+        //
 
-            //
-            // Remove the thread from the process before the reference count
-            // drops to zero so that acquiring the process lock and adding
-            // a reference synchronizes against the thread destroying itself
-            // during or after that process lock is released.
-            //
+        PspAddResourceUsages(&(Thread->OwningProcess->ResourceUsage),
+                             &(Thread->ResourceUsage));
 
-            KeAcquireQueuedLock(Thread->OwningProcess->QueuedLock);
-            LIST_REMOVE(&(Thread->ProcessEntry));
-            Thread->ProcessEntry.Next = NULL;
+        KeReleaseQueuedLock(Thread->OwningProcess->QueuedLock);
 
-            //
-            // The thread has been removed from the process's thread list. Add
-            // its resource usage to the process' counts.
-            //
+        //
+        // Signal everyone waiting on the thread to die.
+        //
 
-            PspAddResourceUsages(&(Thread->OwningProcess->ResourceUsage),
-                                 &(Thread->ResourceUsage));
-
-            KeReleaseQueuedLock(Thread->OwningProcess->QueuedLock);
-
-            //
-            // Signal everyone waiting on the thread to die.
-            //
-
-            ObSignalObject(Thread, SignalOptionSignalAll);
-            ObReleaseReference(Thread);
-        }
+        ObSignalObject(Thread, SignalOptionSignalAll);
+        ObReleaseReference(Thread);
     }
 
     return;

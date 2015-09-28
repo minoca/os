@@ -602,18 +602,6 @@ Return Value:
     KeAllProcessorsGo = TRUE;
 
     //
-    // Perform phase 3 initialization of the memory manager. This allows the
-    // memory manager to kick off any helper threads now that the system is
-    // fully online with thread support.
-    //
-
-    Status = MmInitialize(Parameters, NULL, 3);
-    if (!KSUCCESS(Status)) {
-        FailingSubsystem = KernelSubsystemMemoryManager;
-        goto CompleteSystemInitializationEnd;
-    }
-
-    //
     // Perform phase 0 initialization of the I/O subsystem, which will
     // initialize boot start drivers.
     //
@@ -641,7 +629,7 @@ Return Value:
     // parameters pointer is inaccessible.
     //
 
-    Status = MmInitialize(Parameters, NULL, 4);
+    Status = MmInitialize(Parameters, NULL, 3);
     if (!KSUCCESS(Status)) {
         FailingSubsystem = KernelSubsystemMemoryManager;
         goto CompleteSystemInitializationEnd;
