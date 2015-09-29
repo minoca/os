@@ -546,9 +546,6 @@ Members:
         array is indexed by vector number, where the first index is the
         minimum vector.
 
-    Identifier - Stores the unique identifier for this physical package. In an
-        x86-based system, this is the APIC ID.
-
     IpiListHead - Stores the list head for IPI request packets.
 
     IpiListLock - Stores the lock protecting access to the IPI list.
@@ -624,7 +621,6 @@ struct _PROCESSOR_BLOCK {
     SCHEDULER_DATA Scheduler;
     PVOID Idt;
     PVOID *InterruptTable;
-    ULONG Identifier;
     LIST_ENTRY IpiListHead;
     KSPIN_LOCK IpiListLock;
     ULONG PendingInterruptCount;

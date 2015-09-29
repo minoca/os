@@ -41,6 +41,7 @@ Environment:
 .code32
 
 ##
+## KERNEL_API
 ## BOOL
 ## ArAreInterruptsEnabled (
 ##     VOID
@@ -83,6 +84,7 @@ ArAreInterruptsEnabledEnd:
 END_FUNCTION(ArAreInterruptsEnabled)
 
 ##
+## KERNEL_API
 ## BOOL
 ## ArDisableInterrupts (
 ##     VOID
@@ -123,6 +125,7 @@ ArDisableInterruptsFalse:
 END_FUNCTION(ArDisableInterrupts)
 
 ##
+## KERNEL_API
 ## VOID
 ## ArEnableInterrupts (
 ##     VOID
@@ -1609,6 +1612,126 @@ FUNCTION(ArReloadThreadSegment)
     ret                         # Return.
 
 END_FUNCTION(ArReloadThreadSegment)
+
+##
+## KERNEL_API
+## VOID
+## ArMonitor (
+##     PVOID Address,
+##     UINTN Ecx,
+##     UINTN Edx
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine arms the monitoring hardware in preparation for an mwait
+    instruction.
+
+Arguments:
+
+    Address - Supplies the address pointer to monitor.
+
+    Ecx - Supplies the contents to load into the ECX (RCX in 64-bit) register
+        when executing the monitor instruction. These are defined as hints.
+
+    Edx - Supplies the contents to load into the EDX/RDX register. These are
+        also hints.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION(ArMonitor)
+    movl    4(%esp), %eax       # Load the address to eax.
+    movl    8(%esp), %ecx       # Load first set of hints.
+    movl    12(%esp), %edx      # Load second set of hints.
+    monitor                     # Arm the monitoring hardware.
+    ret                         # Return.
+
+END_FUNCTION(ArMonitor)
+
+##
+## KERNEL_API
+## VOID
+## ArMwait (
+##     UINTN Eax,
+##     UINTN Ecx
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine executes the mwait instruction, which is used to halt the
+    processor until a specified memory location is written to. It is also used
+    on Intel processors to enter C-states. A monitor instruction must have
+    been executed prior to this to set up the monitoring region.
+
+Arguments:
+
+    Eax - Supplies the contents to load into EAX/RAX when executing the mwait
+        instruction. This is a set of hints, including which C-state to enter
+        on Intel processors.
+
+    Ecx - Supplies the contents to load into the ECX (RCX in 64-bit) register
+        when executing the mwait instruction. This is 1 when entering a C-state
+        with interrupts disabled to indicate that an interrupt should still
+        break out.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION(ArMwait)
+    movl    4(%esp), %eax       # Load eax.
+    movl    8(%esp), %ecx       # Load ecx.
+    mwait                       # Go down.
+    ret                         # Return.
+
+END_FUNCTION(ArMwait)
+
+##
+## KERNEL_API
+## VOID
+## ArIoReadAndHalt (
+##     USHORT IoPort
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine performs a single 8-bit I/O port read and then halts the
+    processor until the next interrupt comes in. This routine should be called
+    with interrupts disabled, and will return with interrupts enabled.
+
+Arguments:
+
+    IoPort - Supplies the I/O port to read from.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION(ArIoReadAndHalt)
+    movl    4(%esp), %edx           # Get the I/O port.
+    inb     %dx, %al                # Perform the I/O port read.
+    sti                             # Enables interrupts one instruction later.
+    hlt                             # Simtaneously halt and enable interrupts.
+    ret
+
+END_FUNCTION(ArIoReadAndHalt)
 
 ##
 ## --------------------------------------------------------- Internal Functions

@@ -45,6 +45,12 @@ Author:
 #define EISA_ID_STRING_LENGTH 8
 
 //
+// Define the device ID that processor objects are converted to.
+//
+
+#define ACPI_PROCESSOR_DEVICE_ID "ACPI0007"
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -58,6 +64,7 @@ Author:
 
 KSTATUS
 AcpipInitializeNamespace (
+    VOID
     );
 
 /*++
@@ -78,6 +85,7 @@ Return Value:
 
 PACPI_OBJECT
 AcpipGetNamespaceRoot (
+    VOID
     );
 
 /*++
@@ -101,6 +109,7 @@ Return Value:
 
 PACPI_OBJECT
 AcpipGetSystemBusRoot (
+    VOID
     );
 
 /*++
@@ -109,6 +118,30 @@ Routine Description:
 
     This routine returns the system bus namespace object at \_SB. This routine
     does not modify the reference count of the object.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a pointer to the ACPI object on success.
+
+    NULL on failure.
+
+--*/
+
+PACPI_OBJECT
+AcpipGetProcessorRoot (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the processor namespace directory at \_PR. This
+    routine does not modify the reference count of the object.
 
 Arguments:
 

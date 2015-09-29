@@ -640,6 +640,7 @@ FUNCTION ArSetCycleCountRegister
 END_FUNCTION ArSetCycleCountRegister
 
 ##
+## KERNEL_API
 ## VOID
 ## ArWaitForInterrupt (
 ##     VOID

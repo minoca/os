@@ -99,6 +99,14 @@ Return Value:
 
         break;
 
+    case PmInformationIdleStateHandlers:
+        Status = PmpGetSetIdleStateHandlers(FromKernelMode,
+                                            Data,
+                                            DataSize,
+                                            Set);
+
+        break;
+
     default:
         Status = STATUS_INVALID_PARAMETER;
         *DataSize = 0;

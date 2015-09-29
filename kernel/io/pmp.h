@@ -167,6 +167,28 @@ struct _DEVICE_POWER {
 // -------------------------------------------------------- Function Prototypes
 //
 
+KSTATUS
+PmpArchInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs architecture-specific initialization for the power
+    management library.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 VOID
 PmpRemoveDevice (
     PDEVICE Device
@@ -380,6 +402,77 @@ Return Value:
     STATUS_TOO_LATE if performance state handlers have already been registered.
 
     Other errors if the performance state runtime could not be initialized.
+
+--*/
+
+KSTATUS
+PmpGetSetIdleStateHandlers (
+    BOOL FromKernelMode,
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the idle state handlers. In this case the data
+    pointer is used directly (so the interface structure must not disappear
+    after the call). This can only be set, can only be set once, and can only
+    be set from kernel mode for obvious reasons.
+
+Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether or not this request
+        (and the buffer associated with it) originates from user mode (FALSE)
+        or kernel mode (TRUE).
+
+    Data - Supplies a pointer to the data buffer where the data is either
+        returned for a get operation or given for a set operation.
+
+    DataSize - Supplies a pointer that on input contains the size of the
+        data buffer. On output, contains the required size of the data buffer.
+
+    Set - Supplies a boolean indicating if this is a get operation (FALSE) or
+        a set operation (TRUE).
+
+Return Value:
+
+    STATUS_SUCCESS if the performance state information was initialized.
+
+    STATUS_NOT_SUPPORTED for a get operation.
+
+    STATUS_PERMISSION_DENIED if this is a user mode request.
+
+    STATUS_DATA_LENGTH_MISMATCH if the data size is not the size of the
+    PM_IDLE_STATE_INTERFACE structure.
+
+    STATUS_TOO_LATE if performance state handlers have already been registered.
+
+    Other errors if the performance state runtime could not be initialized.
+
+--*/
+
+VOID
+PmpIntelCstateDriverEntry (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for Intel C-states. It will register
+    itself as a processor idle state manager if it supports this processor.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
 
 --*/
 

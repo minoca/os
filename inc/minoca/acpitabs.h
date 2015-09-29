@@ -312,11 +312,94 @@ typedef enum _MADT_ENTRY_TYPE {
 #define FADT_PM1_CONTROL_SLEEP_TYPE_SHIFT 10
 
 //
+// Define PM2 Control register bit definitions.
+//
+
+//
+// This bit is set to disable the system bus arbiter, which disallows bus
+// masters other than the CPU from using the system bus.
+//
+
+#define FADT_PM2_ARBITER_DISABLE 0x00000001
+
+//
 // Sends the system to sleep. The sleep level is determined by the sleep type
 // bits.
 //
 
 #define FADT_PM1_CONTROL_SLEEP 0x00002000
+
+//
+// Define PM1 Event register bit definitions.
+//
+
+//
+// This bit is set when the most significant bit of the PM timer rolls over.
+//
+
+#define FADT_PM1_EVENT_TIMER_STATUS 0x00000001
+
+//
+// This bit is set any time a system bus master requests the system bus. It can
+// only be cleared by writing a 1 to this bit. This bit reflects bus master
+// activity, not CPU activity.
+//
+
+#define FADT_PM1_EVENT_BUS_MASTER_STATUS 0x00000010
+
+//
+// This bit is set when the BIOS has raised the SCI interrupt and would the
+// attention of the OS.
+//
+
+#define FADT_PM1_EVENT_GLOBAL_STATUS 0x00000020
+
+//
+// This bit is set when the power button was pressed. It is cleared by writing
+// a one to this bit.
+//
+
+#define FADT_PM1_EVENT_POWER_BUTTON_STATUS 0x00000100
+
+//
+// This bit is set when the sleep button was pressed. It is cleared by writing
+// a one to this bit.
+//
+
+#define FADT_PM1_EVENT_SLEEP_BUTTON_STATUS 0x00000200
+
+//
+// This bit is set when the RTC alarm has fired. It is cleared by writing a
+// one to this bit.
+//
+
+#define FADT_PM1_EVENT_RTC_STATUS 0x00000400
+
+//
+// This bit is set when a PCI wake event is requested. It is cleared by writing
+// a one to this bit.
+//
+
+#define FADT_PM1_EVENT_PCIE_WAKE_STATUS 0x00004000
+
+//
+// This bit is set when the system was sleeping and a wake event occurred.
+// It is cleared by writing a one to it.
+//
+
+#define FADT_PM1_EVENT_WAKE_STATUS 0x00008000
+
+//
+// Define PM1 interrupt enable register bits. They correspond to the PM1 event
+// register bits.
+//
+
+#define FADT_PM1_ENABLE_PM_TIMER 0x00000001
+#define FADT_PM1_ENABLE_GLOBAL 0x00000020
+#define FADT_PM1_ENABLE_POWER_BUTTON 0x00000100
+#define FADT_PM1_ENABLE_SLEEP_BUTTON 0x00000200
+#define FADT_PM1_ENABLE_RTC 0x00000400
+#define FADT_PM1_ENABLE_PCIE_DISABLE 0x00004000
 
 //
 // Define FACS flags.
@@ -623,6 +706,39 @@ typedef enum _MADT_ENTRY_TYPE {
 
 #define DEBUG_PORT_16550_OEM_FLAG_64_BYTE_FIFO                  0x00000001
 #define DEBUG_PORT_16550_OEM_FLAG_TRANSMIT_TRIGGER_2_CHARACTERS 0x00000002
+
+//
+// Define Intel-specific fixed function hardware register flags and bitfields.
+//
+
+#define ACPI_FIXED_HARDWARE_INTEL 0x01
+
+#define ACPI_FIXED_HARDWARE_INTEL_CST_HALT 0x00
+#define ACPI_FIXED_HARDWARE_INTEL_CST_IO_HALT 0x01
+#define ACPI_FIXED_HARDWARE_INTEL_CST_MWAIT 0x02
+
+#define ACPI_INTEL_MWAIT_HARDWARE_COORDINATED 0x01
+#define ACPI_INTEL_MWAIT_BUS_MASTER_AVOIDANCE 0x02
+
+//
+// Define Intel-specific _OSC and _PDC bits.
+//
+
+#define ACPI_OSC_INTEL_UUID {{0x4077A616, 0x47BE290C, 0x70D8BD9E, 0x53397158}}
+
+#define ACPI_OSC_INTEL_PSTATE_MSRS (1 << 0)
+#define ACPI_OSC_INTEL_SMP_C1_IO_HALT (1 << 1)
+#define ACPI_OSC_INTEL_THROTTLING_MSRS (1 << 2)
+#define ACPI_OSC_INTEL_SMP_INDEPENDENT (1 << 3)
+#define ACPI_OSC_INTEL_C2_C3_SMP_INDEPENDENT (1 << 4)
+#define ACPI_OSC_INTEL_SMP_PSTATE_PSD (1 << 5)
+#define ACPI_OSC_INTEL_SMP_CSTATE_CST (1 << 6)
+#define ACPI_OSC_INTEL_SMP_TSTATE_TSD (1 << 7)
+#define ACPI_OSC_INTEL_SMP_C1_NATIVE (1 << 8)
+#define ACPI_OSC_INTEL_SMP_C2_C3_NATIVE (1 << 9)
+#define ACPI_OSC_INTEL_PSTATE_ACNT_MCNT (1 << 11)
+#define ACPI_OSC_INTEL_PSTATE_COLLABORATIVE (1 << 12)
+#define ACPI_OSC_INTEL_HARDWARE_DUTY_CYCLING (1 << 13)
 
 //
 // ------------------------------------------------------ Data Type Definitions

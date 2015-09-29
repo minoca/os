@@ -343,6 +343,7 @@ Return Value:
 
 --*/
 
+KERNEL_API
 BOOL
 ArAreInterruptsEnabled (
     VOID
@@ -367,6 +368,7 @@ Return Value:
 
 --*/
 
+KERNEL_API
 BOOL
 ArDisableInterrupts (
     VOID
@@ -390,6 +392,7 @@ Return Value:
 
 --*/
 
+KERNEL_API
 VOID
 ArEnableInterrupts (
     VOID
@@ -497,6 +500,7 @@ Return Value:
 
 --*/
 
+KERNEL_API
 VOID
 ArWaitForInterrupt (
     VOID

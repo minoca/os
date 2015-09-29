@@ -475,7 +475,10 @@ Structure Description:
 
 Members:
 
-    ProcessorId - Store the ACPI processor identifier for this processor.
+    Device - Stores the device information, since processors are treated like
+        devices.
+
+    ProcessorId - Stores the ACPI processor identifier for this processor.
 
     ProcessorBlockAddress - Stores the address of the processor block registers
         for this processor.
@@ -486,6 +489,7 @@ Members:
 --*/
 
 typedef struct _ACPI_PROCESSOR_OBJECT {
+    ACPI_DEVICE_OBJECT Device;
     UCHAR ProcessorId;
     ULONG ProcessorBlockAddress;
     UCHAR ProcessorBlockLength;

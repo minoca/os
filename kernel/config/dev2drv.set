@@ -25,6 +25,7 @@ CUsbHub=usbhub.drv
 CUsbMassStorage=usbmass.drv
 
 DACPI=acpi.drv
+DACPI0007=null.drv
 DAPL0050=pl050.drv
 DBCM0D40=sdbm2709.drv
 DDEVREMCHLD=devrem.drv

@@ -365,6 +365,15 @@ Return Value:
         goto InitializeEnd;
     }
 
+    //
+    // Fire up power management.
+    //
+
+    Status = PmInitializeLibrary();
+    if (!KSUCCESS(Status)) {
+        goto InitializeEnd;
+    }
+
 InitializeEnd:
     return Status;
 }

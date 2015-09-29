@@ -31,6 +31,7 @@ Environment:
 #include "namespce.h"
 #include "amlos.h"
 #include "resdesc.h"
+#include "proc.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -957,7 +958,15 @@ Return Value:
         goto StartDeviceEnd;
     }
 
-    ASSERT(DeviceObject->NamespaceObject->Type == AcpiObjectDevice);
+    if ((DeviceObject->Flags & ACPI_DEVICE_PROCESSOR) != 0) {
+        Status = AcpipProcessorStart(DeviceObject);
+        if (!KSUCCESS(Status)) {
+            goto StartDeviceEnd;
+        }
+    }
+
+    ASSERT((DeviceObject->NamespaceObject->Type == AcpiObjectDevice) ||
+           (DeviceObject->NamespaceObject->Type == AcpiObjectProcessor));
 
     //
     // Attempt to find and execute the _SRS (Set Resource Settings) method.
@@ -1221,7 +1230,12 @@ Return Value:
     ULONGLONG ReturnValue;
     KSTATUS Status;
 
-    ASSERT(Device->Type == AcpiObjectDevice);
+    if (Device->Type != AcpiObjectDevice) {
+
+        ASSERT(Device->Type == AcpiObjectProcessor);
+
+        return STATUS_NOT_FOUND;
+    }
 
     AddressMethodReturnValue = NULL;
     AddressMethod = NULL;
@@ -1313,10 +1327,14 @@ Return Value:
     PACPI_OBJECT StatusObject;
     PACPI_OBJECT StatusReturnValue;
 
-    ASSERT(Device->Type == AcpiObjectDevice);
-
     *DeviceStatus = ACPI_DEFAULT_DEVICE_STATUS;
     Status = STATUS_SUCCESS;
+    if (Device->Type != AcpiObjectDevice) {
+
+        ASSERT(Device->Type == AcpiObjectProcessor);
+
+        goto GetDeviceStatusEnd;
+    }
 
     //
     // Attempt to find and execute the status object.
@@ -1538,10 +1556,32 @@ Return Value:
     PACPI_OBJECT HidMethodReturnValue;
     KSTATUS Status;
 
-    ASSERT(Device->Type == AcpiObjectDevice);
-
     HidMethodReturnValue = NULL;
     HardwareId = NULL;
+
+    //
+    // If this is actually a processor object, then return the ACPI processor
+    // reserved ID.
+    //
+
+    if (Device->Type == AcpiObjectProcessor) {
+        HardwareId = MmAllocatePagedPool(sizeof(ACPI_PROCESSOR_DEVICE_ID),
+                                         ACPI_ALLOCATION_TAG);
+
+        if (HardwareId == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto GetDeviceHardwareIdEnd;
+        }
+
+        RtlStringCopy(HardwareId,
+                      ACPI_PROCESSOR_DEVICE_ID,
+                      sizeof(ACPI_PROCESSOR_DEVICE_ID));
+
+        Status = STATUS_SUCCESS;
+        goto GetDeviceHardwareIdEnd;
+    }
+
+    ASSERT(Device->Type == AcpiObjectDevice);
 
     //
     // Attempt to find the _HID function.
@@ -2396,7 +2436,8 @@ Return Value:
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
-    ASSERT(NamespaceDevice->Type == AcpiObjectDevice);
+    ASSERT((NamespaceDevice->Type == AcpiObjectDevice) ||
+           (NamespaceDevice->Type == AcpiObjectProcessor));
 
     DeviceId = NULL;
     NewChild = NULL;
@@ -2421,6 +2462,10 @@ Return Value:
 
     RtlZeroMemory(NewChild, sizeof(ACPI_DEVICE_CONTEXT));
     NewChild->Flags |= ACPI_DEVICE_BUS_DRIVER;
+    if (IoAreDeviceIdsEqual(ACPI_PROCESSOR_DEVICE_ID, DeviceId) != FALSE) {
+        NewChild->Flags |= ACPI_DEVICE_PROCESSOR;
+    }
+
     NewChild->NamespaceObject = NamespaceDevice;
     NewChild->BusAddress = ACPI_INVALID_BUS_ADDRESS;
     NewChild->ParentObject = ParentDeviceContext;

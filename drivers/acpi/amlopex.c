@@ -6418,6 +6418,7 @@ Return Value:
         // Get the processor ID and processor block register information.
         //
 
+        RtlZeroMemory(&Processor, sizeof(ACPI_PROCESSOR_OBJECT));
         DataPointer = Context->AmlCode + Statement->AdditionalData2;
         Processor.ProcessorId = *DataPointer;
         DataPointer += sizeof(BYTE);

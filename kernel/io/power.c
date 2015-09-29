@@ -391,6 +391,41 @@ Return Value:
     return Status;
 }
 
+KSTATUS
+PmInitializeLibrary (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs global initialization for the power management
+    library. It is called towards the end of I/O initialization.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    Status = PmpArchInitialize();
+    if (!KSUCCESS(Status)) {
+        goto InitializeLibraryEnd;
+    }
+
+InitializeLibraryEnd:
+    return Status;
+}
+
 VOID
 PmpRemoveDevice (
     PDEVICE Device

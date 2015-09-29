@@ -135,6 +135,7 @@ Author:
 
 #define X86_CPUID_IDENTIFICATION 0x00000000
 #define X86_CPUID_BASIC_INFORMATION 0x00000001
+#define X86_CPUID_MWAIT 0x00000005
 #define X86_CPUID_EXTENDED_IDENTIFICATION 0x80000000
 #define X86_CPUID_EXTENDED_INFORMATION 0x80000001
 #define X86_CPUID_ADVANCED_POWER_MANAGEMENT 0x80000007
@@ -153,6 +154,7 @@ Author:
 #define X86_CPUID_BASIC_EAX_EXTENDED_FAMILY_MASK (0xFF << 20)
 #define X86_CPUID_BASIC_EAX_EXTENDED_FAMILY_SHIFT 20
 
+#define X86_CPUID_BASIC_ECX_MONITOR (1 << 3)
 #define X86_CPUID_BASIC_EDX_SYSENTER (1 << 11)
 #define X86_CPUID_BASIC_EDX_CMOV (1 << 15)
 #define X86_CPUID_BASIC_EDX_FX_SAVE_RESTORE (1 << 24)
@@ -163,6 +165,13 @@ Author:
 
 #define X86_VENDOR_INTEL 0x756E6547
 #define X86_VENDOR_AMD 0x68747541
+
+//
+// Define monitor/mwait leaf bits.
+//
+
+#define X86_CPUID_MWAIT_ECX_EXTENSIONS_SUPPORTED 0x00000001
+#define X86_CPUID_MWAIT_ECX_INTERRUPT_BREAK 0x00000002
 
 //
 // Define extended information CPUID bits (eax is 0x80000001).
@@ -194,9 +203,12 @@ Author:
 #define X86_MSR_SYSENTER_CS     0x00000174
 #define X86_MSR_SYSENTER_ESP    0x00000175
 #define X86_MSR_SYSENTER_EIP    0x00000176
+#define X86_MSR_POWER_CONTROL   0x000001FC
 #define X86_MSR_STAR            0xC0000081
 #define X86_MSR_LSTAR           0xC0000082
 #define X86_MSR_FMASK           0xC0000084
+
+#define X86_MSR_POWER_CONTROL_C1E_PROMOTION 0x00000002
 
 //
 // Define the PTE bits.
@@ -1616,6 +1628,94 @@ Routine Description:
 Arguments:
 
     None.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
+VOID
+ArMonitor (
+    PVOID Address,
+    UINTN Ecx,
+    UINTN Edx
+    );
+
+/*++
+
+Routine Description:
+
+    This routine arms the monitoring hardware in preparation for an mwait
+    instruction.
+
+Arguments:
+
+    Address - Supplies the address pointer to monitor.
+
+    Ecx - Supplies the contents to load into the ECX (RCX in 64-bit) register
+        when executing the monitor instruction. These are defined as hints.
+
+    Edx - Supplies the contents to load into the EDX/RDX register. These are
+        also hints.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
+VOID
+ArMwait (
+    UINTN Eax,
+    UINTN Ecx
+    );
+
+/*++
+
+Routine Description:
+
+    This routine executes the mwait instruction, which is used to halt the
+    processor until a specified memory location is written to. It is also used
+    on Intel processors to enter C-states. A monitor instruction must have
+    been executed prior to this to set up the monitoring region.
+
+Arguments:
+
+    Eax - Supplies the contents to load into EAX/RAX when executing the mwait
+        instruction. This is a set of hints, including which C-state to enter
+        on Intel processors.
+
+    Ecx - Supplies the contents to load into the ECX (RCX in 64-bit) register
+        when executing the mwait instruction. This is 1 when entering a C-state
+        with interrupts disabled to indicate that an interrupt should still
+        break out.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
+VOID
+ArIoReadAndHalt (
+    USHORT IoPort
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a single 8-bit I/O port read and then halts the
+    processor until the next interrupt comes in. This routine should be called
+    with interrupts disabled, and will return with interrupts enabled.
+
+Arguments:
+
+    IoPort - Supplies the I/O port to read from.
 
 Return Value:
 

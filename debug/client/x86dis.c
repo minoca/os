@@ -835,6 +835,39 @@ X86_INSTRUCTION_DEFINITION DbgX86Group15Instructions[8] = {
     {"clflush", "M", "", 0},                    /* 07 */
 };
 
+X86_SPARSE_INSTRUCTION_DEFINITION DbgX860F01Alternates[] = {
+    {0, 0xC1, {"vmcall", "", "", 0}},
+    {0, 0xC2, {"vmlaunch", "", "", 0}},
+    {0, 0xC3, {"vmresume", "", "", 0}},
+    {0, 0xC4, {"vmxoff", "", "", 0}},
+    {0, 0xC8, {"monitor", "", "", 0}},
+    {0, 0xC9, {"mwait", "", "", 0}},
+    {0, 0xCA, {"clac", "", "", 0}},
+    {0, 0xCB, {"stac", "", "", 0}},
+    {0, 0xCF, {"encls", "", "", 0}},
+    {0, 0xD0, {"xgetbv", "", "", 0}},
+    {0, 0xD1, {"xsetbv", "", "", 0}},
+    {0, 0xD4, {"vmfunc", "", "", 0}},
+    {0, 0xD5, {"xend", "", "", 0}},
+    {0, 0xD6, {"xtest", "", "", 0}},
+    {0, 0xD7, {"enclu", "", "", 0}},
+    {0, 0xD8, {"vmrun", "", "", 0}},
+    {0, 0xD9, {"vmmcall", "", "", 0}},
+    {0, 0xDA, {"vmload", "", "", 0}},
+    {0, 0xDB, {"vmsave", "", "", 0}},
+    {0, 0xDC, {"stgi", "", "", 0}},
+    {0, 0xDD, {"clgi", "", "", 0}},
+    {0, 0xDE, {"skinit", "", "", 0}},
+    {0, 0xDF, {"invlpga", "", "", 0}},
+    {0, 0xEE, {"rdpkru", "", "", 0}},
+    {0, 0xEF, {"wrpkru", "", "", 0}},
+    {0, 0xF8, {"swapgs", "", "", 0}},
+    {0, 0xF9, {"rdtscp", "", "", 0}},
+    {0, 0xFA, {"monitorx", "", "", 0}},
+    {0, 0xFB, {"mwaitx", "", "", 0}},
+    {0, 0xFC, {"clzero", "", "", 0}},
+};
+
 //
 // Define the various x87 floating point mnemonics. The first index is the
 // first opcode (offset from 0xD8), and the second index is the reg2 portion
@@ -1906,6 +1939,8 @@ Return Value:
 
 {
 
+    ULONG AlternateCount;
+    ULONG AlternateIndex;
     ULONG Base;
     PBYTE Beginning;
     PBYTE CurrentPrefix;
@@ -1914,6 +1949,7 @@ Return Value:
     ULONG ImmediateSize;
     ULONG Mod;
     BOOL ModRmExists;
+    UCHAR Opcode3;
     BYTE RegByte;
     BOOL Result;
     BOOL SibExists;
@@ -2031,6 +2067,32 @@ Return Value:
 
         case 7:
             Instruction->Definition = DbgX86Group7Instructions[RegByte];
+
+            //
+            // There are a bunch of alternate encoding instructions hidden
+            // behind 0F 01, go look for them.
+            //
+
+            if (RegByte == 1) {
+                Opcode3 = *InstructionStream;
+                AlternateCount = sizeof(DbgX860F01Alternates) /
+                                 sizeof(DbgX860F01Alternates[0]);
+
+                for (AlternateIndex = 0;
+                     AlternateIndex < AlternateCount;
+                     AlternateIndex += 1) {
+
+                    if (DbgX860F01Alternates[AlternateIndex].Opcode ==
+                        Opcode3) {
+
+                        Instruction->Definition =
+                              DbgX860F01Alternates[AlternateIndex].Instruction;
+
+                        break;
+                    }
+                }
+            }
+
             break;
 
         case 8:

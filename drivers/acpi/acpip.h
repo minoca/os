@@ -46,6 +46,10 @@ Author:
 #define ACPI_METHOD__STA 0x4154535F // '_STA'
 #define ACPI_METHOD__INI 0x494E495F // '_INI'
 #define ACPI_METHOD__PIC 0x4349505F // '_PIC'
+#define ACPI_METHOD__UID 0x4449555F // '_HID'
+#define ACPI_METHOD__CST 0x5453435F // '_CST'
+#define ACPI_METHOD__OSC 0x43534F5F // '_OSC'
+#define ACPI_METHOD__PDC 0x4344505F // '_PDC'
 
 //
 // Define recognized PCI bus object EISA identifiers.
@@ -94,8 +98,17 @@ Author:
 #define ACPI_DEVICE_PCI_BRIDGE 0x00000002
 
 //
+// This flag is set if this device is a processor device.
+//
+
+#define ACPI_DEVICE_PROCESSOR 0x00000004
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
+
+typedef struct _ACPI_PROCESSOR_CONTEXT
+    ACPI_PROCESSOR_CONTEXT, *PACPI_PROCESSOR_CONTEXT;
 
 /*++
 
@@ -216,8 +229,11 @@ Members:
         will only be non-NULL for PCI bus devices, for everything else this
         pointer is unused.
 
-    BusAddress - Supplies the bus address of this device (the result of
+    BusAddress - Stores the bus address of this device (the result of
         evaluating the _ADR method under the device).
+
+    Processor - Stores a pointer to additional context if this device is a
+        processor.
 
 --*/
 
@@ -233,6 +249,7 @@ struct _ACPI_DEVICE_CONTEXT {
     PACPI_OBJECT ResourceBuffer;
     PPCI_ROUTING_TABLE PciRoutingTable;
     ULONGLONG BusAddress;
+    PACPI_PROCESSOR_CONTEXT Processor;
 };
 
 /*++

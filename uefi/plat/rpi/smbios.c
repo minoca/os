@@ -26,10 +26,8 @@ Environment:
 
 #include <minoca/types.h>
 #include <minoca/status.h>
-#include <minoca/arch.h>
 #include <minoca/rtl.h>
 #include <minoca/smbios.h>
-#include <minoca/arm.h>
 #include "uefifw.h"
 #include "rpifw.h"
 

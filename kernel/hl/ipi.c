@@ -179,6 +179,66 @@ volatile ULONG HlProcessorsLaunched = 1;
 // ------------------------------------------------------------------ Functions
 //
 
+KERNEL_API
+KSTATUS
+HlGetProcessorIndexFromId (
+    ULONGLONG PhysicalId,
+    PULONG ProcessorIndex,
+    PBOOL Active
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find the logical processor index of the processor
+    with the given physical identifier.
+
+Arguments:
+
+    PhysicalId - Supplies the processor physical identifier.
+
+    ProcessorIndex - Supplies a pointer where the processor index will be
+        returned on success.
+
+    Active - Supplies a pointer where a boolean will be returned indicating if
+        this processor is present and active within the system.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG Count;
+    ULONG Index;
+    ULONG Mask;
+
+    Count = HlMaxProcessors;
+    if (HlProcessorTargets == NULL) {
+        return STATUS_NOT_FOUND;
+    }
+
+    Mask = PROCESSOR_ADDRESSING_FLAG_PRESENT |
+           PROCESSOR_ADDRESSING_FLAG_STARTED;
+
+    for (Index = 0; Index < Count; Index += 1) {
+        if (HlProcessorTargets[Index].PhysicalId == PhysicalId) {
+            *ProcessorIndex = Index;
+            *Active = FALSE;
+            if ((HlProcessorTargets[Index].Flags & Mask) == Mask) {
+                *Active = TRUE;
+            }
+
+            return STATUS_SUCCESS;
+        }
+    }
+
+    return STATUS_NOT_FOUND;
+}
+
 KSTATUS
 HlSendIpi (
     IPI_TYPE IpiType,

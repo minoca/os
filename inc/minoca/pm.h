@@ -45,6 +45,19 @@ Author:
 #define PM_PERFORMANCE_STATE_WEIGHT_SHIFT 10
 
 //
+// Define the maximum length of an idle state name.
+//
+
+#define PM_IDLE_STATE_NAME_LENGTH 8
+
+//
+// Define the invalid state used to indicate the CPU is active.
+//
+
+#define PM_IDLE_STATE_NONE (-1)
+#define PM_IDLE_STATE_HALT (-2)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -60,6 +73,7 @@ typedef enum _DEVICE_POWER_STATE {
 typedef enum _PM_INFORMATION_TYPE {
     PmInformationInvalid,
     PmInformationPerformanceStateHandlers,
+    PmInformationIdleStateHandlers,
 } PM_INFORMATION_TYPE, *PPM_INFORMATION_TYPE;
 
 typedef struct _PM_PERFORMANCE_STATE_INTERFACE
@@ -156,6 +170,163 @@ struct _PM_PERFORMANCE_STATE_INTERFACE {
     PPM_PERFORMANCE_STATE States;
     ULONG StateCount;
     PPM_SET_PERFORMANCE_STATE SetPerformanceState;
+    PVOID Context;
+};
+
+//
+// CPU idle state data types
+//
+
+typedef struct _PM_IDLE_STATE_INTERFACE
+    PM_IDLE_STATE_INTERFACE, *PPM_IDLE_STATE_INTERFACE;
+
+/*++
+
+Structure Description:
+
+    This structure defines a single CPU idle state that a processor can enter.
+
+Members:
+
+    Name - Stores the name of this idle state, for display purposes.
+
+    Flags - Stores a bitfield of flags describing this state. See
+        PM_IDLE_STATE_* definitions.
+
+    Context - Stores a pointer's worth of context that the driver can use to
+        store additional data about this state.
+
+    ExitLatency - Stores the amount of time needed to exit this idle state once
+        entered, in time counter ticks.
+
+    TargetResidency - Stores the minimum duration to be in this idle state to
+        make it worth it to enter, in time counter ticks.
+
+--*/
+
+typedef struct _PM_IDLE_STATE {
+    CHAR Name[PM_IDLE_STATE_NAME_LENGTH];
+    ULONG Flags;
+    PVOID Context;
+    ULONGLONG ExitLatency;
+    ULONGLONG TargetResidency;
+} PM_IDLE_STATE, *PPM_IDLE_STATE;
+
+/*++
+
+Structure Description:
+
+    This structure defines the per processor CPU idle information.
+
+Members:
+
+    States - Stores a pointer to an array of idle states. The CPU idle driver
+        fills this in upon initialization.
+
+    StateCount - Stores the number of states in the array. The CPU idle driver
+        fills this in upon initialization.
+
+    ProcessorNumber - Stores the software index of this processor. The boot
+        processor will always be zero.
+
+    Context - Stores a per processor context pointer the CPU idle driver can
+        use to store additional state.
+
+    CurrentState - Stores the current state of the processor. This will be
+        initialized to the desired state upon calling enter, and will be
+        cleared to PM_IDLE_STATE_NONE when the CPU is active.
+
+--*/
+
+typedef struct _PM_IDLE_PROCESSOR_STATE {
+    PPM_IDLE_STATE States;
+    ULONG StateCount;
+    ULONG ProcessorNumber;
+    PVOID Context;
+    ULONG CurrentState;
+} PM_IDLE_PROCESSOR_STATE, *PPM_IDLE_PROCESSOR_STATE;
+
+typedef
+VOID
+(*PPM_ENTER_IDLE_STATE) (
+    PPM_IDLE_PROCESSOR_STATE Processor,
+    ULONG State
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prototype represents a function that is called to go into a
+    given idle state on the current processor. This routine is called with
+    interrupts disabled, and should return with interrupts disabled.
+
+Arguments:
+
+    Processor - Supplies a pointer to the information for the current processor.
+
+    State - Supplies the new state index to change to.
+
+Return Value:
+
+    None. It is assumed when this function returns that the idle state was
+    entered and then exited.
+
+--*/
+
+typedef
+KSTATUS
+(*PPM_INITIALIZE_IDLE_STATES) (
+    PPM_IDLE_STATE_INTERFACE Interface,
+    PPM_IDLE_PROCESSOR_STATE Processor
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prototype represents a function that is called to go set up
+    idle state information on the current processor. It should set the states
+    and state count in the given processor idle information structure. This
+    routine is called once on every processor. It runs at dispatch level.
+
+Arguments:
+
+    Interface - Supplies a pointer to the interface.
+
+    Processor - Supplies a pointer to the context for this processor.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines the kernel CPU idle state interface.
+
+Members:
+
+    Flags - Stores a bitfield of flags about the performance state interface.
+        See PM_IDLE_STATE_INTERFACE_* definitions.
+
+    InitializeIdleStates - Stores a pointer to a function called on each
+        active processor that initializes processor idle state support.
+
+    EnterIdleState - Stores a pointer to a function used to enter an idle state.
+
+    Context - Stores a pointer's worth of context that the interface provider
+        can use to get back to its data structures.
+
+--*/
+
+struct _PM_IDLE_STATE_INTERFACE {
+    ULONG Flags;
+    PPM_INITIALIZE_IDLE_STATES InitializeIdleStates;
+    PPM_ENTER_IDLE_STATE EnterIdleState;
     PVOID Context;
 };
 
@@ -291,6 +462,28 @@ Return Value:
 --*/
 
 KSTATUS
+PmInitializeLibrary (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs global initialization for the power management
+    library. It is called towards the end of I/O initialization.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+KSTATUS
 PmGetSetSystemInformation (
     BOOL FromKernelMode,
     PM_INFORMATION_TYPE InformationType,
@@ -325,6 +518,31 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+VOID
+PmIdle (
+    PPROCESSOR_BLOCK Processor
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called on a processor to go into a low power idle state. If
+    no processor idle driver has been registered or processor idle states have
+    been disabled, then the processor simply halts waiting for an interrupt.
+    This routine is called with interrupts disabled and returns with interrupts
+    enabled. This routine should only be called internally by the idle thread.
+
+Arguments:
+
+    Processor - Supplies a pointer to the processor going idle.
+
+Return Value:
+
+    None. This routine returns from the idle state with interrupts enabled.
 
 --*/
 

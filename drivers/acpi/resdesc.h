@@ -38,6 +38,31 @@ Author:
 //
 
 KSTATUS
+AcpipParseGenericAddress (
+    PACPI_OBJECT ResourceBuffer,
+    PGENERIC_ADDRESS GenericAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads a single generic address from the given resource buffer.
+
+Arguments:
+
+    ResourceBuffer - Supplies a pointer to the ACPI resource buffer to parse.
+
+    GenericAddress - Supplies a pointer where the extracted generic address
+        will be returned.
+
+Return Value:
+
+     Status code.
+
+--*/
+
+KSTATUS
 AcpipConvertFromAcpiResourceBuffer (
     PACPI_OBJECT Device,
     PACPI_OBJECT ResourceBuffer,

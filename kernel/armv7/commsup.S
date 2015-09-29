@@ -38,6 +38,7 @@ Environment:
 ASSEMBLY_FILE_HEADER
 
 ##
+## KERNEL_API
 ## BOOL
 ## ArDisableInterrupts (
 ##     VOID
@@ -76,6 +77,7 @@ FUNCTION ArDisableInterrupts
 END_FUNCTION ArDisableInterrupts
 
 ##
+## KERNEL_API
 ## VOID
 ## ArEnableInterrupts (
 ##     VOID
@@ -105,6 +107,7 @@ FUNCTION ArEnableInterrupts
 END_FUNCTION ArEnableInterrupts
 
 ##
+## KERNEL_API
 ## BOOL
 ## ArAreInterruptsEnabled (
 ##     VOID

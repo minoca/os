@@ -42,7 +42,16 @@ OBJS = acpidrv.o    \
        namespce.o   \
        oprgn.o      \
        oprgnos.o    \
+       proc.o       \
        resdesc.o    \
+
+ARMV7_OBJS = armv7/procarch.o   \
+
+ARMV6_OBJS = $(ARMV7_OBJS)
+
+X86_OBJS = x86/procarch.o   \
+
+EXTRA_SRC_DIRS = x86 armv7
 
 DYNLIBS = $(BINROOT)/kernel             \
 

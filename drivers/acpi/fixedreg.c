@@ -107,6 +107,14 @@ ULONG AcpiPm1aControlRegisterSize = 0;
 PVOID AcpiPm1bControlRegister = NULL;
 ULONG AcpiPm1bControlRegisterSize = 0;
 
+PVOID AcpiPm2ControlRegister = NULL;
+ULONG AcpiPm2ControlRegisterSize = 0;
+
+PVOID AcpiPm1aEventRegister = NULL;
+ULONG AcpiPm1aEventRegisterSize = 0;
+PVOID AcpiPm1bEventRegister = NULL;
+ULONG AcpiPm1bEventRegisterSize = 0;
+
 //
 // Store a pointer to the lock that protects the global lock.
 //
@@ -208,6 +216,186 @@ Return Value:
                                      &AcpiPm1bControlRegister,
                                      &AcpiPm1aControlRegisterSize,
                                      &AcpiPm1bControlRegisterSize,
+                                     Value);
+
+    return Status;
+}
+
+KSTATUS
+AcpipReadPm2ControlRegister (
+    PULONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads the PM2 control register.
+
+Arguments:
+
+    Value - Supplies a pointer where the value will be returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PFADT Fadt;
+    KSTATUS Status;
+
+    Fadt = AcpiFadtTable;
+    if (Fadt == NULL) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    Status = AcpipReadFixedRegister(Fadt->Pm2ControlBlock,
+                                    0,
+                                    Fadt->Pm2ControlLength,
+                                    FIELD_OFFSET(FADT, XPm2ControlBlock),
+                                    0,
+                                    &AcpiPm2ControlRegister,
+                                    NULL,
+                                    &AcpiPm2ControlRegisterSize,
+                                    NULL,
+                                    Value);
+
+    return Status;
+}
+
+KSTATUS
+AcpipWritePm2ControlRegister (
+    ULONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes to the PM2 control register.
+
+Arguments:
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PFADT Fadt;
+    KSTATUS Status;
+
+    Fadt = AcpiFadtTable;
+    if (Fadt == NULL) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    Status = AcpipWriteFixedRegister(Fadt->Pm2ControlBlock,
+                                     0,
+                                     Fadt->Pm2ControlLength,
+                                     FIELD_OFFSET(FADT, XPm2ControlBlock),
+                                     0,
+                                     &AcpiPm2ControlRegister,
+                                     NULL,
+                                     &AcpiPm2ControlRegisterSize,
+                                     NULL,
+                                     Value);
+
+    return Status;
+}
+
+KSTATUS
+AcpipReadPm1EventRegister (
+    PULONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads the PM1 event/status register.
+
+Arguments:
+
+    Value - Supplies a pointer where the value will be returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PFADT Fadt;
+    KSTATUS Status;
+
+    Fadt = AcpiFadtTable;
+    if (Fadt == NULL) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    Status = AcpipReadFixedRegister(Fadt->Pm1aEventBlock,
+                                    Fadt->Pm1bEventBlock,
+                                    Fadt->Pm1EventLength,
+                                    FIELD_OFFSET(FADT, XPm1aEventBlock),
+                                    FIELD_OFFSET(FADT, XPm1bEventBlock),
+                                    &AcpiPm1aEventRegister,
+                                    &AcpiPm1bEventRegister,
+                                    &AcpiPm1aEventRegisterSize,
+                                    &AcpiPm1bEventRegisterSize,
+                                    Value);
+
+    return Status;
+}
+
+KSTATUS
+AcpipWritePm1EventRegister (
+    ULONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes to the PM1 event register.
+
+Arguments:
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PFADT Fadt;
+    KSTATUS Status;
+
+    Fadt = AcpiFadtTable;
+    if (Fadt == NULL) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    Status = AcpipWriteFixedRegister(Fadt->Pm1aEventBlock,
+                                     Fadt->Pm1bEventBlock,
+                                     Fadt->Pm1EventLength,
+                                     FIELD_OFFSET(FADT, XPm1aEventBlock),
+                                     FIELD_OFFSET(FADT, XPm1bEventBlock),
+                                     &AcpiPm1aEventRegister,
+                                     &AcpiPm1bEventRegister,
+                                     &AcpiPm1aEventRegisterSize,
+                                     &AcpiPm1bEventRegisterSize,
                                      Value);
 
     return Status;
@@ -899,11 +1087,6 @@ Return Value:
         ASSERT(GenericAddress->RegisterBitWidth != 0);
 
         AccessSize = GenericAddress->RegisterBitWidth / BITS_PER_BYTE;
-
-    } else {
-
-        ASSERT(GenericAddress->RegisterBitWidth ==
-               GenericAddress->AccessSize * BITS_PER_BYTE);
     }
 
     switch (GenericAddress->AddressSpaceId) {

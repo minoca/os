@@ -633,6 +633,37 @@ Return Value:
 
 --*/
 
+KERNEL_API
+KSTATUS
+HlGetProcessorIndexFromId (
+    ULONGLONG PhysicalId,
+    PULONG ProcessorIndex,
+    PBOOL Active
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find the logical processor index of the processor
+    with the given physical identifier.
+
+Arguments:
+
+    PhysicalId - Supplies the processor physical identifier.
+
+    ProcessorIndex - Supplies a pointer where the processor index will be
+        returned on success.
+
+    Active - Supplies a pointer where a boolean will be returned indicating if
+        this processor is present and active within the system.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 KSTATUS
 HlStartAllProcessors (
     PVOID InitializationRoutine,

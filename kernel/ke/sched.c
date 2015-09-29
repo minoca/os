@@ -790,7 +790,7 @@ Return Value:
     //
 
     KeBeginCycleAccounting(CycleAccountIdle);
-    ArWaitForInterrupt();
+    PmIdle(Processor);
     return;
 }
 

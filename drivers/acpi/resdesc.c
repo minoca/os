@@ -139,6 +139,85 @@ AcpipParseSpbUartDescriptor (
 //
 
 KSTATUS
+AcpipParseGenericAddress (
+    PACPI_OBJECT ResourceBuffer,
+    PGENERIC_ADDRESS GenericAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads a single generic address from the given resource buffer.
+
+Arguments:
+
+    ResourceBuffer - Supplies a pointer to the ACPI resource buffer to parse.
+
+    GenericAddress - Supplies a pointer where the extracted generic address
+        will be returned.
+
+Return Value:
+
+     Status code.
+
+--*/
+
+{
+
+    PUCHAR Buffer;
+    UCHAR Byte;
+    USHORT DescriptorLength;
+    ULONGLONG RemainingSize;
+    KSTATUS Status;
+
+    if ((ResourceBuffer == NULL) ||
+        (ResourceBuffer->Type != AcpiObjectBuffer)) {
+
+        Status = STATUS_INVALID_PARAMETER;
+        goto ReadGenericAddressEnd;
+    }
+
+    Buffer = ResourceBuffer->U.Buffer.Buffer;
+    RemainingSize = ResourceBuffer->U.Buffer.Length;
+    Byte = *Buffer;
+    RemainingSize -= 1;
+    Buffer += 1;
+    if ((Byte & RESOURCE_DESCRIPTOR_LARGE) == 0) {
+        Status = STATUS_MALFORMED_DATA_STREAM;
+        goto ReadGenericAddressEnd;
+    }
+
+    if (RemainingSize < 2) {
+        Status = STATUS_MALFORMED_DATA_STREAM;
+        goto ReadGenericAddressEnd;
+    }
+
+    DescriptorLength = *((PUSHORT)Buffer);
+    Buffer += 2;
+    RemainingSize -= 2;
+    switch (Byte & LARGE_RESOURCE_TYPE_MASK) {
+    case LARGE_RESOURCE_TYPE_GENERIC_REGISTER:
+        if (DescriptorLength < sizeof(GENERIC_ADDRESS)) {
+            Status = STATUS_MALFORMED_DATA_STREAM;
+            goto ReadGenericAddressEnd;
+        }
+
+        RtlCopyMemory(GenericAddress, Buffer, sizeof(GENERIC_ADDRESS));
+        break;
+
+    default:
+        Status = STATUS_MALFORMED_DATA_STREAM;
+        goto ReadGenericAddressEnd;
+    }
+
+    Status = STATUS_SUCCESS;
+
+ReadGenericAddressEnd:
+    return Status;
+}
+
+KSTATUS
 AcpipConvertFromAcpiResourceBuffer (
     PACPI_OBJECT Device,
     PACPI_OBJECT ResourceBuffer,

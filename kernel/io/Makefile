@@ -31,6 +31,7 @@ BINPLACE = intlib
 
 OBJS = arb.o      \
        cachedio.o \
+       cstate.o   \
        device.o   \
        devinfo.o  \
        devrem.o   \
@@ -65,10 +66,13 @@ OBJS = arb.o      \
        userio.o   \
 
 ARMV7_OBJS = armv7/archio.o   \
+             armv7/archpm.o   \
 
-ARMV6_OBJS = armv7/archio.o   \
+ARMV6_OBJS = $(ARMV7_OBJS)
 
 X86_OBJS = x86/archio.o   \
+           x86/archpm.o   \
+           x86/intelcst.o \
 
 EXTRA_SRC_DIRS = x86 armv7
 

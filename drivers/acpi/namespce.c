@@ -108,11 +108,18 @@ PACPI_OBJECT AcpiNamespaceRoot = NULL;
 PACPI_OBJECT AcpiSystemBusRoot = NULL;
 
 //
+// Store a pointer to the old \_PR object.
+//
+
+PACPI_OBJECT AcpiProcessorRoot = NULL;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
 KSTATUS
 AcpipInitializeNamespace (
+    VOID
     )
 
 /*++
@@ -136,12 +143,10 @@ Return Value:
     PACPI_OBJECT GeneralEventObject;
     PACPI_OBJECT OperatingSystem;
     ULONG OperatingSystemStringLength;
-    PACPI_OBJECT ProcessorObject;
     KSTATUS Status;
 
     GeneralEventObject = NULL;
     OperatingSystem = NULL;
-    ProcessorObject = NULL;
     if (AcpiNamespaceRoot != NULL) {
         return STATUS_SUCCESS;
     }
@@ -173,19 +178,19 @@ Return Value:
     }
 
     AcpipObjectReleaseReference(AcpiSystemBusRoot);
-    ProcessorObject = AcpipCreateNamespaceObject(
+    AcpiProcessorRoot = AcpipCreateNamespaceObject(
                                              NULL,
                                              AcpiObjectUninitialized,
                                              ACPI_PROCESSOR_OBJECT_NAME_STRING,
                                              NULL,
                                              0);
 
-    if (ProcessorObject == NULL) {
+    if (AcpiProcessorRoot == NULL) {
         Status = STATUS_UNSUCCESSFUL;
         goto InitializeNamespaceEnd;
     }
 
-    AcpipObjectReleaseReference(ProcessorObject);
+    AcpipObjectReleaseReference(AcpiProcessorRoot);
     GeneralEventObject = AcpipCreateNamespaceObject(
                                  NULL,
                                  AcpiObjectUninitialized,
@@ -227,8 +232,9 @@ InitializeNamespaceEnd:
             AcpiSystemBusRoot = NULL;
         }
 
-        if (ProcessorObject != NULL) {
-            AcpipObjectReleaseReference(ProcessorObject);
+        if (AcpiProcessorRoot != NULL) {
+            AcpipObjectReleaseReference(AcpiProcessorRoot);
+            AcpiProcessorRoot = NULL;
         }
 
         if (GeneralEventObject != NULL) {
@@ -245,6 +251,7 @@ InitializeNamespaceEnd:
 
 PACPI_OBJECT
 AcpipGetNamespaceRoot (
+    VOID
     )
 
 /*++
@@ -273,6 +280,7 @@ Return Value:
 
 PACPI_OBJECT
 AcpipGetSystemBusRoot (
+    VOID
     )
 
 /*++
@@ -297,6 +305,35 @@ Return Value:
 {
 
     return AcpiSystemBusRoot;
+}
+
+PACPI_OBJECT
+AcpipGetProcessorRoot (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the processor namespace directory at \_PR. This
+    routine does not modify the reference count of the object.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a pointer to the ACPI object on success.
+
+    NULL on failure.
+
+--*/
+
+{
+
+    return AcpiProcessorRoot;
 }
 
 PACPI_OBJECT
@@ -923,7 +960,9 @@ Arguments:
 
     ObjectType - Supplies an object type. If a valid object type is supplied,
         then only objects of that type will be returned. Supply
-        AcpiObjectTypeCount to return all objects.
+        AcpiObjectTypeCount to return all objects. Note that if
+        AcpiObjectDevice is requested, then AcpiObjectProcessor objects will
+        also be returned.
 
     ObjectCount - Supplies a pointer where the number of elements in the return
         array will be returned.
@@ -945,19 +984,39 @@ Return Value:
     PACPI_OBJECT Object;
     ULONG ObjectIndex;
     PACPI_OBJECT *Objects;
+    ULONG ProcessorObjectCount;
+    PACPI_OBJECT *ProcessorObjects;
 
     Objects = NULL;
+    ChildCount = 0;
+    ProcessorObjects = NULL;
+
+    //
+    // If looking for devices in the system bus root, also find processors in
+    // the _PR object and merge them in here.
+    //
+
+    if ((ObjectType == AcpiObjectDevice) &&
+        (ParentObject == AcpiSystemBusRoot)) {
+
+        ProcessorObjects = AcpipEnumerateChildObjects(AcpiProcessorRoot,
+                                                      AcpiObjectDevice,
+                                                      &ProcessorObjectCount);
+
+        ChildCount += ProcessorObjectCount;
+    }
 
     //
     // Loop through once to count the number of objects.
     //
 
-    ChildCount = 0;
     CurrentEntry = ParentObject->ChildListHead.Next;
     while (CurrentEntry != &(ParentObject->ChildListHead)) {
         Object = LIST_VALUE(CurrentEntry, ACPI_OBJECT, SiblingListEntry);
         if ((ObjectType == AcpiObjectTypeCount) ||
-            (Object->Type == ObjectType)) {
+            (Object->Type == ObjectType) ||
+            ((ObjectType == AcpiObjectDevice) &&
+             (Object->Type == AcpiObjectProcessor))) {
 
             ChildCount += 1;
         }
@@ -986,7 +1045,9 @@ Return Value:
         Object = LIST_VALUE(CurrentEntry, ACPI_OBJECT, SiblingListEntry);
         CurrentEntry = CurrentEntry->Next;
         if ((ObjectType == AcpiObjectTypeCount) ||
-            (Object->Type == ObjectType)) {
+            (Object->Type == ObjectType) ||
+            ((ObjectType == AcpiObjectDevice) &&
+             (Object->Type == AcpiObjectProcessor))) {
 
             Objects[ObjectIndex] = Object;
             AcpipObjectAddReference(Object);
@@ -994,7 +1055,25 @@ Return Value:
         }
     }
 
+    //
+    // Copy in those processor objects from the beginning if there are any.
+    //
+
+    if (ProcessorObjects != NULL) {
+        RtlCopyMemory(&(Objects[ObjectIndex]),
+                      ProcessorObjects,
+                      ProcessorObjectCount * sizeof(PACPI_OBJECT));
+
+        MmFreePagedPool(ProcessorObjects);
+        ProcessorObjects = NULL;
+    }
+
 EnumerateChildObjectsEnd:
+    if (ProcessorObjects != NULL) {
+        AcpipReleaseChildEnumerationArray(ProcessorObjects,
+                                          ProcessorObjectCount);
+    }
+
     *ObjectCount = ChildCount;
     return Objects;
 }

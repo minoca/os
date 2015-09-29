@@ -78,6 +78,90 @@ Return Value:
 
 --*/
 
+KSTATUS
+AcpipReadPm2ControlRegister (
+    PULONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads the PM2 control register.
+
+Arguments:
+
+    Value - Supplies a pointer where the value will be returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+AcpipWritePm2ControlRegister (
+    ULONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes to the PM2 control register.
+
+Arguments:
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+AcpipReadPm1EventRegister (
+    PULONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads the PM1 event/status register.
+
+Arguments:
+
+    Value - Supplies a pointer where the value will be returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+AcpipWritePm1EventRegister (
+    ULONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes to the PM1 event register.
+
+Arguments:
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 VOID
 AcpipAcquireGlobalLock (
     VOID
