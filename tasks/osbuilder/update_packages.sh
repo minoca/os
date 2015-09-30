@@ -42,7 +42,8 @@ for arch in x86 x86quark armv7; do
             ARCH=x86
             ;;
 
-        armv[67]) package_arch=minoca-arm ;;
+        armv6) package_arch=minoca-armv6 ;;
+        armv7) package_arch=minoca-armv7 ;;
     esac
 
     parch=${package_arch#minoca-}

@@ -58,7 +58,8 @@ case "$ARCH" in
     fi
     ;;
 
-  armv[67]) parch=arm ;;
+  armv6) parch=armv6 ;;
+  armv7) parch=armv7 ;;
   *)
     echo "Invalid arch $ARCH."
     exit 1
