@@ -42,6 +42,50 @@ Author:
 #define GOEC_MAX_DATA (GOEC_PROTO2_MAX_PARAM_SIZE + GOEC_MESSAGE_PROTOCOL_BYTES)
 
 //
+// Define NVRAM context values.
+//
+
+#define GOEC_VBNV_CONTEXT_VERSION 1
+#define GOEC_VBNV_CONTEXT_OP_READ 0
+#define GOEC_VBNV_CONTEXT_OP_WRITE 1
+#define GOEC_VBNV_BLOCK_SIZE 16
+
+//
+// Define NVRAM data values.
+//
+
+#define GOEC_NVRAM_HEADER_SIGNATURE_MASK 0xC0
+#define GOEC_NVRAM_HEADER_SIGNATURE_VALUE 0x40
+#define GOEC_NVRAM_HEADER_FIRMWARE_SETTINGS_RESET 0x20
+#define GOEC_NVRAM_HEADER_KERNEL_SETTINGS_RESET 0x10
+#define GOEC_NVRAM_HEADER_WIPEOUT 0x08
+
+#define GOEC_NVRAM_BOOT_DEBUG_RESET_MODE 0x80
+#define GOEC_NVRAM_BOOT_DISABLE_DEV_REQUEST 0x40
+#define GOEC_NVRAM_BOOT_OPROM_NEEDED 0x20
+#define GOEC_NVRAM_BOOT_BACKUP_NVRAM 0x10
+#define GOEC_NVRAM_BOOT_TRY_B_COUNT_MASK 0x0F
+
+#define GOEC_NVRAM_DEV_BOOT_USB 0x01
+#define GOEC_NVRAM_DEV_BOOT_SIGNED_ONLY 0x02
+#define GOEC_NVRAM_DEV_BOOT_LEGACY 0x04
+#define GOEC_NVRAM_DEV_BOOT_FASTBOOT_FULL_CAP 0x08
+
+#define GOEC_NVRAM_TPM_CLEAR_OWNER_REQUEST 0x01
+#define GOEC_NVRAM_TPM_CLEAR_OWNER_DONE 0x02
+#define GOEC_NVRAM_TPM_REBOOTED 0x04
+
+#define GOEC_NVRAM_BOOT2_RESULT_MASK 0x03
+#define GOEC_NVRAM_BOOT2_TRIED 0x04
+#define GOEC_NVRAM_BOOT2_TRY_NEXT 0x08
+#define GOEC_NVRAM_BOOT2_PREVIOUS_RESULT_MASK 0x30
+#define GOEC_NVRAM_BOOT2_PREVIOUS_RESULT_SHIFT 4
+#define GOEC_NVRAM_BOOT2_PREVIOUS_TRIED 0x40
+
+#define GOEC_NVRAM_MISC_UNLOCK_FASTBOOT 0x01
+#define GOEC_NVRAM_MISC_BOOT_ON_AC_DETECT 0x02
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -154,6 +198,24 @@ typedef enum _GOEC_SPI_STATUS {
     GoecSpiNotReady = 0xFC,
     GoecSpiOldReady = 0xFD
 } GOEC_SPI_STATUS, *PGOEC_SPI_STATUS;
+
+typedef enum _GOEC_STATUS {
+    GoecStatusSuccess = 0,
+    GoecStatusInvalidCommand = 1,
+    GoecStatusError = 2,
+    GoecStatusInvalidParameter = 3,
+    GoecStatusAccessDenied = 4,
+    GoecStatusInvalidResponse = 5,
+    GoecStatusInvalidVersion = 6,
+    GoecStatusInvalidChecksum = 7,
+    GoecStatusInProgress = 8,
+    GoecStatusUnavailable = 9,
+    GoecStatusTimeout = 10,
+    GoecStatusOverflow = 11,
+    GoecStatusInvalidHeader = 12,
+    GoecStatusRequestTruncated = 13,
+    GoecStatusResponseTooBig = 14
+} GOEC_STATUS, *PGOEC_STATUS;
 
 /*++
 
@@ -302,7 +364,7 @@ typedef struct _GOEC_RESPONSE_V3 {
 
 Structure Description:
 
-    This structure defines the the parameters for the Hello command.
+    This structure defines the parameters for the Hello command.
 
 Members:
 
@@ -318,7 +380,7 @@ typedef struct _GOEC_PARAMS_HELLO {
 
 Structure Description:
 
-    This structure defines the the response for the Hello command.
+    This structure defines the response for the Hello command.
 
 Members:
 
@@ -340,7 +402,7 @@ typedef enum _GOEC_CURRENT_IMAGE {
 
 Structure Description:
 
-    This structure defines the the response for the Get Version command.
+    This structure defines the response for the Get Version command.
 
 Members:
 
@@ -365,7 +427,7 @@ typedef struct _GOEC_RESPONSE_GET_VERSION {
 
 Structure Description:
 
-    This structure defines the the response for the Keyboard Information
+    This structure defines the response for the Keyboard Information
     command.
 
 Members:
@@ -383,6 +445,99 @@ typedef struct _GOEC_RESPONSE_KEYBOARD_INFO {
     ULONG Columns;
     UCHAR Switches;
 } PACKED GOEC_RESPONSE_KEYBOARD_INFO, *PGOEC_RESPONSE_KEYBOARD_INFO;
+
+/*++
+
+Structure Description:
+
+    This structure defines the the the response for a verified boot NVRAM
+    request.
+
+Members:
+
+    Header - Stores some header bits and global reset bits.
+
+    BootFlags - Stores boot command flag bits, like debug reset mode, disable
+        dev request, and backup NVRAM bits.
+
+    Recovery - Stores the recovery information.
+
+    Localization - Stores the localization information.
+
+    DevFlags - Stores developer mode flags, like enabling USB/SD boot or
+        requiring signed kernels.
+
+    TpmFlags - Stores TPM flags, like clearing the TPM owner.
+
+    RecoverSubcode - Stores the recovery subcode.
+
+    Boot2 - Stores additional boot flags like the boot results mask.
+
+    Miscellaneous - Stores miscellaneous flags like unlocking fastboot or
+        booting on AC detect.
+
+    Reserved - Stores two currently unused bytes.
+
+    KernelField - Stores the kernel field value.
+
+    Reserved2 - Stores an additional set of unused bytes.
+
+    Crc8 - Stores the CRC8 of the table, except for this byte.
+
+--*/
+
+typedef struct _GOEC_NVRAM {
+    UCHAR Header;
+    UCHAR BootFlags;
+    UCHAR Recovery;
+    UCHAR Localization;
+    UCHAR DevFlags;
+    UCHAR TpmFlags;
+    UCHAR RecoverySubcode;
+    UCHAR Boot2;
+    UCHAR Miscellaneous;
+    UCHAR Reserved[2];
+    UCHAR KernelField;
+    UCHAR Reserved2[3];
+    UCHAR Crc8;
+} PACKED GOEC_NVRAM, *PGOEC_NVRAM;
+
+/*++
+
+Structure Description:
+
+    This structure defines the request parameters for the verified boot
+    non-volatile RAM request.
+
+Members:
+
+    Operation - Stores the requested operation. See GOEC_VBNV_CONTEXT_OP_*
+        definitions.
+
+    NvRam - Stores the data to read or write.
+
+--*/
+
+typedef struct _GOEC_PARAMS_VBNV_CONTEXT {
+    ULONG Operation;
+    GOEC_NVRAM NvRam;
+} PACKED GOEC_PARAMS_VBNV_CONTEXT, *PGOEC_PARAMS_VBNV_CONTEXT;
+
+/*++
+
+Structure Description:
+
+    This structure defines the response for a verified boot NVRAM request.
+
+Members:
+
+    NvRam - Stores the resulting data.
+
+--*/
+
+typedef struct _GOEC_RESPONSE_VBNV_CONTEXT {
+    GOEC_NVRAM NvRam;
+} PACKED GOEC_RESPONSE_VBNV_CONTEXT, *PGOEC_RESPONSE_VBNV_CONTEXT;
 
 //
 // -------------------------------------------------------------------- Globals

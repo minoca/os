@@ -236,6 +236,11 @@ GoecGetVersion (
     );
 
 KSTATUS
+GoecEnablePeripheralBoot (
+    PGOEC_CONTROLLER Controller
+    );
+
+KSTATUS
 GoecGetKeyboardInformation (
     PGOEC_CONTROLLER Controller
     );
@@ -296,6 +301,12 @@ GoecPerformSpiIo (
     PGOEC_CONTROLLER Controller,
     UINTN OutBytes,
     UINTN InBytes
+    );
+
+UCHAR
+GoecCrc8 (
+    PVOID Data,
+    ULONG Size
     );
 
 //
@@ -1146,6 +1157,11 @@ Return Value:
         goto InitializeEnd;
     }
 
+    Status = GoecEnablePeripheralBoot(Controller);
+    if (!KSUCCESS(Status)) {
+        goto InitializeEnd;
+    }
+
     GoecGetKeyboardInformation(Controller);
 
 InitializeEnd:
@@ -1254,6 +1270,91 @@ Return Value:
                   Version.VersionStringRw,
                   Version.CurrentImage);
 
+    return Status;
+}
+
+KSTATUS
+GoecEnablePeripheralBoot (
+    PGOEC_CONTROLLER Controller
+    )
+
+/*++
+
+Routine Description:
+
+    This routine ensures that booting from USB and SD is enabled.
+
+Arguments:
+
+    Controller - Supplies a pointer to the connected controller.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    GOEC_COMMAND Command;
+    GOEC_PARAMS_VBNV_CONTEXT CommandData;
+    GOEC_RESPONSE_VBNV_CONTEXT Response;
+    KSTATUS Status;
+
+    RtlZeroMemory(&CommandData, sizeof(CommandData));
+    CommandData.Operation = GOEC_VBNV_CONTEXT_OP_READ;
+    Command.Code = GoecCommandVbNvContext;
+    Command.Version = GOEC_VBNV_CONTEXT_VERSION;
+    Command.DataIn = &CommandData;
+    Command.DataOut = &Response;
+    Command.SizeIn = sizeof(GOEC_PARAMS_VBNV_CONTEXT);
+    Command.SizeOut = sizeof(GOEC_RESPONSE_VBNV_CONTEXT);
+    Command.DeviceIndex = 0;
+    Status = GoecExecuteCommand(Controller, &Command);
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("GOEC: Failed to read NVRAM: %x\n", Status);
+        return Status;
+    }
+
+    KeDelayExecution(FALSE, FALSE, 10000);
+    if (((Response.NvRam.Header & GOEC_NVRAM_HEADER_SIGNATURE_MASK) !=
+         GOEC_NVRAM_HEADER_SIGNATURE_VALUE) ||
+        (GoecCrc8(&(Response.NvRam), sizeof(GOEC_NVRAM) - 1) !=
+         Response.NvRam.Crc8)) {
+
+        RtlDebugPrint("GOEC: Invalid NVRAM!\n");
+        Status = STATUS_CHECKSUM_MISMATCH;
+        return Status;
+    }
+
+    //
+    // Make sure the dev boot USB bit is set.
+    //
+
+    if ((Response.NvRam.DevFlags & GOEC_NVRAM_DEV_BOOT_USB) != 0) {
+        return STATUS_SUCCESS;
+    }
+
+    RtlDebugPrint("GOEC: Enabling USB/SD boot.\n");
+    RtlCopyMemory(&(CommandData.NvRam), &(Response.NvRam), sizeof(GOEC_NVRAM));
+    CommandData.NvRam.DevFlags |= GOEC_NVRAM_DEV_BOOT_USB;
+    CommandData.NvRam.Crc8 = GoecCrc8(&(CommandData.NvRam),
+                                      sizeof(GOEC_NVRAM) - 1);
+
+    CommandData.Operation = GOEC_VBNV_CONTEXT_OP_WRITE;
+    Command.Code = GoecCommandVbNvContext;
+    Command.Version = GOEC_VBNV_CONTEXT_VERSION;
+    Command.DataIn = &CommandData;
+    Command.DataOut = &Response;
+    Command.SizeIn = sizeof(GOEC_PARAMS_VBNV_CONTEXT);
+    Command.SizeOut = 0;
+    Command.DeviceIndex = 0;
+    Status = GoecExecuteCommand(Controller, &Command);
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("GOEC: Failed to set NVRAM.\n", Status);
+    }
+
+    KeDelayExecution(FALSE, FALSE, 10000);
     return Status;
 }
 
@@ -1871,5 +1972,55 @@ Return Value:
 PerformSpiIoEnd:
     Interface->UnlockBus(Handle);
     return Status;
+}
+
+UCHAR
+GoecCrc8 (
+    PVOID Data,
+    ULONG Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine computes the CRC-8 of the given data using the polynomial
+    x^8 + x^2 + x + 1.
+
+Arguments:
+
+    Data - Supplies a pointer to the data to compute the CRC for.
+
+    Size - Supplies the number of bytes.
+
+Return Value:
+
+    Returns the CRC-8 of the data.
+
+--*/
+
+{
+
+    PUCHAR Bytes;
+    ULONG Crc;
+    ULONG Index;
+    ULONG InnerIndex;
+
+    Bytes = Data;
+    Crc = 0;
+    for (Index = 0; Index < Size; Index += 1) {
+        Crc ^= (*Bytes << 8);
+        for (InnerIndex = 0; InnerIndex < 8; InnerIndex += 1) {
+            if ((Crc & 0x8000) != 0) {
+                Crc ^= 0x1070 << 3;
+            }
+
+            Crc <<= 1;
+        }
+
+        Bytes += 1;
+    }
+
+    return (UCHAR)(Crc >> 8);
 }
 

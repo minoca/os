@@ -3066,6 +3066,7 @@ Return Value:
 {
 
     PSD_RK32_CONTEXT Device;
+    ULONG Mask;
     KSTATUS Status;
     ULONG Value;
     ULONG Voltage;
@@ -3079,6 +3080,12 @@ Return Value:
     //
 
     if (Phase == 0) {
+        Mask = SD_DWC_CONTROL_FIFO_RESET | SD_DWC_CONTROL_CONTROLLER_RESET;
+        SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Mask);
+        do {
+            Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+
+        } while ((Value & Mask) != 0);
 
         //
         // Set the default burst length.
@@ -3207,14 +3214,12 @@ Return Value:
 
     Device = (PSD_RK32_CONTEXT)Context;
     Frequency = HlQueryTimeCounterFrequency();
-
-    //
-    // Always reset the DMA, FIFO, and the controller.
-    //
-
     ResetMask = SD_DWC_CONTROL_FIFO_RESET |
-                SD_DWC_CONTROL_DMA_RESET |
-                SD_DWC_CONTROL_CONTROLLER_RESET;
+                SD_DWC_CONTROL_DMA_RESET;
+
+    if ((Flags & SD_RESET_FLAG_ALL) != 0) {
+        ResetMask |= SD_DWC_CONTROL_CONTROLLER_RESET;
+    }
 
     Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
     Value |= ResetMask;
@@ -3337,11 +3342,9 @@ Return Value:
     ULONG Flags;
     KSTATUS Status;
     ULONGLONG Timeout;
-    ULONGLONG TimeoutTicks;
     ULONG Value;
 
     Device = (PSD_RK32_CONTEXT)Context;
-    TimeoutTicks = HlQueryTimeCounterFrequency() * SD_RK32_TIMEOUT;
     SdRk32SetDmaInterrupts(Controller, Device, Command->Dma);
 
     //
@@ -3355,23 +3358,30 @@ Return Value:
 
     } else {
         Flags = SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
+        if (Command->Command == SdCommandReset) {
+            Flags |= SD_DWC_COMMAND_SEND_INITIALIZATION;
+        }
 
         //
         // Wait for the FIFO to become empty command to complete.
         //
 
+        Timeout = 0;
         Value = SD_DWC_READ_REGISTER(Device, SdDwcStatus);
         if ((Value & SD_DWC_STATUS_FIFO_EMPTY) == 0) {
             Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
             Value |= SD_DWC_CONTROL_FIFO_RESET;
             SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Value);
-            Status = STATUS_SUCCESS;
-            Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
+            Status = STATUS_TIMEOUT;
             do {
                 Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
                 if ((Value & SD_DWC_CONTROL_FIFO_RESET) == 0) {
                     Status = STATUS_SUCCESS;
                     break;
+
+                } else if (Timeout == 0) {
+                    Timeout = SdQueryTimeCounter(Controller) +
+                              Controller->Timeout;
                 }
 
             } while (SdQueryTimeCounter(Controller) <= Timeout);
@@ -3388,19 +3398,21 @@ Return Value:
         // interrupt.
         //
 
-        Status = STATUS_SUCCESS;
-        Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
-        do {
-            Value = SD_DWC_READ_REGISTER(Device, SdDwcStatus);
-            if ((Value & SD_DWC_STATUS_DATA_BUSY) == 0) {
-                Status = STATUS_SUCCESS;
-                break;
+        if ((Value & SD_DWC_STATUS_DATA_BUSY) != 0) {
+            Status = STATUS_TIMEOUT;
+            Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
+            do {
+                Value = SD_DWC_READ_REGISTER(Device, SdDwcStatus);
+                if ((Value & SD_DWC_STATUS_DATA_BUSY) == 0) {
+                    Status = STATUS_SUCCESS;
+                    break;
+                }
+
+            } while (SdQueryTimeCounter(Controller) <= Timeout);
+
+            if (!KSUCCESS(Status)) {
+                goto SendCommandEnd;
             }
-
-        } while (SdQueryTimeCounter(Controller) <= Timeout);
-
-        if (!KSUCCESS(Status)) {
-            goto SendCommandEnd;
         }
     }
 
@@ -3514,13 +3526,16 @@ Return Value:
 
     ASSERT(Controller->EnabledInterrupts == SD_DWC_INTERRUPT_DEFAULT_MASK);
 
-    Status = STATUS_SUCCESS;
-    Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
+    Status = STATUS_TIMEOUT;
+    Timeout = 0;
     do {
         Value = SD_DWC_READ_REGISTER(Device, SdDwcCommand);
         if ((Value & SD_DWC_COMMAND_START) == 0) {
             Status = STATUS_SUCCESS;
             break;
+
+        } else if (Timeout == 0) {
+            Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
         }
 
     } while (SdQueryTimeCounter(Controller) <= Timeout);
@@ -3533,13 +3548,15 @@ Return Value:
     // Check the interrupt status.
     //
 
-    Status = STATUS_SUCCESS;
-    Timeout = SdQueryTimeCounter(Controller) + TimeoutTicks;
+    Status = STATUS_TIMEOUT;
     do {
         Value = SD_DWC_READ_REGISTER(Device, SdDwcInterruptStatus);
         if ((Value & SD_DWC_INTERRUPT_STATUS_COMMAND_DONE) != 0) {
             Status = STATUS_SUCCESS;
             break;
+
+        } else if (Timeout == 0) {
+            Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
         }
 
     } while (SdQueryTimeCounter(Controller) <= Timeout);
@@ -3557,7 +3574,7 @@ Return Value:
                               Context,
                               SD_RESET_FLAG_COMMAND_LINE);
 
-        Status = STATUS_SUCCESS;
+        Status = STATUS_TIMEOUT;
         goto SendCommandEnd;
 
     } else if ((Value & SD_DWC_INTERRUPT_STATUS_COMMAND_ERROR_MASK) != 0) {

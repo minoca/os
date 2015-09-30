@@ -191,6 +191,26 @@ DefinitionBlock (
             })
         }
 
+        Device(EMMC) {
+            Name(_HID, "RKC0D40")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0xFF0F0000,
+                            0xFF0F0FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {67}
+            })
+        }
+
         Device(GPI0) {
             Name(_HID, "RKC0002")
             Name(_UID, 0)

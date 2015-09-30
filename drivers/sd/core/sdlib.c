@@ -1318,13 +1318,15 @@ Return Value:
 
     SD_COMMAND Command;
     ULONG Ocr;
+    ULONGLONG OldTimeout;
     KSTATUS Status;
     ULONGLONG Timeout;
 
     RtlZeroMemory(&Command, sizeof(SD_COMMAND));
-    Timeout = SdQueryTimeCounter(Controller) +
-              (HlQueryTimeCounterFrequency() * SD_CMD1_TIMEOUT);
-
+    Timeout = HlQueryTimeCounterFrequency() * SD_CMD1_TIMEOUT;
+    OldTimeout = Controller->Timeout;
+    Controller->Timeout = Timeout;
+    Timeout += SdQueryTimeCounter(Controller);
     Ocr = 0;
     while (TRUE) {
         Command.Command = SdCommandSendMmcOperatingCondition;
@@ -1383,6 +1385,7 @@ Return Value:
     Status = STATUS_TIMEOUT;
 
 WaitForMmcCardToInitializeEnd:
+    Controller->Timeout = OldTimeout;
     return Status;
 }
 

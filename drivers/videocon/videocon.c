@@ -87,6 +87,7 @@ Environment:
 //
 
 #define VIDEO_CONSOLE_BLINK_RATE 500
+#define VIDEO_CONSOLE_CURSOR_BLINK_COUNT 120
 
 //
 // Define the number of rows to leave at the top for a banner.
@@ -1146,7 +1147,9 @@ Return Value:
 
 {
 
+    ULONG BlinkCount;
     UINTN BytesRead;
+    USHORT CursorAttributes;
     LONG CursorColumn;
     LONG CursorRow;
     PVIDEO_CONSOLE_DEVICE Device;
@@ -1156,6 +1159,8 @@ Return Value:
     KSTATUS Status;
     ULONG Timeout;
 
+    BlinkCount = 0;
+    CursorAttributes = 0;
     Device = (PVIDEO_CONSOLE_DEVICE)Parameter;
     ReadBuffer = MmAllocatePagedPool(VIDEO_CONSOLE_READ_BUFFER_SIZE,
                                      VIDEO_CONSOLE_ALLOCATION_TAG);
@@ -1183,7 +1188,16 @@ Return Value:
         if (((Device->Mode & CONSOLE_MODE_CURSOR) != 0) &&
             ((Device->Mode & CONSOLE_MODE_CURSOR_BLINK) != 0)) {
 
-            Timeout = VIDEO_CONSOLE_BLINK_RATE;
+            //
+            // Stop blinking after a little while to save power, but make sure
+            // the blinking stops on having the cursor drawn.
+            //
+
+            if ((BlinkCount < VIDEO_CONSOLE_CURSOR_BLINK_COUNT) ||
+                ((CursorAttributes & BASE_VIDEO_CURSOR) == 0)) {
+
+                Timeout = VIDEO_CONSOLE_BLINK_RATE;
+            }
         }
 
         Status = IoRead(VcLocalTerminal,
@@ -1200,17 +1214,29 @@ Return Value:
             VcpGetCursorPosition(Device, &CursorRow, &CursorColumn);
             Line = GET_CONSOLE_LINE(Device, CursorRow);
             Line->Character[CursorColumn].Data.Attributes ^= BASE_VIDEO_CURSOR;
+            CursorAttributes = Line->Character[CursorColumn].Data.Attributes;
             VcpRedrawArea(Device,
                           CursorColumn,
                           CursorRow,
                           CursorColumn + 1,
                           CursorRow);
 
+            BlinkCount += 1;
+
+        //
+        // Device I/O error probably means there are no slaves connected. Wait
+        // a little while and see if one connects.
+        //
+
+        } else if (Status == STATUS_DEVICE_IO_ERROR) {
+            KeDelayExecution(FALSE, FALSE, 5 * MICROSECONDS_PER_SECOND);
+
         } else if (!KSUCCESS(Status)) {
             break;
         }
 
         if (BytesRead != 0) {
+            BlinkCount = 0;
             VcpWriteToConsole(Device, ReadBuffer, BytesRead);
         }
     }

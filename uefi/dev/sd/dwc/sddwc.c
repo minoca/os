@@ -586,6 +586,7 @@ Return Value:
 {
 
     PEFI_SD_DWC_CONTROLLER DwcController;
+    UINT32 Mask;
     EFI_STATUS Status;
     UINT32 Value;
     UINT32 Voltage;
@@ -599,6 +600,12 @@ Return Value:
     //
 
     if (Phase == 0) {
+        Mask = SD_DWC_CONTROL_FIFO_RESET | SD_DWC_CONTROL_CONTROLLER_RESET;
+        SD_DWC_WRITE_REGISTER(DwcController, SdDwcControl, Mask);
+        do {
+            Value = SD_DWC_READ_REGISTER(DwcController, SdDwcControl);
+
+        } while ((Value & Mask) != 0);
 
         //
         // Set the default burst length.
@@ -840,6 +847,10 @@ Return Value:
     //
 
     Flags = SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
+    if (Command->Command == SdCommandReset) {
+        Flags |= SD_DWC_COMMAND_SEND_INITIALIZATION;
+    }
+
     if ((Command->ResponseType & SD_RESPONSE_PRESENT) != 0) {
         if ((Command->ResponseType & SD_RESPONSE_136_BIT) != 0) {
             Flags |= SD_DWC_COMMAND_LONG_RESPONSE;
