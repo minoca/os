@@ -74,6 +74,12 @@ Author:
 
 #define AM335_INTC_PRIORITY_COUNT 63
 
+#define AM335_CORTEX_M3_SIZE 0x4000
+#define AM335_MAILBOX_SIZE 0x1000
+#define AM335_OCMC_BASE 0x40300000
+#define AM335_OCMC_SIZE 0x10000
+#define AM335_EMIF_SIZE 0x1000
+
 //
 // Define PRCM offsets.
 //
@@ -391,6 +397,19 @@ Author:
 #define AM335_DISP_PLL_M2 1
 
 //
+// Define PRM wake up reset control register bits.
+//
+
+#define AM335_RM_WAKEUP_RESET_CONTROL_RESET_CORTEX_M3 (1 << 3)
+
+//
+// Define SOC Control M3 TXEV End of interrupt bits.
+//
+
+#define AM335_CONTROL_M3_TXEV_EOI_ENABLE 0x00000000
+#define AM335_CONTROL_M3_TXEV_EOI 0x00000001
+
+//
 // Define the size of the entire USB subsystem region.
 //
 
@@ -415,6 +434,15 @@ Author:
 //
 
 #define AM335_USBSS_SYSCONFIG_SOFT_RESET 0x00000001
+
+//
+// Define EMIF power control registers.
+//
+
+#define AM335_EMIF_POWER_CONTROL_SELF_REFRESH_64 (0x3 << 4)
+#define AM335_EMIF_POWER_CONTROL_CLOCK_STOP (0x1 << 8)
+#define AM335_EMIF_POWER_CONTROL_SELF_REFRESH (0x2 << 8)
+#define AM335_EMIF_POWER_CONTROL_POWER_DOWN (0x4 << 8)
 
 //
 // ------------------------------------------------------ Data Type Definitions

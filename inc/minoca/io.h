@@ -841,6 +841,7 @@ Author:
 //
 
 #define INVALID_INTERRUPT_LINE (-1ULL)
+#define INVALID_INTERRUPT_VECTOR (-1ULL)
 
 //
 // Define the offset to use to specify the current file offset.

@@ -21,8 +21,12 @@
 #
 ################################################################################
 
+ifeq ($(ARCH),armv7)
+
 DIRS = am3soc    \
        tps65217  \
+
+endif
 
 include $(SRCROOT)/os/minoca.mk
 

@@ -247,34 +247,6 @@ typedef struct _PM_IDLE_PROCESSOR_STATE {
 } PM_IDLE_PROCESSOR_STATE, *PPM_IDLE_PROCESSOR_STATE;
 
 typedef
-VOID
-(*PPM_ENTER_IDLE_STATE) (
-    PPM_IDLE_PROCESSOR_STATE Processor,
-    ULONG State
-    );
-
-/*++
-
-Routine Description:
-
-    This routine prototype represents a function that is called to go into a
-    given idle state on the current processor. This routine is called with
-    interrupts disabled, and should return with interrupts disabled.
-
-Arguments:
-
-    Processor - Supplies a pointer to the information for the current processor.
-
-    State - Supplies the new state index to change to.
-
-Return Value:
-
-    None. It is assumed when this function returns that the idle state was
-    entered and then exited.
-
---*/
-
-typedef
 KSTATUS
 (*PPM_INITIALIZE_IDLE_STATES) (
     PPM_IDLE_STATE_INTERFACE Interface,
@@ -299,6 +271,34 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+typedef
+VOID
+(*PPM_ENTER_IDLE_STATE) (
+    PPM_IDLE_PROCESSOR_STATE Processor,
+    ULONG State
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prototype represents a function that is called to go into a
+    given idle state on the current processor. This routine is called with
+    interrupts disabled, and should return with interrupts disabled.
+
+Arguments:
+
+    Processor - Supplies a pointer to the information for the current processor.
+
+    State - Supplies the new state index to change to.
+
+Return Value:
+
+    None. It is assumed when this function returns that the idle state was
+    entered and then exited.
 
 --*/
 

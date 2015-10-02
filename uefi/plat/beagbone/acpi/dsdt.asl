@@ -45,6 +45,11 @@ DefinitionBlock (
             }
 
             Name(_CRS, ResourceTemplate() {
+
+                //
+                // PRCM
+                //
+
                 DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
                             NonCacheable, ReadWrite,
                             0x00000000,
@@ -53,6 +58,10 @@ DefinitionBlock (
                             0x00000000,
                             0x00002000)
 
+                //
+                // CONTROL module
+                //
+
                 DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
                             NonCacheable, ReadWrite,
                             0x00000000,
@@ -60,6 +69,68 @@ DefinitionBlock (
                             0x44E11FFF,
                             0x00000000,
                             0x00002000)
+
+                //
+                // Cortex M3 Memory
+                //
+
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x44D00000,
+                            0x44D03FFF,
+                            0x00000000,
+                            0x00004000)
+
+                //
+                // Mailbox
+                //
+
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x48030000,
+                            0x48030FFF,
+                            0x00000000,
+                            0x00001000)
+
+/*
+                //
+                // OCMC RAM
+                //
+
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x40300000,
+                            0x4030FFFF,
+                            0x00000000,
+                            0x00010000)
+*/
+
+                //
+                // EMIF0
+                //
+
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x4C000000,
+                            0x4C000FFF,
+                            0x00000000,
+                            0x00001000)
+
+                //
+                // Wake M3 interrupt
+                //
+
+                Interrupt(, Level, ActiveHigh,) {78}
+
+                //
+                // Mailbox interrupt
+                //
+
+                Interrupt(, Level, ActiveHigh,) {77}
             })
         }
     }
