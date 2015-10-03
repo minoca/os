@@ -22,24 +22,24 @@ Environment:
 --*/
 
 ##
-## ------------------------------------------------------------------ Includes
+## ------------------------------------------------------------------- Includes
 ##
 
 #include <minoca/arm.inc>
 
 ##
-## --------------------------------------------------------------- Definitions
+## ---------------------------------------------------------------- Definitions
 ##
 
 ##
 ## Define offsets into the PROCESSOR_START_BLOCK structure.
 ##
 
-.equ PROCESSOR_START_BLOCK_STACK_BASE, 0x0
-.equ PROCESSOR_START_BLOCK_STACK_SIZE, 0x4
+#define PROCESSOR_START_BLOCK_STACK_BASE 0x0
+#define PROCESSOR_START_BLOCK_STACK_SIZE 0x4
 
 ##
-## ---------------------------------------------------------------------- Code
+## ----------------------------------------------------------------------- Code
 ##
 
 ASSEMBLY_FILE_HEADER
@@ -221,6 +221,7 @@ HlpTrampolineCodeAtOriginalLocation:
 ##
 ## VOID
 ## HlpInvalidateDataCache (
+##     VOID
 ##     )
 ##
 

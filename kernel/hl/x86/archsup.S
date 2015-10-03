@@ -75,7 +75,7 @@ Return Value:
 
 --*/
 
-FUNCTION(HlQueryProcessorCounter)
+PROTECTED_FUNCTION(HlQueryProcessorCounter)
     rdtsc                       # Store the timestamp counter in EDX:EAX.
     ret                         # And return!
 

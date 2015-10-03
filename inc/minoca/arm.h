@@ -442,7 +442,7 @@ Author:
 // Define the size of an exception stack, in bytes.
 //
 
-#define EXCEPTION_STACK_SIZE 20
+#define EXCEPTION_STACK_SIZE 8
 
 //
 // Define the number of exception stacks that are needed (IRQ, FIQ, Abort,
@@ -496,7 +496,7 @@ Structure Description:
 Members:
 
     Registers - Stores the current state of the machine's registers. These
-    values will be restored upon completion of the interrupt or exception.
+        values will be restored upon completion of the interrupt or exception.
 
 --*/
 
@@ -521,6 +521,144 @@ struct _TRAP_FRAME {
     ULONG SvcLink;
     ULONG Pc;
     ULONG Cpsr;
+};
+
+/*++
+
+Structure Description:
+
+    This structure contains the state of the processor, including both the
+    non-volatile general registers and the system registers configured by the
+    kernel. This structure is used in a manner similar to the C library
+    setjmp/longjmp routines, the save context function appears to return
+    twice. It returns once after the saving is complete, and then again with
+    a different return value after restoring.
+
+Members:
+
+    R0 - Stores the R0 register, also the return value from the restore
+        operation. By default this is initialized to 1.
+
+    R1 - Stores the R1 register, which can be used for a second argument in
+        case this context is being manipulated.
+
+    R2 - Stores the R2 register, which can be used for a third argument in
+        case the PC is manipulated after save context returns.
+
+    R3 - Stores the R3 register, which can be used for a third argument in
+        case the PC is manipulated after save context returns.
+
+    R4 - Stores a non-volatile register.
+
+    R5 - Stores a non-volatile register.
+
+    R6 - Stores a non-volatile register.
+
+    R7 - Stores a non-volatile register.
+
+    R8 - Stores a non-volatile register.
+
+    R9 - Stores a non-volatile register.
+
+    R10 - Stores a non-volatile register.
+
+    R11 - Stores a non-volatile register. R12 is volatile, and is not available
+        since the restore code needs a register for its operation.
+
+    Sp - Stores the stack pointer.
+
+    Pc - Stores the PC to branch to upon restore. By default this is
+        initialized to the return address of the save/restore function, though
+        it can be manipulated after the function returns.
+
+    VirtualAddress - Stores the virtual address of this structure member. The
+        restore process might enable paging when the SCTLR is restored, so this
+        contains the address to continue the restore from in virtual land.
+
+    Sctlr - Stores the system control register.
+
+    Ttbr0 - Stores the translation table base register 0.
+
+    Ttbr1 - Stores the translation table base register 1.
+
+    Actlr - Stores the auxiliary system control register.
+
+    Cpacr - Stores the coprocessor access control register.
+
+    Prrr - Stores the primary region remap register.
+
+    Nmrr - Stores the normal memory remap register.
+
+    ContextIdr - Stores the ASID register.
+
+    Dfsr - Stores the data fault status register.
+
+    Dfar - Store the data fault address register.
+
+    Ifsr - Stores the instruction fault status register.
+
+    Ifar - Stores the instruction fault address register.
+
+    Dacr - Stores the domain access control register.
+
+    Vbar - Stores the virtual base address register.
+
+    Tpidrprw - Stores the privileged thread pointer register.
+
+    Tpidruro - Stores the user read-only thread pointer register.
+
+    Tpidrurw - Stores the user read-write thread pointer register.
+
+    Pmcr - Stores the performance control register.
+
+    Pminten - Stores the performance enabled interrupts.
+
+    Pmuserenr - Stores the performance user enable register.
+
+    Pmcnten - Stores the performance counter enable value.
+
+    Pmccntr - Stores the cycle counter value.
+
+--*/
+
+struct _PROCESSOR_CONTEXT {
+    ULONG R0;
+    ULONG R1;
+    ULONG R2;
+    ULONG R3;
+    ULONG R4;
+    ULONG R5;
+    ULONG R6;
+    ULONG R7;
+    ULONG R8;
+    ULONG R9;
+    ULONG R10;
+    ULONG R11;
+    ULONG Sp;
+    ULONG Pc;
+    ULONG VirtualAddress;
+    ULONG Sctlr;
+    ULONG Ttbr0;
+    ULONG Ttbr1;
+    ULONG Actlr;
+    ULONG Cpacr;
+    ULONG Prrr;
+    ULONG Nmrr;
+    ULONG ContextIdr;
+    ULONG Dfsr;
+    ULONG Dfar;
+    ULONG Ifsr;
+    ULONG Ifar;
+    ULONG Dacr;
+    ULONG Vbar;
+    ULONG Tpidrprw;
+    ULONG Tpidruro;
+    ULONG Tpidrurw;
+    ULONG Pmcr;
+    ULONG Pminten;
+    ULONG Pmuserenr;
+    ULONG Pmcntenset;
+    ULONG Pmccntr;
 };
 
 /*++

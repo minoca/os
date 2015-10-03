@@ -63,7 +63,7 @@ Return Value:
 
 --*/
 
-FUNCTION ArDisableInterrupts
+PROTECTED_FUNCTION ArDisableInterrupts
     mrs     %r1, CPSR               @ Get the status register.
     cpsid   i                       @ Disable interrupts.
     mov     %r0, #0                 @ Assume interrupts disabled.
@@ -100,7 +100,7 @@ Return Value:
 
 --*/
 
-FUNCTION ArEnableInterrupts
+PROTECTED_FUNCTION ArEnableInterrupts
     cpsie   i                       @ Enable interrupts.
     bx      %lr                     @
 
@@ -133,7 +133,7 @@ Return Value:
 
 --*/
 
-FUNCTION ArAreInterruptsEnabled
+PROTECTED_FUNCTION ArAreInterruptsEnabled
     mrs     %r1, CPSR               @ Get the status register.
     mov     %r0, #0                 @ Assume interrupts disabled.
     tst     %r1, #PSR_FLAG_IRQ      @ AND the interrupt flag.
@@ -1363,6 +1363,212 @@ FUNCTION ArGetThreadPointerUser
     bx      %lr
 
 END_FUNCTION ArGetThreadPointerUser
+
+##
+## UINTN
+## ArSaveProcessorContext (
+##     PPROCESSOR_CONTEXT Context
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine saves the current processor context, including the
+    non-volatile general registers and the system level control registers. This
+    function appears to return twice, once when the context is saved and then
+    again when the context is restored. Because the stack pointer is restored,
+    the caller of this function may not return without either abandoning the
+    context or calling restore. Returning and then calling restore would almost
+    certainly result in stack corruption.
+
+Arguments:
+
+    Context - Supplies a pointer to the context area to save into.
+
+Return Value:
+
+    Returns 0 after the context was successfully saved (first time).
+
+    Returns the value in the context return address register when the restore
+    function is called (the second time). By default this value is 1, though it
+    can be manipulated after the initial save is complete.
+
+--*/
+
+FUNCTION ArSaveProcessorContext
+    mov     %r1, #1                     @ "Save" 1 to R0.
+    stmia   %r0!, {%r1}                 @
+    mov     %r1, #0                     @ "Save" 0 to R1, R2, and R3.
+    stmia   %r0!, {%r1}                 @
+    stmia   %r0!, {%r1}                 @
+    stmia   %r0!, {%r1}                 @
+    stmia   %r0!, {%r4-%r11, %sp, %lr}  @ Save R4-R11, SP, and PC (return).
+    stmia   %r0!, {%r0}                 @ Remember the VA right here.
+    mrc     p15, 0, %r1, c1, c0, 0      @ Save SCTLR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c2, c0, 0      @ Save TTBR0.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c2, c0, 1      @ Save TTBR1.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c1, c0, 1      @ Save ACTLR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c1, c0, 2      @ Save CPACR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c10, c2, 0     @ Save PRRR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c10, c2, 1     @ Save NMRR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c13, c0, 1     @ Save CONTEXTIDR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c5, c0, 0      @ Save DFSR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c6, c0, 0      @ Save DFAR
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c5, c0, 1      @ Save IFSR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c6, c0, 2      @ Save IFAR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c3, c0, 1      @ Save DACR
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c12, c0, 0     @ Save VBAR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c13, c0, 4     @ Save TPIDRPRW.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c13, c0, 3     @ Save TPIDRURO.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c13, c0, 2     @ Save TPIDRURW.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c9, c12, 0     @ Save PMCR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c9, c14, 1     @ Save PMINTENSET.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c9, c14, 0     @ Save PMUSERENR.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c9, c12, 1     @ Save PMCNTENSET.
+    stmia   %r0!, {%r1}                 @
+    mrc     p15, 0, %r1, c9, c13, 0     @ Save PMCCNTR. Start losing time.
+    stmia   %r0!, {%r1}                 @
+    mov     %r0, #0                     @ Return 0 initially.
+    bx      %lr
+
+END_FUNCTION ArSaveProcessorContext
+
+##
+## VOID
+## ArRestoreProcessorContext (
+##     PPROCESSOR_CONTEXT Context
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine restores the current processor context, including the
+    non-volatile general registers and the system level control registers. This
+    function does not return, but instead jumps to the return address from
+    the caller of the save context function.
+
+Arguments:
+
+    Context - Supplies a pointer to the context to restore.
+
+Return Value:
+
+    Does not return, at least not conventionally.
+
+--*/
+
+FUNCTION ArRestoreProcessorContext
+    add     %r0, %r0, #PROCESSOR_CONTEXT_SIZE   @ Jump to the end.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c9, c13, 0     @ Restore PMCCNTR. Start losing time.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c9, c12, 1     @ Restore PMCNTENSET.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c9, c14, 0     @ Restore PMUSERENR.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c9, c14, 1     @ Restore PMINTENSET.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c9, c12, 0     @ Restore PMCR.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c13, c0, 2     @ Restore TPIDRURW.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c13, c0, 3     @ Restore TPIDRURO.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c13, c0, 4     @ Restore TPIDRPRW.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c12, c0, 0     @ Restore VBAR.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c3, c0, 1      @ Restore DACR
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c6, c0, 2      @ Restore IFAR.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c5, c0, 1      @ Restore IFSR.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c6, c0, 0      @ Restore DFAR
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c5, c0, 0      @ Restore DFSR.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c13, c0, 1     @ Restore CONTEXTIDR.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c10, c2, 1     @ Restore NMRR.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c10, c2, 0     @ Restore PRRR.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c1, c0, 2      @ Restore CPACR.
+
+    ##
+    ## Sometimes the ACTLR cannot be written in non-secure mode, so only try to
+    ## write it if it appears to need restoring.
+    ##
+
+    mrc     p15, 0, %r2, c1, c0, 1      @ Get current ACTLR.
+    ldmdb   %r0!, {%r1}                 @ Load saved one.
+    cmp     %r1, %r2                    @ Compare.
+    beq ArRestoreProcessorContextAfterActlr
+    mcr     p15, 0, %r1, c1, c0, 1      @ Restore ACTLR.
+
+ArRestoreProcessorContextAfterActlr:
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c2, c0, 1      @ Restore TTBR1.
+    ldmdb   %r0!, {%r1}                 @
+    mcr     p15, 0, %r1, c2, c0, 0      @ Restore TTBR0.
+
+    ##
+    ## This next bit is tricky, because paging may suddenly become enabled.
+    ## This code must be identity mapped, but the context might not be. Load
+    ## the SCTLR and the virtual address of the next structure member. Then
+    ## restore SCTLR and continue the restore from the virtual address.
+    ##
+
+    ldmdb   %r0!, {%r1}                 @ Get SCTLR.
+    ldmdb   %r0, {%r2}                  @ Also get the VA of the remainder.
+    mov     %r0, %r2                    @ Make it the new current pointer.
+    mcr     p15, 0, %r1, c1, c0, 0      @ Restore SCTLR.
+
+    ##
+    ## The paging context may have changed (and observed a wonky ASID in the
+    ## process), so some invalidations are in order.
+    ##
+
+    mcr     p15, 0, %r0, c7, c5, 0      @ ICIALLU, Invalidate I-Cache.
+    mcr     p15, 0, %r0, c7, c5, 6      @ BPIALL, Invalidate Branch Predictor.
+    mcr     p15, 0, %r0, c8, c7, 0      @ Clear the TLB, TLBIALL.
+    dsb                                 @ Data synchronization barrier.
+    isb                                 @ Instruction syncrhonization barrier.
+
+    ##
+    ## Restore the general registers and jump back to the return of the
+    ## save context function.
+    ##
+
+    mov     %r12, %r0                   @ Move to a free register.
+    ldmdb   %r12!, {%r0-%r11, %sp, %pc} @ Restore general context and jump away.
+
+END_FUNCTION ArRestoreProcessorContext
 
 ##
 ## --------------------------------------------------------- Internal Functions

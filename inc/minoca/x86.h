@@ -46,6 +46,7 @@ Author:
 #define MAX_GDT_LIMIT           0xFFFFF
 #define GDT_SYSTEM_SEGMENT      0x00
 #define GDT_CODE_DATA_SEGMENT   0x10
+#define GDT_TSS_BUSY            0x02
 
 #define IDT_SIZE 0x100
 #define VECTOR_DIVIDE_ERROR         0x00
@@ -606,6 +607,104 @@ struct _TRAP_FRAME {
     ULONG Eflags;
     ULONG Esp;
 };
+
+/*++
+
+Structure Description:
+
+    This structure contains the state of the processor, including both the
+    non-volatile general registers and the system registers configured by the
+    kernel. This structure is used in a manner similar to the C library
+    setjmp/longjmp routines, the save context function appears to return
+    twice. It returns once after the saving is complete, and then again with
+    a different return value after restoring. Be careful when modifying this
+    structure, as its offsets are used directly in assembly by the save/restore
+    routines.
+
+Members:
+
+    Eax - Stores the value to return when restoring.
+
+    Eip - Stores the instruction pointer to jump back to on restore. By default
+        this is initialized to the return from whoever called save.
+
+    Cs - Stores the code segment.
+
+    Eflags - Stores the eflags register.
+
+    Ebx - Stores a non-volatile general register.
+
+    Esi - Stores a non-volatile general register.
+
+    Edi - Stores a non-volatile general register.
+
+    Esp - Stores a non-volatile general register.
+
+    Ebp - Stores a non-volatile general register.
+
+    Esp - Stores the stack pointer. This should be restored after the final
+        page tables are in place to avoid NMIs having an invalid stack.
+
+    Dr7 - Stores a debug register. This should be restored last of the debug
+        registers.
+
+    Dr6 - Stores a debug register.
+
+    Dr0 - Stores a debug register.
+
+    Dr1 - Stores a debug register.
+
+    Dr2 - Stores a debug register.
+
+    Dr3 - Stores a debug register.
+
+    VirtualAddress - Stores the virtual address of this structure member, which
+        is used in case the restore of CR0 that just happened enabled paging
+        suddenly.
+
+    Cr0 - Stores the CR0 control register value.
+
+    Cr2 - Stores the CR2 control register value (faulting address).
+
+    Cr3 - Stores the CR3 control register value (top level page directory).
+
+    Cr4 - Stores the CR4 control register value.
+
+    Tr - Stores the task register (must be restored after the GDT).
+
+    Idt - Stores the interrupt descriptor table. The stack should be restored
+        before this because once this is restored NMIs could come in and use
+        stack (rather than the stub function they may currently be on).
+
+    Gdt - Stores the global descriptor table.
+
+--*/
+
+struct _PROCESSOR_CONTEXT {
+    ULONG Eax;
+    ULONG Eip;
+    ULONG Cs;
+    ULONG Eflags;
+    ULONG Ebx;
+    ULONG Esi;
+    ULONG Edi;
+    ULONG Ebp;
+    ULONG Esp;
+    ULONG Dr7;
+    ULONG Dr6;
+    ULONG Dr0;
+    ULONG Dr1;
+    ULONG Dr2;
+    ULONG Dr3;
+    ULONG VirtualAddress;
+    ULONG Cr0;
+    ULONG Cr2;
+    ULONG Cr3;
+    ULONG Cr4;
+    ULONG Tr;
+    TABLE_REGISTER Idt;
+    TABLE_REGISTER Gdt;
+} PACKED;
 
 typedef
 VOID
@@ -1759,6 +1858,28 @@ Routine Description:
 Arguments:
 
     TrapFrame - Supplies a pointer to the trap frame data to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+ArClearTssBusyBit (
+    USHORT TssSegment
+    );
+
+/*++
+
+Routine Description:
+
+    This routine clears the busy bit in the GDT for the given segment. It is
+    assumed this segment is used on the current processor.
+
+Arguments:
+
+    TssSegment - Supplies the TSS segment for the busy bit to clear.
 
 Return Value:
 

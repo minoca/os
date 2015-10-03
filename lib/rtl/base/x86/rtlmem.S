@@ -70,7 +70,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlCopyMemory)
+PROTECTED_FUNCTION(RtlCopyMemory)
     push    %ebp                    # Save the frame register.
     movl    %esp, %ebp              # Make the current stack the new frame.
     pushl   %esi                    # Save registers.
@@ -115,7 +115,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlZeroMemory)
+PROTECTED_FUNCTION(RtlZeroMemory)
     push    %ebp                    # Save the frame register.
     movl    %esp, %ebp              # Make the current stack the new frame.
     pushl   %edi                    # Save a register.
@@ -160,7 +160,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlSetMemory)
+PROTECTED_FUNCTION(RtlSetMemory)
     push    %ebp                    # Save the frame register.
     movl    %esp, %ebp              # Make the current stack the new frame.
     pushl   %edi                    # Save a register.
@@ -207,7 +207,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlCompareMemory)
+PROTECTED_FUNCTION(RtlCompareMemory)
     push    %ebp                    # Save the frame register.
     movl    %esp, %ebp              # Make the current stack the new frame.
     pushl   %esi                    # Save registers.

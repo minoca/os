@@ -63,7 +63,7 @@ Return Value:
 
 --*/
 
-FUNCTION __aeabi_ldivmod
+PROTECTED_FUNCTION __aeabi_ldivmod
     push    {%r4, %r5, %fp, %lr}
     sub     %sp, %sp, #16
     add     %r4, %sp, #8
@@ -103,7 +103,7 @@ Return Value:
 
 --*/
 
-FUNCTION __aeabi_uldivmod
+PROTECTED_FUNCTION __aeabi_uldivmod
     push    {%r4, %r5, %fp, %lr}
     sub     %sp, %sp, #16
     add     %r4, %sp, #8
@@ -143,7 +143,7 @@ Return Value:
 
 --*/
 
-FUNCTION __aeabi_idivmod
+PROTECTED_FUNCTION __aeabi_idivmod
     push    {%r4, %r5, %fp, %lr}
 
     ##
@@ -202,7 +202,7 @@ Return Value:
 
 --*/
 
-FUNCTION __aeabi_uidivmod
+PROTECTED_FUNCTION __aeabi_uidivmod
     push    {%r4, %r5, %fp, %lr}
 
     ##
@@ -253,7 +253,7 @@ Return Value:
 
 --*/
 
-FUNCTION __aeabi_llsl
+PROTECTED_FUNCTION __aeabi_llsl
     subs    %r3, %r2, #32
     rsb     %r12, %r2, #32
     movmi   %r1, %r1, lsl %r2
@@ -291,7 +291,7 @@ Return Value:
 
 --*/
 
-FUNCTION __aeabi_llsr
+PROTECTED_FUNCTION __aeabi_llsr
     subs    %r3, %r2, #32
     rsb     %r12, %r2, #32
     movmi   %r0, %r0, lsr %r2
@@ -329,7 +329,7 @@ Return Value:
 
 --*/
 
-FUNCTION __aeabi_lasr
+PROTECTED_FUNCTION __aeabi_lasr
     subs    %r3, %r2, #32
     rsb     %r12, %r2, #32
     movmi   %r0, %r0, lsr %r2

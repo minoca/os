@@ -521,7 +521,7 @@ Return Value:
 
 --*/
 
-FUNCTION ArWaitForInterrupt
+PROTECTED_FUNCTION ArWaitForInterrupt
     mov     %r1, #0
     mcr     p15, 0, %r1, %cr7, %cr10, 4         @ Data Synchronization barrier.
     wfi                                         @ Wait for interrupt.

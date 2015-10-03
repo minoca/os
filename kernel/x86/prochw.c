@@ -884,6 +884,43 @@ Return Value:
 }
 
 VOID
+ArClearTssBusyBit (
+    USHORT TssSegment
+    )
+
+/*++
+
+Routine Description:
+
+    This routine clears the busy bit in the GDT for the given segment. It is
+    assumed this segment is used on the current processor.
+
+Arguments:
+
+    TssSegment - Supplies the TSS segment for the busy bit to clear.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PGDT_ENTRY Gdt;
+    PPROCESSOR_BLOCK ProcessorBlock;
+
+    ProcessorBlock = KeGetCurrentProcessorBlock();
+    Gdt = ProcessorBlock->Gdt;
+    Gdt += TssSegment / sizeof(GDT_ENTRY);
+
+    ASSERT((Gdt->Access & ~GDT_TSS_BUSY) == (DEFAULT_GDT_ACCESS | Gdt32BitTss));
+
+    Gdt->Access &= ~GDT_TSS_BUSY;
+    return;
+}
+
+VOID
 ArpCreateSegmentDescriptor (
     PGDT_ENTRY GdtEntry,
     PVOID Base,

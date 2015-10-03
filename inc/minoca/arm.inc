@@ -29,9 +29,9 @@ Environment:
 ## really be a preprocessor macro.
 ##
 
-.equ THUMB, 0
+#define THUMB 0
 
-.equ NULL, 0x0
+#define NULL 0x0
 
 ##
 ## Processor flags
@@ -41,44 +41,44 @@ Environment:
 ## Program Status Register flags.
 ##
 
-.equ PSR_FLAG_NEGATIVE,   0x80000000
-.equ PSR_FLAG_ZERO,       0x40000000
-.equ PSR_FLAG_CARRY,      0x20000000
-.equ PSR_FLAG_OVERFLOW,   0x10000000
-.equ PSR_FLAG_SATURATION, 0x08000000
-.equ PSR_FLAG_JAZELLE,    0x01000000
-.equ PSR_FLAG_THUMB,      0x00000020
-.equ PSR_FLAG_IRQ,        0x00000080
-.equ PSR_FLAG_FIQ,        0x00000040
+#define PSR_FLAG_NEGATIVE   0x80000000
+#define PSR_FLAG_ZERO       0x40000000
+#define PSR_FLAG_CARRY      0x20000000
+#define PSR_FLAG_OVERFLOW   0x10000000
+#define PSR_FLAG_SATURATION 0x08000000
+#define PSR_FLAG_JAZELLE    0x01000000
+#define PSR_FLAG_THUMB      0x00000020
+#define PSR_FLAG_IRQ        0x00000080
+#define PSR_FLAG_FIQ        0x00000040
 
 ##
 ## Processor modes
 ##
 
-.equ ARM_MODE_USER,   0x00000010
-.equ ARM_MODE_FIQ,    0x00000011
-.equ ARM_MODE_IRQ,    0x00000012
-.equ ARM_MODE_SVC,    0x00000013
-.equ ARM_MODE_ABORT,  0x00000017
-.equ ARM_MODE_UNDEF,  0x0000001B
-.equ ARM_MODE_SYSTEM, 0x0000001F
-.equ ARM_MODE_MASK,   0x0000001F
+#define ARM_MODE_USER   0x00000010
+#define ARM_MODE_FIQ    0x00000011
+#define ARM_MODE_IRQ    0x00000012
+#define ARM_MODE_SVC    0x00000013
+#define ARM_MODE_ABORT  0x00000017
+#define ARM_MODE_UNDEF  0x0000001B
+#define ARM_MODE_SYSTEM 0x0000001F
+#define ARM_MODE_MASK   0x0000001F
 
 ##
 ## Basic constants.
 ##
 
-.equ FALSE, 0
-.equ TRUE, 1
+#define FALSE 0
+#define TRUE 1
 
 ##
 ## Kernel constants.
 ##
 
-.equ EXCEPTION_BREAK,             0x03
-.equ EXCEPTION_SINGLE_STEP,       0x04
-.equ EXCEPTION_ACCESS_VIOLATION,  0x05
-.equ EXCEPTION_ASSERTION_FAILURE, 0x07
+#define EXCEPTION_BREAK             0x03
+#define EXCEPTION_SINGLE_STEP       0x04
+#define EXCEPTION_ACCESS_VIOLATION  0x05
+#define EXCEPTION_ASSERTION_FAILURE 0x07
 
 ##
 ## Translation table base register address mask.
@@ -87,66 +87,65 @@ Environment:
 ## whether or not the Multiprocessing Extensions are supported on the CPU.
 ##
 
-.equ TTBR_ADDRESS_MASK,                          0x00003FFF
+#define TTBR_ADDRESS_MASK                0x00003FFF
 
 ##
 ## MMU Control bits (SCTLR, CP15, register 1).
 ##
 
-.equ MMU_ENABLED,                     0x00000001
-.equ MMU_ALIGNMENT_FAULT_ENABLED,     0x00000002
-.equ MMU_DCACHE_UNIFIED_ENABLED,      0x00000004
-.equ MMU_WRITE_BUFFER_ENABLED,        0x00000008
-.equ MMU_ENDIANNESS,                  0x00000080
-.equ MMU_SYSTEM_PROTECTION,           0x00000100
-.equ MMU_ROM_PROTECTION,              0x00000200
-.equ MMU_BRANCH_PREDICTION_ENABLED,   0x00000800
-.equ MMU_ICACHE_ENABLED,              0x00001000
-.equ MMU_HIGH_EXCEPTION_VECTORS,      0x00002000
-.equ MMU_PREDICTABLE_REPLACEMENT,     0x00004000
-.equ MMU_DISABLE_THUMB_DEPRECATED,    0x00008000
-.equ MMU_FAST_INTERRUPTS,             0x00200000
-.equ MMU_UNALIGNED_ACCESS_ENABLED,    0x00400000
-.equ MMU_VMSA6_ENABLED,               0x00800000
-.equ MMU_VECTORED_INTERRUPTS_ENABLED, 0x01000000
-.equ MMU_EXCEPTION_ENDIAN,            0x02000000
-.equ MMU_THUMB_EXCEPTIONS,            0x40000000
+#define MMU_ENABLED                     0x00000001
+#define MMU_ALIGNMENT_FAULT_ENABLED     0x00000002
+#define MMU_DCACHE_UNIFIED_ENABLED      0x00000004
+#define MMU_WRITE_BUFFER_ENABLED        0x00000008
+#define MMU_ENDIANNESS                  0x00000080
+#define MMU_SYSTEM_PROTECTION           0x00000100
+#define MMU_ROM_PROTECTION              0x00000200
+#define MMU_BRANCH_PREDICTION_ENABLED   0x00000800
+#define MMU_ICACHE_ENABLED              0x00001000
+#define MMU_HIGH_EXCEPTION_VECTORS      0x00002000
+#define MMU_PREDICTABLE_REPLACEMENT     0x00004000
+#define MMU_DISABLE_THUMB_DEPRECATED    0x00008000
+#define MMU_FAST_INTERRUPTS             0x00200000
+#define MMU_UNALIGNED_ACCESS_ENABLED    0x00400000
+#define MMU_VMSA6_ENABLED               0x00800000
+#define MMU_VECTORED_INTERRUPTS_ENABLED 0x01000000
+#define MMU_EXCEPTION_ENDIAN            0x02000000
+#define MMU_THUMB_EXCEPTIONS            0x40000000
 
-.equ MMU_CONTROL_DEFAULT_VALUE,      (0x00C0180D)
+#define MMU_CONTROL_DEFAULT_VALUE       0x00C0180D
 
 ##
 ## ARMv6 auxiliary control register bits (ACTLR).
 ##
 
-.equ ARMV6_AUX_16K_CACHE_SIZE, 0x00000040
+#define ARMV6_AUX_16K_CACHE_SIZE 0x00000040
 
 ##
 ## Cortex A17 auxiliary control register bits (ACTLR).
 ##
 
-.equ CORTEX_A17_AUX_SMP_ENABLE, 0x00000040
+#define CORTEX_A17_AUX_SMP_ENABLE 0x00000040
 
 ##
 ## Nonsecure Access Control Register bits (CP15, register 1, opcode2 2).
 ##
 
-.equ MMU_TLB_LOCKING_ENABLE,          0x00020000
+#define MMU_TLB_LOCKING_ENABLE          0x00020000
 
 ##
 ## Definition for the structure on the exception stacks.
 ##
 
-.equ EXCEPTION_STACK_R0,   0
-.equ EXCEPTION_STACK_CPSR, 4
-.equ EXCEPTION_STACK_SPSR, 8
-.equ EXCEPTION_STACK_LR,   12
+#define EXCEPTION_STACK_R0   0
+#define EXCEPTION_STACK_CPSR 4
 
-.equ EXCEPTION_STACK_SIZE, 20
+#define EXCEPTION_STACK_SIZE 8
 
-.equ EXCEPTION_STACK_R0,   0
-.equ EXCEPTION_STACK_CPSR, 4
+##
+## Define the size of the PROCESSOR_CONTEXT structure.
+##
 
-.equ EXCEPTION_STACK_SIZE, 8
+#define PROCESSOR_CONTEXT_SIZE 148
 
 ##
 ## -------------------------------------------------------------------- Macros
@@ -172,12 +171,30 @@ Environment:
 .endm
 
 ##
-## This macro defines a function, callable from C code.
+## This macro defines a function, callable from C code within the current
+## module.
 ##
 
 .macro FUNCTION FunctionName
     .func \FunctionName
     .type \FunctionName, %function
+    .hidden \FunctionName
+    .if THUMB
+        .thumb_func
+    .endif
+    .globl \FunctionName
+    \FunctionName:
+.endm
+
+##
+## This macro defines a function, callable from C code in any module, but
+## always called locally in the current module.
+##
+
+.macro PROTECTED_FUNCTION FunctionName
+    .func \FunctionName
+    .type \FunctionName, %function
+    .protected \FunctionName
     .if THUMB
         .thumb_func
     .endif

@@ -38,6 +38,7 @@ Environment:
 ASSEMBLY_FILE_HEADER
 
 ##
+## RTL_API
 ## VOID
 ## RtlDebugBreak (
 ##     VOID
@@ -60,13 +61,14 @@ Return Value:
 
 --*/
 
-FUNCTION RtlDebugBreak
+PROTECTED_FUNCTION RtlDebugBreak
     DEBUGGER_BREAK                              @ Debugger break.
     bx  %lr                                     @ Return.
 
 END_FUNCTION RtlDebugBreak
 
 ##
+## RTL_API
 ## VOID
 ## RtlDebugService (
 ##     UINTN ServiceRequest,
@@ -92,7 +94,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlDebugService
+PROTECTED_FUNCTION RtlDebugService
     DEBUG_SERVICE
     bx      %lr                                 @ Return.
 

@@ -38,6 +38,7 @@ Environment:
 ASSEMBLY_FILE_HEADER
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicExchange32 (
 ##     volatile ULONG *Address,
@@ -64,7 +65,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlAtomicExchange32
+PROTECTED_FUNCTION RtlAtomicExchange32
     dsb                                         @ Data synchronization barrier.
     ldrex   %r2, [%r0]                          @ Get *Address exclusive.
     strex   %r3, %r1, [%r0]                     @ Store new value exclusive.
@@ -77,6 +78,7 @@ FUNCTION RtlAtomicExchange32
 END_FUNCTION RtlAtomicExchange32
 
 ##
+## RTL_API
 ## ULONGLONG
 ## RtlAtomicExchange64 (
 ##     volatile ULONGLONG *Address,
@@ -103,7 +105,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlAtomicExchange64
+PROTECTED_FUNCTION RtlAtomicExchange64
     stmdb   %sp!, {%r4-%r5}                     @ Save nonvolatiles.
 
 RtlAtomicExchange64Loop:
@@ -121,6 +123,7 @@ RtlAtomicExchange64Loop:
 END_FUNCTION RtlAtomicExchange64
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicCompareExchange32 (
 ##     volatile ULONG *Address,
@@ -152,7 +155,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlAtomicCompareExchange32
+PROTECTED_FUNCTION RtlAtomicCompareExchange32
     dsb                                         @ Data synchronization barrier.
     ldrex   %r3, [%r0]                          @ Get *Address exclusive.
     cmp     %r3, %r2                            @ Compare to CompareValue
@@ -180,6 +183,7 @@ RtlAtomicCompareExchange32End2:
 END_FUNCTION RtlAtomicCompareExchange32
 
 ##
+## RTL_API
 ## ULONGLONG
 ## RtlAtomicCompareExchange64 (
 ##     volatile ULONGLONG *Address,
@@ -211,7 +215,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlAtomicCompareExchange64
+PROTECTED_FUNCTION RtlAtomicCompareExchange64
     stmdb   %sp!, {%r4-%r7}                     @ Save nonvolatiles.
     ldrd    %r4, %r5, [%sp, #16]                @ Get the last argument.
 
@@ -247,6 +251,7 @@ RtlAtomicCompareExchange64End2:
 END_FUNCTION RtlAtomicCompareExchange64
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicAdd32 (
 ##     volatile ULONG *Address,
@@ -272,7 +277,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlAtomicAdd32
+PROTECTED_FUNCTION RtlAtomicAdd32
     dsb                                         @ Data synchronization barrier.
     ldrex   %r2, [%r0]                          @ Get *Address exclusive.
     add     %r3, %r2, %r1                       @ Add increment.
@@ -286,6 +291,7 @@ FUNCTION RtlAtomicAdd32
 END_FUNCTION RtlAtomicAdd32
 
 ##
+## RTL_API
 ## ULONGLONG
 ## RtlAtomicAdd64 (
 ##     volatile ULONGLONG *Address,
@@ -311,7 +317,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlAtomicAdd64
+PROTECTED_FUNCTION RtlAtomicAdd64
     stmdb   %sp!, {%r4-%r7}                     @ Save nonvolatiles.
 
 RtlAtomicAdd64Loop:
@@ -331,6 +337,7 @@ RtlAtomicAdd64Loop:
 END_FUNCTION RtlAtomicAdd64
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicOr32 (
 ##     volatile ULONG *Address,
@@ -356,7 +363,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlAtomicOr32
+PROTECTED_FUNCTION RtlAtomicOr32
     dsb                                         @ Data synchronization barrier.
     ldrex   %r2, [%r0]                          @ Get *Address exclusive.
     orr     %r3, %r2, %r1                       @ OR in mask.
@@ -370,6 +377,7 @@ FUNCTION RtlAtomicOr32
 END_FUNCTION RtlAtomicOr32
 
 ##
+## RTL_API
 ## ULONGLONG
 ## RtlAtomicOr64 (
 ##     volatile ULONGLONG *Address,
@@ -395,7 +403,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlAtomicOr64
+PROTECTED_FUNCTION RtlAtomicOr64
     stmdb   %sp!, {%r4-%r7}                     @ Save nonvolatiles.
 
 RtlAtomicOr64Loop:
@@ -415,6 +423,7 @@ RtlAtomicOr64Loop:
 END_FUNCTION RtlAtomicOr64
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicAnd32 (
 ##     volatile ULONG *Address,
@@ -440,7 +449,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlAtomicAnd32
+PROTECTED_FUNCTION RtlAtomicAnd32
     dsb                                         @ Data synchronization barrier.
     ldrex   %r2, [%r0]                          @ Get *Address exclusive.
     and     %r3, %r2, %r1                       @ AND mask.
@@ -454,6 +463,7 @@ FUNCTION RtlAtomicAnd32
 END_FUNCTION RtlAtomicAnd32
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicXor32 (
 ##     volatile ULONG *Address,
@@ -479,7 +489,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlAtomicXor32
+PROTECTED_FUNCTION RtlAtomicXor32
     dsb                                         @ Data synchronization barrier.
     ldrex   %r2, [%r0]                          @ Get *Address exclusive.
     eor     %r3, %r2, %r1                       @ XOR mask.
@@ -493,6 +503,7 @@ FUNCTION RtlAtomicXor32
 END_FUNCTION RtlAtomicXor32
 
 ##
+## RTL_API
 ## VOID
 ## RtlMemoryBarrier (
 ##     VOID
@@ -517,7 +528,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlMemoryBarrier
+PROTECTED_FUNCTION RtlMemoryBarrier
     dmb
     bx      %lr
 

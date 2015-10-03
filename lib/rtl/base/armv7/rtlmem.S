@@ -67,7 +67,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlCopyMemory
+PROTECTED_FUNCTION RtlCopyMemory
     stmdb   %sp!, {%r0}                         @ Save the destination.
     cmp     %r2, #0                             @ See if byte count is zero.
     beq     RtlCopyMemoryBytesDone              @ Branch out if so.
@@ -179,7 +179,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlZeroMemory
+PROTECTED_FUNCTION RtlZeroMemory
     mov     %r2, %r1                            @ Move the count to parameter 3.
     eor     %r1, %r1, %r1                       @ Set parameter 2 to zero.
     b       RtlSetMemory                        @ Call set memory.
@@ -216,7 +216,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlSetMemory
+PROTECTED_FUNCTION RtlSetMemory
     stmdb   %sp!, {%r0}                         @ Save the destination.
     cmp     %r2, #0                             @ See if byte count is zero.
     beq     RtlSetMemoryBytesDone               @ Branch out if so.
@@ -336,7 +336,7 @@ Return Value:
 
 --*/
 
-FUNCTION RtlCompareMemory
+PROTECTED_FUNCTION RtlCompareMemory
     cmp     %r2, #0                             @ Check for zero byte count.
     beq     RtlCompareMemoryReturnTrue          @ Return TRUE if so.
 

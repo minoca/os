@@ -41,6 +41,7 @@ Environment:
 .code32
 
 ##
+## RTL_API
 ## VOID
 ## RtlDebugBreak (
 ##     VOID
@@ -63,13 +64,14 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlDebugBreak)
+PROTECTED_FUNCTION(RtlDebugBreak)
     int $3                          # Debugger break.
     ret
 
 END_FUNCTION(RtlDebugBreak)
 
 ##
+## RTL_API
 ## VOID
 ## RtlDebugService (
 ##     UINTN ServiceRequest,
@@ -95,7 +97,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlDebugService)
+PROTECTED_FUNCTION(RtlDebugService)
     mov     4(%esp), %eax           # Set up service request parameter.
     mov     8(%esp), %ecx           # Set up parameter.
     int     $0x21                   # Request debug service.
@@ -104,6 +106,7 @@ FUNCTION(RtlDebugService)
 END_FUNCTION(RtlDebugService)
 
 ##
+## RTL_API
 ## ULONGLONG
 ## RtlAtomicCompareExchange64 (
 ##     volatile ULONGLONG *Address,
@@ -135,7 +138,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicCompareExchange64)
+PROTECTED_FUNCTION(RtlAtomicCompareExchange64)
     pushl   %ebx                    # Save ebx.
     pushl   %esi                    # Save esi.
     movl    28(%esp), %edx          # Move the CompareValue high part into edx.
@@ -151,6 +154,7 @@ FUNCTION(RtlAtomicCompareExchange64)
 END_FUNCTION(RtlAtomicCompareExchange64)
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicExchange32 (
 ##     volatile ULONG *Address,
@@ -177,7 +181,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicExchange32)
+PROTECTED_FUNCTION(RtlAtomicExchange32)
     movl    8(%esp), %eax           # Move ExchangeValue into eax.
     movl    4(%esp), %edx           # Move Address into edx.
     lock xchgl %eax, (%edx)         # Exchange eax with *edx.
@@ -186,6 +190,7 @@ FUNCTION(RtlAtomicExchange32)
 END_FUNCTION(RtlAtomicExchange32)
 
 ##
+## RTL_API
 ## ULONGLONG
 ## RtlAtomicExchange64 (
 ##     volatile ULONGLONG *Address,
@@ -216,7 +221,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicExchange64)
+PROTECTED_FUNCTION(RtlAtomicExchange64)
     pushl   %ebx                    # Save ebx.
     pushl   %esi                    # Save esi.
     movl    20(%esp), %ecx          # Move ExchangeValue high into ecx.
@@ -235,6 +240,7 @@ RtlAtomicExchange64Loop:
 END_FUNCTION(RtlAtomicExchange64)
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicCompareExchange32 (
 ##     volatile ULONG *Address,
@@ -266,7 +272,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicCompareExchange32)
+PROTECTED_FUNCTION(RtlAtomicCompareExchange32)
     movl    12(%esp), %eax          # Move CompareValue into eax.
     movl    8(%esp), %ecx           # Move ExchangeValue into ecx.
     movl    4(%esp), %edx           # Move Address into edx.
@@ -276,6 +282,7 @@ FUNCTION(RtlAtomicCompareExchange32)
 END_FUNCTION(RtlAtomicCompareExchange32)
 
 ##
+## RTL_API
 ## ULONGLONG
 ## RtlAtomicAdd64 (
 ##     volatile ULONGLONG *Address,
@@ -301,7 +308,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicAdd64)
+PROTECTED_FUNCTION(RtlAtomicAdd64)
     pushl   %ebx                    # Save ebx.
     pushl   %esi                    # Save esi.
     movl    12(%esp), %esi          # Load the address into esi.
@@ -322,6 +329,7 @@ RtlAtomicAdd64Loop:
 END_FUNCTION(RtlAtomicAdd64)
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicAdd32 (
 ##     volatile ULONG *Address,
@@ -347,7 +355,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicAdd32)
+PROTECTED_FUNCTION(RtlAtomicAdd32)
     movl    4(%esp), %edx           # Move Address into edx.
     movl    8(%esp), %ecx           # Move Increment into ecx.
     pushl   %ebx                    # Save ebx.
@@ -364,6 +372,7 @@ RtlAtomicAdd32Loop:
 END_FUNCTION(RtlAtomicAdd32)
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicOr32 (
 ##     volatile ULONG *Address,
@@ -389,7 +398,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicOr32)
+PROTECTED_FUNCTION(RtlAtomicOr32)
     movl    4(%esp), %edx           # Move Address into edx.
     movl    8(%esp), %ecx           # Move Increment into ecx.
     pushl   %ebx                    # Save ebx.
@@ -406,6 +415,7 @@ RtlAtomicOr32Loop:
 END_FUNCTION(RtlAtomicOr32)
 
 ##
+## RTL_API
 ## ULONGLONG
 ## RtlAtomicOr64 (
 ##     volatile ULONGLONG *Address,
@@ -431,7 +441,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicOr64)
+PROTECTED_FUNCTION(RtlAtomicOr64)
     pushl   %ebx                    # Save ebx.
     pushl   %esi                    # Save esi.
     movl    12(%esp), %esi          # Load the address into esi.
@@ -452,6 +462,7 @@ RtlAtomicOr64Loop:
 END_FUNCTION(RtlAtomicOr64)
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicAnd32 (
 ##     volatile ULONG *Address,
@@ -477,7 +488,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicAnd32)
+PROTECTED_FUNCTION(RtlAtomicAnd32)
     movl    4(%esp), %edx           # Move Address into edx.
     movl    8(%esp), %ecx           # Move Increment into ecx.
     pushl   %ebx                    # Save ebx.
@@ -494,6 +505,7 @@ RtlAtomicAnd32Loop:
 END_FUNCTION(RtlAtomicAnd32)
 
 ##
+## RTL_API
 ## ULONG
 ## RtlAtomicXor32 (
 ##     volatile ULONG *Address,
@@ -519,7 +531,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlAtomicXor32)
+PROTECTED_FUNCTION(RtlAtomicXor32)
     movl    4(%esp), %edx           # Move Address into edx.
     movl    8(%esp), %ecx           # Move Increment into ecx.
     pushl   %ebx                    # Save ebx.
@@ -536,6 +548,7 @@ RtlAtomicXor32Loop:
 END_FUNCTION(RtlAtomicXor32)
 
 ##
+## RTL_API
 ## VOID
 ## RtlMemoryBarrier (
 ##     VOID
@@ -560,7 +573,7 @@ Return Value:
 
 --*/
 
-FUNCTION(RtlMemoryBarrier)
+PROTECTED_FUNCTION(RtlMemoryBarrier)
     lock orl $0, (%esp)
     ret
 

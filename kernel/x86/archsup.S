@@ -67,7 +67,7 @@ Return Value:
 
 --*/
 
-FUNCTION(ArAreInterruptsEnabled)
+PROTECTED_FUNCTION(ArAreInterruptsEnabled)
     pushfl                          # Get Eflags.
     popl    %eax                    # Eflags in eax.
     andl    $IA32_EFLAG_IF, %eax    # Isolate the Interrupt flag.
@@ -109,7 +109,7 @@ Return Value:
 
 --*/
 
-FUNCTION(ArDisableInterrupts)
+PROTECTED_FUNCTION(ArDisableInterrupts)
     pushfl                          # Push flags.
     cli                             # Clear the interrupt flag.
     popl    %eax                    # Pop flags into eax.
@@ -148,7 +148,7 @@ Return Value:
 
 --*/
 
-FUNCTION(ArEnableInterrupts)
+PROTECTED_FUNCTION(ArEnableInterrupts)
     sti                             # Set the interrupt flag.
     ret                             #
 
@@ -617,6 +617,7 @@ FUNCTION(ArProcessorYield)
 END_FUNCTION(ArProcessorYield)
 
 ##
+## KERNEL_API
 ## VOID
 ## ArWaitForInterrupt (
 ##     VOID
@@ -641,7 +642,7 @@ Return Value:
 
 --*/
 
-FUNCTION(ArWaitForInterrupt)
+PROTECTED_FUNCTION(ArWaitForInterrupt)
     sti                             # Enables interrupts one instruction later.
     hlt                             # Simtaneously halt and enable interrupts.
     ret
@@ -1646,7 +1647,7 @@ Return Value:
 
 --*/
 
-FUNCTION(ArMonitor)
+PROTECTED_FUNCTION(ArMonitor)
     movl    4(%esp), %eax       # Load the address to eax.
     movl    8(%esp), %ecx       # Load first set of hints.
     movl    12(%esp), %edx      # Load second set of hints.
@@ -1690,7 +1691,7 @@ Return Value:
 
 --*/
 
-FUNCTION(ArMwait)
+PROTECTED_FUNCTION(ArMwait)
     movl    4(%esp), %eax       # Load eax.
     movl    8(%esp), %ecx       # Load ecx.
     mwait                       # Go down.
@@ -1724,7 +1725,7 @@ Return Value:
 
 --*/
 
-FUNCTION(ArIoReadAndHalt)
+PROTECTED_FUNCTION(ArIoReadAndHalt)
     movl    4(%esp), %edx           # Get the I/O port.
     inb     %dx, %al                # Perform the I/O port read.
     sti                             # Enables interrupts one instruction later.
@@ -1732,6 +1733,192 @@ FUNCTION(ArIoReadAndHalt)
     ret
 
 END_FUNCTION(ArIoReadAndHalt)
+
+##
+## UINTN
+## ArSaveProcessorContext (
+##     PPROCESSOR_CONTEXT Context
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine saves the current processor context, including the
+    non-volatile general registers and the system level control registers. This
+    function appears to return twice, once when the context is saved and then
+    again when the context is restored. Because the stack pointer is restored,
+    the caller of this function may not return without either abandoning the
+    context or calling restore. Returning and then calling restore would almost
+    certainly result in stack corruption.
+
+Arguments:
+
+    Context - Supplies a pointer to the context area to save into.
+
+Return Value:
+
+    Returns 0 after the context was successfully saved (first time).
+
+    Returns the value in the context return address register when the restore
+    function is called (the second time). By default this value is 1, though it
+    can be manipulated after the initial save is complete.
+
+--*/
+
+FUNCTION(ArSaveProcessorContext)
+    pushl   %edi                    # Save non-volatile (remember this!)
+    movl    8(%esp), %edi           # Get the context base address.
+    cld                             # Increment edi upon stosd.
+    movl    $1, %eax                # Set default eax (second return value).
+    stosl                           # Save it.
+    movl    4(%esp), %eax           # Get the return address (eip).
+    stosl                           # Save it.
+    xor     %eax, %eax              # Zero out top part of eax.
+    mov     %cs, %ax                # Get CS.
+    stosl                           # Save it.
+    pushfl                          # Push the flags.
+    popl    %eax                    # Pop them into eax.
+    stosl                           # Save it.
+    movl    %ebx, (%edi)            # Save ebx.
+    movl    %esi, 4(%edi)           # Save esi.
+    movl    (%esp), %eax            # Get edi (saved in prologue!)
+    movl    %eax, 8(%edi)           # Save it.
+    movl    %ebp, 12(%edi)          # Save ebp.
+    movl    %esp, %eax              # Get esp.
+    addl    $8, %eax                # Pop off saved non-volatile and ret addr.
+    movl    %eax, 16(%edi)          # Save it.
+    addl    $0x14, %edi             # Advance edi for ebx/esi/edi/ebp/esp.
+    movl    %dr7, %eax              # Get dr7.
+    stosl                           # Save it.
+    movl    %dr6, %eax              # Get dr6.
+    stosl                           # Save it.
+    movl    %dr0, %eax              # Get debug register.
+    stosl                           # Save it.
+    movl    %dr1, %eax              # Get dr1.
+    stosl                           # Save it.
+    movl    %dr2, %eax              # Get dr2.
+    stosl                           # Save it.
+    movl    %dr3, %eax              # Get dr3.
+    stosl                           # Save it.
+    movl    %edi, (%edi)            # Save VA.
+    addl    $4, %edi                # Advance edi.
+    movl    %cr0, %eax              # Get CR0.
+    stosl                           # Save it.
+    movl    %cr2, %eax              # Get CR2.
+    stosl                           # Save it.
+    movl    %cr3, %eax              # Get CR3.
+    stosl                           # Save it.
+    movl    %cr4, %eax              # Get CR4.
+    stosl                           # Save it.
+    xorl    %eax, %eax              # Zero out eax.
+    str     %eax                    # Get task register.
+    stosl                           # Save it.
+    pushl   %eax                    # Push it as an argument.
+    call    ArClearTssBusyBit       # Clear the busy bit from the TSS.
+    addl    $4, %esp                # Pop the argument.
+    sidt    (%edi)                  # Save interrupt descriptor table.
+    addl    $6, %edi                # Advance edi.
+    sgdt    (%edi)                  # Save global descriptor table.
+    addl    $6, %edi                # Advance edi.
+    popl    %edi                    # Restore non-volatile.
+    xor     %eax, %eax              # Zero out return value.
+    ret
+
+END_FUNCTION(ArSaveProcessorContext)
+
+##
+## VOID
+## ArRestoreProcessorContext (
+##     PPROCESSOR_CONTEXT Context
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine restores the current processor context, including the
+    non-volatile general registers and the system level control registers. This
+    function does not return, but instead jumps to the return address from
+    the caller of the save context function.
+
+Arguments:
+
+    Context - Supplies a pointer to the context to restore.
+
+Return Value:
+
+    Does not return, at least not conventionally.
+
+--*/
+
+FUNCTION(ArRestoreProcessorContext)
+
+    ##
+    ## This function should be called from protected mode. It uses non-volatile
+    ## registers without saving them because it never returns.
+    ##
+
+    movl    4(%esp), %ecx           # Get the context parameter.
+    movl    %ecx, %esi              # Move to source register.
+    addl    $(PROCESSOR_CONTEXT_SIZE - 6), %esi # Jump to last member.
+    std                             # Decrement esi during lodsd.
+    lgdt    (%esi)                  # Load the new GDT.
+    subl    $6, %esi                # Retreat.
+    lidt    (%esi)                  # Load the new IDT.
+    ljmp    $KERNEL_CS, $ArRestoreProcessorContextJump # Long jump to load GDT.
+
+ArRestoreProcessorContextJump:
+    subl    $4, %esi                # Retreat to tr.
+    lodsl                           # Pop a value and retreat.
+    ltr     %ax                     # Load the task segment.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %cr4              # Restore CR4.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %cr3              # Restore CR3 (potential page switch).
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %cr2              # Restore CR2.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %edx              # Move CR0 value over.
+    lodsl                           # Pop the VA and retreat.
+    movl    %edx, %cr0              # Restore CR0 (maybe enabling paging).
+    movl    %eax, %esi              # Restore from the new VA.
+    subl    $4, %esi                # Retreat to dr3.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %dr3              # Restore DR3.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %dr2              # Restore DR2.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %dr1              # Restore DR1.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %dr0              # Restore DR0.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %dr6              # Restore DR6.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %dr7              # Restore DR7.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %esp              # Restore esp.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %ebp              # Restore ebp.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %edi              # Restore edi.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %edx              # Restore esi into edx for now.
+    lodsl                           # Pop a value and retreat.
+    movl    %eax, %ebx              # Restore ebx.
+    lodsl                           # Pop a value and retreat.
+    pushl   %eax                    # Push eflags.
+    lodsl                           # Pop a value and retreat.
+    pushl   %eax                    # Push cs.
+    lodsl                           # Pop a value and retreat.
+    pushl   %eax                    # Push eip.
+    lodsl                           # Pop the return value into eax.
+    mov     %edx, %esi              # Restore final esi.
+    iret                            # Return, loading eip, cs, and eflags.
+
+END_FUNCTION(ArRestoreProcessorContext)
 
 ##
 ## --------------------------------------------------------- Internal Functions

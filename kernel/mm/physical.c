@@ -1155,10 +1155,6 @@ Return Value:
                             (SegmentOffset << PageShift);
     }
 
-    //
-    // If there was a working allocation found, allocate it now.
-    //
-
     if (WorkingAllocation != INVALID_PHYSICAL_ADDRESS) {
         PhysicalPage = (PPHYSICAL_PAGE)(Segment + 1);
         PhysicalPage += SegmentOffset;
@@ -1170,7 +1166,7 @@ Return Value:
             MmTotalAllocatedPhysicalPages += 1;
             MmNonPagedPhysicalPages += 1;
 
-            ASSERT(MmTotalAllocatedPhysicalPages <=MmTotalPhysicalPages);
+            ASSERT(MmTotalAllocatedPhysicalPages <= MmTotalPhysicalPages);
 
             PhysicalPage->U.Flags = PHYSICAL_PAGE_FLAG_NON_PAGED;
             PhysicalPage += 1;

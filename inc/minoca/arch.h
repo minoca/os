@@ -32,6 +32,7 @@ Author:
 //
 
 typedef struct _TRAP_FRAME TRAP_FRAME, *PTRAP_FRAME;
+typedef struct _PROCESSOR_CONTEXT PROCESSOR_CONTEXT, *PPROCESSOR_CONTEXT;
 typedef struct _FPU_CONTEXT FPU_CONTEXT, *PFPU_CONTEXT;
 
 //
@@ -657,3 +658,57 @@ Return Value:
 
 --*/
 
+UINTN
+ArSaveProcessorContext (
+    PPROCESSOR_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine saves the current processor context, including the
+    non-volatile general registers and the system level control registers. This
+    function appears to return twice, once when the context is saved and then
+    again when the context is restored. Because the stack pointer is restored,
+    the caller of this function may not return without either abandoning the
+    context or calling restore. Returning and then calling restore would almost
+    certainly result in stack corruption.
+
+Arguments:
+
+    Context - Supplies a pointer to the context area to save into.
+
+Return Value:
+
+    Returns 0 after the context was successfully saved (first time).
+
+    Returns the value in the context return address register when the restore
+    function is called (the second time). By default this value is 1, though it
+    can be manipulated after the initial save is complete.
+
+--*/
+
+VOID
+ArRestoreProcessorContext (
+    PPROCESSOR_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine restores the current processor context, including the
+    non-volatile general registers and the system level control registers. This
+    function does not return, but instead jumps to the return address from
+    the caller of the save context function.
+
+Arguments:
+
+    Context - Supplies a pointer to the context to restore.
+
+Return Value:
+
+    Does not return, at least not conventionally.
+
+--*/

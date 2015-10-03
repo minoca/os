@@ -31,8 +31,6 @@ Environment:
 ## ---------------------------------------------------------------- Definitions
 ##
 
-.equ EXCEPTION_STACK_SIZE, 20
-
 ##
 ## ---------------------------------------------------------------------- Code
 ##
@@ -1408,16 +1406,6 @@ END_FUNCTION ArSetUnprivilegedWriteTranslateRegister
 ##
 ## --------------------------------------------------------- Internal Functions
 ##
-
-##
-## Definition for the structure on the exception stacks.
-##
-
-.equ EXCEPTION_STACK_R0,   0
-.equ EXCEPTION_STACK_CPSR, 4
-.equ EXCEPTION_STACK_SPSR, 8
-.equ EXCEPTION_STACK_LR,   12
-.equ EXCEPTION_STACK_R1,   16
 
 ##
 ## This code is entered as the result of any interrupt or exception. Its job is

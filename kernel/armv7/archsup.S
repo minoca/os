@@ -665,7 +665,7 @@ Return Value:
 
 --*/
 
-FUNCTION ArWaitForInterrupt
+PROTECTED_FUNCTION ArWaitForInterrupt
     dsb                                         @ Ensure everything is done.
     wfi                                         @ Wait for interrupt.
     cpsie   if                                  @ Enable interrupts.
