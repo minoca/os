@@ -68,7 +68,7 @@ Return Value:
 
 --*/
 
-FUNCTION(fegetenv)
+EXPORTED_FUNCTION(fegetenv)
     fnstenv (%rdi)              # Store the FP environment into the pointer.
     xorq    %rax, %rax          # Zero out rax.
     ret                         # Return success.
@@ -103,7 +103,7 @@ Return Value:
 
 --*/
 
-FUNCTION(fesetenv)
+EXPORTED_FUNCTION(fesetenv)
     cmpq    $FE_DFL_ENV, %rdi   # Compare to the "default" environment value.
     jne     fesetenvLoad        # Jump to the load portion if it's custom.
     finit                       # Load the default state.
@@ -147,7 +147,7 @@ Return Value:
 
 --*/
 
-FUNCTION(fegetexceptflag)
+EXPORTED_FUNCTION(fegetexceptflag)
     xorq    %rax, %rax          # Zero out rax.
     fnstsw  %ax                 # Get the floating point flags.
     andq    %rax, %rsi          # AND them with the mask.

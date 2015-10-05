@@ -165,25 +165,36 @@ Environment:
     mov     %ax, %fs                # Load it.
 .endm
 
-##
-## This macro defines a function declaration, callable from C code.
-##
-
 #if defined(__ELF__)
 
-#define FUNCTION(_Name) \
+##
+## This macro defines a function, callable from C code in any module and
+## capable of being overridden by other functions.
+##
+
+#define EXPORTED_FUNCTION(_Name) \
     .func _Name ; \
     .type _Name, %function ; \
     .global _Name ; \
-    .hidden _Name ; \
     _Name:
 
+##
+## This macro defines a function, callable from C code in the current module
+## only.
+##
+
+#define FUNCTION(_Name) \
+    .hidden _Name ; \
+    EXPORTED_FUNCTION(_Name)
+
+##
+## This macro defines a function, callable from C code in any module but always
+## called locally in the current module.
+##
+
 #define PROTECTED_FUNCTION(_Name) \
-    .func _Name ; \
-    .type _Name, %function ; \
-    .global _Name ; \
     .protected _Name ; \
-    _Name:
+    EXPORTED_FUNCTION(_Name)
 
 #define END_FUNCTION(_Name) \
     .size _Name, .-_Name ; \
@@ -198,6 +209,7 @@ Environment:
     _##_Name:
 
 #define PROTECTED_FUNCTION(_Name) FUNCTION(_Name)
+#define EXPORTED_FUNCTION(_Name) FUNCTION(_Name)
 
 #define END_FUNCTION(_Name)
 

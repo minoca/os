@@ -77,7 +77,7 @@ Return Value:
 
 --*/
 
-FUNCTION setjmp
+EXPORTED_FUNCTION setjmp
 
     ##
     ## Clear out the boolean indicating whether or not the mask was saved.
@@ -135,7 +135,7 @@ Return Value:
 
 --*/
 
-FUNCTION sigsetjmp
+EXPORTED_FUNCTION sigsetjmp
 
     ##
     ## Save the registers.

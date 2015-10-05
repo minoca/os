@@ -82,7 +82,7 @@ Return Value:
 
 --*/
 
-FUNCTION(setjmp)
+EXPORTED_FUNCTION(setjmp)
     movq    (%rsp), %rcx        # Load the return address.
 
     ##
@@ -147,7 +147,7 @@ Return Value:
 
 --*/
 
-FUNCTION(sigsetjmp)
+EXPORTED_FUNCTION(sigsetjmp)
     movq    (%rsp), %rcx        # Load the return address.
 
     ##

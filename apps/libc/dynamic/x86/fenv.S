@@ -31,8 +31,8 @@ Environment:
 ## ---------------------------------------------------------------- Definitions
 ##
 
-.equ FE_ALL_EXCEPT, 0x3F
-.equ FE_DFL_ENV, -1
+#define FE_ALL_EXCEPT 0x3F
+#define FE_DFL_ENV -1
 
 ##
 ## ----------------------------------------------------------------------- Code
@@ -75,7 +75,7 @@ Return Value:
 
 --*/
 
-FUNCTION(fegetenv)
+EXPORTED_FUNCTION(fegetenv)
     movl    4(%esp), %eax       # Get the pointer parameter.
     fnstenv (%eax)              # Store the FP environment into the pointer.
     movl    $0, %eax            # Move a successful return status.
@@ -111,7 +111,7 @@ Return Value:
 
 --*/
 
-FUNCTION(fesetenv)
+EXPORTED_FUNCTION(fesetenv)
     movl    4(%esp), %eax       # Get the pointer parameter.
     cmpl    $FE_DFL_ENV, %eax   # Compare to the "default" environment value.
     jne     fesetenvLoad        # Jump to the load portion if it's custom.
@@ -156,7 +156,7 @@ Return Value:
 
 --*/
 
-FUNCTION(fegetexceptflag)
+EXPORTED_FUNCTION(fegetexceptflag)
     movl    4(%esp), %ecx       # Get the pointer parameter.
     movl    8(%esp), %edx       # Get the mask.
     xorl    %eax, %eax          # Zero the high part of EAX.
@@ -168,3 +168,4 @@ FUNCTION(fegetexceptflag)
     ret                         # Return success.
 
 END_FUNCTION(fegetexceptflag)
+

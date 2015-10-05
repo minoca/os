@@ -68,7 +68,7 @@ Return Value:
 
 --*/
 
-FUNCTION __tls_get_addr
+EXPORTED_FUNCTION __tls_get_addr
     mrc     p15, 0, %r2, c13, c0, 3     @ Get the TPIDRURO register.
     ldr     %r2, [%r2, #TCB_TLS_VECTOR_OFFSET]  @ Get the TLS vector.
     ldr     %r3, [%r2]                  @ Get the generation number.

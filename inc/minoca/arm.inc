@@ -176,14 +176,8 @@ Environment:
 ##
 
 .macro FUNCTION FunctionName
-    .func \FunctionName
-    .type \FunctionName, %function
     .hidden \FunctionName
-    .if THUMB
-        .thumb_func
-    .endif
-    .globl \FunctionName
-    \FunctionName:
+    EXPORTED_FUNCTION \FunctionName
 .endm
 
 ##
@@ -192,9 +186,18 @@ Environment:
 ##
 
 .macro PROTECTED_FUNCTION FunctionName
+    .protected \FunctionName
+    EXPORTED_FUNCTION \FunctionName
+.endm
+
+##
+## This macro defines a function, callable from C code in any module, and
+## capable of being overridden by other modules.
+##
+
+.macro EXPORTED_FUNCTION FunctionName
     .func \FunctionName
     .type \FunctionName, %function
-    .protected \FunctionName
     .if THUMB
         .thumb_func
     .endif

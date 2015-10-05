@@ -90,15 +90,34 @@ Environment:
     mov     $GDT_PROCESSOR, %ax ;  \
     mov     %ax, %fs ;             \
 
-//
-// This macro defines a function declaration, callable from C code.
-//
+##
+## This macro defines a function, callable from C code in any module and
+## capable of being overridden by other functions.
+##
 
-#define FUNCTION(_Name) \
+#define EXPORTED_FUNCTION(_Name) \
     .func _Name ; \
     .type _Name, %function ; \
     .global _Name ; \
     _Name:
+
+##
+## This macro defines a function, callable from C code in the current module
+## only.
+##
+
+#define FUNCTION(_Name) \
+    .hidden _Name ; \
+    EXPORTED_FUNCTION(_Name)
+
+##
+## This macro defines a function, callable from C code in any module but always
+## called locally in the current module.
+##
+
+#define PROTECTED_FUNCTION(_Name) \
+    .protected _Name ; \
+    EXPORTED_FUNCTION(_Name)
 
 #define END_FUNCTION(_Name) \
     .size _Name, .-_Name ; \

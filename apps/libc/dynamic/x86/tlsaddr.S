@@ -76,7 +76,7 @@ Return Value:
 
 --*/
 
-FUNCTION(___tls_get_addr)
+EXPORTED_FUNCTION(___tls_get_addr)
     movl    %gs:(TCB_TLS_VECTOR_OFFSET), %ecx    # Get the TLS vector.
     movl    (%eax), %edx        # Get the module ID.
     cmpl    %edx, (%ecx)        # Compare module ID to generation number.

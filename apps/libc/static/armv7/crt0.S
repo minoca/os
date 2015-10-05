@@ -61,7 +61,7 @@ Return Value:
 
 --*/
 
-FUNCTION _start
+EXPORTED_FUNCTION _start
 
     ##
     ## Call out to initialize the C Runtime library.
