@@ -1398,13 +1398,16 @@ Return Value:
 --*/
 
 FUNCTION ArSaveProcessorContext
+    stmia   %r0!, {%lr}                 @ Save PC (return address).
+    mrs     %r1, CPSR                   @ Save CPSR.
+    stmia   %r0!, {%r1}                 @
     mov     %r1, #1                     @ "Save" 1 to R0.
     stmia   %r0!, {%r1}                 @
     mov     %r1, #0                     @ "Save" 0 to R1, R2, and R3.
     stmia   %r0!, {%r1}                 @
     stmia   %r0!, {%r1}                 @
     stmia   %r0!, {%r1}                 @
-    stmia   %r0!, {%r4-%r11, %sp, %lr}  @ Save R4-R11, SP, and PC (return).
+    stmia   %r0!, {%r4-%r11, %sp}       @ Save R4-R11 and SP.
     stmia   %r0!, {%r0}                 @ Remember the VA right here.
     mrc     p15, 0, %r1, c1, c0, 0      @ Save SCTLR.
     stmia   %r0!, {%r1}                 @
@@ -1528,7 +1531,7 @@ FUNCTION ArRestoreProcessorContext
     mrc     p15, 0, %r2, c1, c0, 1      @ Get current ACTLR.
     ldmdb   %r0!, {%r1}                 @ Load saved one.
     cmp     %r1, %r2                    @ Compare.
-    beq ArRestoreProcessorContextAfterActlr
+    beq     ArRestoreProcessorContextAfterActlr
     mcr     p15, 0, %r1, c1, c0, 1      @ Restore ACTLR.
 
 ArRestoreProcessorContextAfterActlr:
@@ -1566,7 +1569,9 @@ ArRestoreProcessorContextAfterActlr:
     ##
 
     mov     %r12, %r0                   @ Move to a free register.
-    ldmdb   %r12!, {%r0-%r11, %sp, %pc} @ Restore general context and jump away.
+    ldmdb   %r12!, {%r0-%r11, %sp}      @ Restore general context.
+    mov     %lr, #0                     @ Zero out lr for goodwill.
+    rfedb   %r12!                       @ Pop PC and CPSR.
 
 END_FUNCTION ArRestoreProcessorContext
 

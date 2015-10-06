@@ -238,6 +238,48 @@ struct _INTERRUPT_CONTROLLER {
     ULONG Features;
 };
 
+/*++
+
+Structure Description:
+
+    This structure defines the addressing details for a processor.
+
+Members:
+
+    PhysicalId - Stores the physical identifier of the processor.
+
+    LogicalFlatId - Stores the identifier of the processor in logical flat mode.
+
+    Target - Stores the targeting information for the processor.
+
+    Controller - Stores a pointer to the interrupt controller whose local unit
+        owns the processor.
+
+    IpiLine - Stores a pointer to an array of interrupt lines used for IPIs on
+        this processor.
+
+    Flags - Stores a bitfield of configuration values regarding the processor.
+        See PROCESSOR_ADDRESSING_FLAG_* definitions.
+
+    ParkedPhysicalAddress - Stores the physical address where this processor is
+        parked.
+
+    ParkedVirtualAddress - Stores the virtual address of the mapping to the
+        parked physical address.
+
+--*/
+
+typedef struct _PROCESSOR_ADDRESSING {
+    ULONG PhysicalId;
+    ULONG LogicalFlatId;
+    INTERRUPT_HARDWARE_TARGET Target;
+    PINTERRUPT_CONTROLLER Controller;
+    INTERRUPT_LINE IpiLine[MAX_IPI_LINE_COUNT];
+    ULONG Flags;
+    PHYSICAL_ADDRESS ParkedPhysicalAddress;
+    PVOID ParkedVirtualAddress;
+} PROCESSOR_ADDRESSING, *PPROCESSOR_ADDRESSING;
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -266,6 +308,13 @@ extern PKINTERRUPT HlIpiKInterrupt[MAX_IPI_LINE_COUNT];
 //
 
 extern ULONG HlMaxProcessors;
+
+//
+// Store an array defining the addressing mode of each processor, indexed by
+// processor number.
+//
+
+extern PPROCESSOR_ADDRESSING HlProcessorTargets;
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -801,29 +850,20 @@ Return Value:
 --*/
 
 KSTATUS
-HlpInterruptPrepareStartupStub (
-    PPHYSICAL_ADDRESS JumpAddressPhysical,
-    PVOID *JumpAddressVirtual,
-    PULONG PagesAllocated
+HlpInterruptPrepareIdentityStub (
+    VOID
     );
 
 /*++
 
 Routine Description:
 
-    This routine prepares the startup stub trampoline, used to bootstrap
-    embryonic processors into the kernel.
+    This routine prepares the identity mapped trampoline, used to bootstrap
+    initializing and resuming processors coming from physical mode.
 
 Arguments:
 
-    JumpAddressPhysical - Supplies a pointer that will receive the physical
-        address the new processor(s) should jump to.
-
-    JumpAddressVirtual - Supplies a pointer that will receive the virtual
-        address the new processor(s) should jump to.
-
-    PagesAllocated - Supplies a pointer that will receive the number of pages
-        needed to create the startup stub.
+    None.
 
 Return Value:
 
@@ -832,10 +872,8 @@ Return Value:
 --*/
 
 VOID
-HlpInterruptDestroyStartupStub (
-    PHYSICAL_ADDRESS JumpAddressPhysical,
-    PVOID JumpAddressVirtual,
-    ULONG PageCount
+HlpInterruptDestroyIdentityStub (
+    VOID
     );
 
 /*++
@@ -847,11 +885,7 @@ Routine Description:
 
 Arguments:
 
-    JumpAddressPhysical - Supplies the physical address of the startup stub.
-
-    JumpAddressVirtual - Supplies the virtual address of the startup stub.
-
-    PageCount - Supplies the number of pages in the startup stub.
+    None.
 
 Return Value:
 
@@ -861,10 +895,10 @@ Return Value:
 
 KSTATUS
 HlpInterruptPrepareForProcessorStart (
-    ULONG ProcessorPhysicalIdentifier,
-    PVOID ParkedAddressMapping,
-    PHYSICAL_ADDRESS PhysicalJumpAddress,
-    PVOID VirtualJumpAddress
+    ULONG ProcessorIndex,
+    PPROCESSOR_START_BLOCK StartBlock,
+    PPROCESSOR_START_ROUTINE StartRoutine,
+    PPHYSICAL_ADDRESS PhysicalStart
     );
 
 /*++
@@ -876,17 +910,15 @@ Routine Description:
 
 Arguments:
 
-    ProcessorPhysicalIdentifier - Supplies the physical ID of the processor that
-        is about to be started.
+    ProcessorIndex - Supplies the index of the processor to start.
 
-    ParkedAddressMapping - Supplies a pointer to the mapping to the processor's
-        parked physical address.
+    StartBlock - Supplies a pointer to the processor start block.
 
-    PhysicalJumpAddress - Supplies the physical address of the boot code this
-        processor should jump to.
+    StartRoutine - Supplies a pointer to the routine to call on the new
+        processor.
 
-    VirtualJumpAddress - Supplies the virtual address of the boot code this
-        processor should jump to.
+    PhysicalStart - Supplies a pointer where the physical address the processor
+        should jump to upon initialization will be returned.
 
 Return Value:
 

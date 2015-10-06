@@ -325,35 +325,38 @@ Structure Description:
     This structure stores information needed by an application processor to
     initialize.
 
-    Warning: The offsets of this structure are also used by assembly code, so
-             be very careful adding, deleting, or moving members of this
-             structure.
-
 Members:
 
-    StackBase - Supplies the base of the stack that the initialization is
+    StackBase - Stores the base of the stack that the initialization is
         running on.
 
-    StackSize - Supplies the size of the stack that the initialization is
+    StackSize - Stores the size of the stack that the initialization is
         running on.
 
-    ProcessorNumber - Supplies the number of the processor.
+    StackPointer - Stores the stack pointer to set.
 
-    ProcessorStructures - Supplies the processor structures buffer used for
+    Started - Stores a boolean set by the processor when it has successfully
+        run through the initial assembly stub.
+
+    ProcessorNumber - Stores the number of the processor.
+
+    ProcessorStructures - Stores the processor structures buffer used for
         early architecture specific initialization.
 
-    SwapPage - Supplies a pointer to the virtual address reservation the
+    SwapPage - Stores a pointer to the virtual address reservation the
         processor should use for quick dispatch level mappings.
 
 --*/
 
-typedef struct _PROCESSOR_START_BLOCK {
+struct _PROCESSOR_START_BLOCK {
     PVOID StackBase;
     ULONG StackSize;
+    PVOID StackPointer;
+    ULONG Started;
     ULONG ProcessorNumber;
     PVOID ProcessorStructures;
     PVOID SwapPage;
-} PACKED PROCESSOR_START_BLOCK, *PPROCESSOR_START_BLOCK;
+} PACKED;
 
 //
 // -------------------------------------------------------------------- Globals

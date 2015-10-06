@@ -55,48 +55,6 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-/*++
-
-Structure Description:
-
-    This structure defines the addressing details for a processor.
-
-Members:
-
-    PhysicalId - Stores the physical identifier of the processor.
-
-    LogicalFlatId - Stores the identifier of the processor in logical flat mode.
-
-    Target - Stores the targeting information for the processor.
-
-    Controller - Stores a pointer to the interrupt controller whose local unit
-        owns the processor.
-
-    IpiLine - Stores a pointer to an array of interrupt lines used for IPIs on
-        this processor.
-
-    Flags - Stores a bitfield of configuration values regarding the processor.
-        See PROCESSOR_ADDRESSING_FLAG_* definitions.
-
-    ParkedPhysicalAddress - Stores the physical address where this processor is
-        parked.
-
-    ParkedVirtualAddress - Stores the virtual address of the mapping to the
-        parked physical address.
-
---*/
-
-typedef struct _PROCESSOR_ADDRESSING {
-    ULONG PhysicalId;
-    ULONG LogicalFlatId;
-    INTERRUPT_HARDWARE_TARGET Target;
-    PINTERRUPT_CONTROLLER Controller;
-    INTERRUPT_LINE IpiLine[MAX_IPI_LINE_COUNT];
-    ULONG Flags;
-    PHYSICAL_ADDRESS ParkedPhysicalAddress;
-    PVOID ParkedVirtualAddress;
-} PROCESSOR_ADDRESSING, *PPROCESSOR_ADDRESSING;
-
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -156,24 +114,6 @@ ULONG HlMaxClusters = 0xF;
 //
 
 BOOL HlLogicalClusteredMode = FALSE;
-
-//
-// Define a variable indicating where baby APs should jump to.
-//
-
-volatile PVOID HlProcessorInitializationRoutine = NULL;
-
-//
-// Define a variable containing the processor's start block information.
-//
-
-volatile PPROCESSOR_START_BLOCK HlProcessorStartBlock = NULL;
-
-//
-// Define a variable that gets incremented as soon as new processors start.
-//
-
-volatile ULONG HlProcessorsLaunched = 1;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -367,7 +307,7 @@ Return Value:
 
 KSTATUS
 HlStartAllProcessors (
-    PVOID InitializationRoutine,
+    PPROCESSOR_START_ROUTINE StartRoutine,
     PULONG ProcessorsStarted
     )
 
@@ -379,10 +319,11 @@ Routine Description:
 
 Arguments:
 
-    InitializationRoutine - Supplies the routine the processors should jump to.
+    StartRoutine - Supplies the routine the processors should jump to.
 
     ProcessorsStarted - Supplies a pointer where the number of processors
-        started will be returned (the total number of processors in the system).
+        started will be returned (the total number of processors in the system,
+        including the boot processor).
 
 Return Value:
 
@@ -397,18 +338,26 @@ Return Value:
     BOOL Enabled;
     ULONGLONG GiveUpTime;
     ULONG Identifier;
-    ULONG LaunchCountBefore;
     PHYSICAL_ADDRESS PhysicalJumpAddress;
     ULONG Processor;
     ULONG ProcessorCount;
+    ULONG ProcessorsLaunched;
+    PPROCESSOR_START_BLOCK StartBlock;
     KSTATUS Status;
-    ULONG TrampolinePageCount;
-    PVOID VirtualJumpAddress;
 
     Enabled = FALSE;
-    PhysicalJumpAddress = INVALID_PHYSICAL_ADDRESS;
-    VirtualJumpAddress = NULL;
-    TrampolinePageCount = 0;
+    ProcessorsLaunched = 1;
+    StartBlock = NULL;
+
+    //
+    // Fire up the identity stub, which is used not only to initialize other
+    // processors but also to come out during resume.
+    //
+
+    Status = HlpInterruptPrepareIdentityStub();
+    if (!KSUCCESS(Status)) {
+        goto StartAllProcessorsEnd;
+    }
 
     //
     // Bail now if this machine is not multiprocessor capable.
@@ -419,20 +368,6 @@ Return Value:
         Status = STATUS_SUCCESS;
         goto StartAllProcessorsEnd;
     }
-
-    Status = HlpInterruptPrepareStartupStub(&PhysicalJumpAddress,
-                                            &VirtualJumpAddress,
-                                            &TrampolinePageCount);
-
-    if (!KSUCCESS(Status)) {
-        goto StartAllProcessorsEnd;
-    }
-
-    //
-    // Set the location where the new processors should jump to.
-    //
-
-    HlProcessorInitializationRoutine = InitializationRoutine;
 
     //
     // Loop through each processor and start it.
@@ -453,14 +388,13 @@ Return Value:
         Controller = HlpInterruptGetProcessorController(Processor);
         Context = Controller->PrivateContext;
         Identifier = HlProcessorTargets[Processor].PhysicalId;
-        LaunchCountBefore = HlProcessorsLaunched;
 
         //
         // Prepare the kernel for the new processor coming online.
         //
 
-        HlProcessorStartBlock = KePrepareForProcessorLaunch();
-        if (HlProcessorStartBlock == NULL) {
+        StartBlock = KePrepareForProcessorLaunch();
+        if (StartBlock == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto StartAllProcessorsEnd;
         }
@@ -471,11 +405,10 @@ Return Value:
         //
 
         Enabled = ArDisableInterrupts();
-        Status = HlpInterruptPrepareForProcessorStart(
-                            Identifier,
-                            HlProcessorTargets[Processor].ParkedVirtualAddress,
-                            PhysicalJumpAddress,
-                            VirtualJumpAddress);
+        Status = HlpInterruptPrepareForProcessorStart(Processor,
+                                                      StartBlock,
+                                                      StartRoutine,
+                                                      &PhysicalJumpAddress);
 
         if (!KSUCCESS(Status)) {
             goto StartAllProcessorsEnd;
@@ -487,8 +420,7 @@ Return Value:
 
         Status = Controller->FunctionTable.StartProcessor(Context,
                                                           Identifier,
-                                                          PhysicalJumpAddress,
-                                                          VirtualJumpAddress);
+                                                          PhysicalJumpAddress);
 
         if (Enabled != FALSE) {
             ArEnableInterrupts();
@@ -511,20 +443,22 @@ Return Value:
         // Wait for the processor to start up.
         //
 
-        while (HlProcessorsLaunched == LaunchCountBefore) {
+        while (StartBlock->Started == FALSE) {
             ArProcessorYield();
             if (HlQueryTimeCounter() >= GiveUpTime) {
                 break;
             }
         }
 
-        if (HlProcessorsLaunched == LaunchCountBefore) {
+        if (StartBlock->Started == FALSE) {
             KeCrashSystem(CRASH_HARDWARE_LAYER_FAILURE,
                           HL_CRASH_PROCESSOR_WONT_START,
                           Processor,
                           (UINTN)Controller,
                           (UINTN)&(HlProcessorTargets[Processor]));
         }
+
+        ProcessorsLaunched += 1;
     }
 
     Status = STATUS_SUCCESS;
@@ -534,21 +468,14 @@ StartAllProcessorsEnd:
         ArEnableInterrupts();
     }
 
-    HlProcessorInitializationRoutine = NULL;
     if (!KSUCCESS(Status)) {
-        if (HlProcessorStartBlock != NULL) {
-            KeFreeProcessorStartBlock(HlProcessorStartBlock, TRUE);
-            HlProcessorStartBlock = NULL;
+        if (StartBlock != NULL) {
+            KeFreeProcessorStartBlock(StartBlock, TRUE);
+            StartBlock = NULL;
         }
     }
 
-    if (VirtualJumpAddress != NULL) {
-        HlpInterruptDestroyStartupStub(PhysicalJumpAddress,
-                                       VirtualJumpAddress,
-                                       TrampolinePageCount);
-    }
-
-    *ProcessorsStarted = HlProcessorsLaunched;
+    *ProcessorsStarted = ProcessorsLaunched;
     return Status;
 }
 

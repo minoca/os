@@ -25,6 +25,7 @@ Environment:
 //
 
 #include <minoca/kernel.h>
+#include <minoca/bootload.h>
 #include <minoca/x86.h>
 #include "../intrupt.h"
 
@@ -59,33 +60,41 @@ extern CHAR HlpTrampolineCodeEnd;
 extern PVOID *HlTrampolineCr3;
 
 //
+// Store a pointer to the virtual address (and physical address) of the
+// identity mapped region used to bootstrap initializing and resuming
+// processors.
+//
+
+PVOID HlIdentityStub = (PVOID)-1;
+
+//
+// Store a pointer to the processor context for the processor currently
+// starting up. Having a single global pointer like this means x86 must
+// serialize bringing processors online. Fortunately this is natural for x86,
+// since on both boot and resume the BSP comes up and then it brings the APs up.
+//
+
+PPROCESSOR_CONTEXT HlProcessorStartContext;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
 KSTATUS
-HlpInterruptPrepareStartupStub (
-    PPHYSICAL_ADDRESS JumpAddressPhysical,
-    PVOID *JumpAddressVirtual,
-    PULONG PagesAllocated
+HlpInterruptPrepareIdentityStub (
+    VOID
     )
 
 /*++
 
 Routine Description:
 
-    This routine prepares the startup stub trampoline, used to bootstrap
-    embryonic processors into the kernel.
+    This routine prepares the identity mapped trampoline, used to bootstrap
+    initializing and resuming processors coming from physical mode.
 
 Arguments:
 
-    JumpAddressPhysical - Supplies a pointer that will receive the physical
-        address the new processor(s) should jump to.
-
-    JumpAddressVirtual - Supplies a pointer that will receive the virtual
-        address the new processor(s) should jump to.
-
-    PagesAllocated - Supplies a pointer that will receive the number of pages
-        needed to create the startup stub.
+    None.
 
 Return Value:
 
@@ -101,6 +110,10 @@ Return Value:
     KSTATUS Status;
     PVOID TrampolineCode;
     ULONG TrampolineCodeSize;
+
+    if (HlIdentityStub != (PVOID)-1) {
+        return STATUS_SUCCESS;
+    }
 
     TrampolineCode = NULL;
 
@@ -140,18 +153,14 @@ Return Value:
     //
 
     *PageDirectoryPointer = CurrentPageDirectory;
-    *JumpAddressPhysical = (PHYSICAL_ADDRESS)(UINTN)TrampolineCode;
-    *JumpAddressVirtual = TrampolineCode;
-    *PagesAllocated = TRAMPOLINE_PAGE_COUNT;
+    HlIdentityStub = TrampolineCode;
     Status = STATUS_SUCCESS;
     return Status;
 }
 
 VOID
-HlpInterruptDestroyStartupStub (
-    PHYSICAL_ADDRESS JumpAddressPhysical,
-    PVOID JumpAddressVirtual,
-    ULONG PageCount
+HlpInterruptDestroyIdentityStub (
+    VOID
     )
 
 /*++
@@ -163,11 +172,7 @@ Routine Description:
 
 Arguments:
 
-    JumpAddressPhysical - Supplies the physical address of the startup stub.
-
-    JumpAddressVirtual - Supplies the virtual address of the startup stub.
-
-    PageCount - Supplies the number of pages in the startup stub.
+    None.
 
 Return Value:
 
@@ -177,16 +182,17 @@ Return Value:
 
 {
 
-    MmUnmapStartupStub(JumpAddressVirtual, PageCount);
+    MmUnmapStartupStub(HlIdentityStub, TRAMPOLINE_PAGE_COUNT);
+    HlIdentityStub = NULL;
     return;
 }
 
 KSTATUS
 HlpInterruptPrepareForProcessorStart (
-    ULONG ProcessorPhysicalIdentifier,
-    PVOID ParkedAddressMapping,
-    PHYSICAL_ADDRESS PhysicalJumpAddress,
-    PVOID VirtualJumpAddress
+    ULONG ProcessorIndex,
+    PPROCESSOR_START_BLOCK StartBlock,
+    PPROCESSOR_START_ROUTINE StartRoutine,
+    PPHYSICAL_ADDRESS PhysicalStart
     )
 
 /*++
@@ -198,17 +204,15 @@ Routine Description:
 
 Arguments:
 
-    ProcessorPhysicalIdentifier - Supplies the physical ID of the processor that
-        is about to be started.
+    ProcessorIndex - Supplies the index of the processor to start.
 
-    ParkedAddressMapping - Supplies a pointer to the mapping to the processor's
-        parked physical address.
+    StartBlock - Supplies a pointer to the processor start block.
 
-    PhysicalJumpAddress - Supplies the physical address of the boot code this
-        processor should jump to.
+    StartRoutine - Supplies a pointer to the routine to call on the new
+        processor.
 
-    VirtualJumpAddress - Supplies the virtual address of the boot code this
-        processor should jump to.
+    PhysicalStart - Supplies a pointer where the physical address the processor
+        should jump to upon initialization will be returned.
 
 Return Value:
 
@@ -218,6 +222,41 @@ Return Value:
 
 {
 
+    PPROCESSOR_CONTEXT ProcessorContext;
+    PVOID *StackPointer;
+
+    //
+    // Save the current processor context. Processors will not restore to here
+    // however. Use the edge of the stack as a region to store the context.
+    //
+
+    ProcessorContext = StartBlock->StackBase;
+    ArSaveProcessorContext(ProcessorContext);
+
+    //
+    // Set a dummy return address and the start block as the one argument.
+    //
+
+    StackPointer = StartBlock->StackBase + StartBlock->StackSize;
+    StackPointer -= 2;
+    StackPointer[0] = NULL;
+    StackPointer[1] = StartBlock;
+    StartBlock->StackPointer = StackPointer;
+
+    //
+    // Now modify the processor context to "restore" to the initialization
+    // routine.
+    //
+
+    ProcessorContext->Esp = (UINTN)StackPointer;
+    ProcessorContext->Eip = (UINTN)StartRoutine;
+    ProcessorContext->Ebp = 0;
+    ProcessorContext->Esi = 0;
+    ProcessorContext->Edi = 0;
+    ProcessorContext->Ebx = 0;
+    ProcessorContext->Eax = 0;
+    HlProcessorStartContext = ProcessorContext;
+    *PhysicalStart = (UINTN)HlIdentityStub;
     return STATUS_SUCCESS;
 }
 

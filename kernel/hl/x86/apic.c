@@ -169,8 +169,7 @@ KSTATUS
 HlpApicStartProcessor (
     PVOID Context,
     ULONG Identifier,
-    PHYSICAL_ADDRESS JumpAddressPhysical,
-    PVOID JumpAddressVirtual
+    PHYSICAL_ADDRESS JumpAddressPhysical
     );
 
 KSTATUS
@@ -969,8 +968,7 @@ KSTATUS
 HlpApicStartProcessor (
     PVOID Context,
     ULONG Identifier,
-    PHYSICAL_ADDRESS JumpAddressPhysical,
-    PVOID JumpAddressVirtual
+    PHYSICAL_ADDRESS JumpAddressPhysical
     )
 
 /*++

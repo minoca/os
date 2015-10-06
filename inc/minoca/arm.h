@@ -536,6 +536,12 @@ Structure Description:
 
 Members:
 
+    Pc - Stores the PC to branch to upon restore. By default this is
+        initialized to the return address of the save/restore function, though
+        it can be manipulated after the function returns.
+
+    Cpsr - Stores the program status word (processor flags and mode).
+
     R0 - Stores the R0 register, also the return value from the restore
         operation. By default this is initialized to 1.
 
@@ -566,10 +572,6 @@ Members:
         since the restore code needs a register for its operation.
 
     Sp - Stores the stack pointer.
-
-    Pc - Stores the PC to branch to upon restore. By default this is
-        initialized to the return address of the save/restore function, though
-        it can be manipulated after the function returns.
 
     VirtualAddress - Stores the virtual address of this structure member. The
         restore process might enable paging when the SCTLR is restored, so this
@@ -622,6 +624,8 @@ Members:
 --*/
 
 struct _PROCESSOR_CONTEXT {
+    ULONG Pc;
+    ULONG Cpsr;
     ULONG R0;
     ULONG R1;
     ULONG R2;
@@ -635,7 +639,6 @@ struct _PROCESSOR_CONTEXT {
     ULONG R10;
     ULONG R11;
     ULONG Sp;
-    ULONG Pc;
     ULONG VirtualAddress;
     ULONG Sctlr;
     ULONG Ttbr0;

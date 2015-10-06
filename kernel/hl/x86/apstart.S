@@ -32,14 +32,7 @@ Environment:
 ## --------------------------------------------------------------- Definitions
 ##
 
-.equ STUB_ADDRESS, 0x1000
-
-##
-## Define offsets into the PROCESSOR_START_BLOCK structure.
-##
-
-.equ PROCESSOR_START_BLOCK_STACK_BASE, 0x0
-.equ PROCESSOR_START_BLOCK_STACK_SIZE, 0x4
+#define STUB_ADDRESS 0x1000
 
 ##
 ## ---------------------------------------------------------------------- Code
@@ -72,6 +65,7 @@ HlpTrampolineCode:
 ##
 
     cli                                 # Turn off interrupts.
+    mov     $(STUB_ADDRESS + 0xFFC), %esp   # Set up a small temporary stack.
     mov     $(TemporaryGdt - HlpTrampolineCode + STUB_ADDRESS), %ebx
     lgdt    (TemporaryGdt - HlpTrampolineCode + STUB_ADDRESS)   # Load the GDT.
     movl    %cr0, %eax                  # Get the CR0 control register.
@@ -122,30 +116,22 @@ ProtectedModeCode:
 CodeInKernelAddressSpace:
 
     ##
-    ## Get the processor start block structure.
+    ## Get the processor context structure.
     ##
 
-    movl    HlProcessorStartBlock, %eax    # Get pointer to start block.
+    movl    HlProcessorStartContext, %eax   # Get pointer to context.
+    pushl   %eax                        # Push it as an argument.
+    call    ArRestoreProcessorContext   # Restore away forever.
 
     ##
-    ## Get the stack base and stack size, and set up a stack.
+    ## The restore context routine does not return, so this will never be
+    ## executed.
     ##
 
-    movl    PROCESSOR_START_BLOCK_STACK_BASE(%eax), %ebx    # Load stack base.
-    movl    PROCESSOR_START_BLOCK_STACK_SIZE(%eax), %ecx    # Load stack size.
-    addl    %ecx, %ebx                  # Get top of stack, store to ebx.
-    subl    $4, %ebx                    # Set up the stack.
-    movl    %ebx, %esp                  # Set the new stack.
-
-    ##
-    ## Call the main initialization routine. Control never returns from here.
-    ## The routine takes one parameter, a pointer to the processor start block.
-    ##
-
-    pushl   %eax                        # Push the start block parameter.
-    movl    HlProcessorInitializationRoutine, %eax   # Get init routine.
-    lock incl   HlProcessorsLaunched    # Indicate this processor has launched.
-    call    *%eax                       # Jump to it.
+HlpTrampolineImpossibleReturn:
+    int     $3
+    hlt
+    jmp     HlpTrampolineImpossibleReturn
 
 ##
 ## This data must be aligned on an 8 byte boundary.
@@ -282,7 +268,8 @@ DebugStub:
 
 ##
 ## Define a global containing the address to put into CR3, the kernel's
-## current page directory.
+## current page directory. This is a temporary CR3 used until the restore
+## context routine puts the real one in place.
 ##
 
 HlTrampolineCr3:

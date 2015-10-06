@@ -145,7 +145,7 @@ Environment:
 ## Define the size of the PROCESSOR_CONTEXT structure.
 ##
 
-#define PROCESSOR_CONTEXT_SIZE 148
+#define PROCESSOR_CONTEXT_SIZE 152
 
 ##
 ## -------------------------------------------------------------------- Macros

@@ -22,24 +22,17 @@ Environment:
 --*/
 
 ##
-## ------------------------------------------------------------------ Includes
+## ------------------------------------------------------------------- Includes
 ##
 
 #include <minoca/arm.inc>
 
 ##
-## --------------------------------------------------------------- Definitions
+## ---------------------------------------------------------------- Definitions
 ##
 
 ##
-## Define offsets into the PROCESSOR_START_BLOCK structure.
-##
-
-.equ PROCESSOR_START_BLOCK_STACK_BASE, 0x0
-.equ PROCESSOR_START_BLOCK_STACK_SIZE, 0x4
-
-##
-## ---------------------------------------------------------------------- Code
+## ----------------------------------------------------------------------- Code
 ##
 
 ASSEMBLY_FILE_HEADER
@@ -50,17 +43,40 @@ ASSEMBLY_FILE_HEADER
 ## .globl allows these labels to be visible to the linker.
 ##
 
+.globl HlpProcessorStartupEnd
 .globl HlpTrampolineCode
 .globl HlTrampolineTtbr0
 .globl HlTrampolineSystemControlRegister
 .globl HlpTrampolineCodeEnd
 
 ##
-## This represents the entrypoint for an embryonic processor trying to boot.
-## R0 should contain the physical address of this code.
+## This small amount of code lives in each processor's page, and jumps to the
+## common and identity mapped code. It's expected that at the start of the
+## page the PC is the ARM_PARKED_PAGE structure.
+##
+
+FUNCTION HlpProcessorStartup
+    mov     %r0, %pc                    @ Get the current code address.
+    lsr     %r0, %r0, #12               @ Shift down to mask off page offset.
+    lsl     %r0, %r0, #12               @ Shift back up to get page base.
+    add     %r0, %r0, #0x10             @ Get the base of the identity jump.
+    ldr     %r1, [%r0]                  @ Load the identity jump address.
+    ldr     %r0, [%r0, #4]              @ Load the processor context VA.
+    blx     %r1                         @ Jump to identity mapped code.
+
+END_FUNCTION HlpProcessorStartup
+HlpProcessorStartupEnd:
+
+##
+## This represents the entry point for an embryonic processor trying to boot or
+## resume. It takes one argument, which is a pointer to a PROCESSOR_CONTEXT
+## structure to pass into the restore context routine.
 ##
 
 HlpTrampolineCode:
+    mov     %r1, %pc                    @ Get the current code address.
+    sub     %r1, %r1, #8                @ Subtract to get the start address.
+    mov     %r6, %r0                    @ Save processor context in R6.
 
     ##
     ## Disable interrupts and switch to SVC mode.
@@ -80,7 +96,7 @@ HlpTrampolineCode:
     ## Clear the TLB.
     ##
 
-    mcr     p15, 0, %r0, c8, c7, 0      @ Clear the TLB.
+    mcr     p15, 0, %r0, c8, c7, 0      @ TLBIALL, clear entire TLB.
 
     ##
     ## Write to CONTEXTIDR to set the ASID to 0, which must be consistent
@@ -88,27 +104,24 @@ HlpTrampolineCode:
     ##
 
     mov     %r4, #0
-    mcr     p15, 0, %r0, c13, c0, 1     @ Clear CONTEXTIDR
-    mcr     p15, 0, %r0, c2, c0, 1      @ Clear TTBR1
-    mcr     p15, 0, %r0, c5, c0, 0      @ Clear DFSR
-    mcr     p15, 0, %r0, c5, c0, 1      @ Clear IFSR
-    mcr     p15, 0, %r0, c6, c0, 0      @ Clear DFAR
-    mcr     p15, 0, %r0, c6, c0, 2      @ Clear IFAR
+    mcr     p15, 0, %r4, c13, c0, 1     @ Clear CONTEXTIDR.
+    mcr     p15, 0, %r4, c2, c0, 1      @ Clear TTBR1
 
     ##
-    ## Stash R0 into R12 temporarily while this function is called. Normally
-    ## R12 is volatile, but this upcoming "function" uses no stack and only
-    ## trashes specific registers.
+    ## Stash some variables into registers not trashed by the invalidate data
+    ## function.
+    ## R1 -> R12 - Trampoline code base address.
+    ## R6 - Processor context pointer.
     ##
 
-    mov     %r12, %r0
+    mov     %r12, %r1                   @ Save R1 into R12.
 
     ##
     ## Invalidate the entire data cache.
     ##
 
     bl      HlpInvalidateDataCache
-    mov     %r0, %r12                   @ Restore R0.
+    mov     %r0, %r12                   @ Restore trampoline base address.
 
     ##
     ## Load the variables. These must be relative loads to work, as the actual
@@ -139,6 +152,8 @@ HlpTrampolineCode:
 
     ##
     ## Load the TTBR0 and then SCTLR registers up. This enables translation.
+    ## It's necessary to get into some valid kernel address space so that
+    ## restore processor context can actually be called.
     ##
 
     mcr     p15, 0, %r1, c2, c0, 0      @ Load up TTBR0.
@@ -155,64 +170,29 @@ HlpTrampolineCode:
     ## again now that translation is enabled.
     ##
 
-    mcr     p15, 0, %r1, c7, c5, 0      @ ICIALLU, Invalidate I-Cache.
-    mcr     p15, 0, %r1, c7, c5, 6      @ BPIALL, Invalidate Branch Predictor.
-    mcr     p15, 0, %r1, c8, c7, 0      @ Clear the TLB.
+    mcr     p15, 0, %r0, c7, c5, 0      @ ICIALLU, Invalidate I-Cache.
+    mcr     p15, 0, %r0, c7, c5, 6      @ BPIALL, Invalidate Branch Predictor.
+    mcr     p15, 0, %r0, c8, c7, 0      @ Clear the TLB, TLBIALL.
     mcr     p15, 0, %r1, %cr7, %cr5, 4  @ Instruction Synchronization barrier.
 
     ##
-    ## Get the processor start block structure.
+    ## Restore the real processor context. Do an absolute load instead of a
+    ## relative branch with link because this code has been relocated.
     ##
 
-    ldr     %r0, =HlProcessorStartBlock @ Get address of start block variable.
-    ldr     %r0, [%r0]                  @ Get the value of the variable.
+    mov     %r0, %r6                    @ Set up PROCESSOR_CONTEXT parameter.
+    ldr     %r1, =ArRestoreProcessorContext @ Get the absolute function address.
+    bx      %r1                         @ Restore context. Does not return.
 
     ##
-    ## Get the stack base and stack size, and set up a stack.
+    ## The restore context function does not return, so this code below will
+    ## never run.
     ##
 
-    ldr     %r1, [%r0, #PROCESSOR_START_BLOCK_STACK_BASE]   @ Load stack base.
-    ldr     %r2, [%r0, #PROCESSOR_START_BLOCK_STACK_SIZE]   @ Load stack size.
-    add     %sp, %r1, %r2               @ Load the top of the stack.
-    sub     %sp, %sp, #4                @ Adjust by a word.
-
-    ##
-    ## Get off of the temporarily mapped startup stub and move to the original
-    ## (and permanent) mapping of this code.
-    ##
-
-    ldr     %r7, =HlpTrampolineCodeAtOriginalLocation @ Get original location
-    bx      %r7                         @ Jump to non identity mapped version.
-
-HlpTrampolineCodeAtOriginalLocation:
-
-    ##
-    ## Grab the address of the initialization routine before declaring
-    ## victory (and allowing the processor starting this one to clear that
-    ## variable).
-    ##
-
-    ldr     %lr, =HlProcessorInitializationRoutine
-    ldr     %lr, [%lr]                  @ Get the value in the pointer.
-
-    ##
-    ## Increment the processors launched variable to let the hardware library
-    ## know this processor is alive.
-    ##
-
-    ldr     %r3, =HlProcessorsLaunched
-    ldr     %r4, [%r3]
-    add     %r4, %r4, #1
-    str     %r4, [%r3]
-    mov     %r1, #0
-    mcr     p15, 0, %r1, %cr7, %cr10, 4 @ Data Synchronization barrier.
-
-    ##
-    ## Call the main initialization routine. The routine takes one parameter,
-    ## a pointer to the processor start block, which is already in R0.
-    ##
-
-    bx      %lr                         @ Jump to that routine.
+HlpTrampolineCodeImpossibleReturn:
+    DEBUGGER_BREAK
+    wfi
+    b       HlpTrampolineCodeImpossibleReturn
 
 ##
 ## --------------------------------------------------------- Internal Functions
@@ -229,9 +209,9 @@ HlpTrampolineCodeAtOriginalLocation:
 
 Routine Description:
 
-    This routine invalidates the entire data cache by Set/Way. This "function"
-    requires no stack, but does corrupt non-volatile registers. This function
-    is taken from the ARM Architecture Reference Manual.
+    This routine invalidates the entire data cache by Set/Way up to the point
+    of unification inner-shareable. This "function" requires no stack. This
+    function is taken from the ARM Architecture Reference Manual.
 
 Arguments:
 

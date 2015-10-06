@@ -958,8 +958,7 @@ KSTATUS
 (*PINTERRUPT_START_PROCESSOR) (
     PVOID Context,
     ULONG Identifier,
-    PHYSICAL_ADDRESS JumpAddressPhysical,
-    PVOID JumpAddressVirtual
+    PHYSICAL_ADDRESS JumpAddressPhysical
     );
 
 /*++
@@ -977,9 +976,6 @@ Arguments:
 
     JumpAddressPhysical - Supplies the physical address of the location that
         new processor should jump to.
-
-    JumpAddressVirtual - Supplies the virtual address corresponding to the
-        physical address that the processor should jump to.
 
 Return Value:
 

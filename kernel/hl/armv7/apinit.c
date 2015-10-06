@@ -25,6 +25,7 @@ Environment:
 //
 
 #include <minoca/kernel.h>
+#include <minoca/bootload.h>
 #include <minoca/arm.h>
 #include "../intrupt.h"
 
@@ -38,8 +39,66 @@ Environment:
 
 #define TRAMPOLINE_PAGE_COUNT 1
 
-#define ARM_PARKED_PROCESSOR_ID_OFFSET 0
-#define ARM_PARKED_PROCESSOR_JUMP_ADDRESS_OFFSET 8
+//
+// Define the size of the OS code region of the processor parked page. The OS
+// has the first half of the page (2k, minus the MP protocol defined regions,
+// and minus the saved processor context).
+//
+
+#define ARM_PARKED_PAGE_OS_CODE_SIZE 0x100
+
+//
+// Define the total size of the OS portion of the parked page.
+//
+
+#define ARM_PARKED_PAGE_OS_SIZE 0x800
+
+/*++
+
+Structure Description:
+
+    This structure describes the format of the page that ARM secondary
+    processors are parked on. Some of this is defined with the firmware, and
+    some of it is OS-specific. Many if not all of these structure members are
+    accessed directly by assembly code.
+
+Members:
+
+    ProcessorId - Stores the processor ID of the processor. This is defined by
+        the MP parking protocol, which uses this as an identifier to indicate
+        if the jump address is valid.
+
+    Reserved - Stores a reserved byte, for alignment and possible expansion of
+        the processor ID field.
+
+    JumpAddress - Stores the physical address to jump to when the processor is
+        coming out of the parking protocol. This is defined by the MP parking
+        protocol.
+
+    IdentityPagePhysical - Stores the physical address of the identity mapped
+        page to jump to. This is OS-specific, and is used directly by assembly
+        code.
+
+    ContextVirtual - Stores the virtual address of the processor context
+        structure below.
+
+    ProcessorContext - Stores the processor context saved for this processor
+        when it was going down. This is OS-specific. This is OS-specific, and
+        is used directly by assembly code.
+
+    OsCode - Stores the OS region for bootstrap code. This is OS-specific.
+
+--*/
+
+typedef struct _ARM_PARKED_PAGE {
+    ULONG ProcessorId;
+    ULONG Reserved;
+    ULONGLONG JumpAddress;
+    ULONG IdentityPagePhysical;
+    PVOID ContextVirtual;
+    PROCESSOR_CONTEXT ProcessorContext;
+    UCHAR OsCode[ARM_PARKED_PAGE_OS_CODE_SIZE];
+} ARM_PARKED_PAGE, *PARM_PARKED_PAGE;
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -54,43 +113,51 @@ Environment:
 // end.
 //
 
+extern PVOID HlpProcessorStartup;
+extern PVOID HlpProcessorStartupEnd;
 extern PVOID HlpTrampolineCode;
 extern PVOID HlTrampolineTtbr0;
 extern PVOID HlTrampolineSystemControlRegister;
 extern PVOID HlpTrampolineCodeEnd;
+
+VOID
+HlpInterruptArmReleaseParkedProcessor (
+    PARM_PARKED_PAGE ParkedPage,
+    ULONG PhysicalJumpAddress,
+    ULONG ProcessorIdentifier
+    );
 
 //
 // -------------------------------------------------------------------- Globals
 //
 
 //
+// Store a pointer to the virtual address (and physical address) of the
+// identity mapped region used to bootstrap initializing and resuming
+// processors.
+//
+
+PVOID HlIdentityStub = (PVOID)-1;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
 KSTATUS
-HlpInterruptPrepareStartupStub (
-    PPHYSICAL_ADDRESS JumpAddressPhysical,
-    PVOID *JumpAddressVirtual,
-    PULONG PagesAllocated
+HlpInterruptPrepareIdentityStub (
+    VOID
     )
 
 /*++
 
 Routine Description:
 
-    This routine prepares the startup stub trampoline, used to bootstrap
-    embryonic processors into the kernel.
+    This routine prepares the identity mapped trampoline, used to bootstrap
+    initializing and resuming processors coming from physical mode.
 
 Arguments:
 
-    JumpAddressPhysical - Supplies a pointer that will receive the physical
-        address the new processor(s) should jump to.
-
-    JumpAddressVirtual - Supplies a pointer that will receive the virtual
-        address the new processor(s) should jump to.
-
-    PagesAllocated - Supplies a pointer that will receive the number of pages
-        needed to create the startup stub.
+    None.
 
 Return Value:
 
@@ -109,6 +176,10 @@ Return Value:
     PULONG SystemControlPointer;
     PVOID TrampolineCode;
     ULONG TrampolineCodeSize;
+
+    if (HlIdentityStub != (PVOID)-1) {
+        return STATUS_SUCCESS;
+    }
 
     PageSize = MmPageSize();
     TrampolineCode = NULL;
@@ -166,18 +237,14 @@ Return Value:
     // Return the needed information.
     //
 
-    *JumpAddressPhysical = (PHYSICAL_ADDRESS)(UINTN)TrampolineCode;
-    *JumpAddressVirtual = TrampolineCode;
-    *PagesAllocated = TRAMPOLINE_PAGE_COUNT;
+    HlIdentityStub = TrampolineCode;
     Status = STATUS_SUCCESS;
     return Status;
 }
 
 VOID
-HlpInterruptDestroyStartupStub (
-    PHYSICAL_ADDRESS JumpAddressPhysical,
-    PVOID JumpAddressVirtual,
-    ULONG PageCount
+HlpInterruptDestroyIdentityStub (
+    VOID
     )
 
 /*++
@@ -189,11 +256,7 @@ Routine Description:
 
 Arguments:
 
-    JumpAddressPhysical - Supplies the physical address of the startup stub.
-
-    JumpAddressVirtual - Supplies the virtual address of the startup stub.
-
-    PageCount - Supplies the number of pages in the startup stub.
+    None.
 
 Return Value:
 
@@ -203,16 +266,16 @@ Return Value:
 
 {
 
-    MmUnmapStartupStub(JumpAddressVirtual, PageCount);
+    MmUnmapStartupStub(HlIdentityStub, TRAMPOLINE_PAGE_COUNT);
     return;
 }
 
 KSTATUS
 HlpInterruptPrepareForProcessorStart (
-    ULONG ProcessorPhysicalIdentifier,
-    PVOID ParkedAddressMapping,
-    PHYSICAL_ADDRESS PhysicalJumpAddress,
-    PVOID VirtualJumpAddress
+    ULONG ProcessorIndex,
+    PPROCESSOR_START_BLOCK StartBlock,
+    PPROCESSOR_START_ROUTINE StartRoutine,
+    PPHYSICAL_ADDRESS PhysicalStart
     )
 
 /*++
@@ -224,17 +287,15 @@ Routine Description:
 
 Arguments:
 
-    ProcessorPhysicalIdentifier - Supplies the physical ID of the processor that
-        is about to be started.
+    ProcessorIndex - Supplies the index of the processor to start.
 
-    ParkedAddressMapping - Supplies a pointer to the mapping to the processor's
-        parked physical address.
+    StartBlock - Supplies a pointer to the processor start block.
 
-    PhysicalJumpAddress - Supplies the physical address of the boot code this
-        processor should jump to.
+    StartRoutine - Supplies a pointer to the routine to call on the new
+        processor.
 
-    VirtualJumpAddress - Supplies the virtual address of the boot code this
-        processor should jump to.
+    PhysicalStart - Supplies a pointer where the physical address the processor
+        should jump to upon initialization will be returned.
 
 Return Value:
 
@@ -244,10 +305,49 @@ Return Value:
 
 {
 
-    PULONGLONG JumpAddressRegister;
-    PULONG ProcessorIdRegister;
+    UINTN CopyEnd;
+    UINTN CopySize;
+    UINTN CopyStart;
+    PARM_PARKED_PAGE ParkedPage;
+    ULONG ParkedPagePhysical;
 
-    ASSERT(ParkedAddressMapping != NULL);
+    ParkedPage = HlProcessorTargets[ProcessorIndex].ParkedVirtualAddress;
+    ParkedPagePhysical =
+                      HlProcessorTargets[ProcessorIndex].ParkedPhysicalAddress;
+
+    ASSERT(ParkedPage != NULL);
+
+    //
+    // Save the current processor context, although the secondary processor
+    // will not restore back to here.
+    //
+
+    StartBlock->StackPointer = StartBlock->StackBase + StartBlock->StackSize;
+    ArSaveProcessorContext(&(ParkedPage->ProcessorContext));
+    ParkedPage->ProcessorContext.Sp = (UINTN)(StartBlock->StackPointer);
+    ParkedPage->ProcessorContext.Pc = (UINTN)StartRoutine;
+    ParkedPage->ProcessorContext.R0 = (UINTN)StartBlock;
+    ParkedPage->ProcessorContext.R4 = ProcessorIndex;
+    ParkedPage->ProcessorContext.R5 = 0xDEADBEEF;
+    ParkedPage->ProcessorContext.R11 = 0;
+    ParkedPage->ProcessorContext.Tpidrprw = 0;
+    ParkedPage->ProcessorContext.Pmccntr = 0;
+    *PhysicalStart = ParkedPagePhysical + FIELD_OFFSET(ARM_PARKED_PAGE, OsCode);
+
+    //
+    // Copy the small amount of code into the parked page.
+    //
+
+    CopyStart = (UINTN)&HlpProcessorStartup & ~ARM_THUMB_BIT;
+    CopyEnd = (UINTN)&HlpProcessorStartupEnd & ~ARM_THUMB_BIT;
+    CopySize = CopyEnd - CopyStart;
+
+    ASSERT(CopySize <= ARM_PARKED_PAGE_OS_CODE_SIZE);
+    ASSERT(sizeof(ARM_PARKED_PAGE) <= ARM_PARKED_PAGE_OS_SIZE);
+
+    RtlCopyMemory(&(ParkedPage->OsCode), (PVOID)CopyStart, CopySize);
+    ParkedPage->IdentityPagePhysical = (UINTN)HlIdentityStub;
+    ParkedPage->ContextVirtual = &(ParkedPage->ProcessorContext);
 
     //
     // Assert that this thread isn't wandering around processors while this
@@ -267,21 +367,62 @@ Return Value:
     HlFlushCache(HL_CACHE_FLAG_CLEAN);
 
     //
-    // Write the jump address first, then the processor number.
+    // Make the core jump to the spot of code within the page itself (which
+    // then jumps to the identity mapped page for real initialization).
     //
 
-    JumpAddressRegister = ParkedAddressMapping +
-                          ARM_PARKED_PROCESSOR_JUMP_ADDRESS_OFFSET;
+    HlpInterruptArmReleaseParkedProcessor(
+                                ParkedPage,
+                                *PhysicalStart,
+                                HlProcessorTargets[ProcessorIndex].PhysicalId);
 
-    *JumpAddressRegister = PhysicalJumpAddress;
-    RtlMemoryBarrier();
-    ProcessorIdRegister = ParkedAddressMapping + ARM_PARKED_PROCESSOR_ID_OFFSET;
-    *ProcessorIdRegister = ProcessorPhysicalIdentifier;
-    RtlMemoryBarrier();
     return STATUS_SUCCESS;
 }
 
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+HlpInterruptArmReleaseParkedProcessor (
+    PARM_PARKED_PAGE ParkedPage,
+    ULONG PhysicalJumpAddress,
+    ULONG ProcessorIdentifier
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs the ARM parking protocol ceremony to release a
+    parked processor.
+
+Arguments:
+
+    ParkedPage - Supplies the virtual address of the parked page mapping for
+        the desired processor.
+
+    PhysicalJumpAddress - Supplies the 32-bit physical address to jump to.
+
+    ProcessorIdentifier - Supplies the processor identifier of the processor
+        to boot.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // Write the jump address first, then the processor number.
+    //
+
+    ParkedPage->JumpAddress = PhysicalJumpAddress;
+    ArSerializeExecution();
+    ParkedPage->ProcessorId = ProcessorIdentifier;
+    RtlMemoryBarrier();
+    return;
+}
 

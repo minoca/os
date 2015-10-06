@@ -118,6 +118,28 @@ Return Value:
 
 --*/
 
+typedef
+VOID
+(*PPROCESSOR_START_ROUTINE) (
+    PPROCESSOR_START_BLOCK StartBlock
+    );
+
+/*++
+
+Routine Description:
+
+    This routine represents a prototype for a processor initialization routine.
+
+Arguments:
+
+    StartBlock - Supplies a pointer to the processor start block.
+
+Return Value:
+
+    None. This routine does not return.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -666,7 +688,7 @@ Return Value:
 
 KSTATUS
 HlStartAllProcessors (
-    PVOID InitializationRoutine,
+    PPROCESSOR_START_ROUTINE StartRoutine,
     PULONG ProcessorsStarted
     );
 
@@ -678,10 +700,11 @@ Routine Description:
 
 Arguments:
 
-    InitializationRoutine - Supplies the routine the processors should jump to.
+    StartRoutine - Supplies the routine the processors should jump to.
 
     ProcessorsStarted - Supplies a pointer where the number of processors
-        started will be returned (the total number of processors in the system).
+        started will be returned (the total number of processors in the system,
+        including the boot processor).
 
 Return Value:
 

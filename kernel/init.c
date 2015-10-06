@@ -451,6 +451,13 @@ Return Value:
     KSTATUS Status;
 
     //
+    // Mark the core as started.
+    //
+
+    StartBlock->Started = TRUE;
+    RtlMemoryBarrier();
+
+    //
     // Wait here until P0 says it's okay to initialize. This barrier allows
     // all processors to get out of the stub code as quickly as possible and
     // not have to worry about contending for non-paged pool locks while
