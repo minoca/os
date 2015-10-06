@@ -70,7 +70,7 @@ Return Value:
 --*/
 
 FUNCTION KdpAtomicCompareExchange32
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrex   %r3, [%r0]                          @ Get *Address exclusive.
     cmp     %r3, %r2                            @ Compare to CompareValue
     bne     KdpAtomicCompareExchange32End1      @ If not equal, exit with clrex.
@@ -91,7 +91,7 @@ KdpAtomicCompareExchange32End1:
 
 KdpAtomicCompareExchange32End2:
     mov     %r0, %r3                            @ Move loaded value to R0.
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     bx      %lr                                 @ Return R0.
 
 END_FUNCTION KdpAtomicCompareExchange32
@@ -123,14 +123,14 @@ Return Value:
 --*/
 
 FUNCTION KdpAtomicAdd32
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrex   %r2, [%r0]                          @ Get *Address exclusive.
     add     %r3, %r2, %r1                       @ Add increment.
     strex   %r12, %r3, [%r0]                    @ Exclusively store the result.
     cmp     %r12, #0                            @ R12 is 0 on success.
     bne     KdpAtomicAdd32                      @ Try again if store failed.
     mov     %r0, %r2                            @ Return original value.
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     bx      %lr                                 @ Return.
 
 END_FUNCTION KdpAtomicAdd32

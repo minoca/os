@@ -39,7 +39,7 @@ ARMV7_OBJS = armv7/kdarch.o        \
              boot/armv7/kdatomic.o \
 
 ARMV6_OBJS = armv7/kdarch.o        \
-             armv6/kdsup.o         \
+             armv7/kdsup.o         \
              armv6/kdsupc.o        \
              boot/armv7/kdatomic.o \
 

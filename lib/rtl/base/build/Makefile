@@ -46,7 +46,7 @@ ifeq (, $(filter softfp.o,$(OBJS)))
 OBJS += softfp.o
 endif
 
-EXTRA_SRC_DIRS = x86 x64 armv7 armv6
+EXTRA_SRC_DIRS = x86 x64 armv7
 
 include $(SRCROOT)/os/minoca.mk
 

@@ -36,7 +36,6 @@ Environment:
 ##
 
 ASSEMBLY_FILE_HEADER
-.cpu arm1176jz-s
 
 ##
 ## VOID

@@ -38,8 +38,6 @@ Environment:
 ##
 
 ASSEMBLY_FILE_HEADER
-.arch armv7-a
-.arch_extension sec
 
 ##
 ## .globl allows these labels to be visible to the linker.
@@ -74,7 +72,7 @@ Return Value:
 --*/
 
 FUNCTION EfipRk32SendEvent
-    dsb                             @ Data Synchronization Barrier.
+    DSB                             @ Data Synchronization Barrier.
     sev                             @ Send Event.
     bx      %lr                     @ Return.
 
@@ -116,8 +114,8 @@ EfipRk32ProcessorStartup:
     ldr     %r1, =CORTEX_A17_AUX_SMP_ENABLE
     orr     %r0, %r0, %r1
     mcr     p15, 0, %r0, %cr1, %cr0, 1
-    dsb
-    isb
+    DSB
+    ISB
 
     ##
     ## Initialize the local GIC CPU interface by setting the lowest priority
@@ -175,7 +173,7 @@ Return Value:
 --*/
 
 EfipRk32ParkingLoop:
-    dsb                                     @ Data synchronization barrier.
+    DSB                                     @ Data synchronization barrier.
     ldr     %r2, [%r1]                      @ Read the processor ID.
     cmp     %r0, %r2                        @ Compare to this processor ID.
     beq     EfipRk32ParkingLoopJump         @ Move to the jump if it's real.
@@ -186,7 +184,7 @@ EfipRk32ParkingLoopJump:
     ldr     %r2, [%r1, #8]                  @ Get the jump address.
     mov     %r3, #0                         @ Clear R3.
     str     %r3, [%r1, #8]                  @ Store zero into jump address.
-    dsb                                     @ One final breath, then...
+    DSB                                     @ One final breath, then...
     bx      %r2                             @ Jump head first into the abyss.
 
 ##

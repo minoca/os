@@ -36,8 +36,6 @@ Environment:
 ##
 
 ASSEMBLY_FILE_HEADER
-.arch armv7-a
-.arch_extension sec
 
 ##
 ## .globl allows these labels to be visible to the linker.
@@ -72,7 +70,7 @@ Return Value:
 --*/
 
 FUNCTION EfipBcm2836SendEvent
-    dsb                             @ Data Synchronization Barrier.
+    DSB                             @ Data Synchronization Barrier.
     sev                             @ Send Event.
     bx      %lr                     @ Return.
 
@@ -112,7 +110,7 @@ EfipBcm2836ProcessorStartup:
     str     %r3, [%r1]                      @ Zero the value.
 
 EfipBcm2836ProcessorStartupLoop:
-    dsb                                     @ Data synchronization barrier.
+    DSB                                     @ Data synchronization barrier.
     ldr     %r2, [%r1]                      @ Load the processor ID.
     cmp     %r0, %r2
     beq     EfipBcm2836ProcessorStartupEnd  @ Move to the jump if it's real.
@@ -125,7 +123,7 @@ EfipBcm2836ProcessorStartupEnd:
     str     %r3, [%r1]                      @ Store zero into jump address.
     ldr     %r3, =0xFFFFF000                @ Get the page mask.
     and     %r1, %r2, %r3                   @ Set the parking location.
-    dsb                                     @ One final breath, then...
+    DSB                                     @ One final breath, then...
     bx      %r2                             @ Jump head first into the abyss.
 
 .ltorg
@@ -157,7 +155,7 @@ Return Value:
 --*/
 
 EfipBcm2836ParkingLoop:
-    dsb                                     @ Data synchronization barrier.
+    DSB                                     @ Data synchronization barrier.
     ldr     %r2, [%r1]                      @ Read the processor ID.
     cmp     %r0, %r2                        @ Compare to this processor ID.
     beq     EfipBcm2836ParkingLoopJump      @ Move to the jump if it's real.
@@ -168,7 +166,7 @@ EfipBcm2836ParkingLoopJump:
     ldr     %r2, [%r1, #8]                  @ Get the jump address.
     mov     %r3, #0                         @ Clear R3.
     str     %r3, [%r1, #8]                  @ Store zero into jump address.
-    dsb                                     @ One final breath, then...
+    DSB                                     @ One final breath, then...
     bx      %r2                             @ Jump head first into the abyss.
 
 ##

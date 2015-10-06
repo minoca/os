@@ -37,8 +37,6 @@ Environment:
 
 ASSEMBLY_FILE_HEADER
 
-.arch armv7-a
-
 ##
 ## VOID
 ## BoInvalidateEntireCache (
@@ -77,7 +75,7 @@ BoInvalidateEntireCacheLoop1:
     cmp     %r1, #2                      @ Check to see if there's no cache or
     blt     BoInvalidateEntireCacheSkip  @ only instruction cache at this level.
     mcr     p15, 2, %r10, c0, c0, 0      @ Write CSSELR from R10.
-    isb                                  @ ISB to sync the change to CCSIDR.
+    ISB                                  @ ISB to sync the change to CCSIDR.
     mrc     p15, 1, %r1, c0, c0, 0       @ Read current CCSIDR
     and     %r2, %r1, #7                 @ Extract the line length field.
     add     %r2, %r2, #4                 @ Add 4 for the line length offset
@@ -111,41 +109,10 @@ BoInvalidateEntireCacheSkip:
 BoInvalidateEntireCacheEnd:
     mcr     p15, 0, %r0, c7, c5, 0       @ Write to ICIALLU
     ldmia   %sp!, {%r4-%r11}             @ Restore non-volatile registers.
-    dsb                                  @ Data Synchronization barrier.
+    DSB                                  @ Data Synchronization barrier.
     bx      %lr
 
 END_FUNCTION BoInvalidateEntireCache
-
-##
-## VOID
-## ArSerializeExecution (
-##     VOID
-##     )
-##
-
-/*++
-
-Routine Description:
-
-    This routine acts a serializing instruction, preventing the processor
-    from speculatively executing beyond this point.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-FUNCTION ArSerializeExecution
-    dsb
-    isb
-    bx      %lr
-
-END_FUNCTION ArSerializeExecution
 
 ##
 ## ULONG

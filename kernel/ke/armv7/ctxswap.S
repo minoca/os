@@ -91,7 +91,7 @@ FUNCTION KepContextSwap
     stmdb   %sp!, {%r12}            @ Push it on the stack.
     ldr     %r4, [%sp, #FirstTime]  @ Get the FirstTime parameter.
     str     %sp, [%r0]              @ Save the old stack.
-    dmb                             @ Ensure that save completed.
+    DMB                             @ Ensure that save completed.
 
     ##
     ## Set up the new user mode thread pointer registers.
@@ -119,11 +119,11 @@ FUNCTION KepContextSwap
     beq     ContextSwapAfterTtb             @ don't set a new one.
     mcr     p15, 0, %r2, c2, c0, 0          @ Set TTBR0.
     mov     %r5, #0                         @ Get a zero register.
-    dsb                                     @ Ensure everything finished.
+    DSB                                     @ Ensure everything finished.
     mcr     p15, 0, %r5, c8, c7, 0          @ TLBIALL, Invalidate entire TLB.
     mcr     p15, 0, %r5, c7, c5, 0          @ ICIALLU, Invalidate I-Cache + BTB.
-    dsb                                     @ Ensure those operations finished.
-    isb                                     @ Instruction synchronization.
+    DSB                                     @ Ensure those operations finished.
+    ISB                                     @ Instruction synchronization.
 
 ContextSwapAfterTtb:
     bl      KepPostContextSwapWork  @ Perform post stack switch work.

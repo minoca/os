@@ -206,7 +206,40 @@ END_FUNCTION ArGetCacheTypeRegister
 
 ##
 ## VOID
-## ArInvalidateInstructionCacheLine (
+## ArInvalidateInstructionCache (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine invalidate the processor's instruction only cache, indicating
+    that a page containing code has changed.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION ArInvalidateInstructionCache
+    DSB
+    mcr     p15, 0, %r0, c7, c5, 0      @ ICIALLU, Invalidate I-Cache.
+    DSB                                 @ Make instructions finish.
+    ISB                                 @ Prevent speculative fetching.
+    bx      %lr                         @ Return
+
+END_FUNCTION ArInvalidateInstructionCache
+
+##
+## VOID
+## ArInvalidateTlbEntry (
 ##     PVOID Address
 ##     )
 ##
@@ -215,12 +248,13 @@ END_FUNCTION ArGetCacheTypeRegister
 
 Routine Description:
 
-    This routine invalidates a line in the instruction cache by virtual address.
+    This routine invalidates one TLB entry corresponding to the given virtual
+    address.
 
 Arguments:
 
-    Address - Supplies the address whose associated instruction cache line will
-        be invalidated.
+    Address - Supplies the virtual address whose associated TLB entry will be
+        invalidated.
 
 Return Value:
 
@@ -228,12 +262,129 @@ Return Value:
 
 --*/
 
-FUNCTION ArInvalidateInstructionCacheLine
-    mcr     p15, 0, %r0, %cr7, %cr5, 1          @ Write to ICIMVAU.
-    mcr     p15, 0, %r0, %cr7, %cr5, 7          @ Write to BPIMVA
+FUNCTION ArInvalidateTlbEntry
+    DSB                                         @ Ensure changes are visible.
+    mcr     p15, 0, %r0, %cr8, %cr7, 1          @ Write to TLBIMVA.
+    BPIALL                                      @ Write to BPIALL (branch pred).
+    DSB                                         @ Data synchronization barrier.
+    ISB                                         @ Instruction sync barrier.
+    bx      %lr                                 @
+
+END_FUNCTION ArInvalidateTlbEntry
+
+##
+## VOID
+## ArInvalidateEntireTlb (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine invalidates the entire TLB.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION ArInvalidateEntireTlb
+    DSB                                         @ Ensure changes are visible.
+    mcr     p15, 0, %r0, c8, c7, 0              @ TLBIALL (invalidate TLB).
+    BPIALL                                      @ Write to BPIALL (branch pred).
+    DSB                                         @ Data synchronization barrier.
+    ISB                                         @ Instruction sync barrier.
+    bx      %lr                                 @
+
+END_FUNCTION ArInvalidateEntireTlb
+
+##
+## ULONG
+## ArLockTlbEntry (
+##     ULONG TlbEntry,
+##     PVOID VirtualAddress,
+##     ULONG NextTlbEntry
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine locks a translation in the TLB. This translation will stick
+    even across total TLB invalidates.
+
+Arguments:
+
+    TlbEntry - Supplies the base and victim number of the TLB entry to lock.
+
+    VirtualAddress - Supplies the virtual address that should be locked in the
+        TLB. The association to physical address will be created by touching
+        that address, so the address had better be mapped.
+
+    NextTlbEntry - Supplies the base and victim number to set after locking the
+        entry.
+
+Return Value:
+
+    Returns the value of the lockdown register after the TLB miss was forced.
+    The lowest bit of this value should be set. If it is not, this indicates
+    that TLB lockdown is not supported.
+
+--*/
+
+FUNCTION ArLockTlbEntry
+    orr     %r0, %r0, #1                        @ Set lock flag.
+    mcr     p15, 0, %r1, %cr8, %cr7, 1          @ Invalidate the TLB entry.
+    mcr     p15, 0, %r0, %cr10, %cr0, 0         @ Write lockdown register.
+    mcr     p15, 0, %r1, %cr10, %cr1, 0         @ Prefetch data TLB.
+    ldr     %r3, [%r1]                          @ Also do standard load.
+    mrc     p15, 0, %r0, %cr10, %cr0, 0         @ Read the lockdown register.
+    bic     %r2, %r2, #1                        @ Clear lock flag.
+    mcr     p15, 0, %r2, %cr10, %cr0, 0         @ Write lockdown register.
+    DSB                                         @ Make instructions finish.
+    ISB                                         @ Prevent speculative fetching.
     bx      %lr                                 @ Return.
 
-END_FUNCTION ArInvalidateInstructionCacheLine
+END_FUNCTION ArLockTlbEntry
+
+##
+## VOID
+## ArSerializeExecution (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine acts a serializing instruction, preventing the processor
+    from speculatively executing beyond this point.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION ArSerializeExecution
+    DSB
+    ISB
+    bx      %lr
+
+END_FUNCTION ArSerializeExecution
 
 ##
 ## PVOID
@@ -497,6 +648,40 @@ FUNCTION ArProcessorYield
     bx      %lr
 
 END_FUNCTION ArProcessorYield
+
+##
+## KERNEL_API
+## VOID
+## ArWaitForInterrupt (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine halts the processor until the next interrupt comes in. This
+    routine should be called with interrupts disabled, and will return with
+    interrupts enabled.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+PROTECTED_FUNCTION ArWaitForInterrupt
+    DSB                                         @ Ensure everything is done.
+    wfi                                         @ Wait for interrupt.
+    cpsie   if                                  @ Enable interrupts.
+    bx      %lr
+
+END_FUNCTION ArWaitForInterrupt
 
 ##
 ## VOID
@@ -1558,10 +1743,10 @@ ArRestoreProcessorContextAfterActlr:
     ##
 
     mcr     p15, 0, %r0, c7, c5, 0      @ ICIALLU, Invalidate I-Cache.
-    mcr     p15, 0, %r0, c7, c5, 6      @ BPIALL, Invalidate Branch Predictor.
+    BPIALL                              @ BPIALL, Invalidate Branch Predictor.
     mcr     p15, 0, %r0, c8, c7, 0      @ Clear the TLB, TLBIALL.
-    dsb                                 @ Data synchronization barrier.
-    isb                                 @ Instruction syncrhonization barrier.
+    DSB                                 @ Data synchronization barrier.
+    ISB                                 @ Instruction syncrhonization barrier.
 
     ##
     ## Restore the general registers and jump back to the return of the

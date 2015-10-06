@@ -95,8 +95,8 @@ FUNCTION KdpCleanMemory
     mcr     p15, 0, %r0, c7, c10, 1             @ DCCMVAC, Clean the cache line.
     mov     %r0, #0                             @
     mcr     p15, 0, %r0, c7, c5, 0              @ ICIALLU, Invalidate i-cache.
-    dsb                                         @ Make instructions finish.
-    isb                                         @ Prevent speculative fetching.
+    DSB                                         @ Make instructions finish.
+    ISB                                         @ Prevent speculative fetching.
     bx      %lr                                 @
 
 END_FUNCTION KdpCleanMemory
@@ -127,8 +127,8 @@ Return Value:
 FUNCTION KdpInvalidateInstructionCache
     mov     %r0, #0                             @
     mcr     p15, 0, %r0, c7, c5, 0              @ ICIALLU - Invalidate i-cache.
-    dsb                                         @ Make instructions finish.
-    isb                                         @ Prevent speculative fetching.
+    DSB                                         @ Make instructions finish.
+    ISB                                         @ Prevent speculative fetching.
     bx      %lr                                 @
 
 END_FUNCTION KdpInvalidateInstructionCache

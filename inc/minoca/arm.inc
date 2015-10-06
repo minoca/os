@@ -148,6 +148,30 @@ Environment:
 #define PROCESSOR_CONTEXT_SIZE 152
 
 ##
+## Define the instructions for DSB/ISB, which are different in ARMv6 vs ARMv7.
+##
+
+#if __ARM_ARCH == 6
+
+#define DMB mcr     p15, 0, %r0, %cr7, %cr10, 5
+#define DSB mcr     p15, 0, %r0, %cr7, %cr10, 4
+#define ISB mcr     p15, 0, %r0, %cr7, %cr5, 4
+#define BPIALL
+
+#elif __ARM_ARCH == 7
+
+#define DMB dmb
+#define DSB dsb
+#define ISB isb
+#define BPIALL mcr     p15, 0, %r0, %cr7, %cr5, 6
+
+#else
+
+#error Unsupported ARM architecture version
+
+#endif
+
+##
 ## -------------------------------------------------------------------- Macros
 ##
 
@@ -168,6 +192,14 @@ Environment:
     .else
         .arm
     .endif
+#if __ARM_ARCH == 6
+    .cpu arm1176jz-s
+#elif __ARM_ARCH == 7
+    .arch armv7-a
+    .arch_extension sec
+#else
+#error Unsupported ARM architecture version
+#endif
 .endm
 
 ##

@@ -73,7 +73,7 @@ Return Value:
 FUNCTION HlpOmap4SmcCommand
     stmdb   sp!, {%r4-%r12, %lr}    @ Save registers.
     mov     %r12, %r2               @ Move command into place.
-    dsb                             @ Data synchronization barrier.
+    DSB                             @ Data synchronization barrier.
     smc     #0                      @ Execute the SMC instruction.
     ldmia   sp!, {%r4-%r12, %lr}    @ Restore registers.
     bx      %lr

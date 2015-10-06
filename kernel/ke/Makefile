@@ -60,8 +60,8 @@ ARMV7_OBJS = armv7/archinit.o \
              armv7/dispatch.o \
              armv7/proc.o     \
 
-ARMV6_OBJS = armv6/ctxswap.o  \
-             armv7/archinit.o \
+ARMV6_OBJS = armv7/archinit.o \
+             armv7/ctxswap.o  \
              armv7/ctxswapc.o \
              armv7/dispatch.o \
              armv7/proc.o     \

@@ -41,16 +41,10 @@ OBJS_WIDE = wprint.o   \
 ARMV7_OBJS = armv7/intrinsa.o \
              armv7/intrinsc.o \
              armv7/rtlarch.o  \
-             armv7/rtlcomm.o  \
              armv7/rtlmem.o   \
              softfp.o         \
 
-ARMV6_OBJS = armv6/rtlarch.o  \
-             armv7/intrinsa.o \
-             armv7/intrinsc.o \
-             armv7/rtlcomm.o  \
-             armv7/rtlmem.o   \
-             softfp.o         \
+ARMV6_OBJS = $(ARMV7_OBJS)
 
 X86_OBJS = x86/intrinsc.o \
            x86/rtlarch.o  \

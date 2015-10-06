@@ -36,8 +36,6 @@ Environment:
 ##
 
 ASSEMBLY_FILE_HEADER
-.arch armv7-a
-.arch_extension sec
 
 ##
 ## .globl allows these labels to be visible to the linker.
@@ -83,7 +81,7 @@ Return Value:
 FUNCTION EfipOmap4SmcCommand
     stmdb   sp!, {%r4-%r12, %lr}    @ Save registers.
     mov     %r12, %r2               @ Move command into place.
-    dsb                             @ Data synchronization barrier.
+    DSB                             @ Data synchronization barrier.
     smc     #0                      @ Execute the SMC instruction.
     ldmia   sp!, {%r4-%r12, %lr}    @ Restore registers.
     bx      %lr
@@ -115,7 +113,7 @@ Return Value:
 --*/
 
 FUNCTION EfipOmap4SendEvent
-    dsb                             @ Data Synchronization Barrier.
+    DSB                             @ Data Synchronization Barrier.
     sev                             @ Send Event.
     bx      %lr                     @ Return.
 
@@ -187,7 +185,7 @@ Return Value:
 --*/
 
 EfipOmap4ParkingLoop:
-    dsb                                     @ Data synchronization barrier.
+    DSB                                     @ Data synchronization barrier.
     ldr     %r2, [%r1]                      @ Read the processor ID.
     cmp     %r0, %r2                        @ Compare to this processor ID.
     beq     EfipOmap4ParkingLoopJump        @ Move to the jump if it's real.
@@ -198,7 +196,7 @@ EfipOmap4ParkingLoopJump:
     ldr     %r2, [%r1, #8]                  @ Get the jump address.
     mov     %r3, #0                         @ Clear R3.
     str     %r3, [%r1, #8]                  @ Store zero into jump address.
-    dsb                                     @ One final breath, then...
+    DSB                                     @ One final breath, then...
     bx      %r2                             @ Jump head first into the abyss.
 
 ##

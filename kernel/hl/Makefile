@@ -79,12 +79,12 @@ ARMV7_OBJS = armv7/am335int.o \
              armv7/b2709tmr.o \
              ns16550.o        \
 
-ARMV6_OBJS = armv6/apstart.o  \
-             armv6/archcach.o \
+ARMV6_OBJS = armv6/archcach.o \
              armv6/archdbg.o  \
              armv6/archintr.o \
              armv6/archtimr.o \
              armv6/cycsupc.o  \
+             armv7/apstart.o  \
              armv7/archrst.o  \
              armv7/apinit.o   \
              armv7/b2709int.o \

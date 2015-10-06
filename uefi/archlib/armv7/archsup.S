@@ -63,7 +63,7 @@ Return Value:
 --*/
 
 FUNCTION EfiMemoryBarrier
-    dmb
+    DMB
     bx      %lr
 
 END_FUNCTION EfiMemoryBarrier
@@ -106,7 +106,7 @@ EfipCleanEntireCacheLoop1:
     cmp     %r1, #2                     @ Check to see if there's no cache or
     blt     EfipCleanEntireCacheSkip    @ only instruction cache at this level.
     mcr     p15, 2, %r10, c0, c0, 0     @ Write CSSELR from R10.
-    isb                                 @ ISB to sync the change to CCSIDR.
+    ISB                                 @ ISB to sync the change to CCSIDR.
     mrc     p15, 1, %r1, c0, c0, 0      @ Read current CCSIDR
     and     %r2, %r1, #7                @ Extract the line length field.
     add     %r2, %r2, #4                @ Add 4 for the line length offset
@@ -140,7 +140,7 @@ EfipCleanEntireCacheSkip:
 EfipCleanEntireCacheEnd:
     mcr     p15, 0, %r0, c7, c5, 0      @ Write to ICIALLU, invalidate i-cache.
     ldmia   %sp!, {%r4-%r11}            @ Restore non-volatile registers.
-    dsb                                 @ Data Synchronization barrier.
+    DSB                                 @ Data Synchronization barrier.
     bx      %lr
 
 END_FUNCTION EfipCleanEntireCache
@@ -170,11 +170,11 @@ Return Value:
 --*/
 
 FUNCTION EfipInvalidateInstructionCache
-    dsb
+    DSB
     mcr     p15, 0, %r0, c7, c5, 0      @ ICIALLU, Invalidate I-Cache.
-    mcr     p15, 0, %r0, c7, c5, 6      @ BPIALL, Invalidate Branch Predictor.
-    dsb                                 @ Make instructions finish.
-    isb                                 @ Prevent speculative fetching.
+    BPIALL                              @ BPIALL, Invalidate Branch Predictor.
+    DSB                                 @ Make instructions finish.
+    ISB                                 @ Prevent speculative fetching.
     bx      %lr                         @ Return
 
 END_FUNCTION EfipInvalidateInstructionCache

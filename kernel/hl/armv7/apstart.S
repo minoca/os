@@ -89,7 +89,7 @@ HlpTrampolineCode:
     ##
 
     mcr     p15, 0, %r0, c7, c5, 0      @ ICIALLU, Invalidate I-Cache.
-    mcr     p15, 0, %r0, c7, c5, 6      @ BPIALL, Invalidate Branch Predictor.
+    BPIALL                              @ BPIALL, Invalidate Branch Predictor.
 
     ##
     ## Clear the TLB.
@@ -158,11 +158,11 @@ HlpTrampolineCode:
     mcr     p15, 0, %r1, c2, c0, 0      @ Load up TTBR0.
     mov     %r1, #0                     @ Load 0.
     mcr     p15, 0, %r1, c2, c0, 2      @ Set TTBCR to 0.
-    dsb                                 @ Ensure all writes have completed.
-    isb                                 @ Don't prefetch past here.
+    DSB                                 @ Ensure all writes have completed.
+    ISB                                 @ Don't prefetch past here.
     mcr     p15, 0, %r2, c1, c0, 0      @ Load up SCTLR.
-    dsb                                 @ Data Synchronization barrier.
-    isb                                 @ Instruction Synchronization barrier.
+    DSB                                 @ Data Synchronization barrier.
+    ISB                                 @ Instruction Synchronization barrier.
 
     ##
     ## Invalidate the instruction cache, branch predictory array, and TLB
@@ -170,9 +170,9 @@ HlpTrampolineCode:
     ##
 
     mcr     p15, 0, %r0, c7, c5, 0      @ ICIALLU, Invalidate I-Cache.
-    mcr     p15, 0, %r0, c7, c5, 6      @ BPIALL, Invalidate Branch Predictor.
+    BPIALL                              @ BPIALL, Invalidate Branch Predictor.
     mcr     p15, 0, %r0, c8, c7, 0      @ Clear the TLB, TLBIALL.
-    isb                                 @ Instruction syncrhonization barrier.
+    ISB                                 @ Instruction syncrhonization barrier.
 
     ##
     ## Restore the real processor context. Do an absolute load instead of a
@@ -237,7 +237,7 @@ HlpInvalidateDataCacheLoop1:
     cmp     %r1, #2                     @ Check to see if there's no cache or
     blt     HlpInvalidateDataCacheSkip  @ only instruction cache at this level.
     mcr     p15, 2, %r10, c0, c0, 0     @ Write CSSELR from R10.
-    isb                                 @ ISB to sync the change to CCSIDR.
+    ISB                                 @ ISB to sync the change to CCSIDR.
     mrc     p15, 1, %r1, c0, c0, 0      @ Read current CCSIDR
     and     %r2, %r1, #7                @ Extract the line length field.
     add     %r2, %r2, #4                @ Add 4 for the line length offset
@@ -267,10 +267,10 @@ HlpInvalidateDataCacheSkip:
     add     %r10, %r10, #2              @ Increment the cache number.
     cmp     %r3, %r10
     bgt     HlpInvalidateDataCacheLoop1
-    dsb
+    DSB
 
 HlpInvalidateDataCacheEnd:
-    dsb                                 @ Data Synchronization barrier.
+    DSB                                 @ Data Synchronization barrier.
     bx      %lr
 
 ##

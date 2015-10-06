@@ -229,6 +229,37 @@ END_FUNCTION BoAreInterruptsEnabled
 
 ##
 ## VOID
+## ArSerializeExecution (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine acts a serializing instruction, preventing the processor
+    from speculatively executing beyond this point.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION ArSerializeExecution
+    DSB
+    ISB
+    bx      %lr
+
+END_FUNCTION ArSerializeExecution
+
+##
+## VOID
 ## BoUndefinedInstructionEntry (
 ##     VOID
 ##     )

@@ -39,6 +39,69 @@ ASSEMBLY_FILE_HEADER
 
 ##
 ## RTL_API
+## VOID
+## RtlDebugBreak (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine causes a break into the debugger.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+PROTECTED_FUNCTION RtlDebugBreak
+    DEBUGGER_BREAK                              @ Debugger break.
+    bx  %lr                                     @ Return.
+
+END_FUNCTION RtlDebugBreak
+
+##
+## RTL_API
+## VOID
+## RtlDebugService (
+##     UINTN ServiceRequest,
+##     PVOID Parameter
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine enters the debugger for a service request.
+
+Arguments:
+
+    ServiceRequest - Supplies the reason for entering the debugger.
+
+    Parameter - Supplies the parameter to pass to the debug service routine.
+
+Return Value:
+
+    None.
+
+--*/
+
+PROTECTED_FUNCTION RtlDebugService
+    DEBUG_SERVICE
+    bx      %lr                                 @ Return.
+
+END_FUNCTION RtlDebugService
+
+##
+## RTL_API
 ## ULONG
 ## RtlAtomicExchange32 (
 ##     volatile ULONG *Address,
@@ -66,13 +129,13 @@ Return Value:
 --*/
 
 PROTECTED_FUNCTION RtlAtomicExchange32
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrex   %r2, [%r0]                          @ Get *Address exclusive.
     strex   %r3, %r1, [%r0]                     @ Store new value exclusive.
     cmp     %r3, #0                             @ See if the write worked.
     bne     RtlAtomicExchange32                 @ Try again if it didn't.
     mov     %r0, %r2                            @ Move original value to R0.
-    dsb                                         @ Another barrier.
+    DSB                                         @ Another barrier.
     bx      %lr                                 @ Return R0.
 
 END_FUNCTION RtlAtomicExchange32
@@ -109,7 +172,7 @@ PROTECTED_FUNCTION RtlAtomicExchange64
     stmdb   %sp!, {%r4-%r5}                     @ Save nonvolatiles.
 
 RtlAtomicExchange64Loop:
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrexd  %r4, %r5, [%r0]                     @ Get *Address exclusive.
     strexd  %r12, %r2, %r3, [%r0]               @ Store new value exclusive.
     cmp     %r12, #0                            @ See if the write worked.
@@ -117,7 +180,7 @@ RtlAtomicExchange64Loop:
     mov     %r0, %r4                            @ Move original low part to R0.
     mov     %r1, %r5                            @ Move original high part to R1.
     ldmia   %sp!, {%r4-%r5}                     @ Restore nonvolatiles.
-    dsb                                         @ Another barrier.
+    DSB                                         @ Another barrier.
     bx      %lr                                 @ Return R0-R1.
 
 END_FUNCTION RtlAtomicExchange64
@@ -156,7 +219,7 @@ Return Value:
 --*/
 
 PROTECTED_FUNCTION RtlAtomicCompareExchange32
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrex   %r3, [%r0]                          @ Get *Address exclusive.
     cmp     %r3, %r2                            @ Compare to CompareValue
     bne     RtlAtomicCompareExchange32End1      @ If not equal, exit with clrex.
@@ -177,7 +240,7 @@ RtlAtomicCompareExchange32End1:
 
 RtlAtomicCompareExchange32End2:
     mov     %r0, %r3                            @ Move loaded value to R0.
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     bx      %lr                                 @ Return R0.
 
 END_FUNCTION RtlAtomicCompareExchange32
@@ -220,7 +283,7 @@ PROTECTED_FUNCTION RtlAtomicCompareExchange64
     ldrd    %r4, %r5, [%sp, #16]                @ Get the last argument.
 
 RtlAtomicCompareExchange64Loop:
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrexd  %r6, %r7, [%r0]                     @ Get *Address exclusive.
     cmp     %r6, %r4                            @ Compare to CompareValue
     bne     RtlAtomicCompareExchange64End1      @ If not equal, exit with clrex.
@@ -245,7 +308,7 @@ RtlAtomicCompareExchange64End2:
     mov     %r0, %r6                            @ Move original low part to R0.
     mov     %r1, %r7                            @ Move original high part to R1.
     ldmia   %sp!, {%r4-%r7}                     @ Restore nonvolatiles.
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     bx      %lr                                 @ Return R0.
 
 END_FUNCTION RtlAtomicCompareExchange64
@@ -278,14 +341,14 @@ Return Value:
 --*/
 
 PROTECTED_FUNCTION RtlAtomicAdd32
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrex   %r2, [%r0]                          @ Get *Address exclusive.
     add     %r3, %r2, %r1                       @ Add increment.
     strex   %r12, %r3, [%r0]                    @ Exclusively store the result.
     cmp     %r12, #0                            @ R12 is 0 on success.
     bne     RtlAtomicAdd32                      @ Try again if store failed.
     mov     %r0, %r2                            @ Return original value.
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     bx      %lr                                 @ Return.
 
 END_FUNCTION RtlAtomicAdd32
@@ -321,7 +384,7 @@ PROTECTED_FUNCTION RtlAtomicAdd64
     stmdb   %sp!, {%r4-%r7}                     @ Save nonvolatiles.
 
 RtlAtomicAdd64Loop:
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrexd  %r4, %r5, [%r0]                     @ Get *Address exclusive.
     adds    %r6, %r4, %r2                       @ Add low word, setting flags.
     adc     %r7, %r5, %r3                       @ Add high word, with carry.
@@ -331,7 +394,7 @@ RtlAtomicAdd64Loop:
     mov     %r0, %r4                            @ Move original low part to R0.
     mov     %r1, %r5                            @ Move original high part to R1.
     ldmia   %sp!, {%r4-%r7}                     @ Restore nonvolatiles.
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     bx      %lr                                 @ Return.
 
 END_FUNCTION RtlAtomicAdd64
@@ -364,14 +427,14 @@ Return Value:
 --*/
 
 PROTECTED_FUNCTION RtlAtomicOr32
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrex   %r2, [%r0]                          @ Get *Address exclusive.
     orr     %r3, %r2, %r1                       @ OR in mask.
     strex   %r12, %r3, [%r0]                    @ Exclusively store the result.
     cmp     %r12, #0                            @ R12 is 0 on success.
     bne     RtlAtomicOr32                       @ Try again if store failed.
     mov     %r0, %r2                            @ Return original value.
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     bx      %lr                                 @ Return.
 
 END_FUNCTION RtlAtomicOr32
@@ -407,7 +470,7 @@ PROTECTED_FUNCTION RtlAtomicOr64
     stmdb   %sp!, {%r4-%r7}                     @ Save nonvolatiles.
 
 RtlAtomicOr64Loop:
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrexd  %r4, %r5, [%r0]                     @ Get *Address exclusive.
     orr     %r6, %r4, %r2                       @ OR low word.
     orr     %r7, %r5, %r3                       @ OR high word.
@@ -417,7 +480,7 @@ RtlAtomicOr64Loop:
     mov     %r0, %r4                            @ Move original low part to R0.
     mov     %r1, %r5                            @ Move original high part to R1.
     ldmia   %sp!, {%r4-%r7}                     @ Restore nonvolatiles.
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     bx      %lr                                 @ Return.
 
 END_FUNCTION RtlAtomicOr64
@@ -450,14 +513,14 @@ Return Value:
 --*/
 
 PROTECTED_FUNCTION RtlAtomicAnd32
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrex   %r2, [%r0]                          @ Get *Address exclusive.
     and     %r3, %r2, %r1                       @ AND mask.
     strex   %r12, %r3, [%r0]                    @ Exclusively store the result.
     cmp     %r12, #0                            @ R12 is 0 on success.
     bne     RtlAtomicAnd32                      @ Try again if store failed.
     mov     %r0, %r2                            @ Return original value.
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     bx      %lr                                 @ Return.
 
 END_FUNCTION RtlAtomicAnd32
@@ -490,14 +553,14 @@ Return Value:
 --*/
 
 PROTECTED_FUNCTION RtlAtomicXor32
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     ldrex   %r2, [%r0]                          @ Get *Address exclusive.
     eor     %r3, %r2, %r1                       @ XOR mask.
     strex   %r12, %r3, [%r0]                    @ Exclusively store the result.
     cmp     %r12, #0                            @ R12 is 0 on success.
     bne     RtlAtomicXor32                      @ Try again if store failed.
     mov     %r0, %r2                            @ Return original value.
-    dsb                                         @ Data synchronization barrier.
+    DSB                                         @ Data synchronization barrier.
     bx      %lr                                 @ Return.
 
 END_FUNCTION RtlAtomicXor32
@@ -529,7 +592,7 @@ Return Value:
 --*/
 
 PROTECTED_FUNCTION RtlMemoryBarrier
-    dmb
+    DMB
     bx      %lr
 
 END_FUNCTION RtlMemoryBarrier

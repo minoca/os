@@ -34,8 +34,7 @@ VPATH += $(SRCDIR)/..:
 ARMV7_OBJS = armv7/intrinsa.o  \
              armv7/intrinsc.o  \
 
-ARMV6_OBJS = armv7/intrinsa.o  \
-             armv7/intrinsc.o  \
+ARMV6_OBJS = $(ARMV7_OBJS)
 
 X86_OBJS = x86/intrinsc.o  \
 
@@ -45,7 +44,7 @@ X86_OBJS = x86/intrinsc.o  \
 
 EXTRA_CFLAGS += -DRTL_API=DLLIMPORT
 
-EXTRA_SRC_DIRS = x86 armv7 armv6
+EXTRA_SRC_DIRS = x86 armv7
 
 include $(SRCROOT)/os/minoca.mk
 
