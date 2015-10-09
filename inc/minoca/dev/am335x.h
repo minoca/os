@@ -74,6 +74,10 @@ Author:
 
 #define AM335_INTC_PRIORITY_COUNT 63
 
+#define AM335_MAX_INTERRUPT_LINES (32 * 4)
+#define AM335_MAX_INTERRUPT_LINE_BLOCKS \
+    AM335_INTC_LINE_TO_INDEX(AM335_MAX_INTERRUPT_LINES)
+
 #define AM335_CORTEX_M3_SIZE 0x4000
 #define AM335_MAILBOX_SIZE 0x1000
 #define AM335_OCMC_BASE 0x40300000
@@ -188,6 +192,7 @@ Author:
 // Interrupt system configuration register bits.
 //
 
+#define AM335_INTC_SYSTEM_CONFIG_AUTO_IDLE 0x00000001
 #define AM335_INTC_SYSTEM_CONFIG_SOFT_RESET 0x00000002
 
 //
@@ -202,6 +207,18 @@ Author:
 
 #define AM335_INTC_SORTED_ACTIVE_MASK 0x0000007F
 #define AM335_INTC_SORTED_SPURIOUS 0x00000080
+
+//
+// Protection register bits.
+//
+
+#define AM335_INTC_PROTECTION_ENABLE 0x00000001
+
+//
+// Idle register bits.
+//
+
+#define AM335_INTC_IDLE_INPUT_AUTO_GATING 0x00000002
 
 //
 // Interrupt line register bits.
@@ -440,6 +457,7 @@ Author:
 //
 
 #define AM335_EMIF_POWER_CONTROL_SELF_REFRESH_64 (0x3 << 4)
+#define AM335_EMIF_POWER_CONTROL_SELF_REFRESH_8192 (0xA << 4)
 #define AM335_EMIF_POWER_CONTROL_CLOCK_STOP (0x1 << 8)
 #define AM335_EMIF_POWER_CONTROL_SELF_REFRESH (0x2 << 8)
 #define AM335_EMIF_POWER_CONTROL_POWER_DOWN (0x4 << 8)
@@ -512,11 +530,14 @@ typedef enum _AM335_DM_TIMER_REGISTER {
 //
 
 typedef enum _AM335_INTC_REGISTER {
+    Am335IntcRevision                       = 0x000,
     Am335IntcSystemConfig                   = 0x010,
     Am335IntcSystemStatus                   = 0x014,
     Am335IntcSortedIrq                      = 0x040,
     Am335IntcSortedFiq                      = 0x044,
     Am335IntcControl                        = 0x048,
+    Am335IntcProtection                     = 0x04C,
+    Am335IntcIdle                           = 0x050,
     Am335IntcIrqPriority                    = 0x060,
     Am335IntcFiqPriority                    = 0x064,
     Am335IntcThreshold                      = 0x068,

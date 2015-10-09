@@ -100,6 +100,34 @@ typedef struct _ARM_PARKED_PAGE {
     UCHAR OsCode[ARM_PARKED_PAGE_OS_CODE_SIZE];
 } ARM_PARKED_PAGE, *PARM_PARKED_PAGE;
 
+typedef
+UINTN
+(*PHLP_DISABLE_MMU) (
+    PHL_PHYSICAL_CALLBACK PhysicalFunction,
+    UINTN Argument
+    );
+
+/*++
+
+Routine Description:
+
+    This routine temporarily disables the MMU and calls then given callback
+    function. This routine must be called with interrupts disabled.
+
+Arguments:
+
+    PhysicalFunction - Supplies the physical address of a function to call
+        with the MMU disabled. Interrupts will also be disabled during this
+        call.
+
+    Argument - Supplies an argument to pass to the function.
+
+Return Value:
+
+    Returns the value returned by the callback function.
+
+--*/
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -116,6 +144,7 @@ typedef struct _ARM_PARKED_PAGE {
 extern PVOID HlpProcessorStartup;
 extern PVOID HlpProcessorStartupEnd;
 extern PVOID HlpTrampolineCode;
+extern PVOID HlpDisableMmu;
 extern PVOID HlTrampolineTtbr0;
 extern PVOID HlTrampolineSystemControlRegister;
 extern PVOID HlpTrampolineCodeEnd;
@@ -142,6 +171,58 @@ PVOID HlIdentityStub = (PVOID)-1;
 //
 // ------------------------------------------------------------------ Functions
 //
+
+KERNEL_API
+UINTN
+HlDisableMmu (
+    PHL_PHYSICAL_CALLBACK PhysicalFunction,
+    UINTN Argument
+    )
+
+/*++
+
+Routine Description:
+
+    This routine temporarily disables the MMU and calls then given callback
+    function.
+
+Arguments:
+
+    PhysicalFunction - Supplies the physical address of a function to call
+        with the MMU disabled. Interrupts will also be disabled during this
+        call.
+
+    Argument - Supplies an argument to pass to the function.
+
+Return Value:
+
+    Returns the value returned by the callback function.
+
+--*/
+
+{
+
+    PHLP_DISABLE_MMU DisableMmu;
+    BOOL Enabled;
+    ULONG FunctionOffset;
+    UINTN Result;
+
+    ASSERT(HlIdentityStub != (PVOID)-1);
+
+    //
+    // Find the inner helper function in the identity mapped region.
+    //
+
+    FunctionOffset = (UINTN)&HlpDisableMmu - (UINTN)&HlpTrampolineCode;
+    DisableMmu = HlIdentityStub + FunctionOffset;
+    Enabled = ArDisableInterrupts();
+    Result = DisableMmu(PhysicalFunction, Argument);
+    if (Enabled != FALSE) {
+        ArEnableInterrupts();
+    }
+
+    return Result;
+}
 
 KSTATUS
 HlpInterruptPrepareIdentityStub (
@@ -318,6 +399,31 @@ Return Value:
     ASSERT(ParkedPage != NULL);
 
     //
+    // Copy the small amount of code into the parked page.
+    //
+
+    CopyStart = (UINTN)&HlpProcessorStartup & ~ARM_THUMB_BIT;
+    CopyEnd = (UINTN)&HlpProcessorStartupEnd & ~ARM_THUMB_BIT;
+    CopySize = CopyEnd - CopyStart;
+
+    ASSERT(CopySize <= ARM_PARKED_PAGE_OS_CODE_SIZE);
+    ASSERT(sizeof(ARM_PARKED_PAGE) <= ARM_PARKED_PAGE_OS_SIZE);
+
+    RtlCopyMemory(&(ParkedPage->OsCode), (PVOID)CopyStart, CopySize);
+    ParkedPage->IdentityPagePhysical = (UINTN)HlIdentityStub;
+    ParkedPage->ContextVirtual = &(ParkedPage->ProcessorContext);
+
+    //
+    // If there is no start block, this is just P0 initializing its parked
+    // page.
+    //
+
+    if (StartBlock == NULL) {
+        HlpInterruptArmReleaseParkedProcessor(ParkedPage, 0, -1);
+        return STATUS_SUCCESS;
+    }
+
+    //
     // Save the current processor context, although the secondary processor
     // will not restore back to here.
     //
@@ -333,21 +439,6 @@ Return Value:
     ParkedPage->ProcessorContext.Tpidrprw = 0;
     ParkedPage->ProcessorContext.Pmccntr = 0;
     *PhysicalStart = ParkedPagePhysical + FIELD_OFFSET(ARM_PARKED_PAGE, OsCode);
-
-    //
-    // Copy the small amount of code into the parked page.
-    //
-
-    CopyStart = (UINTN)&HlpProcessorStartup & ~ARM_THUMB_BIT;
-    CopyEnd = (UINTN)&HlpProcessorStartupEnd & ~ARM_THUMB_BIT;
-    CopySize = CopyEnd - CopyStart;
-
-    ASSERT(CopySize <= ARM_PARKED_PAGE_OS_CODE_SIZE);
-    ASSERT(sizeof(ARM_PARKED_PAGE) <= ARM_PARKED_PAGE_OS_SIZE);
-
-    RtlCopyMemory(&(ParkedPage->OsCode), (PVOID)CopyStart, CopySize);
-    ParkedPage->IdentityPagePhysical = (UINTN)HlIdentityStub;
-    ParkedPage->ContextVirtual = &(ParkedPage->ProcessorContext);
 
     //
     // Assert that this thread isn't wandering around processors while this
@@ -374,6 +465,94 @@ Return Value:
     HlpInterruptArmReleaseParkedProcessor(
                                 ParkedPage,
                                 *PhysicalStart,
+                                HlProcessorTargets[ProcessorIndex].PhysicalId);
+
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+HlpInterruptPrepareForProcessorResume (
+    ULONG ProcessorIndex,
+    PPROCESSOR_CONTEXT *ProcessorContextPointer,
+    PPHYSICAL_ADDRESS ResumeAddress,
+    BOOL Abort
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs any per-processor preparations necessary to resume
+    the given processor from a context-destructive state.
+
+Arguments:
+
+    ProcessorIndex - Supplies the processor index to save context for.
+
+    ProcessorContextPointer - Supplies a pointer where a pointer to the
+        processor's resume context should be saved. This routine cannot do the
+        saving since once the context is saved the routine is not allowed to
+        return until it's restored.
+
+    ResumeAddress - Supplies a pointer where the physical address of the
+        resume code for this processor will be returned.
+
+    Abort - Supplies a boolean that if set undoes the effects of this function.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PARM_PARKED_PAGE ParkedPage;
+    ULONG ParkedPagePhysical;
+    ULONG PhysicalStart;
+
+    ParkedPage = HlProcessorTargets[ProcessorIndex].ParkedVirtualAddress;
+    ParkedPagePhysical =
+                      HlProcessorTargets[ProcessorIndex].ParkedPhysicalAddress;
+
+    ASSERT(ParkedPage != NULL);
+
+    //
+    // Unset the parking protocol.
+    //
+
+    if (Abort != FALSE) {
+
+        //
+        // It's okay to reuse the release processor routine (which incorrectly
+        // writes the values in the wrong order for abort) as long as the
+        // cancelling is always done on the processor being aborted. This
+        // ensures it could never accidentally go through a resume and jump to
+        // the wrong spot.
+        //
+
+        ASSERT(KeGetCurrentProcessorNumber() == ProcessorIndex);
+
+        HlpInterruptArmReleaseParkedProcessor(ParkedPage, 0, -1);
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // Save the current processor context.
+    //
+
+    *ProcessorContextPointer = &(ParkedPage->ProcessorContext);
+    PhysicalStart = ParkedPagePhysical + FIELD_OFFSET(ARM_PARKED_PAGE, OsCode);
+    *ResumeAddress = PhysicalStart;
+
+    //
+    // Make the core jump to the spot of code within the page itself (which
+    // then jumps to the identity mapped page for real initialization).
+    //
+
+    HlpInterruptArmReleaseParkedProcessor(
+                                ParkedPage,
+                                PhysicalStart,
                                 HlProcessorTargets[ProcessorIndex].PhysicalId);
 
     return STATUS_SUCCESS;

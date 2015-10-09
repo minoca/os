@@ -64,8 +64,18 @@ Environment:
     (Am3MailboxInterruptEnableClear0 + ((_User) * 0x10))
 
 //
+// This macro returns a bitmask of the given interrupt for the given mailbox
+// index.
+//
+
+#define AM3_MAILBOX_INTERRUPT(_Mask, _Index) ((_Mask) << ((_Index) * 2))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
+
+#define AM3_MAILBOX_INTERRUPT_MESSAGE 0x00000001
+#define AM3_MAILBOX_INTERRUPT_NOT_FULL 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -82,6 +92,13 @@ typedef enum _AM3_MAILBOX_REGISTER {
     Am3MailboxInterruptEnableSet0 = 0x108,
     Am3MailboxInterruptEnableClear0 = 0x10C,
 } AM3_MAILBOX_REGISTER, *PAM3_MAILBOX_REGISTER;
+
+typedef enum _AM3_MAILBOX_USER {
+    Am3MailboxUserMpu = 0,
+    Am3MailboxUserPru0 = 1,
+    Am3MailboxUserPru1 = 2,
+    Am3MailboxUserWakeM3 = 3
+} AM3_MAILBOX_USER, *PAM3_MAILBOX_USER;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -142,8 +159,10 @@ Return Value:
     PHYSICAL_ADDRESS EndAddress;
     ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddress;
+    ULONG Register;
     UINTN Size;
     KSTATUS Status;
+    ULONG Value;
 
     ASSERT(Mailbox->ControllerBase == NULL);
 
@@ -152,7 +171,7 @@ Return Value:
     Mailbox->InterruptVector = InterruptVector;
 
     //
-    // Map the Cortex M3 region.
+    // Map the registers.
     //
 
     if (Mailbox->ControllerBase == NULL) {
@@ -210,6 +229,16 @@ Return Value:
     if (!KSUCCESS(Status)) {
         goto MailboxInitializeEnd;
     }
+
+    //
+    // Enable interrupts towards the Cortex M3 for the mailbox dedicated to it.
+    //
+
+    Register = AM3_MAILBOX_INTERRUPT_ENABLE(Am3MailboxUserWakeM3);
+    Value = AM3_MAILBOX_INTERRUPT(AM3_MAILBOX_INTERRUPT_MESSAGE,
+                                  AM335_WAKEM3_MAILBOX);
+
+    AM3_WRITE_MAILBOX(Mailbox, Register, Value);
 
 MailboxInitializeEnd:
     if (!KSUCCESS(Status)) {
@@ -317,6 +346,8 @@ Return Value:
 
 {
 
+    ULONG InterruptStatus;
+    ULONG InterruptStatusRegister;
     ULONG MessageRegister;
     ULONG MessageStatusRegister;
 
@@ -324,6 +355,22 @@ Return Value:
     MessageStatusRegister = AM3_MAILBOX_MESSAGE_STATUS(Index);
     while (AM3_READ_MAILBOX(Mailbox, MessageStatusRegister) != 0) {
         AM3_READ_MAILBOX(Mailbox, MessageRegister);
+    }
+
+    //
+    // Remove any interrupts from the Cortex M3 status as well.
+    //
+
+    if (Index == AM335_WAKEM3_MAILBOX) {
+        InterruptStatusRegister =
+                            AM3_MAILBOX_INTERRUPT_STATUS(Am3MailboxUserWakeM3);
+
+        InterruptStatus = AM3_READ_MAILBOX(Mailbox, InterruptStatusRegister);
+        if (InterruptStatus != 0) {
+            AM3_WRITE_MAILBOX(Mailbox,
+                              InterruptStatusRegister,
+                              InterruptStatus);
+        }
     }
 
     return;

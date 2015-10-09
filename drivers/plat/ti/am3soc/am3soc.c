@@ -93,13 +93,9 @@ Environment:
 #define AM335_PERFORMANCE_STATE_800 4
 #define AM335_PERFORMANCE_STATE_1000 5
 
-#define AM3_SOC_IDLE_STATE_COUNT 1
+#define AM3_SOC_IDLE_STATE_COUNT 2
 
-//
-// Define the mailbox number reserved for the Cortex M3.
-//
-
-#define AM335_WAKEM3_MAILBOX 0
+#define AM335_M3_IPC_PARAMETER_DEFAULT 0xFFFFFFFF
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -117,6 +113,14 @@ typedef enum _AM335_CONTROL_REGISTER {
     Am3ControlDeviceId = 0x600,
     Am3ControlEfuseSma = 0x7FC,
     Am3ControlM3TxEventEoi = 0x1324,
+    Am3ControlIpc0 = 0x1328,
+    Am3ControlIpc1 = 0x132C,
+    Am3ControlIpc2 = 0x1330,
+    Am3ControlIpc3 = 0x1334,
+    Am3ControlIpc4 = 0x1338,
+    Am3ControlIpc5 = 0x133C,
+    Am3ControlIpc6 = 0x1340,
+    Am3ControlIpc7 = 0x1344,
 } AM335_CONTROL_REGISTER, *PAM335_CONTROL_REGISTER;
 
 typedef enum _AM3_CM_WAKEUP_REGISTER {
@@ -225,8 +229,27 @@ typedef enum _AM3_EMIF_REGISTER {
 } AM3_EMIF_REGISTER, *PAM3_EMIF_REGISTER;
 
 typedef enum _AM3_IDLE_STATE {
-    Am3IdleC2 = 0,
+    Am3IdleSelfRefreshWfi = 0,
+    Am3IdleStandby = 1,
 } AM3_IDLE_STATE, *PAM3_IDLE_STATE;
+
+typedef enum _AM3_CM3_COMMAND {
+    Am3Cm3CommandRtc = 0x1,
+    Am3Cm3CommandRtcFast = 0x2,
+    Am3Cm3CommandDs0 = 0x3,
+    Am3Cm3CommandDs1 = 0x5,
+    Am3Cm3CommandDs2 = 0x7,
+    Am3Cm3CommandStandaloneApp = 0x9,
+    Am3Cm3CommandStandby = 0xB,
+    Am3Cm3CommandResetStateMachine = 0xE,
+    Am3Cm3CommandVersion = 0xF
+} AM3_CM3_COMMAND, *PAM3_CM3_COMMAND;
+
+typedef enum _AM3_CM3_RESPONSE {
+    Am3Cm3ResponsePass = 0x0,
+    Am3Cm3ResponseFail = 0x1,
+    Am3Cm3ResponseWait4Ok = 0x2
+} AM3_CM3_RESPONSE, *PAM3_CM3_RESPONSE;
 
 /*++
 
@@ -240,7 +263,7 @@ Members:
     ResumeAddress - Stores the address that ROM code should jump to for
         resume.
 
-    SleepMode - Stores the desired sleep state to transition to.
+    Command - Stores the desired command to send to the Cortex M3.
 
     Data - Stores additional arguments.
 
@@ -248,7 +271,7 @@ Members:
 
 typedef struct _AM3_WAKE_M3_IPC_DATA {
     ULONG ResumeAddress;
-    ULONG SleepMode;
+    ULONG Command;
     ULONG Data[2];
 } AM3_WAKE_M3_IPC_DATA, *PAM3_WAKE_M3_IPC_DATA;
 
@@ -271,6 +294,10 @@ Members:
     CortexM3 - Stores the virtual address of the Cortex M3 code region.
 
     Emif - Stores the virtual address of the EMIF interface.
+
+    Ocmc - Stores a pointer to the OCMC L3 RAM.
+
+    OcmcPhysical - Stores the physical address of the OCMC RAM region.
 
     Lock - Stores a pointer to a lock serializing access to the controller.
 
@@ -302,6 +329,10 @@ Members:
 
     IdleInterface - Stores the idle state interface.
 
+    HlSuspendInterface - Stores the low level suspend interface.
+
+    IdleState - Stores the current idle state undergoing transition.
+
 --*/
 
 typedef struct _AM3_SOC {
@@ -310,6 +341,8 @@ typedef struct _AM3_SOC {
     PVOID SocControl;
     PVOID CortexM3;
     PVOID Emif;
+    PVOID Ocmc;
+    PHYSICAL_ADDRESS OcmcPhysical;
     PQUEUED_LOCK Lock;
     PINTERFACE_TPS65217 Tps65217;
     BOOL Tps65217SignedUp;
@@ -323,6 +356,8 @@ typedef struct _AM3_SOC {
     AM3_WAKE_M3_IPC_DATA M3Ipc;
     AM3_MAILBOX Mailbox;
     PM_IDLE_STATE_INTERFACE IdleInterface;
+    HL_SUSPEND_INTERFACE HlSuspendInterface;
+    AM3_IDLE_STATE IdleState;
 } AM3_SOC, *PAM3_SOC;
 
 /*++
@@ -348,15 +383,6 @@ typedef struct _AM335_PERFORMANCE_CONFIGURATION {
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-//
-// Internal assembly routines.
-//
-
-VOID
-Am3SocSleep (
-    VOID
-    );
 
 KSTATUS
 Am3SocAddDevice (
@@ -454,16 +480,6 @@ Am3SocStartCortexM3 (
     PAM3_SOC Device
     );
 
-INTERRUPT_STATUS
-Am3SocWakeM3InterruptService (
-    PVOID Context
-    );
-
-INTERRUPT_STATUS
-Am3SocWakeM3InterruptServiceDpc (
-    PVOID Context
-    );
-
 KSTATUS
 Am3SocRegisterIdleInterface (
     PAM3_SOC Device
@@ -482,7 +498,38 @@ Am3SocEnterIdleState (
     );
 
 VOID
-Am3SocSelfRefreshWfi (
+Am3SocEnterSelfRefreshWfi (
+    PAM3_SOC Device
+    );
+
+VOID
+Am3SocEnterStandby (
+    PAM3_SOC Device
+    );
+
+KSTATUS
+Am3SocSuspendCallback (
+    PVOID Context,
+    HL_SUSPEND_PHASE Phase
+    );
+
+KSTATUS
+Am3SocSuspendBegin (
+    PAM3_SOC Device
+    );
+
+KSTATUS
+Am3SocResetM3 (
+    PAM3_SOC Device
+    );
+
+VOID
+Am3SocSetupIpc (
+    PAM3_SOC Device
+    );
+
+KSTATUS
+Am3SocWaitForIpcResult (
     PAM3_SOC Device
     );
 
@@ -538,6 +585,13 @@ PM_PERFORMANCE_STATE_INTERFACE Am3SocPerformanceStateInterface = {
     NULL
 };
 
+//
+// An estimate for standby (C3) was taken by snapping the time counter
+// between SuspendBegin and SuspendEnd, and modifying the sleep code to never
+// WFI (so it's all overhead, no sleep). Averaging over about 100 iterations,
+// the overall latency was about 2440 microseconds.
+//
+
 PM_IDLE_STATE Am3SocIdleStates[AM3_SOC_IDLE_STATE_COUNT] = {
     {
         "C2",
@@ -545,6 +599,13 @@ PM_IDLE_STATE Am3SocIdleStates[AM3_SOC_IDLE_STATE_COUNT] = {
          NULL,
          100,
          1000
+    },
+    {
+        "C3",
+         0,
+         NULL,
+         2500,
+         5000
     }
 };
 
@@ -555,6 +616,14 @@ PM_IDLE_STATE Am3SocIdleStates[AM3_SOC_IDLE_STATE_COUNT] = {
 extern PVOID _binary_am3cm3fw_bin_start;
 extern PVOID _binary_am3cm3fw_bin_end;
 extern PVOID _binary_am3cm3fw_bin_size;
+
+extern PVOID Am3SocOcmcCode;
+extern PVOID Am3SocRefreshWfi;
+extern PVOID Am3SocStandby;
+extern PVOID Am3SocResumeStandby;
+extern PVOID Am3SocSleep;
+extern PVOID Am3SocResume;
+extern PVOID Am3SocOcmcCodeEnd;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -976,7 +1045,6 @@ Return Value:
     ULONG AlignmentOffset;
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
-    IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION CortexM3;
     PRESOURCE_ALLOCATION Emif;
     PHYSICAL_ADDRESS EndAddress;
@@ -984,6 +1052,7 @@ Return Value:
     PRESOURCE_ALLOCATION Mailbox;
     ULONGLONG MailboxInterruptLine;
     ULONGLONG MailboxInterruptVector;
+    PRESOURCE_ALLOCATION OcmcRam;
     ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddress;
     PRESOURCE_ALLOCATION Prcm;
@@ -994,6 +1063,7 @@ Return Value:
     CortexM3 = NULL;
     Emif = NULL;
     Mailbox = NULL;
+    OcmcRam = NULL;
     Prcm = NULL;
     SocControl = NULL;
     MailboxInterruptLine = INVALID_INTERRUPT_LINE;
@@ -1048,6 +1118,9 @@ Return Value:
             } else if (Mailbox == NULL) {
                 Mailbox = Allocation;
 
+            } else if (OcmcRam == NULL) {
+                OcmcRam = Allocation;
+
             } else if (Emif == NULL) {
                 Emif = Allocation;
             }
@@ -1066,7 +1139,8 @@ Return Value:
         (SocControl->Length < AM335_SOC_CONTROL_SIZE) ||
         (CortexM3 == NULL) ||
         (CortexM3->Length < AM335_CORTEX_M3_SIZE) ||
-        (Mailbox == NULL)) {
+        (Mailbox == NULL) ||
+        (OcmcRam == NULL)) {
 
         Status = STATUS_INVALID_CONFIGURATION;
         goto StartDeviceEnd;
@@ -1153,6 +1227,46 @@ Return Value:
     }
 
     ASSERT(Device->SocControl != NULL);
+
+    //
+    // Map the OCMC RAM region.
+    //
+
+    if (Device->Ocmc == NULL) {
+
+        //
+        // Page align the mapping request.
+        //
+
+        PageSize = MmPageSize();
+        PhysicalAddress = OcmcRam->Allocation;
+        EndAddress = PhysicalAddress + OcmcRam->Length;
+        PhysicalAddress = ALIGN_RANGE_DOWN(PhysicalAddress, PageSize);
+        AlignmentOffset = OcmcRam->Allocation - PhysicalAddress;
+        EndAddress = ALIGN_RANGE_UP(EndAddress, PageSize);
+        Size = (ULONG)(EndAddress - PhysicalAddress);
+
+        //
+        // If the size is not a the constant, then the failure code at the
+        // bottom needs to be fancier.
+        //
+
+        ASSERT(Size == AM335_OCMC_SIZE);
+
+        Device->Ocmc = MmMapPhysicalAddress(PhysicalAddress,
+                                            Size,
+                                            TRUE,
+                                            FALSE,
+                                            TRUE);
+
+        if (Device->Ocmc == NULL) {
+            Status = STATUS_NO_MEMORY;
+            goto StartDeviceEnd;
+        }
+
+        Device->Ocmc += AlignmentOffset;
+        Device->OcmcPhysical = OcmcRam->Allocation;
+    }
 
     //
     // Map the Cortex M3 region.
@@ -1271,26 +1385,6 @@ Return Value:
         Device->Tps65217SignedUp = TRUE;
     }
 
-    //
-    // Connect the wake M3 interrupt.
-    //
-
-    ASSERT(Device->WakeM3InterruptHandle == INVALID_HANDLE);
-
-    RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
-    Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
-    Connect.Device = Irp->Device;
-    Connect.LineNumber = Device->WakeM3InterruptLine;
-    Connect.Vector = Device->WakeM3InterruptVector;
-    Connect.InterruptServiceRoutine = Am3SocWakeM3InterruptService;
-    Connect.DispatchServiceRoutine = Am3SocWakeM3InterruptServiceDpc;
-    Connect.Context = Device;
-    Connect.Interrupt = &(Device->WakeM3InterruptHandle);
-    Status = IoConnectInterrupt(&Connect);
-    if (!KSUCCESS(Status)) {
-        goto StartDeviceEnd;
-    }
-
     Status = Am3SocStartCortexM3(Device);
     if (!KSUCCESS(Status)) {
         goto StartDeviceEnd;
@@ -1333,6 +1427,11 @@ StartDeviceEnd:
         if (Device->Emif != NULL) {
             MmUnmapAddress(Device->Emif, AM335_EMIF_SIZE);
             Device->Emif = NULL;
+        }
+
+        if (Device->Ocmc != NULL) {
+            MmUnmapAddress(Device->Ocmc, AM335_OCMC_SIZE);
+            Device->Ocmc = NULL;
         }
 
         if (Device->Mailbox.ControllerBase != NULL) {
@@ -1814,119 +1913,7 @@ Return Value:
     Value = AM3_READ_PRM_WAKEUP(Device, Am3RmWakeupResetControl);
     Value &= ~AM335_RM_WAKEUP_RESET_CONTROL_RESET_CORTEX_M3;
     AM3_WRITE_PRM_WAKEUP(Device, Am3RmWakeupResetControl, Value);
-
-#if 0
-
-    Device->M3Ipc.ResumeAddress = AM335_OCMC_BASE + AM335_OCMC_SIZE -
-                                  Am3SocSleepSize + Am3SocSleepResumeOffset + 4;
-
-#endif
-
     return STATUS_SUCCESS;
-}
-
-INTERRUPT_STATUS
-Am3SocWakeM3InterruptService (
-    PVOID Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine handles wake M3 interrupts from the Cortex M3.
-
-Arguments:
-
-    Context - Supplies the context supplied when this interrupt was initially
-        connected.
-
-Return Value:
-
-    Returns an interrupt status indicating if this ISR is claiming the
-    interrupt, not claiming the interrupt, or needs the interrupt to be
-    masked temporarily.
-
---*/
-
-{
-
-    PAM3_SOC Controller;
-
-    Controller = Context;
-
-    //
-    // EOI the interrupt to get it to stop, but don't process or re-arm it
-    // until dispatch level.
-    //
-
-    AM3_WRITE_CONTROL(Controller,
-                      Am3ControlM3TxEventEoi,
-                      AM335_CONTROL_M3_TXEV_EOI);
-
-    return InterruptStatusClaimed;
-}
-
-INTERRUPT_STATUS
-Am3SocWakeM3InterruptServiceDpc (
-    PVOID Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine handles wake M3 interrupts from the Cortex M3 at dispatch
-    level.
-
-Arguments:
-
-    Context - Supplies the context supplied when this interrupt was initially
-        connected.
-
-Return Value:
-
-    Returns an interrupt status indicating if this ISR is claiming the
-    interrupt, not claiming the interrupt, or needs the interrupt to be
-    masked temporarily.
-
---*/
-
-{
-
-    PAM3_SOC Controller;
-
-    Controller = Context;
-    switch (Controller->M3State) {
-    case Am3M3StateReset:
-        Controller->M3State = Am3M3StateInitialized;
-        break;
-
-    case Am3M3StateResetMessage:
-        Controller->M3State = Am3M3StateInitialized;
-        Am3MailboxFlush(&(Controller->Mailbox), AM335_WAKEM3_MAILBOX);
-        break;
-
-    case Am3M3StatePowerMessage:
-        Am3MailboxFlush(&(Controller->Mailbox), AM335_WAKEM3_MAILBOX);
-        break;
-
-    default:
-
-        ASSERT(FALSE);
-
-        break;
-    }
-
-    //
-    // Re-enable the mailbox.
-    //
-
-    AM3_WRITE_CONTROL(Controller,
-                      Am3ControlM3TxEventEoi,
-                      AM335_CONTROL_M3_TXEV_EOI_ENABLE);
-
-    return InterruptStatusClaimed;
 }
 
 KSTATUS
@@ -1952,6 +1939,7 @@ Return Value:
 
 {
 
+    UINTN CopySize;
     PPM_IDLE_STATE IdleState;
     ULONG Index;
     PPM_IDLE_STATE_INTERFACE Interface;
@@ -1962,6 +1950,20 @@ Return Value:
     if (Interface->Context != NULL) {
         return STATUS_SUCCESS;
     }
+
+    //
+    // Set up the OCMC RAM region.
+    //
+
+    CopySize = (UINTN)&Am3SocOcmcCodeEnd - (UINTN)&Am3SocOcmcCode;
+    RtlCopyMemory(Device->Ocmc, &Am3SocOcmcCode, CopySize);
+
+    //
+    // Set up the low level suspend interface.
+    //
+
+    Device->HlSuspendInterface.Context = Device;
+    Device->HlSuspendInterface.Callback = Am3SocSuspendCallback;
 
     //
     // Convert the microsecond values to time counter ticks.
@@ -2064,8 +2066,17 @@ Return Value:
     // In C2, set the memory to self-refresh and then WFI.
     //
 
-    case Am3IdleC2:
-        Am3SocSelfRefreshWfi(Processor->Context);
+    case Am3IdleSelfRefreshWfi:
+        Am3SocEnterSelfRefreshWfi(Processor->Context);
+        break;
+
+    //
+    // In C3, take the core down to standby, which destroys the processor
+    // state. It's basically like a suspend without any effect on peripherals.
+    //
+
+    case Am3IdleStandby:
+        Am3SocEnterStandby(Processor->Context);
         break;
 
     default:
@@ -2079,7 +2090,7 @@ Return Value:
 }
 
 VOID
-Am3SocSelfRefreshWfi (
+Am3SocEnterSelfRefreshWfi (
     PAM3_SOC Device
     )
 
@@ -2102,28 +2113,332 @@ Return Value:
 
 {
 
+    ULONG Address;
+
+    //
+    // This is done in physical mode because the EMIF controller says that a
+    // DDR access is required for the self-refresh changes to take effect.
+    //
+
+    Address = Device->OcmcPhysical;
+    Address += (UINTN)&Am3SocRefreshWfi - (UINTN)&Am3SocOcmcCode;
+    HlDisableMmu((PHL_PHYSICAL_CALLBACK)Address, 0);
+    return;
+}
+
+VOID
+Am3SocEnterStandby (
+    PAM3_SOC Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine takes the processor core down into standby.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None. The net change upon returning from this function is zero.
+
+--*/
+
+{
+
+    Device->IdleState = Am3IdleStandby;
+    HlSuspend(&(Device->HlSuspendInterface));
+    return;
+}
+
+KSTATUS
+Am3SocSuspendCallback (
+    PVOID Context,
+    HL_SUSPEND_PHASE Phase
+    )
+
+/*++
+
+Routine Description:
+
+    This routine represents a callback during low level suspend or resume.
+
+Arguments:
+
+    Context - Supplies the context supplied in the interface.
+
+    Phase - Supplies the phase of suspend or resume the callback represents.
+
+Return Value:
+
+    Status code. On suspend, failure causes the suspend to abort. On resume,
+    failure causes a crash.
+
+--*/
+
+{
+
+    UINTN Address;
+    PAM3_SOC Device;
+    KSTATUS Status;
+
+    Device = Context;
+    switch (Phase) {
+    case HlSuspendPhaseSuspendBegin:
+        Status = Am3SocSuspendBegin(Device);
+        break;
+
+    case HlSuspendPhaseSuspend:
+        Address = Device->OcmcPhysical;
+        if (Device->IdleState == Am3IdleStandby) {
+            Address += (UINTN)&Am3SocStandby - (UINTN)&Am3SocOcmcCode;
+
+        } else {
+            Address += (UINTN)&Am3SocSleep - (UINTN)&Am3SocOcmcCode;
+        }
+
+        HlDisableMmu((PHL_PHYSICAL_CALLBACK)Address,
+                     Device->HlSuspendInterface.ResumeAddress);
+
+        //
+        // If execution came back, then the processor came out of WFI before
+        // the Cortex M3 could take it down.
+        //
+
+        Status = STATUS_INTERRUPTED;
+        break;
+
+    case HlSuspendPhaseResume:
+        Status = STATUS_SUCCESS;
+        break;
+
+    case HlSuspendPhaseResumeEnd:
+        Status = Am3SocResetM3(Device);
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        Status = STATUS_SUCCESS;
+        break;
+    }
+
+    return Status;
+}
+
+KSTATUS
+Am3SocSuspendBegin (
+    PAM3_SOC Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine begins the transition to a deeper idle state by requesting it
+    from the Cortex M3.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PAM3_WAKE_M3_IPC_DATA IpcData;
+    AM3_IDLE_STATE State;
+    KSTATUS Status;
+
+    State = Device->IdleState;
+
+    //
+    // This routine is currently expected to be called with interrupts disabled.
+    // If they're enabled, then this routine can use interrupts rather than
+    // spinning.
+    //
+
+    IpcData = &(Device->M3Ipc);
+    switch (State) {
+    case Am3IdleSelfRefreshWfi:
+
+        ASSERT(FALSE);
+
+        return STATUS_NOT_SUPPORTED;
+
+    case Am3IdleStandby:
+        IpcData->Command = Am3Cm3CommandStandby;
+        IpcData->ResumeAddress = (UINTN)&Am3SocResumeStandby -
+                                 (UINTN)&Am3SocOcmcCode + Device->OcmcPhysical;
+
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    IpcData->Data[0] = AM335_M3_IPC_PARAMETER_DEFAULT;
+    IpcData->Data[1] = AM335_M3_IPC_PARAMETER_DEFAULT;
+    Device->M3State = Am3M3StatePowerMessage;
+    Am3SocSetupIpc(Device);
+    Am3MailboxSend(&(Device->Mailbox), AM335_WAKEM3_MAILBOX, 0);
+    Status = Am3SocWaitForIpcResult(Device);
+    if (Status != STATUS_MORE_PROCESSING_REQUIRED) {
+        Am3SocResetM3(Device);
+        Status = STATUS_NOT_READY;
+
+    } else {
+        Status = STATUS_SUCCESS;
+    }
+
+    Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
+    return Status;
+}
+
+KSTATUS
+Am3SocResetM3 (
+    PAM3_SOC Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends a reset command to the Cortex M3.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PAM3_WAKE_M3_IPC_DATA IpcData;
+    KSTATUS Status;
+
+    IpcData = &(Device->M3Ipc);
+    IpcData->Command = Am3Cm3CommandResetStateMachine;
+    IpcData->Data[0] = AM335_M3_IPC_PARAMETER_DEFAULT;
+    IpcData->Data[1] = AM335_M3_IPC_PARAMETER_DEFAULT;
+    Device->M3State = Am3M3StatePowerMessage;
+    Am3SocSetupIpc(Device);
+    Am3MailboxSend(&(Device->Mailbox), AM335_WAKEM3_MAILBOX, 0);
+    Status = Am3SocWaitForIpcResult(Device);
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("Cortex M3 reset failure: %x\n", Status);
+    }
+
+    Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
+    return Status;
+}
+
+VOID
+Am3SocSetupIpc (
+    PAM3_SOC Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes the IPC registers in preparation for sending a command
+    to the Cortex M3.
+
+Arguments:
+
+    Device - Supplies a pointer to the device. The IPC command will be read
+        from here.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    AM3_WRITE_CONTROL(Device, Am3ControlIpc0, Device->M3Ipc.ResumeAddress);
+    AM3_WRITE_CONTROL(Device,
+                      Am3ControlIpc1,
+                      Device->M3Ipc.Command | (0xFFFF << 16));
+
+    AM3_WRITE_CONTROL(Device, Am3ControlIpc2, Device->M3Ipc.Data[0]);
+    AM3_WRITE_CONTROL(Device, Am3ControlIpc3, Device->M3Ipc.Data[1]);
+    return;
+}
+
+KSTATUS
+Am3SocWaitForIpcResult (
+    PAM3_SOC Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine spins waiting for the Cortex M3 IPC result to come back.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    STATUS_SUCCESS if the command completed successfully.
+
+    STATUS_MORE_PROCESSING_REQUIRED if the command completed with the WAIT4OK
+    status (successful).
+
+    STATUS_UNSUCCESSFUL if the command failed.
+
+--*/
+
+{
+
     ULONG Value;
 
     //
-    // Set the SDRAM to self-refresh.
+    // Wait for the command to clear.
     //
 
-    Value = AM335_EMIF_POWER_CONTROL_SELF_REFRESH |
-            AM335_EMIF_POWER_CONTROL_SELF_REFRESH_64;
+    do {
+        Value = AM3_READ_CONTROL(Device, Am3ControlIpc1) >> 16;
 
-    AM3_WRITE_EMIF(Device, Am3EmifPowerManagementControl, Value);
+    } while ((Value & 0x0000FFFF) == 0x0000FFFF);
 
-    //
-    // Go down.
-    //
+    switch (Value) {
+    case Am3Cm3ResponsePass:
+        return STATUS_SUCCESS;
 
-    ArWaitForInterrupt();
+    case Am3Cm3ResponseFail:
+        break;
 
-    //
-    // Take the RAM out of self-refresh.
-    //
+    case Am3Cm3ResponseWait4Ok:
+        return STATUS_MORE_PROCESSING_REQUIRED;
 
-    AM3_WRITE_EMIF(Device, Am3EmifPowerManagementControl, 0);
-    return;
+    default:
+
+        ASSERT(FALSE);
+
+        break;
+    }
+
+    return STATUS_UNSUCCESSFUL;
 }
 

@@ -559,6 +559,34 @@ END_FUNCTION(ArInvalidateTlbEntry)
 
 ##
 ## VOID
+## ArCleanEntireCache (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine cleans the entire data cache.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION(ArCleanEntireCache)
+    wbinvd                          # Write back invalidate cache.
+    ret
+END_FUNCTION(ArCleanEntireCache)
+
+##
+## VOID
 ## ArInvalidateEntireTlb (
 ##     VOID
 ##     )

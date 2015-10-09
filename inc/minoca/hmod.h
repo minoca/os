@@ -215,7 +215,7 @@ Author:
 
 #define PROCESSOR_DESCRIPTION_VERSION 1
 #define INTERRUPT_LINES_DESCRIPTION_VERSION 1
-#define INTERRUPT_CONTROLLER_DESCRIPTION_VERSION 1
+#define INTERRUPT_CONTROLLER_DESCRIPTION_VERSION 2
 #define TIMER_DESCRIPTION_VERSION 1
 #define DEBUG_DEVICE_DESCRIPTION_VERSION 1
 #define CALENDAR_TIMER_DESCRIPTION_VERSION 1
@@ -1090,6 +1090,63 @@ Return Value:
 
 --*/
 
+typedef
+KSTATUS
+(*PINTERRUPT_SAVE_STATE) (
+    PVOID Context,
+    PVOID Buffer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine saves the current state of the interrupt controller, which
+    may lost momentarily in the hardware due to a power transition. Multiple
+    save functions may be called in a row. If a transition is abandoned, the
+    restore function is not called.
+
+Arguments:
+
+    Context - Supplies the pointer to the controller's context, provided by the
+        hardware module upon initialization.
+
+    Buffer - Supplies a pointer to the save buffer for this processor, the
+        size of which was reported during registration.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PINTERRUPT_RESTORE_STATE) (
+    PVOID Context,
+    PVOID Buffer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine restores the previous state of the interrupt controller.
+
+Arguments:
+
+    Context - Supplies the pointer to the controller's context, provided by the
+        hardware module upon initialization.
+
+    Buffer - Supplies a pointer to the save buffer for this processor, the
+        size of which was reported during registration.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -1144,6 +1201,12 @@ Members:
         message address and data pairs, for controllers that support Message
         Signaled Interrupts.
 
+    SaveState - Stores a pointer to a function used to save the interrupt
+        controller state in preparation for a context loss (power transition).
+
+    RestoreState - Stores a pointer to a function used to restore previously
+        saved interrupt controller state after a power transition.
+
 --*/
 
 typedef struct _INTERRUPT_FUNCTION_TABLE {
@@ -1159,6 +1222,8 @@ typedef struct _INTERRUPT_FUNCTION_TABLE {
     PINTERRUPT_SET_LOCAL_UNIT_ADDRESSING SetLocalUnitAddressing;
     PINTERRUPT_START_PROCESSOR StartProcessor;
     PINTERRUPT_GET_MESSAGE_INFORMATION GetMessageInformation;
+    PINTERRUPT_SAVE_STATE SaveState;
+    PINTERRUPT_RESTORE_STATE RestoreState;
 } INTERRUPT_FUNCTION_TABLE, *PINTERRUPT_FUNCTION_TABLE;
 
 //
@@ -1891,6 +1956,9 @@ Members:
         interrupts can be configured at. This value may be 0 to indicate that
         the controller does not support a hardware priority scheme.
 
+    SaveContextSize - Stores the number of bytes needed per processor to save
+        the interrupt controller state.
+
 --*/
 
 typedef struct _INTERRUPT_CONTROLLER_DESCRIPTION {
@@ -1901,6 +1969,7 @@ typedef struct _INTERRUPT_CONTROLLER_DESCRIPTION {
     UINTN Identifier;
     ULONG ProcessorCount;
     ULONG PriorityCount;
+    ULONG SaveContextSize;
 } INTERRUPT_CONTROLLER_DESCRIPTION, *PINTERRUPT_CONTROLLER_DESCRIPTION;
 
 /*++

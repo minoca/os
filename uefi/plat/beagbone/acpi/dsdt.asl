@@ -89,12 +89,12 @@ DefinitionBlock (
                 DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
                             NonCacheable, ReadWrite,
                             0x00000000,
-                            0x48030000,
-                            0x48030FFF,
+                            0x480C8000,
+                            0x480C8FFF,
                             0x00000000,
                             0x00001000)
 
-/*
+
                 //
                 // OCMC RAM
                 //
@@ -106,7 +106,7 @@ DefinitionBlock (
                             0x4030FFFF,
                             0x00000000,
                             0x00010000)
-*/
+
 
                 //
                 // EMIF0

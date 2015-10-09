@@ -86,6 +86,51 @@ typedef struct _AM335_INTC_DATA {
     PHYSICAL_ADDRESS PhysicalAddress;
 } AM335_INTC_DATA, *PAM335_INTC_DATA;
 
+/*++
+
+Structure Description:
+
+    This structure stores the internal state of the AM335 interrupt controller,
+    which can be saved and restored when context is lost.
+
+Members:
+
+    SysConfig - Stores the value of the system configuration register.
+
+    SirIrq - Stores the value of the active interrupt number.
+
+    SirFiq - Stores the value of the active fast interrupt number.
+
+    Protection - Stores the protection register value.
+
+    Idle - Stores the idle register value.
+
+    IrqPriority - Stores the interrupt priority register value.
+
+    FiqPriority - Stores the fast interrupt priority register value.
+
+    Threshold - Stores the threshold register value.
+
+    Mask - Stores the blocks of interrupt masks.
+
+    LineConfiguration - Stores the interrupt line configuration registers (the
+        first 8 bits of each, which is all that matters).
+
+--*/
+
+typedef struct _AM335_INTC_STATE {
+    ULONG SysConfig;
+    ULONG SirIrq;
+    ULONG SirFiq;
+    ULONG Protection;
+    ULONG Idle;
+    ULONG IrqPriority;
+    ULONG FiqPriority;
+    ULONG Threshold;
+    ULONG Mask[AM335_MAX_INTERRUPT_LINE_BLOCKS];
+    UCHAR LineConfiguration[AM335_MAX_INTERRUPT_LINES];
+} AM335_INTC_STATE, *PAM335_INTC_STATE;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -131,6 +176,18 @@ HlpAm335InterruptMaskLine (
     );
 
 KSTATUS
+HlpAm335InterruptSaveState (
+    PVOID Context,
+    PVOID Buffer
+    );
+
+KSTATUS
+HlpAm335InterruptRestoreState (
+    PVOID Context,
+    PVOID Buffer
+    );
+
+KSTATUS
 HlpAm335InterruptDescribeLines (
     PAM335_INTC_DATA Data
     );
@@ -151,7 +208,9 @@ INTERRUPT_FUNCTION_TABLE HlAm335InterruptFunctionTable = {
     NULL,
     NULL,
     NULL,
-    NULL
+    NULL,
+    HlpAm335InterruptSaveState,
+    HlpAm335InterruptRestoreState
 };
 
 //
@@ -232,6 +291,7 @@ Return Value:
         NewController.Identifier = 0;
         NewController.ProcessorCount = 0;
         NewController.PriorityCount = AM335_INTC_PRIORITY_COUNT;
+        NewController.SaveContextSize = sizeof(AM335_INTC_STATE);
 
         //
         // Register the controller with the system.
@@ -315,6 +375,26 @@ Return Value:
         Value = AM335_INTC_READ(Data->Base, Am335IntcSystemStatus);
 
     } while ((Value & AM335_INTC_SYSTEM_STATUS_RESET_DONE) == 0);
+
+    AM335_INTC_WRITE(Data->Base,
+                     Am335IntcSystemConfig,
+                     AM335_INTC_SYSTEM_CONFIG_AUTO_IDLE);
+
+    //
+    // Make sure only privileged mode can access the registers.
+    //
+
+    AM335_INTC_WRITE(Data->Base,
+                     Am335IntcProtection,
+                     AM335_INTC_PROTECTION_ENABLE);
+
+    //
+    // Allow the input synchronizer clock to auto-idle based on input activity.
+    //
+
+    AM335_INTC_WRITE(Data->Base,
+                     Am335IntcIdle,
+                     AM335_INTC_IDLE_INPUT_AUTO_GATING);
 
     //
     // Set the current priority to be the lowest, so all interrupts come in
@@ -628,6 +708,139 @@ Return Value:
     }
 
     return;
+}
+
+KSTATUS
+HlpAm335InterruptSaveState (
+    PVOID Context,
+    PVOID Buffer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine saves the current state of the interrupt controller, which
+    may lost momentarily in the hardware due to a power transition.
+
+Arguments:
+
+    Context - Supplies the pointer to the controller's context, provided by the
+        hardware module upon initialization.
+
+    Buffer - Supplies a pointer to the save buffer for this processor, the
+        size of which was reported during registration.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PAM335_INTC_DATA Data;
+    ULONG Index;
+    PAM335_INTC_STATE State;
+
+    Data = Context;
+    State = Buffer;
+    State->SysConfig = AM335_INTC_READ(Data->Base, Am335IntcSystemConfig);
+    State->SirIrq = AM335_INTC_READ(Data->Base, Am335IntcSortedIrq);
+    State->SirFiq = AM335_INTC_READ(Data->Base, Am335IntcSortedFiq);
+    State->Protection = AM335_INTC_READ(Data->Base, Am335IntcProtection);
+    State->Idle = AM335_INTC_READ(Data->Base, Am335IntcIdle);
+    State->IrqPriority = AM335_INTC_READ(Data->Base, Am335IntcIrqPriority);
+    State->FiqPriority = AM335_INTC_READ(Data->Base, Am335IntcFiqPriority);
+    State->Threshold = AM335_INTC_READ(Data->Base, Am335IntcThreshold);
+    for (Index = 0; Index < AM335_MAX_INTERRUPT_LINE_BLOCKS; Index += 1) {
+        State->Mask[Index] = AM335_INTC_READ(Data->Base,
+                                             Am335IntcMask + (Index * 0x20));
+    }
+
+    for (Index = 0; Index < AM335_MAX_INTERRUPT_LINES; Index += 1) {
+        State->LineConfiguration[Index] =
+                           AM335_INTC_READ(Data->Base, AM335_INTC_LINE(Index));
+    }
+
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+HlpAm335InterruptRestoreState (
+    PVOID Context,
+    PVOID Buffer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine restores the previous state of the interrupt controller.
+
+Arguments:
+
+    Context - Supplies the pointer to the controller's context, provided by the
+        hardware module upon initialization.
+
+    Buffer - Supplies a pointer to the save buffer for this processor, the
+        size of which was reported during registration.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PAM335_INTC_DATA Data;
+    ULONG Index;
+    PAM335_INTC_STATE State;
+    ULONG Value;
+
+    Data = Context;
+    State = Buffer;
+
+    //
+    // Reset the thing first, and set some sane defaults.
+    //
+
+    HlpAm335InterruptInitializeIoUnit(Context);
+    AM335_INTC_WRITE(Data->Base, Am335IntcSystemConfig, State->SysConfig);
+    AM335_INTC_WRITE(Data->Base, Am335IntcSortedIrq, State->SirIrq);
+    AM335_INTC_WRITE(Data->Base, Am335IntcSortedFiq, State->SirFiq);
+    AM335_INTC_WRITE(Data->Base, Am335IntcProtection, State->Protection);
+    AM335_INTC_WRITE(Data->Base, Am335IntcIdle, State->Idle);
+    AM335_INTC_WRITE(Data->Base, Am335IntcIrqPriority, State->IrqPriority);
+    AM335_INTC_WRITE(Data->Base, Am335IntcFiqPriority, State->FiqPriority);
+    AM335_INTC_WRITE(Data->Base, Am335IntcThreshold, State->Threshold);
+
+    //
+    // Restore the line configurations before unmasking anything.
+    //
+
+    for (Index = 0; Index < AM335_MAX_INTERRUPT_LINES; Index += 1) {
+        Value = State->LineConfiguration[Index];
+        if (Value == 0) {
+            continue;
+        }
+
+        AM335_INTC_WRITE(Data->Base, AM335_INTC_LINE(Index), Value);
+    }
+
+    //
+    // Write the masks, which start out all ones. Clear (enable) anything
+    // that's not set in the structure values.
+    //
+
+    for (Index = 0; Index < AM335_MAX_INTERRUPT_LINE_BLOCKS; Index += 1) {
+        AM335_INTC_WRITE(Data->Base,
+                         Am335IntcMaskClear + (0x20 * Index),
+                         ~State->Mask[Index]);
+    }
+
+    return STATUS_SUCCESS;
 }
 
 KSTATUS

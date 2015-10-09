@@ -44,6 +44,7 @@ OBJS = cache.o    \
        ipi.o      \
        profiler.o \
        reset.o    \
+       suspend.o  \
        timer.o    \
 
 ARMV7_OBJS = armv7/am335int.o \

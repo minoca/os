@@ -304,6 +304,9 @@ Return Value:
     LoaderParameters->BootEntryFlags = BootEntry->Flags;
     LoaderParameters->StackTop = Parameters->StackTop;
     LoaderParameters->StackSize = Parameters->StackSize;
+    LoaderParameters->Flags = Parameters->Flags |
+                              BOOT_INITIALIZATION_FLAG_SCREEN_CLEAR;
+
     BaseDifference = (UINTN)LoaderImage->LoadedLowestAddress -
                      (UINTN)LoaderImage->PreferredLowestAddress;
 

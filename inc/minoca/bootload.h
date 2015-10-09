@@ -28,9 +28,15 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define BOOT_INITIALIZATION_BLOCK_VERSION 1
+#define BOOT_INITIALIZATION_BLOCK_VERSION 2
 
 #define KERNEL_INITIALIZATION_BLOCK_VERSION 2
+
+//
+// Define boot initialization flags.
+//
+
+#define BOOT_INITIALIZATION_FLAG_SCREEN_CLEAR 0x00000001
 
 //
 // Define the initial size of the memory allocation to hand to the hardware
@@ -133,6 +139,9 @@ Members:
     ApplicationArguments - Stores a pointer to a null terminated string
         containing the command-line-esque arguments to the application.
 
+    Flags - Stores flags describing the environment state. See
+        BOOT_INITIALIZATION_FLAG_* definitions.
+
 --*/
 
 typedef struct _BOOT_INITIALIZATION_BLOCK {
@@ -154,6 +163,7 @@ typedef struct _BOOT_INITIALIZATION_BLOCK {
     PVOID ApplicationLowestAddress;
     UINTN ApplicationSize;
     PSTR ApplicationArguments;
+    ULONG Flags;
 } BOOT_INITIALIZATION_BLOCK, *PBOOT_INITIALIZATION_BLOCK;
 
 typedef

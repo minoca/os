@@ -1064,7 +1064,6 @@ Return Value:
     ULONGLONG IdleDelta;
     ULONGLONG InterruptDelta;
     ULONGLONG KernelDelta;
-    ULONGLONG Ratio;
     ULONGLONG StoppedCycles;
     ULONGLONG TimeCounter;
     ULONGLONG TimeCounterDelta;
@@ -1099,10 +1098,15 @@ Return Value:
         return;
     }
 
-    Ratio = Context->CycleCounterFrequency * KeGetActiveProcessorCount() /
-            Context->TimeCounterFrequency;
+    //
+    // TcTicks * CcTicks/ * s/       = CcTicks.
+    //           s          TcTicks
+    //
 
-    ExpectedTotalDelta = TimeCounterDelta * Ratio;
+    ExpectedTotalDelta = TimeCounterDelta * Context->CycleCounterFrequency *
+                         KeGetActiveProcessorCount() /
+                         Context->TimeCounterFrequency;
+
     TotalCycles = Cycles.UserCycles + Cycles.KernelCycles +
                   Cycles.InterruptCycles + Cycles.IdleCycles;
 

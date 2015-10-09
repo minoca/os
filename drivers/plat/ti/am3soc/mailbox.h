@@ -25,6 +25,12 @@ Author:
 //
 
 //
+// Define the mailbox number reserved for the Cortex M3.
+//
+
+#define AM335_WAKEM3_MAILBOX 0
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

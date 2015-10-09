@@ -95,7 +95,7 @@ Environment:
 
 #define MMU_ENABLED                     0x00000001
 #define MMU_ALIGNMENT_FAULT_ENABLED     0x00000002
-#define MMU_DCACHE_UNIFIED_ENABLED      0x00000004
+#define MMU_DCACHE_ENABLED              0x00000004
 #define MMU_WRITE_BUFFER_ENABLED        0x00000008
 #define MMU_ENDIANNESS                  0x00000080
 #define MMU_SYSTEM_PROTECTION           0x00000100
@@ -145,7 +145,7 @@ Environment:
 ## Define the size of the PROCESSOR_CONTEXT structure.
 ##
 
-#define PROCESSOR_CONTEXT_SIZE 152
+#define PROCESSOR_CONTEXT_SIZE 192
 
 ##
 ## Define the instructions for DSB/ISB, which are different in ARMv6 vs ARMv7.

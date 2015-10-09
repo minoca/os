@@ -437,6 +437,27 @@ Return Value:
 --*/
 
 VOID
+ArCleanEntireCache (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine cleans the entire data cache.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
 ArInvalidateTlbEntry (
     PVOID Address
     );

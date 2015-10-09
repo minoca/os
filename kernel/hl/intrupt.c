@@ -1165,6 +1165,7 @@ Return Value:
 {
 
     PINTERRUPT_CONTROLLER Controller;
+    UINTN SaveSize;
     KSTATUS Status;
 
     Controller = NULL;
@@ -1225,7 +1226,12 @@ Return Value:
     // Allocate the new controller object.
     //
 
-    Controller = MmAllocateNonPagedPool(sizeof(INTERRUPT_CONTROLLER),
+    SaveSize = ControllerDescription->SaveContextSize;
+    if ((SaveSize != 0) && (ControllerDescription->ProcessorCount != 0)) {
+        SaveSize *= ControllerDescription->ProcessorCount;
+    }
+
+    Controller = MmAllocateNonPagedPool(sizeof(INTERRUPT_CONTROLLER) + SaveSize,
                                         HL_POOL_TAG);
 
     if (Controller == NULL) {
@@ -1233,8 +1239,13 @@ Return Value:
         goto InterruptRegisterHardwareEnd;
     }
 
-    RtlZeroMemory(Controller, sizeof(INTERRUPT_CONTROLLER));
+    RtlZeroMemory(Controller, sizeof(INTERRUPT_CONTROLLER) + SaveSize);
     Controller->RunLevel = RunLevel;
+    if (SaveSize != 0) {
+        Controller->SaveSize = SaveSize;
+        Controller->SaveRegion = Controller + 1;
+    }
+
     INITIALIZE_LIST_HEAD(&(Controller->LinesHead));
     INITIALIZE_LIST_HEAD(&(Controller->OutputLinesHead));
 
@@ -1911,6 +1922,124 @@ Return Value:
     //
 
     return STATUS_NOT_FOUND;
+}
+
+KSTATUS
+HlpInterruptSaveState (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine saves the state of all interrupt controllers for this
+    processor in preparation for a power transition.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PINTERRUPT_CONTROLLER Controller;
+    ULONG Count;
+    ULONG Index;
+    ULONG Processor;
+    PVOID SaveBuffer;
+    KSTATUS Status;
+
+    ASSERT(ArAreInterruptsEnabled() == FALSE);
+
+    Processor = KeGetCurrentProcessorNumber();
+    Count = HlInterruptControllerCount;
+    for (Index = 0; Index < Count; Index += 1) {
+        Controller = HlInterruptControllers[Index];
+        if (Controller->FunctionTable.SaveState != NULL) {
+            SaveBuffer = Controller->SaveRegion +
+                         (Processor * Controller->SaveSize);
+
+            Status = Controller->FunctionTable.SaveState(
+                                                    Controller->PrivateContext,
+                                                    SaveBuffer);
+
+            if (!KSUCCESS(Status)) {
+                goto InterruptSaveStateEnd;
+            }
+
+            Controller->Flags |= INTERRUPT_CONTROLLER_FLAG_SAVED;
+        }
+    }
+
+    Status = STATUS_SUCCESS;
+
+InterruptSaveStateEnd:
+    return Status;
+}
+
+KSTATUS
+HlpInterruptRestoreState (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine restores the state of all interrupt controllers for this
+    processor after a power transition has occurred.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PINTERRUPT_CONTROLLER Controller;
+    ULONG Count;
+    ULONG Index;
+    ULONG Processor;
+    PVOID SaveBuffer;
+    KSTATUS Status;
+
+    ASSERT(ArAreInterruptsEnabled() == FALSE);
+
+    Processor = KeGetCurrentProcessorNumber();
+    Count = HlInterruptControllerCount;
+    for (Index = 0; Index < Count; Index += 1) {
+        Controller = HlInterruptControllers[Index];
+        if ((Controller->Flags & INTERRUPT_CONTROLLER_FLAG_SAVED) != 0) {
+            SaveBuffer = Controller->SaveRegion +
+                         (Processor * Controller->SaveSize);
+
+            Status = Controller->FunctionTable.RestoreState(
+                                                    Controller->PrivateContext,
+                                                    SaveBuffer);
+
+            if (!KSUCCESS(Status)) {
+                goto InterruptRestoreStateEnd;
+            }
+
+            Controller->Flags &= ~INTERRUPT_CONTROLLER_FLAG_SAVED;
+        }
+    }
+
+    Status = STATUS_SUCCESS;
+
+InterruptRestoreStateEnd:
+    return Status;
 }
 
 //

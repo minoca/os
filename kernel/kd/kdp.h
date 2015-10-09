@@ -42,6 +42,15 @@ Author:
     }                                                     \
 
 //
+// Define these trace macros to something to debug KD (I/O port out, video
+// print, alternate UART, etc). See the KD_TRACE_EVENT and
+// KD_DEVICE_TRACE_EVENT for possible values.
+//
+
+#define KD_TRACE(_KdTraceEvent)
+#define KD_DEVICE_TRACE(_KdDeviceTraceEvent)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -64,6 +73,47 @@ typedef struct _MODULE_CHANGE_NOTIFICATION {
     PLOADED_MODULE Module;
     BOOL Loading;
 } MODULE_CHANGE_NOTIFICATION, *PMODULE_CHANGE_NOTIFICATION;
+
+typedef enum _KD_TRACE_EVENT {
+    KdTraceExit,
+    KdTraceInExceptionHandler,
+    KdTraceDebuggingEnabled,
+    KdTraceLockAcquired,
+    KdTracePollBailing,
+    KdTraceClearedSingleStep,
+    KdTraceWaitingForFrozenProcessors,
+    KdTraceProcessorsFrozen,
+    KdTraceReceiveFailure,
+    KdTraceProcessingCommand,
+    KdTraceConnecting,
+    KdTraceConnectBailing,
+    KdTracePrinting,
+    KdTraceSendingProfilingData,
+    KdTraceModuleChange,
+    KdTraceCheckSingleStep,
+    KdTraceCommittingToBreak,
+    KdTraceBailingUnconnected,
+    KdTraceTransmitFailure,
+    KdTraceThawingProcessors,
+} KD_TRACE_EVENT, *PKD_TRACE_EVENT;
+
+typedef enum _KD_DEVICE_TRACE_EVENT {
+    KdDeviceTraceDisconnected,
+    KdDeviceTraceResetting,
+    KdDeviceTraceResetFailed,
+    KdDeviceTraceResetComplete,
+    KdDeviceTraceTransmitting,
+    KdDeviceTraceTransmitFailed,
+    KdDeviceTraceTransmitComplete,
+    KdDeviceTraceReceiving,
+    KdDeviceTraceReceiveFailed,
+    KdDeviceTraceReceiveComplete,
+    KdDeviceTraceGettingStatus,
+    KdDeviceTraceGetStatusFailed,
+    KdDeviceTraceGetStatusHasData,
+    KdDeviceTraceGetStatusEmpty,
+    KdDeviceTraceDisconnecting,
+} KD_DEVICE_TRACE_EVENT, *PKD_DEVICE_TRACE_EVENT;
 
 //
 // -------------------------------------------------------------------- Globals

@@ -98,7 +98,10 @@ Return Value:
         goto InitializeEnd;
     }
 
-    FwClearScreen(0, 0, -1, -1);
+    if ((Parameters->Flags & BOOT_INITIALIZATION_FLAG_SCREEN_CLEAR) == 0) {
+        FwClearScreen(0, 0, -1, -1);
+    }
+
     Status = FwPcatGetMemoryMap(&BoMemoryMap);
     if (!KSUCCESS(Status)) {
         goto InitializeEnd;

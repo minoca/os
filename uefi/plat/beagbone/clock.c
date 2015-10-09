@@ -142,6 +142,19 @@ Return Value:
     } while ((Value & AM335_CM_PER_LCD_CLOCK_MODE_MASK) !=
              AM335_CM_PER_LCD_CLOCK_ENABLE);
 
+    //
+    // Enable the mailbox clock for Cortex-M3 assisted sleep transitions.
+    //
+
+    Value = AM335_CM_PER_READ(AM335_CM_PER_MAILBOX_CLOCK_CONTROL);
+    Value |= AM335_CM_PER_MAILBOX_CLOCK_ENABLE;
+    AM335_CM_PER_WRITE(AM335_CM_PER_MAILBOX_CLOCK_CONTROL, Value);
+    do {
+        Value = AM335_CM_PER_READ(AM335_CM_PER_MAILBOX_CLOCK_CONTROL);
+
+    } while ((Value & AM335_CM_PER_MAILBOX_CLOCK_MODE_MASK) !=
+             AM335_CM_PER_MAILBOX_CLOCK_ENABLE);
+
     return;
 }
 

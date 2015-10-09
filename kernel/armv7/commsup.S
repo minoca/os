@@ -1593,6 +1593,18 @@ FUNCTION ArSaveProcessorContext
     stmia   %r0!, {%r1}                 @
     stmia   %r0!, {%r1}                 @
     stmia   %r0!, {%r4-%r11, %sp}       @ Save R4-R11 and SP.
+    mrs     %r1, CPSR                   @ Get the current mode and status.
+    cpsid   if, #ARM_MODE_SYSTEM        @ Get to user mode (disable interrupts).
+    stmia   %r0!, {%sp, %lr}            @ Save banked registers.
+    cpsid   if, #ARM_MODE_IRQ           @ Get to interrupt mode.
+    stmia   %r0!, {%sp, %lr}            @ Save banked registers.
+    cpsid   if, #ARM_MODE_FIQ           @ Get to fast interrupt mode.
+    stmia   %r0!, {%sp, %lr}            @ Save banked registers (sort of).
+    cpsid   if, #ARM_MODE_ABORT         @ Get to abort mode.
+    stmia   %r0!, {%sp, %lr}            @ Save banked registers.
+    cpsid   if, #ARM_MODE_UNDEF         @ Get to undefined instruction mode.
+    stmia   %r0!, {%sp, %lr}            @ Save banked registers.
+    msr     CPSR, %r1                   @ Restore interrupts and mode.
     stmia   %r0!, {%r0}                 @ Remember the VA right here.
     mrc     p15, 0, %r1, c1, c0, 0      @ Save SCTLR.
     stmia   %r0!, {%r1}                 @
@@ -1618,7 +1630,7 @@ FUNCTION ArSaveProcessorContext
     stmia   %r0!, {%r1}                 @
     mrc     p15, 0, %r1, c6, c0, 2      @ Save IFAR.
     stmia   %r0!, {%r1}                 @
-    mrc     p15, 0, %r1, c3, c0, 1      @ Save DACR
+    mrc     p15, 0, %r1, c3, c0, 0      @ Save DACR
     stmia   %r0!, {%r1}                 @
     mrc     p15, 0, %r1, c12, c0, 0     @ Save VBAR.
     stmia   %r0!, {%r1}                 @
@@ -1690,7 +1702,7 @@ FUNCTION ArRestoreProcessorContext
     ldmdb   %r0!, {%r1}                 @
     mcr     p15, 0, %r1, c12, c0, 0     @ Restore VBAR.
     ldmdb   %r0!, {%r1}                 @
-    mcr     p15, 0, %r1, c3, c0, 1      @ Restore DACR
+    mcr     p15, 0, %r1, c3, c0, 0      @ Restore DACR
     ldmdb   %r0!, {%r1}                 @
     mcr     p15, 0, %r1, c6, c0, 2      @ Restore IFAR.
     ldmdb   %r0!, {%r1}                 @
@@ -1747,6 +1759,22 @@ ArRestoreProcessorContextAfterActlr:
     mcr     p15, 0, %r0, c8, c7, 0      @ Clear the TLB, TLBIALL.
     DSB                                 @ Data synchronization barrier.
     ISB                                 @ Instruction syncrhonization barrier.
+
+    ##
+    ## Restore the banked registers.
+    ##
+
+    cpsid   if, #ARM_MODE_UNDEF         @ Get to undefined instruction mode.
+    ldmdb   %r0!, {%sp, %lr}            @ Save banked registers.
+    cpsid   if, #ARM_MODE_ABORT         @ Get to abort mode.
+    ldmdb   %r0!, {%sp, %lr}            @ Save banked registers.
+    cpsid   if, #ARM_MODE_FIQ           @ Get to fast interrupt mode.
+    ldmdb   %r0!, {%sp, %lr}            @ Save banked registers (sort of).
+    cpsid   if, #ARM_MODE_IRQ           @ Get to interrupt mode.
+    ldmdb   %r0!, {%sp, %lr}            @ Save banked registers.
+    cpsid   if, #ARM_MODE_SYSTEM        @ Get to user mode (disable interrupts).
+    ldmdb   %r0!, {%sp, %lr}            @ Save banked registers.
+    cpsid   if, #ARM_MODE_SVC           @ Get back to SVC mode.
 
     ##
     ## Restore the general registers and jump back to the return of the

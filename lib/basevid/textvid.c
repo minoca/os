@@ -1170,6 +1170,15 @@ Return Value:
     }
 
     //
+    // Pad spaces to at least 8.
+    //
+
+    while (CurrentPosition < 8) {
+        String[CurrentPosition] = ' ';
+        CurrentPosition += 1;
+    }
+
+    //
     // Null terminate and reverse the string.
     //
 

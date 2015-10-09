@@ -360,6 +360,15 @@ Return Value:
     }
 
     //
+    // Set up P0's startup page, needed for resume.
+    //
+
+    Status = HlpInterruptPrepareForProcessorStart(0, NULL, NULL, NULL);
+    if (!KSUCCESS(Status)) {
+        goto StartAllProcessorsEnd;
+    }
+
+    //
     // Bail now if this machine is not multiprocessor capable.
     //
 
@@ -509,6 +518,8 @@ Return Value:
     ULONG ControllerIndex;
     PPROCESSOR_DESCRIPTION Descriptions;
     ULONG GlobalProcessorIndex;
+    PIO_BUFFER IoBuffer;
+    ULONG IoBufferFlags;
     ULONG MaxProcessors;
     ULONG MaxProcessorsPerUnit;
     ULONG NextProcessorIndex;
@@ -521,6 +532,7 @@ Return Value:
     KSTATUS Status;
 
     Descriptions = NULL;
+    PageSize = MmPageSize();
 
     //
     // Loop through all controllers once to figure out how many processors the
@@ -545,14 +557,9 @@ Return Value:
         }
     }
 
-    //
-    // Finish now if this is not a multi-processor system.
-    //
-
     if (MaxProcessors == 0) {
         MaxProcessors = 1;
-        Status = STATUS_SUCCESS;
-        goto InitializeIpisEnd;
+        MaxProcessorsPerUnit = 1;
     }
 
     //
@@ -660,7 +667,6 @@ Return Value:
             //
 
             if (ParkedAddress != INVALID_PHYSICAL_ADDRESS) {
-                PageSize = MmPageSize();
                 ParkedAddressPage = ALIGN_RANGE_DOWN(ParkedAddress, PageSize);
                 Offset = ParkedAddress - ParkedAddressPage;
                 ParkedAddressMapping = MmMapPhysicalAddress(ParkedAddressPage,
@@ -684,6 +690,36 @@ Return Value:
         //
 
         NextProcessorIndex += Controller->ProcessorCount;
+    }
+
+    //
+    // Make up a page for P0 on resume if there was none. The I/O buffer
+    // structure is leaked since the page is permanent.
+    //
+
+    if (HlProcessorTargets[0].ParkedVirtualAddress == NULL) {
+        IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS |
+                        IO_BUFFER_FLAG_MAP_NON_CACHED |
+                        IO_BUFFER_FLAG_KERNEL_MODE_DATA |
+                        IO_BUFFER_FLAG_MEMORY_LOCKED;
+
+        IoBuffer = MmAllocateNonPagedIoBuffer(0,
+                                              MAX_ULONG,
+                                              PageSize,
+                                              PageSize,
+                                              IoBufferFlags);
+
+        if (IoBuffer == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeIpisEnd;
+        }
+
+        HlProcessorTargets[0].Target.Addressing = InterruptAddressingPhysical;
+        HlProcessorTargets[0].ParkedPhysicalAddress =
+                                         IoBuffer->Fragment[0].PhysicalAddress;
+
+        HlProcessorTargets[0].ParkedVirtualAddress =
+                                          IoBuffer->Fragment[0].VirtualAddress;
     }
 
     Status = STATUS_SUCCESS;

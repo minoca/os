@@ -134,9 +134,12 @@ Environment:
 #define TDA19988_CEC_FRO_IM_CLOCK_CONTROL_VALUE 0x82
 
 #define TDA19988_CEC_STATUS 0xFE
-#define TDA19988_CEC_STATUS_CONNECTED 0x02
+#define TDA19988_CEC_STATUS_RX_SENSE 0x01
+#define TDA19988_CEC_STATUS_HOT_PLUG_DETECT 0x02
 
 #define TDA19988_CEC_ENABLE 0xFF
+#define TDA19988_CEC_ENABLE_RX_SENSE 0x04
+#define TDA19988_CEC_ENABLE_HDMI 0x02
 #define TDA19988_CEC_ENABLE_ALL 0x87
 
 //
@@ -710,8 +713,8 @@ Return Value:
     // Initialize the video to the default mode.
     //
 
-    EfipBeagleBoneBlackInitializeVideo(FrameBufferBase);
     EfipTda19988Initialize();
+    EfipBeagleBoneBlackInitializeVideo(FrameBufferBase);
 
     //
     // Everything's all set up, create the graphics output protocol.
@@ -1233,28 +1236,38 @@ Return Value:
 
     BOOLEAN DisplayConnected;
     UINT8 EdidData[128];
-
-    //
-    // TODO: Complete TDA19988 initialization.
-    //
+    UINT32 Try;
 
     EfipAm335I2c0Initialize();
     EfipTda19988HdmiInitialize();
-    DisplayConnected = EfipTda19988IsDisplayConnected();
+    for (Try = 0; Try < 20; Try += 1) {
+        DisplayConnected = EfipTda19988IsDisplayConnected();
+        if (DisplayConnected != FALSE) {
+            break;
+        }
+
+        EfiStall(10000);
+    }
+
+    //
+    // This code always sets the resolution to 1024x768, but the framework is
+    // here to potentially support native resolutions.
+    //
+
     if (DisplayConnected != FALSE) {
         EfiSetMem(EdidData, sizeof(EdidData), 0);
         EfipTda19988ReadEdid(EdidData, sizeof(EdidData));
-        EfipTda19988InitializeEncoder(&EfiTda19988Mode1024x768);
-
-        //
-        // Write default values for RBG 4:4:4.
-        //
-
-        EfipTda19988Write(TDA19988_CONTROL_VIP_CONTROL_0, 0x23);
-        EfipTda19988Write(TDA19988_CONTROL_VIP_CONTROL_1, 0x45);
-        EfipTda19988Write(TDA19988_CONTROL_VIP_CONTROL_2, 0x01);
     }
 
+    EfipTda19988InitializeEncoder(&EfiTda19988Mode1024x768);
+
+    //
+    // Write default values for RBG 4:4:4.
+    //
+
+    EfipTda19988Write(TDA19988_CONTROL_VIP_CONTROL_0, 0x23);
+    EfipTda19988Write(TDA19988_CONTROL_VIP_CONTROL_1, 0x45);
+    EfipTda19988Write(TDA19988_CONTROL_VIP_CONTROL_2, 0x01);
     return;
 }
 
@@ -1285,7 +1298,16 @@ Return Value:
 
     EfipAm335I2c0SetSlaveAddress(EFI_TDA19988_CEC_BUS_ADDRESS);
     EfipAm335I2c0Read(TDA19988_CEC_STATUS, 1, &Value);
-    if ((Value & TDA19988_CEC_STATUS_CONNECTED) != 0) {
+
+    //
+    // Accept either the official hot-plug detect or the jankier RX sense, as
+    // a pre-connected monitor seems to sometimes never set HPD.
+    //
+
+    if ((Value &
+         (TDA19988_CEC_STATUS_HOT_PLUG_DETECT |
+          TDA19988_CEC_STATUS_RX_SENSE)) != 0) {
+
         return TRUE;
     }
 
@@ -1323,7 +1345,7 @@ Return Value:
     //
 
     EfipAm335I2c0SetSlaveAddress(EFI_TDA19988_CEC_BUS_ADDRESS);
-    Value = TDA19988_CEC_ENABLE_ALL;
+    Value = TDA19988_CEC_ENABLE_RX_SENSE | TDA19988_CEC_ENABLE_HDMI;
     EfipAm335I2c0Write(TDA19988_CEC_ENABLE, 1, &Value);
     EfiStall(10000);
     EfipAm335I2c0Read(TDA19988_CEC_STATUS, 1, &Value);

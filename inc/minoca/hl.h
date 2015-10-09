@@ -50,6 +50,7 @@ Author:
 #define HL_CRASH_PROCESSOR_WONT_START             0x00000005
 #define HL_CRASH_INVALID_INTERRUPT_DISCONNECT     0x00000006
 #define HL_CRASH_PROCESSOR_HUNG                   0x00000007
+#define HL_CRASH_RESUME_FAILURE                   0x00000008
 
 #define NANOSECONDS_PER_SECOND 1000000000ULL
 #define MICROSECONDS_PER_SECOND 1000000ULL
@@ -62,6 +63,16 @@ Author:
 //
 
 #define DEFAULT_CLOCK_RATE 156250
+
+//
+// Define low level suspend flags.
+//
+
+//
+// This bit is set when the interrupt controller state needs to be saved.
+//
+
+#define HL_SUSPEND_RESTORE_INTERRUPTS 0x00000001
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -281,6 +292,116 @@ typedef struct _HL_PROCESSOR_COUNTER_INFORMATION {
     ULONG Multiplier;
     ULONG Features;
 } HL_PROCESSOR_COUNTER_INFORMATION, *PHL_PROCESSOR_COUNTER_INFORMATION;
+
+//
+// SuspendBegin is called after all devices have been suspended, but before
+// internal hardware layer context has been saved.
+//
+// Suspend is called after all internal context has been saved, and should
+// actually take the CPU or platform down.
+//
+// Resume is called immediately after the machine context is restored, but
+// before all the internal hardware layer state has been restored.
+//
+// ResumeEnd is called after the internal hardware layer state has been
+// restored, but before devices have been resumed.
+//
+// Complete is not a phase under which the callback is called, but is the
+// ending state indicating the transition went through successfully.
+//
+
+typedef enum _HL_SUSPEND_PHASE {
+    HlSuspendPhaseInvalid,
+    HlSuspendPhaseSuspendBegin = 0x100,
+    HlSuspendPhaseSuspend = 0x200,
+    HlSuspendPhaseResume = 0x300,
+    HlSuspendPhaseResumeEnd = 0x400,
+    HlSuspendPhaseComplete = 0x1000
+} HL_SUSPEND_PHASE, *PHL_SUSPEND_PHASE;
+
+typedef
+KSTATUS
+(*PHL_SUSPEND_CALLBACK) (
+    PVOID Context,
+    HL_SUSPEND_PHASE Phase
+    );
+
+/*++
+
+Routine Description:
+
+    This routine represents a callback during low level suspend or resume.
+
+Arguments:
+
+    Context - Supplies the context supplied in the interface.
+
+    Phase - Supplies the phase of suspend or resume the callback represents.
+
+Return Value:
+
+    Status code. On suspend, failure causes the suspend to abort. On resume,
+    failure causes a crash.
+
+--*/
+
+typedef
+UINTN
+(*PHL_PHYSICAL_CALLBACK) (
+    UINTN Argument
+    );
+
+/*++
+
+Routine Description:
+
+    This routine represents a callback with the MMU disabled. No services
+    except a small stack are available during this callback.
+
+Arguments:
+
+    Argument - Supplies an argument to pass to the function.
+
+Return Value:
+
+    Returns an unspecified value significant to the caller.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines the interface used when going down for a low level
+    suspend where the processor context will be lost. This interface should
+    only be used/called by low-level platform drivers that implement suspend.
+
+Members:
+
+    Flags - Stores a bitfield of flags governing how the processor is taken
+        down and brought back up. See HL_SUSPEND_* definitions.
+
+    Context - Stores a context pointer passed to the callback routines.
+
+    Callback - Stores a pointer to a function that is called for each phase of
+        suspend and resume.
+
+    Phase - Stores the phase at which the suspend or resume operation failed,
+        if it did.
+
+    ResumeAddress - Stores the physical address this processor should resume to.
+        This will be filled out by the system by the time the suspend phase
+        is called.
+
+--*/
+
+typedef struct _HL_SUSPEND_INTERFACE {
+    ULONG Flags;
+    PVOID Context;
+    PHL_SUSPEND_CALLBACK Callback;
+    HL_SUSPEND_PHASE Phase;
+    PHYSICAL_ADDRESS ResumeAddress;
+} HL_SUSPEND_INTERFACE, *PHL_SUSPEND_INTERFACE;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -683,6 +804,59 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+KERNEL_API
+KSTATUS
+HlSuspend (
+    PHL_SUSPEND_INTERFACE Interface
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the low level primitive to suspend the processor
+    and/or platform. This routine does not deal with device states at all, it
+    simply takes the CPU/platform down.
+
+Arguments:
+
+    Interface - Supplies a pointer to the suspend interface to use going down.
+
+Return Value:
+
+    Status code. A failing status code indicates that the suspend did not
+    occur.
+
+--*/
+
+KERNEL_API
+UINTN
+HlDisableMmu (
+    PHL_PHYSICAL_CALLBACK PhysicalFunction,
+    UINTN Argument
+    );
+
+/*++
+
+Routine Description:
+
+    This routine temporarily disables the MMU and calls then given callback
+    function.
+
+Arguments:
+
+    PhysicalFunction - Supplies the physical address of a function to call
+        with the MMU disabled. Interrupts will also be disabled during this
+        call.
+
+    Argument - Supplies an argument to pass to the function.
+
+Return Value:
+
+    Returns the value returned by the callback function.
 
 --*/
 

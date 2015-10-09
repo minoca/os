@@ -31,6 +31,7 @@ FW = am3cm3fw
 OBJS = am3soc.o   \
        $(FW).o    \
        mailbox.o  \
+       sleep.o    \
 
 FW_BIN = $(FW).bin
 

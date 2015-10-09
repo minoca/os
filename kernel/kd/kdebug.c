@@ -1004,6 +1004,7 @@ Return Value:
     PreviousSingleStepAddress = NULL;
     ProcessorBlock = NULL;
     SingleStepHandled = FALSE;
+    KD_TRACE(KdTraceInExceptionHandler);
 
     //
     // If debugging is not enabled, then this shouldn't execute.
@@ -1012,6 +1013,8 @@ Return Value:
     if ((KdInitialized == FALSE) || (KdDebuggingEnabled == FALSE)) {
         return;
     }
+
+    KD_TRACE(KdTraceDebuggingEnabled);
 
     //
     // If the exception is a user mode trap, use the trap frame provided by the
@@ -1032,6 +1035,7 @@ Return Value:
     KdpDisableInterrupts();
     KdpAcquireDebuggerLock(TrapFrame);
     KdpAtomicAdd32(&KdProcessorsFrozen, 1);
+    KD_TRACE(KdTraceLockAcquired);
 
     //
     // If this is just a poll, check for received bytes before bothering to
@@ -1041,6 +1045,7 @@ Return Value:
     if (Exception == EXCEPTION_POLL_DEBUGGER) {
         Status = KdpDeviceGetStatus(&ReceiveDataAvailable);
         if ((!KSUCCESS(Status)) || (ReceiveDataAvailable == FALSE)) {
+            KD_TRACE(KdTracePollBailing);
             goto DebugExceptionHandlerEnd;
         }
     }
@@ -1052,6 +1057,7 @@ Return Value:
     //
 
     KdpClearSingleStepMode(&Exception, TrapFrame, &PreviousSingleStepAddress);
+    KD_TRACE(KdTraceClearedSingleStep);
     if (KeActiveProcessorCount > 1) {
         ProcessorBlock = KeGetCurrentProcessorBlockForDebugger();
         if (KdNmiBroadcastAllowed != FALSE) {
@@ -1083,6 +1089,7 @@ Return Value:
                 // up. Keep the time counter fresh too during this period.
                 //
 
+                KD_TRACE(KdTraceWaitingForFrozenProcessors);
                 while (KdProcessorsFrozen != KeActiveProcessorCount) {
                     if (KdConnectionTimeout != MAX_ULONG) {
                         if (Timeout == 0) {
@@ -1121,6 +1128,8 @@ Return Value:
         KdFreezeOwner = 0;
     }
 
+    KD_TRACE(KdTraceProcessorsFrozen);
+
     //
     // If the exception is a result of polling, find out what's being sent.
     // Process this possible exception first because it's super common.
@@ -1130,14 +1139,17 @@ Return Value:
         while (TRUE) {
             Status = KdpDeviceGetStatus(&ReceiveDataAvailable);
             if ((!KSUCCESS(Status)) || (ReceiveDataAvailable == FALSE)) {
+                KD_TRACE(KdTracePollBailing);
                 break;
             }
 
             Status = KdpReceivePacket(&KdRxPacket, KdConnectionTimeout);
             if (!KSUCCESS(Status)) {
+                KD_TRACE(KdTraceReceiveFailure);
                 break;
             }
 
+            KD_TRACE(KdTraceProcessingCommand);
             if (KdRxPacket.Header.Command == DbgBreakRequest) {
                 Exception = EXCEPTION_BREAK;
 
@@ -1171,11 +1183,13 @@ Return Value:
         goto DebugExceptionHandlerEnd;
 
     } else if (Exception == EXCEPTION_DEBUGGER_CONNECT) {
+        KD_TRACE(KdTraceConnecting);
         Status = KdpConnect(&BreakInRequested);
         if ((KSUCCESS(Status)) && (BreakInRequested != FALSE)) {
             Exception = EXCEPTION_BREAK;
 
         } else {
+            KD_TRACE(KdTraceConnectBailing);
             goto DebugExceptionHandlerEnd;
         }
 
@@ -1184,6 +1198,7 @@ Return Value:
     //
 
     } else if (Exception == EXCEPTION_PRINT) {
+        KD_TRACE(KdTracePrinting);
         BreakInRequested = KdpPrint((PPRINT_PARAMETERS)Parameter);
         if (BreakInRequested == FALSE) {
             goto DebugExceptionHandlerEnd;
@@ -1197,6 +1212,7 @@ Return Value:
     //
 
     } else if (Exception == EXCEPTION_PROFILER) {
+        KD_TRACE(KdTraceSendingProfilingData);
         BreakInRequested = KdpSendProfilingData((PULONG)Parameter);
         if (BreakInRequested == FALSE) {
             goto DebugExceptionHandlerEnd;
@@ -1210,6 +1226,7 @@ Return Value:
     //
 
     } else if (Exception == EXCEPTION_MODULE_CHANGE) {
+        KD_TRACE(KdTraceModuleChange);
         Notification = (PMODULE_CHANGE_NOTIFICATION)Parameter;
         if (Notification->Loading == FALSE) {
             KdLoadedModules.ModuleCount -= 1;
@@ -1231,6 +1248,8 @@ Return Value:
 
         goto DebugExceptionHandlerEnd;
     }
+
+    KD_TRACE(KdTraceCheckSingleStep);
 
     //
     // There are no more shortcuts out of this function, this is going to make
@@ -1322,6 +1341,8 @@ Return Value:
         goto DebugExceptionHandlerEnd;
     }
 
+    KD_TRACE(KdTraceCommittingToBreak);
+
     //
     // Unless it isn't connected, this break is going to make it to the
     // debugger. Turn off the break range.
@@ -1335,6 +1356,7 @@ Return Value:
     //
 
     if (KdDebuggerConnected == FALSE) {
+        KD_TRACE(KdTraceBailingUnconnected);
         goto DebugExceptionHandlerEnd;
     }
 
@@ -1352,6 +1374,7 @@ Return Value:
         KdpInitializeBreakNotification(Exception, TrapFrame, &KdTxPacket);
         Status = KdpSendPacket(&KdTxPacket, NULL);
         if ((!KSUCCESS(Status)) && (Status != STATUS_CONNECTION_RESET)) {
+            KD_TRACE(KdTraceTransmitFailure);
             goto DebugExceptionHandlerEnd;
         }
 
@@ -1359,6 +1382,7 @@ Return Value:
         // Loop processing commands. If there was a serious failure, give up.
         //
 
+        KD_TRACE(KdTraceProcessingCommand);
         ContinueExecution = FALSE;
         do {
             Status = KdpReceivePacket(&KdRxPacket, MAX_ULONG);
@@ -1379,6 +1403,7 @@ Return Value:
     }
 
 DebugExceptionHandlerEnd:
+    KD_TRACE(KdTraceThawingProcessors);
     if (PreviousSingleStepAddress != NULL) {
         KdpSetSingleStepMode(Exception, TrapFrame, PreviousSingleStepAddress);
     }
@@ -1395,6 +1420,7 @@ DebugExceptionHandlerEnd:
     }
 
     KdpReleaseDebuggerLock();
+    KD_TRACE(KdTraceExit);
     return;
 }
 
@@ -3813,12 +3839,22 @@ Return Value:
 
     KSTATUS Status;
 
+    KD_DEVICE_TRACE(KdDeviceTraceResetting);
     if (KdDebugDevice == NULL) {
-        return STATUS_NO_SUCH_DEVICE;
+        Status = STATUS_NO_SUCH_DEVICE;
+        goto DeviceResetEnd;
     }
 
     Status = KdDebugDevice->FunctionTable.Reset(KdDebugDevice->Context,
                                                 BaudRate);
+
+DeviceResetEnd:
+    if (!KSUCCESS(Status)) {
+        KD_DEVICE_TRACE(KdDeviceTraceResetFailed);
+
+    } else {
+        KD_DEVICE_TRACE(KdDeviceTraceResetComplete);
+    }
 
     return Status;
 }
@@ -3853,13 +3889,23 @@ Return Value:
 
     KSTATUS Status;
 
+    KD_DEVICE_TRACE(KdDeviceTraceTransmitting);
     if (KdDebugDevice == NULL) {
-        return STATUS_NO_SUCH_DEVICE;
+        Status = STATUS_NO_SUCH_DEVICE;
+        goto DeviceTransmitEnd;
     }
 
     Status = KdDebugDevice->FunctionTable.Transmit(KdDebugDevice->Context,
                                                    Data,
                                                    Size);
+
+DeviceTransmitEnd:
+    if (!KSUCCESS(Status)) {
+        KD_DEVICE_TRACE(KdDeviceTraceTransmitFailed);
+
+    } else {
+        KD_DEVICE_TRACE(KdDeviceTraceTransmitComplete);
+    }
 
     return Status;
 }
@@ -3898,13 +3944,23 @@ Return Value:
 
     KSTATUS Status;
 
+    KD_DEVICE_TRACE(KdDeviceTraceReceiving);
     if (KdDebugDevice == NULL) {
-        return STATUS_NO_SUCH_DEVICE;
+        Status = STATUS_NO_SUCH_DEVICE;
+        goto DeviceReceiveEnd;
     }
 
     Status = KdDebugDevice->FunctionTable.Receive(KdDebugDevice->Context,
                                                   Data,
                                                   Size);
+
+DeviceReceiveEnd:
+    if (!KSUCCESS(Status)) {
+        KD_DEVICE_TRACE(KdDeviceTraceReceiveFailed);
+
+    } else {
+        KD_DEVICE_TRACE(KdDeviceTraceReceiveComplete);
+    }
 
     return Status;
 }
@@ -3935,12 +3991,27 @@ Return Value:
 
     KSTATUS Status;
 
+    KD_DEVICE_TRACE(KdDeviceTraceGettingStatus);
     if (KdDebugDevice == NULL) {
-        return STATUS_NO_SUCH_DEVICE;
+        Status = STATUS_NO_SUCH_DEVICE;
+        goto DeviceGetStatusEnd;
     }
 
     Status = KdDebugDevice->FunctionTable.GetStatus(KdDebugDevice->Context,
                                                     ReceiveDataAvailable);
+
+DeviceGetStatusEnd:
+    if (!KSUCCESS(Status)) {
+        KD_DEVICE_TRACE(KdDeviceTraceGetStatusFailed);
+
+    } else {
+        if (*ReceiveDataAvailable != FALSE) {
+            KD_DEVICE_TRACE(KdDeviceTraceGetStatusHasData);
+
+        } else {
+            KD_DEVICE_TRACE(KdDeviceTraceGetStatusEmpty);
+        }
+    }
 
     return Status;
 }
@@ -3968,11 +4039,15 @@ Return Value:
 
 {
 
+    KD_DEVICE_TRACE(KdDeviceTraceDisconnecting);
     if (KdDebugDevice == NULL) {
-        return;
+        goto DeviceDisconnectEnd;
     }
 
     KdDebugDevice->FunctionTable.Disconnect(KdDebugDevice->Context);
+
+DeviceDisconnectEnd:
+    KD_DEVICE_TRACE(KdDeviceTraceDisconnected);
     return;
 }
 

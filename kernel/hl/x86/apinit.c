@@ -80,6 +80,47 @@ PPROCESSOR_CONTEXT HlProcessorStartContext;
 // ------------------------------------------------------------------ Functions
 //
 
+KERNEL_API
+UINTN
+HlDisableMmu (
+    PHL_PHYSICAL_CALLBACK PhysicalFunction,
+    UINTN Argument
+    )
+
+/*++
+
+Routine Description:
+
+    This routine temporarily disables the MMU and calls then given callback
+    function.
+
+Arguments:
+
+    PhysicalFunction - Supplies the physical address of a function to call
+        with the MMU disabled. Interrupts will also be disabled during this
+        call.
+
+    Argument - Supplies an argument to pass to the function.
+
+Return Value:
+
+    Returns the value returned by the callback function.
+
+--*/
+
+{
+
+    //
+    // So far this function is not needed on x86. If implemented, the temporary
+    // GDT and IDT would need to be loaded in the assembly version to prevent
+    // NMIs from triple faulting.
+    //
+
+    ASSERT(FALSE);
+
+    return 0;
+}
+
 KSTATUS
 HlpInterruptPrepareIdentityStub (
     VOID
@@ -224,6 +265,14 @@ Return Value:
 
     PPROCESSOR_CONTEXT ProcessorContext;
     PVOID *StackPointer;
+
+    //
+    // If there is no start block, this is just P0 initializing its page.
+    //
+
+    if (StartBlock == NULL) {
+        return STATUS_SUCCESS;
+    }
 
     //
     // Save the current processor context. Processors will not restore to here

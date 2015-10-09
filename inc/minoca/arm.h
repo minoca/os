@@ -571,7 +571,28 @@ Members:
     R11 - Stores a non-volatile register. R12 is volatile, and is not available
         since the restore code needs a register for its operation.
 
-    Sp - Stores the stack pointer.
+    Sp - Stores the stack pointer (in SVC mode, which is assumed to be the
+        current mode when the context was saved).
+
+    UserLink - Stores the user mode link register.
+
+    UserSp - Stores the user mode stack pointer.
+
+    IrqLink - Stores the interrupt mode link register.
+
+    IrqSp - Stores the interrupt link stack pointer.
+
+    FiqLink - Stores the fast interrupt link register.
+
+    FiqSp - Stores the fast interrupt stack pointer.
+
+    AbortLink - Stores the abort mode link register.
+
+    AbortSp - Stores the abort mode stack pointer.
+
+    UndefLink - Stores the undefined instruction mode link pointer.
+
+    UndefSp - Stores the undefined instruction mode stack pointer.
 
     VirtualAddress - Stores the virtual address of this structure member. The
         restore process might enable paging when the SCTLR is restored, so this
@@ -639,6 +660,16 @@ struct _PROCESSOR_CONTEXT {
     ULONG R10;
     ULONG R11;
     ULONG Sp;
+    ULONG UserLink;
+    ULONG UserSp;
+    ULONG IrqLink;
+    ULONG IrqSp;
+    ULONG FiqLink;
+    ULONG FiqSp;
+    ULONG AbortLink;
+    ULONG AbortSp;
+    ULONG UndefLink;
+    ULONG UndefSp;
     ULONG VirtualAddress;
     ULONG Sctlr;
     ULONG Ttbr0;
@@ -880,27 +911,6 @@ Arguments:
 Return Value:
 
     Returns the value of the CTR.
-
---*/
-
-VOID
-ArCleanEntireCache (
-    VOID
-    );
-
-/*++
-
-Routine Description:
-
-    This routine cleans the entire data cache.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
 
 --*/
 

@@ -32,6 +32,12 @@ Environment:
 ##
 
 ##
+## Define the mask to clear in the SCTLR when disabling the MMU.
+##
+
+#define MMU_DISABLE_MASK (MMU_ENABLED | MMU_DCACHE_ENABLED | MMU_ICACHE_ENABLED)
+
+##
 ## ----------------------------------------------------------------------- Code
 ##
 
@@ -43,7 +49,6 @@ ASSEMBLY_FILE_HEADER
 ##
 
 .globl HlpProcessorStartupEnd
-.globl HlpTrampolineCode
 .globl HlTrampolineTtbr0
 .globl HlTrampolineSystemControlRegister
 .globl HlpTrampolineCodeEnd
@@ -67,12 +72,36 @@ END_FUNCTION HlpProcessorStartup
 HlpProcessorStartupEnd:
 
 ##
+## VOID
+## HlpTrampolineCode (
+##     PPROCESSOR_CONTEXT ProcessorContext
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine represents the entry point for an embryonic processor trying
+    to boot or resume.
+
+Arguments:
+
+    ProcessorContext - Supplies a pointer to the processor context to restore.
+
+Return Value:
+
+    Does not return.
+
+--*/
+
+##
 ## This represents the entry point for an embryonic processor trying to boot or
 ## resume. It takes one argument, which is a pointer to a PROCESSOR_CONTEXT
 ## structure to pass into the restore context routine.
 ##
 
-HlpTrampolineCode:
+FUNCTION HlpTrampolineCode
     mov     %r1, %pc                    @ Get the current code address.
     sub     %r1, %r1, #8                @ Subtract to get the start address.
     mov     %r6, %r0                    @ Save processor context in R6.
@@ -192,6 +221,78 @@ HlpTrampolineCodeImpossibleReturn:
     DEBUGGER_BREAK
     wfi
     b       HlpTrampolineCodeImpossibleReturn
+
+END_FUNCTION HlpTrampolineCode
+
+##
+## UINTN
+## HlpDisableMmu (
+##     PHL_PHYSICAL_CALLBACK PhysicalFunction,
+##     UINTN Argument
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine temporarily disables the MMU and calls then given callback
+    function. This routine must be called with interrupts disabled.
+
+Arguments:
+
+    PhysicalFunction - Supplies the physical address of a function to call
+        with the MMU disabled. Interrupts will also be disabled during this
+        call.
+
+    Argument - Supplies an argument to pass to the function.
+
+Return Value:
+
+    Returns the value returned by the callback function.
+
+--*/
+
+FUNCTION HlpDisableMmu
+    stmdb   %sp!, {%r4-r6, %lr}         @ Save non-volatiles and return.
+
+    ##
+    ## Load up the new stack, which is just the top of this region (half a
+    ## page).
+    ##
+
+    mov     %r6, %sp                    @ Save previous stack.
+    mov     %r2, %pc                    @ Get the current code address.
+    lsr     %r2, %r2, #12               @ Shift down to mask off page offset.
+    lsl     %r2, %r2, #12               @ Shift back up to get page base.
+    add     %r2, %r2, #0x800            @ Get the top of the stack.
+    mov     %sp, %r2                    @ Set the stack.
+
+    ##
+    ## Disable the MMU.
+    ##
+
+    DSB                                 @ Make sure writes have finished.
+    mrc     p15, 0, %r4, c1, c0, 0      @ Get SCTLR.
+    ldr     %r5, =~MMU_DISABLE_MASK     @ Get mask.
+    and     %r5, %r4, %r5               @ Turn off MMU and caches.
+    mcr     p15, 0, %r5, c1, c0, 0      @ Set SCTLR.
+    ISB                                 @ Don't fetch beyond this, world change.
+
+    ##
+    ## Call the function.
+    ##
+
+    mov     %r2, %r0                    @ Save function pointer.
+    mov     %r0, %r1                    @ Put function argument in place.
+    blx     %r2                         @ Jump to function.
+    DSB                                 @ Make sure all writes finished.
+    mcr     p15, 0, %r4, c1, c0, 0      @ Restore original SCTLR.
+    ISB                                 @ World switch, don't look beyond here.
+    mov     %sp, %r6                    @ Restore the stack.
+    ldmia   %sp!, {%r4-r6, %pc}         @ Pop and return.
+
+END_FUNCTION HlpDisableMmu
 
 ##
 ## --------------------------------------------------------- Internal Functions

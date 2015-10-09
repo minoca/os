@@ -168,7 +168,11 @@ Return Value:
                 goto InitializeEnd;
             }
 
-            VidClearScreen(0, 0, -1, -1);
+            if ((Parameters->Flags &
+                 BOOT_INITIALIZATION_FLAG_SCREEN_CLEAR) == 0) {
+
+                VidClearScreen(0, 0, -1, -1);
+            }
         }
     }
 
