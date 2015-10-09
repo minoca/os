@@ -460,6 +460,34 @@ Return Value:
 
 --*/
 
+LIBC_API
+int
+login_tty (
+    int TerminalDescriptor
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prepares for a login on the given terminal. It creates a new
+    session, makes the given terminal descriptor the controlling terminal for
+    the session, sets the terminal as standard input, output, and error, and
+    closes the given descriptor.
+
+Arguments:
+
+    TerminalDescriptor - Supplies the file descriptor of the terminal to start
+        a login on.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
 #ifdef __cplusplus
 
 }

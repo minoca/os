@@ -92,6 +92,47 @@ Return Value:
 
 --*/
 
+LIBC_API
+pid_t
+forkpty (
+    int *Master,
+    char *Name,
+    const struct termios *Settings,
+    const struct winsize *WindowSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine combines openpty, fork, and login_tty to create a new process
+    wired up to a pseudo-terminal.
+
+Arguments:
+
+    Master - Supplies a pointer where a file descriptor to the master will be
+        returned on success. This is only returned in the parent.
+
+    Name - Supplies an optional pointer where the name of the slave terminal
+        will be returned on success. This buffer must be PATH_MAX size in bytes
+        if supplied.
+
+    Settings - Supplies an optional pointer to the settings to apply to the
+        new terminal.
+
+    WindowSize - Supplies an optional pointer to the window size to set in the
+        new terminal.
+
+Return Value:
+
+    Returns the pid of the forked child on success in the parent.
+
+    0 on success in the child.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
 #ifdef __cplusplus
 
 }

@@ -785,7 +785,10 @@ Return Value:
         }
 
         //
-        // Double fork.
+        // Double fork. Do this to prevent the grandchild process from ever
+        // acquiring a controlling terminal. Since only the session leader
+        // can acquire a controlling terminal, after the fork its new PID
+        // will not be the session leader ID.
         //
 
         Child = fork();

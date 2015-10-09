@@ -33,6 +33,7 @@ Environment:
 #include <grp.h>
 #include <pty.h>
 #include <stdlib.h>
+#include <syslog.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -216,6 +217,143 @@ openptyEnd:
     *Master = MasterFile;
     *Slave = SlaveFile;
     return Result;
+}
+
+LIBC_API
+int
+login_tty (
+    int TerminalDescriptor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prepares for a login on the given terminal. It creates a new
+    session, makes the given terminal descriptor the controlling terminal for
+    the session, sets the terminal as standard input, output, and error, and
+    closes the given descriptor.
+
+Arguments:
+
+    TerminalDescriptor - Supplies the file descriptor of the terminal to start
+        a login on.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+{
+
+    setsid();
+    if (ioctl(TerminalDescriptor, TIOCSCTTY, NULL) < 0) {
+        return -1;
+    }
+
+    dup2(TerminalDescriptor, STDIN_FILENO);
+    dup2(TerminalDescriptor, STDOUT_FILENO);
+    dup2(TerminalDescriptor, STDERR_FILENO);
+    if (TerminalDescriptor > STDERR_FILENO) {
+        close(TerminalDescriptor);
+    }
+
+    return 0;
+}
+
+LIBC_API
+pid_t
+forkpty (
+    int *Master,
+    char *Name,
+    const struct termios *Settings,
+    const struct winsize *WindowSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine combines openpty, fork, and login_tty to create a new process
+    wired up to a pseudo-terminal.
+
+Arguments:
+
+    Master - Supplies a pointer where a file descriptor to the master will be
+        returned on success. This is only returned in the parent.
+
+    Name - Supplies an optional pointer where the name of the slave terminal
+        will be returned on success. This buffer must be PATH_MAX size in bytes
+        if supplied.
+
+    Settings - Supplies an optional pointer to the settings to apply to the
+        new terminal.
+
+    WindowSize - Supplies an optional pointer to the window size to set in the
+        new terminal.
+
+Return Value:
+
+    Returns the pid of the forked child on success in the parent.
+
+    0 on success in the child.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+{
+
+    pid_t Child;
+    int MasterDescriptor;
+    int Slave;
+
+    if (openpty(&MasterDescriptor, &Slave, Name, Settings, WindowSize) == -1) {
+        return -1;
+    }
+
+    Child = fork();
+    if (Child < 0) {
+        return -1;
+    }
+
+    //
+    // If this is the child, make the new slave portion the controlling
+    // terminal.
+    //
+
+    if (Child == 0) {
+        close(MasterDescriptor);
+        MasterDescriptor = -1;
+
+        //
+        // If login_tty fails to set the controlling terminal, then do the
+        // rest of it as if it succeeded.
+        //
+
+        if (login_tty(Slave) < 0) {
+            syslog(LOG_ERR, "forkpty: login_tty failed.\n");
+            dup2(Slave, STDIN_FILENO);
+            dup2(Slave, STDOUT_FILENO);
+            dup2(Slave, STDERR_FILENO);
+            if (Slave > STDERR_FILENO) {
+                close(Slave);
+            }
+        }
+
+    //
+    // In the parent, close the slave.
+    //
+
+    } else {
+        *Master = MasterDescriptor;
+        close(Slave);
+    }
+
+    return Child;
 }
 
 LIBC_API

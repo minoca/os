@@ -54,6 +54,7 @@ OBJS = $(COMMON_OBJS)   \
        swlib/chownutl.o \
        swlib/minocaos.o \
        swlib/uos.o      \
+       telnetd.o        \
 
 TARGETLIBS = $(INTLIB)/os/lib/termlib/termlib.a     \
 
