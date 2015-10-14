@@ -327,8 +327,8 @@ Return Value:
     KSTATUS Status;
 
     RtlZeroMemory(&Input, sizeof(SCAN_INPUT));
-    Input.Context = Stream;
-    Input.GetInputWide = ClpStreamScannerGetInputWide;
+    Input.DataU.Context = Stream;
+    Input.ReadU.GetInputWide = ClpStreamScannerGetInputWide;
     Status = RtlScanWide(&Input,
                          (PWSTR)Format,
                          MAX_ULONG,
@@ -939,7 +939,7 @@ Return Value:
 
     wint_t NewCharacter;
 
-    NewCharacter = fgetwc_unlocked(Input->Context);
+    NewCharacter = fgetwc_unlocked(Input->DataU.Context);
     if (NewCharacter == WEOF) {
         return FALSE;
     }

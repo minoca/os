@@ -380,8 +380,8 @@ main (
 
 Routine Description:
 
-    This routine is the entry point for the RTL test program. It executes the
-        tests.
+    This routine is the entry point for the crypto library test program. It
+    executes the tests.
 
 Arguments:
 

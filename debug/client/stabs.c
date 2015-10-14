@@ -3195,7 +3195,10 @@ Return Value:
                   &(State->CurrentSourceFile->FunctionsHead));
 
     State->CurrentFunction = NewFunction;
-    State->MaxSourceLineAddress = NewFunction->StartAddress;
+    if (NewFunction->StartAddress > State->MaxSourceLineAddress) {
+        State->MaxSourceLineAddress = NewFunction->StartAddress;
+    }
+
     State->MaxBraceAddress = NewFunction->StartAddress;
     Result = TRUE;
 

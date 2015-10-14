@@ -405,12 +405,10 @@ Return Value:
             RtlZeroMemory(SignalQueueEntry, sizeof(SIGNAL_QUEUE_ENTRY));
             SignalQueueEntry->Parameters.SignalNumber = Request->SignalNumber;
             SignalQueueEntry->Parameters.SignalCode = Request->SignalCode;
-            SignalQueueEntry->Parameters.SendingProcess =
+            SignalQueueEntry->Parameters.FromU.SendingProcess =
                                                 Process->Identifiers.ProcessId;
 
-            SignalQueueEntry->Parameters.ValueParameter =
-                                                      Request->SignalParameter;
-
+            SignalQueueEntry->Parameters.Parameter = Request->SignalParameter;
             SignalQueueEntry->CompletionRoutine =
                                               PsDefaultSignalCompletionRoutine;
 
@@ -805,12 +803,12 @@ Return Value:
             ASSERT(SignalParameters->SignalNumber ==
                    SIGNAL_CHILD_PROCESS_ACTIVITY);
 
-            Parameters->ChildPid = SignalParameters->SendingProcess;
+            Parameters->ChildPid = SignalParameters->FromU.SendingProcess;
             Parameters->Reason = SignalParameters->SignalCode;
 
             ASSERT(Parameters->Reason != 0);
 
-            Parameters->ChildExitValue = SignalParameters->ExitStatus;
+            Parameters->ChildExitValue = SignalParameters->Parameter;
             Status = STATUS_SUCCESS;
             if (Parameters->ResourceUsage != NULL) {
                 ChildProcess = PARENT_STRUCTURE(SignalQueueEntry,
@@ -2240,11 +2238,11 @@ Return Value:
 
     SignalQueueEntry->Parameters.SignalNumber = SIGNAL_CHILD_PROCESS_ACTIVITY;
     SignalQueueEntry->Parameters.SignalCode = Reason;
-    SignalQueueEntry->Parameters.SendingProcess =
+    SignalQueueEntry->Parameters.FromU.SendingProcess =
                                                 Process->Identifiers.ProcessId;
 
     SignalQueueEntry->Parameters.SendingUserId = 0;
-    SignalQueueEntry->Parameters.ExitStatus = ExitStatus;
+    SignalQueueEntry->Parameters.Parameter = ExitStatus;
     SignalQueueEntry->CompletionRoutine = PspChildSignalCompletionRoutine;
     Process->ChildSignalDestination = Destination;
     ObAddReference(Process);
@@ -2583,7 +2581,7 @@ Return Value:
     //
 
     if (WaitPidRequest > 0) {
-        if (SignalParameters->SendingProcess == WaitPidRequest) {
+        if (SignalParameters->FromU.SendingProcess == WaitPidRequest) {
             Match = TRUE;
         }
 
@@ -2594,8 +2592,9 @@ Return Value:
 
     } else if (WaitPidRequest == 0) {
         CurrentProcess = PsGetCurrentProcess();
-        Process = PspGetChildProcessById(CurrentProcess,
-                                         SignalParameters->SendingProcess);
+        Process = PspGetChildProcessById(
+                                       CurrentProcess,
+                                       SignalParameters->FromU.SendingProcess);
 
         ASSERT(Process != NULL);
 
@@ -2621,8 +2620,9 @@ Return Value:
 
     } else {
         CurrentProcess = PsGetCurrentProcess();
-        Process = PspGetChildProcessById(CurrentProcess,
-                                         SignalParameters->SendingProcess);
+        Process = PspGetChildProcessById(
+                                       CurrentProcess,
+                                       SignalParameters->FromU.SendingProcess);
 
         ASSERT(Process != NULL);
 
@@ -2720,7 +2720,7 @@ Return Value:
 
     if ((ChildProcess->ExitReason != 0) &&
         (SignalQueueEntry->Parameters.SignalCode == ChildProcess->ExitReason) &&
-        (SignalQueueEntry->Parameters.ExitStatus == ChildProcess->ExitStatus)) {
+        (SignalQueueEntry->Parameters.Parameter == ChildProcess->ExitStatus)) {
 
         PspRemoveProcessFromLists(ChildProcess);
     }
@@ -3545,10 +3545,10 @@ Return Value:
         SignalQueueEntry->Parameters.SignalNumber = SignalNumber;
         SignalQueueEntry->Parameters.SignalCode = SignalCode;
         CurrentProcess = PsGetCurrentProcess();
-        SignalQueueEntry->Parameters.SendingProcess =
+        SignalQueueEntry->Parameters.FromU.SendingProcess =
                                          CurrentProcess->Identifiers.ProcessId;
 
-        SignalQueueEntry->Parameters.ValueParameter = SignalParameter;
+        SignalQueueEntry->Parameters.Parameter = SignalParameter;
         SignalQueueEntry->CompletionRoutine = PsDefaultSignalCompletionRoutine;
         PsSignalProcess(Process,
                         SignalQueueEntry->Parameters.SignalNumber,

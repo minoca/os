@@ -499,8 +499,8 @@ typedef struct _INTERRUPT_LINE {
         struct {
             UINTN Controller;
             LONG Line;
-        };
-    };
+        } Local;
+    } U;
 
 } INTERRUPT_LINE, *PINTERRUPT_LINE;
 

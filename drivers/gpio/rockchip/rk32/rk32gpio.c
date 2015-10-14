@@ -1197,7 +1197,7 @@ Return Value:
     ULONG Value;
 
     Controller = Context;
-    PinMask = 1 << Line->Line;
+    PinMask = 1 << Line->U.Local.Line;
     Value = RK32_READ_GPIO(Controller, Rk32GpioInterruptMask);
     Value &= ~PinMask;
     if (Enable == FALSE) {
@@ -1258,8 +1258,8 @@ Return Value:
 
     Line = RtlCountTrailingZeros32(Value);
     FiringLine->Type = InterruptLineControllerSpecified;
-    FiringLine->Controller = (UINTN)(Controller->OsDevice);
-    FiringLine->Line = Line;
+    FiringLine->U.Local.Controller = (UINTN)(Controller->OsDevice);
+    FiringLine->U.Local.Line = Line;
     *MagicCandy = 1 << Line;
     return InterruptCauseLineFired;
 }

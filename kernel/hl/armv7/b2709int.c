@@ -1191,8 +1191,8 @@ Return Value:
     //
 
     FiringLine->Type = InterruptLineControllerSpecified;
-    FiringLine->Controller = 0;
-    FiringLine->Line = Line;
+    FiringLine->U.Local.Controller = 0;
+    FiringLine->U.Local.Line = Line;
     return InterruptCauseLineFired;
 }
 
@@ -1333,7 +1333,7 @@ Return Value:
     // will probably have to be added when deep power management comes online.
     //
 
-    if (Line->Line < Bcm2709InterruptHardwareLineCount) {
+    if (Line->U.Local.Line < Bcm2709InterruptHardwareLineCount) {
         Status = STATUS_NOT_IMPLEMENTED;
         goto Bcm2709InterruptRequestInterruptEnd;
     }
@@ -1381,7 +1381,8 @@ Return Value:
         goto Bcm2709InterruptRequestInterruptEnd;
     }
 
-    InterruptValue = 1 << (Line->Line - Bcm2709InterruptHardwareLineCount);
+    InterruptValue = 1 <<
+                     (Line->U.Local.Line - Bcm2709InterruptHardwareLineCount);
 
     //
     // Write the command out to the software interrupt register for each
@@ -1446,8 +1447,8 @@ Return Value:
     INTERRUPT_HARDWARE_TARGET Target;
 
     Line.Type = InterruptLineControllerSpecified;
-    Line.Controller = 0;
-    Line.Line = Bcm2709InterruptHardwareLineCount;
+    Line.U.Local.Controller = 0;
+    Line.U.Local.Line = Bcm2709InterruptHardwareLineCount;
     Target.Addressing = InterruptAddressingPhysical;
     Target.U.PhysicalId = Identifier;
     Status = HlpBcm2709InterruptRequestInterrupt(Context, &Line, 0, &Target);
@@ -1487,6 +1488,7 @@ Return Value:
 
     PBCM2709_INTERRUPT_CONTROLLER Controller;
     ULONG Index;
+    ULONG LineNumber;
     BOOL LocalInterrupt;
     BCM2709_INTERRUPT_MASK Mask;
     UCHAR Priority;
@@ -1496,17 +1498,18 @@ Return Value:
     KSTATUS Status;
 
     Controller = (PBCM2709_INTERRUPT_CONTROLLER)Context;
+    LineNumber = Line->U.Local.Line;
     if ((Line->Type != InterruptLineControllerSpecified) ||
-        (Line->Controller != 0) ||
-        (Line->Line >= BCM2709_INTERRUPT_MAX_LINE_COUNT)) {
+        (Line->U.Local.Controller != 0) ||
+        (LineNumber >= BCM2709_INTERRUPT_MAX_LINE_COUNT)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto Bcm2709SetLineStateEnd;
     }
 
     if ((State->Output.Type != InterruptLineControllerSpecified) ||
-        (State->Output.Controller != INTERRUPT_CPU_IDENTIFIER) ||
-        (State->Output.Line != INTERRUPT_CPU_IRQ_PIN)) {
+        (State->Output.U.Local.Controller != INTERRUPT_CPU_IDENTIFIER) ||
+        (State->Output.U.Local.Line != INTERRUPT_CPU_IRQ_PIN)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto Bcm2709SetLineStateEnd;
@@ -1520,15 +1523,15 @@ Return Value:
     // disable/enable registers it belongs to.
     //
 
-    if (Line->Line < BCM2709_INTERRUPT_GPU_LINE_COUNT) {
-        Shift = Line->Line;
-        if (Line->Line >= 32) {
+    if (LineNumber < BCM2709_INTERRUPT_GPU_LINE_COUNT) {
+        Shift = LineNumber;
+        if (LineNumber >= 32) {
             Shift -= 32;
         }
 
         RegisterValue = 1 << Shift;
         if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) == 0) {
-            if (Line->Line < 32) {
+            if (LineNumber < 32) {
                 Register = Bcm2709InterruptIrqDisable1;
 
             } else {
@@ -1536,7 +1539,7 @@ Return Value:
             }
 
         } else {
-            if (Line->Line < 32) {
+            if (LineNumber < 32) {
                 Register = Bcm2709InterruptIrqEnable1;
 
             } else {
@@ -1548,7 +1551,7 @@ Return Value:
         // Set the mask in the priority level.
         //
 
-        if (Line->Line < 32) {
+        if (LineNumber < 32) {
             Mask.IrqMask1 |= RegisterValue;
 
         } else {
@@ -1559,8 +1562,8 @@ Return Value:
     // If this is an ARM line, then get the correct register and mask.
     //
 
-    } else if (Line->Line < Bcm2709InterruptHardwareLineCount) {
-        Shift = Line->Line - BCM2709_INTERRUPT_GPU_LINE_COUNT;
+    } else if (LineNumber < Bcm2709InterruptHardwareLineCount) {
+        Shift = LineNumber - BCM2709_INTERRUPT_GPU_LINE_COUNT;
         RegisterValue = 1 << Shift;
         if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) == 0) {
             Register = Bcm2709InterruptIrqDisableBasic;
@@ -1581,7 +1584,7 @@ Return Value:
 
     } else {
         LocalInterrupt = TRUE;
-        Shift = Line->Line - Bcm2709InterruptHardwareLineCount;
+        Shift = LineNumber - Bcm2709InterruptHardwareLineCount;
         Mask.IrqMaskLocal |= 1 << Shift;
     }
 
@@ -1596,7 +1599,7 @@ Return Value:
         Controller->EnabledMask.IrqMask2 |= Mask.IrqMask2;
         Controller->EnabledMask.IrqMaskLocal |= Mask.IrqMaskLocal;
         Priority = State->HardwarePriority;
-        Controller->LinePriority[Line->Line] = Priority;
+        Controller->LinePriority[LineNumber] = Priority;
 
         //
         // This interrupt should be masked for any priority at or above it.
@@ -1688,15 +1691,18 @@ Return Value:
 
 {
 
+    ULONG LineNumber;
     BCM2709_INTERRUPT_REGISTER Register;
     ULONG RegisterValue;
     ULONG Shift;
+
+    LineNumber = Line->U.Local.Line;
 
     //
     // Masking software lines is not allowed.
     //
 
-    if (Line->Line >= Bcm2709InterruptHardwareLineCount) {
+    if (LineNumber >= Bcm2709InterruptHardwareLineCount) {
         return;
     }
 
@@ -1705,15 +1711,15 @@ Return Value:
     // disable/enable registers it belongs to.
     //
 
-    if (Line->Line < BCM2709_INTERRUPT_GPU_LINE_COUNT) {
-        Shift = Line->Line;
-        if (Line->Line >= 32) {
+    if (LineNumber < BCM2709_INTERRUPT_GPU_LINE_COUNT) {
+        Shift = LineNumber;
+        if (LineNumber >= 32) {
             Shift -= 32;
         }
 
         RegisterValue = 1 << Shift;
         if (Enable == FALSE) {
-            if (Line->Line < 32) {
+            if (LineNumber < 32) {
                 Register = Bcm2709InterruptIrqDisable1;
 
             } else {
@@ -1721,7 +1727,7 @@ Return Value:
             }
 
         } else {
-            if (Line->Line < 32) {
+            if (LineNumber < 32) {
                 Register = Bcm2709InterruptIrqEnable1;
 
             } else {
@@ -1735,7 +1741,7 @@ Return Value:
     //
 
     } else {
-        Shift = Line->Line - BCM2709_INTERRUPT_GPU_LINE_COUNT;
+        Shift = LineNumber - BCM2709_INTERRUPT_GPU_LINE_COUNT;
         RegisterValue = 1 << Shift;
         if (Enable == FALSE) {
             Register = Bcm2709InterruptIrqDisableBasic;

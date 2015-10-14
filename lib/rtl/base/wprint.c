@@ -265,7 +265,7 @@ Return Value:
     PRINT_FORMAT_CONTEXT Context;
 
     RtlZeroMemory(&Context, sizeof(PRINT_FORMAT_CONTEXT));
-    Context.WriteWideCharacter = RtlpStringFormatWriteCharacterWide;
+    Context.U.WriteWideCharacter = RtlpStringFormatWriteCharacterWide;
     Context.Context = Destination;
     if (DestinationSize != 0) {
         Context.Limit = DestinationSize - 1;
@@ -324,7 +324,7 @@ Return Value:
     ULONG Index;
     BOOL Result;
 
-    ASSERT((Context != NULL) && (Context->WriteWideCharacter != NULL) &&
+    ASSERT((Context != NULL) && (Context->U.WriteWideCharacter != NULL) &&
            (Context->CharactersWritten == 0) &&
            (RtlIsCharacterEncodingSupported(Context->State.Encoding) != FALSE));
 
@@ -2698,7 +2698,7 @@ Return Value:
 
     BOOL Result;
 
-    Result = Context->WriteWideCharacter(Character, Context);
+    Result = Context->U.WriteWideCharacter(Character, Context);
     if (Result == FALSE) {
         return FALSE;
     }

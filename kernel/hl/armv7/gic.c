@@ -1018,8 +1018,8 @@ Return Value:
 
     *MagicCandy = AcknowledgeRegister;
     FiringLine->Type = InterruptLineControllerSpecified;
-    FiringLine->Controller = Controller->Identifier;
-    FiringLine->Line = Line;
+    FiringLine->U.Local.Controller = Controller->Identifier;
+    FiringLine->U.Local.Line = Line;
     return InterruptCauseLineFired;
 }
 
@@ -1109,13 +1109,13 @@ Return Value:
     // will probably have to be added when deep power management comes online.
     //
 
-    if (Line->Line >= GIC_SOFTWARE_INTERRUPT_LINE_COUNT) {
+    CommandValue = Line->U.Local.Line;
+    if (CommandValue >= GIC_SOFTWARE_INTERRUPT_LINE_COUNT) {
         Status = STATUS_NOT_IMPLEMENTED;
         goto GicRequestInterruptEnd;
     }
 
     Status = STATUS_SUCCESS;
-    CommandValue = Line->Line;
     switch (Target->Addressing) {
     case InterruptAddressingLogicalClustered:
         Status = STATUS_NOT_SUPPORTED;
@@ -1206,8 +1206,8 @@ Return Value:
     INTERRUPT_HARDWARE_TARGET Target;
 
     Line.Type = InterruptLineControllerSpecified;
-    Line.Controller = 0;
-    Line.Line = 0;
+    Line.U.Local.Controller = 0;
+    Line.U.Local.Line = 0;
     Target.Addressing = InterruptAddressingPhysical;
     Target.U.PhysicalId = Identifier;
     Status = HlpGicRequestInterrupt(Context, &Line, 0, &Target);
@@ -1251,21 +1251,23 @@ Return Value:
     PGIC_DISTRIBUTOR_DATA Controller;
     ULONG LineBit;
     ULONG LineBlock;
+    ULONG LineNumber;
     UCHAR PriorityValue;
     KSTATUS Status;
     UCHAR Target;
     UCHAR ThisProcessorTarget;
 
     Controller = (PGIC_DISTRIBUTOR_DATA)Context;
-    LineBlock = (Line->Line / 32) * 4;
-    LineBit = Line->Line % 32;
+    LineNumber = Line->U.Local.Line;
+    LineBlock = (LineNumber / 32) * 4;
+    LineBit = LineNumber % 32;
     Status = STATUS_SUCCESS;
 
     //
     // Fail if the system is trying to set a really wacky interrupt line number.
     //
 
-    if (Line->Line >= GIC_MAX_LINES) {
+    if (LineNumber >= GIC_MAX_LINES) {
         Status = STATUS_INVALID_PARAMETER;
         goto GicSetLineStateEnd;
     }
@@ -1289,7 +1291,7 @@ Return Value:
 
     PriorityValue = SYSTEM_TO_GIC_PRIORITY(State->HardwarePriority);
     WRITE_GIC_DISTRIBUTOR_BYTE(Controller,
-                               GicDistributorPriority + Line->Line,
+                               GicDistributorPriority + LineNumber,
                                PriorityValue);
 
     //
@@ -1335,15 +1337,15 @@ Return Value:
     }
 
     WRITE_GIC_DISTRIBUTOR_BYTE(Controller,
-                               GicDistributorInterruptTarget + Line->Line,
+                               GicDistributorInterruptTarget + LineNumber,
                                Target);
 
     //
     // Set the configuration register.
     //
 
-    ConfigurationBlock = 4 * (Line->Line / 16);
-    ConfigurationShift = 2 * (Line->Line % 16);
+    ConfigurationBlock = 4 * (LineNumber / 16);
+    ConfigurationShift = 2 * (LineNumber % 16);
     Configuration = READ_GIC_DISTRIBUTOR(
                     Controller,
                     GicDistributorInterruptConfiguration + ConfigurationBlock);
@@ -1418,8 +1420,8 @@ Return Value:
     GIC_DISTRIBUTOR_REGISTER Register;
 
     Controller = (PGIC_DISTRIBUTOR_DATA)Context;
-    LineBlock = (Line->Line / 32) * 4;
-    LineBit = Line->Line % 32;
+    LineBlock = (Line->U.Local.Line / 32) * 4;
+    LineBit = Line->U.Local.Line % 32;
     Register = GicDistributorEnableClear;
     if (Enable != FALSE) {
         Register = GicDistributorEnableSet;

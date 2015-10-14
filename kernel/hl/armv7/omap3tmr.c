@@ -297,8 +297,8 @@ Return Value:
         }
 
         Timer.Interrupt.Line.Type = InterruptLineControllerSpecified;
-        Timer.Interrupt.Line.Controller = 0;
-        Timer.Interrupt.Line.Line = HlOmap3Table->TimerGsi[TimerIndex];
+        Timer.Interrupt.Line.U.Local.Controller = 0;
+        Timer.Interrupt.Line.U.Local.Line = HlOmap3Table->TimerGsi[TimerIndex];
         Timer.Interrupt.TriggerMode = InterruptModeUnknown;
         Timer.Interrupt.ActiveLevel = InterruptActiveLevelUnknown;
 

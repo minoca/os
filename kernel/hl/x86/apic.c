@@ -873,7 +873,7 @@ Return Value:
     // Currently only IPIs are supported.
     //
 
-    if (Line->Line != APIC_IPI_LINE) {
+    if (Line->U.Local.Line != APIC_IPI_LINE) {
         Status = STATUS_NOT_SUPPORTED;
         goto RequestInterruptEnd;
     }
@@ -1095,12 +1095,14 @@ Return Value:
 
     PIO_APIC_DATA Controller;
     ULONGLONG Entry;
+    ULONG LocalLine;
     LOCAL_APIC_REGISTER Register;
     ULONG RteHigh;
     ULONG RteLow;
     KSTATUS Status;
 
     Controller = (PIO_APIC_DATA)Context;
+    LocalLine = Line->U.Local.Line;
 
     //
     // Convert the line state into interrupt controller format.
@@ -1115,8 +1117,8 @@ Return Value:
     // Handle LVTs.
     //
 
-    if (Line->Line < ApicLineCount) {
-        switch (Line->Line) {
+    if (LocalLine < ApicLineCount) {
+        switch (LocalLine) {
         case ApicLineTimer:
             Register = ApicTimerVector;
 
@@ -1167,7 +1169,7 @@ Return Value:
     // Handle the IPI line.
     //
 
-    } else if (Line->Line == APIC_IPI_LINE) {
+    } else if (LocalLine == APIC_IPI_LINE) {
         Status = STATUS_SUCCESS;
         goto ApicSetLineStateEnd;
 
@@ -1178,7 +1180,7 @@ Return Value:
     } else {
         Entry = ((ULONGLONG)RteHigh << 32) | RteLow;
         HlpIoApicWriteRedirectionTableEntry(Controller,
-                                            Line->Line - IO_APIC_LINE_OFFSET,
+                                            LocalLine - IO_APIC_LINE_OFFSET,
                                             Entry);
 
         Status = STATUS_SUCCESS;
@@ -1223,20 +1225,16 @@ Return Value:
 {
 
     ULONGLONG Entry;
+    ULONG LocalLine;
 
-    Entry = HlpIoApicReadRedirectionTableEntry(
-                                             Context,
-                                             Line->Line - IO_APIC_LINE_OFFSET);
-
+    LocalLine = Line->U.Local.Line - IO_APIC_LINE_OFFSET;
+    Entry = HlpIoApicReadRedirectionTableEntry(Context, LocalLine);
     Entry &= ~APIC_RTE_MASKED;
     if (Enable == FALSE) {
         Entry |= APIC_RTE_MASKED;
     }
 
-    HlpIoApicWriteRedirectionTableEntry(Context,
-                                        Line->Line - IO_APIC_LINE_OFFSET,
-                                        Entry);
-
+    HlpIoApicWriteRedirectionTableEntry(Context, LocalLine, Entry);
     return;
 }
 
@@ -1360,7 +1358,7 @@ Return Value:
     //
 
     Data = APIC_MSI_DATA_EDGE_TRIGGERED;
-    switch (OutputLine->Line) {
+    switch (OutputLine->U.Local.Line) {
     case INTERRUPT_CPU_LINE_NORMAL_INTERRUPT:
         if ((Flags & INTERRUPT_LINE_STATE_FLAG_LOWEST_PRIORITY) != 0) {
             Data |= APIC_MSI_DATA_DELIVER_LOWEST;
@@ -1615,13 +1613,13 @@ Return Value:
     //
 
     if ((State->Output.Type != InterruptLineControllerSpecified) ||
-        (State->Output.Controller != INTERRUPT_CPU_IDENTIFIER)) {
+        (State->Output.U.Local.Controller != INTERRUPT_CPU_IDENTIFIER)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto ConvertToRteEnd;
     }
 
-    switch (State->Output.Line) {
+    switch (State->Output.U.Local.Line) {
     case INTERRUPT_CPU_LINE_NORMAL_INTERRUPT:
         if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_LOWEST_PRIORITY) != 0) {
             *RteLow |= APIC_DELIVER_LOWEST;

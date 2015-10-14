@@ -227,8 +227,8 @@ Return Value:
         Timer.CounterBitWidth = RK32_TIMER_BIT_WIDTH;
         Timer.CounterFrequency = RK32_TIMER_FREQUENCY;
         Timer.Interrupt.Line.Type = InterruptLineControllerSpecified;
-        Timer.Interrupt.Line.Controller = 0;
-        Timer.Interrupt.Line.Line = HlRk32Table->TimerGsi[TimerIndex];
+        Timer.Interrupt.Line.U.Local.Controller = 0;
+        Timer.Interrupt.Line.U.Local.Line = HlRk32Table->TimerGsi[TimerIndex];
         Timer.Interrupt.TriggerMode = InterruptModeLevel;
         Timer.Interrupt.ActiveLevel = InterruptActiveLevelUnknown;
         Timer.Identifier = TimerIndex;

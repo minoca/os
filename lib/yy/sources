@@ -1,0 +1,25 @@
+################################################################################
+#
+#   Copyright (c) 2015 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This module defines the sources files for the Lex/Parse library.
+#
+#   Author:
+#
+#       Evan Green 9-Oct-2015
+#
+#   Environment:
+#
+#       Any
+#
+################################################################################
+
+OBJS = lex.o      \
+       parse.o    \
+

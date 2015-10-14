@@ -233,8 +233,8 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    InputParameters.GetInputWide = RtlpStringScannerGetInputWide;
-    InputParameters.WideString = Input;
+    InputParameters.ReadU.GetInputWide = RtlpStringScannerGetInputWide;
+    InputParameters.DataU.WideString = Input;
     InputParameters.StringSize = InputSize;
     InputParameters.ValidUnputCharacters = 0;
     InputParameters.CharactersRead = 0;
@@ -313,8 +313,8 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    Input.GetInputWide = RtlpStringScannerGetInputWide;
-    Input.WideString = *String;
+    Input.ReadU.GetInputWide = RtlpStringScannerGetInputWide;
+    Input.DataU.WideString = *String;
     Input.StringSize = *StringSize;
     Input.ValidUnputCharacters = 0;
     Input.CharactersRead = 0;
@@ -383,8 +383,8 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    Input.GetInputWide = RtlpStringScannerGetInputWide;
-    Input.WideString = *String;
+    Input.ReadU.GetInputWide = RtlpStringScannerGetInputWide;
+    Input.DataU.WideString = *String;
     Input.StringSize = *StringSize;
     Input.ValidUnputCharacters = 0;
     Input.CharactersRead = 0;
@@ -2242,7 +2242,7 @@ Return Value:
         return TRUE;
     }
 
-    return Input->GetInputWide(Input, Character);
+    return Input->ReadU.GetInputWide(Input, Character);
 }
 
 BOOL
@@ -2281,8 +2281,8 @@ Return Value:
 
     Input->CharactersRead += 1;
     Input->StringSize -= 1;
-    *Character = *(Input->WideString);
-    Input->WideString += 1;
+    *Character = *(Input->DataU.WideString);
+    Input->DataU.WideString += 1;
     return TRUE;
 }
 

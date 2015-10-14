@@ -949,7 +949,7 @@ Return Value:
     // Mask the interrupt line.
     //
 
-    ASSERT((Controller->Identifier == Interrupt->Line.Controller) &&
+    ASSERT((Controller->Identifier == Interrupt->Line.U.Local.Controller) &&
            (Controller == Interrupt->Controller));
 
     Controller->FunctionTable.MaskLine(Controller->PrivateContext,

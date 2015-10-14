@@ -268,7 +268,7 @@ Return Value:
         Timer.CounterBitWidth = 32;
         Timer.CounterFrequency = Frequencies[TimerIndex];
         Timer.Interrupt.Line.Type = InterruptLineGsi;
-        Timer.Interrupt.Line.Gsi = TimerGsi[TimerIndex];
+        Timer.Interrupt.Line.U.Gsi = TimerGsi[TimerIndex];
         Timer.Interrupt.TriggerMode = InterruptModeUnknown;
         Timer.Interrupt.ActiveLevel = InterruptActiveLevelUnknown;
 

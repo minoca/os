@@ -1530,13 +1530,15 @@ Return Value:
             HandlerInformation.si_signo = Signal;
             HandlerInformation.si_code = SignalInformation->SignalCode;
             HandlerInformation.si_errno = SignalInformation->ErrorNumber;
-            HandlerInformation.si_pid = SignalInformation->SendingProcess;
+            HandlerInformation.si_pid = SignalInformation->FromU.SendingProcess;
             HandlerInformation.si_uid = SignalInformation->SendingUserId;
-            HandlerInformation.si_addr = SignalInformation->FaultingAddress;
-            HandlerInformation.si_status = SignalInformation->ExitStatus;
-            HandlerInformation.si_band = SignalInformation->BandEvent;
+            HandlerInformation.si_addr =
+                                      SignalInformation->FromU.FaultingAddress;
+
+            HandlerInformation.si_status = SignalInformation->Parameter;
+            HandlerInformation.si_band = SignalInformation->FromU.BandEvent;
             HandlerInformation.si_value.sival_int =
-                                             SignalInformation->ValueParameter;
+                                                  SignalInformation->Parameter;
 
             Action->sa_sigaction(Signal, &HandlerInformation, NULL);
 

@@ -758,7 +758,7 @@ struct _PRINT_FORMAT_CONTEXT {
     union {
         PPRINT_FORMAT_WRITE_CHARACTER WriteCharacter;
         PPRINT_FORMAT_WRITE_WIDE_CHARACTER WriteWideCharacter;
-    };
+    } U;
 
     PVOID Context;
     ULONG Limit;
@@ -861,13 +861,13 @@ struct _SCAN_INPUT {
     union {
         PSCANNER_GET_INPUT GetInput;
         PSCANNER_GET_INPUT_WIDE GetInputWide;
-    };
+    } ReadU;
 
     union {
         PSTR String;
         PWSTR WideString;
         PVOID Context;
-    };
+    } DataU;
 
     ULONG StringSize;
     ULONG CharactersRead;

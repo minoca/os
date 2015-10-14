@@ -253,8 +253,10 @@ Return Value:
         }
 
         CpTimer.Interrupt.Line.Type = InterruptLineControllerSpecified;
-        CpTimer.Interrupt.Line.Controller = 0;
-        CpTimer.Interrupt.Line.Line = HlCpIntegratorTable->TimerGsi[TimerIndex];
+        CpTimer.Interrupt.Line.U.Local.Controller = 0;
+        CpTimer.Interrupt.Line.U.Local.Line =
+                                     HlCpIntegratorTable->TimerGsi[TimerIndex];
+
         CpTimer.Interrupt.TriggerMode = InterruptModeUnknown;
         CpTimer.Interrupt.ActiveLevel = InterruptActiveLevelUnknown;
 

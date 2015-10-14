@@ -325,8 +325,8 @@ Return Value:
     KSTATUS Status;
 
     RtlZeroMemory(&Input, sizeof(SCAN_INPUT));
-    Input.Context = Stream;
-    Input.GetInput = ClpStreamScannerGetInput;
+    Input.DataU.Context = Stream;
+    Input.ReadU.GetInput = ClpStreamScannerGetInput;
     RtlInitializeMultibyteState(&(Input.State), CharacterEncodingDefault);
     Status = RtlScan(&Input,
                      (PSTR)Format,
@@ -1137,7 +1137,7 @@ Return Value:
 
     int NewCharacter;
 
-    NewCharacter = fgetc_unlocked(Input->Context);
+    NewCharacter = fgetc_unlocked(Input->DataU.Context);
     if (NewCharacter == EOF) {
         return FALSE;
     }

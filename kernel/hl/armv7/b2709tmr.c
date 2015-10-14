@@ -359,7 +359,7 @@ Return Value:
     Timer.CounterBitWidth = 32;
     Timer.CounterFrequency = Frequency;
     Timer.Interrupt.Line.Type = InterruptLineGsi;
-    Timer.Interrupt.Line.Gsi = HlBcm2709Table->ArmTimerGsi;
+    Timer.Interrupt.Line.U.Gsi = HlBcm2709Table->ArmTimerGsi;
     Timer.Interrupt.TriggerMode = InterruptModeUnknown;
     Timer.Interrupt.ActiveLevel = InterruptActiveLevelUnknown;
     Status = HlBcm2709KernelServices->Register(HardwareModuleTimer, &Timer);
@@ -447,7 +447,7 @@ Return Value:
     Timer.Features = TIMER_FEATURE_READABLE | TIMER_FEATURE_PERIODIC;
     Timer.CounterFrequency = HlBcm2709Table->SystemTimerFrequency;
     Timer.Interrupt.Line.Type = InterruptLineGsi;
-    Timer.Interrupt.Line.Gsi = HlBcm2709Table->SystemTimerGsiBase + 1;
+    Timer.Interrupt.Line.U.Gsi = HlBcm2709Table->SystemTimerGsiBase + 1;
     Timer.Interrupt.TriggerMode = InterruptModeUnknown;
     Timer.Interrupt.ActiveLevel = InterruptActiveLevelUnknown;
     Status = HlBcm2709KernelServices->Register(HardwareModuleTimer, &Timer);
@@ -472,7 +472,7 @@ Return Value:
     Timer.Features = TIMER_FEATURE_READABLE | TIMER_FEATURE_PERIODIC;
     Timer.CounterFrequency = HlBcm2709Table->SystemTimerFrequency;
     Timer.Interrupt.Line.Type = InterruptLineGsi;
-    Timer.Interrupt.Line.Gsi = HlBcm2709Table->SystemTimerGsiBase + 3;
+    Timer.Interrupt.Line.U.Gsi = HlBcm2709Table->SystemTimerGsiBase + 3;
     Timer.Interrupt.TriggerMode = InterruptModeUnknown;
     Timer.Interrupt.ActiveLevel = InterruptActiveLevelUnknown;
     Status = HlBcm2709KernelServices->Register(HardwareModuleTimer, &Timer);

@@ -1280,7 +1280,7 @@ Return Value:
     OMAP4_GPIO_REGISTER Register;
 
     Controller = Context;
-    PinMask = 1 << Line->Line;
+    PinMask = 1 << Line->U.Local.Line;
     Register = Omap4GpioIrqStatusClear0;
     if (Enable != FALSE) {
         Register = Omap4GpioIrqStatusSet0;
@@ -1340,8 +1340,8 @@ Return Value:
 
     Line = RtlCountTrailingZeros32(Value);
     FiringLine->Type = InterruptLineControllerSpecified;
-    FiringLine->Controller = (UINTN)(Controller->OsDevice);
-    FiringLine->Line = Line;
+    FiringLine->U.Local.Controller = (UINTN)(Controller->OsDevice);
+    FiringLine->U.Local.Line = Line;
     *MagicCandy = 1 << Line;
     return InterruptCauseLineFired;
 }

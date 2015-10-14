@@ -821,7 +821,7 @@ Return Value:
                                    ListEntry);
 
         CurrentEntry = CurrentEntry->Next;
-        Equal = RtlAreStringsEqual(DatabaseEntry->DeviceId,
+        Equal = RtlAreStringsEqual(DatabaseEntry->U.DeviceId,
                                    DeviceOrClassId,
                                    MAX_DEVICE_ID);
 
@@ -850,13 +850,13 @@ Return Value:
     // Copy the strings into the extra space in the allocation.
     //
 
-    DatabaseEntry->DeviceId = (PSTR)(DatabaseEntry + 1);
-    RtlStringCopy(DatabaseEntry->DeviceId,
+    DatabaseEntry->U.DeviceId = (PSTR)(DatabaseEntry + 1);
+    RtlStringCopy(DatabaseEntry->U.DeviceId,
                   DeviceOrClassId,
                   RtlStringLength(DeviceOrClassId) + 1);
 
-    DatabaseEntry->DriverName = DatabaseEntry->DeviceId +
-                                RtlStringLength(DatabaseEntry->DeviceId) + 1;
+    DatabaseEntry->DriverName = DatabaseEntry->U.DeviceId +
+                                RtlStringLength(DatabaseEntry->U.DeviceId) + 1;
 
     RtlStringCopy(DatabaseEntry->DriverName,
                   DriverName,

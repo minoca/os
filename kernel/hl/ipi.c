@@ -1346,8 +1346,8 @@ Return Value:
                      INTERRUPT_LINE_INTERNAL_STATE_FLAG_RESERVED) == 0) {
 
                     Line->Type = InterruptLineControllerSpecified;
-                    Line->Controller = Controller->Identifier;
-                    Line->Line = Lines->LineStart + LineIndex;
+                    Line->U.Local.Controller = Controller->Identifier;
+                    Line->U.Local.Line = Lines->LineStart + LineIndex;
                     return STATUS_SUCCESS;
                 }
             }

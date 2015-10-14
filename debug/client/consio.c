@@ -280,7 +280,7 @@ Return Value:
 
     memset(&PrintContext, 0, sizeof(PRINT_FORMAT_CONTEXT));
     PrintContext.Context = Context;
-    PrintContext.WriteCharacter = DbgrpFormatWriteCharacter;
+    PrintContext.U.WriteCharacter = DbgrpFormatWriteCharacter;
     RtlInitializeMultibyteState(&(PrintContext.State),
                                 CharacterEncodingDefault);
 

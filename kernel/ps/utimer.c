@@ -290,8 +290,7 @@ Return Value:
                                                       Parameters->SignalNumber;
 
         Timer->SignalQueueEntry.Parameters.SignalCode = SIGNAL_CODE_TIMER;
-        Timer->SignalQueueEntry.Parameters.ValueParameter =
-                                                       Parameters->SignalValue;
+        Timer->SignalQueueEntry.Parameters.Parameter = Parameters->SignalValue;
 
         //
         // Take a reference on the process to avoid a situation where the
@@ -318,8 +317,7 @@ Return Value:
         }
 
         if (Parameters->UseTimerNumber != FALSE) {
-            Timer->SignalQueueEntry.Parameters.ValueParameter =
-                                                            Timer->TimerNumber;
+            Timer->SignalQueueEntry.Parameters.Parameter = Timer->TimerNumber;
         }
 
         INSERT_BEFORE(&(Timer->ListEntry), &(Process->TimerList));
@@ -783,7 +781,9 @@ Return Value:
     ASSERT(ExpirationCount != 0);
 
     Timer->OverflowCount = ExpirationCount - 1;
-    Timer->SignalQueueEntry.Parameters.OverflowCount = Timer->OverflowCount;
+    Timer->SignalQueueEntry.Parameters.FromU.OverflowCount =
+                                                          Timer->OverflowCount;
+
     PsSignalProcess(Timer->Process,
                     Timer->SignalQueueEntry.Parameters.SignalNumber,
                     &(Timer->SignalQueueEntry));

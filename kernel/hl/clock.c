@@ -475,7 +475,7 @@ Return Value:
             KeCrashSystem(CRASH_HARDWARE_LAYER_FAILURE,
                           HL_CRASH_CLOCK_WONT_START,
                           (UINTN)HlClockTimer,
-                          HlClockTimer->Interrupt.Line.Gsi,
+                          HlClockTimer->Interrupt.Line.U.Gsi,
                           0);
         }
 

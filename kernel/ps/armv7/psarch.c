@@ -178,14 +178,14 @@ Return Value:
     // all unioned together.
     //
 
-    TrapFrame->R2 = (UINTN)SignalParameters->FaultingAddress;
+    TrapFrame->R2 = (UINTN)SignalParameters->FromU.FaultingAddress;
     TrapFrame->R3 = SignalParameters->SendingUserId;
 
     //
     // The value parameter and exit status are unioned together.
     //
 
-    TrapFrame->R4 = SignalParameters->ValueParameter;
+    TrapFrame->R4 = SignalParameters->Parameter;
     Thread->SignalInProgress = TRUE;
     return;
 }

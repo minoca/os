@@ -396,8 +396,8 @@ Return Value:
     }
 
     FiringLine->Type = InterruptLineControllerSpecified;
-    FiringLine->Controller = 0;
-    FiringLine->Line = ActiveIrq;
+    FiringLine->U.Local.Controller = 0;
+    FiringLine->U.Local.Line = ActiveIrq;
 
     //
     // Save the old priority into the magic candy, and then set the priority
@@ -538,23 +538,23 @@ Return Value:
     ULONG Value;
 
     if ((Line->Type != InterruptLineControllerSpecified) ||
-        (Line->Controller != 0) ||
-        (Line->Line >= OMAP3_INTERRUPT_LINE_COUNT)) {
+        (Line->U.Local.Controller != 0) ||
+        (Line->U.Local.Line >= OMAP3_INTERRUPT_LINE_COUNT)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto Omap3InterruptSetLineStateEnd;
     }
 
     if ((State->Output.Type != InterruptLineControllerSpecified) ||
-        (State->Output.Controller != INTERRUPT_CPU_IDENTIFIER) ||
-        (State->Output.Line != INTERRUPT_CPU_IRQ_PIN)) {
+        (State->Output.U.Local.Controller != INTERRUPT_CPU_IDENTIFIER) ||
+        (State->Output.U.Local.Line != INTERRUPT_CPU_IRQ_PIN)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto Omap3InterruptSetLineStateEnd;
     }
 
-    InterruptOffset = Line->Line / 32;
-    InterruptIndex = Line->Line - (InterruptOffset * 32);
+    InterruptOffset = Line->U.Local.Line / 32;
+    InterruptIndex = Line->U.Local.Line - (InterruptOffset * 32);
 
     //
     // To disable, set the interrupt mask and clean the interrupt line.
@@ -564,7 +564,7 @@ Return Value:
         WRITE_INTERRUPT_REGISTER(MpuMaskSet + (8 * InterruptOffset),
                                  1 << InterruptIndex);
 
-        WRITE_INTERRUPT_REGISTER(MpuInterrupt + Line->Line, 0);
+        WRITE_INTERRUPT_REGISTER(MpuInterrupt + Line->U.Local.Line, 0);
 
     //
     // To enable, write the interrupt configuration and routing into the
@@ -574,7 +574,7 @@ Return Value:
     } else {
         Value = (OMAP3_INTERRUPT_PRIORITY_COUNT - State->HardwarePriority) + 1;
         Value = Value << MPU_INTERRUPT_PRIORITY_SHIFT;
-        WRITE_INTERRUPT_REGISTER(MpuInterrupt + Line->Line, Value);
+        WRITE_INTERRUPT_REGISTER(MpuInterrupt + Line->U.Local.Line, Value);
         WRITE_INTERRUPT_REGISTER(MpuMaskClear + (8 * InterruptOffset),
                                  1 << InterruptIndex);
     }
@@ -623,8 +623,8 @@ Return Value:
     ULONG InterruptOffset;
     MPU_REGISTERS Register;
 
-    InterruptOffset = Line->Line / 32;
-    InterruptIndex = Line->Line - (InterruptOffset * 32);
+    InterruptOffset = Line->U.Local.Line / 32;
+    InterruptIndex = Line->U.Local.Line - (InterruptOffset * 32);
 
     //
     // To disable, set the interrupt mask and clean the interrupt line.

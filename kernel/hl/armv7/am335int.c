@@ -463,8 +463,8 @@ Return Value:
     }
 
     FiringLine->Type = InterruptLineControllerSpecified;
-    FiringLine->Controller = 0;
-    FiringLine->Line = ActiveIrq;
+    FiringLine->U.Local.Controller = 0;
+    FiringLine->U.Local.Line = ActiveIrq;
 
     //
     // Save the old priority into the magic candy, and then set the priority
@@ -608,21 +608,23 @@ Return Value:
 
     PAM335_INTC_DATA Data;
     ULONG Index;
+    ULONG LocalLine;
     KSTATUS Status;
     ULONG Value;
 
     Data = Context;
+    LocalLine = Line->U.Local.Line;
     if ((Line->Type != InterruptLineControllerSpecified) ||
-        (Line->Controller != 0) ||
-        (Line->Line >= Data->LineCount)) {
+        (Line->U.Local.Controller != 0) ||
+        (LocalLine >= Data->LineCount)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto Am335InterruptSetLineStateEnd;
     }
 
     if ((State->Output.Type != InterruptLineControllerSpecified) ||
-        (State->Output.Controller != INTERRUPT_CPU_IDENTIFIER) ||
-        (State->Output.Line != INTERRUPT_CPU_IRQ_PIN)) {
+        (State->Output.U.Local.Controller != INTERRUPT_CPU_IDENTIFIER) ||
+        (State->Output.U.Local.Line != INTERRUPT_CPU_IRQ_PIN)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto Am335InterruptSetLineStateEnd;
@@ -634,14 +636,14 @@ Return Value:
 
     Value = (AM335_INTC_PRIORITY_COUNT - State->HardwarePriority) + 1;
     Value = Value << AM335_INTC_LINE_PRIORITY_SHIFT;
-    AM335_INTC_WRITE(Data->Base, AM335_INTC_LINE(Line->Line), Value);
+    AM335_INTC_WRITE(Data->Base, AM335_INTC_LINE(LocalLine), Value);
 
     //
     // To enable, clear the interrupt mask.
     //
 
-    Index = AM335_INTC_LINE_TO_INDEX(Line->Line);
-    Value = AM335_INTC_LINE_TO_MASK(Line->Line);
+    Index = AM335_INTC_LINE_TO_INDEX(LocalLine);
+    Value = AM335_INTC_LINE_TO_MASK(LocalLine);
     if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) != 0) {
         AM335_INTC_WRITE(Data->Base, AM335_INTC_MASK_CLEAR(Index), Value);
 
@@ -698,8 +700,8 @@ Return Value:
     ULONG Value;
 
     Data = Context;
-    Index = AM335_INTC_LINE_TO_INDEX(Line->Line);
-    Value = AM335_INTC_LINE_TO_MASK(Line->Line);
+    Index = AM335_INTC_LINE_TO_INDEX(Line->U.Local.Line);
+    Value = AM335_INTC_LINE_TO_MASK(Line->U.Local.Line);
     if (Enable != FALSE) {
         AM335_INTC_WRITE(Data->Base, AM335_INTC_MASK_CLEAR(Index), Value);
 

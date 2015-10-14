@@ -665,7 +665,7 @@ typedef struct _DEVICE_DATABASE_ENTRY {
     union {
         PSTR DeviceId;
         PSTR ClassId;
-    };
+    } U;
 
     PSTR DriverName;
 } DEVICE_DATABASE_ENTRY, *PDEVICE_DATABASE_ENTRY;

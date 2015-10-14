@@ -291,7 +291,7 @@ Return Value:
     //
 
     RtcTimer.Interrupt.Line.Type = InterruptLineGsi;
-    RtcTimer.Interrupt.Line.Gsi = RTC_INTERRUPT_GSI_NUMBER;
+    RtcTimer.Interrupt.Line.U.Gsi = RTC_INTERRUPT_GSI_NUMBER;
     RtcTimer.Interrupt.TriggerMode = InterruptModeUnknown;
     RtcTimer.Interrupt.ActiveLevel = InterruptActiveLevelUnknown;
 

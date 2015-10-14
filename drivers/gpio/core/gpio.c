@@ -1129,7 +1129,7 @@ Return Value:
     Controller = Context;
     OldRunLevel = GpioLockController(Controller);
     Host = &(Controller->Host);
-    Pin = &(Controller->Pins[Line->Line]);
+    Pin = &(Controller->Pins[Line->U.Local.Line]);
     if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) == 0) {
         Pin->Flags = GPIO_PIN_CONFIGURED | GPIO_PIN_ACQUIRED;
 
@@ -1161,7 +1161,7 @@ Return Value:
     }
 
     Status = Host->FunctionTable.SetConfiguration(Host->Context,
-                                                  Line->Line,
+                                                  Line->U.Local.Line,
                                                   Pin);
 
     if (!KSUCCESS(Status)) {

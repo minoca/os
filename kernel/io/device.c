@@ -2645,7 +2645,7 @@ Return Value:
 
         CurrentEntry = CurrentEntry->Next;
         Match = IoAreDeviceIdsEqual(IoGetDeviceId(Device),
-                                    DatabaseEntry->DeviceId);
+                                    DatabaseEntry->U.DeviceId);
 
         if (Match != FALSE) {
             Driver = DatabaseEntry->DriverName;
@@ -2665,7 +2665,7 @@ Return Value:
                                        ListEntry);
 
             CurrentEntry = CurrentEntry->Next;
-            Match = RtlAreStringsEqual(DatabaseEntry->ClassId,
+            Match = RtlAreStringsEqual(DatabaseEntry->U.ClassId,
                                        Device->ClassId,
                                        MAX_DEVICE_ID);
 

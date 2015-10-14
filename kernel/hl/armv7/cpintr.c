@@ -469,8 +469,8 @@ Return Value:
     //
 
     FiringLine->Type = InterruptLineControllerSpecified;
-    FiringLine->Controller = 0;
-    FiringLine->Line = Index;
+    FiringLine->U.Local.Controller = 0;
+    FiringLine->U.Local.Line = Index;
     return InterruptCauseLineFired;
 }
 
@@ -599,21 +599,23 @@ Return Value:
     ULONG BitMask;
     ULONG Index;
     PINTEGRATORCP_INTERRUPT_DATA InterruptData;
+    ULONG LocalLine;
     UCHAR Priority;
     KSTATUS Status;
 
     InterruptData = (PINTEGRATORCP_INTERRUPT_DATA)Context;
+    LocalLine = Line->U.Local.Line;
     if ((Line->Type != InterruptLineControllerSpecified) ||
-        (Line->Controller != 0) ||
-        (Line->Line >= INTEGRATORCP_INTERRUPT_LINE_COUNT)) {
+        (Line->U.Local.Controller != 0) ||
+        (LocalLine >= INTEGRATORCP_INTERRUPT_LINE_COUNT)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto CpInterruptSetLineStateEnd;
     }
 
     if ((State->Output.Type != InterruptLineControllerSpecified) ||
-        (State->Output.Controller != INTERRUPT_CPU_IDENTIFIER) ||
-        (State->Output.Line != INTERRUPT_CPU_IRQ_PIN)) {
+        (State->Output.U.Local.Controller != INTERRUPT_CPU_IDENTIFIER) ||
+        (State->Output.U.Local.Line != INTERRUPT_CPU_IRQ_PIN)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto CpInterruptSetLineStateEnd;
@@ -623,10 +625,10 @@ Return Value:
     // Calculate the bit to flip and flip it.
     //
 
-    BitMask = 1 << Line->Line;
+    BitMask = 1 << LocalLine;
     if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) != 0) {
         Priority = State->HardwarePriority;
-        InterruptData->LinePriority[Line->Line] = Priority;
+        InterruptData->LinePriority[LocalLine] = Priority;
         InterruptData->EnabledMask |= BitMask;
 
         //
@@ -704,7 +706,7 @@ Return Value:
     // Calculate the bit to flip and flip it.
     //
 
-    BitMask = 1 << Line->Line;
+    BitMask = 1 << Line->U.Local.Line;
     if (Enable != FALSE) {
         WRITE_INTERRUPT_REGISTER(CpInterruptIrqEnable, BitMask);
 

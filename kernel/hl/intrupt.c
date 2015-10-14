@@ -231,7 +231,7 @@ Return Value:
     //
 
     OutputLine.Type = InterruptLineGsi;
-    OutputLine.Gsi = ParentGsi;
+    OutputLine.U.Gsi = ParentGsi;
     Status = HlpInterruptConvertLineToControllerSpecified(&OutputLine);
     if (!KSUCCESS(Status)) {
         goto CreateInterruptControllerEnd;
@@ -246,7 +246,7 @@ Return Value:
     //
 
     OutputController = HlpInterruptGetControllerByIdentifier(
-                                                        OutputLine.Controller);
+                                                OutputLine.U.Local.Controller);
 
     ASSERT(OutputController != NULL);
 
@@ -285,10 +285,10 @@ Return Value:
     Lines.Version = INTERRUPT_LINES_DESCRIPTION_VERSION;
     Lines.Controller = Registration->Identifier;
     Lines.Type = InterruptLinesOutput;
-    Lines.LineStart = OutputLine.Line;
+    Lines.LineStart = OutputLine.U.Local.Line;
     Lines.LineEnd = Lines.LineStart + 1;
     Lines.Gsi = INTERRUPT_LINES_GSI_NONE;
-    Lines.OutputControllerIdentifier = OutputLine.Controller;
+    Lines.OutputControllerIdentifier = OutputLine.U.Local.Controller;
     Status = HlpInterruptRegisterLines(&Lines);
     if (!KSUCCESS(Status)) {
         goto CreateInterruptControllerEnd;
@@ -851,7 +851,7 @@ Return Value:
     RtlZeroMemory(&Line, sizeof(INTERRUPT_LINE));
     RtlZeroMemory(&Target, sizeof(PROCESSOR_SET));
     Line.Type = InterruptLineGsi;
-    Line.Gsi = GlobalSystemInterruptNumber;
+    Line.U.Gsi = GlobalSystemInterruptNumber;
     Target.Target = ProcessorTargetAny;
     HlpInterruptGetStandardCpuLine(&OutputLine);
     LineStateFlags |= INTERRUPT_LINE_STATE_FLAG_ENABLED |
@@ -1884,7 +1884,7 @@ Return Value:
 
         LineController = HlInterruptControllers[ControllerIndex];
         if ((LineController == NULL) ||
-            (LineController->Identifier != Line->Controller)) {
+            (LineController->Identifier != Line->U.Local.Controller)) {
 
             continue;
         }
@@ -1906,12 +1906,12 @@ Return Value:
             // Check to see if this segment owns the line, and return it if so.
             //
 
-            if ((Line->Line >= LineSegment->LineStart) &&
-                (Line->Line < LineSegment->LineEnd)) {
+            if ((Line->U.Local.Line >= LineSegment->LineStart) &&
+                (Line->U.Local.Line < LineSegment->LineEnd)) {
 
                 *Controller = LineController;
                 *Lines = LineSegment;
-                *Offset = Line->Line - LineSegment->LineStart;
+                *Offset = Line->U.Local.Line - LineSegment->LineStart;
                 return STATUS_SUCCESS;
             }
         }
@@ -2351,16 +2351,18 @@ Return Value:
             //
 
             LineCount = Lines->LineEnd - Lines->LineStart;
-            if ((Line->Gsi >= Lines->Gsi) &&
-                (Line->Gsi < Lines->Gsi + LineCount)) {
+            if ((Line->U.Gsi >= Lines->Gsi) &&
+                (Line->U.Gsi < Lines->Gsi + LineCount)) {
 
                 //
                 // This is a union, so be very careful about the order in
                 // which these writes are done!
                 //
 
-                Line->Line = Lines->LineStart + (Line->Gsi - Lines->Gsi);
-                Line->Controller = Controller->Identifier;
+                Line->U.Local.Line = Lines->LineStart +
+                                     (Line->U.Gsi - Lines->Gsi);
+
+                Line->U.Local.Controller = Controller->Identifier;
                 Line->Type = InterruptLineControllerSpecified;
                 return STATUS_SUCCESS;
             }
@@ -2420,9 +2422,10 @@ Return Value:
     // the lines encapsulate the destination, and happily return if so.
     //
 
-    if ((OutputLines->OutputControllerIdentifier == Destination->Controller) &&
-        (Destination->Line >= OutputLines->LineStart) &&
-        (Destination->Line < OutputLines->LineEnd)) {
+    if ((OutputLines->OutputControllerIdentifier ==
+         Destination->U.Local.Controller) &&
+        (Destination->U.Local.Line >= OutputLines->LineStart) &&
+        (Destination->U.Local.Line < OutputLines->LineEnd)) {
 
         *Route = *Destination;
         return STATUS_SUCCESS;
@@ -2437,8 +2440,8 @@ Return Value:
     ASSERT(OutputLines->LineEnd > OutputLines->LineStart);
 
     Route->Type = InterruptLineControllerSpecified;
-    Route->Controller = OutputLines->OutputControllerIdentifier;
-    Route->Line = OutputLines->LineStart;
+    Route->U.Local.Controller = OutputLines->OutputControllerIdentifier;
+    Route->U.Local.Line = OutputLines->LineStart;
     return STATUS_SUCCESS;
 }
 

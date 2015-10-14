@@ -209,14 +209,14 @@ Return Value:
     // all unioned together.
     //
 
-    TrapFrame->Eax = (UINTN)SignalParameters->FaultingAddress;
+    TrapFrame->Eax = (UINTN)SignalParameters->FromU.FaultingAddress;
     TrapFrame->Ebx = SignalParameters->SendingUserId;
 
     //
     // The value parameter and exit status are unioned together.
     //
 
-    TrapFrame->Esi = SignalParameters->ValueParameter;
+    TrapFrame->Esi = SignalParameters->Parameter;
     Thread->SignalInProgress = TRUE;
     return;
 }

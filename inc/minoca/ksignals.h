@@ -395,10 +395,8 @@ Members:
 
     SendingUserId - Stores the user ID of the process that generated the signal.
 
-    ExitStatus - Stores the exit status of the process, used by child signals.
-
-    ValueParameter - Stores the user-defined value parameter sent with real time
-        signals.
+    Parameter - Stores the parameter, which is usually either the exit status
+        or the user-defined parameter sent with the queued signal.
 
 --*/
 
@@ -411,14 +409,10 @@ typedef struct _SIGNAL_PARAMETERS {
         PVOID FaultingAddress;
         LONG BandEvent;
         ULONG OverflowCount;
-    };
+    } FromU;
 
     ULONG SendingUserId;
-    union {
-        UINTN ExitStatus;
-        UINTN ValueParameter;
-    };
-
+    UINTN Parameter;
 } SIGNAL_PARAMETERS, *PSIGNAL_PARAMETERS;
 
 //

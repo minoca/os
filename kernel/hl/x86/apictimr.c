@@ -133,8 +133,8 @@ Return Value:
     ApicTimer.CounterFrequency = 0;
     ApicTimer.CounterBitWidth = 32;
     ApicTimer.Interrupt.Line.Type = InterruptLineControllerSpecified;
-    ApicTimer.Interrupt.Line.Controller = HlFirstIoApicId;
-    ApicTimer.Interrupt.Line.Line = ApicLineTimer;
+    ApicTimer.Interrupt.Line.U.Local.Controller = HlFirstIoApicId;
+    ApicTimer.Interrupt.Line.U.Local.Line = ApicLineTimer;
     ApicTimer.Interrupt.TriggerMode = InterruptModeEdge;
     ApicTimer.Interrupt.ActiveLevel = InterruptActiveHigh;
 

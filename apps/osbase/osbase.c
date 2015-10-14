@@ -3303,9 +3303,9 @@ Return Value:
                (SHORT)(SignalNumberAndCode >> (sizeof(SHORT) * BITS_PER_BYTE));
 
         Parameters.ErrorNumber = ErrorNumber;
-        Parameters.FaultingAddress = (PVOID)UnionParameter1;
+        Parameters.FromU.FaultingAddress = (PVOID)UnionParameter1;
         Parameters.SendingUserId = SendingUserId;
-        Parameters.ValueParameter = SignalValue;
+        Parameters.Parameter = SignalValue;
         SignalHandler(&Parameters);
     }
 

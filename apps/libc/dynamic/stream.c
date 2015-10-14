@@ -3158,7 +3158,7 @@ Return Value:
 
     memset(&PrintContext, 0, sizeof(PRINT_FORMAT_CONTEXT));
     PrintContext.Context = File;
-    PrintContext.WriteCharacter = ClpFileFormatWriteCharacter;
+    PrintContext.U.WriteCharacter = ClpFileFormatWriteCharacter;
     RtlInitializeMultibyteState(&(PrintContext.State),
                                 CharacterEncodingDefault);
 

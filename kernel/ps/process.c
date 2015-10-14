@@ -1675,10 +1675,8 @@ Return Value:
         Signal->Parameters.SignalCode = ACCESS_VIOLATION_PERMISSION_ERROR;
     }
 
-    Signal->Parameters.FaultingAddress = VirtualAddress;
-    Signal->Parameters.ValueParameter =
-                                 (UINTN)ArGetInstructionPointer(TrapFrame);
-
+    Signal->Parameters.FromU.FaultingAddress = VirtualAddress;
+    Signal->Parameters.Parameter = (UINTN)ArGetInstructionPointer(TrapFrame);
     Signal->CompletionRoutine = PsDefaultSignalCompletionRoutine;
     PsSignalThread(Thread, SignalNumber, Signal);
     Thread->AccessViolationInProgress = TRUE;

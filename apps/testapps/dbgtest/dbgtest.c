@@ -905,9 +905,9 @@ Return Value:
                   Parameters->SignalNumber,
                   Parameters->SignalCode,
                   Parameters->ErrorNumber,
-                  Parameters->SendingProcess,
+                  Parameters->FromU.SendingProcess,
                   Parameters->SendingUserId,
-                  Parameters->ExitStatus);
+                  Parameters->Parameter);
 
     return;
 }

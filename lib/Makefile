@@ -29,8 +29,9 @@ DIRS = basevid  \
        partlib  \
        rtl      \
        termlib  \
+       yy       \
 
 include $(SRCROOT)/os/minoca.mk
 
-fatlib crypto: rtl
+fatlib crypto yy: rtl
 

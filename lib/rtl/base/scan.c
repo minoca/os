@@ -256,8 +256,8 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    InputParameters.GetInput = RtlpStringScannerGetInput;
-    InputParameters.String = Input;
+    InputParameters.ReadU.GetInput = RtlpStringScannerGetInput;
+    InputParameters.DataU.String = Input;
     InputParameters.StringSize = InputSize;
     InputParameters.ValidUnputCharacters = 0;
     InputParameters.CharactersRead = 0;
@@ -336,8 +336,8 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    Input.GetInput = RtlpStringScannerGetInput;
-    Input.String = *String;
+    Input.ReadU.GetInput = RtlpStringScannerGetInput;
+    Input.DataU.String = *String;
     Input.StringSize = *StringSize;
     Input.ValidUnputCharacters = 0;
     Input.CharactersRead = 0;
@@ -406,8 +406,8 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    Input.GetInput = RtlpStringScannerGetInput;
-    Input.String = *String;
+    Input.ReadU.GetInput = RtlpStringScannerGetInput;
+    Input.DataU.String = *String;
     Input.StringSize = *StringSize;
     Input.ValidUnputCharacters = 0;
     Input.CharactersRead = 0;
@@ -2390,7 +2390,7 @@ Return Value:
         return TRUE;
     }
 
-    return Input->GetInput(Input, Character);
+    return Input->ReadU.GetInput(Input, Character);
 }
 
 BOOL
@@ -2501,8 +2501,8 @@ Return Value:
 
     Input->CharactersRead += 1;
     Input->StringSize -= 1;
-    *Character = *(Input->String);
-    Input->String += 1;
+    *Character = *(Input->DataU.String);
+    Input->DataU.String += 1;
     return TRUE;
 }
 

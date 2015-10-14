@@ -936,7 +936,7 @@ Return Value:
 
     memset(&PrintContext, 0, sizeof(PRINT_FORMAT_CONTEXT));
     PrintContext.Context = File;
-    PrintContext.WriteWideCharacter = ClpFileFormatWriteWideCharacter;
+    PrintContext.U.WriteWideCharacter = ClpFileFormatWriteWideCharacter;
     RtlFormatWide(&PrintContext, (PWSTR)Format, Arguments);
     return PrintContext.CharactersWritten;
 }

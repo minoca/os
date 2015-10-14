@@ -371,8 +371,8 @@ Return Value:
 {
 
     Line->Type = InterruptLineControllerSpecified;
-    Line->Controller = INTERRUPT_CPU_IDENTIFIER;
-    Line->Line = INTERRUPT_CPU_IRQ_PIN;
+    Line->U.Local.Controller = INTERRUPT_CPU_IDENTIFIER;
+    Line->U.Local.Line = INTERRUPT_CPU_IRQ_PIN;
     return;
 }
 
