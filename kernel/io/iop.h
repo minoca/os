@@ -1160,6 +1160,12 @@ extern PATH_POINT IoPathPointRoot;
 extern PSHARED_EXCLUSIVE_LOCK IoMountLock;
 
 //
+// Store the path to the system directory on the system volume.
+//
+
+extern PSTR IoSystemDirectoryPath;
+
+//
 // -------------------------------------------------------- Function Prototypes
 //
 

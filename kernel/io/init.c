@@ -130,6 +130,7 @@ Return Value:
     PBOOT_ENTRY BootEntry;
     ULONG Flags;
     KSTATUS Status;
+    UINTN SystemDirectorySize;
 
     INITIALIZE_LIST_HEAD(&IoDeviceList);
     IoDeviceListLock = KeCreateQueuedLock();
@@ -157,6 +158,25 @@ Return Value:
         RtlCopyMemory(&(IoBootInformation.SystemPartitionIdentifier),
                       &(BootEntry->PartitionId),
                       sizeof(IoBootInformation.SystemPartitionIdentifier));
+
+        //
+        // Copy the system directory path.
+        //
+
+        if (BootEntry->SystemPath != NULL) {
+            SystemDirectorySize = RtlStringLength(BootEntry->SystemPath) + 1;
+            IoSystemDirectoryPath = MmAllocateNonPagedPool(SystemDirectorySize,
+                                                           IO_ALLOCATION_TAG);
+
+            if (IoSystemDirectoryPath == NULL) {
+                Status = STATUS_INSUFFICIENT_RESOURCES;
+                goto InitializeEnd;
+            }
+
+            RtlStringCopy(IoSystemDirectoryPath,
+                          BootEntry->SystemPath,
+                          SystemDirectorySize);
+        }
     }
 
     RtlCopyMemory(&(IoBootInformation.BootTime),

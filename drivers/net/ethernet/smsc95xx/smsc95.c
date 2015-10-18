@@ -700,7 +700,7 @@ Return Value:
     PhysicalAddress += MaxControlSize;
 
     //
-    // Set up the interrupt transfer that's used for register reads and writes.
+    // Set up the interrupt transfer that's used for link change notifications.
     //
 
     Device->InterruptTransfer = UsbAllocateTransfer(
@@ -965,8 +965,8 @@ Return Value:
         }
     }
 
-    if ((Device->BulkInEndpoint == 0) &&
-        (Device->BulkOutEndpoint == 0) &&
+    if ((Device->BulkInEndpoint == 0) ||
+        (Device->BulkOutEndpoint == 0) ||
         (Device->InterruptEndpoint == 0)) {
 
         Status = STATUS_INVALID_CONFIGURATION;

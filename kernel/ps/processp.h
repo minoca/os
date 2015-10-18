@@ -72,10 +72,7 @@ extern volatile THREAD_ID PsNextThreadId;
 // Stores handles to frequently used locations.
 //
 
-extern PIO_HANDLE PsDriverDirectory;
-extern PIO_HANDLE PsSystemDirectory;
 extern PIO_HANDLE PsOsBaseLibrary;
-extern PSTR PsSystemDirectoryPath;
 
 //
 // -------------------------------------------------------- Function Prototypes

@@ -69,6 +69,10 @@ for file in $DRIVERS; do
     $STRIP -o $DRIVERS_DIRECTORY/$file $file
 done
 
+for file in $DEVICE_FIRMWARE; do
+    cp -p $file $DRIVERS_DIRECTORY/$file
+done
+
 mkdir -p $CONFIG_DIRECTORY
 for file in $CONFIG_FILES; do
     cp -p $file $CONFIG_DIRECTORY/$file

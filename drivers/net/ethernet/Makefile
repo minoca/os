@@ -4,12 +4,11 @@
 #
 #   Module Name:
 #
-#       Networking
+#       Ethernet LANs
 #
 #   Abstract:
 #
-#       This directory contains networking-related drivers, including the
-#       networking core driver and support for many specific NICs.
+#       This directory contains Ethernet LAN drivers.
 #
 #   Author:
 #
@@ -21,11 +20,13 @@
 #
 ################################################################################
 
-DIRS = ethernet \
-       netcore  \
-       wireless \
+DIRS = am3eth    \
+       atl1c     \
+       dwceth    \
+       e100      \
+       rtl81xx   \
+       smsc91c1  \
+       smsc95xx  \
 
 include $(SRCROOT)/os/minoca.mk
-
-ethernet wireless: netcore
 

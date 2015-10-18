@@ -4662,6 +4662,196 @@ Return Value:
     return Status;
 }
 
+KERNEL_API
+KSTATUS
+IoLoadFile (
+    PSTR Path,
+    ULONG PathLength,
+    PLOAD_FILE_COMPLETION_ROUTINE CompletionRoutine,
+    PVOID CompletionContext
+    )
+
+/*++
+
+Routine Description:
+
+    This routine asynchronously loads the file at the given path. The path can
+    either be absolute or relative. For the kernel process, relative paths are
+    in relative to the system volume's drivers directory. The supplied
+    completion routine is invoked when the load finishes.
+
+Arguments:
+
+    Path - Supplies a pointer to the path to the file. It can either be an
+        absolute or relative path. Relative paths for the kernel process are
+        relative to the system partition's drivers directory.
+
+    PathLength - Supplies the length of the path buffer in bytes, including the
+        null terminator.
+
+    CompletionRoutine - Supplies a pointer to the callback routine to notify
+        when the load is complete.
+
+    CompletionContext - Supplies a pointer to an opaque context that will be
+        passed to the completion routine along with the loaded file.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINTN BytesCompleted;
+    ULONGLONG FileSize;
+    PLOADED_FILE NewFile;
+    KSTATUS Status;
+
+    NewFile = NULL;
+
+    //
+    // Fail if the path is NULL or has no length.
+    //
+
+    if ((Path == NULL) || (PathLength < 2)) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto LoadFileEnd;
+    }
+
+    //
+    // Allocate a new file structure to store the loaded file information.
+    //
+
+    NewFile = MmAllocatePagedPool(sizeof(LOADED_FILE), IO_ALLOCATION_TAG);
+    if (NewFile == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto LoadFileEnd;
+    }
+
+    RtlZeroMemory(NewFile, sizeof(LOADED_FILE));
+    NewFile->Version = LOADED_FILE_VERSION;
+
+    //
+    // Open the file using the given path. If it is a relative path, then it
+    // will search in the process's current directory. For the kernel, that
+    // is the drivers directory on the system partition.
+    //
+
+    Status = IoOpen(TRUE,
+                    NULL,
+                    Path,
+                    PathLength,
+                    IO_ACCESS_READ | IO_ACCESS_EXECUTE,
+                    0,
+                    FILE_PERMISSION_NONE,
+                    &(NewFile->IoHandle));
+
+    if (!KSUCCESS(Status)) {
+        goto LoadFileEnd;
+    }
+
+    //
+    // Get the file size and allocate an I/O buffer to contain it.
+    //
+
+    Status = IoGetFileSize(NewFile->IoHandle, &FileSize);
+    if (!KSUCCESS(Status)) {
+        goto LoadFileEnd;
+    }
+
+    if (FileSize > MAX_UINTN) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto LoadFileEnd;
+    }
+
+    NewFile->Length = (UINTN)FileSize;
+
+    //
+    // Create an I/O buffer that can support the read.
+    //
+
+    NewFile->IoBuffer = MmAllocateUninitializedIoBuffer(NewFile->Length, 0);
+    if (NewFile->IoBuffer == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto LoadFileEnd;
+    }
+
+    //
+    // TODO: Convert file load reads to asynchronous I/O.
+    //
+
+    Status = IoReadAtOffset(NewFile->IoHandle,
+                            NewFile->IoBuffer,
+                            0,
+                            NewFile->Length,
+                            0,
+                            WAIT_TIME_INDEFINITE,
+                            &BytesCompleted,
+                            NULL);
+
+    if (!KSUCCESS(Status)) {
+        goto LoadFileEnd;
+    }
+
+    if (BytesCompleted != NewFile->Length) {
+        Status = STATUS_DATA_LENGTH_MISMATCH;
+        goto LoadFileEnd;
+    }
+
+    //
+    // With success on the horizon, call the callback to signal completion.
+    //
+
+    CompletionRoutine(CompletionContext, NewFile);
+
+LoadFileEnd:
+    if (!KSUCCESS(Status)) {
+        if (NewFile != NULL) {
+            IoUnloadFile(NewFile);
+            NewFile = NULL;
+        }
+    }
+
+    return Status;
+}
+
+KERNEL_API
+VOID
+IoUnloadFile (
+    PLOADED_FILE File
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unloads the given file.
+
+Arguments:
+
+    File - Supplies a pointer to the file to unload.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (File->IoBuffer != NULL) {
+        MmFreeIoBuffer(File->IoBuffer);
+    }
+
+    if (File->IoHandle != NULL) {
+        IoClose(File->IoHandle);
+    }
+
+    MmFreePagedPool(File);
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

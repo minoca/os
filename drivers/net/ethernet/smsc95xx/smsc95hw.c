@@ -572,7 +572,7 @@ Return Value:
                                      Device->BulkInEndpoint);
         }
 
-        goto Sm95BulkInTransferCompletionEnd;
+        goto BulkInTransferCompletionEnd;
     }
 
     Data = Transfer->Buffer;
@@ -634,7 +634,7 @@ Return Value:
         PhysicalAddress += PacketLength;
     }
 
-Sm95BulkInTransferCompletionEnd:
+BulkInTransferCompletionEnd:
 
     //
     // If the link is still up and everything went smashingly above, resubmit

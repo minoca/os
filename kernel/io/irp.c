@@ -341,11 +341,9 @@ IoContinueIrp (
 Routine Description:
 
     This routine is called by a driver to continue processing an IRP that was
-    previously marked pending. This function can only be called from a driver's
-    dispatch routine when the driver owns the IRP and has previously called
-    IoPendIrp. When the dispatch routine returns, the system will continue to
-    move in the same direction it was previously moving to the next location in
-    the driver stack. This routine must be called at or below dispatch level.
+    previously marked pending. The driver that pended the IRP will get called
+    a second time in the same directon for this IRP. This routine must be
+    called at or below dispatch level.
 
 Arguments:
 
@@ -378,7 +376,16 @@ Return Value:
     ASSERT(DriverStackEntry->Driver == Driver);
 
     if (DriverStackEntry->Driver == Driver) {
-        InternalIrp->Flags &= ~IRP_PENDING;
+
+        //
+        // If the IRP is pending, nothing else is driving it. Signal the IRP to
+        // wake the sending thread to continue driving the IRP. Do not clear
+        // the pending flag. The driving thread will do that.
+        //
+
+        if ((InternalIrp->Flags & IRP_PENDING) != 0) {
+            ObSignalObject(Irp, SignalOptionSignalAll);
+        }
     }
 
     return;

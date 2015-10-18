@@ -1133,8 +1133,10 @@ Return Value:
     // by 8.
     //
 
-    if (NewEndpoint->Speed == UsbDeviceSpeedHigh) {
-        NewEndpoint->PollRate >>= EHCI_MICROFRAMES_PER_FRAME_SHIFT;
+    if ((NewEndpoint->Speed == UsbDeviceSpeedFull) ||
+        (NewEndpoint->Speed == UsbDeviceSpeedLow)) {
+
+        NewEndpoint->PollRate <<= EHCI_MICROFRAMES_PER_FRAME_SHIFT;
     }
 
     //

@@ -802,6 +802,12 @@ Return Value:
 
     Controller = HostControllerContext;
     PollRate = Endpoint->PollRate;
+    if ((Endpoint->Speed == UsbDeviceSpeedLow) ||
+        (Endpoint->Speed == UsbDeviceSpeedHigh)) {
+
+        PollRate <<= MUSB_MICROFRAMES_PER_FRAME_SHIFT;
+    }
+
     if ((Endpoint->Speed == UsbDeviceSpeedHigh) ||
         ((Endpoint->Speed == UsbDeviceSpeedFull) &&
          (Endpoint->Type == UsbTransferTypeIsochronous))) {

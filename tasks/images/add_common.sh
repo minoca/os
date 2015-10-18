@@ -29,6 +29,7 @@ null.drv
 onering.drv
 part.drv
 pci.drv
+rtlw81xx.drv
 ser16550.drv
 sd.drv
 special.drv
@@ -39,6 +40,11 @@ usbkbd.drv
 usbmass.drv
 usrinput.drv
 videocon.drv"
+
+DEVICE_FIRMWARE=\
+"rtlw8188eufw.bin
+rtlw8188cufwUMC.bin
+rtlw8192cufw.bin"
 
 BOOT_DRIVERS=\
 "acpi.drv

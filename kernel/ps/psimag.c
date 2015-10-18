@@ -197,24 +197,10 @@ PspLoadProcessImageIntoKernelDebugger (
 BOOL PsKdLoadAllImages = FALSE;
 
 //
-// Store handles to system directories.
-//
-
-PIO_HANDLE PsDriverDirectory;
-PIO_HANDLE PsSystemDirectory;
-
-//
 // Store a handle to the OS base library.
 //
 
 PIO_HANDLE PsOsBaseLibrary;
-
-//
-// Define the path from the system volume to the system directory. Set it to a
-// default in case there is no boot entry (which there should really always be).
-//
-
-PSTR PsSystemDirectoryPath = "minoca";
 
 //
 // Store the image library function table.
@@ -855,7 +841,6 @@ Return Value:
 
 {
 
-    PIO_HANDLE DriverDirectory;
     FILE_PROPERTIES FileProperties;
     BOOL FromKernelMode;
     ULONGLONG LocalFileSize;
@@ -870,28 +855,20 @@ Return Value:
 
     //
     // If this is for the kernel process, then a driver is being loaded.
-    // Use the path directly if it's absolute, otherwise prepend the drivers
-    // directory path. In the absolute case, determine whether or not the
-    // calling process is the kernel process. If it is not, then the path root
-    // is likely different.
+    // Always use the path directly as the kernel processes current working
+    // directory should aways be the drivers directory on the system partition.
     //
 
     if (Process == PsGetKernelProcess()) {
         if (Process != PsGetCurrentProcess()) {
             FromKernelMode = FALSE;
-            DriverDirectory = NULL;
 
         } else {
             FromKernelMode = TRUE;
-            DriverDirectory = PsDriverDirectory;
-            if (DriverDirectory == NULL) {
-                Status = STATUS_TOO_EARLY;
-                goto ImOpenFileEnd;
-            }
         }
 
         Status = IoOpen(FromKernelMode,
-                        DriverDirectory,
+                        NULL,
                         BinaryName,
                         NameLength,
                         IO_ACCESS_READ | IO_ACCESS_EXECUTE,

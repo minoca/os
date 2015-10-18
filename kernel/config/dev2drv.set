@@ -83,6 +83,7 @@ DVEN_10EC&DEV_8168=rtl81xx.drv
 
 # USB device IDs
 DVID_0424&PID_EC00=smsc95xx.drv
+DVID_7392&PID_7811=rtlw81xx.drv
 DVID_8619&PID_0650=onering.drv
 DVID_8619&PID_0651=onering.drv
 DVID_8619&PID_0652=onering.drv

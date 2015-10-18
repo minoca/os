@@ -208,6 +208,13 @@ Author:
 #define MUSB_USB_INTERRUPT_VBUS_ERROR 0x80
 
 //
+// Store the shift value to convert frames to microframes.
+//
+
+#define MUSB_MICROFRAMES_PER_FRAME 8
+#define MUSB_MICROFRAMES_PER_FRAME_SHIFT 3
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

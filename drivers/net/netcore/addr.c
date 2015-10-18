@@ -884,10 +884,12 @@ Return Value:
     // taking new references on the link.
     //
 
-    KeAcquireQueuedLock(NetLinkListLock);
-    LIST_REMOVE(&(Link->ListEntry));
-    Link->ListEntry.Next = NULL;
-    KeReleaseQueuedLock(NetLinkListLock);
+    if (Link->ListEntry.Next != NULL) {
+        KeAcquireQueuedLock(NetLinkListLock);
+        LIST_REMOVE(&(Link->ListEntry));
+        Link->ListEntry.Next = NULL;
+        KeReleaseQueuedLock(NetLinkListLock);
+    }
 
     //
     // Dereference the link. The final clean-up will be triggered once the last

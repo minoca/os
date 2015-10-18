@@ -865,6 +865,12 @@ Author:
 #define IRP_IO_BUFFER_STATE_FLAG_LOCKED_COPY 0x00000001
 
 //
+// Define the current loaded file structure version.
+//
+
+#define LOADED_FILE_VERSION 1
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -2501,6 +2507,59 @@ typedef struct _PATH_POINT {
     PMOUNT_POINT MountPoint;
 } PATH_POINT, *PPATH_POINT;
 
+/*++
+
+Structure Description:
+
+    This structure defines a loaded file.
+
+Members:
+
+    Version - Stores the structure version. Future revisions will be backwards
+        compatible. Set to LOADED_FILE_VERSION.
+
+    IoHandle - Stores an open handle to the loaded file.
+
+    Length - Stores the length of the loaded file.
+
+    IoBuffer - Stores a pointer to an I/O buffer that stores the loaded file's
+        data.
+
+--*/
+
+typedef struct _LOADED_FILE {
+    ULONG Version;
+    PIO_HANDLE IoHandle;
+    UINTN Length;
+    PIO_BUFFER IoBuffer;
+} LOADED_FILE, *PLOADED_FILE;
+
+typedef
+VOID
+(*PLOAD_FILE_COMPLETION_ROUTINE) (
+    PVOID Context,
+    PLOADED_FILE File
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called when a file load has completed.
+
+Arguments:
+
+    Context - Supplies the context supplied by the caller who initiated the
+        file load.
+
+    File - Supplies a pointer to the loaded file.
+
+Return Value:
+
+    None.
+
+--*/
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -3268,11 +3327,9 @@ IoContinueIrp (
 Routine Description:
 
     This routine is called by a driver to continue processing an IRP that was
-    previously marked pending. This function can only be called from a driver's
-    dispatch routine when the driver owns the IRP and has previously called
-    IoPendIrp. The system will continue to move in the same direction it was
-    previously moving to the next location in the driver stack. This routine
-    must be called at or below dispatch level.
+    previously marked pending. The driver that pended the IRP will get called
+    a second time in the same directon for this IRP. This routine must be
+    called at or below dispatch level.
 
 Arguments:
 
@@ -4692,6 +4749,67 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+KERNEL_API
+KSTATUS
+IoLoadFile (
+    PSTR Path,
+    ULONG PathLength,
+    PLOAD_FILE_COMPLETION_ROUTINE CompletionRoutine,
+    PVOID CompletionContext
+    );
+
+/*++
+
+Routine Description:
+
+    This routine asynchronously loads the file at the given path. The path can
+    either be absolute or relative. For the kernel process, relative paths are
+    in relative to the system volume's drivers directory. The supplied
+    completion routine is invoked when the load finishes.
+
+Arguments:
+
+    Path - Supplies a pointer to the path to the file. It can either be an
+        absolute path or a path relative to the system partition's drivers
+        directory.
+
+    PathLength - Supplies the length of the path buffer in bytes, including the
+        null terminator.
+
+    CompletionRoutine - Supplies a pointer to the callback routine to notify
+        when the load is complete.
+
+    CompletionContext - Supplies a pointer to an opaque context that will be
+        passed to the completion routine along with the loaded file.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KERNEL_API
+VOID
+IoUnloadFile (
+    PLOADED_FILE File
+    );
+
+/*++
+
+Routine Description:
+
+    This routine unloads the given file.
+
+Arguments:
+
+    File - Supplies a pointer to the file to unload.
+
+Return Value:
+
+    None.
 
 --*/
 

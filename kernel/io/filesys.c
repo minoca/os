@@ -52,6 +52,12 @@ Environment:
 #define MAX_VOLUMES 10000
 
 //
+// Define the location of the drivers directory, relative to the system root.
+//
+
+#define SYSTEM_DRIVERS_DIRECTORY "drivers"
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -111,6 +117,13 @@ PQUEUED_LOCK IoFileSystemListLock = NULL;
 //
 
 POBJECT_HEADER IoVolumeDirectory = NULL;
+
+//
+// Define the path from the system volume to the system directory. Set it to a
+// default in case there is no boot entry (which there should really always be).
+//
+
+PSTR IoSystemDirectoryPath = "minoca";
 
 //
 // Store a pointer to the system volumes.
@@ -685,24 +698,32 @@ Return Value:
     BOOL Created;
     PSTR DeviceName;
     ULONG DeviceNameLength;
+    PIO_HANDLE DriversDirectoryHandle;
     PFILE_OBJECT FileObject;
     ULONG FileObjectFlags;
+    PKPROCESS KernelProcess;
     BOOL Match;
     PARTITION_DEVICE_INFORMATION PartitionInformation;
     UINTN PartitionInformationSize;
+    PPATH_POINT PathPoint;
     FILE_PROPERTIES Properties;
     ULONG RootLookupFlags;
     KSTATUS Status;
+    PIO_HANDLE SystemDirectoryHandle;
     BOOL SystemVolume;
     PDEVICE TargetDevice;
     PVOLUME Volume;
+    PIO_HANDLE VolumeHandle;
     PSTR VolumeName;
     ULONG VolumeNameLength;
 
     DeviceName = NULL;
+    DriversDirectoryHandle = NULL;
     FileObject = NULL;
+    SystemDirectoryHandle = NULL;
     SystemVolume = FALSE;
     Volume = (PVOLUME)Parameter;
+    VolumeHandle = NULL;
 
     ASSERT(Volume != NULL);
     ASSERT(Volume->Device.Header.Type == ObjectVolume);
@@ -851,20 +872,109 @@ Return Value:
     }
 
     //
+    // If this is the system volume, then open the drivers directory and change
+    // the kernel's current directory to the driver's directory.
+    //
+
+    if (SystemVolume != FALSE) {
+
+        //
+        // Copy the system volume path. Synchronization would be needed if this
+        // path changes.
+        //
+
+        ASSERT(VolumeNameLength != 0);
+
+        Status = IoOpen(TRUE,
+                        NULL,
+                        VolumeName,
+                        VolumeNameLength,
+                        IO_ACCESS_READ,
+                        OPEN_FLAG_DIRECTORY,
+                        0,
+                        &VolumeHandle);
+
+        if (!KSUCCESS(Status)) {
+            RtlDebugPrint("Failed to open system volume: %x\n", Status);
+            goto VolumeArrivalEnd;
+        }
+
+        //
+        // Attempt to open the system directory.
+        //
+
+        Status = IoOpen(TRUE,
+                        VolumeHandle,
+                        IoSystemDirectoryPath,
+                        RtlStringLength(IoSystemDirectoryPath) + 1,
+                        IO_ACCESS_READ,
+                        OPEN_FLAG_DIRECTORY,
+                        0,
+                        &SystemDirectoryHandle);
+
+        if (!KSUCCESS(Status)) {
+            RtlDebugPrint("Failed to open system directory '%s': %x\n",
+                          IoSystemDirectoryPath,
+                          Status);
+
+            goto VolumeArrivalEnd;
+        }
+
+        //
+        // Attempt to open the driver directory.
+        //
+
+        Status = IoOpen(TRUE,
+                        SystemDirectoryHandle,
+                        SYSTEM_DRIVERS_DIRECTORY,
+                        sizeof(SYSTEM_DRIVERS_DIRECTORY),
+                        IO_ACCESS_READ,
+                        OPEN_FLAG_DIRECTORY,
+                        0,
+                        &DriversDirectoryHandle);
+
+        if (!KSUCCESS(Status)) {
+            RtlDebugPrint("Failed to open driver directory '%s/%s': %x\n",
+                          IoSystemDirectoryPath,
+                          SYSTEM_DRIVERS_DIRECTORY,
+                          Status);
+
+            goto VolumeArrivalEnd;
+        }
+
+        //
+        // Now set the kernel's current working directory to the drivers
+        // directory.
+        //
+
+        KernelProcess = PsGetKernelProcess();
+
+        ASSERT(KernelProcess == PsGetCurrentProcess());
+
+        PathPoint = &(DriversDirectoryHandle->PathPoint);
+        IO_PATH_POINT_ADD_REFERENCE(PathPoint);
+        KeAcquireQueuedLock(KernelProcess->Paths.Lock);
+
+        ASSERT(KernelProcess->Paths.CurrentDirectory.PathEntry == NULL);
+        ASSERT(KernelProcess->Paths.CurrentDirectory.MountPoint == NULL);
+
+        IO_COPY_PATH_POINT(&(KernelProcess->Paths.CurrentDirectory), PathPoint);
+        KeReleaseQueuedLock(KernelProcess->Paths.Lock);
+    }
+
+    //
     // Tell the memory manager about volumes that can contain page files.
     //
 
     if ((Volume->Device.Flags & DEVICE_FLAG_PAGING_DEVICE) != 0) {
-        MmVolumeArrival(VolumeName,
-                        RtlStringLength(VolumeName) + 1,
-                        SystemVolume);
+        MmVolumeArrival(VolumeName, VolumeNameLength, SystemVolume);
     }
 
     //
     // Tell the process library about the new volume.
     //
 
-    PsVolumeArrival(VolumeName, RtlStringLength(VolumeName) + 1, SystemVolume);
+    PsVolumeArrival(VolumeName, VolumeNameLength, SystemVolume);
 
     //
     // Attempt to start any devices that had previously failed as a volume with
@@ -891,6 +1001,18 @@ VolumeArrivalEnd:
 
     if (FileObject != NULL) {
         IopFileObjectReleaseReference(FileObject, FALSE);
+    }
+
+    if (VolumeHandle != NULL) {
+        IoClose(VolumeHandle);
+    }
+
+    if (SystemDirectoryHandle != NULL) {
+        IoClose(SystemDirectoryHandle);
+    }
+
+    if (DriversDirectoryHandle != NULL) {
+        IoClose(DriversDirectoryHandle);
     }
 
     if (!KSUCCESS(Status)) {

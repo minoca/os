@@ -43,12 +43,6 @@ Environment:
 #define INITIALIZATION_COMMAND_FILE "config/init.set"
 
 //
-// Define the location of the drivers directory, relative to the system root.
-//
-
-#define SYSTEM_DRIVERS_DIRECTORY "drivers"
-
-//
 // Define the location of the OS base library, loaded into every user
 // application.
 //
@@ -77,6 +71,13 @@ PspAddIdleThread (
 extern LIST_ENTRY PsProcessGroupList;
 
 PROCESS_GROUP PsKernelProcessGroup;
+
+//
+// Define the path from the system volume to the system directory. Set it to a
+// default in case there is no boot entry (which there should really always be).
+//
+
+PSTR PsSystemDirectoryPath = "minoca";
 
 //
 // ------------------------------------------------------------------ Functions
@@ -327,10 +328,12 @@ Return Value:
     IO_BUFFER IoBuffer;
     PKPROCESS Process;
     KSTATUS Status;
+    PIO_HANDLE SystemDirectory;
     PIO_HANDLE Volume;
 
     Command = NULL;
     File = NULL;
+    SystemDirectory = NULL;
     Volume = NULL;
 
     //
@@ -347,7 +350,6 @@ Return Value:
     // path changes.
     //
 
-    ASSERT(PsSystemDirectory == NULL);
     ASSERT(VolumeNameLength != 0);
 
     Status = IoOpen(TRUE,
@@ -375,7 +377,7 @@ Return Value:
                     IO_ACCESS_READ,
                     OPEN_FLAG_DIRECTORY,
                     0,
-                    &PsSystemDirectory);
+                    &SystemDirectory);
 
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("Failed to open system directory '%s': %x\n",
@@ -386,33 +388,11 @@ Return Value:
     }
 
     //
-    // Attempt to open the driver directory.
-    //
-
-    Status = IoOpen(TRUE,
-                    PsSystemDirectory,
-                    SYSTEM_DRIVERS_DIRECTORY,
-                    sizeof(SYSTEM_DRIVERS_DIRECTORY),
-                    IO_ACCESS_READ,
-                    OPEN_FLAG_DIRECTORY,
-                    0,
-                    &PsDriverDirectory);
-
-    if (!KSUCCESS(Status)) {
-        RtlDebugPrint("Failed to open driver directory '%s/%s': %x\n",
-                      PsSystemDirectoryPath,
-                      PsDriverDirectory,
-                      Status);
-
-        goto VolumeArrivalEnd;
-    }
-
-    //
     // Attempt to open the OS base library.
     //
 
     Status = IoOpen(TRUE,
-                    PsSystemDirectory,
+                    SystemDirectory,
                     SYSTEM_OS_BASE_LIBRARY_PATH,
                     sizeof(SYSTEM_OS_BASE_LIBRARY_PATH),
                     IO_ACCESS_READ | IO_ACCESS_EXECUTE,
@@ -434,7 +414,7 @@ Return Value:
     //
 
     Status = IoOpen(TRUE,
-                    PsSystemDirectory,
+                    SystemDirectory,
                     INITIALIZATION_COMMAND_FILE,
                     sizeof(INITIALIZATION_COMMAND_FILE),
                     IO_ACCESS_READ,
@@ -521,6 +501,10 @@ Return Value:
 VolumeArrivalEnd:
     if (Volume != NULL) {
         IoClose(Volume);
+    }
+
+    if (SystemDirectory != NULL) {
+        IoClose(SystemDirectory);
     }
 
     if (File != NULL) {
