@@ -189,9 +189,11 @@ Return Value:
             LineNumber = 0;
             if ((Context->Flags & DEBUGGER_FLAG_PRINT_LINE_NUMBERS) != 0) {
                 Line = DbgLookupSourceLine(Module->Symbols, Address);
-                LineNumber = Line->LineNumber;
-                if (LineNumber > MAX_LINE_NUMBER) {
-                    LineNumber = MAX_LINE_NUMBER;
+                if (Line != NULL) {
+                    LineNumber = Line->LineNumber;
+                    if (LineNumber > MAX_LINE_NUMBER) {
+                        LineNumber = MAX_LINE_NUMBER;
+                    }
                 }
             }
 

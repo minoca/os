@@ -44,8 +44,7 @@ TARGETLIBS = $(OBJROOT)/os/lib/partlib/build/partlib.a      \
              $(OBJROOT)/os/lib/bconflib/build/bconflib.a    \
              $(INTLIB)/os/lib/rtl/base/build/basertl.a      \
              $(INTLIB)/os/lib/rtl/build/rtlstubs.a          \
-
-EXTRA_SRC_DIRS = minoca
+             $(OBJROOT)/os/lib/yy/build/yy.a                \
 
 DYNLIBS = -lsetupapi
 

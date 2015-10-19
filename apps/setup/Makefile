@@ -41,6 +41,7 @@ TARGETLIBS = $(OBJROOT)/os/lib/partlib/partlib.a            \
              $(OBJROOT)/os/lib/bconflib/bconflib.a          \
              $(INTLIB)/os/lib/rtl/base/basertl.a            \
              $(INTLIB)/os/apps/osbase/urtl/urtl.a           \
+             $(OBJROOT)/os/lib/yy/yy.a                      \
 
 DYNLIBS = -lminocaos
 
@@ -49,8 +50,6 @@ ifeq ($(OS),Windows_NT)
 DIRS = win32
 
 endif
-
-EXTRA_SRC_DIRS = minoca
 
 include $(SRCROOT)/os/minoca.mk
 

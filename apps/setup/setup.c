@@ -74,6 +74,7 @@ Environment:
     "  -l, --platform=name -- Specifies the platform type.\n"                  \
     "  -m, --partition-format=format -- Specifies the partition format for \n" \
     "      installs to a disk. Valid values are GPT and MBR.\n"                \
+    "  -s, --script=file -- Load a script file.\n"                             \
     "  -S  --boot-short-names -- Specifies that short file names should be\n"  \
     "      allowed when creating the boot partition.\n"                        \
     "  -r, --no-reboot -- Do not reboot after installation is complete.\n"     \
@@ -85,7 +86,7 @@ Environment:
     "Example: 'setup -v -p 0x26' Installs on a partition with device ID "      \
     "0x26.\n"
 
-#define SETUP_OPTIONS_STRING "2a:b:BDd:hi:l:m:p:f:rSvV"
+#define SETUP_OPTIONS_STRING "2a:b:BDd:hi:l:m:p:f:rs:SvV"
 
 //
 // Define the path to the EFI default application.
@@ -181,6 +182,7 @@ struct option SetupLongOptions[] = {
     {"partition-format", required_argument, 0, 'm'},
     {"platform", required_argument, 0, 'l'},
     {"help", no_argument, 0, 'h'},
+    {"script", required_argument, 0, 's'},
     {"boot-short-names", no_argument, 0, 'S'},
     {"no-reboot", no_argument, 0, 'r'},
     {"version", no_argument, 0, 'V'},
@@ -243,6 +245,7 @@ Return Value:
     SourcePath = NULL;
     srand(time(NULL) ^ getpid());
     memset(&Context, 0, sizeof(SETUP_CONTEXT));
+    SetupInitializeInterpreter(&(Context.Interpreter));
     Context.DiskFormat = PartitionFormatGpt;
 
     //
@@ -355,6 +358,10 @@ Return Value:
                 goto mainEnd;
             }
 
+            break;
+
+        case 's':
+            SetupLoadScriptFile(&(Context.Interpreter), optarg);
             break;
 
         case 'S':
@@ -600,6 +607,7 @@ Return Value:
     }
 
 mainEnd:
+    SetupDestroyInterpreter(&(Context.Interpreter));
     if (Context.SourceVolume != NULL) {
         SetupVolumeClose(&Context, Context.SourceVolume);
         Context.SourceVolume = NULL;

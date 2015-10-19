@@ -33,6 +33,7 @@ Environment:
 #include <minoca/lib/yy.h>
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,6 +44,8 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
+#define YY_TOKEN_BASE 512
+
 #define YY_DIGITS "[0-9]"
 #define YY_OCTAL_DIGITS "[0-7]"
 #define YY_NAME0 "[a-zA-Z_]"
@@ -50,8 +53,6 @@ Environment:
 #define YY_EXP "[Ee][+-]?" YY_DIGITS "+"
 #define YY_FLOAT_END "(f|F|l|L)"
 #define YY_INT_END "(u|U|l|L)*"
-
-#define YY_TEST_ID_MEMORY 5
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -1115,7 +1116,7 @@ ULONG YyTestCFunctionDefinition[] = {
 PARSER_GRAMMAR_ELEMENT YyTestCGrammar[] = {
     {"StringLiteral", 0, YyTestCStringLiteral},
     {"PrimaryExpression", 0, YyTestCPrimaryExpression},
-    {"PostfixExpression", YY_GRAMMAR_COLLAPSE_ONE, YyTestCPostfixExpression},
+    {"PostfixExpression", 0, YyTestCPostfixExpression},
     {"ArgumentExpressionList", 0, YyTestCArgumentExpressionList},
     {"UnaryExpression", YY_GRAMMAR_COLLAPSE_ONE, YyTestCUnaryExpression},
     {"UnaryOperator", 0, YyTestCUnaryOperator},
@@ -1315,6 +1316,7 @@ Return Value:
     Lexer.Expressions = YyTestCLexerExpressions;
     Lexer.IgnoreExpressions = YyTestCLexerIgnoreExpressions;
     Lexer.ExpressionNames = YyTestCLexerTokenNames;
+    Lexer.TokenBase = YY_TOKEN_BASE;
     KStatus = YyLexInitialize(&Lexer);
     if (!KSUCCESS(KStatus)) {
         Failures += 1;
@@ -1328,7 +1330,7 @@ Return Value:
         goto TestParseEnd;
     }
 
-    Parser.Flags = YY_PARSE_FLAG_MERGE_LISTS;
+    Parser.Flags = 0;
     if (YyTestVerbose != FALSE) {
         Parser.Flags |= YY_PARSE_FLAG_DEBUG;
     }
@@ -1342,7 +1344,7 @@ Return Value:
     Parser.GrammarBase = CNodeStart;
     Parser.GrammarEnd = CNodeEnd;
     Parser.GrammarStart = CNodeTranslationUnit;
-    Parser.LexerExpressionNames = YyTestCLexerTokenNames;
+    Parser.Lexer = &Lexer;
 
     //
     // Try to parse the file, guessing at ID vs type.

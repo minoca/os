@@ -2655,10 +2655,6 @@ Return Value:
         EndAddress = Stab->Value - Symbols->ImageBase;
     }
 
-    if (State->MaxSourceLineAddress > EndAddress) {
-        EndAddress = State->MaxSourceLineAddress;
-    }
-
     //
     // Figure out if the path was completely specified in the string or if
     // the current directory should be examined as well.
@@ -2780,7 +2776,6 @@ Return Value:
 
             State->IncludeStack = NULL;
             State->MaxBraceAddress = 0;
-            State->MaxSourceLineAddress = 0;
             State->MaxIncludeIndex = 0;
         }
 
@@ -2791,6 +2786,10 @@ Return Value:
         if (State->CurrentSourceLine != NULL) {
             if (State->CurrentSourceLine->AbsoluteAddress != FALSE) {
                 State->CurrentSourceLine->EndOffset = EndAddress;
+                if (State->CurrentSourceLine->StartOffset > EndAddress) {
+                    State->CurrentSourceLine->EndOffset =
+                                         State->CurrentSourceLine->StartOffset;
+                }
 
             } else if (State->CurrentSourceLine->ParentFunction != NULL) {
                 State->CurrentSourceLine->EndOffset =
@@ -2919,7 +2918,6 @@ Return Value:
     } else if (Include == FALSE) {
         State->CurrentSourceFile = NewSource;
         State->CurrentSourceLineFile = NewSource;
-        State->MaxSourceLineAddress = NewSource->StartAddress;
         State->MaxBraceAddress = NewSource->StartAddress;
     }
 
@@ -3048,10 +3046,6 @@ Return Value:
                   &(State->CurrentSourceLineFile->SourceLinesHead));
 
     State->CurrentSourceLine = NewLine;
-    if (Address > State->MaxSourceLineAddress) {
-        State->MaxSourceLineAddress = Address;
-    }
-
     Result = TRUE;
 
 ParseSourceLineEnd:
@@ -3195,10 +3189,6 @@ Return Value:
                   &(State->CurrentSourceFile->FunctionsHead));
 
     State->CurrentFunction = NewFunction;
-    if (NewFunction->StartAddress > State->MaxSourceLineAddress) {
-        State->MaxSourceLineAddress = NewFunction->StartAddress;
-    }
-
     State->MaxBraceAddress = NewFunction->StartAddress;
     Result = TRUE;
 

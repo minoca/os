@@ -31,12 +31,6 @@ Author:
 #endif
 
 //
-// Define the base at which tokens start.
-//
-
-#define YY_TOKEN_BASE 512
-
-//
 // Define lexer flags.
 //
 
@@ -47,29 +41,22 @@ Author:
 //
 
 //
-// Set this flag to merge right-recursive elements into a single large element,
-// rather than nesting them deeply.
-//
-
-#define YY_PARSE_FLAG_MERGE_LISTS 0x00000001
-
-//
 // Set this flag to debug print every node the parser is attempting to parser.
 //
 
-#define YY_PARSE_FLAG_DEBUG 0x00000002
+#define YY_PARSE_FLAG_DEBUG 0x00000001
 
 //
 // Set this flag to debug match successes.
 //
 
-#define YY_PARSE_FLAG_DEBUG_MATCHES 0x00000004
+#define YY_PARSE_FLAG_DEBUG_MATCHES 0x00000002
 
 //
 // Set this flag to debug match failures (produces a lot of output).
 //
 
-#define YY_PARSE_FLAG_DEBUG_NON_MATCHES 0x00000008
+#define YY_PARSE_FLAG_DEBUG_NON_MATCHES 0x00000004
 
 //
 // Define parser grammar element flags.
@@ -138,6 +125,9 @@ Members:
     ExpressionNames - Stores an optional pointer to an array of strings that
         names each of the expressions. Useful for debugging, but not mandatory.
 
+    TokenBase - Stores the value to assign for the first expression. 512 is
+        usually a good value, as it won't alias with the literal characters.
+
 --*/
 
 typedef struct _LEXER {
@@ -154,6 +144,7 @@ typedef struct _LEXER {
     PSTR *Expressions;
     PSTR *IgnoreExpressions;
     PSTR *ExpressionNames;
+    ULONG TokenBase;
 } LEXER, *PLEXER;
 
 /*++
@@ -348,7 +339,7 @@ Members:
     GrammarIndex - Stores the index of the rule that applied for this grammar
         node.
 
-    TokenIndex - Stores the token index where parsing of this node began.
+    StartToken - Stores a pointer to the token where parsing of this node began.
 
     Tokens - Stores a pointer to the tokens in the node.
 
@@ -371,7 +362,7 @@ Members:
 struct _PARSER_NODE {
     ULONG GrammarElement;
     ULONG GrammarIndex;
-    ULONG TokenIndex;
+    PLEXER_TOKEN StartToken;
     PLEXER_TOKEN *Tokens;
     PPARSER_NODE *Nodes;
     ULONG TokenCount;
@@ -423,8 +414,8 @@ Members:
     MaxRecursion - Stores the maximum allowed recursion depth. Supply 0 to
         allow infinite recursion.
 
-    LexerExpressionNames - Stores the array of expression names from the lexer.
-        This is optional and used only when debug printing matches.
+    Lexer - Stores an optional pointer to the lexer, which can be used to print
+        token names during debug.
 
     TokenArrays - Stores a pointer to an array of ever-doubling arrays of
         lexer tokens.
@@ -456,7 +447,7 @@ typedef struct _PARSER {
     ULONG GrammarEnd;
     ULONG GrammarStart;
     ULONG MaxRecursion;
-    PSTR *LexerExpressionNames;
+    PLEXER Lexer;
     PLEXER_TOKEN *TokenArrays;
     ULONG TokenCount;
     ULONG TokenCapacity;

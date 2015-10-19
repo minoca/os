@@ -24,10 +24,15 @@ COMMON_OBJS = cache.o          \
               disk.o           \
               fatdev.o         \
               fileio.o         \
+              interp/const.o   \
+              interp/exec.o    \
+              interp/expr.o    \
+              interp/lang.o    \
+              interp/obj.o     \
               partio.o         \
               plat.o           \
               setup.o          \
               util.o           \
 
-EXTRA_SRC_DIRS = ls sed sh swlib
+EXTRA_SRC_DIRS = interp minoca
 

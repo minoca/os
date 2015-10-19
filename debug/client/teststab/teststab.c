@@ -341,8 +341,6 @@ Return Value:
                    CurrentSource->EndAddress);
         }
 
-        assert(CurrentSource->EndAddress >= CurrentSource->StartAddress);
-
         //
         // Loop through all global variables.
         //

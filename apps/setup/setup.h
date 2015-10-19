@@ -21,9 +21,11 @@ Author:
 //
 
 #define RTL_API DLLEXPORT
+#define YY_API DLLEXPORT
 
 #include <osbase.h>
 #include <minoca/partlib.h>
+#include "interp/interp.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -318,6 +320,8 @@ Members:
 
     PageFileSize - Stores the size in megabytes of the page file.
 
+    Interpreter - Stores the interpreter context.
+
 --*/
 
 typedef struct _SETUP_CONTEXT {
@@ -337,6 +341,7 @@ typedef struct _SETUP_CONTEXT {
     PVOID SourceVolume;
     PSETUP_PLATFORM_RECIPE Recipe;
     ULONGLONG PageFileSize;
+    SETUP_INTERPRETER Interpreter;
 } SETUP_CONTEXT, *PSETUP_CONTEXT;
 
 /*++

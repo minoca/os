@@ -1662,20 +1662,6 @@ Return Value:
                                    ListEntry);
 
         //
-        // If searching by address, check if this source file is in range, and
-        // skip it entirely if it is not.
-        //
-
-        if (Address != (INTN)NULL) {
-            if ((Address < CurrentSource->StartAddress) ||
-                (Address >= CurrentSource->EndAddress)) {
-
-                CurrentSourceEntry = CurrentSourceEntry->Next;
-                continue;
-            }
-        }
-
-        //
         // Set up the current symbol entry.
         //
 
@@ -1818,20 +1804,6 @@ Return Value:
         CurrentSource = LIST_VALUE(CurrentSourceEntry,
                                    SOURCE_FILE_SYMBOL,
                                    ListEntry);
-
-        //
-        // If searching by address, check if this source file is in range, and
-        // skip it entirely if it is not.
-        //
-
-        if (Address != (INTN)NULL) {
-            if ((Address < CurrentSource->StartAddress) ||
-                (Address >= CurrentSource->EndAddress)) {
-
-                CurrentSourceEntry = CurrentSourceEntry->Next;
-                continue;
-            }
-        }
 
         if (CurrentEntry == NULL) {
             CurrentEntry = CurrentSource->FunctionsHead.Next;

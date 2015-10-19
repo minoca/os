@@ -172,11 +172,6 @@ Members:
         include index, it's important to keep track of that maximum include
         index we expect to see.
 
-    MaxSourceLineAddress - Stores the highest source line address seen thus far.
-        If the source file ends abruptly (by beginning a new source file that
-        starts at a lower address for example), then use this as a best
-        estimation for where the last source file and line end.
-
     MaxBraceAddress - Stores the address of the most recent (innermost) brace.
 
 --*/
@@ -191,7 +186,6 @@ typedef struct _STAB_PARSE_STATE {
     PINCLUDE_STACK_ELEMENT IncludeStack;
     LIST_ENTRY CrossReferenceListHead;
     ULONG MaxIncludeIndex;
-    ULONGLONG MaxSourceLineAddress;
     ULONGLONG MaxBraceAddress;
 } STAB_PARSE_STATE, *PSTAB_PARSE_STATE;
 

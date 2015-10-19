@@ -208,7 +208,7 @@ Return Value:
                                        &TokenValue);
 
             if (Match != FALSE) {
-                TokenValue += YY_TOKEN_BASE;
+                TokenValue += Lexer->TokenBase;
             }
         }
 

@@ -546,7 +546,8 @@ Return Value:
     // the intermediate node.
     //
 
-    if (((GrammarElement->Flags & YY_GRAMMAR_COLLAPSE_ONE) != 0) &&
+    if ((KSUCCESS(Status)) &&
+        ((GrammarElement->Flags & YY_GRAMMAR_COLLAPSE_ONE) != 0) &&
         (Node->NodeCount == 1) && (Node->TokenCount == 0)) {
 
         Child = Node->Nodes[0];
@@ -623,6 +624,7 @@ Return Value:
     ULONG Start;
     KSTATUS Status;
     PLEXER_TOKEN Token;
+    ULONG TokenBase;
     ULONG TokenCount;
 
     ElementIndex = 0;
@@ -654,26 +656,7 @@ Return Value:
                 break;
             }
 
-            //
-            // If the rule is the same as the base grammar rule, then this is
-            // something like a list (ie: element ',' element). Support
-            // merging list elements into one larger node rather than recursing
-            // deep for each element.
-            //
-
-            if ((Rule == GrammarNode) &&
-                ((Parser->Flags & YY_PARSE_FLAG_MERGE_LISTS) != 0)) {
-
-                Status = YypNodeMerge(Parser, Node, Child);
-                if (KSUCCESS(Status)) {
-                    YyDestroyNode(Parser, Child);
-                    Child = NULL;
-                }
-
-            } else {
-                Status = YypNodeAddNode(Parser, Node, Child);
-            }
-
+            Status = YypNodeAddNode(Parser, Node, Child);
             if (!KSUCCESS(Status)) {
                 YyDestroyNode(Parser, Child);
                 break;
@@ -692,24 +675,33 @@ Return Value:
             if (Token->Value != Rule) {
                 if (((Parser->Flags &
                       YY_PARSE_FLAG_DEBUG_NON_MATCHES) != 0) &&
-                    (Parser->LexerExpressionNames != NULL)) {
+                    (Parser->Lexer != NULL)) {
 
-                    ExpressionNames = Parser->LexerExpressionNames;
-                    RtlDebugPrint(
-                                "No Match: Wanted %s got %s\n",
-                                ExpressionNames[Rule - YY_TOKEN_BASE],
-                                ExpressionNames[Token->Value - YY_TOKEN_BASE]);
+                    ExpressionNames = Parser->Lexer->ExpressionNames;
+                    if (ExpressionNames == NULL) {
+                        ExpressionNames = Parser->Lexer->Expressions;
+                    }
+
+                    TokenBase = Parser->Lexer->TokenBase;
+                    RtlDebugPrint("No Match: Wanted %s got %s\n",
+                                  ExpressionNames[Rule - TokenBase],
+                                  ExpressionNames[Token->Value - TokenBase]);
                 }
 
                 break;
             }
 
             if (((Parser->Flags & YY_PARSE_FLAG_DEBUG_MATCHES) != 0) &&
-                (Parser->LexerExpressionNames != NULL)) {
+                (Parser->Lexer != NULL)) {
 
-                ExpressionNames = Parser->LexerExpressionNames;
+                ExpressionNames = Parser->Lexer->ExpressionNames;
+                if (ExpressionNames == NULL) {
+                    ExpressionNames = Parser->Lexer->Expressions;
+                }
+
+                TokenBase = Parser->Lexer->TokenBase;
                 RtlDebugPrint("Match: %s (%d:%d)\n",
-                              ExpressionNames[Token->Value - YY_TOKEN_BASE],
+                              ExpressionNames[Token->Value - TokenBase],
                               Token->Line,
                               Token->Column);
             }
@@ -1062,7 +1054,7 @@ Return Value:
 
     Node->GrammarElement = GrammarElement;
     Node->GrammarIndex = (ULONG)-1;
-    Node->TokenIndex = Parser->NextTokenIndex;
+    YypGetNextToken(Parser, &(Node->StartToken));
     Node->NodeCount = 0;
     Node->TokenCount = 0;
     return Node;
