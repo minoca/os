@@ -280,6 +280,8 @@ extern SWISS_COMMAND_ENTRY SwissCommands[];
 #define DW_COMMAND_DESCRIPTION "Passes idle time"
 #define TELNETD_COMMAND_NAME "telnetd"
 #define TELNETD_COMMAND_DESCRIPTION "Simple telnet server"
+#define TELNET_COMMAND_NAME "telnet"
+#define TELNET_COMMAND_DESCRIPTION "Telnet client"
 
 //
 // Command entry point prototypes.
@@ -2146,3 +2148,29 @@ Return Value:
     Returns an integer exit code. 0 for success, nonzero otherwise.
 
 --*/
+
+INT
+TelnetMain (
+    INT ArgumentCount,
+    CHAR **Arguments
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the main entry point for the telnet utility.
+
+Arguments:
+
+    ArgumentCount - Supplies the number of command line arguments the program
+        was invoked with.
+
+    Arguments - Supplies a tokenized array of command line arguments.
+
+Return Value:
+
+    Returns an integer exit code. 0 for success, nonzero otherwise.
+
+--*/
+

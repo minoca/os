@@ -684,6 +684,8 @@ Author:
 // -------------------------------------------------------------------- Globals
 //
 
+#ifdef TELCMDS
+
 char *telcmds[] = {
     "EOF",
     "SUSP",
@@ -707,6 +709,14 @@ char *telcmds[] = {
     "IAC",
     0
 };
+
+#else
+
+extern char *telcmds[];
+
+#endif
+
+#ifdef TELOPTS
 
 char *telopts[NTELOPTS + 1] = {
     "BINARY",
@@ -752,7 +762,25 @@ char *telopts[NTELOPTS + 1] = {
     0
 };
 
+#else
+
+extern char *telopts[];
+
+#endif
+
+#ifdef SLC_NAMES
+
 char *slc_names[] = {SLC_NAMELIST};
+
+#else
+
+extern char *slc_names[];
+
+#define SLC_NAMES SLC_NAMELIST
+
+#endif
+
+#ifdef AUTH_NAMES
 
 char *authtype_names[] = {
     "NULL",
@@ -762,6 +790,14 @@ char *authtype_names[] = {
     "MINK",
     0,
 };
+
+#else
+
+extern char *authtype_names[];
+
+#endif
+
+#ifdef ENCRYPT_NAMES
 
 char *encrypt_names[] = {
     "IS",
@@ -782,6 +818,13 @@ char *enctype_names[] = {
     "DES_OFB64",
     0
 };
+
+#else
+
+extern char *encrypt_names[];
+extern char *enctype_names[];
+
+#endif
 
 //
 // -------------------------------------------------------- Function Prototypes

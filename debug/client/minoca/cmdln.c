@@ -93,9 +93,10 @@ pid_t DbgInitialTerminalErrorForegroundProcessGroup;
 pid_t DbgTargetProcessId;
 
 //
-// Store the original terminal parameters.
+// Store the desired terminal parameters and the previous terminal parameters.
 //
 
+struct termios DbgTerminalSettings;
 struct termios DbgOriginalTerminalSettings;
 
 //
@@ -173,6 +174,23 @@ Return Value:
 
     int Result;
 
+    if (tcgetattr(STDIN_FILENO, &DbgTerminalSettings) != 0) {
+        perror("Cannot get terminal settings");
+        return FALSE;
+    }
+
+    //
+    // Set 8 bit characters.
+    //
+
+    DbgTerminalSettings.c_cflag |= CS8;
+
+    //
+    // Change the local mode to enable canonical mode, echo, erase, extended
+    // functions, and signal characters.
+    //
+
+    DbgTerminalSettings.c_lflag |= ECHO | ICANON | ISIG | ECHONL;
     DbgInitialTerminalInputForegroundProcessGroup = tcgetpgrp(STDIN_FILENO);
     DbgInitialTerminalOutputForegroundProcessGroup = tcgetpgrp(STDOUT_FILENO);
     DbgInitialTerminalErrorForegroundProcessGroup = tcgetpgrp(STDERR_FILENO);
@@ -420,29 +438,14 @@ Return Value:
 
     struct sigaction OriginalAction;
     int Result;
-    struct termios Settings;
     struct sigaction SignalAction;
 
-    if (tcgetattr(STDIN_FILENO, &Settings) != 0) {
+    if (tcgetattr(STDIN_FILENO, &DbgOriginalTerminalSettings) != 0) {
         return;
     }
 
     DbgOrignalTerminalForegroundProcessGroupId = tcgetpgrp(STDIN_FILENO);
-    memcpy(&DbgOriginalTerminalSettings, &Settings, sizeof(struct termios));
-
-    //
-    // Set 8 bit characters.
-    //
-
-    Settings.c_cflag |= CS8;
-
-    //
-    // Change the local mode to enable canonical mode, echo, erase, extended
-    // functions, and signal characters.
-    //
-
-    Settings.c_lflag |= ECHO | ICANON | ISIG | ECHONL;
-    tcsetattr(STDIN_FILENO, TCSANOW, &Settings);
+    tcsetattr(STDIN_FILENO, TCSANOW, &DbgTerminalSettings);
 
     //
     // Make the debugger's process group the foreground process ground. This
