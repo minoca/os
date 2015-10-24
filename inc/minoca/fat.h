@@ -38,7 +38,7 @@ Author:
 // Define the FAT mount flags.
 //
 
-#define FAT_MOUNT_FLAG_ALLOW_SHORT_FILE_NAMES 0x00000001
+#define FAT_MOUNT_FLAG_COMPATIBILITY_MODE 0x00000001
 
 //
 // ------------------------------------------------------ Data Type Definitions

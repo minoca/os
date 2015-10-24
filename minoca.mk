@@ -33,16 +33,26 @@ all:
 .SUFFIXES:
 
 ##
-## Define the architecture of the build machine.
+## Define the architecture and object of the build machine.
 ##
 
 BUILD_ARCH = $(shell uname -m)
 ifeq ($(BUILD_ARCH), i686)
 BUILD_ARCH := x86
+BUILD_BFD_ARCH := i386
+BUILD_OBJ_FORMAT := elf32-i386
+ifeq ($(OS),Windows_NT)
+BUILD_OBJ_FORMAT := pe-i386
+endif
+
 else ifeq ($(BUILD_ARCH), arm)
 BUILD_ARCH := armv7
+BUILD_BFD_ARCH := arm
+BUILD_OBJ_FORMAT := elf32-littlearm
 else ifeq ($(BUILD_ARCH), x86_64)
 BUILD_ARCH := x64
+BUILD_OBJ_FORMAT := elf64-x86-64
+BUILD_BFD_ARCH := arm
 else
 $(error Unknown architecture $(BUILD_ARCH))
 endif
@@ -116,10 +126,12 @@ CECHO_CYAN ?= cecho -fC
 
 ifeq (x86, $(ARCH))
 CC := i686-pc-minoca-gcc
-RCC := missing-windres
+RCC := windres
 AR := i686-pc-minoca-ar
 OBJCOPY := i686-pc-minoca-objcopy
 STRIP := i686-pc-minoca-strip
+BFD_ARCH := i386
+OBJ_FORMAT := elf32-i386
 
 ifneq ($(QUARK),)
 CC := i586-pc-minoca-gcc
@@ -135,6 +147,8 @@ CC := x86_64-pc-minoca-gcc
 AR := x86_64-pc-minoca-ar
 OBJCOPY := x86_64-pc-minoca-objcopy
 STRIP := x86_64-pc-minoca-strip
+BFD_ARCH := x86-64
+OBJ_FORMAT := elf64-x86-64
 endif
 
 ifeq (armv7, $(ARCH))
@@ -142,13 +156,17 @@ CC := arm-none-minoca-gcc
 AR := arm-none-minoca-ar
 OBJCOPY := arm-none-minoca-objcopy
 STRIP := arm-none-minoca-strip
+BFD_ARCH := arm
+OBJ_FORMAT := elf32-littlearm
 endif
 
 ifeq (armv6, $(ARCH))
 CC := arm-none-minoca-gcc
 AR := arm-none-minoca-ar
 OBJCOPY := arm-none-minoca-objcopy
-STRIP = arm-none-minoca-strip
+STRIP := arm-none-minoca-strip
+BFD_ARCH := arm
+OBJ_FORMAT := elf32-littlearm
 endif
 
 ##
@@ -340,7 +358,11 @@ EXTRA_ASFLAGS += -Wa,--gstabs+
 ifneq (, $(BUILD))
 override CC = $(CC_FOR_BUILD)
 override AR = $(AR_FOR_BUILD)
+override OBJCOPY = $(OBJCOPY_FOR_BUILD)
+override STRIP = $(STRIP_FOR_BUILD)
 override CFLAGS = -Wall -Werror -O1
+override BFD_ARCH = $(BUILD_BFD_ARCH)
+override OBJ_FORMAT = $(BUILD_OBJ_FORMAT)
 ifneq ($(DEBUG), chk)
 override CFLAGS += -Wno-unused-but-set-variable
 endif

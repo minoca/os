@@ -25,6 +25,7 @@ Environment:
 //
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -36,8 +37,7 @@ Environment:
 #include <unistd.h>
 
 #include "setup.h"
-#include <minoca/uefi/uefi.h>
-#include <minoca/bconflib.h>
+#include "sconf.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -46,16 +46,9 @@ Environment:
 #define SETUP_VERSION_MAJOR 1
 #define SETUP_VERSION_MINOR 0
 
-#define EFI_BOOT_MANAGER_PATH "/EFI/MINOCA/BOOTMEFI.EFI"
-
-#define PCAT_BOOT_MANAGER_SOURCE "/minoca/system/bootman"
-#define EFI_BOOT_MANAGER_SOURCE "/minoca/system/bootmefi.efi"
-
 #define SETUP_USAGE                                                            \
     "usage: setup [-v] [-d|-p|-f destination]\n"                               \
     "Setup installs Minoca OS to a new destination. Options are:\n"            \
-    "  -2, --two-partitions -- Split the disk and create two primary \n"       \
-    "      partitions (plus the small boot partition) instead of one.\n"       \
     "  -a, --page-file=size -- Specifies the size in megabytes of the page \n" \
     "      file to create. Specify 0 to skip page file creation. If not \n"    \
     "      supplied, a default value of 1.5x the amount of memory on the \n"   \
@@ -65,20 +58,22 @@ Environment:
     "  -D, --debug -- Enable debugging on the target installation.\n"          \
     "  -d, --disk=destination -- Specifies the install destination as a "      \
     "disk.\n"                                                                  \
-    "  -p, --partition=destination -- Specifies the install destination as \n" \
-    "      a partition.\n"                                                     \
     "  -f, --directory=destination -- Specifies the install destination as \n" \
     "      a directory.\n"                                                     \
+    "  -G, --disk-size=size -- Specifies the disk size if the install \n"      \
+    "      destination is a disk. Suffixes M, G, and T are permitted.\n"       \
     "  -i, --input=image -- Specifies the location of the installation \n"     \
-    "      image. The default is to open install.img in the current directory."\
+    "      image. The default is to open install.img in the current "          \
+    "directory.\n"                                                             \
     "  -l, --platform=name -- Specifies the platform type.\n"                  \
-    "  -m, --partition-format=format -- Specifies the partition format for \n" \
-    "      installs to a disk. Valid values are GPT and MBR.\n"                \
+    "  -p, --partition=destination -- Specifies the install destination as \n" \
+    "      a partition.\n"                                                     \
+    "  -r, --reboot -- Reboot after installation is complete.\n"               \
     "  -s, --script=file -- Load a script file.\n"                             \
-    "  -S  --boot-short-names -- Specifies that short file names should be\n"  \
-    "      allowed when creating the boot partition.\n"                        \
-    "  -r, --no-reboot -- Do not reboot after installation is complete.\n"     \
     "  -v, --verbose -- Print files being copied.\n"                           \
+    "  -x, --extra-partition=size -- Add an extra partition. Supply -1 to \n"  \
+    "      split the remaining space with the system partition. This can be \n"\
+    "      specified multiple times.\n"                                        \
     "  --help -- Show this help text and exit.\n"                              \
     "  --version -- Print the application version information and exit.\n\n"   \
     "The destination parameter can take the form of a device ID starting \n"   \
@@ -86,38 +81,16 @@ Environment:
     "Example: 'setup -v -p 0x26' Installs on a partition with device ID "      \
     "0x26.\n"
 
-#define SETUP_OPTIONS_STRING "2a:b:BDd:hi:l:m:p:f:rs:SvV"
+#define SETUP_OPTIONS_STRING "Aa:b:BDd:G:hi:l:p:f:rs:vx:V"
 
-//
-// Define the path to the EFI default application.
-//
-
-#define EFI_DEFAULT_APPLICATION_PATH_IA32    "/EFI/BOOT/BOOTIA32.EFI"
-#define EFI_DEFAULT_APPLICATION_PATH_X64     "/EFI/BOOT/BOOTX64.EFI"
-#define EFI_DEFAULT_APPLICATION_PATH_ARM     "/EFI/BOOT/BOOTARM.EFI"
-#define EFI_DEFAULT_APPLICATION_PATH_AARCH64 "/EFI/BOOT/BOOTAA64.EFI"
-
-#if defined (EFI_X86)
-
-#define EFI_DEFAULT_APPLICATION_PATH EFI_DEFAULT_APPLICATION_PATH_IA32
-
-#elif defined (EFI_X64)
-
-#define EFI_DEFAULT_APPLICATION_PATH EFI_DEFAULT_APPLICATION_PATH_X64
-
-#elif defined (EFI_ARM)
-
-#define EFI_DEFAULT_APPLICATION_PATH EFI_DEFAULT_APPLICATION_PATH_ARM
-
-#elif defined (EFI_AARCH64)
-
-#define EFI_DEFAULT_APPLICATION_PATH EFI_DEFAULT_APPLICATION_PATH_AARCH64
-
-#else
-
-#error Unknown Architecture
-
-#endif
+#define SETUP_ADD_PARTITION_SCRIPT_FORMAT \
+    "Partitions += [{" \
+    "\"Index\": %d," \
+    "\"Size\": %I64d," \
+    "\"PartitionType\": PARTITION_TYPE_MINOCA," \
+    "\"MbrType\": PARTITION_ID_MINOCA," \
+    "\"Attributes\": 0," \
+    "\"Alignment\": 4 * KILOBYTE}];"
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -128,39 +101,14 @@ Environment:
 //
 
 INT
-SetupInstallToDisk (
-    PSETUP_CONTEXT Context
-    );
-
-INT
-SetupInstallToPartition (
-    PSETUP_CONTEXT Context
-    );
-
-INT
-SetupInstallToDirectory (
-    PSETUP_CONTEXT Context
-    );
-
-INT
-SetupInstallFiles (
+SetupAddExtraPartition (
     PSETUP_CONTEXT Context,
-    PVOID DestinationVolume
-    );
-
-INT
-SetupUpdateBootVolume (
-    PSETUP_CONTEXT Context,
-    PVOID BootVolume
+    ULONG Index,
+    LONGLONG Size
     );
 
 INT
 SetupDetermineAutodeployDestination (
-    PSETUP_CONTEXT Context
-    );
-
-INT
-SetupDeterminePageFileSize (
     PSETUP_CONTEXT Context
     );
 
@@ -169,22 +117,20 @@ SetupDeterminePageFileSize (
 //
 
 struct option SetupLongOptions[] = {
-    {"two-partitions", no_argument, 0, '2'},
-    {"page-file", required_argument, 0, 'a'},
     {"autodeploy", no_argument, 0, 'A'},
-    {"boot", required_argument, 0, 'b'},
+    {"page-file", required_argument, 0, 'a'},
     {"boot-debug", no_argument, 0, 'B'},
+    {"boot", required_argument, 0, 'b'},
     {"debug", no_argument, 0, 'D'},
     {"disk", required_argument, 0, 'd'},
     {"directory", required_argument, 0, 'f'},
-    {"input", required_argument, 0, 'i'},
-    {"partition", required_argument, 0, 'p'},
-    {"partition-format", required_argument, 0, 'm'},
-    {"platform", required_argument, 0, 'l'},
+    {"disk-size", required_argument, 0, 'G'},
     {"help", no_argument, 0, 'h'},
+    {"input", required_argument, 0, 'i'},
+    {"platform", required_argument, 0, 'l'},
+    {"partition", required_argument, 0, 'p'},
+    {"reboot", no_argument, 0, 'r'},
     {"script", required_argument, 0, 's'},
-    {"boot-short-names", no_argument, 0, 'S'},
-    {"no-reboot", no_argument, 0, 'r'},
     {"version", no_argument, 0, 'V'},
     {"verbose", no_argument, 0, 'v'},
     {NULL, 0, 0, 0},
@@ -224,14 +170,17 @@ Return Value:
 {
 
     PSTR AfterScan;
-    BOOL AllowShortFileNames;
     PVOID BootVolume;
     SETUP_CONTEXT Context;
     ULONG DeviceCount;
     ULONG DeviceIndex;
     PSETUP_PARTITION_DESCRIPTION Devices;
+    ULONG ExtraPartitionIndex;
+    LONGLONG ExtraPartitionSize;
+    PSETUP_DESTINATION HostFileSystemPath;
     PSTR InstallImagePath;
     INT Option;
+    PSTR PlatformName;
     BOOL PrintHeader;
     BOOL QuietlyQuit;
     PSETUP_DESTINATION SourcePath;
@@ -240,13 +189,20 @@ Return Value:
     BootVolume = NULL;
     DeviceCount = 0;
     Devices = NULL;
+    ExtraPartitionIndex = 100;
     InstallImagePath = SETUP_DEFAULT_IMAGE_NAME;
+    PlatformName = NULL;
     QuietlyQuit = FALSE;
     SourcePath = NULL;
     srand(time(NULL) ^ getpid());
     memset(&Context, 0, sizeof(SETUP_CONTEXT));
+    Context.RecipeIndex = -1;
+    Context.PageFileSize = -1ULL;
     SetupInitializeInterpreter(&(Context.Interpreter));
-    Context.DiskFormat = PartitionFormatGpt;
+    Status = SetupAddCommonScripts(&Context);
+    if (Status != 0) {
+        goto mainEnd;
+    }
 
     //
     // Process the control arguments.
@@ -269,12 +225,18 @@ Return Value:
         }
 
         switch (Option) {
-        case '2':
-            Context.Flags |= SETUP_FLAG_TWO_PARTITIONS;
-            break;
-
         case 'A':
-            Context.Flags |= SETUP_FLAG_AUTO_DEPLOY | SETUP_FLAG_TWO_PARTITIONS;
+            Context.Flags |= SETUP_FLAG_AUTO_DEPLOY;
+            Status = SetupAddExtraPartition(&Context,
+                                            ExtraPartitionIndex,
+                                            -1LL);
+
+            if (Status != 0) {
+                fprintf(stderr, "Error: Failed to add extra partition.\n");
+                goto mainEnd;
+            }
+
+            ExtraPartitionIndex += 1;
             break;
 
         case 'a':
@@ -288,7 +250,6 @@ Return Value:
                 goto mainEnd;
             }
 
-            Context.Flags |= SETUP_FLAG_PAGE_FILE_SPECIFIED;
             break;
 
         case 'b':
@@ -319,6 +280,42 @@ Return Value:
 
             break;
 
+        case 'G':
+            Context.DiskSize = strtoull(optarg, &AfterScan, 0);
+            if (AfterScan == optarg) {
+                fprintf(stderr, "Error: Invalid disk size '%s'.\n", optarg);
+                Status = EINVAL;
+                goto mainEnd;
+            }
+
+            switch (toupper(*AfterScan)) {
+            case '\0':
+                break;
+
+            case 'K':
+                Context.DiskSize *= _1KB;
+                break;
+
+            case 'M':
+                Context.DiskSize *= _1MB;
+                break;
+
+            case 'G':
+                Context.DiskSize *= _1GB;
+                break;
+
+            case 'T':
+                Context.DiskSize *= _1TB;
+                break;
+
+            default:
+                fprintf(stderr, "Error: Invalid suffix %s.\n", AfterScan);
+                Status = EINVAL;
+                goto mainEnd;
+            }
+
+            break;
+
         case 'i':
             InstallImagePath = optarg;
             break;
@@ -340,40 +337,48 @@ Return Value:
 
             break;
 
-        case 'm':
-            if (strcasecmp(optarg, "MBR") == 0) {
-                Context.DiskFormat = PartitionFormatMbr;
-                Context.Flags |= SETUP_FLAG_MBR;
+        case 's':
+            Status = SetupLoadScriptFile(&(Context.Interpreter),
+                                         optarg,
+                                         SetupScriptOrderUserCustomization);
 
-            } else if (strcasecmp(optarg, "GPT") == 0) {
-                Context.DiskFormat = PartitionFormatGpt;
-                Context.Flags &= ~SETUP_FLAG_MBR;
-
-            } else {
+            if (Status != 0) {
                 fprintf(stderr,
-                        "Error: Unrecognized partition format '%s'.\n",
-                        optarg);
+                        "Error: Failed to load script %s: %s.\n",
+                        optarg,
+                        strerror(Status));
 
-                Status = EINVAL;
                 goto mainEnd;
             }
 
             break;
 
-        case 's':
-            SetupLoadScriptFile(&(Context.Interpreter), optarg);
-            break;
-
-        case 'S':
-            Context.Flags |= SETUP_FLAG_BOOT_ALLOW_SHORT_FILE_NAMES;
-            break;
-
         case 'r':
-            Context.Flags |= SETUP_FLAG_NO_REBOOT;
+            Context.Flags |= SETUP_FLAG_REBOOT;
             break;
 
         case 'v':
             Context.Flags |= SETUP_FLAG_VERBOSE;
+            break;
+
+        case 'x':
+            ExtraPartitionSize = strtoll(optarg, &AfterScan, 0);
+            if (AfterScan == optarg) {
+                fprintf(stderr, "Error: Invalid Size %s.\n", optarg);
+                Status = EINVAL;
+                goto mainEnd;
+            }
+
+            Status = SetupAddExtraPartition(&Context,
+                                            ExtraPartitionIndex,
+                                            ExtraPartitionSize);
+
+            if (Status != 0) {
+                fprintf(stderr, "Error: Failed to add extra partition.\n");
+                goto mainEnd;
+            }
+
+            ExtraPartitionIndex += 1;
             break;
 
         case 'V':
@@ -402,6 +407,35 @@ Return Value:
     }
 
     //
+    // Create a volume handle to the host file system.
+    //
+
+    HostFileSystemPath = SetupCreateDestination(SetupDestinationDirectory,
+                                                "",
+                                                0);
+
+    if (HostFileSystemPath == NULL) {
+        Status = ENOMEM;
+        goto mainEnd;
+    }
+
+    Context.HostFileSystem = SetupVolumeOpen(&Context,
+                                             HostFileSystemPath,
+                                             SetupVolumeFormatNever,
+                                             FALSE);
+
+    SetupDestroyDestination(HostFileSystemPath);
+    if (Context.HostFileSystem == NULL) {
+        fprintf(stderr, "Failed to open local file system.\n");
+        Status = errno;
+        if (Status == 0) {
+            Status = -1;
+        }
+
+        goto mainEnd;
+    }
+
+    //
     // If autodeploy was specified, figure out what partition to install to.
     //
 
@@ -420,6 +454,14 @@ Return Value:
 
     } else if ((Context.DiskPath == NULL) && (Context.PartitionPath == NULL) &&
                (Context.DirectoryPath == NULL)) {
+
+        Status = SetupOsGetPlatformName(&PlatformName, NULL);
+        if (Status != 0) {
+            printf("Unable to detect platform name.\n");
+
+        } else {
+            printf("Platform: %s\n", PlatformName);
+        }
 
         printf("No destination was specified. Please select one from the "
                "following list.\n");
@@ -469,7 +511,7 @@ Return Value:
     // Detect the platform type if it was not yet done.
     //
 
-    if (Context.Recipe == NULL) {
+    if (Context.RecipeIndex == -1) {
         Status = SetupDeterminePlatform(&Context);
         if (Status != 0) {
             fprintf(stderr,
@@ -480,36 +522,65 @@ Return Value:
         }
     }
 
-    //
-    // Add in any flags specified by the recipe.
-    //
-
-    Context.Flags |= Context.Recipe->Flags;
-    if ((Context.Flags & SETUP_FLAG_MBR) != 0) {
-        Context.DiskFormat = PartitionFormatMbr;
-    }
-
-    //
-    // Open up the source image.
-    //
-
-    SourcePath = SetupCreateDestination(SetupDestinationImage,
-                                        InstallImagePath,
-                                        0);
-
-    if (SourcePath == NULL) {
-        Status = ENOMEM;
+    Status = SetupAddRecipeScript(&Context);
+    if (Status != 0) {
         goto mainEnd;
     }
 
-    Context.SourceVolume = SetupVolumeOpen(&Context, SourcePath, FALSE, FALSE);
-    if (Context.SourceVolume == NULL) {
-        fprintf(stderr,
-                "Setup failed to open the install source: %s.\n",
-                InstallImagePath);
+    //
+    // Execute the user customization scripts.
+    //
 
-        Status = -1;
+    Status = SetupExecuteDeferredScripts(&(Context.Interpreter),
+                                         SetupScriptOrderUserCustomization);
+
+    if (Status != 0) {
         goto mainEnd;
+    }
+
+    //
+    // Read in the configuration details now that all scripts have been read.
+    //
+
+    Status = SetupReadConfiguration(&(Context.Interpreter),
+                                    &(Context.Configuration));
+
+    if (Status != 0) {
+        perror("Failed to read configuration");
+        goto mainEnd;
+    }
+
+    //
+    // Open up the source image. Use the traditional standard in file "-" to
+    // mean the source is the host file system.
+    //
+
+    if (strcmp(InstallImagePath, "-") == 0) {
+        Context.SourceVolume = Context.HostFileSystem;
+
+    } else {
+        SourcePath = SetupCreateDestination(SetupDestinationImage,
+                                            InstallImagePath,
+                                            0);
+
+        if (SourcePath == NULL) {
+            Status = ENOMEM;
+            goto mainEnd;
+        }
+
+        Context.SourceVolume = SetupVolumeOpen(&Context,
+                                               SourcePath,
+                                               SetupVolumeFormatNever,
+                                               FALSE);
+
+        if (Context.SourceVolume == NULL) {
+            fprintf(stderr,
+                    "Setup failed to open the install source: %s.\n",
+                    InstallImagePath);
+
+            Status = -1;
+            goto mainEnd;
+        }
     }
 
     //
@@ -522,20 +593,16 @@ Return Value:
             goto mainEnd;
         }
 
-        //
-        // Don't reboot for disk installs, as the user needs to remove the
-        // install medium.
-        //
-
-        Context.Flags |= SETUP_FLAG_NO_REBOOT;
-        printf("\nRemove install media and reboot to continue.\n");
+        if ((Context.Flags & SETUP_FLAG_REBOOT) == 0) {
+            printf("\nRemove install media and reboot to continue.\n");
+        }
 
     //
     // There's no disk, open a partition.
     //
 
     } else if (Context.PartitionPath != NULL) {
-        Status = SetupInstallToPartition(&Context);
+        Status = SetupInstallToPartition(&Context, NULL);
         if (Status != 0) {
             goto mainEnd;
         }
@@ -553,29 +620,15 @@ Return Value:
     }
 
     //
-    // If a boot partition was specified, try to update that. First try to open
-    // it without formatting. If that doesn't work, try opening and formatting
-    // it.
+    // If a boot partition was specified, try to update that.
     //
 
     BootVolume = NULL;
     if (Context.BootPartitionPath != NULL) {
-        AllowShortFileNames = FALSE;
-        if ((Context.Flags & SETUP_FLAG_BOOT_ALLOW_SHORT_FILE_NAMES) != 0) {
-            AllowShortFileNames = TRUE;
-        }
-
         BootVolume = SetupVolumeOpen(&Context,
                                      Context.BootPartitionPath,
-                                     FALSE,
-                                     AllowShortFileNames);
-
-        if (BootVolume == NULL) {
-            BootVolume = SetupVolumeOpen(&Context,
-                                         Context.BootPartitionPath,
-                                         TRUE,
-                                         AllowShortFileNames);
-        }
+                                     SetupVolumeFormatIfIncompatible,
+                                     TRUE);
 
         if (BootVolume == NULL) {
             fprintf(stderr, "Setup failed to open the boot volume.\n");
@@ -607,10 +660,27 @@ Return Value:
     }
 
 mainEnd:
+    if (Context.Configuration != NULL) {
+        SetupDestroyConfiguration(Context.Configuration);
+        Context.Configuration = NULL;
+    }
+
     SetupDestroyInterpreter(&(Context.Interpreter));
     if (Context.SourceVolume != NULL) {
-        SetupVolumeClose(&Context, Context.SourceVolume);
+        if (Context.SourceVolume != Context.HostFileSystem) {
+            SetupVolumeClose(&Context, Context.SourceVolume);
+        }
+
         Context.SourceVolume = NULL;
+    }
+
+    if (Context.HostFileSystem != NULL) {
+        SetupVolumeClose(&Context, Context.HostFileSystem);
+        Context.HostFileSystem = NULL;
+    }
+
+    if (PlatformName != NULL) {
+        free(PlatformName);
     }
 
     if (SourcePath != NULL) {
@@ -646,7 +716,7 @@ mainEnd:
     }
 
     if (Status == 0) {
-        if ((Context.Flags & SETUP_FLAG_NO_REBOOT) == 0) {
+        if ((Context.Flags & SETUP_FLAG_REBOOT) != 0) {
             if ((Context.Flags & SETUP_FLAG_VERBOSE) != 0) {
                 printf("Rebooting system...\n");
             }
@@ -685,285 +755,25 @@ mainEnd:
 //
 
 INT
-SetupInstallToDisk (
-    PSETUP_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine installs the OS onto an open disk.
-
-Arguments:
-
-    Context - Supplies a pointer to the application context.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
-{
-
-    BOOL AllowShortFileNames;
-    PVOID BootVolume;
-    INT Result;
-
-    BootVolume = NULL;
-
-    //
-    // Format the disk.
-    //
-
-    Result = SetupFormatDisk(Context);
-    if (Result != 0) {
-        fprintf(stderr, "Failed to format disk.\n");
-        goto InstallToDiskEnd;
-    }
-
-    //
-    // Perform the bulk of the installation, setting up the system.
-    //
-
-    Result = SetupInstallToPartition(Context);
-    if (Result != 0) {
-        goto InstallToDiskEnd;
-    }
-
-    //
-    // Set up the boot volume.
-    //
-
-    AllowShortFileNames = FALSE;
-    if ((Context->Flags & SETUP_FLAG_BOOT_ALLOW_SHORT_FILE_NAMES) != 0) {
-        AllowShortFileNames = TRUE;
-    }
-
-    Context->CurrentPartitionOffset = Context->BootPartitionOffset;
-    Context->CurrentPartitionSize = Context->BootPartitionSize;
-    BootVolume = SetupVolumeOpen(Context,
-                                 Context->DiskPath,
-                                 TRUE,
-                                 AllowShortFileNames);
-
-    if (BootVolume == NULL) {
-        fprintf(stderr, "Error: Failed to open boot volume.\n");
-        Result = -1;
-        goto InstallToDiskEnd;
-    }
-
-    Result = SetupUpdateBootVolume(Context, BootVolume);
-    if (Result != 0) {
-        fprintf(stderr, "Error: Failed to update boot volume.\n");
-        goto InstallToDiskEnd;
-    }
-
-    SetupVolumeClose(Context, BootVolume);
-    BootVolume = NULL;
-
-    //
-    // Write out the MBR and VBR.
-    //
-
-    Result = SetupInstallBootSector(Context);
-    if (Result != 0) {
-        fprintf(stderr, "Error: Failed to write boot sector.\n");
-        goto InstallToDiskEnd;
-    }
-
-InstallToDiskEnd:
-    if (BootVolume != NULL) {
-        SetupVolumeClose(Context, BootVolume);
-    }
-
-    return Result;
-}
-
-INT
-SetupInstallToPartition (
-    PSETUP_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine installs the OS onto an open partition.
-
-Arguments:
-
-    Context - Supplies a pointer to the application context.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
-{
-
-    PSETUP_DESTINATION Destination;
-    INT Result;
-    ULONGLONG SeekResult;
-    PVOID Volume;
-
-    Volume = NULL;
-
-    //
-    // Open up the partition. If there's already a disk, then set the offset
-    // to the install partition offset.
-    //
-
-    if (Context->Disk != NULL) {
-        Destination = Context->DiskPath;
-        Context->CurrentPartitionOffset = Context->InstallPartition.FirstBlock;
-        SeekResult = SetupPartitionSeek(Context, Context->Disk, 0);
-        if (SeekResult != 0) {
-            fprintf(stderr, "Failed to seek to install partition.\n");
-            Result = -1;
-            goto InstallToPartitionEnd;
-        }
-
-    //
-    // No device has been opened, so open up the partition directly.
-    //
-
-    } else {
-        Destination = Context->PartitionPath;
-        Context->Disk = SetupPartitionOpen(Context,
-                                           Destination,
-                                           &(Context->InstallPartition));
-
-        if (Context->Disk == NULL) {
-            Result = errno;
-            fprintf(stderr, "Failed to open partition: %s.\n", strerror(errno));
-            goto InstallToPartitionEnd;
-        }
-
-        Context->CurrentPartitionOffset = 0;
-    }
-
-    Context->CurrentPartitionSize = Context->InstallPartition.LastBlock + 1 -
-                                    Context->InstallPartition.FirstBlock;
-
-    assert(Destination != NULL);
-
-    Volume = SetupVolumeOpen(Context, Destination, TRUE, FALSE);
-    if (Volume == NULL) {
-        Result = -1;
-        goto InstallToPartitionEnd;
-    }
-
-    //
-    // Compute the page file size if needed.
-    //
-
-    if ((Context->Flags & SETUP_FLAG_PAGE_FILE_SPECIFIED) == 0) {
-        Result = SetupDeterminePageFileSize(Context);
-        if (Result != 0) {
-            fprintf(stderr,
-                    "Warning: Failed to determine page file size. Page file "
-                    "will not be created.\n");
-        }
-    }
-
-    Result = SetupInstallFiles(Context, Volume);
-    if (Result != 0) {
-        goto InstallToPartitionEnd;
-    }
-
-InstallToPartitionEnd:
-    if (Volume != NULL) {
-        SetupVolumeClose(Context, Volume);
-    }
-
-    //
-    // Only close the partition if this routine opened it.
-    //
-
-    if ((Context->Disk != NULL) && (Destination != Context->DiskPath)) {
-        SetupPartitionClose(Context, Context->Disk);
-        Context->Disk = NULL;
-    }
-
-    return Result;
-}
-
-INT
-SetupInstallToDirectory (
-    PSETUP_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine installs the OS onto a directory.
-
-Arguments:
-
-    Context - Supplies a pointer to the application context.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
-{
-
-    INT Result;
-    PVOID Volume;
-
-    //
-    // Compute the page file size if needed.
-    //
-
-    if ((Context->Flags & SETUP_FLAG_PAGE_FILE_SPECIFIED) == 0) {
-        Result = SetupDeterminePageFileSize(Context);
-        if (Result != 0) {
-            fprintf(stderr,
-                    "Warning: Failed to determine page file size. Page file "
-                    "will not be created.\n");
-        }
-    }
-
-    Volume = SetupVolumeOpen(Context, Context->DirectoryPath, FALSE, FALSE);
-    if (Volume == NULL) {
-        return -1;
-    }
-
-    Result = SetupInstallFiles(Context, Volume);
-    SetupVolumeClose(Context, Volume);
-    return Result;
-}
-
-INT
-SetupInstallFiles (
+SetupAddExtraPartition (
     PSETUP_CONTEXT Context,
-    PVOID DestinationVolume
+    ULONG Index,
+    LONGLONG Size
     )
 
 /*++
 
 Routine Description:
 
-    This routine installs to the given volume.
+    This routine adds an extra partition to the configuration.
 
 Arguments:
 
     Context - Supplies a pointer to the applicaton context.
 
-    DestinationVolume - Supplies a pointer to the open destination volume
-        handle.
+    Index - Supplies the partition index to assign.
+
+    Size - Supplies the size of the partition to add.
 
 Return Value:
 
@@ -975,475 +785,23 @@ Return Value:
 
 {
 
-    PVOID PageFile;
-    ULONGLONG PageFileSize;
-    INT Result;
-
-    PageFile = NULL;
-
-    //
-    // Copy the root directory of the image to the destination.
-    //
-
-    Result = SetupCopyFile(Context,
-                           DestinationVolume,
-                           Context->SourceVolume,
-                           "/",
-                           "/");
-
-    if (Result != 0) {
-        goto InstallFilesEnd;
-    }
-
-    //
-    // Create a page file if needed.
-    //
-
-    if (Context->PageFileSize != 0) {
-        PageFileSize = Context->PageFileSize * _1MB;
-
-        //
-        // Watch out for file system limitations on max file size.
-        // TODO: Max file size is file system specific, not hardcoded.
-        //
-
-        if (PageFileSize > MAX_ULONG) {
-            PageFileSize = MAX_ULONG;
-        }
-
-        if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-            printf("Creating %I64dMB page file...", PageFileSize / _1MB);
-            fflush(stdout);
-        }
-
-        PageFile = SetupFileOpen(DestinationVolume,
-                                 SETUP_PAGE_FILE_PATH,
-                                 O_RDWR | O_CREAT,
-                                 0);
-
-        if (PageFile == NULL) {
-            fprintf(stderr, "Warning: Failed to create page file.\n");
-            goto InstallFilesEnd;
-        }
-
-        Result = SetupFileFileTruncate(PageFile, PageFileSize);
-        SetupFileClose(PageFile);
-        PageFile = NULL;
-        if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-            printf("Done\n", Context->PageFileSize);
-        }
-    }
-
-InstallFilesEnd:
-    if (PageFile != NULL) {
-        SetupFileClose(PageFile);
-    }
-
-    return Result;
-}
-
-INT
-SetupUpdateBootVolume (
-    PSETUP_CONTEXT Context,
-    PVOID BootVolume
-    )
-
-/*++
-
-Routine Description:
-
-    This routine updates the boot volume, updating the boot manager if the
-    existing version is older and adding or updating a boot entry for the
-    newly installed drive.
-
-Arguments:
-
-    Context - Supplies a pointer to the applicaton context.
-
-    BootVolume - Supplies a pointer to the open boot volume handle.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
-{
-
-    BOOT_CONFIGURATION_CONTEXT BootConfiguration;
-    BOOL BootConfigurationInitialized;
-    PBOOT_ENTRY BootEntry;
-    PVOID Buffer;
-    ssize_t BytesComplete;
-    int CompareResult;
-    PVOID Destination;
-    ULONGLONG FileSize;
-    UINTN Index;
-    PSTR LoaderPath;
-    PBOOT_ENTRY NewBootEntry;
-    PVOID NewBuffer;
-    size_t NewSize;
-    mode_t Permissions;
-    INT Result;
-    KSTATUS Status;
-
-    memset(&BootConfiguration, 0, sizeof(BOOT_CONFIGURATION_CONTEXT));
-    BootConfigurationInitialized = FALSE;
-    Destination = NULL;
-    NewBootEntry = NULL;
-
-    //
-    // Make sure the appropriate directories exist.
-    //
-
-    Permissions = S_IRUSR | S_IWUSR | S_IXUSR;
-    SetupFileCreateDirectory(BootVolume, "/EFI", Permissions);
-    SetupFileCreateDirectory(BootVolume, "/EFI/BOOT", Permissions);
-    SetupFileCreateDirectory(BootVolume, "/EFI/MINOCA", Permissions);
-
-    //
-    // Update the EFI boot manager if needed.
-    //
-
-    Result = SetupUpdateFile(Context,
-                             BootVolume,
-                             Context->SourceVolume,
-                             EFI_BOOT_MANAGER_PATH,
-                             EFI_BOOT_MANAGER_SOURCE);
-
-    if (Result != 0) {
-        fprintf(stderr, "Failed to update %s.\n", EFI_BOOT_MANAGER_PATH);
-        goto UpdateBootVolumeEnd;
-    }
-
-    //
-    // Update the default boot application.
-    //
-
-    Result = SetupUpdateFile(Context,
-                             BootVolume,
-                             Context->SourceVolume,
-                             EFI_DEFAULT_APPLICATION_PATH,
-                             EFI_BOOT_MANAGER_SOURCE);
-
-    if (Result != 0) {
-        fprintf(stderr,
-                "Failed to update %s.\n",
-                EFI_REMOVABLE_MEDIA_FILE_NAME);
-
-        goto UpdateBootVolumeEnd;
-    }
-
-    //
-    // The install partition information had better be valid.
-    //
-
-    assert(Context->InstallPartition.Version ==
-           PARTITION_DEVICE_INFORMATION_VERSION);
-
-    //
-    // Initialize the boot configuration library support.
-    //
-
-    BootConfiguration.AllocateFunction = (PBOOT_CONFIGURATION_ALLOCATE)malloc;
-    BootConfiguration.FreeFunction = (PBOOT_CONFIGURATION_FREE)free;
-    Status = BcInitializeContext(&BootConfiguration);
-    if (!KSUCCESS(Status)) {
-        fprintf(stderr, "BcInitializeContext Error: %x\n", Status);
-        Result = -1;
-        goto UpdateBootVolumeEnd;
-    }
-
-    BootConfigurationInitialized = TRUE;
-
-    //
-    // Attempt to open up the boot configuration data.
-    //
-
-    Destination = SetupFileOpen(BootVolume,
-                                BOOT_CONFIGURATION_ABSOLUTE_PATH,
-                                O_RDONLY,
-                                0);
-
-    if (Destination != NULL) {
-        if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-            printf("Reading existing boot configuration.\n");
-        }
-
-        //
-        // The file exists. Read it in.
-        //
-
-        Result = SetupFileFileStat(Destination, &FileSize, NULL, NULL);
-        if (Result != 0) {
-            goto UpdateBootVolumeEnd;
-        }
-
-        Status = STATUS_NOT_FOUND;
-        if (FileSize != 0) {
-            Buffer = malloc(FileSize);
-            if (Buffer == NULL) {
-                goto UpdateBootVolumeEnd;
-            }
-
-            BytesComplete = SetupFileRead(Destination, Buffer, FileSize);
-            if (BytesComplete != FileSize) {
-                fprintf(stderr, "Failed to read boot configuration file.\n");
-                goto UpdateBootVolumeEnd;
-            }
-
-            BootConfiguration.FileData = Buffer;
-            BootConfiguration.FileDataSize = FileSize;
-            Buffer = NULL;
-
-            //
-            // Read in and parse the boot configuration data. If it is
-            // invalid, create a brand new default configuration.
-            //
-
-            Status = BcReadBootConfigurationFile(&BootConfiguration);
-            if (!KSUCCESS(Status)) {
-                fprintf(stderr,
-                        "Failed to read boot configuration data: %x.\n",
-                        Status);
-            }
-        }
-
-        //
-        // If the file size is zero or could not be read, create a default
-        // configuration.
-        //
-
-        if (!KSUCCESS(Status)) {
-            Status = BcCreateDefaultBootConfiguration(
-                                        &BootConfiguration,
-                                        Context->InstallPartition.DiskId,
-                                        Context->InstallPartition.PartitionId);
-
-            if (!KSUCCESS(Status)) {
-                fprintf(stderr,
-                        "Failed to create default boot configuration: "
-                        "%x\n",
-                        Status);
-
-                Result = -1;
-                goto UpdateBootVolumeEnd;
-            }
-        }
-
-        SetupFileClose(Destination);
-        Destination = NULL;
-
-    //
-    // There is no boot configuration data. Create a new one.
-    //
-
-    } else {
-        if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-            printf("Creating initial boot configuration.\n");
-        }
-
-        Status = BcCreateDefaultBootConfiguration(
-                                        &BootConfiguration,
-                                        Context->InstallPartition.DiskId,
-                                        Context->InstallPartition.PartitionId);
-
-        if (!KSUCCESS(Status)) {
-            fprintf(stderr,
-                    "BcCreateDefaultBootConfiguration Error: %x\n",
-                    Status);
-
-            Result = -1;
-            goto UpdateBootVolumeEnd;
-        }
-    }
-
-    //
-    // Create a new default entry.
-    //
-
-    if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-        printf("Adding boot configuration entry.\n");
-    }
-
-    NewBootEntry = BcCreateDefaultBootEntry(
-                            &BootConfiguration,
-                            NULL,
-                            Context->InstallPartition.DiskId,
-                            Context->InstallPartition.PartitionId);
-
-    if (NewBootEntry == NULL) {
-        Result = ENOMEM;
-        fprintf(stderr, "Failed to create boot entry.\n");
-        goto UpdateBootVolumeEnd;
-    }
-
-    if ((Context->Flags & SETUP_FLAG_INSTALL_DEBUG) != 0) {
-        NewBootEntry->Flags |= BOOT_ENTRY_FLAG_DEBUG;
-        if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-            printf("Enabled debug mode.\n");
-        }
-    }
-
-    if ((Context->Flags & SETUP_FLAG_INSTALL_BOOT_DEBUG) != 0) {
-        NewBootEntry->Flags |= BOOT_ENTRY_FLAG_BOOT_DEBUG;
-        if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-            printf("Enabled boot debug mode.\n");
-        }
-    }
-
-    //
-    // Use a custom loader if the platform recipe calls for it.
-    //
-
-    if (Context->Recipe->Loader != NULL) {
-        if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-            printf("Using platform loader path: %s.\n",
-                   Context->Recipe->Loader);
-        }
-
-        LoaderPath = strdup(Context->Recipe->Loader);
-        if (LoaderPath == NULL) {
-            Result = ENOMEM;
-            goto UpdateBootVolumeEnd;
-        }
-
-        free(NewBootEntry->LoaderPath);
-        NewBootEntry->LoaderPath = LoaderPath;
-    }
-
-    //
-    // Look for a boot entry with this partition ID to replace.
-    //
-
-    for (Index = 0;
-         Index < BootConfiguration.BootEntryCount;
-         Index += 1) {
-
-        BootEntry = BootConfiguration.BootEntries[Index];
-        CompareResult = memcmp(BootEntry->PartitionId,
-                               NewBootEntry->PartitionId,
-                               BOOT_PARTITION_ID_SIZE);
-
-        if (CompareResult == 0) {
-            if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-                printf("Replacing boot entry %d: %s.\n",
-                       BootEntry->Id,
-                       BootEntry->Name);
-            }
-
-            BootConfiguration.BootEntries[Index] = NewBootEntry;
-            BcDestroyBootEntry(&BootConfiguration, BootEntry);
-            break;
-        }
-    }
-
-    //
-    // If there was no previous entry pointing at this partition,
-    // add it to the end of the list.
-    //
-
-    if (Index == BootConfiguration.BootEntryCount) {
-        NewSize = (BootConfiguration.BootEntryCount + 1) *
-                  sizeof(PBOOT_ENTRY);
-
-        NewBuffer = realloc(BootConfiguration.BootEntries, NewSize);
-        if (NewBuffer == NULL) {
-            Result = ENOMEM;
-            goto UpdateBootVolumeEnd;
-        }
-
-        BootConfiguration.BootEntries = NewBuffer;
-        BootConfiguration.BootEntries[BootConfiguration.BootEntryCount] =
-                                                                  NewBootEntry;
-
-        BootConfiguration.BootEntryCount += 1;
-    }
-
-    BootConfiguration.GlobalConfiguration.DefaultBootEntry = NewBootEntry;
-    NewBootEntry = NULL;
-
-    //
-    // Serialize the boot configuration data.
-    //
-
-    Status = BcWriteBootConfigurationFile(&BootConfiguration);
-    if (!KSUCCESS(Status)) {
-        fprintf(stderr,
-                "Error: Failed to serialize boot configuration data: %x.\n",
-                Status);
-
-        Result = -1;
-        goto UpdateBootVolumeEnd;
-    }
-
-    if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-        printf("Writing boot configuration data.\n");
-    }
-
-    //
-    // Open and write the data.
-    //
-
-    Destination = SetupFileOpen(BootVolume,
-                                BOOT_CONFIGURATION_ABSOLUTE_PATH,
-                                O_RDWR | O_CREAT | O_TRUNC,
-                                Permissions);
-
-    if (Destination == NULL) {
-        fprintf(stderr,
-                "Error: Failed to open %s for writing.\n",
-                BOOT_CONFIGURATION_ABSOLUTE_PATH);
-
-        Result = errno;
-        if (Result == 0) {
-            Result = -1;
-        }
-
-        goto UpdateBootVolumeEnd;
-    }
-
-    BytesComplete = SetupFileWrite(Destination,
-                                   BootConfiguration.FileData,
-                                   BootConfiguration.FileDataSize);
-
-    if (BytesComplete != BootConfiguration.FileDataSize) {
-        fprintf(stderr,
-                "Error: Failed to write boot configuration data.\n");
-
-        Result = -1;
-        goto UpdateBootVolumeEnd;
-    }
-
-    SetupFileClose(Destination);
-    Destination = NULL;
-
-    //
-    // Install any platform specific files into the boot volume.
-    //
-
-    Result = SetupInstallPlatformBootFiles(Context, BootVolume);
-    if (Result != 0) {
-        fprintf(stderr, "Error: Failed to install platform boot files.\n");
-        goto UpdateBootVolumeEnd;
-    }
-
-UpdateBootVolumeEnd:
-    if (BootConfigurationInitialized != FALSE) {
-        if (NewBootEntry != NULL) {
-            BcDestroyBootEntry(&BootConfiguration, NewBootEntry);
-        }
-
-        BcDestroyContext(&BootConfiguration);
-    }
-
-    if (Destination != NULL) {
-        SetupFileClose(Destination);
-    }
-
-    return Result;
+    CHAR ScriptBuffer[512];
+    ULONG ScriptSize;
+    INT Status;
+
+    ScriptSize = snprintf(ScriptBuffer,
+                          sizeof(ScriptBuffer),
+                          SETUP_ADD_PARTITION_SCRIPT_FORMAT,
+                          Index,
+                          Size);
+
+    Status = SetupLoadScriptBuffer(&(Context->Interpreter),
+                                   "extrapartition",
+                                   ScriptBuffer,
+                                   ScriptSize,
+                                   SetupScriptOrderUserCustomization);
+
+    return Status;
 }
 
 INT
@@ -1569,71 +927,5 @@ DetermineAutodeployDestinationEnd:
     }
 
     return Status;
-}
-
-INT
-SetupDeterminePageFileSize (
-    PSETUP_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine determines the size of the page file to create.
-
-Arguments:
-
-    Context - Supplies a pointer to the applicaton context.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
-{
-
-    ULONGLONG InstallPartitionSize;
-    ULONGLONG PageFileSize;
-    INT Result;
-    ULONGLONG SystemMemory;
-
-    Result = SetupOsGetSystemMemorySize(&SystemMemory);
-    if (Result != 0) {
-        return Result;
-    }
-
-    PageFileSize = (SystemMemory * SETUP_DEFAULT_PAGE_FILE_NUMERATOR) /
-                   SETUP_DEFAULT_PAGE_FILE_DENOMINATOR;
-
-    if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-        printf("System memory %I64dMB, Page File size %I64dMB.\n",
-               SystemMemory,
-               PageFileSize);
-    }
-
-    InstallPartitionSize = (Context->InstallPartition.LastBlock -
-                            Context->InstallPartition.FirstBlock) *
-                           Context->InstallPartition.BlockSize;
-
-    InstallPartitionSize /= _1MB;
-    if ((InstallPartitionSize != 0) &&
-        (PageFileSize >
-         (InstallPartitionSize / SETUP_MAX_PAGE_FILE_DISK_DIVISOR))) {
-
-        PageFileSize = InstallPartitionSize / SETUP_MAX_PAGE_FILE_DISK_DIVISOR;
-        if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-            printf("Clipping page file to %I64dMB, as install partition is "
-                   "only %I64dMB.\n",
-                   PageFileSize,
-                   InstallPartitionSize);
-        }
-    }
-
-    Context->PageFileSize = PageFileSize;
-    return 0;
 }
 

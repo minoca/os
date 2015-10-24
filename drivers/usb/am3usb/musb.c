@@ -802,15 +802,17 @@ Return Value:
 
     Controller = HostControllerContext;
     PollRate = Endpoint->PollRate;
-    if ((Endpoint->Speed == UsbDeviceSpeedLow) ||
-        (Endpoint->Speed == UsbDeviceSpeedHigh)) {
 
-        PollRate <<= MUSB_MICROFRAMES_PER_FRAME_SHIFT;
-    }
+    //
+    // For high speed endpoints, the interval is 2^(Interval - 1). This is
+    // also true for full speed isochronous and full speed bulk (NAK count).
+    // For other full/low speed endpoints, it's just a frame count.
+    //
 
     if ((Endpoint->Speed == UsbDeviceSpeedHigh) ||
         ((Endpoint->Speed == UsbDeviceSpeedFull) &&
-         (Endpoint->Type == UsbTransferTypeIsochronous))) {
+         ((Endpoint->Type == UsbTransferTypeIsochronous) ||
+          (Endpoint->Type == UsbTransferTypeBulk)))) {
 
         if (PollRate != 0) {
             PollRate = RtlCountTrailingZeros32(PollRate) + 1;

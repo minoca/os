@@ -34,12 +34,11 @@ Environment:
 #include <string.h>
 
 #include "setup.h"
+#include "sconf.h"
 
 //
 // ---------------------------------------------------------------- Definitions
 //
-
-#define SETUP_MAX_PARTITION_COUNT 3
 
 //
 // Define the boot partition size in blocks.
@@ -125,28 +124,40 @@ Return Value:
 
 {
 
+    UINTN AllocationSize;
     ULONGLONG BlockCount;
     ULONG BlockIndex;
-    ULONG DiskPadding;
-    ULONGLONG MainSize;
+    ULONGLONG BlockOffset;
+    PSETUP_DISK_CONFIGURATION DiskConfiguration;
+    ULONGLONG FreeSize;
+    PSETUP_PARTITION_CONFIGURATION PartitionConfig;
     PPARTITION_CONTEXT PartitionContext;
     ULONG PartitionCount;
+    ULONG PartitionDataStart;
     ULONG PartitionIndex;
+    PPARTITION_INFORMATION PartitionInfo;
     PPARTITION_INFORMATION Partitions;
     INT Result;
-    CHAR SizeString[20];
+    ULONGLONG Size;
+    ULONG SplitCount;
+    ULONGLONG Start;
     KSTATUS Status;
+    ULONG SystemIndex;
     PVOID ZeroBuffer;
 
     assert((Context->Disk == NULL) && (Context->DiskPath != NULL));
 
+    DiskConfiguration = &(Context->Configuration->Disk);
     Partitions = NULL;
 
     //
     // Open up the disk.
     //
 
-    Context->Disk = SetupOpenDestination(Context->DiskPath, O_RDWR, 0);
+    Context->Disk = SetupOpenDestination(Context->DiskPath,
+                                         O_CREAT | O_RDWR,
+                                         0664);
+
     if (Context->Disk == NULL) {
         printf("Error: Failed to open ");
         SetupPrintDestination(Context->DiskPath);
@@ -179,8 +190,22 @@ Return Value:
         goto FormatDiskEnd;
     }
 
+    //
+    // Use the override if one was specified.
+    //
+
+    if (Context->DiskSize != 0) {
+        PartitionContext->BlockCount = Context->DiskSize;
+    }
+
     PartitionContext->BlockCount /= SETUP_BLOCK_SIZE;
-    PartitionContext->Format = Context->DiskFormat;
+    if (PartitionContext->BlockCount == 0) {
+        fprintf(stderr, "Error: Disk has zero size.\n");
+        Result = ERANGE;
+        goto FormatDiskEnd;
+    }
+
+    PartitionContext->Format = DiskConfiguration->PartitionFormat;
     Status = PartInitialize(PartitionContext);
     if (!KSUCCESS(Status)) {
         fprintf(stderr,
@@ -195,99 +220,200 @@ Return Value:
     // Initialize the partition layout.
     //
 
-    DiskPadding = 0;
-    if (PartitionContext->Format == PartitionFormatGpt) {
-        DiskPadding = 40;
+    switch (PartitionContext->Format) {
+    case PartitionFormatNone:
+        PartitionDataStart = 0;
+        break;
+
+    case PartitionFormatMbr:
+        PartitionDataStart = 1;
+        break;
+
+    case PartitionFormatGpt:
+        PartitionDataStart = 41;
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        Result = EINVAL;
+        goto FormatDiskEnd;
     }
 
-    Partitions = malloc(
-                    sizeof(PARTITION_INFORMATION) * SETUP_MAX_PARTITION_COUNT);
+    AllocationSize = sizeof(PARTITION_INFORMATION) *
+                     DiskConfiguration->PartitionCount;
 
+    Partitions = malloc(AllocationSize);
     if (Partitions == NULL) {
         Result = ENOMEM;
         goto FormatDiskEnd;
     }
 
-    memset(Partitions,
-           0,
-           sizeof(PARTITION_INFORMATION) * SETUP_MAX_PARTITION_COUNT);
-
-    PartitionCount = 2;
+    memset(Partitions, 0, AllocationSize);
 
     //
-    // Create the boot partition.
+    // Go through once to calculate the main partition size and how many
+    // partitions to split it between.
     //
 
-    Partitions[0].StartOffset = 1 + DiskPadding;
-    if ((Context->Flags & SETUP_FLAG_1MB_PARTITION_ALIGNMENT) != 0) {
-        Partitions[0].StartOffset = ALIGN_RANGE_UP(Partitions[0].StartOffset,
-                                                   _1MB / SETUP_BLOCK_SIZE);
+    BlockOffset = PartitionDataStart;
+    SplitCount = 0;
+    for (PartitionIndex = 0;
+         PartitionIndex < DiskConfiguration->PartitionCount;
+         PartitionIndex += 1) {
+
+        PartitionConfig = &(DiskConfiguration->Partitions[PartitionIndex]);
+        Start = BlockOffset;
+        if (PartitionConfig->Alignment > SETUP_BLOCK_SIZE) {
+            Start =
+                ALIGN_RANGE_UP(BlockOffset,
+                               PartitionConfig->Alignment / SETUP_BLOCK_SIZE);
+        }
+
+        BlockOffset = Start;
+        if (PartitionConfig->Size == -1ULL) {
+            SplitCount += 1;
+            continue;
+        }
+
+        Size = ALIGN_RANGE_UP(PartitionConfig->Size, SETUP_BLOCK_SIZE) /
+               SETUP_BLOCK_SIZE;
+
+        BlockOffset += Size;
     }
 
-    Partitions[0].EndOffset = Partitions[0].StartOffset +
-                              SETUP_BOOT_PARTITION_SIZE;
+    if (BlockOffset > PartitionContext->BlockCount) {
+        fprintf(stderr,
+                "Error: Partition specification goes out to block 0x%I64x, "
+                "but disk size is only 0x%I64x.\n",
+                BlockOffset,
+                PartitionContext->BlockCount);
 
-    if ((Context->Flags & SETUP_FLAG_1MB_PARTITION_ALIGNMENT) != 0) {
-        Partitions[0].EndOffset = ALIGN_RANGE_UP(Partitions[0].EndOffset,
-                                                 _1MB / SETUP_BLOCK_SIZE);
-    }
-
-    Partitions[0].Number = 1;
-    Partitions[0].Flags = PARTITION_FLAG_PRIMARY | PARTITION_FLAG_BOOT;
-    Partitions[0].PartitionType = PartitionTypeEfiSystem;
-    Context->BootPartitionOffset = Partitions[0].StartOffset;
-    Context->BootPartitionSize = Partitions[0].EndOffset -
-                                 Partitions[0].StartOffset;
-
-    //
-    // Create the one or two primary partitions.
-    //
-
-    if (Partitions[0].EndOffset + DiskPadding + 2 >=
-        PartitionContext->BlockCount) {
-
-        SetupPrintSize(
-                   SizeString,
-                   sizeof(SizeString),
-                   PartitionContext->BlockCount * PartitionContext->BlockSize);
-
-        fprintf(stderr, "Error: Disk is too small: %s.\n", SizeString);
-        Result = EINVAL;
+        Result = ERANGE;
         goto FormatDiskEnd;
     }
 
-    MainSize = PartitionContext->BlockCount -
-               (Partitions[0].EndOffset + DiskPadding);
+    assert(BlockOffset <= PartitionContext->BlockCount);
 
-    if ((Context->Flags & SETUP_FLAG_TWO_PARTITIONS) != 0) {
-        PartitionCount += 1;
-        MainSize /= 2;
+    FreeSize = PartitionContext->BlockCount - BlockOffset;
+    if (PartitionContext->Format == PartitionFormatGpt) {
+        if (FreeSize < 40) {
+            fprintf(stderr, "Error: Disk too small for GPT footer.\n");
+            Result = ERANGE;
+            goto FormatDiskEnd;
+        }
+
+        FreeSize -= 40;
     }
 
-    if ((Context->Flags & SETUP_FLAG_1MB_PARTITION_ALIGNMENT) != 0) {
-        MainSize = ALIGN_RANGE_DOWN(MainSize, _1MB / SETUP_BLOCK_SIZE);
-        if (MainSize == 0) {
-            fprintf(stderr, "Error: Disk is too small!\n");
+    if (SplitCount > 1) {
+        FreeSize /= SplitCount;
+    }
+
+    //
+    // Initialize the partition structures.
+    //
+
+    PartitionCount = DiskConfiguration->PartitionCount;
+    SystemIndex = PartitionCount;
+    BlockOffset = PartitionDataStart;
+    for (PartitionIndex = 0;
+         PartitionIndex < DiskConfiguration->PartitionCount;
+         PartitionIndex += 1) {
+
+        PartitionInfo = &(Partitions[PartitionIndex]);
+        PartitionConfig = &(DiskConfiguration->Partitions[PartitionIndex]);
+        PartitionInfo->StartOffset = BlockOffset;
+        Start = BlockOffset;
+        if (PartitionConfig->Alignment > SETUP_BLOCK_SIZE) {
+            Start =
+                ALIGN_RANGE_UP(BlockOffset,
+                               PartitionConfig->Alignment / SETUP_BLOCK_SIZE);
+        }
+
+        PartitionInfo->StartOffset = Start;
+        PartitionConfig->Offset = Start * SETUP_BLOCK_SIZE;
+
+        //
+        // If the partition size is -1, use as much space as is available.
+        // Watch out for differences due to alignment requirements between
+        // this loop and the earlier one.
+        //
+
+        if (PartitionConfig->Size == -1ULL) {
+            if (FreeSize > PartitionContext->BlockCount) {
+                Size = PartitionContext->BlockCount - Start;
+
+            } else {
+                Size = FreeSize;
+            }
+
+        } else {
+            Size = ALIGN_RANGE_UP(PartitionConfig->Size, SETUP_BLOCK_SIZE) /
+                   SETUP_BLOCK_SIZE;
+        }
+
+        PartitionConfig->Size = Size * SETUP_BLOCK_SIZE;
+        PartitionInfo->EndOffset = Start + Size;
+        BlockOffset = PartitionInfo->EndOffset;
+        if ((PartitionInfo->EndOffset > PartitionContext->BlockCount) ||
+            (Start + Size < Start)) {
+
+            fprintf(stderr,
+                    "Error: Partition blocks 0x%I64x + 0x%I64x bigger than "
+                    "disk size 0x%I64x (%I64dMB).\n",
+                    Start,
+                    Size,
+                    PartitionContext->BlockCount,
+                    PartitionContext->BlockCount * SETUP_BLOCK_SIZE / _1MB);
+
             Result = EINVAL;
             goto FormatDiskEnd;
         }
+
+        PartitionInfo->Number = PartitionIndex + 1;
+        PartitionInfo->Flags = PARTITION_FLAG_PRIMARY;
+        if ((PartitionConfig->Flags & SETUP_PARTITION_FLAG_BOOT) != 0) {
+            PartitionInfo->Flags |= PARTITION_FLAG_BOOT;
+        }
+
+        if ((PartitionConfig->Flags & SETUP_PARTITION_FLAG_SYSTEM) != 0) {
+            SystemIndex = PartitionIndex;
+        }
+
+        if (DiskConfiguration->PartitionFormat == PartitionFormatGpt) {
+            memcpy(PartitionInfo->TypeIdentifier,
+                   PartitionConfig->PartitionType,
+                   PARTITION_TYPE_SIZE);
+
+        } else if (DiskConfiguration->PartitionFormat == PartitionFormatMbr) {
+            PartitionInfo->TypeIdentifier[0] = PartitionConfig->MbrType;
+        }
+
+        PartitionInfo->Attributes = PartitionConfig->Attributes;
     }
 
-    Partitions[1].StartOffset = Partitions[0].EndOffset;
-    Partitions[1].EndOffset = Partitions[1].StartOffset + MainSize;
-    Partitions[1].Number = 2;
-    Partitions[1].Flags = PARTITION_FLAG_PRIMARY;
-    Partitions[1].PartitionType = PartitionTypeMinoca;
-    if ((Context->Flags & SETUP_FLAG_TWO_PARTITIONS) != 0) {
-        Partitions[2].StartOffset = Partitions[1].EndOffset;
-        Partitions[2].EndOffset = Partitions[2].StartOffset + MainSize;
-        Partitions[2].Number = 3;
-        Partitions[2].Flags = PARTITION_FLAG_PRIMARY;
-        Partitions[2].PartitionType = PartitionTypeMinoca;
+    //
+    // If the disk is actually not partitioned, end now.
+    //
+
+    if (DiskConfiguration->PartitionFormat == PartitionFormatNone) {
+        Status = 0;
+        goto FormatDiskEnd;
+    }
+
+    if (SystemIndex == PartitionCount) {
+        fprintf(stderr,
+                "Error: One partition must be designated the system "
+                "partition.\n");
+
+        Status = EINVAL;
+        goto FormatDiskEnd;
     }
 
     Status = PartWritePartitionLayout(PartitionContext,
-                                      Context->DiskFormat,
+                                      DiskConfiguration->PartitionFormat,
                                       Partitions,
                                       PartitionCount,
                                       TRUE);
@@ -316,8 +442,7 @@ Return Value:
         goto FormatDiskEnd;
     }
 
-    ASSERT((PartitionContext->PartitionCount == PartitionCount) &&
-           (SETUP_MAX_PARTITION_COUNT > 1));
+    assert(PartitionContext->PartitionCount == PartitionCount);
 
     Partitions = PartitionContext->Partitions;
     ZeroBuffer = malloc(PartitionContext->BlockSize);
@@ -329,8 +454,30 @@ Return Value:
     memset(ZeroBuffer, 0, PartitionContext->BlockSize);
 
     //
+    // Clear out the space before the first partition.
+    //
+
+    BlockCount = Partitions[0].StartOffset;
+    for (BlockIndex = PartitionDataStart;
+         BlockIndex < BlockCount;
+         BlockIndex += 1) {
+
+        Status = SetupPartitionLibraryWrite(
+                      PartitionContext,
+                      Partitions[PartitionIndex].StartOffset + BlockIndex,
+                      ZeroBuffer);
+
+        if (!KSUCCESS(Status)) {
+            fprintf(stderr,
+                    "Error: Failed to clear %I64x: %x\n",
+                    Partitions[PartitionIndex].StartOffset + BlockIndex,
+                    Status);
+        }
+    }
+
+    //
     // Clear out the first 16kB of each partition to remove any file systems
-    // tha may have happened to exist there.
+    // that may have happened to exist there.
     //
 
     for (PartitionIndex = 0;
@@ -364,28 +511,38 @@ Return Value:
     free(ZeroBuffer);
 
     //
-    // Fill in the install partition information.
+    // Convert the actual partition data back into the configuration
+    // structures.
     //
 
-    Context->InstallPartition.Version = PARTITION_DEVICE_INFORMATION_VERSION;
-    Context->InstallPartition.PartitionFormat = PartitionContext->Format;
-    Context->InstallPartition.PartitionType = Partitions[1].PartitionType;
-    Context->InstallPartition.Flags = Partitions[1].Flags;
-    Context->InstallPartition.BlockSize = SETUP_BLOCK_SIZE;
-    Context->InstallPartition.Number = Partitions[1].Number;
-    Context->InstallPartition.FirstBlock = Partitions[1].StartOffset;
-    Context->InstallPartition.LastBlock = Partitions[1].EndOffset - 1;
-    RtlCopyMemory(&(Context->InstallPartition.PartitionId),
-                  &(Partitions[1].Identifier),
-                  sizeof(Context->InstallPartition.PartitionId));
+    for (PartitionIndex = 0;
+         PartitionIndex < DiskConfiguration->PartitionCount;
+         PartitionIndex += 1) {
 
-    RtlCopyMemory(&(Context->InstallPartition.PartitionTypeId),
-                  &(Partitions[1].TypeIdentifier),
-                  sizeof(Context->InstallPartition.PartitionTypeId));
+        PartitionInfo = &(Partitions[PartitionIndex]);
+        PartitionConfig = &(DiskConfiguration->Partitions[PartitionIndex]);
+        PartitionConfig->Index = PartitionInfo->Number - 1;
+        PartitionConfig->Offset = PartitionInfo->StartOffset * SETUP_BLOCK_SIZE;
+        Size = (PartitionInfo->EndOffset - PartitionInfo->StartOffset) *
+               SETUP_BLOCK_SIZE;
 
-    RtlCopyMemory(&(Context->InstallPartition.DiskId),
-                  &(PartitionContext->DiskIdentifier),
-                  sizeof(Context->InstallPartition.DiskId));
+        assert(Size == PartitionConfig->Size);
+
+        PartitionConfig->Size = Size;
+        RtlCopyMemory(&(PartitionConfig->PartitionId),
+                      &(PartitionInfo->Identifier),
+                      PARTITION_IDENTIFIER_SIZE);
+
+        RtlCopyMemory(&(PartitionConfig->PartitionType),
+                      &(PartitionInfo->TypeIdentifier),
+                      PARTITION_TYPE_SIZE);
+
+        if (DiskConfiguration->PartitionFormat == PartitionFormatMbr) {
+
+            assert(PartitionConfig->MbrType ==
+                   PartitionInfo->TypeIdentifier[0]);
+        }
+    }
 
 FormatDiskEnd:
     return Result;

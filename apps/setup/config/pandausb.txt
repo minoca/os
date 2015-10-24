@@ -1,0 +1,48 @@
+/*++
+
+Copyright (c) 2015 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    pandausb.txt
+
+Abstract:
+
+    This module implements the setup recipe for the RAM disk PandaBoard build.
+
+Author:
+
+    Evan Green 19-Oct-2015
+
+Environment:
+
+    Setup
+
+--*/
+
+DriverFiles += DriverFilesArm;
+DriverFiles += [
+    "ramdisk.drv",
+    "om4gpio.drv",
+    "sdomap4.drv",
+    "smsc91c1.drv",
+];
+
+BootDrivers += [
+    "ramdisk.drv",
+];
+
+//
+// Remove apps from the user files since it can be huge. Just add the bare
+// minimum.
+//
+
+UserAppsCopy["Source"] = "";
+
+//
+// Set the image to be a single partition.
+//
+
+SystemPartition["Index"] = 0;
+DiskData["Partitions"] = [SystemPartition];
+DiskData["Format"] = PARTITION_FORMAT_NONE;

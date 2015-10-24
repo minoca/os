@@ -42,12 +42,15 @@ TARGETLIBS = $(OBJROOT)/os/lib/partlib/partlib.a            \
              $(INTLIB)/os/lib/rtl/base/basertl.a            \
              $(INTLIB)/os/apps/osbase/urtl/urtl.a           \
              $(OBJROOT)/os/lib/yy/yy.a                      \
+             $(OBJROOT)/os/apps/setup/config/msetplat.a     \
 
 DYNLIBS = -lminocaos
 
+DIRS = config
+
 ifeq ($(OS),Windows_NT)
 
-DIRS = win32
+DIRS += win32
 
 endif
 

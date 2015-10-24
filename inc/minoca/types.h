@@ -64,6 +64,7 @@ Author:
 #define _512KB (512 * _1KB)
 #define _1MB (1024 * _1KB)
 #define _1GB (1024 * _1MB)
+#define _1TB (1024ULL * _1GB)
 
 #define PACKED __attribute__((__packed__))
 #define NO_RETURN __attribute__((__noreturn__))
@@ -330,7 +331,7 @@ typedef struct _KSPIN_LOCK {
 //
 
 #define ALIGN_POINTER_DOWN(_Pointer, _Size) \
-    (PVOID)(UINTN)((UINTN)(_Pointer) & ~((_Size) - 1LL))
+    (PVOID)(UINTN)((UINTN)(_Pointer) & ~((_Size) - 1L))
 
 //
 // The ALIGN_POINTER_UP macro aligns the given Pointer to the granularity of
@@ -339,7 +340,7 @@ typedef struct _KSPIN_LOCK {
 //
 
 #define ALIGN_POINTER_UP(_Pointer, _Size) \
-    ALIGN_POINTER_DOWN((_Pointer) + (_Size) - 1LL, (_Size))
+    ALIGN_POINTER_DOWN((_Pointer) + (_Size) - 1L, (_Size))
 
 //
 // The IS_POINTER_ALIGNED macro returns a non-zero value if the given pointer

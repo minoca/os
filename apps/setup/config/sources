@@ -1,0 +1,37 @@
+################################################################################
+#
+#   Copyright (c) 2015 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This file contains the common object files for setup configuration.
+#
+#   Author:
+#
+#       Evan Green 21-Oct-2015
+#
+#   Environment:
+#
+#       Build
+#
+################################################################################
+
+OBJS = bbone.o    \
+       common.o   \
+       galileo.o  \
+       instarm.o  \
+       instx86.o  \
+       integrd.o  \
+       panda.o    \
+       pandausb.o \
+       pc.o       \
+       pcefi.o    \
+       pctiny.o   \
+       rpi.o      \
+       rpi2.o     \
+       veyron.o   \
+

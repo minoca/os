@@ -175,7 +175,7 @@ Members:
 
     String - Stores the string value.
 
-    Size - Stores the size of the string, including the null terminator.
+    Size - Stores the size of the string, not including the null terminator.
 
 --*/
 
@@ -474,25 +474,22 @@ Return Value:
 
 INT
 SetupListAdd (
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right,
-    PSETUP_OBJECT *Result
+    PSETUP_OBJECT Destination,
+    PSETUP_OBJECT Addition
     );
 
 /*++
 
 Routine Description:
 
-    This routine adds two lists together.
+    This routine adds two lists together, storing the result in the first.
 
 Arguments:
 
-    Left - Supplies a pointer to the left side of the operation.
+    Destination - Supplies a pointer to the destination. The list elements will
+        be added to this list.
 
-    Right - Supplies a pointer to the right side of the operation. This is
-        ignored for unary operators.
-
-    Result - Supplies a pointer where the result will be returned on success.
+    Addition - Supplies the list containing the elements to add.
 
 Return Value:
 
@@ -529,7 +526,8 @@ INT
 SetupDictSetElement (
     PSETUP_OBJECT DictObject,
     PSETUP_OBJECT Key,
-    PSETUP_OBJECT Value
+    PSETUP_OBJECT Value,
+    PSETUP_OBJECT **LValue
     );
 
 /*++
@@ -546,6 +544,10 @@ Arguments:
         be added to the key if it is saved in the dictionary.
 
     Value - Supplies a pointer to the value. A reference will be added.
+
+    LValue - Supplies an optional pointer where an LValue pointer will be
+        returned on success. The caller can use the return of this pointer to
+        assign into the dictionary element later.
 
 Return Value:
 
@@ -584,58 +586,28 @@ Return Value:
 
 INT
 SetupDictAdd (
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right,
-    PSETUP_OBJECT *Result
+    PSETUP_OBJECT Destination,
+    PSETUP_OBJECT Addition
     );
 
 /*++
 
 Routine Description:
 
-    This routine adds two dictionaries together.
+    This routine adds two dictionaries together, returning the result in the
+    left one.
 
 Arguments:
 
-    Left - Supplies a pointer to the left side of the operation.
+    Destination - Supplies a pointer to the dictionary to add to.
 
-    Right - Supplies a pointer to the right side of the operation. This is
-        ignored for unary operators.
-
-    Result - Supplies a pointer where the result will be returned on success.
+    Addition - Supplies the entries to add.
 
 Return Value:
 
     0 on success.
 
     Returns an error number on catastrophic failure.
-
---*/
-
-INT
-SetupObjectAssign (
-    PSETUP_OBJECT Destination,
-    PSETUP_OBJECT Source
-    );
-
-/*++
-
-Routine Description:
-
-    This routine guts the contents of the destination and replaces it with a
-    copy of the source.
-
-Arguments:
-
-    Destination - Supplies a pointer to the destination object to be replaced.
-
-    Source - Supplies the source to copy from.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
 
 --*/
 

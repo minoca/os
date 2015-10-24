@@ -714,7 +714,7 @@ Return Value:
             if (*Current != '.') {
                 if (Argument != NULL) {
                     RtlDebugPrint("Ignoring argument starting at: %s\n",
-                                  Argument->Component);
+                                  Component);
                 }
 
                 continue;

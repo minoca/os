@@ -115,8 +115,8 @@ PVOID
 SetupVolumeOpen (
     PSETUP_CONTEXT Context,
     PSETUP_DESTINATION Destination,
-    BOOL Format,
-    BOOL AllowShortFileNames
+    SETUP_VOLUME_FORMAT_CHOICE Format,
+    BOOL CompatibilityMode
     )
 
 /*++
@@ -131,11 +131,10 @@ Arguments:
 
     Destination - Supplies a pointer to the destination to open.
 
-    Format - Supplies a boolean indicating if the volume should be formatted
-        (TRUE) or just mounted (FALSE).
+    Format - Supplies the disposition for formatting the volume.
 
-    AllowShortFileNames - Supplies a boolean indicating if the volume should be
-        mounted to allow the creation of short file names.
+    CompatibilityMode - Supplies a boolean indicating whether to run the
+        file system in the most compatible way possible.
 
 Return Value:
 
@@ -223,7 +222,30 @@ Return Value:
             BlockParameters.BlockCount /= SETUP_BLOCK_SIZE;
         }
 
-        if (Format != FALSE) {
+        MountFlags = 0;
+        if (CompatibilityMode != FALSE) {
+            MountFlags |= FAT_MOUNT_FLAG_COMPATIBILITY_MODE;
+        }
+
+        //
+        // Potentially try to mount the volume without formatting it.
+        //
+
+        Status = STATUS_NOT_STARTED;
+        if (Format == SetupVolumeFormatIfIncompatible) {
+            Status = FatMount(&BlockParameters,
+                              MountFlags,
+                              &(Volume->VolumeToken));
+        }
+
+        //
+        // Format the volume if needed.
+        //
+
+        if ((Format == SetupVolumeFormatAlways) ||
+            ((Format == SetupVolumeFormatIfIncompatible) &&
+             (!KSUCCESS(Status)))) {
+
             Status = FatFormat(&BlockParameters, SETUP_DEFAULT_CLUSTER_SIZE, 0);
             if (!KSUCCESS(Status)) {
                 printf("Error: Failed to format ");
@@ -232,11 +254,6 @@ Return Value:
                 Result = -1;
                 goto OpenVolumeEnd;
             }
-        }
-
-        MountFlags = 0;
-        if (AllowShortFileNames != FALSE) {
-            MountFlags |= FAT_MOUNT_FLAG_ALLOW_SHORT_FILE_NAMES;
         }
 
         Status = FatMount(&BlockParameters, MountFlags, &(Volume->VolumeToken));
@@ -700,6 +717,10 @@ Return Value:
                                0);
     }
 
+    if (File->Handle != NULL) {
+        SetupClose(File->Handle);
+    }
+
     File->Volume->OpenFiles -= 1;
     free(File);
     return;
@@ -842,6 +863,7 @@ Return Value:
     if ((File->Properties.Type != IoObjectRegularFile) &&
         (File->Properties.Type != IoObjectSymbolicLink)) {
 
+        errno = EISDIR;
         return -1;
     }
 
@@ -876,6 +898,10 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         fprintf(stderr, "FatWriteFile Error: %x\n", Status);
+        if (Status == STATUS_VOLUME_FULL) {
+            errno = ENOSPC;
+        }
+
         BytesComplete = 0;
     }
 
@@ -1146,6 +1172,8 @@ Return Value:
     IoBuffer = NULL;
     Name = NULL;
     Volume = VolumeHandle;
+    memset(&File, 0, sizeof(SETUP_FILE));
+    File.Volume = VolumeHandle;
     if (Volume->DestinationType == SetupDestinationDirectory) {
         FinalPath = SetupAppendPaths(Volume->PathPrefix, DirectoryPath);
         if (FinalPath == NULL) {
@@ -1153,7 +1181,7 @@ Return Value:
             goto EnumerateFileDirectoryEnd;
         }
 
-        Result = SetupEnumerateDirectory(File.Handle,
+        Result = SetupEnumerateDirectory(File.Volume,
                                          FinalPath,
                                          Enumeration);
 
@@ -1161,8 +1189,6 @@ Return Value:
         return Result;
     }
 
-    memset(&File, 0, sizeof(SETUP_FILE));
-    File.Volume = VolumeHandle;
     Result = SetupFatOpen(VolumeHandle,
                           &File,
                           DirectoryPath,
@@ -1447,6 +1473,57 @@ Return Value:
     FatCloseFile(File.FatFile);
     FatWriteFileProperties(Volume->VolumeToken, &(File.Properties), 0);
     return 0;
+}
+
+VOID
+SetupFileDetermineExecuteBit (
+    PVOID Handle,
+    PSTR Path,
+    mode_t *Mode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether the open file is executable.
+
+Arguments:
+
+    Handle - Supplies the open file handle.
+
+    Path - Supplies the path the file was opened from (sometimes the file name
+        is used as a hint).
+
+    Mode - Supplies a pointer to the current mode bits. This routine may add
+        the executable bit to user/group/other if it determines this file is
+        executable.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSETUP_FILE File;
+
+    File = Handle;
+
+    //
+    // Pass directly to the native OS interface if the destination is native.
+    //
+
+    if (File->Volume->DestinationType == SetupDestinationDirectory) {
+        return SetupDetermineExecuteBit(File->Handle, Path, Mode);
+    }
+
+    assert((File->Volume->DestinationType == SetupDestinationDisk) ||
+           (File->Volume->DestinationType == SetupDestinationPartition) ||
+           (File->Volume->DestinationType == SetupDestinationImage));
+
+    return;
 }
 
 //
@@ -1764,6 +1841,10 @@ FatOpenEnd:
     }
 
     if (!KSUCCESS(Status)) {
+        if ((Status == STATUS_NOT_FOUND) || (Status = STATUS_PATH_NOT_FOUND)) {
+            errno = ENOENT;
+        }
+
         if ((Status != STATUS_NOT_FOUND) &&
             (Status != STATUS_UNEXPECTED_TYPE)) {
 

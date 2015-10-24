@@ -330,14 +330,15 @@ Return Value:
 
 {
 
-    BOOL AllowShortFileNames;
+    PSETUP_PARTITION_DESCRIPTION BootPartition;
     PVOID BootVolume;
+    INT Compare;
     ULONG Index;
     PSETUP_PARTITION_DESCRIPTION Partition;
     ULONG PartitionCount;
+    PARTITION_DEVICE_INFORMATION PartitionInformation;
     PSETUP_PARTITION_DESCRIPTION Partitions;
     INT Result;
-    PSETUP_PARTITION_DESCRIPTION SystemPartition;
 
     BootVolume = NULL;
     Partitions = NULL;
@@ -352,51 +353,69 @@ Return Value:
     // partition.
     //
 
-    SystemPartition = NULL;
+    BootPartition = NULL;
     for (Index = 0; Index < PartitionCount; Index += 1) {
         Partition = &(Partitions[Index]);
         if ((Partition->Destination->Type == SetupDestinationPartition) &&
-            (Partition->Partition.PartitionType == PartitionTypeEfiSystem)) {
+            (((Partition->Partition.Flags & PARTITION_FLAG_BOOT) != 0) ||
+             (Partition->Partition.PartitionType == PartitionTypeEfiSystem))) {
 
-            if (SystemPartition != NULL) {
+            if (BootPartition != NULL) {
                 fprintf(stderr, "Found more than one boot partition!\n");
                 goto OsOpenBootVolumeEnd;
 
             } else {
-                SystemPartition = Partition;
+                BootPartition = Partition;
             }
         }
     }
 
-    if (SystemPartition == NULL) {
+    if (BootPartition == NULL) {
         fprintf(stderr, "Failed to find boot partition.\n");
         goto OsOpenBootVolumeEnd;
     }
 
     assert(Context->Disk == NULL);
 
+    memset(&PartitionInformation, 0, sizeof(PartitionInformation));
     Context->Disk = SetupPartitionOpen(Context,
-                                       SystemPartition->Destination,
-                                       NULL);
+                                       BootPartition->Destination,
+                                       &PartitionInformation);
 
     if (Context->Disk == NULL) {
         fprintf(stderr, "Failed to open boot partition.\n");
         goto OsOpenBootVolumeEnd;
     }
 
-    Context->CurrentPartitionOffset = 0;
-    Context->CurrentPartitionSize = SystemPartition->Partition.LastBlock + 1 -
-                                    SystemPartition->Partition.FirstBlock;
+    //
+    // If the disk identifier has not yet been set, set it now. This assumes
+    // that if installing to a directory, the directory resides on the same
+    // disk as the boot partition.
+    //
 
-    AllowShortFileNames = FALSE;
-    if ((Context->Flags & SETUP_FLAG_BOOT_ALLOW_SHORT_FILE_NAMES) != 0) {
-        AllowShortFileNames = TRUE;
+    Compare = memcmp(PartitionInformation.DiskId,
+                     &SetupZeroDiskIdentifier,
+                     DISK_IDENTIFIER_SIZE);
+
+    if (Compare == 0) {
+        memcpy(&(Context->PartitionContext.DiskIdentifier),
+               PartitionInformation.DiskId,
+               DISK_IDENTIFIER_SIZE);
     }
 
+    Context->CurrentPartitionOffset = 0;
+    Context->CurrentPartitionSize = BootPartition->Partition.LastBlock + 1 -
+                                    BootPartition->Partition.FirstBlock;
+
+    //
+    // Always open the boot volume in compatibility mode, since firmware and
+    // others may be looking into it.
+    //
+
     BootVolume = SetupVolumeOpen(Context,
-                                 SystemPartition->Destination,
-                                 FALSE,
-                                 AllowShortFileNames);
+                                 BootPartition->Destination,
+                                 SetupVolumeFormatNever,
+                                 TRUE);
 
 OsOpenBootVolumeEnd:
     if (Partitions != NULL) {

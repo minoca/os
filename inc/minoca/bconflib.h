@@ -462,3 +462,29 @@ Return Value:
 
 --*/
 
+PBOOT_ENTRY
+BcCopyBootEntry (
+    PBOOT_CONFIGURATION_CONTEXT Context,
+    PBOOT_ENTRY Source
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new boot entry based on an existing one.
+
+Arguments:
+
+    Context - Supplies a pointer to the boot configuration context.
+
+    Source - Supplies a pointer to the boot entry to copy.
+
+Return Value:
+
+    Returns a pointer to the new boot entry on success.
+
+    NULL on allocation failure.
+
+--*/
+

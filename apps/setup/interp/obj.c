@@ -163,11 +163,7 @@ Return Value:
     }
 
     memset(String, 0, sizeof(SETUP_OBJECT));
-    AllocateSize = Size;
-    if ((Size == 0) || (InitialValue[Size - 1] != '\0')) {
-        AllocateSize += 1;
-    }
-
+    AllocateSize = Size + 1;
     String->String = malloc(AllocateSize);
     if (String->String == NULL) {
         free(String);
@@ -219,30 +215,28 @@ Return Value:
     assert((Left->Header.Type == SetupObjectString) &&
            (Right->Header.Type == SetupObjectString));
 
-    assert((Left->String.Size != 0) && (Right->String.Size != 0));
-
     String = SetupCreateString(NULL, 0);
     if (String == NULL) {
         return ENOMEM;
     }
 
     //
-    // The left and right each have a null terminator in their size.
+    // The size does not account for the null terminator.
     //
 
-    Size = Left->String.Size + Right->String.Size - 1;
-    String->String.String = malloc(Size);
+    Size = Left->String.Size + Right->String.Size;
+    String->String.String = malloc(Size + 1);
     if (String->String.String == NULL) {
         SetupObjectReleaseReference(String);
         return ENOMEM;
     }
 
-    memcpy(String->String.String, Left->String.String, Left->String.Size - 1);
-    memcpy(String->String.String + Left->String.Size - 1,
+    memcpy(String->String.String, Left->String.String, Left->String.Size);
+    memcpy(String->String.String + Left->String.Size,
            Right->String.String,
-           Right->String.Size - 1);
+           Right->String.Size);
 
-    String->String.String[Size - 1] = '\0';
+    String->String.String[Size] = '\0';
     String->String.Size = Size;
     *Result = String;
     return 0;
@@ -423,25 +417,22 @@ Return Value:
 
 INT
 SetupListAdd (
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right,
-    PSETUP_OBJECT *Result
+    PSETUP_OBJECT Destination,
+    PSETUP_OBJECT Addition
     )
 
 /*++
 
 Routine Description:
 
-    This routine adds two lists together.
+    This routine adds two lists together, storing the result in the first.
 
 Arguments:
 
-    Left - Supplies a pointer to the left side of the operation.
+    Destination - Supplies a pointer to the destination. The list elements will
+        be added to this list.
 
-    Right - Supplies a pointer to the right side of the operation. This is
-        ignored for unary operators.
-
-    Result - Supplies a pointer where the result will be returned on success.
+    Addition - Supplies the list containing the elements to add.
 
 Return Value:
 
@@ -455,36 +446,31 @@ Return Value:
 
     ULONG Index;
     PSETUP_LIST LeftList;
-    PSETUP_LIST NewList;
+    PSETUP_OBJECT *NewArray;
     ULONG NewSize;
     PSETUP_LIST RightList;
 
-    LeftList = (PSETUP_LIST)Left;
-    RightList = (PSETUP_LIST)Right;
+    LeftList = (PSETUP_LIST)Destination;
+    RightList = (PSETUP_LIST)Addition;
 
     assert((LeftList->Header.Type == SetupObjectList) &&
            (RightList->Header.Type == SetupObjectList));
 
     NewSize = LeftList->Count + RightList->Count;
-    NewList = (PSETUP_LIST)SetupCreateList(NULL, NewSize);
-    if (NewList == NULL) {
+    NewArray = realloc(LeftList->Array, NewSize * sizeof(PVOID));
+    if (NewArray == NULL) {
         return ENOMEM;
     }
 
-    assert(NewList->Count >= NewSize);
-
-    memcpy(NewList->Array, LeftList->Array, LeftList->Count * sizeof(PVOID));
-    memcpy(&(NewList->Array[LeftList->Count]),
-           RightList->Array,
-           RightList->Count * sizeof(PVOID));
-
-    for (Index = 0; Index < NewSize; Index += 1) {
-        if (NewList->Array[Index] != NULL) {
-            SetupObjectAddReference(NewList->Array[Index]);
+    LeftList->Array = NewArray;
+    for (Index = LeftList->Count; Index < NewSize; Index += 1) {
+        NewArray[Index] = RightList->Array[Index - LeftList->Count];
+        if (NewArray[Index] != NULL) {
+            SetupObjectAddReference(NewArray[Index]);
         }
     }
 
-    *Result = (PSETUP_OBJECT)NewList;
+    LeftList->Count = NewSize;
     return 0;
 }
 
@@ -535,7 +521,7 @@ Return Value:
         while (CurrentEntry != &(Source->Dict.EntryList)) {
             Entry = LIST_VALUE(CurrentEntry, SETUP_DICT_ENTRY, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            Status = SetupDictSetElement(Dict, Entry->Key, Entry->Value);
+            Status = SetupDictSetElement(Dict, Entry->Key, Entry->Value, NULL);
             if (Status != 0) {
                 SetupObjectReleaseReference(Dict);
                 return NULL;
@@ -550,7 +536,8 @@ INT
 SetupDictSetElement (
     PSETUP_OBJECT DictObject,
     PSETUP_OBJECT Key,
-    PSETUP_OBJECT Value
+    PSETUP_OBJECT Value,
+    PSETUP_OBJECT **LValue
     )
 
 /*++
@@ -567,6 +554,10 @@ Arguments:
         be added to the key if it is saved in the dictionary.
 
     Value - Supplies a pointer to the value. A reference will be added.
+
+    LValue - Supplies an optional pointer where an LValue pointer will be
+        returned on success. The caller can use the return of this pointer to
+        assign into the dictionary element later.
 
 Return Value:
 
@@ -617,6 +608,10 @@ Return Value:
     }
 
     Entry->Value = Value;
+    if (LValue != NULL) {
+        *LValue = &(Entry->Value);
+    }
+
     return 0;
 }
 
@@ -670,24 +665,22 @@ Return Value:
 
 INT
 SetupDictAdd (
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right,
-    PSETUP_OBJECT *Result
+    PSETUP_OBJECT Destination,
+    PSETUP_OBJECT Addition
     )
 
 /*++
 
 Routine Description:
 
-    This routine adds two dictionaries together.
+    This routine adds two dictionaries together, returning the result in the
+    left one.
 
 Arguments:
 
-    Left - Supplies a pointer to the left side of the operation.
+    Destination - Supplies a pointer to the dictionary to add to.
 
-    Right - Supplies a pointer to the right side of the operation.
-
-    Result - Supplies a pointer where the result will be returned on success.
+    Addition - Supplies the entries to add.
 
 Return Value:
 
@@ -701,29 +694,25 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PSETUP_DICT_ENTRY Entry;
-    PSETUP_OBJECT NewDict;
     INT Status;
 
-    assert(Left->Header.Type == SetupObjectDict);
-    assert(Right->Header.Type == SetupObjectDict);
+    assert(Destination->Header.Type == SetupObjectDict);
+    assert(Addition->Header.Type == SetupObjectDict);
 
-    NewDict = SetupObjectCopy(Left);
-    if (NewDict == NULL) {
-        return ENOMEM;
-    }
-
-    CurrentEntry = Right->Dict.EntryList.Next;
-    while (CurrentEntry != &(Right->Dict.EntryList)) {
+    CurrentEntry = Addition->Dict.EntryList.Next;
+    while (CurrentEntry != &(Addition->Dict.EntryList)) {
         Entry = LIST_VALUE(CurrentEntry, SETUP_DICT_ENTRY, ListEntry);
         CurrentEntry = CurrentEntry->Next;
-        Status = SetupDictSetElement(NewDict, Entry->Key, Entry->Value);
+        Status = SetupDictSetElement(Destination,
+                                     Entry->Key,
+                                     Entry->Value,
+                                     NULL);
+
         if (Status != 0) {
-            SetupObjectReleaseReference(NewDict);
             return Status;
         }
     }
 
-    *Result = NewDict;
     return 0;
 }
 
@@ -767,93 +756,6 @@ Return Value:
     Reference->Reference.Value = ReferenceTo;
     SetupObjectAddReference(ReferenceTo);
     return Reference;
-}
-
-INT
-SetupObjectAssign (
-    PSETUP_OBJECT Destination,
-    PSETUP_OBJECT Source
-    )
-
-/*++
-
-Routine Description:
-
-    This routine guts the contents of the destination and replaces it with a
-    copy of the source.
-
-Arguments:
-
-    Destination - Supplies a pointer to the destination object to be replaced.
-
-    Source - Supplies the source to copy from.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-{
-
-    PSETUP_OBJECT NewObject;
-
-    //
-    // Gut the old object, and then switch out the contents.
-    //
-
-    SetupGutObject(Destination);
-    switch (Source->Header.Type) {
-    case SetupObjectInteger:
-        Destination->Header.Type = Source->Header.Type;
-        Destination->Integer.Value = Source->Integer.Value;
-        break;
-
-    case SetupObjectString:
-        NewObject = SetupObjectCopy(Source);
-        if (NewObject == NULL) {
-            return ENOMEM;
-        }
-
-        Destination->Header.Type = Source->Header.Type;
-        Destination->String.String = NewObject->String.String;
-        Destination->String.Size = NewObject->String.Size;
-        NewObject->String.String = NULL;
-        NewObject->String.Size = 0;
-        SetupObjectReleaseReference(NewObject);
-        break;
-
-    //
-    // Lists and dictionaries are assigned by reference.
-    //
-
-    case SetupObjectList:
-    case SetupObjectDict:
-        Destination->Header.Type = SetupObjectReference;
-        Destination->Reference.Value = Source;
-        SetupObjectAddReference(Source);
-        break;
-
-    //
-    // References are assigned by value (so there aren't chains of references).
-    //
-
-    case SetupObjectReference:
-        Destination->Header.Type = Source->Header.Type;
-        Destination->Reference.Value = Source->Reference.Value;
-        SetupObjectAddReference(Destination->Reference.Value);
-        break;
-
-    default:
-
-        assert(FALSE);
-
-        break;
-    }
-
-    return 0;
 }
 
 PSETUP_OBJECT
@@ -955,9 +857,7 @@ Return Value:
         break;
 
     case SetupObjectString:
-        Result = ((Object->String.Size != 0) &&
-                  (Object->String.String[0] != '\0'));
-
+        Result = (Object->String.Size != 0);
         break;
 
     case SetupObjectList:
@@ -1086,6 +986,7 @@ Return Value:
     PSETUP_DICT_ENTRY Entry;
     ULONG Index;
     ULONG ReferenceCount;
+    ULONG Size;
     PSTR String;
     SETUP_OBJECT_TYPE Type;
 
@@ -1135,8 +1036,9 @@ Return Value:
 
         } else {
             String = Object->String.String;
+            Size = Object->String.Size;
             printf("\"");
-            while (*String != '\0') {
+            while (Size != 0) {
                 switch (*String) {
                 case '\r':
                     printf("\\r");
@@ -1186,6 +1088,7 @@ Return Value:
                 }
 
                 String += 1;
+                Size -= 1;
             }
 
             printf("\"");
@@ -1439,8 +1342,11 @@ Return Value:
 
 {
 
-    INT Compare;
+    ULONG LeftSize;
+    PUCHAR LeftString;
     COMPARISON_RESULT Result;
+    ULONG RightSize;
+    PUCHAR RightString;
 
     if (Left->Header.Type == SetupObjectReference) {
         Left = Left->Reference.Value;
@@ -1470,15 +1376,40 @@ Return Value:
         break;
 
     case SetupObjectString:
-        Compare = strcmp(Left->String.String, Right->String.String);
-        if (Compare < 0) {
-            Result = ComparisonResultAscending;
 
-        } else if (Compare > 0) {
-            Result = ComparisonResultDescending;
+        //
+        // The strings always have a null byte afterwards, so that byte can be
+        // used in the comparison.
+        //
 
-        } else {
-            Result = ComparisonResultSame;
+        LeftString = (PUCHAR)(Left->String.String);
+        LeftSize = Left->String.Size;
+        RightString = (PUCHAR)(Right->String.String);
+        RightSize = Right->String.Size;
+        Result = ComparisonResultSame;
+        while ((LeftSize != 0) && (RightSize != 0)) {
+            if (*LeftString < *RightString) {
+                Result = ComparisonResultAscending;
+                break;
+
+            } else if (*LeftString > *RightString) {
+                Result = ComparisonResultDescending;
+                break;
+            }
+
+            LeftString += 1;
+            RightString += 1;
+            LeftSize -= 1;
+            RightSize -= 1;
+        }
+
+        if (Result == ComparisonResultSame) {
+            if (RightSize != 0) {
+                Result = ComparisonResultAscending;
+
+            } else if (LeftSize != 0) {
+                Result = ComparisonResultDescending;
+            }
         }
 
         break;

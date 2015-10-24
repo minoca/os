@@ -392,7 +392,7 @@ Return Value:
     VOID *DiskBuffer;
 
     Context = EFI_RAM_DISK_FROM_THIS(This);
-    if (Lba + (BufferSize / EFI_RAM_DISK_BLOCK_SIZE) >= Context->BlockCount) {
+    if (Lba + (BufferSize / EFI_RAM_DISK_BLOCK_SIZE) > Context->BlockCount) {
         return EFI_INVALID_PARAMETER;
     }
 

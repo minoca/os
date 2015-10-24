@@ -227,6 +227,15 @@ Author:
 #define PTE_FLAG_ENTRY_SHIFT    12
 
 //
+// Define the location of the identity mapped stub. Since x86 doesn't have
+// relative addressing the AP code really is hardwired for this address. This
+// needs to be in the first megabyte since it starts running in real mode, and
+// needs to avoid known BIOS regions.
+//
+
+#define IDENTITY_STUB_ADDRESS 0x00001000
+
+//
 // --------------------------------------------------------------------- Macros
 //
 

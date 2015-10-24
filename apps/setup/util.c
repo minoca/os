@@ -31,8 +31,10 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "setup.h"
+#include "sconf.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -545,135 +547,73 @@ Return Value:
 }
 
 INT
-SetupUpdateFile (
-    PSETUP_CONTEXT Context,
-    PVOID Destination,
-    PVOID Source,
-    PSTR DestinationPath,
-    PSTR SourcePath
+SetupConvertStringArrayToLines (
+    PSTR *StringArray,
+    PSTR *ResultBuffer,
+    PUINTN ResultBufferSize
     )
 
 /*++
 
 Routine Description:
 
-    This routine copies the given path from the source to the destination if
-    the destination is older than the source. If the source is a directory, the
-    contents of that directory are recursively copied to the destination
-    (regardless of the age of the files inside the directory).
+    This routine converts a null-terminated array of strings into a single
+    buffer where each element is separated by a newline.
 
 Arguments:
 
-    Context - Supplies a pointer to the applicaton context.
+    StringArray - Supplies a pointer to the array of strings. The array must be
+        terminated by a NULL entry.
 
-    Destination - Supplies a pointer to the open destination volume
-        handle.
+    ResultBuffer - Supplies a pointer where a string will be returned
+        containing all the lines. The caller is responsible for freeing this
+        buffer.
 
-    Source - Supplies a pointer to the open source volume handle.
-
-    DestinationPath - Supplies a pointer to the path of the file to create at
-        the destination.
-
-    SourcePath - Supplies the source path of the copy.
+    ResultBufferSize - Supplies a pointer where size of the buffer in bytes
+        will be returned, including the null terminator.
 
 Return Value:
 
     0 on success.
 
-    Non-zero on failure.
+    ENOMEM on allocation failure.
 
 --*/
 
 {
 
-    PVOID DestinationFile;
-    time_t DestinationModificationDate;
-    INT Result;
-    PVOID SourceFile;
-    time_t SourceModificationDate;
+    UINTN AllocationSize;
+    PSTR *Array;
+    PSTR Buffer;
+    PSTR Current;
+    size_t Length;
 
-    DestinationFile = NULL;
-
-    //
-    // Open up the source to get its modification date.
-    //
-
-    SourceFile = SetupFileOpen(Source, SourcePath, O_RDONLY, 0);
-    if (SourceFile == NULL) {
-        fprintf(stderr, "Failed to open source file %s.\n", SourcePath);
-        Result = errno;
-        if (Result == 0) {
-            Result = -1;
-        }
-
-        goto UpdateFileEnd;
+    AllocationSize = 1;
+    Array = StringArray;
+    while (*Array != NULL) {
+        AllocationSize += strlen(*Array) + 1;
+        Array += 1;
     }
 
-    Result = SetupFileFileStat(SourceFile, NULL, &SourceModificationDate, NULL);
-    if (Result != 0) {
-        goto UpdateFileEnd;
+    Buffer = malloc(AllocationSize);
+    if (Buffer == NULL) {
+        return ENOMEM;
     }
 
-    SetupFileClose(SourceFile);
-    SourceFile = NULL;
-
-    //
-    // Open up the destination.
-    //
-
-    DestinationFile = SetupFileOpen(Destination, DestinationPath, O_RDONLY, 0);
-
-    //
-    // If the destination does not exist, copy it.
-    //
-
-    if (DestinationFile == NULL) {
-        Result = SetupCopyFile(Context,
-                               Destination,
-                               Source,
-                               DestinationPath,
-                               SourcePath);
-
-        goto UpdateFileEnd;
+    Current = Buffer;
+    Array = StringArray;
+    while (*Array != NULL) {
+        Length = strlen(*Array);
+        memcpy(Current, *Array, Length);
+        Current[Length] = '\n';
+        Current += Length + 1;
+        Array += 1;
     }
 
-    Result = SetupFileFileStat(DestinationFile,
-                               NULL,
-                               &DestinationModificationDate,
-                               NULL);
-
-    if (Result != 0) {
-        goto UpdateFileEnd;
-    }
-
-    SetupFileClose(DestinationFile);
-    DestinationFile = NULL;
-    if (DestinationModificationDate < SourceModificationDate) {
-        Result = SetupCopyFile(Context,
-                               Destination,
-                               Source,
-                               DestinationPath,
-                               SourcePath);
-
-        goto UpdateFileEnd;
-    }
-
-    if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
-        printf("Not updating %s\n", DestinationPath);
-    }
-
-    Result = 0;
-
-UpdateFileEnd:
-    if (SourceFile != NULL) {
-        SetupFileClose(SourceFile);
-    }
-
-    if (DestinationFile != NULL) {
-        SetupFileClose(DestinationFile);
-    }
-
-    return Result;
+    *Current = '\0';
+    *ResultBuffer = Buffer;
+    *ResultBufferSize = AllocationSize;
+    return 0;
 }
 
 INT
@@ -682,7 +622,8 @@ SetupCopyFile (
     PVOID Destination,
     PVOID Source,
     PSTR DestinationPath,
-    PSTR SourcePath
+    PSTR SourcePath,
+    ULONG Flags
     )
 
 /*++
@@ -707,6 +648,9 @@ Arguments:
 
     SourcePath - Supplies the source path of the copy.
 
+    Flags - Supplies a bitfield of flags governing the operation. See
+        SETUP_COPY_FLAG_* definitions.
+
 Return Value:
 
     0 on success.
@@ -723,6 +667,8 @@ Return Value:
     PVOID DestinationFile;
     PSTR DirectoryEntry;
     PSTR Enumeration;
+    mode_t ExistingMode;
+    time_t ExistingModificationDate;
     ULONGLONG FileSize;
     PSTR LinkTarget;
     INT LinkTargetSize;
@@ -737,10 +683,27 @@ Return Value:
     AppendedSourcePath = NULL;
     Buffer = NULL;
     DestinationFile = NULL;
+    FileSize = 0;
     Enumeration = NULL;
     LinkTarget = NULL;
+    Mode = 0;
+    ModificationDate = 0;
+    Result = -1;
     SourceFile = SetupFileOpen(Source, SourcePath, O_RDONLY | O_NOFOLLOW, 0);
-    if (SourceFile == NULL) {
+
+    //
+    // Some OSes don't allow opening of directories. If the source open failed
+    // and the error is that it's a directory, then handle that.
+    //
+
+    if ((SourceFile == NULL) && (errno == EISDIR)) {
+        Mode = S_IFDIR | FILE_PERMISSION_USER_ALL | FILE_PERMISSION_GROUP_ALL |
+               FILE_PERMISSION_OTHER_READ |
+               FILE_PERMISSION_OTHER_EXECUTE;
+
+        ModificationDate = time(NULL);
+
+    } else if (SourceFile == NULL) {
 
         //
         // If the file could not be opened, maybe it's a symbolic link. Try to
@@ -753,8 +716,12 @@ Return Value:
                                    &LinkTargetSize);
 
         if (Result != 0) {
-            fprintf(stderr, "Failed to open source file %s.\n", SourcePath);
             Result = errno;
+            fprintf(stderr,
+                    "Failed to open source file %s: %s\n",
+                    SourcePath,
+                    strerror(Result));
+
             if (Result == 0) {
                 Result = -1;
             }
@@ -798,9 +765,15 @@ Return Value:
         }
     }
 
-    Result = SetupFileFileStat(SourceFile, &FileSize, &ModificationDate, &Mode);
-    if (Result != 0) {
-        goto CopyFileEnd;
+    if (SourceFile != NULL) {
+        Result = SetupFileFileStat(SourceFile,
+                                   &FileSize,
+                                   &ModificationDate,
+                                   &Mode);
+
+        if (Result != 0) {
+            goto CopyFileEnd;
+        }
     }
 
     //
@@ -818,9 +791,26 @@ Return Value:
             }
         }
 
+        //
+        // Attempt to create the destination directory at once. If it fails,
+        // perhaps the directories leading up to it must be created.
+        //
+
         Result = SetupFileCreateDirectory(Destination,
                                           DestinationPath,
                                           Mode);
+
+        if (Result != 0) {
+            Result = SetupCreateDirectories(Context,
+                                            Destination,
+                                            DestinationPath);
+
+            if (Result == 0) {
+                Result = SetupFileCreateDirectory(Destination,
+                                                  DestinationPath,
+                                                  Mode);
+            }
+        }
 
         if (Result != 0) {
             fprintf(stderr,
@@ -864,7 +854,8 @@ Return Value:
                                    Destination,
                                    Source,
                                    AppendedDestinationPath,
-                                   AppendedSourcePath);
+                                   AppendedSourcePath,
+                                   Flags);
 
             if (Result != 0) {
                 fprintf(stderr,
@@ -904,6 +895,60 @@ Return Value:
     //
 
     } else {
+
+        //
+        // If this is an update operation, first try to open up the destination
+        // to see if it is newer than the source.
+        //
+
+        if ((Flags & SETUP_COPY_FLAG_UPDATE) != 0) {
+            DestinationFile = SetupFileOpen(Destination,
+                                            DestinationPath,
+                                            O_RDONLY | O_NOFOLLOW,
+                                            0);
+
+            if (DestinationFile != NULL) {
+                Result = SetupFileFileStat(DestinationFile,
+                                           NULL,
+                                           &ExistingModificationDate,
+                                           &ExistingMode);
+
+                SetupFileClose(DestinationFile);
+                DestinationFile = NULL;
+                if (Result != 0) {
+                    goto CopyFileEnd;
+                }
+
+                //
+                // If the existing one is the same type of file and is at least
+                // as new, don't update it.
+                //
+
+                if ((ExistingModificationDate >= ModificationDate) &&
+                    (((ExistingMode ^ Mode) & S_IFMT) == 0)) {
+
+                    if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
+                        printf("Skipping %s -> %s\n",
+                               SourcePath,
+                               DestinationPath);
+                    }
+
+                    Result = 0;
+                    goto CopyFileEnd;
+                }
+            }
+        }
+
+        //
+        // Some OSes don't have an executable bit, but still need to be able
+        // to install executables onto OSes that do. Probe around a bit to see
+        // if the file should be set executable.
+        //
+
+        if ((Mode & FILE_PERMISSION_ALL_EXECUTE) == 0) {
+            SetupFileDetermineExecuteBit(SourceFile, SourcePath, &Mode);
+        }
+
         Buffer = malloc(SETUP_FILE_BUFFER_SIZE);
         if (Buffer == NULL) {
             Result = ENOMEM;
@@ -914,13 +959,17 @@ Return Value:
             printf("Copying %s -> %s\n", SourcePath, DestinationPath);
         }
 
+        SetupCreateDirectories(Context, Destination, DestinationPath);
         DestinationFile = SetupFileOpen(Destination,
                                         DestinationPath,
-                                        O_CREAT | O_TRUNC | O_RDWR,
+                                        O_CREAT | O_TRUNC | O_RDWR | O_NOFOLLOW,
                                         Mode);
 
         if (DestinationFile == NULL) {
-            fprintf(stderr, "Failed to create destination file %s.\n");
+            fprintf(stderr,
+                    "Failed to create destination file %s.\n",
+                    DestinationPath);
+
             goto CopyFileEnd;
         }
 
@@ -936,6 +985,15 @@ Return Value:
 
             Size = SetupFileRead(SourceFile, Buffer, Size);
             if (Size <= 0) {
+                if (Size < 0) {
+                    Result = errno;
+                    if (Result == 0) {
+                        Result = EINVAL;
+                    }
+
+                    goto CopyFileEnd;
+                }
+
                 break;
             }
 
@@ -946,6 +1004,10 @@ Return Value:
                         DestinationPath);
 
                 Result = errno;
+                if (Result == 0) {
+                    Result = errno;
+                }
+
                 goto CopyFileEnd;
             }
 
@@ -1002,6 +1064,212 @@ CopyFileEnd:
     }
 
     return Result;
+}
+
+INT
+SetupCreateAndWriteFile (
+    PSETUP_CONTEXT Context,
+    PVOID Destination,
+    PSTR DestinationPath,
+    PVOID Contents,
+    ULONG ContentsSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a file and writes the given contents out to it.
+
+Arguments:
+
+    Context - Supplies a pointer to the applicaton context.
+
+    Destination - Supplies a pointer to the open destination volume
+        handle.
+
+    DestinationPath - Supplies a pointer to the path of the file to create at
+        the destination.
+
+    Contents - Supplies the buffer containing the file contents to write.
+
+    ContentsSize - Supplies the size of the buffer in bytes.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+{
+
+    PVOID DestinationFile;
+    mode_t Mode;
+    INT Status;
+    size_t TotalWritten;
+    ssize_t Written;
+
+    Status = 0;
+    Mode = FILE_PERMISSION_USER_READ |
+           FILE_PERMISSION_USER_WRITE |
+           FILE_PERMISSION_GROUP_READ |
+           FILE_PERMISSION_GROUP_WRITE |
+           FILE_PERMISSION_OTHER_READ;
+
+    if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
+        printf("Creating %s\n", DestinationPath);
+    }
+
+    SetupCreateDirectories(Context, Destination, DestinationPath);
+    DestinationFile = SetupFileOpen(Destination,
+                                    DestinationPath,
+                                    O_CREAT | O_TRUNC | O_RDWR | O_NOFOLLOW,
+                                    Mode);
+
+    if (DestinationFile == NULL) {
+        fprintf(stderr,
+                "Failed to create destination file %s.\n",
+                DestinationPath);
+
+        goto CreateAndWriteFileEnd;
+    }
+
+    //
+    // Loop copying chunks.
+    //
+
+    TotalWritten = 0;
+    while (TotalWritten != ContentsSize) {
+        Written = SetupFileWrite(DestinationFile,
+                                 Contents + TotalWritten,
+                                 ContentsSize - TotalWritten);
+
+        if (Written <= 0) {
+            fprintf(stderr,
+                    "Failed to write %s.\n",
+                    DestinationPath);
+
+            Status = errno;
+            goto CreateAndWriteFileEnd;
+        }
+
+        TotalWritten += Written;
+    }
+
+CreateAndWriteFileEnd:
+    if (DestinationFile != NULL) {
+        SetupFileClose(DestinationFile);
+    }
+
+    return Status;
+}
+
+INT
+SetupCreateDirectories (
+    PSETUP_CONTEXT Context,
+    PVOID Volume,
+    PSTR Path
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates directories up to but not including the final
+    component of the given path.
+
+Arguments:
+
+    Context - Supplies a pointer to the applicaton context.
+
+    Volume - Supplies a pointer to the open destination volume handle.
+
+    Path - Supplies the full file path. The file itself won't be created, but
+        all directories leading up to it will. If the path ends in a slash,
+        all components will be created.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+{
+
+    PSTR Copy;
+    ULONG Mode;
+    PSTR Next;
+    INT Status;
+
+    Copy = strdup(Path);
+    if (Copy == NULL) {
+        return ENOMEM;
+    }
+
+    Status = 0;
+    Mode = FILE_PERMISSION_USER_READ |
+           FILE_PERMISSION_USER_WRITE |
+           FILE_PERMISSION_USER_EXECUTE |
+           FILE_PERMISSION_GROUP_READ |
+           FILE_PERMISSION_GROUP_WRITE |
+           FILE_PERMISSION_GROUP_EXECUTE |
+           FILE_PERMISSION_OTHER_READ |
+           FILE_PERMISSION_OTHER_EXECUTE;
+
+    //
+    // Get past any leading slashes.
+    //
+
+    Next = Copy;
+    while (*Next == '/') {
+        Next += 1;
+    }
+
+    while (TRUE) {
+        while ((*Next != '\0') && (*Next != '/')) {
+            Next += 1;
+        }
+
+        //
+        // If the next character is the ending one, then this was the last
+        // component. Don't create a directory for it.
+        //
+
+        if (*Next == '\0') {
+            break;
+        }
+
+        //
+        // Terminate the string and create the directory.
+        //
+
+        *Next = '\0';
+        Status = SetupFileCreateDirectory(Volume, Copy, Mode);
+        if ((Status != 0) && (Status != EEXIST)) {
+            fprintf(stderr,
+                    "Error: Cannot create directories for path %s: %s.\n",
+                    Copy,
+                    strerror(Status));
+
+            goto CreateDirectoriesEnd;
+        }
+
+        *Next = '/';
+        while (*Next == '/') {
+            Next += 1;
+        }
+    }
+
+CreateDirectoriesEnd:
+    if (Copy != NULL) {
+        free(Copy);
+    }
+
+    return Status;
 }
 
 //

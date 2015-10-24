@@ -636,19 +636,15 @@ Return Value:
         }
 
         if (ResultPointer == NULL) {
-            break;
-        }
-
-        if ((strcmp(DirectoryEntry->d_name, ".") == 0) ||
-            (strcmp(DirectoryEntry->d_name, "..") == 0)) {
-
-            continue;
-        }
-
-        if (ResultPointer == NULL) {
             NameSize = 1;
 
         } else {
+            if ((strcmp(DirectoryEntry->d_name, ".") == 0) ||
+                (strcmp(DirectoryEntry->d_name, "..") == 0)) {
+
+                continue;
+            }
+
             NameSize = strlen(DirectoryEntry->d_name) + 1;
         }
 
@@ -803,6 +799,46 @@ Return Value:
     }
 
     return 0;
+}
+
+VOID
+SetupOsDetermineExecuteBit (
+    PVOID Handle,
+    PSTR Path,
+    mode_t *Mode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether the open file is executable.
+
+Arguments:
+
+    Handle - Supplies the open file handle.
+
+    Path - Supplies the path the file was opened from (sometimes the file name
+        is used as a hint).
+
+    Mode - Supplies a pointer to the current mode bits. This routine may add
+        the executable bit to user/group/other if it determines this file is
+        executable.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // Since Minoca OS has support for executable bits, don't screw with the
+    // permissions that are already set.
+    //
+
+    return;
 }
 
 //

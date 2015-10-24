@@ -512,7 +512,6 @@ Return Value:
     UINTN BytesToComplete;
     KSTATUS CompletionStatus;
     PRAM_DISK_DEVICE Disk;
-    PIO_BUFFER IoBuffer;
     ULONGLONG IoOffset;
     ULONG IrpReadWriteFlags;
     BOOL ReadWriteIrpPrepared;
@@ -530,7 +529,6 @@ Return Value:
 
     Irp->U.ReadWrite.IoBytesCompleted = 0;
     IoOffset = Irp->U.ReadWrite.IoOffset;
-    IoBuffer = Irp->U.ReadWrite.IoBuffer;
     if (IoOffset >= Disk->Size) {
         Status = STATUS_OUT_OF_BOUNDS;
         goto DispatchIoEnd;
@@ -568,7 +566,7 @@ Return Value:
     // Transfer the data between the disk and I/O buffer.
     //
 
-    Status = MmCopyIoBufferData(IoBuffer,
+    Status = MmCopyIoBufferData(Irp->U.ReadWrite.IoBuffer,
                                 (PUCHAR)Disk->Buffer + IoOffset,
                                 0,
                                 BytesToComplete,

@@ -129,6 +129,7 @@ Return Value:
     PSETUP_OBJECT ExpressionValue;
     PSETUP_OBJECT Key;
     LONGLONG ListIndex;
+    PSETUP_OBJECT *LValue;
     PSETUP_OBJECT NewExpression;
     ULONG NodeIndex;
     PPARSER_NODE ParseNode;
@@ -208,6 +209,11 @@ Return Value:
                     SetupObjectAddReference(NewExpression);
                 }
 
+                //
+                // Set the LValue so this list element can be assigned.
+                //
+
+                Node->LValue = &(ExpressionValue->List.Array[ListIndex]);
                 SetupObjectReleaseReference(Expression);
                 Expression = NewExpression;
 
@@ -219,6 +225,7 @@ Return Value:
                 DictEntry = SetupDictLookup(ExpressionValue, Key);
                 if (DictEntry != NULL) {
                     NewExpression = DictEntry->Value;
+                    Node->LValue = &(DictEntry->Value);
                     SetupObjectAddReference(NewExpression);
 
                 } else {
@@ -235,7 +242,8 @@ Return Value:
 
                     Status = SetupDictSetElement(ExpressionValue,
                                                  Key,
-                                                 NewExpression);
+                                                 NewExpression,
+                                                 &(Node->LValue));
 
                     if (Status != 0)  {
                         SetupObjectReleaseReference(NewExpression);
@@ -266,6 +274,13 @@ Return Value:
 
         case SetupTokenIncrement:
         case SetupTokenDecrement:
+            LValue = Node->LValue;
+            if (LValue == NULL) {
+                fprintf(stderr, "Error: lvalue required for unary operator.\n");
+                Status = EINVAL;
+                goto VisitPostfixExpressionEnd;
+            }
+
             Status = SetupPerformArithmetic(Interpreter,
                                             Expression,
                                             NULL,
@@ -276,9 +291,26 @@ Return Value:
                 goto VisitPostfixExpressionEnd;
             }
 
-            SetupObjectReleaseReference(Expression);
-            Expression = NewExpression;
+            //
+            // Assign this value back, but leave the expression as the original
+            // value (post increment/decrement). Also clear the LValue,
+            // as a++ = 4 is illegal.
+            //
+
+            if (*LValue != NULL) {
+                SetupObjectReleaseReference(*LValue);
+            }
+
+            *LValue = NewExpression;
+            Node->LValue = NULL;
             break;
+
+        default:
+
+            assert(FALSE);
+
+            Status = EINVAL;
+            goto VisitPostfixExpressionEnd;
         }
     }
 
@@ -328,12 +360,21 @@ Return Value:
 
 {
 
+    PSETUP_OBJECT *LValue;
+    SETUP_TOKEN_TYPE Operator;
     PPARSER_NODE ParseNode;
     INT Status;
     PLEXER_TOKEN Token;
     PPARSER_NODE UnaryOperatorNode;
 
+    LValue = Node->LValue;
     ParseNode = Node->ParseNode;
+
+    //
+    // Unary expressions are not assignable (ie ++a = 4 is illegal).
+    //
+
+    Node->LValue = NULL;
 
     assert(ParseNode->NodeCount == 2);
 
@@ -343,11 +384,38 @@ Return Value:
            (UnaryOperatorNode->TokenCount == 1));
 
     Token = UnaryOperatorNode->Tokens[0];
+    Operator = Token->Value;
     Status = SetupPerformArithmetic(Interpreter,
                                     Node->Results[1],
                                     NULL,
-                                    Token->Value,
+                                    Operator,
                                     Result);
+
+    if (Status != 0) {
+        return Status;
+    }
+
+    //
+    // Assign the object back for increment and decrement.
+    //
+
+    if ((Operator == SetupTokenIncrement) ||
+        (Operator == SetupTokenDecrement)) {
+
+        if (LValue == NULL) {
+            fprintf(stderr, "Error: lvalue required for unary operator.\n");
+            SetupObjectReleaseReference(*Result);
+            *Result = NULL;
+            return EINVAL;
+        }
+
+        if (*LValue != NULL) {
+            SetupObjectReleaseReference(*LValue);
+        }
+
+        *LValue = *Result;
+        SetupObjectAddReference(*Result);
+    }
 
     return Status;
 }
@@ -383,6 +451,8 @@ Return Value:
 --*/
 
 {
+
+    assert(Node->LValue == NULL);
 
     return 0;
 }
@@ -429,6 +499,12 @@ Return Value:
     Answer = NULL;
     ParseNode = Node->ParseNode;
     Status = STATUS_SUCCESS;
+
+    //
+    // Multiplicative expressions are not assignable (ie. a * b = 4 is illegal).
+    //
+
+    Node->LValue = NULL;
 
     assert((ParseNode->NodeCount == ParseNode->TokenCount + 1) &&
            (ParseNode->TokenCount >= 1));
@@ -824,6 +900,11 @@ Return Value:
         Node->Results[2] = NULL;
     }
 
+    //
+    // a ? b : c = 4 is illegal.
+    //
+
+    Node->LValue = NULL;
     return 0;
 }
 
@@ -860,14 +941,21 @@ Return Value:
 {
 
     PPARSER_NODE AssignmentOperator;
-    PSETUP_OBJECT Destination;
+    PSETUP_OBJECT *LValue;
     SETUP_TOKEN_TYPE Operator;
     PPARSER_NODE ParseNode;
     INT Status;
     PLEXER_TOKEN Token;
     PSETUP_OBJECT Value;
 
+    LValue = Node->LValue;
+    if (LValue == NULL) {
+        fprintf(stderr, "Error: Object is not assignable.\n");
+        return EINVAL;
+    }
+
     ParseNode = Node->ParseNode;
+    Status = 0;
 
     assert((ParseNode->NodeCount == 3) && (ParseNode->TokenCount == 0));
 
@@ -945,17 +1033,25 @@ Return Value:
     // Assign the value to the destination.
     //
 
-    Destination = Node->Results[0];
-    Status = SetupObjectAssign(Destination, Value);
-    if (Status == 0) {
-        Node->Results[0] = NULL;
-        *Result = Destination;
-
-    } else {
-        Destination = NULL;
+    if (*LValue != NULL) {
+        SetupObjectReleaseReference(*LValue);
     }
 
-    SetupObjectReleaseReference(Value);
+    *LValue = Value;
+    SetupObjectAddReference(Value);
+    *Result = Value;
+
+    //
+    // Clear the LValue, even though the tree is built in such a way that
+    // a = b = 4 would be built as:
+    // assignment
+    //   a    assignment
+    //           b  =  4
+    // So an assignment expression is never the first node of another
+    // assignment expression.
+    //
+
+    Node->LValue = NULL;
     return Status;
 }
 
@@ -990,6 +1086,8 @@ Return Value:
 --*/
 
 {
+
+    assert(Node->LValue == NULL);
 
     return 0;
 }
@@ -1028,7 +1126,7 @@ Return Value:
 
     //
     // The expression is the first result. Anything else is a side effect
-    // assignment expression.
+    // assignment expression. Allos the LValue to propagate up.
     //
 
     *Result = Node->Results[0];
@@ -1069,9 +1167,11 @@ Return Value:
 {
 
     //
-    // The statement itself does not evaluate to anything.
+    // The statement itself does not evaluate to anything, but cannot somehow
+    // be assigned to.
     //
 
+    Node->LValue = NULL;
     return 0;
 }
 
@@ -1140,10 +1240,22 @@ Return Value:
         Type = LeftValue->Header.Type;
         if (Type == RightValue->Header.Type) {
             if (Type == SetupObjectList) {
-                return SetupListAdd(LeftValue, RightValue, Result);
+                Status = SetupListAdd(LeftValue, RightValue);
+                if (Status == 0) {
+                    *Result = LeftValue;
+                    SetupObjectAddReference(LeftValue);
+                }
+
+                return Status;
 
             } else if (Type == SetupObjectDict) {
-                return SetupDictAdd(LeftValue, RightValue, Result);
+                Status = SetupDictAdd(LeftValue, RightValue);
+                if (Status == 0) {
+                    *Result = LeftValue;
+                    SetupObjectAddReference(LeftValue);
+                }
+
+                return Status;
 
             } else if (Type == SetupObjectString) {
                 return SetupStringAdd(LeftValue, RightValue, Result);

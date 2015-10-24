@@ -78,12 +78,6 @@ PPTE MmKernelPageTables;
 PQUEUED_LOCK MmPageTableLock;
 
 //
-// Keep a page below 1MB for identity mapping.
-//
-
-PHYSICAL_ADDRESS MmFirstMegabyteFreePage;
-
-//
 // Stores a pointer to the page directory block allocator.
 //
 
@@ -371,11 +365,7 @@ Return Value:
     // Allocate pages starting at address 0x1000.
     //
 
-    *Allocation = (PVOID)(UINTN)MmFirstMegabyteFreePage;
-
-    ASSERT(*Allocation != (PVOID)MAX_ULONG);
-
-    MmFirstMegabyteFreePage = MAX_ULONG;
+    *Allocation = (PVOID)(UINTN)IDENTITY_STUB_ADDRESS;
     CurrentAddress = *Allocation;
     for (CurrentPage = 0; CurrentPage < PageCount; CurrentPage += 1) {
         MmpMapPage((UINTN)CurrentAddress,
@@ -416,9 +406,7 @@ Return Value:
 
 {
 
-    ASSERT(Allocation != (PVOID)MAX_ULONG);
-
-    MmFirstMegabyteFreePage = (UINTN)Allocation;
+    ASSERT((UINTN)Allocation == IDENTITY_STUB_ADDRESS);
 
     //
     // Unmap the pages. Don't "free" the physical pages because they were
@@ -722,10 +710,12 @@ Return Value:
 {
 
     PBLOCK_ALLOCATOR BlockAllocator;
+    PMEMORY_DESCRIPTOR Descriptor;
     volatile PTE *Directory;
     ULONG DirectoryIndex;
     ULONG Flags;
     BOOL FreePageTable;
+    MEMORY_DESCRIPTOR NewDescriptor;
     volatile PTE *PageTable;
     PHYSICAL_ADDRESS PhysicalAddress;
     PPROCESSOR_BLOCK ProcessorBlock;
@@ -766,26 +756,23 @@ Return Value:
         if (KeGetCurrentProcessorNumber() == 0) {
 
             //
-            // There should be a free page in the first megabyte somewhere,
-            // needed for processor startup.
+            // Take over the first page of physical memory.
             //
 
-            Status = MmpEarlyAllocatePhysicalMemory(
-                                               Parameters->MemoryMap,
-                                               1,
-                                               0,
-                                               AllocationStrategyLowestAddress,
-                                               &MmFirstMegabyteFreePage);
+            Descriptor = MmMdLookupDescriptor(
+                                            Parameters->MemoryMap,
+                                            IDENTITY_STUB_ADDRESS,
+                                            IDENTITY_STUB_ADDRESS + PAGE_SIZE);
 
-            if (!KSUCCESS(Status)) {
-                goto ArchInitializeEnd;
-            }
+            ASSERT((Descriptor == NULL) ||
+                   (Descriptor->Type == MemoryTypeFree));
 
-            if (MmFirstMegabyteFreePage >= _1MB) {
-                RtlDebugPrint("No free page in the first 1MB.\n");
-                Status = STATUS_INSUFFICIENT_RESOURCES;
-                goto ArchInitializeEnd;
-            }
+            MmMdInitDescriptor(&NewDescriptor,
+                               IDENTITY_STUB_ADDRESS,
+                               IDENTITY_STUB_ADDRESS + PAGE_SIZE,
+                               MemoryTypeReserved);
+
+            MmMdAddDescriptorToList(Parameters->MemoryMap, &NewDescriptor);
         }
 
         Status = STATUS_SUCCESS;

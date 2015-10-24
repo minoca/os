@@ -1127,16 +1127,14 @@ Return Value:
     NewEndpoint->PollRate = Endpoint->PollRate;
 
     //
-    // If the endpoint is a full or low speed endpoint, then the poll rate is
-    // in frames (i.e. millisecond units). But the controller is high speed,
-    // it operates in 125 microsecond microframes. Do the conversion - multiply
-    // by 8.
+    // If the endpoint is high speed, the units are in microframes. But EHCI
+    // periodic schedules run in frames, so convert down (rounding up).
     //
 
-    if ((NewEndpoint->Speed == UsbDeviceSpeedFull) ||
-        (NewEndpoint->Speed == UsbDeviceSpeedLow)) {
-
-        NewEndpoint->PollRate <<= EHCI_MICROFRAMES_PER_FRAME_SHIFT;
+    if (NewEndpoint->Speed == UsbDeviceSpeedHigh) {
+        NewEndpoint->PollRate =
+            ALIGN_RANGE_UP(NewEndpoint->PollRate, EHCI_MICROFRAMES_PER_FRAME) >>
+            EHCI_MICROFRAMES_PER_FRAME_SHIFT;
     }
 
     //

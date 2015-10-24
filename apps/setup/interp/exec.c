@@ -93,6 +93,7 @@ SetupPopScope (
 //
 
 BOOL SetupDebugNodeVisits = FALSE;
+BOOL SetupDebugFinalGlobals = FALSE;
 
 PSETUP_NODE_VISIT SetupNodeVisit[SetupNodeEnd - SetupNodeBegin] = {
     SetupVisitListElementList,
@@ -206,7 +207,8 @@ SetupLoadScriptBuffer (
     PSETUP_INTERPRETER Interpreter,
     PSTR Path,
     PSTR Buffer,
-    ULONG Size
+    ULONG Size,
+    ULONG Order
     )
 
 /*++
@@ -228,6 +230,9 @@ Arguments:
 
     Size - Supplies the size of the buffer in bytes. A null terminator will be
         added if one is not present.
+
+    Order - Supplies the order identifier for ordering which scripts should run
+        when. Supply 0 to run the script now.
 
 Return Value:
 
@@ -251,7 +256,9 @@ Return Value:
         return ENOMEM;
     }
 
+    Status = 0;
     memset(Script, 0, sizeof(SETUP_SCRIPT));
+    Script->Order = Order;
     Script->Path = Path;
     Script->Data = malloc(Size + 1);
     if (Script->Data == NULL) {
@@ -260,15 +267,14 @@ Return Value:
 
     memcpy(Script->Data, Buffer, Size);
     Script->Data[Size] = '\0';
-    if (Script->Data[Size - 1] != '\0') {
-        Size += 1;
-    }
-
     Script->Size = Size;
-    Status = SetupExecuteScript(Interpreter, Script);
-    if (Status != 0) {
-        free(Script->Data);
-        free(Script);
+    INSERT_BEFORE(&(Script->ListEntry), &(Interpreter->ScriptList));
+    if (Script->Order == 0) {
+        Status = SetupExecuteScript(Interpreter, Script);
+        if (Status != 0) {
+            free(Script->Data);
+            free(Script);
+        }
     }
 
     return Status;
@@ -277,7 +283,8 @@ Return Value:
 INT
 SetupLoadScriptFile (
     PSETUP_INTERPRETER Interpreter,
-    PSTR Path
+    PSTR Path,
+    ULONG Order
     )
 
 /*++
@@ -291,6 +298,9 @@ Arguments:
     Interpreter - Supplies a pointer to the initialized interpreter.
 
     Path - Supplies a pointer to the path of the file to load.
+
+    Order - Supplies the order identifier for ordering which scripts should run
+        when. Supply 0 to run the script now.
 
 Return Value:
 
@@ -338,6 +348,7 @@ Return Value:
     }
 
     memset(Script, 0, sizeof(SETUP_SCRIPT));
+    Script->Order = Order;
     Script->Path = Path;
     Script->Data = malloc(Stat.st_size + 1);
     if (Script->Data == NULL) {
@@ -370,15 +381,12 @@ Return Value:
     }
 
     Script->Size = TotalRead;
-    Status = SetupExecuteScript(Interpreter, Script);
-    if (Status != 0) {
-        goto LoadScriptFileEnd;
-    }
-
-    if (SetupDebugNodeVisits != FALSE) {
-        printf("Globals: ");
-        SetupPrintObject(Interpreter->Global.Dict, 0);
-        printf("\n");
+    INSERT_BEFORE(&(Script->ListEntry), &(Interpreter->ScriptList));
+    if (Script->Order == 0) {
+        Status = SetupExecuteScript(Interpreter, Script);
+        if (Status != 0) {
+            goto LoadScriptFileEnd;
+        }
     }
 
 LoadScriptFileEnd:
@@ -400,10 +408,63 @@ LoadScriptFileEnd:
     return Status;
 }
 
+INT
+SetupExecuteDeferredScripts (
+    PSETUP_INTERPRETER Interpreter,
+    ULONG Order
+    )
+
+/*++
+
+Routine Description:
+
+    This routine executes scripts that have been loaded but not yet run.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the initialized interpreter.
+
+    Order - Supplies the order identifier. Any scripts with this order
+        identifier that have not yet been run will be run now.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PSETUP_SCRIPT Script;
+    INT Status;
+
+    Status = 0;
+    CurrentEntry = Interpreter->ScriptList.Next;
+    while (CurrentEntry != &(Interpreter->ScriptList)) {
+        Script = LIST_VALUE(CurrentEntry, SETUP_SCRIPT, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        if ((Script->ParseTree != NULL) || (Script->Order != Order)) {
+            continue;
+        }
+
+        Status = SetupExecuteScript(Interpreter, Script);
+        if (Status != 0) {
+            goto ExecuteDeferredScriptsEnd;
+        }
+    }
+
+ExecuteDeferredScriptsEnd:
+    return Status;
+}
+
 PSETUP_OBJECT
 SetupGetVariable (
     PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT Name
+    PSETUP_OBJECT Name,
+    PSETUP_OBJECT **LValue
     )
 
 /*++
@@ -417,6 +478,10 @@ Arguments:
     Interpreter - Supplies a pointer to the interpreter.
 
     Name - Supplies a pointer to the name string to find.
+
+    LValue - Supplies an optional pointer where an LValue pointer will be
+        returned on success. The caller can use the return of this pointer to
+        assign into the dictionary element later.
 
 Return Value:
 
@@ -443,6 +508,10 @@ Return Value:
         Result = SetupDictLookup(Scope->Dict, Name);
         if (Result != NULL) {
             SetupObjectAddReference(Result->Value);
+            if (LValue != NULL) {
+                *LValue = &(Result->Value);
+            }
+
             return Result->Value;
         }
 
@@ -460,6 +529,10 @@ Return Value:
     Result = SetupDictLookup(Interpreter->Global.Dict, Name);
     if (Result != NULL) {
         SetupObjectAddReference(Result->Value);
+        if (LValue != NULL) {
+            *LValue = &(Result->Value);
+        }
+
         return Result->Value;
     }
 
@@ -470,7 +543,8 @@ INT
 SetupSetVariable (
     PSETUP_INTERPRETER Interpreter,
     PSETUP_OBJECT Name,
-    PSETUP_OBJECT Value
+    PSETUP_OBJECT Value,
+    PSETUP_OBJECT **LValue
     )
 
 /*++
@@ -486,6 +560,10 @@ Arguments:
     Name - Supplies a pointer to the name string to create.
 
     Value - Supplies a pointer to the variable value.
+
+    LValue - Supplies an optional pointer where an LValue pointer will be
+        returned on success. The caller can use the return of this pointer to
+        assign into the dictionary element later.
 
 Return Value:
 
@@ -505,7 +583,7 @@ Return Value:
         Scope = &(Interpreter->Global);
     }
 
-    return SetupDictSetElement(Scope->Dict, Name, Value);
+    return SetupDictSetElement(Scope->Dict, Name, Value, LValue);
 }
 
 //
@@ -543,10 +621,9 @@ Return Value:
     INT Status;
 
     assert(Script->ParseTree == NULL);
-    assert(Script->ListEntry.Next == NULL);
 
     Status = SetupParseScript(Script, &(Script->ParseTree));
-    if (Script->ParseTree == NULL) {
+    if (Status != 0) {
         Status = ENOMEM;
         goto ExecuteScriptEnd;
     }
@@ -561,7 +638,11 @@ Return Value:
         goto ExecuteScriptEnd;
     }
 
-    INSERT_BEFORE(&(Script->ListEntry), &(Interpreter->ScriptList));
+    if (SetupDebugFinalGlobals != FALSE) {
+        printf("Globals: ");
+        SetupPrintObject(Interpreter->Global.Dict, 0);
+        printf("\n");
+    }
 
 ExecuteScriptEnd:
     return Status;
@@ -666,6 +747,14 @@ Return Value:
                 assert(Parent->ChildIndex != 0);
 
                 Parent->Results[Parent->ChildIndex - 1] = Result;
+
+                //
+                // Move the LValue of the first node up to the parent.
+                //
+
+                if (Parent->ChildIndex - 1 == 0) {
+                    Parent->LValue = Node->LValue;
+                }
 
             } else if (Result != NULL) {
                 SetupObjectReleaseReference(Result);

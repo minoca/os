@@ -86,7 +86,7 @@ Return Value:
 INT
 SetupOsGetPlatformName (
     PSTR *Name,
-    PSETUP_PLATFORM Fallback
+    PSETUP_RECIPE_ID Fallback
     )
 
 /*++

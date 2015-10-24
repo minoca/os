@@ -1,0 +1,80 @@
+/*++
+
+Copyright (c) 2015 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    panda.txt
+
+Abstract:
+
+    This module implements the setup recipe for the TI PandaBoard.
+
+Author:
+
+    Evan Green 19-Oct-2015
+
+Environment:
+
+    Setup
+
+--*/
+
+DriverFiles += DriverFilesArm;
+DriverFiles += [
+    "sdomap4.drv",
+    "om4gpio.drv",
+];
+
+BootDrivers += [
+    "sdomap4.drv",
+];
+
+PandaFirmwareFiles = [
+    "pandafw",
+    "omap4mlo",
+];
+
+//
+// Copy the firmware to the system partition for recovery if needed.
+//
+
+PandaFirmwareSystemCopy = {
+    "Destination": SystemDir + "panda/",
+    "Source": "./",
+    "SourceVolume": 0,
+    "Files": PandaFirmwareFiles
+};
+
+//
+// Copy the firmware to the boot partition.
+//
+
+PandaFirmwareCopy = {
+    "Destination": "/pandafw",
+    "Source": "./pandafw",
+    "SourceVolume": 0,
+};
+
+TotalCopy += [PandaFirmwareSystemCopy];
+TotalBootCopy += [PandaFirmwareCopy];
+
+//
+// Set the MBR file.
+//
+
+PandaMloCopy = {
+    "Offset": 0,
+    "Source": "omap4mlo",
+    "SourceVolume": 0,
+};
+
+DiskData["Mbr"] = PandaMloCopy;
+DiskData["Format"] = PARTITION_FORMAT_MBR;
+BootPartition["Alignment"] = 1 * MEGABYTE;
+
+//
+// Set the EFI boot manager name.
+//
+
+BootmefiCopy["Destination"] += EFI_DEFAULT_APP_ARM;

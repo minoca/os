@@ -26,6 +26,7 @@ Environment:
 //
 
 #include <minoca/kernel.h>
+#include <minoca/x86.h>
 #include "firmware.h"
 #include "bios.h"
 #include "bootlib.h"
@@ -34,9 +35,6 @@ Environment:
 //
 // ---------------------------------------------------------------- Definitions
 //
-
-#define PCAT_LOW_MEMORY_PAGE 0x1000
-#define PCAT_LOW_MEMORY_PAGE_SIZE 0x1000
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -179,8 +177,8 @@ Return Value:
     //
 
     MmMdInitDescriptor(&Descriptor,
-                       PCAT_LOW_MEMORY_PAGE,
-                       PCAT_LOW_MEMORY_PAGE + PCAT_LOW_MEMORY_PAGE_SIZE,
+                       IDENTITY_STUB_ADDRESS,
+                       IDENTITY_STUB_ADDRESS + PAGE_SIZE,
                        MemoryTypeFree);
 
     Status = MmMdAddDescriptorToList(&BoMemoryMap, &Descriptor);

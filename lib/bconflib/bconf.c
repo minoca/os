@@ -731,6 +731,122 @@ CreateDefaultBootEntryEnd:
     return Entry;
 }
 
+PBOOT_ENTRY
+BcCopyBootEntry (
+    PBOOT_CONFIGURATION_CONTEXT Context,
+    PBOOT_ENTRY Source
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new boot entry based on an existing one.
+
+Arguments:
+
+    Context - Supplies a pointer to the boot configuration context.
+
+    Source - Supplies a pointer to the boot entry to copy.
+
+Return Value:
+
+    Returns a pointer to the new boot entry on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    PBOOT_ENTRY Entry;
+    KSTATUS Status;
+    PSTR String;
+
+    Status = STATUS_INSUFFICIENT_RESOURCES;
+    Entry = BcAllocate(Context, sizeof(BOOT_ENTRY));
+    if (Entry == NULL) {
+        goto CreateDefaultBootEntryEnd;
+    }
+
+    RtlZeroMemory(Entry, sizeof(BOOT_ENTRY));
+    Entry->Id = Source->Id;
+    RtlCopyMemory(Entry->DiskId, Source->DiskId, sizeof(Entry->DiskId));
+    RtlCopyMemory(Entry->PartitionId,
+                  Source->PartitionId,
+                  sizeof(Entry->PartitionId));
+
+    Entry->Flags = Source->Flags;
+    Entry->DebugDevice = Source->DebugDevice;
+    String = Source->Name;
+    if (String == NULL) {
+        String = BOOT_DEFAULT_NAME;
+    }
+
+    Entry->Name = BcpCopyString(Context, String);
+    if (Entry->Name == NULL) {
+        goto CreateDefaultBootEntryEnd;
+    }
+
+    String = Source->LoaderArguments;
+    if (String != NULL) {
+        Entry->LoaderArguments = BcpCopyString(Context, String);
+        if (Entry->LoaderArguments == NULL) {
+            goto CreateDefaultBootEntryEnd;
+        }
+    }
+
+    String = Source->KernelArguments;
+    if (String != NULL) {
+        Entry->KernelArguments = BcpCopyString(Context, String);
+        if (Entry->KernelArguments == NULL) {
+            goto CreateDefaultBootEntryEnd;
+        }
+    }
+
+    String = Source->LoaderPath;
+    if (String == NULL) {
+        String = BOOT_DEFAULT_LOADER_PATH;
+    }
+
+    Entry->LoaderPath = BcpCopyString(Context, String);
+    if (Entry->LoaderPath == NULL) {
+        goto CreateDefaultBootEntryEnd;
+    }
+
+    String = Source->KernelPath;
+    if (String == NULL) {
+        String = BOOT_DEFAULT_KERNEL_PATH;
+    }
+
+    Entry->KernelPath = BcpCopyString(Context, String);
+    if (Entry->KernelPath == NULL) {
+        goto CreateDefaultBootEntryEnd;
+    }
+
+    String = Source->SystemPath;
+    if (String == NULL) {
+        String = BOOT_DEFAULT_SYSTEM_PATH;
+    }
+
+    Entry->SystemPath = BcpCopyString(Context, String);
+    if (Entry->SystemPath == NULL) {
+        goto CreateDefaultBootEntryEnd;
+    }
+
+    Status = STATUS_SUCCESS;
+
+CreateDefaultBootEntryEnd:
+    if (!KSUCCESS(Status)) {
+        if (Entry != NULL) {
+            BcDestroyBootEntry(Context, Entry);
+            Entry = NULL;
+        }
+    }
+
+    return Entry;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

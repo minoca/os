@@ -19,6 +19,19 @@
 ##     Build
 ##
 
+if test "$ARCH" = "x86"; then
+    STRIP=i686-pc-minoca-strip
+    OBJCOPY=i686-pc-minoca-objcopy
+
+elif test "$ARCH" = "armv7"; then
+    STRIP=arm-none-minoca-strip
+    OBJCOPY=arm-none-minoca-objcopy
+
+elif test "$ARCH" = "armv6"; then
+    STRIP=arm-none-minoca-strip
+    OBJCOPY=arm-none-minoca-objcopy
+fi
+
 DRIVERS=\
 "acpi.drv
 dwceth.drv

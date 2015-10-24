@@ -1,0 +1,72 @@
+/*++
+
+Copyright (c) 2015 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    pc.txt
+
+Abstract:
+
+    This module implements the setup recipe for a standard BIOS-based PC.
+
+Author:
+
+    Evan Green 19-Oct-2015
+
+Environment:
+
+    Setup
+
+--*/
+
+DriverFiles += DriverFilesX86;
+BootDrivers += BootDriversX86;
+
+//
+// Copy the firmware to the system partition for recovery if needed.
+//
+
+SystemFiles += SystemFilesX86Pcat;
+
+//
+// Set the MBR file.
+//
+
+MbrCopy = {
+    "Offset": 0,
+    "Source": "mbr.bin",
+    "SourceVolume": 0,
+};
+
+DiskData["Mbr"] = MbrCopy;
+
+//
+// Set the VBR file.
+//
+
+VbrCopy = {
+    "Offset": 0,
+    "Source": "fatboot.bin",
+    "SourceVolume": 0,
+};
+
+BootPartition["Vbr"] = VbrCopy;
+
+//
+// Replace the boot files with the boot manager.
+//
+
+BootmanCopy = {
+    "Destination": "/",
+    "Source": "./",
+    "SourceVolume": 0,
+    "Files": ["bootman.bin"]
+};
+
+BootPartition["Files"] = [BootmanCopy];
+BootPartition["Alignment"] = 1 * MEGABYTE;
+BootPartition["Flags"]["WriteVbrLba"] = TRUE;
+BootEntry["LoaderPath"] = LoaderPathPcat;
+SystemPartition["Alignment"] = 1 * MEGABYTE;
+DiskData["Format"] = PARTITION_FORMAT_MBR;

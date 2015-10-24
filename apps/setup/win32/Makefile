@@ -25,6 +25,8 @@ BINARY = msetup.exe
 
 BINPLACE = bin
 
+BUILD = yes
+
 BINARYTYPE = ntconsole
 
 INCLUDES += $(SRCROOT)/os/apps/inc;             \
@@ -39,12 +41,14 @@ OBJS = $(COMMON_OBJS)   \
        part.o           \
        win32sup.o       \
 
-TARGETLIBS = $(OBJROOT)/os/lib/partlib/build/partlib.a      \
-             $(OBJROOT)/os/lib/fatlib/build/fat.a           \
-             $(OBJROOT)/os/lib/bconflib/build/bconflib.a    \
-             $(INTLIB)/os/lib/rtl/base/build/basertl.a      \
-             $(INTLIB)/os/lib/rtl/build/rtlstubs.a          \
-             $(OBJROOT)/os/lib/yy/build/yy.a                \
+TARGETLIBS = $(OBJROOT)/os/lib/partlib/build/partlib.a         \
+             $(OBJROOT)/os/lib/fatlib/build/fat.a              \
+             $(OBJROOT)/os/lib/bconflib/build/bconflib.a       \
+             $(INTLIB)/os/lib/rtl/base/build/basertl.a         \
+             $(INTLIB)/os/lib/rtl/build/rtlstubs.a             \
+             $(OBJROOT)/os/lib/yy/build/yy.a                   \
+             $(OBJROOT)/os/apps/setup/config/build/msetplat.a  \
+
 
 DYNLIBS = -lsetupapi
 

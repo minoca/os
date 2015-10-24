@@ -24,6 +24,8 @@ COMMON_OBJS = cache.o          \
               disk.o           \
               fatdev.o         \
               fileio.o         \
+              indat.o          \
+              interp/cif.o     \
               interp/const.o   \
               interp/exec.o    \
               interp/expr.o    \
@@ -32,6 +34,7 @@ COMMON_OBJS = cache.o          \
               partio.o         \
               plat.o           \
               setup.o          \
+              steps.o          \
               util.o           \
 
 EXTRA_SRC_DIRS = interp minoca

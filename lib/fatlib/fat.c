@@ -945,8 +945,8 @@ Return Value:
         goto MountEnd;
     }
 
-    if ((Flags & FAT_MOUNT_FLAG_ALLOW_SHORT_FILE_NAMES) != 0) {
-        FatVolume->Flags |= FAT_VOLUME_FLAG_ALLOW_SHORT_FILE_NAMES;
+    if ((Flags & FAT_MOUNT_FLAG_COMPATIBILITY_MODE) != 0) {
+        FatVolume->Flags |= FAT_VOLUME_FLAG_COMPATIBILITY_MODE;
     }
 
     TotalSectors = FAT_READ_INT16(&(BootSector->SmallTotalSectors));

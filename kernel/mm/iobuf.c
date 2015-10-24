@@ -2742,6 +2742,7 @@ Return Value:
 
 {
 
+    ULONGLONG EndAddress;
     ULONG Flags;
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentIndex;
@@ -2749,11 +2750,10 @@ Return Value:
     PPAGE_CACHE_ENTRY PageCacheEntry;
     UINTN PageCount;
     UINTN PageIndex;
-    ULONG PageOffset;
     ULONG PageShift;
     ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddress;
-    UINTN Size;
+    ULONGLONG StartAddress;
 
     Flags = IoBuffer->Internal.Flags;
     PageShift = MmPageShift();
@@ -2794,11 +2794,12 @@ Return Value:
          FragmentIndex += 1) {
 
         Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-        PageOffset = REMAINDER(Fragment->PhysicalAddress, PageSize);
-        Size = Fragment->Size + PageOffset;
-        Size = ALIGN_RANGE_UP(Size, PageSize);
-        PageCount = Size >> PageShift;
-        PhysicalAddress = Fragment->PhysicalAddress - PageOffset;
+        StartAddress = Fragment->PhysicalAddress;
+        EndAddress = StartAddress + Fragment->Size;
+        PhysicalAddress = ALIGN_RANGE_DOWN(StartAddress, PageSize);
+        PageCount = (ALIGN_RANGE_UP(EndAddress, PageSize) - PhysicalAddress) >>
+                    PageShift;
+
         for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
             if (PageCacheEntries != NULL) {
                 PageCacheEntry = *PageCacheEntries;
@@ -3601,7 +3602,6 @@ Return Value:
 {
 
     UINTN AllocationSize;
-    ULONG ByteOffset;
     UINTN BytesLocked;
     PVOID CurrentAddress;
     PVOID EndAddress;
@@ -3687,7 +3687,7 @@ Return Value:
                      (PageCount * sizeof(PPAGE_CACHE_ENTRY));
 
     LockedIoBuffer = MmAllocateNonPagedPool(AllocationSize,
-                                         MM_IO_ALLOCATION_TAG);
+                                            MM_IO_ALLOCATION_TAG);
 
     if (LockedIoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -3821,14 +3821,6 @@ Return Value:
         FragmentSize = (UINTN)NextAddress - (UINTN)CurrentAddress;
 
         ASSERT(FragmentSize != 0);
-
-        //
-        // The virtual address is not necessary page-aligned. Modify the
-        // physical address to match the virtual address.
-        //
-
-        ByteOffset = REMAINDER((UINTN)CurrentAddress, PageSize);
-        PhysicalAddress += ByteOffset;
 
         //
         // If this buffer is contiguous with the last one, then just up the

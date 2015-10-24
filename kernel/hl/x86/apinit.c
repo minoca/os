@@ -309,6 +309,52 @@ Return Value:
     return STATUS_SUCCESS;
 }
 
+KSTATUS
+HlpInterruptPrepareForProcessorResume (
+    ULONG ProcessorIndex,
+    PPROCESSOR_CONTEXT *ProcessorContextPointer,
+    PPHYSICAL_ADDRESS ResumeAddress,
+    BOOL Abort
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs any per-processor preparations necessary to resume
+    the given processor from a context-destructive state.
+
+Arguments:
+
+    ProcessorIndex - Supplies the processor index to save context for.
+
+    ProcessorContextPointer - Supplies a pointer where a pointer to the
+        processor's resume context should be saved. This routine cannot do the
+        saving since once the context is saved the routine is not allowed to
+        return until it's restored.
+
+    ResumeAddress - Supplies a pointer where the physical address of the
+        resume code for this processor will be returned.
+
+    Abort - Supplies a boolean that if set undoes the effects of this function.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    //
+    // At some point, consider implementing resume.
+    //
+
+    ASSERT(FALSE);
+
+    return STATUS_NOT_SUPPORTED;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

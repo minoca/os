@@ -81,10 +81,12 @@ FatpCreateDirectoryEntriesForFile (
 ULONG FatRandomSeed;
 
 //
-// Set this to TRUE to allow short file names.
+// Set this to TRUE to be as compatible as possible with other implementations.
+// This includes using short names when possible, rather than encoding
+// permission information in the short names.
 //
 
-BOOL FatAllowShortFileNames = FALSE;
+BOOL FatCompatibilityMode = FALSE;
 
 //
 // Set this to TRUE to maintain the count of free clusters in the FAT FS
@@ -3659,8 +3661,8 @@ Return Value:
 
     LastDot = NULL;
     LongEntryNeeded = TRUE;
-    if (((Volume->Flags & FAT_VOLUME_FLAG_ALLOW_SHORT_FILE_NAMES) != 0) ||
-        (FatAllowShortFileNames != FALSE)) {
+    if (((Volume->Flags & FAT_VOLUME_FLAG_COMPATIBILITY_MODE) != 0) ||
+        (FatCompatibilityMode != FALSE)) {
 
         LastDot = RtlStringFindCharacterRight(FileName, '.', FileNameLength);
         if (LastDot != NULL) {

@@ -1,0 +1,89 @@
+/*++
+
+Copyright (c) 2015 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    rpi2.txt
+
+Abstract:
+
+    This module implements the setup recipe for Raspberry Pi 2.
+
+Author:
+
+    Evan Green 19-Oct-2015
+
+Environment:
+
+    Setup
+
+--*/
+
+DriverFiles += DriverFilesArm;
+DriverFiles += [
+    "dwhci.drv",
+    "sdbm2709.drv",
+];
+
+BootDrivers += [
+    "sdbm2709.drv",
+];
+
+RpiFirmwareFiles = [
+    "config.txt",
+    "start.elf",
+    "fixup.dat",
+    "bootcode.bin"
+];
+
+//
+// Copy the firmware to the system partition for recovery if needed.
+//
+
+RpiFirmwareSystemCopy = {
+    "Destination": SystemDir + "rpi/",
+    "Source": "./",
+    "SourceVolume": 0,
+    "Files": RpiFirmwareFiles
+};
+
+Rpi2FirmwareSystemCopy = {
+    "Destination": SystemDir + "rpi2/rpifw",
+    "Source": "./rpi2fw",
+    "SourceVolume": 0,
+    "Files": RpiFirmwareFiles
+};
+
+//
+// Copy the firmware to the boot partition.
+//
+
+RpiFirmwareCopy = {
+    "Destination": "/",
+    "Source": "./",
+    "SourceVolume": 0,
+    "Files": RpiFirmwareFiles
+};
+
+//
+// The config.txt is expecting the name rpifw, so do a special copy and rename
+// for Raspberry Pi 2.
+//
+
+Rpi2FirmwareCopy = {
+    "Destination": "/rpifw",
+    "Source": "./rpi2fw",
+    "SourceVolume": 0
+};
+
+TotalCopy += [RpiFirmwareSystemCopy, Rpi2FirmwareSystemCopy];
+TotalBootCopy += [RpiFirmwareCopy, Rpi2FirmwareCopy];
+DiskData["Format"] = PARTITION_FORMAT_MBR;
+
+//
+// Set the EFI boot manager name.
+//
+
+BootmefiCopy["Destination"] += EFI_DEFAULT_APP_ARM;
+BootPartition["Alignment"] = 1 * MEGABYTE;

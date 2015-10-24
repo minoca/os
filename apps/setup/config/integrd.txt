@@ -1,0 +1,50 @@
+/*++
+
+Copyright (c) 2015 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    integrd.txt
+
+Abstract:
+
+    This module implements the setup recipe for the Integrator/CP RamDisk
+    (Qemu).
+
+Author:
+
+    Evan Green 19-Oct-2015
+
+Environment:
+
+    Setup
+
+--*/
+
+DriverFiles += DriverFilesArm;
+DriverFiles += [
+    "ramdisk.drv",
+    "pl050.drv",
+    "smsc91c1.drv",
+];
+
+BootDrivers += [
+    "ramdisk.drv",
+];
+
+SystemFiles += [
+    "initcon"
+];
+
+//
+// Remove apps from the user files since it can be huge. Just add the bare
+// minimum.
+//
+
+UserAppsCopy["Source"] = "";
+
+//
+// Set the EFI boot manager name.
+//
+
+BootmefiCopy["Destination"] += EFI_DEFAULT_APP_ARM;

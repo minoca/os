@@ -1142,7 +1142,7 @@ Return Value:
 
     MountFlags = 0;
     if (AllowShortFileNames != FALSE) {
-        MountFlags |= FAT_MOUNT_FLAG_ALLOW_SHORT_FILE_NAMES;
+        MountFlags |= FAT_MOUNT_FLAG_COMPATIBILITY_MODE;
     }
 
     Status = FatMount(&BlockParameters,

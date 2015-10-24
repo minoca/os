@@ -25,6 +25,8 @@ BINARY = debugui.exe
 
 BINARYTYPE = win32
 
+BUILD = yes
+
 BINPLACE = bin
 
 INCLUDES += $(SRCDIR)/../../..;$(SRCDIR)/../..;
@@ -54,14 +56,4 @@ X86_OBJS += $(COMMON_OBJS)   \
 endif
 
 include $(SRCROOT)/os/minoca.mk
-
-##
-## Override the compiler since this is a Windows app.
-##
-
-CC := gcc
-LD := ld
-RCC := windres
-AR := ar
-AS := as
 

@@ -670,6 +670,9 @@ Return Value:
             Status = YypGetNextToken(Parser, &Token);
             if (Status == STATUS_END_OF_FILE) {
                 goto ParseNodeEnd;
+
+            } else if (!KSUCCESS(Status)) {
+                goto ParseNodeEnd;
             }
 
             if (Token->Value != Rule) {

@@ -25,6 +25,8 @@ BINARY = swiss.exe
 
 BINPLACE = bin
 
+BUILD = yes
+
 BINARYTYPE = ntconsole
 
 INCLUDES += $(SRCROOT)/os/apps/libc/dynamic/wincsup/inc;$(SRCDIR)/..;

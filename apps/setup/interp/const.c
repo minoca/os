@@ -91,6 +91,7 @@ Return Value:
     INT Status;
 
     ParseNode = Node->ParseNode;
+    Node->LValue = NULL;
     List = SetupCreateList(NULL, ParseNode->NodeCount);
     if (List == NULL) {
         return ENOMEM;
@@ -147,6 +148,7 @@ Return Value:
     PPARSER_NODE ParseNode;
 
     ParseNode = Node->ParseNode;
+    Node->LValue = NULL;
 
     //
     // If it's an empty list, create it now. Otherwise by the time this
@@ -203,6 +205,7 @@ Return Value:
     PPARSER_NODE ParseNode;
 
     ParseNode = Node->ParseNode;
+    Node->LValue = NULL;
 
     assert(ParseNode->NodeCount == 2);
 
@@ -253,6 +256,7 @@ Return Value:
     INT Status;
 
     ParseNode = Node->ParseNode;
+    Node->LValue = NULL;
     Dict = SetupCreateDict(NULL);
     if (Dict == NULL) {
         return ENOMEM;
@@ -268,7 +272,11 @@ Return Value:
 
         assert(List->Header.Type == SetupObjectList);
 
-        Status = SetupDictSetElement(Dict, List->Array[0], List->Array[1]);
+        Status = SetupDictSetElement(Dict,
+                                     List->Array[0],
+                                     List->Array[1],
+                                     NULL);
+
         if (Status != 0) {
             SetupObjectReleaseReference(Dict);
             return Status;
@@ -314,6 +322,7 @@ Return Value:
     PPARSER_NODE ParseNode;
 
     ParseNode = Node->ParseNode;
+    Node->LValue = NULL;
 
     //
     // If it's an empty dictionary, create it now. Otherwise by the time this
@@ -385,7 +394,8 @@ Return Value:
     Value = NULL;
 
     //
-    // It's a dictionary or a list, just return it.
+    // It's a dictionary or a list, just return it. Allow the LValue to pass
+    // up, as (x) = 4 is allowed.
     //
 
     if (ParseNode->NodeCount != 0) {
@@ -402,6 +412,7 @@ Return Value:
     } else {
 
         assert(ParseNode->TokenCount == 1);
+        assert(Node->LValue == NULL);
 
         Token = ParseNode->Tokens[0];
         TokenString = Node->Script->Data + Token->Position;
@@ -418,7 +429,7 @@ Return Value:
                 goto VisitPrimaryExpressionEnd;
             }
 
-            Value = SetupGetVariable(Interpreter, Name);
+            Value = SetupGetVariable(Interpreter, Name, &(Node->LValue));
 
             //
             // If the variable does not exist, create it now.
@@ -431,7 +442,11 @@ Return Value:
                     goto VisitPrimaryExpressionEnd;
                 }
 
-                Status = SetupSetVariable(Interpreter, Name, Value);
+                Status = SetupSetVariable(Interpreter,
+                                          Name,
+                                          Value,
+                                          &(Node->LValue));
+
                 if (Status != 0) {
                     goto VisitPrimaryExpressionEnd;
                 }
@@ -560,7 +575,6 @@ Return Value:
             assert(Destination <= Source);
 
             *Destination = '\0';
-            Destination += 1;
             Value->String.Size = Destination - Value->String.String;
             break;
         }
@@ -625,6 +639,7 @@ Return Value:
     // Statement lists are nothing but side effects.
     //
 
+    Node->LValue = NULL;
     return 0;
 }
 
@@ -664,6 +679,7 @@ Return Value:
     // Translation units are nothing but side effects.
     //
 
+    Node->LValue = NULL;
     return 0;
 }
 

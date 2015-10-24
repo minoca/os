@@ -44,34 +44,22 @@ Author:
 #define SETUP_FLAG_VERBOSE 0x00000001
 
 //
-// Set this flag to disable the reboot at the end of the installation.
+// Set this flag to reboot at the end of the installation.
 //
 
-#define SETUP_FLAG_NO_REBOOT 0x00000002
-
-//
-// Set this flag to use MBR formatting.
-//
-
-#define SETUP_FLAG_MBR 0x00000004
-
-//
-// Set this flag to write the boot sector LBA and length into the MBR and VBR.
-//
-
-#define SETUP_FLAG_WRITE_BOOT_LBA 0x00000008
-
-//
-// Set this flag to align partitions to 1MB.
-//
-
-#define SETUP_FLAG_1MB_PARTITION_ALIGNMENT 0x00000010
+#define SETUP_FLAG_REBOOT 0x00000002
 
 //
 // Set this flag to enable debugging in the new boot configuration.
 //
 
-#define SETUP_FLAG_INSTALL_DEBUG 0x00000020
+#define SETUP_FLAG_INSTALL_DEBUG 0x00000004
+
+//
+// Set this flag to enable boot debugging in the target.
+//
+
+#define SETUP_FLAG_INSTALL_BOOT_DEBUG 0x00000008
 
 //
 // Set this flag to run in automated mode, where setup will try to install to
@@ -79,32 +67,7 @@ Author:
 // shouldn't be used by real users, only test automation.
 //
 
-#define SETUP_FLAG_AUTO_DEPLOY 0x00000040
-
-//
-// Set this flag if the page file size was specified on the command line.
-//
-
-#define SETUP_FLAG_PAGE_FILE_SPECIFIED 0x00000080
-
-//
-// Set this flag to create two evenly divided main partitions (in addition to
-// the small boot partition).
-//
-
-#define SETUP_FLAG_TWO_PARTITIONS 0x00000100
-
-//
-// Set this flag to enable boot debugging in the target.
-//
-
-#define SETUP_FLAG_INSTALL_BOOT_DEBUG 0x00000200
-
-//
-// Set this flag to allow short file names on the boot partition.
-//
-
-#define SETUP_FLAG_BOOT_ALLOW_SHORT_FILE_NAMES 0x00000400
+#define SETUP_FLAG_AUTO_DEPLOY 0x00000010
 
 //
 // Define the name of the source install image.
@@ -132,15 +95,6 @@ Author:
 #define SETUP_BOOT_SECTOR_BLOCK_ADDRESS_OFFSET 0x5C
 #define SETUP_BOOT_SECTOR_BLOCK_LENGTH_OFFSET 0x60
 
-//
-// Define the default factor to multiply system memory by to get the page file
-// size.
-//
-
-#define SETUP_DEFAULT_PAGE_FILE_NUMERATOR 2
-#define SETUP_DEFAULT_PAGE_FILE_DENOMINATOR 1
-#define SETUP_MAX_PAGE_FILE_DISK_DIVISOR 10
-#define SETUP_PAGE_FILE_ZERO_BUFFER_SIZE 0x100000
 #define SETUP_SYMLINK_MAX 512
 
 //
@@ -160,16 +114,28 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef enum _SETUP_PLATFORM {
-    SetupPlatformInvalid,
-    SetupPlatformUnknown,
-    SetupPlatformBiosPc,
-    SetupPlatformEfiPc,
-    SetupPlatformTiPandaBoard,
-    SetupPlatformRaspberryPi,
-    SetupPlatformRaspberryPi2,
-    SetupPlatformTiBeagleBoneBlack,
-} SETUP_PLATFORM, *PSETUP_PLATFORM;
+//
+// Define setup recipe IDs, alphabetized by config file name.
+//
+
+typedef enum _SETUP_RECIPE_ID {
+    SetupRecipeNone,
+    SetupRecipeBeagleBoneBlack,
+    SetupRecipeCommon,
+    SetupRecipeGalileo,
+    SetupRecipeInstallArm,
+    SetupRecipeInstallX86,
+    SetupRecipeIntegratorCpRamDisk,
+    SetupRecipePandaBoard,
+    SetupRecipePandaBoardUsb,
+    SetupRecipePc,
+    SetupRecipePcEfi,
+    SetupRecipePcTiny,
+    SetupRecipeRaspberryPi,
+    SetupRecipeRaspberryPi2,
+    SetupRecipeVeyron,
+    SetupRecipeCount
+} SETUP_RECIPE_ID, *PSETUP_RECIPE_ID;
 
 typedef enum _SETUP_DESTINATION_TYPE {
     SetupDestinationInvalid,
@@ -179,6 +145,23 @@ typedef enum _SETUP_DESTINATION_TYPE {
     SetupDestinationImage,
     SetupDestinationFile,
 } SETUP_DESTINATION_TYPE, *PSETUP_DESTINATION_TYPE;
+
+typedef enum _SETUP_VOLUME_FORMAT_CHOICE {
+    SetupVolumeFormatInvalid,
+    SetupVolumeFormatAlways,
+    SetupVolumeFormatNever,
+    SetupVolumeFormatIfIncompatible,
+} SETUP_VOLUME_FORMAT_CHOICE, *PSETUP_VOLUME_FORMAT_CHOICE;
+
+typedef enum _SETUP_SCRIPT_ORDER {
+    SetupScriptOrderNow,
+    SetupScriptOrderInitialization,
+    SetupScriptOrderUserInitialization,
+    SetupScriptOrderPlatform,
+    SetupScriptOrderUserCustomization
+} SETUP_SCRIPT_ORDER, *PSETUP_SCRIPT_ORDER;
+
+typedef struct _SETUP_CONFIGURATION SETUP_CONFIGURATION, *PSETUP_CONFIGURATION;
 
 /*++
 
@@ -234,50 +217,6 @@ typedef struct _SETUP_PARTITION_DESCRIPTION {
 
 Structure Description:
 
-    This structure stores installation directions for a specific platform.
-
-Members:
-
-    Platform - Stores the platform identifier.
-
-    ShortName - Stores the short name of the platform, usually used at the
-        command line.
-
-    Description - Stores the longer name of the platform, used when printing.
-
-    SmbiosProductName - Stores the platform name in the SMBIOS product name
-        field.
-
-    Flags - Stores additional flags to enable in the setup context.
-
-    Mbr - Stores an optional path to a file to set as the MBR.
-
-    Vbr - Stores an optional path to a file to set as the VBR.
-
-    Loader - Store an optional path to the loader to use, if not the standard
-        EFI loader.
-
-    BootFiles - Stores an array of additional files to place in the boot
-        volume, separated by newlines.
-
---*/
-
-typedef struct _SETUP_PLATFORM_RECIPE {
-    SETUP_PLATFORM Platform;
-    PSTR ShortName;
-    PSTR Description;
-    PSTR SmbiosProductName;
-    ULONG Flags;
-    PSTR Mbr;
-    PSTR Vbr;
-    PSTR Loader;
-    PSTR BootFiles;
-} SETUP_PLATFORM_RECIPE, *PSETUP_PLATFORM_RECIPE;
-
-/*++
-
-Structure Description:
-
     This structure describes setup's application context.
 
 Members:
@@ -285,17 +224,8 @@ Members:
     Flags - Stores a bitfield of flags governing the behavior. See
         SETUP_FLAG_* definitions.
 
-    DiskFormat - Stores the partition format to use on the disk.
-
     PartitionContext - Stores a pointer to the partition library context for
         the disk layout.
-
-    BootPartitionOffset - Stores the offset in blocks to the boot partition.
-
-    BootPartitionSize - Stores the size in blocks of the boot partition.
-
-    InstallPartition - Stores the partition device information for the install
-        partition.
 
     CurrentPartitionOffset - Stores the offset in blocks to the partition
         being actively read from and written to.
@@ -312,36 +242,41 @@ Members:
     BootPartitionPath - Stores an optional pointer to the boot partition to
         update.
 
+    DiskSize - Stores the override disk size.
+
     Disk - Stores a pointer to the install disk.
 
     SourceVolume - Stores a pointer to the install source volume.
 
-    Recipe - Stores a pointer to a specific recipe to follow.
+    HostFileSystem - Stores an open volume pointer to an empty host path.
+
+    RecipeIndex - Stores the recipe index to follow.
 
     PageFileSize - Stores the size in megabytes of the page file.
 
     Interpreter - Stores the interpreter context.
 
+    Configuration - Stores the installation configuration;
+
 --*/
 
 typedef struct _SETUP_CONTEXT {
     ULONG Flags;
-    PARTITION_FORMAT DiskFormat;
     PARTITION_CONTEXT PartitionContext;
-    ULONGLONG BootPartitionOffset;
-    ULONGLONG BootPartitionSize;
-    PARTITION_DEVICE_INFORMATION InstallPartition;
     ULONGLONG CurrentPartitionOffset;
     ULONGLONG CurrentPartitionSize;
     PSETUP_DESTINATION DiskPath;
     PSETUP_DESTINATION PartitionPath;
     PSETUP_DESTINATION DirectoryPath;
     PSETUP_DESTINATION BootPartitionPath;
+    ULONGLONG DiskSize;
     PVOID Disk;
     PVOID SourceVolume;
-    PSETUP_PLATFORM_RECIPE Recipe;
+    PVOID HostFileSystem;
+    LONG RecipeIndex;
     ULONGLONG PageFileSize;
     SETUP_INTERPRETER Interpreter;
+    PSETUP_CONFIGURATION Configuration;
 } SETUP_CONTEXT, *PSETUP_CONTEXT;
 
 /*++
@@ -379,6 +314,9 @@ typedef struct _SETUP_VOLUME {
 //
 // -------------------------------------------------------------------- Globals
 //
+
+extern UCHAR SetupZeroDiskIdentifier[DISK_IDENTIFIER_SIZE];
+extern UCHAR SetupZeroPartitionIdentifier[PARTITION_IDENTIFIER_SIZE];
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -838,6 +776,36 @@ Return Value:
 
 --*/
 
+VOID
+SetupOsDetermineExecuteBit (
+    PVOID Handle,
+    PSTR Path,
+    mode_t *Mode
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines whether the open file is executable.
+
+Arguments:
+
+    Handle - Supplies the open file handle.
+
+    Path - Supplies the path the file was opened from (sometimes the file name
+        is used as a hint).
+
+    Mode - Supplies a pointer to the current mode bits. This routine may add
+        the executable bit to user/group/other if it determines this file is
+        executable.
+
+Return Value:
+
+    None.
+
+--*/
+
 INT
 SetupOsReboot (
     VOID
@@ -864,7 +832,7 @@ Return Value:
 INT
 SetupOsGetPlatformName (
     PSTR *Name,
-    PSETUP_PLATFORM Fallback
+    PSETUP_RECIPE_ID Fallback
     );
 
 /*++
@@ -1117,7 +1085,7 @@ Return Value:
 
 INT
 SetupEnumerateDirectory (
-    PVOID Handle,
+    PVOID VolumeHandle,
     PSTR DirectoryPath,
     PSTR *Enumeration
     );
@@ -1130,7 +1098,7 @@ Routine Description:
 
 Arguments:
 
-    Handle - Supplies the open volume handle.
+    VolumeHandle - Supplies the open volume handle.
 
     DirectoryPath - Supplies a pointer to a string containing the path to the
         directory to enumerate.
@@ -1148,6 +1116,36 @@ Return Value:
 
 --*/
 
+VOID
+SetupDetermineExecuteBit (
+    PVOID Handle,
+    PSTR Path,
+    mode_t *Mode
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines whether the open file is executable.
+
+Arguments:
+
+    Handle - Supplies the open file handle.
+
+    Path - Supplies the path the file was opened from (sometimes the file name
+        is used as a hint).
+
+    Mode - Supplies a pointer to the current mode bits. This routine may add
+        the executable bit to user/group/other if it determines this file is
+        executable.
+
+Return Value:
+
+    None.
+
+--*/
+
 //
 // File I/O functions
 //
@@ -1156,8 +1154,8 @@ PVOID
 SetupVolumeOpen (
     PSETUP_CONTEXT Context,
     PSETUP_DESTINATION Destination,
-    BOOL Format,
-    BOOL AllowShortFileNames
+    SETUP_VOLUME_FORMAT_CHOICE Format,
+    BOOL CompatibilityMode
     );
 
 /*++
@@ -1172,11 +1170,10 @@ Arguments:
 
     Destination - Supplies a pointer to the destination to open.
 
-    Format - Supplies a boolean indicating if the volume should be formatted
-        (TRUE) or just mounted (FALSE).
+    Format - Supplies the disposition for formatting the volume.
 
-    AllowShortFileNames - Supplies a boolean indicating if the volume should be
-        mounted to allow the creation of short file names.
+    CompatibilityMode - Supplies a boolean indicating whether to run the
+        file system in the most compatible way possible.
 
 Return Value:
 
@@ -1567,6 +1564,36 @@ Return Value:
 
 --*/
 
+VOID
+SetupFileDetermineExecuteBit (
+    PVOID Handle,
+    PSTR Path,
+    mode_t *Mode
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines whether the open file is executable.
+
+Arguments:
+
+    Handle - Supplies the open file handle.
+
+    Path - Supplies the path the file was opened from (sometimes the file name
+        is used as a hint).
+
+    Mode - Supplies a pointer to the current mode bits. This routine may add
+        the executable bit to user/group/other if it determines this file is
+        executable.
+
+Return Value:
+
+    None.
+
+--*/
+
 //
 // Partition I/O functions
 //
@@ -1819,7 +1846,7 @@ Return Value:
 --*/
 
 INT
-SetupInstallBootSector (
+SetupAddRecipeScript (
     PSETUP_CONTEXT Context
     );
 
@@ -1827,9 +1854,7 @@ SetupInstallBootSector (
 
 Routine Description:
 
-    This routine writes the MBR and VBR to the disk. This should be done after
-    the file system has set up the beginning of the install partition (so that
-    it doesn't clobber the VBR being written here).
+    This routine adds the platform recipe script.
 
 Arguments:
 
@@ -1844,23 +1869,19 @@ Return Value:
 --*/
 
 INT
-SetupInstallPlatformBootFiles (
-    PSETUP_CONTEXT Context,
-    PVOID BootVolume
+SetupAddCommonScripts (
+    PSETUP_CONTEXT Context
     );
 
 /*++
 
 Routine Description:
 
-    This routine writes any custom platform specific boot files to the boot
-    volume.
+    This routine adds the common scripts that are added no matter what.
 
 Arguments:
 
     Context - Supplies a pointer to the setup context.
-
-    BootVolume - Supplies a pointer to the open boot volume.
 
 Return Value:
 
@@ -2079,42 +2100,36 @@ Return Value:
 --*/
 
 INT
-SetupUpdateFile (
-    PSETUP_CONTEXT Context,
-    PVOID Destination,
-    PVOID Source,
-    PSTR DestinationPath,
-    PSTR SourcePath
+SetupConvertStringArrayToLines (
+    PSTR *StringArray,
+    PSTR *ResultBuffer,
+    PUINTN ResultBufferSize
     );
 
 /*++
 
 Routine Description:
 
-    This routine copies the given path from the source to the destination if
-    the destination is older than the source. If the source is a directory, the
-    contents of that directory are recursively copied to the destination
-    (regardless of the age of the files inside the directory).
+    This routine converts a null-terminated array of strings into a single
+    buffer where each element is separated by a newline.
 
 Arguments:
 
-    Context - Supplies a pointer to the applicaton context.
+    StringArray - Supplies a pointer to the array of strings. The array must be
+        terminated by a NULL entry.
 
-    Destination - Supplies a pointer to the open destination volume
-        handle.
+    ResultBuffer - Supplies a pointer where a string will be returned
+        containing all the lines. The caller is responsible for freeing this
+        buffer.
 
-    Source - Supplies a pointer to the open source volume handle.
-
-    DestinationPath - Supplies a pointer to the path of the file to create at
-        the destination.
-
-    SourcePath - Supplies the source path of the copy.
+    ResultBufferSize - Supplies a pointer where size of the buffer in bytes
+        will be returned, including the null terminator.
 
 Return Value:
 
     0 on success.
 
-    Non-zero on failure.
+    ENOMEM on allocation failure.
 
 --*/
 
@@ -2124,7 +2139,8 @@ SetupCopyFile (
     PVOID Destination,
     PVOID Source,
     PSTR DestinationPath,
-    PSTR SourcePath
+    PSTR SourcePath,
+    ULONG Flags
     );
 
 /*++
@@ -2148,6 +2164,78 @@ Arguments:
         the destination.
 
     SourcePath - Supplies the source path of the copy.
+
+    Flags - Supplies a bitfield of flags governing the operation. See
+        SETUP_COPY_FLAG_* definitions.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+INT
+SetupCreateAndWriteFile (
+    PSETUP_CONTEXT Context,
+    PVOID Destination,
+    PSTR DestinationPath,
+    PVOID Contents,
+    ULONG ContentsSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a file and writes the given contents out to it.
+
+Arguments:
+
+    Context - Supplies a pointer to the applicaton context.
+
+    Destination - Supplies a pointer to the open destination volume
+        handle.
+
+    DestinationPath - Supplies a pointer to the path of the file to create at
+        the destination.
+
+    Contents - Supplies the buffer containing the file contents to write.
+
+    ContentsSize - Supplies the size of the buffer in bytes.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+INT
+SetupCreateDirectories (
+    PSETUP_CONTEXT Context,
+    PVOID Volume,
+    PSTR Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates directories up to but not including the final
+    component of the given path.
+
+Arguments:
+
+    Context - Supplies a pointer to the applicaton context.
+
+    Volume - Supplies a pointer to the open destination volume handle.
+
+    Path - Supplies the full file path. The file itself won't be created, but
+        all directories leading up to it will. If the path ends in a slash,
+        all components will be created.
 
 Return Value:
 

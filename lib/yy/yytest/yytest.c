@@ -1336,8 +1336,8 @@ Return Value:
     }
 
     Parser.Context = &Lexer;
-    Parser.Allocate = malloc;
-    Parser.Free = free;
+    Parser.Allocate = (PYY_ALLOCATE)malloc;
+    Parser.Free = (PYY_FREE)free;
     Parser.GetToken = YyTestGetToken;
     Parser.NodeCallback = YyTestNodeCallback;
     Parser.Grammar = YyTestCGrammar;

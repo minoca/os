@@ -615,7 +615,6 @@ PM_IDLE_STATE Am3SocIdleStates[AM3_SOC_IDLE_STATE_COUNT] = {
 
 extern PVOID _binary_am3cm3fw_bin_start;
 extern PVOID _binary_am3cm3fw_bin_end;
-extern PVOID _binary_am3cm3fw_bin_size;
 
 extern PVOID Am3SocOcmcCode;
 extern PVOID Am3SocRefreshWfi;
@@ -1896,6 +1895,7 @@ Return Value:
 
 {
 
+    UINTN Size;
     ULONG Value;
 
     ASSERT(Device->CortexM3 != NULL);
@@ -1905,10 +1905,10 @@ Return Value:
     // of reset.
     //
 
-    RtlCopyMemory(Device->CortexM3,
-                  &_binary_am3cm3fw_bin_start,
-                  (UINTN)&_binary_am3cm3fw_bin_size);
+    Size = (UINTN)&_binary_am3cm3fw_bin_end -
+           (UINTN)&_binary_am3cm3fw_bin_start;
 
+    RtlCopyMemory(Device->CortexM3, &_binary_am3cm3fw_bin_start, Size);
     Device->M3State = Am3M3StateReset;
     Value = AM3_READ_PRM_WAKEUP(Device, Am3RmWakeupResetControl);
     Value &= ~AM335_RM_WAKEUP_RESET_CONTROL_RESET_CORTEX_M3;

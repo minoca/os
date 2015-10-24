@@ -185,6 +185,9 @@ ULONG SetupGrammarListElementList[] = {
 ULONG SetupGrammarList[] = {
     SetupTokenOpenBracket, SetupTokenCloseBracket, 0,
     SetupTokenOpenBracket, SetupNodeListElementList, SetupTokenCloseBracket, 0,
+    SetupTokenOpenBracket, SetupNodeListElementList, SetupTokenComma,
+        SetupTokenCloseBracket, 0,
+
     0
 };
 

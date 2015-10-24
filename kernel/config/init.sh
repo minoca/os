@@ -88,6 +88,16 @@ mkdir -p -m777 "$WORLD/tmp"
 ##
 
 if ! test -x $WORLD/bin/chroot; then
+
+    ##
+    ## If there is no swiss, link sh to swiss (hopefully that works). Pipes
+    ## don't really work at this point.
+    ##
+
+    if ! test -r $WORLD/bin/swiss ; then
+        ln -s sh $WORLD/bin/swiss
+    fi
+
     for app in `swiss --list`; do
         if ! test -x $WORLD/bin/$app; then
             ln -s swiss $WORLD/bin/$app

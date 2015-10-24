@@ -52,6 +52,14 @@ Environment:
 //
 
 //
+// Define some executable file magic words.
+//
+
+#define ELF_MAGIC 0x464C457F
+#define IMAGE_DOS_SIGNATURE 0x5A4D
+#define SCRIPT_SHEBANG 0x2123
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -188,6 +196,8 @@ Return Value:
 {
 
     PSETUP_OS_HANDLE IoHandle;
+    size_t PathLength;
+    struct stat Stat;
 
     IoHandle = malloc(sizeof(SETUP_OS_HANDLE));
     if (IoHandle == NULL) {
@@ -203,6 +213,32 @@ Return Value:
                                 CreatePermissions);
 
         if (IoHandle->Handle < 0) {
+
+            //
+            // Windows doesn't allow opening directories. Make the error
+            // unambiguous if this is a directory.
+            //
+
+            if ((stat(Destination->Path, &Stat) == 0) &&
+                (S_ISDIR(Stat.st_mode))) {
+
+                errno = EISDIR;
+
+            } else {
+
+                //
+                // Windows also won't stat a path with a slash on the end. If
+                // that's the case, just assume it was a directory.
+                //
+
+                PathLength = strlen(Destination->Path);
+                if ((PathLength != 0) &&
+                    (Destination->Path[PathLength - 1] == '/')) {
+
+                    errno = EISDIR;
+                }
+            }
+
             free(IoHandle);
             return NULL;
         }
@@ -597,7 +633,6 @@ Return Value:
     PSTR Array;
     size_t ArrayCapacity;
     DIR *Directory;
-    struct dirent *DirectoryEntry;
     size_t NameSize;
     PVOID NewBuffer;
     size_t NewCapacity;
@@ -609,12 +644,6 @@ Return Value:
     ArrayCapacity = 0;
     Directory = NULL;
     UsedSize = 0;
-    DirectoryEntry = malloc(sizeof(struct dirent));
-    if (DirectoryEntry == NULL) {
-        Result = ENOMEM;
-        goto OsEnumerateDirectoryEnd;
-    }
-
     Directory = opendir(DirectoryPath);
     if (Directory == NULL) {
         Result = errno;
@@ -628,16 +657,17 @@ Return Value:
     while (TRUE) {
         ResultPointer = readdir(Directory);
         if (ResultPointer == NULL) {
-            break;
+            NameSize = 1;
+
+        } else {
+            if ((strcmp(ResultPointer->d_name, ".") == 0) ||
+                (strcmp(ResultPointer->d_name, "..") == 0)) {
+
+                continue;
+            }
+
+            NameSize = strlen(ResultPointer->d_name) + 1;
         }
-
-        if ((strcmp(DirectoryEntry->d_name, ".") == 0) ||
-            (strcmp(DirectoryEntry->d_name, "..") == 0)) {
-
-            continue;
-        }
-
-        NameSize = strlen(DirectoryEntry->d_name) + 1;
 
         //
         // Reallocate the array if needed.
@@ -673,7 +703,7 @@ Return Value:
             break;
 
         } else {
-            strcpy(Array + UsedSize, DirectoryEntry->d_name);
+            strcpy(Array + UsedSize, ResultPointer->d_name);
             UsedSize += NameSize;
         }
     }
@@ -681,10 +711,6 @@ Return Value:
     Result = 0;
 
 OsEnumerateDirectoryEnd:
-    if (DirectoryEntry != NULL) {
-        free(DirectoryEntry);
-    }
-
     if (Directory != NULL) {
         closedir(Directory);
     }
@@ -790,6 +816,103 @@ Return Value:
     }
 
     return 0;
+}
+
+VOID
+SetupOsDetermineExecuteBit (
+    PVOID Handle,
+    PSTR Path,
+    mode_t *Mode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether the open file is executable.
+
+Arguments:
+
+    Handle - Supplies the open file handle.
+
+    Path - Supplies the path the file was opened from (sometimes the file name
+        is used as a hint).
+
+    Mode - Supplies a pointer to the current mode bits. This routine may add
+        the executable bit to user/group/other if it determines this file is
+        executable.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    BOOL Executable;
+    PSETUP_OS_HANDLE IoHandle;
+    PSTR LastDot;
+    off_t Offset;
+    ULONG Word;
+
+    Executable = FALSE;
+    IoHandle = Handle;
+
+    //
+    // First try to guess based on the name.
+    //
+
+    LastDot = strrchr(Path, '.');
+    if (LastDot != NULL) {
+        LastDot += 1;
+        if ((strcmp(LastDot, "sh") == 0) ||
+            (strcmp(LastDot, "exe") == 0)) {
+
+            Executable = TRUE;
+        }
+    }
+
+    if (Executable == FALSE) {
+
+        //
+        // Go to the beginning of the file and read the first word.
+        //
+
+        Offset = lseek(IoHandle->Handle, 0, SEEK_CUR);
+        lseek(IoHandle->Handle, 0, SEEK_SET);
+        Word = 0;
+        if (read(IoHandle->Handle, &Word, sizeof(Word)) > 0) {
+            if (Word == ELF_MAGIC) {
+                Executable = TRUE;
+
+            } else {
+
+                //
+                // Now just look at the first two bytes.
+                //
+
+                Word &= 0x0000FFFF;
+                if ((Word == IMAGE_DOS_SIGNATURE) ||
+                    (Word == SCRIPT_SHEBANG)) {
+
+                    Executable = TRUE;
+                }
+            }
+        }
+
+        //
+        // Restore the previous offset.
+        //
+
+        lseek(IoHandle->Handle, Offset, SEEK_SET);
+    }
+
+    if (Executable != FALSE) {
+        *Mode |= FILE_PERMISSION_ALL_EXECUTE;
+    }
+
+    return;
 }
 
 //

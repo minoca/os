@@ -35,3 +35,9 @@ DYNLIBS = -lminocaos
 
 include $(SRCROOT)/os/minoca.mk
 
+postbuild:
+	@mkdir -p $(BINROOT)/skel/bin
+	@if test $(BINROOT)/$(BINARY) -nt $(BINROOT)/skel/bin/umount; then \
+	    $(STRIP) -o $(BINROOT)/skel/bin/umount $(BINROOT)/$(BINARY); \
+	fi
+

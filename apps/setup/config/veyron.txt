@@ -1,0 +1,90 @@
+/*++
+
+Copyright (c) 2015 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    veyron.txt
+
+Abstract:
+
+    This module implements the setup recipe for the Veyron Speedy platform
+    (ASUS C201).
+
+Author:
+
+    Evan Green 19-Oct-2015
+
+Environment:
+
+    Setup
+
+--*/
+
+DriverFiles += DriverFilesArm;
+DriverFiles += [
+    "dwhci.drv",
+    "sdrk32xx.drv",
+    "rk32spi.drv",
+    "goec.drv",
+    "rk32gpio.drv"
+];
+
+BootDrivers += [
+    "sdrk32xx.drv",
+];
+
+VeyronFirmwareCopy = {
+    "Offset": 0,
+    "Source": "./veyronfw",
+    "SourceVolume": 0
+};
+
+//
+// Set up the correct partition layout for verified boot, which has a firmware
+// partition at the beginning with the raw firmware image in it.
+//
+
+PARTITION_TYPE_VBOOT_FIRMWARE =
+    "\x5D\x2A\x3A\xFE\x32\x4F\xA7\x41\xb7\x25\xAC\xCC\x32\x85\xA3\x09";
+
+VeyronFirmwarePartition = {
+    "Index": 0,
+    "Size": 1 * MEGABYTE,
+    "PartitionType": PARTITION_TYPE_VBOOT_FIRMWARE,
+    "Files": [],
+    "Attributes": 0x01FF000000000000,
+    "Vbr": VeyronFirmwareCopy,
+    "Flags": {
+        "Boot": FALSE,
+        "System": FALSE
+    },
+};
+
+BootPartition["Index"] += 1;
+//BootPartition["Boot"] = FALSE;
+SystemPartition["Index"] += 1;
+Partitions += [VeyronFirmwarePartition];
+
+//
+// Copy the firmware to the system partition for recovery if needed.
+//
+
+VeyronFirmwareFiles = [
+    "veyronfw",
+];
+
+VeyronFirmwareSystemCopy = {
+    "Destination": SystemDir + "veyron/",
+    "Source": "./",
+    "SourceVolume": 0,
+    "Files": VeyronFirmwareFiles
+};
+
+TotalCopy += [VeyronFirmwareSystemCopy];
+
+//
+// Set the EFI boot manager name.
+//
+
+BootmefiCopy["Destination"] += EFI_DEFAULT_APP_ARM;

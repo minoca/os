@@ -101,7 +101,7 @@ Return Value:
 INT
 SetupOsGetPlatformName (
     PSTR *Name,
-    PSETUP_PLATFORM Fallback
+    PSETUP_RECIPE_ID Fallback
     )
 
 /*++
@@ -146,25 +146,27 @@ Return Value:
     // First figure out the fallback based on the firmware type.
     //
 
-    Size = sizeof(FirmwareType);
-    Status = OsGetSetSystemInformation(SystemInformationKe,
-                                       KeInformationFirmwareType,
-                                       &FirmwareType,
-                                       &Size,
-                                       FALSE);
+    if (Fallback != NULL) {
+        Size = sizeof(FirmwareType);
+        Status = OsGetSetSystemInformation(SystemInformationKe,
+                                           KeInformationFirmwareType,
+                                           &FirmwareType,
+                                           &Size,
+                                           FALSE);
 
-    if (!KSUCCESS(Status)) {
-        goto OsGetPlatformNameEnd;
-    }
+        if (!KSUCCESS(Status)) {
+            goto OsGetPlatformNameEnd;
+        }
 
-    if (FirmwareType == SystemFirmwareEfi) {
-        *Fallback = SetupPlatformEfiPc;
+        if (FirmwareType == SystemFirmwareEfi) {
+            *Fallback = SetupRecipePcEfi;
 
-    } else if (FirmwareType == SystemFirmwarePcat) {
-        *Fallback = SetupPlatformBiosPc;
+        } else if (FirmwareType == SystemFirmwarePcat) {
+            *Fallback = SetupRecipePc;
 
-    } else {
-        *Fallback = SetupPlatformUnknown;
+        } else {
+            *Fallback = SetupRecipeNone;
+        }
     }
 
     //

@@ -320,7 +320,15 @@ Return Value:
                                     Buffer,
                                     SETUP_CACHE_BLOCK_SIZE);
 
-            if (BytesRead != SETUP_CACHE_BLOCK_SIZE) {
+            //
+            // Allow a zero read in case the disk is actually a file that
+            // hasn't grown all the way out.
+            //
+
+            if (BytesRead == 0) {
+                memset(Buffer, 0, SETUP_CACHE_BLOCK_SIZE);
+
+            } else if (BytesRead != SETUP_CACHE_BLOCK_SIZE) {
 
                 assert(FALSE);
 
@@ -527,7 +535,7 @@ Return Value:
 
 INT
 SetupEnumerateDirectory (
-    PVOID Handle,
+    PVOID VolumeHandle,
     PSTR DirectoryPath,
     PSTR *Enumeration
     )
@@ -540,7 +548,7 @@ Routine Description:
 
 Arguments:
 
-    Handle - Supplies the open volume handle.
+    VolumeHandle - Supplies the open volume handle.
 
     DirectoryPath - Supplies a pointer to a string containing the path to the
         directory to enumerate.
@@ -560,18 +568,55 @@ Return Value:
 
 {
 
-    PSETUP_HANDLE IoHandle;
     INT Result;
+
+    Result = SetupOsEnumerateDirectory(VolumeHandle,
+                                       DirectoryPath,
+                                       Enumeration);
+
+    return Result;
+}
+
+VOID
+SetupDetermineExecuteBit (
+    PVOID Handle,
+    PSTR Path,
+    mode_t *Mode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether the open file is executable.
+
+Arguments:
+
+    Handle - Supplies the open file handle.
+
+    Path - Supplies the path the file was opened from (sometimes the file name
+        is used as a hint).
+
+    Mode - Supplies a pointer to the current mode bits. This routine may add
+        the executable bit to user/group/other if it determines this file is
+        executable.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSETUP_HANDLE IoHandle;
 
     IoHandle = Handle;
 
     assert(IoHandle->Cached == FALSE);
 
-    Result = SetupOsEnumerateDirectory(IoHandle->Handle,
-                                       DirectoryPath,
-                                       Enumeration);
-
-    return Result;
+    SetupOsDetermineExecuteBit(IoHandle->Handle, Path, Mode);
+    return;
 }
 
 //
