@@ -440,9 +440,9 @@ Arguments:
 
 Return Value:
 
-    Returns the link size on success.
+    0 on success.
 
-    -1 on failure.
+    Returns an error number on failure.
 
 --*/
 

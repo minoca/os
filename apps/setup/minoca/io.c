@@ -99,9 +99,9 @@ Arguments:
 
 Return Value:
 
-    Returns the link size on success.
+    0 on success.
 
-    -1 on failure.
+    Returns an error number on failure.
 
 --*/
 
@@ -111,16 +111,18 @@ Return Value:
 
     *LinkTarget = malloc(SETUP_SYMLINK_MAX);
     if (*LinkTarget == NULL) {
-        return -1;
+        return errno;
     }
 
     Size = readlink(Path, *LinkTarget, SETUP_SYMLINK_MAX);
     if (Size < 0) {
         free(*LinkTarget);
         *LinkTarget = NULL;
+        return errno;
     }
 
-    return Size;
+    *LinkTargetSize = Size;
+    return 0;
 }
 
 INT

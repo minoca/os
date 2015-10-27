@@ -48,21 +48,21 @@ IMAGES += $(BINROOT)/pc.img \
 $(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
 	@echo Building - $(notdir $@)
 	@mkdir -p $(BINROOT)/apps
-	@cd $(BINROOT) && msetup -ql install-x86 -i- -d $@ $(MSETUP_IMAGE_SIZE)
+	@cd $(BINROOT) && ./msetup -ql install-x86 -i- -d $@ $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/pc.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && msetup -ql pc -i $< $(MSETUP_DEBUG) -d $@ \
+	@cd $(BINROOT) && ./msetup -ql pc -i $< $(MSETUP_DEBUG) -d $@ \
 	    $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/pcefi.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && msetup -ql pcefi -i $< $(MSETUP_DEBUG) -d $@ \
+	@cd $(BINROOT) && ./msetup -ql pcefi -i $< $(MSETUP_DEBUG) -d $@ \
 	    $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/pctiny.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && msetup -ql pc-tiny -i $< $(MSETUP_DEBUG) -d $@ \
+	@cd $(BINROOT) && ./msetup -ql pc-tiny -i $< $(MSETUP_DEBUG) -d $@ \
 	    $(MSETUP_TINY_IMAGE_SIZE)
 
 ifneq ($(QUARK),)
@@ -71,7 +71,7 @@ IMAGES += $(BINROOT)/galileo.img
 
 $(BINROOT)/galileo.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && msetup -ql galileo -i $< -D -d $@ -G512M
+	@cd $(BINROOT) && ./msetup -ql galileo -i $< -D -d $@ -G512M
 
 endif
 
@@ -94,11 +94,11 @@ IMAGES += $(BINROOT)/bbone.img \
 $(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
 	@echo Building - $(notdir $@)
 	@mkdir -p $(BINROOT)/apps
-	@cd $(BINROOT) && msetup -ql install-armv7 -i- -d $@ $(MSETUP_IMAGE_SIZE)
+	@cd $(BINROOT) && ./msetup -ql install-armv7 -i- -d $@ $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/bbone.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && msetup -ql beagleboneblack -i $< $(MSETUP_DEBUG) -d $@ \
+	@cd $(BINROOT) && ./msetup -ql beagleboneblack -i $< $(MSETUP_DEBUG) -d $@ \
 	    $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/integ.img: $(BINROOT)/integrd.img
@@ -109,12 +109,12 @@ $(BINROOT)/integ.img: $(BINROOT)/integrd.img
 
 $(BINROOT)/integrd.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && msetup -ql integrd -i $< $(MSETUP_DEBUG) -d $@ \
+	@cd $(BINROOT) && ./msetup -ql integrd -i $< $(MSETUP_DEBUG) -d $@ \
 	    $(MSETUP_TINY_IMAGE_SIZE)
 
 $(BINROOT)/panda.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && msetup -ql panda -i $< $(MSETUP_DEBUG) -d $@ \
+	@cd $(BINROOT) && ./msetup -ql panda -i $< $(MSETUP_DEBUG) -d $@ \
 	    $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/pandausb.img: $(BINROOT)/pandard.img
@@ -125,17 +125,17 @@ $(BINROOT)/pandausb.img: $(BINROOT)/pandard.img
 
 $(BINROOT)/pandard.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && msetup -ql panda-usb -i $< $(MSETUP_DEBUG) -d $@ \
+	@cd $(BINROOT) && ./msetup -ql panda-usb -i $< $(MSETUP_DEBUG) -d $@ \
 	    $(MSETUP_TINY_IMAGE_SIZE)
 
 $(BINROOT)/rpi2.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && msetup -ql raspberrypi2 -i $< $(MSETUP_DEBUG) -d $@ \
+	@cd $(BINROOT) && ./msetup -ql raspberrypi2 -i $< $(MSETUP_DEBUG) -d $@ \
 	    $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/veyron.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && msetup -ql veyron -i $< $(MSETUP_DEBUG) -d $@ \
+	@cd $(BINROOT) && ./msetup -ql veyron -i $< $(MSETUP_DEBUG) -d $@ \
 	    $(MSETUP_IMAGE_SIZE)
 
 endif
@@ -151,11 +151,11 @@ IMAGES += $(BINROOT)/rpi.img \
 $(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
 	@echo Building - $(notdir $@)
 	@mkdir -p $(BINROOT)/apps
-	@cd $(BINROOT) && msetup -ql install-armv6 -i- -d $@ $(MSETUP_IMAGE_SIZE)
+	@cd $(BINROOT) && ./msetup -ql install-armv6 -i- -d $@ $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/rpi.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && msetup -ql raspberrypi -i $< $(MSETUP_DEBUG) -d $@ \
+	@cd $(BINROOT) && ./msetup -ql raspberrypi -i $< $(MSETUP_DEBUG) -d $@ \
 	    $(MSETUP_IMAGE_SIZE)
 
 endif

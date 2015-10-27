@@ -58,7 +58,12 @@ DIRS = runtime
 
 include $(SRCROOT)/os/minoca.mk
 
-postbuild: $(BINARY).bin
+postbuild: biosfw.bin
+
+biosfw.bin: $(BINARY)
+	@echo Flattening - $(notdir $<)
+	@$(OBJCOPY) -O binary $< $@
+	@cp -p $@ $(BINROOT)/
 
 ##
 ## Define the target that creates the firmware volume object file.
