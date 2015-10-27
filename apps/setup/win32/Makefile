@@ -38,6 +38,7 @@ include $(SRCDIR)/../sources
 OBJS = $(COMMON_OBJS)   \
        io.o             \
        misc.o           \
+       msetuprc.rsc     \
        part.o           \
        win32sup.o       \
 

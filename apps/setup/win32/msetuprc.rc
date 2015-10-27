@@ -1,0 +1,6 @@
+#include <windows.h>
+#include <commctrl.h>
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "msetup.exe.manifest"
+
+101 ICON DISCARDABLE "msetup.ico"
