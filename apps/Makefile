@@ -25,7 +25,6 @@
 ##
 
 APPS = efiboot  \
-       initcon  \
        mount    \
        profile  \
        setup    \
