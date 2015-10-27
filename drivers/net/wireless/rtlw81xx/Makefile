@@ -34,6 +34,7 @@ INCLUDES += $(SRCROOT)/os/drivers/usb/usbcore/inc;
 
 DYNLIBS = $(BINROOT)/kernel                 \
           $(BINROOT)/netcore.drv            \
+          $(BINROOT)/net80211.drv           \
           $(BINROOT)/usbcore.drv            \
 
 include $(SRCROOT)/os/minoca.mk

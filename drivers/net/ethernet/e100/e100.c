@@ -484,9 +484,10 @@ Return Value:
     Properties.Version = NET_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = 1;
     Properties.DriverContext = Device;
-    Properties.MaxPacketSize = RECEIVE_FRAME_DATA_SIZE;
+    Properties.PacketSizeInformation.MaxPacketSize = RECEIVE_FRAME_DATA_SIZE;
+    Properties.DataLinkType = NetDataLinkEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
-    Properties.PhysicalAddress.Network = SocketNetworkPhysical;
+    Properties.PhysicalAddress.Network = SocketNetworkPhysicalEthernet;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->EepromMacAddress),
                   sizeof(Device->EepromMacAddress));

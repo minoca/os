@@ -24,10 +24,19 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+//
+// Data link layer drivers are supposed to be able to stand on their own (ie be
+// able to be implemented outside the core net library). For the builtin ones,
+// avoid including netcore.h, but still redefine those functions that would
+// otherwise generate imports.
+//
+
+#define NET_API DLLEXPORT
+
 #include <minoca/driver.h>
+#include <minoca/net/netdrv.h>
 #include <minoca/acpi.h>
 #include <minoca/smbios.h>
-#include "netcore.h"
 #include "ethernet.h"
 
 //
@@ -52,6 +61,43 @@ Environment:
 //
 
 KSTATUS
+NetpEthernetInitializeLink (
+    PNET_LINK Link
+    );
+
+VOID
+NetpEthernetDestroyLink (
+    PNET_LINK Link
+    );
+
+KSTATUS
+NetpEthernetSend (
+    PNET_LINK Link,
+    PLIST_ENTRY PacketListHead,
+    PNETWORK_ADDRESS SourcePhysicalAddress,
+    PNETWORK_ADDRESS DestinationPhysicalAddress,
+    ULONG ProtocolNumber
+    );
+
+VOID
+NetpEthernetProcessReceivedPacket (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet
+    );
+
+VOID
+NetpEthernetGetBroadcastAddress (
+    PNETWORK_ADDRESS PhysicalNetworkAddress
+    );
+
+ULONG
+NetpEthernetPrintAddress (
+    PNETWORK_ADDRESS Address,
+    PSTR Buffer,
+    ULONG BufferLength
+    );
+
+KSTATUS
 NetpEthernetGetEthernetAddressFromSmbios (
     PULONG Address
     );
@@ -71,6 +117,59 @@ ULONG NetEthernetInventedAddress;
 //
 // ------------------------------------------------------------------ Functions
 //
+
+VOID
+NetpEthernetInitialize (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for Ethernet frames.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    NET_DATA_LINK_ENTRY DataLinkEntry;
+    HANDLE DataLinkHandle;
+    PNET_DATA_LINK_INTERFACE Interface;
+    PNET_PACKET_SIZE_INFORMATION SizeInformation;
+    KSTATUS Status;
+
+    DataLinkEntry.Type = NetDataLinkEthernet;
+    SizeInformation = &(DataLinkEntry.PacketSizeInformation);
+    SizeInformation->HeaderSize = ETHERNET_HEADER_SIZE;
+    SizeInformation->FooterSize = 0;
+    SizeInformation->MaxPacketSize = ETHERNET_HEADER_SIZE +
+                                     ETHERNET_MAXIMUM_PAYLOAD_SIZE;
+
+    Interface = &(DataLinkEntry.Interface);
+    Interface->InitializeLink = NetpEthernetInitializeLink;
+    Interface->DestroyLink = NetpEthernetDestroyLink;
+    Interface->Send = NetpEthernetSend;
+    Interface->ProcessReceivedPacket = NetpEthernetProcessReceivedPacket;
+    Interface->GetBroadcastAddress = NetpEthernetGetBroadcastAddress;
+    Interface->PrintAddress = NetpEthernetPrintAddress;
+    Status = NetRegisterDataLinkLayer(&DataLinkEntry, &DataLinkHandle);
+    if (!KSUCCESS(Status)) {
+
+        ASSERT(FALSE);
+
+    }
+
+    return;
+}
 
 NET_API
 BOOL
@@ -191,32 +290,20 @@ Return Value:
 }
 
 KSTATUS
-NetpEthernetInitializeSocket (
-    PNET_PROTOCOL_ENTRY ProtocolEntry,
-    PNET_NETWORK_ENTRY NetworkEntry,
-    ULONG NetworkProtocol,
-    PNET_SOCKET NewSocket
+NetpEthernetInitializeLink (
+    PNET_LINK Link
     )
 
 /*++
 
 Routine Description:
 
-    This routine initializes any pieces of information needed by the link
-    layer for the socket. The core networking library will fill in the common
-    header when this routine returns.
+    This routine initializes any pieces of information needed by the data link
+    layer for a new link.
 
 Arguments:
 
-    ProtocolEntry - Supplies a pointer to the protocol information.
-
-    NetworkEntry - Supplies a pointer to the network information.
-
-    NetworkProtocol - Supplies the raw protocol value for this socket used on
-        the network. This value is network specific.
-
-    NewSocket - Supplies a pointer to the new socket. The network layer should
-        at the very least add any needed header size.
+    Link - Supplies a pointer to the new link.
 
 Return Value:
 
@@ -226,47 +313,24 @@ Return Value:
 
 {
 
-    ULONG MaxPacketSize;
-
-    //
-    // Calculate the maximum allowed Ethernet packet size, including headers
-    // and footers from lower layers. If this is less than the current maximum
-    // packet size, then update the size.
-    //
-
-    MaxPacketSize = NewSocket->HeaderSize +
-                    ETHERNET_HEADER_SIZE +
-                    ETHERNET_MAXIMUM_PAYLOAD_SIZE +
-                    NewSocket->FooterSize;
-
-    if (NewSocket->MaxPacketSize > MaxPacketSize) {
-        NewSocket->MaxPacketSize = MaxPacketSize;
-    }
-
-    //
-    // Add the Ethernet header size to the socket's headers. Do not add the
-    // footer size as CRC off-loading takes care of it.
-    //
-
-    NewSocket->HeaderSize += ETHERNET_HEADER_SIZE;
     return STATUS_SUCCESS;
 }
 
 VOID
-NetpEthernetGetBroadcastAddress (
-    PNETWORK_ADDRESS PhysicalNetworkAddress
+NetpEthernetDestroyLink (
+    PNET_LINK Link
     )
 
 /*++
 
 Routine Description:
 
-    This routine gets the ethernet broadcast address.
+    This routine allows the data link layer to tear down any state before a
+    link is destroyed.
 
 Arguments:
 
-    PhysicalNetworkAddress - Supplies a pointer where the physical network
-        broadcast address will be returned.
+    Link - Supplies a pointer to the dying link.
 
 Return Value:
 
@@ -276,51 +340,45 @@ Return Value:
 
 {
 
-    ULONG ByteIndex;
-    PUCHAR BytePointer;
-
-    BytePointer = (PUCHAR)(PhysicalNetworkAddress->Address);
-    RtlZeroMemory(BytePointer, sizeof(PhysicalNetworkAddress->Address));
-    PhysicalNetworkAddress->Network = SocketNetworkPhysical;
-    PhysicalNetworkAddress->Port = 0;
-    for (ByteIndex = 0; ByteIndex < ETHERNET_ADDRESS_SIZE; ByteIndex += 1) {
-        BytePointer[ByteIndex] = 0xFF;
-    }
-
     return;
 }
 
-VOID
-NetpEthernetAddHeader (
-    PNET_PACKET_BUFFER SendBuffer,
+KSTATUS
+NetpEthernetSend (
+    PNET_LINK Link,
+    PLIST_ENTRY PacketListHead,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
-    USHORT ProtocolNumber
+    ULONG ProtocolNumber
     )
 
 /*++
 
 Routine Description:
 
-    This routine adds headers to an ethernet packet.
+    This routine sends data through the data link layer and out the link.
 
 Arguments:
 
-    SendBuffer - Supplies a pointer to the sending buffer to add the headers
-        to.
+    Link - Supplies a pointer to the link on which to send the data.
+
+    PacketListHead - Supplies a pointer to the head of the list of network
+        packets to send. Data in these packets may be modified by this routine,
+        but must not be used once this routine returns.
 
     SourcePhysicalAddress - Supplies a pointer to the source (local) physical
         network address.
 
-    DestinationPhysicalAddress - Supplies the physical address of the
-        destination, or at least the next hop.
+    DestinationPhysicalAddress - Supplies the optional physical address of the
+        destination, or at least the next hop. If NULL is provided, then the
+        packets will be sent to the data link layer's broadcast address.
 
-    ProtocolNumber - Supplies the protocol number of the data inside the
-        ethernet header.
+    ProtocolNumber - Supplies the protocol number of the data inside the data
+        link header.
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -328,56 +386,71 @@ Return Value:
 
     ULONG ByteIndex;
     PUCHAR CurrentElement;
+    PLIST_ENTRY CurrentEntry;
+    PVOID DriverContext;
+    PNET_PACKET_BUFFER Packet;
 
-    ASSERT(SendBuffer->DataOffset >= ETHERNET_HEADER_SIZE);
+    CurrentEntry = PacketListHead->Next;
+    while (CurrentEntry != PacketListHead) {
+        Packet = LIST_VALUE(CurrentEntry, NET_PACKET_BUFFER, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
 
-    //
-    // The length should not be bigger than the maximum allowed ethernet packet.
-    //
+        ASSERT(Packet->DataOffset >= ETHERNET_HEADER_SIZE);
 
-    ASSERT((SendBuffer->FooterOffset - SendBuffer->DataOffset) <=
-           ETHERNET_MAXIMUM_PAYLOAD_SIZE);
+        //
+        // The length should not be bigger than the maximum allowed ethernet
+        // packet.
+        //
 
-    //
-    // Copy the destination address.
-    //
+        ASSERT((Packet->FooterOffset - Packet->DataOffset) <=
+               ETHERNET_MAXIMUM_PAYLOAD_SIZE);
 
-    SendBuffer->DataOffset -= ETHERNET_HEADER_SIZE;
-    CurrentElement = SendBuffer->Buffer + SendBuffer->DataOffset;
-    if (DestinationPhysicalAddress != NULL) {
+        //
+        // Copy the destination address.
+        //
+
+        Packet->DataOffset -= ETHERNET_HEADER_SIZE;
+        CurrentElement = Packet->Buffer + Packet->DataOffset;
+        if (DestinationPhysicalAddress != NULL) {
+            RtlCopyMemory(CurrentElement,
+                          &(DestinationPhysicalAddress->Address),
+                          ETHERNET_ADDRESS_SIZE);
+
+            CurrentElement += ETHERNET_ADDRESS_SIZE;
+
+        //
+        // If no destination address was supplied, use the broadcast address.
+        //
+
+        } else {
+            for (ByteIndex = 0;
+                 ByteIndex < ETHERNET_ADDRESS_SIZE;
+                 ByteIndex += 1) {
+
+                *CurrentElement = 0xFF;
+                CurrentElement += 1;
+            }
+        }
+
+        //
+        // Copy the source address.
+        //
+
         RtlCopyMemory(CurrentElement,
-                      &(DestinationPhysicalAddress->Address),
+                      &(SourcePhysicalAddress->Address),
                       ETHERNET_ADDRESS_SIZE);
 
         CurrentElement += ETHERNET_ADDRESS_SIZE;
 
-    //
-    // If no destination address was supplied, use the broadcast address.
-    //
+        //
+        // Copy the protocol number.
+        //
 
-    } else {
-        for (ByteIndex = 0; ByteIndex < ETHERNET_ADDRESS_SIZE; ByteIndex += 1) {
-            *CurrentElement = 0xFF;
-            CurrentElement += 1;
-        }
+        *((PUSHORT)CurrentElement) = CPU_TO_NETWORK16((USHORT)ProtocolNumber);
     }
 
-    //
-    // Copy the source address.
-    //
-
-    RtlCopyMemory(CurrentElement,
-                  &(SourcePhysicalAddress->Address),
-                  ETHERNET_ADDRESS_SIZE);
-
-    CurrentElement += ETHERNET_ADDRESS_SIZE;
-
-    //
-    // Copy the protocol number.
-    //
-
-    *((PUSHORT)CurrentElement) = CPU_TO_NETWORK16(ProtocolNumber);
-    return;
+    DriverContext = Link->Properties.DriverContext;
+    return Link->Properties.Interface.Send(DriverContext, PacketListHead);
 }
 
 VOID
@@ -440,6 +513,44 @@ Return Value:
     return;
 }
 
+VOID
+NetpEthernetGetBroadcastAddress (
+    PNETWORK_ADDRESS PhysicalNetworkAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the ethernet broadcast address.
+
+Arguments:
+
+    PhysicalNetworkAddress - Supplies a pointer where the physical network
+        broadcast address will be returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG ByteIndex;
+    PUCHAR BytePointer;
+
+    BytePointer = (PUCHAR)(PhysicalNetworkAddress->Address);
+    RtlZeroMemory(BytePointer, sizeof(PhysicalNetworkAddress->Address));
+    PhysicalNetworkAddress->Network = SocketNetworkPhysicalEthernet;
+    PhysicalNetworkAddress->Port = 0;
+    for (ByteIndex = 0; ByteIndex < ETHERNET_ADDRESS_SIZE; ByteIndex += 1) {
+        BytePointer[ByteIndex] = 0xFF;
+    }
+
+    return;
+}
+
 ULONG
 NetpEthernetPrintAddress (
     PNETWORK_ADDRESS Address,
@@ -484,7 +595,7 @@ Return Value:
         return ETHERNET_STRING_LENGTH;
     }
 
-    ASSERT(Address->Network == SocketNetworkPhysical);
+    ASSERT(Address->Network == SocketNetworkPhysicalEthernet);
 
     BytePointer = (PUCHAR)(Address->Address);
     Length = RtlPrintToString(Buffer,

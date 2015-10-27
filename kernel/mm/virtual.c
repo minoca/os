@@ -2694,7 +2694,9 @@ Return Value:
 
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     ProcessorBlock = KeGetCurrentProcessorBlock();
-    MmpMapPage(PhysicalAddress, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
+    MmpMapPage(PhysicalAddress,
+               ProcessorBlock->SwapPage,
+               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
 
     //
     // If the page is not accessible, make it accessible temporarily.
@@ -2776,7 +2778,9 @@ Return Value:
 
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     ProcessorBlock = KeGetCurrentProcessorBlock();
-    MmpMapPage(PhysicalAddress, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
+    MmpMapPage(PhysicalAddress,
+               ProcessorBlock->SwapPage,
+               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
 
     //
     // Zero the page.
@@ -3039,7 +3043,10 @@ Return Value:
 
     CurrentAddress = VirtualAddress;
     for (Index = 0; Index < DESCRIPTOR_REFILL_PAGE_COUNT; Index += 1) {
-        MmpMapPage(PhysicalAddress[Index], CurrentAddress, MAP_FLAG_PRESENT);
+        MmpMapPage(PhysicalAddress[Index],
+                   CurrentAddress,
+                   MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+
         CurrentAddress += PageSize;
     }
 

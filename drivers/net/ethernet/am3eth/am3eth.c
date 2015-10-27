@@ -469,6 +469,7 @@ Return Value:
 
 {
 
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     NET_LINK_PROPERTIES Properties;
     KSTATUS Status;
 
@@ -485,9 +486,11 @@ Return Value:
     Properties.Version = NET_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = Device->DataAlignment;
     Properties.DriverContext = Device;
-    Properties.MaxPacketSize = Device->ReceiveFrameDataSize;
+    PacketSizeInformation = &(Properties.PacketSizeInformation);
+    PacketSizeInformation->MaxPacketSize = Device->ReceiveFrameDataSize;
+    Properties.DataLinkType = NetDataLinkEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
-    Properties.PhysicalAddress.Network = SocketNetworkPhysical;
+    Properties.PhysicalAddress.Network = SocketNetworkPhysicalEthernet;
 
     ASSERT(Device->MacAddressAssigned != FALSE);
 
@@ -497,7 +500,6 @@ Return Value:
 
     Properties.Interface.Send = A3eSend;
     Properties.Interface.GetSetInformation = A3eGetSetInformation;
-    Properties.ChecksumFlags = 0;
     Status = NetCreateLink(&Properties, &(Device->NetworkLink));
     if (!KSUCCESS(Status)) {
         goto CreateNetworkDeviceEnd;

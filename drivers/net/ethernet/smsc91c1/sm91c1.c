@@ -488,11 +488,12 @@ Return Value:
     Properties.Version = NET_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = 0;
     Properties.DriverContext = Device;
-    Properties.MaxPacketSize = SM91C1_MAX_PACKET_SIZE;
-    Properties.HeaderSize = SM91C1_PACKET_HEADER_SIZE;
-    Properties.FooterSize = SM91C1_PACKET_FOOTER_SIZE;
+    Properties.PacketSizeInformation.MaxPacketSize = SM91C1_MAX_PACKET_SIZE;
+    Properties.PacketSizeInformation.HeaderSize = SM91C1_PACKET_HEADER_SIZE;
+    Properties.PacketSizeInformation.FooterSize = SM91C1_PACKET_FOOTER_SIZE;
+    Properties.DataLinkType = NetDataLinkEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
-    Properties.PhysicalAddress.Network = SocketNetworkPhysical;
+    Properties.PhysicalAddress.Network = SocketNetworkPhysicalEthernet;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->MacAddress),
                   sizeof(Device->MacAddress));

@@ -474,6 +474,7 @@ Return Value:
 
 {
 
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     NET_LINK_PROPERTIES Properties;
     KSTATUS Status;
 
@@ -490,9 +491,11 @@ Return Value:
     Properties.Version = NET_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = 1;
     Properties.DriverContext = Device;
-    Properties.MaxPacketSize = ATL1C_RECEIVE_FRAME_DATA_SIZE;
+    PacketSizeInformation = &(Properties.PacketSizeInformation);
+    PacketSizeInformation->MaxPacketSize = ATL1C_RECEIVE_FRAME_DATA_SIZE;
+    Properties.DataLinkType = NetDataLinkEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
-    Properties.PhysicalAddress.Network = SocketNetworkPhysical;
+    Properties.PhysicalAddress.Network = SocketNetworkPhysicalEthernet;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->EepromMacAddress),
                   sizeof(Device->EepromMacAddress));

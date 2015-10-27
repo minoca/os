@@ -28,7 +28,7 @@ Environment:
 
 //
 // Network layer drivers are supposed to be able to stand on their own (ie be
-// able to be implemented outside the core net library). For the builtin once,
+// able to be implemented outside the core net library). For the builtin ones,
 // avoid including netcore.h, but still redefine those functions that would
 // otherwise generate imports.
 //
@@ -299,6 +299,8 @@ Return Value:
     PNET_PACKET_BUFFER Buffer;
     LIST_ENTRY BufferListHead;
     PUCHAR CurrentPointer;
+    PNET_DATA_LINK_ENTRY DataLinkEntry;
+    ULONG Flags;
     BOOL LockHeld;
     PARP_PACKET Packet;
     KSTATUS Status;
@@ -312,13 +314,17 @@ Return Value:
     // Allocate a buffer to send down to the network card.
     //
 
+    Flags = NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS;
+
     Packet = NULL;
-    Status = NetAllocateBuffer(ETHERNET_HEADER_SIZE,
+    Status = NetAllocateBuffer(0,
                                ARP_ETHERNET_IP4_SIZE,
                                0,
                                Link,
-                               (NET_ALLOCATE_BUFFER_FLAG_ADD_LINK_HEADERS |
-                                NET_ALLOCATE_BUFFER_FLAG_ADD_LINK_FOOTERS),
+                               Flags,
                                &Buffer);
 
     if (!KSUCCESS(Status)) {
@@ -403,20 +409,15 @@ Return Value:
     }
 
     //
-    // Add the link level header.
+    // Send the request off to the link.
     //
 
-    NetpEthernetAddHeader(Buffer,
-                          &(LinkAddress->PhysicalAddress),
-                          NULL,
-                          ARP_PROTOCOL_NUMBER);
-
-    //
-    // Send the request off to the network.
-    //
-
-    Status = Link->Properties.Interface.Send(Link->Properties.DriverContext,
-                                             &BufferListHead);
+    DataLinkEntry = Link->DataLinkEntry;
+    Status = DataLinkEntry->Interface.Send(Link,
+                                           &BufferListHead,
+                                           &(LinkAddress->PhysicalAddress),
+                                           NULL,
+                                           ARP_PROTOCOL_NUMBER);
 
     if (!KSUCCESS(Status)) {
         goto ArpSendRequestEnd;
@@ -813,7 +814,7 @@ Return Value:
     RtlZeroMemory(&SenderPhysicalAddress, sizeof(NETWORK_ADDRESS));
     RtlZeroMemory(&TargetNetworkAddress, sizeof(NETWORK_ADDRESS));
     RtlZeroMemory(&TargetPhysicalAddress, sizeof(NETWORK_ADDRESS));
-    SenderPhysicalAddress.Network = SocketNetworkPhysical;
+    SenderPhysicalAddress.Network = (SOCKET_NETWORK)Link->DataLinkEntry->Type;
     CurrentPointer = (PUCHAR)(ArpPacket + 1);
     RtlCopyMemory(&(SenderPhysicalAddress.Address),
                   CurrentPointer,
@@ -826,7 +827,7 @@ Return Value:
                   IP4_ADDRESS_SIZE);
 
     CurrentPointer += IP4_ADDRESS_SIZE;
-    TargetPhysicalAddress.Network = SocketNetworkPhysical;
+    TargetPhysicalAddress.Network = (SOCKET_NETWORK)Link->DataLinkEntry->Type;
     RtlCopyMemory(&(TargetPhysicalAddress.Address),
                   CurrentPointer,
                   ETHERNET_ADDRESS_SIZE);
@@ -1053,6 +1054,8 @@ Return Value:
     PNET_PACKET_BUFFER Buffer;
     LIST_ENTRY BufferListHead;
     PUCHAR CurrentPointer;
+    PNET_DATA_LINK_ENTRY DataLinkEntry;
+    ULONG Flags;
     BOOL LockHeld;
     NETWORK_ADDRESS NetworkAddress;
     PARP_PACKET Packet;
@@ -1065,13 +1068,17 @@ Return Value:
     // Allocate a buffer to send down to the network card.
     //
 
+    Flags = NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS;
+
     Packet = NULL;
-    Status = NetAllocateBuffer(ETHERNET_HEADER_SIZE,
+    Status = NetAllocateBuffer(0,
                                ARP_ETHERNET_IP4_SIZE,
                                0,
                                Link,
-                               (NET_ALLOCATE_BUFFER_FLAG_ADD_LINK_HEADERS |
-                                NET_ALLOCATE_BUFFER_FLAG_ADD_LINK_FOOTERS),
+                               Flags,
                                &Buffer);
 
     if (!KSUCCESS(Status)) {
@@ -1083,7 +1090,8 @@ Return Value:
     Packet->HardwareType = CPU_TO_NETWORK16(ARP_HARDWARE_TYPE_ETHERNET);
 
     ASSERT(DestinationNetworkAddress->Network == SocketNetworkIp4);
-    ASSERT(DestinationPhysicalAddress->Network == SocketNetworkPhysical);
+    ASSERT(DestinationPhysicalAddress->Network ==
+           (SOCKET_NETWORK)Link->DataLinkEntry->Type);
 
     Packet->ProtocolType = CPU_TO_NETWORK16(IP4_PROTOCOL_NUMBER);
     Packet->ProtocolAddressLength = 4;
@@ -1177,20 +1185,15 @@ Return Value:
     }
 
     //
-    // Add the link level header.
+    // Send the request off to the link.
     //
 
-    NetpEthernetAddHeader(Buffer,
-                          &(LinkAddress->PhysicalAddress),
-                          DestinationPhysicalAddress,
-                          ARP_PROTOCOL_NUMBER);
-
-    //
-    // Send the request off to the network.
-    //
-
-    Status = Link->Properties.Interface.Send(Link->Properties.DriverContext,
-                                             &BufferListHead);
+    DataLinkEntry = Link->DataLinkEntry;
+    Status = DataLinkEntry->Interface.Send(Link,
+                                           &BufferListHead,
+                                           &(LinkAddress->PhysicalAddress),
+                                           DestinationPhysicalAddress,
+                                           ARP_PROTOCOL_NUMBER);
 
     if (!KSUCCESS(Status)) {
         goto ArpSendReplyEnd;

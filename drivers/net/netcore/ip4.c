@@ -36,7 +36,6 @@ Environment:
 #include <minoca/driver.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/net/ip4.h>
-#include "ethernet.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -214,6 +213,13 @@ NetpIp4ProcessReceivedData (
     PNET_PACKET_BUFFER Packet
     );
 
+ULONG
+NetpIp4PrintAddress (
+    PNETWORK_ADDRESS Address,
+    PSTR Buffer,
+    ULONG BufferLength
+    );
+
 KSTATUS
 NetpIp4GetSetInformation (
     PNET_SOCKET Socket,
@@ -356,88 +362,6 @@ Ip4InitializeEnd:
     return;
 }
 
-ULONG
-NetpIp4PrintAddress (
-    PNETWORK_ADDRESS Address,
-    PSTR Buffer,
-    ULONG BufferLength
-    )
-
-/*++
-
-Routine Description:
-
-    This routine is called to convert a network address into a string, or
-    determine the length of the buffer needed to convert an address into a
-    string.
-
-Arguments:
-
-    Address - Supplies an optional pointer to a network address to convert to
-        a string.
-
-    Buffer - Supplies an optional pointer where the string representation of
-        the address will be returned.
-
-    BufferLength - Supplies the length of the supplied buffer, in bytes.
-
-Return Value:
-
-    Returns the maximum length of any address if no network address is
-    supplied.
-
-    Returns the actual length of the network address string if a network address
-    was supplied, including the null terminator.
-
---*/
-
-{
-
-    UCHAR Components[4];
-    PIP4_ADDRESS Ip4Address;
-    ULONG Length;
-
-    if (Address == NULL) {
-        return IP4_MAX_ADDRESS_STRING;
-    }
-
-    ASSERT(Address->Network == SocketNetworkIp4);
-
-    Ip4Address = (PIP4_ADDRESS)Address;
-    Components[0] = (UCHAR)(Ip4Address->Address);
-    Components[1] = (UCHAR)(Ip4Address->Address >> 8);
-    Components[2] = (UCHAR)(Ip4Address->Address >> 16);
-    Components[3] = (UCHAR)(Ip4Address->Address >> 24);
-
-    //
-    // If the buffer is present, print that bad boy out.
-    //
-
-    if (Ip4Address->Port != 0) {
-        Length = RtlPrintToString(Buffer,
-                                  BufferLength,
-                                  CharacterEncodingDefault,
-                                  "%d.%d.%d.%d:%d",
-                                  Components[0],
-                                  Components[1],
-                                  Components[2],
-                                  Components[3],
-                                  Ip4Address->Port);
-
-    } else {
-        Length = RtlPrintToString(Buffer,
-                                  BufferLength,
-                                  CharacterEncodingDefault,
-                                  "%d.%d.%d.%d",
-                                  Components[0],
-                                  Components[1],
-                                  Components[2],
-                                  Components[3]);
-    }
-
-    return Length;
-}
-
 KSTATUS
 NetpIp4InitializeLink (
     PNET_LINK Link
@@ -560,16 +484,6 @@ Return Value:
 {
 
     ULONG MaxPacketSize;
-    KSTATUS Status;
-
-    Status = NetpEthernetInitializeSocket(ProtocolEntry,
-                                          NetworkEntry,
-                                          NetworkProtocol,
-                                          NewSocket);
-
-    if (!KSUCCESS(Status)) {
-        return Status;
-    }
 
     //
     // If this is coming from the raw protocol and the network protocol is the
@@ -591,12 +505,12 @@ Return Value:
     // the size of the header.
     //
 
-    MaxPacketSize = NewSocket->HeaderSize +
+    MaxPacketSize = NewSocket->PacketSizeInformation.HeaderSize +
                     IP4_MAX_PACKET_SIZE +
-                    NewSocket->FooterSize;
+                    NewSocket->PacketSizeInformation.FooterSize;
 
-    if (NewSocket->MaxPacketSize > MaxPacketSize) {
-        NewSocket->MaxPacketSize = MaxPacketSize;
+    if (NewSocket->PacketSizeInformation.MaxPacketSize > MaxPacketSize) {
+        NewSocket->PacketSizeInformation.MaxPacketSize = MaxPacketSize;
     }
 
     //
@@ -609,7 +523,7 @@ Return Value:
     if ((ProtocolEntry->Type != SocketTypeRaw) ||
         (NetworkProtocol != SOCKET_INTERNET_PROTOCOL_RAW)) {
 
-        NewSocket->HeaderSize += sizeof(IP4_HEADER);
+        NewSocket->PacketSizeInformation.HeaderSize += sizeof(IP4_HEADER);
     }
 
     return STATUS_SUCCESS;
@@ -961,7 +875,6 @@ Return Value:
     ULONG BytesRemaining;
     USHORT Checksum;
     PLIST_ENTRY CurrentEntry;
-    PVOID DriverContext;
     ULONG FooterSize;
     PNET_PACKET_BUFFER Fragment;
     ULONG FragmentLength;
@@ -993,7 +906,7 @@ Return Value:
     if (LinkOverride != NULL) {
         Link = LinkOverride->LinkInformation.Link;
         LinkAddress = LinkOverride->LinkInformation.LinkAddress;
-        MaxPacketSize = LinkOverride->MaxPacketSize;
+        MaxPacketSize = LinkOverride->PacketSizeInformation.MaxPacketSize;
         Source = &(LinkOverride->LinkInformation.LocalAddress);
 
     //
@@ -1003,7 +916,7 @@ Return Value:
     } else {
         Link = Socket->Link;
         LinkAddress = Socket->LinkAddress;
-        MaxPacketSize = Socket->MaxPacketSize;
+        MaxPacketSize = Socket->PacketSizeInformation.MaxPacketSize;
         Source = &(Socket->LocalAddress);
     }
 
@@ -1037,7 +950,7 @@ Return Value:
 
     PhysicalNetworkAddress = &(Socket->RemotePhysicalAddress);
     if ((Destination != &(Socket->RemoteAddress)) ||
-        (PhysicalNetworkAddress->Network != SocketNetworkPhysical)) {
+        (!SOCKET_IS_NETWORK_PHYSICAL(PhysicalNetworkAddress->Network))) {
 
         if (Destination != &(Socket->RemoteAddress)) {
             PhysicalNetworkAddress = &PhysicalNetworkAddressBuffer;
@@ -1052,7 +965,7 @@ Return Value:
             goto Ip4SendEnd;
         }
 
-        ASSERT(PhysicalNetworkAddress->Network == SocketNetworkPhysical);
+        ASSERT(SOCKET_IS_NETWORK_PHYSICAL(PhysicalNetworkAddress->Network));
     }
 
     //
@@ -1189,16 +1102,6 @@ Return Value:
                 }
 
                 //
-                // Add the link level header.
-                //
-
-                NetpEthernetAddHeader(
-                                Fragment,
-                                &(LinkAddress->PhysicalAddress),
-                                PhysicalNetworkAddress,
-                                (USHORT)Socket->Network->ParentProtocolNumber);
-
-                //
                 // Add the fragment to the list of packets.
                 //
 
@@ -1306,23 +1209,19 @@ Return Value:
                 Packet->DataSize -= sizeof(IP4_HEADER);
             }
         }
-
-        //
-        // Add the link level header.
-        //
-
-        NetpEthernetAddHeader(Packet,
-                              &(LinkAddress->PhysicalAddress),
-                              PhysicalNetworkAddress,
-                              (USHORT)Socket->Network->ParentProtocolNumber);
     }
 
     //
     // The packets are all ready to go, send them down the link.
     //
 
-    DriverContext = Link->Properties.DriverContext;
-    Status = Link->Properties.Interface.Send(DriverContext, PacketListHead);
+    Status = Link->DataLinkEntry->Interface.Send(
+                                        Link,
+                                        PacketListHead,
+                                        &(LinkAddress->PhysicalAddress),
+                                        PhysicalNetworkAddress,
+                                        Socket->Network->ParentProtocolNumber);
+
     if (!KSUCCESS(Status)) {
         goto Ip4SendEnd;
     }
@@ -1570,6 +1469,88 @@ Ip4ProcessReceivedDataEnd:
     }
 
     return;
+}
+
+ULONG
+NetpIp4PrintAddress (
+    PNETWORK_ADDRESS Address,
+    PSTR Buffer,
+    ULONG BufferLength
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to convert a network address into a string, or
+    determine the length of the buffer needed to convert an address into a
+    string.
+
+Arguments:
+
+    Address - Supplies an optional pointer to a network address to convert to
+        a string.
+
+    Buffer - Supplies an optional pointer where the string representation of
+        the address will be returned.
+
+    BufferLength - Supplies the length of the supplied buffer, in bytes.
+
+Return Value:
+
+    Returns the maximum length of any address if no network address is
+    supplied.
+
+    Returns the actual length of the network address string if a network address
+    was supplied, including the null terminator.
+
+--*/
+
+{
+
+    UCHAR Components[4];
+    PIP4_ADDRESS Ip4Address;
+    ULONG Length;
+
+    if (Address == NULL) {
+        return IP4_MAX_ADDRESS_STRING;
+    }
+
+    ASSERT(Address->Network == SocketNetworkIp4);
+
+    Ip4Address = (PIP4_ADDRESS)Address;
+    Components[0] = (UCHAR)(Ip4Address->Address);
+    Components[1] = (UCHAR)(Ip4Address->Address >> 8);
+    Components[2] = (UCHAR)(Ip4Address->Address >> 16);
+    Components[3] = (UCHAR)(Ip4Address->Address >> 24);
+
+    //
+    // If the buffer is present, print that bad boy out.
+    //
+
+    if (Ip4Address->Port != 0) {
+        Length = RtlPrintToString(Buffer,
+                                  BufferLength,
+                                  CharacterEncodingDefault,
+                                  "%d.%d.%d.%d:%d",
+                                  Components[0],
+                                  Components[1],
+                                  Components[2],
+                                  Components[3],
+                                  Ip4Address->Port);
+
+    } else {
+        Length = RtlPrintToString(Buffer,
+                                  BufferLength,
+                                  CharacterEncodingDefault,
+                                  "%d.%d.%d.%d",
+                                  Components[0],
+                                  Components[1],
+                                  Components[2],
+                                  Components[3]);
+    }
+
+    return Length;
 }
 
 KSTATUS
@@ -1835,7 +1816,7 @@ Return Value:
     //
 
     if (Ip4Address->Address == IP4_BROADCAST_ADDRESS) {
-        NetpEthernetGetBroadcastAddress(PhysicalAddress);
+        Link->DataLinkEntry->Interface.GetBroadcastAddress(PhysicalAddress);
         return STATUS_SUCCESS;
     }
 

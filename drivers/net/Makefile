@@ -23,9 +23,11 @@
 
 DIRS = ethernet \
        netcore  \
+       net80211 \
        wireless \
 
 include $(SRCROOT)/os/minoca.mk
 
-ethernet wireless: netcore
+ethernet net80211 wireless: netcore
+wireless: net80211
 

@@ -1196,7 +1196,7 @@ Arguments:
         link down which this data is to be sent.
 
     PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data these packets may be modified by this routine,
+        packets to send. Data in these packets may be modified by this routine,
         but must not be used once this routine returns.
 
 Return Value:
@@ -1266,11 +1266,10 @@ Return Value:
         //
         // TODO: Develop a real system to pick the access category.
         //
-        //
 
-        Net80211Type = NET80211_GET_PACKET_TYPE(Net80211Header);
-        if ((Net80211Type == NET80211_FRAME_CONTROL_TYPE_DATA) ||
-            (Net80211Type == NET80211_FRAME_CONTROL_TYPE_MANAGEMENT)) {
+        Net80211Type = NET80211_GET_FRAME_TYPE(Net80211Header);
+        if ((Net80211Type == NET80211_FRAME_TYPE_DATA) ||
+            (Net80211Type == NET80211_FRAME_TYPE_MANAGEMENT)) {
 
             BulkOutType = Rtlw81BulkOutVo;
 
@@ -1287,7 +1286,7 @@ Return Value:
         //
 
         if ((NET80211_IS_MULTICAST_BROADCAST(Net80211Header) == FALSE) &&
-            (Net80211Type == NET80211_FRAME_CONTROL_TYPE_DATA)) {
+            (Net80211Type == NET80211_FRAME_TYPE_DATA)) {
 
             //
             // TODO: Get the current IEEE802.11 mode.
@@ -1368,8 +1367,8 @@ Return Value:
         // Either set hardware sequencing or the QoS bit.
         //
 
-        if ((Net80211Type != NET80211_FRAME_CONTROL_TYPE_DATA) ||
-            (NET80211_GET_PACKET_SUBTYPE(Net80211Header) !=
+        if ((Net80211Type != NET80211_FRAME_TYPE_DATA) ||
+            (NET80211_GET_FRAME_SUBTYPE(Net80211Header) !=
              NET80211_DATA_FRAME_SUBTYPE_QOS_DATA)) {
 
             Header->RateInformation |= RTLW81_TRANSMIT_RATE_INFORMATION_HWSEQ;
@@ -1490,6 +1489,40 @@ Return Value:
     return Status;
 }
 
+KSTATUS
+Rtlw81SetChannel (
+    PVOID DriverContext,
+    ULONG Channel
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the 802.11 link's channel to the given value.
+
+Arguments:
+
+    DriverContext - Supplies a pointer to the driver context associated with
+        the 802.11 link whose channel is to be set.
+
+    Channel - Supplies the channel to which the device should be set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PRTLW81_DEVICE Device;
+
+    Device = (PRTLW81_DEVICE)DriverContext;
+    Rtlw81pSetChannel(Device, Channel);
+    return STATUS_SUCCESS;
+}
+
 VOID
 Rtlw81BulkInTransferCompletion (
     PUSB_TRANSFER Transfer
@@ -1606,10 +1639,7 @@ Return Value:
         Packet.DataSize = Packet.BufferSize;
         Packet.DataOffset = 0;
         Packet.FooterOffset = Packet.DataSize;
-
-        //
-        // TODO: Deliver the packet to 802.11 core.
-        //
+        NetProcessReceivedPacket(Device->NetworkLink, &Packet);
 
         //
         // Advance to the next packet, adding an extra 4 and aligning the total
@@ -1636,7 +1666,7 @@ BulkInTransferCompletionEnd:
 
     Status = UsbSubmitTransfer(Transfer);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SM95: Failed to resubmit bulk IN transfer.\n");
+        RtlDebugPrint("RTLW81: Failed to resubmit bulk IN transfer.\n");
     }
 
     return;
@@ -2596,7 +2626,7 @@ Return Value:
         }
 
         //
-        // Set the default channel for now.
+        // Set the default channel to start.
         //
 
         Rtlw81pSetChannel(Device, RTLW81_DEFAULT_CHANNEL);
@@ -2606,10 +2636,11 @@ Return Value:
         //
 
         if (KSUCCESS(Device->InitializationStatus)) {
-
-            //
-            // TODO: Announce the successful initialization to the 802.11 core.
-            //
+            Rtlw81pSetLed(Device, TRUE);
+            Status = Net80211StartLink(Device->NetworkLink);
+            if (!KSUCCESS(Status)) {
+                goto InitializeEnd;
+            }
 
             Status = Rtlw81pSubmitBulkInTransfers(Device);
             if (!KSUCCESS(Status)) {
@@ -4016,6 +4047,14 @@ Return Value:
     ULONG Value;
 
     //
+    // Do nothing if the desired channel is already set.
+    //
+
+    if (Device->CurrentChannel == Channel) {
+        return;
+    }
+
+    //
     // Enable transmit power on the channel.
     //
 
@@ -4082,6 +4121,7 @@ Return Value:
                                Value);
     }
 
+    Device->CurrentChannel = Channel;
     return;
 }
 

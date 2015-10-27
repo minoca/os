@@ -396,6 +396,7 @@ Return Value:
 {
 
     ULONG MaxPacketSize;
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     KSTATUS Status;
     PUDP_SOCKET UdpSocket;
 
@@ -432,7 +433,8 @@ Return Value:
     // size at the largest possible value.
     //
 
-    UdpSocket->NetSocket.MaxPacketSize = MAX_ULONG;
+    PacketSizeInformation = &(UdpSocket->NetSocket.PacketSizeInformation);
+    PacketSizeInformation->MaxPacketSize = MAX_ULONG;
     Status = NetworkEntry->Interface.InitializeSocket(ProtocolEntry,
                                                       NetworkEntry,
                                                       NetworkProtocol,
@@ -454,19 +456,19 @@ Return Value:
     // size. Note that the UDP max packet size includes the UDP header.
     //
 
-    MaxPacketSize = UdpSocket->NetSocket.HeaderSize +
+    MaxPacketSize = PacketSizeInformation->HeaderSize +
                     UDP_MAX_PACKET_SIZE +
-                    UdpSocket->NetSocket.FooterSize;
+                    PacketSizeInformation->FooterSize;
 
-    if (UdpSocket->NetSocket.MaxPacketSize > MaxPacketSize) {
-        UdpSocket->NetSocket.MaxPacketSize = MaxPacketSize;
+    if (PacketSizeInformation->MaxPacketSize > MaxPacketSize) {
+        PacketSizeInformation->MaxPacketSize = MaxPacketSize;
     }
 
     //
     // Add the UDP header size to the protocol header size.
     //
 
-    UdpSocket->NetSocket.HeaderSize += sizeof(UDP_HEADER);
+    PacketSizeInformation->HeaderSize += sizeof(UDP_HEADER);
     Status = STATUS_SUCCESS;
 
 UdpCreateSocketEnd:
@@ -883,7 +885,7 @@ Return Value:
     PUDP_HEADER UdpHeader;
     PUDP_SOCKET UdpSocket;
 
-    ASSERT(Socket->MaxPacketSize > sizeof(UDP_HEADER));
+    ASSERT(Socket->PacketSizeInformation.MaxPacketSize > sizeof(UDP_HEADER));
 
     BytesComplete = 0;
     Link = NULL;
@@ -1024,8 +1026,8 @@ Return Value:
         ASSERT(LinkOverride == &LinkOverrideBuffer);
 
         Link = LinkOverrideBuffer.LinkInformation.Link;
-        HeaderSize = LinkOverrideBuffer.HeaderSize;
-        FooterSize = LinkOverrideBuffer.FooterSize;
+        HeaderSize = LinkOverrideBuffer.PacketSizeInformation.HeaderSize;
+        FooterSize = LinkOverrideBuffer.PacketSizeInformation.FooterSize;
         SourcePort = LinkOverrideBuffer.LinkInformation.LocalAddress.Port;
 
     } else {
@@ -1033,8 +1035,8 @@ Return Value:
         ASSERT(Socket->Link != NULL);
 
         Link = Socket->Link;
-        HeaderSize = Socket->HeaderSize;
-        FooterSize = Socket->FooterSize;
+        HeaderSize = Socket->PacketSizeInformation.HeaderSize;
+        FooterSize = Socket->PacketSizeInformation.FooterSize;
         SourcePort = Socket->LocalAddress.Port;
     }
 
@@ -1653,6 +1655,7 @@ Return Value:
 
     SOCKET_BASIC_OPTION BasicOption;
     PBOOL BooleanOption;
+    PNET_PACKET_SIZE_INFORMATION SizeInformation;
     PULONG SizeOption;
     KSTATUS Status;
     PULONG TimeoutOption;
@@ -1678,11 +1681,12 @@ Return Value:
                 }
 
                 SizeOption = (PULONG)Data;
+                SizeInformation = &(Socket->PacketSizeInformation);
                 if (*SizeOption > UDP_MAX_PACKET_SIZE) {
                     UdpSocket->MaxPacketSize = UDP_MAX_PACKET_SIZE;
 
-                } else if (*SizeOption < Socket->MaxPacketSize) {
-                    UdpSocket->MaxPacketSize = Socket->MaxPacketSize;
+                } else if (*SizeOption < SizeInformation->MaxPacketSize) {
+                    UdpSocket->MaxPacketSize = SizeInformation->MaxPacketSize;
 
                 } else {
                     UdpSocket->MaxPacketSize = *SizeOption;

@@ -360,6 +360,7 @@ Return Value:
 
     PVOID CurrentAddress;
     ULONG CurrentPage;
+    ULONG MapFlags;
 
     //
     // Allocate pages starting at address 0x1000.
@@ -367,11 +368,13 @@ Return Value:
 
     *Allocation = (PVOID)(UINTN)IDENTITY_STUB_ADDRESS;
     CurrentAddress = *Allocation;
-    for (CurrentPage = 0; CurrentPage < PageCount; CurrentPage += 1) {
-        MmpMapPage((UINTN)CurrentAddress,
-                   CurrentAddress,
-                   MAP_FLAG_PRESENT | MAP_FLAG_EXECUTE);
+    MapFlags = MAP_FLAG_PRESENT | MAP_FLAG_EXECUTE;
+    if (CurrentAddress >= KERNEL_VA_START) {
+        MapFlags |= MAP_FLAG_GLOBAL;
+    }
 
+    for (CurrentPage = 0; CurrentPage < PageCount; CurrentPage += 1) {
+        MmpMapPage((UINTN)CurrentAddress, CurrentAddress, MapFlags);
         CurrentAddress += PAGE_SIZE;
     }
 
@@ -1088,7 +1091,7 @@ Return Value:
 
         PageTable[TableIndex].User = 1;
 
-    } else {
+    } else if ((Flags & MAP_FLAG_GLOBAL) != 0) {
         PageTable[TableIndex].Global = 1;
     }
 
@@ -1536,7 +1539,7 @@ Return Value:
     ProcessorBlock = KeGetCurrentProcessorBlock();
     MmpMapPage(PageTablePhysical,
                ProcessorBlock->SwapPage,
-               MAP_FLAG_PRESENT | MAP_FLAG_READ_ONLY);
+               MAP_FLAG_PRESENT | MAP_FLAG_READ_ONLY | MAP_FLAG_GLOBAL);
 
     PageTable = (volatile PTE *)(ProcessorBlock->SwapPage);
     if (PageTable[PageTableIndex].Entry == 0) {
@@ -1630,7 +1633,10 @@ Return Value:
     PageTableEntry.Entry = 0;
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     ProcessorBlock = KeGetCurrentProcessorBlock();
-    MmpMapPage(PageTablePhysical, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
+    MmpMapPage(PageTablePhysical,
+               ProcessorBlock->SwapPage,
+               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+
     PageTable = (volatile PTE *)(ProcessorBlock->SwapPage);
     if (PageTable[PageTableIndex].Entry != 0) {
 
@@ -1761,7 +1767,10 @@ Return Value:
 
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     ProcessorBlock = KeGetCurrentProcessorBlock();
-    MmpMapPage(PageTablePhysical, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
+    MmpMapPage(PageTablePhysical,
+               ProcessorBlock->SwapPage,
+               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+
     PageTable = (volatile PTE *)(ProcessorBlock->SwapPage);
 
     //
@@ -1809,10 +1818,7 @@ Return Value:
     if ((MapFlags & MAP_FLAG_USER_MODE) != 0) {
         PageTable[PageTableIndex].User = 1;
 
-    } else {
-
-        ASSERT((MapFlags & MAP_FLAG_GLOBAL) != 0);
-
+    } else if ((MapFlags & MAP_FLAG_GLOBAL) != 0) {
         PageTable[PageTableIndex].Global = 1;
     }
 
@@ -2232,7 +2238,10 @@ Return Value:
             OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
             ProcessorBlock = KeGetCurrentProcessorBlock();
             DestinationTable = ProcessorBlock->SwapPage;
-            MmpMapPage(PageTable, DestinationTable, MAP_FLAG_PRESENT);
+            MmpMapPage(PageTable,
+                       DestinationTable,
+                       MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+
             if (TableIndexStart != 0) {
                 RtlZeroMemory(DestinationTable, TableIndexStart * sizeof(PTE));
             }
@@ -2294,7 +2303,10 @@ Return Value:
             OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
             ProcessorBlock = KeGetCurrentProcessorBlock();
             DestinationTable = ProcessorBlock->SwapPage;
-            MmpMapPage(PageTable, DestinationTable, MAP_FLAG_PRESENT);
+            MmpMapPage(PageTable,
+                       DestinationTable,
+                       MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+
             for (TableIndex = TableIndexStart;
                  TableIndex < TableIndexEnd;
                  TableIndex += 1) {
@@ -2504,7 +2516,10 @@ Return Value:
 
         OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
         ProcessorBlock = KeGetCurrentProcessorBlock();
-        MmpMapPage(NewPageTable, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
+        MmpMapPage(NewPageTable,
+                   ProcessorBlock->SwapPage,
+                   MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+
         RtlZeroMemory(ProcessorBlock->SwapPage, PAGE_SIZE);
         MmpUnmapPages(ProcessorBlock->SwapPage, 1, 0, NULL);
         KeLowerRunLevel(OldRunLevel);

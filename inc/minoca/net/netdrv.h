@@ -120,8 +120,10 @@ Author:
 // Define the network buffer allocation flags.
 //
 
-#define NET_ALLOCATE_BUFFER_FLAG_ADD_LINK_HEADERS 0x00000001
-#define NET_ALLOCATE_BUFFER_FLAG_ADD_LINK_FOOTERS 0x00000002
+#define NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS 0x00000001
+#define NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS 0x00000002
+#define NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS   0x00000004
+#define NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS   0x00000008
 
 //
 // Define the network packet flags.
@@ -171,6 +173,31 @@ typedef enum _NET_LINK_INFORMATION_TYPE {
     NetLinkInformationInvalid,
     NetLinkInformationChecksumOffload
 } NET_LINK_INFORMATION_TYPE, *PNET_LINK_INFORMATION_TYPE;
+
+/*++
+
+Structure Description:
+
+    This structure defines packet size information.
+
+Members:
+
+    HeaderSize - Stores the total size of the headers needed to send a packet.
+
+    FooterSize - Stores the total size of the footers needed to send a packet.
+
+    MaxPacketSize - Stores the maximum size of a packet that can be sent to the
+        physical layer. This includes all headers and footers. This is limited
+        by the protocol, network, and link for bound sockets, but is only
+        limited by the protocol and network for unbound sockets.
+
+--*/
+
+typedef struct _NET_PACKET_SIZE_INFORMATION {
+    ULONG HeaderSize;
+    ULONG FooterSize;
+    ULONG MaxPacketSize;
+} NET_PACKET_SIZE_INFORMATION, *PNET_PACKET_SIZE_INFORMATION;
 
 /*++
 
@@ -275,7 +302,7 @@ typedef struct _NET_PACKET_BUFFER {
 
 typedef
 KSTATUS
-(*PNET_LINK_SEND) (
+(*PNET_DEVICE_LINK_SEND) (
     PVOID DriverContext,
     PLIST_ENTRY PacketListHead
     );
@@ -292,7 +319,7 @@ Arguments:
         link down which this data is to be sent.
 
     PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data these packets may be modified by this routine,
+        packets to send. Data in these packets may be modified by this routine,
         but must not be used once this routine returns.
 
 Return Value:
@@ -305,7 +332,7 @@ Return Value:
 
 typedef
 KSTATUS
-(*PNET_LINK_GET_SET_INFORMATION) (
+(*PNET_DEVICE_LINK_GET_SET_INFORMATION) (
     PVOID DriverContext,
     NET_LINK_INFORMATION_TYPE InformationType,
     PVOID Data,
@@ -345,8 +372,8 @@ Return Value:
 
 Structure Description:
 
-    This structure defines the interface to a link from the core networking
-    library.
+    This structure defines the interface to a device link from the core
+    networking library.
 
 Members:
 
@@ -357,10 +384,10 @@ Members:
 
 --*/
 
-typedef struct _NET_LINK_INTERFACE {
-    PNET_LINK_SEND Send;
-    PNET_LINK_GET_SET_INFORMATION GetSetInformation;
-} NET_LINK_INTERFACE, *PNET_LINK_INTERFACE;
+typedef struct _NET_DEVICE_LINK_INTERFACE {
+    PNET_DEVICE_LINK_SEND Send;
+    PNET_DEVICE_LINK_GET_SET_INFORMATION GetSetInformation;
+} NET_DEVICE_LINK_INTERFACE, *PNET_DEVICE_LINK_INTERFACE;
 
 /*++
 
@@ -378,18 +405,16 @@ Members:
     DriverContext - Stores a pointer to driver-specific context on this
         link.
 
-    MaxPacketSize - Stores the maximum number of bytes that can be sent or
-        received over the physical link. Including the header and footer.
-
-    HeaderSize - Stores the number of bytes that should be reserved at the
-        beginning of the packet for the hardware.
-
-    FooterSize - Stores the number of bytes that should be reserved at the end
-        of the packet for the hardware.
+    PacketSizeInformation - Stores the packet size information that includes
+        the maximum number of bytes that can be sent over the physical link and
+        the header and footer sizes.
 
     ChecksumFlags - Stores a bitmask of flags indicating whether certain
         checksum features are enabled. See NET_LINK_CHECKSUM_FLAG_* for
         definitions.
+
+    DataLinkType - Stores the type of the data link layer used by the network
+        link.
 
     MaxPhysicalAddress - Stores the maximum physical address that the network
         controller can access.
@@ -405,14 +430,15 @@ typedef struct _NET_LINK_PROPERTIES {
     ULONG Version;
     ULONG TransmitAlignment;
     PVOID DriverContext;
-    ULONG MaxPacketSize;
-    ULONG HeaderSize;
-    ULONG FooterSize;
+    NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     ULONG ChecksumFlags;
+    NET_DATA_LINK_TYPE DataLinkType;
     PHYSICAL_ADDRESS MaxPhysicalAddress;
     NETWORK_ADDRESS PhysicalAddress;
-    NET_LINK_INTERFACE Interface;
+    NET_DEVICE_LINK_INTERFACE Interface;
 } NET_LINK_PROPERTIES, *PNET_LINK_PROPERTIES;
+
+typedef struct _NET_DATA_LINK_ENTRY NET_DATA_LINK_ENTRY, *PNET_DATA_LINK_ENTRY;
 
 /*++
 
@@ -442,6 +468,12 @@ Members:
 
     LinkSpeed - Stores the maximum speed of the link, in bits per second.
 
+    DataLinkEntry - Stores a pointer to the data link entry to use for this
+        link.
+
+    DataLinkContext - Stores a pointer to a private context for the data link
+        layer. This can be set directly during data link initialization.
+
     Properties - Stores the link properties.
 
     AddressTranslationEvent - Stores the event waited on when a new address
@@ -459,10 +491,252 @@ typedef struct _NET_LINK {
     LIST_ENTRY LinkAddressList;
     BOOL LinkUp;
     ULONGLONG LinkSpeed;
+    PNET_DATA_LINK_ENTRY DataLinkEntry;
+    PVOID DataLinkContext;
     NET_LINK_PROPERTIES Properties;
     PKEVENT AddressTranslationEvent;
     RED_BLACK_TREE AddressTranslationTree;
 } NET_LINK, *PNET_LINK;
+
+typedef
+KSTATUS
+(*PNET_DATA_LINK_INITIALIZE_LINK) (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes any pieces of information needed by the data link
+    layer for a new link.
+
+Arguments:
+
+    Link - Supplies a pointer to the new link.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+VOID
+(*PNET_DATA_LINK_DESTROY_LINK) (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allows the data link layer to tear down any state before a
+    link is destroyed.
+
+Arguments:
+
+    Link - Supplies a pointer to the dying link.
+
+Return Value:
+
+    None.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_DATA_LINK_SEND) (
+    PNET_LINK Link,
+    PLIST_ENTRY PacketListHead,
+    PNETWORK_ADDRESS SourcePhysicalAddress,
+    PNETWORK_ADDRESS DestinationPhysicalAddress,
+    ULONG ProtocolNumber
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends data through the data link layer and out the link.
+
+Arguments:
+
+    Link - Supplies a pointer to the link on which to send the data.
+
+    PacketListHead - Supplies a pointer to the head of the list of network
+        packets to send. Data in these packets may be modified by this routine,
+        but must not be used once this routine returns.
+
+    SourcePhysicalAddress - Supplies a pointer to the source (local) physical
+        network address.
+
+    DestinationPhysicalAddress - Supplies the optional physical address of the
+        destination, or at least the next hop. If NULL is provided, then the
+        packets will be sent to the data link layer's broadcast address.
+
+    ProtocolNumber - Supplies the protocol number of the data inside the data
+        link header.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+VOID
+(*PNET_DATA_LINK_PROCESS_RECEIVED_PACKET) (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to process a received data link layer packet.
+
+Arguments:
+
+    Link - Supplies a pointer to the link that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may be used as a scratch space while this routine
+        executes and the packet travels up the stack, but will not be accessed
+        after this routine returns.
+
+Return Value:
+
+    None. When the function returns, the memory associated with the packet may
+    be reclaimed and reused.
+
+--*/
+
+typedef
+VOID
+(*PNET_DATA_LINK_GET_BROADCAST_ADDRESS) (
+    PNETWORK_ADDRESS PhysicalNetworkAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the data link layer's broadcast address.
+
+Arguments:
+
+    PhysicalNetworkAddress - Supplies a pointer where the physical network
+        broadcast address will be returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+typedef
+ULONG
+(*PNET_DATA_LINK_PRINT_ADDRESS) (
+    PNETWORK_ADDRESS Address,
+    PSTR Buffer,
+    ULONG BufferLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to convert a network address into a string, or
+    determine the length of the buffer needed to convert an address into a
+    string.
+
+Arguments:
+
+    Address - Supplies an optional pointer to a network address to convert to
+        a string.
+
+    Buffer - Supplies an optional pointer where the string representation of
+        the address will be returned.
+
+    BufferLength - Supplies the length of the supplied buffer, in bytes.
+
+Return Value:
+
+    Returns the maximum length of any address if no network address is
+    supplied.
+
+    Returns the actual length of the network address string if a network address
+    was supplied, including the null terminator.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines the interface to the data link from the core
+    networking library.
+
+Members:
+
+    InitializeLink - Stores a pointer to a function called when a new link
+        is created.
+
+    DestroyLink - Stores a pointer to a function called before a link is
+        destroyed.
+
+    Send - Stores a pointer to a function used to transmit data to the network.
+
+    ProcessReceivedPacket - Stores a pointer to a function used to process
+        received data link layer packets.
+
+    GetBroadcastAddress - Stores a pointer to a function used to retrieve the
+        data link layer's physical broadcast address.
+
+    PrintAddress - Stores a pointer to a function used to convert a data link
+        address into a string representation.
+
+--*/
+
+typedef struct _NET_DATA_LINK_INTERFACE {
+    PNET_DATA_LINK_INITIALIZE_LINK InitializeLink;
+    PNET_DATA_LINK_DESTROY_LINK DestroyLink;
+    PNET_DATA_LINK_SEND Send;
+    PNET_DATA_LINK_PROCESS_RECEIVED_PACKET ProcessReceivedPacket;
+    PNET_DATA_LINK_GET_BROADCAST_ADDRESS GetBroadcastAddress;
+    PNET_DATA_LINK_PRINT_ADDRESS PrintAddress;
+} NET_DATA_LINK_INTERFACE, *PNET_DATA_LINK_INTERFACE;
+
+/*++
+
+Structure Description:
+
+    This structure defines a data link entry.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous data link entries,
+        used internally by the core network library.
+
+    Type - Stores the type this data link implements.
+
+    PacketSizeInformation - Stores the packet size information that includes
+        the maximum number of bytes that can be sent over the data link layer,
+        including the header size and footer size.
+
+    Interface - Stores the interface presented to the core networking library
+        for this data link.
+
+--*/
+
+struct _NET_DATA_LINK_ENTRY {
+    LIST_ENTRY ListEntry;
+    NET_DATA_LINK_TYPE Type;
+    NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
+    NET_DATA_LINK_INTERFACE Interface;
+};
 
 /*++
 
@@ -525,24 +799,13 @@ Members:
     Flags - Stores a bitmask of network socket flags. See NET_SOCKET_FLAG_*
         for definitions.
 
-    HeaderSize - Stores the size of all protocol, network, and link headers
-        needed to send a packet.
-
-    FooterSize - Stores the size of all protocol, network, and link footers
-        needed to send a packet.
-
-    MaxPacketSize - Stores the maximum size of a packet that can be sent to the
-        physical layer. This includes all headers and footers. This is limited
-        by the protocol, network, and link for bound sockets, but is only
-        limited by the protocol and network for unbound sockets.
-
-    UnboundHeaderSize - Stores the size of the protocol and network headers.
-
-    UnboundFooterSize - Stores the size of the protocol and network headers.
-
-    UnboundMaxPacketSize - Stores the maximum size of a packet that can be sent
-        to the physical layer. This stores the size that is only bound by the
+    PacketSizeInformation - Stores the packet size information bound by the
+        protocol, network and link layers if the socket is locally bound. For
+        unbound sockets, this stores the size information limited by only the
         protocol and network layers.
+
+    UnboundPacketSizeInformation - Stores the packet size information bound by
+        only the protocol and network layers.
 
     LastError - Stores the last error encountered by this socket.
 
@@ -572,12 +835,8 @@ typedef struct _NET_SOCKET {
 
     NET_SOCKET_BINDING_TYPE BindingType;
     volatile ULONG Flags;
-    ULONG HeaderSize;
-    ULONG FooterSize;
-    ULONG MaxPacketSize;
-    ULONG UnboundHeaderSize;
-    ULONG UnboundFooterSize;
-    ULONG UnboundMaxPacketSize;
+    NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
+    NET_PACKET_SIZE_INFORMATION UnboundPacketSizeInformation;
     volatile KSTATUS LastError;
     PNET_LINK Link;
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
@@ -599,22 +858,14 @@ Members:
     LinkInformation - Stores the local address and its associated link and link
         address entry.
 
-    HeaderSize - Stores the size of all protocol, network, and link headers
-        needed to send a packet on the override link.
-
-    FooterSize - Stores the size of all protocol, network, and link footers
-        needed to send a packet on the override link.
-
-    MaxPacketSize - Stores the maximum size of a packet that can be sent to the
-        physical layer. This includes all headers and footers.
+    PacketSizeInformation - Stores the packet size information bound by the
+        protocol, network and link layers.
 
 --*/
 
 typedef struct _NET_SOCKET_LINK_OVERRIDE {
     NET_LINK_LOCAL_ADDRESS LinkInformation;
-    ULONG HeaderSize;
-    ULONG FooterSize;
-    ULONG MaxPacketSize;
+    NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
 } NET_SOCKET_LINK_OVERRIDE, *PNET_SOCKET_LINK_OVERRIDE;
 
 typedef
@@ -1629,7 +1880,7 @@ NetRegisterNetworkLayer (
 
 Routine Description:
 
-    This routine registers a new entry type with the core networking library.
+    This routine registers a new network type with the core networking library.
 
 Arguments:
 
@@ -1647,6 +1898,65 @@ Return Value:
     STATUS_INSUFFICIENT_RESOURCES if memory could not be allocated.
 
     STATUS_DUPLICATE_ENTRY if the network type is already registered.
+
+--*/
+
+NET_API
+KSTATUS
+NetRegisterDataLinkLayer (
+    PNET_DATA_LINK_ENTRY NewDataLinkEntry,
+    HANDLE *DataLinkHandle
+    );
+
+/*++
+
+Routine Description:
+
+    This routine registers a new data link type with the core networking
+    library.
+
+Arguments:
+
+    NewDataLinkEntry - Supplies a pointer to the link information. The core
+        library will not reference this memory after the function returns, a
+        copy will be made.
+
+    DataLinkHandle - Supplies a pointer that receives a handle to the
+        registered data link layer on success.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INVALID_PARAMETER if part of the structure isn't filled out
+    correctly.
+
+    STATUS_INSUFFICIENT_RESOURCES if memory could not be allocated.
+
+    STATUS_DUPLICATE_ENTRY if the link type is already registered.
+
+--*/
+
+NET_API
+VOID
+NetUnregisterDataLinkLayer (
+    HANDLE DataLinkHandle
+    );
+
+/*++
+
+Routine Description:
+
+    This routine unregisters the given data link layer from the core networking
+    library.
+
+Arguments:
+
+    DataLinkHandle - Supplies the handle to the data link layer to unregister.
+
+Return Value:
+
+    None.
 
 --*/
 
@@ -1999,7 +2309,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link to submit.
+    Link - Supplies a pointer to the link to start.
 
 Return Value:
 

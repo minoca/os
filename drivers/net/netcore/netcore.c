@@ -132,11 +132,12 @@ NetUserControl (
 //
 
 //
-// Define the list of supported socket types.
+// Define the lists of supported types for various networking layers.
 //
 
 LIST_ENTRY NetProtocolList;
 LIST_ENTRY NetNetworkList;
+LIST_ENTRY NetDataLinkList;
 PQUEUED_LOCK NetPluginListLock;
 
 BOOL NetInitialized = FALSE;
@@ -219,6 +220,7 @@ Return Value:
     IoDriverAddReference(Driver);
     INITIALIZE_LIST_HEAD(&NetProtocolList);
     INITIALIZE_LIST_HEAD(&NetNetworkList);
+    INITIALIZE_LIST_HEAD(&NetDataLinkList);
     NetPluginListLock = KeCreateQueuedLock();
     if (NetPluginListLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -237,9 +239,11 @@ Return Value:
     }
 
     //
-    // Set up the built in protocols, networks, and miscellaneous components.
+    // Set up the built in protocols, networks, data links and miscellaneous
+    // components.
     //
 
+    NetpEthernetInitialize();
     NetpIp4Initialize();
     NetpArpInitialize();
     NetpUdpInitialize();
@@ -414,7 +418,7 @@ NetRegisterNetworkLayer (
 
 Routine Description:
 
-    This routine registers a new entry type with the core networking library.
+    This routine registers a new network type with the core networking library.
 
 Arguments:
 
@@ -525,6 +529,178 @@ RegisterNetworkLayerEnd:
     }
 
     return Status;
+}
+
+NET_API
+KSTATUS
+NetRegisterDataLinkLayer (
+    PNET_DATA_LINK_ENTRY NewDataLinkEntry,
+    HANDLE *DataLinkHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine registers a new data link type with the core networking
+    library.
+
+Arguments:
+
+    NewDataLinkEntry - Supplies a pointer to the link information. The core
+        library will not reference this memory after the function returns, a
+        copy will be made.
+
+    DataLinkHandle - Supplies a pointer that receives a handle to the
+        registered data link layer on success.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INVALID_PARAMETER if part of the structure isn't filled out
+    correctly.
+
+    STATUS_INSUFFICIENT_RESOURCES if memory could not be allocated.
+
+    STATUS_DUPLICATE_ENTRY if the link type is already registered.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PNET_DATA_LINK_ENTRY DataLink;
+    PNET_DATA_LINK_ENTRY NewDataLinkCopy;
+    KSTATUS Status;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    NewDataLinkCopy = NULL;
+    if ((NewDataLinkEntry->Type == NetDataLinkInvalid) ||
+        (NewDataLinkEntry->Interface.InitializeLink == NULL) ||
+        (NewDataLinkEntry->Interface.DestroyLink == NULL) ||
+        (NewDataLinkEntry->Interface.Send == NULL) ||
+        (NewDataLinkEntry->Interface.ProcessReceivedPacket == NULL) ||
+        (NewDataLinkEntry->Interface.GetBroadcastAddress == NULL) ||
+        (NewDataLinkEntry->Interface.PrintAddress == NULL)) {
+
+        Status = STATUS_INVALID_PARAMETER;
+        goto RegisterDataLinkLayerEnd;
+    }
+
+    //
+    // Create a copy of the new link entry.
+    //
+
+    NewDataLinkCopy = MmAllocatePagedPool(sizeof(NET_DATA_LINK_ENTRY),
+                                          NET_CORE_ALLOCATION_TAG);
+
+    if (NewDataLinkCopy == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto RegisterDataLinkLayerEnd;
+    }
+
+    RtlCopyMemory(NewDataLinkCopy,
+                  NewDataLinkEntry,
+                  sizeof(NET_DATA_LINK_ENTRY));
+
+    KeAcquireQueuedLock(NetPluginListLock);
+
+    //
+    // Loop through looking for a previous registration with this data link
+    // type.
+    //
+
+    CurrentEntry = NetDataLinkList.Next;
+    while (CurrentEntry != &NetDataLinkList) {
+        DataLink = LIST_VALUE(CurrentEntry, NET_DATA_LINK_ENTRY, ListEntry);
+        if (DataLink->Type == NewDataLinkEntry->Type) {
+            Status = STATUS_DUPLICATE_ENTRY;
+            goto RegisterDataLinkLayerEnd;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    //
+    // There are no duplicates, add this entry to the back of the list.
+    //
+
+    INSERT_BEFORE(&(NewDataLinkCopy->ListEntry), &NetDataLinkList);
+    Status = STATUS_SUCCESS;
+
+RegisterDataLinkLayerEnd:
+    KeReleaseQueuedLock(NetPluginListLock);
+    if (!KSUCCESS(Status)) {
+        if (NewDataLinkCopy != NULL) {
+            MmFreePagedPool(NewDataLinkCopy);
+        }
+
+        *DataLinkHandle = INVALID_HANDLE;
+
+    } else {
+        *DataLinkHandle = NewDataLinkCopy;
+    }
+
+    return Status;
+}
+
+NET_API
+VOID
+NetUnregisterDataLinkLayer (
+    HANDLE DataLinkHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unregisters the given data link layer from the core networking
+    library.
+
+Arguments:
+
+    DataLinkHandle - Supplies the handle to the data link layer to unregister.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PNET_DATA_LINK_ENTRY DataLink;
+    PNET_DATA_LINK_ENTRY FoundDataLink;
+
+    FoundDataLink = NULL;
+
+    //
+    // Loop through looking for a previous registration with this data link
+    // type.
+    //
+
+    KeAcquireQueuedLock(NetPluginListLock);
+    CurrentEntry = NetDataLinkList.Next;
+    while (CurrentEntry != &NetDataLinkList) {
+        DataLink = LIST_VALUE(CurrentEntry, NET_DATA_LINK_ENTRY, ListEntry);
+        if (DataLink == DataLinkHandle) {
+            FoundDataLink = DataLink;
+            LIST_REMOVE(CurrentEntry);
+            break;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    KeReleaseQueuedLock(NetPluginListLock);
+    if (FoundDataLink != NULL) {
+        MmFreePagedPool(FoundDataLink);
+    }
+
+    return;
 }
 
 NET_API
@@ -711,10 +887,10 @@ Return Value:
 {
 
     //
-    // Call the hardwired link layer protocol, ethernet.
+    // Call the data link layer to process the packet.
     //
 
-    NetpEthernetProcessReceivedPacket(Link, Packet);
+    Link->DataLinkEntry->Interface.ProcessReceivedPacket(Link, Packet);
     return;
 }
 
@@ -773,6 +949,7 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
+    PNET_DATA_LINK_ENTRY DataLinkEntry;
     ULONG Length;
     PNET_NETWORK_ENTRY NetworkEntry;
     CHAR StringBuffer[PRINT_ADDRESS_STRING_LENGTH];
@@ -785,23 +962,37 @@ Return Value:
     StringBuffer[0] = '\0';
 
     //
-    // If the address is a physical one, ask the only known physical layer,
-    // ethernet, to print it.
+    // If the address is a physical one, find the data link layer and print the
+    // string.
     //
 
-    if (Address->Network == SocketNetworkPhysical) {
-        Length = NetpEthernetPrintAddress(Address,
-                                          StringBuffer,
-                                          PRINT_ADDRESS_STRING_LENGTH);
+    KeAcquireQueuedLock(NetPluginListLock);
+    if (SOCKET_IS_NETWORK_PHYSICAL(Address->Network) != FALSE) {
+        CurrentEntry = NetDataLinkList.Next;
+        while (CurrentEntry != &NetDataLinkList) {
+            DataLinkEntry = LIST_VALUE(CurrentEntry,
+                                       NET_DATA_LINK_ENTRY,
+                                       ListEntry);
 
-        ASSERT(Length <= PRINT_ADDRESS_STRING_LENGTH);
+            if (DataLinkEntry->Type == (NET_DATA_LINK_TYPE)Address->Network) {
+                Length = DataLinkEntry->Interface.PrintAddress(
+                                                  Address,
+                                                  StringBuffer,
+                                                  PRINT_ADDRESS_STRING_LENGTH);
+
+                ASSERT(Length <= PRINT_ADDRESS_STRING_LENGTH);
+
+                break;
+            }
+
+            CurrentEntry = CurrentEntry->Next;
+        }
 
     //
     // Otherwise, find the network layer and print this string.
     //
 
     } else {
-        KeAcquireQueuedLock(NetPluginListLock);
         CurrentEntry = NetNetworkList.Next;
         while (CurrentEntry != &NetNetworkList) {
             NetworkEntry = LIST_VALUE(CurrentEntry,
@@ -821,10 +1012,9 @@ Return Value:
 
             CurrentEntry = CurrentEntry->Next;
         }
-
-        KeReleaseQueuedLock(NetPluginListLock);
     }
 
+    KeReleaseQueuedLock(NetPluginListLock);
     StringBuffer[PRINT_ADDRESS_STRING_LENGTH - 1] = '\0';
     RtlDebugPrint("%s", StringBuffer);
     return;
@@ -952,9 +1142,9 @@ Return Value:
     Socket->Network = NetworkEntry;
     Socket->BindingType = SocketBindingInvalid;
     Socket->LastError = STATUS_SUCCESS;
-    Socket->UnboundHeaderSize = Socket->HeaderSize;
-    Socket->UnboundFooterSize = Socket->FooterSize;
-    Socket->UnboundMaxPacketSize = Socket->MaxPacketSize;
+    RtlCopyMemory(&(Socket->UnboundPacketSizeInformation),
+                  &(Socket->PacketSizeInformation),
+                  sizeof(NET_PACKET_SIZE_INFORMATION));
 
 CreateSocketEnd:
     if (!KSUCCESS(Status)) {

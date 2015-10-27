@@ -96,6 +96,14 @@ Author:
     (SOCKET_CONTROL_ALIGN(sizeof(SOCKET_CONTROL_MESSAGE)) + (_Length))
 
 //
+// This macro returns TRUE if the socket network is a physical network or FALSE
+// otherwise.
+//
+
+#define SOCKET_IS_NETWORK_PHYSICAL(_SocketNetwork) \
+    ((_SocketNetwork) >= SocketNetworkPhysicalEthernet)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -235,13 +243,20 @@ typedef enum _SOCKET_PROTOCOL {
     SocketProtocolRaw
 } SOCKET_PROTOCOL, *PSOCKET_PROTOCOL;
 
+typedef enum _NET_DATA_LINK_TYPE {
+    NetDataLinkInvalid,
+    NetDataLinkEthernet = 0x8000,
+    NetDataLink80211,
+} NET_DATA_LINK_TYPE, *PNET_DATA_LINK_TYPE;
+
 typedef enum _SOCKET_NETWORK {
     SocketNetworkInvalid,
     SocketNetworkLocal,
-    SocketNetworkPhysical,
     SocketNetworkArp,
     SocketNetworkIp4,
-    SocketNetworkIp6
+    SocketNetworkIp6,
+    SocketNetworkPhysicalEthernet = NetDataLinkEthernet,
+    SocketNetworkPhysical80211 = NetDataLink80211,
 } SOCKET_NETWORK, *PSOCKET_NETWORK;
 
 /*++

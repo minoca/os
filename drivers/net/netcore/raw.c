@@ -364,6 +364,7 @@ Return Value:
 
 {
 
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     PRAW_SOCKET RawSocket;
     KSTATUS Status;
 
@@ -396,7 +397,8 @@ Return Value:
 
     ASSERT(RAW_MAX_PACKET_SIZE == MAX_ULONG);
 
-    RawSocket->NetSocket.MaxPacketSize = RAW_MAX_PACKET_SIZE;
+    PacketSizeInformation = &(RawSocket->NetSocket.PacketSizeInformation);
+    PacketSizeInformation->MaxPacketSize = RAW_MAX_PACKET_SIZE;
     Status = NetworkEntry->Interface.InitializeSocket(ProtocolEntry,
                                                       NetworkEntry,
                                                       NetworkProtocol,
@@ -946,16 +948,16 @@ Return Value:
         ASSERT(LinkOverride == &LinkOverrideBuffer);
 
         Link = LinkOverrideBuffer.LinkInformation.Link;
-        HeaderSize = LinkOverrideBuffer.HeaderSize;
-        FooterSize = LinkOverrideBuffer.FooterSize;
+        HeaderSize = LinkOverrideBuffer.PacketSizeInformation.HeaderSize;
+        FooterSize = LinkOverrideBuffer.PacketSizeInformation.FooterSize;
 
     } else {
 
         ASSERT(Socket->Link != NULL);
 
         Link = Socket->Link;
-        HeaderSize = Socket->HeaderSize;
-        FooterSize = Socket->FooterSize;
+        HeaderSize = Socket->PacketSizeInformation.HeaderSize;
+        FooterSize = Socket->PacketSizeInformation.FooterSize;
     }
 
     //
@@ -1522,6 +1524,7 @@ Return Value:
     SOCKET_BASIC_OPTION BasicOption;
     PBOOL BooleanOption;
     PRAW_SOCKET RawSocket;
+    PNET_PACKET_SIZE_INFORMATION SizeInformation;
     PULONG SizeOption;
     KSTATUS Status;
     PULONG TimeoutOption;
@@ -1546,11 +1549,12 @@ Return Value:
                 }
 
                 SizeOption = (PULONG)Data;
+                SizeInformation = &(Socket->PacketSizeInformation);
                 if (*SizeOption > RAW_MAX_PACKET_SIZE) {
                     RawSocket->MaxPacketSize = RAW_MAX_PACKET_SIZE;
 
-                } else if (*SizeOption < Socket->MaxPacketSize) {
-                    RawSocket->MaxPacketSize = Socket->MaxPacketSize;
+                } else if (*SizeOption < SizeInformation->MaxPacketSize) {
+                    RawSocket->MaxPacketSize = SizeInformation->MaxPacketSize;
 
                 } else {
                     RawSocket->MaxPacketSize = *SizeOption;

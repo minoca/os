@@ -481,6 +481,7 @@ Return Value:
 
 {
 
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     NET_LINK_PROPERTIES Properties;
     KSTATUS Status;
 
@@ -497,9 +498,11 @@ Return Value:
     Properties.Version = NET_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = RTL81_TRANSMIT_ALIGNMENT;
     Properties.DriverContext = Device;
-    Properties.MaxPacketSize = RTL81_MAX_TRANSMIT_PACKET_SIZE;
+    PacketSizeInformation = &(Properties.PacketSizeInformation);
+    PacketSizeInformation->MaxPacketSize = RTL81_MAX_TRANSMIT_PACKET_SIZE;
+    Properties.DataLinkType = NetDataLinkEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
-    Properties.PhysicalAddress.Network = SocketNetworkPhysical;
+    Properties.PhysicalAddress.Network = SocketNetworkPhysicalEthernet;
     Properties.ChecksumFlags = Device->ChecksumFlags;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->MacAddress),

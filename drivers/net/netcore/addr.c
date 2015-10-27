@@ -205,6 +205,13 @@ NetpCheckLocalAddressAvailability (
     PNETWORK_ADDRESS LocalAddress
     );
 
+VOID
+NetpGetPacketSizeInformation (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_SIZE_INFORMATION SizeInformation
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -284,8 +291,10 @@ Return Value:
 
 {
 
+    PNET_DATA_LINK_ENTRY CurrentDataLink;
     PLIST_ENTRY CurrentEntry;
     PNET_NETWORK_ENTRY CurrentNetwork;
+    PNET_DATA_LINK_ENTRY FoundDataLink;
     PLIST_ENTRY LastEntry;
     PNET_LINK Link;
     KSTATUS Status;
@@ -341,6 +350,39 @@ Return Value:
                               NetpCompareAddressTranslationEntries);
 
     //
+    // Find the appropriate data link layer and initialize it for this link.
+    //
+
+    FoundDataLink = NULL;
+    KeAcquireQueuedLock(NetPluginListLock);
+    CurrentEntry = NetDataLinkList.Next;
+    while (CurrentEntry != &NetDataLinkList) {
+        CurrentDataLink = LIST_VALUE(CurrentEntry,
+                                     NET_DATA_LINK_ENTRY,
+                                     ListEntry);
+
+        if (CurrentDataLink->Type == Properties->DataLinkType) {
+            FoundDataLink = CurrentDataLink;
+            break;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    KeReleaseQueuedLock(NetPluginListLock);
+    if (FoundDataLink == NULL) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto CreateLinkEnd;
+    }
+
+    Status = FoundDataLink->Interface.InitializeLink(Link);
+    if (!KSUCCESS(Status)) {
+        goto CreateLinkEnd;
+    }
+
+    Link->DataLinkEntry = FoundDataLink;
+
+    //
     // Let the network layers have their shot at initializing state for this
     // link.
     //
@@ -387,6 +429,10 @@ CreateLinkEnd:
                 }
 
                 KeReleaseQueuedLock(NetPluginListLock);
+            }
+
+            if (Link->DataLinkEntry != NULL) {
+                Link->DataLinkEntry->Interface.DestroyLink(Link);
             }
 
             if (Link->QueuedLock != NULL) {
@@ -916,7 +962,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link to submit.
+    Link - Supplies a pointer to the link to start.
 
 Return Value:
 
@@ -1787,7 +1833,6 @@ Return Value:
     PNETWORK_ADDRESS LocalAddress;
     NET_LINK_LOCAL_ADDRESS LocalInformationBuffer;
     BOOL LockHeld;
-    ULONG MaxPacketSize;
     ULONG OldFlags;
     ULONG OriginalPort;
     NET_SOCKET SearchSocket;
@@ -2157,22 +2202,9 @@ Return Value:
             // header size, and footer size based on the link.
             //
 
-            MaxPacketSize = Socket->Link->Properties.HeaderSize +
-                            Socket->UnboundMaxPacketSize +
-                            Socket->Link->Properties.FooterSize;
-
-            if (Socket->Link->Properties.MaxPacketSize >= MaxPacketSize) {
-                Socket->MaxPacketSize = MaxPacketSize;
-
-            } else {
-                Socket->MaxPacketSize = Socket->Link->Properties.MaxPacketSize;
-            }
-
-            Socket->HeaderSize = Socket->UnboundHeaderSize +
-                                 Socket->Link->Properties.HeaderSize;
-
-            Socket->FooterSize = Socket->UnboundFooterSize +
-                                 Socket->Link->Properties.FooterSize;
+            NetpGetPacketSizeInformation(Socket->Link,
+                                         Socket,
+                                         &(Socket->PacketSizeInformation));
         }
 
         RtlCopyMemory(&(Socket->LocalAddress),
@@ -2394,9 +2426,6 @@ Return Value:
 
 {
 
-    PNET_LINK Link;
-    ULONG MaxPacketSize;
-
     if (Socket->Link != NULL) {
         return STATUS_CONNECTION_EXISTS;
     }
@@ -2407,21 +2436,9 @@ Return Value:
     // no need to protect this under a socket lock.
     //
 
-    Link = LinkInformation->Link;
-    MaxPacketSize = Link->Properties.HeaderSize +
-                    Socket->UnboundMaxPacketSize +
-                    Link->Properties.FooterSize;
-
-    if (Link->Properties.MaxPacketSize < MaxPacketSize) {
-        MaxPacketSize = Link->Properties.MaxPacketSize;
-    }
-
-    LinkOverride->MaxPacketSize = MaxPacketSize;
-    LinkOverride->HeaderSize = Socket->UnboundHeaderSize +
-                               Link->Properties.HeaderSize;
-
-    LinkOverride->FooterSize = Socket->UnboundFooterSize +
-                               Link->Properties.FooterSize;
+    NetpGetPacketSizeInformation(LinkInformation->Link,
+                                 Socket,
+                                 &(LinkOverride->PacketSizeInformation));
 
     RtlCopyMemory(&(LinkOverride->LinkInformation),
                   LinkInformation,
@@ -3353,6 +3370,8 @@ Return Value:
 
 {
 
+    PLIST_ENTRY CurrentEntry;
+    PNET_NETWORK_ENTRY CurrentNetwork;
     PNET_LINK_ADDRESS_ENTRY LinkAddressEntry;
 
     ASSERT(Link->ReferenceCount == 0);
@@ -3373,6 +3392,16 @@ Return Value:
     }
 
     KeDestroyEvent(Link->AddressTranslationEvent);
+    KeAcquireQueuedLock(NetPluginListLock);
+    CurrentEntry = NetNetworkList.Next;
+    while (CurrentEntry != &NetNetworkList) {
+        CurrentNetwork = LIST_VALUE(CurrentEntry, NET_NETWORK_ENTRY, ListEntry);
+        CurrentNetwork->Interface.DestroyLink(Link);
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    KeReleaseQueuedLock(NetPluginListLock);
+    Link->DataLinkEntry->Interface.DestroyLink(Link);
     MmFreePagedPool(Link);
     return;
 }
@@ -3646,7 +3675,6 @@ Return Value:
 
 {
 
-    ULONG MaxPacketSize;
     ULONG OldFlags;
     KSTATUS Status;
 
@@ -3756,9 +3784,9 @@ Return Value:
         NetLinkReleaseReference(Socket->Link);
         Socket->Link = NULL;
         Socket->LinkAddress = NULL;
-        Socket->HeaderSize = Socket->UnboundHeaderSize;
-        Socket->FooterSize = Socket->UnboundFooterSize;
-        Socket->MaxPacketSize = Socket->UnboundMaxPacketSize;
+        RtlCopyMemory(&(Socket->PacketSizeInformation),
+                      &(Socket->UnboundPacketSizeInformation),
+                      sizeof(NET_PACKET_SIZE_INFORMATION));
     }
 
     //
@@ -3778,22 +3806,9 @@ Return Value:
         // header size, and footer size based on the link.
         //
 
-        MaxPacketSize = Socket->Link->Properties.HeaderSize +
-                        Socket->UnboundMaxPacketSize +
-                        Socket->Link->Properties.FooterSize;
-
-        if (Socket->Link->Properties.MaxPacketSize >= MaxPacketSize) {
-            Socket->MaxPacketSize = MaxPacketSize;
-
-        } else {
-            Socket->MaxPacketSize = Socket->Link->Properties.MaxPacketSize;
-        }
-
-        Socket->HeaderSize = Socket->UnboundHeaderSize +
-                             Socket->Link->Properties.HeaderSize;
-
-        Socket->FooterSize = Socket->UnboundFooterSize +
-                             Socket->Link->Properties.FooterSize;
+        NetpGetPacketSizeInformation(Socket->Link,
+                                     Socket,
+                                     &(Socket->PacketSizeInformation));
     }
 
     RtlCopyMemory(&(Socket->LocalAddress),
@@ -4845,5 +4860,91 @@ CheckLocalAddressAvailabilityEnd:
     }
 
     return AvailableAddress;
+}
+
+VOID
+NetpGetPacketSizeInformation (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_SIZE_INFORMATION SizeInformation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine calculates the packet size information given an link and a
+    socket. It uses the unbound packet size information from the socket in
+    order to calculate the resulting size information.
+
+Arguments:
+
+    Link - Supplies a pointer to a network link.
+
+    Socket - Supplies a pointer to a network socket.
+
+    SizeInformation - Supplies a pointer to a packet size information structure
+        that receives the calculated max packet, header, and footer size to
+        use for sending packets from the given socket out over the given
+        network link.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET_PACKET_SIZE_INFORMATION DataLinkInformation;
+    ULONG FooterSize;
+    ULONG HeaderSize;
+    ULONG MaxPacketSize;
+
+    //
+    // Add the data link layer's header and footer sizes to the sockets unbound
+    // max packet size. If this is greater than the allowed maximum packet size
+    // for the data link layer, then truncate it.
+    //
+
+    DataLinkInformation = &(Link->DataLinkEntry->PacketSizeInformation);
+    MaxPacketSize = DataLinkInformation->HeaderSize +
+                    Socket->UnboundPacketSizeInformation.MaxPacketSize +
+                    DataLinkInformation->FooterSize;
+
+    if (MaxPacketSize > DataLinkInformation->MaxPacketSize) {
+        MaxPacketSize = DataLinkInformation->MaxPacketSize;
+    }
+
+    //
+    // Repeat for the device link layer, truncating the allowed maximum packet
+    // size if necessary.
+    //
+
+    MaxPacketSize = Link->Properties.PacketSizeInformation.HeaderSize +
+                    MaxPacketSize +
+                    Link->Properties.PacketSizeInformation.FooterSize;
+
+    if (MaxPacketSize > Link->Properties.PacketSizeInformation.MaxPacketSize) {
+        MaxPacketSize = Link->Properties.PacketSizeInformation.MaxPacketSize;
+    }
+
+    SizeInformation->MaxPacketSize = MaxPacketSize;
+
+    //
+    // The headers and footers of all layers are included in the final tally.
+    //
+
+    HeaderSize = Socket->UnboundPacketSizeInformation.HeaderSize +
+                 DataLinkInformation->HeaderSize +
+                 Link->Properties.PacketSizeInformation.HeaderSize;
+
+    SizeInformation->HeaderSize = HeaderSize;
+    FooterSize = Socket->UnboundPacketSizeInformation.FooterSize +
+                 DataLinkInformation->FooterSize +
+                 Link->Properties.PacketSizeInformation.FooterSize;
+
+    SizeInformation->FooterSize = FooterSize;
+    return;
 }
 

@@ -473,8 +473,10 @@ Return Value:
     // then reserve it while it is in use.
     //
 
+    Flags = MAP_FLAG_PRESENT | MAP_FLAG_EXECUTE;
     *Allocation = (PVOID)(UINTN)PhysicalAddress;
     if (*Allocation >= KERNEL_VA_START) {
+        Flags |= MAP_FLAG_GLOBAL;
         Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
                                          PageCount << PAGE_SHIFT,
                                          PAGE_SIZE,
@@ -497,7 +499,6 @@ Return Value:
     // Map the pages received.
     //
 
-    Flags = MAP_FLAG_PRESENT | MAP_FLAG_EXECUTE;
     CurrentAddress = *Allocation;
     for (CurrentPage = 0; CurrentPage < PageCount; CurrentPage += 1) {
         MmpMapPage((UINTN)CurrentAddress, CurrentAddress, Flags);
@@ -1420,9 +1421,7 @@ Return Value:
 
         } else {
             SecondLevelTable[SecondIndex].Access =
-                                              SLT_XACCESS_READ_ONLY_ALL_MODES;
-
-            SecondLevelTable[SecondIndex].NotGlobal = 1;
+                                               SLT_XACCESS_READ_ONLY_ALL_MODES;
         }
 
     } else {
@@ -1432,8 +1431,13 @@ Return Value:
 
         } else {
             SecondLevelTable[SecondIndex].Access = SLT_ACCESS_USER_FULL;
-            SecondLevelTable[SecondIndex].NotGlobal = 1;
         }
+    }
+
+    if (((Flags & MAP_FLAG_USER_MODE) != 0) ||
+        ((Flags & MAP_FLAG_GLOBAL) == 0)) {
+
+        SecondLevelTable[SecondIndex].NotGlobal = 1;
     }
 
     //
@@ -1922,7 +1926,7 @@ Return Value:
     ProcessorBlock = KeGetCurrentProcessorBlock();
     MmpMapPage(PageTablePhysical,
                ProcessorBlock->SwapPage,
-               MAP_FLAG_PRESENT | MAP_FLAG_READ_ONLY);
+               MAP_FLAG_PRESENT | MAP_FLAG_READ_ONLY | MAP_FLAG_GLOBAL);
 
     SecondLevelTable = (PSECOND_LEVEL_TABLE)(ProcessorBlock->SwapPage);
     SecondLevelTable = (PSECOND_LEVEL_TABLE)((UINTN)SecondLevelTable + Offset);
@@ -2019,7 +2023,10 @@ Return Value:
     SecondLevelEntry.Entry = 0;
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     ProcessorBlock = KeGetCurrentProcessorBlock();
-    MmpMapPage(PageTablePhysical, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
+    MmpMapPage(PageTablePhysical,
+               ProcessorBlock->SwapPage,
+               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+
     SecondLevelTable = (PSECOND_LEVEL_TABLE)(ProcessorBlock->SwapPage);
     SecondLevelTable = (PSECOND_LEVEL_TABLE)((UINTN)SecondLevelTable + Offset);
     if (SecondLevelTable[SecondIndex].Entry != 0) {
@@ -2154,7 +2161,10 @@ Return Value:
     Offset = (FLT_INDEX(VirtualAddress) - FirstIndex) * SLT_SIZE;
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     ProcessorBlock = KeGetCurrentProcessorBlock();
-    MmpMapPage(PageTablePhysical, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
+    MmpMapPage(PageTablePhysical,
+               ProcessorBlock->SwapPage,
+               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+
     SecondLevelTable = (PSECOND_LEVEL_TABLE)(ProcessorBlock->SwapPage);
     SecondLevelTable = (PSECOND_LEVEL_TABLE)((UINTN)SecondLevelTable + Offset);
 
@@ -2198,23 +2208,23 @@ Return Value:
 
         } else {
             SecondLevelTable[SecondIndex].Access =
-                                              SLT_XACCESS_READ_ONLY_ALL_MODES;
-
-            SecondLevelTable[SecondIndex].NotGlobal = 1;
+                                               SLT_XACCESS_READ_ONLY_ALL_MODES;
         }
 
     } else {
         SecondLevelTable[SecondIndex].AccessExtension = 0;
         if ((MapFlags & MAP_FLAG_USER_MODE) == 0) {
-
-            ASSERT((MapFlags & MAP_FLAG_GLOBAL) != 0);
-
             SecondLevelTable[SecondIndex].Access = SLT_ACCESS_SUPERVISOR;
 
         } else {
             SecondLevelTable[SecondIndex].Access = SLT_ACCESS_USER_FULL;
-            SecondLevelTable[SecondIndex].NotGlobal = 1;
         }
+    }
+
+    if (((MapFlags & MAP_FLAG_USER_MODE) != 0) ||
+        ((MapFlags & MAP_FLAG_GLOBAL) == 0)) {
+
+        SecondLevelTable[SecondIndex].NotGlobal = 1;
     }
 
     //
@@ -2738,7 +2748,10 @@ Return Value:
             OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
             ProcessorBlock = KeGetCurrentProcessorBlock();
             DestinationTable = ProcessorBlock->SwapPage;
-            MmpMapPage(PageTable, DestinationTable, MAP_FLAG_PRESENT);
+            MmpMapPage(PageTable,
+                       DestinationTable,
+                       MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+
             if (TableIndexStart != 0) {
                 RtlZeroMemory(DestinationTable,
                               TableIndexStart * sizeof(SECOND_LEVEL_TABLE));
@@ -2856,7 +2869,10 @@ Return Value:
             OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
             ProcessorBlock = KeGetCurrentProcessorBlock();
             DestinationTable = ProcessorBlock->SwapPage;
-            MmpMapPage(PageTable, DestinationTable, MAP_FLAG_PRESENT);
+            MmpMapPage(PageTable,
+                       DestinationTable,
+                       MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+
             for (TableIndex = TableIndexStart;
                  TableIndex < TableIndexEnd;
                  TableIndex += 1) {
@@ -3112,7 +3128,7 @@ Return Value:
             ProcessorBlock = KeGetCurrentProcessorBlock();
             MmpMapPage(PageTablePhysical,
                        ProcessorBlock->SwapPage,
-                       MAP_FLAG_PRESENT);
+                       MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
 
             RtlZeroMemory(ProcessorBlock->SwapPage, PAGE_SIZE);
             MmpUnmapPages(ProcessorBlock->SwapPage, 1, 0, NULL);

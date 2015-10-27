@@ -128,7 +128,7 @@ Arguments:
         link down which this data is to be sent.
 
     PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data these packets may be modified by this routine,
+        packets to send. Data in these packets may be modified by this routine,
         but must not be used once this routine returns.
 
 Return Value:

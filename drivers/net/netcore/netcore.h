@@ -66,6 +66,7 @@ extern BOOL NetGlobalDebug;
 
 extern LIST_ENTRY NetProtocolList;
 extern LIST_ENTRY NetNetworkList;
+extern LIST_ENTRY NetDataLinkList;
 extern PQUEUED_LOCK NetPluginListLock;
 
 //
@@ -292,7 +293,32 @@ Return Value:
 --*/
 
 //
-// Prototype to entry points for built in components.
+// Prototypes to entry points for built in data link layers.
+//
+
+VOID
+NetpEthernetInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for Ethernet frames.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+//
+// Prototypes to entry points for built in components.
 //
 
 VOID

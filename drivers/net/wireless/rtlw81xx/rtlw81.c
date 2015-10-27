@@ -140,6 +140,30 @@ PDRIVER Rtlw81Driver = NULL;
 UUID Rtlw81NetworkDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
 
 //
+// Store the default rate information for the RTL81xx wireless devices.
+//
+
+UCHAR RtlwDefaultRates[] = {
+    NET80211_RATE_BASIC | 0x02,
+    NET80211_RATE_BASIC | 0x04,
+    NET80211_RATE_BASIC | 0x0B,
+    NET80211_RATE_BASIC | 0x16,
+    0x0C,
+    0x12,
+    0x18,
+    0x24,
+    0x30,
+    0x48,
+    0x60,
+    0x6C
+};
+
+NET80211_LINK_RATE_INFORMATION RtlwDefaultRateInformation = {
+    sizeof(RtlwDefaultRates) / sizeof(RtlwDefaultRates[0]),
+    RtlwDefaultRates
+};
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -563,6 +587,8 @@ Return Value:
 
 {
 
+    NET80211_LINK_PROPERTIES Net80211Properties;
+    NET_LINK_PROPERTIES Properties;
     KSTATUS Status;
 
     if (Device->NetworkLink != NULL) {
@@ -571,8 +597,46 @@ Return Value:
     }
 
     //
-    // TODO: Call into the 802.11 networking core to create a new device.
+    // Create a link with the core networking library.
     //
+
+    RtlZeroMemory(&Properties, sizeof(NET_LINK_PROPERTIES));
+    Properties.Version = NET_LINK_PROPERTIES_VERSION;
+    Properties.TransmitAlignment = MmGetIoBufferAlignment();
+    Properties.DriverContext = Device;
+    Properties.PacketSizeInformation.MaxPacketSize = RTLW81_MAX_PACKET_SIZE;
+    Properties.PacketSizeInformation.HeaderSize = RTLW81_TRANSMIT_HEADER_SIZE;
+    Properties.DataLinkType = NetDataLink80211;
+    Properties.MaxPhysicalAddress = MAX_ULONG;
+    Properties.PhysicalAddress.Network = SocketNetworkPhysical80211;
+    RtlCopyMemory(&(Properties.PhysicalAddress.Address),
+                  &(Device->MacAddress),
+                  sizeof(Device->MacAddress));
+
+    Properties.Interface.Send = Rtlw81Send;
+    Properties.Interface.GetSetInformation = Rtlw81GetSetInformation;
+    Status = NetCreateLink(&Properties, &(Device->NetworkLink));
+    if (!KSUCCESS(Status)) {
+        goto CreateNetworkDeviceEnd;
+    }
+
+    //
+    // Now initialize that link with the 802.11 networking library.
+    //
+
+    RtlZeroMemory(&Net80211Properties, sizeof(NET80211_LINK_PROPERTIES));
+    Net80211Properties.Version = NET80211_LINK_PROPERTIES_VERSION;
+    Net80211Properties.DriverContext = Device;
+    Net80211Properties.Capabilities = NET80211_CAPABILITY_FLAG_SHORT_PREAMBLE |
+                                      NET80211_CAPABILITY_FLAG_SHORT_SLOT_TIME;
+
+    Net80211Properties.MaxChannel = RTLW81_MAX_CHANNEL;
+    Net80211Properties.SupportedRates = &RtlwDefaultRateInformation;
+    Net80211Properties.Interface.SetChannel = Rtlw81SetChannel;
+    Status = Net80211InitializeLink(Device->NetworkLink, &Net80211Properties);
+    if (!KSUCCESS(Status)) {
+        goto CreateNetworkDeviceEnd;
+    }
 
     //
     // Register for network device information requests.
@@ -587,6 +651,13 @@ Return Value:
     }
 
 CreateNetworkDeviceEnd:
+    if (!KSUCCESS(Status)) {
+        if (Device->NetworkLink != NULL) {
+            NetDestroyLink(Device->NetworkLink);
+            Device->NetworkLink = NULL;
+        }
+    }
+
     return Status;
 }
 
@@ -1102,11 +1173,7 @@ Return Value:
     //
 
     Device->InitializationPhase = 0;
-
-    //
-    // TODO: Announce to 802.11 that the device has stopped.
-    //
-
+    Net80211StopLink(Device->NetworkLink);
     return STATUS_SUCCESS;
 }
 

@@ -506,10 +506,11 @@ Return Value:
     Properties.Version = NET_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = MmGetIoBufferAlignment();
     Properties.DriverContext = Device;
-    Properties.MaxPacketSize = SM95_MAX_PACKET_SIZE;
-    Properties.HeaderSize = SM95_TRANSMIT_HEADER_SIZE;
+    Properties.PacketSizeInformation.MaxPacketSize = SM95_MAX_PACKET_SIZE;
+    Properties.PacketSizeInformation.HeaderSize = SM95_TRANSMIT_HEADER_SIZE;
+    Properties.DataLinkType = NetDataLinkEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
-    Properties.PhysicalAddress.Network = SocketNetworkPhysical;
+    Properties.PhysicalAddress.Network = SocketNetworkPhysicalEthernet;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->MacAddress),
                   sizeof(Device->MacAddress));

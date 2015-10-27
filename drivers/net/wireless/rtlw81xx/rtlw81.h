@@ -108,6 +108,12 @@ Author:
 #define RTLW81_MAX_CHAIN_COUNT 2
 
 //
+// Define the maximum supported channel.
+//
+
+#define RTLW81_MAX_CHANNEL 11
+
+//
 // Define the default number of transmit and receive chains.
 //
 
@@ -1255,6 +1261,7 @@ typedef enum _RTLW81_REGISTER {
     Rtlw81RegisterMcuFirmwareDownload1 = 0x081,
     Rtlw81RegisterMcuFirmwareDownload2 = 0x082,
     Rtlw81RegisterMcuFirmwareDownload3 = 0x083,
+    Rtlw81RegisterHmeBoxExtension = 0x088,
     Rtlw81Register8188eInterruptMask = 0x0B0,
     Rtlw81Register8188eInterruptStatus = 0x0B4,
     Rtlw81Register8188eInterruptExtraMask = 0x0B8,
@@ -1275,7 +1282,8 @@ typedef enum _RTLW81_REGISTER {
     Rtlw81RegisterHmetfr1 = 0x1CD,
     Rtlw81RegisterHmetfr2 = 0x1CE,
     Rtlw81RegisterHmetfr3 = 0x1CF,
-    Rtlw81RegisterLltInit = 0x1e0,
+    Rtlw81RegisterHmeBox = 0x1D0,
+    Rtlw81RegisterLltInit = 0x1E0,
     Rtlw81RegisterQueuePageCount = 0x200,
     Rtlw81RegisterTransmitDescriptorControl0 = 0x208,
     Rtlw81RegisterTransmitDescriptorControl1 = 0x209,
@@ -1297,6 +1305,7 @@ typedef enum _RTLW81_REGISTER {
     Rtlw81RegisterReceiveResponseRate = 0x440,
     Rtlw81RegisterAggregateLengthLimit = 0x458,
     Rtlw81RegisterTransmitPacketWmacLbkBfHd = 0x45d,
+    Rtlw81RegisterRateSelect = 0x480,
     Rtlw81RegisterProtModeControl = 0x4C8,
     Rtlw81RegisterMaxAggregationNumber = 0x4CA,
     Rtlw81RegisterBarModeControl = 0x4CC,
@@ -1314,6 +1323,7 @@ typedef enum _RTLW81_REGISTER {
     Rtlw81RegisterTbttProhibit = 0x540,
     Rtlw81RegisterNavProtLength = 0x546,
     Rtlw81RegisterBeaconControl = 0x550,
+    Rtlw81RegisterBeaconInterval = 0x554,
     Rtlw81RegisterDriverEarlyInt = 0x558,
     Rtlw81RegisterBeaconDmaTime = 0x559,
     Rtlw81RegisterAtiwnd = 0x55A,
@@ -1323,6 +1333,8 @@ typedef enum _RTLW81_REGISTER {
     Rtlw81RegisterReceiveConfiguration = 0x608,
     Rtlw81RegisterReceiveDriverInformationSize = 0x60F,
     Rtlw81RegisterMacAddress = 0x610,
+    Rtlw81RegisterBssid0 = 0x618,
+    Rtlw81RegisterBssid1 = 0x61C,
     Rtlw81RegisterMulticast1 = 0x620,
     Rtlw81RegisterMulticast2 = 0x624,
     Rtlw81RegisterMacSpecSifs = 0x63A,
@@ -1651,6 +1663,8 @@ Members:
 
     ReceiveChainCount - Stores the number of receive chains on the device.
 
+    CurrentChannel - Stores the current channel the device is set to use.
+
     IoBuffer - Stores a pointer to the I/O buffer used for both the bulk
         receive and the control transfers.
 
@@ -1715,6 +1729,7 @@ typedef struct _RTLW81_DEVICE {
     ULONG Flags;
     ULONG TransmitChainCount;
     ULONG ReceiveChainCount;
+    ULONG CurrentChannel;
     PIO_BUFFER IoBuffer;
     PUSB_TRANSFER ControlTransfer;
     PUSB_TRANSFER BulkInTransfer[RTLW81_BULK_IN_TRANSFER_COUNT];
@@ -1810,6 +1825,31 @@ Arguments:
 
     Set - Supplies a boolean indicating if this is a get operation (FALSE) or a
         set operation (TRUE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+Rtlw81SetChannel (
+    PVOID DriverContext,
+    ULONG Channel
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the 802.11 link's channel to the given value.
+
+Arguments:
+
+    DriverContext - Supplies a pointer to the driver context associated with
+        the 802.11 link whose channel is to be set.
+
+    Channel - Supplies the channel to which the device should be set.
 
 Return Value:
 

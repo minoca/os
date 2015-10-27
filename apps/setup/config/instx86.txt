@@ -51,6 +51,7 @@ Files = [
     "loader",
     "loadefi",
     "mbr.bin",
+    "net80211.drv",
     "netcore.drv",
     "null.drv",
     "onering.drv",

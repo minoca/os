@@ -4297,7 +4297,9 @@ Return Value:
         ASSERT(SwapSpace != NULL);
         ASSERT(Context.PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
 
-        MmpMapPage(Context.PhysicalAddress, SwapSpace, MAP_FLAG_PRESENT);
+        MmpMapPage(Context.PhysicalAddress,
+                   SwapSpace,
+                   MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
 
         ASSERT(IoBuffer->FragmentCount <= 2);
 
@@ -4701,7 +4703,10 @@ Return Value:
     ASSERT(RootSection->SwapSpace->VirtualBase != NULL);
 
     SwapSpace = RootSection->SwapSpace->VirtualBase;
-    MmpMapPage(Context->PhysicalAddress, SwapSpace, MAP_FLAG_PRESENT);
+    MmpMapPage(Context->PhysicalAddress,
+               SwapSpace,
+               MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL);
+
     IoBuffer = &IoBufferData;
     IoBufferFlags = IO_BUFFER_FLAG_KERNEL_MODE_DATA |
                     IO_BUFFER_FLAG_MEMORY_LOCKED;

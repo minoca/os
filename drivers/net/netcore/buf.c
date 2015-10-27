@@ -127,12 +127,20 @@ Return Value:
     // If requested, add the additional headers and footers.
     //
 
-    if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_LINK_HEADERS) != 0) {
-        HeaderSize += Link->Properties.HeaderSize;
+    if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS) != 0) {
+        HeaderSize += Link->Properties.PacketSizeInformation.HeaderSize;
     }
 
-    if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_LINK_FOOTERS) != 0) {
-        FooterSize += Link->Properties.FooterSize;
+    if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS) != 0) {
+        FooterSize += Link->Properties.PacketSizeInformation.FooterSize;
+    }
+
+    if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS) != 0) {
+        HeaderSize += Link->DataLinkEntry->PacketSizeInformation.HeaderSize;
+    }
+
+    if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS) != 0) {
+        FooterSize += Link->DataLinkEntry->PacketSizeInformation.FooterSize;
     }
 
     MaximumPhysicalAddress = Link->Properties.MaxPhysicalAddress;

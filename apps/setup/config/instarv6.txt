@@ -51,6 +51,7 @@ Files = [
     "libcrypt.so.1",
     "libminocaos.so.1",
     "loadefi",
+    "net80211.drv",
     "netcore.drv",
     "null.drv",
     "om4gpio.drv",

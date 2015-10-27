@@ -588,6 +588,7 @@ Return Value:
 {
 
     PIO_OBJECT_STATE IoState;
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     KSTATUS Status;
     PTCP_SOCKET TcpSocket;
 
@@ -648,7 +649,8 @@ Return Value:
     // Initialize the socket on the lower layers.
     //
 
-    TcpSocket->NetSocket.MaxPacketSize = MAX_ULONG;
+    PacketSizeInformation = &(TcpSocket->NetSocket.PacketSizeInformation);
+    PacketSizeInformation->MaxPacketSize = MAX_ULONG;
     Status = NetworkEntry->Interface.InitializeSocket(ProtocolEntry,
                                                       NetworkEntry,
                                                       NetworkProtocol,
@@ -664,15 +666,15 @@ Return Value:
     // enough room for a TCP header and a one byte of data.
     //
 
-    ASSERT((TcpSocket->NetSocket.MaxPacketSize -
-            TcpSocket->NetSocket.HeaderSize -
-            TcpSocket->NetSocket.FooterSize) > sizeof(TCP_HEADER));
+    ASSERT((PacketSizeInformation->MaxPacketSize -
+            PacketSizeInformation->HeaderSize -
+            PacketSizeInformation->FooterSize) > sizeof(TCP_HEADER));
 
     //
     // Add the TCP header size to the protocol header size.
     //
 
-    TcpSocket->NetSocket.HeaderSize += sizeof(TCP_HEADER);
+    PacketSizeInformation->HeaderSize += sizeof(TCP_HEADER);
 
     ASSERT(TcpSocket->NetSocket.KernelSocket.IoState == NULL);
 
@@ -5396,6 +5398,7 @@ Return Value:
     PUCHAR Options;
     ULONG OptionsLength;
     UCHAR OptionType;
+    PNET_PACKET_SIZE_INFORMATION SizeInformation;
 
     //
     // Parse the options in the packet.
@@ -5443,9 +5446,10 @@ Return Value:
                 Socket->SendMaxSegmentSize =
                          NETWORK_TO_CPU16(*((PUSHORT)&(Options[OptionIndex])));
 
-                LocalMaxSegmentSize = Socket->NetSocket.MaxPacketSize -
-                                      Socket->NetSocket.HeaderSize -
-                                      Socket->NetSocket.FooterSize;
+                SizeInformation = &(Socket->NetSocket.PacketSizeInformation);
+                LocalMaxSegmentSize = SizeInformation->MaxPacketSize -
+                                      SizeInformation->HeaderSize -
+                                      SizeInformation->FooterSize;
 
                 if (LocalMaxSegmentSize < Socket->SendMaxSegmentSize) {
                     Socket->SendMaxSegmentSize = LocalMaxSegmentSize;
@@ -5506,6 +5510,7 @@ Return Value:
     PNET_PACKET_BUFFER Packet;
     LIST_ENTRY PacketListHead;
     ULONG SequenceNumber;
+    PNET_PACKET_SIZE_INFORMATION SizeInformation;
     KSTATUS Status;
 
     INITIALIZE_LIST_HEAD(&PacketListHead);
@@ -5528,9 +5533,10 @@ Return Value:
     }
 
     Packet = NULL;
-    Status = NetAllocateBuffer(Socket->NetSocket.HeaderSize,
+    SizeInformation = &(Socket->NetSocket.PacketSizeInformation);
+    Status = NetAllocateBuffer(SizeInformation->HeaderSize,
                                0,
-                               Socket->NetSocket.FooterSize,
+                               SizeInformation->FooterSize,
                                Socket->NetSocket.Link,
                                0,
                                &Packet);
@@ -6693,6 +6699,7 @@ Return Value:
     USHORT HeaderFlags;
     PNET_PACKET_BUFFER Packet;
     ULONG SegmentLength;
+    PNET_PACKET_SIZE_INFORMATION SizeInformation;
     KSTATUS Status;
 
     //
@@ -6704,9 +6711,10 @@ Return Value:
     ASSERT(SegmentLength != 0);
 
     Packet = NULL;
-    Status = NetAllocateBuffer(Socket->NetSocket.HeaderSize,
+    SizeInformation = &(Socket->NetSocket.PacketSizeInformation);
+    Status = NetAllocateBuffer(SizeInformation->HeaderSize,
                                SegmentLength,
-                               Socket->NetSocket.FooterSize,
+                               SizeInformation->FooterSize,
                                Socket->NetSocket.Link,
                                0,
                                &Packet);
@@ -7970,9 +7978,9 @@ Return Value:
     //
 
     Packet = NULL;
-    Status = NetAllocateBuffer(NetSocket->HeaderSize,
+    Status = NetAllocateBuffer(NetSocket->PacketSizeInformation.HeaderSize,
                                TCP_SYN_OPTIONS_LENGTH,
-                               NetSocket->FooterSize,
+                               NetSocket->PacketSizeInformation.FooterSize,
                                NetSocket->Link,
                                0,
                                &Packet);
@@ -7993,9 +8001,9 @@ Return Value:
     PacketBuffer += 1;
     *PacketBuffer = 4;
     PacketBuffer += 1;
-    MaximumSegmentSize = NetSocket->MaxPacketSize -
-                         NetSocket->HeaderSize -
-                         NetSocket->FooterSize;
+    MaximumSegmentSize = NetSocket->PacketSizeInformation.MaxPacketSize -
+                         NetSocket->PacketSizeInformation.HeaderSize -
+                         NetSocket->PacketSizeInformation.FooterSize;
 
     if (MaximumSegmentSize > MAX_USHORT) {
         MaximumSegmentSize = MAX_USHORT;
