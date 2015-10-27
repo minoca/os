@@ -32,7 +32,7 @@ OBJS += bootxfr.o   \
 
 INCLUDES += $(SRCROOT)/os/boot/lib/inc;$(SRCDIR)/..;
 
-TARGETLIBS += $(INTLIB)/os/boot/lib/efi/bootefi.a \
+TARGETLIBS += $(OBJROOT)/os/boot/lib/efi/bootefi.a \
 
 ENTRY = BmEfiApplicationMain
 
@@ -44,13 +44,13 @@ endif
 
 ifeq ($(ARCH), armv7)
 LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
-TARGETLIBS += $(INTLIB)/os/kernel/$(ARCH)/boot/armboot.a
+TARGETLIBS += $(OBJROOT)/os/kernel/$(ARCH)/boot/armboot.a
 LDFLAGS += -Wl,--no-wchar-size-warning
 endif
 
 ifeq ($(ARCH), armv6)
 LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
-TARGETLIBS += $(INTLIB)/os/kernel/$(ARCH)/boot/armboot.a
+TARGETLIBS += $(OBJROOT)/os/kernel/$(ARCH)/boot/armboot.a
 LDFLAGS += -Wl,--no-wchar-size-warning
 endif
 

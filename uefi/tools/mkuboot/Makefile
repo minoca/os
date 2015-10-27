@@ -29,8 +29,8 @@ BINPLACE = bin
 
 BINARYTYPE = build
 
-TARGETLIBS = $(INTLIB)/os/lib/rtl/base/build/basertl.a      \
-             $(INTLIB)/os/lib/rtl/build/rtlstubs.a          \
+TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a      \
+             $(OBJROOT)/os/lib/rtl/build/rtlstubs.a          \
 
 INCLUDES += $(SRCROOT)/os/uefi/inc;
 

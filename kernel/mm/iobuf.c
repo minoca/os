@@ -3781,6 +3781,7 @@ Return Value:
             //
 
             PhysicalAddress = MmGetIoBufferPhysicalAddress(&PagedInBuffer, 0);
+            PhysicalAddress += REMAINDER((UINTN)CurrentAddress, PageSize);
             PageCacheEntry = MmGetIoBufferPageCacheEntry(&PagedInBuffer, 0);
             if (PageCacheEntry != NULL) {
                 LockedIoBuffer->Internal.Flags |=

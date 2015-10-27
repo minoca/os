@@ -24,8 +24,6 @@ BINARY = msetplat.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 include $(SRCDIR)/sources
 
 DIRS = build

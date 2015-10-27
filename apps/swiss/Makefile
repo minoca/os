@@ -57,7 +57,7 @@ OBJS = $(COMMON_OBJS)   \
        telnet.o         \
        telnetd.o        \
 
-TARGETLIBS = $(INTLIB)/os/lib/termlib/termlib.a     \
+TARGETLIBS = $(OBJROOT)/os/lib/termlib/termlib.a     \
 
 DYNLIBS = -lminocaos
 

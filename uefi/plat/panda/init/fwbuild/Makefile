@@ -25,8 +25,6 @@ BINARY = pandafwb
 
 BUILD = yes
 
-BINPLACE = bin
-
 BINARYTYPE = build
 
 OBJS = fwbuild.o

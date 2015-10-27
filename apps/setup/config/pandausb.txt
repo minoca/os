@@ -40,9 +40,9 @@ BootDrivers += [
 UserAppsCopy["Source"] = "";
 
 //
-// Set the image to be a single partition.
+// Set the EFI boot manager name.
 //
 
-SystemPartition["Index"] = 0;
-DiskData["Partitions"] = [SystemPartition];
-DiskData["Format"] = PARTITION_FORMAT_NONE;
+BootmefiCopy["Destination"] += EFI_DEFAULT_APP_ARM;
+BootPartition["Size"] = 2 * MEGABYTE;
+SystemPartition["Size"] = 20 * MEGABYTE;

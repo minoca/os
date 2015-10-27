@@ -36,8 +36,8 @@ LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib
 
 INCLUDES += $(SRCROOT)/os/boot/lib/inc;$(SRCDIR)/..;
 
-TARGETLIBS += $(INTLIB)/os/boot/lib/pcat/bootpcat.a \
-              $(INTLIB)/os/lib/partlib/partlib.a    \
+TARGETLIBS += $(OBJROOT)/os/boot/lib/pcat/bootpcat.a \
+              $(OBJROOT)/os/lib/partlib/partlib.a    \
 
 EXTRA_SRC_DIRS = x86
 

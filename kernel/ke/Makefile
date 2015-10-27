@@ -26,8 +26,6 @@ BINARY = ke.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = crash.o    \
        crashdmp.o \
        dpc.o      \

@@ -26,8 +26,6 @@ BINARY = acpi.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = tables.o   \
 
 include $(SRCROOT)/os/minoca.mk

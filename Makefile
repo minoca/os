@@ -37,23 +37,36 @@ ifndef DEBUG
 $(error Error: Environment not set up: DEBUG environment variable missing)
 endif
 
-DIRS = apps        \
-       createimage \
-       boot        \
-       debug       \
-       drivers     \
-       lib         \
-       kernel      \
-       tzcomp      \
-       uefi        \
+LIBRARIES = lib          \
+
+COMPONENTS = apps        \
+             boot        \
+             debug       \
+             drivers     \
+             kernel      \
+             tzcomp      \
+             uefi        \
+
+DIRS = $(LIBRARIES)      \
+       $(COMPONENTS)     \
+       images
 
 include $(SRCROOT)/os/minoca.mk
 
-kernel: lib
-boot: kernel lib uefi
-drivers: kernel boot lib
-apps: kernel
-createimage: kernel boot drivers apps debug uefi tzcomp
-debug: kernel apps
-uefi: kernel lib
+images: $(COMPONENTS)
+$(COMPONENTS): $(LIBRARIES)
+
+##
+## Boot and UEFI need KD from the kernel (which could be moved out to a
+## library). Drivers and apps (which may also build some drivers) link against
+## the kernel.
+##
+
+boot drivers apps uefi: kernel
+
+##
+## Boot relies on UEFI for the elfconv tool.
+##
+
+boot: uefi
 

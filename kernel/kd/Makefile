@@ -26,8 +26,6 @@ BINARY = kd.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = kdebug.o   \
 
 ARMV7_OBJS = armv7/kdarch.o   \

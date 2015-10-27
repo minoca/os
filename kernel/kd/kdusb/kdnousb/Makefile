@@ -25,8 +25,6 @@ BINARY = kdnousb.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = stubs.o   \
 
 include $(SRCROOT)/os/minoca.mk

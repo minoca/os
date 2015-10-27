@@ -68,6 +68,7 @@ Environment:
     "  -l, --platform=name -- Specifies the platform type.\n"                  \
     "  -p, --partition=destination -- Specifies the install destination as \n" \
     "      a partition.\n"                                                     \
+    "  -q, --quiet -- Print nothing but errors.\n"                             \
     "  -r, --reboot -- Reboot after installation is complete.\n"               \
     "  -s, --script=file -- Load a script file.\n"                             \
     "  -v, --verbose -- Print files being copied.\n"                           \
@@ -81,7 +82,7 @@ Environment:
     "Example: 'setup -v -p 0x26' Installs on a partition with device ID "      \
     "0x26.\n"
 
-#define SETUP_OPTIONS_STRING "Aa:b:BDd:G:hi:l:p:f:rs:vx:V"
+#define SETUP_OPTIONS_STRING "Aa:b:BDd:G:hi:l:p:f:qrs:vx:V"
 
 #define SETUP_ADD_PARTITION_SCRIPT_FORMAT \
     "Partitions += [{" \
@@ -129,6 +130,7 @@ struct option SetupLongOptions[] = {
     {"input", required_argument, 0, 'i'},
     {"platform", required_argument, 0, 'l'},
     {"partition", required_argument, 0, 'p'},
+    {"quiet", no_argument, 0, 'q'},
     {"reboot", no_argument, 0, 'r'},
     {"script", required_argument, 0, 's'},
     {"version", no_argument, 0, 'V'},
@@ -351,6 +353,10 @@ Return Value:
                 goto mainEnd;
             }
 
+            break;
+
+        case 'q':
+            Context.Flags |= SETUP_FLAG_QUIET;
             break;
 
         case 'r':
@@ -593,8 +599,14 @@ Return Value:
             goto mainEnd;
         }
 
-        if ((Context.Flags & SETUP_FLAG_REBOOT) == 0) {
-            printf("\nRemove install media and reboot to continue.\n");
+        if (((Context.Flags & SETUP_FLAG_REBOOT) == 0) &&
+            ((Context.Flags & SETUP_FLAG_QUIET) == 0)) {
+
+            if ((Context.Flags & SETUP_FLAG_VERBOSE) != 0) {
+                printf("\n");
+            }
+
+            printf("Remove install media and reboot to continue.\n");
         }
 
     //
@@ -732,7 +744,9 @@ mainEnd:
     }
 
     if (Status != 0) {
-        if (QuietlyQuit == FALSE) {
+        if ((QuietlyQuit == FALSE) &&
+            ((Context.Flags & SETUP_FLAG_QUIET) == 0)) {
+
             if (Status > 0) {
                 printf("Setup exiting with status %d: %s\n",
                        Status,
@@ -746,7 +760,10 @@ mainEnd:
         return 1;
     }
 
-    printf("Setup completed successfully.\n");
+    if ((Context.Flags & SETUP_FLAG_QUIET) == 0) {
+        printf("Setup completed successfully.\n");
+    }
+
     return 0;
 }
 

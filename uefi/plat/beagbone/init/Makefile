@@ -59,8 +59,11 @@ VPATH += $(SRCDIR)/../../panda/init:
 postbuild: bbonemlo bbonemlo.bin
 
 bbonemlo: bbonemlo.bin
-	@cd $(BINROOT) && bbonefwb 0x402F0408 $^ $@
+	@echo Generating - $@
+	@bbonefwb/bbonefwb 0x402F0408 $^ $@
+	@cp -p $@ $(BINROOT)/
 
 bbonemlo.bin: $(BINARY)
-	@cd $(BINROOT) && $(OBJCOPY) -O binary $^ $@
+	@echo Flattening - $(notdir $<)
+	@$(OBJCOPY) -O binary $^ $@
 

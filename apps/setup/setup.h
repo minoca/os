@@ -70,6 +70,12 @@ Author:
 #define SETUP_FLAG_AUTO_DEPLOY 0x00000010
 
 //
+// Set this flag to print nothing but errors.
+//
+
+#define SETUP_FLAG_QUIET 0x00000020
+
+//
 // Define the name of the source install image.
 //
 
@@ -123,7 +129,8 @@ typedef enum _SETUP_RECIPE_ID {
     SetupRecipeBeagleBoneBlack,
     SetupRecipeCommon,
     SetupRecipeGalileo,
-    SetupRecipeInstallArm,
+    SetupRecipeInstallArmv6,
+    SetupRecipeInstallArmv7,
     SetupRecipeInstallX86,
     SetupRecipeIntegratorCpRamDisk,
     SetupRecipePandaBoard,

@@ -25,8 +25,6 @@ BINARY = hlboot.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 INCLUDES += $(SRCDIR)/..;
 
 OBJS = hmodapi.o     \
@@ -37,7 +35,7 @@ ARMV7_OBJS = ../armv7/archdbg.o  \
              ../armv7/uartpl11.o \
              ../armv7/uartomap.o \
              ../ns16550.o        \
-             
+
 ARMV6_OBJS = ../armv6/archdbg.o  \
              ../armv7/regacces.o \
              ../armv7/uartpl11.o \

@@ -32,9 +32,9 @@ BINPLACE = bin
 INCLUDES += $(SRCDIR)/../../..;$(SRCDIR)/../..;
 INCLUDES += $(SRCROOT)/os/lib/im;
 
-TARGETLIBS = $(INTLIB)/os/lib/rtl/base/build/basertl.a      \
-             $(INTLIB)/os/lib/rtl/build/rtlstubs.a          \
-             $(INTLIB)/os/lib/im/build/im.a                 \
+TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a      \
+             $(OBJROOT)/os/lib/rtl/build/rtlstubs.a          \
+             $(OBJROOT)/os/lib/im/build/im.a                 \
 
 DYNLIBS = -lpsapi -lws2_32 -lmswsock -ladvapi32 -lshlwapi
 

@@ -272,6 +272,7 @@ Return Value:
     if (Script->Order == 0) {
         Status = SetupExecuteScript(Interpreter, Script);
         if (Status != 0) {
+            LIST_REMOVE(&(Script->ListEntry));
             free(Script->Data);
             free(Script);
         }
@@ -385,6 +386,7 @@ Return Value:
     if (Script->Order == 0) {
         Status = SetupExecuteScript(Interpreter, Script);
         if (Status != 0) {
+            LIST_REMOVE(&(Script->ListEntry));
             goto LoadScriptFileEnd;
         }
     }

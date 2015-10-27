@@ -25,8 +25,6 @@ BINARY = armboot.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 ARMV7_OBJS = ../sstep.o    \
 
 include $(SRCROOT)/os/minoca.mk

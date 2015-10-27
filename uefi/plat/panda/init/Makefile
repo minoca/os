@@ -55,11 +55,14 @@ DIRS = fwbuild     \
 
 include $(SRCROOT)/os/minoca.mk
 
-postbuild: omap4mlo omap4mlo.bin
+postbuild: omap4mlo
 
 omap4mlo: omap4mlo.bin
-	@cd $(BINROOT) && pandafwb 0x40300000 $^ $@
+	@echo Generating - $@
+	@fwbuild/pandafwb 0x40300000 $^ $@
+	@cp -p $@ $(BINROOT)/
 
 omap4mlo.bin: $(BINARY)
-	@cd $(BINROOT) && $(OBJCOPY) -O binary $^ $@
-
+	@echo Flattening - $(notdir $<)
+	@$(OBJCOPY) -O binary $^ $@
+	@cp -p $@ $(BINROOT)/

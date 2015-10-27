@@ -25,8 +25,6 @@ BINARY = basevid.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = fontdata.o \
        textvid.o  \
 

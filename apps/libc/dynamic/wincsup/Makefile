@@ -25,8 +25,6 @@ BINARY = wincsup.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 BUILD = yes
 
 INCLUDES += $(SRCROOT)/os/apps/inc;$(SRCROOT)/os/apps/inc/libc;..;

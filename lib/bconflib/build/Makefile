@@ -27,8 +27,6 @@ BINARYTYPE = library
 
 BUILD = yes
 
-BINPLACE = intlib
-
 VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources

@@ -75,17 +75,17 @@ EXTRA_LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib -Wl,-whole-archive
 
 EXTRA_SRC_DIRS = x86 x64 armv7
 
-TARGETLIBS = $(INTLIB)/os/lib/rtl/base/basertl.a        \
-             $(INTLIB)/os/lib/rtl/base/wide/basertlw.a  \
-             $(INTLIB)/os/lib/im/im.a                   \
-             $(INTLIB)/os/apps/osbase/urtl/urtl.a       \
-             $(INTLIB)/os/lib/crypto/crypto.a           \
+TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/basertl.a        \
+             $(OBJROOT)/os/lib/rtl/base/wide/basertlw.a  \
+             $(OBJROOT)/os/lib/im/im.a                   \
+             $(OBJROOT)/os/apps/osbase/urtl/urtl.a       \
+             $(OBJROOT)/os/lib/crypto/crypto.a           \
 
 DIRS = urtl    \
 
 include $(SRCROOT)/os/minoca.mk
 
-$(INTLIB)/os/apps/osbase/urtl/urtl.a: urtl
+$(OBJROOT)/os/apps/osbase/urtl/urtl.a: urtl
 
 postbuild: $(BINROOT)/kernel-version
 

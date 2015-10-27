@@ -26,8 +26,6 @@ BINARY = bcm2709.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = init.o     \
        intr.o     \
        mailbox.o  \

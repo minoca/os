@@ -30,7 +30,7 @@ BINPLACE = bin
 OBJS = fatfs.o    \
        fatio.o    \
 
-TARGETLIBS = $(INTLIB)/os/lib/fatlib/fat.a    \
+TARGETLIBS = $(OBJROOT)/os/lib/fatlib/fat.a    \
 
 DYNLIBS = $(BINROOT)/kernel                \
 

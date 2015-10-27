@@ -49,8 +49,8 @@ ifeq ($(ARCH), armv7)
 LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
 endif
 
-TARGETLIBS = $(INTLIB)/os/uefi/core/rtlib/rtlib.a       \
-             $(INTLIB)/os/uefi/archlib/uefiarch.a       \
+TARGETLIBS = $(OBJROOT)/os/uefi/core/rtlib/rtlib.a       \
+             $(OBJROOT)/os/uefi/archlib/uefiarch.a       \
 
 include $(SRCROOT)/os/minoca.mk
 
@@ -60,8 +60,15 @@ CFLAGS += -fshort-wchar
 ## Convert it to a PE image.
 ##
 
-postbuild: veyronrt
+postbuild: veyronrt.ffs
+
+veyronrt.ffs: veyronrt
+	@genffs -s -i $< -r EFI_SECTION_PE32 \
+	    -i $< -r EFI_SECTION_USER_INTERFACE -t EFI_FV_FILETYPE_DRIVER -o $@
 
 veyronrt: $(BINARY)
-	@cd $(BINROOT) && elfconv -o $@ -t efiruntimedriver $(BINARY)
+	@echo Converting - $(notdir $<)
+	@elfconv -o $@ -t efiruntimedriver $<
+
+CFLAGS += -fshort-wchar
 

@@ -378,7 +378,7 @@ Return Value:
 
 {
 
-    size_t BytesCompleted;
+    ssize_t BytesCompleted;
     PSETUP_OS_HANDLE IoHandle;
     ssize_t TotalBytesWritten;
 
@@ -391,6 +391,7 @@ Return Value:
     while (ByteCount != 0) {
         BytesCompleted = write(IoHandle->Handle, Buffer, ByteCount);
         if (BytesCompleted <= 0) {
+            perror("Write failed");
             break;
         }
 

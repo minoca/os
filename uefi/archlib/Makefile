@@ -24,8 +24,6 @@ BINARY = uefiarch.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 INCLUDES += $(SRCROOT)/os/uefi/inc;$(SRCROOT)/os/uefi/core;
 
 X86_OBJS = x86/archlib.o    \

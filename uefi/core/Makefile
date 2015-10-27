@@ -26,8 +26,6 @@ BINARY = ueficore.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 INCLUDES += $(SRCROOT)/os/uefi/inc;
 
 OBJS = acpi.o     \

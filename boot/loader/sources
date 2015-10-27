@@ -46,23 +46,23 @@ ARMV6_OBJS = armv6/archsupc.o \
              armv7/paging.o   \
              armv7/kernxfr.o  \
 
-TARGETLIBS = $(INTLIB)/os/kernel/kd/boot/kdboot.a         \
-             $(INTLIB)/os/kernel/kd/kdusb/kdusb.a         \
-             $(INTLIB)/os/lib/rtl/base/boot/basertlb.a    \
-             $(INTLIB)/os/lib/rtl/kmode/krtl.a            \
-             $(INTLIB)/os/lib/im/im.a                     \
-             $(INTLIB)/os/lib/fatlib/fat.a                \
-             $(INTLIB)/os/lib/basevid/basevid.a           \
-             $(INTLIB)/os/lib/bconflib/bconflib.a         \
-             $(INTLIB)/os/kernel/hl/boot/hlboot.a         \
-             $(INTLIB)/os/kernel/mm/boot/mmboot.a         \
+TARGETLIBS = $(OBJROOT)/os/kernel/kd/boot/kdboot.a         \
+             $(OBJROOT)/os/kernel/kd/kdusb/kdusb.a         \
+             $(OBJROOT)/os/lib/rtl/base/boot/basertlb.a    \
+             $(OBJROOT)/os/lib/rtl/kmode/krtl.a            \
+             $(OBJROOT)/os/lib/im/im.a                     \
+             $(OBJROOT)/os/lib/fatlib/fat.a                \
+             $(OBJROOT)/os/lib/basevid/basevid.a           \
+             $(OBJROOT)/os/lib/bconflib/bconflib.a         \
+             $(OBJROOT)/os/kernel/hl/boot/hlboot.a         \
+             $(OBJROOT)/os/kernel/mm/boot/mmboot.a         \
 
 ifeq ($(ARCH), armv7)
-TARGETLIBS += $(INTLIB)/os/kernel/$(ARCH)/boot/armboot.a
+TARGETLIBS += $(OBJROOT)/os/kernel/$(ARCH)/boot/armboot.a
 endif
 
 ifeq ($(ARCH), armv6)
-TARGETLIBS += $(INTLIB)/os/kernel/$(ARCH)/boot/armboot.a
+TARGETLIBS += $(OBJROOT)/os/kernel/$(ARCH)/boot/armboot.a
 endif
 
 LDFLAGS += -pie -nodefaultlibs -nostartfiles -nostdlib

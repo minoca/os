@@ -27,8 +27,6 @@ BINARY = mm.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = block.o    \
        imgsec.o   \
        info.o     \

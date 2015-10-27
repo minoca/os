@@ -22,24 +22,26 @@
 
 INCLUDES += $(SRCROOT)/os/uefi/inc;
 
-TARGETLIBS = $(INTLIB)/os/kernel/kd/boot/kdboot.a           \
-             $(INTLIB)/os/kernel/kd/kdusb/kdnousb/kdnousb.a \
-             $(INTLIB)/os/lib/rtl/base/boot/basertlb.a      \
-             $(INTLIB)/os/lib/rtl/kmode/krtl.a              \
-             $(INTLIB)/os/lib/basevid/basevid.a             \
-             $(INTLIB)/os/lib/fatlib/fat.a                  \
-             $(INTLIB)/os/uefi/core/ueficore.a              \
-             $(INTLIB)/os/uefi/archlib/uefiarch.a           \
+RTBASE = $(OBJROOT)/os/uefi/core/runtime/rtbase.ffs
+
+TARGETLIBS = $(OBJROOT)/os/kernel/kd/boot/kdboot.a           \
+             $(OBJROOT)/os/kernel/kd/kdusb/kdnousb/kdnousb.a \
+             $(OBJROOT)/os/lib/rtl/base/boot/basertlb.a      \
+             $(OBJROOT)/os/lib/rtl/kmode/krtl.a              \
+             $(OBJROOT)/os/lib/basevid/basevid.a             \
+             $(OBJROOT)/os/lib/fatlib/fat.a                  \
+             $(OBJROOT)/os/uefi/core/ueficore.a              \
+             $(OBJROOT)/os/uefi/archlib/uefiarch.a           \
 
 ifeq ($(ARCH), armv7)
 
-TARGETLIBS += $(INTLIB)/os/kernel/$(ARCH)/boot/armboot.a    \
+TARGETLIBS += $(OBJROOT)/os/kernel/$(ARCH)/boot/armboot.a    \
 
 endif
 
 ifeq ($(ARCH), armv6)
 
-TARGETLIBS += $(INTLIB)/os/kernel/$(ARCH)/boot/armboot.a    \
+TARGETLIBS += $(OBJROOT)/os/kernel/$(ARCH)/boot/armboot.a    \
 
 endif
 

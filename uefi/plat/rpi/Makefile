@@ -35,7 +35,7 @@ FIRMWARE_VERSION_MINOR = 0
 
 LDFLAGS += -Wl,--no-wchar-size-warning -nodefaultlibs -nostartfiles -nostdlib
 
-RAMDISK = $(OBJROOT)/$(THISDIR)/emptyrd
+RAMDISK = emptyrd
 RAMDISK_O = ramdisk.o
 
 OBJS += debug.o             \
@@ -43,7 +43,7 @@ OBJS += debug.o             \
         intr.o              \
         main.o              \
         memmap.o            \
-        $(BINROOT)/rpifwv.o \
+        rpifwv.o            \
         ramdenum.o          \
         $(RAMDISK_O)        \
         smbios.o            \
@@ -53,9 +53,9 @@ ARMV6_OBJS = armv6/entry.o  \
 
 TEXT_ADDRESS = 0x00008000
 
-TARGETLIBS += $(INTLIB)/os/uefi/dev/pl11/pl11.a       \
-              $(INTLIB)/os/uefi/dev/sd/core/sd.a      \
-              $(INTLIB)/os/uefi/dev/bcm2709/bcm2709.a \
+TARGETLIBS += $(OBJROOT)/os/uefi/dev/pl11/pl11.a       \
+              $(OBJROOT)/os/uefi/dev/sd/core/sd.a      \
+              $(OBJROOT)/os/uefi/dev/bcm2709/bcm2709.a \
 
 EXTRA_SRC_DIRS = armv6
 
@@ -69,6 +69,7 @@ ifeq ($(BINARY), rpifw.elf)
 RAMDISK_O = emptyrd.o
 
 DIRS = acpi     \
+       blobs    \
        runtime
 
 endif
@@ -88,7 +89,7 @@ CFLAGS += -fshort-wchar
 #FIRMWARE_VERSION_STRING := \
 #    "$(FIRMWARE_VERSION_MAJOR).$(FIRMWARE_VERSION_MINOR).$(REVISION)"
 
-FIRMWARE_BUILD_DATE := "08/15/2014"
+FIRMWARE_BUILD_DATE := "01/01/2015"
 FIRMWARE_VERSION_STRING := \
     "$(FIRMWARE_VERSION_MAJOR).$(FIRMWARE_VERSION_MINOR)"
 
@@ -101,18 +102,30 @@ EXTRA_CPPFLAGS += -DFIRMWARE_BUILD_DATE=\"$(FIRMWARE_BUILD_DATE)\" \
 ## Define the target that creates the firmware volume object file.
 ##
 
-FWVOL_IMAGES = rtbase runtime/rpirt.elf
+FWVOL_IMAGES = $(RTBASE) runtime/rpirt.ffs acpi/acpi.ffs
 
-$(BINROOT)/rpifwv.o: $(FWVOL_IMAGES)
-	@sh $(SRCDIR)/genfwvol.sh $(OBJCOPY)
+rpifwv.o: rpifwv
+	@echo Objectifying - $(notdir $<)
+	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
+
+rpifwv: $(FWVOL_IMAGES)
+	@echo Generating - $@
+	@genfv -o $@ $^
 
 $(RAMDISK_O): $(RAMDISK)
-	@cd $(OBJROOT)/$(THISDIR) && \
-	    cp $^ ramdisk && \
-	    $(OBJCOPY) -I binary -O elf32-littlearm -B armv5t ramdisk $@
+	@echo Objectifying - $(notdir $<)
+	@cp $^ ramdisk
+	@$(OBJCOPY) -I binary -O $(OBJ_FORMAT) -B $(BFD_ARCH) ramdisk $@
 
-$(OBJROOT)/$(THISDIR)/emptyrd:
+emptyrd:
 	@echo Minoca > $@
 
-runtime/rpirt.elf: runtime
+runtime/rpirt.ffs: runtime
+
+postbuild: rpifw
+
+rpifw: $(BINARY)
+	@echo Flattening - $(notdir $<)
+	@$(OBJCOPY) -O binary $^ $@
+	@cp -p $@ $(BINROOT)/
 

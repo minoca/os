@@ -25,8 +25,6 @@ BINARY = mmboot.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = ../mdl.o          \
 
 include $(SRCROOT)/os/minoca.mk

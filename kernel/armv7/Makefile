@@ -24,8 +24,6 @@ BINARY = armsup.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 ARMV7_OBJS = archsup.o  \
              archsupc.o \
              commsup.o  \

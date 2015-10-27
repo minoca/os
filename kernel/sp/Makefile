@@ -25,8 +25,6 @@ BINARY = sp.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = info.o \
        profiler.o \
 

@@ -31,7 +31,7 @@ OBJS += memory.o    \
 
 INCLUDES += $(SRCROOT)/os/boot/lib/inc;$(SRCDIR)/..;
 
-TARGETLIBS += $(INTLIB)/os/boot/lib/efi/bootefi.a \
+TARGETLIBS += $(OBJROOT)/os/boot/lib/efi/bootefi.a \
 
 ENTRY = BoMain
 

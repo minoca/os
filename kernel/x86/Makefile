@@ -25,8 +25,6 @@ BINARY = x86sup.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 X86_OBJS = archsup.o   \
            archsupc.o  \
            prochw.o    \

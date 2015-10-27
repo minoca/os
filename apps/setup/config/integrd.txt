@@ -32,10 +32,6 @@ BootDrivers += [
     "ramdisk.drv",
 ];
 
-SystemFiles += [
-    "initcon"
-];
-
 //
 // Remove apps from the user files since it can be huge. Just add the bare
 // minimum.

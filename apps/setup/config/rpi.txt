@@ -30,8 +30,7 @@ BootDrivers += [
     "sdbm2709.drv",
 ];
 
-RpiFirmwareFiles = [
-    "rpifw",
+RpiFirmwareBlobFiles = [
     "config.txt",
     "start.elf",
     "fixup.dat",
@@ -42,26 +41,38 @@ RpiFirmwareFiles = [
 // Copy the firmware to the system partition for recovery if needed.
 //
 
-RpiFirmwareSystemCopy = {
+RpiFirmwareBlobsSystemCopy = {
     "Destination": SystemDir + "rpi/",
-    "Source": "./",
+    "Source": "./rpi/",
     "SourceVolume": 0,
-    "Files": RpiFirmwareFiles
+    "Files": RpiFirmwareBlobFiles
+};
+
+RpiFirmwareSystemCopy = {
+    "Destination": SystemDir + "rpi/rpifw",
+    "Source": "./rpifw",
+    "SourceVolume": 0
 };
 
 //
 // Copy the firmware to the boot partition.
 //
 
-RpiFirmwareCopy = {
+RpiFirmwareBlobsCopy = {
     "Destination": "/",
-    "Source": "./",
+    "Source": "./rpi/",
     "SourceVolume": 0,
-    "Files": RpiFirmwareFiles
+    "Files": RpiFirmwareBlobFiles
 };
 
-TotalCopy += [RpiFirmwareSystemCopy];
-TotalBootCopy += [RpiFirmwareCopy];
+RpiFirmwareCopy = {
+    "Destination": "/rpifw",
+    "Source": "./rpifw",
+    "SourceVolume": 0,
+};
+
+TotalCopy += [RpiFirmwareBlobsSystemCopy, RpiFirmwareSystemCopy];
+TotalBootCopy += [RpiFirmwareBlobsCopy, RpiFirmwareCopy];
 DiskData["Format"] = PARTITION_FORMAT_MBR;
 
 //
@@ -70,3 +81,4 @@ DiskData["Format"] = PARTITION_FORMAT_MBR;
 
 BootmefiCopy["Destination"] += EFI_DEFAULT_APP_ARM;
 BootPartition["Alignment"] = 1 * MEGABYTE;
+BootPartition["Size"] = 20 * MEGABYTE;

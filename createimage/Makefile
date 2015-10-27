@@ -29,11 +29,11 @@ BUILD = yes
 
 BINARYTYPE = build
 
-TARGETLIBS = $(INTLIB)/os/lib/rtl/base/build/basertl.a      \
-             $(INTLIB)/os/lib/rtl/build/rtlstubs.a          \
-             $(INTLIB)/os/lib/fatlib/build/fat.a            \
-             $(INTLIB)/os/lib/partlib/build/partlib.a       \
-             $(INTLIB)/os/lib/bconflib/build/bconflib.a     \
+TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a      \
+             $(OBJROOT)/os/lib/rtl/build/rtlstubs.a          \
+             $(OBJROOT)/os/lib/fatlib/build/fat.a            \
+             $(OBJROOT)/os/lib/partlib/build/partlib.a       \
+             $(OBJROOT)/os/lib/bconflib/build/bconflib.a     \
 
 OBJS = cibconf.o     \
        cipart.o      \

@@ -35,7 +35,7 @@ LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib
 
 OBJS += acpi.o      \
         bioscall.o  \
-        $(BINROOT)/biosfwv.o   \
+        biosfwv.o   \
         disk.o      \
         debug.o     \
         fwvol.o     \
@@ -50,7 +50,7 @@ X86_OBJS = x86/entry.o      \
 
 TEXT_ADDRESS = 0x100000
 
-TARGETLIBS += $(INTLIB)/os/uefi/dev/ns16550/ns16550.a       \
+TARGETLIBS += $(OBJROOT)/os/uefi/dev/ns16550/ns16550.a       \
 
 EXTRA_SRC_DIRS = x86
 
@@ -64,13 +64,20 @@ postbuild: $(BINARY).bin
 ## Define the target that creates the firmware volume object file.
 ##
 
-FWVOL_IMAGES = rtbase runtime/biosrt.elf
+FWVOL_IMAGES = $(RTBASE) runtime/biosrt.ffs
 
-$(BINROOT)/biosfwv.o: $(FWVOL_IMAGES)
-	@sh $(SRCDIR)/genfwvol.sh $(OBJCOPY)
+biosfwv.o: biosfwv
+	@echo Objectifying - $(notdir $<)
+	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
 
-$(BINARY).bin: $(BINARY)
-	@cd $(BINROOT) && $(OBJCOPY) -O binary $^ $@
+biosfwv: $(FWVOL_IMAGES)
+	@echo Generating - $@
+	@genfv -o $@ $^
 
-runtime/biosrt.elf: runtime
+$(RAMDISK_O): $(RAMDISK)
+	@echo Objectifying - $(notdir $<)
+	@cp $^ ramdisk
+	@$(OBJCOPY) -I binary -O $(OBJ_FORMAT) -B $(BFD_ARCH) ramdisk $@
+
+runtime/biosrt.ffs: runtime
 

@@ -47,8 +47,8 @@ ifeq ($(ARCH), armv7)
 LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
 endif
 
-TARGETLIBS = $(INTLIB)/os/uefi/core/rtlib/rtlib.a       \
-             $(INTLIB)/os/uefi/archlib/uefiarch.a       \
+TARGETLIBS = $(OBJROOT)/os/uefi/core/rtlib/rtlib.a       \
+             $(OBJROOT)/os/uefi/archlib/uefiarch.a       \
 
 include $(SRCROOT)/os/minoca.mk
 
@@ -60,6 +60,13 @@ CFLAGS += -fshort-wchar
 
 postbuild: bbonert
 
+postbuild: bbonert.ffs
+
+bbonert.ffs: bbonert
+	@genffs -s -i $< -r EFI_SECTION_PE32 \
+	    -i $< -r EFI_SECTION_USER_INTERFACE -t EFI_FV_FILETYPE_DRIVER -o $@
+
 bbonert: $(BINARY)
-	@cd $(BINROOT) && elfconv -o $@ -t efiruntimedriver $(BINARY)
+	@echo Converting - $(notdir $<)
+	@elfconv -o $@ -t efiruntimedriver $<
 

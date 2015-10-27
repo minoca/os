@@ -26,8 +26,6 @@ BINARY = pl11.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = pl11.o     \
 
 include $(SRCROOT)/os/minoca.mk

@@ -35,33 +35,33 @@ EXTRA_LDFLAGS += -Wl,--whole-archive
 ENTRY = KepStartSystem
 
 ifeq (armv7, $(ARCH))
-ARCHLIB = $(INTLIB)/os/kernel/armv7/armsup.a
+ARCHLIB = $(OBJROOT)/os/kernel/armv7/armsup.a
 endif
 
 ifeq (armv6, $(ARCH))
-ARCHLIB = $(INTLIB)/os/kernel/armv6/armsup.a
+ARCHLIB = $(OBJROOT)/os/kernel/armv6/armsup.a
 endif
 
 ifeq (x86, $(ARCH))
-ARCHLIB = $(INTLIB)/os/kernel/x86/x86sup.a
+ARCHLIB = $(OBJROOT)/os/kernel/x86/x86sup.a
 endif
 
-TARGETLIBS = $(INTLIB)/$(THISDIR)/acpi/acpi.a           \
-             $(INTLIB)/os/lib/crypto/crypto.a           \
-             $(INTLIB)/$(THISDIR)/ob/ob.a               \
-             $(INTLIB)/os/lib/rtl/base/basertl.a        \
-             $(INTLIB)/os/lib/rtl/kmode/krtl.a          \
-             $(INTLIB)/os/lib/im/im.a                   \
-             $(INTLIB)/os/lib/basevid/basevid.a         \
-             $(INTLIB)/os/lib/termlib/termlib.a         \
-             $(INTLIB)/$(THISDIR)/kd/kd.a               \
-             $(INTLIB)/$(THISDIR)/kd/kdusb/kdusb.a      \
-             $(INTLIB)/$(THISDIR)/ps/ps.a               \
-             $(INTLIB)/$(THISDIR)/ke/ke.a               \
-             $(INTLIB)/$(THISDIR)/io/io.a               \
-             $(INTLIB)/$(THISDIR)/hl/hl.a               \
-             $(INTLIB)/$(THISDIR)/mm/mm.a               \
-             $(INTLIB)/$(THISDIR)/sp/sp.a               \
+TARGETLIBS = $(OBJROOT)/$(THISDIR)/acpi/acpi.a           \
+             $(OBJROOT)/os/lib/crypto/crypto.a           \
+             $(OBJROOT)/$(THISDIR)/ob/ob.a               \
+             $(OBJROOT)/os/lib/rtl/base/basertl.a        \
+             $(OBJROOT)/os/lib/rtl/kmode/krtl.a          \
+             $(OBJROOT)/os/lib/im/im.a                   \
+             $(OBJROOT)/os/lib/basevid/basevid.a         \
+             $(OBJROOT)/os/lib/termlib/termlib.a         \
+             $(OBJROOT)/$(THISDIR)/kd/kd.a               \
+             $(OBJROOT)/$(THISDIR)/kd/kdusb/kdusb.a      \
+             $(OBJROOT)/$(THISDIR)/ps/ps.a               \
+             $(OBJROOT)/$(THISDIR)/ke/ke.a               \
+             $(OBJROOT)/$(THISDIR)/io/io.a               \
+             $(OBJROOT)/$(THISDIR)/hl/hl.a               \
+             $(OBJROOT)/$(THISDIR)/mm/mm.a               \
+             $(OBJROOT)/$(THISDIR)/sp/sp.a               \
              $(ARCHLIB)                                 \
 
 OBJS = init.o
@@ -81,16 +81,16 @@ DIRS = mm    \
 
 include $(SRCROOT)/os/minoca.mk
 
-$(INTLIB)/$(THISDIR)/acpi/acpi.a: acpi
-$(INTLIB)/$(THISDIR)/ob/ob.a: ob
-$(INTLIB)/$(THISDIR)/kd/kd.a: kd
-$(INTLIB)/$(THISDIR)/kd/kdusb/kdusb.a: kd
-$(INTLIB)/$(THISDIR)/ps/ps.a: ps
-$(INTLIB)/$(THISDIR)/ke/ke.a: ke
-$(INTLIB)/$(THISDIR)/io/io.a: io
-$(INTLIB)/$(THISDIR)/hl/hl.a: hl
-$(INTLIB)/$(THISDIR)/mm/mm.a: mm
-$(INTLIB)/$(THISDIR)/sp/sp.a: sp
+$(OBJROOT)/$(THISDIR)/acpi/acpi.a: acpi
+$(OBJROOT)/$(THISDIR)/ob/ob.a: ob
+$(OBJROOT)/$(THISDIR)/kd/kd.a: kd
+$(OBJROOT)/$(THISDIR)/kd/kdusb/kdusb.a: kd
+$(OBJROOT)/$(THISDIR)/ps/ps.a: ps
+$(OBJROOT)/$(THISDIR)/ke/ke.a: ke
+$(OBJROOT)/$(THISDIR)/io/io.a: io
+$(OBJROOT)/$(THISDIR)/hl/hl.a: hl
+$(OBJROOT)/$(THISDIR)/mm/mm.a: mm
+$(OBJROOT)/$(THISDIR)/sp/sp.a: sp
 $(ARCHLIB): armv7 armv6 x86
 
 VPATH += $(BINROOT)

@@ -48,16 +48,20 @@ ifeq ($(ARCH), armv6)
 LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
 endif
 
-TARGETLIBS = $(INTLIB)/os/uefi/archlib/uefiarch.a       \
+TARGETLIBS = $(OBJROOT)/os/uefi/archlib/uefiarch.a       \
 
 ##
 ## On architectures that produce ELF binaries, convert it to a PE image.
 ##
 
-postbuild: rtbase
+postbuild: rtbase.ffs
+
+rtbase.ffs: rtbase
+	@genffs -s -i $< -r EFI_SECTION_PE32 \
+	    -i $< -r EFI_SECTION_USER_INTERFACE -t EFI_FV_FILETYPE_DRIVER -o $@
 
 rtbase: $(BINARY)
-	@cd $(BINROOT) && elfconv -o $@ -t efiruntimedriver $(BINARY)
+	@elfconv -o $@ -t efiruntimedriver $<
 
 include $(SRCROOT)/os/minoca.mk
 

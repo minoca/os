@@ -42,17 +42,24 @@ ifeq ($(ARCH), armv7)
 LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
 endif
 
-TARGETLIBS = $(INTLIB)/os/uefi/core/rtlib/rtlib.a       \
-             $(INTLIB)/os/uefi/archlib/uefiarch.a       \
+TARGETLIBS = $(OBJROOT)/os/uefi/core/rtlib/rtlib.a       \
+             $(OBJROOT)/os/uefi/archlib/uefiarch.a       \
+
+include $(SRCROOT)/os/minoca.mk
 
 ##
 ## On architectures that produce ELF binaries, convert it to a PE image.
 ##
 
-postbuild:
-	@cd $(BINROOT) && elfconv -o biosrt -t efiruntimedriver $(BINARY)
+postbuild: biosrt.ffs
 
-include $(SRCROOT)/os/minoca.mk
+biosrt.ffs: biosrt
+	@genffs -s -i $< -r EFI_SECTION_PE32 \
+	    -i $< -r EFI_SECTION_USER_INTERFACE -t EFI_FV_FILETYPE_DRIVER -o $@
+
+biosrt: $(BINARY)
+	@echo Converting - $(notdir $<)
+	@elfconv -o $@ -t efiruntimedriver $<
 
 CFLAGS += -fshort-wchar
 

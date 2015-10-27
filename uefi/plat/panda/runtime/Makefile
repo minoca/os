@@ -49,8 +49,8 @@ ifeq ($(ARCH), armv7)
 LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
 endif
 
-TARGETLIBS = $(INTLIB)/os/uefi/core/rtlib/rtlib.a       \
-             $(INTLIB)/os/uefi/archlib/uefiarch.a       \
+TARGETLIBS = $(OBJROOT)/os/uefi/core/rtlib/rtlib.a       \
+             $(OBJROOT)/os/uefi/archlib/uefiarch.a       \
 
 include $(SRCROOT)/os/minoca.mk
 
@@ -60,8 +60,13 @@ CFLAGS += -fshort-wchar
 ## On architectures that produce ELF binaries, convert it to a PE image.
 ##
 
-postbuild: pandart
+postbuild: pandart.ffs
+
+pandart.ffs: pandart
+	@genffs -s -i $< -r EFI_SECTION_PE32 \
+	    -i $< -r EFI_SECTION_USER_INTERFACE -t EFI_FV_FILETYPE_DRIVER -o $@
 
 pandart: $(BINARY)
-	@cd $(BINROOT) && elfconv -o $@ -t efiruntimedriver $(BINARY)
+	@echo Converting - $(notdir $<)
+	@elfconv -o $@ -t efiruntimedriver $<
 

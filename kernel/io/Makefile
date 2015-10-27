@@ -27,8 +27,6 @@ BINARY = io.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = arb.o      \
        cachedio.o \
        cstate.o   \

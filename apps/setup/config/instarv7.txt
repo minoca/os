@@ -4,12 +4,12 @@ Copyright (c) 2015 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    instarm.txt
+    instarv7.txt
 
 Abstract:
 
     This module implements the setup recipe for a creating the install image
-    itself for the ARMv6 and ARMv7 architectures.
+    itself for the ARMv7 architecture.
 
 Author:
 
@@ -59,13 +59,12 @@ Files = [
     "omap4mlo",
     "onering.drv",
     "pandafw",
-    "pandafw_usb",
     "part.drv",
+    "pci.drv",
     "pl050.drv",
     "ramdisk.drv",
     "rk32gpio.drv",
     "rk32spi.drv",
-    "rpifw",
     "rpi2fw",
     "rtl81xx.drv",
     "rtlw81xx.drv",
@@ -96,7 +95,8 @@ Files = [
 
 Files += [
     "apps/",
-    "skel/"
+    "skel/",
+    "rpi/"
 ];
 
 FilesCopy = {

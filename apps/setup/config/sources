@@ -23,7 +23,8 @@
 OBJS = bbone.o    \
        common.o   \
        galileo.o  \
-       instarm.o  \
+       instarv6.o \
+       instarv7.o \
        instx86.o  \
        integrd.o  \
        panda.o    \

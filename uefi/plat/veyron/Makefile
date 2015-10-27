@@ -35,7 +35,7 @@ FIRMWARE_VERSION_MINOR = 0
 
 LDFLAGS += -Wl,--no-wchar-size-warning -nodefaultlibs -nostartfiles -nostdlib
 
-RAMDISK = $(OBJROOT)/$(THISDIR)/emptyrd
+RAMDISK = emptyrd
 RAMDISK_O = ramdisk.o
 
 OBJS += debug.o                 \
@@ -51,7 +51,7 @@ OBJS += debug.o                 \
         smp.o                   \
         timer.o                 \
         usb.o                   \
-        $(BINROOT)/veyrnfwv.o   \
+        veyrnfwv.o              \
         video.o                 \
 
 ARMV7_OBJS = armv7/entry.o  \
@@ -59,10 +59,10 @@ ARMV7_OBJS = armv7/entry.o  \
 
 TEXT_ADDRESS = 0x020000A4
 
-TARGETLIBS += $(INTLIB)/os/uefi/dev/gic/gic.a               \
-              $(INTLIB)/os/uefi/dev/ns16550/ns16550.a       \
-              $(INTLIB)/os/uefi/dev/sd/core/sd.a            \
-              $(INTLIB)/os/uefi/dev/sd/dwc/sddwc.a          \
+TARGETLIBS += $(OBJROOT)/os/uefi/dev/gic/gic.a               \
+              $(OBJROOT)/os/uefi/dev/ns16550/ns16550.a       \
+              $(OBJROOT)/os/uefi/dev/sd/core/sd.a            \
+              $(OBJROOT)/os/uefi/dev/sd/dwc/sddwc.a          \
 
 EXTRA_SRC_DIRS = armv7
 
@@ -108,34 +108,42 @@ PRIVATE_KEY = $(SRCROOT)/os/uefi/plat/veyron/veyron.pem
 ## Define the target that creates the firmware volume object file.
 ##
 
-FWVOL_IMAGES = rtbase runtime/veyronrt.elf
+FWVOL_IMAGES = $(RTBASE) runtime/veyronrt.ffs acpi/acpi.ffs
 
-$(BINROOT)/veyrnfwv.o: $(FWVOL_IMAGES)
-	@sh $(SRCDIR)/genfwvol.sh $(OBJCOPY)
+veyrnfwv.o: veyrnfwv
+	@echo Objectifying - $(notdir $<)
+	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
+
+veyrnfwv: $(FWVOL_IMAGES)
+	@echo Generating - $@
+	@genfv -o $@ $^
 
 $(RAMDISK_O): $(RAMDISK)
-	@cd $(OBJROOT)/$(THISDIR) && \
-	    cp $^ ramdisk && \
-	    $(OBJCOPY) -I binary -O elf32-littlearm -B armv5t ramdisk $@
+	@echo Objectifying - $(notdir $<)
+	@cp $^ ramdisk
+	@$(OBJCOPY) -I binary -O $(OBJ_FORMAT) -B $(BFD_ARCH) ramdisk $@
 
-$(OBJROOT)/$(THISDIR)/emptyrd:
+emptyrd:
 	@echo Minoca > $@
 
-runtime/veyronrt.elf: runtime
+runtime/veyronrt.ffs: runtime
 
 ##
 ## Handle any post build steps to fix up the firmware images.
 ##
 
-postbuild: veyronfw veyronfw.img veyronfw.bin
+postbuild: veyronfw
 
 veyronfw: veyronfw.img | fwbuild
-	@cd $(BINROOT) && veyrnfwb $(TEXT_ADDRESS) $(KEYBLOCK) $(PRIVATE_KEY) $^ $@
+	@echo Generating - $@
+	@fwbuild/veyrnfwb $(TEXT_ADDRESS) $(KEYBLOCK) $(PRIVATE_KEY) $^ $@
+	@cp -p $@ $(BINROOT)/
 
 veyronfw.img: veyronfw.bin
-	@cd $(BINROOT) && mkuboot -c -l $(TEXT_ADDRESS) -e $(TEXT_ADDRESS) \
-	     -a arm -f fit -o $@ $^
+	@echo Generating - $@
+	@mkuboot -c -l $(TEXT_ADDRESS) -e $(TEXT_ADDRESS) -a arm -f fit -o $@ $^
 
 veyronfw.bin: $(BINARY)
-	@cd $(BINROOT) && $(OBJCOPY) -O binary $^ $@
+	@echo Flattening - $(notdir $<)
+	@$(OBJCOPY) -O binary $^ $@
 

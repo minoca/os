@@ -29,8 +29,8 @@ BUILD = yes
 
 BINPLACE = testbin
 
-TARGETLIBS = $(INTLIB)/os/lib/rtl/base/build/basertl.a    \
-             $(INTLIB)/os/lib/rtl/build/rtlstubs.a        \
+TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a    \
+             $(OBJROOT)/os/lib/rtl/build/rtlstubs.a        \
 
 VPATH += $(SRCDIR)/..:
 

@@ -42,6 +42,13 @@ Environment:
 #define SETUP_MAX_CACHE_SIZE (1024 * 1024 * 10)
 
 //
+// Define some max offset to ever expect to write to in order to debug stray
+// writes.
+//
+
+#define SETUP_CACHE_MAX_OFFSET (16ULL * _1TB)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -743,6 +750,8 @@ Return Value:
         }
     }
 
+    assert(Offset < SETUP_CACHE_MAX_OFFSET);
+
     Data->Offset = Offset;
     Data->Dirty = Dirty;
     Data->Data = Data + 1;
@@ -841,6 +850,8 @@ Return Value:
     PRED_BLACK_TREE_NODE FoundNode;
     SETUP_CACHE_DATA Search;
 
+    assert(Offset < SETUP_CACHE_MAX_OFFSET);
+
     Search.Offset = Offset;
     FoundNode = RtlRedBlackTreeSearch(&(Handle->Cache), &(Search.TreeNode));
     if (FoundNode != NULL) {
@@ -891,6 +902,10 @@ Return Value:
 
     FirstEntry = RED_BLACK_TREE_VALUE(FirstNode, SETUP_CACHE_DATA, TreeNode);
     SecondEntry = RED_BLACK_TREE_VALUE(SecondNode, SETUP_CACHE_DATA, TreeNode);
+
+    assert(FirstEntry->Offset < SETUP_CACHE_MAX_OFFSET);
+    assert(SecondEntry->Offset < SETUP_CACHE_MAX_OFFSET);
+
     if (FirstEntry->Offset < SecondEntry->Offset) {
         return ComparisonResultAscending;
 

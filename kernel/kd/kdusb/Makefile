@@ -24,8 +24,6 @@ BINARY = kdusb.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 INCLUDES += $(SRCROOT)/os/drivers/usb/usbcore/inc;
 INCLUDES += $(SRCROOT)/os/drivers/usb/ehci;
 

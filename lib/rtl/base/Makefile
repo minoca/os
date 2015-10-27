@@ -25,8 +25,6 @@ BINARY = basertl.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 INCLUDES += $(SRCDIR)/..;
 
 include $(SRCDIR)/sources

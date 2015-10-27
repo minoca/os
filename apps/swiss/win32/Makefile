@@ -41,10 +41,10 @@ X86_OBJS = $(COMMON_OBJS)   \
            sh/shntos.o      \
            swlib/ntos.o     \
 
-TARGETLIBS = $(INTLIB)/os/apps/libc/dynamic/wincsup/wincsup.a               \
-             $(INTLIB)/os/lib/termlib/build/termlib.a                       \
-             $(INTLIB)/os/lib/rtl/build/rtlstubs.a                          \
-             $(INTLIB)/os/lib/rtl/base/build/basertl.a                      \
+TARGETLIBS = $(OBJROOT)/os/apps/libc/dynamic/wincsup/wincsup.a               \
+             $(OBJROOT)/os/lib/termlib/build/termlib.a                       \
+             $(OBJROOT)/os/lib/rtl/build/rtlstubs.a                          \
+             $(OBJROOT)/os/lib/rtl/base/build/basertl.a                      \
 
 DYNLIBS = -lpsapi -lws2_32
 

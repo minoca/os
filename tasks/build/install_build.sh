@@ -72,6 +72,6 @@ if test x$DEBUG = xchk; then
 fi
 
 echo "Running msetup -v $DEBUG_FLAG --autodeploy"
-msetup -rv $DEBUG_FLAG --autodeploy
+msetup -v $DEBUG_FLAG --autodeploy
 echo "Done running setup."
 

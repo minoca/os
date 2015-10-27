@@ -28,14 +28,12 @@ BINARYTYPE = staticapp
 
 BINPLACE = bin
 
-VPATH += $(BINROOT):
-
 FIRMWARE_VERSION_MAJOR = 1
 FIRMWARE_VERSION_MINOR = 0
 
 LDFLAGS += -Wl,--no-wchar-size-warning -nodefaultlibs -nostartfiles -nostdlib
 
-RAMDISK = $(OBJROOT)/$(THISDIR)/emptyrd
+RAMDISK = emptyrd
 RAMDISK_O = ramdisk.o
 
 OBJS += clock.o                 \
@@ -45,7 +43,7 @@ OBJS += clock.o                 \
         intr.o                  \
         main.o                  \
         memmap.o                \
-        $(BINROOT)/bbonefwv.o   \
+        bbonefwv.o              \
         ramdenum.o              \
         $(RAMDISK_O)            \
         sd.o                    \
@@ -58,8 +56,8 @@ ARMV7_OBJS = armv7/entry.o  \
 
 TEXT_ADDRESS = 0x82000000
 
-TARGETLIBS += $(INTLIB)/os/uefi/dev/sd/core/sd.a            \
-              $(INTLIB)/os/uefi/dev/omapuart/omapuart.a     \
+TARGETLIBS += $(OBJROOT)/os/uefi/dev/sd/core/sd.a            \
+              $(OBJROOT)/os/uefi/dev/omapuart/omapuart.a     \
 
 EXTRA_SRC_DIRS = armv7
 
@@ -95,20 +93,25 @@ EXTRA_CPPFLAGS += -DFIRMWARE_BUILD_DATE=\"$(FIRMWARE_BUILD_DATE)\" \
 ## Define the target that creates the firmware volume object file.
 ##
 
-FWVOL_IMAGES = rtbase runtime/bbonert.elf
+FWVOL_IMAGES = $(RTBASE) runtime/bbonert.ffs acpi/acpi.ffs
 
-$(BINROOT)/bbonefwv.o: $(FWVOL_IMAGES)
-	@sh $(SRCDIR)/genfwvol.sh $(OBJCOPY)
+bbonefwv.o: bbonefwv
+	@echo Objectifying - $(notdir $<)
+	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
+
+bbonefwv: $(FWVOL_IMAGES)
+	@echo Generating - $@
+	@genfv -o $@ $^
 
 $(RAMDISK_O): $(RAMDISK)
-	@cd $(OBJROOT)/$(THISDIR) && \
-	    cp $^ ramdisk && \
-	    $(OBJCOPY) -I binary -O elf32-littlearm -B armv5t ramdisk $@
+	@echo Objectifying - $(notdir $<)
+	@cp $^ ramdisk
+	@$(OBJCOPY) -I binary -O $(OBJ_FORMAT) -B $(BFD_ARCH) ramdisk $@
 
-$(OBJROOT)/$(THISDIR)/emptyrd:
+emptyrd:
 	@echo Minoca > $@
 
-runtime/bbonert.elf: runtime
+runtime/bbonert.ffs: runtime
 
 ##
 ## Handle any post build steps to fix up the firmware images.
@@ -119,11 +122,13 @@ ifeq ($(BINARY), bbonefw.elf)
 postbuild: bbonefw bbonefw.bin
 
 bbonefw: bbonefw.bin
-	@cd $(BINROOT) && mkuboot -c -a arm -f legacy -l $(TEXT_ADDRESS) \
-	    -e $(TEXT_ADDRESS) -o $@ $^
+	@echo Generating - $@
+	@mkuboot -c -a arm -f legacy -l $(TEXT_ADDRESS) -e $(TEXT_ADDRESS) -o $@ $^
+	@cp -p $@ $(BINROOT)/
 
 bbonefw.bin: $(BINARY)
-	@cd $(BINROOT) && $(OBJCOPY) -O binary $^ $@
+	@echo Flattening - $(notdir $<)
+	@$(OBJCOPY) -O binary $^ $@
 
 endif
 

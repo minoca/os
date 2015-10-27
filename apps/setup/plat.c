@@ -102,8 +102,10 @@ extern PVOID _binary_common_txt_start;
 extern PVOID _binary_common_txt_end;
 extern PVOID _binary_galileo_txt_start;
 extern PVOID _binary_galileo_txt_end;
-extern PVOID _binary_instarm_txt_start;
-extern PVOID _binary_instarm_txt_end;
+extern PVOID _binary_instarv6_txt_start;
+extern PVOID _binary_instarv6_txt_end;
+extern PVOID _binary_instarv7_txt_start;
+extern PVOID _binary_instarv7_txt_end;
 extern PVOID _binary_instx86_txt_start;
 extern PVOID _binary_instx86_txt_end;
 extern PVOID _binary_integrd_txt_start;
@@ -172,13 +174,23 @@ SETUP_RECIPE SetupRecipes[] = {
     },
 
     {
-        SetupRecipeInstallArm,
-        "install-arm",
-        "ARM Install Image Recipe",
+        SetupRecipeInstallArmv6,
+        "install-armv6",
+        "ARMv6 Install Image Recipe",
         NULL,
         SETUP_RECIPE_FLAG_HIDDEN,
-        &_binary_instarm_txt_start,
-        &_binary_instarm_txt_end
+        &_binary_instarv6_txt_start,
+        &_binary_instarv6_txt_end
+    },
+
+    {
+        SetupRecipeInstallArmv7,
+        "install-armv7",
+        "ARMv7 Install Image Recipe",
+        NULL,
+        SETUP_RECIPE_FLAG_HIDDEN,
+        &_binary_instarv7_txt_start,
+        &_binary_instarv7_txt_end
     },
 
     {
@@ -263,8 +275,8 @@ SETUP_RECIPE SetupRecipes[] = {
 
     {
         SetupRecipeRaspberryPi,
-        "rasbperrypi",
-        "Rasbperry Pi",
+        "raspberrypi",
+        "Raspberry Pi",
         "Raspberry Pi",
         0,
         &_binary_rpi_txt_start,
@@ -273,8 +285,8 @@ SETUP_RECIPE SetupRecipes[] = {
 
     {
         SetupRecipeRaspberryPi2,
-        "rasbperrypi2",
-        "Rasbperry Pi 2",
+        "raspberrypi2",
+        "Raspberry Pi 2",
         "Raspberry Pi 2",
         0,
         &_binary_rpi2_txt_start,

@@ -26,8 +26,6 @@ BINARY = gic.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = gic.o     \
 
 include $(SRCROOT)/os/minoca.mk

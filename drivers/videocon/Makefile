@@ -30,8 +30,8 @@ OBJS = videocon.o    \
 
 DYNLIBS = $(BINROOT)/kernel                 \
 
-TARGETLIBS = $(INTLIB)/os/lib/basevid/basevid.a     \
-             $(INTLIB)/os/lib/termlib/termlib.a     \
+TARGETLIBS = $(OBJROOT)/os/lib/basevid/basevid.a     \
+             $(OBJROOT)/os/lib/termlib/termlib.a     \
 
 include $(SRCROOT)/os/minoca.mk
 

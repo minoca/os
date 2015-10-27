@@ -27,8 +27,6 @@ BINARYTYPE = library
 
 BUILD = yes
 
-BINPLACE = intlib
-
 INCLUDES += $(SRCDIR)/..;
 
 OBJS = stubs.o   \

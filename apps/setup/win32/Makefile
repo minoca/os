@@ -44,8 +44,8 @@ OBJS = $(COMMON_OBJS)   \
 TARGETLIBS = $(OBJROOT)/os/lib/partlib/build/partlib.a         \
              $(OBJROOT)/os/lib/fatlib/build/fat.a              \
              $(OBJROOT)/os/lib/bconflib/build/bconflib.a       \
-             $(INTLIB)/os/lib/rtl/base/build/basertl.a         \
-             $(INTLIB)/os/lib/rtl/build/rtlstubs.a             \
+             $(OBJROOT)/os/lib/rtl/base/build/basertl.a        \
+             $(OBJROOT)/os/lib/rtl/build/rtlstubs.a            \
              $(OBJROOT)/os/lib/yy/build/yy.a                   \
              $(OBJROOT)/os/apps/setup/config/build/msetplat.a  \
 

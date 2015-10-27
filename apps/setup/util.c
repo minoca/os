@@ -813,9 +813,14 @@ Return Value:
         }
 
         if (Result != 0) {
+            Result = errno;
             fprintf(stderr,
                     "Failed to create destination directory %s.\n",
                     DestinationPath);
+
+            if (Result == 0) {
+                Result = -1;
+            }
 
             goto CopyFileEnd;
         }
@@ -966,9 +971,14 @@ Return Value:
                                         Mode);
 
         if (DestinationFile == NULL) {
+            Result = errno;
             fprintf(stderr,
                     "Failed to create destination file %s.\n",
                     DestinationPath);
+
+            if (Result == 0) {
+                Result = -1;
+            }
 
             goto CopyFileEnd;
         }

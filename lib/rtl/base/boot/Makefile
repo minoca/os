@@ -25,8 +25,6 @@ BINARY = basertlb.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 INCLUDES += $(SRCDIR)/../..;
 
 VPATH += $(SRCDIR)/..:

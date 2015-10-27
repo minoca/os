@@ -26,16 +26,16 @@ BINARY := pandafw.elf
 
 BINARYTYPE = staticapp
 
-BINPLACE = bin
+ifeq ($(BINARY), pandafw.elf)
 
-VPATH += $(BINROOT):
+endif
 
 FIRMWARE_VERSION_MAJOR = 1
 FIRMWARE_VERSION_MINOR = 0
 
 LDFLAGS += -Wl,--no-wchar-size-warning -nodefaultlibs -nostartfiles -nostdlib
 
-RAMDISK = $(OBJROOT)/$(THISDIR)/emptyrd
+RAMDISK = emptyrd
 RAMDISK_O = ramdisk.o
 
 OBJS += debug.o                 \
@@ -45,7 +45,7 @@ OBJS += debug.o                 \
         main.o                  \
         memmap.o                \
         omap4usb.o              \
-        $(BINROOT)/pandafwv.o   \
+        pandafwv.o              \
         ramdenum.o              \
         $(RAMDISK_O)            \
         sd.o                    \
@@ -60,10 +60,10 @@ ARMV7_OBJS = armv7/entry.o  \
 
 TEXT_ADDRESS = 0x82000000
 
-TARGETLIBS += $(INTLIB)/os/uefi/dev/gic/gic.a               \
-              $(INTLIB)/os/uefi/dev/sd/core/sd.a            \
-              $(INTLIB)/os/uefi/dev/omap4/omap4.a           \
-              $(INTLIB)/os/uefi/dev/omapuart/omapuart.a     \
+TARGETLIBS += $(OBJROOT)/os/uefi/dev/gic/gic.a               \
+              $(OBJROOT)/os/uefi/dev/sd/core/sd.a            \
+              $(OBJROOT)/os/uefi/dev/omap4/omap4.a           \
+              $(OBJROOT)/os/uefi/dev/omapuart/omapuart.a     \
 
 EXTRA_SRC_DIRS = armv7
 
@@ -73,6 +73,8 @@ EXTRA_SRC_DIRS = armv7
 ##
 
 ifeq ($(BINARY), pandafw.elf)
+
+BINPLACE = bin
 
 RAMDISK_O = emptyrd.o
 
@@ -110,20 +112,25 @@ EXTRA_CPPFLAGS += -DFIRMWARE_BUILD_DATE=\"$(FIRMWARE_BUILD_DATE)\" \
 ## Define the target that creates the firmware volume object file.
 ##
 
-FWVOL_IMAGES = rtbase runtime/pandart.elf
+FWVOL_IMAGES = $(RTBASE) runtime/pandart.ffs acpi/acpi.ffs
 
-$(BINROOT)/pandafwv.o: $(FWVOL_IMAGES)
-	@sh $(SRCDIR)/genfwvol.sh $(OBJCOPY)
+pandafwv.o: pandafwv
+	@echo Objectifying - $(notdir $<)
+	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
+
+pandafwv: $(FWVOL_IMAGES)
+	@echo Generating - $@
+	@genfv -o $@ $^
 
 $(RAMDISK_O): $(RAMDISK)
-	@cd $(OBJROOT)/$(THISDIR) && \
-	    cp $^ ramdisk && \
-	    $(OBJCOPY) -I binary -O elf32-littlearm -B armv5t ramdisk $@
+	@echo Objectifying - $(notdir $<)
+	@cp $^ ramdisk
+	@$(OBJCOPY) -I binary -O $(OBJ_FORMAT) -B $(BFD_ARCH) ramdisk $@
 
-$(OBJROOT)/$(THISDIR)/emptyrd:
+emptyrd:
 	@echo Minoca > $@
 
-runtime/pandart.elf: runtime
+runtime/pandart.ffs: runtime
 
 ##
 ## Handle any post build steps to fix up the firmware images.
@@ -134,11 +141,13 @@ ifeq ($(BINARY), pandafw.elf)
 postbuild: pandafw pandafw.bin
 
 pandafw: pandafw.bin
-	@cd $(BINROOT) && mkuboot -c -a arm -f legacy -l $(TEXT_ADDRESS) \
-	    -e $(TEXT_ADDRESS) -o $@ $^
+	@echo Generating - $@
+	@mkuboot -c -a arm -f legacy -l $(TEXT_ADDRESS) -e $(TEXT_ADDRESS) -o $@ $^
+	@cp -p $@ $(BINROOT)/
 
 pandafw.bin: $(BINARY)
-	@cd $(BINROOT) && $(OBJCOPY) -O binary $^ $@
+	@echo Flattening - $(notdir $<)
+	@$(OBJCOPY) -O binary $^ $@
 
 endif
 
@@ -147,11 +156,22 @@ ifeq ($(BINARY), pandafw_usb.elf)
 postbuild: pandafw_usb pandafw_usb.bin
 
 pandafw_usb: pandafw_usb.bin
-	@cd $(BINROOT) && mkuboot -c -a arm -f legacy -l $(TEXT_ADDRESS) \
-	    -e $(TEXT_ADDRESS) -o $@ $^
+	@echo Generating - $@
+	@mkuboot -c -a arm -f legacy -l $(TEXT_ADDRESS) -e $(TEXT_ADDRESS) -o $@ $^
+	@cp -p $@ $(BINROOT)/pandausb.img
 
 pandafw_usb.bin: $(BINARY)
-	@cd $(BINROOT) && $(OBJCOPY) -O binary $^ $@
+	@echo Flattening - $(notdir $<)
+	@$(OBJCOPY) -O binary $^ $@
 
 endif
+
+##
+## Manually copy to binroot, since the binplace variable isn't set for the
+## second iteration of the USB build. Setting it causes all images to be
+## rebuilt every time.
+##
+
+postbuild: $(BINARY)
+	@cp -p $(BINARY) $(BINROOT)/
 

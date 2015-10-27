@@ -26,8 +26,6 @@ BINARY = ps.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = env.o      \
        info.o     \
        init.o     \

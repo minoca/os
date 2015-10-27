@@ -30,7 +30,7 @@ OBJS = part.o  \
 
 DYNLIBS = $(BINROOT)/kernel             \
 
-TARGETLIBS = $(INTLIB)/os/lib/partlib/partlib.a    \
+TARGETLIBS = $(OBJROOT)/os/lib/partlib/partlib.a    \
 
 include $(SRCROOT)/os/minoca.mk
 

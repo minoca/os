@@ -66,7 +66,7 @@ OUTROOT := $(SRCROOT)/$(ARCH)$(DEBUG)
 BINROOT := $(OUTROOT)/bin
 TESTBIN := $(OUTROOT)/testbin
 OBJROOT := $(OUTROOT)/obj
-INTLIB := $(OUTROOT)/intlib
+STRIPPED_DIR := $(BINROOT)/stripped
 
 CURDIR := $(subst \,/,$(CURDIR))
 
@@ -91,13 +91,11 @@ $(OBJDIR):
 
 clean:
 	rm -rf $(OBJROOT)/$(THISDIR)
-	rm -rf $(INTLIB)/$(THISDIR)
 
 wipe:
 	rm -rf $(OBJROOT)
 	rm -rf $(BINROOT)
 	rm -rf $(TESTBIN)
-	rm -rf $(INTLIB)
 
 Makefile: ;
 %.mk :: ;
@@ -185,6 +183,14 @@ endif
 BUILD_TIME := $(shell systime)
 BUILD_TIME_STRING := "$(shell date "+%a %b %d %Y %H:%M:%S %p")"
 BUILD_STRING := "($(USERNAME))"
+
+##
+## Define a file that gets touched to indicate that something has changed and
+## images need to be rebuilt.
+##
+
+LAST_UPDATE_FILE :=  $(OBJROOT)/last-update
+UPDATE_LAST_UPDATE := date > $(LAST_UPDATE_FILE)
 
 ##
 ## Includes directory.
@@ -383,7 +389,8 @@ endif
 ## prepend the current object directory to every extra directory.
 ##
 
-EXTRA_OBJ_DIRS = $(EXTRA_SRC_DIRS:%=$(OBJROOT)/$(THISDIR)/%)
+EXTRA_OBJ_DIRS += $(EXTRA_SRC_DIRS:%=$(OBJROOT)/$(THISDIR)/%) $(STRIPPED_DIR)
+
 all: $(DIRS) $(BINARY) postbuild
 
 $(DIRS): $(OBJROOT)/$(THISDIR)
@@ -468,9 +475,6 @@ $(BINARY): $(ALLOBJS) $(TARGETLIBS)
     ifeq ($(BINARYTYPE),library)
 	@echo Building Library - $@
 	@$(AR) rcs $@ $^ $(TARGETLIBS)
-    ifeq ($(BINPLACE),intlib)
-	@cp -pf $@ $(INTLIB)/$(THISDIR)/
-    endif
     endif
     ifeq ($(BINARYTYPE),so)
 	@echo Linking - $@
@@ -483,6 +487,8 @@ $(BINARY): $(ALLOBJS) $(TARGETLIBS)
     ifeq ($(BINPLACE),bin)
 	@echo Binplacing - $(OBJROOT)/$(THISDIR)/$(BINARY)
 	@cp -pf $(BINARY) $(BINROOT)/
+	@$(STRIP) -p -o $(STRIPPED_DIR)/$(BINARY) $(BINARY)
+	@$(UPDATE_LAST_UPDATE)
     endif
     ifeq ($(BINPLACE),testbin)
 	@echo Binplacing Test - $(OBJROOT)/$(THISDIR)/$(BINARY)
@@ -501,11 +507,10 @@ endif
 ## rebuilt.
 ##
 
-$(OBJROOT)/$(THISDIR): | prebuild $(BINROOT) $(TESTBIN) $(INTLIB)/$(THISDIR) \
-                         $(EXTRA_OBJ_DIRS)
+$(OBJROOT)/$(THISDIR): | prebuild $(BINROOT) $(TESTBIN) $(EXTRA_OBJ_DIRS)
 	@mkdir -p $(OBJROOT)/$(THISDIR)
 
-$(BINROOT) $(INTLIB)/$(THISDIR) $(TESTBIN) $(EXTRA_OBJ_DIRS):
+$(BINROOT) $(TESTBIN) $(EXTRA_OBJ_DIRS):
 	@mkdir -p $@
 
 ##

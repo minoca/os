@@ -30,7 +30,7 @@ BINARYTYPE = app
 INCLUDES += $(SRCROOT)/os/apps/inc;$(SRCDIR)/..;$(SRCDIR)/../..;
 INCLUDES += $(SRCROOT)/os/lib/im;$(SRCROOT)/os/apps/inc/libc;
 
-TARGETLIBS = $(INTLIB)/os/lib/im/im.a                  \
+TARGETLIBS = $(OBJROOT)/os/lib/im/im.a                  \
 
 DYNLIBS = -lminocaos
 

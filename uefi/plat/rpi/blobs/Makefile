@@ -4,30 +4,26 @@
 #
 #   Binary Name:
 #
-#       SD DesignWare
+#       Blobs
 #
 #   Abstract:
 #
-#       This library contains the DesignWare Secure Digital (card) controller
-#       device.
+#       This directory contains the binary blobs needed to boot the Raspberry
+#       Pi.
 #
 #   Author:
 #
-#       Chris Stevens 16-Jul-2015
+#       Evan Green 26-Oct-2015
 #
 #   Environment:
 #
-#       Firmware
+#       User Mode
 #
 ################################################################################
 
-include $(SRCDIR)/../../common
-
-BINARY = sddwc.a
-
-BINARYTYPE = library
-
-OBJS = sddwc.o       \
-
 include $(SRCROOT)/os/minoca.mk
+
+all:
+	@cd $(SRCROOT)/os/uefi/plat/rpi2/blobs && \
+	    $(MAKE) SRCDIR=$(SRCROOT)/os/uefi/plat/rpi2/blobs
 

@@ -1602,6 +1602,11 @@ Return Value:
         goto FatOpenEnd;
     }
 
+    if (*PathCopy == '\0') {
+        Status = STATUS_NOT_FOUND;
+        goto FatOpenEnd;
+    }
+
     //
     // Loop opening the next component in the path.
     //

@@ -26,8 +26,6 @@ BINARY = ob.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = handles.o   \
        obapi.o
 

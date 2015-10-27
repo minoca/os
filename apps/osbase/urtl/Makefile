@@ -25,8 +25,6 @@ BINARY = urtl.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 INCLUDES += $(SRCROOT)/os/apps/inc;
 
 OBJS = assert.o  \

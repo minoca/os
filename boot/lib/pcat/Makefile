@@ -24,8 +24,6 @@ BINARY = bootpcat.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 include $(SRCDIR)/../sources
 
 INCLUDES += $(SRCDIR)/../inc;$(SRCDIR)/..;

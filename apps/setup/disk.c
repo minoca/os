@@ -462,10 +462,9 @@ Return Value:
          BlockIndex < BlockCount;
          BlockIndex += 1) {
 
-        Status = SetupPartitionLibraryWrite(
-                      PartitionContext,
-                      Partitions[PartitionIndex].StartOffset + BlockIndex,
-                      ZeroBuffer);
+        Status = SetupPartitionLibraryWrite(PartitionContext,
+                                            BlockIndex,
+                                            ZeroBuffer);
 
         if (!KSUCCESS(Status)) {
             fprintf(stderr,

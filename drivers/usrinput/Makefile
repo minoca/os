@@ -35,7 +35,7 @@ OBJS = uskeys.o   \
 
 INCLUDES += $(SRCROOT)/os/drivers/usrinput/inc;
 
-TARGETLIBS = $(INTLIB)/os/lib/termlib/termlib.a     \
+TARGETLIBS = $(OBJROOT)/os/lib/termlib/termlib.a     \
 
 DYNLIBS = $(BINROOT)/kernel                \
 

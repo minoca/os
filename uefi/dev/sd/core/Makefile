@@ -27,8 +27,6 @@ BINARY = sd.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = sd.o     \
        sdstd.o  \
 

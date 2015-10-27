@@ -24,11 +24,7 @@ BINARY = msetplat.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 BUILD = yes
-
-BINPLACE = intlib
 
 VPATH += $(SRCDIR)/..:
 

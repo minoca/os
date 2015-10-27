@@ -26,8 +26,6 @@ BINARY = ns16550.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = ns16550.o     \
 
 include $(SRCROOT)/os/minoca.mk

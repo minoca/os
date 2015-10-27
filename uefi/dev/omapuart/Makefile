@@ -27,8 +27,6 @@ BINARY = omapuart.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = omapuart.o     \
 
 include $(SRCROOT)/os/minoca.mk

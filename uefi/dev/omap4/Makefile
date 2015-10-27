@@ -26,8 +26,6 @@ BINARY = omap4.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = clock.o     \
 
 include $(SRCROOT)/os/minoca.mk

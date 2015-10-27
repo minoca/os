@@ -24,8 +24,6 @@ BINARY = krtl.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 INCLUDES += $(SRCDIR)/..;
 
 OBJS = assert.o  \

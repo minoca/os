@@ -29,8 +29,6 @@ BINARY = hl.a
 
 BINARYTYPE = library
 
-BINPLACE = intlib
-
 OBJS = cache.o    \
        calendar.o \
        clock.o    \

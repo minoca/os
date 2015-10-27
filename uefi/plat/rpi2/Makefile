@@ -35,7 +35,7 @@ FIRMWARE_VERSION_MINOR = 0
 
 LDFLAGS += -Wl,--no-wchar-size-warning -nodefaultlibs -nostartfiles -nostdlib
 
-RAMDISK = $(OBJROOT)/$(THISDIR)/emptyrd
+RAMDISK = emptyrd
 RAMDISK_O = ramdisk.o
 
 OBJS += debug.o              \
@@ -43,7 +43,7 @@ OBJS += debug.o              \
         intr.o               \
         main.o               \
         memmap.o             \
-        $(BINROOT)/rpi2fwv.o \
+        rpi2fwv.o            \
         ramdenum.o           \
         $(RAMDISK_O)         \
         smbios.o             \
@@ -55,9 +55,9 @@ ARMV7_OBJS = armv7/entry.o  \
 
 TEXT_ADDRESS = 0x00008000
 
-TARGETLIBS += $(INTLIB)/os/uefi/dev/pl11/pl11.a       \
-              $(INTLIB)/os/uefi/dev/sd/core/sd.a      \
-              $(INTLIB)/os/uefi/dev/bcm2709/bcm2709.a \
+TARGETLIBS += $(OBJROOT)/os/uefi/dev/pl11/pl11.a       \
+              $(OBJROOT)/os/uefi/dev/sd/core/sd.a      \
+              $(OBJROOT)/os/uefi/dev/bcm2709/bcm2709.a \
 
 EXTRA_SRC_DIRS = armv7
 
@@ -71,6 +71,7 @@ ifeq ($(BINARY), rpi2fw.elf)
 RAMDISK_O = emptyrd.o
 
 DIRS = acpi     \
+       blobs    \
        runtime
 
 endif
@@ -103,18 +104,29 @@ EXTRA_CPPFLAGS += -DFIRMWARE_BUILD_DATE=\"$(FIRMWARE_BUILD_DATE)\" \
 ## Define the target that creates the firmware volume object file.
 ##
 
-FWVOL_IMAGES = rtbase runtime/rpi2rt.elf
+FWVOL_IMAGES = $(RTBASE) runtime/rpi2rt.ffs acpi/acpi.ffs
 
-$(BINROOT)/rpi2fwv.o: $(FWVOL_IMAGES)
-	@sh $(SRCDIR)/genfwvol.sh $(OBJCOPY)
+rpi2fwv.o: rpi2fwv
+	@echo Objectifying - $(notdir $<)
+	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
+
+rpi2fwv: $(FWVOL_IMAGES)
+	@echo Generating - $@
+	@genfv -o $@ $^
 
 $(RAMDISK_O): $(RAMDISK)
-	@cd $(OBJROOT)/$(THISDIR) && \
-	    cp $^ ramdisk && \
-	    $(OBJCOPY) -I binary -O elf32-littlearm -B armv5t ramdisk $@
+	@echo Objectifying - $(notdir $<)
+	@cp $^ ramdisk
+	@$(OBJCOPY) -I binary -O $(OBJ_FORMAT) -B $(BFD_ARCH) ramdisk $@
 
-$(OBJROOT)/$(THISDIR)/emptyrd:
+emptyrd:
 	@echo Minoca > $@
 
-runtime/rpi2rt.elf: runtime
+runtime/rpi2rt.ffs: runtime
 
+postbuild: rpi2fw
+
+rpi2fw: $(BINARY)
+	@echo Flattening - $(notdir $<)
+	@$(OBJCOPY) -O binary $^ $@
+	@cp -p $@ $(BINROOT)/
