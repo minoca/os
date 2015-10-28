@@ -814,12 +814,30 @@ Return Value:
     NewObject->DestructorListEntry.Next = NULL;
     if (ParentObject != NULL) {
         NewObject->ReferenceCount += 1;
-        INSERT_AFTER(&(NewObject->SiblingListEntry),
-                     &(ParentObject->ChildListHead));
+        INSERT_BEFORE(&(NewObject->SiblingListEntry),
+                      &(ParentObject->ChildListHead));
 
         if (Context != NULL) {
-            INSERT_AFTER(&(NewObject->DestructorListEntry),
-                         &(Context->CurrentMethod->CreatedObjectsListHead));
+
+            //
+            // The object is being added to the global namespace, so destroy it
+            // when the definition block is unloaded.
+            //
+
+            if (Context->DestructorListHead != NULL) {
+                INSERT_BEFORE(&(NewObject->DestructorListEntry),
+                              Context->DestructorListHead);
+
+            //
+            // A method is executing, so add it to the list of objects created
+            // under the method.
+            //
+
+            } else {
+                INSERT_BEFORE(
+                            &(NewObject->DestructorListEntry),
+                            &(Context->CurrentMethod->CreatedObjectsListHead));
+            }
         }
 
     } else {

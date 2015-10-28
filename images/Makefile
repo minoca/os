@@ -166,5 +166,5 @@ clean: images-clean
 .PHONY: images-clean
 
 images-clean:
-	rm $(IMAGES)
+	rm -f $(IMAGES)
 

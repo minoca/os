@@ -791,9 +791,17 @@ Return Value:
         *((PULONGLONG)Value) = *((PULONGLONG)DataPointer);
         break;
 
+    //
+    // Allow arbitrary reads on a memory op-region to accomodate the Load
+    // instruction.
+    //
+
     default:
-        Status = STATUS_INVALID_PARAMETER;
-        goto ReadMemoryOperationRegionEnd;
+
+        ASSERT(IS_ALIGNED(Size, BITS_PER_BYTE));
+
+        RtlCopyMemory(Value, DataPointer, Size / BITS_PER_BYTE);
+        break;
     }
 
     Status = STATUS_SUCCESS;

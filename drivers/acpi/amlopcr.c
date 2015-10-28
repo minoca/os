@@ -1934,14 +1934,10 @@ Return Value:
 {
 
     NextStatement->Type = AmlStatementLoad;
-
-    //
-    // TODO: Implement AML Load opcode.
-    //
-
-    ASSERT(FALSE);
-
-    return STATUS_NOT_IMPLEMENTED;
+    Context->CurrentOffset += 1;
+    NextStatement->ArgumentsNeeded = 2;
+    NextStatement->ArgumentsAcquired = 0;
+    return STATUS_SUCCESS;
 }
 
 KSTATUS
@@ -4136,14 +4132,10 @@ Return Value:
 {
 
     NextStatement->Type = AmlStatementUnload;
-
-    //
-    // TODO: Implement AML Unload opcode.
-    //
-
-    ASSERT(FALSE);
-
-    return STATUS_NOT_IMPLEMENTED;
+    Context->CurrentOffset += 1;
+    NextStatement->ArgumentsNeeded = 1;
+    NextStatement->ArgumentsAcquired = 0;
+    return STATUS_SUCCESS;
 }
 
 KSTATUS

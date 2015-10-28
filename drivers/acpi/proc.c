@@ -402,7 +402,7 @@ Return Value:
     }
 
     if ((Cst == NULL) || (Cst->Type != AcpiObjectPackage) ||
-        (Cst->U.Package.ElementCount != 2)) {
+        (Cst->U.Package.ElementCount < 2)) {
 
         Status = STATUS_INVALID_CONFIGURATION;
         goto ProcessorInitializeCStatesEnd;

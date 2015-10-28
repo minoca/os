@@ -37,13 +37,13 @@ fi
 
 export TMPDIR=$PWD
 export TEMP=$TMPDIR
-AUTOROOT=$SRCROOT/$ARCH$DEBUG/bin/apps/auto
+BINROOT="$SRCROOT/$ARCH$DEBUG/bin"
+AUTOROOT=$BINROOT/apps/auto
 
 ##
 ## Move the created distribution images aside.
 ##
 
-BINROOT="$SRCROOT/$ARCH$DEBUG/bin"
 if ! test -d "$BINROOT/distribute"; then
     mkdir "$BINROOT/distribute/"
     for file in $BINROOT/*.img $BINROOT/*.vmdk ; do
@@ -73,6 +73,8 @@ fi
 ## Manually symlink it in.
 ##
 
+mkdir -p "$BINROOT/apps/usr/sbin"
+cp -p "$BINROOT/skel/usr/sbin/update-rc.d" "$BINROOT/apps/usr/sbin/"
 mkdir -p "$BINROOT/apps/etc/init.d/"
 cp -v "$SRCROOT/os/tasks/build/autoclient.sh" "$BINROOT/apps/etc/init.d/"
 chmod 0755 "$BINROOT/apps/etc/init.d/autoclient.sh"

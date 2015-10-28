@@ -65,19 +65,23 @@ Members:
     ListEntry - Stores pointers to the next and previous secondary definition
         tables.
 
-    OemTableId - Stores the OEM table ID of the table corresponding to this
-        loaded block. ACPI says that all SSDTs with a unique OEM ID are loaded,
-        implying that non-unique OEM ID tables should not be loaded.
+    HandleObject - Stores the optional handle associated with this definition
+        block.
 
-    Handle - Stores a pointer to the loaded definition block handle.
+    ObjectList - Stores the head of the list of namespace objects to destroy if
+        this definition block is unloaded. The objects on this list will be
+        ACPI objects, and the list entry is the destructor list entry.
+
+    Code - Stores the AML code for this definition block.
 
 --*/
 
-typedef struct _ACPI_SECONDARY_DEFINITION_BLOCK {
+typedef struct _ACPI_LOADED_DEFINITION_BLOCK {
     LIST_ENTRY ListEntry;
-    ULONGLONG OemTableId;
-    HANDLE Handle;
-} ACPI_SECONDARY_DEFINITION_BLOCK, *PACPI_SECONDARY_DEFINITION_BLOCK;
+    PACPI_OBJECT HandleObject;
+    LIST_ENTRY ObjectList;
+    PDESCRIPTION_HEADER Code;
+} ACPI_LOADED_DEFINITION_BLOCK, *PACPI_LOADED_DEFINITION_BLOCK;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -143,22 +147,16 @@ AcpipRunDeviceInitialization (
 //
 // Define a value that can be set from the debugger to change the behavior
 // of the AML interpreter. For example, it can be set to print out the
-// statements it's executing.
+// statements it's executing. See AML_EXECUTION_OPTION_* definitions.
 //
 
 ULONG AcpiDebugExecutionOptions = 0x0;
 
 //
-// Store a pointer to the DSDT execution context.
-//
-
-HANDLE AcpiDsdtDefinitionBlockHandle = INVALID_HANDLE;
-
-//
 // Store the list of SSDT definition blocks.
 //
 
-LIST_ENTRY AcpiSsdtDefinitionBlockList;
+LIST_ENTRY AcpiLoadedDefinitionBlockList;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -167,7 +165,7 @@ LIST_ENTRY AcpiSsdtDefinitionBlockList;
 KSTATUS
 AcpiLoadDefinitionBlock (
     PDESCRIPTION_HEADER Table,
-    PHANDLE DefinitionBlockHandle
+    PACPI_OBJECT Handle
     )
 
 /*++
@@ -183,8 +181,8 @@ Arguments:
     Table - Supplies a pointer to the table containing the definition block.
         This table should probably only be the DSDT or an SSDT.
 
-    DefinitionBlockHandle - Supplies a pointer where a handle to the definition
-        block will be returns on success.
+    Handle - Supplies an optional pointer to the handle associated with this
+        definition block.
 
 Return Value:
 
@@ -195,17 +193,45 @@ Return Value:
 {
 
     ULONG AmlSize;
+    PACPI_LOADED_DEFINITION_BLOCK CurrentBlock;
+    PLIST_ENTRY CurrentEntry;
     PAML_EXECUTION_CONTEXT ExecutionContext;
     ULONG ExecutionOptions;
     BOOL IntegerWidthIs32;
+    PACPI_LOADED_DEFINITION_BLOCK LoadedBlock;
+    BOOL Match;
     PSTR Name;
     KSTATUS Status;
+
+    //
+    // First look to see if this table has already been loaded. Don't double
+    // load tables.
+    //
+
+    CurrentEntry = AcpiLoadedDefinitionBlockList.Next;
+    while (CurrentEntry != &AcpiLoadedDefinitionBlockList) {
+        CurrentBlock = LIST_VALUE(CurrentEntry,
+                                  ACPI_LOADED_DEFINITION_BLOCK,
+                                  ListEntry);
+
+        CurrentEntry = CurrentEntry->Next;
+        if ((CurrentBlock->Code->OemTableId == Table->OemTableId) &&
+            (CurrentBlock->Code->Length == Table->Length)) {
+
+            Match = RtlCompareMemory(Table, CurrentBlock->Code, Table->Length);
+            if (Match != FALSE) {
+                return STATUS_SUCCESS;
+            }
+        }
+    }
 
     //
     // Create an execution context. Before ACPI 2.0, integers were 32-bits wide.
     //
 
     IntegerWidthIs32 = FALSE;
+    ExecutionContext = NULL;
+    LoadedBlock = NULL;
     ExecutionOptions = AML_EXECUTION_OPTION_RUN;
     if (Table->Revision < 2) {
         IntegerWidthIs32 = TRUE;
@@ -217,6 +243,22 @@ Return Value:
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto LoadDefinitionBlockEnd;
     }
+
+    LoadedBlock = AcpipAllocateMemory(sizeof(ACPI_LOADED_DEFINITION_BLOCK));
+    if (LoadedBlock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto LoadDefinitionBlockEnd;
+    }
+
+    RtlZeroMemory(LoadedBlock, sizeof(ACPI_LOADED_DEFINITION_BLOCK));
+    INITIALIZE_LIST_HEAD(&(LoadedBlock->ObjectList));
+    LoadedBlock->Code = Table;
+    if (Handle != NULL) {
+        AcpipObjectAddReference(Handle);
+        LoadedBlock->HandleObject = Handle;
+    }
+
+    INSERT_BEFORE(&(LoadedBlock->ListEntry), &AcpiLoadedDefinitionBlockList);
 
     //
     // Push a default method context onto the execution context that spans the
@@ -236,6 +278,7 @@ Return Value:
         goto LoadDefinitionBlockEnd;
     }
 
+    ExecutionContext->DestructorListHead = &(LoadedBlock->ObjectList);
     if (ExecutionContext->PrintStatements != FALSE) {
         Name = (PSTR)&(Table->Signature);
         RtlDebugPrint("Loading %c%c%c%c\n", Name[0], Name[1], Name[2], Name[3]);
@@ -256,19 +299,14 @@ Return Value:
     }
 
 LoadDefinitionBlockEnd:
-    if (!KSUCCESS(Status)) {
-        if (ExecutionContext != NULL) {
-            AcpipDestroyAmlExecutionContext(ExecutionContext);
-        }
-
-        ExecutionContext = NULL;
+    if (ExecutionContext != NULL) {
+        AcpipDestroyAmlExecutionContext(ExecutionContext);
     }
 
-    if (ExecutionContext == NULL) {
-        *DefinitionBlockHandle = INVALID_HANDLE;
-
-    } else {
-        *DefinitionBlockHandle = ExecutionContext;
+    if (!KSUCCESS(Status)) {
+        if (LoadedBlock != NULL) {
+            AcpiUnloadDefinitionBlock(Handle);
+        }
     }
 
     return Status;
@@ -276,19 +314,20 @@ LoadDefinitionBlockEnd:
 
 VOID
 AcpiUnloadDefinitionBlock (
-    HANDLE DefinitionBlockHandle
+    PACPI_OBJECT Handle
     )
 
 /*++
 
 Routine Description:
 
-    This routine unloads a loaded ACPI definition block.
+    This routine unloads all ACPI definition blocks loaded under the given
+    handle.
 
 Arguments:
 
-    DefinitionBlockHandle - Supplies the handle returned when the block was
-        loaded.
+    Handle - Supplies the handle to unload blocks based on. If NULL is
+        supplied, then all blocks will be unloaded.
 
 Return Value:
 
@@ -298,11 +337,52 @@ Return Value:
 
 {
 
-    if (DefinitionBlockHandle == INVALID_HANDLE) {
-        return;
+    PLIST_ENTRY CurrentEntry;
+    PACPI_LOADED_DEFINITION_BLOCK LoadedBlock;
+    PACPI_OBJECT Object;
+
+    CurrentEntry = AcpiLoadedDefinitionBlockList.Next;
+    while (CurrentEntry != &AcpiLoadedDefinitionBlockList) {
+        LoadedBlock = LIST_VALUE(CurrentEntry,
+                                 ACPI_LOADED_DEFINITION_BLOCK,
+                                 ListEntry);
+
+        CurrentEntry = CurrentEntry->Next;
+        if ((Handle == NULL) || (LoadedBlock->HandleObject == Handle)) {
+            LIST_REMOVE(&(LoadedBlock->ListEntry));
+            if (LoadedBlock->HandleObject != NULL) {
+                AcpipObjectReleaseReference(LoadedBlock->HandleObject);
+            }
+
+            //
+            // Destroy all the namespace objects created by this definition
+            // block.
+            //
+
+            while (!LIST_EMPTY(&(LoadedBlock->ObjectList))) {
+                Object = LIST_VALUE(LoadedBlock->ObjectList.Next,
+                                    ACPI_OBJECT,
+                                    DestructorListEntry);
+
+                LIST_REMOVE(&(Object->DestructorListEntry));
+                Object->DestructorListEntry.Next = NULL;
+                AcpipObjectReleaseReference(Object);
+            }
+
+            //
+            // Free the table as well if this came with a handle. The main
+            // DSDT and SSDTs do not have handles, but every AML Load
+            // instruction does.
+            //
+
+            if (LoadedBlock->HandleObject != NULL) {
+                AcpipFreeMemory(LoadedBlock->Code);
+            }
+
+            AcpipFreeMemory(LoadedBlock);
+        }
     }
 
-    AcpipDestroyAmlExecutionContext(DefinitionBlockHandle);
     return;
 }
 
@@ -485,20 +565,14 @@ Return Value:
 
     PACPI_OBJECT Argument;
     ULONGLONG ArgumentValue;
-    PLIST_ENTRY CurrentEntry;
-    HANDLE DsdtHandle;
     PDESCRIPTION_HEADER DsdtTable;
-    PACPI_SECONDARY_DEFINITION_BLOCK ExistingBlock;
     INTERRUPT_MODEL InterruptModel;
     PACPI_OBJECT PicMethod;
-    PACPI_SECONDARY_DEFINITION_BLOCK SsdtBlock;
     PDESCRIPTION_HEADER SsdtTable;
     KSTATUS Status;
 
     Argument = NULL;
-    DsdtHandle = INVALID_HANDLE;
-    SsdtBlock = NULL;
-    INITIALIZE_LIST_HEAD(&AcpiSsdtDefinitionBlockList);
+    INITIALIZE_LIST_HEAD(&AcpiLoadedDefinitionBlockList);
 
     //
     // Initialize operating system specific support.
@@ -522,11 +596,9 @@ Return Value:
     // Load the DSDT.
     //
 
-    ASSERT(AcpiDsdtDefinitionBlockHandle == INVALID_HANDLE);
-
     DsdtTable = AcpiFindTable(DSDT_SIGNATURE, NULL);
     if (DsdtTable != NULL) {
-        Status = AcpiLoadDefinitionBlock(DsdtTable, &DsdtHandle);
+        Status = AcpiLoadDefinitionBlock(DsdtTable, NULL);
         if (!KSUCCESS(Status)) {
             goto InitializeAmlInterpreterEnd;
         }
@@ -543,60 +615,10 @@ Return Value:
             break;
         }
 
-        //
-        // Look to see if a table with this OEM ID was already loaded, and skip
-        // it if so.
-        //
-
-        CurrentEntry = AcpiSsdtDefinitionBlockList.Next;
-        while (CurrentEntry != &AcpiSsdtDefinitionBlockList) {
-            ExistingBlock = LIST_VALUE(CurrentEntry,
-                                       ACPI_SECONDARY_DEFINITION_BLOCK,
-                                       ListEntry);
-
-            if (ExistingBlock->OemTableId == SsdtTable->OemTableId) {
-                break;
-            }
-
-            CurrentEntry = CurrentEntry->Next;
-        }
-
-        if (CurrentEntry != &AcpiSsdtDefinitionBlockList) {
-            continue;
-        }
-
-        //
-        // Allocate a secondary definition block structure.
-        //
-
-        SsdtBlock = AcpipAllocateMemory(
-                                      sizeof(ACPI_SECONDARY_DEFINITION_BLOCK));
-
-        if (SsdtBlock == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
-            goto InitializeAmlInterpreterEnd;
-        }
-
-        RtlZeroMemory(SsdtBlock, sizeof(ACPI_SECONDARY_DEFINITION_BLOCK));
-        SsdtBlock->OemTableId = SsdtTable->OemTableId;
-        SsdtBlock->Handle = INVALID_HANDLE;
-
-        //
-        // Load up the table.
-        //
-
-        Status = AcpiLoadDefinitionBlock(SsdtTable, &(SsdtBlock->Handle));
+        Status = AcpiLoadDefinitionBlock(SsdtTable, NULL);
         if (!KSUCCESS(Status)) {
             goto InitializeAmlInterpreterEnd;
         }
-
-        //
-        // Insert the block onto the global list, and move to the next SSDT
-        // table.
-        //
-
-        INSERT_BEFORE(&(SsdtBlock->ListEntry), &AcpiSsdtDefinitionBlockList);
-        SsdtBlock = NULL;
     }
 
     //
@@ -654,49 +676,15 @@ InitializeAmlInterpreterEnd:
         AcpipObjectReleaseReference(Argument);
     }
 
-    if (SsdtBlock != NULL) {
-
-        ASSERT(SsdtBlock->ListEntry.Next == NULL);
-
-        if (SsdtBlock->Handle != INVALID_HANDLE) {
-            AcpiUnloadDefinitionBlock(SsdtBlock->Handle);
-        }
-
-        AcpipFreeMemory(SsdtBlock);
-    }
-
     if (!KSUCCESS(Status)) {
 
         //
-        // Unload all the SSDTs.
+        // Unload everything.
         //
 
-        CurrentEntry = AcpiSsdtDefinitionBlockList.Next;
-        while (CurrentEntry != &AcpiSsdtDefinitionBlockList) {
-            ExistingBlock = LIST_VALUE(CurrentEntry,
-                                       ACPI_SECONDARY_DEFINITION_BLOCK,
-                                       ListEntry);
-
-            CurrentEntry = CurrentEntry->Next;
-            LIST_REMOVE(&(ExistingBlock->ListEntry));
-            if (ExistingBlock->Handle != INVALID_HANDLE) {
-                AcpiUnloadDefinitionBlock(SsdtBlock->Handle);
-            }
-
-            AcpipFreeMemory(ExistingBlock);
-        }
-
-        //
-        // Unload the DSDT.
-        //
-
-        if (DsdtHandle != INVALID_HANDLE) {
-            AcpiUnloadDefinitionBlock(DsdtHandle);
-            DsdtHandle = INVALID_HANDLE;
-        }
+        AcpiUnloadDefinitionBlock(NULL);
     }
 
-    AcpiDsdtDefinitionBlockHandle = DsdtHandle;
     return Status;
 }
 

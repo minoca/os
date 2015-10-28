@@ -3582,6 +3582,31 @@ Return Value:
 --*/
 
 KSTATUS
+AcpipEvaluateLoadStatement (
+    PAML_EXECUTION_CONTEXT Context,
+    PAML_STATEMENT Statement
+    );
+
+/*++
+
+Routine Description:
+
+    This routine evaluates a Load statement, which adds the contents of a
+    memory op-region as an SSDT to the namespace.
+
+Arguments:
+
+    Context - Supplies a pointer to the current AML execution context.
+
+    Statement - Supplies a pointer to the statement to evaluate.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
 AcpipEvaluateLocalStatement (
     PAML_EXECUTION_CONTEXT Context,
     PAML_STATEMENT Statement
@@ -4176,6 +4201,31 @@ Routine Description:
     This routine evaluates the "To" something and "From" something statements,
     including ToBCD, ToBuffer, ToDecimalString, ToHexString, ToInteger,
     ToString, ToUUID, Unicode, and FromBcd.
+
+Arguments:
+
+    Context - Supplies a pointer to the current AML execution context.
+
+    Statement - Supplies a pointer to the statement to evaluate.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+AcpipEvaluateUnloadStatement (
+    PAML_EXECUTION_CONTEXT Context,
+    PAML_STATEMENT Statement
+    );
+
+/*++
+
+Routine Description:
+
+    This routine evaluates an Unload statement, which unloads a previously
+    loaded definition block.
 
 Arguments:
 

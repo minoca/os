@@ -4165,6 +4165,226 @@ Return Value:
 }
 
 KSTATUS
+AcpipEvaluateLoadStatement (
+    PAML_EXECUTION_CONTEXT Context,
+    PAML_STATEMENT Statement
+    )
+
+/*++
+
+Routine Description:
+
+    This routine evaluates a Load statement, which adds the contents of a
+    memory op-region as an SSDT to the namespace.
+
+Arguments:
+
+    Context - Supplies a pointer to the current AML execution context.
+
+    Statement - Supplies a pointer to the statement to evaluate.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PDESCRIPTION_HEADER Buffer;
+    PACPI_OBJECT BufferObject;
+    UINTN BufferSize;
+    PACPI_OBJECT DdbHandle;
+    PACPI_OBJECT NewArgument;
+    PACPI_OPERATION_REGION_OBJECT OperationRegion;
+    PACPI_OBJECT Source;
+    KSTATUS Status;
+
+    Buffer = NULL;
+    BufferObject = NULL;
+
+    //
+    // If not all arguments are acquired, evaluate the previous statement to get
+    // the next argument.
+    //
+
+    if (Statement->ArgumentsNeeded != Statement->ArgumentsAcquired) {
+
+        //
+        // Print out the piece of the statement depending on the number of
+        // arguments acquired.
+        //
+
+        if (Context->PrintStatements != FALSE) {
+            if (Context->PreviousStatement == NULL) {
+                RtlDebugPrint("Load (");
+
+            } else if (Statement->ArgumentsAcquired == 0) {
+                RtlDebugPrint(", ");
+
+            } else {
+                RtlDebugPrint(")");
+            }
+        }
+
+        if (Context->PreviousStatement == NULL) {
+            return STATUS_MORE_PROCESSING_REQUIRED;
+        }
+
+        //
+        // If not executing, then assume the argument would be there but don't
+        // try to dink with it.
+        //
+
+        if (Context->ExecuteStatements == FALSE) {
+            Statement->Argument[Statement->ArgumentsAcquired] = NULL;
+            Statement->ArgumentsAcquired += 1;
+
+        } else {
+            NewArgument = Context->PreviousStatement->Reduction;
+
+            ASSERT(Statement->ArgumentsAcquired <= 1);
+
+            if (Context->PreviousStatement->Reduction != NULL) {
+                AcpipObjectAddReference(NewArgument);
+            }
+
+            Statement->Argument[Statement->ArgumentsAcquired] = NewArgument;
+            Statement->ArgumentsAcquired += 1;
+        }
+
+        if (Statement->ArgumentsNeeded != Statement->ArgumentsAcquired) {
+            return STATUS_MORE_PROCESSING_REQUIRED;
+        }
+    }
+
+    Statement->Reduction = NULL;
+    if (Context->ExecuteStatements == FALSE) {
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // The source can either be an operation region itself or a field unit.
+    //
+
+    Source = Statement->Argument[0];
+    DdbHandle = Statement->Argument[1];
+
+    //
+    // If it's an operation region, read it directly. It had better be a memory
+    // region.
+    //
+
+    if (Source->Type == AcpiObjectOperationRegion) {
+        OperationRegion = &(Source->U.OperationRegion);
+        if ((OperationRegion->Space != OperationRegionSystemMemory) ||
+            (OperationRegion->Length < sizeof(DESCRIPTION_HEADER))) {
+
+            ASSERT(FALSE);
+
+            return STATUS_INVALID_PARAMETER;
+        }
+
+        BufferSize = OperationRegion->Length;
+
+        ASSERT(BufferSize == OperationRegion->Length);
+
+        Buffer = AcpipAllocateMemory(BufferSize);
+        if (Buffer == NULL) {
+            return STATUS_INSUFFICIENT_RESOURCES;
+        }
+
+        Status = OperationRegion->FunctionTable->Read(
+                                       OperationRegion->OsContext,
+                                       0,
+                                       OperationRegion->Length * BITS_PER_BYTE,
+                                       Buffer);
+
+        ASSERT(KSUCCESS(Status));
+
+    //
+    // Convert the field unit into a buffer, which performs a read of the
+    // op-region.
+    //
+
+    } else if (Source->Type == AcpiObjectFieldUnit) {
+        BufferObject = AcpipConvertObjectType(Context,
+                                              Source,
+                                              AcpiObjectBuffer);
+
+        if (BufferObject == NULL) {
+            return STATUS_UNSUCCESSFUL;
+        }
+
+        //
+        // Steal the buffer from the buffer object.
+        //
+
+        Buffer = BufferObject->U.Buffer.Buffer;
+        BufferSize = BufferObject->U.Buffer.Length;
+        BufferObject->U.Buffer.Buffer = NULL;
+        BufferObject->U.Buffer.Length = 0;
+
+    } else {
+        RtlDebugPrint("ACPI: Load source should be an op-region or field.\n");
+
+        ASSERT(FALSE);
+
+        return STATUS_UNEXPECTED_TYPE;
+    }
+
+    //
+    // Validate the buffer a bit.
+    //
+
+    if ((BufferSize < sizeof(DESCRIPTION_HEADER)) ||
+        (BufferSize < Buffer->Length)) {
+
+        Status = STATUS_DATA_LENGTH_MISMATCH;
+        goto EvaluateLoadStatementEnd;
+    }
+
+    if (AcpipChecksumData(Buffer, Buffer->Length) != 0) {
+        Status = STATUS_CHECKSUM_MISMATCH;
+        goto EvaluateLoadStatementEnd;
+    }
+
+    //
+    // Load the definition block synchronously.
+    //
+
+    if (Context->PrintStatements != FALSE) {
+        RtlDebugPrint("\nLoading Definition Block...\n");
+    }
+
+    Status = AcpiLoadDefinitionBlock(Buffer, DdbHandle);
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("ACPI: Failed to execute Load: %x\n", Status);
+        goto EvaluateLoadStatementEnd;
+    }
+
+    //
+    // The definition block owns the buffer now.
+    //
+
+    Buffer = NULL;
+    if (Context->PrintStatements != FALSE) {
+        RtlDebugPrint("\nDone Loading Definition Block\n");
+    }
+
+EvaluateLoadStatementEnd:
+    if (BufferObject != NULL) {
+        AcpipObjectReleaseReference(BufferObject);
+    }
+
+    if (Buffer != NULL) {
+        AcpipFreeMemory(Buffer);
+    }
+
+    return Status;
+}
+
+KSTATUS
 AcpipEvaluateLocalStatement (
     PAML_EXECUTION_CONTEXT Context,
     PAML_STATEMENT Statement
@@ -7685,6 +7905,101 @@ Return Value:
                                           Statement->Argument[2]);
     }
 
+    return STATUS_SUCCESS;
+}
+
+KSTATUS
+AcpipEvaluateUnloadStatement (
+    PAML_EXECUTION_CONTEXT Context,
+    PAML_STATEMENT Statement
+    )
+
+/*++
+
+Routine Description:
+
+    This routine evaluates an Unload statement, which unloads a previously
+    loaded definition block.
+
+Arguments:
+
+    Context - Supplies a pointer to the current AML execution context.
+
+    Statement - Supplies a pointer to the statement to evaluate.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PACPI_OBJECT DdbHandle;
+    PACPI_OBJECT NewArgument;
+
+    //
+    // If not all arguments are acquired, evaluate the previous statement to get
+    // the next argument.
+    //
+
+    if (Statement->ArgumentsNeeded != Statement->ArgumentsAcquired) {
+
+        //
+        // Print out the piece of the statement depending on the number of
+        // arguments acquired.
+        //
+
+        if (Context->PrintStatements != FALSE) {
+            if (Context->PreviousStatement == NULL) {
+                RtlDebugPrint("Unload (");
+
+            } else if (Statement->ArgumentsAcquired == 0) {
+                RtlDebugPrint(")");
+            }
+        }
+
+        if (Context->PreviousStatement == NULL) {
+            return STATUS_MORE_PROCESSING_REQUIRED;
+        }
+
+        //
+        // If not executing, then assume the argument would be there but don't
+        // try to dink with it.
+        //
+
+        if (Context->ExecuteStatements == FALSE) {
+            Statement->Argument[Statement->ArgumentsAcquired] = NULL;
+            Statement->ArgumentsAcquired += 1;
+
+        } else {
+            NewArgument = Context->PreviousStatement->Reduction;
+
+            ASSERT(Statement->ArgumentsAcquired <= 1);
+
+            if (Context->PreviousStatement->Reduction != NULL) {
+                AcpipObjectAddReference(NewArgument);
+            }
+
+            Statement->Argument[Statement->ArgumentsAcquired] = NewArgument;
+            Statement->ArgumentsAcquired += 1;
+        }
+
+        if (Statement->ArgumentsNeeded != Statement->ArgumentsAcquired) {
+            return STATUS_MORE_PROCESSING_REQUIRED;
+        }
+    }
+
+    Statement->Reduction = NULL;
+    if (Context->ExecuteStatements == FALSE) {
+        return STATUS_SUCCESS;
+    }
+
+    DdbHandle = Statement->Argument[0];
+
+    ASSERT(DdbHandle != NULL);
+
+    AcpiUnloadDefinitionBlock(DdbHandle);
     return STATUS_SUCCESS;
 }
 

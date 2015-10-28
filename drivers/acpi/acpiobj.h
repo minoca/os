@@ -781,6 +781,10 @@ Members:
         finish executing. This parameter is used for evaluating an Else
         statment.
 
+    DestructorListHead - Stores a pointer to the head of a list where created
+        namespace objects will have their destructor list entries placed. This
+        is used for unloading definition blocks.
+
 --*/
 
 typedef struct _AML_EXECUTION_CONTEXT {
@@ -798,6 +802,7 @@ typedef struct _AML_EXECUTION_CONTEXT {
     PAML_METHOD_EXECUTION_CONTEXT CurrentMethod;
     PACPI_OBJECT ReturnValue;
     BOOL LastIfStatementResult;
+    PLIST_ENTRY DestructorListHead;
 } AML_EXECUTION_CONTEXT, *PAML_EXECUTION_CONTEXT;
 
 //
@@ -811,7 +816,7 @@ typedef struct _AML_EXECUTION_CONTEXT {
 KSTATUS
 AcpiLoadDefinitionBlock (
     PDESCRIPTION_HEADER Table,
-    PHANDLE DefinitionBlockHandle
+    PACPI_OBJECT Handle
     );
 
 /*++
@@ -827,8 +832,8 @@ Arguments:
     Table - Supplies a pointer to the table containing the definition block.
         This table should probably only be the DSDT or an SSDT.
 
-    DefinitionBlockHandle - Supplies a pointer where a handle to the definition
-        block will be returns on success.
+    Handle - Supplies an optional pointer to the handle associated with this
+        definition block.
 
 Return Value:
 
@@ -838,19 +843,20 @@ Return Value:
 
 VOID
 AcpiUnloadDefinitionBlock (
-    HANDLE DefinitionBlockHandle
+    PACPI_OBJECT Handle
     );
 
 /*++
 
 Routine Description:
 
-    This routine unloads a loaded ACPI definition block.
+    This routine unloads all ACPI definition blocks loaded under the given
+    handle.
 
 Arguments:
 
-    DefinitionBlockHandle - Supplies the handle returned when the block was
-        loaded.
+    Handle - Supplies the handle to unload blocks based on. If NULL is
+        supplied, then all blocks will be unloaded.
 
 Return Value:
 

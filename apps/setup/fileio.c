@@ -1846,14 +1846,15 @@ FatOpenEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        if ((Status == STATUS_NOT_FOUND) || (Status = STATUS_PATH_NOT_FOUND)) {
+        if ((Status == STATUS_NOT_FOUND) || (Status == STATUS_PATH_NOT_FOUND)) {
             errno = ENOENT;
         }
 
         if ((Status != STATUS_NOT_FOUND) &&
             (Status != STATUS_UNEXPECTED_TYPE)) {
 
-            fprintf(stderr, "FatOpenFile Error: %x\n", Status);
+            fprintf(stderr, "FatOpenFile Error %s: %x\n", Path, Status);
+            errno = EINVAL;
         }
 
         return -1;

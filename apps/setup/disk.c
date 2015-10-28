@@ -149,6 +149,7 @@ Return Value:
 
     DiskConfiguration = &(Context->Configuration->Disk);
     Partitions = NULL;
+    ZeroBuffer = NULL;
 
     //
     // Open up the disk.
@@ -471,6 +472,9 @@ Return Value:
                     "Error: Failed to clear %I64x: %x\n",
                     Partitions[PartitionIndex].StartOffset + BlockIndex,
                     Status);
+
+            Result = -1;
+            goto FormatDiskEnd;
         }
     }
 
@@ -503,11 +507,37 @@ Return Value:
                         "Error: Failed to clear %I64x: %x\n",
                         Partitions[PartitionIndex].StartOffset + BlockIndex,
                         Status);
+
+                Result = -1;
+                goto FormatDiskEnd;
             }
         }
     }
 
-    free(ZeroBuffer);
+    //
+    // Read and write the last sector on the disk, to ensure that for disks
+    // that are actually files that the file size is correct.
+    //
+
+    Status = SetupPartitionLibraryRead(PartitionContext,
+                                       PartitionContext->BlockCount - 1,
+                                       ZeroBuffer);
+
+    if (Status != 0) {
+        fprintf(stderr, "Error: Failed to read the last sector.\n");
+        Result = -1;
+        goto FormatDiskEnd;
+    }
+
+    Status = SetupPartitionLibraryWrite(PartitionContext,
+                                        PartitionContext->BlockCount - 1,
+                                        ZeroBuffer);
+
+    if (Status != 0) {
+        fprintf(stderr, "Error: Failed to write the last sector.\n");
+        Result = -1;
+        goto FormatDiskEnd;
+    }
 
     //
     // Convert the actual partition data back into the configuration
@@ -544,6 +574,10 @@ Return Value:
     }
 
 FormatDiskEnd:
+    if (ZeroBuffer != NULL) {
+        free(ZeroBuffer);
+    }
+
     return Result;
 }
 
