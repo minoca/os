@@ -69,6 +69,8 @@ Members:
 
     Bssid - Stores the MAC address of the BSS's access point (a.k.a the BSSID).
 
+    Timestamp - Stores the timestamp taken from the access point when probing.
+
     BeaconInterval - Stores the beacon interval for the BSS to which the
         station is attempting to join.
 
@@ -85,10 +87,11 @@ typedef struct _NET80211_BSS_CONTEXT {
     PSTR Ssid;
     ULONG SsidLength;
     NETWORK_ADDRESS Bssid;
+    ULONGLONG Timestamp;
     USHORT BeaconInterval;
     USHORT Capabilities;
     USHORT AssociationId;
-    PNET80211_LINK_RATE_INFORMATION RateInformation;
+    PNET80211_RATE_INFORMATION RateInformation;
 } NET80211_BSS_CONTEXT, *PNET80211_BSS_CONTEXT;
 
 /*++
@@ -333,7 +336,7 @@ Return Value:
     FrameSubtype = NET80211_GET_FRAME_SUBTYPE(Header);
     switch (FrameSubtype) {
     case NET80211_MANAGEMENT_FRAME_SUBTYPE_ASSOCIATION_RESPONSE:
-        if (Net80211Link->State != Net80211StateAssociationSent) {
+        if (Net80211Link->State != Net80211StateAssociating) {
             break;
         }
 
@@ -341,7 +344,7 @@ Return Value:
         break;
 
     case NET80211_MANAGEMENT_FRAME_SUBTYPE_PROBE_RESPONSE:
-        if (Net80211Link->State != Net80211StateProbeSent) {
+        if (Net80211Link->State != Net80211StateProbing) {
             break;
         }
 
@@ -349,7 +352,7 @@ Return Value:
         break;
 
     case NET80211_MANAGEMENT_FRAME_SUBTYPE_AUTHENTICATION:
-        if (Net80211Link->State != Net80211StateAuthenticationSent) {
+        if (Net80211Link->State != Net80211StateAuthenticating) {
             break;
         }
 
@@ -469,11 +472,11 @@ Return Value:
     //
 
     if (ServiceSetFound == FALSE) {
+        Net80211pSetState(Context->Link, Net80211StateProbing);
         for (Channel = 1;
              Channel <= Net80211Link->Properties.MaxChannel;
              Channel += 1) {
 
-            Net80211Link->State = Net80211StateProbeSent;
             Attempts = NET80211_MANAGEMENT_RETRY_COUNT;
             while (Attempts != 0) {
                 Attempts -= 1;
@@ -489,7 +492,6 @@ Return Value:
 
                 if (KSUCCESS(Status)) {
                     ServiceSetFound = TRUE;
-                    Net80211Link->State = Net80211StateProbeReceived;
                 }
 
                 break;
@@ -516,7 +518,7 @@ Return Value:
     // so the hardware will handle the retransmission process.
     //
 
-    Net80211Link->State = Net80211StateAuthenticationSent;
+    Net80211pSetState(Context->Link, Net80211StateAuthenticating);
     Status = Net80211pSendAuthenticationRequest(Context);
     if (!KSUCCESS(Status)) {
         goto JoinBssThreadEnd;
@@ -531,7 +533,7 @@ Return Value:
         goto JoinBssThreadEnd;
     }
 
-    Net80211Link->State = Net80211StateAuthenticated;
+    Net80211pSetState(Context->Link, Net80211StateAuthenticated);
 
     //
     // The link is authentication with the BSS. Attempt to join it via the
@@ -539,7 +541,7 @@ Return Value:
     // hardware will handle the retransmission process.
     //
 
-    Net80211Link->State = Net80211StateAssociationSent;
+    Net80211pSetState(Context->Link, Net80211StateAssociating);
     Status = Net80211pSendAssociationRequest(Context);
     if (!KSUCCESS(Status)) {
         goto JoinBssThreadEnd;
@@ -553,12 +555,6 @@ Return Value:
     if (!KSUCCESS(Status)) {
         goto JoinBssThreadEnd;
     }
-
-    RtlCopyMemory(&(Net80211Link->Bssid),
-                  &Context->Bssid,
-                  sizeof(NETWORK_ADDRESS));
-
-    Net80211Link->State = Net80211StateAssociated;
 
     //
     // Determine the link speed by taking the maximum rate supported by both
@@ -606,6 +602,20 @@ Return Value:
         goto JoinBssThreadEnd;
     }
 
+    //
+    // The station is associated. Copy the context information to the 802.11
+    // link's state and then update the device link with the new state.
+    //
+
+    RtlCopyMemory(Net80211Link->BssState.Bssid,
+                  Context->Bssid.Address,
+                  NET80211_ADDRESS_SIZE);
+
+    Net80211Link->BssState.Timestamp = Context->Timestamp;
+    Net80211Link->BssState.BeaconInterval = Context->BeaconInterval;
+    Net80211Link->BssState.Rates = Context->RateInformation;
+    Context->RateInformation = NULL;
+    Net80211pSetState(Context->Link, Net80211StateAssociated);
     Status = NetStartLink(Context->Link);
     if (!KSUCCESS(Status)) {
         goto JoinBssThreadEnd;
@@ -618,6 +628,8 @@ JoinBssThreadEnd:
         RtlDebugPrint("802.11: Joining BSS %s failed with status 0x%08x\n",
                       Context->Ssid,
                       Status);
+
+        Net80211pSetState(Context->Link, Net80211StateStarted);
     }
 
     Net80211pDestroyBssContext(Context);
@@ -658,7 +670,7 @@ Return Value:
     ULONG Index;
     PUCHAR InformationByte;
     PNET80211_LINK Net80211Link;
-    PNET80211_LINK_RATE_INFORMATION Rates;
+    PNET80211_RATE_INFORMATION Rates;
     PNETWORK_ADDRESS SourceAddress;
     ULONG SsidLength;
     KSTATUS Status;
@@ -779,10 +791,7 @@ Return Value:
     // Set the channel to send the packet over.
     //
 
-    Status = Net80211Link->Properties.Interface.SetChannel(
-                                        Net80211Link->Properties.DriverContext,
-                                        Channel);
-
+    Status = Net80211pSetChannel(Context->Link, Channel);
     if (!KSUCCESS(Status)) {
         goto SendProbeRequestEnd;
     }
@@ -855,6 +864,7 @@ Return Value:
     ULONG Offset;
     ULONG ResponseChannel;
     KSTATUS Status;
+    ULONGLONG Timestamp;
 
     //
     // Attempt to receive a probe response. Retry a few times in case an
@@ -895,23 +905,24 @@ Return Value:
         }
 
         //
-        // Skip the timestamp.
+        // Save the timestamp.
         //
 
+        Timestamp = *((PULONGLONG)&(ElementBytePointer[Offset]));
         Offset += NET80211_TIMESTAMP_SIZE;
 
         //
         // Save the beacon internval.
         //
 
-        BeaconInterval = *((PUSHORT)(&(ElementBytePointer[Offset])));
+        BeaconInterval = *((PUSHORT)&(ElementBytePointer[Offset]));
         Offset += NET80211_BEACON_INTERVAL_SIZE;
 
         //
         // Save the capabilities.
         //
 
-        Capabilities = *((PUSHORT)(&(ElementBytePointer[Offset])));
+        Capabilities = *((PUSHORT)&(ElementBytePointer[Offset]));
         Offset += NET80211_CAPABILITY_SIZE;
 
         //
@@ -994,6 +1005,7 @@ Return Value:
 
             Context->BeaconInterval = BeaconInterval;
             Context->Capabilities = Capabilities;
+            Context->Timestamp = Timestamp;
             break;
         }
     }
@@ -1237,7 +1249,7 @@ Return Value:
     ULONG Index;
     PUCHAR InformationByte;
     PNET80211_LINK Net80211Link;
-    PNET80211_LINK_RATE_INFORMATION Rates;
+    PNET80211_RATE_INFORMATION Rates;
     PNETWORK_ADDRESS SourceAddress;
     ULONG SsidLength;
     KSTATUS Status;
@@ -1570,7 +1582,7 @@ Return Value:
                 }
 
                 if (Context->RateInformation == NULL) {
-                    AllocationSize = sizeof(NET80211_LINK_RATE_INFORMATION) +
+                    AllocationSize = sizeof(NET80211_RATE_INFORMATION) +
                                      (TotalRateCount * sizeof(UCHAR));
 
                     Allocation = MmAllocatePagedPool(AllocationSize,
@@ -1583,7 +1595,7 @@ Return Value:
 
                     Context->RateInformation = Allocation;
                     Context->RateInformation->Rates =
-                           Allocation + sizeof(NET80211_LINK_RATE_INFORMATION);
+                                Allocation + sizeof(NET80211_RATE_INFORMATION);
                 }
 
                 Context->RateInformation->Count = TotalRateCount;

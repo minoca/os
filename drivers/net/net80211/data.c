@@ -163,7 +163,7 @@ Return Value:
         }
 
         RtlCopyMemory(Header->ReceiverAddress,
-                      Net80211Link->Bssid.Address,
+                      Net80211Link->BssState.Bssid,
                       NET80211_ADDRESS_SIZE);
 
         RtlCopyMemory(Header->TransmitterAddress,

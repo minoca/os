@@ -265,7 +265,7 @@ Return Value:
 
     ULONG AllocationSize;
     PNET80211_LINK Net80211Link;
-    PNET80211_LINK_RATE_INFORMATION Rates;
+    PNET80211_RATE_INFORMATION Rates;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -301,7 +301,7 @@ Return Value:
     // and copied.
     //
 
-    AllocationSize = sizeof(NET80211_LINK_RATE_INFORMATION) +
+    AllocationSize = sizeof(NET80211_RATE_INFORMATION) +
                      (Properties->SupportedRates->Count * sizeof(UCHAR));
 
     Rates = MmAllocatePagedPool(AllocationSize, NET80211_ALLOCATION_TAG);
@@ -312,7 +312,7 @@ Return Value:
 
     RtlCopyMemory(Rates,
                   Properties->SupportedRates,
-                  sizeof(NET80211_LINK_RATE_INFORMATION));
+                  sizeof(NET80211_RATE_INFORMATION));
 
     Rates->Rates = (PUCHAR)(Rates + 1);
     RtlCopyMemory(Rates->Rates,
@@ -462,6 +462,7 @@ Return Value:
     }
 
     Net80211Link->State = Net80211StateInitialized;
+    Net80211Link->BssState.Version = NET80211_STATE_INFORMATION_VERSION;
     Link->DataLinkContext = Net80211Link;
     Status = STATUS_SUCCESS;
 
@@ -759,6 +760,93 @@ Return Value:
     return SequenceNumber;
 }
 
+KSTATUS
+Net80211pSetChannel (
+    PNET_LINK Link,
+    ULONG Channel
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the 802.11 link's channel to the given value.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose channel is being updated.
+
+    Channel - Supplies the channel to which the link should be set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PVOID DriverContext;
+    PNET80211_LINK Net80211Link;
+    KSTATUS Status;
+
+    Net80211Link = Link->DataLinkContext;
+    Net80211Link->BssState.Channel = Channel;
+    DriverContext = Net80211Link->Properties.DriverContext;
+    Status = Net80211Link->Properties.Interface.SetChannel(DriverContext,
+                                                           Channel);
+
+    return Status;
+}
+
+VOID
+Net80211pSetState (
+    PNET_LINK Link,
+    NET80211_STATE State
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the given link's 802.11 state.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose state is being updated.
+
+    State - Supplies the state to which the link is transitioning.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_STATE_INFORMATION BssState;
+    PVOID DriverContext;
+    PNET80211_LINK Net80211Link;
+    KSTATUS Status;
+
+    Net80211Link = Link->DataLinkContext;
+    Net80211Link->State = State;
+    BssState = &(Net80211Link->BssState);
+    DriverContext = Net80211Link->Properties.DriverContext;
+    Status = Net80211Link->Properties.Interface.SetState(DriverContext,
+                                                         State,
+                                                         BssState);
+
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("802.11: Failed to set state %d: 0x%08x\n",
+                      State,
+                      Status);
+    }
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -785,6 +873,10 @@ Return Value:
 --*/
 
 {
+
+    if (Net80211Link->BssState.Rates != NULL) {
+        MmFreePagedPool(Net80211Link->BssState.Rates);
+    }
 
     if (Net80211Link->Properties.SupportedRates != NULL) {
         MmFreePagedPool(Net80211Link->Properties.SupportedRates);

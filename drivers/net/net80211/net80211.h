@@ -43,22 +43,6 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef enum _NET80211_STATE {
-    Net80211StateInvalid,
-    Net80211StateInitialized,
-    Net80211StateStarted,
-    Net80211StateStopped,
-    Net80211StateProbeSent,
-    Net80211StateProbeReceived,
-    Net80211StateAuthenticationSent,
-    Net80211StateDeauthenticationSent,
-    Net80211StateAuthenticated,
-    Net80211StateAssociationSent,
-    Net80211StateReassociationSent,
-    Net80211StateDisassociationSent,
-    Net80211StateAssociated,
-} NET80211_STATE, *PNET80211_STATE;
-
 /*++
 
 Structure Description:
@@ -79,8 +63,8 @@ Members:
 
     ManagementFrameList - Stores the list of saved received management frames.
 
-    Bssid - Stores the physical address of the access point to which this
-        802.11 link is associated. In other words, the BSSID.
+    BssState - Stores state information for the BSS to which this link is
+        associated.
 
     Properites - Stores the 802.11 link properties.
 
@@ -92,7 +76,7 @@ typedef struct _NET80211_LINK {
     PQUEUED_LOCK Lock;
     PKEVENT ManagementFrameEvent;
     LIST_ENTRY ManagementFrameList;
-    NETWORK_ADDRESS Bssid;
+    NET80211_STATE_INFORMATION BssState;
     NET80211_LINK_PROPERTIES Properties;
 } NET80211_LINK, *PNET80211_LINK;
 
@@ -293,6 +277,54 @@ Arguments:
 Return Value:
 
     Returns the sequence number to use for the given link.
+
+--*/
+
+KSTATUS
+Net80211pSetChannel (
+    PNET_LINK Link,
+    ULONG Channel
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the 802.11 link's channel to the given value.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose channel is being updated.
+
+    Channel - Supplies the channel to which the link should be set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+VOID
+Net80211pSetState (
+    PNET_LINK Link,
+    NET80211_STATE State
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the given link's 802.11 state.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose state is being updated.
+
+    State - Supplies the state to which the link is transitioning.
+
+Return Value:
+
+    None.
 
 --*/
 

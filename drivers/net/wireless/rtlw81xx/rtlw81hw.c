@@ -230,8 +230,16 @@ Rtlw81pWriteLlt (
     ULONG Data
     );
 
-VOID
+KSTATUS
 Rtlw81pWriteData (
+    PRTLW81_DEVICE Device,
+    USHORT Address,
+    PVOID Data,
+    ULONG DataLength
+    );
+
+KSTATUS
+Rtlw81pReadData (
     PRTLW81_DEVICE Device,
     USHORT Address,
     PVOID Data,
@@ -272,6 +280,14 @@ Rtlw81pReadRfRegister (
     PRTLW81_DEVICE Device,
     ULONG Chain,
     ULONG RfRegister
+    );
+
+KSTATUS
+Rtlw81pSendFirmwareCommand (
+    PRTLW81_DEVICE Device,
+    UCHAR CommandId,
+    PVOID Message,
+    ULONG MessageLength
     );
 
 KSTATUS
@@ -1523,6 +1539,340 @@ Return Value:
     return STATUS_SUCCESS;
 }
 
+KSTATUS
+Rtlw81SetState (
+    PVOID DriverContext,
+    NET80211_STATE State,
+    PNET80211_STATE_INFORMATION StateInformation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the 802.11 link to the given state. State information is
+    provided to communicate the details of the 802.11 core's current state.
+
+Arguments:
+
+    DriverContext - Supplies a pointer to the driver context associated with
+        the 802.11 link whose state is to be set.
+
+    State - Supplies the state to which the link is being set.
+
+    StateInformation - Supplies a pointer to the information collected by the
+        802.11 core to help describe the state.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG BasicRates;
+    ULONG BeaconInterval;
+    ULONG BssIndex;
+    UCHAR BssRate;
+    PRTLW81_DEVICE Device;
+    ULONG LocalIndex;
+    UCHAR LocalRate;
+    RTLW81_MAC_ID_CONFIG_COMMAND MacIdCommand;
+    ULONG MaxBasicRateIndex;
+    ULONG MaxRateIndex;
+    ULONG Rates;
+    USHORT Register;
+    KSTATUS Status;
+    ULONGLONG Timestamp;
+    ULONG Value;
+
+    Device = DriverContext;
+    Status = STATUS_SUCCESS;
+    switch (State) {
+    case Net80211StateProbing:
+
+        //
+        // Receive frames from all BSSIDs during the probing state.
+        //
+
+        Value = RTLW81_READ_REGISTER32(Device,
+                                       Rtlw81RegisterReceiveConfiguration);
+
+        Value &= ~(RTLW81_RECEIVE_CONFIGURATION_CBSSID_DATA |
+                   RTLW81_RECEIVE_CONFIGURATION_CBSSID_BCN);
+
+        RTLW81_WRITE_REGISTER32(Device,
+                                Rtlw81RegisterReceiveConfiguration,
+                                Value);
+
+        //
+        // Set the gain used in the probing state.
+        //
+
+        Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterOfdm0AgcCore1);
+        Value &= ~RTLW81_OFDM0_AGC_CORE1_GAIN_MASK;
+        Value |= RTLW81_OFDM0_AGC_CORE1_GAIN_PROBE_VALUE;
+        RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterOfdm0AgcCore1, Value);
+        if ((Device->Flags & RTLW81_FLAG_8188E) == 0) {
+            Register = Rtlw81RegisterOfdm0AgcCore1 + 8;
+            Value = RTLW81_READ_REGISTER32(Device, Register);
+            Value &= ~RTLW81_OFDM0_AGC_CORE1_GAIN_MASK;
+            Value |= RTLW81_OFDM0_AGC_CORE1_GAIN_PROBE_VALUE;
+            RTLW81_WRITE_REGISTER32(Device, Register, Value);
+        }
+
+        break;
+
+    case Net80211StateAuthenticating:
+
+        //
+        // Set the gain used in the authenticating state.
+        //
+
+        Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterOfdm0AgcCore1);
+        Value &= ~RTLW81_OFDM0_AGC_CORE1_GAIN_MASK;
+        Value |= RTLW81_OFDM0_AGC_CORE1_GAIN_AUTHENTICATE_VALUE;
+        RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterOfdm0AgcCore1, Value);
+        if ((Device->Flags & RTLW81_FLAG_8188E) == 0) {
+            Register = Rtlw81RegisterOfdm0AgcCore1 + 8;
+            Value = RTLW81_READ_REGISTER32(Device, Register);
+            Value &= ~RTLW81_OFDM0_AGC_CORE1_GAIN_MASK;
+            Value |= RTLW81_OFDM0_AGC_CORE1_GAIN_AUTHENTICATE_VALUE;
+            RTLW81_WRITE_REGISTER32(Device, Register, Value);
+        }
+
+        break;
+
+    case Net80211StateAssociated:
+
+        //
+        // Set the network type to associated.
+        //
+
+        Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterConfiguration);
+        Value &= ~RTLW81_CONFIGURATION_NETWORK_TYPE_MASK;
+        Value |= (RTLW81_CONFIGURATION_NETWORK_TYPE_INFRA <<
+                  RTLW81_CONFIGURATION_NETWORK_TYPE_SHIFT);
+
+        RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterConfiguration, Value);
+
+        //
+        // Filter out traffic that is not coming from the BSSID.
+        //
+
+        Value = *((PULONG)&(StateInformation->Bssid[0]));
+        RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterBssid0, Value);
+        Value = *((PUSHORT)&(StateInformation->Bssid[4]));
+        RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterBssid1, Value);
+
+        //
+        // Set the rate for 11b/g.
+        //
+
+        RTLW81_WRITE_REGISTER8(Device,
+                               Rtlw81RegisterIniRtsRateSelect,
+                               RTLW81_INI_RTS_RATE_SELECT_11BG);
+
+        //
+        // Accept all data frames.
+        //
+
+        RTLW81_WRITE_REGISTER16(Device,
+                                Rtlw81RegisterReceiveDataFilter,
+                                0xFFFF);
+
+        //
+        // Enable transmit.
+        //
+
+        RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterTransmitPause, 0);
+
+        //
+        // Set the beacon interval.
+        //
+
+        RTLW81_WRITE_REGISTER16(Device,
+                                Rtlw81RegisterBeaconInterval,
+                                StateInformation->BeaconInterval);
+
+        //
+        // Enable filtering based on the BSSID.
+        //
+
+        Value = RTLW81_READ_REGISTER32(Device,
+                                       Rtlw81RegisterReceiveConfiguration);
+
+        Value |= RTLW81_RECEIVE_CONFIGURATION_CBSSID_BCN |
+                 RTLW81_RECEIVE_CONFIGURATION_CBSSID_DATA;
+
+        RTLW81_WRITE_REGISTER32(Device,
+                                Rtlw81RegisterReceiveConfiguration,
+                                Value);
+
+        //
+        // Initialize TSF for the device. This keeps it in sync with the rest
+        // of the BSS.
+        //
+
+        Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterBeaconControl);
+        Value &= ~RTLW81_BEACON_CONTROL_DISABLE_TSF_UDT0;
+        RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterBeaconControl, Value);
+        Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterBeaconControl);
+        Value &= ~RTLW81_BEACON_CONTROL_ENABLE_BEACON;
+        RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterBeaconControl, Value);
+        Timestamp = StateInformation->Timestamp;
+        BeaconInterval = StateInformation->BeaconInterval * NET80211_TIME_UNIT;
+        Timestamp -= Timestamp % BeaconInterval;
+        Timestamp -= NET80211_TIME_UNIT;
+        RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterTsftr0, (ULONG)Timestamp);
+        RTLW81_WRITE_REGISTER32(Device,
+                                Rtlw81RegisterTsftr1,
+                                (ULONG)(Timestamp >> 32));
+
+        Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterBeaconControl);
+        Value |= RTLW81_BEACON_CONTROL_ENABLE_BEACON;
+        RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterBeaconControl, Value);
+
+        //
+        // Update the SIFS registers.
+        //
+
+        RTLW81_WRITE_REGISTER16(Device,
+                                Rtlw81RegisterSifsCck,
+                                RTLW81_SIFS_CCK_ASSOCIATED);
+
+        RTLW81_WRITE_REGISTER16(Device,
+                                Rtlw81RegisterSifsOfdm,
+                                RTLW81_SIFS_OFDM_ASSOCIATED);
+
+        RTLW81_WRITE_REGISTER16(Device,
+                                Rtlw81RegisterSpecSifs,
+                                RTLW81_SPEC_SIFS_ASSOCIATED);
+
+        RTLW81_WRITE_REGISTER16(Device,
+                                Rtlw81RegisterMacSpecSifs,
+                                RTLW81_MAC_SPEC_SIFS_ASSOCIATED);
+
+        RTLW81_WRITE_REGISTER16(Device,
+                                Rtlw81RegisterT2tSifs,
+                                RTLW81_T2T_SIFS_ASSOCIATED);
+
+        RTLW81_WRITE_REGISTER16(Device,
+                                Rtlw81RegisterR2tSifs,
+                                RTLW81_R2T_SIFS_ASSOCIATED);
+
+        //
+        // Initialize rate adaptation.
+        //
+
+        if ((Device->Flags & RTLW81_FLAG_8188E) == 0) {
+
+            //
+            // Find the set of rates that are supported by both the local
+            // device and the BSS.
+            //
+
+            Rates = 0;
+            BasicRates = 0;
+            MaxRateIndex = 0;
+            MaxBasicRateIndex = 0;
+            for (BssIndex = 0;
+                 BssIndex < StateInformation->Rates->Count;
+                 BssIndex += 1) {
+
+                BssRate = StateInformation->Rates->Rates[BssIndex];
+                BssRate &= NET80211_RATE_VALUE_MASK;
+                for (LocalIndex = 0;
+                     LocalIndex < RtlwDefaultRateInformation.Count;
+                     LocalIndex += 1) {
+
+                    LocalRate = RtlwDefaultRateInformation.Rates[LocalIndex];
+                    LocalRate &= NET80211_RATE_VALUE_MASK;
+                    if (LocalRate == BssRate) {
+                        break;
+                    }
+                }
+
+                if (LocalIndex == RtlwDefaultRateInformation.Count) {
+                    continue;
+                }
+
+                Rates |= (1 << LocalIndex);
+                if (LocalIndex > MaxRateIndex) {
+                    MaxRateIndex = LocalIndex;
+                }
+
+                BssRate = StateInformation->Rates->Rates[BssIndex];
+                if ((BssRate & NET80211_RATE_BASIC) != 0) {
+                    BasicRates |= (1 << LocalIndex);
+                    if (LocalIndex > MaxBasicRateIndex) {
+                        MaxBasicRateIndex = LocalIndex;
+                    }
+                }
+            }
+
+            //
+            // Set the basic rate information.
+            //
+
+            MacIdCommand.MacId = RTLW81_MAC_ID_CONFIG_COMMAND_ID_BROADCAST |
+                                 RTLW81_MAC_ID_CONFIG_COMMAND_ID_VALID;
+
+            MacIdCommand.Mask = (RTLW81_TRANSMIT_IDENTIFICATION_RAID_11BG <<
+                                 RTLW81_MAC_ID_CONFIG_COMMAND_MASK_MODE_SHIFT) |
+                                BasicRates;
+
+            Status = Rtlw81pSendFirmwareCommand(
+                                         Device,
+                                         RTLW81_FIRMWARE_COMMAND_MAC_ID_CONFIG,
+                                         &MacIdCommand,
+                                         sizeof(RTLW81_MAC_ID_CONFIG_COMMAND));
+
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+
+            RTLW81_WRITE_REGISTER8(Device,
+                                   Rtlw81RegisterIniDataRateSelectBroadcast,
+                                   MaxBasicRateIndex);
+
+            //
+            // Set the overall rate information.
+            //
+
+            MacIdCommand.MacId = RTLW81_MAC_ID_CONFIG_COMMAND_ID_BSS |
+                                 RTLW81_MAC_ID_CONFIG_COMMAND_ID_VALID;
+
+            MacIdCommand.Mask = (RTLW81_TRANSMIT_IDENTIFICATION_RAID_11BG <<
+                                 RTLW81_MAC_ID_CONFIG_COMMAND_MASK_MODE_SHIFT) |
+                                Rates;
+
+            Status = Rtlw81pSendFirmwareCommand(
+                                         Device,
+                                         RTLW81_FIRMWARE_COMMAND_MAC_ID_CONFIG,
+                                         &MacIdCommand,
+                                         sizeof(RTLW81_MAC_ID_CONFIG_COMMAND));
+
+            if (!KSUCCESS(Status)) {
+                break;
+            }
+
+            RTLW81_WRITE_REGISTER8(Device,
+                                   Rtlw81RegisterIniDataRateSelectBss,
+                                   MaxRateIndex);
+        }
+
+        break;
+
+    default:
+        Status = STATUS_SUCCESS;
+        break;
+    }
+
+    return Status;
+}
+
 VOID
 Rtlw81BulkInTransferCompletion (
     PUSB_TRANSFER Transfer
@@ -1640,6 +1990,10 @@ Return Value:
         Packet.DataOffset = 0;
         Packet.FooterOffset = Packet.DataSize;
         NetProcessReceivedPacket(Device->NetworkLink, &Packet);
+
+        //
+        // TODO: Get receive signal strength indicator (RSSI).
+        //
 
         //
         // Advance to the next packet, adding an extra 4 and aligning the total
@@ -1886,7 +2240,7 @@ Return Value:
 
         Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterConfiguration);
         Value &= ~RTLW81_CONFIGURATION_NETWORK_TYPE_MASK;
-        Value |= (RTLW81_CONFIGURATION_NETWORK_TYPE_INFRA <<
+        Value |= (RTLW81_CONFIGURATION_NETWORK_TYPE_NO_LINK <<
                   RTLW81_CONFIGURATION_NETWORK_TYPE_SHIFT);
 
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterConfiguration, Value);
@@ -1929,12 +2283,12 @@ Return Value:
                                 0x0000);
 
         //
-        // Accept all data frames.
+        // Reject all data frames.
         //
 
         RTLW81_WRITE_REGISTER16(Device,
                                 Rtlw81RegisterReceiveDataFilter,
-                                0xFFFF);
+                                0x0000);
 
         //
         // Set the response rate.
@@ -2312,12 +2666,12 @@ Return Value:
                                     Value);
 
             Value = RTLW81_READ_REGISTER32(Device,
-                                           Rtlw81RegisterOfmd0AgcParam1);
+                                           Rtlw81RegisterOfdm0AgcParam1);
 
             Value &= ~RTLW81_OFDM0_AGC_PARAM1_INIT_MASK;
             Value |= RTLW81_OFDM0_AGC_PARAM1_INIT_VALUE;
             RTLW81_WRITE_REGISTER32(Device,
-                                    Rtlw81RegisterOfmd0AgcParam1,
+                                    Rtlw81RegisterOfdm0AgcParam1,
                                     Value);
 
             Value = RTLW81_READ_REGISTER32(Device,
@@ -2380,13 +2734,13 @@ Return Value:
 
         if ((Device->Flags & RTLW81_FLAG_8188E) != 0) {
             RTLW81_WRITE_REGISTER32(Device,
-                                    Rtlw81RegisterOfmd0AgcCore1,
-                                    RTLW81_OFMD0_AGC_CORE1_INIT1);
+                                    Rtlw81RegisterOfdm0AgcCore1,
+                                    RTLW81_OFDM0_AGC_CORE1_INIT1);
 
             HlBusySpin(100);
             RTLW81_WRITE_REGISTER32(Device,
-                                    Rtlw81RegisterOfmd0AgcCore1,
-                                    RTLW81_OFMD0_AGC_CORE1_INIT2);
+                                    Rtlw81RegisterOfdm0AgcCore1,
+                                    RTLW81_OFDM0_AGC_CORE1_INIT2);
 
             HlBusySpin(100);
             Value = RTLW81_READ_REGISTER32(Device,
@@ -4531,7 +4885,7 @@ WriteLltEnd:
     return Status;
 }
 
-VOID
+KSTATUS
 Rtlw81pWriteData (
     PRTLW81_DEVICE Device,
     USHORT Address,
@@ -4558,7 +4912,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -4591,10 +4945,10 @@ Return Value:
         Device->InitializationStatus = Status;
     }
 
-    return;
+    return Status;
 }
 
-VOID
+KSTATUS
 Rtlw81pReadData (
     PRTLW81_DEVICE Device,
     USHORT Address,
@@ -4622,7 +4976,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -4657,7 +5011,7 @@ Return Value:
         Device->InitializationStatus = Status;
     }
 
-    return;
+    return Status;
 }
 
 VOID
@@ -4686,7 +5040,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -4727,6 +5081,7 @@ Return Value:
 
     ULONG Data;
 
+    Data = 0;
     Rtlw81pReadData(Device, Register, &Data, DataLength);
     return Data;
 }
@@ -4920,6 +5275,104 @@ Return Value:
             RTLW81_LSSI_READBACK_DATA_SHIFT;
 
     return Value;
+}
+
+KSTATUS
+Rtlw81pSendFirmwareCommand (
+    PRTLW81_DEVICE Device,
+    UCHAR CommandId,
+    PVOID Message,
+    ULONG MessageLength
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends a firmware command to the wireless RTL81xx device.
+
+Arguments:
+
+    Device - Supplies a pointer to the RTLW81xx device.
+
+    CommandId - Supplies the firmware command ID to send to the device.
+
+    Message - Supplies a pointer to the command message.
+
+    MessageLength - Supplies the length of the command message to write.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    RTLW81_FIRMWARE_COMMAND Command;
+    ULONGLONG CurrentTime;
+    USHORT Register;
+    KSTATUS Status;
+    ULONGLONG Timeout;
+    ULONGLONG TimeoutTicks;
+    ULONG Value;
+
+    //
+    // Wait for the firmware box to be ready to receive the command.
+    //
+
+    CurrentTime = KeGetRecentTimeCounter();
+    TimeoutTicks = HlQueryTimeCounterFrequency() * RTLW81_DEVICE_TIMEOUT;
+    Timeout = CurrentTime + TimeoutTicks;
+    do {
+        Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterHmetfr0);
+        if ((Value & (1 << Device->FirmwareBox)) == 0) {
+            break;
+        }
+
+        CurrentTime = KeGetRecentTimeCounter();
+
+    } while (CurrentTime > Timeout);
+
+    if (CurrentTime > Timeout) {
+        Status = STATUS_TIMEOUT;
+        goto SendFirmwareCommandEnd;
+    }
+
+    //
+    // Write the command to the current firmware box.
+    //
+
+    RtlZeroMemory(&Command, sizeof(RTLW81_FIRMWARE_COMMAND));
+    Command.Id = CommandId;
+    if (MessageLength > RTLW81_FIRMWARE_COMMAND_MAX_NO_EXTENSION_LENGTH) {
+        Command.Id |= RTLW81_FIRMWARE_COMMAND_FLAG_EXTENSION;
+    }
+
+    ASSERT(MessageLength <= RTLW81_FIRMWARE_COMMAND_MAX_MESSAGE_LENGTH);
+
+    RtlCopyMemory(Command.Message, Message, MessageLength);
+    Register = Rtlw81RegisterHmeBoxExtension + (Device->FirmwareBox * 2);
+    Status = Rtlw81pWriteData(Device, Register, &Command + 4, 2);
+    if (!KSUCCESS(Status)) {
+        goto SendFirmwareCommandEnd;
+    }
+
+    Register = Rtlw81RegisterHmeBox + (Device->FirmwareBox * 4);
+    Status = Rtlw81pWriteData(Device, Register, &Command, 4);
+    if (!KSUCCESS(Status)) {
+        goto SendFirmwareCommandEnd;
+    }
+
+    //
+    // Move to the next firmware box.
+    //
+
+    Device->FirmwareBox += 1;
+    Device->FirmwareBox %= RTLW81_FIRMWARE_BOX_COUNT;
+
+SendFirmwareCommandEnd:
+    return Status;
 }
 
 KSTATUS
@@ -5184,11 +5637,10 @@ Return Value:
 
     UCHAR Value;
 
-    if (Enable != FALSE) {
-        Value = RTLW81_LED_ENABLE;
-
-    } else {
-        Value = RTLW81_LED_DISABLE;
+    Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterLedConfig0);
+    Value &= RTLW81_LED_SAVE_MASK;
+    if (Enable == FALSE) {
+        Value |= RTLW81_LED_DISABLE;
     }
 
     RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterLedConfig0, Value);

@@ -75,6 +75,12 @@ Author:
 #define NET80211_LINK_PROPERTIES_VERSION 1
 
 //
+// Define the current version number of the 802.11 state information structure.
+//
+
+#define NET80211_STATE_INFORMATION_VERSION 1
+
+//
 // Define the size of an 802.11 MAC address.
 //
 
@@ -355,6 +361,12 @@ Author:
 #define NET80211_RATE_UNIT 500000ULL
 
 //
+// 802.11 times are defined in units of 1024 microseconds.
+//
+
+#define NET80211_TIME_UNIT 1024
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -474,6 +486,21 @@ typedef struct _NET80211_MANAGEMENT_FRAME_HEADER {
     USHORT SequenceControl;
 } PACKED NET80211_MANAGEMENT_FRAME_HEADER, *PNET80211_MANAGEMENT_FRAME_HEADER;
 
+typedef enum _NET80211_STATE {
+    Net80211StateInvalid,
+    Net80211StateInitialized,
+    Net80211StateStarted,
+    Net80211StateStopped,
+    Net80211StateProbing,
+    Net80211StateAuthenticating,
+    Net80211StateDeauthenticating,
+    Net80211StateAuthenticated,
+    Net80211StateAssociating,
+    Net80211StateReassociating,
+    Net80211StateDisassociating,
+    Net80211StateAssociated,
+} NET80211_STATE, *PNET80211_STATE;
+
 /*++
 
 Structure Description:
@@ -488,10 +515,45 @@ Members:
 
 --*/
 
-typedef struct _NET80211_LINK_RATE_INFORMATION {
+typedef struct _NET80211_RATE_INFORMATION {
     UCHAR Count;
     PUCHAR Rates;
-} NET80211_LINK_RATE_INFORMATION, *PNET80211_LINK_RATE_INFORMATION;
+} NET80211_RATE_INFORMATION, *PNET80211_RATE_INFORMATION;
+
+/*++
+
+Structure Description:
+
+    This structure defines the information required for an 802.11 device to
+    transition to a new state.
+
+Members:
+
+    Version - Stores the version number of the structure. Set this to
+        NET80211_STATE_INFORMATION_VERSION.
+
+    Bssid - Stores the MAC address of the BSS's access point (a.k.a. the BSSID).
+
+    BeaconInterval - Stores the beacon interval for the BSS to which the
+        station is associated.
+
+    Timestamp - Stores the timestamp taken from the BSS access point when
+        probing.
+
+    Channel - Stores the current channel to which the device is set.
+
+    Rates - Stores the rates supported by the BSS.
+
+--*/
+
+typedef struct _NET80211_STATE_INFORMATION {
+    ULONG Version;
+    UCHAR Bssid[NET80211_ADDRESS_SIZE];
+    USHORT BeaconInterval;
+    ULONGLONG Timestamp;
+    ULONG Channel;
+    PNET80211_RATE_INFORMATION Rates;
+} NET80211_STATE_INFORMATION, *PNET80211_STATE_INFORMATION;
 
 typedef
 KSTATUS
@@ -519,6 +581,37 @@ Return Value:
 
 --*/
 
+typedef
+KSTATUS
+(*PNET80211_DEVICE_LINK_SET_STATE) (
+    PVOID DriverContext,
+    NET80211_STATE State,
+    PNET80211_STATE_INFORMATION StateInformation
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the 802.11 link to the given state. State information is
+    provided to communicate the details of the 802.11 core's current state.
+
+Arguments:
+
+    DriverContext - Supplies a pointer to the driver context associated with
+        the 802.11 link whose state is to be set.
+
+    State - Supplies the state to which the link is being set.
+
+    StateInformation - Supplies a pointer to the information collected by the
+        802.11 core to help describe the state.
+
+Return Value:
+
+    Status code.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -530,10 +623,13 @@ Members:
 
     SetChannel - Stores a pointer to a function used to set the channel.
 
+    SetState - Stores a pointer to a function used to set the state.
+
 --*/
 
 typedef struct _NET80211_DEVICE_LINK_INTERFACE {
     PNET80211_DEVICE_LINK_SET_CHANNEL SetChannel;
+    PNET80211_DEVICE_LINK_SET_STATE SetState;
 } NET80211_DEVICE_LINK_INTERFACE, *PNET80211_DEVICE_LINK_INTERFACE;
 
 /*++
@@ -569,7 +665,7 @@ typedef struct _NET80211_LINK_PROPERTIES {
     PVOID DriverContext;
     USHORT Capabilities;
     ULONG MaxChannel;
-    PNET80211_LINK_RATE_INFORMATION SupportedRates;
+    PNET80211_RATE_INFORMATION SupportedRates;
     NET80211_DEVICE_LINK_INTERFACE Interface;
 } NET80211_LINK_PROPERTIES, *PNET80211_LINK_PROPERTIES;
 

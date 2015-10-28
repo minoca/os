@@ -422,8 +422,8 @@ Author:
 // Define the bits for the LED register.
 //
 
-#define RTLW81_LED_ENABLE  0x00
-#define RTLW81_LED_DISABLE 0x07
+#define RTLW81_LED_SAVE_MASK 0x70
+#define RTLW81_LED_DISABLE   0x08
 
 //
 // Define the bits for the MCU firmware download register.
@@ -616,6 +616,7 @@ Author:
 #define RTLW81_SPEC_SIFS_CCK_SHIFT  0
 
 #define RTLW81_SPEC_SIFS_DEFAULT 0x100A
+#define RTLW81_SPEC_SIFS_ASSOCIATED 0x0A0A
 
 //
 // Define the bits for the retry limit register.
@@ -655,6 +656,13 @@ Author:
 #define RTLW81_AGGREGATE_LENGTH_LIMIT_DEFAULT 0x99997631
 
 //
+// Define the RTS rate select values for various modes.
+//
+
+#define RTLW81_INI_RTS_RATE_SELECT_11B 0
+#define RTLW81_INI_RTS_RATE_SELECT_11BG 3
+
+//
 // Define the default values for the max aggregation number register.
 //
 
@@ -690,6 +698,15 @@ Author:
 //
 
 #define RTLW81_BEACON_CONTROL_DEFAULT 0x1010
+
+//
+// Define the bits for the beacon control register.
+//
+
+#define RTLW81_BEACON_CONTROL_DISABLE_TSF_UDT0    0x10
+#define RTLW81_BEACON_CONTROL_ENABLE_BEACON       0x08
+#define RTLW81_BEACON_CONTROL_TRANSMIT_BEACON_RPT 0x04
+#define RTLW81_BEACON_CONTROL_ENABLE_MBSSID       0x02
 
 //
 // Define the default value for the driver early init register.
@@ -761,16 +778,18 @@ Author:
 #define RTLW81_EDCA_BK_PARAM_DEFAULT 0x0000A44f
 
 //
-// Define the default value for the SIFS CCK register.
+// Define the default and associated values for the SIFS CCK register.
 //
 
 #define RTLW81_SIFS_CCK_DEFAULT 0x100A
+#define RTLW81_SIFS_CCK_ASSOCIATED 0x0A0A
 
 //
-// Define the default value for the SIFS OFDM register.
+// Define the default and associated values for the SIFS OFDM register.
 //
 
 #define RTLW81_SIFS_OFDM_DEFAULT 0x100A
+#define RTLW81_SIFS_OFDM_ASSOCIATED 0x0A0A
 
 //
 // Define the bits for the MAC SPEC SIFS register.
@@ -782,6 +801,14 @@ Author:
 #define RTLW81_MAC_SPEC_SIFS_CCK_SHIFT  0
 
 #define RTLW81_MAC_SPEC_SIFS_DEFAULT 0x100A
+#define RTLW81_MAC_SPEC_SIFS_ASSOCIATED 0x0A0A
+
+//
+// Define the associated values for the T2T and R2T SIFS.
+//
+
+#define RTLW81_T2T_SIFS_ASSOCIATED 0x0A0A
+#define RTLW81_R2T_SIFS_ASSOCIATED 0x0A0A
 
 //
 // Define the default value for the driver information size register.
@@ -894,11 +921,21 @@ Author:
 #define RTLW81_OFDM0_TRANSMIT_PATH_ENABLE_INIT_VALUE 0x00000023
 
 //
-// Define the two initialization values for the OFMD0 AGC core 1 register.
+// Define the two initialization values for the OFDM0 AGC core 1 register.
 //
 
-#define RTLW81_OFMD0_AGC_CORE1_INIT1 0x69553422
-#define RTLW81_OFMD0_AGC_CORE1_INIT2 0x69553420
+#define RTLW81_OFDM0_AGC_CORE1_INIT1 0x69553422
+#define RTLW81_OFDM0_AGC_CORE1_INIT2 0x69553420
+
+//
+// Define the bits for the OFDM0 AGC core 1 register.
+//
+
+#define RTLW81_OFDM0_AGC_CORE1_GAIN_MASK  0x0000007F
+#define RTLW81_OFDM0_AGC_CORE1_GAIN_SHIFT 0
+
+#define RTLW81_OFDM0_AGC_CORE1_GAIN_PROBE_VALUE 0x20
+#define RTLW81_OFDM0_AGC_CORE1_GAIN_AUTHENTICATE_VALUE 0x32
 
 //
 // Define the initial mask and value for the OFDM 0 AGC parameter 1 register.
@@ -1229,6 +1266,58 @@ Author:
 #define RTLW81_EFUSE_VALID_MASK                   0x0F
 
 //
+// Define the number of firmware boxes available.
+//
+
+#define RTLW81_FIRMWARE_BOX_COUNT 4
+
+//
+// Define the size of a firmware command message.
+//
+
+#define RTLW81_FIRMWARE_COMMAND_MAX_MESSAGE_LENGTH 5
+
+//
+// Define the maximum length of a firmware command that does not need to set
+// the extension flag.
+//
+
+#define RTLW81_FIRMWARE_COMMAND_MAX_NO_EXTENSION_LENGTH 3
+
+//
+// Define the values for the RTL81xx firmware commands.
+//
+
+#define RTLW81_FIRMWARE_COMMAND_FLAG_EXTENSION    0x80
+#define RTLW81_FIRMWARE_COMMAND_AP_OFFLOAD        0x00
+#define RTLW81_FIRMWARE_COMMAND_SET_POWER_MODE    0x01
+#define RTLW81_FIRMWARE_COMMAND_JOIN_BSS_RPT      0x02
+#define RTLW81_FIRMWARE_COMMAND_RSVD_PAGE         0x03
+#define RTLW81_FIRMWARE_COMMAND_RSSI              0x04
+#define RTLW81_FIRMWARE_COMMAND_RSSI_SETTING      0x05
+#define RTLW81_FIRMWARE_COMMAND_MAC_ID_CONFIG     0x06
+#define RTLW81_FIRMWARE_COMMAND_MAC_ID_PS_MODE    0x07
+#define RTLW81_FIRMWARE_COMMAND_P2P_PS_OFFLOAD    0x08
+#define RTLW81_FIRMWARE_COMMAND_SELECTIVE_SUSPEND 0x09
+
+//
+// Define the MAC ID bits for the MAC ID config firmware command.
+//
+
+#define RTLW81_MAC_ID_CONFIG_COMMAND_ID_VALID     0x84
+#define RTLW81_MAC_ID_CONFIG_COMMAND_ID_BROADCAST 0x04
+#define RTLW81_MAC_ID_CONFIG_COMMAND_ID_BSS       0x00
+
+//
+// Define the MAC ID mask bit for the MAC ID config firmware command.
+//
+
+#define RTLW81_MAC_ID_CONFIG_COMMAND_MASK_MODE_MASK  0xF0000000
+#define RTLW81_MAC_ID_CONFIG_COMMAND_MASK_MODE_SHIFT 28
+#define RTLW81_MAC_ID_CONFIG_COMMAND_MASK_RATE_MASK  0x0FFFFFFF
+#define RTLW81_MAC_ID_CONFIG_COMMAND_MASK_RATE_SHIFT 0
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -1305,7 +1394,9 @@ typedef enum _RTLW81_REGISTER {
     Rtlw81RegisterReceiveResponseRate = 0x440,
     Rtlw81RegisterAggregateLengthLimit = 0x458,
     Rtlw81RegisterTransmitPacketWmacLbkBfHd = 0x45d,
-    Rtlw81RegisterRateSelect = 0x480,
+    Rtlw81RegisterIniRtsRateSelect = 0x480,
+    Rtlw81RegisterIniDataRateSelectBss = 0x484,
+    Rtlw81RegisterIniDataRateSelectBroadcast = 0x488,
     Rtlw81RegisterProtModeControl = 0x4C8,
     Rtlw81RegisterMaxAggregationNumber = 0x4CA,
     Rtlw81RegisterBarModeControl = 0x4CC,
@@ -1326,6 +1417,8 @@ typedef enum _RTLW81_REGISTER {
     Rtlw81RegisterBeaconInterval = 0x554,
     Rtlw81RegisterDriverEarlyInt = 0x558,
     Rtlw81RegisterBeaconDmaTime = 0x559,
+    Rtlw81RegisterTsftr0 = 0x560,
+    Rtlw81RegisterTsftr1 = 0x564,
     Rtlw81RegisterAtiwnd = 0x55A,
     Rtlw81RegisterBeaconMaxError = 0x55D,
     Rtlw81RegisterApsdControl = 0x600,
@@ -1338,6 +1431,8 @@ typedef enum _RTLW81_REGISTER {
     Rtlw81RegisterMulticast1 = 0x620,
     Rtlw81RegisterMulticast2 = 0x624,
     Rtlw81RegisterMacSpecSifs = 0x63A,
+    Rtlw81RegisterR2tSifs = 0x63C,
+    Rtlw81RegisterT2tSifs = 0x63E,
     Rtlw81RegisterAckTimeout = 0x640,
     Rtlw81RegisterCamCommand = 0x670,
     Rtlw81RegisterReceiveManagementFilter = 0x6A0,
@@ -1365,8 +1460,8 @@ typedef enum _RTLW81_REGISTER {
     Rtlw81RegisterFpga1TransmitInfo = 0x90C,
     Rtlw81RegisterCck0AfeSetting = 0xA04,
     Rtlw81RegisterOfdm0TransmitPathEnable = 0xC04,
-    Rtlw81RegisterOfmd0AgcCore1 = 0xC50,
-    Rtlw81RegisterOfmd0AgcParam1 = 0xC70,
+    Rtlw81RegisterOfdm0AgcCore1 = 0xC50,
+    Rtlw81RegisterOfdm0AgcParam1 = 0xC70,
     Rtlw81RegisterOfdm0AgcrsstiTable = 0xC78,
     Rtlw81RegisterOfdm1Lstf0 = 0xD00,
     Rtlw81RegisterOfdm1Lstf1 = 0xD01,
@@ -1569,6 +1664,45 @@ typedef struct _RTLW81_TRANSMIT_HEADER {
 
 Structure Description:
 
+    This structure defines an RTL81xx wireless firmware command.
+
+Members:
+
+    Id - Stores the ID of the firmware command.
+
+    Message - Stores the data contents of the firmware command.
+
+--*/
+
+typedef struct RTLW81_FIRMWARE_COMMAND {
+    UCHAR Id;
+    UCHAR Message[RTLW81_FIRMWARE_COMMAND_MAX_MESSAGE_LENGTH];
+} PACKED RTLW81_FIRMWARE_COMMAND, *PRTLW81_FIRMWARE_COMMAND;
+
+/*++
+
+Structure Description:
+
+    This structure defines a MAC ID firmware command for the RTL81xx wireless
+    devices.
+
+Members:
+
+    Mask - Stores the data mask to send to the firmware.
+
+    MacId - Stores the MAC ID the firmware command targets.
+
+--*/
+
+typedef struct _RTLW81_MAC_ID_CONFIG_COMMAND {
+    ULONG Mask;
+    UCHAR MacId;
+} PACKED RTLW81_MAC_ID_CONFIG_COMMAND, *PRTLW81_MAC_ID_CONFIG_COMMAND;
+
+/*++
+
+Structure Description:
+
     This structure defines the power information captured from the ROM for
     default devices. This information is used to program the power for new
     channels.
@@ -1692,6 +1826,9 @@ Members:
 
     Firmware - Stores a pointer to the loaded firmware binary file.
 
+    FirmwareBox - Store the formware box where the next firmware command should
+        be sent.
+
     InterfaceClaimed - Stores a boolean indicating if the interface has
         already been claimed.
 
@@ -1739,6 +1876,7 @@ typedef struct _RTLW81_DEVICE {
     ULONG InitializationPhase;
     PIRP InitializationIrp;
     PLOADED_FILE Firmware;
+    UCHAR FirmwareBox;
     BOOL InterfaceClaimed;
     UCHAR InterfaceNumber;
     UCHAR BulkInEndpoint;
@@ -1761,6 +1899,7 @@ typedef struct _RTLW81_DEVICE {
 //
 
 extern PDRIVER Rtlw81Driver;
+extern NET80211_RATE_INFORMATION RtlwDefaultRateInformation;
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -1850,6 +1989,36 @@ Arguments:
         the 802.11 link whose channel is to be set.
 
     Channel - Supplies the channel to which the device should be set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+Rtlw81SetState (
+    PVOID DriverContext,
+    NET80211_STATE State,
+    PNET80211_STATE_INFORMATION StateInformation
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the 802.11 link to the given state. State information is
+    provided to communicate the details of the 802.11 core's current state.
+
+Arguments:
+
+    DriverContext - Supplies a pointer to the driver context associated with
+        the 802.11 link whose state is to be set.
+
+    State - Supplies the state to which the link is being set.
+
+    StateInformation - Supplies a pointer to the information collected by the
+        802.11 core to help describe the state.
 
 Return Value:
 

@@ -158,7 +158,7 @@ UCHAR RtlwDefaultRates[] = {
     0x6C
 };
 
-NET80211_LINK_RATE_INFORMATION RtlwDefaultRateInformation = {
+NET80211_RATE_INFORMATION RtlwDefaultRateInformation = {
     sizeof(RtlwDefaultRates) / sizeof(RtlwDefaultRates[0]),
     RtlwDefaultRates
 };
@@ -633,6 +633,7 @@ Return Value:
     Net80211Properties.MaxChannel = RTLW81_MAX_CHANNEL;
     Net80211Properties.SupportedRates = &RtlwDefaultRateInformation;
     Net80211Properties.Interface.SetChannel = Rtlw81SetChannel;
+    Net80211Properties.Interface.SetState = Rtlw81SetState;
     Status = Net80211InitializeLink(Device->NetworkLink, &Net80211Properties);
     if (!KSUCCESS(Status)) {
         goto CreateNetworkDeviceEnd;
