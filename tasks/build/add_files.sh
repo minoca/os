@@ -69,12 +69,17 @@ if ! test -d "$AUTOROOT"; then
 fi
 
 ##
+## Copy the skeleton over so the proper environment is set up for postinst
+## scripts.
+##
+
+cp -Rpv $BINROOT/skel/* $BINROOT/apps/
+
+##
 ## Copy the script that automatically loads the Python build client.
 ## Manually symlink it in.
 ##
 
-mkdir -p "$BINROOT/apps/usr/sbin"
-cp -p "$BINROOT/skel/usr/sbin/update-rc.d" "$BINROOT/apps/usr/sbin/"
 mkdir -p "$BINROOT/apps/etc/init.d/"
 cp -v "$SRCROOT/os/tasks/build/autoclient.sh" "$BINROOT/apps/etc/init.d/"
 chmod 0755 "$BINROOT/apps/etc/init.d/autoclient.sh"
