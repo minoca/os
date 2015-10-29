@@ -73,7 +73,8 @@ fi
 ## scripts.
 ##
 
-cp -Rpv $BINROOT/skel/* $BINROOT/apps/
+cp -Rp $BINROOT/skel/* $BINROOT/apps/
+cp -Rp $BINROOT/msetup $BINROOT/apps/bin/msetup
 
 ##
 ## Copy the script that automatically loads the Python build client.
