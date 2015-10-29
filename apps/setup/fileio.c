@@ -1645,7 +1645,6 @@ Return Value:
         //
 
         } else if (!KSUCCESS(Status)) {
-            Status = STATUS_VOLUME_CORRUPT;
             goto FatOpenEnd;
         }
 
@@ -1734,7 +1733,6 @@ Return Value:
                            &NewProperties);
 
         if (!KSUCCESS(Status)) {
-            Status = STATUS_VOLUME_CORRUPT;
             goto FatOpenEnd;
         }
 
@@ -1746,7 +1744,6 @@ Return Value:
         WRITE_INT64_SYNC(&(Properties.FileSize), NewDirectorySize);
         Status = FatWriteFileProperties(Volume->VolumeToken, &Properties, 0);
         if (!KSUCCESS(Status)) {
-            Status = STATUS_VOLUME_CORRUPT;
             goto FatOpenEnd;
         }
 
@@ -1833,7 +1830,6 @@ Return Value:
                            &(NewFile->FatFile));
 
     if (!KSUCCESS(Status)) {
-        Status = STATUS_VOLUME_CORRUPT;
         goto FatOpenEnd;
     }
 
@@ -1848,6 +1844,9 @@ FatOpenEnd:
     if (!KSUCCESS(Status)) {
         if ((Status == STATUS_NOT_FOUND) || (Status == STATUS_PATH_NOT_FOUND)) {
             errno = ENOENT;
+
+        } else if (Status == STATUS_VOLUME_FULL) {
+            errno = ENOSPC;
         }
 
         if ((Status != STATUS_NOT_FOUND) &&

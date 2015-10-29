@@ -627,7 +627,7 @@ FUNCTION(ArSetFaultingAddress)
 END_FUNCTION(ArSetFaultingAddress)
 
 ##
-## PPTE
+## ULONG
 ## ArGetCurrentPageDirectory (
 ##     VOID
 ##     )
@@ -658,7 +658,7 @@ END_FUNCTION(ArGetCurrentPageDirectory)
 ##
 ## VOID
 ## ArSetCurrentPageDirectory (
-##     PVOID Value
+##     ULONG Value
 ##     )
 ##
 

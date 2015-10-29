@@ -65,6 +65,8 @@ Environment:
     "  -i, --input=image -- Specifies the location of the installation \n"     \
     "      image. The default is to open install.img in the current "          \
     "directory.\n"                                                             \
+    "      If the specified image is a file, it will be opened as an image. \n"\
+    "      The input can also be a directory.\n"                               \
     "  -l, --platform=name -- Specifies the platform type.\n"                  \
     "  -p, --partition=destination -- Specifies the install destination as \n" \
     "      a partition.\n"                                                     \
@@ -180,18 +182,21 @@ Return Value:
     ULONG ExtraPartitionIndex;
     LONGLONG ExtraPartitionSize;
     PSETUP_DESTINATION HostFileSystemPath;
+    PSTR HostPathString;
     PSTR InstallImagePath;
     INT Option;
     PSTR PlatformName;
     BOOL PrintHeader;
     BOOL QuietlyQuit;
     PSETUP_DESTINATION SourcePath;
+    struct stat Stat;
     INT Status;
 
     BootVolume = NULL;
     DeviceCount = 0;
     Devices = NULL;
     ExtraPartitionIndex = 100;
+    HostPathString = "";
     InstallImagePath = SETUP_DEFAULT_IMAGE_NAME;
     PlatformName = NULL;
     QuietlyQuit = FALSE;
@@ -413,11 +418,31 @@ Return Value:
     }
 
     //
+    // If the install source is a directory, then open that directory as the
+    // host file system path.
+    //
+
+    Status = stat(InstallImagePath, &Stat);
+    if (Status != 0) {
+        Status = errno;
+        fprintf(stderr,
+                "Error: Cannot open input %s: %s\n",
+                InstallImagePath,
+                strerror(Status));
+
+        goto mainEnd;
+    }
+
+    if (S_ISDIR(Stat.st_mode)) {
+        HostPathString = InstallImagePath;
+    }
+
+    //
     // Create a volume handle to the host file system.
     //
 
     HostFileSystemPath = SetupCreateDestination(SetupDestinationDirectory,
-                                                "",
+                                                HostPathString,
                                                 0);
 
     if (HostFileSystemPath == NULL) {
@@ -439,6 +464,38 @@ Return Value:
         }
 
         goto mainEnd;
+    }
+
+    //
+    // Open up the source image.
+    //
+
+    if (S_ISDIR(Stat.st_mode)) {
+        Context.SourceVolume = Context.HostFileSystem;
+
+    } else {
+        SourcePath = SetupCreateDestination(SetupDestinationImage,
+                                            InstallImagePath,
+                                            0);
+
+        if (SourcePath == NULL) {
+            Status = ENOMEM;
+            goto mainEnd;
+        }
+
+        Context.SourceVolume = SetupVolumeOpen(&Context,
+                                               SourcePath,
+                                               SetupVolumeFormatNever,
+                                               FALSE);
+
+        if (Context.SourceVolume == NULL) {
+            fprintf(stderr,
+                    "Setup failed to open the install source: %s.\n",
+                    InstallImagePath);
+
+            Status = -1;
+            goto mainEnd;
+        }
     }
 
     //
@@ -554,39 +611,6 @@ Return Value:
     if (Status != 0) {
         perror("Failed to read configuration");
         goto mainEnd;
-    }
-
-    //
-    // Open up the source image. Use the traditional standard in file "-" to
-    // mean the source is the host file system.
-    //
-
-    if (strcmp(InstallImagePath, "-") == 0) {
-        Context.SourceVolume = Context.HostFileSystem;
-
-    } else {
-        SourcePath = SetupCreateDestination(SetupDestinationImage,
-                                            InstallImagePath,
-                                            0);
-
-        if (SourcePath == NULL) {
-            Status = ENOMEM;
-            goto mainEnd;
-        }
-
-        Context.SourceVolume = SetupVolumeOpen(&Context,
-                                               SourcePath,
-                                               SetupVolumeFormatNever,
-                                               FALSE);
-
-        if (Context.SourceVolume == NULL) {
-            fprintf(stderr,
-                    "Setup failed to open the install source: %s.\n",
-                    InstallImagePath);
-
-            Status = -1;
-            goto mainEnd;
-        }
     }
 
     //

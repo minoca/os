@@ -96,8 +96,8 @@ Files += [
 ];
 
 FilesCopy = {
-    "Destination": "/",
-    "Source": "./",
+    "Destination": SourceDir,
+    "Source": SourceDir,
     "SourceVolume": -1,
     "Files": Files
 };

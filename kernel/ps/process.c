@@ -621,7 +621,7 @@ Return Value:
     // unmapped reservations in it.
     //
 
-    Status = MmReinitializeUserAccounting(Process->Accountant);
+    Status = MmReinitializeUserAccounting(Process->AddressSpace->Accountant);
     if (!KSUCCESS(Status)) {
         goto SysExecuteProcessEnd;
     }
@@ -2002,12 +2002,6 @@ Return Value:
         goto CreateProcessEnd;
     }
 
-    NewProcess->ImageListQueuedLock = KeCreateQueuedLock();
-    if (NewProcess->ImageListQueuedLock == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateProcessEnd;
-    }
-
     NewProcess->StopEvent = KeCreateEvent(NULL);
     if (NewProcess->StopEvent == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -2028,47 +2022,14 @@ Return Value:
     NewProcess->BinaryNameSize = BinaryNameSize;
     INITIALIZE_LIST_HEAD(&(NewProcess->ThreadListHead));
     NewProcess->ThreadCount = 0;
-    INITIALIZE_LIST_HEAD(&(NewProcess->SectionListHead));
-    INITIALIZE_LIST_HEAD(&(NewProcess->ImageListHead));
 
     //
-    // Initialize the memory accounting structures for this process. If this
-    // is the kernel process being initialized, then avoid doing this
-    // (as detected by the kernel process not being set up yet).
+    // Create an address space for the new process.
     //
 
-    if (KernelProcess == FALSE) {
-        NewProcess->Accountant =
-                             MmAllocatePagedPool(sizeof(MEMORY_ACCOUNTING),
-                                                 PS_ACCOUNTANT_ALLOCATION_TAG);
-
-        if (NewProcess->Accountant == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
-            goto CreateProcessEnd;
-        }
-
-        //
-        // Do not zero the accountant. Initialization is on the hook for
-        // setting up all fields in the structure.
-        //
-
-        Status = MmInitializeMemoryAccounting(NewProcess->Accountant,
-                                              MEMORY_ACCOUNTING_FLAG_USER);
-
-        if (!KSUCCESS(Status)) {
-            goto CreateProcessEnd;
-        }
-    }
-
-    //
-    // Create a page directory for the process and initialize it.
-    //
-
-    Status = MmCreatePageDirectory(&(NewProcess->PageDirectory),
-                                   &(NewProcess->PageDirectoryPhysical),
-                                   KernelProcess);
-
-    if (!KSUCCESS(Status)) {
+    NewProcess->AddressSpace = MmCreateAddressSpace();
+    if (NewProcess->AddressSpace == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateProcessEnd;
     }
 
@@ -2139,10 +2100,9 @@ Return Value:
 CreateProcessEnd:
     if (!KSUCCESS(Status)) {
         if (NewProcess != NULL) {
-            if (NewProcess->Accountant != NULL) {
-                MmDestroyMemoryAccounting(NewProcess->Accountant);
-                MmFreePagedPool(NewProcess->Accountant);
-                NewProcess->Accountant = NULL;
+            if (NewProcess->AddressSpace != NULL) {
+                MmDestroyAddressSpace(NewProcess->AddressSpace);
+                NewProcess->AddressSpace = NULL;
             }
 
             if (NewProcess->HandleTable != NULL) {
@@ -2845,13 +2805,7 @@ Return Value:
     // page.
     //
 
-    ASSERT(Process->ResidentSet == 1);
-
-    if (Process->Accountant != NULL) {
-        MmDestroyMemoryAccounting(Process->Accountant);
-        MmFreePagedPool(Process->Accountant);
-        Process->Accountant = NULL;
-    }
+    ASSERT(Process->AddressSpace->ResidentSet == 1);
 
     return;
 }
@@ -3061,9 +3015,9 @@ Return Value:
     // Assert that everything was properly cleaned up.
     //
 
-    ASSERT(LIST_EMPTY(&(Process->SectionListHead)) != FALSE);
-    ASSERT(LIST_EMPTY(&(Process->ImageListHead)) != FALSE);
-    ASSERT(Process->ImageCount == 0);
+    ASSERT(LIST_EMPTY(&(Process->AddressSpace->SectionListHead)) != FALSE);
+    ASSERT(LIST_EMPTY(&(Process->AddressSpace->ImageListHead)) != FALSE);
+    ASSERT(Process->AddressSpace->ImageCount == 0);
     ASSERT(Process->ProcessGroup == NULL);
     ASSERT(Process->Parent == NULL);
     ASSERT(Process->SiblingListEntry.Next == NULL);
@@ -3075,7 +3029,7 @@ Return Value:
     // page.
     //
 
-    ASSERT(Process->ResidentSet <= 1);
+    ASSERT(Process->AddressSpace->ResidentSet <= 1);
 
     //
     // Clean up the debug data if present.
@@ -3134,7 +3088,10 @@ Return Value:
     ASSERT(Process->Paths.Root.MountPoint == NULL);
     ASSERT(Process->Environment == NULL);
     ASSERT(Process->HandleTable == NULL);
-    ASSERT(Process->Accountant == NULL);
+
+    if (Process->AddressSpace != NULL) {
+        MmDestroyAddressSpace(Process->AddressSpace);
+    }
 
     if (Process->StopEvent != NULL) {
         KeDestroyEvent(Process->StopEvent);
@@ -3145,16 +3102,8 @@ Return Value:
         KeDestroyQueuedLock(Process->QueuedLock);
     }
 
-    if (Process->ImageListQueuedLock != NULL) {
-        KeDestroyQueuedLock(Process->ImageListQueuedLock);
-    }
-
     if (Process->Paths.Lock != NULL) {
         KeDestroyQueuedLock(Process->Paths.Lock);
-    }
-
-    if (Process->PageDirectory != NULL) {
-        MmDestroyPageDirectory(Process->PageDirectory);
     }
 
     return;
@@ -3386,6 +3335,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PLOADED_IMAGE Executable;
     ULONG Flags;
     PLOADED_IMAGE Interpreter;
@@ -3397,14 +3347,15 @@ Return Value:
 
     Executable = NULL;
     Process = PsGetCurrentProcess();
-    KeAcquireQueuedLock(Process->ImageListQueuedLock);
+    AddressSpace = Process->AddressSpace;
+    KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
 
     //
     // Always load the OS base library.
     //
 
     Flags = IMAGE_LOAD_FLAG_LOAD_ONLY;
-    Status = ImLoadExecutable(&(Process->ImageListHead),
+    Status = ImLoadExecutable(&(AddressSpace->ImageListHead),
                               OS_BASE_LIBRARY,
                               NULL,
                               Process,
@@ -3427,7 +3378,7 @@ Return Value:
     //
 
     Flags = IMAGE_LOAD_FLAG_LOAD_ONLY | IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE;
-    Status = ImLoadExecutable(&(Process->ImageListHead),
+    Status = ImLoadExecutable(&(AddressSpace->ImageListHead),
                               BinaryName,
                               File,
                               Process,
@@ -3459,7 +3410,7 @@ Return Value:
                                   Interpreter);
 
 LoadExecutableEnd:
-    KeReleaseQueuedLock(Process->ImageListQueuedLock);
+    KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
     return Status;
 }
 
@@ -3988,6 +3939,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     UINTN BaseDifference;
     PLIST_ENTRY CurrentEntry;
     PLOADED_MODULE_ENTRY CurrentModule;
@@ -4032,6 +3984,7 @@ Return Value:
 
     KeAcquireQueuedLock(Process->QueuedLock);
     LockHeld = TRUE;
+    AddressSpace = Process->AddressSpace;
 
     //
     // Loop through once to find out how much space is needed to enumerate the
@@ -4041,8 +3994,8 @@ Return Value:
     Signature = 0;
     ModuleCount = 0;
     SizeNeeded = sizeof(MODULE_LIST_HEADER);
-    CurrentEntry = Process->ImageListHead.Next;
-    while (CurrentEntry != &(Process->ImageListHead)) {
+    CurrentEntry = AddressSpace->ImageListHead.Next;
+    while (CurrentEntry != &(AddressSpace->ImageListHead)) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         SizeNeeded += sizeof(LOADED_MODULE_ENTRY) +
                       ((RtlStringLength(Image->BinaryName) + 1 -
@@ -4100,8 +4053,8 @@ Return Value:
     // Loop through again and create the list.
     //
 
-    CurrentEntry = Process->ImageListHead.Next;
-    while (CurrentEntry != &(Process->ImageListHead)) {
+    CurrentEntry = AddressSpace->ImageListHead.Next;
+    while (CurrentEntry != &(AddressSpace->ImageListHead)) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         NameSize = (RtlStringLength(Image->BinaryName) + 1) * sizeof(CHAR);
         CurrentModule->StructureSize = sizeof(LOADED_MODULE_ENTRY) + NameSize -
@@ -4418,6 +4371,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PVOID Arguments;
     PLIST_ENTRY CurrentEntry;
     PLOADED_IMAGE Image;
@@ -4447,6 +4401,7 @@ Return Value:
 
     Status = STATUS_SUCCESS;
     KeAcquireQueuedLock(Process->QueuedLock);
+    AddressSpace = Process->AddressSpace;
     ProcessSize = sizeof(PROCESS_INFORMATION) + Process->BinaryNameSize;
     if (Process->Environment != NULL) {
         ProcessSize += Process->Environment->ArgumentsBufferLength;
@@ -4599,16 +4554,16 @@ Return Value:
         // should be the main image.
         //
 
-        KeAcquireQueuedLock(Process->ImageListQueuedLock);
-        if (LIST_EMPTY(&(Process->ImageListHead)) == FALSE) {
-            Image = LIST_VALUE(Process->ImageListHead.Next,
+        KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
+        if (LIST_EMPTY(&(AddressSpace->ImageListHead)) == FALSE) {
+            Image = LIST_VALUE(AddressSpace->ImageListHead.Next,
                                LOADED_IMAGE,
                                ListEntry);
 
             Buffer->ImageSize = Image->Size;
         }
 
-        KeReleaseQueuedLock(Process->ImageListQueuedLock);
+        KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
     }
 
     *BufferSize = ProcessSize;

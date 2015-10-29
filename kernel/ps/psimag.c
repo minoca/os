@@ -255,6 +255,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PLIST_ENTRY CurrentEntry;
     PLOADED_IMAGE Image;
     PKPROCESS KernelProcess;
@@ -267,9 +268,7 @@ Return Value:
     }
 
     KernelProcess = PsGetKernelProcess();
-
-    ASSERT(KernelProcess != NULL);
-
+    AddressSpace = KernelProcess->AddressSpace;
     CurrentEntry = ListHead->Next;
     while (CurrentEntry != ListHead) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
@@ -293,11 +292,11 @@ Return Value:
         NewImage->File.ModificationDate = Image->File.ModificationDate;
         NewImage->File.Size = Image->File.Size;
         NewImage->Size = Image->Size;
-        INSERT_BEFORE(&(NewImage->ListEntry), &(KernelProcess->ImageListHead));
-        KernelProcess->ImageCount += 1;
-        KernelProcess->ImageListSignature +=
-                                      NewImage->File.ModificationDate +
-                                      (UINTN)(NewImage->LoadedLowestAddress);
+        INSERT_BEFORE(&(NewImage->ListEntry), &(AddressSpace->ImageListHead));
+        AddressSpace->ImageCount += 1;
+        AddressSpace->ImageListSignature +=
+                                       NewImage->File.ModificationDate +
+                                       (UINTN)(NewImage->LoadedLowestAddress);
 
         //
         // Load this image into the kernel debugger, but skip the kernel
@@ -346,6 +345,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PIMAGE_ASSOCIATION Association;
     ULONG AssociationIndex;
     PLIST_ENTRY CurrentEntry;
@@ -357,8 +357,9 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    KeAcquireQueuedLock(Source->ImageListQueuedLock);
-    ImageCount = Source->ImageCount;
+    AddressSpace = Source->AddressSpace;
+    KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
+    ImageCount = AddressSpace->ImageCount;
 
     //
     // Allocate space for the association mapping.
@@ -377,8 +378,8 @@ Return Value:
     //
 
     AssociationIndex = 0;
-    CurrentEntry = Source->ImageListHead.Next;
-    while (CurrentEntry != &(Source->ImageListHead)) {
+    CurrentEntry = AddressSpace->ImageListHead.Next;
+    while (CurrentEntry != &(AddressSpace->ImageListHead)) {
         SourceImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
 
@@ -407,8 +408,8 @@ Return Value:
     // relationships.
     //
 
-    CurrentEntry = Destination->ImageListHead.Next;
-    while (CurrentEntry != &(Destination->ImageListHead)) {
+    CurrentEntry = AddressSpace->ImageListHead.Next;
+    while (CurrentEntry != &(AddressSpace->ImageListHead)) {
         NewImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
         if (NewImage->ImportCount == 0) {
@@ -447,7 +448,7 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 ImCloneProcessImagesEnd:
-    KeReleaseQueuedLock(Source->ImageListQueuedLock);
+    KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
     if (Association != NULL) {
         MmFreePagedPool(Association);
     }
@@ -478,6 +479,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PLIST_ENTRY CurrentEntry;
     PLOADED_IMAGE Image;
 
@@ -486,10 +488,11 @@ Return Value:
     // as images and their imports are unloaded.
     //
 
-    KeAcquireQueuedLock(Process->ImageListQueuedLock);
-    while (LIST_EMPTY(&(Process->ImageListHead)) == FALSE) {
-        CurrentEntry = Process->ImageListHead.Next;
-        while (CurrentEntry != &(Process->ImageListHead)) {
+    AddressSpace = Process->AddressSpace;
+    KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
+    while (LIST_EMPTY(&(AddressSpace->ImageListHead)) == FALSE) {
+        CurrentEntry = AddressSpace->ImageListHead.Next;
+        while (CurrentEntry != &(AddressSpace->ImageListHead)) {
             Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
             if (Image->ImportDepth == 0) {
 
@@ -513,10 +516,10 @@ Return Value:
         // of zero should cause a domino effect that unloads all images.
         //
 
-        ASSERT(CurrentEntry != &(Process->ImageListHead));
+        ASSERT(CurrentEntry != &(AddressSpace->ImageListHead));
     }
 
-    KeReleaseQueuedLock(Process->ImageListQueuedLock);
+    KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
     return;
 }
 
@@ -543,6 +546,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     UINTN AllocationSize;
     PROCESS_DEBUG_MODULE_CHANGE Change;
     PLIST_ENTRY CurrentEntry;
@@ -557,6 +561,7 @@ Return Value:
     LockHeld = FALSE;
     NewImage = NULL;
     Process = PsGetCurrentProcess();
+    AddressSpace = Process->AddressSpace;
     Status = MmCopyFromUserMode(&Change,
                                 ModuleChangeUser,
                                 sizeof(PROCESS_DEBUG_MODULE_CHANGE));
@@ -587,11 +592,11 @@ Return Value:
     // Try to find a module matching this base address.
     //
 
-    KeAcquireQueuedLock(Process->ImageListQueuedLock);
+    KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
     LockHeld = TRUE;
-    CurrentEntry = Process->ImageListHead.Next;
+    CurrentEntry = AddressSpace->ImageListHead.Next;
     ExistingImage = NULL;
-    while (CurrentEntry != &(Process->ImageListHead)) {
+    while (CurrentEntry != &(AddressSpace->ImageListHead)) {
         CurrentImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
         if (CurrentImage->LoadedLowestAddress == Image.LoadedLowestAddress) {
@@ -631,7 +636,7 @@ Return Value:
         goto ProcessUserModeModuleChangeEnd;
     }
 
-    if (Process->ImageCount >= PROCESS_USER_MODULE_MAX_COUNT) {
+    if (AddressSpace->ImageCount >= PROCESS_USER_MODULE_MAX_COUNT) {
         Status = STATUS_TOO_MANY_HANDLES;
         goto ProcessUserModeModuleChangeEnd;
     }
@@ -679,7 +684,9 @@ Return Value:
     NewImage->EntryPoint = Image.EntryPoint;
     NewImage->ReferenceCount = 1;
     NewImage->LoadFlags = IMAGE_LOAD_FLAG_PLACEHOLDER;
-    INSERT_BEFORE(&(NewImage->ListEntry), &(Process->ImageListHead));
+    INSERT_BEFORE(&(NewImage->ListEntry),
+                  &(AddressSpace->ImageListHead));
+
     Status = PspImNotifyImageLoad(NewImage);
     if (!KSUCCESS(Status)) {
         LIST_REMOVE(&(NewImage->ListEntry));
@@ -690,7 +697,7 @@ Return Value:
 
 ProcessUserModeModuleChangeEnd:
     if (LockHeld != FALSE) {
-        KeReleaseQueuedLock(Process->ImageListQueuedLock);
+        KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
     }
 
     if (!KSUCCESS(Status)) {
@@ -725,6 +732,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PLIST_ENTRY CurrentEntry;
     PLOADED_IMAGE Image;
     KSTATUS Status;
@@ -732,10 +740,11 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    KeAcquireQueuedLock(Process->ImageListQueuedLock);
+    AddressSpace = Process->AddressSpace;
+    KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
     TotalStatus = STATUS_SUCCESS;
-    CurrentEntry = Process->ImageListHead.Next;
-    while (CurrentEntry != &(Process->ImageListHead)) {
+    CurrentEntry = AddressSpace->ImageListHead.Next;
+    while (CurrentEntry != &(AddressSpace->ImageListHead)) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
         Status = PspLoadProcessImageIntoKernelDebugger(Process, Image);
@@ -744,7 +753,7 @@ Return Value:
         }
     }
 
-    KeReleaseQueuedLock(Process->ImageListQueuedLock);
+    KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
     return TotalStatus;
 }
 
@@ -885,7 +894,7 @@ Return Value:
         // it's always the OS base library.
         //
 
-        if (Process->ImageCount == 0) {
+        if (Process->AddressSpace->ImageCount == 0) {
 
             ASSERT(RtlAreStringsEqual(BinaryName,
                                       OS_BASE_LIBRARY,
@@ -1668,6 +1677,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PKPROCESS KernelProcess;
     PKPROCESS Process;
     PMEMORY_RESERVATION Reservation;
@@ -1681,11 +1691,13 @@ Return Value:
         Process = Reservation->Process;
     }
 
-    ASSERT(KeIsQueuedLockHeld(Process->ImageListQueuedLock) != FALSE);
+    AddressSpace = Process->AddressSpace;
 
-    Process->ImageCount += 1;
-    Process->ImageListSignature += Image->File.ModificationDate +
-                                   (UINTN)(Image->LoadedLowestAddress);
+    ASSERT(KeIsQueuedLockHeld(AddressSpace->ImageListQueuedLock) != FALSE);
+
+    AddressSpace->ImageCount += 1;
+    AddressSpace->ImageListSignature += Image->File.ModificationDate +
+                                        (UINTN)(Image->LoadedLowestAddress);
 
     KernelProcess = PsGetKernelProcess();
 
@@ -1747,6 +1759,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PKPROCESS KernelProcess;
     PKPROCESS Process;
 
@@ -1756,12 +1769,14 @@ Return Value:
         Process = PsGetCurrentProcess();
     }
 
-    ASSERT(KeIsQueuedLockHeld(Process->ImageListQueuedLock) != FALSE);
-    ASSERT(Process->ImageCount != 0);
+    AddressSpace = Process->AddressSpace;
 
-    Process->ImageCount -= 1;
-    Process->ImageListSignature -= Image->File.ModificationDate +
-                                   (UINTN)(Image->LoadedLowestAddress);
+    ASSERT(KeIsQueuedLockHeld(AddressSpace->ImageListQueuedLock) != FALSE);
+    ASSERT(AddressSpace->ImageCount != 0);
+
+    AddressSpace->ImageCount -= 1;
+    AddressSpace->ImageListSignature -= Image->File.ModificationDate +
+                                        (UINTN)(Image->LoadedLowestAddress);
 
     if (Image->DebuggerModule != NULL) {
         KdReportModuleChange(Image->DebuggerModule, FALSE);
@@ -2006,10 +2021,13 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     ULONG AllocationSize;
     ULONG NameSize;
     PLOADED_IMAGE NewImage;
     KSTATUS Status;
+
+    AddressSpace = Destination->AddressSpace;
 
     //
     // Allocate a new image.
@@ -2083,14 +2101,14 @@ Return Value:
         RtlZeroMemory(NewImage->Imports, AllocationSize);
     }
 
-    INSERT_BEFORE(&(NewImage->ListEntry), &(Destination->ImageListHead));
-    Destination->ImageCount += 1;
+    INSERT_BEFORE(&(NewImage->ListEntry), &(AddressSpace->ImageListHead));
+    AddressSpace->ImageCount += 1;
     if (PsKdLoadAllImages != FALSE) {
         PspLoadProcessImageIntoKernelDebugger(Destination, NewImage);
     }
 
-    Destination->ImageListSignature += NewImage->File.ModificationDate +
-                                       (UINTN)(NewImage->LoadedLowestAddress);
+    AddressSpace->ImageListSignature += NewImage->File.ModificationDate +
+                                        (UINTN)(NewImage->LoadedLowestAddress);
 
     Status = STATUS_SUCCESS;
 

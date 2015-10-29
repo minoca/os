@@ -41,7 +41,7 @@ PandaFirmwareFiles = [
 
 PandaFirmwareSystemCopy = {
     "Destination": SystemDir + "panda/",
-    "Source": "./",
+    "Source": SourceDir,
     "SourceVolume": 0,
     "Files": PandaFirmwareFiles
 };
@@ -52,7 +52,7 @@ PandaFirmwareSystemCopy = {
 
 PandaFirmwareCopy = {
     "Destination": "/pandafw",
-    "Source": "./pandafw",
+    "Source": SourceDir + "pandafw",
     "SourceVolume": 0,
 };
 
@@ -65,7 +65,7 @@ TotalBootCopy += [PandaFirmwareCopy];
 
 PandaMloCopy = {
     "Offset": 0,
-    "Source": "omap4mlo",
+    "Source": SourceDir + "omap4mlo",
     "SourceVolume": 0,
 };
 

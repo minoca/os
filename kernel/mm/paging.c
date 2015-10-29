@@ -1336,7 +1336,7 @@ Return Value:
 
             } else {
                 PhysicalAddress = MmpVirtualToPhysicalInOtherProcess(
-                                                        Process->PageDirectory,
+                                                        Process->AddressSpace,
                                                         VirtualAddress);
             }
 

@@ -46,7 +46,7 @@ BboneFirmwareFiles = [
 
 BboneFirmwareSystemCopy = {
     "Destination": SystemDir + "bbone/",
-    "Source": "./",
+    "Source": SourceDir,
     "SourceVolume": 0,
     "Files": BboneFirmwareFiles
 };
@@ -57,7 +57,7 @@ BboneFirmwareSystemCopy = {
 
 BboneFirmwareCopy = {
     "Destination": "/bbonefw",
-    "Source": "./bbonefw",
+    "Source": SourceDir + "bbonefw",
     "SourceVolume": 0,
 };
 
@@ -70,7 +70,7 @@ TotalBootCopy += [BboneFirmwareCopy];
 
 BboneMloCopy = {
     "Offset": 0,
-    "Source": "bbonemlo",
+    "Source": SourceDir + "bbonemlo",
     "SourceVolume": 0,
 };
 

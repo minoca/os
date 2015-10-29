@@ -715,6 +715,54 @@ Return Value:
 
 --*/
 
+PADDRESS_SPACE
+MmpArchCreateAddressSpace (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new address space context. This routine allocates
+    the structure, zeros at least the common portion, and initializes any
+    architecture specific members after the common potion.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a pointer to the new address space on success.
+
+    NULL on allocation failure.
+
+--*/
+
+VOID
+MmpArchDestroyAddressSpace (
+    PADDRESS_SPACE AddressSpace
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys an address space, freeing this structure and all
+    architecture-specific content. The common portion of the structure will
+    already have been taken care of.
+
+Arguments:
+
+    AddressSpace - Supplies a pointer to the address space to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
 BOOL
 MmpCheckDirectoryUpdates (
     PVOID FaultingAddress
@@ -829,7 +877,7 @@ Return Value:
 
 PHYSICAL_ADDRESS
 MmpVirtualToPhysicalInOtherProcess (
-    PVOID PageDirectory,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress
     );
 
@@ -842,8 +890,7 @@ Routine Description:
 
 Arguments:
 
-    PageDirectory - Supplies a pointer to the top level page directory for the
-        process.
+    AddressSpace - Supplies a pointer to the address space.
 
     VirtualAddress - Supplies the address to translate to a physical address.
 
@@ -960,8 +1007,8 @@ Return Value:
 
 KSTATUS
 MmpPreallocatePageTables (
-    PVOID SourcePageDirectory,
-    PVOID DestinationPageDirectory
+    PADDRESS_SPACE SourceAddressSpace,
+    PADDRESS_SPACE DestinationAddressSpace
     );
 
 /*++
@@ -974,12 +1021,12 @@ Routine Description:
 
 Arguments:
 
-    SourcePageDirectory - Supplies a pointer to the page directory to scan. A
-        page table is allocated but not initialized for every missing page
-        table in the destination.
+    SourceAddressSpace - Supplies a pointer to the address space to prepare to
+        copy. A page table is allocated but not initialized for every missing
+        page table in the destination.
 
-    DestinationPageDirectory - Supplies a pointer to the page directory that
-        will get page tables filled in.
+    DestinationAddressSpace - Supplies a pointer to the destination to create
+        the page tables in.
 
 Return Value:
 
@@ -992,7 +1039,7 @@ Return Value:
 KSTATUS
 MmpCopyAndChangeSectionMappings (
     PKPROCESS DestinationProcess,
-    PVOID SourcePageDirectory,
+    PADDRESS_SPACE Source,
     PVOID VirtualAddress,
     UINTN Size
     );
@@ -1009,8 +1056,7 @@ Arguments:
     DestinationProcess - Supplies a pointer to the process where the mappings
         should be copied to.
 
-    SourcePageDirectory - Supplies the top level page table of the current
-        process.
+    Source - Supplies a pointer to the source address space.
 
     VirtualAddress - Supplies the starting virtual address of the memory range.
 
@@ -1980,7 +2026,7 @@ Return Value:
 
 VOID
 MmpSendTlbInvalidateIpi (
-    PVOID PageDirectory,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress,
     ULONG PageCount
     );
@@ -1993,7 +2039,7 @@ Routine Description:
 
 Arguments:
 
-    PageDirectory - Supplies the page directory for the affected address.
+    AddressSpace - Supplies a pointer to the address space to invalidate for.
 
     VirtualAddress - Supplies the virtual address to invalidate.
 

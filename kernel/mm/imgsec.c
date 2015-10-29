@@ -121,9 +121,130 @@ MmpDestroyImageSectionMappings (
 // -------------------------------------------------------------------- Globals
 //
 
+PADDRESS_SPACE MmKernelAddressSpace;
+
 //
 // ------------------------------------------------------------------ Functions
 //
+
+PADDRESS_SPACE
+MmCreateAddressSpace (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new address space context. This routine allocates
+    the structure, zeros at least the common portion, and initializes any
+    architecture specific members after the common potion.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a pointer to the new address space on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    PADDRESS_SPACE Space;
+    KSTATUS Status;
+
+    Space = MmpArchCreateAddressSpace();
+    if (Space == NULL) {
+        return NULL;
+    }
+
+    INITIALIZE_LIST_HEAD(&(Space->ImageListHead));
+    INITIALIZE_LIST_HEAD(&(Space->SectionListHead));
+    if (MmKernelAddressSpace == NULL) {
+        MmKernelAddressSpace = Space;
+        Space->Accountant = &MmKernelVirtualSpace;
+        Status = STATUS_SUCCESS;
+
+    } else {
+        Space->Accountant = MmAllocatePagedPool(
+                                              sizeof(MEMORY_ACCOUNTING),
+                                              MM_ADDRESS_SPACE_ALLOCATION_TAG);
+
+        if (Space->Accountant == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto CreateAddressSpaceEnd;
+        }
+
+        Status = MmInitializeMemoryAccounting(Space->Accountant,
+                                              MEMORY_ACCOUNTING_FLAG_USER);
+
+        if (!KSUCCESS(Status)) {
+            goto CreateAddressSpaceEnd;
+        }
+    }
+
+    Space->ImageListQueuedLock = KeCreateQueuedLock();
+    if (Space->ImageListQueuedLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CreateAddressSpaceEnd;
+    }
+
+CreateAddressSpaceEnd:
+    if (!KSUCCESS(Status)) {
+        if (Space != NULL) {
+            MmDestroyAddressSpace(Space);
+            Space = NULL;
+        }
+    }
+
+    return Space;
+}
+
+VOID
+MmDestroyAddressSpace (
+    PADDRESS_SPACE AddressSpace
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys an address space, freeing this structure and all
+    architecture-specific content. The common portion of the structure will
+    already have been taken care of.
+
+Arguments:
+
+    AddressSpace - Supplies a pointer to the address space to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (AddressSpace == NULL) {
+        return;
+    }
+
+    if (AddressSpace->Accountant != NULL) {
+        MmDestroyMemoryAccounting(AddressSpace->Accountant);
+        MmFreePagedPool(AddressSpace->Accountant);
+    }
+
+    if (AddressSpace->ImageListQueuedLock != NULL) {
+        KeDestroyQueuedLock(AddressSpace->ImageListQueuedLock);
+    }
+
+    MmpArchDestroyAddressSpace(AddressSpace);
+    return;
+}
 
 PIMAGE_SECTION_LIST
 MmCreateImageSectionList (
@@ -440,6 +561,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PLIST_ENTRY CurrentEntry;
     PVOID End;
     PKPROCESS KernelProcess;
@@ -455,12 +577,13 @@ Return Value:
     ASSERT(IS_ALIGNED((UINTN)Address | Size, PageSize));
 
     Process = PsGetCurrentProcess();
+    AddressSpace = Process->AddressSpace;
     KernelProcess = PsGetKernelProcess();
     KeAcquireQueuedLock(Process->QueuedLock);
     Status = STATUS_SUCCESS;
     End = Address + Size;
-    CurrentEntry = Process->SectionListHead.Next;
-    while (CurrentEntry != &(Process->SectionListHead)) {
+    CurrentEntry = AddressSpace->SectionListHead.Next;
+    while (CurrentEntry != &(AddressSpace->SectionListHead)) {
         Section = LIST_VALUE(CurrentEntry, IMAGE_SECTION, ProcessListEntry);
         if (Section->VirtualAddress >= End) {
             break;
@@ -497,10 +620,11 @@ Return Value:
                 //
 
                 if (Section->VirtualAddress < Address) {
-                    Status = MmpClipImageSection(&(Process->SectionListHead),
-                                                 Address,
-                                                 0,
-                                                 Section);
+                    Status = MmpClipImageSection(
+                                              &(AddressSpace->SectionListHead),
+                                              Address,
+                                              0,
+                                              Section);
 
                     if (!KSUCCESS(Status)) {
                         break;
@@ -517,7 +641,7 @@ Return Value:
                 // section.
                 //
 
-                Status = MmpClipImageSection(&(Process->SectionListHead),
+                Status = MmpClipImageSection(&(AddressSpace->SectionListHead),
                                              End,
                                              0,
                                              Section);
@@ -811,6 +935,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PIMAGE_SECTION CurrentSection;
     PLIST_ENTRY CurrentSectionEntry;
     ULONG PageShift;
@@ -823,8 +948,9 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     KeAcquireQueuedLock(Process->QueuedLock);
-    CurrentSectionEntry = Process->SectionListHead.Next;
-    while (CurrentSectionEntry != &(Process->SectionListHead)) {
+    AddressSpace = Process->AddressSpace;
+    CurrentSectionEntry = AddressSpace->SectionListHead.Next;
+    while (CurrentSectionEntry != &(AddressSpace->SectionListHead)) {
         CurrentSection = LIST_VALUE(CurrentSectionEntry,
                                     IMAGE_SECTION,
                                     ProcessListEntry);
@@ -904,6 +1030,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PLIST_ENTRY EntryBefore;
     PIMAGE_SECTION_LIST ImageSectionList;
     PIMAGE_SECTION NewSection;
@@ -913,6 +1040,7 @@ Return Value:
     ULONG PageSize;
     KSTATUS Status;
 
+    AddressSpace = Process->AddressSpace;
     ImageSectionList = NULL;
     NewSection = NULL;
     PageSize = MmPageSize();
@@ -945,7 +1073,7 @@ Return Value:
     //
 
     KeAcquireQueuedLock(Process->QueuedLock);
-    Status = MmpClipImageSections(&(Process->SectionListHead),
+    Status = MmpClipImageSections(&(AddressSpace->SectionListHead),
                                   VirtualAddress,
                                   Size,
                                   &EntryBefore);
@@ -1065,6 +1193,7 @@ Return Value:
     ULONG BitmapSize;
     PLIST_ENTRY CurrentEntry;
     PIMAGE_SECTION CurrentSection;
+    PADDRESS_SPACE DestinationAddressSpace;
     ULONG Flags;
     PIMAGE_SECTION_LIST ImageSectionList;
     PIMAGE_SECTION NewSection;
@@ -1077,6 +1206,7 @@ Return Value:
     BOOL ProcessLockHeld;
     KSTATUS Status;
 
+    DestinationAddressSpace = DestinationProcess->AddressSpace;
     ImageSectionList = NULL;
     NewSection = NULL;
     PageSize = MmPageSize();
@@ -1264,7 +1394,7 @@ Return Value:
     //
 
     Status = MmpCopyAndChangeSectionMappings(DestinationProcess,
-                                             Process->PageDirectory,
+                                             Process->AddressSpace,
                                              SectionToCopy->VirtualAddress,
                                              SectionToCopy->Size);
 
@@ -1280,8 +1410,8 @@ Return Value:
 
     KeAcquireQueuedLock(DestinationProcess->QueuedLock);
     ProcessLockHeld = TRUE;
-    CurrentEntry = DestinationProcess->SectionListHead.Next;
-    while (CurrentEntry != &(DestinationProcess->SectionListHead)) {
+    CurrentEntry = DestinationAddressSpace->SectionListHead.Next;
+    while (CurrentEntry != &(DestinationAddressSpace->SectionListHead)) {
         CurrentSection = LIST_VALUE(CurrentEntry,
                                     IMAGE_SECTION,
                                     ProcessListEntry);
@@ -1407,7 +1537,7 @@ Return Value:
 
     } else {
         KeAcquireQueuedLock(Process->QueuedLock);
-        Status = MmpClipImageSections(&(Process->SectionListHead),
+        Status = MmpClipImageSections(&(Process->AddressSpace->SectionListHead),
                                       SectionAddress,
                                       Size,
                                       NULL);
@@ -3656,10 +3786,10 @@ Return Value:
     if ((Process == CurrentProcess) || (Process == KernelProcess)) {
         MappedPhysicalAddress = MmpVirtualToPhysical(Address, NULL);
 
-    } else if (Process->PageDirectory != NULL) {
+    } else {
         MappedPhysicalAddress = MmpVirtualToPhysicalInOtherProcess(
-                                                        Process->PageDirectory,
-                                                        Address);
+                                                         Process->AddressSpace,
+                                                         Address);
     }
 
     //
@@ -3817,14 +3947,10 @@ Return Value:
     //
     // Sections belonging to other processes need to use the helper routines
     // that unmap pages belonging to another process. This is not as efficient,
-    // but is a rare case. Watch out for test sections, as those run with a
-    // dummy process that does not have a page directory.
+    // but is a rare case.
     //
 
     } else {
-        if (Process->PageDirectory == NULL) {
-            goto DestroyImageSectionMappingsEnd;
-        }
 
         //
         // There should be no non-paged sections in user mode.
@@ -3919,7 +4045,7 @@ Return Value:
 
         } else {
             PhysicalAddress = MmpVirtualToPhysicalInOtherProcess(
-                                                        Process->PageDirectory,
+                                                        Process->AddressSpace,
                                                         CurrentAddress);
 
             if (PhysicalAddress != INVALID_PHYSICAL_ADDRESS) {

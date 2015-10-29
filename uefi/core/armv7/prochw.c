@@ -26,6 +26,7 @@ Environment:
 //
 
 #include "../ueficore.h"
+#include <minoca/mm.h>
 #include <minoca/hmod.h>
 #include <minoca/kdebug.h>
 #include <minoca/arm.h>

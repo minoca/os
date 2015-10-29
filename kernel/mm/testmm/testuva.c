@@ -110,6 +110,7 @@ Return Value:
 
 {
 
+    ADDRESS_SPACE AddressSpace;
     MEMORY_DESCRIPTOR Descriptor;
     ULONG EndAddress;
     ULONG Failures;
@@ -293,13 +294,15 @@ Return Value:
     //
 
     RtlZeroMemory(&UserProcess, sizeof(KPROCESS));
-    INITIALIZE_LIST_HEAD(&(UserProcess.ImageListHead));
-    INITIALIZE_LIST_HEAD(&(UserProcess.SectionListHead));
-    UserProcess.Accountant = malloc(sizeof(MEMORY_ACCOUNTING));
+    RtlZeroMemory(&AddressSpace, sizeof(ADDRESS_SPACE));
+    UserProcess.AddressSpace = &AddressSpace;
+    INITIALIZE_LIST_HEAD(&(UserProcess.AddressSpace->ImageListHead));
+    INITIALIZE_LIST_HEAD(&(AddressSpace.SectionListHead));
+    AddressSpace.Accountant = malloc(sizeof(MEMORY_ACCOUNTING));
 
-    assert(UserProcess.Accountant != NULL);
+    assert(AddressSpace.Accountant != NULL);
 
-    Status = MmInitializeMemoryAccounting(UserProcess.Accountant,
+    Status = MmInitializeMemoryAccounting(AddressSpace.Accountant,
                                           MEMORY_ACCOUNTING_FLAG_USER |
                                           MEMORY_ACCOUNTING_FLAG_NO_MAP);
 
@@ -317,7 +320,7 @@ Return Value:
                        (UINTN)KERNEL_VA_START,
                        MemoryTypeFree);
 
-    Status = MmpAddAccountingDescriptor(UserProcess.Accountant,
+    Status = MmpAddAccountingDescriptor(AddressSpace.Accountant,
                                         &Descriptor);
 
     if (!KSUCCESS(Status)) {
@@ -382,7 +385,7 @@ Return Value:
     //
 
     MmpFreeAccountingRange(&UserProcess,
-                           UserProcess.Accountant,
+                           AddressSpace.Accountant,
                            (PVOID)0x10000,
                            0xF0000,
                            TRUE,
@@ -399,7 +402,7 @@ Return Value:
     //
 
     MmpFreeAccountingRange(&UserProcess,
-                           UserProcess.Accountant,
+                           AddressSpace.Accountant,
                            (PVOID)0x10000,
                            0xF0000,
                            TRUE,
@@ -417,7 +420,7 @@ Return Value:
 
     if (TestAllocation != NULL) {
         Status = MmpFreeAccountingRange(&UserProcess,
-                                        UserProcess.Accountant,
+                                        AddressSpace.Accountant,
                                         TestAllocation,
                                         0x20000,
                                         TRUE,
@@ -446,7 +449,7 @@ Return Value:
 
         if (PreviousAllocation != NULL) {
             Status = MmpFreeAccountingRange(&UserProcess,
-                                            UserProcess.Accountant,
+                                            AddressSpace.Accountant,
                                             PreviousAllocation,
                                             (Index - 1) * PageSize,
                                             TRUE,
@@ -470,7 +473,7 @@ Return Value:
 
     if (PreviousAllocation != NULL) {
         Status = MmpFreeAccountingRange(&UserProcess,
-                                        UserProcess.Accountant,
+                                        AddressSpace.Accountant,
                                         PreviousAllocation,
                                         (Index - 1) * PageSize,
                                         TRUE,
@@ -485,8 +488,8 @@ Return Value:
         }
     }
 
-    MmDestroyMemoryAccounting(UserProcess.Accountant);
-    free(UserProcess.Accountant);
+    MmDestroyMemoryAccounting(AddressSpace.Accountant);
+    free(AddressSpace.Accountant);
 
     //
     // If the outstanding allocations are not from the pool tags, then
@@ -561,7 +564,7 @@ Return Value:
         Strategy = AllocationStrategyFixedAddress;
     }
 
-    Status = MmpAllocateAddressRange(Process->Accountant,
+    Status = MmpAllocateAddressRange(Process->AddressSpace->Accountant,
                                      Size,
                                      0,
                                      MemoryTypeReserved,
@@ -597,7 +600,7 @@ Return Value:
         }
     }
 
-    Valid = ValidateMdl(&(Process->Accountant->Mdl));
+    Valid = ValidateMdl(&(Process->AddressSpace->Accountant->Mdl));
     if (Valid == FALSE) {
         printf("MDL not valid after allocating 0x%08x.\n",
                Allocation);

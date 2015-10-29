@@ -259,8 +259,6 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-#pragma pack(push, 1)
-
 /*++
 
 Structure Description:
@@ -295,7 +293,7 @@ typedef struct _PROCESSOR_GATE {
     BYTE Count;
     BYTE Access;
     USHORT HighOffset;
-} PROCESSOR_GATE, *PPROCESSOR_GATE;
+} PACKED PROCESSOR_GATE, *PPROCESSOR_GATE;
 
 /*++
 
@@ -316,7 +314,7 @@ Members:
 typedef struct _TABLE_REGISTER {
     USHORT Limit;
     ULONG Base;
-} TABLE_REGISTER, *PTABLE_REGISTER;
+} PACKED TABLE_REGISTER, *PTABLE_REGISTER;
 
 /*++
 
@@ -395,7 +393,7 @@ typedef struct _TSS {
     USHORT Pad9;
     USHORT DebugTrap;
     USHORT IoMapBase;
-} TSS, *PTSS;
+} PACKED TSS, *PTSS;
 
 typedef enum _GDT_GRANULARITY {
     GdtByteGranularity = 0x00,
@@ -479,7 +477,7 @@ typedef struct _GDT_ENTRY {
     UCHAR Access;
     UCHAR Granularity;
     UCHAR BaseHigh;
-} GDT_ENTRY, *PGDT_ENTRY;
+} PACKED GDT_ENTRY, *PGDT_ENTRY;
 
 /*++
 
@@ -534,7 +532,7 @@ typedef struct _PTE {
     ULONG Global:1;
     ULONG Unused:3;
     ULONG Entry:20;
-} PTE, *PPTE;
+} PACKED PTE, *PPTE;
 
 /*++
 
@@ -579,9 +577,7 @@ struct _FPU_CONTEXT {
     UCHAR Xmm6[16];
     UCHAR Xmm7[16];
     UCHAR Padding[224];
-};
-
-#pragma pack(pop)
+} PACKED;
 
 /*++
 
@@ -615,7 +611,7 @@ struct _TRAP_FRAME {
     ULONG Cs;
     ULONG Eflags;
     ULONG Esp;
-};
+} PACKED;
 
 /*++
 
@@ -737,6 +733,30 @@ Return Value:
     None.
 
 --*/
+
+/*++
+
+Structure Description:
+
+    This structure defines the architecture specific form of an address space
+    structure.
+
+Members:
+
+    Common - Stores the common address space information.
+
+    PageDirectory - Stores the virtual address of the top level page directory.
+
+    PageDirectoryPhysical - Stores the physical address of the top level page
+        directory.
+
+--*/
+
+typedef struct _ADDRESS_SPACE_X86 {
+    ADDRESS_SPACE Common;
+    PPTE PageDirectory;
+    ULONG PageDirectoryPhysical;
+} ADDRESS_SPACE_X86, *PADDRESS_SPACE_X86;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -945,8 +965,9 @@ Return Value:
 
 --*/
 
-PPTE
+ULONG
 ArGetCurrentPageDirectory (
+    VOID
     );
 
 /*++
@@ -967,7 +988,7 @@ Return Value:
 
 VOID
 ArSetCurrentPageDirectory (
-    PVOID Value
+    ULONG Value
     );
 
 /*++

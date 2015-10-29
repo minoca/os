@@ -884,6 +884,30 @@ typedef struct _ARM_CPUID {
     ULONG IsaFeatures[6];
 } PACKED ARM_CPUID, *PARM_CPUID;
 
+/*++
+
+Structure Description:
+
+    This structure defines the architecture specific form of an address space
+    structure.
+
+Members:
+
+    Common - Stores the common address space information.
+
+    PageDirectory - Stores the virtual address of the top level page directory.
+
+    PageDirectoryPhysical - Stores the physical address of the top level page
+        directory.
+
+--*/
+
+typedef struct _ADDRESS_SPACE_ARM {
+    ADDRESS_SPACE Common;
+    PVOID PageDirectory;
+    ULONG PageDirectoryPhysical;
+} ADDRESS_SPACE_ARM, *PADDRESS_SPACE_ARM;
+
 //
 // -------------------------------------------------------------------- Globals
 //

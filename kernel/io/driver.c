@@ -273,14 +273,16 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PKPROCESS KernelProcess;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     KernelProcess = PsGetKernelProcess();
-    KeAcquireQueuedLock(KernelProcess->ImageListQueuedLock);
+    AddressSpace = KernelProcess->AddressSpace;
+    KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
     ImImageReleaseReference(Driver->Image);
-    KeReleaseQueuedLock(KernelProcess->ImageListQueuedLock);
+    KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
     return;
 }
 
@@ -394,6 +396,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PLOADED_IMAGE DriverImage;
     PKPROCESS KernelProcess;
     ULONG LoadFlags;
@@ -405,9 +408,10 @@ Return Value:
                 IMAGE_LOAD_FLAG_NO_STATIC_CONSTRUCTORS;
 
     KernelProcess = PsGetKernelProcess();
+    AddressSpace = KernelProcess->AddressSpace;
     *DriverOut = NULL;
-    KeAcquireQueuedLock(KernelProcess->ImageListQueuedLock);
-    Status = ImLoadExecutable(&(KernelProcess->ImageListHead),
+    KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
+    Status = ImLoadExecutable(&(AddressSpace->ImageListHead),
                               DriverName,
                               NULL,
                               KernelProcess,
@@ -424,7 +428,7 @@ Return Value:
         }
     }
 
-    KeReleaseQueuedLock(KernelProcess->ImageListQueuedLock);
+    KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
     if (!KSUCCESS(Status)) {
         goto LoadDriverEnd;
     }
@@ -562,8 +566,8 @@ Return Value:
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
-    ASSERT(KeIsQueuedLockHeld(PsGetKernelProcess()->ImageListQueuedLock) !=
-           FALSE);
+    ASSERT(KeIsQueuedLockHeld(
+            PsGetKernelProcess()->AddressSpace->ImageListQueuedLock) != FALSE);
 
     Image = LoadedImage;
     NewDriver = MmAllocateNonPagedPool(sizeof(DRIVER), IO_ALLOCATION_TAG);
@@ -619,8 +623,8 @@ Return Value:
     PDRIVER_UNLOAD UnloadRoutine;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
-    ASSERT(KeIsQueuedLockHeld(PsGetKernelProcess()->ImageListQueuedLock) !=
-           FALSE);
+    ASSERT(KeIsQueuedLockHeld(
+            PsGetKernelProcess()->AddressSpace->ImageListQueuedLock) != FALSE);
 
     Image = LoadedImage;
     Driver = Image->SystemExtension;
@@ -674,8 +678,8 @@ Return Value:
 
     Image = LoadedImage;
 
-    ASSERT(KeIsQueuedLockHeld(PsGetKernelProcess()->ImageListQueuedLock) !=
-           FALSE);
+    ASSERT(KeIsQueuedLockHeld(
+            PsGetKernelProcess()->AddressSpace->ImageListQueuedLock) != FALSE);
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
@@ -729,6 +733,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PLIST_ENTRY CurrentEntry;
     PLOADED_IMAGE Image;
     KSTATUS Status;
@@ -736,13 +741,15 @@ Return Value:
 
     ASSERT(Process == PsGetKernelProcess());
 
+    AddressSpace = Process->AddressSpace;
+
     //
     // Iterate backwards to initialize dependency modules first.
     //
 
     TotalStatus = STATUS_SUCCESS;
-    CurrentEntry = Process->ImageListHead.Previous;
-    while (CurrentEntry != &(Process->ImageListHead)) {
+    CurrentEntry = AddressSpace->ImageListHead.Previous;
+    while (CurrentEntry != &(AddressSpace->ImageListHead)) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Previous;
         if ((Image->Flags & IMAGE_FLAG_INITIALIZED) == 0) {

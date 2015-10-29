@@ -498,7 +498,7 @@ Return Value:
     IaRegisters = &(SpecialRegisters->Ia);
     IaRegisters->Cr0 = ArGetControlRegister0();
     IaRegisters->Cr2 = (UINTN)ArGetFaultingAddress();
-    IaRegisters->Cr3 = (UINTN)ArGetCurrentPageDirectory();
+    IaRegisters->Cr3 = ArGetCurrentPageDirectory();
     IaRegisters->Cr4 = ArGetControlRegister4();
     IaRegisters->Dr0 = ArGetDebugRegister0();
     IaRegisters->Dr1 = ArGetDebugRegister1();
@@ -560,7 +560,7 @@ Return Value:
     }
 
     if (New->Cr3 != Original->Cr3) {
-        ArSetCurrentPageDirectory((PPTE)(UINTN)New->Cr3);
+        ArSetCurrentPageDirectory(New->Cr3);
     }
 
     if (New->Cr4 != Original->Cr4) {

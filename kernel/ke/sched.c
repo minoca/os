@@ -320,7 +320,9 @@ Return Value:
     //      explicitly synchronized into the old thread's page directory.
     //
 
-    NextPageDirectory = NextThread->OwningProcess->PageDirectoryPhysical;
+    NextPageDirectory =
+           MmGetPageDirectoryPhysical(NextThread->OwningProcess->AddressSpace);
+
     NextThreadStack = NextThread->KernelStackPointer;
 
     ASSERT(NextThreadStack >= KERNEL_VA_START);

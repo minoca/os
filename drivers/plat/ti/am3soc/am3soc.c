@@ -1811,7 +1811,10 @@ Return Value:
 
 {
 
+    RUNLEVEL OldRunLevel;
     ULONG Value;
+
+    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
 
     //
     // Put the PLL in bypass mode.
@@ -1868,6 +1871,7 @@ Return Value:
 
     } while ((Value & AM335_CM_WAKEUP_IDLE_STATUS_DPLL_MPU_CLOCK) == 0);
 
+    KeLowerRunLevel(OldRunLevel);
     return;
 }
 

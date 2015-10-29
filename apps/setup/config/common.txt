@@ -57,6 +57,13 @@ PARTITION_ID_MINOCA = 0x6B;
 // Path configuration
 //
 
+//
+// All of the source files are located inside of a directory rather than 
+// directly at the root because some file systems have a limited number of
+// entries in the root directory (FAT12/16).
+//
+
+SourceDir = "bin/";
 SystemRoot = "minoca/";
 SystemDirName = "system/";
 SystemDir = SystemRoot + SystemDirName;
@@ -162,47 +169,47 @@ SystemFilesX86Pcat = [
 
 DriversCopy = {
     "Destination": DriversDir,
-    "Source": "./",
+    "Source": SourceDir,
     "SourceVolume": 0,
     "Files": DriverFiles
 };
 
 SystemCopy = {
     "Destination": SystemDir,
-    "Source": "./",
+    "Source": SourceDir,
     "SourceVolume": 0,
     "Files": SystemFiles
 };
 
 SystemConfigCopy = {
     "Destination": SystemConfigDir,
-    "Source": "./",
+    "Source": SourceDir,
     "SourceVolume": 0,
     "Files": SystemConfigFiles
 };
 
 BootmefiCopy = {
     "Destination": EfiBootDir,
-    "Source": "bootmefi.efi",
+    "Source": SourceDir + "bootmefi.efi",
     "SourceVolume": 0,
     "Update": TRUE,
 };
 
 BootmefiBackupCopy = {
     "Destination": EfiBootDir + "bootmefi.efi",
-    "Source": "bootmefi.efi",
+    "Source": SourceDir + "bootmefi.efi",
     "SourceVolume": 0,
 };
 
 UserAppsCopy = {
     "Destination": "/apps/",
-    "Source": "./apps/",
+    "Source": SourceDir + "apps/",
     "SourceVolume": 0,
 };
 
 UserSkelCopy = {
     "Destination": "/apps/",
-    "Source": "./skel/",
+    "Source": SourceDir + "skel/",
     "SourceVolume": 0,
 };
 

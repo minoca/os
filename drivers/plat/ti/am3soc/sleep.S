@@ -319,6 +319,7 @@ FUNCTION Am3SocStandby
     ## so CORE, DDR, and PER need to stay locked.
     ##
 
+    ldr     %r12, =AM335_CM_WAKEUP_REGISTERS    @ Get CM wakeup base.
     add     %r0, %r12, #AM335_CM_WAKEUP_CLOCK_MODE_DPLL_DISP
     adrl    %r1, Am3SocDpllDispControl
     add     %r2, %r12, #AM335_CM_WAKEUP_IDLE_STATUS_DPLL_DISP
@@ -781,6 +782,7 @@ Am3SocPllBypass:
     bic     %r3, %r3, #AM335_PLL_MODE_MASK      @ Clear the mode mask.
     orr     %r3, %r3, #AM335_PLL_MODE_BYPASS    @ Set bypass mode.
     str     %r3, [%r0]              @ Write new clock mode.
+    DSB                             @ Make sure the write gets out.
 
 Am3SocPllBypassLoop:
     ldr     %r3, [%r2]              @ Get the idle status.
@@ -820,6 +822,7 @@ Return Value:
 
 Am3SocPllRestore:
     str     %r1, [%r0]              @ Set the new value.
+    DSB                             @ Make sure the write gets out.
     and     %r1, %r1, #AM335_PLL_MODE_MASK      @ Isolate the mode portion.
     cmp     %r1, #AM335_PLL_MODE_LOCK           @ Compare against locked.
     bne     Am3SocPllRestoreReturn  @ Return if not locked before.

@@ -37,6 +37,12 @@ Author:
 #define MM_IO_ALLOCATION_TAG 0x6F496D4D
 
 //
+// Define the allocation tag used for MM address space allocations: MmAd
+//
+
+#define MM_ADDRESS_SPACE_ALLOCATION_TAG 0x64416D4D
+
+//
 // Define the pool magic values for non-paged pool (NonP) and paged-pool (PagP).
 //
 
@@ -634,6 +640,45 @@ typedef struct _IO_VECTOR {
     PVOID Data;
     UINTN Length;
 } IO_VECTOR, *PIO_VECTOR;
+
+/*++
+
+Structure Description:
+
+    This structure defines an address space context.
+
+Members:
+
+    ImageCount - Stores the number of images in the image list.
+
+    ImageListHead - Stores the head of list of images loaded for this process.
+
+    ImageListSignature - Stores the sum of all the timestamps and loaded
+        lowest addresses of the loaded images. The debugger uses this as a
+        heuristic to determine if its list of loaded modules is in sync.
+
+    ImageListQueuedLock - Stores a pointer to a queued lock protecting the
+        image list.
+
+    SectionListHead - Stores the head of the list of image sections mapped
+        into this process.
+
+    Accountant - Stores a pointer to the address tracking information for this
+        space.
+
+    ResidentSet - Stores the number of pages currently mapped in the process.
+
+--*/
+
+typedef struct _ADDRESS_SPACE {
+    ULONG ImageCount;
+    LIST_ENTRY ImageListHead;
+    ULONGLONG ImageListSignature;
+    PVOID ImageListQueuedLock;
+    LIST_ENTRY SectionListHead;
+    PMEMORY_ACCOUNTING Accountant;
+    UINTN ResidentSet;
+} ADDRESS_SPACE, *PADDRESS_SPACE;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -2711,60 +2756,6 @@ Return Value:
 
 --*/
 
-KSTATUS
-MmCreatePageDirectory (
-    PVOID *NewPageDirectory,
-    PPHYSICAL_ADDRESS NewPageDirectoryPhysical,
-    BOOL KernelProcessPageDirectory
-    );
-
-/*++
-
-Routine Description:
-
-    This routine creates a new page directory for a new process, and
-    initializes it with kernel address space.
-
-Arguments:
-
-    NewPageDirectory - Supplies a pointer that will receive the new page
-        directory.
-
-    NewPageDirectoryPhysical - Supplies a pointer where the physical address
-        of the new page directory will be returned.
-
-    KernelProcessPageDirectory - Supplies a boolean indicating whether or not
-        the the page directory is for the kernel process.
-
-Return Value:
-
-    STATUS_SUCCESS on success.
-
-    STATUS_NO_MEMORY if memory could not be allocated for the page table.
-
---*/
-
-VOID
-MmDestroyPageDirectory (
-    PVOID PageDirectory
-    );
-
-/*++
-
-Routine Description:
-
-    This routine destroys a page directory upon process destruction.
-
-Arguments:
-
-    PageDirectory - Supplies a pointer to the page directory to destroy.
-
-Return Value:
-
-    None.
-
---*/
-
 VOID
 MmIdentityMapStartupStub (
     ULONG PageCount,
@@ -2822,7 +2813,7 @@ Return Value:
 
 VOID
 MmUpdatePageDirectory (
-    PVOID PageDirectory,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress,
     UINTN Size
     );
@@ -2836,8 +2827,7 @@ Routine Description:
 
 Arguments:
 
-    PageDirectory - Supplies a pointer to the virtual address of the page
-        directory to update.
+    AddressSpace - Supplies a pointer to the address space.
 
     VirtualAddress - Supplies the base virtual address of the range to be
         synchronized.
@@ -2913,6 +2903,29 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+ULONG
+MmGetPageDirectoryPhysical (
+    PADDRESS_SPACE AddressSpace
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the physical address of the page directory. This
+    routine is only temporary and should be deleted once the page directory
+    portion of a context swap happens via MmSwitchAddressSpace.
+
+Arguments:
+
+    AddressSpace - Supplies a pointer to the address space.
+
+Return Value:
+
+    Returns the physical address of the page directory.
 
 --*/
 
@@ -3147,6 +3160,54 @@ Arguments:
 Return Value:
 
     The kernel mode address of the user shared data page.
+
+--*/
+
+PADDRESS_SPACE
+MmCreateAddressSpace (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new address space context. This routine allocates
+    the structure, zeros at least the common portion, and initializes any
+    architecture specific members after the common potion.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a pointer to the new address space on success.
+
+    NULL on allocation failure.
+
+--*/
+
+VOID
+MmDestroyAddressSpace (
+    PADDRESS_SPACE AddressSpace
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys an address space, freeing this structure and all
+    architecture-specific content. The common portion of the structure will
+    already have been taken care of.
+
+Arguments:
+
+    AddressSpace - Supplies a pointer to the address space to destroy.
+
+Return Value:
+
+    None.
 
 --*/
 

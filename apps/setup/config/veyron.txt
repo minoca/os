@@ -36,7 +36,7 @@ BootDrivers += [
 
 VeyronFirmwareCopy = {
     "Offset": 0,
-    "Source": "./veyronfw",
+    "Source": SourceDir + "veyronfw",
     "SourceVolume": 0
 };
 
@@ -62,7 +62,6 @@ VeyronFirmwarePartition = {
 };
 
 BootPartition["Index"] += 1;
-//BootPartition["Boot"] = FALSE;
 SystemPartition["Index"] += 1;
 Partitions += [VeyronFirmwarePartition];
 
@@ -76,7 +75,7 @@ VeyronFirmwareFiles = [
 
 VeyronFirmwareSystemCopy = {
     "Destination": SystemDir + "veyron/",
-    "Source": "./",
+    "Source": SourceDir,
     "SourceVolume": 0,
     "Files": VeyronFirmwareFiles
 };

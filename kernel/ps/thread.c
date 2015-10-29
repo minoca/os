@@ -1545,7 +1545,7 @@ Return Value:
     // is visible to the process.
     //
 
-    MmUpdatePageDirectory(OwningProcess->PageDirectory,
+    MmUpdatePageDirectory(OwningProcess->AddressSpace,
                           NewThread->KernelStack,
                           KernelStackSize);
 
@@ -1557,7 +1557,7 @@ Return Value:
     //
 
     if (OwningProcess != CurrentThread->OwningProcess) {
-        MmUpdatePageDirectory(OwningProcess->PageDirectory,
+        MmUpdatePageDirectory(OwningProcess->AddressSpace,
                               NewThread,
                               sizeof(KTHREAD));
     }

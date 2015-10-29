@@ -43,14 +43,14 @@ RpiFirmwareFiles = [
 
 RpiFirmwareSystemCopy = {
     "Destination": SystemDir + "rpi/",
-    "Source": "./rpi/",
+    "Source": SourceDir + "rpi/",
     "SourceVolume": 0,
     "Files": RpiFirmwareFiles
 };
 
 Rpi2FirmwareSystemCopy = {
     "Destination": SystemDir + "rpi2/rpifw",
-    "Source": "./rpi2fw",
+    "Source": SourceDir + "rpi2fw",
     "SourceVolume": 0,
 };
 
@@ -60,7 +60,7 @@ Rpi2FirmwareSystemCopy = {
 
 RpiFirmwareCopy = {
     "Destination": "/",
-    "Source": "./rpi/",
+    "Source": SourceDir + "rpi/",
     "SourceVolume": 0,
     "Files": RpiFirmwareFiles
 };
@@ -72,7 +72,7 @@ RpiFirmwareCopy = {
 
 Rpi2FirmwareCopy = {
     "Destination": "/rpifw",
-    "Source": "./rpi2fw",
+    "Source": SourceDir + "rpi2fw",
     "SourceVolume": 0
 };
 

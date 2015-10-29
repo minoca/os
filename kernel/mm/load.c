@@ -207,7 +207,7 @@ Return Value:
         Realtor = &MmKernelVirtualSpace;
 
     } else {
-        Realtor = Process->Accountant;
+        Realtor = Process->AddressSpace->Accountant;
     }
 
     //
@@ -400,7 +400,7 @@ Return Value:
     }
 
     AccountantLockHeld = FALSE;
-    Accountant = OwningProcess->Accountant;
+    Accountant = OwningProcess->AddressSpace->Accountant;
     if (FileMapping > KERNEL_VA_START) {
         OwningProcess = PsGetKernelProcess();
         Accountant = &MmKernelVirtualSpace;
@@ -888,6 +888,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     ULONGLONG AlignedSize;
     PLIST_ENTRY CurrentEntry;
     PIMAGE_SECTION CurrentSection;
@@ -963,12 +964,13 @@ Return Value:
     Status = STATUS_SUCCESS;
     TotalSyncSize = 0;
     Process = PsGetCurrentProcess();
+    AddressSpace = Process->AddressSpace;
     SyncRegionStart = Parameters->Address;
     SyncRegionEnd = SyncRegionStart + AlignedSize;
     KeAcquireQueuedLock(Process->QueuedLock);
     LockHeld = TRUE;
-    CurrentEntry = Process->SectionListHead.Next;
-    while (CurrentEntry != &(Process->SectionListHead)) {
+    CurrentEntry = AddressSpace->SectionListHead.Next;
+    while (CurrentEntry != &(AddressSpace->SectionListHead)) {
         CurrentSection = LIST_VALUE(CurrentEntry,
                                     IMAGE_SECTION,
                                     ProcessListEntry);
@@ -1097,7 +1099,7 @@ Return Value:
         KeAcquireQueuedLock(Process->QueuedLock);
         LockHeld = TRUE;
         if (CurrentSection->ProcessListEntry.Next == NULL) {
-            CurrentEntry = Process->SectionListHead.Next;
+            CurrentEntry = AddressSpace->SectionListHead.Next;
 
         } else {
             CurrentEntry = CurrentEntry->Next;
@@ -1164,13 +1166,13 @@ Return Value:
     // Images should have been cleaned up by the last thread to terminate.
     //
 
-    ASSERT(LIST_EMPTY(&(Process->ImageListHead)) != FALSE);
+    ASSERT(LIST_EMPTY(&(Process->AddressSpace->ImageListHead)) != FALSE);
 
     Status = MmpUnmapImageRegion(Process, (PVOID)0, (UINTN)KERNEL_VA_START);
 
     ASSERT(KSUCCESS(Status));
 
-    ASSERT(LIST_EMPTY(&(Process->SectionListHead)) != FALSE);
+    ASSERT(LIST_EMPTY(&(Process->AddressSpace->SectionListHead)) != FALSE);
 
     return;
 }

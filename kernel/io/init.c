@@ -678,6 +678,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     PLIST_ENTRY CurrentEntry;
     PDRIVER Driver;
     PLOADED_IMAGE Image;
@@ -692,9 +693,10 @@ Return Value:
     //
 
     Process = PsGetKernelProcess();
-    KeAcquireQueuedLock(Process->ImageListQueuedLock);
-    CurrentEntry = Process->ImageListHead.Next;
-    while (CurrentEntry != &(Process->ImageListHead)) {
+    AddressSpace = Process->AddressSpace;
+    KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
+    CurrentEntry = AddressSpace->ImageListHead.Next;
+    while (CurrentEntry != &(AddressSpace->ImageListHead)) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
 
@@ -724,7 +726,7 @@ Return Value:
     }
 
 InitializeBootDriversEnd:
-    KeReleaseQueuedLock(Process->ImageListQueuedLock);
+    KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
     return Status;
 }
 

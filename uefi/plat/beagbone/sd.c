@@ -558,12 +558,14 @@ Return Value:
         return EFI_NO_MEDIA;
     }
 
+    EfipBeagleBoneBlackSetLeds(3);
     Status = EfiSdBlockIoPolled(Disk->Controller,
                                 Lba,
                                 BufferSize / Disk->BlockSize,
                                 Buffer,
                                 FALSE);
 
+    EfipBeagleBoneBlackSetLeds(1);
     return Status;
 }
 
@@ -631,12 +633,14 @@ Return Value:
         return EFI_NO_MEDIA;
     }
 
+    EfipBeagleBoneBlackSetLeds(3);
     Status = EfiSdBlockIoPolled(Disk->Controller,
                                 Lba,
                                 BufferSize / Disk->BlockSize,
                                 Buffer,
                                 TRUE);
 
+    EfipBeagleBoneBlackSetLeds(1);
     return Status;
 }
 

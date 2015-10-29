@@ -286,7 +286,7 @@ Return Value:
     //
 
     ArpInitializeTss(Tss);
-    Tss->Cr3 = (UINTN)ArGetCurrentPageDirectory();
+    Tss->Cr3 = ArGetCurrentPageDirectory();
     if (DoubleFaultTss != NULL) {
         ArpInitializeTss(DoubleFaultTss);
         DoubleFaultTss->Esp0 = (UINTN)DoubleFaultStack;
@@ -361,7 +361,7 @@ Return Value:
     PVOID Stack;
     PTSS Tss;
 
-    Cr3 = (UINTN)ArGetCurrentPageDirectory();
+    Cr3 = ArGetCurrentPageDirectory();
     PageSize = MmPageSize();
     GdtTable = ArP0Gdt;
     ProcessorBlock = KeGetCurrentProcessorBlock();

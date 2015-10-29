@@ -70,7 +70,7 @@ UserAppsCopy["Source"] = "";
 
 MbrCopy = {
     "Offset": 0,
-    "Source": "mbr.bin",
+    "Source": SourceDir + "mbr.bin",
     "SourceVolume": 0,
 };
 
@@ -82,7 +82,7 @@ DiskData["Mbr"] = MbrCopy;
 
 VbrCopy = {
     "Offset": 0,
-    "Source": "fatboot.bin",
+    "Source": SourceDir + "fatboot.bin",
     "SourceVolume": 0,
 };
 
@@ -92,7 +92,7 @@ VbrCopy = {
 
 BootmanCopy = {
     "Destination": "/",
-    "Source": "./",
+    "Source": SourceDir,
     "SourceVolume": 0,
     "Files": ["bootman.bin"]
 };

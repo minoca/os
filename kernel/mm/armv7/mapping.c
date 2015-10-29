@@ -49,6 +49,16 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+KSTATUS
+MmpCreatePageDirectory (
+    PADDRESS_SPACE_ARM Space
+    );
+
+VOID
+MmpDestroyPageDirectory (
+    PADDRESS_SPACE_ARM Space
+    );
+
 VOID
 MmpCreatePageTable (
     volatile FIRST_LEVEL_TABLE *FirstLevelTable,
@@ -186,243 +196,6 @@ Return Value:
 {
 
     return PAGE_SHIFT;
-}
-
-KSTATUS
-MmCreatePageDirectory (
-    PVOID *NewPageDirectory,
-    PPHYSICAL_ADDRESS NewPageDirectoryPhysical,
-    BOOL KernelProcessPageDirectory
-    )
-
-/*++
-
-Routine Description:
-
-    This routine creates a new page directory for a new process, and
-    initializes it with kernel address space.
-
-Arguments:
-
-    NewPageDirectory - Supplies a pointer that will receive the new page
-        directory.
-
-    NewPageDirectoryPhysical - Supplies a pointer where the physical address
-        of the new page directory will be returned.
-
-    KernelProcessPageDirectory - Supplies a boolean indicating whether or not
-        the the page directory is for the kernel process.
-
-Return Value:
-
-    STATUS_SUCCESS on success.
-
-    STATUS_NO_MEMORY if memory could not be allocated for the page table.
-
---*/
-
-{
-
-    ULONG CopySize;
-    ULONG Entry;
-    PFIRST_LEVEL_TABLE FirstLevelTable;
-    ULONG KernelIndex;
-    ULONG LoopIndex;
-    PHYSICAL_ADDRESS PhysicalAddress;
-    ULONG SelfMapIndex;
-    PVOID SelfMapPageTable;
-    PHYSICAL_ADDRESS SelfMapPageTablePhysical;
-    KSTATUS Status;
-    ULONG ZeroSize;
-
-    FirstLevelTable = NULL;
-
-    //
-    // If this is a request to create the kernel's page directory, then just
-    // use the global page directory that was supplied from boot.
-    //
-
-    if (KernelProcessPageDirectory != FALSE) {
-        FirstLevelTable = MmKernelFirstLevelTable;
-        *NewPageDirectoryPhysical = MmpVirtualToPhysical(FirstLevelTable, NULL);
-
-        ASSERT((*NewPageDirectoryPhysical & TTBR_ADDRESS_MASK) == 0);
-        ASSERT(*NewPageDirectoryPhysical != INVALID_PHYSICAL_ADDRESS);
-
-        *NewPageDirectoryPhysical |= MmTtbrCacheAttributes;
-        Status = STATUS_SUCCESS;
-        goto CreatePageDirectoryEnd;
-    }
-
-    ASSERT(MmPageDirectoryBlockAllocator != NULL);
-
-    //
-    // Attempt to allocate space for the new page directory and the page
-    // needed for the user-mode half of the self map page table.
-    //
-
-    FirstLevelTable = MmAllocateBlock(MmPageDirectoryBlockAllocator,
-                                      &PhysicalAddress);
-
-    if (FirstLevelTable == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreatePageDirectoryEnd;
-    }
-
-    //
-    // Zero user-mode and copy the kernel portions from the kernel first level
-    // table.
-    //
-
-    KernelIndex = FLT_INDEX(KERNEL_VA_START);
-    ZeroSize = KernelIndex * sizeof(FIRST_LEVEL_TABLE);
-    CopySize = FLT_SIZE - ZeroSize;
-    RtlZeroMemory(FirstLevelTable, ZeroSize);
-    RtlCopyMemory(&(FirstLevelTable[KernelIndex]),
-                  &(MmKernelFirstLevelTable[KernelIndex]),
-                  CopySize);
-
-    *NewPageDirectoryPhysical = PhysicalAddress;
-
-    ASSERT((*NewPageDirectoryPhysical & TTBR_ADDRESS_MASK) == 0);
-    ASSERT(*NewPageDirectoryPhysical != INVALID_PHYSICAL_ADDRESS);
-
-    *NewPageDirectoryPhysical |= MmTtbrCacheAttributes;
-
-    //
-    // Set up the self map page table. Normally first level table entries are
-    // set up in groups of 4 so that the page table size is the same as the page
-    // size. By changing the first two directory entries of the self map page
-    // table, the first half of the self map region (the user mode part) will
-    // point at the per-process user mode page tables, and the second half will
-    // point at the standard kernel self map page table.
-    //
-
-    SelfMapPageTable = (PVOID)FirstLevelTable + FLT_SIZE;
-    RtlZeroMemory(SelfMapPageTable, PAGE_SIZE);
-    MmpCleanPageTableCacheRegion(SelfMapPageTable, PAGE_SIZE);
-    SelfMapPageTablePhysical = PhysicalAddress + FLT_SIZE;
-
-    ASSERT(SelfMapPageTablePhysical != INVALID_PHYSICAL_ADDRESS);
-
-    SelfMapIndex = FLT_INDEX(MmPageTables);
-
-    //
-    // Fix up the user mode mappings. Since there are 4 first level entries that
-    // can be manipulated, the kernel address space better start on one of those
-    // boundaries.
-    //
-
-    ASSERT(ALIGN_RANGE_DOWN((UINTN)KERNEL_VA_START, (1 << (32 - 2))) ==
-           (UINTN)KERNEL_VA_START);
-
-    for (LoopIndex = 0;
-         LoopIndex < ((UINTN)KERNEL_VA_START >> (32 - 2));
-         LoopIndex += 1) {
-
-        Entry = ((ULONG)SelfMapPageTablePhysical >> SLT_ALIGNMENT) + LoopIndex;
-        FirstLevelTable[SelfMapIndex + LoopIndex].Entry = Entry;
-    }
-
-    //
-    // Serialization is not needed here as this new page directory will not be
-    // live for page table walks until after a context switch, which serializes
-    // execution.
-    //
-
-    MmpCleanPageTableCacheRegion(FirstLevelTable, FLT_SIZE);
-    Status = STATUS_SUCCESS;
-
-CreatePageDirectoryEnd:
-    if (!KSUCCESS(Status)) {
-        if (FirstLevelTable != NULL) {
-            MmFreeBlock(MmPageDirectoryBlockAllocator, FirstLevelTable);
-        }
-    }
-
-    *NewPageDirectory = FirstLevelTable;
-    return Status;
-}
-
-VOID
-MmDestroyPageDirectory (
-    PVOID PageDirectory
-    )
-
-/*++
-
-Routine Description:
-
-    This routine destroys a page directory upon process destruction.
-
-Arguments:
-
-    PageDirectory - Supplies a pointer to the page directory to destroy.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ULONG FirstIndex;
-    PFIRST_LEVEL_TABLE FirstLevelTable;
-    PHYSICAL_ADDRESS PhysicalAddress;
-    PHYSICAL_ADDRESS RunPhysicalAddress;
-    UINTN RunSize;
-
-    //
-    // Do nothing if this is the global first level table.
-    //
-
-    if (PageDirectory == MmKernelFirstLevelTable) {
-        return;
-    }
-
-    //
-    // Free every attached page table in user mode. Don't bother to clean the
-    // cache for these updates. The page directory should never be put back
-    // in the TTBR and it certainly should not be in service now.
-    //
-
-    RunSize = 0;
-    RunPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
-    FirstLevelTable = PageDirectory;
-    for (FirstIndex = 0;
-         FirstIndex < FLT_INDEX(KERNEL_VA_START);
-         FirstIndex += 4) {
-
-        if (FirstLevelTable[FirstIndex].Entry != 0) {
-            PhysicalAddress =
-                   (ULONG)(FirstLevelTable[FirstIndex].Entry << SLT_ALIGNMENT);
-
-            if (RunSize != 0) {
-                if ((RunPhysicalAddress + RunSize) == PhysicalAddress) {
-                    RunSize += PAGE_SIZE;
-
-                } else {
-                    MmFreePhysicalPages(RunPhysicalAddress,
-                                        RunSize >> PAGE_SHIFT);
-
-                    RunPhysicalAddress = PhysicalAddress;
-                    RunSize = PAGE_SIZE;
-                }
-
-            } else {
-                RunPhysicalAddress = PhysicalAddress;
-                RunSize = PAGE_SIZE;
-            }
-        }
-    }
-
-    if (RunSize != 0) {
-        MmFreePhysicalPages(RunPhysicalAddress, RunSize >> PAGE_SHIFT);
-    }
-
-    MmFreeBlock(MmPageDirectoryBlockAllocator, PageDirectory);
-    return;
 }
 
 VOID
@@ -597,6 +370,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE_ARM AddressSpace;
     ULONG ByteOffset;
     ULONG BytesMapped;
     ULONG BytesRemaining;
@@ -643,7 +417,7 @@ Return Value:
     if ((ProcessorBlock == NULL) ||
         (ProcessorBlock->RunningThread == NULL) ||
         (ProcessorBlock->RunningThread->OwningProcess == NULL) ||
-        (ProcessorBlock->RunningThread->OwningProcess->PageDirectory == NULL)) {
+        (ProcessorBlock->RunningThread->OwningProcess->AddressSpace == NULL)) {
 
         if (Address < KERNEL_VA_START) {
             return Length;
@@ -653,7 +427,8 @@ Return Value:
 
     } else {
         Process = ProcessorBlock->RunningThread->OwningProcess;
-        FirstLevelTable = Process->PageDirectory;
+        AddressSpace = (PADDRESS_SPACE_ARM)(Process->AddressSpace);
+        FirstLevelTable = AddressSpace->PageDirectory;
     }
 
     SelfMapIndex = FLT_INDEX(MmPageTables);
@@ -771,6 +546,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE_ARM AddressSpace;
     ULONG FirstIndex;
     volatile FIRST_LEVEL_TABLE *FirstLevelTable;
     PKPROCESS Process;
@@ -803,7 +579,7 @@ Return Value:
     if ((ProcessorBlock == NULL) ||
         (ProcessorBlock->RunningThread == NULL) ||
         (ProcessorBlock->RunningThread->OwningProcess == NULL) ||
-        (ProcessorBlock->RunningThread->OwningProcess->PageDirectory == NULL)) {
+        (ProcessorBlock->RunningThread->OwningProcess->AddressSpace == NULL)) {
 
         if (Address < KERNEL_VA_START) {
             return;
@@ -813,7 +589,8 @@ Return Value:
 
     } else {
         Process = ProcessorBlock->RunningThread->OwningProcess;
-        FirstLevelTable = Process->PageDirectory;
+        AddressSpace = (PADDRESS_SPACE_ARM)(Process->AddressSpace);
+        FirstLevelTable = AddressSpace->PageDirectory;
     }
 
     Address = (PVOID)(UINTN)ALIGN_RANGE_DOWN((UINTN)Address, PAGE_SIZE);
@@ -898,7 +675,7 @@ Return Value:
 
 VOID
 MmUpdatePageDirectory (
-    PVOID PageDirectory,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress,
     UINTN Size
     )
@@ -912,8 +689,7 @@ Routine Description:
 
 Arguments:
 
-    PageDirectory - Supplies a pointer to the virtual address of the page
-        directory to update.
+    AddressSpace - Supplies a pointer to the address space.
 
     VirtualAddress - Supplies the base virtual address of the range to be
         synchronized.
@@ -935,6 +711,11 @@ Return Value:
     PULONG Entry;
     ULONG Index;
     ULONG OfficialValue;
+    PFIRST_LEVEL_TABLE PageDirectory;
+    PADDRESS_SPACE_ARM Space;
+
+    Space = (PADDRESS_SPACE_ARM)AddressSpace;
+    PageDirectory = Space->PageDirectory;
 
     //
     // Exit immediately if the page directory is the kernel's page directory.
@@ -946,7 +727,7 @@ Return Value:
 
     ASSERT(sizeof(FIRST_LEVEL_TABLE) == sizeof(ULONG));
 
-    Entry = PageDirectory;
+    Entry = (PULONG)PageDirectory;
     Index = ALIGN_RANGE_DOWN(FLT_INDEX(VirtualAddress), 4);
     EndIndex = ALIGN_RANGE_DOWN(FLT_INDEX(VirtualAddress + (Size - 1)), 4);
     CleanStart = NULL;
@@ -985,6 +766,41 @@ Return Value:
     }
 
     return;
+}
+
+//
+// TODO: Remove this function and swap page directory in C.
+//
+
+ULONG
+MmGetPageDirectoryPhysical (
+    PADDRESS_SPACE AddressSpace
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the physical address of the page directory. This
+    routine is only temporary and should be deleted once the page directory
+    portion of a context swap happens via MmSwitchAddressSpace.
+
+Arguments:
+
+    AddressSpace - Supplies a pointer to the address space.
+
+Return Value:
+
+    Returns the physical address of the page directory.
+
+--*/
+
+{
+
+    PADDRESS_SPACE_ARM Space;
+
+    Space = (PADDRESS_SPACE_ARM)AddressSpace;
+    return Space->PageDirectoryPhysical;
 }
 
 KSTATUS
@@ -1232,6 +1048,94 @@ ArchInitializeEnd:
     return Status;
 }
 
+PADDRESS_SPACE
+MmpArchCreateAddressSpace (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new address space context. This routine allocates
+    the structure, zeros at least the common portion, and initializes any
+    architecture specific members after the common potion.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a pointer to the new address space on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    PADDRESS_SPACE_ARM Space;
+    KSTATUS Status;
+
+    Space = MmAllocateNonPagedPool(sizeof(ADDRESS_SPACE_ARM),
+                                   MM_ADDRESS_SPACE_ALLOCATION_TAG);
+
+    if (Space == NULL) {
+        return NULL;
+    }
+
+    RtlZeroMemory(Space, sizeof(ADDRESS_SPACE_ARM));
+    Status = MmpCreatePageDirectory(Space);
+    if (!KSUCCESS(Status)) {
+        goto ArchCreateAddressSpaceEnd;
+    }
+
+ArchCreateAddressSpaceEnd:
+    if (!KSUCCESS(Status)) {
+        if (Space != NULL) {
+            MmpDestroyPageDirectory(Space);
+            MmFreeNonPagedPool(Space);
+            Space = NULL;
+        }
+    }
+
+    return (PADDRESS_SPACE)Space;
+}
+
+VOID
+MmpArchDestroyAddressSpace (
+    PADDRESS_SPACE AddressSpace
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys an address space, freeing this structure and all
+    architecture-specific content. The common portion of the structure will
+    already have been taken care of.
+
+Arguments:
+
+    AddressSpace - Supplies a pointer to the address space to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PADDRESS_SPACE_ARM Space;
+
+    Space = (PADDRESS_SPACE_ARM)AddressSpace;
+    MmpDestroyPageDirectory(Space);
+    MmFreeNonPagedPool(Space);
+    return;
+}
+
 BOOL
 MmpCheckDirectoryUpdates (
     PVOID FaultingAddress
@@ -1257,6 +1161,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE_ARM AddressSpace;
     volatile FIRST_LEVEL_TABLE *CurrentFirstLevelTable;
     PKPROCESS CurrentProcess;
     ULONG FirstIndex;
@@ -1275,7 +1180,8 @@ Return Value:
     }
 
     CurrentProcess = PsGetCurrentProcess();
-    CurrentFirstLevelTable = CurrentProcess->PageDirectory;
+    AddressSpace = (PADDRESS_SPACE_ARM)(CurrentProcess->AddressSpace);
+    CurrentFirstLevelTable = AddressSpace->PageDirectory;
     FirstIndex = FLT_INDEX(FaultingAddress);
 
     //
@@ -1349,6 +1255,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE_ARM AddressSpace;
     PKTHREAD CurrentThread;
     ULONG FirstIndex;
     volatile FIRST_LEVEL_TABLE *FirstLevelTable;
@@ -1363,10 +1270,12 @@ Return Value:
 
         FirstLevelTable = MmKernelFirstLevelTable;
         Process = NULL;
+        AddressSpace = NULL;
 
     } else {
         Process = CurrentThread->OwningProcess;
-        FirstLevelTable = Process->PageDirectory;
+        AddressSpace = (PADDRESS_SPACE_ARM)(Process->AddressSpace);
+        FirstLevelTable = AddressSpace->PageDirectory;
     }
 
     ASSERT(FirstLevelTable != NULL);
@@ -1548,6 +1457,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE_ARM AddressSpace;
     BOOL ChangedSomething;
     BOOL CleanInvalidate;
     PVOID CurrentVirtual;
@@ -1576,12 +1486,14 @@ Return Value:
         ASSERT(((UINTN)VirtualAddress + (PageCount << MmPageShift())) - 1 >
                (UINTN)VirtualAddress);
 
+        AddressSpace = NULL;
         FirstLevelTable = MmKernelFirstLevelTable;
         Process = NULL;
 
     } else {
         Process = Thread->OwningProcess;
-        FirstLevelTable = Process->PageDirectory;
+        AddressSpace = (PADDRESS_SPACE_ARM)(Process->AddressSpace);
+        FirstLevelTable = AddressSpace->PageDirectory;
 
         //
         // If there's only one thread in the process and this is not a kernel
@@ -1672,7 +1584,7 @@ Return Value:
     if ((ChangedSomething != FALSE) &&
         ((UnmapFlags & UNMAP_FLAG_SEND_INVALIDATE_IPI) != 0)) {
 
-        MmpSendTlbInvalidateIpi((PVOID)FirstLevelTable,
+        MmpSendTlbInvalidateIpi(&(AddressSpace->Common),
                                 VirtualAddress,
                                 PageCount);
     }
@@ -1794,6 +1706,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE_ARM AddressSpace;
     ULONG FirstIndex;
     volatile FIRST_LEVEL_TABLE *FirstLevelTable;
     PHYSICAL_ADDRESS PhysicalAddress;
@@ -1810,7 +1723,8 @@ Return Value:
     Process = PsGetCurrentProcess();
     ProcessFirstLevelTable = NULL;
     if (Process != NULL) {
-        ProcessFirstLevelTable = Process->PageDirectory;
+        AddressSpace = (PADDRESS_SPACE_ARM)(Process->AddressSpace);
+        ProcessFirstLevelTable = AddressSpace->PageDirectory;
     }
 
     FirstIndex = FLT_INDEX(VirtualAddress);
@@ -1861,7 +1775,7 @@ Return Value:
 
 PHYSICAL_ADDRESS
 MmpVirtualToPhysicalInOtherProcess (
-    PVOID PageDirectory,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress
     )
 
@@ -1874,8 +1788,7 @@ Routine Description:
 
 Arguments:
 
-    PageDirectory - Supplies a pointer to the top level page directory for the
-        process.
+    AddressSpace - Supplies a pointer to the address space.
 
     VirtualAddress - Supplies the address to translate to a physical address.
 
@@ -1898,8 +1811,10 @@ Return Value:
     PPROCESSOR_BLOCK ProcessorBlock;
     ULONG SecondIndex;
     volatile SECOND_LEVEL_TABLE *SecondLevelTable;
+    PADDRESS_SPACE_ARM Space;
 
-    ProcessFirstLevelTable = PageDirectory;
+    Space = (PADDRESS_SPACE_ARM)AddressSpace;
+    ProcessFirstLevelTable = Space->PageDirectory;
     FirstIndex = FLT_INDEX(VirtualAddress);
     if (VirtualAddress >= KERNEL_VA_START) {
         FirstLevelTable = MmKernelFirstLevelTable;
@@ -1983,6 +1898,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE_ARM AddressSpace;
     ULONG FirstIndex;
     volatile FIRST_LEVEL_TABLE *FirstLevelTable;
     ULONG Offset;
@@ -2008,7 +1924,8 @@ Return Value:
     }
 
     TypedProcess = Process;
-    FirstLevelTable = (PFIRST_LEVEL_TABLE)(TypedProcess->PageDirectory);
+    AddressSpace = (PADDRESS_SPACE_ARM)(TypedProcess->AddressSpace);
+    FirstLevelTable = AddressSpace->PageDirectory;
     FirstIndex = FLT_INDEX(VirtualAddress);
     if (FirstLevelTable[FirstIndex].Format == FLT_UNMAPPED) {
         goto UnmapPageInOtherProcessEnd;
@@ -2042,7 +1959,7 @@ Return Value:
 
         MmpCleanPageTableCacheLine((PVOID)&(SecondLevelTable[SecondIndex]));
         if (SecondLevelEntry.Format != SLT_UNMAPPED) {
-            MmpSendTlbInvalidateIpi((PVOID)FirstLevelTable, VirtualAddress, 1);
+            MmpSendTlbInvalidateIpi(&(AddressSpace->Common), VirtualAddress, 1);
         }
 
     } else {
@@ -2135,6 +2052,7 @@ Return Value:
     INTN MappedCount;
     ULONG Offset;
     RUNLEVEL OldRunLevel;
+    PADDRESS_SPACE_ARM OtherAddressSpace;
     PHYSICAL_ADDRESS PageTablePhysical;
     PPROCESSOR_BLOCK ProcessorBlock;
     ULONG SecondIndex;
@@ -2142,7 +2060,8 @@ Return Value:
     PKPROCESS TypedProcess;
 
     TypedProcess = Process;
-    FirstLevelTable = (PFIRST_LEVEL_TABLE)(TypedProcess->PageDirectory);
+    OtherAddressSpace = (PADDRESS_SPACE_ARM)(TypedProcess->AddressSpace);
+    FirstLevelTable = OtherAddressSpace->PageDirectory;
     FirstIndex = FLT_INDEX(VirtualAddress);
 
     //
@@ -2289,7 +2208,9 @@ Return Value:
     //
 
     if (SendTlbInvalidateIpi != FALSE) {
-        MmpSendTlbInvalidateIpi((PVOID)FirstLevelTable, VirtualAddress, 1);
+        MmpSendTlbInvalidateIpi(&(OtherAddressSpace->Common),
+                                VirtualAddress,
+                                1);
     }
 
     ASSERT(VirtualAddress < KERNEL_VA_START);
@@ -2337,6 +2258,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE_ARM AddressSpace;
     BOOL AllowWrites;
     BOOL ChangedSomething;
     BOOL ChangedSomethingThisRound;
@@ -2359,15 +2281,15 @@ Return Value:
     ChangedSomething = FALSE;
     CurrentVirtual = VirtualAddress;
     CleanInvalidate = TRUE;
-    Process = PsGetCurrentProcess();
     SendInvalidateIpi = TRUE;
-
-    ASSERT((Process != NULL) && (Process->PageDirectory != NULL));
-
-    ProcessFirstLevelTable = Process->PageDirectory;
     FirstIndex = FLT_INDEX(VirtualAddress);
+    Process = PsGetCurrentProcess();
+    AddressSpace = (PADDRESS_SPACE_ARM)(Process->AddressSpace);
+    ProcessFirstLevelTable = AddressSpace->PageDirectory;
     if (VirtualAddress >= KERNEL_VA_START) {
-        FirstLevelTable = MmKernelFirstLevelTable;
+        Process = PsGetKernelProcess();
+        AddressSpace = (PADDRESS_SPACE_ARM)(Process->AddressSpace);
+        FirstLevelTable = AddressSpace->PageDirectory;
 
     } else {
         FirstLevelTable = ProcessFirstLevelTable;
@@ -2403,6 +2325,16 @@ Return Value:
         FirstIndex = FLT_INDEX(CurrentVirtual);
         SecondIndex = SLT_INDEX(CurrentVirtual);
         CurrentVirtual += PAGE_SIZE;
+
+        //
+        // Sync the current directory entry to the kernel.
+        //
+
+        if (CurrentVirtual >= KERNEL_VA_START) {
+            ProcessFirstLevelTable[FirstIndex] =
+                                           MmKernelFirstLevelTable[FirstIndex];
+        }
+
         if (FirstLevelTable[FirstIndex].Format == FLT_UNMAPPED) {
             continue;
         }
@@ -2506,7 +2438,9 @@ Return Value:
 
     if (ChangedSomething != FALSE) {
         if (SendInvalidateIpi != FALSE) {
-            MmpSendTlbInvalidateIpi(FirstLevelTable, VirtualAddress, PageCount);
+            MmpSendTlbInvalidateIpi(&(AddressSpace->Common),
+                                    VirtualAddress,
+                                    PageCount);
 
         } else {
             CurrentVirtual = VirtualAddress;
@@ -2522,8 +2456,8 @@ Return Value:
 
 KSTATUS
 MmpPreallocatePageTables (
-    PVOID SourcePageDirectory,
-    PVOID DestinationPageDirectory
+    PADDRESS_SPACE SourceAddressSpace,
+    PADDRESS_SPACE DestinationAddressSpace
     )
 
 /*++
@@ -2536,12 +2470,12 @@ Routine Description:
 
 Arguments:
 
-    SourcePageDirectory - Supplies a pointer to the page directory to scan. A
-        page table is allocated but not initialized for every missing page
-        table in the destination.
+    SourceAddressSpace - Supplies a pointer to the address space to prepare to
+        copy. A page table is allocated but not initialized for every missing
+        page table in the destination.
 
-    DestinationPageDirectory - Supplies a pointer to the page directory that
-        will get page tables filled in.
+    DestinationAddressSpace - Supplies a pointer to the destination to create
+        the page tables in.
 
 Return Value:
 
@@ -2555,12 +2489,16 @@ Return Value:
 
     ULONG DeleteIndex;
     PFIRST_LEVEL_TABLE Destination;
+    PADDRESS_SPACE_ARM DestinationSpace;
     ULONG Index;
     PHYSICAL_ADDRESS Physical;
     PFIRST_LEVEL_TABLE Source;
+    PADDRESS_SPACE_ARM SourceSpace;
 
-    Destination = DestinationPageDirectory;
-    Source = SourcePageDirectory;
+    DestinationSpace = (PADDRESS_SPACE_ARM)DestinationAddressSpace;
+    SourceSpace = (PADDRESS_SPACE_ARM)SourceAddressSpace;
+    Destination = DestinationSpace->PageDirectory;
+    Source = SourceSpace->PageDirectory;
     for (Index = 0; Index < FLT_INDEX(KERNEL_VA_START); Index += 4) {
         if (Source[Index].Format != FLT_COARSE_PAGE_TABLE) {
             continue;
@@ -2600,7 +2538,7 @@ Return Value:
 KSTATUS
 MmpCopyAndChangeSectionMappings (
     PKPROCESS DestinationProcess,
-    PVOID SourcePageDirectory,
+    PADDRESS_SPACE Source,
     PVOID VirtualAddress,
     UINTN Size
     )
@@ -2617,8 +2555,7 @@ Arguments:
     DestinationProcess - Supplies a pointer to the process where the mappings
         should be copied to.
 
-    SourcePageDirectory - Supplies the top level page table of the current
-        process.
+    Source - Supplies a pointer to the source address space.
 
     VirtualAddress - Supplies the starting virtual address of the memory range.
 
@@ -2637,6 +2574,7 @@ Return Value:
     PVOID CleanStart;
     PVOID CurrentVirtual;
     PFIRST_LEVEL_TABLE DestinationDirectory;
+    PADDRESS_SPACE_ARM DestinationSpace;
     PSECOND_LEVEL_TABLE DestinationTable;
     ULONG Entry;
     ULONG FirstIndex;
@@ -2651,14 +2589,17 @@ Return Value:
     ULONG SelfMapIndex;
     volatile SECOND_LEVEL_TABLE *SelfMapPageTable;
     PFIRST_LEVEL_TABLE SourceDirectory;
+    PADDRESS_SPACE_ARM SourceSpace;
     PSECOND_LEVEL_TABLE SourceTable;
     ULONG TableIndex;
     ULONG TableIndexEnd;
     ULONG TableIndexStart;
     PVOID VirtualEnd;
 
-    DestinationDirectory = DestinationProcess->PageDirectory;
-    SourceDirectory = SourcePageDirectory;
+    DestinationSpace = (PADDRESS_SPACE_ARM)(DestinationProcess->AddressSpace);
+    SourceSpace = (PADDRESS_SPACE_ARM)Source;
+    DestinationDirectory = DestinationSpace->PageDirectory;
+    SourceDirectory = SourceSpace->PageDirectory;
     VirtualEnd = VirtualAddress + Size;
 
     ASSERT(VirtualEnd > VirtualAddress);
@@ -2970,6 +2911,7 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE_ARM AddressSpace;
     PKTHREAD CurrentThread;
     ULONG FirstIndex;
     ULONG FirstIndexEnd;
@@ -2983,7 +2925,10 @@ Return Value:
         }
 
     } else {
-        FirstLevelTable = CurrentThread->OwningProcess->PageDirectory;
+        AddressSpace =
+              (PADDRESS_SPACE_ARM)(CurrentThread->OwningProcess->AddressSpace);
+
+        FirstLevelTable = AddressSpace->PageDirectory;
     }
 
     FirstIndex = FLT_INDEX(VirtualAddress);
@@ -3007,6 +2952,229 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+KSTATUS
+MmpCreatePageDirectory (
+    PADDRESS_SPACE_ARM Space
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new page directory for a new process, and
+    initializes it with kernel address space.
+
+Arguments:
+
+    Space - Supplies the newly created address space.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NO_MEMORY if memory could not be allocated for the page table.
+
+--*/
+
+{
+
+    PBLOCK_ALLOCATOR Allocator;
+    ULONG CopySize;
+    ULONG Entry;
+    PFIRST_LEVEL_TABLE FirstLevelTable;
+    ULONG KernelIndex;
+    ULONG LoopIndex;
+    PHYSICAL_ADDRESS PhysicalAddress;
+    ULONG SelfMapIndex;
+    PVOID SelfMapPageTable;
+    PHYSICAL_ADDRESS SelfMapPageTablePhysical;
+    KSTATUS Status;
+    ULONG ZeroSize;
+
+    Allocator = MmPageDirectoryBlockAllocator;
+    FirstLevelTable = NULL;
+
+    //
+    // If this is a request to create the kernel's page directory, then just
+    // use the global page directory that was supplied from boot.
+    //
+
+    if (Allocator == NULL) {
+        FirstLevelTable = MmKernelFirstLevelTable;
+        Space->PageDirectoryPhysical = MmpVirtualToPhysical(FirstLevelTable,
+                                                            NULL);
+
+        ASSERT((Space->PageDirectoryPhysical & TTBR_ADDRESS_MASK) == 0);
+        ASSERT(Space->PageDirectoryPhysical != INVALID_PHYSICAL_ADDRESS);
+
+        Space->PageDirectoryPhysical |= MmTtbrCacheAttributes;
+        Status = STATUS_SUCCESS;
+        goto CreatePageDirectoryEnd;
+    }
+
+    //
+    // Attempt to allocate space for the new page directory and the page
+    // needed for the user-mode half of the self map page table.
+    //
+
+    FirstLevelTable = MmAllocateBlock(Allocator, &PhysicalAddress);
+    if (FirstLevelTable == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CreatePageDirectoryEnd;
+    }
+
+    //
+    // Zero user-mode and copy the kernel portions from the kernel first level
+    // table.
+    //
+
+    KernelIndex = FLT_INDEX(KERNEL_VA_START);
+    ZeroSize = KernelIndex * sizeof(FIRST_LEVEL_TABLE);
+    CopySize = FLT_SIZE - ZeroSize;
+    RtlZeroMemory(FirstLevelTable, ZeroSize);
+    RtlCopyMemory(&(FirstLevelTable[KernelIndex]),
+                  &(MmKernelFirstLevelTable[KernelIndex]),
+                  CopySize);
+
+    Space->PageDirectoryPhysical = PhysicalAddress;
+
+    ASSERT((Space->PageDirectoryPhysical & TTBR_ADDRESS_MASK) == 0);
+    ASSERT(Space->PageDirectoryPhysical != INVALID_PHYSICAL_ADDRESS);
+
+    Space->PageDirectoryPhysical |= MmTtbrCacheAttributes;
+
+    //
+    // Set up the self map page table. Normally first level table entries are
+    // set up in groups of 4 so that the page table size is the same as the page
+    // size. By changing the first two directory entries of the self map page
+    // table, the first half of the self map region (the user mode part) will
+    // point at the per-process user mode page tables, and the second half will
+    // point at the standard kernel self map page table.
+    //
+
+    SelfMapPageTable = (PVOID)FirstLevelTable + FLT_SIZE;
+    RtlZeroMemory(SelfMapPageTable, PAGE_SIZE);
+    MmpCleanPageTableCacheRegion(SelfMapPageTable, PAGE_SIZE);
+    SelfMapPageTablePhysical = PhysicalAddress + FLT_SIZE;
+
+    ASSERT(SelfMapPageTablePhysical != INVALID_PHYSICAL_ADDRESS);
+
+    SelfMapIndex = FLT_INDEX(MmPageTables);
+
+    //
+    // Fix up the user mode mappings. Since there are 4 first level entries that
+    // can be manipulated, the kernel address space better start on one of those
+    // boundaries.
+    //
+
+    ASSERT(ALIGN_RANGE_DOWN((UINTN)KERNEL_VA_START, (1 << (32 - 2))) ==
+           (UINTN)KERNEL_VA_START);
+
+    for (LoopIndex = 0;
+         LoopIndex < ((UINTN)KERNEL_VA_START >> (32 - 2));
+         LoopIndex += 1) {
+
+        Entry = ((ULONG)SelfMapPageTablePhysical >> SLT_ALIGNMENT) + LoopIndex;
+        FirstLevelTable[SelfMapIndex + LoopIndex].Entry = Entry;
+    }
+
+    //
+    // Serialization is not needed here as this new page directory will not be
+    // live for page table walks until after a context switch, which serializes
+    // execution.
+    //
+
+    MmpCleanPageTableCacheRegion(FirstLevelTable, FLT_SIZE);
+    Status = STATUS_SUCCESS;
+
+CreatePageDirectoryEnd:
+    if (!KSUCCESS(Status)) {
+        if (FirstLevelTable != NULL) {
+            MmFreeBlock(MmPageDirectoryBlockAllocator, FirstLevelTable);
+        }
+    }
+
+    Space->PageDirectory = FirstLevelTable;
+    return Status;
+}
+
+VOID
+MmpDestroyPageDirectory (
+    PADDRESS_SPACE_ARM Space
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a page directory upon address space destruction.
+
+Arguments:
+
+    Space - Supplies the address space being destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG FirstIndex;
+    PFIRST_LEVEL_TABLE FirstLevelTable;
+    PHYSICAL_ADDRESS PhysicalAddress;
+    PHYSICAL_ADDRESS RunPhysicalAddress;
+    UINTN RunSize;
+
+    ASSERT(Space->PageDirectory != MmKernelFirstLevelTable);
+
+    //
+    // Free every attached page table in user mode. Don't bother to clean the
+    // cache for these updates. The page directory should never be put back
+    // in the TTBR and it certainly should not be in service now.
+    //
+
+    RunSize = 0;
+    RunPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
+    FirstLevelTable = Space->PageDirectory;
+    for (FirstIndex = 0;
+         FirstIndex < FLT_INDEX(KERNEL_VA_START);
+         FirstIndex += 4) {
+
+        if (FirstLevelTable[FirstIndex].Entry != 0) {
+            PhysicalAddress =
+                   (ULONG)(FirstLevelTable[FirstIndex].Entry << SLT_ALIGNMENT);
+
+            if (RunSize != 0) {
+                if ((RunPhysicalAddress + RunSize) == PhysicalAddress) {
+                    RunSize += PAGE_SIZE;
+
+                } else {
+                    MmFreePhysicalPages(RunPhysicalAddress,
+                                        RunSize >> PAGE_SHIFT);
+
+                    RunPhysicalAddress = PhysicalAddress;
+                    RunSize = PAGE_SIZE;
+                }
+
+            } else {
+                RunPhysicalAddress = PhysicalAddress;
+                RunSize = PAGE_SIZE;
+            }
+        }
+    }
+
+    if (RunSize != 0) {
+        MmFreePhysicalPages(RunPhysicalAddress, RunSize >> PAGE_SHIFT);
+    }
+
+    MmFreeBlock(MmPageDirectoryBlockAllocator, Space->PageDirectory);
+    Space->PageDirectory = NULL;
+    Space->PageDirectoryPhysical = 0;
+    return;
+}
 
 VOID
 MmpCreatePageTable (

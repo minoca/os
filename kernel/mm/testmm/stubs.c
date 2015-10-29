@@ -1534,7 +1534,7 @@ Return Value:
     return STATUS_NOT_IMPLEMENTED;
 }
 
-PVOID
+ULONG
 ArGetCurrentPageDirectory (
     VOID
     )
@@ -1557,7 +1557,7 @@ Return Value:
 
 {
 
-    return NULL;
+    return 0;
 }
 
 VOID

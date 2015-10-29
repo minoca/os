@@ -49,7 +49,7 @@ Environment:
 //
 
 KSPIN_LOCK MmInvalidateIpiLock;
-volatile PVOID MmInvalidateIpiPageDirectory = NULL;
+volatile PADDRESS_SPACE MmInvalidateIpiAddressSpace = NULL;
 volatile PVOID MmInvalidateIpiAddress = NULL;
 volatile ULONG MmInvalidateIpiPageCount = 0;
 volatile ULONG MmInvalidateIpiProcessorsRemaining = 0;
@@ -90,8 +90,8 @@ Return Value:
     OldRunLevel = KeRaiseRunLevel(RunLevelIpi);
     PageSize = MmPageSize();
     Process = PsGetCurrentProcess();
-    if ((Process->PageDirectory == MmInvalidateIpiPageDirectory) ||
-        (MmInvalidateIpiAddress >= KERNEL_VA_START)) {
+    if ((MmInvalidateIpiAddress >= KERNEL_VA_START) ||
+        (Process->AddressSpace == MmInvalidateIpiAddressSpace)) {
 
         Address = MmInvalidateIpiAddress;
         for (Index = 0; Index < MmInvalidateIpiPageCount; Index += 1) {
@@ -107,7 +107,7 @@ Return Value:
 
 VOID
 MmpSendTlbInvalidateIpi (
-    PVOID PageDirectory,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress,
     ULONG PageCount
     )
@@ -120,7 +120,7 @@ Routine Description:
 
 Arguments:
 
-    PageDirectory - Supplies the page directory for the affected address.
+    AddressSpace - Supplies a pointer to the address space to invalidate for.
 
     VirtualAddress - Supplies the virtual address to invalidate.
 
@@ -157,7 +157,7 @@ Return Value:
 
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     KeAcquireSpinLock(&MmInvalidateIpiLock);
-    MmInvalidateIpiPageDirectory = PageDirectory;
+    MmInvalidateIpiAddressSpace = AddressSpace;
     MmInvalidateIpiAddress = VirtualAddress;
     MmInvalidateIpiPageCount = PageCount;
     MmInvalidateIpiProcessorsRemaining = KeGetActiveProcessorCount();

@@ -1146,27 +1146,6 @@ Members:
     ProcessGroup - Stores a pointer directly to the process group this process
         belongs to.
 
-    PageDirectory - Stores a pointer to the process' page directory.
-
-    PageDirectoryPhysical - Stores the physical address of the page directory.
-
-    Accountant - Stores a pointer to the memory map accounting information for
-        user-mode space.
-
-    ImageCount - Stores the number of images in the image list.
-
-    ImageListHead - Stores the head of list of images loaded for this process.
-
-    ImageListSignature - Stores the sum of all the timestamps and loaded
-        lowest addresses of the loaded images. The debugger uses this as a
-        heuristic to determine if its list of loaded modules is in sync.
-
-    ImageListQueuedLock - Stores a pointer to a queued lock protecting the
-        image list.
-
-    SectionListHead - Stores the head of the list of image sections mapped
-        into this process.
-
     HandleTable - Stores a pointer to the handle table for this process.
 
     Paths - Stores the path root information for this process.
@@ -1229,8 +1208,6 @@ Members:
     ChildResourceUsage - Stores the resource usage for terminated and waited
         for children of this process. This is protected by the queued lock.
 
-    ResidentSet - Stores the number of pages currently mapped in the process.
-
     Umask - Stores the user file creation permission bit mask for the process.
 
     ControllingTerminal - Stores an opaque pointer to the process' controlling
@@ -1253,14 +1230,7 @@ struct _KPROCESS {
     ULONG ThreadCount;
     PROCESS_IDENTIFIERS Identifiers;
     PPROCESS_GROUP ProcessGroup;
-    PVOID PageDirectory;
-    PHYSICAL_ADDRESS PageDirectoryPhysical;
-    PMEMORY_ACCOUNTING Accountant;
-    ULONG ImageCount;
-    LIST_ENTRY ImageListHead;
-    ULONGLONG ImageListSignature;
-    PVOID ImageListQueuedLock;
-    LIST_ENTRY SectionListHead;
+    PADDRESS_SPACE AddressSpace;
     PHANDLE_TABLE HandleTable;
     PROCESS_PATHS Paths;
     PPROCESS_ENVIRONMENT Environment;
@@ -1284,7 +1254,6 @@ struct _KPROCESS {
     ULONGLONG StartTime;
     RESOURCE_USAGE ResourceUsage;
     RESOURCE_USAGE ChildResourceUsage;
-    UINTN ResidentSet;
     ULONG Umask;
     PVOID ControllingTerminal;
 };

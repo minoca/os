@@ -100,7 +100,7 @@ cd "$OLDPWD"
 
 mkdir -p $WORKING/Minoca/Image
 if test "x$ARCH" = "xx86"; then
-    cp -pv ./distribute/pc.img ./distribute/pc.img.vmdk "$WORKING/Minoca/Image"
+    cp -pv ./distribute/pc.img "$WORKING/Minoca/Image"
 
 elif test "x$ARCH" = "xarmv7"; then
     cp -pv ./distribute/integ.img ./distribute/panda.img \
@@ -115,6 +115,8 @@ fi
 ##
 
 REMOVE='apps*
+dep
+skel
 Python*
 *.img
 *.vmdk
@@ -274,11 +276,11 @@ A: Please file a bug with us indicating the message and debugger output. If
    steps needed to reproduce the issue.
 
 Q: When I break into the debugger, I get warnings about mismatching timestamps
-   that read "Warning: Target timestamp for kernel is Thu Feb 19 
+   that read "Warning: Target timestamp for kernel is Thu Feb 19
    23:38:36 2015 but file '.\Minoca\Symbols/kernel' has timestamp Fri Feb 20
    11:17:46 2015."
 A: These warnings are safe to ignore. The default Windows archive extraction
-   modifies the timestamps on the unzipped files (i.e. Right-Click -> Extract 
+   modifies the timestamps on the unzipped files (i.e. Right-Click -> Extract
    All). If you'd like to remove them, try a different extraction method; 7-zip
    works for us.
 

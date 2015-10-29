@@ -48,7 +48,7 @@ IMAGES += $(BINROOT)/pc.img \
 $(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
 	@echo Building - $(notdir $@)
 	@mkdir -p $(BINROOT)/apps
-	@cd $(BINROOT) && ./msetup -ql install-x86 -i- -d $@ $(MSETUP_IMAGE_SIZE)
+	@cd $(BINROOT) && ./msetup -ql install-x86 -i.. -d $@ $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/pc.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
@@ -94,7 +94,7 @@ IMAGES += $(BINROOT)/bbone.img \
 $(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
 	@echo Building - $(notdir $@)
 	@mkdir -p $(BINROOT)/apps
-	@cd $(BINROOT) && ./msetup -ql install-armv7 -i- -d $@ $(MSETUP_IMAGE_SIZE)
+	@cd $(BINROOT) && ./msetup -ql install-armv7 -i.. -d $@ $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/bbone.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
@@ -151,7 +151,7 @@ IMAGES += $(BINROOT)/rpi.img \
 $(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
 	@echo Building - $(notdir $@)
 	@mkdir -p $(BINROOT)/apps
-	@cd $(BINROOT) && ./msetup -ql install-armv6 -i- -d $@ $(MSETUP_IMAGE_SIZE)
+	@cd $(BINROOT) && ./msetup -ql install-armv6 -i.. -d $@ $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/rpi.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)

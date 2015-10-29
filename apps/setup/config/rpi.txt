@@ -43,14 +43,14 @@ RpiFirmwareBlobFiles = [
 
 RpiFirmwareBlobsSystemCopy = {
     "Destination": SystemDir + "rpi/",
-    "Source": "./rpi/",
+    "Source": SourceDir + "rpi/",
     "SourceVolume": 0,
     "Files": RpiFirmwareBlobFiles
 };
 
 RpiFirmwareSystemCopy = {
     "Destination": SystemDir + "rpi/rpifw",
-    "Source": "./rpifw",
+    "Source": SourceDir + "rpifw",
     "SourceVolume": 0
 };
 
@@ -60,14 +60,14 @@ RpiFirmwareSystemCopy = {
 
 RpiFirmwareBlobsCopy = {
     "Destination": "/",
-    "Source": "./rpi/",
+    "Source": SourceDir + "rpi/",
     "SourceVolume": 0,
     "Files": RpiFirmwareBlobFiles
 };
 
 RpiFirmwareCopy = {
     "Destination": "/rpifw",
-    "Source": "./rpifw",
+    "Source": SourceDir + "rpifw",
     "SourceVolume": 0,
 };
 

@@ -631,7 +631,7 @@ Return Value:
     }
 
     //
-    // Perform phase 4 initialization of the memory manager, which completes
+    // Perform phase 3 initialization of the memory manager, which completes
     // initialization by freeing all boot allocations. From here on out, the
     // parameters pointer is inaccessible.
     //

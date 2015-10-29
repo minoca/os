@@ -663,7 +663,7 @@ Return Value:
     PKPROCESS Process;
 
     Process = PsGetCurrentProcess();
-    MmpLockAccountant(Process->Accountant, FALSE);
+    MmpLockAccountant(Process->AddressSpace->Accountant, FALSE);
     return;
 }
 
@@ -694,7 +694,7 @@ Return Value:
     PKPROCESS Process;
 
     Process = PsGetCurrentProcess();
-    MmpUnlockAccountant(Process->Accountant, FALSE);
+    MmpUnlockAccountant(Process->AddressSpace->Accountant, FALSE);
     return;
 }
 
@@ -779,7 +779,7 @@ Return Value:
             goto CreateMemoryReservationEnd;
         }
 
-        Accountant = Process->Accountant;
+        Accountant = Process->AddressSpace->Accountant;
 
         //
         // If the preferred virtual address is in kernel mode, pretend like
@@ -913,12 +913,7 @@ Return Value:
     ASSERT(Reservation != NULL);
 
     Process = (PKPROCESS)(Reservation->Process);
-    Accountant = Process->Accountant;
-    if (Process == PsGetKernelProcess()) {
-        Accountant = &MmKernelVirtualSpace;
-        Process = PsGetKernelProcess();
-    }
-
+    Accountant = Process->AddressSpace->Accountant;
     UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                  UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
@@ -1136,6 +1131,7 @@ Return Value:
     ULONG Flags;
     PHYSICAL_ADDRESS PhysicalAddress;
     PKPROCESS Source;
+    PADDRESS_SPACE SourceAddressSpace;
     PIMAGE_SECTION SourceSection;
     KSTATUS Status;
 
@@ -1152,14 +1148,15 @@ Return Value:
 
     Destination = (PKPROCESS)DestinationProcess;
     Source = (PKPROCESS)SourceProcess;
+    SourceAddressSpace = Source->AddressSpace;
 
     //
     // Grab both the account lock and the process lock so that neither image
     // sections nor address space reservations can be changed during the copy.
     //
 
-    MmpLockAccountant(Source->Accountant, FALSE);
-    MmpLockAccountant(Destination->Accountant, TRUE);
+    MmpLockAccountant(Source->AddressSpace->Accountant, FALSE);
+    MmpLockAccountant(Destination->AddressSpace->Accountant, TRUE);
     KeAcquireQueuedLock(Source->QueuedLock);
 
     //
@@ -1167,8 +1164,8 @@ Return Value:
     // allocations don't occur while holding the image section lock.
     //
 
-    Status = MmpPreallocatePageTables(Source->PageDirectory,
-                                      Destination->PageDirectory);
+    Status = MmpPreallocatePageTables(Source->AddressSpace,
+                                      Destination->AddressSpace);
 
     if (!KSUCCESS(Status)) {
         goto CloneProcessAddressSpaceEnd;
@@ -1178,8 +1175,8 @@ Return Value:
     // Create a copy of every image section in the process.
     //
 
-    CurrentEntry = Source->SectionListHead.Next;
-    while (CurrentEntry != &(Source->SectionListHead)) {
+    CurrentEntry = SourceAddressSpace->SectionListHead.Next;
+    while (CurrentEntry != &(SourceAddressSpace->SectionListHead)) {
         SourceSection = LIST_VALUE(CurrentEntry,
                                    IMAGE_SECTION,
                                    ProcessListEntry);
@@ -1215,9 +1212,9 @@ Return Value:
     // Copy the memory accounting descriptors.
     //
 
-    Context.Accounting = Destination->Accountant;
+    Context.Accounting = Destination->AddressSpace->Accountant;
     Context.Status = STATUS_SUCCESS;
-    MmMdIterate(&(Source->Accountant->Mdl),
+    MmMdIterate(&(Source->AddressSpace->Accountant->Mdl),
                 MmpCloneAddressSpaceIterator,
                 &Context);
 
@@ -1229,8 +1226,8 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 CloneProcessAddressSpaceEnd:
-    MmpUnlockAccountant(Destination->Accountant, TRUE);
-    MmpUnlockAccountant(Source->Accountant, FALSE);
+    MmpUnlockAccountant(Destination->AddressSpace->Accountant, TRUE);
+    MmpUnlockAccountant(Source->AddressSpace->Accountant, FALSE);
     KeReleaseQueuedLock(Source->QueuedLock);
     return Status;
 }
@@ -1295,7 +1292,7 @@ Return Value:
 
     ASSERT(DestinationProcess != PsGetKernelProcess());
 
-    Accountant = DestinationProcess->Accountant;
+    Accountant = DestinationProcess->AddressSpace->Accountant;
     Status = MmpAddAccountingDescriptor(Accountant, &UserSharedDataRange);
     if (!KSUCCESS(Status)) {
         goto MapUserSharedDataEnd;
@@ -2828,7 +2825,9 @@ Return Value:
     UINTN PreviousMaximum;
     UINTN ReadMaximum;
 
-    OriginalValue = RtlAtomicAdd(&(Process->ResidentSet), Addition);
+    OriginalValue = RtlAtomicAdd(&(Process->AddressSpace->ResidentSet),
+                                 Addition);
+
     if (Addition <= 0) {
 
         ASSERT(OriginalValue != 0);

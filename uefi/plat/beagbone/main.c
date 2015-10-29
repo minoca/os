@@ -112,7 +112,7 @@ Return Value:
     // Initialize UEFI enough to get into the debugger.
     //
 
-    EfipBeagleBoneBlackSetLeds(0x3);
+    EfipBeagleBoneBlackSetLeds(4);
     FirmwareSize = (UINTN)&_end - (UINTN)&__executable_start;
     EfiCoreMain((VOID *)-1,
                 &__executable_start,
