@@ -1179,7 +1179,6 @@ Return Value:
     UINTN BytesCompleted;
     UINTN CleanStreak;
     BOOL Dirty;
-    PKPROCESS KernelProcess;
     UINTN Offset;
     PPAGING_ENTRY OriginalPagingEntry;
     PIMAGE_SECTION OwningSection;
@@ -1187,7 +1186,6 @@ Return Value:
     PPAGE_FILE PageFile;
     ULONG PageShift;
     ULONG PageSize;
-    PKPROCESS Process;
     UINTN SectionPageCount;
     KSTATUS Status;
     ULONGLONG TotalOffset;
@@ -1198,16 +1196,14 @@ Return Value:
     ASSERT((PagingEntry->U.Flags & PAGING_ENTRY_FLAG_PAGING_OUT) != 0);
     ASSERT(IoBuffer->FragmentCount == 0);
 
-    KernelProcess = PsGetKernelProcess();
     OriginalPagingEntry = PagingEntry;
     PageShift = MmPageShift();
     PageSize = MmPageSize();
     *PagesPaged = 0;
-    Process = Section->Process;
     TotalOffset = -1;
 
     ASSERT((Section->VirtualAddress < KERNEL_VA_START) ||
-           (Section->Process == KernelProcess));
+           (Section->AddressSpace == MmKernelAddressSpace));
 
     //
     // This section better not be non-paged or shared.
@@ -1330,13 +1326,12 @@ Return Value:
             VirtualAddress = Section->VirtualAddress +
                              (SectionOffset << PageShift);
 
-            Process = Section->Process;
-            if (Process == KernelProcess) {
+            if (Section->AddressSpace == MmKernelAddressSpace) {
                 PhysicalAddress = MmpVirtualToPhysical(VirtualAddress, NULL);
 
             } else {
                 PhysicalAddress = MmpVirtualToPhysicalInOtherProcess(
-                                                        Process->AddressSpace,
+                                                        Section->AddressSpace,
                                                         VirtualAddress);
             }
 
@@ -1564,7 +1559,7 @@ Return Value:
     ULONG PageShift;
     PIMAGE_SECTION PreviousSection;
     PIMAGE_SECTION PreviousSibling;
-    PKPROCESS Process;
+//    PKPROCESS Process;
     BOOL ThisPageWasDirty;
     BOOL TraverseChildren;
     PVOID VirtualAddress;
@@ -1636,8 +1631,8 @@ Return Value:
             }
 
             if (TraverseChildren != FALSE) {
-                Process = (PKPROCESS)(CurrentSection->Process);
-                if ((Process == CurrentProcess) ||
+                if ((CurrentSection->AddressSpace ==
+                     CurrentProcess->AddressSpace) ||
                     (VirtualAddress >= KERNEL_VA_START)) {
 
                     if (CreateMapping != FALSE) {
@@ -1682,14 +1677,14 @@ Return Value:
                             MapFlags |= MAP_FLAG_READ_ONLY;
                         }
 
-                        MmpMapPageInOtherProcess(Process,
+                        MmpMapPageInOtherProcess(CurrentSection->AddressSpace,
                                                  PhysicalAddress,
                                                  VirtualAddress,
                                                  MapFlags,
                                                  SendTlbInvalidateIpi);
 
                     } else {
-                        MmpUnmapPageInOtherProcess(Process,
+                        MmpUnmapPageInOtherProcess(CurrentSection->AddressSpace,
                                                    VirtualAddress,
                                                    0,
                                                    &ThisPageWasDirty);

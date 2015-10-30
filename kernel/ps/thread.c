@@ -1721,8 +1721,13 @@ Return Value:
 
         //
         // The thread has been removed from the process's thread list. Add
-        // its resource usage to the process' counts.
+        // its resource usage to the process' counts. This is where a process'
+        // max resident set is updated (by setting it in the thread and then
+        // updating to the parent).
         //
+
+        Thread->ResourceUsage.MaxResidentSet =
+                           Thread->OwningProcess->AddressSpace->MaxResidentSet;
 
         PspAddResourceUsages(&(Thread->OwningProcess->ResourceUsage),
                              &(Thread->ResourceUsage));

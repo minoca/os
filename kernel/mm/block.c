@@ -1263,8 +1263,7 @@ Return Value:
             UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
-            Status = MmpFreeAccountingRange(PsGetKernelProcess(),
-                                            &MmKernelVirtualSpace,
+            Status = MmpFreeAccountingRange(NULL,
                                             Segment->VirtualAddress,
                                             Segment->Size,
                                             FALSE,

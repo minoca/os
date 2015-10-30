@@ -698,7 +698,6 @@ AllocateKernelStackEnd:
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
             MmpFreeAccountingRange(NULL,
-                                   &MmKernelVirtualSpace,
                                    Stack,
                                    Size,
                                    FALSE,
@@ -775,8 +774,7 @@ Return Value:
     UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                  UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
-    MmpFreeAccountingRange(PsGetKernelProcess(),
-                           &MmKernelVirtualSpace,
+    MmpFreeAccountingRange(NULL,
                            StackBase,
                            Size,
                            FALSE,
@@ -995,7 +993,6 @@ ExpandNonPagedPoolEnd:
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
             MmpFreeAccountingRange(NULL,
-                                   &MmKernelVirtualSpace,
                                    Allocation,
                                    Size,
                                    FALSE,
@@ -1073,8 +1070,7 @@ Return Value:
     UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                  UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
-    Status = MmpFreeAccountingRange(PsGetKernelProcess(),
-                                    &MmKernelVirtualSpace,
+    Status = MmpFreeAccountingRange(NULL,
                                     Memory,
                                     Size,
                                     FALSE,
@@ -1154,7 +1150,7 @@ Return Value:
     }
 
     SectionFlags = IMAGE_SECTION_READABLE | IMAGE_SECTION_WRITABLE;
-    Status = MmpAddImageSection(KernelProcess,
+    Status = MmpAddImageSection(KernelProcess->AddressSpace,
                                 Expansion,
                                 Size,
                                 SectionFlags,
@@ -1171,8 +1167,7 @@ ExpandPagedPoolEnd:
             UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
-            MmpFreeAccountingRange(KernelProcess,
-                                   &MmKernelVirtualSpace,
+            MmpFreeAccountingRange(NULL,
                                    Expansion,
                                    Size,
                                    FALSE,
@@ -1224,15 +1219,14 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     Process = PsGetKernelProcess();
-    Status = MmpUnmapImageRegion(Process, Memory, Size);
+    Status = MmpUnmapImageRegion(Process->AddressSpace, Memory, Size);
 
     ASSERT(KSUCCESS(Status));
 
     UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                  UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
-    Status = MmpFreeAccountingRange(Process,
-                                    &MmKernelVirtualSpace,
+    Status = MmpFreeAccountingRange(NULL,
                                     Memory,
                                     Size,
                                     FALSE,

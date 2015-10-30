@@ -417,8 +417,8 @@ Return Value:
     Break->Process = Process->Identifiers.ProcessId;
     Break->ProcessorBlock = (UINTN)NULL;
     Break->ErrorCode = 0;
-    Break->LoadedModuleCount = Process->AddressSpace->ImageCount;
-    Break->LoadedModuleSignature = Process->AddressSpace->ImageListSignature;
+    Break->LoadedModuleCount = Process->ImageCount;
+    Break->LoadedModuleSignature = Process->ImageListSignature;
     Break->InstructionPointer = TrapFrame->Pc;
     RtlZeroMemory(Break->InstructionStream, sizeof(Break->InstructionStream));
     MmCopyFromUserMode(Break->InstructionStream,

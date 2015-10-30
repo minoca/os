@@ -164,8 +164,8 @@ Members:
     Flags - Stores flags regarding the image section. See IMAGE_SECTION_*
         definitions.
 
-    ProcessListEntry - Stores pointers to the next and previous sections in the
-        process.
+    AddressListEntry - Stores pointers to the next and previous sections in the
+        address space.
 
     ImageListEntry - Stores pointers to the next and previous sections that
         also inherit page cache pages from the same backing image.
@@ -177,7 +177,8 @@ Members:
 
     ChildList - Stores the list of image sections inheriting from this one.
 
-    Process - Stores a pointer to the process owning this image section mapping.
+    AddressSpace - Stores a pointer to the address space this section belongs
+        to.
 
     VirtualAddress - Stores the virtual address this section is mapped to.
 
@@ -219,12 +220,12 @@ typedef struct _IMAGE_SECTION IMAGE_SECTION, *PIMAGE_SECTION;
 struct _IMAGE_SECTION {
     volatile ULONG ReferenceCount;
     ULONG Flags;
-    LIST_ENTRY ProcessListEntry;
+    LIST_ENTRY AddressListEntry;
     LIST_ENTRY ImageListEntry;
     LIST_ENTRY CopyListEntry;
     PIMAGE_SECTION Parent;
     LIST_ENTRY ChildList;
-    PVOID Process;
+    PADDRESS_SPACE AddressSpace;
     PVOID VirtualAddress;
     PQUEUED_LOCK Lock;
     PVOID PagingInIrp;
@@ -341,6 +342,12 @@ PKEVENT MmVirtualMemoryWarningEvent;
 //
 
 extern MEMORY_ACCOUNTING MmKernelVirtualSpace;
+
+//
+// Store a pointer to the kernel's address space context.
+//
+
+extern PADDRESS_SPACE MmKernelAddressSpace;
 
 //
 // Stores the locks that serialize access to the pools.
@@ -903,7 +910,7 @@ Return Value:
 
 VOID
 MmpUnmapPageInOtherProcess (
-    PVOID Process,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress,
     ULONG UnmapFlags,
     PBOOL PageWasDirty
@@ -917,7 +924,8 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process to unmap the page in.
+    AddressSpace - Supplies a pointer to the address space to unmap the page
+        from.
 
     VirtualAddress - Supplies the virtual address of the page to unmap.
 
@@ -936,7 +944,7 @@ Return Value:
 
 VOID
 MmpMapPageInOtherProcess (
-    PVOID Process,
+    PADDRESS_SPACE AddressSpace,
     PHYSICAL_ADDRESS PhysicalAddress,
     PVOID VirtualAddress,
     ULONG MapFlags,
@@ -952,7 +960,7 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process to map the page in.
+    AddressSpace - Supplies a pointer to the address space to map the page in.
 
     PhysicalAddress - Supplies the physical address to back the mapping with.
 
@@ -1038,7 +1046,7 @@ Return Value:
 
 KSTATUS
 MmpCopyAndChangeSectionMappings (
-    PKPROCESS DestinationProcess,
+    PADDRESS_SPACE Destination,
     PADDRESS_SPACE Source,
     PVOID VirtualAddress,
     UINTN Size
@@ -1053,8 +1061,7 @@ Routine Description:
 
 Arguments:
 
-    DestinationProcess - Supplies a pointer to the process where the mappings
-        should be copied to.
+    Destination - Supplies a pointer to the destination address space.
 
     Source - Supplies a pointer to the source address space.
 
@@ -1161,8 +1168,7 @@ Return Value:
 
 KSTATUS
 MmpFreeAccountingRange (
-    PVOID Process,
-    PMEMORY_ACCOUNTING Accountant,
+    PADDRESS_SPACE AddressSpace,
     PVOID Allocation,
     UINTN SizeInBytes,
     BOOL LockHeld,
@@ -1177,10 +1183,9 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies an optional pointer to the process this accountant
-        lives in. If NULL is supplied, the current process will be used.
-
-    Accountant - Supplies a pointer to the memory accounting structure.
+    AddressSpace - Supplies a pointer to the address space containing the
+        allocated range. If NULL is supplied, the kernel address space will
+        be used.
 
     Allocation - Supplies the allocation to free.
 
@@ -1459,7 +1464,7 @@ Return Value:
 KSTATUS
 MmpLookupSection (
     PVOID VirtualAddress,
-    PKPROCESS Process,
+    PADDRESS_SPACE AddressSpace,
     PIMAGE_SECTION *Section,
     PUINTN PageOffset
     );
@@ -1470,13 +1475,13 @@ Routine Description:
 
     This routine looks up the image section corresponding to the given
     virtual address. This routine must be called at low level. If the section
-    is found, it is returned with its lock acquired.
+    is found, a reference is added to the section.
 
 Arguments:
 
     VirtualAddress - Supplies the virtual address to query for.
 
-    Process - Supplies the process to look in.
+    AddressSpace - Supplies the address space to look up the section in.
 
     Section - Supplies a pointer where a pointer to the image section will be
         returned.
@@ -1495,7 +1500,7 @@ Return Value:
 
 KSTATUS
 MmpAddImageSection (
-    PKPROCESS Process,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress,
     UINTN Size,
     ULONG Flags,
@@ -1513,7 +1518,7 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process to create the section
+    AddressSpace - Supplies a pointer to the address space to add the section
         under.
 
     VirtualAddress - Supplies the virtual address of the section.
@@ -1542,7 +1547,7 @@ Return Value:
 KSTATUS
 MmpCopyImageSection (
     PIMAGE_SECTION SectionToCopy,
-    PKPROCESS DestinationProcess
+    PADDRESS_SPACE DestinationAddressSpace
     );
 
 /*++
@@ -1555,8 +1560,8 @@ Arguments:
 
     SectionToCopy - Supplies a pointer to the section to copy.
 
-    DestinationProcess - Supplies a pointer to the process to copy the section
-        to.
+    DestinationAddressSpace - Supplies a pointer to the address space to copy
+        the image section to.
 
 Return Value:
 
@@ -1569,7 +1574,7 @@ Return Value:
 
 KSTATUS
 MmpUnmapImageRegion (
-    PKPROCESS Process,
+    PADDRESS_SPACE AddressSpace,
     PVOID SectionAddress,
     UINTN Size
     );
@@ -1584,8 +1589,7 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process containing the image
-        section.
+    AddressSpace - Supplies a pointer to the address space to unmap from.
 
     SectionAddress - Supplies the virtual address of the section.
 
@@ -1814,13 +1818,13 @@ MmpClipImageSections (
 Routine Description:
 
     This routine wipes out any image sections covering the given VA range. It
-    assumes the process lock is already held. This routine does not change
-    any accountant mappings.
+    assumes the address space lock is already held. This routine does not
+    change any accountant mappings.
 
 Arguments:
 
     SectionListHead - Supplies a pointer to the head of the list of image
-        sections for the process.
+        sections for the address space.
 
     Address - Supplies the first address (inclusive) to remove image sections
         for.
@@ -1935,7 +1939,7 @@ Return Value:
 
 VOID
 MmpUpdateResidentSetCounter (
-    PKPROCESS Process,
+    PADDRESS_SPACE AddressSpace,
     INTN Addition
     );
 
@@ -1948,7 +1952,7 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process to update.
+    AddressSpace - Supplies a pointer to the address space to update.
 
     Addition - Supplies the number of pages to add or subtract from the counter.
 

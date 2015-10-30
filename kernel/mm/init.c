@@ -460,7 +460,6 @@ Return Value:
     if (StartBlock->SwapPage != NULL) {
         PageSize = MmPageSize();
         MmpFreeAccountingRange(NULL,
-                               &MmKernelVirtualSpace,
                                StartBlock->SwapPage - PageSize,
                                3 * PageSize,
                                FALSE,
@@ -572,11 +571,11 @@ Return Value:
         //
 
         if (VirtualAddress < KERNEL_VA_START) {
-            MmpUpdateResidentSetCounter(PsGetKernelProcess(), PageCount);
+            MmpUpdateResidentSetCounter(PsGetKernelProcess()->AddressSpace,
+                                        PageCount);
         }
 
         Status = MmpFreeAccountingRange(NULL,
-                                        &MmKernelVirtualSpace,
                                         VirtualAddress,
                                         PageCount << PageShift,
                                         FALSE,

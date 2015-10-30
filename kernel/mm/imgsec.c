@@ -62,7 +62,7 @@ struct _IMAGE_SECTION_LIST {
 
 KSTATUS
 MmpAllocateImageSection (
-    PKPROCESS Process,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress,
     UINTN Size,
     ULONG Flags,
@@ -82,7 +82,7 @@ MmpClipImageSection (
 VOID
 MmpRemoveImageSection (
     PIMAGE_SECTION Section,
-    BOOL ProcessLockHeld
+    BOOL AddressSpaceLockHeld
     );
 
 VOID
@@ -119,6 +119,10 @@ MmpDestroyImageSectionMappings (
 
 //
 // -------------------------------------------------------------------- Globals
+//
+
+//
+// Store a pointer to the kernel's address space context.
 //
 
 PADDRESS_SPACE MmKernelAddressSpace;
@@ -162,7 +166,6 @@ Return Value:
         return NULL;
     }
 
-    INITIALIZE_LIST_HEAD(&(Space->ImageListHead));
     INITIALIZE_LIST_HEAD(&(Space->SectionListHead));
     if (MmKernelAddressSpace == NULL) {
         MmKernelAddressSpace = Space;
@@ -187,8 +190,8 @@ Return Value:
         }
     }
 
-    Space->ImageListQueuedLock = KeCreateQueuedLock();
-    if (Space->ImageListQueuedLock == NULL) {
+    Space->Lock = KeCreateQueuedLock();
+    if (Space->Lock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateAddressSpaceEnd;
     }
@@ -238,8 +241,8 @@ Return Value:
         MmFreePagedPool(AddressSpace->Accountant);
     }
 
-    if (AddressSpace->ImageListQueuedLock != NULL) {
-        KeDestroyQueuedLock(AddressSpace->ImageListQueuedLock);
+    if (AddressSpace->Lock != NULL) {
+        KeDestroyQueuedLock(AddressSpace->Lock);
     }
 
     MmpArchDestroyAddressSpace(AddressSpace);
@@ -564,7 +567,6 @@ Return Value:
     PADDRESS_SPACE AddressSpace;
     PLIST_ENTRY CurrentEntry;
     PVOID End;
-    PKPROCESS KernelProcess;
     UINTN PageSize;
     PKPROCESS Process;
     PIMAGE_SECTION Section;
@@ -578,13 +580,12 @@ Return Value:
 
     Process = PsGetCurrentProcess();
     AddressSpace = Process->AddressSpace;
-    KernelProcess = PsGetKernelProcess();
-    KeAcquireQueuedLock(Process->QueuedLock);
+    MmAcquireAddressSpaceLock(AddressSpace);
     Status = STATUS_SUCCESS;
     End = Address + Size;
     CurrentEntry = AddressSpace->SectionListHead.Next;
     while (CurrentEntry != &(AddressSpace->SectionListHead)) {
-        Section = LIST_VALUE(CurrentEntry, IMAGE_SECTION, ProcessListEntry);
+        Section = LIST_VALUE(CurrentEntry, IMAGE_SECTION, AddressListEntry);
         if (Section->VirtualAddress >= End) {
             break;
         }
@@ -606,7 +607,7 @@ Return Value:
             //
 
             if ((Section->VirtualAddress < Address) || (SectionEnd > End)) {
-                if (Section->Process == KernelProcess) {
+                if (Section->AddressSpace == MmKernelAddressSpace) {
 
                     ASSERT(FALSE);
 
@@ -632,7 +633,7 @@ Return Value:
 
                     ASSERT(Section->VirtualAddress + Section->Size == Address);
 
-                    CurrentEntry = Section->ProcessListEntry.Next;
+                    CurrentEntry = Section->AddressListEntry.Next;
                     continue;
                 }
 
@@ -652,7 +653,7 @@ Return Value:
 
                 ASSERT(Section->VirtualAddress + Section->Size == End);
 
-                CurrentEntry = Section->ProcessListEntry.Next;
+                CurrentEntry = Section->AddressListEntry.Next;
             }
 
             ASSERT((Section->VirtualAddress >= Address) &&
@@ -665,7 +666,7 @@ Return Value:
         }
     }
 
-    KeReleaseQueuedLock(Process->QueuedLock);
+    MmReleaseAddressSpaceLock(AddressSpace);
     return Status;
 }
 
@@ -717,7 +718,7 @@ Return Value:
     }
 
     Status = MmpLookupSection(Address,
-                              PsGetCurrentProcess(),
+                              PsGetCurrentProcess()->AddressSpace,
                               &Section,
                               &PageOffset);
 
@@ -854,7 +855,7 @@ Return Value:
     Process = PsGetCurrentProcess();
     while (Size != 0) {
         Status = MmpLookupSection(UserDestination,
-                                  Process,
+                                  Process->AddressSpace,
                                   &Section,
                                   &PageOffset);
 
@@ -899,7 +900,7 @@ Return Value:
 KSTATUS
 MmpLookupSection (
     PVOID VirtualAddress,
-    PKPROCESS Process,
+    PADDRESS_SPACE AddressSpace,
     PIMAGE_SECTION *Section,
     PUINTN PageOffset
     )
@@ -916,7 +917,7 @@ Arguments:
 
     VirtualAddress - Supplies the virtual address to query for.
 
-    Process - Supplies the process to look in.
+    AddressSpace - Supplies the address space to look up the section in.
 
     Section - Supplies a pointer where a pointer to the image section will be
         returned.
@@ -935,7 +936,6 @@ Return Value:
 
 {
 
-    PADDRESS_SPACE AddressSpace;
     PIMAGE_SECTION CurrentSection;
     PLIST_ENTRY CurrentSectionEntry;
     ULONG PageShift;
@@ -947,13 +947,12 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    KeAcquireQueuedLock(Process->QueuedLock);
-    AddressSpace = Process->AddressSpace;
+    MmAcquireAddressSpaceLock(AddressSpace);
     CurrentSectionEntry = AddressSpace->SectionListHead.Next;
     while (CurrentSectionEntry != &(AddressSpace->SectionListHead)) {
         CurrentSection = LIST_VALUE(CurrentSectionEntry,
                                     IMAGE_SECTION,
-                                    ProcessListEntry);
+                                    AddressListEntry);
 
         CurrentSectionEntry = CurrentSectionEntry->Next;
 
@@ -978,13 +977,13 @@ Return Value:
     }
 
 LookupSectionEnd:
-    KeReleaseQueuedLock(Process->QueuedLock);
+    MmReleaseAddressSpaceLock(AddressSpace);
     return Status;
 }
 
 KSTATUS
 MmpAddImageSection (
-    PKPROCESS Process,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress,
     UINTN Size,
     ULONG Flags,
@@ -1002,7 +1001,7 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process to create the section
+    AddressSpace - Supplies a pointer to the address space to add the section
         under.
 
     VirtualAddress - Supplies the virtual address of the section.
@@ -1030,7 +1029,6 @@ Return Value:
 
 {
 
-    PADDRESS_SPACE AddressSpace;
     PLIST_ENTRY EntryBefore;
     PIMAGE_SECTION_LIST ImageSectionList;
     PIMAGE_SECTION NewSection;
@@ -1040,7 +1038,6 @@ Return Value:
     ULONG PageSize;
     KSTATUS Status;
 
-    AddressSpace = Process->AddressSpace;
     ImageSectionList = NULL;
     NewSection = NULL;
     PageSize = MmPageSize();
@@ -1056,7 +1053,7 @@ Return Value:
 
     ASSERT((Flags & IMAGE_SECTION_INTERNAL_MASK) == 0);
 
-    Status = MmpAllocateImageSection(Process,
+    Status = MmpAllocateImageSection(AddressSpace,
                                      VirtualAddress,
                                      Size,
                                      Flags,
@@ -1069,10 +1066,10 @@ Return Value:
     }
 
     //
-    // Lock the process and destroy any image sections that were there.
+    // Lock the address space and destroy any image sections that were there.
     //
 
-    KeAcquireQueuedLock(Process->QueuedLock);
+    MmAcquireAddressSpaceLock(AddressSpace);
     Status = MmpClipImageSections(&(AddressSpace->SectionListHead),
                                   VirtualAddress,
                                   Size,
@@ -1085,8 +1082,8 @@ Return Value:
         goto AddImageSectionEnd;
     }
 
-    INSERT_AFTER(&(NewSection->ProcessListEntry), EntryBefore);
-    KeReleaseQueuedLock(Process->QueuedLock);
+    INSERT_AFTER(&(NewSection->AddressListEntry), EntryBefore);
+    MmReleaseAddressSpaceLock(AddressSpace);
 
     //
     // If the image section is non-paged and accessible, then page in and lock
@@ -1129,11 +1126,11 @@ Return Value:
 AddImageSectionEnd:
     if (!KSUCCESS(Status)) {
         if (NewSection != NULL) {
-            if (NewSection->ProcessListEntry.Next != NULL) {
-                KeAcquireQueuedLock(Process->QueuedLock);
-                LIST_REMOVE(&(NewSection->ProcessListEntry));
-                KeReleaseQueuedLock(Process->QueuedLock);
-                NewSection->ProcessListEntry.Next = NULL;
+            if (NewSection->AddressListEntry.Next != NULL) {
+                MmAcquireAddressSpaceLock(AddressSpace);
+                LIST_REMOVE(&(NewSection->AddressListEntry));
+                MmReleaseAddressSpaceLock(AddressSpace);
+                NewSection->AddressListEntry.Next = NULL;
             }
 
             if (NewSection->ImageListEntry.Next != NULL) {
@@ -1162,21 +1159,21 @@ AddImageSectionEnd:
 KSTATUS
 MmpCopyImageSection (
     PIMAGE_SECTION SectionToCopy,
-    PKPROCESS DestinationProcess
+    PADDRESS_SPACE DestinationAddressSpace
     )
 
 /*++
 
 Routine Description:
 
-    This routine copies an image section to another process.
+    This routine copies an image section to another address space.
 
 Arguments:
 
     SectionToCopy - Supplies a pointer to the section to copy.
 
-    DestinationProcess - Supplies a pointer to the process to copy the section
-        to.
+    DestinationAddressSpace - Supplies a pointer to the address space to copy
+        the image section to.
 
 Return Value:
 
@@ -1189,11 +1186,11 @@ Return Value:
 
 {
 
+    BOOL AddressLockHeld;
     ULONG AllocationSize;
     ULONG BitmapSize;
     PLIST_ENTRY CurrentEntry;
     PIMAGE_SECTION CurrentSection;
-    PADDRESS_SPACE DestinationAddressSpace;
     ULONG Flags;
     PIMAGE_SECTION_LIST ImageSectionList;
     PIMAGE_SECTION NewSection;
@@ -1202,11 +1199,8 @@ Return Value:
     ULONG PageShift;
     ULONG PageSize;
     BOOL ParentDestroyed;
-    PKPROCESS Process;
-    BOOL ProcessLockHeld;
     KSTATUS Status;
 
-    DestinationAddressSpace = DestinationProcess->AddressSpace;
     ImageSectionList = NULL;
     NewSection = NULL;
     PageSize = MmPageSize();
@@ -1216,8 +1210,7 @@ Return Value:
     ASSERT(POWER_OF_2(PageSize) != FALSE);
 
     PageMask = PageSize - 1;
-    Process = PsGetCurrentProcess();
-    ProcessLockHeld = FALSE;
+    AddressLockHeld = FALSE;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
     ASSERT((((UINTN)SectionToCopy->VirtualAddress & PageMask) == 0) &&
@@ -1229,7 +1222,7 @@ Return Value:
     // are mapped in.
     //
 
-    ASSERT(SectionToCopy->Process == Process);
+    ASSERT(SectionToCopy->AddressSpace == PsGetCurrentProcess()->AddressSpace);
 
     //
     // Copying a non-paged section is currently not supported.
@@ -1249,7 +1242,7 @@ Return Value:
         ASSERT(SectionToCopy->ImageBacking.DeviceHandle != INVALID_HANDLE);
 
         Flags = SectionToCopy->Flags & IMAGE_SECTION_COPY_MASK;
-        Status = MmpAddImageSection(DestinationProcess,
+        Status = MmpAddImageSection(DestinationAddressSpace,
                                     SectionToCopy->VirtualAddress,
                                     SectionToCopy->Size,
                                     Flags,
@@ -1296,14 +1289,13 @@ Return Value:
     }
 
     INITIALIZE_LIST_HEAD(&(NewSection->ChildList));
-    NewSection->Process = DestinationProcess;
-    ObAddReference(NewSection->Process);
+    NewSection->AddressSpace = DestinationAddressSpace;
     NewSection->VirtualAddress = SectionToCopy->VirtualAddress;
     NewSection->Size = SectionToCopy->Size;
     NewSection->TruncateCount = 0;
     NewSection->SwapSpace = NULL;
     NewSection->PagingInIrp = NULL;
-    NewSection->ProcessListEntry.Next = NULL;
+    NewSection->AddressListEntry.Next = NULL;
     NewSection->ImageListEntry.Next = NULL;
 
     //
@@ -1393,8 +1385,8 @@ Return Value:
     // destination in one skillful maneuver.
     //
 
-    Status = MmpCopyAndChangeSectionMappings(DestinationProcess,
-                                             Process->AddressSpace,
+    Status = MmpCopyAndChangeSectionMappings(DestinationAddressSpace,
+                                             SectionToCopy->AddressSpace,
                                              SectionToCopy->VirtualAddress,
                                              SectionToCopy->Size);
 
@@ -1405,16 +1397,17 @@ Return Value:
     KeReleaseQueuedLock(SectionToCopy->Lock);
 
     //
-    // Lock the process and determine where the new section should be inserted.
+    // Lock the address space and determine where the new section should be
+    // inserted.
     //
 
-    KeAcquireQueuedLock(DestinationProcess->QueuedLock);
-    ProcessLockHeld = TRUE;
+    MmAcquireAddressSpaceLock(DestinationAddressSpace);
+    AddressLockHeld = TRUE;
     CurrentEntry = DestinationAddressSpace->SectionListHead.Next;
     while (CurrentEntry != &(DestinationAddressSpace->SectionListHead)) {
         CurrentSection = LIST_VALUE(CurrentEntry,
                                     IMAGE_SECTION,
-                                    ProcessListEntry);
+                                    AddressListEntry);
 
         if (CurrentSection->VirtualAddress > NewSection->VirtualAddress) {
             break;
@@ -1424,15 +1417,15 @@ Return Value:
     }
 
     //
-    // Insert the section onto the destination process list.
+    // Insert the section onto the destination section list.
     //
 
-    INSERT_BEFORE(&(NewSection->ProcessListEntry), CurrentEntry);
+    INSERT_BEFORE(&(NewSection->AddressListEntry), CurrentEntry);
     Status = STATUS_SUCCESS;
 
 CopyImageSectionEnd:
-    if (ProcessLockHeld != FALSE) {
-        KeReleaseQueuedLock(DestinationProcess->QueuedLock);
+    if (AddressLockHeld != FALSE) {
+        MmReleaseAddressSpaceLock(DestinationAddressSpace);
     }
 
     if (!KSUCCESS(Status) || (ParentDestroyed != FALSE)) {
@@ -1462,7 +1455,7 @@ CopyImageSectionEnd:
 
 KSTATUS
 MmpUnmapImageRegion (
-    PKPROCESS Process,
+    PADDRESS_SPACE AddressSpace,
     PVOID SectionAddress,
     UINTN Size
     )
@@ -1477,8 +1470,7 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process containing the image
-        section.
+    AddressSpace - Supplies a pointer to the address space to unmap from.
 
     SectionAddress - Supplies the virtual address of the section.
 
@@ -1500,11 +1492,11 @@ Return Value:
     // For kernel mode, get the whole sections and destroy them.
     //
 
-    if (Process == PsGetKernelProcess()) {
+    if (AddressSpace == MmKernelAddressSpace) {
         Status = STATUS_SUCCESS;
         while (Size != 0) {
             Status = MmpLookupSection(SectionAddress,
-                                      Process,
+                                      AddressSpace,
                                       &Section,
                                       &PageOffset);
 
@@ -1536,13 +1528,13 @@ Return Value:
     //
 
     } else {
-        KeAcquireQueuedLock(Process->QueuedLock);
-        Status = MmpClipImageSections(&(Process->AddressSpace->SectionListHead),
+        MmAcquireAddressSpaceLock(AddressSpace);
+        Status = MmpClipImageSections(&(AddressSpace->SectionListHead),
                                       SectionAddress,
                                       Size,
                                       NULL);
 
-        KeReleaseQueuedLock(Process->QueuedLock);
+        MmReleaseAddressSpaceLock(AddressSpace);
     }
 
     return Status;
@@ -1600,7 +1592,7 @@ Return Value:
     ULONG RegionEndOffset;
     KSTATUS Status;
 
-    ASSERT(Section->Process == PsGetCurrentProcess());
+    ASSERT(Section->AddressSpace == PsGetCurrentProcess()->AddressSpace);
 
     LockHeld = FALSE;
     ReferenceAdded = FALSE;
@@ -2412,13 +2404,13 @@ MmpClipImageSections (
 Routine Description:
 
     This routine wipes out any image sections covering the given VA range. It
-    assumes the process lock is already held. This routine does not change
-    any accountant mappings.
+    assumes the address space lock is already held. This routine does not
+    change any accountant mappings.
 
 Arguments:
 
     SectionListHead - Supplies a pointer to the head of the list of image
-        sections for the process.
+        sections for the address space.
 
     Address - Supplies the first address (inclusive) to remove image sections
         for.
@@ -2445,7 +2437,7 @@ Return Value:
     End = Address + Size;
     CurrentEntry = SectionListHead->Next;
     while (CurrentEntry != SectionListHead) {
-        Section = LIST_VALUE(CurrentEntry, IMAGE_SECTION, ProcessListEntry);
+        Section = LIST_VALUE(CurrentEntry, IMAGE_SECTION, AddressListEntry);
         if (Section->VirtualAddress >= End) {
             break;
         }
@@ -2489,7 +2481,7 @@ Return Value:
 
 KSTATUS
 MmpAllocateImageSection (
-    PKPROCESS Process,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress,
     UINTN Size,
     ULONG Flags,
@@ -2506,8 +2498,8 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process to create the section
-        under.
+    AddressSpace - Supplies a pointer to the address space to create the
+        section under.
 
     VirtualAddress - Supplies the virtual address of the section.
 
@@ -2560,7 +2552,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
     ASSERT((VirtualAddress < KERNEL_VA_START) ||
-           (Process == PsGetKernelProcess()));
+           (AddressSpace == MmKernelAddressSpace));
 
     ASSERT(ImageHandle != NULL);
 
@@ -2666,14 +2658,13 @@ Return Value:
 
     NewSection->ReferenceCount = 1;
     NewSection->Flags = Flags;
-    NewSection->ProcessListEntry.Next = NULL;
+    NewSection->AddressListEntry.Next = NULL;
     NewSection->ImageListEntry.Next = NULL;
     NewSection->CopyListEntry.Next = NULL;
     NewSection->CopyListEntry.Previous = NULL;
     NewSection->Parent = NULL;
     INITIALIZE_LIST_HEAD(&(NewSection->ChildList));
-    NewSection->Process = Process;
-    ObAddReference(NewSection->Process);
+    NewSection->AddressSpace = AddressSpace;
     NewSection->VirtualAddress = VirtualAddress;
     NewSection->PagingInIrp = NULL;
     NewSection->SwapSpace = NULL;
@@ -2821,13 +2812,13 @@ Routine Description:
 
     This routine clips the given VA range out of the given image section, which
     may cause the image section to get destroyed entirely, shrunk, or split
-    into two. This routine assumes the process lock is already held (protecting
-    VA changes).
+    into two. This routine assumes the address space lock is already held
+    (protecting VA changes).
 
 Arguments:
 
     SectionListHead - Supplies a pointer to the head of the list of image
-        sections for the process.
+        sections for the address space.
 
     Address - Supplies the first address (inclusive) to remove image sections
         for.
@@ -2874,10 +2865,10 @@ Return Value:
 
     //
     // This doesn't work for the kernel process because it touches paged data
-    // with the process lock held.
+    // with the address space lock held.
     //
 
-    ASSERT(Section->Process != PsGetKernelProcess());
+    ASSERT(Section->AddressSpace != MmKernelAddressSpace);
     ASSERT(Address < SectionEnd);
 
     //
@@ -2905,7 +2896,7 @@ Return Value:
     //
     // Isolate the entire section, except for the portion at the beginning that
     // stays the same. Multiple clippings can't be going on at once because
-    // the process lock is held throughout.
+    // the address space lock is held throughout.
     //
 
     if ((Section->Parent != NULL) || (!LIST_EMPTY(&(Section->ChildList)))) {
@@ -2942,7 +2933,7 @@ Return Value:
                           (UINTN)(Section->VirtualAddress);
 
         RemainderSize = (UINTN)SectionEnd - (UINTN)RegionEnd;
-        Status = MmpAllocateImageSection(Section->Process,
+        Status = MmpAllocateImageSection(Section->AddressSpace,
                                          RegionEnd,
                                          RemainderSize,
                                          Section->Flags,
@@ -3061,8 +3052,8 @@ Return Value:
     //
 
     if (RemainderSection != NULL) {
-        INSERT_AFTER(&(RemainderSection->ProcessListEntry),
-                     &(Section->ProcessListEntry));
+        INSERT_AFTER(&(RemainderSection->AddressListEntry),
+                     &(Section->AddressListEntry));
     }
 
     KeReleaseQueuedLock(Section->Lock);
@@ -3090,7 +3081,7 @@ ClipImageSectionEnd:
 VOID
 MmpRemoveImageSection (
     PIMAGE_SECTION Section,
-    BOOL ProcessLockHeld
+    BOOL AddressSpaceLockHeld
     )
 
 /*++
@@ -3104,8 +3095,8 @@ Arguments:
 
     Section - Supplies a pointer to the section to kill.
 
-    ProcessLockHeld - Supplies a boolean indicating whether or not the process
-        lock is already held.
+    AddressSpaceLockHeld - Supplies a boolean indicating whether or not the
+        address space lock is already held.
 
 Return Value:
 
@@ -3123,14 +3114,12 @@ Return Value:
     UINTN PageCount;
     UINTN PageIndex;
     ULONG PageShift;
-    PKPROCESS Process;
     BOOL SharedWithChild;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     PageShift = MmPageShift();
     PageCount = Section->Size >> PageShift;
-    Process = Section->Process;
 
     ASSERT(IS_ALIGNED(Section->Size, MmPageSize()));
 
@@ -3159,7 +3148,7 @@ Return Value:
         //
 
         ASSERT((Section->VirtualAddress >= KERNEL_VA_START) ||
-               (Section->Process == PsGetCurrentProcess()));
+               (Section->AddressSpace == PsGetCurrentProcess()->AddressSpace));
 
         KeAcquireQueuedLock(Section->Lock);
         for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
@@ -3207,14 +3196,14 @@ Return Value:
     // offline for everyone that's not actively working on it.
     //
 
-    if (ProcessLockHeld == FALSE) {
-        KeAcquireQueuedLock(Process->QueuedLock);
+    if (AddressSpaceLockHeld == FALSE) {
+        MmAcquireAddressSpaceLock(Section->AddressSpace);
     }
 
-    LIST_REMOVE(&(Section->ProcessListEntry));
-    Section->ProcessListEntry.Next = NULL;
-    if (ProcessLockHeld == FALSE) {
-        KeReleaseQueuedLock(Process->QueuedLock);
+    LIST_REMOVE(&(Section->AddressListEntry));
+    Section->AddressListEntry.Next = NULL;
+    if (AddressSpaceLockHeld == FALSE) {
+        MmReleaseAddressSpaceLock(Section->AddressSpace);
     }
 
     //
@@ -3343,7 +3332,7 @@ Return Value:
 {
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
-    ASSERT(ImageSection->ProcessListEntry.Next == NULL);
+    ASSERT(ImageSection->AddressListEntry.Next == NULL);
     ASSERT(ImageSection->ImageListEntry.Next == NULL);
 
     MmpFreePageFileSpace(ImageSection);
@@ -3358,7 +3347,7 @@ Return Value:
     ASSERT((ImageSection->ImageBackingReferenceCount == 0) &&
            (ImageSection->ImageBacking.DeviceHandle == INVALID_HANDLE));
 
-    ObReleaseReference(ImageSection->Process);
+    ImageSection->AddressSpace = NULL;
     MmFreeNonPagedPool(ImageSection);
     return;
 }
@@ -3766,15 +3755,13 @@ Return Value:
 {
 
     PVOID Address;
+    PADDRESS_SPACE AddressSpace;
     PKPROCESS CurrentProcess;
-    PKPROCESS KernelProcess;
     BOOL Mapped;
     PHYSICAL_ADDRESS MappedPhysicalAddress;
-    PKPROCESS Process;
 
+    AddressSpace = Section->AddressSpace;
     CurrentProcess = PsGetCurrentProcess();
-    KernelProcess = PsGetKernelProcess();
-    Process = Section->Process;
 
     //
     // Determine if the image section is mapped at the given page offset based
@@ -3783,13 +3770,14 @@ Return Value:
 
     Address = Section->VirtualAddress + (PageOffset << MmPageShift());
     MappedPhysicalAddress = INVALID_PHYSICAL_ADDRESS;
-    if ((Process == CurrentProcess) || (Process == KernelProcess)) {
+    if ((AddressSpace == CurrentProcess->AddressSpace) ||
+        (AddressSpace == MmKernelAddressSpace)) {
+
         MappedPhysicalAddress = MmpVirtualToPhysical(Address, NULL);
 
     } else {
-        MappedPhysicalAddress = MmpVirtualToPhysicalInOtherProcess(
-                                                         Process->AddressSpace,
-                                                         Address);
+        MappedPhysicalAddress = MmpVirtualToPhysicalInOtherProcess(AddressSpace,
+                                                                   Address);
     }
 
     //
@@ -3838,13 +3826,13 @@ Return Value:
 
 {
 
+    PADDRESS_SPACE AddressSpace;
     ULONG Attributes;
     UINTN BitmapIndex;
     ULONG BitmapMask;
     PVOID CurrentAddress;
     PKPROCESS CurrentProcess;
     UINTN DirtyPageCount;
-    PKPROCESS KernelProcess;
     BOOL MarkedDirty;
     BOOL MultipleIpisRequired;
     BOOL OtherProcess;
@@ -3855,7 +3843,6 @@ Return Value:
     ULONG PageSize;
     BOOL PageWasDirty;
     PHYSICAL_ADDRESS PhysicalAddress;
-    PKPROCESS Process;
     PHYSICAL_ADDRESS RunPhysicalAddress;
     UINTN RunSize;
     ULONG UnmapFlags;
@@ -3874,10 +3861,9 @@ Return Value:
     }
 
     CurrentProcess = PsGetCurrentProcess();
-    KernelProcess = PsGetKernelProcess();
     DirtyPageCount = 0;
     PageSize = MmPageSize();
-    Process = Section->Process;
+    AddressSpace = Section->AddressSpace;
 
     //
     // Record the first virtual address of the section.
@@ -3892,7 +3878,8 @@ Return Value:
     //
 
     MultipleIpisRequired = TRUE;
-    if ((Process == CurrentProcess) || (Process == KernelProcess)) {
+    if ((AddressSpace == CurrentProcess->AddressSpace) ||
+        (AddressSpace == MmKernelAddressSpace)) {
 
         //
         // If the section has no parent and is not backed by the page cache
@@ -3924,7 +3911,7 @@ Return Value:
         //
 
         if ((PageCount == 1) ||
-            ((Process->ThreadCount <= 1) &&
+            ((CurrentProcess->ThreadCount <= 1) &&
              (CurrentAddress < KERNEL_VA_START))) {
 
             MultipleIpisRequired = FALSE;
@@ -4045,11 +4032,11 @@ Return Value:
 
         } else {
             PhysicalAddress = MmpVirtualToPhysicalInOtherProcess(
-                                                        Process->AddressSpace,
-                                                        CurrentAddress);
+                                                               AddressSpace,
+                                                               CurrentAddress);
 
             if (PhysicalAddress != INVALID_PHYSICAL_ADDRESS) {
-                MmpUnmapPageInOtherProcess(Process,
+                MmpUnmapPageInOtherProcess(AddressSpace,
                                            CurrentAddress,
                                            UnmapFlags,
                                            &PageWasDirty);

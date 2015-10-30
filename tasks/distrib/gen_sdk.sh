@@ -99,9 +99,11 @@ cp -Rpv "$SRCROOT/os/drivers/usrinput/inc" "$WORKING/os/drivers/usrinput"
 cp -Rpv "$SRCROOT/os/drivers/null/" "$WORKING/os/drivers/"
 cp -Rpv "$SRCROOT/os/drivers/ramdisk/" "$WORKING/os/drivers/"
 cp -Rpv "$SRCROOT/os/drivers/usb/onering/" "$WORKING/os/drivers/usb/"
-mkdir -pv "$WORKING/os/drivers/net/"
-cp -Rpv "$SRCROOT/os/drivers/net/e100/" "$WORKING/os/drivers/net/"
-cp -Rpv "$SRCROOT/os/apps/initcon" "$WORKING/os/apps"
+mkdir -pv "$WORKING/os/drivers/net/ethernet"
+cp -Rpv "$SRCROOT/os/drivers/net/ethernet/e100/" \
+    "$WORKING/os/drivers/net/ethernet"
+
+cp -Rpv "$SRCROOT/os/apps/mount/" "$WORKING/os/apps/"
 
 ##
 ## Copy the prebuilt binaries that the samples link against. Also copy the
@@ -124,7 +126,7 @@ for iarch in x86 armv7 armv6; do
 
     if test -d "$IBINROOT\tools"; then
         cp -Rpv "$IBINROOT\tools" "$WORKING_BINROOT"
-    fi    
+    fi
 done
 
 ##
@@ -264,6 +266,35 @@ cat > "$WORKING/os/drivers/net/Makefile" <<_EOS
 #
 ################################################################################
 
+DIRS = ethernet  \
+
+include \$(SRCROOT)/os/minoca.mk
+
+_EOS
+
+cat > "$WORKING/os/drivers/net/ethernet/Makefile" <<_EOS
+################################################################################
+#
+#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#
+#   Module Name:
+#
+#       Minoca OS SDK Ethernet Drivers
+#
+#   Abstract:
+#
+#       This directory builds the sample Ethernet drivers contained in the SDK.
+#
+#   Author:
+#
+#       Automatically Generated $TODAY
+#
+#   Environment:
+#
+#       Kernel
+#
+################################################################################
+
 DIRS = e100      \
 
 include \$(SRCROOT)/os/minoca.mk
@@ -293,7 +324,7 @@ cat > "$WORKING/os/apps/Makefile" <<_EOS
 #
 ################################################################################
 
-DIRS = initcon      \
+DIRS = mount      \
 
 include \$(SRCROOT)/os/minoca.mk
 

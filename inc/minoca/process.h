@@ -92,6 +92,16 @@ Author:
     PsDispatchPendingSignalsOnCurrentThread(_TrapFrame);
 
 //
+// These macros acquire the lock protecting the loaded image list.
+//
+
+#define PsAcquireImageListLock(_Process) \
+    KeAcquireQueuedLock((_Process)->QueuedLock)
+
+#define PsReleaseImageListLock(_Process) \
+    KeReleaseQueuedLock((_Process)->QueuedLock)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -1119,7 +1129,21 @@ Members:
         See PROCESS_FLAG_* for definitions.
 
     QueuedLock - Stores a pointer to a queued lock protecting simultaneous
-        access to this structure.
+        access to this structure. A (potentially partial) list of things
+        protected by this lock:
+        * Thread's supplementary groups
+        * Process group membership
+        * Child process list
+        * Environment and binary name
+        * Process parent pointer and ID
+        * Signal masks and function pointers
+        * Exit status
+        * Debug data creation
+        * Debug data tracer list and tracing process pointer
+        * Loaded Image list
+        * Thread list
+        * Resource usage
+        * Timer list
 
     ListEntry - Stores pointers to the next and previous processes in the
         system.
@@ -1152,6 +1176,17 @@ Members:
 
     Environment - Stores a pointer to the kernel mode copy of the process
         environment.
+
+    ImageCount - Stores the number of loaded image elements in the image list.
+
+    ImageListHead - Stores the head of list of images loaded for this process.
+
+    ImageListSignature - Stores the sum of all the timestamps and loaded
+        lowest addresses of the loaded images. The debugger uses this as a
+        heuristic to determine if its list of loaded modules is in sync.
+
+    ImageListQueuedLock - Stores a pointer to a queued lock protecting the
+        image list.
 
     PendingSignals - Stores a bitfield of signals pending for the process as
         a whole.
@@ -1234,8 +1269,10 @@ struct _KPROCESS {
     PHANDLE_TABLE HandleTable;
     PROCESS_PATHS Paths;
     PPROCESS_ENVIRONMENT Environment;
-    PVOID UserEnvironment;
-    ULONG UserEnvironmentSize;
+    ULONG ImageCount;
+    LIST_ENTRY ImageListHead;
+    ULONGLONG ImageListSignature;
+    PVOID ImageListQueuedLock;
     SIGNAL_SET PendingSignals;
     SIGNAL_SET IgnoredSignals;
     SIGNAL_SET HandledSignals;

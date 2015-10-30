@@ -678,7 +678,6 @@ Return Value:
 
 {
 
-    PADDRESS_SPACE AddressSpace;
     PLIST_ENTRY CurrentEntry;
     PDRIVER Driver;
     PLOADED_IMAGE Image;
@@ -689,14 +688,14 @@ Return Value:
 
     //
     // Loop over every loaded image in the kernel process and create a driver
-    // object for it.
+    // object for it. The driver image list is guarded by the device database
+    // lock rather than the kernel process lock so that threads can be created.
     //
 
     Process = PsGetKernelProcess();
-    AddressSpace = Process->AddressSpace;
-    KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
-    CurrentEntry = AddressSpace->ImageListHead.Next;
-    while (CurrentEntry != &(AddressSpace->ImageListHead)) {
+    KeAcquireQueuedLock(IoDeviceDatabaseLock);
+    CurrentEntry = Process->ImageListHead.Next;
+    while (CurrentEntry != &(Process->ImageListHead)) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
 
@@ -726,7 +725,7 @@ Return Value:
     }
 
 InitializeBootDriversEnd:
-    KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
+    KeReleaseQueuedLock(IoDeviceDatabaseLock);
     return Status;
 }
 

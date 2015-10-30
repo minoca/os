@@ -296,7 +296,7 @@ Return Value:
     RtlZeroMemory(&UserProcess, sizeof(KPROCESS));
     RtlZeroMemory(&AddressSpace, sizeof(ADDRESS_SPACE));
     UserProcess.AddressSpace = &AddressSpace;
-    INITIALIZE_LIST_HEAD(&(UserProcess.AddressSpace->ImageListHead));
+    INITIALIZE_LIST_HEAD(&(UserProcess.ImageListHead));
     INITIALIZE_LIST_HEAD(&(AddressSpace.SectionListHead));
     AddressSpace.Accountant = malloc(sizeof(MEMORY_ACCOUNTING));
 
@@ -384,8 +384,7 @@ Return Value:
     // Free the normal allocation.
     //
 
-    MmpFreeAccountingRange(&UserProcess,
-                           AddressSpace.Accountant,
+    MmpFreeAccountingRange(&AddressSpace,
                            (PVOID)0x10000,
                            0xF0000,
                            TRUE,
@@ -401,8 +400,7 @@ Return Value:
     // Free it again.
     //
 
-    MmpFreeAccountingRange(&UserProcess,
-                           AddressSpace.Accountant,
+    MmpFreeAccountingRange(&AddressSpace,
                            (PVOID)0x10000,
                            0xF0000,
                            TRUE,
@@ -419,8 +417,7 @@ Return Value:
                                      &Failures);
 
     if (TestAllocation != NULL) {
-        Status = MmpFreeAccountingRange(&UserProcess,
-                                        AddressSpace.Accountant,
+        Status = MmpFreeAccountingRange(&AddressSpace,
                                         TestAllocation,
                                         0x20000,
                                         TRUE,
@@ -448,8 +445,7 @@ Return Value:
                                          &Failures);
 
         if (PreviousAllocation != NULL) {
-            Status = MmpFreeAccountingRange(&UserProcess,
-                                            AddressSpace.Accountant,
+            Status = MmpFreeAccountingRange(&AddressSpace,
                                             PreviousAllocation,
                                             (Index - 1) * PageSize,
                                             TRUE,
@@ -472,8 +468,7 @@ Return Value:
     //
 
     if (PreviousAllocation != NULL) {
-        Status = MmpFreeAccountingRange(&UserProcess,
-                                        AddressSpace.Accountant,
+        Status = MmpFreeAccountingRange(&AddressSpace,
                                         PreviousAllocation,
                                         (Index - 1) * PageSize,
                                         TRUE,

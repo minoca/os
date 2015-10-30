@@ -176,7 +176,7 @@ Return Value:
         //
 
         Status = MmpLookupSection(FaultingAddress,
-                                  Process,
+                                  Process->AddressSpace,
                                   &ImageSection,
                                   &PageOffset);
 

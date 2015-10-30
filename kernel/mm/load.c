@@ -297,7 +297,7 @@ Return Value:
     // file, which acts as its backing store.
     //
 
-    Status = MmpAddImageSection(ImageProcess,
+    Status = MmpAddImageSection(ImageProcess->AddressSpace,
                                 Allocation,
                                 AdjustedSize,
                                 Flags,
@@ -320,8 +320,7 @@ MapFileSectionEnd:
             UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
-            MmpFreeAccountingRange(ImageProcess,
-                                   Realtor,
+            MmpFreeAccountingRange(ImageProcess->AddressSpace,
                                    Allocation,
                                    AdjustedSize,
                                    TRUE,
@@ -410,7 +409,10 @@ Return Value:
         AccountantLockHeld = TRUE;
     }
 
-    Status = MmpUnmapImageRegion(OwningProcess, FileMapping, Size);
+    Status = MmpUnmapImageRegion(OwningProcess->AddressSpace,
+                                 FileMapping,
+                                 Size);
+
     if (!KSUCCESS(Status)) {
         goto UnmapFileSectionEnd;
     }
@@ -433,8 +435,7 @@ Return Value:
         // it is actually associated with a file section.
         //
 
-        Status = MmpFreeAccountingRange(OwningProcess,
-                                        Accountant,
+        Status = MmpFreeAccountingRange(OwningProcess->AddressSpace,
                                         FileMapping,
                                         Size,
                                         AccountantLockHeld,
@@ -967,13 +968,13 @@ Return Value:
     AddressSpace = Process->AddressSpace;
     SyncRegionStart = Parameters->Address;
     SyncRegionEnd = SyncRegionStart + AlignedSize;
-    KeAcquireQueuedLock(Process->QueuedLock);
+    MmAcquireAddressSpaceLock(AddressSpace);
     LockHeld = TRUE;
     CurrentEntry = AddressSpace->SectionListHead.Next;
     while (CurrentEntry != &(AddressSpace->SectionListHead)) {
         CurrentSection = LIST_VALUE(CurrentEntry,
                                     IMAGE_SECTION,
-                                    ProcessListEntry);
+                                    AddressListEntry);
 
         //
         // If the image section was not created as a result of the map
@@ -1047,7 +1048,7 @@ Return Value:
         //
 
         MmpImageSectionAddReference(CurrentSection);
-        KeReleaseQueuedLock(Process->QueuedLock);
+        MmReleaseAddressSpaceLock(AddressSpace);
         LockHeld = FALSE;
 
         //
@@ -1096,9 +1097,9 @@ Return Value:
         // beginning.
         //
 
-        KeAcquireQueuedLock(Process->QueuedLock);
+        MmReleaseAddressSpaceLock(AddressSpace);
         LockHeld = TRUE;
-        if (CurrentSection->ProcessListEntry.Next == NULL) {
+        if (CurrentSection->AddressListEntry.Next == NULL) {
             CurrentEntry = AddressSpace->SectionListHead.Next;
 
         } else {
@@ -1107,7 +1108,7 @@ Return Value:
     }
 
     if (LockHeld != FALSE) {
-        KeReleaseQueuedLock(Process->QueuedLock);
+        MmReleaseAddressSpaceLock(AddressSpace);
         LockHeld = FALSE;
     }
 
@@ -1166,9 +1167,11 @@ Return Value:
     // Images should have been cleaned up by the last thread to terminate.
     //
 
-    ASSERT(LIST_EMPTY(&(Process->AddressSpace->ImageListHead)) != FALSE);
+    ASSERT(LIST_EMPTY(&(Process->ImageListHead)) != FALSE);
 
-    Status = MmpUnmapImageRegion(Process, (PVOID)0, (UINTN)KERNEL_VA_START);
+    Status = MmpUnmapImageRegion(Process->AddressSpace,
+                                 (PVOID)0,
+                                 (UINTN)KERNEL_VA_START);
 
     ASSERT(KSUCCESS(Status));
 

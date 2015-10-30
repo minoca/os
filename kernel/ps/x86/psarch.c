@@ -483,8 +483,8 @@ Return Value:
     Break->ProcessorOrThreadCount = Process->ThreadCount;
     Break->Process = Process->Identifiers.ProcessId;
     Break->ProcessorBlock = (UINTN)NULL;
-    Break->LoadedModuleCount = Process->AddressSpace->ImageCount;
-    Break->LoadedModuleSignature = Process->AddressSpace->ImageListSignature;
+    Break->LoadedModuleCount = Process->ImageCount;
+    Break->LoadedModuleSignature = Process->ImageListSignature;
 
     //
     // Be careful. A trap frame that resulted from a sysenter only contains

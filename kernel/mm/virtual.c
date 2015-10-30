@@ -381,8 +381,7 @@ Return Value:
     PageOffset = REMAINDER((UINTN)VirtualAddress, PageSize);
     VirtualAddress = ALIGN_POINTER_DOWN(VirtualAddress, PageSize);
     SizeInBytes = ALIGN_RANGE_UP(SizeInBytes + PageOffset, PageSize);
-    MmpFreeAccountingRange(PsGetKernelProcess(),
-                           &MmKernelVirtualSpace,
+    MmpFreeAccountingRange(NULL,
                            VirtualAddress,
                            SizeInBytes,
                            FALSE,
@@ -905,7 +904,6 @@ Return Value:
 
 {
 
-    PMEMORY_ACCOUNTING Accountant;
     PKPROCESS Process;
     KSTATUS Status;
     ULONG UnmapFlags;
@@ -913,12 +911,10 @@ Return Value:
     ASSERT(Reservation != NULL);
 
     Process = (PKPROCESS)(Reservation->Process);
-    Accountant = Process->AddressSpace->Accountant;
     UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                  UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
-    Status = MmpFreeAccountingRange(Process,
-                                    Accountant,
+    Status = MmpFreeAccountingRange(Process->AddressSpace,
                                     Reservation->VirtualBase,
                                     Reservation->Size,
                                     FALSE,
@@ -1097,9 +1093,9 @@ Return Value:
 }
 
 KSTATUS
-MmCloneProcessAddressSpace (
-    PVOID SourceProcess,
-    PVOID DestinationProcess
+MmCloneAddressSpace (
+    PADDRESS_SPACE Source,
+    PADDRESS_SPACE Destination
     )
 
 /*++
@@ -1113,9 +1109,10 @@ Routine Description:
 
 Arguments:
 
-    SourceProcess - Supplies a pointer to the source process to copy.
+    Source - Supplies a pointer to the source address space to copy.
 
-    DestinationProcess - Supplies the destination process of the copy.
+    Destination - Supplies a pointer to the newly created destination to copy
+        the sections to.
 
 Return Value:
 
@@ -1127,11 +1124,8 @@ Return Value:
 
     CLONE_ADDRESS_SPACE_CONTEXT Context;
     PLIST_ENTRY CurrentEntry;
-    PKPROCESS Destination;
     ULONG Flags;
     PHYSICAL_ADDRESS PhysicalAddress;
-    PKPROCESS Source;
-    PADDRESS_SPACE SourceAddressSpace;
     PIMAGE_SECTION SourceSection;
     KSTATUS Status;
 
@@ -1143,30 +1137,24 @@ Return Value:
     //
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
-    ASSERT((SourceProcess != PsGetKernelProcess()) &&
-           (DestinationProcess != PsGetKernelProcess()));
-
-    Destination = (PKPROCESS)DestinationProcess;
-    Source = (PKPROCESS)SourceProcess;
-    SourceAddressSpace = Source->AddressSpace;
+    ASSERT((Source != MmKernelAddressSpace) &&
+           (Destination != MmKernelAddressSpace));
 
     //
     // Grab both the account lock and the process lock so that neither image
     // sections nor address space reservations can be changed during the copy.
     //
 
-    MmpLockAccountant(Source->AddressSpace->Accountant, FALSE);
-    MmpLockAccountant(Destination->AddressSpace->Accountant, TRUE);
-    KeAcquireQueuedLock(Source->QueuedLock);
+    MmpLockAccountant(Source->Accountant, FALSE);
+    MmpLockAccountant(Destination->Accountant, TRUE);
+    MmAcquireAddressSpaceLock(Source);
 
     //
     // Preallocate all the page tables in the destination process so that
     // allocations don't occur while holding the image section lock.
     //
 
-    Status = MmpPreallocatePageTables(Source->AddressSpace,
-                                      Destination->AddressSpace);
-
+    Status = MmpPreallocatePageTables(Source, Destination);
     if (!KSUCCESS(Status)) {
         goto CloneProcessAddressSpaceEnd;
     }
@@ -1175,14 +1163,14 @@ Return Value:
     // Create a copy of every image section in the process.
     //
 
-    CurrentEntry = SourceAddressSpace->SectionListHead.Next;
-    while (CurrentEntry != &(SourceAddressSpace->SectionListHead)) {
+    CurrentEntry = Source->SectionListHead.Next;
+    while (CurrentEntry != &(Source->SectionListHead)) {
         SourceSection = LIST_VALUE(CurrentEntry,
                                    IMAGE_SECTION,
-                                   ProcessListEntry);
+                                   AddressListEntry);
 
         CurrentEntry = CurrentEntry->Next;
-        Status = MmpCopyImageSection(SourceSection, DestinationProcess);
+        Status = MmpCopyImageSection(SourceSection, Destination);
         if (!KSUCCESS(Status)) {
             goto CloneProcessAddressSpaceEnd;
         }
@@ -1212,9 +1200,9 @@ Return Value:
     // Copy the memory accounting descriptors.
     //
 
-    Context.Accounting = Destination->AddressSpace->Accountant;
+    Context.Accounting = Destination->Accountant;
     Context.Status = STATUS_SUCCESS;
-    MmMdIterate(&(Source->AddressSpace->Accountant->Mdl),
+    MmMdIterate(&(Source->Accountant->Mdl),
                 MmpCloneAddressSpaceIterator,
                 &Context);
 
@@ -1226,15 +1214,15 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 CloneProcessAddressSpaceEnd:
-    MmpUnlockAccountant(Destination->AddressSpace->Accountant, TRUE);
-    MmpUnlockAccountant(Source->AddressSpace->Accountant, FALSE);
-    KeReleaseQueuedLock(Source->QueuedLock);
+    MmpUnlockAccountant(Destination->Accountant, TRUE);
+    MmpUnlockAccountant(Source->Accountant, FALSE);
+    MmReleaseAddressSpaceLock(Source);
     return Status;
 }
 
 KSTATUS
 MmMapUserSharedData (
-    PVOID Process
+    PADDRESS_SPACE AddressSpace
     )
 
 /*++
@@ -1246,8 +1234,8 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process to map the page in. Supply
-        NULL to map the page in the current process.
+    AddressSpace - Supplies the address space to map the user shared data page
+        into.
 
 Return Value:
 
@@ -1259,7 +1247,6 @@ Return Value:
 
     PMEMORY_ACCOUNTING Accountant;
     PKPROCESS CurrentProcess;
-    PKPROCESS DestinationProcess;
     ULONG Flags;
     ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddress;
@@ -1285,14 +1272,13 @@ Return Value:
                        MemoryTypeReserved);
 
     CurrentProcess = PsGetCurrentProcess();
-    DestinationProcess = Process;
-    if (DestinationProcess == NULL) {
-        DestinationProcess = CurrentProcess;
+    if (AddressSpace == NULL) {
+        AddressSpace = CurrentProcess->AddressSpace;
     }
 
-    ASSERT(DestinationProcess != PsGetKernelProcess());
+    ASSERT(AddressSpace != MmKernelAddressSpace);
 
-    Accountant = DestinationProcess->AddressSpace->Accountant;
+    Accountant = AddressSpace->Accountant;
     Status = MmpAddAccountingDescriptor(Accountant, &UserSharedDataRange);
     if (!KSUCCESS(Status)) {
         goto MapUserSharedDataEnd;
@@ -1304,7 +1290,7 @@ Return Value:
 
     Flags = MAP_FLAG_PRESENT | MAP_FLAG_USER_MODE | MAP_FLAG_READ_ONLY;
     PhysicalAddress = MmpVirtualToPhysical(MmUserSharedData, NULL);
-    if (DestinationProcess == CurrentProcess) {
+    if (AddressSpace == CurrentProcess->AddressSpace) {
         if (MmpVirtualToPhysical((PVOID)USER_SHARED_DATA_USER_ADDRESS, NULL) ==
             INVALID_PHYSICAL_ADDRESS) {
 
@@ -1312,7 +1298,7 @@ Return Value:
         }
 
     } else {
-        MmpMapPageInOtherProcess(DestinationProcess,
+        MmpMapPageInOtherProcess(AddressSpace,
                                  PhysicalAddress,
                                  USER_SHARED_DATA_USER_ADDRESS,
                                  Flags,
@@ -1487,8 +1473,7 @@ AllocateFromAccountantEnd:
 
 KSTATUS
 MmpFreeAccountingRange (
-    PVOID Process,
-    PMEMORY_ACCOUNTING Accountant,
+    PADDRESS_SPACE AddressSpace,
     PVOID Allocation,
     UINTN SizeInBytes,
     BOOL LockHeld,
@@ -1503,10 +1488,9 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies an optional pointer to the process this accountant
-        lives in. If NULL is supplied, the current process will be used.
-
-    Accountant - Supplies a pointer to the memory accounting structure.
+    AddressSpace - Supplies a pointer to the address space containing the
+        allocated range. If NULL is supplied, the kernel address space will
+        be used.
 
     Allocation - Supplies the allocation to free.
 
@@ -1528,13 +1512,13 @@ Return Value:
 
 {
 
+    PMEMORY_ACCOUNTING Accountant;
     UINTN CurrentCount;
     PKTHREAD CurrentThread;
     ULONGLONG EndAddress;
     BOOL LockAcquired;
     UINTN Mask;
     MEMORY_DESCRIPTOR NewDescriptor;
-    PKPROCESS OwningProcess;
     UINTN PageCount;
     UINTN PageIndex;
     ULONG PageShift;
@@ -1552,6 +1536,12 @@ Return Value:
         Status = STATUS_INVALID_PARAMETER;
         goto FreeAccountingRangeEnd;
     }
+
+    if (AddressSpace == NULL) {
+        AddressSpace = MmKernelAddressSpace;
+    }
+
+    Accountant = AddressSpace->Accountant;
 
     //
     // Initialize the new descriptor.
@@ -1593,20 +1583,15 @@ Return Value:
     //
 
     if ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_NO_MAP) == 0) {
-        if (Process == NULL) {
-            Process = PsGetCurrentProcess();
-        }
-
-        OwningProcess = Process;
+        CurrentThread = KeGetCurrentThread();
 
         //
         // If the current thread is NULL, then this is the test. Do not unmap
         // anything.
         //
 
-        CurrentThread = KeGetCurrentThread();
         if (CurrentThread != NULL) {
-            if ((CurrentThread->OwningProcess == OwningProcess) ||
+            if ((CurrentThread->OwningProcess->AddressSpace == AddressSpace) ||
                 (Accountant == &MmKernelVirtualSpace)) {
 
                 MmpUnmapPages(Allocation, PageCount, UnmapFlags, NULL);
@@ -1614,7 +1599,7 @@ Return Value:
             } else {
                 for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
                     MmpUnmapPageInOtherProcess(
-                                         OwningProcess,
+                                         AddressSpace,
                                          Allocation + (PageIndex << PageShift),
                                          UnmapFlags,
                                          NULL);
@@ -2539,8 +2524,7 @@ MapPhysicalAddressEnd:
         //
 
         if (VirtualAddress != NULL) {
-            MmpFreeAccountingRange(PsGetKernelProcess(),
-                                   &MmKernelVirtualSpace,
+            MmpFreeAccountingRange(NULL,
                                    VirtualAddress,
                                    Size,
                                    FALSE,
@@ -2624,7 +2608,6 @@ InitializeUserSharedDataEnd:
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
             MmpFreeAccountingRange(NULL,
-                                   &MmKernelVirtualSpace,
                                    UserSharedDataPage,
                                    PageSize,
                                    FALSE,
@@ -2796,7 +2779,7 @@ Return Value:
 
 VOID
 MmpUpdateResidentSetCounter (
-    PKPROCESS Process,
+    PADDRESS_SPACE AddressSpace,
     INTN Addition
     )
 
@@ -2809,7 +2792,7 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process to update.
+    AddressSpace - Supplies a pointer to the address space to update.
 
     Addition - Supplies the number of pages to add or subtract from the counter.
 
@@ -2825,9 +2808,7 @@ Return Value:
     UINTN PreviousMaximum;
     UINTN ReadMaximum;
 
-    OriginalValue = RtlAtomicAdd(&(Process->AddressSpace->ResidentSet),
-                                 Addition);
-
+    OriginalValue = RtlAtomicAdd(&(AddressSpace->ResidentSet), Addition);
     if (Addition <= 0) {
 
         ASSERT(OriginalValue != 0);
@@ -2835,17 +2816,16 @@ Return Value:
         return;
     }
 
-    PreviousMaximum = Process->ResourceUsage.MaxResidentSet;
+    PreviousMaximum = AddressSpace->MaxResidentSet;
 
     //
     // Loop trying to update the maximum to this new value.
     //
 
     while (PreviousMaximum < OriginalValue) {
-        ReadMaximum = RtlAtomicCompareExchange(
-                                  &(Process->ResourceUsage.MaxResidentSet),
-                                  OriginalValue,
-                                  PreviousMaximum);
+        ReadMaximum = RtlAtomicCompareExchange(&(AddressSpace->MaxResidentSet),
+                                               OriginalValue,
+                                               PreviousMaximum);
 
         PreviousMaximum = ReadMaximum;
     }

@@ -1002,6 +1002,7 @@ Return Value:
 
         Directory = MmKernelPageDirectory;
         Process = NULL;
+        AddressSpace = NULL;
 
     } else {
         Process = CurrentThread->OwningProcess;
@@ -1081,7 +1082,7 @@ Return Value:
     }
 
     if (VirtualAddress < KERNEL_VA_START) {
-        MmpUpdateResidentSetCounter(Process, 1);
+        MmpUpdateResidentSetCounter(&(AddressSpace->Common), 1);
     }
 
     return;
@@ -1333,7 +1334,7 @@ Return Value:
     }
 
     if (VirtualAddress < KERNEL_VA_START) {
-        MmpUpdateResidentSetCounter(Process, -MappedCount);
+        MmpUpdateResidentSetCounter(&(AddressSpace->Common), -MappedCount);
     }
 
     return;
@@ -1536,7 +1537,7 @@ Return Value:
 
 VOID
 MmpUnmapPageInOtherProcess (
-    PVOID Process,
+    PADDRESS_SPACE AddressSpace,
     PVOID VirtualAddress,
     ULONG UnmapFlags,
     PBOOL PageWasDirty
@@ -1550,7 +1551,8 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process to unmap the page in.
+    AddressSpace - Supplies a pointer to the address space to unmap the page
+        from.
 
     VirtualAddress - Supplies the virtual address of the page to unmap.
 
@@ -1569,7 +1571,6 @@ Return Value:
 
 {
 
-    PADDRESS_SPACE_X86 AddressSpace;
     PPTE Directory;
     ULONG DirectoryIndex;
     RUNLEVEL OldRunLevel;
@@ -1579,7 +1580,7 @@ Return Value:
     PHYSICAL_ADDRESS PageTablePhysical;
     PHYSICAL_ADDRESS PhysicalAddress;
     PPROCESSOR_BLOCK ProcessorBlock;
-    PKPROCESS TypedProcess;
+    PADDRESS_SPACE_X86 Space;
 
     //
     // Assert that this is called at low level. If it ever needs to be called
@@ -1593,9 +1594,8 @@ Return Value:
         *PageWasDirty = FALSE;
     }
 
-    TypedProcess = Process;
-    AddressSpace = (PADDRESS_SPACE_X86)(TypedProcess->AddressSpace);
-    Directory = AddressSpace->PageDirectory;
+    Space = (PADDRESS_SPACE_X86)AddressSpace;
+    Directory = Space->PageDirectory;
     DirectoryIndex = (UINTN)VirtualAddress >> PAGE_DIRECTORY_SHIFT;
     if (Directory[DirectoryIndex].Present == 0) {
         goto UnmapPageInOtherProcessEnd;
@@ -1627,7 +1627,7 @@ Return Value:
 
         if (PageTable[PageTableIndex].Present != 0) {
             PageTable[PageTableIndex].Present = 0;
-            MmpSendTlbInvalidateIpi(&(AddressSpace->Common), VirtualAddress, 1);
+            MmpSendTlbInvalidateIpi(&(Space->Common), VirtualAddress, 1);
         }
 
         PageTableEntry = PageTable[PageTableIndex];
@@ -1661,7 +1661,7 @@ Return Value:
 
     ASSERT(VirtualAddress < KERNEL_VA_START);
 
-    MmpUpdateResidentSetCounter(Process, -1);
+    MmpUpdateResidentSetCounter(&(Space->Common), -1);
 
 UnmapPageInOtherProcessEnd:
     return;
@@ -1669,7 +1669,7 @@ UnmapPageInOtherProcessEnd:
 
 VOID
 MmpMapPageInOtherProcess (
-    PVOID Process,
+    PADDRESS_SPACE AddressSpace,
     PHYSICAL_ADDRESS PhysicalAddress,
     PVOID VirtualAddress,
     ULONG MapFlags,
@@ -1685,7 +1685,7 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process to map the page in.
+    AddressSpace - Supplies a pointer to the address space to map the page in.
 
     PhysicalAddress - Supplies the physical address to back the mapping with.
 
@@ -1706,7 +1706,6 @@ Return Value:
 
 {
 
-    PADDRESS_SPACE_X86 AddressSpace;
     PPTE Directory;
     ULONG DirectoryIndex;
     INTN MappedCount;
@@ -1715,7 +1714,7 @@ Return Value:
     ULONG PageTableIndex;
     PHYSICAL_ADDRESS PageTablePhysical;
     PPROCESSOR_BLOCK ProcessorBlock;
-    PKPROCESS TypedProcess;
+    PADDRESS_SPACE_X86 Space;
 
     //
     // Assert that this is called at low level. If it ever needs to be called
@@ -1725,9 +1724,8 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    TypedProcess = Process;
-    AddressSpace = (PADDRESS_SPACE_X86)(TypedProcess->AddressSpace);
-    Directory = AddressSpace->PageDirectory;
+    Space = (PADDRESS_SPACE_X86)AddressSpace;
+    Directory = Space->PageDirectory;
     DirectoryIndex = (UINTN)VirtualAddress >> PAGE_DIRECTORY_SHIFT;
 
     //
@@ -1823,13 +1821,13 @@ Return Value:
     //
 
     if (SendTlbInvalidateIpi != FALSE) {
-        MmpSendTlbInvalidateIpi(&(AddressSpace->Common), VirtualAddress, 1);
+        MmpSendTlbInvalidateIpi(&(Space->Common), VirtualAddress, 1);
     }
 
     ASSERT(VirtualAddress < KERNEL_VA_START);
 
     if (MappedCount != 0) {
-        MmpUpdateResidentSetCounter(Process, MappedCount);
+        MmpUpdateResidentSetCounter(&(Space->Common), MappedCount);
     }
 
     return;
@@ -2088,7 +2086,7 @@ Return Value:
 
 KSTATUS
 MmpCopyAndChangeSectionMappings (
-    PKPROCESS DestinationProcess,
+    PADDRESS_SPACE Destination,
     PADDRESS_SPACE Source,
     PVOID VirtualAddress,
     UINTN Size
@@ -2103,8 +2101,7 @@ Routine Description:
 
 Arguments:
 
-    DestinationProcess - Supplies a pointer to the process where the mappings
-        should be copied to.
+    Destination - Supplies a pointer to the destination address space.
 
     Source - Supplies a pointer to the source address space.
 
@@ -2139,14 +2136,13 @@ Return Value:
     ULONG TableIndexStart;
     PVOID VirtualEnd;
 
-    DestinationSpace = (PADDRESS_SPACE_X86)(DestinationProcess->AddressSpace);
+    DestinationSpace = (PADDRESS_SPACE_X86)Destination;
     DestinationDirectory = DestinationSpace->PageDirectory;
     SourceSpace = (PADDRESS_SPACE_X86)Source;
     SourceDirectory = SourceSpace->PageDirectory;
     VirtualEnd = VirtualAddress + Size;
 
     ASSERT(VirtualEnd > VirtualAddress);
-    ASSERT(DestinationProcess->ThreadCount == 0);
 
     //
     // It is assumed that all image sections are page aligned in base address
@@ -2323,7 +2319,7 @@ Return Value:
     ASSERT(VirtualAddress < KERNEL_VA_START);
 
     if (MappedCount != 0) {
-        MmpUpdateResidentSetCounter(DestinationProcess, MappedCount);
+        MmpUpdateResidentSetCounter(&(DestinationSpace->Common), MappedCount);
     }
 
     return STATUS_SUCCESS;

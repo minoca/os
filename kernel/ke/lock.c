@@ -205,12 +205,16 @@ Return Value:
 {
 
     KSTATUS Status;
+    PKTHREAD Thread;
+
+    Thread = KeGetCurrentThread();
 
     ASSERT(KeGetRunLevel() <= RunLevelDispatch);
+    ASSERT((Lock->OwningThread != Thread) || (Thread == NULL));
 
     Status = ObWaitOnObject(&(Lock->Header), 0, TimeoutInMilliseconds);
     if (KSUCCESS(Status)) {
-        Lock->OwningThread = KeGetCurrentThread();
+        Lock->OwningThread = Thread;
     }
 
     return Status;

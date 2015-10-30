@@ -630,7 +630,7 @@ Return Value:
     // Remap the user shared data page.
     //
 
-    Status = MmMapUserSharedData(Process);
+    Status = MmMapUserSharedData(Process->AddressSpace);
     if (!KSUCCESS(Status)) {
         goto SysExecuteProcessEnd;
     }
@@ -1820,7 +1820,9 @@ Return Value:
     // Copy the process address space.
     //
 
-    Status = MmCloneProcessAddressSpace(Process, NewProcess);
+    Status = MmCloneAddressSpace(Process->AddressSpace,
+                                 NewProcess->AddressSpace);
+
     if (!KSUCCESS(Status)) {
         goto CopyProcessEnd;
     }
@@ -1991,6 +1993,7 @@ Return Value:
         goto CreateProcessEnd;
     }
 
+    INITIALIZE_LIST_HEAD(&(NewProcess->ImageListHead));
     INITIALIZE_LIST_HEAD(&(NewProcess->ChildListHead));
     INITIALIZE_LIST_HEAD(&(NewProcess->SignalListHead));
     INITIALIZE_LIST_HEAD(&(NewProcess->BlockedSignalListHead));
@@ -2837,6 +2840,7 @@ Return Value:
 {
 
     PspReadResourceUsage(Usage, &(Thread->ResourceUsage));
+    Usage->MaxResidentSet = Thread->OwningProcess->AddressSpace->MaxResidentSet;
     return;
 }
 
@@ -3016,8 +3020,8 @@ Return Value:
     //
 
     ASSERT(LIST_EMPTY(&(Process->AddressSpace->SectionListHead)) != FALSE);
-    ASSERT(LIST_EMPTY(&(Process->AddressSpace->ImageListHead)) != FALSE);
-    ASSERT(Process->AddressSpace->ImageCount == 0);
+    ASSERT(LIST_EMPTY(&(Process->ImageListHead)) != FALSE);
+    ASSERT(Process->ImageCount == 0);
     ASSERT(Process->ProcessGroup == NULL);
     ASSERT(Process->Parent == NULL);
     ASSERT(Process->SiblingListEntry.Next == NULL);
@@ -3236,7 +3240,7 @@ Return Value:
     // Map the user shared data page into the process' usermode address space.
     //
 
-    Status = MmMapUserSharedData(Process);
+    Status = MmMapUserSharedData(Process->AddressSpace);
     if (!KSUCCESS(Status)) {
         goto LoaderThreadEnd;
     }
@@ -3335,7 +3339,6 @@ Return Value:
 
 {
 
-    PADDRESS_SPACE AddressSpace;
     PLOADED_IMAGE Executable;
     ULONG Flags;
     PLOADED_IMAGE Interpreter;
@@ -3347,15 +3350,17 @@ Return Value:
 
     Executable = NULL;
     Process = PsGetCurrentProcess();
-    AddressSpace = Process->AddressSpace;
-    KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
+
+    ASSERT(Process != PsKernelProcess);
+
+    PsAcquireImageListLock(Process);
 
     //
     // Always load the OS base library.
     //
 
     Flags = IMAGE_LOAD_FLAG_LOAD_ONLY;
-    Status = ImLoadExecutable(&(AddressSpace->ImageListHead),
+    Status = ImLoadExecutable(&(Process->ImageListHead),
                               OS_BASE_LIBRARY,
                               NULL,
                               Process,
@@ -3378,7 +3383,7 @@ Return Value:
     //
 
     Flags = IMAGE_LOAD_FLAG_LOAD_ONLY | IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE;
-    Status = ImLoadExecutable(&(AddressSpace->ImageListHead),
+    Status = ImLoadExecutable(&(Process->ImageListHead),
                               BinaryName,
                               File,
                               Process,
@@ -3410,7 +3415,7 @@ Return Value:
                                   Interpreter);
 
 LoadExecutableEnd:
-    KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
+    PsReleaseImageListLock(Process);
     return Status;
 }
 
@@ -3939,7 +3944,6 @@ Return Value:
 
 {
 
-    PADDRESS_SPACE AddressSpace;
     UINTN BaseDifference;
     PLIST_ENTRY CurrentEntry;
     PLOADED_MODULE_ENTRY CurrentModule;
@@ -3982,9 +3986,8 @@ Return Value:
         goto DebugGetLoadedModulesEnd;
     }
 
-    KeAcquireQueuedLock(Process->QueuedLock);
+    PsAcquireImageListLock(Process);
     LockHeld = TRUE;
-    AddressSpace = Process->AddressSpace;
 
     //
     // Loop through once to find out how much space is needed to enumerate the
@@ -3994,8 +3997,8 @@ Return Value:
     Signature = 0;
     ModuleCount = 0;
     SizeNeeded = sizeof(MODULE_LIST_HEADER);
-    CurrentEntry = AddressSpace->ImageListHead.Next;
-    while (CurrentEntry != &(AddressSpace->ImageListHead)) {
+    CurrentEntry = Process->ImageListHead.Next;
+    while (CurrentEntry != &(Process->ImageListHead)) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         SizeNeeded += sizeof(LOADED_MODULE_ENTRY) +
                       ((RtlStringLength(Image->BinaryName) + 1 -
@@ -4053,8 +4056,8 @@ Return Value:
     // Loop through again and create the list.
     //
 
-    CurrentEntry = AddressSpace->ImageListHead.Next;
-    while (CurrentEntry != &(AddressSpace->ImageListHead)) {
+    CurrentEntry = Process->ImageListHead.Next;
+    while (CurrentEntry != &(Process->ImageListHead)) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         NameSize = (RtlStringLength(Image->BinaryName) + 1) * sizeof(CHAR);
         CurrentModule->StructureSize = sizeof(LOADED_MODULE_ENTRY) + NameSize -
@@ -4082,7 +4085,7 @@ Return Value:
 
     ASSERT((UINTN)CurrentModule - (UINTN)List == SizeNeeded);
 
-    KeReleaseQueuedLock(Process->QueuedLock);
+    PsReleaseImageListLock(Process);
     LockHeld = FALSE;
 
     //
@@ -4098,7 +4101,7 @@ Return Value:
 
 DebugGetLoadedModulesEnd:
     if (LockHeld != FALSE) {
-        KeReleaseQueuedLock(Process->QueuedLock);
+        PsReleaseImageListLock(Process);
     }
 
     if (List != NULL) {
@@ -4371,7 +4374,6 @@ Return Value:
 
 {
 
-    PADDRESS_SPACE AddressSpace;
     PVOID Arguments;
     PLIST_ENTRY CurrentEntry;
     PLOADED_IMAGE Image;
@@ -4401,7 +4403,6 @@ Return Value:
 
     Status = STATUS_SUCCESS;
     KeAcquireQueuedLock(Process->QueuedLock);
-    AddressSpace = Process->AddressSpace;
     ProcessSize = sizeof(PROCESS_INFORMATION) + Process->BinaryNameSize;
     if (Process->Environment != NULL) {
         ProcessSize += Process->Environment->ArgumentsBufferLength;
@@ -4554,16 +4555,16 @@ Return Value:
         // should be the main image.
         //
 
-        KeAcquireQueuedLock(AddressSpace->ImageListQueuedLock);
-        if (LIST_EMPTY(&(AddressSpace->ImageListHead)) == FALSE) {
-            Image = LIST_VALUE(AddressSpace->ImageListHead.Next,
+        PsAcquireImageListLock(Process);
+        if (LIST_EMPTY(&(Process->ImageListHead)) == FALSE) {
+            Image = LIST_VALUE(Process->ImageListHead.Next,
                                LOADED_IMAGE,
                                ListEntry);
 
             Buffer->ImageSize = Image->Size;
         }
 
-        KeReleaseQueuedLock(AddressSpace->ImageListQueuedLock);
+        PsReleaseImageListLock(Process);
     }
 
     *BufferSize = ProcessSize;
@@ -4695,6 +4696,9 @@ Return Value:
             Thread = LIST_VALUE(CurrentEntry, KTHREAD, ProcessEntry);
             CurrentEntry = CurrentEntry->Next;
             PspReadResourceUsage(&SnappedUsage, &(Thread->ResourceUsage));
+            SnappedUsage.MaxResidentSet =
+                           Thread->OwningProcess->AddressSpace->MaxResidentSet;
+
             PspAddResourceUsages(Usage, &SnappedUsage);
         }
 
@@ -4703,6 +4707,7 @@ Return Value:
         //
 
         PspReadResourceUsage(&SnappedUsage, &(Process->ResourceUsage));
+        SnappedUsage.MaxResidentSet = Process->AddressSpace->MaxResidentSet;
         KeReleaseQueuedLock(Process->QueuedLock);
         PspAddResourceUsages(Usage, &SnappedUsage);
     }

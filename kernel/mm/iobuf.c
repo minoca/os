@@ -369,7 +369,6 @@ AllocateIoBufferEnd:
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
             MmpFreeAccountingRange(NULL,
-                                   &MmKernelVirtualSpace,
                                    VirtualAddress,
                                    AlignedSize,
                                    FALSE,
@@ -3268,7 +3267,6 @@ Return Value:
             //
 
             Status = MmpFreeAccountingRange(NULL,
-                                            &MmKernelVirtualSpace,
                                             UnmapStartAddress,
                                             UnmapSize,
                                             FALSE,
@@ -3292,7 +3290,6 @@ Return Value:
         //
 
         Status = MmpFreeAccountingRange(NULL,
-                                        &MmKernelVirtualSpace,
                                         StartAddress,
                                         UnmapSize,
                                         FALSE,
@@ -3750,7 +3747,7 @@ Return Value:
             }
 
             Status = MmpLookupSection(CurrentAddress,
-                                      Process,
+                                      Process->AddressSpace,
                                       &ImageSection,
                                       &PageOffset);
 

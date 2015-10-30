@@ -247,6 +247,16 @@ Author:
     MmFreePhysicalPages((_PhysicalAddress), 1)
 
 //
+// These macros acquire the address space lock.
+//
+
+#define MmAcquireAddressSpaceLock(_AddressSpace) \
+    KeAcquireQueuedLock((_AddressSpace)->Lock)
+
+#define MmReleaseAddressSpaceLock(_AddressSpace) \
+    KeReleaseQueuedLock((_AddressSpace)->Lock)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -649,16 +659,8 @@ Structure Description:
 
 Members:
 
-    ImageCount - Stores the number of images in the image list.
-
-    ImageListHead - Stores the head of list of images loaded for this process.
-
-    ImageListSignature - Stores the sum of all the timestamps and loaded
-        lowest addresses of the loaded images. The debugger uses this as a
-        heuristic to determine if its list of loaded modules is in sync.
-
-    ImageListQueuedLock - Stores a pointer to a queued lock protecting the
-        image list.
+    Lock - Stores a pointer to the queued lock serializing access to the
+        image section list.
 
     SectionListHead - Stores the head of the list of image sections mapped
         into this process.
@@ -668,16 +670,17 @@ Members:
 
     ResidentSet - Stores the number of pages currently mapped in the process.
 
+    MaxResidentSet - Stores the maximum resident set ever mapped into the
+        process.
+
 --*/
 
 typedef struct _ADDRESS_SPACE {
-    ULONG ImageCount;
-    LIST_ENTRY ImageListHead;
-    ULONGLONG ImageListSignature;
-    PVOID ImageListQueuedLock;
+    PVOID Lock;
     LIST_ENTRY SectionListHead;
     PMEMORY_ACCOUNTING Accountant;
     UINTN ResidentSet;
+    UINTN MaxResidentSet;
 } ADDRESS_SPACE, *PADDRESS_SPACE;
 
 //
@@ -2730,9 +2733,9 @@ Return Value:
 --*/
 
 KSTATUS
-MmCloneProcessAddressSpace (
-    PVOID SourceProcess,
-    PVOID DestinationProcess
+MmCloneAddressSpace (
+    PADDRESS_SPACE Source,
+    PADDRESS_SPACE Destination
     );
 
 /*++
@@ -2746,9 +2749,10 @@ Routine Description:
 
 Arguments:
 
-    SourceProcess - Supplies a pointer to the source process to copy.
+    Source - Supplies a pointer to the source address space to copy.
 
-    DestinationProcess - Supplies the destination process of the copy.
+    Destination - Supplies a pointer to the newly created destination to copy
+        the sections to.
 
 Return Value:
 
@@ -3123,7 +3127,7 @@ Return Value:
 
 KSTATUS
 MmMapUserSharedData (
-    PVOID Process
+    PADDRESS_SPACE AddressSpace
     );
 
 /*++
@@ -3135,8 +3139,8 @@ Routine Description:
 
 Arguments:
 
-    Process - Supplies a pointer to the process to map the page in. Supply
-        NULL to map the page in the current process.
+    AddressSpace - Supplies the address space to map the user shared data page
+        into.
 
 Return Value:
 
