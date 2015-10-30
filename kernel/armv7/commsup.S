@@ -1550,6 +1550,42 @@ FUNCTION ArGetThreadPointerUser
 END_FUNCTION ArGetThreadPointerUser
 
 ##
+## VOID
+## ArSwitchTtbr0 (
+##     ULONG NewValue
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine performs the proper sequence for changing contexts in TTBR0,
+    including the necessary invalidates and barriers.
+
+Arguments:
+
+    NewValue - Supplies the new value to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION ArSwitchTtbr0
+    mcr     p15, 0, %r0, c2, c0, 0          @ Set TTBR0.
+    mov     %r0, #0                         @ Get a zero register.
+    DSB                                     @ Ensure everything finished.
+    mcr     p15, 0, %r0, c8, c7, 0          @ TLBIALL, Invalidate entire TLB.
+    mcr     p15, 0, %r0, c7, c5, 0          @ ICIALLU, Invalidate I-Cache + BTB.
+    DSB                                     @ Ensure those operations finished.
+    ISB                                     @ Instruction synchronization.
+    bx      %lr                             @ Return.
+
+END_FUNCTION ArSwitchTtbr0
+
+##
 ## UINTN
 ## ArSaveProcessorContext (
 ##     PPROCESSOR_CONTEXT Context

@@ -1561,6 +1561,59 @@ Return Value:
 }
 
 VOID
+ArSetCurrentPageDirectory (
+    ULONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the CR3 register.
+
+Arguments:
+
+    Value - Supplies the value to set.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return;
+}
+
+VOID
+ArSwitchTtbr0 (
+    ULONG NewValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs the proper sequence for changing contexts in TTBR0,
+    including the necessary invalidates and barriers.
+
+Arguments:
+
+    NewValue - Supplies the new value to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return;
+}
+
+VOID
 ArInvalidateTlbEntry (
     PVOID Address
     )

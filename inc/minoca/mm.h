@@ -2906,8 +2906,9 @@ Return Value:
 
 --*/
 
-ULONG
-MmGetPageDirectoryPhysical (
+VOID
+MmSwitchAddressSpace (
+    PVOID CurrentStack,
     PADDRESS_SPACE AddressSpace
     );
 
@@ -2915,17 +2916,19 @@ MmGetPageDirectoryPhysical (
 
 Routine Description:
 
-    This routine returns the physical address of the page directory. This
-    routine is only temporary and should be deleted once the page directory
-    portion of a context swap happens via MmSwitchAddressSpace.
+    This routine switches to the given address space.
 
 Arguments:
 
-    AddressSpace - Supplies a pointer to the address space.
+    CurrentStack - Supplies the address of the current thread's kernel stack.
+        This routine will ensure this address is visible in the address space
+        being switched to. Stacks must not cross page directory boundaries.
+
+    AddressSpace - Supplies a pointer to the address space to switch to.
 
 Return Value:
 
-    Returns the physical address of the page directory.
+    None.
 
 --*/
 

@@ -904,7 +904,7 @@ Members:
 
 typedef struct _ADDRESS_SPACE_ARM {
     ADDRESS_SPACE Common;
-    PVOID PageDirectory;
+    PFIRST_LEVEL_TABLE PageDirectory;
     ULONG PageDirectoryPhysical;
 } ADDRESS_SPACE_ARM, *PADDRESS_SPACE_ARM;
 
@@ -1965,6 +1965,28 @@ Arguments:
 Return Value:
 
     Returns the current value of the TPIDRURW.
+
+--*/
+
+VOID
+ArSwitchTtbr0 (
+    ULONG NewValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs the proper sequence for changing contexts in TTBR0,
+    including the necessary invalidates and barriers.
+
+Arguments:
+
+    NewValue - Supplies the new value to write.
+
+Return Value:
+
+    None.
 
 --*/
 

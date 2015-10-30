@@ -515,12 +515,9 @@ Return Value:
     return;
 }
 
-//
-// TODO: Remove this function and swap page directory in C.
-//
-
-ULONG
-MmGetPageDirectoryPhysical (
+VOID
+MmSwitchAddressSpace (
+    PVOID CurrentStack,
     PADDRESS_SPACE AddressSpace
     )
 
@@ -528,26 +525,41 @@ MmGetPageDirectoryPhysical (
 
 Routine Description:
 
-    This routine returns the physical address of the page directory. This
-    routine is only temporary and should be deleted once the page directory
-    portion of a context swap happens via MmSwitchAddressSpace.
+    This routine switches to the given address space.
 
 Arguments:
 
-    AddressSpace - Supplies a pointer to the address space.
+    CurrentStack - Supplies the address of the current thread's kernel stack.
+        This routine will ensure this address is visible in the address space
+        being switched to. Stacks must not cross page directory boundaries.
+
+    AddressSpace - Supplies a pointer to the address space to switch to.
 
 Return Value:
 
-    Returns the physical address of the page directory.
+    None.
 
 --*/
 
 {
 
+    ULONG DirectoryIndex;
     PADDRESS_SPACE_X86 Space;
 
     Space = (PADDRESS_SPACE_X86)AddressSpace;
-    return Space->PageDirectoryPhysical;
+
+    //
+    // Make sure the current stack is visible. It might not be if this current
+    // thread is new and its stack pushed out into a new page table not in the
+    // destination context.
+    //
+
+    DirectoryIndex = (UINTN)CurrentStack >> PAGE_DIRECTORY_SHIFT;
+    Space->PageDirectory[DirectoryIndex] =
+                                         MmKernelPageDirectory[DirectoryIndex];
+
+    ArSetCurrentPageDirectory(Space->PageDirectoryPhysical);
+    return;
 }
 
 KSTATUS
@@ -1019,6 +1031,7 @@ Return Value:
         MmpCreatePageTable(Directory, VirtualAddress);
     }
 
+    ASSERT(Directory[DirectoryIndex].Present != 0);
     ASSERT((PageTable[TableIndex].Present == 0) &&
            (PageTable[TableIndex].Entry == 0));
 
@@ -2603,8 +2616,8 @@ Return Value:
     //
 
     if ((VirtualAddress >= KERNEL_VA_START) &&
-        (MmKernelPageDirectory[DirectoryIndex].Entry !=
-         Directory[DirectoryIndex].Entry)) {
+        (((PULONG)MmKernelPageDirectory)[DirectoryIndex] !=
+         ((PULONG)Directory)[DirectoryIndex])) {
 
         ASSERT(Directory[DirectoryIndex].Entry == 0);
 
@@ -2627,7 +2640,9 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    if (Directory[DirectoryIndex].Entry != 0) {
+    if ((VirtualAddress < KERNEL_VA_START) &&
+        (Directory[DirectoryIndex].Entry != 0)) {
+
         NewPageTable = (ULONG)(Directory[DirectoryIndex].Entry << PAGE_SHIFT);
         Directory[DirectoryIndex].Entry = 0;
 

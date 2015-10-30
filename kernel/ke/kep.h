@@ -128,7 +128,6 @@ VOID
 KepContextSwap (
     PVOID *SavedStackLocation,
     PVOID NewStack,
-    PHYSICAL_ADDRESS NewPageDirectory,
     ULONGLONG NewThreadPointer,
     BOOL FirstTime
     );
@@ -145,8 +144,6 @@ Arguments:
         be saved.
 
     NewStack - Supplies the new stack address.
-
-    NewPageDirectory - Supplies the new page directory to switch to.
 
     NewThreadPointer - Supplies the new thread pointer data.
 

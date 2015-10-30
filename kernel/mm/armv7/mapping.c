@@ -42,6 +42,14 @@ Environment:
     ((PVOID)MmPageTables + ((_FirstIndex) * SLT_SIZE))
 
 //
+// This macro compares two page directory/table entries.
+//
+
+#define COMPARE_PTES(_FirstDirectory, _SecondDirectory, _Index) \
+    (((PULONG)(_FirstDirectory))[(_Index)] == \
+     ((PULONG)(_SecondDirectory))[(_Index)])
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -768,12 +776,9 @@ Return Value:
     return;
 }
 
-//
-// TODO: Remove this function and swap page directory in C.
-//
-
-ULONG
-MmGetPageDirectoryPhysical (
+VOID
+MmSwitchAddressSpace (
+    PVOID CurrentStack,
     PADDRESS_SPACE AddressSpace
     )
 
@@ -781,26 +786,44 @@ MmGetPageDirectoryPhysical (
 
 Routine Description:
 
-    This routine returns the physical address of the page directory. This
-    routine is only temporary and should be deleted once the page directory
-    portion of a context swap happens via MmSwitchAddressSpace.
+    This routine switches to the given address space.
 
 Arguments:
 
-    AddressSpace - Supplies a pointer to the address space.
+    CurrentStack - Supplies the address of the current thread's kernel stack.
+        This routine will ensure this address is visible in the address space
+        being switched to. Stacks must not cross page directory boundaries.
+
+    AddressSpace - Supplies a pointer to the address space to switch to.
 
 Return Value:
 
-    Returns the physical address of the page directory.
+    None.
 
 --*/
 
 {
 
+    ULONG FirstIndex;
+    PFIRST_LEVEL_TABLE FirstTable;
     PADDRESS_SPACE_ARM Space;
 
     Space = (PADDRESS_SPACE_ARM)AddressSpace;
-    return Space->PageDirectoryPhysical;
+
+    //
+    // Make sure the current stack is visible. It might not be if this current
+    // thread is new and its stack pushed out into a new page table not in the
+    // destination context.
+    //
+
+    FirstIndex = FLT_INDEX(CurrentStack);
+    FirstTable = Space->PageDirectory;
+    if (!COMPARE_PTES(FirstTable, MmKernelFirstLevelTable, FirstIndex)) {
+        MmUpdatePageDirectory(AddressSpace, CurrentStack, PAGE_SIZE);
+    }
+
+    ArSwitchTtbr0(Space->PageDirectoryPhysical);
+    return;
 }
 
 KSTATUS
@@ -2330,9 +2353,14 @@ Return Value:
         // Sync the current directory entry to the kernel.
         //
 
-        if (CurrentVirtual >= KERNEL_VA_START) {
-            ProcessFirstLevelTable[FirstIndex] =
-                                           MmKernelFirstLevelTable[FirstIndex];
+        if ((CurrentVirtual >= KERNEL_VA_START) &&
+            (!COMPARE_PTES(ProcessFirstLevelTable,
+                           MmKernelFirstLevelTable,
+                           FirstIndex))) {
+
+            MmUpdatePageDirectory((PADDRESS_SPACE)AddressSpace,
+                                  CurrentVirtual,
+                                  PAGE_SIZE);
         }
 
         if (FirstLevelTable[FirstIndex].Format == FLT_UNMAPPED) {

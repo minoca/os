@@ -171,9 +171,7 @@ Return Value:
 
     BOOL Enabled;
     BOOL FirstTime;
-    PHYSICAL_ADDRESS NextPageDirectory;
     PKTHREAD NextThread;
-    ULONGLONG NextThreadPointer;
     PVOID NextThreadStack;
     THREAD_STATE NextThreadState;
     PKTHREAD OldThread;
@@ -302,45 +300,19 @@ Return Value:
         KeBeginCycleAccounting(CycleAccountKernel);
     }
 
-    //
-    // While still running on the old thread's page tables, the next thread is
-    // not safe to touch once the processor's running thread is switched. If
-    // a fault were taken accessing the next thread, the system would get stuck
-    // in a loop. The first thing a page fault does is get the running thread's
-    // page directory and check for directory updates, but accessing the
-    // running thread (i.e. NextThread) is what faulted in the first place.
-    // With that in mind, gather all the necessary data from the next thread
-    // into local variables.
-    //
-    // N.B. The next thread's stack does not need to be touched because
-    //      interrupts will be disabled when transitioning stacks and page
-    //      directories and the separate exception stacks will handle any
-    //      faults during the transition. Additionally, touching it means
-    //      nothing if it's still stuck in the TLB; it would need to be
-    //      explicitly synchronized into the old thread's page directory.
-    //
-
-    NextPageDirectory =
-           MmGetPageDirectoryPhysical(NextThread->OwningProcess->AddressSpace);
-
-    NextThreadStack = NextThread->KernelStackPointer;
-
-    ASSERT(NextThreadStack >= KERNEL_VA_START);
-
-    NextThread->KernelStackPointer = NULL;
-    NextThreadPointer = NextThread->ThreadPointer;
     KepArchPrepareForContextSwap(Processor, OldThread, NextThread);
 
     //
-    // After this point, the next thread structure should no longer be touched.
-    // Interrupts must also be disabled before the running thread is switched.
-    // If an ISR faulted on non-paged kernel memory because the old thread had
-    // not yet synchronized, the system would crash if the next thread were
-    // fully synchronized.
+    // Switch to the new thread's address space. The new thread will not fault
+    // on the old stack, nor its own thread structures. It might fault on
+    // anything else, so don't touch anything in between changing address
+    // spaces and setting the running thread.
     //
 
-    RtlMemoryBarrier();
     Enabled = ArDisableInterrupts();
+    MmSwitchAddressSpace(OldThread->KernelStack,
+                         NextThread->OwningProcess->AddressSpace);
+
     Processor->RunningThread = NextThread;
     Processor->PreviousThread = OldThread;
 
@@ -426,10 +398,14 @@ Return Value:
 
     ASSERT(*SaveLocation == NULL);
 
+    NextThreadStack = NextThread->KernelStackPointer;
+
+    ASSERT(NextThreadStack >= KERNEL_VA_START);
+
+    NextThread->KernelStackPointer = NULL;
     KepContextSwap(SaveLocation,
                    NextThreadStack,
-                   NextPageDirectory,
-                   NextThreadPointer,
+                   NextThread->ThreadPointer,
                    FirstTime);
 
     //

@@ -43,7 +43,6 @@ ASSEMBLY_FILE_HEADER
 ## KepContextSwap (
 ##     PVOID *SavedStackLocation,
 ##     PVOID NewStack,
-##     PHYSICAL_ADDRESS NewPageDirectory,
 ##     ULONGLONG NewThreadPointer,
 ##     BOOL FirstTime
 ##     )
@@ -62,8 +61,6 @@ Arguments:
 
     NewStack - Supplies the new stack address.
 
-    NewPageDirectory - Supplies the new page directory to switch to.
-
     NewThreadPointer - Supplies the new thread pointer data.
 
     FirstTime - Supplies a boolean indicating whether the thread has never been
@@ -75,9 +72,7 @@ Return Value:
 
 --*/
 
-.equ NewThreadPointerReadOnly, 0x2C
-.equ NewThreadPointerReadWrite, 0x30
-.equ FirstTime, 0x34
+.equ FirstTime, 0x2C
 
 FUNCTION KepContextSwap
 
@@ -97,10 +92,8 @@ FUNCTION KepContextSwap
     ## Set up the new user mode thread pointer registers.
     ##
 
-    ldr     %r0, [%sp, #NewThreadPointerReadOnly]  @ Get the read-only value.
-    mcr     p15, 0, %r0, c13, c0, 3                @ Set the TPIDRURO register.
-    ldr     %r0, [%sp, #NewThreadPointerReadWrite] @ Get the read-write value.
-    mcr     p15, 0, %r0, c13, c0, 2                @ Set the TPIDRURW register.
+    mcr     p15, 0, %r2, c13, c0, 3                @ Set the TPIDRURO register.
+    mcr     p15, 0, %r3, c13, c0, 2                @ Set the TPIDRURW register.
 
     ##
     ## Switch to the new thread's kernel stack, effectively freezing the old
@@ -111,21 +104,9 @@ FUNCTION KepContextSwap
     mov     %r11, #0                @ Zero out FP so the call stack stops here.
 
     ##
-    ## Switch TTBs (page directory) if needed.
+    ## Perform any post-stack switch work needed on the old thread.
     ##
 
-    mrc     p15, 0, %r6, c2, c0, 0          @ Get TTBR0.
-    cmp     %r6, %r2                        @ If they're the same
-    beq     ContextSwapAfterTtb             @ don't set a new one.
-    mcr     p15, 0, %r2, c2, c0, 0          @ Set TTBR0.
-    mov     %r5, #0                         @ Get a zero register.
-    DSB                                     @ Ensure everything finished.
-    mcr     p15, 0, %r5, c8, c7, 0          @ TLBIALL, Invalidate entire TLB.
-    mcr     p15, 0, %r5, c7, c5, 0          @ ICIALLU, Invalidate I-Cache + BTB.
-    DSB                                     @ Ensure those operations finished.
-    ISB                                     @ Instruction synchronization.
-
-ContextSwapAfterTtb:
     bl      KepPostContextSwapWork  @ Perform post stack switch work.
 
     ##

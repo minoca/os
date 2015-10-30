@@ -54,7 +54,6 @@ Environment:
 ## KepContextSwap (
 ##     PVOID *SavedStackLocation,
 ##     PVOID NewStack,
-##     PHYSICAL_ADDRESS NewPageDirectory,
 ##     PVOID NewThreadPointer,
 ##     BOOL FirstTime
 ##     )
@@ -73,8 +72,6 @@ Arguments:
 
     NewStack - Supplies the new stack address.
 
-    NewPageDirectory - Supplies the new page directory to switch to.
-
     NewThreadPointer - Supplies the new thread pointer data.
 
     FirstTime - Supplies a boolean indicating whether the thread has never been
@@ -92,10 +89,9 @@ Return Value:
 
 .equ SavedStackLocation, 8
 .equ NewStack, 12
-.equ NewPageDirectory, 16
-.equ NewThreadPointerLowerGdt, 24
-.equ NewThreadPointerUpperGdt, 28
-.equ FirstTime, 32
+.equ NewThreadPointerLowerGdt, 16
+.equ NewThreadPointerUpperGdt, 20
+.equ FirstTime, 24
 
 FUNCTION(KepContextSwap)
     pushl   %ebp                    # Function prologue.
@@ -123,7 +119,6 @@ FUNCTION(KepContextSwap)
     ## Save the parameters before the stack switch is initiated.
     ##
 
-    movl    NewPageDirectory(%ebp), %eax            # Get new CR3.
     movl    FirstTime(%ebp), %esi   # Get FirstTime parameter.
 
     ##
@@ -147,17 +142,9 @@ FUNCTION(KepContextSwap)
     xor     %ebp, %ebp              # Zero out ebp so the call stack stops here.
 
     ##
-    ## Switch to the new page directory. If the page directory is already
-    ## the right one, don't do the swap to save the existing TLB entries. eax
-    ## current holds the new page directory.
+    ## Perform any post-stack switch work needed on the old thread.
     ##
 
-    movl    %cr3, %edx              # Get current CR3.
-    cmp     %eax, %edx              # Compare the two.
-    je      KepContextSwapPostCr3   # If the same, skip the swap.
-    movl    %eax, %cr3              # Move in new page directory.
-
-KepContextSwapPostCr3:
     call    KepPostContextSwapWork  # Perform post swap work.
 
     ##
@@ -180,9 +167,7 @@ KepContextSwapFirstTime:
 KepContextSwapRestore:
     popl    %eax                    # Pop the magic value.
     cmp     $CONTEXT_SWAP_MAGIC, %eax   # Compare.
-    je      KepContextSwapReturn    # Jump over break if it's the right value.
-    int     $0x3                    # Break on bad context.
-    nop                             # If we break here, WATCH OUT.
+    jne      KepContextSwapBadMagic # Jump out of line if it's bad.
 
 KepContextSwapReturn:
     popfl                           # Restore registers.
@@ -192,6 +177,10 @@ KepContextSwapReturn:
     popl    %ebx
     leave
     ret
+
+KepContextSwapBadMagic:
+    int     $0x3                    # Break on bad context.
+    jmp     KepContextSwapReturn    # If we break here, WATCH OUT.
 
 END_FUNCTION(KepContextSwap)
 

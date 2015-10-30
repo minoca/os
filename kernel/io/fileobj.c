@@ -781,6 +781,8 @@ CreateOrLookupFileObjectEnd:
         if (Object != NULL) {
             IopFileObjectReleaseReference(Object, FALSE);
             Object = NULL;
+
+            ASSERT(Object != NewObject);
         }
     }
 
