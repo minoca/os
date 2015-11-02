@@ -272,6 +272,7 @@ Return Value:
                               BootEntry->LoaderPath,
                               NULL,
                               NULL,
+                              NULL,
                               LoadFlags,
                               0,
                               &LoaderImage,

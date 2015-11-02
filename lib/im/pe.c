@@ -50,8 +50,7 @@ Environment:
 
 BOOL
 ImpPeGetHeaders (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PIMAGE_NT_HEADERS *PeHeaders
     )
 
@@ -64,9 +63,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the image file mapped into memory.
-
-    FileSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the buffer to get the headers from.
 
     PeHeaders - Supplies a pointer where the location of the PE headers will
         be returned.
@@ -87,20 +84,23 @@ Return Value:
     // Read the DOS header to find out where the PE headers are located.
     //
 
-    if (FileSize < sizeof(IMAGE_DOS_HEADER)) {
+    DosHeader = ImpReadBuffer(NULL, Buffer, 0, sizeof(IMAGE_DOS_HEADER));
+    if (DosHeader == NULL) {
         return FALSE;
     }
 
-    DosHeader = (PIMAGE_DOS_HEADER)File;
     if (DosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
         return FALSE;
     }
 
-    if (DosHeader->e_lfanew + sizeof(PIMAGE_NT_HEADERS) > FileSize) {
+    *PeHeaders = ImpReadBuffer(NULL,
+                               Buffer,
+                               DosHeader->e_lfanew,
+                               sizeof(IMAGE_NT_HEADERS));
+
+    if (*PeHeaders == NULL) {
         return FALSE;
     }
-
-    *PeHeaders = (PIMAGE_NT_HEADERS)((PUCHAR)File + DosHeader->e_lfanew);
 
     //
     // Perform a few basic checks on the headers to make sure they're valid.
@@ -125,8 +125,7 @@ Return Value:
 
 BOOL
 ImpPeGetSection (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PSTR SectionName,
     PVOID *Section,
     PULONGLONG VirtualAddress,
@@ -143,9 +142,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the image file mapped into memory.
-
-    FileSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the file buffer.
 
     SectionName - Supplies the name of the desired section.
 
@@ -190,7 +187,7 @@ Return Value:
         goto GetSectionEnd;
     }
 
-    Result = ImpPeGetHeaders(File, FileSize, &PeHeaders);
+    Result = ImpPeGetHeaders(Buffer, &PeHeaders);
     if (Result == FALSE) {
         goto GetSectionEnd;
     }
@@ -213,7 +210,16 @@ Return Value:
         //
 
         if (Match != FALSE) {
-            ReturnSection = (PUCHAR)File + SectionHeader->PointerToRawData;
+            ReturnSection = ImpReadBuffer(NULL,
+                                          Buffer,
+                                          SectionHeader->PointerToRawData,
+                                          SectionHeader->SizeOfRawData);
+
+            if (ReturnSection == NULL) {
+                Result = FALSE;
+                goto GetSectionEnd;
+            }
+
             ReturnSectionFileSize = SectionHeader->SizeOfRawData;
             ReturnSectionMemorySize = SectionHeader->Misc.VirtualSize;
             ReturnSectionVirtualAddress = SectionHeader->VirtualAddress;
@@ -222,6 +228,8 @@ Return Value:
 
         SectionHeader += 1;
     }
+
+    Result = TRUE;
 
 GetSectionEnd:
     if (Section != NULL) {

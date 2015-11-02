@@ -29,6 +29,12 @@ Author:
 //
 
 //
+// Define the initial amount to read for loading image segments.
+//
+
+#define IMAGE_INITIAL_READ_SIZE 1024
+
+//
 // Define the macros to the various functions.
 //
 
@@ -37,7 +43,8 @@ Author:
 #define ImOpenFile ImImportTable->OpenFile
 #define ImCloseFile ImImportTable->CloseFile
 #define ImLoadFile ImImportTable->LoadFile
-#define ImUnloadFile ImImportTable->UnloadFile
+#define ImReadFile ImImportTable->ReadFile
+#define ImUnloadBuffer ImImportTable->UnloadBuffer
 #define ImAllocateAddressSpace ImImportTable->AllocateAddressSpace
 #define ImFreeAddressSpace ImImportTable->FreeAddressSpace
 #define ImMapImageSegment ImImportTable->MapImageSegment
@@ -69,3 +76,36 @@ extern PIM_IMPORT_TABLE ImImportTable;
 //
 // -------------------------------------------------------- Function Prototypes
 //
+
+PVOID
+ImpReadBuffer (
+    PIMAGE_FILE_INFORMATION File,
+    PIMAGE_BUFFER Buffer,
+    UINTN Offset,
+    UINTN Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine handles access to an image buffer.
+
+Arguments:
+
+    File - Supplies an optional pointer to the file information, if the buffer
+        may need to be resized.
+
+    Buffer - Supplies a pointer to the buffer to read from.
+
+    Offset - Supplies the offset from the start of the file to read.
+
+    Size - Supplies the required size.
+
+Return Value:
+
+    Returns a pointer to the image file at the requested offset on success.
+
+    NULL if the range is invalid or the file could not be fully loaded.
+
+--*/

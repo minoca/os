@@ -109,6 +109,7 @@ Return Value:
     PSTR Filename;
     LONG FileSize;
     BOOL ForceThumb;
+    IMAGE_BUFFER ImageBuffer;
     IMAGE_INFORMATION ImageInformation;
     PUCHAR InstructionStream;
     MACHINE_LANGUAGE Language;
@@ -121,6 +122,7 @@ Return Value:
     Failures = 0;
     FileBuffer = NULL;
     ForceThumb = FALSE;
+    memset(&ImageBuffer, 0, sizeof(IMAGE_BUFFER));
     InstructionStream = NULL;
     PrintDisassembly = TRUE;
     if (ArgumentCount < 2) {
@@ -179,7 +181,9 @@ Return Value:
         goto MainEnd;
     }
 
-    Status = ImGetImageInformation(FileBuffer, FileSize, &ImageInformation);
+    ImageBuffer.Data = FileBuffer;
+    ImageBuffer.Size = FileSize;
+    Status = ImGetImageInformation(&ImageBuffer, &ImageInformation);
     if (!KSUCCESS(Status)) {
         Result = FALSE;
         Failures += 1;
@@ -190,8 +194,7 @@ Return Value:
     // Get the text section.
     //
 
-    Result = ImGetImageSection(FileBuffer,
-                               FileSize,
+    Result = ImGetImageSection(&ImageBuffer,
                                ".text",
                                (PVOID *)&InstructionStream,
                                NULL,

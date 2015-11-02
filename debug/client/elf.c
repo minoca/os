@@ -184,6 +184,7 @@ Return Value:
     ULONG FileSize;
     PELF_SECTION FirstSection;
     PELF32_SECTION_HEADER FirstSectionHeader;
+    IMAGE_BUFFER ImageBuffer;
     PELF_SECTION NewSection;
     PELF_SECTION NextSection;
     BOOL Result;
@@ -195,6 +196,7 @@ Return Value:
     CurrentSection = NULL;
     FileBuffer = NULL;
     FirstSection = NULL;
+    memset(&ImageBuffer, 0, sizeof(IMAGE_BUFFER));
     SymbolSection = NULL;
     Symbols->RawSymbolTable = NULL;
     Symbols->RawSymbolTableStrings = NULL;
@@ -228,11 +230,14 @@ Return Value:
         goto LoadElfSymbolTableEnd;
     }
 
+    ImageBuffer.Data = FileBuffer;
+    ImageBuffer.Size = FileSize;
+
     //
     // Get the ELF headers to determine the location of the sections.
     //
 
-    Result = ImpElfGetHeader(FileBuffer, FileSize, &ElfHeader);
+    Result = ImpElfGetHeader(&ImageBuffer, &ElfHeader);
     if (Result == FALSE) {
         goto LoadElfSymbolTableEnd;
     }

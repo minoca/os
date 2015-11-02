@@ -118,13 +118,13 @@ BopImCloseFile (
 KSTATUS
 BopImLoadFile (
     PIMAGE_FILE_INFORMATION File,
-    PVOID *FileBuffer
+    PIMAGE_BUFFER Buffer
     );
 
 VOID
-BopImUnloadFile (
+BopImUnloadBuffer (
     PIMAGE_FILE_INFORMATION File,
-    PVOID Buffer
+    PIMAGE_BUFFER Buffer
     );
 
 KSTATUS
@@ -215,7 +215,8 @@ IM_IMPORT_TABLE BoImageFunctionTable = {
     BopImOpenFile,
     BopImCloseFile,
     BopImLoadFile,
-    BopImUnloadFile,
+    NULL,
+    BopImUnloadBuffer,
     BopImAllocateAddressSpace,
     BopImFreeAddressSpace,
     BopImMapImageSegment,
@@ -524,21 +525,21 @@ Return Value:
 KSTATUS
 BopImLoadFile (
     PIMAGE_FILE_INFORMATION File,
-    PVOID *FileBuffer
+    PIMAGE_BUFFER Buffer
     )
 
 /*++
 
 Routine Description:
 
-    This routine loads a file into memory so the image library can read it.
+    This routine loads an entire file into memory so the image library can
+    access it.
 
 Arguments:
 
     File - Supplies a pointer to the file information.
 
-    FileBuffer - Supplies a pointer where a pointer to the file buffer will be
-        returned on success.
+    Buffer - Supplies a pointer where the buffer will be returned on success.
 
 Return Value:
 
@@ -577,22 +578,26 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 ImLoadFileEnd:
-    *FileBuffer = BootFileHandle->LoadedFileBuffer;
+    if (KSUCCESS(Status)) {
+        Buffer->Data = BootFileHandle->LoadedFileBuffer;
+        Buffer->Size = BootFileHandle->FileSize;
+    }
+
     return Status;
 }
 
 VOID
-BopImUnloadFile (
+BopImUnloadBuffer (
     PIMAGE_FILE_INFORMATION File,
-    PVOID Buffer
+    PIMAGE_BUFFER Buffer
     )
 
 /*++
 
 Routine Description:
 
-    This routine unloads a file and frees the buffer associated with a load
-    image call.
+    This routine unloads a file buffer created from either the load file or
+    read file function, and frees the buffer.
 
 Arguments:
 

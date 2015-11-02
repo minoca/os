@@ -57,8 +57,7 @@ KSTATUS
 ImpGetImageSize (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PVOID FileBuffer,
-    UINTN FileBufferSize,
+    PIMAGE_BUFFER Buffer,
     PSTR *InterpreterPath
     );
 
@@ -66,13 +65,13 @@ KSTATUS
 ImpLoadImage (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PVOID FileBuffer,
-    UINTN FileBufferSize,
+    PIMAGE_BUFFER Buffer,
     ULONG ImportDepth
     );
 
 KSTATUS
 ImpAddImage (
+    PIMAGE_BUFFER ImageBuffer,
     PLOADED_IMAGE Image
     );
 
@@ -170,7 +169,8 @@ KSTATUS
 ImGetExecutableFormat (
     PSTR BinaryName,
     PVOID SystemContext,
-    PIMAGE_FILE_INFORMATION Information,
+    PIMAGE_FILE_INFORMATION ImageFile,
+    PIMAGE_BUFFER ImageBuffer,
     PIMAGE_FORMAT Format
     )
 
@@ -187,8 +187,11 @@ Arguments:
     SystemContext - Supplies the context pointer passed to the load executable
         function.
 
-    Information - Supplies an optional pointer where the file handle and other
+    ImageFile - Supplies an optional pointer where the file handle and other
         information will be returned on success.
+
+    ImageBuffer - Supplies an optional pointer where the image buffer
+        information will be returned.
 
     Format - Supplies a pointer where the format will be returned on success.
 
@@ -201,12 +204,12 @@ Return Value:
 {
 
     ULONG BinaryNameLength;
+    IMAGE_BUFFER Buffer;
     IMAGE_FILE_INFORMATION File;
-    PVOID FileBuffer;
     KSTATUS Status;
 
     File.Handle = INVALID_HANDLE;
-    FileBuffer = NULL;
+    RtlZeroMemory(&Buffer, sizeof(IMAGE_BUFFER));
     BinaryNameLength = RtlStringLength(BinaryName);
     if (BinaryNameLength == 0) {
         Status = STATUS_INVALID_PARAMETER;
@@ -222,7 +225,11 @@ Return Value:
         goto GetExecutableFormatEnd;
     }
 
-    Status = ImLoadFile(&File, &FileBuffer);
+    Status = ImReadFile(&File,
+                        0,
+                        IMAGE_INITIAL_READ_SIZE,
+                        &Buffer);
+
     if (!KSUCCESS(Status)) {
         goto GetExecutableFormatEnd;
     }
@@ -231,7 +238,7 @@ Return Value:
     // Determine the file format.
     //
 
-    *Format = ImGetImageFormat(FileBuffer, File.Size);
+    *Format = ImGetImageFormat(&Buffer);
     if ((*Format == ImageInvalidFormat) || (*Format == ImageUnknownFormat)) {
         Status = STATUS_UNKNOWN_IMAGE_FORMAT;
         goto GetExecutableFormatEnd;
@@ -240,19 +247,26 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 GetExecutableFormatEnd:
-    if (FileBuffer != NULL) {
-        ImUnloadFile(&File, FileBuffer);
+    if (((!KSUCCESS(Status)) || (ImageBuffer == NULL)) &&
+        (Buffer.Data != NULL)) {
+
+        ImUnloadBuffer(&File, &Buffer);
+        Buffer.Data = NULL;
     }
 
-    if (((!KSUCCESS(Status)) || (Information == NULL)) &&
+    if (((!KSUCCESS(Status)) || (ImageFile == NULL)) &&
         (File.Handle != INVALID_HANDLE)) {
 
         ImCloseFile(&File);
         File.Handle = INVALID_HANDLE;
     }
 
-    if (Information != NULL) {
-        RtlCopyMemory(Information, &File, sizeof(IMAGE_FILE_INFORMATION));
+    if (ImageFile != NULL) {
+        RtlCopyMemory(ImageFile, &File, sizeof(IMAGE_FILE_INFORMATION));
+    }
+
+    if (ImageBuffer != NULL) {
+        RtlCopyMemory(ImageBuffer, &Buffer, sizeof(IMAGE_BUFFER));
     }
 
     return Status;
@@ -263,6 +277,7 @@ ImLoadExecutable (
     PLIST_ENTRY ListHead,
     PSTR BinaryName,
     PIMAGE_FILE_INFORMATION BinaryFile,
+    PIMAGE_BUFFER ImageBuffer,
     PVOID SystemContext,
     ULONG Flags,
     ULONG ImportDepth,
@@ -289,6 +304,9 @@ Arguments:
         if the caller does not already have an open handle to the binary. On
         success, the image library takes ownership of the handle.
 
+    ImageBuffer - Supplies an optional pointer to the image buffer. This can
+        be a complete image file buffer, or just a partial load of the file.
+
     SystemContext - Supplies an opaque token that will be passed to the
         support functions called by the image support library.
 
@@ -313,17 +331,17 @@ Return Value:
 
     ULONG BinaryNameLength;
     PLIST_ENTRY CurrentEntry;
-    PVOID FileBuffer;
     ULONG FileNameSize;
     PLOADED_IMAGE Image;
     PLOADED_IMAGE InterpreterImage;
     PSTR InterpreterPath;
+    IMAGE_BUFFER LocalImageBuffer;
     ULONG NameIndex;
     KSTATUS Status;
 
-    FileBuffer = NULL;
     Image = NULL;
     InterpreterImage = NULL;
+    RtlZeroMemory(&LocalImageBuffer, sizeof(IMAGE_BUFFER));
 
     //
     // If the primary executable flag is set, also set the primary load flag.
@@ -428,16 +446,35 @@ Return Value:
         }
     }
 
-    Status = ImLoadFile(&(Image->File), &FileBuffer);
-    if (!KSUCCESS(Status)) {
-        goto LoadExecutableEnd;
+    if (ImageBuffer == NULL) {
+
+        //
+        // In a load-only scenario, just try to do a small read of the file
+        // contents. Otherwise, just map the whole file.
+        //
+
+        if ((Flags & IMAGE_LOAD_FLAG_LOAD_ONLY) != 0) {
+            Status = ImReadFile(&(Image->File),
+                                0,
+                                IMAGE_INITIAL_READ_SIZE,
+                                &LocalImageBuffer);
+
+        } else {
+            Status = ImLoadFile(&(Image->File), &LocalImageBuffer);
+        }
+
+        if (!KSUCCESS(Status)) {
+            goto LoadExecutableEnd;
+        }
+
+        ImageBuffer = &LocalImageBuffer;
     }
 
     //
     // Determine the file format.
     //
 
-    Image->Format = ImGetImageFormat(FileBuffer, Image->File.Size);
+    Image->Format = ImGetImageFormat(ImageBuffer);
     if ((Image->Format == ImageInvalidFormat) ||
         (Image->Format == ImageUnknownFormat)) {
 
@@ -449,12 +486,7 @@ Return Value:
     // Determine the image size and preferred VA.
     //
 
-    Status = ImpGetImageSize(ListHead,
-                             Image,
-                             FileBuffer,
-                             Image->File.Size,
-                             &InterpreterPath);
-
+    Status = ImpGetImageSize(ListHead, Image, ImageBuffer, &InterpreterPath);
     if (!KSUCCESS(Status)) {
         goto LoadExecutableEnd;
     }
@@ -469,6 +501,7 @@ Return Value:
 
         Status = ImLoadExecutable(ListHead,
                                   InterpreterPath,
+                                  NULL,
                                   NULL,
                                   SystemContext,
                                   Flags | IMAGE_LOAD_FLAG_IGNORE_INTERPRETER,
@@ -525,12 +558,7 @@ Return Value:
     // allocated space.
     //
 
-    Status = ImpLoadImage(ListHead,
-                          Image,
-                          FileBuffer,
-                          Image->File.Size,
-                          ImportDepth);
-
+    Status = ImpLoadImage(ListHead, Image, ImageBuffer, ImportDepth);
     if (!KSUCCESS(Status)) {
         goto LoadExecutableEnd;
     }
@@ -554,8 +582,8 @@ LoadExecutableEnd:
             }
 
             if (Image->File.Handle != INVALID_HANDLE) {
-                if (FileBuffer != NULL) {
-                    ImUnloadFile(&(Image->File), FileBuffer);
+                if (LocalImageBuffer.Data != NULL) {
+                    ImUnloadBuffer(&(Image->File), &LocalImageBuffer);
                 }
 
                 if (BinaryFile == NULL) {
@@ -582,7 +610,7 @@ LoadExecutableEnd:
 KSTATUS
 ImAddImage (
     PSTR BinaryName,
-    PVOID Buffer,
+    PIMAGE_BUFFER Buffer,
     PLOADED_IMAGE *LoadedImage
     )
 
@@ -595,12 +623,10 @@ Routine Description:
 
 Arguments:
 
-    ListHead - Supplies a pointer to the head of the list of loaded images.
-
     BinaryName - Supplies an optional pointer to the name of the image to use.
         If NULL, then the shared object name of the image will be extracted.
 
-    Buffer - Supplies the base address of the loaded image.
+    Buffer - Supplies the image buffer containing the loaded image.
 
     LoadedImage - Supplies an optional pointer where a pointer to the loaded
         image structure will be returned on success.
@@ -628,9 +654,10 @@ Return Value:
         goto AddExecutableEnd;
     }
 
-    Image->Format = ImGetImageFormat(Buffer, -1);
-    Image->LoadedLowestAddress = Buffer;
-    Status = ImpAddImage(Image);
+    Image->Format = ImGetImageFormat(Buffer);
+    Image->LoadedLowestAddress = Buffer->Data;
+    Image->File.Size = Buffer->Size;
+    Status = ImpAddImage(Buffer, Image);
 
 AddExecutableEnd:
     if (!KSUCCESS(Status)) {
@@ -832,8 +859,7 @@ Return Value:
 
 KSTATUS
 ImGetImageInformation (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PIMAGE_INFORMATION Information
     )
 
@@ -846,9 +872,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the memory mapped file.
-
-    FileSize - Supplies the size of the file.
+    Buffer - Supplies a pointer to the image buffer.
 
     Information - Supplies a pointer to the information structure that will be
         filled out by this function. It is assumed the memory pointed to here
@@ -877,7 +901,7 @@ Return Value:
     // Attempt to get image information for a PE image.
     //
 
-    IsPeImage = ImpPeGetHeaders(File, FileSize, &PeHeaders);
+    IsPeImage = ImpPeGetHeaders(Buffer, &PeHeaders);
     if (IsPeImage != FALSE) {
         Information->Format = ImagePe32;
         Information->ImageBase = PeHeaders->OptionalHeader.ImageBase;
@@ -900,7 +924,7 @@ Return Value:
     // Attempt to get the image information for an ELF image.
     //
 
-    IsElfImage = ImpElfGetHeader(File, FileSize, &ElfHeader);
+    IsElfImage = ImpElfGetHeader(Buffer, &ElfHeader);
     if (IsElfImage != FALSE) {
         Information->Format = ImageElf32;
         Information->ImageBase = 0;
@@ -929,8 +953,7 @@ GetImageInformationEnd:
 
 BOOL
 ImGetImageSection (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PSTR SectionName,
     PVOID *Section,
     PULONGLONG VirtualAddress,
@@ -947,9 +970,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the image file mapped into memory.
-
-    FileSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the image buffer.
 
     SectionName - Supplies the name of the desired section.
 
@@ -977,11 +998,10 @@ Return Value:
 
     IMAGE_FORMAT Format;
 
-    Format = ImGetImageFormat(File, FileSize);
+    Format = ImGetImageFormat(Buffer);
     switch (Format) {
     case ImagePe32:
-        return ImpPeGetSection(File,
-                               FileSize,
+        return ImpPeGetSection(Buffer,
                                SectionName,
                                Section,
                                VirtualAddress,
@@ -989,8 +1009,7 @@ Return Value:
                                SectionSizeInMemory);
 
     case ImageElf32:
-        return ImpElfGetSection(File,
-                                FileSize,
+        return ImpElfGetSection(Buffer,
                                 SectionName,
                                 Section,
                                 VirtualAddress,
@@ -1010,8 +1029,7 @@ Return Value:
 
 IMAGE_FORMAT
 ImGetImageFormat (
-    PVOID FileBuffer,
-    UINTN FileBufferSize
+    PIMAGE_BUFFER Buffer
     )
 
 /*++
@@ -1022,9 +1040,7 @@ Routine Description:
 
 Arguments:
 
-    FileBuffer - Supplies a pointer to the memory mapped file.
-
-    FileBufferSize - Supplies the size of the file.
+    Buffer - Supplies a pointer to the image buffer to determine the type of.
 
 Return Value:
 
@@ -1043,7 +1059,7 @@ Return Value:
     // Attempt to get the ELF image header.
     //
 
-    IsElfImage = ImpElfGetHeader(FileBuffer, FileBufferSize, &ElfHeader);
+    IsElfImage = ImpElfGetHeader(Buffer, &ElfHeader);
     if (IsElfImage != FALSE) {
         return ImageElf32;
     }
@@ -1052,7 +1068,7 @@ Return Value:
     // Attempt to get the PE image headers.
     //
 
-    IsPeImage = ImpPeGetHeaders(FileBuffer, FileBufferSize, &PeHeaders);
+    IsPeImage = ImpPeGetHeaders(Buffer, &PeHeaders);
     if (IsPeImage != FALSE) {
         return ImagePe32;
     }
@@ -1134,6 +1150,91 @@ Return Value:
     return Status;
 }
 
+PVOID
+ImpReadBuffer (
+    PIMAGE_FILE_INFORMATION File,
+    PIMAGE_BUFFER Buffer,
+    UINTN Offset,
+    UINTN Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine handles access to an image buffer.
+
+Arguments:
+
+    File - Supplies an optional pointer to the file information, if the buffer
+        may need to be resized.
+
+    Buffer - Supplies a pointer to the buffer to read from.
+
+    Offset - Supplies the offset from the start of the file to read.
+
+    Size - Supplies the required size.
+
+Return Value:
+
+    Returns a pointer to the image file at the requested offset on success.
+
+    NULL if the range is invalid or the file could not be fully loaded.
+
+--*/
+
+{
+
+    UINTN End;
+    KSTATUS Status;
+
+    End = Offset + Size;
+    if (Offset > End) {
+        return NULL;
+    }
+
+    //
+    // In most cases, the buffer can satisfy the request.
+    //
+
+    if ((Buffer->Data != NULL) &&
+        (Offset < Buffer->Size) &&
+        (End < Buffer->Size)) {
+
+        return Buffer->Data + Offset;
+    }
+
+    //
+    // If there's no file, buffer is already the entire file, or the entire
+    // file wouldn't satisfy the request, fail.
+    //
+
+    if ((File == NULL) || (Buffer->Size == File->Size) || (End > File->Size)) {
+        return NULL;
+    }
+
+    //
+    // Unload the current buffer.
+    //
+
+    ImUnloadBuffer(File, Buffer);
+    RtlZeroMemory(Buffer, sizeof(IMAGE_BUFFER));
+
+    //
+    // Load up the whole file.
+    //
+
+    Status = ImLoadFile(File, Buffer);
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("Failed to load file: %x\n", Status);
+        return NULL;
+    }
+
+    ASSERT(End <= Buffer->Size);
+
+    return Buffer->Data + Offset;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -1142,8 +1243,7 @@ KSTATUS
 ImpGetImageSize (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PVOID FileBuffer,
-    UINTN FileBufferSize,
+    PIMAGE_BUFFER Buffer,
     PSTR *InterpreterPath
     )
 
@@ -1161,9 +1261,7 @@ Arguments:
     Image - Supplies a pointer to the loaded image structure. The format
         memeber is the only member that is required to be initialized.
 
-    FileBuffer - Supplies a pointer to the memory mapped file.
-
-    FileBufferSize - Supplies the size of the file.
+    Buffer - Supplies a pointer to the loaded image buffer.
 
     InterpreterPath - Supplies a pointer where the interpreter name will be
         returned if the program is requesting an interpreter.
@@ -1184,12 +1282,7 @@ Return Value:
         break;
 
     case ImageElf32:
-        Status = ImpElfGetImageSize(ListHead,
-                                    Image,
-                                    FileBuffer,
-                                    FileBufferSize,
-                                    InterpreterPath);
-
+        Status = ImpElfGetImageSize(ListHead, Image, Buffer, InterpreterPath);
         break;
 
     default:
@@ -1207,8 +1300,7 @@ KSTATUS
 ImpLoadImage (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PVOID FileBuffer,
-    UINTN FileBufferSize,
+    PIMAGE_BUFFER Buffer,
     ULONG ImportDepth
     )
 
@@ -1227,10 +1319,7 @@ Arguments:
         include the loaded virtual address and image size. This routine will
         fill out many other fields.
 
-    FileBuffer - Supplies a pointer to the raw file, in memory.
-
-    FileBufferSize - Supplies the size of the memory mapped file buffer, in
-        bytes.
+    Buffer - Supplies a pointer to the image file buffer.
 
     ImportDepth - Supplies the import tree depth of the image being loaded.
 
@@ -1254,12 +1343,7 @@ Return Value:
         break;
 
     case ImageElf32:
-        Status = ImpElfLoadImage(ListHead,
-                                 Image,
-                                 FileBuffer,
-                                 FileBufferSize,
-                                 ImportDepth);
-
+        Status = ImpElfLoadImage(ListHead, Image, Buffer, ImportDepth);
         break;
 
     default:
@@ -1272,6 +1356,7 @@ Return Value:
 
 KSTATUS
 ImpAddImage (
+    PIMAGE_BUFFER ImageBuffer,
     PLOADED_IMAGE Image
     )
 
@@ -1283,6 +1368,8 @@ Routine Description:
     been loaded into memory.
 
 Arguments:
+
+    ImageBuffer - Supplies a pointer to the loaded image buffer.
 
     Image - Supplies a pointer to the image to initialize.
 
@@ -1298,7 +1385,7 @@ Return Value:
 
     switch (Image->Format) {
     case ImageElf32:
-        Status = ImpElfAddImage(Image);
+        Status = ImpElfAddImage(ImageBuffer, Image);
         break;
 
     default:

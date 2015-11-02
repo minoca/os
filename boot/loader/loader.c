@@ -517,6 +517,7 @@ Return Value:
                               KernelPath,
                               NULL,
                               NULL,
+                              NULL,
                               LoadFlags,
                               0,
                               &KernelImage,
@@ -1675,6 +1676,7 @@ Return Value:
 
         Status = ImLoadExecutable(&BoLoadedImageList,
                                   DriverName,
+                                  NULL,
                                   NULL,
                                   NULL,
                                   LoadFlags,

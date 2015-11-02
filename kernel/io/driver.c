@@ -414,6 +414,7 @@ Return Value:
     Status = ImLoadExecutable(&(KernelProcess->ImageListHead),
                               DriverName,
                               NULL,
+                              NULL,
                               KernelProcess,
                               LoadFlags,
                               0,

@@ -698,6 +698,7 @@ Return Value:
     FILE *File;
     PVOID FileBuffer;
     LONG FileSize;
+    IMAGE_BUFFER ImageBuffer;
     IMAGE_INFORMATION Information;
     BOOL Result;
     ULONG SectionSize;
@@ -705,6 +706,7 @@ Return Value:
     KSTATUS Status;
 
     FileBuffer = NULL;
+    memset(&ImageBuffer, 0, sizeof(IMAGE_BUFFER));
     SectionSource = NULL;
     Symbols->Filename = NULL;
     Symbols->RawStabs = NULL;
@@ -749,12 +751,14 @@ Return Value:
     }
 
     strcpy(Symbols->Filename, Filename);
+    ImageBuffer.Data = FileBuffer;
+    ImageBuffer.Size = FileSize;
 
     //
     // Get and save the relevant image information.
     //
 
-    Status = ImGetImageInformation(FileBuffer, FileSize, &Information);
+    Status = ImGetImageInformation(&ImageBuffer, &Information);
     if (!KSUCCESS(Status)) {
         Result = FALSE;
         goto LoadRawStabsEnd;
@@ -769,8 +773,7 @@ Return Value:
     // and copy it over.
     //
 
-    Result = ImGetImageSection(FileBuffer,
-                               FileSize,
+    Result = ImGetImageSection(&ImageBuffer,
                                ".stab",
                                &SectionSource,
                                NULL,
@@ -795,8 +798,7 @@ Return Value:
     // Attempt to get the stab strings section.
     //
 
-    Result = ImGetImageSection(FileBuffer,
-                               FileSize,
+    Result = ImGetImageSection(&ImageBuffer,
                                ".stabstr",
                                &SectionSource,
                                NULL,

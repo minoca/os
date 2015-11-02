@@ -91,13 +91,21 @@ PspImCloseFile (
 KSTATUS
 PspImLoadFile (
     PIMAGE_FILE_INFORMATION File,
-    PVOID *FileBuffer
+    PIMAGE_BUFFER Buffer
+    );
+
+KSTATUS
+PspImReadFile (
+    PIMAGE_FILE_INFORMATION File,
+    ULONGLONG Offset,
+    UINTN Size,
+    PIMAGE_BUFFER Buffer
     );
 
 VOID
-PspImUnloadFile (
+PspImUnloadBuffer (
     PIMAGE_FILE_INFORMATION File,
-    PVOID Buffer
+    PIMAGE_BUFFER Buffer
     );
 
 KSTATUS
@@ -212,7 +220,8 @@ IM_IMPORT_TABLE PsImFunctionTable = {
     PspImOpenFile,
     PspImCloseFile,
     PspImLoadFile,
-    PspImUnloadFile,
+    PspImReadFile,
+    PspImUnloadBuffer,
     PspImAllocateAddressSpace,
     PspImFreeAddressSpace,
     PspImMapImageSegment,
@@ -257,10 +266,12 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PLOADED_IMAGE Image;
+    IMAGE_BUFFER ImageBuffer;
     PKPROCESS KernelProcess;
     PLOADED_IMAGE NewImage;
     KSTATUS Status;
 
+    RtlZeroMemory(&ImageBuffer, sizeof(IMAGE_BUFFER));
     Status = ImInitialize(&PsImFunctionTable);
     if (!KSUCCESS(Status)) {
         goto InitializeImageSupportEnd;
@@ -271,10 +282,9 @@ Return Value:
     while (CurrentEntry != ListHead) {
         Image = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
-        Status = ImAddImage(Image->BinaryName,
-                            Image->LoadedLowestAddress,
-                            &NewImage);
-
+        ImageBuffer.Data = Image->LoadedLowestAddress;
+        ImageBuffer.Size = Image->Size;
+        Status = ImAddImage(Image->BinaryName, &ImageBuffer, &NewImage);
         if (!KSUCCESS(Status)) {
 
             ASSERT(FALSE);
@@ -960,21 +970,21 @@ Return Value:
 KSTATUS
 PspImLoadFile (
     PIMAGE_FILE_INFORMATION File,
-    PVOID *FileBuffer
+    PIMAGE_BUFFER Buffer
     )
 
 /*++
 
 Routine Description:
 
-    This routine loads a file into memory so the image library can read it.
+    This routine loads an entire file into memory so the image library can
+    access it.
 
 Arguments:
 
     File - Supplies a pointer to the file information.
 
-    FileBuffer - Supplies a pointer where a pointer to the file buffer will be
-        returned on success.
+    Buffer - Supplies a pointer where the buffer will be returned on success.
 
 Return Value:
 
@@ -988,7 +998,6 @@ Return Value:
     UINTN PageSize;
     KSTATUS Status;
 
-    *FileBuffer = NULL;
     PageSize = MmPageSize();
     AlignedSize = ALIGN_RANGE_UP(File->Size, PageSize);
     if (AlignedSize > MAX_UINTN) {
@@ -1002,27 +1011,112 @@ Return Value:
                               TRUE,
                               NULL,
                               AllocationStrategyAnyAddress,
-                              FileBuffer);
+                              &(Buffer->Data));
 
     if (!KSUCCESS(Status)) {
         return Status;
     }
 
+    Buffer->Size = File->Size;
     return STATUS_SUCCESS;
 }
 
-VOID
-PspImUnloadFile (
+KSTATUS
+PspImReadFile (
     PIMAGE_FILE_INFORMATION File,
-    PVOID Buffer
+    ULONGLONG Offset,
+    UINTN Size,
+    PIMAGE_BUFFER Buffer
     )
 
 /*++
 
 Routine Description:
 
-    This routine unloads a file and frees the buffer associated with a load
-    image call.
+    This routine reads a portion of the given file into a buffer, allocated by
+    this function.
+
+Arguments:
+
+    File - Supplies a pointer to the file information.
+
+    Offset - Supplies the file offset to read from in bytes.
+
+    Size - Supplies the size to read, in bytes.
+
+    Buffer - Supplies a pointer where the buffer will be returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINTN AlignedSize;
+    UINTN BytesComplete;
+    PIO_BUFFER IoBuffer;
+    UINTN PageSize;
+    KSTATUS Status;
+
+    PageSize = MmPageSize();
+    AlignedSize = ALIGN_RANGE_UP(Size, PageSize);
+    IoBuffer = MmAllocateUninitializedIoBuffer(AlignedSize, 0);
+    if (IoBuffer == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto ImReadFileEnd;
+    }
+
+    Status = IoReadAtOffset(File->Handle,
+                            IoBuffer,
+                            Offset,
+                            AlignedSize,
+                            0,
+                            WAIT_TIME_INDEFINITE,
+                            &BytesComplete,
+                            NULL);
+
+    if (Status == STATUS_END_OF_FILE) {
+        Status = STATUS_SUCCESS;
+
+    } else if (!KSUCCESS(Status)) {
+        goto ImReadFileEnd;
+    }
+
+    Status = MmMapIoBuffer(IoBuffer, FALSE, FALSE, TRUE);
+    if (!KSUCCESS(Status)) {
+        goto ImReadFileEnd;
+    }
+
+    Buffer->Context = IoBuffer;
+    Buffer->Data = IoBuffer->Fragment[0].VirtualAddress;
+    Buffer->Size = BytesComplete;
+    Status = STATUS_SUCCESS;
+
+ImReadFileEnd:
+    if (!KSUCCESS(Status)) {
+        if (IoBuffer != NULL) {
+            MmFreeIoBuffer(IoBuffer);
+            IoBuffer = NULL;
+        }
+    }
+
+    return Status;
+}
+
+VOID
+PspImUnloadBuffer (
+    PIMAGE_FILE_INFORMATION File,
+    PIMAGE_BUFFER Buffer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unloads a file buffer created from either the load file or
+    read file function, and frees the buffer.
 
 Arguments:
 
@@ -1042,14 +1136,21 @@ Return Value:
     UINTN PageSize;
     KSTATUS Status;
 
-    ASSERT(Buffer != NULL);
+    ASSERT(Buffer->Data != NULL);
 
-    PageSize = MmPageSize();
-    AlignedSize = ALIGN_RANGE_UP(File->Size, PageSize);
-    Status = MmUnmapFileSection(NULL, Buffer, AlignedSize, NULL);
+    if (Buffer->Context != NULL) {
+        MmFreeIoBuffer(Buffer->Context);
 
-    ASSERT(KSUCCESS(Status));
+    } else {
+        PageSize = MmPageSize();
+        AlignedSize = ALIGN_RANGE_UP(File->Size, PageSize);
+        Status = MmUnmapFileSection(NULL, Buffer->Data, AlignedSize, NULL);
 
+        ASSERT(KSUCCESS(Status));
+    }
+
+    Buffer->Data = NULL;
+    Buffer->Context = NULL;
     return;
 }
 

@@ -76,6 +76,7 @@ KSTATUS
 PspLoadExecutable (
     PSTR BinaryName,
     PIMAGE_FILE_INFORMATION File,
+    PIMAGE_BUFFER Buffer,
     PPROCESS_START_DATA StartData
     );
 
@@ -492,6 +493,7 @@ Return Value:
 
 {
 
+    IMAGE_BUFFER Buffer;
     IMAGE_FILE_INFORMATION File;
     IMAGE_FORMAT Format;
     PPROCESS_ENVIRONMENT NewEnvironment;
@@ -508,6 +510,7 @@ Return Value:
 
     ASSERT(SystemCallNumber == SystemCallExecuteImage);
 
+    RtlZeroMemory(&Buffer, sizeof(IMAGE_BUFFER));
     File.Handle = INVALID_HANDLE;
     NewEnvironment = NULL;
     Parameters = (PSYSTEM_CALL_EXECUTE_IMAGE)SystemCallParameter;
@@ -547,6 +550,7 @@ Return Value:
     Status = ImGetExecutableFormat(NewEnvironment->ImageName,
                                    Process,
                                    &File,
+                                   &Buffer,
                                    &Format);
 
     if (!KSUCCESS(Status)) {
@@ -647,6 +651,7 @@ Return Value:
 
     Status = PspLoadExecutable(Process->Environment->ImageName,
                                &File,
+                               &Buffer,
                                &StartData);
 
     if (!KSUCCESS(Status)) {
@@ -3251,6 +3256,7 @@ Return Value:
 
     Status = PspLoadExecutable(Process->Environment->ImageName,
                                NULL,
+                               NULL,
                                &StartData);
 
     if (!KSUCCESS(Status)) {
@@ -3310,6 +3316,7 @@ KSTATUS
 PspLoadExecutable (
     PSTR BinaryName,
     PIMAGE_FILE_INFORMATION File,
+    PIMAGE_BUFFER Buffer,
     PPROCESS_START_DATA StartData
     )
 
@@ -3327,6 +3334,9 @@ Arguments:
 
     File - Supplies an optional pointer to the already retrieved file
         information, including a handle pointing at the beginning of the file.
+
+    Buffer - Supplies an optional pointer to the loaded image buffer, or at
+        least part of it.
 
     StartData - Supplies a pointer to the process start data, which will be
         initialized by this routine.
@@ -3363,6 +3373,7 @@ Return Value:
     Status = ImLoadExecutable(&(Process->ImageListHead),
                               OS_BASE_LIBRARY,
                               NULL,
+                              NULL,
                               Process,
                               Flags,
                               0,
@@ -3386,6 +3397,7 @@ Return Value:
     Status = ImLoadExecutable(&(Process->ImageListHead),
                               BinaryName,
                               File,
+                              Buffer,
                               Process,
                               Flags,
                               0,

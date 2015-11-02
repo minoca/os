@@ -202,6 +202,7 @@ Return Value:
     ULONG FileSize;
     PCOFF_SECTION FirstSection;
     ULONG ImageBase;
+    IMAGE_BUFFER ImageBuffer;
     PCOFF_SECTION NewSectionEntry;
     PCOFF_SECTION NextSectionEntry;
     PIMAGE_NT_HEADERS PeHeader;
@@ -213,6 +214,7 @@ Return Value:
     CurrentSection = NULL;
     FileBuffer = NULL;
     FirstSection = NULL;
+    memset(&ImageBuffer, 0, sizeof(IMAGE_BUFFER));
     Symbols->RawSymbolTable = NULL;
     Symbols->RawSymbolTableStrings = NULL;
 
@@ -244,11 +246,14 @@ Return Value:
         goto LoadCoffSymbolTableEnd;
     }
 
+    ImageBuffer.Data = FileBuffer;
+    ImageBuffer.Size = FileSize;
+
     //
     // Get the PE headers to determine the location of the symbol table.
     //
 
-    Result = ImpPeGetHeaders(FileBuffer, FileSize, &PeHeader);
+    Result = ImpPeGetHeaders(&ImageBuffer, &PeHeader);
     if (Result == FALSE) {
         goto LoadCoffSymbolTableEnd;
     }

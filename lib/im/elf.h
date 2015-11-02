@@ -523,8 +523,7 @@ KSTATUS
 ImpElfGetImageSize (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PVOID FileBuffer,
-    UINTN FileBufferSize,
+    PIMAGE_BUFFER Buffer,
     PSTR *InterpreterPath
     );
 
@@ -541,9 +540,7 @@ Arguments:
 
     Image - Supplies a pointer to the image to get the size of.
 
-    FileBuffer - Supplies a pointer to the ELF image file, mapped into memory.
-
-    FileBufferSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the loaded image buffer.
 
     InterpreterPath - Supplies a pointer where the interpreter name will be
         returned if the program is requesting an interpreter.
@@ -560,8 +557,7 @@ KSTATUS
 ImpElfLoadImage (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PVOID FileBuffer,
-    UINTN FileBufferSize,
+    PIMAGE_BUFFER Buffer,
     ULONG ImportDepth
     );
 
@@ -580,10 +576,7 @@ Arguments:
         include the loaded virtual address and image size. This routine will
         fill out many other fields.
 
-    FileBuffer - Supplies a pointer to the ELF file, in memory.
-
-    FileBufferSize - Supplies the size of the memory mapped file buffer, in
-        bytes.
+    Buffer - Supplies a pointer to the image buffer.
 
     ImportDepth - Supplies the import depth to assign to the image.
 
@@ -599,6 +592,7 @@ Return Value:
 
 KSTATUS
 ImpElfAddImage (
+    PIMAGE_BUFFER ImageBuffer,
     PLOADED_IMAGE Image
     );
 
@@ -610,6 +604,8 @@ Routine Description:
     been loaded into memory.
 
 Arguments:
+
+    ImageBuffer - Supplies a pointer to the loaded image buffer.
 
     Image - Supplies a pointer to the image to initialize.
 
@@ -642,8 +638,7 @@ Return Value:
 
 BOOL
 ImpElfGetHeader (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PELF32_HEADER *ElfHeader
     );
 
@@ -656,9 +651,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the image file mapped into memory.
-
-    FileSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the loaded image buffer.
 
     ElfHeader - Supplies a pointer where the location of the ELF header will
         be returned.
@@ -673,8 +666,7 @@ Return Value:
 
 BOOL
 ImpElfGetSection (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PSTR SectionName,
     PVOID *Section,
     PULONGLONG VirtualAddress,
@@ -691,9 +683,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the image file mapped into memory.
-
-    FileSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the image buffer.
 
     SectionName - Supplies the name of the desired section.
 

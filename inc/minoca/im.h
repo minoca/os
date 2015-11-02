@@ -215,6 +215,30 @@ typedef struct _IMAGE_FILE_INFORMATION {
 
 Structure Description:
 
+    This structure stores information about a loaded image buffer that the
+    image loader can access portions of the image at.
+
+Members:
+
+    Context - Stores a context pointer to additional information stored by the
+        functions supporting this image library.
+
+    Data - Stores a pointer to the file data.
+
+    Size - Stores the data size in bytes.
+
+--*/
+
+typedef struct _IMAGE_BUFFER {
+    PVOID Context;
+    PVOID Data;
+    UINTN Size;
+} IMAGE_BUFFER, *PIMAGE_BUFFER;
+
+/*++
+
+Structure Description:
+
     This structure stores information about a segment or region of an
     executable image loaded into memory.
 
@@ -554,21 +578,53 @@ typedef
 KSTATUS
 (*PIM_LOAD_FILE) (
     PIMAGE_FILE_INFORMATION File,
-    PVOID *FileBuffer
+    PIMAGE_BUFFER Buffer
     );
 
 /*++
 
 Routine Description:
 
-    This routine loads a file into memory so the image library can read it.
+    This routine loads an entire file into memory so the image library can
+    access it.
 
 Arguments:
 
     File - Supplies a pointer to the file information.
 
-    FileBuffer - Supplies a pointer where a pointer to the file buffer will be
-        returned on success.
+    Buffer - Supplies a pointer where the buffer will be returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PIM_READ_FILE) (
+    PIMAGE_FILE_INFORMATION File,
+    ULONGLONG Offset,
+    UINTN Size,
+    PIMAGE_BUFFER Buffer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads a portion of the given file into a buffer, allocated by
+    this function.
+
+Arguments:
+
+    File - Supplies a pointer to the file information.
+
+    Offset - Supplies the file offset to read from in bytes.
+
+    Size - Supplies the size to read, in bytes.
+
+    Buffer - Supplies a pointer where the buffer will be returned on success.
 
 Return Value:
 
@@ -578,17 +634,17 @@ Return Value:
 
 typedef
 VOID
-(*PIM_UNLOAD_FILE) (
+(*PIM_UNLOAD_BUFFER) (
     PIMAGE_FILE_INFORMATION File,
-    PVOID Buffer
+    PIMAGE_BUFFER Buffer
     );
 
 /*++
 
 Routine Description:
 
-    This routine unloads a file and frees the buffer associated with a load
-    image call.
+    This routine unloads a file buffer created from either the load file or
+    read file function, and frees the buffer.
 
 Arguments:
 
@@ -903,10 +959,13 @@ Members:
         close a handle to a file.
 
     LoadFile - Stores a pointer to a function used by the image library to
-        load a file into memory.
+        load an entire file into memory.
 
-    UnloadFile - Stores a pointer to a function used by the image library to
-        unload a file buffer from memory.
+    ReadFile - Stores a pointer to t a function used by the image library to
+        load a portion of a file into memory.
+
+    UnloadBuffer - Stores a pointer to a function used by the image library to
+        unload a file buffer created from the load file or read file functions.
 
     AllocateAddressSpace - Stores a pointer to a function used by the image
         library to allocate a section of virtual address space.
@@ -943,7 +1002,8 @@ typedef struct _IM_IMPORT_TABLE {
     PIM_OPEN_FILE OpenFile;
     PIM_CLOSE_FILE CloseFile;
     PIM_LOAD_FILE LoadFile;
-    PIM_UNLOAD_FILE UnloadFile;
+    PIM_READ_FILE ReadFile;
+    PIM_UNLOAD_BUFFER UnloadBuffer;
     PIM_ALLOCATE_ADDRESS_SPACE AllocateAddressSpace;
     PIM_FREE_ADDRESS_SPACE FreeAddressSpace;
     PIM_MAP_IMAGE_SEGMENT MapImageSegment;
@@ -992,7 +1052,8 @@ KSTATUS
 ImGetExecutableFormat (
     PSTR BinaryName,
     PVOID SystemContext,
-    PIMAGE_FILE_INFORMATION Information,
+    PIMAGE_FILE_INFORMATION ImageFile,
+    PIMAGE_BUFFER ImageBuffer,
     PIMAGE_FORMAT Format
     );
 
@@ -1009,8 +1070,11 @@ Arguments:
     SystemContext - Supplies the context pointer passed to the load executable
         function.
 
-    Information - Supplies an optional pointer where the file handle and other
+    ImageFile - Supplies an optional pointer where the file handle and other
         information will be returned on success.
+
+    ImageBuffer - Supplies an optional pointer where the image buffer
+        information will be returned.
 
     Format - Supplies a pointer where the format will be returned on success.
 
@@ -1025,6 +1089,7 @@ ImLoadExecutable (
     PLIST_ENTRY ListHead,
     PSTR BinaryName,
     PIMAGE_FILE_INFORMATION BinaryFile,
+    PIMAGE_BUFFER ImageBuffer,
     PVOID SystemContext,
     ULONG Flags,
     ULONG ImportDepth,
@@ -1051,6 +1116,9 @@ Arguments:
         if the caller does not already have an open handle to the binary. On
         success, the image library takes ownership of the handle.
 
+    ImageBuffer - Supplies an optional pointer to the image buffer. This can
+        be a complete image file buffer, or just a partial load of the file.
+
     SystemContext - Supplies an opaque token that will be passed to the
         support functions called by the image support library.
 
@@ -1074,7 +1142,7 @@ Return Value:
 KSTATUS
 ImAddImage (
     PSTR BinaryName,
-    PVOID Buffer,
+    PIMAGE_BUFFER Buffer,
     PLOADED_IMAGE *LoadedImage
     );
 
@@ -1087,12 +1155,10 @@ Routine Description:
 
 Arguments:
 
-    ListHead - Supplies a pointer to the head of the list of loaded images.
-
     BinaryName - Supplies an optional pointer to the name of the image to use.
         If NULL, then the shared object name of the image will be extracted.
 
-    Buffer - Supplies the base address of the loaded image.
+    Buffer - Supplies the image buffer containing the loaded image.
 
     LoadedImage - Supplies an optional pointer where a pointer to the loaded
         image structure will be returned on success.
@@ -1193,8 +1259,7 @@ Return Value:
 
 KSTATUS
 ImGetImageInformation (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PIMAGE_INFORMATION Information
     );
 
@@ -1207,9 +1272,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the memory mapped file.
-
-    FileSize - Supplies the size of the file.
+    Buffer - Supplies a pointer to the image buffer.
 
     Information - Supplies a pointer to the information structure that will be
         filled out by this function. It is assumed the memory pointed to here
@@ -1225,8 +1288,7 @@ Return Value:
 
 BOOL
 ImGetImageSection (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PSTR SectionName,
     PVOID *Section,
     PULONGLONG VirtualAddress,
@@ -1243,9 +1305,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the image file mapped into memory.
-
-    FileSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the image buffer.
 
     SectionName - Supplies the name of the desired section.
 
@@ -1271,8 +1331,7 @@ Return Value:
 
 IMAGE_FORMAT
 ImGetImageFormat (
-    PVOID FileBuffer,
-    UINTN FileBufferSize
+    PIMAGE_BUFFER Buffer
     );
 
 /*++
@@ -1283,9 +1342,7 @@ Routine Description:
 
 Arguments:
 
-    FileBuffer - Supplies a pointer to the memory mapped file.
-
-    FileBufferSize - Supplies the size of the file.
+    Buffer - Supplies a pointer to the image buffer to determine the type of.
 
 Return Value:
 

@@ -97,13 +97,13 @@ OspImCloseFile (
 KSTATUS
 OspImLoadFile (
     PIMAGE_FILE_INFORMATION File,
-    PVOID *FileBuffer
+    PIMAGE_BUFFER Buffer
     );
 
 VOID
-OspImUnloadFile (
+OspImUnloadBuffer (
     PIMAGE_FILE_INFORMATION File,
-    PVOID Buffer
+    PIMAGE_BUFFER Buffer
     );
 
 KSTATUS
@@ -226,7 +226,8 @@ IM_IMPORT_TABLE OsImageFunctionTable = {
     OspImOpenFile,
     OspImCloseFile,
     OspImLoadFile,
-    OspImUnloadFile,
+    NULL,
+    OspImUnloadBuffer,
     OspImAllocateAddressSpace,
     OspImFreeAddressSpace,
     OspImMapImageSegment,
@@ -365,6 +366,7 @@ Return Value:
                                   Environment->ImageName,
                                   NULL,
                                   NULL,
+                                  NULL,
                                   LoadFlags,
                                   0,
                                   &Image,
@@ -497,6 +499,7 @@ Return Value:
     LoadedImage = NULL;
     Status = ImLoadExecutable(&OsLoadedImagesHead,
                               LibraryName,
+                              NULL,
                               NULL,
                               NULL,
                               0,
@@ -988,21 +991,21 @@ Return Value:
 KSTATUS
 OspImLoadFile (
     PIMAGE_FILE_INFORMATION File,
-    PVOID *FileBuffer
+    PIMAGE_BUFFER Buffer
     )
 
 /*++
 
 Routine Description:
 
-    This routine loads a file into memory so the image library can read it.
+    This routine loads an entire file into memory so the image library can
+    access it.
 
 Arguments:
 
     File - Supplies a pointer to the file information.
 
-    FileBuffer - Supplies a pointer where a pointer to the file buffer will be
-        returned on success.
+    Buffer - Supplies a pointer where the buffer will be returned on success.
 
 Return Value:
 
@@ -1024,23 +1027,28 @@ Return Value:
                          0,
                          (UINTN)AlignedSize,
                          SYS_MAP_FLAG_READ,
-                         FileBuffer);
+                         &(Buffer->Data));
 
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    Buffer->Size = File->Size;
     return Status;
 }
 
 VOID
-OspImUnloadFile (
+OspImUnloadBuffer (
     PIMAGE_FILE_INFORMATION File,
-    PVOID Buffer
+    PIMAGE_BUFFER Buffer
     )
 
 /*++
 
 Routine Description:
 
-    This routine unloads a file and frees the buffer associated with a load
-    image call.
+    This routine unloads a file buffer created from either the load file or
+    read file function, and frees the buffer.
 
 Arguments:
 
@@ -1059,11 +1067,14 @@ Return Value:
     UINTN AlignedSize;
     KSTATUS Status;
 
+    ASSERT(Buffer->Data != NULL);
+
     AlignedSize = ALIGN_RANGE_UP(File->Size, OsPageSize);
-    Status = OsMemoryUnmap(Buffer, AlignedSize);
+    Status = OsMemoryUnmap(Buffer->Data, AlignedSize);
 
     ASSERT(KSUCCESS(Status));
 
+    Buffer->Data = NULL;
     return;
 }
 
@@ -2109,6 +2120,7 @@ Return Value:
 
     PLOADED_IMAGE Executable;
     ULONG Flags;
+    IMAGE_BUFFER ImageBuffer;
     PLOADED_IMAGE Interpreter;
     PLOADED_IMAGE OsLibrary;
     PPROCESS_START_DATA StartData;
@@ -2119,8 +2131,11 @@ Return Value:
     ASSERT(OsLoadedImagesHead.Next == NULL);
 
     INITIALIZE_LIST_HEAD(&OsLoadedImagesHead);
+    RtlZeroMemory(&ImageBuffer, sizeof(IMAGE_BUFFER));
     StartData = OsEnvironment->StartData;
-    Status = ImAddImage(NULL, StartData->OsLibraryBase, &OsLibrary);
+    ImageBuffer.Size = MAX_UINTN;
+    ImageBuffer.Data = StartData->OsLibraryBase;
+    Status = ImAddImage(NULL, &ImageBuffer, &OsLibrary);
     if (!KSUCCESS(Status)) {
         goto LoadInitialImageListEnd;
     }
@@ -2130,7 +2145,8 @@ Return Value:
     if ((StartData->InterpreterBase != NULL) &&
         (StartData->InterpreterBase != StartData->OsLibraryBase)) {
 
-        Status = ImAddImage(NULL, StartData->InterpreterBase, &Interpreter);
+        ImageBuffer.Data = StartData->InterpreterBase;
+        Status = ImAddImage(NULL, &ImageBuffer, &Interpreter);
         if (!KSUCCESS(Status)) {
             goto LoadInitialImageListEnd;
         }
@@ -2142,7 +2158,8 @@ Return Value:
     ASSERT(StartData->ExecutableBase != StartData->InterpreterBase);
 
     if (StartData->ExecutableBase != StartData->OsLibraryBase) {
-        Status = ImAddImage(NULL, StartData->ExecutableBase, &Executable);
+        ImageBuffer.Data = StartData->ExecutableBase;
+        Status = ImAddImage(NULL, &ImageBuffer, &Executable);
         if (!KSUCCESS(Status)) {
             goto LoadInitialImageListEnd;
         }

@@ -267,8 +267,7 @@ typedef struct _COFF_SYMBOL {
 
 BOOL
 ImpPeGetHeaders (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PIMAGE_NT_HEADERS *PeHeaders
     );
 
@@ -281,9 +280,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the image file mapped into memory.
-
-    FileSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the buffer to get the headers from.
 
     PeHeaders - Supplies a pointer where the location of the PE headers will
         be returned.
@@ -298,8 +295,7 @@ Return Value:
 
 BOOL
 ImpPeGetSection (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PSTR SectionName,
     PVOID *Section,
     PULONGLONG VirtualAddress,
@@ -316,9 +312,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the image file mapped into memory.
-
-    FileSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the file buffer.
 
     SectionName - Supplies the name of the desired section.
 

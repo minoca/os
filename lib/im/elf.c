@@ -89,7 +89,7 @@ Structure Description:
 
 Members:
 
-    File - Stores a pointer to a buffer containing the raw file.
+    Buffer - Stores the loaded image buffer.
 
     ElfHeader - Stores a pointer pointing inside the file buffer where the
         main ELF header resides.
@@ -108,7 +108,7 @@ Members:
 --*/
 
 typedef struct _ELF_LOADING_IMAGE {
-    PVOID File;
+    IMAGE_BUFFER Buffer;
     PELF32_HEADER ElfHeader;
     PELF32_DYNAMIC_ENTRY DynamicSection;
     ULONG DynamicEntryCount;
@@ -241,8 +241,7 @@ KSTATUS
 ImpElfGetImageSize (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PVOID FileBuffer,
-    UINTN FileBufferSize,
+    PIMAGE_BUFFER Buffer,
     PSTR *InterpreterPath
     )
 
@@ -259,9 +258,7 @@ Arguments:
 
     Image - Supplies a pointer to the image to get the size of.
 
-    FileBuffer - Supplies a pointer to the ELF image file, mapped into memory.
-
-    FileBufferSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the loaded image buffer.
 
     InterpreterPath - Supplies a pointer where the interpreter name will be
         returned if the program is requesting an interpreter.
@@ -278,6 +275,7 @@ Return Value:
 
     PELF32_HEADER ElfHeader;
     PELF32_PROGRAM_HEADER FirstProgramHeader;
+    ULONG HeaderSize;
     UINTN HighestVirtualAddress;
     UINTN ImageSize;
     PSTR InterpreterName;
@@ -298,26 +296,23 @@ Return Value:
     // Get the ELF headers.
     //
 
-    Result = ImpElfGetHeader(FileBuffer, FileBufferSize, &ElfHeader);
+    Result = ImpElfGetHeader(Buffer, &ElfHeader);
     if (Result == FALSE) {
         goto GetImageSizeEnd;
     }
 
     SegmentCount = ElfHeader->ProgramHeaderCount;
-    FirstProgramHeader = (PELF32_PROGRAM_HEADER)((PUCHAR)FileBuffer +
-                                               ElfHeader->ProgramHeaderOffset);
+    if (SegmentCount > ELF_MAX_PROGRAM_HEADERS) {
+        goto GetImageSizeEnd;
+    }
 
-    //
-    // Validate that program headers don't go off the end of the file.
-    //
+    FirstProgramHeader = ImpReadBuffer(
+                                  &(Image->File),
+                                  Buffer,
+                                  ElfHeader->ProgramHeaderOffset,
+                                  ElfHeader->ProgramHeaderSize * SegmentCount);
 
-    if ((ElfHeader->ProgramHeaderOffset > FileBufferSize) ||
-        (ElfHeader->ProgramHeaderSize < sizeof(ELF32_PROGRAM_HEADER)) ||
-        (ElfHeader->ProgramHeaderCount > ELF_MAX_PROGRAM_HEADERS) ||
-        (ElfHeader->ProgramHeaderOffset +
-         (ElfHeader->ProgramHeaderCount * sizeof(ELF32_PROGRAM_HEADER)) >
-         FileBufferSize)) {
-
+    if (FirstProgramHeader == NULL) {
         goto GetImageSizeEnd;
     }
 
@@ -355,11 +350,15 @@ Return Value:
 
             ASSERT(Image->ImportDepth == 0);
 
-            InterpreterName = FileBuffer + ProgramHeader->Offset;
-            if ((ProgramHeader->Offset >= FileBufferSize) ||
-                (ProgramHeader->FileSize >
-                 FileBufferSize - ProgramHeader->Offset) ||
-                (InterpreterName[ProgramHeader->FileSize - 1] != '\0')) {
+            HeaderSize = ProgramHeader->FileSize;
+            InterpreterName = ImpReadBuffer(&(Image->File),
+                                            Buffer,
+                                            ProgramHeader->Offset,
+                                            HeaderSize);
+
+            if ((InterpreterName == NULL) ||
+                (HeaderSize == 0) ||
+                (InterpreterName[HeaderSize - 1] != '\0')) {
 
                 Status = STATUS_UNKNOWN_IMAGE_FORMAT;
                 goto GetImageSizeEnd;
@@ -414,8 +413,7 @@ KSTATUS
 ImpElfLoadImage (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PVOID FileBuffer,
-    UINTN FileBufferSize,
+    PIMAGE_BUFFER Buffer,
     ULONG ImportDepth
     )
 
@@ -434,10 +432,7 @@ Arguments:
         include the loaded virtual address and image size. This routine will
         fill out many other fields.
 
-    FileBuffer - Supplies a pointer to the ELF file, in memory.
-
-    FileBufferSize - Supplies the size of the memory mapped file buffer, in
-        bytes.
+    Buffer - Supplies a pointer to the image buffer.
 
     ImportDepth - Supplies the import depth to assign to the image.
 
@@ -482,13 +477,13 @@ Return Value:
 
     Image->ImageContext = LoadingImage;
     RtlZeroMemory(LoadingImage, sizeof(ELF_LOADING_IMAGE));
-    LoadingImage->File = FileBuffer;
+    RtlCopyMemory(&(LoadingImage->Buffer), Buffer, sizeof(IMAGE_BUFFER));
 
     //
     // Get the ELF headers.
     //
 
-    Result = ImpElfGetHeader(FileBuffer, FileBufferSize, &ElfHeader);
+    Result = ImpElfGetHeader(Buffer, &ElfHeader);
     if (Result == FALSE) {
         Status = STATUS_FILE_CORRUPT;
         goto LoadImageEnd;
@@ -510,9 +505,31 @@ Return Value:
     }
 
     SegmentCount = ElfHeader->ProgramHeaderCount;
-    FirstProgramHeader =
-        (PELF32_PROGRAM_HEADER)((PUCHAR)FileBuffer +
-                                ElfHeader->ProgramHeaderOffset);
+    FirstProgramHeader = ImpReadBuffer(
+                                  &(Image->File),
+                                  Buffer,
+                                  ElfHeader->ProgramHeaderOffset,
+                                  ElfHeader->ProgramHeaderSize * SegmentCount);
+
+    if (FirstProgramHeader == NULL) {
+        Status = STATUS_UNKNOWN_IMAGE_FORMAT;
+        goto LoadImageEnd;
+    }
+
+    //
+    // Reload the ELF header if reading the program headers caused the buffer
+    // to change.
+    //
+
+    if (Buffer->Data != ElfHeader) {
+        Result = ImpElfGetHeader(Buffer, &ElfHeader);
+        if (Result == FALSE) {
+            Status = STATUS_FILE_CORRUPT;
+            goto LoadImageEnd;
+        }
+
+        LoadingImage->ElfHeader = ElfHeader;
+    }
 
     //
     // Allocate space for the image segment structures.
@@ -777,6 +794,7 @@ LoadImageEnd:
 
 KSTATUS
 ImpElfAddImage (
+    PIMAGE_BUFFER ImageBuffer,
     PLOADED_IMAGE Image
     )
 
@@ -788,6 +806,8 @@ Routine Description:
     been loaded into memory.
 
 Arguments:
+
+    ImageBuffer - Supplies a pointer to the loaded image buffer.
 
     Image - Supplies a pointer to the image to initialize.
 
@@ -806,9 +826,12 @@ Return Value:
     PELF_LOADING_IMAGE LoadingImage;
     UINTN LowestVirtualAddress;
     PELF32_PROGRAM_HEADER ProgramHeader;
+    ULONG SegmentCount;
     KSTATUS Status;
 
     ElfHeader = Image->LoadedLowestAddress;
+    Image->LoadedLowestAddress = ImageBuffer->Data;
+    Image->Size = ImageBuffer->Size;
     Image->LoadedImageBuffer = Image->LoadedLowestAddress;
     LoadingImage = ImAllocateMemory(sizeof(ELF_LOADING_IMAGE),
                                     IM_ALLOCATION_TAG);
@@ -820,8 +843,8 @@ Return Value:
 
     Image->ImageContext = LoadingImage;
     RtlZeroMemory(LoadingImage, sizeof(ELF_LOADING_IMAGE));
+    RtlCopyMemory(&(LoadingImage->Buffer), ImageBuffer, sizeof(IMAGE_BUFFER));
     LoadingImage->ElfHeader = ElfHeader;
-    LoadingImage->File = ElfHeader;
     if (ElfHeader->ImageType == ELF_IMAGE_SHARED_OBJECT) {
         Image->Flags |= IMAGE_FLAG_RELOCATABLE;
 
@@ -847,9 +870,17 @@ Return Value:
         break;
     }
 
-    FirstProgramHeader =
-                       (PELF32_PROGRAM_HEADER)((PUCHAR)ElfHeader +
-                                               ElfHeader->ProgramHeaderOffset);
+    SegmentCount = ElfHeader->ProgramHeaderCount;
+    FirstProgramHeader = ImpReadBuffer(
+                                  &(Image->File),
+                                  ImageBuffer,
+                                  ElfHeader->ProgramHeaderOffset,
+                                  ElfHeader->ProgramHeaderSize * SegmentCount);
+
+    if (FirstProgramHeader == NULL) {
+        Status = STATUS_UNKNOWN_IMAGE_FORMAT;
+        goto AddImageEnd;
+    }
 
     //
     // Loop through the program headers.
@@ -857,7 +888,7 @@ Return Value:
 
     LowestVirtualAddress = (UINTN)-1;
     ProgramHeader = FirstProgramHeader;
-    for (Index = 0; Index < ElfHeader->ProgramHeaderCount; Index += 1) {
+    for (Index = 0; Index < SegmentCount; Index += 1) {
 
         //
         // Remember the TLS segment.
@@ -932,20 +963,11 @@ Return Value:
 {
 
     ULONG ImportIndex;
-    PELF_LOADING_IMAGE LoadingImage;
     ULONG SegmentIndex;
 
     ASSERT((Image->ImportCount == 0) || (Image->Imports != NULL));
 
-    if (Image->ImageContext != NULL) {
-        LoadingImage = Image->ImageContext;
-        if (LoadingImage->File != NULL) {
-            ImUnloadFile(&(Image->File), LoadingImage->File);
-        }
-
-        ImFreeMemory(Image->ImageContext);
-        Image->ImageContext = NULL;
-    }
+    ImpElfFreeContext(Image);
 
     //
     // Unload all imports.
@@ -989,8 +1011,7 @@ Return Value:
 
 BOOL
 ImpElfGetHeader (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PELF32_HEADER *ElfHeader
     )
 
@@ -1003,9 +1024,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the image file mapped into memory.
-
-    FileSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the loaded image buffer.
 
     ElfHeader - Supplies a pointer where the location of the ELF header will
         be returned.
@@ -1021,17 +1040,10 @@ Return Value:
 {
 
     PELF32_HEADER Header;
-    ULONGLONG TotalProgramHeaders;
-    ULONGLONG TotalSectionHeaders;
 
     *ElfHeader = NULL;
-    Header = (PELF32_HEADER)File;
-
-    //
-    // Perform some basic validation on the image.
-    //
-
-    if (FileSize < sizeof(ELF32_HEADER)) {
+    Header = ImpReadBuffer(NULL, Buffer, 0, sizeof(ELF32_HEADER));
+    if (Header == NULL) {
         return FALSE;
     }
 
@@ -1084,41 +1096,13 @@ Return Value:
         return FALSE;
     }
 
-    //
-    // Ensure that the program header and section header offsets are within
-    // bounds of the file. Watch out for tricky counts that try to wrap ULONGs.
-    //
-
-    TotalProgramHeaders = sizeof(ELF32_PROGRAM_HEADER) *
-                          Header->ProgramHeaderCount;
-
-    TotalSectionHeaders = sizeof(ELF32_SECTION_HEADER) *
-                          Header->SectionHeaderCount;
-
-    if ((Header->ProgramHeaderOffset > FileSize) ||
-        (Header->ProgramHeaderOffset + TotalProgramHeaders > FileSize) ||
-        (Header->ProgramHeaderOffset + TotalProgramHeaders <
-         Header->ProgramHeaderOffset)) {
-
-        return FALSE;
-    }
-
-    if ((Header->SectionHeaderOffset > FileSize) ||
-        (Header->SectionHeaderOffset + TotalSectionHeaders > FileSize) ||
-        (Header->SectionHeaderOffset + TotalSectionHeaders <
-         Header->SectionHeaderOffset)) {
-
-        return FALSE;
-    }
-
     *ElfHeader = Header;
     return TRUE;
 }
 
 BOOL
 ImpElfGetSection (
-    PVOID File,
-    UINTN FileSize,
+    PIMAGE_BUFFER Buffer,
     PSTR SectionName,
     PVOID *Section,
     PULONGLONG VirtualAddress,
@@ -1135,9 +1119,7 @@ Routine Description:
 
 Arguments:
 
-    File - Supplies a pointer to the image file mapped into memory.
-
-    FileSize - Supplies the size of the memory mapped file, in bytes.
+    Buffer - Supplies a pointer to the image buffer.
 
     SectionName - Supplies the name of the desired section.
 
@@ -1185,7 +1167,7 @@ Return Value:
         goto GetSectionEnd;
     }
 
-    Result = ImpElfGetHeader(File, FileSize, &ElfHeader);
+    Result = ImpElfGetHeader(Buffer, &ElfHeader);
     if (Result == FALSE) {
         goto GetSectionEnd;
     }
@@ -1194,11 +1176,27 @@ Return Value:
     // Get the beginning of the section array, and then get the string table.
     //
 
-    SectionHeader = (PELF32_SECTION_HEADER)((PUCHAR)File +
-                                            ElfHeader->SectionHeaderOffset);
+    SectionHeader = ImpReadBuffer(
+                 NULL,
+                 Buffer,
+                 ElfHeader->SectionHeaderOffset,
+                 sizeof(ELF32_SECTION_HEADER) * ElfHeader->SectionHeaderCount);
+
+    if (SectionHeader == NULL) {
+        Result = FALSE;
+        goto GetSectionEnd;
+    }
 
     StringTableHeader = SectionHeader + ElfHeader->StringSectionIndex;
-    StringTable = (PSTR)((PUCHAR)File + StringTableHeader->Offset);
+    StringTable = ImpReadBuffer(NULL,
+                                Buffer,
+                                StringTableHeader->Offset,
+                                StringTableHeader->Size);
+
+    if (StringTable == NULL) {
+        Result = FALSE;
+        goto GetSectionEnd;
+    }
 
     //
     // Loop through all sections looking for the desired one.
@@ -1217,6 +1215,11 @@ Return Value:
             continue;
         }
 
+        if (SectionHeader->NameOffset >= StringTableHeader->Size) {
+            Result = FALSE;
+            goto GetSectionEnd;
+        }
+
         CurrentSectionName = StringTable + SectionHeader->NameOffset;
         Match = RtlAreStringsEqual(CurrentSectionName,
                                    SectionName,
@@ -1229,7 +1232,16 @@ Return Value:
         //
 
         if (Match != FALSE) {
-            ReturnSection = (PUCHAR)File + SectionHeader->Offset;
+            ReturnSection = ImpReadBuffer(NULL,
+                                          Buffer,
+                                          SectionHeader->Offset,
+                                          SectionHeader->Size);
+
+            if (ReturnSection == NULL) {
+                Result = FALSE;
+                goto GetSectionEnd;
+            }
+
             ReturnSectionFileSize = SectionHeader->Size;
             ReturnSectionMemorySize = 0;
             ReturnSectionVirtualAddress = SectionHeader->VirtualAddress;
@@ -1296,6 +1308,9 @@ Return Value:
     CurrentEntry = ListHead->Next;
     while (CurrentEntry != ListHead) {
         CurrentImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
+
+        ASSERT((CurrentImage->LoadFlags & IMAGE_LOAD_FLAG_LOAD_ONLY) == 0);
+
         if ((CurrentImage->Flags & IMAGE_FLAG_IMPORTS_LOADED) == 0) {
             Status = ImpElfLoadImportsForImage(ListHead, CurrentImage);
             if (!KSUCCESS(Status)) {
@@ -1855,6 +1870,7 @@ Return Value:
         Status = ImLoadExecutable(ListHead,
                                   CompletePath,
                                   NULL,
+                                  NULL,
                                   Image->SystemContext,
                                   LoadFlags,
                                   Image->ImportDepth + 1,
@@ -1917,6 +1933,7 @@ Return Value:
     UINTN DynamicSymbolStringsSize;
     PULONG HashTable;
     ULONG HashTag;
+    ULONG HeaderCount;
     UINTN Index;
     UINTN LibraryNameOffset;
     PELF_LOADING_IMAGE LoadingImage;
@@ -1934,17 +1951,24 @@ Return Value:
     HashTag = 0;
     LibraryNameOffset = 0;
     LoadingImage = Image->ImageContext;
+    HeaderCount = LoadingImage->ElfHeader->ProgramHeaderCount;
+    ProgramHeader = NULL;
     StaticFunctions = NULL;
+
+    //
+    // This function is not using the read buffer functions because it should
+    // only be called in the actual runtime address space, in which case the
+    // image is fully loaded.
+    //
+
+    ASSERT(LoadingImage->Buffer.Size == Image->File.Size);
 
     //
     // Loop through the program headers to find the dynamic section.
     //
 
-    for (Index = 0;
-         Index < LoadingImage->ElfHeader->ProgramHeaderCount;
-         Index += 1) {
-
-        ProgramHeader = LoadingImage->File +
+    for (Index = 0; Index < HeaderCount; Index += 1) {
+        ProgramHeader = LoadingImage->Buffer.Data +
                         LoadingImage->ElfHeader->ProgramHeaderOffset +
                         (Index * LoadingImage->ElfHeader->ProgramHeaderSize);
 
@@ -1989,7 +2013,7 @@ Return Value:
         BaseDifference = Image->LoadedImageBuffer -
                          Image->PreferredLowestAddress;
 
-        DynamicEntry = LoadingImage->File + ProgramHeader->Offset;
+        DynamicEntry = LoadingImage->Buffer.Data + ProgramHeader->Offset;
     }
 
     MaxDynamic = ProgramHeader->FileSize / sizeof(ELF32_DYNAMIC_ENTRY);
@@ -3661,12 +3685,15 @@ Return Value:
     if (Image->ImageContext != NULL) {
         LoadingImage = Image->ImageContext;
         if (Image->File.Handle != INVALID_HANDLE) {
-            ImUnloadFile(&(Image->File), LoadingImage->File);
+            if (LoadingImage->Buffer.Data != NULL) {
+                ImUnloadBuffer(&(Image->File), &(LoadingImage->Buffer));
+            }
+
             ImCloseFile(&(Image->File));
             Image->File.Handle = INVALID_HANDLE;
         }
 
-        LoadingImage->File = NULL;
+        LoadingImage->Buffer.Data = NULL;
         LoadingImage = NULL;
         ImFreeMemory(Image->ImageContext);
         Image->ImageContext = NULL;
