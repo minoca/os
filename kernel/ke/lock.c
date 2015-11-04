@@ -34,6 +34,13 @@ Environment:
 #define SHARED_EXCLUSIVE_LOCK_TAG 0x6553654B // 'eSeK'
 
 //
+// Define shared exclusive lock states.
+//
+
+#define SHARED_EXCLUSIVE_LOCK_FREE 0
+#define SHARED_EXCLUSIVE_LOCK_EXCLUSIVE ((ULONG)-1)
+
+//
 // ----------------------------------------------- Internal Function Prototypes
 //
 
@@ -550,26 +557,13 @@ Return Value:
     }
 
     RtlZeroMemory(SharedExclusiveLock, sizeof(SHARED_EXCLUSIVE_LOCK));
-    SharedExclusiveLock->ExclusiveLock = KeCreateQueuedLock();
-    if (SharedExclusiveLock->ExclusiveLock == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateSharedExclusiveLockEnd;
-    }
-
     SharedExclusiveLock->Event = KeCreateEvent(NULL);
     if (SharedExclusiveLock->Event == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateSharedExclusiveLockEnd;
     }
 
-    //
-    // Signal all waiters on this event to let successive exclusive acquires
-    // succeed. Otherwise each exclusive release would need to signal the event.
-    //
-
-    KeSignalEvent(SharedExclusiveLock->Event, SignalOptionSignalAll);
-    KeInitializeSpinLock(&(SharedExclusiveLock->SharedLock));
-    SharedExclusiveLock->ShareCount = 0;
+    KeSignalEvent(SharedExclusiveLock->Event, SignalOptionSignalOne);
     Status = STATUS_SUCCESS;
 
 CreateSharedExclusiveLockEnd:
@@ -607,10 +601,6 @@ Return Value:
 
 {
 
-    if (SharedExclusiveLock->ExclusiveLock != NULL) {
-        KeDestroyQueuedLock(SharedExclusiveLock->ExclusiveLock);
-    }
-
     if (SharedExclusiveLock->Event != NULL) {
         KeDestroyEvent(SharedExclusiveLock->Event);
     }
@@ -643,15 +633,74 @@ Return Value:
 
 {
 
-    KeAcquireQueuedLock(SharedExclusiveLock->ExclusiveLock);
-    KeAcquireSpinLock(&(SharedExclusiveLock->SharedLock));
-    SharedExclusiveLock->ShareCount += 1;
-    if (SharedExclusiveLock->ShareCount == 1) {
+    BOOL HaveWaited;
+    ULONG PreviousState;
+    ULONG State;
+
+    HaveWaited = FALSE;
+    while (TRUE) {
+        State = SharedExclusiveLock->State;
+
+        //
+        // If no one is trying to acquire exclusive, then attempt to get it
+        // shared.
+        //
+
+        if ((SharedExclusiveLock->ExclusiveWaiting == FALSE) &&
+            (State < SHARED_EXCLUSIVE_LOCK_EXCLUSIVE - 1)) {
+
+            PreviousState = State;
+            State = RtlAtomicCompareExchange32(&(SharedExclusiveLock->State),
+                                               PreviousState + 1,
+                                               PreviousState);
+
+            if (State == PreviousState) {
+
+                //
+                // Let all the blocked reader brethren go if this thread was
+                // also blocked.
+                //
+
+                if (HaveWaited != FALSE) {
+                    KeSignalEvent(SharedExclusiveLock->Event,
+                                  SignalOptionSignalAll);
+                }
+
+                break;
+
+            //
+            // The addition got foiled, go try again.
+            //
+
+            } else {
+                continue;
+            }
+        }
+
+        //
+        // Either someone is trying to get it exclusive, or the attempt to
+        // get it shared failed. Unsignal the event in preparation for going
+        // down to wait on it. If the state changed in the meantime, loop
+        // around again before going down to wait, as the event update might
+        // have become stale.
+        //
+
         KeSignalEvent(SharedExclusiveLock->Event, SignalOptionUnsignal);
+        if (State != SharedExclusiveLock->State) {
+            continue;
+        }
+
+        KeWaitForEvent(SharedExclusiveLock->Event, FALSE, WAIT_TIME_INDEFINITE);
+
+        //
+        // This thread has waited. It may be the only reader woken up after
+        // an exclusive release. Set this boolean to remember to signal the
+        // event to let all waiting readers go.
+        //
+
+        HaveWaited = TRUE;
     }
 
-    KeReleaseSpinLock(&(SharedExclusiveLock->SharedLock));
-    KeReleaseQueuedLock(SharedExclusiveLock->ExclusiveLock);
     return;
 }
 
@@ -679,23 +728,24 @@ Return Value:
 
 {
 
-    ASSERT(KeIsSharedExclusiveLockHeldShared(SharedExclusiveLock) != FALSE);
+    ULONG PreviousState;
 
-    KeAcquireSpinLock(&(SharedExclusiveLock->SharedLock));
-    SharedExclusiveLock->ShareCount -= 1;
+    PreviousState = RtlAtomicAdd32(&(SharedExclusiveLock->State), -1);
+
+    ASSERT((PreviousState < SHARED_EXCLUSIVE_LOCK_EXCLUSIVE) &&
+           (PreviousState != SHARED_EXCLUSIVE_LOCK_FREE));
 
     //
-    // Signal all waiters on this event to let successive exclusive acquires
-    // succeed. Otherwise each exclusive release would need to signal the event.
-    // In practice, however, there is only one waiter because waiting on the
-    // event is protected by the exclusive queued lock.
+    // If this was the last reader and there was a writer waiting, wake that
+    // writer up.
     //
 
-    if (SharedExclusiveLock->ShareCount == 0) {
-        KeSignalEvent(SharedExclusiveLock->Event, SignalOptionSignalAll);
+    if ((SharedExclusiveLock->ExclusiveWaiting != FALSE) &&
+        (PreviousState - 1 == SHARED_EXCLUSIVE_LOCK_FREE)) {
+
+        KeSignalEvent(SharedExclusiveLock->Event, SignalOptionSignalOne);
     }
 
-    KeReleaseSpinLock(&(SharedExclusiveLock->SharedLock));
     return;
 }
 
@@ -723,8 +773,31 @@ Return Value:
 
 {
 
-    KeAcquireQueuedLock(SharedExclusiveLock->ExclusiveLock);
-    KeWaitForEvent(SharedExclusiveLock->Event, FALSE, WAIT_TIME_INDEFINITE);
+    ULONG State;
+
+    while (TRUE) {
+        SharedExclusiveLock->ExclusiveWaiting = TRUE;
+        State = RtlAtomicCompareExchange32(&(SharedExclusiveLock->State),
+                                           SHARED_EXCLUSIVE_LOCK_EXCLUSIVE,
+                                           SHARED_EXCLUSIVE_LOCK_FREE);
+
+        if (State == SHARED_EXCLUSIVE_LOCK_FREE) {
+            break;
+        }
+
+        //
+        // Make the bed to sleep in, but if things changed in the meantime go
+        // try again.
+        //
+
+        KeSignalEvent(SharedExclusiveLock->Event, SignalOptionUnsignal);
+        if (SharedExclusiveLock->State < State) {
+            continue;
+        }
+
+        KeWaitForEvent(SharedExclusiveLock->Event, FALSE, WAIT_TIME_INDEFINITE);
+    }
+
     return;
 }
 
@@ -752,9 +825,14 @@ Return Value:
 
 {
 
-    ASSERT(KeIsSharedExclusiveLockHeldExclusive(SharedExclusiveLock) != FALSE);
+    ASSERT((SharedExclusiveLock->ExclusiveWaiting != FALSE) &&
+           (SharedExclusiveLock->State == SHARED_EXCLUSIVE_LOCK_EXCLUSIVE));
 
-    KeReleaseQueuedLock(SharedExclusiveLock->ExclusiveLock);
+    SharedExclusiveLock->ExclusiveWaiting = FALSE;
+    RtlAtomicExchange32(&(SharedExclusiveLock->State),
+                        SHARED_EXCLUSIVE_LOCK_FREE);
+
+    KeSignalEvent(SharedExclusiveLock->Event, SignalOptionSignalAll);
     return;
 }
 
@@ -782,9 +860,7 @@ Return Value:
 
 {
 
-    if ((KeIsSharedExclusiveLockHeldExclusive(SharedExclusiveLock) != FALSE) ||
-        (KeIsSharedExclusiveLockHeldShared(SharedExclusiveLock) != FALSE)) {
-
+    if (SharedExclusiveLock->State != SHARED_EXCLUSIVE_LOCK_FREE) {
         return TRUE;
     }
 
@@ -817,9 +893,7 @@ Return Value:
 
 {
 
-    if ((KeIsQueuedLockHeld(SharedExclusiveLock->ExclusiveLock) != FALSE) &&
-        (SharedExclusiveLock->ShareCount == 0)) {
-
+    if (SharedExclusiveLock->State == SHARED_EXCLUSIVE_LOCK_EXCLUSIVE) {
         return TRUE;
     }
 
@@ -852,7 +926,9 @@ Return Value:
 
 {
 
-    if (SharedExclusiveLock->ShareCount != 0) {
+    if ((SharedExclusiveLock->State != SHARED_EXCLUSIVE_LOCK_FREE) &&
+        (SharedExclusiveLock->State < SHARED_EXCLUSIVE_LOCK_EXCLUSIVE)) {
+
         return TRUE;
     }
 

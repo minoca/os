@@ -736,23 +736,20 @@ Structure Description:
 
 Members:
 
-    ExclusiveLock - Stores a pointer to a queued lock controls exclusive access
-        to the lock.
+    State - Stores the current state of the shared-exclusive lock. See
+        SHARED_EXCLUSIVE_LOCK_* definitions.
 
-    SharedLock - Stores a spin lock that controls shared access to the lock.
+    Event - Stores a pointer to the event that allows for blocking.
 
-    Event - Stores a pointer to an event that an exclusive aquire must wait on
-        and the last shared release must signal.
-
-    ShareCount - Stores the number of shared acquisitions of the lock.
+    ExclusiveWaiting - Stores a boolean indicating that an exclusive lock
+        acquire is in progress.
 
 --*/
 
 typedef struct _SHARED_EXCLUSIVE_LOCK {
-    PQUEUED_LOCK ExclusiveLock;
-    KSPIN_LOCK SharedLock;
+    volatile ULONG State;
     PKEVENT Event;
-    ULONG ShareCount;
+    BOOL ExclusiveWaiting;
 } SHARED_EXCLUSIVE_LOCK, *PSHARED_EXCLUSIVE_LOCK;
 
 /*++
