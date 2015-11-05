@@ -31,6 +31,8 @@ Author:
 // Define macros to convert from CPU to network format and back.
 //
 
+#define CPU_TO_NETWORK64(_Input) RtlByteSwapUlonglong(_Input)
+#define NETWORK_TO_CPU64(_Input) RtlByteSwapUlonglong(_Input)
 #define CPU_TO_NETWORK32(_Input) RtlByteSwapUlong(_Input)
 #define NETWORK_TO_CPU32(_Input) RtlByteSwapUlong(_Input)
 #define CPU_TO_NETWORK16(_Input) RtlByteSwapUshort(_Input)
@@ -94,6 +96,7 @@ Author:
 #define IP4_PROTOCOL_NUMBER      0x0800
 #define IP6_PROTOCOL_NUMBER      0x86DD
 #define ARP_PROTOCOL_NUMBER      0x0806
+#define EAPOL_PROTOCOL_NUMBER    0x888E
 
 //
 // Define the network socket flags.
@@ -1842,7 +1845,8 @@ struct _NET_NETWORK_ENTRY {
 NET_API
 KSTATUS
 NetRegisterProtocol (
-    PNET_PROTOCOL_ENTRY NewProtocol
+    PNET_PROTOCOL_ENTRY NewProtocol,
+    PHANDLE ProtocolHandle
     );
 
 /*++
@@ -1859,6 +1863,9 @@ Arguments:
         returns, so this pointer had better not point to stack allocated
         memory.
 
+    ProtocolHandle - Supplies an optional pointer that receives a handle to the
+        registered protocol on success.
+
 Return Value:
 
     STATUS_SUCCESS on success.
@@ -1871,9 +1878,33 @@ Return Value:
 --*/
 
 NET_API
+VOID
+NetUnregisterProtocol (
+    HANDLE ProtocolHandle
+    );
+
+/*++
+
+Routine Description:
+
+    This routine unregisters the given protocol from the core networking
+    library.
+
+Arguments:
+
+    ProtocolHandle - Supplies the handle to the protocol to unregister.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
 KSTATUS
 NetRegisterNetworkLayer (
-    PNET_NETWORK_ENTRY NewNetworkEntry
+    PNET_NETWORK_ENTRY NewNetworkEntry,
+    PHANDLE NetworkHandle
     );
 
 /*++
@@ -1887,6 +1918,9 @@ Arguments:
     NewNetworkEntry - Supplies a pointer to the network information. The core
         library will not reference this memory after the function returns, a
         copy will be made.
+
+    NetworkHandle - Supplies an optional pointer that receives a handle to the
+        registered network layer on success.
 
 Return Value:
 
@@ -1902,10 +1936,33 @@ Return Value:
 --*/
 
 NET_API
+VOID
+NetUnregisterNetworkLayer (
+    HANDLE NetworkHandle
+    );
+
+/*++
+
+Routine Description:
+
+    This routine unregisters the given network layer from the core networking
+    library.
+
+Arguments:
+
+    NetworkHandle - Supplies the handle to the network layer to unregister.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
 KSTATUS
 NetRegisterDataLinkLayer (
     PNET_DATA_LINK_ENTRY NewDataLinkEntry,
-    HANDLE *DataLinkHandle
+    PHANDLE DataLinkHandle
     );
 
 /*++
@@ -1921,7 +1978,7 @@ Arguments:
         library will not reference this memory after the function returns, a
         copy will be made.
 
-    DataLinkHandle - Supplies a pointer that receives a handle to the
+    DataLinkHandle - Supplies an optional pointer that receives a handle to the
         registered data link layer on success.
 
 Return Value:

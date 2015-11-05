@@ -106,6 +106,14 @@ Net80211pDestroy80211Link (
 HANDLE Net80211DataLinkLayerHandle = INVALID_HANDLE;
 
 //
+// Define the passphrase for the test BSS.
+//
+
+UCHAR Net80211TestPassphrase[] = {
+    'm', 'i', 'n', 'o', 'c', 'a', 't', 'e', 's', 't'
+};
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -187,6 +195,15 @@ Return Value:
 
     Net80211DataLinkLayerHandle = DataLinkHandle;
 
+    //
+    // Initialize any built-in networks.
+    //
+
+    Status = Net80211pEapolInitialize();
+    if (!KSUCCESS(Status)) {
+        goto DriverEntryEnd;
+    }
+
 DriverEntryEnd:
     if (!KSUCCESS(Status)) {
         if (Net80211DataLinkLayerHandle != INVALID_HANDLE) {
@@ -222,6 +239,16 @@ Return Value:
 --*/
 
 {
+
+    //
+    // Tear down built-in networks.
+    //
+
+    Net80211pEapolDestroy();
+
+    //
+    // Unregister the 802.11 data link layer from the networking core.
+    //
 
     if (Net80211DataLinkLayerHandle != INVALID_HANDLE) {
         NetUnregisterDataLinkLayer(Net80211DataLinkLayerHandle);
@@ -373,7 +400,9 @@ Return Value:
     Status = Net80211pJoinBss(Link,
                               LinkAddress,
                               NET80211_TEST_SSID,
-                              NET80211_TEST_SSID_LENGTH);
+                              NET80211_TEST_SSID_LENGTH,
+                              Net80211TestPassphrase,
+                              sizeof(Net80211TestPassphrase));
 
     return Status;
 }

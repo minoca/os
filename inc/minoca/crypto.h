@@ -89,6 +89,8 @@ typedef enum _AES_CIPHER_MODE {
     AesModeInvalid,
     AesModeCbc128,
     AesModeCbc256,
+    AesModeEcb128,
+    AesModeEcb256,
 } AES_CIPHER_MODE, *PAES_CIPHER_MODE;
 
 typedef enum _FORTUNA_INITIALIZATION_STATE {
@@ -740,9 +742,75 @@ Arguments:
 
     Context - Supplies a pointer to the AES context.
 
+    Ciphertext - Supplies a pointer to the ciphertext buffer.
+
+    Plaintext - Supplies a pointer where the plaintext will be returned.
+
+    Length - Supplies the length of the plaintext and ciphertext buffers, in
+        bytes. This length must be a multiple of 16 bytes.
+
+Return Value:
+
+    None.
+
+--*/
+
+CRYPTO_API
+VOID
+CyAesEcbEncrypt (
+    PAES_CONTEXT Context,
+    PUCHAR Plaintext,
+    PUCHAR Ciphertext,
+    INT Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine encrypts a byte sequence (with a block size of 16) using the
+    AES codebook.
+
+Arguments:
+
+    Context - Supplies a pointer to the AES context.
+
     Plaintext - Supplies a pointer to the plaintext buffer.
 
     Ciphertext - Supplies a pointer where the ciphertext will be returned.
+
+    Length - Supplies the length of the plaintext and ciphertext buffers, in
+        bytes. This length must be a multiple of 16 bytes.
+
+Return Value:
+
+    None.
+
+--*/
+
+CRYPTO_API
+VOID
+CyAesEcbDecrypt (
+    PAES_CONTEXT Context,
+    PUCHAR Ciphertext,
+    PUCHAR Plaintext,
+    INT Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine decrypts a byte sequence (with a block size of 16) using the
+    AES codebook.
+
+Arguments:
+
+    Context - Supplies a pointer to the AES context.
+
+    Ciphertext - Supplies a pointer to the ciphertext buffer.
+
+    Plaintext - Supplies a pointer where the plaintext will be returned.
 
     Length - Supplies the length of the plaintext and ciphertext buffers, in
         bytes. This length must be a multiple of 16 bytes.

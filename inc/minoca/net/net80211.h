@@ -283,6 +283,7 @@ Author:
 #define NET80211_ELEMENT_FH                       0x02
 #define NET80211_ELEMENT_DSSS                     0x03
 #define NET80211_ELEMENT_EDCA                     0x0C
+#define NET80211_ELEMENT_RSN                      0x30
 #define NET80211_ELEMENT_EXTENDED_SUPPORTED_RATES 0x32
 
 //
@@ -347,6 +348,65 @@ Author:
 //
 
 #define NET80211_MAX_EXTENDED_SUPPORTED_RATES 255
+
+//
+// Define the current version for the RSN element.
+//
+
+#define NET80211_RSN_VERSION 1
+
+//
+// Define the RSN cipher suite types.
+//
+
+#define NET80211_CIPHER_SUITE_USE_GROUP_CIPHER  0x000FAC00
+#define NET80211_CIPHER_SUITE_WEP_40            0x000FAC01
+#define NET80211_CIPHER_SUITE_TKIP              0x000FAC02
+#define NET80211_CIPHER_SUITE_CCMP              0x000FAC04
+#define NET80211_CIPHER_SUITE_WEP_104           0x000FAC05
+#define NET80211_CIPHER_SUITE_BIP               0x000FAC06
+#define NET80211_CIPHER_SUITE_GROUP_NOT_ALLOWED 0x000FAC07
+
+//
+// Define the RSN AKM suite types.
+//
+
+#define NET80211_AKM_SUITE_8021X         0x000FAC01
+#define NET80211_AKM_SUITE_PSK           0x000FAC02
+#define NET80211_AKM_SUITE_FT_8021X      0x000FAC03
+#define NET80211_AKM_SUITE_FT_PSK        0x000FAC04
+#define NET80211_AKM_SUITE_8021X_SHA256  0x000FAC05
+#define NET80211_AKM_SUITE_PSK_SHA256    0x000FAC06
+#define NET80211_AKM_SUITE_TDLS_TPK      0x000FAC07
+#define NET80211_AKM_SUITE_SAE_SHA256    0x000FAC08
+#define NET80211_AKM_SUITE_FT_SAE_SHA256 0x000FAC09
+
+//
+// Define the bits for the RSN capabilities.
+//
+
+#define NET80211_RSN_CAPABILITY_EXTENDED_KEY_ID            0x2000
+#define NET80211_RSN_CAPABILITY_PBAC                       0x1000
+#define NET80211_RSN_CAPABILITY_SPP_AMSDU_REQUIRED         0x0800
+#define NET80211_RSN_CAPABILITY_SPP_AMSDU_CAPABLE          0x0400
+#define NET80211_RSN_CAPABILITY_PEERKEY_ENABLED            0x0200
+#define NET80211_RSN_CAPABILITY_MFPC                       0x0080
+#define NET80211_RSN_CAPABILITY_MFPR                       0x0040
+#define NET80211_RSN_CAPABILITY_GTKSA_REPLAY_COUNTER_MASK  0x0030
+#define NET80211_RSN_CAPABILITY_GTKSA_REPLAY_COUNTER_SHIFT 4
+#define NET80211_RSN_CAPABILITY_PTKSA_REPLAY_COUNTER_MASK  0x000C
+#define NET80211_RNS_CAPABILITY_PTKSA_REPLAY_COUNTER_SHIFT 2
+#define NET80211_RSN_CAPABILITY_NO_PAIRWISE                0x0002
+#define NET80211_RSN_CAPABILITY_PREAUTHENTICATION          0x0001
+
+//
+// Define the values for the RSN capability replay counter fields.
+//
+
+#define NET80211_RSN_REPLAY_COUNTER_1  0
+#define NET80211_RSN_REPLAY_COUNTER_2  1
+#define NET80211_RSN_REPLAY_COUNTER_4  2
+#define NET80211_RSN_REPLAY_COUNTER_16 3
 
 //
 // Define the maximum data frame body size, in bytes.
@@ -537,6 +597,9 @@ Members:
     BeaconInterval - Stores the beacon interval for the BSS to which the
         station is associated.
 
+    Capabilities - Stores the bitmask of 802.11 capabilities for the BSS. See
+        NET80211_CAPABILTY_FLAG_* for definitions.
+
     Timestamp - Stores the timestamp taken from the BSS access point when
         probing.
 
@@ -550,6 +613,7 @@ typedef struct _NET80211_STATE_INFORMATION {
     ULONG Version;
     UCHAR Bssid[NET80211_ADDRESS_SIZE];
     USHORT BeaconInterval;
+    USHORT Capabilities;
     ULONGLONG Timestamp;
     ULONG Channel;
     PNET80211_RATE_INFORMATION Rates;

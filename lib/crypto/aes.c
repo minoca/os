@@ -236,11 +236,13 @@ Return Value:
 
     switch (Mode) {
     case AesModeCbc128:
+    case AesModeEcb128:
         Context->Rounds = 10;
         Context->KeySize = AES_CBC128_KEY_SIZE;
         break;
 
     case AesModeCbc256:
+    case AesModeEcb256:
         Context->Rounds = 14;
         Context->KeySize = AES_CBC256_KEY_SIZE;
         break;
@@ -295,17 +297,20 @@ Return Value:
     }
 
     //
-    // Just copy the initialization vector straight over.
+    // Just copy the initialization vector straight over, ignoring it for ECB
+    // modes.
     //
 
-    if (InitializationVector != NULL) {
-        RtlCopyMemory(Context->InitializationVector,
-                      InitializationVector,
-                      AES_INITIALIZATION_VECTOR_SIZE);
+    if ((Mode != AesModeEcb128) && (Mode != AesModeEcb256)) {
+        if (InitializationVector != NULL) {
+            RtlCopyMemory(Context->InitializationVector,
+                          InitializationVector,
+                          AES_INITIALIZATION_VECTOR_SIZE);
 
-    } else {
-        RtlZeroMemory(Context->InitializationVector,
-                      AES_INITIALIZATION_VECTOR_SIZE);
+        } else {
+            RtlZeroMemory(Context->InitializationVector,
+                          AES_INITIALIZATION_VECTOR_SIZE);
+        }
     }
 
     return;
@@ -490,9 +495,9 @@ Arguments:
 
     Context - Supplies a pointer to the AES context.
 
-    Plaintext - Supplies a pointer to the plaintext buffer.
+    Ciphertext - Supplies a pointer to the ciphertext buffer.
 
-    Ciphertext - Supplies a pointer where the ciphertext will be returned.
+    Plaintext - Supplies a pointer where the plaintext will be returned.
 
     Length - Supplies the length of the plaintext and ciphertext buffers, in
         bytes. This length must be a multiple of 16 bytes.
@@ -578,6 +583,156 @@ Return Value:
     RtlCopyMemory(Context->InitializationVector,
                   InitializationVector,
                   AES_INITIALIZATION_VECTOR_SIZE);
+
+    return;
+}
+
+CRYPTO_API
+VOID
+CyAesEcbEncrypt (
+    PAES_CONTEXT Context,
+    PUCHAR Plaintext,
+    PUCHAR Ciphertext,
+    INT Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine encrypts a byte sequence (with a block size of 16) using the
+    AES codebook.
+
+Arguments:
+
+    Context - Supplies a pointer to the AES context.
+
+    Plaintext - Supplies a pointer to the plaintext buffer.
+
+    Ciphertext - Supplies a pointer where the ciphertext will be returned.
+
+    Length - Supplies the length of the plaintext and ciphertext buffers, in
+        bytes. This length must be a multiple of 16 bytes.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG BlockIn[AES_BLOCK_SIZE / sizeof(ULONG)];
+    PULONG InLong;
+    PULONG OutLong;
+    INT TextIndex;
+    INT WordIndex;
+
+    ASSERT((Length % AES_BLOCK_SIZE) == 0);
+
+    //
+    // Loop over and encrypt each block.
+    //
+
+    for (TextIndex = Length - AES_BLOCK_SIZE;
+         TextIndex >= 0;
+         TextIndex -= AES_BLOCK_SIZE) {
+
+        InLong = (PULONG)Plaintext;
+        OutLong = (PULONG)Ciphertext;
+        for (WordIndex = 0;
+             WordIndex < (AES_BLOCK_SIZE / sizeof(ULONG));
+             WordIndex += 1) {
+
+            BlockIn[WordIndex] = AES_BYTE_SWAP32(InLong[WordIndex]);
+        }
+
+        CypAesEncryptBlock(Context, BlockIn);
+        for (WordIndex = 0;
+             WordIndex < (AES_BLOCK_SIZE / sizeof(ULONG));
+             WordIndex += 1) {
+
+            OutLong[WordIndex] = AES_BYTE_SWAP32(BlockIn[WordIndex]);
+        }
+
+        Plaintext += AES_BLOCK_SIZE;
+        Ciphertext += AES_BLOCK_SIZE;
+    }
+
+    return;
+}
+
+CRYPTO_API
+VOID
+CyAesEcbDecrypt (
+    PAES_CONTEXT Context,
+    PUCHAR Ciphertext,
+    PUCHAR Plaintext,
+    INT Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine decrypts a byte sequence (with a block size of 16) using the
+    AES codebook.
+
+Arguments:
+
+    Context - Supplies a pointer to the AES context.
+
+    Ciphertext - Supplies a pointer to the ciphertext buffer.
+
+    Plaintext - Supplies a pointer where the plaintext will be returned.
+
+    Length - Supplies the length of the plaintext and ciphertext buffers, in
+        bytes. This length must be a multiple of 16 bytes.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG BlockIn[AES_BLOCK_SIZE / sizeof(ULONG)];
+    PULONG InLong;
+    PULONG OutLong;
+    INT TextIndex;
+    INT WordIndex;
+
+    ASSERT((Length % AES_BLOCK_SIZE) == 0);
+
+    //
+    // Decrypt each block.
+    //
+
+    for (TextIndex = Length - AES_BLOCK_SIZE;
+         TextIndex >= 0;
+         TextIndex -= AES_BLOCK_SIZE) {
+
+        InLong = (PULONG)Ciphertext;
+        OutLong = (PULONG)Plaintext;
+        for (WordIndex = 0;
+             WordIndex < (AES_BLOCK_SIZE / sizeof(ULONG));
+             WordIndex += 1) {
+
+            BlockIn[WordIndex] = AES_BYTE_SWAP32(InLong[WordIndex]);
+        }
+
+        CypAesDecryptBlock(Context, BlockIn);
+        for (WordIndex = 0;
+             WordIndex < (AES_BLOCK_SIZE / sizeof(ULONG));
+             WordIndex += 1) {
+
+            OutLong[WordIndex] = AES_BYTE_SWAP32(BlockIn[WordIndex]);
+        }
+
+        Ciphertext += AES_BLOCK_SIZE;
+        Plaintext += AES_BLOCK_SIZE;
+    }
 
     return;
 }

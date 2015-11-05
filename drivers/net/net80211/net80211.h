@@ -43,6 +43,13 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef enum _NET80211_ENCRYPTION_TYPE {
+    Net80211EncryptionNone,
+    Net80211EncryptionWep,
+    Net80211EncryptionWpaPsk,
+    Net80211EncryptionWpa2Psk
+} NET80211_ENCRYPTION_TYPE, *PNET80211_ENCRYPTION_TYPE;
+
 /*++
 
 Structure Description:
@@ -93,7 +100,9 @@ Net80211pJoinBss (
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PSTR Ssid,
-    ULONG SsidLength
+    ULONG SsidLength,
+    PUCHAR Passphrase,
+    ULONG PassphraseLength
     );
 
 /*++
@@ -114,6 +123,12 @@ Arguments:
 
     SsidLength - Supplies the length of the SSID string, including the NULL
         terminator.
+
+    Passphrase - Supplies an optional pointer to the passphrase for the BSS.
+        This is only required if the BSS is secured. The passphrase may be a
+        sequence of bytes or an ASCII password.
+
+    PassphraseLength - Supplies the length of the passphrase, in bytes.
 
 Return Value:
 
@@ -321,6 +336,48 @@ Arguments:
     Link - Supplies a pointer to the link whose state is being updated.
 
     State - Supplies the state to which the link is transitioning.
+
+Return Value:
+
+    None.
+
+--*/
+
+KSTATUS
+Net80211pEapolInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for EAPOL packets.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+VOID
+Net80211pEapolDestroy (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine tears down support for EAPOL packets.
+
+Arguments:
+
+    None.
 
 Return Value:
 

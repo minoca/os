@@ -513,7 +513,7 @@ Return Value:
     // Register the TCP socket handlers with the core networking library.
     //
 
-    Status = NetRegisterProtocol(&NetTcpProtocol);
+    Status = NetRegisterProtocol(&NetTcpProtocol, NULL);
     if (!KSUCCESS(Status)) {
         goto TcpInitializeEnd;
     }

@@ -277,7 +277,8 @@ DriverEntryEnd:
 NET_API
 KSTATUS
 NetRegisterProtocol (
-    PNET_PROTOCOL_ENTRY NewProtocol
+    PNET_PROTOCOL_ENTRY NewProtocol,
+    PHANDLE ProtocolHandle
     )
 
 /*++
@@ -292,6 +293,9 @@ Arguments:
     NewProtocol - Supplies a pointer to the protocol information. The core
         library will not reference this memory after the function returns, a
         copy will be made.
+
+    ProtocolHandle - Supplies an optional pointer that receives a handle to the
+        registered protocol on success.
 
 Return Value:
 
@@ -309,12 +313,14 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
+    HANDLE Handle;
     PNET_PROTOCOL_ENTRY NewProtocolCopy;
     PNET_PROTOCOL_ENTRY Protocol;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    Handle = INVALID_HANDLE;
     NewProtocolCopy = NULL;
     if ((NewProtocol->Type == SocketTypeInvalid) ||
         (NewProtocol->Interface.CreateSocket == NULL) ||
@@ -396,6 +402,7 @@ Return Value:
     }
 
     Status = STATUS_SUCCESS;
+    Handle = NewProtocolCopy;
 
 RegisterProtocolEnd:
     KeReleaseQueuedLock(NetPluginListLock);
@@ -405,13 +412,75 @@ RegisterProtocolEnd:
         }
     }
 
+    if (ProtocolHandle != NULL) {
+        *ProtocolHandle = Handle;
+    }
+
     return Status;
+}
+
+NET_API
+VOID
+NetUnregisterProtocol (
+    HANDLE ProtocolHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unregisters the given protocol from the core networking
+    library.
+
+Arguments:
+
+    ProtocolHandle - Supplies the handle to the protocol to unregister.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PNET_PROTOCOL_ENTRY FoundProtocol;
+    PNET_PROTOCOL_ENTRY Protocol;
+
+    FoundProtocol = NULL;
+
+    //
+    // Loop through looking for a previous registration with this protocol
+    // handle.
+    //
+
+    KeAcquireQueuedLock(NetPluginListLock);
+    CurrentEntry = NetProtocolList.Next;
+    while (CurrentEntry != &NetProtocolList) {
+        Protocol = LIST_VALUE(CurrentEntry, NET_PROTOCOL_ENTRY, ListEntry);
+        if (Protocol == ProtocolHandle) {
+            FoundProtocol = Protocol;
+            LIST_REMOVE(CurrentEntry);
+            break;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    KeReleaseQueuedLock(NetPluginListLock);
+    if (FoundProtocol != NULL) {
+        MmFreePagedPool(FoundProtocol);
+    }
+
+    return;
 }
 
 NET_API
 KSTATUS
 NetRegisterNetworkLayer (
-    PNET_NETWORK_ENTRY NewNetworkEntry
+    PNET_NETWORK_ENTRY NewNetworkEntry,
+    PHANDLE NetworkHandle
     )
 
 /*++
@@ -425,6 +494,9 @@ Arguments:
     NewNetworkEntry - Supplies a pointer to the network information. The core
         library will not reference this memory after the function returns, a
         copy will be made.
+
+    NetworkHandle - Supplies a pointer that receives a handle to the
+        registered network layer on success.
 
 Return Value:
 
@@ -442,12 +514,14 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
+    HANDLE Handle;
     PNET_NETWORK_ENTRY Network;
     PNET_NETWORK_ENTRY NewNetworkCopy;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    Handle = INVALID_HANDLE;
     NewNetworkCopy = NULL;
     if ((NewNetworkEntry->Type == SocketNetworkInvalid) ||
         (NewNetworkEntry->Interface.InitializeLink == NULL) ||
@@ -519,6 +593,7 @@ Return Value:
     }
 
     Status = STATUS_SUCCESS;
+    Handle = NewNetworkCopy;
 
 RegisterNetworkLayerEnd:
     KeReleaseQueuedLock(NetPluginListLock);
@@ -528,14 +603,75 @@ RegisterNetworkLayerEnd:
         }
     }
 
+    if (NetworkHandle != NULL) {
+        *NetworkHandle = Handle;
+    }
+
     return Status;
+}
+
+NET_API
+VOID
+NetUnregisterNetworkLayer (
+    HANDLE NetworkHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unregisters the given network layer from the core networking
+    library.
+
+Arguments:
+
+    NetworkHandle - Supplies the handle to the network layer to unregister.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PNET_NETWORK_ENTRY FoundNetwork;
+    PNET_NETWORK_ENTRY Network;
+
+    FoundNetwork = NULL;
+
+    //
+    // Loop through looking for a previous registration with this network
+    // handle.
+    //
+
+    KeAcquireQueuedLock(NetPluginListLock);
+    CurrentEntry = NetNetworkList.Next;
+    while (CurrentEntry != &NetNetworkList) {
+        Network = LIST_VALUE(CurrentEntry, NET_NETWORK_ENTRY, ListEntry);
+        if (Network == NetworkHandle) {
+            FoundNetwork = Network;
+            LIST_REMOVE(CurrentEntry);
+            break;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    KeReleaseQueuedLock(NetPluginListLock);
+    if (FoundNetwork != NULL) {
+        MmFreePagedPool(FoundNetwork);
+    }
+
+    return;
 }
 
 NET_API
 KSTATUS
 NetRegisterDataLinkLayer (
     PNET_DATA_LINK_ENTRY NewDataLinkEntry,
-    HANDLE *DataLinkHandle
+    PHANDLE DataLinkHandle
     )
 
 /*++
@@ -571,11 +707,13 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PNET_DATA_LINK_ENTRY DataLink;
+    HANDLE Handle;
     PNET_DATA_LINK_ENTRY NewDataLinkCopy;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    Handle = INVALID_HANDLE;
     NewDataLinkCopy = NULL;
     if ((NewDataLinkEntry->Type == NetDataLinkInvalid) ||
         (NewDataLinkEntry->Interface.InitializeLink == NULL) ||
@@ -629,6 +767,7 @@ Return Value:
 
     INSERT_BEFORE(&(NewDataLinkCopy->ListEntry), &NetDataLinkList);
     Status = STATUS_SUCCESS;
+    Handle = NewDataLinkCopy;
 
 RegisterDataLinkLayerEnd:
     KeReleaseQueuedLock(NetPluginListLock);
@@ -636,11 +775,10 @@ RegisterDataLinkLayerEnd:
         if (NewDataLinkCopy != NULL) {
             MmFreePagedPool(NewDataLinkCopy);
         }
+    }
 
-        *DataLinkHandle = INVALID_HANDLE;
-
-    } else {
-        *DataLinkHandle = NewDataLinkCopy;
+    if (DataLinkHandle != NULL) {
+        *DataLinkHandle = Handle;
     }
 
     return Status;
@@ -679,7 +817,7 @@ Return Value:
 
     //
     // Loop through looking for a previous registration with this data link
-    // type.
+    // handle.
     //
 
     KeAcquireQueuedLock(NetPluginListLock);

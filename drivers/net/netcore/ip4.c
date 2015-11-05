@@ -25,7 +25,7 @@ Environment:
 //
 
 //
-// Network layer drivers are supposed to be able to stand on their own (ie be
+// Network layer drivers are supposed to be able to stand on their own (i.e. be
 // able to be implemented outside the core net library). For the builtin ones,
 // avoid including netcore.h, but still redefine those functions that would
 // otherwise generate imports.
@@ -351,7 +351,7 @@ Return Value:
     NetworkEntry.Interface.ProcessReceivedData = NetpIp4ProcessReceivedData;
     NetworkEntry.Interface.PrintAddress = NetpIp4PrintAddress;
     NetworkEntry.Interface.GetSetInformation = NetpIp4GetSetInformation;
-    Status = NetRegisterNetworkLayer(&NetworkEntry);
+    Status = NetRegisterNetworkLayer(&NetworkEntry, NULL);
     if (!KSUCCESS(Status)) {
 
         ASSERT(FALSE);

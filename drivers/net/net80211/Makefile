@@ -29,11 +29,12 @@ BINPLACE = bin
 
 OBJS = control.o  \
        data.o     \
+       eapol.o    \
        mgmt.o     \
        net80211.o \
 
-DYNLIBS = $(BINROOT)/kernel             \
-          $(BINROOT)/netcore.drv        \
+DYNLIBS = $(BINROOT)/kernel      \
+          $(BINROOT)/netcore.drv \
 
 include $(SRCROOT)/os/minoca.mk
 

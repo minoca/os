@@ -345,7 +345,7 @@ Return Value:
     // Register the UDP socket handlers with the core networking library.
     //
 
-    Status = NetRegisterProtocol(&NetUdpProtocol);
+    Status = NetRegisterProtocol(&NetUdpProtocol, NULL);
     if (!KSUCCESS(Status)) {
 
         ASSERT(FALSE);

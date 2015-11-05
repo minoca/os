@@ -26,6 +26,7 @@ Environment:
 //
 
 #include "net80211.h"
+#include "eapol.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -46,6 +47,38 @@ Environment:
 #define NET80211_MANAGEMENT_RETRY_COUNT 5
 
 //
+// Define default values for the local station's RSN capabilities.
+//
+
+#define NET80211_DEFAULT_RSN_ELEMENT_LENGTH \
+    (sizeof(NET80211_DEFAULT_RSN_INFORMATION) - (2 * sizeof(UCHAR)))
+
+#define NET80211_DEFAULT_RSN_CAPABILITIES 0
+#define NET80211_DEFAULT_RSN_PAIRWISE_CIPHER_SUITE_COUNT 1
+#define NET80211_DEFAULT_RSN_AKM_SUITE_COUNT 1
+
+//
+// Define the default RSN group cipher suite. This is
+// NET80211_CIPHER_SUITE_CCMP in network byte order.
+//
+
+#define NET80211_DEFAULT_RSN_GROUP_CIPHER_SUITE 0x04AC0F00
+
+//
+// Define the default RSN pairwise cipher suite. This is
+// NET80211_CIPHER_SUITE_CCMP in network byte order.
+//
+
+#define NET80211_DEFAULT_RSN_PAIRWISE_CIPHER_SUITE 0x04AC0F00
+
+//
+// Define the default RSN AKM cipher suite. This is NET80211_AKM_SUITE_PSK in
+// network byte order.
+//
+
+#define NET80211_DEFAULT_RSN_AKM_SUITE 0x02AC0F00
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -53,7 +86,7 @@ Environment:
 
 Structure Description:
 
-    This structure defines the context used to joing an basic service set (BSS).
+    This structure defines the context used to join an basic service set (BSS).
 
 Members:
 
@@ -64,8 +97,14 @@ Members:
 
     Ssid - Stores the string identifying the BSS to join.
 
-    SsidLength - Stores the length of the BSS identifier string, including the
-        NULL terminator.
+    SsidLength - Stores the length of the BSS identifier string, not including
+        the NULL terminator.
+
+    Passphrase - Stores an optional pointer to the passphrase for the BSS. The
+        passphrase may be a sequence of bytes or ASCII characters depending on
+        the security implemented by the BSS.
+
+    PassphraseLength - Stores the length of the passphrase, in bytes.
 
     Bssid - Stores the MAC address of the BSS's access point (a.k.a the BSSID).
 
@@ -77,7 +116,19 @@ Members:
     Capabilities - Stores the capabilities for the BSS to which the station is
         attempting to join.
 
-    AssociationId = Stores the association ID assigned to the station by the AP.
+    AssociationId - Stores the association ID assigned to the station by the AP.
+
+    RateInformation - Stores the rate information for the BSS, supplied by the
+        AP.
+
+    GroupEncryption - Stores the group encryption policy for the BSS.
+
+    PairwiseEncryption - Stores the pairwise encryption policy for the BSS.
+
+    ApRsnInformation - Stores the AP's robust security network (RSN)
+        information.
+
+    ApRsnInformationLength - Stores the length of the AP's RSN information.
 
 --*/
 
@@ -86,12 +137,18 @@ typedef struct _NET80211_BSS_CONTEXT {
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
     PSTR Ssid;
     ULONG SsidLength;
+    PUCHAR Passphrase;
+    ULONG PassphraseLength;
     NETWORK_ADDRESS Bssid;
     ULONGLONG Timestamp;
     USHORT BeaconInterval;
     USHORT Capabilities;
     USHORT AssociationId;
     PNET80211_RATE_INFORMATION RateInformation;
+    NET80211_ENCRYPTION_TYPE GroupEncryption;
+    NET80211_ENCRYPTION_TYPE PairwiseEncryption;
+    PUCHAR ApRsnInformation;
+    ULONG ApRsnInformationLength;
 } NET80211_BSS_CONTEXT, *PNET80211_BSS_CONTEXT;
 
 /*++
@@ -142,6 +199,50 @@ typedef struct _NET80211_AUTHENTICATION_OPEN_BODY {
     USHORT TransactionSequenceNumber;
     USHORT StatusCode;
 } PACKED NET80211_AUTHENTICATION_OPEN_BODY, *PNET80211_AUTHENTICATION_OPEN_BODY;
+
+/*++
+
+Structure Description:
+
+    This structure defines the default RSN information used by the 802.11
+    networking library.
+
+Members:
+
+    ElementId - Stores the RSN element ID. This should be NET80211_ELEMENT_RSN.
+
+    ElementLength - Stores the length of the RSN information, not including the
+        first two bytes.
+
+    RsnVersion - Stores the RSN information version.
+
+    GroupCipherSuite - Stores the group cipher suite.
+
+    PairwiseCipherSuiteCount - Stores the number of pairwise cipher suites that
+        follow this field. There should only be 1.
+
+    PairwiseCipherSuite - Stores the only supported pairwise cipher suite.
+
+    AkmSuiteCount - Stores the number of AKM cipher suites that follow this
+        field. There should be only 1.
+
+    AkmSuite - Stores the only supported AKM cipher suite.
+
+    RsnCapabilites - Stores the RSN capapbilites for the node.
+
+--*/
+
+typedef struct _NET80211_DEFAULT_RSN_INFORMATION {
+    UCHAR ElementId;
+    UCHAR ElementLength;
+    USHORT RsnVersion;
+    ULONG GroupCipherSuite;
+    USHORT PairwiseCipherSuiteCount;
+    ULONG PairwiseCipherSuite;
+    USHORT AkmSuiteCount;
+    ULONG AkmSuite;
+    USHORT RsnCapabilities;
+} PACKED NET80211_DEFAULT_RSN_INFORMATION, *PNET80211_DEFAULT_RSN_INFORMATION;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -208,7 +309,9 @@ Net80211pCreateBssContext (
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PSTR Ssid,
-    ULONG SsidLength
+    ULONG SsidLength,
+    PUCHAR Passphrase,
+    ULONG PassphraseLength
     );
 
 VOID
@@ -221,6 +324,22 @@ Net80211pDestroyBssContext (
 //
 
 //
+// Store the default RSN information to send out for association requests.
+//
+
+NET80211_DEFAULT_RSN_INFORMATION Net80211DefaultRsnInformation = {
+    NET80211_ELEMENT_RSN,
+    NET80211_DEFAULT_RSN_ELEMENT_LENGTH,
+    NET80211_RSN_VERSION,
+    NET80211_DEFAULT_RSN_GROUP_CIPHER_SUITE,
+    NET80211_DEFAULT_RSN_PAIRWISE_CIPHER_SUITE_COUNT,
+    NET80211_DEFAULT_RSN_PAIRWISE_CIPHER_SUITE,
+    NET80211_DEFAULT_RSN_AKM_SUITE_COUNT,
+    NET80211_DEFAULT_RSN_AKM_SUITE,
+    NET80211_DEFAULT_RSN_CAPABILITIES
+};
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -229,15 +348,17 @@ Net80211pJoinBss (
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PSTR Ssid,
-    ULONG SsidLength
+    ULONG SsidLength,
+    PUCHAR Passphrase,
+    ULONG PassphraseLength
     )
 
 /*++
 
 Routine Description:
 
-    This routine attempts to join the link to the basic service set (BSS)
-    identified by the given SSID.
+    This routine attempts to join the link to the service set identified by the
+    given SSID.
 
 Arguments:
 
@@ -250,6 +371,12 @@ Arguments:
 
     SsidLength - Supplies the length of the SSID string, including the NULL
         terminator.
+
+    Passphrase - Supplies an optional pointer to the passphrase for the BSS.
+        This is only required if the BSS is secured. The passphrase may be a
+        sequence of bytes or an ASCII password.
+
+    PassphraseLength - Supplies the length of the passphrase, in bytes.
 
 Return Value:
 
@@ -272,7 +399,13 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    Context = Net80211pCreateBssContext(Link, LinkAddress, Ssid, SsidLength);
+    Context = Net80211pCreateBssContext(Link,
+                                        LinkAddress,
+                                        Ssid,
+                                        SsidLength,
+                                        Passphrase,
+                                        PassphraseLength);
+
     if (Context == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto JoinBssEnd;
@@ -451,14 +584,18 @@ Return Value:
     ULONG Attempts;
     ULONG Channel;
     PNET80211_BSS_CONTEXT Context;
+    HANDLE EapolHandle;
+    EAPOL_KEY Key;
     ULONG LocalIndex;
     UCHAR LocalRate;
     UCHAR MaxRate;
     PNET80211_LINK Net80211Link;
+    EAPOL_CREATION_PARAMETERS Parameters;
     BOOL ServiceSetFound;
     KSTATUS Status;
 
     Context = (PNET80211_BSS_CONTEXT)Parameter;
+    EapolHandle = INVALID_HANDLE;
     Net80211Link = (PNET80211_LINK)Context->Link->DataLinkContext;
     ServiceSetFound = FALSE;
 
@@ -508,7 +645,20 @@ Return Value:
     //
 
     if (ServiceSetFound == FALSE) {
+        RtlDebugPrint("802.11: Failed to find BSS %s.\n", Context->Ssid);
         Status = STATUS_UNSUCCESSFUL;
+        goto JoinBssThreadEnd;
+    }
+
+    //
+    // Before going any further, if the BSS required private data packets, then
+    // make sure a passphrase was supplied.
+    //
+
+    if (((Context->Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) &&
+        (Context->Passphrase == NULL)) {
+
+        Status = STATUS_INVALID_PARAMETER;
         goto JoinBssThreadEnd;
     }
 
@@ -534,6 +684,36 @@ Return Value:
     }
 
     Net80211pSetState(Context->Link, Net80211StateAuthenticated);
+
+    //
+    // Before attempting to associate, initialize an EAPOL instance, if
+    // necessary. As soon as association completes, the AP will begin the EAPOL
+    // handshake. Be ready to receive that first message.
+    //
+
+    if (((Context->Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) &&
+        (Context->PairwiseEncryption != Net80211EncryptionWep)) {
+
+        ASSERT(Context->PairwiseEncryption != Net80211EncryptionNone);
+
+        RtlZeroMemory(&Parameters, sizeof(EAPOL_CREATION_PARAMETERS));
+        Parameters.Mode = EapolModeSupplicant;
+        Parameters.Link = Context->Link;
+        Parameters.SupplicantAddress = &(Context->LinkAddress->PhysicalAddress);
+        Parameters.AuthenticatorAddress = &(Context->Bssid);
+        Parameters.Ssid = Context->Ssid;
+        Parameters.SsidLength = Context->SsidLength;
+        Parameters.Passphrase = Context->Passphrase;
+        Parameters.PassphraseLength = Context->PassphraseLength;
+        Parameters.SupplicantRsn = (PUCHAR)&Net80211DefaultRsnInformation;
+        Parameters.SupplicantRsnSize = sizeof(NET80211_DEFAULT_RSN_INFORMATION);
+        Parameters.AuthenticatorRsn = Context->ApRsnInformation;
+        Parameters.AuthenticatorRsnSize = Context->ApRsnInformationLength;
+        Status = Net80211pEapolInstanceCreate(&Parameters, &EapolHandle);
+        if (!KSUCCESS(Status)) {
+            goto JoinBssThreadEnd;
+        }
+    }
 
     //
     // The link is authentication with the BSS. Attempt to join it via the
@@ -613,9 +793,33 @@ Return Value:
 
     Net80211Link->BssState.Timestamp = Context->Timestamp;
     Net80211Link->BssState.BeaconInterval = Context->BeaconInterval;
+    Net80211Link->BssState.Capabilities = Context->Capabilities;
     Net80211Link->BssState.Rates = Context->RateInformation;
     Context->RateInformation = NULL;
     Net80211pSetState(Context->Link, Net80211StateAssociated);
+
+    //
+    // Attempt to get the keys from EAPOL. This may block.
+    //
+
+    if (EapolHandle != INVALID_HANDLE) {
+        Status = Net80211pEapolGetKey(EapolHandle, &Key);
+        if (!KSUCCESS(Status)) {
+            goto JoinBssThreadEnd;
+        }
+
+        //
+        // TODO: Save the key and use it to encrypt/decrypt data packets.
+        //
+
+        MmFreePagedPool(Key.Key);
+    }
+
+    //
+    // The link is finally read to start transmitting and receiving data for
+    // upper level layers.
+    //
+
     Status = NetStartLink(Context->Link);
     if (!KSUCCESS(Status)) {
         goto JoinBssThreadEnd;
@@ -629,7 +833,15 @@ JoinBssThreadEnd:
                       Context->Ssid,
                       Status);
 
+        //
+        // TODO: Perform 802.11 disassociation and deauthentication.
+        //
+
         Net80211pSetState(Context->Link, Net80211StateStarted);
+    }
+
+    if (EapolHandle != INVALID_HANDLE) {
+        Net80211pEapolInstanceDestroy(EapolHandle);
     }
 
     Net80211pDestroyBssContext(Context);
@@ -689,7 +901,7 @@ Return Value:
     //
 
     FrameBodySize += NET80211_BASE_ELEMENT_SIZE;
-    SsidLength = Context->SsidLength - 1;
+    SsidLength = Context->SsidLength;
     if (SsidLength > NET80211_SSID_MAX_LENGTH) {
         Status = STATUS_INVALID_PARAMETER;
         goto SendProbeRequestEnd;
@@ -859,12 +1071,23 @@ Return Value:
     ULONG ElementLength;
     PNET80211_MANAGEMENT_FRAME Frame;
     ULONG FrameSubtype;
+    NET80211_ENCRYPTION_TYPE GroupEncryption;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
+    ULONG Index;
     BOOL Match;
     ULONG Offset;
+    NET80211_ENCRYPTION_TYPE PairwiseEncryption;
     ULONG ResponseChannel;
+    ULONG RsnElementLength;
+    ULONG RsnElementOffset;
+    ULONG RsnOffset;
+    USHORT RsnPmkidCount;
+    BOOL RsnPskSupported;
+    ULONG RsnSuite;
+    USHORT RsnSuiteCount;
     KSTATUS Status;
     ULONGLONG Timestamp;
+    USHORT Version;
 
     //
     // Attempt to receive a probe response. Retry a few times in case an
@@ -929,12 +1152,17 @@ Return Value:
         // Now look at the information elements.
         //
 
+        RsnElementOffset = -1;
+        RsnElementLength = -1;
+        PairwiseEncryption = Net80211EncryptionNone;
+        GroupEncryption = Net80211EncryptionNone;
         AcceptedResponse = TRUE;
         while ((AcceptedResponse != FALSE) && (Offset < Frame->BufferSize)) {
             ElementId = ElementBytePointer[Offset];
             Offset += 1;
             if (Offset >= Frame->BufferSize) {
                 Status = STATUS_DATA_LENGTH_MISMATCH;
+                AcceptedResponse = FALSE;
                 break;
             }
 
@@ -942,6 +1170,7 @@ Return Value:
             Offset += 1;
             if ((Offset + ElementLength) > Frame->BufferSize) {
                 Status = STATUS_DATA_LENGTH_MISMATCH;
+                AcceptedResponse = FALSE;
                 break;
             }
 
@@ -953,7 +1182,7 @@ Return Value:
             //
 
             case NET80211_ELEMENT_SSID:
-                if (ElementLength != (Context->SsidLength - 1)) {
+                if (ElementLength != Context->SsidLength) {
                     AcceptedResponse = FALSE;
                     break;
                 }
@@ -982,6 +1211,219 @@ Return Value:
 
                 break;
 
+            case NET80211_ELEMENT_RSN:
+                RsnElementOffset = Offset - NET80211_BASE_ELEMENT_SIZE;
+                RsnElementLength = ElementLength + NET80211_BASE_ELEMENT_SIZE;
+                if ((Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) == 0) {
+                    RtlDebugPrint("802.11: Found RSN element in probe response "
+                                  "that does not require privacy.\n");
+
+                    Status = STATUS_NOT_SUPPORTED;
+                    AcceptedResponse = FALSE;
+                    break;
+                }
+
+                RsnOffset = 0;
+                if ((RsnOffset + sizeof(USHORT)) > ElementLength) {
+                    Status = STATUS_DATA_LENGTH_MISMATCH;
+                    AcceptedResponse = FALSE;
+                    break;
+                }
+
+                Version = *((PUSHORT)&(ElementBytePointer[Offset + RsnOffset]));
+                RsnOffset += sizeof(USHORT);
+                if (Version != NET80211_RSN_VERSION) {
+                    RtlDebugPrint("802.11: Unexpected RSN version %d\n",
+                                  Version);
+
+                    Status = STATUS_VERSION_MISMATCH;
+                    AcceptedResponse = FALSE;
+                    break;
+                }
+
+                //
+                // Group suite.
+                //
+
+                if ((RsnOffset + sizeof(ULONG)) > ElementLength) {
+                    break;
+                }
+
+                RsnSuite = *((PULONG)&(ElementBytePointer[Offset + RsnOffset]));
+                RsnOffset += sizeof(ULONG);
+                switch (NETWORK_TO_CPU32(RsnSuite)) {
+                case NET80211_CIPHER_SUITE_CCMP:
+                    GroupEncryption = Net80211EncryptionWpa2Psk;
+                    break;
+
+                default:
+                    RtlDebugPrint("802.11: Group cipher suite not supported "
+                                  "0x%08x\n",
+                                  RsnSuite);
+
+                    break;
+                }
+
+                if (GroupEncryption == Net80211EncryptionNone) {
+                    Status = STATUS_NOT_SUPPORTED;
+                    AcceptedResponse = FALSE;
+                    break;
+                }
+
+                //
+                // Pairwise suites.
+                //
+
+                PairwiseEncryption = Net80211EncryptionNone;
+                if ((RsnOffset + sizeof(USHORT)) > ElementLength) {
+                    break;
+                }
+
+                RsnSuiteCount =
+                         *((PUSHORT)&(ElementBytePointer[Offset + RsnOffset]));
+
+                RsnOffset += sizeof(USHORT);
+                for (Index = 0; Index < RsnSuiteCount; Index += 1) {
+                    if ((RsnOffset + sizeof(ULONG)) > ElementLength) {
+                        Status = STATUS_DATA_LENGTH_MISMATCH;
+                        break;
+                    }
+
+                    RsnSuite =
+                          *((PULONG)&(ElementBytePointer[Offset + RsnOffset]));
+
+                    RsnOffset += sizeof(ULONG);
+                    switch (NETWORK_TO_CPU32(RsnSuite)) {
+                    case NET80211_CIPHER_SUITE_CCMP:
+                        PairwiseEncryption = Net80211EncryptionWpa2Psk;
+                        break;
+
+                    default:
+                        RtlDebugPrint("802.11: Pairwise cipher suite not "
+                                      "supported 0x%08x\n",
+                                      RsnSuite);
+
+                        break;
+                    }
+                }
+
+                if (PairwiseEncryption == Net80211EncryptionNone) {
+                    Status = STATUS_NOT_SUPPORTED;
+                    AcceptedResponse = FALSE;
+                    break;
+                }
+
+                //
+                // AKM suites.
+                //
+
+                if ((RsnOffset + sizeof(USHORT)) > ElementLength) {
+                    break;
+                }
+
+                RsnSuiteCount =
+                         *((PUSHORT)&(ElementBytePointer[Offset + RsnOffset]));
+
+                RsnOffset += sizeof(USHORT);
+                RsnPskSupported = FALSE;
+                for (Index = 0; Index < RsnSuiteCount; Index += 1) {
+                    if ((RsnOffset + sizeof(ULONG)) > ElementLength) {
+                        Status = STATUS_DATA_LENGTH_MISMATCH;
+                        AcceptedResponse = FALSE;
+                        break;
+                    }
+
+                    RsnSuite =
+                          *((PULONG)&(ElementBytePointer[Offset + RsnOffset]));
+
+                    RsnOffset += sizeof(ULONG);
+                    switch (NETWORK_TO_CPU32(RsnSuite)) {
+                    case NET80211_AKM_SUITE_PSK:
+                        RsnPskSupported = TRUE;
+                        break;
+
+                    default:
+                        RtlDebugPrint("802.11: AKM suite not supported "
+                                      "0x%08x\n",
+                                      RsnSuite);
+
+                        break;
+                    }
+                }
+
+                if (RsnPskSupported == FALSE) {
+                    Status = STATUS_NOT_SUPPORTED;
+                    AcceptedResponse = FALSE;
+                    break;
+                }
+
+                //
+                // Capabilities.
+                //
+
+                if ((RsnOffset + sizeof(USHORT)) > ElementLength) {
+                    break;
+                }
+
+                RsnOffset += sizeof(USHORT);
+
+                //
+                // PMKID.
+                //
+
+                if ((RsnOffset + sizeof(USHORT)) > ElementLength) {
+                    break;
+                }
+
+                RsnPmkidCount =
+                         *((PUSHORT)&(ElementBytePointer[Offset + RsnOffset]));
+
+                RsnOffset += sizeof(USHORT);
+                for (Index = 0; Index < RsnPmkidCount; Index += 1) {
+                    if ((RsnOffset + 16) > ElementLength) {
+                        Status = STATUS_DATA_LENGTH_MISMATCH;
+                        AcceptedResponse = FALSE;
+                        break;
+                    }
+
+                    RsnOffset += 16;
+                }
+
+                if (!KSUCCESS(Status)) {
+                    AcceptedResponse = FALSE;
+                    break;
+                }
+
+                //
+                // Group management suite.
+                //
+
+                if ((RsnOffset + sizeof(ULONG)) > ElementLength) {
+                    break;
+                }
+
+                RsnSuite = *((PULONG)&(ElementBytePointer[Offset + RsnOffset]));
+                RsnOffset += sizeof(ULONG);
+                switch (NETWORK_TO_CPU32(RsnSuite)) {
+                case NET80211_CIPHER_SUITE_CCMP:
+                    break;
+
+                default:
+                    RtlDebugPrint("802.11: Group cipher suite not supported "
+                                  "0x%08x\n",
+                                  RsnSuite);
+
+                    Status = STATUS_NOT_SUPPORTED;
+                    break;
+                }
+
+                if (!KSUCCESS(Status)) {
+                    AcceptedResponse = FALSE;
+                    break;
+                }
+
+                break;
+
             case NET80211_ELEMENT_SUPPORTED_RATES:
             case NET80211_ELEMENT_EXTENDED_SUPPORTED_RATES:
                 break;
@@ -1006,6 +1448,30 @@ Return Value:
             Context->BeaconInterval = BeaconInterval;
             Context->Capabilities = Capabilities;
             Context->Timestamp = Timestamp;
+            Context->GroupEncryption = GroupEncryption;
+            Context->PairwiseEncryption = PairwiseEncryption;
+            if ((Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) {
+                if ((RsnElementOffset == -1) || (RsnElementLength == -1)) {
+                    Status = STATUS_INVALID_CONFIGURATION;
+                    break;
+                }
+
+                Context->ApRsnInformation = MmAllocatePagedPool(
+                                                      RsnElementLength,
+                                                      NET80211_ALLOCATION_TAG);
+
+                if (Context->ApRsnInformation == NULL) {
+                    Status = STATUS_INSUFFICIENT_RESOURCES;
+                    break;
+                }
+
+                RtlCopyMemory(Context->ApRsnInformation,
+                              &(ElementBytePointer[RsnElementOffset]),
+                              RsnElementLength);
+
+                Context->ApRsnInformationLength = RsnElementLength;
+            }
+
             break;
         }
     }
@@ -1257,7 +1723,7 @@ Return Value:
     Net80211Link = Context->Link->DataLinkContext;
     FrameBody = NULL;
 
-    ASSERT((Context->Ssid != NULL) && (Context->SsidLength > 1));
+    ASSERT((Context->Ssid != NULL) && (Context->SsidLength != 0));
 
     //
     // Determine the size of the probe response packet.
@@ -1282,7 +1748,7 @@ Return Value:
     //
 
     FrameBodySize += NET80211_BASE_ELEMENT_SIZE;
-    SsidLength = Context->SsidLength - 1;
+    SsidLength = Context->SsidLength;
     if (SsidLength > 32) {
         Status = STATUS_INVALID_PARAMETER;
         goto SendAssociationRequestEnd;
@@ -1304,6 +1770,12 @@ Return Value:
         FrameBodySize += NET80211_BASE_ELEMENT_SIZE;
         FrameBodySize += Rates->Count - NET80211_MAX_SUPPORTED_RATES;
     }
+
+    //
+    // Get the RSN size.
+    //
+
+    FrameBodySize += sizeof(NET80211_DEFAULT_RSN_INFORMATION);
 
     //
     // Allocate a buffer to hold the assocation request frame body.
@@ -1365,6 +1837,16 @@ Return Value:
             InformationByte += 1;
         }
     }
+
+    //
+    // Set the RSN information.
+    //
+
+    RtlCopyMemory(InformationByte,
+                  &Net80211DefaultRsnInformation,
+                  sizeof(NET80211_DEFAULT_RSN_INFORMATION));
+
+    InformationByte += sizeof(NET80211_DEFAULT_RSN_INFORMATION);
 
     ASSERT(FrameBodySize == (InformationByte - FrameBody));
 
@@ -1506,6 +1988,10 @@ Return Value:
 
         FrameStatus = *((PUSHORT)(&(ElementBytePointer[Offset])));
         if (FrameStatus != NET80211_STATUS_CODE_SUCCESS) {
+            RtlDebugPrint("802.11: Association response failed with status "
+                          "0x%04x.\n",
+                          FrameStatus);
+
             Status = STATUS_UNSUCCESSFUL;
             break;
         }
@@ -1933,7 +2419,9 @@ Net80211pCreateBssContext (
     PNET_LINK Link,
     PNET_LINK_ADDRESS_ENTRY LinkAddress,
     PSTR Ssid,
-    ULONG SsidLength
+    ULONG SsidLength,
+    PUCHAR Passphrase,
+    ULONG PassphraseLength
     )
 
 /*++
@@ -1955,6 +2443,12 @@ Arguments:
     SsidLength - Supplies the length of the SSID string, including the NULL
         terminator.
 
+    Passphrase - Supplies an optional pointer to the passphrase for the BSS.
+        This is only required if the BSS is secured. The passphrase may be a
+        sequence of bytes or an ASCII password.
+
+    PassphraseLength - Supplies the length of the passphrase, in bytes.
+
 Return Value:
 
     Returns a pointer to the created BSS context on success or NULL on failure.
@@ -1966,7 +2460,10 @@ Return Value:
     ULONG AllocationSize;
     PNET80211_BSS_CONTEXT Context;
 
-    AllocationSize = sizeof(NET80211_BSS_CONTEXT) + SsidLength;
+    AllocationSize = sizeof(NET80211_BSS_CONTEXT) +
+                     SsidLength +
+                     PassphraseLength;
+
     Context = MmAllocatePagedPool(AllocationSize, NET80211_ALLOCATION_TAG);
     if (Context == NULL) {
         goto CreateBssContextEnd;
@@ -1977,9 +2474,21 @@ Return Value:
     Context->Link = Link;
     Context->LinkAddress = LinkAddress;
     if (Ssid != NULL) {
+
+        ASSERT(SsidLength != 0);
+
         Context->Ssid = (PSTR)(Context + 1);
-        Context->SsidLength = SsidLength;
+        Context->SsidLength = SsidLength - 1;
         RtlCopyMemory(Context->Ssid, Ssid, SsidLength);
+    }
+
+    if (Passphrase != NULL) {
+
+        ASSERT(PassphraseLength != 0);
+
+        Context->Passphrase = (PUCHAR)(Context + 1) + Context->SsidLength;
+        Context->PassphraseLength = PassphraseLength;
+        RtlCopyMemory(Context->Passphrase, Passphrase, PassphraseLength);
     }
 
 CreateBssContextEnd:

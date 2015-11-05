@@ -255,6 +255,7 @@ typedef enum _SOCKET_NETWORK {
     SocketNetworkArp,
     SocketNetworkIp4,
     SocketNetworkIp6,
+    SocketNetworkEapol,
     SocketNetworkPhysicalEthernet = NetDataLinkEthernet,
     SocketNetworkPhysical80211 = NetDataLink80211,
 } SOCKET_NETWORK, *PSOCKET_NETWORK;

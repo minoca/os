@@ -314,7 +314,7 @@ Return Value:
     // filter packets from every protocol.
     //
 
-    Status = NetRegisterProtocol(&NetRawProtocol);
+    Status = NetRegisterProtocol(&NetRawProtocol, NULL);
     if (!KSUCCESS(Status)) {
 
         ASSERT(FALSE);
