@@ -259,6 +259,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/nano-2.2.6"
         },
         {
+            "name": "Make vim",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/vim-7.4"
+        },
+        {
             "name": "Make vttest",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/vttest-20140305"

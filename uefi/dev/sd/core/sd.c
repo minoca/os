@@ -1123,6 +1123,7 @@ Return Value:
                     SD_OPERATING_CONDITION_VOLTAGE_MASK) |
                    SD_OPERATING_CONDITION_ACCESS_MODE;
 
+            Ocr |= SD_OPERATING_CONDITION_HIGH_CAPACITY;
             Status = EfipSdResetCard(Controller);
             if (EFI_ERROR(Status)) {
                 goto WaitForMmcCardToInitializeEnd;

@@ -147,7 +147,7 @@ SETUP_RECIPE SetupRecipes[] = {
         SetupRecipeBeagleBoneBlack,
         "beagleboneblack",
         "TI BeagleBone Black",
-        "BBBK",
+        "A335BNLT",
         0,
         &_binary_bbone_txt_start,
         &_binary_bbone_txt_end

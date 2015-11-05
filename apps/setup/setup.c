@@ -418,6 +418,78 @@ Return Value:
     }
 
     //
+    // If autodeploy was specified, figure out what partition to install to.
+    //
+
+    if ((Context.Flags & SETUP_FLAG_AUTO_DEPLOY) != 0) {
+        Status = SetupDetermineAutodeployDestination(&Context);
+        if (Status != 0) {
+            fprintf(stderr,
+                    "Setup failed to determine autodeploy destination.\n");
+
+            goto mainEnd;
+        }
+
+    //
+    // If no destination was specified, list the possible destinations.
+    //
+
+    } else if ((Context.DiskPath == NULL) && (Context.PartitionPath == NULL) &&
+               (Context.DirectoryPath == NULL)) {
+
+        Status = SetupOsGetPlatformName(&PlatformName, NULL);
+        if (Status != 0) {
+            printf("Unable to detect platform name.\n");
+
+        } else {
+            printf("Platform: %s\n", PlatformName);
+        }
+
+        printf("No destination was specified. Please select one from the "
+               "following list.\n");
+
+        //
+        // Enumerate all eligible setup devices.
+        //
+
+        Status = SetupOsEnumerateDevices(&Devices, &DeviceCount);
+        if (Status != 0) {
+            fprintf(stderr, "Error: Failed to enumerate devices.\n");
+            goto mainEnd;
+        }
+
+        //
+        // Print a description of the eligible devices.
+        //
+
+        if (DeviceCount == 0) {
+            printf("Setup found no devices to install to.\n");
+
+        } else {
+            if (DeviceCount == 1) {
+                printf("Setup found 1 device.\n");
+
+            } else {
+                printf("Setup found %d devices:\n", DeviceCount);
+            }
+
+            PrintHeader = TRUE;
+            for (DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex += 1) {
+                SetupPrintDeviceDescription(&(Devices[DeviceIndex]),
+                                            PrintHeader);
+
+                PrintHeader = FALSE;
+            }
+
+            printf("\n");
+        }
+
+        QuietlyQuit = TRUE;
+        Status = -1;
+        goto mainEnd;
+    }
+
+    //
     // If the install source is a directory, then open that directory as the
     // host file system path.
     //
@@ -496,78 +568,6 @@ Return Value:
             Status = -1;
             goto mainEnd;
         }
-    }
-
-    //
-    // If autodeploy was specified, figure out what partition to install to.
-    //
-
-    if ((Context.Flags & SETUP_FLAG_AUTO_DEPLOY) != 0) {
-        Status = SetupDetermineAutodeployDestination(&Context);
-        if (Status != 0) {
-            fprintf(stderr,
-                    "Setup failed to determine autodeploy destination.\n");
-
-            goto mainEnd;
-        }
-
-    //
-    // If no destination was specified, list the possible destinations.
-    //
-
-    } else if ((Context.DiskPath == NULL) && (Context.PartitionPath == NULL) &&
-               (Context.DirectoryPath == NULL)) {
-
-        Status = SetupOsGetPlatformName(&PlatformName, NULL);
-        if (Status != 0) {
-            printf("Unable to detect platform name.\n");
-
-        } else {
-            printf("Platform: %s\n", PlatformName);
-        }
-
-        printf("No destination was specified. Please select one from the "
-               "following list.\n");
-
-        //
-        // Enumerate all eligible setup devices.
-        //
-
-        Status = SetupOsEnumerateDevices(&Devices, &DeviceCount);
-        if (Status != 0) {
-            fprintf(stderr, "Error: Failed to enumerate devices.\n");
-            goto mainEnd;
-        }
-
-        //
-        // Print a description of the eligible devices.
-        //
-
-        if (DeviceCount == 0) {
-            printf("Setup found no devices to install to.\n");
-
-        } else {
-            if (DeviceCount == 1) {
-                printf("Setup found 1 device.\n");
-
-            } else {
-                printf("Setup found %d devices:\n", DeviceCount);
-            }
-
-            PrintHeader = TRUE;
-            for (DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex += 1) {
-                SetupPrintDeviceDescription(&(Devices[DeviceIndex]),
-                                            PrintHeader);
-
-                PrintHeader = FALSE;
-            }
-
-            printf("\n");
-        }
-
-        QuietlyQuit = TRUE;
-        Status = -1;
-        goto mainEnd;
     }
 
     //

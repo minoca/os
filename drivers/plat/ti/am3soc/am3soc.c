@@ -2297,8 +2297,14 @@ Return Value:
     Device->M3State = Am3M3StatePowerMessage;
     Am3SocSetupIpc(Device);
     Am3MailboxSend(&(Device->Mailbox), AM335_WAKEM3_MAILBOX, 0);
+    Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
     Status = Am3SocWaitForIpcResult(Device);
     if (Status != STATUS_MORE_PROCESSING_REQUIRED) {
+        RtlDebugPrint("Am3: Failed to request power transition: %x\n",
+                      Status);
+
+        ASSERT(IpcData->Command == Am3Cm3CommandStandby);
+
         Am3SocResetM3(Device);
         Status = STATUS_NOT_READY;
 
@@ -2306,7 +2312,6 @@ Return Value:
         Status = STATUS_SUCCESS;
     }
 
-    Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
     return Status;
 }
 
@@ -2341,14 +2346,25 @@ Return Value:
     IpcData->Data[0] = AM335_M3_IPC_PARAMETER_DEFAULT;
     IpcData->Data[1] = AM335_M3_IPC_PARAMETER_DEFAULT;
     Device->M3State = Am3M3StatePowerMessage;
+
+    //
+    // Send and then immediately revoke the message. If the flush is done
+    // after collecting the response, then confusion results because the M3
+    // continues to get interrupts and process the same message. Even this
+    // send-revoke sequence is not great because the M3 could still loop
+    // many times and get confused. The better solution would be to have the
+    // M3 ignore messages that don't have 0xFFFF0000 in the upper 16 bits (ie
+    // messages it's already replied to).
+    //
+
     Am3SocSetupIpc(Device);
     Am3MailboxSend(&(Device->Mailbox), AM335_WAKEM3_MAILBOX, 0);
+    Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
     Status = Am3SocWaitForIpcResult(Device);
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("Cortex M3 reset failure: %x\n", Status);
     }
 
-    Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
     return Status;
 }
 
@@ -2377,11 +2393,11 @@ Return Value:
 
 {
 
-    AM3_WRITE_CONTROL(Device, Am3ControlIpc0, Device->M3Ipc.ResumeAddress);
-    AM3_WRITE_CONTROL(Device,
-                      Am3ControlIpc1,
-                      Device->M3Ipc.Command | (0xFFFF << 16));
+    ULONG Command;
 
+    Command = Device->M3Ipc.Command | (0xFFFF << 16);
+    AM3_WRITE_CONTROL(Device, Am3ControlIpc0, Device->M3Ipc.ResumeAddress);
+    AM3_WRITE_CONTROL(Device, Am3ControlIpc1, Command);
     AM3_WRITE_CONTROL(Device, Am3ControlIpc2, Device->M3Ipc.Data[0]);
     AM3_WRITE_CONTROL(Device, Am3ControlIpc3, Device->M3Ipc.Data[1]);
     return;
@@ -2415,6 +2431,7 @@ Return Value:
 
 {
 
+    ULONG Result;
     ULONG Value;
 
     //
@@ -2422,11 +2439,24 @@ Return Value:
     //
 
     do {
-        Value = AM3_READ_CONTROL(Device, Am3ControlIpc1) >> 16;
+        Value = AM3_READ_CONTROL(Device, Am3ControlIpc1);
 
-    } while ((Value & 0x0000FFFF) == 0x0000FFFF);
+    } while ((Value & 0xFFFF0000) == 0xFFFF0000);
 
-    switch (Value) {
+    if ((Value & 0x0000FFFF) != Device->M3Ipc.Command) {
+        RtlDebugPrint("Am3: Got response %x for other command %x\n",
+                      Value,
+                      Device->M3Ipc.Command);
+    }
+
+    //
+    // Write a bogus value into the command to detect cases where the M3 is
+    // looping re-processing the same command.
+    //
+
+    AM3_WRITE_CONTROL(Device, Am3ControlIpc1, 0x66660000);
+    Result = Value >> 16;
+    switch (Result) {
     case Am3Cm3ResponsePass:
         return STATUS_SUCCESS;
 
