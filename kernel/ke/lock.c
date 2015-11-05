@@ -679,13 +679,32 @@ Return Value:
 
         //
         // Either someone is trying to get it exclusive, or the attempt to
-        // get it shared failed. Unsignal the event in preparation for going
-        // down to wait on it. If the state changed in the meantime, loop
-        // around again before going down to wait, as the event update might
-        // have become stale.
+        // get it shared failed. If this thread has already gone down for a
+        // wait and there's an exclusive request, it may be the only one woken
+        // up (ahead of line of the exclusive that wants it). To prevent
+        // unsignaling and waiting indefinitely on a potentially free lock,
+        // signal the next waiter on the event until the exclusive gets it.
         //
 
-        KeSignalEvent(SharedExclusiveLock->Event, SignalOptionUnsignal);
+        if ((HaveWaited != FALSE) &&
+            (SharedExclusiveLock->ExclusiveWaiting != FALSE)) {
+
+            KeSignalEvent(SharedExclusiveLock->Event, SignalOptionSignalOne);
+
+        //
+        // Otherwise, unsignal the event since this thread is going down to
+        // wait for it.
+        //
+
+        } else {
+            KeSignalEvent(SharedExclusiveLock->Event, SignalOptionUnsignal);
+        }
+
+        //
+        // If something changed since the event was updated, try all this
+        // again, as the event state may be stale now.
+        //
+
         if (State != SharedExclusiveLock->State) {
             continue;
         }
@@ -825,8 +844,7 @@ Return Value:
 
 {
 
-    ASSERT((SharedExclusiveLock->ExclusiveWaiting != FALSE) &&
-           (SharedExclusiveLock->State == SHARED_EXCLUSIVE_LOCK_EXCLUSIVE));
+    ASSERT(SharedExclusiveLock->State == SHARED_EXCLUSIVE_LOCK_EXCLUSIVE);
 
     SharedExclusiveLock->ExclusiveWaiting = FALSE;
     RtlAtomicExchange32(&(SharedExclusiveLock->State),
