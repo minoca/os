@@ -39,6 +39,7 @@ Environment:
 
 #define SHARED_EXCLUSIVE_LOCK_FREE 0
 #define SHARED_EXCLUSIVE_LOCK_EXCLUSIVE ((ULONG)-1)
+#define SHARED_EXCLUSIVE_LOCK_MAX_WAITERS ((ULONG)-2)
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -633,20 +634,24 @@ Return Value:
 
 {
 
-    BOOL HaveWaited;
+    ULONG ExclusiveWaiters;
+    BOOL IsWaiter;
     ULONG PreviousState;
+    ULONG PreviousWaiters;
+    ULONG SharedWaiters;
     ULONG State;
 
-    HaveWaited = FALSE;
+    IsWaiter = FALSE;
     while (TRUE) {
         State = SharedExclusiveLock->State;
+        ExclusiveWaiters = SharedExclusiveLock->ExclusiveWaiters;
 
         //
         // If no one is trying to acquire exclusive, then attempt to get it
         // shared.
         //
 
-        if ((SharedExclusiveLock->ExclusiveWaiting == FALSE) &&
+        if ((ExclusiveWaiters == 0) &&
             (State < SHARED_EXCLUSIVE_LOCK_EXCLUSIVE - 1)) {
 
             PreviousState = State;
@@ -661,7 +666,7 @@ Return Value:
                 // also blocked.
                 //
 
-                if (HaveWaited != FALSE) {
+                if (SharedExclusiveLock->SharedWaiters != 0) {
                     KeSignalEvent(SharedExclusiveLock->Event,
                                   SignalOptionSignalAll);
                 }
@@ -679,16 +684,36 @@ Return Value:
 
         //
         // Either someone is trying to get it exclusive, or the attempt to
-        // get it shared failed. If this thread has already gone down for a
-        // wait and there's an exclusive request, it may be the only one woken
-        // up (ahead of line of the exclusive that wants it). To prevent
-        // unsignaling and waiting indefinitely on a potentially free lock,
-        // signal the next waiter on the event until the exclusive gets it.
+        // get it shared failed. Become a waiter so that the event will be
+        // signaled when the lock is released. Use compare-exchange to avoid
+        // overflowing.
         //
 
-        if ((HaveWaited != FALSE) &&
-            (SharedExclusiveLock->ExclusiveWaiting != FALSE)) {
+        if (IsWaiter == FALSE) {
+            SharedWaiters = SharedExclusiveLock->SharedWaiters;
+            if (SharedWaiters >= SHARED_EXCLUSIVE_LOCK_MAX_WAITERS) {
+                continue;
+            }
 
+            PreviousWaiters = RtlAtomicCompareExchange32(
+                                         &(SharedExclusiveLock->SharedWaiters),
+                                         SharedWaiters + 1,
+                                         SharedWaiters);
+
+            if (PreviousWaiters != SharedWaiters) {
+                continue;
+            }
+        }
+
+        //
+        // If this thread has already gone down for a wait and there's an
+        // exclusive request, it may be the only one woken up (ahead of line
+        // of the exclusive that wants it). To prevent unsignaling and waiting
+        // indefinitely on a potentially free lock, signal the next waiter on
+        // the event until the exclusive gets it.
+        //
+
+        if ((IsWaiter != FALSE) && (ExclusiveWaiters != 0)) {
             KeSignalEvent(SharedExclusiveLock->Event, SignalOptionSignalOne);
 
         //
@@ -700,24 +725,31 @@ Return Value:
             KeSignalEvent(SharedExclusiveLock->Event, SignalOptionUnsignal);
         }
 
+        IsWaiter = TRUE;
+
         //
         // If something changed since the event was updated, try all this
         // again, as the event state may be stale now.
         //
 
-        if (State != SharedExclusiveLock->State) {
+        if ((State != SharedExclusiveLock->State) ||
+            (SharedExclusiveLock->ExclusiveWaiters != ExclusiveWaiters)) {
+
             continue;
         }
 
         KeWaitForEvent(SharedExclusiveLock->Event, FALSE, WAIT_TIME_INDEFINITE);
+    }
 
-        //
-        // This thread has waited. It may be the only reader woken up after
-        // an exclusive release. Set this boolean to remember to signal the
-        // event to let all waiting readers go.
-        //
+    //
+    // This thread is no longer waiting, away it goes.
+    //
 
-        HaveWaited = TRUE;
+    if (IsWaiter != FALSE) {
+        PreviousWaiters =
+                     RtlAtomicAdd32(&(SharedExclusiveLock->SharedWaiters), -1);
+
+        ASSERT(PreviousWaiters != 0);
     }
 
     return;
@@ -755,12 +787,12 @@ Return Value:
            (PreviousState != SHARED_EXCLUSIVE_LOCK_FREE));
 
     //
-    // If this was the last reader and there was a writer waiting, wake that
-    // writer up.
+    // If this was the last reader and there are writers waiting, signal the
+    // event.
     //
 
-    if ((SharedExclusiveLock->ExclusiveWaiting != FALSE) &&
-        (PreviousState - 1 == SHARED_EXCLUSIVE_LOCK_FREE)) {
+    if ((PreviousState - 1 == SHARED_EXCLUSIVE_LOCK_FREE) &&
+        (SharedExclusiveLock->ExclusiveWaiters != 0)) {
 
         KeSignalEvent(SharedExclusiveLock->Event, SignalOptionSignalOne);
     }
@@ -792,10 +824,13 @@ Return Value:
 
 {
 
+    ULONG ExclusiveWaiters;
+    BOOL IsWaiting;
+    ULONG PreviousWaiters;
     ULONG State;
 
+    IsWaiting = FALSE;
     while (TRUE) {
-        SharedExclusiveLock->ExclusiveWaiting = TRUE;
         State = RtlAtomicCompareExchange32(&(SharedExclusiveLock->State),
                                            SHARED_EXCLUSIVE_LOCK_EXCLUSIVE,
                                            SHARED_EXCLUSIVE_LOCK_FREE);
@@ -805,16 +840,51 @@ Return Value:
         }
 
         //
-        // Make the bed to sleep in, but if things changed in the meantime go
-        // try again.
+        // Increment the exclusive waiters count to indicate to readers that
+        // the event needs to be signaled. Use compare-exchange to avoid
+        // overflowing.
+        //
+
+        if (IsWaiting == FALSE) {
+            ExclusiveWaiters = SharedExclusiveLock->ExclusiveWaiters;
+            if (ExclusiveWaiters >= SHARED_EXCLUSIVE_LOCK_MAX_WAITERS) {
+                continue;
+            }
+
+            PreviousWaiters = RtlAtomicCompareExchange32(
+                                      &(SharedExclusiveLock->ExclusiveWaiters),
+                                      ExclusiveWaiters + 1,
+                                      ExclusiveWaiters);
+
+            if (PreviousWaiters != ExclusiveWaiters) {
+                continue;
+            }
+
+            IsWaiting = TRUE;
+        }
+
+        //
+        // Make the bed to sleep in, but if the lock became free in the
+        // meantime try again.
         //
 
         KeSignalEvent(SharedExclusiveLock->Event, SignalOptionUnsignal);
-        if (SharedExclusiveLock->State < State) {
+        if (SharedExclusiveLock->State == SHARED_EXCLUSIVE_LOCK_FREE) {
             continue;
         }
 
         KeWaitForEvent(SharedExclusiveLock->Event, FALSE, WAIT_TIME_INDEFINITE);
+    }
+
+    //
+    // This lucky writer is no longer waiting.
+    //
+
+    if (IsWaiting != FALSE) {
+        PreviousWaiters =
+                  RtlAtomicAdd32(&(SharedExclusiveLock->ExclusiveWaiters), -1);
+
+        ASSERT(PreviousWaiters != 0);
     }
 
     return;
@@ -846,11 +916,15 @@ Return Value:
 
     ASSERT(SharedExclusiveLock->State == SHARED_EXCLUSIVE_LOCK_EXCLUSIVE);
 
-    SharedExclusiveLock->ExclusiveWaiting = FALSE;
     RtlAtomicExchange32(&(SharedExclusiveLock->State),
                         SHARED_EXCLUSIVE_LOCK_FREE);
 
-    KeSignalEvent(SharedExclusiveLock->Event, SignalOptionSignalAll);
+    if ((SharedExclusiveLock->SharedWaiters != 0) ||
+        (SharedExclusiveLock->ExclusiveWaiters != 0)) {
+
+        KeSignalEvent(SharedExclusiveLock->Event, SignalOptionSignalOne);
+    }
+
     return;
 }
 

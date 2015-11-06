@@ -660,7 +660,6 @@ Return Value:
 
     pid_t Child;
     int ChildResult;
-    char *CurrentDirectory;
     int Failures;
     char *OriginalDirectory;
     int Result;
@@ -800,16 +799,10 @@ Return Value:
         // 'getcwd' which performs a reverse path walk.
         //
 
-        CurrentDirectory = getcwd(NULL, 0);
-        if (CurrentDirectory != NULL) {
+        if (creat("myfile", 0777) == 0) {
             Failures += 1;
-            PATHTEST_ERROR("'getcwd' succeeded to find %s, expected to fail "
-                           "with error %d.\n",
-                           CurrentDirectory,
-                           ENOENT);
-
-            free(CurrentDirectory);
-            goto HardLinkTestsEnd;
+            PATHTEST_ERROR("Succeeded in creating a file in a deleted "
+                           "directory.\n");
         }
 
         //

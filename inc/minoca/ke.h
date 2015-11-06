@@ -741,15 +741,19 @@ Members:
 
     Event - Stores a pointer to the event that allows for blocking.
 
-    ExclusiveWaiting - Stores a boolean indicating that an exclusive lock
-        acquire is in progress.
+    ExclusiveWaiters - Stores the number of thread trying to acquire the lock
+        exclusively.
+
+    SharedWaiters - Stores the number of threads trying to acquire the lock
+        shared.
 
 --*/
 
 typedef struct _SHARED_EXCLUSIVE_LOCK {
     volatile ULONG State;
     PKEVENT Event;
-    BOOL ExclusiveWaiting;
+    volatile ULONG ExclusiveWaiters;
+    volatile ULONG SharedWaiters;
 } SHARED_EXCLUSIVE_LOCK, *PSHARED_EXCLUSIVE_LOCK;
 
 /*++
