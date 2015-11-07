@@ -139,8 +139,18 @@ Environment:
 
 ASSEMBLY_FILE_HEADER
 
+##
+## These functions are defined in ARM mode, which is okay since the MMU-disable
+## transition code uses blx jumps to possibly transition between modes.
+##
+
+.arm
+
 .globl Am3SocOcmcCode
+.globl Am3SocRefreshWfi
+.globl Am3SocStandby
 .globl Am3SocResumeStandby
+.globl Am3SocSleep
 .globl Am3SocResume
 .globl Am3SocResumeAddress
 .globl Am3SocOcmcCodeEnd
@@ -224,7 +234,7 @@ Return Value:
 
 --*/
 
-FUNCTION Am3SocRefreshWfi
+Am3SocRefreshWfi:
 
     ##
     ## Put the DDR into self refresh.
@@ -263,8 +273,6 @@ FUNCTION Am3SocRefreshWfi
     Am3SocEmifDisableSelfRefresh
     bx      %lr             @ Return.
 
-END_FUNCTION Am3SocRefreshWfi
-
 ##
 ## VOID
 ## Am3SocStandby (
@@ -290,7 +298,7 @@ Return Value:
 
 --*/
 
-FUNCTION Am3SocStandby
+Am3SocStandby:
     str     %lr, Am3SocAbortAddress     @ Save return address for failure.
 
     ##
@@ -409,8 +417,6 @@ Am3SocResumeStandby:
     ldr     %lr, Am3SocResumeAddress     @ Get the resume location.
     bx      %lr             @ Return.
 
-END_FUNCTION Am3SocStandby
-
 ##
 ## VOID
 ## Am3SocSleep (
@@ -436,7 +442,7 @@ Return Value:
 
 --*/
 
-FUNCTION Am3SocSleep
+Am3SocSleep:
     str     %lr, Am3SocAbortAddress     @ Save return address for failure.
 
     ##
@@ -743,8 +749,6 @@ Am3SocEmifEnableLoop:
 
     ldr     %lr, Am3SocResumeAddress    @ Get the resume physical address.
     bx      %lr                         @ Branch to the OS resume address.
-
-END_FUNCTION Am3SocSleep
 
 ##
 ## VOID

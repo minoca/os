@@ -25,11 +25,14 @@ Environment:
 ##
 
 ##
-## Set this to 1 to enable Thumb-2 instructions. Better yet, this should
-## really be a preprocessor macro.
+## Set this to 1 to enable Thumb-2 instructions.
 ##
 
+#ifdef __thumb__
+#define THUMB 1
+#else
 #define THUMB 0
+#endif
 
 #define NULL 0x0
 
@@ -174,6 +177,30 @@ Environment:
 ##
 ## -------------------------------------------------------------------- Macros
 ##
+
+##
+## This macro emits a thumb if-then instruction, if compiling in Thumb mode.
+##
+
+#define IT(_Condition) \
+    .if THUMB ; \
+        it     _Condition ; \
+    .endif
+
+#define ITE(_Condition) \
+    .if THUMB ; \
+        ite    _Condition ; \
+    .endif
+
+#define ITTE(_Condition) \
+    .if THUMB ; \
+        itte   _Condition ; \
+    .endif
+
+#define ITTTE(_Condition) \
+    .if THUMB ; \
+        ittte  _Condition ; \
+    .endif
 
 ##
 ## This macro goes at the top of an assembly file.

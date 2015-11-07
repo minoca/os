@@ -154,14 +154,10 @@ PROTECTED_FUNCTION __aeabi_idivmod
     mov     %r2, %r1
     mov     %r4, #0x80000000
     ands    %r1, %r0, %r4
-.if THUMB
-    itne    ne
-.endif
+    IT(ne)
     movne   %r1, #0xFFFFFFFF
     ands    %r3, %r2, %r4
-.if THUMB
-    itne    ne
-.endif
+    IT(ne)
     movne   %r3, #0xFFFFFFFF
     sub     %sp, %sp, #16
     add     %r4, %sp, #8
@@ -256,9 +252,15 @@ Return Value:
 PROTECTED_FUNCTION __aeabi_llsl
     subs    %r3, %r2, #32
     rsb     %r12, %r2, #32
+    ITTTE(mi)
     movmi   %r1, %r1, lsl %r2
-    movpl   %r1, %r0, lsl %r3
+.if THUMB
+    lsrmi   %r3, %r0, %r12
+    orrmi   %r1, %r1, %r2
+.else
     orrmi   %r1, %r1, %r0, lsr %r12
+.endif
+    movpl   %r1, %r0, lsl %r3
     lsl     %r0, %r0, %r2
     bx      %lr
 
@@ -294,9 +296,15 @@ Return Value:
 PROTECTED_FUNCTION __aeabi_llsr
     subs    %r3, %r2, #32
     rsb     %r12, %r2, #32
+    ITTTE(mi)
     movmi   %r0, %r0, lsr %r2
-    movpl   %r0, %r1, lsr %r3
+.if THUMB
+    lslmi   %r3, %r1, %r12
+    orrmi   %r0, %r0, %r3
+.else
     orrmi   %r0, %r0, %r1, lsl %r12
+.endif
+    movpl   %r0, %r1, lsr %r3
     lsr     %r1, %r1, %r2
     bx      %lr
 
@@ -332,9 +340,15 @@ Return Value:
 PROTECTED_FUNCTION __aeabi_lasr
     subs    %r3, %r2, #32
     rsb     %r12, %r2, #32
+    ITTTE(mi)
     movmi   %r0, %r0, lsr %r2
-    movpl   %r0, %r1, asr %r3
+.if THUMB
+    lslmi   %r3, %r1, %r12
+    orrmi   %r0, %r0, %r3
+.else
     orrmi   %r0, %r0, %r1, lsl %r12
+.endif
+    movpl   %r0, %r1, asr %r3
     asr     %r1, %r1, %r2
     bx      %lr
 

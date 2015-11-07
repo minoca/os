@@ -554,6 +554,9 @@ Members:
     R3 - Stores the R3 register, which can be used for a third argument in
         case the PC is manipulated after save context returns.
 
+    Sp - Stores the stack pointer (in SVC mode, which is assumed to be the
+        current mode when the context was saved).
+
     R4 - Stores a non-volatile register.
 
     R5 - Stores a non-volatile register.
@@ -570,9 +573,6 @@ Members:
 
     R11 - Stores a non-volatile register. R12 is volatile, and is not available
         since the restore code needs a register for its operation.
-
-    Sp - Stores the stack pointer (in SVC mode, which is assumed to be the
-        current mode when the context was saved).
 
     UserLink - Stores the user mode link register.
 
@@ -651,6 +651,7 @@ struct _PROCESSOR_CONTEXT {
     ULONG R1;
     ULONG R2;
     ULONG R3;
+    ULONG Sp;
     ULONG R4;
     ULONG R5;
     ULONG R6;
@@ -659,7 +660,6 @@ struct _PROCESSOR_CONTEXT {
     ULONG R9;
     ULONG R10;
     ULONG R11;
-    ULONG Sp;
     ULONG UserLink;
     ULONG UserSp;
     ULONG IrqLink;

@@ -68,9 +68,7 @@ PROTECTED_FUNCTION ArDisableInterrupts
     cpsid   i                       @ Disable interrupts.
     mov     %r0, #0                 @ Assume interrupts disabled.
     tst     %r1, #PSR_FLAG_IRQ      @ AND the interrupt flag.
-.if THUMB
-    iteq    eq                      @ If the zero flag is set.
-.endif
+    IT(eq)                          @ If the zero flag is set...
     moveq   %r0, #1                 @ Interrupts were enabled.
     bx      %lr                     @ Return.
 
@@ -137,9 +135,7 @@ PROTECTED_FUNCTION ArAreInterruptsEnabled
     mrs     %r1, CPSR               @ Get the status register.
     mov     %r0, #0                 @ Assume interrupts disabled.
     tst     %r1, #PSR_FLAG_IRQ      @ AND the interrupt flag.
-.if THUMB
-    iteq    eq                      @ If the zero flag is set.
-.endif
+    IT(eq)                          @ If the zero flag is set...
     moveq   %r0, #1                 @ Interrupts were enabled.
     bx      %lr                     @ Return.
 
@@ -1628,18 +1624,24 @@ FUNCTION ArSaveProcessorContext
     stmia   %r0!, {%r1}                 @
     stmia   %r0!, {%r1}                 @
     stmia   %r0!, {%r1}                 @
-    stmia   %r0!, {%r4-%r11, %sp}       @ Save R4-R11 and SP.
+    mov     %r3, %sp                    @ Put SP in R1 because no pushing SP.
+    stmia   %r0!, {%r3-%r11}            @ Save SP and R4-R11.
     mrs     %r1, CPSR                   @ Get the current mode and status.
     cpsid   if, #ARM_MODE_SYSTEM        @ Get to user mode (disable interrupts).
-    stmia   %r0!, {%sp, %lr}            @ Save banked registers.
+    mov     %r1, %sp                    @ Get banked SP.
+    stmia   %r0!, {%r1, %lr}            @ Save banked registers.
     cpsid   if, #ARM_MODE_IRQ           @ Get to interrupt mode.
-    stmia   %r0!, {%sp, %lr}            @ Save banked registers.
+    mov     %r1, %sp                    @ Get banked SP.
+    stmia   %r0!, {%r1, %lr}            @ Save banked registers.
     cpsid   if, #ARM_MODE_FIQ           @ Get to fast interrupt mode.
-    stmia   %r0!, {%sp, %lr}            @ Save banked registers (sort of).
+    mov     %r1, %sp                    @ Get banked SP.
+    stmia   %r0!, {%r1, %lr}            @ Save banked registers.
     cpsid   if, #ARM_MODE_ABORT         @ Get to abort mode.
-    stmia   %r0!, {%sp, %lr}            @ Save banked registers.
+    mov     %r1, %sp                    @ Get banked SP.
+    stmia   %r0!, {%r1, %lr}            @ Save banked registers.
     cpsid   if, #ARM_MODE_UNDEF         @ Get to undefined instruction mode.
-    stmia   %r0!, {%sp, %lr}            @ Save banked registers.
+    mov     %r1, %sp                    @ Get banked SP.
+    stmia   %r0!, {%r1, %lr}            @ Save banked registers.
     msr     CPSR, %r1                   @ Restore interrupts and mode.
     stmia   %r0!, {%r0}                 @ Remember the VA right here.
     mrc     p15, 0, %r1, c1, c0, 0      @ Save SCTLR.
@@ -1801,15 +1803,20 @@ ArRestoreProcessorContextAfterActlr:
     ##
 
     cpsid   if, #ARM_MODE_UNDEF         @ Get to undefined instruction mode.
-    ldmdb   %r0!, {%sp, %lr}            @ Save banked registers.
+    ldmdb   %r0!, {%r1, %lr}            @ Restore banked registers.
+    mov     %sp, %r1                    @ Restore banked SP.
     cpsid   if, #ARM_MODE_ABORT         @ Get to abort mode.
-    ldmdb   %r0!, {%sp, %lr}            @ Save banked registers.
+    ldmdb   %r0!, {%r1, %lr}            @ Restore banked registers.
+    mov     %sp, %r1                    @ Restore banked SP.
     cpsid   if, #ARM_MODE_FIQ           @ Get to fast interrupt mode.
-    ldmdb   %r0!, {%sp, %lr}            @ Save banked registers (sort of).
+    ldmdb   %r0!, {%r1, %lr}            @ Restore banked registers.
+    mov     %sp, %r1                    @ Restore banked SP.
     cpsid   if, #ARM_MODE_IRQ           @ Get to interrupt mode.
-    ldmdb   %r0!, {%sp, %lr}            @ Save banked registers.
+    ldmdb   %r0!, {%r1, %lr}            @ Restore banked registers.
+    mov     %sp, %r1                    @ Restore banked SP.
     cpsid   if, #ARM_MODE_SYSTEM        @ Get to user mode (disable interrupts).
-    ldmdb   %r0!, {%sp, %lr}            @ Save banked registers.
+    ldmdb   %r0!, {%r1, %lr}            @ Restore banked registers.
+    mov     %sp, %r1                    @ Restore banked SP.
     cpsid   if, #ARM_MODE_SVC           @ Get back to SVC mode.
 
     ##
@@ -1818,7 +1825,9 @@ ArRestoreProcessorContextAfterActlr:
     ##
 
     mov     %r12, %r0                   @ Move to a free register.
-    ldmdb   %r12!, {%r0-%r11, %sp}      @ Restore general context.
+    ldmdb   %r12!, {%r3-%r11}           @ Restore general context.
+    mov     %sp, %r3                    @ Restore stack.
+    ldmdb   %r12!, {%r0-%r3}            @ Restore remaining registers.
     mov     %lr, #0                     @ Zero out lr for goodwill.
     rfedb   %r12!                       @ Pop PC and CPSR.
 

@@ -254,6 +254,10 @@ Return Value:
     return 0;
 }
 
+//
+// TODO: Keep i2d and friends but remove others if switching to hard FP.
+//
+
 RTL_API
 double
 __aeabi_i2d (

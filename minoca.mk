@@ -274,6 +274,16 @@ EXTRA_CPPFLAGS += -march=armv6zk
 endif
 endif
 
+##
+## TODO: Remove this to complete the switch to Thumb.
+##
+
+ifeq (armv7, $(ARCH))
+ifneq ($(BINARYTYPE), $(filter ntconsole win32 dll,$(BINARYTYPE)))
+EXTRA_CPPFLAGS += -marm
+endif
+endif
+
 ifeq (x86, $(ARCH))
 EXTRA_CFLAGS += -mno-ms-bitfields
 

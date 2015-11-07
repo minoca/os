@@ -150,9 +150,7 @@ FUNCTION EfiDisableInterrupts
     cpsid   i                       @ Disable interrupts.
     mov     %r0, #0                 @ Assume interrupts disabled.
     tst     %r1, #PSR_FLAG_IRQ      @ AND the interrupt flag.
-.if THUMB
-    iteq    eq                      @ If the zero flag is set.
-.endif
+    IT(eq)                          @ If the zero flag is set...
     moveq   %r0, #1                 @ Interrupts were enabled.
     bx      %lr                     @ Return.
 
@@ -217,9 +215,7 @@ FUNCTION EfiAreInterruptsEnabled
     mrs     %r1, CPSR               @ Get the status register.
     mov     %r0, #0                 @ Assume interrupts disabled.
     tst     %r1, #PSR_FLAG_IRQ      @ AND the interrupt flag.
-.if THUMB
-    iteq    eq                      @ If the zero flag is set.
-.endif
+    IT(eq)                          @ If the zero flag is set...
     moveq   %r0, #1                 @ Interrupts were enabled.
     bx      %lr                     @ Return.
 
