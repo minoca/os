@@ -647,11 +647,15 @@ Return Value:
         ExclusiveWaiters = SharedExclusiveLock->ExclusiveWaiters;
 
         //
-        // If no one is trying to acquire exclusive, then attempt to get it
-        // shared.
+        // If no one is trying to acquire exclusive, or this is not the first
+        // time around, try to acquire the lock. The reason subsequent attempts
+        // are allowed to try to acquire even with exclusive waiters is that
+        // without this, shared acquires may go down indefinitely on a free
+        // lock (since they soaked up the "signal for one" and got woken up
+        // ahead of the exclusive waiter).
         //
 
-        if ((ExclusiveWaiters == 0) &&
+        if (((ExclusiveWaiters == 0) || (IsWaiter != FALSE)) &&
             (State < SHARED_EXCLUSIVE_LOCK_EXCLUSIVE - 1)) {
 
             PreviousState = State;
@@ -668,7 +672,7 @@ Return Value:
 
                 if (SharedExclusiveLock->SharedWaiters != 0) {
                     KeSignalEvent(SharedExclusiveLock->Event,
-                                  SignalOptionSignalAll);
+                                  SignalOptionPulse);
                 }
 
                 break;
@@ -703,37 +707,18 @@ Return Value:
             if (PreviousWaiters != SharedWaiters) {
                 continue;
             }
+
+            IsWaiter = TRUE;
         }
 
         //
-        // If this thread has already gone down for a wait and there's an
-        // exclusive request, it may be the only one woken up (ahead of line
-        // of the exclusive that wants it). To prevent unsignaling and waiting
-        // indefinitely on a potentially free lock, signal the next waiter on
-        // the event until the exclusive gets it.
+        // Recheck the condition now that the waiter count is incremented, as a
+        // release may not have seen any waiters and therefore never signaled
+        // the event.
         //
 
-        if ((IsWaiter != FALSE) && (ExclusiveWaiters != 0)) {
-            KeSignalEvent(SharedExclusiveLock->Event, SignalOptionSignalOne);
-
-        //
-        // Otherwise, unsignal the event since this thread is going down to
-        // wait for it.
-        //
-
-        } else {
-            KeSignalEvent(SharedExclusiveLock->Event, SignalOptionUnsignal);
-        }
-
-        IsWaiter = TRUE;
-
-        //
-        // If something changed since the event was updated, try all this
-        // again, as the event state may be stale now.
-        //
-
-        if ((State != SharedExclusiveLock->State) ||
-            (SharedExclusiveLock->ExclusiveWaiters != ExclusiveWaiters)) {
+        if ((SharedExclusiveLock->ExclusiveWaiters == 0) &&
+            (SharedExclusiveLock->State != SHARED_EXCLUSIVE_LOCK_EXCLUSIVE)) {
 
             continue;
         }
@@ -824,6 +809,7 @@ Return Value:
 
 {
 
+    ULONG CurrentState;
     ULONG ExclusiveWaiters;
     BOOL IsWaiting;
     ULONG PreviousWaiters;
@@ -864,12 +850,13 @@ Return Value:
         }
 
         //
-        // Make the bed to sleep in, but if the lock became free in the
-        // meantime try again.
+        // Recheck the state now that the exclusive waiters count has been
+        // incremented, in case the release didn't see the increment and never
+        // signaled the event.
         //
 
-        KeSignalEvent(SharedExclusiveLock->Event, SignalOptionUnsignal);
-        if (SharedExclusiveLock->State == SHARED_EXCLUSIVE_LOCK_FREE) {
+        CurrentState = SharedExclusiveLock->State;
+        if (CurrentState == SHARED_EXCLUSIVE_LOCK_FREE) {
             continue;
         }
 
