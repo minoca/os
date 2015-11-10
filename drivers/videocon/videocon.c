@@ -87,7 +87,7 @@ Environment:
 //
 
 #define VIDEO_CONSOLE_BLINK_RATE 500
-#define VIDEO_CONSOLE_CURSOR_BLINK_COUNT 120
+#define VIDEO_CONSOLE_CURSOR_BLINK_COUNT 60
 
 //
 // Define the number of rows to leave at the top for a banner.

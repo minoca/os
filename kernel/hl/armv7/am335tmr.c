@@ -197,10 +197,11 @@ Return Value:
 
         //
         // Skip timer 1 for now, as it has funky register offsets and not that
-        // many timers are needed.
+        // many timers are needed. Skip timer 0 as it seems to interact with
+        // power management.
         //
 
-        if (TimerIndex == 1) {
+        if ((TimerIndex == 1) || (TimerIndex == 0)) {
             continue;
         }
 
@@ -320,15 +321,12 @@ Return Value:
     }
 
     //
-    // Program the timer in free running mode with no interrupt. Set the
-    // interface configuration to a state that disables going idle. This is
-    // the only register that does not change at all between the standard
-    // and alternate interface.
+    // Program the timer in free running mode with no interrupt.
     //
 
     WRITE_TIMER_REGISTER(Timer->Base,
                          Am335TimerOcpConfig,
-                         AM335_TIMER_IDLEMODE_NOIDLE);
+                         AM335_TIMER_IDLEMODE_SMART);
 
     //
     // Disable wakeup functionality.

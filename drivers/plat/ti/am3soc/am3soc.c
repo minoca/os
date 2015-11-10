@@ -609,6 +609,8 @@ PM_IDLE_STATE Am3SocIdleStates[AM3_SOC_IDLE_STATE_COUNT] = {
     }
 };
 
+ULONG Am3SocIdleStateCount = AM3_SOC_IDLE_STATE_COUNT;
+
 //
 // The Cortex M3 firmware is built in to the driver.
 //
@@ -2031,7 +2033,7 @@ Return Value:
 
     Processor->Context = Interface->Context;
     Processor->States = Am3SocIdleStates;
-    Processor->StateCount = AM3_SOC_IDLE_STATE_COUNT;
+    Processor->StateCount = Am3SocIdleStateCount;
     return STATUS_SUCCESS;
 }
 

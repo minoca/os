@@ -784,6 +784,7 @@ Return Value:
     ULONG Size;
     KSTATUS Status;
     ULONGLONG TimeCounter;
+    PKTIMER Timer;
     SYSTEM_USAGE_CONTEXT UsageContext;
     UINTN UsedSize;
     ULONGLONG WriteDifference;
@@ -797,6 +798,11 @@ Return Value:
     IoStatistics.Version = IO_GLOBAL_STATISTICS_VERSION;
     Memory.Version = MM_STATISTICS_VERSION;
     Cache.Version = IO_CACHE_STATISTICS_VERSION;
+    Timer = KeCreateTimer(KE_ALLOCATION_TAG);
+    if (Timer == NULL) {
+        return;
+    }
+
     while (TRUE) {
         Status = MmGetMemoryStatistics(&Memory);
         if (!KSUCCESS(Status)) {
@@ -1029,9 +1035,17 @@ Return Value:
 
         BannerString[sizeof(BannerString) - 1] = '\0';
         VidPrintString(0, 1, BannerString);
-        KeDelayExecution(TRUE, FALSE, MICROSECONDS_PER_SECOND);
+        KeQueueTimer(Timer,
+                     TimerQueueSoftWake,
+                     TimeCounter + Frequency,
+                     0,
+                     0,
+                     NULL);
+
+        ObWaitOnObject(Timer, 0, WAIT_TIME_INDEFINITE);
     }
 
+    KeDestroyTimer(Timer);
     return;
 }
 

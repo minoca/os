@@ -86,7 +86,8 @@ Environment:
 // Idle bits.
 //
 
-#define AM335_TIMER_IDLEMODE_NOIDLE 0x00000080
+#define AM335_TIMER_IDLEMODE_NOIDLE 0x00000004
+#define AM335_TIMER_IDLEMODE_SMART 0x00000008
 
 //
 // Mode bits.
@@ -604,15 +605,12 @@ Return Value:
     }
 
     //
-    // Program the timer in free running mode with no interrupt. Set the
-    // interface configuration to a state that disables going idle. This is
-    // the only register that does not change at all between the standard
-    // and alternate interface.
+    // Program the timer in free running mode with no interrupt.
     //
 
     WRITE_TIMER_REGISTER(Context->Base,
                          Am335TimerOcpConfig,
-                         AM335_TIMER_IDLEMODE_NOIDLE);
+                         AM335_TIMER_IDLEMODE_SMART);
 
     //
     // Disable wakeup functionality.
