@@ -675,6 +675,35 @@ Return Value:
 
 --*/
 
+typedef
+VOID
+(*PNET_DATA_LINK_GET_PACKET_SIZE_INFORMATION) (
+    PNET_LINK Link,
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the current packet size information for the given link.
+    As the number of required headers can be different for each link, the
+    packet size information is not a constant for an entire data link layer.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose packet size information is
+        being queried.
+
+    PacketSizeInformation - Supplies a pointer to a structure that receives the
+        link's data link layer packet size information.
+
+Return Value:
+
+    None.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -710,6 +739,7 @@ typedef struct _NET_DATA_LINK_INTERFACE {
     PNET_DATA_LINK_PROCESS_RECEIVED_PACKET ProcessReceivedPacket;
     PNET_DATA_LINK_GET_BROADCAST_ADDRESS GetBroadcastAddress;
     PNET_DATA_LINK_PRINT_ADDRESS PrintAddress;
+    PNET_DATA_LINK_GET_PACKET_SIZE_INFORMATION GetPacketSizeInformation;
 } NET_DATA_LINK_INTERFACE, *PNET_DATA_LINK_INTERFACE;
 
 /*++
@@ -725,10 +755,6 @@ Members:
 
     Type - Stores the type this data link implements.
 
-    PacketSizeInformation - Stores the packet size information that includes
-        the maximum number of bytes that can be sent over the data link layer,
-        including the header size and footer size.
-
     Interface - Stores the interface presented to the core networking library
         for this data link.
 
@@ -737,7 +763,6 @@ Members:
 struct _NET_DATA_LINK_ENTRY {
     LIST_ENTRY ListEntry;
     NET_DATA_LINK_TYPE Type;
-    NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     NET_DATA_LINK_INTERFACE Interface;
 };
 

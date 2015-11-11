@@ -97,6 +97,12 @@ NetpEthernetPrintAddress (
     ULONG BufferLength
     );
 
+VOID
+NetpEthernetGetPacketSizeInformation (
+    PNET_LINK Link,
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation
+    );
+
 KSTATUS
 NetpEthernetGetEthernetAddressFromSmbios (
     PULONG Address
@@ -144,16 +150,9 @@ Return Value:
     NET_DATA_LINK_ENTRY DataLinkEntry;
     HANDLE DataLinkHandle;
     PNET_DATA_LINK_INTERFACE Interface;
-    PNET_PACKET_SIZE_INFORMATION SizeInformation;
     KSTATUS Status;
 
     DataLinkEntry.Type = NetDataLinkEthernet;
-    SizeInformation = &(DataLinkEntry.PacketSizeInformation);
-    SizeInformation->HeaderSize = ETHERNET_HEADER_SIZE;
-    SizeInformation->FooterSize = 0;
-    SizeInformation->MaxPacketSize = ETHERNET_HEADER_SIZE +
-                                     ETHERNET_MAXIMUM_PAYLOAD_SIZE;
-
     Interface = &(DataLinkEntry.Interface);
     Interface->InitializeLink = NetpEthernetInitializeLink;
     Interface->DestroyLink = NetpEthernetDestroyLink;
@@ -161,6 +160,7 @@ Return Value:
     Interface->ProcessReceivedPacket = NetpEthernetProcessReceivedPacket;
     Interface->GetBroadcastAddress = NetpEthernetGetBroadcastAddress;
     Interface->PrintAddress = NetpEthernetPrintAddress;
+    Interface->GetPacketSizeInformation = NetpEthernetGetPacketSizeInformation;
     Status = NetRegisterDataLinkLayer(&DataLinkEntry, &DataLinkHandle);
     if (!KSUCCESS(Status)) {
 
@@ -610,6 +610,44 @@ Return Value:
                               BytePointer[5]);
 
     return Length;
+}
+
+VOID
+NetpEthernetGetPacketSizeInformation (
+    PNET_LINK Link,
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the current packet size information for the given link.
+    As the number of required headers can be different for each link, the
+    packet size information is not a constant for an entire data link layer.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose packet size information is
+        being queried.
+
+    PacketSizeInformation - Supplies a pointer to a structure that receives the
+        link's data link layer packet size information.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PacketSizeInformation->HeaderSize = ETHERNET_HEADER_SIZE;
+    PacketSizeInformation->FooterSize = 0;
+    PacketSizeInformation->MaxPacketSize = ETHERNET_HEADER_SIZE +
+                                           ETHERNET_MAXIMUM_PAYLOAD_SIZE;
+
+    return;
 }
 
 //

@@ -4896,7 +4896,8 @@ Return Value:
 
 {
 
-    PNET_PACKET_SIZE_INFORMATION DataLinkInformation;
+    PNET_DATA_LINK_ENTRY DataLinkEntry;
+    NET_PACKET_SIZE_INFORMATION DataLinkInformation;
     ULONG FooterSize;
     ULONG HeaderSize;
     ULONG MaxPacketSize;
@@ -4907,13 +4908,16 @@ Return Value:
     // for the data link layer, then truncate it.
     //
 
-    DataLinkInformation = &(Link->DataLinkEntry->PacketSizeInformation);
-    MaxPacketSize = DataLinkInformation->HeaderSize +
-                    Socket->UnboundPacketSizeInformation.MaxPacketSize +
-                    DataLinkInformation->FooterSize;
+    DataLinkEntry = Link->DataLinkEntry;
+    DataLinkEntry->Interface.GetPacketSizeInformation(Link,
+                                                      &DataLinkInformation);
 
-    if (MaxPacketSize > DataLinkInformation->MaxPacketSize) {
-        MaxPacketSize = DataLinkInformation->MaxPacketSize;
+    MaxPacketSize = DataLinkInformation.HeaderSize +
+                    Socket->UnboundPacketSizeInformation.MaxPacketSize +
+                    DataLinkInformation.FooterSize;
+
+    if (MaxPacketSize > DataLinkInformation.MaxPacketSize) {
+        MaxPacketSize = DataLinkInformation.MaxPacketSize;
     }
 
     //
@@ -4936,12 +4940,12 @@ Return Value:
     //
 
     HeaderSize = Socket->UnboundPacketSizeInformation.HeaderSize +
-                 DataLinkInformation->HeaderSize +
+                 DataLinkInformation.HeaderSize +
                  Link->Properties.PacketSizeInformation.HeaderSize;
 
     SizeInformation->HeaderSize = HeaderSize;
     FooterSize = Socket->UnboundPacketSizeInformation.FooterSize +
-                 DataLinkInformation->FooterSize +
+                 DataLinkInformation.FooterSize +
                  Link->Properties.PacketSizeInformation.FooterSize;
 
     SizeInformation->FooterSize = FooterSize;

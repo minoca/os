@@ -39,6 +39,10 @@ Author:
 #define AES_INITIALIZATION_VECTOR_SIZE 16
 #define AES_CBC128_KEY_SIZE 16
 #define AES_CBC256_KEY_SIZE 32
+#define AES_ECB128_KEY_SIZE AES_CBC128_KEY_SIZE
+#define AES_ECB256_KEY_SIZE AES_CBC256_KEY_SIZE
+#define AES_CTR128_KEY_SIZE AES_CBC128_KEY_SIZE
+#define AES_CTR256_KEY_SIZE AES_CBC256_KEY_SIZE
 
 //
 // Define SHA-1 parameters.
@@ -91,6 +95,8 @@ typedef enum _AES_CIPHER_MODE {
     AesModeCbc256,
     AesModeEcb128,
     AesModeEcb256,
+    AesModeCtr128,
+    AesModeCtr256
 } AES_CIPHER_MODE, *PAES_CIPHER_MODE;
 
 typedef enum _FORTUNA_INITIALIZATION_STATE {
@@ -803,6 +809,72 @@ Routine Description:
 
     This routine decrypts a byte sequence (with a block size of 16) using the
     AES codebook.
+
+Arguments:
+
+    Context - Supplies a pointer to the AES context.
+
+    Ciphertext - Supplies a pointer to the ciphertext buffer.
+
+    Plaintext - Supplies a pointer where the plaintext will be returned.
+
+    Length - Supplies the length of the plaintext and ciphertext buffers, in
+        bytes. This length must be a multiple of 16 bytes.
+
+Return Value:
+
+    None.
+
+--*/
+
+CRYPTO_API
+VOID
+CyAesCtrEncrypt (
+    PAES_CONTEXT Context,
+    PUCHAR Plaintext,
+    PUCHAR Ciphertext,
+    INT Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine encrypts a byte sequence (with a block size of 16) using AES
+    counter mode.
+
+Arguments:
+
+    Context - Supplies a pointer to the AES context.
+
+    Plaintext - Supplies a pointer to the plaintext buffer.
+
+    Ciphertext - Supplies a pointer where the ciphertext will be returned.
+
+    Length - Supplies the length of the plaintext and ciphertext buffers, in
+        bytes. This length must be a multiple of 16 bytes.
+
+Return Value:
+
+    None.
+
+--*/
+
+CRYPTO_API
+VOID
+CyAesCtrDecrypt (
+    PAES_CONTEXT Context,
+    PUCHAR Ciphertext,
+    PUCHAR Plaintext,
+    INT Length
+    );
+
+/*++
+
+Routine Description:
+
+    This routine decrypts a byte sequence (with a block size of 16) using AES
+    counter mode.
 
 Arguments:
 

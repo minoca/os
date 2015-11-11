@@ -106,10 +106,13 @@ Return Value:
     PHYSICAL_ADDRESS BufferPhysical;
     ULONGLONG BufferSize;
     PLIST_ENTRY CurrentEntry;
+    PNET_DATA_LINK_ENTRY DataLinkEntry;
+    ULONG DataLinkMask;
     ULONG DataSize;
     ULONG IoBufferFlags;
     BOOL LockHeld;
     PHYSICAL_ADDRESS MaximumPhysicalAddress;
+    NET_PACKET_SIZE_INFORMATION SizeInformation;
     KSTATUS Status;
     ULONG TotalSize;
 
@@ -135,12 +138,21 @@ Return Value:
         FooterSize += Link->Properties.PacketSizeInformation.FooterSize;
     }
 
-    if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS) != 0) {
-        HeaderSize += Link->DataLinkEntry->PacketSizeInformation.HeaderSize;
-    }
+    DataLinkMask = NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS |
+                   NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS;
 
-    if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS) != 0) {
-        FooterSize += Link->DataLinkEntry->PacketSizeInformation.FooterSize;
+    if ((Flags & DataLinkMask) != 0) {
+        DataLinkEntry = Link->DataLinkEntry;
+        DataLinkEntry->Interface.GetPacketSizeInformation(Link,
+                                                          &SizeInformation);
+
+        if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS) != 0) {
+            HeaderSize += SizeInformation.HeaderSize;
+        }
+
+        if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS) != 0) {
+            FooterSize += SizeInformation.FooterSize;
+        }
     }
 
     MaximumPhysicalAddress = Link->Properties.MaxPhysicalAddress;

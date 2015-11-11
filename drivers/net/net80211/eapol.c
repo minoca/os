@@ -48,9 +48,15 @@ Environment:
 // These macros return the KCK, KEK, and TK from the given PTK.
 //
 
-#define EAPOL_GET_KCK(_Ptk) &((_Ptk)[0])
-#define EAPOL_GET_KEK(_Ptk) &((_Ptk)[EAPOL_KCK_SIZE])
-#define EAPOL_GET_TK(_Ptk) &((_Ptk)[EAPOL_KCK_SIZE + EAPOL_KEK_SIZE])
+#define EAPOL_PTK_GET_KCK(_Ptk) &((_Ptk)[0])
+#define EAPOL_PTK_GET_KEK(_Ptk) &((_Ptk)[EAPOL_KCK_SIZE])
+#define EAPOL_PTK_GET_TK(_Ptk) &((_Ptk)[EAPOL_KCK_SIZE + EAPOL_KEK_SIZE])
+
+//
+// This macro returns the TK from the given GTK.
+//
+
+#define EAPOL_GTK_GET_TK(_Gtk) &((_Gtk)[0])
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -202,6 +208,14 @@ Environment:
 #define EAPOL_KDE_SELECTOR_KEY_ID   0x000FAC0A
 
 //
+// Define the bits for the KDE GTK entry flags.
+//
+
+#define EAPOL_KDE_GTK_FLAG_TRANSMIT     0x04
+#define EAPOL_KDE_GTK_FLAG_KEY_ID_MASK  0x03
+#define EAPOL_KDE_GTK_FLAG_KEY_ID_SHIFT 0
+
+//
 // Define the recommended application text to use when generating the global
 // key counter.
 //
@@ -264,13 +278,6 @@ Environment:
 
 #define EAPOL_PTK_DATA_SIZE \
     (NET80211_ADDRESS_SIZE * 2) + (EAPOL_NONCE_SIZE * 2)
-
-//
-// Define the default timeout period to wait for the EAPOL instance to acquire
-// a private key.
-//
-
-#define EAPOL_TIMEOUT (10 * MILLISECONDS_PER_SECOND)
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -392,6 +399,28 @@ typedef struct _EAPOL_KDE {
 
 Structure Description:
 
+    This structure defines a KDE GTK entry.
+
+Members:
+
+    Flags - Stores a bitmask of flags describing the global transient key.
+
+    Reserved - Stores a reserved byte.
+
+    Gtk - Stores the global transient key.
+
+--*/
+
+typedef struct _EAPOL_KDE_GTK {
+    UCHAR Flags;
+    UCHAR Reserved;
+    UCHAR Gtk[ANYSIZE_ARRAY];
+} PACKED EAPOL_KDE_GTK, *PEAPOL_KDE_GTK;
+
+/*++
+
+Structure Description:
+
     This structure defines the information needed for the two nodes
     participating in an EAPOL exchange.
 
@@ -434,19 +463,12 @@ Members:
     Link - Stores a pointer to the network link associated with this EAPOL
         entry.
 
-    StationAddress - Stores the physical address of the station (i.e. the link).
-
-    ApAddress - Stores the physical address of the AP with which the station is
-        attempting to authenticate.
-
     Lock - Stores a pointer to a queued lock that protects access to the global
         key counter.
 
-    Event - Stores a pointer to an event that is waited on while the
-        authentication process completes.
+    CompletionRoutine - Stores a pointer to the completion routine.
 
-    CompletionStatus - Stores the completion status of the EAPOL authentication
-        process.
+    CompletionContext - Stores a pointer to the completion context.
 
     Supplicant - Stores all the node-specific information for the supplicant
         node.
@@ -461,6 +483,15 @@ Members:
     Ptk - Stores the pairwise transient key for the link.
 
     PtkSize - Stores the size of the PTK, in bytes.
+
+    Gtk - Stores the group temporal key.
+
+    GtkFlags - Stores a bitmask of flags for the GTK. See EAPOL_KDE_GTK_FLAG_*
+        for definitions.
+
+    GtkSize - Stores the size of the GTK, in bytes.
+
+    TemporalKeySize - Stores the size of the temporal key, in bytes.
 
     KeyReplayCounterValid - Stores a boolean indicating whether or not the key
         replay counter is valid. It is not valid on a supplicant until the
@@ -479,14 +510,18 @@ typedef struct _EAPOL_CONTEXT {
     volatile ULONG ReferenceCount;
     PNET_LINK Link;
     PQUEUED_LOCK Lock;
-    PKEVENT Event;
-    KSTATUS CompletionStatus;
+    PEAPOL_COMPLETION_ROUTINE CompletionRoutine;
+    PVOID CompletionContext;
     EAPOL_NODE Supplicant;
     EAPOL_NODE Authenticator;
     UCHAR GlobalKeyCounter[EAPOL_GLOBAL_KEY_COUNTER_SIZE];
     UCHAR Pmk[EAPOL_PMK_SIZE];
     PUCHAR Ptk;
     ULONG PtkSize;
+    PUCHAR Gtk;
+    ULONG GtkFlags;
+    ULONG GtkSize;
+    ULONG TemporalKeySize;
     BOOL KeyReplayCounterValid;
     ULONGLONG KeyReplayCounter;
     ULONG KeyVersion;
@@ -889,13 +924,14 @@ Return Value:
         (Parameters->SupplicantAddress == NULL) ||
         (Parameters->AuthenticatorAddress == NULL) ||
         (Parameters->Ssid == NULL) ||
-        (Parameters->SsidLength == 0) ||
+        (Parameters->SsidLength <= 1) ||
         (Parameters->Passphrase == NULL) ||
         (Parameters->PassphraseLength == 0) ||
         (Parameters->SupplicantRsn == NULL) ||
         (Parameters->SupplicantRsnSize == 0) ||
         (Parameters->AuthenticatorRsn == NULL) ||
-        (Parameters->AuthenticatorRsnSize == 0)) {
+        (Parameters->AuthenticatorRsnSize == 0) ||
+        (Parameters->CompletionRoutine == NULL)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto CreateEnd;
@@ -920,15 +956,10 @@ Return Value:
     Context->ReferenceCount = 1;
     Context->Mode = Parameters->Mode;
     Context->Link = Parameters->Link;
-    Context->CompletionStatus = STATUS_SUCCESS;
+    Context->CompletionRoutine = Parameters->CompletionRoutine;
+    Context->CompletionContext = Parameters->CompletionContext;
     Context->Lock = KeCreateQueuedLock();
     if (Context->Lock == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateEnd;
-    }
-
-    Context->Event = KeCreateEvent(NULL);
-    if (Context->Event == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateEnd;
     }
@@ -1028,6 +1059,14 @@ Return Value:
     }
 
     //
+    // Generate a nonce for the supplicant.
+    //
+
+    Net80211pEapolReadGlobalKeyCounter(Context,
+                                       Context->Supplicant.Nonce,
+                                       EAPOL_NONCE_SIZE);
+
+    //
     // If the passphrase is less than the size of the PMK, then it needs to be
     // converted into the PMK, which is the PSK in this case.
     //
@@ -1115,71 +1154,6 @@ Return Value:
     KeReleaseQueuedLock(Net80211EapolTreeLock);
     Net80211pEapolContextReleaseReference(Context);
     return;
-}
-
-KSTATUS
-Net80211pEapolGetKey (
-    HANDLE EapolHandle,
-    PEAPOL_KEY Key
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to get the session's key from the given EAPOL
-    instance. It may block until the key is ready.
-
-Arguments:
-
-    EapolHandle - Supplies a handle to the EAPOL instance whose key is being
-        queried.
-
-    Key - Supplies a pointer to an EAPOL key structure that receives the EAPOL
-        instance's key.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PEAPOL_CONTEXT Context;
-    KSTATUS Status;
-
-    Context = (PEAPOL_CONTEXT)EapolHandle;
-
-    //
-    // Wait for the EAPOL instance to complete the authentication.
-    //
-
-    Status = KeWaitForEvent(Context->Event, FALSE, EAPOL_TIMEOUT);
-    if (!KSUCCESS(Status)) {
-        goto GetKeyEnd;
-    }
-
-    //
-    // Check the completion status. Fail if it not success.
-    //
-
-    if (!KSUCCESS(Context->CompletionStatus)) {
-        Status = Context->CompletionStatus;
-        goto GetKeyEnd;
-    }
-
-    Key->Key = MmAllocatePagedPool(Context->PtkSize, EAPOL_ALLOCATION_TAG);
-    if (Key->Key == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto GetKeyEnd;
-    }
-
-    RtlCopyMemory(Key->Key, Context->Ptk, Context->PtkSize);
-    Key->KeyLength = Context->PtkSize;
-
-GetKeyEnd:
-    return Status;
 }
 
 //
@@ -1507,11 +1481,8 @@ Return Value:
     PEAPOL_CONTEXT Context;
     PRED_BLACK_TREE_NODE FoundNode;
     PEAPOL_KEY_FRAME KeyFrame;
-    BOOL LockHeld;
     USHORT PacketBodyLength;
     EAPOL_CONTEXT SearchEntry;
-
-    LockHeld = FALSE;
 
     //
     // Lookup to see if this is link is registered for an authentication
@@ -1537,9 +1508,11 @@ Return Value:
     //
 
     if (Context == NULL) {
-        RtlDebugPrint("EAPOL: Failed to find entry for link 0x%08x. Dropping "
-                      "packet.\n",
-                      Link);
+        if (Net80211EapolDebug != FALSE) {
+            RtlDebugPrint("EAPOL: Failed to find entry for link 0x%08x. "
+                          "Dropping packet.\n",
+                          Link);
+        }
 
         goto ProcessReceivedDataEnd;
     }
@@ -1604,13 +1577,6 @@ Return Value:
     }
 
     //
-    // Synchronize with other packets arriving for this EAPOL context.
-    //
-
-    KeAcquireQueuedLock(Context->Lock);
-    LockHeld = TRUE;
-
-    //
     // Parse the key frame based on the mode.
     //
 
@@ -1624,10 +1590,6 @@ Return Value:
 
 ProcessReceivedDataEnd:
     if (Context != NULL) {
-        if (LockHeld != FALSE) {
-            KeReleaseQueuedLock(Context->Lock);
-        }
-
         Net80211pEapolContextReleaseReference(Context);
     }
 
@@ -1766,8 +1728,14 @@ Return Value:
 
 {
 
+    BOOL CompleteExchange;
+    KSTATUS CompletionStatus;
     PUCHAR EncryptedKeyData;
     USHORT EncryptedKeyDataLength;
+    ULONG GtkLength;
+    PEAPOL_KDE Kde;
+    PEAPOL_KDE_GTK KdeGtk;
+    ULONG KdeOuiDataType;
     PUCHAR KeyData;
     ULONG KeyDataLength;
     USHORT KeyInformation;
@@ -1780,9 +1748,25 @@ Return Value:
     BOOL ValidMic;
 
     ASSERT(Context->Mode == EapolModeSupplicant);
-    ASSERT(KeIsQueuedLockHeld(Context->Lock) != FALSE);
 
+    CompleteExchange = FALSE;
+    CompletionStatus = STATUS_SUCCESS;
     KeyData = NULL;
+
+    //
+    // Synchronize with other packets arriving for this EAPOL context.
+    //
+
+    KeAcquireQueuedLock(Context->Lock);
+
+    //
+    // If this context has already been removed from the tree, then a previous
+    // packet completed it.
+    //
+
+    if (Context->TreeEntry.Parent == NULL) {
+        goto SupplicantProcessKeyFrameEnd;
+    }
 
     //
     // Make sure the replay counter has not been used. It should be greater
@@ -1827,14 +1811,6 @@ Return Value:
                       EAPOL_NONCE_SIZE);
 
         //
-        // Generate a new nonce for the supplicant.
-        //
-
-        Net80211pEapolReadGlobalKeyCounter(Context,
-                                           Context->Supplicant.Nonce,
-                                           EAPOL_NONCE_SIZE);
-
-        //
         // Derive the pairwise transient key (PTK) for this link. The length of
         // the temporal key portion of the PTK is indicated by the AP.
         //
@@ -1861,7 +1837,10 @@ Return Value:
                                                      KeyReplayCounter);
 
         if (!KSUCCESS(Status)) {
-            RtlDebugPrint("EAPOL: Failed to send supplicant message 2.\n");
+            RtlDebugPrint("EAPOL: Failed to send supplicant message 2: "
+                          "0x%08x.\n",
+                          Status);
+
             goto SupplicantProcessKeyFrameEnd;
         }
 
@@ -1931,13 +1910,10 @@ Return Value:
 
         if (Match == FALSE) {
             RtlDebugPrint("EAPOL: Mismatching encrypted RSN in message 3.\n");
-            Net80211pEapolInstanceComplete(Context, STATUS_UNSUCCESSFUL);
+            CompleteExchange = TRUE;
+            CompletionStatus = STATUS_UNSUCCESSFUL;
             goto SupplicantProcessKeyFrameEnd;
         }
-
-        //
-        // TODO: Use second RSNE, if present, or deauthenticate.
-        //
 
         //
         // Validate the MIC. If it is not valid, drop the packet.
@@ -1946,6 +1922,51 @@ Return Value:
         ValidMic = Net80211pEapolValidateMic(Context, KeyFrame);
         if (ValidMic == FALSE) {
             goto SupplicantProcessKeyFrameEnd;
+        }
+
+        //
+        // Parse the rest of the decrypted key data to see if an GTK was
+        // supplied.
+        //
+
+        KeyDataLength -= Context->Authenticator.RsnSize;
+        Kde = (PEAPOL_KDE)(KeyData + Context->Authenticator.RsnSize);
+        if ((KeyDataLength >= sizeof(EAPOL_KDE)) &&
+            (Kde->Type == EAPOL_KDE_TYPE)) {
+
+            KdeOuiDataType = NETWORK_TO_CPU32(Kde->OuiDataType);
+            switch (KdeOuiDataType) {
+            case EAPOL_KDE_SELECTOR_GTK:
+                GtkLength = Kde->Length - 6;
+                if ((GtkLength > Kde->Length) || (GtkLength == 0)) {
+                    break;
+                }
+
+                //
+                // The length should match the key data length specified in
+                // message 1, which was cached in the context.
+                //
+
+                if (GtkLength != Context->TemporalKeySize) {
+                    break;
+                }
+
+                KdeGtk = (PEAPOL_KDE_GTK)(Kde + 1);
+                Context->GtkFlags = KdeGtk->Flags;
+                Context->Gtk = MmAllocatePagedPool(GtkLength,
+                                                   EAPOL_ALLOCATION_TAG);
+
+                if (Context->Gtk == NULL) {
+                    goto SupplicantProcessKeyFrameEnd;
+                }
+
+                Context->GtkSize = GtkLength;
+                RtlCopyMemory(Context->Gtk, KdeGtk->Gtk, GtkLength);
+                break;
+
+            default:
+                break;
+            }
         }
 
         //
@@ -1968,7 +1989,8 @@ Return Value:
             goto SupplicantProcessKeyFrameEnd;
         }
 
-        Net80211pEapolInstanceComplete(Context, STATUS_SUCCESS);
+        CompleteExchange = TRUE;
+        CompletionStatus = STATUS_SUCCESS;
         break;
 
     default:
@@ -1980,6 +2002,33 @@ Return Value:
     }
 
 SupplicantProcessKeyFrameEnd:
+
+    //
+    // In order to not process more packets for a completed context, remove the
+    // context from the global tree while the context lock is still held.
+    //
+
+    if (CompleteExchange != FALSE) {
+        KeAcquireQueuedLock(Net80211EapolTreeLock);
+        if (Context->TreeEntry.Parent != NULL) {
+            RtlRedBlackTreeRemove(&Net80211EapolTree, &(Context->TreeEntry));
+            Context->TreeEntry.Parent = NULL;
+        }
+
+        KeReleaseQueuedLock(Net80211EapolTreeLock);
+    }
+
+    KeReleaseQueuedLock(Context->Lock);
+
+    //
+    // Now that the context lock has been released, call the completion
+    // routine if necessary.
+    //
+
+    if (CompleteExchange != FALSE) {
+        Net80211pEapolInstanceComplete(Context, CompletionStatus);
+    }
+
     if (KeyData != NULL) {
         MmFreePagedPool(KeyData);
     }
@@ -2174,8 +2223,6 @@ Return Value:
     ULONG Index;
     ULONG Offset;
 
-    ASSERT(KeIsQueuedLockHeld(Context->Lock) != FALSE);
-
     if (ReadSize > EAPOL_GLOBAL_KEY_COUNTER_SIZE) {
         ReadSize = EAPOL_GLOBAL_KEY_COUNTER_SIZE;
     }
@@ -2187,6 +2234,7 @@ Return Value:
     // The global key counter is a 32-byte big endian value.
     //
 
+    KeAcquireQueuedLock(Context->Lock);
     RtlCopyMemory(ReadBuffer, Context->GlobalKeyCounter + Offset, ReadSize);
 
     //
@@ -2201,6 +2249,7 @@ Return Value:
         }
     }
 
+    KeReleaseQueuedLock(Context->Lock);
     return;
 }
 
@@ -2229,8 +2278,7 @@ Arguments:
 
     Ssid - Supplies the SSID string for the BSS to which the passphrase belongs.
 
-    SsidLength - Supplies the length of the SSID, not including the NULL
-        terminator.
+    SsidLength - Supplies the length of the SSID, including the NULL terminator.
 
     Psk - Supplies a pointer that receives the 256-bit PSK derived from the
         passphrase.
@@ -2257,6 +2305,12 @@ Return Value:
     ULONG XorIndex;
 
     PskBuffer = NULL;
+
+    //
+    // Stip off the NULL terminator from the SSID length.
+    //
+
+    SsidLength -= 1;
 
     //
     // Allocate a buffer to hold the SSID plus the PSK index. It must be at
@@ -2408,6 +2462,15 @@ Return Value:
     KSTATUS Status;
 
     //
+    // Release the existing PTK.
+    //
+
+    if (Context->Ptk != NULL) {
+        MmFreePagedPool(Context->Ptk);
+        Context->Ptk = NULL;
+    }
+
+    //
     // Concatenate both MAC addresses and both nonce values from the
     // authenticator and the supplicant in to the data buffer.
     //
@@ -2464,6 +2527,7 @@ Return Value:
     }
 
     Context->PtkSize = PtkSize;
+    Context->TemporalKeySize = TemporalKeyLength;
 
     //
     // Run the data through the PRF using the PMK as a key.
@@ -2604,7 +2668,7 @@ Return Value:
 
     Net80211pEapolNistAesKeyWrap(Plaintext,
                                  PlaintextLength,
-                                 EAPOL_GET_KEK(Context->Ptk),
+                                 EAPOL_PTK_GET_KEK(Context->Ptk),
                                  EAPOL_KEK_SIZE,
                                  Ciphertext,
                                  CiphertextLength);
@@ -2696,7 +2760,7 @@ Return Value:
 
     Status = Net80211pEapolNistAesKeyUnwrap(EncryptedKeyData,
                                             EncryptedKeyDataLength,
-                                            EAPOL_GET_KEK(Context->Ptk),
+                                            EAPOL_PTK_GET_KEK(Context->Ptk),
                                             EAPOL_KEK_SIZE,
                                             Plaintext,
                                             PlaintextLength);
@@ -2710,8 +2774,9 @@ DecryptKeyDataEnd:
         if (Plaintext != NULL) {
             MmFreePagedPool(Plaintext);
             Plaintext = NULL;
-            PlaintextLength = 0;
         }
+
+        PlaintextLength = 0;
     }
 
     *KeyData = Plaintext;
@@ -2767,7 +2832,7 @@ Return Value:
     case EAPOL_KEY_VERSION_NIST_AES_HMAC_SHA1_128:
         CySha1ComputeHmac((PUCHAR)KeyFrame,
                           KeyFrameLength,
-                          EAPOL_GET_KCK(Context->Ptk),
+                          EAPOL_PTK_GET_KCK(Context->Ptk),
                           EAPOL_KCK_SIZE,
                           Digest);
 
@@ -2855,7 +2920,7 @@ Return Value:
     case EAPOL_KEY_VERSION_NIST_AES_HMAC_SHA1_128:
         CySha1ComputeHmac((PUCHAR)KeyFrame,
                           KeyFrameLength,
-                          EAPOL_GET_KCK(Context->Ptk),
+                          EAPOL_PTK_GET_KCK(Context->Ptk),
                           EAPOL_KCK_SIZE,
                           Digest);
 
@@ -3074,7 +3139,7 @@ Return Value:
     ASSERT((KeyDataLength + EAPOL_NIST_AES_KEY_DATA_CIPHERTEXT_LENGTH_DELTA) ==
            EncryptedKeyDataLength);
 
-    ASSERT(KeyLength == AES_CBC128_KEY_SIZE);
+    ASSERT(KeyLength == AES_ECB128_KEY_SIZE);
 
     //
     // Initailize the AES context for codebook decryption.
@@ -3484,16 +3549,16 @@ Return Value:
 
 {
 
-    if (Context->Event != NULL) {
-        KeDestroyEvent(Context->Event);
-    }
-
     if (Context->Lock != NULL) {
         KeDestroyQueuedLock(Context->Lock);
     }
 
     if (Context->Ptk != NULL) {
         MmFreePagedPool(Context->Ptk);
+    }
+
+    if (Context->Gtk != NULL) {
+        MmFreePagedPool(Context->Gtk);
     }
 
     if (Context->Link != NULL) {
@@ -3514,15 +3579,15 @@ Net80211pEapolInstanceComplete (
 
 Routine Description:
 
-    This routine completes an EAPOL instance by setting the completion status,
-    removing it from the global tree, and signaling the event. This routine
-    assumes the context lock is held.
+    This routine completes an EAPOL instance. If the exchange was successful,
+    then this routine sets the acquired keys in the link. The routine always
+    notified the creator of the instance via the completion callback.
 
 Arguments:
 
     Context - Supplies a pointer to the context of the completed EAPOL instance.
 
-    CompletionStatus - Supplies the status to set in the given context.
+    CompletionStatus - Supplies the completion status for the instance.
 
 Return Value:
 
@@ -3532,17 +3597,48 @@ Return Value:
 
 {
 
-    ASSERT(KeIsQueuedLockHeld(Context->Lock) != FALSE);
+    ULONG KeyFlags;
+    ULONG KeyId;
 
-    KeAcquireQueuedLock(Net80211EapolTreeLock);
-    if (Context->TreeEntry.Parent != NULL) {
-        RtlRedBlackTreeRemove(&Net80211EapolTree, &(Context->TreeEntry));
-        Context->TreeEntry.Parent = NULL;
+    if (!KSUCCESS(CompletionStatus)) {
+        goto InstanceCompleteEnd;
     }
 
-    KeReleaseQueuedLock(Net80211EapolTreeLock);
-    Context->CompletionStatus = CompletionStatus;
-    KeSignalEvent(Context->Event, SignalOptionSignalAll);
+    if (Context->Ptk != NULL) {
+        KeyFlags = NET80211_KEY_FLAG_CCMP | NET80211_KEY_FLAG_TRANSMIT;
+        CompletionStatus = Net80211SetKey(Context->Link,
+                                          EAPOL_PTK_GET_TK(Context->Ptk),
+                                          Context->TemporalKeySize,
+                                          KeyFlags,
+                                          0);
+
+        if (!KSUCCESS(CompletionStatus)) {
+            goto InstanceCompleteEnd;
+        }
+    }
+
+    if (Context->Gtk != NULL) {
+        KeyFlags = NET80211_KEY_FLAG_CCMP | NET80211_KEY_FLAG_GLOBAL;
+        if ((Context->GtkFlags & EAPOL_KDE_GTK_FLAG_TRANSMIT) != 0) {
+            KeyFlags |= NET80211_KEY_FLAG_TRANSMIT;
+        }
+
+        KeyId = (Context->GtkFlags & EAPOL_KDE_GTK_FLAG_KEY_ID_MASK) >>
+                EAPOL_KDE_GTK_FLAG_KEY_ID_SHIFT;
+
+        CompletionStatus = Net80211SetKey(Context->Link,
+                                          EAPOL_GTK_GET_TK(Context->Gtk),
+                                          Context->TemporalKeySize,
+                                          KeyFlags,
+                                          KeyId);
+
+        if (!KSUCCESS(CompletionStatus)) {
+            goto InstanceCompleteEnd;
+        }
+    }
+
+InstanceCompleteEnd:
+    Context->CompletionRoutine(Context->CompletionContext, CompletionStatus);
     return;
 }
 

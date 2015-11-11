@@ -217,6 +217,8 @@ Arguments:
     Key - Supplies the encryption/decryption key to use.
 
     InitializationVector - Supplies the initialization vector to start with.
+        This doubles as the initial counter value for counter mode, which
+        should be provided in big-endian byte order.
 
 Return Value:
 
@@ -237,12 +239,14 @@ Return Value:
     switch (Mode) {
     case AesModeCbc128:
     case AesModeEcb128:
+    case AesModeCtr128:
         Context->Rounds = 10;
         Context->KeySize = AES_CBC128_KEY_SIZE;
         break;
 
     case AesModeCbc256:
     case AesModeEcb256:
+    case AesModeCtr256:
         Context->Rounds = 14;
         Context->KeySize = AES_CBC256_KEY_SIZE;
         break;
@@ -734,6 +738,163 @@ Return Value:
         Plaintext += AES_BLOCK_SIZE;
     }
 
+    return;
+}
+
+CRYPTO_API
+VOID
+CyAesCtrEncrypt (
+    PAES_CONTEXT Context,
+    PUCHAR Plaintext,
+    PUCHAR Ciphertext,
+    INT Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine encrypts a byte sequence (with a block size of 16) using AES
+    counter mode.
+
+Arguments:
+
+    Context - Supplies a pointer to the AES context.
+
+    Plaintext - Supplies a pointer to the plaintext buffer.
+
+    Ciphertext - Supplies a pointer where the ciphertext will be returned.
+
+    Length - Supplies the length of the plaintext and ciphertext buffers, in
+        bytes. This length must be a multiple of 16 bytes.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG BlockIn[AES_BLOCK_SIZE / sizeof(ULONG)];
+    INT ByteIndex;
+    ULONG Counter[AES_INITIALIZATION_VECTOR_SIZE / sizeof(ULONG)];
+    PUCHAR CounterBytes;
+    PULONG InLong;
+    PULONG OutLong;
+    INT TextIndex;
+    INT WordIndex;
+
+    ASSERT((Length % AES_BLOCK_SIZE) == 0);
+
+    RtlCopyMemory(Counter,
+                  Context->InitializationVector,
+                  AES_INITIALIZATION_VECTOR_SIZE);
+
+    //
+    // Encrypt the incrementing counter each iteration and XOR it with the next
+    // block of input.
+    //
+
+    for (TextIndex = Length - AES_BLOCK_SIZE;
+         TextIndex >= 0;
+         TextIndex -= AES_BLOCK_SIZE) {
+
+        //
+        // Copy the counter into the input block.
+        //
+
+        for (WordIndex = 0;
+             WordIndex < (AES_BLOCK_SIZE / sizeof(ULONG));
+             WordIndex += 1) {
+
+            BlockIn[WordIndex] = AES_BYTE_SWAP32(Counter[WordIndex]);
+        }
+
+        InLong = (PULONG)Plaintext;
+        OutLong = (PULONG)Ciphertext;
+        CypAesEncryptBlock(Context, BlockIn);
+        for (WordIndex = 0;
+             WordIndex < (AES_BLOCK_SIZE / sizeof(ULONG));
+             WordIndex += 1) {
+
+            OutLong[WordIndex] = AES_BYTE_SWAP32(BlockIn[WordIndex]) ^
+                                 InLong[WordIndex];
+        }
+
+        Plaintext += AES_BLOCK_SIZE;
+        Ciphertext += AES_BLOCK_SIZE;
+
+        //
+        // Increment the counter. Remember that this is big-endian.
+        //
+
+        CounterBytes = (PUCHAR)Counter;
+        for (ByteIndex = AES_BLOCK_SIZE - 1;
+             ByteIndex >= 0;
+             ByteIndex -= 1) {
+
+            CounterBytes[ByteIndex] += 1;
+            if (CounterBytes[ByteIndex] != 0) {
+                break;
+            }
+        }
+    }
+
+    //
+    // Copy the counter back in to the context.
+    //
+
+    RtlCopyMemory(Context->InitializationVector,
+                  Counter,
+                  AES_INITIALIZATION_VECTOR_SIZE);
+
+    return;
+}
+
+CRYPTO_API
+VOID
+CyAesCtrDecrypt (
+    PAES_CONTEXT Context,
+    PUCHAR Ciphertext,
+    PUCHAR Plaintext,
+    INT Length
+    )
+
+/*++
+
+Routine Description:
+
+    This routine decrypts a byte sequence (with a block size of 16) using AES
+    counter mode.
+
+Arguments:
+
+    Context - Supplies a pointer to the AES context.
+
+    Ciphertext - Supplies a pointer to the ciphertext buffer.
+
+    Plaintext - Supplies a pointer where the plaintext will be returned.
+
+    Length - Supplies the length of the plaintext and ciphertext buffers, in
+        bytes. This length must be a multiple of 16 bytes.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // Counter mode always uses AES encryption to derive a value from the
+    // counter and then XOR's that value with the input. Thus, decryption is
+    // the same as encryption except the ciphertext is the input and the
+    // plaintext is the output.
+    //
+
+    CyAesCtrEncrypt(Context, Ciphertext, Plaintext, Length);
     return;
 }
 

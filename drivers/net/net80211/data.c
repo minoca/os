@@ -173,6 +173,11 @@ Return Value:
         Header->SequenceControl = Net80211pGetSequenceNumber(Link);
         Header->SequenceControl <<=
                                NET80211_SEQUENCE_CONTROL_SEQUENCE_NUMBER_SHIFT;
+
+        if (Net80211Link->PairwiseEncryption != Net80211EncryptionNone) {
+            Header->FrameControl |= NET80211_FRAME_CONTROL_PROTECTED_FRAME;
+            Net80211pEncryptPacket(Link->DataLinkContext, Packet);
+        }
     }
 
     DriverContext = Link->Properties.DriverContext;
@@ -206,19 +211,35 @@ Return Value:
 {
 
     UCHAR DestinationSap;
+    PNET80211_DATA_FRAME_HEADER Header;
     PNET8022_LLC_HEADER LlcHeader;
     PNET_NETWORK_ENTRY NetworkEntry;
     ULONG NetworkProtocol;
     PNET8022_SNAP_EXTENSION SnapExtension;
     UCHAR SourceSap;
+    KSTATUS Status;
 
     //
-    // Remove the 802.11 header. It should be the same size as this station
-    // does not handle QoS at the moment and is only expecting traffic from the
-    // DS.
+    // If the packet is protected, then decrypt it. The decryption leaves the
+    // packet's data offset at the start of the decrypted ciphertext.
     //
 
-    Packet->DataOffset += sizeof(NET80211_DATA_FRAME_HEADER);
+    Header = Packet->Buffer + Packet->DataOffset;
+    if ((Header->FrameControl & NET80211_FRAME_CONTROL_PROTECTED_FRAME) != 0) {
+        Status = Net80211pDecryptPacket(Link->DataLinkContext, Packet);
+        if (!KSUCCESS(Status)) {
+            return;
+        }
+
+    //
+    // Otherwise remove the 802.11 header. It should always be the same size as
+    // this node does not handle QoS at the moment and is only expecting '
+    // traffic from the DS.
+    //
+
+    } else {
+        Packet->DataOffset += sizeof(NET80211_DATA_FRAME_HEADER);
+    }
 
     //
     // Check the LLC header to look for the SNAP extension and unnumbered

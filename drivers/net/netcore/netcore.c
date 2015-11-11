@@ -721,7 +721,8 @@ Return Value:
         (NewDataLinkEntry->Interface.Send == NULL) ||
         (NewDataLinkEntry->Interface.ProcessReceivedPacket == NULL) ||
         (NewDataLinkEntry->Interface.GetBroadcastAddress == NULL) ||
-        (NewDataLinkEntry->Interface.PrintAddress == NULL)) {
+        (NewDataLinkEntry->Interface.PrintAddress == NULL) ||
+        (NewDataLinkEntry->Interface.GetPacketSizeInformation == NULL)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto RegisterDataLinkLayerEnd;

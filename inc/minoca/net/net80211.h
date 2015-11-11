@@ -58,6 +58,22 @@ Author:
      NET80211_FRAME_CONTROL_SUBTYPE_SHIFT)
 
 //
+// This macro gets the packet number from a CCMP header.
+//
+
+#define NET80211_GET_CCMP_HEADER_PACKET_NUMBER(_Header, _PacketNumber) \
+    (_PacketNumber) = (_Header)->PacketNumberLow;                      \
+    (_PacketNumber) |= (_Header)->PacketNumberHigh << 16;              \
+
+//
+// This macro sets the packet number for a CCMP header.
+//
+
+#define NET80211_SET_CCMP_HEADER_PACKET_NUMBER(_Header, _PacketNumber)      \
+    (_Header)->PacketNumberLow = (_PacketNumber) & 0xFFFF;                  \
+    (_Header)->PacketNumberHigh = ((_PacketNumber) & 0xFFFFFFFF0000) >> 16; \
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -75,10 +91,10 @@ Author:
 #define NET80211_LINK_PROPERTIES_VERSION 1
 
 //
-// Define the current version number of the 802.11 state information structure.
+// Define the current version number of the 802.11 BSS information structure.
 //
 
-#define NET80211_STATE_INFORMATION_VERSION 1
+#define NET80211_BSS_INFORMATION_VERSION 1
 
 //
 // Define the size of an 802.11 MAC address.
@@ -427,6 +443,113 @@ Author:
 #define NET80211_TIME_UNIT 1024
 
 //
+// Define the flags for the CCMP header.
+//
+
+#define NET80211_CCMP_FLAG_KEY_ID_MASK  0xC0
+#define NET80211_CCMP_FLAG_KEY_ID_SHIFT 6
+#define NET80211_CCMP_FLAG_EXT_IV       0x20
+
+//
+// Define the maximum number of keys that can be in use by CCMP.
+//
+
+#define NET80211_CCMP_MAX_KEY_COUNT 4
+
+//
+// Define the size, in bytes, of the MIC appended to the end of the PDU for
+// CCMP encryption.
+//
+
+#define NET80211_CCMP_MIC_SIZE 8
+
+//
+// Define the size, in bytes, of the CCM length field used by CCMP encryption.
+//
+
+#define NET80211_CCMP_LENGTH_FIELD_SIZE 2
+
+//
+// Define the size of the packet number used in CCMP.
+//
+
+#define NET80211_CCMP_PACKET_NUMBER_SIZE 6
+
+//
+// Define the set of frame control bits that are carried over from the MPDU
+// header to the AAD. The mask is different for QoS frames.
+//
+
+#define NET80211_AAD_FRAME_CONTROL_DEFAULT_MASK \
+    ~(NET80211_FRAME_CONTROL_SUBTYPE_MASK |     \
+      NET80211_FRAME_CONTROL_RETRY |            \
+      NET80211_FRAME_CONTROL_POWER_MANAGEMENT | \
+      NET80211_FRAME_CONTROL_MORE_DATA)
+
+#define NET80211_AAD_FRAME_CONTROL_QOS_MASK     \
+    ~(NET80211_FRAME_CONTROL_SUBTYPE_MASK |     \
+      NET80211_FRAME_CONTROL_RETRY |            \
+      NET80211_FRAME_CONTROL_POWER_MANAGEMENT | \
+      NET80211_FRAME_CONTROL_MORE_DATA |        \
+      NET80211_FRAME_CONTROL_ORDER)
+
+//
+// Define the portion of the sequence control field that is carried over from
+// the MPDU header to the AAD.
+//
+
+#define NET80211_AAD_SEQUENCE_CONTROL_MASK \
+    ~(NET80211_SEQUENCE_CONTROL_SEQUENCE_NUMBER_MASK)
+
+//
+// Define the flags for the CCM nonce.
+//
+
+#define NET80211_CCM_NONCE_FLAG_MANAGEMENT     0x10
+#define NET80211_CCM_NONCE_FLAG_PRIORITY_MASK  0x0F
+#define NET80211_CCM_NONCE_FLAG_PRIORITY_SHIFT 0
+
+//
+// Define the maximum number of bytes supported for the CCM authentication
+// field.
+//
+
+#define NET80211_CCM_MAX_AUTHENTICATION_FIELD_SIZE 16
+
+//
+// Define the minimum and maximum allowed CCM length field sizes.
+//
+
+#define NET80211_CCM_MAX_LENGTH_FIELD_SIZE 8
+#define NET80211_CCM_MIN_LENGTH_FIELD_SIZE 2
+
+//
+// Define the bitmask of CCM flags used in the first byte of the first
+// encryption block.
+//
+
+#define NET80211_CCM_FLAG_AAD                        0x40
+#define NET80211_CCM_FLAG_AUTHENTICATION_FIELD_MASK  0x38
+#define NET80211_CCM_FLAG_AUTHENTICATION_FIELD_SHIFT 3
+#define NET80211_CCM_FLAG_LENGTH_MASK                0x07
+#define NET80211_CCM_FLAG_LENGTH_SHIFT               0
+
+//
+// Define necessary encoding values for the CCM AAD length.
+//
+
+#define NET80211_CCM_AAD_MAX_SHORT_LENGTH 0xFEFF
+#define NET80211_CCM_AAD_LONG_ENCODING 0xFEFF
+
+//
+// Define the bits that describe the 802.11 networking core key flags.
+//
+
+#define NET80211_KEY_FLAG_CCMP     0x00000001
+#define NET80211_KEY_FLAG_GLOBAL   0x00000002
+#define NET80211_KEY_FLAG_TRANSMIT 0x00000004
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -546,6 +669,88 @@ typedef struct _NET80211_MANAGEMENT_FRAME_HEADER {
     USHORT SequenceControl;
 } PACKED NET80211_MANAGEMENT_FRAME_HEADER, *PNET80211_MANAGEMENT_FRAME_HEADER;
 
+/*++
+
+Structure Description:
+
+    This structure defines the 802.11 CTR with CBC-MAC Protocol (CCMP) header
+    used on encrypted data packets.
+
+Members:
+
+    PacketNumberLow - Stores the lowest two bytes of the 48-bit packet number.
+
+    Reserved - Stores a reserved field.
+
+    Flags - Stores a bitmask of CCMP flags. See NET80211_CCMP_FLAG_* for
+        definitions;
+
+    PacketNumberHigh - Stores the highest four bytes of the 48-bit packet
+        number.
+
+--*/
+
+typedef struct _NET80211_CCMP_HEADER {
+    USHORT PacketNumberLow;
+    UCHAR Reserved;
+    UCHAR Flags;
+    ULONG PacketNumberHigh;
+} PACKED NET80211_CCMP_HEADER, *PNET80211_CCMP_HEADER;
+
+/*++
+
+Structure Description:
+
+    This structure defines the base additional authentication data (AAD) used
+    for CCMP encryption.
+
+Members:
+
+    FrameControl - Stores a masked version of the frame control field from the
+        MPDU frame control field. See NET80211_AAD_FRAME_CONTROL_MASK.
+
+    Address1 - Stores the first address from the MPDU header.
+
+    Address2 - Stores the second address from the MPDU header.
+
+    Address3 - Stores the third address from the MPDU header.
+
+    SequenceControl - Stores a masked version of the sequence control field
+        from the MPDU frame. See NET80211_AAD_SEQUENCE_CONTROL_MASK.
+
+--*/
+
+typedef struct _NET80211_AAD {
+    USHORT FrameControl;
+    UCHAR Address1[NET80211_ADDRESS_SIZE];
+    UCHAR Address2[NET80211_ADDRESS_SIZE];
+    UCHAR Address3[NET80211_ADDRESS_SIZE];
+    USHORT SequenceControl;
+} PACKED NET80211_AAD, *PNET80211_AAD;
+
+/*++
+
+Structure Description:
+
+    This structure defines the CCM nonce value used during CCMP encryption.
+
+Members:
+
+    Flags - Stores a bitmask of flags. See NET80211_CCM_NONCE_FLAG_* for
+        definitions.
+
+    Address2 - Stores the second address from the MPDU header.
+
+    PacketNumber - Stores the packet number from the CCMP header.
+
+--*/
+
+typedef struct _NET80211_CCM_NONCE {
+    UCHAR Flags;
+    UCHAR Address2[NET80211_ADDRESS_SIZE];
+    UCHAR PacketNumber[NET80211_CCMP_PACKET_NUMBER_SIZE];
+} PACKED NET80211_CCM_NONCE, *PNET80211_CCM_NONCE;
+
 typedef enum _NET80211_STATE {
     Net80211StateInvalid,
     Net80211StateInitialized,
@@ -590,7 +795,7 @@ Structure Description:
 Members:
 
     Version - Stores the version number of the structure. Set this to
-        NET80211_STATE_INFORMATION_VERSION.
+        NET80211_BSS_INFORMATION_VERSION.
 
     Bssid - Stores the MAC address of the BSS's access point (a.k.a. the BSSID).
 
@@ -609,7 +814,7 @@ Members:
 
 --*/
 
-typedef struct _NET80211_STATE_INFORMATION {
+typedef struct _NET80211_BSS_INFORMATION {
     ULONG Version;
     UCHAR Bssid[NET80211_ADDRESS_SIZE];
     USHORT BeaconInterval;
@@ -617,7 +822,7 @@ typedef struct _NET80211_STATE_INFORMATION {
     ULONGLONG Timestamp;
     ULONG Channel;
     PNET80211_RATE_INFORMATION Rates;
-} NET80211_STATE_INFORMATION, *PNET80211_STATE_INFORMATION;
+} NET80211_BSS_INFORMATION, *PNET80211_BSS_INFORMATION;
 
 typedef
 KSTATUS
@@ -650,7 +855,7 @@ KSTATUS
 (*PNET80211_DEVICE_LINK_SET_STATE) (
     PVOID DriverContext,
     NET80211_STATE State,
-    PNET80211_STATE_INFORMATION StateInformation
+    PNET80211_BSS_INFORMATION BssInformation
     );
 
 /*++
@@ -667,8 +872,8 @@ Arguments:
 
     State - Supplies the state to which the link is being set.
 
-    StateInformation - Supplies a pointer to the information collected by the
-        802.11 core to help describe the state.
+    BssInformation - Supplies a pointer to the BSS information collected by the
+        802.11 core.
 
 Return Value:
 
@@ -819,6 +1024,44 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+NET80211_API
+KSTATUS
+Net80211SetKey (
+    PNET_LINK Link,
+    PUCHAR KeyValue,
+    ULONG KeyLength,
+    ULONG KeyFlags,
+    ULONG KeyId
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the given key into the given network link. The 802.11
+    networking library makes a local copy of all parameters.
+
+Arguments:
+
+    Link - Supplies a pointer to the networking link to which the keys should
+        be added.
+
+    KeyValue - Supplies a pointer to the key value.
+
+    KeyLength - Supplies the length of the key value, in bytes.
+
+    KeyFlags - Supplies a bitmask of flags to describe the key. See
+        NET80211_KEY_FLAG_* for definitions.
+
+    KeyId - Supplies the ID of the key negotiated between this station and its
+        peers and/or access point.
+
+Return Value:
+
+    Status code.
 
 --*/
 

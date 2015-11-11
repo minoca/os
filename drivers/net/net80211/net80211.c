@@ -95,6 +95,12 @@ Net80211pPrintAddress (
     );
 
 VOID
+Net80211pGetPacketSizeInformation (
+    PNET_LINK Link,
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation
+    );
+
+VOID
 Net80211pDestroy80211Link (
     PNET80211_LINK Net80211Link
     );
@@ -145,7 +151,6 @@ Return Value:
     HANDLE DataLinkHandle;
     DRIVER_FUNCTION_TABLE FunctionTable;
     PNET_DATA_LINK_INTERFACE Interface;
-    PNET_PACKET_SIZE_INFORMATION SizeInformation;
     KSTATUS Status;
 
     ASSERT(Net80211DataLinkLayerHandle == INVALID_HANDLE);
@@ -163,24 +168,6 @@ Return Value:
     //
 
     DataLinkEntry.Type = NetDataLink80211;
-    SizeInformation = &(DataLinkEntry.PacketSizeInformation);
-
-    //
-    // The header size depends on whether QoS is implemented. If QoS is not
-    // implemented, then the header size is always the same. If QoS is
-    // implemented, it depends on whether or not the other station implements
-    // QoS.
-    //
-
-    SizeInformation->HeaderSize = sizeof(NET80211_DATA_FRAME_HEADER) +
-                                  sizeof(NET8022_LLC_HEADER) +
-                                  sizeof(NET8022_SNAP_EXTENSION);
-
-    SizeInformation->FooterSize = 0;
-    SizeInformation->MaxPacketSize = NET80211_MAX_DATA_FRAME_BODY_SIZE +
-                                     SizeInformation->HeaderSize +
-                                     SizeInformation->FooterSize;
-
     Interface = &(DataLinkEntry.Interface);
     Interface->InitializeLink = Net80211pInitializeLink;
     Interface->DestroyLink = Net80211pDestroyLink;
@@ -188,6 +175,7 @@ Return Value:
     Interface->ProcessReceivedPacket = Net80211pProcessReceivedPacket;
     Interface->GetBroadcastAddress = Net80211pGetBroadcastAddress;
     Interface->PrintAddress = Net80211pPrintAddress;
+    Interface->GetPacketSizeInformation = Net80211pGetPacketSizeInformation;
     Status = NetRegisterDataLinkLayer(&DataLinkEntry, &DataLinkHandle);
     if (!KSUCCESS(Status)) {
         goto DriverEntryEnd;
@@ -491,7 +479,9 @@ Return Value:
     }
 
     Net80211Link->State = Net80211StateInitialized;
-    Net80211Link->BssState.Version = NET80211_STATE_INFORMATION_VERSION;
+    Net80211Link->BssState.Version = NET80211_BSS_INFORMATION_VERSION;
+    Net80211Link->PairwiseEncryption = Net80211EncryptionNone;
+    Net80211Link->GroupEncryption = Net80211EncryptionNone;
     Link->DataLinkContext = Net80211Link;
     Status = STATUS_SUCCESS;
 
@@ -758,6 +748,70 @@ Return Value:
     return Length;
 }
 
+VOID
+Net80211pGetPacketSizeInformation (
+    PNET_LINK Link,
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the current packet size information for the given link.
+    As the number of required headers can be different for each link, the
+    packet size information is not a constant for an entire data link layer.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose packet size information is
+        being queried.
+
+    PacketSizeInformation - Supplies a pointer to a structure that receives the
+        link's data link layer packet size information.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_LINK Net80211Link;
+
+    Net80211Link = (PNET80211_LINK)Link->DataLinkContext;
+
+    //
+    // The header size depends on whether QoS is implemented. If QoS is not
+    // implemented, then the header size is always the same. If QoS is
+    // implemented, it depends on whether or not the other station implements
+    // QoS.
+    //
+
+    PacketSizeInformation->HeaderSize = sizeof(NET80211_DATA_FRAME_HEADER) +
+                                        sizeof(NET8022_LLC_HEADER) +
+                                        sizeof(NET8022_SNAP_EXTENSION);
+
+    PacketSizeInformation->FooterSize = 0;
+
+    //
+    // If encryption is enable on the link, then there is an additional header
+    // and an additional footer.
+    //
+
+    if (Net80211Link->PairwiseEncryption == Net80211EncryptionWpa2Psk) {
+        PacketSizeInformation->HeaderSize += sizeof(NET80211_CCMP_HEADER);
+        PacketSizeInformation->FooterSize += NET80211_CCMP_MIC_SIZE;
+    }
+
+    PacketSizeInformation->MaxPacketSize = NET80211_MAX_DATA_FRAME_BODY_SIZE +
+                                           PacketSizeInformation->HeaderSize +
+                                           PacketSizeInformation->FooterSize;
+
+    return;
+}
+
 ULONG
 Net80211pGetSequenceNumber (
     PNET_LINK Link
@@ -854,7 +908,7 @@ Return Value:
 
 {
 
-    PNET80211_STATE_INFORMATION BssState;
+    PNET80211_BSS_INFORMATION BssState;
     PVOID DriverContext;
     PNET80211_LINK Net80211Link;
     KSTATUS Status;

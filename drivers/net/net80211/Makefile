@@ -28,6 +28,7 @@ BINARYTYPE = so
 BINPLACE = bin
 
 OBJS = control.o  \
+       crypto.o   \
        data.o     \
        eapol.o    \
        mgmt.o     \

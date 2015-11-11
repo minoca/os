@@ -2000,7 +2000,7 @@ KSTATUS
 Rtlw81SetState (
     PVOID DriverContext,
     NET80211_STATE State,
-    PNET80211_STATE_INFORMATION StateInformation
+    PNET80211_BSS_INFORMATION BssInformation
     );
 
 /*++
@@ -2017,8 +2017,8 @@ Arguments:
 
     State - Supplies the state to which the link is being set.
 
-    StateInformation - Supplies a pointer to the information collected by the
-        802.11 core to help describe the state.
+    BssInformation - Supplies a pointer to the BSS information collected by the
+        802.11 core.
 
 Return Value:
 

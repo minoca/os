@@ -40,6 +40,12 @@ Author:
 #define NET80211_ALLOCATION_TAG 0x69666957 // 'ifiW'
 
 //
+// Define the maximum number of supported keys.
+//
+
+#define NET80211_MAX_KEY_COUNT NET80211_CCMP_MAX_KEY_COUNT
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -49,6 +55,41 @@ typedef enum _NET80211_ENCRYPTION_TYPE {
     Net80211EncryptionWpaPsk,
     Net80211EncryptionWpa2Psk
 } NET80211_ENCRYPTION_TYPE, *PNET80211_ENCRYPTION_TYPE;
+
+/*++
+
+Structure Description:
+
+    This structure defines a key for the 802.11 core networking library.
+
+Members:
+
+    Flags - Stores a bitmask of flags describing the key. See
+        NET80211_KEY_FLAG_* for definitions.
+
+    Id - Stores the key ID negotiatied between the station and access point.
+
+    Length - Stores the length of the key, in bytes.
+
+    PacketNumber - Stores a 64-bit packet number that is incremented for each
+        encrypted packet sent with the key. Only the lower 48-bits are used.
+
+    ReplayCounter - Stores a 64-bit replay counter that is updated on each
+        accepted data frame. All subsequent data frames must have a packet
+        number greater than the current replay counter.
+
+    Value - Stores the array holding the value of the key.
+
+--*/
+
+typedef struct _NET80211_KEY {
+    ULONG Flags;
+    ULONG Id;
+    ULONG Length;
+    volatile ULONGLONG PacketNumber;
+    ULONGLONG ReplayCounter;
+    UCHAR Value[ANYSIZE_ARRAY];
+} NET80211_KEY, *PNET80211_KEY;
 
 /*++
 
@@ -75,6 +116,13 @@ Members:
 
     Properites - Stores the 802.11 link properties.
 
+    GroupEncryption - Stores the group encryption policy for the BSS.
+
+    PairwiseEncryption - Stores the pairwise encryption policy for the BSS.
+
+    Keys - Stores an array of pointers to keys used for encrypting and
+        decrypting packets.
+
 --*/
 
 typedef struct _NET80211_LINK {
@@ -83,8 +131,11 @@ typedef struct _NET80211_LINK {
     PQUEUED_LOCK Lock;
     PKEVENT ManagementFrameEvent;
     LIST_ENTRY ManagementFrameList;
-    NET80211_STATE_INFORMATION BssState;
+    NET80211_BSS_INFORMATION BssState;
     NET80211_LINK_PROPERTIES Properties;
+    NET80211_ENCRYPTION_TYPE PairwiseEncryption;
+    NET80211_ENCRYPTION_TYPE GroupEncryption;
+    PNET80211_KEY Keys[NET80211_MAX_KEY_COUNT];
 } NET80211_LINK, *PNET80211_LINK;
 
 //
@@ -177,32 +228,6 @@ Arguments:
     Link - Supplies a pointer to the network link on which the frame arrived.
 
     Packet - Supplies a pointer to the network packet.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
-Net80211pSendAcknowledgeFrame (
-    PNET_LINK Link,
-    PNET80211_FRAME_HEADER ReceivedFrameHeader
-    );
-
-/*++
-
-Routine Description:
-
-    This routine acknowledges the received packet by sending an ACK control
-    frame.
-
-Arguments:
-
-    Link - Supplies the link on which the frame was received.
-
-    ReceivedFrameHeader - Supplies the header of the received frame that needs
-        to be acknowledged.
 
 Return Value:
 
@@ -382,6 +407,58 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+KSTATUS
+Net80211pEncryptPacket (
+    PNET80211_LINK Link,
+    PNET_PACKET_BUFFER Packet
+    );
+
+/*++
+
+Routine Description:
+
+    This routine encrypts the given network packet's plaintext data. The
+    supplied packet buffer is modified directly and should already include the
+    full MPDU (i.e. the 802.11 headers should be present).
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 network link that owns the packet.
+
+    Packet - Supplies a pointer to the packet to encrypt.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+Net80211pDecryptPacket (
+    PNET80211_LINK Link,
+    PNET_PACKET_BUFFER Packet
+    );
+
+/*++
+
+Routine Description:
+
+    This routine decrypts the given network packet's ciphertext. The supplied
+    packet buffer is modified directly and should contain the full encrypted
+    MPDU, including the 802.11 headers.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 network link that owns the packet.
+
+    Packet - Supplies a pointer to the packet to decrypt.
+
+Return Value:
+
+    Status code.
 
 --*/
 

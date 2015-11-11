@@ -79,6 +79,12 @@ Environment:
 #define NET80211_DEFAULT_RSN_AKM_SUITE 0x02AC0F00
 
 //
+// Define the default timeout period to wait for the EAPOL instance to complete.
+//
+
+#define NET80211_EAPOL_TIMEOUT (10 * MILLISECONDS_PER_SECOND)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -95,10 +101,15 @@ Members:
     LinkAddress - Stores a pointer to the link's local address to be used in
         joining the BSS.
 
+    EapolCompletionEvent - Stores a pointer to the event that is signaled when
+        EAPOL authentication completes.
+
+    EapolCompletionStatus - Stores the status of the completed EAPOL exchange.
+
     Ssid - Stores the string identifying the BSS to join.
 
-    SsidLength - Stores the length of the BSS identifier string, not including
-        the NULL terminator.
+    SsidLength - Stores the length of the BSS identifier string, including the
+        NULL terminator.
 
     Passphrase - Stores an optional pointer to the passphrase for the BSS. The
         passphrase may be a sequence of bytes or ASCII characters depending on
@@ -135,6 +146,8 @@ Members:
 typedef struct _NET80211_BSS_CONTEXT {
     PNET_LINK Link;
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    PKEVENT EapolCompletionEvent;
+    KSTATUS EapolCompletionStatus;
     PSTR Ssid;
     ULONG SsidLength;
     PUCHAR Passphrase;
@@ -317,6 +330,12 @@ Net80211pCreateBssContext (
 VOID
 Net80211pDestroyBssContext (
     PNET80211_BSS_CONTEXT Context
+    );
+
+VOID
+Net80211pJoinBssEapolCompletionRoutine (
+    PVOID Context,
+    KSTATUS Status
     );
 
 //
@@ -585,7 +604,6 @@ Return Value:
     ULONG Channel;
     PNET80211_BSS_CONTEXT Context;
     HANDLE EapolHandle;
-    EAPOL_KEY Key;
     ULONG LocalIndex;
     UCHAR LocalRate;
     UCHAR MaxRate;
@@ -709,6 +727,8 @@ Return Value:
         Parameters.SupplicantRsnSize = sizeof(NET80211_DEFAULT_RSN_INFORMATION);
         Parameters.AuthenticatorRsn = Context->ApRsnInformation;
         Parameters.AuthenticatorRsnSize = Context->ApRsnInformationLength;
+        Parameters.CompletionRoutine = Net80211pJoinBssEapolCompletionRoutine;
+        Parameters.CompletionContext = Context;
         Status = Net80211pEapolInstanceCreate(&Parameters, &EapolHandle);
         if (!KSUCCESS(Status)) {
             goto JoinBssThreadEnd;
@@ -799,20 +819,29 @@ Return Value:
     Net80211pSetState(Context->Link, Net80211StateAssociated);
 
     //
-    // Attempt to get the keys from EAPOL. This may block.
+    // Wait for the EAPOL exchange to complete if necessary.
     //
 
     if (EapolHandle != INVALID_HANDLE) {
-        Status = Net80211pEapolGetKey(EapolHandle, &Key);
+        Status = KeWaitForEvent(Context->EapolCompletionEvent,
+                                FALSE,
+                                NET80211_EAPOL_TIMEOUT);
+
+        if (!KSUCCESS(Status)) {
+            goto JoinBssThreadEnd;
+        }
+
+        Status = Context->EapolCompletionStatus;
         if (!KSUCCESS(Status)) {
             goto JoinBssThreadEnd;
         }
 
         //
-        // TODO: Save the key and use it to encrypt/decrypt data packets.
+        // Now that the link is ready for encryption, updates its state.
         //
 
-        MmFreePagedPool(Key.Key);
+        Net80211Link->PairwiseEncryption = Context->PairwiseEncryption;
+        Net80211Link->GroupEncryption = Context->GroupEncryption;
     }
 
     //
@@ -901,7 +930,7 @@ Return Value:
     //
 
     FrameBodySize += NET80211_BASE_ELEMENT_SIZE;
-    SsidLength = Context->SsidLength;
+    SsidLength = Context->SsidLength - 1;
     if (SsidLength > NET80211_SSID_MAX_LENGTH) {
         Status = STATUS_INVALID_PARAMETER;
         goto SendProbeRequestEnd;
@@ -1182,7 +1211,7 @@ Return Value:
             //
 
             case NET80211_ELEMENT_SSID:
-                if (ElementLength != Context->SsidLength) {
+                if (ElementLength != (Context->SsidLength - 1)) {
                     AcceptedResponse = FALSE;
                     break;
                 }
@@ -1723,7 +1752,7 @@ Return Value:
     Net80211Link = Context->Link->DataLinkContext;
     FrameBody = NULL;
 
-    ASSERT((Context->Ssid != NULL) && (Context->SsidLength != 0));
+    ASSERT((Context->Ssid != NULL) && (Context->SsidLength > 1));
 
     //
     // Determine the size of the probe response packet.
@@ -1748,7 +1777,7 @@ Return Value:
     //
 
     FrameBodySize += NET80211_BASE_ELEMENT_SIZE;
-    SsidLength = Context->SsidLength;
+    SsidLength = Context->SsidLength - 1;
     if (SsidLength > 32) {
         Status = STATUS_INVALID_PARAMETER;
         goto SendAssociationRequestEnd;
@@ -2459,6 +2488,7 @@ Return Value:
 
     ULONG AllocationSize;
     PNET80211_BSS_CONTEXT Context;
+    KSTATUS Status;
 
     AllocationSize = sizeof(NET80211_BSS_CONTEXT) +
                      SsidLength +
@@ -2466,6 +2496,7 @@ Return Value:
 
     Context = MmAllocatePagedPool(AllocationSize, NET80211_ALLOCATION_TAG);
     if (Context == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateBssContextEnd;
     }
 
@@ -2473,12 +2504,18 @@ Return Value:
     NetLinkAddReference(Link);
     Context->Link = Link;
     Context->LinkAddress = LinkAddress;
+    Context->EapolCompletionEvent = KeCreateEvent(NULL);
+    if (Context->EapolCompletionEvent == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CreateBssContextEnd;
+    }
+
     if (Ssid != NULL) {
 
         ASSERT(SsidLength != 0);
 
         Context->Ssid = (PSTR)(Context + 1);
-        Context->SsidLength = SsidLength - 1;
+        Context->SsidLength = SsidLength;
         RtlCopyMemory(Context->Ssid, Ssid, SsidLength);
     }
 
@@ -2491,7 +2528,15 @@ Return Value:
         RtlCopyMemory(Context->Passphrase, Passphrase, PassphraseLength);
     }
 
+    Status = STATUS_SUCCESS;
+
 CreateBssContextEnd:
+    if (!KSUCCESS(Status)) {
+        if (Context != NULL) {
+            Net80211pDestroyBssContext(Context);
+        }
+    }
+
     return Context;
 }
 
@@ -2518,12 +2563,52 @@ Return Value:
 
 {
 
+    if (Context->EapolCompletionEvent != NULL) {
+        KeDestroyEvent(Context->EapolCompletionEvent);
+    }
+
     if (Context->RateInformation != NULL) {
         MmFreePagedPool(Context->RateInformation);
     }
 
     NetLinkReleaseReference(Context->Link);
     MmFreePagedPool(Context);
+    return;
+}
+
+VOID
+Net80211pJoinBssEapolCompletionRoutine (
+    PVOID Context,
+    KSTATUS Status
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when an EAPOL exchange completes. It is supplied by
+    the creator of the EAPOL instance.
+
+Arguments:
+
+    Context - Supplies a pointer to the context supplied by the creator of the
+        EAPOL instance.
+
+    Status - Supplies the completion status of the EAPOL exchange.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_BSS_CONTEXT BssContext;
+
+    BssContext = (PNET80211_BSS_CONTEXT)Context;
+    BssContext->EapolCompletionStatus = Status;
+    KeSignalEvent(BssContext->EapolCompletionEvent, SignalOptionSignalAll);
     return;
 }
 

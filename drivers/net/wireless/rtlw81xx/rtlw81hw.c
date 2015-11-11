@@ -1543,7 +1543,7 @@ KSTATUS
 Rtlw81SetState (
     PVOID DriverContext,
     NET80211_STATE State,
-    PNET80211_STATE_INFORMATION StateInformation
+    PNET80211_BSS_INFORMATION BssInformation
     )
 
 /*++
@@ -1560,8 +1560,8 @@ Arguments:
 
     State - Supplies the state to which the link is being set.
 
-    StateInformation - Supplies a pointer to the information collected by the
-        802.11 core to help describe the state.
+    BssInformation - Supplies a pointer to the BSS information collected by the
+        802.11 core.
 
 Return Value:
 
@@ -1661,9 +1661,9 @@ Return Value:
         // Filter out traffic that is not coming from the BSSID.
         //
 
-        Value = *((PULONG)&(StateInformation->Bssid[0]));
+        Value = *((PULONG)&(BssInformation->Bssid[0]));
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterBssid0, Value);
-        Value = *((PUSHORT)&(StateInformation->Bssid[4]));
+        Value = *((PUSHORT)&(BssInformation->Bssid[4]));
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterBssid1, Value);
 
         //
@@ -1694,7 +1694,7 @@ Return Value:
 
         RTLW81_WRITE_REGISTER16(Device,
                                 Rtlw81RegisterBeaconInterval,
-                                StateInformation->BeaconInterval);
+                                BssInformation->BeaconInterval);
 
         //
         // Enable filtering based on the BSSID.
@@ -1721,8 +1721,8 @@ Return Value:
         Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterBeaconControl);
         Value &= ~RTLW81_BEACON_CONTROL_ENABLE_BEACON;
         RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterBeaconControl, Value);
-        Timestamp = StateInformation->Timestamp;
-        BeaconInterval = StateInformation->BeaconInterval * NET80211_TIME_UNIT;
+        Timestamp = BssInformation->Timestamp;
+        BeaconInterval = BssInformation->BeaconInterval * NET80211_TIME_UNIT;
         Timestamp -= Timestamp % BeaconInterval;
         Timestamp -= NET80211_TIME_UNIT;
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterTsftr0, (ULONG)Timestamp);
@@ -1778,10 +1778,10 @@ Return Value:
             MaxRateIndex = 0;
             MaxBasicRateIndex = 0;
             for (BssIndex = 0;
-                 BssIndex < StateInformation->Rates->Count;
+                 BssIndex < BssInformation->Rates->Count;
                  BssIndex += 1) {
 
-                BssRate = StateInformation->Rates->Rates[BssIndex];
+                BssRate = BssInformation->Rates->Rates[BssIndex];
                 BssRate &= NET80211_RATE_VALUE_MASK;
                 for (LocalIndex = 0;
                      LocalIndex < RtlwDefaultRateInformation.Count;
@@ -1803,7 +1803,7 @@ Return Value:
                     MaxRateIndex = LocalIndex;
                 }
 
-                BssRate = StateInformation->Rates->Rates[BssIndex];
+                BssRate = BssInformation->Rates->Rates[BssIndex];
                 if ((BssRate & NET80211_RATE_BASIC) != 0) {
                     BasicRates |= (1 << LocalIndex);
                     if (LocalIndex > MaxBasicRateIndex) {

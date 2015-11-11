@@ -1583,6 +1583,13 @@ Return Value:
 
             ASSERT((Image->LoadFlags & IMAGE_LOAD_FLAG_PLACEHOLDER) == 0);
 
+            //
+            // Finding the image indicates that an image further along in the
+            // list depends on said images. Move it to be back of the list.
+            //
+
+            LIST_REMOVE(&(Image->ListEntry));
+            INSERT_BEFORE(&(Image->ListEntry), ListHead);
             return Image;
         }
     }
