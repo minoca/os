@@ -136,6 +136,14 @@ Author:
     (((_TrapFrame)->Cpsr & ARM_MODE_MASK) != ARM_MODE_USER)
 
 //
+// This macro manipulates the bitfields in the coprocessor access mask.
+//
+
+#define ARM_COPROCESSOR_ACCESS_MASK(_Coprocessor) (0x3 << ((_Coprocessor) * 2))
+#define ARM_COPROCESSOR_ACCESS(_Coprocessor, _Access) \
+    ((_Access) << ((_Coprocessor) * 2))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -203,6 +211,14 @@ Author:
 #define ARM_BREAK_INSTRUCTION 0xE7F000F3
 #define ARM_SINGLE_STEP_INSTRUCTION 0xE7F000F1
 #define ARM_DEBUG_SERVICE_INSTRUCTION 0xE7F000F4
+
+//
+// Thumb instruction width constants.
+//
+
+#define THUMB32_OP_SHIFT 11
+#define THUMB32_OP_MASK 0x1F
+#define THUMB32_OP_MIN 0x1D
 
 //
 // Memory related definitions.
@@ -408,6 +424,75 @@ Author:
 #define ARM_FAULT_STATUS_TYPE_ASYNCHRONOUS_PARITY               0x00000408
 
 //
+// Define ARM coprocessor access values.
+//
+
+#define ARM_COPROCESSOR_ACCESS_NONE 0x0
+#define ARM_COPROCESSOR_ACCESS_SUPERVISOR 0x1
+#define ARM_COPROCESSOR_ACCESS_FULL 0x3
+
+//
+// Define ARM floating point system ID (FPSID) register values.
+//
+
+#define ARM_FPSID_IMPLEMENTER_MASK 0xFF000000
+#define ARM_FPSID_IMPLEMENTER_SHIFT 24
+#define ARM_FPSID_IMPLEMENTER_ARM 0x41
+#define ARM_FPSID_SOFTWARE (1 << 23)
+#define ARM_FPSID_SUBARCHITECTURE_MASK 0x007F0000
+#define ARM_FPSID_SUBARCHITECTURE_SHIFT 16
+#define ARM_FPSID_SUBARCHITECTURE_VFPV1 0
+#define ARM_FPSID_SUBARCHITECTURE_VFPV2 1
+#define ARM_FPSID_SUBARCHITECTURE_VFPV3_COMMON_V2 2
+#define ARM_FPSID_SUBARCHITECTURE_VFPV3 3
+#define ARM_FPSID_SUBARCHITECTURE_VFPV3_COMMON_V3 4
+
+//
+// Define the FPU/SIMD extensions register values.
+//
+
+#define ARM_MVFR0_SIMD_REGISTERS_MASK 0x0000000F
+#define ARM_MVFR0_SIMD_REGISTERS_NONE 0
+#define ARM_MVFR0_SIMD_REGISTERS_16 1
+#define ARM_MVFR0_SIMD_REGISTERS_32 2
+
+//
+// Define the FPU/SIMD exception control register.
+//
+
+#define ARM_FPEXC_EXCEPTION 0x80000000
+#define ARM_FPEXC_ENABLE 0x40000000
+
+//
+// Define floating point status registers.
+//
+
+#define ARM_FPSCR_FLUSH_TO_ZERO (1 << 24)
+
+//
+// Define ARM Main ID register values.
+//
+
+#define ARM_MAIN_ID_IMPLEMENTOR_MASK 0xFF000000
+#define ARM_MAIN_ID_IMPLEMENTER_SHIFT 24
+#define ARM_MAIN_ID_VARIANT_MASK 0x00F00000
+#define ARM_MAIN_ID_VARIANT_SHIFT 20
+#define ARM_MAIN_ID_ARCHITECTURE_MASK 0x000F0000
+#define ARM_MAIN_ID_ARCHITECTURE_SHIFT 16
+#define ARM_MAIN_ID_PART_MASK 0x0000FFF0
+#define ARM_MAIN_ID_PART_SHIFT 4
+#define ARM_MAIN_ID_REVISION_MASK 0x0000000F
+
+#define ARM_MAIN_ID_ARCHITECTURE_ARMV4 1
+#define ARM_MAIN_ID_ARCHITECTURE_ARMV4T 2
+#define ARM_MAIN_ID_ARCHITECTURE_ARMV5 3
+#define ARM_MAIN_ID_ARCHITECTURE_ARMV5T 4
+#define ARM_MAIN_ID_ARCHITECTURE_ARMV5TE 5
+#define ARM_MAIN_ID_ARCHITECTURE_ARMV5TEJ 6
+#define ARM_MAIN_ID_ARCHITECTURE_ARMV6 7
+#define ARM_MAIN_ID_ARCHITECTURE_CPUID 0xF
+
+//
 // Define performance monitor control register bits.
 //
 
@@ -485,6 +570,49 @@ Return Value:
     bytes could be read.
 
 --*/
+
+typedef
+BOOL
+(*PARM_HANDLE_EXCEPTION) (
+    PTRAP_FRAME TrapFrame
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to handle an ARM exception. Interrupts are disabled
+    upon entry, and may be enabled during this function.
+
+Arguments:
+
+    TrapFrame - Supplies a pointer to the exception trap frame.
+
+Return Value:
+
+    TRUE if the exception was handled.
+
+    FALSE if the exception was not handled.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines the VFPv3 floating point state of the ARM
+    architecture.
+
+Members:
+
+    Registers - Stores the floating point state.
+
+--*/
+
+struct _FPU_CONTEXT {
+    ULONGLONG Registers[32];
+    ULONG Fpscr;
+} PACKED;
 
 /*++
 
@@ -2220,6 +2348,297 @@ Return Value:
     Status code. This routine will attempt to make a guess at the next PC even
     if the status code is failing, but chances it's right go way down if a
     failing status is returned.
+
+--*/
+
+ULONG
+ArGetMainIdRegister (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the Main ID Register (MIDR).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+ULONG
+ArGetCoprocessorAccessRegister (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the Coprocessor Access Control Register (CPACR).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+VOID
+ArSetCoprocessorAccessRegister (
+    ULONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the Coprocessor Access Control Register (CPACR).
+
+Arguments:
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+ULONG
+ArGetFloatingPointIdRegister (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the Floating Point unit ID register (FPSID).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+ULONG
+ArGetMvfr0Register (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the floating point extensions identification register
+    (MVFR0).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+ULONG
+ArGetVfpExceptionRegister (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the floating point exception control register (FPEXC).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+VOID
+ArSetVfpExceptionRegister (
+    ULONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the floating point exception control register (FPEXC).
+
+Arguments:
+
+    Value - Supplies the new value to set.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+ArSaveVfp (
+    PFPU_CONTEXT Context,
+    BOOL SimdSupport
+    );
+
+/*++
+
+Routine Description:
+
+    This routine saves the Vector Floating Point unit state.
+
+Arguments:
+
+    Context - Supplies a pointer where the context will be saved.
+
+    SimdSupport - Supplies a boolean indicating whether the VFP unit contains
+        32 64-bit registers (TRUE) or 16 64-bit registers (FALSE).
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+ArRestoreVfp (
+    PFPU_CONTEXT Context,
+    BOOL SimdSupport
+    );
+
+/*++
+
+Routine Description:
+
+    This routine restores the Vector Floating Point unit state into the
+    hardware.
+
+Arguments:
+
+    Context - Supplies a pointer to the context to restore.
+
+    SimdSupport - Supplies a boolean indicating whether the VFP unit contains
+        32 64-bit registers (TRUE) or 16 64-bit registers (FALSE).
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+ArInitializeVfpSupport (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes processor support for the VFP unit, and sets the
+    related feature bits in the user shared data.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+ArSaveFpuState (
+    PFPU_CONTEXT Buffer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine saves the current FPU context into the given buffer.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer where the information will be
+        saved to.
+
+Return Value:
+
+    None.
+
+--*/
+
+BOOL
+ArCheckForVfpException (
+    PTRAP_FRAME TrapFrame,
+    ULONG Instruction
+    );
+
+/*++
+
+Routine Description:
+
+    This routine checks for VFP or NEON undefined instruction faults, and
+    potentially handles them if found.
+
+Arguments:
+
+    TrapFrame - Supplies a pointer to the state immediately before the
+        exception.
+
+    Instruction - Supplies the instruction that caused the abort.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+ArDisableFpu (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine disallows access to the FPU on the current processor, causing
+    all future accesses to generate exceptions.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
 
 --*/
 

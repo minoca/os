@@ -43,6 +43,11 @@ ArpInitializeInterrupts (
     PVOID Idt
     );
 
+VOID
+ArpSetProcessorFeatures (
+    PPROCESSOR_BLOCK ProcessorBlock
+    );
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -157,6 +162,7 @@ Return Value:
     ProcessorBlock->InterruptTable = InterruptTable;
     ArSetProcessorBlockRegister(ProcessorBlock);
     ArpInitializeInterrupts(PhysicalMode, BootProcessor, NULL);
+    ArpSetProcessorFeatures(ProcessorBlock);
 
     //
     // Initialize the performance monitor.
@@ -642,6 +648,47 @@ Return Value:
     }
 
     ArSetSystemControlRegister(SystemControl);
+    return;
+}
+
+VOID
+ArpSetProcessorFeatures (
+    PPROCESSOR_BLOCK ProcessorBlock
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads processor features.
+
+Arguments:
+
+    ProcessorBlock - Supplies a pointer to the processor block.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PPROCESSOR_IDENTIFICATION Identification;
+    ULONG MainId;
+
+    MainId = ArGetMainIdRegister();
+    Identification = &(ProcessorBlock->CpuVersion);
+    Identification->Vendor = (MainId & ARM_MAIN_ID_IMPLEMENTOR_MASK) >>
+                             ARM_MAIN_ID_IMPLEMENTER_SHIFT;
+
+    Identification->Family = (MainId & ARM_MAIN_ID_PART_MASK) >>
+                             ARM_MAIN_ID_PART_SHIFT;
+
+    Identification->Model = (MainId & ARM_MAIN_ID_VARIANT_MASK) >>
+                            ARM_MAIN_ID_VARIANT_SHIFT;
+
+    Identification->Stepping = MainId & ARM_MAIN_ID_REVISION_MASK;
     return;
 }
 

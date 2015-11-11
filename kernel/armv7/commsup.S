@@ -36,6 +36,7 @@ Environment:
 ##
 
 ASSEMBLY_FILE_HEADER
+.fpu vfpv3
 
 ##
 ## KERNEL_API
@@ -1628,20 +1629,20 @@ FUNCTION ArSaveProcessorContext
     stmia   %r0!, {%r3-%r11}            @ Save SP and R4-R11.
     mrs     %r1, CPSR                   @ Get the current mode and status.
     cpsid   if, #ARM_MODE_SYSTEM        @ Get to user mode (disable interrupts).
-    mov     %r1, %sp                    @ Get banked SP.
-    stmia   %r0!, {%r1, %lr}            @ Save banked registers.
+    mov     %r2, %sp                    @ Get banked SP.
+    stmia   %r0!, {%r2, %lr}            @ Save banked registers.
     cpsid   if, #ARM_MODE_IRQ           @ Get to interrupt mode.
-    mov     %r1, %sp                    @ Get banked SP.
-    stmia   %r0!, {%r1, %lr}            @ Save banked registers.
+    mov     %r2, %sp                    @ Get banked SP.
+    stmia   %r0!, {%r2, %lr}            @ Save banked registers.
     cpsid   if, #ARM_MODE_FIQ           @ Get to fast interrupt mode.
-    mov     %r1, %sp                    @ Get banked SP.
-    stmia   %r0!, {%r1, %lr}            @ Save banked registers.
+    mov     %r2, %sp                    @ Get banked SP.
+    stmia   %r0!, {%r2, %lr}            @ Save banked registers.
     cpsid   if, #ARM_MODE_ABORT         @ Get to abort mode.
-    mov     %r1, %sp                    @ Get banked SP.
-    stmia   %r0!, {%r1, %lr}            @ Save banked registers.
+    mov     %r2, %sp                    @ Get banked SP.
+    stmia   %r0!, {%r2, %lr}            @ Save banked registers.
     cpsid   if, #ARM_MODE_UNDEF         @ Get to undefined instruction mode.
-    mov     %r1, %sp                    @ Get banked SP.
-    stmia   %r0!, {%r1, %lr}            @ Save banked registers.
+    mov     %r2, %sp                    @ Get banked SP.
+    stmia   %r0!, {%r2, %lr}            @ Save banked registers.
     msr     CPSR, %r1                   @ Restore interrupts and mode.
     stmia   %r0!, {%r0}                 @ Remember the VA right here.
     mrc     p15, 0, %r1, c1, c0, 0      @ Save SCTLR.
@@ -1832,6 +1833,289 @@ ArRestoreProcessorContextAfterActlr:
     rfedb   %r12!                       @ Pop PC and CPSR.
 
 END_FUNCTION ArRestoreProcessorContext
+
+##
+## ULONG
+## ArGetMainIdRegister (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine gets the Main ID Register (MIDR).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+FUNCTION ArGetMainIdRegister
+    mrc     p15, 0, %r0, c0, c0, 0
+    bx      %lr
+
+END_FUNCTION ArGetMainIdRegister
+
+##
+## ULONG
+## ArGetCoprocessorAccessRegister (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine gets the Coprocessor Access Control Register (CPACR).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+FUNCTION ArGetCoprocessorAccessRegister
+    mrc     p15, 0, %r0, c1, c0, 2
+    bx      %lr
+
+END_FUNCTION ArGetCoprocessorAccessRegister
+
+##
+## VOID
+## ArSetCoprocessorAccessRegister (
+##     ULONG Value
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine sets the Coprocessor Access Control Register (CPACR).
+
+Arguments:
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION ArSetCoprocessorAccessRegister
+    mcr     p15, 0, %r0, c1, c0, 2
+    bx      %lr
+
+END_FUNCTION ArSetCoprocessorAccessRegister
+
+##
+## ULONG
+## ArGetFloatingPointIdRegister (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine gets the Floating Point unit ID register (FPSID).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+FUNCTION ArGetFloatingPointIdRegister
+    vmrs    %r0, FPSID
+    bx      %lr
+
+END_FUNCTION ArGetFloatingPointIdRegister
+
+##
+## ULONG
+## ArGetMvfr0Register (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine gets the floating point extensions identification register
+    (MVFR0).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+FUNCTION ArGetMvfr0Register
+    vmrs    %r0, MVFR0
+    bx      %lr
+
+END_FUNCTION ArGetMvfr0Register
+
+##
+## ULONG
+## ArGetVfpExceptionRegister (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine gets the floating point exception control register (FPEXC).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+FUNCTION ArGetVfpExceptionRegister
+    vmrs    %r0, FPEXC
+    bx      %lr
+
+END_FUNCTION ArGetVfpExceptionRegister
+
+##
+## VOID
+## ArSetVfpExceptionRegister (
+##     ULONG Value
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine sets the floating point exception control register (FPEXC).
+
+Arguments:
+
+    Value - Supplies the new value to set.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION ArSetVfpExceptionRegister
+    vmsr    FPEXC, %r0
+    bx      %lr
+
+END_FUNCTION ArSetVfpExceptionRegister
+
+##
+## VOID
+## ArSaveVfp (
+##     PFPU_CONTEXT Context,
+##     BOOL SimdSupport
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine saves the Vector Floating Point unit state.
+
+Arguments:
+
+    Context - Supplies a pointer where the context will be saved.
+
+    SimdSupport - Supplies a boolean indicating whether the VFP unit contains
+        32 64-bit registers (TRUE) or 16 64-bit registers (FALSE).
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION ArSaveVfp
+    stc     p11, c0, [%r0], #16*8       @ Save D0-D15 (stmia).
+    cmp     %r1, #0                     @ Test for no SIMD support.
+    ITE(eq)                             @ If equal then else.
+    stcnel  p11, c0, [%r0], #16*8       @ Save D16-D31 if SIMD support.
+    addeq   %r0, %r0, #16*8             @ Skip those registers if not.
+    vmrs    %r2, FPSCR                  @ Get FPSCR.
+    str     %r2, [%r0]                  @ Store it.
+    bx      %lr                         @ Return.
+
+END_FUNCTION ArSaveVfp
+
+##
+## VOID
+## ArRestoreVfp (
+##     PFPU_CONTEXT Context,
+##     BOOL SimdSupport
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine restores the Vector Floating Point unit state into the
+    hardware.
+
+Arguments:
+
+    Context - Supplies a pointer to the context to restore.
+
+    SimdSupport - Supplies a boolean indicating whether the VFP unit contains
+        32 64-bit registers (TRUE) or 16 64-bit registers (FALSE).
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION ArRestoreVfp
+    ldc     p11, c0, [%r0], #16*8       @ Restore D0-D15 (ldmia).
+    cmp     %r1, #0                     @ Test for no SIMD support.
+    ITE(eq)                             @ If equal then else.
+    ldcnel  p11, c0, [%r0], #16*8       @ Restore D16-D31 if SIMD support.
+    addeq   %r0, %r0, #16*8             @ Skip those registers if not.
+    ldr     %r2, [%r0]                  @ Get FPSCR.
+    vmsr    FPSCR, %r2                  @ Restore FPSCR.
+    bx      %lr                         @ Return.
+
+END_FUNCTION ArRestoreVfp
 
 ##
 ## --------------------------------------------------------- Internal Functions

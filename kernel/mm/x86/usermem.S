@@ -342,6 +342,89 @@ END_FUNCTION(MmpTouchUserModeMemoryForWrite)
 
 ##
 ## BOOL
+## MmUserRead16 (
+##     PVOID Buffer,
+##     PUSHORT Value
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine performs a 16-bit read from user mode.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to read.
+
+    Value - Supplies a pointer where the read value will be returned.
+
+Return Value:
+
+    TRUE if the read succeeded.
+
+    FALSE if the read failed.
+
+--*/
+
+FUNCTION(MmUserRead16)
+    push    %ebp                    # Save the frame register.
+    movl    %esp, %ebp              # Make the current stack the new frame.
+    pushl   %esi                    # Save registers.
+    pushl   %edi                    # Save more registers.
+    movl    $1, %eax                # Assume success.
+    movl    8(%ebp), %esi           # Load the target buffer address.
+    movw    (%esi), %cx             # Get the value. This may fault.
+    movl    12(%ebp), %edi          # Load the destination pointer.
+    movw    %cx, (%edi)             # Move the value to the destination.
+    jmp     MmpUserModeMemoryReturn
+
+END_FUNCTION(MmUserRead16)
+
+##
+## BOOL
+## MmUserWrite16 (
+##     PVOID Buffer,
+##     USHORT Value
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine performs a 16-bit write to user mode.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to write to.
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    TRUE if the write succeeded.
+
+    FALSE if the write failed.
+
+--*/
+
+FUNCTION(MmUserWrite16)
+    push    %ebp                    # Save the frame register.
+    movl    %esp, %ebp              # Make the current stack the new frame.
+    pushl   %esi                    # Save registers.
+    pushl   %edi                    # Save more registers.
+    movl    $1, %eax                # Assume success.
+    movl    8(%ebp), %edi           # Load the user buffer address.
+    movl    12(%ebp), %ecx          # Load the value to write.
+    movw    %cx, (%edi)             # Write the value. This may fault.
+    jmp     MmpUserModeMemoryReturn
+
+END_FUNCTION(MmUserWrite16)
+
+##
+## BOOL
 ## MmUserRead32 (
 ##     PVOID Buffer,
 ##     PULONG Value

@@ -50,6 +50,32 @@ Author:
 
 #define FE_DFL_ENV ((const fenv_t *)-1)
 
+#elif defined(__arm__)
+
+//
+// Define the bits based on VFPv3 FPSCR.
+//
+
+#define FE_INVALID      0x0001
+#define FE_DIVBYZERO    0x0002
+#define FE_OVERFLOW     0x0004
+#define FE_UNDERFLOW    0x0008
+#define FE_INEXACT      0x0010
+#define FE_DENORM       0x0080
+
+#define FE_EXCEPT_SHIFT 8
+
+#define FE_ALL_EXCEPT \
+    (FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT | \
+     FE_DENORM)
+
+#define FE_TONEAREST    0x00000000
+#define FE_UPWARD       0x00400000
+#define FE_DOWNWARD     0x00800000
+#define FE_TOWARDZERO   0x00C00000
+
+#define FE_DFL_ENV ((const fenv_t *)-1)
+
 #endif
 
 //
@@ -71,6 +97,14 @@ typedef struct {
     unsigned int OperandSelector;
 } fenv_t;
 
+#elif defined(__arm__)
+
+typedef unsigned int fexcept_t;
+
+typedef struct {
+    unsigned int Fpscr;
+} fenv_t;
+
 #endif
 
 //
@@ -81,7 +115,7 @@ typedef struct {
 // -------------------------------------------------------- Function Prototypes
 //
 
-#if defined(__i386) || defined(__amd64)
+#if defined(__i386) || defined(__amd64) || defined(__arm__)
 
 LIBC_API
 int

@@ -369,6 +369,11 @@ Return Value:
         TrapFrame->Cpsr |= PSR_FLAG_THUMB;
     }
 
+    if ((Thread->Flags & THREAD_FLAG_USING_FPU) != 0) {
+        Thread->Flags &= ~(THREAD_FLAG_USING_FPU | THREAD_FLAG_FPU_OWNER);
+        ArDisableFpu();
+    }
+
     return;
 }
 

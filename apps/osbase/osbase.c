@@ -865,6 +865,10 @@ GetSystemVersionEnd:
     return Status;
 }
 
+//
+// TODO: Remove this once one build has gone by.
+//
+
 OS_API
 ULONGLONG
 OsGetProcessorFeatures (

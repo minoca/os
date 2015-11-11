@@ -1454,7 +1454,7 @@ END_FUNCTION(ArEnableFpu)
 
 Routine Description:
 
-    This routine sets the TS bit of CR0, allowing access to the FPU.
+    This routine sets the TS bit of CR0, disallowing access to the FPU.
 
 Arguments:
 

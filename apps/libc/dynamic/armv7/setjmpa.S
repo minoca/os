@@ -30,19 +30,19 @@ Environment:
 ## ---------------------------------------------------------------- Definitions
 ##
 
-.equ JUMP_BUFFER_SAVE_MASK, 0x00
+#define JUMP_BUFFER_SAVE_MASK 0x00
 
 ##
 ## This offset represents the start offset of the registers in the jump buffer.
 ##
 
-.equ JUMP_BUFFER_REGISTER_OFFSET, 0x0C
+#define JUMP_BUFFER_REGISTER_OFFSET 0x0C
 
 ##
 ## This offset represents the end of the registers in the jump buffer.
 ##
 
-.equ JUMP_BUFFER_REGISTER_END_OFFSET, 0x34
+#define JUMP_BUFFER_REGISTER_END_OFFSET 0x34
 
 ##
 ## ----------------------------------------------------------------------- Code

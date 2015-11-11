@@ -120,6 +120,31 @@ Author:
 #define X86_FEATURE_I686     0x00000004
 
 //
+// This bit is set if the kernel is ARMv7.
+//
+
+#define ARM_FEATURE_V7       0x00000001
+
+//
+// This bit is set if the processor supports VFPv2 or beyond.
+//
+
+#define ARM_FEATURE_VFP2      0x00000002
+
+//
+// This bit is set if the processor supports VFPv3.
+//
+
+#define ARM_FEATURE_VFP3      0x00000004
+
+//
+// This bit is set if the processor supports NEON advanced SIMD with 32 64-bit
+// registers.
+//
+
+#define ARM_FEATURE_NEON32     0x00000008
+
+//
 // Define the set of DCP flags.
 //
 

@@ -31,6 +31,7 @@ ARMV7_OBJS = archsup.o  \
              prochw.o   \
              sstep.o    \
              trap.o     \
+             vfp.o      \
 
 DIRS = boot
 

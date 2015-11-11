@@ -133,7 +133,7 @@ Return Value:
     // or a Pentium (including Intel Quark).
     //
 
-    if ((OsGetProcessorFeatures() & X86_FEATURE_I686) != 0) {
+    if (OsTestProcessorFeature(OsX86I686) != FALSE) {
         strcpy(Name->machine, "i686");
 
     } else {

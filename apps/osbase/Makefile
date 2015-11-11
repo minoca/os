@@ -47,13 +47,14 @@ OBJS = env.o       \
        time.o      \
        tls.o       \
 
-ARMV7_OBJS = armv7/osbasea.o \
-             armv7/syscall.o \
+ARMV7_OBJS = armv7/features.o \
+             armv7/osbasea.o  \
+             armv7/syscall.o  \
 
-ARMV6_OBJS = armv7/osbasea.o \
-             armv7/syscall.o \
+ARMV6_OBJS = $(ARMV7_OBJS)
 
-X86_OBJS = x86/osbasea.o \
+X86_OBJS = x86/features.o \
+           x86/osbasea.o \
            x86/syscall.o \
 
 X64_OBJS = x64/osbasea.o \

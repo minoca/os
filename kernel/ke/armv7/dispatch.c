@@ -32,8 +32,6 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define DOUBLE_FAULT_STACK_SIZE 2048
-
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -45,10 +43,6 @@ Environment:
 //
 // -------------------------------------------------------------------- Globals
 //
-
-UCHAR KeDoubleFaultStack[DOUBLE_FAULT_STACK_SIZE];
-PUCHAR KeDoubleFaultStackPointer =
-                  KeDoubleFaultStack + DOUBLE_FAULT_STACK_SIZE - sizeof(ULONG);
 
 //
 // ------------------------------------------------------------------ Functions
@@ -210,13 +204,43 @@ Return Value:
 
     PVOID Address;
     ULONG Exception;
+    BOOL Handled;
     ULONG Instruction;
     BOOL IsBreak;
     PVOID Parameter;
     CYCLE_ACCOUNT PreviousPeriod;
-    ULONG Size;
-    KSTATUS Status;
     PKTHREAD Thread;
+
+    Parameter = NULL;
+    ArEnableInterrupts();
+
+    //
+    // Get the instruction. Use the user-mode read routines since they're also
+    // safe on kernel mode memory.
+    //
+
+    Instruction = 0;
+    if ((TrapFrame->Cpsr & PSR_FLAG_THUMB) != 0) {
+        Address = (PVOID)REMOVE_THUMB_BIT(TrapFrame->Pc) -
+                  THUMB16_INSTRUCTION_LENGTH;
+
+        MmUserRead16(Address, (PUSHORT)&Instruction);
+
+        //
+        // Watch out for this being a 32-bit Thumb-2 instruction. If it is,
+        // the processor put the PC in the middle of it. Advance beyond.
+        //
+
+        if ((Instruction >> THUMB32_OP_SHIFT) >= THUMB32_OP_MIN) {
+            Instruction = (Instruction << 16);
+            TrapFrame->Pc += 2;
+            MmUserRead16(Address + 2, (PUSHORT)&Instruction);
+        }
+
+    } else {
+        Address = (PVOID)(TrapFrame->Pc - ARM_INSTRUCTION_LENGTH);
+        MmUserRead32(Address, &Instruction);
+    }
 
     //
     // The SVC mode stack pointer is wrong because it has the trap frame on it.
@@ -228,78 +252,81 @@ Return Value:
         (ArIsTranslationEnabled() != FALSE)) {
 
         PreviousPeriod = KeBeginCycleAccounting(CycleAccountKernel);
-        ArEnableInterrupts();
         Thread = KeGetCurrentThread();
-
-        //
-        // Read the instruction to determine if it's a debug break instruction
-        // or an actual illegal instruction.
-        //
-
+        IsBreak = FALSE;
         if ((TrapFrame->Cpsr & PSR_FLAG_THUMB) != 0) {
-            Address = (PVOID)REMOVE_THUMB_BIT(TrapFrame->Pc) -
-                      THUMB16_INSTRUCTION_LENGTH;
-
-            Size = THUMB16_INSTRUCTION_LENGTH;
+            if (Instruction == THUMB_BREAK_INSTRUCTION) {
+                IsBreak = TRUE;
+            }
 
         } else {
-            Address = (PVOID)TrapFrame->Pc - ARM_INSTRUCTION_LENGTH;
-            Size = ARM_INSTRUCTION_LENGTH;
-        }
-
-        Instruction = 0;
-        Status = MmCopyFromUserMode(&Instruction, Address, Size);
-        IsBreak = FALSE;
-        if (KSUCCESS(Status)) {
-            if ((TrapFrame->Cpsr & PSR_FLAG_THUMB) != 0) {
-                if (Instruction == THUMB_BREAK_INSTRUCTION) {
-                    IsBreak = TRUE;
-                }
-
-            } else {
-                if (Instruction == ARM_BREAK_INSTRUCTION) {
-                    IsBreak = TRUE;
-                }
+            if (Instruction == ARM_BREAK_INSTRUCTION) {
+                IsBreak = TRUE;
             }
         }
 
         if (IsBreak == FALSE) {
-            PsSignalThread(Thread, SIGNAL_ILLEGAL_INSTRUCTION, NULL);
+
+            //
+            // Walk the PC backwards as this is a real undefined instruction.
+            //
+
+            TrapFrame->Pc = (UINTN)Address;
+            Handled = ArCheckForVfpException(TrapFrame, Instruction);
+            if (Handled == FALSE) {
+                PsSignalThread(Thread, SIGNAL_ILLEGAL_INSTRUCTION, NULL);
+            }
 
         } else {
             PsSignalThread(Thread, SIGNAL_TRAP, NULL);
         }
 
         PsDispatchPendingSignals(Thread, TrapFrame);
-        ArDisableInterrupts();
         KeBeginCycleAccounting(PreviousPeriod);
 
     } else {
 
         //
-        // Since this is an undefined instruction entry and not a data abort,
-        // the memory at PC must be valid. If this is a debug service
-        // exception, get parameters.
+        // If this is a debug service exception, get parameters.
         //
 
         Exception = EXCEPTION_UNDEFINED_INSTRUCTION;
+        IsBreak = FALSE;
         Parameter = NULL;
         if ((TrapFrame->Cpsr & PSR_FLAG_THUMB) != 0) {
-            Address = (PVOID)REMOVE_THUMB_BIT(TrapFrame->Pc) -
-                      THUMB16_INSTRUCTION_LENGTH;
-
-            Instruction = *((PUSHORT)Address);
             if (Instruction == THUMB_DEBUG_SERVICE_INSTRUCTION) {
                 Exception = TrapFrame->R0;
                 Parameter = (PVOID)TrapFrame->R1;
+                IsBreak = TRUE;
+
+            } else if ((Instruction == THUMB_BREAK_INSTRUCTION) ||
+                       (Instruction == THUMB_SINGLE_STEP_INSTRUCTION)) {
+
+                IsBreak = TRUE;
             }
 
         } else {
-            Instruction = *((PULONG)(TrapFrame->Pc - ARM_INSTRUCTION_LENGTH));
             if (Instruction == ARM_DEBUG_SERVICE_INSTRUCTION) {
                 Exception = TrapFrame->R0;
                 Parameter = (PVOID)TrapFrame->R1;
+                IsBreak = TRUE;
+
+            } else if ((Instruction == ARM_BREAK_INSTRUCTION) ||
+                       (Instruction == ARM_SINGLE_STEP_INSTRUCTION)) {
+
+                IsBreak = TRUE;
             }
+        }
+
+        //
+        // If this is a break instruction, the continue executing at the next
+        // address so the machine makes progress if no debugger is attached. If
+        // this isn't a debug-related instruction, then set the PC back as it's
+        // a real undefined instruction.
+        //
+
+        if (IsBreak == FALSE) {
+            TrapFrame->Pc = (UINTN)Address;
         }
 
         //
@@ -307,6 +334,13 @@ Return Value:
         //
 
         KdDebugExceptionHandler(Exception, Parameter, TrapFrame);
+        if (IsBreak == FALSE) {
+            KeCrashSystem(CRASH_ILLEGAL_INSTRUCTION,
+                          Instruction,
+                          (UINTN)TrapFrame,
+                          0,
+                          0);
+        }
     }
 
     //

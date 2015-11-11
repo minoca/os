@@ -690,7 +690,7 @@ Return Value:
     // Add the decrement-before or increment-after suffix.
     //
 
-    if ((Instruction & THUMB32_LOAD_STORE_INCREMENT_MASK) != 0) {
+    if ((Instruction & THUMB32_LOAD_STORE_INCREMENT) != 0) {
         strcat(Context->Mnemonic, THUMB_IA_SUFFIX);
 
     } else {

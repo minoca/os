@@ -140,11 +140,12 @@ OBJS = assert.o             \
        wstream.o            \
        wstring.o            \
 
-ARMV7_OBJS = armv7/setjmpa.o  \
+ARMV7_OBJS = armv7/fenva.o    \
+             armv7/fenvc.o    \
+             armv7/setjmpa.o  \
              armv7/tlsaddr.o  \
 
-ARMV6_OBJS = armv7/setjmpa.o  \
-             armv7/tlsaddr.o  \
+ARMV6_OBJS = $(ARMV7_OBJS)
 
 X86_OBJS = x86/fenv.o    \
            x86/fenvc.o   \

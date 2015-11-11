@@ -66,6 +66,20 @@ extern "C" {
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef enum _OS_ARM_PROCESSOR_FEATURE {
+    OsArmFeatureInvalid,
+    OsArmArmv7,
+    OsArmVfp,
+    OsArmVfp3,
+    OsArmNeon32,
+} OS_ARM_PROCESSOR_FEATURE, *POS_ARM_PROCESSOR_FEATURE;
+
+typedef enum _OS_X86_PROCESSOR_FEATURE {
+    OsX86FeatureInvalid,
+    OsX86Sysenter,
+    OsX86I686,
+} OS_X86_PROCESSOR_FEATURE, *POS_X86_PROCESSOR_FEATURE;
+
 typedef
 VOID
 (*PSIGNAL_HANDLER_ROUTINE) (
@@ -3676,6 +3690,31 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+OS_API
+BOOL
+OsTestProcessorFeature (
+    ULONG Feature
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if a given processor features is supported or not.
+
+Arguments:
+
+    Feature - Supplies the feature to test, which is an enum of type
+        OS_<arch>_PROCESSOR_FEATURE.
+
+Return Value:
+
+    TRUE if the feature is set.
+
+    FALSE if the feature is not set or not recognized.
 
 --*/
 

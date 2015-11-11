@@ -70,6 +70,20 @@ Return Value:
 
 {
 
+    ULONG Architecture;
+    PUSER_SHARED_DATA Data;
+    ULONG MainId;
+
+    Data = MmGetUserSharedData();
+    MainId = ArGetMainIdRegister();
+    Architecture = (MainId & ARM_MAIN_ID_ARCHITECTURE_MASK) >>
+                   ARM_MAIN_ID_ARCHITECTURE_SHIFT;
+
+    if (Architecture == ARM_MAIN_ID_ARCHITECTURE_CPUID) {
+        Data->ProcessorFeatures |= ARM_FEATURE_V7;
+    }
+
+    ArInitializeVfpSupport();
     return;
 }
 
@@ -105,34 +119,6 @@ Return Value:
         ArClearPerformanceInterruptRegister(PERF_MONITOR_COUNTER_MASK);
         ArSetPerformanceUserEnableRegister(0);
     }
-
-    return;
-}
-
-VOID
-ArDestroyFpuContext (
-    PFPU_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine destroys a previously allocated FPU context buffer.
-
-Arguments:
-
-    Context - Supplies a pointer to the context to destroy.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ASSERT(FALSE);
 
     return;
 }

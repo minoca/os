@@ -437,6 +437,79 @@ END_FUNCTION MmpTouchUserModeMemoryForWrite
 
 ##
 ## BOOL
+## MmUserRead16 (
+##     PVOID Buffer,
+##     PUSHORT Value
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine performs a 16-bit read from user mode. This is assumed to be
+    two-byte aligned.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to read.
+
+    Value - Supplies a pointer where the read value will be returned.
+
+Return Value:
+
+    TRUE if the read succeeded.
+
+    FALSE if the read failed.
+
+--*/
+
+FUNCTION MmUserRead16
+    ldrh    %r2, [%r0]              @ Perform the read.
+    strh    %r2, [%r1]              @ Write it to the value.
+    mov     %r0, #1                 @ Set success status.
+    bx      %lr                     @ Return.
+
+END_FUNCTION MmUserRead16
+
+##
+## BOOL
+## MmUserWrite16 (
+##     PVOID Buffer,
+##     USHORT Value
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine performs a 16-bit write to user mode. This is assumed to be
+    two-byte aligned.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to write to.
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    TRUE if the write succeeded.
+
+    FALSE if the write failed.
+
+--*/
+
+FUNCTION MmUserWrite16
+    strh    %r1, [%r0]              @ Write the value out.
+    mov     %r0, #1                 @ Set success status.
+    bx      %lr                     @ Return.
+
+END_FUNCTION MmUserWrite16
+
+##
+## BOOL
 ## MmUserRead32 (
 ##     PVOID Buffer,
 ##     PULONG Value

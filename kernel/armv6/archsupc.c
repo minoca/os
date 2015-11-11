@@ -70,6 +70,7 @@ Return Value:
 
 {
 
+    ArInitializeVfpSupport();
     return;
 }
 
@@ -109,34 +110,6 @@ Return Value:
         ArSetPerformanceControlRegister(ControlRegister);
         ArSetPerformanceUserEnableRegister(0);
     }
-
-    return;
-}
-
-VOID
-ArDestroyFpuContext (
-    PFPU_CONTEXT Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine destroys a previously allocated FPU context buffer.
-
-Arguments:
-
-    Context - Supplies a pointer to the context to destroy.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ASSERT(FALSE);
 
     return;
 }

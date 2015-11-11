@@ -81,11 +81,6 @@ Return Value:
 
     ASSERT(Phase == 0);
 
-    //
-    // There is currently no ARM-specific initialization required. The IPI
-    // handler will need to be wired up here once MP is supported.
-    //
-
     Status = STATUS_SUCCESS;
     return Status;
 }

@@ -148,16 +148,6 @@ Environment:
 //
 
 //
-// Thumb instruction width constants.
-//
-
-#define THUMB32_OP_SHIFT 11
-#define THUMB32_OP_MASK 0x1F
-#define THUMB32_OP_1 0x1D
-#define THUMB32_OP_2 0x1E
-#define THUMB32_OP_3 0x1F
-
-//
 // Common Thumb definitions
 //
 
@@ -1865,9 +1855,7 @@ Return Value:
     // Determine whether this is a 16 or 32-bit thumb instruction.
     //
 
-    if ((Op == THUMB32_OP_1) || (Op == THUMB32_OP_2) ||
-        (Op == THUMB32_OP_3)) {
-
+    if (Op >= THUMB32_OP_MIN) {
         return THUMB32_INSTRUCTION_LENGTH;
     }
 

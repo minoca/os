@@ -2548,6 +2548,60 @@ Return Value:
 --*/
 
 BOOL
+MmUserRead16 (
+    PVOID Buffer,
+    PUSHORT Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a 16-bit read from user mode. This is assumed to be
+    two-byte aligned.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to read.
+
+    Value - Supplies a pointer where the read value will be returned.
+
+Return Value:
+
+    TRUE if the read succeeded.
+
+    FALSE if the read failed.
+
+--*/
+
+BOOL
+MmUserWrite16 (
+    PVOID Buffer,
+    USHORT Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a 16-bit write to user mode. This is assumed to be
+    two-byte aligned.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to write to.
+
+    Value - Supplies the value to write.
+
+Return Value:
+
+    TRUE if the write succeeded.
+
+    FALSE if the write failed.
+
+--*/
+
+BOOL
 MmUserRead32 (
     PVOID Buffer,
     PULONG Value
