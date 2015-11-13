@@ -1151,6 +1151,17 @@ Return Value:
     }
 
     //
+    // Set the EDPWRDOWN (energy detect power down) bit in the LAN8710 for
+    // better power management (otherwise there are large 15-20mA spikes
+    // every 2-3 milliseconds).
+    //
+
+    A3epWritePhy(Device,
+                 Device->PhyId,
+                 PHY_LAN8710_MODE,
+                 PHY_LAN8710_MODE_ENERGY_DETECT_POWER_DOWN);
+
+    //
     // Enable RGMII for the sliver.
     //
 
@@ -1688,12 +1699,36 @@ Return Value:
     ULONG GigabitControl;
     ULONG GigabitStatus;
     BOOL HasGigabit;
+    ULONG Mode;
     ULONG PartnerAbility;
     KSTATUS Status;
 
     *LinkUp = FALSE;
     *Speed = NET_SPEED_NONE;
     *FullDuplex = FALSE;
+
+    //
+    // The energy power down mode is a little flaky. If there is no link,
+    // disable and re-enable it, which will kick it into detecting a link.
+    //
+
+    if (Device->LinkActive == FALSE) {
+        Status = A3epReadPhy(Device,
+                             Device->PhyId,
+                             PHY_LAN8710_MODE,
+                             &Mode);
+
+        if (!KSUCCESS(Status)) {
+            goto DetermineLinkParametersEnd;
+        }
+
+        Mode &= ~PHY_LAN8710_MODE_ENERGY_DETECT_POWER_DOWN;
+        A3epWritePhy(Device, Device->PhyId, PHY_LAN8710_MODE, Mode);
+        KeDelayExecution(FALSE, FALSE, 64 * MICROSECONDS_PER_MILLISECOND);
+        Mode |= PHY_LAN8710_MODE_ENERGY_DETECT_POWER_DOWN;
+        A3epWritePhy(Device, Device->PhyId, PHY_LAN8710_MODE, Mode);
+    }
+
     HasGigabit = Device->GigabitCapable;
     Status = A3epReadPhy(Device,
                          Device->PhyId,

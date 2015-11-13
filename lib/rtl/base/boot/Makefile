@@ -31,10 +31,18 @@ VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
-ARMV7_OBJS = armv7/rtlmem.o        \
+##
+## Compiling in eabisfp.c (and its dependency softfp.c) isn't necessary, but
+## until there's a need for soft float (ie Cortex-M) compile it in so that it
+## gets exercise.
+##
+
+ARMV7_OBJS = armv7/aeabisfp.o      \
              armv7/intrinsa.o      \
              armv7/intrinsc.o      \
+             armv7/rtlmem.o        \
              boot/armv7/rtlarch.o  \
+             fp2int.o              \
              softfp.o              \
 
 ARMV6_OBJS = $(ARMV7_OBJS)

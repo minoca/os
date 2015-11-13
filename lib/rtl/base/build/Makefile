@@ -40,8 +40,10 @@ OBJS := $(OBJS)      \
 ## Make sure softfp is in there. On an ARM build system it would be.
 ##
 
-ifeq (, $(filter softfp.o,$(OBJS)))
-OBJS += softfp.o
+ifeq (, $(filter fp2int.o,$(OBJS)))
+OBJS += fp2int.o \
+        softfp.o
+
 endif
 
 EXTRA_SRC_DIRS = x86 x64 armv7

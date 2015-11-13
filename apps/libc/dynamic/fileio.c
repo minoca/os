@@ -2464,7 +2464,8 @@ Return Value:
     // Perform the actual poll call, and return if failure is received.
     //
 
-    Status = OsPoll(Descriptors,
+    Status = OsPoll(NULL,
+                    Descriptors,
                     DescriptorCount,
                     (ULONG)Timeout,
                     &DescriptorsSelected);
@@ -2662,7 +2663,8 @@ Return Value:
     // Peform the poll.
     //
 
-    Status = OsPoll(Descriptors,
+    Status = OsPoll(NULL,
+                    Descriptors,
                     DescriptorCount,
                     TimeoutInMilliseconds,
                     &DescriptorsSelected);

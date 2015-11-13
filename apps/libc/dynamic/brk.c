@@ -134,11 +134,17 @@ Return Value:
         Status = OsMemoryMap(INVALID_HANDLE,
                              0,
                              AdditionalSize,
-                             Flags | SYS_MAP_FLAG_FIXED,
+                             Flags,
                              &ExtraSpace);
 
         if (!KSUCCESS(Status)) {
             errno = ClConvertKstatusToErrorNumber(Status);
+            return -1;
+        }
+
+        if (ExtraSpace != ClBreakBase + ClBreakSize) {
+            OsMemoryUnmap(ExtraSpace, AdditionalSize);
+            errno = ENOMEM;
             return -1;
         }
     }

@@ -153,6 +153,13 @@ Author:
 //
 
 //
+// LAN8710 PHY register bits (probably not the best place for them).
+//
+
+#define PHY_LAN8710_MODE 17
+#define PHY_LAN8710_MODE_ENERGY_DETECT_POWER_DOWN (1 << 13)
+
+//
 // Define the TI AM335x Ethernet controller allocation tag: Am3E
 //
 

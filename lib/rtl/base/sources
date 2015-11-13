@@ -42,7 +42,7 @@ ARMV7_OBJS = armv7/intrinsa.o \
              armv7/intrinsc.o \
              armv7/rtlarch.o  \
              armv7/rtlmem.o   \
-             softfp.o         \
+             fp2int.o         \
 
 ARMV6_OBJS = $(ARMV7_OBJS)
 

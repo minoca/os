@@ -795,7 +795,7 @@ Return Value:
 
 {
 
-    OsSuspendExecution(NULL);
+    OsSuspendExecution(NULL, NULL, SYS_WAIT_TIME_INDEFINITE);
     errno = EINTR;
     return -1;
 }
@@ -864,7 +864,7 @@ Return Value:
 
 {
 
-    OsSuspendExecution(SignalMask);
+    OsSuspendExecution(SignalMask, NULL, SYS_WAIT_TIME_INDEFINITE);
 
     //
     // Obviously if execution is back, a signal must have occurred that was

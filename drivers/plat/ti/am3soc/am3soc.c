@@ -1984,6 +1984,10 @@ Return Value:
                   KeConvertMicrosecondsToTimeTicks(IdleState->TargetResidency);
     }
 
+    if (Am3SocIdleStateCount == 0) {
+        return STATUS_SUCCESS;
+    }
+
     Interface->Context = Device;
     Interface->Flags = 0;
     Interface->InitializeIdleStates = Am3SocInitializeIdleStates;

@@ -631,29 +631,6 @@ Return Value:
 --*/
 
 OS_API
-ULONGLONG
-OsGetProcessorFeatures (
-    VOID
-    );
-
-/*++
-
-Routine Description:
-
-    This routine returns the set of supported processor features.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    Returns the mask of processor features. On x86, see X86_FEATURE_*
-    definitions, and on ARM see ARM_FEATURE_* definitions.
-
---*/
-
-OS_API
 KSTATUS
 OsGetCurrentDirectory (
     BOOL Root,
@@ -758,9 +735,10 @@ Return Value:
 OS_API
 KSTATUS
 OsPoll (
+    PSIGNAL_SET SignalMask,
     PPOLL_DESCRIPTOR Descriptors,
     ULONG DescriptorCount,
-    ULONGLONG TimeoutInMilliseconds,
+    ULONG TimeoutInMilliseconds,
     PULONG DescriptorsSelected
     );
 
@@ -771,6 +749,9 @@ Routine Description:
     This routine polls several I/O handles.
 
 Arguments:
+
+    SignalMask - Supplies an optional pointer to a mask to set for the
+        duration of the wait.
 
     Descriptors - Supplies a pointer to an array of poll descriptor structures
         describing the descriptors and events to wait on.
@@ -1015,7 +996,9 @@ Return Value:
 OS_API
 VOID
 OsSuspendExecution (
-    PSIGNAL_SET SignalMask
+    PSIGNAL_SET SignalMask,
+    PSIGNAL_PARAMETERS SignalParameters,
+    ULONG TimeoutInMilliseconds
     );
 
 /*++
@@ -1029,6 +1012,12 @@ Arguments:
 
     SignalMask - Supplies an optional pointer to a signal mask to set for the
         duration of this system call.
+
+    SignalParameters - Supplies an optional pointer where the signal
+        information for the signal that occurred will be returned.
+
+    TimeoutInMilliseconds - Supplies the timeout of the operation in
+        milliseconds.
 
 Return Value:
 
