@@ -2436,20 +2436,20 @@ Return Value:
         Control = MUSB_READ16(Controller, ControlRegister);
 
         //
-        // In DMA mode, spin waiting for the FIFO to clear out.
+        // In DMA mode, the packet ready and FIFO full bits might still be set
+        // (even though the DMA transfer supposedly completed). The original
+        // code spun here waiting for those bits to clear, but that turned out
+        // to be a very significant portion of time. Instead it seems to be
+        // okay to clear the control register, and then spin on seeing the
+        // descriptor show up in the CPPI completion queue.
         //
-
-        if ((Transfer->Flags & MUSB_TRANSFER_DMA) != 0) {
-            while ((Control & MUSB_TX_CONTROL_PACKET_READY) != 0) {
-                Control = MUSB_READ16(Controller, ControlRegister);
-            }
 
         //
         // In non-DMA mode, there's a FIFO empty interrupt, so if the FIFO is
         // not currently empty just wait for that.
         //
 
-        } else {
+        if ((Transfer->Flags & MUSB_TRANSFER_DMA) == 0) {
             if ((Control & MUSB_TX_CONTROL_PACKET_READY) != 0) {
                 return NULL;
             }

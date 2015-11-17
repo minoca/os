@@ -186,6 +186,11 @@ Return Value:
     //
 
     TrapFrame->R4 = SignalParameters->Parameter;
+    TrapFrame->Cpsr = ARM_MODE_USER;
+    if ((TrapFrame->Pc & ARM_THUMB_BIT) != 0) {
+        TrapFrame->Cpsr |= PSR_FLAG_THUMB;
+    }
+
     Thread->SignalInProgress = TRUE;
     return;
 }
@@ -425,6 +430,10 @@ Return Value:
     Break->LoadedModuleCount = Process->ImageCount;
     Break->LoadedModuleSignature = Process->ImageListSignature;
     Break->InstructionPointer = TrapFrame->Pc;
+    if ((TrapFrame->Cpsr & PSR_FLAG_THUMB) != 0) {
+        Break->InstructionPointer |= ARM_THUMB_BIT;
+    }
+
     RtlZeroMemory(Break->InstructionStream, sizeof(Break->InstructionStream));
     MmCopyFromUserMode(Break->InstructionStream,
                        (PVOID)REMOVE_THUMB_BIT(TrapFrame->Pc),
@@ -585,19 +594,14 @@ Return Value:
         // executed.
         //
 
-        if (DebugData->DebugSingleStepAddress == BreakingAddress) {
+        if (Address == BreakingAddress) {
             TrapFrame->Pc -= Length;
             ArBackUpIfThenState(TrapFrame);
         }
 
-        Status = MmCopyToUserMode(DebugData->DebugSingleStepAddress,
+        Status = MmCopyToUserMode(Address,
                                   &(DebugData->DebugSingleStepOriginalContents),
                                   Length);
-
-        if (Address == DebugData->DebugSingleStepAddress + Length) {
-            TrapFrame->Pc -= Length;
-            ArBackUpIfThenState(TrapFrame);
-        }
 
         DebugData->DebugSingleStepAddress = NULL;
         if (!KSUCCESS(Status)) {
@@ -658,7 +662,7 @@ Return Value:
         // Write the break instruction in there.
         //
 
-        Status = MmCopyToUserMode(NextPc, &BreakInstruction, Length);
+        Status = MmCopyToUserMode(Address, &BreakInstruction, Length);
         if (!KSUCCESS(Status)) {
             return Status;
         }

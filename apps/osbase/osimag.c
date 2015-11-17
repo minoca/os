@@ -2284,6 +2284,7 @@ Return Value:
     Image->ModuleNumber = OsImModuleNumberBitmapSize * sizeof(UINTN) *
                           BITS_PER_BYTE;
 
+    OsImModuleNumberBitmap[OsImModuleNumberBitmapSize] = 1;
     if (Image->ModuleNumber > OsImModuleGeneration) {
         OsImModuleGeneration += 1;
     }

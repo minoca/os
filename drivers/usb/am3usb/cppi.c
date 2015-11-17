@@ -1125,6 +1125,7 @@ Return Value:
     ULONG PoppedQueue;
     ULONG Queue;
     ULONG Register;
+    ULONGLONG Timeout;
 
     ASSERT(Descriptor->Submitted != FALSE);
 
@@ -1138,8 +1139,21 @@ Return Value:
                                              Descriptor->Endpoint);
     }
 
+    Timeout = 0;
     Register = CppiQueuePend0 + ((Queue / 32) * 4);
-    Pend = CPPI_QUEUE_READ(Controller, Register);
+    do {
+        Pend = CPPI_QUEUE_READ(Controller, Register);
+        if (Timeout == 0) {
+            Timeout = KeGetRecentTimeCounter() + HlQueryTimeCounterFrequency();
+
+        } else {
+            if (KeGetRecentTimeCounter() >= Timeout) {
+                RtlDebugPrint("CPPI Timeout.\n");
+                break;
+            }
+        }
+
+    } while ((Pend & (1 << (Queue & 0x1F))) == 0);
 
     //
     // If the descriptor is pending, pull it off the completion queue.

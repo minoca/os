@@ -91,9 +91,9 @@ Return Value:
     *StorageAddress = ArGetThreadPointerUser();
 
     //
-    // If the thread is using the FPU, save it. If the thread was using the FPU
-    // but is now context switching in a system call, then abandon the FPU
-    // state, as FPU state is volatile across function calls.
+    // If the thread is using the FPU, save it. Some FPU state (d8-d15) must be
+    // preserved across function calls, so the FPU state cannot be abandoned by
+    // virtue of simply being in a system call.
     //
 
     if ((CurrentThread->Flags & THREAD_FLAG_USING_FPU) != 0) {
@@ -103,8 +103,7 @@ Return Value:
         // terminating.
         //
 
-        if ((CurrentThread->FpuContext != NULL) &&
-            ((CurrentThread->Flags & THREAD_FLAG_IN_SYSTEM_CALL) == 0)) {
+        if (CurrentThread->FpuContext != NULL) {
 
             //
             // Save the FPU state if it was used this iteration. A thread may
@@ -116,14 +115,6 @@ Return Value:
             if ((CurrentThread->Flags & THREAD_FLAG_FPU_OWNER) != 0) {
                 ArSaveFpuState(CurrentThread->FpuContext);
             }
-
-        //
-        // The thread is either dying or in a system call, so abandon the FPU
-        // context.
-        //
-
-        } else {
-            CurrentThread->Flags &= ~THREAD_FLAG_USING_FPU;
         }
 
         CurrentThread->Flags &= ~THREAD_FLAG_FPU_OWNER;

@@ -204,11 +204,12 @@ Return Value:
 
 //
 // Floating point intrinsic routines. These are used in both soft and hard
-// float implementations.
+// float implementations. Note that even in hard-float implementations, double
+// values are returned using integer registers.
 //
 
 RTL_API
-double
+unsigned long long
 __aeabi_i2d (
     int Value
     )
@@ -226,17 +227,21 @@ Arguments:
 
 Return Value:
 
-    Returns the double equivalent of the given integer.
+    Returns the double equivalent of the given integer, in the integer
+    registers.
 
 --*/
 
 {
 
-    return RtlDoubleConvertFromInteger32(Value);
+    DOUBLE_PARTS Result;
+
+    Result.Double = RtlDoubleConvertFromInteger32(Value);
+    return Result.Ulonglong;
 }
 
 RTL_API
-double
+unsigned long long
 __aeabi_ui2d (
     unsigned int Value
     )
@@ -254,17 +259,21 @@ Arguments:
 
 Return Value:
 
-    Returns the double equivalent of the given integer.
+    Returns the double equivalent of the given integer, in the integer
+    registers.
 
 --*/
 
 {
 
-    return RtlDoubleConvertFromUnsignedInteger32(Value);
+    DOUBLE_PARTS Result;
+
+    Result.Double = RtlDoubleConvertFromUnsignedInteger32(Value);
+    return Result.Ulonglong;
 }
 
 RTL_API
-double
+unsigned long long
 __aeabi_l2d (
     long long Value
     )
@@ -282,17 +291,21 @@ Arguments:
 
 Return Value:
 
-    Returns the double equivalent of the given integer.
+    Returns the double equivalent of the given integer, in the integer
+    registers.
 
 --*/
 
 {
 
-    return RtlDoubleConvertFromInteger64(Value);
+    DOUBLE_PARTS Result;
+
+    Result.Double = RtlDoubleConvertFromInteger64(Value);
+    return Result.Ulonglong;
 }
 
 RTL_API
-double
+unsigned long long
 __aeabi_ul2d (
     unsigned long long Value
     )
@@ -310,12 +323,16 @@ Arguments:
 
 Return Value:
 
-    Returns the double equivalent of the given integer.
+    Returns the double equivalent of the given integer, in the integer
+    registers.
 
 --*/
 
 {
 
-    return RtlDoubleConvertFromUnsignedInteger64(Value);
+    DOUBLE_PARTS Result;
+
+    Result.Double = RtlDoubleConvertFromUnsignedInteger64(Value);
+    return Result.Ulonglong;
 }
 

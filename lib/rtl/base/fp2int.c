@@ -119,7 +119,7 @@ Return Value:
 
     ULONG AbsoluteInteger;
     DOUBLE_PARTS Parts;
-    CHAR ShiftCount;
+    INT ShiftCount;
     CHAR Sign;
     ULONGLONG Significand;
 
@@ -169,7 +169,7 @@ Return Value:
 {
 
     DOUBLE_PARTS Parts;
-    CHAR ShiftCount;
+    INT ShiftCount;
     ULONGLONG Significand;
 
     if (Integer == 0) {
@@ -257,13 +257,22 @@ Return Value:
 {
 
     DOUBLE_PARTS Parts;
+    SHORT ShiftCount;
 
     if (Integer == 0) {
         Parts.Ulonglong = 0;
         return Parts.Double;
     }
 
-    return RtlpNormalizeRoundAndPackDouble(0, 0x43C, Integer);
+    ShiftCount = RtlCountLeadingZeros64(Integer) - 1;
+    if (ShiftCount < 0) {
+        RtlpShift64RightJamming(Integer, -ShiftCount, &Integer);
+
+    } else {
+        Integer <<= ShiftCount;
+    }
+
+    return RtlpRoundAndPackDouble(0, 0x43C - ShiftCount, Integer);
 }
 
 RTL_API
@@ -292,7 +301,7 @@ Return Value:
 
     SHORT Exponent;
     DOUBLE_PARTS Parts;
-    SHORT ShiftCount;
+    INT ShiftCount;
     CHAR Sign;
     ULONGLONG Significand;
 
@@ -608,7 +617,7 @@ Arguments:
         shifted exponent must be normalized or smaller. If the significand is
         not normalized, the exponent must be 0. In that case, the result
         returned is a subnormal number, and it must not require rounding. In
-        the normal case wehre the significand is normalized, the exponent must
+        the normal case where the significand is normalized, the exponent must
         be one less than the true floating point exponent.
 
 Return Value:
@@ -733,7 +742,7 @@ Return Value:
 {
 
     double Result;
-    CHAR ShiftCount;
+    INT ShiftCount;
 
     ShiftCount = RtlCountLeadingZeros64(Significand) - 1;
     Result = RtlpRoundAndPackDouble(SignBit,
@@ -1053,7 +1062,7 @@ Return Value:
 
 {
 
-    CHAR NegativeCount;
+    INT NegativeCount;
     ULONGLONG ShiftedValueHigh;
     ULONGLONG ShiftedValueLow;
 
