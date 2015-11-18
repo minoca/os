@@ -2400,12 +2400,76 @@ Return Value:
 
 {
 
+    struct timespec *TimeoutPointer;
+    struct timespec Timespec;
+
+    if (Timeout >= 0) {
+        Timespec.tv_sec = Timeout / MILLISECONDS_PER_SECOND;
+        Timespec.tv_nsec = (Timeout % MILLISECONDS_PER_SECOND) *
+                           NANOSECONDS_PER_MILLISECOND;
+
+        TimeoutPointer = &Timespec;
+
+    } else {
+        TimeoutPointer = NULL;
+    }
+
+    return ppoll(PollDescriptors, DescriptorCount, TimeoutPointer, NULL);
+}
+
+LIBC_API
+int
+ppoll (
+    struct pollfd PollDescriptors[],
+    nfds_t DescriptorCount,
+    const struct timespec *Timeout,
+    const sigset_t *SignalMask
+    )
+
+/*++
+
+Routine Description:
+
+    This routine blocks waiting for specified activity on a range of file
+    descriptors.
+
+Arguments:
+
+    PollDescriptors - Supplies an array of poll descriptor structures,
+        indicating which descriptors should be waited on and which events
+        should qualify in each descriptor.
+
+    DescriptorCount - Supplies the number of descriptors in the array.
+
+    Timeout - Supplies the amount of time to block before giving up and
+        returning anyway. Supply 0 to not block at all, and supply -1 to wait
+        for an indefinite amount of time. The timeout will be at least as long
+        as supplied, but may also be rounded up.
+
+    SignalMask - Supplies an optional pointer to a signal mask to set
+        atomically for the duration of the wait.
+
+Return Value:
+
+    Returns a positive number to indicate success and the number of file
+    descriptors that had events occur.
+
+    Returns 0 to indicate a timeout.
+
+    Returns -1 to indicate an error, and errno will be set to contain more
+    information.
+
+--*/
+
+{
+
     PPOLL_DESCRIPTOR Descriptor;
     ULONG DescriptorIndex;
     PPOLL_DESCRIPTOR Descriptors;
     ULONG DescriptorsSelected;
     struct pollfd *PollDescriptor;
     KSTATUS Status;
+    ULONGLONG TimeoutMilliseconds;
 
     //
     // Allocate the real descriptor structure array.
@@ -2456,18 +2520,20 @@ Return Value:
         PollDescriptor += 1;
     }
 
-    if (Timeout < 0) {
-        Timeout = SYS_WAIT_TIME_INDEFINITE;
+    TimeoutMilliseconds = WAIT_TIME_INDEFINITE;
+    if (Timeout != NULL) {
+        TimeoutMilliseconds = (Timeout->tv_sec * MILLISECONDS_PER_SECOND) +
+                              (Timeout->tv_nsec / NANOSECONDS_PER_MILLISECOND);
     }
 
     //
     // Perform the actual poll call, and return if failure is received.
     //
 
-    Status = OsPoll(NULL,
+    Status = OsPoll((PSIGNAL_SET)SignalMask,
                     Descriptors,
                     DescriptorCount,
-                    (ULONG)Timeout,
+                    TimeoutMilliseconds,
                     &DescriptorsSelected);
 
     if (!KSUCCESS(Status)) {
@@ -2590,6 +2656,84 @@ Return Value:
 
 {
 
+    int Result;
+    struct timespec *TimeoutPointer;
+    struct timespec Timespec;
+
+    if (Timeout != NULL) {
+        Timespec.tv_sec = Timeout->tv_sec;
+        Timespec.tv_nsec = Timeout->tv_usec * NANOSECONDS_PER_MICROSECOND;
+        TimeoutPointer = &Timespec;
+
+    } else {
+        TimeoutPointer = NULL;
+    }
+
+    Result = pselect(MaxDescriptorCount,
+                     ReadDescriptors,
+                     WriteDescriptors,
+                     ErrorDescriptors,
+                     TimeoutPointer,
+                     NULL);
+
+    return Result;
+}
+
+LIBC_API
+int
+pselect (
+    int MaxDescriptorCount,
+    fd_set *ReadDescriptors,
+    fd_set *WriteDescriptors,
+    fd_set *ErrorDescriptors,
+    const struct timespec *Timeout,
+    const sigset_t *SignalMask
+    )
+
+/*++
+
+Routine Description:
+
+    This routine indicates which of the specified file descriptors are ready
+    for reading, writing, and have error conditions.
+
+Arguments:
+
+    MaxDescriptorCount - Supplies the range of file descriptors to be tested.
+        This routine tests file descriptors in the range of 0 to the descriptor
+        count - 1.
+
+    ReadDescriptors - Supplies an optional pointer to a set of descriptors that
+        on input supplies the set of descriptors to be checked for reading. On
+        output, contains the set of descriptors that are ready to be read.
+
+    WriteDescriptors - Supplies an optional pointer to a set of descriptors that
+        on input supplies the set of descriptors to be checked for writing. On
+        output, contains the set of descriptors that are ready to be written to.
+
+    ErrorDescriptors - Supplies an optional pointer to a set of descriptors that
+        on input supplies the set of descriptors to be checked for errors. On
+        output, contains the set of descriptors that have errors.
+
+    Timeout - Supplies an optional to a structure that defines how long to wait
+        for one or more of the descriptors to become ready. If all members of
+        this structure are 0, the function will not block. If this argument is
+        not supplied, the function will block indefinitely until one of the
+        events is ready. If all three descriptor structure pointers is null,
+        this routine will block for the specified amount of time and then
+        return.
+
+    SignalMask - Supplies an optional pointer to the signal mask to set for
+        the duration of the wait.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
     PPOLL_DESCRIPTOR Descriptor;
     ULONG DescriptorCount;
     ULONG DescriptorIndex;
@@ -2655,15 +2799,16 @@ Return Value:
         TimeoutInMilliseconds = SYS_WAIT_TIME_INDEFINITE;
 
     } else {
-        TimeoutInMilliseconds = (Timeout->tv_sec * 1000) +
-                                (Timeout->tv_usec / 1000);
+        TimeoutInMilliseconds = (Timeout->tv_sec * MILLISECONDS_PER_SECOND) +
+                                (Timeout->tv_nsec /
+                                 NANOSECONDS_PER_MILLISECOND);
     }
 
     //
     // Peform the poll.
     //
 
-    Status = OsPoll(NULL,
+    Status = OsPoll((PSIGNAL_SET)SignalMask,
                     Descriptors,
                     DescriptorCount,
                     TimeoutInMilliseconds,

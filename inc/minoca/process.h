@@ -1926,6 +1926,30 @@ Return Value:
 --*/
 
 VOID
+PsSetSignalMask (
+    PSIGNAL_SET NewMask,
+    PSIGNAL_SET OriginalMask
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the blocked signal mask for the current thread.
+
+Arguments:
+
+    NewMask - Supplies a pointer to the new mask to set.
+
+    OriginalMask - Supplies an optional pointer to the previous mask.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
 PsSysCreateThread (
     ULONG SystemCallNumber,
     PVOID SystemCallParameter,

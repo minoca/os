@@ -26,6 +26,7 @@ Author:
 #include <libcbase.h>
 #include <stddef.h>
 #include <signal.h>
+#include <time.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -195,6 +196,59 @@ Arguments:
         events is ready. If all three descriptor structure pointers is null,
         this routine will block for the specified amount of time and then
         return.
+
+Return Value:
+
+    None.
+
+--*/
+
+LIBC_API
+int
+pselect (
+    int MaxDescriptorCount,
+    fd_set *ReadDescriptors,
+    fd_set *WriteDescriptors,
+    fd_set *ErrorDescriptors,
+    const struct timespec *Timeout,
+    const sigset_t *SignalMask
+    );
+
+/*++
+
+Routine Description:
+
+    This routine indicates which of the specified file descriptors are ready
+    for reading, writing, and have error conditions.
+
+Arguments:
+
+    MaxDescriptorCount - Supplies the range of file descriptors to be tested.
+        This routine tests file descriptors in the range of 0 to the descriptor
+        count - 1.
+
+    ReadDescriptors - Supplies an optional pointer to a set of descriptors that
+        on input supplies the set of descriptors to be checked for reading. On
+        output, contains the set of descriptors that are ready to be read.
+
+    WriteDescriptors - Supplies an optional pointer to a set of descriptors that
+        on input supplies the set of descriptors to be checked for writing. On
+        output, contains the set of descriptors that are ready to be written to.
+
+    ErrorDescriptors - Supplies an optional pointer to a set of descriptors that
+        on input supplies the set of descriptors to be checked for errors. On
+        output, contains the set of descriptors that have errors.
+
+    Timeout - Supplies an optional to a structure that defines how long to wait
+        for one or more of the descriptors to become ready. If all members of
+        this structure are 0, the function will not block. If this argument is
+        not supplied, the function will block indefinitely until one of the
+        events is ready. If all three descriptor structure pointers is null,
+        this routine will block for the specified amount of time and then
+        return.
+
+    SignalMask - Supplies an optional pointer to the signal mask to set for
+        the duration of the wait.
 
 Return Value:
 

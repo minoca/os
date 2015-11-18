@@ -37,7 +37,7 @@ all:
 ##
 
 BUILD_ARCH = $(shell uname -m)
-ifeq ($(BUILD_ARCH), i686)
+ifeq ($(BUILD_ARCH), $(filter i686 i586,$(BUILD_ARCH)))
 BUILD_ARCH := x86
 BUILD_BFD_ARCH := i386
 BUILD_OBJ_FORMAT := elf32-i386
@@ -45,8 +45,7 @@ ifeq ($(OS),Windows_NT)
 BUILD_OBJ_FORMAT := pe-i386
 endif
 
-else ifeq ($(BUILD_ARCH), arm)
-BUILD_ARCH := armv7
+else ifeq ($(BUILD_ARCH), $(filter armv7 armv6,$(BUILD_ARCH)))
 BUILD_BFD_ARCH := arm
 BUILD_OBJ_FORMAT := elf32-littlearm
 else ifeq ($(BUILD_ARCH), x86_64)

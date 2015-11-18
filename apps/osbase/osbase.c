@@ -1094,12 +1094,7 @@ Return Value:
 
     SYSTEM_CALL_POLL Poll;
 
-    //
-    // TODO: Use signal mask.
-    //
-
-    ASSERT(SignalMask == NULL);
-
+    Poll.SignalMask = SignalMask;
     Poll.Descriptors = Descriptors;
     Poll.DescriptorCount = DescriptorCount;
     Poll.TimeoutInMilliseconds = TimeoutInMilliseconds;

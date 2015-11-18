@@ -1416,11 +1416,15 @@ Return Value:
     ULONG MaskedEvents;
     ULONGLONG Microseconds;
     ULONGLONG ObjectIndex;
+    SIGNAL_SET OldSignalSet;
     PPATH_ENTRY PathEntry;
     PSYSTEM_CALL_POLL PollInformation;
     PKPROCESS Process;
+    BOOL RestoreSignalMask;
     ULONG SelectedDescriptors;
+    SIGNAL_SET SignalMask;
     KSTATUS Status;
+    PKTHREAD Thread;
     PPOLL_DESCRIPTOR UserDescriptors;
     ULONG WaitEvents;
     PVOID *WaitObjects;
@@ -1430,9 +1434,28 @@ Return Value:
     HaveRegularFiles = FALSE;
     PollInformation = (PSYSTEM_CALL_POLL)SystemCallParameter;
     DescriptorCount = PollInformation->DescriptorCount;
-    Process = PsGetCurrentProcess();
+    Thread = KeGetCurrentThread();
+    Process = Thread->OwningProcess;
+    RestoreSignalMask = FALSE;
     SelectedDescriptors = 0;
     WaitObjects = NULL;
+
+    //
+    // Set the signal mask if supplied.
+    //
+
+    if (PollInformation->SignalMask != NULL) {
+        Status = MmCopyFromUserMode(&SignalMask,
+                                    PollInformation->SignalMask,
+                                    sizeof(SIGNAL_SET));
+
+        if (!KSUCCESS(Status)) {
+            goto PollEnd;
+        }
+
+        PsSetSignalMask(&SignalMask, &OldSignalSet);
+        RestoreSignalMask = TRUE;
+    }
 
     //
     // Polling nothing is easy.
@@ -1662,6 +1685,16 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 PollEnd:
+    if (RestoreSignalMask != FALSE) {
+
+        //
+        // Queue up signals before resetting the mask.
+        //
+
+        PsDispatchPendingSignals(Thread, TrapFrame);
+        PsSetSignalMask(&OldSignalSet, NULL);
+    }
+
     if (WaitObjects != NULL) {
         MmFreePagedPool(WaitObjects);
     }

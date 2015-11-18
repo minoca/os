@@ -179,6 +179,55 @@ PSTR PsSignalNames[STANDARD_SIGNAL_COUNT] = {
 //
 
 VOID
+PsSetSignalMask (
+    PSIGNAL_SET NewMask,
+    PSIGNAL_SET OriginalMask
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the blocked signal mask for the current thread.
+
+Arguments:
+
+    NewMask - Supplies a pointer to the new mask to set.
+
+    OriginalMask - Supplies an optional pointer to the previous mask.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    SIGNAL_SET NewMaskLocal;
+    PKPROCESS Process;
+    PKTHREAD Thread;
+
+    Thread = KeGetCurrentThread();
+    Process = Thread->OwningProcess;
+
+    ASSERT(Process != PsGetKernelProcess());
+
+    NewMaskLocal = *NewMask;
+    REMOVE_SIGNAL(NewMaskLocal, SIGNAL_STOP);
+    REMOVE_SIGNAL(NewMaskLocal, SIGNAL_KILL);
+    KeAcquireQueuedLock(Process->QueuedLock);
+    if (OriginalMask != NULL) {
+        *OriginalMask = Thread->BlockedSignals;
+    }
+
+    Thread->BlockedSignals = NewMaskLocal;
+    PspRequeueBlockedSignals(Process);
+    KeReleaseQueuedLock(Process->QueuedLock);
+    return;
+}
+
+VOID
 PsSysSetSignalHandler (
     ULONG SystemCallNumber,
     PVOID SystemCallParameter,

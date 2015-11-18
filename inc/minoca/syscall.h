@@ -965,6 +965,9 @@ Structure Description:
 
 Members:
 
+    SignalMask - Stores an optional pointer to a signal mask to set for the
+        duration of the poll.
+
     Descriptors - Stores a pointer to a buffer containing an array of poll
         descriptors.
 
@@ -981,6 +984,7 @@ Members:
 --*/
 
 typedef struct _SYSTEM_CALL_POLL {
+    PSIGNAL_SET SignalMask;
     PPOLL_DESCRIPTOR Descriptors;
     ULONG DescriptorCount;
     ULONGLONG TimeoutInMilliseconds;

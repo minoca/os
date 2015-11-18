@@ -24,6 +24,7 @@ Author:
 //
 
 #include <libcbase.h>
+#include <time.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -151,6 +152,50 @@ Arguments:
     Timeout - Supplies the amount of time in milliseconds to block before
         giving up and returning anyway. Supply 0 to not block at all, and
         supply -1 to wait for an indefinite amount of time.
+
+Return Value:
+
+    Returns a positive number to indicate success and the number of file
+    descriptors that had events occur.
+
+    Returns 0 to indicate a timeout.
+
+    Returns -1 to indicate an error, and errno will be set to contain more
+    information.
+
+--*/
+
+LIBC_API
+int
+ppoll (
+    struct pollfd PollDescriptors[],
+    nfds_t DescriptorCount,
+    const struct timespec *Timeout,
+    const sigset_t *SignalMask
+    );
+
+/*++
+
+Routine Description:
+
+    This routine blocks waiting for specified activity on a range of file
+    descriptors.
+
+Arguments:
+
+    PollDescriptors - Supplies an array of poll descriptor structures,
+        indicating which descriptors should be waited on and which events
+        should qualify in each descriptor.
+
+    DescriptorCount - Supplies the number of descriptors in the array.
+
+    Timeout - Supplies the amount of time to block before giving up and
+        returning anyway. Supply 0 to not block at all, and supply -1 to wait
+        for an indefinite amount of time. The timeout will be at least as long
+        as supplied, but may also be rounded up.
+
+    SignalMask - Supplies an optional pointer to a signal mask to set
+        atomically for the duration of the wait.
 
 Return Value:
 

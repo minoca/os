@@ -146,7 +146,12 @@ Return Value:
 
 #elif defined(__arm__)
 
-    strcpy(Name->machine, "arm");
+    if (OsTestProcessorFeature(OsArmArmv7) != FALSE) {
+        strcpy(Name->machine, "armv7");
+
+    } else {
+        strcpy(Name->machine, "armv6");
+    }
 
 #else
 

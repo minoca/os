@@ -92,9 +92,10 @@ Environment:
 // User input debug flags.
 //
 
-#define USER_INPUT_DEBUG_REGISTER     0x00000001
-#define USER_INPUT_DEBUG_EVENT        0x00000002
-#define USER_INPUT_DEBUG_REPEAT_EVENT 0x00000004
+#define USER_INPUT_DEBUG_REGISTER       0x00000001
+#define USER_INPUT_DEBUG_EVENT          0x00000002
+#define USER_INPUT_DEBUG_REPEAT_EVENT   0x00000004
+#define USER_INPUT_DEBUG_DISABLE_REPEAT 0x00000008
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -226,18 +227,18 @@ volatile ULONG InTerminalKeyboardMask = 0;
 // for definitions.
 //
 
-ULONG UserInputDebugFlags = 0x0;
+ULONG InDebugFlags = 0x0;
 
 //
 // Define user input type strings for debugging.
 //
 
-PSTR UserInputDeviceTypeStrings[UserInputDeviceTypeCount] = {
+PSTR InDeviceTypeStrings[UserInputDeviceTypeCount] = {
     "INVALID",
     "Keyboard"
 };
 
-PSTR UserInputEventTypeStrings[UserInputEventCount] = {
+PSTR InEventTypeStrings[UserInputEventCount] = {
     "INVALID",
     "key down",
     "key up"
@@ -505,10 +506,10 @@ Return Value:
 
     INSERT_BEFORE(&(InputDevice->ListEntry), &InDeviceListHead);
     KeReleaseQueuedLock(InDeviceListLock);
-    if ((UserInputDebugFlags & USER_INPUT_DEBUG_REGISTER) != 0) {
+    if ((InDebugFlags & USER_INPUT_DEBUG_REGISTER) != 0) {
         RtlDebugPrint("USIN: Registered %s Device (0x%08x), identifier: "
                       "0x%08x.\n",
-                      UserInputDeviceTypeStrings[InputDevice->Type],
+                      InDeviceTypeStrings[InputDevice->Type],
                       InputDevice,
                       InputDevice->Identifier);
     }
@@ -577,10 +578,10 @@ Return Value:
         KeDestroyWorkItem(InputDevice->RepeatWorkItem);
     }
 
-    if ((UserInputDebugFlags & USER_INPUT_DEBUG_REGISTER) != 0) {
+    if ((InDebugFlags & USER_INPUT_DEBUG_REGISTER) != 0) {
         RtlDebugPrint("USIN: Destroyed %s Device (0x%08x), identifier: "
                       "0x%08x.\n",
-                      UserInputDeviceTypeStrings[InputDevice->Type],
+                      InDeviceTypeStrings[InputDevice->Type],
                       InputDevice,
                       InputDevice->Identifier);
     }
@@ -713,7 +714,8 @@ Return Value:
     // If there is an active keyboard repeat event, then queue it.
     //
 
-    if (Repeat != FALSE) {
+    if ((Repeat != FALSE) &&
+        ((InDebugFlags & USER_INPUT_DEBUG_DISABLE_REPEAT) == 0)) {
 
         ASSERT(Event->DeviceType == UserInputDeviceKeyboard);
 
@@ -728,11 +730,11 @@ Return Value:
                      InputDevice->RepeatDpc);
     }
 
-    if ((UserInputDebugFlags & USER_INPUT_DEBUG_EVENT) != 0) {
+    if ((InDebugFlags & USER_INPUT_DEBUG_EVENT) != 0) {
         RtlDebugPrint("USIN: %s %s event processed with status 0x%08x: event "
                       "0x%08x, device 0x%08x, ",
-                      UserInputDeviceTypeStrings[Event->DeviceType],
-                      UserInputEventTypeStrings[Event->EventType],
+                      InDeviceTypeStrings[Event->DeviceType],
+                      InEventTypeStrings[Event->EventType],
                       Status,
                       Event->EventIdentifier,
                       Event->DeviceIdentifier);
@@ -1296,11 +1298,11 @@ Return Value:
     // Display optional debug information.
     //
 
-    if ((UserInputDebugFlags & USER_INPUT_DEBUG_REPEAT_EVENT) != 0) {
+    if ((InDebugFlags & USER_INPUT_DEBUG_REPEAT_EVENT) != 0) {
         RtlDebugPrint("USIN: REPEAT %s %s event processed with status 0x%08x: "
                       "event 0x%08x, device 0x%08x, ",
-                      UserInputDeviceTypeStrings[RepeatEvent->DeviceType],
-                      UserInputEventTypeStrings[RepeatEvent->EventType],
+                      InDeviceTypeStrings[RepeatEvent->DeviceType],
+                      InEventTypeStrings[RepeatEvent->EventType],
                       Status,
                       RepeatEvent->EventIdentifier,
                       RepeatEvent->DeviceIdentifier);

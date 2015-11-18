@@ -57,6 +57,7 @@ Author:
 #define MILLISECONDS_PER_SECOND 1000ULL
 #define MICROSECONDS_PER_MILLISECOND 1000ULL
 #define NANOSECONDS_PER_MICROSECOND 1000ULL
+#define NANOSECONDS_PER_MILLISECOND 1000000ULL
 
 //
 // Define the default system clock rate at system boot, in 100ns units.
