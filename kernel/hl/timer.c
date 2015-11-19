@@ -118,6 +118,11 @@ HlpTimerResetCounterOffset (
     ULONGLONG NewValue
     );
 
+KSTATUS
+HlpTimerCreateSoftUpdateTimer (
+    PHARDWARE_TIMER Timer
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -501,6 +506,17 @@ Return Value:
         //
 
         KeUpdateClockForProfiling(FALSE);
+
+        //
+        // Create a soft timer to ensure that the system wakes from idle at
+        // least often enough to observe every half-rollover of the time
+        // counter.
+        //
+
+        Status = HlpTimerCreateSoftUpdateTimer(HlTimeCounter);
+        if (!KSUCCESS(Status)) {
+            goto InitializeTimersEnd;
+        }
 
     //
     // Perform initialization for all other processors.
@@ -1851,5 +1867,90 @@ Return Value:
     NewOffset = NewValue - Counter;
     WRITE_INT64_SYNC(&(Timer->SoftwareOffset), NewOffset);
     return;
+}
+
+KSTATUS
+HlpTimerCreateSoftUpdateTimer (
+    PHARDWARE_TIMER Timer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a software timer that fires a little more frequently
+    than half the timer rollover rate. This is used to ensure that each
+    significant bit flip of the timer is observed. If the timer's counter is
+    64-bits in length, then no timer is created.
+
+Arguments:
+
+    Timer - Supplies a pointer to the timer to create the software timer for.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONGLONG HalfRolloverSeconds;
+    ULONGLONG Microseconds;
+    PKTIMER SoftTimer;
+    KSTATUS Status;
+    ULONG Ticks;
+
+    //
+    // Do nothing if the timer is 64-bits (and so there's no rollover to keep
+    // track of).
+    //
+
+    if (Timer->CounterBitWidth == 64) {
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // Compute the half rollover rate in seconds. If it's huge, then also don't
+    // bother with a software timer.
+    //
+
+    Ticks = 1ULL << (Timer->CounterBitWidth - 1);
+    HalfRolloverSeconds = Ticks / Timer->CounterFrequency;
+    if (HalfRolloverSeconds > (SECONDS_PER_DAY * 90)) {
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // Figure out the microseconds per half-rollover, and then take about 80
+    // percent of that for safety.
+    //
+
+    Microseconds = (Ticks * MICROSECONDS_PER_SECOND) / Timer->CounterFrequency;
+    Microseconds = (Microseconds * 820) / 1024;
+
+    //
+    // Create the timer, which itself is leaked. If this function is needed by
+    // timers other than the time counter, then 1) the timer should be saved
+    // in the hardware timer structure so that it can be shut off if the timer
+    // is no longer used, and 2) the timer should fire a DPC that actually
+    // queries the counter (rather than assuming the clock interrupt will do it,
+    // which is true only for the time counter).
+    //
+
+    ASSERT(Timer == HlTimeCounter);
+
+    SoftTimer = KeCreateTimer(HL_POOL_TAG);
+    if (SoftTimer == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    //
+    // Now convert those microseconds to time counter ticks and queue the timer.
+    //
+
+    Ticks = KeConvertMicrosecondsToTimeTicks(Microseconds);
+    Status = KeQueueTimer(SoftTimer, TimerQueueSoftWake, 0, Ticks, 0, NULL);
+    return Status;
 }
 

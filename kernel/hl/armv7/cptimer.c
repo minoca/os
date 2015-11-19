@@ -416,7 +416,7 @@ Return Value:
 
     Timer = (PCP_TIMER_DATA)Context;
     if (TickCount >= MAX_ULONG) {
-        return STATUS_INVALID_PARAMETER;
+        TickCount = MAX_ULONG - 1;
     }
 
     //

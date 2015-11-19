@@ -113,6 +113,7 @@ BootPartition = {
         "System": TRUE,
         "CompatibilityMode": FALSE,
         "WriteVbrLba": TRUE,
+        "MergeVbr": TRUE,
     },
 };
 
@@ -121,3 +122,4 @@ DiskData["Format"] = PARTITION_FORMAT_MBR;
 BootEntry["LoaderPath"] = LoaderPathPcat;
 BootPartition["Alignment"] = 1 * MEGABYTE;
 SystemPartition["Alignment"] = 1 * MEGABYTE;
+

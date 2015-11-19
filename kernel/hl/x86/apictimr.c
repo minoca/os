@@ -310,6 +310,9 @@ Return Value:
 
     if (TickCount == 0) {
         TickCount = 1;
+
+    } else if (TickCount >= MAX_ULONG) {
+        TickCount = MAX_ULONG - 1;
     }
 
     //

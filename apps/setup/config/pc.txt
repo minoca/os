@@ -52,6 +52,7 @@ VbrCopy = {
 };
 
 BootPartition["Vbr"] = VbrCopy;
+BootPartition["Flags"]["MergeVbr"] = TRUE;
 
 //
 // Replace the boot files with the boot manager.
@@ -70,3 +71,4 @@ BootPartition["Flags"]["WriteVbrLba"] = TRUE;
 BootEntry["LoaderPath"] = LoaderPathPcat;
 SystemPartition["Alignment"] = 1 * MEGABYTE;
 DiskData["Format"] = PARTITION_FORMAT_MBR;
+

@@ -369,8 +369,8 @@ Return Value:
     PreambleHeader->HeaderVersionMajor =
                                    VERIFIED_BOOT_PREAMBLE_HEADER_VERSION_MAJOR;
 
-    PreambleHeader->HeaderVersionMajor =
-                                   VERIFIED_BOOT_PREAMBLE_HEADER_VERSION_MAJOR;
+    PreambleHeader->HeaderVersionMinor =
+                                   VERIFIED_BOOT_PREAMBLE_HEADER_VERSION_MINOR;
 
     PreambleHeader->ImageVersion = VERIFIED_BOOT_PREAMBLE_IMAGE_VERSION;
     PreambleHeader->ImageLoadAddress = LoadAddress;

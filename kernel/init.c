@@ -785,6 +785,7 @@ Return Value:
     KSTATUS Status;
     ULONGLONG TimeCounter;
     PKTIMER Timer;
+    TIMER_QUEUE_TYPE TimerQueueType;
     SYSTEM_USAGE_CONTEXT UsageContext;
     UINTN UsedSize;
     ULONGLONG WriteDifference;
@@ -1035,8 +1036,13 @@ Return Value:
 
         BannerString[sizeof(BannerString) - 1] = '\0';
         VidPrintString(0, 1, BannerString);
+        TimerQueueType = TimerQueueSoftWake;
+        if ((Seconds % 5) == 0) {
+            TimerQueueType = TimerQueueSoft;
+        }
+
         KeQueueTimer(Timer,
-                     TimerQueueSoftWake,
+                     TimerQueueType,
                      TimeCounter + Frequency,
                      0,
                      0,

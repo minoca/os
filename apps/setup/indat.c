@@ -177,6 +177,14 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionFlagsMembers[] = {
         {SETUP_PARTITION_FLAG_WRITE_VBR_LBA}
     },
 
+    {
+        SetupCFlag32,
+        "MergeVbr",
+        FALSE,
+        0,
+        {SETUP_PARTITION_FLAG_MERGE_VBR}
+    },
+
     {0}
 };
 

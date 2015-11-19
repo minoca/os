@@ -360,9 +360,7 @@ Return Value:
 
     assert(Destination != NULL);
 
-    Clobber = TRUE;
     if (PartitionConfiguration->CopyCommandCount != 0) {
-        Clobber = FALSE;
         CompatibilityMode = FALSE;
         if ((PartitionConfiguration->Flags &
              SETUP_PARTITION_FLAG_COMPATIBILITY_MODE) != 0) {
@@ -389,6 +387,11 @@ Return Value:
     //
     // Write the VBR if there is one.
     //
+
+    Clobber = TRUE;
+    if ((PartitionConfiguration->Flags & SETUP_PARTITION_FLAG_MERGE_VBR) != 0) {
+        Clobber = FALSE;
+    }
 
     if (PartitionConfiguration->Vbr.Source != NULL) {
         WriteLbaOffset = FALSE;
@@ -1369,37 +1372,57 @@ Return Value:
 
     Offset = 0;
     while (Offset < FileSize) {
-        BytesDone = SetupPartitionRead(Context,
-                                       Context->Disk,
-                                       Block,
-                                       SETUP_BLOCK_SIZE);
 
-        if (BytesDone != SETUP_BLOCK_SIZE) {
-            fprintf(stderr,
-                    "Read only %d of %d bytes.\n",
-                    BytesDone,
-                    SETUP_BLOCK_SIZE);
+        //
+        // If clobbering, just write the contents over what's there.
+        //
 
-            Result = errno;
-            if (Result == 0) {
-                Result = -1;
+        if (Clobber != FALSE) {
+            if (FileSize - Offset >= SETUP_BLOCK_SIZE) {
+                memcpy(Block, FileData + Offset, SETUP_BLOCK_SIZE);
+                Offset += SETUP_BLOCK_SIZE;
+
+            } else {
+                memset(Block, 0, SETUP_BLOCK_SIZE);
+                memcpy(Block, FileData + Offset, FileSize - Offset);
+                Offset = FileSize;
             }
 
-            goto WriteBootSectorFileEnd;
-        }
-
         //
-        // Merge the boot file contents with what's on the disk. There should
-        // be no byte set in both.
+        // If not clobbering, carefully merge the bytes with what's already on
+        // disk.
         //
 
-        ByteIndex = 0;
-        while (ByteIndex < SETUP_BLOCK_SIZE) {
-            if (Offset < FileSize) {
-                if (FileData[Offset] != 0) {
+        } else {
+            BytesDone = SetupPartitionRead(Context,
+                                           Context->Disk,
+                                           Block,
+                                           SETUP_BLOCK_SIZE);
+
+            if (BytesDone != SETUP_BLOCK_SIZE) {
+                fprintf(stderr,
+                        "Read only %d of %d bytes.\n",
+                        BytesDone,
+                        SETUP_BLOCK_SIZE);
+
+                Result = errno;
+                if (Result == 0) {
+                    Result = -1;
+                }
+
+                goto WriteBootSectorFileEnd;
+            }
+
+            //
+            // Merge the boot file contents with what's on the disk. There
+            // should be no byte set in both.
+            //
+
+            ByteIndex = 0;
+            while (ByteIndex < SETUP_BLOCK_SIZE) {
+                if ((Offset < FileSize) && (FileData[Offset] != 0)) {
                     if ((Block[ByteIndex] != 0) &&
-                        (FileData[Offset] != Block[ByteIndex]) &&
-                        (Clobber == FALSE)) {
+                        (FileData[Offset] != Block[ByteIndex])) {
 
                         fprintf(stderr,
                                 "Error: Aborted writing boot file %s, as "
@@ -1417,10 +1440,10 @@ Return Value:
 
                     Block[ByteIndex] = FileData[Offset];
                 }
-            }
 
-            ByteIndex += 1;
-            Offset += 1;
+                ByteIndex += 1;
+                Offset += 1;
+            }
         }
 
         if (WriteLbaOffset != FALSE) {

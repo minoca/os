@@ -58,7 +58,7 @@ PARTITION_ID_MINOCA = 0x6B;
 //
 
 //
-// All of the source files are located inside of a directory rather than 
+// All of the source files are located inside of a directory rather than
 // directly at the root because some file systems have a limited number of
 // entries in the root directory (FAT12/16).
 //
@@ -239,6 +239,7 @@ BootPartition = {
         "System": FALSE,
         "CompatibilityMode": TRUE,
         "WriteVbrLba": FALSE,
+        "MergeVbr": FALSE,
     },
 };
 
@@ -255,6 +256,7 @@ SystemPartition = {
         "System": TRUE,
         "CompatibilityMode": FALSE,
         "WriteVbrLba": FALSE,
+        "MergeVbr": FALSE,
     },
 };
 
@@ -308,3 +310,4 @@ Settings = {
     "BootConfiguration": BootConfiguration,
     "DriverDb": DriverDb
 };
+

@@ -493,7 +493,7 @@ Return Value:
 
     Timer = (PAM335_TIMER_DATA)Context;
     if (TickCount >= MAX_ULONG) {
-        return STATUS_INVALID_PARAMETER;
+        TickCount = MAX_ULONG - 1;
     }
 
     if (TickCount < 2) {
