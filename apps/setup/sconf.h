@@ -203,7 +203,7 @@ struct _SETUP_CONFIGURATION {
 
 INT
 SetupReadConfiguration (
-    PSETUP_INTERPRETER Interpreter,
+    PCHALK_INTERPRETER Interpreter,
     PSETUP_CONFIGURATION *NewConfiguration
     );
 
@@ -216,7 +216,7 @@ Routine Description:
 
 Arguments:
 
-    Interpreter - Supplies a pointer to the setup interpreter.
+    Interpreter - Supplies a pointer to the Chalk interpreter.
 
     NewConfiguration - Supplies a pointer where a pointer to the new
         configuration will be returned on success.

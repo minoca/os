@@ -8,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This module handles execution details for the setup interpreter.
+    This module handles execution details for the Chalk interpreter.
 
 Author:
 
@@ -31,9 +31,11 @@ Environment:
 #include <string.h>
 #include <sys/stat.h>
 
-#include "../setup.h"
-#include "visit.h"
+#include <minoca/types.h>
+#include <minoca/status.h>
 #include <minoca/lib/yy.h>
+#include "chalk.h"
+#include "visit.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -48,80 +50,80 @@ Environment:
 //
 
 INT
-SetupExecuteScript (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_SCRIPT Script
+ChalkExecuteScript (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_SCRIPT Script
     );
 
 INT
-SetupExecute (
-    PSETUP_INTERPRETER Interpreter
+ChalkExecute (
+    PCHALK_INTERPRETER Interpreter
     );
 
 VOID
-SetupUnloadScript (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_SCRIPT Script
+ChalkUnloadScript (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_SCRIPT Script
     );
 
 INT
-SetupPushNode (
-    PSETUP_INTERPRETER Interpreter,
+ChalkPushNode (
+    PCHALK_INTERPRETER Interpreter,
     PVOID ParseTree,
-    PSETUP_SCRIPT Script,
+    PCHALK_SCRIPT Script,
     BOOL Function
     );
 
 VOID
-SetupPopNode (
-    PSETUP_INTERPRETER Interpreter
+ChalkPopNode (
+    PCHALK_INTERPRETER Interpreter
     );
 
 INT
-SetupPushScope (
-    PSETUP_INTERPRETER Interpreter,
+ChalkPushScope (
+    PCHALK_INTERPRETER Interpreter,
     BOOL Function
     );
 
 VOID
-SetupPopScope (
-    PSETUP_INTERPRETER Interpreter
+ChalkPopScope (
+    PCHALK_INTERPRETER Interpreter
     );
 
 //
 // -------------------------------------------------------------------- Globals
 //
 
-BOOL SetupDebugNodeVisits = FALSE;
-BOOL SetupDebugFinalGlobals = FALSE;
+BOOL ChalkDebugNodeVisits = FALSE;
+BOOL ChalkDebugFinalGlobals = FALSE;
 
-PSETUP_NODE_VISIT SetupNodeVisit[SetupNodeEnd - SetupNodeBegin] = {
-    SetupVisitListElementList,
-    SetupVisitList,
-    SetupVisitDictElement,
-    SetupVisitDictElementList,
-    SetupVisitDict,
-    SetupVisitPrimaryExpression,
-    SetupVisitPostfixExpression,
-    SetupVisitUnaryExpression,
-    SetupVisitUnaryOperator,
-    SetupVisitMultiplicativeExpression,
-    SetupVisitAdditiveExpression,
-    SetupVisitShiftExpression,
-    SetupVisitRelationalExpression,
-    SetupVisitEqualityExpression,
-    SetupVisitAndExpression,
-    SetupVisitExclusiveOrExpression,
-    SetupVisitInclusiveOrExpression,
-    SetupVisitLogicalAndExpression,
-    SetupVisitLogicalOrExpression,
-    SetupVisitConditionalExpression,
-    SetupVisitAssignmentExpression,
-    SetupVisitAssignmentOperator,
-    SetupVisitExpression,
-    SetupVisitStatementList,
-    SetupVisitExpressionStatement,
-    SetupVisitTranslationUnit,
+PCHALK_NODE_VISIT ChalkNodeVisit[ChalkNodeEnd - ChalkNodeBegin] = {
+    ChalkVisitListElementList,
+    ChalkVisitList,
+    ChalkVisitDictElement,
+    ChalkVisitDictElementList,
+    ChalkVisitDict,
+    ChalkVisitPrimaryExpression,
+    ChalkVisitPostfixExpression,
+    ChalkVisitUnaryExpression,
+    ChalkVisitUnaryOperator,
+    ChalkVisitMultiplicativeExpression,
+    ChalkVisitAdditiveExpression,
+    ChalkVisitShiftExpression,
+    ChalkVisitRelationalExpression,
+    ChalkVisitEqualityExpression,
+    ChalkVisitAndExpression,
+    ChalkVisitExclusiveOrExpression,
+    ChalkVisitInclusiveOrExpression,
+    ChalkVisitLogicalAndExpression,
+    ChalkVisitLogicalOrExpression,
+    ChalkVisitConditionalExpression,
+    ChalkVisitAssignmentExpression,
+    ChalkVisitAssignmentOperator,
+    ChalkVisitExpression,
+    ChalkVisitStatementList,
+    ChalkVisitExpressionStatement,
+    ChalkVisitTranslationUnit,
 };
 
 //
@@ -129,15 +131,15 @@ PSETUP_NODE_VISIT SetupNodeVisit[SetupNodeEnd - SetupNodeBegin] = {
 //
 
 INT
-SetupInitializeInterpreter (
-    PSETUP_INTERPRETER Interpreter
+ChalkInitializeInterpreter (
+    PCHALK_INTERPRETER Interpreter
     )
 
 /*++
 
 Routine Description:
 
-    This routine initializes a setup interpreter.
+    This routine initializes a Chalk interpreter.
 
 Arguments:
 
@@ -151,9 +153,9 @@ Return Value:
 
 {
 
-    memset(Interpreter, 0, sizeof(SETUP_INTERPRETER));
+    memset(Interpreter, 0, sizeof(CHALK_INTERPRETER));
     INITIALIZE_LIST_HEAD(&(Interpreter->ScriptList));
-    Interpreter->Global.Dict = SetupCreateDict(NULL);
+    Interpreter->Global.Dict = ChalkCreateDict(NULL);
     if (Interpreter->Global.Dict == NULL) {
         return ENOMEM;
     }
@@ -162,15 +164,15 @@ Return Value:
 }
 
 VOID
-SetupDestroyInterpreter (
-    PSETUP_INTERPRETER Interpreter
+ChalkDestroyInterpreter (
+    PCHALK_INTERPRETER Interpreter
     )
 
 /*++
 
 Routine Description:
 
-    This routine destroys a setup interpreter.
+    This routine destroys a Chalk interpreter.
 
 Arguments:
 
@@ -184,27 +186,27 @@ Return Value:
 
 {
 
-    PSETUP_SCRIPT Script;
+    PCHALK_SCRIPT Script;
 
     if (Interpreter->Global.Dict != NULL) {
-        SetupObjectReleaseReference(Interpreter->Global.Dict);
+        ChalkObjectReleaseReference(Interpreter->Global.Dict);
         Interpreter->Global.Dict = NULL;
     }
 
     while (!LIST_EMPTY(&(Interpreter->ScriptList))) {
         Script = LIST_VALUE(Interpreter->ScriptList.Next,
-                            SETUP_SCRIPT,
+                            CHALK_SCRIPT,
                             ListEntry);
 
-        SetupUnloadScript(Interpreter, Script);
+        ChalkUnloadScript(Interpreter, Script);
     }
 
     return;
 }
 
 INT
-SetupLoadScriptBuffer (
-    PSETUP_INTERPRETER Interpreter,
+ChalkLoadScriptBuffer (
+    PCHALK_INTERPRETER Interpreter,
     PSTR Path,
     PSTR Buffer,
     ULONG Size,
@@ -244,20 +246,20 @@ Return Value:
 
 {
 
-    PSETUP_SCRIPT Script;
+    PCHALK_SCRIPT Script;
     INT Status;
 
     if (Size == 0) {
         return EINVAL;
     }
 
-    Script = malloc(sizeof(SETUP_SCRIPT));
+    Script = malloc(sizeof(CHALK_SCRIPT));
     if (Script == NULL) {
         return ENOMEM;
     }
 
     Status = 0;
-    memset(Script, 0, sizeof(SETUP_SCRIPT));
+    memset(Script, 0, sizeof(CHALK_SCRIPT));
     Script->Order = Order;
     Script->Path = Path;
     Script->Data = malloc(Size + 1);
@@ -270,7 +272,7 @@ Return Value:
     Script->Size = Size;
     INSERT_BEFORE(&(Script->ListEntry), &(Interpreter->ScriptList));
     if (Script->Order == 0) {
-        Status = SetupExecuteScript(Interpreter, Script);
+        Status = ChalkExecuteScript(Interpreter, Script);
         if (Status != 0) {
             LIST_REMOVE(&(Script->ListEntry));
             free(Script->Data);
@@ -282,8 +284,8 @@ Return Value:
 }
 
 INT
-SetupLoadScriptFile (
-    PSETUP_INTERPRETER Interpreter,
+ChalkLoadScriptFile (
+    PCHALK_INTERPRETER Interpreter,
     PSTR Path,
     ULONG Order
     )
@@ -315,7 +317,7 @@ Return Value:
 
     FILE *File;
     size_t Read;
-    PSETUP_SCRIPT Script;
+    PCHALK_SCRIPT Script;
     struct stat Stat;
     INT Status;
     size_t TotalRead;
@@ -342,13 +344,13 @@ Return Value:
         goto LoadScriptFileEnd;
     }
 
-    Script = malloc(sizeof(SETUP_SCRIPT));
+    Script = malloc(sizeof(CHALK_SCRIPT));
     if (Script == NULL) {
         Status = errno;
         goto LoadScriptFileEnd;
     }
 
-    memset(Script, 0, sizeof(SETUP_SCRIPT));
+    memset(Script, 0, sizeof(CHALK_SCRIPT));
     Script->Order = Order;
     Script->Path = Path;
     Script->Data = malloc(Stat.st_size + 1);
@@ -384,7 +386,7 @@ Return Value:
     Script->Size = TotalRead;
     INSERT_BEFORE(&(Script->ListEntry), &(Interpreter->ScriptList));
     if (Script->Order == 0) {
-        Status = SetupExecuteScript(Interpreter, Script);
+        Status = ChalkExecuteScript(Interpreter, Script);
         if (Status != 0) {
             LIST_REMOVE(&(Script->ListEntry));
             goto LoadScriptFileEnd;
@@ -411,8 +413,8 @@ LoadScriptFileEnd:
 }
 
 INT
-SetupExecuteDeferredScripts (
-    PSETUP_INTERPRETER Interpreter,
+ChalkExecuteDeferredScripts (
+    PCHALK_INTERPRETER Interpreter,
     ULONG Order
     )
 
@@ -440,19 +442,19 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PSETUP_SCRIPT Script;
+    PCHALK_SCRIPT Script;
     INT Status;
 
     Status = 0;
     CurrentEntry = Interpreter->ScriptList.Next;
     while (CurrentEntry != &(Interpreter->ScriptList)) {
-        Script = LIST_VALUE(CurrentEntry, SETUP_SCRIPT, ListEntry);
+        Script = LIST_VALUE(CurrentEntry, CHALK_SCRIPT, ListEntry);
         CurrentEntry = CurrentEntry->Next;
         if ((Script->ParseTree != NULL) || (Script->Order != Order)) {
             continue;
         }
 
-        Status = SetupExecuteScript(Interpreter, Script);
+        Status = ChalkExecuteScript(Interpreter, Script);
         if (Status != 0) {
             goto ExecuteDeferredScriptsEnd;
         }
@@ -462,11 +464,11 @@ ExecuteDeferredScriptsEnd:
     return Status;
 }
 
-PSETUP_OBJECT
-SetupGetVariable (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT Name,
-    PSETUP_OBJECT **LValue
+PCHALK_OBJECT
+ChalkGetVariable (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Name,
+    PCHALK_OBJECT **LValue
     )
 
 /*++
@@ -496,10 +498,10 @@ Return Value:
 
 {
 
-    PSETUP_DICT_ENTRY Result;
-    PSETUP_SCOPE Scope;
+    PCHALK_DICT_ENTRY Result;
+    PCHALK_SCOPE Scope;
 
-    assert(Name->Header.Type == SetupObjectString);
+    assert(Name->Header.Type == ChalkObjectString);
 
     //
     // Loop searching in all visible scopes.
@@ -507,9 +509,9 @@ Return Value:
 
     Scope = Interpreter->Scope;
     while (Scope != NULL) {
-        Result = SetupDictLookup(Scope->Dict, Name);
+        Result = ChalkDictLookup(Scope->Dict, Name);
         if (Result != NULL) {
-            SetupObjectAddReference(Result->Value);
+            ChalkObjectAddReference(Result->Value);
             if (LValue != NULL) {
                 *LValue = &(Result->Value);
             }
@@ -528,9 +530,9 @@ Return Value:
     // Also search the global scope.
     //
 
-    Result = SetupDictLookup(Interpreter->Global.Dict, Name);
+    Result = ChalkDictLookup(Interpreter->Global.Dict, Name);
     if (Result != NULL) {
-        SetupObjectAddReference(Result->Value);
+        ChalkObjectAddReference(Result->Value);
         if (LValue != NULL) {
             *LValue = &(Result->Value);
         }
@@ -542,11 +544,11 @@ Return Value:
 }
 
 INT
-SetupSetVariable (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT Name,
-    PSETUP_OBJECT Value,
-    PSETUP_OBJECT **LValue
+ChalkSetVariable (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Name,
+    PCHALK_OBJECT Value,
+    PCHALK_OBJECT **LValue
     )
 
 /*++
@@ -578,14 +580,14 @@ Return Value:
 
 {
 
-    PSETUP_SCOPE Scope;
+    PCHALK_SCOPE Scope;
 
     Scope = Interpreter->Scope;
     if (Scope == NULL) {
         Scope = &(Interpreter->Global);
     }
 
-    return SetupDictSetElement(Scope->Dict, Name, Value, LValue);
+    return ChalkDictSetElement(Scope->Dict, Name, Value, LValue);
 }
 
 //
@@ -593,9 +595,9 @@ Return Value:
 //
 
 INT
-SetupExecuteScript (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_SCRIPT Script
+ChalkExecuteScript (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_SCRIPT Script
     )
 
 /*++
@@ -624,25 +626,25 @@ Return Value:
 
     assert(Script->ParseTree == NULL);
 
-    Status = SetupParseScript(Script, &(Script->ParseTree));
+    Status = ChalkParseScript(Script, &(Script->ParseTree));
     if (Status != 0) {
         Status = ENOMEM;
         goto ExecuteScriptEnd;
     }
 
-    Status = SetupPushNode(Interpreter, Script->ParseTree, Script, FALSE);
+    Status = ChalkPushNode(Interpreter, Script->ParseTree, Script, FALSE);
     if (Status != 0) {
         goto ExecuteScriptEnd;
     }
 
-    Status = SetupExecute(Interpreter);
+    Status = ChalkExecute(Interpreter);
     if (Status != 0) {
         goto ExecuteScriptEnd;
     }
 
-    if (SetupDebugFinalGlobals != FALSE) {
+    if (ChalkDebugFinalGlobals != FALSE) {
         printf("Globals: ");
-        SetupPrintObject(Interpreter->Global.Dict, 0);
+        ChalkPrintObject(Interpreter->Global.Dict, 0);
         printf("\n");
     }
 
@@ -651,8 +653,8 @@ ExecuteScriptEnd:
 }
 
 INT
-SetupExecute (
-    PSETUP_INTERPRETER Interpreter
+ChalkExecute (
+    PCHALK_INTERPRETER Interpreter
     )
 
 /*++
@@ -676,12 +678,12 @@ Return Value:
 {
 
     ULONG GrammarIndex;
-    PSETUP_NODE Node;
-    PSETUP_NODE Parent;
+    PCHALK_NODE Node;
+    PCHALK_NODE Parent;
     PPARSER_NODE ParseNode;
-    PSETUP_OBJECT Result;
+    PCHALK_OBJECT Result;
     INT Status;
-    PSETUP_NODE_VISIT VisitFunction;
+    PCHALK_NODE_VISIT VisitFunction;
 
     while (Interpreter->Node != NULL) {
         Node = Interpreter->Node;
@@ -692,7 +694,7 @@ Return Value:
         //
 
         if (Node->ChildIndex < ParseNode->NodeCount) {
-            Status = SetupPushNode(Interpreter,
+            Status = ChalkPushNode(Interpreter,
                                    ParseNode->Nodes[Node->ChildIndex],
                                    Node->Script,
                                    FALSE);
@@ -709,13 +711,13 @@ Return Value:
 
         } else {
             Result = NULL;
-            GrammarIndex = ParseNode->GrammarElement - SetupNodeBegin;
-            VisitFunction = SetupNodeVisit[GrammarIndex];
-            if (SetupDebugNodeVisits != FALSE) {
+            GrammarIndex = ParseNode->GrammarElement - ChalkNodeBegin;
+            VisitFunction = ChalkNodeVisit[GrammarIndex];
+            if (ChalkDebugNodeVisits != FALSE) {
                 printf("%*s%s 0x%x 0x%x\n",
                        Interpreter->NodeDepth,
                        "",
-                       SetupGetNodeGrammarName(Node),
+                       ChalkGetNodeGrammarName(Node),
                        Node,
                        ParseNode);
             }
@@ -759,7 +761,7 @@ Return Value:
                 }
 
             } else if (Result != NULL) {
-                SetupObjectReleaseReference(Result);
+                ChalkObjectReleaseReference(Result);
             }
 
             //
@@ -768,22 +770,22 @@ Return Value:
             //
 
             if (Node == Interpreter->Node) {
-                SetupPopNode(Interpreter);
+                ChalkPopNode(Interpreter);
             }
         }
     }
 
     while (Interpreter->Node != NULL) {
-        SetupPopNode(Interpreter);
+        ChalkPopNode(Interpreter);
     }
 
     return Status;
 }
 
 VOID
-SetupUnloadScript (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_SCRIPT Script
+ChalkUnloadScript (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_SCRIPT Script
     )
 
 /*++
@@ -819,10 +821,10 @@ Return Value:
 }
 
 INT
-SetupPushNode (
-    PSETUP_INTERPRETER Interpreter,
+ChalkPushNode (
+    PCHALK_INTERPRETER Interpreter,
     PVOID ParseTree,
-    PSETUP_SCRIPT Script,
+    PCHALK_SCRIPT Script,
     BOOL Function
     )
 
@@ -853,13 +855,13 @@ Return Value:
 
 {
 
-    PSETUP_NODE Node;
+    PCHALK_NODE Node;
     PPARSER_NODE ParseNode;
     ULONG Size;
     INT Status;
 
     ParseNode = ParseTree;
-    Size = sizeof(SETUP_NODE) + (ParseNode->NodeCount * sizeof(PVOID));
+    Size = sizeof(CHALK_NODE) + (ParseNode->NodeCount * sizeof(PVOID));
     Node = malloc(Size);
     if (Node == NULL) {
         return ENOMEM;
@@ -869,9 +871,9 @@ Return Value:
     Node->Parent = Interpreter->Node;
     Node->ParseNode = ParseTree;
     Node->Script = Script;
-    Node->Results = (PSETUP_OBJECT *)(Node + 1);
+    Node->Results = (PCHALK_OBJECT *)(Node + 1);
     if (Function != FALSE) {
-        Status = SetupPushScope(Interpreter, Function);
+        Status = ChalkPushScope(Interpreter, Function);
         if (Status != 0) {
             free(Node);
             return Status;
@@ -886,8 +888,8 @@ Return Value:
 }
 
 VOID
-SetupPopNode (
-    PSETUP_INTERPRETER Interpreter
+ChalkPopNode (
+    PCHALK_INTERPRETER Interpreter
     )
 
 /*++
@@ -910,7 +912,7 @@ Return Value:
 
     ULONG Count;
     ULONG Index;
-    PSETUP_NODE Node;
+    PCHALK_NODE Node;
     PPARSER_NODE ParseNode;
 
     Node = Interpreter->Node;
@@ -925,16 +927,16 @@ Return Value:
     Count = ParseNode->NodeCount;
     for (Index = 0; Index < Count; Index += 1) {
         if (Node->Results[Index] != NULL) {
-            SetupObjectReleaseReference(Node->Results[Index]);
+            ChalkObjectReleaseReference(Node->Results[Index]);
         }
     }
 
     if (Node->BaseScope != NULL) {
         while (Interpreter->Scope != Node->BaseScope) {
-            SetupPopScope(Interpreter);
+            ChalkPopScope(Interpreter);
         }
 
-        SetupPopScope(Interpreter);
+        ChalkPopScope(Interpreter);
     }
 
     Interpreter->Node = Node->Parent;
@@ -944,8 +946,8 @@ Return Value:
 }
 
 INT
-SetupPushScope (
-    PSETUP_INTERPRETER Interpreter,
+ChalkPushScope (
+    PCHALK_INTERPRETER Interpreter,
     BOOL Function
     )
 
@@ -972,17 +974,17 @@ Return Value:
 
 {
 
-    PSETUP_SCOPE Scope;
+    PCHALK_SCOPE Scope;
 
-    Scope = malloc(sizeof(SETUP_SCOPE));
+    Scope = malloc(sizeof(CHALK_SCOPE));
     if (Scope == NULL) {
         return ENOMEM;
     }
 
-    memset(Scope, 0, sizeof(SETUP_SCOPE));
+    memset(Scope, 0, sizeof(CHALK_SCOPE));
     Scope->Parent = Interpreter->Scope;
     Scope->Function = Function;
-    Scope->Dict = SetupCreateDict(NULL);
+    Scope->Dict = ChalkCreateDict(NULL);
     if (Scope->Dict == NULL) {
         free(Scope);
         return ENOMEM;
@@ -993,8 +995,8 @@ Return Value:
 }
 
 VOID
-SetupPopScope (
-    PSETUP_INTERPRETER Interpreter
+ChalkPopScope (
+    PCHALK_INTERPRETER Interpreter
     )
 
 /*++
@@ -1015,11 +1017,11 @@ Return Value:
 
 {
 
-    PSETUP_SCOPE Scope;
+    PCHALK_SCOPE Scope;
 
     Scope = Interpreter->Scope;
     Interpreter->Scope = Scope->Parent;
-    SetupObjectReleaseReference(Scope->Dict);
+    ChalkObjectReleaseReference(Scope->Dict);
     free(Scope);
     return;
 }

@@ -4,12 +4,11 @@ Copyright (c) 2015 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    interp.h
+    chalk.h
 
 Abstract:
 
-    This header contains definitions for the interpreter built into the setup
-    application.
+    This header contains definitions for the Chalk interpreter.
 
 Author:
 
@@ -35,7 +34,7 @@ Author:
 
 Structure Description:
 
-    This structure stores the data for a setup script (text).
+    This structure stores the data for a Chalk script (text).
 
 Members:
 
@@ -54,16 +53,16 @@ Members:
 
 --*/
 
-typedef struct _SETUP_SCRIPT {
+typedef struct _CHALK_SCRIPT {
     LIST_ENTRY ListEntry;
     PSTR Path;
     PSTR Data;
     ULONG Size;
     PVOID ParseTree;
     ULONG Order;
-} SETUP_SCRIPT, *PSETUP_SCRIPT;
+} CHALK_SCRIPT, *PCHALK_SCRIPT;
 
-typedef struct _SETUP_SCOPE SETUP_SCOPE, *PSETUP_SCOPE;
+typedef struct _CHALK_SCOPE CHALK_SCOPE, *PCHALK_SCOPE;
 
 /*++
 
@@ -84,13 +83,13 @@ Members:
 
 --*/
 
-struct _SETUP_SCOPE {
-    PSETUP_SCOPE Parent;
-    PSETUP_OBJECT Dict;
+struct _CHALK_SCOPE {
+    PCHALK_SCOPE Parent;
+    PCHALK_OBJECT Dict;
     BOOL Function;
 };
 
-typedef struct _SETUP_NODE SETUP_NODE, *PSETUP_NODE;
+typedef struct _CHALK_NODE CHALK_NODE, *PCHALK_NODE;
 
 /*++
 
@@ -119,21 +118,21 @@ Members:
 
 --*/
 
-struct _SETUP_NODE {
-    PSETUP_NODE Parent;
-    PSETUP_SCOPE BaseScope;
+struct _CHALK_NODE {
+    PCHALK_NODE Parent;
+    PCHALK_SCOPE BaseScope;
     PVOID ParseNode;
     ULONG ChildIndex;
-    PSETUP_SCRIPT Script;
-    PSETUP_OBJECT *Results;
-    PSETUP_OBJECT *LValue;
+    PCHALK_SCRIPT Script;
+    PCHALK_OBJECT *Results;
+    PCHALK_OBJECT *LValue;
 };
 
 /*++
 
 Structure Description:
 
-    This structure stores the interpreter context in the setup application.
+    This structure stores the interpreter context in the Chalk application.
 
 Members:
 
@@ -149,37 +148,37 @@ Members:
 
 --*/
 
-typedef struct _SETUP_INTERPRETER {
-    SETUP_SCOPE Global;
-    PSETUP_SCOPE Scope;
-    PSETUP_NODE Node;
+typedef struct _CHALK_INTERPRETER {
+    CHALK_SCOPE Global;
+    PCHALK_SCOPE Scope;
+    PCHALK_NODE Node;
     ULONG NodeDepth;
     LIST_ENTRY ScriptList;
-} SETUP_INTERPRETER, *PSETUP_INTERPRETER;
+} CHALK_INTERPRETER, *PCHALK_INTERPRETER;
 
 //
 // Data types for interfacing the interpreter with the C language.
 //
 
-typedef enum _SETUP_C_TYPE {
-    SetupCTypeInvalid,
-    SetupCInt8,
-    SetupCUint8,
-    SetupCInt16,
-    SetupCUint16,
-    SetupCInt32,
-    SetupCUint32,
-    SetupCInt64,
-    SetupCUint64,
-    SetupCString,
-    SetupCByteArray,
-    SetupCFlag32,
-    SetupCSubStructure,
-    SetupCStructurePointer,
-} SETUP_C_TYPE, *PSETUP_C_TYPE;
+typedef enum _CHALK_C_TYPE {
+    ChalkCTypeInvalid,
+    ChalkCInt8,
+    ChalkCUint8,
+    ChalkCInt16,
+    ChalkCUint16,
+    ChalkCInt32,
+    ChalkCUint32,
+    ChalkCInt64,
+    ChalkCUint64,
+    ChalkCString,
+    ChalkCByteArray,
+    ChalkCFlag32,
+    ChalkCSubStructure,
+    ChalkCStructurePointer,
+} CHALK_C_TYPE, *PCHALK_C_TYPE;
 
-typedef struct _SETUP_C_STRUCTURE_MEMBER
-    SETUP_C_STRUCTURE_MEMBER, *PSETUP_C_STRUCTURE_MEMBER;
+typedef struct _CHALK_C_STRUCTURE_MEMBER
+    CHALK_C_STRUCTURE_MEMBER, *PCHALK_C_STRUCTURE_MEMBER;
 
 /*++
 
@@ -212,15 +211,15 @@ Members:
 
 --*/
 
-struct _SETUP_C_STRUCTURE_MEMBER {
-    SETUP_C_TYPE Type;
+struct _CHALK_C_STRUCTURE_MEMBER {
+    CHALK_C_TYPE Type;
     PSTR Key;
     ULONG Offset;
     BOOL Required;
     union {
         UINTN Mask;
         UINTN Size;
-        PSETUP_C_STRUCTURE_MEMBER SubStructure;
+        PCHALK_C_STRUCTURE_MEMBER SubStructure;
     } U;
 };
 
@@ -233,15 +232,15 @@ struct _SETUP_C_STRUCTURE_MEMBER {
 //
 
 INT
-SetupInitializeInterpreter (
-    PSETUP_INTERPRETER Interpreter
+ChalkInitializeInterpreter (
+    PCHALK_INTERPRETER Interpreter
     );
 
 /*++
 
 Routine Description:
 
-    This routine initializes a setup interpreter.
+    This routine initializes a Chalk interpreter.
 
 Arguments:
 
@@ -254,15 +253,15 @@ Return Value:
 --*/
 
 VOID
-SetupDestroyInterpreter (
-    PSETUP_INTERPRETER Interpreter
+ChalkDestroyInterpreter (
+    PCHALK_INTERPRETER Interpreter
     );
 
 /*++
 
 Routine Description:
 
-    This routine destroys a setup interpreter.
+    This routine destroys a Chalk interpreter.
 
 Arguments:
 
@@ -275,8 +274,8 @@ Return Value:
 --*/
 
 INT
-SetupLoadScriptBuffer (
-    PSETUP_INTERPRETER Interpreter,
+ChalkLoadScriptBuffer (
+    PCHALK_INTERPRETER Interpreter,
     PSTR Path,
     PSTR Buffer,
     ULONG Size,
@@ -315,8 +314,8 @@ Return Value:
 --*/
 
 INT
-SetupLoadScriptFile (
-    PSETUP_INTERPRETER Interpreter,
+ChalkLoadScriptFile (
+    PCHALK_INTERPRETER Interpreter,
     PSTR Path,
     ULONG Order
     );
@@ -345,8 +344,8 @@ Return Value:
 --*/
 
 INT
-SetupExecuteDeferredScripts (
-    PSETUP_INTERPRETER Interpreter,
+ChalkExecuteDeferredScripts (
+    PCHALK_INTERPRETER Interpreter,
     ULONG Order
     );
 
@@ -371,11 +370,11 @@ Return Value:
 
 --*/
 
-PSETUP_OBJECT
-SetupGetVariable (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT Name,
-    PSETUP_OBJECT **LValue
+PCHALK_OBJECT
+ChalkGetVariable (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Name,
+    PCHALK_OBJECT **LValue
     );
 
 /*++
@@ -404,11 +403,11 @@ Return Value:
 --*/
 
 INT
-SetupSetVariable (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT Name,
-    PSETUP_OBJECT Value,
-    PSETUP_OBJECT **LValue
+ChalkSetVariable (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Name,
+    PCHALK_OBJECT Value,
+    PCHALK_OBJECT **LValue
     );
 
 /*++
@@ -439,8 +438,8 @@ Return Value:
 --*/
 
 INT
-SetupParseScript (
-    PSETUP_SCRIPT Script,
+ChalkParseScript (
+    PCHALK_SCRIPT Script,
     PVOID *TranslationUnit
     );
 
@@ -466,7 +465,7 @@ Return Value:
 --*/
 
 VOID
-SetupDestroyParseTree (
+ChalkDestroyParseTree (
     PVOID TranslationUnit
     );
 
@@ -488,8 +487,8 @@ Return Value:
 --*/
 
 PSTR
-SetupGetNodeGrammarName (
-    PSETUP_NODE Node
+ChalkGetNodeGrammarName (
+    PCHALK_NODE Node
     );
 
 /*++
@@ -514,10 +513,10 @@ Return Value:
 //
 
 INT
-SetupConvertDictToStructure (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT Dict,
-    PSETUP_C_STRUCTURE_MEMBER Members,
+ChalkConvertDictToStructure (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Dict,
+    PCHALK_C_STRUCTURE_MEMBER Members,
     PVOID Structure
     );
 
@@ -553,11 +552,11 @@ Return Value:
 --*/
 
 INT
-SetupConvertStructureToDict (
-    PSETUP_INTERPRETER Interpreter,
+ChalkConvertStructureToDict (
+    PCHALK_INTERPRETER Interpreter,
     PVOID Structure,
-    PSETUP_C_STRUCTURE_MEMBER Members,
-    PSETUP_OBJECT Dict
+    PCHALK_C_STRUCTURE_MEMBER Members,
+    PCHALK_OBJECT Dict
     );
 
 /*++
@@ -590,9 +589,9 @@ Return Value:
 --*/
 
 INT
-SetupReadStringsList (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT List,
+ChalkReadStringsList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT List,
     PSTR **StringsArray
     );
 
@@ -625,10 +624,10 @@ Return Value:
 --*/
 
 INT
-SetupWriteStringsList (
-    PSETUP_INTERPRETER Interpreter,
+ChalkWriteStringsList (
+    PCHALK_INTERPRETER Interpreter,
     PSTR *StringsArray,
-    PSETUP_OBJECT List
+    PCHALK_OBJECT List
     );
 
 /*++
@@ -653,9 +652,9 @@ Return Value:
 
 --*/
 
-PSETUP_OBJECT
-SetupDictLookupCStringKey (
-    PSETUP_OBJECT Dict,
+PCHALK_OBJECT
+ChalkDictLookupCStringKey (
+    PCHALK_OBJECT Dict,
     PSTR Key
     );
 

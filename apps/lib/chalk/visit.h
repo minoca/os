@@ -30,10 +30,10 @@ Author:
 
 typedef
 INT
-(*PSETUP_NODE_VISIT) (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+(*PCHALK_NODE_VISIT) (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -41,7 +41,7 @@ INT
 Routine Description:
 
     This routine is called to visit a particular node in the Abstract Syntax
-    Tree for the setup script interpreter.
+    Tree for the Chalk script interpreter.
 
 Arguments:
 
@@ -69,10 +69,10 @@ Return Value:
 //
 
 INT
-SetupVisitListElementList (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitListElementList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -99,10 +99,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitList (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -129,10 +129,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitDictElement (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitDictElement (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -159,10 +159,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitDictElementList (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitDictElementList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -189,10 +189,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitDict (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitDict (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -219,10 +219,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitPrimaryExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitPrimaryExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -249,10 +249,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitStatementList (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitStatementList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -279,10 +279,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitTranslationUnit (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitTranslationUnit (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -309,10 +309,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitPostfixExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitPostfixExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -339,10 +339,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitUnaryExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitUnaryExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -369,10 +369,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitUnaryOperator (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitUnaryOperator (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -399,10 +399,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitMultiplicativeExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitMultiplicativeExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -429,10 +429,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitAdditiveExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitAdditiveExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -459,10 +459,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitShiftExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitShiftExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -489,10 +489,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitRelationalExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitRelationalExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -519,10 +519,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitEqualityExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitEqualityExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -549,10 +549,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitAndExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitAndExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -579,10 +579,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitExclusiveOrExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitExclusiveOrExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -609,10 +609,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitInclusiveOrExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitInclusiveOrExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -639,10 +639,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitLogicalAndExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitLogicalAndExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -669,10 +669,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitLogicalOrExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitLogicalOrExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -699,10 +699,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitConditionalExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitConditionalExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -729,10 +729,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitAssignmentExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitAssignmentExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -759,10 +759,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitAssignmentOperator (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitAssignmentOperator (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -789,10 +789,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -819,10 +819,10 @@ Return Value:
 --*/
 
 INT
-SetupVisitExpressionStatement (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitExpressionStatement (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -847,3 +847,4 @@ Return Value:
     Returns an error number on catastrophic failure.
 
 --*/
+

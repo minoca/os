@@ -8,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This module handles low level object manipulation for setup.
+    This module handles low level object manipulation for Chalk.
 
 Author:
 
@@ -30,7 +30,7 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 
-#include "../setup.h"
+#include "chalkp.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -45,36 +45,36 @@ Environment:
 //
 
 VOID
-SetupGutObject (
-    PSETUP_OBJECT Object
+ChalkGutObject (
+    PCHALK_OBJECT Object
     );
 
 VOID
-SetupDestroyList (
-    PSETUP_OBJECT List
+ChalkDestroyList (
+    PCHALK_OBJECT List
     );
 
 VOID
-SetupDestroyDict (
-    PSETUP_OBJECT Dict
+ChalkDestroyDict (
+    PCHALK_OBJECT Dict
     );
 
 VOID
-SetupDestroyDictEntry (
-    PSETUP_DICT_ENTRY Entry
+ChalkDestroyDictEntry (
+    PCHALK_DICT_ENTRY Entry
     );
 
-COMPARISON_RESULT
-SetupCompareObjects (
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right
+LONG
+ChalkCompareObjects (
+    PCHALK_OBJECT Left,
+    PCHALK_OBJECT Right
     );
 
 //
 // -------------------------------------------------------------------- Globals
 //
 
-PSTR SetupObjectTypeNames[SetupObjectCount] = {
+PSTR ChalkObjectTypeNames[ChalkObjectCount] = {
     "INVALID",
     "integer",
     "string",
@@ -87,8 +87,8 @@ PSTR SetupObjectTypeNames[SetupObjectCount] = {
 // ------------------------------------------------------------------ Functions
 //
 
-PSETUP_OBJECT
-SetupCreateInteger (
+PCHALK_OBJECT
+ChalkCreateInteger (
     LONGLONG Value
     )
 
@@ -112,22 +112,22 @@ Return Value:
 
 {
 
-    PSETUP_INT Int;
+    PCHALK_INT Int;
 
-    Int = malloc(sizeof(SETUP_OBJECT));
+    Int = malloc(sizeof(CHALK_OBJECT));
     if (Int == NULL) {
         return NULL;
     }
 
-    memset(Int, 0, sizeof(SETUP_OBJECT));
-    Int->Header.Type = SetupObjectInteger;
+    memset(Int, 0, sizeof(CHALK_OBJECT));
+    Int->Header.Type = ChalkObjectInteger;
     Int->Header.ReferenceCount = 1;
     Int->Value = Value;
-    return (PSETUP_OBJECT)Int;
+    return (PCHALK_OBJECT)Int;
 }
 
-PSETUP_OBJECT
-SetupCreateString (
+PCHALK_OBJECT
+ChalkCreateString (
     PSTR InitialValue,
     ULONG Size
     )
@@ -155,14 +155,14 @@ Return Value:
 {
 
     ULONG AllocateSize;
-    PSETUP_STRING String;
+    PCHALK_STRING String;
 
-    String = malloc(sizeof(SETUP_OBJECT));
+    String = malloc(sizeof(CHALK_OBJECT));
     if (String == NULL) {
         return NULL;
     }
 
-    memset(String, 0, sizeof(SETUP_OBJECT));
+    memset(String, 0, sizeof(CHALK_OBJECT));
     AllocateSize = Size + 1;
     String->String = malloc(AllocateSize);
     if (String->String == NULL) {
@@ -173,16 +173,16 @@ Return Value:
     memcpy(String->String, InitialValue, Size);
     String->String[AllocateSize - 1] = '\0';
     String->Size = Size;
-    String->Header.Type = SetupObjectString;
+    String->Header.Type = ChalkObjectString;
     String->Header.ReferenceCount = 1;
-    return (PSETUP_OBJECT)String;
+    return (PCHALK_OBJECT)String;
 }
 
 INT
-SetupStringAdd (
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right,
-    PSETUP_OBJECT *Result
+ChalkStringAdd (
+    PCHALK_OBJECT Left,
+    PCHALK_OBJECT Right,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -210,12 +210,12 @@ Return Value:
 {
 
     ULONG Size;
-    PSETUP_OBJECT String;
+    PCHALK_OBJECT String;
 
-    assert((Left->Header.Type == SetupObjectString) &&
-           (Right->Header.Type == SetupObjectString));
+    assert((Left->Header.Type == ChalkObjectString) &&
+           (Right->Header.Type == ChalkObjectString));
 
-    String = SetupCreateString(NULL, 0);
+    String = ChalkCreateString(NULL, 0);
     if (String == NULL) {
         return ENOMEM;
     }
@@ -227,7 +227,7 @@ Return Value:
     Size = Left->String.Size + Right->String.Size;
     String->String.String = malloc(Size + 1);
     if (String->String.String == NULL) {
-        SetupObjectReleaseReference(String);
+        ChalkObjectReleaseReference(String);
         return ENOMEM;
     }
 
@@ -242,9 +242,9 @@ Return Value:
     return 0;
 }
 
-PSETUP_OBJECT
-SetupCreateList (
-    PSETUP_OBJECT *InitialValues,
+PCHALK_OBJECT
+ChalkCreateList (
+    PCHALK_OBJECT *InitialValues,
     ULONG Size
     )
 
@@ -272,15 +272,15 @@ Return Value:
 {
 
     ULONG Index;
-    PSETUP_LIST List;
+    PCHALK_LIST List;
 
-    List = malloc(sizeof(SETUP_OBJECT));
+    List = malloc(sizeof(CHALK_OBJECT));
     if (List == NULL) {
         return NULL;
     }
 
-    memset(List, 0, sizeof(SETUP_OBJECT));
-    List->Header.Type = SetupObjectList;
+    memset(List, 0, sizeof(CHALK_OBJECT));
+    List->Header.Type = ChalkObjectList;
     List->Header.ReferenceCount = 1;
     if (Size != 0) {
         List->Array = malloc(Size * sizeof(PVOID));
@@ -294,7 +294,7 @@ Return Value:
             memcpy(List->Array, InitialValues, Size * sizeof(PVOID));
             for (Index = 0; Index < Size; Index += 1) {
                 if (List->Array[Index] != NULL) {
-                    SetupObjectAddReference(List->Array[Index]);
+                    ChalkObjectAddReference(List->Array[Index]);
                 }
             }
 
@@ -303,12 +303,12 @@ Return Value:
         }
     }
 
-    return (PSETUP_OBJECT)List;
+    return (PCHALK_OBJECT)List;
 }
 
-PSETUP_OBJECT
-SetupListLookup (
-    PSETUP_OBJECT List,
+PCHALK_OBJECT
+ChalkListLookup (
+    PCHALK_OBJECT List,
     ULONG Index
     )
 
@@ -335,9 +335,9 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT Object;
+    PCHALK_OBJECT Object;
 
-    assert(List->Header.Type == SetupObjectList);
+    assert(List->Header.Type == ChalkObjectList);
 
     if (Index >= List->List.Count) {
         return NULL;
@@ -345,17 +345,17 @@ Return Value:
 
     Object = List->List.Array[Index];
     if (Object != NULL) {
-        SetupObjectAddReference(Object);
+        ChalkObjectAddReference(Object);
     }
 
     return Object;
 }
 
 INT
-SetupListSetElement (
-    PSETUP_OBJECT ListObject,
+ChalkListSetElement (
+    PCHALK_OBJECT ListObject,
     ULONG Index,
-    PSETUP_OBJECT Object
+    PCHALK_OBJECT Object
     )
 
 /*++
@@ -383,12 +383,12 @@ Return Value:
 
 {
 
-    PSETUP_LIST List;
+    PCHALK_LIST List;
     PVOID NewBuffer;
 
-    assert(ListObject->Header.Type == SetupObjectList);
+    assert(ListObject->Header.Type == ChalkObjectList);
 
-    List = (PSETUP_LIST)ListObject;
+    List = (PCHALK_LIST)ListObject;
     if (List->Count <= Index) {
         NewBuffer = realloc(List->Array, sizeof(PVOID) * (Index + 1));
         if (NewBuffer == NULL) {
@@ -404,21 +404,21 @@ Return Value:
     }
 
     if (List->Array[Index] != NULL) {
-        SetupObjectReleaseReference(List->Array[Index]);
+        ChalkObjectReleaseReference(List->Array[Index]);
     }
 
     List->Array[Index] = Object;
     if (Object != NULL) {
-        SetupObjectAddReference(Object);
+        ChalkObjectAddReference(Object);
     }
 
     return 0;
 }
 
 INT
-SetupListAdd (
-    PSETUP_OBJECT Destination,
-    PSETUP_OBJECT Addition
+ChalkListAdd (
+    PCHALK_OBJECT Destination,
+    PCHALK_OBJECT Addition
     )
 
 /*++
@@ -445,16 +445,16 @@ Return Value:
 {
 
     ULONG Index;
-    PSETUP_LIST LeftList;
-    PSETUP_OBJECT *NewArray;
+    PCHALK_LIST LeftList;
+    PCHALK_OBJECT *NewArray;
     ULONG NewSize;
-    PSETUP_LIST RightList;
+    PCHALK_LIST RightList;
 
-    LeftList = (PSETUP_LIST)Destination;
-    RightList = (PSETUP_LIST)Addition;
+    LeftList = (PCHALK_LIST)Destination;
+    RightList = (PCHALK_LIST)Addition;
 
-    assert((LeftList->Header.Type == SetupObjectList) &&
-           (RightList->Header.Type == SetupObjectList));
+    assert((LeftList->Header.Type == ChalkObjectList) &&
+           (RightList->Header.Type == ChalkObjectList));
 
     NewSize = LeftList->Count + RightList->Count;
     NewArray = realloc(LeftList->Array, NewSize * sizeof(PVOID));
@@ -466,7 +466,7 @@ Return Value:
     for (Index = LeftList->Count; Index < NewSize; Index += 1) {
         NewArray[Index] = RightList->Array[Index - LeftList->Count];
         if (NewArray[Index] != NULL) {
-            SetupObjectAddReference(NewArray[Index]);
+            ChalkObjectAddReference(NewArray[Index]);
         }
     }
 
@@ -474,9 +474,9 @@ Return Value:
     return 0;
 }
 
-PSETUP_OBJECT
-SetupCreateDict (
-    PSETUP_OBJECT Source
+PCHALK_OBJECT
+ChalkCreateDict (
+    PCHALK_OBJECT Source
     )
 
 /*++
@@ -500,30 +500,30 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PSETUP_OBJECT Dict;
-    PSETUP_DICT_ENTRY Entry;
+    PCHALK_OBJECT Dict;
+    PCHALK_DICT_ENTRY Entry;
     INT Status;
 
-    Dict = malloc(sizeof(SETUP_OBJECT));
+    Dict = malloc(sizeof(CHALK_OBJECT));
     if (Dict == NULL) {
         return NULL;
     }
 
-    memset(Dict, 0, sizeof(SETUP_OBJECT));
-    Dict->Header.Type = SetupObjectDict;
+    memset(Dict, 0, sizeof(CHALK_OBJECT));
+    Dict->Header.Type = ChalkObjectDict;
     Dict->Header.ReferenceCount = 1;
     INITIALIZE_LIST_HEAD(&(Dict->Dict.EntryList));
     if (Source != NULL) {
 
-        assert(Source->Header.Type == SetupObjectDict);
+        assert(Source->Header.Type == ChalkObjectDict);
 
         CurrentEntry = Source->Dict.EntryList.Next;
         while (CurrentEntry != &(Source->Dict.EntryList)) {
-            Entry = LIST_VALUE(CurrentEntry, SETUP_DICT_ENTRY, ListEntry);
+            Entry = LIST_VALUE(CurrentEntry, CHALK_DICT_ENTRY, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            Status = SetupDictSetElement(Dict, Entry->Key, Entry->Value, NULL);
+            Status = ChalkDictSetElement(Dict, Entry->Key, Entry->Value, NULL);
             if (Status != 0) {
-                SetupObjectReleaseReference(Dict);
+                ChalkObjectReleaseReference(Dict);
                 return NULL;
             }
         }
@@ -533,11 +533,11 @@ Return Value:
 }
 
 INT
-SetupDictSetElement (
-    PSETUP_OBJECT DictObject,
-    PSETUP_OBJECT Key,
-    PSETUP_OBJECT Value,
-    PSETUP_OBJECT **LValue
+ChalkDictSetElement (
+    PCHALK_OBJECT DictObject,
+    PCHALK_OBJECT Key,
+    PCHALK_OBJECT Value,
+    PCHALK_OBJECT **LValue
     )
 
 /*++
@@ -569,42 +569,42 @@ Return Value:
 
 {
 
-    PSETUP_DICT_ENTRY Entry;
+    PCHALK_DICT_ENTRY Entry;
 
-    assert(DictObject->Header.Type == SetupObjectDict);
+    assert(DictObject->Header.Type == ChalkObjectDict);
     assert(Key != NULL);
 
-    if ((Key->Header.Type != SetupObjectInteger) &&
-        (Key->Header.Type != SetupObjectString)) {
+    if ((Key->Header.Type != ChalkObjectInteger) &&
+        (Key->Header.Type != ChalkObjectString)) {
 
         fprintf(stderr,
                 "Cannot add type %s as dictionary key.\n",
-                SetupObjectTypeNames[Key->Header.Type]);
+                ChalkObjectTypeNames[Key->Header.Type]);
 
         return EINVAL;
     }
 
-    Entry = SetupDictLookup(DictObject, Key);
+    Entry = ChalkDictLookup(DictObject, Key);
 
     //
     // If there is no entry, replace it.
     //
 
     if (Entry == NULL) {
-        Entry = malloc(sizeof(SETUP_DICT_ENTRY));
+        Entry = malloc(sizeof(CHALK_DICT_ENTRY));
         if (Entry == NULL) {
             return ENOMEM;
         }
 
-        memset(Entry, 0, sizeof(SETUP_DICT_ENTRY));
+        memset(Entry, 0, sizeof(CHALK_DICT_ENTRY));
         Entry->Key = Key;
-        SetupObjectAddReference(Key);
+        ChalkObjectAddReference(Key);
         INSERT_BEFORE(&(Entry->ListEntry), &(DictObject->Dict.EntryList));
     }
 
-    SetupObjectAddReference(Value);
+    ChalkObjectAddReference(Value);
     if (Entry->Value != NULL) {
-        SetupObjectReleaseReference(Entry->Value);
+        ChalkObjectReleaseReference(Entry->Value);
     }
 
     Entry->Value = Value;
@@ -615,10 +615,10 @@ Return Value:
     return 0;
 }
 
-PSETUP_DICT_ENTRY
-SetupDictLookup (
-    PSETUP_OBJECT DictObject,
-    PSETUP_OBJECT Key
+PCHALK_DICT_ENTRY
+ChalkDictLookup (
+    PCHALK_OBJECT DictObject,
+    PCHALK_OBJECT Key
     )
 
 /*++
@@ -645,17 +645,17 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PSETUP_DICT Dict;
-    PSETUP_DICT_ENTRY Entry;
+    PCHALK_DICT Dict;
+    PCHALK_DICT_ENTRY Entry;
 
-    assert(DictObject->Header.Type == SetupObjectDict);
+    assert(DictObject->Header.Type == ChalkObjectDict);
 
-    Dict = (PSETUP_DICT)DictObject;
+    Dict = (PCHALK_DICT)DictObject;
     CurrentEntry = Dict->EntryList.Next;
     while (CurrentEntry != &(Dict->EntryList)) {
-        Entry = LIST_VALUE(CurrentEntry, SETUP_DICT_ENTRY, ListEntry);
+        Entry = LIST_VALUE(CurrentEntry, CHALK_DICT_ENTRY, ListEntry);
         CurrentEntry = CurrentEntry->Next;
-        if (SetupCompareObjects(Entry->Key, Key) == ComparisonResultSame) {
+        if (ChalkCompareObjects(Entry->Key, Key) == 0) {
             return Entry;
         }
     }
@@ -664,9 +664,9 @@ Return Value:
 }
 
 INT
-SetupDictAdd (
-    PSETUP_OBJECT Destination,
-    PSETUP_OBJECT Addition
+ChalkDictAdd (
+    PCHALK_OBJECT Destination,
+    PCHALK_OBJECT Addition
     )
 
 /*++
@@ -693,17 +693,17 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PSETUP_DICT_ENTRY Entry;
+    PCHALK_DICT_ENTRY Entry;
     INT Status;
 
-    assert(Destination->Header.Type == SetupObjectDict);
-    assert(Addition->Header.Type == SetupObjectDict);
+    assert(Destination->Header.Type == ChalkObjectDict);
+    assert(Addition->Header.Type == ChalkObjectDict);
 
     CurrentEntry = Addition->Dict.EntryList.Next;
     while (CurrentEntry != &(Addition->Dict.EntryList)) {
-        Entry = LIST_VALUE(CurrentEntry, SETUP_DICT_ENTRY, ListEntry);
+        Entry = LIST_VALUE(CurrentEntry, CHALK_DICT_ENTRY, ListEntry);
         CurrentEntry = CurrentEntry->Next;
-        Status = SetupDictSetElement(Destination,
+        Status = ChalkDictSetElement(Destination,
                                      Entry->Key,
                                      Entry->Value,
                                      NULL);
@@ -716,9 +716,9 @@ Return Value:
     return 0;
 }
 
-PSETUP_OBJECT
-SetupCreateReference (
-    PSETUP_OBJECT ReferenceTo
+PCHALK_OBJECT
+ChalkCreateReference (
+    PCHALK_OBJECT ReferenceTo
     )
 
 /*++
@@ -741,26 +741,26 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT Reference;
+    PCHALK_OBJECT Reference;
 
     assert(ReferenceTo != NULL);
 
-    Reference = malloc(sizeof(SETUP_OBJECT));
+    Reference = malloc(sizeof(CHALK_OBJECT));
     if (Reference == NULL) {
         return NULL;
     }
 
-    memset(Reference, 0, sizeof(SETUP_OBJECT));
-    Reference->Header.Type = SetupObjectInteger;
+    memset(Reference, 0, sizeof(CHALK_OBJECT));
+    Reference->Header.Type = ChalkObjectInteger;
     Reference->Header.ReferenceCount = 1;
     Reference->Reference.Value = ReferenceTo;
-    SetupObjectAddReference(ReferenceTo);
+    ChalkObjectAddReference(ReferenceTo);
     return Reference;
 }
 
-PSETUP_OBJECT
-SetupObjectCopy (
-    PSETUP_OBJECT Source
+PCHALK_OBJECT
+ChalkObjectCopy (
+    PCHALK_OBJECT Source
     )
 
 /*++
@@ -783,31 +783,31 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT NewObject;
-    PSETUP_OBJECT Object;
+    PCHALK_OBJECT NewObject;
+    PCHALK_OBJECT Object;
 
     Object = Source;
     switch (Object->Header.Type) {
-    case SetupObjectInteger:
-        NewObject = SetupCreateInteger(Object->Integer.Value);
+    case ChalkObjectInteger:
+        NewObject = ChalkCreateInteger(Object->Integer.Value);
         break;
 
-    case SetupObjectString:
-        NewObject = SetupCreateString(Object->String.String,
+    case ChalkObjectString:
+        NewObject = ChalkCreateString(Object->String.String,
                                       Object->String.Size);
 
         break;
 
-    case SetupObjectList:
-        NewObject = SetupCreateList(Object->List.Array, Object->List.Count);
+    case ChalkObjectList:
+        NewObject = ChalkCreateList(Object->List.Array, Object->List.Count);
         break;
 
-    case SetupObjectDict:
-        NewObject = SetupCreateDict(Object);
+    case ChalkObjectDict:
+        NewObject = ChalkCreateDict(Object);
         break;
 
-    case SetupObjectReference:
-        NewObject = SetupCreateReference(Object->Reference.Value);
+    case ChalkObjectReference:
+        NewObject = ChalkCreateReference(Object->Reference.Value);
         break;
 
     default:
@@ -821,8 +821,8 @@ Return Value:
 }
 
 BOOL
-SetupObjectGetBooleanValue (
-    PSETUP_OBJECT Object
+ChalkObjectGetBooleanValue (
+    PCHALK_OBJECT Object
     )
 
 /*++
@@ -847,24 +847,24 @@ Return Value:
 
     BOOL Result;
 
-    if (Object->Header.Type == SetupObjectReference) {
+    if (Object->Header.Type == ChalkObjectReference) {
         Object = Object->Reference.Value;
     }
 
     switch (Object->Header.Type) {
-    case SetupObjectInteger:
+    case ChalkObjectInteger:
         Result = (Object->Integer.Value != 0);
         break;
 
-    case SetupObjectString:
+    case ChalkObjectString:
         Result = (Object->String.Size != 0);
         break;
 
-    case SetupObjectList:
+    case ChalkObjectList:
         Result = (Object->List.Count != 0);
         break;
 
-    case SetupObjectDict:
+    case ChalkObjectDict:
         Result = !LIST_EMPTY(&(Object->Dict.EntryList));
         break;
 
@@ -879,15 +879,15 @@ Return Value:
 }
 
 VOID
-SetupObjectAddReference (
-    PSETUP_OBJECT Object
+ChalkObjectAddReference (
+    PCHALK_OBJECT Object
     )
 
 /*++
 
 Routine Description:
 
-    This routine adds a reference to the given setup object.
+    This routine adds a reference to the given Chalk object.
 
 Arguments:
 
@@ -901,11 +901,11 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT_HEADER Header;
+    PCHALK_OBJECT_HEADER Header;
 
     Header = &(Object->Header);
 
-    assert(Header->Type != SetupObjectInvalid);
+    assert(Header->Type != ChalkObjectInvalid);
     assert((Header->ReferenceCount != 0) &&
            (Header->ReferenceCount < 0x10000000));
 
@@ -914,15 +914,15 @@ Return Value:
 }
 
 VOID
-SetupObjectReleaseReference (
-    PSETUP_OBJECT Object
+ChalkObjectReleaseReference (
+    PCHALK_OBJECT Object
     )
 
 /*++
 
 Routine Description:
 
-    This routine releases a reference from the given setup object. If the
+    This routine releases a reference from the given Chalk object. If the
     reference count its zero, the object is destroyed.
 
 Arguments:
@@ -937,17 +937,17 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT_HEADER Header;
+    PCHALK_OBJECT_HEADER Header;
 
     Header = &(Object->Header);
 
-    assert(Header->Type != SetupObjectInvalid);
+    assert(Header->Type != ChalkObjectInvalid);
     assert((Header->ReferenceCount != 0) &&
            (Header->ReferenceCount < 0x10000000));
 
     Header->ReferenceCount -= 1;
     if (Header->ReferenceCount == 0) {
-        SetupGutObject(Object);
+        ChalkGutObject(Object);
         free(Header);
     }
 
@@ -955,8 +955,8 @@ Return Value:
 }
 
 VOID
-SetupPrintObject (
-    PSETUP_OBJECT Object,
+ChalkPrintObject (
+    PCHALK_OBJECT Object,
     ULONG RecursionDepth
     )
 
@@ -980,22 +980,22 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT *Array;
+    PCHALK_OBJECT *Array;
     ULONG Count;
     PLIST_ENTRY CurrentEntry;
-    PSETUP_DICT_ENTRY Entry;
+    PCHALK_DICT_ENTRY Entry;
     ULONG Index;
     ULONG ReferenceCount;
     ULONG Size;
     PSTR String;
-    SETUP_OBJECT_TYPE Type;
+    CHALK_OBJECT_TYPE Type;
 
     if (Object == NULL) {
         printf("0");
         return;
     }
 
-    if (Object->Header.Type == SetupObjectReference) {
+    if (Object->Header.Type == ChalkObjectReference) {
         Object = Object->Reference.Value;
     }
 
@@ -1006,12 +1006,12 @@ Return Value:
     //
 
     if (Object->Header.ReferenceCount == (ULONG)-1) {
-        if (Type == SetupObjectList) {
+        if (Type == ChalkObjectList) {
             printf("[...]");
 
         } else {
 
-            assert(Type == SetupObjectDict);
+            assert(Type == ChalkObjectDict);
 
             printf("{...}");
         }
@@ -1026,11 +1026,11 @@ Return Value:
     ReferenceCount = Object->Header.ReferenceCount;
     Object->Header.ReferenceCount = (ULONG)-1;
     switch (Type) {
-    case SetupObjectInteger:
+    case ChalkObjectInteger:
         printf("%I64d", Object->Integer.Value);
         break;
 
-    case SetupObjectString:
+    case ChalkObjectString:
         if (Object->String.Size == 0) {
             printf("\"\"");
 
@@ -1096,12 +1096,12 @@ Return Value:
 
         break;
 
-    case SetupObjectList:
+    case ChalkObjectList:
         printf("[");
         Array = Object->List.Array;
         Count = Object->List.Count;
         for (Index = 0; Index < Count; Index += 1) {
-            SetupPrintObject(Array[Index], RecursionDepth + 1);
+            ChalkPrintObject(Array[Index], RecursionDepth + 1);
             if (Index < Count - 1) {
                 printf(", ");
                 if (Count >= 5) {
@@ -1113,15 +1113,15 @@ Return Value:
         printf("]");
         break;
 
-    case SetupObjectDict:
+    case ChalkObjectDict:
         printf("{");
         CurrentEntry = Object->Dict.EntryList.Next;
         while (CurrentEntry != &(Object->Dict.EntryList)) {
-            Entry = LIST_VALUE(CurrentEntry, SETUP_DICT_ENTRY, ListEntry);
+            Entry = LIST_VALUE(CurrentEntry, CHALK_DICT_ENTRY, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            SetupPrintObject(Entry->Key, RecursionDepth + 1);
+            ChalkPrintObject(Entry->Key, RecursionDepth + 1);
             printf(" : ");
-            SetupPrintObject(Entry->Value, RecursionDepth + 1);
+            ChalkPrintObject(Entry->Value, RecursionDepth + 1);
             if (CurrentEntry != &(Object->Dict.EntryList)) {
                 printf("\n%*s", RecursionDepth + 1, "");
             }
@@ -1146,8 +1146,8 @@ Return Value:
 //
 
 VOID
-SetupGutObject (
-    PSETUP_OBJECT Object
+ChalkGutObject (
+    PCHALK_OBJECT Object
     )
 
 /*++
@@ -1169,26 +1169,26 @@ Return Value:
 {
 
     switch (Object->Header.Type) {
-    case SetupObjectInteger:
+    case ChalkObjectInteger:
         break;
 
-    case SetupObjectString:
+    case ChalkObjectString:
         if (Object->String.String != NULL) {
             free(Object->String.String);
         }
 
         break;
 
-    case SetupObjectList:
-        SetupDestroyList(Object);
+    case ChalkObjectList:
+        ChalkDestroyList(Object);
         break;
 
-    case SetupObjectDict:
-        SetupDestroyDict(Object);
+    case ChalkObjectDict:
+        ChalkDestroyDict(Object);
         break;
 
-    case SetupObjectReference:
-        SetupObjectReleaseReference(Object->Reference.Value);
+    case ChalkObjectReference:
+        ChalkObjectReleaseReference(Object->Reference.Value);
         Object->Reference.Value = NULL;
         break;
 
@@ -1199,20 +1199,20 @@ Return Value:
         break;
     }
 
-    Object->Header.Type = SetupObjectInvalid;
+    Object->Header.Type = ChalkObjectInvalid;
     return;
 }
 
 VOID
-SetupDestroyList (
-    PSETUP_OBJECT List
+ChalkDestroyList (
+    PCHALK_OBJECT List
     )
 
 /*++
 
 Routine Description:
 
-    This routine destroys a setup list object.
+    This routine destroys a Chalk list object.
 
 Arguments:
 
@@ -1226,13 +1226,13 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT *Array;
+    PCHALK_OBJECT *Array;
     ULONG Index;
 
     Array = List->List.Array;
     for (Index = 0; Index < List->List.Count; Index += 1) {
         if (Array[Index] != NULL) {
-            SetupObjectReleaseReference(Array[Index]);
+            ChalkObjectReleaseReference(Array[Index]);
         }
     }
 
@@ -1244,15 +1244,15 @@ Return Value:
 }
 
 VOID
-SetupDestroyDict (
-    PSETUP_OBJECT Dict
+ChalkDestroyDict (
+    PCHALK_OBJECT Dict
     )
 
 /*++
 
 Routine Description:
 
-    This routine destroys a setup dictionary object.
+    This routine destroys a Chalk dictionary object.
 
 Arguments:
 
@@ -1266,29 +1266,29 @@ Return Value:
 
 {
 
-    PSETUP_DICT_ENTRY Entry;
+    PCHALK_DICT_ENTRY Entry;
 
     while (!LIST_EMPTY(&(Dict->Dict.EntryList))) {
         Entry = LIST_VALUE(Dict->Dict.EntryList.Next,
-                           SETUP_DICT_ENTRY,
+                           CHALK_DICT_ENTRY,
                            ListEntry);
 
-        SetupDestroyDictEntry(Entry);
+        ChalkDestroyDictEntry(Entry);
     }
 
     return;
 }
 
 VOID
-SetupDestroyDictEntry (
-    PSETUP_DICT_ENTRY Entry
+ChalkDestroyDictEntry (
+    PCHALK_DICT_ENTRY Entry
     )
 
 /*++
 
 Routine Description:
 
-    This routine removes and destroys a setup dictionary entry.
+    This routine removes and destroys a Chalk dictionary entry.
 
 Arguments:
 
@@ -1307,18 +1307,18 @@ Return Value:
         Entry->ListEntry.Next = NULL;
     }
 
-    SetupObjectReleaseReference(Entry->Key);
+    ChalkObjectReleaseReference(Entry->Key);
     if (Entry->Value != NULL) {
-        SetupObjectReleaseReference(Entry->Value);
+        ChalkObjectReleaseReference(Entry->Value);
     }
 
     return;
 }
 
-COMPARISON_RESULT
-SetupCompareObjects (
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right
+LONG
+ChalkCompareObjects (
+    PCHALK_OBJECT Left,
+    PCHALK_OBJECT Right
     )
 
 /*++
@@ -1335,8 +1335,11 @@ Arguments:
 
 Return Value:
 
-    Returns a comparison result. If the objects are not of the same type then
-    their types will be compared. Otherwise, their values will be compared.
+    < 0 if the objects are in ascending order.
+
+    0 if the objects are equal.
+
+    > 0 if the objects are in descending order.
 
 --*/
 
@@ -1344,38 +1347,38 @@ Return Value:
 
     ULONG LeftSize;
     PUCHAR LeftString;
-    COMPARISON_RESULT Result;
+    LONG Result;
     ULONG RightSize;
     PUCHAR RightString;
 
-    if (Left->Header.Type == SetupObjectReference) {
+    if (Left->Header.Type == ChalkObjectReference) {
         Left = Left->Reference.Value;
     }
 
-    if (Right->Header.Type == SetupObjectReference) {
+    if (Right->Header.Type == ChalkObjectReference) {
         Right = Right->Reference.Value;
     }
 
     if (Left->Header.Type < Right->Header.Type) {
-        return ComparisonResultAscending;
+        return -1;
 
     } else if (Left->Header.Type > Right->Header.Type) {
-        return ComparisonResultDescending;
+        return 1;
     }
 
-    Result = ComparisonResultSame;
+    Result = 0;
     switch (Left->Header.Type) {
-    case SetupObjectInteger:
+    case ChalkObjectInteger:
         if (Left->Integer.Value < Right->Integer.Value) {
-            Result = ComparisonResultAscending;
+            Result = -1;
 
         } else if (Left->Integer.Value > Right->Integer.Value) {
-            Result = ComparisonResultDescending;
+            Result = 1;
         }
 
         break;
 
-    case SetupObjectString:
+    case ChalkObjectString:
 
         //
         // The strings always have a null byte afterwards, so that byte can be
@@ -1386,14 +1389,14 @@ Return Value:
         LeftSize = Left->String.Size;
         RightString = (PUCHAR)(Right->String.String);
         RightSize = Right->String.Size;
-        Result = ComparisonResultSame;
+        Result = 0;
         while ((LeftSize != 0) && (RightSize != 0)) {
             if (*LeftString < *RightString) {
-                Result = ComparisonResultAscending;
+                Result = -1;
                 break;
 
             } else if (*LeftString > *RightString) {
-                Result = ComparisonResultDescending;
+                Result = 1;
                 break;
             }
 
@@ -1403,12 +1406,12 @@ Return Value:
             RightSize -= 1;
         }
 
-        if (Result == ComparisonResultSame) {
+        if (Result == 0) {
             if (RightSize != 0) {
-                Result = ComparisonResultAscending;
+                Result = -1;
 
             } else if (LeftSize != 0) {
-                Result = ComparisonResultDescending;
+                Result = 1;
             }
         }
 
@@ -1418,7 +1421,7 @@ Return Value:
     // List comparison is possible but currently not needed.
     //
 
-    case SetupObjectList:
+    case ChalkObjectList:
 
         assert(FALSE);
 
@@ -1428,7 +1431,7 @@ Return Value:
     // Dictionaries compare poorly.
     //
 
-    case SetupObjectDict:
+    case ChalkObjectDict:
 
         assert(FALSE);
 

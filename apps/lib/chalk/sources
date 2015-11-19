@@ -1,0 +1,29 @@
+################################################################################
+#
+#   Copyright (c) 2015 Minoca Corp. All Rights Reserved
+#
+#   Binary Name:
+#
+#       Chalk Sources
+#
+#   Abstract:
+#
+#       This file describes the common Chalk source files.
+#
+#   Author:
+#
+#       Evan Green 19-Nov-2015
+#
+#   Environment:
+#
+#       POSIX
+#
+################################################################################
+
+OBJS = cif.o      \
+       const.o    \
+       exec.o     \
+       expr.o     \
+       lang.o     \
+       obj.o      \
+

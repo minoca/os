@@ -34,6 +34,7 @@ APPS = efiboot  \
        vmstat   \
 
 DIRS = $(APPS)  \
+       lib      \
        libc     \
        osbase   \
        posix    \
@@ -41,5 +42,6 @@ DIRS = $(APPS)  \
 include $(SRCROOT)/os/minoca.mk
 
 libc: osbase
-$(APPS): libc
+$(APPS): libc lib
+lib: libc
 

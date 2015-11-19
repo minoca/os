@@ -21,11 +21,10 @@ Author:
 //
 
 #define RTL_API DLLEXPORT
-#define YY_API DLLEXPORT
 
 #include <osbase.h>
 #include <minoca/partlib.h>
-#include "interp/interp.h"
+#include "chalk.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -282,7 +281,7 @@ typedef struct _SETUP_CONTEXT {
     PVOID HostFileSystem;
     LONG RecipeIndex;
     ULONGLONG PageFileSize;
-    SETUP_INTERPRETER Interpreter;
+    CHALK_INTERPRETER Interpreter;
     PSETUP_CONFIGURATION Configuration;
 } SETUP_CONTEXT, *PSETUP_CONTEXT;
 

@@ -48,9 +48,9 @@ Environment:
 
 INT
 SetupReadCopyCommands (
-    PSETUP_INTERPRETER Interpreter,
+    PCHALK_INTERPRETER Interpreter,
     PSETUP_PARTITION_CONFIGURATION Partition,
-    PSETUP_OBJECT PartitionObject
+    PCHALK_OBJECT PartitionObject
     );
 
 VOID
@@ -59,7 +59,7 @@ SetupDestroyCopyCommand (
     );
 
 int
-SetupComparePartitionConfigurations (
+ChalkComparePartitionConfigurations (
     const void *LeftPointer,
     const void *RightPointer
     );
@@ -72,9 +72,9 @@ SetupComparePartitionConfigurations (
 // Define copy command members.
 //
 
-SETUP_C_STRUCTURE_MEMBER SetupCopyMembers[] = {
+CHALK_C_STRUCTURE_MEMBER ChalkCopyMembers[] = {
     {
-        SetupCString,
+        ChalkCString,
         "Destination",
         FIELD_OFFSET(SETUP_COPY, Destination),
         FALSE,
@@ -82,7 +82,7 @@ SETUP_C_STRUCTURE_MEMBER SetupCopyMembers[] = {
     },
 
     {
-        SetupCUint32,
+        ChalkCUint32,
         "Offset",
         FIELD_OFFSET(SETUP_COPY, Offset),
         FALSE,
@@ -90,7 +90,7 @@ SETUP_C_STRUCTURE_MEMBER SetupCopyMembers[] = {
     },
 
     {
-        SetupCString,
+        ChalkCString,
         "Source",
         FIELD_OFFSET(SETUP_COPY, Source),
         TRUE,
@@ -98,7 +98,7 @@ SETUP_C_STRUCTURE_MEMBER SetupCopyMembers[] = {
     },
 
     {
-        SetupCInt32,
+        ChalkCInt32,
         "SourceVolume",
         FIELD_OFFSET(SETUP_COPY, SourceVolume),
         FALSE,
@@ -106,7 +106,7 @@ SETUP_C_STRUCTURE_MEMBER SetupCopyMembers[] = {
     },
 
     {
-        SetupCFlag32,
+        ChalkCFlag32,
         "Update",
         FIELD_OFFSET(SETUP_COPY, Flags),
         FALSE,
@@ -120,9 +120,9 @@ SETUP_C_STRUCTURE_MEMBER SetupCopyMembers[] = {
 // Define disk configuration members.
 //
 
-SETUP_C_STRUCTURE_MEMBER SetupDiskConfigurationMembers[] = {
+CHALK_C_STRUCTURE_MEMBER SetupDiskConfigurationMembers[] = {
     {
-        SetupCUint32,
+        ChalkCUint32,
         "Format",
         FIELD_OFFSET(SETUP_DISK_CONFIGURATION, PartitionFormat),
         TRUE,
@@ -130,11 +130,11 @@ SETUP_C_STRUCTURE_MEMBER SetupDiskConfigurationMembers[] = {
     },
 
     {
-        SetupCSubStructure,
+        ChalkCSubStructure,
         "Mbr",
         FIELD_OFFSET(SETUP_DISK_CONFIGURATION, Mbr),
         FALSE,
-        {(UINTN)SetupCopyMembers}
+        {(UINTN)ChalkCopyMembers}
     },
 
     {0}
@@ -144,9 +144,9 @@ SETUP_C_STRUCTURE_MEMBER SetupDiskConfigurationMembers[] = {
 // Define partition entry flags.
 //
 
-SETUP_C_STRUCTURE_MEMBER SetupPartitionFlagsMembers[] = {
+CHALK_C_STRUCTURE_MEMBER SetupPartitionFlagsMembers[] = {
     {
-        SetupCFlag32,
+        ChalkCFlag32,
         "Boot",
         0,
         FALSE,
@@ -154,7 +154,7 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionFlagsMembers[] = {
     },
 
     {
-        SetupCFlag32,
+        ChalkCFlag32,
         "System",
         FALSE,
         0,
@@ -162,7 +162,7 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionFlagsMembers[] = {
     },
 
     {
-        SetupCFlag32,
+        ChalkCFlag32,
         "CompatibilityMode",
         FALSE,
         0,
@@ -170,7 +170,7 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionFlagsMembers[] = {
     },
 
     {
-        SetupCFlag32,
+        ChalkCFlag32,
         "WriteVbrLba",
         FALSE,
         0,
@@ -178,7 +178,7 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionFlagsMembers[] = {
     },
 
     {
-        SetupCFlag32,
+        ChalkCFlag32,
         "MergeVbr",
         FALSE,
         0,
@@ -192,9 +192,9 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionFlagsMembers[] = {
 // Define partition configuration members.
 //
 
-SETUP_C_STRUCTURE_MEMBER SetupPartitionConfigurationMembers[] = {
+CHALK_C_STRUCTURE_MEMBER SetupPartitionConfigurationMembers[] = {
     {
-        SetupCUint32,
+        ChalkCUint32,
         "Index",
         FIELD_OFFSET(SETUP_PARTITION_CONFIGURATION, Index),
         TRUE,
@@ -202,7 +202,7 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionConfigurationMembers[] = {
     },
 
     {
-        SetupCUint64,
+        ChalkCUint64,
         "Alignment",
         FIELD_OFFSET(SETUP_PARTITION_CONFIGURATION, Alignment),
         FALSE,
@@ -210,7 +210,7 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionConfigurationMembers[] = {
     },
 
     {
-        SetupCUint64,
+        ChalkCUint64,
         "Size",
         FIELD_OFFSET(SETUP_PARTITION_CONFIGURATION, Size),
         TRUE,
@@ -218,7 +218,7 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionConfigurationMembers[] = {
     },
 
     {
-        SetupCByteArray,
+        ChalkCByteArray,
         "PartitionType",
         FIELD_OFFSET(SETUP_PARTITION_CONFIGURATION, PartitionType),
         FALSE,
@@ -226,7 +226,7 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionConfigurationMembers[] = {
     },
 
     {
-        SetupCUint8,
+        ChalkCUint8,
         "MbrType",
         FIELD_OFFSET(SETUP_PARTITION_CONFIGURATION, MbrType),
         FALSE,
@@ -234,7 +234,7 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionConfigurationMembers[] = {
     },
 
     {
-        SetupCUint64,
+        ChalkCUint64,
         "Attributes",
         FIELD_OFFSET(SETUP_PARTITION_CONFIGURATION, Attributes),
         FALSE,
@@ -242,15 +242,15 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionConfigurationMembers[] = {
     },
 
     {
-        SetupCSubStructure,
+        ChalkCSubStructure,
         "Vbr",
         FIELD_OFFSET(SETUP_PARTITION_CONFIGURATION, Vbr),
         FALSE,
-        {(UINTN)SetupCopyMembers}
+        {(UINTN)ChalkCopyMembers}
     },
 
     {
-        SetupCSubStructure,
+        ChalkCSubStructure,
         "Flags",
         FIELD_OFFSET(SETUP_PARTITION_CONFIGURATION, Flags),
         FALSE,
@@ -264,9 +264,9 @@ SETUP_C_STRUCTURE_MEMBER SetupPartitionConfigurationMembers[] = {
 // Define boot entry flags.
 //
 
-SETUP_C_STRUCTURE_MEMBER SetupBootEntryFlagsMembers[] = {
+CHALK_C_STRUCTURE_MEMBER SetupBootEntryFlagsMembers[] = {
     {
-        SetupCFlag32,
+        ChalkCFlag32,
         "Debug",
         0,
         FALSE,
@@ -274,7 +274,7 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryFlagsMembers[] = {
     },
 
     {
-        SetupCFlag32,
+        ChalkCFlag32,
         "BootDebug",
         FALSE,
         0,
@@ -288,9 +288,9 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryFlagsMembers[] = {
 // Define boot entry fields.
 //
 
-SETUP_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
+CHALK_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
     {
-        SetupCByteArray,
+        ChalkCByteArray,
         "DiskId",
         FIELD_OFFSET(BOOT_ENTRY, DiskId),
         FALSE,
@@ -298,7 +298,7 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
     },
 
     {
-        SetupCByteArray,
+        ChalkCByteArray,
         "PartitionId",
         FIELD_OFFSET(BOOT_ENTRY, PartitionId),
         FALSE,
@@ -306,7 +306,7 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
     },
 
     {
-        SetupCString,
+        ChalkCString,
         "Name",
         FIELD_OFFSET(BOOT_ENTRY, Name),
         FALSE,
@@ -314,7 +314,7 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
     },
 
     {
-        SetupCString,
+        ChalkCString,
         "LoaderArguments",
         FIELD_OFFSET(BOOT_ENTRY, LoaderArguments),
         FALSE,
@@ -322,7 +322,7 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
     },
 
     {
-        SetupCString,
+        ChalkCString,
         "KernelArguments",
         FIELD_OFFSET(BOOT_ENTRY, KernelArguments),
         FALSE,
@@ -330,7 +330,7 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
     },
 
     {
-        SetupCString,
+        ChalkCString,
         "LoaderPath",
         FIELD_OFFSET(BOOT_ENTRY, LoaderPath),
         FALSE,
@@ -338,7 +338,7 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
     },
 
     {
-        SetupCString,
+        ChalkCString,
         "KernelPath",
         FIELD_OFFSET(BOOT_ENTRY, KernelPath),
         FALSE,
@@ -346,7 +346,7 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
     },
 
     {
-        SetupCString,
+        ChalkCString,
         "SystemPath",
         FIELD_OFFSET(BOOT_ENTRY, SystemPath),
         FALSE,
@@ -354,7 +354,7 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
     },
 
     {
-        SetupCSubStructure,
+        ChalkCSubStructure,
         "Flags",
         FIELD_OFFSET(BOOT_ENTRY, Flags),
         FALSE,
@@ -362,7 +362,7 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
     },
 
     {
-        SetupCUint32,
+        ChalkCUint32,
         "DebugDevice",
         FIELD_OFFSET(BOOT_ENTRY, DebugDevice),
         FALSE,
@@ -376,9 +376,9 @@ SETUP_C_STRUCTURE_MEMBER SetupBootEntryMembers[] = {
 // Define global boot configuration fields.
 //
 
-SETUP_C_STRUCTURE_MEMBER SetupBootConfigurationMembers[] = {
+CHALK_C_STRUCTURE_MEMBER SetupBootConfigurationMembers[] = {
     {
-        SetupCUint32,
+        ChalkCUint32,
         "Timeout",
         FIELD_OFFSET(BOOT_CONFIGURATION_GLOBAL, Timeout),
         FALSE,
@@ -394,7 +394,7 @@ SETUP_C_STRUCTURE_MEMBER SetupBootConfigurationMembers[] = {
 
 INT
 SetupReadConfiguration (
-    PSETUP_INTERPRETER Interpreter,
+    PCHALK_INTERPRETER Interpreter,
     PSETUP_CONFIGURATION *NewConfiguration
     )
 
@@ -407,7 +407,7 @@ Routine Description:
 
 Arguments:
 
-    Interpreter - Supplies a pointer to the setup interpreter.
+    Interpreter - Supplies a pointer to the Chalk interpreter.
 
     NewConfiguration - Supplies a pointer where a pointer to the new
         configuration will be returned on success.
@@ -425,16 +425,16 @@ Return Value:
 {
 
     UINTN AllocationSize;
-    PSETUP_OBJECT BootEntries;
-    PSETUP_OBJECT BootEntry;
+    PCHALK_OBJECT BootEntries;
+    PCHALK_OBJECT BootEntry;
     PSETUP_CONFIGURATION Configuration;
     ULONG Count;
-    PSETUP_OBJECT DriverDb;
+    PCHALK_OBJECT DriverDb;
     ULONG Index;
-    PSETUP_OBJECT Partition;
-    PSETUP_OBJECT Settings;
+    PCHALK_OBJECT Partition;
+    PCHALK_OBJECT Settings;
     INT Status;
-    PSETUP_OBJECT Value;
+    PCHALK_OBJECT Value;
 
     Configuration = malloc(sizeof(SETUP_CONFIGURATION));
     if (Configuration == NULL) {
@@ -443,7 +443,7 @@ Return Value:
     }
 
     memset(Configuration, 0, sizeof(SETUP_CONFIGURATION));
-    Settings = SetupDictLookupCStringKey(Interpreter->Global.Dict,
+    Settings = ChalkDictLookupCStringKey(Interpreter->Global.Dict,
                                          "Settings");
 
     if (Settings == NULL) {
@@ -452,14 +452,14 @@ Return Value:
         goto ReadConfigurationEnd;
     }
 
-    Value = SetupDictLookupCStringKey(Settings, "BootConfiguration");
+    Value = ChalkDictLookupCStringKey(Settings, "BootConfiguration");
     if (Value != NULL) {
 
         //
         // Convert the global configuration first (timeout, etc).
         //
 
-        Status = SetupConvertDictToStructure(
+        Status = ChalkConvertDictToStructure(
                                     Interpreter,
                                     Value,
                                     SetupBootConfigurationMembers,
@@ -476,9 +476,9 @@ Return Value:
         // Parse out the array of boot entry dictionaries.
         //
 
-        BootEntries = SetupDictLookupCStringKey(Value, "BootEntries");
+        BootEntries = ChalkDictLookupCStringKey(Value, "BootEntries");
         if ((BootEntries == NULL) ||
-            (BootEntries->Header.Type != SetupObjectList)) {
+            (BootEntries->Header.Type != ChalkObjectList)) {
 
             fprintf(stderr, "Error: No boot entries found.\n");
             Status = EINVAL;
@@ -501,15 +501,15 @@ Return Value:
                 continue;
             }
 
-            if (BootEntry->Header.Type == SetupObjectReference) {
+            if (BootEntry->Header.Type == ChalkObjectReference) {
                 BootEntry = BootEntry->Reference.Value;
             }
 
-            if (BootEntry->Header.Type != SetupObjectDict) {
+            if (BootEntry->Header.Type != ChalkObjectDict) {
                 continue;
             }
 
-            Status = SetupConvertDictToStructure(
+            Status = ChalkConvertDictToStructure(
                                          Interpreter,
                                          BootEntry,
                                          SetupBootEntryMembers,
@@ -530,20 +530,20 @@ Return Value:
         // Grab the boot configuration path.
         //
 
-        Value = SetupDictLookupCStringKey(Value, "DataPath");
-        if ((Value != NULL) && (Value->Header.Type == SetupObjectString)) {
+        Value = ChalkDictLookupCStringKey(Value, "DataPath");
+        if ((Value != NULL) && (Value->Header.Type == ChalkObjectString)) {
             Configuration->BootDataPath = Value->String.String;
         }
     }
 
-    Value = SetupDictLookupCStringKey(Settings, "Disk");
+    Value = ChalkDictLookupCStringKey(Settings, "Disk");
     if (Value == NULL) {
         fprintf(stderr, "Error: No disk configuration found.\n");
         Status = EINVAL;
         goto ReadConfigurationEnd;
 
     } else {
-        Status = SetupConvertDictToStructure(Interpreter,
+        Status = ChalkConvertDictToStructure(Interpreter,
                                              Value,
                                              SetupDiskConfigurationMembers,
                                              &(Configuration->Disk));
@@ -554,8 +554,8 @@ Return Value:
         }
     }
 
-    Value = SetupDictLookupCStringKey(Value, "Partitions");
-    if ((Value == NULL) || (Value->Header.Type != SetupObjectList)) {
+    Value = ChalkDictLookupCStringKey(Value, "Partitions");
+    if ((Value == NULL) || (Value->Header.Type != ChalkObjectList)) {
         fprintf(stderr, "Error: No partition configuration found.\n");
         Status = EINVAL;
         goto ReadConfigurationEnd;
@@ -576,15 +576,15 @@ Return Value:
             continue;
         }
 
-        if (Partition->Header.Type == SetupObjectReference) {
+        if (Partition->Header.Type == ChalkObjectReference) {
             Partition = Partition->Reference.Value;
         }
 
-        if (Partition->Header.Type != SetupObjectDict) {
+        if (Partition->Header.Type != ChalkObjectDict) {
             continue;
         }
 
-        Status = SetupConvertDictToStructure(
+        Status = ChalkConvertDictToStructure(
                                      Interpreter,
                                      Partition,
                                      SetupPartitionConfigurationMembers,
@@ -621,17 +621,17 @@ Return Value:
     qsort(Configuration->Disk.Partitions,
           Count,
           sizeof(SETUP_PARTITION_CONFIGURATION),
-          SetupComparePartitionConfigurations);
+          ChalkComparePartitionConfigurations);
 
     //
     // Get the driver database.
     //
 
-    DriverDb = SetupDictLookupCStringKey(Settings, "DriverDb");
-    if ((DriverDb != NULL) && (DriverDb->Header.Type == SetupObjectDict)) {
-        Value = SetupDictLookupCStringKey(DriverDb, "BootDrivers");
-        if ((Value != NULL) && (Value->Header.Type == SetupObjectList)) {
-            Status = SetupReadStringsList(Interpreter,
+    DriverDb = ChalkDictLookupCStringKey(Settings, "DriverDb");
+    if ((DriverDb != NULL) && (DriverDb->Header.Type == ChalkObjectDict)) {
+        Value = ChalkDictLookupCStringKey(DriverDb, "BootDrivers");
+        if ((Value != NULL) && (Value->Header.Type == ChalkObjectList)) {
+            Status = ChalkReadStringsList(Interpreter,
                                           Value,
                                           &(Configuration->BootDrivers));
 
@@ -640,8 +640,8 @@ Return Value:
             }
         }
 
-        Value = SetupDictLookupCStringKey(DriverDb, "BootDriversPath");
-        if ((Value != NULL) && (Value->Header.Type == SetupObjectString)) {
+        Value = ChalkDictLookupCStringKey(DriverDb, "BootDriversPath");
+        if ((Value != NULL) && (Value->Header.Type == ChalkObjectString)) {
             Configuration->BootDriversPath = Value->String.String;
         }
     }
@@ -769,9 +769,9 @@ Return Value:
 
 INT
 SetupReadCopyCommands (
-    PSETUP_INTERPRETER Interpreter,
+    PCHALK_INTERPRETER Interpreter,
     PSETUP_PARTITION_CONFIGURATION Partition,
-    PSETUP_OBJECT PartitionObject
+    PCHALK_OBJECT PartitionObject
     )
 
 /*++
@@ -799,17 +799,17 @@ Return Value:
 {
 
     UINTN AllocationSize;
-    PSETUP_OBJECT Command;
+    PCHALK_OBJECT Command;
     UINTN Count;
-    PSETUP_OBJECT FileList;
-    PSETUP_OBJECT Files;
+    PCHALK_OBJECT FileList;
+    PCHALK_OBJECT Files;
     ULONG Index;
     INT Status;
 
-    assert(PartitionObject->Header.Type == SetupObjectDict);
+    assert(PartitionObject->Header.Type == ChalkObjectDict);
 
-    Files = SetupDictLookupCStringKey(PartitionObject, "Files");
-    if ((Files == NULL) || (Files->Header.Type != SetupObjectList)) {
+    Files = ChalkDictLookupCStringKey(PartitionObject, "Files");
+    if ((Files == NULL) || (Files->Header.Type != ChalkObjectList)) {
         return 0;
     }
 
@@ -828,17 +828,17 @@ Return Value:
             continue;
         }
 
-        if (Command->Header.Type == SetupObjectReference) {
+        if (Command->Header.Type == ChalkObjectReference) {
             Command = Command->Reference.Value;
         }
 
-        if (Command->Header.Type != SetupObjectDict) {
+        if (Command->Header.Type != ChalkObjectDict) {
             continue;
         }
 
-        Status = SetupConvertDictToStructure(Interpreter,
+        Status = ChalkConvertDictToStructure(Interpreter,
                                              Command,
-                                             SetupCopyMembers,
+                                             ChalkCopyMembers,
                                              &(Partition->CopyCommands[Count]));
 
         if (Status != 0) {
@@ -846,9 +846,9 @@ Return Value:
             return Status;
         }
 
-        FileList = SetupDictLookupCStringKey(Command, "Files");
+        FileList = ChalkDictLookupCStringKey(Command, "Files");
         if (FileList != NULL) {
-            Status = SetupReadStringsList(
+            Status = ChalkReadStringsList(
                                       Interpreter,
                                       FileList,
                                       &(Partition->CopyCommands[Count].Files));
@@ -908,7 +908,7 @@ Return Value:
 }
 
 int
-SetupComparePartitionConfigurations (
+ChalkComparePartitionConfigurations (
     const void *LeftPointer,
     const void *RightPointer
     )

@@ -546,7 +546,7 @@ Return Value:
     }
 
     ScriptSize = (UINTN)(Recipe->ScriptEnd) - (UINTN)(Recipe->Script);
-    Status = SetupLoadScriptBuffer(&(Context->Interpreter),
+    Status = ChalkLoadScriptBuffer(&(Context->Interpreter),
                                    Recipe->ShortName,
                                    Recipe->Script,
                                    ScriptSize,
@@ -595,7 +595,7 @@ Return Value:
         }
 
         ScriptSize = (UINTN)(Recipe->ScriptEnd) - (UINTN)(Recipe->Script);
-        Status = SetupLoadScriptBuffer(&(Context->Interpreter),
+        Status = ChalkLoadScriptBuffer(&(Context->Interpreter),
                                        Recipe->ShortName,
                                        Recipe->Script,
                                        ScriptSize,

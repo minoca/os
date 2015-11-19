@@ -8,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This module implements support for interfacing the setup interpreter with
+    This module implements support for interfacing the Chalk interpreter with
     C functions and structures.
 
 Author:
@@ -17,7 +17,7 @@ Author:
 
 Environment:
 
-    Setup
+    POSIX
 
 --*/
 
@@ -32,7 +32,7 @@ Environment:
 #include <string.h>
 #include <sys/stat.h>
 
-#include "../setup.h"
+#include "chalkp.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -55,10 +55,10 @@ Environment:
 //
 
 INT
-SetupConvertDictToStructure (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT Dict,
-    PSETUP_C_STRUCTURE_MEMBER Members,
+ChalkConvertDictToStructure (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Dict,
+    PCHALK_C_STRUCTURE_MEMBER Members,
     PVOID Structure
     )
 
@@ -95,25 +95,25 @@ Return Value:
 
 {
 
-    PSETUP_DICT_ENTRY DictEntry;
+    PCHALK_DICT_ENTRY DictEntry;
     LONGLONG Int;
-    SETUP_STRING LocalKeyString;
+    CHALK_STRING LocalKeyString;
     ULONG Mask;
     PVOID Pointer;
     ULONG Shift;
     ULONG Size;
     INT Status;
     PSTR String;
-    PSETUP_OBJECT Value;
+    PCHALK_OBJECT Value;
 
-    if (Dict->Header.Type == SetupObjectReference) {
+    if (Dict->Header.Type == ChalkObjectReference) {
         Dict = Dict->Reference.Value;
     }
 
-    assert(Dict->Header.Type == SetupObjectDict);
+    assert(Dict->Header.Type == ChalkObjectDict);
 
     memset(&LocalKeyString, 0, sizeof(LocalKeyString));
-    LocalKeyString.Header.Type = SetupObjectString;
+    LocalKeyString.Header.Type = ChalkObjectString;
 
     //
     // Loop across all the members.
@@ -123,7 +123,7 @@ Return Value:
         LocalKeyString.String = Members->Key;
         LocalKeyString.Size = strlen(Members->Key);
         Pointer = Structure + Members->Offset;
-        DictEntry = SetupDictLookup(Dict, (PSETUP_OBJECT)&LocalKeyString);
+        DictEntry = ChalkDictLookup(Dict, (PCHALK_OBJECT)&LocalKeyString);
         if (DictEntry == NULL) {
             if (Members->Required != FALSE) {
                 fprintf(stderr,
@@ -144,16 +144,16 @@ Return Value:
         //
 
         switch (Members->Type) {
-        case SetupCInt8:
-        case SetupCUint8:
-        case SetupCInt16:
-        case SetupCUint16:
-        case SetupCInt32:
-        case SetupCUint32:
-        case SetupCInt64:
-        case SetupCUint64:
-        case SetupCFlag32:
-            if (Value->Header.Type != SetupObjectInteger) {
+        case ChalkCInt8:
+        case ChalkCUint8:
+        case ChalkCInt16:
+        case ChalkCUint16:
+        case ChalkCInt32:
+        case ChalkCUint32:
+        case ChalkCInt64:
+        case ChalkCUint64:
+        case ChalkCFlag32:
+            if (Value->Header.Type != ChalkObjectInteger) {
                 fprintf(stderr,
                         "Error: Member %s must be an integer.\n",
                         Members->Key);
@@ -163,39 +163,39 @@ Return Value:
 
             Int = Value->Integer.Value;
             switch (Members->Type) {
-            case SetupCInt8:
+            case ChalkCInt8:
                 *((PCHAR)Pointer) = Int;
                 break;
 
-            case SetupCUint8:
+            case ChalkCUint8:
                 *((PUCHAR)Pointer) = Int;
                 break;
 
-            case SetupCInt16:
+            case ChalkCInt16:
                 *((PSHORT)Pointer) = Int;
                 break;
 
-            case SetupCUint16:
+            case ChalkCUint16:
                 *((PUSHORT)Pointer) = Int;
                 break;
 
-            case SetupCInt32:
+            case ChalkCInt32:
                 *((PLONG)Pointer) = Int;
                 break;
 
-            case SetupCUint32:
+            case ChalkCUint32:
                 *((PULONG)Pointer) = Int;
                 break;
 
-            case SetupCInt64:
+            case ChalkCInt64:
                 *((PLONGLONG)Pointer) = Int;
                 break;
 
-            case SetupCUint64:
+            case ChalkCUint64:
                 *((PULONGLONG)Pointer) = Int;
                 break;
 
-            case SetupCFlag32:
+            case ChalkCFlag32:
                 Mask = Members->U.Mask;
                 if (Mask == 0) {
                     break;
@@ -219,9 +219,9 @@ Return Value:
 
             break;
 
-        case SetupCString:
-        case SetupCByteArray:
-            if (Value->Header.Type != SetupObjectString) {
+        case ChalkCString:
+        case ChalkCByteArray:
+            if (Value->Header.Type != ChalkObjectString) {
                 fprintf(stderr,
                         "Error: Member %s must be a string.\n",
                         Members->Key);
@@ -230,7 +230,7 @@ Return Value:
             }
 
             Size = Value->String.Size;
-            if (Members->Type == SetupCString) {
+            if (Members->Type == ChalkCString) {
                 String = malloc(Size + 1);
                 if (String == NULL) {
                     return ENOMEM;
@@ -238,7 +238,7 @@ Return Value:
 
             } else {
 
-                assert(Members->Type == SetupCByteArray);
+                assert(Members->Type == ChalkCByteArray);
 
                 String = Pointer;
                 if (Size > Members->U.Size) {
@@ -247,7 +247,7 @@ Return Value:
             }
 
             memcpy(String, Value->String.String, Size);
-            if (Members->Type == SetupCString) {
+            if (Members->Type == ChalkCString) {
                 String[Size] = '\0';
                 *((PSTR *)Pointer) = String;
 
@@ -257,13 +257,13 @@ Return Value:
 
             break;
 
-        case SetupCSubStructure:
-        case SetupCStructurePointer:
-            if (Value->Header.Type == SetupObjectReference) {
+        case ChalkCSubStructure:
+        case ChalkCStructurePointer:
+            if (Value->Header.Type == ChalkObjectReference) {
                 Value = Value->Reference.Value;
             }
 
-            if (Value->Header.Type != SetupObjectDict) {
+            if (Value->Header.Type != ChalkObjectDict) {
                 fprintf(stderr,
                         "Error: Member %s must be a dictionary.\n",
                         Members->Key);
@@ -275,11 +275,11 @@ Return Value:
             // Recurse into the substructure.
             //
 
-            if (Members->Type == SetupCStructurePointer) {
+            if (Members->Type == ChalkCStructurePointer) {
                 Pointer = *((PVOID *)Pointer);
             }
 
-            Status = SetupConvertDictToStructure(Interpreter,
+            Status = ChalkConvertDictToStructure(Interpreter,
                                                  Value,
                                                  Members->U.SubStructure,
                                                  Pointer);
@@ -304,11 +304,11 @@ Return Value:
 }
 
 INT
-SetupConvertStructureToDict (
-    PSETUP_INTERPRETER Interpreter,
+ChalkConvertStructureToDict (
+    PCHALK_INTERPRETER Interpreter,
     PVOID Structure,
-    PSETUP_C_STRUCTURE_MEMBER Members,
-    PSETUP_OBJECT Dict
+    PCHALK_C_STRUCTURE_MEMBER Members,
+    PCHALK_OBJECT Dict
     )
 
 /*++
@@ -343,76 +343,76 @@ Return Value:
 {
 
     LONGLONG Integer;
-    PSETUP_OBJECT Key;
+    PCHALK_OBJECT Key;
     ULONG Mask;
     PVOID Pointer;
     ULONG Shift;
     ULONG Size;
     INT Status;
     PSTR String;
-    PSETUP_OBJECT Value;
+    PCHALK_OBJECT Value;
 
-    if (Dict->Header.Type == SetupObjectReference) {
+    if (Dict->Header.Type == ChalkObjectReference) {
         Dict = Dict->Reference.Value;
     }
 
-    assert(Dict->Header.Type == SetupObjectDict);
+    assert(Dict->Header.Type == ChalkObjectDict);
 
     //
     // Loop across all the members.
     //
 
     while (Members->Key != NULL) {
-        Key = SetupCreateString(Members->Key, strlen(Members->Key));
+        Key = ChalkCreateString(Members->Key, strlen(Members->Key));
         if (Key == NULL) {
             return ENOMEM;
         }
 
         Pointer = Structure + Members->Offset;
         switch (Members->Type) {
-        case SetupCInt8:
-        case SetupCUint8:
-        case SetupCInt16:
-        case SetupCUint16:
-        case SetupCInt32:
-        case SetupCUint32:
-        case SetupCInt64:
-        case SetupCUint64:
-        case SetupCFlag32:
+        case ChalkCInt8:
+        case ChalkCUint8:
+        case ChalkCInt16:
+        case ChalkCUint16:
+        case ChalkCInt32:
+        case ChalkCUint32:
+        case ChalkCInt64:
+        case ChalkCUint64:
+        case ChalkCFlag32:
             switch (Members->Type) {
-            case SetupCInt8:
+            case ChalkCInt8:
                 Integer = *((PCHAR)Pointer);
                 break;
 
-            case SetupCUint8:
+            case ChalkCUint8:
                 Integer = *((PUCHAR)Pointer);
                 break;
 
-            case SetupCInt16:
+            case ChalkCInt16:
                 Integer = *((PSHORT)Pointer);
                 break;
 
-            case SetupCUint16:
+            case ChalkCUint16:
                 Integer = *((PUSHORT)Pointer);
                 break;
 
-            case SetupCInt32:
+            case ChalkCInt32:
                 Integer = *((PLONG)Pointer);
                 break;
 
-            case SetupCUint32:
+            case ChalkCUint32:
                 Integer = *((PULONG)Pointer);
                 break;
 
-            case SetupCInt64:
+            case ChalkCInt64:
                 Integer = *((PLONGLONG)Pointer);
                 break;
 
-            case SetupCUint64:
+            case ChalkCUint64:
                 Integer = *((PULONGLONG)Pointer);
                 break;
 
-            case SetupCFlag32:
+            case ChalkCFlag32:
                 Integer = *((PULONG)Pointer);
                 Shift = 0;
                 Mask = Members->U.Mask;
@@ -431,35 +431,35 @@ Return Value:
                 goto ConvertStructureToDictEnd;
             }
 
-            Value = SetupCreateInteger(Integer);
+            Value = ChalkCreateInteger(Integer);
             break;
 
-        case SetupCString:
-        case SetupCByteArray:
+        case ChalkCString:
+        case ChalkCByteArray:
             String = Pointer;
-            if (Members->Type == SetupCString) {
+            if (Members->Type == ChalkCString) {
                 String = *((PSTR *)Pointer);
             }
 
             Size = strlen(String);
-            Value = SetupCreateString(String, Size);
+            Value = ChalkCreateString(String, Size);
             break;
 
-        case SetupCStructurePointer:
+        case ChalkCStructurePointer:
             Pointer = *((PVOID *)Pointer);
 
             //
             // Fall through.
             //
 
-        case SetupCSubStructure:
-            Value = SetupCreateDict(NULL);
+        case ChalkCSubStructure:
+            Value = ChalkCreateDict(NULL);
             if (Value == NULL) {
                 Status = ENOMEM;
                 goto ConvertStructureToDictEnd;
             }
 
-            Status = SetupConvertStructureToDict(Interpreter,
+            Status = ChalkConvertStructureToDict(Interpreter,
                                                  Pointer,
                                                  Members->U.SubStructure,
                                                  Value);
@@ -483,7 +483,7 @@ Return Value:
             goto ConvertStructureToDictEnd;
         }
 
-        Status = SetupDictSetElement(Dict, Key, Value, NULL);
+        Status = ChalkDictSetElement(Dict, Key, Value, NULL);
         if (Status != 0) {
             Status = ENOMEM;
             goto ConvertStructureToDictEnd;
@@ -495,16 +495,16 @@ Return Value:
 
 ConvertStructureToDictEnd:
     if (Key != NULL) {
-        SetupObjectReleaseReference(Key);
+        ChalkObjectReleaseReference(Key);
     }
 
     return Status;
 }
 
 INT
-SetupReadStringsList (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT List,
+ChalkReadStringsList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT List,
     PSTR **StringsArray
     )
 
@@ -543,13 +543,13 @@ Return Value:
     PSTR Buffer;
     UINTN Count;
     UINTN Index;
-    PSETUP_OBJECT Item;
+    PCHALK_OBJECT Item;
 
-    if (List->Header.Type == SetupObjectReference) {
+    if (List->Header.Type == ChalkObjectReference) {
         List = List->Reference.Value;
     }
 
-    if (List->Header.Type != SetupObjectList) {
+    if (List->Header.Type != ChalkObjectList) {
         return EINVAL;
     }
 
@@ -561,7 +561,7 @@ Return Value:
     Count = 0;
     for (Index = 0; Index < List->List.Count; Index += 1) {
         Item = List->List.Array[Index];
-        if ((Item == NULL) || (Item->Header.Type != SetupObjectString)) {
+        if ((Item == NULL) || (Item->Header.Type != ChalkObjectString)) {
             continue;
         }
 
@@ -585,7 +585,7 @@ Return Value:
     Count = 0;
     for (Index = 0; Index < List->List.Count; Index += 1) {
         Item = List->List.Array[Index];
-        if ((Item == NULL) || (Item->Header.Type != SetupObjectString)) {
+        if ((Item == NULL) || (Item->Header.Type != ChalkObjectString)) {
             continue;
         }
 
@@ -601,10 +601,10 @@ Return Value:
 }
 
 INT
-SetupWriteStringsList (
-    PSETUP_INTERPRETER Interpreter,
+ChalkWriteStringsList (
+    PCHALK_INTERPRETER Interpreter,
     PSTR *StringsArray,
-    PSETUP_OBJECT List
+    PCHALK_OBJECT List
     )
 
 /*++
@@ -631,23 +631,23 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT NewString;
+    PCHALK_OBJECT NewString;
     UINTN Size;
     INT Status;
     PSTR String;
 
-    assert(List->Header.Type == SetupObjectList);
+    assert(List->Header.Type == ChalkObjectList);
 
     while (*StringsArray != NULL) {
         String = *StringsArray;
         Size = strlen(String);
-        NewString = SetupCreateString(String, Size);
+        NewString = ChalkCreateString(String, Size);
         if (NewString == NULL) {
             return ENOMEM;
         }
 
-        Status = SetupListSetElement(List, List->List.Count, NewString);
-        SetupObjectReleaseReference(NewString);
+        Status = ChalkListSetElement(List, List->List.Count, NewString);
+        ChalkObjectReleaseReference(NewString);
         if (Status != 0) {
             return Status;
         }
@@ -658,9 +658,9 @@ Return Value:
     return 0;
 }
 
-PSETUP_OBJECT
-SetupDictLookupCStringKey (
-    PSETUP_OBJECT Dict,
+PCHALK_OBJECT
+ChalkDictLookupCStringKey (
+    PCHALK_OBJECT Dict,
     PSTR Key
     )
 
@@ -687,21 +687,21 @@ Return Value:
 
 {
 
-    PSETUP_DICT_ENTRY DictEntry;
-    SETUP_STRING FakeString;
-    PSETUP_OBJECT Value;
+    PCHALK_DICT_ENTRY DictEntry;
+    CHALK_STRING FakeString;
+    PCHALK_OBJECT Value;
 
-    if (Dict->Header.Type == SetupObjectReference) {
+    if (Dict->Header.Type == ChalkObjectReference) {
         Dict = Dict->Reference.Value;
     }
 
-    assert(Dict->Header.Type == SetupObjectDict);
+    assert(Dict->Header.Type == ChalkObjectDict);
 
-    FakeString.Header.Type = SetupObjectString;
+    FakeString.Header.Type = ChalkObjectString;
     FakeString.Header.ReferenceCount = 0;
     FakeString.String = Key;
     FakeString.Size = strlen(Key);
-    DictEntry = SetupDictLookup(Dict, (PSETUP_OBJECT)&FakeString);
+    DictEntry = ChalkDictLookup(Dict, (PCHALK_OBJECT)&FakeString);
     if (DictEntry == NULL) {
         return NULL;
     }
@@ -712,7 +712,7 @@ Return Value:
 
     Value = DictEntry->Value;
     if ((Value != NULL) &&
-        (Value->Header.Type == SetupObjectReference)) {
+        (Value->Header.Type == ChalkObjectReference)) {
 
         Value = Value->Reference.Value;
     }

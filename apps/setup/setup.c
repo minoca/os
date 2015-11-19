@@ -205,7 +205,7 @@ Return Value:
     memset(&Context, 0, sizeof(SETUP_CONTEXT));
     Context.RecipeIndex = -1;
     Context.PageFileSize = -1ULL;
-    SetupInitializeInterpreter(&(Context.Interpreter));
+    ChalkInitializeInterpreter(&(Context.Interpreter));
     Status = SetupAddCommonScripts(&Context);
     if (Status != 0) {
         goto mainEnd;
@@ -345,7 +345,7 @@ Return Value:
             break;
 
         case 's':
-            Status = SetupLoadScriptFile(&(Context.Interpreter),
+            Status = ChalkLoadScriptFile(&(Context.Interpreter),
                                          optarg,
                                          SetupScriptOrderUserCustomization);
 
@@ -594,7 +594,7 @@ Return Value:
     // Execute the user customization scripts.
     //
 
-    Status = SetupExecuteDeferredScripts(&(Context.Interpreter),
+    Status = ChalkExecuteDeferredScripts(&(Context.Interpreter),
                                          SetupScriptOrderUserCustomization);
 
     if (Status != 0) {
@@ -701,7 +701,7 @@ mainEnd:
         Context.Configuration = NULL;
     }
 
-    SetupDestroyInterpreter(&(Context.Interpreter));
+    ChalkDestroyInterpreter(&(Context.Interpreter));
     if (Context.SourceVolume != NULL) {
         if (Context.SourceVolume != Context.HostFileSystem) {
             SetupVolumeClose(&Context, Context.SourceVolume);
@@ -836,7 +836,7 @@ Return Value:
                           Index,
                           Size);
 
-    Status = SetupLoadScriptBuffer(&(Context->Interpreter),
+    Status = ChalkLoadScriptBuffer(&(Context->Interpreter),
                                    "extrapartition",
                                    ScriptBuffer,
                                    ScriptSize,

@@ -8,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This header contains definitions for objects within the setup interpreter.
+    This header contains definitions for objects within the Chalk interpreter.
 
 Author:
 
@@ -24,108 +24,108 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define SETUP_TOKEN_BASE 512
-#define SETUP_NODE_BASE 1024
+#define CHALK_TOKEN_BASE 512
+#define CHALK_NODE_BASE 1024
 
 //
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef enum _SETUP_TOKEN_TYPE {
-    SetupTokenMultilineComment = SETUP_TOKEN_BASE,
-    SetupTokenComment,
-    SetupTokenIdentifier,
-    SetupTokenHexInteger,
-    SetupTokenOctalInteger,
-    SetupTokenDecimalInteger,
-    SetupTokenString,
-    SetupTokenRightAssign,
-    SetupTokenLeftAssign,
-    SetupTokenAddAssign,
-    SetupTokenSubtractAssign,
-    SetupTokenMultiplyAssign,
-    SetupTokenDivideAssign,
-    SetupTokenModuloAssign,
-    SetupTokenAndAssign,
-    SetupTokenXorAssign,
-    SetupTokenOrAssign,
-    SetupTokenRightShift,
-    SetupTokenLeftShift,
-    SetupTokenIncrement,
-    SetupTokenDecrement,
-    SetupTokenLogicalAnd,
-    SetupTokenLogicalOr,
-    SetupTokenLessOrEqual,
-    SetupTokenGreaterOrEqual,
-    SetupTokenIsEqual,
-    SetupTokenIsNotEqual,
-    SetupTokenSemicolon,
-    SetupTokenOpenBrace,
-    SetupTokenCloseBrace,
-    SetupTokenComma,
-    SetupTokenColon,
-    SetupTokenAssign,
-    SetupTokenOpenParentheses,
-    SetupTokenCloseParentheses,
-    SetupTokenOpenBracket,
-    SetupTokenCloseBracket,
-    SetupTokenBitAnd,
-    SetupTokenLogicalNot,
-    SetupTokenBitNot,
-    SetupTokenMinus,
-    SetupTokenPlus,
-    SetupTokenAsterisk,
-    SetupTokenDivide,
-    SetupTokenModulo,
-    SetupTokenLessThan,
-    SetupTokenGreaterThan,
-    SetupTokenXor,
-    SetupTokenBitOr,
-    SetupTokenQuestion,
-} SETUP_TOKEN_TYPE, *PSETUP_TOKEN_TYPE;
+typedef enum _CHALK_TOKEN_TYPE {
+    ChalkTokenMultilineComment = CHALK_TOKEN_BASE,
+    ChalkTokenComment,
+    ChalkTokenIdentifier,
+    ChalkTokenHexInteger,
+    ChalkTokenOctalInteger,
+    ChalkTokenDecimalInteger,
+    ChalkTokenString,
+    ChalkTokenRightAssign,
+    ChalkTokenLeftAssign,
+    ChalkTokenAddAssign,
+    ChalkTokenSubtractAssign,
+    ChalkTokenMultiplyAssign,
+    ChalkTokenDivideAssign,
+    ChalkTokenModuloAssign,
+    ChalkTokenAndAssign,
+    ChalkTokenXorAssign,
+    ChalkTokenOrAssign,
+    ChalkTokenRightShift,
+    ChalkTokenLeftShift,
+    ChalkTokenIncrement,
+    ChalkTokenDecrement,
+    ChalkTokenLogicalAnd,
+    ChalkTokenLogicalOr,
+    ChalkTokenLessOrEqual,
+    ChalkTokenGreaterOrEqual,
+    ChalkTokenIsEqual,
+    ChalkTokenIsNotEqual,
+    ChalkTokenSemicolon,
+    ChalkTokenOpenBrace,
+    ChalkTokenCloseBrace,
+    ChalkTokenComma,
+    ChalkTokenColon,
+    ChalkTokenAssign,
+    ChalkTokenOpenParentheses,
+    ChalkTokenCloseParentheses,
+    ChalkTokenOpenBracket,
+    ChalkTokenCloseBracket,
+    ChalkTokenBitAnd,
+    ChalkTokenLogicalNot,
+    ChalkTokenBitNot,
+    ChalkTokenMinus,
+    ChalkTokenPlus,
+    ChalkTokenAsterisk,
+    ChalkTokenDivide,
+    ChalkTokenModulo,
+    ChalkTokenLessThan,
+    ChalkTokenGreaterThan,
+    ChalkTokenXor,
+    ChalkTokenBitOr,
+    ChalkTokenQuestion,
+} CHALK_TOKEN_TYPE, *PCHALK_TOKEN_TYPE;
 
-typedef enum _SETUP_NODE_TYPE {
-    SetupNodeBegin = SETUP_NODE_BASE,
-    SetupNodeListElementList = SetupNodeBegin,
-    SetupNodeList,
-    SetupNodeDictElement,
-    SetupNodeDictElementList,
-    SetupNodeDict,
-    SetupNodePrimaryExpression,
-    SetupNodePostfixExpression,
-    SetupNodeUnaryExpression,
-    SetupNodeUnaryOperator,
-    SetupNodeMultiplicativeExpression,
-    SetupNodeAdditiveExpression,
-    SetupNodeShiftExpression,
-    SetupNodeRelationalExpression,
-    SetupNodeEqualityExpression,
-    SetupNodeAndExpression,
-    SetupNodeExclusiveOrExpression,
-    SetupNodeInclusiveOrExpression,
-    SetupNodeLogicalAndExpression,
-    SetupNodeLogicalOrExpression,
-    SetupNodeConditionalExpression,
-    SetupNodeAssignmentExpression,
-    SetupNodeAssignmentOperator,
-    SetupNodeExpression,
-    SetupNodeStatementList,
-    SetupNodeExpressionStatement,
-    SetupNodeTranslationUnit,
-    SetupNodeEnd
-} SETUP_NODE_TYPE, *PSETUP_NODE_TYPE;
+typedef enum _CHALK_NODE_TYPE {
+    ChalkNodeBegin = CHALK_NODE_BASE,
+    ChalkNodeListElementList = ChalkNodeBegin,
+    ChalkNodeList,
+    ChalkNodeDictElement,
+    ChalkNodeDictElementList,
+    ChalkNodeDict,
+    ChalkNodePrimaryExpression,
+    ChalkNodePostfixExpression,
+    ChalkNodeUnaryExpression,
+    ChalkNodeUnaryOperator,
+    ChalkNodeMultiplicativeExpression,
+    ChalkNodeAdditiveExpression,
+    ChalkNodeShiftExpression,
+    ChalkNodeRelationalExpression,
+    ChalkNodeEqualityExpression,
+    ChalkNodeAndExpression,
+    ChalkNodeExclusiveOrExpression,
+    ChalkNodeInclusiveOrExpression,
+    ChalkNodeLogicalAndExpression,
+    ChalkNodeLogicalOrExpression,
+    ChalkNodeConditionalExpression,
+    ChalkNodeAssignmentExpression,
+    ChalkNodeAssignmentOperator,
+    ChalkNodeExpression,
+    ChalkNodeStatementList,
+    ChalkNodeExpressionStatement,
+    ChalkNodeTranslationUnit,
+    ChalkNodeEnd
+} CHALK_NODE_TYPE, *PCHALK_NODE_TYPE;
 
-typedef enum _SETUP_OBJECT_TYPE {
-    SetupObjectInvalid,
-    SetupObjectInteger,
-    SetupObjectString,
-    SetupObjectDict,
-    SetupObjectList,
-    SetupObjectReference,
-    SetupObjectCount
-} SETUP_OBJECT_TYPE, *PSETUP_OBJECT_TYPE;
+typedef enum _CHALK_OBJECT_TYPE {
+    ChalkObjectInvalid,
+    ChalkObjectInteger,
+    ChalkObjectString,
+    ChalkObjectDict,
+    ChalkObjectList,
+    ChalkObjectReference,
+    ChalkObjectCount
+} CHALK_OBJECT_TYPE, *PCHALK_OBJECT_TYPE;
 
-typedef union _SETUP_OBJECT SETUP_OBJECT, *PSETUP_OBJECT;
+typedef union _CHALK_OBJECT CHALK_OBJECT, *PCHALK_OBJECT;
 
 /*++
 
@@ -139,16 +139,16 @@ Members:
 
 --*/
 
-typedef struct _SETUP_OBJECT_HEADER {
-    SETUP_OBJECT_TYPE Type;
+typedef struct _CHALK_OBJECT_HEADER {
+    CHALK_OBJECT_TYPE Type;
     ULONG ReferenceCount;
-} SETUP_OBJECT_HEADER, *PSETUP_OBJECT_HEADER;
+} CHALK_OBJECT_HEADER, *PCHALK_OBJECT_HEADER;
 
 /*++
 
 Structure Description:
 
-    This structure stores the data for a setup integer object.
+    This structure stores the data for a Chalk integer object.
 
 Members:
 
@@ -158,16 +158,16 @@ Members:
 
 --*/
 
-typedef struct _SETUP_INT {
-    SETUP_OBJECT_HEADER Header;
+typedef struct _CHALK_INT {
+    CHALK_OBJECT_HEADER Header;
     LONGLONG Value;
-} SETUP_INT, *PSETUP_INT;
+} CHALK_INT, *PCHALK_INT;
 
 /*++
 
 Structure Description:
 
-    This structure stores the data for a setup string object.
+    This structure stores the data for a Chalk string object.
 
 Members:
 
@@ -179,17 +179,17 @@ Members:
 
 --*/
 
-typedef struct _SETUP_STRING {
-    SETUP_OBJECT_HEADER Header;
+typedef struct _CHALK_STRING {
+    CHALK_OBJECT_HEADER Header;
     PSTR String;
     ULONG Size;
-} SETUP_STRING, *PSETUP_STRING;
+} CHALK_STRING, *PCHALK_STRING;
 
 /*++
 
 Structure Description:
 
-    This structure stores the data for a setup list object.
+    This structure stores the data for a Chalk list object.
 
 Members:
 
@@ -201,11 +201,11 @@ Members:
 
 --*/
 
-typedef struct _SETUP_LIST {
-    SETUP_OBJECT_HEADER Header;
-    PSETUP_OBJECT *Array;
+typedef struct _CHALK_LIST {
+    CHALK_OBJECT_HEADER Header;
+    PCHALK_OBJECT *Array;
     UINTN Count;
-} SETUP_LIST, *PSETUP_LIST;
+} CHALK_LIST, *PCHALK_LIST;
 
 /*++
 
@@ -224,36 +224,36 @@ Members:
 
 --*/
 
-typedef struct _SETUP_DICT_ENTRY {
+typedef struct _CHALK_DICT_ENTRY {
     LIST_ENTRY ListEntry;
-    PSETUP_OBJECT Key;
-    PSETUP_OBJECT Value;
-} SETUP_DICT_ENTRY, *PSETUP_DICT_ENTRY;
+    PCHALK_OBJECT Key;
+    PCHALK_OBJECT Value;
+} CHALK_DICT_ENTRY, *PCHALK_DICT_ENTRY;
 
 /*++
 
 Structure Description:
 
-    This structure stores the data for a setup list object.
+    This structure stores the data for a Chalk list object.
 
 Members:
 
     Header - Stores the common object header.
 
-    EntryList - Stores the head of the list of SETUP_DICT_ENTRY entries.
+    EntryList - Stores the head of the list of CHALK_DICT_ENTRY entries.
 
 --*/
 
-typedef struct _SETUP_DICT {
-    SETUP_OBJECT_HEADER Header;
+typedef struct _CHALK_DICT {
+    CHALK_OBJECT_HEADER Header;
     LIST_ENTRY EntryList;
-} SETUP_DICT, *PSETUP_DICT;
+} CHALK_DICT, *PCHALK_DICT;
 
 /*++
 
 Structure Description:
 
-    This structure stores the data for a setup reference (to another object).
+    This structure stores the data for a Chalk reference (to another object).
 
 Members:
 
@@ -263,16 +263,16 @@ Members:
 
 --*/
 
-typedef struct _SETUP_REFERENCE {
-    SETUP_OBJECT_HEADER Header;
-    PSETUP_OBJECT Value;
-} SETUP_REFERENCE, *PSETUP_REFERENCE;
+typedef struct _CHALK_REFERENCE {
+    CHALK_OBJECT_HEADER Header;
+    PCHALK_OBJECT Value;
+} CHALK_REFERENCE, *PCHALK_REFERENCE;
 
 /*++
 
 Structure Description:
 
-    This union describes the entire storage size needed for any setup object
+    This union describes the entire storage size needed for any Chalk object
     type.
 
 Members:
@@ -291,27 +291,27 @@ Members:
     Reference - Stores the reference representation.
 --*/
 
-union _SETUP_OBJECT {
-    SETUP_OBJECT_HEADER Header;
-    SETUP_INT Integer;
-    SETUP_STRING String;
-    SETUP_LIST List;
-    SETUP_DICT Dict;
-    SETUP_REFERENCE Reference;
+union _CHALK_OBJECT {
+    CHALK_OBJECT_HEADER Header;
+    CHALK_INT Integer;
+    CHALK_STRING String;
+    CHALK_LIST List;
+    CHALK_DICT Dict;
+    CHALK_REFERENCE Reference;
 };
 
 //
 // -------------------------------------------------------------------- Globals
 //
 
-extern PSTR SetupObjectTypeNames[SetupObjectCount];
+extern PSTR ChalkObjectTypeNames[ChalkObjectCount];
 
 //
 // -------------------------------------------------------- Function Prototypes
 //
 
-PSETUP_OBJECT
-SetupCreateInteger (
+PCHALK_OBJECT
+ChalkCreateInteger (
     LONGLONG Value
     );
 
@@ -333,8 +333,8 @@ Return Value:
 
 --*/
 
-PSETUP_OBJECT
-SetupCreateString (
+PCHALK_OBJECT
+ChalkCreateString (
     PSTR InitialValue,
     ULONG Size
     );
@@ -360,10 +360,10 @@ Return Value:
 --*/
 
 INT
-SetupStringAdd (
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right,
-    PSETUP_OBJECT *Result
+ChalkStringAdd (
+    PCHALK_OBJECT Left,
+    PCHALK_OBJECT Right,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -388,9 +388,9 @@ Return Value:
 
 --*/
 
-PSETUP_OBJECT
-SetupCreateList (
-    PSETUP_OBJECT *InitialValues,
+PCHALK_OBJECT
+ChalkCreateList (
+    PCHALK_OBJECT *InitialValues,
     ULONG Size
     );
 
@@ -415,9 +415,9 @@ Return Value:
 
 --*/
 
-PSETUP_OBJECT
-SetupListLookup (
-    PSETUP_OBJECT List,
+PCHALK_OBJECT
+ChalkListLookup (
+    PCHALK_OBJECT List,
     ULONG Index
     );
 
@@ -443,10 +443,10 @@ Return Value:
 --*/
 
 INT
-SetupListSetElement (
-    PSETUP_OBJECT ListObject,
+ChalkListSetElement (
+    PCHALK_OBJECT ListObject,
     ULONG Index,
-    PSETUP_OBJECT Object
+    PCHALK_OBJECT Object
     );
 
 /*++
@@ -473,9 +473,9 @@ Return Value:
 --*/
 
 INT
-SetupListAdd (
-    PSETUP_OBJECT Destination,
-    PSETUP_OBJECT Addition
+ChalkListAdd (
+    PCHALK_OBJECT Destination,
+    PCHALK_OBJECT Addition
     );
 
 /*++
@@ -499,9 +499,9 @@ Return Value:
 
 --*/
 
-PSETUP_OBJECT
-SetupCreateDict (
-    PSETUP_OBJECT Source
+PCHALK_OBJECT
+ChalkCreateDict (
+    PCHALK_OBJECT Source
     );
 
 /*++
@@ -523,11 +523,11 @@ Return Value:
 --*/
 
 INT
-SetupDictSetElement (
-    PSETUP_OBJECT DictObject,
-    PSETUP_OBJECT Key,
-    PSETUP_OBJECT Value,
-    PSETUP_OBJECT **LValue
+ChalkDictSetElement (
+    PCHALK_OBJECT DictObject,
+    PCHALK_OBJECT Key,
+    PCHALK_OBJECT Value,
+    PCHALK_OBJECT **LValue
     );
 
 /*++
@@ -557,10 +557,10 @@ Return Value:
 
 --*/
 
-PSETUP_DICT_ENTRY
-SetupDictLookup (
-    PSETUP_OBJECT DictObject,
-    PSETUP_OBJECT Key
+PCHALK_DICT_ENTRY
+ChalkDictLookup (
+    PCHALK_OBJECT DictObject,
+    PCHALK_OBJECT Key
     );
 
 /*++
@@ -585,9 +585,9 @@ Return Value:
 --*/
 
 INT
-SetupDictAdd (
-    PSETUP_OBJECT Destination,
-    PSETUP_OBJECT Addition
+ChalkDictAdd (
+    PCHALK_OBJECT Destination,
+    PCHALK_OBJECT Addition
     );
 
 /*++
@@ -611,9 +611,9 @@ Return Value:
 
 --*/
 
-PSETUP_OBJECT
-SetupObjectCopy (
-    PSETUP_OBJECT Source
+PCHALK_OBJECT
+ChalkObjectCopy (
+    PCHALK_OBJECT Source
     );
 
 /*++
@@ -635,8 +635,8 @@ Return Value:
 --*/
 
 BOOL
-SetupObjectGetBooleanValue (
-    PSETUP_OBJECT Object
+ChalkObjectGetBooleanValue (
+    PCHALK_OBJECT Object
     );
 
 /*++
@@ -658,15 +658,15 @@ Return Value:
 --*/
 
 VOID
-SetupObjectAddReference (
-    PSETUP_OBJECT Object
+ChalkObjectAddReference (
+    PCHALK_OBJECT Object
     );
 
 /*++
 
 Routine Description:
 
-    This routine adds a reference to the given setup object.
+    This routine adds a reference to the given Chalk object.
 
 Arguments:
 
@@ -679,15 +679,15 @@ Return Value:
 --*/
 
 VOID
-SetupObjectReleaseReference (
-    PSETUP_OBJECT Object
+ChalkObjectReleaseReference (
+    PCHALK_OBJECT Object
     );
 
 /*++
 
 Routine Description:
 
-    This routine releases a reference from the given setup object. If the
+    This routine releases a reference from the given Chalk object. If the
     reference count its zero, the object is destroyed.
 
 Arguments:
@@ -701,8 +701,8 @@ Return Value:
 --*/
 
 VOID
-SetupPrintObject (
-    PSETUP_OBJECT Object,
+ChalkPrintObject (
+    PCHALK_OBJECT Object,
     ULONG RecursionDepth
     );
 

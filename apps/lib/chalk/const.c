@@ -30,8 +30,7 @@ Environment:
 #include <stdlib.h>
 #include <errno.h>
 
-#include "../setup.h"
-#include <minoca/lib/yy.h>
+#include "chalkp.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -54,10 +53,10 @@ Environment:
 //
 
 INT
-SetupVisitListElementList (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitListElementList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -86,13 +85,13 @@ Return Value:
 {
 
     LONG Index;
-    PSETUP_OBJECT List;
+    PCHALK_OBJECT List;
     PPARSER_NODE ParseNode;
     INT Status;
 
     ParseNode = Node->ParseNode;
     Node->LValue = NULL;
-    List = SetupCreateList(NULL, ParseNode->NodeCount);
+    List = ChalkCreateList(NULL, ParseNode->NodeCount);
     if (List == NULL) {
         return ENOMEM;
     }
@@ -102,9 +101,9 @@ Return Value:
     //
 
     for (Index = 0; Index < ParseNode->NodeCount; Index += 1) {
-        Status = SetupListSetElement(List, Index, Node->Results[Index]);
+        Status = ChalkListSetElement(List, Index, Node->Results[Index]);
         if (Status != 0) {
-            SetupObjectReleaseReference(List);
+            ChalkObjectReleaseReference(List);
             return Status;
         }
     }
@@ -114,10 +113,10 @@ Return Value:
 }
 
 INT
-SetupVisitList (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -157,7 +156,7 @@ Return Value:
     //
 
     if (ParseNode->NodeCount == 0) {
-        *Result = SetupCreateList(NULL, 0);
+        *Result = ChalkCreateList(NULL, 0);
         if (*Result == NULL) {
             return ENOMEM;
         }
@@ -171,10 +170,10 @@ Return Value:
 }
 
 INT
-SetupVisitDictElement (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitDictElement (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -209,7 +208,7 @@ Return Value:
 
     assert(ParseNode->NodeCount == 2);
 
-    *Result = SetupCreateList(Node->Results, 2);
+    *Result = ChalkCreateList(Node->Results, 2);
     if (*Result == NULL) {
         return ENOMEM;
     }
@@ -218,10 +217,10 @@ Return Value:
 }
 
 INT
-SetupVisitDictElementList (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitDictElementList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -249,15 +248,15 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT Dict;
+    PCHALK_OBJECT Dict;
     ULONG Index;
-    PSETUP_LIST List;
+    PCHALK_LIST List;
     PPARSER_NODE ParseNode;
     INT Status;
 
     ParseNode = Node->ParseNode;
     Node->LValue = NULL;
-    Dict = SetupCreateDict(NULL);
+    Dict = ChalkCreateDict(NULL);
     if (Dict == NULL) {
         return ENOMEM;
     }
@@ -268,17 +267,17 @@ Return Value:
     //
 
     for (Index = 0; Index < ParseNode->NodeCount; Index += 1) {
-        List = (PSETUP_LIST)(Node->Results[Index]);
+        List = (PCHALK_LIST)(Node->Results[Index]);
 
-        assert(List->Header.Type == SetupObjectList);
+        assert(List->Header.Type == ChalkObjectList);
 
-        Status = SetupDictSetElement(Dict,
+        Status = ChalkDictSetElement(Dict,
                                      List->Array[0],
                                      List->Array[1],
                                      NULL);
 
         if (Status != 0) {
-            SetupObjectReleaseReference(Dict);
+            ChalkObjectReleaseReference(Dict);
             return Status;
         }
     }
@@ -288,10 +287,10 @@ Return Value:
 }
 
 INT
-SetupVisitDict (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitDict (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -331,7 +330,7 @@ Return Value:
     //
 
     if (ParseNode->NodeCount == 0) {
-        *Result = SetupCreateDict(NULL);
+        *Result = ChalkCreateDict(NULL);
         if (*Result == NULL) {
             return ENOMEM;
         }
@@ -345,10 +344,10 @@ Return Value:
 }
 
 INT
-SetupVisitPrimaryExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitPrimaryExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -381,13 +380,13 @@ Return Value:
     PSTR Destination;
     ULONG Index;
     LONGLONG Integer;
-    PSETUP_OBJECT Name;
+    PCHALK_OBJECT Name;
     PPARSER_NODE ParseNode;
     PSTR Source;
     INT Status;
     PLEXER_TOKEN Token;
     PSTR TokenString;
-    PSETUP_OBJECT Value;
+    PCHALK_OBJECT Value;
 
     Name = NULL;
     ParseNode = Node->ParseNode;
@@ -422,27 +421,27 @@ Return Value:
         // Look up the variable value.
         //
 
-        case SetupTokenIdentifier:
-            Name = SetupCreateString(TokenString, Token->Size);
+        case ChalkTokenIdentifier:
+            Name = ChalkCreateString(TokenString, Token->Size);
             if (Name == NULL) {
                 Status = ENOMEM;
                 goto VisitPrimaryExpressionEnd;
             }
 
-            Value = SetupGetVariable(Interpreter, Name, &(Node->LValue));
+            Value = ChalkGetVariable(Interpreter, Name, &(Node->LValue));
 
             //
             // If the variable does not exist, create it now.
             //
 
             if (Value == NULL) {
-                Value = SetupCreateInteger(0);
+                Value = ChalkCreateInteger(0);
                 if (Value == NULL) {
                     Status = ENOMEM;
                     goto VisitPrimaryExpressionEnd;
                 }
 
-                Status = SetupSetVariable(Interpreter,
+                Status = ChalkSetVariable(Interpreter,
                                           Name,
                                           Value,
                                           &(Node->LValue));
@@ -454,26 +453,26 @@ Return Value:
 
             break;
 
-        case SetupTokenHexInteger:
+        case ChalkTokenHexInteger:
             Integer = strtoull(TokenString, &After, 16);
-            Value = SetupCreateInteger(Integer);
+            Value = ChalkCreateInteger(Integer);
             break;
 
-        case SetupTokenOctalInteger:
+        case ChalkTokenOctalInteger:
             Integer = strtoull(TokenString, &After, 8);
-            Value = SetupCreateInteger(Integer);
+            Value = ChalkCreateInteger(Integer);
             break;
 
-        case SetupTokenDecimalInteger:
+        case ChalkTokenDecimalInteger:
             Integer = strtoull(TokenString, &After, 10);
-            Value = SetupCreateInteger(Integer);
+            Value = ChalkCreateInteger(Integer);
             break;
 
-        case SetupTokenString:
+        case ChalkTokenString:
 
             assert((*TokenString == '"') && (Token->Size >= 2));
 
-            Value = SetupCreateString(TokenString + 1, Token->Size - 1);
+            Value = ChalkCreateString(TokenString + 1, Token->Size - 1);
             if (Value == NULL) {
                 break;
             }
@@ -590,13 +589,13 @@ Return Value:
 VisitPrimaryExpressionEnd:
     if (Status != 0) {
         if (Value != NULL) {
-            SetupObjectReleaseReference(Value);
+            ChalkObjectReleaseReference(Value);
             Value = NULL;
         }
     }
 
     if (Name != NULL) {
-        SetupObjectReleaseReference(Name);
+        ChalkObjectReleaseReference(Name);
     }
 
     *Result = Value;
@@ -604,10 +603,10 @@ VisitPrimaryExpressionEnd:
 }
 
 INT
-SetupVisitStatementList (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitStatementList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -644,10 +643,10 @@ Return Value:
 }
 
 INT
-SetupVisitTranslationUnit (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitTranslationUnit (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++

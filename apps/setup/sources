@@ -25,12 +25,6 @@ COMMON_OBJS = cache.o          \
               fatdev.o         \
               fileio.o         \
               indat.o          \
-              interp/cif.o     \
-              interp/const.o   \
-              interp/exec.o    \
-              interp/expr.o    \
-              interp/lang.o    \
-              interp/obj.o     \
               partio.o         \
               plat.o           \
               setup.o          \

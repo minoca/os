@@ -8,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This module implements support for expressions in the setup interpreter.
+    This module implements support for expressions in the Chalk interpreter.
 
 Author:
 
@@ -29,30 +29,29 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "../setup.h"
-#include <minoca/lib/yy.h>
+#include "chalkp.h"
 
 //
 // --------------------------------------------------------------------- Macros
 //
 
-#define SETUP_LOGICAL_OPERATOR(_Operator) \
-    (((_Operator) == SetupTokenLogicalAnd) || \
-     ((_Operator) == SetupTokenLogicalOr) || \
-     ((_Operator) == SetupTokenLogicalNot) || \
-     ((_Operator) == SetupTokenLessThan) || \
-     ((_Operator) == SetupTokenGreaterThan) || \
-     ((_Operator) == SetupTokenLessOrEqual) || \
-     ((_Operator) == SetupTokenGreaterOrEqual) || \
-     ((_Operator) == SetupTokenIsEqual) || \
-     ((_Operator) == SetupTokenIsNotEqual))
+#define CHALK_LOGICAL_OPERATOR(_Operator) \
+    (((_Operator) == ChalkTokenLogicalAnd) || \
+     ((_Operator) == ChalkTokenLogicalOr) || \
+     ((_Operator) == ChalkTokenLogicalNot) || \
+     ((_Operator) == ChalkTokenLessThan) || \
+     ((_Operator) == ChalkTokenGreaterThan) || \
+     ((_Operator) == ChalkTokenLessOrEqual) || \
+     ((_Operator) == ChalkTokenGreaterOrEqual) || \
+     ((_Operator) == ChalkTokenIsEqual) || \
+     ((_Operator) == ChalkTokenIsNotEqual))
 
-#define SETUP_UNARY_OPERATOR(_Operator) \
-    (((_Operator) == SetupTokenMinus) || \
-     ((_Operator) == SetupTokenLogicalNot) || \
-     ((_Operator) == SetupTokenBitNot) || \
-     ((_Operator) == SetupTokenIncrement) || \
-     ((_Operator) == SetupTokenDecrement))
+#define CHALK_UNARY_OPERATOR(_Operator) \
+    (((_Operator) == ChalkTokenMinus) || \
+     ((_Operator) == ChalkTokenLogicalNot) || \
+     ((_Operator) == ChalkTokenBitNot) || \
+     ((_Operator) == ChalkTokenIncrement) || \
+     ((_Operator) == ChalkTokenDecrement))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -67,21 +66,21 @@ Environment:
 //
 
 INT
-SetupPerformArithmetic (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right,
-    SETUP_TOKEN_TYPE Operator,
-    PSETUP_OBJECT *Result
+ChalkPerformArithmetic (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Left,
+    PCHALK_OBJECT Right,
+    CHALK_TOKEN_TYPE Operator,
+    PCHALK_OBJECT *Result
     );
 
 INT
-SetupIntegerMath (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right,
-    SETUP_TOKEN_TYPE Operator,
-    PSETUP_OBJECT *Result
+ChalkIntegerMath (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Left,
+    PCHALK_OBJECT Right,
+    CHALK_TOKEN_TYPE Operator,
+    PCHALK_OBJECT *Result
     );
 
 //
@@ -93,10 +92,10 @@ SetupIntegerMath (
 //
 
 INT
-SetupVisitPostfixExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitPostfixExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -124,13 +123,13 @@ Return Value:
 
 {
 
-    PSETUP_DICT_ENTRY DictEntry;
-    PSETUP_OBJECT Expression;
-    PSETUP_OBJECT ExpressionValue;
-    PSETUP_OBJECT Key;
+    PCHALK_DICT_ENTRY DictEntry;
+    PCHALK_OBJECT Expression;
+    PCHALK_OBJECT ExpressionValue;
+    PCHALK_OBJECT Key;
     LONGLONG ListIndex;
-    PSETUP_OBJECT *LValue;
-    PSETUP_OBJECT NewExpression;
+    PCHALK_OBJECT *LValue;
+    PCHALK_OBJECT NewExpression;
     ULONG NodeIndex;
     PPARSER_NODE ParseNode;
     INT Status;
@@ -144,7 +143,7 @@ Return Value:
     for (TokenIndex = 0; TokenIndex < ParseNode->TokenCount; TokenIndex += 1) {
         Token = ParseNode->Tokens[TokenIndex];
         switch (Token->Value) {
-        case SetupTokenOpenBracket:
+        case ChalkTokenOpenBracket:
 
             assert(NodeIndex < ParseNode->NodeCount);
 
@@ -156,7 +155,7 @@ Return Value:
             //
 
             ExpressionValue = Expression;
-            if (Expression->Header.Type == SetupObjectReference) {
+            if (Expression->Header.Type == ChalkObjectReference) {
                 ExpressionValue = Expression->Reference.Value;
             }
 
@@ -164,8 +163,8 @@ Return Value:
             // Index into a list.
             //
 
-            if (ExpressionValue->Header.Type == SetupObjectList) {
-                if (Key->Header.Type != SetupObjectInteger) {
+            if (ExpressionValue->Header.Type == ChalkObjectList) {
+                if (Key->Header.Type != ChalkObjectInteger) {
                     fprintf(stderr, "List index must be an integer.\n");
                     Status = EINVAL;
                     goto VisitPostfixExpressionEnd;
@@ -189,24 +188,24 @@ Return Value:
                 if ((ListIndex >= ExpressionValue->List.Count) ||
                     (ExpressionValue->List.Array[ListIndex] == NULL)) {
 
-                    NewExpression = SetupCreateInteger(0);
+                    NewExpression = ChalkCreateInteger(0);
                     if (NewExpression == NULL) {
                         Status = ENOMEM;
                         goto VisitPostfixExpressionEnd;
                     }
 
-                    Status = SetupListSetElement(ExpressionValue,
+                    Status = ChalkListSetElement(ExpressionValue,
                                                  ListIndex,
                                                  NewExpression);
 
                     if (Status != 0)  {
-                        SetupObjectReleaseReference(NewExpression);
+                        ChalkObjectReleaseReference(NewExpression);
                         goto VisitPostfixExpressionEnd;
                     }
 
                 } else {
                     NewExpression = ExpressionValue->List.Array[ListIndex];
-                    SetupObjectAddReference(NewExpression);
+                    ChalkObjectAddReference(NewExpression);
                 }
 
                 //
@@ -214,19 +213,19 @@ Return Value:
                 //
 
                 Node->LValue = &(ExpressionValue->List.Array[ListIndex]);
-                SetupObjectReleaseReference(Expression);
+                ChalkObjectReleaseReference(Expression);
                 Expression = NewExpression;
 
             //
             // Key into a dictionary.
             //
 
-            } else if (ExpressionValue->Header.Type == SetupObjectDict) {
-                DictEntry = SetupDictLookup(ExpressionValue, Key);
+            } else if (ExpressionValue->Header.Type == ChalkObjectDict) {
+                DictEntry = ChalkDictLookup(ExpressionValue, Key);
                 if (DictEntry != NULL) {
                     NewExpression = DictEntry->Value;
                     Node->LValue = &(DictEntry->Value);
-                    SetupObjectAddReference(NewExpression);
+                    ChalkObjectAddReference(NewExpression);
 
                 } else {
 
@@ -234,30 +233,30 @@ Return Value:
                     // Add a zero there if there wasn't one before.
                     //
 
-                    NewExpression = SetupCreateInteger(0);
+                    NewExpression = ChalkCreateInteger(0);
                     if (NewExpression == NULL) {
                         Status = ENOMEM;
                         goto VisitPostfixExpressionEnd;
                     }
 
-                    Status = SetupDictSetElement(ExpressionValue,
+                    Status = ChalkDictSetElement(ExpressionValue,
                                                  Key,
                                                  NewExpression,
                                                  &(Node->LValue));
 
                     if (Status != 0)  {
-                        SetupObjectReleaseReference(NewExpression);
+                        ChalkObjectReleaseReference(NewExpression);
                         goto VisitPostfixExpressionEnd;
                     }
                 }
 
-                SetupObjectReleaseReference(Expression);
+                ChalkObjectReleaseReference(Expression);
                 Expression = NewExpression;
 
             } else {
                 fprintf(stderr,
                         "Cannot index into %s.\n",
-                        SetupObjectTypeNames[ExpressionValue->Header.Type]);
+                        ChalkObjectTypeNames[ExpressionValue->Header.Type]);
 
                 Status = EINVAL;
                 goto VisitPostfixExpressionEnd;
@@ -269,11 +268,11 @@ Return Value:
         // Ignore the close bracket that came with an earlier open bracket.
         //
 
-        case SetupTokenCloseBracket:
+        case ChalkTokenCloseBracket:
             break;
 
-        case SetupTokenIncrement:
-        case SetupTokenDecrement:
+        case ChalkTokenIncrement:
+        case ChalkTokenDecrement:
             LValue = Node->LValue;
             if (LValue == NULL) {
                 fprintf(stderr, "Error: lvalue required for unary operator.\n");
@@ -281,7 +280,7 @@ Return Value:
                 goto VisitPostfixExpressionEnd;
             }
 
-            Status = SetupPerformArithmetic(Interpreter,
+            Status = ChalkPerformArithmetic(Interpreter,
                                             Expression,
                                             NULL,
                                             Token->Value,
@@ -298,7 +297,7 @@ Return Value:
             //
 
             if (*LValue != NULL) {
-                SetupObjectReleaseReference(*LValue);
+                ChalkObjectReleaseReference(*LValue);
             }
 
             *LValue = NewExpression;
@@ -319,7 +318,7 @@ Return Value:
 VisitPostfixExpressionEnd:
     if (Status != 0) {
         if (Expression != NULL) {
-            SetupObjectReleaseReference(Expression);
+            ChalkObjectReleaseReference(Expression);
             Expression = NULL;
         }
     }
@@ -329,10 +328,10 @@ VisitPostfixExpressionEnd:
 }
 
 INT
-SetupVisitUnaryExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitUnaryExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -360,8 +359,8 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT *LValue;
-    SETUP_TOKEN_TYPE Operator;
+    PCHALK_OBJECT *LValue;
+    CHALK_TOKEN_TYPE Operator;
     PPARSER_NODE ParseNode;
     INT Status;
     PLEXER_TOKEN Token;
@@ -385,7 +384,7 @@ Return Value:
 
     Token = UnaryOperatorNode->Tokens[0];
     Operator = Token->Value;
-    Status = SetupPerformArithmetic(Interpreter,
+    Status = ChalkPerformArithmetic(Interpreter,
                                     Node->Results[1],
                                     NULL,
                                     Operator,
@@ -399,32 +398,32 @@ Return Value:
     // Assign the object back for increment and decrement.
     //
 
-    if ((Operator == SetupTokenIncrement) ||
-        (Operator == SetupTokenDecrement)) {
+    if ((Operator == ChalkTokenIncrement) ||
+        (Operator == ChalkTokenDecrement)) {
 
         if (LValue == NULL) {
             fprintf(stderr, "Error: lvalue required for unary operator.\n");
-            SetupObjectReleaseReference(*Result);
+            ChalkObjectReleaseReference(*Result);
             *Result = NULL;
             return EINVAL;
         }
 
         if (*LValue != NULL) {
-            SetupObjectReleaseReference(*LValue);
+            ChalkObjectReleaseReference(*LValue);
         }
 
         *LValue = *Result;
-        SetupObjectAddReference(*Result);
+        ChalkObjectAddReference(*Result);
     }
 
     return Status;
 }
 
 INT
-SetupVisitUnaryOperator (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitUnaryOperator (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -458,10 +457,10 @@ Return Value:
 }
 
 INT
-SetupVisitMultiplicativeExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitMultiplicativeExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -489,8 +488,8 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT Answer;
-    PSETUP_OBJECT Left;
+    PCHALK_OBJECT Answer;
+    PCHALK_OBJECT Left;
     PPARSER_NODE ParseNode;
     INT Status;
     PLEXER_TOKEN Token;
@@ -516,14 +515,14 @@ Return Value:
     Left = Node->Results[0];
     for (TokenIndex = 0; TokenIndex < ParseNode->TokenCount; TokenIndex += 1) {
         Token = ParseNode->Tokens[TokenIndex];
-        Status = SetupPerformArithmetic(Interpreter,
+        Status = ChalkPerformArithmetic(Interpreter,
                                         Left,
                                         Node->Results[TokenIndex + 1],
                                         Token->Value,
                                         &Answer);
 
         if (Left != Node->Results[0]) {
-            SetupObjectReleaseReference(Left);
+            ChalkObjectReleaseReference(Left);
         }
 
         if (!KSUCCESS(Status)) {
@@ -539,10 +538,10 @@ Return Value:
 }
 
 INT
-SetupVisitAdditiveExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitAdditiveExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -570,14 +569,14 @@ Return Value:
 
 {
 
-    return SetupVisitMultiplicativeExpression(Interpreter, Node, Result);
+    return ChalkVisitMultiplicativeExpression(Interpreter, Node, Result);
 }
 
 INT
-SetupVisitShiftExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitShiftExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -605,14 +604,14 @@ Return Value:
 
 {
 
-    return SetupVisitMultiplicativeExpression(Interpreter, Node, Result);
+    return ChalkVisitMultiplicativeExpression(Interpreter, Node, Result);
 }
 
 INT
-SetupVisitRelationalExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitRelationalExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -640,14 +639,14 @@ Return Value:
 
 {
 
-    return SetupVisitMultiplicativeExpression(Interpreter, Node, Result);
+    return ChalkVisitMultiplicativeExpression(Interpreter, Node, Result);
 }
 
 INT
-SetupVisitEqualityExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitEqualityExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -675,14 +674,14 @@ Return Value:
 
 {
 
-    return SetupVisitMultiplicativeExpression(Interpreter, Node, Result);
+    return ChalkVisitMultiplicativeExpression(Interpreter, Node, Result);
 }
 
 INT
-SetupVisitAndExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitAndExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -710,14 +709,14 @@ Return Value:
 
 {
 
-    return SetupVisitMultiplicativeExpression(Interpreter, Node, Result);
+    return ChalkVisitMultiplicativeExpression(Interpreter, Node, Result);
 }
 
 INT
-SetupVisitExclusiveOrExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitExclusiveOrExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -745,14 +744,14 @@ Return Value:
 
 {
 
-    return SetupVisitMultiplicativeExpression(Interpreter, Node, Result);
+    return ChalkVisitMultiplicativeExpression(Interpreter, Node, Result);
 }
 
 INT
-SetupVisitInclusiveOrExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitInclusiveOrExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -780,14 +779,14 @@ Return Value:
 
 {
 
-    return SetupVisitMultiplicativeExpression(Interpreter, Node, Result);
+    return ChalkVisitMultiplicativeExpression(Interpreter, Node, Result);
 }
 
 INT
-SetupVisitLogicalAndExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitLogicalAndExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -815,14 +814,14 @@ Return Value:
 
 {
 
-    return SetupVisitMultiplicativeExpression(Interpreter, Node, Result);
+    return ChalkVisitMultiplicativeExpression(Interpreter, Node, Result);
 }
 
 INT
-SetupVisitLogicalOrExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitLogicalOrExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -850,14 +849,14 @@ Return Value:
 
 {
 
-    return SetupVisitMultiplicativeExpression(Interpreter, Node, Result);
+    return ChalkVisitMultiplicativeExpression(Interpreter, Node, Result);
 }
 
 INT
-SetupVisitConditionalExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitConditionalExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -891,7 +890,7 @@ Return Value:
 
     assert((ParseNode->TokenCount == 2) && (ParseNode->NodeCount == 3));
 
-    if (SetupObjectGetBooleanValue(Node->Results[0]) != FALSE) {
+    if (ChalkObjectGetBooleanValue(Node->Results[0]) != FALSE) {
         *Result = Node->Results[1];
         Node->Results[1] = NULL;
 
@@ -909,10 +908,10 @@ Return Value:
 }
 
 INT
-SetupVisitAssignmentExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitAssignmentExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -941,12 +940,12 @@ Return Value:
 {
 
     PPARSER_NODE AssignmentOperator;
-    PSETUP_OBJECT *LValue;
-    SETUP_TOKEN_TYPE Operator;
+    PCHALK_OBJECT *LValue;
+    CHALK_TOKEN_TYPE Operator;
     PPARSER_NODE ParseNode;
     INT Status;
     PLEXER_TOKEN Token;
-    PSETUP_OBJECT Value;
+    PCHALK_OBJECT Value;
 
     LValue = Node->LValue;
     if (LValue == NULL) {
@@ -965,50 +964,50 @@ Return Value:
            (AssignmentOperator->TokenCount == 1));
 
     Token = AssignmentOperator->Tokens[0];
-    if (Token->Value == SetupTokenAssign) {
+    if (Token->Value == ChalkTokenAssign) {
         Value = Node->Results[2];
         Node->Results[2] = NULL;
 
     } else {
         switch (Token->Value) {
-        case SetupTokenLeftAssign:
-            Operator = SetupTokenLeftShift;
+        case ChalkTokenLeftAssign:
+            Operator = ChalkTokenLeftShift;
             break;
 
-        case SetupTokenRightAssign:
-            Operator = SetupTokenRightShift;
+        case ChalkTokenRightAssign:
+            Operator = ChalkTokenRightShift;
             break;
 
-        case SetupTokenAddAssign:
-            Operator = SetupTokenPlus;
+        case ChalkTokenAddAssign:
+            Operator = ChalkTokenPlus;
             break;
 
-        case SetupTokenSubtractAssign:
-            Operator = SetupTokenMinus;
+        case ChalkTokenSubtractAssign:
+            Operator = ChalkTokenMinus;
             break;
 
-        case SetupTokenMultiplyAssign:
-            Operator = SetupTokenAsterisk;
+        case ChalkTokenMultiplyAssign:
+            Operator = ChalkTokenAsterisk;
             break;
 
-        case SetupTokenDivideAssign:
-            Operator = SetupTokenDivide;
+        case ChalkTokenDivideAssign:
+            Operator = ChalkTokenDivide;
             break;
 
-        case SetupTokenModuloAssign:
-            Operator = SetupTokenModulo;
+        case ChalkTokenModuloAssign:
+            Operator = ChalkTokenModulo;
             break;
 
-        case SetupTokenAndAssign:
-            Operator = SetupTokenBitAnd;
+        case ChalkTokenAndAssign:
+            Operator = ChalkTokenBitAnd;
             break;
 
-        case SetupTokenOrAssign:
-            Operator = SetupTokenBitOr;
+        case ChalkTokenOrAssign:
+            Operator = ChalkTokenBitOr;
             break;
 
-        case SetupTokenXorAssign:
-            Operator = SetupTokenXor;
+        case ChalkTokenXorAssign:
+            Operator = ChalkTokenXor;
             break;
 
         default:
@@ -1018,7 +1017,7 @@ Return Value:
             return EINVAL;
         }
 
-        Status = SetupPerformArithmetic(Interpreter,
+        Status = ChalkPerformArithmetic(Interpreter,
                                         Node->Results[0],
                                         Node->Results[2],
                                         Operator,
@@ -1034,11 +1033,11 @@ Return Value:
     //
 
     if (*LValue != NULL) {
-        SetupObjectReleaseReference(*LValue);
+        ChalkObjectReleaseReference(*LValue);
     }
 
     *LValue = Value;
-    SetupObjectAddReference(Value);
+    ChalkObjectAddReference(Value);
     *Result = Value;
 
     //
@@ -1056,10 +1055,10 @@ Return Value:
 }
 
 INT
-SetupVisitAssignmentOperator (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitAssignmentOperator (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -1093,10 +1092,10 @@ Return Value:
 }
 
 INT
-SetupVisitExpression (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitExpression (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -1135,10 +1134,10 @@ Return Value:
 }
 
 INT
-SetupVisitExpressionStatement (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_NODE Node,
-    PSETUP_OBJECT *Result
+ChalkVisitExpressionStatement (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -1180,12 +1179,12 @@ Return Value:
 //
 
 INT
-SetupPerformArithmetic (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right,
-    SETUP_TOKEN_TYPE Operator,
-    PSETUP_OBJECT *Result
+ChalkPerformArithmetic (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Left,
+    PCHALK_OBJECT Right,
+    CHALK_TOKEN_TYPE Operator,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -1217,53 +1216,53 @@ Return Value:
 
 {
 
-    PSETUP_OBJECT LeftValue;
-    PSETUP_OBJECT RightValue;
+    PCHALK_OBJECT LeftValue;
+    PCHALK_OBJECT RightValue;
     INT Status;
-    SETUP_OBJECT_TYPE Type;
+    CHALK_OBJECT_TYPE Type;
 
     //
     // Lists and dictionaries can be added.
     //
 
-    if (Operator == SetupTokenPlus) {
+    if (Operator == ChalkTokenPlus) {
         LeftValue = Left;
-        if (LeftValue->Header.Type == SetupObjectReference) {
+        if (LeftValue->Header.Type == ChalkObjectReference) {
             LeftValue = LeftValue->Reference.Value;
         }
 
         RightValue = Right;
-        if (RightValue->Header.Type == SetupObjectReference) {
+        if (RightValue->Header.Type == ChalkObjectReference) {
             RightValue = RightValue->Reference.Value;
         }
 
         Type = LeftValue->Header.Type;
         if (Type == RightValue->Header.Type) {
-            if (Type == SetupObjectList) {
-                Status = SetupListAdd(LeftValue, RightValue);
+            if (Type == ChalkObjectList) {
+                Status = ChalkListAdd(LeftValue, RightValue);
                 if (Status == 0) {
                     *Result = LeftValue;
-                    SetupObjectAddReference(LeftValue);
+                    ChalkObjectAddReference(LeftValue);
                 }
 
                 return Status;
 
-            } else if (Type == SetupObjectDict) {
-                Status = SetupDictAdd(LeftValue, RightValue);
+            } else if (Type == ChalkObjectDict) {
+                Status = ChalkDictAdd(LeftValue, RightValue);
                 if (Status == 0) {
                     *Result = LeftValue;
-                    SetupObjectAddReference(LeftValue);
+                    ChalkObjectAddReference(LeftValue);
                 }
 
                 return Status;
 
-            } else if (Type == SetupObjectString) {
-                return SetupStringAdd(LeftValue, RightValue, Result);
+            } else if (Type == ChalkObjectString) {
+                return ChalkStringAdd(LeftValue, RightValue, Result);
             }
         }
     }
 
-    Status = SetupIntegerMath(Interpreter,
+    Status = ChalkIntegerMath(Interpreter,
                               Left,
                               Right,
                               Operator,
@@ -1273,12 +1272,12 @@ Return Value:
 }
 
 INT
-SetupIntegerMath (
-    PSETUP_INTERPRETER Interpreter,
-    PSETUP_OBJECT Left,
-    PSETUP_OBJECT Right,
-    SETUP_TOKEN_TYPE Operator,
-    PSETUP_OBJECT *Result
+ChalkIntegerMath (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Left,
+    PCHALK_OBJECT Right,
+    CHALK_TOKEN_TYPE Operator,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -1314,20 +1313,20 @@ Return Value:
     LONGLONG ResultValue;
     LONGLONG RightValue;
 
-    if (SETUP_LOGICAL_OPERATOR(Operator)) {
-        LeftValue = SetupObjectGetBooleanValue(Left);
-        if (Operator != SetupTokenLogicalNot) {
+    if (CHALK_LOGICAL_OPERATOR(Operator)) {
+        LeftValue = ChalkObjectGetBooleanValue(Left);
+        if (Operator != ChalkTokenLogicalNot) {
 
             assert(Right != NULL);
 
-            RightValue = SetupObjectGetBooleanValue(Right);
+            RightValue = ChalkObjectGetBooleanValue(Right);
         }
 
     } else {
-        if (Left->Header.Type != SetupObjectInteger) {
+        if (Left->Header.Type != ChalkObjectInteger) {
             fprintf(stderr,
                     "Error: Operator expects integer, got %s.\n",
-                    SetupObjectTypeNames[Left->Header.Type]);
+                    ChalkObjectTypeNames[Left->Header.Type]);
 
             return EINVAL;
         }
@@ -1340,13 +1339,13 @@ Return Value:
         //
 
         RightValue = 0;
-        if ((!SETUP_UNARY_OPERATOR(Operator)) ||
-            ((Operator == SetupTokenMinus) && (Right != NULL))) {
+        if ((!CHALK_UNARY_OPERATOR(Operator)) ||
+            ((Operator == ChalkTokenMinus) && (Right != NULL))) {
 
-            if (Right->Header.Type != SetupObjectInteger) {
+            if (Right->Header.Type != ChalkObjectInteger) {
                 fprintf(stderr,
                         "Error: Operator expects integer, got %s.\n",
-                        SetupObjectTypeNames[Right->Header.Type]);
+                        ChalkObjectTypeNames[Right->Header.Type]);
 
                 return EINVAL;
             }
@@ -1356,19 +1355,19 @@ Return Value:
     }
 
     switch (Operator) {
-    case SetupTokenIncrement:
+    case ChalkTokenIncrement:
         ResultValue = LeftValue + 1;
         break;
 
-    case SetupTokenDecrement:
+    case ChalkTokenDecrement:
         ResultValue = LeftValue - 1;
         break;
 
-    case SetupTokenPlus:
+    case ChalkTokenPlus:
         ResultValue = LeftValue + RightValue;
         break;
 
-    case SetupTokenMinus:
+    case ChalkTokenMinus:
         if (Right != NULL) {
             ResultValue = LeftValue - RightValue;
 
@@ -1378,18 +1377,18 @@ Return Value:
 
         break;
 
-    case SetupTokenAsterisk:
+    case ChalkTokenAsterisk:
         ResultValue = LeftValue * RightValue;
         break;
 
-    case SetupTokenDivide:
-    case SetupTokenModulo:
+    case ChalkTokenDivide:
+    case ChalkTokenModulo:
         if (RightValue == 0) {
             fprintf(stderr, "Error: Divide by zero.\n");
             return ERANGE;
         }
 
-        if (Operator == SetupTokenDivide) {
+        if (Operator == ChalkTokenDivide) {
             ResultValue = LeftValue / RightValue;
 
         } else {
@@ -1398,63 +1397,63 @@ Return Value:
 
         break;
 
-    case SetupTokenLeftShift:
+    case ChalkTokenLeftShift:
         ResultValue = LeftValue << RightValue;
         break;
 
-    case SetupTokenRightShift:
+    case ChalkTokenRightShift:
         ResultValue = LeftValue >> RightValue;
         break;
 
-    case SetupTokenBitAnd:
+    case ChalkTokenBitAnd:
         ResultValue = LeftValue & RightValue;
         break;
 
-    case SetupTokenBitOr:
+    case ChalkTokenBitOr:
         ResultValue = LeftValue | RightValue;
         break;
 
-    case SetupTokenXor:
+    case ChalkTokenXor:
         ResultValue = LeftValue ^ RightValue;
         break;
 
-    case SetupTokenBitNot:
+    case ChalkTokenBitNot:
         ResultValue = ~LeftValue;
         break;
 
-    case SetupTokenLogicalNot:
+    case ChalkTokenLogicalNot:
         ResultValue = !LeftValue;
         break;
 
-    case SetupTokenLogicalAnd:
+    case ChalkTokenLogicalAnd:
         ResultValue = (LeftValue && RightValue);
         break;
 
-    case SetupTokenLogicalOr:
+    case ChalkTokenLogicalOr:
         ResultValue = (LeftValue || RightValue);
         break;
 
-    case SetupTokenLessThan:
+    case ChalkTokenLessThan:
         ResultValue = (LeftValue < RightValue);
         break;
 
-    case SetupTokenGreaterThan:
+    case ChalkTokenGreaterThan:
         ResultValue = (LeftValue > RightValue);
         break;
 
-    case SetupTokenLessOrEqual:
+    case ChalkTokenLessOrEqual:
         ResultValue = (LeftValue <= RightValue);
         break;
 
-    case SetupTokenGreaterOrEqual:
+    case ChalkTokenGreaterOrEqual:
         ResultValue = (LeftValue >= RightValue);
         break;
 
-    case SetupTokenIsEqual:
+    case ChalkTokenIsEqual:
         ResultValue = (LeftValue == RightValue);
         break;
 
-    case SetupTokenIsNotEqual:
+    case ChalkTokenIsNotEqual:
         ResultValue = (LeftValue != RightValue);
         break;
 
@@ -1466,7 +1465,7 @@ Return Value:
         break;
     }
 
-    *Result = SetupCreateInteger(ResultValue);
+    *Result = ChalkCreateInteger(ResultValue);
     if (*Result == NULL) {
         return ENOMEM;
     }
