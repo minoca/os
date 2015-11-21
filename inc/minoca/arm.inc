@@ -213,9 +213,9 @@ Environment:
 
 .macro ASSEMBLY_FILE_HEADER
     .text
+    .syntax unified
     .if THUMB
         .thumb
-        .syntax unified
     .else
         .arm
     .endif

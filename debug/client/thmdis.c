@@ -882,6 +882,7 @@ Return Value:
 
     ULONG Immediate8;
     ULONG Instruction;
+    ULONGLONG OperandAddress;
     ULONG Rt;
 
     Instruction = Context->Instruction;
@@ -892,13 +893,24 @@ Return Value:
     Rt = (Instruction >> THUMB16_LDR_RT_SHIFT) & THUMB_REGISTER8_MASK;
     strcpy(Context->Mnemonic, THUMB_LDR_MNEMONIC);
     strcpy(Context->Operand1, DbgArmRegisterNames[Rt]);
+
+    //
+    // The immediate value is relative to the PC aligned down to a 4-byte
+    // boundary. On Thumb, the PC is always 4 bytes ahead of the instruction
+    // pointer.
+    //
+
+    OperandAddress = Context->InstructionPointer + 4;
+    OperandAddress = THUMB_ALIGN_4(OperandAddress);
+    OperandAddress += Immediate8;
+    Context->Result->OperandAddress = OperandAddress;
+    Context->Result->AddressIsDestination = FALSE;
+    Context->Result->AddressIsValid = TRUE;
     snprintf(Context->Operand2,
              sizeof(Context->Operand2),
-             "[pc, #%d]", Immediate8);
+             "[0x%08I64x]",
+             OperandAddress);
 
-    Context->Result->OperandAddress = (LONGLONG)Immediate8;
-    Context->Result->AddressIsDestination = FALSE;
-    Context->Result->OperandAddressRelation = RelationIp;
     return;
 }
 
@@ -1162,10 +1174,11 @@ Return Value:
 
 {
 
+    PSTR BaseMnemonic;
     ULONG Immediate8;
     ULONG Instruction;
+    ULONGLONG OperandAddress;
     ULONG Rd;
-    PSTR Source;
 
     Instruction = Context->Instruction;
     Immediate8 = (Instruction >> THUMB16_ADR_IMMEDIATE8_SHIFT) &
@@ -1175,34 +1188,40 @@ Return Value:
     Rd = (Instruction >> THUMB16_ADR_RD_SHIFT) & THUMB_REGISTER8_MASK;
 
     //
-    // Turns out adr Rn, pc, #imm8 and add Rn, sp, #imm8 share nearly the same
-    // encoding.
+    // The second operand is either SP with an immediate or an absolute address
+    // calculated from the PC aligned down to a 4-byte boundary.
     //
 
     if ((Instruction & THUMB16_ADR_SP) != 0) {
-        strcpy(Context->Mnemonic, THUMB_ADD_MNEMONIC);
-        Source = DbgArmRegisterNames[13];
+        BaseMnemonic = THUMB_ADD_MNEMONIC;
+        snprintf(Context->Operand2,
+                 sizeof(Context->Operand2),
+                 "%s, #%d",
+                 DbgArmRegisterNames[13],
+                 Immediate8);
 
     } else {
-        strcpy(Context->Mnemonic, THUMB_ADR_MNEMONIC);
-        Source = DbgArmRegisterNames[15];
+        BaseMnemonic = THUMB_ADR_MNEMONIC;
 
         //
-        // Add two because the PC already points an instruction ahead.
+        // The label here is relative to the PC aligned down to 4-byte boundary.
+        // On Thumb, the PC is always 4 bytes ahead of the instruction pointer.
         //
 
-        Context->Result->OperandAddress = (LONGLONG)Immediate8 + 2;
+        OperandAddress = Context->InstructionPointer + 4;
+        OperandAddress = THUMB_ALIGN_4(OperandAddress);
+        OperandAddress += Immediate8;
+        Context->Result->OperandAddress = OperandAddress;
         Context->Result->AddressIsDestination = FALSE;
-        Context->Result->OperandAddressRelation = RelationIp;
+        Context->Result->AddressIsValid = TRUE;
+        snprintf(Context->Operand2,
+                 sizeof(Context->Operand2),
+                 "[0x%08I64x]",
+                 OperandAddress);
     }
 
+    strcpy(Context->Mnemonic, BaseMnemonic);
     strcpy(Context->Operand1, DbgArmRegisterNames[Rd]);
-    snprintf(Context->Operand2,
-             sizeof(Context->Operand2),
-             "%s, #%d",
-             Source,
-             Immediate8);
-
     return;
 }
 
@@ -1312,6 +1331,7 @@ Return Value:
     UCHAR Immediate8;
     ULONG Instruction;
     ULONG Op;
+    ULONGLONG OperandAddress;
     LONG SignedImmediate8;
 
     Instruction = Context->Instruction;
@@ -1342,18 +1362,20 @@ Return Value:
                  THUMB_B_MNEMONIC,
                  DbgArmConditionCodes[Op]);
 
+        //
+        // The destination address is relative to the PC value, which is always
+        // 4 bytes ahead of the instruction pointer when in Thumb mode.
+        //
+
+        OperandAddress = Context->InstructionPointer + 4;
+        OperandAddress += (LONGLONG)SignedImmediate8;
+        Context->Result->OperandAddress = OperandAddress;
+        Context->Result->AddressIsDestination = TRUE;
+        Context->Result->AddressIsValid = TRUE;
         snprintf(Context->Operand1,
                  sizeof(Context->Operand1),
-                 "#%d",
-                 SignedImmediate8);
-
-        //
-        // Add two because the PC already points an instruction ahead.
-        //
-
-        Context->Result->OperandAddress = (LONGLONG)SignedImmediate8 + 2;
-        Context->Result->AddressIsDestination = TRUE;
-        Context->Result->OperandAddressRelation = RelationIp;
+                 "[0x%08I64x]",
+                 OperandAddress);
     }
 
     return;
@@ -1383,6 +1405,7 @@ Return Value:
 {
 
     ULONG Instruction;
+    ULONGLONG OperandAddress;
     LONG SignedImmediate12;
 
     Instruction = Context->Instruction;
@@ -1398,18 +1421,22 @@ Return Value:
     }
 
     strcpy(Context->Mnemonic, THUMB_B_MNEMONIC);
+
+    //
+    // The destination address is relative to the PC value, which is always 4
+    // bytes ahead of the instruction pointer on Thumb.
+    //
+
+    OperandAddress = Context->InstructionPointer + 4;
+    OperandAddress += (LONGLONG)SignedImmediate12;
+    Context->Result->OperandAddress = OperandAddress;
+    Context->Result->AddressIsDestination = TRUE;
+    Context->Result->AddressIsValid = TRUE;
     snprintf(Context->Operand1,
              sizeof(Context->Operand1),
-             "#%d",
-             SignedImmediate12);
+             "[0x%08I64x]",
+             OperandAddress);
 
-    //
-    // Add two because the PC already points an instruction ahead.
-    //
-
-    Context->Result->OperandAddress = (LONGLONG)SignedImmediate12 + 2;
-    Context->Result->AddressIsDestination = TRUE;
-    Context->Result->OperandAddressRelation = RelationIp;
     return;
 }
 
@@ -1485,6 +1512,7 @@ Return Value:
 
     ULONG Immediate6;
     ULONG Instruction;
+    ULONGLONG OperandAddress;
     ULONG Rn;
 
     Instruction = Context->Instruction;
@@ -1507,18 +1535,23 @@ Return Value:
          THUMB_REGISTER8_MASK;
 
     strcpy(Context->Operand1, DbgArmRegisterNames[Rn]);
+
+    //
+    // The branch address is the immediate value added to the PC value of the
+    // instruction. For Thumb, the PC is always 4 bytes ahead of the
+    // instruction pointer.
+    //
+
+    OperandAddress = Context->InstructionPointer + 4;
+    OperandAddress += Immediate6;
+    Context->Result->OperandAddress = OperandAddress;
+    Context->Result->AddressIsDestination = FALSE;
+    Context->Result->AddressIsValid = TRUE;
     snprintf(Context->Operand2,
              sizeof(Context->Operand2),
-             "#%d",
-             Immediate6);
+             "[0x%08I64x]",
+             OperandAddress);
 
-    //
-    // Add two because the PC already points an instruction ahead.
-    //
-
-    Context->Result->OperandAddress = Immediate6 + 2;
-    Context->Result->AddressIsDestination = FALSE;
-    Context->Result->OperandAddressRelation = RelationIp;
     return;
 }
 

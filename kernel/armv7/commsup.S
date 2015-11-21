@@ -2068,8 +2068,8 @@ Return Value:
 FUNCTION ArSaveVfp
     stc     p11, c0, [%r0], #16*8       @ Save D0-D15 (stmia).
     cmp     %r1, #0                     @ Test for no SIMD support.
-    ITE(eq)                             @ If equal then else.
-    stcnel  p11, c0, [%r0], #16*8       @ Save D16-D31 if SIMD support.
+    ITE(ne)                             @ If equal then else.
+    stclne  p11, c0, [%r0], #16*8       @ Save D16-D31 if SIMD support.
     addeq   %r0, %r0, #16*8             @ Skip those registers if not.
     vmrs    %r2, FPSCR                  @ Get FPSCR.
     str     %r2, [%r0]                  @ Store it.
@@ -2108,8 +2108,8 @@ Return Value:
 FUNCTION ArRestoreVfp
     ldc     p11, c0, [%r0], #16*8       @ Restore D0-D15 (ldmia).
     cmp     %r1, #0                     @ Test for no SIMD support.
-    ITE(eq)                             @ If equal then else.
-    ldcnel  p11, c0, [%r0], #16*8       @ Restore D16-D31 if SIMD support.
+    ITE(ne)                             @ If equal then else.
+    ldclne  p11, c0, [%r0], #16*8       @ Restore D16-D31 if SIMD support.
     addeq   %r0, %r0, #16*8             @ Skip those registers if not.
     ldr     %r2, [%r0]                  @ Get FPSCR.
     vmsr    FPSCR, %r2                  @ Restore FPSCR.

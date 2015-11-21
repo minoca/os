@@ -261,7 +261,8 @@ Return Value:
             printf("\n%04x: ", BytesDisassembled);
         }
 
-        Result = DbgDisassemble(CurrentInstruction,
+        Result = DbgDisassemble((UINTN)CurrentInstruction,
+                                CurrentInstruction,
                                 DisassemblyBuffer,
                                 100,
                                 &Disassembly,
@@ -534,34 +535,12 @@ Return Value:
 
 {
 
-    LONGLONG SignedAddress;
-
-    if (Instruction->OperandAddressRelation == RelationInvalid) {
+    if (Instruction->AddressIsValid == FALSE) {
         return 0;
-
-    } else if (Instruction->OperandAddressRelation == RelationIp) {
-        SignedAddress = Instruction->OperandAddress;
-        if (Print != FALSE) {
-            if (SignedAddress >= 0) {
-                printf(" (ip+%08I64x)", SignedAddress);
-
-            } else {
-                SignedAddress = -SignedAddress;
-                printf(" (ip-%08I64x)", SignedAddress);
-            }
-        }
-
-    } else {
-        if (Print != FALSE) {
-            printf(" (%08I64x)", Instruction->OperandAddress);
-        }
     }
 
-    if ((Instruction->OperandAddressRelation != RelationInvalid) &&
-        (Instruction->OperandAddressRelation != RelationIp) &&
-        (Instruction->OperandAddressRelation != RelationAbsolute)) {
-
-        return 1;
+    if (Print != FALSE) {
+        printf(" (0x%08I64x)", Instruction->OperandAddress);
     }
 
     return 0;

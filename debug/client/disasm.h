@@ -31,12 +31,6 @@ typedef enum _MACHINE_LANGUAGE {
     MachineLanguageThumb2
 } MACHINE_LANGUAGE, *PMACHINE_LANGUAGE;
 
-typedef enum _ADDRESS_RELATION {
-    RelationInvalid,
-    RelationAbsolute,
-    RelationIp
-} ADDRESS_RELATION, *PADDRESS_RELATION;
-
 /*++
 
 Structure Description:
@@ -67,10 +61,8 @@ Members:
     OperandAddress - Stores the numeric address if one of the operands contains
         an address.
 
-    OperandAddressRelation - Stores information about what the OperandAddress
-        parameter is relative to, or whether or not the address is valid at all.
-        For example, some operands will give an address relative to the
-        instruction pointer.
+    AddressIsValid - Stores a boolean indicating whether the address in
+        OperandAddress is valid.
 
     AddressIsDestionation - Stores a flag indicating whether the address in
         OperandAddress refers to the source operand or the destination operand.
@@ -88,7 +80,7 @@ typedef struct _DISASSEMBLED_INSTRUCTION {
     PSTR ThirdOperand;
     PSTR FourthOperand;
     ULONGLONG OperandAddress;
-    ADDRESS_RELATION OperandAddressRelation;
+    BOOL AddressIsValid;
     BOOL AddressIsDestination;
     ULONG BinaryLength;
 } DISASSEMBLED_INSTRUCTION, *PDISASSEMBLED_INSTRUCTION;
@@ -99,6 +91,7 @@ typedef struct _DISASSEMBLED_INSTRUCTION {
 
 BOOL
 DbgDisassemble (
+    ULONGLONG InstructionPointer,
     PBYTE InstructionStream,
     PSTR Buffer,
     ULONG BufferLength,
@@ -114,6 +107,9 @@ Routine Description:
     a human readable form.
 
 Arguments:
+
+    InstructionPointer - Supplies the instruction pointer for the start of the
+        instruction stream.
 
     InstructionStream - Supplies a pointer to the binary instruction stream.
 
@@ -138,6 +134,7 @@ Return Value:
 
 BOOL
 DbgpX86Disassemble (
+    ULONGLONG InstructionPointer,
     PBYTE InstructionStream,
     PSTR Buffer,
     ULONG BufferLength,
@@ -152,6 +149,9 @@ Routine Description:
     stream into a human readable form.
 
 Arguments:
+
+    InstructionPointer - Supplies the instruction pointer for the start of the
+        instruction stream.
 
     InstructionStream - Supplies a pointer to the binary instruction stream.
 
@@ -174,6 +174,7 @@ Return Value:
 
 BOOL
 DbgpArmDisassemble (
+    ULONGLONG InsructionPointer,
     PBYTE InstructionStream,
     PSTR Buffer,
     ULONG BufferLength,
@@ -189,6 +190,9 @@ Routine Description:
     stream into a human readable form.
 
 Arguments:
+
+    InstructionPointer - Supplies the instruction pointer for the start of the
+        instruction stream.
 
     InstructionStream - Supplies a pointer to the binary instruction stream.
 

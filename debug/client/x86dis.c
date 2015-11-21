@@ -1158,12 +1158,13 @@ PSTR DbgX87RegisterNames[X86_REGISTER_NAME_COUNT] = {
 
 BOOL
 DbgpX86PrintOperand (
+    ULONGLONG InstructionPointer,
     PX86_INSTRUCTION Instruction,
     PSTR OperandFormat,
     PSTR Operand,
     ULONG BufferLength,
     PULONGLONG Address,
-    PADDRESS_RELATION AddressRelation
+    PBOOL AddressValid
     );
 
 PSTR
@@ -1231,6 +1232,7 @@ DbgpX86DecodeFloatingPointInstruction (
 
 BOOL
 DbgpX86Disassemble (
+    ULONGLONG InstructionPointer,
     PBYTE InstructionStream,
     PSTR Buffer,
     ULONG BufferLength,
@@ -1245,6 +1247,9 @@ Routine Description:
     stream into a human readable form.
 
 Arguments:
+
+    InstructionPointer - Supplies the instruction pointer for the start of the
+        instruction stream.
 
     InstructionStream - Supplies a pointer to the binary instruction stream.
 
@@ -1268,7 +1273,7 @@ Return Value:
 {
 
     ULONGLONG Address;
-    ADDRESS_RELATION AddressRelation;
+    BOOL AddressValid;
     X86_INSTRUCTION Instruction;
     PSTR Mnemonic;
     BOOL Result;
@@ -1316,12 +1321,13 @@ Return Value:
     // Get the destination operand.
     //
 
-    Result = DbgpX86PrintOperand(&Instruction,
+    Result = DbgpX86PrintOperand(InstructionPointer,
+                                 &Instruction,
                                  Instruction.Definition.Target,
                                  DbgX86DisassemblyBuffer,
                                  X86_WORKING_BUFFER_SIZE,
                                  &Address,
-                                 &AddressRelation);
+                                 &AddressValid);
 
     if ((Result == FALSE) ||
         (strlen(DbgX86DisassemblyBuffer) >= BufferLength)) {
@@ -1334,9 +1340,9 @@ Return Value:
     // If an address came out of that, plug it into the result.
     //
 
-    if (AddressRelation != RelationInvalid) {
+    if (AddressValid != FALSE) {
         Disassembly->OperandAddress = Address;
-        Disassembly->OperandAddressRelation = AddressRelation;
+        Disassembly->AddressIsValid = TRUE;
         Disassembly->AddressIsDestination = TRUE;
     }
 
@@ -1353,12 +1359,13 @@ Return Value:
     // Get the source operand.
     //
 
-    Result = DbgpX86PrintOperand(&Instruction,
+    Result = DbgpX86PrintOperand(InstructionPointer,
+                                 &Instruction,
                                  Instruction.Definition.Source,
                                  DbgX86DisassemblyBuffer,
                                  X86_WORKING_BUFFER_SIZE,
                                  &Address,
-                                 &AddressRelation);
+                                 &AddressValid);
 
     if ((Result == FALSE) ||
         (strlen(DbgX86DisassemblyBuffer) >= BufferLength)) {
@@ -1371,9 +1378,9 @@ Return Value:
     // If an address came out of the operand, plug it into the result.
     //
 
-    if (AddressRelation != RelationInvalid) {
+    if (AddressValid != FALSE) {
          Disassembly->OperandAddress = Address;
-         Disassembly->OperandAddressRelation = AddressRelation;
+         Disassembly->AddressIsValid = TRUE;
          Disassembly->AddressIsDestination = FALSE;
     }
 
@@ -1413,12 +1420,13 @@ Return Value:
     }
 
     if (ThirdOperandFormat != NULL) {
-        Result = DbgpX86PrintOperand(&Instruction,
+        Result = DbgpX86PrintOperand(InstructionPointer,
+                                     &Instruction,
                                      ThirdOperandFormat,
                                      DbgX86DisassemblyBuffer,
                                      X86_WORKING_BUFFER_SIZE,
                                      &Address,
-                                     &AddressRelation);
+                                     &AddressValid);
 
         if ((Result == FALSE) ||
             (strlen(DbgX86DisassemblyBuffer) > BufferLength)) {
@@ -1441,12 +1449,13 @@ DisassembleEnd:
 
 BOOL
 DbgpX86PrintOperand (
+    ULONGLONG InstructionPointer,
     PX86_INSTRUCTION Instruction,
     PSTR OperandFormat,
     PSTR Operand,
     ULONG BufferLength,
     PULONGLONG Address,
-    PADDRESS_RELATION AddressRelation
+    PBOOL AddressValid
     )
 
 /*++
@@ -1457,6 +1466,9 @@ Routine Description:
     supplied format.
 
 Arguments:
+
+    InstructionPointer - Supplies the instruction pointer for the instruction
+        being disassembled.
 
     Instruction - Supplies a pointer to the instruction structure.
 
@@ -1473,8 +1485,8 @@ Arguments:
     Address - Supplies a pointer that receives the memory address encoded in the
         operand.
 
-    AddressRelation - Supplies a pointer that receives information about whether
-        or not the address in the Address parameter is relative to some value.
+    AddressValid - Supplies a pointer that receives whether or not the value
+        store in the Address parameter is valid.
 
 Return Value:
 
@@ -1515,7 +1527,7 @@ Return Value:
     strcpy(Operand, "");
     strcpy(DbgX86OperandBuffer, "");
     *Address = 0ULL;
-    *AddressRelation = RelationInvalid;
+    *AddressValid = FALSE;
     if (strlen(OperandFormat) < 2) {
         return TRUE;
     }
@@ -1574,10 +1586,10 @@ Return Value:
     //
 
     case 'A':
-        sprintf(DbgX86OperandBuffer, "[%x]", Instruction->Immediate);
+        sprintf(DbgX86OperandBuffer, "[0x%x]", Instruction->Immediate);
         strcat(Operand, DbgX86OperandBuffer);
         *Address = Instruction->Immediate;
-        *AddressRelation = RelationAbsolute;
+        *AddressValid = TRUE;
         break;
 
     //
@@ -1725,7 +1737,7 @@ Return Value:
             sprintf(DbgX86OperandBuffer, "[0x%x]", Instruction->Displacement);
             strcat(Operand, DbgX86OperandBuffer);
             *Address = Instruction->Displacement;
-            *AddressRelation = RelationAbsolute;
+            *AddressValid = TRUE;
 
         //
         // The operand is an address in a register, possibly with some
@@ -1781,8 +1793,10 @@ Return Value:
                                DbgX86OperandBuffer,
                                (PLONGLONG)Address);
 
+        *Address += (InstructionPointer + Instruction->Length);
+        sprintf(DbgX86OperandBuffer, "[0x%x]", *Address);
         strcat(Operand, DbgX86OperandBuffer);
-        *AddressRelation = RelationIp;
+        *AddressValid = TRUE;
         break;
 
     //

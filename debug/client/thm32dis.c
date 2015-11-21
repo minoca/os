@@ -97,26 +97,6 @@ DbgpThumb32DecodeSimdDataProcessing (
     );
 
 VOID
-DbgpThumb32DecodeSimdExtensionRegister (
-    PARM_DISASSEMBLY Context
-    );
-
-VOID
-DbgpThumb32DecodeSimd64BitTransfers (
-    PARM_DISASSEMBLY Context
-    );
-
-VOID
-DbgpThumb32DecodeFloatingPoint (
-    PARM_DISASSEMBLY Context
-    );
-
-VOID
-DbgpThumb32DecodeSimdExtensionRegisterSmall (
-    PARM_DISASSEMBLY Context
-    );
-
-VOID
 DbgpThumb32DecodeDataModifiedImmediate (
     PARM_DISASSEMBLY Context
     );
@@ -198,11 +178,6 @@ DbgpThumb32DecodeLoadStoreImmediate (
 
 VOID
 DbgpThumb32DecodeLoadStoreRegister (
-    PARM_DISASSEMBLY Context
-    );
-
-VOID
-DbgpThumb32DecodeSimdElementLoadStore (
     PARM_DISASSEMBLY Context
     );
 
@@ -517,7 +492,7 @@ THUMB_DECODE_BRANCH DbgThumb32TopLevelTable[] = {
     {0x1E700000, 0x18300000, 0, DbgpThumb32DecodeLoadStoreSingleItem},
     {0x1E700000, 0x18500000, 0, DbgpThumb32DecodeLoadStoreSingleItem},
     {0x1E700000, 0x18700000, 0, DbgpThumb32DecodeUndefined},
-    {0x1F100000, 0x19000000, 0, DbgpThumb32DecodeSimdElementLoadStore},
+    {0x1F100000, 0x19000000, 0, DbgpArmDecodeSimdElementLoadStore},
     {0x1F000000, 0x1A000000, 0, DbgpThumb32DecodeDataProcessingRegister},
     {0x1F800000, 0x1B000000, 0, DbgpThumb32DecodeMultiplyAccumulate},
     {0x1F800000, 0x1B800000, 0, DbgpThumb32DecodeLongMultiplyDivide},
@@ -544,17 +519,14 @@ THUMB_DECODE_BRANCH DbgThumb32LoadStoreDualExclusiveTable[] = {
 THUMB_DECODE_BRANCH DbgThumb32CoprocessorSimdFloatingPointTable[] = {
     {0x03E00000, 0x00000000, 0, DbgpThumb32DecodeUndefined},
     {0x03000000, 0x03000000, 0, DbgpThumb32DecodeSimdDataProcessing},
-    {0x02000E00, 0x00000A00, 0, DbgpThumb32DecodeSimdExtensionRegister},
-    {0x03E00E00, 0x00400A00, 0, DbgpThumb32DecodeSimd64BitTransfers},
-    {0x02000E00, 0x00000A00, 0, DbgpThumb32DecodeSimdExtensionRegister},
-    {0x03000E10, 0x02000A00, 0, DbgpThumb32DecodeFloatingPoint},
-    {0x03000E10, 0x02000A10, 0, DbgpThumb32DecodeSimdExtensionRegisterSmall},
-    {0x02000000, 0x00000000, 0, DbgpArmDecodeCoprocessorData},
-    {0x03F00000, 0x00400000, 0, DbgpArmDecodeCoprocessorMove},
-    {0x03F00000, 0x00500000, 0, DbgpArmDecodeCoprocessorMove},
+    {0x03E00E00, 0x00400A00, 0, DbgpArmDecodeSimd64BitTransfers},
+    {0x02000E00, 0x00000A00, 0, DbgpArmDecodeSimdLoadStore},
+    {0x03000E10, 0x02000A00, 0, DbgpArmDecodeFloatingPoint},
+    {0x03000E10, 0x02000A10, 0, DbgpArmDecodeSimdSmallTransfers},
+    {0x03E00000, 0x00400000, 0, DbgpArmDecodeCoprocessorMoveTwo},
+    {0x02000000, 0x00000000, 0, DbgpArmDecodeCoprocessorLoadStore},
     {0x03000010, 0x02000000, 0, DbgpArmDecodeCoprocessorMove},
-    {0x03100010, 0x02000010, 0, DbgpArmDecodeCoprocessorMove},
-    {0x03100010, 0x02100010, 0, DbgpArmDecodeCoprocessorMove},
+    {0x03000010, 0x02000010, 0, DbgpArmDecodeCoprocessorMove},
 };
 
 THUMB_DECODE_BRANCH DbgThumb32BranchAndMiscellaneousTable[] = {
@@ -1335,117 +1307,24 @@ Return Value:
 
 {
 
-    strcpy(Context->Mnemonic, "Unimpl. SIMD Data");
-    return;
-}
+    ULONG Instruction;
 
-VOID
-DbgpThumb32DecodeSimdExtensionRegister (
-    PARM_DISASSEMBLY Context
-    )
+    //
+    // The 32-bit Thumb instruction and the ARM instruction only differ by one
+    // bit. Move the bit in ths 32-bit Thumb instruction and use the ARM
+    // decoder.
+    //
 
-/*++
+    Instruction = Context->Instruction;
+    if ((Instruction & THUMB32_SIMD_DATA_PROCESSING_UNSIGNED) != 0) {
+        Context->Instruction |= ARM_SIMD_DATA_PROCESSING_UNSIGNED;
 
-Routine Description:
+    } else {
+        Context->Instruction &= ~ARM_SIMD_DATA_PROCESSING_UNSIGNED;
+    }
 
-    This routine decodes SIMD extension register load/store operations.
-
-Arguments:
-
-    Context - Supplies a pointer to the disassembly context.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    strcpy(Context->Mnemonic, "Unimpl. SIMD Ext");
-    return;
-}
-
-VOID
-DbgpThumb32DecodeSimd64BitTransfers (
-    PARM_DISASSEMBLY Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine decodes SIMD 64-bit transfers between ARM core and extension
-    register instructions.
-
-Arguments:
-
-    Context - Supplies a pointer to the disassembly context.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    strcpy(Context->Mnemonic, "Unimpl. SIMD 64");
-    return;
-}
-
-VOID
-DbgpThumb32DecodeFloatingPoint (
-    PARM_DISASSEMBLY Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine decodes floating point instructions.
-
-Arguments:
-
-    Context - Supplies a pointer to the disassembly context.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    strcpy(Context->Mnemonic, "Unimpl. FP");
-    return;
-}
-
-VOID
-DbgpThumb32DecodeSimdExtensionRegisterSmall (
-    PARM_DISASSEMBLY Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine decodes 8, 16, and 32-bit transfers between the ARM core and
-    extension registers.
-
-Arguments:
-
-    Context - Supplies a pointer to the disassembly context.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    strcpy(Context->Mnemonic, "Unimpl. FP");
+    DbgpArmDecodeSimdDataProcessing(Context);
+    Context->Instruction = Instruction;
     return;
 }
 
@@ -1640,14 +1519,21 @@ Return Value:
 
     ULONG Immediate;
     ULONG Immediate12;
+    ULONG Immediate3;
+    ULONG Immediate5;
     ULONG Instruction;
+    PSTR LsbString;
     PSTR Mnemonic;
     PSTR *Mnemonics;
     ULONG Op;
+    ULONGLONG OperandAddress;
     ULONG Rd;
     ULONG Rn;
     ULONG SetFlags;
+    PSTR ShiftMnemonic;
     LONG SignedImmediate;
+    ULONG Width;
+    PSTR WidthString;
 
     Instruction = Context->Instruction;
     Rd = (Instruction >> THUMB32_DATA_PLAIN_IMMEDIATE_RD_SHIFT) &
@@ -1659,14 +1545,20 @@ Return Value:
     Op = (Instruction >> THUMB32_DATA_PLAIN_IMMEDIATE_OP_SHIFT) &
          THUMB32_DATA_PLAIN_IMMEDIATE_OP_MASK;
 
+    Immediate3 = (Instruction >>
+                  THUMB32_DATA_MODIFIED_IMMEDIATE_IMMEDIATE3_SHIFT) &
+                 THUMB_IMMEDIATE3_MASK;
+
+    Immediate5 = (Instruction >>
+                  THUMB32_DATA_PLAIN_IMMEDIATE_IMMEDIATE2_SHIFT) &
+                 THUMB_IMMEDIATE2_MASK;
+
+    Immediate5 |= Immediate3 << 2;
     Immediate12 = (Instruction >>
                    THUMB32_DATA_MODIFIED_IMMEDIATE_IMMEDIATE8_SHIFT) &
                   THUMB_IMMEDIATE8_MASK;
 
-    Immediate12 |= ((Instruction >>
-                     THUMB32_DATA_MODIFIED_IMMEDIATE_IMMEDIATE3_SHIFT) &
-                    THUMB_IMMEDIATE3_MASK) << 8;
-
+    Immediate12 |= Immediate3 << 8;
     if ((Instruction & THUMB32_DATA_MODIFIED_IMMEDIATE_IMMEDIATE12) != 0) {
         Immediate12 |= 1 << 11;
     }
@@ -1676,7 +1568,7 @@ Return Value:
         SetFlags = 1;
     }
 
-    Mnemonic = "Unimpl.";
+    Mnemonic = "Unknown thumb.";
     switch (Op) {
     case THUMB32_DATA_PLAIN_IMMEDIATE_OP_ADD:
     case THUMB32_DATA_PLAIN_IMMEDIATE_OP_SUB:
@@ -1688,18 +1580,22 @@ Return Value:
                 SignedImmediate = -SignedImmediate;
             }
 
+            //
+            // Calculate the operand address. The immediate is relative to the
+            // current PC aligned down to a four-byte boundary.
+            //
+
+            OperandAddress = Context->InstructionPointer + 4;
+            OperandAddress = THUMB_ALIGN_4(OperandAddress);
+            OperandAddress += (LONGLONG)SignedImmediate;
             snprintf(Context->Operand2,
                      sizeof(Context->Operand2),
-                     "#%d",
-                     SignedImmediate);
+                     "[0x%08I64x]",
+                     OperandAddress);
 
-            //
-            // Add four because the PC already points an instruction ahead.
-            //
-
-            Context->Result->OperandAddress = (LONGLONG)SignedImmediate + 4;
+            Context->Result->OperandAddress = OperandAddress;
             Context->Result->AddressIsDestination = FALSE;
-            Context->Result->OperandAddressRelation = RelationIp;
+            Context->Result->AddressIsValid = TRUE;
 
         } else {
             Mnemonics = DbgThumb32DataProcessingMnemonics[SetFlags];
@@ -1744,13 +1640,94 @@ Return Value:
 
     case THUMB32_DATA_PLAIN_IMMEDIATE_OP_SSAT:
     case THUMB32_DATA_PLAIN_IMMEDIATE_OP_SSAT16:
-    case THUMB32_DATA_PLAIN_IMMEDIATE_OP_SBFX:
-    case THUMB32_DATA_PLAIN_IMMEDIATE_OP_BFIC:
     case THUMB32_DATA_PLAIN_IMMEDIATE_OP_USAT:
     case THUMB32_DATA_PLAIN_IMMEDIATE_OP_USAT16:
+        Immediate = (Instruction >>
+                     THUMB32_DATA_PLAIN_IMMEDIATE_SAT_IMMEDIATE_SHIFT);
+
+        if (Immediate5 == 0) {
+            Immediate &= THUMB32_DATA_PLAIN_IMMEDIATE_SAT_IMMEDIATE4_MASK;
+
+        } else {
+            Immediate &= THUMB32_DATA_PLAIN_IMMEDIATE_SAT_IMMEDIATE5_MASK;
+        }
+
+        if ((Instruction & THUMB32_DATA_PLAIN_IMMEDIATE_UNSIGNED) != 0) {
+            if (Immediate5 == 0) {
+                Mnemonic = THUMB_USAT16_MNEMONIC;
+
+            } else {
+                Mnemonic = THUMB_USAT_MNEMONIC;
+            }
+
+        } else {
+            if (Immediate5 == 0) {
+                Mnemonic = THUMB_SSAT16_MNEMONIC;
+
+            } else {
+                Mnemonic = THUMB_SSAT_MNEMONIC;
+            }
+
+            Immediate += 1;
+        }
+
+        strcpy(Context->Operand1, DbgArmRegisterNames[Rd]);
+        sprintf(Context->Operand2, "#%d", Immediate);
+        strcpy(Context->Operand3, DbgArmRegisterNames[Rn]);
+        if (Immediate5 != 0) {
+            ShiftMnemonic = ARM_LSL_MNEMONIC;
+            if ((Instruction & THUMB32_DATA_PLAIN_IMMEDIATE_SHIFT_RIGHT) != 0) {
+                ShiftMnemonic = ARM_ASR_MNEMONIC;
+            }
+
+            sprintf(Context->Operand4, "%s #%d", ShiftMnemonic, Immediate5);
+        }
+
+        break;
+
+    case THUMB32_DATA_PLAIN_IMMEDIATE_OP_BFIC:
+        if (Rn == 0xF) {
+            Mnemonic = THUMB_BFC_MNEMONIC;
+            LsbString = Context->Operand2;
+            WidthString = Context->Operand3;
+
+        } else {
+            Mnemonic = THUMB_BFI_MNEMONIC;
+            strcpy(Context->Operand2, DbgArmRegisterNames[Rn]);
+            LsbString = Context->Operand3;
+            WidthString = Context->Operand4;
+        }
+
+        Width = (Instruction >> THUMB32_DATA_PLAIN_IMMEDIATE_MSB_SHIFT) &
+                THUMB32_DATA_PLAIN_IMMEDIATE_MSB_MASK;
+
+        Width = Width + 1 - Immediate5;
+        strcpy(Context->Operand1, DbgArmRegisterNames[Rd]);
+        sprintf(LsbString, "#%d", Immediate5);
+        sprintf(WidthString, "#%d", Width);
+        break;
+
+    case THUMB32_DATA_PLAIN_IMMEDIATE_OP_SBFX:
     case THUMB32_DATA_PLAIN_IMMEDIATE_OP_UBFX:
+        if ((Instruction & THUMB32_DATA_PLAIN_IMMEDIATE_UNSIGNED) != 0) {
+            Mnemonic = THUMB_UBFX_MNEMONIC;
+
+        } else {
+            Mnemonic = THUMB_SBFX_MNEMONIC;
+        }
+
+        Width = (Instruction >>
+                 THUMB32_DATA_PLAIN_IMMEDIATE_WIDTH_MINUS_1_SHIFT) &
+                THUMB32_DATA_PLAIN_IMMEDIATE_WIDTH_MINUS_1_MASK;
+
+        Width += 1;
+        strcpy(Context->Operand1, DbgArmRegisterNames[Rd]);
+        strcpy(Context->Operand2, DbgArmRegisterNames[Rn]);
+        sprintf(Context->Operand3, "#%d", Immediate5);
+        sprintf(Context->Operand4, "#%d", Width);
+        break;
+
     default:
-        strcpy(Context->Mnemonic, "Unimpl. SAT");
         break;
     }
 
@@ -2247,6 +2224,7 @@ Return Value:
     PSTR ConditionString;
     LONG Immediate;
     ULONG Instruction;
+    ULONGLONG OperandAddress;
     ULONG SBit;
 
     Instruction = Context->Instruction;
@@ -2348,19 +2326,21 @@ Return Value:
              THUMB_B_W_MNEMONIC_FORMAT,
              ConditionString);
 
+    //
+    // All of these branches are relative to the PC, which is 4 ahead of the
+    // instruction pointer. Calculate the absolute operand address.
+    //
+
+    OperandAddress = Context->InstructionPointer + 4;
+    OperandAddress += (LONGLONG)Immediate;
     snprintf(Context->Operand1,
              sizeof(Context->Operand1),
-             "#%d",
-             Immediate);
+             "[0x%08I64x]",
+             OperandAddress);
 
-    //
-    // Add 4 because the relation is from the *next* instruction (at pc +
-    // 4).
-    //
-
-    Context->Result->OperandAddress = (LONGLONG)Immediate;
+    Context->Result->OperandAddress = OperandAddress;
     Context->Result->AddressIsDestination = TRUE;
-    Context->Result->OperandAddressRelation = RelationIp;
+    Context->Result->AddressIsValid = TRUE;
     return;
 }
 
@@ -2431,6 +2411,7 @@ Return Value:
     ULONG Bit;
     LONG Immediate25;
     ULONG Instruction;
+    ULONGLONG OperandAddress;
     ULONG SBit;
 
     Instruction = Context->Instruction;
@@ -2486,21 +2467,36 @@ Return Value:
         Immediate25 |= 0xFFC00000;
     }
 
+    //
+    // For the BLX encoding, the immediate is relative to "Align(PC, 4)". The
+    // PC is four bytes ahead of the instruction pointer and it is an align
+    // down operation. The align-down action also strips the low bit from the
+    // Thumb instruction point, resulting in the correct ARM address. This is
+    // necessay because the destination mode of BLX is ARM.
+    //
+
+    OperandAddress = Context->InstructionPointer + 4;
     if ((Instruction & THUMB32_BL_X_BIT) == 0) {
         strcpy(Context->Mnemonic, THUMB_BLX_MNEMONIC);
+        OperandAddress = THUMB_ALIGN_4(OperandAddress);
+
+    //
+    // BL is relative to the PC.
+    //
 
     } else {
         strcpy(Context->Mnemonic, THUMB_BL_MNEMONIC);
     }
 
+    OperandAddress += (LONGLONG)Immediate25;
     snprintf(Context->Operand1,
              sizeof(Context->Operand1),
-             "#%d",
-             Immediate25);
+             "[0x%08I64x]",
+             OperandAddress);
 
-    Context->Result->OperandAddress = (LONGLONG)Immediate25;
+    Context->Result->OperandAddress = OperandAddress;
     Context->Result->AddressIsDestination = TRUE;
-    Context->Result->OperandAddressRelation = RelationIp;
+    Context->Result->AddressIsValid = TRUE;
     return;
 }
 
@@ -2569,6 +2565,7 @@ Return Value:
     ULONG Instruction;
     ULONG Load;
     ULONG Op;
+    ULONGLONG OperandAddress;
     ULONG Rn;
     ULONG Rt;
 
@@ -2665,6 +2662,30 @@ Return Value:
     }
 
     //
+    // If this is a load relative to the PC, then calculate the absolute
+    // operand address and override the second operand with the absolute
+    // address.
+    //
+
+    if ((Load != 0) && (Rn == 15)) {
+
+        //
+        // The address is relative to the PC aligned down to a 4-byte boundary.
+        //
+
+        OperandAddress = Context->InstructionPointer + 4;
+        OperandAddress = THUMB_ALIGN_4(OperandAddress);
+        OperandAddress += Immediate;
+        Context->Result->OperandAddress = OperandAddress;
+        Context->Result->AddressIsDestination = FALSE;
+        Context->Result->AddressIsValid = TRUE;
+        snprintf(Context->Operand2,
+                 sizeof(Context->Operand2),
+                 "[0x%08I64x]",
+                 OperandAddress);
+    }
+
+    //
     // If Rt is 15, then this is actually a preload operation. Copy the second
     // operand to the first.
     //
@@ -2672,21 +2693,10 @@ Return Value:
     if (Rt == 15) {
         strcpy(Context->Mnemonic, DbgThumb32PreloadMnemonics[Op]);
         strcpy(Context->Operand1, Context->Operand2);
-        strcpy(Context->Operand2, "");
+        Context->Operand2[0] = '\0';
 
     } else {
         strcpy(Context->Operand1, DbgArmRegisterNames[Rt]);
-    }
-
-    if ((Load != 0) && (Rn == 15)) {
-
-        //
-        // Add four because the PC already points an instruction ahead.
-        //
-
-        Context->Result->OperandAddress = Immediate + 4;
-        Context->Result->AddressIsDestination = FALSE;
-        Context->Result->OperandAddressRelation = RelationIp;
     }
 
     return;
@@ -2782,33 +2792,6 @@ Return Value:
                  Immediate2);
     }
 
-    return;
-}
-
-VOID
-DbgpThumb32DecodeSimdElementLoadStore (
-    PARM_DISASSEMBLY Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine decodes 32-bit Thumb SIMD element load/store instructions.
-
-Arguments:
-
-    Context - Supplies a pointer to the disassembly context.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    strcpy(Context->Mnemonic, "SIMD load/store...");
     return;
 }
 
@@ -2915,9 +2898,6 @@ Return Value:
                              Rotate);
                 }
             }
-
-        } else {
-            strcpy(Context->Mnemonic, "Unimpl Data Shift");
         }
 
     //

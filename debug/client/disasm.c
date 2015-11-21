@@ -49,6 +49,7 @@ Environment:
 
 BOOL
 DbgDisassemble (
+    ULONGLONG InstructionPointer,
     PBYTE InstructionStream,
     PSTR Buffer,
     ULONG BufferLength,
@@ -64,6 +65,9 @@ Routine Description:
     a human readable form.
 
 Arguments:
+
+    InstructionPointer - Supplies the instruction pointer for the start of the
+        instruction stream.
 
     InstructionStream - Supplies a pointer to the binary instruction stream.
 
@@ -92,7 +96,8 @@ Return Value:
 
     switch (Language) {
     case MachineLanguageX86:
-        Result = DbgpX86Disassemble(InstructionStream,
+        Result = DbgpX86Disassemble(InstructionPointer,
+                                    InstructionStream,
                                     Buffer,
                                     BufferLength,
                                     Disassembly);
@@ -101,7 +106,8 @@ Return Value:
 
     case MachineLanguageArm:
     case MachineLanguageThumb2:
-        Result = DbgpArmDisassemble(InstructionStream,
+        Result = DbgpArmDisassemble(InstructionPointer,
+                                    InstructionStream,
                                     Buffer,
                                     BufferLength,
                                     Disassembly,

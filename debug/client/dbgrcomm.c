@@ -7336,7 +7336,8 @@ Return Value:
         //
 
         DbgOut("%08I64x ", InstructionPointer);
-        Result = DbgDisassemble(InstructionStream,
+        Result = DbgDisassemble(InstructionPointer,
+                                InstructionStream,
                                 DisassemblyBuffer,
                                 200,
                                 &Disassembly,
@@ -7352,7 +7353,7 @@ Return Value:
             (Language == MachineLanguageThumb2)) {
 
             if (Disassembly.BinaryLength == 2) {
-                DbgOut("%04x ", *((PUSHORT)InstructionStream));
+                DbgOut("%04x      ", *((PUSHORT)InstructionStream));
 
             } else {
 
@@ -7370,19 +7371,6 @@ Return Value:
         }
 
         DbgOut("%s\t", Disassembly.Mnemonic);
-        OperandAddress = 0;
-
-        //
-        // Figure out what the complete operand address is.
-        //
-
-        if (Disassembly.OperandAddressRelation == RelationAbsolute) {
-            OperandAddress = Disassembly.OperandAddress;
-
-        } else if (Disassembly.OperandAddressRelation == RelationIp) {
-            OperandAddress = Disassembly.OperandAddress + InstructionPointer +
-                             Disassembly.BinaryLength;
-        }
 
         //
         // Print the first (destination) operand if one exists.
@@ -7390,38 +7378,21 @@ Return Value:
 
         if (Disassembly.DestinationOperand != NULL) {
             if ((Disassembly.AddressIsDestination != FALSE) &&
-                (OperandAddress != 0)) {
+                (Disassembly.AddressIsValid != FALSE)) {
 
-                if (Disassembly.OperandAddressRelation == RelationAbsolute) {
-                    DbgOut("%s ", Disassembly.DestinationOperand);
-                    Result = DbgPrintAddressSymbol(Context, OperandAddress);
-                    if ((Result != 0) &&
-                        (Disassembly.DestinationOperand[0] != '[')) {
+                OperandAddress = Disassembly.OperandAddress;
+                Result = DbgPrintAddressSymbol(Context, OperandAddress);
+                if (Result == 0) {
+                    DbgOut(" ");
+                }
 
-                        DbgOut("(%08I64x)", OperandAddress);
-                    }
+                if (Disassembly.DestinationOperand[0] == '[') {
+                    DbgOut("%s", Disassembly.DestinationOperand);
 
-                } else if (Disassembly.OperandAddressRelation == RelationIp) {
-                    Result = DbgPrintAddressSymbol(Context, OperandAddress);
-                    if (Result == 0) {
-                        DbgOut(" (%s)", Disassembly.DestinationOperand);
-
-                    } else {
-
-                        //
-                        // Avoid printing the address if the destination
-                        // operand already shows it.
-                        //
-
-                        if (Disassembly.DestinationOperand[0] == '[') {
-                            DbgOut("%s", Disassembly.DestinationOperand);
-
-                        } else {
-                            DbgOut("%s (%08I64x)",
-                                   Disassembly.DestinationOperand,
-                                   OperandAddress);
-                        }
-                    }
+                } else {
+                    DbgOut("%s (0x%08I64x)",
+                           Disassembly.DestinationOperand,
+                           OperandAddress);
                 }
 
             } else {
@@ -7436,27 +7407,21 @@ Return Value:
         if (Disassembly.SourceOperand != NULL) {
             DbgOut(", ");
             if ((Disassembly.AddressIsDestination == FALSE) &&
-                (OperandAddress != 0)) {
+                (Disassembly.AddressIsValid != FALSE)) {
 
+                OperandAddress = Disassembly.OperandAddress;
                 Result = DbgPrintAddressSymbol(Context, OperandAddress);
                 if (Result == 0) {
-                    DbgOut(" (%s)", Disassembly.SourceOperand);
+                    DbgOut(" ");
+                }
+
+                if (Disassembly.SourceOperand[0] == '[') {
+                    DbgOut("%s", Disassembly.SourceOperand);
 
                 } else {
-
-                    //
-                    // Avoid printing the address if the source operand already
-                    // shows it.
-                    //
-
-                    if (Disassembly.SourceOperand[0] == '[') {
-                        DbgOut("%s", Disassembly.SourceOperand);
-
-                    } else {
-                        DbgOut("%s (%s)",
-                               Disassembly.SourceOperand,
-                               OperandAddress);
-                    }
+                    DbgOut("%s (0x%08I64x)",
+                           Disassembly.SourceOperand,
+                           OperandAddress);
                 }
 
             } else {

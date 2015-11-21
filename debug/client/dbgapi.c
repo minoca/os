@@ -76,6 +76,7 @@ typedef struct _DEBUG_COMPLETE_ACKNOWLEDGE_PACKET {
 
 BOOL
 DbgpKdContinue (
+    VOID
     );
 
 BOOL
@@ -95,6 +96,7 @@ DbgpKdSetSpecialRegisters (
 
 BOOL
 DbgpKdSingleStep (
+    VOID
     );
 
 BOOL
@@ -1803,6 +1805,7 @@ Return Value:
 
 BOOL
 DbgpKdContinue (
+    VOID
     )
 
 /*++
@@ -1977,6 +1980,7 @@ Return Value:
 
 BOOL
 DbgpKdSingleStep (
+    VOID
     )
 
 /*++
