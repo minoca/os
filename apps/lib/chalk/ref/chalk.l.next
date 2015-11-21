@@ -24,6 +24,7 @@ void count();
 "return"        { count(); return(RETURN); }
 "switch"        { count(); return(SWITCH); }
 "while"         { count(); return(WHILE); }
+"function"      { count(); return(FUNCTION); }
 
 {L}({L}|{D})*       { count(); return(IDENTIFIER); }
 

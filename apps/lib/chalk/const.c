@@ -31,6 +31,7 @@ Environment:
 #include <errno.h>
 
 #include "chalkp.h"
+#include "visit.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -90,7 +91,31 @@ Return Value:
     INT Status;
 
     ParseNode = Node->ParseNode;
-    Node->LValue = NULL;
+    if (Node->ChildIndex != 0) {
+        Node->Results[Node->ChildIndex - 1] = *Result;
+        *Result = NULL;
+    }
+
+    Interpreter->LValue = NULL;
+
+    //
+    // If not all the list elements have been parsed yet, go get them.
+    //
+
+    if (Node->ChildIndex < ParseNode->NodeCount) {
+        Status = ChalkPushNode(Interpreter,
+                               ParseNode->Nodes[Node->ChildIndex],
+                               Node->Script,
+                               FALSE);
+
+        Node->ChildIndex += 1;
+        return Status;
+    }
+
+    //
+    // Create a list with these elements in it.
+    //
+
     List = ChalkCreateList(NULL, ParseNode->NodeCount);
     if (List == NULL) {
         return ENOMEM;
@@ -109,6 +134,7 @@ Return Value:
     }
 
     *Result = List;
+    ChalkPopNode(Interpreter);
     return 0;
 }
 
@@ -145,9 +171,12 @@ Return Value:
 {
 
     PPARSER_NODE ParseNode;
+    INT Status;
 
     ParseNode = Node->ParseNode;
-    Node->LValue = NULL;
+    Interpreter->LValue = NULL;
+
+    assert(ParseNode->NodeCount <= 1);
 
     //
     // If it's an empty list, create it now. Otherwise by the time this
@@ -156,16 +185,34 @@ Return Value:
     //
 
     if (ParseNode->NodeCount == 0) {
+
+        assert(*Result == NULL);
+
         *Result = ChalkCreateList(NULL, 0);
         if (*Result == NULL) {
             return ENOMEM;
         }
 
     } else {
-        *Result = Node->Results[0];
-        Node->Results[0] = NULL;
+
+        //
+        // If this is the first time through, go get the list element list.
+        //
+
+        if (Node->ChildIndex < ParseNode->NodeCount) {
+            Status = ChalkPushNode(Interpreter,
+                                   ParseNode->Nodes[Node->ChildIndex],
+                                   Node->Script,
+                                   FALSE);
+
+            Node->ChildIndex += 1;
+            return Status;
+        }
+
+        assert(*Result != NULL);
     }
 
+    ChalkPopNode(Interpreter);
     return 0;
 }
 
@@ -202,17 +249,38 @@ Return Value:
 {
 
     PPARSER_NODE ParseNode;
+    INT Status;
 
     ParseNode = Node->ParseNode;
-    Node->LValue = NULL;
 
     assert(ParseNode->NodeCount == 2);
 
+    if (Node->ChildIndex != 0) {
+        Node->Results[Node->ChildIndex - 1] = *Result;
+        *Result = NULL;
+    }
+
+    //
+    // If not all the dict element pieces have been parsed yet, go get them.
+    //
+
+    if (Node->ChildIndex < ParseNode->NodeCount) {
+        Status = ChalkPushNode(Interpreter,
+                               ParseNode->Nodes[Node->ChildIndex],
+                               Node->Script,
+                               FALSE);
+
+        Node->ChildIndex += 1;
+        return Status;
+    }
+
+    Interpreter->LValue = NULL;
     *Result = ChalkCreateList(Node->Results, 2);
     if (*Result == NULL) {
         return ENOMEM;
     }
 
+    ChalkPopNode(Interpreter);
     return 0;
 }
 
@@ -255,7 +323,26 @@ Return Value:
     INT Status;
 
     ParseNode = Node->ParseNode;
-    Node->LValue = NULL;
+    if (Node->ChildIndex != 0) {
+        Node->Results[Node->ChildIndex - 1] = *Result;
+        *Result = NULL;
+    }
+
+    //
+    // If not all the dict elements have been parsed yet, go get them.
+    //
+
+    if (Node->ChildIndex < ParseNode->NodeCount) {
+        Status = ChalkPushNode(Interpreter,
+                               ParseNode->Nodes[Node->ChildIndex],
+                               Node->Script,
+                               FALSE);
+
+        Node->ChildIndex += 1;
+        return Status;
+    }
+
+    Interpreter->LValue = NULL;
     Dict = ChalkCreateDict(NULL);
     if (Dict == NULL) {
         return ENOMEM;
@@ -283,6 +370,7 @@ Return Value:
     }
 
     *Result = Dict;
+    ChalkPopNode(Interpreter);
     return 0;
 }
 
@@ -319,27 +407,48 @@ Return Value:
 {
 
     PPARSER_NODE ParseNode;
+    INT Status;
 
     ParseNode = Node->ParseNode;
-    Node->LValue = NULL;
+    Interpreter->LValue = NULL;
 
     //
-    // If it's an empty dictionary, create it now. Otherwise by the time this
-    // node is evaluated the element list has already fully formed the
-    // dictionary.
+    // If it's an empty dictionary, create it now.
     //
 
     if (ParseNode->NodeCount == 0) {
+
+        assert(*Result == 0);
+
         *Result = ChalkCreateDict(NULL);
         if (*Result == NULL) {
             return ENOMEM;
         }
 
     } else {
-        *Result = Node->Results[0];
-        Node->Results[0] = NULL;
+
+        //
+        // If the dict element list hasn't been evaluated yet, go get it.
+        //
+
+        assert(ParseNode->NodeCount == 1);
+
+        if (Node->ChildIndex < ParseNode->NodeCount) {
+            Status = ChalkPushNode(Interpreter,
+                                   ParseNode->Nodes[Node->ChildIndex],
+                                   Node->Script,
+                                   FALSE);
+
+            Node->ChildIndex += 1;
+            return Status;
+        }
+
+        assert(*Result != NULL);
+
     }
 
+    Interpreter->LValue = NULL;
+    ChalkPopNode(Interpreter);
     return 0;
 }
 
@@ -401,8 +510,21 @@ Return Value:
 
         assert(ParseNode->NodeCount == 1);
 
-        Value = Node->Results[0];
-        Node->Results[0] = NULL;
+        //
+        // Get the item if it's not yet been parsed.
+        //
+
+        if (Node->ChildIndex < ParseNode->NodeCount) {
+            Status = ChalkPushNode(Interpreter,
+                                   ParseNode->Nodes[Node->ChildIndex],
+                                   Node->Script,
+                                   FALSE);
+
+            Node->ChildIndex += 1;
+            return Status;
+        }
+
+        assert(*Result != NULL);
 
     //
     // It's an identifier, constant, or string literal.
@@ -411,7 +533,8 @@ Return Value:
     } else {
 
         assert(ParseNode->TokenCount == 1);
-        assert(Node->LValue == NULL);
+        assert(Interpreter->LValue == NULL);
+        assert(*Result == NULL);
 
         Token = ParseNode->Tokens[0];
         TokenString = Node->Script->Data + Token->Position;
@@ -428,7 +551,7 @@ Return Value:
                 goto VisitPrimaryExpressionEnd;
             }
 
-            Value = ChalkGetVariable(Interpreter, Name, &(Node->LValue));
+            Value = ChalkGetVariable(Interpreter, Name, &(Interpreter->LValue));
 
             //
             // If the variable does not exist, create it now.
@@ -444,7 +567,7 @@ Return Value:
                 Status = ChalkSetVariable(Interpreter,
                                           Name,
                                           Value,
-                                          &(Node->LValue));
+                                          &(Interpreter->LValue));
 
                 if (Status != 0) {
                     goto VisitPrimaryExpressionEnd;
@@ -582,8 +705,11 @@ Return Value:
             Status = ENOMEM;
             goto VisitPrimaryExpressionEnd;
         }
+
+        *Result = Value;
     }
 
+    ChalkPopNode(Interpreter);
     Status = 0;
 
 VisitPrimaryExpressionEnd:
@@ -598,8 +724,92 @@ VisitPrimaryExpressionEnd:
         ChalkObjectReleaseReference(Name);
     }
 
-    *Result = Value;
     return 0;
+}
+
+INT
+ChalkVisitStatement (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    )
+
+/*++
+
+Routine Description:
+
+    This routine evaluates a statement.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+{
+
+    //
+    // Statements should never get evaluated because they collapse for single
+    // element child lists and the grammar rule is composed of only that.
+    //
+
+    assert(FALSE);
+
+    return EINVAL;
+}
+
+INT
+ChalkVisitCompoundStatement (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    )
+
+/*++
+
+Routine Description:
+
+    This routine evaluates a statement list.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+{
+
+    //
+    // In C, a compound statement creates a new scope, and can go anywhere
+    // in a function. In order for this language to support the addition of
+    // dicts {}, compound statements had to be done away with except at the
+    // beginning of functions and conditionals. So they no longer introduce
+    // a new scope themselves.
+    //
+
+    return ChalkVisitStatementList(Interpreter, Node, Result);
 }
 
 INT
@@ -634,11 +844,24 @@ Return Value:
 
 {
 
-    //
-    // Statement lists are nothing but side effects.
-    //
+    PPARSER_NODE ParseNode;
+    INT Status;
 
-    Node->LValue = NULL;
+    assert(*Result == NULL);
+    assert(Interpreter->LValue == NULL);
+
+    ParseNode = Node->ParseNode;
+    if (Node->ChildIndex < ParseNode->NodeCount) {
+        Status = ChalkPushNode(Interpreter,
+                               ParseNode->Nodes[Node->ChildIndex],
+                               Node->Script,
+                               FALSE);
+
+        Node->ChildIndex += 1;
+        return Status;
+    }
+
+    ChalkPopNode(Interpreter);
     return 0;
 }
 
@@ -675,11 +898,256 @@ Return Value:
 {
 
     //
-    // Translation units are nothing but side effects.
+    // Just like a statement list, a translation unit is nothing but its
+    // side effects.
     //
 
-    Node->LValue = NULL;
-    return 0;
+    return ChalkVisitStatementList(Interpreter, Node, Result);
+}
+
+INT
+ChalkVisitExternalDeclaration (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    )
+
+/*++
+
+Routine Description:
+
+    This routine evaluates an external declaration.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+{
+
+    //
+    // Just like a statement list, an external declaration is nothing but its
+    // side effects.
+    //
+
+    return ChalkVisitStatementList(Interpreter, Node, Result);
+}
+
+INT
+ChalkVisitIdentifierList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to visit an identifier list.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer that on input contains a pointer to the
+        previous evaluation. On output, returns a pointer to the evaluation.
+        It is the caller's responsibility to release this reference on output.
+        If the output value is not the same as the input value, the callee
+        becomes the owner of the object, and must take responsibility for
+        releasing it.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+{
+
+    assert(FALSE);
+
+    return EINVAL;
+}
+
+INT
+ChalkVisitFunctionDefinition (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to visit a function definition node.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer that on input contains a pointer to the
+        previous evaluation. On output, returns a pointer to the evaluation.
+        It is the caller's responsibility to release this reference on output.
+        If the output value is not the same as the input value, the callee
+        becomes the owner of the object, and must take responsibility for
+        releasing it.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+{
+
+    PCHALK_OBJECT Argument;
+    PCHALK_OBJECT Arguments;
+    PPARSER_NODE Body;
+    PCHALK_OBJECT Function;
+    PPARSER_NODE IdentifierList;
+    ULONG Index;
+    PCHALK_OBJECT Name;
+    PPARSER_NODE ParseNode;
+    INT Status;
+    PLEXER_TOKEN Token;
+    PSTR TokenString;
+
+    Arguments = NULL;
+    Function = NULL;
+    Name = NULL;
+    ParseNode = Node->ParseNode;
+
+    assert((ParseNode->TokenCount == 4) &&
+           ((ParseNode->NodeCount == 2) || (ParseNode->NodeCount == 1)));
+
+    //
+    // Get the name.
+    //
+
+    Token = ParseNode->Tokens[1];
+    TokenString = Node->Script->Data + Token->Position;
+    Name = ChalkCreateString(TokenString, Token->Size);
+    if (Name == NULL) {
+        Status = ENOMEM;
+        goto VisitFunctionDefinitionEnd;
+    }
+
+    //
+    // Get the argument name list if there is one.
+    //
+
+    if (ParseNode->NodeCount == 2) {
+        IdentifierList = ParseNode->Nodes[0];
+        Body = ParseNode->Nodes[1];
+
+        assert((IdentifierList->GrammarElement == ChalkNodeIdentifierList) &&
+               (IdentifierList->TokenCount != 0) &&
+               (IdentifierList->NodeCount == 0));
+
+        //
+        // Create a list to hold all the argument names.
+        //
+
+        if (IdentifierList->TokenCount >= MAX_LONG) {
+            fprintf(stderr, "Too many function arguments\n");
+            goto VisitFunctionDefinitionEnd;
+        }
+
+        Arguments = ChalkCreateList(NULL, IdentifierList->TokenCount);
+        if (Arguments == NULL) {
+            Status = ENOMEM;
+            goto VisitFunctionDefinitionEnd;
+        }
+
+        //
+        // Create strings for all the argument names, and stick them in the
+        // list.
+        //
+
+        for (Index = 0; Index < IdentifierList->TokenCount; Index += 1) {
+            Token = IdentifierList->Tokens[Index];
+            TokenString = Node->Script->Data + Token->Position;
+            Argument = ChalkCreateString(TokenString, Token->Size);
+            if (Argument == NULL) {
+                Status = ENOMEM;
+                goto VisitFunctionDefinitionEnd;
+            }
+
+            Status = ChalkListSetElement(Arguments, Index, Argument);
+
+            assert(Status == 0);
+
+            ChalkObjectReleaseReference(Argument);
+        }
+
+    //
+    // There is no argument name list, it was just function myfunc().
+    //
+
+    } else {
+        Body = ParseNode->Nodes[0];
+    }
+
+    //
+    // Create the function object itself, and set it in the current scope
+    // (which should just be the global scope).
+    //
+
+    Function = ChalkCreateFunction(Arguments, Body, Node->Script);
+    if (Function == NULL) {
+        Status = ENOMEM;
+        goto VisitFunctionDefinitionEnd;
+    }
+
+    Status = ChalkSetVariable(Interpreter,
+                              Name,
+                              Function,
+                              &(Interpreter->LValue));
+
+    Interpreter->LValue = NULL;
+    if (Status != 0) {
+        goto VisitFunctionDefinitionEnd;
+    }
+
+    ChalkPopNode(Interpreter);
+    Status = 0;
+
+VisitFunctionDefinitionEnd:
+    if (Arguments != NULL) {
+        ChalkObjectReleaseReference(Arguments);
+    }
+
+    if (Name != NULL) {
+        ChalkObjectReleaseReference(Name);
+    }
+
+    if (Function != NULL) {
+        ChalkObjectReleaseReference(Function);
+    }
+
+    return Status;
 }
 
 //

@@ -31,10 +31,7 @@ Environment:
 #include <string.h>
 #include <sys/stat.h>
 
-#include <minoca/types.h>
-#include <minoca/status.h>
-#include <minoca/lib/yy.h>
-#include "chalk.h"
+#include "chalkp.h"
 #include "visit.h"
 
 //
@@ -52,12 +49,14 @@ Environment:
 INT
 ChalkExecuteScript (
     PCHALK_INTERPRETER Interpreter,
-    PCHALK_SCRIPT Script
+    PCHALK_SCRIPT Script,
+    PCHALK_OBJECT *ReturnValue
     );
 
 INT
 ChalkExecute (
-    PCHALK_INTERPRETER Interpreter
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT *ReturnValue
     );
 
 VOID
@@ -67,22 +66,8 @@ ChalkUnloadScript (
     );
 
 INT
-ChalkPushNode (
-    PCHALK_INTERPRETER Interpreter,
-    PVOID ParseTree,
-    PCHALK_SCRIPT Script,
-    BOOL Function
-    );
-
-VOID
-ChalkPopNode (
-    PCHALK_INTERPRETER Interpreter
-    );
-
-INT
 ChalkPushScope (
-    PCHALK_INTERPRETER Interpreter,
-    BOOL Function
+    PCHALK_INTERPRETER Interpreter
     );
 
 VOID
@@ -105,6 +90,7 @@ PCHALK_NODE_VISIT ChalkNodeVisit[ChalkNodeEnd - ChalkNodeBegin] = {
     ChalkVisitDict,
     ChalkVisitPrimaryExpression,
     ChalkVisitPostfixExpression,
+    ChalkVisitArgumentExpressionList,
     ChalkVisitUnaryExpression,
     ChalkVisitUnaryOperator,
     ChalkVisitMultiplicativeExpression,
@@ -121,9 +107,15 @@ PCHALK_NODE_VISIT ChalkNodeVisit[ChalkNodeEnd - ChalkNodeBegin] = {
     ChalkVisitAssignmentExpression,
     ChalkVisitAssignmentOperator,
     ChalkVisitExpression,
+    ChalkVisitStatement,
+    ChalkVisitCompoundStatement,
     ChalkVisitStatementList,
     ChalkVisitExpressionStatement,
+    ChalkVisitJumpStatement,
     ChalkVisitTranslationUnit,
+    ChalkVisitExternalDeclaration,
+    ChalkVisitIdentifierList,
+    ChalkVisitFunctionDefinition,
 };
 
 //
@@ -153,14 +145,42 @@ Return Value:
 
 {
 
+    PPARSER Parser;
+    INT Status;
+
     memset(Interpreter, 0, sizeof(CHALK_INTERPRETER));
     INITIALIZE_LIST_HEAD(&(Interpreter->ScriptList));
     Interpreter->Global.Dict = ChalkCreateDict(NULL);
     if (Interpreter->Global.Dict == NULL) {
-        return ENOMEM;
+        Status = ENOMEM;
+        goto InitializeInterpreterEnd;
     }
 
-    return 0;
+    Parser = ChalkAllocate(sizeof(PARSER));
+    if (Parser == NULL) {
+        Status = ENOMEM;
+        goto InitializeInterpreterEnd;
+    }
+
+    memset(Parser, 0, sizeof(PARSER));
+    Interpreter->Parser = Parser;
+    Parser->Flags = 0;
+    Parser->Allocate = (PYY_ALLOCATE)ChalkAllocate;
+    Parser->Free = ChalkFree;
+    Parser->GetToken = ChalkLexGetToken;
+    Parser->Grammar = ChalkGrammar;
+    Parser->GrammarBase = ChalkNodeBegin;
+    Parser->GrammarEnd = ChalkNodeEnd;
+    Parser->GrammarStart = ChalkNodeTranslationUnit;
+    Parser->MaxRecursion = 500;
+    Status = 0;
+
+InitializeInterpreterEnd:
+    if (Status != 0) {
+        ChalkDestroyInterpreter(Interpreter);
+    }
+
+    return Status;
 }
 
 VOID
@@ -201,6 +221,12 @@ Return Value:
         ChalkUnloadScript(Interpreter, Script);
     }
 
+    if (Interpreter->Parser != NULL) {
+        YyParserDestroy(Interpreter->Parser);
+        ChalkFree(Interpreter->Parser);
+        Interpreter->Parser = NULL;
+    }
+
     return;
 }
 
@@ -210,7 +236,8 @@ ChalkLoadScriptBuffer (
     PSTR Path,
     PSTR Buffer,
     ULONG Size,
-    ULONG Order
+    ULONG Order,
+    PCHALK_OBJECT *ReturnValue
     )
 
 /*++
@@ -236,6 +263,11 @@ Arguments:
     Order - Supplies the order identifier for ordering which scripts should run
         when. Supply 0 to run the script now.
 
+    ReturnValue - Supplies an optional pointer where the return value from
+        the script will be returned. It is the caller's responsibility to
+        release the object. This is only filled in if the order is zero
+        (so the script is executed now).
+
 Return Value:
 
     0 on success.
@@ -253,7 +285,7 @@ Return Value:
         return EINVAL;
     }
 
-    Script = malloc(sizeof(CHALK_SCRIPT));
+    Script = ChalkAllocate(sizeof(CHALK_SCRIPT));
     if (Script == NULL) {
         return ENOMEM;
     }
@@ -262,9 +294,9 @@ Return Value:
     memset(Script, 0, sizeof(CHALK_SCRIPT));
     Script->Order = Order;
     Script->Path = Path;
-    Script->Data = malloc(Size + 1);
+    Script->Data = ChalkAllocate(Size + 1);
     if (Script->Data == NULL) {
-        free(Script);
+        ChalkFree(Script);
     }
 
     memcpy(Script->Data, Buffer, Size);
@@ -272,11 +304,11 @@ Return Value:
     Script->Size = Size;
     INSERT_BEFORE(&(Script->ListEntry), &(Interpreter->ScriptList));
     if (Script->Order == 0) {
-        Status = ChalkExecuteScript(Interpreter, Script);
+        Status = ChalkExecuteScript(Interpreter, Script, ReturnValue);
         if (Status != 0) {
             LIST_REMOVE(&(Script->ListEntry));
-            free(Script->Data);
-            free(Script);
+            ChalkFree(Script->Data);
+            ChalkFree(Script);
         }
     }
 
@@ -287,7 +319,8 @@ INT
 ChalkLoadScriptFile (
     PCHALK_INTERPRETER Interpreter,
     PSTR Path,
-    ULONG Order
+    ULONG Order,
+    PCHALK_OBJECT *ReturnValue
     )
 
 /*++
@@ -304,6 +337,11 @@ Arguments:
 
     Order - Supplies the order identifier for ordering which scripts should run
         when. Supply 0 to run the script now.
+
+    ReturnValue - Supplies an optional pointer where the return value from
+        the script will be returned. It is the caller's responsibility to
+        release the object. This is only filled in if the order is zero
+        (so the script is executed now).
 
 Return Value:
 
@@ -344,7 +382,7 @@ Return Value:
         goto LoadScriptFileEnd;
     }
 
-    Script = malloc(sizeof(CHALK_SCRIPT));
+    Script = ChalkAllocate(sizeof(CHALK_SCRIPT));
     if (Script == NULL) {
         Status = errno;
         goto LoadScriptFileEnd;
@@ -353,7 +391,7 @@ Return Value:
     memset(Script, 0, sizeof(CHALK_SCRIPT));
     Script->Order = Order;
     Script->Path = Path;
-    Script->Data = malloc(Stat.st_size + 1);
+    Script->Data = ChalkAllocate(Stat.st_size + 1);
     if (Script->Data == NULL) {
         Status = errno;
         goto LoadScriptFileEnd;
@@ -386,7 +424,7 @@ Return Value:
     Script->Size = TotalRead;
     INSERT_BEFORE(&(Script->ListEntry), &(Interpreter->ScriptList));
     if (Script->Order == 0) {
-        Status = ChalkExecuteScript(Interpreter, Script);
+        Status = ChalkExecuteScript(Interpreter, Script, ReturnValue);
         if (Status != 0) {
             LIST_REMOVE(&(Script->ListEntry));
             goto LoadScriptFileEnd;
@@ -402,10 +440,10 @@ LoadScriptFileEnd:
         perror("Error");
         if (Script != NULL) {
             if (Script->Data != NULL) {
-                free(Script->Data);
+                ChalkFree(Script->Data);
             }
 
-            free(Script);
+            ChalkFree(Script);
         }
     }
 
@@ -454,7 +492,7 @@ Return Value:
             continue;
         }
 
-        Status = ChalkExecuteScript(Interpreter, Script);
+        Status = ChalkExecuteScript(Interpreter, Script, NULL);
         if (Status != 0) {
             goto ExecuteDeferredScriptsEnd;
         }
@@ -590,242 +628,12 @@ Return Value:
     return ChalkDictSetElement(Scope->Dict, Name, Value, LValue);
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
-INT
-ChalkExecuteScript (
-    PCHALK_INTERPRETER Interpreter,
-    PCHALK_SCRIPT Script
-    )
-
-/*++
-
-Routine Description:
-
-    This routine executes the given interpreted script.
-
-Arguments:
-
-    Interpreter - Supplies a pointer to the initialized interpreter.
-
-    Script - Supplies a pointer to the script to execute.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-{
-
-    INT Status;
-
-    assert(Script->ParseTree == NULL);
-
-    Status = ChalkParseScript(Script, &(Script->ParseTree));
-    if (Status != 0) {
-        Status = ENOMEM;
-        goto ExecuteScriptEnd;
-    }
-
-    Status = ChalkPushNode(Interpreter, Script->ParseTree, Script, FALSE);
-    if (Status != 0) {
-        goto ExecuteScriptEnd;
-    }
-
-    Status = ChalkExecute(Interpreter);
-    if (Status != 0) {
-        goto ExecuteScriptEnd;
-    }
-
-    if (ChalkDebugFinalGlobals != FALSE) {
-        printf("Globals: ");
-        ChalkPrintObject(Interpreter->Global.Dict, 0);
-        printf("\n");
-    }
-
-ExecuteScriptEnd:
-    return Status;
-}
-
-INT
-ChalkExecute (
-    PCHALK_INTERPRETER Interpreter
-    )
-
-/*++
-
-Routine Description:
-
-    This routine executes the given interpreter setup.
-
-Arguments:
-
-    Interpreter - Supplies a pointer to the interpreter to run on.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-{
-
-    ULONG GrammarIndex;
-    PCHALK_NODE Node;
-    PCHALK_NODE Parent;
-    PPARSER_NODE ParseNode;
-    PCHALK_OBJECT Result;
-    INT Status;
-    PCHALK_NODE_VISIT VisitFunction;
-
-    while (Interpreter->Node != NULL) {
-        Node = Interpreter->Node;
-        ParseNode = Node->ParseNode;
-
-        //
-        // If this is not the end, visit the next child.
-        //
-
-        if (Node->ChildIndex < ParseNode->NodeCount) {
-            Status = ChalkPushNode(Interpreter,
-                                   ParseNode->Nodes[Node->ChildIndex],
-                                   Node->Script,
-                                   FALSE);
-
-            if (Status != 0) {
-                break;
-            }
-
-            Node->ChildIndex += 1;
-
-        //
-        // All the children have been popped, so visit this node and pop it.
-        //
-
-        } else {
-            Result = NULL;
-            GrammarIndex = ParseNode->GrammarElement - ChalkNodeBegin;
-            VisitFunction = ChalkNodeVisit[GrammarIndex];
-            if (ChalkDebugNodeVisits != FALSE) {
-                printf("%*s%s 0x%x 0x%x\n",
-                       Interpreter->NodeDepth,
-                       "",
-                       ChalkGetNodeGrammarName(Node),
-                       Node,
-                       ParseNode);
-            }
-
-            Status = VisitFunction(Interpreter, Node, &Result);
-            if (Status != 0) {
-                fprintf(stderr,
-                        "Interpreter error around %s:%d:%d: %s.\n",
-                        Node->Script->Path,
-                        ParseNode->StartToken->Line,
-                        ParseNode->StartToken->Column,
-                        strerror(Status));
-
-                break;
-            }
-
-            //
-            // Move the result of the visitation (the return value) up into the
-            // parent node.
-            //
-
-            if (Node != Interpreter->Node) {
-                Parent = Interpreter->Node;
-
-            } else {
-                Parent = Node->Parent;
-            }
-
-            if (Parent != NULL) {
-
-                assert(Parent->ChildIndex != 0);
-
-                Parent->Results[Parent->ChildIndex - 1] = Result;
-
-                //
-                // Move the LValue of the first node up to the parent.
-                //
-
-                if (Parent->ChildIndex - 1 == 0) {
-                    Parent->LValue = Node->LValue;
-                }
-
-            } else if (Result != NULL) {
-                ChalkObjectReleaseReference(Result);
-            }
-
-            //
-            // Remove this node from the execution stack unless it already was
-            // (ie break or return).
-            //
-
-            if (Node == Interpreter->Node) {
-                ChalkPopNode(Interpreter);
-            }
-        }
-    }
-
-    while (Interpreter->Node != NULL) {
-        ChalkPopNode(Interpreter);
-    }
-
-    return Status;
-}
-
-VOID
-ChalkUnloadScript (
-    PCHALK_INTERPRETER Interpreter,
-    PCHALK_SCRIPT Script
-    )
-
-/*++
-
-Routine Description:
-
-    This routine unloads and frees a script.
-
-Arguments:
-
-    Interpreter - Supplies a pointer to the interpreter.
-
-    Script - Supplies a pointer to the script to unload.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    if (Script->ListEntry.Next != NULL) {
-        LIST_REMOVE(&(Script->ListEntry));
-    }
-
-    if (Script->Data != NULL) {
-        free(Script->Data);
-    }
-
-    free(Script);
-    return;
-}
-
 INT
 ChalkPushNode (
     PCHALK_INTERPRETER Interpreter,
     PVOID ParseTree,
     PCHALK_SCRIPT Script,
-    BOOL Function
+    BOOL NewScope
     )
 
 /*++
@@ -842,8 +650,7 @@ Arguments:
 
     Script - Supplies a pointer to the script this tree came from.
 
-    Function - Supplies a boolean indicating if this is a function scope or
-        not.
+    NewScope - Supplies a boolean indicating if this node creates a new scope.
 
 Return Value:
 
@@ -862,7 +669,7 @@ Return Value:
 
     ParseNode = ParseTree;
     Size = sizeof(CHALK_NODE) + (ParseNode->NodeCount * sizeof(PVOID));
-    Node = malloc(Size);
+    Node = ChalkAllocate(Size);
     if (Node == NULL) {
         return ENOMEM;
     }
@@ -872,10 +679,10 @@ Return Value:
     Node->ParseNode = ParseTree;
     Node->Script = Script;
     Node->Results = (PCHALK_OBJECT *)(Node + 1);
-    if (Function != FALSE) {
-        Status = ChalkPushScope(Interpreter, Function);
+    if (NewScope != FALSE) {
+        Status = ChalkPushScope(Interpreter);
         if (Status != 0) {
-            free(Node);
+            ChalkFree(Node);
             return Status;
         }
 
@@ -941,14 +748,218 @@ Return Value:
 
     Interpreter->Node = Node->Parent;
     Interpreter->NodeDepth -= 1;
-    free(Node);
+    ChalkFree(Node);
+    return;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+INT
+ChalkExecuteScript (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_SCRIPT Script,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine executes the given interpreted script.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the initialized interpreter.
+
+    Script - Supplies a pointer to the script to execute.
+
+    ReturnValue - Supplies an optional pointer where the return value from
+        the script will be returned. It is the caller's responsibility to
+        release the object.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    INT Status;
+
+    assert(Script->ParseTree == NULL);
+
+    Status = ChalkParseScript(Interpreter, Script, &(Script->ParseTree));
+    if (Status != 0) {
+        Status = ENOMEM;
+        goto ExecuteScriptEnd;
+    }
+
+    Status = ChalkPushNode(Interpreter, Script->ParseTree, Script, FALSE);
+    if (Status != 0) {
+        goto ExecuteScriptEnd;
+    }
+
+    Status = ChalkExecute(Interpreter, ReturnValue);
+    if (Status != 0) {
+        goto ExecuteScriptEnd;
+    }
+
+    if (ChalkDebugFinalGlobals != FALSE) {
+        printf("Globals: ");
+        ChalkPrintObject(Interpreter->Global.Dict, 0);
+        printf("\n");
+    }
+
+ExecuteScriptEnd:
+    return Status;
+}
+
+INT
+ChalkExecute (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine executes the given interpreter setup.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter to run on.
+
+    ReturnValue - Supplies an optional pointer where a pointer to the return
+        object will be returned. The caller is responsible for releasing the
+        reference on this object.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    ULONG GrammarIndex;
+    PCHALK_NODE Node;
+    PPARSER_NODE ParseNode;
+    PCHALK_OBJECT Result;
+    PCHALK_SCRIPT Script;
+    INT Status;
+    PCHALK_NODE_VISIT VisitFunction;
+
+    //
+    // Just keep visiting nodes until there are no more.
+    //
+
+    Result = NULL;
+    while (Interpreter->Node != NULL) {
+        Node = Interpreter->Node;
+        Script = Node->Script;
+        ParseNode = Node->ParseNode;
+        GrammarIndex = ParseNode->GrammarElement - ChalkNodeBegin;
+        VisitFunction = ChalkNodeVisit[GrammarIndex];
+        if (ChalkDebugNodeVisits != FALSE) {
+            printf("%*s%s 0x%x 0x%x [%s:%d:%d]\n",
+                   Interpreter->NodeDepth,
+                   "",
+                   ChalkGetNodeGrammarName(Node),
+                   Node,
+                   ParseNode,
+                   Script->Path,
+                   ParseNode->StartToken->Line,
+                   ParseNode->StartToken->Column);
+        }
+
+        Status = VisitFunction(Interpreter, Node, &Result);
+        if (Status != 0) {
+            fprintf(stderr,
+                    "Interpreter error around %s:%d:%d: %s.\n",
+                    Script->Path,
+                    ParseNode->StartToken->Line,
+                    ParseNode->StartToken->Column,
+                    strerror(Status));
+
+            break;
+        }
+    }
+
+    //
+    // If there was an error, pop any remaining nodes from the stack.
+    //
+
+    assert((Status != 0) || (Interpreter->Node == NULL));
+
+    while (Interpreter->Node != NULL) {
+        ChalkPopNode(Interpreter);
+    }
+
+    if (ReturnValue != NULL) {
+        *ReturnValue = Result;
+
+    } else {
+        if (Result != NULL) {
+            ChalkObjectReleaseReference(Result);
+        }
+    }
+
+    return Status;
+}
+
+VOID
+ChalkUnloadScript (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_SCRIPT Script
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unloads and frees a script.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Script - Supplies a pointer to the script to unload.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (Script->ListEntry.Next != NULL) {
+        LIST_REMOVE(&(Script->ListEntry));
+    }
+
+    if (Script->Data != NULL) {
+        ChalkFree(Script->Data);
+    }
+
+    if (Script->ParseTree != NULL) {
+        YyDestroyNode(Interpreter->Parser, Script->ParseTree);
+    }
+
+    ChalkFree(Script);
     return;
 }
 
 INT
 ChalkPushScope (
-    PCHALK_INTERPRETER Interpreter,
-    BOOL Function
+    PCHALK_INTERPRETER Interpreter
     )
 
 /*++
@@ -960,9 +971,6 @@ Routine Description:
 Arguments:
 
     Interpreter - Supplies a pointer to the interpreter.
-
-    Function - Supplies a boolean indicating if this is a function scope or
-        not.
 
 Return Value:
 
@@ -976,17 +984,16 @@ Return Value:
 
     PCHALK_SCOPE Scope;
 
-    Scope = malloc(sizeof(CHALK_SCOPE));
+    Scope = ChalkAllocate(sizeof(CHALK_SCOPE));
     if (Scope == NULL) {
         return ENOMEM;
     }
 
     memset(Scope, 0, sizeof(CHALK_SCOPE));
     Scope->Parent = Interpreter->Scope;
-    Scope->Function = Function;
     Scope->Dict = ChalkCreateDict(NULL);
     if (Scope->Dict == NULL) {
-        free(Scope);
+        ChalkFree(Scope);
         return ENOMEM;
     }
 
@@ -1022,7 +1029,7 @@ Return Value:
     Scope = Interpreter->Scope;
     Interpreter->Scope = Scope->Parent;
     ChalkObjectReleaseReference(Scope->Dict);
-    free(Scope);
+    ChalkFree(Scope);
     return;
 }
 

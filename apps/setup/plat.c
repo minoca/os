@@ -550,7 +550,8 @@ Return Value:
                                    Recipe->ShortName,
                                    Recipe->Script,
                                    ScriptSize,
-                                   0);
+                                   0,
+                                   NULL);
 
     return Status;
 }
@@ -599,7 +600,8 @@ Return Value:
                                        Recipe->ShortName,
                                        Recipe->Script,
                                        ScriptSize,
-                                       0);
+                                       0,
+                                       NULL);
 
         if (Status != 0) {
             fprintf(stderr, "Failed to add common scripts.\n");

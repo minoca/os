@@ -80,7 +80,7 @@ PSTR ChalkObjectTypeNames[ChalkObjectCount] = {
     "string",
     "dict",
     "list",
-    "ref"
+    "function",
 };
 
 //
@@ -114,7 +114,7 @@ Return Value:
 
     PCHALK_INT Int;
 
-    Int = malloc(sizeof(CHALK_OBJECT));
+    Int = ChalkAllocate(sizeof(CHALK_OBJECT));
     if (Int == NULL) {
         return NULL;
     }
@@ -157,16 +157,16 @@ Return Value:
     ULONG AllocateSize;
     PCHALK_STRING String;
 
-    String = malloc(sizeof(CHALK_OBJECT));
+    String = ChalkAllocate(sizeof(CHALK_OBJECT));
     if (String == NULL) {
         return NULL;
     }
 
     memset(String, 0, sizeof(CHALK_OBJECT));
     AllocateSize = Size + 1;
-    String->String = malloc(AllocateSize);
+    String->String = ChalkAllocate(AllocateSize);
     if (String->String == NULL) {
-        free(String);
+        ChalkFree(String);
         return NULL;
     }
 
@@ -220,12 +220,14 @@ Return Value:
         return ENOMEM;
     }
 
+    ChalkFree(String->String.String);
+
     //
     // The size does not account for the null terminator.
     //
 
     Size = Left->String.Size + Right->String.Size;
-    String->String.String = malloc(Size + 1);
+    String->String.String = ChalkAllocate(Size + 1);
     if (String->String.String == NULL) {
         ChalkObjectReleaseReference(String);
         return ENOMEM;
@@ -274,7 +276,7 @@ Return Value:
     ULONG Index;
     PCHALK_LIST List;
 
-    List = malloc(sizeof(CHALK_OBJECT));
+    List = ChalkAllocate(sizeof(CHALK_OBJECT));
     if (List == NULL) {
         return NULL;
     }
@@ -283,9 +285,9 @@ Return Value:
     List->Header.Type = ChalkObjectList;
     List->Header.ReferenceCount = 1;
     if (Size != 0) {
-        List->Array = malloc(Size * sizeof(PVOID));
+        List->Array = ChalkAllocate(Size * sizeof(PVOID));
         if (List->Array == NULL) {
-            free(List);
+            ChalkFree(List);
             return NULL;
         }
 
@@ -390,7 +392,7 @@ Return Value:
 
     List = (PCHALK_LIST)ListObject;
     if (List->Count <= Index) {
-        NewBuffer = realloc(List->Array, sizeof(PVOID) * (Index + 1));
+        NewBuffer = ChalkReallocate(List->Array, sizeof(PVOID) * (Index + 1));
         if (NewBuffer == NULL) {
             return ENOMEM;
         }
@@ -457,7 +459,7 @@ Return Value:
            (RightList->Header.Type == ChalkObjectList));
 
     NewSize = LeftList->Count + RightList->Count;
-    NewArray = realloc(LeftList->Array, NewSize * sizeof(PVOID));
+    NewArray = ChalkReallocate(LeftList->Array, NewSize * sizeof(PVOID));
     if (NewArray == NULL) {
         return ENOMEM;
     }
@@ -504,7 +506,7 @@ Return Value:
     PCHALK_DICT_ENTRY Entry;
     INT Status;
 
-    Dict = malloc(sizeof(CHALK_OBJECT));
+    Dict = ChalkAllocate(sizeof(CHALK_OBJECT));
     if (Dict == NULL) {
         return NULL;
     }
@@ -591,7 +593,7 @@ Return Value:
     //
 
     if (Entry == NULL) {
-        Entry = malloc(sizeof(CHALK_DICT_ENTRY));
+        Entry = ChalkAllocate(sizeof(CHALK_DICT_ENTRY));
         if (Entry == NULL) {
             return ENOMEM;
         }
@@ -717,23 +719,32 @@ Return Value:
 }
 
 PCHALK_OBJECT
-ChalkCreateReference (
-    PCHALK_OBJECT ReferenceTo
+ChalkCreateFunction (
+    PCHALK_OBJECT Arguments,
+    PVOID Body,
+    PCHALK_SCRIPT Script
     )
 
 /*++
 
 Routine Description:
 
-    This routine creates a reference object.
+    This routine creates a new function object.
 
 Arguments:
 
-    ReferenceTo - Supplies a pointer to the object to refer to.
+    Arguments - Supplies a pointer to a list containing the arguments for the
+        function. A reference is added, and this list is used directly.
+
+    Body - Supplies a pointer to the Abstract Syntax Tree node representing the
+        body of the function (what to execute when the function is called).
+        This is opaque, but is currently of type PPARSER_NODE.
+
+    Script - Supplies a pointer to the script the function is defined in.
 
 Return Value:
 
-    Returns a pointer to the object on success.
+    Returns a pointer to the new object on success.
 
     NULL on failure.
 
@@ -741,21 +752,24 @@ Return Value:
 
 {
 
-    PCHALK_OBJECT Reference;
+    PCHALK_OBJECT Function;
 
-    assert(ReferenceTo != NULL);
-
-    Reference = malloc(sizeof(CHALK_OBJECT));
-    if (Reference == NULL) {
+    Function = ChalkAllocate(sizeof(CHALK_OBJECT));
+    if (Function == NULL) {
         return NULL;
     }
 
-    memset(Reference, 0, sizeof(CHALK_OBJECT));
-    Reference->Header.Type = ChalkObjectInteger;
-    Reference->Header.ReferenceCount = 1;
-    Reference->Reference.Value = ReferenceTo;
-    ChalkObjectAddReference(ReferenceTo);
-    return Reference;
+    memset(Function, 0, sizeof(CHALK_OBJECT));
+    Function->Header.Type = ChalkObjectFunction;
+    Function->Header.ReferenceCount = 1;
+    Function->Function.Arguments = Arguments;
+    if (Arguments != NULL) {
+        ChalkObjectAddReference(Arguments);
+    }
+
+    Function->Function.Body = Body;
+    Function->Function.Script = Script;
+    return Function;
 }
 
 PCHALK_OBJECT
@@ -806,8 +820,11 @@ Return Value:
         NewObject = ChalkCreateDict(Object);
         break;
 
-    case ChalkObjectReference:
-        NewObject = ChalkCreateReference(Object->Reference.Value);
+    case ChalkObjectFunction:
+        NewObject = ChalkCreateFunction(Object->Function.Arguments,
+                                        Object->Function.Body,
+                                        Object->Function.Script);
+
         break;
 
     default:
@@ -847,10 +864,6 @@ Return Value:
 
     BOOL Result;
 
-    if (Object->Header.Type == ChalkObjectReference) {
-        Object = Object->Reference.Value;
-    }
-
     switch (Object->Header.Type) {
     case ChalkObjectInteger:
         Result = (Object->Integer.Value != 0);
@@ -866,6 +879,10 @@ Return Value:
 
     case ChalkObjectDict:
         Result = !LIST_EMPTY(&(Object->Dict.EntryList));
+        break;
+
+    case ChalkObjectFunction:
+        Result = TRUE;
         break;
 
     default:
@@ -948,7 +965,7 @@ Return Value:
     Header->ReferenceCount -= 1;
     if (Header->ReferenceCount == 0) {
         ChalkGutObject(Object);
-        free(Header);
+        ChalkFree(Header);
     }
 
     return;
@@ -993,10 +1010,6 @@ Return Value:
     if (Object == NULL) {
         printf("0");
         return;
-    }
-
-    if (Object->Header.Type == ChalkObjectReference) {
-        Object = Object->Reference.Value;
     }
 
     Type = Object->Header.Type;
@@ -1130,6 +1143,10 @@ Return Value:
         printf("}");
         break;
 
+    case ChalkObjectFunction:
+        printf("Function at 0x%x", Object->Function.Body);
+        break;
+
     default:
 
         assert(FALSE);
@@ -1174,7 +1191,8 @@ Return Value:
 
     case ChalkObjectString:
         if (Object->String.String != NULL) {
-            free(Object->String.String);
+            ChalkFree(Object->String.String);
+            Object->String.String = NULL;
         }
 
         break;
@@ -1187,9 +1205,14 @@ Return Value:
         ChalkDestroyDict(Object);
         break;
 
-    case ChalkObjectReference:
-        ChalkObjectReleaseReference(Object->Reference.Value);
-        Object->Reference.Value = NULL;
+    case ChalkObjectFunction:
+        if (Object->Function.Arguments != NULL) {
+            ChalkObjectReleaseReference(Object->Function.Arguments);
+            Object->Function.Arguments = NULL;
+        }
+
+        Object->Function.Body = NULL;
+        Object->Function.Script = NULL;
         break;
 
     default:
@@ -1237,7 +1260,7 @@ Return Value:
     }
 
     if (Array != NULL) {
-        free(Array);
+        ChalkFree(Array);
     }
 
     return;
@@ -1312,6 +1335,7 @@ Return Value:
         ChalkObjectReleaseReference(Entry->Value);
     }
 
+    ChalkFree(Entry);
     return;
 }
 
@@ -1350,14 +1374,6 @@ Return Value:
     LONG Result;
     ULONG RightSize;
     PUCHAR RightString;
-
-    if (Left->Header.Type == ChalkObjectReference) {
-        Left = Left->Reference.Value;
-    }
-
-    if (Right->Header.Type == ChalkObjectReference) {
-        Right = Right->Reference.Value;
-    }
 
     if (Left->Header.Type < Right->Header.Type) {
         return -1;
@@ -1434,6 +1450,22 @@ Return Value:
     case ChalkObjectDict:
 
         assert(FALSE);
+
+        break;
+
+    //
+    // Functions really only compare for equality, as they're comparing pointer
+    // values directly.
+    //
+
+    case ChalkObjectFunction:
+        Result = 0;
+        if (Left->Function.Body < Right->Function.Body) {
+            Result = -1;
+
+        } else if (Left->Function.Body > Right->Function.Body) {
+            Result = 1;
+        }
 
         break;
 

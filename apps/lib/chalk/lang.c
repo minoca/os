@@ -50,12 +50,6 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-KSTATUS
-ChalkLexGetToken (
-    PVOID Context,
-    PLEXER_TOKEN Token
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -63,6 +57,8 @@ ChalkLexGetToken (
 PSTR ChalkLexerExpressions[] = {
     "/\\*.*?\\*/", // Multiline comment
     "//(\\\\.|[^\n])*", // single line comment
+    "return",
+    "function",
     YY_NAME0 "(" YY_NAME0 "|" YY_DIGITS ")*", // identifier
     "0[xX]" YY_HEX "+", // hex integer
     "0" YY_OCTAL_DIGITS "+", // octal integer
@@ -117,6 +113,8 @@ PSTR ChalkLexerExpressions[] = {
 PSTR ChalkLexerTokenNames[] = {
     "MultilineComment", // Multiline comment
     "Comment", // single line comment
+    "return",
+    "function",
     "ID", // identifier
     "HEXINT", // hex integer
     "OCTINT", // octal integer
@@ -229,8 +227,19 @@ ULONG ChalkGrammarPostfixExpression[] = {
     ChalkNodePostfixExpression, ChalkTokenOpenBracket, ChalkNodeExpression,
         ChalkTokenCloseBracket, 0,
 
+    ChalkNodePostfixExpression, ChalkTokenOpenParentheses,
+        ChalkNodeArgumentExpressionList, ChalkTokenCloseParentheses, 0,
+
     ChalkNodePostfixExpression, ChalkTokenIncrement, 0,
     ChalkNodePostfixExpression, ChalkTokenDecrement, 0,
+    0
+};
+
+ULONG ChalkGrammarArgumentExpressionList[] = {
+    ChalkNodeAssignmentExpression, 0,
+    ChalkNodeArgumentExpressionList, ChalkTokenComma,
+        ChalkNodeAssignmentExpression, 0,
+
     0
 };
 
@@ -352,7 +361,7 @@ ULONG ChalkGrammarLogicalOrExpression[] = {
 
 ULONG ChalkGrammarConditionalExpression[] = {
     ChalkNodeLogicalOrExpression, ChalkTokenQuestion, ChalkNodeExpression,
-        ChalkNodeConditionalExpression, 0,
+        ChalkTokenColon, ChalkNodeConditionalExpression, 0,
 
     ChalkNodeLogicalOrExpression, 0,
     0
@@ -387,9 +396,21 @@ ULONG ChalkGrammarExpression[] = {
     0
 };
 
-ULONG ChalkGrammarStatementList[] = {
+ULONG ChalkGrammarStatement[] = {
     ChalkNodeExpressionStatement, 0,
-    ChalkNodeStatementList, ChalkNodeExpressionStatement, 0,
+    ChalkNodeJumpStatement, 0,
+    0
+};
+
+ULONG ChalkGrammarCompoundStatement[] = {
+    ChalkTokenOpenBrace, ChalkTokenCloseBrace, 0,
+    ChalkTokenOpenBrace, ChalkNodeStatementList, ChalkTokenCloseBrace, 0,
+    0
+};
+
+ULONG ChalkGrammarStatementList[] = {
+    ChalkNodeStatement, 0,
+    ChalkNodeStatementList, ChalkNodeStatement, 0,
     0
 };
 
@@ -399,8 +420,38 @@ ULONG ChalkGrammarExpressionStatement[] = {
     0
 };
 
+ULONG ChalkGrammarJumpStatement[] = {
+    ChalkTokenReturn, ChalkTokenSemicolon, 0,
+    ChalkTokenReturn, ChalkNodeExpression, ChalkTokenSemicolon, 0,
+    0
+};
+
 ULONG ChalkGrammarTranslationUnit[] = {
-    ChalkNodeStatementList, 0,
+    ChalkNodeExternalDeclaration, 0,
+    ChalkNodeTranslationUnit, ChalkNodeExternalDeclaration, 0,
+    0
+};
+
+ULONG ChalkGrammarExternalDeclaration[] = {
+    ChalkNodeFunctionDefinition, 0,
+    ChalkNodeStatement, 0,
+    0
+};
+
+ULONG ChalkGrammarIdentifierList[] = {
+    ChalkTokenIdentifier, 0,
+    ChalkNodeIdentifierList, ChalkTokenComma, ChalkTokenIdentifier, 0,
+    0
+};
+
+ULONG ChalkGrammarFunctionDefinition[] = {
+    ChalkTokenFunction, ChalkTokenIdentifier, ChalkTokenOpenParentheses,
+        ChalkTokenCloseParentheses, ChalkNodeCompoundStatement, 0,
+
+    ChalkTokenFunction, ChalkTokenIdentifier, ChalkTokenOpenParentheses,
+        ChalkNodeIdentifierList, ChalkTokenCloseParentheses,
+        ChalkNodeCompoundStatement, 0,
+
     0
 };
 
@@ -412,9 +463,10 @@ PARSER_GRAMMAR_ELEMENT ChalkGrammar[] = {
     {"Dict", 0, ChalkGrammarDict},
     {"PrimaryExpression", 0, ChalkGrammarPrimaryExpression},
     {"PostfixExpression",
-     YY_GRAMMAR_COLLAPSE_ONE,
+     YY_GRAMMAR_COLLAPSE_ONE | YY_GRAMMAR_NEST_LEFT_RECURSION,
      ChalkGrammarPostfixExpression},
 
+    {"ArgumentExpressionList", 0, ChalkGrammarArgumentExpressionList},
     {"UnaryExpression", YY_GRAMMAR_COLLAPSE_ONE, ChalkGrammarUnaryExpression},
     {"UnaryOperator", 0, ChalkGrammarUnaryOperator},
     {"MultiplicativeExpression",
@@ -467,9 +519,19 @@ PARSER_GRAMMAR_ELEMENT ChalkGrammar[] = {
 
     {"AssignmentOperator", 0, ChalkGrammarAssignmentOperator},
     {"Expression", 0, ChalkGrammarExpression},
+    {"Statement", YY_GRAMMAR_COLLAPSE_ONE, ChalkGrammarStatement},
+    {"CompoundStatement", 0, ChalkGrammarCompoundStatement},
     {"StatementList", 0, ChalkGrammarStatementList},
     {"ExpressionStatement", 0, ChalkGrammarExpressionStatement},
+    {"JumpStatement", 0, ChalkGrammarJumpStatement},
     {"TranslationUnit", 0, ChalkGrammarTranslationUnit},
+    {"ExternalDeclaration",
+     YY_GRAMMAR_COLLAPSE_ONE,
+     ChalkGrammarExternalDeclaration},
+
+    {"IdentifierList", 0, ChalkGrammarIdentifierList},
+    {"FunctionDefinition", 0, ChalkGrammarFunctionDefinition},
+    {NULL, 0, NULL},
 };
 
 PARSER ChalkParser;
@@ -480,6 +542,7 @@ PARSER ChalkParser;
 
 INT
 ChalkParseScript (
+    PCHALK_INTERPRETER Interpreter,
     PCHALK_SCRIPT Script,
     PVOID *TranslationUnit
     )
@@ -491,6 +554,8 @@ Routine Description:
     This routine lexes and parses the given script data.
 
 Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
 
     Script - Supplies a pointer to the script to parse.
 
@@ -511,6 +576,7 @@ Return Value:
     KSTATUS KStatus;
     LEXER Lexer;
     ULONG Line;
+    PPARSER Parser;
     INT Status;
 
     memset(&Lexer, 0, sizeof(Lexer));
@@ -521,28 +587,19 @@ Return Value:
     Lexer.ExpressionNames = ChalkLexerTokenNames;
     Lexer.TokenBase = CHALK_TOKEN_BASE;
     YyLexInitialize(&Lexer);
-    ChalkParser.Context = &Lexer;
-    if (ChalkParser.GetToken == NULL) {
-        ChalkParser.Flags = 0;
-        ChalkParser.Allocate = (PYY_ALLOCATE)malloc;
-        ChalkParser.Free = free;
-        ChalkParser.GetToken = ChalkLexGetToken;
-        ChalkParser.Grammar = ChalkGrammar;
-        ChalkParser.GrammarBase = ChalkNodeBegin;
-        ChalkParser.GrammarEnd = ChalkNodeEnd;
-        ChalkParser.GrammarStart = ChalkNodeTranslationUnit;
-        ChalkParser.MaxRecursion = 500;
-        ChalkParser.Lexer = &Lexer;
-    }
-
-    YyParserInitialize(&ChalkParser);
-    KStatus = YyParse(&ChalkParser, (PPARSER_NODE *)TranslationUnit);
+    Parser = Interpreter->Parser;
+    Parser->Context = &Lexer;
+    Parser->Lexer = &Lexer;
+    YyParserInitialize(Parser);
+    KStatus = YyParse(Parser, (PPARSER_NODE *)TranslationUnit);
+    Parser->Context = NULL;
+    Parser->Lexer = NULL;
     if (!KSUCCESS(KStatus)) {
         Column = 0;
         Line = 0;
-        if (ChalkParser.NextToken != NULL) {
-            Column = ChalkParser.NextToken->Column;
-            Line = ChalkParser.NextToken->Line;
+        if (Parser->NextToken != NULL) {
+            Column = Parser->NextToken->Column;
+            Line = Parser->NextToken->Line;
         }
 
         fprintf(stderr,
@@ -560,34 +617,6 @@ Return Value:
 
 ParseScriptEnd:
     return Status;
-}
-
-VOID
-ChalkDestroyParseTree (
-    PVOID TranslationUnit
-    )
-
-/*++
-
-Routine Description:
-
-    This routine destroys the translation unit returned when a script was
-    parsed.
-
-Arguments:
-
-    TranslationUnit - Supplies a pointer to the translation unit to destroy.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    YyDestroyNode(&ChalkParser, TranslationUnit);
-    return;
 }
 
 PSTR
@@ -619,10 +648,6 @@ Return Value:
     ParseNode = Node->ParseNode;
     return ChalkGrammar[ParseNode->GrammarElement - ChalkNodeBegin].Name;
 }
-
-//
-// --------------------------------------------------------- Internal Functions
-//
 
 KSTATUS
 ChalkLexGetToken (
@@ -677,4 +702,8 @@ Return Value:
 
     return Status;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 

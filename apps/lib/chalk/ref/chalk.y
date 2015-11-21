@@ -1,10 +1,11 @@
 %token IDENTIFIER CONSTANT STRING_LITERAL
+
 %token INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
 %token AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
 %token XOR_ASSIGN OR_ASSIGN
 
-%token CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
+%token RETURN
 
 %token FUNCTION
 
@@ -50,15 +51,15 @@ primary_expression
 postfix_expression
     : primary_expression
     | postfix_expression '[' expression ']'
-    | postfix_expression '(' ')'
     | postfix_expression '(' argument_expression_list ')'
     | postfix_expression INC_OP
     | postfix_expression DEC_OP
     ;
-
+    
 argument_expression_list
     : assignment_expression
     | argument_expression_list ',' assignment_expression
+    | 
     ;
 
 unary_expression
@@ -162,23 +163,9 @@ expression
     | expression ',' assignment_expression
     ;
 
-constant_expression
-    : conditional_expression
-    ;
-
 statement
-    : labeled_statement
-    | compound_statement
-    | expression_statement
-    | selection_statement
-    | iteration_statement
+    : expression_statement
     | jump_statement
-    ;
-
-labeled_statement
-    : IDENTIFIER ':' statement
-    | CASE constant_expression ':' statement
-    | DEFAULT ':' statement
     ;
 
 compound_statement
@@ -196,24 +183,8 @@ expression_statement
     | expression ';'
     ;
 
-selection_statement
-    : IF '(' expression ')' statement
-    | IF '(' expression ')' statement ELSE statement
-    | SWITCH '(' expression ')' statement
-    ;
-
-iteration_statement
-    : WHILE '(' expression ')' statement
-    | DO statement WHILE '(' expression ')' ';'
-    | FOR '(' expression_statement expression_statement ')' statement
-    | FOR '(' expression_statement expression_statement expression ')' statement
-    ;
-
 jump_statement
-    : GOTO IDENTIFIER ';'
-    | CONTINUE ';'
-    | BREAK ';'
-    | RETURN ';'
+    : RETURN ';'
     | RETURN expression ';'
     ;
 
@@ -224,6 +195,7 @@ translation_unit
 
 external_declaration
     : function_definition
+    | statement
     ;
 
 identifier_list
@@ -232,7 +204,8 @@ identifier_list
     ;
 
 function_definition
-    : FUNCTION IDENTIFIER '(' identifier_list ')' compound_statement
+    : FUNCTION IDENTIFIER '(' ')' compound_statement
+    | FUNCTION IDENTIFIER '(' identifier_list ')' compound_statement
     ;
 
 %%

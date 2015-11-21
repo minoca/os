@@ -66,6 +66,14 @@ Environment:
 //
 
 INT
+ChalkDereference (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Object,
+    PCHALK_OBJECT Index,
+    PCHALK_OBJECT *Result
+    );
+
+INT
 ChalkPerformArithmetic (
     PCHALK_INTERPRETER Interpreter,
     PCHALK_OBJECT Left,
@@ -123,208 +131,196 @@ Return Value:
 
 {
 
-    PCHALK_DICT_ENTRY DictEntry;
+    PCHALK_OBJECT ArgumentList;
     PCHALK_OBJECT Expression;
-    PCHALK_OBJECT ExpressionValue;
     PCHALK_OBJECT Key;
-    LONGLONG ListIndex;
     PCHALK_OBJECT *LValue;
     PCHALK_OBJECT NewExpression;
-    ULONG NodeIndex;
     PPARSER_NODE ParseNode;
     INT Status;
     PLEXER_TOKEN Token;
-    ULONG TokenIndex;
 
     ParseNode = Node->ParseNode;
+    Status = 0;
+    if (Node->ChildIndex != 0) {
+        Node->Results[Node->ChildIndex - 1] = *Result;
+        *Result = NULL;
+    }
+
+    //
+    // If not all the child elements have been evaluated yet, go get them.
+    //
+
+    if (Node->ChildIndex < ParseNode->NodeCount) {
+        Status = ChalkPushNode(Interpreter,
+                               ParseNode->Nodes[Node->ChildIndex],
+                               Node->Script,
+                               FALSE);
+
+        Node->ChildIndex += 1;
+        return Status;
+    }
+
+    //
+    // A postfix expression should be of the form node[node], node(node),
+    // or node++/--.
+    //
+
+    assert(((ParseNode->NodeCount == 1) || (ParseNode->NodeCount == 2)) &&
+           ((ParseNode->TokenCount == 1) || (ParseNode->TokenCount == 2)));
+
     Expression = Node->Results[0];
-    Node->Results[0] = NULL;
-    NodeIndex = 1;
-    for (TokenIndex = 0; TokenIndex < ParseNode->TokenCount; TokenIndex += 1) {
-        Token = ParseNode->Tokens[TokenIndex];
-        switch (Token->Value) {
-        case ChalkTokenOpenBracket:
+    Token = ParseNode->Tokens[0];
+    switch (Token->Value) {
+    case ChalkTokenOpenBracket:
 
-            assert(NodeIndex < ParseNode->NodeCount);
+        assert((ParseNode->NodeCount == 2) && (ParseNode->TokenCount == 2));
 
-            Key = Node->Results[NodeIndex];
-            NodeIndex += 1;
+        Key = Node->Results[1];
+        Status = ChalkDereference(Interpreter,
+                                  Expression,
+                                  Key,
+                                  Result);
 
-            //
-            // Dereference the value if needed.
-            //
+        if (Status != 0) {
+            goto VisitPostfixExpressionEnd;
+        }
 
-            ExpressionValue = Expression;
-            if (Expression->Header.Type == ChalkObjectReference) {
-                ExpressionValue = Expression->Reference.Value;
-            }
+        break;
 
-            //
-            // Index into a list.
-            //
+    case ChalkTokenOpenParentheses:
 
-            if (ExpressionValue->Header.Type == ChalkObjectList) {
-                if (Key->Header.Type != ChalkObjectInteger) {
-                    fprintf(stderr, "List index must be an integer.\n");
-                    Status = EINVAL;
-                    goto VisitPostfixExpressionEnd;
-                }
-
-                ListIndex = Key->Integer.Value;
-                if ((ListIndex < 0) || (ListIndex >= MAX_ULONG)) {
-                    fprintf(stderr,
-                            "Invalid list index %I64d.\n",
-                            ListIndex);
-
-                    Status = EINVAL;
-                    goto VisitPostfixExpressionEnd;
-                }
-
-                //
-                // If the value isn't there, create a zero and stick it in
-                // there.
-                //
-
-                if ((ListIndex >= ExpressionValue->List.Count) ||
-                    (ExpressionValue->List.Array[ListIndex] == NULL)) {
-
-                    NewExpression = ChalkCreateInteger(0);
-                    if (NewExpression == NULL) {
-                        Status = ENOMEM;
-                        goto VisitPostfixExpressionEnd;
-                    }
-
-                    Status = ChalkListSetElement(ExpressionValue,
-                                                 ListIndex,
-                                                 NewExpression);
-
-                    if (Status != 0)  {
-                        ChalkObjectReleaseReference(NewExpression);
-                        goto VisitPostfixExpressionEnd;
-                    }
-
-                } else {
-                    NewExpression = ExpressionValue->List.Array[ListIndex];
-                    ChalkObjectAddReference(NewExpression);
-                }
-
-                //
-                // Set the LValue so this list element can be assigned.
-                //
-
-                Node->LValue = &(ExpressionValue->List.Array[ListIndex]);
-                ChalkObjectReleaseReference(Expression);
-                Expression = NewExpression;
-
-            //
-            // Key into a dictionary.
-            //
-
-            } else if (ExpressionValue->Header.Type == ChalkObjectDict) {
-                DictEntry = ChalkDictLookup(ExpressionValue, Key);
-                if (DictEntry != NULL) {
-                    NewExpression = DictEntry->Value;
-                    Node->LValue = &(DictEntry->Value);
-                    ChalkObjectAddReference(NewExpression);
-
-                } else {
-
-                    //
-                    // Add a zero there if there wasn't one before.
-                    //
-
-                    NewExpression = ChalkCreateInteger(0);
-                    if (NewExpression == NULL) {
-                        Status = ENOMEM;
-                        goto VisitPostfixExpressionEnd;
-                    }
-
-                    Status = ChalkDictSetElement(ExpressionValue,
-                                                 Key,
-                                                 NewExpression,
-                                                 &(Node->LValue));
-
-                    if (Status != 0)  {
-                        ChalkObjectReleaseReference(NewExpression);
-                        goto VisitPostfixExpressionEnd;
-                    }
-                }
-
-                ChalkObjectReleaseReference(Expression);
-                Expression = NewExpression;
-
-            } else {
-                fprintf(stderr,
-                        "Cannot index into %s.\n",
-                        ChalkObjectTypeNames[ExpressionValue->Header.Type]);
-
-                Status = EINVAL;
-                goto VisitPostfixExpressionEnd;
-            }
-
-            break;
+        assert((ParseNode->NodeCount == 2) && (ParseNode->TokenCount == 2));
 
         //
-        // Ignore the close bracket that came with an earlier open bracket.
+        // Pop the current node and push the function invocation.
         //
 
-        case ChalkTokenCloseBracket:
-            break;
+        ArgumentList = Node->Results[1];
+        Node->Results[1] = NULL;
+        ChalkPopNode(Interpreter);
+        Status = ChalkInvokeFunction(Interpreter, Expression, ArgumentList);
+        ChalkObjectReleaseReference(ArgumentList);
+        goto VisitPostfixExpressionEnd;
 
-        case ChalkTokenIncrement:
-        case ChalkTokenDecrement:
-            LValue = Node->LValue;
-            if (LValue == NULL) {
-                fprintf(stderr, "Error: lvalue required for unary operator.\n");
-                Status = EINVAL;
-                goto VisitPostfixExpressionEnd;
-            }
-
-            Status = ChalkPerformArithmetic(Interpreter,
-                                            Expression,
-                                            NULL,
-                                            Token->Value,
-                                            &NewExpression);
-
-            if (Status != 0) {
-                goto VisitPostfixExpressionEnd;
-            }
-
-            //
-            // Assign this value back, but leave the expression as the original
-            // value (post increment/decrement). Also clear the LValue,
-            // as a++ = 4 is illegal.
-            //
-
-            if (*LValue != NULL) {
-                ChalkObjectReleaseReference(*LValue);
-            }
-
-            *LValue = NewExpression;
-            Node->LValue = NULL;
-            break;
-
-        default:
-
-            assert(FALSE);
-
+    case ChalkTokenIncrement:
+    case ChalkTokenDecrement:
+        LValue = Interpreter->LValue;
+        if (LValue == NULL) {
+            fprintf(stderr, "Error: lvalue required for unary operator.\n");
             Status = EINVAL;
             goto VisitPostfixExpressionEnd;
         }
+
+        Status = ChalkPerformArithmetic(Interpreter,
+                                        Expression,
+                                        NULL,
+                                        Token->Value,
+                                        &NewExpression);
+
+        if (Status != 0) {
+            goto VisitPostfixExpressionEnd;
+        }
+
+        //
+        // Assign this value back. Also clear the LValue, as a++ = 4 is illegal.
+        //
+
+        assert(*LValue == Expression);
+
+        *LValue = NewExpression;
+        Interpreter->LValue = NULL;
+
+        //
+        // For post-increment/decrement, return the value before the operation.
+        //
+
+        *Result = Expression;
+        Node->Results[0] = NULL;
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        Status = EINVAL;
+        goto VisitPostfixExpressionEnd;
     }
 
+    ChalkPopNode(Interpreter);
     Status = 0;
 
 VisitPostfixExpressionEnd:
-    if (Status != 0) {
-        if (Expression != NULL) {
-            ChalkObjectReleaseReference(Expression);
-            Expression = NULL;
-        }
+    return Status;
+}
+
+INT
+ChalkVisitArgumentExpressionList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    )
+
+/*++
+
+Routine Description:
+
+    This routine evaluates an argument expression list.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+{
+
+    PPARSER_NODE ParseNode;
+    INT Status;
+
+    Interpreter->LValue = NULL;
+    ParseNode = Node->ParseNode;
+    if (Node->ChildIndex != 0) {
+        Node->Results[Node->ChildIndex - 1] = *Result;
+        *Result = NULL;
     }
 
-    *Result = Expression;
-    return Status;
+    //
+    // If not all the child elements have been evaluated yet, go get them.
+    //
+
+    if (Node->ChildIndex < ParseNode->NodeCount) {
+        Status = ChalkPushNode(Interpreter,
+                               ParseNode->Nodes[Node->ChildIndex],
+                               Node->Script,
+                               FALSE);
+
+        Node->ChildIndex += 1;
+        return Status;
+    }
+
+    //
+    // Create a list from here of all the argument values.
+    //
+
+    *Result = ChalkCreateList(Node->Results, ParseNode->NodeCount);
+    if (*Result == NULL) {
+        return ENOMEM;
+    }
+
+    ChalkPopNode(Interpreter);
+    return 0;
 }
 
 INT
@@ -366,26 +362,63 @@ Return Value:
     PLEXER_TOKEN Token;
     PPARSER_NODE UnaryOperatorNode;
 
-    LValue = Node->LValue;
     ParseNode = Node->ParseNode;
+    LValue = Interpreter->LValue;
+    if (Node->ChildIndex != 0) {
+        Node->Results[Node->ChildIndex - 1] = *Result;
+        *Result = NULL;
+    }
 
     //
-    // Unary expressions are not assignable (ie ++a = 4 is illegal).
+    // If not all the child elements have been evaluated yet, go get them.
+    // Don't bother pushing the unary operator, it's nothing but tokens.
     //
 
-    Node->LValue = NULL;
+    if (Node->ChildIndex < ParseNode->NodeCount) {
+        if (ParseNode->Nodes[Node->ChildIndex]->GrammarElement ==
+            ChalkNodeUnaryOperator) {
 
-    assert(ParseNode->NodeCount == 2);
+            assert(ParseNode->NodeCount == 2);
 
-    UnaryOperatorNode = ParseNode->Nodes[0];
+            Node->ChildIndex += 1;
+        }
 
-    assert((UnaryOperatorNode->NodeCount == 0) &&
-           (UnaryOperatorNode->TokenCount == 1));
+        Status = ChalkPushNode(Interpreter,
+                               ParseNode->Nodes[Node->ChildIndex],
+                               Node->Script,
+                               FALSE);
 
-    Token = UnaryOperatorNode->Tokens[0];
+        Node->ChildIndex += 1;
+        return Status;
+    }
+
+    //
+    // If there are two nodes, it's of the form unary_operator unary_expression.
+    //
+
+    if (ParseNode->NodeCount == 2) {
+        UnaryOperatorNode = ParseNode->Nodes[0];
+
+        assert((UnaryOperatorNode->NodeCount == 0) &&
+               (UnaryOperatorNode->TokenCount == 1));
+
+        Token = UnaryOperatorNode->Tokens[0];
+
+    //
+    // Otherwise, it must be of the form INC/DEC_OP unary_expression.
+    //
+
+    } else {
+
+        assert((ParseNode->NodeCount == 1) &&
+               (ParseNode->TokenCount == 1));
+
+        Token = ParseNode->Tokens[0];
+    }
+
     Operator = Token->Value;
     Status = ChalkPerformArithmetic(Interpreter,
-                                    Node->Results[1],
+                                    Node->Results[ParseNode->NodeCount - 1],
                                     NULL,
                                     Operator,
                                     Result);
@@ -416,7 +449,8 @@ Return Value:
         ChalkObjectAddReference(*Result);
     }
 
-    return Status;
+    ChalkPopNode(Interpreter);
+    return 0;
 }
 
 INT
@@ -451,7 +485,7 @@ Return Value:
 
 {
 
-    assert(Node->LValue == NULL);
+    assert(FALSE);
 
     return 0;
 }
@@ -497,13 +531,32 @@ Return Value:
 
     Answer = NULL;
     ParseNode = Node->ParseNode;
-    Status = STATUS_SUCCESS;
 
     //
     // Multiplicative expressions are not assignable (ie. a * b = 4 is illegal).
     //
 
-    Node->LValue = NULL;
+    Interpreter->LValue = NULL;
+    if (Node->ChildIndex != 0) {
+        Node->Results[Node->ChildIndex - 1] = *Result;
+        *Result = NULL;
+    }
+
+    //
+    // If not all the child elements have been evaluated yet, go get them.
+    //
+
+    if (Node->ChildIndex < ParseNode->NodeCount) {
+        Status = ChalkPushNode(Interpreter,
+                               ParseNode->Nodes[Node->ChildIndex],
+                               Node->Script,
+                               FALSE);
+
+        Node->ChildIndex += 1;
+        return Status;
+    }
+
+    Status = 0;
 
     assert((ParseNode->NodeCount == ParseNode->TokenCount + 1) &&
            (ParseNode->TokenCount >= 1));
@@ -525,7 +578,7 @@ Return Value:
             ChalkObjectReleaseReference(Left);
         }
 
-        if (!KSUCCESS(Status)) {
+        if (Status != 0) {
             Answer = NULL;
             break;
         }
@@ -534,6 +587,10 @@ Return Value:
     }
 
     *Result = Answer;
+    if (Status == 0) {
+        ChalkPopNode(Interpreter);
+    }
+
     return Status;
 }
 
@@ -885,25 +942,57 @@ Return Value:
 {
 
     PPARSER_NODE ParseNode;
+    INT Status;
 
     ParseNode = Node->ParseNode;
 
     assert((ParseNode->TokenCount == 2) && (ParseNode->NodeCount == 3));
 
-    if (ChalkObjectGetBooleanValue(Node->Results[0]) != FALSE) {
-        *Result = Node->Results[1];
-        Node->Results[1] = NULL;
+    //
+    // If the condition has been evaluated, find out what it is.
+    //
 
-    } else {
-        *Result = Node->Results[2];
-        Node->Results[2] = NULL;
+    if (Node->ChildIndex == 1) {
+        Node->Results[Node->ChildIndex - 1] = *Result;
+        *Result = NULL;
+        if (ChalkObjectGetBooleanValue(Node->Results[0]) != FALSE) {
+            Node->ChildIndex = 1;
+
+        } else {
+            Node->ChildIndex = 2;
+        }
+
+        Interpreter->LValue = NULL;
     }
 
     //
-    // a ? b : c = 4 is illegal.
+    // Evaluate either the conditional or the result.
     //
 
-    Node->LValue = NULL;
+    if (Node->ChildIndex < ParseNode->NodeCount) {
+        Status = ChalkPushNode(Interpreter,
+                               ParseNode->Nodes[Node->ChildIndex],
+                               Node->Script,
+                               FALSE);
+
+        if (Node->ChildIndex == 0) {
+            Node->ChildIndex = 1;
+
+        } else {
+
+            //
+            // Jump to the end if the result is being evaluated.
+            //
+
+            Node->ChildIndex = ParseNode->NodeCount;
+        }
+
+        return Status;
+    }
+
+    assert(*Result != NULL);
+
+    ChalkPopNode(Interpreter);
     return 0;
 }
 
@@ -943,24 +1032,72 @@ Return Value:
     PCHALK_OBJECT *LValue;
     CHALK_TOKEN_TYPE Operator;
     PPARSER_NODE ParseNode;
+    ULONG PushIndex;
     INT Status;
     PLEXER_TOKEN Token;
     PCHALK_OBJECT Value;
 
-    LValue = Node->LValue;
+    ParseNode = Node->ParseNode;
+
+    //
+    // Evaluate the expression first and then the lvalue.
+    //
+
+    switch (Node->ChildIndex) {
+    case 0:
+
+        assert((ParseNode->NodeCount == 3) && (*Result == NULL));
+
+        PushIndex = 2;
+        break;
+
+    case 1:
+
+        assert(*Result != NULL);
+
+        Node->Results[2] = *Result;
+        Interpreter->LValue = NULL;
+        PushIndex = 0;
+        break;
+
+    case 2:
+
+        assert(*Result != NULL);
+
+        Node->Results[0] = *Result;
+        PushIndex = -1;
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        return EINVAL;
+    }
+
+    *Result = NULL;
+    if (PushIndex != (ULONG)-1) {
+        Status = ChalkPushNode(Interpreter,
+                               ParseNode->Nodes[PushIndex],
+                               Node->Script,
+                               FALSE);
+
+        Node->ChildIndex += 1;
+        return Status;
+    }
+
+    LValue = Interpreter->LValue;
     if (LValue == NULL) {
         fprintf(stderr, "Error: Object is not assignable.\n");
         return EINVAL;
     }
 
-    ParseNode = Node->ParseNode;
     Status = 0;
-
-    assert((ParseNode->NodeCount == 3) && (ParseNode->TokenCount == 0));
-
     AssignmentOperator = ParseNode->Nodes[1];
 
-    assert((AssignmentOperator->NodeCount == 0) &&
+    assert((AssignmentOperator->GrammarElement ==
+            ChalkNodeAssignmentOperator) &&
+           (AssignmentOperator->NodeCount == 0) &&
            (AssignmentOperator->TokenCount == 1));
 
     Token = AssignmentOperator->Tokens[0];
@@ -1041,8 +1178,8 @@ Return Value:
     *Result = Value;
 
     //
-    // Clear the LValue, even though the tree is built in such a way that
-    // a = b = 4 would be built as:
+    // Clear the LValue, as the tree is built in such a way that a = b = 4
+    // would be built as:
     // assignment
     //   a    assignment
     //           b  =  4
@@ -1050,8 +1187,9 @@ Return Value:
     // assignment expression.
     //
 
-    Node->LValue = NULL;
-    return Status;
+    Interpreter->LValue = NULL;
+    ChalkPopNode(Interpreter);
+    return 0;
 }
 
 INT
@@ -1086,7 +1224,7 @@ Return Value:
 
 {
 
-    assert(Node->LValue == NULL);
+    assert(FALSE);
 
     return 0;
 }
@@ -1123,13 +1261,44 @@ Return Value:
 
 {
 
+    PPARSER_NODE ParseNode;
+    INT Status;
+
+    ParseNode = Node->ParseNode;
+
     //
-    // The expression is the first result. Anything else is a side effect
-    // assignment expression. Allos the LValue to propagate up.
+    // Discard all results but the last one.
     //
 
-    *Result = Node->Results[0];
-    Node->Results[0] = NULL;
+    if (Node->ChildIndex != ParseNode->NodeCount) {
+        if (*Result != NULL) {
+            ChalkObjectReleaseReference(*Result);
+            *Result = NULL;
+        }
+
+        Interpreter->LValue = NULL;
+    }
+
+    //
+    // If not all the child elements have been evaluated yet, go get them.
+    //
+
+    if (Node->ChildIndex < ParseNode->NodeCount) {
+        Status = ChalkPushNode(Interpreter,
+                               ParseNode->Nodes[Node->ChildIndex],
+                               Node->Script,
+                               FALSE);
+
+        Node->ChildIndex += 1;
+        return Status;
+    }
+
+    //
+    // The expression evaluates to the last expression in the comma group, so
+    // that lvalue and value are propagated up.
+    //
+
+    ChalkPopNode(Interpreter);
     return 0;
 }
 
@@ -1165,18 +1334,174 @@ Return Value:
 
 {
 
+    INT Status;
+
     //
-    // The statement itself does not evaluate to anything, but cannot somehow
-    // be assigned to.
+    // Expression statements (; | expression ;) work just like expressions,
+    // although there can only ever be one.
     //
 
-    Node->LValue = NULL;
-    return 0;
+    Status = ChalkVisitExpression(Interpreter, Node, Result);
+    Interpreter->LValue = NULL;
+    if (*Result != NULL) {
+        ChalkObjectReleaseReference(*Result);
+        *Result = NULL;
+    }
+
+    return Status;
 }
 
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+INT
+ChalkDereference (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Object,
+    PCHALK_OBJECT Index,
+    PCHALK_OBJECT *Result
+    )
+
+/*++
+
+Routine Description:
+
+    This routine dereferences into a list or dictionary.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Object - Supplies a pointer to the object to peek inside of.
+
+    Index - Supplies the index or key object to dereference with.
+
+    Result - Supplies a pointer to the resulting object. The LValue will also
+        be saved in the interpreter. This value will have an extra reference on
+        it that the caller is responsible for freeing.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure (such as dereferencing into something
+    like an integer).
+
+--*/
+
+{
+
+    PCHALK_DICT_ENTRY DictEntry;
+    PCHALK_OBJECT Element;
+    LONGLONG ListIndex;
+    INT Status;
+
+    assert(*Result == NULL);
+
+    //
+    // Index into a list.
+    //
+
+    if (Object->Header.Type == ChalkObjectList) {
+        if (Index->Header.Type != ChalkObjectInteger) {
+            fprintf(stderr, "List index must be an integer.\n");
+            Status = EINVAL;
+            goto DereferenceEnd;
+        }
+
+        ListIndex = Index->Integer.Value;
+        if ((ListIndex < 0) || (ListIndex >= MAX_ULONG)) {
+            fprintf(stderr,
+                    "Invalid list index %I64d.\n",
+                    ListIndex);
+
+            Status = EINVAL;
+            goto DereferenceEnd;
+        }
+
+        //
+        // If the value isn't there, create a zero and stick it in
+        // there.
+        //
+
+        if ((ListIndex >= Object->List.Count) ||
+            (Object->List.Array[ListIndex] == NULL)) {
+
+            Element = ChalkCreateInteger(0);
+            if (Element == NULL) {
+                Status = ENOMEM;
+                goto DereferenceEnd;
+            }
+
+            Status = ChalkListSetElement(Object, ListIndex, Element);
+            if (Status != 0)  {
+                ChalkObjectReleaseReference(Element);
+                goto DereferenceEnd;
+            }
+
+        } else {
+            Element = Object->List.Array[ListIndex];
+            ChalkObjectAddReference(Element);
+        }
+
+        //
+        // Set the LValue so this list element can be assigned.
+        //
+
+        Interpreter->LValue = &(Object->List.Array[ListIndex]);
+        *Result = Element;
+
+    //
+    // Key into a dictionary.
+    //
+
+    } else if (Object->Header.Type == ChalkObjectDict) {
+        DictEntry = ChalkDictLookup(Object, Index);
+        if (DictEntry != NULL) {
+            Element = DictEntry->Value;
+            Interpreter->LValue = &(DictEntry->Value);
+            ChalkObjectAddReference(Element);
+
+        } else {
+
+            //
+            // Add a zero there if there wasn't one before.
+            //
+
+            Element = ChalkCreateInteger(0);
+            if (Element == NULL) {
+                Status = ENOMEM;
+                goto DereferenceEnd;
+            }
+
+            Status = ChalkDictSetElement(Object,
+                                         Index,
+                                         Element,
+                                         &(Interpreter->LValue));
+
+            if (Status != 0)  {
+                ChalkObjectReleaseReference(Element);
+                goto DereferenceEnd;
+            }
+        }
+
+        *Result = Element;
+
+    } else {
+        fprintf(stderr,
+                "Cannot index into %s.\n",
+                ChalkObjectTypeNames[Object->Header.Type]);
+
+        Status = EINVAL;
+        goto DereferenceEnd;
+    }
+
+    Status = 0;
+
+DereferenceEnd:
+    return Status;
+}
 
 INT
 ChalkPerformArithmetic (
@@ -1216,8 +1541,6 @@ Return Value:
 
 {
 
-    PCHALK_OBJECT LeftValue;
-    PCHALK_OBJECT RightValue;
     INT Status;
     CHALK_OBJECT_TYPE Type;
 
@@ -1226,38 +1549,28 @@ Return Value:
     //
 
     if (Operator == ChalkTokenPlus) {
-        LeftValue = Left;
-        if (LeftValue->Header.Type == ChalkObjectReference) {
-            LeftValue = LeftValue->Reference.Value;
-        }
-
-        RightValue = Right;
-        if (RightValue->Header.Type == ChalkObjectReference) {
-            RightValue = RightValue->Reference.Value;
-        }
-
-        Type = LeftValue->Header.Type;
-        if (Type == RightValue->Header.Type) {
+        Type = Left->Header.Type;
+        if (Type == Right->Header.Type) {
             if (Type == ChalkObjectList) {
-                Status = ChalkListAdd(LeftValue, RightValue);
+                Status = ChalkListAdd(Left, Right);
                 if (Status == 0) {
-                    *Result = LeftValue;
-                    ChalkObjectAddReference(LeftValue);
+                    *Result = Left;
+                    ChalkObjectAddReference(Left);
                 }
 
                 return Status;
 
             } else if (Type == ChalkObjectDict) {
-                Status = ChalkDictAdd(LeftValue, RightValue);
+                Status = ChalkDictAdd(Left, Right);
                 if (Status == 0) {
-                    *Result = LeftValue;
-                    ChalkObjectAddReference(LeftValue);
+                    *Result = Left;
+                    ChalkObjectAddReference(Left);
                 }
 
                 return Status;
 
             } else if (Type == ChalkObjectString) {
-                return ChalkStringAdd(LeftValue, RightValue, Result);
+                return ChalkStringAdd(Left, Right, Result);
             }
         }
     }

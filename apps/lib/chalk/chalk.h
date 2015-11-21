@@ -30,38 +30,6 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-/*++
-
-Structure Description:
-
-    This structure stores the data for a Chalk script (text).
-
-Members:
-
-    ListEntry - Stores pointers to the next and previous entries on the list of
-        scripts loaded in the interpreter.
-
-    Path - Stores a pointer to the file path for printing errors.
-
-    Data - Stores a pointer to the script data.
-
-    Size - Stores the size of the script data in bytes.
-
-    ParseTree - Stores a pointer to the parse tree for this script.
-
-    Order - Stores the order identifier of the script.
-
---*/
-
-typedef struct _CHALK_SCRIPT {
-    LIST_ENTRY ListEntry;
-    PSTR Path;
-    PSTR Data;
-    ULONG Size;
-    PVOID ParseTree;
-    ULONG Order;
-} CHALK_SCRIPT, *PCHALK_SCRIPT;
-
 typedef struct _CHALK_SCOPE CHALK_SCOPE, *PCHALK_SCOPE;
 
 /*++
@@ -105,16 +73,12 @@ Members:
 
     ParseNode - Stores a pointer to the parser element being executed.
 
-    ChildIndex - Stores the index of the child node to execute next.
+    ChildIndex - Stores the index of the child node to evaluate next.
 
     Script - Stores a pointer to the script input this node came from.
 
     Results - Stores the evaluation of intermediate items found while
         processing this node.
-
-    LValue - Stores the pointer where the pointer to the first result is
-        stored. This is used in assignments (so that if mylist[0] is assigned
-        to, this pointer points at the list array element to set).
 
 --*/
 
@@ -125,7 +89,6 @@ struct _CHALK_NODE {
     ULONG ChildIndex;
     PCHALK_SCRIPT Script;
     PCHALK_OBJECT *Results;
-    PCHALK_OBJECT *LValue;
 };
 
 /*++
@@ -146,6 +109,12 @@ Members:
 
     ScriptList - Stores the head of the list of scripts loaded.
 
+    LValue - Stores the last LValue pointer retrieved. This is used during
+        assignments to know how to set the value of a dictionary element, list,
+        or variable (which is really just another dict).
+
+    Parser - Stores a pointer to the parser object, currently of type PARSER.
+
 --*/
 
 typedef struct _CHALK_INTERPRETER {
@@ -154,6 +123,8 @@ typedef struct _CHALK_INTERPRETER {
     PCHALK_NODE Node;
     ULONG NodeDepth;
     LIST_ENTRY ScriptList;
+    PCHALK_OBJECT *LValue;
+    PVOID Parser;
 } CHALK_INTERPRETER, *PCHALK_INTERPRETER;
 
 //
@@ -279,7 +250,8 @@ ChalkLoadScriptBuffer (
     PSTR Path,
     PSTR Buffer,
     ULONG Size,
-    ULONG Order
+    ULONG Order,
+    PCHALK_OBJECT *ReturnValue
     );
 
 /*++
@@ -305,6 +277,11 @@ Arguments:
     Order - Supplies the order identifier for ordering which scripts should run
         when. Supply 0 to run the script now.
 
+    ReturnValue - Supplies an optional pointer where the return value from
+        the script will be returned. It is the caller's responsibility to
+        release the object. This is only filled in if the order is zero
+        (so the script is executed now).
+
 Return Value:
 
     0 on success.
@@ -317,7 +294,8 @@ INT
 ChalkLoadScriptFile (
     PCHALK_INTERPRETER Interpreter,
     PSTR Path,
-    ULONG Order
+    ULONG Order,
+    PCHALK_OBJECT *ReturnValue
     );
 
 /*++
@@ -334,6 +312,11 @@ Arguments:
 
     Order - Supplies the order identifier for ordering which scripts should run
         when. Supply 0 to run the script now.
+
+    ReturnValue - Supplies an optional pointer where the return value from
+        the script will be returned. It is the caller's responsibility to
+        release the object. This is only filled in if the order is zero
+        (so the script is executed now).
 
 Return Value:
 
@@ -434,77 +417,6 @@ Return Value:
     on success. The caller should release this reference when finished.
 
     NULL if no such variable exists.
-
---*/
-
-INT
-ChalkParseScript (
-    PCHALK_SCRIPT Script,
-    PVOID *TranslationUnit
-    );
-
-/*++
-
-Routine Description:
-
-    This routine lexes and parses the given script data.
-
-Arguments:
-
-    Script - Supplies a pointer to the script to parse.
-
-    TranslationUnit - Supplies a pointer where the translation unit will be
-        returned on success.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-VOID
-ChalkDestroyParseTree (
-    PVOID TranslationUnit
-    );
-
-/*++
-
-Routine Description:
-
-    This routine destroys the translation unit returned when a script was
-    parsed.
-
-Arguments:
-
-    TranslationUnit - Supplies a pointer to the translation unit to destroy.
-
-Return Value:
-
-    None.
-
---*/
-
-PSTR
-ChalkGetNodeGrammarName (
-    PCHALK_NODE Node
-    );
-
-/*++
-
-Routine Description:
-
-    This routine returns the grammatical element name for the given node.
-
-Arguments:
-
-    Node - Supplies a pointer to the node.
-
-Return Value:
-
-    Returns a pointer to a constant string of the name of the grammar element
-    represented by this execution node.
 
 --*/
 
@@ -676,6 +588,103 @@ Return Value:
     that the reference count on this object is not increased.
 
     NULL if no value for the given key exists.
+
+--*/
+
+//
+// Utility functions
+//
+
+PVOID
+ChalkAllocate (
+    size_t Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine dynamically allocates memory for the Chalk interpreter.
+
+Arguments:
+
+    Size - Supplies the number of bytes to allocate.
+
+Return Value:
+
+    Returns a pointer to the memory on success.
+
+    NULL on allocation failure.
+
+--*/
+
+PVOID
+ChalkReallocate (
+    PVOID Allocation,
+    size_t Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reallocates a previously allocated dynamic memory chunk,
+    changing its size.
+
+Arguments:
+
+    Allocation - Supplies the previous allocation.
+
+    Size - Supplies the number of bytes to allocate.
+
+Return Value:
+
+    Returns a pointer to the memory on success.
+
+    NULL on allocation failure.
+
+--*/
+
+VOID
+ChalkFree (
+    PVOID Allocation
+    );
+
+/*++
+
+Routine Description:
+
+    This routine releases dynamically allocated memory back to the system.
+
+Arguments:
+
+    Allocation - Supplies a pointer to the allocation received from the
+        allocate function.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+ChalkPrintAllocations (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints any outstanding Chalk allocations.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
 
 --*/
 

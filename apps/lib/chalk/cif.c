@@ -106,10 +106,6 @@ Return Value:
     PSTR String;
     PCHALK_OBJECT Value;
 
-    if (Dict->Header.Type == ChalkObjectReference) {
-        Dict = Dict->Reference.Value;
-    }
-
     assert(Dict->Header.Type == ChalkObjectDict);
 
     memset(&LocalKeyString, 0, sizeof(LocalKeyString));
@@ -231,7 +227,7 @@ Return Value:
 
             Size = Value->String.Size;
             if (Members->Type == ChalkCString) {
-                String = malloc(Size + 1);
+                String = ChalkAllocate(Size + 1);
                 if (String == NULL) {
                     return ENOMEM;
                 }
@@ -259,10 +255,6 @@ Return Value:
 
         case ChalkCSubStructure:
         case ChalkCStructurePointer:
-            if (Value->Header.Type == ChalkObjectReference) {
-                Value = Value->Reference.Value;
-            }
-
             if (Value->Header.Type != ChalkObjectDict) {
                 fprintf(stderr,
                         "Error: Member %s must be a dictionary.\n",
@@ -351,10 +343,6 @@ Return Value:
     INT Status;
     PSTR String;
     PCHALK_OBJECT Value;
-
-    if (Dict->Header.Type == ChalkObjectReference) {
-        Dict = Dict->Reference.Value;
-    }
 
     assert(Dict->Header.Type == ChalkObjectDict);
 
@@ -545,10 +533,6 @@ Return Value:
     UINTN Index;
     PCHALK_OBJECT Item;
 
-    if (List->Header.Type == ChalkObjectReference) {
-        List = List->Reference.Value;
-    }
-
     if (List->Header.Type != ChalkObjectList) {
         return EINVAL;
     }
@@ -570,7 +554,7 @@ Return Value:
     }
 
     AllocationSize += (Count + 1) * sizeof(PVOID);
-    Array = malloc(AllocationSize);
+    Array = ChalkAllocate(AllocationSize);
     if (Array == NULL) {
         return ENOMEM;
     }
@@ -691,10 +675,6 @@ Return Value:
     CHALK_STRING FakeString;
     PCHALK_OBJECT Value;
 
-    if (Dict->Header.Type == ChalkObjectReference) {
-        Dict = Dict->Reference.Value;
-    }
-
     assert(Dict->Header.Type == ChalkObjectDict);
 
     FakeString.Header.Type = ChalkObjectString;
@@ -711,12 +691,6 @@ Return Value:
     //
 
     Value = DictEntry->Value;
-    if ((Value != NULL) &&
-        (Value->Header.Type == ChalkObjectReference)) {
-
-        Value = Value->Reference.Value;
-    }
-
     return Value;
 }
 

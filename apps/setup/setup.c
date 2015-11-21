@@ -347,7 +347,8 @@ Return Value:
         case 's':
             Status = ChalkLoadScriptFile(&(Context.Interpreter),
                                          optarg,
-                                         SetupScriptOrderUserCustomization);
+                                         SetupScriptOrderUserCustomization,
+                                         NULL);
 
             if (Status != 0) {
                 fprintf(stderr,
@@ -840,7 +841,8 @@ Return Value:
                                    "extrapartition",
                                    ScriptBuffer,
                                    ScriptSize,
-                                   SetupScriptOrderUserCustomization);
+                                   SetupScriptOrderUserCustomization,
+                                   NULL);
 
     return Status;
 }

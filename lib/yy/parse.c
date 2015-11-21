@@ -408,6 +408,7 @@ Return Value:
     PPARSER_GRAMMAR_ELEMENT GrammarElement;
     BOOL LeftRecursive;
     PPARSER_NODE Node;
+    PPARSER_NODE OuterNode;
     ULONG RuleIndex;
     PULONG Rules;
     ULONG Start;
@@ -491,9 +492,39 @@ Return Value:
 
     if ((LeftRecursive != FALSE) && (KSUCCESS(Status))) {
         while (TRUE) {
+
+            //
+            // If nesting left recursive rules, create a new outer node,
+            // add the inner one as the first child, and then try to
+            // match.
+            //
+
+            if ((GrammarElement->Flags &
+                 YY_GRAMMAR_NEST_LEFT_RECURSION) != 0) {
+
+                OuterNode = YypCreateNode(Parser, GrammarNode);
+                if (OuterNode == NULL) {
+                    Status = STATUS_INSUFFICIENT_RESOURCES;
+                    goto ParseNodeEnd;
+                }
+
+                Status = YypNodeAddNode(Parser, OuterNode, Node);
+                if (!KSUCCESS(Status)) {
+                    goto ParseNodeEnd;
+                }
+
+            //
+            // Otherwise (in the usual case) left recursion takes the form of
+            // a list, so just keep adding on tokens and elements to the same
+            // node.
+            //
+
+            } else {
+                OuterNode = Node;
+            }
+
             Status = STATUS_INVALID_SEQUENCE;
             RuleIndex = 0;
-            Rules = GrammarElement->Components;
             while (Rules[RuleIndex] != 0) {
 
                 //
@@ -505,7 +536,7 @@ Return Value:
                     Status = YypMatchRule(Parser,
                                           GrammarNode,
                                           Rules + RuleIndex,
-                                          Node);
+                                          OuterNode);
 
                     if (KSUCCESS(Status)) {
                         break;
@@ -536,8 +567,48 @@ Return Value:
                     Status = STATUS_SUCCESS;
                 }
 
+                //
+                // If there's an outer node that never matched, destroy it.
+                //
+
+                if (OuterNode != Node) {
+
+                    ASSERT((OuterNode->NodeCount == 1) &&
+                           (OuterNode->TokenCount == 0));
+
+                    OuterNode->NodeCount = 0;
+                    YyDestroyNode(Parser, OuterNode);
+                }
+
                 break;
             }
+
+            //
+            // Perform collapsing on the inner node since it may not get the
+            // treatment at the end of this function. Also remember that the
+            // outer node's first child is this node.
+            //
+
+            if ((Node != OuterNode) &&
+                ((GrammarElement->Flags & YY_GRAMMAR_COLLAPSE_ONE) != 0) &&
+                (Node->NodeCount == 1) && (Node->TokenCount == 0)) {
+
+                Child = Node->Nodes[0];
+
+                ASSERT(OuterNode->Nodes[0] == Node);
+
+                OuterNode->Nodes[0] = Child;
+                Node->NodeCount = 0;
+                YyDestroyNode(Parser, Node);
+                Node = Child;
+            }
+
+            //
+            // Make the node to return the new outer node (no-op if not nesting
+            // left-recursive nodes).
+            //
+
+            Node = OuterNode;
         }
     }
 
@@ -886,7 +957,10 @@ Return Value:
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
-    Parser->Free(Parser->TokenArrays);
+    if (Parser->TokenArrays != NULL) {
+        Parser->Free(Parser->TokenArrays);
+    }
+
     Parser->TokenArrays = NewArrays;
     Parser->TokenCapacity += NewCapacity;
     Parser->TokenArrays[ArrayCount] = NewChunk;

@@ -34,6 +34,8 @@ Author:
 typedef enum _CHALK_TOKEN_TYPE {
     ChalkTokenMultilineComment = CHALK_TOKEN_BASE,
     ChalkTokenComment,
+    ChalkTokenReturn,
+    ChalkTokenFunction,
     ChalkTokenIdentifier,
     ChalkTokenHexInteger,
     ChalkTokenOctalInteger,
@@ -93,6 +95,7 @@ typedef enum _CHALK_NODE_TYPE {
     ChalkNodeDict,
     ChalkNodePrimaryExpression,
     ChalkNodePostfixExpression,
+    ChalkNodeArgumentExpressionList,
     ChalkNodeUnaryExpression,
     ChalkNodeUnaryOperator,
     ChalkNodeMultiplicativeExpression,
@@ -109,9 +112,15 @@ typedef enum _CHALK_NODE_TYPE {
     ChalkNodeAssignmentExpression,
     ChalkNodeAssignmentOperator,
     ChalkNodeExpression,
+    ChalkNodeStatement,
+    ChalkNodeCompoundStatement,
     ChalkNodeStatementList,
     ChalkNodeExpressionStatement,
+    ChalkNodeJumpStatement,
     ChalkNodeTranslationUnit,
+    ChalkNodeExternalDeclaration,
+    ChalkNodeIdentifierList,
+    ChalkNodeFunctionDefinition,
     ChalkNodeEnd
 } CHALK_NODE_TYPE, *PCHALK_NODE_TYPE;
 
@@ -121,11 +130,43 @@ typedef enum _CHALK_OBJECT_TYPE {
     ChalkObjectString,
     ChalkObjectDict,
     ChalkObjectList,
-    ChalkObjectReference,
+    ChalkObjectFunction,
     ChalkObjectCount
 } CHALK_OBJECT_TYPE, *PCHALK_OBJECT_TYPE;
 
 typedef union _CHALK_OBJECT CHALK_OBJECT, *PCHALK_OBJECT;
+
+/*++
+
+Structure Description:
+
+    This structure stores the data for a Chalk script (text).
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous entries on the list of
+        scripts loaded in the interpreter.
+
+    Path - Stores a pointer to the file path for printing errors.
+
+    Data - Stores a pointer to the script data.
+
+    Size - Stores the size of the script data in bytes.
+
+    ParseTree - Stores a pointer to the parse tree for this script.
+
+    Order - Stores the order identifier of the script.
+
+--*/
+
+typedef struct _CHALK_SCRIPT {
+    LIST_ENTRY ListEntry;
+    PSTR Path;
+    PSTR Data;
+    ULONG Size;
+    PVOID ParseTree;
+    ULONG Order;
+} CHALK_SCRIPT, *PCHALK_SCRIPT;
 
 /*++
 
@@ -272,6 +313,32 @@ typedef struct _CHALK_REFERENCE {
 
 Structure Description:
 
+    This structure stores the data for a Chalk function object.
+
+Members:
+
+    Header - Stores the common object header.
+
+    Arguments - Stores a pointer to a list of argument names for this function.
+
+    Body - Stores a pointer to the Abstract Syntax Tree for the body of this
+        function. This is opaque, but is currently of type PPARSER_NODE.
+
+    Script - Stores a pointer to the script the function resides in.
+
+--*/
+
+typedef struct _CHALK_FUNCTION {
+    CHALK_OBJECT_HEADER Header;
+    PCHALK_OBJECT Arguments;
+    PVOID Body;
+    PCHALK_SCRIPT Script;
+} CHALK_FUNCTION, *PCHALK_FUNCTION;
+
+/*++
+
+Structure Description:
+
     This union describes the entire storage size needed for any Chalk object
     type.
 
@@ -289,6 +356,9 @@ Members:
     Dict - Stores the dict representation.
 
     Reference - Stores the reference representation.
+
+    Function - Stores the function representation.
+
 --*/
 
 union _CHALK_OBJECT {
@@ -298,6 +368,7 @@ union _CHALK_OBJECT {
     CHALK_LIST List;
     CHALK_DICT Dict;
     CHALK_REFERENCE Reference;
+    CHALK_FUNCTION Function;
 };
 
 //
@@ -608,6 +679,38 @@ Return Value:
     0 on success.
 
     Returns an error number on catastrophic failure.
+
+--*/
+
+PCHALK_OBJECT
+ChalkCreateFunction (
+    PCHALK_OBJECT Arguments,
+    PVOID Body,
+    PCHALK_SCRIPT Script
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new function object.
+
+Arguments:
+
+    Arguments - Supplies a pointer to a list containing the arguments for the
+        function. A reference is added, and this list is used directly.
+
+    Body - Supplies a pointer to the Abstract Syntax Tree node representing the
+        body of the function (what to execute when the function is called).
+        This is opaque, but is currently of type PPARSER_NODE.
+
+    Script - Supplies a pointer to the script the function is defined in.
+
+Return Value:
+
+    Returns a pointer to the new object on success.
+
+    NULL on failure.
 
 --*/
 

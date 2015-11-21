@@ -72,7 +72,7 @@ ChalkComparePartitionConfigurations (
 // Define copy command members.
 //
 
-CHALK_C_STRUCTURE_MEMBER ChalkCopyMembers[] = {
+CHALK_C_STRUCTURE_MEMBER SetupCopyMembers[] = {
     {
         ChalkCString,
         "Destination",
@@ -134,7 +134,7 @@ CHALK_C_STRUCTURE_MEMBER SetupDiskConfigurationMembers[] = {
         "Mbr",
         FIELD_OFFSET(SETUP_DISK_CONFIGURATION, Mbr),
         FALSE,
-        {(UINTN)ChalkCopyMembers}
+        {(UINTN)SetupCopyMembers}
     },
 
     {0}
@@ -246,7 +246,7 @@ CHALK_C_STRUCTURE_MEMBER SetupPartitionConfigurationMembers[] = {
         "Vbr",
         FIELD_OFFSET(SETUP_PARTITION_CONFIGURATION, Vbr),
         FALSE,
-        {(UINTN)ChalkCopyMembers}
+        {(UINTN)SetupCopyMembers}
     },
 
     {
@@ -501,10 +501,6 @@ Return Value:
                 continue;
             }
 
-            if (BootEntry->Header.Type == ChalkObjectReference) {
-                BootEntry = BootEntry->Reference.Value;
-            }
-
             if (BootEntry->Header.Type != ChalkObjectDict) {
                 continue;
             }
@@ -574,10 +570,6 @@ Return Value:
         Partition = Value->List.Array[Index];
         if (Partition == NULL) {
             continue;
-        }
-
-        if (Partition->Header.Type == ChalkObjectReference) {
-            Partition = Partition->Reference.Value;
         }
 
         if (Partition->Header.Type != ChalkObjectDict) {
@@ -696,39 +688,39 @@ Return Value:
 
     Configuration->BootDriversPath = NULL;
     if (Configuration->BootDrivers != NULL) {
-        free(Configuration->BootDrivers);
+        ChalkFree(Configuration->BootDrivers);
         Configuration->BootDrivers = NULL;
     }
 
     for (Index = 0; Index < Configuration->BootEntryCount; Index += 1) {
         BootEntry = &(Configuration->BootEntries[Index]);
         if (BootEntry->Name != NULL) {
-            free(BootEntry->Name);
+            ChalkFree(BootEntry->Name);
             BootEntry->Name = NULL;
         }
 
         if (BootEntry->LoaderArguments != NULL) {
-            free(BootEntry->LoaderArguments);
+            ChalkFree(BootEntry->LoaderArguments);
             BootEntry->LoaderArguments = NULL;
         }
 
         if (BootEntry->KernelArguments != NULL) {
-            free(BootEntry->KernelArguments);
+            ChalkFree(BootEntry->KernelArguments);
             BootEntry->KernelArguments = NULL;
         }
 
         if (BootEntry->LoaderPath != NULL) {
-            free(BootEntry->LoaderPath);
+            ChalkFree(BootEntry->LoaderPath);
             BootEntry->LoaderPath = NULL;
         }
 
         if (BootEntry->KernelPath != NULL) {
-            free(BootEntry->KernelPath);
+            ChalkFree(BootEntry->KernelPath);
             BootEntry->KernelPath = NULL;
         }
 
         if (BootEntry->SystemPath != NULL) {
-            free(BootEntry->SystemPath);
+            ChalkFree(BootEntry->SystemPath);
             BootEntry->SystemPath = NULL;
         }
     }
@@ -828,17 +820,13 @@ Return Value:
             continue;
         }
 
-        if (Command->Header.Type == ChalkObjectReference) {
-            Command = Command->Reference.Value;
-        }
-
         if (Command->Header.Type != ChalkObjectDict) {
             continue;
         }
 
         Status = ChalkConvertDictToStructure(Interpreter,
                                              Command,
-                                             ChalkCopyMembers,
+                                             SetupCopyMembers,
                                              &(Partition->CopyCommands[Count]));
 
         if (Status != 0) {
@@ -890,17 +878,17 @@ Return Value:
 {
 
     if (Copy->Destination != NULL) {
-        free(Copy->Destination);
+        ChalkFree(Copy->Destination);
         Copy->Destination = NULL;
     }
 
     if (Copy->Source != NULL) {
-        free(Copy->Source);
+        ChalkFree(Copy->Source);
         Copy->Source = NULL;
     }
 
     if (Copy->Files != NULL) {
-        free(Copy->Files);
+        ChalkFree(Copy->Files);
         Copy->Files = NULL;
     }
 

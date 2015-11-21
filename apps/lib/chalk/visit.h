@@ -49,8 +49,12 @@ Arguments:
 
     Node - Supplies a pointer to the node.
 
-    Result - Supplies a pointer where a pointer to the evaluation will be
-        returned. It is the caller's responsibility to release this reference.
+    Result - Supplies a pointer that on input contains a pointer to the
+        previous evaluation. On output, returns a pointer to the evaluation.
+        It is the caller's responsibility to release this reference on output.
+        If the output value is not the same as the input value, the callee
+        becomes the owner of the object, and must take responsibility for
+        releasing it.
 
 Return Value:
 
@@ -249,6 +253,66 @@ Return Value:
 --*/
 
 INT
+ChalkVisitStatement (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine evaluates a statement.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+INT
+ChalkVisitCompoundStatement (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine evaluates a statement list.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+INT
 ChalkVisitStatementList (
     PCHALK_INTERPRETER Interpreter,
     PCHALK_NODE Node,
@@ -309,6 +373,104 @@ Return Value:
 --*/
 
 INT
+ChalkVisitExternalDeclaration (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine evaluates an external declaration.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+INT
+ChalkVisitIdentifierList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to visit an identifier list.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer that on input contains a pointer to the
+        previous evaluation. On output, returns a pointer to the evaluation.
+        It is the caller's responsibility to release this reference on output.
+        If the output value is not the same as the input value, the callee
+        becomes the owner of the object, and must take responsibility for
+        releasing it.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+INT
+ChalkVisitFunctionDefinition (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to visit a function definition node.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer that on input contains a pointer to the
+        previous evaluation. On output, returns a pointer to the evaluation.
+        It is the caller's responsibility to release this reference on output.
+        If the output value is not the same as the input value, the callee
+        becomes the owner of the object, and must take responsibility for
+        releasing it.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+INT
 ChalkVisitPostfixExpression (
     PCHALK_INTERPRETER Interpreter,
     PCHALK_NODE Node,
@@ -320,6 +482,36 @@ ChalkVisitPostfixExpression (
 Routine Description:
 
     This routine evaluates a postfix expression.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+INT
+ChalkVisitArgumentExpressionList (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine evaluates an argument expression list.
 
 Arguments:
 
@@ -830,6 +1022,36 @@ ChalkVisitExpressionStatement (
 Routine Description:
 
     This routine evaluates an expression statement.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+INT
+ChalkVisitJumpStatement (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine evaluates a jump statement.
 
 Arguments:
 

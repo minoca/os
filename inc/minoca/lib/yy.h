@@ -70,6 +70,14 @@ Author:
 #define YY_GRAMMAR_COLLAPSE_ONE 0x00000001
 
 //
+// Set this flag to indicate that additional matches should not be added on
+// the end of a left recursive rule list-style, but should instead be nested
+// nodes.
+//
+
+#define YY_GRAMMAR_NEST_LEFT_RECURSION 0x00000002
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

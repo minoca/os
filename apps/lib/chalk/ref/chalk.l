@@ -12,6 +12,9 @@ void count();
 %%
 "/*"            { comment(); }
 
+"return"        { count(); return(RETURN); }
+"function"      { count(); return(FUNCTION); }
+
 {L}({L}|{D})*       { count(); return(IDENTIFIER); }
 
 0[xX]{H}+?      { count(); return(CONSTANT); }
