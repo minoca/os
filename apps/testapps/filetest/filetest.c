@@ -643,11 +643,6 @@ Return Value:
                 }
             }
 
-            FileOffset[FileIndex] = rand();
-            DEBUG_PRINT("Writing file %s, Value %x\n",
-                        FileName,
-                        FileOffset[FileIndex]);
-
             OpenFlags = O_WRONLY | O_CREAT;
             if ((rand() & 0x1) != 0) {
                 OpenFlags |= O_TRUNC;
@@ -663,6 +658,11 @@ Return Value:
                 Failures += 1;
                 continue;
             }
+
+            FileOffset[FileIndex] = rand();
+            DEBUG_PRINT("Writing file %s, Value %x\n",
+                        FileName,
+                        FileOffset[FileIndex]);
 
             for (FillIndex = 0;
                  FillIndex < FileSize / sizeof(INT);

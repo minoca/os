@@ -116,7 +116,7 @@ Author:
 
 #define THUMB_ADVANCE_IT_STATE(_ItState)                \
     ((((_ItState) & 0x07) == 0) ? 0 :                   \
-    ((((_ItState) << 1) & 0xF) | ((_ItState) & 0xF0)))
+    ((((_ItState) << 1) & 0x1F) | ((_ItState) & 0xE0)))
 
 //
 // This macro reverses the if-then state by one instruction, placing the given

@@ -319,7 +319,7 @@ Return Value:
         }
 
         //
-        // If this is a break instruction, the continue executing at the next
+        // If this is a break instruction, then continue executing at the next
         // address so the machine makes progress if no debugger is attached. If
         // this isn't a debug-related instruction, then set the PC back as it's
         // a real undefined instruction.

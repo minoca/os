@@ -256,6 +256,13 @@ Return Value:
 --*/
 
 FUNCTION ArpPrefetchAbortEntry
+
+    ##
+    ## In ARM mode, prefect aborts save the PC-4 in LR. For Thumb mode, data
+    ## aborts save the PC in LR. Thus, the PC is always 4 bytes head of the
+    ## faulting address.
+    ##
+
     sub     %lr, %lr, #4                @ Prefetches go too far by 4.
 
     ##
@@ -306,7 +313,14 @@ Return Value:
 --*/
 
 FUNCTION ArpDataAbortEntry
-    sub     %lr, %lr, #8                @ Data aborts go too far by 8.
+
+    ##
+    ## In ARM mode, data aborts save the PC in LR. For Thumb mode, data aborts
+    ## save the PC+4 in LR. Thus, the PC is always 8 bytes head of the faulting
+    ## address.
+    ##
+
+    sub     %lr, %lr, #8
 
     ##
     ## Save state and create a trap frame.

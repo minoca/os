@@ -437,13 +437,6 @@ Return Value:
     X86Registers = &(DbgCurrentEvent.BreakNotification.Registers.X86);
     switch (DataSymbol->Location) {
     case DataLocationRegister:
-        if (DataStreamSize > 4) {
-            DbgOut("Error: Data symbol location was a register, but type size "
-                   "was %d!\n",
-                   DataStreamSize);
-
-            DbgOut("Error: the register was %d.\n", DataSymbol->Register);
-        }
 
         //
         // Get a pointer to the data.
@@ -451,6 +444,17 @@ Return Value:
 
         switch (Context->MachineType) {
         case MACHINE_TYPE_X86:
+            if ((DataStreamSize > 4) &&
+                (DataSymbol->Register != RegisterEax) &&
+                (DataSymbol->Register != RegisterEbx)) {
+
+                DbgOut("Error: Data symbol location was a register, but type "
+                       "size was %d!\n",
+                       DataStreamSize);
+
+                DbgOut("Error: the register was %d.\n", DataSymbol->Register);
+            }
+
             switch (DataSymbol->Register) {
                 case RegisterEax:
                     *(PULONG)DataStream = (ULONG)X86Registers->Eax;
@@ -463,6 +467,11 @@ Return Value:
 
                 case RegisterEbx:
                     *(PULONG)DataStream = (ULONG)X86Registers->Ebx;
+                    if (DataStreamSize > 4) {
+                        *((PULONG)DataStream + 1) =
+                                              (ULONG)X86Registers->Ecx;
+                    }
+
                     break;
 
                 case RegisterEcx:

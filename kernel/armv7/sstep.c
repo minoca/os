@@ -40,6 +40,7 @@ Environment:
 
 #define ARM_CONDITION_CODE_MASK 0xF0000000
 #define ARM_CONDITION_CODE_SHIFT 28
+#define ARM_CONDITION_CODE_UNCONDITIONAL 0xF
 
 #define ARM_CONDITION_EQUAL 0x0
 #define ARM_CONDITION_CARRY 0x1
@@ -66,6 +67,14 @@ Environment:
 
 #define BRANCH_MASK                 0x0E000000
 #define BRANCH_VALUE                0x0A000000
+#define BRANCH_H_BIT                0x01000000
+
+//
+// Media instructions.
+//
+
+#define MEDIA_MASK                  0x0E000010
+#define MEDIA_VALUE                 0x06000010
 
 //
 // Load/Store instructions (LDR/STR).
@@ -78,7 +87,6 @@ Environment:
 #define DESTINATION_REGISTER_SHIFT  12
 #define LOAD_BIT                    0x00100000
 #define PREINDEX_BIT                0x01000000
-#define ADD_SUBTRACT_BIT            0x00800000
 #define IMMEDIATE_BIT               0x02000000
 #define SET_FLAGS_BIT               0x00100000
 #define ADD_SUBTRACT_BIT            0x00800000
@@ -117,6 +125,8 @@ Environment:
 #define DATA_PROCESSING_OPCODE_SHIFT 21
 #define DATA_PROCESSING_OPERAND1_MASK   0x000F0000
 #define DATA_PROCESSING_OPERAND1_SHIFT  16
+#define DATA_PROCESSING_NOT_IMMEDIATE_MASK  0x01900000
+#define DATA_PROCESSING_NOT_IMMEDIATE_VALUE 0x01000000
 #define SHIFT_REGISTER_MASK         0x00000F00
 #define SHIFT_REGISTER_SHIFT        8
 #define SHIFT_REGISTER_EMPTY_BIT    0x00000080
@@ -144,6 +154,17 @@ Environment:
 #define OPCODE_MVN                  15
 
 //
+// Define RFE instruction bits.
+//
+
+#define ARM_RFE_MASK  0xFE50FFFF
+#define ARM_RFE_VALUE 0xF8100A00
+#define ARM_RFE_PREINDEX (1 << 24)
+#define ARM_RFE_INCREMENT (1 << 23)
+#define ARM_RFE_REGISTER_MASK  0x000F0000
+#define ARM_RFE_REGISTER_SHIFT 16
+
+//
 // Define Thumb decoding constants.
 //
 
@@ -164,28 +185,28 @@ Environment:
 // 16-bit Thumb decoding constants
 //
 
-#define THUMB16_IT_MASK 0xFF00
+#define THUMB16_IT_MASK  0xFF00
 #define THUMB16_IT_VALUE 0xBF00
 #define THUMB16_IT_STATE_MASK 0x00FF
 
-#define THUMB16_BX_MASK 0xFF07
+#define THUMB16_BX_MASK  0xFF07
 #define THUMB16_BX_VALUE 0x4700
 #define THUMB16_BX_RM_SHIFT 3
 
-#define THUMB16_B_CONDITIONAL_MASK 0xF000
+#define THUMB16_B_CONDITIONAL_MASK  0xF000
 #define THUMB16_B_CONDITIONAL_VALUE 0xD000
 #define THUMB16_B_CONDITIONAL_CONDITION_SHIFT 8
 
-#define THUMB16_B_UNCONDITIONAL_MASK 0xF800
+#define THUMB16_B_UNCONDITIONAL_MASK  0xF800
 #define THUMB16_B_UNCONDITIONAL_VALUE 0xE000
 
-#define THUMB16_CBZ_MASK 0xF500
+#define THUMB16_CBZ_MASK  0xF500
 #define THUMB16_CBZ_VALUE 0xB100
 #define THUMB16_CBZ_IMMEDIATE5_SHIFT 3
 #define THUMB16_CBZ_IMMEDIATE5 (1 << 9)
 #define THUMB16_CBZ_NOT (1 << 11)
 
-#define THUMB16_POP_MASK 0xFE00
+#define THUMB16_POP_MASK  0xFE00
 #define THUMB16_POP_VALUE 0xBC00
 #define THUMB16_POP_PC (1 << 8)
 #define THUMB16_POP_REGISTER_LIST 0xFF
@@ -194,26 +215,27 @@ Environment:
 // 32-BIT Thumb decoding constants
 //
 
-#define THUMB32_RFE_MASK 0xFE50FFFF
-#define THUMB32_RFE_VALUE 0xF8100A00
-#define THUMB32_RFE_PREINDEX (1 << 24)
-#define THUMB32_RFE_INCREMENT (1 << 23)
+#define THUMB32_RFE_MASK    0xFFD0FFFF
+#define THUMB32_RFEIA_VALUE 0xF810C000
+#define THUMB32_RFEDB_VALUE 0xF990C000
+#define THUMB32_RFE_REGISTER_MASK 0x000F0000
+#define THUMB32_RFE_REGISTER_SHIFT 16
 
-#define THUMB32_LDM_MASK 0xFE500000
+#define THUMB32_LDM_MASK  0xFE500000
 #define THUMB32_LDM_VALUE 0xE8100000
 #define THUMB32_LDM_RN_SHIFT 16
 #define THUMB32_LDM_INCREMENT (1 << 23)
 
-#define THUMB32_TB_MASK 0xFFF0FFE0
+#define THUMB32_TB_MASK  0xFFF0FFE0
 #define THUMB32_TB_VALUE 0xE8D0F000
 #define THUMB32_TB_RN_SHIFT 16
 #define THUMB32_TB_RM_SHIFT 0
 #define THUMB32_TB_HALF_WORD (1 << 4)
 
-#define THUMB32_SUBS_PC_LR_MASK 0xFFFFFF00
+#define THUMB32_SUBS_PC_LR_MASK  0xFFFFFF00
 #define THUMB32_SUBS_PC_LR_VALUE 0xF3DE8F00
 
-#define THUMB32_B_CONDITIONAL_MASK 0xF800D000
+#define THUMB32_B_CONDITIONAL_MASK  0xF800D000
 #define THUMB32_B_CONDITIONAL_VALUE 0xF0008000
 #define THUMB32_B_IMMEDIATE11_SHIFT 0
 #define THUMB32_B_IMMEDIATE11_MASK 0x7FF
@@ -224,11 +246,11 @@ Environment:
 #define THUMB32_B_CONDITIONAL_CONDITION_SHIFT 22
 #define THUMB32_B_CONDITIONAL_CONDITION_MASK 0xF
 
-#define THUMB32_B_UNCONDITIONAL_MASK 0xF800D000
+#define THUMB32_B_UNCONDITIONAL_MASK  0xF800D000
 #define THUMB32_B_UNCONDITIONAL_VALUE 0xF0009000
 #define THUMB32_B_UNCONDITIONAL_IMMEDIATE10_SHIFT 16
 
-#define THUMB32_BL_MASK 0xF800C000
+#define THUMB32_BL_MASK  0xF800C000
 #define THUMB32_BL_VALUE 0xF000C000
 #define THUMB32_BL_IMMEDIATE11_SHIFT 0
 #define THUMB32_BL_IMMEDIATE10_SHIFT 16
@@ -403,20 +425,46 @@ Return Value:
     NextPc = TrapFrame->Pc + 4;
 
     //
-    // Determine whether the condition code is satisfied.
+    // Determine whether the condition code is satisfied. If the condition is
+    // not satisfied, there's no need to decode the instruction.
     //
 
     ConditionCode = (Instruction & ARM_CONDITION_CODE_MASK) >>
                     ARM_CONDITION_CODE_SHIFT;
 
-    Condition = ArpArmCheckConditionCode(TrapFrame->Cpsr, ConditionCode);
+    if (ConditionCode != ARM_CONDITION_CODE_UNCONDITIONAL) {
+        Condition = ArpArmCheckConditionCode(TrapFrame->Cpsr, ConditionCode);
+        if (Condition == FALSE) {
+            goto GetNextPcEnd;
+        }
+    }
 
     //
-    // If the condition is not satisfied, there's no need to decode the
-    // instruction.
+    // Attempt to decode a return from exception (RFE).
     //
 
-    if (Condition == FALSE) {
+    if ((Instruction & ARM_RFE_MASK) == ARM_RFE_VALUE) {
+        BaseRegister = (Instruction & ARM_RFE_REGISTER_MASK) >>
+                       ARM_RFE_REGISTER_SHIFT;
+
+        Address = ArpGetArmRegister(TrapFrame, BaseRegister);
+
+        //
+        // The RFE instruction pops the PC and CPSR. Determine the location of
+        // the PC based on the mode.
+        //
+
+        if ((Instruction & ARM_RFE_INCREMENT) == 0) {
+            Address -= (sizeof(PVOID) * 2);
+            if ((Instruction & ARM_RFE_PREINDEX) == 0) {
+                Address += sizeof(PVOID);
+            }
+
+        } else if ((Instruction & ARM_RFE_PREINDEX) != 0) {
+            Address += sizeof(PVOID);
+        }
+
+        Status = ReadMemoryFunction((PVOID)Address, sizeof(PVOID), &NextPc);
         goto GetNextPcEnd;
     }
 
@@ -425,8 +473,9 @@ Return Value:
     // contents of a register indexed by the last 4 bits of the instruction.
     //
 
-    if (((Instruction & BRANCH_EXCHANGE_MASK) == BRANCH_EXCHANGE_VALUE) ||
-        ((Instruction & BRANCH_EXCHANGE_X_MASK) == BRANCH_EXCHANGE_X_VALUE)) {
+    if ((ConditionCode != ARM_CONDITION_CODE_UNCONDITIONAL) &&
+        (((Instruction & BRANCH_EXCHANGE_MASK) == BRANCH_EXCHANGE_VALUE) ||
+         ((Instruction & BRANCH_EXCHANGE_X_MASK) == BRANCH_EXCHANGE_X_VALUE))) {
 
         if ((Instruction & 0xF) == BRANCH_EXCHANGE_LINK_REGISTER) {
             FunctionReturning = TRUE;
@@ -438,17 +487,37 @@ Return Value:
 
     //
     // Attempt to decode a branch instruction. These instructions branch to
-    // PC + immediate24 + 4.
+    // PC + immediate24, where the PC is 8 bytes ahead of the ARM instruction
+    // being decoded. Recall that the guess of NextPc is already 4 ahead of the
+    // current instruction. This mask works for both conditional and
+    // unconditional branches.
     //
 
     if ((Instruction & BRANCH_MASK) == BRANCH_VALUE) {
 
         //
-        // The offset is formed by taking the lower 24 bits from the
+        // If this is an unconditional BLX instruction, the immediate value is
+        // formed differently and the destination is Thumb, so the low bit
+        // should be set in the address.
+        //
+
+        if (ConditionCode == ARM_CONDITION_CODE_UNCONDITIONAL) {
+            Offset = (Instruction & 0x00FFFFFF) << 2;
+            if ((Instruction & BRANCH_H_BIT) != 0) {
+                Offset |= 0x2;
+            }
+
+            Offset |= ARM_THUMB_BIT;
+
+        //
+        // Otherwise The offset is formed by taking the lower 24 bits from the
         // instruction, right shifting by 2, and then sign extending.
         //
 
-        Offset = (Instruction & 0x00FFFFFF) << 2;
+        } else {
+            Offset = (Instruction & 0x00FFFFFF) << 2;
+        }
+
         if ((Offset & 0x02000000) != 0) {
             Offset |= 0xFC000000;
         }
@@ -461,7 +530,10 @@ Return Value:
     // Attempt to decode a load register (LDR) instruction.
     //
 
-    if ((Instruction & LOAD_STORE_SINGLE_MASK) == LOAD_STORE_SINGLE_VALUE) {
+    if ((ConditionCode != ARM_CONDITION_CODE_UNCONDITIONAL) &&
+        ((Instruction & LOAD_STORE_SINGLE_MASK) == LOAD_STORE_SINGLE_VALUE) &&
+        ((Instruction & MEDIA_MASK) != MEDIA_VALUE)) {
+
         DestinationRegister = (Instruction & DESTINATION_REGISTER_MASK) >>
                               DESTINATION_REGISTER_SHIFT;
 
@@ -518,10 +590,6 @@ Return Value:
                           Offset;
             }
 
-            if (BaseRegister == REGISTER_PC) {
-                Address += 2 * ARM_INSTRUCTION_LENGTH;
-            }
-
             //
             // Get that byte or word.
             //
@@ -551,7 +619,9 @@ Return Value:
     // Attempt to decode a load/store multiple instruction.
     //
 
-    if ((Instruction & LOAD_STORE_MULTIPLE_MASK) == LOAD_STORE_MULTIPLE_VALUE) {
+    if ((ConditionCode != ARM_CONDITION_CODE_UNCONDITIONAL) &&
+        ((Instruction & LOAD_STORE_MULTIPLE_MASK) ==
+         LOAD_STORE_MULTIPLE_VALUE)) {
 
         //
         // Only care about load instructions that affect the PC register.
@@ -615,7 +685,9 @@ Return Value:
     // Decode data processing instructions.
     //
 
-    if ((Instruction & DATA_PROCESSING_MASK) == DATA_PROCESSING_VALUE) {
+    if ((ConditionCode != ARM_CONDITION_CODE_UNCONDITIONAL) &&
+        ((Instruction & DATA_PROCESSING_MASK) == DATA_PROCESSING_VALUE)) {
+
         NotDataProcessing = FALSE;
 
         //
@@ -624,6 +696,18 @@ Return Value:
         //
 
         if ((Instruction & IMMEDIATE_BIT) != 0) {
+
+            //
+            // The 16-bit immediate load and MSR instructions do not follow the
+            // same pattern as the data processing instructions.
+            //
+
+            if ((Instruction & DATA_PROCESSING_NOT_IMMEDIATE_MASK) ==
+                DATA_PROCESSING_NOT_IMMEDIATE_VALUE) {
+
+                NotDataProcessing = TRUE;
+            }
+
             ShiftImmediate = 2 * ((Instruction & IMMEDIATE_ROTATE_MASK) >>
                                   IMMEDIATE_ROTATE_SHIFT);
 
@@ -640,8 +724,7 @@ Return Value:
             }
 
         //
-        // The register form can is either an immediate shift or a register
-        // shift.
+        // The register form is either an immediate shift or a register shift.
         //
 
         } else {
@@ -1013,13 +1096,22 @@ Return Value:
         Condition = (Instruction >> THUMB16_B_CONDITIONAL_CONDITION_SHIFT) &
                     THUMB_CONDITION_MASK;
 
-        if (ArpArmCheckConditionCode(TrapFrame->Cpsr, Condition) != FALSE) {
+        if (((Condition >> 1) != ARM_CONDITION_ALWAYS) &&
+            (ArpArmCheckConditionCode(TrapFrame->Cpsr, Condition) != FALSE)) {
+
             SignedImmediate = (CHAR)(Instruction & THUMB_IMMEDIATE8_MASK);
             if ((SignedImmediate & 0x80) != 0) {
                 SignedImmediate |= 0xFFFFFF00;
             }
 
             SignedImmediate <<= 1;
+
+            //
+            // The signed offset is PC-relative, but the Next PC guess is only
+            // 2 bytes ahead of the instruction pointer, when the real PC is
+            // always 4 bytes ahead on Thumb.
+            //
+
             NextPc += SignedImmediate + THUMB16_INSTRUCTION_LENGTH;
         }
 
@@ -1035,7 +1127,15 @@ Return Value:
             SignedImmediate |= 0xFFFFF800;
         }
 
-        NextPc += (SignedImmediate << 1) + THUMB16_INSTRUCTION_LENGTH;
+        SignedImmediate <<= 1;
+
+        //
+        // The signed offset is PC-relative, but the Next PC guess is only
+        // 2 bytes ahead of the instruction pointer, when the real PC is
+        // always 4 bytes ahead on Thumb.
+        //
+
+        NextPc += SignedImmediate + THUMB16_INSTRUCTION_LENGTH;
 
     //
     // Handle compare and branch if zero (or not zero), cbz and cbnz. This
@@ -1053,13 +1153,20 @@ Return Value:
             UnsignedImmediate |= 1 << 5;
         }
 
-        Condition = Value == 0;
+        UnsignedImmediate <<= 1;
+        Condition = (Value == 0);
         if ((Instruction & THUMB16_CBZ_NOT) != 0) {
             Condition = !Condition;
         }
 
+        //
+        // The offset is PC-relative, but the Next PC guess is only 2 bytes
+        // ahead of the instruction pointer, when the real PC is always 4 bytes
+        // ahead on Thumb.
+        //
+
         if (Condition != 0) {
-            NextPc += THUMB16_INSTRUCTION_LENGTH + (UnsignedImmediate << 1);
+            NextPc += THUMB16_INSTRUCTION_LENGTH + UnsignedImmediate;
         }
 
     //
@@ -1148,6 +1255,7 @@ Return Value:
     ULONG Condition;
     LONG Immediate;
     UINTN Offset;
+    ULONG Register;
     ULONG RegisterCount;
     ULONG RegisterList;
     ULONG Rm;
@@ -1161,28 +1269,24 @@ Return Value:
     // Handle the rfe (return from exception) instruction.
     //
 
-    if ((Instruction & THUMB32_RFE_MASK) == THUMB32_RFE_VALUE) {
+    if (((Instruction & THUMB32_RFE_MASK) == THUMB32_RFEIA_VALUE) ||
+        ((Instruction & THUMB32_RFE_MASK) == THUMB32_RFEDB_VALUE)) {
+
         *IsFunctionReturning = TRUE;
+        Register = (Instruction & THUMB32_RFE_REGISTER_MASK) >>
+                   THUMB32_RFE_REGISTER_SHIFT;
+
+        Address = ArpGetArmRegister(TrapFrame, Register);
 
         //
-        // RFE pops the PC and CPSR from the stack. If not preindex, then it's
-        // decrement after or increment after. Either way the PC is at the
-        // stack register.
+        // RFE pops the PC and CPSR from the register. For Thumb, there is only
+        // IA and DB. For increment after, PC is located at the address stored
+        // in the register. For decrement before, the register value minus 8 is
+        // the location of the PC.
         //
 
-        if ((Instruction & THUMB32_RFE_PREINDEX) == 0) {
-            Address = TrapFrame->SvcSp;
-
-        //
-        // If the mode is increment before, then the PC is at SP+4. Otherwise,
-        // it's at SP-4.
-        //
-
-        } else if ((Instruction & THUMB32_RFE_INCREMENT) != 0) {
-            Address = TrapFrame->SvcSp + sizeof(PVOID);
-
-        } else {
-            Address = TrapFrame->SvcSp - sizeof(PVOID);
+        if ((Instruction & THUMB32_RFE_MASK) == THUMB32_RFEDB_VALUE) {
+            Address -= 8;
         }
 
         Status = ReadMemoryFunction((PVOID)Address, sizeof(PVOID), NextPcValue);
@@ -1238,6 +1342,8 @@ Return Value:
     } else if ((Instruction & THUMB32_TB_MASK) == THUMB32_TB_VALUE) {
         Rm = (Instruction >> THUMB32_TB_RM_SHIFT) & THUMB_REGISTER16_MASK;
         Rn = (Instruction >> THUMB32_TB_RN_SHIFT) & THUMB_REGISTER16_MASK;
+        Rm = ArpGetArmRegister(TrapFrame, Rm);
+        Rn = ArpGetArmRegister(TrapFrame, Rn);
         Offset = 0;
         if ((Instruction & THUMB32_TB_HALF_WORD) != 0) {
             Address = Rn + (Rm << 1);
@@ -1252,7 +1358,14 @@ Return Value:
             return Status;
         }
 
-        *NextPcValue += (Offset << 1) + THUMB32_INSTRUCTION_LENGTH;
+        //
+        // The next PC value was already guessed to be 4 bytes ahead of the
+        // instruction being decoded. Conveniently, that is the location of the
+        // actually PC (from the instruction's perspective) and the offset is
+        // PC-relative.
+        //
+
+        *NextPcValue += (Offset << 1);
 
     //
     // Handle the subs pc, lr, #imm8 instruction, which performs an exception
@@ -1310,6 +1423,12 @@ Return Value:
             if ((Immediate & 0x00100000) != 0) {
                 Immediate |= 0xFFE00000;
             }
+
+            //
+            // This immediate offset is PC relative. On Thumb, the PC is 4
+            // bytes ahead of the current instruction. The original guess for
+            // the next PC was four bytes ahead, so just add the immediate.
+            //
 
             *NextPcValue += Immediate;
         }
@@ -1371,7 +1490,13 @@ Return Value:
             Immediate |= 0xFE000000;
         }
 
-        *NextPcValue += Immediate + THUMB32_INSTRUCTION_LENGTH;
+        //
+        // This immediate offset is PC relative. On Thumb, the PC is 4 bytes
+        // ahead of the current instruction. The original guess for the next PC
+        // was four bytes ahead, so just add the immediate.
+        //
+
+        *NextPcValue += Immediate;
 
     //
     // Handle the bl and blx (immediate) instructions.
@@ -1430,6 +1555,12 @@ Return Value:
             Immediate |= 0xFFC00000;
         }
 
+        //
+        // BLX instructions transfer from Thumb to ARM. The low bit of the
+        // address will be removed when aligning the PC down to a 4-byte
+        // boundary.
+        //
+
         Address = (UINTN)(*NextPcValue);
         if (((Instruction & THUMB32_BL_X_BIT) == 0) &&
             ((Instruction & ARM_THUMB_BIT) == 0)) {
@@ -1487,8 +1618,8 @@ Return Value:
     ULONG InstructionSize;
     ULONG ItState;
     PVOID NextPcAddress;
-    BOOL ReadResult;
     BOOL Result;
+    KSTATUS Status;
 
     Result = FALSE;
 
@@ -1539,11 +1670,11 @@ Return Value:
         //
 
         NextPcAddress = (PVOID)REMOVE_THUMB_BIT((UINTN)*NextPc);
-        ReadResult = ReadMemoryFunction(NextPcAddress,
-                                        THUMB32_INSTRUCTION_LENGTH,
-                                        &Instruction);
+        Status = ReadMemoryFunction(NextPcAddress,
+                                    THUMB32_INSTRUCTION_LENGTH,
+                                    &Instruction);
 
-        if (ReadResult == FALSE) {
+        if (!KSUCCESS(Status)) {
             break;
         }
 
@@ -1654,12 +1785,18 @@ Return Value:
         }
 
     //
-    // Assume this is an ARM instruction doing an operation on the PC, and add
-    // the 4 implicitly baked in when the PC is used as an operand.
+    // When PC is used as an operand for a Thumb instruction, it is 4 ahead of
+    // the current instruction (i.e. the PC stored in the trap frame). When PC
+    // is used by an ARM instruction, it is 8 ahead of the current instruction.
     //
 
     case 15:
-        return TrapFrame->Pc + ARM_INSTRUCTION_LENGTH;
+        if ((TrapFrame->Cpsr & PSR_FLAG_THUMB) != 0) {
+            return TrapFrame->Pc + ARM_INSTRUCTION_LENGTH;
+
+        } else {
+            return TrapFrame->Pc + (ARM_INSTRUCTION_LENGTH * 2);
+        }
 
     default:
         return MAX_ULONG;
