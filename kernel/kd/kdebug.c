@@ -241,14 +241,16 @@ KdpProcessCommand (
     PBOOL ContinueExecution
     );
 
-BOOL
+KSTATUS
 KdpPrint (
-    PPRINT_PARAMETERS PrintParameters
+    PPRINT_PARAMETERS PrintParameters,
+    PBOOL BreakInRequested
     );
 
-BOOL
+KSTATUS
 KdpSendProfilingData (
-    PULONG Flags
+    PULONG Flags,
+    PBOOL BreakInRequested
     );
 
 USHORT
@@ -292,6 +294,11 @@ KdpConnect (
     );
 
 KSTATUS
+KdpSynchronize (
+    VOID
+    );
+
+KSTATUS
 KdpSendConnectionResponse (
     PCONNECTION_REQUEST ConnectionRequest,
     PBOOL BreakInRequested
@@ -322,14 +329,14 @@ KdpTransmitBytes (
 KSTATUS
 KdpReceiveBuffer (
     PVOID Data,
-    ULONG Size,
+    PULONG Size,
     PULONG Timeout
     );
 
 KSTATUS
 KdpDeviceReceiveBuffer (
     PVOID Data,
-    ULONG Size,
+    PULONG Size,
     PULONG Timeout
     );
 
@@ -1146,6 +1153,10 @@ Return Value:
             Status = KdpReceivePacket(&KdRxPacket, KdConnectionTimeout);
             if (!KSUCCESS(Status)) {
                 KD_TRACE(KdTraceReceiveFailure);
+                if (Status == STATUS_CONNECTION_RESET) {
+                    Exception = EXCEPTION_DEBUGGER_CONNECT;
+                }
+
                 break;
             }
 
@@ -1182,29 +1193,23 @@ Return Value:
         KdpDisconnect();
         goto DebugExceptionHandlerEnd;
 
-    } else if (Exception == EXCEPTION_DEBUGGER_CONNECT) {
-        KD_TRACE(KdTraceConnecting);
-        Status = KdpConnect(&BreakInRequested);
-        if ((KSUCCESS(Status)) && (BreakInRequested != FALSE)) {
-            Exception = EXCEPTION_BREAK;
-
-        } else {
-            KD_TRACE(KdTraceConnectBailing);
-            goto DebugExceptionHandlerEnd;
-        }
-
     //
     // If the exception was just a print, do the print and return.
     //
 
     } else if (Exception == EXCEPTION_PRINT) {
         KD_TRACE(KdTracePrinting);
-        BreakInRequested = KdpPrint((PPRINT_PARAMETERS)Parameter);
-        if (BreakInRequested == FALSE) {
+        Status = KdpPrint((PPRINT_PARAMETERS)Parameter, &BreakInRequested);
+        if ((KSUCCESS(Status) && (BreakInRequested == FALSE)) ||
+            (!KSUCCESS(Status) && (Status != STATUS_CONNECTION_RESET))) {
+
             goto DebugExceptionHandlerEnd;
         }
 
         Exception = EXCEPTION_BREAK;
+        if (Status == STATUS_CONNECTION_RESET) {
+            Exception = EXCEPTION_DEBUGGER_CONNECT;
+        }
 
     //
     // If the exception is just to send profiling data, send the data and
@@ -1213,12 +1218,17 @@ Return Value:
 
     } else if (Exception == EXCEPTION_PROFILER) {
         KD_TRACE(KdTraceSendingProfilingData);
-        BreakInRequested = KdpSendProfilingData((PULONG)Parameter);
-        if (BreakInRequested == FALSE) {
+        Status = KdpSendProfilingData((PULONG)Parameter, &BreakInRequested);
+        if ((KSUCCESS(Status) && (BreakInRequested == FALSE)) ||
+            (!KSUCCESS(Status) && (Status != STATUS_CONNECTION_RESET))) {
+
             goto DebugExceptionHandlerEnd;
         }
 
         Exception = EXCEPTION_BREAK;
+        if (Status == STATUS_CONNECTION_RESET) {
+            Exception = EXCEPTION_DEBUGGER_CONNECT;
+        }
 
     //
     // If the exception was a module state change, update the module
@@ -1247,6 +1257,24 @@ Return Value:
         }
 
         goto DebugExceptionHandlerEnd;
+    }
+
+    //
+    // If the exception is a connection request or one of the above exceptions
+    // noticed that the host needed to be reconnected, run through the
+    // connection process.
+    //
+
+    if (Exception == EXCEPTION_DEBUGGER_CONNECT) {
+        KD_TRACE(KdTraceConnecting);
+        Status = KdpConnect(&BreakInRequested);
+        if ((KSUCCESS(Status)) && (BreakInRequested != FALSE)) {
+            Exception = EXCEPTION_BREAK;
+
+        } else {
+            KD_TRACE(KdTraceConnectBailing);
+            goto DebugExceptionHandlerEnd;
+        }
     }
 
     KD_TRACE(KdTraceCheckSingleStep);
@@ -1371,20 +1399,44 @@ Return Value:
             continue;
         }
 
-        KdpInitializeBreakNotification(Exception, TrapFrame, &KdTxPacket);
-        Status = KdpSendPacket(&KdTxPacket, NULL);
-        if ((!KSUCCESS(Status)) && (Status != STATUS_CONNECTION_RESET)) {
-            KD_TRACE(KdTraceTransmitFailure);
-            goto DebugExceptionHandlerEnd;
-        }
-
         //
-        // Loop processing commands. If there was a serious failure, give up.
+        // Loop processing commands and handling connection resets. Also send a
+        // break request the first time around the loop and if the connection
+        // was reset.
         //
 
+        BreakInRequested = TRUE;
         KD_TRACE(KdTraceProcessingCommand);
         ContinueExecution = FALSE;
         do {
+            if (BreakInRequested != FALSE) {
+                KdpInitializeBreakNotification(Exception,
+                                               TrapFrame,
+                                               &KdTxPacket);
+
+                Status = KdpSendPacket(&KdTxPacket, NULL);
+                if ((!KSUCCESS(Status)) &&
+                    (Status != STATUS_CONNECTION_RESET)) {
+
+                    KD_TRACE(KdTraceTransmitFailure);
+                    goto DebugExceptionHandlerEnd;
+                }
+
+                BreakInRequested = FALSE;
+            }
+
+            if (Status == STATUS_CONNECTION_RESET) {
+                KD_TRACE(KdTraceConnecting);
+                Status = KdpConnect(&BreakInRequested);
+                if ((KSUCCESS(Status)) && (BreakInRequested != FALSE)) {
+                    Exception = EXCEPTION_BREAK;
+                    continue;
+                }
+
+                KD_TRACE(KdTraceConnectBailing);
+                goto DebugExceptionHandlerEnd;
+            }
+
             Status = KdpReceivePacket(&KdRxPacket, MAX_ULONG);
             if (!KSUCCESS(Status)) {
                 continue;
@@ -1582,9 +1634,11 @@ Return Value:
 {
 
     DEBUG_PACKET_ACKNOWLEDGE Acknowledge;
+    UCHAR Byte;
     USHORT Checksum;
     DEBUG_PACKET_HEADER Header;
     ULONG HeaderSize;
+    ULONG PayloadSize;
     ULONG Retries;
     KSTATUS Status;
     ULONG Timeout;
@@ -1626,7 +1680,7 @@ Return Value:
         }
 
         Status = KdpReceivePacketHeader(&Header, &Timeout);
-        if (Status == STATUS_TIMEOUT) {
+        if ((Status == STATUS_TIMEOUT) || (Status == STATUS_CONNECTION_RESET)) {
             break;
         }
 
@@ -1643,11 +1697,15 @@ Return Value:
             //
 
             if (Header.PayloadSize == sizeof(DEBUG_PACKET_ACKNOWLEDGE)) {
-                Status = KdpReceiveBuffer(&Acknowledge,
-                                          sizeof(DEBUG_PACKET_ACKNOWLEDGE),
-                                          &Timeout);
-
+                PayloadSize = sizeof(DEBUG_PACKET_ACKNOWLEDGE);
+                Status = KdpReceiveBuffer(&Acknowledge, &PayloadSize, &Timeout);
                 if ((KSUCCESS(Status)) && (BreakInRequested != NULL)) {
+                    Byte = Acknowledge.BreakInRequested;
+                    if (DEBUG_IS_SYNCHRONIZATION_BYTE(Byte) != FALSE) {
+                        Status = STATUS_CONNECTION_RESET;
+                        break;
+                    }
+
                     *BreakInRequested = Acknowledge.BreakInRequested;
                 }
             }
@@ -1664,10 +1722,11 @@ Return Value:
     }
 
     //
-    // If the receive timed out, mark the connection terminated.
+    // If the receive timed out or the connection was reset, mark the
+    // connection terminated.
     //
 
-    if (Status == STATUS_TIMEOUT) {
+    if ((Status == STATUS_TIMEOUT) || (Status == STATUS_CONNECTION_RESET)) {
         KdDebuggerConnected = FALSE;
     }
 
@@ -1703,10 +1762,12 @@ Return Value:
 {
 
     DEBUG_PACKET_HEADER Acknowledge;
+    UCHAR Byte;
     USHORT CalculatedChecksum;
     USHORT Checksum;
     USHORT HeaderChecksum;
     ULONG HeaderSize;
+    ULONG PayloadSize;
     ULONG Retries;
     KSTATUS Status;
 
@@ -1714,7 +1775,7 @@ Return Value:
     Retries = 10;
     while (TRUE) {
         Status = KdpReceivePacketHeader(&(Packet->Header), &Timeout);
-        if (Status == STATUS_TIMEOUT) {
+        if ((Status == STATUS_TIMEOUT) || (Status == STATUS_CONNECTION_RESET)) {
             break;
         }
 
@@ -1727,15 +1788,31 @@ Return Value:
         //
 
         if (Packet->Header.PayloadSize != 0) {
+            PayloadSize = Packet->Header.PayloadSize;
             Status = KdpReceiveBuffer(&(Packet->Payload),
-                                      Packet->Header.PayloadSize,
+                                      &PayloadSize,
                                       &Timeout);
 
-            if (Status == STATUS_TIMEOUT) {
-                break;
-            }
-
             if (!KSUCCESS(Status)) {
+
+                //
+                // Even in a failure case, if bytes were received, check the
+                // last to see if it is a SYN byte. The receive may have timed
+                // out because the host was waiting to synchronize.
+                //
+
+                if (PayloadSize != 0) {
+                    Byte = Packet->Payload[PayloadSize - 1];
+                    if (DEBUG_IS_SYNCHRONIZATION_BYTE(Byte) != FALSE) {
+                        Status = STATUS_CONNECTION_RESET;
+                        break;
+                    }
+                }
+
+                if (Status == STATUS_TIMEOUT) {
+                    break;
+                }
+
                 goto ReceivePacketRetry;
             }
         }
@@ -1754,6 +1831,12 @@ Return Value:
 
         Packet->Header.Checksum = HeaderChecksum;
         if (HeaderChecksum != CalculatedChecksum) {
+            Byte = Packet->Payload[PayloadSize - 1];
+            if (DEBUG_IS_SYNCHRONIZATION_BYTE(Byte) != FALSE) {
+                Status = STATUS_CONNECTION_RESET;
+                break;
+            }
+
             Status = STATUS_CHECKSUM_MISMATCH;
             goto ReceivePacketRetry;
         }
@@ -1803,10 +1886,11 @@ ReceivePacketRetry:
     }
 
     //
-    // On timeout, mark the debugger as disconnected.
+    // If the receive timed out or the connection was reset, mark the
+    // connection terminated.
     //
 
-    if (Status == STATUS_TIMEOUT) {
+    if ((Status == STATUS_TIMEOUT) || (Status == STATUS_CONNECTION_RESET)) {
         KdDebuggerConnected = FALSE;
     }
 
@@ -1843,9 +1927,12 @@ Return Value:
 {
 
     DEBUG_PACKET_HEADER Acknowledge;
+    BYTE Byte;
     USHORT Checksum;
     ULONG HeaderSize;
     BYTE Magic;
+    PBYTE ReceiveBuffer;
+    ULONG ReceiveSize;
     ULONG Retries;
     KSTATUS Status;
 
@@ -1859,7 +1946,8 @@ Return Value:
         //
 
         Magic = 0;
-        Status = KdpReceiveBuffer(&Magic, 1, Timeout);
+        ReceiveSize = sizeof(BYTE);
+        Status = KdpReceiveBuffer(&Magic, &ReceiveSize, Timeout);
         if (Status == STATUS_TIMEOUT) {
             break;
         }
@@ -1869,11 +1957,17 @@ Return Value:
         }
 
         if (Magic != DEBUG_PACKET_MAGIC_BYTE1) {
+            if (DEBUG_IS_SYNCHRONIZATION_BYTE(Magic) != FALSE) {
+                Status = STATUS_CONNECTION_RESET;
+                break;
+            }
+
             continue;
         }
 
         Magic = 0;
-        Status = KdpReceiveBuffer(&Magic, 1, Timeout);
+        ReceiveSize = sizeof(BYTE);
+        Status = KdpReceiveBuffer(&Magic, &ReceiveSize, Timeout);
         if (Status == STATUS_TIMEOUT) {
             break;
         }
@@ -1883,6 +1977,11 @@ Return Value:
         }
 
         if (Magic != DEBUG_PACKET_MAGIC_BYTE2) {
+            if (DEBUG_IS_SYNCHRONIZATION_BYTE(Magic) != FALSE) {
+                Status = STATUS_CONNECTION_RESET;
+                break;
+            }
+
             continue;
         }
 
@@ -1891,11 +1990,18 @@ Return Value:
         //
 
         Packet->Magic = DEBUG_PACKET_MAGIC;
-        Status = KdpReceiveBuffer((PUCHAR)Packet + DEBUG_PACKET_MAGIC_SIZE,
-                                  HeaderSize - DEBUG_PACKET_MAGIC_SIZE,
-                                  Timeout);
-
+        ReceiveSize = HeaderSize - DEBUG_PACKET_MAGIC_SIZE;
+        ReceiveBuffer = (PBYTE)Packet + DEBUG_PACKET_MAGIC_SIZE;
+        Status = KdpReceiveBuffer(ReceiveBuffer, &ReceiveSize, Timeout);
         if (!KSUCCESS(Status)) {
+            if (ReceiveSize != 0) {
+                Byte = ReceiveBuffer[ReceiveSize - 1];
+                if (DEBUG_IS_SYNCHRONIZATION_BYTE(Byte) != FALSE) {
+                    Status = STATUS_CONNECTION_RESET;
+                    break;
+                }
+            }
+
             goto ReceivePacketRetry;
         }
 
@@ -2192,9 +2298,10 @@ Return Value:
     return Status;
 }
 
-BOOL
+KSTATUS
 KdpPrint (
-    PPRINT_PARAMETERS PrintParameters
+    PPRINT_PARAMETERS PrintParameters,
+    PBOOL BreakInRequested
     )
 
 /*++
@@ -2210,19 +2317,18 @@ Arguments:
 
     PrintParameters - Supplies a pointer to the required print parameters.
 
+    BreakInRequested - Supplies an optional pointer where a boolean will be
+        returned indicating if the debugger would like to break in.
+
 Return Value:
 
-    TRUE if the debugger requested a break in.
-
-    FALSE if the debugger does not want to break in.
+    Status code.
 
 --*/
 
 {
 
-    BOOL BreakInRequested;
     ULONG MaxStringLength;
-    KSTATUS Status;
     ULONG StringLength;
 
     KdTxPacket.Header.Command = DbgPrintString;
@@ -2248,17 +2354,13 @@ Return Value:
     }
 
     KdTxPacket.Header.PayloadSize = StringLength;
-    Status = KdpSendPacket(&KdTxPacket, &BreakInRequested);
-    if (Status == STATUS_CONNECTION_RESET) {
-        BreakInRequested = TRUE;
-    }
-
-    return BreakInRequested;
+    return KdpSendPacket(&KdTxPacket, BreakInRequested);
 }
 
-BOOL
+KSTATUS
 KdpSendProfilingData (
-    PULONG Flags
+    PULONG Flags,
+    PBOOL BreakInRequested
     )
 
 /*++
@@ -2274,25 +2376,23 @@ Arguments:
     Flags - Supplies a pointer to flags specifying what types of profiling
         data are ready to be sent.
 
+    BreakInRequested - Supplies a pointer where a boolean will be returned
+        indicating if the debugger would like to break in.
+
 Return Value:
 
-    TRUE if the debugger requested a break in.
-
-    FALSE if the debugger does not want to break in.
+    Status code.
 
 --*/
 
 {
 
-    BOOL BreakInRequested;
     ULONG DataSize;
+    BOOL LocalBreakInRequested;
     PPROCESSOR_BLOCK ProcessorBlock;
     PPROFILER_NOTIFICATION ProfilerNotification;
-    BOOL ReturnBreakInRequested;
     KSTATUS Status;
 
-    BreakInRequested = FALSE;
-    ReturnBreakInRequested = FALSE;
     ProcessorBlock = KeGetCurrentProcessorBlockForDebugger();
     DataSize = DEBUG_PAYLOAD_SIZE - sizeof(PROFILER_NOTIFICATION_HEADER);
     ProfilerNotification = (PPROFILER_NOTIFICATION)KdTxPacket.Payload;
@@ -2334,13 +2434,13 @@ Return Value:
         // Send the profiler notification packet.
         //
 
-        Status = KdpSendPacket(&KdTxPacket, &BreakInRequested);
+        Status = KdpSendPacket(&KdTxPacket, &LocalBreakInRequested);
         if (!KSUCCESS(Status)) {
             goto SendProfilingDataEnd;
         }
 
-        if (BreakInRequested != FALSE) {
-            ReturnBreakInRequested = TRUE;
+        if (LocalBreakInRequested != FALSE) {
+            *BreakInRequested = TRUE;
         }
     }
 
@@ -2360,17 +2460,17 @@ Return Value:
                                                ProcessorBlock->ProcessorNumber;
     }
 
-    Status = KdpSendPacket(&KdTxPacket, &BreakInRequested);
+    Status = KdpSendPacket(&KdTxPacket, &LocalBreakInRequested);
     if (!KSUCCESS(Status)) {
         goto SendProfilingDataEnd;
     }
 
-    if (BreakInRequested != FALSE) {
-        ReturnBreakInRequested = TRUE;
+    if (LocalBreakInRequested != FALSE) {
+        *BreakInRequested = TRUE;
     }
 
 SendProfilingDataEnd:
-    return ReturnBreakInRequested;
+    return Status;
 }
 
 ULONG
@@ -3221,6 +3321,15 @@ Return Value:
     }
 
     //
+    // Synchronize with the host.
+    //
+
+    Status = KdpSynchronize();
+    if (!KSUCCESS(Status)) {
+        goto ConnectEnd;
+    }
+
+    //
     // Attempt to receive the connection request packet.
     //
 
@@ -3247,6 +3356,166 @@ Return Value:
     }
 
 ConnectEnd:
+    return Status;
+}
+
+KSTATUS
+KdpSynchronize (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine synchronizes with the kernel debugger in preparation for
+    receiving the connection request packet. The synchornization process is a
+    simply exchange of bytes where both sides must send a SYN, ACK the other
+    side's SYN, and receive an ACK.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    BOOL AckReceived;
+    BOOL AckSent;
+    ULONG BytesAvailable;
+    ULONG ReceiveSize;
+    ULONG Retries;
+    KSTATUS Status;
+    BYTE SynchronizeByte;
+    BOOL SynReceived;
+    ULONG Timeout;
+
+    AckReceived = FALSE;
+    AckSent = FALSE;
+    SynReceived = FALSE;
+
+    //
+    // The host may have already sent a SYN, check to see if it has come in.
+    //
+
+    Status = KdpDeviceGetStatus(&BytesAvailable);
+    if (!KSUCCESS(Status)) {
+        goto SynchronizeEnd;
+    }
+
+    while (BytesAvailable != 0) {
+        Timeout = 0;
+        ReceiveSize = sizeof(BYTE);
+        Status = KdpReceiveBuffer(&SynchronizeByte, &ReceiveSize, &Timeout);
+        if (!KSUCCESS(Status)) {
+            goto SynchronizeEnd;
+        }
+
+        BytesAvailable -= 1;
+
+        //
+        // Ignore any bytes that are not synchronization bytes.
+        //
+
+        if (DEBUG_IS_SYNCHRONIZATION_BYTE(SynchronizeByte) == FALSE) {
+            continue;
+        }
+
+        //
+        // Only record a SYN. There should be no ACK, as the target (this side)
+        // is yet to send a SYN.
+        //
+
+        if ((SynchronizeByte & DEBUG_SYNCHRONIZE_SYN) != 0) {
+            SynReceived = TRUE;
+            break;
+        }
+    }
+
+    Retries = 10;
+    Status = STATUS_UNSUCCESSFUL;
+    while (Retries > 0) {
+
+        //
+        // Send out a byte to either announce to the host that the target is
+        // trying to synchronize and/or that the host's SYN byte has been
+        // received.
+        //
+
+        SynchronizeByte = DEBUG_SYNCHRONIZE_BASE_VALUE;
+        if (SynReceived != FALSE) {
+            SynchronizeByte |= DEBUG_SYNCHRONIZE_ACK;
+            AckSent = TRUE;
+        }
+
+        if (AckReceived == FALSE) {
+            SynchronizeByte |= DEBUG_SYNCHRONIZE_SYN;
+        }
+
+        Status = KdpTransmitBytes(&SynchronizeByte, sizeof(UCHAR));
+        if (!KSUCCESS(Status)) {
+            Retries -= 1;
+            continue;
+        }
+
+        //
+        // If necessary, read a byte from the target. It may be a SYN, if the
+        // target tried to synchronize first, or a SYN+ACK if the target has
+        // seen the SYN.
+        //
+
+        while ((SynReceived == FALSE) || (AckReceived == FALSE)) {
+            ReceiveSize = sizeof(BYTE);
+            Timeout = KdConnectionTimeout;
+            Status = KdpReceiveBuffer(&SynchronizeByte, &ReceiveSize, &Timeout);
+            if (!KSUCCESS(Status)) {
+                Retries -= 1;
+                break;
+            }
+
+            //
+            // If the byte is not a synchronization byte, then try again.
+            //
+
+            if (DEBUG_IS_SYNCHRONIZATION_BYTE(SynchronizeByte) == FALSE) {
+                continue;
+            }
+
+            //
+            // If it is a SYN+ACK, send an ACK back. If it is just a SYN, then
+            // send a SYN+ACK
+            //
+
+            if ((SynchronizeByte & DEBUG_SYNCHRONIZE_SYN) != 0) {
+                SynReceived = TRUE;
+            }
+
+            if ((SynchronizeByte & DEBUG_SYNCHRONIZE_ACK) != 0) {
+                AckReceived = TRUE;
+            }
+
+            break;
+        }
+
+        //
+        // Break out successfully if the complete exchange has been made.
+        //
+
+        if ((SynReceived != FALSE) &&
+            (AckReceived != FALSE) &&
+            (AckSent != FALSE)) {
+
+            Status = STATUS_SUCCESS;
+            break;
+        }
+    }
+
+SynchronizeEnd:
     return Status;
 }
 
@@ -3394,7 +3663,7 @@ Return Value:
 
     PrintParameters.FormatString = Format;
     va_start(PrintParameters.Arguments, Format);
-    KdpPrint(&PrintParameters);
+    KdpPrint(&PrintParameters, NULL);
     va_end(PrintParameters.Arguments);
     return;
 }
@@ -3605,7 +3874,7 @@ Return Value:
 KSTATUS
 KdpReceiveBuffer (
     PVOID Data,
-    ULONG Size,
+    PULONG Size,
     PULONG Timeout
     )
 
@@ -3640,6 +3909,8 @@ Return Value:
 {
 
     PUCHAR Bytes;
+    ULONG BytesCompleted;
+    ULONG BytesRemaining;
     ULONG Count;
     ULONG Index;
     ULONG MoveIndex;
@@ -3649,8 +3920,10 @@ Return Value:
     NextEscaped = FALSE;
     Status = STATUS_SUCCESS;
     Bytes = Data;
-    while (Size != 0) {
-        Status = KdpDeviceReceiveBuffer(Bytes, Size, Timeout);
+    BytesRemaining = *Size;
+    while (BytesRemaining != 0) {
+        BytesCompleted = BytesRemaining;
+        Status = KdpDeviceReceiveBuffer(Bytes, &BytesCompleted, Timeout);
         if (!KSUCCESS(Status)) {
             break;
         }
@@ -3672,16 +3945,17 @@ Return Value:
                 NextEscaped = FALSE;
                 Bytes[0] -= DEBUG_ESCAPE;
                 Bytes += 1;
-                Size -= 1;
-                if (Size == 0) {
+                BytesRemaining -= 1;
+                BytesCompleted -= 1;
+                if (BytesRemaining == 0) {
                     break;
                 }
             }
 
-            for (Index = 0; Index < Size - 1; Index += 1) {
+            for (Index = 0; Index < BytesCompleted - 1; Index += 1) {
                 if (Bytes[Index] == DEBUG_ESCAPE) {
                     for (MoveIndex = Index;
-                         MoveIndex < Size - 1;
+                         MoveIndex < BytesCompleted - 1;
                          MoveIndex += 1) {
 
                         Bytes[MoveIndex] = Bytes[MoveIndex + 1];
@@ -3703,23 +3977,25 @@ Return Value:
             }
         }
 
-        Bytes += Size - Count;
+        BytesCompleted -= Count;
+        Bytes += BytesCompleted;
 
         //
         // If the count is non-zero, fewer real bytes were received than
         // expected, so go get the extra ones.
         //
 
-        Size = Count;
+        BytesRemaining -= BytesCompleted;
     }
 
+    *Size -= BytesRemaining;
     return Status;
 }
 
 KSTATUS
 KdpDeviceReceiveBuffer (
     PVOID Data,
-    ULONG Size,
+    PULONG Size,
     PULONG Timeout
     )
 
@@ -3753,7 +4029,8 @@ Return Value:
 
 {
 
-    ULONG BytesComplete;
+    ULONG BytesCompleted;
+    ULONG BytesRemaining;
     ULONG StallDuration;
     KSTATUS Status;
 
@@ -3763,11 +4040,13 @@ Return Value:
     // back to back, the larger delay doesn't get stuck in between each byte.
     //
 
+    BytesRemaining = *Size;
     StallDuration = DEBUG_SMALL_STALL;
     Status = STATUS_SUCCESS;
-    while (Size != 0) {
-        BytesComplete = Size;
-        Status = KdpDeviceReceive(Data, &BytesComplete);
+    while (BytesRemaining != 0) {
+        BytesCompleted = BytesRemaining;
+        Status = KdpDeviceReceive(Data, &BytesCompleted);
+        BytesRemaining -= BytesCompleted;
         if (Status == STATUS_NO_DATA_AVAILABLE) {
 
             //
@@ -3802,11 +4081,11 @@ Return Value:
             break;
         }
 
-        Size -= BytesComplete;
-        Data += BytesComplete;
+        Data += BytesCompleted;
         StallDuration = DEBUG_SMALL_STALL;
     }
 
+    *Size -= BytesRemaining;
     return Status;
 }
 

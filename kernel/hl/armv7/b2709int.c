@@ -525,6 +525,8 @@ INTERRUPT_FUNCTION_TABLE HlBcm2709InterruptFunctionTable = {
     HlpBcm2709InterruptInitializeLocalUnit,
     HlpBcm2709InterruptSetLocalUnitAddressing,
     HlpBcm2709InterruptStartProcessor,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -642,6 +644,18 @@ Return Value:
     HlBcm2709KernelServices->CopyMemory(&(NewController.FunctionTable),
                                         &HlBcm2709InterruptFunctionTable,
                                         sizeof(INTERRUPT_FUNCTION_TABLE));
+
+    //
+    // If there is only one processor, do not report the multi-processor
+    // functions.
+    //
+
+    if (ProcessorCount == 0) {
+        NewController.FunctionTable.EnumerateProcessors = NULL;
+        NewController.FunctionTable.InitializeLocalUnit = NULL;
+        NewController.FunctionTable.SetLocalUnitAddressing = NULL;
+        NewController.FunctionTable.StartProcessor = NULL;
+    }
 
     NewController.Context = Context;
     NewController.Identifier = 0;

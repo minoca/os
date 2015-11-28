@@ -31,6 +31,7 @@ ARMV6_OBJS = archsup.o  \
              ../armv7/prochw.o   \
              ../armv7/sstep.o    \
              ../armv7/trap.o     \
+             ../armv7/vfp.o      \
 
 DIRS = boot
 

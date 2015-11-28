@@ -86,3 +86,4 @@ DiskData["Format"] = PARTITION_FORMAT_MBR;
 
 BootmefiCopy["Destination"] += EFI_DEFAULT_APP_ARM;
 BootPartition["Alignment"] = 1 * MEGABYTE;
+BootPartition["Size"] = 20 * MEGABYTE;

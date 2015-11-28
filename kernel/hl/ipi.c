@@ -947,6 +947,7 @@ SetupProcessorAddressingEnd:
 
 PINTERRUPT_CONTROLLER
 HlpInterruptGetCurrentProcessorController (
+    VOID
     )
 
 /*++

@@ -787,6 +787,7 @@ Return Value:
 
 PINTERRUPT_CONTROLLER
 HlpInterruptGetCurrentProcessorController (
+    VOID
     );
 
 /*++

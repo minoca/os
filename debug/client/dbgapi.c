@@ -153,6 +153,11 @@ DbgpKdReceivePacketHeader (
     PBOOL TimeoutOccurred
     );
 
+INT
+DbgpKdSynchronize (
+    VOID
+    );
+
 USHORT
 DbgpKdCalculateChecksum (
     PVOID Data,
@@ -349,6 +354,15 @@ Return Value:
     *ConnectionDetails = NULL;
 
     assert(DbgConnectionType == DebugConnectionKernel);
+
+    //
+    // Synchronize with the target to make sure it is ready and listening.
+    //
+
+    Result = DbgpKdSynchronize();
+    if (Result != 0) {
+        return Result;
+    }
 
     //
     // Fill out the connection request structure, and send the initial packet.
@@ -3034,6 +3048,173 @@ Return Value:
         break;
     }
 
+    return Status;
+}
+
+INT
+DbgpKdSynchronize (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine synchronizes with the target machine, making sure it is ready
+    to receive the connection request.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on error.
+
+--*/
+
+{
+
+    BOOL AckReceived;
+    BOOL AckSent;
+    ULONG BytesAvailable;
+    BOOL Result;
+    ULONG Retries;
+    ULONG Status;
+    UCHAR SynchronizeByte;
+    BOOL SynReceived;
+    ULONG TimeWaited;
+
+    AckReceived = FALSE;
+    AckSent = FALSE;
+    SynReceived = FALSE;
+    Status = EPIPE;
+
+    //
+    // Check to see if the target has already sent a SYN to the host.
+    //
+
+    BytesAvailable = CommReceiveBytesReady();
+    while (BytesAvailable != 0) {
+        Result = DbgpKdReceiveBytes(&SynchronizeByte, sizeof(UCHAR));
+        if (Result == FALSE) {
+            Status = EPIPE;
+            goto KdSynchronizeEnd;
+        }
+
+        BytesAvailable -= 1;
+        if (DEBUG_IS_SYNCHRONIZATION_BYTE(SynchronizeByte) == FALSE) {
+            continue;
+        }
+
+        //
+        // Record that a SYN was received. There should not be an ACK, because
+        // the host (this side) has not yet sent a SYN.
+        //
+
+        if ((SynchronizeByte & DEBUG_SYNCHRONIZE_SYN) != 0) {
+            SynReceived = TRUE;
+            break;
+        }
+    }
+
+    Retries = 10;
+    while (Retries > 0) {
+
+        //
+        // Send a byte to the target with the SYN and/or ACK bit set.
+        //
+
+        SynchronizeByte = DEBUG_SYNCHRONIZE_BASE_VALUE;
+        if (SynReceived != FALSE) {
+            SynchronizeByte |= DEBUG_SYNCHRONIZE_ACK;
+            AckSent = TRUE;
+        }
+
+        if (AckReceived == FALSE) {
+            SynchronizeByte |= DEBUG_SYNCHRONIZE_SYN;
+        }
+
+        Result = DbgpKdSendBytes(&SynchronizeByte, sizeof(UCHAR));
+        if (Result == FALSE) {
+            Retries -= 1;
+            Status = EPIPE;
+            continue;
+        }
+
+        //
+        // Read a byte from the target. It may be a SYN, if the target tried to
+        // synchronize first, or a SYN+ACK if the target has seen the SYN.
+        //
+
+        TimeWaited = 0;
+        while ((SynReceived == FALSE) || (AckReceived == FALSE)) {
+            while (TRUE) {
+                BytesAvailable = CommReceiveBytesReady();
+                if (BytesAvailable >= sizeof(UCHAR)) {
+                    break;
+                }
+
+                CommStall(15);
+                TimeWaited += 15;
+                if (TimeWaited >= 5000) {
+                    Status = EPIPE;
+                    break;
+                }
+            }
+
+            //
+            // If the timeout occurred and a byte was not found, then it's time
+            // to send another SYN.
+            //
+
+            if (BytesAvailable == 0) {
+                break;
+            }
+
+            Result = DbgpKdReceiveBytes(&SynchronizeByte, sizeof(UCHAR));
+            if (Result == FALSE) {
+                Retries -= 1;
+                Status = EPIPE;
+                break;
+            }
+
+            //
+            // If the byte is not a synchronization byte, then try again.
+            //
+
+            if (DEBUG_IS_SYNCHRONIZATION_BYTE(SynchronizeByte) == FALSE) {
+                continue;
+            }
+
+            //
+            // Record if a SYN and/or an ACK was received. The next time around
+            // the loop will make sure to send the correct response.
+            //
+
+            if ((SynchronizeByte & DEBUG_SYNCHRONIZE_SYN) != 0) {
+                SynReceived = TRUE;
+            }
+
+            if ((SynchronizeByte & DEBUG_SYNCHRONIZE_ACK) != 0) {
+                AckReceived = TRUE;
+            }
+
+            break;
+        }
+
+        if ((SynReceived != FALSE) &&
+            (AckReceived != FALSE) &&
+            (AckSent != FALSE)) {
+
+            Status = 0;
+            break;
+        }
+    }
+
+KdSynchronizeEnd:
     return Status;
 }
 
