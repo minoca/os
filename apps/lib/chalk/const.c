@@ -847,7 +847,11 @@ Return Value:
     PPARSER_NODE ParseNode;
     INT Status;
 
-    assert(*Result == NULL);
+    if (*Result != NULL) {
+        ChalkObjectReleaseReference(*Result);
+        *Result = NULL;
+    }
+
     assert(Interpreter->LValue == NULL);
 
     ParseNode = Node->ParseNode;

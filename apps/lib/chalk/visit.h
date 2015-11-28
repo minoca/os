@@ -1041,6 +1041,66 @@ Return Value:
 --*/
 
 INT
+ChalkVisitSelectionStatement (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine evaluates a jump statement.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+INT
+ChalkVisitIterationStatement (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
+    PCHALK_OBJECT *Result
+    );
+
+/*++
+
+Routine Description:
+
+    This routine evaluates an iteration statement (for, while, and do-while).
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+INT
 ChalkVisitJumpStatement (
     PCHALK_INTERPRETER Interpreter,
     PCHALK_NODE Node,

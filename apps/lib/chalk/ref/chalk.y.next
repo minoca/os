@@ -54,11 +54,11 @@ postfix_expression
     | postfix_expression INC_OP
     | postfix_expression DEC_OP
     ;
-    
+
 argument_expression_list
     : assignment_expression
     | argument_expression_list ',' assignment_expression
-    | 
+    |
     ;
 
 unary_expression
@@ -197,16 +197,17 @@ expression_statement
     ;
 
 selection_statement
-    : IF '(' expression ')' statement
-    | IF '(' expression ')' statement ELSE statement
+    : IF '(' expression ')' compound_statement ELSE selection_statement
+    | IF '(' expression ')' compound_statement ELSE compound_statement
+    | IF '(' expression ')' compound_statement
     | SWITCH '(' expression ')' statement
     ;
 
 iteration_statement
-    : WHILE '(' expression ')' statement
-    | DO statement WHILE '(' expression ')' ';'
-    | FOR '(' expression_statement expression_statement ')' statement
-    | FOR '(' expression_statement expression_statement expression ')' statement
+    : WHILE '(' expression ')' compound_statement
+    | DO compound_statement WHILE '(' expression ')' ';'
+    | FOR '(' expression_statement expression_statement ')' compound_statement
+    | FOR '(' expression_statement expression_statement expression ')' compound_statement
     ;
 
 jump_statement

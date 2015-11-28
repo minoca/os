@@ -111,6 +111,8 @@ PCHALK_NODE_VISIT ChalkNodeVisit[ChalkNodeEnd - ChalkNodeBegin] = {
     ChalkVisitCompoundStatement,
     ChalkVisitStatementList,
     ChalkVisitExpressionStatement,
+    ChalkVisitSelectionStatement,
+    ChalkVisitIterationStatement,
     ChalkVisitJumpStatement,
     ChalkVisitTranslationUnit,
     ChalkVisitExternalDeclaration,

@@ -38,13 +38,7 @@ Environment:
 #define CHALK_LOGICAL_OPERATOR(_Operator) \
     (((_Operator) == ChalkTokenLogicalAnd) || \
      ((_Operator) == ChalkTokenLogicalOr) || \
-     ((_Operator) == ChalkTokenLogicalNot) || \
-     ((_Operator) == ChalkTokenLessThan) || \
-     ((_Operator) == ChalkTokenGreaterThan) || \
-     ((_Operator) == ChalkTokenLessOrEqual) || \
-     ((_Operator) == ChalkTokenGreaterOrEqual) || \
-     ((_Operator) == ChalkTokenIsEqual) || \
-     ((_Operator) == ChalkTokenIsNotEqual))
+     ((_Operator) == ChalkTokenLogicalNot))
 
 #define CHALK_UNARY_OPERATOR(_Operator) \
     (((_Operator) == ChalkTokenMinus) || \
@@ -1343,11 +1337,6 @@ Return Value:
 
     Status = ChalkVisitExpression(Interpreter, Node, Result);
     Interpreter->LValue = NULL;
-    if (*Result != NULL) {
-        ChalkObjectReleaseReference(*Result);
-        *Result = NULL;
-    }
-
     return Status;
 }
 

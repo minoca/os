@@ -57,7 +57,14 @@ Environment:
 PSTR ChalkLexerExpressions[] = {
     "/\\*.*?\\*/", // Multiline comment
     "//(\\\\.|[^\n])*", // single line comment
+    "break",
+    "continue",
+    "do",
+    "else",
+    "for",
+    "if",
     "return",
+    "while",
     "function",
     YY_NAME0 "(" YY_NAME0 "|" YY_DIGITS ")*", // identifier
     "0[xX]" YY_HEX "+", // hex integer
@@ -113,7 +120,14 @@ PSTR ChalkLexerExpressions[] = {
 PSTR ChalkLexerTokenNames[] = {
     "MultilineComment", // Multiline comment
     "Comment", // single line comment
+    "break",
+    "continue",
+    "do",
+    "else",
+    "for",
+    "if",
     "return",
+    "while",
     "function",
     "ID", // identifier
     "HEXINT", // hex integer
@@ -398,6 +412,8 @@ ULONG ChalkGrammarExpression[] = {
 
 ULONG ChalkGrammarStatement[] = {
     ChalkNodeExpressionStatement, 0,
+    ChalkNodeSelectionStatement, 0,
+    ChalkNodeIterationStatement, 0,
     ChalkNodeJumpStatement, 0,
     0
 };
@@ -420,7 +436,43 @@ ULONG ChalkGrammarExpressionStatement[] = {
     0
 };
 
+ULONG ChalkGrammarSelectionStatement[] = {
+    ChalkTokenIf, ChalkTokenOpenParentheses, ChalkNodeExpression,
+        ChalkTokenCloseParentheses, ChalkNodeCompoundStatement, ChalkTokenElse,
+        ChalkNodeSelectionStatement, 0,
+
+    ChalkTokenIf, ChalkTokenOpenParentheses, ChalkNodeExpression,
+        ChalkTokenCloseParentheses, ChalkNodeCompoundStatement, ChalkTokenElse,
+        ChalkNodeCompoundStatement, 0,
+
+    ChalkTokenIf, ChalkTokenOpenParentheses, ChalkNodeExpression,
+        ChalkTokenCloseParentheses, ChalkNodeCompoundStatement, 0,
+
+    0
+};
+
+ULONG ChalkGrammarIterationStatement[] = {
+    ChalkTokenWhile, ChalkTokenOpenParentheses, ChalkNodeExpression,
+        ChalkTokenCloseParentheses, ChalkNodeCompoundStatement, 0,
+
+    ChalkTokenDo, ChalkNodeCompoundStatement, ChalkTokenWhile,
+        ChalkTokenOpenParentheses, ChalkNodeExpression,
+        ChalkTokenCloseParentheses, ChalkTokenSemicolon, 0,
+
+    ChalkTokenFor, ChalkTokenOpenParentheses, ChalkNodeExpressionStatement,
+        ChalkNodeExpressionStatement, ChalkTokenCloseParentheses,
+        ChalkNodeCompoundStatement, 0,
+
+    ChalkTokenFor, ChalkTokenOpenParentheses, ChalkNodeExpressionStatement,
+        ChalkNodeExpressionStatement, ChalkNodeExpression,
+        ChalkTokenCloseParentheses, ChalkNodeCompoundStatement, 0,
+
+    0
+};
+
 ULONG ChalkGrammarJumpStatement[] = {
+    ChalkTokenBreak, ChalkTokenSemicolon, 0,
+    ChalkTokenContinue, ChalkTokenSemicolon, 0,
     ChalkTokenReturn, ChalkTokenSemicolon, 0,
     ChalkTokenReturn, ChalkNodeExpression, ChalkTokenSemicolon, 0,
     0
@@ -523,6 +575,8 @@ PARSER_GRAMMAR_ELEMENT ChalkGrammar[] = {
     {"CompoundStatement", 0, ChalkGrammarCompoundStatement},
     {"StatementList", 0, ChalkGrammarStatementList},
     {"ExpressionStatement", 0, ChalkGrammarExpressionStatement},
+    {"SelectionStatement", 0, ChalkGrammarSelectionStatement},
+    {"IterationStatement", 0, ChalkGrammarIterationStatement},
     {"JumpStatement", 0, ChalkGrammarJumpStatement},
     {"TranslationUnit", 0, ChalkGrammarTranslationUnit},
     {"ExternalDeclaration",

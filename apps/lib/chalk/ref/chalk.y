@@ -5,7 +5,7 @@
 %token SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
 %token XOR_ASSIGN OR_ASSIGN
 
-%token RETURN
+%token BREAK CONTINUE DO FOR ELSE IF RETURN WHILE
 
 %token FUNCTION
 
@@ -55,11 +55,11 @@ postfix_expression
     | postfix_expression INC_OP
     | postfix_expression DEC_OP
     ;
-    
+
 argument_expression_list
     : assignment_expression
     | argument_expression_list ',' assignment_expression
-    | 
+    |
     ;
 
 unary_expression
@@ -165,6 +165,8 @@ expression
 
 statement
     : expression_statement
+    | selection_statement
+    | iteration_statement
     | jump_statement
     ;
 
@@ -183,8 +185,23 @@ expression_statement
     | expression ';'
     ;
 
+selection_statement
+    : IF '(' expression ')' compound_statement ELSE selection_statement
+    | IF '(' expression ')' compound_statement ELSE compound_statement
+    | IF '(' expression ')' compound_statement
+    ;
+
+iteration_statement
+    : WHILE '(' expression ')' compound_statement
+    | DO compound_statement WHILE '(' expression ')' ';'
+    | FOR '(' expression_statement expression_statement ')' compound_statement
+    | FOR '(' expression_statement expression_statement expression ')' compound_statement
+    ;
+
 jump_statement
-    : RETURN ';'
+    : CONTINUE ';'
+    | BREAK ';'
+    | RETURN ';'
     | RETURN expression ';'
     ;
 

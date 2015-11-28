@@ -12,7 +12,14 @@ void count();
 %%
 "/*"            { comment(); }
 
+"break"         { count(); return(BREAK); }
+"continue"      { count(); return(CONTINUE); }
+"do"            { count(); return(DO); }
+"else"          { count(); return(ELSE); }
+"for"           { count(); return(FOR); }
+"if"            { count(); return(IF); }
 "return"        { count(); return(RETURN); }
+"while"         { count(); return(WHILE); }
 "function"      { count(); return(FUNCTION); }
 
 {L}({L}|{D})*       { count(); return(IDENTIFIER); }
