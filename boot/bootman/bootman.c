@@ -266,7 +266,8 @@ Return Value:
     LoaderNameSize = RtlStringLength(BootEntry->LoaderPath);
     LoadFlags = IMAGE_LOAD_FLAG_IGNORE_INTERPRETER |
                 IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE |
-                IMAGE_LOAD_FLAG_NO_STATIC_CONSTRUCTORS;
+                IMAGE_LOAD_FLAG_NO_STATIC_CONSTRUCTORS |
+                IMAGE_LOAD_FLAG_BIND_NOW;
 
     Status = ImLoadExecutable(&BmLoadedImageList,
                               BootEntry->LoaderPath,

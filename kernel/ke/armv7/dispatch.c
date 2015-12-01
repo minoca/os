@@ -255,12 +255,16 @@ Return Value:
         Thread = KeGetCurrentThread();
         IsBreak = FALSE;
         if ((TrapFrame->Cpsr & PSR_FLAG_THUMB) != 0) {
-            if (Instruction == THUMB_BREAK_INSTRUCTION) {
+            if ((Instruction == THUMB_BREAK_INSTRUCTION) ||
+                (Instruction == THUMB_SINGLE_STEP_INSTRUCTION)) {
+
                 IsBreak = TRUE;
             }
 
         } else {
-            if (Instruction == ARM_BREAK_INSTRUCTION) {
+            if ((Instruction == ARM_BREAK_INSTRUCTION) ||
+                (Instruction == ARM_SINGLE_STEP_INSTRUCTION)) {
+
                 IsBreak = TRUE;
             }
         }

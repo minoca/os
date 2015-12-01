@@ -70,18 +70,19 @@ EXPORTED_FUNCTION _start
     bl      ClApplicationInitialize
 
     ##
-    ## Create an undefined reference to main. There needs to be a reference to
-    ## main early because if main is defined in a library the linker will
-    ## throw it out if it thinks it's not needed.
-    ##
-
-    ldr     %r0, =main
-
-    ##
     ## Execution should never get here.
     ##
 
     DEBUGGER_BREAK
+
+    ##
+    ## Create an undefined reference to main. There needs to be a reference to
+    ## main early because if main is defined in a library the linker will
+    ## throw it out if it thinks it's not needed. This call is never actually
+    ## executed.
+    ##
+
+    blx     main
 
 END_FUNCTION _start
 

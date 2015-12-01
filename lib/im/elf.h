@@ -783,3 +783,39 @@ Return Value:
 
 --*/
 
+PVOID
+ImpElfResolvePltEntry (
+    PLIST_ENTRY ListHead,
+    PLOADED_IMAGE Image,
+    ULONG RelocationOffset
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the slow path for a Procedure Linkable Table entry
+    that has not yet been resolved to its target function address. This routine
+    is only called once for each PLT entry, as subsequent calls jump directly
+    to the destination function address. It resolves the appropriate GOT
+    relocation and returns a pointer to the function to jump to.
+
+Arguments:
+
+    ListHead - Supplies a pointer to the head of the list of images to use for
+        symbol resolution.
+
+    Image - Supplies a pointer to the loaded image whose PLT needs resolution.
+        This is really whatever pointer is in GOT + 4.
+
+    RelocationOffset - Supplies the byte offset from the start of the
+        relocation section where the relocation for this PLT entry resides, or
+        the PLT index, depending on the architecture.
+
+Return Value:
+
+    Returns a pointer to the function to jump to (in addition to writing that
+    address in the GOT at the appropriate spot).
+
+--*/
+

@@ -193,3 +193,50 @@ FUNCTION(OspGetThreadControlBlock)
 
 END_FUNCTION(OspGetThreadControlBlock)
 
+##
+## VOID
+## OspImArchResolvePltEntry (
+##     PLOADED_IMAGE Image,
+##     ULONG RelocationOffset
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine implements the slow path for a Procedure Linkable Table entry
+    that has not yet been resolved to its target function address. This routine
+    is only called once for each PLT entry, as subsequent calls jump directly
+    to the destination function address.
+
+Arguments:
+
+    Image - Supplies a pointer to the loaded image whose PLT needs resolution.
+        This is really whatever pointer is in GOT + 4.
+
+    RelocationOffset - Supplies the byte offset from the start of the
+        relocation section where the relocation for this PLT entry resides.
+
+Return Value:
+
+    None. Control jumps directly to the destination function, rather than
+    returning.
+
+--*/
+
+FUNCTION(OspImArchResolvePltEntry)
+    pushl   %ecx                # Save ecx in case of fastcall.
+    pushl   %edx                # Save edx in case of fastcall.
+    movl    12(%esp), %eax      # Get relocation offset argument.
+    pushl   %eax                # Push it.
+    movl    12(%esp), %eax      # Get the image pointer.
+    pushl   %eax                # Push it.
+    call    OspImResolvePltEntry    # Call the C handler
+    movl    8(%esp), %edx       # Restore edx.
+    movl    12(%esp), %ecx      # Restore ecx.
+    addl    $24, %esp           # Pop everything and arguments off stack.
+    jmp     *%eax               # Jump directly to function destination.
+
+END_FUNCTION(OspImArchResolvePltEntry)
+

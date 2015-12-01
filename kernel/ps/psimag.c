@@ -230,7 +230,8 @@ IM_IMPORT_TABLE PsImFunctionTable = {
     PspImNotifyImageUnload,
     PspImInvalidateInstructionCacheRegion,
     PspImGetEnvironmentVariable,
-    PspImFinalizeSegments
+    PspImFinalizeSegments,
+    NULL,
 };
 
 //
@@ -1489,9 +1490,13 @@ Return Value:
                               RegionSize - IoSize);
             }
 
-            Status = MmSyncCacheRegion((PVOID)SegmentAddress, RegionSize);
+            if (((Segment->Flags | PreviousSegment->Flags) &
+                 IMAGE_MAP_FLAG_EXECUTE) != 0) {
 
-            ASSERT(KSUCCESS(Status));
+                Status = MmSyncCacheRegion((PVOID)SegmentAddress, RegionSize);
+
+                ASSERT(KSUCCESS(Status));
+            }
 
             FileOffset += IoSize;
             FileSize -= IoSize;
@@ -1601,9 +1606,11 @@ Return Value:
                 goto MapImageSegmentEnd;
             }
 
-            Status = MmSyncCacheRegion((PVOID)SegmentAddress, IoSize);
+            if ((Segment->Flags & IMAGE_MAP_FLAG_EXECUTE) != 0) {
+                Status = MmSyncCacheRegion((PVOID)SegmentAddress, IoSize);
 
-            ASSERT(KSUCCESS(Status));
+                ASSERT(KSUCCESS(Status));
+            }
         }
 
         SegmentAddress += FileSize;
@@ -1617,10 +1624,12 @@ Return Value:
         NextPage = ALIGN_RANGE_UP(SegmentAddress, PageSize);
         if (NextPage - SegmentAddress != 0) {
             RtlZeroMemory((PVOID)SegmentAddress, NextPage - SegmentAddress);
-            Status = MmSyncCacheRegion((PVOID)SegmentAddress,
-                                       NextPage - SegmentAddress);
+            if ((Segment->Flags & IMAGE_MAP_FLAG_EXECUTE) != 0) {
+                Status = MmSyncCacheRegion((PVOID)SegmentAddress,
+                                           NextPage - SegmentAddress);
 
-            ASSERT(KSUCCESS(Status));
+                ASSERT(KSUCCESS(Status));
+            }
         }
 
         if (NextPage >= SegmentAddress + MemorySize) {

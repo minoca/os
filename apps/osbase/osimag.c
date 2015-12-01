@@ -42,6 +42,13 @@ Environment:
     "execute a command line directly.\n"
 
 //
+// Define the name of the environment variable to look at to determine whether
+// to resolve all PLT symbols at load time or not.
+//
+
+#define LD_BIND_NOW "LD_BIND_NOW"
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -70,6 +77,11 @@ Return Value:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+VOID
+OspImArchResolvePltEntry (
+    VOID
+    );
 
 PVOID
 OspImAllocateMemory (
@@ -177,6 +189,12 @@ OspImInitializeImage (
     PLOADED_IMAGE Image
     );
 
+PVOID
+OspImResolvePltEntry (
+    PLOADED_IMAGE Image,
+    ULONG RelocationOffset
+    );
+
 KSTATUS
 OspLoadInitialImageList (
     BOOL Relocate
@@ -236,7 +254,8 @@ IM_IMPORT_TABLE OsImageFunctionTable = {
     OspImNotifyImageUnload,
     OspImInvalidateInstructionCacheRegion,
     OspImGetEnvironmentVariable,
-    OspImFinalizeSegments
+    OspImFinalizeSegments,
+    OspImArchResolvePltEntry
 };
 
 //
@@ -325,6 +344,10 @@ Return Value:
         LoadFlags = IMAGE_LOAD_FLAG_IGNORE_INTERPRETER |
                     IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE |
                     IMAGE_LOAD_FLAG_NO_RELOCATIONS;
+
+        if (OspImGetEnvironmentVariable(LD_BIND_NOW) != NULL) {
+            LoadFlags |= IMAGE_LOAD_FLAG_BIND_NOW;
+        }
 
         ArgumentIndex = 1;
         while (ArgumentIndex < Environment->ArgumentCount) {
@@ -484,6 +507,7 @@ Return Value:
 {
 
     PLOADED_IMAGE LoadedImage;
+    ULONG LoadFlags;
     KSTATUS Status;
 
     OspAcquireImageLock();
@@ -497,12 +521,13 @@ Return Value:
 
     *Handle = INVALID_HANDLE;
     LoadedImage = NULL;
+    LoadFlags = 0;
     Status = ImLoadExecutable(&OsLoadedImagesHead,
                               LibraryName,
                               NULL,
                               NULL,
                               NULL,
-                              0,
+                              LoadFlags,
                               0,
                               &LoadedImage,
                               NULL);
@@ -1333,9 +1358,13 @@ Return Value:
                               RegionSize - IoSize);
             }
 
-            Status = OsFlushCache((PVOID)SegmentAddress, RegionSize);
+            if (((Segment->Flags | PreviousSegment->Flags) &
+                 IMAGE_MAP_FLAG_EXECUTE) != 0) {
 
-            ASSERT(KSUCCESS(Status));
+                Status = OsFlushCache((PVOID)SegmentAddress, RegionSize);
+
+                ASSERT(KSUCCESS(Status));
+            }
 
             FileOffset += IoSize;
             FileSize -= IoSize;
@@ -1469,9 +1498,11 @@ Return Value:
                 goto MapImageSegmentEnd;
             }
 
-            Status = OsFlushCache((PVOID)SegmentAddress, IoSize);
+            if ((Segment->Flags & IMAGE_MAP_FLAG_EXECUTE) != 0) {
+                Status = OsFlushCache((PVOID)SegmentAddress, IoSize);
 
-            ASSERT(KSUCCESS(Status));
+                ASSERT(KSUCCESS(Status));
+            }
         }
 
         SegmentAddress += FileSize;
@@ -1485,10 +1516,12 @@ Return Value:
         NextPage = ALIGN_RANGE_UP(SegmentAddress, PageSize);
         if (NextPage - SegmentAddress != 0) {
             RtlZeroMemory((PVOID)SegmentAddress, NextPage - SegmentAddress);
-            Status = OsFlushCache((PVOID)SegmentAddress,
-                                  NextPage - SegmentAddress);
+            if ((Segment->Flags & IMAGE_MAP_FLAG_EXECUTE) != 0) {
+                Status = OsFlushCache((PVOID)SegmentAddress,
+                                      NextPage - SegmentAddress);
 
-            ASSERT(KSUCCESS(Status));
+                ASSERT(KSUCCESS(Status));
+            }
         }
 
         if (NextPage >= SegmentAddress + MemorySize) {
@@ -2093,6 +2126,52 @@ Return Value:
     return;
 }
 
+PVOID
+OspImResolvePltEntry (
+    PLOADED_IMAGE Image,
+    ULONG RelocationOffset
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the slow path for a Procedure Linkable Table entry
+    that has not yet been resolved to its target function address. This routine
+    is only called once for each PLT entry, as subsequent calls jump directly
+    to the destination function address. This routine is called directly by
+    assembly, which takes care of the volatile register save/restore and
+    non C style return jump at the end.
+
+Arguments:
+
+    Image - Supplies a pointer to the loaded image whose PLT needs resolution.
+        This is really whatever pointer is in GOT + 4.
+
+    RelocationOffset - Supplies the byte offset from the start of the
+        relocation section where the relocation for this PLT entry resides, or
+        the PLT index, depending on the architecture.
+
+Return Value:
+
+    Returns a pointer to the function to jump to (in addition to writing that
+    address in the GOT at the appropriate spot).
+
+--*/
+
+{
+
+    PVOID FunctionAddress;
+
+    OspAcquireImageLock();
+    FunctionAddress = ImResolvePltEntry(&OsLoadedImagesHead,
+                                        Image,
+                                        RelocationOffset);
+
+    OspReleaseImageLock();
+    return FunctionAddress;
+}
+
 KSTATUS
 OspLoadInitialImageList (
     BOOL Relocate
@@ -2172,6 +2251,10 @@ Return Value:
 
     Executable->LoadFlags |= IMAGE_LOAD_FLAG_PRIMARY_LOAD |
                              IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE;
+
+    if (OspImGetEnvironmentVariable(LD_BIND_NOW) != NULL) {
+        Executable->LoadFlags |= IMAGE_LOAD_FLAG_BIND_NOW;
+    }
 
     //
     // If no relocations should be performed, another binary is taking care of

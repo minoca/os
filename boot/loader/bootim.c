@@ -225,7 +225,8 @@ IM_IMPORT_TABLE BoImageFunctionTable = {
     BopImNotifyImageUnload,
     BopImInvalidateInstructionCacheRegion,
     BopImGetEnvironmentVariable,
-    BopImFinalizeSegments
+    BopImFinalizeSegments,
+    NULL
 };
 
 //

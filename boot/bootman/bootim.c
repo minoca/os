@@ -196,6 +196,7 @@ IM_IMPORT_TABLE BmImageFunctionTable = {
     BmpImNotifyImageUnload,
     BmpImInvalidateInstructionCacheRegion,
     NULL,
+    NULL,
     NULL
 };
 

@@ -171,6 +171,14 @@ ImpElfProcessRelocateSection (
     BOOL Addends
     );
 
+VOID
+ImpElfAdjustJumpSlots (
+    PLOADED_IMAGE Image,
+    PVOID Relocations,
+    UINTN RelocationsSize,
+    BOOL Addends
+    );
+
 ULONG
 ImpElfGetSymbolValue (
     PLIST_ENTRY ListHead,
@@ -191,9 +199,9 @@ BOOL
 ImpElfApplyRelocation (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PELF32_SYMBOL Symbols,
-    PVOID RelocationEntry,
-    BOOL AddendEntry
+    PELF32_RELOCATION_ADDEND_ENTRY RelocationEntry,
+    BOOL AddendEntry,
+    PVOID *FinalSymbolValue
     );
 
 ULONG
@@ -1454,6 +1462,77 @@ Return Value:
     return STATUS_SUCCESS;
 }
 
+PVOID
+ImpElfResolvePltEntry (
+    PLIST_ENTRY ListHead,
+    PLOADED_IMAGE Image,
+    ULONG RelocationOffset
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the slow path for a Procedure Linkable Table entry
+    that has not yet been resolved to its target function address. This routine
+    is only called once for each PLT entry, as subsequent calls jump directly
+    to the destination function address. It resolves the appropriate GOT
+    relocation and returns a pointer to the function to jump to.
+
+Arguments:
+
+    ListHead - Supplies a pointer to the head of the list of images to use for
+        symbol resolution.
+
+    Image - Supplies a pointer to the loaded image whose PLT needs resolution.
+        This is really whatever pointer is in GOT + 4.
+
+    RelocationOffset - Supplies the byte offset from the start of the
+        relocation section where the relocation for this PLT entry resides, or
+        the PLT index, depending on the architecture.
+
+Return Value:
+
+    Returns a pointer to the function to jump to (in addition to writing that
+    address in the GOT at the appropriate spot).
+
+--*/
+
+{
+
+    PVOID FunctionAddress;
+    PVOID RelocationEntry;
+    UINTN RelocationSize;
+    BOOL Result;
+
+    FunctionAddress = NULL;
+
+    //
+    // On ARM, what's passed in is a PLT index. Convert that to an offset based
+    // on the size of each PLT entry.
+    //
+
+    if (Image->Machine == ImageMachineTypeArm32) {
+        RelocationSize = sizeof(ELF32_RELOCATION_ENTRY);
+        if (Image->PltRelocationsAddends != FALSE) {
+            RelocationSize = sizeof(ELF32_RELOCATION_ADDEND_ENTRY);
+        }
+
+        RelocationOffset *= RelocationSize;
+    }
+
+    RelocationEntry = Image->PltRelocations + RelocationOffset;
+    Result = ImpElfApplyRelocation(ListHead,
+                                   Image,
+                                   RelocationEntry,
+                                   Image->PltRelocationsAddends,
+                                   &FunctionAddress);
+
+    ASSERT(Result != FALSE);
+
+    return FunctionAddress;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -1931,6 +2010,7 @@ Return Value:
     PVOID DynamicSymbols;
     PVOID DynamicSymbolStrings;
     UINTN DynamicSymbolStringsSize;
+    PUINTN Got;
     PULONG HashTable;
     ULONG HashTag;
     ULONG HeaderCount;
@@ -1938,6 +2018,8 @@ Return Value:
     UINTN LibraryNameOffset;
     PELF_LOADING_IMAGE LoadingImage;
     UINTN MaxDynamic;
+    PVOID PltRelocations;
+    BOOL PltRelocationsAddends;
     PELF32_PROGRAM_HEADER ProgramHeader;
     PIMAGE_STATIC_FUNCTIONS StaticFunctions;
     KSTATUS Status;
@@ -1952,6 +2034,8 @@ Return Value:
     LibraryNameOffset = 0;
     LoadingImage = Image->ImageContext;
     HeaderCount = LoadingImage->ElfHeader->ProgramHeaderCount;
+    PltRelocations = NULL;
+    PltRelocationsAddends = FALSE;
     ProgramHeader = NULL;
     StaticFunctions = NULL;
 
@@ -2150,6 +2234,37 @@ Return Value:
 
             break;
 
+        //
+        // Upon finding the GOT, save the image and the resolution address in
+        // the second and third entries of the GOT.
+        //
+
+        case ELF_DYNAMIC_PLT_GOT:
+            Got = Address;
+            Got[1] = (UINTN)Image;
+            Got[2] = (UINTN)(ImImportTable->ResolvePltEntry);
+            break;
+
+        //
+        // Remember where the Procedure Linkage Table relocations are for
+        // lazy binding.
+        //
+
+        case ELF_DYNAMIC_JUMP_RELOCATIONS:
+            PltRelocations = Address;
+            break;
+
+        case ELF_DYNAMIC_PLT_RELOCATION_TYPE:
+            if (DynamicEntry->Value == ELF_DYNAMIC_RELA_TABLE) {
+                PltRelocationsAddends = TRUE;
+            }
+
+            break;
+
+        case ELF_DYNAMIC_TEXT_RELOCATIONS:
+            Image->Flags |= IMAGE_FLAG_TEXT_RELOCATIONS;
+            break;
+
         default:
             break;
         }
@@ -2171,6 +2286,8 @@ Return Value:
     Image->ExportStringTable = DynamicSymbolStrings;
     Image->ExportStringTableSize = DynamicSymbolStringsSize;
     Image->ExportHashTable = HashTable;
+    Image->PltRelocations = PltRelocations;
+    Image->PltRelocationsAddends = PltRelocationsAddends;
     if (HashTag == ELF_DYNAMIC_GNU_HASH_TABLE) {
         Image->Flags |= IMAGE_FLAG_GNU_HASH;
     }
@@ -2263,7 +2380,6 @@ Return Value:
 
     PVOID Address;
     UINTN BaseDifference;
-    BOOL BindNow;
     PELF32_DYNAMIC_ENTRY DynamicEntry;
     UINTN DynamicIndex;
     PELF_LOADING_IMAGE LoadingImage;
@@ -2368,18 +2484,30 @@ Return Value:
         }
     }
 
-    BindNow = TRUE;
-    if ((BindNow != FALSE) &&
-        (PltRelocations != NULL) && (PltRelocationsSize != 0)) {
+    //
+    // Only process the PLT relocations now if lazy binding is disabled.
+    // Otherwise, these relocations get patched up when they're called, but
+    // need to be adjusted by the base difference. This is much faster as
+    // symbol lookups don't need to be done.
+    //
 
-        Status = ImpElfProcessRelocateSection(ListHead,
-                                              Image,
-                                              PltRelocations,
-                                              PltRelocationsSize,
-                                              PltRelocationAddends);
+    if ((PltRelocations != NULL) && (PltRelocationsSize != 0)) {
+        if ((Image->LoadFlags & IMAGE_LOAD_FLAG_BIND_NOW) != 0) {
+            Status = ImpElfProcessRelocateSection(ListHead,
+                                                  Image,
+                                                  PltRelocations,
+                                                  PltRelocationsSize,
+                                                  PltRelocationAddends);
 
-        if (!KSUCCESS(Status)) {
-            goto RelocateImageEnd;
+            if (!KSUCCESS(Status)) {
+                goto RelocateImageEnd;
+            }
+
+        } else {
+            ImpElfAdjustJumpSlots(Image,
+                                  PltRelocations,
+                                  PltRelocationsSize,
+                                  PltRelocationAddends);
         }
     }
 
@@ -2388,6 +2516,7 @@ Return Value:
 RelocateImageEnd:
     if (LoadingImage->RelocationStart != ELF_INVALID_RELOCATION) {
 
+        ASSERT((Image->Flags & IMAGE_FLAG_TEXT_RELOCATIONS) != 0);
         ASSERT(LoadingImage->RelocationEnd != ELF_INVALID_RELOCATION);
         ASSERT(LoadingImage->RelocationEnd > LoadingImage->RelocationStart);
 
@@ -2434,17 +2563,11 @@ Return Value:
 
 {
 
-    PELF_LOADING_IMAGE LoadingImage;
     PELF32_RELOCATION_ENTRY Relocation;
     PELF32_RELOCATION_ADDEND_ENTRY RelocationAddend;
     ULONG RelocationCount;
     ULONG RelocationIndex;
     BOOL Result;
-    PVOID Symbols;
-
-    LoadingImage = Image->ImageContext;
-
-    ASSERT(LoadingImage != NULL);
 
     RelocationAddend = Relocations;
     Relocation = Relocations;
@@ -2455,8 +2578,6 @@ Return Value:
     } else {
         RelocationCount = RelocationsSize / sizeof(ELF32_RELOCATION_ENTRY);
     }
-
-    Symbols = Image->ExportSymbolTable;
 
     //
     // Process each relocation in the table.
@@ -2469,9 +2590,9 @@ Return Value:
         if (Addends != FALSE) {
             Result = ImpElfApplyRelocation(ListHead,
                                            Image,
-                                           Symbols,
                                            RelocationAddend,
-                                           TRUE);
+                                           TRUE,
+                                           NULL);
 
             ASSERT(Result != FALSE);
 
@@ -2484,9 +2605,9 @@ Return Value:
         } else {
             Result = ImpElfApplyRelocation(ListHead,
                                            Image,
-                                           Symbols,
-                                           Relocation,
-                                           FALSE);
+                                           (PVOID)Relocation,
+                                           FALSE,
+                                           NULL);
 
             ASSERT(Result != FALSE);
 
@@ -2499,6 +2620,105 @@ Return Value:
     }
 
     return STATUS_SUCCESS;
+}
+
+VOID
+ImpElfAdjustJumpSlots (
+    PLOADED_IMAGE Image,
+    PVOID Relocations,
+    UINTN RelocationsSize,
+    BOOL Addends
+    )
+
+/*++
+
+Routine Description:
+
+    This routine iterates over all the relocations in the PLT section and adds
+    the base difference to them.
+
+Arguments:
+
+    Image - Supplies a pointer to the loaded image structure.
+
+    Relocations - Supplies a pointer to the relocations to apply.
+
+    RelocationsSize - Supplies the size of the relocation section in bytes.
+
+    Addends - Supplies a boolean indicating whether these are relocations with
+        explicit addends (TRUE) or implicit addends (FALSE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINTN BaseDifference;
+    ULONG Information;
+    UINTN Offset;
+    PELF32_RELOCATION_ENTRY Relocation;
+    PELF32_RELOCATION_ADDEND_ENTRY RelocationAddend;
+    ULONG RelocationCount;
+    ULONG RelocationIndex;
+    PUINTN RelocationPlace;
+    ELF32_RELOCATION_TYPE RelocationType;
+
+    BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
+    if (BaseDifference == 0) {
+        return;
+    }
+
+    RelocationAddend = Relocations;
+    Relocation = Relocations;
+    if (Addends != FALSE) {
+        RelocationCount = RelocationsSize /
+                          sizeof(ELF32_RELOCATION_ADDEND_ENTRY);
+
+    } else {
+        RelocationCount = RelocationsSize / sizeof(ELF32_RELOCATION_ENTRY);
+    }
+
+    //
+    // Process each relocation in the table.
+    //
+
+    for (RelocationIndex = 0;
+         RelocationIndex < RelocationCount;
+         RelocationIndex += 1) {
+
+        if (Addends != FALSE) {
+            Offset = RelocationAddend->Offset;
+            Information = RelocationAddend->Information;
+            RelocationAddend += 1;
+
+        } else {
+            Offset = Relocation->Offset;
+            Information = Relocation->Information;
+            Relocation += 1;
+        }
+
+        RelocationType = Information & 0xFF;
+
+        //
+        // If this is a jump slot relocation, bump it up by the base difference.
+        //
+
+        if (((Image->Machine == ImageMachineTypeArm32) &&
+             (RelocationType == ElfArmRelocationJumpSlot)) ||
+            ((Image->Machine == ImageMachineTypeX86) &&
+             (RelocationType == Elf386RelocationJumpSlot))) {
+
+            RelocationPlace = (PUINTN)((PUCHAR)Image->LoadedImageBuffer +
+                               (Offset - (UINTN)Image->PreferredLowestAddress));
+
+            *RelocationPlace += BaseDifference;
+        }
+    }
+
+    return;
 }
 
 ULONG
@@ -2888,9 +3108,9 @@ BOOL
 ImpElfApplyRelocation (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PELF32_SYMBOL Symbols,
-    PVOID RelocationEntry,
-    BOOL AddendEntry
+    PELF32_RELOCATION_ADDEND_ENTRY RelocationEntry,
+    BOOL AddendEntry,
+    PVOID *FinalSymbolValue
     )
 
 /*++
@@ -2905,14 +3125,17 @@ Arguments:
 
     Image - Supplies a pointer to the loaded image structure.
 
-    Symbols - Supplies a pointer to the symbols for the image.
-
     RelocationEntry - Supplies a pointer to the relocation entry. This should
-        either be of type ELF32_RELOCATION_ENTRY or
-        ELF32_RELOCATION_ADDEND_ENTRY depending on the Addends parameter.
+        either be of type PELF32_RELOCATION_ENTRY or
+        PELF32_RELOCATION_ADDEND_ENTRY depending on the Addends parameter.
 
     AddendEntry - Supplies a flag indicating that the entry if of type
         ELF32_RELOCATION_ADDEND_ENTRY, not ELF32_RELOCATION_ENTRY.
+
+    FinalSymbolValue - Supplies an optional pointer where the symbol value will
+        be returned on success. This is used by PLT relocations that are being
+        fixed up on the fly and also need to jump directly to the symbol
+        address.
 
 Return Value:
 
@@ -2939,25 +3162,17 @@ Return Value:
     ELF32_RELOCATION_TYPE RelocationType;
     PLOADED_IMAGE SymbolImage;
     ULONG SymbolIndex;
+    PELF32_SYMBOL Symbols;
     ULONG SymbolValue;
 
     Address = 0;
     LoadingImage = Image->ImageContext;
-
-    ASSERT(LoadingImage != NULL);
-
     BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
+    Offset = RelocationEntry->Offset;
+    Information = RelocationEntry->Information;
+    Addend = 0;
     if (AddendEntry != FALSE) {
-        Offset = ((PELF32_RELOCATION_ADDEND_ENTRY)RelocationEntry)->Offset;
-        Information =
-                ((PELF32_RELOCATION_ADDEND_ENTRY)RelocationEntry)->Information;
-
-        Addend = ((PELF32_RELOCATION_ADDEND_ENTRY)RelocationEntry)->Addend;
-
-    } else {
-        Offset = ((PELF32_RELOCATION_ENTRY)RelocationEntry)->Offset;
-        Information = ((PELF32_RELOCATION_ENTRY)RelocationEntry)->Information;
-        Addend = 0;
+        Addend = RelocationEntry->Addend;
     }
 
     //
@@ -2971,6 +3186,7 @@ Return Value:
     // relocation as well as the type of relocation to apply.
     //
 
+    Symbols = Image->ExportSymbolTable;
     SymbolIndex = Information >> 8;
     RelocationType = Information & 0xFF;
 
@@ -2986,6 +3202,10 @@ Return Value:
 
     if (SymbolValue == MAX_ULONG) {
         SymbolValue = 0;
+    }
+
+    if (FinalSymbolValue != NULL) {
+        *FinalSymbolValue = (PVOID)(UINTN)SymbolValue;
     }
 
     //
@@ -3318,16 +3538,20 @@ Return Value:
             RelocationEnd = RelocationPlace + 1;
         }
 
-        if ((LoadingImage->RelocationStart == ELF_INVALID_RELOCATION) ||
-            (LoadingImage->RelocationStart > (PVOID)RelocationPlace)) {
+        if ((LoadingImage != NULL) &&
+            ((Image->Flags & IMAGE_FLAG_TEXT_RELOCATIONS) != 0)) {
 
-            LoadingImage->RelocationStart = RelocationPlace;
-        }
+            if ((LoadingImage->RelocationStart == ELF_INVALID_RELOCATION) ||
+                (LoadingImage->RelocationStart > (PVOID)RelocationPlace)) {
 
-        if ((LoadingImage->RelocationEnd == ELF_INVALID_RELOCATION) ||
-            (LoadingImage->RelocationEnd < RelocationEnd)) {
+                LoadingImage->RelocationStart = RelocationPlace;
+            }
 
-            LoadingImage->RelocationEnd = RelocationEnd;
+            if ((LoadingImage->RelocationEnd == ELF_INVALID_RELOCATION) ||
+                (LoadingImage->RelocationEnd < RelocationEnd)) {
+
+                LoadingImage->RelocationEnd = RelocationEnd;
+            }
         }
     }
 

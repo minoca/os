@@ -82,16 +82,17 @@ _start:
     jmp     ClApplicationInitialize
 
     ##
-    ## Create an undefined reference to main. There needs to be a reference to
-    ## main early because if main is defined in a library the linker will
-    ## throw it out if it thinks it's not needed.
-    ##
-
-    leal    main, %eax
-
-    ##
     ## Execution should never get here.
     ##
 
     int $3
+
+    ##
+    ## Create an undefined reference to main. There needs to be a reference to
+    ## main early because if main is defined in a library the linker will
+    ## throw it out if it thinks it's not needed. This jump is never actually
+    ## executed.
+    ##
+
+    jmp     main
 

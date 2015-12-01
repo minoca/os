@@ -90,6 +90,12 @@ Author:
 #define IMAGE_LOAD_FLAG_LOAD_ONLY 0x00000040
 
 //
+// Set this flag to bind all symbols at load time, rather than lazily bind them
+//
+
+#define IMAGE_LOAD_FLAG_BIND_NOW 0x00000080
+
+//
 // Define flags passed into the map image section routine.
 //
 
@@ -113,6 +119,7 @@ Author:
 #define IMAGE_FLAG_RELOCATABLE        0x00000008
 #define IMAGE_FLAG_STATIC_TLS         0x00000010
 #define IMAGE_FLAG_GNU_HASH           0x00000020
+#define IMAGE_FLAG_TEXT_RELOCATIONS   0x00000040
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -390,6 +397,12 @@ Members:
     ExportHashTable - Stores a pointer to the export hash table, not used in
         all image formats.
 
+    PltRelocations - Stores a pointer to the procedure linkage table relocation
+        section.
+
+    PltRelocationsAddends - Stores a boolean indicating if the PLT relocations
+        are of type REL (FALSE) or RELA (TRUE).
+
     ImportDepth - Stores the import depth of the image (the number of images
         between the image and some image that was actually requested to be
         loaded). An image's imports, unless already loaded, have an import
@@ -454,6 +467,8 @@ typedef struct _LOADED_IMAGE {
     PVOID ExportStringTable;
     ULONG ExportStringTableSize;
     PVOID ExportHashTable;
+    PVOID PltRelocations;
+    BOOL PltRelocationsAddends;
     ULONG ImportDepth;
     ULONG ImportCount;
     PVOID *Imports;
@@ -937,6 +952,32 @@ Return Value:
 
 --*/
 
+typedef
+VOID
+(*PIM_RESOLVE_PLT_ENTRY) (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to lazily resolve a PLT entry that has been called.
+    It is architecture specific and usually must be implemented in assembly.
+    Although it is listed here as having no arguments, it usually takes at
+    least two arguments: a pointer to the loaded image, and the byte offset
+    into the PLT relocation section.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -994,6 +1035,9 @@ Members:
     FinalizeSegments - Stores an optional pointer to a function used to set the
         final permissions on all segments.
 
+    ResolvePltEntry - Stores an optional pointer to an assembly function used
+        to resolve procedure linkage table entries on the fly.
+
 --*/
 
 typedef struct _IM_IMPORT_TABLE {
@@ -1013,6 +1057,7 @@ typedef struct _IM_IMPORT_TABLE {
     PIM_INVALIDATE_INSTRUCTION_CACHE_REGION InvalidateInstructionCacheRegion;
     PIM_GET_ENVIRONMENT_VARIABLE GetEnvironmentVariable;
     PIM_FINALIZE_SEGMENTS FinalizeSegments;
+    PIM_RESOLVE_PLT_ENTRY ResolvePltEntry;
 } IM_IMPORT_TABLE, *PIM_IMPORT_TABLE;
 
 //
@@ -1385,6 +1430,42 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+PVOID
+ImResolvePltEntry (
+    PLIST_ENTRY ListHead,
+    PLOADED_IMAGE Image,
+    ULONG RelocationOffset
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the slow path for a Procedure Linkable Table entry
+    that has not yet been resolved to its target function address. This routine
+    is only called once for each PLT entry, as subsequent calls jump directly
+    to the destination function address. It resolves the appropriate GOT
+    relocation and returns a pointer to the function to jump to.
+
+Arguments:
+
+    ListHead - Supplies a pointer to the head of the list of images to use for
+        symbol resolution.
+
+    Image - Supplies a pointer to the loaded image whose PLT needs resolution.
+        This is really whatever pointer is in GOT + 4.
+
+    RelocationOffset - Supplies the byte offset from the start of the
+        relocation section where the relocation for this PLT entry resides, or
+        the PLT index, depending on the architecture.
+
+Return Value:
+
+    Returns a pointer to the function to jump to (in addition to writing that
+    address in the GOT at the appropriate spot).
 
 --*/
 

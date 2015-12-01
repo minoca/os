@@ -129,3 +129,57 @@ FUNCTION OspGetThreadControlBlock
 
 END_FUNCTION OspGetThreadControlBlock
 
+##
+## VOID
+## OspImArchResolvePltEntry (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine implements the slow path for a Procedure Linkable Table entry
+    that has not yet been resolved to its target function address. This routine
+    is only called once for each PLT entry, as subsequent calls jump directly
+    to the destination function address.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None. Control jumps directly to the destination function, rather than
+    returning.
+
+--*/
+
+FUNCTION OspImArchResolvePltEntry
+
+    ##
+    ## Push the original arguments, and an extra register to keep the stack
+    ## aligned (since the old lr was already pushed).
+    ##
+
+    stmdb   %sp!, {%r0-%r4}         @ Save the original arguments.
+
+    ##
+    ## Upon entry to the resolver:
+    ## *sp = original lr.
+    ## lr = &(GOT[2])
+    ## ip = &(GOT[n + 3])
+    ##
+
+    ldr     %r0, [%lr, #-4]         @ Get GOT[1] for the context pointer.
+    sub     %r1, %ip, %lr           @ &(GOT[n+3])-&(GOT[2]) = n + 1.
+    asr     %r1, %r1, #2            @ Divide by 4 to get the actual index.
+    sub     %r1, %r1, #1            @ Get rid of that extra one.
+    bl      OspImResolvePltEntry    @ Resolve the relocation.
+    mov     %ip, %r0                @ Save function in IP.
+    ldmia   %sp!, {%r0-%r4,%lr}     @ Pop registers and previously pushed lr.
+    bx      %ip                     @ Jump to the function.
+
+END_FUNCTION OspImArchResolvePltEntry
+
