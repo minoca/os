@@ -3408,8 +3408,8 @@ Return Value:
         goto SynchronizeEnd;
     }
 
+    Timeout = 0;
     while (BytesAvailable != 0) {
-        Timeout = 0;
         ReceiveSize = sizeof(BYTE);
         Status = KdpReceiveBuffer(&SynchronizeByte, &ReceiveSize, &Timeout);
         if (!KSUCCESS(Status)) {
@@ -3439,6 +3439,7 @@ Return Value:
 
     Retries = 10;
     Status = STATUS_UNSUCCESSFUL;
+    Timeout = KdConnectionTimeout;
     while (Retries > 0) {
 
         //
@@ -3471,8 +3472,11 @@ Return Value:
 
         while ((SynReceived == FALSE) || (AckReceived == FALSE)) {
             ReceiveSize = sizeof(BYTE);
-            Timeout = KdConnectionTimeout;
             Status = KdpReceiveBuffer(&SynchronizeByte, &ReceiveSize, &Timeout);
+            if (Status == STATUS_TIMEOUT) {
+                goto SynchronizeEnd;
+            }
+
             if (!KSUCCESS(Status)) {
                 Retries -= 1;
                 break;

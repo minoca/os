@@ -1664,7 +1664,7 @@ Return Value:
 
         ASSERT(MsiContext->MsiXOffset != 0);
 
-        if (MsiContext->MsiXTable == NULL) {
+        if (MsiContext->MsiXPendingArray == NULL) {
             Status = PcipMapMsiXPendingArray(MsiContext);
             if (!KSUCCESS(Status)) {
                 goto MsiIsVectorPendingEnd;

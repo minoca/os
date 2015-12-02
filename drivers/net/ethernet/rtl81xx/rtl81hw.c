@@ -940,10 +940,18 @@ Return Value:
     }
 
     //
-    // Clear the status bits and then reset the interrupt mask.
+    // The RTL81xx devices that use MSIs require interrupts to be disabled and
+    // enabled after each interrupt, otherwise the interrupts eventually stop
+    // firing. That said, disable and enable the interrupts even if MSIs are
+    // not in use.
     //
 
+    RTL81_WRITE_REGISTER16(Device, Rtl81RegisterInterruptMask, 0);
     RTL81_WRITE_REGISTER16(Device, Rtl81RegisterInterruptStatus, PendingBits);
+    RTL81_WRITE_REGISTER16(Device,
+                           Rtl81RegisterInterruptMask,
+                           RTL81_DEFAULT_INTERRUPT_MASK);
+
     RtlAtomicOr32(&(Device->PendingInterrupts), PendingBits);
     return InterruptStatusClaimed;
 }

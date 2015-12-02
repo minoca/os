@@ -5129,7 +5129,7 @@ Return Value:
     //
 
     for (Index = 0; Index < RTLW81_EFUSE_RETRY_COUNT; Index += 1) {
-        Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterEfuseControl);
+        Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterEfuseControl);
         if ((Value & RTLW81_EFUSE_CONTROL_VALID) != 0) {
             break;
         }
