@@ -510,6 +510,12 @@ Return Value:
     ULONG LoadFlags;
     KSTATUS Status;
 
+    //
+    // Prime the get environment variable function to ensure it does not
+    // have to resolve a PLT entry (and reacquire the lock) during load.
+    //
+
+    OspImGetEnvironmentVariable(LD_BIND_NOW);
     OspAcquireImageLock();
     if (OsLoadedImagesHead.Next == NULL) {
         Status = OspLoadInitialImageList(FALSE);

@@ -226,17 +226,20 @@ Return Value:
 --*/
 
 FUNCTION(OspImArchResolvePltEntry)
+    pushl   %eax                # Save eax in case of ___tls_get_addr.
     pushl   %ecx                # Save ecx in case of fastcall.
     pushl   %edx                # Save edx in case of fastcall.
-    movl    12(%esp), %eax      # Get relocation offset argument.
+    movl    16(%esp), %eax      # Get relocation offset argument.
     pushl   %eax                # Push it.
-    movl    12(%esp), %eax      # Get the image pointer.
+    movl    16(%esp), %eax      # Get the image pointer.
     pushl   %eax                # Push it.
     call    OspImResolvePltEntry    # Call the C handler
+    movl    %eax, 24(%esp)      # Save the address to fake return to later.
     movl    8(%esp), %edx       # Restore edx.
     movl    12(%esp), %ecx      # Restore ecx.
-    addl    $24, %esp           # Pop everything and arguments off stack.
-    jmp     *%eax               # Jump directly to function destination.
+    movl    16(%esp), %eax      # Restore eax.
+    addl    $24, %esp           # Pop nearly everything, including parameters.
+    ret                         # "Return" to the function destination.
 
 END_FUNCTION(OspImArchResolvePltEntry)
 
