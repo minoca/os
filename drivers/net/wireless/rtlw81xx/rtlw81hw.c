@@ -1227,15 +1227,18 @@ Return Value:
 
     RTLW81_BULK_OUT_TYPE BulkOutType;
     USHORT Checksum;
+    ULONG DataRate;
     ULONG DataSize;
     PRTLW81_DEVICE Device;
     PRTLW81_TRANSMIT_HEADER Header;
     PUSHORT HeaderBuffer;
     ULONG Index;
+    ULONG MacId;
     PNET80211_FRAME_HEADER Net80211Header;
     ULONG Net80211Type;
     PNET_PACKET_BUFFER Packet;
-    UCHAR Raid;
+    ULONG QueueSelect;
+    ULONG Raid;
     PRTLW81_BULK_OUT_TRANSFER Rtlw81Transfer;
     KSTATUS Status;
     PUSB_TRANSFER UsbTransfer;
@@ -1270,7 +1273,7 @@ Return Value:
 
         Packet->DataOffset -= RTLW81_TRANSMIT_HEADER_SIZE;
         Header = Packet->Buffer;
-        RtlZeroMemory(Header, sizeof(RTLW81_TRANSMIT_HEADER_SIZE));
+        RtlZeroMemory(Header, RTLW81_TRANSMIT_HEADER_SIZE);
         Header->PacketLength = DataSize;
         Header->Offset = RTLW81_TRANSMIT_HEADER_SIZE;
         Header->TypeFlags = RTLW81_TRANSMIT_TYPE_FLAG_FIRST_SEGMENT |
@@ -1280,11 +1283,9 @@ Return Value:
         //
         // Pick an endpoint based on the 802.11 frame type.
         //
-        // TODO: Develop a real system to pick the access category.
-        //
 
         Net80211Type = NET80211_GET_FRAME_TYPE(Net80211Header);
-        if ((Net80211Type == NET80211_FRAME_TYPE_DATA) ||
+        if ((Net80211Type == NET80211_FRAME_TYPE_CONTROL) ||
             (Net80211Type == NET80211_FRAME_TYPE_MANAGEMENT)) {
 
             BulkOutType = Rtlw81BulkOutVo;
@@ -1293,9 +1294,14 @@ Return Value:
             BulkOutType = Rtlw81BulkOutBe;
         }
 
-        if (NET80211_IS_MULTICAST_BROADCAST(Net80211Header) != FALSE) {
-            Header->TypeFlags |= RTLW81_TRANSMIT_TYPE_FLAG_MULTICAST_BROADCAST;
-        }
+        //
+        // Assume the default values for various fields in the header.
+        //
+
+        DataRate = RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_CCK1;
+        MacId = RTLW81_TRANSMIT_IDENTIFICATION_MAC_ID_BSS;
+        QueueSelect = RTLW81_TRANSMIT_IDENTIFICATION_QSEL_MGMT;
+        Raid = RTLW81_TRANSMIT_IDENTIFICATION_RAID_11B;
 
         //
         // Handle non-multicast requests to send 802.11 data packets.
@@ -1309,20 +1315,7 @@ Return Value:
             //
 
             Raid = RTLW81_TRANSMIT_IDENTIFICATION_RAID_11BG;
-            Header->Identification =
-                           (RTLW81_TRANSMIT_IDENTIFICATION_MAC_ID_BSS <<
-                            RTLW81_TRANSMIT_IDENTIFICATION_MAC_ID_SHIFT) &&
-                           RTLW81_TRANSMIT_IDENTIFICATION_MAC_ID_MASK;
-
-            Header->Identification |=
-                             (RTLW81_TRANSMIT_IDENTIFICATION_QSEL_BE <<
-                              RTLW81_TRANSMIT_IDENTIFICATION_QSEL_SHIFT) &&
-                             RTLW81_TRANSMIT_IDENTIFICATION_QSEL_MASK;
-
-            Header->Identification |=
-                     (Raid << RTLW81_TRANSMIT_IDENTIFICATION_RAID_SHIFT) &&
-                     RTLW81_TRANSMIT_IDENTIFICATION_RAID_MASK;
-
+            QueueSelect = RTLW81_TRANSMIT_IDENTIFICATION_QSEL_BE;
             if ((Device->Flags & RTLW81_FLAG_8188E) != 0) {
                 Header->AggBkFlag |= RTLW81_TRANSMIT_AGG_BK_FLAG;
 
@@ -1342,45 +1335,40 @@ Return Value:
             Header->DataRateInformation |=
                                   RTLW81_TRANSMIT_DATA_RATE_INFORMATION_OFDM24;
 
-            Header->DataRateInformation |=
-                    (RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_OFDM54 <<
-                     RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_SHIFT) &
-                    RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_MASK;
+            DataRate = RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_OFDM54;
 
-        } else {
-            Header->Identification =
-                               (RTLW81_TRANSMIT_IDENTIFICATION_MAC_ID_BSS <<
-                                RTLW81_TRANSMIT_IDENTIFICATION_MAC_ID_SHIFT) &&
-                               RTLW81_TRANSMIT_IDENTIFICATION_MAC_ID_MASK;
+        //
+        // Handle multicast packets.
+        //
 
-            Header->Identification |=
-                                 (RTLW81_TRANSMIT_IDENTIFICATION_QSEL_MGMT <<
-                                  RTLW81_TRANSMIT_IDENTIFICATION_QSEL_SHIFT) &&
-                                 RTLW81_TRANSMIT_IDENTIFICATION_QSEL_MASK;
+        } else if (NET80211_IS_MULTICAST_BROADCAST(Net80211Header) != FALSE) {
+            Header->TypeFlags |= RTLW81_TRANSMIT_TYPE_FLAG_MULTICAST_BROADCAST;
+            MacId = RTLW81_TRANSMIT_IDENTIFICATION_MAC_ID_BROADCAST;
+        }
 
-            Header->Identification |=
-                                 (RTLW81_TRANSMIT_IDENTIFICATION_RAID_11B <<
-                                  RTLW81_TRANSMIT_IDENTIFICATION_RAID_SHIFT) &&
-                                 RTLW81_TRANSMIT_IDENTIFICATION_RAID_MASK;
+        Header->Identification |=
+                       (MacId << RTLW81_TRANSMIT_IDENTIFICATION_MAC_ID_SHIFT) &
+                       RTLW81_TRANSMIT_IDENTIFICATION_MAC_ID_MASK;
 
-            Header->RateInformation |= RTLW81_TRANSMIT_RATE_INFORMATION_DRVRATE;
-            Header->DataRateInformation &=
-                         ~RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_MASK;
+        Header->Identification |=
+                   (QueueSelect << RTLW81_TRANSMIT_IDENTIFICATION_QSEL_SHIFT) &
+                   RTLW81_TRANSMIT_IDENTIFICATION_QSEL_MASK;
 
-            Header->DataRateInformation |=
-                      (RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_CCK1 <<
+        Header->Identification |=
+                          (Raid << RTLW81_TRANSMIT_IDENTIFICATION_RAID_SHIFT) &
+                          RTLW81_TRANSMIT_IDENTIFICATION_RAID_MASK;
+
+        Header->DataRateInformation |=
+                      (DataRate <<
                        RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_SHIFT) &
                       RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_MASK;
+
+        if (DataRate == RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_CCK1) {
+            Header->RateInformation |= RTLW81_TRANSMIT_RATE_INFORMATION_DRVRATE;
         }
 
         //
-        // Set the 802.11 sequence number.
-        //
-
-        Header->Sequence = NET80211_GET_SEQUENCE_NUMBER(Net80211Header);
-
-        //
-        // Either set hardware sequencing or the QoS bit.
+        // Unless it is a QOS Data packet, use hardware sequence numbering.
         //
 
         if ((Net80211Type != NET80211_FRAME_TYPE_DATA) ||
@@ -1391,7 +1379,7 @@ Return Value:
             Header->Sequence |= RTLW81_TRANSMIT_SEQUENCE_PACKET_ID;
 
         } else {
-            Header->RateInformation |= RTLW81_TRANSMIT_RATE_INFORMATION_QOS;
+            Header->Sequence = NET80211_GET_SEQUENCE_NUMBER(Net80211Header);
         }
 
         //

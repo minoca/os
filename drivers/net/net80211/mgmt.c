@@ -1804,7 +1804,11 @@ Return Value:
     // Get the RSN size.
     //
 
-    FrameBodySize += sizeof(NET80211_DEFAULT_RSN_INFORMATION);
+    if (((Context->Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) &&
+        (Context->PairwiseEncryption != Net80211EncryptionWep)) {
+
+        FrameBodySize += sizeof(NET80211_DEFAULT_RSN_INFORMATION);
+    }
 
     //
     // Allocate a buffer to hold the assocation request frame body.
@@ -1871,11 +1875,15 @@ Return Value:
     // Set the RSN information.
     //
 
-    RtlCopyMemory(InformationByte,
-                  &Net80211DefaultRsnInformation,
-                  sizeof(NET80211_DEFAULT_RSN_INFORMATION));
+    if (((Context->Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) &&
+        (Context->PairwiseEncryption != Net80211EncryptionWep)) {
 
-    InformationByte += sizeof(NET80211_DEFAULT_RSN_INFORMATION);
+        RtlCopyMemory(InformationByte,
+                      &Net80211DefaultRsnInformation,
+                      sizeof(NET80211_DEFAULT_RSN_INFORMATION));
+
+        InformationByte += sizeof(NET80211_DEFAULT_RSN_INFORMATION);
+    }
 
     ASSERT(FrameBodySize == (InformationByte - FrameBody));
 
