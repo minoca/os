@@ -52,6 +52,14 @@ Environment:
 //
 
 //
+// Define the maximum number of pending packets that will be saved before the
+// driver starts to drop packets for legacy chips. Such chips only have 4
+// descriptors, but save a fair amount of packets to be sent.
+//
+
+#define RTL81_MAX_TRANSMIT_PACKET_LIST_COUNT_LEGACY 64
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -75,7 +83,7 @@ Rtl81pReapTransmitDescriptors (
     );
 
 VOID
-Rtl81pSendPackets (
+Rtl81pSendPendingPackets (
     PRTL81_DEVICE Device
     );
 
@@ -127,6 +135,8 @@ Rtl81pWriteMdio (
 // -------------------------------------------------------------------- Globals
 //
 
+BOOL Rtl81DisablePacketDropping = FALSE;
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -134,7 +144,7 @@ Rtl81pWriteMdio (
 KSTATUS
 Rtl81Send (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -148,21 +158,26 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 
 {
 
     PRTL81_DEVICE Device;
+    UINTN PacketListCount;
+    KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
@@ -170,19 +185,29 @@ Return Value:
     KeAcquireQueuedLock(Device->TransmitLock);
 
     //
-    // Append the new packets list to the device's list of packets to transmit.
+    // If there is any room in the packet list (or dropping packets is
+    // disabled), add all of the packets to the list waiting to be sent.
     //
 
-    APPEND_LIST(PacketListHead, &(Device->PendingTransmitPacketListHead));
-    INITIALIZE_LIST_HEAD(PacketListHead);
+    PacketListCount = Device->TransmitPacketList.Count;
+    if ((PacketListCount < Device->MaxTransmitPacketListCount) ||
+        (Rtl81DisablePacketDropping != FALSE)) {
+
+        NET_APPEND_PACKET_LIST(PacketList, &(Device->TransmitPacketList));
+        Rtl81pSendPendingPackets(Device);
+        Status = STATUS_SUCCESS;
 
     //
-    // Try to push new packets through the system.
+    // Otherwise report that the resource is use as it is too busy to handle
+    // more packets.
     //
 
-    Rtl81pSendPackets(Device);
+    } else {
+        Status = STATUS_RESOURCE_IN_USE;
+    }
+
     KeReleaseQueuedLock(Device->TransmitLock);
-    return STATUS_SUCCESS;
+    return Status;
 }
 
 KSTATUS
@@ -367,7 +392,7 @@ Return Value:
         goto InitializeDeviceStructuresEnd;
     }
 
-    INITIALIZE_LIST_HEAD(&(Device->PendingTransmitPacketListHead));
+    NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
 
     //
     // The range of different RTL81xx devices use various register sets and
@@ -464,6 +489,9 @@ Return Value:
         ASSERT(Device->U.LegacyData.TransmitNextToUse == 0);
         ASSERT(Device->U.LegacyData.TransmitNextToClean == 0);
 
+        Device->MaxTransmitPacketListCount =
+                                   RTL81_MAX_TRANSMIT_PACKET_LIST_COUNT_LEGACY;
+
     } else {
         DefaultData = &(Device->U.DefaultData);
         if ((Flags & RTL81_FLAG_DESCRIPTOR_LIMIT_64) != 0) {
@@ -480,6 +508,9 @@ Return Value:
             DefaultData->ReceiveDescriptorCount =
                                         RTL81_RECEIVE_DESCRIPTOR_COUNT_DEFAULT;
         }
+
+        Device->MaxTransmitPacketListCount =
+                                      DefaultData->TransmitDescriptorCount * 2;
 
         AllocationSize = (DefaultData->TransmitDescriptorCount *
                           sizeof(RTL81_TRANSMIT_DESCRIPTOR)) +
@@ -1430,7 +1461,7 @@ Return Value:
     //
 
     if (DescriptorReaped != FALSE) {
-        Rtl81pSendPackets(Device);
+        Rtl81pSendPendingPackets(Device);
     }
 
     KeReleaseQueuedLock(Device->TransmitLock);
@@ -1449,7 +1480,7 @@ Return Value:
 }
 
 VOID
-Rtl81pSendPackets (
+Rtl81pSendPendingPackets (
     PRTL81_DEVICE Device
     )
 
@@ -1523,7 +1554,7 @@ Return Value:
     //
 
     LegacyData = &(Device->U.LegacyData);
-    while (LIST_EMPTY(&(Device->PendingTransmitPacketListHead)) == FALSE) {
+    while (NET_PACKET_LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) {
 
         //
         // Get the next descriptor to use. If it is not available, then
@@ -1542,11 +1573,11 @@ Return Value:
             LegacyData->TransmitNextToUse = 0;
         }
 
-        Packet = LIST_VALUE(Device->PendingTransmitPacketListHead.Next,
+        Packet = LIST_VALUE(Device->TransmitPacketList.Head.Next,
                             NET_PACKET_BUFFER,
                             ListEntry);
 
-        LIST_REMOVE(&(Packet->ListEntry));
+        NET_REMOVE_PACKET_FROM_LIST(Packet, &(Device->TransmitPacketList));
 
         //
         // Remember the packet so that it can be released once it is
@@ -1642,7 +1673,7 @@ Return Value:
 
     DefaultData = &(Device->U.DefaultData);
     PacketSubmitted = FALSE;
-    while (LIST_EMPTY(&(Device->PendingTransmitPacketListHead)) == FALSE) {
+    while (NET_PACKET_LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) {
 
         //
         // Get the next descriptor to use. If it is not available, then
@@ -1661,11 +1692,11 @@ Return Value:
             DefaultData->TransmitNextToUse = 0;
         }
 
-        Packet = LIST_VALUE(Device->PendingTransmitPacketListHead.Next,
+        Packet = LIST_VALUE(Device->TransmitPacketList.Head.Next,
                             NET_PACKET_BUFFER,
                             ListEntry);
 
-        LIST_REMOVE(&(Packet->ListEntry));
+        NET_REMOVE_PACKET_FROM_LIST(Packet, &(Device->TransmitPacketList));
 
         //
         // Remember the packet so that it can be released once it is

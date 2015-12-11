@@ -967,6 +967,8 @@ Members:
     ReceivedPacketData - Stores the virtual address of the first descriptor's
         packet data.
 
+    TransmitPacketList - Stores a list of network packets waiting to be sent.
+
     TransmitNextToClean - Stores the index of the oldest in-flight packet, the
         first one to check to see if transmission is done.
 
@@ -975,9 +977,6 @@ Members:
 
     TransmitLock - Stores the queued lock that protects access to the transmit
         ring.
-
-    TransmitDescriptorFreeEvent - Stores the event to wait on in the event that
-        no transmit descriptors are free.
 
     LinkActive - Stores a boolean indicating if there is an active network link.
 
@@ -1014,10 +1013,10 @@ typedef struct _ATL1C_DEVICE {
     PATL1C_RECEIVE_SLOT ReceiveSlot;
     PATL1C_RECEIVED_PACKET ReceivedPacket;
     PVOID ReceivedPacketData;
+    NET_PACKET_LIST TransmitPacketList;
     USHORT TransmitNextToClean;
     USHORT TransmitNextToUse;
     PQUEUED_LOCK TransmitLock;
-    PKEVENT TransmitDescriptorFreeEvent;
     BOOL LinkActive;
     KSPIN_LOCK InterruptLock;
     volatile ULONG PendingInterrupts;
@@ -1042,7 +1041,7 @@ typedef struct _ATL1C_DEVICE {
 KSTATUS
 AtlSend (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     );
 
 /*++
@@ -1056,15 +1055,18 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 

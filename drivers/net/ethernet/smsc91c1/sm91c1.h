@@ -527,8 +527,7 @@ Members:
         run level, that synchronizes access to the pending status bits, DPC,
         and work item.
 
-    TransmitPacketListHead - Stores the head of the list of network packets to
-        transfer.
+    TransmitPacketList - Stores a list of network packets waiting to be sent.
 
     Lock - Stores a queued lock that protects access to the transmit packet
         list and various other values.
@@ -567,7 +566,7 @@ typedef struct _SM91C1_DEVICE {
     BOOL InterruptResourcesFound;
     HANDLE InterruptHandle;
     KSPIN_LOCK InterruptLock;
-    LIST_ENTRY TransmitPacketListHead;
+    NET_PACKET_LIST TransmitPacketList;
     PQUEUED_LOCK Lock;
     PIO_BUFFER ReceiveIoBuffer;
     USHORT PendingTransmitPacket;
@@ -594,7 +593,7 @@ typedef struct _SM91C1_DEVICE {
 KSTATUS
 Sm91c1Send (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     );
 
 /*++
@@ -608,15 +607,18 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 

@@ -157,7 +157,7 @@ NetpArpSend (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Destination,
     PNET_SOCKET_LINK_OVERRIDE LinkOverride,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     );
 
 VOID
@@ -296,18 +296,18 @@ Return Value:
 
 {
 
-    PNET_PACKET_BUFFER Buffer;
-    LIST_ENTRY BufferListHead;
+    PARP_PACKET ArpPacket;
     PUCHAR CurrentPointer;
     PNET_DATA_LINK_ENTRY DataLinkEntry;
     ULONG Flags;
     BOOL LockHeld;
-    PARP_PACKET Packet;
+    PNET_PACKET_BUFFER NetPacket;
+    NET_PACKET_LIST NetPacketList;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    INITIALIZE_LIST_HEAD(&BufferListHead);
+    NET_INITIALIZE_PACKET_LIST(&NetPacketList);
     LockHeld = FALSE;
 
     //
@@ -319,34 +319,34 @@ Return Value:
             NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS |
             NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS;
 
-    Packet = NULL;
+    ArpPacket = NULL;
     Status = NetAllocateBuffer(0,
                                ARP_ETHERNET_IP4_SIZE,
                                0,
                                Link,
                                Flags,
-                               &Buffer);
+                               &NetPacket);
 
     if (!KSUCCESS(Status)) {
         goto ArpSendRequestEnd;
     }
 
-    INSERT_BEFORE(&(Buffer->ListEntry), &BufferListHead);
-    Packet = Buffer->Buffer + Buffer->DataOffset;
-    Packet->HardwareType = CPU_TO_NETWORK16(ARP_HARDWARE_TYPE_ETHERNET);
+    NET_ADD_PACKET_TO_LIST(NetPacket, &NetPacketList);
+    ArpPacket = NetPacket->Buffer + NetPacket->DataOffset;
+    ArpPacket->HardwareType = CPU_TO_NETWORK16(ARP_HARDWARE_TYPE_ETHERNET);
 
     ASSERT(QueryAddress->Network == SocketNetworkIp4);
 
-    Packet->ProtocolType = CPU_TO_NETWORK16(IP4_PROTOCOL_NUMBER);
-    Packet->ProtocolAddressLength = IP4_ADDRESS_SIZE;
-    Packet->HardwareAddressLength = ETHERNET_ADDRESS_SIZE;
-    Packet->Operation = CPU_TO_NETWORK16(ARP_OPERATION_REQUEST);
+    ArpPacket->ProtocolType = CPU_TO_NETWORK16(IP4_PROTOCOL_NUMBER);
+    ArpPacket->ProtocolAddressLength = IP4_ADDRESS_SIZE;
+    ArpPacket->HardwareAddressLength = ETHERNET_ADDRESS_SIZE;
+    ArpPacket->Operation = CPU_TO_NETWORK16(ARP_OPERATION_REQUEST);
 
     //
     // Copy the sender's hardware address.
     //
 
-    CurrentPointer = (PUCHAR)(Packet + 1);
+    CurrentPointer = (PUCHAR)(ArpPacket + 1);
     RtlCopyMemory(CurrentPointer,
                   &(LinkAddress->PhysicalAddress.Address),
                   ETHERNET_ADDRESS_SIZE);
@@ -394,7 +394,7 @@ Return Value:
     RtlCopyMemory(CurrentPointer, &(QueryAddress->Address), IP4_ADDRESS_SIZE);
     CurrentPointer += IP4_ADDRESS_SIZE;
 
-    ASSERT(((UINTN)CurrentPointer - (UINTN)Packet) == ARP_ETHERNET_IP4_SIZE);
+    ASSERT(((UINTN)CurrentPointer - (UINTN)ArpPacket) == ARP_ETHERNET_IP4_SIZE);
 
     //
     // Debug print the request.
@@ -414,7 +414,7 @@ Return Value:
 
     DataLinkEntry = Link->DataLinkEntry;
     Status = DataLinkEntry->Interface.Send(Link,
-                                           &BufferListHead,
+                                           &NetPacketList,
                                            &(LinkAddress->PhysicalAddress),
                                            NULL,
                                            ARP_PROTOCOL_NUMBER);
@@ -429,13 +429,13 @@ ArpSendRequestEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        while (LIST_EMPTY(&BufferListHead) == FALSE) {
-            Buffer = LIST_VALUE(BufferListHead.Next,
-                                NET_PACKET_BUFFER,
-                                ListEntry);
+        while (NET_PACKET_LIST_EMPTY(&NetPacketList) == FALSE) {
+            NetPacket = LIST_VALUE(NetPacketList.Head.Next,
+                                   NET_PACKET_BUFFER,
+                                   ListEntry);
 
-            LIST_REMOVE(&(Buffer->ListEntry));
-            NetFreeBuffer(Buffer);
+            NET_REMOVE_PACKET_FROM_LIST(NetPacket, &NetPacketList);
+            NetFreeBuffer(NetPacket);
         }
     }
 
@@ -696,7 +696,7 @@ NetpArpSend (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Destination,
     PNET_SOCKET_LINK_OVERRIDE LinkOverride,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -715,9 +715,9 @@ Arguments:
         all the necessary information to send data out a link on behalf
         of the given socket.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
@@ -1051,18 +1051,18 @@ Return Value:
 
 {
 
-    PNET_PACKET_BUFFER Buffer;
-    LIST_ENTRY BufferListHead;
+    PARP_PACKET ArpPacket;
     PUCHAR CurrentPointer;
     PNET_DATA_LINK_ENTRY DataLinkEntry;
     ULONG Flags;
     BOOL LockHeld;
+    PNET_PACKET_BUFFER NetPacket;
+    NET_PACKET_LIST NetPacketList;
     NETWORK_ADDRESS NetworkAddress;
-    PARP_PACKET Packet;
     KSTATUS Status;
 
     LockHeld = FALSE;
-    INITIALIZE_LIST_HEAD(&BufferListHead);
+    NET_INITIALIZE_PACKET_LIST(&NetPacketList);
 
     //
     // Allocate a buffer to send down to the network card.
@@ -1073,36 +1073,36 @@ Return Value:
             NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS |
             NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS;
 
-    Packet = NULL;
+    ArpPacket = NULL;
     Status = NetAllocateBuffer(0,
                                ARP_ETHERNET_IP4_SIZE,
                                0,
                                Link,
                                Flags,
-                               &Buffer);
+                               &NetPacket);
 
     if (!KSUCCESS(Status)) {
         goto ArpSendReplyEnd;
     }
 
-    INSERT_BEFORE(&(Buffer->ListEntry), &BufferListHead);
-    Packet = Buffer->Buffer + Buffer->DataOffset;
-    Packet->HardwareType = CPU_TO_NETWORK16(ARP_HARDWARE_TYPE_ETHERNET);
+    NET_ADD_PACKET_TO_LIST(NetPacket, &NetPacketList);
+    ArpPacket = NetPacket->Buffer + NetPacket->DataOffset;
+    ArpPacket->HardwareType = CPU_TO_NETWORK16(ARP_HARDWARE_TYPE_ETHERNET);
 
     ASSERT(DestinationNetworkAddress->Network == SocketNetworkIp4);
     ASSERT(DestinationPhysicalAddress->Network ==
            (SOCKET_NETWORK)Link->DataLinkEntry->Type);
 
-    Packet->ProtocolType = CPU_TO_NETWORK16(IP4_PROTOCOL_NUMBER);
-    Packet->ProtocolAddressLength = 4;
-    Packet->HardwareAddressLength = ETHERNET_ADDRESS_SIZE;
-    Packet->Operation = CPU_TO_NETWORK16(ARP_OPERATION_REPLY);
+    ArpPacket->ProtocolType = CPU_TO_NETWORK16(IP4_PROTOCOL_NUMBER);
+    ArpPacket->ProtocolAddressLength = 4;
+    ArpPacket->HardwareAddressLength = ETHERNET_ADDRESS_SIZE;
+    ArpPacket->Operation = CPU_TO_NETWORK16(ARP_OPERATION_REPLY);
 
     //
     // Copy the sender's hardware address.
     //
 
-    CurrentPointer = (PUCHAR)(Packet + 1);
+    CurrentPointer = (PUCHAR)(ArpPacket + 1);
     RtlCopyMemory(CurrentPointer,
                   &(LinkAddress->PhysicalAddress.Address),
                   ETHERNET_ADDRESS_SIZE);
@@ -1166,7 +1166,7 @@ Return Value:
 
     CurrentPointer += IP4_ADDRESS_SIZE;
 
-    ASSERT(((UINTN)CurrentPointer - (UINTN)Packet) == ARP_ETHERNET_IP4_SIZE);
+    ASSERT(((UINTN)CurrentPointer - (UINTN)ArpPacket) == ARP_ETHERNET_IP4_SIZE);
 
     //
     // Debug print the request.
@@ -1190,7 +1190,7 @@ Return Value:
 
     DataLinkEntry = Link->DataLinkEntry;
     Status = DataLinkEntry->Interface.Send(Link,
-                                           &BufferListHead,
+                                           &NetPacketList,
                                            &(LinkAddress->PhysicalAddress),
                                            DestinationPhysicalAddress,
                                            ARP_PROTOCOL_NUMBER);
@@ -1205,13 +1205,13 @@ ArpSendReplyEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        while (LIST_EMPTY(&BufferListHead) == FALSE) {
-            Buffer = LIST_VALUE(BufferListHead.Next,
-                                NET_PACKET_BUFFER,
-                                ListEntry);
+        while (NET_PACKET_LIST_EMPTY(&NetPacketList) == FALSE) {
+            NetPacket = LIST_VALUE(NetPacketList.Head.Next,
+                                   NET_PACKET_BUFFER,
+                                   ListEntry);
 
-            LIST_REMOVE(&(Buffer->ListEntry));
-            NetFreeBuffer(Buffer);
+            NET_REMOVE_PACKET_FROM_LIST(NetPacket, &NetPacketList);
+            NetFreeBuffer(NetPacket);
         }
     }
 

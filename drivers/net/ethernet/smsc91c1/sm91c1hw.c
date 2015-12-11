@@ -52,6 +52,12 @@ Environment:
 //
 
 //
+// Define the maximum number of pending transfers allowed.
+//
+
+#define SM91C1_MAX_TRANSMIT_PACKET_LIST_COUNT 64
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -115,13 +121,15 @@ Sm91c1SynchronizeMdio (
 // -------------------------------------------------------------------- Globals
 //
 
+BOOL Sm91c1DisablePacketDropping = FALSE;
+
 // ------------------------------------------------------------------ Functions
 //
 
 KSTATUS
 Sm91c1Send (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -135,98 +143,56 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 
 {
 
     BOOL AllocatePacket;
-    USHORT ByteCount;
-    ULONG DataSize;
     PSM91C1_DEVICE Device;
-    PBYTE Footer;
-    PUSHORT Header;
     USHORT InterruptMask;
     USHORT MmuCommand;
-    PNET_PACKET_BUFFER Packet;
+    UINTN PacketListCount;
+    KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    //
-    // Insert each packing into the list of pending packets for the device.
-    //
-
     AllocatePacket = FALSE;
     Device = (PSM91C1_DEVICE)DriverContext;
-    while (LIST_EMPTY(PacketListHead) == FALSE) {
-        Packet = LIST_VALUE(PacketListHead->Next, NET_PACKET_BUFFER, ListEntry);
-        LIST_REMOVE(&(Packet->ListEntry));
 
-        //
-        // There should be space in the packet for the header.
-        //
+    //
+    // If there is any room in the packet list (or dropping packets is
+    // disabled), add all of the packets to the list waiting to be sent.
+    //
 
-        ASSERT(Packet->DataOffset == SM91C1_PACKET_HEADER_SIZE);
+    KeAcquireQueuedLock(Device->Lock);
+    PacketListCount = Device->TransmitPacketList.Count;
+    if ((PacketListCount < SM91C1_MAX_TRANSMIT_PACKET_LIST_COUNT) ||
+        (Sm91c1DisablePacketDropping != FALSE)) {
 
-        //
-        // Get the current data size.
-        //
-
-        DataSize = Packet->FooterOffset - Packet->DataOffset;
-
-        ASSERT(DataSize == (USHORT)DataSize);
-
-        Packet->DataOffset -= SM91C1_PACKET_HEADER_SIZE;
-        Header = Packet->Buffer;
-
-        //
-        // Initialize the SM91c111 packet header. The first two bytes are the
-        // status word. This gets set to 0. The second word is the byte count,
-        // which includes the data size, the status word, the byte count word,
-        // and the control word. The byte count is always even because any odd
-        // byte in the data is included in the lower byte of the control word.
-        //
-
-        *Header = 0x0;
-        ByteCount = DataSize +
-                    SM91C1_PACKET_HEADER_SIZE +
-                    SM91C1_PACKET_FOOTER_SIZE;
-
-        *(Header + 1) = ALIGN_RANGE_DOWN(ByteCount, sizeof(USHORT));
-        Footer = Packet->Buffer + Packet->FooterOffset;
-
-        //
-        // If the original byte count was odd, then the footer points at the
-        // high byte of the control word. Set the ODD bit there. The low byte
-        // of the control word correctly contains the last byte of data.
-        //
-
-        if ((ByteCount & 0x1) != 0) {
-            *Footer = SM91C1_CONTROL_BYTE_ODD;
-
-        //
-        // Otherwise, the footer points at the low byte of the control word.
-        // Zero the entire control word.
-        //
-
-        } else {
-            *Footer = 0;
-            *(Footer + 1) = 0;
-        }
-
-        KeAcquireQueuedLock(Device->Lock);
-        INSERT_BEFORE(&(Packet->ListEntry), &(Device->TransmitPacketListHead));
-        KeReleaseQueuedLock(Device->Lock);
+        NET_APPEND_PACKET_LIST(PacketList, &(Device->TransmitPacketList));
         AllocatePacket = TRUE;
+        Status = STATUS_SUCCESS;
+
+    //
+    // Otherwise report that the resource is use as it is too busy to handle
+    // more packets.
+    //
+
+    } else {
+        Status = STATUS_RESOURCE_IN_USE;
     }
 
     //
@@ -235,35 +201,31 @@ Return Value:
     // interrupt is fired.
     //
 
-    if (AllocatePacket != FALSE) {
-        KeAcquireQueuedLock(Device->Lock);
-        if (Device->AllocateInProgress == FALSE) {
-            Device->AllocateInProgress = TRUE;
-            MmuCommand = (SM91C1_MMU_OPERATION_ALLOCATE_FOR_TRANSMIT <<
-                          SM91C1_MMU_COMMAND_OPERATION_SHIFT) &
-                         SM91C1_MMU_COMMAND_OPERATION_MASK;
+    if ((AllocatePacket != FALSE) && (Device->AllocateInProgress == FALSE)) {
+        Device->AllocateInProgress = TRUE;
+        MmuCommand = (SM91C1_MMU_OPERATION_ALLOCATE_FOR_TRANSMIT <<
+                      SM91C1_MMU_COMMAND_OPERATION_SHIFT) &
+                     SM91C1_MMU_COMMAND_OPERATION_MASK;
 
-            Sm91c1pWriteRegister(Device, Sm91c1RegisterMmuCommand, MmuCommand);
+        Sm91c1pWriteRegister(Device, Sm91c1RegisterMmuCommand, MmuCommand);
 
-            //
-            // Re-enable the allocation interrupt. Do this after the allocate
-            // command is set because the previous allocate interrupt is not
-            // cleared until a new allocate command is sent.
-            //
+        //
+        // Re-enable the allocation interrupt. Do this after the allocate
+        // command is set because the previous allocate interrupt is not
+        // cleared until a new allocate command is sent.
+        //
 
-            InterruptMask = Sm91c1pReadRegister(Device,
-                                                Sm91c1RegisterInterruptMask);
+        InterruptMask = Sm91c1pReadRegister(Device,
+                                            Sm91c1RegisterInterruptMask);
 
-            InterruptMask |= SM91C1_INTERRUPT_ALLOCATE;
-            Sm91c1pWriteRegister(Device,
-                                 Sm91c1RegisterInterruptMask,
-                                 InterruptMask);
-        }
-
-        KeReleaseQueuedLock(Device->Lock);
+        InterruptMask |= SM91C1_INTERRUPT_ALLOCATE;
+        Sm91c1pWriteRegister(Device,
+                             Sm91c1RegisterInterruptMask,
+                             InterruptMask);
     }
 
-    return STATUS_SUCCESS;
+    KeReleaseQueuedLock(Device->Lock);
+    return Status;
 }
 
 KSTATUS
@@ -359,7 +321,7 @@ Return Value:
 
     KeInitializeSpinLock(&(Device->InterruptLock));
     KeInitializeSpinLock(&(Device->BankLock));
-    INITIALIZE_LIST_HEAD(&(Device->TransmitPacketListHead));
+    NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
     Device->SelectedBank = -1;
 
     ASSERT(Device->Lock == NULL);
@@ -875,10 +837,10 @@ Return Value:
         // that was allocated.
         //
 
-        if (LIST_EMPTY(&(Device->TransmitPacketListHead)) == FALSE) {
-            FirstEntry = Device->TransmitPacketListHead.Next;
+        if (NET_PACKET_LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) {
+            FirstEntry = Device->TransmitPacketList.Head.Next;
             Packet = LIST_VALUE(FirstEntry, NET_PACKET_BUFFER, ListEntry);
-            LIST_REMOVE(&(Packet->ListEntry));
+            NET_REMOVE_PACKET_FROM_LIST(Packet, &(Device->TransmitPacketList));
             Sm91c1pSendPacket(Device, Packet);
         }
 
@@ -886,7 +848,7 @@ Return Value:
         // If the list is still not empty then allocate another packet.
         //
 
-        if (LIST_EMPTY(&(Device->TransmitPacketListHead)) == FALSE) {
+        if (NET_PACKET_LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) {
 
             ASSERT(Device->AllocateInProgress != FALSE);
 
@@ -968,13 +930,70 @@ Return Value:
 {
 
     BYTE AllocationResult;
+    USHORT ByteCount;
     PUSHORT Data;
     ULONG DataSize;
+    PBYTE Footer;
+    PUSHORT Header;
     USHORT MmuCommand;
     BYTE PacketNumber;
     USHORT PointerValue;
 
     ASSERT(KeIsQueuedLockHeld(Device->Lock) != FALSE);
+
+    //
+    // There should be space in the packet for the header.
+    //
+
+    ASSERT(Packet->DataOffset == SM91C1_PACKET_HEADER_SIZE);
+
+    //
+    // Get the current data size.
+    //
+
+    DataSize = Packet->FooterOffset - Packet->DataOffset;
+
+    ASSERT(DataSize == (USHORT)DataSize);
+
+    Packet->DataOffset -= SM91C1_PACKET_HEADER_SIZE;
+    Header = Packet->Buffer;
+
+    //
+    // Initialize the SM91c111 packet header. The first two bytes are the
+    // status word. This gets set to 0. The second word is the byte count,
+    // which includes the data size, the status word, the byte count word,
+    // and the control word. The byte count is always even because any odd
+    // byte in the data is included in the lower byte of the control word.
+    //
+
+    *Header = 0x0;
+    ByteCount = DataSize +
+                SM91C1_PACKET_HEADER_SIZE +
+                SM91C1_PACKET_FOOTER_SIZE;
+
+    *(Header + 1) = ALIGN_RANGE_DOWN(ByteCount, sizeof(USHORT));
+    Footer = Packet->Buffer + Packet->FooterOffset;
+
+    //
+    // If the original byte count was odd, then the footer points at the
+    // high byte of the control word. Set the ODD bit there. The low byte
+    // of the control word correctly contains the last byte of data.
+    //
+
+    if ((ByteCount & 0x1) != 0) {
+        *Footer = SM91C1_CONTROL_BYTE_ODD;
+        Packet->FooterOffset += 1;
+
+    //
+    // Otherwise, the footer points at the low byte of the control word.
+    // Zero the entire control word.
+    //
+
+    } else {
+        *Footer = 0;
+        *(Footer + 1) = 0;
+        Packet->FooterOffset += 2;
+    }
 
     //
     // Read the allocated packet from the allocation result register.
@@ -1010,8 +1029,8 @@ Return Value:
 
     Data = Packet->Buffer;
     DataSize = Packet->FooterOffset - Packet->DataOffset;
-    DataSize = ALIGN_RANGE_UP(DataSize, sizeof(USHORT));
 
+    ASSERT(IS_ALIGNED(DataSize, sizeof(USHORT)) != FALSE);
     ASSERT(DataSize <= Packet->BufferSize);
 
     while (DataSize != 0) {

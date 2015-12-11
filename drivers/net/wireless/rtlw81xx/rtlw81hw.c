@@ -62,6 +62,13 @@ Environment:
 #define RTLW81_DEFAULT_CHANNEL 1
 
 //
+// Define the maximum number of bulk out transfers that are allowed to be
+// submitted at the same time.
+//
+
+#define RTLW81_MAX_BULK_OUT_TRANSFER_COUNT 64
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -1190,6 +1197,8 @@ RTLW81_8188E_TRANSMIT_POWER_DATA Rtlw8188eTransmitPowerData[] = {
     }
 };
 
+BOOL Rtlw81DisablePacketDropping = FALSE;
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -1197,7 +1206,7 @@ RTLW81_8188E_TRANSMIT_POWER_DATA Rtlw8188eTransmitPowerData[] = {
 KSTATUS
 Rtlw81Send (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -1211,15 +1220,18 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 
@@ -1244,9 +1256,29 @@ Return Value:
     PUSB_TRANSFER UsbTransfer;
 
     Device = (PRTLW81_DEVICE)DriverContext;
-    while (LIST_EMPTY(PacketListHead) == FALSE) {
-        Packet = LIST_VALUE(PacketListHead->Next, NET_PACKET_BUFFER, ListEntry);
-        LIST_REMOVE(&(Packet->ListEntry));
+
+    //
+    // If there are more bulk out transfers in transit that allowed, drop all
+    // of these packets.
+    //
+
+    if ((Device->BulkOutTransferCount >= RTLW81_MAX_BULK_OUT_TRANSFER_COUNT) &&
+        (Rtlw81DisablePacketDropping == FALSE)) {
+
+        return STATUS_RESOURCE_IN_USE;
+    }
+
+    //
+    // Otherwise submit all the packets. This may stretch over the maximum
+    // number of bulk out transfers, but it's a flexible line.
+    //
+
+    while (NET_PACKET_LIST_EMPTY(PacketList) == FALSE) {
+        Packet = LIST_VALUE(PacketList->Head.Next,
+                            NET_PACKET_BUFFER,
+                            ListEntry);
+
+        NET_REMOVE_PACKET_FROM_LIST(Packet, PacketList);
 
         ASSERT(IS_ALIGNED(Packet->BufferSize, MmGetIoBufferAlignment()) !=
                FALSE);
@@ -1405,9 +1437,10 @@ Return Value:
 
         Rtlw81Transfer = Rtlw81pAllocateBulkOutTransfer(Device, BulkOutType);
         if (Rtlw81Transfer == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
             RtlDebugPrint("RTLW81: Failed to allocate transfer.\n");
             NetFreeBuffer(Packet);
-            continue;
+            break;
         }
 
         Rtlw81Transfer->Packet = Packet;
@@ -1416,6 +1449,7 @@ Return Value:
         UsbTransfer->BufferActualLength = Packet->BufferSize;
         UsbTransfer->Buffer = Header;
         UsbTransfer->BufferPhysicalAddress = Packet->BufferPhysicalAddress;
+        RtlAtomicAdd32(&(Device->BulkOutTransferCount), 1);
         Status = UsbSubmitTransfer(UsbTransfer);
         if (!KSUCCESS(Status)) {
             RtlDebugPrint("RTLW81: Failed to submit transmit packet: %x\n",
@@ -1423,10 +1457,12 @@ Return Value:
 
             Rtlw81pFreeBulkOutTransfer(Rtlw81Transfer);
             NetFreeBuffer(Packet);
+            RtlAtomicAdd32(&(Device->BulkOutTransferCount), -1);
+            break;
         }
     }
 
-    return STATUS_SUCCESS;
+    return Status;
 }
 
 KSTATUS
@@ -5590,6 +5626,7 @@ Return Value:
     PRTLW81_BULK_OUT_TRANSFER Rtlw81Transfer;
 
     Rtlw81Transfer = Transfer->UserData;
+    RtlAtomicAdd32(&(Rtlw81Transfer->Device->BulkOutTransferCount), -1);
     NetFreeBuffer(Rtlw81Transfer->Packet);
     Rtlw81Transfer->Packet = NULL;
     Rtlw81pFreeBulkOutTransfer(Rtlw81Transfer);

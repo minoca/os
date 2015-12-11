@@ -1812,6 +1812,9 @@ Members:
     BulkOutFreeTransferList - Stores an array of lists of free transfers to
         use to send data.
 
+    BulkOutTransferCount - Stores the number of currently submitted bulk out
+        transfers.
+
     BulkOutListLock - Stores a pointer to a lock that protects the list of free
         bulk OUT transfers.
 
@@ -1872,6 +1875,7 @@ typedef struct _RTLW81_DEVICE {
     PUSB_TRANSFER ControlTransfer;
     PUSB_TRANSFER BulkInTransfer[RTLW81_BULK_IN_TRANSFER_COUNT];
     LIST_ENTRY BulkOutFreeTransferList[RTLW81_MAX_BULK_OUT_ENDPOINT_COUNT];
+    volatile ULONG BulkOutTransferCount;
     PQUEUED_LOCK BulkOutListLock;
     KSTATUS InitializationStatus;
     ULONG InitializationPhase;
@@ -1909,7 +1913,7 @@ extern NET80211_RATE_INFORMATION RtlwDefaultRateInformation;
 KSTATUS
 Rtlw81Send (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     );
 
 /*++
@@ -1923,15 +1927,18 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 

@@ -840,7 +840,7 @@ Return Value:
     PNET_SOCKET_LINK_OVERRIDE LinkOverride;
     NET_SOCKET_LINK_OVERRIDE LinkOverrideBuffer;
     PNET_PACKET_BUFFER Packet;
-    LIST_ENTRY PacketListHead;
+    NET_PACKET_LIST PacketList;
     PRAW_SOCKET RawSocket;
     UINTN Size;
     KSTATUS Status;
@@ -851,7 +851,7 @@ Return Value:
     Link = NULL;
     LinkInformation.Link = NULL;
     LinkOverride = NULL;
-    INITIALIZE_LIST_HEAD(&PacketListHead);
+    NET_INITIALIZE_PACKET_LIST(&PacketList);
     Size = Parameters->Size;
     RawSocket = (PRAW_SOCKET)Socket;
     Destination = Parameters->NetworkAddress;
@@ -975,7 +975,7 @@ Return Value:
         goto RawSendEnd;
     }
 
-    INSERT_BEFORE(&(Packet->ListEntry), &PacketListHead);
+    NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
 
     //
     // Copy the packet data.
@@ -999,7 +999,7 @@ Return Value:
     Status = Socket->Network->Interface.Send(Socket,
                                              Destination,
                                              LinkOverride,
-                                             &PacketListHead);
+                                             &PacketList);
 
     if (!KSUCCESS(Status)) {
         goto RawSendEnd;
@@ -1011,12 +1011,12 @@ Return Value:
 RawSendEnd:
     Parameters->Size = BytesComplete;
     if (!KSUCCESS(Status)) {
-        while (LIST_EMPTY(&PacketListHead) == FALSE) {
-            Packet = LIST_VALUE(PacketListHead.Next,
+        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
+            Packet = LIST_VALUE(PacketList.Head.Next,
                                 NET_PACKET_BUFFER,
                                 ListEntry);
 
-            LIST_REMOVE(&(Packet->ListEntry));
+            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
             NetFreeBuffer(Packet);
         }
     }

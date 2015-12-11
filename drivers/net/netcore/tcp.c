@@ -5508,12 +5508,12 @@ Return Value:
 {
 
     PNET_PACKET_BUFFER Packet;
-    LIST_ENTRY PacketListHead;
+    NET_PACKET_LIST PacketList;
     ULONG SequenceNumber;
     PNET_PACKET_SIZE_INFORMATION SizeInformation;
     KSTATUS Status;
 
-    INITIALIZE_LIST_HEAD(&PacketListHead);
+    NET_INITIALIZE_PACKET_LIST(&PacketList);
 
     //
     // If the socket has no link, then some incoming packet happened to guess
@@ -5545,7 +5545,7 @@ Return Value:
         goto TcpSendControlPacketEnd;
     }
 
-    INSERT_BEFORE(&(Packet->ListEntry), &PacketListHead);
+    NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
 
     ASSERT(Packet->DataOffset >= sizeof(TCP_HEADER));
 
@@ -5572,7 +5572,7 @@ Return Value:
                                             &(Socket->NetSocket),
                                             &(Socket->NetSocket.RemoteAddress),
                                             NULL,
-                                            &PacketListHead);
+                                            &PacketList);
 
     if (!KSUCCESS(Status)) {
         goto TcpSendControlPacketEnd;
@@ -5580,12 +5580,12 @@ Return Value:
 
 TcpSendControlPacketEnd:
     if (!KSUCCESS(Status)) {
-        while (LIST_EMPTY(&PacketListHead) == FALSE) {
-            Packet = LIST_VALUE(PacketListHead.Next,
+        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
+            Packet = LIST_VALUE(PacketList.Head.Next,
                                 NET_PACKET_BUFFER,
                                 ListEntry);
 
-            LIST_REMOVE(&(Packet->ListEntry));
+            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
             NetFreeBuffer(Packet);
         }
     }
@@ -6321,7 +6321,7 @@ Return Value:
     PTCP_SEND_SEGMENT LastSegment;
     ULONGLONG LocalCurrentTime;
     PNET_PACKET_BUFFER Packet;
-    LIST_ENTRY PacketListHead;
+    NET_PACKET_LIST PacketList;
     PTCP_SEND_SEGMENT Segment;
     ULONG SegmentBegin;
     KSTATUS Status;
@@ -6397,7 +6397,7 @@ Return Value:
 
     FirstSegment = NULL;
     LastSegment = NULL;
-    INITIALIZE_LIST_HEAD(&PacketListHead);
+    NET_INITIALIZE_PACKET_LIST(&PacketList);
     CurrentEntry = Socket->OutgoingSegmentList.Next;
     while (CurrentEntry != &(Socket->OutgoingSegmentList)) {
         Segment = LIST_VALUE(CurrentEntry, TCP_SEND_SEGMENT, Header.ListEntry);
@@ -6444,7 +6444,7 @@ Return Value:
                 break;
             }
 
-            INSERT_BEFORE(&(Packet->ListEntry), &PacketListHead);
+            NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
             if (FirstSegment == NULL) {
                 FirstSegment = Segment;
             }
@@ -6490,7 +6490,7 @@ Return Value:
                     break;
                 }
 
-                INSERT_BEFORE(&(Packet->ListEntry), &PacketListHead);
+                NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
                 if (FirstSegment == NULL) {
                     FirstSegment = Segment;
                 }
@@ -6508,7 +6508,8 @@ Return Value:
     // Exit immediately if there was nothing to send.
     //
 
-    if (LIST_EMPTY(&PacketListHead) != FALSE) {
+    if (NET_PACKET_LIST_EMPTY(&PacketList) != FALSE) {
+        Status = STATUS_SUCCESS;
         goto TcpSendPendingSegmentsEnd;
     }
 
@@ -6520,7 +6521,7 @@ Return Value:
                                             &(Socket->NetSocket),
                                             &(Socket->NetSocket.RemoteAddress),
                                             NULL,
-                                            &PacketListHead);
+                                            &PacketList);
 
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("TCP segments failed to send 0x%08x.\n", Status);
@@ -6542,12 +6543,12 @@ Return Value:
 
 TcpSendPendingSegmentsEnd:
     if (!KSUCCESS(Status)) {
-        while (LIST_EMPTY(&PacketListHead) == FALSE) {
-            Packet = LIST_VALUE(PacketListHead.Next,
+        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
+            Packet = LIST_VALUE(PacketList.Head.Next,
                                 NET_PACKET_BUFFER,
                                 ListEntry);
 
-            LIST_REMOVE(&(Packet->ListEntry));
+            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
             NetFreeBuffer(Packet);
         }
     }
@@ -6588,26 +6589,26 @@ Return Value:
 
     ULONGLONG LastSendTime;
     PNET_PACKET_BUFFER Packet;
-    LIST_ENTRY PacketListHead;
+    NET_PACKET_LIST PacketList;
     KSTATUS Status;
 
     //
     // Create the network packet to send down to the network layer.
     //
 
-    INITIALIZE_LIST_HEAD(&PacketListHead);
+    NET_INITIALIZE_PACKET_LIST(&PacketList);
     Packet = NetpTcpCreatePacket(Socket, Segment);
     if (Packet == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto TcpSendSegmentEnd;
     }
 
-    INSERT_BEFORE(&(Packet->ListEntry), &PacketListHead);
+    NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
     Status = Socket->NetSocket.Network->Interface.Send(
                                             &(Socket->NetSocket),
                                             &(Socket->NetSocket.RemoteAddress),
                                             NULL,
-                                            &PacketListHead);
+                                            &PacketList);
 
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("TCP segment failed to send 0x%08x.\n", Status);
@@ -6654,12 +6655,12 @@ Return Value:
 
 TcpSendSegmentEnd:
     if (!KSUCCESS(Status)) {
-        while (LIST_EMPTY(&PacketListHead) == FALSE) {
-            Packet = LIST_VALUE(PacketListHead.Next,
+        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
+            Packet = LIST_VALUE(PacketList.Head.Next,
                                 NET_PACKET_BUFFER,
                                 ListEntry);
 
-            LIST_REMOVE(&(Packet->ListEntry));
+            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
             NetFreeBuffer(Packet);
         }
     }
@@ -7967,11 +7968,11 @@ Return Value:
     PNET_SOCKET NetSocket;
     PNET_PACKET_BUFFER Packet;
     PUCHAR PacketBuffer;
-    LIST_ENTRY PacketListHead;
+    NET_PACKET_LIST PacketList;
     KSTATUS Status;
 
     NetSocket = &(Socket->NetSocket);
-    INITIALIZE_LIST_HEAD(&PacketListHead);
+    NET_INITIALIZE_PACKET_LIST(&PacketList);
 
     //
     // Allocate the SYN packet that will kick things off with the remote host.
@@ -7989,7 +7990,7 @@ Return Value:
         goto TcpSendSynEnd;
     }
 
-    INSERT_BEFORE(&(Packet->ListEntry), &PacketListHead);
+    NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
 
     //
     // Initialize the options of the SYN packet. The first option will be the
@@ -8062,7 +8063,7 @@ Return Value:
     Status = NetSocket->Network->Interface.Send(NetSocket,
                                                 &(NetSocket->RemoteAddress),
                                                 NULL,
-                                                &PacketListHead);
+                                                &PacketList);
 
     if (!KSUCCESS(Status)) {
         goto TcpSendSynEnd;
@@ -8070,12 +8071,12 @@ Return Value:
 
 TcpSendSynEnd:
     if (!KSUCCESS(Status)) {
-        while (LIST_EMPTY(&PacketListHead) == FALSE) {
-            Packet = LIST_VALUE(PacketListHead.Next,
+        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
+            Packet = LIST_VALUE(PacketList.Head.Next,
                                 NET_PACKET_BUFFER,
                                 ListEntry);
 
-            LIST_REMOVE(&(Packet->ListEntry));
+            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
             NetFreeBuffer(Packet);
         }
     }

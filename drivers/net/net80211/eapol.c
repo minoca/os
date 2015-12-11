@@ -582,7 +582,7 @@ Net80211pEapolSend (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Destination,
     PNET_SOCKET_LINK_OVERRIDE LinkOverride,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     );
 
 VOID
@@ -1410,7 +1410,7 @@ Net80211pEapolSend (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Destination,
     PNET_SOCKET_LINK_OVERRIDE LinkOverride,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -1429,9 +1429,9 @@ Arguments:
         all the necessary information to send data out a link on behalf
         of the given socket.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
@@ -2073,7 +2073,7 @@ Return Value:
     PEAPOL_KEY_FRAME KeyFrame;
     USHORT KeyInformation;
     PNET_PACKET_BUFFER Packet;
-    LIST_ENTRY PacketListHead;
+    NET_PACKET_LIST PacketList;
     ULONG PacketSize;
     KSTATUS Status;
 
@@ -2163,11 +2163,11 @@ Return Value:
     // Send the packet down to the data link layer.
     //
 
-    INITIALIZE_LIST_HEAD(&PacketListHead);
-    INSERT_BEFORE(&(Packet->ListEntry), &PacketListHead);
+    NET_INITIALIZE_PACKET_LIST(&PacketList);
+    NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
     Status = Context->Link->DataLinkEntry->Interface.Send(
                                              Context->Link,
-                                             &PacketListHead,
+                                             &PacketList,
                                              &(Context->Supplicant.Address),
                                              &(Context->Authenticator.Address),
                                              EAPOL_PROTOCOL_NUMBER);
@@ -2178,7 +2178,12 @@ Return Value:
 
 SupplicantSendMessageEnd:
     if (!KSUCCESS(Status)) {
-        if (Packet != NULL) {
+        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
+            Packet = LIST_VALUE(PacketList.Head.Next,
+                                NET_PACKET_BUFFER,
+                                ListEntry);
+
+            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
             NetFreeBuffer(Packet);
         }
     }
@@ -3001,7 +3006,6 @@ Return Value:
     ULONGLONG CipherText[2];
     AES_CONTEXT Context;
     ULONG Index;
-    PULONGLONG Input;
     PULONGLONG Output;
     ULONGLONG PlainText[2];
     ULONG QuadwordCount;
@@ -3025,22 +3029,20 @@ Return Value:
 
     //
     // The algorithm treats the input and output as arrays of 64-bit words.
-    //
-
-    Input = (PULONGLONG)KeyData;
-    Output = (PULONGLONG)EncryptedKeyData;
-    QuadwordCount = KeyDataLength / sizeof(ULONGLONG);
-
-    //
     // Initialize the register and the output buffer. The register gets the
     // default initial value and the output gets the input values, leaving
-    // space for the final register value to fill the first 64-bit word.
+    // space for the final register value to fill the first 64-bit word. The
+    // output buffer must be 8-byte aligned, but it cannot be assumed that the
+    // input key data (that originates from the network packet) is aligned.
     //
 
+    ASSERT(IS_POINTER_ALIGNED(EncryptedKeyData,
+                              EAPOL_NIST_AES_KEY_DATA_ALIGNMENT) != FALSE);
+
+    Output = (PULONGLONG)EncryptedKeyData;
+    QuadwordCount = KeyDataLength / sizeof(ULONGLONG);
     Register = EAPOL_NIST_AES_KEY_WRAP_INITIAL_VALUE;
-    for (Index = 0; Index < QuadwordCount; Index += 1) {
-        Output[Index + 1] = Input[Index];
-    }
+    RtlCopyMemory(Output + 1, KeyData, KeyDataLength);
 
     //
     // The input is wrapped 6 times in order to produce the encrypted key data.
@@ -3124,7 +3126,6 @@ Return Value:
     ULONGLONG Ciphertext[2];
     AES_CONTEXT Context;
     ULONG Index;
-    PULONGLONG Input;
     PULONGLONG Output;
     ULONGLONG Plaintext[2];
     ULONG QuadwordCount;
@@ -3150,21 +3151,17 @@ Return Value:
 
     //
     // The algorithm treats the input and output as arrays of 64-bit words.
+    // Initialize the register and the output buffer. The register gets the
+    // first 64-bit word and the output gets the remaining input values. The
+    // input may not be aligned for quadword access, so be careful.
     //
 
-    Input = (PULONGLONG)EncryptedKeyData;
+    ASSERT(IS_POINTER_ALIGNED(KeyData, EAPOL_NIST_AES_KEY_DATA_ALIGNMENT));
+
     Output = (PULONGLONG)KeyData;
     QuadwordCount = KeyDataLength / sizeof(ULONGLONG);
-
-    //
-    // Initialize the register and the output buffer. The register gets the
-    // first 64-bit word and the output gets the remaining input values.
-    //
-
-    Register = Input[0];
-    for (Index = 0; Index < QuadwordCount; Index += 1) {
-        Output[Index] = Input[Index + 1];
-    }
+    RtlCopyMemory(&Register, EncryptedKeyData, sizeof(ULONGLONG));
+    RtlCopyMemory(Output, EncryptedKeyData + sizeof(ULONGLONG), KeyDataLength);
 
     //
     // The input is unwrapped 6 times in order to reproduce the key data.

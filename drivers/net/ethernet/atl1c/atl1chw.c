@@ -34,6 +34,14 @@ Environment:
 //
 
 //
+// Define the maximum amount of packets that ATL will keep queued before it
+// starts to drop packets.
+//
+//
+
+#define ATL_MAX_TRANSMIT_PACKET_LIST_COUNT (ATL1C_TRANSMIT_DESCRIPTOR_COUNT * 2)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -43,6 +51,11 @@ Environment:
 
 VOID
 AtlpReapCompletedTransmitDescriptors (
+    PATL1C_DEVICE Device
+    );
+
+VOID
+AtlpSendPendingPackets (
     PATL1C_DEVICE Device
     );
 
@@ -199,6 +212,8 @@ AtlpReleaseInterruptLock (
 // -------------------------------------------------------------------- Globals
 //
 
+BOOL AtlDisablePacketDropping = FALSE;
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -206,7 +221,7 @@ AtlpReleaseInterruptLock (
 KSTATUS
 AtlSend (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -220,25 +235,25 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 
 {
 
-    PATL1C_TRANSMIT_DESCRIPTOR Descriptor;
-    ULONG DescriptorIndex;
     PATL1C_DEVICE Device;
-    ULONG OriginalDescriptorIndex;
-    PNET_PACKET_BUFFER Packet;
+    UINTN PacketListCount;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -250,114 +265,27 @@ Return Value:
         goto SendEnd;
     }
 
-    OriginalDescriptorIndex = Device->TransmitNextToUse;
-
     //
-    // Reap any completed commands, maximizing the chance that free descriptors
-    // will be found.
+    // If there is any room in the packet list (or dropping packets is
+    // disabled), add all of the packets to the list waiting to be sent.
     //
 
-    AtlpReapCompletedTransmitDescriptors(Device);
-    while (LIST_EMPTY(PacketListHead) == FALSE) {
-        Packet = LIST_VALUE(PacketListHead->Next, NET_PACKET_BUFFER, ListEntry);
-        LIST_REMOVE(&(Packet->ListEntry));
+    PacketListCount = Device->TransmitPacketList.Count;
+    if ((PacketListCount < ATL_MAX_TRANSMIT_PACKET_LIST_COUNT) ||
+        (AtlDisablePacketDropping != FALSE)) {
 
-        //
-        // Loop trying to get a descriptor.
-        //
+        NET_APPEND_PACKET_LIST(PacketList, &(Device->TransmitPacketList));
+        AtlpSendPendingPackets(Device);
+        Status = STATUS_SUCCESS;
 
-        while (TRUE) {
-            DescriptorIndex = Device->TransmitNextToUse;
-            Descriptor = &(Device->TransmitDescriptor[DescriptorIndex]);
+    //
+    // Otherwise report that the resource is use as it is too busy to handle
+    // more packets.
+    //
 
-            //
-            // If the length isn't zero, this is an active or unreaped entry.
-            // Wait for some entries to free up, and try again.
-            //
-
-            if (Descriptor->BufferLength != 0) {
-
-                //
-                // Before waiting, if there are packets queueud up, signal the
-                // hardware to send them now.
-                //
-
-                if (DescriptorIndex != OriginalDescriptorIndex) {
-                    RtlMemoryBarrier();
-                    ATL_WRITE_REGISTER16(Device,
-                                         AtlRegisterTransmitNextIndex,
-                                         Device->TransmitNextToUse);
-
-                }
-
-                KeSignalEvent(Device->TransmitDescriptorFreeEvent,
-                              SignalOptionUnsignal);
-
-                KeReleaseQueuedLock(Device->TransmitLock);
-                KeWaitForEvent(Device->TransmitDescriptorFreeEvent,
-                               FALSE,
-                               ATL1C_TRANSMIT_DESCRIPTOR_WAIT_INTERVAL);
-
-                KeAcquireQueuedLock(Device->TransmitLock);
-
-                //
-                // Set the original index back to the current one, as any
-                // packets set up by this loop were already sent, and another
-                // thread may have sent additional packets while the lock
-                // wasn't held.
-                //
-
-                OriginalDescriptorIndex = Device->TransmitNextToUse;
-                continue;
-            }
-
-            ASSERT(Descriptor->BufferLength == 0);
-
-            //
-            // Success, a free transmit descriptor. Let's fill it out!
-            //
-
-            ASSERT(Device->TransmitBuffer[DescriptorIndex] == NULL);
-
-            Device->TransmitBuffer[DescriptorIndex] = Packet;
-            Descriptor->BufferLength = Packet->FooterOffset -
-                                       Packet->DataOffset;
-
-            Descriptor->PhysicalAddress = Packet->BufferPhysicalAddress +
-                                          Packet->DataOffset;
-
-            Descriptor->Flags = ATL_TRANSMIT_DESCRIPTOR_END_OF_PACKET;
-
-            //
-            // Advance the list past this entry.
-            //
-
-            Device->TransmitNextToUse += 1;
-            if (Device->TransmitNextToUse == ATL1C_TRANSMIT_DESCRIPTOR_COUNT) {
-                Device->TransmitNextToUse = 0;
-            }
-
-            //
-            // Break out of this loop working on this specific packet and get
-            // to the outer loop of sending the next packet.
-            //
-
-            break;
-        }
+    } else {
+        Status = STATUS_RESOURCE_IN_USE;
     }
-
-    //
-    // If some packets were queued and not sent, then send them now.
-    //
-
-    if (Device->TransmitNextToUse != OriginalDescriptorIndex) {
-        RtlMemoryBarrier();
-        ATL_WRITE_REGISTER16(Device,
-                             AtlRegisterTransmitNextIndex,
-                             Device->TransmitNextToUse);
-    }
-
-    Status = STATUS_SUCCESS;
 
 SendEnd:
     KeReleaseQueuedLock(Device->TransmitLock);
@@ -556,16 +484,10 @@ Return Value:
         PhysicalAddress += ATL1C_RECEIVE_FRAME_DATA_SIZE;
     }
 
+    NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
     Device->ReceiveNextToClean = 0;
     Device->TransmitNextToClean = 0;
     Device->TransmitNextToUse = 0;
-    Device->TransmitDescriptorFreeEvent = KeCreateEvent(NULL);
-    if (Device->TransmitDescriptorFreeEvent == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeDeviceStructuresEnd;
-    }
-
-    KeSignalEvent(Device->TransmitDescriptorFreeEvent, SignalOptionSignalAll);
     Status = STATUS_SUCCESS;
 
 InitializeDeviceStructuresEnd:
@@ -576,11 +498,6 @@ InitializeDeviceStructuresEnd:
             Device->TransmitBuffer = NULL;
             Device->ReceiveSlot = NULL;
             Device->ReceivedPacket = NULL;
-        }
-
-        if (Device->TransmitDescriptorFreeEvent != NULL) {
-            KeDestroyEvent(Device->TransmitDescriptorFreeEvent);
-            Device->TransmitDescriptorFreeEvent = NULL;
         }
     }
 
@@ -1083,9 +1000,7 @@ Return Value:
     //
 
     if ((PendingBits & ATL_INTERRUPT_TRANSMIT_PACKET) != 0) {
-        KeAcquireQueuedLock(Device->TransmitLock);
         AtlpReapCompletedTransmitDescriptors(Device);
-        KeReleaseQueuedLock(Device->TransmitLock);
     }
 
     //
@@ -1147,8 +1062,7 @@ Return Value:
     BOOL DescriptorReaped;
     USHORT HardwareIndex;
 
-    ASSERT(KeIsQueuedLockHeld(Device->TransmitLock) != FALSE);
-
+    KeAcquireQueuedLock(Device->TransmitLock);
     HardwareIndex = ATL_READ_REGISTER16(Device,
                                         AtlRegisterTransmitCurrentIndex);
 
@@ -1179,8 +1093,103 @@ Return Value:
     //
 
     if (DescriptorReaped != FALSE) {
-        KeSignalEvent(Device->TransmitDescriptorFreeEvent,
-                      SignalOptionSignalAll);
+        AtlpSendPendingPackets(Device);
+    }
+
+    KeReleaseQueuedLock(Device->TransmitLock);
+    return;
+}
+
+VOID
+AtlpSendPendingPackets (
+    PATL1C_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends as many packets as can fit in the hardware descriptor
+    buffer. This routine assumes the transmit lock is already held.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PATL1C_TRANSMIT_DESCRIPTOR Descriptor;
+    ULONG DescriptorIndex;
+    PNET_PACKET_BUFFER Packet;
+    BOOL PacketQueued;
+
+    ASSERT(KeIsQueuedLockHeld(Device->TransmitLock) != FALSE);
+
+    //
+    // Fill up the open descriptors with as many pending packets as possible.
+    //
+
+    PacketQueued = FALSE;
+    while (NET_PACKET_LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) {
+        Packet = LIST_VALUE(Device->TransmitPacketList.Head.Next,
+                            NET_PACKET_BUFFER,
+                            ListEntry);
+
+        DescriptorIndex = Device->TransmitNextToUse;
+        Descriptor = &(Device->TransmitDescriptor[DescriptorIndex]);
+
+        //
+        // If the length isn't zero, this is an active or unreaped entry.
+        // Quit to try another day. The active packets should interrupt on
+        // completion and drive more packets to be send.
+        //
+
+        if (Descriptor->BufferLength != 0) {
+            break;
+        }
+
+        NET_REMOVE_PACKET_FROM_LIST(Packet, &(Device->TransmitPacketList));
+
+        //
+        // Success, a free transmit descriptor. Let's fill it out!
+        //
+
+        ASSERT(Device->TransmitBuffer[DescriptorIndex] == NULL);
+
+        Device->TransmitBuffer[DescriptorIndex] = Packet;
+        Descriptor->BufferLength = Packet->FooterOffset - Packet->DataOffset;
+        Descriptor->PhysicalAddress = Packet->BufferPhysicalAddress +
+                                       Packet->DataOffset;
+
+        Descriptor->Flags = ATL_TRANSMIT_DESCRIPTOR_END_OF_PACKET;
+
+        //
+        // Advance the list past this entry.
+        //
+
+        Device->TransmitNextToUse += 1;
+        if (Device->TransmitNextToUse == ATL1C_TRANSMIT_DESCRIPTOR_COUNT) {
+            Device->TransmitNextToUse = 0;
+        }
+
+        PacketQueued = TRUE;
+    }
+
+    //
+    // If some packets were queued, then send them now.
+    //
+
+    if (PacketQueued != FALSE) {
+        RtlMemoryBarrier();
+        ATL_WRITE_REGISTER16(Device,
+                             AtlRegisterTransmitNextIndex,
+                             Device->TransmitNextToUse);
     }
 
     return;
@@ -2698,6 +2707,7 @@ Return Value:
 
     USHORT CurrentIndex;
     USHORT DescriptorIndex;
+    PNET_PACKET_BUFFER Packet;
 
     ASSERT(KeIsQueuedLockHeld(Device->TransmitLock) != FALSE);
 
@@ -2726,6 +2736,19 @@ Return Value:
     RtlZeroMemory(Device->TransmitDescriptor,
                   sizeof(ATL1C_TRANSMIT_DESCRIPTOR) *
                   (ATL1C_TRANSMIT_DESCRIPTOR_COUNT + 1));
+
+    //
+    // Destroy the list of packets waiting to be sent.
+    //
+
+    while (NET_PACKET_LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) {
+        Packet = LIST_VALUE(Device->TransmitPacketList.Head.Next,
+                            NET_PACKET_BUFFER,
+                            ListEntry);
+
+        NET_REMOVE_PACKET_FROM_LIST(Packet, &(Device->TransmitPacketList));
+        NetFreeBuffer(Packet);
+    }
 
     //
     // Reset the counters in software and hardware based on the current index.

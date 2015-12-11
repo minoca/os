@@ -34,6 +34,13 @@ Environment:
 //
 
 //
+// Define the maximum amount of packets that E100 will keep queued before it
+// starts to drop packets.
+//
+
+#define E100_MAX_TRANSMIT_PACKET_LIST_COUNT (E100_COMMAND_RING_COUNT * 2)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -78,6 +85,8 @@ E100pSendPendingPackets (
 // -------------------------------------------------------------------- Globals
 //
 
+BOOL E100DisablePacketDropping = FALSE;
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -85,7 +94,7 @@ E100pSendPendingPackets (
 KSTATUS
 E100Send (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -99,21 +108,25 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 
 {
 
     PE100_DEVICE Device;
+    UINTN PacketListCount;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -126,17 +139,26 @@ Return Value:
     }
 
     //
-    // Add these packets onto the end of the list of outgoing packets.
+    // If there is any room in the packet list (or dropping packets is
+    // disabled), add all of the packets to the list waiting to be sent.
     //
 
-    APPEND_LIST(PacketListHead, &(Device->TransmitPacketList));
+    PacketListCount = Device->TransmitPacketList.Count;
+    if ((PacketListCount < E100_MAX_TRANSMIT_PACKET_LIST_COUNT) ||
+        (E100DisablePacketDropping != FALSE)) {
+
+        NET_APPEND_PACKET_LIST(PacketList, &(Device->TransmitPacketList));
+        E100pSendPendingPackets(Device);
+        Status = STATUS_SUCCESS;
 
     //
-    // Enqueue as many as possible now.
+    // Otherwise report that the resource is use as it is too busy to handle
+    // more packets.
     //
 
-    E100pSendPendingPackets(Device);
-    Status = STATUS_SUCCESS;
+    } else {
+        Status = STATUS_RESOURCE_IN_USE;
+    }
 
 SendEnd:
     KeReleaseQueuedLock(Device->CommandListLock);
@@ -317,10 +339,10 @@ Return Value:
     ASSERT(Device->CommandIoBuffer->Fragment[0].VirtualAddress != NULL);
 
     Device->Command = Device->CommandIoBuffer->Fragment[0].VirtualAddress;
-    Device->CommandListBegin = 0;
-    Device->CommandListEnd = 1;
+    Device->CommandLastReaped = E100_COMMAND_RING_COUNT - 1;
+    Device->CommandNextToUse = 1;
     RtlZeroMemory(Device->Command, CommandSize);
-    INITIALIZE_LIST_HEAD(&(Device->TransmitPacketList));
+    NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
 
     //
     // Allocate an array of pointers to net packet buffers that runs parallel
@@ -530,13 +552,14 @@ Return Value:
     // Set up the first command to set the individual address.
     //
 
-    Command = &(Device->Command[Device->CommandListEnd]);
-    PreviousCommandIndex = E100_DECREMENT_RING_INDEX(Device->CommandListEnd,
+    Command = &(Device->Command[Device->CommandNextToUse]);
+    PreviousCommandIndex = E100_DECREMENT_RING_INDEX(Device->CommandNextToUse,
                                                      E100_COMMAND_RING_COUNT);
 
     PreviousCommand = &(Device->Command[PreviousCommandIndex]);
-    Device->CommandListEnd = E100_INCREMENT_RING_INDEX(Device->CommandListEnd,
-                                                       E100_COMMAND_RING_COUNT);
+    Device->CommandNextToUse = E100_INCREMENT_RING_INDEX(
+                                                      Device->CommandNextToUse,
+                                                      E100_COMMAND_RING_COUNT);
 
     RtlCopyMemory(&(Command->U.SetAddress),
                   &(Device->EepromMacAddress[0]),
@@ -767,9 +790,7 @@ Return Value:
          (E100_STATUS_COMMAND_NOT_ACTIVE |
           E100_STATUS_COMMAND_COMPLETE)) != 0) {
 
-        KeAcquireQueuedLock(Device->CommandListLock);
         E100pReapCompletedCommands(Device);
-        KeReleaseQueuedLock(Device->CommandListLock);
     }
 
     return InterruptStatusClaimed;
@@ -1161,11 +1182,17 @@ Return Value:
     ULONG CommandIndex;
     BOOL CommandReaped;
 
-    ASSERT(KeIsQueuedLockHeld(Device->CommandListLock) != FALSE);
-
+    KeAcquireQueuedLock(Device->CommandListLock);
     CommandReaped = FALSE;
     while (TRUE) {
-        CommandIndex = Device->CommandListBegin;
+
+        //
+        // Check to see if the next command can be reaped.
+        //
+
+        CommandIndex = E100_INCREMENT_RING_INDEX(Device->CommandLastReaped,
+                                                 E100_COMMAND_RING_COUNT);
+
         Command = &(Device->Command[CommandIndex]);
 
         //
@@ -1205,12 +1232,11 @@ Return Value:
         Command->Command = 0;
 
         //
-        // Move the beginning of the list forward.
+        // Update the last reaped index to reflex that the command at the
+        // current index has been reaped.
         //
 
-        Device->CommandListBegin =
-              E100_INCREMENT_RING_INDEX(CommandIndex, E100_COMMAND_RING_COUNT);
-
+        Device->CommandLastReaped = CommandIndex;
         CommandReaped = TRUE;
     }
 
@@ -1218,12 +1244,11 @@ Return Value:
     // If space was freed up, send more segments.
     //
 
-    if ((CommandReaped != FALSE) &&
-        (LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE)) {
-
+    if (CommandReaped != FALSE) {
         E100pSendPendingPackets(Device);
     }
 
+    KeReleaseQueuedLock(Device->CommandListLock);
     return;
 }
 
@@ -1376,25 +1401,36 @@ Return Value:
     ULONG CommandIndex;
     PNET_PACKET_BUFFER Packet;
     ULONG PreviousCommandIndex;
+    ULONG Status;
+    BOOL WakeDevice;
 
-    while (LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) {
-        Packet = LIST_VALUE(Device->TransmitPacketList.Next,
+    //
+    // Chew up as many open command slots as possible, but always leave the
+    // last reaped command open. The hardware is more than likely suspended on
+    // that command. This routine will take that command out of suspend and
+    // poke the hardware to resume. If this routine did not leave the last spot
+    // open, the hardware would wake up and see the command is still in the
+    // suspended state and go back to sleep.
+    //
+
+    WakeDevice = FALSE;
+    while ((NET_PACKET_LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) &&
+           (Device->CommandNextToUse != Device->CommandLastReaped)) {
+
+        Packet = LIST_VALUE(Device->TransmitPacketList.Head.Next,
                             NET_PACKET_BUFFER,
                             ListEntry);
 
-        CommandIndex = Device->CommandListEnd;
+        CommandIndex = Device->CommandNextToUse;
         Command = &(Device->Command[CommandIndex]);
 
         //
-        // If the command isn't zero, this is an active or unreaped entry.
-        // Wait for some entries to free up, and try again.
+        // The command better be reaped and not in use.
         //
 
-        if (Command->Command != 0) {
-            return;
-        }
+        ASSERT(Command->Command == 0);
 
-        LIST_REMOVE(&(Packet->ListEntry));
+        NET_REMOVE_PACKET_FROM_LIST(Packet, &(Device->TransmitPacketList));
 
         //
         // Success, a free command entry. Let's fill it out!
@@ -1451,8 +1487,8 @@ Return Value:
         //
 
         PreviousCommandIndex = E100_DECREMENT_RING_INDEX(
-                                                  CommandIndex,
-                                                  E100_COMMAND_RING_COUNT);
+                                                      CommandIndex,
+                                                      E100_COMMAND_RING_COUNT);
 
         RtlAtomicAnd32(&(Device->Command[PreviousCommandIndex].Command),
                        ~E100_COMMAND_SUSPEND);
@@ -1461,9 +1497,11 @@ Return Value:
         // Move the pointer past this entry.
         //
 
-        Device->CommandListEnd = E100_INCREMENT_RING_INDEX(
-                                                  CommandIndex,
-                                                  E100_COMMAND_RING_COUNT);
+        Device->CommandNextToUse = E100_INCREMENT_RING_INDEX(
+                                                      CommandIndex,
+                                                      E100_COMMAND_RING_COUNT);
+
+        WakeDevice = TRUE;
     }
 
     //
@@ -1471,11 +1509,12 @@ Return Value:
     // commands), wake it up.
     //
 
-    if ((E100_READ_STATUS_REGISTER(Device) &
-         E100_STATUS_COMMAND_UNIT_STATUS_MASK) ==
-        E100_STATUS_COMMAND_UNIT_SUSPENDED) {
-
-        E100_WRITE_COMMAND_REGISTER(Device, E100_COMMAND_UNIT_RESUME);
+    if (WakeDevice != FALSE) {
+        Status = E100_READ_STATUS_REGISTER(Device);
+        Status &= E100_STATUS_COMMAND_UNIT_STATUS_MASK;
+        if (Status == E100_STATUS_COMMAND_UNIT_SUSPENDED) {
+            E100_WRITE_COMMAND_REGISTER(Device, E100_COMMAND_UNIT_RESUME);
+        }
     }
 
     return;

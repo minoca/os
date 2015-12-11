@@ -714,7 +714,7 @@ Return Value:
     RtlZeroMemory(Device, sizeof(RTLW81_DEVICE));
     Device->OsDevice = OsDevice;
     Device->UsbCoreHandle = INVALID_HANDLE;
-    for (Index = 0; Index < Rtlw81BulkOutTypeCount; Index += 1) {
+    for (Index = 0; Index < RTLW81_MAX_BULK_OUT_ENDPOINT_COUNT; Index += 1) {
         INITIALIZE_LIST_HEAD(&(Device->BulkOutFreeTransferList[Index]));
     }
 

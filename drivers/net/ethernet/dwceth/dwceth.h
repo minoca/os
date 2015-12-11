@@ -600,6 +600,8 @@ Members:
     TransmitPacket - Stores a pointer to the array of net packet buffers that
         go with each command.
 
+    TransmitPacketList - Stores a list of network packets waiting to be sent.
+
     TransmitBegin - Stores the index of the least recent command, the first
         one to reap.
 
@@ -666,6 +668,7 @@ typedef struct _DWE_DEVICE {
     PDWE_DESCRIPTOR TransmitDescriptors;
     PDWE_DESCRIPTOR ReceiveDescriptors;
     PNET_PACKET_BUFFER *TransmitPacket;
+    NET_PACKET_LIST TransmitPacketList;
     ULONG TransmitBegin;
     ULONG TransmitEnd;
     PQUEUED_LOCK TransmitLock;
@@ -696,7 +699,7 @@ typedef struct _DWE_DEVICE {
 KSTATUS
 DweSend (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     );
 
 /*++
@@ -710,15 +713,18 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 

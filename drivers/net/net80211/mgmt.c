@@ -1183,6 +1183,7 @@ Return Value:
 
         RsnElementOffset = -1;
         RsnElementLength = -1;
+        ResponseChannel = -1;
         PairwiseEncryption = Net80211EncryptionNone;
         GroupEncryption = Net80211EncryptionNone;
         AcceptedResponse = TRUE;
@@ -1228,16 +1229,6 @@ Return Value:
 
             case NET80211_ELEMENT_DSSS:
                 ResponseChannel = (ULONG)ElementBytePointer[Offset];
-                if (ResponseChannel != Channel) {
-                    RtlDebugPrint("802.11: Received probe response from "
-                                  "unexpected channel %d. Expected %d.\n",
-                                  ResponseChannel,
-                                  Channel);
-
-                    AcceptedResponse = FALSE;
-                    Status = STATUS_UNEXPECTED_TYPE;
-                }
-
                 break;
 
             case NET80211_ELEMENT_RSN:
@@ -1467,6 +1458,23 @@ Return Value:
         if (AcceptedResponse != FALSE) {
 
             ASSERT(KSUCCESS(Status));
+
+            //
+            // If the probe response came in on a different channel, then the
+            // channel needs to be switched.
+            //
+
+            if (ResponseChannel != Channel) {
+                if (ResponseChannel == -1) {
+                    Status = STATUS_INVALID_CONFIGURATION;
+                    break;
+                }
+
+                Status = Net80211pSetChannel(Context->Link, ResponseChannel);
+                if (!KSUCCESS(Status)) {
+                    break;
+                }
+            }
 
             Header = Frame->Buffer;
             Context->Bssid.Network = SocketNetworkPhysical80211;
@@ -2196,8 +2204,10 @@ Return Value:
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
     ULONG Index;
     PNET_PACKET_BUFFER Packet;
-    LIST_ENTRY PacketListHead;
+    NET_PACKET_LIST PacketList;
     KSTATUS Status;
+
+    NET_INITIALIZE_PACKET_LIST(&PacketList);
 
     //
     // Allocate a network packet to send down to the lower layers.
@@ -2286,17 +2296,21 @@ Return Value:
     // Send the packet off.
     //
 
-    INITIALIZE_LIST_HEAD(&PacketListHead);
-    INSERT_BEFORE(&(Packet->ListEntry), &PacketListHead);
+    NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
     DriverContext = Link->Properties.DriverContext;
-    Status = Link->Properties.Interface.Send(DriverContext, &PacketListHead);
+    Status = Link->Properties.Interface.Send(DriverContext, &PacketList);
     if (!KSUCCESS(Status)) {
         goto SendManagementFrameEnd;
     }
 
 SendManagementFrameEnd:
     if (!KSUCCESS(Status)) {
-        if (Packet != NULL) {
+        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
+            Packet = LIST_VALUE(PacketList.Head.Next,
+                                NET_PACKET_BUFFER,
+                                ListEntry);
+
+            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
             NetFreeBuffer(Packet);
         }
     }

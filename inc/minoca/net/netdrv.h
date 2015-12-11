@@ -59,6 +59,62 @@ Author:
     RtlAtomicExchange32(&((_Socket)->LastError), (_Error));
 
 //
+// This macro initializes a network packet list.
+//
+
+#define NET_INITIALIZE_PACKET_LIST(_PacketList)   \
+    INITIALIZE_LIST_HEAD(&((_PacketList)->Head)); \
+    (_PacketList)->Count = 0;
+
+//
+// This macro adds a network packet to a network packet list.
+//
+
+#define NET_ADD_PACKET_TO_LIST(_Packet, _PacketList)                \
+    INSERT_BEFORE(&((_Packet)->ListEntry), &((_PacketList)->Head)); \
+    (_PacketList)->Count += 1;
+
+//
+// This macro removes a network packet from a network packet list.
+//
+
+#define NET_REMOVE_PACKET_FROM_LIST(_Packet, _PacketList) \
+    LIST_REMOVE(&(_Packet)->ListEntry);                   \
+    (_PacketList)->Count -= 1;
+
+//
+// This macro inserts a new packet before an existing packet.
+//
+
+#define NET_INSERT_PACKET_BEFORE(_New, _Existing, _PacketList)      \
+    INSERT_BEFORE(&((_New)->ListEntry), &((_Existing)->ListEntry)); \
+    (_PacketList)->Count += 1;
+
+//
+// This macro inserts a new packet after an existing packet.
+//
+
+#define NET_INSERT_PACKET_AFTER(_New, _Existing, _PacketList)      \
+    INSERT_AFTER(&((_New)->ListEntry), &((_Existing)->ListEntry)); \
+    (_PacketList)->Count += 1;
+
+//
+// This macro determines if the packet list is empty.
+//
+
+#define NET_PACKET_LIST_EMPTY(_PacketList) ((_PacketList)->Count == 0)
+
+//
+// This macro appends a list of network packets to another list of network
+// packets, leaving the original appended list empty.
+//
+
+#define NET_APPEND_PACKET_LIST(_AppendList, _ExistingList)         \
+    APPEND_LIST(&((_AppendList)->Head), &((_ExistingList)->Head)); \
+    (_ExistingList)->Count += (_AppendList)->Count;                \
+    NET_INITIALIZE_PACKET_LIST(_AppendList);
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -303,11 +359,31 @@ typedef struct _NET_PACKET_BUFFER {
     ULONG FooterOffset;
 } NET_PACKET_BUFFER, *PNET_PACKET_BUFFER;
 
+/*++
+
+Struction Description:
+
+    This structure defines a list of network packet buffers.
+
+Members:
+
+    Head - Stores pointers to the first and last network packet buffers in the
+        list.
+
+    Count - Stores the total number of packets in the list.
+
+--*/
+
+typedef struct _NET_PACKET_LIST {
+    LIST_ENTRY Head;
+    UINTN Count;
+} NET_PACKET_LIST, *PNET_PACKET_LIST;
+
 typedef
 KSTATUS
 (*PNET_DEVICE_LINK_SEND) (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     );
 
 /*++
@@ -321,15 +397,18 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 
@@ -551,7 +630,7 @@ typedef
 KSTATUS
 (*PNET_DATA_LINK_SEND) (
     PNET_LINK Link,
-    PLIST_ENTRY PacketListHead,
+    PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
     ULONG ProtocolNumber
@@ -567,9 +646,9 @@ Arguments:
 
     Link - Supplies a pointer to the link on which to send the data.
 
-    PacketListHead - Supplies a pointer to the head of the list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
     SourcePhysicalAddress - Supplies a pointer to the source (local) physical
         network address.
@@ -1627,7 +1706,7 @@ KSTATUS
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Destination,
     PNET_SOCKET_LINK_OVERRIDE LinkOverride,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     );
 
 /*++
@@ -1646,9 +1725,9 @@ Arguments:
         all the necessary information to send data out a link on behalf
         of the given socket.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 

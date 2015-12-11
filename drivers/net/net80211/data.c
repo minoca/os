@@ -50,7 +50,7 @@ Environment:
 KSTATUS
 Net80211pSendDataFrames (
     PNET_LINK Link,
-    PLIST_ENTRY PacketListHead,
+    PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
     ULONG ProtocolNumber
@@ -67,9 +67,9 @@ Arguments:
 
     Link - Supplies a pointer to the link on which to send the data.
 
-    PacketListHead - Supplies a pointer to the head of the list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
     SourcePhysicalAddress - Supplies a pointer to the source (local) physical
         network address.
@@ -97,6 +97,7 @@ Return Value:
     PNET80211_LINK Net80211Link;
     PNET_PACKET_BUFFER Packet;
     PNET8022_SNAP_EXTENSION SnapExtension;
+    KSTATUS Status;
 
     Net80211Link = Link->DataLinkContext;
 
@@ -104,8 +105,8 @@ Return Value:
     // Fill out the 802.11 headers for these data frames.
     //
 
-    CurrentEntry = PacketListHead->Next;
-    while (CurrentEntry != PacketListHead) {
+    CurrentEntry = PacketList->Head.Next;
+    while (CurrentEntry != &(PacketList->Head)) {
         Packet = LIST_VALUE(CurrentEntry, NET_PACKET_BUFFER, ListEntry);
         CurrentEntry = CurrentEntry->Next;
 
@@ -181,7 +182,28 @@ Return Value:
     }
 
     DriverContext = Link->Properties.DriverContext;
-    return Link->Properties.Interface.Send(DriverContext, PacketListHead);
+    Status =  Link->Properties.Interface.Send(DriverContext, PacketList);
+
+    //
+    // If the link layer returns that the resource is in use it means it was
+    // too busy to send all of the packets. Release the packets for it and
+    // convert this into a success status.
+    //
+
+    if (Status == STATUS_RESOURCE_IN_USE) {
+        while (NET_PACKET_LIST_EMPTY(PacketList) == FALSE) {
+            Packet = LIST_VALUE(PacketList->Head.Next,
+                                NET_PACKET_BUFFER,
+                                ListEntry);
+
+            NET_REMOVE_PACKET_FROM_LIST(Packet, PacketList);
+            NetFreeBuffer(Packet);
+        }
+
+        Status = STATUS_SUCCESS;
+    }
+
+    return Status;
 }
 
 VOID

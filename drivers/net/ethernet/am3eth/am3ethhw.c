@@ -35,6 +35,13 @@ Environment:
 //
 
 //
+// Define the maximum amount of packets that AM3 Ethernet will keep queued
+// before it starts to drop packets.
+//
+
+#define A3E_MAX_TRANSMIT_PACKET_LIST_COUNT (A3E_TRANSMIT_DESCRIPTOR_COUNT * 2)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -146,6 +153,8 @@ A3epAleWriteEntry (
 // -------------------------------------------------------------------- Globals
 //
 
+BOOL A3eDisablePacketDropping = FALSE;
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -153,7 +162,7 @@ A3epAleWriteEntry (
 KSTATUS
 A3eSend (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -167,21 +176,25 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 
 {
 
     PA3E_DEVICE Device;
+    UINTN PacketListCount;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -194,17 +207,26 @@ Return Value:
     }
 
     //
-    // Add these packets onto the end of the list of outgoing packets.
+    // If there is any room in the packet list (or dropping packets is
+    // disabled), add all of the packets to the list waiting to be sent.
     //
 
-    APPEND_LIST(PacketListHead, &(Device->TransmitPacketList));
+    PacketListCount = Device->TransmitPacketList.Count;
+    if ((PacketListCount < A3E_MAX_TRANSMIT_PACKET_LIST_COUNT) ||
+        (A3eDisablePacketDropping != FALSE)) {
+
+        NET_APPEND_PACKET_LIST(PacketList, &(Device->TransmitPacketList));
+        A3epSendPendingPackets(Device);
+        Status = STATUS_SUCCESS;
 
     //
-    // Enqueue as many as possible now.
+    // Otherwise report that the resource is use as it is too busy to handle
+    // more packets.
     //
 
-    A3epSendPendingPackets(Device);
-    Status = STATUS_SUCCESS;
+    } else {
+        Status = STATUS_RESOURCE_IN_USE;
+    }
 
 SendEnd:
     KeReleaseQueuedLock(Device->TransmitLock);
@@ -296,7 +318,7 @@ Return Value:
     KSTATUS Status;
 
     KeInitializeSpinLock(&(Device->InterruptLock));
-    INITIALIZE_LIST_HEAD(&(Device->TransmitPacketList));
+    NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
 
     //
     // Initialize the transmit and receive list locks.
@@ -964,9 +986,7 @@ Return Value:
     //
 
     if ((PendingBits & A3E_PENDING_TRANSMIT_INTERRUPT) != 0) {
-        KeAcquireQueuedLock(Device->TransmitLock);
         A3epReapCompletedTransmitDescriptors(Device);
-        KeReleaseQueuedLock(Device->TransmitLock);
     }
 
     if ((PendingBits & A3E_PENDING_LINK_CHECK_TIMER) != 0) {
@@ -1265,8 +1285,8 @@ Return Value:
 
     Port = 1;
     HeadDescriptor = 0;
-    while (LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) {
-        Packet = LIST_VALUE(Device->TransmitPacketList.Next,
+    while (NET_PACKET_LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) {
+        Packet = LIST_VALUE(Device->TransmitPacketList.Head.Next,
                             NET_PACKET_BUFFER,
                             ListEntry);
 
@@ -1279,10 +1299,10 @@ Return Value:
         //
 
         if (Descriptor->PacketLengthFlags != 0) {
-            return;
+            break;
         }
 
-        LIST_REMOVE(&(Packet->ListEntry));
+        NET_REMOVE_PACKET_FROM_LIST(Packet, &(Device->TransmitPacketList));
         PacketSize = Packet->FooterOffset;
         PacketSize = ALIGN_RANGE_UP(PacketSize, Device->DataAlignment);
         MmFlushBufferForDataOut(Packet->Buffer, PacketSize);
@@ -1305,10 +1325,10 @@ Return Value:
                             (Port << A3E_DESCRIPTOR_TX_TO_PORT_SHIFT);
 
         //
-        // Calculate the physical address of the this descriptor, and set it as
-        // the next pointer of the previous descriptor. If this is the first
-        // packet being sent, then this is setting the next pointer for a
-        // descriptor that was never queued, but it's harmless.
+        // Calculate the physical address of the descriptor, and set it as the
+        // next pointer of the previous descriptor. If this is the first packet
+        // being sent, then this is setting the next pointer for a descriptor
+        // that was never queued, but it's harmless.
         //
 
         if (DescriptorIndex == 0) {
@@ -1388,8 +1408,8 @@ Return Value:
     USHORT Flags;
     BOOL PacketReaped;
 
-    ASSERT(KeIsQueuedLockHeld(Device->TransmitLock) != FALSE);
-
+    PacketReaped = FALSE;
+    KeAcquireQueuedLock(Device->TransmitLock);
     while (TRUE) {
         Begin = Device->TransmitBegin;
         Descriptor = &(Device->TransmitDescriptors[Begin]);
@@ -1443,6 +1463,7 @@ Return Value:
         A3epSendPendingPackets(Device);
     }
 
+    KeReleaseQueuedLock(Device->TransmitLock);
     return;
 }
 

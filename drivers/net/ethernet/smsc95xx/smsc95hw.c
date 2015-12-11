@@ -35,6 +35,13 @@ Environment:
 //
 
 //
+// Define the maximum number of bulk out transfers that are allowed to be
+// submitted to USB at one time.
+//
+
+#define SM95_MAX_BULK_OUT_TRANSFER_COUNT 64
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -182,6 +189,8 @@ Sm95pFreeBulkOutTransfer (
 // -------------------------------------------------------------------- Globals
 //
 
+BOOL Sm95DisablePacketDropping = FALSE;
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -189,7 +198,7 @@ Sm95pFreeBulkOutTransfer (
 KSTATUS
 Sm95Send (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -203,15 +212,18 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 
@@ -226,9 +238,29 @@ Return Value:
     PUSB_TRANSFER UsbTransfer;
 
     Device = (PSM95_DEVICE)DriverContext;
-    while (LIST_EMPTY(PacketListHead) == FALSE) {
-        Packet = LIST_VALUE(PacketListHead->Next, NET_PACKET_BUFFER, ListEntry);
-        LIST_REMOVE(&(Packet->ListEntry));
+
+    //
+    // If there are more bulk out transfers in transit that allowed, drop all
+    // of these packets.
+    //
+
+    if ((Device->BulkOutTransferCount >= SM95_MAX_BULK_OUT_TRANSFER_COUNT) &&
+        (Sm95DisablePacketDropping == FALSE)) {
+
+        return STATUS_RESOURCE_IN_USE;
+    }
+
+    //
+    // Otherwise submit all the packets. This may stretch over the maximum
+    // number of bulk out transfers, but it's a flexible line.
+    //
+
+    while (NET_PACKET_LIST_EMPTY(PacketList) == FALSE) {
+        Packet = LIST_VALUE(PacketList->Head.Next,
+                            NET_PACKET_BUFFER,
+                            ListEntry);
+
+        NET_REMOVE_PACKET_FROM_LIST(Packet, PacketList);
 
         ASSERT(IS_ALIGNED(Packet->BufferSize, MmGetIoBufferAlignment()) !=
                FALSE);
@@ -264,9 +296,10 @@ Return Value:
 
         Sm95Transfer = Sm95pAllocateBulkOutTransfer(Device);
         if (Sm95Transfer == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
             RtlDebugPrint("SM95: Failed to allocate transfer.\n");
             NetFreeBuffer(Packet);
-            continue;
+            break;
         }
 
         Sm95Transfer->Packet = Packet;
@@ -275,6 +308,7 @@ Return Value:
         UsbTransfer->BufferActualLength = Packet->BufferSize;
         UsbTransfer->Buffer = Header;
         UsbTransfer->BufferPhysicalAddress = Packet->BufferPhysicalAddress;
+        RtlAtomicAdd32(&(Device->BulkOutTransferCount), 1);
         Status = UsbSubmitTransfer(UsbTransfer);
         if (!KSUCCESS(Status)) {
             RtlDebugPrint("SM95: Failed to submit transmit packet: %x\n",
@@ -282,10 +316,12 @@ Return Value:
 
             Sm95pFreeBulkOutTransfer(Sm95Transfer);
             NetFreeBuffer(Packet);
+            RtlAtomicAdd32(&(Device->BulkOutTransferCount), -1);
+            break;
         }
     }
 
-    return STATUS_SUCCESS;
+    return Status;
 }
 
 KSTATUS
@@ -1085,6 +1121,7 @@ Return Value:
     PSM95_BULK_OUT_TRANSFER Sm95Transfer;
 
     Sm95Transfer = Transfer->UserData;
+    RtlAtomicAdd32(&(Sm95Transfer->Device->BulkOutTransferCount), -1);
     NetFreeBuffer(Sm95Transfer->Packet);
     Sm95Transfer->Packet = NULL;
     Sm95pFreeBulkOutTransfer(Sm95Transfer);

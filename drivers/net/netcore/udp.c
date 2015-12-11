@@ -878,7 +878,7 @@ Return Value:
     USHORT NetworkLocalPort;
     USHORT NetworkRemotePort;
     PNET_PACKET_BUFFER Packet;
-    LIST_ENTRY PacketListHead;
+    NET_PACKET_LIST PacketList;
     UINTN Size;
     USHORT SourcePort;
     KSTATUS Status;
@@ -891,7 +891,7 @@ Return Value:
     Link = NULL;
     LinkInformation.Link = NULL;
     LinkOverride = NULL;
-    INITIALIZE_LIST_HEAD(&PacketListHead);
+    NET_INITIALIZE_PACKET_LIST(&PacketList);
     Size = Parameters->Size;
     UdpSocket = (PUDP_SOCKET)Socket;
     Flags = Parameters->SocketIoFlags;
@@ -1058,7 +1058,7 @@ Return Value:
         goto UdpSendEnd;
     }
 
-    INSERT_BEFORE(&(Packet->ListEntry), &PacketListHead);
+    NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
 
     //
     // Copy the packet data.
@@ -1100,7 +1100,7 @@ Return Value:
     Status = Socket->Network->Interface.Send(Socket,
                                              Destination,
                                              LinkOverride,
-                                             &PacketListHead);
+                                             &PacketList);
 
     if (!KSUCCESS(Status)) {
         goto UdpSendEnd;
@@ -1112,12 +1112,12 @@ Return Value:
 UdpSendEnd:
     Parameters->Size = BytesComplete;
     if (!KSUCCESS(Status)) {
-        while (LIST_EMPTY(&PacketListHead) == FALSE) {
-            Packet = LIST_VALUE(PacketListHead.Next,
+        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
+            Packet = LIST_VALUE(PacketList.Head.Next,
                                 NET_PACKET_BUFFER,
                                 ListEntry);
 
-            LIST_REMOVE(&(Packet->ListEntry));
+            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
             NetFreeBuffer(Packet);
         }
     }

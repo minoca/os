@@ -53,6 +53,12 @@ Environment:
 #define ETHERNET_STRING_LENGTH 18
 
 //
+// Define the Ethernet debug flags.
+//
+
+#define ETHERNET_DEBUG_FLAG_DROPPED_PACKETS 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -73,7 +79,7 @@ NetpEthernetDestroyLink (
 KSTATUS
 NetpEthernetSend (
     PNET_LINK Link,
-    PLIST_ENTRY PacketListHead,
+    PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
     ULONG ProtocolNumber
@@ -119,6 +125,12 @@ NetpEthernetGetEthernetAddressFromSmbios (
 //
 
 ULONG NetEthernetInventedAddress;
+
+//
+// Store a bitmask of debug flags.
+//
+
+ULONG EthernetDebugFlags = 0;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -346,7 +358,7 @@ Return Value:
 KSTATUS
 NetpEthernetSend (
     PNET_LINK Link,
-    PLIST_ENTRY PacketListHead,
+    PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
     ULONG ProtocolNumber
@@ -362,9 +374,9 @@ Arguments:
 
     Link - Supplies a pointer to the link on which to send the data.
 
-    PacketListHead - Supplies a pointer to the head of the list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
     SourcePhysicalAddress - Supplies a pointer to the source (local) physical
         network address.
@@ -389,9 +401,10 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PVOID DriverContext;
     PNET_PACKET_BUFFER Packet;
+    KSTATUS Status;
 
-    CurrentEntry = PacketListHead->Next;
-    while (CurrentEntry != PacketListHead) {
+    CurrentEntry = PacketList->Head.Next;
+    while (CurrentEntry != &(PacketList->Head)) {
         Packet = LIST_VALUE(CurrentEntry, NET_PACKET_BUFFER, ListEntry);
         CurrentEntry = CurrentEntry->Next;
 
@@ -450,7 +463,33 @@ Return Value:
     }
 
     DriverContext = Link->Properties.DriverContext;
-    return Link->Properties.Interface.Send(DriverContext, PacketListHead);
+    Status = Link->Properties.Interface.Send(DriverContext, PacketList);
+
+    //
+    // If the link layer returns that the resource is in use it means it was
+    // too busy to send all of the packets. Release the packets for it and
+    // convert this into a success status.
+    //
+
+    if (Status == STATUS_RESOURCE_IN_USE) {
+        if ((EthernetDebugFlags & ETHERNET_DEBUG_FLAG_DROPPED_PACKETS) != 0) {
+            RtlDebugPrint("ETH: Link layer dropped %d packets.\n",
+                          PacketList->Count);
+        }
+
+        while (NET_PACKET_LIST_EMPTY(PacketList) == FALSE) {
+            Packet = LIST_VALUE(PacketList->Head.Next,
+                                NET_PACKET_BUFFER,
+                                ListEntry);
+
+            NET_REMOVE_PACKET_FROM_LIST(Packet, PacketList);
+            NetFreeBuffer(Packet);
+        }
+
+        Status = STATUS_SUCCESS;
+    }
+
+    return Status;
 }
 
 VOID

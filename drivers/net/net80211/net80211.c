@@ -70,7 +70,7 @@ Net80211pDestroyLink (
 KSTATUS
 Net80211pSend (
     PNET_LINK Link,
-    PLIST_ENTRY PacketListHead,
+    PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
     ULONG ProtocolNumber
@@ -528,7 +528,7 @@ Return Value:
 KSTATUS
 Net80211pSend (
     PNET_LINK Link,
-    PLIST_ENTRY PacketListHead,
+    PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
     ULONG ProtocolNumber
@@ -544,9 +544,9 @@ Arguments:
 
     Link - Supplies a pointer to the link on which to send the data.
 
-    PacketListHead - Supplies a pointer to the head of the list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
     SourcePhysicalAddress - Supplies a pointer to the source (local) physical
         network address.
@@ -579,7 +579,7 @@ Return Value:
     }
 
     Status = Net80211pSendDataFrames(Link,
-                                     PacketListHead,
+                                     PacketList,
                                      SourcePhysicalAddress,
                                      DestinationPhysicalAddress,
                                      ProtocolNumber);

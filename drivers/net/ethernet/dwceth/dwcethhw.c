@@ -41,6 +41,13 @@ Environment:
 #define DWE_STATUS_LINK_CHECK (1 << 11)
 
 //
+// Define the maximum amount of packets that DWE will keep queued before it
+// starts to drop packets.
+//
+
+#define DWE_MAX_TRANSMIT_PACKET_LIST_COUNT (DWE_TRANSMIT_DESCRIPTOR_COUNT * 2)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -65,6 +72,11 @@ DwepReadMacAddress (
 
 VOID
 DwepReapCompletedTransmitDescriptors (
+    PDWE_DEVICE Device
+    );
+
+VOID
+DwepSendPendingPackets (
     PDWE_DEVICE Device
     );
 
@@ -106,6 +118,8 @@ DwepWriteMii (
 // -------------------------------------------------------------------- Globals
 //
 
+BOOL DweDisablePacketDropping = FALSE;
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -113,7 +127,7 @@ DwepWriteMii (
 KSTATUS
 DweSend (
     PVOID DriverContext,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -127,26 +141,25 @@ Arguments:
     DriverContext - Supplies a pointer to the driver context associated with the
         link down which this data is to be sent.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data in these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
 
 --*/
 
 {
 
-    PHYSICAL_ADDRESS BufferPhysical;
-    ULONG Control;
-    PDWE_DESCRIPTOR Descriptor;
-    ULONG DescriptorIndex;
     PDWE_DEVICE Device;
-    PNET_PACKET_BUFFER Packet;
+    UINTN PacketListCount;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -159,114 +172,28 @@ Return Value:
     }
 
     //
-    // Reap any completed commands, maximizing the chance that free descriptors
-    // will be found.
+    // If there is any room in the packet list (or dropping packets is
+    // disabled), add all of the packets to the list waiting to be sent.
     //
 
-    DwepReapCompletedTransmitDescriptors(Device);
-    while (LIST_EMPTY(PacketListHead) == FALSE) {
-        Packet = LIST_VALUE(PacketListHead->Next, NET_PACKET_BUFFER, ListEntry);
-        LIST_REMOVE(&(Packet->ListEntry));
+    PacketListCount = Device->TransmitPacketList.Count;
+    if ((PacketListCount < DWE_MAX_TRANSMIT_PACKET_LIST_COUNT) ||
+        (DweDisablePacketDropping != FALSE)) {
 
-        //
-        // Loop trying to get a transmit descriptor.
-        //
+        NET_APPEND_PACKET_LIST(PacketList, &(Device->TransmitPacketList));
+        DwepSendPendingPackets(Device);
+        Status = STATUS_SUCCESS;
 
-        while (TRUE) {
-            DescriptorIndex = Device->TransmitEnd;
-            Descriptor = &(Device->TransmitDescriptors[DescriptorIndex]);
+    //
+    // Otherwise report that the resource is use as it is too busy to handle
+    // more packets.
+    //
 
-            //
-            // If the buffer size word isn't zero, this is an active or
-            // unreaped entry. See if it just now became available. If it did
-            // not, drop the transmit packet.
-            //
-
-            if (Descriptor->BufferSize != 0) {
-                DwepReapCompletedTransmitDescriptors(Device);
-                if (Descriptor->BufferSize != 0) {
-                    Device->DroppedTxPackets += 1;
-                    RtlDebugPrint("Dropped %d TX packets.\n",
-                                  Device->DroppedTxPackets);
-
-                    continue;
-                }
-            }
-
-            ASSERT(Descriptor->BufferSize == 0);
-
-            //
-            // Success, a free descriptor. Let's fill it out!
-            //
-
-            Control = DWE_TX_CONTROL_CHAINED |
-                      DWE_TX_CONTROL_FIRST_SEGMENT |
-                      DWE_TX_CONTROL_LAST_SEGMENT |
-                      DWE_TX_CONTROL_INTERRUPT_ON_COMPLETE |
-                      DWE_TX_CONTROL_CHECKSUM_NONE |
-                      DWE_TX_CONTROL_DMA_OWNED;
-
-            if ((Packet->Flags & NET_PACKET_FLAG_IP_CHECKSUM_OFFLOAD) != 0) {
-                if ((Packet->Flags &
-                     (NET_PACKET_FLAG_TCP_CHECKSUM_OFFLOAD |
-                      NET_PACKET_FLAG_UDP_CHECKSUM_OFFLOAD)) != 0) {
-
-                    Control |= DWE_TX_CONTROL_CHECKSUM_PSEUDOHEADER;
-
-                } else {
-                    Control |= DWE_TX_CONTROL_CHECKSUM_IP_HEADER;
-                }
-            }
-
-            //
-            // Fill out the transfer buffer pointer and size.
-            //
-
-            Descriptor->BufferSize = DWE_BUFFER_SIZE(
-                                    Packet->FooterOffset - Packet->DataOffset,
-                                    0);
-
-            BufferPhysical = Packet->BufferPhysicalAddress + Packet->DataOffset;
-
-            ASSERT(BufferPhysical == (ULONG)BufferPhysical);
-
-            Descriptor->Address1 = BufferPhysical;
-            Device->TransmitPacket[DescriptorIndex] = Packet;
-
-            //
-            // Use a register write to write the new control value in, making
-            // it live in the hardware.
-            //
-
-            HlWriteRegister32(&(Descriptor->Control), Control);
-
-            //
-            // Move the pointer past this entry.
-            //
-
-            if (DescriptorIndex == DWE_TRANSMIT_DESCRIPTOR_COUNT - 1) {
-                Device->TransmitEnd = 0;
-
-            } else {
-                Device->TransmitEnd = DescriptorIndex + 1;
-            }
-
-            //
-            // Break out of this loop working on this specific packet and get
-            // to the outer loop of sending the next packet.
-            //
-
-            break;
-        }
+    } else {
+        Device->DroppedTxPackets += PacketList->Count;
+        RtlDebugPrint("DWE: Dropped %d packets.\n", Device->DroppedTxPackets);
+        Status = STATUS_RESOURCE_IN_USE;
     }
-
-    //
-    // Write the transmit poll demand register to make the hardware take a look
-    // at the transmit queue again.
-    //
-
-    DWE_WRITE(Device, DweRegisterTransmitPollDemand, 1);
-    Status = STATUS_SUCCESS;
 
 SendEnd:
     KeReleaseQueuedLock(Device->TransmitLock);
@@ -505,6 +432,7 @@ Return Value:
     Device->ReceiveDescriptors = Device->TransmitDescriptors +
                                  DWE_TRANSMIT_DESCRIPTOR_COUNT;
 
+    NET_INITIALIZE_PACKET_LIST(&(Device->TransmitPacketList));
     Device->TransmitBegin = 0;
     Device->TransmitEnd = 0;
     Device->ReceiveBegin = 0;
@@ -984,9 +912,7 @@ Return Value:
     //
 
     if ((PendingBits & DWE_STATUS_TRANSMIT_INTERRUPT) != 0) {
-        KeAcquireQueuedLock(Device->TransmitLock);
         DwepReapCompletedTransmitDescriptors(Device);
-        KeReleaseQueuedLock(Device->TransmitLock);
     }
 
     if ((PendingBits & DWE_STATUS_LINK_CHECK) != 0) {
@@ -1208,9 +1134,10 @@ Return Value:
 
     UINTN Begin;
     PDWE_DESCRIPTOR Descriptor;
+    BOOL DescriptorReaped;
 
-    ASSERT(KeIsQueuedLockHeld(Device->TransmitLock) != FALSE);
-
+    DescriptorReaped = FALSE;
+    KeAcquireQueuedLock(Device->TransmitLock);
     while (TRUE) {
         Begin = Device->TransmitBegin;
         Descriptor = &(Device->TransmitDescriptors[Begin]);
@@ -1245,6 +1172,7 @@ Return Value:
         NetFreeBuffer(Device->TransmitPacket[Begin]);
         Device->TransmitPacket[Begin] = NULL;
         Descriptor->BufferSize = 0;
+        DescriptorReaped = TRUE;
 
         //
         // Move the beginning of the list forward.
@@ -1256,6 +1184,130 @@ Return Value:
         } else {
             Device->TransmitBegin = Begin + 1;
         }
+    }
+
+    if (DescriptorReaped != FALSE) {
+        DwepSendPendingPackets(Device);
+    }
+
+    KeReleaseQueuedLock(Device->TransmitLock);
+    return;
+}
+
+VOID
+DwepSendPendingPackets (
+    PDWE_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends as many packets as can fit in the hardware descriptor
+    buffer. This routine assumes the transmit lock is already held.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PHYSICAL_ADDRESS BufferPhysical;
+    ULONG Control;
+    PDWE_DESCRIPTOR Descriptor;
+    ULONG DescriptorIndex;
+    PNET_PACKET_BUFFER Packet;
+    BOOL PacketSent;
+    ULONG PacketSize;
+
+    //
+    // Send as many packets as possible.
+    //
+
+    PacketSent = FALSE;
+    while (NET_PACKET_LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) {
+        Packet = LIST_VALUE(Device->TransmitPacketList.Head.Next,
+                            NET_PACKET_BUFFER,
+                            ListEntry);
+
+        DescriptorIndex = Device->TransmitEnd;
+        Descriptor = &(Device->TransmitDescriptors[DescriptorIndex]);
+        if (Descriptor->BufferSize != 0) {
+            break;
+        }
+
+        NET_REMOVE_PACKET_FROM_LIST(Packet, &(Device->TransmitPacketList));
+
+        //
+        // Success, a free descriptor. Let's fill it out!
+        //
+
+        Control = DWE_TX_CONTROL_CHAINED |
+                  DWE_TX_CONTROL_FIRST_SEGMENT |
+                  DWE_TX_CONTROL_LAST_SEGMENT |
+                  DWE_TX_CONTROL_INTERRUPT_ON_COMPLETE |
+                  DWE_TX_CONTROL_CHECKSUM_NONE |
+                  DWE_TX_CONTROL_DMA_OWNED;
+
+        if ((Packet->Flags & NET_PACKET_FLAG_IP_CHECKSUM_OFFLOAD) != 0) {
+            if ((Packet->Flags &
+                 (NET_PACKET_FLAG_TCP_CHECKSUM_OFFLOAD |
+                  NET_PACKET_FLAG_UDP_CHECKSUM_OFFLOAD)) != 0) {
+
+                Control |= DWE_TX_CONTROL_CHECKSUM_PSEUDOHEADER;
+
+            } else {
+                Control |= DWE_TX_CONTROL_CHECKSUM_IP_HEADER;
+            }
+        }
+
+        //
+        // Fill out the transfer buffer pointer and size.
+        //
+
+        PacketSize = Packet->FooterOffset - Packet->DataOffset;
+        Descriptor->BufferSize = DWE_BUFFER_SIZE(PacketSize, 0);
+        BufferPhysical = Packet->BufferPhysicalAddress + Packet->DataOffset;
+
+        ASSERT(BufferPhysical == (ULONG)BufferPhysical);
+
+        Descriptor->Address1 = BufferPhysical;
+        Device->TransmitPacket[DescriptorIndex] = Packet;
+
+        //
+        // Use a register write to write the new control value in, making
+        // it live in the hardware.
+        //
+
+        HlWriteRegister32(&(Descriptor->Control), Control);
+
+        //
+        // Move the pointer past this entry.
+        //
+
+        if (DescriptorIndex == DWE_TRANSMIT_DESCRIPTOR_COUNT - 1) {
+            Device->TransmitEnd = 0;
+
+        } else {
+            Device->TransmitEnd = DescriptorIndex + 1;
+        }
+
+        PacketSent = TRUE;
+    }
+
+    //
+    // Write the transmit poll demand register to make the hardware take a look
+    // at the transmit queue again.
+    //
+
+    if (PacketSent != FALSE) {
+        DWE_WRITE(Device, DweRegisterTransmitPollDemand, 1);
     }
 
     return;

@@ -204,7 +204,7 @@ NetpIp4Send (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Destination,
     PNET_SOCKET_LINK_OVERRIDE LinkOverride,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     );
 
 VOID
@@ -838,7 +838,7 @@ NetpIp4Send (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Destination,
     PNET_SOCKET_LINK_OVERRIDE LinkOverride,
-    PLIST_ENTRY PacketListHead
+    PNET_PACKET_LIST PacketList
     )
 
 /*++
@@ -857,9 +857,9 @@ Arguments:
         all the necessary information to send data out a link on behalf
         of the given socket.
 
-    PacketListHead - Supplies a pointer to the head of a list of network
-        packets to send. Data these packets may be modified by this routine,
-        but must not be used once this routine returns.
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
 
 Return Value:
 
@@ -972,8 +972,8 @@ Return Value:
     // Add the IP4 and Ethernet headers to each packet.
     //
 
-    CurrentEntry = PacketListHead->Next;
-    while (CurrentEntry != PacketListHead) {
+    CurrentEntry = PacketList->Head.Next;
+    while (CurrentEntry != &(PacketList->Head)) {
         Packet = LIST_VALUE(CurrentEntry, NET_PACKET_BUFFER, ListEntry);
         CurrentEntry = CurrentEntry->Next;
 
@@ -1105,7 +1105,7 @@ Return Value:
                 // Add the fragment to the list of packets.
                 //
 
-                INSERT_BEFORE(&(Fragment->ListEntry), &(Packet->ListEntry));
+                NET_INSERT_PACKET_BEFORE(Fragment, Packet, PacketList);
                 PacketBuffer += FragmentLength;
                 BytesCompleted += FragmentLength;
                 BytesRemaining -= FragmentLength;
@@ -1117,7 +1117,7 @@ Return Value:
             //
 
             Socket->SendPacketCount += 1;
-            LIST_REMOVE(&(Packet->ListEntry));
+            NET_REMOVE_PACKET_FROM_LIST(Packet, PacketList);
             NetFreeBuffer(Packet);
             continue;
         }
@@ -1217,7 +1217,7 @@ Return Value:
 
     Status = Link->DataLinkEntry->Interface.Send(
                                         Link,
-                                        PacketListHead,
+                                        PacketList,
                                         &(LinkAddress->PhysicalAddress),
                                         PhysicalNetworkAddress,
                                         Socket->Network->ParentProtocolNumber);
