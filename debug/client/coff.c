@@ -756,10 +756,12 @@ Return Value:
         //
 
         if ((ResultPointer != NULL) &&
-            (Result.DataResult->Location == DataLocationAbsoluteAddress) &&
-            (Result.DataResult->Address == (UINTN)NULL - Symbols->ImageBase)) {
+            (Result.U.DataResult->LocationType ==
+             DataLocationAbsoluteAddress) &&
+            (Result.U.DataResult->Location.Address ==
+             (UINTN)NULL - Symbols->ImageBase)) {
 
-            Result.DataResult->Address = Value;
+            Result.U.DataResult->Location.Address = Value;
         }
     }
 

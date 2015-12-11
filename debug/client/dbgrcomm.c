@@ -1981,11 +1981,11 @@ Return Value:
             switch (SearchResult.Variety) {
             case SymbolResultFunction:
                 Address = DbgAddAddress(
-                                     Context,
-                                     SearchResult.FunctionResult->StartAddress,
-                                     CurrentModule->BaseAddress);
+                                   Context,
+                                   SearchResult.U.FunctionResult->StartAddress,
+                                   CurrentModule->BaseAddress);
 
-                DbgPrintFunctionPrototype(SearchResult.FunctionResult,
+                DbgPrintFunctionPrototype(SearchResult.U.FunctionResult,
                                           CurrentModule->ModuleName,
                                           Address);
 
@@ -1993,21 +1993,22 @@ Return Value:
                 break;
 
             case SymbolResultData:
-                if (SearchResult.DataResult->Location !=
+                if (SearchResult.U.DataResult->LocationType !=
                     DataLocationAbsoluteAddress) {
 
                     DbgOut("ERROR: Found data symbol with location type %d!\n",
-                           SearchResult.DataResult->Location);
+                           SearchResult.U.DataResult->LocationType);
 
                 }
 
-                Address = DbgAddAddress(Context,
-                                        SearchResult.DataResult->Address,
-                                        CurrentModule->BaseAddress);
+                Address = DbgAddAddress(
+                                   Context,
+                                   SearchResult.U.DataResult->Location.Address,
+                                   CurrentModule->BaseAddress);
 
                 DbgOut("%s!%s @ 0x%08x\n",
                        CurrentModule->ModuleName,
-                       SearchResult.DataResult->Name,
+                       SearchResult.U.DataResult->Name,
                        Address);
 
                 break;
@@ -2015,13 +2016,13 @@ Return Value:
             case SymbolResultType:
                 DbgOut("%s!%s\n",
                        CurrentModule->ModuleName,
-                       SearchResult.TypeResult->Name);
+                       SearchResult.U.TypeResult->Name);
 
                 break;
 
             default:
                 DbgOut("ERROR: Unknown search result type %d returned!",
-                       SearchResult.TypeResult);
+                       SearchResult.U.TypeResult);
 
                 Result = EINVAL;
                 goto SearchSymbolsEnd;
@@ -2419,8 +2420,8 @@ Return Value:
     // structure type.
     //
 
-    if (SearchResult.TypeResult->Type == DataTypeRelation) {
-        ResolvedType = DbgResolveRelationType(SearchResult.TypeResult, 0);
+    if (SearchResult.U.TypeResult->Type == DataTypeRelation) {
+        ResolvedType = DbgResolveRelationType(SearchResult.U.TypeResult, 0);
         if ((ResolvedType == NULL) ||
             (ResolvedType->Type != DataTypeStructure)) {
 
@@ -2434,12 +2435,12 @@ Return Value:
     // If the symbol is not a structure type, then this is an error.
     //
 
-    } else if (SearchResult.TypeResult->Type != DataTypeStructure) {
+    } else if (SearchResult.U.TypeResult->Type != DataTypeStructure) {
         DbgOut("Error: %s is not a structure.\n", TypeNameString);
          goto DumpListEnd;
 
     } else {
-        ResolvedType = SearchResult.TypeResult;
+        ResolvedType = SearchResult.U.TypeResult;
     }
 
     //
@@ -2530,7 +2531,7 @@ Return Value:
     // each structure entry in the list.
     //
 
-    StructureData = (PDATA_TYPE_STRUCTURE)ResolvedType->Data;
+    StructureData = &(ResolvedType->U.Structure);
     StructureSize = StructureData->SizeInBytes;
     StructureBuffer = malloc(StructureSize);
     if (StructureBuffer == NULL) {
@@ -2980,7 +2981,7 @@ Return Value:
         goto PrintLocalsEnd;
     }
 
-    Function = SearchResult.FunctionResult;
+    Function = SearchResult.U.FunctionResult;
 
     //
     // Print all function parameters.
@@ -5621,12 +5622,12 @@ Return Value:
 
     switch (SearchResult.Variety) {
     case SymbolResultType:
-        Type = SearchResult.TypeResult;
+        Type = SearchResult.U.TypeResult;
         AddressStartIndex = 1;
         break;
 
     case SymbolResultData:
-        DataResult = SearchResult.DataResult;
+        DataResult = SearchResult.U.DataResult;
         Type = DbgGetType(DataResult->TypeOwner, DataResult->TypeNumber);
 
         //
@@ -8341,7 +8342,7 @@ Return Value:
             break;
         }
 
-        RelationData = (PDATA_TYPE_RELATION)CurrentType->Data;
+        RelationData = &(CurrentType->U.Relation);
         RelativeType = DbgGetType(RelationData->OwningFile,
                                   RelationData->TypeNumber);
 

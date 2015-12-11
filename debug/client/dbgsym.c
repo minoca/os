@@ -204,7 +204,7 @@ Return Value:
             //
 
             SymbolSize = RtlStringLength(Module->ModuleName) +
-                         RtlStringLength(SearchResult.FunctionResult->Name) +
+                         RtlStringLength(SearchResult.U.FunctionResult->Name) +
                          (sizeof(CHAR) * 2);
 
             //
@@ -223,7 +223,7 @@ Return Value:
             // Add additional length if an offset needs to be appended.
             //
 
-            Offset = Address - SearchResult.FunctionResult->StartAddress;
+            Offset = Address - SearchResult.U.FunctionResult->StartAddress;
             if (Offset != 0) {
                 SymbolSize += OFFSET_MAX_LENGTH;
             }
@@ -239,7 +239,7 @@ Return Value:
                              SymbolSize,
                              "%s!%s+0x%I64x [%s:%d]",
                              Module->ModuleName,
-                             SearchResult.FunctionResult->Name,
+                             SearchResult.U.FunctionResult->Name,
                              Offset,
                              Line->ParentSource->SourceFile,
                              LineNumber);
@@ -249,7 +249,7 @@ Return Value:
                              SymbolSize,
                              "%s!%s+0x%I64x",
                              Module->ModuleName,
-                             SearchResult.FunctionResult->Name,
+                             SearchResult.U.FunctionResult->Name,
                              Offset);
                 }
 
@@ -259,7 +259,7 @@ Return Value:
                              SymbolSize,
                              "%s!%s [%s:%d]",
                              Module->ModuleName,
-                             SearchResult.FunctionResult->Name,
+                             SearchResult.U.FunctionResult->Name,
                              Line->ParentSource->SourceFile,
                              LineNumber);
 
@@ -268,7 +268,7 @@ Return Value:
                              SymbolSize,
                              "%s!%s",
                              Module->ModuleName,
-                             SearchResult.FunctionResult->Name);
+                             SearchResult.U.FunctionResult->Name);
 
                 }
             }
@@ -284,7 +284,7 @@ Return Value:
             //
 
             SymbolSize = RtlStringLength(Module->ModuleName) +
-                         RtlStringLength(SearchResult.DataResult->Name) +
+                         RtlStringLength(SearchResult.U.DataResult->Name) +
                          (sizeof(CHAR) * 2);
 
             Symbol = malloc(SymbolSize);
@@ -295,7 +295,7 @@ Return Value:
             sprintf(Symbol,
                     "%s!%s",
                     Module->ModuleName,
-                    SearchResult.DataResult->Name);
+                    SearchResult.U.DataResult->Name);
 
             return Symbol;
 
@@ -425,6 +425,7 @@ Return Value:
 {
 
     ULONG BytesRead;
+    ULONG Register;
     PULONG RegisterBase;
     INT Result;
     ULONGLONG TargetAddress;
@@ -435,8 +436,9 @@ Return Value:
     //
 
     X86Registers = &(DbgCurrentEvent.BreakNotification.Registers.X86);
-    switch (DataSymbol->Location) {
+    switch (DataSymbol->LocationType) {
     case DataLocationRegister:
+        Register = DataSymbol->Location.Register;
 
         //
         // Get a pointer to the data.
@@ -445,22 +447,20 @@ Return Value:
         switch (Context->MachineType) {
         case MACHINE_TYPE_X86:
             if ((DataStreamSize > 4) &&
-                (DataSymbol->Register != RegisterEax) &&
-                (DataSymbol->Register != RegisterEbx)) {
+                (Register != RegisterEax) && (Register != RegisterEbx)) {
 
                 DbgOut("Error: Data symbol location was a register, but type "
                        "size was %d!\n",
                        DataStreamSize);
 
-                DbgOut("Error: the register was %d.\n", DataSymbol->Register);
+                DbgOut("Error: the register was %d.\n", Register);
             }
 
-            switch (DataSymbol->Register) {
+            switch (Register) {
                 case RegisterEax:
                     *(PULONG)DataStream = (ULONG)X86Registers->Eax;
                     if (DataStreamSize > 4) {
-                        *((PULONG)DataStream + 1) =
-                                              (ULONG)X86Registers->Edx;
+                        *((PULONG)DataStream + 1) = (ULONG)X86Registers->Edx;
                     }
 
                     break;
@@ -468,8 +468,7 @@ Return Value:
                 case RegisterEbx:
                     *(PULONG)DataStream = (ULONG)X86Registers->Ebx;
                     if (DataStreamSize > 4) {
-                        *((PULONG)DataStream + 1) =
-                                              (ULONG)X86Registers->Ecx;
+                        *((PULONG)DataStream + 1) = (ULONG)X86Registers->Ecx;
                     }
 
                     break;
@@ -499,9 +498,7 @@ Return Value:
                     break;
 
                 default:
-                    DbgOut("Error: Unknown register %d.\n",
-                           DataSymbol->Register);
-
+                    DbgOut("Error: Unknown register %d.\n", Register);
                     Result = EINVAL;
                     goto GetDataSymbolDataEnd;
             }
@@ -515,8 +512,8 @@ Return Value:
 
         case MACHINE_TYPE_ARMV7:
         case MACHINE_TYPE_ARMV6:
-            if (DataSymbol->Register > 16) {
-                DbgOut("Error: Unknown register %d.\n", DataSymbol->Register);
+            if (Register > 16) {
+                DbgOut("Error: Unknown register %d.\n", Register);
                 Result = EINVAL;
                 goto GetDataSymbolDataEnd;
             }
@@ -524,12 +521,10 @@ Return Value:
             RegisterBase =
                          &(DbgCurrentEvent.BreakNotification.Registers.Arm.R0);
 
-            *(PULONG)DataStream =
-                                *(PULONG)(RegisterBase + DataSymbol->Register);
-
+            *(PULONG)DataStream = *(PULONG)(RegisterBase + Register);
             if (DataStreamSize > 4) {
                 *((PULONG)DataStream + 1) =
-                          *(PULONG)(RegisterBase + (DataSymbol->Register + 1));
+                                      *(PULONG)(RegisterBase + (Register + 1));
             }
 
             break;
@@ -546,14 +541,15 @@ Return Value:
 
         break;
 
-    case DataLocationStackOffset:
+    case DataLocationIndirect:
 
         //
         // Get the target virtual address and attempt to read from the debuggee.
+        // TODO: This should be the unwound register from Indirect.Register.
         //
 
         TargetAddress = Context->CurrentFrameBasePointer +
-                        (ULONGLONG)(LONGLONG)DataSymbol->StackOffset;
+                        DataSymbol->Location.Indirect.Offset;
 
         Result = DbgReadMemory(Context,
                                TRUE,
@@ -578,7 +574,7 @@ Return Value:
         break;
 
     case DataLocationAbsoluteAddress:
-        TargetAddress = DataSymbol->Address;
+        TargetAddress = DataSymbol->Location.Address;
         Result = DbgReadMemory(Context,
                                TRUE,
                                TargetAddress,
@@ -603,7 +599,7 @@ Return Value:
 
     default:
         DbgOut("Error: Unknown data symbol location %d.\n",
-               DataSymbol->Location);
+               DataSymbol->LocationType);
 
         Result = EINVAL;
         goto GetDataSymbolDataEnd;
@@ -691,7 +687,7 @@ Return Value:
     // contents.
     //
 
-    switch (DataSymbol->Location) {
+    switch (DataSymbol->LocationType) {
     case DataLocationRegister:
 
         //
@@ -700,7 +696,7 @@ Return Value:
 
         switch (Context->MachineType) {
         case MACHINE_TYPE_X86:
-            switch (DataSymbol->Register) {
+            switch (DataSymbol->Location.Register) {
                 case RegisterEax:
                     DbgOut("@eax");
                     break;
@@ -746,7 +742,7 @@ Return Value:
 
         case MACHINE_TYPE_ARMV7:
         case MACHINE_TYPE_ARMV6:
-            DbgOut("@r%d", DataSymbol->Register);
+            DbgOut("@r%d", DataSymbol->Location.Register);
             break;
 
         //
@@ -760,7 +756,7 @@ Return Value:
         DbgOut("     ");
         break;
 
-    case DataLocationStackOffset:
+    case DataLocationIndirect:
 
         //
         // Determine what the stack register should be.
@@ -780,13 +776,18 @@ Return Value:
         // the field width should be 4 characters, left justified. Ideally the
         // format specifier would be "%+-4x", so that a sign would be
         // unconditionally printed, but that doesn't seem to work.
+        // TODO: This should honor the Indirect.Register.
         //
 
-        if (DataSymbol->StackOffset >= 0) {
-            DbgOut("%s+%-4x", StackRegister, DataSymbol->StackOffset);
+        if (DataSymbol->Location.Indirect.Offset >= 0) {
+            DbgOut("%s+%-4I64x",
+                   StackRegister,
+                   DataSymbol->Location.Indirect.Offset);
 
         } else {
-            DbgOut("%s-%-4x", StackRegister, -DataSymbol->StackOffset);
+            DbgOut("%s-%-4I64x",
+                   StackRegister,
+                   -DataSymbol->Location.Indirect.Offset);
         }
 
         break;
@@ -1039,9 +1040,10 @@ Return Value:
     if ((ResultValid != NULL) &&
         (SearchResult.Variety == SymbolResultFunction)) {
 
-        FunctionStart = DbgAddAddress(Context,
-                                      SearchResult.FunctionResult->StartAddress,
-                                      Module->BaseAddress);
+        FunctionStart = DbgAddAddress(
+                                   Context,
+                                   SearchResult.U.FunctionResult->StartAddress,
+                                   Module->BaseAddress);
 
         if (DbgGetTargetPointerSize(Context) == sizeof(ULONG)) {
             FunctionStart &= MAX_ULONG;
@@ -1159,7 +1161,7 @@ Return Value:
         //
 
         SearchResult->Variety = SymbolResultInvalid;
-        SearchResult->TypeResult = NULL;
+        SearchResult->U.TypeResult = NULL;
         while (TRUE) {
             ResultValid = DbgpFindSymbolInModule(CurrentModule->Symbols,
                                                  SearchString,
@@ -1182,13 +1184,13 @@ Return Value:
             //
 
             if (SearchResult->Variety == SymbolResultType) {
-                ResolvedType = DbgResolveRelationType(SearchResult->TypeResult,
-                                                      0);
+                ResolvedType =
+                        DbgResolveRelationType(SearchResult->U.TypeResult, 0);
 
                 if ((ResolvedType != NULL) &&
                     (ResolvedType->Type == DataTypeStructure)) {
 
-                    Structure = ResolvedType->Data;
+                    Structure = &(ResolvedType->U.Structure);
 
                     //
                     // If it's got a body, return it.
@@ -1616,7 +1618,7 @@ Return Value:
         return FALSE;
     }
 
-    *Function = SearchResult.FunctionResult;
+    *Function = SearchResult.U.FunctionResult;
     *ExecutionAddress = InstructionPointer;
     return TRUE;
 }

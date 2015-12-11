@@ -187,6 +187,11 @@ DbgpGetFileSize (
     FILE *File
     );
 
+ULONG
+DbgpStabsGetFramePointerRegister (
+    PDEBUG_SYMBOLS Symbols
+    );
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -518,7 +523,7 @@ Return Value:
             //
 
             if (TypeSymbol->Type == DataTypeStructure) {
-                Structure = (PDATA_TYPE_STRUCTURE)TypeSymbol->Data;
+                Structure = &(TypeSymbol->U.Structure);
                 CurrentStructureMember = Structure->FirstMember;
                 while (CurrentStructureMember != NULL) {
                     NextStructureMember = CurrentStructureMember->NextMember;
@@ -536,7 +541,7 @@ Return Value:
             //
 
             if (TypeSymbol->Type == DataTypeEnumeration) {
-                Enumeration = (PDATA_TYPE_ENUMERATION)TypeSymbol->Data;
+                Enumeration = &(TypeSymbol->U.Enumeration);
                 CurrentEnumerationMember = Enumeration->FirstMember;
                 while (CurrentEnumerationMember != NULL) {
                     NextEnumerationMember =
@@ -555,7 +560,6 @@ Return Value:
                 FREE(TypeSymbol->Name);
             }
 
-            FREE(TypeSymbol->Data);
             FREE(TypeSymbol);
         }
 
@@ -1279,8 +1283,11 @@ Return Value:
         NewLocal->ParentSource = State->CurrentSourceFile;
         NewLocal->ParentFunction = State->CurrentFunction;
         NewLocal->Name = Name;
-        NewLocal->Location = DataLocationStackOffset;
-        NewLocal->StackOffset = (LONG)Stab->Value;
+        NewLocal->LocationType = DataLocationIndirect;
+        NewLocal->Location.Indirect.Offset = (LONG)Stab->Value;
+        NewLocal->Location.Indirect.Register =
+                                     DbgpStabsGetFramePointerRegister(Symbols);
+
         NewLocal->MinimumValidExecutionAddress = State->MaxBraceAddress;
         INSERT_BEFORE(&(NewLocal->ListEntry),
                       &(State->CurrentFunction->LocalsHead));
@@ -1931,13 +1938,7 @@ Return Value:
         }
 
         memset(NewType, 0, sizeof(TYPE_SYMBOL));
-        NewType->Data = MALLOC(LocalDataSize);
-        if (NewType->Data == NULL) {
-            String = NULL;
-            goto CreateTypeEnd;
-        }
-
-        memcpy(NewType->Data, LocalData, LocalDataSize);
+        memcpy(&(NewType->U), LocalData, LocalDataSize);
         NewType->ParentSource = TypeOwner;
         NewType->ParentFunction = NULL;
         NewType->Name = TypeName;
@@ -1966,10 +1967,6 @@ CreateTypeEnd:
         }
 
         if (NewType != NULL) {
-            if (NewType->Data != NULL) {
-                FREE(NewType->Data);
-            }
-
             FREE(NewType);
         }
 
@@ -3284,12 +3281,14 @@ Return Value:
 
     ParameterTypeString = StabString;
     if (*ParameterTypeString == 'P') {
-        NewParameter->Location = DataLocationRegister;
-        NewParameter->Register = STAB_REGISTER_TO_GENERAL(Stab->Value);
+        NewParameter->LocationType = DataLocationRegister;
+        NewParameter->Location.Register = STAB_REGISTER_TO_GENERAL(Stab->Value);
 
     } else if (*ParameterTypeString == 'p') {
-        NewParameter->Location = DataLocationStackOffset;
-        NewParameter->StackOffset = (LONG)Stab->Value;
+        NewParameter->LocationType = DataLocationIndirect;
+        NewParameter->Location.Indirect.Offset = (LONG)Stab->Value;
+        NewParameter->Location.Indirect.Register =
+                                     DbgpStabsGetFramePointerRegister(Symbols);
 
     } else {
         Result = FALSE;
@@ -3449,8 +3448,8 @@ Return Value:
 
     NewLocal->ParentFunction = State->CurrentFunction;
     NewLocal->ParentSource = State->CurrentSourceFile;
-    NewLocal->Location = DataLocationRegister;
-    NewLocal->Register = STAB_REGISTER_TO_GENERAL(Stab->Value);
+    NewLocal->LocationType = DataLocationRegister;
+    NewLocal->Location.Register = STAB_REGISTER_TO_GENERAL(Stab->Value);
     NewLocal->MinimumValidExecutionAddress = State->MaxBraceAddress;
 
     //
@@ -3621,8 +3620,8 @@ Return Value:
     }
 
     NewStatic->ParentSource = State->CurrentSourceFile;
-    NewStatic->Location = DataLocationAbsoluteAddress;
-    NewStatic->Address = Stab->Value - Symbols->ImageBase;
+    NewStatic->LocationType = DataLocationAbsoluteAddress;
+    NewStatic->Location.Address = Stab->Value - Symbols->ImageBase;
     NewStatic->MinimumValidExecutionAddress = 0;
     StaticType = StaticScope + 1;
     StaticType = DbgpGetTypeNumber(Symbols,
@@ -3736,7 +3735,7 @@ Return Value:
             goto ResolveCrossReferencesEnd;
         }
 
-        NewType->Data = NULL;
+        memset(NewType, 0, sizeof(TYPE_SYMBOL));
 
         //
         // Find the end of the reference name, marked by one colon. Two colons
@@ -3827,13 +3826,7 @@ Return Value:
 
             if (Match != FALSE) {
                 NewType->Type = DataTypeRelation;
-                NewType->Data = MALLOC(sizeof(DATA_TYPE_RELATION));
-                if (NewType->Data == NULL) {
-                    Result = FALSE;
-                    goto ResolveCrossReferencesEnd;
-                }
-
-                NewTypeRelation = (PDATA_TYPE_RELATION)NewType->Data;
+                NewTypeRelation = &(NewType->U.Relation);
                 NewTypeRelation->Pointer = FALSE;
                 NewTypeRelation->OwningFile = CurrentType->ParentSource;
                 NewTypeRelation->TypeNumber = CurrentType->TypeNumber;
@@ -3867,13 +3860,7 @@ Return Value:
             case 'u':
             case 's':
                 NewType->Type = DataTypeStructure;
-                NewType->Data = MALLOC(sizeof(DATA_TYPE_STRUCTURE));
-                if (NewType->Data == NULL) {
-                    Result = FALSE;
-                    goto ResolveCrossReferencesEnd;
-                }
-
-                NewTypeStructure = (PDATA_TYPE_STRUCTURE)NewType->Data;
+                NewTypeStructure = &(NewType->U.Structure);
                 NewTypeStructure->SizeInBytes = 0;
                 NewTypeStructure->MemberCount = 0;
                 NewTypeStructure->FirstMember = NULL;
@@ -3881,13 +3868,7 @@ Return Value:
 
             case 'e':
                 NewType->Type = DataTypeEnumeration;
-                NewType->Data = MALLOC(sizeof(DATA_TYPE_ENUMERATION));
-                if (NewType->Data == NULL) {
-                    Result = FALSE;
-                    goto ResolveCrossReferencesEnd;
-                }
-
-                NewTypeEnumeration = (PDATA_TYPE_ENUMERATION)NewType->Data;
+                NewTypeEnumeration = &(NewType->U.Enumeration);
                 NewTypeEnumeration->MemberCount = 0;
                 NewTypeEnumeration->FirstMember = NULL;
                 break;
@@ -3929,10 +3910,6 @@ ResolveCrossReferencesEnd:
 
     if (Result == FALSE) {
         if (NewType != NULL) {
-            if (NewType->Data != NULL) {
-                FREE(NewType->Data);
-            }
-
             if (NewType->Name != NULL) {
                 FREE(NewType->Name);
             }
@@ -3975,5 +3952,60 @@ Return Value:
     FileSize = ftell(File);
     fseek(File, CurrentPosition, SEEK_SET);
     return FileSize;
+}
+
+ULONG
+DbgpStabsGetFramePointerRegister (
+    PDEBUG_SYMBOLS Symbols
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the frame pointer register for use in indirect
+    addresses.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the symbols.
+
+Return Value:
+
+    Returns the machine-dependent frame pointer register.
+
+--*/
+
+{
+
+    PSTAB_PARSE_STATE ParseState;
+
+    if (Symbols->Machine == ImageMachineTypeX86) {
+        return RegisterEbp;
+
+    } else if (Symbols->Machine == ImageMachineTypeArm32) {
+        ParseState = Symbols->ParseState;
+
+        //
+        // If the current function has the thumb bit set, then use the thumb
+        // frame pointer register.
+        //
+
+        if ((ParseState != NULL) && (ParseState->CurrentFunction != NULL) &&
+            ((ParseState->CurrentFunction->StartAddress & 0x1) != 0)) {
+
+            return 7;
+        }
+
+        //
+        // Return R11, the ARM frame pointer register.
+        //
+
+        return 11;
+    }
+
+    assert(FALSE);
+
+    return 0;
 }
 

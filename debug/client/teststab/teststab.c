@@ -186,6 +186,7 @@ Return Value:
     BOOL PrintVerbose;
     PSTR QueryAddress;
     PSTR QueryString;
+    ULONG Register;
     PSTR RegisterName;
     PDATA_TYPE_RELATION Relation;
     PTYPE_SYMBOL RelativeType;
@@ -356,7 +357,7 @@ Return Value:
                        GlobalVariable->Name,
                        GlobalVariable->TypeOwner->SourceFile,
                        GlobalVariable->TypeNumber,
-                       GlobalVariable->Address);
+                       GlobalVariable->Location.Address);
 
             }
 
@@ -417,10 +418,10 @@ Return Value:
                                        DATA_SYMBOL,
                                        ListEntry);
 
-                if (Parameter->Location == DataLocationStackOffset) {
+                if (Parameter->LocationType == DataLocationIndirect) {
                     if (PrintFunctions != FALSE) {
                         printf("      +%d %s: (%s, %d)\n",
-                               Parameter->StackOffset,
+                               Parameter->Location.Indirect.Offset,
                                Parameter->Name,
                                Parameter->TypeOwner->SourceFile,
                                Parameter->TypeNumber);
@@ -428,21 +429,19 @@ Return Value:
 
                 } else {
 
-                    assert(Parameter->Location == DataLocationRegister);
-                    assert(Parameter->Register >= 0);
+                    assert(Parameter->LocationType == DataLocationRegister);
 
                     if (PrintFunctions != FALSE) {
                         RegisterName = NULL;
+                        Register = Parameter->Location.Register;
                         if (Symbols->Machine == ImageMachineTypeX86) {
-                            RegisterName =
-                                      I386RegisterNames[Parameter->Register];
+                            RegisterName = I386RegisterNames[Register];
 
                         } else {
 
                             assert(Symbols->Machine == ImageMachineTypeArm32);
 
-                            RegisterName =
-                                       ArmRegisterNames[Parameter->Register];
+                            RegisterName = ArmRegisterNames[Register];
                         }
 
                         printf("      @%s %s: (%s, %d)\n",
@@ -472,22 +471,21 @@ Return Value:
                                            DATA_SYMBOL,
                                            ListEntry);
 
-                if (LocalVariable->Location == DataLocationRegister) {
+                if (LocalVariable->LocationType == DataLocationRegister) {
 
-                    assert(LocalVariable->Register >= 0);
+                    assert(LocalVariable->Location.Register >= 0);
 
                     if (PrintLocalVariables != FALSE) {
                         RegisterName = NULL;
+                        Register = LocalVariable->Location.Register;
                         if (Symbols->Machine == ImageMachineTypeX86) {
-                            RegisterName =
-                                  I386RegisterNames[LocalVariable->Register];
+                            RegisterName = I386RegisterNames[Register];
 
                         } else {
 
                             assert(Symbols->Machine == ImageMachineTypeArm32);
 
-                            RegisterName =
-                                   ArmRegisterNames[LocalVariable->Register];
+                            RegisterName = ArmRegisterNames[Register];
                         }
 
                         printf("         Local %s (%s, %d)  @%s, Valid at "
@@ -499,14 +497,16 @@ Return Value:
                                LocalVariable->MinimumValidExecutionAddress);
                     }
 
-                } else if (LocalVariable->Location == DataLocationStackOffset) {
+                } else if (LocalVariable->LocationType ==
+                           DataLocationIndirect) {
+
                     if (PrintLocalVariables != FALSE) {
                         printf("         Local %s (%s, %d)  offset %d, Valid "
                                "at 0x%08I64x\n",
                                LocalVariable->Name,
                                LocalVariable->TypeOwner->SourceFile,
                                LocalVariable->TypeNumber,
-                               LocalVariable->StackOffset,
+                               LocalVariable->Location.Indirect.Offset,
                                LocalVariable->MinimumValidExecutionAddress);
                     }
 
@@ -580,7 +580,6 @@ Return Value:
                                      ListEntry);
 
             assert(CurrentType->ParentSource != NULL);
-            assert(CurrentType->Data != NULL);
 
             TypeName = CurrentType->Name;
             if (TypeName == NULL) {
@@ -589,7 +588,7 @@ Return Value:
 
             switch (CurrentType->Type) {
             case DataTypeRelation:
-                Relation = (PDATA_TYPE_RELATION)CurrentType->Data;
+                Relation = &(CurrentType->U.Relation);
                 PointerCharacter = ' ';
                 if (Relation->Pointer != FALSE) {
                     PointerCharacter = '*';
@@ -642,7 +641,7 @@ Return Value:
                 break;
 
             case DataTypeNumeric:
-                Numeric = (PDATA_TYPE_NUMERIC)CurrentType->Data;
+                Numeric = &(CurrentType->U.Numeric);
                 if (PrintTypes != FALSE) {
                     printf("   %d: %s:(%s,%d). Numeric: %d bits, ",
                           TypesProcessed,
@@ -665,7 +664,7 @@ Return Value:
                 break;
 
             case DataTypeStructure:
-                Structure = (PDATA_TYPE_STRUCTURE)CurrentType->Data;
+                Structure = &(CurrentType->U.Structure);
                 MemberCount = 0;
                 if (PrintTypes != FALSE) {
                     printf("   %d: %s:(%s,%d). Structure: %d Bytes, %d "
@@ -726,7 +725,7 @@ Return Value:
                 break;
 
             case DataTypeEnumeration:
-                Enumeration = (PDATA_TYPE_ENUMERATION)CurrentType->Data;
+                Enumeration = &(CurrentType->U.Enumeration);
                 MemberCount = 0;
                 if (PrintTypes != FALSE) {
                     printf("   %d: %s:(%s,%d). Enumeration: %d Members\n",
@@ -803,35 +802,35 @@ Return Value:
 
         switch (SearchResult.Variety) {
         case SymbolResultType:
-            TypeSize = DbgGetTypeSize(SearchResult.TypeResult, 0);
+            TypeSize = DbgGetTypeSize(SearchResult.U.TypeResult, 0);
             printf("%d Type: ", FunctionsProcessed);
-            DbgPrintTypeName(SearchResult.TypeResult);
+            DbgPrintTypeName(SearchResult.U.TypeResult);
             printf(" (size: %d) = ", TypeSize);
-            DbgPrintTypeDescription(SearchResult.TypeResult, 4, 10);
+            DbgPrintTypeDescription(SearchResult.U.TypeResult, 4, 10);
             printf("\n");
             break;
 
         case SymbolResultData:
             printf("%d Data Symbol: %s in %s%s \t\t0x%I64x\n",
                    FunctionsProcessed,
-                   SearchResult.DataResult->Name,
-                   SearchResult.DataResult->ParentSource->SourceDirectory,
-                   SearchResult.DataResult->ParentSource->SourceFile,
-                   SearchResult.DataResult->Address);
+                   SearchResult.U.DataResult->Name,
+                   SearchResult.U.DataResult->ParentSource->SourceDirectory,
+                   SearchResult.U.DataResult->ParentSource->SourceFile,
+                   SearchResult.U.DataResult->Location.Address);
 
             break;
 
         case SymbolResultFunction:
             printf("%d Function Symbol: %s in %s%s \t\t0x%I64x - 0x%I64x\n",
                    FunctionsProcessed,
-                   SearchResult.FunctionResult->Name,
-                   SearchResult.FunctionResult->ParentSource->SourceDirectory,
-                   SearchResult.FunctionResult->ParentSource->SourceFile,
-                   SearchResult.FunctionResult->StartAddress,
-                   SearchResult.FunctionResult->EndAddress);
+                   SearchResult.U.FunctionResult->Name,
+                   SearchResult.U.FunctionResult->ParentSource->SourceDirectory,
+                   SearchResult.U.FunctionResult->ParentSource->SourceFile,
+                   SearchResult.U.FunctionResult->StartAddress,
+                   SearchResult.U.FunctionResult->EndAddress);
 
             printf("\t");
-            DbgPrintFunctionPrototype(SearchResult.FunctionResult, NULL, 0);
+            DbgPrintFunctionPrototype(SearchResult.U.FunctionResult, NULL, 0);
             printf("\n");
             break;
 
@@ -863,28 +862,28 @@ Return Value:
             switch (SearchResult.Variety) {
             case SymbolResultData:
 
-                assert(SearchResult.DataResult->Location ==
+                assert(SearchResult.U.DataResult->LocationType ==
                        DataLocationAbsoluteAddress);
 
                 printf("Data matched 0x%I64x: %s in %s%s at 0x%I64x\n",
                        SearchAddress,
-                       SearchResult.DataResult->Name,
-                       SearchResult.DataResult->ParentSource->SourceDirectory,
-                       SearchResult.DataResult->ParentSource->SourceFile,
-                       SearchResult.DataResult->Address);
+                       SearchResult.U.DataResult->Name,
+                       SearchResult.U.DataResult->ParentSource->SourceDirectory,
+                       SearchResult.U.DataResult->ParentSource->SourceFile,
+                       SearchResult.U.DataResult->Location.Address);
 
                 break;
 
             case SymbolResultFunction:
                 printf(
-                    "Function matched 0x%I64x: %s in %s%s at 0x%I64x - "
-                    "0x%I64x\n",
-                    SearchAddress,
-                    SearchResult.FunctionResult->Name,
-                    SearchResult.FunctionResult->ParentSource->SourceDirectory,
-                    SearchResult.FunctionResult->ParentSource->SourceFile,
-                    SearchResult.FunctionResult->StartAddress,
-                    SearchResult.FunctionResult->EndAddress);
+                  "Function matched 0x%I64x: %s in %s%s at 0x%I64x - "
+                  "0x%I64x\n",
+                  SearchAddress,
+                  SearchResult.U.FunctionResult->Name,
+                  SearchResult.U.FunctionResult->ParentSource->SourceDirectory,
+                  SearchResult.U.FunctionResult->ParentSource->SourceFile,
+                  SearchResult.U.FunctionResult->StartAddress,
+                  SearchResult.U.FunctionResult->EndAddress);
 
                 break;
 

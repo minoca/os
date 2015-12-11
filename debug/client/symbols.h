@@ -27,7 +27,6 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef struct _TYPE_SYMBOL TYPE_SYMBOL, *PTYPE_SYMBOL;
 typedef struct _STRUCTURE_MEMBER STRUCTURE_MEMBER, *PSTRUCTURE_MEMBER;
 typedef struct _ENUMERATION_MEMBER ENUMERATION_MEMBER, *PENUMERATION_MEMBER;
 
@@ -37,6 +36,7 @@ typedef enum _DATA_TYPE_TYPE {
     DataTypeNumeric,
     DataTypeStructure,
     DataTypeEnumeration,
+    DataTypeFunctionPointer,
     DataTypeNumberOfTypes
 } DATA_TYPE_TYPE, *PDATA_TYPE_TYPE;
 
@@ -52,12 +52,13 @@ typedef enum _I386_GENERAL_REGISTER {
     NumberOfRegisters
 } I386_GENERAL_REGISTER, *PI386_GENERAL_REGISTER;
 
-typedef enum _DATA_SYMBOL_LOCATION {
+typedef enum _DATA_SYMBOL_LOCATION_TYPE {
     DataLocationInvalid,
     DataLocationRegister,
-    DataLocationStackOffset,
-    DataLocationAbsoluteAddress
-} DATA_SYMBOL_LOCATION, *PDATA_SYMBOLS_LOCATION;
+    DataLocationIndirect,
+    DataLocationAbsoluteAddress,
+    DataLocationComplex
+} DATA_SYMBOL_LOCATION_TYPE, *PDATA_SYMBOL_LOCATION_TYPE;
 
 typedef enum _SYMBOL_RESULT_TYPE {
     SymbolResultInvalid,
@@ -207,6 +208,9 @@ Members:
         future references to the file. For Stabs, this is the value of the
         stab, and is used to match N_EXCL references to N_BINCLs.
 
+    SymbolContext - Stores a pointer's worth of context reserved for the symbol
+        parsing library.
+
 --*/
 
 typedef struct _SOURCE_FILE_SYMBOL {
@@ -221,6 +225,7 @@ typedef struct _SOURCE_FILE_SYMBOL {
     ULONGLONG StartAddress;
     ULONGLONG EndAddress;
     ULONG Identifier;
+    PVOID SymbolContext;
 } SOURCE_FILE_SYMBOL, *PSOURCE_FILE_SYMBOL;
 
 /*++
@@ -319,52 +324,6 @@ typedef struct _SOURCE_LINE_SYMBOL {
 
 Structure Description:
 
-    This structure defines a new type (such as a bool, int, structure, or enum).
-
-Members:
-
-    ParentSource - Stores a link to the source file this type was defined in.
-        This is necessary because types are defined with a type index and
-        potentially an include file index. This could be an include file.
-
-    ParentFunction - Stores a link to the function where this type was defined.
-
-    ListEntry - Stores links to the next and previous types in the owning source
-        file.
-
-    Name - Stores the name of the type. This buffer will need to be freed
-        explicitly upon destruction.
-
-    TypeNumber - Stores the type number, which can be referred to by other
-        types.
-
-    Type - Stores the type of this type, such as whether it is a basic type,
-        structure, enum, etc.
-
-    Data - Stores a pointer to the rest of the type definition. Depending on
-        the value of the Type member, this will be a pointer to one of the
-        DATA_TYPE_* structures. This buffer will need to be freed explicitly.
-
---*/
-
-struct _TYPE_SYMBOL {
-    PSOURCE_FILE_SYMBOL ParentSource;
-    PFUNCTION_SYMBOL ParentFunction;
-    LIST_ENTRY ListEntry;
-    PSTR Name;
-    LONG TypeNumber;
-    DATA_TYPE_TYPE Type;
-    PVOID Data;
-};
-
-//
-// Type flavors. These complete the TYPE_SYMBOL type definition.
-//
-
-/*++
-
-Structure Description:
-
     This structure defines a relation type between the type being defined and
     another type.
 
@@ -450,6 +409,10 @@ Structure Description:
 
 Members:
 
+    SizeInBytes - Stores the number of bytes required to hold an instantiation
+        of this enumeration. This might be zero if the symbol format does not
+        describe this information.
+
     MemberCount - Stores the number of values defined in this enum.
 
     FirstMember - Stores a pointer to the first enumeration definition.
@@ -457,9 +420,120 @@ Members:
 --*/
 
 typedef struct _DATA_TYPE_ENUMERATION {
+    ULONG SizeInBytes;
     ULONG MemberCount;
     PENUMERATION_MEMBER FirstMember;
 } DATA_TYPE_ENUMERATION, *PDATA_TYPE_ENUMERATION;
+
+/*++
+
+Structure Description:
+
+    This structure defines a function pointer type.
+
+Members:
+
+    SizeInBytes - Stores the size of the type (the size of an address in the
+        target).
+
+--*/
+
+typedef struct _DATA_TYPE_FUNCTION_POINTER {
+    ULONG SizeInBytes;
+} DATA_TYPE_FUNCTION_POINTER, *PDATA_TYPE_FUNCTION_POINTER;
+
+/*++
+
+Structure Description:
+
+    This structure defines a new type (such as a bool, int, structure, or enum).
+
+Members:
+
+    ParentSource - Stores a link to the source file this type was defined in.
+        This is necessary because types are defined with a type index and
+        potentially an include file index. This could be an include file.
+
+    ParentFunction - Stores a link to the function where this type was defined.
+
+    ListEntry - Stores links to the next and previous types in the owning source
+        file.
+
+    Name - Stores the name of the type. This buffer will need to be freed
+        explicitly upon destruction.
+
+    TypeNumber - Stores the type number, which can be referred to by other
+        types.
+
+    Type - Stores the type of this type, such as whether it is a basic type,
+        structure, enum, etc.
+
+    U - Stores the union of type information. Which structure to reach through
+        can be determined by the type member above.
+
+--*/
+
+typedef struct _TYPE_SYMBOL {
+    PSOURCE_FILE_SYMBOL ParentSource;
+    PFUNCTION_SYMBOL ParentFunction;
+    LIST_ENTRY ListEntry;
+    PSTR Name;
+    LONG TypeNumber;
+    DATA_TYPE_TYPE Type;
+    union {
+        DATA_TYPE_RELATION Relation;
+        DATA_TYPE_NUMERIC Numeric;
+        DATA_TYPE_STRUCTURE Structure;
+        DATA_TYPE_ENUMERATION Enumeration;
+        DATA_TYPE_FUNCTION_POINTER FunctionPointer;
+    } U;
+
+} TYPE_SYMBOL, *PTYPE_SYMBOL;
+
+/*++
+
+Structure Description:
+
+    This structure defines a data address that is a register plus an offset.
+
+Members:
+
+    Register - Stores the register number.
+
+    Offset - Stores the offset in bytes to add to the value at the register.
+
+--*/
+
+typedef struct _DATA_LOCATION_REGISTER_OFFSET {
+    ULONG Register;
+    LONGLONG Offset;
+} DATA_LOCATION_REGISTER_OFFSET, *PDATA_LOCATION_REGISTER_OFFSET;
+
+/*++
+
+Structure Description:
+
+    This union defines the various forms a data symbol location can take.
+
+Members:
+
+    Address - Stores the memory address of the symbol.
+
+    Register - Stores the register number of the symbol.
+
+    Indirect - Stores the register plus offset address of the symbol.
+
+    Complex - Stores a context pointer that the symbol library can interpret
+        to evaluate a more complicated location.
+
+--*/
+
+typedef union _DATA_LOCATION_UNION {
+    ULONGLONG Address;
+    ULONG Register;
+    DATA_LOCATION_REGISTER_OFFSET Indirect;
+    PVOID Complex;
+} DATA_LOCATION_UNION, *PDATA_LOCATION_UNION;
 
 /*++
 
@@ -482,20 +556,10 @@ Members:
     Name - Stores a pointer to the name of this variable. This buffer will need
         to be explicitly freed upon destruction.
 
-    Location - Stores the location of the variable. If the variable is in a
-        register, the Register field in the union determines which register the
-        variable is in. For a variable on the stack, StackOffset provides the
-        amount to subtract off the stack to get the variable. For a global
-        variable, the Address field provide the absolute address of the
-        variable.
+    LocationType - Stores a value that indicates the form the location union
+        should be accessed through.
 
-    Address - Stores the absolute address of the variable, if Location is
-        AbsoluteAddress.
-
-    StackOffset - Stores the amount that should be subtracted off the stack to
-        find the location of the variable if Location is StackOffset.
-
-    Register - Stores the register number if Location is Register.
+    Location - Stores the location of the symbol.
 
     MinimumValidExecutionAddress - Stores the point in the execution flow when
         this variable becomes active. For globals, this will probably be 0. For
@@ -514,13 +578,8 @@ typedef struct _DATA_SYMBOL {
     PFUNCTION_SYMBOL ParentFunction;
     LIST_ENTRY ListEntry;
     PSTR Name;
-    DATA_SYMBOL_LOCATION Location;
-    union {
-        ULONGLONG Address;
-        LONG StackOffset;
-        ULONG Register;
-    };
-
+    DATA_SYMBOL_LOCATION_TYPE LocationType;
+    DATA_LOCATION_UNION Location;
     ULONGLONG MinimumValidExecutionAddress;
     PSOURCE_FILE_SYMBOL TypeOwner;
     LONG TypeNumber;
@@ -615,7 +674,8 @@ typedef struct _SYMBOL_SEARCH_RESULT {
         PFUNCTION_SYMBOL FunctionResult;
         PTYPE_SYMBOL TypeResult;
         PDATA_SYMBOL DataResult;
-    };
+    } U;
+
 } SYMBOL_SEARCH_RESULT, *PSYMBOL_SEARCH_RESULT;
 
 /*++

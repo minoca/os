@@ -28,7 +28,8 @@ DIRS += win32   \
 
 endif
 
-TESTDIRS = teststab \
+TESTDIRS = tdwarf   \
+           teststab \
            testdisa
 
 include $(SRCROOT)/os/minoca.mk

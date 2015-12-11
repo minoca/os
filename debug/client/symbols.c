@@ -205,7 +205,7 @@ Return Value:
 
     case DataTypeRelation:
         if ((Type->Name == NULL) || (strlen(Type->Name) == 0)) {
-            RelationData = (PDATA_TYPE_RELATION)Type->Data;
+            RelationData = &(Type->U.Relation);
             Relative = DbgGetType(RelationData->OwningFile,
                                   RelationData->TypeNumber);
 
@@ -233,6 +233,10 @@ Return Value:
             DbgOut(Type->Name);
         }
 
+        break;
+
+    case DataTypeFunctionPointer:
+        DbgOut("(Function pointer)");
         break;
 
     default:
@@ -292,15 +296,15 @@ Return Value:
         // For a numeric type, return the size rounded up to the nearest byte.
         //
 
-        NumericData = (PDATA_TYPE_NUMERIC)Type->Data;
+        NumericData = &(Type->U.Numeric);
         return (NumericData->BitSize + BITS_PER_BYTE - 1) / BITS_PER_BYTE;
 
     case DataTypeStructure:
-        StructureData = (PDATA_TYPE_STRUCTURE)Type->Data;
+        StructureData = &(Type->U.Structure);
         return StructureData->SizeInBytes;
 
     case DataTypeRelation:
-        RelationData = (PDATA_TYPE_RELATION)Type->Data;
+        RelationData = &(Type->U.Relation);
         Relative = DbgGetType(RelationData->OwningFile,
                               RelationData->TypeNumber);
 
@@ -361,6 +365,9 @@ Return Value:
         //
 
         return ArraySize * DbgGetTypeSize(Relative, RecursionDepth + 1);
+
+    case DataTypeFunctionPointer:
+        return Type->U.FunctionPointer.SizeInBytes;
 
     default:
         return 0;
@@ -430,7 +437,7 @@ Return Value:
 
     switch (Type->Type) {
     case DataTypeNumeric:
-        NumericData = (PDATA_TYPE_NUMERIC)Type->Data;
+        NumericData = &(Type->U.Numeric);
         if (NumericData->Float != FALSE) {
             DbgOut("%d bit floating point number.", NumericData->BitSize);
 
@@ -447,7 +454,7 @@ Return Value:
         // Get the type this relation refers to.
         //
 
-        RelationData = (PDATA_TYPE_RELATION)Type->Data;
+        RelationData = &(Type->U.Relation);
         RelativeType = DbgGetType(RelationData->OwningFile,
                                   RelationData->TypeNumber);
 
@@ -532,7 +539,7 @@ Return Value:
     case DataTypeEnumeration:
         SpaceLevel += 2;
         DbgOut("enum {\n");
-        EnumerationData = (PDATA_TYPE_ENUMERATION)Type->Data;
+        EnumerationData = &(Type->U.Enumeration);
         EnumerationMember = EnumerationData->FirstMember;
         while (EnumerationMember != NULL) {
             for (SpaceIndex = 0; SpaceIndex < SpaceLevel; SpaceIndex += 1) {
@@ -562,7 +569,7 @@ Return Value:
     case DataTypeStructure:
         DbgOut("struct {\n");
         SpaceLevel += 2;
-        StructureData = (PDATA_TYPE_STRUCTURE)Type->Data;
+        StructureData = &(Type->U.Structure);
         StructureMember = StructureData->FirstMember;
         while (StructureMember != NULL) {
             Bytes = StructureMember->BitOffset / BITS_PER_BYTE;
@@ -615,6 +622,10 @@ Return Value:
             DbgOut("\nType Size: %d Bytes.", StructureData->SizeInBytes);
         }
 
+        break;
+
+    case DataTypeFunctionPointer:
+        DbgOut("(*)()");
         break;
 
     default:
@@ -702,7 +713,7 @@ Return Value:
 
     switch (Type->Type) {
     case DataTypeNumeric:
-        NumericData = (PDATA_TYPE_NUMERIC)Type->Data;
+        NumericData = &(Type->U.Numeric);
         TypeSize = ALIGN_RANGE_UP(NumericData->BitSize, BITS_PER_BYTE) /
                    BITS_PER_BYTE;
 
@@ -761,7 +772,7 @@ Return Value:
         // Get the type this relation refers to.
         //
 
-        RelationData = (PDATA_TYPE_RELATION)Type->Data;
+        RelationData = &(Type->U.Relation);
         RelativeType = DbgGetType(RelationData->OwningFile,
                                   RelationData->TypeNumber);
 
@@ -905,7 +916,7 @@ Return Value:
         if (DataStream != NULL) {
             EnumerationValue = *((PULONG)DataStream);
             DbgOut("%d", EnumerationValue);
-            EnumerationData = (PDATA_TYPE_ENUMERATION)Type->Data;
+            EnumerationData = &(Type->U.Enumeration);
             EnumerationMember = EnumerationData->FirstMember;
             while (EnumerationMember != NULL) {
                 if (EnumerationMember->Value == EnumerationValue) {
@@ -927,7 +938,7 @@ Return Value:
         break;
 
     case DataTypeStructure:
-        StructureData = (PDATA_TYPE_STRUCTURE)Type->Data;
+        StructureData = &(Type->U.Structure);
         TypeSize = StructureData->SizeInBytes;
         if (DataStream == NULL) {
             break;
@@ -991,6 +1002,17 @@ Return Value:
         }
 
         SpaceLevel -= 2;
+        break;
+
+    case DataTypeFunctionPointer:
+        TypeSize = Type->U.FunctionPointer.SizeInBytes;
+        if (TypeSize > sizeof(Numeric)) {
+            TypeSize = sizeof(Numeric);
+        }
+
+        Numeric = 0;
+        memcpy(&Numeric, DataStream, TypeSize);
+        DbgOut("0x%08I64x", Numeric);
         break;
 
     default:
@@ -1064,7 +1086,7 @@ Return Value:
     //
 
     Result = FALSE;
-    StructureData = (PDATA_TYPE_STRUCTURE)StructureType->Data;
+    StructureData = &(StructureType->U.Structure);
     StructureMember = StructureData->FirstMember;
     for (Index = 0; Index < StructureData->MemberCount; Index += 1) {
         if (strncmp(FieldName, StructureMember->Name, FieldNameLength) == 0) {
@@ -1120,7 +1142,7 @@ Return Value:
     // Get the type this relation refers to.
     //
 
-    RelationData = (PDATA_TYPE_RELATION)Type->Data;
+    RelationData = &(Type->U.Relation);
     RelativeType = DbgGetType(RelationData->OwningFile,
                               RelationData->TypeNumber);
 
@@ -1518,8 +1540,8 @@ Return Value:
     //
 
     CurrentEntry = NULL;
-    if ((Input->Variety == SymbolResultType) && (Input->TypeResult != NULL)) {
-        CurrentEntry = &(Input->TypeResult->ListEntry);
+    if ((Input->Variety == SymbolResultType) && (Input->U.TypeResult != NULL)) {
+        CurrentEntry = &(Input->U.TypeResult->ListEntry);
         CurrentType = LIST_VALUE(CurrentEntry, TYPE_SYMBOL, ListEntry);
         CurrentSource = CurrentType->ParentSource;
         CurrentSourceEntry = &(CurrentSource->ListEntry);
@@ -1561,7 +1583,7 @@ Return Value:
                 //
 
                 Input->Variety = SymbolResultType;
-                Input->TypeResult = CurrentType;
+                Input->U.TypeResult = CurrentType;
                 return Input;
             }
 
@@ -1638,8 +1660,8 @@ Return Value:
     //
 
     CurrentEntry = NULL;
-    if ((Input->Variety == SymbolResultData) && (Input->DataResult != NULL)) {
-        CurrentEntry = &(Input->DataResult->ListEntry);
+    if ((Input->Variety == SymbolResultData) && (Input->U.DataResult != NULL)) {
+        CurrentEntry = &(Input->U.DataResult->ListEntry);
         CurrentData = LIST_VALUE(CurrentEntry, DATA_SYMBOL, ListEntry);
         CurrentSource = CurrentData->ParentSource;
         CurrentSourceEntry = &(CurrentSource->ListEntry);
@@ -1684,11 +1706,12 @@ Return Value:
             //
 
             if (Address != (INTN)NULL) {
-                if ((CurrentData->Location == DataLocationAbsoluteAddress) &&
-                    (CurrentData->Address == Address)) {
+                if ((CurrentData->LocationType ==
+                     DataLocationAbsoluteAddress) &&
+                    (CurrentData->Location.Address == Address)) {
 
                     Input->Variety = SymbolResultData;
-                    Input->DataResult = CurrentData;
+                    Input->U.DataResult = CurrentData;
                     return Input;
                 }
 
@@ -1702,7 +1725,7 @@ Return Value:
 
                 if (DbgpStringMatch(Query, CurrentData->Name) != FALSE) {
                     Input->Variety = SymbolResultData;
-                    Input->DataResult = CurrentData;
+                    Input->U.DataResult = CurrentData;
                     return Input;
                 }
             }
@@ -1781,9 +1804,9 @@ Return Value:
 
     CurrentEntry = NULL;
     if ((Input->Variety == SymbolResultFunction) &&
-        (Input->FunctionResult != NULL)) {
+        (Input->U.FunctionResult != NULL)) {
 
-        CurrentEntry = &(Input->FunctionResult->ListEntry);
+        CurrentEntry = &(Input->U.FunctionResult->ListEntry);
         CurrentFunction = LIST_VALUE(CurrentEntry, FUNCTION_SYMBOL, ListEntry);
         CurrentSource = CurrentFunction->ParentSource;
         CurrentSourceEntry = &(CurrentSource->ListEntry);
@@ -1828,7 +1851,7 @@ Return Value:
                     (Address < CurrentFunction->EndAddress)) {
 
                     Input->Variety = SymbolResultFunction;
-                    Input->FunctionResult = CurrentFunction;
+                    Input->U.FunctionResult = CurrentFunction;
                     return Input;
                 }
 
@@ -1842,7 +1865,7 @@ Return Value:
 
                 if (DbgpStringMatch(Query, CurrentFunction->Name) != FALSE) {
                     Input->Variety = SymbolResultFunction;
-                    Input->FunctionResult = CurrentFunction;
+                    Input->U.FunctionResult = CurrentFunction;
                     return Input;
                 }
             }

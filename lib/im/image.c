@@ -1258,7 +1258,7 @@ Return Value:
 
     if ((Buffer->Data != NULL) &&
         (Offset < Buffer->Size) &&
-        (End < Buffer->Size)) {
+        (End <= Buffer->Size)) {
 
         return Buffer->Data + Offset;
     }

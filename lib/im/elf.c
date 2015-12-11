@@ -31,8 +31,6 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define MAX_SECTION_NAME 8
-
 //
 // Try some magically built-in library paths.
 //
@@ -1229,9 +1227,7 @@ Return Value:
         }
 
         CurrentSectionName = StringTable + SectionHeader->NameOffset;
-        Match = RtlAreStringsEqual(CurrentSectionName,
-                                   SectionName,
-                                   MAX_SECTION_NAME);
+        Match = RtlAreStringsEqual(CurrentSectionName, SectionName, -1);
 
         //
         // If the name matches, return that section. Sections have no relevance

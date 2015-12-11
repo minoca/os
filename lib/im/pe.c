@@ -168,7 +168,11 @@ Return Value:
 
 {
 
+    ULONG ItemsScanned;
+    KSTATUS KStatus;
     BOOL Match;
+    PSTR Name;
+    ULONG Offset;
     PIMAGE_NT_HEADERS PeHeaders;
     BOOL Result;
     PVOID ReturnSection;
@@ -177,11 +181,16 @@ Return Value:
     ULONG ReturnSectionVirtualAddress;
     PIMAGE_SECTION_HEADER SectionHeader;
     ULONG SectionIndex;
+    PSTR StringTable;
+    ULONG StringTableSize;
+    PULONG StringTableSizePointer;
 
     ReturnSection = NULL;
     ReturnSectionFileSize = 0;
     ReturnSectionMemorySize = 0;
     ReturnSectionVirtualAddress = (UINTN)NULL;
+    StringTable = NULL;
+    StringTableSize = 0;
     if (SectionName == NULL) {
         Result = FALSE;
         goto GetSectionEnd;
@@ -193,6 +202,28 @@ Return Value:
     }
 
     //
+    // Read in the string table as well.
+    //
+
+    if (PeHeaders->FileHeader.PointerToSymbolTable != 0) {
+        Offset = PeHeaders->FileHeader.PointerToSymbolTable +
+                 (PeHeaders->FileHeader.NumberOfSymbols * sizeof(COFF_SYMBOL));
+
+        StringTableSizePointer = ImpReadBuffer(NULL, Buffer, Offset, 4);
+        if (StringTableSizePointer == NULL) {
+            Result = FALSE;
+            goto GetSectionEnd;
+        }
+
+        StringTableSize = *StringTableSizePointer;
+        StringTable = ImpReadBuffer(NULL, Buffer, Offset, StringTableSize);
+        if (StringTable == NULL) {
+            Result = FALSE;
+            goto GetSectionEnd;
+        }
+    }
+
+    //
     // Loop through all sections looking for the desired one.
     //
 
@@ -201,9 +232,35 @@ Return Value:
          SectionIndex < PeHeaders->FileHeader.NumberOfSections;
          SectionIndex += 1) {
 
-        Match = RtlAreStringsEqual((PSTR)SectionHeader->Name,
-                                   SectionName,
-                                   IMAGE_SIZEOF_SHORT_NAME);
+        if (SectionHeader->Name[0] == '/') {
+            if (StringTable == NULL) {
+                Result = FALSE;
+                goto GetSectionEnd;
+            }
+
+            KStatus = RtlStringScan((PSTR)(SectionHeader->Name + 1),
+                                    IMAGE_SIZEOF_SHORT_NAME - 1,
+                                    "%d",
+                                    sizeof("%d"),
+                                    CharacterEncodingAscii,
+                                    &ItemsScanned,
+                                    &Offset);
+
+            if ((!KSUCCESS(KStatus)) || (ItemsScanned != 1)) {
+                Result = FALSE;
+                goto GetSectionEnd;
+            }
+
+            Name = StringTable + Offset;
+            Match = RtlAreStringsEqual(Name,
+                                       SectionName,
+                                       StringTableSize - Offset);
+
+        } else {
+            Match = RtlAreStringsEqual((PSTR)SectionHeader->Name,
+                                       SectionName,
+                                       IMAGE_SIZEOF_SHORT_NAME);
+        }
 
         //
         // If the name matches, return that section.
@@ -222,6 +279,16 @@ Return Value:
 
             ReturnSectionFileSize = SectionHeader->SizeOfRawData;
             ReturnSectionMemorySize = SectionHeader->Misc.VirtualSize;
+
+            //
+            // The file size seems to always be rounded up to 0x200. Give the
+            // more accurate number if possible.
+            //
+
+            if (ReturnSectionMemorySize < ReturnSectionFileSize) {
+                ReturnSectionFileSize = ReturnSectionMemorySize;
+            }
+
             ReturnSectionVirtualAddress = SectionHeader->VirtualAddress;
             break;
         }

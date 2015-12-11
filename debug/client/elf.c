@@ -567,10 +567,11 @@ Return Value:
             //
 
             if ((ResultPointer != NULL) &&
-                (Result.DataResult->Location == DataLocationAbsoluteAddress) &&
-                (Result.DataResult->Address == (UINTN)NULL)) {
+                (Result.U.DataResult->LocationType ==
+                 DataLocationAbsoluteAddress) &&
+                (Result.U.DataResult->Location.Address == (UINTN)NULL)) {
 
-                Result.DataResult->Address = SymbolAddress;
+                Result.U.DataResult->Location.Address = SymbolAddress;
             }
 
             break;

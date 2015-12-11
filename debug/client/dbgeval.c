@@ -1104,20 +1104,21 @@ Return Value:
 
             if (SearchResult.Variety == SymbolResultFunction) {
                 *Address = DbgAddAddress(
-                                     Context,
-                                     SearchResult.FunctionResult->StartAddress,
-                                     CurrentModule->BaseAddress);
+                                   Context,
+                                   SearchResult.U.FunctionResult->StartAddress,
+                                   CurrentModule->BaseAddress);
 
                 Result = 0;
                 break;
 
             } else if ((SearchResult.Variety == SymbolResultData) &&
-                       (SearchResult.DataResult->Location ==
+                       (SearchResult.U.DataResult->LocationType ==
                         DataLocationAbsoluteAddress)) {
 
-                *Address = DbgAddAddress(Context,
-                                         SearchResult.DataResult->Address,
-                                         CurrentModule->BaseAddress);
+                *Address = DbgAddAddress(
+                                   Context,
+                                   SearchResult.U.DataResult->Location.Address,
+                                   CurrentModule->BaseAddress);
 
                 Result = 0;
                 break;
