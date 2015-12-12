@@ -112,6 +112,8 @@ Return Value:
     ULONG IoBufferFlags;
     BOOL LockHeld;
     PHYSICAL_ADDRESS MaximumPhysicalAddress;
+    ULONG MinPacketSize;
+    ULONG Padding;
     NET_PACKET_SIZE_INFORMATION SizeInformation;
     KSTATUS Status;
     ULONG TotalSize;
@@ -157,8 +159,20 @@ Return Value:
 
     MaximumPhysicalAddress = Link->Properties.MaxPhysicalAddress;
     DataSize = HeaderSize + Size + FooterSize;
-    TotalSize = ALIGN_RANGE_UP(DataSize, Alignment);
-    TotalSize = ALIGN_RANGE_UP(TotalSize, 64);
+
+    //
+    // If the total packet size is less than the link's allowed minimum, record
+    // the size of the padding so that it can be zero'd later.
+    //
+
+    Padding = 0;
+    MinPacketSize = Link->Properties.PacketSizeInformation.MinPacketSize;
+    if (DataSize < MinPacketSize) {
+        Padding = MinPacketSize - DataSize;
+    }
+
+    TotalSize = DataSize + Padding;
+    TotalSize = ALIGN_RANGE_UP(TotalSize, Alignment);
 
     //
     // Loop through the list looking for the first buffer that fits.
@@ -254,6 +268,14 @@ AllocateBufferEnd:
         Buffer->DataSize = DataSize;
         Buffer->DataOffset = HeaderSize;
         Buffer->FooterOffset = Buffer->DataOffset + Size;
+
+        //
+        // If padding was added to the packet, then zero it.
+        //
+
+        if (Padding != 0) {
+            RtlZeroMemory(Buffer->Buffer + DataSize, Padding);
+        }
     }
 
     *NewBuffer = Buffer;

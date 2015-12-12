@@ -500,6 +500,10 @@ Return Value:
     Properties.DriverContext = Device;
     PacketSizeInformation = &(Properties.PacketSizeInformation);
     PacketSizeInformation->MaxPacketSize = RTL81_MAX_TRANSMIT_PACKET_SIZE;
+    if ((Device->Flags & RTL81_FLAG_TRANSMIT_MODE_LEGACY) != 0) {
+        PacketSizeInformation->MinPacketSize = RTL81_MINIMUM_PACKET_LENGTH;
+    }
+
     Properties.DataLinkType = NetDataLinkEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
     Properties.PhysicalAddress.Network = SocketNetworkPhysicalEthernet;

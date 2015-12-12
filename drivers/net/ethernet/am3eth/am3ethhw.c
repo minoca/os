@@ -1274,11 +1274,12 @@ Return Value:
 {
 
     ULONG BufferDescriptorAddress;
+    UINTN BufferSize;
     PA3E_DESCRIPTOR Descriptor;
     ULONG DescriptorIndex;
     ULONG HeadDescriptor;
     PNET_PACKET_BUFFER Packet;
-    UINTN PacketSize;
+    ULONG PacketLength;
     ULONG Port;
     PA3E_DESCRIPTOR PreviousDescriptor;
     ULONG PreviousIndex;
@@ -1303,26 +1304,44 @@ Return Value:
         }
 
         NET_REMOVE_PACKET_FROM_LIST(Packet, &(Device->TransmitPacketList));
-        PacketSize = Packet->FooterOffset;
-        PacketSize = ALIGN_RANGE_UP(PacketSize, Device->DataAlignment);
-        MmFlushBufferForDataOut(Packet->Buffer, PacketSize);
+
+        //
+        // If the packet is less than the allowed minimum packet size, then pad
+        // it. The buffer should be big enough to handle it and should have
+        // already initialized the padding to zero.
+        //
+
+        PacketLength = Packet->FooterOffset - Packet->DataOffset;
+        if (PacketLength < A3E_TRANSMIT_MINIMUM_PACKET_SIZE) {
+
+            ASSERT(Packet->BufferSize >= A3E_TRANSMIT_MINIMUM_PACKET_SIZE);
+
+            PacketLength = A3E_TRANSMIT_MINIMUM_PACKET_SIZE;
+        }
+
+        BufferSize = PacketLength + Packet->DataOffset;
+        BufferSize = ALIGN_RANGE_UP(BufferSize, Device->DataAlignment);
+        MmFlushBufferForDataOut(Packet->Buffer, BufferSize);
 
         //
         // Success, a free descriptor. Let's fill it out!
         //
 
+        ASSERT((PacketLength & ~A3E_DESCRIPTOR_BUFFER_LENGTH_MASK) == 0);
+
         Descriptor->NextDescriptor = A3E_DESCRIPTOR_NEXT_NULL;
         Descriptor->Buffer = Packet->BufferPhysicalAddress + Packet->DataOffset;
-        Descriptor->BufferLengthOffset = Packet->FooterOffset -
-                                         Packet->DataOffset;
+        Descriptor->BufferLengthOffset = PacketLength;
+
+        ASSERT((PacketLength & ~A3E_DESCRIPTOR_TX_PACKET_LENGTH_MASK) == 0);
 
         Descriptor->PacketLengthFlags =
-                            (Packet->FooterOffset - Packet->DataOffset) |
-                            A3E_DESCRIPTOR_START_OF_PACKET |
-                            A3E_DESCRIPTOR_END_OF_PACKET |
-                            A3E_DESCRIPTOR_HARDWARE_OWNED |
-                            A3E_DESCRIPTOR_TX_TO_PORT_ENABLE |
-                            (Port << A3E_DESCRIPTOR_TX_TO_PORT_SHIFT);
+                                     PacketLength |
+                                     A3E_DESCRIPTOR_START_OF_PACKET |
+                                     A3E_DESCRIPTOR_END_OF_PACKET |
+                                     A3E_DESCRIPTOR_HARDWARE_OWNED |
+                                     A3E_DESCRIPTOR_TX_TO_PORT_ENABLE |
+                                     (Port << A3E_DESCRIPTOR_TX_TO_PORT_SHIFT);
 
         //
         // Calculate the physical address of the descriptor, and set it as the

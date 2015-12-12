@@ -488,6 +488,7 @@ Return Value:
     Properties.DriverContext = Device;
     PacketSizeInformation = &(Properties.PacketSizeInformation);
     PacketSizeInformation->MaxPacketSize = Device->ReceiveFrameDataSize;
+    PacketSizeInformation->MinPacketSize = A3E_TRANSMIT_MINIMUM_PACKET_SIZE;
     Properties.DataLinkType = NetDataLinkEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
     Properties.PhysicalAddress.Network = SocketNetworkPhysicalEthernet;

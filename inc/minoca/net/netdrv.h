@@ -250,12 +250,17 @@ Members:
         by the protocol, network, and link for bound sockets, but is only
         limited by the protocol and network for unbound sockets.
 
+    MinPacketSize - Stores the minimum size of a packet that can be sent to the
+        physical layer. This includes all headers and footers. This is only
+        ever limited by the device link layer.
+
 --*/
 
 typedef struct _NET_PACKET_SIZE_INFORMATION {
     ULONG HeaderSize;
     ULONG FooterSize;
     ULONG MaxPacketSize;
+    ULONG MinPacketSize;
 } NET_PACKET_SIZE_INFORMATION, *PNET_PACKET_SIZE_INFORMATION;
 
 /*++

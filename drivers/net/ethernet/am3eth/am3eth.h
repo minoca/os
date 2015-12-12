@@ -172,6 +172,13 @@ Author:
 #define A3E_LINK_CHECK_INTERVAL 5
 
 //
+// Define the minimum allowed packet size. The CPSW Ethernet controller does
+// not automatically pad packets up to the Ethernet minimum of 64-bytes.
+//
+
+#define A3E_TRANSMIT_MINIMUM_PACKET_SIZE 64
+
+//
 // Define the size of receive frame data. This is rounded up to be a multiple
 // of 64 for more predictable cache line flushing.
 //
@@ -220,6 +227,7 @@ Author:
 #define A3E_DESCRIPTOR_BUFFER_LENGTH_MASK 0x0000FFFF
 #define A3E_DESCRIPTOR_BUFFER_OFFSET_SHIFT 16
 
+#define A3E_DESCRIPTOR_TX_PACKET_LENGTH_MASK 0x000007FF
 #define A3E_DESCRIPTOR_TX_TO_PORT_SHIFT 16
 #define A3E_DESCRIPTOR_PORT_MASK (0x3 << 16)
 #define A3E_DESCRIPTOR_VLAN (1 << 19)

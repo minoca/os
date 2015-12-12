@@ -4901,11 +4901,12 @@ Return Value:
     ULONG FooterSize;
     ULONG HeaderSize;
     ULONG MaxPacketSize;
+    ULONG MinPacketSize;
 
     //
-    // Add the data link layer's header and footer sizes to the sockets unbound
-    // max packet size. If this is greater than the allowed maximum packet size
-    // for the data link layer, then truncate it.
+    // Add the data link layer's header and footer sizes to the socket's
+    // unbound max packet size. If this is greater than the allowed maximum
+    // packet size for the data link layer, then truncate it.
     //
 
     DataLinkEntry = Link->DataLinkEntry;
@@ -4921,6 +4922,20 @@ Return Value:
     }
 
     //
+    // Add the data link layer's header and footer sizes to the socket's
+    // unbound minimum packet size. The maximum of the minimum packet size is
+    // what wins here.
+    //
+
+    MinPacketSize = DataLinkInformation.HeaderSize +
+                    Socket->UnboundPacketSizeInformation.MinPacketSize +
+                    DataLinkInformation.FooterSize;
+
+    if (MinPacketSize < DataLinkInformation.MinPacketSize) {
+        MinPacketSize = DataLinkInformation.MinPacketSize;
+    }
+
+    //
     // Repeat for the device link layer, truncating the allowed maximum packet
     // size if necessary.
     //
@@ -4933,7 +4948,21 @@ Return Value:
         MaxPacketSize = Link->Properties.PacketSizeInformation.MaxPacketSize;
     }
 
+    //
+    // Repeat for the device link layer, increasing the the minimum packet
+    // size if necessary.
+    //
+
+    MinPacketSize = Link->Properties.PacketSizeInformation.HeaderSize +
+                    MinPacketSize +
+                    Link->Properties.PacketSizeInformation.FooterSize;
+
+    if (MinPacketSize < Link->Properties.PacketSizeInformation.MinPacketSize) {
+        MinPacketSize = Link->Properties.PacketSizeInformation.MinPacketSize;
+    }
+
     SizeInformation->MaxPacketSize = MaxPacketSize;
+    SizeInformation->MinPacketSize = MinPacketSize;
 
     //
     // The headers and footers of all layers are included in the final tally.

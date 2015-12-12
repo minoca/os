@@ -686,6 +686,10 @@ Return Value:
     PacketSizeInformation->MaxPacketSize = ETHERNET_HEADER_SIZE +
                                            ETHERNET_MAXIMUM_PAYLOAD_SIZE;
 
+    PacketSizeInformation->MinPacketSize = ETHERNET_HEADER_SIZE +
+                                           ETHERNET_MINIMUM_PAYLOAD_SIZE +
+                                           ETHERNET_FOOTER_SIZE;
+
     return;
 }
 

@@ -1605,16 +1605,14 @@ Return Value:
 
         //
         // The RTL8139C does not automatically pad runt packets (less than
-        // 64k). Handle that now, by padding the buffer with zero's up to
-        // the CRC, which will get included by the hardware.
+        // 64 bytes). The buffer should have been zero'd as this driver
+        // registered a minimum packet length with net core. Adjust the size,
+        // leaving space for the hardware to fill in the CRC.
         //
 
         if (Size < (RTL81_MINIMUM_PACKET_LENGTH - sizeof(ULONG))) {
 
             ASSERT(Packet->BufferSize >= RTL81_MINIMUM_PACKET_LENGTH);
-
-            RtlZeroMemory(Packet->Buffer + Size,
-                          RTL81_MINIMUM_PACKET_LENGTH - Size);
 
             Size = RTL81_MINIMUM_PACKET_LENGTH - sizeof(ULONG);
         }

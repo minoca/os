@@ -809,6 +809,7 @@ Return Value:
                                            PacketSizeInformation->HeaderSize +
                                            PacketSizeInformation->FooterSize;
 
+    PacketSizeInformation->MinPacketSize = 0;
     return;
 }
 
