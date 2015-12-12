@@ -179,7 +179,7 @@ DbgrpValidateLoadedModules (
 VOID
 DbgrpUnloadModule (
     PDEBUGGER_CONTEXT Context,
-    PLOADED_MODULE Module,
+    PDEBUGGER_MODULE Module,
     BOOL Verbose
     );
 
@@ -226,7 +226,7 @@ DbgrpProcessShutdown (
     PDEBUGGER_CONTEXT Context
     );
 
-PLOADED_MODULE
+PDEBUGGER_MODULE
 DbgpLoadModule (
     PDEBUGGER_CONTEXT Context,
     PSTR BinaryName,
@@ -1885,7 +1885,7 @@ Return Value:
 {
 
     ULONGLONG Address;
-    PLOADED_MODULE CurrentModule;
+    PDEBUGGER_MODULE CurrentModule;
     PLIST_ENTRY CurrentModuleEntry;
     PSTR ModuleEnd;
     ULONG ModuleLength;
@@ -1893,7 +1893,7 @@ Return Value:
     PSYMBOL_SEARCH_RESULT ResultValid;
     SYMBOL_SEARCH_RESULT SearchResult;
     PSTR SearchString;
-    PLOADED_MODULE UserModule;
+    PDEBUGGER_MODULE UserModule;
 
     UserModule = NULL;
     if (ArgumentCount != 2) {
@@ -1942,7 +1942,7 @@ Return Value:
 
     while (CurrentModuleEntry != &(Context->ModuleList.ModulesHead)) {
         CurrentModule = LIST_VALUE(CurrentModuleEntry,
-                                   LOADED_MODULE,
+                                   DEBUGGER_MODULE,
                                    ListEntry);
 
         CurrentModuleEntry = CurrentModuleEntry->Next;
@@ -1980,10 +1980,8 @@ Return Value:
             Result = TRUE;
             switch (SearchResult.Variety) {
             case SymbolResultFunction:
-                Address = DbgAddAddress(
-                                   Context,
-                                   SearchResult.U.FunctionResult->StartAddress,
-                                   CurrentModule->BaseAddress);
+                Address = SearchResult.U.FunctionResult->StartAddress +
+                          CurrentModule->BaseDifference;
 
                 DbgPrintFunctionPrototype(SearchResult.U.FunctionResult,
                                           CurrentModule->ModuleName,
@@ -2001,10 +1999,8 @@ Return Value:
 
                 }
 
-                Address = DbgAddAddress(
-                                   Context,
-                                   SearchResult.U.DataResult->Location.Address,
-                                   CurrentModule->BaseAddress);
+                Address = SearchResult.U.DataResult->Location.Address +
+                          CurrentModule->BaseDifference;
 
                 DbgOut("%s!%s @ 0x%08x\n",
                        CurrentModule->ModuleName,
@@ -2925,7 +2921,7 @@ Return Value:
     PLIST_ENTRY CurrentLocalEntry;
     PFUNCTION_SYMBOL Function;
     ULONGLONG InstructionPointer;
-    PLOADED_MODULE Module;
+    PDEBUGGER_MODULE Module;
     BOOL ParameterPrinted;
     PSYMBOL_SEARCH_RESULT ResultValid;
     SYMBOL_SEARCH_RESULT SearchResult;
@@ -3760,21 +3756,22 @@ Return Value:
 
 {
 
-    ULONG BaseAddress;
+    ULONGLONG BaseDifference;
     PFUNCTION_SYMBOL CurrentFunction;
-    PLOADED_MODULE CurrentModule;
+    PDEBUGGER_MODULE CurrentModule;
     PSOURCE_FILE_SYMBOL CurrentSource;
     ULONGLONG DebasedInstructionPointer;
     ULONGLONG FunctionEndAddress;
+    SYMBOL_SEARCH_RESULT FunctionSearch;
     ULONGLONG InstructionPointer;
     ULONGLONG LineEndAddress;
-    ULONGLONG LineStartAddress;
     RANGE_STEP RangeStep;
     INT Result;
+    PSYMBOL_SEARCH_RESULT ResultValid;
     PSOURCE_LINE_SYMBOL SourceLine;
     BOOL StepInto;
 
-    BaseAddress = 0;
+    BaseDifference = 0;
     CurrentFunction = NULL;
     CurrentSource = NULL;
     FunctionEndAddress = 0;
@@ -3799,14 +3796,26 @@ Return Value:
                                               &DebasedInstructionPointer);
 
     if (CurrentModule != NULL) {
-        BaseAddress = CurrentModule->BaseAddress;
+        BaseDifference = CurrentModule->BaseDifference;
         SourceLine = DbgLookupSourceLine(CurrentModule->Symbols,
                                          DebasedInstructionPointer);
 
         if (SourceLine != NULL) {
-            CurrentFunction = SourceLine->ParentFunction;
             CurrentSource = SourceLine->ParentSource;
         }
+    }
+
+    FunctionSearch.Variety = SymbolResultInvalid;
+    ResultValid = DbgFindFunctionSymbol(CurrentModule->Symbols,
+                                        NULL,
+                                        DebasedInstructionPointer,
+                                        &FunctionSearch);
+
+    if (ResultValid != NULL) {
+
+        assert(FunctionSearch.Variety == SymbolResultFunction);
+
+        CurrentFunction = FunctionSearch.U.FunctionResult;
     }
 
     //
@@ -3815,9 +3824,7 @@ Return Value:
     //
 
     if ((SourceLine == NULL) ||
-        ((Context->Flags & DEBUGGER_FLAG_SOURCE_LINE_STEPPING) == 0) ||
-        ((CurrentFunction == NULL) &&
-         (SourceLine->AbsoluteAddress == FALSE))) {
+        ((Context->Flags & DEBUGGER_FLAG_SOURCE_LINE_STEPPING) == 0)) {
 
         //
         // If stepping into, just execute a single step.
@@ -3852,15 +3859,11 @@ Return Value:
                      Context->BreakInstructionLength) <
                     CurrentFunction->EndAddress) {
 
-                    RangeStep.BreakRangeMinimum = DbgAddAddress(
-                                                 Context,
-                                                 CurrentFunction->StartAddress,
-                                                 BaseAddress);
+                    RangeStep.BreakRangeMinimum =
+                                CurrentFunction->StartAddress + BaseDifference;
 
-                    RangeStep.BreakRangeMaximum = DbgAddAddress(
-                                                   Context,
-                                                   CurrentFunction->EndAddress,
-                                                   BaseAddress);
+                    RangeStep.BreakRangeMaximum =
+                                  CurrentFunction->EndAddress + BaseDifference;
                 }
 
             //
@@ -3874,23 +3877,16 @@ Return Value:
                      Context->BreakInstructionLength) <
                     CurrentSource->EndAddress) {
 
-                    RangeStep.BreakRangeMinimum = DbgAddAddress(
-                                                   Context,
-                                                   CurrentSource->StartAddress,
-                                                   BaseAddress);
+                    RangeStep.BreakRangeMinimum =
+                                  CurrentSource->StartAddress + BaseDifference;
 
-                    RangeStep.BreakRangeMaximum = DbgAddAddress(
-                                                     Context,
-                                                     CurrentSource->EndAddress,
-                                                     BaseAddress);
+                    RangeStep.BreakRangeMaximum =
+                                    CurrentSource->EndAddress + BaseDifference;
                 }
             }
 
             RangeStep.RangeHoleMinimum = InstructionPointer;
-            RangeStep.RangeHoleMaximum = DbgAddAddress(Context,
-                                                       InstructionPointer,
-                                                       1);
-
+            RangeStep.RangeHoleMaximum = InstructionPointer + 1;
             Result = DbgrpRangeStep(Context, &RangeStep);
         }
 
@@ -3910,35 +3906,9 @@ Return Value:
         RangeStep.RangeHoleMinimum = 0;
         RangeStep.RangeHoleMaximum = 0;
 
-    } else if (SourceLine->AbsoluteAddress != FALSE) {
-        LineEndAddress = DbgAddAddress(Context,
-                                       SourceLine->EndOffset,
-                                       BaseAddress);
-
-        RangeStep.RangeHoleMinimum = DbgAddAddress(Context,
-                                                   SourceLine->StartOffset,
-                                                   BaseAddress);
-
-        RangeStep.RangeHoleMaximum = LineEndAddress;
-
     } else {
-        LineEndAddress = DbgAddAddress(Context,
-                                       CurrentFunction->StartAddress,
-                                       BaseAddress);
-
-        LineEndAddress = DbgAddAddress(Context,
-                                       LineEndAddress,
-                                       SourceLine->EndOffset);
-
-        LineStartAddress = DbgAddAddress(Context,
-                                         CurrentFunction->StartAddress,
-                                         BaseAddress);
-
-        LineStartAddress = DbgAddAddress(Context,
-                                         LineStartAddress,
-                                         SourceLine->StartOffset);
-
-        RangeStep.RangeHoleMinimum = LineStartAddress;
+        LineEndAddress = SourceLine->End + BaseDifference;
+        RangeStep.RangeHoleMinimum = SourceLine->Start + BaseDifference;
         RangeStep.RangeHoleMaximum = LineEndAddress;
     }
 
@@ -3949,9 +3919,7 @@ Return Value:
     //
 
     if (CurrentFunction != NULL) {
-        FunctionEndAddress = DbgAddAddress(Context,
-                                           CurrentFunction->EndAddress,
-                                           BaseAddress);
+        FunctionEndAddress = CurrentFunction->EndAddress + BaseDifference;
     }
 
     if ((StepInto != FALSE) ||
@@ -3967,10 +3935,8 @@ Return Value:
     //
 
     } else {
-        RangeStep.BreakRangeMinimum = DbgAddAddress(
-                                                 Context,
-                                                 CurrentFunction->StartAddress,
-                                                 BaseAddress);
+        RangeStep.BreakRangeMinimum =
+                                CurrentFunction->StartAddress + BaseDifference;
 
         RangeStep.BreakRangeMaximum = FunctionEndAddress;
     }
@@ -5364,7 +5330,7 @@ Return Value:
 
 {
 
-    PLOADED_MODULE CurrentModule;
+    PDEBUGGER_MODULE CurrentModule;
     ULONGLONG DebasedAddress;
     BOOL Result;
     PSOURCE_LINE_SYMBOL SourceLine;
@@ -6970,7 +6936,7 @@ Return Value:
     ULONG BinaryNameLength;
     PLIST_ENTRY CurrentEntry;
     PLOADED_MODULE_ENTRY CurrentTargetModule;
-    PLOADED_MODULE ExistingModule;
+    PDEBUGGER_MODULE ExistingModule;
     PSTR FriendlyName;
     ULONG FriendlyNameLength;
     PSTR FriendlyNameStart;
@@ -7029,7 +6995,7 @@ Return Value:
     CurrentEntry = Context->ModuleList.ModulesHead.Next;
     while (CurrentEntry != &(Context->ModuleList.ModulesHead)) {
         ExistingModule = LIST_VALUE(CurrentEntry,
-                                    LOADED_MODULE,
+                                    DEBUGGER_MODULE,
                                     ListEntry);
 
         ExistingModule->Loaded = FALSE;
@@ -7100,7 +7066,7 @@ Return Value:
     CurrentEntry = Context->ModuleList.ModulesHead.Next;
     while (CurrentEntry != &(Context->ModuleList.ModulesHead)) {
         ExistingModule = LIST_VALUE(CurrentEntry,
-                                    LOADED_MODULE,
+                                    DEBUGGER_MODULE,
                                     ListEntry);
 
         CurrentEntry = CurrentEntry->Next;
@@ -7134,7 +7100,7 @@ ValidateLoadedModulesEnd:
 VOID
 DbgrpUnloadModule (
     PDEBUGGER_CONTEXT Context,
-    PLOADED_MODULE Module,
+    PDEBUGGER_MODULE Module,
     BOOL Verbose
     )
 
@@ -7179,7 +7145,8 @@ Return Value:
     //
 
     if (Module->Symbols != NULL) {
-        DbgFreeSymbols(Module->Symbols);
+        DbgUnloadSymbols(Module->Symbols);
+        Module->Symbols = NULL;
     }
 
     if (Module->Filename != NULL) {
@@ -7223,7 +7190,7 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PLOADED_MODULE CurrentModule;
+    PDEBUGGER_MODULE CurrentModule;
 
     if (Context->ModuleList.ModuleCount == 0) {
 
@@ -7235,7 +7202,7 @@ Return Value:
 
     CurrentEntry = Context->ModuleList.ModulesHead.Next;
     while (CurrentEntry != &(Context->ModuleList.ModulesHead)) {
-        CurrentModule = LIST_VALUE(CurrentEntry, LOADED_MODULE, ListEntry);
+        CurrentModule = LIST_VALUE(CurrentEntry, DEBUGGER_MODULE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
         DbgrpUnloadModule(Context, CurrentModule, Verbose);
     }
@@ -7516,7 +7483,11 @@ Return Value:
 
 {
 
+    UINTN DirectoryLength;
+    UINTN FileLength;
     ULONG Index;
+    CHAR LastCharacter;
+    BOOL NeedsSlash;
     PSTR Path;
     ULONG PathLength;
 
@@ -7528,17 +7499,26 @@ Return Value:
         return NULL;
     }
 
+    DirectoryLength = 0;
+    FileLength = strlen(Source->SourceFile);
+    PathLength = FileLength;
+    NeedsSlash = FALSE;
+
     //
     // Get the length of the full path, depending on whether or not a directory
     // was specified.
     //
 
     if (Source->SourceDirectory != NULL) {
-        PathLength = strlen(Source->SourceDirectory) +
-                     strlen(Source->SourceFile);
-
-    } else {
-        PathLength = strlen(Source->SourceFile);
+        DirectoryLength = strlen(Source->SourceDirectory);
+        PathLength += DirectoryLength;
+        if (DirectoryLength != 0) {
+            LastCharacter = Source->SourceDirectory[DirectoryLength - 1];
+            if ((LastCharacter != '/') && (LastCharacter != '\\')) {
+                NeedsSlash = TRUE;
+                PathLength += 1;
+            }
+        }
     }
 
     //
@@ -7551,12 +7531,14 @@ Return Value:
     }
 
     if (Source->SourceDirectory != NULL) {
-        strcpy(Path, Source->SourceDirectory);
-        strcat(Path, Source->SourceFile);
-
-    } else {
-        strcpy(Path, Source->SourceFile);
+        memcpy(Path, Source->SourceDirectory, DirectoryLength);
+        if (NeedsSlash != FALSE) {
+            Path[DirectoryLength] = '/';
+            DirectoryLength += 1;
+        }
     }
+
+    memcpy(Path + DirectoryLength, Source->SourceFile, FileLength + 1);
 
     //
     // Change any backslashes to forward slashes.
@@ -7876,7 +7858,7 @@ Return Value:
     return;
 }
 
-PLOADED_MODULE
+PDEBUGGER_MODULE
 DbgpLoadModule (
     PDEBUGGER_CONTEXT Context,
     PSTR BinaryName,
@@ -7935,7 +7917,7 @@ Return Value:
     UINTN LastIndex;
     ULONG NameIndex;
     ULONG NameLength;
-    PLOADED_MODULE NewModule;
+    PDEBUGGER_MODULE NewModule;
     PSTR OriginalBinaryName;
     ULONG PathCount;
     ULONG PathIndex;
@@ -7975,13 +7957,13 @@ Return Value:
     // Create an entry for the module.
     //
 
-    NewModule = malloc(sizeof(LOADED_MODULE));
+    NewModule = malloc(sizeof(DEBUGGER_MODULE));
     if (NewModule == NULL) {
         Result = FALSE;
         goto LoadModuleEnd;
     }
 
-    memset(NewModule, 0, sizeof(LOADED_MODULE));
+    memset(NewModule, 0, sizeof(DEBUGGER_MODULE));
     NameLength = strlen(BinaryName);
     if (NameLength == 0) {
         Result = FALSE;
@@ -8050,10 +8032,11 @@ Return Value:
                 // this file.
                 //
 
-                NewModule->Symbols = DbgLoadSymbols(PotentialBinary,
-                                                    &ImageMachineType);
+                Status = DbgLoadSymbols(PotentialBinary,
+                                        ImageMachineType,
+                                        &(NewModule->Symbols));
 
-                if (NewModule->Symbols != NULL) {
+                if (Status == 0) {
                     NewModule->Timestamp = Timestamp;
                     NewModule->Filename = PotentialBinary;
                     break;
@@ -8102,10 +8085,11 @@ Return Value:
                 (PotentialTimestamp + 1 == Timestamp) ||
                 (PotentialTimestamp - 1 == Timestamp)) {
 
-                NewModule->Symbols = DbgLoadSymbols(NewModule->Filename,
-                                                    &ImageMachineType);
+                Status = DbgLoadSymbols(NewModule->Filename,
+                                        ImageMachineType,
+                                        &(NewModule->Symbols));
 
-                if (NewModule->Symbols != NULL) {
+                if (Status == 0) {
 
                     //
                     // A module was successfully loaded this way, so skip the
@@ -8138,10 +8122,11 @@ Return Value:
     //
 
     if ((NewModule->Symbols == NULL) && (BackupPotential != NULL)) {
-        NewModule->Symbols = DbgLoadSymbols(BackupPotential,
-                                            &ImageMachineType);
+        Status = DbgLoadSymbols(BackupPotential,
+                                ImageMachineType,
+                                &(NewModule->Symbols));
 
-        if (NewModule->Symbols != NULL) {
+        if (Status == 0) {
 
             //
             // Warn the user that a module with a different timestamp is being
@@ -8221,6 +8206,7 @@ Return Value:
         NewModule->BaseAddress = NewModule->Symbols->ImageBase;
     }
 
+    NewModule->BaseDifference = BaseAddress - NewModule->Symbols->ImageBase;
     DbgOut("Module loaded 0x%08I64x: %s -> ",
            NewModule->BaseAddress,
            NewModule->ModuleName);
@@ -8258,7 +8244,8 @@ LoadModuleEnd:
             }
 
             if (NewModule->Symbols != NULL) {
-                DbgFreeSymbols(NewModule->Symbols);
+                DbgUnloadSymbols(NewModule->Symbols);
+                NewModule->Symbols = NULL;
             }
 
             free(NewModule);

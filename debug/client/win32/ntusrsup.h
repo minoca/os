@@ -48,22 +48,22 @@ typedef enum _NT_EXCEPTION_TYPE {
 } NT_EXCEPTION_TYPE, *PNT_EXCEPTION_TYPE;
 
 typedef struct _NT_X86_REGISTERS {
-    DWORD   SegGs;
-    DWORD   SegFs;
-    DWORD   SegEs;
-    DWORD   SegDs;
-    DWORD   Edi;
-    DWORD   Esi;
-    DWORD   Ebx;
-    DWORD   Edx;
-    DWORD   Ecx;
-    DWORD   Eax;
-    DWORD   Ebp;
-    DWORD   Eip;
-    DWORD   SegCs;
-    DWORD   EFlags;
-    DWORD   Esp;
-    DWORD   SegSs;
+    DWORD SegGs;
+    DWORD SegFs;
+    DWORD SegEs;
+    DWORD SegDs;
+    DWORD Edi;
+    DWORD Esi;
+    DWORD Ebx;
+    DWORD Edx;
+    DWORD Ecx;
+    DWORD Eax;
+    DWORD Ebp;
+    DWORD Eip;
+    DWORD SegCs;
+    DWORD EFlags;
+    DWORD Esp;
+    DWORD SegSs;
 } NT_X86_REGISTERS, *PNT_X86_REGISTERS;
 
 typedef struct _NT_DEBUGGER_EVENT {

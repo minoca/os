@@ -607,7 +607,8 @@ Members:
 
     UnitList - Stores the head of the list of Compilation Units.
 
-    SourcesHead - Stores the head of the list of source file symbols.
+    SourcesHead - Stores a pointer to the head of the list of source file
+        symbols.
 
     LoadingContext - Stores a pointer to internal state used during the load of
         the module. This is of type DWARF_LOADING_CONTEXT.
@@ -620,7 +621,7 @@ typedef struct _DWARF_CONTEXT {
     UINTN FileSize;
     DWARF_DEBUG_SECTIONS Sections;
     LIST_ENTRY UnitList;
-    LIST_ENTRY SourcesHead;
+    PLIST_ENTRY SourcesHead;
     PVOID LoadingContext;
 } DWARF_CONTEXT, *PDWARF_CONTEXT;
 
@@ -752,8 +753,10 @@ typedef struct _DWARF_LOCATION_CONTEXT {
 
 INT
 DwarfLoadSymbols (
-    PDWARF_CONTEXT Context,
-    PSTR FilePath
+    PSTR Filename,
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Flags,
+    PDEBUG_SYMBOLS *Symbols
     );
 
 /*++
@@ -764,33 +767,17 @@ Routine Description:
 
 Arguments:
 
-    Context - Supplies a pointer to the DWARF context structure, which is
-        assumed to have been zeroed.
+    Filename - Supplies the name of the binary to load symbols from.
 
-    FilePath - Supplies the path of the module to load symbols for.
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
 
-Return Value:
+    Flags - Supplies a bitfield of flags governing the behavior during load.
+        These flags are specific to each symbol library.
 
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-VOID
-DwarfDestroyContext (
-    PDWARF_CONTEXT Context
-    );
-
-/*++
-
-Routine Description:
-
-    This routine destroys a DWARF context structure.
-
-Arguments:
-
-    Context - Supplies a pointer to the DWARF context structure.
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
 
 Return Value:
 
@@ -799,3 +786,4 @@ Return Value:
     Returns an error number on failure.
 
 --*/
+

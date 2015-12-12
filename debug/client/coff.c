@@ -28,7 +28,10 @@ Environment:
 #include <minoca/im.h>
 #include "pe.h"
 #include "symbols.h"
+#include "stabs.h"
 
+#include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,6 +61,11 @@ struct _COFF_SECTION {
 LONG
 DbgpGetFileSize (
     FILE *File
+    );
+
+VOID
+DbgpCoffFreeSymbols (
+    PDEBUG_SYMBOLS Symbols
     );
 
 BOOL
@@ -92,9 +100,87 @@ DbgpCreateOrUpdateCoffSymbol (
 // -------------------------------------------------------------------- Globals
 //
 
+DEBUG_SYMBOL_INTERFACE DbgCoffSymbolInterface = {
+    DbgpCoffLoadSymbols,
+    DbgpCoffFreeSymbols
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
+
+INT
+DbgpCoffLoadSymbols (
+    PSTR Filename,
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Flags,
+    PDEBUG_SYMBOLS *Symbols
+    )
+
+/*++
+
+Routine Description:
+
+    This routine loads debugging symbol information from the specified file.
+
+Arguments:
+
+    Filename - Supplies the name of the binary to load symbols from.
+
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
+
+    Flags - Supplies a bitfield of flags governing the behavior during load.
+        These flags are specific to each symbol library.
+
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    UINTN AllocationSize;
+    PDEBUG_SYMBOLS CoffSymbols;
+    BOOL Result;
+    INT Status;
+
+    AllocationSize = sizeof(DEBUG_SYMBOLS) + sizeof(STAB_CONTEXT);
+    CoffSymbols = MALLOC(AllocationSize);
+    if (CoffSymbols == NULL) {
+        Status = ENOMEM;
+        goto CoffLoadSymbolsEnd;
+    }
+
+    memset(CoffSymbols, 0, AllocationSize);
+    CoffSymbols->Interface = &DbgCoffSymbolInterface;
+    CoffSymbols->SymbolContext = CoffSymbols + 1;
+    Result = DbgpLoadCoffSymbols(CoffSymbols, Filename);
+    if (Result == FALSE) {
+        Status = EINVAL;
+        goto CoffLoadSymbolsEnd;
+    }
+
+    Status = 0;
+
+CoffLoadSymbolsEnd:
+    if (Status != 0) {
+        if (CoffSymbols != NULL) {
+            DbgpCoffFreeSymbols(CoffSymbols);
+            CoffSymbols = NULL;
+        }
+    }
+
+    *Symbols = CoffSymbols;
+    return 0;
+}
 
 BOOL
 DbgpLoadCoffSymbols (
@@ -161,6 +247,117 @@ LoadCoffSymbolsEnd:
 // --------------------------------------------------------- Internal Functions
 //
 
+VOID
+DbgpCoffFreeSymbols (
+    PDEBUG_SYMBOLS Symbols
+    )
+
+/*++
+
+Routine Description:
+
+    This routine frees all memory associated with an instance of debugging
+    symbols. Once called, the pointer passed in should not be dereferenced
+    again by the caller.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the debugging symbols.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentFunctionEntry;
+    PLIST_ENTRY CurrentGlobalEntry;
+    PLIST_ENTRY CurrentSourceEntry;
+    PFUNCTION_SYMBOL Function;
+    PDATA_SYMBOL GlobalVariable;
+    PLIST_ENTRY NextFunctionEntry;
+    PSOURCE_FILE_SYMBOL SourceFile;
+    PSTAB_CONTEXT StabContext;
+
+    StabContext = Symbols->SymbolContext;
+    if (Symbols->Filename != NULL) {
+        FREE(Symbols->Filename);
+    }
+
+    if (StabContext->RawSymbolTable != NULL) {
+        FREE(StabContext->RawSymbolTable);
+    }
+
+    if (StabContext->RawSymbolTableStrings != NULL) {
+        FREE(StabContext->RawSymbolTableStrings);
+    }
+
+    //
+    // Free Source files.
+    //
+
+    CurrentSourceEntry = Symbols->SourcesHead.Next;
+    while ((CurrentSourceEntry != &(Symbols->SourcesHead)) &&
+           (CurrentSourceEntry != NULL)) {
+
+        SourceFile = LIST_VALUE(CurrentSourceEntry,
+                                SOURCE_FILE_SYMBOL,
+                                ListEntry);
+
+        assert(LIST_EMPTY(&(SourceFile->TypesHead)));
+
+        //
+        // Free functions.
+        //
+
+        CurrentFunctionEntry = SourceFile->FunctionsHead.Next;
+        while (CurrentFunctionEntry != &(SourceFile->FunctionsHead)) {
+            Function = LIST_VALUE(CurrentFunctionEntry,
+                                  FUNCTION_SYMBOL,
+                                  ListEntry);
+
+            assert(LIST_EMPTY(&(Function->ParametersHead)));
+            assert(LIST_EMPTY(&(Function->LocalsHead)));
+
+            if (Function->Name != NULL) {
+                FREE(Function->Name);
+            }
+
+            NextFunctionEntry = CurrentFunctionEntry->Next;
+            FREE(Function);
+            CurrentFunctionEntry = NextFunctionEntry;
+        }
+
+        assert(LIST_EMPTY(&(SourceFile->SourceLinesHead)));
+
+        //
+        // Free global/static symbols.
+        //
+
+        CurrentGlobalEntry = SourceFile->DataSymbolsHead.Next;
+        while (CurrentGlobalEntry != &(SourceFile->DataSymbolsHead)) {
+            GlobalVariable = LIST_VALUE(CurrentGlobalEntry,
+                                        DATA_SYMBOL,
+                                        ListEntry);
+
+            if (GlobalVariable->Name != NULL) {
+                FREE(GlobalVariable->Name);
+            }
+
+            CurrentGlobalEntry = CurrentGlobalEntry->Next;
+            FREE(GlobalVariable);
+        }
+
+        CurrentSourceEntry = CurrentSourceEntry->Next;
+        FREE(SourceFile);
+    }
+
+    FREE(Symbols);
+    return;
+}
+
 BOOL
 DbgpLoadCoffSymbolTable (
     PDEBUG_SYMBOLS Symbols,
@@ -210,13 +407,15 @@ Return Value:
     ULONG SectionIndex;
     PUCHAR Source;
     ULONG SourceSize;
+    PSTAB_CONTEXT StabContext;
 
+    StabContext = Symbols->SymbolContext;
     CurrentSection = NULL;
     FileBuffer = NULL;
     FirstSection = NULL;
     memset(&ImageBuffer, 0, sizeof(IMAGE_BUFFER));
-    Symbols->RawSymbolTable = NULL;
-    Symbols->RawSymbolTableStrings = NULL;
+    StabContext->RawSymbolTable = NULL;
+    StabContext->RawSymbolTableStrings = NULL;
 
     //
     // Determine the file size and load the file into memory.
@@ -266,14 +465,14 @@ Return Value:
     // Allocate space for the symbol table and copy it in.
     //
 
-    Symbols->RawSymbolTableSize = SourceSize;
-    Symbols->RawSymbolTable = MALLOC(SourceSize);
-    if (Symbols->RawSymbolTable == NULL) {
+    StabContext->RawSymbolTableSize = SourceSize;
+    StabContext->RawSymbolTable = MALLOC(SourceSize);
+    if (StabContext->RawSymbolTable == NULL) {
         Result = FALSE;
         goto LoadCoffSymbolTableEnd;
     }
 
-    memcpy(Symbols->RawSymbolTable, Source, SourceSize);
+    memcpy(StabContext->RawSymbolTable, Source, SourceSize);
 
     //
     // Find the string table, which is right after the symbol table, allocate
@@ -284,20 +483,20 @@ Return Value:
 
     Source += SourceSize;
     SourceSize = *((PULONG)Source);
-    Symbols->RawSymbolTableStringsSize = SourceSize;
-    Symbols->RawSymbolTableStrings = MALLOC(SourceSize);
-    if (Symbols->RawSymbolTableStrings == NULL) {
+    StabContext->RawSymbolTableStringsSize = SourceSize;
+    StabContext->RawSymbolTableStrings = MALLOC(SourceSize);
+    if (StabContext->RawSymbolTableStrings == NULL) {
         Result = FALSE;
         goto LoadCoffSymbolTableEnd;
     }
 
-    memcpy(Symbols->RawSymbolTableStrings, Source, SourceSize);
+    memcpy(StabContext->RawSymbolTableStrings, Source, SourceSize);
 
     //
     // Set the first four bytes to 0.
     //
 
-    *((PULONG)(Symbols->RawSymbolTableStrings)) = 0;
+    *((PULONG)(StabContext->RawSymbolTableStrings)) = 0;
 
     //
     // Create the section list.
@@ -358,12 +557,12 @@ LoadCoffSymbolTableEnd:
     }
 
     if (Result == FALSE) {
-        if (Symbols->RawSymbolTable != NULL) {
-            FREE(Symbols->RawSymbolTable);
+        if (StabContext->RawSymbolTable != NULL) {
+            FREE(StabContext->RawSymbolTable);
         }
 
-        if (Symbols->RawSymbolTableStrings != NULL) {
-            FREE(Symbols->RawSymbolTableStrings);
+        if (StabContext->RawSymbolTableStrings != NULL) {
+            FREE(StabContext->RawSymbolTableStrings);
         }
 
         //
@@ -430,24 +629,26 @@ Return Value:
     ULONG BytesRead;
     PCOFF_SECTION CurrentSection;
     PSTR Name;
+    PSTAB_CONTEXT StabContext;
     PCOFF_SYMBOL Symbol;
     BOOL SymbolCreated;
     ULONGLONG SymbolValue;
 
     BytesRead = 0;
+    StabContext = Symbols->SymbolContext;
 
     //
     // Validate that the symbol tables are there.
     //
 
-    if ((Symbols == NULL) || (Symbols->RawSymbolTable == NULL) ||
-        (Symbols->RawSymbolTableStrings == NULL)) {
+    if ((Symbols == NULL) || (StabContext->RawSymbolTable == NULL) ||
+        (StabContext->RawSymbolTableStrings == NULL)) {
 
         return FALSE;
     }
 
-    Symbol = (PCOFF_SYMBOL)Symbols->RawSymbolTable;
-    while (BytesRead + sizeof(COFF_SYMBOL) <= Symbols->RawSymbolTableSize) {
+    Symbol = (PCOFF_SYMBOL)(StabContext->RawSymbolTable);
+    while (BytesRead + sizeof(COFF_SYMBOL) <= StabContext->RawSymbolTableSize) {
         SymbolValue = 0;
 
         //
@@ -467,8 +668,7 @@ Return Value:
             }
 
             if (CurrentSection != NULL) {
-                SymbolValue = Symbol->Value + CurrentSection->SectionAddress -
-                              Symbols->ImageBase;
+                SymbolValue = Symbol->Value + CurrentSection->SectionAddress;
             }
         }
 
@@ -564,10 +764,12 @@ Return Value:
 
     ULONG Length;
     PSTR Name;
+    PSTAB_CONTEXT StabContext;
     PSTR StringTable;
 
+    StabContext = SymbolData->SymbolContext;
     Name = NULL;
-    StringTable = SymbolData->RawSymbolTableStrings;
+    StringTable = StabContext->RawSymbolTableStrings;
 
     //
     // If the symbol name has its zeroes field zeroed, then use the offset
@@ -579,7 +781,7 @@ Return Value:
             goto GetCoffSymbolNameEnd;
         }
 
-        if (Symbol->Offset >= SymbolData->RawSymbolTableStringsSize) {
+        if (Symbol->Offset >= StabContext->RawSymbolTableStringsSize) {
             goto GetCoffSymbolNameEnd;
         }
 
@@ -758,8 +960,7 @@ Return Value:
         if ((ResultPointer != NULL) &&
             (Result.U.DataResult->LocationType ==
              DataLocationAbsoluteAddress) &&
-            (Result.U.DataResult->Location.Address ==
-             (UINTN)NULL - Symbols->ImageBase)) {
+            (Result.U.DataResult->Location.Address == 0)) {
 
             Result.U.DataResult->Location.Address = Value;
         }

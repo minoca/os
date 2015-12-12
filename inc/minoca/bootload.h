@@ -314,8 +314,8 @@ typedef struct _KERNEL_INITIALIZATION_BLOCK {
     PVOID PageTableStage;
     LOADER_BUFFER MmInitMemory;
     LIST_ENTRY ImageList;
-    PLOADED_MODULE KernelModule;
-    PLOADED_MODULE LoaderModule;
+    PDEBUG_MODULE KernelModule;
+    PDEBUG_MODULE LoaderModule;
     LOADER_BUFFER KernelStack;
     LOADER_BUFFER DeviceToDriverFile;
     LOADER_BUFFER DeviceMapFile;

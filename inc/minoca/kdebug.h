@@ -79,11 +79,11 @@ Members:
 
 --*/
 
-typedef struct _LOADED_MODULE_LIST {
+typedef struct _DEBUG_MODULE_LIST {
     ULONG ModuleCount;
     ULONGLONG Signature;
     LIST_ENTRY ModulesHead;
-} LOADED_MODULE_LIST, *PLOADED_MODULE_LIST;
+} DEBUG_MODULE_LIST, *PDEBUG_MODULE_LIST;
 
 /*++
 
@@ -120,7 +120,7 @@ Members:
 
 --*/
 
-typedef struct _LOADED_MODULE {
+typedef struct _DEBUG_MODULE {
     LIST_ENTRY ListEntry;
     ULONG StructureSize;
     USHORT Checksum;
@@ -132,7 +132,7 @@ typedef struct _LOADED_MODULE {
     PVOID Image;
     ULONG Process;
     CHAR BinaryName[ANYSIZE_ARRAY];
-} LOADED_MODULE, *PLOADED_MODULE;
+} DEBUG_MODULE, *PDEBUG_MODULE;
 
 /*++
 
@@ -233,7 +233,7 @@ typedef struct _DEBUG_HANDOFF_DATA {
 // -------------------------------------------------------------------- Externs
 //
 
-extern LOADED_MODULE_LIST KdLoadedModules;
+extern DEBUG_MODULE_LIST KdLoadedModules;
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -317,7 +317,7 @@ Return Value:
 KSTATUS
 KdInitialize (
     PDEBUG_DEVICE_DESCRIPTION DebugDevice,
-    PLOADED_MODULE CurrentModule
+    PDEBUG_MODULE CurrentModule
     );
 
 /*++
@@ -413,7 +413,7 @@ Return Value:
 
 VOID
 KdReportModuleChange (
-    PLOADED_MODULE Module,
+    PDEBUG_MODULE Module,
     BOOL Loading
     );
 

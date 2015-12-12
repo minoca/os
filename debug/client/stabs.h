@@ -17,8 +17,6 @@ Author:
 
 --*/
 
-#include "symbols.h"
-
 //
 // ---------------------------------------------------------------- Definitions
 //
@@ -139,11 +137,31 @@ typedef struct _CROSS_REFERENCE_ENTRY {
 
 Structure Description:
 
-    This structure stores the current state of the stab parsing process. It is
-    to be used internally during the stab parsing process, and may contain
-    undefined data after parsing is complete.
+    This structure stores the current STABs specific symbol information. It
+    is primarily used during parsing.
 
 Members:
+
+    RawSymbolTable - Stores a pointer to a buffer containing the symbol table
+        out of the PE or ELF file.
+
+    RawSymbolTableSize - Stores the size of the RawSymbolTable buffer, in bytes.
+
+    RawSymbolTableStrings - Stores a pointer to a buffer containing the string
+        table associated with the symbol table in the PE or ELF file.
+
+    RawSymbolTableStringsSize - Stores the size of the RawSymbolTableStrings,
+        in bytes.
+
+    RawStabs - Stores a pointer to a buffer containing the .stab section of
+        the loaded image.
+
+    RawStabsSize - Stores the size of the RawStabs buffer.
+
+    RawStabStrings - Stores a pointer to a buffer containing the .stabstr
+        section of the loaded image.
+
+    RawStabStringsSize - Stores the size of the RawStabStrings buffer.
 
     CurrentModule - Stores a pointer back to the current module being parsed.
 
@@ -176,7 +194,15 @@ Members:
 
 --*/
 
-typedef struct _STAB_PARSE_STATE {
+typedef struct _STAB_CONTEXT {
+    PVOID RawSymbolTable;
+    ULONG RawSymbolTableSize;
+    PVOID RawSymbolTableStrings;
+    ULONG RawSymbolTableStringsSize;
+    PVOID RawStabs;
+    ULONG RawStabsSize;
+    PVOID RawStabStrings;
+    ULONG RawStabStringsSize;
     PDEBUG_SYMBOLS CurrentModule;
     PSTR CurrentSourceDirectory;
     PSOURCE_FILE_SYMBOL CurrentSourceFile;
@@ -187,7 +213,7 @@ typedef struct _STAB_PARSE_STATE {
     LIST_ENTRY CrossReferenceListHead;
     ULONG MaxIncludeIndex;
     ULONGLONG MaxBraceAddress;
-} STAB_PARSE_STATE, *PSTAB_PARSE_STATE;
+} STAB_CONTEXT, *PSTAB_CONTEXT;
 
 /*++
 
@@ -228,6 +254,118 @@ typedef struct _RAW_STAB {
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+INT
+DbgpStabsLoadSymbols (
+    PSTR Filename,
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Flags,
+    PDEBUG_SYMBOLS *Symbols
+    );
+
+/*++
+
+Routine Description:
+
+    This routine loads debugging symbol information from the specified file.
+
+Arguments:
+
+    Filename - Supplies the name of the binary to load symbols from.
+
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
+
+    Flags - Supplies a bitfield of flags governing the behavior during load.
+        These flags are specific to each symbol library.
+
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+DbgpCoffLoadSymbols (
+    PSTR Filename,
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Flags,
+    PDEBUG_SYMBOLS *Symbols
+    );
+
+/*++
+
+Routine Description:
+
+    This routine loads debugging symbol information from the specified file.
+
+Arguments:
+
+    Filename - Supplies the name of the binary to load symbols from.
+
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
+
+    Flags - Supplies a bitfield of flags governing the behavior during load.
+        These flags are specific to each symbol library.
+
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+DbgpElfLoadSymbols (
+    PSTR Filename,
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Flags,
+    PDEBUG_SYMBOLS *Symbols
+    );
+
+/*++
+
+Routine Description:
+
+    This routine loads ELF debugging symbol information from the specified file.
+
+Arguments:
+
+    Filename - Supplies the name of the binary to load symbols from.
+
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
+
+    Flags - Supplies a bitfield of flags governing the behavior during load.
+        These flags are specific to each symbol library.
+
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+//
+// Lower level COFF/ELF functions called from within STABs parsing
+//
+
 BOOL
 DbgpLoadCoffSymbols (
     PDEBUG_SYMBOLS Symbols,
@@ -265,7 +403,7 @@ DbgpLoadElfSymbols (
 
 Routine Description:
 
-    This routine loads COFF symbols into a pre-existing set of ELF symbols.
+    This routine loads ELF symbols into a pre-existing set of ELF symbols.
 
 Arguments:
 

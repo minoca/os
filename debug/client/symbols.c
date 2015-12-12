@@ -29,11 +29,15 @@ Environment:
 #include <minoca/status.h>
 #include <minoca/im.h>
 #include "symbols.h"
+#include "stabs.h"
+#include "dwarf.h"
 #include "dbgext.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -59,8 +63,134 @@ DbgpStringMatch (
 //
 
 //
+// -------------------------------------------------------------------- Globals
+//
+
+//
+// Define the set of known symbol libraries.
+//
+
+PSYMBOLS_LOAD DbgSymbolLoaders[] = {
+    DwarfLoadSymbols,
+    DbgpStabsLoadSymbols,
+    DbgpElfLoadSymbols,
+    DbgpCoffLoadSymbols,
+    NULL
+};
+
+//
+// Define a default void type that has a source file of NULL (this is unique)
+// and a type number of -1.
+//
+
+TYPE_SYMBOL DbgVoidType = {
+    {NULL, NULL},
+    NULL,
+    -1,
+    "void",
+    NULL,
+    DataTypeNumeric,
+    {
+        {
+            FALSE,
+            NULL,
+            -1
+        }
+    }
+};
+
+//
 // ------------------------------------------------------------------ Functions
 //
+
+INT
+DbgLoadSymbols (
+    PSTR Filename,
+    IMAGE_MACHINE_TYPE MachineType,
+    PDEBUG_SYMBOLS *Symbols
+    )
+
+/*++
+
+Routine Description:
+
+    This routine loads debugging symbol information from the specified file.
+
+Arguments:
+
+    Filename - Supplies the name of the binary to load symbols from.
+
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
+
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PSYMBOLS_LOAD *LoadFunction;
+    struct stat Stat;
+    INT Status;
+
+    //
+    // Don't go through the whole process if the file isn't even there.
+    //
+
+    if (stat(Filename, &Stat) != 0) {
+        return errno;
+    }
+
+    LoadFunction = &(DbgSymbolLoaders[0]);
+    Status = ENOSYS;
+    while (*LoadFunction != NULL) {
+        Status = (*LoadFunction)(Filename, MachineType, 0, Symbols);
+        if (Status == 0) {
+            break;
+        }
+
+        LoadFunction += 1;
+    }
+
+    return Status;
+}
+
+VOID
+DbgUnloadSymbols (
+    PDEBUG_SYMBOLS Symbols
+    )
+
+/*++
+
+Routine Description:
+
+    This routine frees all memory associated with an instance of debugging
+    symbols. Once called, the pointer passed in should not be dereferenced
+    again by the caller.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the debugging symbols.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    Symbols->Interface->Unload(Symbols);
+    return;
+}
 
 VOID
 DbgPrintFunctionPrototype (
@@ -168,11 +298,6 @@ Return Value:
 
     PDATA_TYPE_RELATION RelationData;
     PTYPE_SYMBOL Relative;
-
-    if (Type == NULL) {
-        DbgOut("VOID");
-        return;
-    }
 
     switch (Type->Type) {
     case DataTypeStructure:
@@ -1219,7 +1344,10 @@ Return Value:
     PTYPE_SYMBOL CurrentType;
 
     if (SourceFile == NULL) {
-        return NULL;
+
+        assert(TypeNumber == -1);
+
+        return &DbgVoidType;
     }
 
     CurrentEntry = SourceFile->TypesHead.Next;
@@ -1231,6 +1359,10 @@ Return Value:
 
         CurrentEntry = CurrentEntry->Next;
     }
+
+    DbgOut("Error: Failed to look up type %s:%x\n",
+           SourceFile->SourceFile,
+           TypeNumber);
 
     return NULL;
 }
@@ -1264,7 +1396,6 @@ Return Value:
 
 {
 
-    ULONGLONG BaseAddress;
     PLIST_ENTRY CurrentEntry;
     PSOURCE_LINE_SYMBOL CurrentLine;
     PSOURCE_FILE_SYMBOL CurrentSource;
@@ -1302,31 +1433,8 @@ Return Value:
                                      SOURCE_LINE_SYMBOL,
                                      ListEntry);
 
-            //
-            // Get the base address for the source line, which is often
-            // expressed as an offset from the beginning of the function.
-            //
-
-            if (CurrentLine->AbsoluteAddress == FALSE) {
-                if (CurrentLine->ParentFunction != NULL) {
-                    BaseAddress = CurrentLine->ParentFunction->StartAddress;
-
-                } else {
-                    BaseAddress = CurrentLine->ParentSource->StartAddress;
-                }
-
-            } else {
-
-                //
-                // The source line has specified that the offset is actually an
-                // absolute address, so do not add a base.
-                //
-
-                BaseAddress = 0;
-            }
-
-            if ((Address >= BaseAddress + CurrentLine->StartOffset) &&
-                (Address < BaseAddress + CurrentLine->EndOffset)) {
+            if ((Address >= CurrentLine->Start) &&
+                (Address < CurrentLine->End)) {
 
                 //
                 // A match has been found!

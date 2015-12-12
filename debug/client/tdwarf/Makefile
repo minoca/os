@@ -36,10 +36,14 @@ VPATH += $(SRCDIR)/..:
 INCLUDES += $(SRCDIR)/../..;
 INCLUDES += $(SRCROOT)/os/lib/im;
 
-OBJS = dwarf.o       \
+OBJS = coff.o        \
+       elf.o         \
+       dwarf.o       \
        dwexpr.o      \
        dwline.o      \
        dwread.o      \
+       stabs.o       \
+       symbols.o     \
        tdwarf.o      \
 
 include $(SRCROOT)/os/minoca.mk

@@ -28,13 +28,15 @@ Environment:
 #include <minoca/types.h>
 #include <minoca/status.h>
 #include <minoca/im.h>
+#include "symbols.h"
 #include "stabs.h"
 #include "dbgext.h"
 
+#include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -60,6 +62,11 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+VOID
+DbgpStabsUnloadSymbols (
+    PDEBUG_SYMBOLS Symbols
+    );
 
 BOOL
 DbgpLoadRawStabs (
@@ -179,7 +186,7 @@ DbgpParseStaticSymbolStab (
 
 BOOL
 DbgpResolveCrossReferences (
-    PSTAB_PARSE_STATE State
+    PSTAB_CONTEXT State
     );
 
 LONG
@@ -199,6 +206,11 @@ DbgpStabsGetFramePointerRegister (
 //
 // -------------------------------------------------------------------- Globals
 //
+
+DEBUG_SYMBOL_INTERFACE DbgStabsSymbolInterface = {
+    DbgpStabsLoadSymbols,
+    DbgpStabsUnloadSymbols
+};
 
 //
 // Basic memory leak detection code. Disabled by default.
@@ -318,10 +330,12 @@ PrintMemoryLeaks (
 // ------------------------------------------------------------------ Functions
 //
 
-PDEBUG_SYMBOLS
-DbgLoadSymbols (
+INT
+DbgpStabsLoadSymbols (
     PSTR Filename,
-    PIMAGE_MACHINE_TYPE MachineType
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Flags,
+    PDEBUG_SYMBOLS *Symbols
     )
 
 /*++
@@ -334,25 +348,36 @@ Arguments:
 
     Filename - Supplies the name of the binary to load symbols from.
 
-    MachineType - Supplies an optional parameter containing the required image
-        machine type. If this image does not have this machine type, the call
-        fails.
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
+
+    Flags - Supplies a bitfield of flags governing the behavior during load.
+        These flags are specific to each symbol library.
+
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
 
 Return Value:
 
-    Returns a pointer to the loaded debugging symbols, or NULL on error.
+    0 on success.
+
+    Returns an error number on failure.
 
 --*/
 
 {
 
+    UINTN AllocationSize;
     BOOL Result;
-    PDEBUG_SYMBOLS Symbols;
+    PSTAB_CONTEXT StabState;
+    PDEBUG_SYMBOLS StabSymbols;
+    INT Status;
 
-    Result = TRUE;
-    Symbols = MALLOC(sizeof(DEBUG_SYMBOLS));
-    if (Symbols == NULL) {
-        Result = FALSE;
+    AllocationSize = sizeof(DEBUG_SYMBOLS) + sizeof(STAB_CONTEXT);
+    StabSymbols = MALLOC(AllocationSize);
+    if (StabSymbols == NULL) {
+        Status = ENOMEM;
         goto LoadSymbolsEnd;
     }
 
@@ -360,9 +385,15 @@ Return Value:
     // Load the raw stab data from the file into memory.
     //
 
-    memset(Symbols, 0, sizeof(DEBUG_SYMBOLS));
-    Result = DbgpLoadRawStabs(Filename, Symbols);
+    memset(StabSymbols, 0, AllocationSize);
+    StabSymbols->Interface = &DbgStabsSymbolInterface;
+    StabSymbols->SymbolContext = StabSymbols + 1;
+    StabState = StabSymbols->SymbolContext;
+    INITIALIZE_LIST_HEAD(&(StabState->CrossReferenceListHead));
+    StabState->CurrentModule = StabSymbols;
+    Result = DbgpLoadRawStabs(Filename, StabSymbols);
     if (Result == FALSE) {
+        Status = EINVAL;
         goto LoadSymbolsEnd;
     }
 
@@ -370,15 +401,14 @@ Return Value:
     // Verify the machine type, if supplied.
     //
 
-    if ((MachineType != NULL) &&
-        (*MachineType != ImageMachineTypeUnknown) &&
-        (*MachineType != Symbols->Machine)) {
+    if ((MachineType != ImageMachineTypeUnknown) &&
+        (MachineType != StabSymbols->Machine)) {
 
         DbgOut("Image machine type %d mismatches expected %d.\n",
-               *MachineType,
-               Symbols->Machine);
+               MachineType,
+               StabSymbols->Machine);
 
-        Result = FALSE;
+        Status = EINVAL;
         goto LoadSymbolsEnd;
     }
 
@@ -386,40 +416,53 @@ Return Value:
     // Parse through the stabs and initialize internal data structures.
     //
 
-    Result = DbgpPopulateStabs(Symbols);
+    Result = DbgpPopulateStabs(StabSymbols);
     if (Result == FALSE) {
+        Status = EINVAL;
         DbgOut("Failure populating stabs.\n");
         goto LoadSymbolsEnd;
     }
 
     //
-    // Attempt to load COFF symbols for PE images.
+    // Attempt to load COFF symbols for PE images, or ELF symbols for ELF
+    // images.
     //
 
-    if (Symbols->ImageFormat == ImagePe32) {
-        Result = DbgpLoadCoffSymbols(Symbols, Filename);
+    if (StabSymbols->ImageFormat == ImagePe32) {
+        Result = DbgpLoadCoffSymbols(StabSymbols, Filename);
         if (Result == FALSE) {
+            Status = EINVAL;
             goto LoadSymbolsEnd;
         }
 
-    } else if (Symbols->ImageFormat == ImageElf32) {
-        Result = DbgpLoadElfSymbols(Symbols, Filename);
+    } else if (StabSymbols->ImageFormat == ImageElf32) {
+        Result = DbgpLoadElfSymbols(StabSymbols, Filename);
         if (Result == FALSE) {
+            Status = EINVAL;
             goto LoadSymbolsEnd;
         }
     }
+
+    Status = 0;
 
 LoadSymbolsEnd:
-    if (Result == FALSE) {
-        DbgFreeSymbols(Symbols);
-        Symbols = NULL;
+    if (Status != 0) {
+        if (StabSymbols != NULL) {
+            DbgpStabsUnloadSymbols(StabSymbols);
+            StabSymbols = NULL;
+        }
     }
 
-    return Symbols;
+    *Symbols = StabSymbols;
+    return Status;
 }
 
+//
+// --------------------------------------------------------- Internal Functions
+//
+
 VOID
-DbgFreeSymbols (
+DbgpStabsUnloadSymbols (
     PDEBUG_SYMBOLS Symbols
     )
 
@@ -465,6 +508,7 @@ Return Value:
     PDATA_SYMBOL Parameter;
     PSOURCE_FILE_SYMBOL SourceFile;
     PSOURCE_LINE_SYMBOL SourceLine;
+    PSTAB_CONTEXT StabState;
     PDATA_TYPE_STRUCTURE Structure;
     PTYPE_SYMBOL TypeSymbol;
 
@@ -472,24 +516,21 @@ Return Value:
         return;
     }
 
+    StabState = Symbols->SymbolContext;
+
+    assert(LIST_EMPTY(&(StabState->CrossReferenceListHead)));
+    assert(StabState->IncludeStack == NULL);
+
     if (Symbols->Filename != NULL) {
         FREE(Symbols->Filename);
     }
 
-    if (Symbols->RawStabs != NULL) {
-        FREE(Symbols->RawStabs);
+    if (StabState->RawStabs != NULL) {
+        FREE(StabState->RawStabs);
     }
 
-    if (Symbols->RawStabStrings != NULL) {
-        FREE(Symbols->RawStabStrings);
-    }
-
-    if (Symbols->RawSymbolTable != NULL) {
-        FREE(Symbols->RawSymbolTable);
-    }
-
-    if (Symbols->RawSymbolTableStrings != NULL) {
-        FREE(Symbols->RawSymbolTableStrings);
+    if (StabState->RawStabStrings != NULL) {
+        FREE(StabState->RawStabStrings);
     }
 
     //
@@ -664,10 +705,6 @@ Return Value:
     return;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
 BOOL
 DbgpLoadRawStabs (
     PSTR Filename,
@@ -707,14 +744,16 @@ Return Value:
     BOOL Result;
     ULONG SectionSize;
     PVOID SectionSource;
+    PSTAB_CONTEXT StabState;
     KSTATUS Status;
 
     FileBuffer = NULL;
+    StabState = Symbols->SymbolContext;
     memset(&ImageBuffer, 0, sizeof(IMAGE_BUFFER));
     SectionSource = NULL;
     Symbols->Filename = NULL;
-    Symbols->RawStabs = NULL;
-    Symbols->RawStabStrings = NULL;
+    StabState->RawStabs = NULL;
+    StabState->RawStabStrings = NULL;
 
     //
     // Determine the file size and load the file into memory.
@@ -789,14 +828,14 @@ Return Value:
         goto LoadRawStabsEnd;
     }
 
-    Symbols->RawStabs = MALLOC(SectionSize);
-    if (Symbols->RawStabs == NULL) {
+    StabState->RawStabs = MALLOC(SectionSize);
+    if (StabState->RawStabs == NULL) {
         Result = FALSE;
         goto LoadRawStabsEnd;
     }
 
-    memcpy(Symbols->RawStabs, SectionSource, SectionSize);
-    Symbols->RawStabsSize = SectionSize;
+    memcpy(StabState->RawStabs, SectionSource, SectionSize);
+    StabState->RawStabsSize = SectionSize;
 
     //
     // Attempt to get the stab strings section.
@@ -814,28 +853,28 @@ Return Value:
         goto LoadRawStabsEnd;
     }
 
-    Symbols->RawStabStrings = MALLOC(SectionSize);
-    if (Symbols->RawStabStrings == NULL) {
+    StabState->RawStabStrings = MALLOC(SectionSize);
+    if (StabState->RawStabStrings == NULL) {
         Result = FALSE;
         goto LoadRawStabsEnd;
     }
 
-    memcpy(Symbols->RawStabStrings, SectionSource, SectionSize);
-    Symbols->RawStabStringsSize = SectionSize;
+    memcpy(StabState->RawStabStrings, SectionSource, SectionSize);
+    StabState->RawStabStringsSize = SectionSize;
     Result = TRUE;
 
 LoadRawStabsEnd:
     if (Result == FALSE) {
-        if (Symbols->RawStabs != NULL) {
-            FREE(Symbols->RawStabs);
-            Symbols->RawStabs = NULL;
-            Symbols->RawStabsSize = 0;
+        if (StabState->RawStabs != NULL) {
+            FREE(StabState->RawStabs);
+            StabState->RawStabs = NULL;
+            StabState->RawStabsSize = 0;
         }
 
-        if (Symbols->RawStabStrings != NULL) {
-            FREE(Symbols->RawStabStrings);
-            Symbols->RawStabStrings = NULL;
-            Symbols->RawStabStringsSize = 0;
+        if (StabState->RawStabStrings != NULL) {
+            FREE(StabState->RawStabStrings);
+            StabState->RawStabStrings = NULL;
+            StabState->RawStabStringsSize = 0;
         }
 
         if (Symbols->Filename != NULL) {
@@ -892,19 +931,19 @@ Return Value:
     PSTR NameEnd;
     PRAW_STAB RawStab;
     BOOL Result;
+    PSTAB_CONTEXT StabState;
     PSTR StabString;
-    STAB_PARSE_STATE State;
 
     Name = NULL;
-    memset(&State, 0, sizeof(STAB_PARSE_STATE));
+    StabState = Symbols->SymbolContext;
 
     //
     // Validate parameters.
     //
 
-    if ((Symbols == NULL) || (Symbols->RawStabs == NULL) ||
-        (Symbols->RawStabsSize == 0) || (Symbols->RawStabStrings == NULL) ||
-        (Symbols->RawStabStringsSize == 0)) {
+    if ((Symbols == NULL) || (StabState->RawStabs == NULL) ||
+        (StabState->RawStabsSize == 0) || (StabState->RawStabStrings == NULL) ||
+        (StabState->RawStabStringsSize == 0)) {
 
         Result = FALSE;
         goto PopulateStabsEnd;
@@ -920,18 +959,14 @@ Return Value:
         INITIALIZE_LIST_HEAD(&(Symbols->SourcesHead));
     }
 
-    Symbols->ParseState = (PVOID)&State;
-    INITIALIZE_LIST_HEAD(&(State.CrossReferenceListHead));
-    State.CurrentModule = Symbols;
-
     //
     // Loop over stabs.
     //
 
     ByteCount = sizeof(RAW_STAB);
     Index = 0;
-    RawStab = Symbols->RawStabs;
-    while (ByteCount <= Symbols->RawStabsSize) {
+    RawStab = StabState->RawStabs;
+    while (ByteCount <= StabState->RawStabsSize) {
         Name = NULL;
         STABS_DEBUG("%d: Index: 0x%x, Type: %d, Other: %d, Desc: %d, "
                     "Value: 0x%x\n",
@@ -943,11 +978,11 @@ Return Value:
                     RawStab->Value);
 
         if ((RawStab->StringIndex > 0) &&
-            (RawStab->StringIndex < Symbols->RawStabStringsSize)) {
+            (RawStab->StringIndex < StabState->RawStabStringsSize)) {
 
-            StabString = Symbols->RawStabStrings + RawStab->StringIndex;
+            StabString = StabState->RawStabStrings + RawStab->StringIndex;
             STABS_DEBUG("String: %s\n",
-                        Symbols->RawStabStrings + RawStab->StringIndex);
+                        StabState->RawStabStrings + RawStab->StringIndex);
 
             //
             // If the stab has a string, it probably starts with a name. Get
@@ -1120,13 +1155,14 @@ PopulateStabsEnd:
     // Free any remaining cross references.
     //
 
-    CurrentCrossReferenceEntry = State.CrossReferenceListHead.Next;
-    while (CurrentCrossReferenceEntry != &(State.CrossReferenceListHead)) {
+    CurrentCrossReferenceEntry = StabState->CrossReferenceListHead.Next;
+    while (CurrentCrossReferenceEntry != &(StabState->CrossReferenceListHead)) {
         CrossReference = LIST_VALUE(CurrentCrossReferenceEntry,
                                     CROSS_REFERENCE_ENTRY,
                                     ListEntry);
 
         CurrentCrossReferenceEntry = CurrentCrossReferenceEntry->Next;
+        LIST_REMOVE(&(CrossReference->ListEntry));
         FREE(CrossReference);
     }
 
@@ -1180,7 +1216,7 @@ Return Value:
     PSTR Contents;
     PDATA_SYMBOL NewLocal;
     BOOL Result;
-    PSTAB_PARSE_STATE State;
+    PSTAB_CONTEXT State;
     LONG TypeNumber;
     PSOURCE_FILE_SYMBOL TypeOwner;
 
@@ -1239,7 +1275,7 @@ Return Value:
     } else if ((*Contents == '-') || (*Contents == '(') ||
                ((*Contents >= '0') && (*Contents <= '9'))) {
 
-        State = (PSTAB_PARSE_STATE)Symbols->ParseState;
+        State = Symbols->SymbolContext;
 
         //
         // If there is no current source file or function, then it makes very
@@ -1359,7 +1395,7 @@ Return Value:
     PENUMERATION_MEMBER NextEnumerationMember;
     PSTRUCTURE_MEMBER NextStructureMember;
     DATA_TYPE_NUMERIC Numeric;
-    PSTAB_PARSE_STATE ParseState;
+    PSTAB_CONTEXT ParseState;
     DATA_RANGE Range;
     DATA_TYPE_RELATION Relation;
     BOOL Result;
@@ -1459,7 +1495,7 @@ Return Value:
         CrossReference->ReferringTypeNumber = TypeNumber;
         CrossReference->ReferringTypeSource = TypeOwner;
         CrossReference->ReferenceString = String;
-        ParseState = (PSTAB_PARSE_STATE)Symbols->ParseState;
+        ParseState = Symbols->SymbolContext;
         INSERT_BEFORE(&(CrossReference->ListEntry),
                       &(ParseState->CrossReferenceListHead));
 
@@ -2437,7 +2473,7 @@ Return Value:
     INT MatchedItems;
     PSOURCE_FILE_SYMBOL Owner;
     PSOURCE_FILE_SYMBOL PotentialOwner;
-    PSTAB_PARSE_STATE State;
+    PSTAB_CONTEXT State;
     LONG Type;
 
     if ((String == NULL) || (strlen(String) == 0)) {
@@ -2445,7 +2481,7 @@ Return Value:
     }
 
     EndString = String;
-    State = (PSTAB_PARSE_STATE)Symbols->ParseState;
+    State = Symbols->SymbolContext;
 
     //
     // The form is either simply a type number or "(x,y)", where x specifies a
@@ -2621,7 +2657,7 @@ Return Value:
     BOOL PathFullySpecified;
     PSOURCE_FILE_SYMBOL PotentialSource;
     BOOL Result;
-    PSTAB_PARSE_STATE State;
+    PSTAB_CONTEXT State;
     ULONG StringLength;
 
     NewSource = NULL;
@@ -2631,7 +2667,7 @@ Return Value:
     // Parameter checking.
     //
 
-    if ((Symbols == NULL) || (Symbols->ParseState == NULL) ||
+    if ((Symbols == NULL) || (Symbols->SymbolContext == NULL) ||
         ((Stab != NULL) &&
          (Stab->Type != STAB_SOURCE_FILE) &&
          (Stab->Type != STAB_INCLUDE_BEGIN) &&
@@ -2641,7 +2677,7 @@ Return Value:
         return FALSE;
     }
 
-    State = (PSTAB_PARSE_STATE)Symbols->ParseState;
+    State = Symbols->SymbolContext;
 
     //
     // The current source file, line or function may be terminated, so
@@ -2651,7 +2687,7 @@ Return Value:
 
     EndAddress = 0;
     if (Stab != NULL) {
-        EndAddress = Stab->Value - Symbols->ImageBase;
+        EndAddress = Stab->Value;
     }
 
     //
@@ -2783,17 +2819,9 @@ Return Value:
         //
 
         if (State->CurrentSourceLine != NULL) {
-            if (State->CurrentSourceLine->AbsoluteAddress != FALSE) {
-                State->CurrentSourceLine->EndOffset = EndAddress;
-                if (State->CurrentSourceLine->StartOffset > EndAddress) {
-                    State->CurrentSourceLine->EndOffset =
-                                         State->CurrentSourceLine->StartOffset;
-                }
-
-            } else if (State->CurrentSourceLine->ParentFunction != NULL) {
-                State->CurrentSourceLine->EndOffset =
-                     EndAddress -
-                     State->CurrentSourceLine->ParentFunction->StartAddress;
+            State->CurrentSourceLine->End = EndAddress;
+            if (State->CurrentSourceLine->Start > EndAddress) {
+                State->CurrentSourceLine->End = State->CurrentSourceLine->Start;
             }
 
             State->CurrentSourceLine = NULL;
@@ -2855,7 +2883,7 @@ Return Value:
         INITIALIZE_LIST_HEAD(&(NewSource->DataSymbolsHead));
         INITIALIZE_LIST_HEAD(&(NewSource->FunctionsHead));
         INITIALIZE_LIST_HEAD(&(NewSource->TypesHead));
-        NewSource->StartAddress = Stab->Value - Symbols->ImageBase;
+        NewSource->StartAddress = Stab->Value;
 
         //
         // The stab value is used to match EXCL stabs to the includes (BINCL)
@@ -2964,21 +2992,21 @@ Return Value:
     ULONGLONG Address;
     PSOURCE_LINE_SYMBOL NewLine;
     BOOL Result;
-    PSTAB_PARSE_STATE State;
+    PSTAB_CONTEXT State;
 
     //
     // Parameter checking.
     //
 
     if ((Symbols == NULL) ||
-        (Symbols->ParseState == NULL) ||
+        (Symbols->SymbolContext == NULL) ||
         (Stab == NULL) ||
         (Stab->Type != STAB_SOURCE_LINE)) {
 
         return FALSE;
     }
 
-    State = (PSTAB_PARSE_STATE)Symbols->ParseState;
+    State = Symbols->SymbolContext;
     if (State->CurrentSourceLineFile == NULL) {
         return FALSE;
     }
@@ -3008,32 +3036,20 @@ Return Value:
     //
 
     NewLine->ParentSource = State->CurrentSourceLineFile;
-    NewLine->ParentFunction = State->CurrentFunction;
     NewLine->LineNumber = Stab->Description;
-    NewLine->StartOffset = Stab->Value;
-    if (State->CurrentFunction == NULL) {
-        NewLine->AbsoluteAddress = TRUE;
-        NewLine->StartOffset -= Symbols->ImageBase;
-        Address = NewLine->StartOffset;
-
-    } else {
-        NewLine->AbsoluteAddress = FALSE;
-        Address = NewLine->StartOffset + NewLine->ParentFunction->StartAddress;
+    Address = Stab->Value;
+    if (State->CurrentFunction != NULL) {
+        Address += State->CurrentFunction->StartAddress;
     }
+
+    NewLine->Start = Address;
 
     //
     // If there was a previous source line active, end it here.
     //
 
     if (State->CurrentSourceLine != NULL) {
-        if (State->CurrentSourceLine->AbsoluteAddress != FALSE) {
-            State->CurrentSourceLine->EndOffset = Address;
-
-        } else {
-            State->CurrentSourceLine->EndOffset =
-                              Address - State->CurrentFunction->StartAddress;
-        }
-
+        State->CurrentSourceLine->End = Address;
         State->CurrentSourceLine = NULL;
     }
 
@@ -3096,10 +3112,11 @@ Return Value:
 
 {
 
+    ULONG EndAddress;
     PFUNCTION_SYMBOL NewFunction;
     BOOL Result;
     PSTR ReturnTypeString;
-    PSTAB_PARSE_STATE State;
+    PSTAB_CONTEXT State;
 
     NewFunction = NULL;
 
@@ -3107,13 +3124,13 @@ Return Value:
     // Parameter checking.
     //
 
-    if ((Symbols == NULL) || (Symbols->ParseState == NULL) || (Stab == NULL) ||
-        (Stab->Type != STAB_FUNCTION)) {
+    if ((Symbols == NULL) || (Symbols->SymbolContext == NULL) ||
+        (Stab == NULL) || (Stab->Type != STAB_FUNCTION)) {
 
         return FALSE;
     }
 
-    State = (PSTAB_PARSE_STATE)Symbols->ParseState;
+    State = Symbols->SymbolContext;
 
     //
     // If the string is NULL, the current function is ending. Also make sure to
@@ -3121,15 +3138,18 @@ Return Value:
     //
 
     if ((StabString == NULL) || (strlen(StabString) == 0)) {
+        EndAddress = Stab->Value;
+        if (State->CurrentFunction != NULL) {
+            EndAddress += State->CurrentFunction->StartAddress;
+        }
+
         if (State->CurrentSourceLine != NULL) {
-            State->CurrentSourceLine->EndOffset = Stab->Value;
+            State->CurrentSourceLine->End = EndAddress;
             State->CurrentSourceLine = NULL;
         }
 
         if (State->CurrentFunction != NULL) {
-            State->CurrentFunction->EndAddress =
-                            State->CurrentFunction->StartAddress + Stab->Value;
-
+            State->CurrentFunction->EndAddress = EndAddress;
             State->CurrentFunction = NULL;
         }
 
@@ -3178,7 +3198,7 @@ Return Value:
 
     NewFunction->FunctionNumber = Stab->Description;
     NewFunction->ParentSource = State->CurrentSourceFile;
-    NewFunction->StartAddress = Stab->Value - Symbols->ImageBase;
+    NewFunction->StartAddress = Stab->Value;
 
     //
     // Insert the function into the current source file's list of functions.
@@ -3244,7 +3264,7 @@ Return Value:
     PDATA_SYMBOL NewParameter;
     PSTR ParameterTypeString;
     BOOL Result;
-    PSTAB_PARSE_STATE State;
+    PSTAB_CONTEXT State;
 
     NewParameter = NULL;
 
@@ -3255,12 +3275,12 @@ Return Value:
     if ((Symbols == NULL) || (Stab == NULL) ||
         ((Stab->Type != STAB_FUNCTION_PARAMETER) &&
          (Stab->Type != STAB_REGISTER_VARIABLE)) ||
-        (Symbols->ParseState == NULL)) {
+        (Symbols->SymbolContext == NULL)) {
 
         return FALSE;
     }
 
-    State = (PSTAB_PARSE_STATE)Symbols->ParseState;
+    State = Symbols->SymbolContext;
 
     //
     // Create the new parameter on the heap.
@@ -3372,7 +3392,7 @@ Return Value:
 
     PDATA_SYMBOL NewLocal;
     BOOL Result;
-    PSTAB_PARSE_STATE State;
+    PSTAB_CONTEXT State;
     CHAR VariableFlavor;
     PSTR VariableType;
 
@@ -3384,12 +3404,12 @@ Return Value:
 
     if ((Symbols == NULL) || (Stab == NULL) ||
         (Stab->Type != STAB_REGISTER_VARIABLE) ||
-        (Symbols->ParseState == NULL)) {
+        (Symbols->SymbolContext == NULL)) {
 
         return FALSE;
     }
 
-    State = (PSTAB_PARSE_STATE)Symbols->ParseState;
+    State = Symbols->SymbolContext;
     if (State->CurrentFunction == NULL) {
         return FALSE;
     }
@@ -3509,15 +3529,16 @@ Return Value:
 {
 
     ULONGLONG Address;
-    PSTAB_PARSE_STATE State;
+    PSTAB_CONTEXT State;
 
-    if ((Symbols == NULL) || (Stab == NULL) || (Symbols->ParseState == NULL) ||
+    if ((Symbols == NULL) || (Stab == NULL) ||
+        (Symbols->SymbolContext == NULL) ||
         ((Stab->Type != STAB_LEFT_BRACE) && (Stab->Type != STAB_RIGHT_BRACE))) {
 
         return FALSE;
     }
 
-    State = (PSTAB_PARSE_STATE)Symbols->ParseState;
+    State = Symbols->SymbolContext;
     if (State->CurrentFunction == NULL) {
         return FALSE;
     }
@@ -3570,7 +3591,7 @@ Return Value:
 
     PDATA_SYMBOL NewStatic;
     BOOL Result;
-    PSTAB_PARSE_STATE State;
+    PSTAB_CONTEXT State;
     PSTR StaticScope;
     PSTR StaticType;
 
@@ -3582,7 +3603,7 @@ Return Value:
 
     if ((Symbols == NULL) ||
         (Stab == NULL) ||
-        (Symbols->ParseState == NULL) ||
+        (Symbols->SymbolContext == NULL) ||
         ((Stab->Type != STAB_STATIC) &&
          (Stab->Type != STAB_GLOBAL_SYMBOL) &&
          (Stab->Type != STAB_BSS_SYMBOL)) ) {
@@ -3590,7 +3611,7 @@ Return Value:
         return FALSE;
     }
 
-    State = (PSTAB_PARSE_STATE)Symbols->ParseState;
+    State = Symbols->SymbolContext;
 
     //
     // Create the new static variable on the heap.
@@ -3621,7 +3642,7 @@ Return Value:
 
     NewStatic->ParentSource = State->CurrentSourceFile;
     NewStatic->LocationType = DataLocationAbsoluteAddress;
-    NewStatic->Location.Address = Stab->Value - Symbols->ImageBase;
+    NewStatic->Location.Address = Stab->Value;
     NewStatic->MinimumValidExecutionAddress = 0;
     StaticType = StaticScope + 1;
     StaticType = DbgpGetTypeNumber(Symbols,
@@ -3675,7 +3696,7 @@ ParseStaticSymbolStabEnd:
 
 BOOL
 DbgpResolveCrossReferences (
-    PSTAB_PARSE_STATE State
+    PSTAB_CONTEXT State
     )
 
 /*++
@@ -3978,13 +3999,13 @@ Return Value:
 
 {
 
-    PSTAB_PARSE_STATE ParseState;
+    PSTAB_CONTEXT ParseState;
 
     if (Symbols->Machine == ImageMachineTypeX86) {
         return RegisterEbp;
 
     } else if (Symbols->Machine == ImageMachineTypeArm32) {
-        ParseState = Symbols->ParseState;
+        ParseState = Symbols->SymbolContext;
 
         //
         // If the current function has the thumb bit set, then use the thumb

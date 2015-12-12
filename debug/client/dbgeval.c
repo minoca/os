@@ -1024,14 +1024,14 @@ Return Value:
 
 {
 
-    PLOADED_MODULE CurrentModule;
+    PDEBUGGER_MODULE CurrentModule;
     PLIST_ENTRY CurrentModuleEntry;
     PSTR ModuleEnd;
     ULONG ModuleLength;
     INT Result;
     PSYMBOL_SEARCH_RESULT ResultValid;
     SYMBOL_SEARCH_RESULT SearchResult;
-    PLOADED_MODULE UserModule;
+    PDEBUGGER_MODULE UserModule;
 
     Result = EINVAL;
     UserModule = NULL;
@@ -1073,7 +1073,7 @@ Return Value:
 
     while (CurrentModuleEntry != &(Context->ModuleList.ModulesHead)) {
         CurrentModule = LIST_VALUE(CurrentModuleEntry,
-                                   LOADED_MODULE,
+                                   DEBUGGER_MODULE,
                                    ListEntry);
 
         CurrentModuleEntry = CurrentModuleEntry->Next;
@@ -1103,10 +1103,8 @@ Return Value:
             (SearchResult.Variety != SymbolResultInvalid)) {
 
             if (SearchResult.Variety == SymbolResultFunction) {
-                *Address = DbgAddAddress(
-                                   Context,
-                                   SearchResult.U.FunctionResult->StartAddress,
-                                   CurrentModule->BaseAddress);
+                *Address = SearchResult.U.FunctionResult->StartAddress +
+                           CurrentModule->BaseDifference;
 
                 Result = 0;
                 break;
@@ -1115,10 +1113,8 @@ Return Value:
                        (SearchResult.U.DataResult->LocationType ==
                         DataLocationAbsoluteAddress)) {
 
-                *Address = DbgAddAddress(
-                                   Context,
-                                   SearchResult.U.DataResult->Location.Address,
-                                   CurrentModule->BaseAddress);
+                *Address = SearchResult.U.DataResult->Location.Address +
+                           CurrentModule->BaseDifference;
 
                 Result = 0;
                 break;

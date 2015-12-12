@@ -710,7 +710,7 @@ Return Value:
     CHAR8 *AsciiFileName;
     UINTN AsciiFileNameSize;
     UINT32 AuthenticationStatus;
-    PLOADED_MODULE DebuggerModule;
+    PDEBUG_MODULE DebuggerModule;
     EFI_HANDLE DeviceHandle;
     EFI_IMAGE_FILE_HANDLE FileHandle;
     CHAR16 *FileName;
@@ -922,7 +922,7 @@ Return Value:
                                                        &AsciiFileNameSize);
 
         if (AsciiFileName != NULL) {
-            AllocationSize = sizeof(LOADED_MODULE) + AsciiFileNameSize;
+            AllocationSize = sizeof(DEBUG_MODULE) + AsciiFileNameSize;
             DebuggerModule = EfiCoreAllocateBootPool(AllocationSize);
             if (DebuggerModule != NULL) {
                 EfiSetMem(DebuggerModule, AllocationSize, 0);

@@ -563,7 +563,7 @@ struct _DEBUGGER_CONTEXT {
     DEBUGGER_SOURCE_FILE SourceFile;
     LIST_ENTRY SourcePathList;
     ULONG HighlightedLineNumber;
-    LOADED_MODULE_LIST ModuleList;
+    DEBUGGER_MODULE_LIST ModuleList;
     ULONGLONG RemoteModuleListSignature;
     ULONG MachineType;
     DEBUGGER_THREAD_PROFILING_DATA ThreadProfiling;
@@ -2404,34 +2404,6 @@ Return Value:
     0 on success.
 
     Returns an error code on failure.
-
---*/
-
-ULONGLONG
-DbgAddAddress (
-    PDEBUGGER_CONTEXT Context,
-    ULONGLONG Address,
-    ULONGLONG Value
-    );
-
-/*++
-
-Routine Description:
-
-    This routine adds a value to a target address, truncating the result if the
-    target is 32-bits.
-
-Arguments:
-
-    Context - Supplies a pointer to the application context.
-
-    Address - Supplies the address to add to.
-
-    Value - Supplies the offset to add to the address.
-
-Return Value:
-
-    Returns (Address + Value) mod PointerSize.
 
 --*/
 

@@ -931,12 +931,12 @@ Return Value:
 
     ULONG AllocationSize;
     UINTN BaseDifference;
-    PLOADED_MODULE LoadedModule;
+    PDEBUG_MODULE LoadedModule;
     ULONG NameSize;
     KSTATUS Status;
 
     NameSize = RtlStringLength(Image->BinaryName) + 1;
-    AllocationSize = sizeof(LOADED_MODULE) +
+    AllocationSize = sizeof(DEBUG_MODULE) +
                      ((NameSize - ANYSIZE_ARRAY) * sizeof(CHAR));
 
     LoadedModule = BoAllocateMemory(AllocationSize);
@@ -999,7 +999,7 @@ Return Value:
 
 {
 
-    PLOADED_MODULE UnloadingModule;
+    PDEBUG_MODULE UnloadingModule;
 
     UnloadingModule = Image->DebuggerModule;
     Image->DebuggerModule = NULL;

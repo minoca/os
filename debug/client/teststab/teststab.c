@@ -25,6 +25,7 @@ Environment:
 //
 
 #include <assert.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +34,7 @@ Environment:
 #include <minoca/types.h>
 #include <minoca/status.h>
 #include <minoca/im.h>
+#include "../symbols.h"
 #include "../stabs.h"
 
 //
@@ -108,12 +110,6 @@ PSTR ArmRegisterNames[] = {
     "fps",
     "cpsr"
 };
-
-//
-// Unused global to satisfy the linker.
-//
-
-LOADED_MODULE_LIST ModuleList;
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -197,6 +193,7 @@ Return Value:
     SYMBOL_SEARCH_RESULT SearchResult;
     ULONG SourceFilesProcessed;
     PSOURCE_LINE_SYMBOL SourceLine;
+    INT Status;
     PDATA_TYPE_STRUCTURE Structure;
     PDEBUG_SYMBOLS Symbols;
     PSTR TypeName;
@@ -301,13 +298,13 @@ Return Value:
         printf("Loading symbols...");
     }
 
-    Symbols = DbgLoadSymbols(ImageName, NULL);
+    Status = DbgLoadSymbols(ImageName, ImageMachineTypeUnknown, &Symbols);
     if (PrintVerbose != FALSE) {
-        printf("Done\n");
+        printf("Done %d\n", Status);
     }
 
     if (Symbols == NULL) {
-        printf("Error loading symbols\n");
+        printf("Error loading symbols: %s\n", strerror(Status));
         Result = FALSE;
         goto MainEnd;
     }
@@ -533,29 +530,15 @@ Return Value:
                                     SOURCE_LINE_SYMBOL,
                                     ListEntry);
 
-            if (SourceLine->AbsoluteAddress == FALSE) {
-                if (PrintSourceLines != FALSE) {
-                    printf("   Line %d of file %s in function %s: %08I64x - "
-                           "%08I64x\n",
-                           SourceLine->LineNumber,
-                           SourceLine->ParentSource->SourceFile,
-                           SourceLine->ParentFunction->Name,
-                           SourceLine->StartOffset,
-                           SourceLine->EndOffset);
-                }
-
-            } else {
-                if (PrintSourceLines != FALSE) {
-                    printf("   Line %d of file %s with absolute address "
-                           "%08I64x - %08I64x\n",
-                           SourceLine->LineNumber,
-                           SourceLine->ParentSource->SourceFile,
-                           SourceLine->StartOffset,
-                           SourceLine->EndOffset);
-                }
+            if (PrintSourceLines != FALSE) {
+                printf("   Line %d of file %s: %08I64x - %08I64x\n",
+                       SourceLine->LineNumber,
+                       SourceLine->ParentSource->SourceFile,
+                       SourceLine->Start,
+                       SourceLine->End);
             }
 
-            assert(SourceLine->EndOffset >= SourceLine->StartOffset);
+            assert(SourceLine->End >= SourceLine->Start);
 
             CurrentLineEntry = CurrentLineEntry->Next;
             LinesProcessed += 1;
@@ -914,7 +897,7 @@ MainEnd:
             printf("\nCleaning up...");
         }
 
-        DbgFreeSymbols(Symbols);
+        DbgUnloadSymbols(Symbols);
         if (PrintVerbose != FALSE) {
             printf("Done!\n");
         }
@@ -965,4 +948,45 @@ Return Value:
     Result = vprintf(Format, Arguments);
     va_end(Arguments);
     return Result;
+}
+
+INT
+DwarfLoadSymbols (
+    PSTR Filename,
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Flags,
+    PDEBUG_SYMBOLS *Symbols
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements a stub for the DWARF symbol loader entry point.
+
+Arguments:
+
+    Filename - Supplies the name of the binary to load symbols from.
+
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
+
+    Flags - Supplies a bitfield of flags governing the behavior during load.
+        These flags are specific to each symbol library.
+
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    return ENOSYS;
 }

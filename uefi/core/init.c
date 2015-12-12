@@ -44,7 +44,7 @@ Environment:
 //
 
 #define EFI_MODULE_BUFFER_SIZE \
-    (sizeof(LOADED_MODULE) + EFI_FIRMWARE_BINARY_NAME_MAX_SIZE)
+    (sizeof(DEBUG_MODULE) + EFI_FIRMWARE_BINARY_NAME_MAX_SIZE)
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -312,7 +312,7 @@ Return Value:
 
 {
 
-    PLOADED_MODULE DebugModule;
+    PDEBUG_MODULE DebugModule;
     EFI_STATUS EfiStatus;
     UINTN ModuleNameLength;
     ULONG OriginalTimeout;
@@ -332,7 +332,7 @@ Return Value:
 
     EfipInitializeProcessor();
     Step += 1;
-    DebugModule = (PLOADED_MODULE)EfiModuleBuffer;
+    DebugModule = (PDEBUG_MODULE)EfiModuleBuffer;
 
     //
     // Initialize the debugging subsystem.
@@ -344,7 +344,7 @@ Return Value:
         ModuleNameLength = EFI_FIRMWARE_BINARY_NAME_MAX_SIZE;
     }
 
-    DebugModule->StructureSize = sizeof(LOADED_MODULE) + ModuleNameLength -
+    DebugModule->StructureSize = sizeof(DEBUG_MODULE) + ModuleNameLength -
                                  (ANYSIZE_ARRAY * sizeof(CHAR));
 
     RtlStringCopy(DebugModule->BinaryName,

@@ -53,6 +53,11 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+VOID
+DwarfUnloadSymbols (
+    PDEBUG_SYMBOLS Symbols
+    );
+
 INT
 DwarfpProcessDebugInfo (
     PDWARF_CONTEXT Context
@@ -140,14 +145,21 @@ DwarfpProcessGenericBlock (
 // -------------------------------------------------------------------- Globals
 //
 
+DEBUG_SYMBOL_INTERFACE DwarfSymbolInterface = {
+    DwarfLoadSymbols,
+    DwarfUnloadSymbols
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
 
 INT
 DwarfLoadSymbols (
-    PDWARF_CONTEXT Context,
-    PSTR FilePath
+    PSTR Filename,
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Flags,
+    PDEBUG_SYMBOLS *Symbols
     )
 
 /*++
@@ -158,10 +170,17 @@ Routine Description:
 
 Arguments:
 
-    Context - Supplies a pointer to the DWARF context structure, which is
-        assumed to have been zeroed.
+    Filename - Supplies the name of the binary to load symbols from.
 
-    FilePath - Supplies the path of the module to load symbols for.
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
+
+    Flags - Supplies a bitfield of flags governing the behavior during load.
+        These flags are specific to each symbol library.
+
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
 
 Return Value:
 
@@ -173,20 +192,45 @@ Return Value:
 
 {
 
+    UINTN AllocationSize;
+    PDWARF_CONTEXT Context;
+    PDEBUG_SYMBOLS DwarfSymbols;
     FILE *File;
     IMAGE_BUFFER ImageBuffer;
+    IMAGE_INFORMATION ImageInformation;
+    KSTATUS KStatus;
     size_t Read;
     PDWARF_DEBUG_SECTIONS Sections;
     struct stat Stat;
     INT Status;
 
-    INITIALIZE_LIST_HEAD(&(Context->UnitList));
-    INITIALIZE_LIST_HEAD(&(Context->SourcesHead));
-    Status = stat(FilePath, &Stat);
+    DwarfSymbols = NULL;
+    Status = stat(Filename, &Stat);
     if (Status != 0) {
+        Status = errno;
         return Status;
     }
 
+    //
+    // Allocate and initialize the top level data structures.
+    //
+
+    AllocationSize = sizeof(DEBUG_SYMBOLS) + sizeof(DWARF_CONTEXT);
+    DwarfSymbols = malloc(AllocationSize);
+    if (DwarfSymbols == NULL) {
+        Status = ENOMEM;
+        goto LoadSymbolsEnd;
+    }
+
+    memset(DwarfSymbols, 0, AllocationSize);
+    INITIALIZE_LIST_HEAD(&(DwarfSymbols->SourcesHead));
+    DwarfSymbols->Filename = strdup(Filename);
+    DwarfSymbols->SymbolContext = DwarfSymbols + 1;
+    DwarfSymbols->Interface = &DwarfSymbolInterface;
+    Context = DwarfSymbols->SymbolContext;
+    Context->SourcesHead = &(DwarfSymbols->SourcesHead);
+    Context->Flags = Flags;
+    INITIALIZE_LIST_HEAD(&(Context->UnitList));
     Context->FileData = malloc(Stat.st_size);
     if (Context->FileData == NULL) {
         Status = errno;
@@ -194,7 +238,12 @@ Return Value:
     }
 
     Context->FileSize = Stat.st_size;
-    File = fopen(FilePath, "rb");
+
+    //
+    // Read in the file.
+    //
+
+    File = fopen(Filename, "rb");
     if (File == NULL) {
         Status = errno;
         goto LoadSymbolsEnd;
@@ -208,9 +257,39 @@ Return Value:
         goto LoadSymbolsEnd;
     }
 
+    //
+    // Fill in the image information, and check against the desired machine
+    // type if set before going to all the trouble of fully loading symbols.
+    //
+
     ImageBuffer.Context = NULL;
     ImageBuffer.Data = Context->FileData;
     ImageBuffer.Size = Context->FileSize;
+    KStatus = ImGetImageInformation(&ImageBuffer, &ImageInformation);
+    if (!KSUCCESS(KStatus)) {
+        Status = ENOEXEC;
+        goto LoadSymbolsEnd;
+    }
+
+    DwarfSymbols->ImageBase = ImageInformation.ImageBase;
+    DwarfSymbols->Machine = ImageInformation.Machine;
+    DwarfSymbols->ImageFormat = ImageInformation.Format;
+    if ((MachineType != ImageMachineTypeUnknown) &&
+        (MachineType != DwarfSymbols->Machine)) {
+
+        DWARF_ERROR("DWARF: File %s has machine type %d, expecting %d.\n",
+                    Filename,
+                    DwarfSymbols->Machine,
+                    MachineType);
+
+        Status = ENOEXEC;
+        goto LoadSymbolsEnd;
+    }
+
+    //
+    // Find the important DWARF sections.
+    //
+
     Sections = &(Context->Sections);
     ImGetImageSection(&ImageBuffer,
                       ".debug_info",
@@ -312,6 +391,10 @@ Return Value:
         goto LoadSymbolsEnd;
     }
 
+    //
+    // Parse the .debug_info section, which contains most of the good bits.
+    //
+
     Status = DwarfpProcessDebugInfo(Context);
     if (Status != 0) {
         goto LoadSymbolsEnd;
@@ -321,37 +404,41 @@ Return Value:
 
 LoadSymbolsEnd:
     if (Status != 0) {
-        DwarfDestroyContext(Context);
+        if (DwarfSymbols != NULL) {
+            DwarfUnloadSymbols(DwarfSymbols);
+            DwarfSymbols = NULL;
+        }
     }
 
+    *Symbols = DwarfSymbols;
     return Status;
 }
 
 VOID
-DwarfDestroyContext (
-    PDWARF_CONTEXT Context
+DwarfUnloadSymbols (
+    PDEBUG_SYMBOLS Symbols
     )
 
 /*++
 
 Routine Description:
 
-    This routine destroys a DWARF context structure.
+    This routine frees all memory associated with an instance of debugging
+    symbols, including the symbols structure itsefl.
 
 Arguments:
 
-    Context - Supplies a pointer to the DWARF context structure.
+    Symbols - Supplies a pointer to the debugging symbols.
 
 Return Value:
 
-    0 on success.
-
-    Returns an error number on failure.
+    None.
 
 --*/
 
 {
 
+    PDWARF_CONTEXT Context;
     PDATA_SYMBOL DataSymbol;
     PENUMERATION_MEMBER Enumeration;
     PFUNCTION_SYMBOL Function;
@@ -362,12 +449,14 @@ Return Value:
     PTYPE_SYMBOL Type;
     PDWARF_COMPILATION_UNIT Unit;
 
+    Context = Symbols->SymbolContext;
+
     //
     // Destroy all the sources.
     //
 
-    while (!LIST_EMPTY(&(Context->SourcesHead))) {
-        SourceFile = LIST_VALUE(Context->SourcesHead.Next,
+    while (!LIST_EMPTY(Context->SourcesHead)) {
+        SourceFile = LIST_VALUE(Context->SourcesHead->Next,
                                 SOURCE_FILE_SYMBOL,
                                 ListEntry);
 
@@ -468,6 +557,11 @@ Return Value:
     }
 
     Context->FileSize = 0;
+    if (Symbols->Filename != NULL) {
+        free(Symbols->Filename);
+    }
+
+    free(Symbols);
     return;
 }
 
@@ -510,8 +604,8 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PSOURCE_FILE_SYMBOL File;
 
-    CurrentEntry = Context->SourcesHead.Next;
-    while (CurrentEntry != &(Context->SourcesHead)) {
+    CurrentEntry = Context->SourcesHead->Next;
+    while (CurrentEntry != Context->SourcesHead) {
         File = LIST_VALUE(CurrentEntry, SOURCE_FILE_SYMBOL, ListEntry);
         CurrentEntry = CurrentEntry->Next;
 
@@ -553,7 +647,7 @@ Return Value:
     INITIALIZE_LIST_HEAD(&(File->TypesHead));
     File->SourceDirectory = Directory;
     File->SourceFile = FileName;
-    INSERT_BEFORE(&(File->ListEntry), &(Context->SourcesHead));
+    INSERT_BEFORE(&(File->ListEntry), Context->SourcesHead);
     return File;
 }
 

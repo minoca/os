@@ -28,8 +28,11 @@ Environment:
 #include <minoca/im.h>
 #include "elf.h"
 #include "symbols.h"
+#include "stabs.h"
 #include "dbgext.h"
 
+#include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,6 +64,11 @@ DbgpGetFileSize (
     FILE *File
     );
 
+VOID
+DbgpElfFreeSymbols (
+    PDEBUG_SYMBOLS Symbols
+    );
+
 BOOL
 DbgpLoadElfSymbolTable (
     PDEBUG_SYMBOLS Symbols,
@@ -78,9 +86,87 @@ DbgpParseElfSymbolTable (
 // -------------------------------------------------------------------- Globals
 //
 
+DEBUG_SYMBOL_INTERFACE DbgElfSymbolInterface = {
+    DbgpElfLoadSymbols,
+    DbgpElfFreeSymbols
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
+
+INT
+DbgpElfLoadSymbols (
+    PSTR Filename,
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Flags,
+    PDEBUG_SYMBOLS *Symbols
+    )
+
+/*++
+
+Routine Description:
+
+    This routine loads ELF debugging symbol information from the specified file.
+
+Arguments:
+
+    Filename - Supplies the name of the binary to load symbols from.
+
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
+
+    Flags - Supplies a bitfield of flags governing the behavior during load.
+        These flags are specific to each symbol library.
+
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    UINTN AllocationSize;
+    PDEBUG_SYMBOLS ElfSymbols;
+    BOOL Result;
+    INT Status;
+
+    AllocationSize = sizeof(DEBUG_SYMBOLS) + sizeof(PSTAB_CONTEXT);
+    ElfSymbols = MALLOC(AllocationSize);
+    if (ElfSymbols == NULL) {
+        Status = ENOMEM;
+        goto ElfLoadSymbolsEnd;
+    }
+
+    memset(ElfSymbols, 0, AllocationSize);
+    ElfSymbols->Interface = &DbgElfSymbolInterface;
+    ElfSymbols->SymbolContext = ElfSymbols + 1;
+    Result = DbgpLoadElfSymbols(ElfSymbols, Filename);
+    if (Result == FALSE) {
+        Status = EINVAL;
+        goto ElfLoadSymbolsEnd;
+    }
+
+    Status = 0;
+
+ElfLoadSymbolsEnd:
+    if (Status != 0) {
+        if (ElfSymbols != NULL) {
+            DbgpElfFreeSymbols(ElfSymbols);
+            ElfSymbols = NULL;
+        }
+    }
+
+    *Symbols = ElfSymbols;
+    return 0;
+}
 
 BOOL
 DbgpLoadElfSymbols (
@@ -92,7 +178,7 @@ DbgpLoadElfSymbols (
 
 Routine Description:
 
-    This routine loads COFF symbols into a pre-existing set of ELF symbols.
+    This routine loads ELF symbols into a pre-existing set of ELF symbols.
 
 Arguments:
 
@@ -142,6 +228,117 @@ LoadElfSymbolsEnd:
 // --------------------------------------------------------- Internal Functions
 //
 
+VOID
+DbgpElfFreeSymbols (
+    PDEBUG_SYMBOLS Symbols
+    )
+
+/*++
+
+Routine Description:
+
+    This routine frees all memory associated with an instance of debugging
+    symbols. Once called, the pointer passed in should not be dereferenced
+    again by the caller.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the debugging symbols.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentFunctionEntry;
+    PLIST_ENTRY CurrentGlobalEntry;
+    PLIST_ENTRY CurrentSourceEntry;
+    PFUNCTION_SYMBOL Function;
+    PDATA_SYMBOL GlobalVariable;
+    PLIST_ENTRY NextFunctionEntry;
+    PSOURCE_FILE_SYMBOL SourceFile;
+    PSTAB_CONTEXT StabContext;
+
+    StabContext = Symbols->SymbolContext;
+    if (Symbols->Filename != NULL) {
+        FREE(Symbols->Filename);
+    }
+
+    if (StabContext->RawSymbolTable != NULL) {
+        FREE(StabContext->RawSymbolTable);
+    }
+
+    if (StabContext->RawSymbolTableStrings != NULL) {
+        FREE(StabContext->RawSymbolTableStrings);
+    }
+
+    //
+    // Free Source files.
+    //
+
+    CurrentSourceEntry = Symbols->SourcesHead.Next;
+    while ((CurrentSourceEntry != &(Symbols->SourcesHead)) &&
+           (CurrentSourceEntry != NULL)) {
+
+        SourceFile = LIST_VALUE(CurrentSourceEntry,
+                                SOURCE_FILE_SYMBOL,
+                                ListEntry);
+
+        assert(LIST_EMPTY(&(SourceFile->TypesHead)));
+
+        //
+        // Free functions.
+        //
+
+        CurrentFunctionEntry = SourceFile->FunctionsHead.Next;
+        while (CurrentFunctionEntry != &(SourceFile->FunctionsHead)) {
+            Function = LIST_VALUE(CurrentFunctionEntry,
+                                  FUNCTION_SYMBOL,
+                                  ListEntry);
+
+            assert(LIST_EMPTY(&(Function->ParametersHead)));
+            assert(LIST_EMPTY(&(Function->LocalsHead)));
+
+            if (Function->Name != NULL) {
+                FREE(Function->Name);
+            }
+
+            NextFunctionEntry = CurrentFunctionEntry->Next;
+            FREE(Function);
+            CurrentFunctionEntry = NextFunctionEntry;
+        }
+
+        assert(LIST_EMPTY(&(SourceFile->SourceLinesHead)));
+
+        //
+        // Free global/static symbols.
+        //
+
+        CurrentGlobalEntry = SourceFile->DataSymbolsHead.Next;
+        while (CurrentGlobalEntry != &(SourceFile->DataSymbolsHead)) {
+            GlobalVariable = LIST_VALUE(CurrentGlobalEntry,
+                                        DATA_SYMBOL,
+                                        ListEntry);
+
+            if (GlobalVariable->Name != NULL) {
+                FREE(GlobalVariable->Name);
+            }
+
+            CurrentGlobalEntry = CurrentGlobalEntry->Next;
+            FREE(GlobalVariable);
+        }
+
+        CurrentSourceEntry = CurrentSourceEntry->Next;
+        FREE(SourceFile);
+    }
+
+    FREE(Symbols);
+    return;
+}
+
 BOOL
 DbgpLoadElfSymbolTable (
     PDEBUG_SYMBOLS Symbols,
@@ -190,16 +387,18 @@ Return Value:
     BOOL Result;
     ULONG SectionIndex;
     PUCHAR Source;
+    PSTAB_CONTEXT StabContext;
     PELF32_SECTION_HEADER StringSection;
     PELF32_SECTION_HEADER SymbolSection;
 
     CurrentSection = NULL;
+    StabContext = Symbols->SymbolContext;
     FileBuffer = NULL;
     FirstSection = NULL;
     memset(&ImageBuffer, 0, sizeof(IMAGE_BUFFER));
     SymbolSection = NULL;
-    Symbols->RawSymbolTable = NULL;
-    Symbols->RawSymbolTableStrings = NULL;
+    StabContext->RawSymbolTable = NULL;
+    StabContext->RawSymbolTableStrings = NULL;
     *SectionList = NULL;
 
     //
@@ -313,26 +512,31 @@ Return Value:
         goto LoadElfSymbolTableEnd;
     }
 
-    Symbols->RawSymbolTableSize = SymbolSection->Size;
-    Symbols->RawSymbolTableStringsSize = StringSection->Size;
-    Symbols->RawSymbolTable = MALLOC(Symbols->RawSymbolTableSize);
-    if (Symbols->RawSymbolTable == NULL) {
+    StabContext->RawSymbolTableSize = SymbolSection->Size;
+    StabContext->RawSymbolTableStringsSize = StringSection->Size;
+    StabContext->RawSymbolTable = MALLOC(StabContext->RawSymbolTableSize);
+    if (StabContext->RawSymbolTable == NULL) {
         Result = FALSE;
         goto LoadElfSymbolTableEnd;
     }
 
-    Symbols->RawSymbolTableStrings = MALLOC(Symbols->RawSymbolTableStringsSize);
-    if (Symbols->RawSymbolTableStrings == NULL) {
+    StabContext->RawSymbolTableStrings =
+                                MALLOC(StabContext->RawSymbolTableStringsSize);
+
+    if (StabContext->RawSymbolTableStrings == NULL) {
         Result = FALSE;
         goto LoadElfSymbolTableEnd;
     }
 
     Source = (PUCHAR)FileBuffer + SymbolSection->Offset;
-    RtlCopyMemory(Symbols->RawSymbolTable, Source, Symbols->RawSymbolTableSize);
-    Source = (PUCHAR)FileBuffer + StringSection->Offset;
-    RtlCopyMemory(Symbols->RawSymbolTableStrings,
+    RtlCopyMemory(StabContext->RawSymbolTable,
                   Source,
-                  Symbols->RawSymbolTableStringsSize);
+                  StabContext->RawSymbolTableSize);
+
+    Source = (PUCHAR)FileBuffer + StringSection->Offset;
+    RtlCopyMemory(StabContext->RawSymbolTableStrings,
+                  Source,
+                  StabContext->RawSymbolTableStringsSize);
 
     Result = TRUE;
 
@@ -342,12 +546,12 @@ LoadElfSymbolTableEnd:
     }
 
     if (Result == FALSE) {
-        if (Symbols->RawSymbolTable != NULL) {
-            FREE(Symbols->RawSymbolTable);
+        if (StabContext->RawSymbolTable != NULL) {
+            FREE(StabContext->RawSymbolTable);
         }
 
-        if (Symbols->RawSymbolTableStrings != NULL) {
-            FREE(Symbols->RawSymbolTableStrings);
+        if (StabContext->RawSymbolTableStrings != NULL) {
+            FREE(StabContext->RawSymbolTableStrings);
         }
 
         //
@@ -395,7 +599,7 @@ Arguments:
         string table are expected to be valid.
 
     SectionList - Supplies a list of all loadable section in the image. Most
-        COFF symbols are relative to a section, so this is needed to determine
+        ELF symbols are relative to a section, so this is needed to determine
         the real address.
 
 Return Value:
@@ -416,6 +620,7 @@ Return Value:
     PFUNCTION_SYMBOL NewFunction;
     SYMBOL_SEARCH_RESULT Result;
     PSYMBOL_SEARCH_RESULT ResultPointer;
+    PSTAB_CONTEXT StabContext;
     BOOL Status;
     ULONG SymbolAddress;
     PELF32_SYMBOL SymbolEnd;
@@ -423,18 +628,19 @@ Return Value:
     PSTR SymbolNameCopy;
     ELF32_SYMBOL_TYPE SymbolType;
 
+    StabContext = Symbols->SymbolContext;
     Status = TRUE;
     NewFunction = NULL;
     SymbolNameCopy = NULL;
-    SymbolEnd = (PELF32_SYMBOL)((PUCHAR)Symbols->RawSymbolTable +
-                                Symbols->RawSymbolTableSize);
+    SymbolEnd = (PELF32_SYMBOL)((PUCHAR)StabContext->RawSymbolTable +
+                                StabContext->RawSymbolTableSize);
 
-    CurrentSymbol = (PELF32_SYMBOL)Symbols->RawSymbolTable;
+    CurrentSymbol = (PELF32_SYMBOL)(StabContext->RawSymbolTable);
     while (CurrentSymbol + 1 <= SymbolEnd) {
         Result.Variety = SymbolResultInvalid;
         SymbolAddress = 0;
         SymbolType = ELF32_EXTRACT_SYMBOL_TYPE(CurrentSymbol->Information);
-        SymbolName = (PSTR)Symbols->RawSymbolTableStrings +
+        SymbolName = (PSTR)StabContext->RawSymbolTableStrings +
                      CurrentSymbol->NameOffset;
 
         //

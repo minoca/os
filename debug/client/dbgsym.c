@@ -143,7 +143,7 @@ Return Value:
 
     PSOURCE_LINE_SYMBOL Line;
     LONG LineNumber;
-    PLOADED_MODULE Module;
+    PDEBUGGER_MODULE Module;
     ULONGLONG Offset;
     PSYMBOL_SEARCH_RESULT ResultValid;
     SYMBOL_SEARCH_RESULT SearchResult;
@@ -319,7 +319,7 @@ Return Value:
         return NULL;
     }
 
-    Address = DbgAddAddress(Context, Address, Module->BaseAddress);
+    Address += Module->BaseDifference;
     if (Address >= Module->BaseAddress) {
         Offset = Address - Module->BaseAddress;
         sprintf(Symbol, "%s+0x%I64x", Module->ModuleName, Offset);
@@ -820,51 +820,11 @@ PrintDataSymbolEnd:
     return Result;
 }
 
-ULONGLONG
-DbgAddAddress (
-    PDEBUGGER_CONTEXT Context,
-    ULONGLONG Address,
-    ULONGLONG Value
-    )
-
-/*++
-
-Routine Description:
-
-    This routine adds a value to a target address, truncating the result if the
-    target is 32-bits.
-
-Arguments:
-
-    Context - Supplies a pointer to the application context.
-
-    Address - Supplies the address to add to.
-
-    Value - Supplies the offset to add to the address.
-
-Return Value:
-
-    Returns (Address + Value) mod PointerSize.
-
---*/
-
-{
-
-    ULONGLONG Result;
-
-    Result = Address + Value;
-    if (DbgGetTargetPointerSize(Context) == sizeof(ULONG)) {
-        Result &= MAX_ULONG;
-    }
-
-    return Result;
-}
-
-PLOADED_MODULE
+PDEBUGGER_MODULE
 DbgpFindModuleFromAddress (
     PDEBUGGER_CONTEXT Context,
     ULONGLONG Address,
-    PULONGLONG Offset
+    PULONGLONG DebasedAddress
     )
 
 /*++
@@ -880,8 +840,10 @@ Arguments:
 
     Address - Supplies an address somewhere in one of the loaded modules.
 
-    Offset - Supplies an optional pointer where the offset into the module
-        of the given address will be returned.
+    DebasedAddress - Supplies an optional pointer where the address minus the
+        loaded base difference from where the module would have preferred to
+        have been loaded will be returned. This will be the address from the
+        symbols' perspective.
 
 Return Value:
 
@@ -892,15 +854,15 @@ Return Value:
 
 {
 
-    PLOADED_MODULE CurrentModule;
+    PDEBUGGER_MODULE CurrentModule;
     PLIST_ENTRY CurrentModuleEntry;
-    PLOADED_MODULE FoundModule;
+    PDEBUGGER_MODULE FoundModule;
 
     FoundModule = NULL;
     CurrentModuleEntry = Context->ModuleList.ModulesHead.Next;
     while (CurrentModuleEntry != &(Context->ModuleList.ModulesHead)) {
         CurrentModule = LIST_VALUE(CurrentModuleEntry,
-                                   LOADED_MODULE,
+                                   DEBUGGER_MODULE,
                                    ListEntry);
 
         CurrentModuleEntry = CurrentModuleEntry->Next;
@@ -916,17 +878,14 @@ Return Value:
         }
     }
 
-    if ((FoundModule != NULL) && (Offset != NULL)) {
-        *Offset = Address - FoundModule->BaseAddress;
-        if (DbgGetTargetPointerSize(Context) == sizeof(ULONG)) {
-            *Offset &= MAX_ULONG;
-        }
+    if ((FoundModule != NULL) && (DebasedAddress != NULL)) {
+        *DebasedAddress = Address - FoundModule->BaseDifference;
     }
 
     return FoundModule;
 }
 
-PLOADED_MODULE
+PDEBUGGER_MODULE
 DbgpGetModule (
     PDEBUGGER_CONTEXT Context,
     PSTR ModuleName,
@@ -955,13 +914,13 @@ Return Value:
 
 {
 
-    PLOADED_MODULE CurrentModule;
+    PDEBUGGER_MODULE CurrentModule;
     PLIST_ENTRY CurrentModuleEntry;
 
     CurrentModuleEntry = Context->ModuleList.ModulesHead.Next;
     while (CurrentModuleEntry != &(Context->ModuleList.ModulesHead)) {
         CurrentModule = LIST_VALUE(CurrentModuleEntry,
-                                   LOADED_MODULE,
+                                   DEBUGGER_MODULE,
                                    ListEntry);
 
         CurrentModuleEntry = CurrentModuleEntry->Next;
@@ -1009,7 +968,7 @@ Return Value:
 
     ULONGLONG DebasedAddress;
     ULONGLONG FunctionStart;
-    PLOADED_MODULE Module;
+    PDEBUGGER_MODULE Module;
     PSYMBOL_SEARCH_RESULT ResultValid;
     SYMBOL_SEARCH_RESULT SearchResult;
 
@@ -1040,14 +999,8 @@ Return Value:
     if ((ResultValid != NULL) &&
         (SearchResult.Variety == SymbolResultFunction)) {
 
-        FunctionStart = DbgAddAddress(
-                                   Context,
-                                   SearchResult.U.FunctionResult->StartAddress,
-                                   Module->BaseAddress);
-
-        if (DbgGetTargetPointerSize(Context) == sizeof(ULONG)) {
-            FunctionStart &= MAX_ULONG;
-        }
+        FunctionStart = SearchResult.U.FunctionResult->StartAddress +
+                        Module->BaseDifference;
     }
 
 GetFunctionStartAddressEnd:
@@ -1084,7 +1037,7 @@ Return Value:
 
 {
 
-    PLOADED_MODULE CurrentModule;
+    PDEBUGGER_MODULE CurrentModule;
     PLIST_ENTRY CurrentModuleEntry;
     BOOL HaveSilverMedalResult;
     PSTR ModuleEnd;
@@ -1094,7 +1047,7 @@ Return Value:
     PSYMBOL_SEARCH_RESULT ResultValid;
     SYMBOL_SEARCH_RESULT SilverMedalResult;
     PDATA_TYPE_STRUCTURE Structure;
-    PLOADED_MODULE UserModule;
+    PDEBUGGER_MODULE UserModule;
 
     Result = FALSE;
     ResultValid = NULL;
@@ -1144,7 +1097,7 @@ Return Value:
 
     while (CurrentModuleEntry != &(Context->ModuleList.ModulesHead)) {
         CurrentModule = LIST_VALUE(CurrentModuleEntry,
-                                   LOADED_MODULE,
+                                   DEBUGGER_MODULE,
                                    ListEntry);
 
         CurrentModuleEntry = CurrentModuleEntry->Next;
@@ -1255,7 +1208,7 @@ FindSymbolEnd:
     return Result;
 }
 
-PLOADED_MODULE
+PDEBUGGER_MODULE
 DbgpFindModuleFromEntry (
     PDEBUGGER_CONTEXT Context,
     PLOADED_MODULE_ENTRY TargetEntry
@@ -1283,11 +1236,11 @@ Return Value:
 
 {
 
-    PLOADED_MODULE Backup;
+    PDEBUGGER_MODULE Backup;
     ULONG BinaryNameLength;
     ULONG CharacterIndex;
     PLIST_ENTRY CurrentListEntry;
-    PLOADED_MODULE CurrentModule;
+    PDEBUGGER_MODULE CurrentModule;
     PSTR FriendlyName;
     ULONG FriendlyNameLength;
 
@@ -1299,7 +1252,7 @@ Return Value:
     CurrentListEntry = Context->ModuleList.ModulesHead.Next;
     while (CurrentListEntry != &(Context->ModuleList.ModulesHead)) {
         CurrentModule = LIST_VALUE(CurrentListEntry,
-                                   LOADED_MODULE,
+                                   DEBUGGER_MODULE,
                                    ListEntry);
 
         //
@@ -1571,7 +1524,7 @@ Return Value:
 {
 
     ULONGLONG InstructionPointer;
-    PLOADED_MODULE Module;
+    PDEBUGGER_MODULE Module;
     PSYMBOL_SEARCH_RESULT ResultValid;
     SYMBOL_SEARCH_RESULT SearchResult;
 

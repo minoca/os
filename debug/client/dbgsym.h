@@ -33,11 +33,11 @@ Author:
 // ------------------------------------------------------------------ Functions
 //
 
-PLOADED_MODULE
+PDEBUGGER_MODULE
 DbgpFindModuleFromAddress (
     PDEBUGGER_CONTEXT Context,
     ULONGLONG Address,
-    PULONGLONG Offset
+    PULONGLONG DebasedAddress
     );
 
 /*++
@@ -53,8 +53,10 @@ Arguments:
 
     Address - Supplies an address somewhere in one of the loaded modules.
 
-    Offset - Supplies an optional pointer where the offset into the module
-        of the given address will be returned.
+    DebasedAddress - Supplies an optional pointer where the address minus the
+        loaded base difference from where the module would have preferred to
+        have been loaded will be returned. This will be the address from the
+        symbols' perspective.
 
 Return Value:
 
@@ -63,7 +65,7 @@ Return Value:
 
 --*/
 
-PLOADED_MODULE
+PDEBUGGER_MODULE
 DbgpGetModule (
     PDEBUGGER_CONTEXT Context,
     PSTR ModuleName,
@@ -144,7 +146,7 @@ Return Value:
 
 --*/
 
-PLOADED_MODULE
+PDEBUGGER_MODULE
 DbgpFindModuleFromEntry (
     PDEBUGGER_CONTEXT Context,
     PLOADED_MODULE_ENTRY TargetEntry

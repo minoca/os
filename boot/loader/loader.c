@@ -41,7 +41,7 @@ Environment:
 
 #define LOADER_BINARY_NAME_MAX_SIZE 16
 #define LOADER_MODULE_BUFFER_SIZE \
-    (sizeof(LOADED_MODULE) + sizeof(LOADER_BINARY_NAME_MAX_SIZE))
+    (sizeof(DEBUG_MODULE) + sizeof(LOADER_BINARY_NAME_MAX_SIZE))
 
 #define LOADER_NAME "Minoca Boot Loader"
 
@@ -176,7 +176,7 @@ typedef struct _LOADER_ACPI_MEMORY_ITERATOR {
 
 BOOL BoForceDebug = FALSE;
 
-LOADED_MODULE BoLoaderModule;
+DEBUG_MODULE BoLoaderModule;
 extern MEMORY_DESCRIPTOR_LIST BoVirtualMap;
 
 //
@@ -238,11 +238,11 @@ Return Value:
     FILE_ID ConfigurationDirectory;
     PDEBUG_DEVICE_DESCRIPTION DebugDevice;
     PLOADED_IMAGE KernelImage;
-    PLOADED_MODULE KernelModule;
+    PDEBUG_MODULE KernelModule;
     PKERNEL_INITIALIZATION_BLOCK KernelParameters;
     PSTR KernelPath;
     PHYSICAL_ADDRESS KernelStackPhysical;
-    PLOADED_MODULE LoaderModule;
+    PDEBUG_MODULE LoaderModule;
     ULONG LoaderModuleNameLength;
     ULONG LoaderStep;
     ULONG LoadFlags;
@@ -287,7 +287,7 @@ Return Value:
     }
 
     LoaderStep += 1;
-    LoaderModule = (PLOADED_MODULE)BoLoaderModuleBuffer;
+    LoaderModule = (PDEBUG_MODULE)BoLoaderModuleBuffer;
 
     //
     // Initialize the debugging subsystem.
@@ -299,7 +299,7 @@ Return Value:
         LoaderModuleNameLength = LOADER_BINARY_NAME_MAX_SIZE;
     }
 
-    LoaderModule->StructureSize = sizeof(LOADED_MODULE) +
+    LoaderModule->StructureSize = sizeof(DEBUG_MODULE) +
                                   LoaderModuleNameLength -
                                   (ANYSIZE_ARRAY * sizeof(CHAR));
 

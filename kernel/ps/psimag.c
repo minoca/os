@@ -2307,7 +2307,7 @@ Return Value:
 
     ULONG AllocationSize;
     UINTN BaseDifference;
-    PLOADED_MODULE DebuggerModule;
+    PDEBUG_MODULE DebuggerModule;
     ULONG NameSize;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -2333,7 +2333,7 @@ Return Value:
     //
 
     NameSize = ((RtlStringLength(Image->BinaryName) + 1) * sizeof(CHAR));
-    AllocationSize = sizeof(LOADED_MODULE) + NameSize -
+    AllocationSize = sizeof(DEBUG_MODULE) + NameSize -
                      (sizeof(CHAR) * ANYSIZE_ARRAY);
 
     DebuggerModule = MmAllocateNonPagedPool(AllocationSize,

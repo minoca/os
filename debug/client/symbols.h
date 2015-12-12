@@ -29,6 +29,7 @@ Author:
 
 typedef struct _STRUCTURE_MEMBER STRUCTURE_MEMBER, *PSTRUCTURE_MEMBER;
 typedef struct _ENUMERATION_MEMBER ENUMERATION_MEMBER, *PENUMERATION_MEMBER;
+typedef struct _DEBUG_SYMBOLS DEBUG_SYMBOLS, *PDEBUG_SYMBOLS;
 
 typedef enum _DATA_TYPE_TYPE {
     DataTypeInvalid,
@@ -67,6 +68,141 @@ typedef enum _SYMBOL_RESULT_TYPE {
     SymbolResultData
 } SYMBOL_RESULT_TYPE, *PSYMBOL_RESULT_TYPE;
 
+//
+// Symbol interface function types.
+//
+
+typedef
+INT
+(*PSYMBOLS_LOAD) (
+    PSTR Filename,
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Flags,
+    PDEBUG_SYMBOLS *Symbols
+    );
+
+/*++
+
+Routine Description:
+
+    This routine loads debugging symbol information from the specified file.
+
+Arguments:
+
+    Filename - Supplies the name of the binary to load symbols from.
+
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
+
+    Flags - Supplies a bitfield of flags governing the behavior during load.
+        These flags are specific to each symbol library.
+
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+typedef
+VOID
+(*PSYMBOLS_UNLOAD) (
+    PDEBUG_SYMBOLS Symbols
+    );
+
+/*++
+
+Routine Description:
+
+    This routine frees all memory associated with an instance of debugging
+    symbols, including the symbols structure itsefl.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the debugging symbols.
+
+Return Value:
+
+    None.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines the interface to a symbol parsing library.
+
+Members:
+
+    Load - Stores a pointer to a function that loads symbols.
+
+    Unload - Stores a pointer to a function that unloads loaded symbols.
+
+--*/
+
+typedef struct _DEBUG_SYMBOL_INTERFACE {
+    PSYMBOLS_LOAD Load;
+    PSYMBOLS_UNLOAD Unload;
+} DEBUG_SYMBOL_INTERFACE, *PDEBUG_SYMBOL_INTERFACE;
+
+/*++
+
+Structure Description:
+
+    This structure holds internal information pertaining to a loaded module's
+    symbols. It stores all symbol information for a given module.
+
+Members:
+
+    Filename - Stores the file name of the current module. This will most likely
+        point to the RawStabStrings buffer, and will not need to be freed
+        explicitly.
+
+    ImageBase - Stores the default base of the image.
+
+    Machine - Stores the machine architecture of the file.
+
+    ImageFormat - Stores the image format of the file.
+
+    RawSymbolTable - Stores a pointer to a buffer containing the symbol table
+        out of the PE or ELF file.
+
+    RawSymbolTableSize - Stores the size of the RawSymbolTable buffer, in bytes.
+
+    RawSymbolTableStrings - Stores a pointer to a buffer containing the string
+        table associated with the symbol table in the PE or ELF file.
+
+    RawSymbolTableStringsSize - Stores the size of the RawSymbolTableStrings,
+        in bytes.
+
+    SourcesHead - Stores the list head for a linked list of SOURCE_FILE_SYMBOL
+        structures. This list contains the symbols for all the source files in
+        the image.
+
+    SymbolContext - Stores an opaque pointer that the symbol parsing library
+        can use to store global state for this image.
+
+    Interface - Stores a pointer to a table of functions used to interact with
+        the symbol library.
+
+--*/
+
+struct _DEBUG_SYMBOLS {
+    PSTR Filename;
+    ULONGLONG ImageBase;
+    ULONG Machine;
+    IMAGE_FORMAT ImageFormat;
+    LIST_ENTRY SourcesHead;
+    PVOID SymbolContext;
+    PDEBUG_SYMBOL_INTERFACE Interface;
+};
+
 /*++
 
 Structure Description:
@@ -92,79 +228,6 @@ typedef struct _DATA_RANGE {
     LONGLONG Maximum;
     BOOL MaxUlonglong;
 } DATA_RANGE, *PDATA_RANGE;
-
-/*++
-
-Structure Description:
-
-    This structure holds internal information pertaining to a loaded module's
-    symbols. It stores all symbol information for a given module.
-
-Members:
-
-    ModuleName - Stores a string representing the name of the current module.
-        This will most likely point somewhere in the RawStabStrings buffer, and
-        therefore not need to be freed explicitly.
-
-    Filename - Stores the file name of the current module. This will most likely
-        point to the RawStabStrings buffer, and will not need to be freed
-        explicitly.
-
-    ImageBase - Stores the default base of the image.
-
-    Machine - Stores the machine architecture of the file.
-
-    ImageFormat - Stores the image format of the file.
-
-    RawStabs - Stores a pointer to a buffer containing the .stab section of
-        the loaded image.
-
-    RawStabsSize - Stores the size of the RawStabs buffer.
-
-    RawStabStrings - Stores a pointer to a buffer containing the .stabstr
-        section of the loaded image.
-
-    RawStabStringsSize - Stores the size of the RawStabStrings buffer.
-
-    RawSymbolTable - Stores a pointer to a buffer containing the symbol table
-        out of the PE or ELF file.
-
-    RawSymbolTableSize - Stores the size of the RawSymbolTable buffer, in bytes.
-
-    RawSymbolTableStrings - Stores a pointer to a buffer containing the string
-        table associated with the symbol table in the PE or ELF file.
-
-    RawSymbolTableStringsSize - Stores the size of the RawSymbolTableStrings,
-        in bytes.
-
-    SourcesHead - Stores the list head for a linked list of SOURCE_FILE_SYMBOL
-        structures. This list contains the symbols for all the source files in
-        the image.
-
-    ParseState - Stores a pointer to the parsing state. This is used only
-        during initialization of the symbols, and only the symbol parsing
-        routines should access it. It will likely be invalid after loading
-        symbol data.
-
---*/
-
-typedef struct _DEBUG_SYMBOLS {
-    PSTR ModuleName;
-    PSTR Filename;
-    ULONGLONG ImageBase;
-    ULONG Machine;
-    IMAGE_FORMAT ImageFormat;
-    PVOID RawStabs;
-    ULONG RawStabsSize;
-    PVOID RawStabStrings;
-    ULONG RawStabStringsSize;
-    PVOID RawSymbolTable;
-    ULONG RawSymbolTableSize;
-    PVOID RawSymbolTableStrings;
-    ULONG RawSymbolTableStringsSize;
-    LIST_ENTRY SourcesHead;
-    PVOID ParseState;
-} DEBUG_SYMBOLS, *PDEBUG_SYMBOLS;
 
 /*++
 
@@ -289,35 +352,23 @@ Members:
     ParentSource - Stores a pointer to the source file that this line refers to.
         This could point to an include file.
 
-    ParentFunction - Stores a pointer to the function this source line resides
-        in.
-
     ListEntry - Stores links to the previous and next source lines in this
         source file.
 
     LineNumber - Stores the line number of this source line symbol.
 
-    AbsoluteAddress - Stores a flag which is set if StartOffset and EndOffset
-        actually represent absolute addresses. This is usually only the case
-        in assembly files.
+    Start - Stores the starting address of this line, inclusive.
 
-    StartOffset - Stores the offset from the start of the owning function where
-        this line's execution starts.
-
-    EndOffset - Stores the offset from the start of the owning function where
-        this line's execution ends, NOT inclusive (ie. the offset in EndAddress
-        represents the first offset not in the source line.)
+    End - Stores the ending address of this line, exclusive.
 
 --*/
 
 typedef struct _SOURCE_LINE_SYMBOL {
     PSOURCE_FILE_SYMBOL ParentSource;
-    PFUNCTION_SYMBOL ParentFunction;
     LIST_ENTRY ListEntry;
     LONG LineNumber;
-    BOOL AbsoluteAddress;
-    ULONGLONG StartOffset;
-    ULONGLONG EndOffset;
+    ULONGLONG Start;
+    ULONGLONG End;
 } SOURCE_LINE_SYMBOL, *PSOURCE_LINE_SYMBOL;
 
 /*++
@@ -450,20 +501,20 @@ Structure Description:
 
 Members:
 
+    ListEntry - Stores links to the next and previous types in the owning source
+        file.
+
     ParentSource - Stores a link to the source file this type was defined in.
         This is necessary because types are defined with a type index and
         potentially an include file index. This could be an include file.
 
-    ParentFunction - Stores a link to the function where this type was defined.
-
-    ListEntry - Stores links to the next and previous types in the owning source
-        file.
+    TypeNumber - Stores the type number, which can be referred to by other
+        types.
 
     Name - Stores the name of the type. This buffer will need to be freed
         explicitly upon destruction.
 
-    TypeNumber - Stores the type number, which can be referred to by other
-        types.
+    ParentFunction - Stores a link to the function where this type was defined.
 
     Type - Stores the type of this type, such as whether it is a basic type,
         structure, enum, etc.
@@ -474,11 +525,11 @@ Members:
 --*/
 
 typedef struct _TYPE_SYMBOL {
-    PSOURCE_FILE_SYMBOL ParentSource;
-    PFUNCTION_SYMBOL ParentFunction;
     LIST_ENTRY ListEntry;
-    PSTR Name;
+    PSOURCE_FILE_SYMBOL ParentSource;
     LONG TypeNumber;
+    PSTR Name;
+    PFUNCTION_SYMBOL ParentFunction;
     DATA_TYPE_TYPE Type;
     union {
         DATA_TYPE_RELATION Relation;
@@ -696,8 +747,11 @@ Members:
     Timestamp - Stores the modification date of this module in seconds since
         2001.
 
-    BaseAddress - Stores the base address of the file as defined by the PE
-        header.
+    BaseAddress - Stores the base address the file was loaded at. For ELF
+        images, this is always the same as the base difference.
+
+    BaseDifference - Supplies the difference between the preferred load
+        address of the module and the actual load address of the module.
 
     LowestAddress - Stores the lowest address of the image actually in use,
         since this can be lower than the base address.
@@ -713,18 +767,19 @@ Members:
 
 --*/
 
-typedef struct _LOADED_MODULE {
+typedef struct _DEBUGGER_MODULE {
     LIST_ENTRY ListEntry;
     PSTR Filename;
     PSTR ModuleName;
     ULONGLONG Timestamp;
     ULONGLONG BaseAddress;
+    ULONGLONG BaseDifference;
     ULONGLONG LowestAddress;
     ULONGLONG Size;
     ULONG Process;
     PDEBUG_SYMBOLS Symbols;
     BOOL Loaded;
-} LOADED_MODULE, *PLOADED_MODULE;
+} DEBUGGER_MODULE, *PDEBUGGER_MODULE;
 
 /*++
 
@@ -739,15 +794,15 @@ Members:
     Signature - Stores the total of all timestamps and loaded addresses in the
         module list.
 
-    ModulesHead - Stores the head of the list of LOADED_MODULE structures.
+    ModulesHead - Stores the head of the list of DEBUGGER_MODULE structures.
 
 --*/
 
-typedef struct _LOADED_MODULE_LIST {
+typedef struct _DEBUGGER_MODULE_LIST {
     ULONG ModuleCount;
     ULONGLONG Signature;
     LIST_ENTRY ModulesHead;
-} LOADED_MODULE_LIST, *PLOADED_MODULE_LIST;
+} DEBUGGER_MODULE_LIST, *PDEBUGGER_MODULE_LIST;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -757,10 +812,11 @@ typedef struct _LOADED_MODULE_LIST {
 // -------------------------------------------------------- Function Prototypes
 //
 
-PDEBUG_SYMBOLS
+INT
 DbgLoadSymbols (
     PSTR Filename,
-    PIMAGE_MACHINE_TYPE MachineType
+    IMAGE_MACHINE_TYPE MachineType,
+    PDEBUG_SYMBOLS *Symbols
     );
 
 /*++
@@ -773,18 +829,23 @@ Arguments:
 
     Filename - Supplies the name of the binary to load symbols from.
 
-    MachineType - Supplies an optional parameter containing the required image
-        machine type. If this image does not have this machine type, the call
-        fails.
+    MachineType - Supplies the required machine type of the image. Set to
+        unknown to allow the symbol library to load a file with any machine
+        type.
+
+    Symbols - Supplies an optional pointer where a pointer to the symbols will
+        be returned on success.
 
 Return Value:
 
-    Returns a pointer to the loaded debugging symbols, or NULL on error.
+    0 on success.
+
+    Returns an error number on failure.
 
 --*/
 
 VOID
-DbgFreeSymbols (
+DbgUnloadSymbols (
     PDEBUG_SYMBOLS Symbols
     );
 
@@ -794,7 +855,7 @@ Routine Description:
 
     This routine frees all memory associated with an instance of debugging
     symbols. Once called, the pointer passed in should not be dereferenced
-    again.
+    again by the caller.
 
 Arguments:
 

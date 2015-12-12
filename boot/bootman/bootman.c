@@ -39,7 +39,7 @@ Environment:
 #define BOOT_MANAGER_BINARY_NAME_MAX_SIZE 16
 
 #define BOOT_MANAGER_MODULE_BUFFER_SIZE \
-    (sizeof(LOADED_MODULE) + sizeof(BOOT_MANAGER_BINARY_NAME_MAX_SIZE))
+    (sizeof(DEBUG_MODULE) + sizeof(BOOT_MANAGER_BINARY_NAME_MAX_SIZE))
 
 #define BOOT_MANAGER_NAME "Minoca Boot Manager"
 
@@ -68,7 +68,7 @@ BmpLoadBootConfiguration (
 
 BOOL BmDebug = FALSE;
 
-LOADED_MODULE BmModule;
+DEBUG_MODULE BmModule;
 LIST_ENTRY BmLoadedImageList;
 
 //
@@ -113,7 +113,7 @@ Return Value:
     PBOOT_VOLUME BootDevice;
     PBOOT_ENTRY BootEntry;
     PDEBUG_DEVICE_DESCRIPTION DebugDevice;
-    PLOADED_MODULE DebugModule;
+    PDEBUG_MODULE DebugModule;
     PLOADED_IMAGE LoaderImage;
     PSTR LoaderName;
     UINTN LoaderNameSize;
@@ -153,7 +153,7 @@ Return Value:
     }
 
     Step += 1;
-    DebugModule = (PLOADED_MODULE)BmModuleBuffer;
+    DebugModule = (PDEBUG_MODULE)BmModuleBuffer;
 
     //
     // Initialize the debugging subsystem.
@@ -165,7 +165,7 @@ Return Value:
         ModuleNameLength = BOOT_MANAGER_BINARY_NAME_MAX_SIZE;
     }
 
-    DebugModule->StructureSize = sizeof(LOADED_MODULE) + ModuleNameLength -
+    DebugModule->StructureSize = sizeof(DEBUG_MODULE) + ModuleNameLength -
                                  (ANYSIZE_ARRAY * sizeof(CHAR));
 
     RtlStringCopy(DebugModule->BinaryName,

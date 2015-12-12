@@ -397,6 +397,7 @@ Return Value:
     PDWARF_LINE_FILE File;
     DWARF_LINE_TABLE_HEADER Header;
     UINTN Index;
+    ULONG InitialFlags;
     PVOID NewBuffer;
     PUCHAR Next;
     UCHAR Op;
@@ -412,7 +413,6 @@ Return Value:
     // Read and and potentially print out the header.
     //
 
-    memset(&State, 0, sizeof(DWARF_LINE_STATE));
     memset(&Header, 0, sizeof(DWARF_LINE_TABLE_HEADER));
     Start = *Table;
     Status = DwarfpReadLineNumberHeader(Table, End, &Header);
@@ -473,11 +473,15 @@ Return Value:
     // Initialize the state machine registers.
     //
 
+    InitialFlags = 0;
+    if (Header.DefaultIsStatement != FALSE) {
+        InitialFlags |= DWARF_LINE_IS_STATEMENT;
+    }
+
+    memset(&State, 0, sizeof(DWARF_LINE_STATE));
     State.Registers.File = 1;
     State.Registers.Line = 1;
-    if (Header.DefaultIsStatement != FALSE) {
-        State.Registers.Flags |= DWARF_LINE_IS_STATEMENT;
-    }
+    State.Registers.Flags = InitialFlags;
 
     assert(Header.MaximumOperationsPerInstruction != 0);
 
@@ -548,17 +552,25 @@ Return Value:
 
             //
             // Emit one more row using the current registers, set the end
-            // sequence boolean in the registers, and after the switch
-            // statement break out.
+            // sequence boolean in the registers. Then reset the state machine
+            // and move to the next sequence.
             //
 
             case DwarfLneEndSequence:
+                if ((Context->Flags & DWARF_CONTEXT_DEBUG_LINE_NUMBERS) != 0) {
+                    DWARF_PRINT("   End Sequence\n ");
+                }
+
                 State.Registers.Flags |= DWARF_LINE_END_SEQUENCE;
                 Status = DwarfpEmitLine(Context, &Header, &State);
                 if (Status != 0) {
                     goto ProcessLineTableEnd;
                 }
 
+                memset(&State, 0, sizeof(DWARF_LINE_STATE));
+                State.Registers.File = 1;
+                State.Registers.Line = 1;
+                State.Registers.Flags = InitialFlags;
                 break;
 
             //
@@ -637,14 +649,6 @@ Return Value:
             //
 
             assert(*Table == Next);
-
-            if ((State.Registers.Flags & DWARF_LINE_END_SEQUENCE) != 0) {
-                if ((Context->Flags & DWARF_CONTEXT_DEBUG_LINE_NUMBERS) != 0) {
-                    DWARF_PRINT("\n");
-                }
-
-                break;
-            }
 
         //
         // If it's less than the special opcode base, then it's a standard
@@ -780,14 +784,15 @@ Return Value:
 
             //
             // Advance the address and op-index by the increments corresponding
-            // to special register 255.
+            // to special register 255 (but don't touch the line number). This
+            // allows a slightly more efficient "fast-forward" of the PC.
             //
 
             case DwarfLnsConstAddPc:
 
                 assert(Header.StandardOpcodeLengths[Op] == 0);
 
-                OperationAdvance = 255;
+                OperationAdvance = (255 - Header.OpcodeBase) / Header.LineRange;
                 State.Registers.Address +=
                     Header.MinimumInstructionLength *
                     ((State.Registers.OpIndex + OperationAdvance) /
@@ -1026,7 +1031,7 @@ Return Value:
     //
 
     if (State->PreviousLine != NULL) {
-        State->PreviousLine->EndOffset = State->Registers.Address;
+        State->PreviousLine->End = State->Registers.Address;
     }
 
     //
@@ -1050,9 +1055,8 @@ Return Value:
     memset(Line, 0, sizeof(SOURCE_LINE_SYMBOL));
     Line->ParentSource = File;
     Line->LineNumber = State->Registers.Line;
-    Line->AbsoluteAddress = TRUE;
-    Line->StartOffset = State->Registers.Address;
-    Line->EndOffset = Line->StartOffset + 1;
+    Line->Start = State->Registers.Address;
+    Line->End = Line->Start + 1;
     State->PreviousLine = Line;
     INSERT_BEFORE(&(Line->ListEntry),
                   &(LoadingContext->CurrentFile->SourceLinesHead));

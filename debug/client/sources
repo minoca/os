@@ -32,6 +32,10 @@ COMMON_OBJS = armdis.o     \
               dbgsym.o     \
               debug.o      \
               disasm.o     \
+              dwarf.o      \
+              dwexpr.o     \
+              dwline.o     \
+              dwread.o     \
               elf.o        \
               exts.o       \
               profthrd.o   \

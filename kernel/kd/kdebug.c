@@ -179,14 +179,14 @@ BOOL KdAsserted = FALSE;
 
 DEBUG_PACKET KdTxPacket;
 DEBUG_PACKET KdRxPacket;
-LOADED_MODULE_LIST KdLoadedModules;
+DEBUG_MODULE_LIST KdLoadedModules;
 BOOL KdLoadedModulesInitialized;
 
 //
 // Carve off memory to store the kernel module, including its string.
 //
 
-UCHAR KdKernelModuleBuffer[sizeof(LOADED_MODULE) + MAX_KERNEL_MODULE_NAME];
+UCHAR KdKernelModuleBuffer[sizeof(DEBUG_MODULE) + MAX_KERNEL_MODULE_NAME];
 
 //
 // Store information about whether or not the user asked for a single step.
@@ -578,7 +578,7 @@ Return Value:
 KSTATUS
 KdInitialize (
     PDEBUG_DEVICE_DESCRIPTION DebugDevice,
-    PLOADED_MODULE CurrentModule
+    PDEBUG_MODULE CurrentModule
     )
 
 /*++
@@ -603,7 +603,7 @@ Return Value:
 {
 
     PSTR KernelBinaryName;
-    PLOADED_MODULE KernelModule;
+    PDEBUG_MODULE KernelModule;
     ULONG NameSize;
     KSTATUS Status;
 
@@ -617,14 +617,14 @@ Return Value:
     //
 
     if (KdLoadedModulesInitialized == FALSE) {
-        KernelModule = (PLOADED_MODULE)KdKernelModuleBuffer;
+        KernelModule = (PDEBUG_MODULE)KdKernelModuleBuffer;
         KernelBinaryName = CurrentModule->BinaryName;
 
         //
         // Copy the name string into the kernel module structure.
         //
 
-        NameSize = CurrentModule->StructureSize - sizeof(LOADED_MODULE) +
+        NameSize = CurrentModule->StructureSize - sizeof(DEBUG_MODULE) +
                    (ANYSIZE_ARRAY * sizeof(CHAR));
 
         if (NameSize > MAX_KERNEL_MODULE_NAME) {
@@ -725,7 +725,7 @@ Return Value:
 
 VOID
 KdReportModuleChange (
-    PLOADED_MODULE Module,
+    PDEBUG_MODULE Module,
     BOOL Loading
     )
 
@@ -2648,7 +2648,7 @@ Return Value:
 
 {
 
-    PLOADED_MODULE CurrentModule;
+    PDEBUG_MODULE CurrentModule;
     PLIST_ENTRY CurrentModuleListEntry;
     ULONG MaxNameLength;
     PLOADED_MODULE_ENTRY ModuleEntry;
@@ -2698,7 +2698,7 @@ Return Value:
     CurrentModuleListEntry = KdLoadedModules.ModulesHead.Next;
     while (CurrentModuleListEntry != &(KdLoadedModules.ModulesHead)) {
         CurrentModule = LIST_VALUE(CurrentModuleListEntry,
-                                   LOADED_MODULE,
+                                   DEBUG_MODULE,
                                    ListEntry);
 
         //
@@ -2707,7 +2707,7 @@ Return Value:
 
         NameSource = CurrentModule->BinaryName;
         NameDestination = ModuleEntry->BinaryName;
-        MaxNameLength = CurrentModule->StructureSize - sizeof(LOADED_MODULE) +
+        MaxNameLength = CurrentModule->StructureSize - sizeof(DEBUG_MODULE) +
                         (ANYSIZE_ARRAY * sizeof(CHAR));
 
         if (MaxNameLength > PacketMaxNameLength) {

@@ -55,7 +55,7 @@ Environment:
     "  -t, --types -- Print parsed type information.\n" \
     "  -h, --help -- Print this help and exit.\n" \
 
-#define TDWARF_OPTIONS_STRING "AaDfilhpt"
+#define TDWARF_OPTIONS_STRING "AaDfgilhpt"
 
 #define TDWARF_OPTION_PRINT_FILES 0x00000001
 #define TDWARF_OPTION_PRINT_TYPES 0x00000002
@@ -370,7 +370,7 @@ Return Value:
 
     ArgumentIndex = optind;
     if (ArgumentIndex == ArgumentCount) {
-        fprintf(stderr, "Error: Argument expected");
+        fprintf(stderr, "Error: Argument expected.\n");
         printf(TDWARF_USAGE);
         Status = 1;
         goto MainEnd;
@@ -425,9 +425,10 @@ Return Value:
 
 {
 
-    DWARF_CONTEXT Context;
+    PDWARF_CONTEXT Context;
     PLIST_ENTRY DataEntry;
     PDATA_SYMBOL DataSymbol;
+    ULONG DwarfFlags;
     PDATA_TYPE_ENUMERATION Enumeration;
     PENUMERATION_MEMBER EnumerationMember;
     PSOURCE_FILE_SYMBOL File;
@@ -453,17 +454,23 @@ Return Value:
     PSTR ReturnTypeSource;
     INT Status;
     PDATA_TYPE_STRUCTURE Structure;
+    PDEBUG_SYMBOLS Symbols;
     PTYPE_SYMBOL Type;
     ULONG TypeCount;
     PLIST_ENTRY TypeEntry;
 
-    memset(&Context, 0, sizeof(DWARF_CONTEXT));
+    Symbols = NULL;
+    DwarfFlags = 0;
     if ((Options & TDWARF_OPTION_DEBUG) != 0) {
-        Context.Flags = DWARF_CONTEXT_DEBUG | DWARF_CONTEXT_DEBUG_LINE_NUMBERS |
-                        DWARF_CONTEXT_DEBUG_ABBREVIATIONS;
+        DwarfFlags = DWARF_CONTEXT_DEBUG | DWARF_CONTEXT_DEBUG_LINE_NUMBERS |
+                     DWARF_CONTEXT_DEBUG_ABBREVIATIONS;
     }
 
-    Status = DwarfLoadSymbols(&Context, FilePath);
+    Status = DwarfLoadSymbols(FilePath,
+                              ImageMachineTypeUnknown,
+                              DwarfFlags,
+                              &Symbols);
+
     if (Status != 0) {
         fprintf(stderr,
                 "Failed to load symbols for %s: %s\n",
@@ -472,6 +479,8 @@ Return Value:
 
         goto TestDwarfEnd;
     }
+
+    Context = Symbols->SymbolContext;
 
     //
     // Iterate through all the symbols, and print what's desired.
@@ -483,8 +492,8 @@ Return Value:
     LineCount = 0;
     GlobalCount = 0;
     TypeCount = 0;
-    FileEntry = Context.SourcesHead.Next;
-    while (FileEntry != &(Context.SourcesHead)) {
+    FileEntry = Symbols->SourcesHead.Next;
+    while (FileEntry != &(Symbols->SourcesHead)) {
         File = LIST_VALUE(FileEntry, SOURCE_FILE_SYMBOL, ListEntry);
 
         //
@@ -778,7 +787,7 @@ Return Value:
             DataEntry = Function->ParametersHead.Next;
             while (DataEntry != &(Function->ParametersHead)) {
                 DataSymbol = LIST_VALUE(DataEntry, DATA_SYMBOL, ListEntry);
-                Status = TdwarfProcessVariable(&Context,
+                Status = TdwarfProcessVariable(Context,
                                                NULL,
                                                Options,
                                                TDWARF_OPTION_PRINT_PARAMETERS,
@@ -814,7 +823,7 @@ Return Value:
             DataEntry = Function->LocalsHead.Next;
             while (DataEntry != &(Function->LocalsHead)) {
                 DataSymbol = LIST_VALUE(DataEntry, DATA_SYMBOL, ListEntry);
-                Status = TdwarfProcessVariable(&Context,
+                Status = TdwarfProcessVariable(Context,
                                                NULL,
                                                Options,
                                                TDWARF_OPTION_PRINT_LOCALS,
@@ -849,7 +858,7 @@ Return Value:
         DataEntry = File->DataSymbolsHead.Next;
         while (DataEntry != &(File->DataSymbolsHead)) {
             DataSymbol = LIST_VALUE(DataEntry, DATA_SYMBOL, ListEntry);
-            Status = TdwarfProcessVariable(&Context,
+            Status = TdwarfProcessVariable(Context,
                                            NULL,
                                            Options,
                                            TDWARF_OPTION_PRINT_GLOBALS,
@@ -884,11 +893,11 @@ Return Value:
                        Line->ParentSource->SourceDirectory,
                        Line->ParentSource->SourceFile,
                        Line->LineNumber,
-                       Line->StartOffset,
-                       Line->EndOffset);
+                       Line->Start,
+                       Line->End);
             }
 
-            if (Line->EndOffset < Line->StartOffset) {
+            if (Line->End < Line->Start) {
                 fprintf(stderr, "Error: Line end less than start.\n");
                 Status = EINVAL;
                 goto TestDwarfEnd;
@@ -903,7 +912,10 @@ Return Value:
     }
 
 TestDwarfEnd:
-    DwarfDestroyContext(&Context);
+    if (Symbols != NULL) {
+        DbgUnloadSymbols(Symbols);
+    }
+
     return Status;
 }
 
