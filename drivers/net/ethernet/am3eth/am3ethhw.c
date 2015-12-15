@@ -1277,6 +1277,7 @@ Return Value:
     UINTN BufferSize;
     PA3E_DESCRIPTOR Descriptor;
     ULONG DescriptorIndex;
+    ULONG Flags;
     ULONG HeadDescriptor;
     PNET_PACKET_BUFFER Packet;
     ULONG PacketLength;
@@ -1291,15 +1292,13 @@ Return Value:
                             NET_PACKET_BUFFER,
                             ListEntry);
 
+        //
+        // If the transmit packet array is not NULL, this descriptor is either
+        // active or not yet reaped. Wait for more entries.
+        //
+
         DescriptorIndex = Device->TransmitEnd;
-        Descriptor = &(Device->TransmitDescriptors[DescriptorIndex]);
-
-        //
-        // If the command isn't zero, this is an active or unreaped entry.
-        // Wait for some entries to free up, and try again.
-        //
-
-        if (Descriptor->PacketLengthFlags != 0) {
+        if (Device->TransmitPacket[DescriptorIndex] != NULL) {
             break;
         }
 
@@ -1308,15 +1307,16 @@ Return Value:
         //
         // If the packet is less than the allowed minimum packet size, then pad
         // it. The buffer should be big enough to handle it and should have
-        // already initialized the padding to zero.
+        // already initialized the padding to zero. The hardware adds the 4
+        // byte CRC, so do not include that in the padding.
         //
 
         PacketLength = Packet->FooterOffset - Packet->DataOffset;
-        if (PacketLength < A3E_TRANSMIT_MINIMUM_PACKET_SIZE) {
+        if (PacketLength < (A3E_TRANSMIT_MINIMUM_PACKET_SIZE - sizeof(ULONG))) {
 
             ASSERT(Packet->BufferSize >= A3E_TRANSMIT_MINIMUM_PACKET_SIZE);
 
-            PacketLength = A3E_TRANSMIT_MINIMUM_PACKET_SIZE;
+            PacketLength = A3E_TRANSMIT_MINIMUM_PACKET_SIZE - sizeof(ULONG);
         }
 
         BufferSize = PacketLength + Packet->DataOffset;
@@ -1329,6 +1329,7 @@ Return Value:
 
         ASSERT((PacketLength & ~A3E_DESCRIPTOR_BUFFER_LENGTH_MASK) == 0);
 
+        Descriptor = &(Device->TransmitDescriptors[DescriptorIndex]);
         Descriptor->NextDescriptor = A3E_DESCRIPTOR_NEXT_NULL;
         Descriptor->Buffer = Packet->BufferPhysicalAddress + Packet->DataOffset;
         Descriptor->BufferLengthOffset = PacketLength;
@@ -1361,10 +1362,32 @@ Return Value:
         BufferDescriptorAddress = Device->TransmitDescriptorsPhysical +
                                   (DescriptorIndex * sizeof(A3E_DESCRIPTOR));
 
-        PreviousDescriptor->NextDescriptor = BufferDescriptorAddress;
-        if ((Device->TransmitBegin == Device->TransmitEnd) ||
-            ((PreviousDescriptor->PacketLengthFlags &
-              A3E_DESCRIPTOR_END_OF_QUEUE) != 0)) {
+        //
+        // Use the register write function to ensure the compiler does this in
+        // a single write (and not something goofy like byte by byte). This
+        // routine also serves as a full memory barrier.
+        //
+
+        HlWriteRegister32(&(PreviousDescriptor->NextDescriptor),
+                          BufferDescriptorAddress);
+
+        Flags = PreviousDescriptor->PacketLengthFlags;
+        if ((Device->TransmitPacket[PreviousIndex] == NULL) ||
+            ((Flags & A3E_DESCRIPTOR_END_OF_QUEUE) != 0)) {
+
+            //
+            // Clear the end of queue bit so that reaping the previous
+            // descriptor does not cause a second reprogramming of the hardware.
+            //
+
+            Flags &= ~A3E_DESCRIPTOR_END_OF_QUEUE;
+            PreviousDescriptor->PacketLengthFlags = Flags;
+
+            //
+            // This condition should only be detected once.
+            //
+
+            ASSERT(HeadDescriptor == 0);
 
             HeadDescriptor = BufferDescriptorAddress;
         }
@@ -1422,33 +1445,48 @@ Return Value:
 
 {
 
-    UINTN Begin;
+    ULONG Channel;
     PA3E_DESCRIPTOR Descriptor;
-    USHORT Flags;
+    ULONG Flags;
+    ULONG HeadDescriptor;
     BOOL PacketReaped;
+    ULONG PreviousFlags;
+    ULONG ReapIndex;
 
     PacketReaped = FALSE;
+    PreviousFlags = 0;
+    HeadDescriptor = 0;
     KeAcquireQueuedLock(Device->TransmitLock);
+    ReapIndex = Device->TransmitBegin;
     while (TRUE) {
-        Begin = Device->TransmitBegin;
-        Descriptor = &(Device->TransmitDescriptors[Begin]);
 
         //
-        // If the buffer size word is zeroed, that's the indication that this
-        // descriptor has already been cleaned out.
+        // If there is no packet for this index, then the descriptor has
+        // already been reaped.
         //
 
-        Flags = Descriptor->PacketLengthFlags;
-        if (Flags == 0) {
+        if (Device->TransmitPacket[ReapIndex] == NULL) {
             break;
         }
 
         //
-        // If the command, whatever it may be, is not complete, then this is
-        // an active entry, so stop reaping.
+        // If the descriptor is still owned by the hardware, then it is not
+        // complete. The hardware, however, may have gone idle if the last
+        // descriptor marked the end of the queue. Poke the hardware with the
+        // current descriptor if necessary.
         //
 
+        Descriptor = &(Device->TransmitDescriptors[ReapIndex]);
+        Flags = Descriptor->PacketLengthFlags;
         if ((Flags & A3E_DESCRIPTOR_HARDWARE_OWNED) != 0) {
+            if ((PreviousFlags & A3E_DESCRIPTOR_END_OF_QUEUE) != 0) {
+                HeadDescriptor = Device->TransmitDescriptorsPhysical +
+                                 (ReapIndex * sizeof(A3E_DESCRIPTOR));
+
+                Channel = A3E_CPDMA_CHANNEL(A3eDmaTxHeadDescriptorPointer, 0);
+                A3E_DMA_WRITE(Device, Channel, HeadDescriptor);
+            }
+
             break;
         }
 
@@ -1457,21 +1495,21 @@ Return Value:
         // zeroing out the control.
         //
 
-        NetFreeBuffer(Device->TransmitPacket[Begin]);
-        Device->TransmitPacket[Begin] = NULL;
-        Descriptor->PacketLengthFlags = 0;
+        NetFreeBuffer(Device->TransmitPacket[ReapIndex]);
+        Device->TransmitPacket[ReapIndex] = NULL;
         PacketReaped = TRUE;
+        PreviousFlags = Flags;
 
         //
         // Move the beginning of the list forward.
         //
 
-        if (Begin == A3E_TRANSMIT_DESCRIPTOR_COUNT - 1) {
-            Device->TransmitBegin = 0;
-
-        } else {
-            Device->TransmitBegin = Begin + 1;
+        ReapIndex += 1;
+        if (ReapIndex == A3E_TRANSMIT_DESCRIPTOR_COUNT) {
+            ReapIndex = 0;
         }
+
+        Device->TransmitBegin = ReapIndex;
     }
 
     //
@@ -1616,12 +1654,12 @@ Return Value:
         // Move the beginning pointer up.
         //
 
-        if (Begin == A3E_RECEIVE_FRAME_COUNT - 1) {
-            Device->ReceiveBegin = 0;
-
-        } else {
-            Device->ReceiveBegin = Begin + 1;
+        Begin += 1;
+        if (Begin == A3E_RECEIVE_FRAME_COUNT) {
+            Begin = 0;
         }
+
+        Device->ReceiveBegin = Begin;
     }
 
     KeReleaseQueuedLock(Device->ReceiveLock);
