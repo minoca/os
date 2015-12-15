@@ -241,6 +241,11 @@ Return Value:
     UINT32 ReadLength;
     INTN Result;
 
+    //
+    // The processor must be in ARM mode, otherwise enabling interrupts causes
+    // a reset.
+    //
+
     EfiEnableInterrupts();
     Result = EfipOmap4UsbOpen(&EfiOmap4RomUsbHandle);
     if (Result != 0) {

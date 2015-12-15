@@ -642,7 +642,7 @@ PSTR DbgArmSynchronizationMnemonics[8] = {
     "strexd",
     "ldrexd",
     "strexb",
-    "ldrexb"
+    "ldrexb",
     "strexh",
     "ldrexh"
 };
@@ -9071,43 +9071,64 @@ Return Value:
 {
 
     ULONG CurrentVector;
-    BOOL FirstVector;
-    CHAR VectorString[8];
+    PSTR Separator;
+    INT Size;
+    CHAR VectorString[16];
 
-    strcpy(Destination, "{");
-    FirstVector = TRUE;
+    if (DestinationSize > 1) {
+        strcpy(Destination, "{");
+        Size = strlen(Destination);
+        Destination += Size;
+        DestinationSize -= Size;
+    }
+
+    Separator = "";
     for (CurrentVector = VectorStart;
          CurrentVector < VectorCount;
          CurrentVector += VectorIncrement) {
 
-        if (FirstVector == FALSE) {
-            strcat(Destination, ", ");
-        }
-
         if ((Flags & DBG_ARM_VECTOR_LIST_FLAG_INDEX) != 0) {
             if ((Flags & DBG_ARM_VECTOR_LIST_FLAG_ALL_LANES) != 0) {
-                sprintf(VectorString,
-                        "%s%d[]",
-                        VectorTypeString,
-                        CurrentVector);
+                snprintf(VectorString,
+                         sizeof(VectorString),
+                         "%s%s%d[]",
+                         Separator,
+                         VectorTypeString,
+                         CurrentVector);
 
             } else {
-                sprintf(VectorString,
-                        "%s%d[%d]",
-                        VectorTypeString,
-                        CurrentVector,
-                        VectorIndex);
+                snprintf(VectorString,
+                         sizeof(VectorString),
+                         "%s%s%d[%d]",
+                         Separator,
+                         VectorTypeString,
+                         CurrentVector,
+                         VectorIndex);
             }
 
         } else {
-            sprintf(VectorString, "%s%d", VectorTypeString, CurrentVector);
+            snprintf(VectorString,
+                     sizeof(VectorString),
+                     "%s%s%d",
+                     Separator,
+                     VectorTypeString,
+                     CurrentVector);
         }
 
-        strcat(Destination, VectorString);
-        FirstVector = FALSE;
+        Size = strlen(VectorString);
+        if (Size < DestinationSize) {
+            strcpy(Destination, VectorString);
+            Destination += Size;
+            DestinationSize -= Size;
+        }
+
+        Separator = ", ";
     }
 
-    strcat(Destination, "}");
+    if (DestinationSize > 1) {
+        strcpy(Destination, "}");
+    }
+
     return;
 }
 

@@ -1617,15 +1617,15 @@ Return Value:
 
 FUNCTION ArSaveProcessorContext
     stmia   %r0!, {%lr}                 @ Save PC (return address).
-    mrs     %r1, CPSR                   @ Save CPSR.
-    stmia   %r0!, {%r1}                 @
     mov     %r1, #1                     @ "Save" 1 to R0.
     stmia   %r0!, {%r1}                 @
     mov     %r1, #0                     @ "Save" 0 to R1, R2, and R3.
     stmia   %r0!, {%r1}                 @
     stmia   %r0!, {%r1}                 @
     stmia   %r0!, {%r1}                 @
-    mov     %r3, %sp                    @ Put SP in R1 because no pushing SP.
+    mrs     %r1, CPSR                   @ Save CPSR.
+    stmia   %r0!, {%r1}                 @
+    mov     %r3, %sp                    @ Put SP in R3 because no pushing SP.
     stmia   %r0!, {%r3-%r11}            @ Save SP and R4-R11.
     mrs     %r1, CPSR                   @ Get the current mode and status.
     cpsid   if, #ARM_MODE_SYSTEM        @ Get to user mode (disable interrupts).
@@ -1828,9 +1828,11 @@ ArRestoreProcessorContextAfterActlr:
     mov     %r12, %r0                   @ Move to a free register.
     ldmdb   %r12!, {%r3-%r11}           @ Restore general context.
     mov     %sp, %r3                    @ Restore stack.
-    ldmdb   %r12!, {%r0-%r3}            @ Restore remaining registers.
+    ldmdb   %r12!, {%r0-%r3,%lr}        @ Restore arguments and CPSR.
+    msr     CPSR, %lr                   @ Restore CPSR.
+    ldr     %r12, [%r12, #-4]           @ Read the last value: PC.
     mov     %lr, #0                     @ Zero out lr for goodwill.
-    rfedb   %r12!                       @ Pop PC and CPSR.
+    bx      %r12                        @ Jump to the return address.
 
 END_FUNCTION ArRestoreProcessorContext
 

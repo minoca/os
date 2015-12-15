@@ -102,7 +102,7 @@ Return Value:
     ULONG BytesRead;
     PUCHAR CurrentInstruction;
     DISASSEMBLED_INSTRUCTION Disassembly;
-    CHAR DisassemblyBuffer[200];
+    CHAR DisassemblyBuffer[1024];
     ULONG Failures;
     FILE *File;
     PVOID FileBuffer;
@@ -264,7 +264,7 @@ Return Value:
         Result = DbgDisassemble((UINTN)CurrentInstruction,
                                 CurrentInstruction,
                                 DisassemblyBuffer,
-                                100,
+                                sizeof(DisassemblyBuffer),
                                 &Disassembly,
                                 Language);
 
@@ -309,7 +309,9 @@ Return Value:
                 }
 
             } else if (Disassembly.BinaryLength == 2) {
-                printf("      ");
+                if (PrintDisassembly != FALSE) {
+                    printf("      ");
+                }
 
             } else if (Disassembly.BinaryLength != 2) {
                 printf("Error: Got %d byte Thumb-2 disassembly.\n",

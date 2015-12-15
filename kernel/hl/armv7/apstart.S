@@ -48,10 +48,21 @@ ASSEMBLY_FILE_HEADER
 ## .globl allows these labels to be visible to the linker.
 ##
 
+.globl HlpProcessorStartup
 .globl HlpProcessorStartupEnd
+.globl HlpTrampolineCode
+.globl HlpDisableMmu
 .globl HlTrampolineTtbr0
 .globl HlTrampolineSystemControlRegister
 .globl HlpTrampolineCodeEnd
+
+.hidden HlpProcessorStartup
+.hidden HlpProcessorStartupEnd
+.hidden HlpDisableMmu
+.hidden HlpTrampolineCode
+.hidden HlTrampolineTtbr0
+.hidden HlTrampolineSystemControlRegister
+.hidden HlpTrampolineCodeEnd
 
 ##
 ## This small amount of code lives in each processor's page, and jumps to the
@@ -59,7 +70,7 @@ ASSEMBLY_FILE_HEADER
 ## page the PC is the ARM_PARKED_PAGE structure.
 ##
 
-FUNCTION HlpProcessorStartup
+HlpProcessorStartup:
     mov     %r0, %pc                    @ Get the current code address.
     lsr     %r0, %r0, #12               @ Shift down to mask off page offset.
     lsl     %r0, %r0, #12               @ Shift back up to get page base.
@@ -68,7 +79,6 @@ FUNCTION HlpProcessorStartup
     ldr     %r0, [%r0, #4]              @ Load the processor context VA.
     blx     %r1                         @ Jump to identity mapped code.
 
-END_FUNCTION HlpProcessorStartup
 HlpProcessorStartupEnd:
 
 ##
@@ -101,7 +111,7 @@ Return Value:
 ## structure to pass into the restore context routine.
 ##
 
-FUNCTION HlpTrampolineCode
+HlpTrampolineCode:
     mov     %r1, %pc                    @ Get the current code address.
     sub     %r1, %r1, #8                @ Subtract to get the start address.
     mov     %r6, %r0                    @ Save processor context in R6.
@@ -210,6 +220,11 @@ FUNCTION HlpTrampolineCode
 
     mov     %r0, %r6                    @ Set up PROCESSOR_CONTEXT parameter.
     ldr     %r1, =ArRestoreProcessorContext @ Get the absolute function address.
+
+.if THUMB
+    orr     %r1, %r1, #1                @ Set the thumb bit on the function.
+.endif
+
     bx      %r1                         @ Restore context. Does not return.
 
     ##
@@ -218,11 +233,8 @@ FUNCTION HlpTrampolineCode
     ##
 
 HlpTrampolineCodeImpossibleReturn:
-    DEBUGGER_BREAK
     wfi
     b       HlpTrampolineCodeImpossibleReturn
-
-END_FUNCTION HlpTrampolineCode
 
 ##
 ## UINTN
@@ -253,7 +265,7 @@ Return Value:
 
 --*/
 
-FUNCTION HlpDisableMmu
+HlpDisableMmu:
     stmdb   %sp!, {%r4-r6, %lr}         @ Save non-volatiles and return.
 
     ##
@@ -291,8 +303,6 @@ FUNCTION HlpDisableMmu
     ISB                                 @ World switch, don't look beyond here.
     mov     %sp, %r6                    @ Restore the stack.
     ldmia   %sp!, {%r4-r6, %pc}         @ Pop and return.
-
-END_FUNCTION HlpDisableMmu
 
 ##
 ## --------------------------------------------------------- Internal Functions
@@ -383,6 +393,8 @@ HlpInvalidateDataCacheEnd:
 ##
 ## -------------------------------------------------------------------- Globals
 ##
+
+.align 4
 
 ##
 ## Define a global that contains the Translation Table Base register.

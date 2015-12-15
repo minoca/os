@@ -102,8 +102,7 @@ FUNCTION BoEnablePaging
     mcr     p15, 0, %r0, %cr2, %cr0, 2
     ldr     %r0, =BoFirstLevelTable
     ldr     %r0, [%r0]
-    ldr     %r1, =TtbrAddressMask
-    ldr     %r1, [%r1]
+    ldr     %r1, =TTBR_ADDRESS_MASK
     bic     %r0, %r0, %r1
     ldr     %r1, =BoTtbrCacheAttributes
     ldr     %r1, [%r1]
@@ -114,8 +113,7 @@ FUNCTION BoEnablePaging
     ## Enable the MMU.
     ##
 
-    ldr     %r0, =MmuValue
-    ldr     %r0, [%r0]
+    ldr     %r0, =MMU_CONTROL_DEFAULT_VALUE
     mcr     p15, 0, %r0, %cr1, %cr0, 0
     bl      ArSerializeExecution
 
@@ -131,13 +129,6 @@ FUNCTION BoEnablePaging
 
     ldmia   %sp!, {%lr}
     bx      %lr
-
-##
-## Constants for BoEnablePaging.
-##
-
-TtbrAddressMask: .word TTBR_ADDRESS_MASK
-MmuValue: .word MMU_CONTROL_DEFAULT_VALUE
 
 END_FUNCTION BoEnablePaging
 

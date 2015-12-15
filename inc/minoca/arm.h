@@ -668,8 +668,6 @@ Members:
         initialized to the return address of the save/restore function, though
         it can be manipulated after the function returns.
 
-    Cpsr - Stores the program status word (processor flags and mode).
-
     R0 - Stores the R0 register, also the return value from the restore
         operation. By default this is initialized to 1.
 
@@ -681,6 +679,8 @@ Members:
 
     R3 - Stores the R3 register, which can be used for a third argument in
         case the PC is manipulated after save context returns.
+
+    Cpsr - Stores the program status word (processor flags and mode).
 
     Sp - Stores the stack pointer (in SVC mode, which is assumed to be the
         current mode when the context was saved).
@@ -774,11 +774,11 @@ Members:
 
 struct _PROCESSOR_CONTEXT {
     ULONG Pc;
-    ULONG Cpsr;
     ULONG R0;
     ULONG R1;
     ULONG R2;
     ULONG R3;
+    ULONG Cpsr;
     ULONG Sp;
     ULONG R4;
     ULONG R5;

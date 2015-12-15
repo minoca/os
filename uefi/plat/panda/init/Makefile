@@ -32,6 +32,13 @@ INCLUDES += $(SRCROOT)/os/uefi/inc;$(SRCROOT)/os/lib/fatlib;
 
 LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib
 
+##
+## The first stage loader has to be built in ARM mode since the ROM code
+## seems to reset if interrupts are enabled and the processor is in Thumb mode.
+##
+
+EXTRA_CFLAGS += -marm
+
 OBJS += boot.o      \
         clock.o     \
         crc32.o     \

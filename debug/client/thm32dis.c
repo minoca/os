@@ -951,6 +951,7 @@ Return Value:
             assert(Op == THUMB32_EXCLUSIVE_FUNKY_OP_DUAL);
 
             Mnemonic = THUMB_STREXD_MNEMONIC;
+            strcpy(Context->Operand3, DbgArmRegisterNames[Rt2]);
             RnRegister = &(Context->Operand4[0]);
         }
     }
@@ -2761,20 +2762,6 @@ Return Value:
         strcpy(Context->Mnemonic, DbgThumb32LoadStoreMnemonics[Load][Op]);
     }
 
-    //
-    // If Rt is 15, then this is actually a preload operation. Copy the second
-    // operand to the first.
-    //
-
-    if (Rt == 15) {
-        strcpy(Context->Mnemonic, DbgThumb32PreloadMnemonics[Op]);
-        strcpy(Context->Operand1, Context->Operand2);
-        strcpy(Context->Operand2, "");
-
-    } else {
-        strcpy(Context->Operand1, DbgArmRegisterNames[Rt]);
-    }
-
     if (Immediate2 == 0) {
         snprintf(Context->Operand2,
                  sizeof(Context->Operand2),
@@ -2790,6 +2777,20 @@ Return Value:
                  THUMB_SHIFT_TYPE_LSL_STRING,
                  DbgArmRegisterNames[Rm],
                  Immediate2);
+    }
+
+    //
+    // If Rt is 15, then this is actually a preload operation. Copy the second
+    // operand to the first.
+    //
+
+    if (Rt == 15) {
+        strcpy(Context->Mnemonic, DbgThumb32PreloadMnemonics[Op]);
+        strcpy(Context->Operand1, Context->Operand2);
+        strcpy(Context->Operand2, "");
+
+    } else {
+        strcpy(Context->Operand1, DbgArmRegisterNames[Rt]);
     }
 
     return;
