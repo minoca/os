@@ -32,9 +32,10 @@ Author:
 // to the current process.
 //
 
-#define IS_MODULE_IN_CURRENT_PROCESS(_LoadedModule)                            \
+#define IS_MODULE_IN_CURRENT_PROCESS(_Context, _LoadedModule)                  \
     (((_LoadedModule)->Process == 0) ||                                        \
-     ((_LoadedModule)->Process == DbgCurrentEvent.BreakNotification.Process))
+     ((_LoadedModule)->Process ==                                              \
+      (_Context)->CurrentEvent.BreakNotification.Process))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -95,14 +96,6 @@ typedef struct _DEBUGGER_EVENT {
 //
 // -------------------------------------------------------------------- Globals
 //
-
-extern DEBUG_CONNECTION_TYPE DbgConnectionType;
-
-//
-// Store the current event information.
-//
-
-extern DEBUGGER_EVENT DbgCurrentEvent;
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -228,7 +221,7 @@ Return Value:
 
 ULONG
 DbgGetSignalToDeliver (
-    VOID
+    PDEBUGGER_CONTEXT Context
     );
 
 /*++
@@ -242,7 +235,7 @@ Routine Description:
 
 Arguments:
 
-    None.
+    Context - Supplies a pointer to the application context.
 
 Return Value:
 
@@ -507,7 +500,7 @@ Return Value:
 
 VOID
 DbgRequestBreakIn (
-    VOID
+    PDEBUGGER_CONTEXT Context
     );
 
 /*++
@@ -518,7 +511,7 @@ Routine Description:
 
 Arguments:
 
-    None.
+    Context - Supplies a pointer to the application context.
 
 Return Value:
 

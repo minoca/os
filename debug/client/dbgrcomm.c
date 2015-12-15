@@ -652,7 +652,7 @@ Return Value:
     INT Result;
     ULONG SignalToDeliver;
 
-    SignalToDeliver = DbgGetSignalToDeliver();
+    SignalToDeliver = DbgGetSignalToDeliver(Context);
     Result = DbgSingleStep(Context, SignalToDeliver);
     return Result;
 }
@@ -714,10 +714,10 @@ Return Value:
         }
     }
 
-    assert(DbgCurrentEvent.Type == DebuggerEventBreak);
+    assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
-    ArmRegisters = &(DbgCurrentEvent.BreakNotification.Registers.Arm);
-    X86Registers = &(DbgCurrentEvent.BreakNotification.Registers.X86);
+    ArmRegisters = &(Context->CurrentEvent.BreakNotification.Registers.Arm);
+    X86Registers = &(Context->CurrentEvent.BreakNotification.Registers.X86);
 
     //
     // If the first parameter is not NULL, find the register the user is
@@ -904,8 +904,8 @@ Return Value:
             }
 
             Result = DbgSetRegisters(
-                               Context,
-                               &(DbgCurrentEvent.BreakNotification.Registers));
+                         Context,
+                         &(Context->CurrentEvent.BreakNotification.Registers));
 
             goto GetSetRegistersEnd;
         }
@@ -1514,7 +1514,7 @@ Return Value:
     INT Result;
     ULONGLONG StackPointer;
 
-    assert(DbgCurrentEvent.Type == DebuggerEventBreak);
+    assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
     if ((ArgumentCount != 1) && (ArgumentCount != 4)) {
         DbgOut("Usage: k [<InstructionPointer> <StackPointer> "
@@ -1553,20 +1553,23 @@ Return Value:
 
     } else {
         InstructionPointer =
-                          DbgCurrentEvent.BreakNotification.InstructionPointer;
+                    Context->CurrentEvent.BreakNotification.InstructionPointer;
 
         if (Context->MachineType == MACHINE_TYPE_X86) {
-            StackPointer = DbgCurrentEvent.BreakNotification.Registers.X86.Esp;
-            BasePointer = DbgCurrentEvent.BreakNotification.Registers.X86.Ebp;
+            StackPointer =
+                     Context->CurrentEvent.BreakNotification.Registers.X86.Esp;
+
+            BasePointer =
+                     Context->CurrentEvent.BreakNotification.Registers.X86.Ebp;
 
         } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
                    (Context->MachineType == MACHINE_TYPE_ARMV6)) {
 
             StackPointer =
-                         DbgCurrentEvent.BreakNotification.Registers.Arm.R13Sp;
+                   Context->CurrentEvent.BreakNotification.Registers.Arm.R13Sp;
 
             BaseAddress = DbgrpArmGetStackFrameBaseRegister(
-                               &(DbgCurrentEvent.BreakNotification.Registers));
+                         &(Context->CurrentEvent.BreakNotification.Registers));
 
             BasePointer = *BaseAddress;
 
@@ -1816,7 +1819,7 @@ Return Value:
             return Result;
         }
 
-        switch (DbgCurrentEvent.Type) {
+        switch (Context->CurrentEvent.Type) {
         case DebuggerEventBreak:
             Result = DbgrpProcessBreakNotification(Context);
             if (Result != 0) {
@@ -1839,7 +1842,9 @@ Return Value:
             // The target sent an unknown command.
             //
 
-            DbgOut("Unknown event received: 0x%x\n", DbgCurrentEvent.Type);
+            DbgOut("Unknown event received: 0x%x\n",
+                   Context->CurrentEvent.Type);
+
             break;
         }
     }
@@ -1946,7 +1951,7 @@ Return Value:
                                    ListEntry);
 
         CurrentModuleEntry = CurrentModuleEntry->Next;
-        if (!IS_MODULE_IN_CURRENT_PROCESS(CurrentModule)) {
+        if (!IS_MODULE_IN_CURRENT_PROCESS(Context, CurrentModule)) {
             if (UserModule != NULL) {
                 break;
             }
@@ -3775,7 +3780,9 @@ Return Value:
     CurrentFunction = NULL;
     CurrentSource = NULL;
     FunctionEndAddress = 0;
-    InstructionPointer = DbgCurrentEvent.BreakNotification.InstructionPointer;
+    InstructionPointer =
+                    Context->CurrentEvent.BreakNotification.InstructionPointer;
+
     DebasedInstructionPointer = InstructionPointer;
     SourceLine = NULL;
     StepInto = FALSE;
@@ -4129,9 +4136,10 @@ Return Value:
 
     ReturnAddress = 0;
 
-    assert(DbgCurrentEvent.Type == DebuggerEventBreak);
+    assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
-    InstructionPointer = DbgCurrentEvent.BreakNotification.InstructionPointer;
+    InstructionPointer =
+                    Context->CurrentEvent.BreakNotification.InstructionPointer;
 
     //
     // For ARM machines, the compiler doesn't generate a stack frame for
@@ -4160,7 +4168,7 @@ Return Value:
                  (InstructionPointer == FirstInstructionAddress))) {
 
                 ReturnAddress =
-                         DbgCurrentEvent.BreakNotification.Registers.Arm.R14Lr;
+                    Context->CurrentEvent.BreakNotification.Registers.Arm.R14Lr;
 
                 Result = 0;
                 goto ReturnToCallerEnd;
@@ -4174,15 +4182,19 @@ Return Value:
     //
 
     if (Context->MachineType == MACHINE_TYPE_X86) {
-        StackPointer = DbgCurrentEvent.BreakNotification.Registers.X86.Esp;
-        BasePointer = DbgCurrentEvent.BreakNotification.Registers.X86.Ebp;
+        StackPointer =
+                     Context->CurrentEvent.BreakNotification.Registers.X86.Esp;
+
+        BasePointer = Context->CurrentEvent.BreakNotification.Registers.X86.Ebp;
 
     } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
                (Context->MachineType == MACHINE_TYPE_ARMV6)) {
 
-        StackPointer = DbgCurrentEvent.BreakNotification.Registers.Arm.R13Sp;
+        StackPointer =
+                   Context->CurrentEvent.BreakNotification.Registers.Arm.R13Sp;
+
         BasePointerAddress = DbgrpArmGetStackFrameBaseRegister(
-                               &(DbgCurrentEvent.BreakNotification.Registers));
+                         &(Context->CurrentEvent.BreakNotification.Registers));
 
         BasePointer = *BasePointerAddress;
 
@@ -4441,10 +4453,10 @@ Return Value:
 
     DbgrpUnloadAllModules(Context, FALSE);
     Result = DbgrpValidateLoadedModules(
-                       Context,
-                       DbgCurrentEvent.BreakNotification.LoadedModuleCount,
-                       DbgCurrentEvent.BreakNotification.LoadedModuleSignature,
-                       TRUE);
+                 Context,
+                 Context->CurrentEvent.BreakNotification.LoadedModuleCount,
+                 Context->CurrentEvent.BreakNotification.LoadedModuleSignature,
+                 TRUE);
 
     return Result;
 }
@@ -4779,7 +4791,7 @@ Return Value:
             goto SwitchProcessorsEnd;
         }
 
-        if (DbgConnectionType == DebugConnectionKernel) {
+        if (Context->ConnectionType == DebugConnectionKernel) {
             if (Count == 1) {
                 DbgOut("There is 1 processor in the system.\n");
 
@@ -4789,7 +4801,7 @@ Return Value:
 
             Result = 0;
 
-        } else if (DbgConnectionType == DebugConnectionUser) {
+        } else if (Context->ConnectionType == DebugConnectionUser) {
             if (Count == 1) {
                 DbgOut("There is 1 thread in the process.\n");
 
@@ -4801,7 +4813,9 @@ Return Value:
             }
 
         } else {
-            DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+            DbgOut("Error: Unknown connection type %d.\n",
+                    Context->ConnectionType);
+
             Result = EINVAL;
         }
 
@@ -4813,7 +4827,7 @@ Return Value:
     //
 
     if (ProcessorNumber ==
-        DbgCurrentEvent.BreakNotification.ProcessorOrThreadNumber) {
+        Context->CurrentEvent.BreakNotification.ProcessorOrThreadNumber) {
 
         Result = 0;
         goto SwitchProcessorsEnd;
@@ -4823,8 +4837,8 @@ Return Value:
     // The user cannot switch to a processor that's out of range.
     //
 
-    Count = DbgCurrentEvent.BreakNotification.ProcessorOrThreadCount;
-    if ((DbgConnectionType == DebugConnectionKernel) &&
+    Count = Context->CurrentEvent.BreakNotification.ProcessorOrThreadCount;
+    if ((Context->ConnectionType == DebugConnectionKernel) &&
         (ProcessorNumber >= Count)) {
 
         if (Count == 1) {
@@ -4855,7 +4869,7 @@ Return Value:
 
     DbgrpSetFrame(Context, 0);
     Context->LastMemoryDump.NextAddress =
-                          DbgCurrentEvent.BreakNotification.InstructionPointer;
+                    Context->CurrentEvent.BreakNotification.InstructionPointer;
 
     Context->LastMemoryDump.Virtual = TRUE;
     Context->DisassemblyAddress = Context->LastMemoryDump.NextAddress;
@@ -4907,10 +4921,10 @@ Return Value:
     ULONGLONG ProcessorBlock;
     INT Result;
 
-    assert(DbgCurrentEvent.Type == DebuggerEventBreak);
+    assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
     Result = 0;
-    ProcessorBlock = DbgCurrentEvent.BreakNotification.ProcessorBlock;
+    ProcessorBlock = Context->CurrentEvent.BreakNotification.ProcessorBlock;
     DbgOut("Processor block at 0x%08I64x\n", ProcessorBlock);
     sprintf(AddressString, "0x%I64x", ProcessorBlock);
     if (ProcessorBlock != (UINTN)NULL) {
@@ -4951,11 +4965,11 @@ Return Value:
 
 {
 
-    if (DbgConnectionType == DebugConnectionRemote) {
+    if (DbgConsoleContext->ConnectionType == DebugConnectionRemote) {
         DbgrpClientRequestBreakIn(DbgConsoleContext);
 
     } else {
-        DbgRequestBreakIn();
+        DbgRequestBreakIn(DbgConsoleContext);
     }
 
     return;
@@ -5272,7 +5286,7 @@ Return Value:
             return Result;
         }
 
-        if (DbgCurrentEvent.Type != DebuggerEventBreak) {
+        if (Context->CurrentEvent.Type != DebuggerEventBreak) {
             DbgOut("Failed to get a break after a single step.\n");
             return EINVAL;
         }
@@ -5293,7 +5307,7 @@ Return Value:
         Context->BreakpointToRestore = NULL;
     }
 
-    SignalToDeliver = DbgGetSignalToDeliver();
+    SignalToDeliver = DbgGetSignalToDeliver(Context);
     Result = DbgContinue(Context, SignalToDeliver);
     if (Result != 0) {
         return Result;
@@ -6424,7 +6438,7 @@ Return Value:
 
         if ((Breakpoint->Enabled != FALSE) &&
             (Breakpoint->Type == BreakpointTypeExecution) &&
-            (DbgCurrentEvent.BreakNotification.InstructionPointer ==
+            (Context->CurrentEvent.BreakNotification.InstructionPointer ==
                                                  Breakpoint->Address + Size)) {
 
             BreakpointNumber = Breakpoint->Index;
@@ -6490,7 +6504,7 @@ Return Value:
             return -1;
         }
 
-        if (DbgCurrentEvent.BreakNotification.InstructionPointer ==
+        if (Context->CurrentEvent.BreakNotification.InstructionPointer ==
             Context->OneTimeBreakAddress + Size) {
 
             Result = DbgrpAdjustInstructionPointerForBreakpoint(
@@ -6563,9 +6577,9 @@ Return Value:
     BOOL Result;
     ULONG Size;
 
-    assert(DbgCurrentEvent.Type == DebuggerEventBreak);
+    assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
-    BreakNotification = &(DbgCurrentEvent.BreakNotification);
+    BreakNotification = &(Context->CurrentEvent.BreakNotification);
     if (Context->MachineType == MACHINE_TYPE_X86) {
         Size = X86_BREAK_INSTRUCTION_LENGTH;
 
@@ -6668,7 +6682,7 @@ Return Value:
     // Synchronize symbols with the target.
     //
 
-    CurrentBreak = &(DbgCurrentEvent.BreakNotification);
+    CurrentBreak = &(Context->CurrentEvent.BreakNotification);
     ForceModuleUpdate = FALSE;
     if (Context->PreviousProcess != CurrentBreak->Process) {
         ForceModuleUpdate = TRUE;
@@ -6700,9 +6714,11 @@ Return Value:
     case ExceptionSingleStep:
     case ExceptionSignal:
         if (CurrentBreak->Exception == ExceptionSignal) {
-            if (DbgCurrentEvent.SignalParameters.SignalNumber != SIGNAL_TRAP) {
+            if (Context->CurrentEvent.SignalParameters.SignalNumber !=
+                SIGNAL_TRAP) {
+
                 DbgOut("Caught signal %d.\n",
-                       DbgCurrentEvent.SignalParameters.SignalNumber);
+                       Context->CurrentEvent.SignalParameters.SignalNumber);
             }
         }
 
@@ -6798,7 +6814,7 @@ Return Value:
                (Context->MachineType == MACHINE_TYPE_ARMV6)) {
 
         BasePointerAddress = DbgrpArmGetStackFrameBaseRegister(
-                               &(DbgCurrentEvent.BreakNotification.Registers));
+                         &(Context->CurrentEvent.BreakNotification.Registers));
 
         Context->CurrentFrameBasePointer = *BasePointerAddress;
 
@@ -6874,7 +6890,7 @@ Return Value:
     // have to send break notifications back and forth for every singls step.
     //
 
-    SignalToDeliver = DbgGetSignalToDeliver();
+    SignalToDeliver = DbgGetSignalToDeliver(Context);
     Result = DbgRangeStep(Context, RangeStep, SignalToDeliver);
     if (Result == 0) {
         return 0;
@@ -7828,30 +7844,34 @@ Return Value:
 
 {
 
-    assert(DbgCurrentEvent.Type == DebuggerEventShutdown);
+    assert(Context->CurrentEvent.Type == DebuggerEventShutdown);
 
-    switch (DbgCurrentEvent.ShutdownNotification.ShutdownType) {
+    switch (Context->CurrentEvent.ShutdownNotification.ShutdownType) {
     case ShutdownTypeTransition:
         DbgOut("Target disconnected.\n");
-        CommStall(250);
         DbgrConnect(Context);
         break;
 
     case ShutdownTypeExit:
         DbgOut("Process %x exited with status %d.\n",
-               DbgCurrentEvent.ShutdownNotification.Process,
-               DbgCurrentEvent.ShutdownNotification.ExitStatus);
+               Context->CurrentEvent.ShutdownNotification.Process,
+               Context->CurrentEvent.ShutdownNotification.ExitStatus);
 
+        break;
+
+    case ShutdownTypeSynchronizationLost:
+        DbgOut("Resynchronizing...\n");
+        DbgrConnect(Context);
         break;
 
     default:
         DbgOut("Shutdown occurred, unknown reason %d.\n",
-               DbgCurrentEvent.ShutdownNotification.ShutdownType);
+               Context->CurrentEvent.ShutdownNotification.ShutdownType);
 
         break;
     }
 
-    if (DbgCurrentEvent.ShutdownNotification.UnloadAllSymbols != FALSE) {
+    if (Context->CurrentEvent.ShutdownNotification.UnloadAllSymbols != FALSE) {
         DbgrpUnloadAllModules(Context, TRUE);
     }
 
@@ -8463,24 +8483,30 @@ Return Value:
 
     Frames = NULL;
 
-    assert(DbgCurrentEvent.Type == DebuggerEventBreak);
+    assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
     //
     // Get the important registers as a starting point for stack frame
     // traversal.
     //
 
-    InstructionPointer = DbgCurrentEvent.BreakNotification.InstructionPointer;
+    InstructionPointer =
+                    Context->CurrentEvent.BreakNotification.InstructionPointer;
+
     if (Context->MachineType == MACHINE_TYPE_X86) {
-        StackPointer = DbgCurrentEvent.BreakNotification.Registers.X86.Esp;
-        BasePointer = DbgCurrentEvent.BreakNotification.Registers.X86.Ebp;
+        StackPointer =
+                     Context->CurrentEvent.BreakNotification.Registers.X86.Esp;
+
+        BasePointer = Context->CurrentEvent.BreakNotification.Registers.X86.Ebp;
 
     } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
                (Context->MachineType == MACHINE_TYPE_ARMV6)) {
 
-        StackPointer = DbgCurrentEvent.BreakNotification.Registers.Arm.R13Sp;
+        StackPointer =
+                   Context->CurrentEvent.BreakNotification.Registers.Arm.R13Sp;
+
         BasePointerAddress = DbgrpArmGetStackFrameBaseRegister(
-                               &(DbgCurrentEvent.BreakNotification.Registers));
+                         &(Context->CurrentEvent.BreakNotification.Registers));
 
         BasePointer = *BasePointerAddress;
 

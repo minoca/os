@@ -435,7 +435,7 @@ Return Value:
     // Collect the data contents for the symbol based on where it is located.
     //
 
-    X86Registers = &(DbgCurrentEvent.BreakNotification.Registers.X86);
+    X86Registers = &(Context->CurrentEvent.BreakNotification.Registers.X86);
     switch (DataSymbol->LocationType) {
     case DataLocationRegister:
         Register = DataSymbol->Location.Register;
@@ -519,7 +519,7 @@ Return Value:
             }
 
             RegisterBase =
-                         &(DbgCurrentEvent.BreakNotification.Registers.Arm.R0);
+                   &(Context->CurrentEvent.BreakNotification.Registers.Arm.R0);
 
             *(PULONG)DataStream = *(PULONG)(RegisterBase + Register);
             if (DataStreamSize > 4) {
@@ -656,7 +656,7 @@ Return Value:
     DataStream = NULL;
     StackRegister = NULL;
 
-    assert(DbgCurrentEvent.Type == DebuggerEventBreak);
+    assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
     Result = DbgGetDataSymbolTypeInformation(DataSymbol, &Type, &TypeSize);
     if (Result == FALSE) {
@@ -866,7 +866,7 @@ Return Value:
                                    ListEntry);
 
         CurrentModuleEntry = CurrentModuleEntry->Next;
-        if (!IS_MODULE_IN_CURRENT_PROCESS(CurrentModule)) {
+        if (!IS_MODULE_IN_CURRENT_PROCESS(Context, CurrentModule)) {
             continue;
         }
 
@@ -924,7 +924,7 @@ Return Value:
                                    ListEntry);
 
         CurrentModuleEntry = CurrentModuleEntry->Next;
-        if (!IS_MODULE_IN_CURRENT_PROCESS(CurrentModule)) {
+        if (!IS_MODULE_IN_CURRENT_PROCESS(Context, CurrentModule)) {
             continue;
         }
 
@@ -1101,7 +1101,7 @@ Return Value:
                                    ListEntry);
 
         CurrentModuleEntry = CurrentModuleEntry->Next;
-        if (!IS_MODULE_IN_CURRENT_PROCESS(CurrentModule)) {
+        if (!IS_MODULE_IN_CURRENT_PROCESS(Context, CurrentModule)) {
             if (UserModule != NULL) {
                 break;
             }

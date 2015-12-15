@@ -1029,15 +1029,17 @@ Return Value:
 
 {
 
+    PBREAK_NOTIFICATION Break;
     CHAR Prompt[32];
 
-    assert(DbgCurrentEvent.Type == DebuggerEventBreak);
+    assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
-    if (DbgConnectionType == DebugConnectionKernel) {
-        if (DbgCurrentEvent.BreakNotification.ProcessorOrThreadCount > 1) {
+    Break = &(Context->CurrentEvent.BreakNotification);
+    if (Context->ConnectionType == DebugConnectionKernel) {
+        if (Break->ProcessorOrThreadCount > 1) {
             sprintf(Prompt,
                     "%d : kd>",
-                    DbgCurrentEvent.BreakNotification.ProcessorOrThreadNumber);
+                    Break->ProcessorOrThreadNumber);
 
         } else {
             sprintf(Prompt, "kd>");
@@ -1045,12 +1047,12 @@ Return Value:
 
     } else {
 
-        assert(DbgConnectionType == DebugConnectionUser);
+        assert(Context->ConnectionType == DebugConnectionUser);
 
         sprintf(Prompt,
                 "%x:%x>",
-                DbgCurrentEvent.BreakNotification.Process,
-                DbgCurrentEvent.BreakNotification.ProcessorOrThreadNumber);
+                Break->Process,
+                Break->ProcessorOrThreadNumber);
     }
 
     DbgrpSetPromptText(Context, Prompt);

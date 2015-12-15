@@ -310,7 +310,7 @@ Return Value:
     // Get the profiler notification data out of the current event.
     //
 
-    ProfilerNotification = DbgCurrentEvent.ProfilerNotification;
+    ProfilerNotification = Context->CurrentEvent.ProfilerNotification;
 
     //
     // If the end packet was received, denoted by the max profiler type, then

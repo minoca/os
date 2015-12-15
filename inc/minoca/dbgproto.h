@@ -22,14 +22,6 @@ Author:
 //
 
 //
-// This macros determines whether or not the given byte is a synchronziation
-// byte.
-//
-
-#define DEBUG_IS_SYNCHRONIZATION_BYTE(_Byte) \
-    (((_Byte) & DEBUG_SYNCHRONIZE_BASE_MASK) == DEBUG_SYNCHRONIZE_BASE_VALUE)
-
-//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -38,7 +30,7 @@ Author:
 //
 
 #define DEBUG_PROTOCOL_MAJOR_VERSION    1
-#define DEBUG_PROTOCOL_REVISION         1
+#define DEBUG_PROTOCOL_REVISION         2
 
 //
 // Define some size limits.
@@ -83,13 +75,13 @@ Author:
 #define DEBUG_PACKET_MAGIC_SIZE 2
 
 //
-// Define the bits for the byte based synchronization protocol.
+// Define two single-byte resynchronization constants, one that is sent by the
+// host, and one that is sent by the target. Them being different prevents
+// false positives from a loopback device.
 //
 
-#define DEBUG_SYNCHRONIZE_BASE_MASK  0xFC
-#define DEBUG_SYNCHRONIZE_BASE_VALUE 0xC0
-#define DEBUG_SYNCHRONIZE_SYN        0x02
-#define DEBUG_SYNCHRONIZE_ACK        0x01
+#define DEBUG_SYNCHRONIZE_HOST 0x3F
+#define DEBUG_SYNCHRONIZE_TARGET 0x21
 
 //
 // Define the escaped characters.
@@ -221,7 +213,8 @@ typedef enum _EXCEPTION_TYPE {
 typedef enum _SHUTDOWN_TYPE {
     ShutdownTypeInvalid,
     ShutdownTypeTransition,
-    ShutdownTypeExit
+    ShutdownTypeExit,
+    ShutdownTypeSynchronizationLost
 } SHUTDOWN_TYPE, *PSHUTDOWN_TYPE;
 
 /*++

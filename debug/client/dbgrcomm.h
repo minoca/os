@@ -539,6 +539,10 @@ Members:
 
     Client - Stores context when this debugger is acting as a remote client.
 
+    CurrentEvent - Stores the current debug event.
+
+    ConnectionType - Stores the current debug connection type.
+
 --*/
 
 struct _DEBUGGER_CONTEXT {
@@ -577,6 +581,8 @@ struct _DEBUGGER_CONTEXT {
     ULONG CommandHistoryNextIndex;
     DEBUGGER_SERVER_CONTEXT Server;
     DEBUGGER_CLIENT_CONTEXT Client;
+    DEBUGGER_EVENT CurrentEvent;
+    DEBUG_CONNECTION_TYPE ConnectionType;
 };
 
 typedef

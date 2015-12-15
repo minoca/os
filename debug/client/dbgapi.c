@@ -180,16 +180,8 @@ DbgpKdSendBytes (
 // -------------------------------------------------------------------- Globals
 //
 
-DEBUG_CONNECTION_TYPE DbgConnectionType;
 BOOL DbgBreakInDesired;
 BOOL DbgBreakInRequestSent;
-
-//
-// Store the current event information.
-//
-
-DEBUGGER_EVENT DbgCurrentEvent;
-PPROFILER_NOTIFICATION DbgCurrentEventProfilerNotification;
 
 //
 // Define the globals used to transmit and receive kernel debug packets.
@@ -217,6 +209,13 @@ BOOL DbgKdPrintMemoryAccesses = FALSE;
 //
 
 BOOL DbgKdEncodeBytes = FALSE;
+
+//
+// This boolean gets set to TRUE when a resynchronization byte is found in the
+// data stream between packets.
+//
+
+BOOL DbgKdConnectionReset;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -253,19 +252,9 @@ Return Value:
 
     assert(ConnectionType != DebugConnectionInvalid);
 
-    DbgConnectionType = ConnectionType;
+    Context->ConnectionType = ConnectionType;
     if (ConnectionType == DebugConnectionUser) {
         Context->MachineType = DbgGetHostMachineType();
-    }
-
-    //
-    // If the debugger receives profiler notifications, the maximum possible
-    // size is that of the debug payload size.
-    //
-
-    DbgCurrentEventProfilerNotification = malloc(DEBUG_PAYLOAD_SIZE);
-    if (DbgCurrentEventProfilerNotification == NULL) {
-        return ENOMEM;
     }
 
     return 0;
@@ -297,10 +286,6 @@ Return Value:
 --*/
 
 {
-
-    if (DbgCurrentEventProfilerNotification != NULL) {
-        free(DbgCurrentEventProfilerNotification);
-    }
 
     return;
 }
@@ -353,7 +338,14 @@ Return Value:
     *BufferSize = 0;
     *ConnectionDetails = NULL;
 
-    assert(DbgConnectionType == DebugConnectionKernel);
+    assert(Context->ConnectionType == DebugConnectionKernel);
+
+    //
+    // Set the connection reset flag so that receive knows to ignore incoming
+    // resync bytes.
+    //
+
+    DbgKdConnectionReset = TRUE;
 
     //
     // Synchronize with the target to make sure it is ready and listening.
@@ -381,7 +373,8 @@ Return Value:
     }
 
     //
-    // Attempt to receive the connection response packet.
+    // Attempt to receive the connection response packet. Get through resync
+    // bytes.
     //
 
     Result = DbgpKdReceivePacket(&DbgRxPacket, 0, NULL);
@@ -390,6 +383,11 @@ Return Value:
         return EPIPE;
     }
 
+    //
+    // The connection is now established, so future resync bytes reset it.
+    //
+
+    DbgKdConnectionReset = FALSE;
     ConnectionResponse = (PCONNECTION_RESPONSE)DbgRxPacket.Payload;
     if (DbgRxPacket.Header.Command != DbgConnectionAcknowledge) {
 
@@ -476,14 +474,14 @@ Return Value:
 
     INT Result;
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         Result = DbgpKdContinue();
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         Result = DbgpUserContinue(SignalToDeliver);
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = FALSE;
     }
 
@@ -500,7 +498,7 @@ Return Value:
 
 ULONG
 DbgGetSignalToDeliver (
-    VOID
+    PDEBUGGER_CONTEXT Context
     )
 
 /*++
@@ -514,7 +512,7 @@ Routine Description:
 
 Arguments:
 
-    None.
+    Context - Supplies a pointer to the application context.
 
 Return Value:
 
@@ -530,8 +528,8 @@ Return Value:
     ULONG SignalToDeliver;
 
     SignalToDeliver = 0;
-    if (DbgConnectionType == DebugConnectionUser) {
-        SignalToDeliver = DbgCurrentEvent.SignalParameters.SignalNumber;
+    if (Context->ConnectionType == DebugConnectionUser) {
+        SignalToDeliver = Context->CurrentEvent.SignalParameters.SignalNumber;
         SignalToDeliver = DbgpUserGetSignalToDeliver(SignalToDeliver);
     }
 
@@ -569,14 +567,14 @@ Return Value:
 
     INT Result;
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         Result = DbgpKdSetRegisters(Registers);
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         Result = DbgpUserSetRegisters(Registers);
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = FALSE;
     }
 
@@ -620,15 +618,15 @@ Return Value:
 
     INT Result;
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         Result = DbgpKdGetSpecialRegisters(SpecialRegisters);
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         DbgOut("Special registers cannot be accessed in user mode.\n");
         Result = FALSE;
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = FALSE;
     }
 
@@ -673,15 +671,15 @@ Return Value:
 
     INT Result;
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         Result = DbgpKdSetSpecialRegisters(Command);
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         DbgOut("Special registers cannot be accessed in user mode.\n");
         Result = FALSE;
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = FALSE;
     }
 
@@ -726,14 +724,14 @@ Return Value:
 
     INT Result;
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         Result = DbgpKdSingleStep();
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         Result = DbgpUserSingleStep(SignalToDeliver);
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = FALSE;
     }
 
@@ -774,15 +772,15 @@ Return Value:
 
     INT Result;
 
-    DbgCurrentEvent.Type = DebuggerEventInvalid;
-    if (DbgConnectionType == DebugConnectionKernel) {
-        Result = DbgpKdWaitForEvent(&DbgCurrentEvent);
+    Context->CurrentEvent.Type = DebuggerEventInvalid;
+    if (Context->ConnectionType == DebugConnectionKernel) {
+        Result = DbgpKdWaitForEvent(&(Context->CurrentEvent));
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
-        Result = DbgpUserWaitForEvent(&DbgCurrentEvent);
+    } else if (Context->ConnectionType == DebugConnectionUser) {
+        Result = DbgpUserWaitForEvent(&(Context->CurrentEvent));
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = FALSE;
     }
 
@@ -831,14 +829,14 @@ Return Value:
 
     INT Result;
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         Result = DbgpKdRangeStep(RangeStep);
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         Result = DbgpUserRangeStep(RangeStep, SignalToDeliver);
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = FALSE;
     }
 
@@ -884,7 +882,7 @@ Return Value:
 
     INT Result;
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         Result = DbgpKdSwitchProcessors(ProcessorNumber);
         if (Result == FALSE) {
             Result = EINVAL;
@@ -894,15 +892,17 @@ Return Value:
             Context->TargetFlags |= DEBUGGER_TARGET_RUNNING;
         }
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
-        Result = DbgpUserSwitchThread(ProcessorNumber, &DbgCurrentEvent);
+    } else if (Context->ConnectionType == DebugConnectionUser) {
+        Result = DbgpUserSwitchThread(ProcessorNumber,
+                                      &(Context->CurrentEvent));
+
         if (Result == FALSE) {
             Result = EINVAL;
             goto SwitchProcessorsEnd;
         }
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = EINVAL;
         goto SwitchProcessorsEnd;
     }
@@ -957,9 +957,9 @@ Return Value:
 
     *ThreadCount = 0;
     *ThreadIds = NULL;
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         ProcessorCount =
-                      DbgCurrentEvent.BreakNotification.ProcessorOrThreadCount;
+                Context->CurrentEvent.BreakNotification.ProcessorOrThreadCount;
 
         assert(ProcessorCount != 0);
 
@@ -981,11 +981,11 @@ Return Value:
         *ThreadIds = Processors;
         Result = TRUE;
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         Result = DbgpUserGetThreadList(ThreadCount, ThreadIds);
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = FALSE;
     }
 
@@ -1031,14 +1031,14 @@ Return Value:
 
     INT Result;
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         Result = DbgpKdGetLoadedModuleList(ModuleList);
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         Result = DbgpUserGetLoadedModuleList(ModuleList);
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = FALSE;
     }
 
@@ -1054,7 +1054,7 @@ Return Value:
 
 VOID
 DbgRequestBreakIn (
-    VOID
+    PDEBUGGER_CONTEXT Context
     )
 
 /*++
@@ -1065,7 +1065,7 @@ Routine Description:
 
 Arguments:
 
-    None.
+    Context - Supplies a pointer to the application context.
 
 Return Value:
 
@@ -1075,15 +1075,15 @@ Return Value:
 
 {
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         DbgBreakInRequestSent = FALSE;
         DbgBreakInDesired = TRUE;
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         DbgpUserRequestBreakIn();
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
     }
 
     return;
@@ -1134,7 +1134,7 @@ Return Value:
 
     BOOL Result;
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         Result = DbgpKdReadWriteMemory(FALSE,
                                        VirtualMemory,
                                        Address,
@@ -1142,7 +1142,7 @@ Return Value:
                                        BytesToRead,
                                        BytesRead);
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         Result = DbgpUserReadWriteMemory(FALSE,
                                          VirtualMemory,
                                          Address,
@@ -1151,7 +1151,7 @@ Return Value:
                                          BytesRead);
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = FALSE;
     }
 
@@ -1206,7 +1206,7 @@ Return Value:
 
     INT Result;
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         Result = DbgpKdReadWriteMemory(TRUE,
                                        VirtualMemory,
                                        Address,
@@ -1214,7 +1214,7 @@ Return Value:
                                        BytesToWrite,
                                        BytesWritten);
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         Result = DbgpUserReadWriteMemory(TRUE,
                                          VirtualMemory,
                                          Address,
@@ -1223,7 +1223,7 @@ Return Value:
                                          BytesWritten);
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = FALSE;
     }
 
@@ -1265,7 +1265,7 @@ Return Value:
 
     INT Result;
 
-    if (DbgConnectionType == DebugConnectionKernel) {
+    if (Context->ConnectionType == DebugConnectionKernel) {
         Result = DbgpKdReboot(RebootType);
         if (Result == FALSE) {
             Result = EINVAL;
@@ -1273,12 +1273,12 @@ Return Value:
 
         Result = 0;
 
-    } else if (DbgConnectionType == DebugConnectionUser) {
+    } else if (Context->ConnectionType == DebugConnectionUser) {
         DbgOut("Reboot is only supported on kernel debug targets.\n");
         Result = ENODEV;
 
     } else {
-        DbgOut("Error: Unknown connection type %d.\n", DbgConnectionType);
+        DbgOut("Error: Unknown connection type %d.\n", Context->ConnectionType);
         Result = EINVAL;
     }
 
@@ -1674,14 +1674,14 @@ Return Value:
         }
 
         DbgOut("xxxxxxxx %08x ",
-               DbgCurrentEvent.BreakNotification.Registers.Arm.R14Lr);
+               Context->CurrentEvent.BreakNotification.Registers.Arm.R14Lr);
 
         Result = DbgPrintAddressSymbol(Context, CallSite);
         if (Result != 0) {
             DbgOut("%08I64x", CallSite);
         }
 
-        CallSite = DbgCurrentEvent.BreakNotification.Registers.Arm.R14Lr;
+        CallSite = Context->CurrentEvent.BreakNotification.Registers.Arm.R14Lr;
         DbgOut("\n");
     }
 
@@ -2045,7 +2045,7 @@ Arguments:
 
 Return Value:
 
-    Returns TRUE on success, or FALSE on failure.
+    Returns TRUE if successful, or FALSE if there was an error.
 
 --*/
 
@@ -2065,6 +2065,20 @@ Return Value:
         //
 
         while (TRUE) {
+
+            //
+            // If the connection was reset, attempt to reinitialize.
+            //
+
+            if (DbgKdConnectionReset != FALSE) {
+                Event->Type = DebuggerEventShutdown;
+                Event->ShutdownNotification.ShutdownType =
+                                               ShutdownTypeSynchronizationLost;
+
+                Result = TRUE;
+                goto KdWaitForEventEnd;
+            }
+
             Result = DbgpKdReceivePacket(&DbgRxPacket,
                                          DEBUG_USER_POLL_MILLISECONDS,
                                          &TimeoutOccurred);
@@ -2075,6 +2089,10 @@ Return Value:
             //
 
             if ((Result == FALSE) && (TimeoutOccurred == FALSE)) {
+                if (DbgKdConnectionReset != FALSE) {
+                    continue;
+                }
+
                 DbgOut("Communication Error.\n");
                 goto KdWaitForEventEnd;
             }
@@ -2099,6 +2117,10 @@ Return Value:
                 DbgTxPacket.Header.PayloadSize = 0;
                 Result = DbgpKdSendPacket(&DbgTxPacket);
                 if (Result == FALSE) {
+                    if (DbgKdConnectionReset != FALSE) {
+                        continue;
+                    }
+
                     DbgOut("Error: Could not send break request.\n");
                     Retries -= 1;
                     if (Retries == 0) {
@@ -2150,10 +2172,8 @@ Return Value:
 
             assert(DbgRxPacket.Header.PayloadSize <= DEBUG_PAYLOAD_SIZE);
 
-            Event->ProfilerNotification = DbgCurrentEventProfilerNotification;
-            RtlCopyMemory(Event->ProfilerNotification,
-                          DbgRxPacket.Payload,
-                          DbgRxPacket.Header.PayloadSize);
+            Event->ProfilerNotification =
+                                 (PPROFILER_NOTIFICATION)(DbgRxPacket.Payload);
 
             break;
 
@@ -2968,7 +2988,7 @@ Return Value:
             TimeWaited = 0;
             while (TRUE) {
                 BytesAvailable = CommReceiveBytesReady();
-                if (BytesAvailable >= HeaderSize) {
+                if (BytesAvailable != 0) {
                     break;
                 }
 
@@ -2996,6 +3016,22 @@ Return Value:
         }
 
         if (Magic != DEBUG_PACKET_MAGIC_BYTE1) {
+
+            //
+            // Check for a resynchronization byte, indicating the target is
+            // new or confused. If the state is already reset, then this is
+            // probably during the initial connect, where extra resync bytes
+            // from the target are ignored.
+            //
+
+            if ((Magic == DEBUG_SYNCHRONIZE_TARGET) &&
+                (DbgKdConnectionReset == FALSE)) {
+
+                DbgKdConnectionReset = TRUE;
+                Status = FALSE;
+                break;
+            }
+
             continue;
         }
 
@@ -3077,46 +3113,26 @@ Return Value:
 
 {
 
-    BOOL AckReceived;
-    BOOL AckSent;
-    ULONG BytesAvailable;
     BOOL Result;
     ULONG Retries;
     ULONG Status;
     UCHAR SynchronizeByte;
-    BOOL SynReceived;
     ULONG TimeWaited;
 
-    AckReceived = FALSE;
-    AckSent = FALSE;
-    SynReceived = FALSE;
-    Status = EPIPE;
-
     //
-    // Check to see if the target has already sent a SYN to the host.
+    // Check to see if the target has already sent a sync to the host.
     //
 
-    BytesAvailable = CommReceiveBytesReady();
-    while (BytesAvailable != 0) {
+    while (CommReceiveBytesReady() != 0) {
         Result = DbgpKdReceiveBytes(&SynchronizeByte, sizeof(UCHAR));
         if (Result == FALSE) {
             Status = EPIPE;
             goto KdSynchronizeEnd;
         }
 
-        BytesAvailable -= 1;
-        if (DEBUG_IS_SYNCHRONIZATION_BYTE(SynchronizeByte) == FALSE) {
-            continue;
-        }
-
-        //
-        // Record that a SYN was received. There should not be an ACK, because
-        // the host (this side) has not yet sent a SYN.
-        //
-
-        if ((SynchronizeByte & DEBUG_SYNCHRONIZE_SYN) != 0) {
-            SynReceived = TRUE;
-            break;
+        if (SynchronizeByte == DEBUG_SYNCHRONIZE_TARGET) {
+            Status = 0;
+            goto KdSynchronizeEnd;
         }
     }
 
@@ -3124,95 +3140,44 @@ Return Value:
     while (Retries > 0) {
 
         //
-        // Send a byte to the target with the SYN and/or ACK bit set.
+        // Send a little query.
         //
 
-        SynchronizeByte = DEBUG_SYNCHRONIZE_BASE_VALUE;
-        if (SynReceived != FALSE) {
-            SynchronizeByte |= DEBUG_SYNCHRONIZE_ACK;
-            AckSent = TRUE;
-        }
-
-        if (AckReceived == FALSE) {
-            SynchronizeByte |= DEBUG_SYNCHRONIZE_SYN;
-        }
-
-        Result = DbgpKdSendBytes(&SynchronizeByte, sizeof(UCHAR));
+        SynchronizeByte = DEBUG_SYNCHRONIZE_HOST;
+        Result = DbgpKdSendBytes(&SynchronizeByte, 1);
         if (Result == FALSE) {
-            Retries -= 1;
             Status = EPIPE;
             continue;
         }
 
         //
-        // Read a byte from the target. It may be a SYN, if the target tried to
-        // synchronize first, or a SYN+ACK if the target has seen the SYN.
+        // Wait for a response.
         //
 
         TimeWaited = 0;
-        while ((SynReceived == FALSE) || (AckReceived == FALSE)) {
-            while (TRUE) {
-                BytesAvailable = CommReceiveBytesReady();
-                if (BytesAvailable >= sizeof(UCHAR)) {
-                    break;
-                }
-
-                CommStall(15);
-                TimeWaited += 15;
-                if (TimeWaited >= 5000) {
+        while (TimeWaited < 5000) {
+            if (CommReceiveBytesReady() != 0) {
+                Result = DbgpKdReceiveBytes(&SynchronizeByte, 1);
+                if (Result == FALSE) {
                     Status = EPIPE;
                     break;
                 }
+
+                if (SynchronizeByte == DEBUG_SYNCHRONIZE_TARGET) {
+                    Status = 0;
+                    goto KdSynchronizeEnd;
+                }
+
+            } else {
+                CommStall(15);
+                TimeWaited += 15;
             }
-
-            //
-            // If the timeout occurred and a byte was not found, then it's time
-            // to send another SYN.
-            //
-
-            if (BytesAvailable == 0) {
-                break;
-            }
-
-            Result = DbgpKdReceiveBytes(&SynchronizeByte, sizeof(UCHAR));
-            if (Result == FALSE) {
-                Retries -= 1;
-                Status = EPIPE;
-                break;
-            }
-
-            //
-            // If the byte is not a synchronization byte, then try again.
-            //
-
-            if (DEBUG_IS_SYNCHRONIZATION_BYTE(SynchronizeByte) == FALSE) {
-                continue;
-            }
-
-            //
-            // Record if a SYN and/or an ACK was received. The next time around
-            // the loop will make sure to send the correct response.
-            //
-
-            if ((SynchronizeByte & DEBUG_SYNCHRONIZE_SYN) != 0) {
-                SynReceived = TRUE;
-            }
-
-            if ((SynchronizeByte & DEBUG_SYNCHRONIZE_ACK) != 0) {
-                AckReceived = TRUE;
-            }
-
-            break;
         }
 
-        if ((SynReceived != FALSE) &&
-            (AckReceived != FALSE) &&
-            (AckSent != FALSE)) {
-
-            Status = 0;
-            break;
-        }
+        Retries -= 1;
     }
+
+    Status = EPIPE;
 
 KdSynchronizeEnd:
     return Status;
@@ -3331,7 +3296,7 @@ Return Value:
             }
 
             DbgOut("\nRX: ");
-            for (ByteIndex = 0; ByteIndex < BytesToRead; ByteIndex += 1) {
+            for (ByteIndex = 0; ByteIndex <  BytesToRead; ByteIndex += 1) {
                 Character = Bytes[ByteIndex];
                 if (!isprint(Character)) {
                     Character = '.';

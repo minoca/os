@@ -1425,7 +1425,7 @@ Return Value:
                    Client->UserName,
                    Client->HostName);
 
-            DbgRequestBreakIn();
+            DbgRequestBreakIn(Context);
             break;
 
         case DebugRemoteSourceDataRequest:

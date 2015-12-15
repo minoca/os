@@ -293,7 +293,7 @@ KdpConnect (
     PBOOL BreakInRequested
     );
 
-KSTATUS
+VOID
 KdpSynchronize (
     VOID
     );
@@ -915,16 +915,23 @@ Return Value:
     // If debugging is not enabled, then this shouldn't execute.
     //
 
-    if ((KdInitialized == FALSE) ||
-        (KdDebuggingEnabled == FALSE) ||
-        (KdDebuggerConnected == FALSE)) {
-
+    if ((KdInitialized == FALSE) || (KdDebuggingEnabled == FALSE)) {
         return;
     }
 
-    Flags = SpGetProfilerDataStatus();
-    if (Flags != 0) {
-        RtlDebugService(EXCEPTION_PROFILER, &Flags);
+    //
+    // If the debugger's not actually connected, just poll for a connection
+    // request.
+    //
+
+    if (KdDebuggerConnected == FALSE) {
+        KdPollForBreakRequest();
+
+    } else {
+        Flags = SpGetProfilerDataStatus();
+        if (Flags != 0) {
+            RtlDebugService(EXCEPTION_PROFILER, &Flags);
+        }
     }
 
     return;
@@ -1163,6 +1170,7 @@ Return Value:
             KD_TRACE(KdTraceProcessingCommand);
             if (KdRxPacket.Header.Command == DbgBreakRequest) {
                 Exception = EXCEPTION_BREAK;
+                KdDebuggerConnected = TRUE;
 
             } else {
                 ContinueExecution = FALSE;
@@ -1201,15 +1209,12 @@ Return Value:
         KD_TRACE(KdTracePrinting);
         Status = KdpPrint((PPRINT_PARAMETERS)Parameter, &BreakInRequested);
         if ((KSUCCESS(Status) && (BreakInRequested == FALSE)) ||
-            (!KSUCCESS(Status) && (Status != STATUS_CONNECTION_RESET))) {
+            (!KSUCCESS(Status))) {
 
             goto DebugExceptionHandlerEnd;
         }
 
         Exception = EXCEPTION_BREAK;
-        if (Status == STATUS_CONNECTION_RESET) {
-            Exception = EXCEPTION_DEBUGGER_CONNECT;
-        }
 
     //
     // If the exception is just to send profiling data, send the data and
@@ -1220,15 +1225,12 @@ Return Value:
         KD_TRACE(KdTraceSendingProfilingData);
         Status = KdpSendProfilingData((PULONG)Parameter, &BreakInRequested);
         if ((KSUCCESS(Status) && (BreakInRequested == FALSE)) ||
-            (!KSUCCESS(Status) && (Status != STATUS_CONNECTION_RESET))) {
+            (!KSUCCESS(Status))) {
 
             goto DebugExceptionHandlerEnd;
         }
 
         Exception = EXCEPTION_BREAK;
-        if (Status == STATUS_CONNECTION_RESET) {
-            Exception = EXCEPTION_DEBUGGER_CONNECT;
-        }
 
     //
     // If the exception was a module state change, update the module
@@ -1415,26 +1417,12 @@ Return Value:
                                                &KdTxPacket);
 
                 Status = KdpSendPacket(&KdTxPacket, NULL);
-                if ((!KSUCCESS(Status)) &&
-                    (Status != STATUS_CONNECTION_RESET)) {
-
+                if (!KSUCCESS(Status)) {
                     KD_TRACE(KdTraceTransmitFailure);
                     goto DebugExceptionHandlerEnd;
                 }
 
                 BreakInRequested = FALSE;
-            }
-
-            if (Status == STATUS_CONNECTION_RESET) {
-                KD_TRACE(KdTraceConnecting);
-                Status = KdpConnect(&BreakInRequested);
-                if ((KSUCCESS(Status)) && (BreakInRequested != FALSE)) {
-                    Exception = EXCEPTION_BREAK;
-                    continue;
-                }
-
-                KD_TRACE(KdTraceConnectBailing);
-                goto DebugExceptionHandlerEnd;
             }
 
             Status = KdpReceivePacket(&KdRxPacket, MAX_ULONG);
@@ -1634,7 +1622,6 @@ Return Value:
 {
 
     DEBUG_PACKET_ACKNOWLEDGE Acknowledge;
-    UCHAR Byte;
     USHORT Checksum;
     DEBUG_PACKET_HEADER Header;
     ULONG HeaderSize;
@@ -1700,12 +1687,6 @@ Return Value:
                 PayloadSize = sizeof(DEBUG_PACKET_ACKNOWLEDGE);
                 Status = KdpReceiveBuffer(&Acknowledge, &PayloadSize, &Timeout);
                 if ((KSUCCESS(Status)) && (BreakInRequested != NULL)) {
-                    Byte = Acknowledge.BreakInRequested;
-                    if (DEBUG_IS_SYNCHRONIZATION_BYTE(Byte) != FALSE) {
-                        Status = STATUS_CONNECTION_RESET;
-                        break;
-                    }
-
                     *BreakInRequested = Acknowledge.BreakInRequested;
                 }
             }
@@ -1723,11 +1704,15 @@ Return Value:
 
     //
     // If the receive timed out or the connection was reset, mark the
-    // connection terminated.
+    // connection terminated. Don't send sync bytes if not connected, as that's
+    // counterproductive during connect.
     //
 
     if ((Status == STATUS_TIMEOUT) || (Status == STATUS_CONNECTION_RESET)) {
-        KdDebuggerConnected = FALSE;
+        if (KdDebuggerConnected != FALSE) {
+            KdpSynchronize();
+            KdDebuggerConnected = FALSE;
+        }
     }
 
     return Status;
@@ -1762,7 +1747,6 @@ Return Value:
 {
 
     DEBUG_PACKET_HEADER Acknowledge;
-    UCHAR Byte;
     USHORT CalculatedChecksum;
     USHORT Checksum;
     USHORT HeaderChecksum;
@@ -1794,21 +1778,6 @@ Return Value:
                                       &Timeout);
 
             if (!KSUCCESS(Status)) {
-
-                //
-                // Even in a failure case, if bytes were received, check the
-                // last to see if it is a SYN byte. The receive may have timed
-                // out because the host was waiting to synchronize.
-                //
-
-                if (PayloadSize != 0) {
-                    Byte = Packet->Payload[PayloadSize - 1];
-                    if (DEBUG_IS_SYNCHRONIZATION_BYTE(Byte) != FALSE) {
-                        Status = STATUS_CONNECTION_RESET;
-                        break;
-                    }
-                }
-
                 if (Status == STATUS_TIMEOUT) {
                     break;
                 }
@@ -1831,12 +1800,6 @@ Return Value:
 
         Packet->Header.Checksum = HeaderChecksum;
         if (HeaderChecksum != CalculatedChecksum) {
-            Byte = Packet->Payload[PayloadSize - 1];
-            if (DEBUG_IS_SYNCHRONIZATION_BYTE(Byte) != FALSE) {
-                Status = STATUS_CONNECTION_RESET;
-                break;
-            }
-
             Status = STATUS_CHECKSUM_MISMATCH;
             goto ReceivePacketRetry;
         }
@@ -1887,11 +1850,15 @@ ReceivePacketRetry:
 
     //
     // If the receive timed out or the connection was reset, mark the
-    // connection terminated.
+    // connection terminated. Don't send sync bytes if not connected, as that's
+    // counterproductive during connect.
     //
 
     if ((Status == STATUS_TIMEOUT) || (Status == STATUS_CONNECTION_RESET)) {
-        KdDebuggerConnected = FALSE;
+        if (KdDebuggerConnected != FALSE) {
+            KdpSynchronize();
+            KdDebuggerConnected = FALSE;
+        }
     }
 
     return Status;
@@ -1927,7 +1894,6 @@ Return Value:
 {
 
     DEBUG_PACKET_HEADER Acknowledge;
-    BYTE Byte;
     USHORT Checksum;
     ULONG HeaderSize;
     BYTE Magic;
@@ -1957,7 +1923,13 @@ Return Value:
         }
 
         if (Magic != DEBUG_PACKET_MAGIC_BYTE1) {
-            if (DEBUG_IS_SYNCHRONIZATION_BYTE(Magic) != FALSE) {
+
+            //
+            // If this was a resync byte from the host, then report the
+            // connection as reset.
+            //
+
+            if (Magic == DEBUG_SYNCHRONIZE_HOST) {
                 Status = STATUS_CONNECTION_RESET;
                 break;
             }
@@ -1977,11 +1949,6 @@ Return Value:
         }
 
         if (Magic != DEBUG_PACKET_MAGIC_BYTE2) {
-            if (DEBUG_IS_SYNCHRONIZATION_BYTE(Magic) != FALSE) {
-                Status = STATUS_CONNECTION_RESET;
-                break;
-            }
-
             continue;
         }
 
@@ -1994,14 +1961,6 @@ Return Value:
         ReceiveBuffer = (PBYTE)Packet + DEBUG_PACKET_MAGIC_SIZE;
         Status = KdpReceiveBuffer(ReceiveBuffer, &ReceiveSize, Timeout);
         if (!KSUCCESS(Status)) {
-            if (ReceiveSize != 0) {
-                Byte = ReceiveBuffer[ReceiveSize - 1];
-                if (DEBUG_IS_SYNCHRONIZATION_BYTE(Byte) != FALSE) {
-                    Status = STATUS_CONNECTION_RESET;
-                    break;
-                }
-            }
-
             goto ReceivePacketRetry;
         }
 
@@ -2107,7 +2066,7 @@ Return Value:
                                        TrapFrame,
                                        &KdTxPacket);
 
-        KdpSendPacket(&KdTxPacket, NULL);
+        Status = KdpSendPacket(&KdTxPacket, NULL);
         break;
 
     //
@@ -2216,7 +2175,7 @@ Return Value:
         KdpGetSpecialRegisters((PSPECIAL_REGISTERS_UNION)(KdTxPacket.Payload));
         KdTxPacket.Header.Command = DbgCommandReturnSpecialRegisters;
         KdTxPacket.Header.PayloadSize = sizeof(SPECIAL_REGISTERS_UNION);
-        KdpSendPacket(&KdTxPacket, NULL);
+        Status = KdpSendPacket(&KdTxPacket, NULL);
         break;
 
     case DbgCommandSetSpecialRegisters:
@@ -2267,7 +2226,7 @@ Return Value:
                                                TrapFrame,
                                                &KdTxPacket);
 
-                KdpSendPacket(&KdTxPacket, NULL);
+                Status = KdpSendPacket(&KdTxPacket, NULL);
             }
         }
 
@@ -2291,7 +2250,7 @@ Return Value:
                       &KdRxPacket.Header,
                       sizeof(DEBUG_PACKET_HEADER));
 
-        KdpSendPacket(&KdTxPacket, NULL);
+        Status = KdpSendPacket(&KdTxPacket, NULL);
         break;
     }
 
@@ -2397,6 +2356,7 @@ Return Value:
     DataSize = DEBUG_PAYLOAD_SIZE - sizeof(PROFILER_NOTIFICATION_HEADER);
     ProfilerNotification = (PPROFILER_NOTIFICATION)KdTxPacket.Payload;
     KdTxPacket.Header.Command = DbgProfilerNotification;
+    *BreakInRequested = FALSE;
 
     //
     // Loop as long as there is more profiling data to send.
@@ -3321,13 +3281,10 @@ Return Value:
     }
 
     //
-    // Synchronize with the host.
+    // Let the host know a new connection is present.
     //
 
-    Status = KdpSynchronize();
-    if (!KSUCCESS(Status)) {
-        goto ConnectEnd;
-    }
+    KdpSynchronize();
 
     //
     // Attempt to receive the connection request packet.
@@ -3335,6 +3292,16 @@ Return Value:
 
     while (TRUE) {
         Status = KdpReceivePacket(&KdRxPacket, KdConnectionTimeout);
+
+        //
+        // If a synchronize byte was found, reply to it and try again.
+        //
+
+        if (Status == STATUS_CONNECTION_RESET) {
+            KdpSynchronize();
+            continue;
+        }
+
         if (!KSUCCESS(Status)) {
             goto ConnectEnd;
         }
@@ -3359,7 +3326,7 @@ ConnectEnd:
     return Status;
 }
 
-KSTATUS
+VOID
 KdpSynchronize (
     VOID
     )
@@ -3379,148 +3346,17 @@ Arguments:
 
 Return Value:
 
-    Status code.
+    None. Failure is considered non-fatal.
 
 --*/
 
 {
 
-    BOOL AckReceived;
-    BOOL AckSent;
-    ULONG BytesAvailable;
-    ULONG ReceiveSize;
-    ULONG Retries;
-    KSTATUS Status;
-    BYTE SynchronizeByte;
-    BOOL SynReceived;
-    ULONG Timeout;
+    UCHAR SynchronizeByte;
 
-    AckReceived = FALSE;
-    AckSent = FALSE;
-    SynReceived = FALSE;
-
-    //
-    // The host may have already sent a SYN, check to see if it has come in.
-    //
-
-    Status = KdpDeviceGetStatus(&BytesAvailable);
-    if (!KSUCCESS(Status)) {
-        goto SynchronizeEnd;
-    }
-
-    Timeout = 0;
-    while (BytesAvailable != 0) {
-        ReceiveSize = sizeof(BYTE);
-        Status = KdpReceiveBuffer(&SynchronizeByte, &ReceiveSize, &Timeout);
-        if (!KSUCCESS(Status)) {
-            goto SynchronizeEnd;
-        }
-
-        BytesAvailable -= 1;
-
-        //
-        // Ignore any bytes that are not synchronization bytes.
-        //
-
-        if (DEBUG_IS_SYNCHRONIZATION_BYTE(SynchronizeByte) == FALSE) {
-            continue;
-        }
-
-        //
-        // Only record a SYN. There should be no ACK, as the target (this side)
-        // is yet to send a SYN.
-        //
-
-        if ((SynchronizeByte & DEBUG_SYNCHRONIZE_SYN) != 0) {
-            SynReceived = TRUE;
-            break;
-        }
-    }
-
-    Retries = 10;
-    Status = STATUS_UNSUCCESSFUL;
-    Timeout = KdConnectionTimeout;
-    while (Retries > 0) {
-
-        //
-        // Send out a byte to either announce to the host that the target is
-        // trying to synchronize and/or that the host's SYN byte has been
-        // received.
-        //
-
-        SynchronizeByte = DEBUG_SYNCHRONIZE_BASE_VALUE;
-        if (SynReceived != FALSE) {
-            SynchronizeByte |= DEBUG_SYNCHRONIZE_ACK;
-            AckSent = TRUE;
-        }
-
-        if (AckReceived == FALSE) {
-            SynchronizeByte |= DEBUG_SYNCHRONIZE_SYN;
-        }
-
-        Status = KdpTransmitBytes(&SynchronizeByte, sizeof(UCHAR));
-        if (!KSUCCESS(Status)) {
-            Retries -= 1;
-            continue;
-        }
-
-        //
-        // If necessary, read a byte from the target. It may be a SYN, if the
-        // target tried to synchronize first, or a SYN+ACK if the target has
-        // seen the SYN.
-        //
-
-        while ((SynReceived == FALSE) || (AckReceived == FALSE)) {
-            ReceiveSize = sizeof(BYTE);
-            Status = KdpReceiveBuffer(&SynchronizeByte, &ReceiveSize, &Timeout);
-            if (Status == STATUS_TIMEOUT) {
-                goto SynchronizeEnd;
-            }
-
-            if (!KSUCCESS(Status)) {
-                Retries -= 1;
-                break;
-            }
-
-            //
-            // If the byte is not a synchronization byte, then try again.
-            //
-
-            if (DEBUG_IS_SYNCHRONIZATION_BYTE(SynchronizeByte) == FALSE) {
-                continue;
-            }
-
-            //
-            // If it is a SYN+ACK, send an ACK back. If it is just a SYN, then
-            // send a SYN+ACK
-            //
-
-            if ((SynchronizeByte & DEBUG_SYNCHRONIZE_SYN) != 0) {
-                SynReceived = TRUE;
-            }
-
-            if ((SynchronizeByte & DEBUG_SYNCHRONIZE_ACK) != 0) {
-                AckReceived = TRUE;
-            }
-
-            break;
-        }
-
-        //
-        // Break out successfully if the complete exchange has been made.
-        //
-
-        if ((SynReceived != FALSE) &&
-            (AckReceived != FALSE) &&
-            (AckSent != FALSE)) {
-
-            Status = STATUS_SUCCESS;
-            break;
-        }
-    }
-
-SynchronizeEnd:
-    return Status;
+    SynchronizeByte = DEBUG_SYNCHRONIZE_TARGET;
+    KdpTransmitBytes(&SynchronizeByte, 1);
+    return;
 }
 
 KSTATUS

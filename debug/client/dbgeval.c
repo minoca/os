@@ -716,10 +716,10 @@ Return Value:
 
     } else if (FirstCharacter == '@') {
 
-        assert(DbgCurrentEvent.Type == DebuggerEventBreak);
+        assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
-        X86Registers = &(DbgCurrentEvent.BreakNotification.Registers.X86);
-        ArmRegisters = &(DbgCurrentEvent.BreakNotification.Registers.Arm);
+        X86Registers = &(Context->CurrentEvent.BreakNotification.Registers.X86);
+        ArmRegisters = &(Context->CurrentEvent.BreakNotification.Registers.Arm);
 
         //
         // Assume success and set the operator. It will be set back if the
@@ -1077,7 +1077,7 @@ Return Value:
                                    ListEntry);
 
         CurrentModuleEntry = CurrentModuleEntry->Next;
-        if (!IS_MODULE_IN_CURRENT_PROCESS(CurrentModule)) {
+        if (!IS_MODULE_IN_CURRENT_PROCESS(Context, CurrentModule)) {
             if (UserModule != NULL) {
                 break;
             }
