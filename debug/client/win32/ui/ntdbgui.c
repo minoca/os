@@ -42,7 +42,6 @@ Environment:
 #include <limits.h>
 #include <assert.h>
 #include <stdio.h>
-#include <minoca/dbgproto.h>
 #include <minoca/spproto.h>
 #include "dbgrprof.h"
 #include "console.h"

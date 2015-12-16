@@ -26,7 +26,6 @@ Environment:
 
 #include <minoca/types.h>
 #include <minoca/status.h>
-#include <minoca/dbgproto.h>
 #include <minoca/spproto.h>
 #include <minoca/im.h>
 #include "symbols.h"

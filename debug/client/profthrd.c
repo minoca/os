@@ -27,7 +27,6 @@ Environment:
 #define KERNEL_API
 
 #include "dbgrtl.h"
-#include <minoca/dbgproto.h>
 #include <minoca/spproto.h>
 #include <minoca/im.h>
 #include "symbols.h"

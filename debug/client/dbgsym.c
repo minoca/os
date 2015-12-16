@@ -25,7 +25,6 @@ Environment:
 //
 
 #include "dbgrtl.h"
-#include <minoca/dbgproto.h>
 #include <minoca/spproto.h>
 #include <minoca/im.h>
 #include "symbols.h"
@@ -435,7 +434,7 @@ Return Value:
     // Collect the data contents for the symbol based on where it is located.
     //
 
-    X86Registers = &(Context->CurrentEvent.BreakNotification.Registers.X86);
+    X86Registers = &(Context->FrameRegisters.X86);
     switch (DataSymbol->LocationType) {
     case DataLocationRegister:
         Register = DataSymbol->Location.Register;
@@ -447,7 +446,7 @@ Return Value:
         switch (Context->MachineType) {
         case MACHINE_TYPE_X86:
             if ((DataStreamSize > 4) &&
-                (Register != RegisterEax) && (Register != RegisterEbx)) {
+                (Register != X86RegisterEax) && (Register != X86RegisterEbx)) {
 
                 DbgOut("Error: Data symbol location was a register, but type "
                        "size was %d!\n",
@@ -457,7 +456,7 @@ Return Value:
             }
 
             switch (Register) {
-                case RegisterEax:
+                case X86RegisterEax:
                     *(PULONG)DataStream = (ULONG)X86Registers->Eax;
                     if (DataStreamSize > 4) {
                         *((PULONG)DataStream + 1) = (ULONG)X86Registers->Edx;
@@ -465,7 +464,7 @@ Return Value:
 
                     break;
 
-                case RegisterEbx:
+                case X86RegisterEbx:
                     *(PULONG)DataStream = (ULONG)X86Registers->Ebx;
                     if (DataStreamSize > 4) {
                         *((PULONG)DataStream + 1) = (ULONG)X86Registers->Ecx;
@@ -473,27 +472,27 @@ Return Value:
 
                     break;
 
-                case RegisterEcx:
+                case X86RegisterEcx:
                     *(PULONG)DataStream = (ULONG)X86Registers->Ecx;
                     break;
 
-                case RegisterEdx:
+                case X86RegisterEdx:
                     *(PULONG)DataStream = (ULONG)X86Registers->Edx;
                     break;
 
-                case RegisterEsi:
+                case X86RegisterEsi:
                     *(PULONG)DataStream = (ULONG)X86Registers->Esi;
                     break;
 
-                case RegisterEdi:
+                case X86RegisterEdi:
                     *(PULONG)DataStream = (ULONG)X86Registers->Edi;
                     break;
 
-                case RegisterEbp:
+                case X86RegisterEbp:
                     *(PULONG)DataStream = (ULONG)X86Registers->Ebp;
                     break;
 
-                case RegisterEsp:
+                case X86RegisterEsp:
                     *(PULONG)DataStream = (ULONG)X86Registers->Esp;
                     break;
 
@@ -518,9 +517,7 @@ Return Value:
                 goto GetDataSymbolDataEnd;
             }
 
-            RegisterBase =
-                   &(Context->CurrentEvent.BreakNotification.Registers.Arm.R0);
-
+            RegisterBase = &(Context->FrameRegisters.Arm.R0);
             *(PULONG)DataStream = *(PULONG)(RegisterBase + Register);
             if (DataStreamSize > 4) {
                 *((PULONG)DataStream + 1) =
@@ -545,12 +542,13 @@ Return Value:
 
         //
         // Get the target virtual address and attempt to read from the debuggee.
-        // TODO: This should be the unwound register from Indirect.Register.
         //
 
-        TargetAddress = Context->CurrentFrameBasePointer +
-                        DataSymbol->Location.Indirect.Offset;
+        TargetAddress = DbgGetRegister(Context,
+                                       &(Context->FrameRegisters),
+                                       DataSymbol->Location.Indirect.Register);
 
+        TargetAddress += DataSymbol->Location.Indirect.Offset;
         Result = DbgReadMemory(Context,
                                TRUE,
                                TargetAddress,
@@ -697,35 +695,35 @@ Return Value:
         switch (Context->MachineType) {
         case MACHINE_TYPE_X86:
             switch (DataSymbol->Location.Register) {
-                case RegisterEax:
+                case X86RegisterEax:
                     DbgOut("@eax");
                     break;
 
-                case RegisterEbx:
+                case X86RegisterEbx:
                     DbgOut("@ebx");
                     break;
 
-                case RegisterEcx:
+                case X86RegisterEcx:
                     DbgOut("@ecx");
                     break;
 
-                case RegisterEdx:
+                case X86RegisterEdx:
                     DbgOut("@edx");
                     break;
 
-                case RegisterEsi:
+                case X86RegisterEsi:
                     DbgOut("@esi");
                     break;
 
-                case RegisterEdi:
+                case X86RegisterEdi:
                     DbgOut("@edi");
                     break;
 
-                case RegisterEbp:
+                case X86RegisterEbp:
                     DbgOut("@ebp");
                     break;
 
-                case RegisterEsp:
+                case X86RegisterEsp:
                     DbgOut("@esp");
                     break;
 
@@ -818,6 +816,165 @@ PrintDataSymbolEnd:
     }
 
     return Result;
+}
+
+ULONGLONG
+DbgGetRegister (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
+    ULONG RegisterNumber
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the contents of a register given a debug symbol
+    register index.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies a pointer to the current machine context.
+
+    RegisterNumber - Supplies the register index to get.
+
+Return Value:
+
+    Returns the register at the given index.
+
+    -1 if the register does not exist.
+
+--*/
+
+{
+
+    PULONG Registers32;
+    ULONGLONG Value;
+
+    Value = -1ULL;
+    switch (Context->MachineType) {
+    case MACHINE_TYPE_X86:
+        switch (RegisterNumber) {
+        case X86RegisterEax:
+            Value = Registers->X86.Eax;
+            break;
+
+        case X86RegisterEcx:
+            Value = Registers->X86.Ecx;
+            break;
+
+        case X86RegisterEdx:
+            Value = Registers->X86.Edx;
+            break;
+
+        case X86RegisterEbx:
+            Value = Registers->X86.Ebx;
+            break;
+
+        case X86RegisterEsp:
+            Value = Registers->X86.Esp;
+            break;
+
+        case X86RegisterEbp:
+            Value = Registers->X86.Ebp;
+            break;
+
+        case X86RegisterEsi:
+            Value = Registers->X86.Esi;
+            break;
+
+        case X86RegisterEdi:
+            Value = Registers->X86.Edi;
+            break;
+
+        case X86RegisterEip:
+            Value = Registers->X86.Eip;
+            break;
+
+        case X86RegisterEflags:
+            Value = Registers->X86.Eflags;
+            break;
+
+        case X86RegisterCs:
+            Value = Registers->X86.Cs;
+            break;
+
+        case X86RegisterSs:
+            Value = Registers->X86.Ss;
+            break;
+
+        case X86RegisterDs:
+            Value = Registers->X86.Ds;
+            break;
+
+        case X86RegisterEs:
+            Value = Registers->X86.Es;
+            break;
+
+        case X86RegisterFs:
+            Value = Registers->X86.Fs;
+            break;
+
+        case X86RegisterGs:
+            Value = Registers->X86.Gs;
+            break;
+
+        default:
+
+            //
+            // TODO: Fetch the floating point registers if not yet grabbed.
+            //
+
+            if ((RegisterNumber >= X86RegisterSt0) &&
+                (RegisterNumber <= X86RegisterFpDo)) {
+
+                DbgOut("TODO: FPU Register %d.\n", RegisterNumber);
+                Value = 0;
+                break;
+            }
+
+            assert(FALSE);
+
+            break;
+        }
+
+        break;
+
+    case MACHINE_TYPE_ARMV7:
+    case MACHINE_TYPE_ARMV6:
+        if ((RegisterNumber >= ArmRegisterR0) &&
+            (RegisterNumber <= ArmRegisterR15)) {
+
+            Registers32 = &(Registers->Arm.R0);
+            Value = Registers32[RegisterNumber];
+
+        } else if ((RegisterNumber >= ArmRegisterD0) &&
+                   (RegisterNumber <= ArmRegisterD31)) {
+
+            //
+            // TODO: Fetch the floating point registers if not yet grabbed.
+            //
+
+            DbgOut("TODO: FPU Register D%d\n", RegisterNumber - ArmRegisterD0);
+            Value = 0;
+
+        } else {
+
+            assert(FALSE);
+        }
+
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        break;
+    }
+
+    return Value;
 }
 
 PDEBUGGER_MODULE

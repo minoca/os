@@ -285,7 +285,7 @@ typedef struct _X86_INSTRUCTION {
     X86_INSTRUCTION_DEFINITION Definition;
 } X86_INSTRUCTION, *PX86_INSTRUCTION;
 
-typedef enum _X86_REGISTER {
+typedef enum _X86_REGISTER_VALUE {
     X86RegisterValueEax,
     X86RegisterValueEcx,
     X86RegisterValueEdx,
@@ -296,7 +296,7 @@ typedef enum _X86_REGISTER {
     X86RegisterValueEdi,
     X86RegisterValueScaleIndexBase,
     X86RegisterValueDisplacement32,
-} X86_REGISTER, *PX86_REGISTER;
+} X86_REGISTER_VALUE, *PX86_REGISTER_VALUE;
 
 typedef enum _X86_MOD_VALUE {
     X86ModValueNoDisplacement,
@@ -1205,7 +1205,7 @@ DbgpX86GetSegmentRegister (
 
 PSTR
 DbgpX86GetGenericRegister (
-    X86_REGISTER RegisterNumber,
+    X86_REGISTER_VALUE RegisterNumber,
     CHAR Type
     );
 
@@ -1503,9 +1503,9 @@ Return Value:
     PSTR Index;
     BYTE IndexValue;
     X86_MOD_VALUE Mod;
-    X86_REGISTER Register;
+    X86_REGISTER_VALUE Register;
     PSTR RegisterString;
-    X86_REGISTER Rm;
+    X86_REGISTER_VALUE Rm;
     ULONG Scale;
     CHAR Type;
     CHAR Width;
@@ -2637,7 +2637,7 @@ Return Value:
 
 PSTR
 DbgpX86GetGenericRegister (
-    X86_REGISTER RegisterNumber,
+    X86_REGISTER_VALUE RegisterNumber,
     CHAR Type
     )
 

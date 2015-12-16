@@ -88,6 +88,71 @@ Author:
 #define DEBUGGER_TARGET_RUNNING 0x00000001
 
 //
+// x86 Flags.
+//
+
+#define IA32_EFLAG_CF 0x00000001
+#define IA32_EFLAG_PF 0x00000004
+#define IA32_EFLAG_AF 0x00000010
+#define IA32_EFLAG_ZF 0x00000040
+#define IA32_EFLAG_SF 0x00000080
+#define IA32_EFLAG_TF 0x00000100
+#define IA32_EFLAG_IF 0x00000200
+#define IA32_EFLAG_DF 0x00000400
+#define IA32_EFLAG_OF 0x00000800
+#define IA32_EFLAG_IOPL_MASK 0x00003000
+#define IA32_EFLAG_IOPL_SHIFT 12
+#define IA32_EFLAG_NT 0x00004000
+#define IA32_EFLAG_RF 0x00010000
+#define IA32_EFLAG_VM 0x00020000
+#define IA32_EFLAG_AC 0x00040000
+#define IA32_EFLAG_VIF 0x00080000
+#define IA32_EFLAG_VIP 0x00100000
+#define IA32_EFLAG_ID 0x00200000
+#define IA32_EFLAG_ALWAYS_0 0xFFC08028
+#define IA32_EFLAG_ALWAYS_1 0x00000002
+
+//
+// ARM Processor modes.
+//
+
+#define ARM_MODE_USER   0x00000010
+#define ARM_MODE_FIQ    0x00000011
+#define ARM_MODE_IRQ    0x00000012
+#define ARM_MODE_SVC    0x00000013
+#define ARM_MODE_ABORT  0x00000017
+#define ARM_MODE_UNDEF  0x0000001B
+#define ARM_MODE_SYSTEM 0x0000001F
+#define ARM_MODE_MASK   0x0000001F
+
+//
+// ARM Program Status Register flags.
+//
+
+#define PSR_FLAG_NEGATIVE   0x80000000
+#define PSR_FLAG_ZERO       0x40000000
+#define PSR_FLAG_CARRY      0x20000000
+#define PSR_FLAG_OVERFLOW   0x10000000
+#define PSR_FLAG_SATURATION 0x08000000
+#define PSR_FLAG_JAZELLE    0x01000000
+#define PSR_FLAG_THUMB      0x00000020
+#define PSR_FLAG_IRQ        0x00000080
+#define PSR_FLAG_FIQ        0x00000040
+
+//
+// ARM Instruction information.
+//
+
+#define ARM_BREAK_INSTRUCTION 0xE7F000F3
+#define ARM_BREAK_INSTRUCTION_LENGTH ARM_INSTRUCTION_LENGTH
+#define THUMB_BREAK_INSTRUCTION 0xDE20
+#define THUMB_BREAK_INSTRUCTION_LENGTH 2
+#define ARM_THUMB_BIT 0x00000001
+
+#define X86_BREAK_INSTRUCTION 0xCC
+#define X86_BREAK_INSTRUCTION_LENGTH 1
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -497,12 +562,6 @@ Members:
 
     LoadedExtensions - Stores the list head of loaded debugger extensions.
 
-    CurrentFrameInstructionPointer - Stores the address of the instruction
-        pointer for the frame being shown.
-
-    CurrentFrameBasePointer - Stores the stack base pointer for the current
-        frame being displayed.
-
     SourceFile - Stores information about the currently displayed source file.
 
     SourcePathList - Stores the head of the list of DEBUGGER_SOURCE_PATHs.
@@ -543,6 +602,11 @@ Members:
 
     ConnectionType - Stores the current debug connection type.
 
+    FrameRegisters - Stores the registers as unwound to the currently displayed
+        stack frame.
+
+    CurrentFrame - Stores the current stack frame index.
+
 --*/
 
 struct _DEBUGGER_CONTEXT {
@@ -562,8 +626,6 @@ struct _DEBUGGER_CONTEXT {
     ULONG BreakInstructionLength;
     ULONGLONG DisassemblyAddress;
     LIST_ENTRY LoadedExtensions;
-    ULONGLONG CurrentFrameInstructionPointer;
-    ULONGLONG CurrentFrameBasePointer;
     DEBUGGER_SOURCE_FILE SourceFile;
     LIST_ENTRY SourcePathList;
     ULONG HighlightedLineNumber;
@@ -583,6 +645,8 @@ struct _DEBUGGER_CONTEXT {
     DEBUGGER_CLIENT_CONTEXT Client;
     DEBUGGER_EVENT CurrentEvent;
     DEBUG_CONNECTION_TYPE ConnectionType;
+    REGISTERS_UNION FrameRegisters;
+    ULONG CurrentFrame;
 };
 
 typedef
@@ -2410,6 +2474,36 @@ Return Value:
     0 on success.
 
     Returns an error code on failure.
+
+--*/
+
+ULONGLONG
+DbgGetRegister (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
+    ULONG RegisterNumber
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the contents of a register given a debug symbol
+    register index.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies a pointer to the current machine context.
+
+    RegisterNumber - Supplies the register index to get.
+
+Return Value:
+
+    Returns the register at the given index.
+
+    -1 if the register does not exist.
 
 --*/
 

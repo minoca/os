@@ -25,7 +25,6 @@ Environment:
 //
 
 #include "dbgrtl.h"
-#include <minoca/dbgproto.h>
 #include <minoca/spproto.h>
 #include <minoca/im.h>
 #include "dbgext.h"
@@ -1292,43 +1291,32 @@ Return Value:
 INT
 DbgGetCallStack (
     PDEBUGGER_CONTEXT Context,
-    ULONGLONG StartingBasePointer,
-    ULONGLONG StackPointer,
-    ULONGLONG InstructionPointer,
+    PREGISTERS_UNION Registers,
     PSTACK_FRAME Frames,
-    ULONG FrameCount,
-    PULONG FramesRead
+    PULONG FrameCount
     )
 
 /*++
 
 Routine Description:
 
-    This routine attempts to read the call stack starting at the given base
-    pointer.
+    This routine attempts to unwind the call stack starting at the given
+    machine state.
 
 Arguments:
 
     Context - Supplies a pointer to the application context.
 
-    StartingBasePointer - Supplies the virtual address of the topmost (most
-        recent) stack frame base.
-
-    StackPointer - Supplies an optional pointer to the current stack pointer. If
-        supplied, it will be used with the instruction pointer to potentially
-        make the first stack frame more accurate.
-
-    InstructionPointer - Supplies an optional virtual address of the
-        instruction pointer.
+    Registers - Supplies an optional pointer to the registers on input. On
+        output, these registers will be updated with the unwound value. If this
+        is NULL, then the current break notification registers will be used.
 
     Frames - Supplies a pointer where the array of stack frames will be
         returned.
 
     FrameCount - Supplies the number of frames allocated in the frames
-        argument, representing the maximum number of frames to get.
-
-    FramesRead - Supplies a pointer where the number of valid frames in the
-        frames array will be returned.
+        argument, representing the maximum number of frames to get. On output,
+        returns the number of valid frames in the array.
 
 Return Value:
 
@@ -1340,24 +1328,115 @@ Return Value:
 
 {
 
-    ULONG ByteIndex;
-    ULONG BytesRead;
-    ULONGLONG CurrentBasePointer;
     ULONG FrameIndex;
-    ULONG PointerSize;
-    INT Result;
+    REGISTERS_UNION LocalRegisters;
     INT SearchIndex;
-    ULONGLONG WorkingBuffer[3];
-    UCHAR X86InstructionContents[X86_FUNCTION_PROLOGUE_LENGTH];
+    INT Status;
 
-    FrameIndex = 0;
-    *FramesRead = 0;
-    if (FrameCount == 0) {
-        return EINVAL;
+    if (Registers == NULL) {
+
+        assert(Context->CurrentEvent.Type == DebuggerEventBreak);
+
+        RtlCopyMemory(&LocalRegisters,
+                      &(Context->CurrentEvent.BreakNotification.Registers),
+                      sizeof(REGISTERS_UNION));
+
+        Registers = &LocalRegisters;
     }
 
+    FrameIndex = 0;
+    while (FrameIndex < *FrameCount) {
+        Status = DbgStackUnwind(Context,
+                                Registers,
+                                FALSE,
+                                &(Frames[FrameIndex]));
+
+        if (Status == EOF) {
+            Status = 0;
+            break;
+
+        } else if (Status != 0) {
+            break;
+        }
+
+        //
+        // If the stack frame appears to loop back on itself, stop.
+        //
+
+        for (SearchIndex = 0; SearchIndex < FrameIndex; SearchIndex += 1) {
+            if (Frames[SearchIndex].FramePointer ==
+                Frames[FrameIndex].FramePointer) {
+
+                break;
+            }
+        }
+
+        FrameIndex += 1;
+        if (SearchIndex != FrameIndex - 1) {
+            DbgOut("Stack frame loops.\n");
+            break;
+        }
+    }
+
+    *FrameCount = FrameIndex;
+    return Status;
+}
+
+INT
+DbgStackUnwind (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
+    BOOL AllRegisters,
+    PSTACK_FRAME Frame
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to unwind the stack by one frame.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies a pointer to the registers on input. On output, these
+        registers will be updated with the unwound value.
+
+    AllRegisters - Supplies a boolean indicating whether to unwind all
+        registers (TRUE) or just the instruction pointer and stack pointer
+        (FALSE).
+
+    Frame - Supplies a pointer where the basic frame information for this
+        frame will be returned.
+
+Return Value:
+
+    0 on success.
+
+    EOF if there are no more stack frames.
+
+    Returns an error code on failure.
+
+--*/
+
+{
+
+    ULONGLONG BasePointer;
+    ULONG ByteIndex;
+    ULONG BytesRead;
+    ULONGLONG Pc;
+    ULONG PointerSize;
+    ULONGLONG StackPointer;
+    INT Status;
+    UCHAR WorkingBuffer[24];
+    UCHAR X86InstructionContents[X86_FUNCTION_PROLOGUE_LENGTH];
+
     PointerSize = DbgGetTargetPointerSize(Context);
-    if (Context->MachineType == MACHINE_TYPE_X86) {
+    DbgGetStackRegisters(Context, Registers, &StackPointer, &BasePointer);
+    switch (Context->MachineType) {
+    case MACHINE_TYPE_X86:
+        Pc = DbgGetPc(Context, Registers);
 
         //
         // If the instruction pointer was supplied, check the contents of the
@@ -1366,15 +1445,15 @@ Return Value:
         // first stack frame that hasn't quite yet been created.
         //
 
-        if (InstructionPointer != 0) {
-            Result = DbgReadMemory(Context,
+        if (Pc != 0) {
+            Status = DbgReadMemory(Context,
                                    TRUE,
-                                   InstructionPointer,
+                                   Pc,
                                    X86_FUNCTION_PROLOGUE_LENGTH,
                                    X86InstructionContents,
                                    &BytesRead);
 
-            if ((Result == 0) &&
+            if ((Status == 0) &&
                 (BytesRead == X86_FUNCTION_PROLOGUE_LENGTH)) {
 
                 for (ByteIndex = 0;
@@ -1397,193 +1476,157 @@ Return Value:
                 //
 
                 if (ByteIndex == X86_FUNCTION_PROLOGUE_LENGTH) {
-                    Frames[FrameIndex].FramePointer =
-                                                    StackPointer + PointerSize;
-
-                    Frames[FrameIndex].ReturnAddress = 0;
-                    Result = DbgReadMemory(Context,
+                    Frame->FramePointer = StackPointer + PointerSize;
+                    Frame->ReturnAddress = 0;
+                    Status = DbgReadMemory(Context,
                                            TRUE,
                                            StackPointer,
                                            PointerSize,
-                                           &(Frames[FrameIndex].ReturnAddress),
+                                           &(Frame->ReturnAddress),
                                            &BytesRead);
 
-                    if ((Result != 0) || (BytesRead != PointerSize)) {
-                        if (Result == 0) {
-                            Result = EINVAL;
+                    if ((Status != 0) || (BytesRead != PointerSize)) {
+                        if (Status == 0) {
+                            Status = EINVAL;
                         }
 
-                        return Result;
+                        goto StackUnwindEnd;
                     }
-
-                    FrameIndex += 1;
                 }
             }
         }
 
         //
-        // Loop until a base pointer of zero is encountered, or an AV occurs.
+        // Stop if the base pointer is zero.
         //
 
-        CurrentBasePointer = StartingBasePointer;
-        while ((CurrentBasePointer != 0) && (FrameIndex < FrameCount)) {
-
-            //
-            // Store the base pointer for the current frame.
-            //
-
-            Frames[FrameIndex].FramePointer = CurrentBasePointer;
-            Frames[FrameIndex].ReturnAddress = 0;
-
-            //
-            // From the base pointer, the next two pointers in memory are the
-            // next base pointer and then the return address.
-            //
-
-            Result = DbgReadMemory(Context,
-                                   TRUE,
-                                   CurrentBasePointer,
-                                   PointerSize * 2,
-                                   WorkingBuffer,
-                                   &BytesRead);
-
-            if ((Result != 0) || (BytesRead != (PointerSize * 2))) {
-                if (Result == 0) {
-                    Result = EINVAL;
-                }
-
-                goto GetCallStackEnd;
-            }
-
-            CurrentBasePointer = 0;
-            RtlCopyMemory(&CurrentBasePointer, WorkingBuffer, PointerSize);
-            RtlCopyMemory(&(Frames[FrameIndex].ReturnAddress),
-                          (PUCHAR)WorkingBuffer + PointerSize,
-                          PointerSize);
-
-            //
-            // If the stack frame appears to loop back on itself, stop.
-            //
-
-            for (SearchIndex = 0; SearchIndex < FrameIndex; SearchIndex += 1) {
-                if (Frames[SearchIndex].FramePointer ==
-                    Frames[FrameIndex].FramePointer) {
-
-                    break;
-                }
-            }
-
-            FrameIndex += 1;
-            if (SearchIndex != FrameIndex - 1) {
-                DbgOut("Stack frame loops.\n");
-                break;
-            }
-        }
-
-    } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-               (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
-        //
-        // Loop until a base pointer of zero is encountered, or the buffer
-        // fills up.
-        //
-
-        CurrentBasePointer = StartingBasePointer;
-        while ((CurrentBasePointer != 0) && (FrameIndex < FrameCount)) {
-
-            //
-            // The newer AAPCS calling convention sets up the frames where
-            // *(fp-4) is next frame pointer, and *fp is the return address.
-            // Store the base pointer for the current frame.
-            //
-
-            Frames[FrameIndex].FramePointer = CurrentBasePointer;
-            Frames[FrameIndex].ReturnAddress = 0;
-
-            //
-            // Read in just below the base of the frame to get the return
-            // address and next frame address.
-            //
-
-            CurrentBasePointer -= PointerSize;
-            Result = DbgReadMemory(Context,
-                                   TRUE,
-                                   CurrentBasePointer,
-                                   PointerSize * 2,
-                                   WorkingBuffer,
-                                   &BytesRead);
-
-            if ((Result != 0) || (BytesRead != (PointerSize * 2))) {
-                if (Result == 0) {
-                    Result = EINVAL;
-                }
-
-                goto GetCallStackEnd;
-            }
-
-            //
-            // Store the return address for this function, then follow the base
-            // pointer to get the base pointer for the calling function.
-            //
-
-            RtlCopyMemory(&(Frames[FrameIndex].ReturnAddress),
-                          (PUCHAR)WorkingBuffer + PointerSize,
-                          PointerSize);
-
-            CurrentBasePointer = 0;
-            RtlCopyMemory(&CurrentBasePointer, WorkingBuffer, PointerSize);
-
-            //
-            // If the stack frame appears to loop back on itself, stop.
-            //
-
-            for (SearchIndex = 0; SearchIndex < FrameIndex; SearchIndex += 1) {
-                if (Frames[SearchIndex].FramePointer ==
-                    Frames[FrameIndex].FramePointer) {
-
-                    break;
-                }
-            }
-
-            FrameIndex += 1;
-            if (SearchIndex != FrameIndex - 1) {
-                DbgOut("Stack frame loops.\n");
-                break;
-            }
+        if (BasePointer == 0) {
+            Status = EOF;
+            goto StackUnwindEnd;
         }
 
         //
-        // Add in the bottom frame and return.
+        // Store the base pointer for the current frame.
         //
 
-        if ((FrameIndex != 0) && (FrameIndex < FrameCount) &&
-            (Frames[FrameIndex - 1].ReturnAddress != 0)) {
+        Frame->FramePointer = BasePointer;
 
-            Frames[FrameIndex].FramePointer = 0;
-            Frames[FrameIndex].ReturnAddress = 0;
-            FrameIndex += 1;
+        //
+        // From the base pointer, the next two pointers in memory are the
+        // next base pointer and then the return address.
+        //
+
+        Status = DbgReadMemory(Context,
+                               TRUE,
+                               BasePointer,
+                               PointerSize * 2,
+                               WorkingBuffer,
+                               &BytesRead);
+
+        if ((Status != 0) || (BytesRead != (PointerSize * 2))) {
+            if (Status == 0) {
+                Status = EINVAL;
+            }
+
+            goto StackUnwindEnd;
         }
 
-    } else {
+        BasePointer = 0;
+        RtlCopyMemory(&BasePointer, WorkingBuffer, PointerSize);
+        Frame->ReturnAddress = 0;
+        RtlCopyMemory(&(Frame->ReturnAddress),
+                      (PUCHAR)WorkingBuffer + PointerSize,
+                      PointerSize);
 
-        ASSERT(FALSE);
+        //
+        // Update the registers.
+        //
 
-        return FALSE;
+        Registers->X86.Eip = Frame->ReturnAddress;
+        Registers->X86.Esp = Registers->X86.Ebp;
+        Registers->X86.Ebp = BasePointer;
+        break;
+
+    case MACHINE_TYPE_ARMV7:
+    case MACHINE_TYPE_ARMV6:
+
+        //
+        // Stop if the base pointer is zero.
+        //
+
+        if (BasePointer == 0) {
+            Status = EOF;
+            goto StackUnwindEnd;
+        }
+
+        //
+        // The newer AAPCS calling convention sets up the frames where
+        // *(fp-4) is next frame pointer, and *fp is the return address.
+        // Store the base pointer for the current frame.
+        //
+
+        Frame->FramePointer = BasePointer;
+        Frame->ReturnAddress = 0;
+
+        //
+        // Read in just below the base of the frame to get the return
+        // address and next frame address.
+        //
+
+        Status = DbgReadMemory(Context,
+                               TRUE,
+                               BasePointer - PointerSize,
+                               PointerSize * 2,
+                               WorkingBuffer,
+                               &BytesRead);
+
+        if ((Status != 0) || (BytesRead != (PointerSize * 2))) {
+            if (Status == 0) {
+                Status = EINVAL;
+            }
+
+            goto StackUnwindEnd;
+        }
+
+        //
+        // Store the return address for this function, then follow the base
+        // pointer to get the base pointer for the calling function.
+        //
+
+        RtlCopyMemory(&(Frame->ReturnAddress),
+                      (PUCHAR)WorkingBuffer + PointerSize,
+                      PointerSize);
+
+        Registers->Arm.R13Sp = BasePointer;
+        BasePointer = 0;
+        RtlCopyMemory(&BasePointer, WorkingBuffer, PointerSize);
+        Registers->Arm.R15Pc = Frame->ReturnAddress;
+        if ((Registers->Arm.R15Pc & ARM_THUMB_BIT) != 0) {
+            Registers->Arm.R7 = BasePointer;
+            Registers->Arm.Cpsr |= PSR_FLAG_THUMB;
+
+        } else {
+            Registers->Arm.R11Fp = BasePointer;
+            Registers->Arm.Cpsr &= ~PSR_FLAG_THUMB;
+        }
+
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        Status = EINVAL;
     }
 
-    Result = 0;
-
-GetCallStackEnd:
-    *FramesRead = FrameIndex;
-    return Result;
+StackUnwindEnd:
+    return Status;
 }
 
 INT
 DbgPrintCallStack (
     PDEBUGGER_CONTEXT Context,
-    ULONGLONG InstructionPointer,
-    ULONGLONG StackPointer,
-    ULONGLONG BasePointer,
+    PREGISTERS_UNION Registers,
     BOOL PrintFrameNumbers
     )
 
@@ -1597,11 +1640,8 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
-    InstructionPointer - Supplies the instruction pointer of the thread.
-
-    StackPointer - Supplies the stack pointer of the thread.
-
-    BasePointer - Supplies the base pointer of the thread.
+    Registers - Supplies an optional pointer to the registers to use when
+        unwinding.
 
     PrintFrameNumbers - Supplies a boolean indicating whether or not frame
         numbers should be printed to the left of every frame.
@@ -1620,11 +1660,15 @@ Return Value:
     ULONG FrameCount;
     ULONG FrameIndex;
     PSTACK_FRAME Frames;
-    BOOL LeafFunction;
     INT Result;
 
     Frames = NULL;
-    LeafFunction = FALSE;
+
+    //
+    // Initialize the call site with the current instruction pointer.
+    //
+
+    CallSite = DbgGetPc(Context, Registers);
 
     //
     // Allocate the call stack frames buffer.
@@ -1637,14 +1681,11 @@ Return Value:
         goto PrintCallStackEnd;
     }
 
-    FrameCount = 0;
-    DbgGetCallStack(Context,
-                    BasePointer,
-                    StackPointer,
-                    InstructionPointer,
-                    Frames,
-                    MAX_CALL_STACK,
-                    &FrameCount);
+    FrameCount = MAX_CALL_STACK;
+    Result = DbgGetCallStack(Context, Registers, Frames, &FrameCount);
+    if (Result != 0) {
+        DbgOut("Error: Failed to get call stack: %s.\n", strerror(Result));
+    }
 
     //
     // Print the column headings.
@@ -1654,37 +1695,7 @@ Return Value:
         DbgOut("No ");
     }
 
-    DbgOut("BP       RetAddr  Call Site\n");
-
-    //
-    // Initialize the call site with the current instruction pointer.
-    //
-
-    CallSite = InstructionPointer;
-
-    //
-    // For leaf functions, print out the extra invisble frame, which is the
-    // current instruction pointer with the link register as the return
-    // address. After that, the frames are set up normally.
-    //
-
-    if (LeafFunction != FALSE) {
-        if (PrintFrameNumbers != FALSE) {
-            DbgOut("   ");
-        }
-
-        DbgOut("xxxxxxxx %08x ",
-               Context->CurrentEvent.BreakNotification.Registers.Arm.R14Lr);
-
-        Result = DbgPrintAddressSymbol(Context, CallSite);
-        if (Result != 0) {
-            DbgOut("%08I64x", CallSite);
-        }
-
-        CallSite = Context->CurrentEvent.BreakNotification.Registers.Arm.R14Lr;
-        DbgOut("\n");
-    }
-
+    DbgOut("Frame    RetAddr  Call Site\n");
     for (FrameIndex = 0; FrameIndex < FrameCount; FrameIndex += 1) {
         if (PrintFrameNumbers != FALSE) {
             DbgOut("%2d ", FrameIndex);
@@ -1791,13 +1802,7 @@ Return Value:
 
     switch (Context->MachineType) {
     case MACHINE_TYPE_X86:
-        PointerSize = sizeof(ULONG);
-        break;
-
     case MACHINE_TYPE_ARMV7:
-        PointerSize = sizeof(ULONG);
-        break;
-
     case MACHINE_TYPE_ARMV6:
         PointerSize = sizeof(ULONG);
         break;
@@ -1811,6 +1816,137 @@ Return Value:
     }
 
     return PointerSize;
+}
+
+VOID
+DbgGetStackRegisters (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
+    PULONGLONG StackPointer,
+    PULONGLONG FramePointer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the stack and/or frame pointer registers from a
+    given registers union.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies a pointer to the filled out registers union.
+
+    StackPointer - Supplies an optional pointer where the stack register value
+        will be returned.
+
+    FramePointer - Supplies an optional pointer where teh stack frame base
+        register value will be returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONGLONG FrameValue;
+    ULONGLONG StackValue;
+
+    switch (Context->MachineType) {
+    case MACHINE_TYPE_X86:
+        StackValue = Registers->X86.Esp;
+        FrameValue = Registers->X86.Ebp;
+        break;
+
+    case MACHINE_TYPE_ARMV7:
+    case MACHINE_TYPE_ARMV6:
+        StackValue = Registers->Arm.R13Sp;
+        if ((Registers->Arm.Cpsr & PSR_FLAG_THUMB) != 0) {
+            FrameValue = Registers->Arm.R7;
+
+        } else {
+            FrameValue = Registers->Arm.R11Fp;
+        }
+
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        StackValue = 0;
+        FrameValue = 0;
+        break;
+    }
+
+    if (StackPointer != NULL) {
+        *StackPointer = StackValue;
+    }
+
+    if (FramePointer != NULL) {
+        *FramePointer = FrameValue;
+    }
+
+    return;
+}
+
+ULONGLONG
+DbgGetPc (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the value of the program counter (instruction pointer)
+    register in the given registers union.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies an optional pointer to the filled out registers union.
+        If NULL, then the registers from the current frame will be used.
+
+Return Value:
+
+    Returns the instruction pointer member from the given registers.
+
+--*/
+
+{
+
+    ULONGLONG Value;
+
+    if (Registers == NULL) {
+        Registers = &(Context->FrameRegisters);
+    }
+
+    switch (Context->MachineType) {
+    case MACHINE_TYPE_X86:
+        Value = Registers->X86.Eip;
+        break;
+
+    case MACHINE_TYPE_ARMV7:
+    case MACHINE_TYPE_ARMV6:
+        Value = Registers->Arm.R15Pc;
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        Value = 0;
+        break;
+    }
+
+    return Value;
 }
 
 //

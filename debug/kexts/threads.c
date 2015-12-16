@@ -101,6 +101,7 @@ Return Value:
     ULONGLONG BasePointer;
     ULONG BytesRead;
     ULONGLONG InstructionPointer;
+    REGISTERS_UNION LocalRegisters;
     ULONGLONG StackPointer;
     INT Status;
     DEBUG_TARGET_INFORMATION TargetInformation;
@@ -117,6 +118,8 @@ Return Value:
 
         return EINVAL;
     }
+
+    memset(&LocalRegisters, 0, sizeof(REGISTERS_UNION));
 
     //
     // Get the address of the thread and read in the structure.
@@ -280,6 +283,9 @@ Return Value:
             return Status;
         }
 
+        LocalRegisters.X86.Eip = InstructionPointer;
+        LocalRegisters.X86.Ebp = BasePointer;
+        LocalRegisters.X86.Esp = BasePointer;
         break;
 
     case MACHINE_TYPE_ARMV7:
@@ -320,6 +326,10 @@ Return Value:
             return Status;
         }
 
+        LocalRegisters.Arm.R15Pc = InstructionPointer;
+        LocalRegisters.Arm.R11Fp = BasePointer;
+        LocalRegisters.Arm.R7 = BasePointer;
+        LocalRegisters.Arm.R13Sp = BasePointer;
         break;
 
     default:
@@ -333,12 +343,7 @@ Return Value:
     // Print the call stack for the given thread.
     //
 
-    DbgPrintCallStack(Context,
-                      InstructionPointer,
-                      StackPointer,
-                      BasePointer,
-                      FALSE);
-
+    DbgPrintCallStack(Context, &LocalRegisters, FALSE);
     return 0;
 }
 

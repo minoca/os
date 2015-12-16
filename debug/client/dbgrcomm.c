@@ -26,7 +26,6 @@ Environment:
 //
 
 #include "dbgrtl.h"
-#include <minoca/dbgproto.h>
 #include <minoca/spproto.h>
 #include <minoca/im.h>
 #include "disasm.h"
@@ -58,71 +57,6 @@ Environment:
 #define BYTES_PER_INSTRUCTION 15
 #define DEFAULT_MEMORY_PRINT_ROWS 10
 #define DEFAULT_DUMP_POINTERS_ROWS 100
-
-//
-// x86 Flags.
-//
-
-#define IA32_EFLAG_CF 0x00000001
-#define IA32_EFLAG_PF 0x00000004
-#define IA32_EFLAG_AF 0x00000010
-#define IA32_EFLAG_ZF 0x00000040
-#define IA32_EFLAG_SF 0x00000080
-#define IA32_EFLAG_TF 0x00000100
-#define IA32_EFLAG_IF 0x00000200
-#define IA32_EFLAG_DF 0x00000400
-#define IA32_EFLAG_OF 0x00000800
-#define IA32_EFLAG_IOPL_MASK 0x00003000
-#define IA32_EFLAG_IOPL_SHIFT 12
-#define IA32_EFLAG_NT 0x00004000
-#define IA32_EFLAG_RF 0x00010000
-#define IA32_EFLAG_VM 0x00020000
-#define IA32_EFLAG_AC 0x00040000
-#define IA32_EFLAG_VIF 0x00080000
-#define IA32_EFLAG_VIP 0x00100000
-#define IA32_EFLAG_ID 0x00200000
-#define IA32_EFLAG_ALWAYS_0 0xFFC08028
-#define IA32_EFLAG_ALWAYS_1 0x00000002
-
-//
-// ARM Processor modes.
-//
-
-#define ARM_MODE_USER   0x00000010
-#define ARM_MODE_FIQ    0x00000011
-#define ARM_MODE_IRQ    0x00000012
-#define ARM_MODE_SVC    0x00000013
-#define ARM_MODE_ABORT  0x00000017
-#define ARM_MODE_UNDEF  0x0000001B
-#define ARM_MODE_SYSTEM 0x0000001F
-#define ARM_MODE_MASK   0x0000001F
-
-//
-// ARM Program Status Register flags.
-//
-
-#define PSR_FLAG_NEGATIVE   0x80000000
-#define PSR_FLAG_ZERO       0x40000000
-#define PSR_FLAG_CARRY      0x20000000
-#define PSR_FLAG_OVERFLOW   0x10000000
-#define PSR_FLAG_SATURATION 0x08000000
-#define PSR_FLAG_JAZELLE    0x01000000
-#define PSR_FLAG_THUMB      0x00000020
-#define PSR_FLAG_IRQ        0x00000080
-#define PSR_FLAG_FIQ        0x00000040
-
-//
-// ARM Instruction information.
-//
-
-#define ARM_BREAK_INSTRUCTION 0xE7F000F3
-#define ARM_BREAK_INSTRUCTION_LENGTH ARM_INSTRUCTION_LENGTH
-#define THUMB_BREAK_INSTRUCTION 0xDE20
-#define THUMB_BREAK_INSTRUCTION_LENGTH 2
-#define ARM_THUMB_BIT 0x00000001
-
-#define X86_BREAK_INSTRUCTION 0xCC
-#define X86_BREAK_INSTRUCTION_LENGTH 1
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -257,11 +191,6 @@ DbgrpEnableBreakPoint (
     PDEBUGGER_CONTEXT Context,
     LONG BreakPointIndex,
     BOOL Enable
-    );
-
-PULONG
-DbgrpArmGetStackFrameBaseRegister (
-    PREGISTERS_UNION Registers
     );
 
 VOID
@@ -718,6 +647,10 @@ Return Value:
 
     ArmRegisters = &(Context->CurrentEvent.BreakNotification.Registers.Arm);
     X86Registers = &(Context->CurrentEvent.BreakNotification.Registers.X86);
+    if (Context->CurrentFrame != 0) {
+        ArmRegisters = &(Context->FrameRegisters.Arm);
+        X86Registers = &(Context->FrameRegisters.X86);
+    }
 
     //
     // If the first parameter is not NULL, find the register the user is
@@ -887,6 +820,11 @@ Return Value:
         //
 
         } else {
+            if (Context->CurrentFrame != 0) {
+                DbgOut("Error: Registers can only be set in frame 0.\n");
+                goto GetSetRegistersEnd;
+            }
+
             Result = DbgEvaluate(Context, ValueString, &NewValue);
             if (Result != 0) {
                 DbgOut("Error: Unable to evaluate \"%s\".\n", ValueString);
@@ -915,6 +853,10 @@ Return Value:
     //
 
     } else {
+        if (Context->CurrentFrame != 0) {
+            DbgOut("Frame %d Registers:\n", Context->CurrentFrame);
+        }
+
         switch (Context->MachineType) {
 
         //
@@ -1507,12 +1449,15 @@ Return Value:
 
 {
 
-    PULONG BaseAddress;
     ULONGLONG BasePointer;
     ULONGLONG InstructionPointer;
+    REGISTERS_UNION LocalRegisters;
     BOOL PrintFrameNumbers;
+    PREGISTERS_UNION Registers;
     INT Result;
     ULONGLONG StackPointer;
+
+    Registers = NULL;
 
     assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
@@ -1533,6 +1478,11 @@ Return Value:
     }
 
     if (ArgumentCount == 4) {
+        RtlCopyMemory(&LocalRegisters,
+                      &(Context->CurrentEvent.BreakNotification.Registers),
+                      sizeof(REGISTERS_UNION));
+
+        Registers = &LocalRegisters;
         Result = DbgEvaluate(Context, Arguments[1], &InstructionPointer);
         if (Result != 0) {
             DbgOut("Failed to evaluate \"%s\".\n", Arguments[1]);
@@ -1551,42 +1501,29 @@ Return Value:
             goto PrintCallStackEnd;
         }
 
-    } else {
-        InstructionPointer =
-                    Context->CurrentEvent.BreakNotification.InstructionPointer;
+        switch (Context->MachineType) {
+        case MACHINE_TYPE_X86:
+            LocalRegisters.X86.Eip = InstructionPointer;
+            LocalRegisters.X86.Esp = StackPointer;
+            LocalRegisters.X86.Ebp = BasePointer;
+            break;
 
-        if (Context->MachineType == MACHINE_TYPE_X86) {
-            StackPointer =
-                     Context->CurrentEvent.BreakNotification.Registers.X86.Esp;
+        case MACHINE_TYPE_ARMV7:
+        case MACHINE_TYPE_ARMV6:
+            LocalRegisters.Arm.R15Pc = InstructionPointer;
+            LocalRegisters.Arm.R13Sp = StackPointer;
+            if ((LocalRegisters.Arm.Cpsr & PSR_FLAG_THUMB) != 0) {
+                LocalRegisters.Arm.R7 = BasePointer;
 
-            BasePointer =
-                     Context->CurrentEvent.BreakNotification.Registers.X86.Ebp;
+            } else {
+                LocalRegisters.Arm.R11Fp = BasePointer;
+            }
 
-        } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-                   (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
-            StackPointer =
-                   Context->CurrentEvent.BreakNotification.Registers.Arm.R13Sp;
-
-            BaseAddress = DbgrpArmGetStackFrameBaseRegister(
-                         &(Context->CurrentEvent.BreakNotification.Registers));
-
-            BasePointer = *BaseAddress;
-
-        } else {
-
-            ASSERT(FALSE);
-
-            return EINVAL;
+            break;
         }
     }
 
-    Result = DbgPrintCallStack(Context,
-                               InstructionPointer,
-                               StackPointer,
-                               BasePointer,
-                               PrintFrameNumbers);
-
+    Result = DbgPrintCallStack(Context, Registers, PrintFrameNumbers);
     if (Result != 0) {
         goto PrintCallStackEnd;
     }
@@ -2937,7 +2874,7 @@ Return Value:
     // then there is no useful information to print, so exit.
     //
 
-    InstructionPointer = Context->CurrentFrameInstructionPointer;
+    InstructionPointer = DbgGetPc(Context, &(Context->FrameRegisters));
     Module = DbgpFindModuleFromAddress(Context,
                                        InstructionPointer,
                                        &InstructionPointer);
@@ -4122,8 +4059,6 @@ Return Value:
 
 {
 
-    ULONGLONG BasePointer;
-    PULONG BasePointerAddress;
     ULONG BytesRead;
     ULONG FirstInstruction;
     ULONG FirstInstructionAddress;
@@ -4132,7 +4067,6 @@ Return Value:
     ULONGLONG InstructionPointer;
     INT Result;
     ULONGLONG ReturnAddress;
-    ULONGLONG StackPointer;
 
     ReturnAddress = 0;
 
@@ -4176,49 +4110,10 @@ Return Value:
         }
     }
 
-    //
-    // Get the important registers as a starting point for stack frame
-    // traversal.
-    //
-
-    if (Context->MachineType == MACHINE_TYPE_X86) {
-        StackPointer =
-                     Context->CurrentEvent.BreakNotification.Registers.X86.Esp;
-
-        BasePointer = Context->CurrentEvent.BreakNotification.Registers.X86.Ebp;
-
-    } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-               (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
-        StackPointer =
-                   Context->CurrentEvent.BreakNotification.Registers.Arm.R13Sp;
-
-        BasePointerAddress = DbgrpArmGetStackFrameBaseRegister(
-                         &(Context->CurrentEvent.BreakNotification.Registers));
-
-        BasePointer = *BasePointerAddress;
-
-    } else {
-
-        ASSERT(FALSE);
-
-        Result = EINVAL;
-        goto ReturnToCallerEnd;
-    }
-
-    FrameCount = 0;
-    DbgGetCallStack(Context,
-                    BasePointer,
-                    StackPointer,
-                    InstructionPointer,
-                    &Frame,
-                    1,
-                    &FrameCount);
-
-    if (FrameCount == 0) {
-        DbgOut("Error: Unable to get call stack, and therefore get the current "
-               "return address.\n");
-
+    FrameCount = 1;
+    Result = DbgGetCallStack(Context, NULL, &Frame, &FrameCount);
+    if ((Result != 0) || (FrameCount == 0)) {
+        DbgOut("Error: Unable to get call stack.\n");
         Result = EINVAL;
         goto ReturnToCallerEnd;
     }
@@ -5496,6 +5391,7 @@ Return Value:
     PDATA_SYMBOL DataResult;
     PVOID DataStream;
     PDATA_SYMBOL Local;
+    ULONGLONG Pc;
     INT Result;
     SYMBOL_SEARCH_RESULT SearchResult;
     PSTR SymbolString;
@@ -5519,10 +5415,8 @@ Return Value:
     if ((ArgumentCount == 1) &&
         ((RawDataStream == NULL) || (RawDataStreamSizeInBytes == 0))) {
 
-        Local = DbgpFindLocal(Context,
-                              Arguments[0],
-                              Context->CurrentFrameInstructionPointer);
-
+        Pc = DbgGetPc(Context, &(Context->FrameRegisters));
+        Local = DbgpFindLocal(Context, Arguments[0], Pc);
         if (Local != NULL) {
 
             //
@@ -6668,7 +6562,6 @@ Return Value:
 
 {
 
-    PULONG BasePointerAddress;
     ULONG BreakpointNumber;
     PBREAK_NOTIFICATION CurrentBreak;
     BOOL ForceModuleUpdate;
@@ -6806,24 +6699,11 @@ Return Value:
     //
 
     Context->DisassemblyAddress = InstructionPointer;
-    Context->CurrentFrameInstructionPointer = InstructionPointer;
-    if (Context->MachineType == MACHINE_TYPE_X86) {
-        Context->CurrentFrameBasePointer = CurrentBreak->Registers.X86.Ebp;
+    RtlCopyMemory(&(Context->FrameRegisters),
+                  &(Context->CurrentEvent.BreakNotification.Registers),
+                  sizeof(REGISTERS_UNION));
 
-    } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-               (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
-        BasePointerAddress = DbgrpArmGetStackFrameBaseRegister(
-                         &(Context->CurrentEvent.BreakNotification.Registers));
-
-        Context->CurrentFrameBasePointer = *BasePointerAddress;
-
-    } else {
-        DbgOut("Error: Unknown machine type %d. \n", Context->MachineType);
-        Result = EINVAL;
-        goto ProcessBreakNotificationEnd;
-    }
-
+    Context->CurrentFrame = 0;
     Context->LastMemoryDump.Virtual = TRUE;
     Context->LastMemoryDump.NextAddress = InstructionPointer;
     Context->LastMemoryDump.Columns = 0;
@@ -6834,7 +6714,7 @@ Return Value:
     // Load up the source file in the source window.
     //
 
-    DbgrShowSourceAtAddress(Context, Context->CurrentFrameInstructionPointer);
+    DbgrShowSourceAtAddress(Context, InstructionPointer);
 
     //
     // Print the instruction that's about to execute.
@@ -8473,109 +8353,65 @@ Return Value:
 
 {
 
-    ULONGLONG BasePointer;
-    PULONG BasePointerAddress;
-    ULONG FrameCount;
-    PSTACK_FRAME Frames;
-    ULONGLONG InstructionPointer;
-    ULONGLONG StackPointer;
+    STACK_FRAME Frame;
+    ULONG FrameIndex;
+    REGISTERS_UNION Registers;
     INT Status;
-
-    Frames = NULL;
 
     assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
-    //
-    // Get the important registers as a starting point for stack frame
-    // traversal.
-    //
-
-    InstructionPointer =
-                    Context->CurrentEvent.BreakNotification.InstructionPointer;
-
-    if (Context->MachineType == MACHINE_TYPE_X86) {
-        StackPointer =
-                     Context->CurrentEvent.BreakNotification.Registers.X86.Esp;
-
-        BasePointer = Context->CurrentEvent.BreakNotification.Registers.X86.Ebp;
-
-    } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-               (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
-        StackPointer =
-                   Context->CurrentEvent.BreakNotification.Registers.Arm.R13Sp;
-
-        BasePointerAddress = DbgrpArmGetStackFrameBaseRegister(
-                         &(Context->CurrentEvent.BreakNotification.Registers));
-
-        BasePointer = *BasePointerAddress;
-
-    } else {
-
-        ASSERT(FALSE);
-
-        Status = EINVAL;
-        goto SetFrameEnd;
-    }
-
-    if (FrameNumber == 0) {
-        Context->CurrentFrameInstructionPointer = InstructionPointer;
-        Context->CurrentFrameBasePointer = BasePointer;
-
-    } else {
-
-        //
-        // Allocate the call stack frames buffer.
-        //
-
-        Frames = malloc(sizeof(STACK_FRAME) * MAX_CALL_STACK);
-        if (Frames == NULL) {
-            DbgOut("Failed to allocate memory for call stack buffer.\n");
-            Status = ENOMEM;
-            goto SetFrameEnd;
-        }
-
-        FrameCount = 0;
-        DbgGetCallStack(Context,
-                        BasePointer,
-                        StackPointer,
-                        InstructionPointer,
-                        Frames,
-                        MAX_CALL_STACK,
-                        &FrameCount);
-
-        //
-        // If the frame number specified is invalid, bail out now.
-        //
-
-        if (FrameNumber >= FrameCount) {
-            DbgOut("Invalid frame number, only %d functions on the stack!\n",
-                   FrameCount);
-
-            Status = ERANGE;
-            goto SetFrameEnd;
-        }
-
-        //
-        // Set the current frame.
-        //
-
-        Context->CurrentFrameInstructionPointer =
-                                         Frames[FrameNumber - 1].ReturnAddress;
-
-        Context->CurrentFrameBasePointer = Frames[FrameNumber].FramePointer;
-    }
-
-    //
-    // Load and highlight the source line of the new frame.
-    //
-
-    DbgrShowSourceAtAddress(Context, Context->CurrentFrameInstructionPointer);
     Status = 0;
 
-SetFrameEnd:
-    if (Frames != NULL) {
-        free(Frames);
+    //
+    // Attempt to unwind to the given frame.
+    //
+
+    RtlCopyMemory(&Registers,
+                  &(Context->CurrentEvent.BreakNotification.Registers),
+                  sizeof(REGISTERS_UNION));
+
+    //
+    // Set the return address to the current PC so that if it's frame 0, the
+    // highlighted line returns to the PC.
+    //
+
+    Frame.ReturnAddress = DbgGetPc(Context, &Registers);
+
+    //
+    // Unwind the desired number of frames.
+    //
+
+    for (FrameIndex = 0; FrameIndex < FrameNumber; FrameIndex += 1) {
+        Status = DbgStackUnwind(Context, &Registers, TRUE, &Frame);
+        if (Status == EOF) {
+            DbgOut("Error: Only %d frames on the stack.\n", FrameIndex);
+            break;
+
+        } else if (Status != 0) {
+            DbgOut("Error: Failed to unwind stack: %s.\n",
+                   strerror(Status));
+
+            break;
+        }
+    }
+
+    //
+    // If the stack was successfully unwound to the given frame, set that
+    // as the current information.
+    //
+
+    if (Status == 0) {
+        RtlCopyMemory(&(Context->FrameRegisters),
+                      &Registers,
+                      sizeof(REGISTERS_UNION));
+
+        Context->CurrentFrame = FrameNumber;
+
+        //
+        // Load and highlight the source line of the new frame.
+        //
+
+        DbgrShowSourceAtAddress(Context, Frame.ReturnAddress);
     }
 
     return Status;
@@ -8689,36 +8525,6 @@ Return Value:
 
 EnableBreakPointEnd:
     return Status;
-}
-
-PULONG
-DbgrpArmGetStackFrameBaseRegister (
-    PREGISTERS_UNION Registers
-    )
-
-/*++
-
-Routine Description:
-
-    This routine returns the frame base pointer for ARM machines.
-
-Arguments:
-
-    Registers - Supplies a pointer to the registers union.
-
-Return Value:
-
-    Returns a pointer to the frame register within the registers union.
-
---*/
-
-{
-
-    if ((Registers->Arm.Cpsr & PSR_FLAG_THUMB) != 0) {
-        return &(Registers->Arm.R7);
-    }
-
-    return &(Registers->Arm.R11Fp);
 }
 
 VOID

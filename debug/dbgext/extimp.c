@@ -499,43 +499,32 @@ Return Value:
 INT
 DbgGetCallStack (
     PDEBUGGER_CONTEXT Context,
-    ULONGLONG StartingBasePointer,
-    ULONGLONG StackPointer,
-    ULONGLONG InstructionPointer,
+    PREGISTERS_UNION Registers,
     PSTACK_FRAME Frames,
-    ULONG FrameCount,
-    PULONG FramesRead
+    PULONG FrameCount
     )
 
 /*++
 
 Routine Description:
 
-    This routine attempts to read the call stack starting at the given base
-    pointer.
+    This routine attempts to unwind the call stack starting at the given
+    machine state.
 
 Arguments:
 
     Context - Supplies a pointer to the application context.
 
-    StartingBasePointer - Supplies the virtual address of the topmost (most
-        recent) stack frame base.
-
-    StackPointer - Supplies an optional pointer to the current stack pointer. If
-        supplied, it will be used with the instruction pointer to potentially
-        make the first stack frame more accurate.
-
-    InstructionPointer - Supplies an optional virtual address of the
-        instruction pointer.
+    Registers - Supplies an optional pointer to the registers on input. On
+        output, these registers will be updated with the unwound value. If this
+        is NULL, then the current break notification registers will be used.
 
     Frames - Supplies a pointer where the array of stack frames will be
         returned.
 
     FrameCount - Supplies the number of frames allocated in the frames
-        argument, representing the maximum number of frames to get.
-
-    FramesRead - Supplies a pointer where the number of valid frames in the
-        frames array will be returned.
+        argument, representing the maximum number of frames to get. On output,
+        returns the number of valid frames in the array.
 
 Return Value:
 
@@ -550,12 +539,9 @@ Return Value:
     INT Result;
 
     Result = DbgImportInterface->GetCallStack(Context,
-                                              StartingBasePointer,
-                                              StackPointer,
-                                              InstructionPointer,
+                                              Registers,
                                               Frames,
-                                              FrameCount,
-                                              FramesRead);
+                                              FrameCount);
 
     return Result;
 }
@@ -563,9 +549,7 @@ Return Value:
 INT
 DbgPrintCallStack (
     PDEBUGGER_CONTEXT Context,
-    ULONGLONG InstructionPointer,
-    ULONGLONG StackPointer,
-    ULONGLONG BasePointer,
+    PREGISTERS_UNION Registers,
     BOOL PrintFrameNumbers
     )
 
@@ -579,11 +563,8 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
-    InstructionPointer - Supplies the instruction pointer of the thread.
-
-    StackPointer - Supplies the stack pointer of the thread.
-
-    BasePointer - Supplies the base pointer of the thread.
+    Registers - Supplies an optional pointer to the registers to use when
+        unwinding.
 
     PrintFrameNumbers - Supplies a boolean indicating whether or not frame
         numbers should be printed to the left of every frame.
@@ -601,9 +582,7 @@ Return Value:
     INT Result;
 
     Result = DbgImportInterface->PrintCallStack(Context,
-                                                InstructionPointer,
-                                                StackPointer,
-                                                BasePointer,
+                                                Registers,
                                                 PrintFrameNumbers);
 
     return Result;

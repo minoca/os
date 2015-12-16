@@ -33,7 +33,6 @@ Environment:
 #include <stdio.h>
 #include <windows.h>
 
-#include <minoca/dbgproto.h>
 #include <minoca/spproto.h>
 #include "dbgrprof.h"
 #include "console.h"

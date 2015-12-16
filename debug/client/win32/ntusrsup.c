@@ -37,8 +37,8 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include "ntusrsup.h"
 #include "dbgext.h"
+#include "ntusrsup.h"
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -22,6 +22,7 @@ Author:
 //
 
 #include <stdarg.h>
+#include <minoca/dbgproto.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -471,43 +472,32 @@ Return Value:
 INT
 DbgGetCallStack (
     PDEBUGGER_CONTEXT Context,
-    ULONGLONG StartingBasePointer,
-    ULONGLONG StackPointer,
-    ULONGLONG InstructionPointer,
+    PREGISTERS_UNION Registers,
     PSTACK_FRAME Frames,
-    ULONG FrameCount,
-    PULONG FramesRead
+    PULONG FrameCount
     );
 
 /*++
 
 Routine Description:
 
-    This routine attempts to read the call stack starting at the given base
-    pointer.
+    This routine attempts to unwind the call stack starting at the given
+    machine state.
 
 Arguments:
 
     Context - Supplies a pointer to the application context.
 
-    StartingBasePointer - Supplies the virtual address of the topmost (most
-        recent) stack frame base.
-
-    StackPointer - Supplies an optional pointer to the current stack pointer. If
-        supplied, it will be used with the instruction pointer to potentially
-        make the first stack frame more accurate.
-
-    InstructionPointer - Supplies an optional virtual address of the
-        instruction pointer.
+    Registers - Supplies an optional pointer to the registers on input. On
+        output, these registers will be updated with the unwound value. If this
+        is NULL, then the current break notification registers will be used.
 
     Frames - Supplies a pointer where the array of stack frames will be
         returned.
 
     FrameCount - Supplies the number of frames allocated in the frames
-        argument, representing the maximum number of frames to get.
-
-    FramesRead - Supplies a pointer where the number of valid frames in the
-        frames array will be returned.
+        argument, representing the maximum number of frames to get. On output,
+        returns the number of valid frames in the array.
 
 Return Value:
 
@@ -518,11 +508,47 @@ Return Value:
 --*/
 
 INT
+DbgStackUnwind (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
+    BOOL AllRegisters,
+    PSTACK_FRAME Frame
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to unwind the stack by one frame.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies a pointer to the registers on input. On output, these
+        registers will be updated with the unwound value.
+
+    AllRegisters - Supplies a boolean indicating whether to unwind all
+        registers (TRUE) or just the instruction pointer and stack pointer
+        (FALSE).
+
+    Frame - Supplies a pointer where the basic frame information for this
+        frame will be returned.
+
+Return Value:
+
+    0 on success.
+
+    EOF if there are no more stack frames.
+
+    Returns an error code on failure.
+
+--*/
+
+INT
 DbgPrintCallStack (
     PDEBUGGER_CONTEXT Context,
-    ULONGLONG InstructionPointer,
-    ULONGLONG StackPointer,
-    ULONGLONG BasePointer,
+    PREGISTERS_UNION Registers,
     BOOL PrintFrameNumbers
     );
 
@@ -536,11 +562,8 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
-    InstructionPointer - Supplies the instruction pointer of the thread.
-
-    StackPointer - Supplies the stack pointer of the thread.
-
-    BasePointer - Supplies the base pointer of the thread.
+    Registers - Supplies an optional pointer to the registers to use when
+        unwinding.
 
     PrintFrameNumbers - Supplies a boolean indicating whether or not frame
         numbers should be printed to the left of every frame.
@@ -602,6 +625,65 @@ Arguments:
 Return Value:
 
     The size of a pointer on the target system, in bytes.
+
+--*/
+
+VOID
+DbgGetStackRegisters (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
+    PULONGLONG StackPointer,
+    PULONGLONG FramePointer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the stack and/or frame pointer registers from a
+    given registers union.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies a pointer to the filled out registers union.
+
+    StackPointer - Supplies an optional pointer where the stack register value
+        will be returned.
+
+    FramePointer - Supplies an optional pointer where teh stack frame base
+        register value will be returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+ULONGLONG
+DbgGetPc (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the value of the program counter (instruction pointer)
+    register in the given registers union.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies an optional pointer to the filled out registers union.
+        If NULL, then the registers from the current frame will be used.
+
+Return Value:
+
+    Returns the instruction pointer member from the given registers.
 
 --*/
 

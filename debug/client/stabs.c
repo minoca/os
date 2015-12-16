@@ -4002,7 +4002,7 @@ Return Value:
     PSTAB_CONTEXT ParseState;
 
     if (Symbols->Machine == ImageMachineTypeX86) {
-        return RegisterEbp;
+        return X86RegisterEbp;
 
     } else if (Symbols->Machine == ImageMachineTypeArm32) {
         ParseState = Symbols->SymbolContext;
@@ -4015,14 +4015,14 @@ Return Value:
         if ((ParseState != NULL) && (ParseState->CurrentFunction != NULL) &&
             ((ParseState->CurrentFunction->StartAddress & 0x1) != 0)) {
 
-            return 7;
+            return ArmRegisterR7;
         }
 
         //
         // Return R11, the ARM frame pointer register.
         //
 
-        return 11;
+        return ArmRegisterR11;
     }
 
     assert(FALSE);

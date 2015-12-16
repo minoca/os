@@ -25,7 +25,6 @@ Environment:
 //
 
 #include "dbgrtl.h"
-#include <minoca/dbgproto.h>
 #include <minoca/spproto.h>
 #include <minoca/im.h>
 #include "symbols.h"
@@ -718,8 +717,8 @@ Return Value:
 
         assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
-        X86Registers = &(Context->CurrentEvent.BreakNotification.Registers.X86);
-        ArmRegisters = &(Context->CurrentEvent.BreakNotification.Registers.Arm);
+        X86Registers = &(Context->FrameRegisters.X86);
+        ArmRegisters = &(Context->FrameRegisters.Arm);
 
         //
         // Assume success and set the operator. It will be set back if the

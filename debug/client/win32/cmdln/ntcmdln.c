@@ -30,7 +30,6 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <minoca/dbgproto.h>
 #include <minoca/spproto.h>
 #include "dbgrprof.h"
 #include "console.h"
