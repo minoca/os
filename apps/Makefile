@@ -25,6 +25,7 @@
 ##
 
 APPS = efiboot  \
+       mbgen    \
        mount    \
        profile  \
        setup    \

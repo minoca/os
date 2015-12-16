@@ -1,0 +1,27 @@
+################################################################################
+#
+#   Copyright (c) 2015 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This file contains the common build information for the Minoca Build
+#       Generator utility.
+#
+#   Author:
+#
+#       Evan Green 3-Dec-2015
+#
+#   Environment:
+#
+#       Build
+#
+################################################################################
+
+OBJS = mbgen.o          \
+       path.o           \
+       script.o         \
+

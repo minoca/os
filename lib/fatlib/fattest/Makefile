@@ -28,8 +28,8 @@ BUILD = yes
 
 BINPLACE = testbin
 
-TARGETLIBS = $(OBJROOT)/os/lib/rtl/build/rtlstubs.a          \
-             $(OBJROOT)/os/lib/rtl/base/build/basertl.a      \
+TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a      \
+             $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a         \
              $(OBJROOT)/os/lib/fatlib/build/fat.a            \
 
 OBJS = fattest.o \

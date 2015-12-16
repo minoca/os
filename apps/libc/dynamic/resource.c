@@ -380,6 +380,47 @@ Return Value:
     return;
 }
 
+LIBC_API
+int
+getloadavg (
+    double LoadAverage[],
+    int ElementCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of processes in the system run queue
+    averaged over various periods of time. The elements returned (up to three)
+    return the number of processes over the past one, five, and fifteen minutes.
+
+Arguments:
+
+    LoadAverage - Supplies a pointer where up to three load average values
+        will be returned on success.
+
+    ElementCount - Supplies the number of elements in the supplied array.
+
+Return Value:
+
+    Returns the number of elements returned on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+{
+
+    //
+    // Consider implementing getloadavg, although it's not clear how useful of
+    // an API it really is.
+    //
+
+    errno = ENOSYS;
+    return -1;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

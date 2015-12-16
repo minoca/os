@@ -33,7 +33,7 @@ INCLUDES += $(SRCDIR)/../../..;$(SRCDIR)/../..;
 INCLUDES += $(SRCROOT)/os/lib/im;
 
 TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a      \
-             $(OBJROOT)/os/lib/rtl/build/rtlstubs.a          \
+             $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a         \
              $(OBJROOT)/os/lib/im/build/im.a                 \
 
 DYNLIBS = -lpsapi -lws2_32 -lmswsock -ladvapi32

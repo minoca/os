@@ -56,12 +56,6 @@ Environment:
 //
 
 //
-// Define the printf conversion buffer.
-//
-
-CHAR RtlPrintConversionBuffer[DEBUG_PRINT_CONVERSION_BUFFER_SIZE];
-
-//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -94,12 +88,13 @@ Return Value:
 {
 
     va_list ArgumentList;
+    CHAR Buffer[DEBUG_PRINT_CONVERSION_BUFFER_SIZE];
     UINTN BytesCompleted;
     ULONG StringSize;
 
     va_start(ArgumentList, Format);
-    StringSize = RtlFormatString(RtlPrintConversionBuffer,
-                                 sizeof(RtlPrintConversionBuffer),
+    StringSize = RtlFormatString(Buffer,
+                                 sizeof(Buffer),
                                  CharacterEncodingDefault,
                                  Format,
                                  ArgumentList);
@@ -110,10 +105,10 @@ Return Value:
                     StringSize,
                     SYS_IO_FLAG_WRITE,
                     SYS_WAIT_TIME_INDEFINITE,
-                    RtlPrintConversionBuffer,
+                    Buffer,
                     &BytesCompleted);
 
-        OsDebugPrint(RtlPrintConversionBuffer, StringSize);
+        OsDebugPrint(Buffer, StringSize);
     }
 
     va_end(ArgumentList);

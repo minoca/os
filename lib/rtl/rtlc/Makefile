@@ -4,12 +4,12 @@
 #
 #   Binary Name:
 #
-#       RTL Stubs
+#       RTL C
 #
 #   Abstract:
 #
 #       This library contains stub functions to allow the Rtl Library to
-#       compile in a huild or test environment.
+#       run on top of a standard C library.
 #
 #   Author:
 #
@@ -17,19 +17,19 @@
 #
 #   Environment:
 #
-#       Build
+#       User
 #
 ################################################################################
 
-BINARY = rtlstubs.a
+BINARY = rtlc.a
 
 BINARYTYPE = library
-
-BUILD = yes
 
 INCLUDES += $(SRCDIR)/..;
 
 OBJS = stubs.o   \
+
+DIRS = build
 
 include $(SRCROOT)/os/minoca.mk
 

@@ -30,7 +30,7 @@ BINARYTYPE = build
 INCLUDES += $(SRCROOT)/os/uefi/inc;
 
 TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a          \
-             $(OBJROOT)/os/lib/rtl/build/rtlstubs.a              \
+             $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a             \
              $(OBJROOT)/os/lib/crypto/build/crypto.a             \
              $(OBJROOT)/os/lib/crypto/ssl/build/ssl.a            \
 
