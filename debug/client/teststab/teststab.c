@@ -34,6 +34,7 @@ Environment:
 #include <minoca/types.h>
 #include <minoca/status.h>
 #include <minoca/im.h>
+#include "../../dbgext.h"
 #include "../symbols.h"
 #include "../stabs.h"
 
@@ -298,7 +299,7 @@ Return Value:
         printf("Loading symbols...");
     }
 
-    Status = DbgLoadSymbols(ImageName, ImageMachineTypeUnknown, &Symbols);
+    Status = DbgLoadSymbols(ImageName, ImageMachineTypeUnknown, NULL, &Symbols);
     if (PrintVerbose != FALSE) {
         printf("Done %d\n", Status);
     }
@@ -955,6 +956,7 @@ DwarfLoadSymbols (
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
     ULONG Flags,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     )
 
@@ -962,7 +964,7 @@ DwarfLoadSymbols (
 
 Routine Description:
 
-    This routine implements a stub for the DWARF symbol loader entry point.
+    This routine loads DWARF symbols for the given file.
 
 Arguments:
 
@@ -974,6 +976,9 @@ Arguments:
 
     Flags - Supplies a bitfield of flags governing the behavior during load.
         These flags are specific to each symbol library.
+
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
 
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.
@@ -990,3 +995,4 @@ Return Value:
 
     return ENOSYS;
 }
+

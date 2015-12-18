@@ -28,9 +28,9 @@ Environment:
 #include <minoca/types.h>
 #include <minoca/status.h>
 #include <minoca/im.h>
+#include "dbgext.h"
 #include "symbols.h"
 #include "stabs.h"
-#include "dbgext.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -209,7 +209,8 @@ DbgpStabsGetFramePointerRegister (
 
 DEBUG_SYMBOL_INTERFACE DbgStabsSymbolInterface = {
     DbgpStabsLoadSymbols,
-    DbgpStabsUnloadSymbols
+    DbgpStabsUnloadSymbols,
+    NULL
 };
 
 //
@@ -335,6 +336,7 @@ DbgpStabsLoadSymbols (
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
     ULONG Flags,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     )
 
@@ -354,6 +356,9 @@ Arguments:
 
     Flags - Supplies a bitfield of flags governing the behavior during load.
         These flags are specific to each symbol library.
+
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
 
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.
@@ -388,6 +393,7 @@ Return Value:
     memset(StabSymbols, 0, AllocationSize);
     StabSymbols->Interface = &DbgStabsSymbolInterface;
     StabSymbols->SymbolContext = StabSymbols + 1;
+    StabSymbols->HostContext = HostContext;
     StabState = StabSymbols->SymbolContext;
     INITIALIZE_LIST_HEAD(&(StabState->CrossReferenceListHead));
     StabState->CurrentModule = StabSymbols;

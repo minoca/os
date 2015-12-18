@@ -32,14 +32,6 @@ Author:
 #define MAX_EXTENSION_COMMAND 32
 
 //
-// Define image machine types.
-//
-
-#define MACHINE_TYPE_X86 0x1
-#define MACHINE_TYPE_ARMV7 0x2
-#define MACHINE_TYPE_ARMV6 0x3
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -511,7 +503,7 @@ INT
 DbgStackUnwind (
     PDEBUGGER_CONTEXT Context,
     PREGISTERS_UNION Registers,
-    BOOL AllRegisters,
+    PBOOL Unwind,
     PSTACK_FRAME Frame
     );
 
@@ -528,9 +520,10 @@ Arguments:
     Registers - Supplies a pointer to the registers on input. On output, these
         registers will be updated with the unwound value.
 
-    AllRegisters - Supplies a boolean indicating whether to unwind all
-        registers (TRUE) or just the instruction pointer and stack pointer
-        (FALSE).
+    Unwind - Supplies a pointer that on input should initially be set to TRUE,
+        indicating to use the symbol unwinder if possible. If unwinding is not
+        possible, this will be set to FALSE, and should remain FALSE for the
+        remainder of the stack frames unwound.
 
     Frame - Supplies a pointer where the basic frame information for this
         frame will be returned.

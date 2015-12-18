@@ -26,6 +26,7 @@ COMMON_OBJS = armdis.o     \
               coff.o       \
               consio.o     \
               dbgapi.o     \
+              dbgdwarf.o   \
               dbgeval.o    \
               dbgrcomm.o   \
               dbgrprof.o   \
@@ -34,6 +35,7 @@ COMMON_OBJS = armdis.o     \
               disasm.o     \
               dwarf.o      \
               dwexpr.o     \
+              dwframe.o    \
               dwline.o     \
               dwread.o     \
               elf.o        \

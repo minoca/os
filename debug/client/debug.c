@@ -28,8 +28,8 @@ Environment:
 #include <minoca/status.h>
 #include <minoca/spproto.h>
 #include <minoca/im.h>
-#include "symbols.h"
 #include "dbgext.h"
+#include "symbols.h"
 #include "dbgapi.h"
 #include "dbgrprof.h"
 #include "console.h"

@@ -28,7 +28,6 @@ Environment:
 #include <minoca/status.h>
 #include <minoca/im.h>
 #include "dwarfp.h"
-#include "dbgext.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -147,7 +146,8 @@ DwarfpProcessGenericBlock (
 
 DEBUG_SYMBOL_INTERFACE DwarfSymbolInterface = {
     DwarfLoadSymbols,
-    DwarfUnloadSymbols
+    DwarfUnloadSymbols,
+    DwarfStackUnwind
 };
 
 //
@@ -159,6 +159,7 @@ DwarfLoadSymbols (
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
     ULONG Flags,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     )
 
@@ -178,6 +179,9 @@ Arguments:
 
     Flags - Supplies a bitfield of flags governing the behavior during load.
         These flags are specific to each symbol library.
+
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
 
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.
@@ -227,6 +231,7 @@ Return Value:
     DwarfSymbols->Filename = strdup(Filename);
     DwarfSymbols->SymbolContext = DwarfSymbols + 1;
     DwarfSymbols->Interface = &DwarfSymbolInterface;
+    DwarfSymbols->HostContext = HostContext;
     Context = DwarfSymbols->SymbolContext;
     Context->SourcesHead = &(DwarfSymbols->SourcesHead);
     Context->Flags = Flags;
@@ -375,14 +380,12 @@ Return Value:
                       &(Sections->Frame.Size),
                       NULL);
 
-    if (Sections->Frame.Data == NULL) {
-        ImGetImageSection(&ImageBuffer,
-                          ".eh_frame",
-                          &(Sections->Frame.Data),
-                          NULL,
-                          &(Sections->Frame.Size),
-                          NULL);
-    }
+    ImGetImageSection(&ImageBuffer,
+                      ".eh_frame",
+                      &(Sections->EhFrame.Data),
+                      &(Sections->EhFrameAddress),
+                      &(Sections->EhFrame.Size),
+                      NULL);
 
     if ((Sections->Info.Data == NULL) ||
         (Sections->Abbreviations.Data == NULL)) {
@@ -1840,10 +1843,6 @@ Return Value:
     DwarfpGetAddressAttribute(Die,
                               DwarfAtHighPc,
                               &(Function->EndAddress));
-
-    if (Function->EndAddress != 0) {
-        Function->EndAddress += 1;
-    }
 
     if ((Function->EndAddress < Function->StartAddress) &&
         (Function->StartAddress != 0)) {

@@ -29,7 +29,6 @@ Environment:
 #include <minoca/status.h>
 #include <minoca/im.h>
 #include "dwarfp.h"
-#include "dbgext.h"
 
 #include <assert.h>
 #include <errno.h>

@@ -28,10 +28,10 @@ Environment:
 #include <minoca/types.h>
 #include <minoca/status.h>
 #include <minoca/im.h>
+#include "dbgext.h"
 #include "symbols.h"
 #include "stabs.h"
 #include "dwarf.h"
-#include "dbgext.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -100,6 +100,168 @@ TYPE_SYMBOL DbgVoidType = {
 };
 
 //
+// Define the machine register names.
+//
+
+PSTR DbgX86RegisterSymbolNames[] = {
+    "eax",
+    "ecx",
+    "edx",
+    "ebx",
+    "esp",
+    "ebp",
+    "esi",
+    "edi",
+    "eip",
+    "eflags",
+    "cs",
+    "ss",
+    "ds",
+    "es",
+    "fs",
+    "gs",
+    "st0",
+    "st1",
+    "st2",
+    "st3",
+    "st4",
+    "st5",
+    "st6",
+    "st7",
+    "xmm0",
+    "xmm1",
+    "xmm2",
+    "xmm3",
+    "xmm4",
+    "xmm5",
+    "xmm6",
+    "xmm7",
+};
+
+PSTR DbgX64RegisterSymbolNames[] = {
+    "rax",
+    "rdx",
+    "rcx",
+    "rbx",
+    "rsi",
+    "rdi",
+    "rbp",
+    "rsp",
+    "r8",
+    "r9",
+    "r10",
+    "r11",
+    "r12",
+    "r13",
+    "r14",
+    "r15",
+    "rip",
+    "xmm0",
+    "xmm1",
+    "xmm2",
+    "xmm3",
+    "xmm4",
+    "xmm5",
+    "xmm6",
+    "xmm7",
+    "xmm8",
+    "xmm9",
+    "xmm10",
+    "xmm11",
+    "xmm12",
+    "xmm13",
+    "xmm14",
+    "xmm15",
+    "st0",
+    "st1",
+    "st2",
+    "st3",
+    "st4",
+    "st5",
+    "st6",
+    "st7",
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    "eflags",
+    "es",
+    "cs",
+    "ss",
+    "ds",
+    "fs",
+    "gs",
+};
+
+PSTR DbgArmRegisterSymbolNames[] = {
+    "r0",
+    "r1",
+    "r2",
+    "r3",
+    "r4",
+    "r5",
+    "r6",
+    "r7",
+    "r8",
+    "r9",
+    "r10",
+    "r11",
+    "r12",
+    "sp",
+    "lr",
+    "pc",
+    "f0"
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "fps",
+    "cpsr"
+};
+
+PSTR DbgArmVfpRegisterSymbolNames[] = {
+    "d0",
+    "d1",
+    "d2",
+    "d3",
+    "d4",
+    "d5",
+    "d6",
+    "d7",
+    "d8",
+    "d9",
+    "d10",
+    "d11",
+    "d12",
+    "d13",
+    "d14",
+    "d15",
+    "d16",
+    "d17",
+    "d18",
+    "d19",
+    "d20",
+    "d21",
+    "d22",
+    "d23",
+    "d24",
+    "d25",
+    "d26",
+    "d27",
+    "d28",
+    "d29",
+    "d30",
+    "d31",
+};
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -107,6 +269,7 @@ INT
 DbgLoadSymbols (
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     )
 
@@ -123,6 +286,9 @@ Arguments:
     MachineType - Supplies the required machine type of the image. Set to
         unknown to allow the symbol library to load a file with any machine
         type.
+
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
 
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.
@@ -152,7 +318,12 @@ Return Value:
     LoadFunction = &(DbgSymbolLoaders[0]);
     Status = ENOSYS;
     while (*LoadFunction != NULL) {
-        Status = (*LoadFunction)(Filename, MachineType, 0, Symbols);
+        Status = (*LoadFunction)(Filename,
+                                 MachineType,
+                                 0,
+                                 HostContext,
+                                 Symbols);
+
         if (Status == 0) {
             break;
         }
@@ -1986,6 +2157,78 @@ Return Value:
     }
 
     return NULL;
+}
+
+PSTR
+DbgGetRegisterName (
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Register
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a string containing the name of the given register.
+
+Arguments:
+
+    MachineType - Supplies the machine type.
+
+    Register - Supplies the register number.
+
+Return Value:
+
+    Returns a pointer to a constant string containing the name of the register.
+
+--*/
+
+{
+
+    ULONG Count;
+    PSTR Name;
+
+    Name = NULL;
+    switch (MachineType) {
+    case ImageMachineTypeX86:
+        Count = sizeof(DbgX86RegisterSymbolNames) /
+                sizeof(DbgX86RegisterSymbolNames[0]);
+
+        if (Register < Count) {
+            Name = DbgX86RegisterSymbolNames[Register];
+        }
+
+        break;
+
+    case ImageMachineTypeArm32:
+        Count = sizeof(DbgArmRegisterSymbolNames) /
+                sizeof(DbgArmRegisterSymbolNames[0]);
+
+        if (Register < Count) {
+            Name = DbgArmRegisterSymbolNames[Register];
+            break;
+        }
+
+        Count = sizeof(DbgArmVfpRegisterSymbolNames) /
+                sizeof(DbgArmVfpRegisterSymbolNames[0]);
+
+        if ((Register >= ArmRegisterD0) &&
+            ((Register - ArmRegisterD0) < Count)) {
+
+            Name = DbgArmVfpRegisterSymbolNames[Register - ArmRegisterD0];
+        }
+
+        break;
+
+    default:
+        break;
+    }
+
+    if (Name == NULL) {
+        Name = "UNKNOWNREG";
+    }
+
+    return Name;
 }
 
 //

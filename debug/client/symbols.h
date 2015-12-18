@@ -199,6 +199,7 @@ INT
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
     ULONG Flags,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     );
 
@@ -218,6 +219,9 @@ Arguments:
 
     Flags - Supplies a bitfield of flags governing the behavior during load.
         These flags are specific to each symbol library.
+
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
 
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.
@@ -253,6 +257,41 @@ Return Value:
 
 --*/
 
+typedef
+INT
+(*PSYMBOLS_STACK_UNWIND) (
+    PDEBUG_SYMBOLS Symbols,
+    ULONGLONG DebasedPc,
+    PSTACK_FRAME Frame
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to unwind the stack by one frame.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the debug symbols.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus loaded
+        base difference of the module).
+
+    Frame - Supplies a pointer where the basic frame information for this
+        frame will be returned.
+
+Return Value:
+
+    0 on success.
+
+    EOF if there are no more stack frames.
+
+    Returns an error code on failure.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -265,11 +304,16 @@ Members:
 
     Unload - Stores a pointer to a function that unloads loaded symbols.
 
+    Unwind - Stores an optional pointer to a function that can unwind the
+        target stack. If not supplied, then traditional frame chaining will be
+        used.
+
 --*/
 
 typedef struct _DEBUG_SYMBOL_INTERFACE {
     PSYMBOLS_LOAD Load;
     PSYMBOLS_UNLOAD Unload;
+    PSYMBOLS_STACK_UNWIND Unwind;
 } DEBUG_SYMBOL_INTERFACE, *PDEBUG_SYMBOL_INTERFACE;
 
 /*++
@@ -312,6 +356,14 @@ Members:
     Interface - Stores a pointer to a table of functions used to interact with
         the symbol library.
 
+    HostContext - Stores a pointer's worth of context for the user of the
+        debug symbols library. This currently holds a pointer back to the
+        debugger context.
+
+    RegistersContext - Stores an optional pointer's worth of context regarding
+        which set of registers to access when the symbol library needs to do
+        accesses.
+
 --*/
 
 struct _DEBUG_SYMBOLS {
@@ -322,6 +374,8 @@ struct _DEBUG_SYMBOLS {
     LIST_ENTRY SourcesHead;
     PVOID SymbolContext;
     PDEBUG_SYMBOL_INTERFACE Interface;
+    PVOID HostContext;
+    PVOID RegistersContext;
 };
 
 /*++
@@ -937,6 +991,7 @@ INT
 DbgLoadSymbols (
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     );
 
@@ -953,6 +1008,9 @@ Arguments:
     MachineType - Supplies the required machine type of the image. Set to
         unknown to allow the symbol library to load a file with any machine
         type.
+
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
 
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.
@@ -1419,6 +1477,30 @@ Return Value:
     If a successful match is found, returns Input with the search results filled
     into the structure. If no result was found or an error occurred, NULL is
     returned.
+
+--*/
+
+PSTR
+DbgGetRegisterName (
+    IMAGE_MACHINE_TYPE MachineType,
+    ULONG Register
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns a string containing the name of the given register.
+
+Arguments:
+
+    MachineType - Supplies the machine type.
+
+    Register - Supplies the register number.
+
+Return Value:
+
+    Returns a pointer to a constant string containing the name of the register.
 
 --*/
 

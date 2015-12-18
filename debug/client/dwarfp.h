@@ -22,6 +22,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
+#include "dbgext.h"
 #include "symbols.h"
 #include "dwarf.h"
 
@@ -318,6 +319,126 @@ typedef struct _DWARF_COMPLEX_DATA_SYMBOL {
     PDWARF_COMPILATION_UNIT Unit;
     DWARF_ATTRIBUTE_VALUE LocationAttribute;
 } DWARF_COMPLEX_DATA_SYMBOL, *PDWARF_COMPLEX_DATA_SYMBOL;
+
+/*++
+
+Structure Description:
+
+    This structure stores a parsed out DWARF Common Information Entry, which
+    provides information common to several Frame Description Entries.
+
+Members:
+
+    EhFrame - Stores a boolean indicating if this structure was picked out of
+        .eh_frame section (TRUE) or a .debug_frame section (FALSE).
+
+    Is64Bit - Stores a boolean indicating whether or not this CIE contains
+        64-bit addresses or not.
+
+    Version - Stores the CIE version.
+
+    UnitLength - Stores the length of the CIE, not including the unit length
+        field itself.
+
+    Augmentation - Stores a pointer to a UTF-8 string that describes the data
+        augmentation format.
+
+    AddressSize - Stores the size of an address.
+
+    SegmentSize - Stores the size of a segment selector, in bytes.
+
+    CodeAlignmentFactor - Stores the value factored out of all advance location
+        instructions.
+
+    DataAlignmentFactor - Stores the constant factored out of certain offset
+        instructions. The resulting value is operand * DataAlignmentFactor.
+
+    ReturnAddressRegister - Stores the register in the rule table that
+        represents the return address.
+
+    AugmentationLength - Stores the length of the augmentation data.
+
+    AugmentationData - Stores a pointer to the augmentation data.
+
+    LanguageEncoding - Stores the encoding in the Language Specific Data Area.
+
+    Personality - Stores the personality encoding.
+
+    FdeEncoding - Stores the encoding of address in the following FDEs.
+
+    Start - Stores a pointer to the start of the CIE.
+
+    InitialInstructions - Stores a pointer to the initial instructions to
+        execute to set up the initial values of the columns in the table.
+
+    End - Stores a pointer to the first byte not in the CIE.
+
+--*/
+
+typedef struct _DWARF_CIE {
+    BOOL EhFrame;
+    BOOL Is64Bit;
+    UCHAR Version;
+    ULONGLONG UnitLength;
+    PSTR Augmentation;
+    UCHAR AddressSize;
+    UCHAR SegmentSize;
+    DWARF_LEB128 CodeAlignmentFactor;
+    DWARF_SLEB128 DataAlignmentFactor;
+    DWARF_LEB128 ReturnAddressRegister;
+    DWARF_LEB128 AugmentationLength;
+    PUCHAR AugmentationData;
+    DWARF_ADDRESS_ENCODING LanguageEncoding;
+    DWARF_ADDRESS_ENCODING Personality;
+    DWARF_ADDRESS_ENCODING FdeEncoding;
+    PUCHAR Start;
+    PUCHAR InitialInstructions;
+    PUCHAR End;
+} DWARF_CIE, *PDWARF_CIE;
+
+/*++
+
+Structure Description:
+
+    This structure stores a parsed out DWARF Frame Description Entry, which
+    describes how to unwind a frame.
+
+Members:
+
+    Length - Stores the length of the FDE, not including the length
+        field itself.
+
+    CiePointer - Stores a pointer to the CIE that owns this FDE. For
+        .debug_frame FDEs, this is an offset from the start of the .debug_frame
+        section. For .eh_frame FDEs, this is a negative offset from the start
+        of this field to the CIE (that is, positive values go backwards to a
+        CIE).
+
+    InitialLocation - Stores the starting address the FDE covers.
+
+    Range - Stores the number of bytes the FDE covers from the starting address.
+
+    AugmentationLength - Stores the length of the augmentation data.
+
+    Start - Stores a pointer to the start of the FDE.
+
+    Instructions - Stores a pointer to the beginning of the instructions for
+        unwinding this frame.
+
+    End - Stores a pointer to the first byte not in the FDE.
+
+--*/
+
+typedef struct _DWARF_FDE {
+    ULONGLONG Length;
+    LONGLONG CiePointer;
+    ULONGLONG InitialLocation;
+    ULONGLONG Range;
+    ULONGLONG AugmentationLength;
+    PUCHAR Start;
+    PUCHAR Instructions;
+    PUCHAR End;
+} DWARF_FDE, *PDWARF_FDE;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -955,11 +1076,58 @@ Return Value:
 
 --*/
 
+INT
+DwarfpEvaluateSimpleExpression (
+    PDWARF_CONTEXT Context,
+    UCHAR AddressSize,
+    PDWARF_COMPILATION_UNIT Unit,
+    ULONGLONG InitialPush,
+    PUCHAR Expression,
+    UINTN Size,
+    PDWARF_LOCATION Location
+    );
+
+/*++
+
+Routine Description:
+
+    This routine evaluates a simple DWARF expression. A simple expression is
+    one that is not possibly a location list, and will ultimately contain only
+    a single piece.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    AddressSize - Supplies the size of an address on the target.
+
+    Unit - Supplies an optional pointer to the compilation unit.
+
+    InitialPush - Supplies a value to push onto the stack initially. Supply
+        -1ULL to not push anything onto the stack initially.
+
+    Expression - Supplies a pointer to the expression bytes to evaluate.
+
+    Size - Supplies the size of the expression in bytes.
+
+    Location - Supplies a pointer where the location information will be
+        returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error code on failure.
+
+--*/
+
 VOID
 DwarfpPrintExpression (
     PDWARF_CONTEXT Context,
+    UCHAR AddressSize,
     PDWARF_COMPILATION_UNIT Unit,
-    PDWARF_ATTRIBUTE_VALUE AttributeValue
+    PUCHAR Expression,
+    UINTN Size
     );
 
 /*++
@@ -972,10 +1140,15 @@ Arguments:
 
     Context - Supplies a pointer to the context.
 
-    Unit - Supplies a pointer to the compilation unit.
+    AddressSize - Supplies the size of an address on the target.
 
-    AttributeValue - Supplies a pointer to the value, which should be of type
-        expression location.
+    Unit - Supplies an optional pointer to the compilation unit.
+
+    Expression - Supplies a pointer to the expression bytes.
+
+    ExpressionEnd - Supplies the first byte beyond the expression bytes.
+
+    Size - Supplies the size of the expression in bytes.
 
 Return Value:
 
@@ -1010,6 +1183,128 @@ Return Value:
     0 on success.
 
     Returns an error number on failure.
+
+--*/
+
+//
+// Functions implemented outside the library called by the DWARF library.
+//
+
+INT
+DwarfTargetRead (
+    PDWARF_CONTEXT Context,
+    ULONGLONG TargetAddress,
+    ULONGLONG Size,
+    ULONG AddressSpace,
+    PVOID Buffer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a read from target memory.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    TargetAddress - Supplies the address to read from.
+
+    Size - Supplies the number of bytes to read.
+
+    AddressSpace - Supplies the address space identifier. Supply 0 for normal
+        memory.
+
+    Buffer - Supplies a pointer where the read data will be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+DwarfTargetReadRegister (
+    PDWARF_CONTEXT Context,
+    ULONG Register,
+    PULONGLONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads a register value.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    Register - Supplies the register to read.
+
+    Value - Supplies a pointer where the value will be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+DwarfTargetWriteRegister (
+    PDWARF_CONTEXT Context,
+    ULONG Register,
+    ULONGLONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine writes a register value.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    Register - Supplies the register to write.
+
+    Value - Supplies the new value of the register.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+PSTR
+DwarfGetRegisterName (
+    PDWARF_CONTEXT Context,
+    ULONG Register
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns a string containing the name of the given register.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Register - Supplies the register number.
+
+Return Value:
+
+    Returns a pointer to a constant string containing the name of the register.
 
 --*/
 

@@ -47,6 +47,18 @@ Author:
 #define DWARF_CONTEXT_DEBUG_LINE_NUMBERS 0x00000004
 
 //
+// Set this flag to print unwinding information.
+//
+
+#define DWARF_CONTEXT_DEBUG_FRAMES 0x00000008
+
+//
+// Set this flag to print just the unwinding results.
+//
+
+#define DWARF_CONTEXT_VERBOSE_UNWINDING 0x00000010
+
+//
 // Define the maximum currently implemented depth of the stack. Bump this up if
 // applications seem to be heavily using the DWARF expression stack.
 //
@@ -479,7 +491,8 @@ typedef enum _DWARF_MACRO_INFORMATION {
 } DWARF_MACRO_INFORMATION, *PDWARF_MACRO_INFORMATION;
 
 typedef enum _DWARF_CALL_FRAME_ENCODING {
-    DwarfCfaNop = 0x01,
+    DwarfCfaNop = 0x00,
+    DwarfCfaSetLoc = 0x01,
     DwarfCfaAdvanceLoc1 = 0x02,
     DwarfCfaAdvanceLoc2 = 0x03,
     DwarfCfaAdvanceLoc4 = 0x04,
@@ -505,8 +518,31 @@ typedef enum _DWARF_CALL_FRAME_ENCODING {
     DwarfCfaHighUser = 0x3F,
     DwarfCfaAdvanceLoc = 0x40,
     DwarfCfaOffset = 0x80,
-    DwarfCfaRestore = 0xC0
+    DwarfCfaRestore = 0xC0,
+    DwarfCfaHighMask = 0xC0
 } DWARF_CALL_FRAME_ENCODING, *PDWARF_CALL_FRAME_ENCODING;
+
+typedef enum _DWARF_ADDRESS_ENCODING {
+    DwarfPeAbsolute = 0x00,
+    DwarfPeLeb128 = 0x01,
+    DwarfPeUdata2 = 0x02,
+    DwarfPeUdata4 = 0x03,
+    DwarfPeUdata8 = 0x04,
+    DwarfPeSigned = 0x08,
+    DwarfPeSleb128 = 0x09,
+    DwarfPeSdata2 = 0x0A,
+    DwarfPeSdata4 = 0x0B,
+    DwarfPeSdata8 = 0x0C,
+    DwarfPeTypeMask = 0x0F,
+    DwarfPePcRelative = 0x10,
+    DwarfPeTextRelative = 0x20,
+    DwarfPeDataRelative = 0x30,
+    DwarfPeFunctionRelative = 0x40,
+    DwarfPeAligned = 0x50,
+    DwarfPeModifierMask = 0x70,
+    DwarfPeIndirect = 0x80,
+    DwarfPeOmit = 0xFF,
+} DWARF_ADDRESS_ENCODING, *PDWARF_ADDRESS_ENCODING;
 
 //
 // Parser data types.
@@ -570,7 +606,11 @@ Members:
 
     Types - Stores the .debug_types type information, new in DWARF4.
 
-    Frame - Stores the .debug_frame section, or the .eh_frame section.
+    Frame - Stores the .debug_frame section.
+
+    EhFrame - Stores the .eh_frame section.
+
+    EhFrameAddress - Stores the virtual address of the .eh_frame section.
 
 --*/
 
@@ -587,6 +627,8 @@ typedef struct _DWARF_DEBUG_SECTIONS {
     DWARF_SECTION PubTypes;
     DWARF_SECTION Types;
     DWARF_SECTION Frame;
+    DWARF_SECTION EhFrame;
+    ULONGLONG EhFrameAddress;
 } DWARF_DEBUG_SECTIONS, *PDWARF_DEBUG_SECTIONS;
 
 /*++
@@ -708,6 +750,8 @@ Members:
 
     Unit - Stores a pointer to the compilation unit the expression lives in.
 
+    AddressSize - Stores the size of a target address.
+
     Pc - Stores the current value of the instruction pointer, which may be
         needed for computing the frame base.
 
@@ -734,6 +778,7 @@ typedef struct _DWARF_LOCATION_CONTEXT {
     ULONGLONG Stack[DWARF_EXPRESSION_STACK_SIZE];
     ULONG StackSize;
     PDWARF_COMPILATION_UNIT Unit;
+    UCHAR AddressSize;
     ULONGLONG Pc;
     ULONGLONG ObjectAddress;
     ULONGLONG TlsBase;
@@ -756,6 +801,7 @@ DwarfLoadSymbols (
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
     ULONG Flags,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     );
 
@@ -776,6 +822,9 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior during load.
         These flags are specific to each symbol library.
 
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
+
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.
 
@@ -784,6 +833,40 @@ Return Value:
     0 on success.
 
     Returns an error number on failure.
+
+--*/
+
+INT
+DwarfStackUnwind (
+    PDEBUG_SYMBOLS Symbols,
+    ULONGLONG DebasedPc,
+    PSTACK_FRAME Frame
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to unwind the stack by one frame.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the debug symbols.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus loaded
+        base difference of the module).
+
+    Frame - Supplies a pointer where the basic frame information for this
+        frame will be returned.
+
+Return Value:
+
+    0 on success.
+
+    EOF if there are no more stack frames.
+
+    Returns an error code on failure.
 
 --*/
 

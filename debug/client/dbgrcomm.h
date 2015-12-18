@@ -2477,11 +2477,12 @@ Return Value:
 
 --*/
 
-ULONGLONG
+INT
 DbgGetRegister (
     PDEBUGGER_CONTEXT Context,
     PREGISTERS_UNION Registers,
-    ULONG RegisterNumber
+    ULONG RegisterNumber,
+    PULONGLONG RegisterValue
     );
 
 /*++
@@ -2499,11 +2500,51 @@ Arguments:
 
     RegisterNumber - Supplies the register index to get.
 
+    RegisterValue - Supplies a pointer where the register value will be
+        returned on success.
+
 Return Value:
 
-    Returns the register at the given index.
+    0 on success.
 
-    -1 if the register does not exist.
+    EINVAL if the register number is invalid.
+
+    Other error codes on other failures.
+
+--*/
+
+INT
+DbgSetRegister (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
+    ULONG RegisterNumber,
+    ULONGLONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the contents of a register given its register number.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies a pointer to the current machine context. The register
+        value will be set in this context.
+
+    RegisterNumber - Supplies the register index to set.
+
+    Value - Supplies the new value to set.
+
+Return Value:
+
+    0 on success.
+
+    EINVAL if the register number is invalid.
+
+    Other error codes on other failures.
 
 --*/
 

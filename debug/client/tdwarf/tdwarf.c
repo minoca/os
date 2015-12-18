@@ -42,20 +42,21 @@ Environment:
 //
 
 #define TDWARF_USAGE \
-    "usage: tdwarf [options] [files...]\n" \
-    "Options are:\n" \
-    "  -A, --all -- Print everything.\n" \
-    "  -a, --arguments -- Print function parameters.\n" \
-    "  -D, --debug -- Enable debugging in the symbol parser.\n" \
-    "  -f, --files -- Print parsed source file information.\n" \
-    "  -g, --globals -- Print global variables.\n" \
-    "  -i, --lines -- Print source file lines.\n" \
-    "  -l, --locals -- Print function local variables.\n" \
-    "  -p, --functions -- Print function/subroutine information.\n" \
-    "  -t, --types -- Print parsed type information.\n" \
-    "  -h, --help -- Print this help and exit.\n" \
+    "usage: tdwarf [options] [files...]\n"                                     \
+    "Options are:\n"                                                           \
+    "  -A, --all -- Print everything (except debug).\n"                        \
+    "  -a, --arguments -- Print function parameters.\n"                        \
+    "  -D, --debug -- Enable debugging in the symbol parser.\n"                \
+    "  -f, --files -- Print parsed source file information.\n"                 \
+    "  -g, --globals -- Print global variables.\n"                             \
+    "  -i, --lines -- Print source file lines.\n"                              \
+    "  -l, --locals -- Print function local variables.\n"                      \
+    "  -p, --functions -- Print function/subroutine information.\n"            \
+    "  -t, --types -- Print parsed type information.\n"                        \
+    "  -u, --unwind -- Print frame unwind info.\n"                             \
+    "  -h, --help -- Print this help and exit.\n"                              \
 
-#define TDWARF_OPTIONS_STRING "AaDfgilhpt"
+#define TDWARF_OPTIONS_STRING "AaDfgilhptu"
 
 #define TDWARF_OPTION_PRINT_FILES 0x00000001
 #define TDWARF_OPTION_PRINT_TYPES 0x00000002
@@ -64,7 +65,8 @@ Environment:
 #define TDWARF_OPTION_PRINT_LOCALS 0x00000010
 #define TDWARF_OPTION_PRINT_GLOBALS 0x00000020
 #define TDWARF_OPTION_PRINT_LINES 0x00000040
-#define TDWARF_OPTION_DEBUG 0x00000080
+#define TDWARF_OPTION_PRINT_UNWIND 0x00000080
+#define TDWARF_OPTION_DEBUG 0x00000100
 
 #define TDWARF_OPTION_PRINT_ALL         \
     (TDWARF_OPTION_PRINT_FILES |        \
@@ -73,7 +75,8 @@ Environment:
      TDWARF_OPTION_PRINT_PARAMETERS |   \
      TDWARF_OPTION_PRINT_LOCALS |       \
      TDWARF_OPTION_PRINT_GLOBALS |      \
-     TDWARF_OPTION_PRINT_LINES)
+     TDWARF_OPTION_PRINT_LINES |        \
+     TDWARF_OPTION_PRINT_UNWIND)
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -83,22 +86,31 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+//
+// Borrowing internal DWARF library routines.
+//
+
+INT
+DwarfpReadCieOrFde (
+    PDWARF_CONTEXT Context,
+    BOOL EhFrame,
+    PUCHAR *Table,
+    PUCHAR End,
+    PDWARF_CIE Cie,
+    PDWARF_FDE Fde,
+    PBOOL IsCie
+    );
+
 INT
 TdwarfTestDwarf (
     ULONG Options,
     PSTR FilePath
     );
 
-PTYPE_SYMBOL
-TdwarfGetType (
-    PSOURCE_FILE_SYMBOL File,
-    LONG Number
-    );
-
-VOID
-TdwarfPrintDwarfLocation (
+INT
+TdwarfTestUnwind (
     PDEBUG_SYMBOLS Symbols,
-    PDWARF_LOCATION Location
+    ULONG Options
     );
 
 INT
@@ -112,10 +124,21 @@ TdwarfProcessVariable (
     PDATA_SYMBOL Variable
     );
 
-PSTR
-TdwarfGetRegisterName (
+VOID
+TdwarfPrintAddressEncoding (
+    DWARF_ADDRESS_ENCODING Encoding
+    );
+
+PTYPE_SYMBOL
+TdwarfGetType (
+    PSOURCE_FILE_SYMBOL File,
+    LONG Number
+    );
+
+VOID
+TdwarfPrintDwarfLocation (
     PDEBUG_SYMBOLS Symbols,
-    ULONG Register
+    PDWARF_LOCATION Location
     );
 
 //
@@ -132,131 +155,28 @@ struct option TdwarfLongOptions[] = {
     {"locals", no_argument, 0, 'l'},
     {"functions", no_argument, 0, 'p'},
     {"types", no_argument, 0, 't'},
+    {"unwind", no_argument, 0, 'u'},
     {"help", no_argument, 0, 'h'},
     {NULL, 0, 0, 0},
 };
 
-PSTR TdwarfX86RegisterNames[] = {
-    "eax",
-    "ecx",
-    "edx",
-    "ebx",
-    "esp",
-    "ebp",
-    "esi",
-    "edi",
-    "eip",
-    "eflags",
-    "cs",
-    "ss",
-    "ds",
-    "es",
-    "fs",
-    "gs",
-    "st0",
-    "st1",
-    "st2",
-    "st3",
-    "st4",
-    "st5",
-    "st6",
-    "st7",
-    "xmm0",
-    "xmm1",
-    "xmm2",
-    "xmm3",
-    "xmm4",
-    "xmm5",
-    "xmm6",
-    "xmm7",
-};
-
-PSTR TdwarfX64RegisterNames[] = {
-    "rax",
-    "rdx",
-    "rcx",
-    "rbx",
-    "rsi",
-    "rdi",
-    "rbp",
-    "rsp",
-    "r8",
-    "r9",
-    "r10",
-    "r11",
-    "r12",
-    "r13",
-    "r14",
-    "r15",
-    "rip",
-    "xmm0",
-    "xmm1",
-    "xmm2",
-    "xmm3",
-    "xmm4",
-    "xmm5",
-    "xmm6",
-    "xmm7",
-    "xmm8",
-    "xmm9",
-    "xmm10",
-    "xmm11",
-    "xmm12",
-    "xmm13",
-    "xmm14",
-    "xmm15",
-    "st0",
-    "st1",
-    "st2",
-    "st3",
-    "st4",
-    "st5",
-    "st6",
-    "st7",
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    "eflags",
-    "es",
-    "cs",
-    "ss",
-    "ds",
-    "fs",
-    "gs",
-};
-
-PSTR TdwarfArmRegisterNames[] = {
-    "r0",
-    "r1",
-    "r2",
-    "r3",
-    "r4",
-    "r5",
-    "r6",
-    "r7",
-    "r8",
-    "r9",
-    "r10",
-    "r11",
-    "r12",
-    "sp",
-    "lr",
-    "pc",
-    "f0"
-    "f1",
-    "f2",
-    "f3",
-    "f4",
-    "f5",
-    "f6",
-    "f7",
-    "fps",
-    "cpsr"
+PSTR DwarfAddressEncodingNames[] = {
+    "DwarfPeAbsolute",
+    "DwarfPeLeb128",
+    "DwarfPeUdata2",
+    "DwarfPeUdata4",
+    "DwarfPeUdata8",
+    "DwarfPeINVALID",
+    "DwarfPeINVALID",
+    "DwarfPeINVALID",
+    "DwarfPeSigned",
+    "DwarfPeSleb128",
+    "DwarfPeSdata2",
+    "DwarfPeSdata4",
+    "DwarfPeSdata8",
+    "DwarfPeINVALID",
+    "DwarfPeINVALID",
+    "DwarfPeINVALID",
 };
 
 TYPE_SYMBOL TdwarfVoidType;
@@ -353,6 +273,10 @@ Return Value:
 
         case 't':
             Options |= TDWARF_OPTION_PRINT_TYPES;
+            break;
+
+        case 'u':
+            Options |= TDWARF_OPTION_PRINT_UNWIND;
             break;
 
         case 'h':
@@ -466,9 +390,15 @@ Return Value:
                      DWARF_CONTEXT_DEBUG_ABBREVIATIONS;
     }
 
+    if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
+        DwarfFlags |= DWARF_CONTEXT_DEBUG_FRAMES |
+                      DWARF_CONTEXT_VERBOSE_UNWINDING;
+    }
+
     Status = DwarfLoadSymbols(FilePath,
                               ImageMachineTypeUnknown,
                               DwarfFlags,
+                              NULL,
                               &Symbols);
 
     if (Status != 0) {
@@ -481,6 +411,11 @@ Return Value:
     }
 
     Context = Symbols->SymbolContext;
+    Status = TdwarfTestUnwind(Symbols, Options);
+    if (Status != 0) {
+        fprintf(stderr, "Unwind test failed: %s\n", strerror(Status));
+        goto TestDwarfEnd;
+    }
 
     //
     // Iterate through all the symbols, and print what's desired.
@@ -788,7 +723,7 @@ Return Value:
             while (DataEntry != &(Function->ParametersHead)) {
                 DataSymbol = LIST_VALUE(DataEntry, DATA_SYMBOL, ListEntry);
                 Status = TdwarfProcessVariable(Context,
-                                               NULL,
+                                               Symbols,
                                                Options,
                                                TDWARF_OPTION_PRINT_PARAMETERS,
                                                5,
@@ -824,7 +759,7 @@ Return Value:
             while (DataEntry != &(Function->LocalsHead)) {
                 DataSymbol = LIST_VALUE(DataEntry, DATA_SYMBOL, ListEntry);
                 Status = TdwarfProcessVariable(Context,
-                                               NULL,
+                                               Symbols,
                                                Options,
                                                TDWARF_OPTION_PRINT_LOCALS,
                                                5,
@@ -859,7 +794,7 @@ Return Value:
         while (DataEntry != &(File->DataSymbolsHead)) {
             DataSymbol = LIST_VALUE(DataEntry, DATA_SYMBOL, ListEntry);
             Status = TdwarfProcessVariable(Context,
-                                           NULL,
+                                           Symbols,
                                            Options,
                                            TDWARF_OPTION_PRINT_GLOBALS,
                                            3,
@@ -1014,7 +949,9 @@ Return Value:
 
     switch (Variable->LocationType) {
     case DataLocationRegister:
-        Register = TdwarfGetRegisterName(NULL, Variable->Location.Register);
+        Register = DbgGetRegisterName(Symbols->Machine,
+                                      Variable->Location.Register);
+
         if (Print != FALSE) {
             printf(" @%s", Register);
         }
@@ -1022,8 +959,8 @@ Return Value:
         break;
 
     case DataLocationIndirect:
-        Register = TdwarfGetRegisterName(NULL,
-                                         Variable->Location.Indirect.Register);
+        Register = DbgGetRegisterName(Symbols->Machine,
+                                      Variable->Location.Indirect.Register);
 
         if (Print != FALSE) {
             printf(" [%s%+I64d]", Register, Variable->Location.Indirect.Offset);
@@ -1187,57 +1124,237 @@ Return Value:
     return Status;
 }
 
-PSTR
-TdwarfGetRegisterName (
+INT
+TdwarfTestUnwind (
     PDEBUG_SYMBOLS Symbols,
-    ULONG Register
+    ULONG Options
     )
 
 /*++
 
 Routine Description:
 
-    This routine returns a string describing the register for the target
-    machine.
+    This routine exercises the DWARF unwind code by asking it to unwind every
+    possible frame at its highest PC.
 
 Arguments:
 
-    Symbols - Supplies a pointer to the debug symbols.
+    Symbols - Supplies a pointer to the loaded symbols.
 
-    Register - Supplies the register number to print.
+    Options - Supplies the TDWARF_OPTION_* options.
 
 Return Value:
 
-    Returns a pointer to a string containing the register number.
+    0 on success.
+
+    Returns an error number on failure.
 
 --*/
 
 {
 
-    ULONG Count;
+    DWARF_CIE Cie;
+    PDWARF_CONTEXT Context;
+    BOOL EhFrame;
+    PUCHAR End;
+    DWARF_FDE Fde;
+    STACK_FRAME Frame;
+    BOOL IsCie;
+    PUCHAR ObjectStart;
+    ULONGLONG Pc;
+    PUCHAR Start;
+    INT Status;
+    PUCHAR Table;
 
-    if ((Symbols == NULL) || (Symbols->Machine == ImageMachineTypeX86)) {
-        Count = sizeof(TdwarfX86RegisterNames) /
-                sizeof(TdwarfX86RegisterNames[0]);
+    Context = Symbols->SymbolContext;
 
-        if (Register < Count) {
-            return TdwarfX86RegisterNames[Register];
+    //
+    // Get the .debug_frame or .eh_frame sections.
+    //
+
+    if (Context->Sections.Frame.Size != 0) {
+        Table = Context->Sections.Frame.Data;
+        End = Table + Context->Sections.Frame.Size;
+        if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
+            printf(".debug_frame section, %d bytes\n", End - Table);
         }
 
-    } else if (Symbols->Machine == ImageMachineTypeArm32) {
-        Count = sizeof(TdwarfArmRegisterNames) /
-                sizeof(TdwarfArmRegisterNames[0]);
+        EhFrame = FALSE;
 
-        if (Register < Count) {
-            return TdwarfArmRegisterNames[Register];
+    } else if (Context->Sections.EhFrame.Size != 0) {
+        Table = Context->Sections.EhFrame.Data;
+        End = Table + Context->Sections.EhFrame.Size;
+        if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
+            printf(".eh_frame section, %d bytes\n", End - Table);
+        }
+
+        EhFrame = TRUE;
+
+    } else {
+        Status = ENOENT;
+        goto TestUnwindEnd;
+    }
+
+    Start = Table;
+    memset(&Cie, 0, sizeof(DWARF_CIE));
+    memset(&Fde, 0, sizeof(DWARF_FDE));
+
+    //
+    // Loop through the table and try an unwind on every FDE found.
+    //
+
+    while (Table < End) {
+        ObjectStart = Table;
+        Status = DwarfpReadCieOrFde(Context,
+                                    EhFrame,
+                                    &Table,
+                                    End,
+                                    &Cie,
+                                    &Fde,
+                                    &IsCie);
+
+        if (Status != 0) {
+            if (Status == EAGAIN) {
+                if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
+                    printf(" Zero terminator Offset %x.\n\n",
+                           ObjectStart - Start);
+                }
+
+                continue;
+            }
+
+            goto TestUnwindEnd;
+        }
+
+        if (IsCie != FALSE) {
+            if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
+                printf(" CIE Offset %x Length %I64x\n"
+                       "  Version: %d\n"
+                       "  Augmentation: \"%s\"\n"
+                       "  Address Size: %d\n"
+                       "  Segment Size: %d\n"
+                       "  Code Alignment Factor: %I64u\n"
+                       "  Data Alignment Factor: %I64d\n"
+                       "  Return Address Register: %I64u\n"
+                       "  Augmentation Length: %I64u\n"
+                       "  Language Encoding: ",
+                       ObjectStart - Start,
+                       Cie.UnitLength,
+                       Cie.Version,
+                       Cie.Augmentation,
+                       Cie.AddressSize,
+                       Cie.SegmentSize,
+                       Cie.CodeAlignmentFactor,
+                       Cie.DataAlignmentFactor,
+                       Cie.ReturnAddressRegister,
+                       Cie.AugmentationLength);
+
+                TdwarfPrintAddressEncoding(Cie.LanguageEncoding);
+                printf("\n  Personality: ");
+                TdwarfPrintAddressEncoding(Cie.Personality);
+                printf("\n  FdeEncoding: ");
+                TdwarfPrintAddressEncoding(Cie.FdeEncoding);
+                printf("\n\n");
+            }
+
+            continue;
+
+        } else {
+            if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
+                printf("  FDE Offset %x Length %I64x CIE %I64d "
+                       "PC %I64x - %I64x\n",
+                       ObjectStart - Start,
+                       Fde.Length,
+                       Fde.CiePointer,
+                       Fde.InitialLocation,
+                       Fde.InitialLocation + Fde.Range);
+            }
+
+            Pc = Fde.InitialLocation + Fde.Range - 1;
+            Status = DwarfStackUnwind(Symbols, Pc, &Frame);
+            if (Status != 0) {
+                fprintf(stderr,
+                        "Error: Failed to unwind stack for PC %I64x.\n",
+                        Pc);
+
+                goto TestUnwindEnd;
+            }
+
+            if ((Options & TDWARF_OPTION_PRINT_UNWIND) != 0) {
+                printf("\n");
+            }
         }
     }
 
-    fprintf(stderr, "Error: Unknown register number %d\n", Register);
+    Status = 0;
 
-    assert(FALSE);
+TestUnwindEnd:
+    return Status;
+}
 
-    return "UnknownRegister";
+VOID
+TdwarfPrintAddressEncoding (
+    DWARF_ADDRESS_ENCODING Encoding
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a description of the given address encoding.
+
+Arguments:
+
+    Encoding - Supplies the address encoding value.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (Encoding == DwarfPeOmit) {
+        printf("DwarfPeOmit");
+        return;
+    }
+
+    printf("%s", DwarfAddressEncodingNames[Encoding & DwarfPeTypeMask]);
+    switch (Encoding & DwarfPeModifierMask) {
+    case DwarfPeAbsolute:
+        break;
+
+    case DwarfPePcRelative:
+        printf(", DwarfPePcRelative");
+        break;
+
+    case DwarfPeTextRelative:
+        printf(", DwarfPeTextRelative");
+        break;
+
+    case DwarfPeDataRelative:
+        printf(", DwarfPeDataRelative");
+        break;
+
+    case DwarfPeFunctionRelative:
+        printf(", DwarfPeFunctionRelative");
+        break;
+
+    case DwarfPeAligned:
+        printf(", DwarfPeAligned");
+        break;
+
+    default:
+        printf(", Unknown%x", Encoding & DwarfPeModifierMask);
+        break;
+    }
+
+    if ((Encoding & DwarfPeIndirect) != 0) {
+        printf(", DwarfPeIndirect");
+    }
+
+    return;
 }
 
 PTYPE_SYMBOL
@@ -1324,7 +1441,9 @@ Return Value:
             break;
 
         case DwarfLocationRegister:
-            Register = TdwarfGetRegisterName(Symbols, Location->Value.Register);
+            Register = DbgGetRegisterName(Symbols->Machine,
+                                          Location->Value.Register);
+
             printf(" @%s", Register);
             break;
 
@@ -1367,6 +1486,153 @@ Return Value:
     }
 
     return;
+}
+
+//
+// Routines called by the DWARF library.
+//
+
+INT
+DwarfTargetRead (
+    PDWARF_CONTEXT Context,
+    ULONGLONG TargetAddress,
+    ULONGLONG Size,
+    ULONG AddressSpace,
+    PVOID Buffer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a read from target memory.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    TargetAddress - Supplies the address to read from.
+
+    Size - Supplies the number of bytes to read.
+
+    AddressSpace - Supplies the address space identifier. Supply 0 for normal
+        memory.
+
+    Buffer - Supplies a pointer where the read data will be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    memset(Buffer, 0, Size);
+    return 0;
+}
+
+INT
+DwarfTargetReadRegister (
+    PDWARF_CONTEXT Context,
+    ULONG Register,
+    PULONGLONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads a register value.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    Register - Supplies the register to read.
+
+    Value - Supplies a pointer where the value will be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    *Value = 0;
+    return 0;
+}
+
+INT
+DwarfTargetWriteRegister (
+    PDWARF_CONTEXT Context,
+    ULONG Register,
+    ULONGLONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes a register value.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    Register - Supplies the register to write.
+
+    Value - Supplies the new value of the register.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    return 0;
+}
+
+PSTR
+DwarfGetRegisterName (
+    PDWARF_CONTEXT Context,
+    ULONG Register
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a string containing the name of the given register.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Register - Supplies the register number.
+
+Return Value:
+
+    Returns a pointer to a constant string containing the name of the register.
+
+--*/
+
+{
+
+    PDEBUG_SYMBOLS Symbols;
+
+    Symbols = (((PDEBUG_SYMBOLS)Context) - 1);
+    return DbgGetRegisterName(Symbols->Machine, Register);
 }
 
 INT

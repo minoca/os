@@ -28,7 +28,6 @@ Environment:
 #include <minoca/status.h>
 #include <minoca/im.h>
 #include "dwarfp.h"
-#include "dbgext.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -76,21 +75,6 @@ DwarfpExpressionPush (
 ULONGLONG
 DwarfpExpressionPop (
     PDWARF_LOCATION_CONTEXT LocationContext
-    );
-
-INT
-DwarfpTargetRead (
-    PDWARF_LOCATION_CONTEXT LocationContext,
-    ULONGLONG TargetAddress,
-    ULONGLONG Size,
-    ULONG AddressSpace,
-    PVOID Buffer
-    );
-
-INT
-DwarfpTargetReadRegister (
-    ULONG Register,
-    PULONGLONG Value
     );
 
 INT
@@ -225,6 +209,8 @@ Return Value:
 
     assert(Unit != NULL);
 
+    LocationContext->AddressSize = Unit->AddressSize;
+
     //
     // An expression location is the primary form to be dealt with.
     //
@@ -339,11 +325,92 @@ Return Value:
     return;
 }
 
+INT
+DwarfpEvaluateSimpleExpression (
+    PDWARF_CONTEXT Context,
+    UCHAR AddressSize,
+    PDWARF_COMPILATION_UNIT Unit,
+    ULONGLONG InitialPush,
+    PUCHAR Expression,
+    UINTN Size,
+    PDWARF_LOCATION Location
+    )
+
+/*++
+
+Routine Description:
+
+    This routine evaluates a simple DWARF expression. A simple expression is
+    one that is not possibly a location list, and will ultimately contain only
+    a single piece.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF context.
+
+    AddressSize - Supplies the size of an address on the target.
+
+    Unit - Supplies an optional pointer to the compilation unit.
+
+    InitialPush - Supplies a value to push onto the stack initially. Supply
+        -1ULL to not push anything onto the stack initially.
+
+    Expression - Supplies a pointer to the expression bytes to evaluate.
+
+    Size - Supplies the size of the expression in bytes.
+
+    Location - Supplies a pointer where the location information will be
+        returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error code on failure.
+
+--*/
+
+{
+
+    DWARF_LOCATION_CONTEXT LocationContext;
+    INT Status;
+
+    memset(&LocationContext, 0, sizeof(DWARF_LOCATION_CONTEXT));
+    LocationContext.Unit = Unit;
+    LocationContext.AddressSize = AddressSize;
+    if (Unit != NULL) {
+        LocationContext.AddressSize = Unit->AddressSize;
+    }
+
+    if (InitialPush != -1ULL) {
+        LocationContext.Stack[0] = InitialPush;
+        LocationContext.StackSize = 1;
+    }
+
+    Status = DwarfpEvaluateExpression(Context,
+                                      &LocationContext,
+                                      Expression,
+                                      Size);
+
+    if (Status == 0) {
+        memcpy(Location, &(LocationContext.Location), sizeof(DWARF_LOCATION));
+        if (Location->NextPiece != NULL) {
+            DWARF_ERROR("DWARF: Simple expression had multiple pieces!\n");
+            Location->NextPiece = NULL;
+        }
+    }
+
+    DwarfpDestroyLocationContext(Context, &LocationContext);
+    return Status;
+}
+
 VOID
 DwarfpPrintExpression (
     PDWARF_CONTEXT Context,
+    UCHAR AddressSize,
     PDWARF_COMPILATION_UNIT Unit,
-    PDWARF_ATTRIBUTE_VALUE AttributeValue
+    PUCHAR Expression,
+    UINTN Size
     )
 
 /*++
@@ -356,10 +423,15 @@ Arguments:
 
     Context - Supplies a pointer to the context.
 
-    Unit - Supplies a pointer to the compilation unit.
+    AddressSize - Supplies the size of an address on the target.
 
-    AttributeValue - Supplies a pointer to the value, which should be of type
-        expression location.
+    Unit - Supplies an optional pointer to the compilation unit.
+
+    Expression - Supplies a pointer to the expression bytes.
+
+    ExpressionEnd - Supplies the first byte beyond the expression bytes.
+
+    Size - Supplies the size of the expression in bytes.
 
 Return Value:
 
@@ -380,11 +452,8 @@ Return Value:
     ULONG OperandCount;
     PSTR OpName;
 
-    assert((AttributeValue->Form == DwarfFormExprLoc) ||
-           (DWARF_BLOCK_FORM(AttributeValue->Form)));
-
-    Bytes = AttributeValue->Value.Block.Data;
-    End = Bytes + AttributeValue->Value.Block.Size;
+    Bytes = Expression;
+    End = Expression + Size;
     while (Bytes < End) {
         Op = DwarfpRead1(&Bytes);
         OpName = DwarfpGetOpName(Op, OpBuffer, sizeof(OpBuffer));
@@ -399,12 +468,12 @@ Return Value:
         } else {
             switch (Op) {
             case DwarfOpAddress:
-                if (Unit->AddressSize == 4) {
+                if (AddressSize == 4) {
                     Operand1 = DwarfpRead4(&Bytes);
 
                 } else {
 
-                    assert(Unit->AddressSize == 8);
+                    assert(AddressSize == 8);
 
                     Operand1 = DwarfpRead8(&Bytes);
                 }
@@ -475,7 +544,11 @@ Return Value:
                 break;
 
             case DwarfOpCallRef:
-                Operand1 = DWARF_READN(&Bytes, Unit->Is64Bit);
+                Operand1 = 0;
+                if (Unit != NULL) {
+                    Operand1 = DWARF_READN(&Bytes, Unit->Is64Bit);
+                }
+
                 break;
 
             case DwarfOpBitPiece:
@@ -487,6 +560,43 @@ Return Value:
             case DwarfOpImplicitValue:
                 Operand1 = DwarfpReadLeb128(&Bytes);
                 Bytes += Operand1;
+                break;
+
+            case DwarfOpGnuEntryValue:
+                Operand1 = DwarfpReadLeb128(&Bytes);
+                break;
+
+            case DwarfOpGnuImplicitPointer:
+                if (AddressSize == 8) {
+                    Operand1 = DwarfpRead8(&Bytes);
+
+                } else {
+                    Operand1 = DwarfpRead4(&Bytes);
+                }
+
+                Operand2 = DwarfpReadSleb128(&Bytes);
+                Operand2Signed = TRUE;
+                OperandCount = 2;
+                break;
+
+            case DwarfOpGnuConstType:
+                Operand1 = DwarfpReadLeb128(&Bytes);
+                Operand2 = DwarfpRead1(&Bytes);
+                Bytes += Operand2;
+                break;
+
+            case DwarfOpGnuConvert:
+            case DwarfOpGnuReinterpret:
+                Operand1 = DwarfpReadLeb128(&Bytes);
+                break;
+
+            //
+            // Parameter references point to a DIE that contains an
+            // optimized-away parameter.
+            //
+
+            case DwarfOpGnuParameterRef:
+                Operand1 = DwarfpRead4(&Bytes);
                 break;
 
             default:
@@ -555,6 +665,7 @@ Return Value:
 
 {
 
+    UCHAR AddressSize;
     PUCHAR End;
     ULONG Index;
     PDWARF_LOCATION Location;
@@ -566,6 +677,10 @@ Return Value:
     ULONGLONG Value;
     ULONGLONG Value2;
     ULONGLONG Value3;
+
+    AddressSize = LocationContext->AddressSize;
+
+    assert((AddressSize == 8) || (AddressSize == 4));
 
     End = Expression + Size;
     PreviousLocation = NULL;
@@ -580,13 +695,10 @@ Return Value:
         //
 
         case DwarfOpAddress:
-            if (LocationContext->Unit->AddressSize == 8) {
+            if (AddressSize == 8) {
                 Value = DwarfpRead8(&Expression);
 
             } else {
-
-                assert(LocationContext->Unit->AddressSize == 4);
-
                 Value = DwarfpRead4(&Expression);
             }
 
@@ -606,16 +718,14 @@ Return Value:
         case DwarfOpDerefSize:
         case DwarfOpGnuDerefType:
             Value = DwarfpExpressionPop(LocationContext);
+            SizeOperand = AddressSize;
             if ((Op == DwarfOpXDerefSize) || (Op == DwarfOpDerefSize) ||
                 (Op == DwarfOpGnuDerefType)) {
 
                 SizeOperand = DwarfpRead1(&Expression);
-                if (SizeOperand > LocationContext->Unit->AddressSize) {
-                    SizeOperand = LocationContext->Unit->AddressSize;
+                if (SizeOperand > AddressSize) {
+                    SizeOperand = AddressSize;
                 }
-
-            } else {
-                SizeOperand = LocationContext->Unit->AddressSize;
             }
 
             //
@@ -636,11 +746,12 @@ Return Value:
             }
 
             Value3 = 0;
-            Status = DwarfpTargetRead(LocationContext,
-                                      Value,
-                                      LocationContext->Unit->AddressSize,
-                                      Value2,
-                                      &Value3);
+            LocationContext->Constant = FALSE;
+            Status = DwarfTargetRead(Context,
+                                     Value,
+                                     SizeOperand,
+                                     Value2,
+                                     &Value3);
 
             if (Status != 0) {
                 DWARF_ERROR("DWARF: Target read failure from address "
@@ -973,13 +1084,15 @@ Return Value:
                 }
 
             } else {
-                if (LocationContext->Unit->AddressSize == 8) {
+                if (LocationContext->Unit == NULL) {
+                    Status = EINVAL;
+                    goto EvaluateExpressionEnd;
+                }
+
+                if (LocationContext->Unit->Is64Bit != FALSE) {
                     Value = DwarfpRead8(&Expression);
 
                 } else {
-
-                    assert(LocationContext->Unit->AddressSize == 4);
-
                     Value = DwarfpRead4(&Expression);
                 }
             }
@@ -1167,13 +1280,10 @@ Return Value:
         //
 
         case DwarfOpGnuImplicitPointer:
-            if (LocationContext->Unit->AddressSize == 8) {
+            if (AddressSize == 8) {
                 Value = DwarfpRead8(&Expression);
 
             } else {
-
-                assert(LocationContext->Unit->AddressSize == 4);
-
                 Value = DwarfpRead4(&Expression);
             }
 
@@ -1290,7 +1400,7 @@ Return Value:
                     Value2 = DwarfpReadSleb128(&Expression);
                 }
 
-                Status = DwarfpTargetReadRegister(Value, &Value);
+                Status = DwarfTargetReadRegister(Context, Value, &Value);
                 if (Status != 0) {
                     DWARF_ERROR("DWARF: Failed to read register %I64d\n",
                                 Value);
@@ -1488,94 +1598,6 @@ Return Value:
     Value = LocationContext->Stack[StackSize - 1];
     LocationContext->StackSize -= 1;
     return Value;
-}
-
-INT
-DwarfpTargetRead (
-    PDWARF_LOCATION_CONTEXT LocationContext,
-    ULONGLONG TargetAddress,
-    ULONGLONG Size,
-    ULONG AddressSpace,
-    PVOID Buffer
-    )
-
-/*++
-
-Routine Description:
-
-    This routine performs a read from target memory.
-
-Arguments:
-
-    LocationContext - Supplies a pointer to the execution context.
-
-    TargetAddress - Supplies the address to read from.
-
-    Size - Supplies the number of bytes to read.
-
-    AddressSpace - Supplies the address space identifier. Supply 0 for normal
-        memory.
-
-    Buffer - Supplies a pointer where the read data will be returned on success.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-{
-
-    //
-    // Target reads mean the expression can change.
-    //
-
-    LocationContext->Constant = FALSE;
-
-    //
-    // TODO: Implement target reads for DWARF.
-    //
-
-    memset(Buffer, 0, Size);
-    return 0;
-}
-
-INT
-DwarfpTargetReadRegister (
-    ULONG Register,
-    PULONGLONG Value
-    )
-
-/*++
-
-Routine Description:
-
-    This routine reads a register value.
-
-Arguments:
-
-    Register - Supplies the register to read.
-
-    Value - Supplies a pointer where the value will be returned on success.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-{
-
-    //
-    // TODO: Implement target register reads for DWARF.
-    //
-
-    *Value = 0;
-    return 0;
 }
 
 INT

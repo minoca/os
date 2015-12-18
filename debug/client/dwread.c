@@ -28,7 +28,6 @@ Environment:
 #include <minoca/status.h>
 #include <minoca/im.h>
 #include "dwarfp.h"
-#include "dbgext.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -1705,7 +1704,12 @@ Return Value:
                   (Attribute->Name == DwarfAtDataMemberLocation)))) {
 
                 DWARF_PRINT(" (");
-                DwarfpPrintExpression(Context, Unit, Attribute);
+                DwarfpPrintExpression(Context,
+                                      Unit->AddressSize,
+                                      Unit,
+                                      Attribute->Value.Block.Data,
+                                      Attribute->Value.Block.Size);
+
                 DWARF_PRINT(")");
             }
 

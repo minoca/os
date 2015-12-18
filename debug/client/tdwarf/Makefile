@@ -40,6 +40,7 @@ OBJS = coff.o        \
        elf.o         \
        dwarf.o       \
        dwexpr.o      \
+       dwframe.o     \
        dwline.o      \
        dwread.o      \
        stabs.o       \

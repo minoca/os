@@ -27,9 +27,9 @@ Environment:
 #include "dbgrtl.h"
 #include <minoca/im.h>
 #include "elf.h"
+#include "dbgext.h"
 #include "symbols.h"
 #include "stabs.h"
-#include "dbgext.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -88,7 +88,8 @@ DbgpParseElfSymbolTable (
 
 DEBUG_SYMBOL_INTERFACE DbgElfSymbolInterface = {
     DbgpElfLoadSymbols,
-    DbgpElfFreeSymbols
+    DbgpElfFreeSymbols,
+    NULL
 };
 
 //
@@ -100,6 +101,7 @@ DbgpElfLoadSymbols (
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
     ULONG Flags,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     )
 
@@ -119,6 +121,9 @@ Arguments:
 
     Flags - Supplies a bitfield of flags governing the behavior during load.
         These flags are specific to each symbol library.
+
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
 
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.
@@ -148,6 +153,7 @@ Return Value:
     memset(ElfSymbols, 0, AllocationSize);
     ElfSymbols->Interface = &DbgElfSymbolInterface;
     ElfSymbols->SymbolContext = ElfSymbols + 1;
+    ElfSymbols->HostContext = HostContext;
     Result = DbgpLoadElfSymbols(ElfSymbols, Filename);
     if (Result == FALSE) {
         Status = EINVAL;

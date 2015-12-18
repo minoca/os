@@ -7934,6 +7934,7 @@ Return Value:
 
                 Status = DbgLoadSymbols(PotentialBinary,
                                         ImageMachineType,
+                                        Context,
                                         &(NewModule->Symbols));
 
                 if (Status == 0) {
@@ -7987,6 +7988,7 @@ Return Value:
 
                 Status = DbgLoadSymbols(NewModule->Filename,
                                         ImageMachineType,
+                                        Context,
                                         &(NewModule->Symbols));
 
                 if (Status == 0) {
@@ -8024,6 +8026,7 @@ Return Value:
     if ((NewModule->Symbols == NULL) && (BackupPotential != NULL)) {
         Status = DbgLoadSymbols(BackupPotential,
                                 ImageMachineType,
+                                Context,
                                 &(NewModule->Symbols));
 
         if (Status == 0) {
@@ -8100,13 +8103,14 @@ Return Value:
     NewModule->Process = Process;
     NewModule->Loaded = TRUE;
     INSERT_BEFORE(&(NewModule->ListEntry), &(Context->ModuleList.ModulesHead));
-    if ((NewModule->Symbols != NULL) &&
-        (NewModule->BaseAddress == PREFERRED_IMAGE_BASE)) {
+    if (NewModule->Symbols != NULL) {
+        if (NewModule->BaseAddress == PREFERRED_IMAGE_BASE) {
+            NewModule->BaseAddress = NewModule->Symbols->ImageBase;
+        }
 
-        NewModule->BaseAddress = NewModule->Symbols->ImageBase;
+        NewModule->BaseDifference = BaseAddress - NewModule->Symbols->ImageBase;
     }
 
-    NewModule->BaseDifference = BaseAddress - NewModule->Symbols->ImageBase;
     DbgOut("Module loaded 0x%08I64x: %s -> ",
            NewModule->BaseAddress,
            NewModule->ModuleName);
@@ -8357,6 +8361,7 @@ Return Value:
     ULONG FrameIndex;
     REGISTERS_UNION Registers;
     INT Status;
+    BOOL Unwind;
 
     assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
@@ -8381,8 +8386,9 @@ Return Value:
     // Unwind the desired number of frames.
     //
 
+    Unwind = TRUE;
     for (FrameIndex = 0; FrameIndex < FrameNumber; FrameIndex += 1) {
-        Status = DbgStackUnwind(Context, &Registers, TRUE, &Frame);
+        Status = DbgStackUnwind(Context, &Registers, &Unwind, &Frame);
         if (Status == EOF) {
             DbgOut("Error: Only %d frames on the stack.\n", FrameIndex);
             break;

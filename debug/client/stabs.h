@@ -259,6 +259,7 @@ DbgpStabsLoadSymbols (
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
     ULONG Flags,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     );
 
@@ -278,6 +279,9 @@ Arguments:
 
     Flags - Supplies a bitfield of flags governing the behavior during load.
         These flags are specific to each symbol library.
+
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
 
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.
@@ -295,6 +299,7 @@ DbgpCoffLoadSymbols (
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
     ULONG Flags,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     );
 
@@ -315,6 +320,9 @@ Arguments:
     Flags - Supplies a bitfield of flags governing the behavior during load.
         These flags are specific to each symbol library.
 
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
+
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.
 
@@ -331,6 +339,7 @@ DbgpElfLoadSymbols (
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
     ULONG Flags,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     );
 
@@ -350,6 +359,9 @@ Arguments:
 
     Flags - Supplies a bitfield of flags governing the behavior during load.
         These flags are specific to each symbol library.
+
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
 
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.

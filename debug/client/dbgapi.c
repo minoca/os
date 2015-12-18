@@ -1332,6 +1332,7 @@ Return Value:
     REGISTERS_UNION LocalRegisters;
     INT SearchIndex;
     INT Status;
+    BOOL Unwind;
 
     if (Registers == NULL) {
 
@@ -1344,11 +1345,12 @@ Return Value:
         Registers = &LocalRegisters;
     }
 
+    Unwind = TRUE;
     FrameIndex = 0;
     while (FrameIndex < *FrameCount) {
         Status = DbgStackUnwind(Context,
                                 Registers,
-                                FALSE,
+                                &Unwind,
                                 &(Frames[FrameIndex]));
 
         if (Status == EOF) {
@@ -1386,7 +1388,7 @@ INT
 DbgStackUnwind (
     PDEBUGGER_CONTEXT Context,
     PREGISTERS_UNION Registers,
-    BOOL AllRegisters,
+    PBOOL Unwind,
     PSTACK_FRAME Frame
     )
 
@@ -1403,9 +1405,10 @@ Arguments:
     Registers - Supplies a pointer to the registers on input. On output, these
         registers will be updated with the unwound value.
 
-    AllRegisters - Supplies a boolean indicating whether to unwind all
-        registers (TRUE) or just the instruction pointer and stack pointer
-        (FALSE).
+    Unwind - Supplies a pointer that on input should initially be set to TRUE,
+        indicating to use the symbol unwinder if possible. If unwinding is not
+        possible, this will be set to FALSE, and should remain FALSE for the
+        remainder of the stack frames unwound.
 
     Frame - Supplies a pointer where the basic frame information for this
         frame will be returned.
@@ -1425,18 +1428,55 @@ Return Value:
     ULONGLONG BasePointer;
     ULONG ByteIndex;
     ULONG BytesRead;
+    ULONGLONG DebasedPc;
+    PDEBUGGER_MODULE Module;
     ULONGLONG Pc;
     ULONG PointerSize;
     ULONGLONG StackPointer;
     INT Status;
+    PDEBUG_SYMBOLS Symbols;
     UCHAR WorkingBuffer[24];
     UCHAR X86InstructionContents[X86_FUNCTION_PROLOGUE_LENGTH];
+
+    //
+    // First look up the symbols and see if they can unwind the stack.
+    //
+
+    Pc = DbgGetPc(Context, Registers);
+    if (*Unwind != FALSE) {
+        Module = DbgpFindModuleFromAddress(Context, Pc, &DebasedPc);
+        if ((Module != NULL) && (Module->Symbols != NULL) &&
+            (Module->Symbols->Interface->Unwind != NULL)) {
+
+            Symbols = Module->Symbols;
+
+            assert(Symbols->RegistersContext == NULL);
+
+            Symbols->RegistersContext = Registers;
+            Status = Symbols->Interface->Unwind(Symbols, DebasedPc, Frame);
+            Symbols->RegistersContext = NULL;
+            if (Status != 0) {
+                if (Status != ENOENT) {
+                    DbgOut("Failed to unwind stack at PC 0x%I64x\n", Pc);
+                }
+
+            } else {
+                goto StackUnwindEnd;
+            }
+        }
+
+        *Unwind = FALSE;
+    }
+
+    //
+    // Symbols do not exist or were no help. Use traditional frame chaining to
+    // unwind the stack.
+    //
 
     PointerSize = DbgGetTargetPointerSize(Context);
     DbgGetStackRegisters(Context, Registers, &StackPointer, &BasePointer);
     switch (Context->MachineType) {
     case MACHINE_TYPE_X86:
-        Pc = DbgGetPc(Context, Registers);
 
         //
         // If the instruction pointer was supplied, check the contents of the

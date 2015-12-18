@@ -289,7 +289,9 @@ Return Value:
                 ReturnSectionFileSize = ReturnSectionMemorySize;
             }
 
-            ReturnSectionVirtualAddress = SectionHeader->VirtualAddress;
+            ReturnSectionVirtualAddress = SectionHeader->VirtualAddress +
+                                          PeHeaders->OptionalHeader.ImageBase;
+
             break;
         }
 

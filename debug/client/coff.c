@@ -26,6 +26,7 @@ Environment:
 
 #include "dbgrtl.h"
 #include <minoca/im.h>
+#include "dbgext.h"
 #include "pe.h"
 #include "symbols.h"
 #include "stabs.h"
@@ -102,7 +103,8 @@ DbgpCreateOrUpdateCoffSymbol (
 
 DEBUG_SYMBOL_INTERFACE DbgCoffSymbolInterface = {
     DbgpCoffLoadSymbols,
-    DbgpCoffFreeSymbols
+    DbgpCoffFreeSymbols,
+    NULL
 };
 
 //
@@ -114,6 +116,7 @@ DbgpCoffLoadSymbols (
     PSTR Filename,
     IMAGE_MACHINE_TYPE MachineType,
     ULONG Flags,
+    PVOID HostContext,
     PDEBUG_SYMBOLS *Symbols
     )
 
@@ -133,6 +136,9 @@ Arguments:
 
     Flags - Supplies a bitfield of flags governing the behavior during load.
         These flags are specific to each symbol library.
+
+    HostContext - Supplies the value to store in the host context field of the
+        debug symbols.
 
     Symbols - Supplies an optional pointer where a pointer to the symbols will
         be returned on success.
@@ -162,6 +168,7 @@ Return Value:
     memset(CoffSymbols, 0, AllocationSize);
     CoffSymbols->Interface = &DbgCoffSymbolInterface;
     CoffSymbols->SymbolContext = CoffSymbols + 1;
+    CoffSymbols->HostContext = HostContext;
     Result = DbgpLoadCoffSymbols(CoffSymbols, Filename);
     if (Result == FALSE) {
         Status = EINVAL;

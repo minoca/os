@@ -27,8 +27,8 @@ Environment:
 #include "dbgrtl.h"
 #include <minoca/spproto.h>
 #include <minoca/im.h>
-#include "symbols.h"
 #include "dbgext.h"
+#include "symbols.h"
 #include "dbgapi.h"
 #include "dbgrprof.h"
 #include "dbgrcomm.h"
@@ -544,9 +544,17 @@ Return Value:
         // Get the target virtual address and attempt to read from the debuggee.
         //
 
-        TargetAddress = DbgGetRegister(Context,
-                                       &(Context->FrameRegisters),
-                                       DataSymbol->Location.Indirect.Register);
+        Result = DbgGetRegister(Context,
+                                &(Context->FrameRegisters),
+                                DataSymbol->Location.Indirect.Register,
+                                &TargetAddress);
+
+        if (Result != 0) {
+            DbgOut("Error: Failed to get register %d.\n",
+                   DataSymbol->Location.Indirect.Register);
+
+            goto GetDataSymbolDataEnd;
+        }
 
         TargetAddress += DataSymbol->Location.Indirect.Offset;
         Result = DbgReadMemory(Context,
@@ -818,11 +826,12 @@ PrintDataSymbolEnd:
     return Result;
 }
 
-ULONGLONG
+INT
 DbgGetRegister (
     PDEBUGGER_CONTEXT Context,
     PREGISTERS_UNION Registers,
-    ULONG RegisterNumber
+    ULONG RegisterNumber,
+    PULONGLONG RegisterValue
     )
 
 /*++
@@ -840,19 +849,26 @@ Arguments:
 
     RegisterNumber - Supplies the register index to get.
 
+    RegisterValue - Supplies a pointer where the register value will be
+        returned on success.
+
 Return Value:
 
-    Returns the register at the given index.
+    0 on success.
 
-    -1 if the register does not exist.
+    EINVAL if the register number is invalid.
+
+    Other error codes on other failures.
 
 --*/
 
 {
 
     PULONG Registers32;
+    INT Status;
     ULONGLONG Value;
 
+    Status = 0;
     Value = -1ULL;
     switch (Context->MachineType) {
     case MACHINE_TYPE_X86:
@@ -937,6 +953,7 @@ Return Value:
 
             assert(FALSE);
 
+            Status = EINVAL;
             break;
         }
 
@@ -963,6 +980,8 @@ Return Value:
         } else {
 
             assert(FALSE);
+
+            Status = EINVAL;
         }
 
         break;
@@ -971,10 +990,178 @@ Return Value:
 
         assert(FALSE);
 
+        Status = EINVAL;
         break;
     }
 
-    return Value;
+    *RegisterValue = Value;
+    return Status;
+}
+
+INT
+DbgSetRegister (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
+    ULONG RegisterNumber,
+    ULONGLONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the contents of a register given its register number.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies a pointer to the current machine context. The register
+        value will be set in this context.
+
+    RegisterNumber - Supplies the register index to set.
+
+    Value - Supplies the new value to set.
+
+Return Value:
+
+    0 on success.
+
+    EINVAL if the register number is invalid.
+
+    Other error codes on other failures.
+
+--*/
+
+{
+
+    PULONG Registers32;
+    INT Status;
+
+    Status = 0;
+    switch (Context->MachineType) {
+    case MACHINE_TYPE_X86:
+        switch (RegisterNumber) {
+        case X86RegisterEax:
+            Registers->X86.Eax = Value;
+            break;
+
+        case X86RegisterEcx:
+            Registers->X86.Ecx = Value;
+            break;
+
+        case X86RegisterEdx:
+            Registers->X86.Edx = Value;
+            break;
+
+        case X86RegisterEbx:
+            Registers->X86.Ebx = Value;
+            break;
+
+        case X86RegisterEsp:
+            Registers->X86.Esp = Value;
+            break;
+
+        case X86RegisterEbp:
+            Registers->X86.Ebp = Value;
+            break;
+
+        case X86RegisterEsi:
+            Registers->X86.Esi = Value;
+            break;
+
+        case X86RegisterEdi:
+            Registers->X86.Edi = Value;
+            break;
+
+        case X86RegisterEip:
+            Registers->X86.Eip = Value;
+            break;
+
+        case X86RegisterEflags:
+            Registers->X86.Eflags = Value;
+            break;
+
+        case X86RegisterCs:
+            Registers->X86.Cs = Value;
+            break;
+
+        case X86RegisterSs:
+            Registers->X86.Ss = Value;
+            break;
+
+        case X86RegisterDs:
+            Registers->X86.Ds = Value;
+            break;
+
+        case X86RegisterEs:
+            Registers->X86.Es = Value;
+            break;
+
+        case X86RegisterFs:
+            Registers->X86.Fs = Value;
+            break;
+
+        case X86RegisterGs:
+            Registers->X86.Gs = Value;
+            break;
+
+        default:
+
+            //
+            // TODO: Fetch the floating point registers if not yet grabbed.
+            //
+
+            if ((RegisterNumber >= X86RegisterSt0) &&
+                (RegisterNumber <= X86RegisterFpDo)) {
+
+                DbgOut("TODO: FPU Register %d.\n", RegisterNumber);
+                break;
+            }
+
+            assert(FALSE);
+
+            Status = EINVAL;
+            break;
+        }
+
+        break;
+
+    case MACHINE_TYPE_ARMV7:
+    case MACHINE_TYPE_ARMV6:
+        if ((RegisterNumber >= ArmRegisterR0) &&
+            (RegisterNumber <= ArmRegisterR15)) {
+
+            Registers32 = &(Registers->Arm.R0);
+            Registers32[RegisterNumber] = Value;
+
+        } else if ((RegisterNumber >= ArmRegisterD0) &&
+                   (RegisterNumber <= ArmRegisterD31)) {
+
+            //
+            // TODO: Fetch the floating point registers if not yet grabbed.
+            //
+
+            DbgOut("TODO: FPU Register D%d\n", RegisterNumber - ArmRegisterD0);
+
+        } else {
+
+            assert(FALSE);
+
+            Status = EINVAL;
+        }
+
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        Status = EINVAL;
+        break;
+    }
+
+    return Status;
 }
 
 PDEBUGGER_MODULE
