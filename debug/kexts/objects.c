@@ -27,6 +27,7 @@ Environment:
 #include <minoca/driver.h>
 #include "dbgext.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,7 +37,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define MAX_OBJECT_NAME 100
+#define MAX_OBJECT_NAME 512
 #define ROOT_OBJECT_NAME "kernel!ObRootObject"
 
 #define MALLOC(_x) malloc(_x)
@@ -121,11 +122,14 @@ Return Value:
 
 {
 
+    ULONG AddressSize;
     ULONG ArgumentIndex;
     ULONG BytesRead;
     ULONGLONG ObjectAddress;
     ULONGLONG RootObjectAddress;
     INT Status;
+
+    AddressSize = DbgGetTargetPointerSize(Context);
 
     //
     // At least one parameter is required.
@@ -139,19 +143,14 @@ Return Value:
 
         Status = DbgEvaluate(Context, ROOT_OBJECT_NAME, &RootObjectAddress);
         if (Status == 0) {
-
-            //
-            // TODO: 64-bit capable.
-            //
-
-            Status = DbgReadMemory(Context,
+             Status = DbgReadMemory(Context,
                                    TRUE,
                                    RootObjectAddress,
-                                   sizeof(PVOID),
+                                   AddressSize,
                                    &RootObjectAddress,
                                    &BytesRead);
 
-            if ((Status != 0) || (BytesRead != sizeof(PVOID))) {
+            if ((Status != 0) || (BytesRead != AddressSize)) {
                 DbgOut("Unable to find ObRootObject.\n");
                 if (Status == 0) {
                     Status = EINVAL;
@@ -328,28 +327,53 @@ Return Value:
 
 {
 
+    ULONG AddressSize;
     ULONG BytesRead;
     ULONGLONG ChildAddress;
     ULONGLONG ChildListHeadAddress;
-    LIST_ENTRY CurrentListEntry;
+    ULONG ChildListOffset;
     ULONGLONG CurrentListEntryAddress;
     PSTR CurrentName;
     ULONG CurrentNameSize;
-    OBJECT_HEADER CurrentObject;
+    ULONGLONG CurrentObjectName;
+    ULONGLONG CurrentObjectParent;
+    PVOID Data;
+    ULONG DataSize;
+    ULONGLONG FirstChild;
     BOOL FirstWaiter;
     PSTR FullName;
     ULONG FullNameSize;
+    PVOID ListEntryData;
+    ULONG ListEntryDataSize;
+    PTYPE_SYMBOL ListEntryType;
     ULONGLONG ListHeadAddress;
+    ULONGLONG LockHeld;
     PSTR NewFullName;
     ULONGLONG NextObjectAddress;
-    OBJECT_HEADER Object;
+    ULONGLONG NextSibling;
+    PVOID ObjectData;
+    ULONG ObjectDataSize;
+    ULONGLONG ObjectParent;
+    PTYPE_SYMBOL ObjectType;
+    ULONGLONG ObjectTypeValue;
+    ULONGLONG OwningThread;
     ULONGLONG RootObjectAddress;
+    ULONG SiblingEntryOffset;
     INT Status;
     ULONGLONG WaitBlockEntryAddress;
+    ULONG WaitBlockEntryListEntryOffset;
+    PTYPE_SYMBOL WaitBlockEntryType;
+    ULONG WaitersOffset;
+    ULONG WaitQueueOffset;
+    PTYPE_SYMBOL WaitQueueType;
 
+    AddressSize = DbgGetTargetPointerSize(Context);
     CurrentName = NULL;
+    Data = NULL;
     FullName = NULL;
     FullNameSize = 0;
+    ListEntryData = NULL;
+    ObjectData = NULL;
     RootObjectAddress = 0;
     ExtpPrintIndentation(IndentationLevel);
 
@@ -357,32 +381,65 @@ Return Value:
     // Attempt to read the object header.
     //
 
-    Status = DbgReadMemory(Context,
-                           TRUE,
-                           ObjectAddress,
-                           sizeof(OBJECT_HEADER),
-                           &Object,
-                           &BytesRead);
+    Status = DbgReadTypeByName(Context,
+                               ObjectAddress,
+                               "OBJECT_HEADER",
+                               &ObjectType,
+                               &ObjectData,
+                               &ObjectDataSize);
 
-    if ((Status != 0) || (BytesRead != sizeof(OBJECT_HEADER))) {
+    if (Status != 0) {
         DbgOut("Error: Could not read object.\n");
-        if (Status == 0) {
-            Status = EINVAL;
-        }
-
         goto PrintObjectEnd;
     }
 
-    if ((Object.Type == ObjectInvalid) || (Object.Type >= ObjectMaxTypes)) {
-        DbgOut("%08I64x probably not an object, has type %x.\n",
+    Status = DbgReadIntegerMember(Context,
+                                  ObjectType,
+                                  "Type",
+                                  ObjectAddress,
+                                  ObjectData,
+                                  ObjectDataSize,
+                                  &ObjectTypeValue);
+
+    if (Status != 0) {
+        goto PrintObjectEnd;
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  ObjectType,
+                                  "Name",
+                                  ObjectAddress,
+                                  ObjectData,
+                                  ObjectDataSize,
+                                  &CurrentObjectName);
+
+    if (Status != 0) {
+        goto PrintObjectEnd;
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  ObjectType,
+                                  "Parent",
+                                  ObjectAddress,
+                                  ObjectData,
+                                  ObjectDataSize,
+                                  &ObjectParent);
+
+    if (Status != 0) {
+        goto PrintObjectEnd;
+    }
+
+    CurrentObjectParent = ObjectParent;
+    if ((ObjectTypeValue == ObjectInvalid) ||
+        (ObjectTypeValue >= ObjectMaxTypes)) {
+
+        DbgOut("%08I64x probably not an object, has type %I64x.\n",
                ObjectAddress,
-               Object.Type);
+               ObjectTypeValue);
 
         Status = EINVAL;
         goto PrintObjectEnd;
     }
-
-    memcpy(&CurrentObject, &Object, sizeof(OBJECT_HEADER));
 
     //
     // If the full name should be printed, collect that now.
@@ -403,15 +460,10 @@ Return Value:
 
         Status = DbgEvaluate(Context, ROOT_OBJECT_NAME, &RootObjectAddress);
         if (Status == 0) {
-
-            //
-            // TODO: 64-bit capable.
-            //
-
             Status = DbgReadMemory(Context,
                                    TRUE,
                                    RootObjectAddress,
-                                   sizeof(PVOID),
+                                   AddressSize,
                                    &RootObjectAddress,
                                    &BytesRead);
 
@@ -441,20 +493,20 @@ Return Value:
             // it as this extension cares to read.
             //
 
-            if (CurrentObject.Name == NULL) {
+            if (CurrentObjectName == 0) {
                 strncpy(CurrentName, "<noname>", MAX_OBJECT_NAME);
 
             } else {
                 Status = DbgReadMemory(Context,
                                        TRUE,
-                                       (ULONG)CurrentObject.Name,
+                                       CurrentObjectName,
                                        MAX_OBJECT_NAME,
                                        CurrentName,
                                        &BytesRead);
 
                 if (Status != 0) {
-                    DbgOut("Error: Unable to read object name at 0x%08x.\n",
-                           CurrentObject.Name);
+                    DbgOut("Error: Unable to read object name at 0x%08I64x.\n",
+                           CurrentObjectName);
 
                     goto PrintObjectEnd;
                 }
@@ -472,7 +524,7 @@ Return Value:
             }
 
             //
-            // Create a new full path big enough to hold everything, and copy '
+            // Create a new full path big enough to hold everything, and copy
             // it in.
             //
 
@@ -500,29 +552,53 @@ Return Value:
             // Find the parent, read it in, and loop.
             //
 
-            if ((CurrentObject.Parent == NULL) ||
-                ((ULONG)CurrentObject.Parent == RootObjectAddress)) {
+            if ((CurrentObjectParent == 0) ||
+                (CurrentObjectParent == RootObjectAddress)) {
 
                 break;
             }
 
-            Status = DbgReadMemory(Context,
-                                   TRUE,
-                                   (ULONG)CurrentObject.Parent,
-                                   sizeof(OBJECT_HEADER),
-                                   &CurrentObject,
-                                   &BytesRead);
+            assert(Data == NULL);
 
-            if ((Status != 0) || (BytesRead != sizeof(OBJECT_HEADER))) {
-                DbgOut("Error reading object at 0x%08x.\n",
-                       CurrentObject.Parent);
+            Status = DbgReadType(Context,
+                                 CurrentObjectParent,
+                                 ObjectType,
+                                 &Data,
+                                 &DataSize);
 
-                if (Status == 0) {
-                    Status = EINVAL;
-                }
+            if (Status != 0) {
+                DbgOut("Error reading object at 0x%08I64x.\n",
+                       CurrentObjectParent);
 
                 goto PrintObjectEnd;
             }
+
+            Status = DbgReadIntegerMember(Context,
+                                          ObjectType,
+                                          "Name",
+                                          ObjectAddress,
+                                          Data,
+                                          DataSize,
+                                          &CurrentObjectName);
+
+            if (Status != 0) {
+                goto PrintObjectEnd;
+            }
+
+            Status = DbgReadIntegerMember(Context,
+                                          ObjectType,
+                                          "Parent",
+                                          ObjectAddress,
+                                          Data,
+                                          DataSize,
+                                          &CurrentObjectParent);
+
+            if (Status != 0) {
+                goto PrintObjectEnd;
+            }
+
+            free(Data);
+            Data = NULL;
         }
 
     } else {
@@ -531,20 +607,20 @@ Return Value:
         // Just read in this object's name.
         //
 
-        if (Object.Name == NULL) {
-            strncpy(CurrentName, "<noname>", MAX_OBJECT_NAME);
+        if (CurrentObjectName == 0) {
+            CurrentName[0] = '\0';
 
         } else {
             Status = DbgReadMemory(Context,
                                    TRUE,
-                                   (ULONG)Object.Name,
+                                   CurrentObjectName,
                                    MAX_OBJECT_NAME,
                                    CurrentName,
                                    &BytesRead);
 
             if (Status != 0) {
-                DbgOut("Error: Unable to read object name at 0x%08x.\n",
-                       Object.Name);
+                DbgOut("Error: Unable to read object name at 0x%08I64x.\n",
+                       CurrentObjectName);
 
                 goto PrintObjectEnd;
             }
@@ -566,19 +642,82 @@ Return Value:
     }
 
     //
+    // Get some attributes.
+    //
+
+    Status = DbgReadIntegerMember(Context,
+                                  ObjectType,
+                                  "SiblingEntry.Next",
+                                  ObjectAddress,
+                                  ObjectData,
+                                  ObjectDataSize,
+                                  &NextSibling);
+
+    if (Status != 0) {
+        goto PrintObjectEnd;
+    }
+
+    Status = DbgGetMemberOffset(ObjectType,
+                                "SiblingEntry",
+                                &SiblingEntryOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintObjectEnd;
+    }
+
+    Status = DbgGetMemberOffset(ObjectType,
+                                "ChildListHead",
+                                &ChildListOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintObjectEnd;
+    }
+
+    Status = DbgGetMemberOffset(ObjectType,
+                                "WaitQueue",
+                                &WaitQueueOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintObjectEnd;
+    }
+
+    SiblingEntryOffset /= BITS_PER_BYTE;
+    ChildListOffset /= BITS_PER_BYTE;
+    WaitQueueOffset /= BITS_PER_BYTE;
+    Status = DbgReadIntegerMember(Context,
+                                  ObjectType,
+                                  "ChildListHead.Next",
+                                  ObjectAddress,
+                                  ObjectData,
+                                  ObjectDataSize,
+                                  &FirstChild);
+
+    if (Status != 0) {
+        goto PrintObjectEnd;
+    }
+
+    Status = DbgGetTypeByName(Context, "LIST_ENTRY", &ListEntryType);
+    if (Status != 0) {
+        goto PrintObjectEnd;
+    }
+
+    //
     // Print out the one line version or the detailed version.
     //
 
     if (OneLiner != FALSE) {
         DbgOut("0x%08I64x ", ObjectAddress);
-        Status = DbgPrintType(Context,
-                              "OBJECT_TYPE",
-                              &(Object.Type),
-                              sizeof(OBJECT_TYPE));
-
-        if (Status != 0) {
-            DbgOut("BADOBJECTTYPE");
-        }
+        DbgPrintTypeMember(Context,
+                           ObjectAddress,
+                           ObjectData,
+                           ObjectDataSize,
+                           ObjectType,
+                           "Type",
+                           0,
+                           0);
 
         DbgOut(" %s\n", FullName);
 
@@ -586,45 +725,53 @@ Return Value:
         DbgOut("%20s : 0x%08I64x\n", "Object", ObjectAddress);
         ExtpPrintIndentation(IndentationLevel);
         DbgOut("%20s : ", "Type");
-        Status = DbgPrintType(Context,
-                              "OBJECT_TYPE",
-                              &(Object.Type),
-                              sizeof(OBJECT_TYPE));
-
-        if (Status != 0) {
-            DbgOut("BADOBJECTTYPE");
-        }
+        DbgPrintTypeMember(Context,
+                           ObjectAddress,
+                           ObjectData,
+                           ObjectDataSize,
+                           ObjectType,
+                           "Type",
+                           0,
+                           0);
 
         DbgOut("\n");
         ExtpPrintIndentation(IndentationLevel);
         DbgOut("%20s : %s\n", "Name", FullName);
         ExtpPrintIndentation(IndentationLevel);
-        if (Object.WaitQueue.Lock.LockHeld != 0) {
-            DbgOut("%20s : 0x%08x.\n",
-                   "Locked",
-                   Object.WaitQueue.Lock.OwningThread);
+        Status = DbgReadIntegerMember(Context,
+                                      ObjectType,
+                                      "WaitQueue.Lock.LockHeld",
+                                      ObjectAddress,
+                                      ObjectData,
+                                      ObjectDataSize,
+                                      &LockHeld);
 
-            ExtpPrintIndentation(IndentationLevel);
+        if ((Status == 0) && (LockHeld != FALSE)) {
+            Status = DbgReadIntegerMember(Context,
+                                          ObjectType,
+                                          "WaitQueue.Lock.OwningThread",
+                                          ObjectAddress,
+                                          ObjectData,
+                                          ObjectDataSize,
+                                          &OwningThread);
+
+            if (Status == 0) {
+                DbgOut("%20s : 0x%08x.\n", "Locked", OwningThread);
+                ExtpPrintIndentation(IndentationLevel);
+            }
         }
 
         //
         // Print various attributes of the object.
         //
 
-        DbgOut("%20s : Parent 0x%08x Sibling ",
-               "Relatives",
-               Object.Parent);
-
-        NextObjectAddress = (ULONG)Object.SiblingEntry.Next -
-                            FIELD_OFFSET(OBJECT_HEADER, SiblingEntry);
-
-        if (Object.SiblingEntry.Next == NULL) {
+        DbgOut("%20s : Parent 0x%08x Sibling ", "Relatives", ObjectParent);
+        NextObjectAddress = NextSibling - SiblingEntryOffset;
+        if (NextSibling == 0) {
             DbgOut("NULL");
             NextObjectAddress = 0;
 
-        } else if ((ULONG)Object.SiblingEntry.Next ==
-                   ObjectAddress + FIELD_OFFSET(OBJECT_HEADER, SiblingEntry)) {
-
+        } else if (NextSibling == ObjectAddress + SiblingEntryOffset) {
             DbgOut("NONE");
             NextObjectAddress = 0;
 
@@ -633,37 +780,52 @@ Return Value:
         }
 
         DbgOut(" Child ");
-        if (Object.ChildListHead.Next == NULL) {
+        if (FirstChild == 0) {
             DbgOut("NULL\n");
 
-        } else if ((ULONG)Object.ChildListHead.Next ==
-                   ObjectAddress + FIELD_OFFSET(OBJECT_HEADER, ChildListHead)) {
-
+        } else if (FirstChild == ObjectAddress + ChildListOffset) {
             DbgOut("NONE\n");
 
         } else {
-            ChildAddress = (ULONG)Object.ChildListHead.Next -
-                           FIELD_OFFSET(OBJECT_HEADER, ChildListHead);
-
+            ChildAddress = FirstChild - ChildListOffset;
             DbgOut("0x%08I64x\n", ChildAddress);
         }
 
         ExtpPrintIndentation(IndentationLevel);
         DbgOut("%20s : ", "State");
-        Status = DbgPrintType(Context,
-                              "SIGNAL_STATE",
-                              (PVOID)&(Object.WaitQueue.State),
-                              sizeof(SIGNAL_STATE));
-
-        if (Status != 0) {
-            DbgOut("BADSIGNALSTATE");
-        }
+        DbgPrintTypeMember(Context,
+                           ObjectAddress,
+                           ObjectData,
+                           ObjectDataSize,
+                           ObjectType,
+                           "WaitQueue.State",
+                           0,
+                           0);
 
         DbgOut("\n");
         ExtpPrintIndentation(IndentationLevel);
-        DbgOut("%20s : %d\n", "Ref Count", Object.ReferenceCount);
+        DbgOut("%20s : ", "Ref Count");
+        DbgPrintTypeMember(Context,
+                           ObjectAddress,
+                           ObjectData,
+                           ObjectDataSize,
+                           ObjectType,
+                           "ReferenceCount",
+                           0,
+                           0);
+
+        DbgOut("\n");
         ExtpPrintIndentation(IndentationLevel);
         DbgOut("%20s : ", "Flags");
+        DbgPrintTypeMember(Context,
+                           ObjectAddress,
+                           ObjectData,
+                           ObjectDataSize,
+                           ObjectType,
+                           "Flags",
+                           0,
+                           0);
+
         DbgOut("\n");
         ExtpPrintIndentation(IndentationLevel);
 
@@ -672,11 +834,53 @@ Return Value:
         //
 
         DbgOut("%20s : ", "Waiters");
-        FirstWaiter = TRUE;
-        ListHeadAddress = ObjectAddress +
-                          FIELD_OFFSET(OBJECT_HEADER, WaitQueue.Waiters);
+        Status = DbgGetTypeByName(Context, "WAIT_QUEUE", &WaitQueueType);
+        if (Status != 0) {
+            goto PrintObjectEnd;
+        }
 
-        CurrentListEntryAddress = (ULONG)Object.WaitQueue.Waiters.Next;
+        Status = DbgGetMemberOffset(WaitQueueType,
+                                    "Waiters",
+                                    &WaitersOffset,
+                                    NULL);
+
+        if (Status != 0) {
+            goto PrintObjectEnd;
+        }
+
+        WaitersOffset /= BITS_PER_BYTE;
+        Status = DbgGetTypeByName(Context,
+                                  "WAIT_BLOCK_ENTRY",
+                                  &WaitBlockEntryType);
+
+        if (Status != 0) {
+            goto PrintObjectEnd;
+        }
+
+        Status = DbgGetMemberOffset(WaitBlockEntryType,
+                                    "WaitListEntry",
+                                    &WaitBlockEntryListEntryOffset,
+                                    NULL);
+
+        if (Status != 0) {
+            goto PrintObjectEnd;
+        }
+
+        WaitBlockEntryListEntryOffset /= BITS_PER_BYTE;
+        FirstWaiter = TRUE;
+        ListHeadAddress = ObjectAddress + WaitQueueOffset + WaitersOffset;
+        Status = DbgReadIntegerMember(Context,
+                                      ObjectType,
+                                      "WaitQueue.Waiters.Next",
+                                      ObjectAddress,
+                                      ObjectData,
+                                      ObjectDataSize,
+                                      &CurrentListEntryAddress);
+
+        if (Status != 0) {
+            goto PrintObjectEnd;
+        }
+
         while (CurrentListEntryAddress != ListHeadAddress) {
             if (FirstWaiter == FALSE) {
                 DbgOut("                     : ");
@@ -685,33 +889,38 @@ Return Value:
                 FirstWaiter = FALSE;
             }
 
-            //
-            // TODO: This should subtract the offset of WaitListEntry in
-            // WAIT_BLOCK_ENTRY, rather than a hardcoded pointer.
-            //
+            WaitBlockEntryAddress = CurrentListEntryAddress -
+                                    WaitBlockEntryListEntryOffset;
 
-            WaitBlockEntryAddress = CurrentListEntryAddress - sizeof(PVOID);
             DbgOut("0x%08I64x\n", WaitBlockEntryAddress);
             ExtpPrintIndentation(IndentationLevel);
-            Status = DbgReadMemory(Context,
-                                   TRUE,
-                                   CurrentListEntryAddress,
-                                   sizeof(LIST_ENTRY),
-                                   &CurrentListEntry,
-                                   &BytesRead);
 
-            if ((Status != 0) || (BytesRead != sizeof(LIST_ENTRY))) {
-                DbgOut("Error: Could not read list entry at 0x%08I64x.\n",
-                       CurrentListEntryAddress);
+            assert(ListEntryData == NULL);
 
-                if (Status == 0) {
-                    Status = EINVAL;
-                }
+            Status = DbgReadType(Context,
+                                 CurrentListEntryAddress,
+                                 ListEntryType,
+                                 &ListEntryData,
+                                 &ListEntryDataSize);
 
+            if (Status != 0) {
                 goto PrintObjectEnd;
             }
 
-            CurrentListEntryAddress = (ULONG)CurrentListEntry.Next;
+            Status = DbgReadIntegerMember(Context,
+                                          ListEntryType,
+                                          "Next",
+                                          0,
+                                          ListEntryData,
+                                          ListEntryDataSize,
+                                          &CurrentListEntryAddress);
+
+            if (Status != 0) {
+                goto PrintObjectEnd;
+            }
+
+            free(ListEntryData);
+            ListEntryData = NULL;
         }
 
         DbgOut("\n");
@@ -728,35 +937,14 @@ Return Value:
         // child are found.
         //
 
-        ChildListHeadAddress = ObjectAddress +
-                               FIELD_OFFSET(OBJECT_HEADER, ChildListHead);
-
-        ObjectAddress = (ULONG)Object.ChildListHead.Next;
+        ChildListHeadAddress = ObjectAddress + ChildListOffset;
+        ObjectAddress = FirstChild;
         while ((ObjectAddress != (INTN)NULL) &&
                (ObjectAddress != ChildListHeadAddress)) {
 
-            ObjectAddress -= FIELD_OFFSET(OBJECT_HEADER, SiblingEntry);
-            Status = DbgReadMemory(Context,
-                                   TRUE,
-                                   ObjectAddress,
-                                   sizeof(OBJECT_HEADER),
-                                   &Object,
-                                   &BytesRead);
-
-            if ((Status != 0) || (BytesRead != sizeof(OBJECT_HEADER))) {
-                DbgOut("Error: Could not read object at 0x%08I64x.\n",
-                       ObjectAddress);
-
-                if (Status == 0) {
-                    Status = EINVAL;
-                }
-
-                goto PrintObjectEnd;
-            }
-
             Status = ExtpPrintObject(Context,
                                      IndentationLevel + 1,
-                                     ObjectAddress,
+                                     ObjectAddress - SiblingEntryOffset,
                                      TRUE,
                                      FALSE,
                                      FullyRecurse,
@@ -767,13 +955,53 @@ Return Value:
                 goto PrintObjectEnd;
             }
 
-            ObjectAddress = (ULONG)Object.SiblingEntry.Next;
+            assert(ListEntryData == NULL);
+
+            Status = DbgReadType(Context,
+                                 ObjectAddress,
+                                 ListEntryType,
+                                 &ListEntryData,
+                                 &ListEntryDataSize);
+
+            if (Status != 0) {
+                DbgOut("Error: Could not read LIST_ENTRY at 0x%I64x.\n",
+                       ObjectAddress);
+
+                goto PrintObjectEnd;
+            }
+
+            Status = DbgReadIntegerMember(Context,
+                                          ListEntryType,
+                                          "Next",
+                                          0,
+                                          ListEntryData,
+                                          ListEntryDataSize,
+                                          &ObjectAddress);
+
+            if (Status != 0) {
+                goto PrintObjectEnd;
+            }
+
+            free(ListEntryData);
+            ListEntryData = NULL;
         }
     }
 
     Status = 0;
 
 PrintObjectEnd:
+    if (ObjectData != NULL) {
+        free(ObjectData);
+    }
+
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    if (ListEntryData != NULL) {
+        free(ListEntryData);
+    }
+
     if (CurrentName != NULL) {
         FREE(CurrentName);
     }
@@ -808,13 +1036,7 @@ Return Value:
 
 {
 
-    ULONG IndentationIndex;
-
-    for (IndentationIndex = 0;
-         IndentationIndex < IndentationLevel;
-         IndentationIndex += 1) {
-
-        DbgOut("  ");
-    }
+    DbgOut("%*s", IndentationLevel, "");
+    return;
 }
 

@@ -305,3 +305,121 @@ Return Value:
 
 --*/
 
+INT
+DbgpPrintNumeric (
+    PTYPE_SYMBOL Type,
+    PVOID Data,
+    UINTN DataSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a numeric type's contents.
+
+Arguments:
+
+    Type - Supplies a pointer to the type symbol to print.
+
+    Data - Supplies a pointer to the data contents.
+
+    DataSize - Supplies the size of the data in bytes.
+
+Return Value:
+
+    0 on success.
+
+    ENOBUFS if the provided buffer is not large enough to accomodate the given
+    type.
+
+--*/
+
+INT
+DbgpGetStructureMember (
+    PDEBUGGER_CONTEXT Context,
+    PTYPE_SYMBOL Type,
+    PSTR MemberName,
+    ULONGLONG Address,
+    PVOID Data,
+    UINTN DataSize,
+    PVOID *ShiftedData,
+    PUINTN ShiftedDataSize,
+    PTYPE_SYMBOL *FinalType
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns a shifted form of the given data for accessing
+    specific members of a structure.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Type - Supplies a pointer to the structure type.
+
+    MemberName - Supplies a pointer to the member name string, which can
+        contain dot '.' notation for accessing members, and array [] notation
+        for access sub-elements and dereferencing.
+
+    Address - Supplies the address the read data is located at.
+
+    Data - Supplies a pointer to the read in data.
+
+    DataSize - Supplies the size of the read data in bytes.
+
+    ShiftedData - Supplies a pointer where the shifted data will be returned on
+        success. The caller is responsible for freeing this data when finished.
+
+    ShiftedDataSize - Supplies a pointer where the size of the shifted data
+        will be returned on success.
+
+    FinalType - Supplies an optional pointer where the final type of the
+        data will be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+PVOID
+DbgpShiftBufferRight (
+    PVOID Buffer,
+    UINTN DataSize,
+    UINTN Bits,
+    UINTN BitSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine shifts a buffer right by a given number of bits. Zero bits
+    will be shifted in from the left.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer contents to shift. This buffer
+        will remain untouched.
+
+    DataSize - Supplies the size of the data in bytes.
+
+    Bits - Supplies the number of bits to shift.
+
+    BitSize - Supplies an optional number of bits to keep after shifting, all
+        others will be masked. Supply 0 to perform no masking.
+
+Return Value:
+
+    Returns a pointer to a newly allocated and shifted buffer on success.
+
+    NULL on allocation failure.
+
+--*/
+

@@ -2548,3 +2548,109 @@ Return Value:
 
 --*/
 
+INT
+DbgPrintTypeByName (
+    PDEBUGGER_CONTEXT Context,
+    ULONGLONG Address,
+    PSTR TypeName,
+    ULONG SpaceLevel,
+    ULONG RecursionCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a structure or value at a specified address, whose type
+    is specified by a string.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Address - Supplies a target address pointer where the data resides.
+
+    TypeName - Supplies a pointer to a string containing the type name to get.
+        This should start with a type name, and can use dot '.' notation to
+        specify field members, and array[] notation to specify dereferences.
+
+    SpaceLevel - Supplies the number of spaces worth of indentation to print
+        for subsequent lines.
+
+    RecursionCount - Supplies the number of substructures to recurse into.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+DbgPrintType (
+    PDEBUGGER_CONTEXT Context,
+    PTYPE_SYMBOL Type,
+    PVOID Data,
+    UINTN DataSize,
+    ULONG SpaceLevel,
+    ULONG RecursionCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints the given type to the debugger console.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Type - Supplies a pointer to the data type to print.
+
+    Data - Supplies a pointer to the data contents.
+
+    DataSize - Supplies the size of the data buffer in bytes.
+
+    SpaceLevel - Supplies the number of spaces worth of indentation to print
+        for subsequent lines.
+
+    RecursionCount - Supplies the number of substructures to recurse into.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+VOID
+DbgPrintStringData (
+    PSTR String,
+    UINTN Size,
+    ULONG SpaceDepth
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints string data to the debugger console.
+
+Arguments:
+
+    String - Supplies a pointer to the string data.
+
+    Size - Supplies the number of bytes to print out.
+
+    SpaceDepth - Supplies the indentation to use when breaking up a string into
+        multiple lines.
+
+Return Value:
+
+    None.
+
+--*/
+

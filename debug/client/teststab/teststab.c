@@ -574,7 +574,7 @@ Return Value:
             case DataTypeRelation:
                 Relation = &(CurrentType->U.Relation);
                 PointerCharacter = ' ';
-                if (Relation->Pointer != FALSE) {
+                if (Relation->Pointer != 0) {
                     PointerCharacter = '*';
                 }
 

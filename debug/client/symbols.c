@@ -44,7 +44,6 @@ Environment:
 //
 
 #define MEMBER_NAME_SPACE 17
-#define POINTER_SIZE 4
 
 #define MAX_RELATION_TYPE_DEPTH 50
 
@@ -517,11 +516,11 @@ Return Value:
                            RelationData->Array.Maximum + 1);
 
                 } else {
-                    DbgOut("[%d]", RelationData->Array.Maximum + 1);
+                    DbgOut("[%I64d]", RelationData->Array.Maximum + 1);
                 }
             }
 
-            if (RelationData->Pointer != FALSE) {
+            if (RelationData->Pointer != 0) {
                 DbgOut("*");
             }
 
@@ -584,7 +583,7 @@ Return Value:
 
     switch (Type->Type) {
     case DataTypeEnumeration:
-        return POINTER_SIZE;
+        return Type->U.Enumeration.SizeInBytes;
 
     case DataTypeNumeric:
 
@@ -644,8 +643,8 @@ Return Value:
         // as big as that pointer (or an array of them).
         //
 
-        if (RelationData->Pointer != FALSE) {
-            return ArraySize * POINTER_SIZE;
+        if (RelationData->Pointer != 0) {
+            return ArraySize * RelationData->Pointer;
         }
 
         //
@@ -786,7 +785,7 @@ Return Value:
 
         } else if ((RelationData->Array.Minimum ==
                     RelationData->Array.Maximum) &&
-                   (RelationData->Pointer == FALSE)) {
+                   (RelationData->Pointer == 0)) {
 
             DbgPrintTypeDescription(RelativeType,
                                     SpaceLevel,
@@ -804,7 +803,7 @@ Return Value:
             // type.
             //
 
-            if (RelationData->Pointer != FALSE) {
+            if (RelationData->Pointer != 0) {
                 DbgOut("*");
             }
 
@@ -932,400 +931,10 @@ Return Value:
     }
 }
 
-ULONG
-DbgPrintTypeContents (
-    PVOID DataStream,
-    PTYPE_SYMBOL Type,
-    ULONG SpaceLevel,
-    ULONG RecursionDepth
-    )
-
-/*++
-
-Routine Description:
-
-    This routine prints the given data stream interpreted as a given type. It is
-    assumed that the datastream is long enough for the type. To get the number
-    of bytes required to print the type, call the function with a NULL
-    datastream.
-
-Arguments:
-
-    DataStream - Supplies a pointer to the datastream. This can be NULL if the
-        caller only wants the size of the type.
-
-    Type - Supplies a pointer to the type to print.
-
-    SpaceLevel - Supplies the number of spaces to print after every newline.
-        Used for nesting types.
-
-    RecursionDepth - Supplies how many times this should recurse on structure
-        members. If 0, only the name of the type is printed.
-
-Return Value:
-
-    Returns the size in bytes of the type.
-
---*/
-
-{
-
-    ULONG ArrayIndex;
-    ULONG BitRemainder;
-    ULONG Bytes;
-    PDATA_TYPE_ENUMERATION EnumerationData;
-    PENUMERATION_MEMBER EnumerationMember;
-    ULONG EnumerationValue;
-    ULONG InnerTypeSize;
-    PSHORT Int16;
-    PLONG Int32;
-    PCHAR Int8;
-    ULONG MemberLength;
-    PTYPE_SYMBOL MemberType;
-    ULONG NextRecursionDepth;
-    ULONGLONG Numeric;
-    PDATA_TYPE_NUMERIC NumericData;
-    PDATA_TYPE_RELATION RelationData;
-    PTYPE_SYMBOL RelativeType;
-    ULONG SpaceIndex;
-    PDATA_TYPE_STRUCTURE StructureData;
-    PSTRUCTURE_MEMBER StructureMember;
-    ULONG TypeSize;
-
-    TypeSize = 0;
-
-    //
-    // Make sure the recursion depth wont go below 0. Note that it's necessary
-    // to keep recursing to find the ultimate type size, but stop printing at
-    // this point.
-    //
-
-    if (RecursionDepth == 0) {
-        NextRecursionDepth = 0;
-
-    } else {
-        NextRecursionDepth = RecursionDepth - 1;
-    }
-
-    switch (Type->Type) {
-    case DataTypeNumeric:
-        NumericData = &(Type->U.Numeric);
-        TypeSize = ALIGN_RANGE_UP(NumericData->BitSize, BITS_PER_BYTE) /
-                   BITS_PER_BYTE;
-
-        if (DataStream != NULL) {
-            if (TypeSize > sizeof(ULONGLONG)) {
-                DbgOut("Error: Numeric type too big: %d bytes!", TypeSize);
-
-            } else {
-                Numeric = 0;
-                memcpy(&Numeric, DataStream, TypeSize);
-                Int8 = (PVOID)&Numeric;
-                Int16 = (PVOID)&Numeric;
-                Int32 = (PVOID)&Numeric;
-
-                //
-                // Print a signed integer. The switch is necessary to avoid
-                // worrying about sign extension.
-                //
-
-                if (NumericData->Signed != FALSE) {
-                    switch (TypeSize) {
-                    case 1:
-                        DbgOut("%d", *Int8);
-                        break;
-
-                    case 2:
-                        DbgOut("%d", *Int16);
-                        break;
-
-                    case 4:
-                        DbgOut("%d", *Int32);
-                        break;
-
-                    case 8:
-                    default:
-                        DbgOut("%I64d", Numeric);
-                        break;
-                    }
-
-                //
-                // Print an unsigned integer. If it's 8 or 16 bits and is
-                // printable, print the character associated with this number.
-                //
-
-                } else {
-                    DbgOut("0x%I64x", Numeric);
-                }
-            }
-        }
-
-        break;
-
-    case DataTypeRelation:
-
-        //
-        // Get the type this relation refers to.
-        //
-
-        RelationData = &(Type->U.Relation);
-        RelativeType = DbgGetType(RelationData->OwningFile,
-                                  RelationData->TypeNumber);
-
-        //
-        // If it cannot be found, this is an error.
-        //
-
-        if (RelativeType == NULL) {
-            DbgOut("DANGLING RELATION %s, %d\n",
-                   RelationData->OwningFile->SourceFile,
-                   RelationData->TypeNumber);
-
-            assert(RelativeType != NULL);
-
-            break;
-        }
-
-        //
-        // If it's a reference to itself, it's a void.
-        //
-
-        if (RelativeType == Type) {
-            if (DataStream != NULL) {
-                DbgOut("void");
-            }
-
-            TypeSize = 0;
-
-        //
-        // If the type is neither a pointer nor an array, recurse to get the
-        // real value. This recurses until we actually get a type that's *not*
-        // a relation, hit an array, or hit a pointer. Note that simply
-        // following relations does not count against the recursion depth since
-        // these types merely equal each other. This is why the recursion depth
-        // is not decreased.
-        //
-
-        } else if ((RelationData->Array.Minimum ==
-                    RelationData->Array.Maximum) &&
-                   (RelationData->Pointer == FALSE)) {
-
-            TypeSize = DbgPrintTypeContents(DataStream,
-                                            RelativeType,
-                                            SpaceLevel,
-                                            RecursionDepth);
-
-        //
-        // The relation is either a pointer or an array.
-        //
-
-        } else {
-
-            //
-            // If it's a pointer, then the type is just a pointer.
-            // TODO: Make pointer size dynamic.
-            //
-
-            if (RelationData->Pointer != FALSE) {
-                TypeSize = 4;
-                if (DataStream != NULL) {
-                    DbgOut("0x%08x", *((PULONG)DataStream));
-                }
-
-            //
-            // If the type is an array, then print out values repeatedly. Only
-            // print if the recursion depth is greater than 1.
-            //
-
-            } else if (RelationData->Array.Minimum !=
-                       RelationData->Array.Maximum) {
-
-                TypeSize = 0;
-
-                //
-                // If there's no need to print out all the contents, just get
-                // the size of the relative type and multiply by the array size.
-                //
-
-                if (DataStream == NULL) {
-                    TypeSize = DbgPrintTypeContents(DataStream,
-                                                    RelativeType,
-                                                    SpaceLevel + 2,
-                                                    NextRecursionDepth);
-
-                    TypeSize *= RelationData->Array.Maximum + 1 -
-                                RelationData->Array.Minimum;
-
-                    break;
-                }
-
-                DbgPrintTypeName(Type);
-                if (RecursionDepth > 1) {
-                    SpaceLevel += 2;
-                    for (ArrayIndex = RelationData->Array.Minimum;
-                         ArrayIndex <= RelationData->Array.Maximum;
-                         ArrayIndex += 1) {
-
-                        DbgOut("\n");
-                        for (SpaceIndex = 0;
-                             SpaceIndex < SpaceLevel;
-                             SpaceIndex += 1) {
-
-                            DbgOut(" ");
-                        }
-
-                        DbgOut("[%d] --------------------------------------"
-                               "-------\n", ArrayIndex);
-
-                        for (SpaceIndex = 0;
-                             SpaceIndex < SpaceLevel + 2;
-                             SpaceIndex += 1) {
-
-                            DbgOut(" ");
-                        }
-
-                        InnerTypeSize = DbgPrintTypeContents(
-                                                            DataStream,
-                                                            RelativeType,
-                                                            SpaceLevel + 2,
-                                                            NextRecursionDepth);
-
-                        TypeSize += InnerTypeSize;
-                        DataStream += InnerTypeSize;
-                    }
-
-                    SpaceLevel -= 2;
-                }
-            }
-        }
-
-        break;
-
-    case DataTypeEnumeration:
-
-        //
-        // Enumerations are just integers of the standard word size.
-        // TODO: Make this dynamic like pointer size.
-        //
-
-        TypeSize = 4;
-        if (DataStream != NULL) {
-            EnumerationValue = *((PULONG)DataStream);
-            DbgOut("%d", EnumerationValue);
-            EnumerationData = &(Type->U.Enumeration);
-            EnumerationMember = EnumerationData->FirstMember;
-            while (EnumerationMember != NULL) {
-                if (EnumerationMember->Value == EnumerationValue) {
-                    DbgOut(" %s", EnumerationMember->Name);
-                    break;
-                }
-
-                EnumerationMember = EnumerationMember->NextMember;
-            }
-
-            if (EnumerationMember != NULL) {
-                DbgOut(" 0x%x", EnumerationValue);
-
-            } else {
-                DbgOut(" (%d)", EnumerationValue);
-            }
-        }
-
-        break;
-
-    case DataTypeStructure:
-        StructureData = &(Type->U.Structure);
-        TypeSize = StructureData->SizeInBytes;
-        if (DataStream == NULL) {
-            break;
-        }
-
-        //
-        // If the recursion depth is zero, don't print this structure contents
-        // out, only print the name.
-        //
-
-        DbgPrintTypeName(Type);
-        if (RecursionDepth == 0) {
-            break;
-        }
-
-        SpaceLevel += 2;
-        StructureMember = StructureData->FirstMember;
-        while (StructureMember != NULL) {
-            Bytes = StructureMember->BitOffset / BITS_PER_BYTE;
-            BitRemainder = StructureMember->BitOffset % BITS_PER_BYTE;
-            DbgOut("\n");
-            for (SpaceIndex = 0; SpaceIndex < SpaceLevel; SpaceIndex += 1) {
-                DbgOut(" ");
-            }
-
-            DbgOut("+0x%03x  %s", Bytes, StructureMember->Name);
-            MemberLength = strlen(StructureMember->Name);
-            if (BitRemainder != 0) {
-                DbgOut(":%d", BitRemainder);
-                MemberLength += 2;
-            }
-
-            for (SpaceIndex = MemberLength;
-                 SpaceIndex < MEMBER_NAME_SPACE;
-                 SpaceIndex += 1) {
-
-                DbgOut(" ");
-            }
-
-            DbgOut(": ");
-            MemberType = DbgGetType(StructureMember->TypeFile,
-                                    StructureMember->TypeNumber);
-
-            if (MemberType == NULL) {
-                DbgOut("DANGLING REFERENCE %s, %d\n",
-                       StructureMember->TypeFile->SourceFile,
-                       StructureMember->TypeNumber);
-
-                assert(MemberType != NULL);
-
-                StructureMember = StructureMember->NextMember;
-                continue;
-            }
-
-            DbgPrintTypeContents(DataStream + Bytes,
-                                 MemberType,
-                                 SpaceLevel,
-                                 NextRecursionDepth);
-
-            StructureMember = StructureMember->NextMember;
-        }
-
-        SpaceLevel -= 2;
-        break;
-
-    case DataTypeFunctionPointer:
-        TypeSize = Type->U.FunctionPointer.SizeInBytes;
-        if (TypeSize > sizeof(Numeric)) {
-            TypeSize = sizeof(Numeric);
-        }
-
-        Numeric = 0;
-        memcpy(&Numeric, DataStream, TypeSize);
-        DbgOut("0x%08I64x", Numeric);
-        break;
-
-    default:
-
-        assert(FALSE);
-
-        break;
-    }
-
-    return TypeSize;
-}
-
-BOOL
-DbgGetStructureFieldInformation (
+INT
+DbgGetMemberOffset (
     PTYPE_SYMBOL StructureType,
     PSTR FieldName,
-    ULONG FieldNameLength,
     PULONG FieldOffset,
     PULONG FieldSize
     )
@@ -1344,8 +953,6 @@ Arguments:
     FieldName - Supplies a string containing the name of the field whose offset
         will be returned.
 
-    FieldNameLength - Supplies the lenght of the given field name.
-
     FieldOffset - Supplies a pointer that will receive the bit offset of the
         given field name within the given structure.
 
@@ -1354,14 +961,18 @@ Arguments:
 
 Return Value:
 
-    TRUE if the field name is found in the structure. FALSE otherwise.
+    0 on success.
+
+    ENOENT if no such field name exists.
+
+    Other error codes on other errors.
 
 --*/
 
 {
 
     ULONG Index;
-    BOOL Result;
+    INT Result;
     PDATA_TYPE_STRUCTURE StructureData;
     PSTRUCTURE_MEMBER StructureMember;
 
@@ -1371,117 +982,104 @@ Return Value:
 
     if ((StructureType == NULL) ||
         (StructureType->Type != DataTypeStructure) ||
-        (FieldNameLength == 0) ||
         (FieldOffset == NULL)) {
 
-        return FALSE;
+        return EINVAL;
     }
 
     //
     // Search for the field within the structure.
     //
 
-    Result = FALSE;
+    Result = ENOENT;
     StructureData = &(StructureType->U.Structure);
     StructureMember = StructureData->FirstMember;
     for (Index = 0; Index < StructureData->MemberCount; Index += 1) {
-        if (strncmp(FieldName, StructureMember->Name, FieldNameLength) == 0) {
-            *FieldOffset = StructureMember->BitOffset;
-            *FieldSize = StructureMember->BitSize;
-            Result = TRUE;
+        if (strcmp(FieldName, StructureMember->Name) == 0) {
+            if (FieldOffset != NULL) {
+                *FieldOffset = StructureMember->BitOffset;
+            }
+
+            if (FieldSize != NULL) {
+                *FieldSize = StructureMember->BitSize;
+            }
+
+            Result = 0;
             break;
         }
 
         StructureMember = StructureMember->NextMember;
     }
 
+    if (Result != 0) {
+        DbgOut("GetMemberOffset: %s has no member %s.\n",
+               StructureType->Name,
+               FieldName);
+    }
+
     return Result;
 }
 
 PTYPE_SYMBOL
-DbgResolveRelationType (
-    PTYPE_SYMBOL Type,
-    ULONG RecursionDepth
+DbgSkipTypedefs (
+    PTYPE_SYMBOL Type
     )
 
 /*++
 
 Routine Description:
 
-    This routine resolves a relation type into a non-relation data type. If the
-    given relation type is void, an array, a pointer, or a function, then the
-    relation type is returned as is.
+    This routine skips all relation types that aren't pointers or arrays.
 
 Arguments:
 
-    Type - Supplies a pointer to the type to be resolved.
-
-    RecursionDepth - Supplies the recursion depth of this function. Supply
-        zero here.
+    Type - Supplies a pointer to the type to get to the bottom of.
 
 Return Value:
 
-    Returns a pointer to the type on success, or NULL on error.
+    NULL if the type ended up being void or not found.
+
+    Returns a pointer to the root type on success.
 
 --*/
 
 {
 
-    PDATA_TYPE_RELATION RelationData;
+    ULONG MaxCount;
+    PDATA_TYPE_RELATION Relation;
     PTYPE_SYMBOL RelativeType;
 
     if (Type->Type != DataTypeRelation) {
         return Type;
     }
 
-    //
-    // Get the type this relation refers to.
-    //
-
-    RelationData = &(Type->U.Relation);
-    RelativeType = DbgGetType(RelationData->OwningFile,
-                              RelationData->TypeNumber);
+    Relation = &(Type->U.Relation);
 
     //
-    // If it cannot be found, it is an error.
+    // Loop scanning through typedefs.
     //
 
-    if (RelativeType == NULL) {
-        DbgOut("DANGLING RELATION %s, %d\n",
-               RelationData->OwningFile->SourceFile,
-               RelationData->TypeNumber);
+    MaxCount = 50;
+    while ((MaxCount != 0) &&
+           (Type->Type == DataTypeRelation) &&
+           (Relation->Array.Minimum == Relation->Array.Maximum) &&
+           (Relation->Pointer == 0)) {
 
-        assert(RelativeType != NULL);
+        RelativeType = DbgGetType(Relation->OwningFile, Relation->TypeNumber);
+        if ((RelativeType == NULL) || (RelativeType == Type)) {
+            return NULL;
+        }
 
+        Type = RelativeType;
+        Relation = &(Type->U.Relation);
+        MaxCount -= 1;
+    }
+
+    if (MaxCount == 0) {
         return NULL;
     }
 
-    if (RecursionDepth >= MAX_RELATION_TYPE_DEPTH) {
-        DbgOut("Recursive relation loop for type: %s, %d\n",
-               RelationData->OwningFile->SourceFile,
-               RelationData->TypeNumber);
-
-        return NULL;
-    }
-
-    //
-    // If the relative relation type is void, an array, a pointer, or a
-    // function, then resolve it as a relation type.
-    //
-
-    if ((RelativeType == Type) ||
-        (RelationData->Array.Minimum != RelationData->Array.Maximum) ||
-        (RelationData->Pointer != FALSE) ||
-        (RelationData->Function != FALSE)) {
-
-        return Type;
-    }
-
-    //
-    // Recursively search for a non-relation type.
-    //
-
-    return DbgResolveRelationType(RelativeType, RecursionDepth + 1);
+    return Type;
 }
 
 PTYPE_SYMBOL

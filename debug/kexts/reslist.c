@@ -27,8 +27,8 @@ Environment:
 #include <minoca/kernel.h>
 #include "dbgext.h"
 #include "../../kernel/io/arb.h"
-#include "../../kernel/io/iop.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -283,11 +283,20 @@ Return Value:
 
 {
 
-    ULONG BytesRead;
-    DEVICE Device;
+    ULONGLONG BootResources;
+    ULONGLONG BusLocalResources;
+    PVOID Data;
+    ULONG DataSize;
     ULONGLONG DeviceAddress;
-    ULONG IndentIndex;
-    INT Success;
+    PTYPE_SYMBOL DeviceType;
+    ULONGLONG HeaderType;
+    ULONGLONG ProcessorLocalResources;
+    ULONGLONG ResourceRequirements;
+    BOOL Result;
+    ULONGLONG SelectedConfiguration;
+    INT Status;
+
+    Data = NULL;
 
     //
     // Bail out if the indentation seems too deep.
@@ -301,33 +310,39 @@ Return Value:
     // Print out the indentation.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
-    }
-
+    DbgOut("%*s", IndentationLevel, "");
     DeviceAddress = Address;
     DbgOut("Device %I64x:\n", DeviceAddress);
-    Success = DbgReadMemory(Context,
-                            TRUE,
-                            Address,
-                            sizeof(DEVICE),
-                            &Device,
-                            &BytesRead);
+    Status = DbgReadTypeByName(Context,
+                               Address,
+                               "DEVICE",
+                               &DeviceType,
+                               &Data,
+                               &DataSize);
 
-    if ((Success != 0) ||
-        (BytesRead != sizeof(DEVICE))) {
-
-        DbgOut("Error: Could not read device at 0x%I64x.\n",
-               Address);
-
-        return FALSE;
+    if (Status != 0) {
+        DbgOut("Error: Could not read DEVICE at 0x%I64x\n", Address);
+        goto PrintDeviceResourcesEnd;
     }
 
-    if (Device.Header.Type != ObjectDevice) {
-        DbgOut("Object header type %d, probably not a device!\n",
-                      Device.Header.Type);
+    Status = DbgReadIntegerMember(Context,
+                                  DeviceType,
+                                  "Header.Type",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &HeaderType);
 
-        return FALSE;
+    if (Status != 0) {
+        goto PrintDeviceResourcesEnd;
+    }
+
+    if (HeaderType != ObjectDevice) {
+        DbgOut("Object header type %I64d, probably not a device!\n",
+               HeaderType);
+
+        Status = EINVAL;
+        goto PrintDeviceResourcesEnd;
     }
 
     IndentationLevel += 1;
@@ -336,19 +351,26 @@ Return Value:
     // Print the processor resources.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
+    DbgOut("%*s", IndentationLevel, "");
+    Status = DbgReadIntegerMember(Context,
+                                  DeviceType,
+                                  "ProcessorLocalResources",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &ProcessorLocalResources);
+
+    if (Status != 0) {
+        goto PrintDeviceResourcesEnd;
     }
 
-    if (Device.ProcessorLocalResources == NULL) {
+    if (ProcessorLocalResources == 0) {
         DbgOut("No Processor Local Resources.\n");
 
     } else {
-        DbgOut("Processor Local Resources @ %x\n",
-                      Device.ProcessorLocalResources);
-
+        DbgOut("Processor Local Resources @ %x\n", ProcessorLocalResources);
         ExtpPrintResourceAllocationList(Context,
-                                        (UINTN)Device.ProcessorLocalResources,
+                                        ProcessorLocalResources,
                                         IndentationLevel);
     }
 
@@ -356,17 +378,26 @@ Return Value:
     // Print the bus local resources.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
+    DbgOut("%*s", IndentationLevel, "");
+    Status = DbgReadIntegerMember(Context,
+                                  DeviceType,
+                                  "BusLocalResources",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &BusLocalResources);
+
+    if (Status != 0) {
+        goto PrintDeviceResourcesEnd;
     }
 
-    if (Device.BusLocalResources == NULL) {
+    if (BusLocalResources == 0) {
         DbgOut("No Bus Local Resources.\n");
 
     } else {
-        DbgOut("Bus Local Resources @ %x\n", Device.BusLocalResources);
+        DbgOut("Bus Local Resources @ %x\n", BusLocalResources);
         ExtpPrintResourceAllocationList(Context,
-                                        (UINTN)Device.BusLocalResources,
+                                        BusLocalResources,
                                         IndentationLevel);
     }
 
@@ -374,17 +405,26 @@ Return Value:
     // Print the boot resources.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
+    DbgOut("%*s", IndentationLevel, "");
+    Status = DbgReadIntegerMember(Context,
+                                  DeviceType,
+                                  "BootResources",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &BootResources);
+
+    if (Status != 0) {
+        goto PrintDeviceResourcesEnd;
     }
 
-    if (Device.BootResources == NULL) {
+    if (BootResources == 0) {
         DbgOut("No Boot Resources.\n");
 
     } else {
-        DbgOut("Boot Resources @ %x\n", Device.BootResources);
+        DbgOut("Boot Resources @ %x\n", BootResources);
         ExtpPrintResourceAllocationList(Context,
-                                        (UINTN)Device.BootResources,
+                                        BootResources,
                                         IndentationLevel);
     }
 
@@ -392,36 +432,63 @@ Return Value:
     // Print the selected configuration.
     //
 
-    if (Device.SelectedConfiguration != NULL) {
-        for (IndentIndex = 0;
-             IndentIndex < IndentationLevel;
-             IndentIndex += 1) {
+    Status = DbgReadIntegerMember(Context,
+                                  DeviceType,
+                                  "SelectedConfiguration",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &SelectedConfiguration);
 
-            DbgOut("  ");
-        }
+    if (Status != 0) {
+        goto PrintDeviceResourcesEnd;
+    }
 
-        DbgOut("Selected Configuration %x\n", Device.SelectedConfiguration);
+    if (SelectedConfiguration != 0) {
+        DbgOut("%*s", IndentationLevel, "");
+        DbgOut("Selected Configuration %x\n", SelectedConfiguration);
     }
 
     //
     // Print the resource requirements.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
+    DbgOut("%*s", IndentationLevel, "");
+    Status = DbgReadIntegerMember(Context,
+                                  DeviceType,
+                                  "ResourceRequirements",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &ResourceRequirements);
+
+    if (Status != 0) {
+        goto PrintDeviceResourcesEnd;
     }
 
-    if (Device.ResourceRequirements == NULL) {
+    if (ResourceRequirements == 0) {
         DbgOut("No Resource Requirements.\n");
 
     } else {
-        DbgOut("Resource Requirements @ %x\n", Device.ResourceRequirements);
+        DbgOut("Resource Requirements @ %x\n", ResourceRequirements);
         ExtpPrintResourceConfigurationList(Context,
-                                           (UINTN)Device.ResourceRequirements,
+                                           ResourceRequirements,
                                            IndentationLevel);
     }
 
-    return TRUE;
+    Status = 0;
+
+PrintDeviceResourcesEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    Result = TRUE;
+    if (Status != 0) {
+        Result = FALSE;
+    }
+
+    return Result;
 }
 
 BOOL
@@ -455,15 +522,20 @@ Return Value:
 
 {
 
-    ULONG BytesRead;
     ULONGLONG ChildListHead;
     ULONGLONG ChildObjectAddress;
-    RESOURCE_CONFIGURATION_LIST ConfigurationList;
-    ULONGLONG ConfigurationListAddress;
+    PTYPE_SYMBOL ConfigurationListType;
     ULONGLONG CurrentEntryAddress;
-    LIST_ENTRY CurrentEntryValue;
-    ULONG IndentIndex;
-    INT Success;
+    PVOID Data;
+    ULONG DataSize;
+    PTYPE_SYMBOL ListEntryType;
+    ULONG RequirementHeadOffset;
+    ULONG RequirementListEntryOffset;
+    PTYPE_SYMBOL RequirementListType;
+    BOOL Result;
+    INT Status;
+
+    Data = NULL;
 
     //
     // Bail out if the indentation seems too deep.
@@ -477,83 +549,139 @@ Return Value:
     // Print out the indentation.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
-    }
+    DbgOut("%*s", IndentationLevel, "");
+    DbgOut("Resource Configuration List @ %08I64x\n", Address);
+    Status = DbgReadTypeByName(Context,
+                               Address,
+                               "RESOURCE_CONFIGURATION_LIST",
+                               &ConfigurationListType,
+                               &Data,
+                               &DataSize);
 
-    ConfigurationListAddress = Address;
-    DbgOut("Resource Configuration List @ %08I64x\n",
-           ConfigurationListAddress);
-
-    Success = DbgReadMemory(Context,
-                            TRUE,
-                            Address,
-                            sizeof(RESOURCE_CONFIGURATION_LIST),
-                            &ConfigurationList,
-                            &BytesRead);
-
-    if ((Success != 0) ||
-        (BytesRead != sizeof(RESOURCE_CONFIGURATION_LIST))) {
-
+    if (Status != 0) {
         DbgOut("Error: Could not read configuration list at 0x%I64x.\n",
                Address);
 
-        return FALSE;
+        goto PrintResourceConfigurationListEnd;
     }
+
+    Status = DbgGetMemberOffset(ConfigurationListType,
+                                "RequirementListListHead",
+                                &RequirementHeadOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintResourceConfigurationListEnd;
+    }
+
+    RequirementHeadOffset /= BITS_PER_BYTE;
+    Status = DbgGetTypeByName(Context, "LIST_ENTRY", &ListEntryType);
+    if (Status != 0) {
+        goto PrintResourceConfigurationListEnd;
+    }
+
+    Status = DbgGetTypeByName(Context,
+                              "RESOURCE_REQUIREMENT_LIST",
+                              &RequirementListType);
+
+    if (Status != 0) {
+        goto PrintResourceConfigurationListEnd;
+    }
+
+    Status = DbgGetMemberOffset(RequirementListType,
+                                "ListEntry",
+                                &RequirementListEntryOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintResourceConfigurationListEnd;
+    }
+
+    RequirementListEntryOffset /= BITS_PER_BYTE;
 
     //
     // Print out all children.
     //
 
     IndentationLevel += 1;
-    ChildListHead = ConfigurationListAddress +
-                    FIELD_OFFSET(RESOURCE_CONFIGURATION_LIST,
-                                 RequirementListListHead);
+    ChildListHead = Address + RequirementHeadOffset;
+    Status = DbgReadIntegerMember(Context,
+                                  ConfigurationListType,
+                                  "RequirementListListHead.Next",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &CurrentEntryAddress);
 
-    CurrentEntryAddress = (UINTN)ConfigurationList.RequirementListListHead.Next;
+    if (Status != 0) {
+        goto PrintResourceConfigurationListEnd;
+    }
+
+    free(Data);
+    Data = NULL;
     while (CurrentEntryAddress != ChildListHead) {
 
         //
         // Read the list entry.
         //
 
-        Success = DbgReadMemory(Context,
-                                TRUE,
-                                CurrentEntryAddress,
-                                sizeof(LIST_ENTRY),
-                                &CurrentEntryValue,
-                                &BytesRead);
+        assert(Data == NULL);
 
-        if ((Success != 0) || (BytesRead != sizeof(LIST_ENTRY))) {
-            DbgOut("Error: Could not read LIST_ENTRY at 0x%I64x.\n",
-                   CurrentEntryAddress);
+        Status = DbgReadType(Context,
+                             CurrentEntryAddress,
+                             ListEntryType,
+                             &Data,
+                             &DataSize);
 
-            return FALSE;
+        if (Status != 0) {
+            goto PrintResourceConfigurationListEnd;
         }
 
         //
         // Print the resource requirement list.
         //
 
-        ChildObjectAddress = CurrentEntryAddress -
-                             FIELD_OFFSET(RESOURCE_REQUIREMENT_LIST, ListEntry);
+        ChildObjectAddress = CurrentEntryAddress - RequirementListEntryOffset;
+        Status = ExtpPrintResourceRequirementList(Context,
+                                                  ChildObjectAddress,
+                                                  IndentationLevel);
 
-        Success = ExtpPrintResourceRequirementList(Context,
-                                                   ChildObjectAddress,
-                                                   IndentationLevel);
-
-        if (Success == FALSE) {
-            return FALSE;
+        if (Status == FALSE) {
+            Status = EINVAL;
+            goto PrintResourceConfigurationListEnd;
         }
 
         //
         // Move to the next child.
         //
 
-        CurrentEntryAddress = (UINTN)CurrentEntryValue.Next;
+        Status = DbgReadIntegerMember(Context,
+                                      ListEntryType,
+                                      "Next",
+                                      CurrentEntryAddress,
+                                      Data,
+                                      DataSize,
+                                      &CurrentEntryAddress);
+
+        if (Status != 0) {
+            goto PrintResourceConfigurationListEnd;
+        }
+
+        free(Data);
+        Data = NULL;
     }
 
-    return TRUE;
+PrintResourceConfigurationListEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    Result = TRUE;
+    if (Status != 0) {
+        Result = FALSE;
+    }
+
+    return Result;
 }
 
 BOOL
@@ -587,15 +715,18 @@ Return Value:
 
 {
 
-    ULONG BytesRead;
     ULONGLONG ChildListHead;
     ULONGLONG ChildObjectAddress;
     ULONGLONG CurrentEntryAddress;
-    LIST_ENTRY CurrentEntryValue;
-    ULONG IndentIndex;
-    RESOURCE_REQUIREMENT_LIST RequirementList;
-    ULONGLONG RequirementListAddress;
-    INT Success;
+    PVOID Data;
+    ULONG DataSize;
+    PTYPE_SYMBOL ListEntryType;
+    ULONG RequirementEntryOffset;
+    ULONG RequirementListHeadOffset;
+    PTYPE_SYMBOL RequirementListType;
+    PTYPE_SYMBOL RequirementType;
+    BOOL Result;
+    INT Status;
 
     //
     // Bail out if the indentation seems too deep.
@@ -609,83 +740,139 @@ Return Value:
     // Print out the indentation.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
-    }
+    DbgOut("%*s", IndentationLevel, "");
+    DbgOut("Resource Requirement List @ %08I64x\n", Address);
+    Status = DbgReadTypeByName(Context,
+                               Address,
+                               "RESOURCE_REQUIREMENT_LIST",
+                               &RequirementListType,
+                               &Data,
+                               &DataSize);
 
-    RequirementListAddress = Address;
-    DbgOut("Resource Requirement List @ %08I64x\n",
-                  RequirementListAddress);
-
-    Success = DbgReadMemory(Context,
-                            TRUE,
-                            Address,
-                            sizeof(RESOURCE_REQUIREMENT_LIST),
-                            &RequirementList,
-                            &BytesRead);
-
-    if ((Success != 0) ||
-        (BytesRead != sizeof(RESOURCE_REQUIREMENT_LIST))) {
-
+    if (Status != 0) {
         DbgOut("Error: Could not read requirement list at 0x%I64x.\n",
                Address);
 
-        return FALSE;
+        goto PrintResourceRequirementListEnd;
     }
+
+    Status = DbgGetMemberOffset(RequirementListType,
+                                "RequirementListHead",
+                                &RequirementListHeadOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementListEnd;
+    }
+
+    RequirementListHeadOffset /= BITS_PER_BYTE;
+    Status = DbgGetTypeByName(Context, "LIST_ENTRY", &ListEntryType);
+    if (Status != 0) {
+        goto PrintResourceRequirementListEnd;
+    }
+
+    Status = DbgGetTypeByName(Context,
+                              "RESOURCE_REQUIREMENT",
+                              &RequirementType);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementListEnd;
+    }
+
+    Status = DbgGetMemberOffset(RequirementType,
+                                "ListEntry",
+                                &RequirementEntryOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementListEnd;
+    }
+
+    RequirementEntryOffset /= BITS_PER_BYTE;
 
     //
     // Print out all children.
     //
 
     IndentationLevel += 1;
-    ChildListHead = RequirementListAddress +
-                    FIELD_OFFSET(RESOURCE_REQUIREMENT_LIST,
-                                 RequirementListHead);
+    ChildListHead = Address + RequirementListHeadOffset;
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementListType,
+                                  "RequirementListHead.Next",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &CurrentEntryAddress);
 
-    CurrentEntryAddress = (UINTN)RequirementList.RequirementListHead.Next;
+    if (Status != 0) {
+        goto PrintResourceRequirementListEnd;
+    }
+
+    free(Data);
+    Data = NULL;
     while (CurrentEntryAddress != ChildListHead) {
 
         //
         // Read the list entry.
         //
 
-        Success = DbgReadMemory(Context,
-                                TRUE,
-                                CurrentEntryAddress,
-                                sizeof(LIST_ENTRY),
-                                &CurrentEntryValue,
-                                &BytesRead);
+        assert(Data == NULL);
 
-        if ((Success != 0) || (BytesRead != sizeof(LIST_ENTRY))) {
-            DbgOut("Error: Could not read LIST_ENTRY at 0x%I64x.\n",
-                   CurrentEntryAddress);
+        Status = DbgReadType(Context,
+                             CurrentEntryAddress,
+                             ListEntryType,
+                             &Data,
+                             &DataSize);
 
-            return FALSE;
+        if (Status != 0) {
+            goto PrintResourceRequirementListEnd;
         }
 
         //
         // Print the resource requirement list.
         //
 
-        ChildObjectAddress = CurrentEntryAddress -
-                             FIELD_OFFSET(RESOURCE_REQUIREMENT, ListEntry);
+        ChildObjectAddress = CurrentEntryAddress - RequirementEntryOffset;
+        Result = ExtpPrintResourceRequirement(Context,
+                                              ChildObjectAddress,
+                                              IndentationLevel);
 
-        Success = ExtpPrintResourceRequirement(Context,
-                                               ChildObjectAddress,
-                                               IndentationLevel);
-
-        if (Success == FALSE) {
-            return FALSE;
+        if (Result == FALSE) {
+            Status = EINVAL;
+            goto PrintResourceRequirementListEnd;
         }
 
         //
         // Move to the next child.
         //
 
-        CurrentEntryAddress = (UINTN)CurrentEntryValue.Next;
+        Status = DbgReadIntegerMember(Context,
+                                      ListEntryType,
+                                      "Next",
+                                      CurrentEntryAddress,
+                                      Data,
+                                      DataSize,
+                                      &CurrentEntryAddress);
+
+        if (Status != 0) {
+            goto PrintResourceRequirementListEnd;
+        }
+
+        free(Data);
+        Data = NULL;
     }
 
-    return TRUE;
+PrintResourceRequirementListEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    Result = TRUE;
+    if (Status != 0) {
+        Result = FALSE;
+    }
+
+    return Result;
 }
 
 BOOL
@@ -719,16 +906,22 @@ Return Value:
 
 {
 
-    ULONG BytesRead;
+    ULONG AlternativeListEntryOffset;
     ULONGLONG ChildListHead;
     ULONGLONG ChildObjectAddress;
     ULONGLONG CurrentEntryAddress;
-    LIST_ENTRY CurrentEntryValue;
-    ULONG IndentIndex;
-    RESOURCE_REQUIREMENT Requirement;
-    ULONGLONG RequirementAddress;
+    PVOID Data;
+    ULONG DataSize;
+    ULONGLONG Flags;
+    PTYPE_SYMBOL ListEntryType;
+    ULONGLONG RequirementDataSize;
+    PTYPE_SYMBOL RequirementType;
     PSTR ResourceType;
-    INT Success;
+    BOOL Result;
+    INT Status;
+    ULONGLONG Value;
+
+    Data = NULL;
 
     //
     // Bail out if the indentation seems too deep.
@@ -742,51 +935,173 @@ Return Value:
     // Print out the indentation.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
+    DbgOut("%*s", IndentationLevel, "");
+    Status = DbgReadTypeByName(Context,
+                               Address,
+                               "RESOURCE_REQUIREMENT",
+                               &RequirementType,
+                               &Data,
+                               &DataSize);
+
+    if (Status != 0) {
+        DbgOut("Error: Could not read requirement at 0x%I64x.\n", Address);
+        goto PrintResourceRequirementEnd;
     }
 
-    RequirementAddress = Address;
-    Success = DbgReadMemory(Context,
-                            TRUE,
-                            Address,
-                            sizeof(RESOURCE_REQUIREMENT),
-                            &Requirement,
-                            &BytesRead);
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "Type",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
 
-    if ((Success != 0) || (BytesRead != sizeof(RESOURCE_REQUIREMENT))) {
-        DbgOut("Error: Could not read requirement at 0x%I64x.\n",
-               Address);
-
-        return FALSE;
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
     }
 
-    ResourceType = ExtpGetResourceTypeString(Requirement.Type);
-    DbgOut("%08I64x %16s: Range %08I64x - %08I64x, Len %08I64x, "
-           "Align %I64x, Char %I64x, Flags %x",
-           RequirementAddress,
-           ResourceType,
-           Requirement.Minimum,
-           Requirement.Maximum,
-           Requirement.Length,
-           Requirement.Alignment,
-           Requirement.Characteristics,
-           Requirement.Flags);
+    ResourceType = ExtpGetResourceTypeString(Value);
+    DbgOut("%08I64x %16s: Range ", Address, ResourceType);
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "Minimum",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
 
-    if (Requirement.OwningRequirement != NULL) {
-        DbgOut(", Owner %x", Requirement.OwningRequirement);
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
     }
 
-    if ((Requirement.Flags & RESOURCE_FLAG_NOT_SHAREABLE) != 0) {
+    DbgOut("%08I64x - ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "Maximum",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
+    }
+
+    DbgOut("%08I64x, Len ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "Length",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
+    }
+
+    DbgOut("%08I64x, Align ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "Alignment",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
+    }
+
+    DbgOut("%I64x, Char ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "Characteristics",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
+    }
+
+    DbgOut("%I64x, Flags ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "Flags",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Flags);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
+    }
+
+    DbgOut("%I64x", Flags);
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "OwningRequirement",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
+    }
+
+    if (Value != 0) {
+        DbgOut(", Owner %I64x", Value);
+    }
+
+    if ((Flags & RESOURCE_FLAG_NOT_SHAREABLE) != 0) {
         DbgOut(" NotShared");
     }
 
-    if (Requirement.Provider != NULL) {
-        DbgOut(", Provider %x", Requirement.Provider);
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "Provider",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
     }
 
-    if (Requirement.DataSize != 0) {
-        DbgOut(", Data %x Size 0x%x", Requirement.Data, Requirement.DataSize);
+    if (Value != 0) {
+        DbgOut(", Provider %x", Value);
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "DataSize",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &RequirementDataSize);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
+    }
+
+    if (RequirementDataSize != 0) {
+        Status = DbgReadIntegerMember(Context,
+                                      RequirementType,
+                                      "Requirement.Data",
+                                      Address,
+                                      Data,
+                                      DataSize,
+                                      &Value);
+
+        if (Status != 0) {
+            goto PrintResourceRequirementEnd;
+        }
+
+        DbgOut(", Data %I64x Size 0x%I64x", Value, RequirementDataSize);
     }
 
     DbgOut("\n");
@@ -796,64 +1111,124 @@ Return Value:
     // don't try to traverse alternatives.
     //
 
-    if (Requirement.ListEntry.Next == NULL) {
-        return TRUE;
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "ListEntry.Next",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
     }
+
+    if (Value == 0) {
+        Status = 0;
+        goto PrintResourceRequirementEnd;
+    }
+
+    Status = DbgGetTypeByName(Context, "LIST_ENTRY", &ListEntryType);
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
+    }
+
+    Status = DbgGetMemberOffset(RequirementType,
+                                "AlternativeListEntry",
+                                &AlternativeListEntryOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
+    }
+
+    AlternativeListEntryOffset /= BITS_PER_BYTE;
 
     //
     // Print out all children.
     //
 
     IndentationLevel += 1;
-    ChildListHead = RequirementAddress +
-                    FIELD_OFFSET(RESOURCE_REQUIREMENT,
-                                 AlternativeListEntry);
+    ChildListHead = Address + AlternativeListEntryOffset;
+    Status = DbgReadIntegerMember(Context,
+                                  RequirementType,
+                                  "AlternativeListEntry.Next",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &CurrentEntryAddress);
 
-    CurrentEntryAddress = (UINTN)Requirement.AlternativeListEntry.Next;
+    if (Status != 0) {
+        goto PrintResourceRequirementEnd;
+    }
+
+    free(Data);
+    Data = NULL;
     while (CurrentEntryAddress != ChildListHead) {
 
         //
         // Read the list entry.
         //
 
-        Success = DbgReadMemory(Context,
-                                TRUE,
-                                CurrentEntryAddress,
-                                sizeof(LIST_ENTRY),
-                                &CurrentEntryValue,
-                                &BytesRead);
+        assert(Data == NULL);
 
-        if ((Success != 0) || (BytesRead != sizeof(LIST_ENTRY))) {
-            DbgOut("Error: Could not read LIST_ENTRY at 0x%I64x.\n",
-                   CurrentEntryAddress);
+        Status = DbgReadType(Context,
+                             CurrentEntryAddress,
+                             ListEntryType,
+                             &Data,
+                             &DataSize);
 
-            return FALSE;
+        if (Status != 0) {
+            goto PrintResourceRequirementEnd;
         }
 
         //
         // Print the resource requirement alternative.
         //
 
-        ChildObjectAddress = CurrentEntryAddress -
-                             FIELD_OFFSET(RESOURCE_REQUIREMENT,
-                                          AlternativeListEntry);
+        ChildObjectAddress = CurrentEntryAddress - AlternativeListEntryOffset;
+        Result = ExtpPrintResourceRequirement(Context,
+                                              ChildObjectAddress,
+                                              IndentationLevel);
 
-        Success = ExtpPrintResourceRequirement(Context,
-                                               ChildObjectAddress,
-                                               IndentationLevel);
-
-        if (Success == FALSE) {
-            return FALSE;
+        if (Result == FALSE) {
+            Status = EINVAL;
+            goto PrintResourceRequirementEnd;
         }
 
         //
         // Move to the next child.
         //
 
-        CurrentEntryAddress = (UINTN)CurrentEntryValue.Next;
+        Status = DbgReadIntegerMember(Context,
+                                      ListEntryType,
+                                      "Next",
+                                      CurrentEntryAddress,
+                                      Data,
+                                      DataSize,
+                                      &CurrentEntryAddress);
+
+        if (Status != 0) {
+            goto PrintResourceRequirementEnd;
+        }
+
+        free(Data);
+        Data = NULL;
     }
 
-    return TRUE;
+    Status = 0;
+
+PrintResourceRequirementEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    Result = TRUE;
+    if (Status != 0) {
+        Result = FALSE;
+    }
+
+    return Result;
 }
 
 BOOL
@@ -887,15 +1262,20 @@ Return Value:
 
 {
 
-    RESOURCE_ALLOCATION_LIST AllocationList;
-    ULONGLONG AllocationListAddress;
-    ULONG BytesRead;
+    ULONG AllocationEntryOffset;
+    ULONG AllocationListHeadOffset;
+    PTYPE_SYMBOL AllocationListType;
+    PTYPE_SYMBOL AllocationType;
     ULONGLONG ChildListHead;
     ULONGLONG ChildObjectAddress;
     ULONGLONG CurrentEntryAddress;
-    LIST_ENTRY CurrentEntryValue;
-    ULONG IndentIndex;
-    INT Success;
+    PVOID Data;
+    ULONG DataSize;
+    PTYPE_SYMBOL ListEntryType;
+    BOOL Result;
+    INT Status;
+
+    Data = NULL;
 
     //
     // Bail out if the indentation seems too deep.
@@ -909,24 +1289,47 @@ Return Value:
     // Print out the indentation.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
+    DbgOut("%*s", IndentationLevel, "");
+    DbgOut("Resource Allocation List @ %08I64x\n", Address);
+    Status = DbgReadTypeByName(Context,
+                               Address,
+                               "RESOURCE_ALLOCATION_LIST",
+                               &AllocationListType,
+                               &Data,
+                               &DataSize);
+
+    if (Status != 0) {
+        DbgOut("Error: Could not read allocation list at 0x%I64x.\n", Address);
+        goto PrintResourceAllocationListEnd;
     }
 
-    AllocationListAddress = Address;
-    DbgOut("Resource Allocation List @ %08I64x\n", AllocationListAddress);
-    Success = DbgReadMemory(Context,
-                            TRUE,
-                            Address,
-                            sizeof(RESOURCE_ALLOCATION_LIST),
-                            &AllocationList,
-                            &BytesRead);
+    Status = DbgGetMemberOffset(AllocationListType,
+                                "AllocationListHead",
+                                &AllocationListHeadOffset,
+                                NULL);
 
-    if ((Success != 0) || (BytesRead != sizeof(RESOURCE_ALLOCATION_LIST))) {
-        DbgOut("Error: Could not read allocation list at 0x%I64x.\n",
-               Address);
+    if (Status != 0) {
+        goto PrintResourceAllocationListEnd;
+    }
 
-        return FALSE;
+    AllocationListHeadOffset /= BITS_PER_BYTE;
+    Status = DbgGetTypeByName(Context, "LIST_ENTRY", &ListEntryType);
+    if (Status != 0) {
+        goto PrintResourceAllocationListEnd;
+    }
+
+    Status = DbgGetTypeByName(Context, "RESOURCE_ALLOCATION", &AllocationType);
+    if (Status != 0) {
+        goto PrintResourceAllocationListEnd;
+    }
+
+    Status = DbgGetMemberOffset(AllocationType,
+                                "ListEntry",
+                                &AllocationEntryOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintResourceAllocationListEnd;
     }
 
     //
@@ -934,54 +1337,86 @@ Return Value:
     //
 
     IndentationLevel += 1;
-    ChildListHead = AllocationListAddress +
-                    FIELD_OFFSET(RESOURCE_ALLOCATION_LIST,
-                                 AllocationListHead);
+    ChildListHead = Address + AllocationListHeadOffset;
+    Status = DbgReadIntegerMember(Context,
+                                  AllocationListType,
+                                  "AllocationListHead.Next",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &CurrentEntryAddress);
 
-    CurrentEntryAddress = (UINTN)AllocationList.AllocationListHead.Next;
+    if (Status != 0) {
+        goto PrintResourceAllocationListEnd;
+    }
+
+    free(Data);
+    Data = NULL;
     while (CurrentEntryAddress != ChildListHead) {
 
         //
         // Read the list entry.
         //
 
-        Success = DbgReadMemory(Context,
-                                TRUE,
-                                CurrentEntryAddress,
-                                sizeof(LIST_ENTRY),
-                                &CurrentEntryValue,
-                                &BytesRead);
+        assert(Data == NULL);
 
-        if ((Success != 0) || (BytesRead != sizeof(LIST_ENTRY))) {
-            DbgOut("Error: Could not read LIST_ENTRY at 0x%I64x.\n",
-                   CurrentEntryAddress);
+        Status = DbgReadType(Context,
+                             CurrentEntryAddress,
+                             ListEntryType,
+                             &Data,
+                             &DataSize);
 
-            return FALSE;
+        if (Status != 0) {
+            goto PrintResourceAllocationListEnd;
         }
 
         //
         // Print the resource requirement list.
         //
 
-        ChildObjectAddress = CurrentEntryAddress -
-                             FIELD_OFFSET(RESOURCE_ALLOCATION, ListEntry);
+        ChildObjectAddress = CurrentEntryAddress - AllocationEntryOffset;
+        Result = ExtpPrintResourceAllocation(Context,
+                                             ChildObjectAddress,
+                                             IndentationLevel);
 
-        Success = ExtpPrintResourceAllocation(Context,
-                                              ChildObjectAddress,
-                                              IndentationLevel);
-
-        if (Success == FALSE) {
-            return FALSE;
+        if (Result == FALSE) {
+            Status = EINVAL;
+            goto PrintResourceAllocationListEnd;
         }
 
         //
         // Move to the next child.
         //
 
-        CurrentEntryAddress = (UINTN)CurrentEntryValue.Next;
+        Status = DbgReadIntegerMember(Context,
+                                      ListEntryType,
+                                      "Next",
+                                      CurrentEntryAddress,
+                                      Data,
+                                      DataSize,
+                                      &CurrentEntryAddress);
+
+        if (Status != 0) {
+            goto PrintResourceAllocationListEnd;
+        }
+
+        free(Data);
+        Data = NULL;
     }
 
-    return TRUE;
+    Status = 0;
+
+PrintResourceAllocationListEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    Result = TRUE;
+    if (Status != 0) {
+        Result = FALSE;
+    }
+
+    return Result;
 }
 
 BOOL
@@ -1015,12 +1450,16 @@ Return Value:
 
 {
 
-    RESOURCE_ALLOCATION Allocation;
-    ULONGLONG AllocationAddress;
-    ULONG BytesRead;
-    ULONG IndentIndex;
+    ULONGLONG AllocationDataSize;
+    PTYPE_SYMBOL AllocationType;
+    PVOID Data;
+    ULONG DataSize;
     PSTR ResourceType;
-    INT Success;
+    BOOL Result;
+    INT Status;
+    ULONGLONG Value;
+
+    Data = NULL;
 
     //
     // Bail out if the indentation seems too deep.
@@ -1034,51 +1473,164 @@ Return Value:
     // Print out the indentation.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
-    }
+    DbgOut("%*s", IndentationLevel, "");
+    Status = DbgReadTypeByName(Context,
+                               Address,
+                               "RESOURCE_ALLOCATION",
+                               &AllocationType,
+                               &Data,
+                               &DataSize);
 
-    AllocationAddress = Address;
-    Success = DbgReadMemory(Context,
-                            TRUE,
-                            Address,
-                            sizeof(RESOURCE_ALLOCATION),
-                            &Allocation,
-                            &BytesRead);
-
-    if ((Success != 0) || (BytesRead != sizeof(RESOURCE_ALLOCATION))) {
+    if (Status != 0) {
         DbgOut("Error: Could not read allocation at 0x%I64x.\n",
                Address);
 
-        return FALSE;
+        goto PrintResourceAllocationEnd;
     }
 
-    ResourceType = ExtpGetResourceTypeString(Allocation.Type);
-    DbgOut("%08I64x %16s: %08I64x, Len %08I64x, Char %I64x",
-           AllocationAddress,
-           ResourceType,
-           Allocation.Allocation,
-           Allocation.Length,
-           Allocation.Characteristics);
+    Status = DbgReadIntegerMember(Context,
+                                  AllocationType,
+                                  "Type",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
 
-    if (Allocation.OwningAllocation != NULL) {
-        DbgOut(", Owner %x", Allocation.OwningAllocation);
+    if (Status != 0) {
+        goto PrintResourceAllocationEnd;
     }
 
-    if ((Allocation.Flags & RESOURCE_FLAG_NOT_SHAREABLE) != 0) {
+    ResourceType = ExtpGetResourceTypeString(Value);
+    DbgOut("%08I64x %16s: ", Address, ResourceType);
+    Status = DbgReadIntegerMember(Context,
+                                  AllocationType,
+                                  "Allocation",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceAllocationEnd;
+    }
+
+    DbgOut("%08I64x, Len ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  AllocationType,
+                                  "Length",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceAllocationEnd;
+    }
+
+    DbgOut("%08I64x, Char ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  AllocationType,
+                                  "Characteristics",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceAllocationEnd;
+    }
+
+    DbgOut("%I64x", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  AllocationType,
+                                  "OwningAllocation",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceAllocationEnd;
+    }
+
+    if (Value != 0) {
+        DbgOut(", Owner %I64x", Value);
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  AllocationType,
+                                  "Flags",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceAllocationEnd;
+    }
+
+    if ((Value & RESOURCE_FLAG_NOT_SHAREABLE) != 0) {
         DbgOut(" NotShared");
     }
 
-    if (Allocation.Provider != NULL) {
-        DbgOut(", Provider %x", Allocation.Provider);
+    Status = DbgReadIntegerMember(Context,
+                                  AllocationType,
+                                  "Provider",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceAllocationEnd;
     }
 
-    if (Allocation.DataSize != 0) {
-        DbgOut(", Data %x Size 0x%x", Allocation.Data, Allocation.DataSize);
+    if (Value != 0) {
+        DbgOut(", Provider %I64x", Value);
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  AllocationType,
+                                  "DataSize",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &AllocationDataSize);
+
+    if (Status != 0) {
+        goto PrintResourceAllocationEnd;
+    }
+
+    if (AllocationDataSize != 0) {
+        Status = DbgReadIntegerMember(Context,
+                                      AllocationType,
+                                      "Data",
+                                      Address,
+                                      Data,
+                                      DataSize,
+                                      &Value);
+
+        if (Status != 0) {
+            goto PrintResourceAllocationEnd;
+        }
+
+        DbgOut(", Data %I64x Size 0x%I64x", Value, AllocationDataSize);
+    }
+
+    Status = 0;
+
+PrintResourceAllocationEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    Result = TRUE;
+    if (Status != 0) {
+        Result = FALSE;
     }
 
     DbgOut("\n");
-    return TRUE;
+    return Result;
 }
 
 BOOL
@@ -1113,21 +1665,31 @@ Return Value:
 
 {
 
-    RESOURCE_ARBITER Arbiter;
     ULONG ArbiterIndex;
-    ULONG BytesRead;
+    ULONG ArbiterListEntryOffset;
+    ULONG ArbiterListHeadOffset;
+    PTYPE_SYMBOL ArbiterType;
     ULONGLONG ChildListHead;
     ULONGLONG ChildObjectAddress;
     ULONGLONG CurrentEntryAddress;
-    LIST_ENTRY CurrentEntryValue;
-    DEVICE Device;
+    PVOID Data;
+    ULONG DataSize;
     ULONGLONG DeviceAddress;
     ULONGLONG DeviceParentAddress;
-    ULONG IndentIndex;
+    PTYPE_SYMBOL DeviceType;
+    ULONGLONG HeaderType;
+    PVOID ListEntryData;
+    ULONG ListEntryDataSize;
+    PTYPE_SYMBOL ListEntryType;
+    ULONGLONG NextParent;
     ULONGLONG OriginalDeviceAddress;
-    INT Success;
+    ULONGLONG ResourceType;
+    BOOL Result;
+    INT Status;
 
     ChildObjectAddress = 0;
+    Data = NULL;
+    ListEntryData = NULL;
 
     //
     // Bail out if the indentation seems too deep.
@@ -1141,40 +1703,91 @@ Return Value:
     // Print out the indentation.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
-    }
+    DbgOut("%*s", IndentationLevel, "");
 
     //
     // Get the parent of the current device.
     //
 
     OriginalDeviceAddress = Address;
-    Success = DbgReadMemory(Context,
-                            TRUE,
-                            OriginalDeviceAddress,
-                            sizeof(DEVICE),
-                            &Device,
-                            &BytesRead);
+    Status = DbgReadTypeByName(Context,
+                               Address,
+                               "DEVICE",
+                               &DeviceType,
+                               &Data,
+                               &DataSize);
 
-    if ((Success != 0) || (BytesRead != sizeof(DEVICE))) {
-        DbgOut("Failed to read device at %I64x.\n",
-               OriginalDeviceAddress);
+    if (Status != 0) {
+        DbgOut("Failed to read device at %I64x.\n", Address);
+        goto PrintDeviceArbitersEnd;
+    }
+
+    Status = DbgGetMemberOffset(DeviceType,
+                                "ArbiterListHead",
+                                &ArbiterListHeadOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintDeviceArbitersEnd;
+    }
+
+    ArbiterListHeadOffset /= BITS_PER_BYTE;
+    Status = DbgGetTypeByName(Context, "LIST_ENTRY", &ListEntryType);
+    if (Status != 0) {
+        goto PrintDeviceArbitersEnd;
+    }
+
+    Status = DbgGetTypeByName(Context, "RESOURCE_ARBITER", &ArbiterType);
+    if (Status != 0) {
+        goto PrintDeviceArbitersEnd;
+    }
+
+    Status = DbgGetMemberOffset(ArbiterType,
+                                "ListEntry",
+                                &ArbiterListEntryOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintDeviceArbitersEnd;
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  DeviceType,
+                                  "Header.Type",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &HeaderType);
+
+    if (Status != 0) {
+        goto PrintDeviceArbitersEnd;
+    }
+
+    if (HeaderType != ObjectDevice) {
+        DbgOut("Object header type %I64d, probably not a device!\n",
+               HeaderType);
 
         return FALSE;
     }
 
-    if (Device.Header.Type != ObjectDevice) {
-        DbgOut("Object header type %d, probably not a device!\n",
-               Device.Header.Type);
+    Status = DbgReadIntegerMember(Context,
+                                  DeviceType,
+                                  "ParentDevice",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &DeviceParentAddress);
 
-        return FALSE;
+    if (Status != 0) {
+        goto PrintDeviceArbitersEnd;
     }
 
-    DeviceParentAddress = (UINTN)Device.ParentDevice;
     DbgOut("Arbiters for device %I64x (parent %I64x):\n",
            OriginalDeviceAddress,
            DeviceParentAddress);
+
+    free(Data);
+    Data = NULL;
 
     //
     // Attempt to find each arbiter.
@@ -1190,79 +1803,133 @@ Return Value:
 
         DeviceAddress = DeviceParentAddress;
         while (TRUE) {
-            Success = DbgReadMemory(Context,
-                                    TRUE,
-                                    DeviceAddress,
-                                    sizeof(DEVICE),
-                                    &Device,
-                                    &BytesRead);
 
-            if ((Success != 0) || (BytesRead != sizeof(DEVICE))) {
+            assert(Data == NULL);
+
+            Status = DbgReadType(Context,
+                                 DeviceAddress,
+                                 DeviceType,
+                                 &Data,
+                                 &DataSize);
+
+            if (Status != 0) {
                 DbgOut("Failed to read device at %I64x.\n", DeviceAddress);
-                return FALSE;
+                goto PrintDeviceArbitersEnd;
             }
 
-            if (Device.Header.Type != ObjectDevice) {
-                DbgOut("Object header type %d, probably not a device!\n",
-                       Device.Header.Type);
+            Status = DbgReadIntegerMember(Context,
+                                          DeviceType,
+                                          "Header.Type",
+                                          DeviceAddress,
+                                          Data,
+                                          DataSize,
+                                          &HeaderType);
 
-                return FALSE;
+            if (Status != 0) {
+                goto PrintDeviceArbitersEnd;
+            }
+
+            if (HeaderType != ObjectDevice) {
+                DbgOut("Object header type %I64d, probably not a device!\n",
+                       HeaderType);
+
+                Status = EINVAL;
+                goto PrintDeviceArbitersEnd;
+            }
+
+            Status = DbgReadIntegerMember(Context,
+                                          DeviceType,
+                                          "ParentDevice",
+                                          Address,
+                                          Data,
+                                          DataSize,
+                                          &NextParent);
+
+            if (Status != 0) {
+                goto PrintDeviceArbitersEnd;
             }
 
             //
             // Loop through every arbiter in the device.
             //
 
-            ChildListHead = DeviceAddress +
-                            FIELD_OFFSET(DEVICE, ArbiterListHead);
+            ChildListHead = DeviceAddress + ArbiterListHeadOffset;
+            Status = DbgReadIntegerMember(Context,
+                                          DeviceType,
+                                          "ArbiterListHead.Next",
+                                          DeviceAddress,
+                                          Data,
+                                          DataSize,
+                                          &CurrentEntryAddress);
 
-            CurrentEntryAddress = (UINTN)Device.ArbiterListHead.Next;
+            if (Status != 0) {
+                goto PrintDeviceArbitersEnd;
+            }
+
+            free(Data);
+            Data = NULL;
             while (CurrentEntryAddress != ChildListHead) {
 
                 //
                 // Read the list entry.
                 //
 
-                Success = DbgReadMemory(Context,
-                                        TRUE,
-                                        CurrentEntryAddress,
-                                        sizeof(LIST_ENTRY),
-                                        &CurrentEntryValue,
-                                        &BytesRead);
+                assert(ListEntryData == NULL);
 
-                if ((Success != 0) || (BytesRead != sizeof(LIST_ENTRY))) {
-                    DbgOut("Error: Could not read LIST_ENTRY at 0x%I64x.\n",
-                           CurrentEntryAddress);
+                Status = DbgReadType(Context,
+                                     CurrentEntryAddress,
+                                     ListEntryType,
+                                     &ListEntryData,
+                                     &ListEntryDataSize);
 
-                    return FALSE;
+                if (Status != 0) {
+                    goto PrintDeviceArbitersEnd;
                 }
 
                 //
                 // Read in the arbiter.
                 //
 
-                ChildObjectAddress = CurrentEntryAddress -
-                                     FIELD_OFFSET(RESOURCE_ARBITER, ListEntry);
+                ChildObjectAddress =
+                                  CurrentEntryAddress - ArbiterListEntryOffset;
 
-                Success = DbgReadMemory(Context,
-                                        TRUE,
-                                        ChildObjectAddress,
-                                        sizeof(RESOURCE_ARBITER),
-                                        &Arbiter,
-                                        &BytesRead);
+                assert(Data == NULL);
 
-                if ((Success != 0) || (BytesRead != sizeof(RESOURCE_ARBITER))) {
+                Status = DbgReadType(Context,
+                                     ChildObjectAddress,
+                                     ArbiterType,
+                                     &Data,
+                                     &DataSize);
+
+                if (Status != 0) {
                     DbgOut("Error: Could not read arbiter at 0x%I64x.\n",
                            ChildObjectAddress);
 
-                    return FALSE;
+                    goto PrintDeviceArbitersEnd;
                 }
+
+                Status = DbgReadIntegerMember(Context,
+                                              ArbiterType,
+                                              "ResourceType",
+                                              ChildObjectAddress,
+                                              Data,
+                                              DataSize,
+                                              &ResourceType);
+
+                if (Status != 0) {
+                    goto PrintDeviceArbitersEnd;
+                }
+
+                free(Data);
+                Data = NULL;
 
                 //
                 // Stop looking if this arbiter is the right type.
                 //
 
-                if (Arbiter.ResourceType == ArbiterIndex) {
+                if (ResourceType == ArbiterIndex) {
+                    free(ListEntryData);
+                    ListEntryData = NULL;
                     break;
                 }
 
@@ -1270,7 +1937,20 @@ Return Value:
                 // Move to the next entry.
                 //
 
-                CurrentEntryAddress = (UINTN)CurrentEntryValue.Next;
+                Status = DbgReadIntegerMember(Context,
+                                              ListEntryType,
+                                              "Next",
+                                              CurrentEntryAddress,
+                                              ListEntryData,
+                                              ListEntryDataSize,
+                                              &CurrentEntryAddress);
+
+                if (Status != 0) {
+                    goto PrintDeviceArbitersEnd;
+                }
+
+                free(ListEntryData);
+                ListEntryData = NULL;
             }
 
             //
@@ -1291,8 +1971,8 @@ Return Value:
             // device.
             //
 
-            DeviceAddress = (UINTN)Device.ParentDevice;
-            if (Device.ParentDevice == NULL) {
+            DeviceAddress = NextParent;
+            if (DeviceAddress == 0) {
                 DbgOut("Could not find %s arbiter.\n",
                        ExtpGetResourceTypeString(ArbiterIndex));
 
@@ -1301,7 +1981,21 @@ Return Value:
         }
     }
 
-    return TRUE;
+PrintDeviceArbitersEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    if (ListEntryData != NULL) {
+        free(ListEntryData);
+    }
+
+    Result = TRUE;
+    if (Status != 0) {
+        Result = FALSE;
+    }
+
+    return Result;
 }
 
 BOOL
@@ -1335,16 +2029,19 @@ Return Value:
 
 {
 
-    RESOURCE_ARBITER Arbiter;
-    ULONGLONG ArbiterAddress;
-    ULONG BytesRead;
+    ULONG ArbiterEntryListHeadOffset;
+    ULONG ArbiterEntryOffset;
+    PTYPE_SYMBOL ArbiterType;
     ULONGLONG ChildListHead;
     ULONGLONG ChildObjectAddress;
     ULONGLONG CurrentEntryAddress;
-    LIST_ENTRY CurrentEntryValue;
-    ULONG IndentIndex;
+    PVOID Data;
+    ULONG DataSize;
+    PTYPE_SYMBOL ListEntryType;
     PSTR ResourceType;
-    INT Success;
+    BOOL Result;
+    INT Status;
+    ULONGLONG Value;
 
     //
     // Bail out if the indentation seems too deep.
@@ -1358,84 +2055,156 @@ Return Value:
     // Print out the indentation.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
+    DbgOut("%*s", IndentationLevel, "");
+    Status = DbgReadTypeByName(Context,
+                               Address,
+                               "RESOURCE_ARBITER",
+                               &ArbiterType,
+                               &Data,
+                               &DataSize);
+
+    if (Status != 0) {
+        DbgOut("Failed to read RESOURCE_ARBITER at %I64x.\n", Address);
+        goto PrintResourceArbiterEnd;
     }
 
-    ArbiterAddress = Address;
-    Success = DbgReadMemory(Context,
-                            TRUE,
-                            Address,
-                            sizeof(RESOURCE_ARBITER),
-                            &Arbiter,
-                            &BytesRead);
+    Status = DbgReadIntegerMember(Context,
+                                  ArbiterType,
+                                  "ResourceType",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
 
-    if ((Success != 0) || (BytesRead != sizeof(RESOURCE_ARBITER))) {
-        DbgOut("Error: Could not read arbiter at 0x%I64x.\n",
-               Address);
-
-        return FALSE;
+    if (Status != 0) {
+        goto PrintResourceArbiterEnd;
     }
 
-    ResourceType = ExtpGetResourceTypeString(Arbiter.ResourceType);
-    DbgOut("%s Arbiter @ %I64x owned by device %x\n",
-           ResourceType,
-           ArbiterAddress,
-           Arbiter.OwningDevice);
+    ResourceType = ExtpGetResourceTypeString(Value);
+    DbgOut("%s Arbiter @ 0x%I64x owned by device ", ResourceType, Address);
+    Status = DbgReadIntegerMember(Context,
+                                  ArbiterType,
+                                  "OwningDevice",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintResourceArbiterEnd;
+    }
+
+    DbgOut("0x%I64x\n", Value);
+    Status = DbgGetMemberOffset(ArbiterType,
+                                "EntryListHead",
+                                &ArbiterEntryListHeadOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintResourceArbiterEnd;
+    }
+
+    ArbiterEntryListHeadOffset /= BITS_PER_BYTE;
+    Status = DbgGetMemberOffset(ArbiterType,
+                                "ListEntry",
+                                &ArbiterEntryOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto PrintResourceArbiterEnd;
+    }
+
+    ArbiterEntryOffset /= BITS_PER_BYTE;
+    Status = DbgGetTypeByName(Context, "LIST_ENTRY", &ListEntryType);
+    if (Status != 0) {
+        goto PrintResourceArbiterEnd;
+    }
 
     //
     // Print out all entries.
     //
 
     IndentationLevel += 1;
-    ChildListHead = ArbiterAddress +
-                    FIELD_OFFSET(RESOURCE_ARBITER,
-                                 EntryListHead);
+    ChildListHead = Address + ArbiterEntryListHeadOffset;
+    Status = DbgReadIntegerMember(Context,
+                                  ArbiterType,
+                                  "EntryListHead.Next",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &CurrentEntryAddress);
 
-    CurrentEntryAddress = (UINTN)Arbiter.EntryListHead.Next;
+    if (Status != 0) {
+        goto PrintResourceArbiterEnd;
+    }
+
+    free(Data);
+    Data = NULL;
     while (CurrentEntryAddress != ChildListHead) {
 
         //
         // Read the list entry.
         //
 
-        Success = DbgReadMemory(Context,
-                                TRUE,
-                                CurrentEntryAddress,
-                                sizeof(LIST_ENTRY),
-                                &CurrentEntryValue,
-                                &BytesRead);
+        assert(Data == NULL);
 
-        if ((Success != 0) || (BytesRead != sizeof(LIST_ENTRY))) {
-            DbgOut("Error: Could not read LIST_ENTRY at 0x%I64x.\n",
-                   CurrentEntryAddress);
+        Status = DbgReadType(Context,
+                             CurrentEntryAddress,
+                             ListEntryType,
+                             &Data,
+                             &DataSize);
 
-            return FALSE;
+        if (Status != 0) {
+            goto PrintResourceArbiterEnd;
         }
 
         //
         // Print the arbiter entry.
         //
 
-        ChildObjectAddress = CurrentEntryAddress -
-                             FIELD_OFFSET(ARBITER_ENTRY, ListEntry);
+        ChildObjectAddress = CurrentEntryAddress - ArbiterEntryOffset;
+        Result = ExtpPrintArbiterEntry(Context,
+                                       ChildObjectAddress,
+                                       IndentationLevel);
 
-        Success = ExtpPrintArbiterEntry(Context,
-                                        ChildObjectAddress,
-                                        IndentationLevel);
-
-        if (Success == FALSE) {
-            return FALSE;
+        if (Result == FALSE) {
+            Status = EINVAL;
+            goto PrintResourceArbiterEnd;
         }
 
         //
         // Move to the next entry.
         //
 
-        CurrentEntryAddress = (UINTN)CurrentEntryValue.Next;
+        Status = DbgReadIntegerMember(Context,
+                                      ListEntryType,
+                                      "Next",
+                                      CurrentEntryAddress,
+                                      Data,
+                                      DataSize,
+                                      &CurrentEntryAddress);
+
+        if (Status != 0) {
+            goto PrintResourceArbiterEnd;
+        }
+
+        free(Data);
+        Data = NULL;
     }
 
-    return TRUE;
+    Status = 0;
+
+PrintResourceArbiterEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    Result = TRUE;
+    if (Status != 0) {
+        Result = FALSE;
+    }
+
+    return Result;
 }
 
 BOOL
@@ -1469,12 +2238,15 @@ Return Value:
 
 {
 
-    ULONG BytesRead;
-    ARBITER_ENTRY Entry;
-    ULONGLONG EntryAddress;
-    ULONG IndentIndex;
+    PVOID Data;
+    ULONG DataSize;
+    PTYPE_SYMBOL EntryType;
+    BOOL Result;
     PSTR SpaceType;
-    INT Success;
+    INT Status;
+    ULONGLONG Value;
+
+    Data = NULL;
 
     //
     // Bail out if the indentation seems too deep.
@@ -1488,26 +2260,34 @@ Return Value:
     // Print out the indentation.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
-    }
+    DbgOut("%*s", IndentationLevel, "");
+    Status = DbgReadTypeByName(Context,
+                               Address,
+                               "ARBITER_ENTRY",
+                               &EntryType,
+                               &Data,
+                               &DataSize);
 
-    EntryAddress = Address;
-    Success = DbgReadMemory(Context,
-                            TRUE,
-                            Address,
-                            sizeof(ARBITER_ENTRY),
-                            &Entry,
-                            &BytesRead);
-
-    if ((Success != 0) || (BytesRead != sizeof(ARBITER_ENTRY))) {
+    if (Status != 0) {
         DbgOut("Error: Could not read entry at 0x%I64x.\n",
                Address);
 
-        return FALSE;
+        goto PrintArbiterEntryEnd;
     }
 
-    switch (Entry.Type) {
+    Status = DbgReadIntegerMember(Context,
+                                  EntryType,
+                                  "Type",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintArbiterEntryEnd;
+    }
+
+    switch (Value) {
     case ArbiterSpaceInvalid:
         SpaceType = "Invalid";
         break;
@@ -1529,30 +2309,121 @@ Return Value:
         break;
     }
 
-    DbgOut("%08I64x %9s: %08I64x, Len %08I64x, Char %I64x, Requirement "
-           "%x, Device %x",
-           EntryAddress,
-           SpaceType,
-           Entry.Allocation,
-           Entry.Length,
-           Entry.Characteristics,
-           Entry.CorrespondingRequirement,
-           Entry.Device);
+    DbgOut("%08I64x %9s: ", Address, SpaceType);
+    Status = DbgReadIntegerMember(Context,
+                                  EntryType,
+                                  "Allocation",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
 
-    if (Entry.DependentEntry != NULL) {
-        DbgOut(", Dependent %x", Entry.DependentEntry);
+    if (Status != 0) {
+        goto PrintArbiterEntryEnd;
     }
 
-    if ((Entry.Flags & RESOURCE_FLAG_NOT_SHAREABLE) != 0) {
+    DbgOut("%08I64x, Len ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  EntryType,
+                                  "Length",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintArbiterEntryEnd;
+    }
+
+    DbgOut("%08I64x, Char ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  EntryType,
+                                  "Characteristics",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintArbiterEntryEnd;
+    }
+
+    DbgOut("%I64x, Requirement ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  EntryType,
+                                  "CorrespondingRequirement",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintArbiterEntryEnd;
+    }
+
+    DbgOut("0x%I64x, Device ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  EntryType,
+                                  "Device",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintArbiterEntryEnd;
+    }
+
+    DbgOut("0x%I64x", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  EntryType,
+                                  "DependentEntry",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintArbiterEntryEnd;
+    }
+
+    if (Value != 0) {
+        DbgOut(", Dependent %I64x", Value);
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  EntryType,
+                                  "Flags",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto PrintArbiterEntryEnd;
+    }
+
+    if ((Value & RESOURCE_FLAG_NOT_SHAREABLE) != 0) {
         DbgOut(" NotShared");
     }
 
-    if ((Entry.Flags & RESOURCE_FLAG_BOOT) != 0) {
+    if ((Value & RESOURCE_FLAG_BOOT) != 0) {
         DbgOut(" Boot");
     }
 
     DbgOut("\n");
-    return TRUE;
+
+PrintArbiterEntryEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    Result = TRUE;
+    if (Status != 0) {
+        Result = FALSE;
+    }
+
+    return Result;
 }
 
 PSTR

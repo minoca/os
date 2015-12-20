@@ -555,8 +555,9 @@ Structure Description:
 
 Members:
 
-    Pointer - Stores a flag indicating that this type is a pointer to its
-        reference type.
+    Pointer - Stores a combination of a flag and a value. If zero, it indicates
+        this relation is not a pointer. If non-zero it indicates both that this
+        relation is a pointer type, and the size of a pointer on the machine.
 
     OwningFile - Stores a pointer to the source file that contains the
         reference type.
@@ -573,7 +574,7 @@ Members:
 --*/
 
 typedef struct _DATA_TYPE_RELATION {
-    BOOL Pointer;
+    UCHAR Pointer;
     PSOURCE_FILE_SYMBOL OwningFile;
     LONG TypeNumber;
     DATA_RANGE Array;
@@ -699,7 +700,7 @@ Members:
 
 --*/
 
-typedef struct _TYPE_SYMBOL {
+struct _TYPE_SYMBOL {
     LIST_ENTRY ListEntry;
     PSOURCE_FILE_SYMBOL ParentSource;
     LONG TypeNumber;
@@ -714,7 +715,7 @@ typedef struct _TYPE_SYMBOL {
         DATA_TYPE_FUNCTION_POINTER FunctionPointer;
     } U;
 
-} TYPE_SYMBOL, *PTYPE_SYMBOL;
+};
 
 /*++
 
@@ -1149,103 +1150,26 @@ Return Value:
 
 --*/
 
-ULONG
-DbgPrintTypeContents (
-    PVOID DataStream,
-    PTYPE_SYMBOL Type,
-    ULONG SpaceLevel,
-    ULONG RecursionDepth
-    );
-
-/*++
-
-Routine Description:
-
-    This routine prints the given data stream interpreted as a given type. It is
-    assumed that the datastream is long enough for the type. To get the number
-    of bytes required to print the type, call the function with a NULL
-    datastream.
-
-Arguments:
-
-    DataStream - Supplies a pointer to the datastream. This can be NULL if the
-        caller only wants the size of the type.
-
-    Type - Supplies a pointer to the type to print.
-
-    SpaceLevel - Supplies the number of spaces to print after every newline.
-        Used for nesting types.
-
-    RecursionDepth - Supplies how many times this should recurse on structure
-        members. If 0, only the name of the type is printed.
-
-Return Value:
-
-    None (information is printed directly to the standard output).
-
---*/
-
-BOOL
-DbgGetStructureFieldInformation (
-    PTYPE_SYMBOL StructureType,
-    PSTR FieldName,
-    ULONG FieldNameLength,
-    PULONG FieldOffset,
-    PULONG FieldSize
-    );
-
-/*++
-
-Routine Description:
-
-    This routine returns the given field's offset (in bits) within the
-    given structure.
-
-Arguments:
-
-    StructureType - Supplies a pointer to a symbol structure type.
-
-    FieldName - Supplies a string containing the name of the field whose offset
-        will be returned.
-
-    FieldNameLength - Supplies the lenght of the given field name.
-
-    FieldOffset - Supplies a pointer that will receive the bit offset of the
-        given field name within the given structure.
-
-    FieldSize - Supplies a pointer that will receive the size of the field in
-        bits.
-
-Return Value:
-
-    TRUE if the field name is found in the structure. FALSE otherwise.
-
---*/
-
 PTYPE_SYMBOL
-DbgResolveRelationType (
-    PTYPE_SYMBOL Type,
-    ULONG RecursionDepth
+DbgSkipTypedefs (
+    PTYPE_SYMBOL Type
     );
 
 /*++
 
 Routine Description:
 
-    This routine resolves a relation type into a non-relation data type. If the
-    given relation type is void, an array, a pointer, or a function, then the
-    relation type is returned as is.
+    This routine skips all relation types that aren't pointers or arrays.
 
 Arguments:
 
-    Type - Supplies a pointer to the type to be resolved.
-
-    RecursionDepth - Supplies the recursion depth of this function. Supply
-        zero here.
+    Type - Supplies a pointer to the type to get to the bottom of.
 
 Return Value:
 
-    Returns a pointer to the type on success, or NULL on error.
+    NULL if the type ended up being void or not found.
+
+    Returns a pointer to the root type on success.
 
 --*/
 

@@ -59,6 +59,8 @@ Environment:
 #define BUILTIN_TYPE_BOOL (-16)
 #define BUILTIN_TYPE_BOOL_STRING "@s1;r-16;0;1;"
 
+#define STABS_POINTER_SIZE 4
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -1555,7 +1557,7 @@ Return Value:
 
         memset(&Relation, 0, sizeof(DATA_TYPE_RELATION));
         if ((*String == '*') || (*String == '&')) {
-            Relation.Pointer = TRUE;
+            Relation.Pointer = STABS_POINTER_SIZE;
             String += 1;
         }
 
@@ -1606,7 +1608,7 @@ Return Value:
             if ((Relation.Array.Minimum == 0) &&
                 (Relation.Array.Maximum == -1)) {
 
-                Relation.Pointer = TRUE;
+                Relation.Pointer = STABS_POINTER_SIZE;
                 Relation.Array.Maximum = 0;
             }
         }
@@ -1943,6 +1945,13 @@ Return Value:
         //
 
         String += 1;
+
+        //
+        // Assume all enumerations are 4 bytes since there's no other
+        // information to go on.
+        //
+
+        Enumeration.SizeInBytes = 4;
 
         //
         // Set the local type and data pointer.
@@ -3854,7 +3863,7 @@ Return Value:
             if (Match != FALSE) {
                 NewType->Type = DataTypeRelation;
                 NewTypeRelation = &(NewType->U.Relation);
-                NewTypeRelation->Pointer = FALSE;
+                NewTypeRelation->Pointer = 0;
                 NewTypeRelation->OwningFile = CurrentType->ParentSource;
                 NewTypeRelation->TypeNumber = CurrentType->TypeNumber;
                 NewTypeRelation->Array.Minimum = 0;
@@ -3898,6 +3907,7 @@ Return Value:
                 NewTypeEnumeration = &(NewType->U.Enumeration);
                 NewTypeEnumeration->MemberCount = 0;
                 NewTypeEnumeration->FirstMember = NULL;
+                NewTypeEnumeration->SizeInBytes = 4;
                 break;
 
             default:

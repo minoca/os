@@ -177,6 +177,7 @@ DbgrpResolveDumpType (
     PDEBUGGER_CONTEXT Context,
     PTYPE_SYMBOL *Type,
     PVOID *Data,
+    PUINTN DataSize,
     PULONGLONG Address
     );
 
@@ -2288,14 +2289,13 @@ Return Value:
     ULONG FieldSize;
     ULONGLONG ListEntry[2];
     PSTR ListEntryName;
-    ULONG ListEntryNameLength;
     ULONG ListEntrySize;
     ULONGLONG ListHeadAddress;
     PSTR ListHeadAddressString;
     ULONG PointerSize;
     ULONGLONG PreviousAddress;
     PTYPE_SYMBOL ResolvedType;
-    INT Result;
+    BOOL Result;
     SYMBOL_SEARCH_RESULT SearchResult;
     INT Status;
     ULONGLONG StructureAddress;
@@ -2324,12 +2324,11 @@ Return Value:
     // Evaluate the first argument, converting it to the list head address.
     //
 
-    Result = DbgEvaluate(Context, ListHeadAddressString, &ListHeadAddress);
-    if (Result != 0) {
+    Status = DbgEvaluate(Context, ListHeadAddressString, &ListHeadAddress);
+    if (Status != 0) {
         DbgOut("Error: Could not evaluate address from string %s\n",
                Arguments[0]);
 
-        Status = Result;
         goto DumpListEnd;
     }
 
@@ -2337,6 +2336,7 @@ Return Value:
     // Serach through all modules to find the supplied symbol.
     //
 
+    SearchResult.Variety = SymbolResultType;
     Result = DbgpFindSymbol(Context, TypeNameString, &SearchResult);
     if (Result == FALSE) {
         DbgOut("Error: Unknown type name %s\n", TypeNameString);
@@ -2359,7 +2359,7 @@ Return Value:
     //
 
     if (SearchResult.U.TypeResult->Type == DataTypeRelation) {
-        ResolvedType = DbgResolveRelationType(SearchResult.U.TypeResult, 0);
+        ResolvedType = DbgSkipTypedefs(SearchResult.U.TypeResult);
         if ((ResolvedType == NULL) ||
             (ResolvedType->Type != DataTypeStructure)) {
 
@@ -2375,7 +2375,7 @@ Return Value:
 
     } else if (SearchResult.U.TypeResult->Type != DataTypeStructure) {
         DbgOut("Error: %s is not a structure.\n", TypeNameString);
-         goto DumpListEnd;
+        goto DumpListEnd;
 
     } else {
         ResolvedType = SearchResult.U.TypeResult;
@@ -2395,14 +2395,12 @@ Return Value:
     // Get the offset and size of the list entry field.
     //
 
-    ListEntryNameLength = strlen(ListEntryName);
-    Result = DbgGetStructureFieldInformation(ResolvedType,
-                                             ListEntryName,
-                                             ListEntryNameLength,
-                                             &FieldOffset,
-                                             &FieldSize);
+    Status = DbgGetMemberOffset(ResolvedType,
+                                ListEntryName,
+                                &FieldOffset,
+                                &FieldSize);
 
-    if (Result == FALSE) {
+    if (Status != 0) {
         DbgOut("Error: Unknown structure member %s\n", ListEntryName);
         goto DumpListEnd;
     }
@@ -2418,19 +2416,18 @@ Return Value:
 
     PointerSize = DbgGetTargetPointerSize(Context);
     ListEntrySize = PointerSize * 2;
-    Result = DbgReadMemory(Context,
+    Status = DbgReadMemory(Context,
                            TRUE,
                            ListHeadAddress,
                            ListEntrySize,
                            ListEntry,
                            &BytesRead);
 
-    if ((Result != 0) || (BytesRead != ListEntrySize)) {
-        if (Result == 0) {
-            Result = EINVAL;
+    if ((Status != 0) || (BytesRead != ListEntrySize)) {
+        if (Status == 0) {
+            Status = EINVAL;
         }
 
-        Status = Result;
         DbgOut("Error: Unable to read data at address 0x%I64x\n",
                ListHeadAddress);
 
@@ -2495,19 +2492,18 @@ Return Value:
         //
 
         StructureAddress = CurrentAddress - (FieldOffset / BITS_PER_BYTE);
-        Result = DbgReadMemory(Context,
+        Status = DbgReadMemory(Context,
                                TRUE,
                                StructureAddress,
                                StructureSize,
                                StructureBuffer,
                                &BytesRead);
 
-        if ((Result != 0) || (BytesRead != StructureSize)) {
-            if (Result == 0) {
-                Result = EINVAL;
+        if ((Status != 0) || (BytesRead != StructureSize)) {
+            if (Status == 0) {
+                Status = EINVAL;
             }
 
-            Status = Result;
             DbgOut("Error: Unable to read %d bytes at address 0x%I64x\n",
                    StructureSize,
                    StructureAddress);
@@ -2522,10 +2518,12 @@ Return Value:
         DbgOut("----------------------------------------\n");
         DbgOut("List Entry %d at address 0x%I64x\n", Count, StructureAddress);
         DbgOut("----------------------------------------\n");
-        DbgPrintTypeContents(StructureBuffer,
-                             ResolvedType,
-                             1,
-                             DEFAULT_RECURSION_DEPTH);
+        DbgPrintType(Context,
+                     ResolvedType,
+                     StructureBuffer,
+                     StructureSize,
+                     1,
+                     DEFAULT_RECURSION_DEPTH);
 
         DbgOut("\n");
 
@@ -2533,19 +2531,19 @@ Return Value:
         // Read the current structure's list entry data.
         //
 
-        Result = DbgReadMemory(Context,
+        Status = DbgReadMemory(Context,
                                TRUE,
                                CurrentAddress,
                                ListEntrySize,
                                ListEntry,
                                &BytesRead);
 
-        if ((Result != 0) || (BytesRead != ListEntrySize)) {
-            if (Result == 0) {
-                Result = EINVAL;
+        if ((Status != 0) || (BytesRead != ListEntrySize)) {
+            if (Status == 0) {
+                Status = EINVAL;
             }
 
-            Status = Result;
+            Status = Status;
             DbgOut("Error: Unable to read data at address 0x%I64x\n",
                    CurrentAddress);
 
@@ -4811,30 +4809,41 @@ Return Value:
 
 {
 
-    CHAR AddressString[50];
-    PSTR DumpArguments[2];
-    ULONGLONG ProcessorBlock;
-    INT Result;
+    ULONGLONG Address;
+    UINTN Size;
+    INT Status;
+    PSTR TypeString;
 
-    assert(Context->CurrentEvent.Type == DebuggerEventBreak);
-
-    Result = 0;
-    ProcessorBlock = Context->CurrentEvent.BreakNotification.ProcessorBlock;
-    DbgOut("Processor block at 0x%08I64x\n", ProcessorBlock);
-    sprintf(AddressString, "0x%I64x", ProcessorBlock);
-    if (ProcessorBlock != (UINTN)NULL) {
-        DumpArguments[0] = "PROCESSOR_BLOCK";
-        DumpArguments[1] = AddressString;
-        Result = DbgrDumpType(Context, DumpArguments, 2, NULL, 0);
-        if (Result != 0) {
-            return Result;
+    if (ArgumentCount > 1) {
+        Size = strlen(Arguments[1]) + strlen("PROCESSOR_BLOCK") + 2;
+        TypeString = malloc(Size);
+        if (TypeString == NULL) {
+            return ENOMEM;
         }
 
-        Result = 0;
+        snprintf(TypeString, Size, "%s.%s", "PROCESSOR_BLOCK", Arguments[1]);
+
+    } else {
+        TypeString = "PROCESSOR_BLOCK";
+    }
+
+    Address = Context->CurrentEvent.BreakNotification.ProcessorBlock;
+    Status = EFAULT;
+    if (Address != 0) {
+        Status = DbgPrintTypeByName(Context,
+                                    Address,
+                                    TypeString,
+                                    0,
+                                    DEFAULT_RECURSION_DEPTH);
+
         DbgOut("\n");
     }
 
-    return Result;
+    if (ArgumentCount > 1) {
+        free(TypeString);
+    }
+
+    return Status;
 }
 
 VOID
@@ -5464,6 +5473,7 @@ Return Value:
             Result = DbgrpResolveDumpType(Context,
                                           &Type,
                                           &DataStream,
+                                          &TypeSize,
                                           &Address);
 
             if (Result != 0) {
@@ -5475,7 +5485,13 @@ Return Value:
                 DbgOut("Dumping memory at 0x%08x\n", (ULONG)Address);
             }
 
-            DbgPrintTypeContents(DataStream, Type, 0, DEFAULT_RECURSION_DEPTH);
+            Result = DbgPrintType(Context,
+                                  Type,
+                                  DataStream,
+                                  TypeSize,
+                                  0,
+                                  DEFAULT_RECURSION_DEPTH);
+
             goto DumpTypeEnd;
         }
     }
@@ -5519,6 +5535,10 @@ Return Value:
         break;
     }
 
+    if (Type != NULL) {
+        Type = DbgSkipTypedefs(Type);
+    }
+
     //
     // If a type was not found, print the error and exit.
     //
@@ -5545,13 +5565,14 @@ Return Value:
             goto DumpTypeEnd;
         }
 
-        Result = DbgPrintTypeContents(RawDataStream,
-                                      Type,
-                                      0,
-                                      DEFAULT_RECURSION_DEPTH);
+        Result = DbgPrintType(Context,
+                              Type,
+                              RawDataStream,
+                              RawDataStreamSizeInBytes,
+                              0,
+                              DEFAULT_RECURSION_DEPTH);
 
-        if (Result == FALSE) {
-            Result = EINVAL;
+        if (Result != 0) {
             goto DumpTypeEnd;
         }
 
@@ -5604,6 +5625,7 @@ Return Value:
             Result = DbgrpResolveDumpType(Context,
                                           &Type,
                                           &DataStream,
+                                          &TypeSize,
                                           &Address);
 
             if (Result != 0) {
@@ -5616,13 +5638,19 @@ Return Value:
             //
 
             DbgOut("Dumping memory at 0x%08x\n", (ULONG)Address);
-            TypeSize = DbgPrintTypeContents(DataStream,
-                                            Type,
-                                            0,
-                                            DEFAULT_RECURSION_DEPTH);
+            Result = DbgPrintType(Context,
+                                  Type,
+                                  DataStream,
+                                  TypeSize,
+                                  0,
+                                  DEFAULT_RECURSION_DEPTH);
 
             if (AddressIndex != ArgumentCount - 1) {
                 DbgOut("\n");
+            }
+
+            if (Result != 0) {
+                goto DumpTypeEnd;
             }
         }
 
@@ -8165,6 +8193,7 @@ DbgrpResolveDumpType (
     PDEBUGGER_CONTEXT Context,
     PTYPE_SYMBOL *Type,
     PVOID *Data,
+    PUINTN DataSize,
     PULONGLONG Address
     )
 
@@ -8185,6 +8214,9 @@ Arguments:
 
     Data - Supplies a pointer that receives the data to be dumped. It also
         supplies the dump data for the given type.
+
+    DataSize - Supplies a pointer that on input contains the size of the
+        existing data buffer. This will be updated on output.
 
     Address - Supplies a pointer that receives the address of the final
         data if pointers are followed.
@@ -8210,6 +8242,7 @@ Return Value:
     INT Result;
 
     CurrentData = *Data;
+    CurrentSize = *DataSize;
     CurrentType = *Type;
     while (TRUE) {
         Result = FALSE;
@@ -8219,7 +8252,7 @@ Return Value:
         // non-relation type is found.
         //
 
-        CurrentType = DbgResolveRelationType(CurrentType, 0);
+        CurrentType = DbgSkipTypedefs(CurrentType);
         if (CurrentType == NULL) {
             Result = EINVAL;
             goto ResolveDumpTypeEnd;
@@ -8255,7 +8288,7 @@ Return Value:
         // current data should not be bigger than a pointer size.
         //
 
-        assert(RelationData->Pointer != FALSE);
+        assert(RelationData->Pointer != 0);
 
         CurrentSize = DbgGetTypeSize(CurrentType, 0);
         if (CurrentSize > sizeof(ULONGLONG)) {
@@ -8267,11 +8300,14 @@ Return Value:
             goto ResolveDumpTypeEnd;
         }
 
+        assert((CurrentData != *Data) || (*DataSize == CurrentSize));
+
         //
         // Make sure to not follow a NULL pointer.
         //
 
-        PointerValue = *(PULONG)CurrentData;
+        PointerValue = 0;
+        memcpy(&PointerValue, CurrentData, CurrentSize);
         if (PointerValue == 0) {
             DbgOut("Pointer is NULL.\n", CurrentType->Name);
             Result = FALSE;
@@ -8284,7 +8320,8 @@ Return Value:
 
         RelativeSize = DbgGetTypeSize(RelativeType, 0);
         free(CurrentData);
-        CurrentData = malloc(RelativeSize);
+        CurrentSize = RelativeSize;
+        CurrentData = malloc(CurrentSize);
         if (CurrentData == NULL) {
             DbgOut("Error unable to allocate %d bytes of memory.\n",
                    RelativeSize);
@@ -8318,11 +8355,21 @@ Return Value:
         CurrentType = RelativeType;
     }
 
-    *Type = CurrentType;
-    *Data = CurrentData;
     Result = 0;
 
 ResolveDumpTypeEnd:
+    if (Result != 0) {
+        if (CurrentData != NULL) {
+            free(CurrentData);
+            CurrentData = NULL;
+        }
+
+        CurrentSize = 0;
+    }
+
+    *Type = CurrentType;
+    *Data = CurrentData;
+    *DataSize = CurrentSize;
     return Result;
 }
 

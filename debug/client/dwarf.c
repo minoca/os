@@ -1230,7 +1230,7 @@ Return Value:
     LoadingContext = Context->LoadingContext;
     memset(&Relation, 0, sizeof(DATA_TYPE_RELATION));
     if (Die->Tag == DwarfTagPointerType) {
-        Relation.Pointer = TRUE;
+        Relation.Pointer = LoadingContext->CurrentUnit->AddressSize;
     }
 
     //
@@ -1315,7 +1315,9 @@ Return Value:
 
     Result = DwarfpGetIntegerAttribute(Die, DwarfAtUpperBound, &UpperBound);
     if (Result == FALSE) {
-        LoadingContext->CurrentType->U.Relation.Pointer = TRUE;
+        LoadingContext->CurrentType->U.Relation.Pointer =
+                                      LoadingContext->CurrentUnit->AddressSize;
+
         return 0;
     }
 

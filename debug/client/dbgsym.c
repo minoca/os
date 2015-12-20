@@ -57,6 +57,19 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef union _NUMERIC_UNION {
+    UCHAR Uint8;
+    CHAR Int8;
+    USHORT Uint16;
+    SHORT Int16;
+    ULONG Uint32;
+    LONG Int32;
+    ULONGLONG Uint64;
+    LONGLONG Int64;
+    float Float32;
+    double Float64;
+} NUMERIC_UNION, *PNUMERIC_UNION;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -268,7 +281,6 @@ Return Value:
                              "%s!%s",
                              Module->ModuleName,
                              SearchResult.U.FunctionResult->Name);
-
                 }
             }
 
@@ -815,7 +827,13 @@ Return Value:
     // Print the type contents.
     //
 
-    DbgPrintTypeContents(DataStream, Type, SpaceLevel, RecursionDepth);
+    Result = DbgPrintType(Context,
+                          Type,
+                          DataStream,
+                          TypeSize,
+                          SpaceLevel,
+                          RecursionDepth);
+
     Result = 0;
 
 PrintDataSymbolEnd:
@@ -1164,6 +1182,935 @@ Return Value:
     return Status;
 }
 
+INT
+DbgGetTypeByName (
+    PDEBUGGER_CONTEXT Context,
+    PSTR TypeName,
+    PTYPE_SYMBOL *Type
+    )
+
+/*++
+
+Routine Description:
+
+    This routine finds a type symbol object by its type name.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    TypeName - Supplies a pointer to the string containing the name of the
+        type to find. This can be prefixed with an module name if needed.
+
+    Type - Supplies a pointer where a pointer to the type will be returned.
+
+Return Value:
+
+    0 on success.
+
+    ENOENT if no type with the given name was found.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PTYPE_SYMBOL FoundType;
+    BOOL Result;
+    SYMBOL_SEARCH_RESULT SearchResult;
+    INT Status;
+
+    FoundType = NULL;
+    SearchResult.Variety = SymbolResultType;
+    Result = DbgpFindSymbol(Context, TypeName, &SearchResult);
+    if ((Result == FALSE) || (SearchResult.Variety != SymbolResultType)) {
+        Status = ENOENT;
+        goto GetTypeByNameEnd;
+    }
+
+    //
+    // Read the base type.
+    //
+
+    FoundType = SearchResult.U.TypeResult;
+    FoundType = DbgSkipTypedefs(FoundType);
+    Status = 0;
+
+GetTypeByNameEnd:
+    if (Status != 0) {
+        FoundType = NULL;
+    }
+
+    *Type = FoundType;
+    return Status;
+}
+
+INT
+DbgReadIntegerMember (
+    PDEBUGGER_CONTEXT Context,
+    PTYPE_SYMBOL Type,
+    PSTR MemberName,
+    ULONGLONG Address,
+    PVOID Data,
+    ULONG DataSize,
+    PULONGLONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads an integer sized member out of an already read-in
+    structure.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Type - Supplies a pointer to the type of the data.
+
+    MemberName - Supplies a pointer to the member name.
+
+    Address - Supplies the address where the data was obtained.
+
+    Data - Supplies a pointer to the data contents.
+
+    DataSize - Supplies the size of the data buffer in bytes.
+
+    Value - Supplies a pointer where the value will be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PVOID ShiftedData;
+    UINTN ShiftedDataSize;
+    INT Status;
+
+    Status = DbgpGetStructureMember(Context,
+                                    Type,
+                                    MemberName,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    &ShiftedData,
+                                    &ShiftedDataSize,
+                                    &Type);
+
+    if (Status != 0) {
+        return Status;
+    }
+
+    if (ShiftedDataSize > sizeof(ULONGLONG)) {
+        DbgOut("Error: Member %s.%s was larger than integer size.\n",
+               Type->Name,
+               MemberName);
+
+        free(ShiftedData);
+        return EINVAL;
+    }
+
+    *Value = 0;
+    memcpy(Value, ShiftedData, ShiftedDataSize);
+    return Status;
+}
+
+INT
+DbgReadTypeByName (
+    PDEBUGGER_CONTEXT Context,
+    ULONGLONG Address,
+    PSTR TypeName,
+    PTYPE_SYMBOL *FinalType,
+    PVOID *Data,
+    PULONG DataSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads in data from the target for a specified type, which is
+    given as a string.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Address - Supplies a target address pointer where the data resides.
+
+    TypeName - Supplies a pointer to a string containing the type name to get.
+        This should start with a type name, and can use dot '.' notation to
+        specify field members, and array[] notation to specify dereferences.
+
+    FinalType - Supplies a pointer where the final type symbol will be returned
+        on success.
+
+    Data - Supplies a pointer where the data will be returned on success. The
+        caller is responsible for freeing this data when finished.
+
+    DataSize - Supplies a pointer where the size of the data in bytes will be
+        returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PSTR Current;
+    PVOID CurrentData;
+    ULONG CurrentDataSize;
+    PSTR End;
+    PVOID NewData;
+    UINTN NewDataSize;
+    INT Status;
+    PTYPE_SYMBOL Type;
+
+    CurrentData = NULL;
+    CurrentDataSize = 0;
+    TypeName = strdup(TypeName);
+    if (TypeName == NULL) {
+        Status = ENOMEM;
+        goto ReadTypeByNameEnd;
+    }
+
+    End = TypeName + strlen(TypeName);
+
+    //
+    // Get the base type name.
+    //
+
+    Current = TypeName;
+    while ((*Current != '\0') && (*Current != '.') && (*Current != '[')) {
+        Current += 1;
+    }
+
+    *Current = '\0';
+    Current += 1;
+    Status = DbgGetTypeByName(Context, TypeName, &Type);
+    if (Status != 0) {
+        goto ReadTypeByNameEnd;
+    }
+
+    if (Type == NULL) {
+        DbgOut("Error: Cannot read void.\n");
+        Status = EINVAL;
+        goto ReadTypeByNameEnd;
+    }
+
+    //
+    // Read the base type.
+    //
+
+    Status = DbgReadType(Context,
+                         Address,
+                         Type,
+                         &CurrentData,
+                         &CurrentDataSize);
+
+    if (Status != 0) {
+        goto ReadTypeByNameEnd;
+    }
+
+    //
+    // Dereference through the structure members.
+    //
+
+    if (Current < End) {
+        Status = DbgpGetStructureMember(Context,
+                                        Type,
+                                        Current,
+                                        Address,
+                                        CurrentData,
+                                        CurrentDataSize,
+                                        &NewData,
+                                        &NewDataSize,
+                                        &Type);
+
+        if (Status != 0) {
+            goto ReadTypeByNameEnd;
+        }
+
+        free(CurrentData);
+        CurrentData = NewData;
+        CurrentDataSize = NewDataSize;
+    }
+
+ReadTypeByNameEnd:
+    if (TypeName != NULL) {
+        free(TypeName);
+    }
+
+    if (Status != 0) {
+        if (CurrentData != NULL) {
+            free(CurrentData);
+            CurrentData = NULL;
+        }
+
+        CurrentDataSize = 0;
+        Type = NULL;
+    }
+
+    if (FinalType != NULL) {
+        *FinalType = Type;
+    }
+
+    *Data = CurrentData;
+    *DataSize = CurrentDataSize;
+    return Status;
+}
+
+INT
+DbgReadType (
+    PDEBUGGER_CONTEXT Context,
+    ULONGLONG Address,
+    PTYPE_SYMBOL Type,
+    PVOID *Data,
+    PULONG DataSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads in data from the target for a specified type.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Address - Supplies a target address pointer where the data resides.
+
+    Type - Supplies a pointer to the type symbol to get.
+
+    Data - Supplies a pointer where the data will be returned on success. The
+        caller is responsible for freeing this data when finished.
+
+    DataSize - Supplies a pointer where the size of the data in bytes will be
+        returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PVOID Buffer;
+    ULONG BytesRead;
+    ULONGLONG Size;
+    INT Status;
+
+    *Data = NULL;
+    *DataSize = 0;
+    Size = DbgGetTypeSize(Type, 0);
+    Buffer = malloc(Size);
+    if (Buffer == NULL) {
+        return ENOMEM;
+    }
+
+    memset(Buffer, 0, Size);
+    Status = DbgReadMemory(Context, TRUE, Address, Size, Buffer, &BytesRead);
+    if (Status != 0) {
+        free(Buffer);
+        return Status;
+    }
+
+    *Data = Buffer;
+    *DataSize = Size;
+    return 0;
+}
+
+INT
+DbgPrintTypeByName (
+    PDEBUGGER_CONTEXT Context,
+    ULONGLONG Address,
+    PSTR TypeName,
+    ULONG SpaceLevel,
+    ULONG RecursionCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a structure or value at a specified address, whose type
+    is specified by a string.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Address - Supplies a target address pointer where the data resides.
+
+    TypeName - Supplies a pointer to a string containing the type name to get.
+        This should start with a type name, and can use dot '.' notation to
+        specify field members, and array[] notation to specify dereferences.
+
+    SpaceLevel - Supplies the number of spaces worth of indentation to print
+        for subsequent lines.
+
+    RecursionCount - Supplies the number of substructures to recurse into.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PVOID Data;
+    UINTN DataSize;
+    INT Status;
+    PTYPE_SYMBOL Type;
+
+    Data = NULL;
+    Status = DbgReadTypeByName(Context,
+                               Address,
+                               TypeName,
+                               &Type,
+                               &Data,
+                               &DataSize);
+
+    if (Status != 0) {
+        return Status;
+    }
+
+    Status = DbgPrintType(Context,
+                          Type,
+                          Data,
+                          DataSize,
+                          SpaceLevel,
+                          RecursionCount);
+
+    free(Data);
+    return Status;
+}
+
+INT
+DbgPrintTypeMember (
+    PDEBUGGER_CONTEXT Context,
+    ULONGLONG Address,
+    PVOID Data,
+    ULONG DataSize,
+    PTYPE_SYMBOL Type,
+    PSTR MemberName,
+    ULONG SpaceLevel,
+    ULONG RecursionCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a member of a structure or union whose contents have
+    already been read in.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Address - Supplies the address where this data came from.
+
+    Data - Supplies a pointer to the data contents.
+
+    DataSize - Supplies the size of the data contents buffer in bytes.
+
+    Type - Supplies a pointer to the structure type.
+
+    MemberName - Supplies the name of the member to print.
+
+    SpaceLevel - Supplies the number of spaces worth of indentation to print
+        for subsequent lines.
+
+    RecursionCount - Supplies the number of substructures to recurse into.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PVOID ShiftedData;
+    UINTN ShiftedDataSize;
+    INT Status;
+
+    Status = DbgpGetStructureMember(Context,
+                                    Type,
+                                    MemberName,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    &ShiftedData,
+                                    &ShiftedDataSize,
+                                    &Type);
+
+    if (Status != 0) {
+        return Status;
+    }
+
+    Status = DbgPrintType(Context,
+                          Type,
+                          ShiftedData,
+                          ShiftedDataSize,
+                          SpaceLevel,
+                          RecursionCount);
+
+    return Status;
+}
+
+INT
+DbgPrintType (
+    PDEBUGGER_CONTEXT Context,
+    PTYPE_SYMBOL Type,
+    PVOID Data,
+    UINTN DataSize,
+    ULONG SpaceLevel,
+    ULONG RecursionCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints the given type to the debugger console.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Type - Supplies a pointer to the data type to print.
+
+    Data - Supplies a pointer to the data contents.
+
+    DataSize - Supplies the size of the data buffer in bytes.
+
+    SpaceLevel - Supplies the number of spaces worth of indentation to print
+        for subsequent lines.
+
+    RecursionCount - Supplies the number of substructures to recurse into.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    ULONGLONG ArrayIndex;
+    ULONG BitRemainder;
+    ULONG Bytes;
+    PDATA_TYPE_ENUMERATION Enumeration;
+    PENUMERATION_MEMBER EnumerationMember;
+    CHAR Field[256];
+    PVOID MemberData;
+    PTYPE_SYMBOL MemberType;
+    NUMERIC_UNION NumericValue;
+    PDATA_TYPE_RELATION Relation;
+    PTYPE_SYMBOL RelativeType;
+    PVOID ShiftedData;
+    INT Status;
+    PDATA_TYPE_STRUCTURE Structure;
+    PSTRUCTURE_MEMBER StructureMember;
+    UINTN TypeSize;
+
+    Status = 0;
+    switch (Type->Type) {
+    case DataTypeNumeric:
+        Status = DbgpPrintNumeric(Type, Data, DataSize);
+        break;
+
+    case DataTypeRelation:
+        Type = DbgSkipTypedefs(Type);
+        if (Type == NULL) {
+            DbgOut("void");
+            Status = 0;
+            break;
+        }
+
+        //
+        // If it just ended up being a typedef to something else, print that
+        // something else.
+        //
+
+        if (Type->Type != DataTypeRelation) {
+            Status = DbgPrintType(Context,
+                                  Type,
+                                  Data,
+                                  DataSize,
+                                  SpaceLevel,
+                                  RecursionCount);
+
+            return Status;
+        }
+
+        //
+        // This is either a pointer or an array.
+        //
+
+        Relation = &(Type->U.Relation);
+        RelativeType = DbgGetType(Relation->OwningFile, Relation->TypeNumber);
+
+        assert((Relation->Array.Minimum != Relation->Array.Maximum) ||
+               (Relation->Pointer != 0));
+
+        //
+        // If it's a pointer, then the type is just a pointer.
+        //
+
+        if (Relation->Pointer != 0) {
+            TypeSize = Relation->Pointer;
+            if (DataSize < TypeSize) {
+                return ERANGE;
+            }
+
+            NumericValue.Uint64 = 0;
+            memcpy(&NumericValue, Data, TypeSize);
+            DbgOut("0x%08I64x", NumericValue.Uint64);
+            break;
+        }
+
+        //
+        // This is an array.
+        //
+
+        TypeSize = 0;
+        DbgPrintTypeName(Type);
+        if (RecursionCount == 0) {
+            break;
+        }
+
+        SpaceLevel += 2;
+        TypeSize = DbgGetTypeSize(RelativeType, 0);
+
+        //
+        // If it's a a string, print it out as such.
+        //
+
+        if ((RelativeType->Type == DataTypeNumeric) &&
+            (RelativeType->U.Numeric.Signed != FALSE) &&
+            (RelativeType->U.Numeric.BitSize == BITS_PER_BYTE) &&
+            (RelativeType->U.Numeric.Float == FALSE)) {
+
+            TypeSize = Relation->Array.Maximum - Relation->Array.Minimum + 1;
+            if (DataSize < TypeSize) {
+                return ERANGE;
+            }
+
+            DbgPrintStringData(Data, TypeSize, SpaceLevel);
+
+        } else {
+            for (ArrayIndex = Relation->Array.Minimum;
+                 ArrayIndex <= Relation->Array.Maximum;
+                 ArrayIndex += 1) {
+
+                if (DataSize < TypeSize) {
+                    Status = ERANGE;
+                    break;
+                }
+
+                DbgOut("\n%*s", SpaceLevel, "");
+                DbgOut("[%I64d] --------------------------------------"
+                       "-------", ArrayIndex);
+
+                DbgOut("\n%*s", SpaceLevel + 2, "");
+                Status = DbgPrintType(Context,
+                                      RelativeType,
+                                      Data,
+                                      DataSize,
+                                      SpaceLevel + 2,
+                                      RecursionCount - 1);
+
+                if (Status != 0) {
+                    break;
+                }
+
+                Data += TypeSize;
+                DataSize -= TypeSize;
+            }
+        }
+
+        SpaceLevel -= 2;
+        break;
+
+    case DataTypeEnumeration:
+        Enumeration = &(Type->U.Enumeration);
+        TypeSize = Enumeration->SizeInBytes;
+        if (TypeSize > sizeof(NumericValue)) {
+            TypeSize = sizeof(NumericValue);
+        }
+
+        NumericValue.Uint64 = 0;
+        memcpy(&NumericValue, Data, TypeSize);
+        switch (TypeSize) {
+        case 1:
+            NumericValue.Int64 = NumericValue.Int8;
+            break;
+
+        case 2:
+            NumericValue.Int64 = NumericValue.Int16;
+            break;
+
+        case 4:
+            NumericValue.Int64 = NumericValue.Int32;
+            break;
+
+        case 8:
+            break;
+
+        default:
+
+            assert(FALSE);
+
+            return EINVAL;
+        }
+
+        DbgOut("%I64d", NumericValue.Int64);
+        EnumerationMember = Enumeration->FirstMember;
+        while (EnumerationMember != NULL) {
+            if (EnumerationMember->Value == NumericValue.Int64) {
+                DbgOut(" %s", EnumerationMember->Name);
+                break;
+            }
+
+            EnumerationMember = EnumerationMember->NextMember;
+        }
+
+        break;
+
+    case DataTypeStructure:
+        Structure = &(Type->U.Structure);
+        TypeSize = Structure->SizeInBytes;
+        if (DataSize < TypeSize) {
+            return ERANGE;
+        }
+
+        //
+        // If the recursion depth is zero, don't print this structure contents
+        // out, only print the name.
+        //
+
+        DbgPrintTypeName(Type);
+        if (RecursionCount == 0) {
+            break;
+        }
+
+        SpaceLevel += 2;
+        StructureMember = Structure->FirstMember;
+        while (StructureMember != NULL) {
+            Bytes = StructureMember->BitOffset / BITS_PER_BYTE;
+            if (Bytes >= DataSize) {
+                return ERANGE;
+            }
+
+            BitRemainder = StructureMember->BitOffset % BITS_PER_BYTE;
+            MemberData = Data + Bytes;
+            DbgOut("\n%*s", SpaceLevel, "");
+            snprintf(Field, sizeof(Field), "+0x%x", Bytes);
+            DbgOut("%-6s  ", Field);
+            ShiftedData = NULL;
+            if (BitRemainder != 0) {
+                snprintf(Field,
+                         sizeof(Field),
+                         "%s:%d",
+                         StructureMember->Name,
+                         BitRemainder);
+
+            } else {
+                snprintf(Field, sizeof(Field), StructureMember->Name);
+            }
+
+            Field[sizeof(Field) - 1] = '\0';
+            DbgOut("%-17s : ", Field);
+
+            //
+            // Manipulate the data for the structure member if it's got a
+            // bitwise offset or size.
+            //
+
+            if ((BitRemainder != 0) || (StructureMember->BitSize != 0)) {
+                ShiftedData = DbgpShiftBufferRight(MemberData,
+                                                   DataSize - Bytes,
+                                                   BitRemainder,
+                                                   StructureMember->BitSize);
+
+                if (ShiftedData == NULL) {
+                    return ENOMEM;
+                }
+
+                MemberData = ShiftedData;
+            }
+
+            MemberType = DbgGetType(StructureMember->TypeFile,
+                                    StructureMember->TypeNumber);
+
+            if (MemberType == NULL) {
+                DbgOut("DANGLING REFERENCE %s, %d\n",
+                       StructureMember->TypeFile->SourceFile,
+                       StructureMember->TypeNumber);
+
+                assert(MemberType != NULL);
+
+            } else {
+                Status = DbgPrintType(Context,
+                                      MemberType,
+                                      MemberData,
+                                      DataSize - Bytes,
+                                      SpaceLevel,
+                                      RecursionCount - 1);
+
+                if (Status != 0) {
+                    break;
+                }
+            }
+
+            if (ShiftedData != NULL) {
+                free(ShiftedData);
+                ShiftedData = NULL;
+            }
+
+            StructureMember = StructureMember->NextMember;
+        }
+
+        SpaceLevel -= 2;
+        break;
+
+    case DataTypeFunctionPointer:
+        TypeSize = Type->U.FunctionPointer.SizeInBytes;
+        if (TypeSize > sizeof(NumericValue)) {
+            TypeSize = sizeof(NumericValue);
+        }
+
+        NumericValue.Uint64 = 0;
+        memcpy(&NumericValue, Data, TypeSize);
+        DbgOut("(*0x%08I64x)()", NumericValue.Uint64);
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        break;
+    }
+
+    return Status;
+}
+
+VOID
+DbgPrintStringData (
+    PSTR String,
+    UINTN Size,
+    ULONG SpaceDepth
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints string data to the debugger console.
+
+Arguments:
+
+    String - Supplies a pointer to the string data.
+
+    Size - Supplies the number of bytes to print out.
+
+    SpaceDepth - Supplies the indentation to use when breaking up a string into
+        multiple lines.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UCHAR Character;
+    ULONG Column;
+
+    Column = SpaceDepth;
+    DbgOut("\"");
+    Column += 1;
+    while (Size != 0) {
+        Character = *String;
+        if ((Character >= ' ') && (Character < 0x80)) {
+            DbgOut("%c", Character);
+            Column += 1;
+
+        } else if (Character == '\0') {
+            DbgOut("\\0");
+            Column += 2;
+
+        } else if (Character == '\r') {
+            DbgOut("\\r");
+            Column += 2;
+
+        } else if (Character == '\n') {
+            DbgOut("\\n");
+            Column += 2;
+
+        } else if (Character == '\f') {
+            DbgOut("\\f");
+            Column += 2;
+
+        } else if (Character == '\v') {
+            DbgOut("\\v");
+            Column += 2;
+
+        } else if (Character == '\t') {
+            DbgOut("\\t");
+            Column += 2;
+
+        } else if (Character == '\a') {
+            DbgOut("\\a");
+            Column += 2;
+
+        } else if (Character == '\b') {
+            DbgOut("\\b");
+            Column += 2;
+
+        } else {
+            DbgOut("\\x%02x", Character);
+            Column += 4;
+        }
+
+        String += 1;
+        Size -= 1;
+        if (Column >= 80) {
+            Column = SpaceDepth;
+            DbgOut("\n%*s", SpaceDepth, "");
+        }
+    }
+
+    DbgOut("\"");
+    return;
+}
+
 PDEBUGGER_MODULE
 DbgpFindModuleFromAddress (
     PDEBUGGER_CONTEXT Context,
@@ -1457,7 +2404,6 @@ Return Value:
         // Search for the symbol in the current module. Exit if it is found.
         //
 
-        SearchResult->Variety = SymbolResultInvalid;
         SearchResult->U.TypeResult = NULL;
         while (TRUE) {
             ResultValid = DbgpFindSymbolInModule(CurrentModule->Symbols,
@@ -1481,9 +2427,7 @@ Return Value:
             //
 
             if (SearchResult->Variety == SymbolResultType) {
-                ResolvedType =
-                        DbgResolveRelationType(SearchResult->U.TypeResult, 0);
-
+                ResolvedType = DbgSkipTypedefs(SearchResult->U.TypeResult);
                 if ((ResolvedType != NULL) &&
                     (ResolvedType->Type == DataTypeStructure)) {
 
@@ -2003,6 +2947,532 @@ Return Value:
     *NameBegin = LastSeparator;
     *NameLength = FriendlyNameLength;
     return;
+}
+
+INT
+DbgpPrintNumeric (
+    PTYPE_SYMBOL Type,
+    PVOID Data,
+    UINTN DataSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a numeric type's contents.
+
+Arguments:
+
+    Type - Supplies a pointer to the type symbol to print.
+
+    Data - Supplies a pointer to the data contents.
+
+    DataSize - Supplies the size of the data in bytes.
+
+Return Value:
+
+    0 on success.
+
+    ENOBUFS if the provided buffer is not large enough to accomodate the given
+    type.
+
+--*/
+
+{
+
+    ULONG BitSize;
+    PDATA_TYPE_NUMERIC Numeric;
+    NUMERIC_UNION NumericValue;
+    UINTN TypeSize;
+
+    assert(Type->Type == DataTypeNumeric);
+
+    Numeric = &(Type->U.Numeric);
+    BitSize = Numeric->BitSize;
+    TypeSize = ALIGN_RANGE_UP(BitSize, BITS_PER_BYTE) / BITS_PER_BYTE;
+    if (DataSize < TypeSize) {
+        return ERANGE;
+    }
+
+    NumericValue.Uint64 = 0;
+    memcpy(&NumericValue, Data, TypeSize);
+    if ((BitSize & (BITS_PER_BYTE - 1)) != 0) {
+        NumericValue.Uint64 &= (1ULL << BitSize) - 1;
+    }
+
+    if (Numeric->Float != FALSE) {
+        switch (TypeSize) {
+        case 4:
+            DbgOut("%f", (double)(NumericValue.Float32));
+            break;
+
+        case 8:
+            DbgOut("%f", NumericValue.Float64);
+            break;
+
+        default:
+            DbgOut("%I64x", NumericValue.Uint64);
+            break;
+        }
+
+    } else if (Numeric->Signed != FALSE) {
+        switch (TypeSize) {
+        case 1:
+            DbgOut("%d", NumericValue.Int8);
+            break;
+
+        case 2:
+            DbgOut("%d", NumericValue.Int16);
+            break;
+
+        case 4:
+            DbgOut("%d", NumericValue.Int32);
+            break;
+
+        case 8:
+        default:
+            DbgOut("%I64d", NumericValue.Int64);
+            break;
+        }
+
+    } else {
+        DbgOut("0x%I64x", NumericValue.Uint64);
+    }
+
+    return 0;
+}
+
+INT
+DbgpGetStructureMember (
+    PDEBUGGER_CONTEXT Context,
+    PTYPE_SYMBOL Type,
+    PSTR MemberName,
+    ULONGLONG Address,
+    PVOID Data,
+    UINTN DataSize,
+    PVOID *ShiftedData,
+    PUINTN ShiftedDataSize,
+    PTYPE_SYMBOL *FinalType
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a shifted form of the given data for accessing
+    specific members of a structure.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Type - Supplies a pointer to the structure type.
+
+    MemberName - Supplies a pointer to the member name string, which can
+        contain dot '.' notation for accessing members, and array [] notation
+        for access sub-elements and dereferencing.
+
+    Address - Supplies the address the read data is located at.
+
+    Data - Supplies a pointer to the read in data.
+
+    DataSize - Supplies the size of the read data in bytes.
+
+    ShiftedData - Supplies a pointer where the shifted data will be returned on
+        success. The caller is responsible for freeing this data when finished.
+
+    ShiftedDataSize - Supplies a pointer where the size of the shifted data
+        will be returned on success.
+
+    FinalType - Supplies an optional pointer where the final type of the
+        data will be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    ULONGLONG ArrayIndex;
+    PSTR Current;
+    PVOID CurrentData;
+    UINTN CurrentDataSize;
+    BOOL Dereference;
+    PSTR End;
+    PSTR FieldName;
+    CHAR FieldType;
+    PSTRUCTURE_MEMBER Member;
+    PVOID NewData;
+    ULONG NewDataSize;
+    PTYPE_SYMBOL RelativeType;
+    UINT ShiftAmount;
+    INT Status;
+    UINTN TypeSize;
+
+    CurrentData = Data;
+    CurrentDataSize = DataSize;
+    MemberName = strdup(MemberName);
+    if (MemberName == NULL) {
+        Status = ENOMEM;
+        goto GetStructureMemberEnd;
+    }
+
+    Type = DbgSkipTypedefs(Type);
+    End = MemberName + strlen(MemberName);
+    Current = MemberName;
+    Status = 0;
+
+    //
+    // Now loop reading members and array indices.
+    //
+
+    while (Current < End) {
+
+        //
+        // Assume a member if a dot is missing from the beginning.
+        //
+
+        if ((*Current != '.') && (*Current != '[')) {
+            FieldType = '.';
+
+        } else {
+            FieldType = *Current;
+            Current += 1;
+        }
+
+        if (*Current == '\0') {
+            break;
+        }
+
+        FieldName = Current;
+
+        //
+        // Handle an array access.
+        //
+
+        if (FieldType == '[') {
+
+            //
+            // Find the closing square bracket.
+            //
+
+            while ((*Current != '\0') && (*Current != ']')) {
+                Current += 1;
+            }
+
+            *Current = '\0';
+            Current += 1;
+            Status = DbgEvaluate(Context, FieldName, &ArrayIndex);
+            if (Status != 0) {
+                DbgOut("Error: Failed to evaluate array index '%s'.\n",
+                       FieldName);
+
+                goto GetStructureMemberEnd;
+            }
+
+            //
+            // If this current type is not a relation, then a dereference will
+            // have to occur to make something like mytype[3] work, where
+            // mytype is a structure.
+            //
+
+            Dereference = FALSE;
+            if (Type->Type != DataTypeRelation) {
+                Dereference = TRUE;
+
+            //
+            // If it is a relation, use the relative type as the type size. If
+            // this is a pointer type, then it will also need a dereference
+            // through it.
+            //
+
+            } else if ((Type->U.Relation.Pointer != 0) ||
+                       (Type->U.Relation.Array.Minimum !=
+                        Type->U.Relation.Array.Maximum)) {
+
+                if (Type->U.Relation.Pointer != 0) {
+                    Dereference = TRUE;
+                    Address = 0;
+                    memcpy(&Address, CurrentData, Type->U.Relation.Pointer);
+                }
+
+                RelativeType = DbgGetType(Type->U.Relation.OwningFile,
+                                          Type->U.Relation.TypeNumber);
+
+                if ((RelativeType == NULL) || (RelativeType == Type)) {
+                    DbgOut("Error: Cannot get void type.\n");
+                    Status = EINVAL;
+                    goto GetStructureMemberEnd;
+                }
+
+                Type = RelativeType;
+            }
+
+            TypeSize = DbgGetTypeSize(Type, 0);
+            if (TypeSize == 0) {
+                DbgOut("Error: Got a type size of zero.\n");
+                Status = EINVAL;
+                goto GetStructureMemberEnd;
+            }
+
+            //
+            // If this was a pointer, dereference through the pointer to get
+            // the new data.
+            //
+
+            if (Dereference != FALSE) {
+                Address += TypeSize * ArrayIndex;
+                Status = DbgReadType(Context,
+                                     Address,
+                                     Type,
+                                     &NewData,
+                                     &NewDataSize);
+
+                if (Status != 0) {
+                    goto GetStructureMemberEnd;
+                }
+
+            //
+            // If this was an array, just shift the buffer over to index into
+            // it.
+            //
+
+            } else {
+                ShiftAmount = TypeSize * ArrayIndex * BITS_PER_BYTE;
+                NewData = DbgpShiftBufferRight(CurrentData,
+                                               CurrentDataSize,
+                                               ShiftAmount,
+                                               0);
+
+                if (NewData == NULL) {
+                    Status = ENOMEM;
+                    goto GetStructureMemberEnd;
+                }
+
+                NewDataSize = TypeSize;
+            }
+
+        //
+        // Access a structure member.
+        //
+
+        } else if (FieldType == '.') {
+
+            //
+            // Find the end of the member name.
+            //
+
+            while ((*Current != '\0') && (*Current != '.') &&
+                   (*Current != '[')) {
+
+                Current += 1;
+            }
+
+            *Current = '\0';
+            Current += 1;
+            if (Type->Type != DataTypeStructure) {
+                DbgOut("Error: %s is not a structure.\n", Type->Name);
+            }
+
+            //
+            // Find the member. First try matching case, then try case
+            // insensitive.
+            //
+
+            Member = Type->U.Structure.FirstMember;
+            while (Member != NULL) {
+                if (strcmp(Member->Name, FieldName) == 0) {
+                    break;
+                }
+
+                Member = Member->NextMember;
+            }
+
+            if (Member == NULL) {
+                Member = Type->U.Structure.FirstMember;
+                while (Member != NULL) {
+                    if (strcasecmp(Member->Name, FieldName) == 0) {
+                        break;
+                    }
+
+                    Member = Member->NextMember;
+                }
+            }
+
+            if (Member == NULL) {
+                DbgOut("Error: Structure %s has no member %s.\n",
+                       Type->Name,
+                       FieldName);
+
+                Status = ENOENT;
+                goto GetStructureMemberEnd;
+            }
+
+            //
+            // Get the next type of this member.
+            //
+
+            Type = DbgGetType(Member->TypeFile, Member->TypeNumber);
+            if (Type != NULL) {
+                Type = DbgSkipTypedefs(Type);
+            }
+
+            if (Type == NULL) {
+                DbgOut("Error: Got incomplete member %s.\n", FieldName);
+                Status = EINVAL;
+                goto GetStructureMemberEnd;
+            }
+
+            //
+            // Manipulate the buffer to put the member at the beginning, which
+            // creates a new buffer.
+            //
+
+            NewData = DbgpShiftBufferRight(CurrentData,
+                                           CurrentDataSize,
+                                           Member->BitOffset,
+                                           Member->BitSize);
+
+            if (NewData == NULL) {
+                Status = ENOMEM;
+                goto GetStructureMemberEnd;
+            }
+
+            NewDataSize = DbgGetTypeSize(Type, 0);
+
+        } else {
+
+            assert(FALSE);
+
+            Status = EINVAL;
+            break;
+        }
+
+        assert(NewData != NULL);
+
+        if (CurrentData != Data) {
+            free(CurrentData);
+        }
+
+        CurrentData = NewData;
+        CurrentDataSize = NewDataSize;
+    }
+
+GetStructureMemberEnd:
+    if (MemberName != NULL) {
+        free(MemberName);
+    }
+
+    if (Status != 0) {
+        if ((CurrentData != NULL) && (CurrentData != Data)) {
+            free(CurrentData);
+            CurrentData = NULL;
+        }
+
+        CurrentDataSize = 0;
+        Type = NULL;
+    }
+
+    *ShiftedData = CurrentData;
+    *ShiftedDataSize = CurrentDataSize;
+    *FinalType = Type;
+    return Status;
+}
+
+PVOID
+DbgpShiftBufferRight (
+    PVOID Buffer,
+    UINTN DataSize,
+    UINTN Bits,
+    UINTN BitSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine shifts a buffer right by a given number of bits. Zero bits
+    will be shifted in from the left.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer contents to shift. This buffer
+        will remain untouched.
+
+    DataSize - Supplies the size of the data in bytes.
+
+    Bits - Supplies the number of bits to shift.
+
+    BitSize - Supplies an optional number of bits to keep after shifting, all
+        others will be masked. Supply 0 to perform no masking.
+
+Return Value:
+
+    Returns a pointer to a newly allocated and shifted buffer on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    UINTN ByteCount;
+    PUCHAR Bytes;
+    UINTN Index;
+
+    Bytes = malloc(DataSize);
+    if (Bytes == NULL) {
+        return NULL;
+    }
+
+    ByteCount = Bits / BITS_PER_BYTE;
+    Bits %= BITS_PER_BYTE;
+    if (DataSize > ByteCount) {
+        memcpy(Bytes, Buffer + ByteCount, DataSize - ByteCount);
+        memset(Bytes + DataSize - ByteCount, 0, ByteCount);
+
+    } else {
+        memset(Bytes, 0, DataSize);
+        return Bytes;
+    }
+
+    if (Bits != 0) {
+
+        //
+        // Now the tricky part, shifting by between 1 and 7 bits.
+        //
+
+        for (Index = 0; Index < DataSize - 1; Index += 1) {
+            Bytes[Index] = (Bytes[Index] >> Bits) |
+                           (Bytes[Index + 1] << (BITS_PER_BYTE - Bits));
+        }
+
+        Bytes[Index] = Bytes[Index] >> Bits;
+    }
+
+    //
+    // Do some masking as well.
+    //
+
+    if (BitSize != 0) {
+        Index = BitSize / BITS_PER_BYTE;
+        BitSize %= BITS_PER_BYTE;
+        if (BitSize != 0) {
+            Bytes[Index] &= (1 << BitSize) - 1;
+            Index += 1;
+        }
+
+        if (Index != DataSize) {
+            memset(Bytes + Index, 0, DataSize - Index);
+        }
+    }
+
+    return Bytes;
 }
 
 //

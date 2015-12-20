@@ -36,6 +36,7 @@ Author:
 //
 
 typedef struct _DEBUGGER_CONTEXT DEBUGGER_CONTEXT, *PDEBUGGER_CONTEXT;
+typedef struct _TYPE_SYMBOL TYPE_SYMBOL, *PTYPE_SYMBOL;
 
 typedef
 INT
@@ -316,38 +317,6 @@ Arguments:
 Return Value:
 
     0 if information was successfully printed.
-
-    Returns an error code on failure.
-
---*/
-
-INT
-DbgPrintType (
-    PDEBUGGER_CONTEXT Context,
-    PSTR TypeString,
-    PVOID Data,
-    ULONG DataSizeInBytes
-    );
-
-/*++
-
-Routine Description:
-
-    This routine prints the contents of a given type.
-
-Arguments:
-
-    Context - Supplies a pointer to the application context.
-
-    TypeString - Supplies the type to print either information or contents of.
-
-    Data - Supplies a pointer to the data to use as contents of the type.
-
-    DataSizeInBytes - Supplies the size of the Data buffer, in bytes.
-
-Return Value:
-
-    0 if the type was successfully printed.
 
     Returns an error code on failure.
 
@@ -677,6 +646,245 @@ Arguments:
 Return Value:
 
     Returns the instruction pointer member from the given registers.
+
+--*/
+
+INT
+DbgGetMemberOffset (
+    PTYPE_SYMBOL StructureType,
+    PSTR FieldName,
+    PULONG FieldOffset,
+    PULONG FieldSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the given field's offset (in bits) within the
+    given structure.
+
+Arguments:
+
+    StructureType - Supplies a pointer to a symbol structure type.
+
+    FieldName - Supplies a string containing the name of the field whose offset
+        will be returned.
+
+    FieldOffset - Supplies a pointer that will receive the bit offset of the
+        given field name within the given structure.
+
+    FieldSize - Supplies a pointer that will receive the size of the field in
+        bits.
+
+Return Value:
+
+    0 on success.
+
+    ENOENT if no such field name exists.
+
+    Other error codes on other errors.
+
+--*/
+
+INT
+DbgGetTypeByName (
+    PDEBUGGER_CONTEXT Context,
+    PSTR TypeName,
+    PTYPE_SYMBOL *Type
+    );
+
+/*++
+
+Routine Description:
+
+    This routine finds a type symbol object by its type name.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    TypeName - Supplies a pointer to the string containing the name of the
+        type to find. This can be prefixed with an module name if needed.
+
+    Type - Supplies a pointer where a pointer to the type will be returned.
+
+Return Value:
+
+    0 on success.
+
+    ENOENT if no type with the given name was found.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+DbgReadIntegerMember (
+    PDEBUGGER_CONTEXT Context,
+    PTYPE_SYMBOL Type,
+    PSTR MemberName,
+    ULONGLONG Address,
+    PVOID Data,
+    ULONG DataSize,
+    PULONGLONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads an integer sized member out of an already read-in
+    structure.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Type - Supplies a pointer to the type of the data.
+
+    MemberName - Supplies a pointer to the member name.
+
+    Address - Supplies the address where the data was obtained.
+
+    Data - Supplies a pointer to the data contents.
+
+    DataSize - Supplies the size of the data buffer in bytes.
+
+    Value - Supplies a pointer where the value will be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+DbgReadTypeByName (
+    PDEBUGGER_CONTEXT Context,
+    ULONGLONG Address,
+    PSTR TypeName,
+    PTYPE_SYMBOL *FinalType,
+    PVOID *Data,
+    PULONG DataSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads in data from the target for a specified type, which is
+    given as a string.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Address - Supplies a target address pointer where the data resides.
+
+    TypeName - Supplies a pointer to a string containing the type name to get.
+        This should start with a type name, and can use dot '.' notation to
+        specify field members, and array[] notation to specify dereferences.
+
+    FinalType - Supplies a pointer where the final type symbol will be returned
+        on success.
+
+    Data - Supplies a pointer where the data will be returned on success. The
+        caller is responsible for freeing this data when finished.
+
+    DataSize - Supplies a pointer where the size of the data in bytes will be
+        returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+DbgReadType (
+    PDEBUGGER_CONTEXT Context,
+    ULONGLONG Address,
+    PTYPE_SYMBOL Type,
+    PVOID *Data,
+    PULONG DataSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads in data from the target for a specified type.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Address - Supplies a target address pointer where the data resides.
+
+    Type - Supplies a pointer to the type symbol to get.
+
+    Data - Supplies a pointer where the data will be returned on success. The
+        caller is responsible for freeing this data when finished.
+
+    DataSize - Supplies a pointer where the size of the data in bytes will be
+        returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+DbgPrintTypeMember (
+    PDEBUGGER_CONTEXT Context,
+    ULONGLONG Address,
+    PVOID Data,
+    ULONG DataSize,
+    PTYPE_SYMBOL Type,
+    PSTR MemberName,
+    ULONG SpaceLevel,
+    ULONG RecursionCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a member of a structure or union whose contents have
+    already been read in.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Address - Supplies the address where this data came from.
+
+    Data - Supplies a pointer to the data contents.
+
+    DataSize - Supplies the size of the data contents buffer in bytes.
+
+    Type - Supplies a pointer to the structure type.
+
+    MemberName - Supplies the name of the member to print.
+
+    SpaceLevel - Supplies the number of spaces worth of indentation to print
+        for subsequent lines.
+
+    RecursionCount - Supplies the number of substructures to recurse into.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
 
 --*/
 

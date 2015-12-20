@@ -27,8 +27,11 @@ Environment:
 #include <minoca/driver.h>
 #include "dbgext.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -45,6 +48,7 @@ Environment:
 INT
 ExtMdlGetFirstTreeNode (
     PDEBUGGER_CONTEXT Context,
+    PTYPE_SYMBOL TreeType,
     ULONGLONG TreeAddress,
     PULONGLONG Node
     );
@@ -52,6 +56,8 @@ ExtMdlGetFirstTreeNode (
 INT
 ExtMdlGetNextTreeNode (
     PDEBUGGER_CONTEXT Context,
+    PTYPE_SYMBOL TreeType,
+    PTYPE_SYMBOL TreeNodeType,
     ULONGLONG TreeAddress,
     PULONGLONG Node
     );
@@ -105,19 +111,35 @@ Return Value:
 
 {
 
-    ULONG BytesRead;
-    MEMORY_DESCRIPTOR Descriptor;
+    ULONGLONG BaseAddress;
     ULONGLONG DescriptorAddress;
-    ULONG DescriptorCount;
+    ULONGLONG DescriptorCount;
+    PVOID DescriptorData;
+    ULONG DescriptorDataSize;
     ULONGLONG DescriptorEntryAddress;
+    PTYPE_SYMBOL DescriptorType;
     ULONGLONG Free;
     ULONGLONG LastEndAddress;
-    MEMORY_DESCRIPTOR_LIST Mdl;
     ULONGLONG MdlAddress;
+    PVOID MdlData;
+    ULONG MdlDataSize;
+    ULONGLONG MdlDescriptorCount;
+    ULONGLONG MdlFreeSpace;
+    ULONGLONG MdlTotalSpace;
+    PTYPE_SYMBOL MdlType;
+    ULONGLONG MemoryType;
+    ULONGLONG Size;
     INT Status;
     ULONGLONG Total;
     ULONGLONG TreeAddress;
+    ULONG TreeNodeOffset;
+    PTYPE_SYMBOL TreeNodeType;
+    ULONG TreeOffset;
+    PTYPE_SYMBOL TreeType;
 
+    DescriptorData = NULL;
+    MdlData = NULL;
+    MdlType = NULL;
     if ((Command != NULL) || (ArgumentCount != 2)) {
         DbgOut("Usage: !mdl <MdlAddress>.\n"
                "       The MDL extension prints out the contents of a Memory "
@@ -135,35 +157,76 @@ Return Value:
     Status = DbgEvaluate(Context, ArgumentValues[1], &MdlAddress);
     if (Status != 0) {
         DbgOut("Error: Unable to evaluate Address parameter.\n");
-        return Status;
+        goto ExtMdlEnd;
     }
 
     DbgOut("Dumping MDL at 0x%08I64x\n", MdlAddress);
-    Status = DbgReadMemory(Context,
-                           TRUE,
-                           MdlAddress,
-                           sizeof(MEMORY_DESCRIPTOR_LIST),
-                           &Mdl,
-                           &BytesRead);
+    Status = DbgReadTypeByName(Context,
+                               MdlAddress,
+                               "MEMORY_DESCRIPTOR_LIST",
+                               &MdlType,
+                               &MdlData,
+                               &MdlDataSize);
 
-    if ((Status != 0) || (BytesRead != sizeof(MEMORY_DESCRIPTOR_LIST))) {
-        DbgOut("Error: Could not read MDL.\n");
-        if (Status == 0) {
-            Status = EINVAL;
-        }
+    if (Status != 0) {
+        DbgOut("Error: Could not read mdl at 0x%I64x: %s\n",
+               MdlAddress,
+               strerror(Status));
 
-        return Status;
+        goto ExtMdlEnd;
     }
 
     //
     // Bail if no descriptors are there.
     //
 
-    if (Mdl.DescriptorCount == 0) {
-        DbgOut("No Descriptors.\n");
-        return 0;
+    Status = DbgReadIntegerMember(Context,
+                                  MdlType,
+                                  "DescriptorCount",
+                                  MdlAddress,
+                                  MdlData,
+                                  MdlDataSize,
+                                  &DescriptorCount);
+
+    if (Status != 0) {
+        goto ExtMdlEnd;
     }
 
+    if (DescriptorCount == 0) {
+        DbgOut("No Descriptors.\n");
+        Status = 0;
+        goto ExtMdlEnd;
+    }
+
+    //
+    // Get the red black tree types.
+    //
+
+    Status = DbgGetTypeByName(Context, "RED_BLACK_TREE", &TreeType);
+    if (Status != 0) {
+        goto ExtMdlEnd;
+    }
+
+    Status = DbgGetTypeByName(Context, "RED_BLACK_TREE_NODE", &TreeNodeType);
+    if (Status != 0) {
+        goto ExtMdlEnd;
+    }
+
+    Status = DbgGetTypeByName(Context, "MEMORY_DESCRIPTOR", &DescriptorType);
+    if (Status != 0) {
+        goto ExtMdlEnd;
+    }
+
+    Status = DbgGetMemberOffset(DescriptorType,
+                                "TreeNode",
+                                &TreeNodeOffset,
+                                NULL);
+
+    if (Status != 0) {
+        goto ExtMdlEnd;
+    }
+
+    TreeNodeOffset /= BITS_PER_BYTE;
     DbgOut("\n       Start Address    End Address  Size   Type\n");
     DbgOut("-----------------------------------------------------------\n");
 
@@ -175,18 +238,19 @@ Return Value:
     Free = 0;
     Total = 0;
     LastEndAddress = 0;
+    Status = DbgGetMemberOffset(MdlType, "Tree", &TreeOffset, NULL);
+    if (Status != 0) {
+        goto ExtMdlEnd;
+    }
 
-    //
-    // TODO: 64-bit capable.
-    //
-
-    TreeAddress = MdlAddress + FIELD_OFFSET(MEMORY_DESCRIPTOR_LIST, Tree);
+    TreeAddress = MdlAddress + (TreeOffset / BITS_PER_BYTE);
     Status = ExtMdlGetFirstTreeNode(Context,
+                                    TreeType,
                                     TreeAddress,
                                     &DescriptorEntryAddress);
 
     if (Status != 0) {
-        return Status;
+        goto ExtMdlEnd;
     }
 
     while (DescriptorEntryAddress != 0) {
@@ -195,36 +259,72 @@ Return Value:
         // Read in the descriptor.
         //
 
-        DescriptorAddress = DescriptorEntryAddress -
-                            FIELD_OFFSET(MEMORY_DESCRIPTOR, TreeNode);
+        DescriptorAddress = DescriptorEntryAddress - TreeNodeOffset;
 
-        Status = DbgReadMemory(Context,
-                               TRUE,
-                               DescriptorAddress,
-                               sizeof(MEMORY_DESCRIPTOR),
-                               &Descriptor,
-                               &BytesRead);
+        assert(DescriptorData == NULL);
 
-        if ((Status != 0) || (BytesRead != sizeof(MEMORY_DESCRIPTOR))) {
+        Status = DbgReadType(Context,
+                             DescriptorAddress,
+                             DescriptorType,
+                             &DescriptorData,
+                             &DescriptorDataSize);
+
+        if (Status != 0) {
             DbgOut("Error: Could not read descriptor at 0x%08I64x.\n",
                    DescriptorAddress);
 
-            if (Status == 0) {
-                Status = EINVAL;
-            }
+            goto ExtMdlEnd;
+        }
 
-            return Status;
+        Status = DbgReadIntegerMember(Context,
+                                      DescriptorType,
+                                      "BaseAddress",
+                                      DescriptorAddress,
+                                      DescriptorData,
+                                      DescriptorDataSize,
+                                      &BaseAddress);
+
+        if (Status != 0) {
+            goto ExtMdlEnd;
+        }
+
+        Status = DbgReadIntegerMember(Context,
+                                      DescriptorType,
+                                      "Size",
+                                      DescriptorAddress,
+                                      DescriptorData,
+                                      DescriptorDataSize,
+                                      &Size);
+
+        if (Status != 0) {
+            goto ExtMdlEnd;
+        }
+
+        Status = DbgReadIntegerMember(Context,
+                                      DescriptorType,
+                                      "Type",
+                                      DescriptorAddress,
+                                      DescriptorData,
+                                      DescriptorDataSize,
+                                      &MemoryType);
+
+        if (Status != 0) {
+            goto ExtMdlEnd;
         }
 
         DbgOut("    %13I64x  %13I64x  %8I64x  ",
-               Descriptor.BaseAddress,
-               Descriptor.BaseAddress + Descriptor.Size,
-               Descriptor.Size);
+               BaseAddress,
+               BaseAddress + Size,
+               Size);
 
-        Status = DbgPrintType(Context,
-                              "MEMORY_TYPE",
-                              &(Descriptor.Type),
-                              sizeof(MEMORY_TYPE));
+        Status = DbgPrintTypeMember(Context,
+                                    DescriptorAddress,
+                                    DescriptorData,
+                                    DescriptorDataSize,
+                                    DescriptorType,
+                                    "Type",
+                                    0,
+                                    0);
 
         if (Status != 0) {
             DbgOut("Error: Could not print memory type.\n");
@@ -232,63 +332,104 @@ Return Value:
 
         DbgOut("\n");
         DescriptorCount += 1;
-        Total += Descriptor.Size;
-        if (Descriptor.Type == MemoryTypeFree) {
-            Free += Descriptor.Size;
+        Total += Size;
+        if (MemoryType == MemoryTypeFree) {
+            Free += Size;
         }
 
-        if (Descriptor.BaseAddress + Descriptor.Size < LastEndAddress) {
+        if (BaseAddress + Size < LastEndAddress) {
             DbgOut("Error: Overlapping or out of order descriptors. Last "
                    "ending address was 0x%08I64x, current is 0x%08I64x.\n",
                    LastEndAddress,
-                   Descriptor.BaseAddress + Descriptor.Size);
+                   BaseAddress + Size);
         }
 
-        LastEndAddress = Descriptor.BaseAddress + Descriptor.Size;
-
-        //
-        // TODO: 64-bit capable.
-        //
-
+        LastEndAddress = BaseAddress + Size;
         Status = ExtMdlGetNextTreeNode(Context,
+                                       TreeType,
+                                       TreeNodeType,
                                        TreeAddress,
                                        &DescriptorEntryAddress);
 
         if (Status != 0) {
             return Status;
         }
+
+        free(DescriptorData);
+        DescriptorData = NULL;
     }
 
     DbgOut("-----------------------------------------------------------\n");
-    if (DescriptorCount != Mdl.DescriptorCount) {
-        DbgOut("WARNING: The MDL claims there are %d descriptors, but %d "
+    Status = DbgReadIntegerMember(Context,
+                                  MdlType,
+                                  "DescriptorCount",
+                                  MdlAddress,
+                                  MdlData,
+                                  MdlDataSize,
+                                  &MdlDescriptorCount);
+
+    if (Status != 0) {
+        goto ExtMdlEnd;
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  MdlType,
+                                  "TotalSpace",
+                                  MdlAddress,
+                                  MdlData,
+                                  MdlDataSize,
+                                  &MdlTotalSpace);
+
+    if (Status != 0) {
+        goto ExtMdlEnd;
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  MdlType,
+                                  "FreeSpace",
+                                  MdlAddress,
+                                  MdlData,
+                                  MdlDataSize,
+                                  &MdlFreeSpace);
+
+    if (Status != 0) {
+        goto ExtMdlEnd;
+    }
+
+    if (DescriptorCount != MdlDescriptorCount) {
+        DbgOut("WARNING: The MDL claims there are %I64d descriptors, but %I64d "
                "were described here!\n",
-               Mdl.DescriptorCount,
+               MdlDescriptorCount,
                DescriptorCount);
     }
 
-    DbgOut("Descriptor Count: %d  Free: 0x%I64x  Used: 0x%I64x  "
+    DbgOut("Descriptor Count: %I64d  Free: 0x%I64x  Used: 0x%I64x  "
            "Total: 0x%I64x\n\n",
-           Mdl.DescriptorCount,
+           MdlDescriptorCount,
            Free,
            Total - Free,
            Total);
 
-    if (Total != Mdl.TotalSpace) {
+    if (Total != MdlTotalSpace) {
         DbgOut("Warning: MDL reported 0x%I64x total, but 0x%I64x was "
                "calculated.\n",
-               Mdl.TotalSpace,
+               MdlTotalSpace,
                Total);
     }
 
-    if (Free != Mdl.FreeSpace) {
+    if (Free != MdlFreeSpace) {
         DbgOut("Warning: MDL reported 0x%I64x free, but 0x%I64x was "
                "calculated.\n",
-               Mdl.FreeSpace,
+               MdlFreeSpace,
                Free);
     }
 
-    return 0;
+ExtMdlEnd:
+    if (MdlData != NULL) {
+        free(MdlData);
+    }
+
+    return Status;
 }
 
 //
@@ -298,6 +439,7 @@ Return Value:
 INT
 ExtMdlGetFirstTreeNode (
     PDEBUGGER_CONTEXT Context,
+    PTYPE_SYMBOL TreeType,
     ULONGLONG TreeAddress,
     PULONGLONG Node
     )
@@ -311,6 +453,10 @@ Routine Description:
 Arguments:
 
     Context - Supplies a pointer to the application context.
+
+    MdlType - Supplies a pointer to the MEMORY_DESCRIPTOR_LIST type.
+
+    TreeType - Supplies a pointer to the RED_BLACK_TREE type.
 
     TreeAddress - Supplies the target address of the tree.
 
@@ -327,31 +473,48 @@ Return Value:
 
 {
 
-    ULONG BytesRead;
-    RED_BLACK_TREE_NODE NodeValue;
+    PVOID Data;
+    ULONG DataSize;
+    ULONGLONG LeftChild;
     ULONGLONG NullNode;
+    ULONG NullNodeOffset;
     INT Result;
-    ULONGLONG Root;
+    PTYPE_SYMBOL TreeNodeType;
 
-    NullNode = TreeAddress + FIELD_OFFSET(RED_BLACK_TREE, NullNode);
-    Root = TreeAddress + FIELD_OFFSET(RED_BLACK_TREE, Root);
+    Data = NULL;
+    Result = DbgGetMemberOffset(TreeType, "NullNode", &NullNodeOffset, NULL);
+    if (Result != 0) {
+        return Result;
+    }
+
+    NullNodeOffset /= BITS_PER_BYTE;
+    NullNode = TreeAddress + NullNodeOffset;
 
     //
-    // Read the root.
+    // Get the root's left child.
     //
 
-    Result = DbgReadMemory(Context,
-                           TRUE,
-                           Root,
-                           sizeof(RED_BLACK_TREE_NODE),
-                           &NodeValue,
-                           &BytesRead);
+    Result = DbgReadTypeByName(Context,
+                               TreeAddress,
+                               "RED_BLACK_TREE.Root",
+                               &TreeNodeType,
+                               &Data,
+                               &DataSize);
 
-    if ((Result != 0) || (BytesRead != sizeof(RED_BLACK_TREE_NODE))) {
-        if (Result == 0) {
-            Result = EINVAL;
-        }
+    if (Result != 0) {
+        return Result;
+    }
 
+    *Node = 0;
+    Result = DbgReadIntegerMember(Context,
+                                  TreeNodeType,
+                                  "LeftChild",
+                                  0,
+                                  Data,
+                                  DataSize,
+                                  &LeftChild);
+
+    if (Result != 0) {
         return Result;
     }
 
@@ -359,39 +522,55 @@ Return Value:
     // If the root's left child is NULL, then the tree is empty.
     //
 
-    *Node = (UINTN)(NodeValue.LeftChild);
-    if (*Node == NullNode) {
+    if (LeftChild == NullNode) {
         *Node = 0;
+        goto GetFirstTreeNodeEnd;
     }
 
     //
     // Go left as far as possible.
     //
 
-    while ((UINTN)(NodeValue.LeftChild) != NullNode) {
-        *Node = (UINTN)(NodeValue.LeftChild);
-        Result = DbgReadMemory(Context,
-                               TRUE,
-                               *Node,
-                               sizeof(RED_BLACK_TREE_NODE),
-                               &NodeValue,
-                               &BytesRead);
+    while (LeftChild != NullNode) {
+        *Node = LeftChild;
+        free(Data);
+        Data = NULL;
+        Result = DbgReadType(Context,
+                             LeftChild,
+                             TreeNodeType,
+                             &Data,
+                             &DataSize);
 
-        if ((Result != 0) || (BytesRead != sizeof(RED_BLACK_TREE_NODE))) {
-            if (Result == 0) {
-                Result = EINVAL;
-            }
+        if (Result != 0) {
+            goto GetFirstTreeNodeEnd;
+        }
 
-            return Result;
+        Result = DbgReadIntegerMember(Context,
+                                      TreeNodeType,
+                                      "LeftChild",
+                                      0,
+                                      Data,
+                                      DataSize,
+                                      &LeftChild);
+
+        if (Result != 0) {
+            goto GetFirstTreeNodeEnd;
         }
     }
 
-    return 0;
+GetFirstTreeNodeEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    return Result;
 }
 
 INT
 ExtMdlGetNextTreeNode (
     PDEBUGGER_CONTEXT Context,
+    PTYPE_SYMBOL TreeType,
+    PTYPE_SYMBOL TreeNodeType,
     ULONGLONG TreeAddress,
     PULONGLONG Node
     )
@@ -405,6 +584,10 @@ Routine Description:
 Arguments:
 
     Context - Supplies a pointer to the debugger context.
+
+    TreeType - Supplies a pointer to the RED_BLACK_TREE type.
+
+    TreeNodeType - Supplies a pointer to the RED_BLACK_TREE_NODE type.
 
     TreeAddress - Supplies the target address of the tree.
 
@@ -421,15 +604,37 @@ Return Value:
 
 {
 
-    ULONG BytesRead;
+    PVOID Data;
+    ULONG DataSize;
+    ULONGLONG LeftChild;
     ULONGLONG NextHighest;
-    RED_BLACK_TREE_NODE NodeValue;
     ULONGLONG NullNode;
+    ULONG NullNodeOffset;
     INT Result;
+    ULONGLONG RightChild;
     ULONGLONG Root;
+    ULONG RootOffset;
 
-    NullNode = TreeAddress + FIELD_OFFSET(RED_BLACK_TREE, NullNode);
-    Root = TreeAddress + FIELD_OFFSET(RED_BLACK_TREE, Root);
+    Data = NULL;
+
+    //
+    // Get the addresses of the null node and the root node.
+    //
+
+    Result = DbgGetMemberOffset(TreeType, "NullNode", &NullNodeOffset, NULL);
+    if (Result != 0) {
+        return Result;
+    }
+
+    NullNodeOffset /= BITS_PER_BYTE;
+    NullNode = TreeAddress + NullNodeOffset;
+    Result = DbgGetMemberOffset(TreeType, "Root", &RootOffset, NULL);
+    if (Result != 0) {
+        return Result;
+    }
+
+    RootOffset /= BITS_PER_BYTE;
+    Root = TreeAddress + RootOffset;
     if (*Node == 0) {
         return EINVAL;
     }
@@ -438,19 +643,9 @@ Return Value:
     // Read the node.
     //
 
-    Result = DbgReadMemory(Context,
-                           TRUE,
-                           *Node,
-                           sizeof(RED_BLACK_TREE_NODE),
-                           &NodeValue,
-                           &BytesRead);
-
-    if ((Result != 0) || (BytesRead != sizeof(RED_BLACK_TREE_NODE))) {
-        if (Result == 0) {
-            Result = EINVAL;
-        }
-
-        return Result;
+    Result = DbgReadType(Context, *Node, TreeNodeType, &Data, &DataSize);
+    if (Result != 0) {
+        goto GetNextTreeNodeEnd;
     }
 
     //
@@ -458,29 +653,49 @@ Return Value:
     // with the smallest value that is still greater than the current node.
     //
 
-    NextHighest = (UINTN)(NodeValue.RightChild);
+    Result = DbgReadIntegerMember(Context,
+                                  TreeNodeType,
+                                  "RightChild",
+                                  0,
+                                  Data,
+                                  DataSize,
+                                  &NextHighest);
+
+    if (Result != 0) {
+        goto GetNextTreeNodeEnd;
+    }
+
     if (NextHighest != NullNode) {
         while (TRUE) {
-            Result = DbgReadMemory(Context,
-                                   TRUE,
-                                   NextHighest,
-                                   sizeof(RED_BLACK_TREE_NODE),
-                                   &NodeValue,
-                                   &BytesRead);
+            free(Data);
+            Data = NULL;
+            Result = DbgReadType(Context,
+                                 NextHighest,
+                                 TreeNodeType,
+                                 &Data,
+                                 &DataSize);
 
-            if ((Result != 0) || (BytesRead != sizeof(RED_BLACK_TREE_NODE))) {
-                if (Result == 0) {
-                    Result = EINVAL;
-                }
-
-                return Result;
+            if (Result != 0) {
+                goto GetNextTreeNodeEnd;
             }
 
-            if ((UINTN)(NodeValue.LeftChild) == NullNode) {
+            Result = DbgReadIntegerMember(Context,
+                                          TreeNodeType,
+                                          "LeftChild",
+                                          0,
+                                          Data,
+                                          DataSize,
+                                          &LeftChild);
+
+            if (Result != 0) {
+                goto GetNextTreeNodeEnd;
+            }
+
+            if (LeftChild == NullNode) {
                 break;
             }
 
-            NextHighest = (UINTN)(NodeValue.LeftChild);
+            NextHighest = LeftChild;
         }
 
     //
@@ -488,7 +703,17 @@ Return Value:
     //
 
     } else {
-        NextHighest = (UINTN)(NodeValue.Parent);
+        Result = DbgReadIntegerMember(Context,
+                                      TreeNodeType,
+                                      "Parent",
+                                      0,
+                                      Data,
+                                      DataSize,
+                                      &NextHighest);
+
+        if (Result != 0) {
+            goto GetNextTreeNodeEnd;
+        }
 
         //
         // This won't loop forever because the child of the sentinal root is
@@ -496,27 +721,44 @@ Return Value:
         //
 
         while (TRUE) {
-            Result = DbgReadMemory(Context,
-                                   TRUE,
-                                   NextHighest,
-                                   sizeof(RED_BLACK_TREE_NODE),
-                                   &NodeValue,
-                                   &BytesRead);
+            Result = DbgReadType(Context,
+                                 NextHighest,
+                                 TreeNodeType,
+                                 &Data,
+                                 &DataSize);
 
-            if ((Result != 0) || (BytesRead != sizeof(RED_BLACK_TREE_NODE))) {
-                if (Result == 0) {
-                    Result = EINVAL;
-                }
-
-                return Result;
+            if (Result != 0) {
+                goto GetNextTreeNodeEnd;
             }
 
-            if ((UINTN)(NodeValue.RightChild) != *Node) {
+            Result = DbgReadIntegerMember(Context,
+                                          TreeNodeType,
+                                          "RightChild",
+                                          0,
+                                          Data,
+                                          DataSize,
+                                          &RightChild);
+
+            if (Result != 0) {
+                goto GetNextTreeNodeEnd;
+            }
+
+            if (RightChild != *Node) {
                 break;
             }
 
             *Node = NextHighest;
-            NextHighest = (UINTN)(NodeValue.Parent);
+            Result = DbgReadIntegerMember(Context,
+                                          TreeNodeType,
+                                          "Parent",
+                                          0,
+                                          Data,
+                                          DataSize,
+                                          &NextHighest);
+
+            if (Result != 0) {
+                goto GetNextTreeNodeEnd;
+            }
         }
 
         if (NextHighest == Root) {
@@ -531,6 +773,11 @@ Return Value:
         *Node = NextHighest;
     }
 
-    return 0;
+GetNextTreeNodeEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    return Result;
 }
 

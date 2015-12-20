@@ -461,7 +461,7 @@ Return Value:
             case DataTypeRelation:
                 Relation = &(Type->U.Relation);
                 Pointer = "";
-                if (Relation->Pointer != FALSE) {
+                if (Relation->Pointer != 0) {
                     Pointer = "*";
                 }
 

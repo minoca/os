@@ -83,18 +83,24 @@ DbgpFindExtensionEntry (
 //
 
 DEBUG_EXTENSION_IMPORT_INTERFACE DbgExports = {
+    DEBUG_EXTENSION_INTERFACE_VERSION,
     DbgRegisterExtension,
     DbgOutVaList,
     DbgEvaluate,
     DbgPrintAddressSymbol,
-    DbgPrintType,
     DbgReadMemory,
     DbgWriteMemory,
     DbgReboot,
     DbgGetCallStack,
     DbgPrintCallStack,
     DbgGetTargetInformation,
-    DbgGetTargetPointerSize
+    DbgGetTargetPointerSize,
+    DbgGetMemberOffset,
+    DbgGetTypeByName,
+    DbgReadIntegerMember,
+    DbgReadTypeByName,
+    DbgReadType,
+    DbgPrintTypeMember,
 };
 
 //
@@ -584,46 +590,6 @@ RegisterExtensionEnd:
     }
 
     return Result;
-}
-
-INT
-DbgPrintType (
-    PDEBUGGER_CONTEXT Context,
-    PSTR TypeString,
-    PVOID Data,
-    ULONG DataSizeInBytes
-    )
-
-/*++
-
-Routine Description:
-
-    This routine prints the contents of a given type.
-
-Arguments:
-
-    Context - Supplies a pointer to the application context.
-
-    TypeString - Supplies the type to print either information or contents of.
-
-    Data - Supplies a pointer to the data to use as contents of the type.
-
-    DataSizeInBytes - Supplies the size of the Data buffer, in bytes.
-
-Return Value:
-
-    0 if the type was successfully printed.
-
-    Returns an error code on failure.
-
---*/
-
-{
-
-    PSTR Arguments[1];
-
-    Arguments[0] = TypeString;
-    return DbgrDumpType(Context, Arguments, 1, Data, DataSizeInBytes);
 }
 
 //

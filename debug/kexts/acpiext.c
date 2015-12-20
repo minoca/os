@@ -33,6 +33,7 @@ Environment:
 #include <minoca/types.h>
 #include <minoca/status.h>
 #include <minoca/rtl.h>
+#include <minoca/im.h>
 #include "../../drivers/acpi/acpiobj.h"
 #include "dbgext.h"
 
@@ -69,6 +70,7 @@ INT
 ExtpPrintNamespaceAtRoot (
     PDEBUGGER_CONTEXT Context,
     ULONGLONG Address,
+    PULONGLONG NextSibling,
     ULONG IndentationLevel
     );
 
@@ -172,6 +174,7 @@ Return Value:
 
 {
 
+    ULONG AddressSize;
     ULONG ArgumentIndex;
     ULONG BytesRead;
     BOOL Result;
@@ -181,6 +184,7 @@ Return Value:
 
     RootAddress = 0;
     RootAddressAddress = 0;
+    AddressSize = DbgGetTargetPointerSize(Context);
 
     //
     // If there are no arguments, try to find the root.
@@ -206,11 +210,11 @@ Return Value:
         Success = DbgReadMemory(Context,
                                 TRUE,
                                 RootAddressAddress,
-                                sizeof(PACPI_OBJECT),
+                                AddressSize,
                                 &RootAddress,
                                 &BytesRead);
 
-        if ((Success != 0) || (BytesRead != sizeof(PACPI_OBJECT))) {
+        if ((Success != 0) || (BytesRead != AddressSize)) {
             DbgOut("Error: Could not read root object at 0x%I64x.\n",
                    RootAddressAddress);
 
@@ -223,7 +227,7 @@ Return Value:
         }
 
         DbgOut("%s: %I64x\n", ROOT_NAMESPACE_OBJECT_SYMBOL, RootAddress);
-        ExtpPrintNamespaceAtRoot(Context, RootAddress, 0);
+        ExtpPrintNamespaceAtRoot(Context, RootAddress, NULL, 0);
 
     } else {
 
@@ -245,7 +249,7 @@ Return Value:
                        ArgumentValues[ArgumentIndex]);
             }
 
-            ExtpPrintNamespaceAtRoot(Context, RootAddress, 0);
+            ExtpPrintNamespaceAtRoot(Context, RootAddress, NULL, 0);
             if (ArgumentIndex != ArgumentCount - 1) {
                 DbgOut("\n----");
             }
@@ -259,6 +263,7 @@ INT
 ExtpPrintNamespaceAtRoot (
     PDEBUGGER_CONTEXT Context,
     ULONGLONG Address,
+    PULONGLONG NextSibling,
     ULONG IndentationLevel
     )
 
@@ -274,6 +279,9 @@ Arguments:
 
     Address - Supplies the address of the root object to print.
 
+    NextSibling - Supplies an optional pointer where the next sibling pointer
+        will be returned.
+
     IndentationLevel - Supplies the indentation level to print the object at.
 
 Return Value:
@@ -286,16 +294,15 @@ Return Value:
 
 {
 
-    ULONG BytesRead;
+    PTYPE_SYMBOL AcpiObjectType;
     ULONGLONG ChildListHead;
-    ULONGLONG ChildObjectAddress;
-    ULONGLONG CurrentEntryAddress;
-    LIST_ENTRY CurrentEntryValue;
-    ULONG IndentIndex;
-    PSTR Name;
-    ACPI_OBJECT Object;
-    PSTR Space;
+    ULONG ChildListOffset;
+    PVOID Data;
+    ULONG DataSize;
+    ULONG ListEntryOffset;
+    ULONG Name;
     INT Status;
+    ULONGLONG Value;
 
     //
     // Bail out if the indentation seems too deep.
@@ -309,200 +316,423 @@ Return Value:
     // Print out the indentation.
     //
 
-    for (IndentIndex = 0; IndentIndex < IndentationLevel; IndentIndex += 1) {
-        DbgOut("  ");
-    }
+    DbgOut("%*s", IndentationLevel, "");
+    Status = DbgReadTypeByName(Context,
+                               Address,
+                               "acpi!ACPI_OBJECT",
+                               &AcpiObjectType,
+                               &Data,
+                               &DataSize);
 
-    Status = DbgReadMemory(Context,
-                           TRUE,
-                           Address,
-                           sizeof(ACPI_OBJECT),
-                           &Object,
-                           &BytesRead);
+    if (Status != 0) {
+        DbgOut("Error: Could not read object at 0x%I64x: %s.\n",
+               Address,
+               strerror(Status));
 
-    if ((Status != 0) || (BytesRead != sizeof(ACPI_OBJECT))) {
-        DbgOut("Error: Could not read object at 0x%I64x.\n", Address);
-        if (Status == 0) {
-            Status = EINVAL;
-        }
-
-        return Status;
+        goto PrintNamespaceAtRootEnd;
     }
 
     //
     // Print the object.
     //
 
-    Name = (PSTR)(&(Object.Name));
-    DbgOut("%08I64x %c%c%c%c ", Address, Name[0], Name[1], Name[2], Name[3]);
-    Status = DbgPrintType(Context,
-                          "ACPI_OBJECT_TYPE",
-                          &(Object.Type),
-                          sizeof(ACPI_OBJECT_TYPE));
+    Status = DbgReadIntegerMember(Context,
+                                  AcpiObjectType,
+                                  "Name",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
 
     if (Status != 0) {
-        DbgOut("OBJECTTYPE(%x)", Object.Type);
-        return Status;
+        goto PrintNamespaceAtRootEnd;
+    }
+
+    Name = Value;
+    DbgOut("%08I64x %c%c%c%c ",
+           Address,
+           (UCHAR)Name,
+           (UCHAR)(Name >> 8),
+           (UCHAR)(Name >> 16),
+           (UCHAR)(Name >> 24));
+
+    Status = DbgPrintTypeMember(Context,
+                                Address,
+                                Data,
+                                DataSize,
+                                AcpiObjectType,
+                                "Type",
+                                0,
+                                0);
+
+    if (Status != 0) {
+        goto PrintNamespaceAtRootEnd;
     }
 
     DbgOut(" ");
-    switch (Object.Type) {
+    Status = DbgReadIntegerMember(Context,
+                                  AcpiObjectType,
+                                  "Type",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    switch (Value) {
     case AcpiObjectInteger:
-        DbgOut("Value: 0x%I64x", Object.U.Integer.Value);
+        DbgOut("Value: ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.Integer.Value",
+                                    0,
+                                    0);
+
         break;
 
     case AcpiObjectString:
-        DbgOut("Address: %x", Object.U.String.String);
+        DbgOut("Address: ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.String.String",
+                                    0,
+                                    0);
+
         break;
 
     case AcpiObjectBuffer:
-        DbgOut("Buffer: %x Length: 0x%x",
-               Object.U.Buffer.Buffer,
-               Object.U.Buffer.Length);
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.Buffer.Buffer",
+                                    0,
+                                    0);
+
+        if (Status != 0) {
+            break;
+        }
+
+        DbgOut(" Length: ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.Buffer.Length",
+                                    0,
+                                    0);
 
         break;
 
     case AcpiObjectPackage:
-        DbgOut("Array: %x ElementCount: 0x%x",
-               Object.U.Package.Array,
-               Object.U.Package.ElementCount);
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.Package.Array",
+                                    0,
+                                    0);
+
+        if (Status != 0) {
+            break;
+        }
+
+        DbgOut(" Count: ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.Package.ElementCount",
+                                    0,
+                                    0);
 
         break;
 
     case AcpiObjectFieldUnit:
-        DbgOut("OpRegion: %x (%I64x, %I64x)",
-               Object.U.FieldUnit.OperationRegion,
-               Object.U.FieldUnit.BitOffset,
-               Object.U.FieldUnit.BitLength);
+        DbgOut("OpRegion ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.FieldUnit.OperationRegion",
+                                    0,
+                                    0);
 
+        if (Status != 0) {
+            break;
+        }
+
+        DbgOut(" ( ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.FieldUnit.BitOffset",
+                                    0,
+                                    0);
+
+        if (Status != 0) {
+            break;
+        }
+
+        DbgOut(", ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.FieldUnit.BitLength",
+                                    0,
+                                    0);
+
+        DbgOut(")");
         break;
 
     case AcpiObjectMethod:
-        DbgOut("%d Args, at %x length 0x%x",
-               Object.U.Method.ArgumentCount,
-               Object.U.Method.AmlCode,
-               Object.U.Method.AmlCodeSize);
+        DbgOut("Args: ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.Method.ArgumentCount",
+                                    0,
+                                    0);
+
+        if (Status != 0) {
+            break;
+        }
+
+        DbgOut(", at ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.Method.AmlCode",
+                                    0,
+                                    0);
+
+        if (Status != 0) {
+            break;
+        }
+
+        DbgOut(" length ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.Method.AmlCodeSize",
+                                    0,
+                                    0);
 
         break;
 
     case AcpiObjectOperationRegion:
-        switch (Object.U.OperationRegion.Space) {
-        case OperationRegionSystemMemory:
-            Space = "SystemMemory";
-            break;
+        DbgOut("(");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.OperationRegion.Space",
+                                    0,
+                                    0);
 
-        case OperationRegionSystemIo:
-            Space = "SystemIO";
-            break;
-
-        case OperationRegionPciConfig:
-            Space = "PCIConfig";
-            break;
-
-        case OperationRegionEmbeddedController:
-            Space = "EmbeddedController";
-            break;
-
-        case OperationRegionSmBus:
-            Space = "SMBus";
-            break;
-
-        case OperationRegionCmos:
-            Space = "CMOS";
-            break;
-
-        case OperationRegionPciBarTarget:
-            Space = "PCIBarTarget";
-            break;
-
-        case OperationRegionIpmi:
-            Space = "IPMI";
-            break;
-
-        default:
-            Space = "Unknown space";
+        if (Status != 0) {
             break;
         }
 
-        DbgOut("(%s, 0x%I64x, 0x%I64x)",
-               Space,
-               Object.U.OperationRegion.Offset,
-               Object.U.OperationRegion.Length);
+        DbgOut(", ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.OperationRegion.Offset",
+                                    0,
+                                    0);
 
+        if (Status != 0) {
+            break;
+        }
+
+        DbgOut(", ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.OperationRegion.Length",
+                                    0,
+                                    0);
+
+        if (Status != 0) {
+            break;
+        }
+
+        DbgOut(")");
         break;
 
     case AcpiObjectBufferField:
-        DbgOut("Destination Object: %x, Bit Offset: 0x%I64x, Bit "
-               "Length 0x%I64x",
-               Object.U.BufferField.DestinationObject,
-               Object.U.BufferField.BitOffset,
-               Object.U.BufferField.BitLength);
+        DbgOut("Destination Object: ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.BufferField.DestinationObject",
+                                    0,
+                                    0);
+
+        if (Status != 0) {
+            break;
+        }
+
+        DbgOut(", Bit Offset: ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.BufferField.BitOffset",
+                                    0,
+                                    0);
+
+        if (Status != 0) {
+            break;
+        }
+
+        DbgOut(", Bit Length ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.BufferField.BitLength",
+                                    0,
+                                    0);
+
+        if (Status != 0) {
+            break;
+        }
 
         break;
 
     case AcpiObjectAlias:
-        DbgOut("Destination: %x", Object.U.Alias.DestinationObject);
+        DbgOut("Destination: ");
+        Status = DbgPrintTypeMember(Context,
+                                    Address,
+                                    Data,
+                                    DataSize,
+                                    AcpiObjectType,
+                                    "U.Alias.DestinationObject",
+                                    0,
+                                    0);
+
         break;
 
     default:
         break;
     }
 
-    DbgOut("\n", Object.ReferenceCount);
+    DbgOut("\n");
+    if (Status != 0) {
+        goto PrintNamespaceAtRootEnd;
+    }
 
     //
-    // Print out all children.
+    // Get offsets into the structure for the list head and list entries.
     //
 
     IndentationLevel += 1;
-    ChildListHead = Address + FIELD_OFFSET(ACPI_OBJECT, ChildListHead);
-    CurrentEntryAddress = (UINTN)Object.ChildListHead.Next;
-    while (CurrentEntryAddress != ChildListHead) {
+    Status = DbgGetMemberOffset(AcpiObjectType,
+                                "ChildListHead",
+                                &ChildListOffset,
+                                NULL);
 
-        //
-        // Read the list entry.
-        //
+    if (Status != 0) {
+        goto PrintNamespaceAtRootEnd;
+    }
 
-        Status = DbgReadMemory(Context,
-                               TRUE,
-                               CurrentEntryAddress,
-                               sizeof(LIST_ENTRY),
-                               &CurrentEntryValue,
-                               &BytesRead);
+    ChildListHead = Address + (ChildListOffset / BITS_PER_BYTE);
+    Status = DbgGetMemberOffset(AcpiObjectType,
+                                "SiblingListEntry",
+                                &ListEntryOffset,
+                                NULL);
 
-        if ((Status != 0) || (BytesRead != sizeof(LIST_ENTRY))) {
-            DbgOut("Error: Could not read LIST_ENTRY at 0x%I64x.\n",
-                   CurrentEntryAddress);
+    if (Status != 0) {
+        goto PrintNamespaceAtRootEnd;
+    }
 
-            if (Status == 0) {
-                Status = EINVAL;
-            }
+    ListEntryOffset /= BITS_PER_BYTE;
 
-            return Status;
+    //
+    // Read the sibling list entry's next pointer for the caller.
+    //
+
+    if (NextSibling != NULL) {
+        Status = DbgReadIntegerMember(Context,
+                                      AcpiObjectType,
+                                      "SiblingListEntry.Next",
+                                      Address,
+                                      Data,
+                                      DataSize,
+                                      NextSibling);
+
+        if (Status != 0) {
+            goto PrintNamespaceAtRootEnd;
         }
+    }
 
-        //
-        // Recurse down the tree.
-        //
+    //
+    // Read the first element on the child list.
+    //
 
-        ChildObjectAddress = CurrentEntryAddress -
-                             FIELD_OFFSET(ACPI_OBJECT, SiblingListEntry);
+    Status = DbgReadIntegerMember(Context,
+                                  AcpiObjectType,
+                                  "ChildListHead.Next",
+                                  Address,
+                                  Data,
+                                  DataSize,
+                                  &Address);
 
+    free(Data);
+    Data = NULL;
+
+    //
+    // Loop printing all children.
+    //
+
+    while (Address != ChildListHead) {
+        Address -= ListEntryOffset;
         Status = ExtpPrintNamespaceAtRoot(Context,
-                                          ChildObjectAddress,
+                                          Address,
+                                          &Address,
                                           IndentationLevel);
 
         if (Status != 0) {
-            return Status;
+            goto PrintNamespaceAtRootEnd;
         }
-
-        //
-        // Move to the next child.
-        //
-
-        CurrentEntryAddress = (UINTN)CurrentEntryValue.Next;
     }
 
-    return 0;
+PrintNamespaceAtRootEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    return Status;
 }
 

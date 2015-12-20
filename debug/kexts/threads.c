@@ -98,17 +98,25 @@ Return Value:
 
 {
 
+    ULONG AddressSize;
     ULONGLONG BasePointer;
     ULONG BytesRead;
+    PVOID Data;
+    ULONG DataSize;
     ULONGLONG InstructionPointer;
     REGISTERS_UNION LocalRegisters;
+    ULONGLONG Preemptions;
     ULONGLONG StackPointer;
+    ULONGLONG State;
     INT Status;
     DEBUG_TARGET_INFORMATION TargetInformation;
-    KTHREAD Thread;
     ULONGLONG ThreadAddress;
     PSTR ThreadName;
+    PTYPE_SYMBOL ThreadType;
+    ULONGLONG Value;
+    ULONGLONG Yields;
 
+    Data = NULL;
     if ((Command != NULL) || (ArgumentCount != 2)) {
         DbgOut("Usage: !thread <ThreadAddress>.\n"
                "       The thread extension prints out the contents of a "
@@ -119,6 +127,7 @@ Return Value:
         return EINVAL;
     }
 
+    AddressSize = DbgGetTargetPointerSize(Context);
     memset(&LocalRegisters, 0, sizeof(REGISTERS_UNION));
 
     //
@@ -128,39 +137,61 @@ Return Value:
     Status = DbgEvaluate(Context, ArgumentValues[1], &ThreadAddress);
     if (Status != 0) {
         DbgOut("Error: Unable to evaluate Address parameter.\n");
-        return Status;
+        goto ExtThreadEnd;
     }
 
     DbgOut("Dumping Thread at 0x%08I64x ", ThreadAddress);
-    Status = DbgReadMemory(Context,
-                           TRUE,
-                           ThreadAddress,
-                           sizeof(KTHREAD),
-                           &Thread,
-                           &BytesRead);
+    Status = DbgReadTypeByName(Context,
+                               ThreadAddress,
+                               "KTHREAD",
+                               &ThreadType,
+                               &Data,
+                               &DataSize);
 
-    if ((Status != 0) || (BytesRead != sizeof(KTHREAD))) {
-        DbgOut("Error: Could not read thread.\n");
-        if (Status == 0) {
-            Status = EINVAL;
-        }
-
-        return Status;
+    if (Status != 0) {
+        DbgOut("Error: Could not read KTHREAD at 0x%I64x.\n", ThreadAddress);
+        goto ExtThreadEnd;
     }
 
-    if (Thread.Header.Type != ObjectThread) {
-        DbgOut("Probably not a thread, has an object type %d instead of %d.\n",
-               Thread.Header.Type,
+    Status = DbgReadIntegerMember(Context,
+                                  ThreadType,
+                                  "Header.Type",
+                                  ThreadAddress,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto ExtThreadEnd;
+    }
+
+    if (Value != ObjectThread) {
+        DbgOut("Probably not a thread, has an object type %I64d instead of "
+               "%d.\n",
+               Value,
                ObjectThread);
 
-        return EINVAL;
+        Status = EINVAL;
+        goto ExtThreadEnd;
     }
 
     //
     // If the thread has a name, attempt to read that in and print it.
     //
 
-    if (Thread.Header.Name != NULL) {
+    Status = DbgReadIntegerMember(Context,
+                                  ThreadType,
+                                  "Header.Name",
+                                  ThreadAddress,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto ExtThreadEnd;
+    }
+
+    if (Value != 0) {
         DbgOut("Name: ");
         ThreadName = MALLOC(MAX_THREAD_NAME + 1);
         if (ThreadName == NULL) {
@@ -171,7 +202,7 @@ Return Value:
         memset(ThreadName, 0, MAX_THREAD_NAME + 1);
         Status = DbgReadMemory(Context,
                                TRUE,
-                               (UINTN)Thread.Header.Name,
+                               Value,
                                MAX_THREAD_NAME,
                                ThreadName,
                                &BytesRead);
@@ -186,29 +217,144 @@ Return Value:
         FREE(ThreadName);
     }
 
-    DbgOut("Process %08x ID 0x%x ", Thread.OwningProcess, Thread.ThreadId);
-    if ((Thread.Flags & THREAD_FLAG_USER_MODE) != 0) {
-        DbgOut("UserMode ");
+    Status = DbgReadIntegerMember(Context,
+                                  ThreadType,
+                                  "OwningProcess",
+                                  ThreadAddress,
+                                  Data,
+                                  DataSize,
+                                  &Value);
 
-    } else {
-        DbgOut("KernelMode ");
+    if (Status != 0) {
+        goto ExtThreadEnd;
     }
 
-    DbgPrintAddressSymbol(Context, (UINTN)Thread.ThreadRoutine);
-    DbgOut("\nState: ");
-    DbgPrintType(Context,
-                 "kernel!THREAD_STATE",
-                 (PVOID)&(Thread.State),
-                 sizeof(THREAD_STATE));
+    DbgOut("Process 0x%08I64x ID ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  ThreadType,
+                                  "ThreadId",
+                                  ThreadAddress,
+                                  Data,
+                                  DataSize,
+                                  &Value);
 
-    if (Thread.State == ThreadStateBlocked) {
-        DbgOut(" on %08x", Thread.WaitBlock);
+    if (Status != 0) {
+        goto ExtThreadEnd;
+    }
+
+    DbgOut("%I64d, Flags: ", Value);
+    Status = DbgReadIntegerMember(Context,
+                                  ThreadType,
+                                  "Flags",
+                                  ThreadAddress,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto ExtThreadEnd;
+    }
+
+    DbgOut("0x%I64x", Value);
+    if ((Value & THREAD_FLAG_USER_MODE) != 0) {
+        DbgOut(" UserMode ");
+
+    } else {
+        DbgOut(" KernelMode ");
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  ThreadType,
+                                  "ThreadRoutine",
+                                  ThreadAddress,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto ExtThreadEnd;
+    }
+
+    DbgPrintAddressSymbol(Context, Value);
+    Status = DbgReadIntegerMember(Context,
+                                  ThreadType,
+                                  "ThreadParameter",
+                                  ThreadAddress,
+                                  Data,
+                                  DataSize,
+                                  &Value);
+
+    if (Status != 0) {
+        goto ExtThreadEnd;
+    }
+
+    DbgOut(" (Param 0x%I64x)", Value);
+    DbgOut("\nState: ");
+    DbgPrintTypeMember(Context,
+                       ThreadAddress,
+                       Data,
+                       DataSize,
+                       ThreadType,
+                       "State",
+                       0,
+                       0);
+
+    Status = DbgReadIntegerMember(Context,
+                                  ThreadType,
+                                  "State",
+                                  ThreadAddress,
+                                  Data,
+                                  DataSize,
+                                  &State);
+
+    if (Status != 0) {
+        goto ExtThreadEnd;
+    }
+
+    if (State == ThreadStateBlocked) {
+        Status = DbgReadIntegerMember(Context,
+                                      ThreadType,
+                                      "WaitBlock",
+                                      ThreadAddress,
+                                      Data,
+                                      DataSize,
+                                      &Value);
+
+        if (Status != 0) {
+            goto ExtThreadEnd;
+        }
+
+        DbgOut(" on 0x%08I64x", Value);
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  ThreadType,
+                                  "ResourceUsage.Preemptions",
+                                  ThreadAddress,
+                                  Data,
+                                  DataSize,
+                                  &Preemptions);
+
+    if (Status != 0) {
+        goto ExtThreadEnd;
+    }
+
+    Status = DbgReadIntegerMember(Context,
+                                  ThreadType,
+                                  "ResourceUsage.Yields",
+                                  ThreadAddress,
+                                  Data,
+                                  DataSize,
+                                  &Yields);
+
+    if (Status != 0) {
+        goto ExtThreadEnd;
     }
 
     DbgOut(" Runs: %I64d, Preemptions %I64d Yields %I64d",
-           Thread.ResourceUsage.Preemptions + Thread.ResourceUsage.Yields,
-           Thread.ResourceUsage.Preemptions,
-           Thread.ResourceUsage.Yields);
+           Preemptions + Yields,
+           Preemptions,
+           Yields);
 
     DbgOut("\n\n");
 
@@ -217,11 +363,12 @@ Return Value:
     // or currently running threads.
     //
 
-    if ((Thread.State == ThreadStateRunning) ||
-        (Thread.State == ThreadStateExited) ||
-        (Thread.State == ThreadStateFirstTime)) {
+    if ((State == ThreadStateRunning) ||
+        (State == ThreadStateExited) ||
+        (State == ThreadStateFirstTime)) {
 
-        return 0;
+        Status = 0;
+        goto ExtThreadEnd;
     }
 
     //
@@ -243,18 +390,29 @@ Return Value:
     //
 
     InstructionPointer = (UINTN)NULL;
-    StackPointer = (UINTN)Thread.KernelStackPointer;
+    Status = DbgReadIntegerMember(Context,
+                                  ThreadType,
+                                  "KernelStackPointer",
+                                  ThreadAddress,
+                                  Data,
+                                  DataSize,
+                                  &StackPointer);
+
+    if (Status != 0) {
+        goto ExtThreadEnd;
+    }
+
     BasePointer = (UINTN)NULL;
     switch (TargetInformation.MachineType) {
     case MACHINE_TYPE_X86:
         Status = DbgReadMemory(Context,
                                TRUE,
                                StackPointer + 24,
-                               sizeof(ULONG),
+                               AddressSize,
                                &BasePointer,
                                &BytesRead);
 
-        if ((Status != 0) || (BytesRead != sizeof(ULONG))) {
+        if ((Status != 0) || (BytesRead != AddressSize)) {
             DbgOut("Error: Could not get base pointer at 0x%08I64x.\n",
                    StackPointer + 24);
 
@@ -268,11 +426,11 @@ Return Value:
         Status = DbgReadMemory(Context,
                                TRUE,
                                StackPointer + 28,
-                               sizeof(ULONG),
+                               AddressSize,
                                &InstructionPointer,
                                &BytesRead);
 
-        if ((Status != 0) || (BytesRead != sizeof(ULONG))) {
+        if ((Status != 0) || (BytesRead != AddressSize)) {
             DbgOut("Error: Could not get return address at 0x%08I64x.\n",
                    StackPointer + 28);
 
@@ -293,11 +451,11 @@ Return Value:
         Status = DbgReadMemory(Context,
                                TRUE,
                                StackPointer + 32,
-                               sizeof(ULONG),
+                               AddressSize,
                                &BasePointer,
                                &BytesRead);
 
-        if ((Status != 0) || (BytesRead != sizeof(ULONG))) {
+        if ((Status != 0) || (BytesRead != AddressSize)) {
             DbgOut("Error: Could not get base pointer at 0x%08I64x.\n",
                    StackPointer + 32);
 
@@ -311,11 +469,11 @@ Return Value:
         Status = DbgReadMemory(Context,
                                TRUE,
                                StackPointer + 36,
-                               sizeof(ULONG),
+                               AddressSize,
                                &InstructionPointer,
                                &BytesRead);
 
-        if ((Status != 0) || (BytesRead != sizeof(ULONG))) {
+        if ((Status != 0) || (BytesRead != AddressSize)) {
             DbgOut("Error: Could not get return address at 0x%08I64x.\n",
                    StackPointer + 36);
 
@@ -344,7 +502,14 @@ Return Value:
     //
 
     DbgPrintCallStack(Context, &LocalRegisters, FALSE);
-    return 0;
+    Status = 0;
+
+ExtThreadEnd:
+    if (Data != NULL) {
+        free(Data);
+    }
+
+    return Status;
 }
 
 //
