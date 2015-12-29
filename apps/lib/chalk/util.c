@@ -156,6 +156,10 @@ Return Value:
     PCHALK_ALLOCATION ChalkAllocation;
     PVOID NewAllocation;
 
+    if (Allocation == NULL) {
+        return ChalkAllocate(Size);
+    }
+
     if (ChalkDebugLeaks == FALSE) {
         return realloc(Allocation, Size);
     }

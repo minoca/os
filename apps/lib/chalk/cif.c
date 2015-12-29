@@ -50,6 +50,16 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
+PSTR ChalkFunctionPrintArguments[] = {
+    "object",
+    NULL,
+};
+
+CHALK_FUNCTION_PROTOTYPE ChalkBuiltinFunctions[] = {
+    {"print", ChalkFunctionPrintArguments, ChalkFunctionPrint},
+    {NULL, NULL, NULL}
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -686,12 +696,191 @@ Return Value:
         return NULL;
     }
 
-    //
-    // Skip through references for convenience.
-    //
-
     Value = DictEntry->Value;
     return Value;
+}
+
+PCHALK_OBJECT
+ChalkCGetVariable (
+    PCHALK_INTERPRETER Interpreter,
+    PSTR Name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine looks up a variable or function parameter corresponding to the
+    given C string name.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter state.
+
+    Name - Supplies a pointer to the NULL-terminated case sensitive name of the
+        variable or parameter to look up.
+
+Return Value:
+
+    Returns a pointer to the value object for the given key on success. Note
+    that the reference count on this object is not increased.
+
+    NULL if no value for the given key exists.
+
+--*/
+
+{
+
+    CHALK_STRING FakeString;
+    PCHALK_OBJECT Value;
+
+    FakeString.Header.Type = ChalkObjectString;
+    FakeString.Header.ReferenceCount = 0;
+    FakeString.String = Name;
+    FakeString.Size = strlen(Name);
+    Value = ChalkGetVariable(Interpreter, (PCHALK_OBJECT)&FakeString, NULL);
+    return Value;
+}
+
+INT
+ChalkRegisterFunctions (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_FUNCTION_PROTOTYPE Prototypes
+    )
+
+/*++
+
+Routine Description:
+
+    This routine registers several new C functions with the Chalk interpreter.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Context - Supplies a pointer's worth of context to pass to the C functions
+        when they are called.
+
+    Prototypes - Supplies a pointer to an array of prototypes. Terminate the
+        array with an entry whose name is NULL.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    INT Status;
+
+    Status = 0;
+    while (Prototypes->Name != NULL) {
+        Status = ChalkRegisterFunction(Interpreter, Context, Prototypes);
+        if (Status != 0) {
+            break;
+        }
+
+        Prototypes += 1;
+    }
+
+    return Status;
+}
+
+INT
+ChalkRegisterFunction (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_FUNCTION_PROTOTYPE Prototype
+    )
+
+/*++
+
+Routine Description:
+
+    This routine registers a new Chalk C function in the current context.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Context - Supplies a pointer's worth of context to pass to the C function
+        when it is called.
+
+    Prototype - Supplies a pointer to the prototype information.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PCHALK_OBJECT ArgumentList;
+    PSTR ArgumentName;
+    PCHALK_OBJECT ArgumentString;
+    INT Count;
+    PCHALK_OBJECT Function;
+    INT Index;
+    PCHALK_OBJECT NameString;
+    INT Status;
+
+    Status = ENOMEM;
+    ArgumentList = NULL;
+    NameString = ChalkCreateString(Prototype->Name, strlen(Prototype->Name));
+    if (NameString == NULL) {
+        goto RegisterFunctionEnd;
+    }
+
+    Index = 0;
+    while (Prototype->ArgumentNames[Index] != NULL) {
+        Index += 1;
+    }
+
+    Count = Index;
+    ArgumentList = ChalkCreateList(NULL, Count);
+    if (ArgumentList == NULL) {
+        goto RegisterFunctionEnd;
+    }
+
+    for (Index = 0; Index < Count; Index += 1) {
+        ArgumentName = Prototype->ArgumentNames[Index];
+        ArgumentString = ChalkCreateString(ArgumentName, strlen(ArgumentName));
+        if (ArgumentString == NULL) {
+            goto RegisterFunctionEnd;
+        }
+
+        ArgumentList->List.Array[Index] = ArgumentString;
+    }
+
+    Function = ChalkCreateFunction(ArgumentList, NULL, NULL);
+    if (Function == NULL) {
+        goto RegisterFunctionEnd;
+    }
+
+    Function->Function.CFunction = Prototype->Function;
+    Function->Function.CFunctionContext = Context;
+    Status = ChalkSetVariable(Interpreter, NameString, Function, NULL);
+    if (Status != 0) {
+        goto RegisterFunctionEnd;
+    }
+
+RegisterFunctionEnd:
+    if (NameString != NULL) {
+        ChalkObjectReleaseReference(NameString);
+    }
+
+    if (ArgumentList != NULL) {
+        ChalkObjectReleaseReference(ArgumentList);
+    }
+
+    return Status;
 }
 
 //

@@ -60,6 +60,7 @@ Author:
 //
 
 extern PARSER_GRAMMAR_ELEMENT ChalkGrammar[];
+extern CHALK_FUNCTION_PROTOTYPE ChalkBuiltinFunctions[];
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -123,7 +124,8 @@ INT
 ChalkInvokeFunction (
     PCHALK_INTERPRETER Interpreter,
     PCHALK_OBJECT Function,
-    PCHALK_OBJECT ArgumentList
+    PCHALK_OBJECT ArgumentList,
+    PCHALK_OBJECT *Result
     );
 
 /*++
@@ -139,6 +141,9 @@ Arguments:
     Function - Supplies a pointer to the function object to execute.
 
     ArgumentList - Supplies a pointer to the argument values.
+
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
 
 Return Value:
 

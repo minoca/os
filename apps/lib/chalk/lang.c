@@ -66,6 +66,7 @@ PSTR ChalkLexerExpressions[] = {
     "return",
     "while",
     "function",
+    "in",
     YY_NAME0 "(" YY_NAME0 "|" YY_DIGITS ")*", // identifier
     "0[xX]" YY_HEX "+", // hex integer
     "0" YY_OCTAL_DIGITS "+", // octal integer
@@ -129,6 +130,7 @@ PSTR ChalkLexerTokenNames[] = {
     "return",
     "while",
     "function",
+    "in",
     "ID", // identifier
     "HEXINT", // hex integer
     "OCTINT", // octal integer
@@ -458,6 +460,10 @@ ULONG ChalkGrammarIterationStatement[] = {
     ChalkTokenDo, ChalkNodeCompoundStatement, ChalkTokenWhile,
         ChalkTokenOpenParentheses, ChalkNodeExpression,
         ChalkTokenCloseParentheses, ChalkTokenSemicolon, 0,
+
+    ChalkTokenFor, ChalkTokenOpenParentheses, ChalkTokenIdentifier,
+        ChalkTokenIn, ChalkNodeExpression, ChalkTokenCloseParentheses,
+        ChalkNodeCompoundStatement, 0,
 
     ChalkTokenFor, ChalkTokenOpenParentheses, ChalkNodeExpressionStatement,
         ChalkNodeExpressionStatement, ChalkTokenCloseParentheses,

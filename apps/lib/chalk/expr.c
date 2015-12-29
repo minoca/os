@@ -193,7 +193,11 @@ Return Value:
         ArgumentList = Node->Results[1];
         Node->Results[1] = NULL;
         ChalkPopNode(Interpreter);
-        Status = ChalkInvokeFunction(Interpreter, Expression, ArgumentList);
+        Status = ChalkInvokeFunction(Interpreter,
+                                     Expression,
+                                     ArgumentList,
+                                     Result);
+
         ChalkObjectReleaseReference(ArgumentList);
         goto VisitPostfixExpressionEnd;
 
@@ -1024,6 +1028,7 @@ Return Value:
 
     PPARSER_NODE AssignmentOperator;
     PCHALK_OBJECT *LValue;
+    CHALK_OBJECT_TYPE ObjectType;
     CHALK_TOKEN_TYPE Operator;
     PPARSER_NODE ParseNode;
     ULONG PushIndex;
@@ -1100,6 +1105,7 @@ Return Value:
         Node->Results[2] = NULL;
 
     } else {
+        ObjectType = Node->Results[0]->Header.Type;
         switch (Token->Value) {
         case ChalkTokenLeftAssign:
             Operator = ChalkTokenLeftShift;
@@ -1111,6 +1117,31 @@ Return Value:
 
         case ChalkTokenAddAssign:
             Operator = ChalkTokenPlus;
+
+            //
+            // Handle add-assigning two lists or two dicts.
+            //
+
+            if (ObjectType == Node->Results[2]->Header.Type) {
+                Status = 0;
+                if (ObjectType == ChalkObjectList) {
+                    Value = Node->Results[0];
+                    Node->Results[0] = NULL;
+                    Status = ChalkListAdd(Value, Node->Results[2]);
+                    Operator = 0;
+
+                } else if (ObjectType == ChalkObjectDict) {
+                    Value = Node->Results[0];
+                    Node->Results[0] = NULL;
+                    Status = ChalkDictAdd(Value, Node->Results[2]);
+                    Operator = 0;
+                }
+
+                if (Status != 0) {
+                    return Status;
+                }
+            }
+
             break;
 
         case ChalkTokenSubtractAssign:
@@ -1148,14 +1179,16 @@ Return Value:
             return EINVAL;
         }
 
-        Status = ChalkPerformArithmetic(Interpreter,
-                                        Node->Results[0],
-                                        Node->Results[2],
-                                        Operator,
-                                        &Value);
+        if (Operator != 0) {
+            Status = ChalkPerformArithmetic(Interpreter,
+                                            Node->Results[0],
+                                            Node->Results[2],
+                                            Operator,
+                                            &Value);
 
-        if (Status != 0) {
-            return Status;
+            if (Status != 0) {
+                return Status;
+            }
         }
     }
 
@@ -1163,12 +1196,15 @@ Return Value:
     // Assign the value to the destination.
     //
 
-    if (*LValue != NULL) {
-        ChalkObjectReleaseReference(*LValue);
+    if (*LValue != Value) {
+        if (*LValue != NULL) {
+            ChalkObjectReleaseReference(*LValue);
+        }
+
+        *LValue = Value;
+        ChalkObjectAddReference(Value);
     }
 
-    *LValue = Value;
-    ChalkObjectAddReference(Value);
     *Result = Value;
 
     //
@@ -1530,6 +1566,7 @@ Return Value:
 
 {
 
+    PCHALK_OBJECT Copy;
     INT Status;
     CHALK_OBJECT_TYPE Type;
 
@@ -1541,19 +1578,33 @@ Return Value:
         Type = Left->Header.Type;
         if (Type == Right->Header.Type) {
             if (Type == ChalkObjectList) {
-                Status = ChalkListAdd(Left, Right);
+                Copy = ChalkObjectCopy(Left);
+                if (Copy == NULL) {
+                    return ENOMEM;
+                }
+
+                Status = ChalkListAdd(Copy, Right);
                 if (Status == 0) {
-                    *Result = Left;
-                    ChalkObjectAddReference(Left);
+                    *Result = Copy;
+
+                } else {
+                    ChalkObjectReleaseReference(Copy);
                 }
 
                 return Status;
 
             } else if (Type == ChalkObjectDict) {
-                Status = ChalkDictAdd(Left, Right);
+                Copy = ChalkObjectCopy(Left);
+                if (Copy == NULL) {
+                    return ENOMEM;
+                }
+
+                Status = ChalkDictAdd(Copy, Right);
                 if (Status == 0) {
-                    *Result = Left;
-                    ChalkObjectAddReference(Left);
+                    *Result = Copy;
+
+                } else {
+                    ChalkObjectReleaseReference(Copy);
                 }
 
                 return Status;

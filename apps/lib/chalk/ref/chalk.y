@@ -7,7 +7,7 @@
 
 %token BREAK CONTINUE DO FOR ELSE IF RETURN WHILE
 
-%token FUNCTION
+%token FUNCTION IN
 
 %start translation_unit
 
@@ -194,6 +194,7 @@ selection_statement
 iteration_statement
     : WHILE '(' expression ')' compound_statement
     | DO compound_statement WHILE '(' expression ')' ';'
+    | FOR '(' IDENTIFIER IN expression ')' compound_statement
     | FOR '(' expression_statement expression_statement ')' compound_statement
     | FOR '(' expression_statement expression_statement expression ')' compound_statement
     ;

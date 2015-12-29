@@ -40,6 +40,26 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+/*++
+
+Structure Description:
+
+    This structure stores the iterator context for a dictionary.
+
+Members:
+
+    Next - Stores a pointer to the next entry to return in an iteration.
+
+    Generation - Stores the dictionary generation number when the iterator was
+        created.
+
+--*/
+
+typedef struct _CHALK_DICT_ITERATOR {
+    PCHALK_DICT_ENTRY Next;
+    UINTN Generation;
+} CHALK_DICT_ITERATOR, *PCHALK_DICT_ITERATOR;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -476,6 +496,127 @@ Return Value:
     return 0;
 }
 
+INT
+ChalkListInitializeIterator (
+    PCHALK_OBJECT List,
+    PVOID *Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prepares to iterate over a list.
+
+Arguments:
+
+    List - Supplies a pointer to the list to iterate over.
+
+    Context - Supplies a pointer where a pointer's worth of context will be
+        returned, the contents of which are internal to the list structure.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+{
+
+    assert(List->Header.Type == ChalkObjectList);
+
+    *Context = (PVOID)0;
+    return 0;
+}
+
+INT
+ChalkListIterate (
+    PCHALK_OBJECT List,
+    PVOID *Context,
+    PCHALK_OBJECT *Iteration
+    )
+
+/*++
+
+Routine Description:
+
+    This routine retrieves the next value in a list iteration.
+
+Arguments:
+
+    List - Supplies a pointer to the list to iterate over.
+
+    Context - Supplies a pointer to the iteration context. This will be updated
+        to advance the iteration.
+
+    Iteration - Supplies a pointer where the next value will be returned.
+        Returns NULL when the end of the list is encountered. The reference
+        count is NOT incremented on this object.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+{
+
+    ULONG Index;
+
+    assert(List->Header.Type == ChalkObjectList);
+
+    Index = (UINTN)*Context;
+    while (Index < List->List.Count) {
+        if (List->List.Array[Index] == NULL) {
+            Index += 1;
+            continue;
+        }
+
+        *Iteration = List->List.Array[Index];
+        Index += 1;
+        *Context = (PVOID)(UINTN)Index;
+        return 0;
+    }
+
+    *Context = (PVOID)(UINTN)Index;
+    *Iteration = NULL;
+    return 0;
+}
+
+VOID
+ChalkListDestroyIterator (
+    PCHALK_OBJECT List,
+    PVOID *Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine cleans up a list iterator.
+
+Arguments:
+
+    List - Supplies a pointer to the list that was being iterated over.
+
+    Context - Supplies a pointer to the iterator's context pointer.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    *Context = NULL;
+    return;
+}
+
 PCHALK_OBJECT
 ChalkCreateDict (
     PCHALK_OBJECT Source
@@ -602,6 +743,7 @@ Return Value:
         Entry->Key = Key;
         ChalkObjectAddReference(Key);
         INSERT_BEFORE(&(Entry->ListEntry), &(DictObject->Dict.EntryList));
+        DictObject->Dict.Generation += 1;
     }
 
     ChalkObjectAddReference(Value);
@@ -716,6 +858,165 @@ Return Value:
     }
 
     return 0;
+}
+
+INT
+ChalkDictInitializeIterator (
+    PCHALK_OBJECT Dict,
+    PVOID *Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prepares to iterate over a dictionary.
+
+Arguments:
+
+    Dict - Supplies a pointer to the dictionary to iterate over.
+
+    Context - Supplies a pointer where a pointer's worth of context will be
+        returned, the contents of which are internal to the dict structure.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+{
+
+    PCHALK_DICT_ITERATOR Iterator;
+
+    assert(Dict->Header.Type == ChalkObjectDict);
+
+    Iterator = ChalkAllocate(sizeof(CHALK_DICT_ITERATOR));
+    if (Iterator == NULL) {
+        return ENOMEM;
+    }
+
+    memset(Iterator, 0, sizeof(CHALK_DICT_ITERATOR));
+    if (!LIST_EMPTY(&(Dict->Dict.EntryList))) {
+        Iterator->Next = LIST_VALUE(Dict->Dict.EntryList.Next,
+                                    CHALK_DICT_ENTRY,
+                                    ListEntry);
+
+    } else {
+        Iterator->Next = NULL;
+    }
+
+    Iterator->Generation = Dict->Dict.Generation;
+    *Context = Iterator;
+    return 0;
+}
+
+INT
+ChalkDictIterate (
+    PCHALK_OBJECT Dict,
+    PVOID *Context,
+    PCHALK_OBJECT *Iteration
+    )
+
+/*++
+
+Routine Description:
+
+    This routine retrieves the next value in a dictionary iteration.
+
+Arguments:
+
+    Dict - Supplies a pointer to the dict to iterate over.
+
+    Context - Supplies a pointer to the iteration context. This will be updated
+        to advance the iteration.
+
+    Iteration - Supplies a pointer where the next value will be returned.
+        Returns NULL when the end of the dict is encountered. The reference
+        count is NOT incremented on this object.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+{
+
+    PCHALK_DICT_ENTRY Entry;
+    PCHALK_DICT_ITERATOR Iterator;
+
+    assert(Dict->Header.Type == ChalkObjectDict);
+
+    Iterator = *Context;
+
+    //
+    // Detect dictionary changes during iteration, which might lead to a wild
+    // pointer in the iteration structure.
+    //
+
+    if (Iterator->Generation != Dict->Dict.Generation) {
+        fprintf(stderr, "Error: Dictionary changed while iterating.\n");
+        return ERANGE;
+    }
+
+    if (Iterator->Next == NULL) {
+        *Iteration = NULL;
+
+    } else {
+        Entry = Iterator->Next;
+        *Iteration = Entry->Key;
+        if (Entry->ListEntry.Next == &(Dict->Dict.EntryList)) {
+            Entry = NULL;
+
+        } else {
+            Entry = LIST_VALUE(Entry->ListEntry.Next,
+                               CHALK_DICT_ENTRY,
+                               ListEntry);
+        }
+
+        Iterator->Next = Entry;
+    }
+
+    return 0;
+}
+
+VOID
+ChalkDictDestroyIterator (
+    PCHALK_OBJECT Dict,
+    PVOID *Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine cleans up a dictionary iterator.
+
+Arguments:
+
+    Dict - Supplies a pointer to the dictionary that was being iterated over.
+
+    Context - Supplies a pointer to the iterator's context pointer.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (*Context != NULL) {
+        ChalkFree(*Context);
+        *Context = NULL;
+    }
+
+    return;
 }
 
 PCHALK_OBJECT
@@ -971,6 +1272,77 @@ Return Value:
     return;
 }
 
+INT
+ChalkFunctionPrint (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the binding prototype between Chalk and C.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    PCHALK_OBJECT Element;
+    BOOL First;
+    UINTN Index;
+    PCHALK_OBJECT Object;
+
+    Object = ChalkCGetVariable(Interpreter, "object");
+
+    assert(Object != NULL);
+
+    //
+    // If it's a list, print the contents separated by spaces.
+    //
+
+    if (Object->Header.Type == ChalkObjectList) {
+        First = TRUE;
+        for (Index = 0; Index < Object->List.Count; Index += 1) {
+            Element = Object->List.Array[Index];
+            if (Element == NULL) {
+                continue;
+            }
+
+            if (First == FALSE) {
+                printf(" ");
+
+            } else {
+                First = FALSE;
+            }
+
+            ChalkPrintObject(Element, 0);
+        }
+
+    } else {
+        ChalkPrintObject(Object, 0);
+    }
+
+    return 0;
+}
+
 VOID
 ChalkPrintObject (
     PCHALK_OBJECT Object,
@@ -1044,6 +1416,11 @@ Return Value:
         break;
 
     case ChalkObjectString:
+        if (RecursionDepth == 0) {
+            printf("%s", Object->String.String);
+            break;
+        }
+
         if (Object->String.Size == 0) {
             printf("\"\"");
 

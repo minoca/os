@@ -21,6 +21,7 @@ void count();
 "return"        { count(); return(RETURN); }
 "while"         { count(); return(WHILE); }
 "function"      { count(); return(FUNCTION); }
+"in"            { count(); return(IN); }
 
 {L}({L}|{D})*       { count(); return(IDENTIFIER); }
 

@@ -175,6 +175,16 @@ Return Value:
     Parser->GrammarEnd = ChalkNodeEnd;
     Parser->GrammarStart = ChalkNodeTranslationUnit;
     Parser->MaxRecursion = 500;
+
+    //
+    // Add the builtin functions.
+    //
+
+    Status = ChalkRegisterFunctions(Interpreter, NULL, ChalkBuiltinFunctions);
+    if (Status != 0) {
+        goto InitializeInterpreterEnd;
+    }
+
     Status = 0;
 
 InitializeInterpreterEnd:
@@ -670,7 +680,11 @@ Return Value:
     INT Status;
 
     ParseNode = ParseTree;
-    Size = sizeof(CHALK_NODE) + (ParseNode->NodeCount * sizeof(PVOID));
+    Size = sizeof(CHALK_NODE);
+    if (ParseNode != NULL) {
+        Size += ParseNode->NodeCount * sizeof(PVOID);
+    }
+
     Node = ChalkAllocate(Size);
     if (Node == NULL) {
         return ENOMEM;
@@ -733,10 +747,12 @@ Return Value:
     // Free any intermediate results.
     //
 
-    Count = ParseNode->NodeCount;
-    for (Index = 0; Index < Count; Index += 1) {
-        if (Node->Results[Index] != NULL) {
-            ChalkObjectReleaseReference(Node->Results[Index]);
+    if (ParseNode != NULL) {
+        Count = ParseNode->NodeCount;
+        for (Index = 0; Index < Count; Index += 1) {
+            if (Node->Results[Index] != NULL) {
+                ChalkObjectReleaseReference(Node->Results[Index]);
+            }
         }
     }
 

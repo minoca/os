@@ -56,7 +56,8 @@ INT
 ChalkInvokeFunction (
     PCHALK_INTERPRETER Interpreter,
     PCHALK_OBJECT Function,
-    PCHALK_OBJECT ArgumentList
+    PCHALK_OBJECT ArgumentList,
+    PCHALK_OBJECT *Result
     )
 
 /*++
@@ -73,6 +74,9 @@ Arguments:
 
     ArgumentList - Supplies a pointer to the argument values.
 
+    Result - Supplies a pointer where a pointer to the evaluation will be
+        returned. It is the caller's responsibility to release this reference.
+
 Return Value:
 
     0 on success.
@@ -85,6 +89,7 @@ Return Value:
 
     PCHALK_OBJECT ArgumentNames;
     ULONG Count;
+    PVOID FunctionContext;
     ULONG Index;
     PCHALK_OBJECT *LValue;
     PCHALK_OBJECT Name;
@@ -101,6 +106,7 @@ Return Value:
     }
 
     assert(ArgumentList->Header.Type == ChalkObjectList);
+    assert(*Result == NULL);
 
     //
     // Validate the argument count.
@@ -164,6 +170,31 @@ Return Value:
         if (Status != 0) {
             goto InvokeFunctionEnd;
         }
+    }
+
+    //
+    // If there's a C function to call, give it a ring.
+    //
+
+    if (Function->Function.CFunction != NULL) {
+        FunctionContext = Function->Function.CFunctionContext;
+        Status = Function->Function.CFunction(Interpreter,
+                                              FunctionContext,
+                                              Result);
+
+        if (Status != 0) {
+            goto InvokeFunctionEnd;
+        }
+
+        if (*Result == NULL) {
+            *Result = ChalkCreateInteger(0);
+            if (*Result == NULL) {
+                Status = ENOMEM;
+                goto InvokeFunctionEnd;
+            }
+        }
+
+        ChalkPopNode(Interpreter);
     }
 
 InvokeFunctionEnd:
@@ -314,10 +345,15 @@ Return Value:
 {
 
     PCHALK_OBJECT Condition;
+    PCHALK_OBJECT Iteratee;
+    PCHALK_OBJECT Iteration;
+    PVOID IteratorContext;
+    PCHALK_OBJECT Name;
     PPARSER_NODE ParseNode;
     INT PushIndex;
     INT Status;
     PLEXER_TOKEN Token;
+    PSTR TokenString;
 
     ParseNode = Node->ParseNode;
 
@@ -353,50 +389,172 @@ Return Value:
     case ChalkTokenFor:
 
         //
-        // For loops look like:
-        // FOR ( expression_statement expression_statement ) compound_statement
-        // FOR ( expression_statement expression_statement expression)
-        // compound_statement.
-        // Index 0: Just starting out, evaluate the initial statement (push 0).
-        // Index 1: Finished the initial statement, evaluate the condition
-        // (push 1).
-        // Index 2: Finished the expression, if false then exit. If true then
-        // execute the compound statement (push N-1).
-        // Index N: Finished the compound statement, execute the final
-        // expression if it exists (push 2). Go back and execute the condition
-        // again.
-        // Index 3: Finished the final expression, go execute the condition
-        // again (push 1).
+        // For loops are overloaded for iteration. Handle that case in here,
+        // detected by the fact that there are more tokens in the IN case.
+        // This takes the form:
+        // FOR ( IDENTIFIER IN expression ) compound_statement.
         //
 
-        if (PushIndex == 2) {
-            Condition = *Result;
+        if (ParseNode->TokenCount == 5) {
+            IteratorContext = (PVOID *)&(Node->Results[1]);
 
-            assert(Condition != NULL);
+            //
+            // If the expression hasn't even been evaluated yet, then go get it.
+            //
 
-            if (ChalkObjectGetBooleanValue(Condition) != FALSE) {
-                PushIndex = ParseNode->NodeCount - 1;
+            if (PushIndex == 0) {
+                break;
 
-            } else {
-                PushIndex = -1;
+            //
+            // If the expression was just evaluated, go get it and squirrel it
+            // away.
+            //
+
+            } else if (PushIndex == 1) {
+                Iteratee = *Result;
+
+                assert(Iteratee != NULL);
+
+                Node->Results[0] = Iteratee;
+                *Result = NULL;
+                if (Iteratee->Header.Type == ChalkObjectList) {
+                    ChalkListInitializeIterator(Iteratee, IteratorContext);
+
+                } else if (Iteratee->Header.Type == ChalkObjectDict) {
+                    ChalkDictInitializeIterator(Iteratee, IteratorContext);
+
+                } else {
+                    fprintf(stderr,
+                            "Error: %s is not iterable.\n",
+                            ChalkObjectTypeNames[Iteratee->Header.Type]);
+
+                    return EINVAL;
+                }
             }
 
-        } else if (PushIndex == ParseNode->NodeCount) {
-
             //
-            // Push the final expression if there are 4 child nodes, or the
-            // condition if there are 3.
+            // Get the next value, and set it in the new variable.
             //
 
-            PushIndex = ParseNode->NodeCount - 2;
+            Iteratee = Node->Results[0];
+            if (Iteratee->Header.Type == ChalkObjectList) {
+                Status = ChalkListIterate(Iteratee,
+                                          IteratorContext,
+                                          &Iteration);
 
-        //
-        // If the final expression just finished, go back and evaluate the
-        // condition. This only hits for 4-node for statements.
-        //
+                if (Iteration == NULL) {
+                    ChalkListDestroyIterator(Iteratee, IteratorContext);
+                    PushIndex = -1;
+                    break;
+                }
 
-        } else if (PushIndex == 3) {
+            } else if (Iteratee->Header.Type == ChalkObjectDict) {
+                Status = ChalkDictIterate(Iteratee,
+                                          IteratorContext,
+                                          &Iteration);
+
+                if (Iteration == NULL) {
+                    ChalkDictDestroyIterator(Iteratee, IteratorContext);
+                    PushIndex = -1;
+                    break;
+                }
+
+            } else {
+
+                assert(FALSE);
+
+                Iteration = NULL;
+                Status = EINVAL;
+            }
+
+            if (Status != 0) {
+                return Status;
+            }
+
+            //
+            // Get the identifier name string.
+            //
+
+            Token = ParseNode->Tokens[2];
+
+            assert(Token->Value == ChalkTokenIdentifier);
+
+            TokenString = Node->Script->Data + Token->Position;
+            Name = ChalkCreateString(TokenString, Token->Size);
+            if (Name == NULL) {
+                Status = ENOMEM;
+                return Status;
+            }
+
+            Status = ChalkSetVariable(Interpreter, Name, Iteration, NULL);
+            ChalkObjectReleaseReference(Name);
+            if (Status != 0) {
+                return Status;
+            }
+
+            //
+            // With the variable set for this iteration, go execute the
+            // compound statement.
+            //
+
             PushIndex = 1;
+
+        //
+        // Handle a normal for loop.
+        //
+
+        } else {
+
+            assert(ParseNode->TokenCount == 3);
+
+            //
+            // For loops look like:
+            // FOR ( expression_statement expression_statement )
+            //     compound_statement
+            // FOR ( expression_statement expression_statement expression)
+            //     compound_statement.
+            // Index 0: Just starting out, evaluate the initial statement
+            // (push 0).
+            // Index 1: Finished the initial statement, evaluate the condition
+            // (push 1).
+            // Index 2: Finished the expression, if false then exit. If true
+            // then execute the compound statement (push N-1).
+            // Index N: Finished the compound statement, execute the final
+            // expression if it exists (push 2). Go back and execute the
+            // condition again.
+            // Index 3: Finished the final expression, go execute the condition
+            // again (push 1).
+            //
+
+            if (PushIndex == 2) {
+                Condition = *Result;
+
+                assert(Condition != NULL);
+
+                if (ChalkObjectGetBooleanValue(Condition) != FALSE) {
+                    PushIndex = ParseNode->NodeCount - 1;
+
+                } else {
+                    PushIndex = -1;
+                }
+
+            } else if (PushIndex == ParseNode->NodeCount) {
+
+                //
+                // Push the final expression if there are 4 child nodes, or the
+                // condition if there are 3.
+                //
+
+                PushIndex = ParseNode->NodeCount - 2;
+
+            //
+            // If the final expression just finished, go back and evaluate the
+            // condition. This only hits for 4-node for statements.
+            //
+
+            } else if (PushIndex == 3) {
+                PushIndex = 1;
+            }
         }
 
         break;

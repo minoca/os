@@ -43,6 +43,7 @@ typedef enum _CHALK_TOKEN_TYPE {
     ChalkTokenReturn,
     ChalkTokenWhile,
     ChalkTokenFunction,
+    ChalkTokenIn,
     ChalkTokenIdentifier,
     ChalkTokenHexInteger,
     ChalkTokenOctalInteger,
@@ -143,7 +144,40 @@ typedef enum _CHALK_OBJECT_TYPE {
     ChalkObjectCount
 } CHALK_OBJECT_TYPE, *PCHALK_OBJECT_TYPE;
 
+typedef struct _CHALK_INTERPRETER CHALK_INTERPRETER, *PCHALK_INTERPRETER;
 typedef union _CHALK_OBJECT CHALK_OBJECT, *PCHALK_OBJECT;
+
+typedef
+INT
+(*PCHALK_C_FUNCTION) (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the binding prototype between Chalk and C.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
 
 /*++
 
@@ -292,11 +326,15 @@ Members:
 
     EntryList - Stores the head of the list of CHALK_DICT_ENTRY entries.
 
+    Generation - Stores the dictionary generation, used to detect if a
+        dictionary has changed out from under an iteration.
+
 --*/
 
 typedef struct _CHALK_DICT {
     CHALK_OBJECT_HEADER Header;
     LIST_ENTRY EntryList;
+    UINTN Generation;
 } CHALK_DICT, *PCHALK_DICT;
 
 /*++
@@ -333,6 +371,11 @@ Members:
     Body - Stores a pointer to the Abstract Syntax Tree for the body of this
         function. This is opaque, but is currently of type PPARSER_NODE.
 
+    CFunction - Supplies an optional pointer to a C function to call.
+
+    CFunctionContext - Supplies a pointer's worth of context to pass to the C
+        function.
+
     Script - Stores a pointer to the script the function resides in.
 
 --*/
@@ -341,6 +384,8 @@ typedef struct _CHALK_FUNCTION {
     CHALK_OBJECT_HEADER Header;
     PCHALK_OBJECT Arguments;
     PVOID Body;
+    PCHALK_C_FUNCTION CFunction;
+    PVOID CFunctionContext;
     PCHALK_SCRIPT Script;
 } CHALK_FUNCTION, *PCHALK_FUNCTION;
 
@@ -579,6 +624,89 @@ Return Value:
 
 --*/
 
+INT
+ChalkListInitializeIterator (
+    PCHALK_OBJECT List,
+    PVOID *Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prepares to iterate over a list.
+
+Arguments:
+
+    List - Supplies a pointer to the list to iterate over.
+
+    Context - Supplies a pointer where a pointer's worth of context will be
+        returned, the contents of which are internal to the list structure.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+INT
+ChalkListIterate (
+    PCHALK_OBJECT List,
+    PVOID *Context,
+    PCHALK_OBJECT *Iteration
+    );
+
+/*++
+
+Routine Description:
+
+    This routine retrieves the next value in a list iteration.
+
+Arguments:
+
+    List - Supplies a pointer to the list to iterate over.
+
+    Context - Supplies a pointer to the iteration context. This will be updated
+        to advance the iteration.
+
+    Iteration - Supplies a pointer where the next value will be returned.
+        Returns NULL when the end of the list is encountered. The reference
+        count is NOT incremented on this object.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+VOID
+ChalkListDestroyIterator (
+    PCHALK_OBJECT List,
+    PVOID *Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine cleans up a list iterator.
+
+Arguments:
+
+    List - Supplies a pointer to the list that was being iterated over.
+
+    Context - Supplies a pointer to the iterator's context pointer.
+
+Return Value:
+
+    None.
+
+--*/
+
 PCHALK_OBJECT
 ChalkCreateDict (
     PCHALK_OBJECT Source
@@ -688,6 +816,89 @@ Return Value:
     0 on success.
 
     Returns an error number on catastrophic failure.
+
+--*/
+
+INT
+ChalkDictInitializeIterator (
+    PCHALK_OBJECT Dict,
+    PVOID *Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prepares to iterate over a dictionary.
+
+Arguments:
+
+    Dict - Supplies a pointer to the dictionary to iterate over.
+
+    Context - Supplies a pointer where a pointer's worth of context will be
+        returned, the contents of which are internal to the dict structure.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+INT
+ChalkDictIterate (
+    PCHALK_OBJECT Dict,
+    PVOID *Context,
+    PCHALK_OBJECT *Iteration
+    );
+
+/*++
+
+Routine Description:
+
+    This routine retrieves the next value in a dictionary iteration.
+
+Arguments:
+
+    Dict - Supplies a pointer to the dict to iterate over.
+
+    Context - Supplies a pointer to the iteration context. This will be updated
+        to advance the iteration.
+
+    Iteration - Supplies a pointer where the next value will be returned.
+        Returns NULL when the end of the dict is encountered. The reference
+        count is NOT incremented on this object.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on catastrophic failure.
+
+--*/
+
+VOID
+ChalkDictDestroyIterator (
+    PCHALK_OBJECT Dict,
+    PVOID *Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine cleans up a dictionary iterator.
+
+Arguments:
+
+    Dict - Supplies a pointer to the dictionary that was being iterated over.
+
+    Context - Supplies a pointer to the iterator's context pointer.
+
+Return Value:
+
+    None.
 
 --*/
 
@@ -809,6 +1020,37 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+INT
+ChalkFunctionPrint (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the binding prototype between Chalk and C.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
 
 --*/
 
