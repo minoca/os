@@ -430,6 +430,7 @@ Author:
 //
 
 #define RTLW81_MCU_FIRMWARE_DOWNLOAD_CPRST           0x00800000
+#define RTLW81_MCU_FIRMWARE_DOWNLOAD_CLEAR           0x00080000
 #define RTLW81_MCU_FIRMWARE_DOWNLOAD_PAGE_MASK       0x00070000
 #define RTLW81_MCU_FIRMWARE_DOWNLOAD_PAGE_SHIFT      16
 #define RTLW81_MCU_FIRMWARE_DOWNLOAD_RAM_DL_SELECT   0x00000080
@@ -583,7 +584,7 @@ Author:
 // Define the bits for the transmit descriptor control register.
 //
 
-#define RTLW81_TRANSMIT_DESCRIPTOR_CONTROL_BLOCK_COUNT_MASK  0x000000F0
+#define RTLW81_TRANSMIT_DESCRIPTOR_CONTROL_BLOCK_COUNT_MASK 0x000000F0
 #define RTLW81_TRANSMIT_DESCRIPTOR_CONTROL_BLOCK_COUNT_SHIFT 4
 #define RTLW81_TRANSMIT_DESCRIPTOR_CONTROL_BLOCK_COUNT_DEFAULT 6
 
@@ -1207,6 +1208,7 @@ Author:
 //
 
 #define RTLW81_TRANSMIT_AGG_BK_FLAG 0x00010000
+#define RTLW81_TRANSMIT_CCX_RPT     0x00080000
 
 //
 // Define the rate information bits for the transmit packet header.
@@ -1238,14 +1240,14 @@ Author:
 #define RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_MASK   0x0000003F
 #define RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_SHIFT  0
 #define RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_OFDM54 11
-#define RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_CCK1   0
+#define RTLW81_TRANSMIT_DATA_RATE_INFORMATION_DATA_RATE_CCK1   3
 
 //
 // Define the sequence bits for the transmit packet header.
 //
 
-#define RTLW81_TRANSMIT_SEQUENCE_PACKET_ID     0x8000
-#define RTLW81_TRANSMIT_SEQUENCE_MASK 0x0FFF
+#define RTLW81_TRANSMIT_SEQUENCE_HARDWARE 0x8000
+#define RTLW81_TRANSMIT_SEQUENCE_MASK     0x0FFF
 
 //
 // Define the bits for programming the EFUSE registers in order to read the ROM.
@@ -1305,7 +1307,7 @@ Author:
 // Define the MAC ID bits for the MAC ID config firmware command.
 //
 
-#define RTLW81_MAC_ID_CONFIG_COMMAND_ID_VALID     0x84
+#define RTLW81_MAC_ID_CONFIG_COMMAND_ID_VALID     0x80
 #define RTLW81_MAC_ID_CONFIG_COMMAND_ID_BROADCAST 0x04
 #define RTLW81_MAC_ID_CONFIG_COMMAND_ID_BSS       0x00
 
@@ -1329,7 +1331,7 @@ typedef enum _RTLW81_REGISTER {
     Rtlw81RegisterSysClock = 0x008,
     Rtlw81RegisterAfeMisc = 0x010,
     Rtlw81RegisterSps0Control = 0x011,
-    Rtlw81RegisterTempatureControl = 0x015,
+    Rtlw81RegisterTemperatureControl = 0x015,
     Rtlw81RegisterPaSetting = 0x016,
     Rtlw81RegisterRsvControl = 0x01C,
     Rtlw81RegisterRfControl = 0x01F,
@@ -1415,6 +1417,7 @@ typedef enum _RTLW81_REGISTER {
     Rtlw81RegisterTbttProhibit = 0x540,
     Rtlw81RegisterNavProtLength = 0x546,
     Rtlw81RegisterBeaconControl = 0x550,
+    Rtlw81RegisterTsfReset = 0x553,
     Rtlw81RegisterBeaconInterval = 0x554,
     Rtlw81RegisterDriverEarlyInt = 0x558,
     Rtlw81RegisterBeaconDmaTime = 0x559,
@@ -1523,8 +1526,6 @@ Members:
 
     Subversion - Stores the firmware's subversion.
 
-    Reserved1 - Stores one reserved byte.
-
     Month - Stores the month in which the firmware was created.
 
     MonthDay - Stores the day of the month on which the firmware was created.
@@ -1535,15 +1536,15 @@ Members:
 
     RamcodeSize - Stores the size of the code.
 
-    Reserved2 - Stores 2 reserved byte.
+    Reserved1 - Stores 2 reserved byte.
 
     SvnIndex - Stores the SVN index of the firwmare.
+
+    Reserved2 - Stores 4 reserved bytes.
 
     Reserved3 - Stores 4 reserved bytes.
 
     Reserved4 - Stores 4 reserved bytes.
-
-    Reserved5 - Stores 4 reserved bytes.
 
 --*/
 
@@ -1552,18 +1553,17 @@ typedef struct _RTLW81_FIRMWARE_HEADER {
     UCHAR Category;
     UCHAR Function;
     USHORT Version;
-    UCHAR Subversion;
-    UCHAR Reserved1;
+    USHORT Subversion;
     UCHAR Month;
     UCHAR MonthDay;
     UCHAR Hour;
     UCHAR Minute;
     USHORT RamcodeSize;
-    USHORT Reserved2;
+    USHORT Reserved1;
     ULONG SvnIndex;
+    ULONG Reserved2;
     ULONG Reserved3;
     ULONG Reserved4;
-    ULONG Reserved5;
 } PACKED RTLW81_FIRMWARE_HEADER, *PRTLW81_FIRMWARE_HEADER;
 
 /*++
@@ -1859,6 +1859,8 @@ Members:
     CrystalCapbility - Stores the capability of the crystal for the RTL8188E
         device.
 
+    PaSetting - Stores the PA setting for the RTL81xx device.
+
     Power - Stores channel power information captured from the ROM.
 
 --*/
@@ -1892,6 +1894,7 @@ typedef struct _RTLW81_DEVICE {
     UCHAR BoardType;
     UCHAR Regulatory;
     UCHAR CrystalCapability;
+    UCHAR PaSetting;
     union {
         RTLW81_POWER_DEFAULT Default;
         RTLW81_POWER_8188E Rtlw8188e;

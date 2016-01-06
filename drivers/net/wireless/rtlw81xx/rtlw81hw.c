@@ -1304,7 +1304,7 @@ Return Value:
         ASSERT(DataSize <= MAX_USHORT);
 
         Packet->DataOffset -= RTLW81_TRANSMIT_HEADER_SIZE;
-        Header = Packet->Buffer;
+        Header = Packet->Buffer + Packet->DataOffset;
         RtlZeroMemory(Header, RTLW81_TRANSMIT_HEADER_SIZE);
         Header->PacketLength = DataSize;
         Header->Offset = RTLW81_TRANSMIT_HEADER_SIZE;
@@ -1407,8 +1407,13 @@ Return Value:
             (NET80211_GET_FRAME_SUBTYPE(Net80211Header) !=
              NET80211_DATA_FRAME_SUBTYPE_QOS_DATA)) {
 
-            Header->RateInformation |= RTLW81_TRANSMIT_RATE_INFORMATION_HWSEQ;
-            Header->Sequence |= RTLW81_TRANSMIT_SEQUENCE_PACKET_ID;
+            if ((Device->Flags & RTLW81_FLAG_8188E) != 0) {
+                Header->Sequence |= RTLW81_TRANSMIT_SEQUENCE_HARDWARE;
+
+            } else {
+                Header->RateInformation |=
+                                        RTLW81_TRANSMIT_RATE_INFORMATION_HWSEQ;
+            }
 
         } else {
             Header->Sequence = NET80211_GET_SEQUENCE_NUMBER(Net80211Header);
@@ -1693,6 +1698,8 @@ Return Value:
         //
         // Set the rate for 11b/g.
         //
+        // TODO: Detect the real mode from Net80211 Core to handle 11b.
+        //
 
         RTLW81_WRITE_REGISTER8(Device,
                                Rtlw81RegisterIniRtsRateSelect,
@@ -1707,7 +1714,7 @@ Return Value:
                                 0xFFFF);
 
         //
-        // Enable transmit.
+        // Flush all access control queues and enable transmit.
         //
 
         RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterTransmitPause, 0);
@@ -1839,6 +1846,8 @@ Return Value:
             //
             // Set the basic rate information.
             //
+            // TODO: Get the mode information from Net80211 Core.
+            //
 
             MacIdCommand.MacId = RTLW81_MAC_ID_CONFIG_COMMAND_ID_BROADCAST |
                                  RTLW81_MAC_ID_CONFIG_COMMAND_ID_VALID;
@@ -1887,6 +1896,7 @@ Return Value:
                                    MaxRateIndex);
         }
 
+        Rtlw81pSetLed(Device, TRUE);
         break;
 
     default:
@@ -2111,13 +2121,6 @@ Return Value:
                 goto InitializeEnd;
             }
 
-            if ((Value & RTLW81_SYS_CONFIGURATION_VENDOR_UMC) != 0) {
-                Device->Flags |= RTLW81_FLAG_UMC;
-                if ((Value & RTLW81_SYS_CONFIGURATION_VERSION_MASK) == 0) {
-                    Device->Flags |= RTLW81_FLAG_UMC_A_CUT;
-                }
-            }
-
             if ((Value & RTLW81_SYS_CONFIGURATION_TYPE_8192C) != 0) {
                 Device->Flags |= RTLW81_FLAG_8192C;
                 Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterHponFsm);
@@ -2125,6 +2128,13 @@ Return Value:
                 Value >>= RTLW81_HPON_FSM_CHIP_BONDING_ID_SHIFT;
                 if (Value == RTLW81_HPON_FSM_CHIP_BONDING_ID_8192C_1T2R) {
                     Device->Flags |= RTLW81_FLAG_8192C_1T2R;
+                }
+            }
+
+            if ((Value & RTLW81_SYS_CONFIGURATION_VENDOR_UMC) != 0) {
+                Device->Flags |= RTLW81_FLAG_UMC;
+                if ((Value & RTLW81_SYS_CONFIGURATION_VERSION_MASK) == 0) {
+                    Device->Flags |= RTLW81_FLAG_UMC_A_CUT;
                 }
             }
         }
@@ -2250,21 +2260,12 @@ Return Value:
                          NET80211_ADDRESS_SIZE);
 
         //
-        // Create the core networking device.
-        //
-
-        Status = Rtlw81pCreateNetworkDevice(Device);
-        if (!KSUCCESS(Status)) {
-            goto InitializeEnd;
-        }
-
-        //
         // Set the network type.
         //
 
         Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterConfiguration);
         Value &= ~RTLW81_CONFIGURATION_NETWORK_TYPE_MASK;
-        Value |= (RTLW81_CONFIGURATION_NETWORK_TYPE_NO_LINK <<
+        Value |= (RTLW81_CONFIGURATION_NETWORK_TYPE_INFRA <<
                   RTLW81_CONFIGURATION_NETWORK_TYPE_SHIFT);
 
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterConfiguration, Value);
@@ -2286,6 +2287,10 @@ Return Value:
         RTLW81_WRITE_REGISTER32(Device,
                                 Rtlw81RegisterReceiveConfiguration,
                                 Value);
+
+        //
+        // Accept all multicast frames.
+        //
 
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterMulticast1, 0xFFFFFFFF);
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterMulticast2, 0xFFFFFFFF);
@@ -2336,15 +2341,6 @@ Return Value:
         RTLW81_WRITE_REGISTER16(Device,
                                 Rtlw81RegisterRetryLimit,
                                 RTLW81_RETRY_LIMIT_DEFAULT);
-
-        //
-        // Disable the enhanced distributed channel access (EDCA) countdown to
-        // reduce collisions.
-        //
-
-        Value = RTLW81_READ_REGISTER16(Device, Rtlw81RegisterRdControl);
-        Value |= RTLW81_RD_CONTROL_DISABLE_EDCA_COUNTDOWN;
-        RTLW81_WRITE_REGISTER16(Device, Rtlw81RegisterRdControl, Value);
 
         //
         // Initialize the short interfame space (SIFS).
@@ -2428,7 +2424,8 @@ Return Value:
 
         Value &= ~RTLW81_TRANSMIT_DESCRIPTOR_CONTROL_BLOCK_COUNT_MASK;
         Value |= (RTLW81_TRANSMIT_DESCRIPTOR_CONTROL_BLOCK_COUNT_DEFAULT <<
-                  RTLW81_TRANSMIT_DESCRIPTOR_CONTROL_BLOCK_COUNT_SHIFT);
+                  RTLW81_TRANSMIT_DESCRIPTOR_CONTROL_BLOCK_COUNT_SHIFT) &
+                 RTLW81_TRANSMIT_DESCRIPTOR_CONTROL_BLOCK_COUNT_MASK;
 
         RTLW81_WRITE_REGISTER32(Device,
                                 Rtlw81RegisterTransmitDescriptorControl0,
@@ -2600,6 +2597,10 @@ Return Value:
                                    RTLW81_LDOHCI_12_CONTROL_DEFAULT);
 
             RTLW81_WRITE_REGISTER8(Device,
+                                   Rtlw81RegisterTemperatureControl,
+                                   RTLW81_TEMPERATURE_CONTROL_DEFAULT);
+
+            RTLW81_WRITE_REGISTER8(Device,
                                    Rtlw81RegisterAfeXtalControl1,
                                    RTLW81_AFE_XTAL_CONTROL1_DEFAULT);
         }
@@ -2643,7 +2644,7 @@ Return Value:
                                     DeviceData->BbRegisters[Index],
                                     DeviceData->BbValues[Index]);
 
-            HlBusySpin(100);
+            HlBusySpin(1000);
         }
 
         //
@@ -2753,7 +2754,7 @@ Return Value:
                                     Rtlw81RegisterOfdm0AgcrsstiTable,
                                     DeviceData->AgcValues[Index]);
 
-            HlBusySpin(100);
+            HlBusySpin(1000);
         }
 
         if ((Device->Flags & RTLW81_FLAG_8188E) != 0) {
@@ -2761,12 +2762,12 @@ Return Value:
                                     Rtlw81RegisterOfdm0AgcCore1,
                                     RTLW81_OFDM0_AGC_CORE1_INIT1);
 
-            HlBusySpin(100);
+            HlBusySpin(1000);
             RTLW81_WRITE_REGISTER32(Device,
                                     Rtlw81RegisterOfdm0AgcCore1,
                                     RTLW81_OFDM0_AGC_CORE1_INIT2);
 
-            HlBusySpin(100);
+            HlBusySpin(1000);
             Value = RTLW81_READ_REGISTER32(Device,
                                            Rtlw81RegisterAfeXtalControl0);
 
@@ -2817,11 +2818,11 @@ Return Value:
             Value = RTLW81_READ_REGISTER32(Device, Register);
             Value |= RTLW81_FPGA0_RF_OE_INTERFACE_ENABLE;
             RTLW81_WRITE_REGISTER32(Device, Register, Value);
-            HlBusySpin(100);
+            HlBusySpin(1000);
             Value = RTLW81_READ_REGISTER32(Device, Register);
             Value |= RTLW81_FPGA0_RF_OE_INTERFACE_HIGH_OUTPUT;
             RTLW81_WRITE_REGISTER32(Device, Register, Value);
-            HlBusySpin(100);
+            HlBusySpin(1000);
 
             //
             // Set the RF register address and data lengths.
@@ -2831,11 +2832,11 @@ Return Value:
             Value = RTLW81_READ_REGISTER32(Device, Register);
             Value &= ~RTLW81_HSSI_PARAMETER2_ADDRESS_LENGTH;
             RTLW81_WRITE_REGISTER32(Device, Register, Value);
-            HlBusySpin(100);
+            HlBusySpin(1000);
             Value = RTLW81_READ_REGISTER32(Device, Register);
             Value &= ~RTLW81_HSSI_PARAMETER2_DATA_LENGTH;
             RTLW81_WRITE_REGISTER32(Device, Register, Value);
-            HlBusySpin(100);
+            HlBusySpin(1000);
 
             //
             // Program the RF values to this chain.
@@ -2846,7 +2847,7 @@ Return Value:
                 if ((RfRegister >= RTLW81_RF_REGISTER_DELAY_VALUE_MIN) &&
                     (RfRegister <= RTLW81_RF_REGISTER_DELAY_VALUE_MAX)) {
 
-                    KeDelayExecution(FALSE, FALSE, 50);
+                    HlBusySpin(50 * MICROSECONDS_PER_MILLISECOND);
                     continue;
                 }
 
@@ -2855,7 +2856,7 @@ Return Value:
                                        RfRegister,
                                        DeviceData->RfValues[Chain][Index]);
 
-                HlBusySpin(100);
+                HlBusySpin(1000);
             }
 
             Register = Rtlw81RegisterFpga0RfSoftwareInterface +
@@ -2881,12 +2882,12 @@ Return Value:
 
             Rtlw81pWriteRfRegister(Device,
                                    0,
-                                   Rtlw81RfRegisterReceiveG1,
+                                   Rtlw81RfRegisterReceiveG2,
                                    RTLW81_RF_RECEIVE_G2_DEFAULT);
         }
 
         //
-        // Enabl MAC transmit and receive on RTL8188E devices.
+        // Enable MAC transmit and receive on RTL8188E devices.
         //
 
         if ((Device->Flags & RTLW81_FLAG_8188E) != 0) {
@@ -2950,7 +2951,7 @@ Return Value:
             // PA Bias init.
             //
 
-            PaSetting = Rtlw81pEfuseRead8(Device, Rtlw81EfuseRegisterPaSetting);
+            PaSetting = Device->PaSetting;
             for (Index = 0; Index < Device->ReceiveChainCount; Index += 1) {
                 if ((PaSetting & (1 << Index)) != 0) {
                     continue;
@@ -2999,7 +3000,7 @@ Return Value:
 
         if ((Device->Flags & RTLW81_FLAG_8188E) == 0) {
             RTLW81_WRITE_REGISTER8(Device,
-                                   Rtlw81RegisterTempatureControl,
+                                   Rtlw81RegisterTemperatureControl,
                                    RTLW81_TEMPERATURE_CONTROL_DEFAULT);
         }
 
@@ -3015,6 +3016,16 @@ Return Value:
 
         if (KSUCCESS(Device->InitializationStatus)) {
             Rtlw81pSetLed(Device, TRUE);
+
+            //
+            // Create the core networking device.
+            //
+
+            Status = Rtlw81pCreateNetworkDevice(Device);
+            if (!KSUCCESS(Status)) {
+                goto InitializeEnd;
+            }
+
             Status = Net80211StartLink(Device->NetworkLink);
             if (!KSUCCESS(Status)) {
                 goto InitializeEnd;
@@ -3128,7 +3139,7 @@ Return Value:
         RomSize = RTLW81_8188E_ROM_SIZE;
     }
 
-    Rom = MmAllocatePagedPool(RTLW81_DEFAULT_ROM_SIZE, RTLW81_ALLOCATION_TAG);
+    Rom = MmAllocatePagedPool(RomSize, RTLW81_ALLOCATION_TAG);
     if (Rom == NULL) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
@@ -3208,6 +3219,26 @@ Return Value:
 
             Mask >>= 1;
         }
+    }
+
+    //
+    // Store the PA setting for non-8188E devices. It is beyond the end of the
+    // rest of the ROM.
+    //
+
+    if ((Device->Flags & RTLW81_FLAG_8188E) == 0) {
+        EfuseValue = Rtlw81pEfuseRead8(Device, Rtlw81EfuseRegisterPaSetting);
+        Device->PaSetting = EfuseValue;
+    }
+
+    //
+    // Disable EFUSE access.
+    //
+
+    if ((Device->Flags & RTLW81_FLAG_8188E) != 0) {
+        RTLW81_WRITE_REGISTER8(Device,
+                               Rtlw81RegisterEfuseAccess,
+                               RTLW81_EFUSE_ACCESS_OFF);
     }
 
     //
@@ -3296,22 +3327,13 @@ Return Value:
                       sizeof(Device->MacAddress));
 
         Device->BoardType = Rom[RTLW81_DEFAULT_ROM_RF_OPT1_OFFSET];
-        Device->Regulatory= Rom[RTLW81_DEFAULT_ROM_RF_OPT1_OFFSET];
+        Device->Regulatory = Rom[RTLW81_DEFAULT_ROM_RF_OPT1_OFFSET];
     }
 
     Device->BoardType &= RTLW81_ROM_RF_OPT1_BOARD_TYPE_MASK;
     Device->BoardType >>= RTLW81_ROM_RF_OPT1_BOARD_TYPE_SHIFT;
     Device->Regulatory &= RTLW81_ROM_RF_OPT1_REGULATORY_MASK;
     Device->Regulatory >>= RTLW81_ROM_RF_OPT1_REGULATORY_SHIFT;
-
-    //
-    // Disable EFUSE access.
-    //
-
-    RTLW81_WRITE_REGISTER8(Device,
-                           Rtlw81RegisterEfuseAccess,
-                           RTLW81_EFUSE_ACCESS_OFF);
-
     MmFreePagedPool(Rom);
     return STATUS_SUCCESS;
 }
@@ -3382,7 +3404,7 @@ Return Value:
                            Rtlw81RegisterSps0Control,
                            RTLW81_SPS0_CONTROL_DEFAULT);
 
-    HlBusySpin(100);
+    HlBusySpin(1000);
 
     //
     // Make sure LDV12 is enabled.
@@ -3392,7 +3414,7 @@ Return Value:
     if ((Value & RTLW81_LDOV12D_CONTROL_LDV12_ENABLE) == 0) {
         Value |= RTLW81_LDOV12D_CONTROL_LDV12_ENABLE;
         RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterLdov12dControl, Value);
-        HlBusySpin(100);
+        HlBusySpin(1000);
         Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterSysIsoControl);
         Value &= ~RTLW81_SYS_ISO_CONTROL_MD2PP;
         RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterSysIsoControl, Value);
@@ -3660,6 +3682,7 @@ Return Value:
     BOOL LowQueuePresent;
     ULONG NormalQueuePageCount;
     BOOL NormalQueuePresent;
+    ULONG PacketCount;
     ULONG PageBoundary;
     ULONG PageCount;
     ULONG PagesPerQueue;
@@ -3671,11 +3694,22 @@ Return Value:
     KSTATUS Status;
     ULONG Value;
 
+    if ((Device->Flags & RTLW81_FLAG_8188E) != 0) {
+        PageBoundary = RTLW81_8188E_TRANSMIT_PAGE_BOUNDARY;
+        PageCount = RTLW81_8188E_TRANSMIT_PAGE_COUNT;
+        PacketCount = RTLW81_8188E_TRANSMIT_PACKET_COUNT;
+
+    } else {
+        PageBoundary = RTLW81_DEFAULT_TRANSMIT_PAGE_BOUNDARY;
+        PageCount = RTLW81_DEFAULT_TRANSMIT_PAGE_COUNT;
+        PacketCount = RTLW81_DEFAULT_TRANSMIT_PACKET_COUNT;
+    }
+
     //
     // Initialize the LLT.
     //
 
-    for (Index = 0; Index < RTLW81_DEFAULT_TRANSMIT_PAGE_COUNT; Index += 1) {
+    for (Index = 0; Index < PageCount; Index += 1) {
         Status = Rtlw81pWriteLlt(Device, Index, Index + 1);
         if (!KSUCCESS(Status)) {
             goto InitializeDmaEnd;
@@ -3687,20 +3721,14 @@ Return Value:
         goto InitializeDmaEnd;
     }
 
-    for (Index = RTLW81_DEFAULT_TRANSMIT_PAGE_BOUNDARY;
-         Index < (RTLW81_DEFAULT_TRANSMIT_PACKET_COUNT - 1);
-         Index += 1) {
-
+    for (Index = PageBoundary; Index < (PacketCount - 1); Index += 1) {
         Status = Rtlw81pWriteLlt(Device, Index, Index + 1);
         if (!KSUCCESS(Status)) {
             goto InitializeDmaEnd;
         }
     }
 
-    Status = Rtlw81pWriteLlt(Device,
-                             Index,
-                             RTLW81_DEFAULT_TRANSMIT_PAGE_BOUNDARY);
-
+    Status = Rtlw81pWriteLlt(Device, Index, PageBoundary);
     if (!KSUCCESS(Status)) {
         goto InitializeDmaEnd;
     }
@@ -3714,7 +3742,6 @@ Return Value:
     NormalQueuePresent = FALSE;
     LowQueuePresent = FALSE;
     if ((Device->Flags & RTLW81_FLAG_8188E) != 0) {
-        PageBoundary = RTLW81_8188E_TRANSMIT_PAGE_BOUNDARY;
         PublicQueuePageCount = RTLW81_8188E_PUBLIC_QUEUE_PAGE_COUNT;
         NormalQueuePageCount = RTLW81_8188E_NORMAL_QUEUE_PAGE_COUNT;
         LowQueuePageCount = RTLW81_8188E_LOW_QUEUE_PAGE_COUNT;
@@ -3739,7 +3766,6 @@ Return Value:
         }
 
     } else {
-        PageBoundary = RTLW81_DEFAULT_TRANSMIT_PAGE_BOUNDARY;
         PublicQueuePageCount = RTLW81_DEFAULT_PUBLIC_QUEUE_PAGE_COUNT;
         ReceiveBoundary2 = RTLW81_DEFAULT_RECEIVE_BOUNDARY2;
 
@@ -4094,10 +4120,10 @@ Return Value:
     // Perform a firmware reset if necessary.
     //
 
-    Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterMcuFirmwareDownload0);
+    Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterMcuFirmwareDownload0);
     if ((Value & RTLW81_MCU_FIRMWARE_DOWNLOAD_RAM_DL_SELECT) != 0) {
         Rtlw81pFirmwareReset(Device);
-        RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterMcuFirmwareDownload0, 0);
+        RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterMcuFirmwareDownload0, 0);
     }
 
     if ((Device->Flags & RTLW81_FLAG_8188E) == 0) {
@@ -4114,7 +4140,7 @@ Return Value:
     Value |= RTLW81_MCU_FIRMWARE_DOWNLOAD_ENABLE;
     RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterMcuFirmwareDownload0, Value);
     Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterMcuFirmwareDownload2);
-    Value &= ~(RTLW81_MCU_FIRMWARE_DOWNLOAD_CPRST >> 16);
+    Value &= ~(RTLW81_MCU_FIRMWARE_DOWNLOAD_CLEAR >> 16);
     RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterMcuFirmwareDownload2, Value);
 
     //
@@ -4483,21 +4509,22 @@ Return Value:
         BandwidthValue = RTLW81_RF_CHANNEL_BANDWIDTH_8188E_20MHZ;
     }
 
-    for (Index = 0; Index < Device->ReceiveChainCount; Index += 1) {
-        Value = Rtlw81pReadRfRegister(Device,
-                                      Index,
-                                      Rtlw81RfRegisterChannelBandwidth);
+    Value = Rtlw81pReadRfRegister(Device,
+                                  0,
+                                  Rtlw81RfRegisterChannelBandwidth);
 
-        Value &= ~RTLW81_RF_CHANNEL_BANDWIDTH_CHANNEL_MASK;
-        Value |= (Channel << RTLW81_RF_CHANNEL_BANDWIDTH_CHANNEL_SHIFT) &
-                 RTLW81_RF_CHANNEL_BANDWIDTH_CHANNEL_MASK;
+    Value &= ~(RTLW81_RF_CHANNEL_BANDWIDTH_CHANNEL_MASK |
+               RTLW81_RF_CHANNEL_BANDWIDTH_DEFAULT_20MHZ |
+               RTLW81_RF_CHANNEL_BANDWIDTH_8188E_20MHZ);
 
-        Value |= BandwidthValue;
-        Rtlw81pWriteRfRegister(Device,
-                               Index,
-                               Rtlw81RfRegisterChannelBandwidth,
-                               Value);
-    }
+    Value |= (Channel << RTLW81_RF_CHANNEL_BANDWIDTH_CHANNEL_SHIFT) &
+             RTLW81_RF_CHANNEL_BANDWIDTH_CHANNEL_MASK;
+
+    Value |= BandwidthValue;
+    Rtlw81pWriteRfRegister(Device,
+                           0,
+                           Rtlw81RfRegisterChannelBandwidth,
+                           Value);
 
     Device->CurrentChannel = Channel;
     return;
@@ -4621,7 +4648,7 @@ Return Value:
 
         for (Index = 4; Index < RTLW81_POWER_STATE_COUNT; Index += 1) {
             if (Device->Regulatory == 3) {
-                PowerStates[Index] = DefaultPowerData->GroupPower[Group][Index];
+                PowerStates[Index] = DefaultPowerData->GroupPower[0][Index];
                 MaxPower = Device->Power.Default.Ht20MaxPower[Group];
                 MaxPower = (MaxPower >> (Chain * 4)) & 0xF;
                 if (PowerStates[Index] > MaxPower) {
@@ -4754,9 +4781,9 @@ Return Value:
             ((PowerStates[7] << RTLW81_TRANSMIT_AGC_RATE_18_SHIFT) &
              RTLW81_TRANSMIT_AGC_RATE_18_MASK);
 
-    Register = Rtlw81RegisterTransmitAgcRate1806Chain0;
-    if (Chain == 1) {
-        Register = Rtlw81RegisterTransmitAgcRate1806Chain1;
+    Register = Rtlw81RegisterTransmitAgcRate1806Chain1;
+    if (Chain == 0) {
+        Register = Rtlw81RegisterTransmitAgcRate1806Chain0;
     }
 
     RTLW81_WRITE_REGISTER32(Device, Register, Value);
@@ -4769,9 +4796,9 @@ Return Value:
             ((PowerStates[11] << RTLW81_TRANSMIT_AGC_RATE_54_SHIFT) &
              RTLW81_TRANSMIT_AGC_RATE_54_MASK);
 
-    Register = Rtlw81RegisterTransmitAgcRate5424Chain0;
-    if (Chain == 1) {
-        Register = Rtlw81RegisterTransmitAgcRate5424Chain1;
+    Register = Rtlw81RegisterTransmitAgcRate5424Chain1;
+    if (Chain == 0) {
+        Register = Rtlw81RegisterTransmitAgcRate5424Chain0;
     }
 
     RTLW81_WRITE_REGISTER32(Device, Register, Value);
@@ -4784,9 +4811,9 @@ Return Value:
             ((PowerStates[15] << RTLW81_TRANSMIT_AGC_MCS03_SHIFT) &
              RTLW81_TRANSMIT_AGC_MCS03_MASK);
 
-    Register = Rtlw81RegisterTransmitAgcMcs03Mcs00Chain0;
-    if (Chain == 1) {
-        Register = Rtlw81RegisterTransmitAgcMcs03Mcs00Chain1;
+    Register = Rtlw81RegisterTransmitAgcMcs03Mcs00Chain1;
+    if (Chain == 0) {
+        Register = Rtlw81RegisterTransmitAgcMcs03Mcs00Chain0;
     }
 
     RTLW81_WRITE_REGISTER32(Device, Register, Value);
@@ -4799,9 +4826,9 @@ Return Value:
             ((PowerStates[19] << RTLW81_TRANSMIT_AGC_MCS07_SHIFT) &
              RTLW81_TRANSMIT_AGC_MCS07_MASK);
 
-    Register = Rtlw81RegisterTransmitAgcMcs07Mcs04Chain0;
-    if (Chain == 1) {
-        Register = Rtlw81RegisterTransmitAgcMcs07Mcs04Chain1;
+    Register = Rtlw81RegisterTransmitAgcMcs07Mcs04Chain1;
+    if (Chain == 0) {
+        Register = Rtlw81RegisterTransmitAgcMcs07Mcs04Chain0;
     }
 
     RTLW81_WRITE_REGISTER32(Device, Register, Value);
@@ -4814,9 +4841,9 @@ Return Value:
             ((PowerStates[23] << RTLW81_TRANSMIT_AGC_MCS11_SHIFT) &
              RTLW81_TRANSMIT_AGC_MCS11_MASK);
 
-    Register = Rtlw81RegisterTransmitAgcMcs11Mcs08Chain0;
-    if (Chain == 1) {
-        Register = Rtlw81RegisterTransmitAgcMcs11Mcs08Chain1;
+    Register = Rtlw81RegisterTransmitAgcMcs11Mcs08Chain1;
+    if (Chain == 0) {
+        Register = Rtlw81RegisterTransmitAgcMcs11Mcs08Chain0;
     }
 
     RTLW81_WRITE_REGISTER32(Device, Register, Value);
@@ -4829,9 +4856,9 @@ Return Value:
             ((PowerStates[27] << RTLW81_TRANSMIT_AGC_MCS15_SHIFT) &
              RTLW81_TRANSMIT_AGC_MCS15_MASK);
 
-    Register = Rtlw81RegisterTransmitAgcMcs15Mcs12Chain0;
-    if (Chain == 1) {
-        Register = Rtlw81RegisterTransmitAgcMcs15Mcs12Chain1;
+    Register = Rtlw81RegisterTransmitAgcMcs15Mcs12Chain1;
+    if (Chain == 0) {
+        Register = Rtlw81RegisterTransmitAgcMcs15Mcs12Chain0;
     }
 
     RTLW81_WRITE_REGISTER32(Device, Register, Value);
@@ -4888,7 +4915,7 @@ Return Value:
     TimeoutTicks = HlQueryTimeCounterFrequency() * RTLW81_DEVICE_TIMEOUT;
     Timeout = CurrentTime + TimeoutTicks;
     do {
-        Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterLltInit);
+        Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterLltInit);
         Value = (Value & RTLW81_LLT_INIT_OP_MASK) >> RTLW81_LLT_INIT_OP_SHIFT;
         if (Value == RTLW81_LLT_INIT_OP_NO_ACTIVE) {
             break;
@@ -5152,15 +5179,18 @@ Return Value:
     // Wait for the operation to complete.
     //
 
+    Data = RTLW81_EFUSE_INVALID;
     for (Index = 0; Index < RTLW81_EFUSE_RETRY_COUNT; Index += 1) {
         Value = RTLW81_READ_REGISTER32(Device, Rtlw81RegisterEfuseControl);
         if ((Value & RTLW81_EFUSE_CONTROL_VALID) != 0) {
+            Data = (Value & RTLW81_EFUSE_CONTROL_DATA_MASK) >>
+                   RTLW81_EFUSE_CONTROL_DATA_SHIFT;
+
             break;
         }
-    }
 
-    Data = (Value & RTLW81_EFUSE_CONTROL_DATA_MASK) >>
-           RTLW81_EFUSE_CONTROL_DATA_SHIFT;
+        HlBusySpin(1000);
+    }
 
     return Data;
 }
@@ -5265,7 +5295,7 @@ Return Value:
     Value &= ~RTLW81_HSSI_PARAMETER2_READ_EDGE;
     Register = Rtlw81RegisterHssiParameter2;
     RTLW81_WRITE_REGISTER32(Device, Register, Value);
-    HlBusySpin(100);
+    HlBusySpin(1000);
     Value = ChainValues[Chain];
     Value &= ~RTLW81_HSSI_PARAMETER2_READ_ADDRESS_MASK;
     Value |= (RfRegister << RTLW81_HSSI_PARAMETER2_READ_ADDRESS_SHIFT) &
@@ -5274,12 +5304,12 @@ Return Value:
     Value |= RTLW81_HSSI_PARAMETER2_READ_EDGE;
     Register += (Chain * 8);
     RTLW81_WRITE_REGISTER32(Device, Register, Value);
-    HlBusySpin(100);
+    HlBusySpin(1000);
     Value = ChainValues[0];
     Value |= RTLW81_HSSI_PARAMETER2_READ_EDGE;
     Register = Rtlw81RegisterHssiParameter2;
     RTLW81_WRITE_REGISTER32(Device, Register, Value);
-    HlBusySpin(100);
+    HlBusySpin(1000);
 
     //
     // Read the value back from the appropriate register.
@@ -5377,13 +5407,13 @@ Return Value:
 
     RtlCopyMemory(Command.Message, Message, MessageLength);
     Register = Rtlw81RegisterHmeBoxExtension + (Device->FirmwareBox * 2);
-    Status = Rtlw81pWriteData(Device, Register, &Command + 4, 2);
+    Status = Rtlw81pWriteData(Device, Register, (PUCHAR)&Command + 4, 2);
     if (!KSUCCESS(Status)) {
         goto SendFirmwareCommandEnd;
     }
 
     Register = Rtlw81RegisterHmeBox + (Device->FirmwareBox * 4);
-    Status = Rtlw81pWriteData(Device, Register, &Command, 4);
+    Status = Rtlw81pWriteData(Device, Register, (PUCHAR)&Command, 4);
     if (!KSUCCESS(Status)) {
         goto SendFirmwareCommandEnd;
     }
