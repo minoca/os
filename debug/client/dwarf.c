@@ -58,6 +58,25 @@ DwarfUnloadSymbols (
     );
 
 INT
+DwarfReadDataSymbol (
+    PDEBUG_SYMBOLS Symbols,
+    PDATA_SYMBOL Symbol,
+    ULONGLONG DebasedPc,
+    PVOID Data,
+    ULONG DataSize,
+    PSTR Location,
+    ULONG LocationSize
+    );
+
+INT
+DwarfGetAddressOfDataSymbol (
+    PDEBUG_SYMBOLS Symbols,
+    PDATA_SYMBOL Symbol,
+    ULONGLONG DebasedPc,
+    PULONGLONG Address
+    );
+
+INT
 DwarfpProcessDebugInfo (
     PDWARF_CONTEXT Context
     );
@@ -147,7 +166,9 @@ DwarfpProcessGenericBlock (
 DEBUG_SYMBOL_INTERFACE DwarfSymbolInterface = {
     DwarfLoadSymbols,
     DwarfUnloadSymbols,
-    DwarfStackUnwind
+    DwarfStackUnwind,
+    DwarfReadDataSymbol,
+    DwarfGetAddressOfDataSymbol
 };
 
 //
@@ -566,6 +587,325 @@ Return Value:
 
     free(Symbols);
     return;
+}
+
+INT
+DwarfReadDataSymbol (
+    PDEBUG_SYMBOLS Symbols,
+    PDATA_SYMBOL Symbol,
+    ULONGLONG DebasedPc,
+    PVOID Data,
+    ULONG DataSize,
+    PSTR Location,
+    ULONG LocationSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads the contents of a data symbol.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the debug symbols.
+
+    Symbol - Supplies a pointer to the data symbol to read.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus the
+        loaded base difference of the module).
+
+    Data - Supplies a pointer to the buffer where the symbol data will be
+        returned on success.
+
+    DataSize - Supplies the size of the data buffer in bytes.
+
+    Location - Supplies a pointer where the symbol location will be described
+        in text on success.
+
+    LocationSize - Supplies the size of the location buffer in bytes.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error code on failure.
+
+--*/
+
+{
+
+    PSTR Comma;
+    PDWARF_COMPLEX_DATA_SYMBOL Complex;
+    PDWARF_CONTEXT Context;
+    PDWARF_LOCATION CurrentLocation;
+    DWARF_LOCATION_CONTEXT LocationContext;
+    ULONG MaxBit;
+    CHAR PieceLocation[32];
+    INT Printed;
+    ULONG Size;
+    INT Status;
+    ULONGLONG Value;
+
+    Comma = "";
+    Context = Symbols->SymbolContext;
+
+    assert(Symbol->LocationType == DataLocationComplex);
+
+    Complex = Symbol->Location.Complex;
+    memset(&LocationContext, 0, sizeof(DWARF_LOCATION_CONTEXT));
+    memset(Data, 0, DataSize);
+    LocationContext.Unit = Complex->Unit;
+    LocationContext.CurrentFunction = Symbol->ParentFunction;
+    LocationContext.Pc = DebasedPc;
+    Status = DwarfpGetLocation(Context,
+                               &LocationContext,
+                               &(Complex->LocationAttribute));
+
+    if (Status != 0) {
+        if (Status != ENOENT) {
+            DWARF_ERROR("DWARF: Failed to get location for symbol %s: %s.\n",
+                        Symbol->Name,
+                        strerror(Status));
+        }
+
+        goto ReadDataSymbolEnd;
+    }
+
+    CurrentLocation = &(LocationContext.Location);
+    while (CurrentLocation != NULL) {
+
+        //
+        // Figure out the size to copy, without regard to the source size. Note
+        // that if multiple bitwise fields came together, this loop would need
+        // to be adjusted to take into account (as well as not clobber) the
+        // previous bits.
+        //
+
+        Size = DataSize;
+        if (CurrentLocation->BitSize != 0) {
+            Size = CurrentLocation->BitSize / BITS_PER_BYTE;
+            if (Size > DataSize) {
+                Size = DataSize;
+            }
+        }
+
+        switch (CurrentLocation->Form) {
+        case DwarfLocationMemory:
+            Status = DwarfTargetRead(Context,
+                                     CurrentLocation->Value.Address,
+                                     Size,
+                                     0,
+                                     Data);
+
+            if (Status != 0) {
+                DWARF_ERROR("DWARF: Cannot read %d bytes at %I64x.\n",
+                            Size,
+                            CurrentLocation->Value.Address);
+
+                goto ReadDataSymbolEnd;
+            }
+
+            snprintf(PieceLocation,
+                     sizeof(PieceLocation),
+                     "[0x%I64x]",
+                     CurrentLocation->Value.Address);
+
+            break;
+
+        case DwarfLocationRegister:
+            if (Size > Complex->Unit->AddressSize) {
+                Size = Complex->Unit->AddressSize;
+            }
+
+            Status = DwarfTargetReadRegister(Context,
+                                             CurrentLocation->Value.Register,
+                                             &Value);
+
+            if (Status != 0) {
+                DWARF_ERROR("DWARF: Failed to get register %d.\n",
+                            CurrentLocation->Value.Register);
+
+                goto ReadDataSymbolEnd;
+            }
+
+            memcpy(Data, &Value, Size);
+            snprintf(
+                PieceLocation,
+                sizeof(PieceLocation),
+                "@%s",
+                DwarfGetRegisterName(Context, CurrentLocation->Value.Register));
+
+            break;
+
+        case DwarfLocationKnownValue:
+            Value = CurrentLocation->Value.Value;
+            if (Size > sizeof(ULONGLONG)) {
+                Size = sizeof(ULONGLONG);
+            }
+
+            memcpy(Data, &Value, Size);
+            strncpy(PieceLocation, "<const>", sizeof(PieceLocation));
+            break;
+
+        case DwarfLocationKnownData:
+            if (Size > CurrentLocation->Value.Buffer.Size) {
+                Size = CurrentLocation->Value.Buffer.Size;
+            }
+
+            memcpy(Data, CurrentLocation->Value.Buffer.Data, Size);
+            strncpy(PieceLocation, "<const>", sizeof(PieceLocation));
+            break;
+
+        case DwarfLocationUndefined:
+            strncpy(PieceLocation, "<undef>", sizeof(PieceLocation));
+            break;
+
+        default:
+
+            assert(FALSE);
+
+            Status = EINVAL;
+            goto ReadDataSymbolEnd;
+        }
+
+        //
+        // Shift the buffer over if needed. Again, this doesn't cut it for bit
+        // fields.
+        //
+
+        if (CurrentLocation->BitOffset != 0) {
+            memmove(Data,
+                    Data + (CurrentLocation->BitOffset / BITS_PER_BYTE),
+                    Size);
+        }
+
+        if (LocationSize > 1) {
+            if ((CurrentLocation->BitOffset != 0) ||
+                (CurrentLocation->BitSize != 0)) {
+
+                MaxBit = CurrentLocation->BitOffset + CurrentLocation->BitSize;
+                Printed = snprintf(Location,
+                                   LocationSize,
+                                   "%s%s[%d:%d]",
+                                   Comma,
+                                   PieceLocation,
+                                   MaxBit,
+                                   CurrentLocation->BitOffset);
+
+            } else {
+                Printed = snprintf(Location,
+                                   LocationSize,
+                                   "%s%s",
+                                   Comma,
+                                   PieceLocation);
+            }
+
+            if (Printed > 0) {
+                Location += Printed;
+                LocationSize -= Printed;
+            }
+        }
+
+        Comma = ",";
+        CurrentLocation = CurrentLocation->NextPiece;
+    }
+
+    if (LocationSize != 0) {
+        *Location = '\0';
+    }
+
+ReadDataSymbolEnd:
+    DwarfpDestroyLocationContext(Context, &LocationContext);
+    return Status;
+}
+
+INT
+DwarfGetAddressOfDataSymbol (
+    PDEBUG_SYMBOLS Symbols,
+    PDATA_SYMBOL Symbol,
+    ULONGLONG DebasedPc,
+    PULONGLONG Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the memory address of a data symbol.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the debug symbols.
+
+    Symbol - Supplies a pointer to the data symbol to read.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus the
+        loaded base difference of the module).
+
+    Address - Supplies a pointer where the address of the data symbol will be
+        returned on success.
+
+Return Value:
+
+    0 on success.
+
+    ENOENT if the data symbol is not currently valid.
+
+    ERANGE if the data symbol is not stored in memory.
+
+    Other error codes on other failures.
+
+--*/
+
+{
+
+    PDWARF_COMPLEX_DATA_SYMBOL Complex;
+    PDWARF_CONTEXT Context;
+    PDWARF_LOCATION CurrentLocation;
+    DWARF_LOCATION_CONTEXT LocationContext;
+    INT Status;
+
+    Context = Symbols->SymbolContext;
+
+    assert(Symbol->LocationType == DataLocationComplex);
+
+    Complex = Symbol->Location.Complex;
+    memset(&LocationContext, 0, sizeof(DWARF_LOCATION_CONTEXT));
+    LocationContext.Unit = Complex->Unit;
+    LocationContext.CurrentFunction = Symbol->ParentFunction;
+    LocationContext.Pc = DebasedPc;
+    Status = DwarfpGetLocation(Context,
+                               &LocationContext,
+                               &(Complex->LocationAttribute));
+
+    if (Status != 0) {
+        if (Status != ENOENT) {
+            DWARF_ERROR("DWARF: Failed to get location for symbol %s: %s.\n",
+                        Symbol->Name,
+                        strerror(Status));
+        }
+
+        goto GetAddressOfDataSymbolEnd;
+    }
+
+    CurrentLocation = &(LocationContext.Location);
+    switch (CurrentLocation->Form) {
+    case DwarfLocationMemory:
+        *Address = CurrentLocation->Value.Address;
+        Status = 0;
+        break;
+
+    default:
+        Status = ERANGE;
+        break;
+    }
+
+GetAddressOfDataSymbolEnd:
+    DwarfpDestroyLocationContext(Context, &LocationContext);
+    return Status;
 }
 
 PSOURCE_FILE_SYMBOL
@@ -1021,9 +1361,25 @@ Return Value:
 
     if (Result != FALSE) {
         SourceFile->EndAddress = SourceFile->StartAddress + 1;
-        DwarfpGetAddressAttribute(Die,
-                                  DwarfAtHighPc,
-                                  &(SourceFile->EndAddress));
+        Result = DwarfpGetAddressAttribute(Die,
+                                           DwarfAtHighPc,
+                                           &(SourceFile->EndAddress));
+
+        if (Result == FALSE) {
+
+            //
+            // DWARF4 also allows constant forms for high PC, in which case
+            // it's an offset from low PC.
+            //
+
+            Result = DwarfpGetIntegerAttribute(Die,
+                                               DwarfAtHighPc,
+                                               &(SourceFile->EndAddress));
+
+            if (Result != FALSE) {
+                SourceFile->EndAddress += SourceFile->StartAddress;
+            }
+        }
     }
 
     //
@@ -1327,7 +1683,7 @@ Return Value:
             return EINVAL;
         }
 
-        LoadingContext->CurrentType->U.Relation.Array.Maximum = UpperBound + 1;
+        LoadingContext->CurrentType->U.Relation.Array.Maximum = UpperBound;
         if (UpperBound == MAX_ULONGLONG) {
             LoadingContext->CurrentType->U.Relation.Array.MaxUlonglong = TRUE;
         }
@@ -1781,7 +2137,10 @@ Return Value:
 
 {
 
+    ULONG AllocationSize;
     ULONGLONG Declaration;
+    PDWARF_FUNCTION_SYMBOL DwarfFunction;
+    PDWARF_ATTRIBUTE_VALUE FrameBase;
     PFUNCTION_SYMBOL Function;
     PDWARF_LOADING_CONTEXT LoadingContext;
     PFUNCTION_SYMBOL PreviousFunction;
@@ -1809,12 +2168,16 @@ Return Value:
         return 0;
     }
 
-    Function = malloc(sizeof(FUNCTION_SYMBOL));
+    AllocationSize = sizeof(FUNCTION_SYMBOL) + sizeof(DWARF_FUNCTION_SYMBOL);
+    Function = malloc(AllocationSize);
     if (Function == NULL) {
         return ENOMEM;
     }
 
-    memset(Function, 0, sizeof(FUNCTION_SYMBOL));
+    memset(Function, 0, AllocationSize);
+    DwarfFunction = (PDWARF_FUNCTION_SYMBOL)(Function + 1);
+    Function->SymbolContext = DwarfFunction;
+    DwarfFunction->Unit = LoadingContext->CurrentUnit;
     INITIALIZE_LIST_HEAD(&(Function->ParametersHead));
     INITIALIZE_LIST_HEAD(&(Function->LocalsHead));
     Function->ParentSource = LoadingContext->CurrentFile;
@@ -1842,14 +2205,37 @@ Return Value:
                     Function->Name);
     }
 
-    DwarfpGetAddressAttribute(Die,
-                              DwarfAtHighPc,
-                              &(Function->EndAddress));
+    Result = DwarfpGetAddressAttribute(Die,
+                                       DwarfAtHighPc,
+                                       &(Function->EndAddress));
+
+    if (Result == FALSE) {
+
+        //
+        // DWARF4 also allows constant forms for high PC, in which case
+        // it's an offset from low PC.
+        //
+
+        Result = DwarfpGetIntegerAttribute(Die,
+                                           DwarfAtHighPc,
+                                           &(Function->EndAddress));
+
+        if (Result != FALSE) {
+            Function->EndAddress += Function->StartAddress;
+        }
+    }
 
     if ((Function->EndAddress < Function->StartAddress) &&
         (Function->StartAddress != 0)) {
 
         Function->EndAddress = Function->StartAddress + 1;
+    }
+
+    FrameBase = DwarfpGetAttribute(Die, DwarfAtFrameBase);
+    if (FrameBase != NULL) {
+        memcpy(&(DwarfFunction->FrameBase),
+               FrameBase,
+               sizeof(DWARF_ATTRIBUTE_VALUE));
     }
 
     INSERT_BEFORE(&(Function->ListEntry),

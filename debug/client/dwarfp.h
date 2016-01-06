@@ -304,6 +304,25 @@ struct _DWARF_DIE {
 
 Structure Description:
 
+    This structure stores the context saved into a function symbol.
+
+Members:
+
+    Unit - Stores a pointer to the compilation unit.
+
+    FrameBase - Stores the frame base attribute for the variable.
+
+--*/
+
+typedef struct _DWARF_FUNCTION_SYMBOL {
+    PDWARF_COMPILATION_UNIT Unit;
+    DWARF_ATTRIBUTE_VALUE FrameBase;
+} DWARF_FUNCTION_SYMBOL, *PDWARF_FUNCTION_SYMBOL;
+
+/*++
+
+Structure Description:
+
     This structure stores the context saved into a data symbol such that the
     DWARF library can compute a location later.
 
@@ -1048,6 +1067,9 @@ Return Value:
     0 on success, and the final location will be returned in the location
     context.
 
+    ENOENT if the attribute is a location list and none of the current PC is
+    not in any of the locations.
+
     Returns an error number on failure.
 
 --*/
@@ -1183,6 +1205,49 @@ Return Value:
     0 on success.
 
     Returns an error number on failure.
+
+--*/
+
+//
+// Call frame information functions
+//
+
+INT
+DwarfpStackUnwind (
+    PDWARF_CONTEXT Context,
+    ULONGLONG DebasedPc,
+    BOOL CfaOnly,
+    PSTACK_FRAME Frame
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to unwind the stack by one frame.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF symbol context.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus loaded
+        base difference of the module).
+
+    CfaOnly - Supplies a boolean indicating whether to only return the
+        current Canonical Frame Address and not actually perform any unwinding
+        (TRUE) or whether to fully unwind this function (FALSE).
+
+    Frame - Supplies a pointer where the basic frame information for this
+        frame will be returned.
+
+Return Value:
+
+    0 on success.
+
+    EOF if there are no more stack frames.
+
+    Returns an error code on failure.
 
 --*/
 

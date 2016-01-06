@@ -649,6 +649,35 @@ Return Value:
 
 --*/
 
+VOID
+DbgSetPc (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
+    ULONGLONG Value
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the value of the program counter (instruction pointer)
+    register in the given registers union.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies an optional pointer to the filled out registers union.
+        If NULL, then the registers from the current frame will be used.
+
+    Value - Supplies the new value to set.
+
+Return Value:
+
+    None.
+
+--*/
+
 INT
 DbgGetMemberOffset (
     PTYPE_SYMBOL StructureType,

@@ -314,7 +314,7 @@ Return Value:
     PUCHAR End;
     PDWARF_LOADING_CONTEXT LoadingContext;
     ULONGLONG Offset;
-    BOOL Result;
+    PDWARF_ATTRIBUTE_VALUE OffsetAttribute;
     INT Status;
     PUCHAR Table;
     PDWARF_COMPILATION_UNIT Unit;
@@ -324,14 +324,16 @@ Return Value:
     LoadingContext = Context->LoadingContext;
     Unit = LoadingContext->CurrentUnit;
     CompileDirectory = DwarfpGetStringAttribute(Die, DwarfAtCompDir);
-    Result = DwarfpGetLocalReferenceAttribute(Die,
-                                              DwarfAtStatementList,
-                                              &Offset);
-
-    if (Result == FALSE) {
+    OffsetAttribute = DwarfpGetAttribute(Die, DwarfAtStatementList);
+    if (OffsetAttribute == NULL) {
         return 0;
     }
 
+    if (!DWARF_SECTION_OFFSET_FORM(OffsetAttribute->Form, Unit)) {
+        return 0;
+    }
+
+    Offset = OffsetAttribute->Value.Offset;
     Table = Context->Sections.Lines.Data;
     End = Table + Context->Sections.Lines.Size;
     if ((Table == NULL) || (Table == End) || (Table + Offset >= End)) {

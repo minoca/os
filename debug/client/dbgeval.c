@@ -1027,6 +1027,7 @@ Return Value:
     PLIST_ENTRY CurrentModuleEntry;
     PSTR ModuleEnd;
     ULONG ModuleLength;
+    ULONGLONG Pc;
     INT Result;
     PSYMBOL_SEARCH_RESULT ResultValid;
     SYMBOL_SEARCH_RESULT SearchResult;
@@ -1108,15 +1109,20 @@ Return Value:
                 Result = 0;
                 break;
 
-            } else if ((SearchResult.Variety == SymbolResultData) &&
-                       (SearchResult.U.DataResult->LocationType ==
-                        DataLocationAbsoluteAddress)) {
+            } else if (SearchResult.Variety == SymbolResultData) {
+                Pc = DbgGetPc(Context, &(Context->FrameRegisters)) -
+                     CurrentModule->BaseDifference;
 
-                *Address = SearchResult.U.DataResult->Location.Address +
-                           CurrentModule->BaseDifference;
+                Result = DbgGetDataSymbolAddress(Context,
+                                                 CurrentModule->Symbols,
+                                                 SearchResult.U.DataResult,
+                                                 Pc,
+                                                 Address);
 
-                Result = 0;
-                break;
+                if (Result == 0) {
+                    *Address += CurrentModule->BaseDifference;
+                    break;
+                }
             }
         }
 

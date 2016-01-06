@@ -175,6 +175,7 @@ Environment:
 #define EXPORTED_FUNCTION(_Name) \
     .func _Name ; \
     .type _Name, %function ; \
+    .cfi_startproc ; \
     .global _Name ; \
     _Name:
 
@@ -198,7 +199,8 @@ Environment:
 
 #define END_FUNCTION(_Name) \
     .size _Name, .-_Name ; \
-    .endfunc
+    .endfunc ; \
+    .cfi_endproc
 
 #else
 

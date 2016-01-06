@@ -30,6 +30,7 @@ Author:
 typedef struct _STRUCTURE_MEMBER STRUCTURE_MEMBER, *PSTRUCTURE_MEMBER;
 typedef struct _ENUMERATION_MEMBER ENUMERATION_MEMBER, *PENUMERATION_MEMBER;
 typedef struct _DEBUG_SYMBOLS DEBUG_SYMBOLS, *PDEBUG_SYMBOLS;
+typedef struct _DATA_SYMBOL DATA_SYMBOL, *PDATA_SYMBOL;
 
 typedef enum _DATA_TYPE_TYPE {
     DataTypeInvalid,
@@ -292,6 +293,92 @@ Return Value:
 
 --*/
 
+typedef
+INT
+(*PSYMBOLS_READ_DATA_SYMBOL) (
+    PDEBUG_SYMBOLS Symbols,
+    PDATA_SYMBOL Symbol,
+    ULONGLONG DebasedPc,
+    PVOID Data,
+    ULONG DataSize,
+    PSTR Location,
+    ULONG LocationSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine reads the contents of a data symbol.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the debug symbols.
+
+    Symbol - Supplies a pointer to the data symbol to read.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus the
+        loaded base difference of the module).
+
+    Data - Supplies a pointer to the buffer where the symbol data will be
+        returned on success.
+
+    DataSize - Supplies the size of the data buffer in bytes.
+
+    Location - Supplies a pointer where the symbol location will be described
+        in text on success.
+
+    LocationSize - Supplies the size of the location buffer in bytes.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error code on failure.
+
+--*/
+
+typedef
+INT
+(*PSYMBOLS_GET_ADDRESS_OF_DATA_SYMBOL) (
+    PDEBUG_SYMBOLS Symbols,
+    PDATA_SYMBOL Symbol,
+    ULONGLONG DebasedPc,
+    PULONGLONG Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the memory address of a data symbol.
+
+Arguments:
+
+    Symbols - Supplies a pointer to the debug symbols.
+
+    Symbol - Supplies a pointer to the data symbol to read.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus the
+        loaded base difference of the module).
+
+    Address - Supplies a pointer where the address of the data symbol will be
+        returned on success.
+
+Return Value:
+
+    0 on success.
+
+    ENOENT if the data symbol is not currently valid.
+
+    ERANGE if the data symbol is not stored in memory.
+
+    Other error codes on other failures.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -308,12 +395,20 @@ Members:
         target stack. If not supplied, then traditional frame chaining will be
         used.
 
+    ReadDataSymbol - Stores an optional pointer to a function that can read
+        a data symbol value.
+
+    GetAddressOfDataSymbol - Stores an optional pointer to a function that
+        can return the memory address of a data symbol.
+
 --*/
 
 typedef struct _DEBUG_SYMBOL_INTERFACE {
     PSYMBOLS_LOAD Load;
     PSYMBOLS_UNLOAD Unload;
     PSYMBOLS_STACK_UNWIND Unwind;
+    PSYMBOLS_READ_DATA_SYMBOL ReadDataSymbol;
+    PSYMBOLS_GET_ADDRESS_OF_DATA_SYMBOL GetAddressOfDataSymbol;
 } DEBUG_SYMBOL_INTERFACE, *PDEBUG_SYMBOL_INTERFACE;
 
 /*++
@@ -419,8 +514,6 @@ Members:
     SourceFile - Stores a string of the source file name. This will also not
         need to be freed explicitly.
 
-    ParentModule - Stores a link to the image that this source file belongs to.
-
     ListEntry - Stores links to the next and previous source files in the image.
 
     TypesHead - Stores the list head for all the types defined by this file. The
@@ -454,7 +547,6 @@ Members:
 typedef struct _SOURCE_FILE_SYMBOL {
     PSTR SourceDirectory;
     PSTR SourceFile;
-    PDEBUG_SYMBOLS ParentModule;
     LIST_ENTRY ListEntry;
     LIST_ENTRY TypesHead;
     LIST_ENTRY SourceLinesHead;
@@ -501,6 +593,9 @@ Members:
     ReturnTypeOwner - Stores a pointer to the source file where the function's
         return type resides.
 
+    SymbolContext - Store's a pointer's worth of additional context for the
+        symbol library.
+
 --*/
 
 typedef struct _FUNCTION_SYMBOL {
@@ -514,6 +609,7 @@ typedef struct _FUNCTION_SYMBOL {
     ULONGLONG EndAddress;
     LONG ReturnTypeNumber;
     PSOURCE_FILE_SYMBOL ReturnTypeOwner;
+    PVOID SymbolContext;
 } FUNCTION_SYMBOL, *PFUNCTION_SYMBOL;
 
 /*++
@@ -800,7 +896,7 @@ Members:
 
 --*/
 
-typedef struct _DATA_SYMBOL {
+struct _DATA_SYMBOL {
     PSOURCE_FILE_SYMBOL ParentSource;
     PFUNCTION_SYMBOL ParentFunction;
     LIST_ENTRY ListEntry;
@@ -810,7 +906,7 @@ typedef struct _DATA_SYMBOL {
     ULONGLONG MinimumValidExecutionAddress;
     PSOURCE_FILE_SYMBOL TypeOwner;
     LONG TypeNumber;
-} DATA_SYMBOL, *PDATA_SYMBOL;
+};
 
 /*++
 

@@ -219,7 +219,7 @@ endif
 ##
 ## -mno-ms-bitfields         Honor the packed attribute.
 ##
-## -gstabs+                  Build with stabs debugging symbol information.
+## -g                        Build with DWARF debugging symbol information.
 ##
 ## -I ...                    Specifies a list of include directories.
 ##
@@ -252,7 +252,7 @@ endif
 
 EXTRA_CPPFLAGS_FOR_BUILD := $(EXTRA_CPPFLAGS)
 
-EXTRA_CFLAGS += -fno-builtin -fno-omit-frame-pointer -gstabs+ -save-temps=obj \
+EXTRA_CFLAGS += -fno-builtin -fno-omit-frame-pointer -g -save-temps=obj \
                 -ffunction-sections -fdata-sections -fvisibility=hidden
 
 EXTRA_CFLAGS_FOR_BUILD := $(EXTRA_CFLAGS)
@@ -349,12 +349,12 @@ endif
 ##
 ## Assembler flags:
 ##
-## --gstabs+                 Build with stabs debugging symbol information.
+## -g                        Build with debugging symbol information.
 ##
 ## -I ...                    Specify include directories to search.
 ##
 
-EXTRA_ASFLAGS += -Wa,--gstabs+
+EXTRA_ASFLAGS += -Wa,-g
 
 ##
 ## For build executables, override the names even if set on the command line.

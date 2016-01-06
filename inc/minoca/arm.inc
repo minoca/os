@@ -214,6 +214,7 @@ Environment:
 .macro ASSEMBLY_FILE_HEADER
     .text
     .syntax unified
+    .cfi_sections .debug_frame
     .if THUMB
         .thumb
     .else
@@ -261,6 +262,8 @@ Environment:
         .thumb_func
     .endif
     .globl \FunctionName
+    .cfi_startproc
+    .cfi_same_value r14
     \FunctionName:
 .endm
 
@@ -271,6 +274,7 @@ Environment:
 .macro END_FUNCTION FunctionName
     .ltorg
     .size \FunctionName, .-\FunctionName
+    .cfi_endproc
     .endfunc
 .endm
 

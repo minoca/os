@@ -80,6 +80,7 @@ DwarfpExpressionPop (
 INT
 DwarfpGetFrameBase (
     PDWARF_CONTEXT Context,
+    PFUNCTION_SYMBOL Function,
     ULONGLONG Pc,
     PULONGLONG FrameBaseValue
     );
@@ -192,6 +193,9 @@ Return Value:
 
     0 on success, and the final location will be returned in the location
     context.
+
+    ENOENT if the attribute is a location list and none of the current PC is
+    not in any of the locations.
 
     Returns an error number on failure.
 
@@ -667,6 +671,7 @@ Return Value:
 
     UCHAR AddressSize;
     PUCHAR End;
+    STACK_FRAME Frame;
     ULONG Index;
     PDWARF_LOCATION Location;
     DWARF_OP Op;
@@ -1114,6 +1119,7 @@ Return Value:
         case DwarfOpFbreg:
             LocationContext->Constant = FALSE;
             Status = DwarfpGetFrameBase(Context,
+                                        LocationContext->CurrentFunction,
                                         LocationContext->Pc,
                                         &Value);
 
@@ -1129,10 +1135,17 @@ Return Value:
 
         case DwarfOpCallFrameCfa:
             LocationContext->Constant = FALSE;
-            Status = DwarfpGetFrameBase(Context,
-                                        LocationContext->Pc,
-                                        &Value);
+            Status = DwarfpStackUnwind(Context,
+                                       LocationContext->Pc,
+                                       TRUE,
+                                       &Frame);
 
+            if (Status != 0) {
+                DWARF_ERROR("DWARF: Failed to get CFA.\n");
+                goto EvaluateExpressionEnd;
+            }
+
+            Value = Frame.FramePointer;
             DwarfpExpressionPush(LocationContext, Value);
             break;
 
@@ -1603,6 +1616,7 @@ Return Value:
 INT
 DwarfpGetFrameBase (
     PDWARF_CONTEXT Context,
+    PFUNCTION_SYMBOL Function,
     ULONGLONG Pc,
     PULONGLONG FrameBaseValue
     )
@@ -1617,6 +1631,9 @@ Routine Description:
 Arguments:
 
     Context - Supplies a pointer to the DWARF context.
+
+    Function - Supplies an optional pointer to the current function containing
+        the location to evaluate.
 
     Pc - Supplies the current value of the instruction pointer.
 
@@ -1633,16 +1650,52 @@ Return Value:
 
 {
 
-    if (Pc == 0) {
+    PDWARF_FUNCTION_SYMBOL DwarfFunction;
+    DWARF_LOCATION_CONTEXT LocationContext;
+    INT Status;
+
+    //
+    // Just return a zero frame register if there's no current function or no
+    // frame base attribute within that function.
+    //
+
+    if (Function == NULL) {
+        *FrameBaseValue = 0;
+        return 0;
+    }
+
+    DwarfFunction = Function->SymbolContext;
+    if ((DwarfFunction == NULL) ||
+        (DwarfFunction->FrameBase.Name != DwarfAtFrameBase)) {
+
         *FrameBaseValue = 0;
         return 0;
     }
 
     //
-    // TODO: Implement getting the frame base register.
+    // Evaluate the frame base location.
     //
 
-    *FrameBaseValue = 0;
-    return 0;
+    memset(&LocationContext, 0, sizeof(DWARF_LOCATION_CONTEXT));
+    LocationContext.Unit = DwarfFunction->Unit;
+    LocationContext.Pc = Pc;
+    Status = DwarfpGetLocation(Context,
+                               &LocationContext,
+                               &(DwarfFunction->FrameBase));
+
+    if (Status == 0) {
+        if ((LocationContext.Location.Form != DwarfLocationMemory) ||
+            (LocationContext.Location.NextPiece != NULL)) {
+
+            assert(FALSE);
+
+            return EINVAL;
+        }
+
+        *FrameBaseValue = LocationContext.Location.Value.Address;
+    }
+
+    DwarfpDestroyLocationContext(Context, &LocationContext);
+    return Status;
 }
 

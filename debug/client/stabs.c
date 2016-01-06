@@ -212,6 +212,8 @@ DbgpStabsGetFramePointerRegister (
 DEBUG_SYMBOL_INTERFACE DbgStabsSymbolInterface = {
     DbgpStabsLoadSymbols,
     DbgpStabsUnloadSymbols,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -2730,7 +2732,6 @@ Return Value:
                                          ListEntry);
 
             assert(CurrentSourceEntry != NULL);
-            assert(PotentialSource->ParentModule == Symbols);
             assert(PotentialSource->SourceFile != NULL);
 
             CurrentSourceEntry = CurrentSourceEntry->Next;
@@ -2893,7 +2894,6 @@ Return Value:
         }
 
         NewSource->SourceFile = StabString;
-        NewSource->ParentModule = State->CurrentModule;
         INITIALIZE_LIST_HEAD(&(NewSource->SourceLinesHead));
         INITIALIZE_LIST_HEAD(&(NewSource->DataSymbolsHead));
         INITIALIZE_LIST_HEAD(&(NewSource->FunctionsHead));

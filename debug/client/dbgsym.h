@@ -172,11 +172,14 @@ Return Value:
 
 --*/
 
-PDATA_SYMBOL
+INT
 DbgpFindLocal (
     PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
     PSTR LocalName,
-    ULONGLONG CurrentFrameInstructionPointer
+    PDEBUG_SYMBOLS *ModuleSymbols,
+    PDATA_SYMBOL *Local,
+    PULONGLONG DebasedPc
     );
 
 /*++
@@ -190,16 +193,26 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
-    LocalName - Supplies a case sensitive string of the local name.
+    Registers - Supplies a pointer to the registers to use for the search.
 
-    CurrentFrameInstructionPointer - Supplies the current frame instruction
-        pointer.
+    LocalName - Supplies a case insensitive string of the local name.
+
+    ModuleSymbols - Supplies a pointer where the symbols for the module will be
+        returned on success.
+
+    Local - Supplies a pointer where the local symbol will be returned on
+        success.
+
+    DebasedPc - Supplies a pointer where the PC will be returned, adjusted by
+        the amount the image load was adjusted by.
 
 Return Value:
 
-    Returns a pointer to the local variable or function parameter symbol.
+    0 on success.
 
-    NULL if no local variable matching the given name could be found.
+    ENOENT if no local by that name could be found.
+
+    Returns an error number on other failures.
 
 --*/
 
@@ -233,40 +246,6 @@ Return Value:
 
     Returns a pointer to the local variable symbol, or NULL if one could not
     be found.
-
---*/
-
-BOOL
-DbgpGetCurrentFunctionInformation (
-    PDEBUGGER_CONTEXT Context,
-    ULONGLONG CurrentFrameInstructionPointer,
-    PFUNCTION_SYMBOL *Function,
-    PULONGLONG ExecutionAddress
-    );
-
-/*++
-
-Routine Description:
-
-    This routine gets the function for the current instruction pointer and
-    the module-adjusted execution address.
-
-Arguments:
-
-    Context - Supplies a pointer to the application context.
-
-    CurrentFrameInstructionPointer - Supplies the current frame instruction
-        pointer.
-
-    Function - Supplies a pointer that receives symbol information for the
-        current function.
-
-    ExecutionAddress - Supplies a pointer that receives the current
-        module-adjusted execution address.
-
-Return Value:
-
-    Returns TRUE on success, or FALSE on failure.
 
 --*/
 

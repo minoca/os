@@ -1290,7 +1290,7 @@ Return Value:
 
     *Is64Bit = FALSE;
     *Value = DwarfpRead4(Data);
-    if (*Value == 0xFFFFFFF0) {
+    if (*Value == 0xFFFFFFFF) {
         *Is64Bit = TRUE;
         *Value = DwarfpRead8(Data);
     }

@@ -1461,6 +1461,14 @@ Return Value:
                 }
 
             } else {
+
+                //
+                // Set the PC to the return address. For architectures like
+                // x86 this is a no-op. On ARM, the return address register
+                // (r14) is different than the PC (r15).
+                //
+
+                DbgSetPc(Context, Registers, Frame->ReturnAddress);
                 goto StackUnwindEnd;
             }
         }
@@ -1700,9 +1708,20 @@ Return Value:
     ULONG FrameCount;
     ULONG FrameIndex;
     PSTACK_FRAME Frames;
+    REGISTERS_UNION LocalRegisters;
     INT Result;
 
     Frames = NULL;
+    if (Registers == NULL) {
+
+        assert(Context->CurrentEvent.Type == DebuggerEventBreak);
+
+        memcpy(&LocalRegisters,
+               &(Context->CurrentEvent.BreakNotification.Registers),
+               sizeof(REGISTERS_UNION));
+
+        Registers = &LocalRegisters;
+    }
 
     //
     // Initialize the call site with the current instruction pointer.
@@ -1987,6 +2006,61 @@ Return Value:
     }
 
     return Value;
+}
+
+VOID
+DbgSetPc (
+    PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
+    ULONGLONG Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the value of the program counter (instruction pointer)
+    register in the given registers union.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Registers - Supplies an optional pointer to the filled out registers union.
+        If NULL, then the registers from the current frame will be used.
+
+    Value - Supplies the new value to set.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (Registers == NULL) {
+        Registers = &(Context->FrameRegisters);
+    }
+
+    switch (Context->MachineType) {
+    case MACHINE_TYPE_X86:
+        Registers->X86.Eip = Value;
+        break;
+
+    case MACHINE_TYPE_ARMV7:
+    case MACHINE_TYPE_ARMV6:
+        Registers->Arm.R15Pc = Value;
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        break;
+    }
+
+    return;
 }
 
 //

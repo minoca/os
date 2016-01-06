@@ -401,11 +401,93 @@ Return Value:
 }
 
 INT
+DbgGetDataSymbolAddress (
+    PDEBUGGER_CONTEXT Context,
+    PDEBUG_SYMBOLS Symbols,
+    PDATA_SYMBOL DataSymbol,
+    ULONGLONG DebasedPc,
+    PULONGLONG Address
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the memory address of the given data symbol.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Symbols - Supplies a pointer to the module symbols.
+
+    DataSymbol - Supplies a pointer to the data symbol whose address is to be
+        returned.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus the
+        loaded base difference of the module).
+
+    Address - Supplies a pointer where the debased memory address of the symbol
+        will be returned. That is, the caller needs to add any loaded base
+        difference of the module to this value.
+
+Return Value:
+
+    0 on success.
+
+    ENOENT if the data symbol is not currently valid.
+
+    ERANGE if the data symbol is not stored in memory.
+
+    Other error codes on other failures.
+
+--*/
+
+{
+
+    PSYMBOLS_GET_ADDRESS_OF_DATA_SYMBOL AddressOf;
+    INT Status;
+
+    if (DebasedPc < DataSymbol->MinimumValidExecutionAddress) {
+        return ENOENT;
+    }
+
+    switch (DataSymbol->LocationType) {
+    case DataLocationAbsoluteAddress:
+        *Address = DataSymbol->Location.Address;
+        Status = 0;
+        break;
+
+    case DataLocationComplex:
+        AddressOf = Symbols->Interface->GetAddressOfDataSymbol;
+        if (AddressOf == NULL) {
+            DbgOut("Error: Complex symbol had no AddressOf function.\n");
+            Status = EINVAL;
+            break;
+        }
+
+        Status = AddressOf(Symbols, DataSymbol, DebasedPc, Address);
+        break;
+
+    default:
+        Status = ERANGE;
+        break;
+    }
+
+    return Status;
+}
+
+INT
 DbgGetDataSymbolData (
     PDEBUGGER_CONTEXT Context,
+    PDEBUG_SYMBOLS Symbols,
     PDATA_SYMBOL DataSymbol,
+    ULONGLONG DebasedPc,
     PVOID DataStream,
-    ULONG DataStreamSize
+    ULONG DataStreamSize,
+    PSTR Location,
+    ULONG LocationSize
     )
 
 /*++
@@ -418,16 +500,30 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
+    Symbols - Supplies a pointer to the module symbols.
+
     DataSymbol - Supplies a pointer to the data symbol whose data is to be
         retrieved.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus the
+        loaded base difference of the module).
 
     DataStream - Supplies a pointer that receives the data from the data symbol.
 
     DataStreamSize - Supplies the size of the data stream buffer.
 
+    Location - Supplies an optional pointer where a string describing the
+        location of the data symbol will be returned on success.
+
+    LocationSize - Supplies the size of the location in bytes.
+
 Return Value:
 
     0 on success.
+
+    ENOENT if the data symbol is not currently active given the current state
+    of the machine.
 
     Returns an error code on failure.
 
@@ -436,20 +532,40 @@ Return Value:
 {
 
     ULONG BytesRead;
+    LONGLONG Offset;
+    INT Printed;
     ULONG Register;
-    PULONG RegisterBase;
     INT Result;
     ULONGLONG TargetAddress;
-    PX86_GENERAL_REGISTERS X86Registers;
+    ULONGLONG Value;
 
     //
     // Collect the data contents for the symbol based on where it is located.
     //
 
-    X86Registers = &(Context->FrameRegisters.X86);
     switch (DataSymbol->LocationType) {
     case DataLocationRegister:
         Register = DataSymbol->Location.Register;
+        if (LocationSize != 0) {
+            Printed = snprintf(Location,
+                               LocationSize,
+                               "@%s",
+                               DbgGetRegisterName(Symbols->Machine, Register));
+
+            if (Printed > 0) {
+                Location += Printed;
+                LocationSize -= Printed;
+            }
+        }
+
+        Result = DbgGetRegister(Context,
+                                &(Context->FrameRegisters),
+                                Register,
+                                &Value);
+
+        if (Result != 0) {
+            goto GetDataSymbolDataEnd;
+        }
 
         //
         // Get a pointer to the data.
@@ -457,61 +573,38 @@ Return Value:
 
         switch (Context->MachineType) {
         case MACHINE_TYPE_X86:
-            if ((DataStreamSize > 4) &&
-                (Register != X86RegisterEax) && (Register != X86RegisterEbx)) {
-
-                DbgOut("Error: Data symbol location was a register, but type "
-                       "size was %d!\n",
-                       DataStreamSize);
-
-                DbgOut("Error: the register was %d.\n", Register);
+            if (DataStreamSize >= 4) {
+                *(PULONG)DataStream = Value;
+                DataStream += 4;
+                DataStreamSize -= 4;
             }
 
-            switch (Register) {
+            if (DataStreamSize >= 4) {
+                switch (Register) {
                 case X86RegisterEax:
-                    *(PULONG)DataStream = (ULONG)X86Registers->Eax;
-                    if (DataStreamSize > 4) {
-                        *((PULONG)DataStream + 1) = (ULONG)X86Registers->Edx;
-                    }
-
+                    Register = X86RegisterEdx;
                     break;
 
                 case X86RegisterEbx:
-                    *(PULONG)DataStream = (ULONG)X86Registers->Ebx;
-                    if (DataStreamSize > 4) {
-                        *((PULONG)DataStream + 1) = (ULONG)X86Registers->Ecx;
-                    }
-
-                    break;
-
-                case X86RegisterEcx:
-                    *(PULONG)DataStream = (ULONG)X86Registers->Ecx;
-                    break;
-
-                case X86RegisterEdx:
-                    *(PULONG)DataStream = (ULONG)X86Registers->Edx;
-                    break;
-
-                case X86RegisterEsi:
-                    *(PULONG)DataStream = (ULONG)X86Registers->Esi;
-                    break;
-
-                case X86RegisterEdi:
-                    *(PULONG)DataStream = (ULONG)X86Registers->Edi;
-                    break;
-
-                case X86RegisterEbp:
-                    *(PULONG)DataStream = (ULONG)X86Registers->Ebp;
-                    break;
-
-                case X86RegisterEsp:
-                    *(PULONG)DataStream = (ULONG)X86Registers->Esp;
+                    Register = X86RegisterEcx;
                     break;
 
                 default:
-                    DbgOut("Error: Unknown register %d.\n", Register);
-                    Result = EINVAL;
-                    goto GetDataSymbolDataEnd;
+                    DbgOut("Error: Data symbol location was a register, but "
+                           "type size was %d!\n"
+                           "Error: the register was %d.\n",
+                           DataStreamSize,
+                           Register);
+
+                    break;
+                }
+
+                DbgGetRegister(Context,
+                               &(Context->FrameRegisters),
+                               Register,
+                               &Value);
+
+                *(PULONG)DataStream = Value;
             }
 
             break;
@@ -523,17 +616,19 @@ Return Value:
 
         case MACHINE_TYPE_ARMV7:
         case MACHINE_TYPE_ARMV6:
-            if (Register > 16) {
-                DbgOut("Error: Unknown register %d.\n", Register);
-                Result = EINVAL;
-                goto GetDataSymbolDataEnd;
+            if (DataStreamSize >= 4) {
+                *(PULONG)DataStream = Value;
+                DataStream += 4;
+                DataStreamSize -= 4;
             }
 
-            RegisterBase = &(Context->FrameRegisters.Arm.R0);
-            *(PULONG)DataStream = *(PULONG)(RegisterBase + Register);
-            if (DataStreamSize > 4) {
-                *((PULONG)DataStream + 1) =
-                                      *(PULONG)(RegisterBase + (Register + 1));
+            if (DataStreamSize >= 4) {
+                DbgGetRegister(Context,
+                               &(Context->FrameRegisters),
+                               Register + 1,
+                               &Value);
+
+                *(PULONG)DataStream = Value;
             }
 
             break;
@@ -551,6 +646,8 @@ Return Value:
         break;
 
     case DataLocationIndirect:
+        Register = DataSymbol->Location.Indirect.Register;
+        Offset = DataSymbol->Location.Indirect.Offset;
 
         //
         // Get the target virtual address and attempt to read from the debuggee.
@@ -558,7 +655,7 @@ Return Value:
 
         Result = DbgGetRegister(Context,
                                 &(Context->FrameRegisters),
-                                DataSymbol->Location.Indirect.Register,
+                                Register,
                                 &TargetAddress);
 
         if (Result != 0) {
@@ -568,7 +665,31 @@ Return Value:
             goto GetDataSymbolDataEnd;
         }
 
-        TargetAddress += DataSymbol->Location.Indirect.Offset;
+        TargetAddress += Offset;
+        if (LocationSize != 0) {
+            if (Offset >= 0) {
+                Printed = snprintf(
+                               Location,
+                               LocationSize,
+                               "[@%s+0x%I64x]",
+                               DbgGetRegisterName(Symbols->Machine, Register),
+                               Offset);
+
+            } else {
+                Printed = snprintf(
+                               Location,
+                               LocationSize,
+                               "[@%s-0x%I64x]",
+                               DbgGetRegisterName(Symbols->Machine, Register),
+                               -Offset);
+            }
+
+            if (Printed > 0) {
+                Location += Printed;
+                LocationSize -= Printed;
+            }
+        }
+
         Result = DbgReadMemory(Context,
                                TRUE,
                                TargetAddress,
@@ -593,6 +714,18 @@ Return Value:
 
     case DataLocationAbsoluteAddress:
         TargetAddress = DataSymbol->Location.Address;
+        if (LocationSize != 0) {
+            Printed = snprintf(Location,
+                               LocationSize,
+                               "[%+I64x]",
+                               TargetAddress);
+
+            if (Printed > 0) {
+                Location += Printed;
+                LocationSize -= Printed;
+            }
+        }
+
         Result = DbgReadMemory(Context,
                                TRUE,
                                TargetAddress,
@@ -615,12 +748,42 @@ Return Value:
 
         break;
 
+    case DataLocationComplex:
+        if (Symbols->Interface->ReadDataSymbol == NULL) {
+            DbgOut("Error: Cannot resolve complex symbol.\n");
+            Result = EINVAL;
+            goto GetDataSymbolDataEnd;
+        }
+
+        Result = Symbols->Interface->ReadDataSymbol(Symbols,
+                                                    DataSymbol,
+                                                    DebasedPc,
+                                                    DataStream,
+                                                    DataStreamSize,
+                                                    Location,
+                                                    LocationSize);
+
+        if (Result != 0) {
+            if (Result != ENOENT) {
+                DbgOut("Error: Cannot read local %s.\n", DataSymbol->Name);
+            }
+
+            goto GetDataSymbolDataEnd;
+        }
+
+        LocationSize = 0;
+        break;
+
     default:
         DbgOut("Error: Unknown data symbol location %d.\n",
                DataSymbol->LocationType);
 
         Result = EINVAL;
         goto GetDataSymbolDataEnd;
+    }
+
+    if (LocationSize != 0) {
+        *Location = '\0';
     }
 
     Result = 0;
@@ -632,7 +795,9 @@ GetDataSymbolDataEnd:
 INT
 DbgPrintDataSymbol (
     PDEBUGGER_CONTEXT Context,
+    PDEBUG_SYMBOLS Symbols,
     PDATA_SYMBOL DataSymbol,
+    ULONGLONG DebasedPc,
     ULONG SpaceLevel,
     ULONG RecursionDepth
     )
@@ -647,7 +812,13 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
+    Symbols - Supplies a pointer to the module symbols.
+
     DataSymbol - Supplies a pointer to the data symbol to print.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus the
+        loaded base difference of the module).
 
     SpaceLevel - Supplies the number of spaces to print after every newline.
         Used for nesting types.
@@ -659,6 +830,9 @@ Return Value:
 
     0 on success.
 
+    ENOENT if the data symbol is not currently active given the current state
+    of the machine.
+
     Returns an error code on failure.
 
 --*/
@@ -666,13 +840,12 @@ Return Value:
 {
 
     PVOID DataStream;
+    CHAR Location[64];
     INT Result;
-    PSTR StackRegister;
     PTYPE_SYMBOL Type;
     ULONG TypeSize;
 
     DataStream = NULL;
-    StackRegister = NULL;
 
     assert(Context->CurrentEvent.Type == DebuggerEventBreak);
 
@@ -692,136 +865,26 @@ Return Value:
         goto PrintDataSymbolEnd;
     }
 
-    Result = DbgGetDataSymbolData(Context, DataSymbol, DataStream, TypeSize);
+    Result = DbgGetDataSymbolData(Context,
+                                  Symbols,
+                                  DataSymbol,
+                                  DebasedPc,
+                                  DataStream,
+                                  TypeSize,
+                                  Location,
+                                  sizeof(Location));
+
     if (Result != 0) {
-        DbgOut("Error: unable to get data for data symbol %s\n",
-               DataSymbol->Name);
+        if (Result != ENOENT) {
+            DbgOut("Error: unable to get data for data symbol %s\n",
+                   DataSymbol->Name);
+        }
 
         goto PrintDataSymbolEnd;
     }
 
-    //
-    // Depending on where the symbol is, print out its location, name and
-    // contents.
-    //
-
-    switch (DataSymbol->LocationType) {
-    case DataLocationRegister:
-
-        //
-        // Print the register name and get a pointer to the data.
-        //
-
-        switch (Context->MachineType) {
-        case MACHINE_TYPE_X86:
-            switch (DataSymbol->Location.Register) {
-                case X86RegisterEax:
-                    DbgOut("@eax");
-                    break;
-
-                case X86RegisterEbx:
-                    DbgOut("@ebx");
-                    break;
-
-                case X86RegisterEcx:
-                    DbgOut("@ecx");
-                    break;
-
-                case X86RegisterEdx:
-                    DbgOut("@edx");
-                    break;
-
-                case X86RegisterEsi:
-                    DbgOut("@esi");
-                    break;
-
-                case X86RegisterEdi:
-                    DbgOut("@edi");
-                    break;
-
-                case X86RegisterEbp:
-                    DbgOut("@ebp");
-                    break;
-
-                case X86RegisterEsp:
-                    DbgOut("@esp");
-                    break;
-
-                default:
-                    goto PrintDataSymbolEnd;
-            }
-
-            break;
-
-        //
-        // ARM registers. Since the registers are all in order and are named
-        // r0-r15, do a direct translation from register number to register.
-        //
-
-        case MACHINE_TYPE_ARMV7:
-        case MACHINE_TYPE_ARMV6:
-            DbgOut("@r%d", DataSymbol->Location.Register);
-            break;
-
-        //
-        // Unknown machine type.
-        //
-
-        default:
-            break;
-        }
-
-        DbgOut("     ");
-        break;
-
-    case DataLocationIndirect:
-
-        //
-        // Determine what the stack register should be.
-        //
-
-        if (Context->MachineType == MACHINE_TYPE_X86) {
-            StackRegister = "@ebp";
-
-        } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-                   (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
-            StackRegister = "@fp";
-        }
-
-        //
-        // Print the stack offset. The -4 in the format specifier specifies that
-        // the field width should be 4 characters, left justified. Ideally the
-        // format specifier would be "%+-4x", so that a sign would be
-        // unconditionally printed, but that doesn't seem to work.
-        // TODO: This should honor the Indirect.Register.
-        //
-
-        if (DataSymbol->Location.Indirect.Offset >= 0) {
-            DbgOut("%s+%-4I64x",
-                   StackRegister,
-                   DataSymbol->Location.Indirect.Offset);
-
-        } else {
-            DbgOut("%s-%-4I64x",
-                   StackRegister,
-                   -DataSymbol->Location.Indirect.Offset);
-        }
-
-        break;
-
-    case DataLocationAbsoluteAddress:
-        break;
-
-    default:
-        goto PrintDataSymbolEnd;
-    }
-
-    //
-    // Print the symbol name.
-    //
-
-    DbgOut("%-20s: ", DataSymbol->Name);
+    Location[sizeof(Location) - 1] = '\0';
+    DbgOut("%-12s %-20s: ", Location, DataSymbol->Name);
 
     //
     // Print the type contents.
@@ -1728,6 +1791,7 @@ Return Value:
     PENUMERATION_MEMBER EnumerationMember;
     CHAR Field[256];
     PVOID MemberData;
+    PSTR MemberName;
     PTYPE_SYMBOL MemberType;
     NUMERIC_UNION NumericValue;
     PDATA_TYPE_RELATION Relation;
@@ -1933,15 +1997,20 @@ Return Value:
             snprintf(Field, sizeof(Field), "+0x%x", Bytes);
             DbgOut("%-6s  ", Field);
             ShiftedData = NULL;
+            MemberName = StructureMember->Name;
+            if (MemberName == NULL) {
+                MemberName = "";
+            }
+
             if (BitRemainder != 0) {
                 snprintf(Field,
                          sizeof(Field),
                          "%s:%d",
-                         StructureMember->Name,
+                         MemberName,
                          BitRemainder);
 
             } else {
-                snprintf(Field, sizeof(Field), StructureMember->Name);
+                snprintf(Field, sizeof(Field), "%s", MemberName);
             }
 
             Field[sizeof(Field) - 1] = '\0';
@@ -2610,11 +2679,14 @@ Return Value:
     return Backup;
 }
 
-PDATA_SYMBOL
+INT
 DbgpFindLocal (
     PDEBUGGER_CONTEXT Context,
+    PREGISTERS_UNION Registers,
     PSTR LocalName,
-    ULONGLONG CurrentFrameInstructionPointer
+    PDEBUG_SYMBOLS *ModuleSymbols,
+    PDATA_SYMBOL *Local,
+    PULONGLONG DebasedPc
     )
 
 /*++
@@ -2628,60 +2700,118 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
-    LocalName - Supplies a case sensitive string of the local name.
+    Registers - Supplies a pointer to the registers to use for the search.
 
-    CurrentFrameInstructionPointer - Supplies the current frame instruction
-        pointer.
+    LocalName - Supplies a case insensitive string of the local name.
+
+    ModuleSymbols - Supplies a pointer where the symbols for the module will be
+        returned on success.
+
+    Local - Supplies a pointer where the local symbol will be returned on
+        success.
+
+    DebasedPc - Supplies a pointer where the PC will be returned, adjusted by
+        the amount the image load was adjusted by.
 
 Return Value:
 
-    Returns a pointer to the local variable or function parameter symbol.
+    0 on success.
 
-    NULL if no local variable matching the given name could be found.
+    ENOENT if no local by that name could be found.
+
+    Returns an error number on other failures.
 
 --*/
 
 {
 
     PLIST_ENTRY CurrentEntry;
-    ULONGLONG ExecutionAddress;
     PFUNCTION_SYMBOL Function;
     PDATA_SYMBOL LocalSymbol;
+    PDEBUGGER_MODULE Module;
     PDATA_SYMBOL Parameter;
-    BOOL Result;
+    ULONGLONG Pc;
+    PSYMBOL_SEARCH_RESULT ResultValid;
+    SYMBOL_SEARCH_RESULT SearchResult;
 
-    Result = DbgpGetCurrentFunctionInformation(Context,
-                                               CurrentFrameInstructionPointer,
-                                               &Function,
-                                               &ExecutionAddress);
+    //
+    // Attempt to get the module this address is in. If one cannot be found,
+    // then there is no useful information to print, so exit.
+    //
 
-    if (Result == FALSE) {
-        return NULL;
+    Pc = DbgGetPc(Context, Registers);
+    Module = DbgpFindModuleFromAddress(Context, Pc, &Pc);
+    if (Module == NULL) {
+        return ENOENT;
     }
+
+    //
+    // Attempt to find the current function symbol in the module.
+    //
+
+    SearchResult.Variety = SymbolResultInvalid;
+    ResultValid = NULL;
+    if (Module->Symbols != NULL) {
+        ResultValid = DbgFindFunctionSymbol(Module->Symbols,
+                                            NULL,
+                                            Pc,
+                                            &SearchResult);
+
+    } else {
+        return ENOENT;
+    }
+
+    //
+    // If a function could not be found, bail.
+    //
+
+    if ((ResultValid == NULL) ||
+        (SearchResult.Variety != SymbolResultFunction)) {
+
+        return ENOENT;
+    }
+
+    Function = SearchResult.U.FunctionResult;
 
     //
     // First check the locals.
     //
 
-    LocalSymbol = DbgpGetLocal(Function, LocalName, ExecutionAddress);
-    if (LocalSymbol != NULL) {
-        return LocalSymbol;
-    }
+    LocalSymbol = DbgpGetLocal(Function, LocalName, Pc);
+    if (LocalSymbol == NULL) {
 
-    //
-    // Then check any function parameters.
-    //
+        //
+        // Check any function parameters.
+        //
 
-    CurrentEntry = Function->ParametersHead.Next;
-    while (CurrentEntry != &(Function->ParametersHead)) {
-        Parameter = LIST_VALUE(CurrentEntry, DATA_SYMBOL, ListEntry);
-        CurrentEntry = CurrentEntry->Next;
-        if (strcasecmp(LocalName, Parameter->Name) == 0) {
-            return Parameter;
+        CurrentEntry = Function->ParametersHead.Next;
+        while (CurrentEntry != &(Function->ParametersHead)) {
+            Parameter = LIST_VALUE(CurrentEntry, DATA_SYMBOL, ListEntry);
+            CurrentEntry = CurrentEntry->Next;
+            if (strcasecmp(LocalName, Parameter->Name) == 0) {
+                LocalSymbol = Parameter;
+                break;
+            }
         }
     }
 
-    return NULL;
+    if (LocalSymbol != NULL) {
+        if (ModuleSymbols != NULL) {
+            *ModuleSymbols = Module->Symbols;
+        }
+
+        if (Local != NULL) {
+            *Local = LocalSymbol;
+        }
+
+        if (DebasedPc != NULL) {
+            *DebasedPc = Pc;
+        }
+
+        return 0;
+    }
+
+    return ENOENT;
 }
 
 PDATA_SYMBOL
@@ -2773,95 +2903,6 @@ Return Value:
     }
 
     return Winner;
-}
-
-BOOL
-DbgpGetCurrentFunctionInformation (
-    PDEBUGGER_CONTEXT Context,
-    ULONGLONG CurrentFrameInstructionPointer,
-    PFUNCTION_SYMBOL *Function,
-    PULONGLONG ExecutionAddress
-    )
-
-/*++
-
-Routine Description:
-
-    This routine gets the function for the current instruction pointer and
-    the module-adjusted execution address.
-
-Arguments:
-
-    Context - Supplies a pointer to the application context.
-
-    CurrentFrameInstructionPointer - Supplies the current frame instruction
-        pointer.
-
-    Function - Supplies a pointer that receives symbol information for the
-        current function.
-
-    ExecutionAddress - Supplies a pointer that receives the current
-        module-adjusted execution address.
-
-Return Value:
-
-    Returns TRUE on success, or FALSE on failure.
-
---*/
-
-{
-
-    ULONGLONG InstructionPointer;
-    PDEBUGGER_MODULE Module;
-    PSYMBOL_SEARCH_RESULT ResultValid;
-    SYMBOL_SEARCH_RESULT SearchResult;
-
-    assert(Function != NULL);
-    assert(ExecutionAddress != NULL);
-
-    //
-    // Attempt to get the module this address is in. If one cannot be found,
-    // then there is no useful information to print, so exit.
-    //
-
-    InstructionPointer = CurrentFrameInstructionPointer;
-    Module = DbgpFindModuleFromAddress(Context,
-                                       InstructionPointer,
-                                       &InstructionPointer);
-
-    if (Module == NULL) {
-        return FALSE;
-    }
-
-    //
-    // Attempt to find the current function symbol in the module.
-    //
-
-    SearchResult.Variety = SymbolResultInvalid;
-    ResultValid = NULL;
-    if (Module->Symbols != NULL) {
-        ResultValid = DbgFindFunctionSymbol(Module->Symbols,
-                                            NULL,
-                                            InstructionPointer,
-                                            &SearchResult);
-
-    } else {
-        return FALSE;
-    }
-
-    //
-    // If a function could not be found, bail.
-    //
-
-    if ((ResultValid == NULL) ||
-        (SearchResult.Variety != SymbolResultFunction)) {
-
-        return FALSE;
-    }
-
-    *Function = SearchResult.U.FunctionResult;
-    *ExecutionAddress = InstructionPointer;
-    return TRUE;
 }
 
 VOID
@@ -3286,7 +3327,9 @@ Return Value:
 
             Member = Type->U.Structure.FirstMember;
             while (Member != NULL) {
-                if (strcmp(Member->Name, FieldName) == 0) {
+                if ((Member->Name != NULL) &&
+                    (strcmp(Member->Name, FieldName) == 0)) {
+
                     break;
                 }
 
@@ -3296,7 +3339,9 @@ Return Value:
             if (Member == NULL) {
                 Member = Type->U.Structure.FirstMember;
                 while (Member != NULL) {
-                    if (strcasecmp(Member->Name, FieldName) == 0) {
+                    if ((Member->Name != NULL) &&
+                        (strcasecmp(Member->Name, FieldName) == 0)) {
+
                         break;
                     }
 

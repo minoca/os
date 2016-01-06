@@ -712,12 +712,12 @@ Return Value:
     ULONG Bytes;
     PDATA_TYPE_ENUMERATION EnumerationData;
     PENUMERATION_MEMBER EnumerationMember;
-    ULONG MemberLength;
+    PSTR MemberName;
+    CHAR MemberNameBuffer[256];
     PTYPE_SYMBOL MemberType;
     PDATA_TYPE_NUMERIC NumericData;
     PDATA_TYPE_RELATION RelationData;
     PTYPE_SYMBOL RelativeType;
-    ULONG SpaceIndex;
     PDATA_TYPE_STRUCTURE StructureData;
     PSTRUCTURE_MEMBER StructureMember;
 
@@ -837,27 +837,22 @@ Return Value:
         EnumerationData = &(Type->U.Enumeration);
         EnumerationMember = EnumerationData->FirstMember;
         while (EnumerationMember != NULL) {
-            for (SpaceIndex = 0; SpaceIndex < SpaceLevel; SpaceIndex += 1) {
-                DbgOut(" ");
+            DbgOut("%*s", SpaceLevel, "");
+            MemberName = EnumerationMember->Name;
+            if (MemberName == NULL) {
+                MemberName = "";
             }
 
-            DbgOut("%s", EnumerationMember->Name);
-            for (SpaceIndex = strlen(EnumerationMember->Name);
-                 SpaceIndex < MEMBER_NAME_SPACE;
-                 SpaceIndex += 1) {
+            DbgOut("%-*s = %I64d\n",
+                   MEMBER_NAME_SPACE,
+                   MemberName,
+                   EnumerationMember->Value);
 
-                DbgOut(" ");
-            }
-
-            DbgOut(" =  %I64d\n", EnumerationMember->Value);
             EnumerationMember = EnumerationMember->NextMember;
         }
 
         SpaceLevel -= 2;
-        for (SpaceIndex = 0; SpaceIndex < SpaceLevel; SpaceIndex += 1) {
-            DbgOut(" ");
-        }
-
+        DbgOut("%*s", SpaceLevel, "");
         DbgOut("}");
         break;
 
@@ -869,25 +864,25 @@ Return Value:
         while (StructureMember != NULL) {
             Bytes = StructureMember->BitOffset / BITS_PER_BYTE;
             BitRemainder = StructureMember->BitOffset % BITS_PER_BYTE;
-            for (SpaceIndex = 0; SpaceIndex < SpaceLevel; SpaceIndex += 1) {
-                DbgOut(" ");
+            DbgOut("%*s", SpaceLevel, "");
+            MemberName = StructureMember->Name;
+            if (MemberName == NULL) {
+                MemberName = "";
             }
 
-            DbgOut("+0x%03x  %s", Bytes, StructureMember->Name);
-            MemberLength = strlen(StructureMember->Name);
             if (BitRemainder != 0) {
-                DbgOut(":%d", BitRemainder);
-                MemberLength += 2;
+                snprintf(MemberNameBuffer,
+                         sizeof(MemberNameBuffer),
+                         "%s:%d",
+                         MemberName,
+                         BitRemainder);
+
+                MemberNameBuffer[sizeof(MemberNameBuffer) - 1] = '\0';
+                MemberName = MemberNameBuffer;
             }
 
-            for (SpaceIndex = MemberLength;
-                 SpaceIndex < MEMBER_NAME_SPACE;
-                 SpaceIndex += 1) {
-
-                DbgOut(" ");
-            }
-
-            DbgOut(": ");
+            DbgOut("+0x%03x  %-*s", Bytes, MEMBER_NAME_SPACE, MemberName);
+            DbgOut(" : ");
             MemberType = DbgGetType(StructureMember->TypeFile,
                                     StructureMember->TypeNumber);
 
@@ -908,11 +903,7 @@ Return Value:
         }
 
         SpaceLevel -= 2;
-        for (SpaceIndex = 0; SpaceIndex < SpaceLevel; SpaceIndex += 1) {
-            DbgOut(" ");
-        }
-
-        DbgOut("}");
+        DbgOut("%*s}", SpaceLevel, "");
         if (SpaceLevel == 0) {
             DbgOut("\nType Size: %d Bytes.", StructureData->SizeInBytes);
         }
@@ -995,7 +986,9 @@ Return Value:
     StructureData = &(StructureType->U.Structure);
     StructureMember = StructureData->FirstMember;
     for (Index = 0; Index < StructureData->MemberCount; Index += 1) {
-        if (strcmp(FieldName, StructureMember->Name) == 0) {
+        if ((StructureMember->Name != NULL) &&
+            (strcmp(FieldName, StructureMember->Name) == 0)) {
+
             if (FieldOffset != NULL) {
                 *FieldOffset = StructureMember->BitOffset;
             }

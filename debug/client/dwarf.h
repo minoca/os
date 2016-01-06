@@ -719,7 +719,7 @@ Members:
     BitSize - Stores the size of this piece, or 0 if this describes the entire
         object.
 
-    BitOffset - Stores the offset from the start of the location in bits if
+    BitOffset - Stores the offset from the start of the source data in bits if
         this piece is offset in some way.
 
     NextPiece - Stores a pointer to the next piece of the object if it's a
@@ -761,10 +761,7 @@ Members:
     TlsBase - Stores the thread local storage base region for this thread and
         module. This value is added if a Form TLS Address op is executed.
 
-    Description - Stores an optional pointer where a description of the
-        location will be returned on success.
-
-    DescriptionSize - Stores the size of the description buffer in bytes.
+    CurrentFunction - Stores a pointer to the current function.
 
     Location - Stores the final location of the entity. This may end up being a
         list.
@@ -782,8 +779,7 @@ typedef struct _DWARF_LOCATION_CONTEXT {
     ULONGLONG Pc;
     ULONGLONG ObjectAddress;
     ULONGLONG TlsBase;
-    PSTR Description;
-    ULONG DescriptionSize;
+    PFUNCTION_SYMBOL CurrentFunction;
     DWARF_LOCATION Location;
     BOOL Constant;
 } DWARF_LOCATION_CONTEXT, *PDWARF_LOCATION_CONTEXT;

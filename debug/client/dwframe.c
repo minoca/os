@@ -172,6 +172,7 @@ DwarfpExecuteFde (
     ULONGLONG Pc,
     PDWARF_FDE Fde,
     PDWARF_CIE Cie,
+    BOOL CfaOnly,
     PSTACK_FRAME Frame
     );
 
@@ -313,18 +314,72 @@ Return Value:
 
 {
 
-    DWARF_CIE Cie;
     PDWARF_CONTEXT Context;
-    DWARF_FDE Fde;
     INT Status;
 
     Context = Symbols->SymbolContext;
+    Status = DwarfpStackUnwind(Context, DebasedPc, FALSE, Frame);
+    if ((Context->Flags & DWARF_CONTEXT_DEBUG_FRAMES) != 0) {
+        DbgOut("Unwind %d: %I64x %I64x\n",
+               Status,
+               Frame->FramePointer,
+               Frame->ReturnAddress);
+    }
+
+    return Status;
+}
+
+INT
+DwarfpStackUnwind (
+    PDWARF_CONTEXT Context,
+    ULONGLONG DebasedPc,
+    BOOL CfaOnly,
+    PSTACK_FRAME Frame
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to unwind the stack by one frame.
+
+Arguments:
+
+    Context - Supplies a pointer to the DWARF symbol context.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus loaded
+        base difference of the module).
+
+    CfaOnly - Supplies a boolean indicating whether to only return the
+        current Canonical Frame Address and not actually perform any unwinding
+        (TRUE) or whether to fully unwind this function (FALSE).
+
+    Frame - Supplies a pointer where the basic frame information for this
+        frame will be returned.
+
+Return Value:
+
+    0 on success.
+
+    EOF if there are no more stack frames.
+
+    Returns an error code on failure.
+
+--*/
+
+{
+
+    DWARF_CIE Cie;
+    DWARF_FDE Fde;
+    INT Status;
+
     Status = DwarfpFindFrameInfo(Context, DebasedPc, &Cie, &Fde);
     if (Status != 0) {
         return Status;
     }
 
-    Status = DwarfpExecuteFde(Context, DebasedPc, &Fde, &Cie, Frame);
+    Status = DwarfpExecuteFde(Context, DebasedPc, &Fde, &Cie, CfaOnly, Frame);
     return Status;
 }
 
@@ -338,6 +393,7 @@ DwarfpExecuteFde (
     ULONGLONG Pc,
     PDWARF_FDE Fde,
     PDWARF_CIE Cie,
+    BOOL CfaOnly,
     PSTACK_FRAME Frame
     )
 
@@ -358,12 +414,9 @@ Arguments:
 
     Cie - Supplies a pointer to the CIE.
 
-    Registers - Supplies a pointer to the registers on input. On output, these
-        registers will be updated with the unwound value.
-
-    AllRegisters - Supplies a boolean indicating whether to unwind all
-        registers (TRUE) or just the instruction pointer and stack pointer
-        (FALSE).
+    CfaOnly - Supplies a boolean indicating whether to only return the
+        current Canonical Frame Address and not actually perform any unwinding
+        (TRUE) or whether to fully unwind this function (FALSE).
 
     Frame - Supplies a pointer where the basic frame information for this
         frame will be returned.
@@ -454,6 +507,10 @@ Return Value:
 
     Frame->FramePointer = Cfa;
     Frame->ReturnAddress = 0;
+    if (CfaOnly != FALSE) {
+        Status = 0;
+        goto ExecuteFdeEnd;
+    }
 
     //
     // Now unwind the registers.
@@ -1500,10 +1557,12 @@ Return Value:
     }
 
     //
-    // If the CIE ID is zero, this is a CIE.
+    // If the CIE ID is zero or -1, this is a CIE.
     //
 
-    if (CieId == 0) {
+    if (((EhFrame != FALSE) && (CieId == 0)) ||
+        ((EhFrame == FALSE) && (CieId == -1))) {
+
         *IsCie = TRUE;
         memset(Cie, 0, sizeof(DWARF_CIE));
         Cie->EhFrame = EhFrame;
@@ -1515,14 +1574,15 @@ Return Value:
         Augmentation = (PSTR)(*Table);
         Cie->Augmentation = Augmentation;
         *Table = (PUCHAR)Augmentation + strlen(Augmentation) + 1;
-        if (EhFrame == FALSE) {
-            Cie->AddressSize = DwarfpRead1(Table);
-            Cie->SegmentSize = DwarfpRead1(Table);
+        Cie->AddressSize = 4;
+        if (Is64Bit != FALSE) {
+            Cie->AddressSize = 8;
+        }
 
-        } else {
-            Cie->AddressSize = 4;
-            if (Is64Bit != FALSE) {
-                Cie->AddressSize = 8;
+        if (EhFrame == FALSE) {
+            if (Cie->Version == 4) {
+                Cie->AddressSize = DwarfpRead1(Table);
+                Cie->SegmentSize = DwarfpRead1(Table);
             }
         }
 

@@ -104,6 +104,8 @@ DbgpCreateOrUpdateCoffSymbol (
 DEBUG_SYMBOL_INTERFACE DbgCoffSymbolInterface = {
     DbgpCoffLoadSymbols,
     DbgpCoffFreeSymbols,
+    NULL,
+    NULL,
     NULL
 };
 

@@ -89,6 +89,8 @@ DbgpParseElfSymbolTable (
 DEBUG_SYMBOL_INTERFACE DbgElfSymbolInterface = {
     DbgpElfLoadSymbols,
     DbgpElfFreeSymbols,
+    NULL,
+    NULL,
     NULL
 };
 

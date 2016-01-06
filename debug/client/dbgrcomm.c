@@ -2926,11 +2926,22 @@ Return Value:
     ParameterPrinted = FALSE;
     CurrentLocalEntry = Function->ParametersHead.Next;
     while (CurrentLocalEntry != &(Function->ParametersHead)) {
-        ParameterPrinted = TRUE;
         CurrentLocal = LIST_VALUE(CurrentLocalEntry, DATA_SYMBOL, ListEntry);
         CurrentLocalEntry = CurrentLocalEntry->Next;
-        DbgPrintDataSymbol(Context, CurrentLocal, 4, DEFAULT_RECURSION_DEPTH);
-        DbgOut("\n");
+        Status = DbgPrintDataSymbol(Context,
+                                    Module->Symbols,
+                                    CurrentLocal,
+                                    InstructionPointer,
+                                    4,
+                                    DEFAULT_RECURSION_DEPTH);
+
+        if (Status != ENOENT) {
+            if (Status == 0) {
+                ParameterPrinted = TRUE;
+            }
+
+            DbgOut("\n");
+        }
     }
 
     if (ParameterPrinted != FALSE) {
@@ -2945,41 +2956,54 @@ Return Value:
     while (CurrentLocalEntry != &(Function->LocalsHead)) {
         CurrentLocal = LIST_VALUE(CurrentLocalEntry, DATA_SYMBOL, ListEntry);
         CurrentLocalEntry = CurrentLocalEntry->Next;
+        if (CurrentLocal->MinimumValidExecutionAddress != 0) {
 
-        //
-        // Skip this local if it's not yet valid.
-        //
+            //
+            // Skip this local if it's not yet valid.
+            //
 
-        if (InstructionPointer < CurrentLocal->MinimumValidExecutionAddress) {
-            continue;
-        }
+            if (InstructionPointer <
+                CurrentLocal->MinimumValidExecutionAddress) {
 
-        //
-        // Attempt to find the most updated version of this local. Skip this one
-        // if a different local is determined to be the most up to date.
-        //
+                continue;
+            }
 
-        BestLocal = DbgpGetLocal(Function,
-                                 CurrentLocal->Name,
-                                 InstructionPointer);
+            //
+            // Attempt to find the most updated version of this local. Skip
+            // this one if a different local is determined to be the most up to
+            // date.
+            //
 
-        //
-        // The function should definitely not fail to find any local, since this
-        // function found it.
-        //
+            BestLocal = DbgpGetLocal(Function,
+                                     CurrentLocal->Name,
+                                     InstructionPointer);
 
-        assert(BestLocal != NULL);
+            //
+            // The function should definitely not fail to find any local, since
+            // this function found it.
+            //
 
-        if (BestLocal != CurrentLocal) {
-            continue;
+            assert(BestLocal != NULL);
+
+            if (BestLocal != CurrentLocal) {
+                continue;
+            }
         }
 
         //
         // Print out this local.
         //
 
-        DbgPrintDataSymbol(Context, CurrentLocal, 4, DEFAULT_RECURSION_DEPTH);
-        DbgOut("\n");
+        Status = DbgPrintDataSymbol(Context,
+                                    Module->Symbols,
+                                    CurrentLocal,
+                                    InstructionPointer,
+                                    4,
+                                    DEFAULT_RECURSION_DEPTH);
+
+        if (Status != ENOENT) {
+            DbgOut("\n");
+        }
     }
 
     Status = 0;
@@ -5403,6 +5427,7 @@ Return Value:
     ULONGLONG Pc;
     INT Result;
     SYMBOL_SEARCH_RESULT SearchResult;
+    PDEBUG_SYMBOLS Symbols;
     PSTR SymbolString;
     PTYPE_SYMBOL Type;
     ULONG TypeSize;
@@ -5424,9 +5449,14 @@ Return Value:
     if ((ArgumentCount == 1) &&
         ((RawDataStream == NULL) || (RawDataStreamSizeInBytes == 0))) {
 
-        Pc = DbgGetPc(Context, &(Context->FrameRegisters));
-        Local = DbgpFindLocal(Context, Arguments[0], Pc);
-        if (Local != NULL) {
+        Result = DbgpFindLocal(Context,
+                               &(Context->FrameRegisters),
+                               Arguments[0],
+                               &Symbols,
+                               &Local,
+                               &Pc);
+
+        if (Result == 0) {
 
             //
             // In order to dump the local variable, the local data symbol must
@@ -5460,39 +5490,56 @@ Return Value:
             // Read the symbol data from the local data symbol.
             //
 
-            Result = DbgGetDataSymbolData(Context, Local, DataStream, TypeSize);
-            if (Result != 0) {
+            Result = DbgGetDataSymbolData(Context,
+                                          Symbols,
+                                          Local,
+                                          Pc,
+                                          DataStream,
+                                          TypeSize,
+                                          NULL,
+                                          0);
+
+            if (Result == 0) {
+
+                //
+                // Resolve the data into something useful to dump.
+                //
+
+                Address = 0;
+                Result = DbgrpResolveDumpType(Context,
+                                              &Type,
+                                              &DataStream,
+                                              &TypeSize,
+                                              &Address);
+
+                if (Result != 0) {
+                    DbgOut("Error: could not resolve dump type %s.\n",
+                           Type->Name);
+
+                    goto DumpTypeEnd;
+                }
+
+                if (Address != 0) {
+                    DbgOut("Dumping memory at 0x%08x\n", (ULONG)Address);
+                }
+
+                Result = DbgPrintType(Context,
+                                      Type,
+                                      DataStream,
+                                      TypeSize,
+                                      0,
+                                      DEFAULT_RECURSION_DEPTH);
+
                 goto DumpTypeEnd;
-            }
 
             //
-            // Resolve the data into something useful to dump.
+            // If failed with something other than not found (for not currently
+            // active locals), then bail to the end.
             //
 
-            Address = 0;
-            Result = DbgrpResolveDumpType(Context,
-                                          &Type,
-                                          &DataStream,
-                                          &TypeSize,
-                                          &Address);
-
-            if (Result != 0) {
-                DbgOut("Error: could not resolve dump type %s.\n", Type->Name);
+            } else if (Result != ENOENT) {
                 goto DumpTypeEnd;
             }
-
-            if (Address != 0) {
-                DbgOut("Dumping memory at 0x%08x\n", (ULONG)Address);
-            }
-
-            Result = DbgPrintType(Context,
-                                  Type,
-                                  DataStream,
-                                  TypeSize,
-                                  0,
-                                  DEFAULT_RECURSION_DEPTH);
-
-            goto DumpTypeEnd;
         }
     }
 

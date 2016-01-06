@@ -2411,11 +2411,59 @@ Return Value:
 --*/
 
 INT
+DbgGetDataSymbolAddress (
+    PDEBUGGER_CONTEXT Context,
+    PDEBUG_SYMBOLS Symbols,
+    PDATA_SYMBOL DataSymbol,
+    ULONGLONG DebasedPc,
+    PULONGLONG Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the memory address of the given data symbol.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Symbols - Supplies a pointer to the module symbols.
+
+    DataSymbol - Supplies a pointer to the data symbol whose address is to be
+        returned.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus the
+        loaded base difference of the module).
+
+    Address - Supplies a pointer where the debased memory address of the symbol
+        will be returned. That is, the caller needs to add any loaded base
+        difference of the module to this value.
+
+Return Value:
+
+    0 on success.
+
+    ENOENT if the data symbol is not currently valid.
+
+    ERANGE if the data symbol is not stored in memory.
+
+    Other error codes on other failures.
+
+--*/
+
+INT
 DbgGetDataSymbolData (
     PDEBUGGER_CONTEXT Context,
+    PDEBUG_SYMBOLS Symbols,
     PDATA_SYMBOL DataSymbol,
+    ULONGLONG DebasedPc,
     PVOID DataStream,
-    ULONG DataStreamSize
+    ULONG DataStreamSize,
+    PSTR Location,
+    ULONG LocationSize
     );
 
 /*++
@@ -2428,16 +2476,30 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
+    Symbols - Supplies a pointer to the module symbols.
+
     DataSymbol - Supplies a pointer to the data symbol whose data is to be
         retrieved.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus the
+        loaded base difference of the module).
 
     DataStream - Supplies a pointer that receives the data from the data symbol.
 
     DataStreamSize - Supplies the size of the data stream buffer.
 
+    Location - Supplies an optional pointer where a string describing the
+        location of the data symbol will be returned on success.
+
+    LocationSize - Supplies the size of the location in bytes.
+
 Return Value:
 
     0 on success.
+
+    ENOENT if the data symbol is not currently active given the current state
+    of the machine.
 
     Returns an error code on failure.
 
@@ -2446,7 +2508,9 @@ Return Value:
 INT
 DbgPrintDataSymbol (
     PDEBUGGER_CONTEXT Context,
+    PDEBUG_SYMBOLS Symbols,
     PDATA_SYMBOL DataSymbol,
+    ULONGLONG DebasedPc,
     ULONG SpaceLevel,
     ULONG RecursionDepth
     );
@@ -2461,7 +2525,13 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
+    Symbols - Supplies a pointer to the module symbols.
+
     DataSymbol - Supplies a pointer to the data symbol to print.
+
+    DebasedPc - Supplies the program counter value, assuming the image were
+        loaded at its preferred base address (that is, actual PC minus the
+        loaded base difference of the module).
 
     SpaceLevel - Supplies the number of spaces to print after every newline.
         Used for nesting types.
@@ -2472,6 +2542,9 @@ Arguments:
 Return Value:
 
     0 on success.
+
+    ENOENT if the data symbol is not currently active given the current state
+    of the machine.
 
     Returns an error code on failure.
 
