@@ -72,7 +72,7 @@ Return Value:
 
 {
 
-    return MACHINE_TYPE_ARMV7;
+    return MACHINE_TYPE_ARM;
 }
 
 //

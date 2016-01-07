@@ -33,10 +33,7 @@ ARMV7_OBJS = armv7/kdarch.o   \
              armv7/kdsup.o    \
              armv7/kdsupc.o   \
 
-ARMV6_OBJS = armv7/kdarch.o   \
-             armv7/kdatomic.o \
-             armv7/kdsup.o    \
-             armv6/kdsupc.o   \
+ARMV6_OBJS = $(ARMV7_OBJS)
 
 X86_OBJS = x86/kdarch.o   \
            x86/kdsup.o    \

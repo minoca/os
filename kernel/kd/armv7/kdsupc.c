@@ -51,7 +51,7 @@ Environment:
 // Store the machine architecture.
 //
 
-ULONG KdMachineType = MACHINE_TYPE_ARMV7;
+ULONG KdMachineType = MACHINE_TYPE_ARM;
 
 //
 // ------------------------------------------------------------------ Functions

@@ -446,8 +446,7 @@ Return Value:
         LocalRegisters.X86.Esp = BasePointer;
         break;
 
-    case MACHINE_TYPE_ARMV7:
-    case MACHINE_TYPE_ARMV6:
+    case MACHINE_TYPE_ARM:
         Status = DbgReadMemory(Context,
                                TRUE,
                                StackPointer + 32,

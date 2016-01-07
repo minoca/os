@@ -52,7 +52,7 @@ X86_OBJS = x86/dbgarch.o
 
 ARMV7_OBJS = armv7/dbgarch.o
 
-ARMV6_OBJS = armv6/dbgarch.o
+ARMV6_OBJS = $(ARMV7_OBJS)
 
 EXTRA_SRC_DIRS = x86 armv7 armv6
 

@@ -1595,8 +1595,7 @@ Return Value:
         Registers->X86.Ebp = BasePointer;
         break;
 
-    case MACHINE_TYPE_ARMV7:
-    case MACHINE_TYPE_ARMV6:
+    case MACHINE_TYPE_ARM:
 
         //
         // Stop if the base pointer is zero.
@@ -1861,8 +1860,7 @@ Return Value:
 
     switch (Context->MachineType) {
     case MACHINE_TYPE_X86:
-    case MACHINE_TYPE_ARMV7:
-    case MACHINE_TYPE_ARMV6:
+    case MACHINE_TYPE_ARM:
         PointerSize = sizeof(ULONG);
         break;
 
@@ -1921,8 +1919,7 @@ Return Value:
         FrameValue = Registers->X86.Ebp;
         break;
 
-    case MACHINE_TYPE_ARMV7:
-    case MACHINE_TYPE_ARMV6:
+    case MACHINE_TYPE_ARM:
         StackValue = Registers->Arm.R13Sp;
         if ((Registers->Arm.Cpsr & PSR_FLAG_THUMB) != 0) {
             FrameValue = Registers->Arm.R7;
@@ -1992,8 +1989,7 @@ Return Value:
         Value = Registers->X86.Eip;
         break;
 
-    case MACHINE_TYPE_ARMV7:
-    case MACHINE_TYPE_ARMV6:
+    case MACHINE_TYPE_ARM:
         Value = Registers->Arm.R15Pc;
         break;
 
@@ -2048,8 +2044,7 @@ Return Value:
         Registers->X86.Eip = Value;
         break;
 
-    case MACHINE_TYPE_ARMV7:
-    case MACHINE_TYPE_ARMV6:
+    case MACHINE_TYPE_ARM:
         Registers->Arm.R15Pc = Value;
         break;
 

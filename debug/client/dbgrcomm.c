@@ -391,12 +391,8 @@ Return Value:
         Architecture = "x86";
         break;
 
-    case MACHINE_TYPE_ARMV7:
-        Architecture = "ARMv7";
-        break;
-
-    case MACHINE_TYPE_ARMV6:
-        Architecture = "ARMv6";
+    case MACHINE_TYPE_ARM:
+        Architecture = "ARM";
         break;
 
     default:
@@ -725,8 +721,7 @@ Return Value:
         // Get ARM registers.
         //
 
-        case MACHINE_TYPE_ARMV7:
-        case MACHINE_TYPE_ARMV6:
+        case MACHINE_TYPE_ARM:
             if (strcasecmp(RegisterString, "r0") == 0) {
                 Register = &(ArmRegisters->R0);
 
@@ -968,8 +963,7 @@ Return Value:
         // Dump ARM registers.
         //
 
-        case MACHINE_TYPE_ARMV7:
-        case MACHINE_TYPE_ARMV6:
+        case MACHINE_TYPE_ARM:
             DbgOut("r0=%08x r1=%08x r2=%08x r3=%08x r4=%08x r5=%08x\n"
                    "r6=%08x r7=%08x r8=%08x r9=%08x r10=%08x fp=%08x\n"
                    "ip=%08x sp=%08x lr=%08x pc=%08x cpsr=%08x\n",
@@ -1205,8 +1199,7 @@ Return Value:
 
             break;
 
-        case MACHINE_TYPE_ARMV7:
-        case MACHINE_TYPE_ARMV6:
+        case MACHINE_TYPE_ARM:
             RegisterSize = 4;
             if (strcasecmp(RegisterString, "sctlr") == 0) {
                 Register = &(Original->Arm.Sctlr);
@@ -1377,8 +1370,7 @@ Return Value:
 
             break;
 
-        case MACHINE_TYPE_ARMV7:
-        case MACHINE_TYPE_ARMV6:
+        case MACHINE_TYPE_ARM:
             DbgOut("Not shown: ats1cpr, ats1cpw, ats1cur, ats1cuw\n"
                    "sctlr=%08x actlr=%08x ttbr0=%08I64x ttbr1=%08I64x\n"
                    " dfsr=%08x  dfar=%08I64x  ifsr=%08x  ifar=%08I64x\n"
@@ -1509,8 +1501,7 @@ Return Value:
             LocalRegisters.X86.Ebp = BasePointer;
             break;
 
-        case MACHINE_TYPE_ARMV7:
-        case MACHINE_TYPE_ARMV6:
+        case MACHINE_TYPE_ARM:
             LocalRegisters.Arm.R15Pc = InstructionPointer;
             LocalRegisters.Arm.R13Sp = StackPointer;
             if ((LocalRegisters.Arm.Cpsr & PSR_FLAG_THUMB) != 0) {
@@ -1676,9 +1667,7 @@ Return Value:
     //
 
     ActualAddress = Context->DisassemblyAddress;
-    if ((Context->MachineType == MACHINE_TYPE_ARMV6) ||
-        (Context->MachineType == MACHINE_TYPE_ARMV7)) {
-
+    if (Context->MachineType == MACHINE_TYPE_ARM) {
         ActualAddress &= ~ARM_THUMB_BIT;
     }
 
@@ -4105,9 +4094,7 @@ Return Value:
     // it's not "mov ip, sp", then this is a leaf function.
     //
 
-    if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-        (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
+    if (Context->MachineType == MACHINE_TYPE_ARM) {
         FirstInstructionAddress =
                       DbgpGetFunctionStartAddress(Context, InstructionPointer);
 
@@ -6129,9 +6116,7 @@ Return Value:
         BreakInstruction = X86_BREAK_INSTRUCTION;
         Size = X86_BREAK_INSTRUCTION_LENGTH;
 
-    } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-               (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
+    } else if (Context->MachineType == MACHINE_TYPE_ARM) {
         if ((Address & ARM_THUMB_BIT) != 0) {
             BreakInstruction = THUMB_BREAK_INSTRUCTION;
             Size = THUMB_BREAK_INSTRUCTION_LENGTH;
@@ -6239,9 +6224,7 @@ Return Value:
         BreakInstruction = X86_BREAK_INSTRUCTION;
         Size = X86_BREAK_INSTRUCTION_LENGTH;
 
-    } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-               (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
+    } else if (Context->MachineType == MACHINE_TYPE_ARM) {
         if ((Address & ARM_THUMB_BIT) != 0) {
             BreakInstruction = THUMB_BREAK_INSTRUCTION;
             Size = THUMB_BREAK_INSTRUCTION_LENGTH;
@@ -6384,9 +6367,7 @@ Return Value:
         if (Context->MachineType == MACHINE_TYPE_X86) {
             Size = X86_BREAK_INSTRUCTION_LENGTH;
 
-        } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-                   (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
+        } else if (Context->MachineType == MACHINE_TYPE_ARM) {
             if ((Breakpoint->Address & ARM_THUMB_BIT) != 0) {
                 Size = THUMB_BREAK_INSTRUCTION_LENGTH;
 
@@ -6458,9 +6439,7 @@ Return Value:
         if (Context->MachineType == MACHINE_TYPE_X86) {
             Size = X86_BREAK_INSTRUCTION_LENGTH;
 
-        } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-                   (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
+        } else if (Context->MachineType == MACHINE_TYPE_ARM) {
             if ((Context->OneTimeBreakAddress & ARM_THUMB_BIT) != 0) {
                 Size = THUMB_BREAK_INSTRUCTION_LENGTH;
 
@@ -6570,9 +6549,7 @@ Return Value:
 
         BreakNotification->InstructionStream[0] = (UCHAR)OriginalValue;
 
-    } else if ((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-               (Context->MachineType == MACHINE_TYPE_ARMV6)) {
-
+    } else if (Context->MachineType == MACHINE_TYPE_ARM) {
         Size = ARM_BREAK_INSTRUCTION_LENGTH;
         if ((BreakNotification->Registers.Arm.Cpsr & PSR_FLAG_THUMB) != 0) {
             Size = THUMB_BREAK_INSTRUCTION_LENGTH;
@@ -7248,8 +7225,7 @@ Return Value:
         Language = MachineLanguageX86;
         break;
 
-    case MACHINE_TYPE_ARMV7:
-    case MACHINE_TYPE_ARMV6:
+    case MACHINE_TYPE_ARM:
         Language = MachineLanguageArm;
         if ((InstructionPointer & ARM_THUMB_BIT) != 0) {
             Language = MachineLanguageThumb2;
@@ -7918,8 +7894,7 @@ Return Value:
         ImageMachineType = ImageMachineTypeX86;
         break;
 
-    case MACHINE_TYPE_ARMV7:
-    case MACHINE_TYPE_ARMV6:
+    case MACHINE_TYPE_ARM:
         ImageMachineType = ImageMachineTypeArm32;
         break;
 

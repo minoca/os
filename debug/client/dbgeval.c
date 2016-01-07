@@ -867,8 +867,7 @@ Return Value:
         // Get ARM regisers.
         //
 
-        case MACHINE_TYPE_ARMV7:
-        case MACHINE_TYPE_ARMV6:
+        case MACHINE_TYPE_ARM:
             if (strcasecmp(CurrentPosition, "r0") == 0) {
                 *Value = ArmRegisters->R0;
 
@@ -1111,8 +1110,7 @@ Return Value:
                 // correctly on Thumb.
                 //
 
-                if (((Context->MachineType == MACHINE_TYPE_ARMV7) ||
-                     (Context->MachineType == MACHINE_TYPE_ARMV6)) &&
+                if ((Context->MachineType == MACHINE_TYPE_ARM) &&
                     ((Context->FrameRegisters.Arm.Cpsr &
                       PSR_FLAG_THUMB) != 0)) {
 

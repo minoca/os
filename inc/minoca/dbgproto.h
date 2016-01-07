@@ -43,8 +43,7 @@ Author:
 //
 
 #define MACHINE_TYPE_X86 0x1
-#define MACHINE_TYPE_ARMV7 0x2
-#define MACHINE_TYPE_ARMV6 0x3
+#define MACHINE_TYPE_ARM 0x2
 
 //
 // Define the maximum size of a debug packet, including the header.

@@ -619,8 +619,7 @@ Return Value:
         // r0-r15, the register number is an offset from the register base, r0.
         //
 
-        case MACHINE_TYPE_ARMV7:
-        case MACHINE_TYPE_ARMV6:
+        case MACHINE_TYPE_ARM:
             if (DataStreamSize >= 4) {
                 *(PULONG)DataStream = Value;
                 DataStream += 4;
@@ -1045,8 +1044,7 @@ Return Value:
 
         break;
 
-    case MACHINE_TYPE_ARMV7:
-    case MACHINE_TYPE_ARMV6:
+    case MACHINE_TYPE_ARM:
         if ((RegisterNumber >= ArmRegisterR0) &&
             (RegisterNumber <= ArmRegisterR15)) {
 
@@ -1213,8 +1211,7 @@ Return Value:
 
         break;
 
-    case MACHINE_TYPE_ARMV7:
-    case MACHINE_TYPE_ARMV6:
+    case MACHINE_TYPE_ARM:
         if ((RegisterNumber >= ArmRegisterR0) &&
             (RegisterNumber <= ArmRegisterR15)) {
 
