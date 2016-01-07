@@ -2685,8 +2685,12 @@ Return Value:
                                       sizeof(CHAR));
 
         ModuleEntry->Timestamp = CurrentModule->Timestamp;
-        ModuleEntry->BaseAddress = (ULONG)CurrentModule->BaseAddress;
-        ModuleEntry->LowestAddress = (ULONG)CurrentModule->LowestAddress;
+        ModuleEntry->BaseAddress = (UINTN)CurrentModule->BaseAddress;
+        if (ModuleEntry->BaseAddress == (UINTN)-1ULL) {
+            ModuleEntry->BaseAddress = -1ULL;
+        }
+
+        ModuleEntry->LowestAddress = (UINTN)CurrentModule->LowestAddress;
         ModuleEntry->Size = CurrentModule->Size;
         ModuleEntry->Process = CurrentModule->Process;
         KdTxPacket.Header.PayloadSize = ModuleEntry->StructureSize;

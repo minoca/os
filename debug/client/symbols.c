@@ -471,7 +471,13 @@ Return Value:
 
     switch (Type->Type) {
     case DataTypeStructure:
-        DbgOut("struct %s", Type->Name);
+        if (Type->Name == NULL) {
+            DbgOut("struct (anon)");
+
+        } else {
+            DbgOut("struct %s", Type->Name);
+        }
+
         break;
 
     case DataTypeEnumeration:

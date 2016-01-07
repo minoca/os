@@ -153,6 +153,7 @@ Return Value:
 
 {
 
+    PSTR FunctionName;
     PSOURCE_LINE_SYMBOL Line;
     LONG LineNumber;
     PDEBUGGER_MODULE Module;
@@ -216,8 +217,12 @@ Return Value:
             //
 
             SymbolSize = RtlStringLength(Module->ModuleName) +
-                         RtlStringLength(SearchResult.U.FunctionResult->Name) +
                          (sizeof(CHAR) * 2);
+
+            FunctionName = SearchResult.U.FunctionResult->Name;
+            if (FunctionName != NULL) {
+                SymbolSize += RtlStringLength(FunctionName);
+            }
 
             //
             // If there's a line number, also include space for a space,

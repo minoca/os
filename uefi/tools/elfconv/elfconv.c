@@ -93,6 +93,23 @@ struct option ElfconvLongOptions[] = {
     {NULL, 0, 0, 0},
 };
 
+CHAR8 *ElfconvDebugSections[] = {
+    ".stab",
+    ".stabstr",
+    ".debug_aranges",
+    ".debug_info",
+    ".debug_abbrev",
+    ".debug_frame",
+    ".debug_line",
+    ".debug_str",
+    ".debug_loc",
+    ".debug_ranges",
+    ".debug_macinfo",
+    ".debug_pubtypes",
+    ".eh_frame",
+    NULL
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -391,6 +408,10 @@ mainEnd:
         free(Context.CoffFile);
     }
 
+    if (Context.StringTable != NULL) {
+        free(Context.StringTable);
+    }
+
     if ((Context.Flags & ELFCONV_OPTION_VERBOSE) != 0) {
         printf("ElfConv %s returning %d: %s.\n",
                Context.InputName,
@@ -550,11 +571,48 @@ Return Value:
 {
 
     EFI_IMAGE_SECTION_HEADER *Header;
+    UINT32 Length;
+    UINT32 NewSize;
+    CHAR8 *NewTable;
 
     Header =
         (EFI_IMAGE_SECTION_HEADER *)(Context->CoffFile + Context->TableOffset);
 
-    strncpy((INT8 *)(Header->Name), Name, EFI_IMAGE_SIZEOF_SHORT_NAME);
+    Length = strlen(Name) + 1;
+    if (Length > EFI_IMAGE_SIZEOF_SHORT_NAME) {
+
+        //
+        // Create a string table entry for it. The first 4 bytes of the string
+        // table are its size.
+        //
+
+        NewSize = Context->StringTableSize + Length;
+        if (Context->StringTableSize == 0) {
+            NewSize += sizeof(UINT32);
+            Context->StringTableSize = sizeof(UINT32);
+        }
+
+        NewTable = realloc(Context->StringTable, NewSize);
+        if (NewTable == NULL) {
+
+            assert(FALSE);
+
+            return;
+        }
+
+        memcpy(NewTable + Context->StringTableSize, Name, Length);
+        Context->StringTable = NewTable;
+        snprintf((INT8 *)(Header->Name),
+                 EFI_IMAGE_SIZEOF_SHORT_NAME,
+                 "/%d",
+                 Context->StringTableSize);
+
+        Context->StringTableSize += Length;
+
+    } else {
+        strncpy((INT8 *)(Header->Name), Name, EFI_IMAGE_SIZEOF_SHORT_NAME);
+    }
+
     Header->Misc.VirtualSize = Size;
     Header->VirtualAddress = Offset;
     Header->SizeOfRawData = Size;

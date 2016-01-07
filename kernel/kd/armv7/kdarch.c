@@ -247,7 +247,6 @@ Return Value:
 
             if (SingleStepAddress == BreakingAddress) {
                 TrapFrame->Pc -= Length;
-                ArBackUpIfThenState(TrapFrame);
             }
 
             *PreviousSingleStepAddress = KdSingleStepAddress;
@@ -340,10 +339,12 @@ Return Value:
 
         if (KdPrintNextPcPredictions != FALSE) {
             if (FunctionReturning != FALSE) {
-                KdpInternalPrint("Next: 0x%08x, TRUE\n", NextPc);
+                KdpInternalPrint("Next: 0x%08x %x, TRUE\n",
+                                 NextPc,
+                                 TrapFrame->Cpsr);
 
             } else {
-                KdpInternalPrint("Next: 0x%08x\n", NextPc);
+                KdpInternalPrint("Next: 0x%08x %x\n", NextPc, TrapFrame->Cpsr);
             }
         }
 

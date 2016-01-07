@@ -87,7 +87,7 @@ Environment:
 // Define the number of sections assumed in the PE image.
 //
 
-#define ELFCONV_PE_SECTION_COUNT 7
+#define ELFCONV_PE_SECTION_COUNT 16
 
 //
 // Define the alignment used throughout the COFF file.
@@ -180,7 +180,7 @@ ElfconvIsHiiRsrcSection (
     );
 
 BOOLEAN
-ElfconvIsStabSection (
+ElfconvIsDebugSection (
     Elf32_Ehdr *ElfHeader,
     Elf32_Shdr *SectionHeader
     );
@@ -1593,8 +1593,7 @@ ElfconvWriteDebug32 (
 
 Routine Description:
 
-    This routine writes out the debug sections (currently the .stab and
-    .stabstr sections).
+    This routine writes out the debug sections.
 
 Arguments:
 
@@ -1614,6 +1613,7 @@ Return Value:
     Elf32_Shdr *ElfSection;
     UINT32 Flags;
     VOID *NewBuffer;
+    EFI_IMAGE_OPTIONAL_HEADER_UNION *NtHeader;
     UINT32 SectionCount;
     UINTN SectionIndex;
     CHAR8 *SectionName;
@@ -1626,7 +1626,7 @@ Return Value:
            (ElfHeader->e_machine == EM_ARM));
 
     //
-    // Find and wrangle data sections.
+    // Find and wrangle debug sections.
     //
 
     Context->DataOffset = Context->CoffOffset;
@@ -1636,7 +1636,7 @@ Return Value:
          SectionIndex += 1) {
 
         ElfSection = ELFCONV_ELF_SECTION(ElfHeader, SectionIndex);
-        if (ElfconvIsStabSection(ElfHeader, ElfSection) == FALSE) {
+        if (ElfconvIsDebugSection(ElfHeader, ElfSection) == FALSE) {
             continue;
         }
 
@@ -1672,10 +1672,38 @@ Return Value:
         SectionCount += 1;
     }
 
-    if ((SectionCount != 0) && (SectionCount != 2)) {
-        fprintf(stderr,
-                "Warning: Found %d stabs sections, expected none or two.\n",
-                SectionCount);
+    //
+    // Also write out the string table at this point.
+    //
+
+    if (Context->StringTable != NULL) {
+        NewBuffer = realloc(Context->CoffFile,
+                            Context->CoffOffset + Context->StringTableSize);
+
+        if (NewBuffer == NULL) {
+            return FALSE;
+        }
+
+        Context->CoffFile = NewBuffer;
+
+        //
+        // Set the final size in the string table, then copy the string table
+        // to the image.
+        //
+
+        memcpy(Context->StringTable,
+               &(Context->StringTableSize),
+               sizeof(UINT32));
+
+        memcpy(Context->CoffFile + Context->CoffOffset,
+               Context->StringTable,
+               Context->StringTableSize);
+
+        NtHeader = (EFI_IMAGE_OPTIONAL_HEADER_UNION *)(Context->CoffFile +
+                                                       Context->NtHeaderOffset);
+
+        NtHeader->Pe32.FileHeader.PointerToSymbolTable = Context->CoffOffset;
+        Context->CoffOffset += Context->StringTableSize;
     }
 
     return TRUE;
@@ -1876,7 +1904,7 @@ Return Value:
 }
 
 BOOLEAN
-ElfconvIsStabSection (
+ElfconvIsDebugSection (
     Elf32_Ehdr *ElfHeader,
     Elf32_Shdr *SectionHeader
     )
@@ -1904,6 +1932,7 @@ Return Value:
 
 {
 
+    CHAR8 **DebugSection;
     CHAR8 *SectionName;
     Elf32_Shdr *StringSection;
 
@@ -1911,10 +1940,13 @@ Return Value:
     SectionName = (CHAR8 *)ElfHeader + StringSection->sh_offset +
                   SectionHeader->sh_name;
 
-    if ((strcmp(SectionName, ELFCONV_STAB_SECTION_NAME) == 0) ||
-        (strcmp(SectionName, ELFCONV_STAB_STRINGS_SECTION_NAME) == 0)) {
+    DebugSection = ElfconvDebugSections;
+    while (*DebugSection != NULL) {
+        if (strcmp(SectionName, *DebugSection) == 0) {
+            return TRUE;
+        }
 
-        return TRUE;
+        DebugSection += 1;
     }
 
     return FALSE;

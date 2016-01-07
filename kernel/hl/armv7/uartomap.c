@@ -218,7 +218,8 @@ BAUD_RATE HlpOmapAvailableRates[] = {
 PVOID HlOmapUartBase = NULL;
 
 //
-// Store the physical address of the UART. For OMAP4 set this to 0x48020000.
+// Store the physical address of the UART. For OMAP4 set this to 0x48020000,
+// and for the Beaglebone Black it's 0x44E09000.
 //
 
 PHYSICAL_ADDRESS HlOmapUartPhysicalAddress;

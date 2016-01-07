@@ -809,6 +809,8 @@ Return Value:
         }
 
         Comma = ",";
+        Data += Size;
+        DataSize -= Size;
         CurrentLocation = CurrentLocation->NextPiece;
     }
 

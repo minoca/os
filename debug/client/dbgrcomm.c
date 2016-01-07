@@ -8179,11 +8179,12 @@ Return Value:
     NewModule->Loaded = TRUE;
     INSERT_BEFORE(&(NewModule->ListEntry), &(Context->ModuleList.ModulesHead));
     if (NewModule->Symbols != NULL) {
-        if (NewModule->BaseAddress == PREFERRED_IMAGE_BASE) {
+        if (NewModule->BaseAddress == -1ULL) {
             NewModule->BaseAddress = NewModule->Symbols->ImageBase;
         }
 
-        NewModule->BaseDifference = BaseAddress - NewModule->Symbols->ImageBase;
+        NewModule->BaseDifference = NewModule->BaseAddress -
+                                    NewModule->Symbols->ImageBase;
     }
 
     DbgOut("Module loaded 0x%08I64x: %s -> ",

@@ -1,11 +1,10 @@
-OUTPUT_FORMAT("elf32-i386", "elf32-i386",
-	      "elf32-i386")
+OUTPUT_FORMAT("elf32-i386", "elf32-i386", "elf32-i386")
 OUTPUT_ARCH(i386)
 ENTRY(_start)
 SEARCH_DIR("=/usr/local/lib"); SEARCH_DIR("=/lib"); SEARCH_DIR("=/usr/lib");
 SECTIONS
 {
-    PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x280)); . = SEGMENT_START("text-segment", 0x280);
+    PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x400)); . = SEGMENT_START("text-segment", 0x400);
   .rel.dyn        :
     {
       *(.rel.init)
@@ -49,6 +48,12 @@ SECTIONS
       pad the .data section.  */
    . = ALIGN(. != 0 ? 32 / 8 : 1);
   }
+
+  .eh_frame       :
+  {
+      *(.eh_frame)
+  }
+
   .rel.plt        :
     {
       *(.rel.plt)
@@ -66,4 +71,15 @@ SECTIONS
   /* Stabs debugging sections.  */
   .stab          0 : { *(.stab) }
   .stabstr       0 : { *(.stabstr) }
+  /* DWARF debug sections. */
+  .debug_aranges 0 : { *(.debug_aranges) }
+  .debug_info 0 : { *(.debug_info) }
+  .debug_abbrev 0 : { *(.debug_abbrev) }
+  .debug_frame 0 : { *(.debug_frame) }
+  .debug_line 0 : { *(.debug_line) }
+  .debug_str 0 : { *(.debug_str) }
+  .debug_loc 0 : { *(.debug_loc) }
+  .debug_ranges 0 : { *(.debug_ranges) }
+  .debug_macinfo 0 : { *(.debug_macinfo) }
+  .debug_pubtypes 0 : { *(.debug_pubtypes) }
 }

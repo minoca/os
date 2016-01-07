@@ -4,7 +4,7 @@ OUTPUT_ARCH(arm)
 ENTRY(_start)
 SECTIONS
 {
-    PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x280)); . = SEGMENT_START("text-segment", 0x280);
+    PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x400)); . = SEGMENT_START("text-segment", 0x400);
     .rel.dyn        :
     {
         *(.rel.init)
@@ -57,6 +57,7 @@ SECTIONS
         *(.glue_7t) *(.glue_7) *(.vfp11_veneer) *(.v4_bx)
         *(.rodata .rodata.* .gnu.linkonce.r.*)
     }
+
     _edata = .; PROVIDE (edata = .);
     .data           :
     {
@@ -71,6 +72,11 @@ SECTIONS
         *(COMMON)
         . = ALIGN(. != 0 ? 32 / 8 : 1);
         _bss_end__ = . ; __bss_end__ = . ;
+    }
+
+    .eh_frame       :
+    {
+        *(.eh_frame)
     }
 
     .rel.plt        :
@@ -93,4 +99,15 @@ SECTIONS
     /* Stabs debugging sections.  */
     .stab          0 : { *(.stab) }
     .stabstr       0 : { *(.stabstr) }
+    /* DWARF debug sections. */
+    .debug_aranges 0 : { *(.debug_aranges) }
+    .debug_info 0 : { *(.debug_info) }
+    .debug_abbrev 0 : { *(.debug_abbrev) }
+    .debug_frame 0 : { *(.debug_frame) }
+    .debug_line 0 : { *(.debug_line) }
+    .debug_str 0 : { *(.debug_str) }
+    .debug_loc 0 : { *(.debug_loc) }
+    .debug_ranges 0 : { *(.debug_ranges) }
+    .debug_macinfo 0 : { *(.debug_macinfo) }
+    .debug_pubtypes 0 : { *(.debug_pubtypes) }
 }

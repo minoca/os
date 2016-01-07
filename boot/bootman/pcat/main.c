@@ -126,7 +126,7 @@ Return Value:
     BmBootBlock.PartitionOffset = PartitionOffset;
     BmBootBlock.DriveNumber = BootDriveNumber;
     BmBootBlock.ApplicationName = "bootman";
-    BmBootBlock.ApplicationBaseAddress = (PVOID)PREFERRED_IMAGE_BASE;
+    BmBootBlock.ApplicationBaseAddress = (PVOID)-1;
     BmBootBlock.ApplicationLowestAddress = &__executable_start;
     BmBootBlock.ApplicationSize = (UINTN)&_end - (UINTN)&__executable_start;
     BmBootBlock.ApplicationArguments = "";

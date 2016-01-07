@@ -572,8 +572,8 @@ Return Value:
                                           RelocationDirectory->VirtualAddress);
 
     RelocationBaseEnd =
-        (EFI_IMAGE_BASE_RELOCATION *)(UINTN)(RelocationBase +
-                                             RelocationDirectory->Size);
+        (EFI_IMAGE_BASE_RELOCATION *)((UINTN)RelocationBase +
+                                      RelocationDirectory->Size);
 
     //
     // Run the whole relocation block. Re-fix up data that has not been

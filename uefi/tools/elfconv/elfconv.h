@@ -40,13 +40,6 @@ Author:
 #define ELFCONV_HII_SECTION_NAME ".hii"
 
 //
-// Define the names of the stabs sections.
-//
-
-#define ELFCONV_STAB_SECTION_NAME ".stab"
-#define ELFCONV_STAB_STRINGS_SECTION_NAME ".stabstr"
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -102,6 +95,11 @@ Members:
     CoffNextRelocation - Stores a pointer to the next available relocation
         entry.
 
+    StringTable - Stores a pointer to the string table, needed for sections
+        that are larger than 8 characters.
+
+    StringTableSize - Stores the size of the string table in bytes.
+
 --*/
 
 typedef struct _ELFCONV_CONTEXT {
@@ -123,6 +121,8 @@ typedef struct _ELFCONV_CONTEXT {
     UINT32 ImageTimestamp;
     EFI_IMAGE_BASE_RELOCATION *CoffBaseRelocation;
     UINT16 *CoffNextRelocation;
+    CHAR8 *StringTable;
+    UINT32 StringTableSize;
 } ELFCONV_CONTEXT, *PELFCONV_CONTEXT;
 
 typedef
@@ -309,6 +309,8 @@ typedef struct _ELFCONV_FUNCTION_TABLE {
 //
 // -------------------------------------------------------------------- Globals
 //
+
+extern CHAR8 *ElfconvDebugSections[];
 
 //
 // -------------------------------------------------------- Function Prototypes

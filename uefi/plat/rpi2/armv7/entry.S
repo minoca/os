@@ -96,9 +96,10 @@ BssZeroLoop:
     adr     %r0, _start             @ Get the current address for the stack top.
     ldr     %r1, =STACK_SIZE        @ Get the stack size.
     mov     %sp, %r0                @ Set the stack.
-    mov     %fp, #0                 @ Zero the stack base.
-    mov     %r2, %fp                @ Zero out another temporary register.
-    push    {%r2, %fp}              @ Create an empty stack frame for debugging.
+    mov     %r11, #0                @ Zero the ARM frame pointer.
+    mov     %r7, #0                 @ Zero out the Thumb frame pointer.
+    mov     %r2, %r7                @ Zero out another temporary register.
+    push    {%r2, %r7}              @ Create an empty stack frame for debugging.
     blx     EfiRpi2Main
 
 LoopForever:

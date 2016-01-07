@@ -592,7 +592,6 @@ Am3SocEmifDisableLoop:
     ## resume normally.
     ##
 
-    bl      Am3SocRestore
     ldr     %r0, Am3SocAbortAddress
     str     %r0, Am3SocResumeAddress
 

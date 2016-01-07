@@ -1633,6 +1633,13 @@ Return Value:
 
     } else {
         ItState = PSR_GET_IT_STATE(Cpsr);
+
+        //
+        // Assume that the next instruction to execute is the one that the
+        // breakpoint that got in here is sitting on, and advance beyond it.
+        //
+
+        ItState = THUMB_ADVANCE_IT_STATE(ItState);
     }
 
     //

@@ -1106,6 +1106,19 @@ Return Value:
                 *Address = SearchResult.U.FunctionResult->StartAddress +
                            CurrentModule->BaseDifference;
 
+                //
+                // Add in the thumb bit here so things like "g myfunc" work
+                // correctly on Thumb.
+                //
+
+                if (((Context->MachineType == MACHINE_TYPE_ARMV7) ||
+                     (Context->MachineType == MACHINE_TYPE_ARMV6)) &&
+                    ((Context->FrameRegisters.Arm.Cpsr &
+                      PSR_FLAG_THUMB) != 0)) {
+
+                    *Address |= ARM_THUMB_BIT;
+                }
+
                 Result = 0;
                 break;
 

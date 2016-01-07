@@ -31,13 +31,6 @@ Author:
 #define IM_ALLOCATION_TAG 0x67616D49
 
 //
-// Define the constant used to indicate loading an image at its preferred base
-// address.
-//
-
-#define PREFERRED_IMAGE_BASE MAX_ULONG
-
-//
 // Define image load flags.
 //
 

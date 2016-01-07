@@ -101,7 +101,12 @@ FUNCTION KepContextSwap
     ##
 
     mov     %sp, %r1                @ Switch to the new stack.
+
+.if THUMB
+    mov     %r7, #0                 @ Zero out FP so the call stack stops here.
+.else
     mov     %r11, #0                @ Zero out FP so the call stack stops here.
+.endif
 
     ##
     ## Perform any post-stack switch work needed on the old thread.

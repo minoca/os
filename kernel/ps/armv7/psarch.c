@@ -596,7 +596,6 @@ Return Value:
 
         if (Address == BreakingAddress) {
             TrapFrame->Pc -= Length;
-            ArBackUpIfThenState(TrapFrame);
         }
 
         Status = MmCopyToUserMode(Address,
