@@ -661,7 +661,8 @@ Return Value:
     for (Index = 0; Index < SM95_BULK_IN_TRANSFER_COUNT; Index += 1) {
         UsbTransfer = UsbAllocateTransfer(Device->UsbCoreHandle,
                                           Device->BulkInEndpoint,
-                                          SM95_HIGH_SPEED_BURST_SIZE);
+                                          SM95_HIGH_SPEED_BURST_SIZE,
+                                          0);
 
         if (UsbTransfer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -687,7 +688,8 @@ Return Value:
     Device->ControlTransfer = UsbAllocateTransfer(
                                                Device->UsbCoreHandle,
                                                0,
-                                               SM95_MAX_CONTROL_TRANSFER_SIZE);
+                                               SM95_MAX_CONTROL_TRANSFER_SIZE,
+                                               0);
 
     if (Device->ControlTransfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -707,7 +709,8 @@ Return Value:
     Device->InterruptTransfer = UsbAllocateTransfer(
                                              Device->UsbCoreHandle,
                                              Device->InterruptEndpoint,
-                                             SM95_MAX_INTERRUPT_TRANSFER_SIZE);
+                                             SM95_MAX_INTERRUPT_TRANSFER_SIZE,
+                                             0);
 
     if (Device->InterruptTransfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

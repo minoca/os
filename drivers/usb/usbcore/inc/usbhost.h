@@ -347,6 +347,7 @@ KSTATUS
     PVOID HostControllerContext,
     PVOID EndpointContext,
     ULONG MaxBufferSize,
+    ULONG Flags,
     PVOID *TransferContext
     );
 
@@ -370,6 +371,9 @@ Arguments:
         transfer when it is submitted. It is assumed that the host controller
         will set up as many transfer descriptors as are needed to support a
         transfer of this size.
+
+    Flags - Supplies a bitfield of flags regarding the transaction. See
+        USB_TRANSFER_FLAG_* definitions.
 
     TransferContext - Supplies a pointer where the host controller can store a
         context pointer containing any needed structures for the transfer.

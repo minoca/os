@@ -480,6 +480,13 @@ Author:
 #define DWHCI_CHANNEL_TOKEN_TRANSFER_SIZE_SHIFT 0
 
 //
+// Define the maximum allowed transfer size and packet counts.
+//
+
+#define DWHCI_MAX_PACKET_COUNT 0x3FF
+#define DWHCI_MAX_TRANSFER_SIZE 0x7FFFF
+
+//
 // Define the flags for the DWHCI power and clock configuration register.
 //
 

@@ -125,6 +125,7 @@ EhcipCreateTransfer (
     PVOID HostControllerContext,
     PVOID EndpointContext,
     ULONG MaxBufferSize,
+    ULONG Flags,
     PVOID *TransferContext
     );
 
@@ -203,7 +204,7 @@ EhcipFillOutTransferDescriptor (
     PEHCI_TRANSFER EhciTransfer,
     ULONG Offset,
     ULONG Length,
-    BOOL StatusPhase,
+    BOOL LastTransfer,
     PBOOL DataToggle,
     PEHCI_TRANSFER AlternateNextTransfer
     );
@@ -1824,6 +1825,7 @@ EhcipCreateTransfer (
     PVOID HostControllerContext,
     PVOID EndpointContext,
     ULONG MaxBufferSize,
+    ULONG Flags,
     PVOID *TransferContext
     )
 
@@ -1848,6 +1850,9 @@ Arguments:
         will set up as many transfer descriptors as are needed to support a
         transfer of this size.
 
+    Flags - Supplies a bitfield of flags regarding the transaction. See
+        USB_TRANSFER_FLAG_* definitions.
+
     TransferContext - Supplies a pointer where the host controller can store a
         context pointer containing any needed structures for the transfer.
 
@@ -1862,6 +1867,7 @@ Return Value:
     ULONG AllocationSize;
     PEHCI_CONTROLLER Controller;
     PEHCI_ENDPOINT Endpoint;
+    BOOL ForceShortTransfer;
     PEHCI_TRANSFER_DESCRIPTOR HardwareTransfer;
     PHYSICAL_ADDRESS HardwareTransferPhysicalAddress;
     KSTATUS Status;
@@ -1875,6 +1881,10 @@ Return Value:
 
     Controller = (PEHCI_CONTROLLER)HostControllerContext;
     Endpoint = (PEHCI_ENDPOINT)EndpointContext;
+    ForceShortTransfer = FALSE;
+    if ((Flags & USB_TRANSFER_FLAG_FORCE_SHORT_TRANSFER) != 0) {
+        ForceShortTransfer = TRUE;
+    }
 
     //
     // Figure out the number of transfers needed. The first 8 bytes of a
@@ -1904,9 +1914,34 @@ Return Value:
     // across two hardware transfers.
     //
 
-    MaxBufferSize += (EHCI_PAGE_SIZE - 1);
-    TransferCount += MaxBufferSize / EHCI_TRANSFER_MAX_PACKET_SIZE;
-    if ((MaxBufferSize % EHCI_TRANSFER_MAX_PACKET_SIZE) != 0) {
+    if (MaxBufferSize != 0) {
+        MaxBufferSize += (EHCI_PAGE_SIZE - 1);
+        TransferCount += MaxBufferSize / EHCI_TRANSFER_MAX_PACKET_SIZE;
+        if ((MaxBufferSize % EHCI_TRANSFER_MAX_PACKET_SIZE) != 0) {
+            TransferCount += 1;
+        }
+
+        //
+        // If a short transfer needs to be forced and the last packet might not
+        // be a short packet, then add another transfer to account for the
+        // forced zero length packet.
+        //
+
+        if ((ForceShortTransfer != FALSE) &&
+            (MaxBufferSize >= Endpoint->MaxPacketSize)) {
+
+            TransferCount += 1;
+        }
+
+    //
+    // Account for a USB transfer that will only send zero length packets and
+    // for control transfers that need to force a zero length packet in the
+    // data phase.
+    //
+
+    } else if ((ForceShortTransfer != FALSE) ||
+               (Endpoint->TransferType != UsbTransferTypeControl)) {
+
         TransferCount += 1;
     }
 
@@ -1917,7 +1952,7 @@ Return Value:
     //
 
     AllocationSize = sizeof(EHCI_TRANSFER_SET);
-    if (TransferCount != 0) {
+    if (TransferCount > 1) {
         AllocationSize += sizeof(PEHCI_TRANSFER) * (TransferCount - 1);
         AllocationSize += sizeof(EHCI_TRANSFER) * (TransferCount - 1);
     }
@@ -2352,12 +2387,13 @@ Return Value:
     PEHCI_TRANSFER EhciTransfer;
     LIST_ENTRY EndpointList;
     PEHCI_TRANSFER FinalTransfer;
+    BOOL ForceShortTransfer;
+    BOOL LastTransfer;
     ULONG Length;
     ULONG Offset;
     RUNLEVEL OldRunLevel;
     ULONG PageOffset;
     PEHCI_TRANSFER PreviousTransfer;
-    BOOL StatusPhase;
     ULONG TotalLength;
     PUSB_TRANSFER_INTERNAL Transfer;
     PEHCI_TRANSFER *TransferArray;
@@ -2400,7 +2436,7 @@ Return Value:
     // Determine the number of EHCI transfers needed for this USB transfer,
     // and loop filling them out. This is necessary because the number of
     // EHCI transfers per USB transfer is not constant; the system may re-use a
-    // transfer and and change the length.
+    // transfer and change the length.
     //
 
     PageOffset = REMAINDER(Transfer->Public.BufferPhysicalAddress,
@@ -2424,6 +2460,13 @@ Return Value:
         PageOffset = REMAINDER(PageOffset, EHCI_PAGE_SIZE);
     }
 
+    ForceShortTransfer = FALSE;
+    if ((Transfer->Public.Flags &
+         USB_TRANSFER_FLAG_FORCE_SHORT_TRANSFER) != 0) {
+
+        ForceShortTransfer = TRUE;
+    }
+
     //
     // If the USB transfer has data, the number of data transfers depends on
     // the length of the data and the page offset for the start of the data.
@@ -2435,6 +2478,29 @@ Return Value:
         if ((TotalLength % EHCI_TRANSFER_MAX_PACKET_SIZE) != 0) {
             TransferCount += 1;
         }
+
+        //
+        // If a short transfer must be sent and the total length is a multiple,
+        // of the max packet size, then add an extra transfer to make sure a
+        // short transfer is sent.
+        //
+
+        if ((ForceShortTransfer != FALSE) &&
+            ((TotalLength % Endpoint->MaxPacketSize) == 0)) {
+
+            TransferCount += 1;
+        }
+
+    //
+    // Make sure at least one packet is set for zero-length packets. Unless a
+    // short transfer is being forced, exclude control transfers as there is
+    // just no data phase if this is the case.
+    //
+
+    } else if ((ForceShortTransfer != FALSE) ||
+               (Endpoint->TransferType != UsbTransferTypeControl)) {
+
+        TransferCount = 1;
     }
 
     ASSERT(TransferSet->TransferCount >= TransferCount);
@@ -2453,10 +2519,10 @@ Return Value:
 
     DataToggle = FALSE;
     Offset = 0;
+    LastTransfer = FALSE;
     INITIALIZE_LIST_HEAD(&ControllerList);
     INITIALIZE_LIST_HEAD(&EndpointList);
     for (TransferIndex = 0; TransferIndex < TransferCount; TransferIndex += 1) {
-        StatusPhase = FALSE;
 
         //
         // Calculate the length for this transfer descriptor.
@@ -2465,6 +2531,10 @@ Return Value:
         Length = EHCI_TRANSFER_MAX_PACKET_SIZE - PageOffset;
         if ((Offset + Length) > Transfer->Public.Length) {
             Length = Transfer->Public.Length - Offset;
+        }
+
+        if (TransferIndex == (TransferCount - 1)) {
+            LastTransfer = TRUE;
         }
 
         if (ControlTransfer != FALSE) {
@@ -2476,21 +2546,19 @@ Return Value:
 
             if (Offset == 0) {
                 Length = sizeof(USB_SETUP_PACKET);
-
-            //
-            // The last part of a control transfer is the status phase.
-            //
-
-            } else if (TransferIndex == TransferCount - 1) {
-                StatusPhase = TRUE;
-
-                ASSERT(Length == 0);
             }
+
+            //
+            // The last part of a control transfer is the status phase and the
+            // length better be zero.
+            //
+
+            ASSERT((LastTransfer == FALSE) || (Length == 0));
         }
 
         ASSERT((Length != 0) ||
-               ((ControlTransfer != FALSE) &&
-                (TransferIndex == TransferCount - 1)));
+               (LastTransfer != FALSE) ||
+               ((ForceShortTransfer != FALSE) && (ControlTransfer != FALSE)));
 
         //
         // Fill out this transfer descriptor.
@@ -2501,7 +2569,7 @@ Return Value:
                                        EhciTransfer,
                                        Offset,
                                        Length,
-                                       StatusPhase,
+                                       LastTransfer,
                                        &DataToggle,
                                        FinalTransfer);
 
@@ -3391,7 +3459,7 @@ EhcipFillOutTransferDescriptor (
     PEHCI_TRANSFER EhciTransfer,
     ULONG Offset,
     ULONG Length,
-    BOOL StatusPhase,
+    BOOL LastTransfer,
     PBOOL DataToggle,
     PEHCI_TRANSFER AlternateNextTransfer
     )
@@ -3413,9 +3481,10 @@ Arguments:
 
     Length - Supplies the length of the transfer, in bytes.
 
-    StatusPhase - Supplies a boolean indicating if this transfer descriptor
-        represents the status phase of a control transfer. If so, the in/out is
-        reversed and the length had better be zero.
+    LastTransfer - Supplies a boolean indicating if this transfer descriptor
+        represents the last transfer in a set. For control transfers, this is
+        the status phase where the in/out is reversed and the length had better
+        be zero.
 
     DataToggle - Supplies a pointer to a boolean that indicates the current
         data toggle status for the overall transfer. This routine will update
@@ -3500,7 +3569,9 @@ Return Value:
     // as this is always the last transfer.
     //
 
-    } else if (StatusPhase != FALSE) {
+    } else if ((Endpoint->TransferType == UsbTransferTypeControl) &&
+               (LastTransfer != FALSE)) {
+
         Token |= EHCI_TRANSFER_DATA_TOGGLE;
 
         ASSERT((Length == 0) &&
@@ -3555,21 +3626,14 @@ Return Value:
 
     //
     // Don't set the interrupt flag if 1) This is not the last descriptor or
-    // 2) The caller requested not to. For control transfers, the last transfer
-    // is the status phase. For all others, it's the last data transmission.
+    // 2) The caller requested not to.
     //
 
-    if ((Transfer->Public.Flags &
-         USB_TRANSFER_FLAG_NO_INTERRUPT_ON_COMPLETION) == 0) {
+    if ((LastTransfer != FALSE) &&
+        ((Transfer->Public.Flags &
+          USB_TRANSFER_FLAG_NO_INTERRUPT_ON_COMPLETION) == 0)) {
 
-        if (Endpoint->TransferType == UsbTransferTypeControl) {
-            if (StatusPhase != FALSE) {
-                Token |= EHCI_TRANSFER_INTERRUPT_ON_COMPLETE;
-            }
-
-        } else if (Offset + Length == Transfer->Public.Length) {
-            Token |= EHCI_TRANSFER_INTERRUPT_ON_COMPLETE;
-        }
+        Token |= EHCI_TRANSFER_INTERRUPT_ON_COMPLETE;
     }
 
     HardwareTransfer->Token = Token;

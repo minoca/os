@@ -1067,7 +1067,8 @@ Return Value:
                 Header->Type = 0;
                 TotalLength = Fragment->FooterOffset - Fragment->DataOffset;
                 Header->TotalLength = CPU_TO_NETWORK16(TotalLength);
-                Header->Identification = (USHORT)(Socket->SendPacketCount);
+                Header->Identification =
+                                     CPU_TO_NETWORK16(Socket->SendPacketCount);
 
                 ASSERT(IS_ALIGNED(BytesCompleted, IP4_FRAGMENT_ALIGNMENT) != 0);
 
@@ -1148,7 +1149,7 @@ Return Value:
             Header->Type = 0;
             TotalLength = Packet->FooterOffset - Packet->DataOffset;
             Header->TotalLength = CPU_TO_NETWORK16(TotalLength);
-            Header->Identification = (USHORT)(Socket->SendPacketCount);
+            Header->Identification = CPU_TO_NETWORK16(Socket->SendPacketCount);
             Socket->SendPacketCount += 1;
             Header->FragmentOffset = 0;
             Header->TimeToLive = IP4_INITIAL_TIME_TO_LIVE;

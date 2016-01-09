@@ -2310,7 +2310,11 @@ Return Value:
     // Create a USB transfer.
     //
 
-    Transfer = UsbAllocateTransfer(Device->UsbCoreHandle, 0, MaxTransferLength);
+    Transfer = UsbAllocateTransfer(Device->UsbCoreHandle,
+                                   0,
+                                   MaxTransferLength,
+                                   0);
+
     if (Transfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto GetMaxLunEnd;
@@ -2582,7 +2586,8 @@ Return Value:
 
     ControlTransfer = UsbAllocateTransfer(Device->UsbCoreHandle,
                                           0,
-                                          sizeof(USB_SETUP_PACKET));
+                                          sizeof(USB_SETUP_PACKET),
+                                          0);
 
     if (ControlTransfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -2722,7 +2727,8 @@ Return Value:
 
     StatusTransfer = UsbAllocateTransfer(Device->UsbCoreHandle,
                                          Device->InEndpoint,
-                                         sizeof(SCSI_COMMAND_STATUS));
+                                         sizeof(SCSI_COMMAND_STATUS),
+                                         0);
 
     if (StatusTransfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -2752,7 +2758,8 @@ Return Value:
 
     CommandTransfer = UsbAllocateTransfer(Device->UsbCoreHandle,
                                           Device->OutEndpoint,
-                                          sizeof(SCSI_COMMAND_BLOCK));
+                                          sizeof(SCSI_COMMAND_BLOCK),
+                                          0);
 
     if (CommandTransfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -2778,7 +2785,8 @@ Return Value:
 
     Transfers->DataInTransfer = UsbAllocateTransfer(Device->UsbCoreHandle,
                                                     Device->InEndpoint,
-                                                    USB_MASS_MAX_DATA_TRANSFER);
+                                                    USB_MASS_MAX_DATA_TRANSFER,
+                                                    0);
 
     if (Transfers->DataInTransfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -2795,7 +2803,8 @@ Return Value:
 
     DataOutTransfer = UsbAllocateTransfer(Device->UsbCoreHandle,
                                           Device->OutEndpoint,
-                                          USB_MASS_MAX_DATA_TRANSFER);
+                                          USB_MASS_MAX_DATA_TRANSFER,
+                                          0);
 
     if (DataOutTransfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

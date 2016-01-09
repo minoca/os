@@ -95,6 +95,7 @@ KSTATUS
 MusbpCreateTransfer (
     PVOID HostControllerContext,
     PVOID EndpointContext,
+    ULONG Flags,
     ULONG MaxBufferSize,
     PVOID *TransferContext
     );
@@ -1223,6 +1224,7 @@ MusbpCreateTransfer (
     PVOID HostControllerContext,
     PVOID EndpointContext,
     ULONG MaxBufferSize,
+    ULONG Flags,
     PVOID *TransferContext
     )
 
@@ -1247,6 +1249,9 @@ Arguments:
         will set up as many transfer descriptors as are needed to support a
         transfer of this size.
 
+    Flags - Supplies a bitfield of flags regarding the transaction. See
+        USB_TRANSFER_FLAG_* definitions.
+
     TransferContext - Supplies a pointer where the host controller can store a
         context pointer containing any needed structures for the transfer.
 
@@ -1260,6 +1265,7 @@ Return Value:
 
     UINTN AllocationSize;
     PMUSB_CONTROLLER Controller;
+    BOOL ForceShortTransfer;
     ULONG Index;
     PMUSB_SOFT_ENDPOINT SoftEndpoint;
     KSTATUS Status;
@@ -1270,9 +1276,13 @@ Return Value:
     Controller = HostControllerContext;
     SoftEndpoint = EndpointContext;
     TransferCount = 0;
+    ForceShortTransfer = FALSE;
+    if ((Flags & USB_TRANSFER_FLAG_FORCE_SHORT_TRANSFER) != 0) {
+        ForceShortTransfer = TRUE;
+    }
 
     //
-    // Control transfers need at least 3 transfers: the setup packet (which
+    // Control transfers need at least 2 transfers: the setup packet (which
     // burns the first 8 bytes), zero or more data transfers, and a status
     // transfer.
     //
@@ -1285,8 +1295,33 @@ Return Value:
         TransferCount += 2;
     }
 
-    TransferCount += (MaxBufferSize + (SoftEndpoint->MaxPayload - 1)) /
-                     SoftEndpoint->MaxPayload;
+    if (MaxBufferSize != 0) {
+        TransferCount += (MaxBufferSize + (SoftEndpoint->MaxPayload - 1)) /
+                         SoftEndpoint->MaxPayload;
+
+        //
+        // If it's possible for the transfer to send a multiple of the max
+        // payload size and a short transfer needs to be forced, add an another
+        // transfer.
+        //
+
+        if ((ForceShortTransfer != FALSE) &&
+            (MaxBufferSize >= SoftEndpoint->MaxPayload)) {
+
+            TransferCount += 1;
+        }
+
+    //
+    // Account for a USB transfer that will only send zero length packets and
+    // for control transfers that need to force a zero length packet in the
+    // data phase.
+    //
+
+    } else if ((ForceShortTransfer != FALSE) ||
+               (SoftEndpoint->HardwareIndex != 0)) {
+
+        TransferCount += 1;
+    }
 
     AllocationSize = sizeof(MUSB_TRANSFER_SET) +
                      (TransferCount * sizeof(MUSB_TRANSFER));
@@ -1993,7 +2028,9 @@ Return Value:
 
     ULONG BufferOffset;
     ULONG DmaEndpoint;
+    BOOL ForceShortTransfer;
     PMUSB_TRANSFER MusbTransfer;
+    BOOL ShortTransfer;
     ULONG TransferIndex;
     ULONG TransferSize;
     BOOL Transmit;
@@ -2011,15 +2048,27 @@ Return Value:
     TransferSet->SoftEndpoint = SoftEndpoint;
     TransferSet->CurrentIndex = 0;
     DmaEndpoint = CPPI_USB_ENDPOINT_TO_DMA(SoftEndpoint->HardwareIndex);
+    ForceShortTransfer = FALSE;
+    if ((Transfer->Public.Flags &
+         USB_TRANSFER_FLAG_FORCE_SHORT_TRANSFER) != 0) {
+
+        ForceShortTransfer = TRUE;
+    }
 
     //
-    // Go around and fill out the transfers.
+    // Go around and fill out the transfers. Make sure the data transfer end
+    // with a short transfer if required and that zero-length transfers are
+    // allowed.
     //
 
+    ShortTransfer = FALSE;
     TransferIndex = 0;
     BufferOffset = 0;
     MusbTransfer = &(TransferSet->Transfers[0]);
-    while (BufferOffset < Transfer->Public.Length) {
+    while ((BufferOffset < Transfer->Public.Length) ||
+           ((ShortTransfer == FALSE) &&
+            ((Transfer->Public.Length == 0) ||
+             (ForceShortTransfer != FALSE)))) {
 
         //
         // If this is a control transfer on the first packet, it's a setup
@@ -2035,7 +2084,10 @@ Return Value:
 
         } else {
             TransferSize = Transfer->Public.Length - BufferOffset;
-            if (TransferSize > SoftEndpoint->MaxPayload) {
+            if (TransferSize < SoftEndpoint->MaxPayload) {
+                ShortTransfer = TRUE;
+
+            } else {
                 TransferSize = SoftEndpoint->MaxPayload;
             }
 
@@ -2056,10 +2108,18 @@ Return Value:
             }
         }
 
-        MusbTransfer->BufferVirtual = Transfer->Public.Buffer + BufferOffset;
-        MusbTransfer->BufferPhysical =
-                                   Transfer->Public.BufferPhysicalAddress +
-                                   BufferOffset;
+        if (MusbTransfer->Size != 0) {
+            MusbTransfer->BufferVirtual = Transfer->Public.Buffer +
+                                          BufferOffset;
+
+            MusbTransfer->BufferPhysical =
+                                       Transfer->Public.BufferPhysicalAddress +
+                                       BufferOffset;
+
+        } else {
+            MusbTransfer->BufferVirtual = NULL;
+            MusbTransfer->BufferPhysical = 0;
+        }
 
         //
         // Initialize the DMA descriptor if there is one.
@@ -2241,7 +2301,7 @@ Return Value:
     // Only write the low byte of control.
     //
 
-    MUSB_WRITE16(Controller, Register, Control);
+    MUSB_WRITE8(Controller, Register, Control);
     return;
 }
 

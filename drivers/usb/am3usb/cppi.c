@@ -979,6 +979,11 @@ Return Value:
     PacketStatus = CPPI_PACKET_DESCRIPTOR_STATUS_TYPE_USB |
                    CPPI_PACKET_DESCRIPTOR_STATUS_ON_CHIP;
 
+    if (BufferSize == 0) {
+        PacketStatus |= CPPI_PACKET_DESCRIPTOR_STATUS_ZERO_LENGTH;
+        BufferSize = 1;
+    }
+
     if (Transmit != FALSE) {
         Packet->Control = CPPI_PACKET_DESCRIPTOR_CONTROL | BufferSize;
         PacketStatus |= CPPI_GET_TX_COMPLETION_QUEUE(Descriptor->Instance,
@@ -1219,7 +1224,10 @@ Return Value:
     }
 
     if (CompletedSize != NULL) {
-        if (Packet != NULL) {
+        if ((Packet != NULL) &&
+            ((Packet->Status &
+              CPPI_PACKET_DESCRIPTOR_STATUS_ZERO_LENGTH) == 0)) {
+
             *CompletedSize = Packet->Control &
                              CPPI_PACKET_DESCRIPTOR_CONTROL_LENGTH_MASK;
 

@@ -670,7 +670,8 @@ Return Value:
 
         Device->InTransfer = UsbAllocateTransfer(Device->UsbCoreHandle,
                                                  Device->InEndpoint,
-                                                 Device->InMaxTransferSize);
+                                                 Device->InMaxTransferSize,
+                                                 0);
 
         if (Device->InTransfer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1401,7 +1402,8 @@ Return Value:
 
         Transfer = UsbAllocateTransfer(UsbDevice->UsbCoreHandle,
                                        UsbDevice->OutEndpoint,
-                                       UsbDevice->OutMaxTransferSize);
+                                       UsbDevice->OutMaxTransferSize,
+                                       0);
 
         if (Transfer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

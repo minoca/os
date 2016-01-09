@@ -283,7 +283,8 @@ Return Value:
     NewHub->ControlTransfer = UsbAllocateTransfer(
                                             NewHub->DeviceHandle,
                                             0,
-                                            USB_HUB_MAX_CONTROL_TRANSFER_SIZE);
+                                            USB_HUB_MAX_CONTROL_TRANSFER_SIZE,
+                                            0);
 
     if (NewHub->ControlTransfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1609,7 +1610,8 @@ Return Value:
 
         Hub->InterruptTransfer = UsbAllocateTransfer(Hub->DeviceHandle,
                                                      EndpointNumber,
-                                                     TransferLength);
+                                                     TransferLength,
+                                                     0);
 
         if (Hub->InterruptTransfer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

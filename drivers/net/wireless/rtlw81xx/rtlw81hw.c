@@ -1349,7 +1349,8 @@ Return Value:
             Raid = RTLW81_TRANSMIT_IDENTIFICATION_RAID_11BG;
             QueueSelect = RTLW81_TRANSMIT_IDENTIFICATION_QSEL_BE;
             if ((Device->Flags & RTLW81_FLAG_8188E) != 0) {
-                Header->AggBkFlag |= RTLW81_TRANSMIT_AGG_BK_FLAG;
+                Header->AggBkFlag |= RTLW81_TRANSMIT_AGG_BK_FLAG |
+                                     RTLW81_TRANSMIT_CCX_RPT;
 
             } else {
                 Header->Identification |= RTLW81_TRANSMIT_IDENTIFICATION_AGG_BK;
@@ -3235,11 +3236,9 @@ Return Value:
     // Disable EFUSE access.
     //
 
-    if ((Device->Flags & RTLW81_FLAG_8188E) != 0) {
-        RTLW81_WRITE_REGISTER8(Device,
-                               Rtlw81RegisterEfuseAccess,
-                               RTLW81_EFUSE_ACCESS_OFF);
-    }
+    RTLW81_WRITE_REGISTER8(Device,
+                           Rtlw81RegisterEfuseAccess,
+                           RTLW81_EFUSE_ACCESS_OFF);
 
     //
     // Cache any values based on the device type as the ROMs are formatted a
@@ -5527,6 +5526,7 @@ Return Value:
 
     UCHAR Endpoint;
     UCHAR EndpointIndex;
+    ULONG Flags;
     PLIST_ENTRY FreeList;
     PRTLW81_BULK_OUT_TRANSFER Rtlw81Transfer;
     PUSB_TRANSFER UsbTransfer;
@@ -5553,9 +5553,11 @@ Return Value:
                 goto AllocateBulkOutTransferEnd;
             }
 
+            Flags = USB_TRANSFER_FLAG_FORCE_SHORT_TRANSFER;
             UsbTransfer = UsbAllocateTransfer(Device->UsbCoreHandle,
                                               Endpoint,
-                                              RTLW81_MAX_PACKET_SIZE);
+                                              RTLW81_MAX_PACKET_SIZE,
+                                              Flags);
 
             if (UsbTransfer == NULL) {
                 MmFreePagedPool(Rtlw81Transfer);

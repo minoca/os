@@ -246,6 +246,7 @@ DwhcipCreateTransfer (
     PVOID HostControllerContext,
     PVOID EndpointContext,
     ULONG MaxBufferSize,
+    ULONG Flags,
     PVOID *TransferContext
     );
 
@@ -357,7 +358,7 @@ DwhcipFillOutTransferDescriptor (
     PDWHCI_TRANSFER DwhciTransfer,
     ULONG Offset,
     ULONG Length,
-    BOOL StatusPhase
+    BOOL LastTransfer
     );
 
 VOID
@@ -1234,6 +1235,9 @@ Return Value:
     NewEndpoint->MaxTransferSize = NewEndpoint->MaxPacketCount *
                                    NewEndpoint->MaxPacketSize;
 
+    ASSERT(NewEndpoint->MaxPacketCount <= DWHCI_MAX_PACKET_COUNT);
+    ASSERT(NewEndpoint->MaxTransferSize <= DWHCI_MAX_TRANSFER_SIZE);
+
     //
     // High-bandwidth multiple count packets are not supported.
     //
@@ -1408,6 +1412,7 @@ DwhcipCreateTransfer (
     PVOID HostControllerContext,
     PVOID EndpointContext,
     ULONG MaxBufferSize,
+    ULONG Flags,
     PVOID *TransferContext
     )
 
@@ -1432,6 +1437,9 @@ Arguments:
         will set up as many transfer descriptors as are needed to support a
         transfer of this size.
 
+    Flags - Supplies a bitfield of flags regarding the transaction. See
+        USB_TRANSFER_FLAG_* definitions.
+
     TransferContext - Supplies a pointer where the host controller can store a
         context pointer containing any needed structures for the transfer.
 
@@ -1446,6 +1454,7 @@ Return Value:
     ULONG AllocationSize;
     PDWHCI_CONTROLLER Controller;
     PDWHCI_ENDPOINT Endpoint;
+    BOOL ForceShortTransfer;
     KSTATUS Status;
     PDWHCI_TRANSFER Transfer;
     PDWHCI_TRANSFER *TransferArray;
@@ -1458,6 +1467,10 @@ Return Value:
     Controller = (PDWHCI_CONTROLLER)HostControllerContext;
     Endpoint = (PDWHCI_ENDPOINT)EndpointContext;
     TransferArray = NULL;
+    ForceShortTransfer = FALSE;
+    if ((Flags & USB_TRANSFER_FLAG_FORCE_SHORT_TRANSFER) != 0) {
+        ForceShortTransfer = TRUE;
+    }
 
     //
     // Figure out the number of transfers needed. The first 8 bytes of a
@@ -1485,17 +1498,44 @@ Return Value:
     // execute one max packet size per transfer.
     //
 
-    if (Endpoint->SplitControl == 0) {
-        TransferCount += MaxBufferSize / Endpoint->MaxTransferSize;
-        if ((MaxBufferSize % Endpoint->MaxTransferSize) != 0) {
+    if (MaxBufferSize != 0) {
+        if (Endpoint->SplitControl == 0) {
+            TransferCount += MaxBufferSize / Endpoint->MaxTransferSize;
+            if ((MaxBufferSize % Endpoint->MaxTransferSize) != 0) {
+                TransferCount += 1;
+            }
+
+        } else {
+            TransferCount += MaxBufferSize / Endpoint->MaxPacketSize;
+            if ((MaxBufferSize % Endpoint->MaxPacketSize) != 0) {
+                TransferCount += 1;
+            }
+        }
+
+        //
+        // If this transfer needs to indicate completion with a short packet,
+        // make sure another transfer is available. This is only necessary if
+        // the last packet might not be a short packet. Unfortunately the
+        // terminating zero length packet cannot be added to the end of a
+        // multi-packet transfer, so it needs its own.
+        //
+
+        if ((ForceShortTransfer != FALSE) &&
+            (MaxBufferSize >= Endpoint->MaxPacketSize)) {
+
             TransferCount += 1;
         }
 
-    } else {
-        TransferCount += MaxBufferSize / Endpoint->MaxPacketSize;
-        if ((MaxBufferSize % Endpoint->MaxPacketSize) != 0) {
-            TransferCount += 1;
-        }
+    //
+    // Account for a USB transfer that will only send zero length packets and
+    // for control transfers that need to force a zero length packet in the
+    // data phase.
+    //
+
+    } else if ((ForceShortTransfer != FALSE) ||
+               (Endpoint->TransferType != UsbTransferTypeControl)) {
+
+        TransferCount += 1;
     }
 
     //
@@ -1503,7 +1543,7 @@ Return Value:
     //
 
     AllocationSize = sizeof(DWHCI_TRANSFER_SET);
-    if (TransferCount != 0) {
+    if (TransferCount > 1) {
         AllocationSize += sizeof(PDWHCI_TRANSFER) * (TransferCount - 1);
     }
 
@@ -1667,14 +1707,15 @@ Return Value:
     PDWHCI_TRANSFER DwhciTransfer;
     PDWHCI_ENDPOINT Endpoint;
     UCHAR EndpointDeviceAddress;
+    BOOL ForceShortTransfer;
     ULONG FrameNumber;
     ULONG FrameOffset;
+    BOOL LastTransfer;
     ULONG Length;
     ULONG MaxTransferSize;
     ULONG NextFrame;
     ULONG Offset;
     RUNLEVEL OldRunLevel;
-    BOOL StatusPhase;
     ULONG TotalLength;
     PDWHCI_TRANSFER *TransferArray;
     ULONG TransferCount;
@@ -1743,6 +1784,13 @@ Return Value:
         TransferCount += 2;
     }
 
+    ForceShortTransfer = FALSE;
+    if ((Transfer->Public.Flags &
+         USB_TRANSFER_FLAG_FORCE_SHORT_TRANSFER) != 0) {
+
+        ForceShortTransfer = TRUE;
+    }
+
     //
     // Determine the number of transfers in this set. Low speed endpoints on
     // high speed controllers requiring split transfers can only execute one
@@ -1766,6 +1814,19 @@ Return Value:
         MaxTransferSize = Endpoint->MaxPacketSize;
     }
 
+    //
+    // Add an extra transfer if it is needed for more data or to force a short
+    // transfer. Make sure this accounts for non-control zero-length requests.
+    //
+
+    if (((ForceShortTransfer != FALSE) &&
+         ((TotalLength % Endpoint->MaxPacketSize) == 0)) ||
+        ((TotalLength == 0) &&
+         (Endpoint->TransferType != UsbTransferTypeControl)) ) {
+
+        TransferCount += 1;
+    }
+
     ASSERT(TransferSet->TransferCount >= TransferCount);
 
     //
@@ -1774,9 +1835,9 @@ Return Value:
     //
 
     Offset = 0;
+    LastTransfer = FALSE;
     INITIALIZE_LIST_HEAD(&(TransferSet->TransferListHead));
     for (TransferIndex = 0; TransferIndex < TransferCount; TransferIndex += 1) {
-        StatusPhase = FALSE;
 
         //
         // Calculate the length for this transfer descriptor.
@@ -1785,6 +1846,10 @@ Return Value:
         Length = MaxTransferSize;
         if (Offset + Length > Transfer->Public.Length) {
             Length = Transfer->Public.Length - Offset;
+        }
+
+        if (TransferIndex == (TransferCount - 1)) {
+            LastTransfer = TRUE;
         }
 
         if (ControlTransfer != FALSE) {
@@ -1796,22 +1861,19 @@ Return Value:
 
             if (Offset == 0) {
                 Length = sizeof(USB_SETUP_PACKET);
-
-            //
-            // The last part of a control transfer is the status phase.
-            //
-
-            } else if (TransferIndex == TransferCount - 1) {
-                StatusPhase = TRUE;
-
-                ASSERT(Length == 0);
-
             }
+
+            //
+            // The last part of a control transfer is the status phase and the
+            // length better be zero.
+            //
+
+            ASSERT((LastTransfer == FALSE) || (Length == 0));
         }
 
         ASSERT((Length != 0) ||
-               ((ControlTransfer != FALSE) &&
-                (TransferIndex == TransferCount - 1)));
+               (LastTransfer != FALSE) ||
+               ((ForceShortTransfer != FALSE) && (ControlTransfer != FALSE)));
 
         //
         // Fill out this transfer descriptor.
@@ -1823,7 +1885,7 @@ Return Value:
                                         DwhciTransfer,
                                         Offset,
                                         Length,
-                                        StatusPhase);
+                                        LastTransfer);
 
         //
         // Advance the buffer position.
@@ -3612,7 +3674,7 @@ DwhcipFillOutTransferDescriptor (
     PDWHCI_TRANSFER DwhciTransfer,
     ULONG Offset,
     ULONG Length,
-    BOOL StatusPhase
+    BOOL LastTransfer
     )
 
 /*++
@@ -3636,9 +3698,10 @@ Arguments:
 
     Length - Supplies the length of the transfer, in bytes.
 
-    StatusPhase - Supplies a boolean indicating if this transfer descriptor
-        represents the status phase of a control transfer. If so, the in/out is
-        reversed and the length had better be zero.
+    LastTransfer - Supplies a boolean indicating if this transfer descriptor
+        represents the last transfer in a set. For control transfers, this is
+        the status phase where the in/out is reversed and the length had better
+        be zero.
 
 Return Value:
 
@@ -3681,10 +3744,10 @@ Return Value:
     // phase is always in the IN direction.
     //
 
-    } else if (StatusPhase != FALSE) {
+    } else if ((Endpoint->TransferType == UsbTransferTypeControl) &&
+               (LastTransfer != FALSE)) {
 
-        ASSERT((Length == 0) &&
-               (Endpoint->TransferType == UsbTransferTypeControl));
+        ASSERT(Length == 0);
 
         PidCode = DWHCI_PID_CODE_DATA_1;
         if (Offset == sizeof(USB_SETUP_PACKET)) {
@@ -3757,8 +3820,7 @@ Return Value:
     DwhciTransfer->CompleteSplitCount = 0;
 
     //
-    // Initialize the token that is to be written to a channel's transfer setup
-    // register when submitting this transfer.
+    // Determine the number of packets in the transfer.
     //
 
     PacketCount = 1;
@@ -3770,6 +3832,11 @@ Return Value:
     }
 
     ASSERT(PacketCount <= Endpoint->MaxPacketCount);
+
+    //
+    // Initialize the token that is to be written to a channel's transfer setup
+    // register when submitting this transfer.
+    //
 
     Token = (PacketCount << DWHCI_CHANNEL_TOKEN_PACKET_COUNT_SHIFT) &
             DWHCI_CHANNEL_TOKEN_PACKET_COUNT_MASK;

@@ -364,7 +364,8 @@ PUSB_TRANSFER
 UsbAllocateTransfer (
     HANDLE UsbDeviceHandle,
     UCHAR EndpointNumber,
-    ULONG MaxTransferSize
+    ULONG MaxTransferSize,
+    ULONG Flags
     )
 
 /*++
@@ -385,6 +386,9 @@ Arguments:
         length will fail. Longer transfer sizes do require more resources as
         they are split into subpackets, so try to be reasonable.
 
+    Flags - Supplies a bitfield of flags regarding the transaction. See
+        USB_TRANSFER_FLAG_* definitions.
+
 Return Value:
 
     Returns a pointer to the new USB transfer on success.
@@ -399,7 +403,8 @@ Return Value:
 
     Transfer = UsbpAllocateTransfer((PUSB_DEVICE)UsbDeviceHandle,
                                     EndpointNumber,
-                                    MaxTransferSize);
+                                    MaxTransferSize,
+                                    Flags);
 
     return Transfer;
 }
@@ -1709,7 +1714,7 @@ Return Value:
     // Create a USB transfer.
     //
 
-    Transfer = UsbpAllocateTransfer(Device, 0, AllocationSize);
+    Transfer = UsbpAllocateTransfer(Device, 0, AllocationSize, 0);
     if (Transfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto SendControlTransferEnd;
@@ -1771,7 +1776,8 @@ PUSB_TRANSFER
 UsbpAllocateTransfer (
     PUSB_DEVICE Device,
     UCHAR EndpointNumber,
-    ULONG MaxTransferSize
+    ULONG MaxTransferSize,
+    ULONG Flags
     )
 
 /*++
@@ -1793,6 +1799,9 @@ Arguments:
         Attempts to submit a transfer with lengths longer than this initialized
         length will fail. Longer transfer sizes do require more resources as
         they are split into subpackets, so try to be reasonable.
+
+    Flags - Supplies a bitfield of flags regarding the transaction. See
+        USB_TRANSFER_FLAG_* definitions.
 
 Return Value:
 
@@ -1862,6 +1871,7 @@ Return Value:
     Transfer->Protected.Type = Endpoint->Type;
     Transfer->MaxTransferSize = MaxTransferSize;
     Transfer->Endpoint = Endpoint;
+    Transfer->Protected.Public.Flags = Flags;
     Transfer->Event = KeCreateEvent(NULL);
     if (Transfer->Event == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1889,6 +1899,7 @@ Return Value:
     Status = CreateTransfer(HostControllerContext,
                             Endpoint->HostControllerContext,
                             MaxTransferSize,
+                            Flags,
                             &(Transfer->HostControllerContext));
 
     if (!KSUCCESS(Status)) {

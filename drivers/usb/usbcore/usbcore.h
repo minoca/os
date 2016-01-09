@@ -578,7 +578,8 @@ PUSB_TRANSFER
 UsbpAllocateTransfer (
     PUSB_DEVICE Device,
     UCHAR EndpointNumber,
-    ULONG MaxTransferSize
+    ULONG MaxTransferSize,
+    ULONG Flags
     );
 
 /*++
@@ -600,6 +601,9 @@ Arguments:
         Attempts to submit a transfer with lengths longer than this initialized
         length will fail. Longer transfer sizes do require more resources as
         they are split into subpackets, so try to be reasonable.
+
+    Flags - Supplies a bitfield of flags regarding the transaction. See
+        USB_TRANSFER_FLAG_* definitions.
 
 Return Value:
 

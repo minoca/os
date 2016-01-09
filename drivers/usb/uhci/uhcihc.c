@@ -113,6 +113,7 @@ UhcipCreateTransfer (
     PVOID HostControllerContext,
     PVOID EndpointContext,
     ULONG MaxBufferSize,
+    ULONG Flags,
     PVOID *TransferContext
     );
 
@@ -199,7 +200,7 @@ UhcipFillOutTransferDescriptor (
     PUSB_TRANSFER_INTERNAL Transfer,
     ULONG Offset,
     ULONG Length,
-    BOOL StatusPhase
+    BOOL LastTransfer
     );
 
 BOOL
@@ -1197,6 +1198,7 @@ UhcipCreateTransfer (
     PVOID HostControllerContext,
     PVOID EndpointContext,
     ULONG MaxBufferSize,
+    ULONG Flags,
     PVOID *TransferContext
     )
 
@@ -1221,6 +1223,9 @@ Arguments:
         will set up as many transfer descriptors as are needed to support a
         transfer of this size.
 
+    Flags - Supplies a bitfield of flags regarding the transaction. See
+        USB_TRANSFER_FLAG_* definitions.
+
     TransferContext - Supplies a pointer where the host controller can store a
         context pointer containing any needed structures for the transfer.
 
@@ -1234,6 +1239,7 @@ Return Value:
 
     PUHCI_CONTROLLER Controller;
     PUHCI_ENDPOINT Endpoint;
+    BOOL ForceShortTransfer;
     PUHCI_TRANSFER_QUEUE Queue;
     PHYSICAL_ADDRESS QueuePhysicalAddress;
     KSTATUS Status;
@@ -1246,6 +1252,10 @@ Return Value:
 
     Controller = (PUHCI_CONTROLLER)HostControllerContext;
     Endpoint = (PUHCI_ENDPOINT)EndpointContext;
+    ForceShortTransfer = FALSE;
+    if ((Flags & USB_TRANSFER_FLAG_FORCE_SHORT_TRANSFER) != 0) {
+        ForceShortTransfer = TRUE;
+    }
 
     //
     // Create a new transfer queue.
@@ -1284,8 +1294,38 @@ Return Value:
         TransferCount += 2;
     }
 
-    TransferCount += MaxBufferSize / Endpoint->MaxPacketSize;
-    if ((MaxBufferSize % Endpoint->MaxPacketSize) != 0) {
+    //
+    // Create enough data transfers, where one transfer can hold up to the max
+    // packet size.
+    //
+
+    if (MaxBufferSize != 0) {
+        TransferCount += MaxBufferSize / Endpoint->MaxPacketSize;
+        if ((MaxBufferSize % Endpoint->MaxPacketSize) != 0) {
+            TransferCount += 1;
+        }
+
+        //
+        // If this transfer needs to indicate completion with a short packet,
+        // make sure another transfer is available. This is only necessary if
+        // the max size for this transfer won't guarantee a short transfer.
+        //
+
+        if (((Flags & USB_TRANSFER_FLAG_FORCE_SHORT_TRANSFER) != 0) &&
+            (MaxBufferSize >= Endpoint->MaxPacketSize)) {
+
+            TransferCount += 1;
+        }
+
+    //
+    // Account for a USB transfer that will only send zero length packets and
+    // for control transfers what need to force a zero length packet in the
+    // data phase.
+    //
+
+    } else if ((ForceShortTransfer != FALSE) ||
+               (Endpoint->TransferType != UsbTransferTypeControl)) {
+
         TransferCount += 1;
     }
 
@@ -1623,13 +1663,14 @@ Return Value:
 
     BOOL ControlTransfer;
     PLIST_ENTRY CurrentEntry;
+    BOOL ForceShortTransfer;
     BOOL InGlobalList;
+    BOOL LastTransfer;
     ULONG Length;
     ULONG Offset;
     RUNLEVEL OldRunLevel;
     PUHCI_TRANSFER PreviousLastTransfer;
     PUHCI_TRANSFER_QUEUE QueueBefore;
-    BOOL StatusPhase;
     ULONG TotalLength;
     PUSB_TRANSFER_INTERNAL Transfer;
     ULONG TransferCount;
@@ -1678,8 +1719,28 @@ Return Value:
         TransferCount += 2;
     }
 
+    ForceShortTransfer = FALSE;
+    if ((Transfer->Public.Flags &
+         USB_TRANSFER_FLAG_FORCE_SHORT_TRANSFER) != 0) {
+
+        ForceShortTransfer = TRUE;
+    }
+
+    //
+    // The required number of transfers for the data can be obtained by
+    // dividing the total length by the maximum packet size. An additional
+    // transfer is necessary for a remaining short transfer or if a short
+    // transfer must be forced in order to complete the whole transaction.
+    // Non-control zero length transfers also need to have at least one
+    // transfer.
+    //
+
     TransferCount += TotalLength / Endpoint->MaxPacketSize;
-    if ((TotalLength % Endpoint->MaxPacketSize) != 0) {
+    if (((TotalLength % Endpoint->MaxPacketSize) != 0) ||
+        ((TotalLength == 0) &&
+         (Endpoint->TransferType != UsbTransferTypeControl)) ||
+        (ForceShortTransfer != FALSE)) {
+
         TransferCount += 1;
     }
 
@@ -1697,8 +1758,8 @@ Return Value:
         OldRunLevel = UhcipAcquireControllerLock(Controller);
     }
 
+    LastTransfer = FALSE;
     for (TransferIndex = 0; TransferIndex < TransferCount; TransferIndex += 1) {
-        StatusPhase = FALSE;
 
         //
         // Calculate the length for this transfer descriptor.
@@ -1707,6 +1768,10 @@ Return Value:
         Length = Endpoint->MaxPacketSize;
         if (Offset + Length > Transfer->Public.Length) {
             Length = Transfer->Public.Length - Offset;
+        }
+
+        if (TransferIndex == (TransferCount - 1)) {
+            LastTransfer = TRUE;
         }
 
         if (ControlTransfer != FALSE) {
@@ -1718,22 +1783,20 @@ Return Value:
 
             if (Offset == 0) {
                 Length = sizeof(USB_SETUP_PACKET);
-
-            //
-            // The last part of a control transfer is the status phase.
-            //
-
-            } else if (TransferIndex == TransferCount - 1) {
-                StatusPhase = TRUE;
-
-                ASSERT(Length == 0);
-
             }
+
+            //
+            // The last part of a control transfer is the status phase and it
+            // must be zero in length.
+            //
+
+            ASSERT((LastTransfer == FALSE) || (Length == 0));
+
         }
 
         ASSERT((Length != 0) ||
-               ((ControlTransfer != FALSE) &&
-                (TransferIndex == TransferCount - 1)));
+               (LastTransfer != FALSE) ||
+               ((ForceShortTransfer != FALSE) && (ControlTransfer != FALSE)));
 
         //
         // Fill out this transfer descriptor.
@@ -1749,7 +1812,7 @@ Return Value:
                                        Transfer,
                                        Offset,
                                        Length,
-                                       StatusPhase);
+                                       LastTransfer);
 
         //
         // Move on to the next descriptor.
@@ -2545,7 +2608,7 @@ UhcipFillOutTransferDescriptor (
     PUSB_TRANSFER_INTERNAL Transfer,
     ULONG Offset,
     ULONG Length,
-    BOOL StatusPhase
+    BOOL LastTransfer
     )
 
 /*++
@@ -2572,9 +2635,10 @@ Arguments:
 
     Length - Supplies the length of the transfer, in bytes.
 
-    StatusPhase - Supplies a boolean indicating if this transfer descriptor
-        represents the status phase of a control transfer. If so, the in/out is
-        reversed and the length had better be zero.
+    LastTransfer - Supplies a boolean indicating if this transfer descriptor
+        represents the last transfer in a set. For control transfers, this is
+        the status phase where the in/out is reversed and the length had better
+        be zero.
 
 Return Value:
 
@@ -2585,7 +2649,7 @@ Return Value:
 {
 
     ULONG Control;
-    PUHCI_TRANSFER LastTransfer;
+    PUHCI_TRANSFER PreviousTransfer;
     BOOL Setup;
     ULONG Token;
 
@@ -2621,7 +2685,9 @@ Return Value:
     // a data toggle of 1.
     //
 
-    } else if (StatusPhase != FALSE) {
+    } else if ((Endpoint->TransferType == UsbTransferTypeControl) &&
+               (LastTransfer != FALSE)) {
+
         Endpoint->DataToggle = TRUE;
 
         ASSERT((Length == 0) &&
@@ -2694,21 +2760,14 @@ Return Value:
 
     //
     // Don't set the interrupt flag if 1) This is not the last descriptor or
-    // 2) The caller requested not to. For control transfers, the last transfer
-    // is the status phase. For all others, it's the last data transmission.
+    // 2) The caller requested not to.
     //
 
-    if ((Transfer->Public.Flags &
-         USB_TRANSFER_FLAG_NO_INTERRUPT_ON_COMPLETION) == 0) {
+    if ((LastTransfer != FALSE) &&
+        ((Transfer->Public.Flags &
+          USB_TRANSFER_FLAG_NO_INTERRUPT_ON_COMPLETION) == 0)) {
 
-        if (Endpoint->TransferType == UsbTransferTypeControl) {
-            if (StatusPhase != FALSE) {
-                Control |= UHCI_TRANSFER_DESCRIPTOR_STATUS_INTERRUPT;
-            }
-
-        } else if (Offset + Length == Transfer->Public.Length) {
-            Control |= UHCI_TRANSFER_DESCRIPTOR_STATUS_INTERRUPT;
-        }
+        Control |= UHCI_TRANSFER_DESCRIPTOR_STATUS_INTERRUPT;
     }
 
     UhciTransfer->HardwareTransfer.Status = Control;
@@ -2779,14 +2838,14 @@ Return Value:
         //
 
         } else {
-            LastTransfer = LIST_VALUE(UhciTransfer->QueueListEntry.Previous,
-                                      UHCI_TRANSFER,
-                                      QueueListEntry);
+            PreviousTransfer = LIST_VALUE(UhciTransfer->QueueListEntry.Previous,
+                                          UHCI_TRANSFER,
+                                          QueueListEntry);
 
-            ASSERT((LastTransfer->HardwareTransfer.LinkPointer &
+            ASSERT((PreviousTransfer->HardwareTransfer.LinkPointer &
                     UHCI_QUEUE_HEAD_LINK_TERMINATE) != 0);
 
-            LastTransfer->HardwareTransfer.LinkPointer =
+            PreviousTransfer->HardwareTransfer.LinkPointer =
                                           (ULONG)UhciTransfer->PhysicalAddress;
         }
     }

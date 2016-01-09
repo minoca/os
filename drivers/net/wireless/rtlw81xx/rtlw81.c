@@ -777,7 +777,8 @@ Return Value:
     for (Index = 0; Index < RTLW81_BULK_IN_TRANSFER_COUNT; Index += 1) {
         UsbTransfer = UsbAllocateTransfer(Device->UsbCoreHandle,
                                           Device->BulkInEndpoint,
-                                          RTLW81_BULK_IN_TRANSFER_SIZE);
+                                          RTLW81_BULK_IN_TRANSFER_SIZE,
+                                          0);
 
         if (UsbTransfer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -803,7 +804,8 @@ Return Value:
     Device->ControlTransfer = UsbAllocateTransfer(
                                              Device->UsbCoreHandle,
                                              0,
-                                             RTLW81_MAX_CONTROL_TRANSFER_SIZE);
+                                             RTLW81_MAX_CONTROL_TRANSFER_SIZE,
+                                             0);
 
     if (Device->ControlTransfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

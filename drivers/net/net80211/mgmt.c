@@ -789,7 +789,7 @@ Return Value:
 
     //
     // There are no matching rates. This should really not happen given that
-    // APs should not response to probes unless the rates and capabilities are
+    // APs should not respond to probes unless the rates and capabilities are
     // agreeable.
     //
 
@@ -1833,7 +1833,9 @@ Return Value:
     //
 
     InformationByte = FrameBody;
-    *((PUSHORT)InformationByte) = Net80211Link->Properties.Capabilities;
+    *((PUSHORT)InformationByte) = Net80211Link->Properties.Capabilities |
+                                  NET80211_CAPABILITY_FLAG_ESS;
+
     InformationByte += NET80211_CAPABILITY_SIZE;
 
     //

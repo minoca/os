@@ -2062,7 +2062,8 @@ Return Value:
 
             UsbTransfer = UsbAllocateTransfer(Device->UsbCoreHandle,
                                               Device->BulkOutEndpoint,
-                                              SM95_MAX_PACKET_SIZE);
+                                              SM95_MAX_PACKET_SIZE,
+                                              0);
 
             if (UsbTransfer == NULL) {
                 MmFreePagedPool(Sm95Transfer);
