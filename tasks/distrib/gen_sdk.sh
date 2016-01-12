@@ -72,10 +72,7 @@ mkdir -p "$WORKING/tools/win32"
 cp -Rv "$SRCROOT/tools/win32/bin" "$WORKING/tools/win32"
 cp -Rv "$SRCROOT/tools/win32/scripts" "$WORKING/tools/win32"
 cp -Rv "$SRCROOT/tools/win32/swiss" "$WORKING/tools/win32"
-cp -Rv "$SRCROOT/tools/win32/iasl-win-20140214" "$WORKING/tools/win32"
 cp -Rv "$SRCROOT/tools/win32/MinGW" "$WORKING/tools/win32"
-
-rm -rf "$WORKING/tools/win32/MinGW/msys/1.0/home"
 
 ##
 ## Copy the headers.

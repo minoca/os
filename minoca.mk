@@ -179,8 +179,8 @@ ifeq ($(REVISION),)
 REVISION := 0
 endif
 
-BUILD_TIME := $(shell systime)
-BUILD_TIME_STRING := "$(shell date "+%a %b %d %Y %H:%M:%S %p")"
+BUILD_TIME := $(shell echo $$((`date "+%s"` - 978307200)))
+BUILD_TIME_STRING := "$(shell date "+%a %b %d %Y %H:%M:%S")"
 BUILD_STRING := "($(USERNAME))"
 
 ##

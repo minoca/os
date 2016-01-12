@@ -33,6 +33,7 @@ Author:
 
 #define ctermid(_Buffer) NULL
 #define strsignal(_Signal) "Unknown"
+#define strftime ClStrftimeC90
 
 #endif
 
@@ -681,6 +682,39 @@ Return Value:
     0 on success.
 
     -1 on error, and the errno variable will contain more information.
+
+--*/
+
+size_t
+ClStrftimeC90 (
+    char *Buffer,
+    size_t BufferSize,
+    const char *Format,
+    const struct tm *Time
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements a C90 strftime, using the underlying system's C89
+    strftime.
+
+Arguments:
+
+    Buffer - Supplies a pointer where the converted string will be returned.
+
+    BufferSize - Supplies the size of the string buffer in bytes.
+
+    Format - Supplies the format string to govern the conversion.
+
+    Time - Supplies a pointer to the calendar time value to use in the
+        substitution.
+
+Return Value:
+
+    Returns the number of characters written to the output buffer, including
+    the null terminator.
 
 --*/
 

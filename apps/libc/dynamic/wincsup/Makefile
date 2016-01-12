@@ -33,6 +33,7 @@ VPATH += $(SRCDIR)/..:
 
 X86_OBJS = regexcmp.o       \
            regexexe.o       \
+           strftime.o       \
 
 include $(SRCROOT)/os/minoca.mk
 

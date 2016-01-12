@@ -70,14 +70,14 @@ mkdir -p $WORKING
 ##
 
 if test "x$ARCH" = "xx86"; then
-    cp -Rv $SRCROOT/tools/qemu-0.13.0-windows $WORKING
+    cp -Rv $SRCROOT/tools/win32/qemu-0.13.0-windows $WORKING
     mv $WORKING/qemu-0.13.0-windows $WORKING/Qemu
     rm -rf "$WORKING/Qemu/bin"
-    rm -rf "$WORKING/Qemu/stderr.txt" "$WORKING/Qemu/stdout.txt"
+    rm -f "$WORKING/Qemu/stderr.txt" "$WORKING/Qemu/stdout.txt"
 
 elif test "x$ARCH" = "xarmv7"; then
     cp -Rv "$SRCROOT/tools/win32/qemu-2.0.0" "$WORKING/Qemu"
-    rm -rf "$WORKING/Qemu/stderr.txt" "$WORKING/Qemu/stdout.txt"
+    rm -f "$WORKING/Qemu/stderr.txt" "$WORKING/Qemu/stdout.txt"
 fi
 
 ##

@@ -30,7 +30,7 @@ BINARYTYPE = build
 
 OBJS = tzcomp.o      \
 
-TZDATA_DIR = $(SRCROOT)/tools/resources/tzdata
+TZDATA_DIR = $(SRCROOT)/os/tzcomp/data
 TZ_FILES = $(TZDATA_DIR)/africa         \
            $(TZDATA_DIR)/antarctica     \
            $(TZDATA_DIR)/asia           \

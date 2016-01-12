@@ -114,15 +114,3 @@ for app in `$SWISSPATH/swiss --list`; do
   fi
 done
 
-##
-## Compile the systime utility, used by OS build.
-##
-
-cd $SRCROOT/tools/resources/systime
-make clean
-make
-cp -v ./systime $BINROOT
-mkdir -p "$SRCROOT/$ARCH$DEBUG/bin"
-cp -v ./systime "$SRCROOT/$ARCH$DEBUG/bin"
-make clean
-

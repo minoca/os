@@ -43,7 +43,7 @@ X86_OBJS = $(COMMON_OBJS)   \
 
 TARGETLIBS = $(OBJROOT)/os/apps/libc/dynamic/wincsup/wincsup.a               \
              $(OBJROOT)/os/lib/termlib/build/termlib.a                       \
-             $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a           				 \
+             $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a                         \
              $(OBJROOT)/os/lib/rtl/base/build/basertl.a                      \
 
 DYNLIBS = -lpsapi -lws2_32
