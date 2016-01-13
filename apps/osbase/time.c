@@ -1,0 +1,1056 @@
+/*++
+
+Copyright (c) 2013 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    time.c
+
+Abstract:
+
+    This module implements OS layer support for timekeeping.
+
+Author:
+
+    Evan Green 28-Jul-2013
+
+Environment:
+
+    User Mode
+
+--*/
+
+//
+// ------------------------------------------------------------------- Includes
+//
+
+#include "osbasep.h"
+
+//
+// ---------------------------------------------------------------- Definitions
+//
+
+#define TIME_ALLOCATION_TAG 0x656D6954 // 'emiT'
+
+//
+// ------------------------------------------------------ Data Type Definitions
+//
+
+//
+// ----------------------------------------------- Internal Function Prototypes
+//
+
+KSTATUS
+OspTimeZoneControl (
+    TIME_ZONE_OPERATION Operation,
+    PVOID DataBuffer,
+    PULONG DataBufferSize,
+    PSTR ZoneName,
+    ULONG ZoneNameSize,
+    PSTR OriginalZoneName,
+    PULONG OriginalZoneNameSize
+    );
+
+KSTATUS
+OspTimerControl (
+    TIMER_OPERATION Operation,
+    LONG TimerNumber,
+    PTIMER_INFORMATION Information
+    );
+
+VOID
+OspGetTimeOffset (
+    PSYSTEM_TIME TimeOffset
+    );
+
+//
+// -------------------------------------------------------------------- Globals
+//
+
+//
+// ------------------------------------------------------------------ Functions
+//
+
+OS_API
+ULONGLONG
+OsGetRecentTimeCounter (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a relatively recent snap of the time counter.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the fairly recent snap of the time counter.
+
+--*/
+
+{
+
+    ULONGLONG TickCount;
+    ULONGLONG TimeCounter;
+    PUSER_SHARED_DATA UserSharedData;
+
+    UserSharedData = OspGetUserSharedData();
+
+    //
+    // Loop reading the two tick count values to ensure the read of the time
+    // counter variable wasn't torn.
+    //
+
+    do {
+        TickCount = UserSharedData->TickCount;
+        TimeCounter = UserSharedData->TimeCounter;
+
+    } while (TickCount != UserSharedData->TickCount2);
+
+    return TimeCounter;
+}
+
+OS_API
+ULONGLONG
+OsQueryTimeCounter (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the current (most up to date) value of the system's
+    time counter.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the time counter value.
+
+--*/
+
+{
+
+    SYSTEM_CALL_QUERY_TIME_COUNTER Parameters;
+
+    OsSystemCall(SystemCallQueryTimeCounter, &Parameters);
+    return Parameters.Value;
+}
+
+OS_API
+ULONGLONG
+OsGetTimeCounterFrequency (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the frequency of the time counter.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the frequency, in Hertz (ticks per second) of the time counter.
+
+--*/
+
+{
+
+    PUSER_SHARED_DATA UserSharedData;
+
+    UserSharedData = OspGetUserSharedData();
+    return UserSharedData->TimeCounterFrequency;
+}
+
+OS_API
+VOID
+OsConvertSystemTimeToTimeCounter (
+    PSYSTEM_TIME SystemTime,
+    PULONGLONG TimeCounter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a system time value into a time counter value.
+
+Arguments:
+
+    SystemTime - Supplies a pointer to the system time convert to a time
+        counter value.
+
+    TimeCounter - Supplies a pointer where the time counter value will be
+        returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONGLONG Frequency;
+    LONGLONG Nanoseconds;
+    ULONGLONG Result;
+    ULONGLONG Seconds;
+    SYSTEM_TIME TimeOffset;
+
+    Frequency = OsGetTimeCounterFrequency();
+    OspGetTimeOffset(&TimeOffset);
+    Seconds = SystemTime->Seconds - TimeOffset.Seconds;
+    Nanoseconds = SystemTime->Nanoseconds - TimeOffset.Nanoseconds;
+    if (Nanoseconds < 0) {
+        Seconds -= 1;
+        Nanoseconds += NANOSECONDS_PER_SECOND;
+    }
+
+    Result = Seconds * Frequency;
+    Result += (((ULONGLONG)Nanoseconds * Frequency) +
+               (NANOSECONDS_PER_SECOND - 1)) /
+              NANOSECONDS_PER_SECOND;
+
+    *TimeCounter = Result;
+    return;
+}
+
+OS_API
+VOID
+OsConvertTimeCounterToSystemTime (
+    ULONGLONG TimeCounter,
+    PSYSTEM_TIME SystemTime
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a time counter value into a system time value.
+
+Arguments:
+
+    TimeCounter - Supplies the time counter value to convert.
+
+    SystemTime - Supplies a pointer where the converted system time will be
+        returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONGLONG Frequency;
+    ULONGLONG Nanoseconds;
+    ULONGLONG Seconds;
+    SYSTEM_TIME TimeOffset;
+
+    Frequency = OsGetTimeCounterFrequency();
+    OspGetTimeOffset(&TimeOffset);
+    Seconds = TimeCounter / Frequency;
+    SystemTime->Seconds = TimeOffset.Seconds + Seconds;
+    TimeCounter -= (Seconds * Frequency);
+    Nanoseconds = ((TimeCounter * NANOSECONDS_PER_SECOND) + (Frequency - 1)) /
+                  Frequency;
+
+    SystemTime->Nanoseconds = TimeOffset.Nanoseconds + Nanoseconds;
+    if (SystemTime->Nanoseconds < 0) {
+        SystemTime->Nanoseconds += NANOSECONDS_PER_SECOND;
+        SystemTime->Seconds -= 1;
+    }
+
+    if (SystemTime->Nanoseconds >= NANOSECONDS_PER_SECOND) {
+        SystemTime->Nanoseconds -= NANOSECONDS_PER_SECOND;
+        SystemTime->Seconds += 1;
+    }
+
+    ASSERT((SystemTime->Nanoseconds >= 0) &&
+           (SystemTime->Nanoseconds < NANOSECONDS_PER_SECOND));
+
+    return;
+}
+
+OS_API
+VOID
+OsGetSystemTime (
+    PSYSTEM_TIME Time
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the current system time.
+
+Arguments:
+
+    Time - Supplies a pointer where the system time will be returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONGLONG TickCount;
+    PUSER_SHARED_DATA UserSharedData;
+
+    UserSharedData = OspGetUserSharedData();
+
+    //
+    // Loop reading the two tick count values to ensure the read of the system
+    // time structure wasn't torn.
+    //
+
+    do {
+        TickCount = UserSharedData->TickCount;
+        *Time = UserSharedData->SystemTime;
+
+    } while (TickCount != UserSharedData->TickCount2);
+
+    return;
+}
+
+OS_API
+VOID
+OsGetHighPrecisionSystemTime (
+    PSYSTEM_TIME Time
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a high precision snap of the current system time.
+
+Arguments:
+
+    Time - Supplies a pointer where the system time will be returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONGLONG Delta;
+    ULONGLONG Frequency;
+    ULONGLONG Seconds;
+    ULONGLONG TimeCounter;
+
+    //
+    // Get the time offset and time counter and calculate the system time from
+    // those two values.
+    //
+
+    Frequency = OsGetTimeCounterFrequency();
+    OspGetTimeOffset(Time);
+    TimeCounter = OsQueryTimeCounter();
+    Seconds = TimeCounter / Frequency;
+    Time->Seconds += Seconds;
+    Delta = TimeCounter - (Seconds * Frequency);
+
+    //
+    // Since the seconds were subtracted off, there could be at most a billion
+    // nanoseconds to add. If the nanoseconds are currently under a billion like
+    // they should be, then this add should never overflow. Unless the time
+    // counter itself is overflowing constantly, the multiply should also be
+    // nowhere near overflowing.
+    //
+
+    ASSERT(Frequency <= (MAX_ULONGLONG / NANOSECONDS_PER_SECOND));
+
+    Time->Nanoseconds += (Delta * NANOSECONDS_PER_SECOND) / Frequency;
+
+    //
+    // Normalize the nanoseconds back into the 0 to 1 billion range.
+    //
+
+    if (Time->Nanoseconds > NANOSECONDS_PER_SECOND) {
+        Time->Nanoseconds -= NANOSECONDS_PER_SECOND;
+        Time->Seconds += 1;
+
+        ASSERT((Time->Nanoseconds > 0) &&
+               (Time->Nanoseconds < NANOSECONDS_PER_SECOND));
+    }
+
+    return;
+}
+
+OS_API
+KSTATUS
+OsSetSystemTime (
+    PSYSTEM_TIME NewTime,
+    ULONGLONG TimeCounter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the current system time.
+
+Arguments:
+
+    NewTime - Supplies a pointer to the new system time to set.
+
+    TimeCounter - Supplies the time counter value corresponding with the
+        moment the system time was meant to be set by the caller.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    SYSTEM_CALL_SET_SYSTEM_TIME Parameters;
+
+    Parameters.SystemTime = *NewTime;
+    Parameters.TimeCounter = TimeCounter;
+    OsSystemCall(SystemCallSetSystemTime, &Parameters);
+    return Parameters.Status;
+}
+
+OS_API
+KSTATUS
+OsGetResourceUsage (
+    RESOURCE_USAGE_REQUEST Request,
+    PROCESS_ID Id,
+    PRESOURCE_USAGE Usage,
+    PULONGLONG Frequency
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns resource usage information for the specified process
+    or thread.
+
+Arguments:
+
+    Request - Supplies the request type, indicating whether to get resource
+        usage for a process, a process' children, or a thread.
+
+    Id - Supplies the process or thread ID. Supply -1 to use the current
+        process or thread.
+
+    Usage - Supplies a pointer where the resource usage is returned on success.
+
+    Frequency - Supplies a pointer that receives the frequency of the
+        processor(s).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    SYSTEM_CALL_GET_RESOURCE_USAGE Parameters;
+
+    Parameters.Request = Request;
+    Parameters.Id = Id;
+    OsSystemCall(SystemCallGetResourceUsage, &Parameters);
+    if (KSUCCESS(Parameters.Status)) {
+        if (Usage != NULL) {
+            RtlCopyMemory(Usage, &(Parameters.Usage), sizeof(RESOURCE_USAGE));
+        }
+
+        if (Frequency != NULL) {
+            *Frequency = Parameters.Frequency;
+        }
+    }
+
+    return Parameters.Status;
+}
+
+OS_API
+KSTATUS
+OsGetTimeZoneData (
+    BOOL AllZones,
+    PSTR ZoneName,
+    PVOID *ZoneData,
+    PULONG ZoneDataSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns time zone data for the given time zone.
+
+Arguments:
+
+    AllZones - Supplies a boolean indicating whether data for all time zones
+        should be returned (TRUE) or just the specified zone (FALSE). If this
+        parameter is TRUE, then the zone name parameter is ignored.
+
+    ZoneName - Supplies an optional pointer to the time zone to get information
+        for. If NULL, information for the current system time zone will be
+        returned.
+
+    ZoneData - Supplies a pointer where a pointer to the data buffer will be
+        returned on success. The caller is responsible for freeing this memory
+        from the heap when done.
+
+    ZoneDataSize - Supplies a pointer where the size of the zone data will be
+        returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PVOID Data;
+    ULONG DataSize;
+    TIME_ZONE_OPERATION Operation;
+    KSTATUS Status;
+    PUSER_SHARED_DATA UserSharedData;
+    ULONG ZoneNameSize;
+
+    Data = NULL;
+    DataSize = 0;
+    Operation = TimeZoneOperationGetZoneData;
+    ZoneNameSize = 0;
+    if (AllZones != FALSE) {
+        Operation = TimeZoneOperationGetAllData;
+
+    //
+    // If the zone is NULL, then the caller wants the current time zone data.
+    // Get the size hint out of the user shared data page to save a system call.
+    //
+
+    } else if (ZoneName == NULL) {
+        Operation = TimeZoneOperationGetCurrentZoneData;
+        UserSharedData = OspGetUserSharedData();
+        DataSize = UserSharedData->CurrentTimeZoneDataSize;
+        Data = OsHeapAllocate(DataSize, TIME_ALLOCATION_TAG);
+        if (Data == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto GetTimeZoneDataEnd;
+        }
+
+    } else {
+        ZoneNameSize = RtlStringLength(ZoneName) + 1;
+    }
+
+    Status = OspTimeZoneControl(Operation,
+                                Data,
+                                &DataSize,
+                                ZoneName,
+                                ZoneNameSize,
+                                NULL,
+                                0);
+
+    if ((!KSUCCESS(Status)) && (Status != STATUS_BUFFER_TOO_SMALL)) {
+        goto GetTimeZoneDataEnd;
+    }
+
+    if (Data != NULL) {
+        goto GetTimeZoneDataEnd;
+    }
+
+    ASSERT(DataSize != 0);
+
+    //
+    // Now that the size is known, allocate a buffer to hold it all, and try
+    // that system call again.
+    //
+
+    Data = OsHeapAllocate(DataSize, TIME_ALLOCATION_TAG);
+    if (Data == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto GetTimeZoneDataEnd;
+    }
+
+    Status = OspTimeZoneControl(Operation,
+                                Data,
+                                &DataSize,
+                                ZoneName,
+                                ZoneNameSize,
+                                NULL,
+                                0);
+
+    if (!KSUCCESS(Status)) {
+        goto GetTimeZoneDataEnd;
+    }
+
+GetTimeZoneDataEnd:
+    if (!KSUCCESS(Status)) {
+        if (Data != NULL) {
+            OsHeapFree(Data);
+            Data = NULL;
+            DataSize = 0;
+        }
+    }
+
+    *ZoneData = Data;
+    *ZoneDataSize = DataSize;
+    return Status;
+}
+
+OS_API
+KSTATUS
+OsSetSystemTimeZone (
+    PSTR Zone,
+    PSTR OriginalZoneName,
+    PULONG OriginalZoneNameSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to set the system time zone.
+
+Arguments:
+
+    Zone - Supplies a pointer to the name of the new zone to set.
+
+    OriginalZoneName - Supplies an optional pointer that if supplied will
+        return the name of the original time zone. If this buffer is supplied
+        but not big enough, the time zone change will not take effect.
+
+    OriginalZoneNameSize - Supplies an optional pointer that on input contains
+        the size of the original zone name buffer. On output, returns the
+        needed size for the original zone name.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG NameLength;
+    KSTATUS Status;
+
+    NameLength = 0;
+    if (Zone != NULL) {
+        NameLength = RtlStringLength(Zone) + 1;
+    }
+
+    Status = OspTimeZoneControl(TimeZoneOperationSetZone,
+                                NULL,
+                                NULL,
+                                Zone,
+                                NameLength,
+                                OriginalZoneName,
+                                OriginalZoneNameSize);
+
+    return Status;
+}
+
+OS_API
+KSTATUS
+OsCreateTimer (
+    ULONG SignalNumber,
+    PUINTN SignalValue,
+    PLONG TimerHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new timer.
+
+Arguments:
+
+    SignalNumber - Supplies the signal number to raise when the timer expires.
+
+    SignalValue - Supplies an optional pointer to the signal value to put in
+        the signal information structure when the signal is raised. If this is
+         NULL, the timer number will be returned as the signal value.
+
+    TimerHandle - Supplies a pointer where the timer handle will be returned on
+        success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    SYSTEM_CALL_TIMER_CONTROL Parameters;
+
+    RtlZeroMemory(&Parameters, sizeof(SYSTEM_CALL_TIMER_CONTROL));
+    Parameters.Operation = TimerOperationCreateTimer;
+    Parameters.SignalNumber = SignalNumber;
+    if (SignalValue != NULL) {
+        Parameters.SignalValue = *SignalValue;
+        Parameters.UseTimerNumber = FALSE;
+
+    } else {
+        Parameters.UseTimerNumber = TRUE;
+    }
+
+    OsSystemCall(SystemCallTimerControl, &Parameters);
+    *TimerHandle = Parameters.TimerNumber;
+    return Parameters.Status;
+}
+
+OS_API
+KSTATUS
+OsDeleteTimer (
+    LONG Timer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine disarms and deletes a timer.
+
+Arguments:
+
+    Timer - Supplies the timer to delete.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    return OspTimerControl(TimerOperationDeleteTimer, Timer, NULL);
+}
+
+OS_API
+KSTATUS
+OsGetTimerInformation (
+    LONG Timer,
+    PTIMER_INFORMATION Information
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the given timer's information.
+
+Arguments:
+
+    Timer - Supplies the timer to query.
+
+    Information - Supplies a pointer where the timer information will be
+        returned.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    //
+    // Be helpful in debugging, but don't tolerate incompetence for new APIs.
+    //
+
+    ASSERT(Information != NULL);
+
+    return OspTimerControl(TimerOperationGetTimer, Timer, Information);
+}
+
+OS_API
+KSTATUS
+OsSetTimerInformation (
+    LONG Timer,
+    PTIMER_INFORMATION Information
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the given timer's information.
+
+Arguments:
+
+    Timer - Supplies the timer to set.
+
+    Information - Supplies a pointer to the information to set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ASSERT(Information != NULL);
+
+    return OspTimerControl(TimerOperationSetTimer, Timer, Information);
+}
+
+OS_API
+KSTATUS
+OsDelayExecution (
+    BOOL TimeTicks,
+    ULONGLONG Interval
+    )
+
+/*++
+
+Routine Description:
+
+    This routine blocks the current thread for the specified amount of time.
+
+Arguments:
+
+    TimeTicks - Supplies a boolean indicating if the interval parameter is
+        represented in time counter ticks (TRUE) or microseconds (FALSE).
+
+    Interval - Supplies the interval to wait. If the time ticks parameter is
+        TRUE, this parameter represents an absolute time in time counter ticks.
+        If the time ticks parameter is FALSE, this parameter represents a
+        relative time from now in microseconds. If an interval of 0 is
+        supplied, this routine is equivalent to KeYield.
+
+Return Value:
+
+    STATUS_SUCCESS if the wait completed.
+
+    STATUS_INTERRUPTED if the wait was interrupted.
+
+--*/
+
+{
+
+    SYSTEM_CALL_DELAY_EXECUTION Parameters;
+
+    Parameters.TimeTicks = TimeTicks;
+    Parameters.Interval = Interval;
+    OsSystemCall(SystemCallDelayExecution, &Parameters);
+    return Parameters.Status;
+}
+
+PUSER_SHARED_DATA
+OspGetUserSharedData (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns a pointer to the user shared data.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a pointer to the user shared data area.
+
+--*/
+
+{
+
+    return (PUSER_SHARED_DATA)USER_SHARED_DATA_USER_ADDRESS;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+KSTATUS
+OspTimeZoneControl (
+    TIME_ZONE_OPERATION Operation,
+    PVOID DataBuffer,
+    PULONG DataBufferSize,
+    PSTR ZoneName,
+    ULONG ZoneNameSize,
+    PSTR OriginalZoneName,
+    PULONG OriginalZoneNameSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a time zone control system call.
+
+Arguments:
+
+    Operation - Supplies the time zone operation to perform.
+
+    DataBuffer - Supplies a pointer to the data buffer.
+
+    DataBufferSize - Supplies the size of the data buffer in bytes.
+
+    ZoneName - Supplies the name of the zone to set.
+
+    ZoneNameSize - Supplies the size of the zone name buffer.
+
+    OriginalZoneName - Supplies a pointer where the original time zone name
+        will be returned (for the relevant operations).
+
+    OriginalZoneNameSize - Supplies the size of the original zone name buffer.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    SYSTEM_CALL_TIME_ZONE_CONTROL Parameters;
+
+    Parameters.Operation = Operation;
+    Parameters.DataBuffer = DataBuffer;
+    Parameters.DataBufferSize = 0;
+    if (DataBufferSize != NULL) {
+        Parameters.DataBufferSize = *DataBufferSize;
+    }
+
+    Parameters.ZoneName = ZoneName;
+    Parameters.ZoneNameSize = ZoneNameSize;
+    Parameters.OriginalZoneName = OriginalZoneName;
+    Parameters.OriginalZoneNameSize = 0;
+    if (OriginalZoneNameSize != NULL) {
+        Parameters.OriginalZoneNameSize = *OriginalZoneNameSize;
+    }
+
+    OsSystemCall(SystemCallTimeZoneControl, &Parameters);
+    if (DataBufferSize != NULL) {
+        *DataBufferSize = Parameters.DataBufferSize;
+    }
+
+    if (OriginalZoneNameSize != NULL) {
+        *OriginalZoneNameSize = Parameters.OriginalZoneNameSize;
+    }
+
+    return Parameters.Status;
+}
+
+KSTATUS
+OspTimerControl (
+    TIMER_OPERATION Operation,
+    LONG TimerNumber,
+    PTIMER_INFORMATION Information
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a timer control operation.
+
+Arguments:
+
+    Operation - Supplies the timer operation to perform.
+
+    TimerNumber - Supplies the timer number to operate on.
+
+    Information - Supplies an optional pointer to the timer information to get
+        or set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    SYSTEM_CALL_TIMER_CONTROL Parameters;
+
+    RtlZeroMemory(&Parameters, sizeof(SYSTEM_CALL_TIMER_CONTROL));
+    Parameters.Operation = Operation;
+    Parameters.TimerNumber = TimerNumber;
+    if (Operation == TimerOperationSetTimer) {
+        RtlCopyMemory(&(Parameters.TimerInformation),
+                      Information,
+                      sizeof(TIMER_INFORMATION));
+    }
+
+    OsSystemCall(SystemCallTimerControl, &Parameters);
+    if (Information != NULL) {
+        RtlCopyMemory(Information,
+                      &(Parameters.TimerInformation),
+                      sizeof(TIMER_INFORMATION));
+    }
+
+    return Parameters.Status;
+}
+
+VOID
+OspGetTimeOffset (
+    PSYSTEM_TIME TimeOffset
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads the time offset from the shared user data page.
+
+Arguments:
+
+    TimeOffset - Supplies a pointer that receives the time offset from the
+        shared user data page.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONGLONG TickCount;
+    PUSER_SHARED_DATA UserSharedData;
+
+    UserSharedData = OspGetUserSharedData();
+
+    //
+    // Loop reading the two tick count values to ensure the read of the time
+    // offset structure wasn't torn.
+    //
+
+    do {
+        TickCount = UserSharedData->TickCount;
+        *TimeOffset = UserSharedData->TimeOffset;
+
+    } while (TickCount != UserSharedData->TickCount2);
+
+    return;
+}
+

@@ -1,0 +1,2508 @@
+/*++
+
+Copyright (c) 2013 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    scan.c
+
+Abstract:
+
+    This module implements scanning strings into various other forms, such as
+    integers.
+
+Author:
+
+    Evan Green 25-May-2013
+
+Environment:
+
+    Kernel and User Modes
+
+--*/
+
+//
+// ------------------------------------------------------------------- Includes
+//
+
+#include "rtlp.h"
+
+//
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// ---------------------------------------------------------------- Definitions
+//
+
+#define INFINITY_STRING "infinity"
+#define NAN_STRING "nan"
+
+//
+// ------------------------------------------------------ Data Type Definitions
+//
+
+//
+// ----------------------------------------------- Internal Function Prototypes
+//
+
+KSTATUS
+RtlpScanInteger (
+    PSCAN_INPUT Input,
+    ULONG Base,
+    ULONG FieldSize,
+    BOOL Signed,
+    PLONGLONG Integer,
+    PULONG CharactersConsumed
+    );
+
+KSTATUS
+RtlpScanDouble (
+    PSCAN_INPUT Input,
+    ULONG FieldSize,
+    double *Double,
+    PULONG CharactersConsumed
+    );
+
+VOID
+RtlpScannerUnput (
+    PSCAN_INPUT Input,
+    CHAR Character
+    );
+
+VOID
+RtlpScannerWideUnput (
+    PSCAN_INPUT Input,
+    WCHAR Character
+    );
+
+BOOL
+RtlpScannerGetInput (
+    PSCAN_INPUT Input,
+    PCHAR Character
+    );
+
+BOOL
+RtlpScannerGetWideInput (
+    PSCAN_INPUT Input,
+    PWCHAR WideCharacter
+    );
+
+BOOL
+RtlpStringScannerGetInput (
+    PSCAN_INPUT Input,
+    PCHAR Character
+    );
+
+//
+// -------------------------------------------------------------------- Globals
+//
+
+double RtlFirst16PowersOf10[16] = {
+    1E0, 1E1, 1E2, 1E3, 1E4, 1E5, 1E6, 1E7, 1E8, 1E9, 1E10, 1E11, 1E12, 1E13,
+    1E14, 1E15
+};
+
+double RtlPositivePowersOf2[5] = {
+    1E16, 1E32, 1E64, 1E128, 1E256
+};
+
+double RtlNegativePowersOf2[5] = {
+    1E-16, 1E-32, 1E-64, 1E-128, 1E-256
+};
+
+//
+// ------------------------------------------------------------------ Functions
+//
+
+RTL_API
+KSTATUS
+RtlStringScan (
+    PSTR Input,
+    ULONG InputSize,
+    PSTR Format,
+    ULONG FormatSize,
+    CHARACTER_ENCODING Encoding,
+    PULONG ItemsScanned,
+    ...
+    )
+
+/*++
+
+Routine Description:
+
+    This routine scans in a string and converts it to a number of arguments
+    based on a format string.
+
+Arguments:
+
+    Input - Supplies a pointer to the input string to scan.
+
+    InputSize - Supplies the size of the string in bytes including the null
+        terminator.
+
+    Format - Supplies the format string that specifies how to convert the input
+        to the arguments.
+
+    FormatSize - Supplies the size of the format string in bytes, including
+        the null terminator.
+
+    Encoding - Supplies the character encoding to use when scanning into
+        wide strings or characters.
+
+    ItemsScanned - Supplies a pointer where the number of items scanned will
+        be returned (not counting any %n specifiers).
+
+    ... - Supplies the remaining pointer arguments where the scanned data will
+        be returned.
+
+Return Value:
+
+    STATUS_SUCCESS if the input was successfully scanned according to the
+    format.
+
+    STATUS_INVALID_SEQUENCE if the input did not match the format or the
+    format was invalid.
+
+    STATUS_ARGUMENT_EXPECTED if not enough arguments were supplied for the
+        format.
+
+    STATUS_END_OF_FILE if the input ended before any arguments were converted
+    or any matching failures occurred.
+
+--*/
+
+{
+
+    va_list ArgumentList;
+    KSTATUS Status;
+
+    va_start(ArgumentList, ItemsScanned);
+    Status = RtlStringScanVaList(Input,
+                                 InputSize,
+                                 Format,
+                                 FormatSize,
+                                 Encoding,
+                                 ItemsScanned,
+                                 ArgumentList);
+
+    va_end(ArgumentList);
+    return Status;
+}
+
+RTL_API
+KSTATUS
+RtlStringScanVaList (
+    PSTR Input,
+    ULONG InputSize,
+    PSTR Format,
+    ULONG FormatSize,
+    CHARACTER_ENCODING Encoding,
+    PULONG ItemsScanned,
+    va_list Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine scans in a string and converts it to a number of arguments
+    based on a format string.
+
+Arguments:
+
+    Input - Supplies a pointer to the input string to scan.
+
+    InputSize - Supplies the size of the string in bytes including the null
+        terminator.
+
+    Format - Supplies the format string that specifies how to convert the input
+        to the arguments.
+
+    FormatSize - Supplies the size of the format string in bytes, including
+        the null terminator.
+
+    Encoding - Supplies the character encoding to use when scanning into
+        wide strings or characters.
+
+    ItemsScanned - Supplies a pointer where the number of items scanned will
+        be returned (not counting any %n specifiers).
+
+    Arguments - Supplies the initialized arguments list where various pieces
+        of the formatted string will be returned.
+
+Return Value:
+
+    STATUS_SUCCESS if the input was successfully scanned according to the
+    format.
+
+    STATUS_INVALID_SEQUENCE if the input did not match the format or the
+    format was invalid.
+
+    STATUS_ARGUMENT_EXPECTED if not enough arguments were supplied for the
+        format.
+
+    STATUS_END_OF_FILE if the input ended before any arguments were converted
+    or any matching failures occurred.
+
+--*/
+
+{
+
+    SCAN_INPUT InputParameters;
+    KSTATUS Status;
+
+    if (Input == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    InputParameters.GetInput = RtlpStringScannerGetInput;
+    InputParameters.String = Input;
+    InputParameters.StringSize = InputSize;
+    InputParameters.ValidUnputCharacters = 0;
+    InputParameters.CharactersRead = 0;
+    RtlInitializeMultibyteState(&(InputParameters.State), Encoding);
+    Status = RtlScan(&InputParameters,
+                     Format,
+                     FormatSize,
+                     ItemsScanned,
+                     Arguments);
+
+    return Status;
+}
+
+RTL_API
+KSTATUS
+RtlStringScanInteger (
+    PSTR *String,
+    PULONG StringSize,
+    ULONG Base,
+    BOOL Signed,
+    PLONGLONG Integer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a string into an integer. It scans past leading
+    whitespace.
+
+Arguments:
+
+    String - Supplies a pointer that on input contains a pointer to the string
+        to scan. On output, the string advanced past the scanned value (if any)
+        will be returned. If the entire string is whitespace or starts with an
+        invalid character, this parameter will not be modified.
+
+    StringSize - Supplies a pointer that on input contains the size of the
+        string, in bytes, including the null terminator. On output, this will
+        contain the size of the string minus the number of bytes scanned by
+        this routine. Said differently, it will return the size of the output
+        to the string parameter in bytes including the null terminator.
+
+    Base - Supplies the base of the integer to scan. Valid values are zero and
+        two through thirty six. If zero is supplied, this routine will attempt
+        to automatically detect what the base is out of bases 8, 10, and 16.
+
+    Signed - Supplies a boolean indicating whether the integer to scan is
+        signed or not.
+
+    Integer - Supplies a pointer where the resulting integer is returned on
+        success.
+
+Return Value:
+
+    STATUS_SUCCESS if an integer was successfully scanned.
+
+    STATUS_INVALID_SEQUENCE if a valid integer could not be scanned.
+
+    STATUS_INTEGER_OVERFLOW if the result overflowed. In this case the integer
+    returned will be MAX_LONGLONG, MIN_LONGLONG, or MAX_ULONGLONG depending on
+    the signedness and value.
+
+    STATUS_END_OF_FILE if the input ended before the value was converted
+    or a matching failure occurred.
+
+--*/
+
+{
+
+    ULONG CharactersConsumed;
+    SCAN_INPUT Input;
+    KSTATUS Status;
+
+    if (String == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    Input.GetInput = RtlpStringScannerGetInput;
+    Input.String = *String;
+    Input.StringSize = *StringSize;
+    Input.ValidUnputCharacters = 0;
+    Input.CharactersRead = 0;
+    RtlInitializeMultibyteState(&(Input.State), CharacterEncodingDefault);
+    Status = RtlpScanInteger(&Input,
+                             Base,
+                             *StringSize,
+                             Signed,
+                             Integer,
+                             &CharactersConsumed);
+
+    *StringSize -= CharactersConsumed;
+    *String += CharactersConsumed;
+    return Status;
+}
+
+RTL_API
+KSTATUS
+RtlStringScanDouble (
+    PSTR *String,
+    PULONG StringSize,
+    double *Double
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a string into a floating point double. It scans past
+    leading whitespace.
+
+Arguments:
+
+    String - Supplies a pointer that on input contains a pointer to the string
+        to scan. On output, the string advanced past the scanned value (if any)
+        will be returned. If the entire string is whitespace or starts with an
+        invalid character, this parameter will not be modified.
+
+    StringSize - Supplies a pointer that on input contains the size of the
+        string, in bytes, including the null terminator. On output, this will
+        contain the size of the string minus the number of bytes scanned by
+        this routine. Said differently, it will return the size of the output
+        to the string parameter in bytes including the null terminator.
+
+    Double - Supplies a pointer where the resulting double is returned on
+        success.
+
+Return Value:
+
+    STATUS_SUCCESS if an integer was successfully scanned.
+
+    STATUS_INVALID_SEQUENCE if a valid integer could not be scanned.
+
+    STATUS_END_OF_FILE if the input ended before the value was converted
+    or a matching failure occurred.
+
+--*/
+
+{
+
+    ULONG CharactersConsumed;
+    SCAN_INPUT Input;
+    KSTATUS Status;
+
+    if (String == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    Input.GetInput = RtlpStringScannerGetInput;
+    Input.String = *String;
+    Input.StringSize = *StringSize;
+    Input.ValidUnputCharacters = 0;
+    Input.CharactersRead = 0;
+    RtlInitializeMultibyteState(&(Input.State), CharacterEncodingDefault);
+    Status = RtlpScanDouble(&Input, *StringSize, Double, &CharactersConsumed);
+    *StringSize -= CharactersConsumed;
+    *String += CharactersConsumed;
+    return Status;
+}
+
+RTL_API
+KSTATUS
+RtlScan (
+    PSCAN_INPUT Input,
+    PSTR Format,
+    ULONG FormatLength,
+    PULONG ItemsScanned,
+    va_list ArgumentList
+    )
+
+/*++
+
+Routine Description:
+
+    This routine scans from an input and converts the input to various
+    parameters according to a specified format.
+
+Arguments:
+
+    Input - Supplies a pointer to the filled out scan input structure which
+        will be used to retrieve more input.
+
+    Format - Supplies the format string which specifies how to convert the
+        input to the argument list.
+
+    FormatLength - Supplies the size of the format length string in bytes,
+        including the null terminator.
+
+    ItemsScanned - Supplies a pointer where the number of parameters filled in
+        (not counting %n) will be returned.
+
+    ArgumentList - Supplies the list of arguments that will get filled out
+        based on the input and format string.
+
+Return Value:
+
+    STATUS_SUCCESS if the input was successfully scanned according to the
+    format.
+
+    STATUS_INVALID_SEQUENCE if the input did not match the format or the
+    format was invalid.
+
+    STATUS_ARGUMENT_EXPECTED if not enough arguments were supplied for the
+    format.
+
+    STATUS_END_OF_FILE if the input ended before any arguments were converted
+    or any matching failures occurred.
+
+--*/
+
+{
+
+    BOOL AdvanceFormat;
+    PCHAR Argument;
+    ULONG ArgumentsWritten;
+    BOOL AssignmentSuppression;
+    ULONG Base;
+    CHAR Character;
+    ULONG CharactersConsumed;
+    double Double;
+    ULONG FieldWidth;
+    CHAR InputCharacter;
+    BOOL InScanSet;
+    LONGLONG Integer;
+    ULONG LengthModifier;
+    BOOL LongSpecified;
+    ULONG Position;
+    BOOL Result;
+    PSTR ScanSetBegin;
+    BOOL ScanSetGotSomething;
+    ULONG ScanSetIndex;
+    ULONG ScanSetLength;
+    BOOL ScanSetNegated;
+    KSTATUS ScanStatus;
+    BOOL Signed;
+    KSTATUS Status;
+    WCHAR WideCharacter;
+    PWSTR WideStringArgument;
+
+    ASSERT(RtlIsCharacterEncodingSupported(Input->State.Encoding) != FALSE);
+
+    ArgumentsWritten = 0;
+    *ItemsScanned = 0;
+    Result = FALSE;
+
+    //
+    // Loop getting characters.
+    //
+
+    while (FormatLength != 0) {
+        AssignmentSuppression = FALSE;
+        FieldWidth = -1;
+        LengthModifier = 0;
+        Position = -1;
+        Character = *Format;
+
+        //
+        // Any whitespace in the format blasts through all whitespace in the
+        // input.
+        //
+
+        if (RtlIsCharacterSpace(Character) != FALSE) {
+            do {
+                Result = RtlpScannerGetInput(Input, &InputCharacter);
+                if (Result == FALSE) {
+                    break;
+                }
+
+            } while (RtlIsCharacterSpace(InputCharacter) != FALSE);
+
+            //
+            // This went one too far, put the non-whitespace character back.
+            //
+
+            if (Result != FALSE) {
+                RtlpScannerUnput(Input, InputCharacter);
+            }
+
+        //
+        // If it's a terminator, stop scanning.
+        //
+
+        } else if (Character == '\0') {
+            break;
+
+        //
+        // If it's not a percent, then it's just a regular character, match it
+        // up.
+        //
+
+        } else if (Character != '%') {
+            Result = RtlpScannerGetInput(Input, &InputCharacter);
+            if (Result == FALSE) {
+                Status = STATUS_END_OF_FILE;
+                goto ScanEnd;
+            }
+
+            if (InputCharacter != Character) {
+                Status = STATUS_INVALID_SEQUENCE;
+                goto ScanEnd;
+            }
+
+        //
+        // Big boy land, it's a format specifier (percent sign).
+        //
+
+        } else {
+
+            ASSERT(Character == '%');
+
+            Format += 1;
+            FormatLength -= 1;
+            if ((FormatLength == 0) || (*Format == '\0')) {
+                Status = STATUS_INVALID_SEQUENCE;
+                goto ScanEnd;
+            }
+
+            Character = *Format;
+
+            //
+            // Potentially get a positional argument (or field length, it's
+            // unclear yet).
+            //
+
+            if ((Character >= '0') && (Character <= '9')) {
+                ScanStatus = RtlStringScanInteger(&Format,
+                                                  &FormatLength,
+                                                  10,
+                                                  FALSE,
+                                                  &Integer);
+
+                if (!KSUCCESS(ScanStatus)) {
+                    Status = ScanStatus;
+                    goto ScanEnd;
+                }
+
+                if ((FormatLength == 0) || (*Format == '\0')) {
+                    Status = STATUS_END_OF_FILE;
+                    goto ScanEnd;
+                }
+
+                if (Integer <= 0) {
+                    Status = STATUS_INVALID_SEQUENCE;
+                    goto ScanEnd;
+                }
+
+                //
+                // A dollar sign means it was a positional argument, none means
+                // it was a field width.
+                //
+
+                Character = *Format;
+                if (Character == '$') {
+                    Position = (ULONG)Integer;
+                    Format += 1;
+                    FormatLength -= 1;
+                    if (FormatLength == 0) {
+                        Status = STATUS_INVALID_SEQUENCE;
+                        goto ScanEnd;
+                    }
+
+                    Character = *Format;
+                    if (Character == '\0') {
+                        Status = STATUS_INVALID_SEQUENCE;
+                        goto ScanEnd;
+                    }
+
+                } else {
+                    FieldWidth = (ULONG)Integer;
+                }
+            }
+
+            //
+            // Watch out for assignment suppression.
+            //
+
+            if (Character == '*') {
+                AssignmentSuppression = TRUE;
+                Format += 1;
+                FormatLength -= 1;
+                if (FormatLength == 0) {
+                    Status = STATUS_INVALID_SEQUENCE;
+                    goto ScanEnd;
+                }
+
+                Character = *Format;
+            }
+
+            //
+            // If not already found, try again to scan a field width, as it
+            // could have been after the asterisk.
+            //
+
+            if ((FieldWidth == -1) &&
+                (Character >= '0') && (Character <= '9')) {
+
+                ScanStatus = RtlStringScanInteger(&Format,
+                                                  &FormatLength,
+                                                  10,
+                                                  FALSE,
+                                                  &Integer);
+
+                if (!KSUCCESS(ScanStatus)) {
+                    Status = ScanStatus;
+                    goto ScanEnd;
+                }
+
+                if ((FormatLength == 0) || (*Format == '\0')) {
+                    Status = STATUS_END_OF_FILE;
+                    goto ScanEnd;
+                }
+
+                if (Integer <= 0) {
+                    Status = STATUS_INVALID_SEQUENCE;
+                    goto ScanEnd;
+                }
+
+                FieldWidth = (ULONG)Integer;
+                Character = *Format;
+            }
+
+            //
+            // Look for a length modifier. There are two-character wide
+            // length modifiers hh for char and ll for long long.
+            //
+
+            AdvanceFormat = FALSE;
+            LongSpecified = FALSE;
+
+            //
+            // If the character is 'h', then the parameter points to a short.
+            // Advance manually here to look for 'hh' as well, which makes the
+            // parameter a char.
+            //
+
+            if (Character == 'h') {
+                LengthModifier = sizeof(SHORT);
+                Format += 1;
+                FormatLength -= 1;
+                if ((FormatLength == 0) || (*Format == '\0')) {
+                    Status = STATUS_INVALID_SEQUENCE;
+                    goto ScanEnd;
+                }
+
+                Character = *Format;
+                if (Character == 'h') {
+                    LengthModifier = sizeof(CHAR);
+                    AdvanceFormat = TRUE;
+                }
+
+            //
+            // If the character is 'l', then the parameter points to a long.
+            // Advance manually here as well to look for the 'll', which is
+            // long long.
+            //
+
+            } else if (Character == 'l') {
+                LongSpecified = TRUE;
+                LengthModifier = sizeof(LONG);
+                Format += 1;
+                FormatLength -= 1;
+                if ((FormatLength == 0) || (*Format == '\0')) {
+                    Status = STATUS_INVALID_SEQUENCE;
+                    goto ScanEnd;
+                }
+
+                Character = *Format;
+                if (Character == 'l') {
+                    LongSpecified = FALSE;
+                    LengthModifier = sizeof(LONGLONG);
+                    AdvanceFormat = TRUE;
+                }
+
+            //
+            // The 'j' override specifies an intmax_t type.
+            //
+
+            } else if (Character == 'j') {
+                LengthModifier = sizeof(intmax_t);
+                AdvanceFormat = TRUE;
+
+            //
+            // The 'z' override specifies a size_t type.
+            //
+
+            } else if (Character == 'z') {
+                LengthModifier = sizeof(size_t);
+                AdvanceFormat = TRUE;
+
+            //
+            // The 't' override specifies a ptrdiff_t type.
+            //
+
+            } else if (Character == 't') {
+                LengthModifier = sizeof(ptrdiff_t);
+                AdvanceFormat = TRUE;
+
+            //
+            // The 'L' override specifies a long double.
+            //
+
+            } else if (Character == 'L') {
+                LengthModifier = sizeof(LONGLONG);
+                AdvanceFormat = TRUE;
+            }
+
+            if (AdvanceFormat != FALSE) {
+                Format += 1;
+                FormatLength -= 1;
+                if ((FormatLength == 0) || (*Format == '\0')) {
+                    Status = STATUS_INVALID_SEQUENCE;
+                    goto ScanEnd;
+                }
+
+                Character = *Format;
+            }
+
+            //
+            // Get the argument unless the assignment is suppressed.
+            //
+
+            Argument = NULL;
+            if ((AssignmentSuppression == FALSE) && (Character != '%')) {
+
+                //
+                // TODO: Handle positional arguments. Not sure how to do
+                // that with just va_arg. If they're all pointer types
+                // perhaps pointer arithmetic is fine if there were a way
+                // to get the original address of the first argument.
+                //
+
+                if (Position != -1) {
+
+                    ASSERT(FALSE);
+
+                    Argument = NULL;
+
+                } else {
+                    Argument = va_arg(ArgumentList, PCHAR);
+                }
+
+                if (Argument == NULL) {
+                    Status = STATUS_ARGUMENT_EXPECTED;
+                    goto ScanEnd;
+                }
+            }
+
+            //
+            // Convert an lc to a C and and ls to an S just to make the if
+            // statements easier.
+            //
+
+            if (LongSpecified != FALSE) {
+                if (Character == 'c') {
+                    Character = 'C';
+
+                } else if (Character == 's') {
+                    Character = 'S';
+                }
+            }
+
+            //
+            // All the wiggly stuff is out of the way, get down to the real
+            // format specifier. First check for an integer.
+            //
+
+            if ((Character == 'd') || (Character == 'i') ||
+                (Character == 'o') || (Character == 'u') ||
+                (Character == 'x') || (Character == 'X')) {
+
+                if (LengthModifier == 0) {
+                    LengthModifier = sizeof(INT);
+                }
+
+                Signed = TRUE;
+                if (Character == 'd') {
+                    Base = 10;
+
+                } else if (Character == 'i') {
+                    Base = 0;
+
+                } else if (Character == 'o') {
+                    Base = 8;
+
+                } else if (Character == 'u') {
+                    Base = 10;
+                    Signed = FALSE;
+
+                } else {
+                    Base = 16;
+                }
+
+                ScanStatus = RtlpScanInteger(Input,
+                                             Base,
+                                             FieldWidth,
+                                             Signed,
+                                             &Integer,
+                                             &CharactersConsumed);
+
+                if (!KSUCCESS(ScanStatus)) {
+                    Status = ScanStatus;
+                    goto ScanEnd;
+                }
+
+                if (AssignmentSuppression == FALSE) {
+
+                    //
+                    // Write the argument.
+                    //
+
+                    switch (LengthModifier) {
+                    case sizeof(CHAR):
+                        *((PCHAR)Argument) = (CHAR)Integer;
+                        break;
+
+                    case sizeof(SHORT):
+                        *((PSHORT)Argument) = (SHORT)Integer;
+                        break;
+
+                    case sizeof(LONG):
+                        *((PLONG)Argument) = (LONG)Integer;
+                        break;
+
+                    case sizeof(LONGLONG):
+                        *((PLONGLONG)Argument) = (LONGLONG)Integer;
+                        break;
+
+                    default:
+
+                        ASSERT(FALSE);
+
+                        Status = STATUS_INVALID_SEQUENCE;
+                        goto ScanEnd;
+                    }
+
+                    ArgumentsWritten += 1;
+                }
+
+            //
+            // Handle floats.
+            //
+
+            } else if ((Character == 'a') || (Character == 'A') ||
+                       (Character == 'e') || (Character == 'E') ||
+                       (Character == 'f') || (Character == 'F') ||
+                       (Character == 'g') || (Character == 'G')) {
+
+                ScanStatus = RtlpScanDouble(Input,
+                                            FieldWidth,
+                                            &Double,
+                                            &CharactersConsumed);
+
+                if (!KSUCCESS(ScanStatus)) {
+                    Status = ScanStatus;
+                    goto ScanEnd;
+                }
+
+                if (AssignmentSuppression == FALSE) {
+                    switch (LengthModifier) {
+                    case sizeof(LONG):
+                        *((double *)Argument) = Double;
+                        break;
+
+                    case sizeof(LONGLONG):
+                        *((long double *)Argument) = Double;
+                        break;
+
+                    default:
+                        *((float *)Argument) = (float)Double;
+                        break;
+                    }
+
+                    ArgumentsWritten += 1;
+                }
+
+            //
+            // Handle string copies.
+            //
+
+            } else if (Character == 's') {
+
+                //
+                // First get past any whitespace.
+                //
+
+                do {
+                    Result = RtlpScannerGetInput(Input, &InputCharacter);
+                    if ((Result == FALSE) || (InputCharacter == '\0')) {
+                        Status = STATUS_END_OF_FILE;
+                        goto ScanEnd;
+                    }
+
+                } while (RtlIsCharacterSpace(InputCharacter) != FALSE);
+
+                //
+                // Now loop putting non-whitespace characters into the
+                // argument. Note how the destination argument buffer is
+                // unbounded? Very dangerous to use without a field width.
+                //
+
+                do {
+                    if (AssignmentSuppression == FALSE) {
+                        *Argument = InputCharacter;
+                    }
+
+                    Argument += 1;
+                    FieldWidth -= 1;
+                    Result = RtlpScannerGetInput(Input, &InputCharacter);
+                    if ((Result == FALSE) || (InputCharacter == '\0')) {
+                        Status = STATUS_END_OF_FILE;
+                        break;
+                    }
+
+                } while ((FieldWidth != 0) &&
+                         (RtlIsCharacterSpace(InputCharacter) == FALSE));
+
+                //
+                // Put the last character back.
+                //
+
+                if (Result != FALSE) {
+                    RtlpScannerUnput(Input, InputCharacter);
+                }
+
+                //
+                // Null terminate the destination string.
+                //
+
+                if (AssignmentSuppression == FALSE) {
+                    *Argument = '\0';
+                    ArgumentsWritten += 1;
+                }
+
+            //
+            // Handle wide string copies.
+            //
+
+            } else if (Character == 'S') {
+                RtlResetMultibyteState(&(Input->State));
+
+                //
+                // First get past any whitespace.
+                //
+
+                do {
+                    Result = RtlpScannerGetWideInput(Input, &WideCharacter);
+                    if ((Result == FALSE) || (InputCharacter == L'\0')) {
+                        Status = STATUS_END_OF_FILE;
+                        goto ScanEnd;
+                    }
+
+                } while (RtlIsCharacterSpaceWide(WideCharacter) != FALSE);
+
+                //
+                // Now loop putting non-whitespace characters into the
+                // argument. Note how the destination argument buffer is
+                // unbounded? Very dangerous to use without a field width.
+                //
+
+                WideStringArgument = (PWSTR)Argument;
+                do {
+                    if (AssignmentSuppression == FALSE) {
+                        *WideStringArgument = WideCharacter;
+                    }
+
+                    WideStringArgument += 1;
+                    FieldWidth -= 1;
+                    Result = RtlpScannerGetWideInput(Input, &WideCharacter);
+                    if ((Result == FALSE) || (WideCharacter == L'\0')) {
+                        Status = STATUS_END_OF_FILE;
+                        break;
+                    }
+
+                } while ((FieldWidth != 0) &&
+                         (RtlIsCharacterSpaceWide(WideCharacter) == FALSE));
+
+                //
+                // Put the last character back.
+                //
+
+                if (Result != FALSE) {
+                    RtlpScannerWideUnput(Input, WideCharacter);
+                }
+
+                //
+                // Null terminate the destination string.
+                //
+
+                if (AssignmentSuppression == FALSE) {
+                    *WideStringArgument = L'\0';
+                    ArgumentsWritten += 1;
+                }
+
+            //
+            // Handle a character (or a bunch of them).
+            //
+
+            } else if (Character == 'c') {
+                if (FieldWidth == -1) {
+                    FieldWidth = 1;
+                }
+
+                Result = RtlpScannerGetInput(Input, &InputCharacter);
+                if ((Result == FALSE) || (InputCharacter == '\0')) {
+                    Status = STATUS_END_OF_FILE;
+                    goto ScanEnd;
+                }
+
+                while (TRUE) {
+                    if (AssignmentSuppression == FALSE) {
+                        *Argument = InputCharacter;
+                    }
+
+                    Argument += 1;
+                    FieldWidth -= 1;
+                    if (FieldWidth == 0) {
+                        break;
+                    }
+
+                    Result = RtlpScannerGetInput(Input, &InputCharacter);
+                    if ((Result == FALSE) || (InputCharacter == '\0')) {
+                        Status = STATUS_END_OF_FILE;
+                        break;
+                    }
+                }
+
+                if (AssignmentSuppression == FALSE) {
+                    ArgumentsWritten += 1;
+                }
+
+            //
+            // Handle a wide character (or a bunch of them).
+            //
+
+            } else if (Character == 'C') {
+                RtlResetMultibyteState(&(Input->State));
+                if (FieldWidth == -1) {
+                    FieldWidth = 1;
+                }
+
+                Result = RtlpScannerGetWideInput(Input, &WideCharacter);
+                if ((Result == FALSE) || (WideCharacter == L'\0')) {
+                    Status = STATUS_END_OF_FILE;
+                    goto ScanEnd;
+                }
+
+                WideStringArgument = (PWSTR)Argument;
+                while (TRUE) {
+                    if (AssignmentSuppression == FALSE) {
+                        *WideStringArgument = WideCharacter;
+                    }
+
+                    WideStringArgument += 1;
+                    FieldWidth -= 1;
+                    if (FieldWidth == 0) {
+                        break;
+                    }
+
+                    Result = RtlpScannerGetWideInput(Input, &WideCharacter);
+                    if ((Result == FALSE) || (WideCharacter == '\0')) {
+                        Status = STATUS_END_OF_FILE;
+                        break;
+                    }
+                }
+
+                if (AssignmentSuppression == FALSE) {
+                    ArgumentsWritten += 1;
+                }
+
+            //
+            // Handle a scanset.
+            //
+
+            } else if (Character == '[') {
+                Format += 1;
+                FormatLength -= 1;
+                if (FormatLength == 0) {
+                    Status = STATUS_INVALID_SEQUENCE;
+                    goto ScanEnd;
+                }
+
+                //
+                // The circumflex (^) negates the scanset.
+                //
+
+                ScanSetNegated = FALSE;
+                if (*Format == '^') {
+                    ScanSetNegated = TRUE;
+                    Format += 1;
+                    FormatLength -= 1;
+                    if (FormatLength == 0) {
+                        break;
+                    }
+                }
+
+                //
+                // Find the end of the scanset. If the scanset starts with
+                // [] or [^] then the left bracket is considered to be part of
+                // the scanset. Annoyingly, there is no way to specify a
+                // sequence of just ^, which seems like a glaring hole to this
+                // programmer.
+                //
+
+                ScanSetBegin = Format;
+                ScanSetLength = 0;
+                while ((FormatLength != 0) && (*Format != '\0')) {
+                    if ((*Format == ']') && (ScanSetLength != 0)) {
+                        break;
+                    }
+
+                    ScanSetLength += 1;
+                    Format += 1;
+                    FormatLength -= 1;
+                }
+
+                if ((FormatLength == 0) || (*Format == '\0')) {
+                    Status = STATUS_INVALID_SEQUENCE;
+                    goto ScanEnd;
+                }
+
+                //
+                // Now grab characters that are either in the scanset or not in
+                // the scanset.
+                //
+
+                ScanSetGotSomething = FALSE;
+                if (LongSpecified != FALSE) {
+                    WideStringArgument = (PWSTR)Argument;
+                    do {
+                        Result = RtlpScannerGetWideInput(Input, &WideCharacter);
+                        if ((Result == FALSE) || (WideCharacter == L'\0')) {
+                            break;
+                        }
+
+                        InScanSet = FALSE;
+                        for (ScanSetIndex = 0;
+                             ScanSetIndex < ScanSetLength;
+                             ScanSetIndex += 1) {
+
+                            if (WideCharacter == ScanSetBegin[ScanSetIndex]) {
+                                InScanSet = TRUE;
+                                break;
+                            }
+                        }
+
+                        //
+                        // Break out if it's not negated and it's not in the
+                        // scanset, or it is negated and it is in the scanset.
+                        // Write it out the long way and the simplification will
+                        // be more obvious.
+                        //
+
+                        if (ScanSetNegated == InScanSet) {
+                            break;
+                        }
+
+                        if (AssignmentSuppression == FALSE) {
+                            *WideStringArgument = WideCharacter;
+                            WideStringArgument += 1;
+                        }
+
+                        FieldWidth -= 1;
+                        ScanSetGotSomething = TRUE;
+
+                    } while (FieldWidth != 0);
+
+                    if (ScanSetGotSomething == FALSE) {
+                        Status = STATUS_INVALID_SEQUENCE;
+                        goto ScanEnd;
+                    }
+
+                    //
+                    // Put the last character back.
+                    //
+
+                    if ((Result != FALSE) && (FieldWidth != 0)) {
+                        RtlpScannerWideUnput(Input, WideCharacter);
+                    }
+
+                    //
+                    // Null terminate the destination string.
+                    //
+
+                    if (AssignmentSuppression == FALSE) {
+                        *WideStringArgument = L'\0';
+                        ArgumentsWritten += 1;
+                    }
+
+                //
+                // Long was not specified, these are just normal bytes in the
+                // input.
+                //
+
+                } else {
+                    do {
+                        Result = RtlpScannerGetInput(Input, &InputCharacter);
+                        if ((Result == FALSE) || (InputCharacter == '\0')) {
+                            break;
+                        }
+
+                        InScanSet = FALSE;
+                        for (ScanSetIndex = 0;
+                             ScanSetIndex < ScanSetLength;
+                             ScanSetIndex += 1) {
+
+                            if (InputCharacter == ScanSetBegin[ScanSetIndex]) {
+                                InScanSet = TRUE;
+                                break;
+                            }
+                        }
+
+                        //
+                        // Break out if it's not negated and it's not in the
+                        // scanset, or it is negated and it is in the scanset.
+                        // Write it out the long way and the simplification will
+                        // be more obvious.
+                        //
+
+                        if (ScanSetNegated == InScanSet) {
+                            break;
+                        }
+
+                        if (AssignmentSuppression == FALSE) {
+                            *Argument = InputCharacter;
+                            Argument += 1;
+                        }
+
+                        FieldWidth -= 1;
+                        ScanSetGotSomething = TRUE;
+
+                    } while (FieldWidth != 0);
+
+                    if (ScanSetGotSomething == FALSE) {
+                        Status = STATUS_INVALID_SEQUENCE;
+                        goto ScanEnd;
+                    }
+
+                    //
+                    // Put the last character back.
+                    //
+
+                    if ((Result != FALSE) && (FieldWidth != 0)) {
+                        RtlpScannerUnput(Input, InputCharacter);
+                    }
+
+                    //
+                    // Null terminate the destination string.
+                    //
+
+                    if (AssignmentSuppression == FALSE) {
+                        *Argument = '\0';
+                        ArgumentsWritten += 1;
+                    }
+                }
+
+            //
+            // Handle a little old percent. Double percents are just the
+            // percent sign literal.
+            //
+
+            } else if (Character == '%') {
+                Result = RtlpScannerGetInput(Input, &InputCharacter);
+                if (Result == FALSE) {
+                    Status = STATUS_END_OF_FILE;
+                    goto ScanEnd;
+                }
+
+                if (InputCharacter != Character) {
+                    Status = STATUS_INVALID_SEQUENCE;
+                    goto ScanEnd;
+                }
+
+            //
+            // Return the number of bytes read from the input to get to this
+            // point. This doesn't count in the number of arguments written.
+            //
+
+            } else if (Character == 'n') {
+                if (AssignmentSuppression == FALSE) {
+                    *((PINT)Argument) = Input->CharactersRead -
+                                        Input->ValidUnputCharacters;
+                }
+
+            //
+            // This is an unknown format specifier.
+            //
+
+            } else {
+                Status = STATUS_NOT_SUPPORTED;
+                goto ScanEnd;
+            }
+        }
+
+        //
+        // Advance to the next character in the format string.
+        //
+
+        Format += 1;
+        FormatLength -= 1;
+    }
+
+    Status = STATUS_SUCCESS;
+
+ScanEnd:
+    if ((Status == STATUS_INVALID_SEQUENCE) && (Result != FALSE)) {
+        RtlpScannerUnput(Input, InputCharacter);
+    }
+
+    if ((Status == STATUS_END_OF_FILE) && (ArgumentsWritten != 0)) {
+        Status = STATUS_SUCCESS;
+    }
+
+    *ItemsScanned = ArgumentsWritten;
+    return Status;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+KSTATUS
+RtlpScanInteger (
+    PSCAN_INPUT Input,
+    ULONG Base,
+    ULONG FieldSize,
+    BOOL Signed,
+    PLONGLONG Integer,
+    PULONG CharactersConsumed
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a string into an integer. It scans past leading
+    whitespace.
+
+Arguments:
+
+    Input - Supplies a pointer to the filled out scan input structure which
+        will be used to retrieve more input.
+
+    Base - Supplies the base of the integer to scan. Valid values are zero and
+        two through thirty six. If zero is supplied, this routine will attempt
+        to automatically detect what the base is out of bases 8, 10, and 16.
+
+    Signed - Supplies a boolean indicating if the integer is signed or not.
+
+    FieldSize - Supplies the maximum number of characters to scan for the
+        integer.
+
+    Integer - Supplies a pointer where the resulting integer is returned on
+        success.
+
+    CharactersConsumed - Supplies a pointer where the number characters consumed
+        will be stored.
+
+Return Value:
+
+    STATUS_SUCCESS if an integer was successfully scanned.
+
+    STATUS_INVALID_SEQUENCE if a valid integer could not be scanned.
+
+    STATUS_INTEGER_OVERFLOW if the result overflowed. In this case the integer
+    returned will be MAX_LONGLONG, MIN_LONGLONG, or MAX_ULONGLONG depending on
+    the signedness and value.
+
+    STATUS_END_OF_FILE if the end of the file was reached before any
+    non-whitespace could be retrieved.
+
+--*/
+
+{
+
+    CHAR Character;
+    ULONG CharacterCount;
+    CHAR MaxDigit;
+    CHAR MaxLetter;
+    ULONGLONG MaxValue;
+    BOOL Negative;
+    BOOL Result;
+    KSTATUS Status;
+    BOOL ValidCharacterFound;
+    ULONGLONG Value;
+
+    *CharactersConsumed = 0;
+    CharacterCount = 0;
+    *Integer = 0;
+    Negative = FALSE;
+    Result = RtlpScannerGetInput(Input, &Character);
+    if ((Result == FALSE) || (Character == '\0')) {
+        return STATUS_END_OF_FILE;
+    }
+
+    //
+    // Scan past any whitespace.
+    //
+
+    while (RtlIsCharacterSpace(Character) != FALSE) {
+        CharacterCount += 1;
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result == FALSE) || (Character == '\0')) {
+            return STATUS_END_OF_FILE;
+        }
+    }
+
+    //
+    // Get past any optional plus or minus.
+    //
+
+    if ((Character == '+') || (Character == '-')) {
+        if (Character == '-') {
+            Negative = TRUE;
+        }
+
+        if (FieldSize == 0) {
+            Status = STATUS_INVALID_SEQUENCE;
+            goto ScanIntegerEnd;
+        }
+
+        CharacterCount += 1;
+        FieldSize -= 1;
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result == FALSE) || (Character == '\0') || (FieldSize == 0)) {
+            Status = STATUS_INVALID_SEQUENCE;
+            goto ScanIntegerEnd;
+        }
+    }
+
+    //
+    // Get past an optional 0x or 0X for base 16 mode.
+    //
+
+    ValidCharacterFound = FALSE;
+    if (((Base == 0) || (Base == 16)) && (Character == '0')) {
+
+        //
+        // Seeing a leading zero is an indication of octal mode, so start with
+        // that in case the x coming up isn't there.
+        //
+
+        if (Base == 0) {
+            Base = 8;
+        }
+
+        if (FieldSize == 0) {
+            Status = STATUS_INVALID_SEQUENCE;
+            goto ScanIntegerEnd;
+        }
+
+        CharacterCount += 1;
+        FieldSize -= 1;
+        ValidCharacterFound = TRUE;
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result == FALSE) || (Character == '\0') || (FieldSize == 0)) {
+            *CharactersConsumed = CharacterCount;
+            Status = STATUS_SUCCESS;
+            goto ScanIntegerEnd;
+        }
+
+        //
+        // Swallow an x. 0x by itself is allowed, and counts as just the zero.
+        //
+
+        if ((Character == 'x') || (Character == 'X')) {
+            Base = 16;
+            Result = RtlpScannerGetInput(Input, &Character);
+            if ((Result == FALSE) ||
+                (RtlIsCharacterHexDigit(Character) == FALSE) ||
+                (FieldSize == 0)) {
+
+                *CharactersConsumed = CharacterCount;
+                Status = STATUS_SUCCESS;
+                goto ScanIntegerEnd;
+            }
+
+            CharacterCount += 1;
+            FieldSize -= 1;
+        }
+    }
+
+    //
+    // If the base is undecided, take a look at the first digit to figure it
+    // out.
+    //
+
+    if (Base == 0) {
+
+        ASSERT(Character != '0');
+
+        if ((Character >= '1') && (Character <= '9')) {
+            Base = 10;
+
+        } else {
+            Status = STATUS_INVALID_SEQUENCE;
+            goto ScanIntegerEnd;
+        }
+    }
+
+    //
+    // Compute the maximum digit or letter value.
+    //
+
+    ASSERT(Base != 0);
+
+    if (Base <= 10) {
+        MaxDigit = '0' + Base - 1;
+        MaxLetter = 'A' - 1;
+
+    } else {
+        MaxDigit = '9';
+        MaxLetter = 'A' + Base - 1 - 10;
+    }
+
+    MaxValue = 0;
+    Value = 0;
+
+    //
+    // Loop through every digit.
+    //
+
+    while (TRUE) {
+
+        //
+        // Uppercase any letters.
+        //
+
+        if ((Character >= 'a') && (Character <= 'z')) {
+            Character = 'A' + Character - 'a';
+        }
+
+        //
+        // Potentially add the next digit.
+        //
+
+        if ((Character >= '0') && (Character <= '9')) {
+            if (Character > MaxDigit) {
+                break;
+            }
+
+            Value = (Value * Base) + (Character - '0');
+
+        //
+        // It could also be a letter digit.
+        //
+
+        } else if ((Character >= 'A') && (Character <= 'Z')) {
+            if (Character > MaxLetter) {
+                break;
+            }
+
+            Value = (Value * Base) + (Character - 'A' + 10);
+
+        //
+        // Or it could be something entirely different, in which case the
+        // number is over.
+        //
+
+        } else {
+            break;
+        }
+
+        if (Value > MaxValue) {
+            MaxValue = Value;
+        }
+
+        ValidCharacterFound = TRUE;
+        CharacterCount += 1;
+        FieldSize -= 1;
+        if (FieldSize == 0) {
+            break;
+        }
+
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result == FALSE) || (Character == '\0')) {
+            break;
+        }
+    }
+
+    //
+    // If the loop broke without ever finding a valid character, fail.
+    //
+
+    if (ValidCharacterFound == FALSE) {
+        Status = STATUS_INVALID_SEQUENCE;
+        goto ScanIntegerEnd;
+    }
+
+    //
+    // If the character that caused the loop to break wasn't an integer, put
+    // the candle back.
+    //
+
+    if ((FieldSize != 0) && (Result != FALSE)) {
+        RtlpScannerUnput(Input, Character);
+    }
+
+    *CharactersConsumed = CharacterCount;
+
+    //
+    // Handle overflow.
+    //
+
+    if (Value != MaxValue) {
+        Status = STATUS_INTEGER_OVERFLOW;
+        if (Signed != FALSE) {
+            if (Negative != FALSE) {
+                *Integer = MIN_LONGLONG;
+
+            } else {
+                *Integer = MAX_LONGLONG;
+            }
+
+        } else {
+            *(PULONGLONG)Integer = MAX_ULONGLONG;
+        }
+
+    } else {
+        Status = STATUS_SUCCESS;
+        if (Negative != FALSE) {
+            Value = -Value;
+        }
+
+        *Integer = Value;
+    }
+
+ScanIntegerEnd:
+    if ((!KSUCCESS(Status)) && (Result != FALSE)) {
+        RtlpScannerUnput(Input, Character);
+    }
+
+    return Status;
+}
+
+KSTATUS
+RtlpScanDouble (
+    PSCAN_INPUT Input,
+    ULONG FieldSize,
+    double *Double,
+    PULONG CharactersConsumed
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a string into a floating point double. It scans past
+    leading whitespace.
+
+Arguments:
+
+    Input - Supplies a pointer to the filled out scan input structure which
+        will be used to retrieve more input.
+
+    FieldSize - Supplies the maximum number of characters to scan for the
+        integer.
+
+    Double - Supplies a pointer where the resulting double is returned on
+        success.
+
+    CharactersConsumed - Supplies a pointer where the number characters consumed
+        will be stored.
+
+Return Value:
+
+    STATUS_SUCCESS if an integer was successfully scanned.
+
+    STATUS_INVALID_SEQUENCE if a valid integer could not be scanned.
+
+    STATUS_END_OF_FILE if the end of the file was reached before any
+    non-whitespace could be retrieved.
+
+--*/
+
+{
+
+    double Base;
+    CHAR Character;
+    ULONG CharacterCount;
+    CHAR DecasedCharacter;
+    double Digit;
+    LONG Exponent;
+    BOOL ExponentIsNegative;
+    double ExponentMultiplier;
+    double ExponentValue;
+    BOOL FoundExponent;
+    BOOL Negative;
+    double NegativeExponent;
+    double OneOverBase;
+    ULONG PowerIndex;
+    BOOL Result;
+    BOOL SeenDecimal;
+    KSTATUS Status;
+    CHAR String[DOUBLE_SCAN_STRING_SIZE];
+    ULONG StringCharacterCount;
+    BOOL ValidCharacterFound;
+    double Value;
+
+    Base = 10.0;
+    OneOverBase = 1.0E-1;
+    ExponentIsNegative = FALSE;
+    *CharactersConsumed = 0;
+    CharacterCount = 0;
+    *Double = 0.0;
+    Negative = FALSE;
+    Value = 0.0;
+    Result = RtlpScannerGetInput(Input, &Character);
+    if ((Result == FALSE) || (Character == '\0')) {
+        return STATUS_END_OF_FILE;
+    }
+
+    //
+    // Scan past any whitespace.
+    //
+
+    while (RtlIsCharacterSpace(Character) != FALSE) {
+        CharacterCount += 1;
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result == FALSE) || (Character == '\0')) {
+            return STATUS_END_OF_FILE;
+        }
+    }
+
+    Status = STATUS_SUCCESS;
+
+    //
+    // Get past any optional plus or minus.
+    //
+
+    if ((Character == '+') || (Character == '-')) {
+        if (Character == '-') {
+            Negative = TRUE;
+        }
+
+        if (FieldSize == 0) {
+            Status = STATUS_INVALID_SEQUENCE;
+            goto ScanDoubleEnd;
+        }
+
+        CharacterCount += 1;
+        FieldSize -= 1;
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result == FALSE) || (Character == '\0') || (FieldSize == 0)) {
+            Status = STATUS_INVALID_SEQUENCE;
+            goto ScanDoubleEnd;
+        }
+    }
+
+    //
+    // Look for inf and infinity, ignoring case.
+    //
+
+    StringCharacterCount = 0;
+    DecasedCharacter = Character;
+    if ((Character >= 'A') && (Character <= 'Z')) {
+        DecasedCharacter = Character + 'a' - 'A';
+    }
+
+    while ((StringCharacterCount < sizeof(INFINITY_STRING) - 1) &&
+           (DecasedCharacter == INFINITY_STRING[StringCharacterCount])) {
+
+        String[StringCharacterCount] = Character;
+        StringCharacterCount += 1;
+        CharacterCount += 1;
+        FieldSize -= 1;
+        if (FieldSize == 0) {
+            break;
+        }
+
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result == FALSE) || (Character == '\0')) {
+            break;
+        }
+
+        DecasedCharacter = Character;
+        if ((Character >= 'A') && (Character <= 'Z')) {
+            DecasedCharacter = Character + 'a' - 'A';
+        }
+    }
+
+    if (StringCharacterCount >= 3) {
+
+        //
+        // If it didn't match the full infinity (but has matched inf), then
+        // put back anything between inf and the failed infinity.
+        //
+
+        if (StringCharacterCount != sizeof(INFINITY_STRING) - 1) {
+            RtlpScannerUnput(Input, Character);
+            while (StringCharacterCount > 3) {
+                RtlpScannerUnput(Input, String[StringCharacterCount]);
+                StringCharacterCount -= 1;
+                CharacterCount -= 1;
+            }
+        }
+
+        Value = DOUBLE_INFINITY;
+        goto ScanDoubleEnd;
+
+    //
+    // Unput all the characters looked at.
+    //
+
+    } else if (StringCharacterCount != 0) {
+        RtlpScannerUnput(Input, Character);
+        StringCharacterCount -= 1;
+        CharacterCount -= 1;
+        while (StringCharacterCount != 0) {
+            RtlpScannerUnput(Input, String[StringCharacterCount]);
+            StringCharacterCount -= 1;
+            CharacterCount -= 1;
+        }
+
+        Character = String[0];
+    }
+
+    //
+    // Also look for NaN.
+    //
+
+    DecasedCharacter = Character;
+    if ((Character >= 'A') && (Character <= 'Z')) {
+        DecasedCharacter = Character + 'a' - 'A';
+    }
+
+    while ((StringCharacterCount < sizeof(NAN_STRING) - 1) &&
+           (DecasedCharacter == NAN_STRING[StringCharacterCount])) {
+
+        String[StringCharacterCount] = Character;
+        StringCharacterCount += 1;
+        CharacterCount += 1;
+        FieldSize -= 1;
+        if (FieldSize == 0) {
+            break;
+        }
+
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result == FALSE) || (Character == '\0')) {
+            break;
+        }
+
+        DecasedCharacter = Character;
+        if ((Character >= 'A') && (Character <= 'Z')) {
+            DecasedCharacter = Character + 'a' - 'A';
+        }
+    }
+
+    if (StringCharacterCount == sizeof(NAN_STRING) - 1) {
+
+        //
+        // Also check for a () on the end.
+        //
+
+        if (Character == '(') {
+            Result = RtlpScannerGetInput(Input, &Character);
+            if (Result != FALSE) {
+                if (Character == ')') {
+                    CharacterCount += 2;
+
+                } else {
+                    RtlpScannerUnput(Input, Character);
+                    RtlpScannerUnput(Input, '(');
+                }
+
+            } else {
+                RtlpScannerUnput(Input, Character);
+            }
+
+        } else {
+            RtlpScannerUnput(Input, Character);
+        }
+
+        Value = DOUBLE_NAN;
+        Negative = FALSE;
+        goto ScanDoubleEnd;
+
+    //
+    // Unput all the characters looked at.
+    //
+
+    } else if (StringCharacterCount != 0) {
+        RtlpScannerUnput(Input, Character);
+        StringCharacterCount -= 1;
+        CharacterCount -= 1;
+        while (StringCharacterCount != 0) {
+            RtlpScannerUnput(Input, String[StringCharacterCount]);
+            StringCharacterCount -= 1;
+            CharacterCount -= 1;
+        }
+
+        Character = String[0];
+    }
+
+    //
+    // Get past an optional 0x or 0X for base 16 mode.
+    //
+
+    if (Character == '0') {
+        if (FieldSize == 0) {
+            Status = STATUS_INVALID_SEQUENCE;
+            goto ScanDoubleEnd;
+        }
+
+        CharacterCount += 1;
+        FieldSize -= 1;
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result != FALSE) && (Character != '\0')) {
+
+            //
+            // If it was only a lonely zero, then handle that case specifically.
+            //
+
+            if ((FieldSize == 0) ||
+                (Character == '\0') ||
+                (RtlIsCharacterSpace(Character) != FALSE)) {
+
+                *CharactersConsumed = CharacterCount;
+                goto ScanDoubleEnd;
+            }
+
+            if ((Character == 'x') || (Character == 'X')) {
+                Base = 16.0;
+                OneOverBase = 0.0625;
+                Result = RtlpScannerGetInput(Input, &Character);
+
+                //
+                // If it was just an 0x, then actually it was just a 0.
+                //
+
+                if ((Result == FALSE) ||
+                    (RtlIsCharacterHexDigit(Character) == FALSE)) {
+
+                    RtlpScannerUnput(Input, Character);
+                    goto ScanDoubleEnd;
+                }
+
+                CharacterCount += 1;
+                FieldSize -= 1;
+                if (FieldSize == 0) {
+                    Status = STATUS_INVALID_SEQUENCE;
+                    goto ScanDoubleEnd;
+                }
+            }
+        }
+    }
+
+    Digit = 0.0;
+    NegativeExponent = OneOverBase;
+
+    //
+    // Loop through every digit.
+    //
+
+    SeenDecimal = FALSE;
+    ValidCharacterFound = FALSE;
+    while (TRUE) {
+
+        //
+        // Uppercase any letters.
+        //
+
+        if ((Character >= 'a') && (Character <= 'z')) {
+            Character = 'A' + Character - 'a';
+        }
+
+        //
+        // Potentially add the next digit.
+        //
+
+        if ((Character >= '0') && (Character <= '9')) {
+            Digit = Character - '0';
+
+        //
+        // It could also be a letter digit.
+        //
+
+        } else if ((Base == 16.0) && (Character >= 'A') && (Character <= 'F')) {
+            Digit = Character - 'A' + 10;
+
+        //
+        // Handle a decimal point. Hopefully it was the the first and only one.
+        //
+
+        } else if (Character == '.') {
+            if (SeenDecimal != FALSE) {
+                break;
+            }
+
+            SeenDecimal = TRUE;
+
+        //
+        // Or it could be something entirely different, in which case the
+        // number is over.
+        //
+
+        } else {
+            break;
+        }
+
+        if (Character != '.') {
+
+            //
+            // If a decimal point has not been seen yet, this is the next
+            // integer digit, so multiply everything by the base and add
+            // this digit.
+            //
+
+            if (SeenDecimal == FALSE) {
+                Value = (Value * Base) + Digit;
+
+            //
+            // This is a fractional part, so multiply it by the current
+            // negative exponent, add it to the value, and shrink down to the
+            // next exponent.
+            //
+
+            } else {
+                Value += Digit * NegativeExponent;
+                NegativeExponent *= OneOverBase;
+            }
+        }
+
+        ValidCharacterFound = TRUE;
+        CharacterCount += 1;
+        FieldSize -= 1;
+        if (FieldSize == 0) {
+            goto ScanDoubleEnd;
+        }
+
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result == FALSE) || (Character == '\0')) {
+            break;
+        }
+    }
+
+    //
+    // If the loop broke without ever finding a valid character, fail.
+    //
+
+    if (ValidCharacterFound == FALSE) {
+        Status = STATUS_INVALID_SEQUENCE;
+        goto ScanDoubleEnd;
+    }
+
+    if (FieldSize == 0) {
+        goto ScanDoubleEnd;
+    }
+
+    //
+    // Look for an exponent character, and if none is found, finish.
+    //
+
+    FoundExponent = FALSE;
+    if (((Base == 10.0) && ((Character == 'e') || (Character == 'E'))) ||
+        ((Base == 16.0) && ((Character == 'p') || (Character == 'P')))) {
+
+        FoundExponent = TRUE;
+    }
+
+    if (FoundExponent == FALSE) {
+        RtlpScannerUnput(Input, Character);
+        goto ScanDoubleEnd;
+    }
+
+    CharacterCount += 1;
+    FieldSize -= 1;
+    if (FieldSize == 0) {
+        goto ScanDoubleEnd;
+    }
+
+    Result = RtlpScannerGetInput(Input, &Character);
+    if ((Result == FALSE) || (Character == '\0')) {
+        goto ScanDoubleEnd;
+    }
+
+    //
+    // Look for an optional plus or minus.
+    //
+
+    if ((Character != '+') &&
+        (Character != '-') &&
+        ((Character < '0') || (Character > '9'))) {
+
+        RtlpScannerUnput(Input, Character);
+        goto ScanDoubleEnd;
+    }
+
+    if ((Character == '+') || (Character == '-')) {
+        if (Character == '-') {
+            ExponentIsNegative = TRUE;
+        }
+
+        CharacterCount += 1;
+        FieldSize -= 1;
+        if (FieldSize == 0) {
+            goto ScanDoubleEnd;
+        }
+
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result == FALSE) || (Character == '\0')) {
+            goto ScanDoubleEnd;
+        }
+    }
+
+    //
+    // Scan the base decimal integer exponent (meaning the exponent is always
+    // a string in base 10).
+    //
+
+    Exponent = 0;
+    while ((Character >= '0') && (Character <= '9')) {
+        Exponent = (Exponent * 10) + (Character - '0');
+        CharacterCount += 1;
+        FieldSize -= 1;
+        if (FieldSize == 0) {
+            break;
+        }
+
+        Result = RtlpScannerGetInput(Input, &Character);
+        if ((Result == FALSE) || (Character == '\0')) {
+            break;
+        }
+    }
+
+    //
+    // If the character that caused the loop to break wasn't an integer, put.
+    // the candle. back.
+    //
+
+    if ((FieldSize != 0) && (Result != FALSE)) {
+        RtlpScannerUnput(Input, Character);
+    }
+
+    if (Exponent > 300) {
+        if (ExponentIsNegative != FALSE) {
+            Value = 0.0;
+
+        } else {
+            Value = DOUBLE_HUGE_VALUE;
+        }
+
+        goto ScanDoubleEnd;
+    }
+
+    //
+    // Create a value with the desired exponent.
+    //
+
+    if (Base == 10.0) {
+
+        //
+        // Put together the approximation using powers of 2.
+        //
+
+        ExponentValue = RtlFirst16PowersOf10[Exponent & 0x0F];
+        Exponent = Exponent >> 4;
+        for (PowerIndex = 0; PowerIndex < 5; PowerIndex += 1) {
+            if (Exponent == 0) {
+                break;
+            }
+
+            if ((Exponent & 0x1) != 0) {
+                if (ExponentIsNegative != FALSE) {
+                    ExponentValue *= RtlNegativePowersOf2[PowerIndex];
+
+                } else {
+                    ExponentValue *= RtlPositivePowersOf2[PowerIndex];
+                }
+            }
+
+            Exponent = Exponent >> 1;
+        }
+
+    //
+    // For base 16, just multiply the power of 2 out.
+    //
+
+    } else {
+        ExponentValue = 1.0;
+        if (ExponentIsNegative != FALSE) {
+            ExponentMultiplier = 0.5;
+
+        } else {
+            ExponentMultiplier = 2.0;
+        }
+
+        while (Exponent != 0) {
+            ExponentValue *= ExponentMultiplier;
+            Exponent -= 1;
+        }
+    }
+
+    Value *= ExponentValue;
+
+ScanDoubleEnd:
+    if ((!KSUCCESS(Status)) && (Result != FALSE)) {
+        RtlpScannerUnput(Input, Character);
+    }
+
+    *CharactersConsumed = CharacterCount;
+    if (Negative != FALSE) {
+        Value = -Value;
+    }
+
+    *Double = Value;
+    return Status;
+}
+
+VOID
+RtlpScannerUnput (
+    PSCAN_INPUT Input,
+    CHAR Character
+    )
+
+/*++
+
+Routine Description:
+
+    This routine puts a byte of input back into the scanner's input stream.
+
+Arguments:
+
+    Input - Supplies a pointer to the input scanner structure.
+
+    Character - Supplies the character to put back.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ASSERT(Input->ValidUnputCharacters < SCANNER_UNPUT_SIZE);
+
+    Input->UnputCharacters[Input->ValidUnputCharacters] = Character;
+    Input->ValidUnputCharacters += 1;
+    return;
+}
+
+VOID
+RtlpScannerWideUnput (
+    PSCAN_INPUT Input,
+    WCHAR Character
+    )
+
+/*++
+
+Routine Description:
+
+    This routine puts a wide character of input back into a byte-oriented
+    scanner's input stream.
+
+Arguments:
+
+    Input - Supplies a pointer to the input scanner structure.
+
+    Character - Supplies the character to put back.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    CHAR Buffer[MULTIBYTE_MAX];
+    ULONG BufferSize;
+    ULONG ByteIndex;
+    KSTATUS Status;
+
+    ASSERT(Input->ValidUnputCharacters < SCANNER_UNPUT_SIZE);
+
+    BufferSize = MULTIBYTE_MAX;
+    Status = RtlConvertWideCharacterToMultibyte(Character,
+                                                Buffer,
+                                                &BufferSize,
+                                                &(Input->State));
+
+    if (KSUCCESS(Status)) {
+        for (ByteIndex = 0; ByteIndex < BufferSize; ByteIndex += 1) {
+            if (Input->ValidUnputCharacters >= SCANNER_UNPUT_SIZE) {
+                break;
+            }
+
+            Input->UnputCharacters[Input->ValidUnputCharacters] =
+                                                            Buffer[ByteIndex];
+
+            Input->ValidUnputCharacters += 1;
+        }
+    }
+
+    return;
+}
+
+BOOL
+RtlpScannerGetInput (
+    PSCAN_INPUT Input,
+    PCHAR Character
+    )
+
+/*++
+
+Routine Description:
+
+    This routine retrieves another byte of input from the input scanner.
+
+Arguments:
+
+    Input - Supplies a pointer to the input scanner structure.
+
+    Character - Supplies a pointer where the character will be returned on
+        success.
+
+Return Value:
+
+    TRUE if a character was read.
+
+    FALSE if the end of the file or string was encountered.
+
+--*/
+
+{
+
+    if (Input->ValidUnputCharacters != 0) {
+        *Character = Input->UnputCharacters[Input->ValidUnputCharacters - 1];
+        Input->ValidUnputCharacters -= 1;
+        return TRUE;
+    }
+
+    return Input->GetInput(Input, Character);
+}
+
+BOOL
+RtlpScannerGetWideInput (
+    PSCAN_INPUT Input,
+    PWCHAR WideCharacter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine retrieves wide input character from a byte oriented scanner
+    input.
+
+Arguments:
+
+    Input - Supplies a pointer to the input scanner structure.
+
+    WideCharacter - Supplies a pointer where the wide character will be
+        returned on success.
+
+Return Value:
+
+    TRUE if a character was read.
+
+    FALSE if the end of the file or string was encountered.
+
+--*/
+
+{
+
+    PSTR Buffer;
+    ULONG BufferSize;
+    CHAR MultibyteBuffer[MULTIBYTE_MAX];
+    ULONG MultibyteBufferSize;
+    BOOL Result;
+    KSTATUS Status;
+
+    MultibyteBufferSize = 0;
+    while (TRUE) {
+        Result = RtlpScannerGetInput(Input,
+                                     &(MultibyteBuffer[MultibyteBufferSize]));
+
+        if (Result == FALSE) {
+            return FALSE;
+        }
+
+        MultibyteBufferSize += 1;
+        Buffer = MultibyteBuffer;
+        BufferSize = MultibyteBufferSize;
+        Status = RtlConvertMultibyteCharacterToWide(&Buffer,
+                                                    &BufferSize,
+                                                    WideCharacter,
+                                                    &(Input->State));
+
+        if (KSUCCESS(Status)) {
+            break;
+
+        } else if (Status != STATUS_BUFFER_TOO_SMALL) {
+            return FALSE;
+        }
+
+        if (MultibyteBufferSize >= MULTIBYTE_MAX) {
+
+            ASSERT(FALSE);
+
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+BOOL
+RtlpStringScannerGetInput (
+    PSCAN_INPUT Input,
+    PCHAR Character
+    )
+
+/*++
+
+Routine Description:
+
+    This routine retrieves another byte of input from the input scanner for a
+    string based scanner.
+
+Arguments:
+
+    Input - Supplies a pointer to the input scanner structure.
+
+    Character - Supplies a pointer where the character will be returned on
+        success.
+
+Return Value:
+
+    TRUE if a character was read.
+
+    FALSE if the end of the file or string was encountered.
+
+--*/
+
+{
+
+    if (Input->StringSize == 0) {
+        return FALSE;
+    }
+
+    Input->CharactersRead += 1;
+    Input->StringSize -= 1;
+    *Character = *(Input->String);
+    Input->String += 1;
+    return TRUE;
+}
+

@@ -1,0 +1,116 @@
+################################################################################
+#
+#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       config.txt
+#
+#   Abstract:
+#
+#       This file contains platform configuration settings for the Raspberry Pi.
+#       It is read by the GPU before it hands control over to the ARM core.
+#
+#   Author:
+#
+#       Chris Stevens 3-Feb-2014
+#
+#   Environment:
+#
+#       Build
+#
+################################################################################
+
+#
+# Limit the amount of memory given to the video core.
+#
+
+gpu_mem=32
+
+#
+# As of 4-Nov-2014 the firmware defaults to swap the red and blue channels.
+# Disable this as the video core mailbox still reports BGR, which is incorrect
+# when the swap is enabled.
+#
+
+framebuffer_swap=0
+
+#
+# Set this to disable the default overscans chosen by the Raspberry Pi firmware.
+#
+
+disable_overscan=1
+
+#
+# Overscan adjustment parameters. Use positive numbers if the console goes off
+# the screen, and negative numbers if there is too much border.
+#
+
+#overscan_left=0
+#overscan_right=0
+#overscan_top=0
+#overscan_bottom=0
+
+#
+# Force a display size. The default uses the display's size minus the overscan.
+#
+
+#framebuffer_width=1024
+#framebuffer_height=768
+
+#
+# Force use of HDMI if it is not being detected and composite output is showing.
+#
+
+hdmi_force_hotplug=1
+
+#
+# Boot in HDMI safe mode with the default HDMI settings.
+#
+
+#hdmi_safe=1
+
+#
+# Force an HDMI group type, rather than relying on the EDID value.
+#
+
+#hdmi_group=1
+
+#
+# Force an HDMI mode type, rather than relying on the EDID value.
+#
+
+#hdmi_mode=1
+
+#
+# Force HDMI mode to get audio. The default is DVI mode without audio.
+#
+
+#hdmi_drive=2
+
+#
+# Set an HDMI boost value between 0 and 7. Higher numbers help with
+# interference issues.
+#
+
+config_hdmi_boost=4
+
+#
+# Set an overclock frequency. The default is 700 MHz.
+#
+
+#arm_freq=800
+
+#
+# Disable the ARM core's access to the L2 cache.
+#
+
+disable_l2cache=0
+
+#
+# Set the kernel image and the kernel's start address.
+#
+
+kernel rpifw
+kernel_address 0x8000
+

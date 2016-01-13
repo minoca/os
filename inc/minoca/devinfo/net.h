@@ -1,0 +1,134 @@
+/*++
+
+Copyright (c) 2014 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    net.h
+
+Abstract:
+
+    This header contains the device information structure format for
+    networking devices.
+
+Author:
+
+    Evan Green 9-May-2014
+
+--*/
+
+//
+// ------------------------------------------------------------------- Includes
+//
+
+//
+// ---------------------------------------------------------------- Definitions
+//
+
+#define NETWORK_DEVICE_INFORMATION_UUID \
+    {{0x0EF6E8C6, 0xAE4B4B90, 0xA2D2D0F7, 0x9BE9F31A}}
+
+#define NETWORK_DEVICE_INFORMATION_VERSION 0x00010000
+
+//
+// Define network device information flags.
+//
+
+//
+// This flag is set if the device is connected to some sort of network.
+//
+
+#define NETWORK_DEVICE_FLAG_MEDIA_CONNECTED 0x00000001
+
+//
+// This flag is set if the device has a network address entry and is configured.
+//
+
+#define NETWORK_DEVICE_FLAG_CONFIGURED 0x00000002
+
+//
+// Define the maximum number of DNS servers to remember.
+//
+
+#define NETWORK_DEVICE_MAX_DNS_SERVERS 4
+
+//
+// ------------------------------------------------------ Data Type Definitions
+//
+
+typedef enum _NETWORK_ADDRESS_CONFIGURATION_METHOD {
+    NetworkAddressConfigurationInvalid,
+    NetworkAddressConfigurationNone,
+    NetworkAddressConfigurationStatic,
+    NetworkAddressConfigurationDhcp
+} NETWORK_ADDRESS_CONFIGURATION_METHOD, *PNETWORK_ADDRESS_CONFIGURATION_METHOD;
+
+/*++
+
+Structure Description:
+
+    This structure defines the information published by networking devices.
+
+Members:
+
+    Version - Stores the table version. Future revisions will be backwards
+        compatible. Set to NETWORK_DEVICE_INFORMATION_VERSION.
+
+    Flags - Stores a bitfield of flags describing the network device. See
+        NETWORK_DEVICE_FLAG_* definitions.
+
+    Network - Stores the socket network for which this information is valid.
+        Network devices may be active on more than network protocol
+        simultaneously (IPv4 and IPv6 for example). The caller sets this to
+        request information about a given network address configuration.
+
+    ConfigurationMethod - Stores the method used to configure the address of
+        this device.
+
+    Address - Stores the network address of the link.
+
+    Subnet - Stores the network subnet mask of the link.
+
+    Gateway - Stores the default gateway network address for the link.
+
+    DnsServer - Stores an array of network addresses of Domain Name Servers
+        to try, in order.
+
+    DnsServerCount - Stores the number of valid DNS servers in the array.
+
+    PhysicalAddress - Stores the physical address of the link.
+
+    LeaseServerAddress - Stores the network address of the server who provided
+        the network address if it is a dynamic address.
+
+    LeaseStartTime - Stores the time the lease on the network address began.
+        This is only valid for dynamic address configuration methods.
+
+    LeaseEndTime - Stores the time the lease on the network address ends. This
+        is only valid for dynamic address configuration methods.
+
+--*/
+
+typedef struct _NETWORK_DEVICE_INFORMATION {
+    ULONG Version;
+    ULONG Flags;
+    SOCKET_NETWORK Network;
+    NETWORK_ADDRESS_CONFIGURATION_METHOD ConfigurationMethod;
+    NETWORK_ADDRESS Address;
+    NETWORK_ADDRESS Subnet;
+    NETWORK_ADDRESS Gateway;
+    NETWORK_ADDRESS DnsServers[NETWORK_DEVICE_MAX_DNS_SERVERS];
+    ULONG DnsServerCount;
+    NETWORK_ADDRESS PhysicalAddress;
+    NETWORK_ADDRESS LeaseServerAddress;
+    SYSTEM_TIME LeaseStartTime;
+    SYSTEM_TIME LeaseEndTime;
+} NETWORK_DEVICE_INFORMATION, *PNETWORK_DEVICE_INFORMATION;
+
+//
+// -------------------------------------------------------------------- Globals
+//
+
+//
+// -------------------------------------------------------- Function Prototypes
+//

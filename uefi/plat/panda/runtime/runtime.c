@@ -1,0 +1,260 @@
+/*++
+
+Copyright (c) 2014 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    runtime.c
+
+Abstract:
+
+    This module implements platform-specific runtime code for the PandaBoard
+    system.
+
+Author:
+
+    Evan Green 19-Mar-2014
+
+Environment:
+
+    Firmware
+
+--*/
+
+//
+// ------------------------------------------------------------------- Includes
+//
+
+#include <uefifw.h>
+#include "pandafw.h"
+
+//
+// ---------------------------------------------------------------- Definitions
+//
+
+//
+// ------------------------------------------------------ Data Type Definitions
+//
+
+//
+// ----------------------------------------------- Internal Function Prototypes
+//
+
+//
+// -------------------------------------------------------------------- Globals
+//
+
+//
+// Keep the GPIO address around just for the LEDs.
+//
+
+VOID *EfiOmap4Gpio1Address = (VOID *)OMAP4430_GPIO1_BASE;
+
+//
+// ------------------------------------------------------------------ Functions
+//
+
+EFI_STATUS
+EfiPlatformRuntimeInitialize (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs platform-specific firmware initialization in the
+    runtime core driver. The runtime routines are in a separate binary from the
+    firmware core routines as they need to be relocated for runtime. This
+    routine should perform platform-specific initialization needed to provide
+    the core runtime services.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    EFI status code.
+
+--*/
+
+{
+
+    EFI_STATUS Status;
+
+    EfipOmapI2cInitialize();
+    Status = Omap4Twl6030InitializeMmcPower();
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    Status = Omap4Twl6030InitializeRtc();
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    //
+    // Take over the runtime services. The runtime library recomputes the
+    // CRC so there's no need to do it here.
+    //
+
+    EfiRuntimeServices->GetTime = EfipOmap4GetTime;
+    EfiRuntimeServices->SetTime = EfipOmap4SetTime;
+    EfiRuntimeServices->GetWakeupTime = EfipOmap4GetWakeupTime;
+    EfiRuntimeServices->SetWakeupTime = EfipOmap4SetWakeupTime;
+    EfiRuntimeServices->ResetSystem = EfipOmap4ResetSystem;
+    return EFI_SUCCESS;
+}
+
+EFI_STATUS
+EfiPlatformReadNonVolatileData (
+    VOID *Data,
+    UINTN DataSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine reads the EFI variable data from non-volatile storage.
+
+Arguments:
+
+    Data - Supplies a pointer where the platform returns the non-volatile
+        data.
+
+    DataSize - Supplies the size of the data to return.
+
+Return Value:
+
+    EFI_SUCCESS if some data was successfully loaded.
+
+    EFI_UNSUPPORTED if the platform does not have non-volatile storage. In this
+    case the firmware core saves the non-volatile variables to a file on the
+    EFI system partition, and the variable library hopes to catch the same
+    variable buffer on reboots to see variable writes that happened at
+    runtime.
+
+    EFI_DEVICE_IO_ERROR if a device error occurred during the operation.
+
+    Other error codes on other failures.
+
+--*/
+
+{
+
+    return EFI_UNSUPPORTED;
+}
+
+EFI_STATUS
+EfiPlatformWriteNonVolatileData (
+    VOID *Data,
+    UINTN DataSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine writes the EFI variable data to non-volatile storage.
+
+Arguments:
+
+    Data - Supplies a pointer to the data to write.
+
+    DataSize - Supplies the size of the data to write, in bytes.
+
+Return Value:
+
+    EFI_SUCCESS if some data was successfully loaded.
+
+    EFI_UNSUPPORTED if the platform does not have non-volatile storage. In this
+    case the firmware core saves the non-volatile variables to a file on the
+    EFI system partition, and the variable library hopes to catch the same
+    variable buffer on reboots to see variable writes that happened at
+    runtime.
+
+    EFI_DEVICE_IO_ERROR if a device error occurred during the operation.
+
+    Other error codes on other failures.
+
+--*/
+
+{
+
+    return EFI_UNSUPPORTED;
+}
+
+VOID
+EfiPlatformRuntimeExitBootServices (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called in the runtime core driver when the firmware is in
+    the process of terminating boot services. The platform can do any work it
+    needs to prepare for the imminent termination of boot services.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // Turn on both LEDs just for fun.
+    //
+
+    WRITE_GPIO1_REGISTER(OmapGpioOutputSet, (1 << 7) | (1 << 8));
+    return;
+}
+
+VOID
+EfiPlatformRuntimeVirtualAddressChange (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called in the runtime core driver when the firmware is
+    converting to virtual address mode. It should convert any pointers it's
+    got. This routine is called after ExitBootServices, so no EFI boot services
+    are available.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // Convert the I2C base for GetTime and friends, and convert the PRM
+    // Device instance base for ResetSystem.
+    //
+
+    EfiConvertPointer(0, &EfiOmap4I2cBase);
+    EfiConvertPointer(0, &EfiOmap4PrmDeviceBase);
+    return;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//

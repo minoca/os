@@ -1,0 +1,51 @@
+#!/bin/sh
+## Copyright (c) 2014 Minoca Corp. All Rights Reserved.
+##
+## Script Name:
+##
+##     download_build.sh
+##
+## Abstract:
+##
+##     This script downloads and extracts the latest build.
+##
+## Author:
+##
+##     Evan Green 15-May-2014
+##
+## Environment:
+##
+##     Minoca Build
+##
+
+set -e
+
+if test -z "$ARCH"; then
+    echo "ARCH must be set."
+    exit 1
+fi
+
+if test -z "$DEBUG"; then
+    echo "DEBUG must be set."
+    exit 1
+fi
+
+export TMPDIR=$PWD
+export TEMP=$TMPDIR
+SCHEDULE_ARCH="$ARCH"
+if [ -n "$QUARK" ]; then
+    SCHEDULE_ARCH="${ARCH}quark"
+fi
+
+last_native_build=`python ../../client.py --query "Native Pilot $SCHEDULE_ARCH"`
+if test -z $last_native_build; then
+  echo "Error: Failed to get last Native Pilot $SCHEDULE_ARCH build."
+  exit 1
+fi
+
+file=minoca-bin-$ARCH$DEBUG.tar.gz
+echo "Downloading $file from schedule instance ID $last_native_build"
+python ../../client.py --pull $file $file $last_native_build
+echo "Extracting $file"
+tar -xzf $file
+rm $file

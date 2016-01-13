@@ -1,0 +1,168 @@
+/*++
+
+Copyright (c) 2012 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    kdsup.S
+
+Abstract:
+
+    This module implements ARMv7 specific support routines for the Kernel
+    Debugging subsystem.
+
+Author:
+
+    Evan Green 21-Aug-2012
+
+Environment:
+
+    Kernel mode
+
+--*/
+
+##
+## ------------------------------------------------------------------ Includes
+##
+
+#include <minoca/arm.inc>
+
+##
+## --------------------------------------------------------------- Definitions
+##
+
+##
+## ---------------------------------------------------------------------- Code
+##
+
+ASSEMBLY_FILE_HEADER
+
+##
+## VOID
+## KdpBreak (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine causes a break into the debugger.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION KdpBreak
+    DEBUGGER_BREAK                              @ Debugger break.
+    bx  %lr                                     @ Return.
+
+END_FUNCTION KdpBreak
+
+##
+## VOID
+## KdpCleanMemory (
+##     PVOID Address
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine cleans memory modified by the kernel debugger, flushing it
+    out of the instruciton and data caches.
+
+Arguments:
+
+    Address - Supplies the address whose associated cache line will be
+        cleaned.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION KdpCleanMemory
+    mcr     p15, 0, %r0, %cr7, %cr10, 1         @ Clean the cache line.
+    mov     %r0, #0                             @
+    mcr     p15, 0, %r0, %cr7, %cr5, 0          @ Invalidate instruction cache.
+    dsb                                         @ Make instructions finish.
+    isb                                         @ Prevent speculative fetching.
+    bx      %lr                                 @
+
+END_FUNCTION KdpCleanMemory
+
+##
+## VOID
+## KdpInvalidateInstructionCache (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine invalidates the instruction cache to PoU inner shareable.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION KdpInvalidateInstructionCache
+    mov     %r0, #0                             @
+    mcr     p15, 0, %r0, %cr7, %cr5, 0          @ Invalidate instruction cache.
+    dsb                                         @ Make instructions finish.
+    isb                                         @ Prevent speculative fetching.
+    bx      %lr                                 @
+
+END_FUNCTION KdpInvalidateInstructionCache
+
+##
+## VOID
+## KdpDisableInterrupts (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine disables all interrupts on the current processor.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION KdpDisableInterrupts
+    cpsid   i                       @ OR in the interrupts flag.
+    bx      %lr                     @
+
+END_FUNCTION KdpDisableInterrupts
+
+##
+## --------------------------------------------------------- Internal Functions
+##
+

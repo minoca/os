@@ -1,0 +1,27 @@
+################################################################################
+#
+#   Copyright (c) 2012 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This module defines the sources files for the FAT32 file system.
+#
+#   Author:
+#
+#       Evan Green 23-Sep-2012
+#
+#   Environment:
+#
+#       Boot Environment, Build Environment, and Kernel Mode
+#
+################################################################################
+
+OBJS = fat.o      \
+       fatcache.o \
+       fatsup.o   \
+       idtodir.o  \
+

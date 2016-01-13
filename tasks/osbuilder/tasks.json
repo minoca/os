@@ -1,0 +1,30 @@
+[
+{
+    "type": "task",
+    "name": "Update OS Builder",
+    "steps": [
+        {
+            "name": "Run Install",
+            "type": "runtask",
+            "parameter": "Install Build"
+        },
+        {
+            "name": "Update OS Builder Packages",
+            "type": "execute",
+            "parameter": "../../tasks/osbuilder/update_packages.sh"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "OS Builder Task",
+    "steps": [
+        {
+            "name": "OS Builder Step",
+            "type": "execute",
+            "parameter": "../../tasks/osbuilder/build_image.sh"
+        }
+    ]
+}
+]
+

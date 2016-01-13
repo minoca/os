@@ -1,0 +1,153 @@
+#! /bin/sh
+## Copyright (c) 2015 Minoca Corp. All Rights Reserved.
+##
+## Script Name:
+##
+##     init-functions
+##
+## Abstract:
+##
+##     This script provides a set of common functions to init scripts.
+##
+## Author:
+##
+##     Evan Green 23-Mar-2015
+##
+## Environment:
+##
+##     System Boot
+##
+
+log_use_fancy_output() {
+    FANCYTTY=1
+    true
+}
+
+log_success_msg () {
+    if [ -n "${1:-}" ]; then
+        log_begin_msg $@
+    fi
+
+    log_end_msg 0
+}
+
+log_failure_msg () {
+    if [ -n "${1:-}" ]; then
+        log_begin_msg $@
+    fi
+
+    log_end_msg 1 || true
+}
+
+log_warning_msg () {
+    if [ -n "${1:-}" ]; then
+        log_begin_msg $@
+    fi
+
+    log_end_msg 255 || true
+}
+
+log_begin_msg () {
+    if [ -z "${1:-}" ]; then
+        return 1
+    fi
+
+    echo -n "$@" || true
+}
+
+log_daemon_msg () {
+    if [ -z "${1:-}" ]; then
+        return 1
+    fi
+
+    if [ -z "${2:-}" ]; then
+        echo -n "$1:" || true
+        return
+    fi
+
+    echo -n "$1: $2" || true
+}
+
+log_progress_msg () {
+    if [ -z "${1:-}" ]; then
+        return 1
+    fi
+
+    echo -n " $@" || true
+}
+
+log_end_msg () {
+    local returnvalue
+    if [ -z "${1:-}" ]; then
+        return 1
+    fi
+
+    returnvalue=$1
+    RED="\\0033[1;31m"
+    YELLOW="\\0033[1;33m"
+    GREEN="\\0033[1;32m"
+    NORMAL="\\0033[1;39m"
+    RES_COL=60
+    MOVE_TO_COL="\\0033[${RES_COL}G"
+    SAVE_CURSOR="\\00337"
+    RESTORE_CURSOR="\\00338"
+    echo -ne "${SAVE_CURSOR}${MOVE_TO_COL}"
+    if [ $1 -eq 0 ]; then
+        echo -ne "[ ${GREEN}OK "
+
+    elif [ $1 -eq 255 ]; then
+        echo -ne "[${YELLOW}WARN"
+
+    else
+        echo -ne "[${RED}FAIL"
+    fi
+
+    echo -ne "${NORMAL}]${RESTORE_CURSOR}"
+    if [ $1 -eq 0 ]; then
+        echo "." || true
+
+    elif [ $1 -eq 255 ]; then
+        echo -e " ${YELLOW}(warning).${NORMAL}" || true
+
+    else
+        echo -e " ${RED}failed!${NORMAL}" || true
+
+    fi
+    return $returnvalue
+}
+
+log_action_msg () {
+    echo "$@." || true
+}
+
+log_action_begin_msg () {
+    echo "$@..." || true
+}
+
+log_action_cont_msg () {
+    echo "$@..." || true
+}
+
+log_action_end_msg () {
+    local end
+    if [ -z "${2:-}" ]; then
+        end="."
+
+    else
+        end=" ($2)."
+    fi
+
+    if [ $1 -eq 0 ]; then
+        echo "done${end}" || true
+
+    else
+        if log_use_fancy_output; then
+            RED="\\0033[[1;31m"
+            NORMAL="\\0033[[1;39m"
+            echo -e "${RED}failed${end}${NORMAL}" || true
+
+        else
+            echo "failed${end}" || true
+        fi
+    fi
+}

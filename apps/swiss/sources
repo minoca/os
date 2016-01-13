@@ -1,0 +1,99 @@
+################################################################################
+#
+#   Copyright (c) 2013 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This file contains the common object files for the swiss application.
+#
+#   Author:
+#
+#       Evan Green 10-Sep-2013
+#
+#   Environment:
+#
+#       Build
+#
+################################################################################
+
+COMMON_OBJS = basename.o       \
+              cat.o            \
+              cecho.o          \
+              chmod.o          \
+              chroot.o         \
+              cmp.o            \
+              comm.o           \
+              cp.o             \
+              cut.o            \
+              dd.o             \
+              diff.o           \
+              date.o           \
+              dirname.o        \
+              easy.o           \
+              echo.o           \
+              env.o            \
+              expr.o           \
+              find.o           \
+              grep.o           \
+              head.o           \
+              id.o             \
+              install.o        \
+              kill.o           \
+              ln.o             \
+              ls/compare.o     \
+              ls/ls.o          \
+              mkdir.o          \
+              mktemp.o         \
+              mv.o             \
+              nl.o             \
+              od.o             \
+              printf.o         \
+              ps.o             \
+              pwd.o            \
+              reboot.o         \
+              rm.o             \
+              rmdir.o          \
+              sed/sed.o        \
+              sed/sedfunc.o    \
+              sed/sedparse.o   \
+              sed/sedutil.o    \
+              sh/alias.o       \
+              sh/arith.o       \
+              sh/builtin.o     \
+              sh/exec.o        \
+              sh/expand.o      \
+              sh/lex.o         \
+              sh/linein.o      \
+              sh/parser.o      \
+              sh/path.o        \
+              sh/sh.o          \
+              sh/signals.o     \
+              sh/util.o        \
+              sh/var.o         \
+              sort.o           \
+              split.o          \
+              sum.o            \
+              swiss.o          \
+              swlib/copy.o     \
+              swlib/delete.o   \
+              swlib/pattern.o  \
+              swlib/pwdcmd.o   \
+              swlib/string.o   \
+              swlib/userio.o   \
+              tail.o           \
+              tee.o            \
+              test.o           \
+              time.o           \
+              touch.o          \
+              tr.o             \
+              uname.o          \
+              uniq.o           \
+              wc.o             \
+              xargs.o          \
+
+EXTRA_SRC_DIRS = login ls sed sh swlib
+

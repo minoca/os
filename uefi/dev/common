@@ -1,0 +1,24 @@
+################################################################################
+#
+#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#
+#   Binary Name:
+#
+#       Common UEFI device sources
+#
+#   Abstract:
+#
+#       This file includes common build arguments for all UEFI device libraries.
+#
+#   Author:
+#
+#       Evan Green 27-Feb-2014
+#
+#   Environment:
+#
+#       Firmware
+#
+################################################################################
+
+INCLUDES += $(SRCROOT)/os/uefi/inc;
+

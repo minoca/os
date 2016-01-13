@@ -1,0 +1,44 @@
+The following are the expected schedules in the build server. These are not
+hard-coded in JSON so that the machine pools and scheduling parameters can be
+configured.
+
+Schedule Name               Task Name               Node
+================================================================================
+Windows Pilot               Windows Pilot           Windows Pilot Machine
+Windows Compile x86 chk     Windows Compile         Windows Pilot Machine
+    ARCH=x86 DEBUG=chk
+Windows Compile armv7 chk   Windows Compile         Windows Pilot Machine
+    ARCH=armv7 DEBUG=chk
+Windows Compile armv6 chk   Windows Compile         Windows Pilot Machine
+    ARCH=armv6 DEBUG=chk
+Native Pilot x86            Native Pilot            Native Pilot Machine (x86)
+    ARCH=x86 DEBUG=chk
+Native Pilot x86quark       Native Pilot            Native Pilot Machine (x86)
+    ARCH=x86 DEBUG=chk QUARK=yes
+Native Pilot armv7          Native Pilot            Native Pilot Machine (armv7)
+    ARCH=armv7 DEBUG=chk
+Native Pilot armv6          Native Pilot            Native Pilot Machine (armv6)
+    ARCH=armv6 DEBUG=chk
+Native Test x86             Native Test             x86 test machines
+Native Test x86quark        Native Test             Galileo test machines
+Native Test armv7           Native Test             armv7 test machines
+Native Test armv6           Native Test             armv6 test machines
+Package Distributables      Generate Distributables Windows Pilot Machine
+
+Tree view showing which schedules kick off which other schedules:
+Windows Pilot
+    Windows Compile x86 chk
+    Windows Compile armv7 chk
+    Native Pilot x86
+        Native Test x86
+        Package Distributables
+    Native Pilot x86quark
+        Native Test x86quark
+        Package Distributables
+    Native Pilot armv7
+        Native Test Architecture
+        Package Distributables
+    Native Pilot armv6
+        Native Test Architecture
+        Package Distributables
+

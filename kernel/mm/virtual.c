@@ -1,0 +1,3030 @@
+/*++
+
+Copyright (c) 2012 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    virtual.c
+
+Abstract:
+
+    This module implements virtual memory accounting in the kernel.
+
+Author:
+
+    Evan Green 1-Aug-2012
+
+Environment:
+
+    Kernel
+
+--*/
+
+//
+// ------------------------------------------------------------------- Includes
+//
+
+#include <minoca/kernel.h>
+#include <minoca/bootload.h>
+#include "mmp.h"
+
+//
+// ---------------------------------------------------------------- Definitions
+//
+
+#define DESCRIPTOR_REFILL_PAGE_COUNT 3
+
+//
+// Define the system virtual memory warning levels, in bytes, for systems with
+// a small amount of virtual memory (i.e. <= 4GB).
+//
+
+#define MM_SMALL_VIRTUAL_MEMORY_WARNING_LEVEL_1_TRIGGER (200 * _1MB)
+#define MM_SMALL_VIRTUAL_MEMORY_WARNING_LEVEL_1_RETREAT (256 * _1MB)
+#define MM_SMALL_VIRTUAL_MEMORY_WARNING_COUNT_MASK ~((16 * _1MB) - 1)
+
+//
+// Define the system virtual memory warning levels, in bytes, for systems with
+// a large amount of virtual memory (e.g. 64-bit systems).
+//
+
+#define MM_LARGE_VIRTUAL_MEMORY_WARNING_LEVEL_1_TRIGGER (1 * (UINTN)_1GB)
+#define MM_LARGE_VIRTUAL_MEMORY_WARNING_LEVEL_1_RETREAT (2 * (UINTN)_1GB)
+#define MM_LARGE_VIRTUAL_MEMORY_WARNING_COUNT_MASK ~((256 * _1MB) - 1)
+
+//
+// ------------------------------------------------------ Data Type Definitions
+//
+
+/*++
+
+Structure Description:
+
+    This structure defines the iteration context when initializing the kernel
+    address space.
+
+Members:
+
+    Status - Stores the resulting status code.
+
+--*/
+
+typedef struct _INITIALIZE_KERNEL_VA_CONTEXT {
+    KSTATUS Status;
+} INITIALIZE_KERNEL_VA_CONTEXT, *PINITIALIZE_KERNEL_VA_CONTEXT;
+
+/*++
+
+Structure Description:
+
+    This structure defines the iteration context when cloning the memory map
+    of an address space.
+
+Members:
+
+    Accounting - Stores the destination of the clone operation.
+
+    Status - Stores the resulting status code.
+
+--*/
+
+typedef struct _CLONE_ADDRESS_SPACE_CONTEXT {
+    PMEMORY_ACCOUNTING Accounting;
+    KSTATUS Status;
+} CLONE_ADDRESS_SPACE_CONTEXT, *PCLONE_ADDRESS_SPACE_CONTEXT;
+
+//
+// ----------------------------------------------- Internal Function Prototypes
+//
+
+KSTATUS
+MmpLockOrUnlockUserModeAddressRange (
+    PVOID UserModePointer,
+    ULONG Size,
+    BOOL Lock
+    );
+
+KSTATUS
+MmpPrepareToAddAccountingDescriptor (
+    PMEMORY_ACCOUNTING Accountant
+    );
+
+BOOL
+MmpIsAccountingRangeAllocated (
+    PMEMORY_ACCOUNTING Accountant,
+    PVOID Address,
+    UINTN SizeInBytes
+    );
+
+VOID
+MmpInitializeKernelVaIterator (
+    PMEMORY_DESCRIPTOR_LIST DescriptorList,
+    PMEMORY_DESCRIPTOR Descriptor,
+    PVOID Context
+    );
+
+VOID
+MmpCloneAddressSpaceIterator (
+    PMEMORY_DESCRIPTOR_LIST DescriptorList,
+    PMEMORY_DESCRIPTOR Descriptor,
+    PVOID Context
+    );
+
+//
+// -------------------------------------------------------------------- Globals
+//
+
+//
+// Stores information about which kernel VA space is occupied and which is free.
+//
+
+MEMORY_ACCOUNTING MmKernelVirtualSpace;
+
+//
+// Stores the kernel address of the user shared data.
+//
+
+PUSER_SHARED_DATA MmUserSharedData;
+
+//
+// Stores the event used to signal a virtual memory notification when there is
+// a significant change in the amount of allocated virtual memory.
+//
+
+PKEVENT MmVirtualMemoryWarningEvent;
+
+//
+// Stores the current virtual memory warning level.
+//
+
+MEMORY_WARNING_LEVEL MmVirtualMemoryWarningLevel;
+
+//
+// Stores the number of bytes for each warning level's threshold.
+//
+
+UINTN MmVirtualMemoryWarningLevel1Retreat;
+UINTN MmVirtualMemoryWarningLevel1Trigger;
+
+//
+// Store the mask that determines how often virtual memory warning levels are
+// checked.
+//
+
+UINTN MmVirtualMemoryCountMask;
+
+//
+// Store counters that track how many virtual system memory bytes have been
+// allocated and freed. It is OK for these values to wrap.
+//
+
+UINTN MmVirtualMemoryAllocationByteCount;
+UINTN MmVirtualMemoryFreeByteCount;
+
+//
+// ------------------------------------------------------------------ Functions
+//
+
+KERNEL_API
+PVOID
+MmGetVirtualMemoryWarningEvent (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the memory manager's system virtual memory warning
+    event. This event is signaled whenever there is a change in system virtual
+    memory's warning level.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a pointer to the virutal memory warning event.
+
+--*/
+
+{
+
+    ASSERT(MmVirtualMemoryWarningEvent != NULL);
+
+    return MmVirtualMemoryWarningEvent;
+}
+
+KERNEL_API
+MEMORY_WARNING_LEVEL
+MmGetVirtualMemoryWarningLevel (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the current system virtual memory warning level.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the current virtual memory warning level.
+
+--*/
+
+{
+
+    return MmVirtualMemoryWarningLevel;
+}
+
+UINTN
+MmGetTotalVirtualMemory (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the total number of system virtual memory, in bytes.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the total number of system virtual memory, in bytes.
+
+--*/
+
+{
+
+    return (UINTN)MmKernelVirtualSpace.Mdl.TotalSpace;
+}
+
+UINTN
+MmGetTotalFreeVirtualMemory (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the total number of free system virtual memory, in
+    bytes.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the total number of free system virtual memory, in bytes.
+
+--*/
+
+{
+
+    return (UINTN)MmKernelVirtualSpace.Mdl.FreeSpace;
+}
+
+KERNEL_API
+PVOID
+MmMapPhysicalAddress (
+    PHYSICAL_ADDRESS PhysicalAddress,
+    UINTN SizeInBytes,
+    BOOL Writable,
+    BOOL WriteThrough,
+    BOOL CacheDisabled
+    )
+
+/*++
+
+Routine Description:
+
+    This routine maps a physical address into kernel VA space. It is meant so
+    that system components can access memory mapped hardware.
+
+Arguments:
+
+    PhysicalAddress - Supplies a pointer to the physical address.
+
+    SizeInBytes - Supplies the size in bytes of the mapping. This will be
+        rounded up to the nearest page size.
+
+    Writable - Supplies a boolean indicating if the memory is to be marked
+        writable (TRUE) or read-only (FALSE).
+
+    WriteThrough - Supplies a boolean indicating if the memory is to be marked
+        write-through (TRUE) or write-back (FALSE).
+
+    CacheDisabled - Supplies a boolean indicating if the memory is to be mapped
+        uncached.
+
+Return Value:
+
+    Returns a pointer to the virtual address of the mapping on success, or
+    NULL on failure.
+
+--*/
+
+{
+
+    ULONG PageOffset;
+    ULONG PageSize;
+    PVOID VirtualAddress;
+
+    PageSize = MmPageSize();
+    PageOffset = PhysicalAddress - ALIGN_RANGE_DOWN(PhysicalAddress, PageSize);
+    VirtualAddress = MmpMapPhysicalAddress(PhysicalAddress - PageOffset,
+                                           SizeInBytes + PageOffset,
+                                           Writable,
+                                           WriteThrough,
+                                           CacheDisabled,
+                                           MemoryTypeHardware);
+
+    return VirtualAddress + PageOffset;
+}
+
+KERNEL_API
+VOID
+MmUnmapAddress (
+    PVOID VirtualAddress,
+    UINTN SizeInBytes
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unmaps memory mapped with MmMapPhysicalMemory.
+
+Arguments:
+
+    VirtualAddress - Supplies the virtual address to unmap.
+
+    SizeInBytes - Supplies the number of bytes to unmap.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG PageOffset;
+    ULONG PageSize;
+
+    PageSize = MmPageSize();
+    PageOffset = REMAINDER((UINTN)VirtualAddress, PageSize);
+    VirtualAddress = ALIGN_POINTER_DOWN(VirtualAddress, PageSize);
+    SizeInBytes = ALIGN_RANGE_UP(SizeInBytes + PageOffset, PageSize);
+    MmpFreeAccountingRange(PsGetKernelProcess(),
+                           &MmKernelVirtualSpace,
+                           VirtualAddress,
+                           SizeInBytes,
+                           FALSE,
+                           UNMAP_FLAG_SEND_INVALIDATE_IPI);
+
+    return;
+}
+
+KSTATUS
+MmCreateCopyOfUserModeString (
+    PSTR UserModeString,
+    ULONG UserModeStringBufferLength,
+    ULONG AllocationTag,
+    PSTR *CreatedCopy
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is a convenience method that captures a string from user mode
+    and creates a paged-pool copy in kernel mode. The caller can be sure that
+    the string pointer was properly sanitized and the resulting buffer is null
+    terminated. The caller is responsible for freeing the memory returned by
+    this function on success.
+
+Arguments:
+
+    UserModeString - Supplies the user mode pointer to the string.
+
+    UserModeStringBufferLength - Supplies the size of the buffer containing the
+        user mode string.
+
+    AllocationTag - Supplies the allocation tag that should be used when
+        creating the kernel buffer.
+
+    CreatedCopy - Supplies a pointer where the paged pool allocation will be
+        returned.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PSTR Copy;
+    KSTATUS Status;
+
+    Copy = NULL;
+    if ((UserModeString == NULL) || (UserModeStringBufferLength == 0)) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto CreateCopyOfUserModeStringEnd;
+    }
+
+    //
+    // Allocate the new buffer.
+    //
+
+    UserModeStringBufferLength += 1;
+    Copy = MmAllocatePagedPool(UserModeStringBufferLength, AllocationTag);
+    if (Copy == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CreateCopyOfUserModeStringEnd;
+    }
+
+    //
+    // Copy the string from user mode.
+    //
+
+    Status = MmCopyFromUserMode(Copy,
+                                UserModeString,
+                                UserModeStringBufferLength);
+
+    if (!KSUCCESS(Status)) {
+        goto CreateCopyOfUserModeStringEnd;
+    }
+
+    //
+    // Explicitly null terminate the buffer.
+    //
+
+    Copy[UserModeStringBufferLength - 1] = '\0';
+
+CreateCopyOfUserModeStringEnd:
+    if (!KSUCCESS(Status)) {
+        if (Copy != NULL) {
+            MmFreePagedPool(Copy);
+            Copy = NULL;
+        }
+    }
+
+    *CreatedCopy = Copy;
+    return Status;
+}
+
+KERNEL_API
+KSTATUS
+MmCopyFromUserMode (
+    PVOID KernelModePointer,
+    PVOID UserModePointer,
+    UINTN Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine copies memory from user mode to kernel mode.
+
+Arguments:
+
+    KernelModePointer - Supplies the kernel mode pointer, the destination of
+        the copy.
+
+    UserModePointer - Supplies the untrusted user mode pointer, the source of
+        the copy.
+
+    Size - Supplies the number of bytes to copy.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the user mode memory is invalid or corrupt.
+
+--*/
+
+{
+
+    BOOL Result;
+
+    if ((UserModePointer + Size > KERNEL_VA_START) ||
+        (UserModePointer + Size <= UserModePointer)) {
+
+        return STATUS_ACCESS_VIOLATION;
+    }
+
+    Result = MmpCopyUserModeMemory(KernelModePointer, UserModePointer, Size);
+    if (Result != FALSE) {
+        return STATUS_SUCCESS;
+    }
+
+    return STATUS_ACCESS_VIOLATION;
+}
+
+KERNEL_API
+KSTATUS
+MmCopyToUserMode (
+    PVOID UserModePointer,
+    PVOID KernelModePointer,
+    UINTN Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine copies memory to user mode from kernel mode.
+
+Arguments:
+
+    UserModePointer - Supplies the untrusted user mode pointer, the destination
+        of the copy.
+
+    KernelModePointer - Supplies the kernel mode pointer, the source of the
+        copy.
+
+    Size - Supplies the number of bytes to copy.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the user mode memory is invalid or corrupt.
+
+--*/
+
+{
+
+    BOOL Result;
+
+    if ((UserModePointer + Size > KERNEL_VA_START) ||
+        (UserModePointer + Size <= UserModePointer)) {
+
+        return STATUS_ACCESS_VIOLATION;
+    }
+
+    Result = MmpCopyUserModeMemory(UserModePointer, KernelModePointer, Size);
+    if (Result != FALSE) {
+        return STATUS_SUCCESS;
+    }
+
+    return STATUS_ACCESS_VIOLATION;
+}
+
+KERNEL_API
+KSTATUS
+MmTouchUserModeBuffer (
+    PVOID Buffer,
+    UINTN Size,
+    BOOL Write
+    )
+
+/*++
+
+Routine Description:
+
+    This routine touches a user mode buffer, validating it either for reading
+    or writing. Note that the caller must also have the process VA space
+    locked, or else this data is immediately stale.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer to probe.
+
+    Size - Supplies the number of bytes to copy.
+
+    Write - Supplies a boolean indicating whether to probe the memory for
+        reading or writing.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_ACCESS_VIOLATION if the user mode memory is invalid.
+
+--*/
+
+{
+
+    BOOL Result;
+
+    if ((Buffer + Size > KERNEL_VA_START) || (Buffer + Size <= Buffer)) {
+        return STATUS_ACCESS_VIOLATION;
+    }
+
+    if (Write != FALSE) {
+        Result = MmpTouchUserModeMemoryForWrite(Buffer, Size);
+
+    } else {
+        Result = MmpTouchUserModeMemoryForRead(Buffer, Size);
+    }
+
+    if (Result != FALSE) {
+        return STATUS_SUCCESS;
+    }
+
+    return STATUS_ACCESS_VIOLATION;
+}
+
+VOID
+MmLockProcessAddressSpace (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine acquires a shared lock on the process address space to ensure
+    that user mode cannot change the virtual address map while the kernel is
+    using a region.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PKPROCESS Process;
+
+    Process = PsGetCurrentProcess();
+    MmpLockAccountant(Process->Accountant, FALSE);
+    return;
+}
+
+VOID
+MmUnlockProcessAddressSpace (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unlocks the current process address space, allowing changes
+    to be made once again.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PKPROCESS Process;
+
+    Process = PsGetCurrentProcess();
+    MmpUnlockAccountant(Process->Accountant, FALSE);
+    return;
+}
+
+PMEMORY_RESERVATION
+MmCreateMemoryReservation (
+    PVOID PreferredVirtualAddress,
+    UINTN Size,
+    BOOL KernelMode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a virtual address reservation for the current process.
+
+Arguments:
+
+    PreferredVirtualAddress - Supplies the preferred virtual address of the
+        reservation. Supply NULL to indicate no preference.
+
+    Size - Supplies the size of the requested reservation, in bytes.
+
+    KernelMode - Supplies a boolean indicating whether the VA reservation must
+        be in kernel mode (TRUE) or user mode (FALSE).
+
+Return Value:
+
+    Returns a pointer to the reservation structure on success.
+
+    NULL on failure.
+
+--*/
+
+{
+
+    PMEMORY_ACCOUNTING Accountant;
+    UINTN AlignedSize;
+    PVOID AllocatedAddress;
+    PKPROCESS KernelProcess;
+    ULONG PageSize;
+    PKPROCESS Process;
+    PMEMORY_RESERVATION Reservation;
+    KSTATUS Status;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    KernelProcess = PsGetKernelProcess();
+    PageSize = MmPageSize();
+    Process = PsGetCurrentProcess();
+    Reservation = NULL;
+    AlignedSize = ALIGN_RANGE_UP(Size, PageSize);
+    if (AlignedSize == 0) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto CreateMemoryReservationEnd;
+    }
+
+    if (KernelMode != FALSE) {
+        Process = KernelProcess;
+        Accountant = &MmKernelVirtualSpace;
+
+        //
+        // If the caller specified kernel mode and a usermode preferred address,
+        // pretend like the preference didn't happen.
+        //
+
+        if ((PreferredVirtualAddress != NULL) &&
+            (PreferredVirtualAddress < KERNEL_VA_START)) {
+
+            PreferredVirtualAddress = NULL;
+        }
+
+    } else {
+
+        //
+        // It is not valid to be running in the kernel process and requesting
+        // user space.
+        //
+
+        if (Process == KernelProcess) {
+            Status = STATUS_INVALID_PARAMETER;
+            goto CreateMemoryReservationEnd;
+        }
+
+        Accountant = Process->Accountant;
+
+        //
+        // If the preferred virtual address is in kernel mode, pretend like
+        // there was no preferred virtual address.
+        //
+
+        if ((PreferredVirtualAddress != NULL) &&
+            (PreferredVirtualAddress >= KERNEL_VA_START)) {
+
+            PreferredVirtualAddress = NULL;
+        }
+    }
+
+    //
+    // Allocate space for the reservation.
+    //
+
+    if (Process == KernelProcess) {
+        Reservation = MmAllocateNonPagedPool(sizeof(MEMORY_RESERVATION),
+                                             MM_ALLOCATION_TAG);
+
+    } else {
+        Reservation = MmAllocatePagedPool(sizeof(MEMORY_RESERVATION),
+                                          MM_ALLOCATION_TAG);
+    }
+
+    if (Reservation == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CreateMemoryReservationEnd;
+    }
+
+    //
+    // If there was a preferred address, attempt to allocate it.
+    //
+
+    if (PreferredVirtualAddress != NULL) {
+        AllocatedAddress = PreferredVirtualAddress;
+        Status = MmpAllocateAddressRange(Accountant,
+                                         AlignedSize,
+                                         0,
+                                         MemoryTypeReserved,
+                                         AllocationStrategyFixedAddress,
+                                         FALSE,
+                                         &AllocatedAddress);
+
+        //
+        // If the range was successfully allocated, fill out the reservation
+        // and return.
+        //
+
+        if (KSUCCESS(Status)) {
+
+            ASSERT(AllocatedAddress == PreferredVirtualAddress);
+
+            Reservation->Process = Process;
+            Reservation->VirtualBase = PreferredVirtualAddress;
+            Reservation->Size = AlignedSize;
+            goto CreateMemoryReservationEnd;
+        }
+    }
+
+    //
+    // Either there was no preferred address, or the attempt to allocate at
+    // that preferred address failed. Allocate anywhere.
+    //
+
+    Status = MmpAllocateAddressRange(Accountant,
+                                     AlignedSize,
+                                     PageSize,
+                                     MemoryTypeReserved,
+                                     AllocationStrategyAnyAddress,
+                                     FALSE,
+                                     &AllocatedAddress);
+
+    if (!KSUCCESS(Status)) {
+        goto CreateMemoryReservationEnd;
+    }
+
+    Reservation->Process = Process;
+    Reservation->VirtualBase = AllocatedAddress;
+    Reservation->Size = AlignedSize;
+    Status = STATUS_SUCCESS;
+
+CreateMemoryReservationEnd:
+    if (!KSUCCESS(Status)) {
+        if (Reservation != NULL) {
+            if (Process == KernelProcess) {
+                MmFreeNonPagedPool(Reservation);
+
+            } else {
+                MmFreePagedPool(Reservation);
+            }
+
+            Reservation = NULL;
+        }
+    }
+
+    return Reservation;
+}
+
+VOID
+MmFreeMemoryReservation (
+    PMEMORY_RESERVATION Reservation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a memory reservation. All memory must be unmapped
+    and freed prior to this call.
+
+Arguments:
+
+    Reservation - Supplies a pointer to the reservation structure returned when
+        the reservation was made.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PMEMORY_ACCOUNTING Accountant;
+    PKPROCESS Process;
+    KSTATUS Status;
+    ULONG UnmapFlags;
+
+    ASSERT(Reservation != NULL);
+
+    Process = (PKPROCESS)(Reservation->Process);
+    Accountant = Process->Accountant;
+    if (Process == PsGetKernelProcess()) {
+        Accountant = &MmKernelVirtualSpace;
+        Process = PsGetKernelProcess();
+    }
+
+    UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
+                 UNMAP_FLAG_SEND_INVALIDATE_IPI;
+
+    Status = MmpFreeAccountingRange(Process,
+                                    Accountant,
+                                    Reservation->VirtualBase,
+                                    Reservation->Size,
+                                    FALSE,
+                                    UnmapFlags);
+
+    ASSERT(KSUCCESS(Status));
+
+    if (Process == PsGetKernelProcess()) {
+        MmFreeNonPagedPool(Reservation);
+
+    } else {
+        MmFreePagedPool(Reservation);
+    }
+
+    return;
+}
+
+KSTATUS
+MmInitializeMemoryAccounting (
+    PMEMORY_ACCOUNTING Accountant,
+    ULONG Flags
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes a memory accounting structure.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure to
+        initialize.
+
+    Flags - Supplies flags to control the behavior of the accounting. See the
+        MEMORY_ACCOUNTING_FLAG_* definitions for valid flags.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INVALID_PARAMETER if an invalid flag was passed.
+
+--*/
+
+{
+
+    MDL_ALLOCATION_SOURCE Source;
+    KSTATUS Status;
+
+    ASSERT((Flags & ~MEMORY_ACCOUNTING_FLAG_MASK) == 0);
+
+    if ((Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0) {
+        Source = MdlAllocationSourceSystem;
+
+    } else if ((Flags & MEMORY_ACCOUNTING_FLAG_USER) != 0) {
+        Source = MdlAllocationSourcePagedPool;
+
+    } else {
+        Source = MdlAllocationSourcePagedPool;
+    }
+
+    Accountant->Flags = Flags;
+
+    //
+    // If the system accountant is initializing, then it is too early to
+    // create objects. Skip it for now, once the object manager is online the
+    // queued lock will be created.
+    //
+
+    Accountant->Lock = NULL;
+    if ((Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) == 0) {
+        Accountant->Lock = KeCreateSharedExclusiveLock();
+        if (Accountant->Lock == NULL) {
+            return STATUS_INSUFFICIENT_RESOURCES;
+        }
+    }
+
+    MmMdInitDescriptorList(&(Accountant->Mdl), Source);
+
+    //
+    // Create the free range of user space.
+    //
+
+    if ((Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) == 0) {
+        Status = MmReinitializeUserAccounting(Accountant);
+        if (!KSUCCESS(Status)) {
+            goto InitializeMemoryAccountingEnd;
+        }
+    }
+
+    Accountant->Flags |= MEMORY_ACCOUNTING_FLAG_INITIALIZED;
+    Status = STATUS_SUCCESS;
+
+InitializeMemoryAccountingEnd:
+    return Status;
+}
+
+KSTATUS
+MmReinitializeUserAccounting (
+    PMEMORY_ACCOUNTING Accountant
+    )
+
+/*++
+
+Routine Description:
+
+    This routine resets the memory reservations on a user memory accounting
+    structure to those of a clean process.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure to
+        initialize.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INVALID_PARAMETER if an invalid flag was passed.
+
+--*/
+
+{
+
+    MEMORY_DESCRIPTOR FreeRange;
+    ULONG PageSize;
+    KSTATUS Status;
+
+    PageSize = MmPageSize();
+
+    ASSERT((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) == 0);
+
+    MmMdInitDescriptor(&FreeRange,
+                       PageSize,
+                       (UINTN)KERNEL_VA_START,
+                       MemoryTypeFree);
+
+    Status = MmpAddAccountingDescriptor(Accountant, &FreeRange);
+    return Status;
+}
+
+VOID
+MmDestroyMemoryAccounting (
+    PMEMORY_ACCOUNTING Accountant
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a memory accounting structure, freeing all memory
+    associated with it (except the MEMORY_ACCOUNTING structure itself, which
+    was provided to the initialize function separately).
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure to
+        destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_INITIALIZED) == 0) {
+        return;
+    }
+
+    MmMdDestroyDescriptorList(&(Accountant->Mdl));
+    KeDestroySharedExclusiveLock(Accountant->Lock);
+    Accountant->Lock = NULL;
+    Accountant->Flags = 0;
+    return;
+}
+
+KSTATUS
+MmCloneProcessAddressSpace (
+    PVOID SourceProcess,
+    PVOID DestinationProcess
+    )
+
+/*++
+
+Routine Description:
+
+    This routine makes a clone of one process' entire address space into
+    another process. The copy is not shared memory, the destination segments
+    are marked copy on write. This includes copying the mapping for the user
+    shared data page.
+
+Arguments:
+
+    SourceProcess - Supplies a pointer to the source process to copy.
+
+    DestinationProcess - Supplies the destination process of the copy.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    CLONE_ADDRESS_SPACE_CONTEXT Context;
+    PLIST_ENTRY CurrentEntry;
+    PKPROCESS Destination;
+    ULONG Flags;
+    PHYSICAL_ADDRESS PhysicalAddress;
+    PKPROCESS Source;
+    PIMAGE_SECTION SourceSection;
+    KSTATUS Status;
+
+    //
+    // This routine must be called at low level, and neither process can be
+    // the kernel process, one because that would make no sense, and two
+    // because then page faults couldn't be serviced while the locks acquired
+    // in this function are held.
+    //
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+    ASSERT((SourceProcess != PsGetKernelProcess()) &&
+           (DestinationProcess != PsGetKernelProcess()));
+
+    Destination = (PKPROCESS)DestinationProcess;
+    Source = (PKPROCESS)SourceProcess;
+
+    //
+    // Grab both the account lock and the process lock so that neither image
+    // sections nor address space reservations can be changed during the copy.
+    //
+
+    MmpLockAccountant(Source->Accountant, FALSE);
+    MmpLockAccountant(Destination->Accountant, TRUE);
+    KeAcquireQueuedLock(Source->QueuedLock);
+
+    //
+    // Create a copy of every image section in the process.
+    //
+
+    CurrentEntry = Source->SectionListHead.Next;
+    while (CurrentEntry != &(Source->SectionListHead)) {
+        SourceSection = LIST_VALUE(CurrentEntry,
+                                   IMAGE_SECTION,
+                                   ProcessListEntry);
+
+        CurrentEntry = CurrentEntry->Next;
+        Status = MmpCopyImageSection(SourceSection, DestinationProcess);
+        if (!KSUCCESS(Status)) {
+            goto CloneProcessAddressSpaceEnd;
+        }
+    }
+
+    //
+    // Invalidate the entire TLB as all the source process's writable image
+    // sections were converted to read-only image sections.
+    //
+
+    ArInvalidateEntireTlb();
+
+    //
+    // Map the user shared data page. The accounting descriptor will get copied
+    // in the next step.
+    //
+
+    Flags = MAP_FLAG_PRESENT | MAP_FLAG_USER_MODE | MAP_FLAG_READ_ONLY;
+    PhysicalAddress = MmpVirtualToPhysical(MmUserSharedData, NULL);
+    MmpMapPageInOtherProcess(Destination,
+                             PhysicalAddress,
+                             USER_SHARED_DATA_USER_ADDRESS,
+                             Flags,
+                             FALSE);
+
+    //
+    // Copy the memory accounting descriptors.
+    //
+
+    Context.Accounting = Destination->Accountant;
+    Context.Status = STATUS_SUCCESS;
+    MmMdIterate(&(Source->Accountant->Mdl),
+                MmpCloneAddressSpaceIterator,
+                &Context);
+
+    if (!KSUCCESS(Context.Status)) {
+        Status = Context.Status;
+        goto CloneProcessAddressSpaceEnd;
+    }
+
+    Status = STATUS_SUCCESS;
+
+CloneProcessAddressSpaceEnd:
+    MmpUnlockAccountant(Destination->Accountant, TRUE);
+    MmpUnlockAccountant(Source->Accountant, FALSE);
+    KeReleaseQueuedLock(Source->QueuedLock);
+    return Status;
+}
+
+KSTATUS
+MmMapUserSharedData (
+    PVOID Process
+    )
+
+/*++
+
+Routine Description:
+
+    This routine maps the user shared data at a fixed address in a new
+    process' address space.
+
+Arguments:
+
+    Process - Supplies a pointer to the process to map the page in. Supply
+        NULL to map the page in the current process.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PMEMORY_ACCOUNTING Accountant;
+    PKPROCESS CurrentProcess;
+    PKPROCESS DestinationProcess;
+    ULONG Flags;
+    ULONG PageSize;
+    PHYSICAL_ADDRESS PhysicalAddress;
+    UINTN RangeEnd;
+    UINTN RangeStart;
+    KSTATUS Status;
+    MEMORY_DESCRIPTOR UserSharedDataRange;
+
+    //
+    // Reserve the fixed virtual address for the user shared data page,
+    // updating the memory accounting for the current process.
+    //
+
+    PageSize = MmPageSize();
+    RangeStart = (UINTN)USER_SHARED_DATA_USER_ADDRESS;
+    RangeEnd = RangeStart + PageSize;
+
+    ASSERT(sizeof(USER_SHARED_DATA) <= PageSize);
+
+    MmMdInitDescriptor(&UserSharedDataRange,
+                       RangeStart,
+                       RangeEnd,
+                       MemoryTypeReserved);
+
+    CurrentProcess = PsGetCurrentProcess();
+    DestinationProcess = Process;
+    if (DestinationProcess == NULL) {
+        DestinationProcess = CurrentProcess;
+    }
+
+    ASSERT(DestinationProcess != PsGetKernelProcess());
+
+    Accountant = DestinationProcess->Accountant;
+    Status = MmpAddAccountingDescriptor(Accountant, &UserSharedDataRange);
+    if (!KSUCCESS(Status)) {
+        goto MapUserSharedDataEnd;
+    }
+
+    //
+    // Read-only map the user shared data page at the fixed user mode address.
+    //
+
+    Flags = MAP_FLAG_PRESENT | MAP_FLAG_USER_MODE | MAP_FLAG_READ_ONLY;
+    PhysicalAddress = MmpVirtualToPhysical(MmUserSharedData, NULL);
+    if (DestinationProcess == CurrentProcess) {
+        if (MmpVirtualToPhysical((PVOID)USER_SHARED_DATA_USER_ADDRESS, NULL) ==
+            INVALID_PHYSICAL_ADDRESS) {
+
+            MmpMapPage(PhysicalAddress, USER_SHARED_DATA_USER_ADDRESS, Flags);
+        }
+
+    } else {
+        MmpMapPageInOtherProcess(DestinationProcess,
+                                 PhysicalAddress,
+                                 USER_SHARED_DATA_USER_ADDRESS,
+                                 Flags,
+                                 FALSE);
+    }
+
+MapUserSharedDataEnd:
+    return Status;
+}
+
+PVOID
+MmGetUserSharedData (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the kernel virtual address of the user shared data
+    area.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    The kernel mode address of the user shared data page.
+
+--*/
+
+{
+
+    return MmUserSharedData;
+}
+
+KSTATUS
+MmpAddAccountingDescriptor (
+    PMEMORY_ACCOUNTING Accountant,
+    PMEMORY_DESCRIPTOR Descriptor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adds the given descriptor to the accounting information. The
+    caller must he holding the accounting lock.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure.
+
+    Descriptor - Supplies a pointer to the descriptor to add. Note that the
+        descriptor being passed in does not have to be permanent. A copy of the
+        descriptor will be made.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    //
+    // Adding this descriptor will potentially require allocating new
+    // descriptors. Make sure the accountant's MDL is prepared for this.
+    //
+
+    Status = MmpPrepareToAddAccountingDescriptor(Accountant);
+    if (!KSUCCESS(Status)) {
+        goto AddAccountingDescriptorEnd;
+    }
+
+    //
+    // Add the new descriptor to the list.
+    //
+
+    Status = MmMdAddDescriptorToList(&(Accountant->Mdl), Descriptor);
+    if (!KSUCCESS(Status)) {
+        goto AddAccountingDescriptorEnd;
+    }
+
+    Status = STATUS_SUCCESS;
+
+AddAccountingDescriptorEnd:
+    return Status;
+}
+
+KSTATUS
+MmpAllocateFromAccountant (
+    PMEMORY_ACCOUNTING Accountant,
+    PVOID *Address,
+    ULONGLONG Size,
+    ULONG Alignment,
+    MEMORY_TYPE MemoryType,
+    ALLOCATION_STRATEGY Strategy
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates a piece of free memory from the given memory
+    accountant's memory list and marks it as the given memory type.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure.
+
+    Address - Supplies a pointer to where the allocation will be returned.
+
+    Size - Supplies the size of the required space.
+
+    Alignment - Supplies the alignment requirement for the allocation, in bytes.
+        Valid values are powers of 2. Set to 1 or 0 to specify no alignment
+        requirement.
+
+    MemoryType - Supplies the type of memory to mark the allocation as.
+
+    Strategy - Supplies the memory allocation strategy for this allocation.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONGLONG AddressResult;
+    KSTATUS Status;
+
+    ASSERT((Accountant->Lock == NULL) ||
+           (KeIsSharedExclusiveLockHeldExclusive(Accountant->Lock) != FALSE));
+
+    //
+    // Allocating from the MDL will potentially require adding new descriptors.
+    // Make sure the accountant's MDL is prepared for this.
+    //
+
+    Status = MmpPrepareToAddAccountingDescriptor(Accountant);
+    if (!KSUCCESS(Status)) {
+        goto AllocateFromAccountantEnd;
+    }
+
+    //
+    // Go ahead and perform the allocation.
+    //
+
+    AddressResult = 0;
+    Status = MmMdAllocateFromMdl(&(Accountant->Mdl),
+                                 &AddressResult,
+                                 Size,
+                                 Alignment,
+                                 MemoryType,
+                                 Strategy);
+
+    if (!KSUCCESS(Status)) {
+        goto AllocateFromAccountantEnd;
+    }
+
+    ASSERT((UINTN)AddressResult == AddressResult);
+
+    *Address = (PVOID)(UINTN)AddressResult;
+
+AllocateFromAccountantEnd:
+    return Status;
+}
+
+KSTATUS
+MmpFreeAccountingRange (
+    PVOID Process,
+    PMEMORY_ACCOUNTING Accountant,
+    PVOID Allocation,
+    UINTN SizeInBytes,
+    BOOL LockHeld,
+    ULONG UnmapFlags
+    )
+
+/*++
+
+Routine Description:
+
+    This routine frees the previously allocated memory range.
+
+Arguments:
+
+    Process - Supplies an optional pointer to the process this accountant
+        lives in. If NULL is supplied, the current process will be used.
+
+    Accountant - Supplies a pointer to the memory accounting structure.
+
+    Allocation - Supplies the allocation to free.
+
+    SizeInBytes - Supplies the length of space, in bytes, to release.
+
+    LockHeld - Supplies a boolean indicating whether or not the accountant's
+        lock is already held exclusively.
+
+    UnmapFlags - Supplies a bitmask of flags for the unmap operation. See
+        UNMAP_FLAG_* for definitions. In the default case, this should contain
+        UNMAP_FLAG_SEND_INVALIDATE_IPI. There are specific situations where
+        it's known that this memory could not exist in another processor's TLB.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINTN CurrentCount;
+    PKTHREAD CurrentThread;
+    ULONGLONG EndAddress;
+    BOOL LockAcquired;
+    UINTN Mask;
+    MEMORY_DESCRIPTOR NewDescriptor;
+    PKPROCESS OwningProcess;
+    UINTN PageCount;
+    UINTN PageIndex;
+    ULONG PageShift;
+    UINTN PreviousCount;
+    BOOL SignalEvent;
+    KSTATUS Status;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    LockAcquired = FALSE;
+    PageShift = MmPageShift();
+    PageCount = ALIGN_RANGE_UP(SizeInBytes, MmPageSize()) >> PageShift;
+    EndAddress = (UINTN)Allocation + (PageCount << PageShift);
+    if (EndAddress <= (UINTN)Allocation) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto FreeAccountingRangeEnd;
+    }
+
+    //
+    // Initialize the new descriptor.
+    //
+
+    MmMdInitDescriptor(&NewDescriptor,
+                       (UINTN)Allocation,
+                       (ULONGLONG)(UINTN)Allocation + SizeInBytes,
+                       MemoryTypeFree);
+
+    //
+    // Acquire the accountant lock to synchronize the check with the insertion.
+    //
+
+    if (LockHeld == FALSE) {
+        MmpLockAccountant(Accountant, TRUE);
+        LockAcquired = TRUE;
+    }
+
+    //
+    // Assert that this is a valid range that was previously allocated.
+    //
+
+    ASSERT(MmpIsAccountingRangeAllocated(Accountant,
+                                         Allocation,
+                                         SizeInBytes) != FALSE);
+
+    //
+    // Add the new descriptor to the MDL.
+    //
+
+    Status = MmpAddAccountingDescriptor(Accountant, &NewDescriptor);
+    if (!KSUCCESS(Status)) {
+        goto FreeAccountingRangeEnd;
+    }
+
+    //
+    // Unmap and free any pages associated with this range.
+    //
+
+    if ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_NO_MAP) == 0) {
+        if (Process == NULL) {
+            Process = PsGetCurrentProcess();
+        }
+
+        OwningProcess = Process;
+
+        //
+        // If the current thread is NULL, then this is the test. Do not unmap
+        // anything.
+        //
+
+        CurrentThread = KeGetCurrentThread();
+        if (CurrentThread != NULL) {
+            if ((CurrentThread->OwningProcess == OwningProcess) ||
+                (Accountant == &MmKernelVirtualSpace)) {
+
+                MmpUnmapPages(Allocation, PageCount, UnmapFlags, NULL);
+
+            } else {
+                for (PageIndex = 0; PageIndex < PageCount; PageIndex += 1) {
+                    MmpUnmapPageInOtherProcess(
+                                         OwningProcess,
+                                         Allocation + (PageIndex << PageShift),
+                                         UnmapFlags,
+                                         NULL);
+                }
+            }
+        }
+    }
+
+FreeAccountingRangeEnd:
+
+    //
+    // If the system accountant successfully released resources, check to see
+    // if the memory warning event needs to be signaled.
+    //
+
+    SignalEvent = FALSE;
+    if (KSUCCESS(Status) &&
+        ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0)) {
+
+        Mask = MmVirtualMemoryCountMask;
+        PreviousCount = MmVirtualMemoryFreeByteCount & Mask;
+        MmVirtualMemoryFreeByteCount += SizeInBytes;
+        CurrentCount = MmVirtualMemoryFreeByteCount & Mask;
+        if ((CurrentCount != PreviousCount) &&
+            (MmVirtualMemoryWarningLevel == MemoryWarningLevel1) &&
+            (Accountant->Mdl.FreeSpace >=
+             MmVirtualMemoryWarningLevel1Retreat)) {
+
+            MmVirtualMemoryWarningLevel = MemoryWarningLevelNone;
+            SignalEvent = TRUE;
+        }
+    }
+
+    if (LockAcquired != FALSE) {
+        MmpUnlockAccountant(Accountant, TRUE);
+    }
+
+    if (SignalEvent != FALSE) {
+
+        ASSERT(MmVirtualMemoryWarningEvent != NULL);
+
+        KeSignalEvent(MmVirtualMemoryWarningEvent, SignalOptionPulse);
+    }
+
+    return Status;
+}
+
+KSTATUS
+MmpAllocateAddressRange (
+    PMEMORY_ACCOUNTING Accountant,
+    UINTN Size,
+    ULONG Alignment,
+    MEMORY_TYPE MemoryType,
+    ALLOCATION_STRATEGY Strategy,
+    BOOL LockHeld,
+    PVOID *Allocation
+    )
+
+/*++
+
+Routine Description:
+
+    This routine finds an address range of a certain size in the given memory
+    space.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure.
+
+    Size - Supplies the size of the allocation, in bytes.
+
+    Alignment - Supplies the required alignment, in bytes, of the allocation.
+
+    MemoryType - Supplies a the type of memory this allocation should be marked
+        as. Do not specify MemoryTypeFree for this parameter.
+
+    Strategy - Supplies the allocation strategy for this allocation.
+
+    LockHeld - Supplies a boolean indicating whether or not the accountant's
+        lock is already held exclusively.
+
+    Allocation - Supplies a pointer to the requested address range on input if
+        the allocation strategy allows. On output, returns the allocation.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINTN CurrentCount;
+    BOOL LockAcquired;
+    UINT Mask;
+    MEMORY_DESCRIPTOR NewDescriptor;
+    UINTN PreviousCount;
+    BOOL RangeFree;
+    BOOL SignalEvent;
+    KSTATUS Status;
+    PVOID VirtualAddress;
+
+    LockAcquired = FALSE;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+    ASSERT(MemoryType != MemoryTypeFree);
+
+    if (Size == 0) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto AllocateAddressRangeEnd;
+    }
+
+    if (LockHeld == FALSE) {
+        MmpLockAccountant(Accountant, TRUE);
+        LockAcquired = TRUE;
+    }
+
+    //
+    // If the caller requested a fixed address, check to see if the range is in
+    // use. If it is not, go ahead and allocate it.
+    //
+
+    if ((Strategy == AllocationStrategyFixedAddress) ||
+        (Strategy == AllocationStrategyFixedAddressClobber) ||
+        (Strategy == AllocationStrategyPreferredAddress)) {
+
+        VirtualAddress = *Allocation;
+        if (Strategy == AllocationStrategyFixedAddressClobber) {
+            RangeFree = TRUE;
+
+        } else {
+            RangeFree = MmpIsAccountingRangeFree(Accountant,
+                                                 VirtualAddress,
+                                                 Size);
+        }
+
+        if (RangeFree != FALSE) {
+
+            //
+            // This virtual address is available. Allocate it.
+            //
+
+            MmMdInitDescriptor(&NewDescriptor,
+                               (UINTN)VirtualAddress,
+                               (UINTN)VirtualAddress + Size,
+                               MemoryType);
+
+            Status = MmpAddAccountingDescriptor(Accountant, &NewDescriptor);
+            if (KSUCCESS(Status)) {
+                goto AllocateAddressRangeEnd;
+            }
+
+        } else {
+            Status = STATUS_MEMORY_CONFLICT;
+        }
+
+        if (Strategy == AllocationStrategyFixedAddress) {
+            goto AllocateAddressRangeEnd;
+        }
+
+        ASSERT(Strategy != AllocationStrategyFixedAddressClobber);
+
+        Strategy = AllocationStrategyAnyAddress;
+    }
+
+    //
+    // Otherwise allocate any free address range.
+    //
+
+    Status = MmpAllocateFromAccountant(Accountant,
+                                       &VirtualAddress,
+                                       Size,
+                                       Alignment,
+                                       MemoryType,
+                                       Strategy);
+
+    if (!KSUCCESS(Status)) {
+        goto AllocateAddressRangeEnd;
+    }
+
+    *Allocation = VirtualAddress;
+
+AllocateAddressRangeEnd:
+
+    //
+    // If the system accountant successfully allocate a range, check to see if
+    // the memory warning level needs to be updated.
+    //
+
+    SignalEvent = FALSE;
+    if (KSUCCESS(Status) &&
+        ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0)) {
+
+        Mask = MmVirtualMemoryCountMask;
+        PreviousCount = MmVirtualMemoryAllocationByteCount & Mask;
+        MmVirtualMemoryAllocationByteCount += Size;
+        CurrentCount = MmVirtualMemoryAllocationByteCount & Mask;
+        if ((CurrentCount != PreviousCount) &&
+            (MmVirtualMemoryWarningLevel != MemoryWarningLevel1) &&
+            (Accountant->Mdl.FreeSpace < MmVirtualMemoryWarningLevel1Trigger)) {
+
+            MmVirtualMemoryWarningLevel = MemoryWarningLevel1;
+            SignalEvent = TRUE;
+        }
+    }
+
+    if (LockAcquired != FALSE) {
+        MmpUnlockAccountant(Accountant, TRUE);
+    }
+
+    if (SignalEvent != FALSE) {
+
+        ASSERT(MmVirtualMemoryWarningEvent != NULL);
+
+        KeSignalEvent(MmVirtualMemoryWarningEvent, SignalOptionPulse);
+    }
+
+    return Status;
+}
+
+KSTATUS
+MmpMapRange (
+    PVOID RangeAddress,
+    UINTN RangeSize,
+    UINTN PhysicalRunAlignment,
+    UINTN PhysicalRunSize,
+    BOOL WriteThrough,
+    BOOL NonCached
+    )
+
+/*++
+
+Routine Description:
+
+    This routine maps the given memory region after allocating physical pages
+    to back the region. The pages will be allocated in sets of physically
+    contiguous pages according to the given physical run size. Each set of
+    physical pages will be aligned to the given physical run alignment.
+
+Arguments:
+
+    RangeAddress - Supplies the starting virtual address of the range to map.
+
+    RangeSize - Supplies the size of the virtual range to map, in bytes.
+
+    PhysicalRunAlignment - Supplies the required alignment of the runs of
+        physical pages.
+
+    PhysicalRunSize - Supplies the size of each run of physically contiguous
+        pages.
+
+    WriteThrough - Supplies a boolean indicating if the virtual addresses
+        should be mapped write through (TRUE) or the default write back (FALSE).
+
+    NonCached - Supplies a boolean indicating if the virtual addresses should
+        be mapped non-cached (TRUE) or the default, which is to map is as
+        normal cached memory (FALSE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG MapFlags;
+    UINTN MapIndex;
+    UINTN PageCount;
+    UINTN PageIndex;
+    ULONG PageShift;
+    ULONG PageSize;
+    PHYSICAL_ADDRESS PhysicalPage;
+    UINTN RunPageCount;
+    KSTATUS Status;
+    ULONG UnmapFlags;
+    PVOID VirtualAddress;
+
+    PageShift = MmPageShift();
+    PageSize = MmPageSize();
+
+    ASSERT(IS_ALIGNED((UINTN)RangeAddress, PageSize) != FALSE);
+    ASSERT(IS_ALIGNED(RangeSize, PageSize) != FALSE);
+    ASSERT(IS_ALIGNED(PhysicalRunAlignment, PageSize) != FALSE);
+    ASSERT(IS_ALIGNED(PhysicalRunSize, PageSize) != FALSE);
+
+    MapFlags = MAP_FLAG_PRESENT;
+    if (RangeAddress >= KERNEL_VA_START) {
+        MapFlags |= MAP_FLAG_GLOBAL;
+
+    } else {
+        MapFlags |= MAP_FLAG_USER_MODE;
+    }
+
+    if (WriteThrough != FALSE) {
+        MapFlags |= MAP_FLAG_WRITE_THROUGH;
+    }
+
+    if (NonCached != FALSE) {
+        MapFlags |= MAP_FLAG_CACHE_DISABLE;
+    }
+
+    PageCount = RangeSize >> PageShift;
+    RunPageCount = PhysicalRunSize >> PageShift;
+    Status = STATUS_SUCCESS;
+    VirtualAddress = RangeAddress;
+    for (PageIndex = 0; PageIndex < PageCount; PageIndex += RunPageCount) {
+        PhysicalPage = MmpAllocatePhysicalPages(RunPageCount,
+                                                PhysicalRunAlignment);
+
+        if (PhysicalPage == INVALID_PHYSICAL_ADDRESS) {
+            Status = STATUS_NO_MEMORY;
+            break;
+        }
+
+        for (MapIndex = 0; MapIndex < RunPageCount; MapIndex += 1) {
+            MmpMapPage(PhysicalPage, VirtualAddress, MapFlags);
+            VirtualAddress += PageSize;
+            PhysicalPage += PageSize;
+        }
+    }
+
+    if (!KSUCCESS(Status)) {
+        UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
+                     UNMAP_FLAG_SEND_INVALIDATE_IPI;
+
+        MmpUnmapPages(RangeAddress, PageIndex, UnmapFlags, NULL);
+    }
+
+    return Status;
+}
+
+VOID
+MmpLockAccountant (
+    PMEMORY_ACCOUNTING Accountant,
+    BOOL Exclusive
+    )
+
+/*++
+
+Routine Description:
+
+    This routine acquires the memory accounting lock, preventing changes to the
+    virtual address space of the given process.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accountant.
+
+    Exclusive - Supplies a boolean indicating whether to acquire the lock
+        shared (FALSE) if the caller just wants to make sure the VA layout
+        doesn't change or exclusive (TRUE) if the caller wants to change the
+        VA layout.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (Accountant->Lock == NULL) {
+        return;
+    }
+
+    if (Exclusive != FALSE) {
+        KeAcquireSharedExclusiveLockExclusive(Accountant->Lock);
+
+    } else {
+        KeAcquireSharedExclusiveLockShared(Accountant->Lock);
+    }
+
+    return;
+}
+
+VOID
+MmpUnlockAccountant (
+    PMEMORY_ACCOUNTING Accountant,
+    BOOL Exclusive
+    )
+
+/*++
+
+Routine Description:
+
+    This routine releases the memory accounting lock.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accountant.
+
+    Exclusive - Supplies a boolean indicating whether the lock was held
+        shared (FALSE) or exclusive (TRUE).
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (Accountant->Lock == NULL) {
+        return;
+    }
+
+    if (Exclusive != FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(Accountant->Lock);
+
+    } else {
+        KeReleaseSharedExclusiveLockShared(Accountant->Lock);
+    }
+
+    return;
+}
+
+KSTATUS
+MmpInitializeKernelVa (
+    PKERNEL_INITIALIZATION_BLOCK Parameters
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes the kernel's virtual memory accounting structures.
+
+Arguments:
+
+    Parameters - Supplies a pointer to the parameters provided by the boot
+        loader.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    INITIALIZE_KERNEL_VA_CONTEXT Context;
+    MEMORY_DESCRIPTOR Descriptor;
+    KSTATUS Status;
+
+    Status = MmInitializeMemoryAccounting(&MmKernelVirtualSpace,
+                                          MEMORY_ACCOUNTING_FLAG_SYSTEM);
+
+    if (!KSUCCESS(Status)) {
+        goto InitializeKernelVaEnd;
+    }
+
+    //
+    // Add the init descriptors to the newly initialized memory descriptor
+    // list. It is system backed, but the init descriptors are just sitting
+    // around unused in the kernel environment.
+    //
+
+    MmMdAddInitDescriptorsToMdl(&(MmKernelVirtualSpace.Mdl));
+
+    //
+    // Add the entire kernel address space as free.
+    //
+
+    MmMdInitDescriptor(&Descriptor,
+                       (UINTN)KERNEL_VA_START,
+                       KERNEL_VA_END,
+                       MemoryTypeFree);
+
+    Status = MmpAddAccountingDescriptor(&MmKernelVirtualSpace, &Descriptor);
+    if (!KSUCCESS(Status)) {
+        goto InitializeKernelVaEnd;
+    }
+
+    //
+    // Loop through and copy all the boot descriptors.
+    //
+
+    Context.Status = STATUS_SUCCESS;
+    MmMdIterate(Parameters->VirtualMap,
+                MmpInitializeKernelVaIterator,
+                &Context);
+
+    if (!KSUCCESS(Context.Status)) {
+        Status = Context.Status;
+        goto InitializeKernelVaEnd;
+    }
+
+    //
+    // Synchronize the virtual allocator with the current memory map of the
+    // system. Any page currently mapped will be marked as occupied.
+    //
+
+    Status = MmpReserveCurrentMappings(&MmKernelVirtualSpace);
+    if (!KSUCCESS(Status)) {
+        goto InitializeKernelVaEnd;
+    }
+
+    //
+    // If physical page zero was allocated during physical page initialization,
+    // then reuse it for memory descriptors.
+    //
+
+    if (MmPhysicalPageZeroAllocated != FALSE) {
+        MmpAddPageZeroDescriptorsToMdl(&MmKernelVirtualSpace);
+    }
+
+    //
+    // Set up the virtual memory warning trigger and retreat values depending
+    // on the total size of system virtual memory. There are really only two
+    // buckets here: system VA less than 4GB and the expansive amount of system
+    // VA available on a 64-bit system.
+    //
+
+    if (MmKernelVirtualSpace.Mdl.TotalSpace <= MAX_ULONG) {
+        MmVirtualMemoryWarningLevel1Trigger =
+                               MM_SMALL_VIRTUAL_MEMORY_WARNING_LEVEL_1_TRIGGER;
+
+        MmVirtualMemoryWarningLevel1Retreat =
+                               MM_SMALL_VIRTUAL_MEMORY_WARNING_LEVEL_1_RETREAT;
+
+        MmVirtualMemoryCountMask = MM_SMALL_VIRTUAL_MEMORY_WARNING_COUNT_MASK;
+
+    } else {
+        MmVirtualMemoryWarningLevel1Trigger =
+                               MM_LARGE_VIRTUAL_MEMORY_WARNING_LEVEL_1_TRIGGER;
+
+        MmVirtualMemoryWarningLevel1Retreat =
+                               MM_LARGE_VIRTUAL_MEMORY_WARNING_LEVEL_1_RETREAT;
+
+        MmVirtualMemoryCountMask = MM_LARGE_VIRTUAL_MEMORY_WARNING_COUNT_MASK;
+    }
+
+    Status = STATUS_SUCCESS;
+
+InitializeKernelVaEnd:
+    return Status;
+}
+
+BOOL
+MmpIsAccountingRangeFree (
+    PMEMORY_ACCOUNTING Accountant,
+    PVOID Address,
+    ULONGLONG SizeInBytes
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether the given address range is free according
+    to the accountant. This routine assumes the accounting lock is already
+    held.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure.
+
+    Address - Supplies the address to find the corresponding descriptor for.
+
+    SizeInBytes - Supplies the size, in bytes, of the range in question.
+
+Return Value:
+
+    TRUE if the given range is free.
+
+    FALSE if at least part of the given range is in use.
+
+--*/
+
+{
+
+    ULONGLONG EndAddress;
+    ULONGLONG StartAddress;
+
+    StartAddress = (UINTN)Address;
+    EndAddress = StartAddress + SizeInBytes;
+    if (EndAddress < StartAddress) {
+        return FALSE;
+    }
+
+    if (MmMdIsRangeFree(&(Accountant->Mdl), StartAddress, EndAddress) != NULL) {
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+PVOID
+MmpMapPhysicalAddress (
+    PHYSICAL_ADDRESS PhysicalAddress,
+    UINTN SizeInBytes,
+    BOOL Writable,
+    BOOL WriteThrough,
+    BOOL CacheDisabled,
+    MEMORY_TYPE MemoryType
+    )
+
+/*++
+
+Routine Description:
+
+    This routine maps a physical address into kernel VA space.
+
+Arguments:
+
+    PhysicalAddress - Supplies a pointer to the physical address. This address
+        must be page aligned.
+
+    SizeInBytes - Supplies the size in bytes of the mapping. This will be
+        rounded up to the nearest page size.
+
+    Writable - Supplies a boolean indicating if the memory is to be marked
+        writable (TRUE) or read-only (FALSE).
+
+    WriteThrough - Supplies a boolean indicating if the memory is to be marked
+        write-through (TRUE) or write-back (FALSE).
+
+    CacheDisabled - Supplies a boolean indicating if the memory is to be mapped
+        uncached.
+
+    MemoryType - Supplies the memory type to allocate this as.
+
+Return Value:
+
+    Returns a pointer to the virtual address of the mapping on success, or
+    NULL on failure.
+
+--*/
+
+{
+
+    PHYSICAL_ADDRESS CurrentPhysicalAddress;
+    PVOID CurrentVirtualAddress;
+    ULONGLONG Index;
+    ULONG MapFlags;
+    ULONGLONG PageCount;
+    ULONG PageShift;
+    ULONG PageSize;
+    UINTN Size;
+    KSTATUS Status;
+    PVOID VirtualAddress;
+
+    PageShift = MmPageShift();
+    PageSize = MmPageSize();
+    VirtualAddress = NULL;
+
+    ASSERT((PhysicalAddress & (PageSize - 1)) == 0);
+
+    Size = ALIGN_RANGE_UP(SizeInBytes, PageSize);
+    PageCount = Size >> PageShift;
+    if (Size == 0) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto MapPhysicalAddressEnd;
+    }
+
+    //
+    // Find a VA range for this mapping.
+    //
+
+    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
+                                     Size,
+                                     PageSize,
+                                     MemoryType,
+                                     AllocationStrategyAnyAddress,
+                                     FALSE,
+                                     &VirtualAddress);
+
+    if (!KSUCCESS(Status)) {
+        goto MapPhysicalAddressEnd;
+    }
+
+    //
+    // Map each page with the desired attributes.
+    //
+
+    MapFlags = MAP_FLAG_PRESENT | MAP_FLAG_GLOBAL;
+    if (Writable == FALSE) {
+        MapFlags |= MAP_FLAG_READ_ONLY;
+    }
+
+    if (WriteThrough != FALSE) {
+        MapFlags |= MAP_FLAG_WRITE_THROUGH;
+    }
+
+    if (CacheDisabled != FALSE) {
+        MapFlags |= MAP_FLAG_CACHE_DISABLE;
+    }
+
+    CurrentPhysicalAddress = PhysicalAddress;
+    CurrentVirtualAddress = VirtualAddress;
+    for (Index = 0; Index < PageCount; Index += 1) {
+        MmpMapPage(CurrentPhysicalAddress, CurrentVirtualAddress, MapFlags);
+        CurrentPhysicalAddress += PageSize;
+        CurrentVirtualAddress += PageSize;
+    }
+
+    Status = STATUS_SUCCESS;
+
+MapPhysicalAddressEnd:
+    if (!KSUCCESS(Status)) {
+
+        //
+        // Free the VA range if it was claimed, but do not free the physical
+        // pages as those are owned by the caller.
+        //
+
+        if (VirtualAddress != NULL) {
+            MmpFreeAccountingRange(PsGetKernelProcess(),
+                                   &MmKernelVirtualSpace,
+                                   VirtualAddress,
+                                   Size,
+                                   FALSE,
+                                   UNMAP_FLAG_SEND_INVALIDATE_IPI);
+        }
+    }
+
+    return (PVOID)(UINTN)VirtualAddress;
+}
+
+KSTATUS
+MmpInitializeUserSharedData (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates and maps the user shared data into kernel virtual
+    address space. The address is stored globally.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG PageSize;
+    KSTATUS Status;
+    ULONG UnmapFlags;
+    PVOID UserSharedDataPage;
+
+    PageSize = MmPageSize();
+
+    ASSERT(sizeof(USER_SHARED_DATA) <= PageSize);
+
+    //
+    // Allocate and map a single page that is page-aligned. The virtual address
+    // can be dynamic.
+    //
+
+    UserSharedDataPage = NULL;
+    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
+                                     PageSize,
+                                     PageSize,
+                                     MemoryTypeReserved,
+                                     AllocationStrategyAnyAddress,
+                                     FALSE,
+                                     &UserSharedDataPage);
+
+    if (!KSUCCESS(Status)) {
+        goto InitializeUserSharedDataEnd;
+    }
+
+    Status = MmpMapRange(UserSharedDataPage,
+                         PageSize,
+                         PageSize,
+                         PageSize,
+                         FALSE,
+                         FALSE);
+
+    if (!KSUCCESS(Status)) {
+        goto InitializeUserSharedDataEnd;
+    }
+
+    RtlZeroMemory(UserSharedDataPage, PageSize);
+    MmUserSharedData = UserSharedDataPage;
+    Status = STATUS_SUCCESS;
+
+InitializeUserSharedDataEnd:
+    if (!KSUCCESS(Status)) {
+        if (UserSharedDataPage != NULL) {
+            UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
+                         UNMAP_FLAG_SEND_INVALIDATE_IPI;
+
+            MmpFreeAccountingRange(NULL,
+                                   &MmKernelVirtualSpace,
+                                   UserSharedDataPage,
+                                   PageSize,
+                                   FALSE,
+                                   UnmapFlags);
+
+            UserSharedDataPage = NULL;
+        }
+    }
+
+    return Status;
+}
+
+VOID
+MmpCopyPage (
+    PIMAGE_SECTION Section,
+    PVOID VirtualAddress,
+    PHYSICAL_ADDRESS PhysicalAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine copies the page at the given virtual address. It temporarily
+    maps the physical address at the given temporary virtual address in order
+    to perform the copy.
+
+Arguments:
+
+    Section - Supplies a pointer to the image section to which the virtual
+        address belongs.
+
+    VirtualAddress - Supplies the page-aligned virtual address to use as the
+        initial contents of the page.
+
+    PhysicalAddress - Supplies the physical address of the destination page
+        where the data is to be copied.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Attributes;
+    RUNLEVEL OldRunLevel;
+    ULONG PageSize;
+    PPROCESSOR_BLOCK ProcessorBlock;
+    PHYSICAL_ADDRESS SourcePhysical;
+
+    ASSERT(PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
+
+    SourcePhysical = MmpVirtualToPhysical(VirtualAddress, &Attributes);
+
+    ASSERT(SourcePhysical != INVALID_PHYSICAL_ADDRESS);
+
+    PageSize = MmPageSize();
+
+    //
+    // Map the page to the temporary virtual address in order to perform a copy.
+    //
+
+    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    ProcessorBlock = KeGetCurrentProcessorBlock();
+    MmpMapPage(PhysicalAddress, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
+
+    //
+    // If the page is not accessible, make it accessible temporarily.
+    //
+
+    if ((Attributes & MAP_FLAG_PRESENT) == 0) {
+        MmpChangeMemoryRegionAccess(VirtualAddress,
+                                    1,
+                                    MAP_FLAG_PRESENT | MAP_FLAG_READ_ONLY,
+                                    MAP_FLAG_ALL_MASK);
+    }
+
+    //
+    // Make a copy of the original page (which is still read-only).
+    //
+
+    RtlCopyMemory(ProcessorBlock->SwapPage, VirtualAddress, PageSize);
+
+    //
+    // Make the page inaccessible again if it was not accessible before.
+    //
+
+    if ((Attributes & MAP_FLAG_PRESENT) == 0) {
+        MmpChangeMemoryRegionAccess(VirtualAddress,
+                                    1,
+                                    Attributes,
+                                    MAP_FLAG_ALL_MASK);
+    }
+
+    if ((Section->Flags & IMAGE_SECTION_EXECUTABLE) != 0) {
+        MmFlushDataCache(ProcessorBlock->SwapPage, PageSize, FALSE);
+    }
+
+    //
+    // Unmap the page from the temporary space.
+    //
+
+    MmpUnmapPages(ProcessorBlock->SwapPage, 1, 0, NULL);
+    KeLowerRunLevel(OldRunLevel);
+    return;
+}
+
+VOID
+MmpZeroPage (
+    PHYSICAL_ADDRESS PhysicalAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine zeros the page specified by the physical address. It maps the
+    page temporarily in order to zero it out.
+
+Arguments:
+
+    PhysicalAddress - Supplies the physical address of the page to be filled
+        with zero.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    RUNLEVEL OldRunLevel;
+    ULONG PageSize;
+    PPROCESSOR_BLOCK ProcessorBlock;
+
+    ASSERT(PhysicalAddress != INVALID_PHYSICAL_ADDRESS);
+
+    PageSize = MmPageSize();
+
+    //
+    // Map the page to the temporary address in order to perform the zero.
+    //
+
+    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    ProcessorBlock = KeGetCurrentProcessorBlock();
+    MmpMapPage(PhysicalAddress, ProcessorBlock->SwapPage, MAP_FLAG_PRESENT);
+
+    //
+    // Zero the page.
+    //
+
+    RtlZeroMemory(ProcessorBlock->SwapPage, PageSize);
+
+    //
+    // Unmap the page from the temporary space.
+    //
+
+    MmpUnmapPages(ProcessorBlock->SwapPage, 1, 0, NULL);
+    KeLowerRunLevel(OldRunLevel);
+    return;
+}
+
+VOID
+MmpUpdateResidentSetCounter (
+    PKPROCESS Process,
+    INTN Addition
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adjusts the process resident set counter. This should only
+    be done for user mode addresses.
+
+Arguments:
+
+    Process - Supplies a pointer to the process to update.
+
+    Addition - Supplies the number of pages to add or subtract from the counter.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINTN OriginalValue;
+    UINTN PreviousMaximum;
+    UINTN ReadMaximum;
+
+    OriginalValue = RtlAtomicAdd(&(Process->ResidentSet), Addition);
+    if (Addition <= 0) {
+
+        ASSERT(OriginalValue != 0);
+
+        return;
+    }
+
+    PreviousMaximum = Process->ResourceUsage.MaxResidentSet;
+
+    //
+    // Loop trying to update the maximum to this new value.
+    //
+
+    while (PreviousMaximum < OriginalValue) {
+        ReadMaximum = RtlAtomicCompareExchange(
+                                  &(Process->ResourceUsage.MaxResidentSet),
+                                  OriginalValue,
+                                  PreviousMaximum);
+
+        PreviousMaximum = ReadMaximum;
+    }
+
+    return;
+}
+
+VOID
+MmpAddPageZeroDescriptorsToMdl (
+    PMEMORY_ACCOUNTING Accountant
+    )
+
+/*++
+
+Routine Description:
+
+    This routine maps page zero and adds it to be used as memory descriptors
+    for the given memory accountant. It is assume that page zero was already
+    reserved by some means.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accontant to receive the
+        memory descriptors from page zero.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG PageSize;
+    PVOID VirtualAddress;
+
+    ASSERT(MmPhysicalPageZeroAllocated != FALSE);
+
+    //
+    // Map physical page zero. If this fails then physical page zero is just
+    // wasted.
+    //
+
+    PageSize = MmPageSize();
+    VirtualAddress = MmpMapPhysicalAddress(0,
+                                           PageSize,
+                                           TRUE,
+                                           FALSE,
+                                           FALSE,
+                                           MemoryTypeMmStructures);
+
+    if (VirtualAddress == NULL) {
+        return;
+    }
+
+    //
+    // Insert the now mapped page zero as descriptors for the accountant.
+    //
+
+    MmpLockAccountant(Accountant, TRUE);
+    MmMdAddFreeDescriptorsToMdl(&(Accountant->Mdl), VirtualAddress, PageSize);
+    MmpUnlockAccountant(Accountant, TRUE);
+    return;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+KSTATUS
+MmpPrepareToAddAccountingDescriptor (
+    PMEMORY_ACCOUNTING Accountant
+    )
+
+/*++
+
+Routine Description:
+
+    This routine make sures the memory accountant's MDL has enough available
+    free memory descriptors to allow for the addition of a new memory region,
+    either from insertion or allocation.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONGLONG Address;
+    ULONG AllocationSize;
+    PVOID CurrentAddress;
+    ULONG Index;
+    ULONG PageSize;
+    PHYSICAL_ADDRESS PhysicalAddress[DESCRIPTOR_REFILL_PAGE_COUNT];
+    KSTATUS Status;
+    PVOID VirtualAddress;
+
+    //
+    // If this is not the system accountant, then it's ready to go. The memory
+    // descriptor library will allocate new descriptors as necessary.
+    //
+
+    if ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) == 0) {
+        return STATUS_SUCCESS;
+    }
+
+    ASSERT((Accountant->Lock == NULL) ||
+           (KeIsSharedExclusiveLockHeldExclusive(Accountant->Lock) != FALSE));
+
+    //
+    // If there are enough free descriptors left to proceed and to still allow
+    // the descriptors to be replenished in the future, then exit successfully.
+    //
+
+    if (Accountant->Mdl.UnusedDescriptorCount >
+        FREE_SYSTEM_DESCRIPTORS_REQUIRED_FOR_REFILL) {
+
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // Otherwise it is time to add more descriptors to the list. Allocate a
+    // few physical pages.
+    //
+
+    PageSize = MmPageSize();
+    RtlZeroMemory(PhysicalAddress, sizeof(PHYSICAL_ADDRESS) * 3);
+    PhysicalAddress[0] = MmpAllocatePhysicalPages(DESCRIPTOR_REFILL_PAGE_COUNT,
+                                                  1);
+
+    //
+    // If three contiguous pages could not be found, then allocate them one by
+    // one.
+    //
+
+    if (PhysicalAddress[0] == INVALID_PHYSICAL_ADDRESS) {
+        for (Index = 0; Index < DESCRIPTOR_REFILL_PAGE_COUNT; Index += 1) {
+            PhysicalAddress[Index] = MmpAllocatePhysicalPages(1, 1);
+            if (PhysicalAddress[Index] == INVALID_PHYSICAL_ADDRESS) {
+                break;
+            }
+        }
+
+    } else {
+        for (Index = 1; Index < DESCRIPTOR_REFILL_PAGE_COUNT; Index += 1) {
+            PhysicalAddress[Index] = PhysicalAddress[Index - 1] + PageSize;
+        }
+
+        ASSERT(Index == DESCRIPTOR_REFILL_PAGE_COUNT);
+    }
+
+    //
+    // If no physical pages where allocated, fail.
+    //
+
+    if (Index == 0) {
+        Status = STATUS_NO_MEMORY;
+        goto PrepareToAddAccountingDescriptorEnd;
+    }
+
+    //
+    // Get a virtual address region to map the physical pages. There should be
+    // enough free descriptors left for this allocation.
+    //
+
+    ASSERT(Accountant->Mdl.UnusedDescriptorCount >=
+           FREE_SYSTEM_DESCRIPTORS_MIN);
+
+    AllocationSize = DESCRIPTOR_REFILL_PAGE_COUNT * PageSize;
+    Status = MmMdAllocateFromMdl(&(Accountant->Mdl),
+                                 &Address,
+                                 AllocationSize,
+                                 PageSize,
+                                 MemoryTypeMmStructures,
+                                 AllocationStrategyAnyAddress);
+
+    if (!KSUCCESS(Status)) {
+        goto PrepareToAddAccountingDescriptorEnd;
+    }
+
+    ASSERT((UINTN)Address == Address);
+
+    VirtualAddress = (PVOID)(UINTN)Address;
+
+    //
+    // Map the physical pages.
+    //
+
+    CurrentAddress = VirtualAddress;
+    for (Index = 0; Index < DESCRIPTOR_REFILL_PAGE_COUNT; Index += 1) {
+        MmpMapPage(PhysicalAddress[Index], CurrentAddress, MAP_FLAG_PRESENT);
+        CurrentAddress += PageSize;
+    }
+
+    //
+    // Insert these new pages as descriptors.
+    //
+
+    MmMdAddFreeDescriptorsToMdl(&(Accountant->Mdl),
+                                VirtualAddress,
+                                AllocationSize);
+
+    Status = STATUS_SUCCESS;
+
+PrepareToAddAccountingDescriptorEnd:
+    if (!KSUCCESS(Status)) {
+        for (Index = 0; Index < 3; Index += 1) {
+            if (PhysicalAddress[Index] != INVALID_PHYSICAL_ADDRESS) {
+                MmFreePhysicalPage(PhysicalAddress[Index]);
+            }
+        }
+    }
+
+    return Status;
+}
+
+BOOL
+MmpIsAccountingRangeAllocated (
+    PMEMORY_ACCOUNTING Accountant,
+    PVOID Address,
+    UINTN SizeInBytes
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines whether or not the supplied range is currently
+    allocated in the given memory accountant.
+
+Arguments:
+
+    Accountant - Supplies a pointer to a memory accounting structure.
+
+    Address - Supplies the base address of the range.
+
+    SizeInBytes - Supplies the size of the range, in bytes.
+
+Return Value:
+
+    Returns TRUE if the range is currently allocated or FALSE otherwise.
+
+--*/
+
+{
+
+    ULONGLONG EndAddress;
+    PMEMORY_DESCRIPTOR ExistingAllocation;
+    ULONGLONG ExistingEndAddress;
+    UINTN PageCount;
+    ULONG PageShift;
+    KSTATUS Status;
+
+    PageShift = MmPageShift();
+    PageCount = ALIGN_RANGE_UP(SizeInBytes, MmPageSize()) >> PageShift;
+    EndAddress = (UINTN)Address + (PageCount << PageShift);
+
+    //
+    // Look up the descriptor containing this allocation.
+    //
+
+    ExistingAllocation = MmMdLookupDescriptor(&(Accountant->Mdl),
+                                              (UINTN)Address,
+                                              (UINTN)Address + SizeInBytes);
+
+    if ((ExistingAllocation == NULL) ||
+        (ExistingAllocation->Type == MemoryTypeFree)) {
+
+        Status = STATUS_INVALID_PARAMETER;
+        goto MmpIsAccountingRangeAllocatedEnd;
+    }
+
+    //
+    // Ensure that the descriptor covers the allocation.
+    //
+
+    ExistingEndAddress = ExistingAllocation->BaseAddress +
+                         ExistingAllocation->Size;
+
+    if (ExistingEndAddress < EndAddress) {
+        Status = STATUS_MEMORY_CONFLICT;
+        goto MmpIsAccountingRangeAllocatedEnd;
+    }
+
+    ASSERT(ExistingAllocation->BaseAddress <= (ULONGLONG)(UINTN)Address);
+
+    Status = STATUS_SUCCESS;
+
+MmpIsAccountingRangeAllocatedEnd:
+    if (!KSUCCESS(Status)) {
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+VOID
+MmpInitializeKernelVaIterator (
+    PMEMORY_DESCRIPTOR_LIST DescriptorList,
+    PMEMORY_DESCRIPTOR Descriptor,
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called once for each descriptor in the memory descriptor
+    list.
+
+Arguments:
+
+    DescriptorList - Supplies a pointer to the descriptor list being iterated
+        over.
+
+    Descriptor - Supplies a pointer to the current descriptor.
+
+    Context - Supplies an optional opaque pointer of context that was provided
+        when the iteration was requested.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PINITIALIZE_KERNEL_VA_CONTEXT MemoryContext;
+    KSTATUS Status;
+
+    MemoryContext = Context;
+    if (IS_MEMORY_FREE_TYPE(Descriptor->Type)) {
+        return;
+    }
+
+    if (Descriptor->BaseAddress < (UINTN)KERNEL_VA_START) {
+        return;
+    }
+
+    Status = MmpAddAccountingDescriptor(&MmKernelVirtualSpace, Descriptor);
+    if (!KSUCCESS(Status)) {
+        MemoryContext->Status = Status;
+    }
+
+    return;
+}
+
+VOID
+MmpCloneAddressSpaceIterator (
+    PMEMORY_DESCRIPTOR_LIST DescriptorList,
+    PMEMORY_DESCRIPTOR Descriptor,
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called once for each descriptor in the memory descriptor
+    list.
+
+Arguments:
+
+    DescriptorList - Supplies a pointer to the descriptor list being iterated
+        over.
+
+    Descriptor - Supplies a pointer to the current descriptor.
+
+    Context - Supplies an optional opaque pointer of context that was provided
+        when the iteration was requested.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCLONE_ADDRESS_SPACE_CONTEXT CloneContext;
+    KSTATUS Status;
+
+    CloneContext = Context;
+    if (!KSUCCESS(CloneContext->Status)) {
+        return;
+    }
+
+    Status = MmpAddAccountingDescriptor(CloneContext->Accounting, Descriptor);
+    if (!KSUCCESS(Status)) {
+        CloneContext->Status = Status;
+    }
+
+    return;
+}
+

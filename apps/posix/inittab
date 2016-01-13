@@ -1,0 +1,26 @@
+# Define the default runlevel
+:2:initdefault:
+
+# Define the system initialization script. Not run in emergency mode.
+si::sysinit:/etc/init.d/rc S
+
+# Define the single-user mode action.
+0:S:wait:/bin/sulogin
+
+# Run initialization scripts for the various runlevels.
+# Runlevel 0 is halt.
+# Runlevel 1 is single-user mode.
+# Runlevels 2-5 are multi-user modes.
+# Runlevel 6 is reboot.
+
+r0:0:wait:/etc/init.d/rc 0
+r1:1:wait:/etc/init.d/rc 1
+r2:2:wait:/etc/init.d/rc 2
+r3:3:wait:/etc/init.d/rc 3
+r4:4:wait:/etc/init.d/rc 4
+r5:5:wait:/etc/init.d/rc 5
+r6:6:wait:/etc/init.d/rc 6
+r6r:6:respawn:/bin/sulogin 
+
+# Allow login on the console.
+li:2345:respawn:/bin/getty -a root $CONSOLE 115200

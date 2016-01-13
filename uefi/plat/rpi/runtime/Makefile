@@ -1,0 +1,63 @@
+################################################################################
+#
+#   Copyright (c) 2015 Minoca Corp. All Rights Reserved
+#
+#   Module Name:
+#
+#       Raspberry Pi UEFI Runtime
+#
+#   Abstract:
+#
+#       This module implements the Raspberry Pi runtime firmware, which
+#       continues running even after boot services have been torn down. It is
+#       never unloaded.
+#
+#   Author:
+#
+#       Chris Stevens 5-Jan-2015
+#
+#   Environment:
+#
+#       Firmware
+#
+################################################################################
+
+BINARY = rpirt.elf
+
+BINARYTYPE = staticapp
+
+BINPLACE = bin
+
+INCLUDES += $(SRCROOT)/os/uefi/inc;$(SRCDIR)/..;
+
+BINPLACE = bin
+
+OBJS += runtime.o   \
+
+VPATH += $(BINROOT):
+
+ENTRY = EfiRuntimeCoreEntry
+
+LDFLAGS += -pie -Wl,--no-wchar-size-warning
+LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib
+
+ifeq ($(ARCH), armv6)
+LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
+endif
+
+TARGETLIBS = $(INTLIB)/os/uefi/core/rtlib/rtlib.a \
+             $(INTLIB)/os/uefi/archlib/uefiarch.a \
+
+include $(SRCROOT)/os/minoca.mk
+
+##
+## On architectures that produce ELF binaries, convert it to a PE image.
+##
+
+postbuild: rpirt
+
+rpirt: $(BINARY)
+	@cd $(BINROOT) && elfconv -o $@ -t efiruntimedriver $(BINARY)
+
+CFLAGS += -fshort-wchar
+

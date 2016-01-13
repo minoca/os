@@ -1,0 +1,13 @@
+root:x:0:
+daemon:x:1:
+bin:x:2:
+games:x:3:
+man:x:4:
+news:x:5:
+uucp:x:6:
+www-data:x:7:
+shadow:x:8:
+utmp:x:9:
+tty:x:10:
+users:x:100:
+nogroup:x:65534:

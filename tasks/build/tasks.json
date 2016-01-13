@@ -1,0 +1,417 @@
+[
+{
+    "type": "task",
+    "name": "Native Pilot x86",
+    "steps": [
+        {
+            "name": "Run Native Compile",
+            "type": "runtask",
+            "parameter": "Native Compile"
+        },
+        {
+            "name": "Run Upload Build",
+            "type": "runtask",
+            "parameter": "Upload Build"
+        },
+        {
+            "name": "Start Native Tests",
+            "type": "runschedule",
+            "parameter": "Native Test x86"
+        },
+        {
+            "name": "Run Package Distributables",
+            "type": "runschedule",
+            "parameter": "Package Distributables"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "Native Pilot x86quark",
+    "steps": [
+        {
+            "name": "Run Native Compile",
+            "type": "runtask",
+            "parameter": "Native Compile"
+        },
+        {
+            "name": "Run Upload Build",
+            "type": "runtask",
+            "parameter": "Upload Build"
+        },
+        {
+            "name": "Start Native Tests",
+            "type": "runschedule",
+            "parameter": "Native Test x86quark"
+        },
+        {
+            "name": "Run Package Distributables",
+            "type": "runschedule",
+            "parameter": "Package Distributables"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "Native Pilot ARMv7",
+    "steps": [
+        {
+            "name": "Run Native Compile",
+            "type": "runtask",
+            "parameter": "Native Compile"
+        },
+        {
+            "name": "Run Upload Build",
+            "type": "runtask",
+            "parameter": "Upload Build"
+        },
+        {
+            "name": "Start Native Tests",
+            "type": "runschedule",
+            "parameter": "Native Test armv7"
+        },
+        {
+            "name": "Run Package Distributables",
+            "type": "runschedule",
+            "parameter": "Package Distributables"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "Native Pilot ARMv6",
+    "steps": [
+        {
+            "name": "Run Native Compile",
+            "type": "runtask",
+            "parameter": "Native Compile"
+        },
+        {
+            "name": "Run Upload Build",
+            "type": "runtask",
+            "parameter": "Upload Build"
+        },
+        {
+            "name": "Start Native Tests",
+            "type": "runschedule",
+            "parameter": "Native Test armv6"
+        },
+        {
+            "name": "Run Package Distributables",
+            "type": "runschedule",
+            "parameter": "Package Distributables"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "Native Test",
+    "steps": [
+        {
+            "name": "Run Install",
+            "type": "runtask",
+            "parameter": "Install Build"
+        },
+        {
+            "name": "Run Performance Test",
+            "type": "runtask",
+            "parameter": "Performance Test"
+        },
+        {
+            "name": "Run Native Compile (test)",
+            "type": "runtask",
+            "parameter": "Native Compile"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "Native Compile",
+    "steps": [
+        {
+            "name": "Download Sources",
+            "type": "execute",
+            "parameter": "../../tasks/build/download_sources.sh"
+        },
+        {
+            "name": "Prepare Environment",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/prep_env.sh"
+        },
+        {
+            "name": "Make awk",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/awk"
+        },
+        {
+            "name": "Make zlib",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/zlib-1.2.8"
+        },
+        {
+            "name": "Make libiconv",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libiconv-1.14"
+        },
+        {
+            "name": "Make binutils",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/binutils-2.23"
+        },
+        {
+            "name": "Make GMP",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/gmp-4.3.2"
+        },
+        {
+            "name": "Make MPFR",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/mpfr-2.4.2"
+        },
+        {
+            "name": "Make MPC",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/mpc-0.8.1"
+        },
+        {
+            "name": "Make GCC",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/gcc-4.9.2"
+        },
+        {
+            "name": "Make perl",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/perl-5.20.1"
+        },
+        {
+            "name": "Make mbedtls",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/mbedtls-1.3.10"
+        },
+        {
+            "name": "Make OpenSSL",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/openssl-1.0.1k"
+        },
+        {
+            "name": "Make M4",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/m4-1.4.17"
+        },
+        {
+            "name": "Make tar",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/tar-1.27.1"
+        },
+        {
+            "name": "Make make",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/make-3.82"
+        },
+        {
+            "name": "Make gzip",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/gzip-1.6"
+        },
+        {
+            "name": "Make patch",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/patch-2.7"
+        },
+        {
+            "name": "Make flex",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/flex-2.5.39"
+        },
+        {
+            "name": "Make bison",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/bison-3.0.2"
+        },
+        {
+            "name": "Make byacc",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/byacc-20141128"
+        },
+        {
+            "name": "Make iASL",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/acpica-unix-20140424"
+        },
+        {
+            "name": "Make SQLite",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/sqlite-autoconf-3080500"
+        },
+        {
+            "name": "Make NCurses",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/ncurses-5.9"
+        },
+        {
+            "name": "Make readline",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/readline-6.3"
+        },
+        {
+            "name": "Make nano",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/nano-2.2.6"
+        },
+        {
+            "name": "Make vttest",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/vttest-20140305"
+        },
+        {
+            "name": "Make xz",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/xz-5.2.1"
+        },
+        {
+            "name": "Make bzip2",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/bzip2-1.0.6"
+        },
+        {
+            "name": "Make wget",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/wget-1.15"
+        },
+        {
+            "name": "Make shadow",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/shadow-4.2.1"
+        },
+        {
+            "name": "Make Python",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/Python-2.7.5"
+        },
+        {
+            "name": "Make openssh",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/openssh-6.7p1"
+        },
+        {
+            "name": "Make opkg",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/opkg-0.2.4"
+        },
+        {
+            "name": "Make apr",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/apr-1.5.1"
+        },
+        {
+            "name": "Make apr-util",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/apr-util-1.5.4"
+        },
+        {
+            "name": "Make subversion",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/subversion-1.8.11"
+        },
+        {
+            "name": "Make bash",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/bash-4.3.30"
+        },
+        {
+            "name": "Make dash",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/dash-0.5.8"
+        },
+        {
+            "name": "Make libssh2",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libssh2-1.5.0"
+        },
+        {
+            "name": "Make curl",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/curl-7.41.0"
+        },
+        {
+            "name": "Make git",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/git-2.3.5"
+        },
+        {
+            "name": "Setup Distribution",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/setup_distrib.sh"
+        },
+        {
+            "name": "Make OS (Distribution)",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh os test BUILD_STRING= BUILD_USER=\"Minoca Corp\" REVISION=`cat src/os/revision`"
+        },
+        {
+            "name": "Add Files",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/add_files.sh"
+        },
+        {
+            "name": "Make OS (Automation)",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh os test BUILD_STRING= BUILD_USER=\"Minoca Corp\" REVISION=`cat src/os/revision`"
+        },
+        {
+            "name": "Package Binaries",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/package_binaries.sh"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "Upload Build",
+    "steps": [
+        {
+            "name": "Upload binaries",
+            "type": "execute",
+            "parameter": "../../tasks/build/upload_binaries.sh"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "Install Build",
+    "steps": [
+        {
+            "name": "Download build",
+            "type": "execute",
+            "parameter": "../../tasks/build/download_build.sh"
+        },
+        {
+            "name": "Install Build",
+            "type": "execute",
+            "parameter": "../../tasks/build/install_build.sh"
+        },
+        {
+            "name": "Reboot",
+            "type": "reboot",
+            "parameter": ""
+        },
+        {
+            "name": "Finish",
+            "type": "no-op",
+            "parameter": ""
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "No-op Task",
+    "steps": [
+        {
+            "name": "Do nothing",
+            "type": "no-op",
+            "parameter": ""
+        }
+    ]
+}
+]
+

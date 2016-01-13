@@ -1,0 +1,841 @@
+/*++
+
+Copyright (c) 2012 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    init.c
+
+Abstract:
+
+    This module contains functions necessary to initialize the memory manager
+    subsystem.
+
+Author:
+
+    Evan Green 1-Aug-2012
+
+Environment:
+
+    Kernel
+
+--*/
+
+//
+// ------------------------------------------------------------------- Includes
+//
+
+#include <minoca/kernel.h>
+#include <minoca/bootload.h>
+#include "mmp.h"
+
+//
+// ---------------------------------------------------------------- Definitions
+//
+
+//
+// Define the stack size for the processor initialization and idle thread.
+//
+
+#define DEFAULT_IDLE_STACK_SIZE 0x3000
+
+//
+// ------------------------------------------------------ Data Type Definitions
+//
+
+/*++
+
+Structure Description:
+
+    This structure defines the iteration context when creating an array of
+    boot descriptors.
+
+Members:
+
+    Count - Stores the currently counted number of descriptors.
+
+    AllocatedCount - Stores the number of elements in the allocated array.
+
+    Array - Stores the destination array of descriptors.
+
+--*/
+
+typedef struct _BOOT_DESCRIPTOR_ITERATOR_CONTEXT {
+    UINTN Count;
+    UINTN AllocatedCount;
+    PMEMORY_DESCRIPTOR Array;
+} BOOT_DESCRIPTOR_ITERATOR_CONTEXT, *PBOOT_DESCRIPTOR_ITERATOR_CONTEXT;
+
+//
+// ----------------------------------------------- Internal Function Prototypes
+//
+
+KSTATUS
+MmpInitializeKernelVa (
+    PKERNEL_INITIALIZATION_BLOCK Parameters
+    );
+
+KSTATUS
+MmpArchInitialize (
+    PKERNEL_INITIALIZATION_BLOCK Parameters,
+    ULONG Phase
+    );
+
+KSTATUS
+MmpInitializeUserSharedData (
+    VOID
+    );
+
+KSTATUS
+MmpFreeBootMappings (
+    PKERNEL_INITIALIZATION_BLOCK Parameters
+    );
+
+VOID
+MmpFreeBootMappingsIpiRoutine (
+    PVOID Context
+    );
+
+KSTATUS
+MmpCreateBootMemoryDescriptorArray (
+    PMEMORY_DESCRIPTOR_LIST MemoryMap,
+    PMEMORY_DESCRIPTOR *Descriptors,
+    PULONG DescriptorCount
+    );
+
+VOID
+MmpBootMemoryDescriptorIterationRoutine (
+    PMEMORY_DESCRIPTOR_LIST DescriptorList,
+    PMEMORY_DESCRIPTOR Descriptor,
+    PVOID Context
+    );
+
+//
+// -------------------------------------------------------------------- Globals
+//
+
+//
+// ------------------------------------------------------------------ Functions
+//
+
+KSTATUS
+MmInitialize (
+    PKERNEL_INITIALIZATION_BLOCK Parameters,
+    PPROCESSOR_START_BLOCK StartBlock,
+    ULONG Phase
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes the kernel Memory Manager.
+
+Arguments:
+
+    Parameters - Supplies a pointer to the initialization block from the loader.
+
+    StartBlock - Supplies a pointer to the processor start block if this is an
+        application processor.
+
+    Phase - Supplies the phase of initialization. Valid values are 0 through 4.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PPROCESSOR_BLOCK ProcessorBlock;
+    KSTATUS Status;
+
+    //
+    // Phase 0 is executed on the boot processor before the debugger comes
+    // online.
+    //
+
+    if (Phase == 0) {
+
+        //
+        // Perform phase 0 architecture specific initialization.
+        //
+
+        Status = MmpArchInitialize(Parameters, 0);
+        if (!KSUCCESS(Status)) {
+            goto InitializeEnd;
+        }
+
+    //
+    // Phase 1 is executed on all processors.
+    //
+
+    } else if (Phase == 1) {
+
+        //
+        // Set the swap virtual address used by this processor.
+        //
+
+        ProcessorBlock = KeGetCurrentProcessorBlock();
+        if (Parameters != NULL) {
+            ProcessorBlock->SwapPage = Parameters->PageTableStage;
+
+        } else {
+            ProcessorBlock->SwapPage = StartBlock->SwapPage;
+        }
+
+        ASSERT(ProcessorBlock->SwapPage != NULL);
+
+        //
+        // Perform phase 1 architecture specific initialization.
+        //
+
+        Status = MmpArchInitialize(Parameters, 1);
+        if (!KSUCCESS(Status)) {
+            goto InitializeEnd;
+        }
+
+        //
+        // If the system is just booting, initialize MM data structures.
+        //
+
+        if (KeGetCurrentProcessorNumber() == 0) {
+            KeInitializeSpinLock(&MmInvalidateIpiLock);
+            KeInitializeSpinLock(&MmNonPagedPoolLock);
+
+            //
+            // Initialize the physical memory allocator.
+            //
+
+            Status = MmpInitializePhysicalPageAllocator(Parameters->MemoryMap);
+            if (!KSUCCESS(Status)) {
+                goto InitializeEnd;
+            }
+
+            //
+            // Initialize structures for kernel VA space. After this routine
+            // completes the system is ready to use real allocation routines.
+            //
+
+            Status = MmpInitializeKernelVa(Parameters);
+            if (!KSUCCESS(Status)) {
+                goto InitializeEnd;
+            }
+
+            //
+            // Initialize the non-paged pool. This will cause an initial pool
+            // expansion.
+            //
+
+            Status = MmpInitializeNonPagedPool();
+            if (!KSUCCESS(Status)) {
+                goto InitializeEnd;
+            }
+
+            //
+            // Initialize the user shared data page in the kernel VA space.
+            //
+
+            Status = MmpInitializeUserSharedData();
+            if (!KSUCCESS(Status)) {
+                goto InitializeEnd;
+            }
+
+            //
+            // Initialize the paged pool. No memory gets mapped for the paged
+            // pool initialization, page faults bring it in as needed.
+            //
+
+            MmpInitializePagedPool();
+        }
+
+    //
+    // In phase 2, lock down memory structures in preparation for
+    // multi-threaded access. This is only executed on processor 0.
+    //
+
+    } else if (Phase == 2) {
+
+        ASSERT(KeGetCurrentProcessorNumber() == 0);
+
+        MmPagedPoolLock = KeCreateQueuedLock();
+        if (MmPagedPoolLock == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeEnd;
+        }
+
+        //
+        // Create the kernel's VA lock, which was deferred becaues the Object
+        // Manager was not online.
+        //
+
+        MmKernelVirtualSpace.Lock = KeCreateSharedExclusiveLock();
+        if (MmKernelVirtualSpace.Lock == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeEnd;
+        }
+
+        //
+        // Create the kernel's VA memory warning event.
+        //
+
+        MmVirtualMemoryWarningEvent = KeCreateEvent(NULL);
+        if (MmVirtualMemoryWarningEvent == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeEnd;
+        }
+
+        //
+        // Create the physical address lock.
+        //
+
+        MmPhysicalPageLock = KeCreateQueuedLock();
+        if (MmPhysicalPageLock == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeEnd;
+        }
+
+        //
+        // Create an event that signals whenever there is a change in the
+        // physical memory warning level.
+        //
+
+        MmPhysicalMemoryWarningEvent = KeCreateEvent(NULL);
+        if (MmPhysicalMemoryWarningEvent == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeEnd;
+        }
+
+        //
+        // Initialize the paging infrastructure. Some things need to be set up
+        // even if a page file will never arrive. This must be done before the
+        // first paged pool allocation.
+        //
+
+        Status = MmpInitializePaging(0);
+        if (!KSUCCESS(Status)) {
+            goto InitializeEnd;
+        }
+
+        Status = MmpArchInitialize(Parameters, 2);
+        if (!KSUCCESS(Status)) {
+            goto InitializeEnd;
+        }
+
+        Status = STATUS_SUCCESS;
+
+    //
+    // Kick off any helper threads as this runs after all cores are set up and
+    // ready for true multi-threading.
+    //
+
+    } else if (Phase == 3) {
+
+        //
+        // Finish initializing the paging infrastructure by kicking of the
+        // paging helper thread.
+        //
+
+        Status = MmpInitializePaging(1);
+        if (!KSUCCESS(Status)) {
+            goto InitializeEnd;
+        }
+
+    } else {
+
+        ASSERT(Phase == 4);
+
+        //
+        // Free all loader temporary space, the kernel is on its own now.
+        //
+
+        Status = MmpFreeBootMappings(Parameters);
+        if (!KSUCCESS(Status)) {
+            goto InitializeEnd;
+        }
+    }
+
+InitializeEnd:
+    return Status;
+}
+
+KSTATUS
+MmPrepareForProcessorLaunch (
+    PPROCESSOR_START_BLOCK StartBlock
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes a processor start block in preparation for
+    launching a new processor.
+
+Arguments:
+
+    StartBlock - Supplies a pointer to the start block that will be passed to
+        the new core.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PVOID Allocation;
+    UINTN PageSize;
+    KSTATUS Status;
+
+    PageSize = MmPageSize();
+    StartBlock->StackBase = MmAllocateKernelStack(DEFAULT_IDLE_STACK_SIZE);
+    if (StartBlock->StackBase == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto PrepareForProcessorLaunchEnd;
+    }
+
+    StartBlock->StackSize = DEFAULT_IDLE_STACK_SIZE;
+
+    //
+    // Allocate a space the processor can use for temporary mappings. Note that
+    // processors do actual TLB fills on speculative data accesses, so other
+    // processors may accumulate stale mappings to this VA. As long as this
+    // address is only ever used by the processor that owns it, it's all fine.
+    //
+
+    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
+                                     PageSize,
+                                     PageSize,
+                                     MemoryTypeReserved,
+                                     AllocationStrategyAnyAddress,
+                                     FALSE,
+                                     &Allocation);
+
+    if (!KSUCCESS(Status)) {
+        goto PrepareForProcessorLaunchEnd;
+    }
+
+    StartBlock->SwapPage = Allocation;
+    Status = STATUS_SUCCESS;
+
+PrepareForProcessorLaunchEnd:
+    if (!KSUCCESS(Status)) {
+        MmDestroyProcessorStartBlock(StartBlock);
+    }
+
+    return Status;
+}
+
+VOID
+MmDestroyProcessorStartBlock (
+    PPROCESSOR_START_BLOCK StartBlock
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys structures initialized by MM in preparation for a
+    (now failed) processor launch.
+
+Arguments:
+
+    StartBlock - Supplies a pointer to the start block.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINTN PageSize;
+
+    if (StartBlock->StackBase != NULL) {
+        MmFreeKernelStack(StartBlock->StackBase, DEFAULT_IDLE_STACK_SIZE);
+        StartBlock->StackBase = NULL;
+    }
+
+    if (StartBlock->SwapPage != NULL) {
+        PageSize = MmPageSize();
+        MmpFreeAccountingRange(NULL,
+                               &MmKernelVirtualSpace,
+                               StartBlock->SwapPage - PageSize,
+                               3 * PageSize,
+                               FALSE,
+                               0);
+
+        StartBlock->SwapPage = NULL;
+    }
+
+    return;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+KSTATUS
+MmpFreeBootMappings (
+    PKERNEL_INITIALIZATION_BLOCK Parameters
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unmaps and releases the physical memory associated with
+    temporary boot memory. After this routine, the kernel initialization block
+    is no longer touchable.
+
+Arguments:
+
+    Parameters - Supplies a pointer to the initialization block from the loader.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PMEMORY_DESCRIPTOR CurrentDescriptor;
+    ULONG DescriptorIndex;
+    ULONG PageCount;
+    ULONG PageShift;
+    ULONG PageSize;
+    BOOL PageZeroFound;
+    PHYSICAL_ADDRESS PhysicalAddress;
+    ULONG PhysicalDescriptorCount;
+    PMEMORY_DESCRIPTOR PhysicalDescriptors;
+    PROCESSOR_SET ProcessorSet;
+    KSTATUS Status;
+    PVOID VirtualAddress;
+    ULONG VirtualDescriptorCount;
+    PMEMORY_DESCRIPTOR VirtualDescriptors;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    PageShift = MmPageShift();
+    PageSize = MmPageSize();
+
+    //
+    // Create an array of the virtual boot memory descriptors.
+    //
+
+    Status = MmpCreateBootMemoryDescriptorArray(Parameters->VirtualMap,
+                                                &VirtualDescriptors,
+                                                &VirtualDescriptorCount);
+
+    if (!KSUCCESS(Status)) {
+        goto FreeBootMappingsEnd;
+    }
+
+    //
+    // Create an array of the physical boot memory descriptors.
+    //
+
+    Status = MmpCreateBootMemoryDescriptorArray(Parameters->MemoryMap,
+                                                &PhysicalDescriptors,
+                                                &PhysicalDescriptorCount);
+
+    if (!KSUCCESS(Status)) {
+        goto FreeBootMappingsEnd;
+    }
+
+    //
+    // Loop through the virtual descriptors, unmapping the region in every
+    // descriptor that describes kernel virtual address space. User mode
+    // virtual addresses will be unmapped in bulk. Don't send the invalidate
+    // IPIs now, an entire TLB flush will be done at the end.
+    //
+
+    for (DescriptorIndex = 0;
+         DescriptorIndex < VirtualDescriptorCount;
+         DescriptorIndex += 1) {
+
+        CurrentDescriptor = &(VirtualDescriptors[DescriptorIndex]);
+        VirtualAddress = (PVOID)(UINTN)CurrentDescriptor->BaseAddress;
+        PageCount = CurrentDescriptor->Size >> PageShift;
+
+        ASSERT((PageCount << PageShift) == CurrentDescriptor->Size);
+
+        if (VirtualAddress < KERNEL_VA_START) {
+
+            ASSERT((VirtualAddress + CurrentDescriptor->Size) <=
+                   KERNEL_VA_START);
+
+            continue;
+        }
+
+        Status = MmpFreeAccountingRange(NULL,
+                                        &MmKernelVirtualSpace,
+                                        VirtualAddress,
+                                        PageCount << PageShift,
+                                        FALSE,
+                                        0);
+
+        if (!KSUCCESS(Status)) {
+            goto FreeBootMappingsEnd;
+        }
+    }
+
+    //
+    // Perform architecture specific work, including zeroing out all the user
+    // space page directory entries.
+    //
+
+    Status = MmpArchInitialize(Parameters, 3);
+    if (!KSUCCESS(Status)) {
+        goto FreeBootMappingsEnd;
+    }
+
+    //
+    // Invalidate the entire TLB on all processors.
+    //
+
+    ProcessorSet.Target = ProcessorTargetAll;
+    Status = KeSendIpi(MmpFreeBootMappingsIpiRoutine, NULL, &ProcessorSet);
+    if (!KSUCCESS(Status)) {
+        goto FreeBootMappingsEnd;
+    }
+
+    //
+    // Now that the physical pages have been unmapped and removed from the
+    // page tables and TLB, loop through the physical descriptors and free
+    // every region.
+    //
+
+    PageZeroFound = FALSE;
+    for (DescriptorIndex = 0;
+         DescriptorIndex < PhysicalDescriptorCount;
+         DescriptorIndex += 1) {
+
+        CurrentDescriptor = &(PhysicalDescriptors[DescriptorIndex]);
+        PhysicalAddress = CurrentDescriptor->BaseAddress;
+        PageCount = CurrentDescriptor->Size >> PageShift;
+
+        ASSERT((PageCount << PageShift) == CurrentDescriptor->Size);
+
+        //
+        // Record the fact that page zero was found and do not release it. It
+        // will be repurposed below.
+        //
+
+        if (PhysicalAddress == 0) {
+
+            ASSERT(PageZeroFound == FALSE);
+
+            PageZeroFound = TRUE;
+            PhysicalAddress += PageSize;
+            PageCount -= 1;
+        }
+
+        //
+        // Do not release pages that are greater than the allowed maximum.
+        //
+
+        if (MmMaximumPhysicalAddress != 0) {
+            if (PhysicalAddress >= MmMaximumPhysicalAddress) {
+                PageCount = 0;
+
+            } else if ((PhysicalAddress + (PageCount << PageShift)) >
+                       MmMaximumPhysicalAddress) {
+
+                PageCount = (MmMaximumPhysicalAddress - PhysicalAddress) >>
+                            PageShift;
+            }
+        }
+
+        if (PageCount != 0) {
+            MmFreePhysicalPages(PhysicalAddress, PageCount);
+        }
+    }
+
+    //
+    // If page zero was found in the boot mappings, then it was skipped above.
+    // Repurpose it for memory descriptors.
+    //
+
+    if (PageZeroFound != FALSE) {
+
+        ASSERT(MmPhysicalPageZeroAllocated == FALSE);
+
+        MmPhysicalPageZeroAllocated = TRUE;
+        MmpAddPageZeroDescriptorsToMdl(&MmKernelVirtualSpace);
+    }
+
+    Status = STATUS_SUCCESS;
+
+FreeBootMappingsEnd:
+    if (VirtualDescriptors != NULL) {
+        MmFreeNonPagedPool(VirtualDescriptors);
+    }
+
+    if (PhysicalDescriptors != NULL) {
+        MmFreeNonPagedPool(PhysicalDescriptors);
+    }
+
+    return Status;
+}
+
+VOID
+MmpFreeBootMappingsIpiRoutine (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is an IPI routine that runs once all boot allocations are
+    freed. It flushes the entire TLB on the current processor.
+
+Arguments:
+
+    Context - Supplies an unused context parameter.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ArInvalidateEntireTlb();
+    return;
+}
+
+KSTATUS
+MmpCreateBootMemoryDescriptorArray (
+    PMEMORY_DESCRIPTOR_LIST MemoryMap,
+    PMEMORY_DESCRIPTOR *Descriptors,
+    PULONG DescriptorCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates an array of boot memory descriptors based on the given
+    memory map.
+
+Arguments:
+
+    MemoryMap - Supplies a pointer to the memory map whose descriptors are to
+        be put in an array.
+
+    Descriptors - Supplies a pointer that receives an array of memory
+        descriptors.
+
+    DescriptorCount - Supplies a pointer that receives the number of memory
+        descriptors in the allocated array.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG AllocationSize;
+    BOOT_DESCRIPTOR_ITERATOR_CONTEXT Context;
+    PMEMORY_DESCRIPTOR DescriptorArray;
+    KSTATUS Status;
+
+    //
+    // Determine how many boot descriptors are in the memory map.
+    //
+
+    RtlZeroMemory(&Context, sizeof(BOOT_DESCRIPTOR_ITERATOR_CONTEXT));
+    MmMdIterate(MemoryMap, MmpBootMemoryDescriptorIterationRoutine, &Context);
+
+    //
+    // Allocate an array of descriptors and copy the descriptors from the
+    // initialization block into this temporary array. This must be done
+    // because one of the things being unmapped and freed is this memory list.
+    //
+
+    AllocationSize = Context.Count * sizeof(MEMORY_DESCRIPTOR);
+    DescriptorArray = MmAllocateNonPagedPool(AllocationSize, MM_ALLOCATION_TAG);
+    if (DescriptorArray == NULL) {
+        Status = STATUS_NO_MEMORY;
+        goto CreateMemoryDescriptorArrayEnd;
+    }
+
+    Context.Array = DescriptorArray;
+    Context.AllocatedCount = Context.Count;
+    Context.Count = 0;
+
+    //
+    // Loop through the list again, copying the descriptors into the new space.
+    //
+
+    MmMdIterate(MemoryMap, MmpBootMemoryDescriptorIterationRoutine, &Context);
+    *Descriptors = DescriptorArray;
+    *DescriptorCount = Context.Count;
+    Status = STATUS_SUCCESS;
+
+CreateMemoryDescriptorArrayEnd:
+    return Status;
+}
+
+VOID
+MmpBootMemoryDescriptorIterationRoutine (
+    PMEMORY_DESCRIPTOR_LIST DescriptorList,
+    PMEMORY_DESCRIPTOR Descriptor,
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called once for each descriptor in the memory descriptor
+    list.
+
+Arguments:
+
+    DescriptorList - Supplies a pointer to the descriptor list being iterated
+        over.
+
+    Descriptor - Supplies a pointer to the current descriptor.
+
+    Context - Supplies an optional opaque pointer of context that was provided
+        when the iteration was requested.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PBOOT_DESCRIPTOR_ITERATOR_CONTEXT IteratorContext;
+
+    IteratorContext = Context;
+    if ((Descriptor->Type == MemoryTypeLoaderTemporary) ||
+        (Descriptor->Type == MemoryTypeFirmwareTemporary)) {
+
+        if (IteratorContext->Array != NULL) {
+
+            ASSERT(IteratorContext->Count < IteratorContext->AllocatedCount);
+
+            RtlCopyMemory(&(IteratorContext->Array[IteratorContext->Count]),
+                          Descriptor,
+                          sizeof(MEMORY_DESCRIPTOR));
+        }
+
+        IteratorContext->Count += 1;
+    }
+
+    return;
+}
+

@@ -1,0 +1,24 @@
+################################################################################
+#
+#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This file contains the list of sources in the image library.
+#
+#   Author:
+#
+#       Evan Green 31-Jul-2014
+#
+#   Environment:
+#
+#       Any
+#
+################################################################################
+
+OBJS = term.o       \
+

@@ -1,0 +1,45 @@
+################################################################################
+#
+#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#
+#   Binary Name:
+#
+#       Common UEFI platform sources
+#
+#   Abstract:
+#
+#       This file includes common build arguments for all UEFI platform targets.
+#
+#   Author:
+#
+#       Evan Green 26-Feb-2014
+#
+#   Environment:
+#
+#       Firmware
+#
+################################################################################
+
+INCLUDES += $(SRCROOT)/os/uefi/inc;
+
+TARGETLIBS = $(INTLIB)/os/kernel/kd/boot/kdboot.a           \
+             $(INTLIB)/os/kernel/kd/kdusb/kdnousb/kdnousb.a \
+             $(INTLIB)/os/lib/rtl/base/boot/basertlb.a      \
+             $(INTLIB)/os/lib/rtl/kmode/krtl.a              \
+             $(INTLIB)/os/lib/basevid/basevid.a             \
+             $(INTLIB)/os/lib/fatlib/fat.a                  \
+             $(INTLIB)/os/uefi/core/ueficore.a              \
+             $(INTLIB)/os/uefi/archlib/uefiarch.a           \
+
+ifeq ($(ARCH), armv7)
+
+TARGETLIBS += $(INTLIB)/os/kernel/$(ARCH)/boot/armboot.a    \
+
+endif
+
+ifeq ($(ARCH), armv6)
+
+TARGETLIBS += $(INTLIB)/os/kernel/$(ARCH)/boot/armboot.a    \
+
+endif
+

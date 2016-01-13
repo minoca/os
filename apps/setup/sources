@@ -1,0 +1,33 @@
+################################################################################
+#
+#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This file contains the common object files for the setup application.
+#
+#   Author:
+#
+#       Evan Green 8-Oct-2014
+#
+#   Environment:
+#
+#       Build
+#
+################################################################################
+
+COMMON_OBJS = cache.o          \
+              disk.o           \
+              fatdev.o         \
+              fileio.o         \
+              partio.o         \
+              plat.o           \
+              setup.o          \
+              util.o           \
+
+EXTRA_SRC_DIRS = ls sed sh swlib
+

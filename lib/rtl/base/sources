@@ -1,0 +1,58 @@
+################################################################################
+#
+#   Copyright (c) 2013 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This file contains the common object files for the Runtime Library base
+#       layer.
+#
+#   Author:
+#
+#       Evan Green 23-Oct-2013
+#
+#   Environment:
+#
+#       Build
+#
+################################################################################
+
+OBJS = crc32.o    \
+       heap.o     \
+       math.o     \
+       print.o    \
+       rbtree.o   \
+       scan.o     \
+       softfp.o   \
+       string.o   \
+       time.o     \
+       timezone.o \
+       version.o  \
+       wchar.o    \
+       wprint.o   \
+       wscan.o    \
+       wstring.o  \
+
+ARMV7_OBJS = armv7/intrinsa.o \
+             armv7/intrinsc.o \
+             armv7/rtlarch.o  \
+             armv7/rtlcomm.o  \
+             armv7/rtlmem.o   \
+
+ARMV6_OBJS = armv6/rtlarch.o  \
+             armv7/intrinsa.o \
+             armv7/intrinsc.o \
+             armv7/rtlcomm.o  \
+             armv7/rtlmem.o   \
+
+X86_OBJS = x86/intrinsc.o \
+           x86/rtlarch.o  \
+           x86/rtlmem.o   \
+
+X64_OBJS = x64/rtlarch.o  \
+           x64/rtlmem.o   \
+

@@ -1,0 +1,44 @@
+################################################################################
+#
+#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#
+#   Binary Name:
+#
+#       bootman (sources)
+#
+#   Abstract:
+#
+#       This file includes the common build arguments for the boot manager.
+#
+#   Author:
+#
+#       Evan Green 21-Feb-2014
+#
+#   Environment:
+#
+#       Boot
+#
+################################################################################
+
+BINARY ?= bootman
+
+BINARYTYPE = staticapp
+
+BINPLACE = bin
+
+OBJS     = bootman.o  \
+           bootim.o   \
+
+TARGETLIBS = $(INTLIB)/os/lib/rtl/base/boot/basertlb.a      \
+             $(INTLIB)/os/lib/rtl/kmode/krtl.a              \
+             $(INTLIB)/os/lib/im/im.a                       \
+             $(INTLIB)/os/lib/fatlib/fat.a                  \
+             $(INTLIB)/os/lib/basevid/basevid.a             \
+             $(INTLIB)/os/lib/bconflib/bconflib.a           \
+             $(INTLIB)/os/kernel/kd/boot/kdboot.a           \
+             $(INTLIB)/os/kernel/kd/kdusb/kdnousb/kdnousb.a \
+             $(INTLIB)/os/kernel/hl/boot/hlboot.a           \
+             $(INTLIB)/os/kernel/mm/boot/mmboot.a           \
+
+EXTRA_SRC_DIRS = x86
+

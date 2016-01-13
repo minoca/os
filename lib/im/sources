@@ -1,0 +1,26 @@
+################################################################################
+#
+#   Copyright (c) 2012 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This file contains the list of sources in the image library.
+#
+#   Author:
+#
+#       Evan Green 13-Oct-2012
+#
+#   Environment:
+#
+#       Kernel
+#
+################################################################################
+
+OBJS = image.o    \
+       pe.o       \
+       elf.o
+

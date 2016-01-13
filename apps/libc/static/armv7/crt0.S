@@ -1,0 +1,87 @@
+/*++
+
+Copyright (c) 2013 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    crt0.S
+
+Abstract:
+
+    This module implements the very first code that every C application runs.
+
+Author:
+
+    Evan Green 4-Mar-2013
+
+Environment:
+
+    User Mode (Program startup)
+
+--*/
+
+##
+## ------------------------------------------------------------------- Includes
+##
+
+#include <minoca/arm.inc>
+
+##
+## ---------------------------------------------------------------- Definitions
+##
+
+##
+## ----------------------------------------------------------------------- Code
+##
+
+ASSEMBLY_FILE_HEADER
+
+##
+## VOID
+## _start (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine is the default entry point for a user mode program in the ELF
+    binary format. It is responsible for initializing the C library and
+    calling main.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION _start
+
+    ##
+    ## Call out to initialize the C Runtime library.
+    ##
+
+    bl      ClApplicationInitialize
+
+    ##
+    ## Create an undefined reference to main. There needs to be a reference to
+    ## main early because if main is defined in a library the linker will
+    ## throw it out if it thinks it's not needed.
+    ##
+
+    ldr     %r0, =main
+
+    ##
+    ## Execution should never get here.
+    ##
+
+    DEBUGGER_BREAK
+
+END_FUNCTION _start
+

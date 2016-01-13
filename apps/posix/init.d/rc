@@ -1,0 +1,235 @@
+#! /bin/sh
+## Copyright (c) 2015 Minoca Corp. All Rights Reserved.
+##
+## Script Name:
+##
+##     rc <runlevel>
+##
+## Abstract:
+##
+##     This script runs system initialization scripts. Inspired by the rc
+##     script by Miqual van Smoorenburg and Bruce Perens.
+##
+## Author:
+##
+##     Evan Green 23-Mar-2015
+##
+## Environment:
+##
+##     System Boot
+##
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+export PATH
+
+me="$0"
+umask 022
+
+##
+## Catch exits that happen too early.
+##
+
+on_exit () {
+    echo "Error: $me exited prematurely."
+}
+
+trap on_exit EXIT
+
+##
+## Ignore certain signals.
+##
+
+trap ":" INT QUIT TSTP
+
+##
+## Get the next and previous runlevels.
+##
+
+runlevel=$RUNLEVEL
+if [ "x$1" != "x" ] ; then
+    runlevel="$1"
+fi
+
+if [ "x$runlevel" == "x" ] ; then
+    echo "Usage: $me <runlevel>" >&2
+    exit 1
+fi
+
+previous=$PREVLEVEL
+if [ "x$previous" == "x" ] ; then
+    previous=N
+fi
+
+export runlevel previous
+
+if [ -f /etc/default/rcS ] ; then
+    . /etc/default/rcS
+fi
+
+export VERBOSE
+if [ -f /etc/init.d/init-functions ] ; then
+    . /etc/init.d/init-functions
+
+else
+    log_action_msg () { echo $@; }
+    log_failure_msg () { echo $@; }
+    log_warning_msg () { echo $@; }
+fi
+
+startup () {
+    action="$1"
+    shift
+    scripts="$@"
+    for script in $scripts; do
+        if [ -n "$debug" ] ; then
+            echo "$script" "$action"
+        fi
+
+        "$script" $action
+    done
+}
+
+if [ -d /etc/rc$runlevel.d ] ; then
+    case "$runlevel" in
+    0|6) ACTION=stop ;;
+    S|s) ACTION=start ;;
+    *) ACTION=start ;;
+    esac
+
+    if [ "$previous" != "N" ] ; then
+        CURLEVEL=""
+        for script in /etc/rc$runlevel.d/K* ; do
+
+            ##
+            ## Extract the numeric part by removing the path prefix, and the
+            ## non-numeric suffix.
+            ##
+
+            level=${script#/etc/rc$runlevel.d/K}
+            level=${script%%[a-zA-Z]*}
+            if [ "$level" = "$CURLEVEL" ] ; then
+                continue
+            fi
+
+            CURLEVEL=$level
+            SCRIPTS=""
+            for i in /etc/rc$runlevel.d/K$level*; do
+
+                ##
+                ## Skip the script if it doesn't exist.
+                ##
+
+                [ ! -f $i ] && continue
+
+                ##
+                ## Try to find a start and stop script in the previous
+                ## run-level for this script.
+                ##
+
+                suffix=${i#/etc/rc$runlevel.d/K[0-9][0-9]}
+                previous_stop=/etc/rc$previous.d/K[0-9][0-9]$suffix
+                previous_start=/etc/rc$previous.d/S[0-9][0-9]$suffix
+
+                ##
+                ## If there is a stop script in the previous runlevel but no
+                ## start script, don't stop the service.
+                ##
+
+                [ -f $previous_stop ] && [ ! -f $previous_start ] && continue
+
+                ##
+                ## Add this to the list of services to stop.
+                ##
+
+                SCRIPTS="$SCRIPTS $i"
+            done
+
+            ##
+            ## Actually stop the services.
+            ##
+
+            startup stop $SCRIPTS
+        done
+    fi
+
+    ##
+    ## Run all the start scripts for this runlevel.
+    ##
+
+    CURLEVEL=""
+    for script in /etc/rc$runlevel.d/S* ; do
+
+        ##
+        ## Get the numerical portion by removing the path prefix and
+        ## non-numeric suffix.
+        ##
+
+        level=${script#/etc/rc$runlevel.d/S}
+        level=${level%%[a-zA-Z]*}
+        if [ "$level" = "$CURLEVEL" ] ; then
+            continue
+        fi
+
+        CURLEVEL=$level
+        SCRIPTS=""
+        for i in /etc/rc$runlevel.d/S$level* ; do
+
+            ##
+            ## Skip files that don't exist.
+            ##
+
+            [ ! -f $i ] && continue
+            suffix=${i#/etc/rc$runlevel.d/S[0-9][0-9]}
+            if [ "$previous" != N ] ; then
+
+                ##
+                ## Find a stop script in this runlevel and a start script in
+                ## the previous.
+                ##
+
+                stop=/etc/rc$runlevel.d/K[0-9][0-9]$suffix
+                previous_start=/etc/rc$previous.d/S[0-9][0-9]$suffix
+
+                ##
+                ## If there is a start script in the previous runlevel and no
+                ## stop script in this level, don't start the service.
+                ##
+
+                if [ "$ACTION" = start ] ; then
+                    [ -f $previous_start ] && [ ! -f $stop ] && continue
+
+                else
+
+                    ##
+                    ## If there is a stop script in the previous runlevel and
+                    ## no start script, don't stop the service.
+                    ##
+
+                    previous_stop=/etc/rc$previous.d/K[0-9][0-9]$suffix
+                    [ -f $previous_stop ] && [ ! -f $previous_start ] && \
+                        continue
+
+                fi
+            fi
+
+            ##
+            ## Add the script to the list of things to do.
+            ##
+
+            SCRIPTS="$SCRIPTS $i"
+        done
+
+        ##
+        ## Actually run the action.
+        ##
+
+        startup $ACTION $SCRIPTS
+    done
+fi
+
+##
+## Exit gracefully.
+##
+
+trap - EXIT
+exit 0

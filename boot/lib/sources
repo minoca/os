@@ -1,0 +1,41 @@
+################################################################################
+#
+#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#
+#   Binary Name:
+#
+#       Boot Library common sources.
+#
+#   Abstract:
+#
+#       This file includes the common files for the boot library.
+#
+#   Author:
+#
+#       Evan Green 19-Feb-2014
+#
+#   Environment:
+#
+#       Boot
+#
+################################################################################
+
+OBJS = ../bootfat.o    \
+       ../bootmem.o    \
+       ../file.o       \
+       ../stubs.o      \
+       ../version.o    \
+
+X86_OBJS = ../x86/archsup.o  \
+           ../x86/prochw.o   \
+
+ARMV7_OBJS = ../armv7/archsup.o     \
+             ../armv7/commsup.o     \
+             ../armv7/inttable.o    \
+             ../armv7/prochw.o      \
+
+ARMV6_OBJS = ../armv6/archsup.o  \
+             ../armv7/commsup.o  \
+             ../armv7/inttable.o \
+             ../armv7/prochw.o   \
+

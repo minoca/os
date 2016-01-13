@@ -1,0 +1,2653 @@
+/*++
+
+Copyright (c) 2013 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    netdrv.h
+
+Abstract:
+
+    This header contains definitions necessary for implementing network
+    drivers.
+
+Author:
+
+    Evan Green 4-Apr-2013
+
+--*/
+
+//
+// ------------------------------------------------------------------- Includes
+//
+
+#include <minoca/devinfo/net.h>
+
+//
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// Define macros to convert from CPU to network format and back.
+//
+
+#define CPU_TO_NETWORK32(_Input) RtlByteSwapUlong(_Input)
+#define NETWORK_TO_CPU32(_Input) RtlByteSwapUlong(_Input)
+#define CPU_TO_NETWORK16(_Input) RtlByteSwapUshort(_Input)
+#define NETWORK_TO_CPU16(_Input) RtlByteSwapUshort(_Input)
+
+//
+// This macro gets a network sockets last error.
+//
+
+#define NET_SOCKET_GET_LAST_ERROR(_Socket) (_Socket)->LastError
+
+//
+// This macro gets and clears a network sockets last error.
+//
+
+#define NET_SOCKET_GET_AND_CLEAR_LAST_ERROR(_Socket) \
+    RtlAtomicExchange32(&((_Socket)->LastError), STATUS_SUCCESS);
+
+//
+// This macro sets the network sockets last error state.
+//
+
+#define NET_SOCKET_SET_LAST_ERROR(_Socket, _Error) \
+    RtlAtomicExchange32(&((_Socket)->LastError), (_Error));
+
+//
+// ---------------------------------------------------------------- Definitions
+//
+
+#ifndef NET_API
+
+#define NET_API DLLIMPORT
+
+#endif
+
+//
+// Define the current version number of the net link properties structure.
+//
+
+#define NET_LINK_PROPERTIES_VERSION 1
+
+//
+// Define some common network link speeds.
+//
+
+#define NET_SPEED_NONE 0
+#define NET_SPEED_10_MBPS 10000000ULL
+#define NET_SPEED_100_MBPS 100000000ULL
+#define NET_SPEED_1000_MBPS 1000000000ULL
+
+//
+// Define the size of an ethernet address.
+//
+
+#define ETHERNET_ADDRESS_SIZE 6
+
+//
+// Define well-known protocol numbers.
+//
+
+#define IP4_PROTOCOL_NUMBER      0x0800
+#define IP6_PROTOCOL_NUMBER      0x86DD
+#define ARP_PROTOCOL_NUMBER      0x0806
+
+//
+// Define the network socket flags.
+//
+
+#define NET_SOCKET_FLAG_REUSE_ANY_ADDRESS       0x00000001
+#define NET_SOCKET_FLAG_REUSE_TIME_WAIT         0x00000002
+#define NET_SOCKET_FLAG_REUSE_EXACT_ADDRESS     0x00000004
+#define NET_SOCKET_FLAG_BROADCAST_DISABLED      0x00000008
+#define NET_SOCKET_FLAG_ACTIVE                  0x00000010
+#define NET_SOCKET_FLAG_PREVIOUSLY_ACTIVE       0x00000020
+#define NET_SOCKET_FLAG_TIME_WAIT               0x00000040
+#define NET_SOCKET_FLAG_FORKED_LISTENER         0x00000080
+#define NET_SOCKET_FLAG_NETWORK_HEADER_INCLUDED 0x00000100
+
+//
+// Define the set of network socket flags that should be carried over to a
+// copied socket after a spawned connection.
+//
+
+#define NET_SOCKET_FLAGS_INHERIT_MASK       0x0000000F
+
+//
+// Define the network buffer allocation flags.
+//
+
+#define NET_ALLOCATE_BUFFER_FLAG_ADD_LINK_HEADERS 0x00000001
+#define NET_ALLOCATE_BUFFER_FLAG_ADD_LINK_FOOTERS 0x00000002
+
+//
+// Define the network packet flags.
+//
+
+#define NET_PACKET_FLAG_IP_CHECKSUM_OFFLOAD  0x00000001
+#define NET_PACKET_FLAG_UDP_CHECKSUM_OFFLOAD 0x00000002
+#define NET_PACKET_FLAG_TCP_CHECKSUM_OFFLOAD 0x00000004
+#define NET_PACKET_FLAG_IP_CHECKSUM_FAILED   0x00000008
+#define NET_PACKET_FLAG_UDP_CHECKSUM_FAILED  0x00000010
+#define NET_PACKET_FLAG_TCP_CHECKSUM_FAILED  0x00000020
+
+//
+// Define the network link feature flags.
+//
+
+#define NET_LINK_CHECKSUM_FLAG_TRANSMIT_IP_OFFLOAD  0x00000001
+#define NET_LINK_CHECKSUM_FLAG_TRANSMIT_UDP_OFFLOAD 0x00000002
+#define NET_LINK_CHECKSUM_FLAG_TRANSMIT_TCP_OFFLOAD 0x00000004
+#define NET_LINK_CHECKSUM_FLAG_RECEIVE_IP_OFFLOAD   0x00000008
+#define NET_LINK_CHECKSUM_FLAG_RECEIVE_UDP_OFFLOAD  0x00000010
+#define NET_LINK_CHECKSUM_FLAG_RECEIVE_TCP_OFFLOAD  0x00000020
+
+#define NET_LINK_CHECKSUM_FLAG_TRANSMIT_MASK        \
+    (NET_LINK_CHECKSUM_FLAG_TRANSMIT_IP_OFFLOAD |   \
+     NET_LINK_CHECKSUM_FLAG_TRANSMIT_UDP_OFFLOAD |  \
+     NET_LINK_CHECKSUM_FLAG_TRANSMIT_TCP_OFFLOAD)
+
+#define NET_LINK_CHECKSUM_FLAG_RECEIVE_MASK         \
+    (NET_LINK_CHECKSUM_FLAG_RECEIVE_IP_OFFLOAD |    \
+     NET_LINK_CHECKSUM_FLAG_RECEIVE_UDP_OFFLOAD |   \
+     NET_LINK_CHECKSUM_FLAG_RECEIVE_TCP_OFFLOAD)
+
+//
+// ------------------------------------------------------ Data Type Definitions
+//
+
+typedef enum _NET_SOCKET_BINDING_TYPE {
+    SocketUnbound,
+    SocketLocallyBound,
+    SocketFullyBound,
+    SocketBindingTypeCount,
+    SocketBindingInvalid
+} NET_SOCKET_BINDING_TYPE, *PNET_SOCKET_BINDING_TYPE;
+
+typedef enum _NET_LINK_INFORMATION_TYPE {
+    NetLinkInformationInvalid,
+    NetLinkInformationChecksumOffload
+} NET_LINK_INFORMATION_TYPE, *PNET_LINK_INFORMATION_TYPE;
+
+/*++
+
+Structure Description:
+
+    This structure defines an entry in the list of link layer network addresses
+    owned by the link.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous addresses owned by the
+        link.
+
+    Configured - Stores a boolean indicating whether or not the network link
+        address is configured.
+
+    StaticAddress - Stores a boolean indicating whether or not the network
+        address is static (TRUE) or dynamic (FALSE).
+
+    Address - Stores the network address of the link.
+
+    Subnet - Stores the network subnet mask of the link.
+
+    DefaultGateway - Stores the default gateway network address for the link.
+
+    DnsServer - Stores an array of network addresses of Domain Name Servers
+        to try, in order.
+
+    DnsServerCount - Stores the number of valid DNS servers in the array.
+
+    PhysicalAddress - Stores the physical address of the link.
+
+    LeaseServerAddress - Stores the network address of the server who provided
+        the network address if it is a dynamic address.
+
+    LeaseStartTime - Stores the time the lease on the network address began.
+
+    LeaseEndTime - Stores the time the lease on the network address ends.
+
+--*/
+
+typedef struct _NET_LINK_ADDRESS_ENTRY {
+    LIST_ENTRY ListEntry;
+    BOOL Configured;
+    BOOL StaticAddress;
+    NETWORK_ADDRESS Address;
+    NETWORK_ADDRESS Subnet;
+    NETWORK_ADDRESS DefaultGateway;
+    NETWORK_ADDRESS DnsServer[NETWORK_DEVICE_MAX_DNS_SERVERS];
+    ULONG DnsServerCount;
+    NETWORK_ADDRESS PhysicalAddress;
+    NETWORK_ADDRESS LeaseServerAddress;
+    SYSTEM_TIME LeaseStartTime;
+    SYSTEM_TIME LeaseEndTime;
+} NET_LINK_ADDRESS_ENTRY, *PNET_LINK_ADDRESS_ENTRY;
+
+/*++
+
+Structure Description:
+
+    This structure defines information about a network packet.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous network packets.
+
+    Buffer - Stores the virtual address of the buffer.
+
+    IoBuffer - Stores a pointer to the I/O buffer backing this buffer.
+
+    BufferPhysicalAddress - Stores the physical address of the buffer.
+
+    Flags - Stores a bitmask of network packet buffer flags. See
+        NET_PACKET_FLAG_* for definitions.
+
+    BufferSize - Stores the size of the buffer, in bytes.
+
+    DataSize - Stores the size of the data, including the headers payload, and
+        footers.
+
+    DataOffset - Stores the offset from the beginning of the buffer to the
+        beginning of the valid data. The next lower layer should puts its own
+        headers right before this offset.
+
+    FooterOffset - Stores the offset from the beginning of the buffer to the
+        beginning of the footer data (ie the location to store the first byte
+        of new footer).
+
+--*/
+
+typedef struct _NET_PACKET_BUFFER {
+    LIST_ENTRY ListEntry;
+    PVOID Buffer;
+    PIO_BUFFER IoBuffer;
+    PHYSICAL_ADDRESS BufferPhysicalAddress;
+    ULONG Flags;
+    ULONG BufferSize;
+    ULONG DataSize;
+    ULONG DataOffset;
+    ULONG FooterOffset;
+} NET_PACKET_BUFFER, *PNET_PACKET_BUFFER;
+
+typedef
+KSTATUS
+(*PNET_LINK_SEND) (
+    PVOID DriverContext,
+    PLIST_ENTRY PacketListHead
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends data through the network.
+
+Arguments:
+
+    DriverContext - Supplies a pointer to the driver context associated with the
+        link down which this data is to be sent.
+
+    PacketListHead - Supplies a pointer to the head of a list of network
+        packets to send. Data these packets may be modified by this routine,
+        but must not be used once this routine returns.
+
+Return Value:
+
+    Status code. It is assumed that either all packets are submitted (if
+    success is returned) or none of the packets were submitted (if a failing
+    status is returned).
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_LINK_GET_SET_INFORMATION) (
+    PVOID DriverContext,
+    NET_LINK_INFORMATION_TYPE InformationType,
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the network device layer's link information.
+
+Arguments:
+
+    DriverContext - Supplies a pointer to the driver context associated with the
+        link for which information is being set or queried.
+
+    InformationType - Supplies the type of information being queried or set.
+
+    Data - Supplies a pointer to the data buffer where the data is either
+        returned for a get operation or given for a set operation.
+
+    DataSize - Supplies a pointer that on input contains the size of the data
+        buffer. On output, contains the required size of the data buffer.
+
+    Set - Supplies a boolean indicating if this is a get operation (FALSE) or a
+        set operation (TRUE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines the interface to a link from the core networking
+    library.
+
+Members:
+
+    Send - Stores a pointer to a function used to transmit data to the network.
+
+    GetSetInformation - Supplies a pointer to a function used to get or set
+        network link information.
+
+--*/
+
+typedef struct _NET_LINK_INTERFACE {
+    PNET_LINK_SEND Send;
+    PNET_LINK_GET_SET_INFORMATION GetSetInformation;
+} NET_LINK_INTERFACE, *PNET_LINK_INTERFACE;
+
+/*++
+
+Structure Description:
+
+    This structure defines characteristics about a network link.
+
+Members:
+
+    Version - Stores the version number of the structure. Set this to
+        NET_LINK_PROPERTIES_VERSION.
+
+    TransmitAlignment - Stores the alignment requirement for transmit buffers.
+
+    DriverContext - Stores a pointer to driver-specific context on this
+        link.
+
+    MaxPacketSize - Stores the maximum number of bytes that can be sent or
+        received over the physical link. Including the header and footer.
+
+    HeaderSize - Stores the number of bytes that should be reserved at the
+        beginning of the packet for the hardware.
+
+    FooterSize - Stores the number of bytes that should be reserved at the end
+        of the packet for the hardware.
+
+    ChecksumFlags - Stores a bitmask of flags indicating whether certain
+        checksum features are enabled. See NET_LINK_CHECKSUM_FLAG_* for
+        definitions.
+
+    MaxPhysicalAddress - Stores the maximum physical address that the network
+        controller can access.
+
+    PhysicalAddress - Stores the original primary physical address of the link.
+
+    Interface - Stores the list of functions used by the core networking
+        library to call into the link.
+
+--*/
+
+typedef struct _NET_LINK_PROPERTIES {
+    ULONG Version;
+    ULONG TransmitAlignment;
+    PVOID DriverContext;
+    ULONG MaxPacketSize;
+    ULONG HeaderSize;
+    ULONG FooterSize;
+    ULONG ChecksumFlags;
+    PHYSICAL_ADDRESS MaxPhysicalAddress;
+    NETWORK_ADDRESS PhysicalAddress;
+    NET_LINK_INTERFACE Interface;
+} NET_LINK_PROPERTIES, *PNET_LINK_PROPERTIES;
+
+/*++
+
+Structure Description:
+
+    This structure defines a network link, something that can actually send
+    packets out onto the network.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous network links
+        available in the system.
+
+    ReferenceCount - Stores the reference count of the link.
+
+    QueuedLock - Stores a queued lock protecting access to various data
+        structures in this structure. This lock must only be called at low
+        level.
+
+    LinkAddressList - Stores the head of the list of link layer addresses owned
+        by this link. For example, in IPv4 this would be the list of IP
+        addresses this link responds to. These entries are of type
+        NET_LINK_ADDRESS_ENTRY.
+
+    LinkUp - Stores a boolean indicating whether the link is active (TRUE) or
+        disconnected (FALSE).
+
+    LinkSpeed - Stores the maximum speed of the link, in bits per second.
+
+    Properties - Stores the link properties.
+
+    AddressTranslationEvent - Stores the event waited on when a new address
+        translation is required.
+
+    AddressTranslationTree - Stores the tree containing translations between
+        network addresses and physical addresses, keyed by network address.
+
+--*/
+
+typedef struct _NET_LINK {
+    LIST_ENTRY ListEntry;
+    volatile ULONG ReferenceCount;
+    PQUEUED_LOCK QueuedLock;
+    LIST_ENTRY LinkAddressList;
+    BOOL LinkUp;
+    ULONGLONG LinkSpeed;
+    NET_LINK_PROPERTIES Properties;
+    PKEVENT AddressTranslationEvent;
+    RED_BLACK_TREE AddressTranslationTree;
+} NET_LINK, *PNET_LINK;
+
+/*++
+
+Structure Description:
+
+    This structure defines the link information associated with a local address.
+
+Members:
+
+    Link - Stores a pointer to the link that owns the local address.
+
+    LinkAdress - Stores a pointer to the link address entry that owns the local
+        address.
+
+    LocalAddress - Stores the local address.
+
+--*/
+
+typedef struct _NET_LINK_LOCAL_ADDRESS {
+    PNET_LINK Link;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    NETWORK_ADDRESS LocalAddress;
+} NET_LINK_LOCAL_ADDRESS, *PNET_LINK_LOCAL_ADDRESS;
+
+typedef struct _NET_PROTOCOL_ENTRY NET_PROTOCOL_ENTRY, *PNET_PROTOCOL_ENTRY;
+typedef struct _NET_NETWORK_ENTRY NET_NETWORK_ENTRY, *PNET_NETWORK_ENTRY;
+
+/*++
+
+Structure Description:
+
+    This structure defines a core networking library socket.
+
+Members:
+
+    KernelSocket - Stores the common parameters recognized by the kernel.
+
+    Protocol - Stores a pointer to the protocol entry responsible for this
+        socket.
+
+    Network - Stores a pointer to the network layer entry responsible for this
+        socket.
+
+    LocalAddress - Stores the local address of this connection.
+
+    RemoteAddress - Stores the remote address of this connection.
+
+    RemotePhysicalAddress - Stores the remote physical address of this
+        connection.
+
+    TreeEntry - Stores the information about this socket in the tree of
+        sockets (which is either on the link itself or global).
+
+    ListEntry - Stores the information about this socket in the list of sockets.
+        This is only used for raw sockets; they do not get inserted in a tree.
+
+    BindingType - Stores the type of binding for this socket (unbound, locally
+        bound, or fully bound).
+
+    Flags - Stores a bitmask of network socket flags. See NET_SOCKET_FLAG_*
+        for definitions.
+
+    HeaderSize - Stores the size of all protocol, network, and link headers
+        needed to send a packet.
+
+    FooterSize - Stores the size of all protocol, network, and link footers
+        needed to send a packet.
+
+    MaxPacketSize - Stores the maximum size of a packet that can be sent to the
+        physical layer. This includes all headers and footers. This is limited
+        by the protocol, network, and link for bound sockets, but is only
+        limited by the protocol and network for unbound sockets.
+
+    UnboundHeaderSize - Stores the size of the protocol and network headers.
+
+    UnboundFooterSize - Stores the size of the protocol and network headers.
+
+    UnboundMaxPacketSize - Stores the maximum size of a packet that can be sent
+        to the physical layer. This stores the size that is only bound by the
+        protocol and network layers.
+
+    LastError - Stores the last error encountered by this socket.
+
+    Link - Stores a pointer to the link this socket is associated with.
+
+    LinkAddress - Stores the link address information for the given socket.
+
+    SendPacketCount - Stores the number of packets sent on this socket.
+
+    MaxIncomingConnections - Stores the maximum number of pending but not yet
+        accepted connections that are allowed to accumulate before connections
+        are refused. In the sockets API this is known as the backlog count.
+
+--*/
+
+typedef struct _NET_SOCKET {
+    SOCKET KernelSocket;
+    PNET_PROTOCOL_ENTRY Protocol;
+    PNET_NETWORK_ENTRY Network;
+    NETWORK_ADDRESS LocalAddress;
+    NETWORK_ADDRESS RemoteAddress;
+    NETWORK_ADDRESS RemotePhysicalAddress;
+    union {
+        RED_BLACK_TREE_NODE TreeEntry;
+        LIST_ENTRY ListEntry;
+    } U;
+
+    NET_SOCKET_BINDING_TYPE BindingType;
+    volatile ULONG Flags;
+    ULONG HeaderSize;
+    ULONG FooterSize;
+    ULONG MaxPacketSize;
+    ULONG UnboundHeaderSize;
+    ULONG UnboundFooterSize;
+    ULONG UnboundMaxPacketSize;
+    volatile KSTATUS LastError;
+    PNET_LINK Link;
+    PNET_LINK_ADDRESS_ENTRY LinkAddress;
+    ULONG SendPacketCount;
+    ULONG MaxIncomingConnections;
+} NET_SOCKET, *PNET_SOCKET;
+
+/*++
+
+Structure Description:
+
+    This structure defines a core networking socket link override. This stores
+    all the socket and link specific information needed to send a packet. This
+    can be used to send data from a link on behalf of a socket if the socket
+    is not yet bound to a link.
+
+Members:
+
+    LinkInformation - Stores the local address and its associated link and link
+        address entry.
+
+    HeaderSize - Stores the size of all protocol, network, and link headers
+        needed to send a packet on the override link.
+
+    FooterSize - Stores the size of all protocol, network, and link footers
+        needed to send a packet on the override link.
+
+    MaxPacketSize - Stores the maximum size of a packet that can be sent to the
+        physical layer. This includes all headers and footers.
+
+--*/
+
+typedef struct _NET_SOCKET_LINK_OVERRIDE {
+    NET_LINK_LOCAL_ADDRESS LinkInformation;
+    ULONG HeaderSize;
+    ULONG FooterSize;
+    ULONG MaxPacketSize;
+} NET_SOCKET_LINK_OVERRIDE, *PNET_SOCKET_LINK_OVERRIDE;
+
+typedef
+KSTATUS
+(*PNET_PROTOCOL_CREATE_SOCKET) (
+    PNET_PROTOCOL_ENTRY ProtocolEntry,
+    PNET_NETWORK_ENTRY NetworkEntry,
+    ULONG NetworkProtocol,
+    PNET_SOCKET *NewSocket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates resources associated with a new socket. The protocol
+    driver is responsible for allocating the structure (with additional length
+    for any of its context). The core networking library will fill in the
+    common header when this routine returns.
+
+Arguments:
+
+    ProtocolEntry - Supplies a pointer to the protocol information.
+
+    NetworkEntry - Supplies a pointer to the network information.
+
+    NetworkProtocol - Supplies the raw protocol value for this socket used on
+        the network. This value is network specific.
+
+    NewSocket - Supplies a pointer where a pointer to a newly allocated
+        socket structure will be returned. The caller is responsible for
+        allocating the socket (and potentially a larger structure for its own
+        context). The core network library will fill in the standard socket
+        structure after this routine returns.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+VOID
+(*PNET_PROTOCOL_DESTROY_SOCKET) (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys resources associated with an open socket, officially
+    marking the end of the kernel and core networking library's knowledge of
+    this structure.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to destroy. The core networking
+        library will have already destroyed any resources inside the common
+        header, the protocol should not reach through any pointers inside the
+        socket header except the protocol and network entries.
+
+Return Value:
+
+    None. This routine is responsible for freeing the memory associated with
+    the socket structure itself.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_PROTOCOL_BIND_TO_ADDRESS) (
+    PNET_SOCKET Socket,
+    PNET_LINK Link,
+    PNETWORK_ADDRESS Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine binds the given socket to the specified network address.
+    Usually this is a no-op for the protocol, it's simply responsible for
+    passing the request down to the network layer.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to bind.
+
+    Link - Supplies an optional pointer to a link to bind to.
+
+    Address - Supplies a pointer to the address to bind the socket to.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_PROTOCOL_LISTEN) (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds a bound socket to the list of listening sockets,
+    officially allowing clients to attempt to connect to it.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to mark as listning.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_PROTOCOL_ACCEPT) (
+    PNET_SOCKET Socket,
+    PIO_HANDLE *NewConnectionSocket,
+    PNETWORK_ADDRESS RemoteAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine accepts an incoming connection on a listening connection-based
+    socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to accept a connection from.
+
+    NewConnectionSocket - Supplies a pointer where a new socket will be
+        returned that represents the accepted connection with the remote
+        host.
+
+    RemoteAddress - Supplies a pointer where the address of the connected
+        remote host will be returned.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_PROTOCOL_CONNECT) (
+    PNET_SOCKET Socket,
+    PNETWORK_ADDRESS Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to make an outgoing connection to a server.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to use for the connection.
+
+    Address - Supplies a pointer to the address to connect to.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_PROTOCOL_CLOSE) (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine closes a socket connection.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to shut down.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_PROTOCOL_SHUTDOWN) (
+    PNET_SOCKET Socket,
+    ULONG ShutdownType
+    );
+
+/*++
+
+Routine Description:
+
+    This routine shuts down communication with a given socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket.
+
+    ShutdownType - Supplies the shutdown type to perform. See the
+        SOCKET_SHUTDOWN_* definitions.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_PROTOCOL_SEND) (
+    BOOL FromKernelMode,
+    PNET_SOCKET Socket,
+    PSOCKET_IO_PARAMETERS Parameters,
+    PIO_BUFFER IoBuffer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends the given data buffer through the network using a
+    specific protocol.
+
+Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether the request is
+        coming from kernel mode (TRUE) or user mode (FALSE).
+
+    Socket - Supplies a pointer to the socket to send the data to.
+
+    Parameters - Supplies a pointer to the socket I/O parameters. This will
+        always be a kernel mode pointer.
+
+    IoBuffer - Supplies a pointer to the I/O buffer containing the data to
+        send.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+VOID
+(*PNET_PROTOCOL_PROCESS_RECEIVED_DATA) (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress,
+    PNET_PROTOCOL_ENTRY ProtocolEntry
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to process a received packet.
+
+Arguments:
+
+    Link - Supplies a pointer to the link that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may be used as a scratch space while this routine
+        executes and the packet travels up the stack, but will not be accessed
+        after this routine returns.
+
+    SourceAddress - Supplies a pointer to the source (remote) address that the
+        packet originated from. This memory will not be referenced once the
+        function returns, it can be stack allocated.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        that the packet is heading to. This memory will not be referenced once
+        the function returns, it can be stack allocated.
+
+    ProtocolEntry - Supplies a pointer to this protocol entry.
+
+Return Value:
+
+    None. When the function returns, the memory associated with the packet may
+    be reclaimed and reused.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_PROTOCOL_RECEIVE) (
+    BOOL FromKernelMode,
+    PNET_SOCKET Socket,
+    PSOCKET_IO_PARAMETERS Parameters,
+    PIO_BUFFER IoBuffer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called by the user to receive data from the socket on a
+    particular protocol.
+
+Arguments:
+
+    FromKernelMode - Supplies a boolean indicating whether the request is
+        coming from kernel mode (TRUE) or user mode (FALSE).
+
+    Socket - Supplies a pointer to the socket to receive data from.
+
+    Parameters - Supplies a pointer to the socket I/O parameters.
+
+    IoBuffer - Supplies a pointer to the I/O buffer where the received data
+        will be returned.
+
+Return Value:
+
+    STATUS_SUCCESS if any bytes were read.
+
+    STATUS_TIMEOUT if the request timed out.
+
+    STATUS_BUFFER_TOO_SMALL if the incoming datagram was too large for the
+        buffer. The remainder of the datagram is discarded in this case.
+
+    Other error codes on other failures.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_PROTOCOL_GET_SET_INFORMATION) (
+    PNET_SOCKET Socket,
+    SOCKET_INFORMATION_TYPE InformationType,
+    UINTN Option,
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets properties of the given socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to get or set information for.
+
+    InformationType - Supplies the socket information type category to which
+        specified option belongs.
+
+    Option - Supplies the option to get or set, which is specific to the
+        information type. The type of this value is generally
+        SOCKET_<information_type>_OPTION.
+
+    Data - Supplies a pointer to the data buffer where the data is either
+        returned for a get operation or given for a set operation.
+
+    DataSize - Supplies a pointer that on input constains the size of the data
+        buffer. On output, this contains the required size of the data buffer.
+
+    Set - Supplies a boolean indicating if this is a get operation (FALSE) or
+        a set operation (TRUE).
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INVALID_PARAMETER if the information type is incorrect.
+
+    STATUS_BUFFER_TOO_SMALL if the data buffer is too small to receive the
+        requested option.
+
+    STATUS_NOT_SUPPORTED_BY_PROTOCOL if the socket option is not supported by
+        the socket.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_PROTOCOL_USER_CONTROL) (
+    PNET_SOCKET Socket,
+    ULONG CodeNumber,
+    BOOL FromKernelMode,
+    PVOID ContextBuffer,
+    UINTN ContextBufferSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine handles user control requests destined for a socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket.
+
+    CodeNumber - Supplies the minor code of the request.
+
+    FromKernelMode - Supplies a boolean indicating whether or not this request
+        (and the buffer associated with it) originates from user mode (FALSE)
+        or kernel mode (TRUE).
+
+    ContextBuffer - Supplies a pointer to the context buffer allocated by the
+        caller for the request.
+
+    ContextBufferSize - Supplies the size of the supplied context buffer.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines interface between the core networking library and
+    a network protocol.
+
+Members:
+
+    CreateSocket - Stores a pointer to a function that creates a new socket.
+
+    DestroySocket - Stores a pointer to a function that destroys all resources
+        associated with a socket, called when the socket's reference count
+        drops to zero.
+
+    BindToAddress - Stores a pointer to a function that binds an open but
+        unbound socket to a particular network address.
+
+    Listen - Stores a pointer to a function that starts the socket listening
+        for incoming connections.
+
+    Accept - Stores a pointer to a function that accepts an incoming connection
+        from a remote host on a listening socket.
+
+    Connect - Stores a pointer to a function used to establish a connection with
+        a remote server.
+
+    Close - Stores a pointer to a function used to shut down and close a
+        connection.
+
+    Shutdown - Stores a pointer to a function used to shut down a connection.
+
+    Send - Stores a pointer to a function used to send data to a connection.
+
+    ProcessReceivedData - Stores a pointer to a function called when a packet
+        is received from the network.
+
+    Receive - Stores a pointer to a function called by the user to receive
+        data from the socket.
+
+    GetSetInformation - Stores a pointer to a function used to get or set
+        socket information.
+
+    UserControl - Stores a pointer to a function used to respond to user
+        control (ioctl) requests.
+
+--*/
+
+typedef struct _NET_PROTOCOL_INTERFACE {
+    PNET_PROTOCOL_CREATE_SOCKET CreateSocket;
+    PNET_PROTOCOL_DESTROY_SOCKET DestroySocket;
+    PNET_PROTOCOL_BIND_TO_ADDRESS BindToAddress;
+    PNET_PROTOCOL_LISTEN Listen;
+    PNET_PROTOCOL_ACCEPT Accept;
+    PNET_PROTOCOL_CONNECT Connect;
+    PNET_PROTOCOL_CLOSE Close;
+    PNET_PROTOCOL_SHUTDOWN Shutdown;
+    PNET_PROTOCOL_SEND Send;
+    PNET_PROTOCOL_PROCESS_RECEIVED_DATA ProcessReceivedData;
+    PNET_PROTOCOL_RECEIVE Receive;
+    PNET_PROTOCOL_GET_SET_INFORMATION GetSetInformation;
+    PNET_PROTOCOL_USER_CONTROL UserControl;
+} NET_PROTOCOL_INTERFACE, *PNET_PROTOCOL_INTERFACE;
+
+/*++
+
+Structure Description:
+
+    This structure defines a network protocol entry.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous protocol entries, used
+        internally by the core networking library.
+
+    Type - Stores the connection type this protocol implements.
+
+    ParentProtocolNumber - Stores the protocol number in the parent layer's
+        protocol.
+
+    Interface - Stores the interface presented to the kernel for this type of
+        socket.
+
+--*/
+
+struct _NET_PROTOCOL_ENTRY {
+    LIST_ENTRY ListEntry;
+    SOCKET_TYPE Type;
+    ULONG ParentProtocolNumber;
+    NET_PROTOCOL_INTERFACE Interface;
+};
+
+typedef
+KSTATUS
+(*PNET_NETWORK_INITIALIZE_LINK) (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes any pieces of information needed by the network
+    layer for a new link.
+
+Arguments:
+
+    Link - Supplies a pointer to the new link.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+VOID
+(*PNET_NETWORK_DESTROY_LINK) (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allows the network layer to tear down any state before a link
+    is destroyed.
+
+Arguments:
+
+    Link - Supplies a pointer to the dying link.
+
+Return Value:
+
+    None.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_NETWORK_INITIALIZE_SOCKET) (
+    PNET_PROTOCOL_ENTRY ProtocolEntry,
+    PNET_NETWORK_ENTRY NetworkEntry,
+    ULONG NetworkProtocol,
+    PNET_SOCKET NewSocket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes any pieces of information needed by the network
+    layer for the socket. The core networking library will fill in the common
+    header when this routine returns.
+
+Arguments:
+
+    ProtocolEntry - Supplies a pointer to the protocol information.
+
+    NetworkEntry - Supplies a pointer to the network information.
+
+    NetworkProtocol - Supplies the raw protocol value for this socket used on
+        the network. This value is network specific.
+
+    NewSocket - Supplies a pointer to the new socket. The network layer should
+        at the very least add any needed header size.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_NETWORK_BIND_TO_ADDRESS) (
+    PNET_SOCKET Socket,
+    PNET_LINK Link,
+    PNETWORK_ADDRESS Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine binds the given socket to the specified network address.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to bind.
+
+    Link - Supplies an optional pointer to a link to bind to.
+
+    Address - Supplies a pointer to the address to bind the socket to.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_NETWORK_LISTEN) (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds a bound socket to the list of listening sockets,
+    officially allowing clients to attempt to connect to it.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to mark as listning.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_NETWORK_CONNECT) (
+    PNET_SOCKET Socket,
+    PNETWORK_ADDRESS Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine connects the given socket to a specific remote address. It
+    will implicitly bind the socket if it is not yet locally bound.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to use for the connection.
+
+    Address - Supplies a pointer to the remote address to bind this socket to.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_NETWORK_DISCONNECT) (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine will disconnect the given socket from its remote address.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to disconnect.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_NETWORK_CLOSE) (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine closes a socket connection.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to shut down.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_NETWORK_SEND) (
+    PNET_SOCKET Socket,
+    PNETWORK_ADDRESS Destination,
+    PNET_SOCKET_LINK_OVERRIDE LinkOverride,
+    PLIST_ENTRY PacketListHead
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends data through the network.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to send the data to.
+
+    Destination - Supplies a pointer to the network address to send to.
+
+    LinkOverride - Supplies an optional pointer to a structure that contains
+        all the necessary information to send data out a link on behalf
+        of the given socket.
+
+    PacketListHead - Supplies a pointer to the head of a list of network
+        packets to send. Data these packets may be modified by this routine,
+        but must not be used once this routine returns.
+
+Return Value:
+
+    Status code. It is assumed that either all packets are submitted (if
+    success is returned) or none of the packets were submitted (if a failing
+    status is returned).
+
+--*/
+
+typedef
+VOID
+(*PNET_NETWORK_PROCESS_RECEIVED_DATA) (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to process a received packet.
+
+Arguments:
+
+    Link - Supplies a pointer to the link that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may be used as a scratch space while this routine
+        executes and the packet travels up the stack, but will not be accessed
+        after this routine returns.
+
+Return Value:
+
+    None. When the function returns, the memory associated with the packet may
+    be reclaimed and reused.
+
+--*/
+
+typedef
+ULONG
+(*PNET_NETWORK_PRINT_ADDRESS) (
+    PNETWORK_ADDRESS Address,
+    PSTR Buffer,
+    ULONG BufferLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called to convert a network address into a string, or
+    determine the length of the buffer needed to convert an address into a
+    string.
+
+Arguments:
+
+    Address - Supplies an optional pointer to a network address to convert to
+        a string.
+
+    Buffer - Supplies an optional pointer where the string representation of
+        the address will be returned.
+
+    BufferLength - Supplies the length of the supplied buffer, in bytes.
+
+Return Value:
+
+    Returns the maximum length of any address if no network address is
+    supplied.
+
+    Returns the actual length of the network address string if a network address
+    was supplied, including the null terminator.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET_NETWORK_GET_SET_INFORMATION) (
+    PNET_SOCKET Socket,
+    SOCKET_INFORMATION_TYPE InformationType,
+    UINTN Option,
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets properties of the given socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to get or set information for.
+
+    InformationType - Supplies the socket information type category to which
+        specified option belongs.
+
+    Option - Supplies the option to get or set, which is specific to the
+        information type. The type of this value is generally
+        SOCKET_<information_type>_OPTION.
+
+    Data - Supplies a pointer to the data buffer where the data is either
+        returned for a get operation or given for a set operation.
+
+    DataSize - Supplies a pointer that on input constains the size of the data
+        buffer. On output, this contains the required size of the data buffer.
+
+    Set - Supplies a boolean indicating if this is a get operation (FALSE) or
+        a set operation (TRUE).
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INVALID_PARAMETER if the information type is incorrect.
+
+    STATUS_BUFFER_TOO_SMALL if the data buffer is too small to receive the
+        requested option.
+
+    STATUS_NOT_SUPPORTED_BY_PROTOCOL if the socket option is not supported by
+        the socket.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines interface between the core networking library and
+    a network.
+
+Members:
+
+    InitializeLink - Stores a pointer to a function called when a new link
+        is created.
+
+    DestroyLink - Stores a pointer to a function called before a link is
+        destroyed.
+
+    InitializeSocket - Stores a pointer to a function that initializes a newly
+        created socket.
+
+    BindToAddress - Stores a pointer to a function that binds an open but
+        unbound socket to a particular network address.
+
+    Listen - Stores a pointer to a function that marks the packet as listening
+        and allows clients to attempt to connect to it.
+
+    Connect - Stores a pointer to a function that binds a socket to a remote
+        host.
+
+    Close - Stores a pointer to a function used to shut down a connection.
+
+    Send - Stores a pointer to a function used to send data.
+
+    ProcessReceivedData - Stores a pointer to a function called when a
+        received packet comes in.
+
+    PrintAddress - Stores a pointer to a function used to convert a network
+        address into a string representation.
+
+    GetSetInformation - Stores a pointer to a function used to get or set
+        socket information.
+
+--*/
+
+typedef struct _NET_NETWORK_INTERFACE {
+    PNET_NETWORK_INITIALIZE_LINK InitializeLink;
+    PNET_NETWORK_DESTROY_LINK DestroyLink;
+    PNET_NETWORK_INITIALIZE_SOCKET InitializeSocket;
+    PNET_NETWORK_BIND_TO_ADDRESS BindToAddress;
+    PNET_NETWORK_LISTEN Listen;
+    PNET_NETWORK_CONNECT Connect;
+    PNET_NETWORK_DISCONNECT Disconnect;
+    PNET_NETWORK_CLOSE Close;
+    PNET_NETWORK_SEND Send;
+    PNET_NETWORK_PROCESS_RECEIVED_DATA ProcessReceivedData;
+    PNET_NETWORK_PRINT_ADDRESS PrintAddress;
+    PNET_NETWORK_GET_SET_INFORMATION GetSetInformation;
+} NET_NETWORK_INTERFACE, *PNET_NETWORK_INTERFACE;
+
+/*++
+
+Structure Description:
+
+    This structure defines a network entry.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous network entries, used
+        internally by the core networking library.
+
+    Type - Stores the type this network implements.
+
+    ParentProtocolNumber - Stores the protocol number in the parent layer's
+        protocol.
+
+    Interface - Stores the interface presented to the core networking library
+        for this network.
+
+--*/
+
+struct _NET_NETWORK_ENTRY {
+    LIST_ENTRY ListEntry;
+    SOCKET_NETWORK Type;
+    ULONG ParentProtocolNumber;
+    NET_NETWORK_INTERFACE Interface;
+};
+
+//
+// -------------------------------------------------------------------- Globals
+//
+
+//
+// -------------------------------------------------------- Function Prototypes
+//
+
+NET_API
+KSTATUS
+NetRegisterProtocol (
+    PNET_PROTOCOL_ENTRY NewProtocol
+    );
+
+/*++
+
+Routine Description:
+
+    This routine registers a new protocol type with the core networking
+    library.
+
+Arguments:
+
+    NewProtocol - Supplies a pointer to the protocol information. The core
+        networking library *will* continue to use the memory after the function
+        returns, so this pointer had better not point to stack allocated
+        memory.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INVALID_PARAMETER if part of the structure isn't filled out
+    correctly.
+
+    STATUS_DUPLICATE_ENTRY if the socket type is already registered.
+
+--*/
+
+NET_API
+KSTATUS
+NetRegisterNetworkLayer (
+    PNET_NETWORK_ENTRY NewNetworkEntry
+    );
+
+/*++
+
+Routine Description:
+
+    This routine registers a new entry type with the core networking library.
+
+Arguments:
+
+    NewNetworkEntry - Supplies a pointer to the network information. The core
+        library will not reference this memory after the function returns, a
+        copy will be made.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INVALID_PARAMETER if part of the structure isn't filled out
+    correctly.
+
+    STATUS_INSUFFICIENT_RESOURCES if memory could not be allocated.
+
+    STATUS_DUPLICATE_ENTRY if the network type is already registered.
+
+--*/
+
+NET_API
+PNET_NETWORK_ENTRY
+NetGetNetworkEntry (
+    ULONG ParentProtocolNumber
+    );
+
+/*++
+
+Routine Description:
+
+    This routine looks up a registered network layer given the parent protocol
+    number.
+
+Arguments:
+
+    ParentProtocolNumber - Supplies the parent protocol number of the desired
+        network layer.
+
+Return Value:
+
+    Returns a pointer to the network layer entry on success.
+
+--*/
+
+NET_API
+PNET_PROTOCOL_ENTRY
+NetGetProtocolEntry (
+    ULONG ParentProtocolNumber
+    );
+
+/*++
+
+Routine Description:
+
+    This routine looks up a registered protocol layer given the parent protocol
+    number.
+
+Arguments:
+
+    ParentProtocolNumber - Supplies the parent protocol number of the desired
+        protocol layer.
+
+Return Value:
+
+    Returns a pointer to the protocol layer entry on success.
+
+--*/
+
+NET_API
+VOID
+NetProcessReceivedPacket (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called by the low level NIC driver to pass received packets
+    onto the core networking library for dispatching.
+
+Arguments:
+
+    Link - Supplies a pointer to the link that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may be used as a scratch space while this routine
+        executes and the packet travels up the stack, but will not be accessed
+        after this routine returns.
+
+Return Value:
+
+    None. When the function returns, the memory associated with the packet may
+    be reclaimed and reused.
+
+--*/
+
+NET_API
+BOOL
+NetGetGlobalDebugFlag (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the current value of the global networking debug flag.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    TRUE if debug information should be collected throughout the networking
+    subsystem.
+
+    FALSE if verbose debug information should be suppressed globally.
+
+--*/
+
+NET_API
+VOID
+NetDebugPrintAddress (
+    PNETWORK_ADDRESS Address
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints the given address to the debug console.
+
+Arguments:
+
+    Address - Supplies a pointer to the string to print.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+KSTATUS
+NetCreateLink (
+    PNET_LINK_PROPERTIES Properties,
+    PNET_LINK *NewLink
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new network link, something that will eventually
+    be able to send and receive network traffic. The link is initially created
+    as having no physical and no link layer addresses assigned to it.
+
+Arguments:
+
+    Properties - Supplies a pointer describing the properties and interface of
+        the link. This memory will not be referenced after the function returns,
+        so this may be a stack allocated structure.
+
+    NewLink - Supplies a pointer where a pointer to the new link will be
+        returned on success.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INSUFFICIENT_RESOURCES if memory could not be allocated for the
+        structure.
+
+--*/
+
+NET_API
+VOID
+NetLinkAddReference (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine increases the reference count on a network link.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link whose reference count
+        should be incremented.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+VOID
+NetLinkReleaseReference (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine decreases the reference count of a network link, and destroys
+    the link if the reference count drops to zero.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link whose reference count
+        should be decremented.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+VOID
+NetSetLinkState (
+    PNET_LINK Link,
+    BOOL LinkUp,
+    ULONGLONG LinkSpeed
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the link state of the given link. The physical device
+    layer is responsible for synchronizing link state changes.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose state is changing.
+
+    LinkUp - Supplies a boolean indicating whether the link is active (TRUE) or
+        disconnected (FALSE).
+
+    LinkSpeed - Supplies the speed of the link, in bits per second.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+VOID
+NetGetLinkState (
+    PNET_LINK Link,
+    PBOOL LinkUp,
+    PULONGLONG LinkSpeed
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the link state of the given link.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose state is being retrieved.
+
+    LinkUp - Supplies a pointer that receives a boolean indicating whether the
+        link is active (TRUE) or disconnected (FALSE). This parameter is
+        optional.
+
+    LinkSpeed - Supplies a pointer that receives the speed of the link, in bits
+        per second. This parameter is optional.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+KSTATUS
+NetGetSetLinkDeviceInformation (
+    PNET_LINK Link,
+    PUUID Uuid,
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets device information for a link.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose device information is being
+        retrieved or set.
+
+    Uuid - Supplies a pointer to the information identifier.
+
+    Data - Supplies a pointer to the data buffer.
+
+    DataSize - Supplies a pointer that on input contains the size of the data
+        buffer in bytes. On output, returns the needed size of the data buffer,
+        even if the supplied buffer was nonexistant or too small.
+
+    Set - Supplies a boolean indicating whether to get the information (FALSE)
+        or set the information (TRUE).
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_BUFFER_TOO_SMALL if the supplied buffer was too small.
+
+    STATUS_NOT_HANDLED if the given UUID was not recognized.
+
+--*/
+
+NET_API
+VOID
+NetDestroyLink (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys a link after it's device has been removed. This
+    should not be used if the media has simply been removed. In that case,
+    setting the link state to 'down' is suffiient.
+
+Arguments:
+
+    Link - Supplies a pointer to the link to destroy. The link must be all
+        cleaned up before this routine can be called.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+KSTATUS
+NetStartLink (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called when a link is fully set up and ready to send and
+    indicates its readiness to create sockets and send data. This routine must
+    be called at low level.
+
+Arguments:
+
+    Link - Supplies a pointer to the link to submit.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+KSTATUS
+NetFindLinkForLocalAddress (
+    PNETWORK_ADDRESS LocalAddress,
+    BOOL AnyAddress,
+    PNET_LINK Link,
+    PNET_LINK_LOCAL_ADDRESS LinkResult
+    );
+
+/*++
+
+Routine Description:
+
+    This routine searches for a link and the associated address entry that
+    matches the given local address. If a link is supplied as a hint, then the
+    given link must be able to service the given address for this routine to
+    succeed.
+
+Arguments:
+
+    LocalAddress - Supplies a pointer to the local address to test against.
+
+    AnyAddress - Supplies a boolean indicating whether or not the local address
+        is the network's any address.
+
+    Link - Supplies an optional pointer to a link that the local address must
+        be from.
+
+    LinkResult - Supplies a pointer that receives the found link, link address
+        entry, and local address.
+
+Return Value:
+
+    STATUS_SUCCESS if a link was found and bound with the socket.
+
+    STATUS_INVALID_ADDRESS if no link was found to own that address.
+
+    STATUS_NO_NETWORK_CONNECTION if no networks are available.
+
+--*/
+
+NET_API
+KSTATUS
+NetFindLinkForRemoteAddress (
+    PNETWORK_ADDRESS RemoteAddress,
+    PNET_LINK_LOCAL_ADDRESS LinkResult
+    );
+
+/*++
+
+Routine Description:
+
+    This routine searches for a link and associated address entry that can
+    reach the given remote address.
+
+Arguments:
+
+    RemoteAddress - Supplies a pointer to the address to test against.
+
+    LinkResult - Supplies a pointer that receives the link information,
+        including the link, link address entry, and associated local address.
+
+Return Value:
+
+    STATUS_SUCCESS if a link was found and bound with the socket.
+
+    STATUS_NO_NETWORK_CONNECTION if no networks are available.
+
+--*/
+
+NET_API
+KSTATUS
+NetCreateLinkAddressEntry (
+    PNET_LINK Link,
+    PNETWORK_ADDRESS Address,
+    PNETWORK_ADDRESS Subnet,
+    PNETWORK_ADDRESS DefaultGateway,
+    BOOL StaticAddress,
+    PNET_LINK_ADDRESS_ENTRY *NewLinkAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes a new network link address entry.
+
+Arguments:
+
+    Link - Supplies a pointer to the physical link that has the new network
+        address.
+
+    Address - Supplies an optional pointer to the address to assign to the link
+        address entry.
+
+    Subnet - Supplies an optional pointer to the subnet mask to assign to the
+        link address entry.
+
+    DefaultGateway - Supplies an optional pointer to the default gateway
+        address to assign to the link address entry.
+
+    StaticAddress - Supplies a boolean indicating if the provided information
+        is a static configuration of the link address entry. This parameter is
+        only used when the Address, Subnet, and DefaultGateway parameters are
+        supplied.
+
+    NewLinkAddress - Supplies a pointer where a pointer to the new link address
+        will be returned. The new link address will also be inserted onto the
+        link.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+VOID
+NetDestroyLinkAddressEntry (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine removes and destroys a link address.
+
+Arguments:
+
+    Link - Supplies a pointer to the physical link that has the network address.
+
+    LinkAddress - Supplies a pointer to the link address to remove and destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+KSTATUS
+NetTranslateNetworkAddress (
+    PNETWORK_ADDRESS NetworkAddress,
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddress,
+    PNETWORK_ADDRESS PhysicalAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine translates a network level address to a physical address.
+
+Arguments:
+
+    NetworkAddress - Supplies a pointer to the network address to translate.
+
+    Link - Supplies a pointer to the link to use.
+
+    LinkAddress - Supplies a pointer to the link address entry to use for this
+        request.
+
+    PhysicalAddress - Supplies a pointer where the corresponding physical
+        address for this network address will be returned.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+KSTATUS
+NetAddNetworkAddressTranslation (
+    PNET_LINK Link,
+    PNETWORK_ADDRESS NetworkAddress,
+    PNETWORK_ADDRESS PhysicalAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds a mapping between a network address and its associated
+    physical address.
+
+Arguments:
+
+    Link - Supplies a pointer to the link receiving the mapping.
+
+    NetworkAddress - Supplies a pointer to the network address whose physical
+        mapping is known.
+
+    PhysicalAddress - Supplies a pointer to the physical address corresponding
+        to the network address.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+KSTATUS
+NetFindEntryForAddress (
+    PNET_LINK Link,
+    PNETWORK_ADDRESS Address,
+    BOOL AnyAddress,
+    PNET_LINK_ADDRESS_ENTRY *AddressEntry
+    );
+
+/*++
+
+Routine Description:
+
+    This routine searches for a link address entry within the given link
+    matching the desired address.
+
+Arguments:
+
+    Link - Supplies the link whose address entries should be searched.
+
+    Address - Supplies the address to search for.
+
+    AnyAddress - Supplies a boolean indicating whether or not the given address
+        is the owning network's any address.
+
+    AddressEntry - Supplies a pointer where the address entry will be returned
+        on success.
+
+Return Value:
+
+    STATUS_SUCCESS if a link was found and bound with the socket.
+
+    STATUS_INVALID_ADDRESS if no link was found to own that address.
+
+--*/
+
+NET_API
+KSTATUS
+NetActivateSocket (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine activates or re-activates a socket, making it eligible to
+    receive data or updating it from an unbound or locally bound socket to a
+    fully bound socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the initialized socket to add to the
+        listening sockets tree.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+VOID
+NetDeactivateSocket (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine removes a socket from the socket tree it's on, removing it
+    from eligibility to receive packets. If the socket is removed from the
+    tree then a reference will be released.
+
+Arguments:
+
+    Socket - Supplies a pointer to the initialized socket to remove from the
+        socket tree.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+KSTATUS
+NetBindSocket (
+    PNET_SOCKET Socket,
+    NET_SOCKET_BINDING_TYPE TreeType,
+    PNET_LINK_LOCAL_ADDRESS LocalInformation,
+    PNETWORK_ADDRESS RemoteAddress,
+    BOOL Activate
+    );
+
+/*++
+
+Routine Description:
+
+    This routine officially binds a socket to a local address, local port,
+    remote address and remote port tuple by adding it to the appropriate socket
+    tree. It can also re-bind a socket in the case where it has already been
+    bound to a different tree. Raw sockets are handled specially as ports do
+    not make sense for raw sockets; they are put in a list that contains all
+    raw sockets.
+
+Arguments:
+
+    Socket - Supplies a pointer to the initialized socket to bind.
+
+    TreeType - Supplies the type of tree to add the socket to.
+
+    LocalInformation - Supplies an optional pointer to the information for the
+        local link or address to which the socket shall be bound. Use this for
+        unbound sockets, leaving the link and link address NULL.
+
+    RemoteAddress - Supplies an optional pointer to a remote address to use
+        when fully binding the socket.
+
+    Activate - Supplies a boolean indicating whether or not the socket should
+        be made active (ready to receive) upon binding it.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+KSTATUS
+NetDisconnectSocket (
+    PNET_SOCKET Socket
+    );
+
+/*++
+
+Routine Description:
+
+    This routine disconnects a socket from the fully bound state, rolling it
+    back to the locally bound state.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to disconnect.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+KSTATUS
+NetInitializeSocketLinkOverride (
+    PNET_SOCKET Socket,
+    PNET_LINK_LOCAL_ADDRESS LinkInformation,
+    PNET_SOCKET_LINK_OVERRIDE LinkOverride
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the given socket link override structure with the
+    appropriate mix of socket and link information. The routine will fail if it
+    determines that the socket is already bound to a link.
+
+Arguments:
+
+    Socket - Supplies a pointer to a network socket.
+
+    LinkInformation - Supplies a pointer to link local address information.
+
+    LinkOverride - Supplies a pointer to a socket link override structure that
+        will be filled in by this routine.
+
+Return Value:
+
+    STATUS_SUCCESS if the link override was successfully filled in.
+
+    STATUS_CONNECTION_EXISTS if the socket is already bound to a link.
+
+--*/
+
+NET_API
+PNET_SOCKET
+NetFindSocket (
+    PNET_PROTOCOL_ENTRY ProtocolEntry,
+    PNETWORK_ADDRESS LocalAddress,
+    PNETWORK_ADDRESS RemoteAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find a socket that matches the given parameters.
+    If the socket is found and returned, the reference count will be increased
+    on it. It is the caller's responsiblity to release that reference.
+
+Arguments:
+
+    ProtocolEntry - Supplies the protocol the socket must be on.
+
+    LocalAddress - Supplies a pointer to the local address of the socket.
+
+    RemoteAddress - Supplies a pointer to the remote address of the socket.
+
+Return Value:
+
+    Returns a pointer to a socket matching the given parameters, with an
+    increased reference count.
+
+    NULL if no socket matches.
+
+--*/
+
+NET_API
+KSTATUS
+NetGetSetNetworkDeviceInformation (
+    PNET_LINK Link,
+    PNET_LINK_ADDRESS_ENTRY LinkAddressEntry,
+    PNETWORK_DEVICE_INFORMATION Information,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the network device information for a particular
+    link.
+
+Arguments:
+
+    Link - Supplies a pointer to the link to work with.
+
+    LinkAddressEntry - Supplies an optional pointer to the specific address
+        entry to set. If NULL, a link address entry matching the network type
+        contained in the information will be found.
+
+    Information - Supplies a pointer that either receives the device
+        information, or contains the new information to set. For set operations,
+        the information buffer will contain the current settings on return.
+
+    Set - Supplies a boolean indicating if the information should be set or
+        returned.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+VOID
+NetRawSocketsProcessReceivedData (
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress,
+    ULONG NetworkProtocol
+    );
+
+/*++
+
+Routine Description:
+
+    This routine processes a received packet and sends it to any raw sockets
+    that should be receiving it based on the protocol, source address, and
+    destination address.
+
+Arguments:
+
+    Packet - Supplies a pointer to the network packet. It is only guaranteed to
+        include network layer headers, not physical layer headers.
+
+    SourceAddress - Supplies a pointer to the source (remote) address of the
+        packet.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        of the packet.
+
+    NetworkProtocol - Supplies the network protocol of the packet.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+COMPARISON_RESULT
+NetCompareNetworkAddresses (
+    PNETWORK_ADDRESS FirstAddress,
+    PNETWORK_ADDRESS SecondAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine compares two network addresses.
+
+Arguments:
+
+    FirstAddress - Supplies a pointer to the left side of the comparison.
+
+    SecondAddress - Supplies a pointer to the second side of the comparison.
+
+Return Value:
+
+    Same if the two nodes have the same value.
+
+    Ascending if the first node is less than the second node.
+
+    Descending if the second node is less than the first node.
+
+--*/
+
+NET_API
+KSTATUS
+NetAllocateBuffer (
+    ULONG HeaderSize,
+    ULONG Size,
+    ULONG FooterSize,
+    PNET_LINK Link,
+    ULONG Flags,
+    PNET_PACKET_BUFFER *NewBuffer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates a network buffer.
+
+Arguments:
+
+    HeaderSize - Supplies the number of header bytes needed.
+
+    Size - Supplies the number of data bytes needed.
+
+    FooterSize - Supplies the number of footer bytes needed.
+
+    Link - Supplies a pointer to the link the buffer will be sent through.
+
+    Flags - Supplies a bitmask of allocation flags. See
+        NET_ALLOCATOR_BUFFER_FLAG_* for definitions.
+
+    NewBuffer - Supplies a pointer where a pointer to the new allocation will be
+        returned on success.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_INVALID_PARAMETER if a zero length buffer was requested.
+
+    STATUS_INSUFFICIENT_RESOURCES if the buffer or any auxiliary structures
+        could not be allocated.
+
+--*/
+
+NET_API
+VOID
+NetFreeBuffer (
+    PNET_PACKET_BUFFER Buffer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine frees a previously allocated network buffer.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the buffer returned by the allocation
+        routine.
+
+Return Value:
+
+    None.
+
+--*/
+
+//
+// Link-specific definitions.
+//
+
+NET_API
+BOOL
+NetIsEthernetAddressValid (
+    BYTE Address[ETHERNET_ADDRESS_SIZE]
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given ethernet address is a valid individual
+    address or not. This routine returns FALSE for 00:00:00:00:00:00 and
+    FF:FF:FF:FF:FF:FF, and TRUE for everything else.
+
+Arguments:
+
+    Address - Supplies the address to check.
+
+Return Value:
+
+    TRUE if the ethernet address is a valid individual address.
+
+    FALSE if the address is not valid.
+
+--*/
+
+NET_API
+VOID
+NetCreateEthernetAddress (
+    BYTE Address[ETHERNET_ADDRESS_SIZE]
+    );
+
+/*++
+
+Routine Description:
+
+    This routine generates a random ethernet address.
+
+Arguments:
+
+    Address - Supplies the array where the new address will be stored.
+
+Return Value:
+
+    None.
+
+--*/
+

@@ -1,0 +1,315 @@
+[{
+    "type": "task",
+    "name": "Nightly Schedule",
+    "steps": [
+        {
+            "name": "Run Windows Pilot",
+            "type": "runschedule",
+            "parameter": "Windows Pilot"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "Windows Pilot",
+    "steps": [
+        {
+            "name": "Update code",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/svn_up.sh"
+        },
+        {
+            "name": "Package source",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/package_source.sh"
+        },
+        {
+            "name": "Upload source",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/upload_source.sh"
+        },
+        {
+            "name": "Start Native Pilot x86",
+            "type": "runschedule",
+            "parameter": "Native Pilot x86"
+        },
+        {
+            "name": "Start Native Pilot x86quark",
+            "type": "runschedule",
+            "parameter": "Native Pilot x86quark"
+        },
+        {
+            "name": "Start Native Pilot armv7",
+            "type": "runschedule",
+            "parameter": "Native Pilot armv7"
+        },
+        {
+            "name": "Start Native Pilot armv6",
+            "type": "no-op",
+            "parameter": "Native Pilot armv6"
+        },
+        {
+            "name": "Run Windows Compile x86 chk",
+            "type": "runschedule",
+            "parameter": "Windows Compile x86 chk"
+        },
+        {
+            "name": "Run Windows Compile armv7 chk",
+            "type": "runschedule",
+            "parameter": "Windows Compile armv7 chk"
+        },
+        {
+            "name": "Run Windows Compile armv6 chk",
+            "type": "runschedule",
+            "parameter": "Windows Compile armv6 chk"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "Windows Compile",
+    "steps": [
+        {
+            "name": "Make wipe",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/os wipe"
+        },
+        {
+            "name": "Make awk (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/awk tools"
+        },
+        {
+            "name": "Make binutils (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/binutils-2.23 tools"
+        },
+        {
+            "name": "Make GMP (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gmp-4.3.2 tools"
+        },
+        {
+            "name": "Make MPFR (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpfr-2.4.2 tools"
+        },
+        {
+            "name": "Make MPC (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpc-0.8.1 tools"
+        },
+        {
+            "name": "Make GCC (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gcc-4.9.2 tools"
+        },
+        {
+            "name": "Make NCurses (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/ncurses-5.9 tools"
+        },
+        {
+            "name": "Make awk",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/awk"
+        },
+        {
+            "name": "Make zlib",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/zlib-1.2.8"
+        },
+        {
+            "name": "Make libiconv",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/libiconv-1.14"
+        },
+        {
+            "name": "Make binutils",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/binutils-2.23"
+        },
+        {
+            "name": "Make GMP",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gmp-4.3.2"
+        },
+        {
+            "name": "Make MPFR",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpfr-2.4.2"
+        },
+        {
+            "name": "Make MPC",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mpc-0.8.1"
+        },
+        {
+            "name": "Make GCC",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gcc-4.9.2"
+        },
+        {
+            "name": "Make M4",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/m4-1.4.17"
+        },
+        {
+            "name": "Make tar",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/tar-1.27.1"
+        },
+        {
+            "name": "Make make",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/make-3.82"
+        },
+        {
+            "name": "Make gzip",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/gzip-1.6"
+        },
+        {
+            "name": "Make patch",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/patch-2.7"
+        },
+        {
+            "name": "Make flex",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/flex-2.5.39"
+        },
+        {
+            "name": "Make byacc",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/byacc-20141128"
+        },
+        {
+            "name": "Make iASL",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/acpica-unix-20140424"
+        },
+        {
+            "name": "Make SQLite",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/sqlite-autoconf-3080500"
+        },
+        {
+            "name": "Make NCurses",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/ncurses-5.9"
+        },
+        {
+            "name": "Make readline",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/readline-6.3"
+        },
+        {
+            "name": "Make nano",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/nano-2.2.6"
+        },
+        {
+            "name": "Make vttest",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/vttest-20140305"
+        },
+        {
+            "name": "Make xz",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/xz-5.2.1"
+        },
+        {
+            "name": "Make bzip2",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/bzip2-1.0.6"
+        },
+        {
+            "name": "Make wget",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/wget-1.15"
+        },
+        {
+            "name": "Make opkg",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/opkg-0.2.4"
+        },
+        {
+            "name": "Make shadow",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/shadow-4.2.1"
+        },
+        {
+            "name": "Make apr",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/apr-1.5.1"
+        },
+        {
+            "name": "Make apr-util",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/apr-util-1.5.4"
+        },
+        {
+            "name": "Make subversion",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/subversion-1.8.11"
+        },
+        {
+            "name": "Make bash",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/bash-4.3.30"
+        },
+        {
+            "name": "Make dash",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/dash-0.5.8"
+        },
+        {
+            "name": "Make mbedtls",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/mbedtls-1.3.10"
+        },
+        {
+            "name": "Make libssh2",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/libssh2-1.5.0"
+        },
+        {
+            "name": "Make curl",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/curl-7.41.0"
+        },
+        {
+            "name": "Make git",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/git-2.3.5"
+        },
+        {
+            "name": "Make OS",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/os test"
+        },
+        {
+            "name": "Create Windows binaries",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/package_binaries.sh"
+        },
+        {
+            "name": "Upload Windows binaries",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/upload_binaries.sh"
+        }
+    ]
+},
+{
+    "type": "task",
+    "name": "Generate Distributables",
+    "steps": [
+        {
+            "name": "Package Distributables",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/package_distrib.sh"
+        }
+    ]
+}]
+

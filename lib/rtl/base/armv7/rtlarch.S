@@ -1,0 +1,529 @@
+/*++
+
+Copyright (c) 2012 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    rtlarch.S
+
+Abstract:
+
+    This module implements ARMv7 processor architecture features not
+    implementable in C.
+
+Author:
+
+    Evan Green 25-Sep-2012
+
+Environment:
+
+    Kernel mode
+
+--*/
+
+##
+## ------------------------------------------------------------------ Includes
+##
+
+#include <minoca/arm.inc>
+
+##
+## --------------------------------------------------------------- Definitions
+##
+
+##
+## ---------------------------------------------------------------------- Code
+##
+
+ASSEMBLY_FILE_HEADER
+
+##
+## ULONG
+## RtlAtomicExchange32 (
+##     volatile ULONG *Address,
+##     ULONG ExchangeValue
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine atomically exchanges the value at the given memory address
+    with the given value.
+
+Arguments:
+
+    Address - Supplies the address of the value to exchange with.
+
+    ExchangeValue - Supplies the value to write to the address.
+
+Return Value:
+
+    Returns the original value at the given address.
+
+--*/
+
+FUNCTION RtlAtomicExchange32
+    dsb                                         @ Data synchronization barrier.
+    ldrex   %r2, [%r0]                          @ Get *Address exclusive.
+    strex   %r3, %r1, [%r0]                     @ Store new value exclusive.
+    cmp     %r3, #0                             @ See if the write worked.
+    bne     RtlAtomicExchange32                 @ Try again if it didn't.
+    mov     %r0, %r2                            @ Move original value to R0.
+    dsb                                         @ Another barrier.
+    bx      %lr                                 @ Return R0.
+
+END_FUNCTION RtlAtomicExchange32
+
+##
+## ULONGLONG
+## RtlAtomicExchange64 (
+##     volatile ULONGLONG *Address,
+##     ULONGLONG ExchangeValue
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine atomically exchanges the value at the given memory address
+    with the given value.
+
+Arguments:
+
+    Address - Supplies the address of the value to exchange with.
+
+    ExchangeValue - Supplies the value to write to the address.
+
+Return Value:
+
+    Returns the original value at the given address.
+
+--*/
+
+FUNCTION RtlAtomicExchange64
+    stmdb   %sp!, {%r4-%r5}                     @ Save nonvolatiles.
+
+RtlAtomicExchange64Loop:
+    dsb                                         @ Data synchronization barrier.
+    ldrexd  %r4, %r5, [%r0]                     @ Get *Address exclusive.
+    strexd  %r12, %r2, %r3, [%r0]               @ Store new value exclusive.
+    cmp     %r12, #0                            @ See if the write worked.
+    bne     RtlAtomicExchange64Loop             @ Try again if it didn't.
+    mov     %r0, %r4                            @ Move original low part to R0.
+    mov     %r1, %r5                            @ Move original high part to R1.
+    ldmia   %sp!, {%r4-%r5}                     @ Restore nonvolatiles.
+    dsb                                         @ Another barrier.
+    bx      %lr                                 @ Return R0-R1.
+
+END_FUNCTION RtlAtomicExchange64
+
+##
+## ULONG
+## RtlAtomicCompareExchange32 (
+##     volatile ULONG *Address,
+##     ULONG ExchangeValue,
+##     ULONG CompareValue
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine atomically compares memory at the given address with a value
+    and exchanges it with another value if they are equal.
+
+Arguments:
+
+    Address - Supplies the address of the value to compare and potentially
+        exchange.
+
+    ExchangeValue - Supplies the value to write to Address if the comparison
+        returns equality.
+
+    CompareValue - Supplies the value to compare against.
+
+Return Value:
+
+    Returns the original value at the given address.
+
+--*/
+
+FUNCTION RtlAtomicCompareExchange32
+    dsb                                         @ Data synchronization barrier.
+    ldrex   %r3, [%r0]                          @ Get *Address exclusive.
+    cmp     %r3, %r2                            @ Compare to CompareValue
+    bne     RtlAtomicCompareExchange32End1      @ If not equal, exit with clrex.
+
+    ##
+    ## If the values are equal, do an exclusive store of R1 to the address at
+    ## R0. Store whether or not the store succeeded in R12 (a volatile
+    ## register). A 0 in R12 indicates the store succeeded.
+    ##
+
+    strex   %r12, %r1, [%r0]                    @ Store exclusive.
+    cmp     %r12, #0                            @ Compare with 0.
+    bne     RtlAtomicCompareExchange32          @ Try again if the store failed.
+    b       RtlAtomicCompareExchange32End2      @ Exit without clrex.
+
+RtlAtomicCompareExchange32End1:
+    clrex
+
+RtlAtomicCompareExchange32End2:
+    mov     %r0, %r3                            @ Move loaded value to R0.
+    dsb                                         @ Data synchronization barrier.
+    bx      %lr                                 @ Return R0.
+
+END_FUNCTION RtlAtomicCompareExchange32
+
+##
+## ULONGLONG
+## RtlAtomicCompareExchange64 (
+##     volatile ULONGLONG *Address,
+##     ULONGLONG ExchangeValue,
+##     ULONGLONG CompareValue
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine atomically compares memory at the given address with a value
+    and exchanges it with another value if they are equal.
+
+Arguments:
+
+    Address - Supplies the address of the value to compare and potentially
+        exchange.
+
+    ExchangeValue - Supplies the value to write to Address if the comparison
+        returns equality.
+
+    CompareValue - Supplies the value to compare against.
+
+Return Value:
+
+    Returns the original value at the given address.
+
+--*/
+
+FUNCTION RtlAtomicCompareExchange64
+    stmdb   %sp!, {%r4-%r7}                     @ Save nonvolatiles.
+    ldrd    %r4, %r5, [%sp, #16]                @ Get the last argument.
+
+RtlAtomicCompareExchange64Loop:
+    dsb                                         @ Data synchronization barrier.
+    ldrexd  %r6, %r7, [%r0]                     @ Get *Address exclusive.
+    cmp     %r6, %r4                            @ Compare to CompareValue
+    bne     RtlAtomicCompareExchange64End1      @ If not equal, exit with clrex.
+    cmp     %r7, %r5                            @ Compare to CompareValue
+    bne     RtlAtomicCompareExchange64End1      @ If not equal, exit with clrex.
+
+    ##
+    ## If the values are equal, do an exclusive store of R2:R3 to the address at
+    ## R0. Store whether or not the store succeeded in R12 (a volatile
+    ## register). A 0 in R12 indicates the store succeeded.
+    ##
+
+    strexd  %r12, %r2, %r3, [%r0]               @ Store exclusive.
+    cmp     %r12, #0                            @ Compare with 0.
+    bne     RtlAtomicCompareExchange64Loop      @ Try again if the store failed.
+    b       RtlAtomicCompareExchange64End2
+
+RtlAtomicCompareExchange64End1:
+    clrex
+
+RtlAtomicCompareExchange64End2:
+    mov     %r0, %r6                            @ Move original low part to R0.
+    mov     %r1, %r7                            @ Move original high part to R1.
+    ldmia   %sp!, {%r4-%r7}                     @ Restore nonvolatiles.
+    dsb                                         @ Data synchronization barrier.
+    bx      %lr                                 @ Return R0.
+
+END_FUNCTION RtlAtomicCompareExchange64
+
+##
+## ULONG
+## RtlAtomicAdd32 (
+##     volatile ULONG *Address,
+##     ULONG Increment
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine atomically adds the given amount to a 32-bit variable.
+
+Arguments:
+
+    Address - Supplies the address of the value to atomically add to.
+
+    Increment - Supplies the amount to add.
+
+Return Value:
+
+    Returns the value before the atomic addition was performed.
+
+--*/
+
+FUNCTION RtlAtomicAdd32
+    dsb                                         @ Data synchronization barrier.
+    ldrex   %r2, [%r0]                          @ Get *Address exclusive.
+    add     %r3, %r2, %r1                       @ Add increment.
+    strex   %r12, %r3, [%r0]                    @ Exclusively store the result.
+    cmp     %r12, #0                            @ R12 is 0 on success.
+    bne     RtlAtomicAdd32                      @ Try again if store failed.
+    mov     %r0, %r2                            @ Return original value.
+    dsb                                         @ Data synchronization barrier.
+    bx      %lr                                 @ Return.
+
+END_FUNCTION RtlAtomicAdd32
+
+##
+## ULONGLONG
+## RtlAtomicAdd64 (
+##     volatile ULONGLONG *Address,
+##     ULONGLONG Increment
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine atomically adds the given amount to a 64-bit variable.
+
+Arguments:
+
+    Address - Supplies the address of the value to atomically add to.
+
+    Increment - Supplies the amount to add.
+
+Return Value:
+
+    Returns the value before the atomic addition was performed.
+
+--*/
+
+FUNCTION RtlAtomicAdd64
+    stmdb   %sp!, {%r4-%r7}                     @ Save nonvolatiles.
+
+RtlAtomicAdd64Loop:
+    dsb                                         @ Data synchronization barrier.
+    ldrexd  %r4, %r5, [%r0]                     @ Get *Address exclusive.
+    adds    %r6, %r4, %r2                       @ Add low word, setting flags.
+    adc     %r7, %r5, %r3                       @ Add high word, with carry.
+    strexd  %r12, %r6, %r7, [%r0]               @ Exclusively store the result.
+    cmp     %r12, #0                            @ R12 is 0 on success.
+    bne     RtlAtomicAdd64Loop                  @ Try again if store failed.
+    mov     %r0, %r4                            @ Move original low part to R0.
+    mov     %r1, %r5                            @ Move original high part to R1.
+    ldmia   %sp!, {%r4-%r7}                     @ Restore nonvolatiles.
+    dsb                                         @ Data synchronization barrier.
+    bx      %lr                                 @ Return.
+
+END_FUNCTION RtlAtomicAdd64
+
+##
+## ULONG
+## RtlAtomicOr32 (
+##     volatile ULONG *Address,
+##     ULONG Mask
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine atomically ORs the given mask to a 32-bit variable.
+
+Arguments:
+
+    Address - Supplies the address of the value to atomically add to.
+
+    Mask - Supplies the bitmask to logically OR in to the value.
+
+Return Value:
+
+    Returns the value before the atomic operation was performed.
+
+--*/
+
+FUNCTION RtlAtomicOr32
+    dsb                                         @ Data synchronization barrier.
+    ldrex   %r2, [%r0]                          @ Get *Address exclusive.
+    orr     %r3, %r2, %r1                       @ OR in mask.
+    strex   %r12, %r3, [%r0]                    @ Exclusively store the result.
+    cmp     %r12, #0                            @ R12 is 0 on success.
+    bne     RtlAtomicOr32                       @ Try again if store failed.
+    mov     %r0, %r2                            @ Return original value.
+    dsb                                         @ Data synchronization barrier.
+    bx      %lr                                 @ Return.
+
+END_FUNCTION RtlAtomicOr32
+
+##
+## ULONGLONG
+## RtlAtomicOr64 (
+##     volatile ULONGLONG *Address,
+##     ULONGLONG Mask
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine atomically ORs the given amount to a 64-bit variable.
+
+Arguments:
+
+    Address - Supplies the address of the value to atomically add to.
+
+    Mask - Supplies the bitmask to logically OR in to the value.
+
+Return Value:
+
+    Returns the value before the atomic addition was performed.
+
+--*/
+
+FUNCTION RtlAtomicOr64
+    stmdb   %sp!, {%r4-%r7}                     @ Save nonvolatiles.
+
+RtlAtomicOr64Loop:
+    dsb                                         @ Data synchronization barrier.
+    ldrexd  %r4, %r5, [%r0]                     @ Get *Address exclusive.
+    orr     %r6, %r4, %r2                       @ OR low word.
+    orr     %r7, %r5, %r3                       @ OR high word.
+    strexd  %r12, %r6, %r7, [%r0]               @ Exclusively store the result.
+    cmp     %r12, #0                            @ R12 is 0 on success.
+    bne     RtlAtomicOr64Loop                   @ Try again if store failed.
+    mov     %r0, %r4                            @ Move original low part to R0.
+    mov     %r1, %r5                            @ Move original high part to R1.
+    ldmia   %sp!, {%r4-%r7}                     @ Restore nonvolatiles.
+    dsb                                         @ Data synchronization barrier.
+    bx      %lr                                 @ Return.
+
+END_FUNCTION RtlAtomicOr64
+
+##
+## ULONG
+## RtlAtomicAnd32 (
+##     volatile ULONG *Address,
+##     ULONG Mask
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine atomically ANDs the given mask to a 32-bit variable.
+
+Arguments:
+
+    Address - Supplies the address of the value to atomically add to.
+
+    Mask - Supplies the bitmask to logically AND in to the value.
+
+Return Value:
+
+    Returns the value before the atomic operation was performed.
+
+--*/
+
+FUNCTION RtlAtomicAnd32
+    dsb                                         @ Data synchronization barrier.
+    ldrex   %r2, [%r0]                          @ Get *Address exclusive.
+    and     %r3, %r2, %r1                       @ AND mask.
+    strex   %r12, %r3, [%r0]                    @ Exclusively store the result.
+    cmp     %r12, #0                            @ R12 is 0 on success.
+    bne     RtlAtomicAnd32                      @ Try again if store failed.
+    mov     %r0, %r2                            @ Return original value.
+    dsb                                         @ Data synchronization barrier.
+    bx      %lr                                 @ Return.
+
+END_FUNCTION RtlAtomicAnd32
+
+##
+## ULONG
+## RtlAtomicXor32 (
+##     volatile ULONG *Address,
+##     ULONG Mask
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine atomically exclusive ORs the given mask to a 32-bit variable.
+
+Arguments:
+
+    Address - Supplies the address of the value to atomically add to.
+
+    Mask - Supplies the bitmask to logically XOR in to the value.
+
+Return Value:
+
+    Returns the value before the atomic operation was performed.
+
+--*/
+
+FUNCTION RtlAtomicXor32
+    dsb                                         @ Data synchronization barrier.
+    ldrex   %r2, [%r0]                          @ Get *Address exclusive.
+    eor     %r3, %r2, %r1                       @ XOR mask.
+    strex   %r12, %r3, [%r0]                    @ Exclusively store the result.
+    cmp     %r12, #0                            @ R12 is 0 on success.
+    bne     RtlAtomicXor32                      @ Try again if store failed.
+    mov     %r0, %r2                            @ Return original value.
+    dsb                                         @ Data synchronization barrier.
+    bx      %lr                                 @ Return.
+
+END_FUNCTION RtlAtomicXor32
+
+##
+## VOID
+## RtlMemoryBarrier (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine provides a full memory barrier, ensuring that all memory
+    accesses occurring before this function complete before any memory accesses
+    after this function start.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION RtlMemoryBarrier
+    dmb
+    bx      %lr
+
+END_FUNCTION RtlMemoryBarrier
+
+##
+## --------------------------------------------------------- Internal Functions
+##
+

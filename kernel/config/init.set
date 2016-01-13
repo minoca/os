@@ -1,0 +1,1 @@
+apps/lib/libminocaos.so.1 --library-path apps/lib apps/bin/sh minoca/config/init.sh

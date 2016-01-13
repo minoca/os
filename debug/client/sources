@@ -1,0 +1,52 @@
+################################################################################
+#
+#   Copyright (c) 2013 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This file contains the common object files for the debug client
+#       application.
+#
+#   Author:
+#
+#       Evan Green 11-Dec-2013
+#
+#   Environment:
+#
+#       Build
+#
+################################################################################
+
+COMMON_OBJS = armdis.o     \
+              cmdtab.o     \
+              coff.o       \
+              consio.o     \
+              dbgapi.o     \
+              dbgeval.o    \
+              dbgrcomm.o   \
+              dbgrprof.o   \
+              dbgsym.o     \
+              debug.o      \
+              disasm.o     \
+              elf.o        \
+              exts.o       \
+              profthrd.o   \
+              remsrv.o     \
+              stabs.o      \
+              symbols.o    \
+              thmdis.o     \
+              thm32dis.o   \
+              x86dis.o     \
+
+X86_OBJS = x86/dbgarch.o
+
+ARMV7_OBJS = armv7/dbgarch.o
+
+ARMV6_OBJS = armv6/dbgarch.o
+
+EXTRA_SRC_DIRS = x86 armv7 armv6
+

@@ -1,0 +1,31 @@
+################################################################################
+#
+#   Copyright (c) 2015 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This file contains the common object files for the Cryptographic
+#       Library.
+#
+#   Author:
+#
+#       Evan Green 13-Jan-2015
+#
+#   Environment:
+#
+#       Build
+#
+################################################################################
+
+OBJS = aes.o      \
+       fortuna.o  \
+       hmac.o     \
+       md5.o      \
+       sha1.o     \
+       sha256.o   \
+       sha512.o   \
+

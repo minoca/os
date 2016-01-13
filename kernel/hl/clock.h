@@ -1,0 +1,95 @@
+/*++
+
+Copyright (c) 2012 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    clock.h
+
+Abstract:
+
+    This header contains definitions for the hardware layer's clock interrupt
+    support.
+
+Author:
+
+    Evan Green 19-Aug-2012
+
+--*/
+
+//
+// ---------------------------------------------------------------- Definitions
+//
+
+//
+// ------------------------------------------------------ Data Type Definitions
+//
+
+//
+// -------------------------------------------------------- Function Prototypes
+//
+
+INTERRUPT_STATUS
+HlpEarlyClockInterruptHandler (
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine responds to clock interrupts while the system is still in
+    early initialization.
+
+Arguments:
+
+    Context - Supplies a context pointer. Currently unused.
+
+Return Value:
+
+    Claimed always.
+
+--*/
+
+KSTATUS
+HlpTimerInitializeClock (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the system clock source and start it ticking.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
+HlpTimerActivateClock (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the clock handler routine to the main clock ISR.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+

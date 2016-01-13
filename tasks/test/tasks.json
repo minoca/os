@@ -1,0 +1,14 @@
+[
+{
+    "type": "task",
+    "name": "Performance Test",
+    "steps": [
+        {
+            "name": "Run Performance Test",
+            "type": "execute",
+            "parameter": "../../tasks/test/perf_test.sh"
+        }
+    ]
+}
+]
+

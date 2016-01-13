@@ -1,0 +1,95 @@
+#include <windows.h>
+#include <richedit.h>
+#include <commctrl.h>
+#include "resource.h"
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "debugui.exe.manifest"
+
+IDD_MAIN_WINDOW DIALOG 6, 18, UI_INITIAL_WIDTH, UI_INITIAL_HEIGHT
+STYLE WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME |
+      WS_MAXIMIZEBOX | WS_MINIMIZEBOX
+
+CAPTION "Minoca Debugger"
+FONT 8, "MS Sans Serif"
+BEGIN
+    CONTROL       "", IDE_SOURCE_RICHEDIT, "RICHEDIT20A", WS_BORDER |
+                  WS_VSCROLL | WS_HSCROLL | ES_MULTILINE | ES_NOHIDESEL |
+                  WS_TABSTOP, UI_BORDER,
+                  UI_BUTTON_HEIGHT + (2 * UI_BORDER),
+                  (UI_INITIAL_WIDTH / 2) - (UI_BORDER * 3 / 2),
+                  UI_INITIAL_HEIGHT - UI_BUTTON_HEIGHT - (UI_BORDER * 3)
+
+    CONTROL       "", IDE_STDOUT_RICHEDIT, "RICHEDIT20A", WS_BORDER |
+                  WS_VSCROLL | WS_HSCROLL | ES_MULTILINE | ES_NOHIDESEL |
+                  ES_AUTOVSCROLL | ES_READONLY | WS_TABSTOP,
+                  (UI_INITIAL_WIDTH / 2) + (UI_BORDER / 2),
+                  UI_BUTTON_HEIGHT + (2 * UI_BORDER),
+                  (UI_INITIAL_WIDTH / 2) - (UI_BORDER * 3 / 2),
+                  UI_INITIAL_HEIGHT - (2 * UI_BUTTON_HEIGHT) -
+                  (4 * UI_BORDER)
+
+    CONTROL       "", IDC_STACK_PROFILER, "SysTreeView32", WS_BORDER |
+                  WS_VSCROLL | WS_HSCROLL | TVS_HASLINES | TVS_HASBUTTONS |
+                  TVS_LINESATROOT, UI_BORDER,
+                  (UI_INITIAL_HEIGHT / 2) + (UI_BORDER / 2),
+                  (UI_INITIAL_WIDTH / 2) - (UI_BORDER * 3 / 2),
+                  (UI_INITIAL_HEIGHT / 2) - (UI_BORDER * 3 / 2)
+
+    CONTROL       "", IDC_MEMORY_PROFILER, "SysListView32", WS_BORDER |
+                  WS_VSCROLL | WS_HSCROLL | WS_TABSTOP | LVS_REPORT |
+                  LVS_ALIGNTOP, UI_BORDER,
+                  (UI_INITIAL_HEIGHT / 2) + (UI_BORDER / 2),
+                  (UI_INITIAL_WIDTH / 2) - (UI_BORDER * 3 / 2),
+                  (UI_INITIAL_HEIGHT / 2) - (UI_BORDER * 3 / 2)
+
+    CONTROL       "", IDE_SOURCE_FILE, "EDIT", ES_LEFT | WS_CHILD |
+                  WS_VISIBLE | WS_BORDER | WS_TABSTOP,
+                  UI_BORDER, UI_BORDER,
+                  (UI_INITIAL_WIDTH / 2) - (UI_BORDER * 3 / 2),
+                  UI_BUTTON_HEIGHT
+
+    PUSHBUTTON    "&Stack Profiler", IDC_STACK_PROFILER_TOGGLE,
+                  (UI_INITIAL_WIDTH / 2) + (UI_BORDER / 2), UI_BORDER,
+                  UI_LARGE_BUTTON_WIDTH, UI_BUTTON_HEIGHT
+
+    PUSHBUTTON    "&Memory Profiler", IDC_MEMORY_PROFILER_TOGGLE,
+                  (UI_INITIAL_WIDTH / 2) + UI_LARGE_BUTTON_WIDTH +
+                  (UI_BORDER * 3 / 2),
+                  UI_BORDER, UI_LARGE_BUTTON_WIDTH, UI_BUTTON_HEIGHT
+
+    PUSHBUTTON    "Break at Cursor", IDC_BREAK_CURSOR,
+                  (UI_INITIAL_WIDTH / 2) + (2 * UI_LARGE_BUTTON_WIDTH) +
+                  (UI_BORDER * 5 / 2),
+                  UI_BORDER, UI_LARGE_BUTTON_WIDTH, UI_BUTTON_HEIGHT
+
+    PUSHBUTTON    "Goto Cursor", IDC_GOTO_CURSOR,
+                  (UI_INITIAL_WIDTH / 2) + (3 * UI_LARGE_BUTTON_WIDTH) +
+                  (UI_BORDER * 7 / 2),
+                  UI_BORDER, UI_LARGE_BUTTON_WIDTH, UI_BUTTON_HEIGHT
+
+    CONTROL       "", IDE_PROMPT, "EDIT", ES_RIGHT | ES_READONLY |
+                  WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP,
+                  (UI_INITIAL_WIDTH / 2) + (UI_BORDER / 2),
+                  UI_INITIAL_HEIGHT - UI_BUTTON_HEIGHT - UI_BORDER,
+                  UI_PROMPT_WIDTH, UI_BUTTON_HEIGHT
+
+    CONTROL       "Not Connected", IDE_COMMAND, "EDIT", ES_LEFT | WS_CHILD |
+                  WS_VISIBLE | WS_BORDER | WS_TABSTOP,
+                  (UI_INITIAL_WIDTH / 2) + (UI_BORDER * 3 / 2) +
+                  UI_PROMPT_WIDTH,
+                  UI_INITIAL_HEIGHT - UI_BUTTON_HEIGHT - UI_BORDER,
+                  (UI_INITIAL_WIDTH / 2) - (UI_PROMPT_WIDTH +
+                  (UI_BORDER * 5 / 2)),
+                  UI_BUTTON_HEIGHT
+END
+
+IDD_ACCELERATORS ACCELERATORS
+BEGIN
+    "^b",      IDA_CONTROL_B
+    "^k",      IDA_CONTROL_K
+    VK_DOWN,   IDA_DOWN, VIRTKEY
+    VK_UP,     IDA_UP, VIRTKEY
+    VK_ESCAPE, IDA_ESCAPE, VIRTKEY
+END
+
+IDI_DEBUG_ICON ICON DISCARDABLE "minoca.ico"

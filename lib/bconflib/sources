@@ -1,0 +1,25 @@
+################################################################################
+#
+#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#
+#   File Name:
+#
+#       sources
+#
+#   Abstract:
+#
+#       This module defines the sources files for the Boot Configuration
+#       library.
+#
+#   Author:
+#
+#       Evan Green 20-Feb-2014
+#
+#   Environment:
+#
+#       Boot Environment, Build Environment, and Kernel Mode
+#
+################################################################################
+
+OBJS = bconf.o      \
+
