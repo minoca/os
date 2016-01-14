@@ -46,7 +46,7 @@ fi
 
 export TMPDIR=$PWD
 export TEMP=$TMPDIR
-export PATH="$SRCROOT/tools/win32/mingw/bin;$SRCROOT/tools;$SRCROOT/x86$DEBUG/bin;$SRCROOT/x86$DEBUG/testbin;$SRCROOT/x86$DEBUG/bin/tools/bin;$SRCROOT/$ARCH$DEBUG/bin;$SRCROOT/$ARCH$DEBUG/testbin;$SRCROOT/$ARCH$DEBUG/bin/tools/bin;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;C:/Program Files/SlikSvn/bin;"
+export PATH="$SRCROOT/tools/win32/mingw/bin;$SRCROOT/tools;$SRCROOT/x86$DEBUG/bin;$SRCROOT/x86$DEBUG/testbin;$SRCROOT/x86$DEBUG/bin/tools/bin;$SRCROOT/$ARCH$DEBUG/bin;$SRCROOT/$ARCH$DEBUG/testbin;$SRCROOT/$ARCH$DEBUG/bin/tools/bin;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;$PATH"
 
 ##
 ## Download the latest build.

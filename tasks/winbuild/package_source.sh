@@ -35,19 +35,33 @@ fi
 
 export TMPDIR=$PWD
 export TEMP=$TMPDIR
-export PATH="$SRCROOT/tools/win32/mingw/bin;$SRCROOT/tools;$SRCROOT/$ARCH$DEBUG/bin;$SRCROOT/$ARCH$DEBUG/testbin;$SRCROOT/$ARCH$DEBUG/bin/tools/bin;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;C:/Program Files/SlikSvn/bin;"
+export PATH="$SRCROOT/tools/win32/mingw/bin;$SRCROOT/tools;$SRCROOT/$ARCH$DEBUG/bin;$SRCROOT/$ARCH$DEBUG/testbin;$SRCROOT/$ARCH$DEBUG/bin/tools/bin;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;$PATH"
 rm -rf ./src
 mkdir ./src
+
 echo "Exporting OS"
-svn export --quiet $SRCROOT/os ./src/os
-echo `svnversion $SRCROOT/os | sed 's/\([0-9]*\).*/\1/'` > ./src/os/revision
+cd $SRCROOT/os
+git archive HEAD > $TMPDIR/os.tar
+mkdir $TMPDIR/src/os
+tar -xf $TMPDIR/os.tar -C $TMPDIR/src/os
+rm $TMPDIR/os.tar
+git rev-list --count HEAD > $TMPDIR/src/os/revision
+
 echo "Exporting third-party"
-svn export --quiet $SRCROOT/third-party ./src/third-party
-echo "Exporting tools"
-mkdir -p ./src/tools
-svn export --quiet $SRCROOT/tools/resources ./src/tools/resources
+cd $SRCROOT/third-party
+git archive HEAD > $TMPDIR/tp.tar
+mkdir $TMPDIR/src/third-party
+tar -xf $TMPDIR/tp.tar -C $TMPDIR/src/third-party
+rm $TMPDIR/tp.tar
+
 echo "Exporting client script"
-svn export https://svn.freshkernel.com/svn/web/trunk/mweb/mbuild/client.py ./src/client.py
+cd $TMPDIR
+git archive --format=tar --remote=ssh://git@git.minoca.co:2222/minoca/web.git \
+    HEAD mweb/mbuild/client.py > web.tar
+
+tar -Oxf web.tar > ./src/client.py
+rm web.tar
+
 echo "Archiving"
 set +e
 tar -czf minoca-src.tar.gz ./src

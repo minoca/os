@@ -16,7 +16,7 @@
         {
             "name": "Update code",
             "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/svn_up.sh"
+            "parameter": "$SRCROOT/os/tasks/winbuild/git_up.sh"
         },
         {
             "name": "Package source",
@@ -108,6 +108,11 @@
             "name": "Make NCurses (tools)",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/ncurses-5.9 tools"
+        },
+        {
+            "name": "Make ACPICA (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/acpica-unix-20140424 tools"
         },
         {
             "name": "Make awk",

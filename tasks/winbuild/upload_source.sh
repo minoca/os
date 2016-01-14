@@ -34,7 +34,7 @@ fi
 
 export TMPDIR=$PWD
 export TEMP=$TMPDIR
-export PATH="$SRCROOT/tools/win32/mingw/bin;$SRCROOT/tools;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;C:/Program Files/SlikSvn/bin;"
+export PATH="$SRCROOT/tools/win32/mingw/bin;$SRCROOT/tools;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;$PATH"
 file=minoca-src.tar.gz
 file_size=`ls -l $file | \
     sed -n 's/[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([0123456789]*\).*/\1/p'`
@@ -46,3 +46,4 @@ echo rm $file
 rm $file
 echo rm -rf ./src
 rm -rf ./src
+

@@ -174,7 +174,17 @@ SYSTEM_VERSION_MAJOR := 0
 SYSTEM_VERSION_MINOR := 1
 SYSTEM_VERSION_REVISION := 0
 
-REVISION ?= $(shell svn info $(SRCROOT)/$(THISDIR) | sed -n 's_^Revision: \(.*\)$$_\1_p')
+INIT_REV := 1598fc5f1734f7d7ee01e014ee64e131601b78a7
+REVISION_EXTRA ?= $(shell \
+    if [ -f $(SRCROOT)/os/.git/refs/replace/$(INIT_REV) ] ; then \
+        echo 1 ; \
+    else echo 1000 ; \
+    fi)
+
+REVISION ?= $(shell \
+    echo $$((`cd $(SRCROOT)/os/ && git rev-list --count HEAD` + \
+             $(REVISION_EXTRA))))
+
 ifeq ($(REVISION),)
 REVISION := 0
 endif

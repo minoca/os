@@ -3,7 +3,7 @@
 ##
 ## Script Name:
 ##
-##     svn_up.sh
+##     git_up.sh
 ##
 ## Abstract:
 ##
@@ -25,18 +25,17 @@ if ! test -d $SRCROOT; then
     exit 1
 fi
 
-export PATH="$PATH;C:/Program Files/SlikSvn/bin;"
 cd $SRCROOT/os
 pwd
-svn up --non-interactive
-svn st
+git pull
+git status
 cd $SRCROOT/tools
 pwd
-svn up --non-interactive
-svn st
+git pull
+git status
 cd $SRCROOT/third-party
 pwd
-svn up --non-interactive
-svn st
-echo "Svn update complete"
+git pull
+git status
+echo "Git update complete"
 exit 0

@@ -124,9 +124,11 @@ fi
 ## Add client.py and the tasks directory.
 ##
 
-svn export --force \
-    https://svn.freshkernel.com/svn/web/trunk/mweb/mbuild/client.py \
-    "$AUTOROOT/client.py"
+git archive --format=tar --remote=ssh://git@git.minoca.co:2222/minoca/web.git \
+    HEAD mweb/mbuild/client.py > $AUTOROOT/client.tar
+
+tar -Oxf $AUTOROOT/client.tar > $AUTOROOT/client.py
+rm $AUTOROOT/client.tar
 
 cp -Rp "$SRCROOT/os/tasks" "$AUTOROOT/"
 echo Completed adding files
