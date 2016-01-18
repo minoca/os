@@ -1251,7 +1251,7 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
         FileOpened = FALSE;
         if (Input->File == NULL) {
-            Input->File = fopen(Input->FileName, "rb");
+            Input->File = fopen(Input->FileName, "r");
             if (Input->File == NULL) {
                 if ((Context->Options &
                      GREP_OPTION_SUPPRESS_BLAND_ERRORS) == 0) {
