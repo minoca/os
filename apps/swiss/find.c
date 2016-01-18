@@ -261,7 +261,7 @@ Members:
 
 typedef struct _FIND_NODE_NAME {
     PSTR Pattern;
-    ULONG PatternSize;
+    UINTN PatternSize;
 } FIND_NODE_NAME, *PFIND_NODE_NAME;
 
 /*++
@@ -1534,11 +1534,11 @@ Return Value:
 
 {
 
-    ULONGLONG Capacity;
+    UINTN Capacity;
     ULONG Index;
     PSTR NewArgument;
     ULONG PathSize;
-    ULONGLONG Size;
+    UINTN Size;
 
     NewArgument = strdup(Argument);
     if (NewArgument == NULL) {

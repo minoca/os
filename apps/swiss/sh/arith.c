@@ -148,16 +148,16 @@ Members:
 
 typedef struct _SHELL_ARITHMETIC_LEXER {
     PSTR Input;
-    ULONG InputSize;
-    ULONG InputOffset;
+    UINTN InputSize;
+    UINTN InputOffset;
     ULONG TokenType;
     PSTR TokenBuffer;
-    ULONG TokenBufferCapacity;
-    ULONG TokenBufferSize;
+    UINTN TokenBufferCapacity;
+    UINTN TokenBufferSize;
     BOOL LexerPrimed;
-    ULONG TokensRead;
+    UINTN TokensRead;
     PSTR AssignmentName;
-    ULONG AssignmentNameSize;
+    UINTN AssignmentNameSize;
 } SHELL_ARITHMETIC_LEXER, *PSHELL_ARITHMETIC_LEXER;
 
 /*++
@@ -286,9 +286,9 @@ BOOL
 ShEvaluateArithmeticExpression (
     PSHELL Shell,
     PSTR String,
-    ULONG Length,
+    UINTN Length,
     PSTR *Answer,
-    PULONG AnswerSize
+    PUINTN AnswerSize
     )
 
 /*++
@@ -583,7 +583,7 @@ Return Value:
     LONG TrueValue;
     LONG Value;
     PSTR ValueString;
-    ULONGLONG ValueStringSize;
+    UINTN ValueStringSize;
 
     Result = ShGetArithmeticToken(Shell, Lexer);
     if (Result == FALSE) {
@@ -1298,7 +1298,7 @@ Return Value:
 
     BOOL Result;
     CHAR StringBuffer[SHELL_ARITHMETIC_INTEGER_STRING_BUFFER_SIZE];
-    ULONG StringSize;
+    UINTN StringSize;
 
     StringSize = snprintf(StringBuffer,
                           SHELL_ARITHMETIC_INTEGER_STRING_BUFFER_SIZE,
@@ -1350,7 +1350,7 @@ Return Value:
     CHAR LastCharacter;
     CHAR LastLastCharacter;
     BOOL Result;
-    ULONG TokenStringIndex;
+    UINTN TokenStringIndex;
     BOOL Unput;
 
     Character = 0;
@@ -1765,7 +1765,7 @@ Return Value:
 
 {
 
-    ULONG NewCapacity;
+    UINTN NewCapacity;
 
     if (Lexer->TokenBufferSize < Lexer->TokenBufferCapacity) {
         Lexer->TokenBuffer[Lexer->TokenBufferSize] = Character;

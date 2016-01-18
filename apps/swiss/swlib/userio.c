@@ -754,11 +754,11 @@ Return Value:
 
 {
 
-    ULONGLONG Capacity;
+    UINTN Capacity;
     INT Character;
-    ULONGLONG NewCapacity;
+    UINTN NewCapacity;
     PSTR NewString;
-    ULONGLONG Size;
+    UINTN Size;
     INT Status;
     PSTR String;
 

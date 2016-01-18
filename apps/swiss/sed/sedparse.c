@@ -102,7 +102,7 @@ BOOL
 SedCreateRegularExpression (
     PSED_CONTEXT Context,
     PSTR ExpressionString,
-    ULONGLONG Size,
+    UINTN Size,
     CHAR Delimiter,
     regex_t *Expression
     );
@@ -1450,7 +1450,7 @@ BOOL
 SedCreateRegularExpression (
     PSED_CONTEXT Context,
     PSTR ExpressionString,
-    ULONGLONG Size,
+    UINTN Size,
     CHAR Delimiter,
     regex_t *Expression
     )
@@ -1486,9 +1486,9 @@ Return Value:
 {
 
     CHAR Character;
-    ULONGLONG CopyIndex;
+    UINTN CopyIndex;
     CHAR ErrorString[512];
-    ULONGLONG Index;
+    UINTN Index;
     ULONG RemainingSize;
     BOOL Result;
     int Status;
@@ -1856,7 +1856,7 @@ Return Value:
     PSTR ReplacementBegin;
     BOOL Result;
     PSTR Script;
-    ULONGLONG Size;
+    UINTN Size;
     int Status;
     BOOL WasBackslash;
     PSTR WriteFileBegin;

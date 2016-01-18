@@ -152,11 +152,11 @@ Return Value:
 
     PSTR Argument;
     ULONG ArgumentIndex;
-    ULONGLONG BackupCount;
+    UINTN BackupCount;
     PUCHAR Buffer;
-    ULONGLONG BufferNextIndex;
-    ULONGLONG BufferSize;
-    ULONGLONG BufferValidSize;
+    UINTN BufferNextIndex;
+    UINTN BufferSize;
+    UINTN BufferValidSize;
     INT Character;
     PSTR FileName;
     FILE *Input;
@@ -164,7 +164,7 @@ Return Value:
     ULONGLONG Offset;
     INT Option;
     ULONG Options;
-    ULONGLONG StartIndex;
+    UINTN StartIndex;
     struct stat Stat;
     int Status;
 

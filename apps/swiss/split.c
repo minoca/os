@@ -165,8 +165,8 @@ Return Value:
     PSTR OutputName;
     PSTR OutputPrefix;
     INT OutputPrefixLength;
-    ULONGLONG SplitCurrentSize;
-    ULONGLONG SplitSize;
+    UINTN SplitCurrentSize;
+    UINTN SplitSize;
     int Status;
     INT SuffixIndex;
     LONG SuffixLength;

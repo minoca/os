@@ -526,11 +526,11 @@ Return Value:
 
 {
 
-    ULONG ArgumentIndex;
-    ULONG ArgumentSize;
+    INT ArgumentIndex;
+    UINTN ArgumentSize;
     PSTR Input;
-    ULONG InputIndex;
-    ULONG InputSize;
+    UINTN InputIndex;
+    UINTN InputSize;
     ULONG OldOptions;
     SHELL_LEXER_STATE OriginalLexer;
     BOOL Result;
@@ -1458,8 +1458,8 @@ Return Value:
 {
 
     PSTR Argument;
-    ULONG ArgumentIndex;
-    ULONG ArgumentSize;
+    INT ArgumentIndex;
+    UINTN ArgumentSize;
     UCHAR Character;
     BOOL EndOfFileDetected;
     SHELL_EXPANSION_RANGE Expansion;
@@ -1470,8 +1470,8 @@ Return Value:
     ULONG FieldSize;
     BOOL IgnoreBackslash;
     PSTR Line;
-    ULONGLONG LineCapacity;
-    ULONGLONG LineSize;
+    UINTN LineCapacity;
+    UINTN LineSize;
     PSTR NewBuffer;
     BOOL Result;
     INT Status;
@@ -2030,7 +2030,7 @@ Return Value:
     INT BytesConverted;
     BOOL EndOfOptions;
     PSTR ExpandedArguments;
-    ULONGLONG ExpandedArgumentsSize;
+    UINTN ExpandedArgumentsSize;
     CHAR NewOptionIndex[SHELL_MAX_OPTION_INDEX_LENGTH];
     CHAR NewOptionValueBuffer[2];
     PSTR NewOptionVariable;
@@ -2405,7 +2405,7 @@ Return Value:
     PSHELL_BUILTIN_COMMAND BuiltinCommand;
     BOOL DefaultPath;
     PSTR OriginalPath;
-    ULONGLONG OriginalPathSize;
+    UINTN OriginalPathSize;
     BOOL PrintPath;
     INT ReturnValue;
     INT TotalReturnValue;

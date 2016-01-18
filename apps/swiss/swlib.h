@@ -778,7 +778,7 @@ Return Value:
 PSTR
 SwStringDuplicate (
     PSTR String,
-    ULONGLONG StringSize
+    UINTN StringSize
     );
 
 /*++
@@ -804,12 +804,12 @@ Return Value:
 BOOL
 SwStringReplaceRegion (
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    ULONGLONG SourceRegionBegin,
-    ULONGLONG SourceRegionEnd,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    UINTN SourceRegionBegin,
+    UINTN SourceRegionEnd,
     PSTR Replacement,
-    ULONGLONG ReplacementSize
+    UINTN ReplacementSize
     );
 
 /*++
@@ -853,9 +853,9 @@ Return Value:
 VOID
 SwStringRemoveRegion (
     PSTR String,
-    PULONGLONG StringSize,
-    ULONGLONG RemoveIndex,
-    ULONGLONG RemoveLength
+    PUINTN StringSize,
+    UINTN RemoveIndex,
+    UINTN RemoveLength
     );
 
 /*++
@@ -968,9 +968,9 @@ Return Value:
 BOOL
 SwDoesPathPatternMatch (
     PSTR Path,
-    ULONG PathSize,
+    UINTN PathSize,
     PSTR Pattern,
-    ULONG PatternSize
+    UINTN PatternSize
     );
 
 /*++
@@ -1004,9 +1004,9 @@ Return Value:
 BOOL
 SwDoesPatternMatch (
     PSTR Input,
-    ULONG InputSize,
+    UINTN InputSize,
     PSTR Pattern,
-    ULONG PatternSize
+    UINTN PatternSize
     );
 
 /*++

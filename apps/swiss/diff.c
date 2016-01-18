@@ -254,7 +254,7 @@ typedef struct _DIFF_CONTEXT {
     ULONG ContextLines;
     DIFF_FILE EmptyFile;
     PSTR *FileExclusions;
-    ULONG FileExclusionCount;
+    UINTN FileExclusionCount;
 } DIFF_CONTEXT, *PDIFF_CONTEXT;
 
 //
@@ -1425,11 +1425,11 @@ Return Value:
 
 {
 
-    ULONG ExclusionIndex;
+    UINTN ExclusionIndex;
     BOOL Match;
-    ULONG NameSize;
+    UINTN NameSize;
     PSTR Pattern;
-    ULONG PatternSize;
+    UINTN PatternSize;
 
     if (Context->FileExclusionCount == 0) {
         return FALSE;

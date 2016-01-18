@@ -538,7 +538,7 @@ Return Value:
 {
 
     PSED_STRING Pattern;
-    ULONGLONG Size;
+    UINTN Size;
 
     assert((Command->Function.Type == SedFunctionDelete) ||
            (Command->Function.Type == SedFunctionDeleteToNewline));
@@ -809,7 +809,7 @@ Return Value:
 
     CHAR Character;
     ULONG Column;
-    ULONGLONG Index;
+    UINTN Index;
     PSED_STRING Pattern;
 
     assert(Command->Function.Type == SedFunctionWritePatternEscaped);
@@ -1008,7 +1008,7 @@ Return Value:
 
 {
 
-    ULONGLONG Index;
+    UINTN Index;
     PSED_STRING Pattern;
 
     assert((Command->Function.Type == SedFunctionWritePattern) ||
@@ -1104,24 +1104,24 @@ Return Value:
 
 {
 
-    ULONGLONG InputEnd;
-    ULONGLONG InputStart;
+    UINTN InputEnd;
+    UINTN InputStart;
     ULONG Occurrence;
     PSED_STRING Pattern;
-    ULONGLONG PatternOffset;
+    UINTN PatternOffset;
     PSTR Replace;
     ULONG ReplaceEnd;
     PSED_STRING Replacement;
     CHAR ReplacementCharacter;
-    ULONGLONG ReplacementIndex;
-    ULONGLONG ReplacementSize;
+    UINTN ReplacementIndex;
+    UINTN ReplacementSize;
     ULONG ReplaceStart;
     int Result;
     LONG Subexpression;
     PSED_SUBSTITUTE Substitute;
     BOOL SubstitutionMade;
-    ULONGLONG TotalEndOffset;
-    ULONGLONG TotalStartOffset;
+    UINTN TotalEndOffset;
+    UINTN TotalStartOffset;
     BOOL WasBackslash;
 
     Pattern = Context->PatternSpace;
@@ -1545,8 +1545,8 @@ Return Value:
 
 {
 
-    ULONGLONG CharacterCount;
-    ULONGLONG CharacterIndex;
+    UINTN CharacterCount;
+    UINTN CharacterIndex;
     PSTR Characters;
     PSTR Pattern;
     PSTR Replacement;

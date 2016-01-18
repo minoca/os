@@ -91,10 +91,10 @@ ShPerformExpansionsCore (
     PSHELL Shell,
     ULONG Options,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     );
 
@@ -103,10 +103,10 @@ ShExpandNormalParameter (
     PSHELL Shell,
     BOOL Quoted,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     );
 
@@ -115,10 +115,10 @@ ShExpandSpecialParameter (
     PSHELL Shell,
     BOOL Quoted,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     );
 
@@ -127,10 +127,10 @@ ShExpandSubshell (
     PSHELL Shell,
     BOOL Quoted,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     );
 
@@ -138,10 +138,10 @@ BOOL
 ShExpandTilde (
     PSHELL Shell,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     );
 
@@ -149,10 +149,10 @@ BOOL
 ShExpandArithmeticExpression (
     PSHELL Shell,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     );
 
@@ -161,21 +161,21 @@ ShCreateAllParametersString (
     PSHELL Shell,
     CHAR Separator,
     PSTR *NewString,
-    PULONGLONG NewStringSize
+    PUINTN NewStringSize
     );
 
 BOOL
 ShCreateParameterCountString (
     PSHELL Shell,
     PSTR *NewString,
-    PULONGLONG NewStringSize
+    PUINTN NewStringSize
     );
 
 BOOL
 ShCreateOptionsString (
     PSHELL Shell,
     PSTR *NewString,
-    PULONGLONG NewStringSize
+    PUINTN NewStringSize
     );
 
 VOID
@@ -183,23 +183,23 @@ ShGetPositionalArgument (
     PSHELL Shell,
     ULONG ArgumentNumber,
     PSTR *Argument,
-    PULONGLONG ArgumentSize
+    PUINTN ArgumentSize
     );
 
 BOOL
 ShAddExpansionRangeEntry (
     PLIST_ENTRY ListHead,
     SHELL_EXPANSION_TYPE Type,
-    ULONG Index,
-    ULONG Length
+    UINTN Index,
+    UINTN Length
     );
 
 VOID
 ShTrimVariableValue (
     PSTR *Value,
-    PULONGLONG ValueSize,
+    PUINTN ValueSize,
     PSTR Pattern,
-    ULONGLONG PatternSize,
+    UINTN PatternSize,
     BOOL Prefix,
     BOOL Longest
     );
@@ -208,7 +208,7 @@ BOOL
 ShEscapeSpecialCharacters (
     BOOL Quoted,
     PSTR *Value,
-    PULONGLONG ValueSize
+    PUINTN ValueSize
     );
 
 //
@@ -223,10 +223,10 @@ BOOL
 ShPerformExpansions (
     PSHELL Shell,
     PSTR String,
-    ULONGLONG StringSize,
+    UINTN StringSize,
     ULONG Options,
     PSTR *ExpandedString,
-    PULONGLONG ExpandedStringSize,
+    PUINTN ExpandedStringSize,
     PSTR **Fields,
     PULONG FieldCount
     )
@@ -275,13 +275,13 @@ Return Value:
 
 {
 
-    ULONGLONG BufferCapacity;
-    ULONGLONG EndIndex;
+    UINTN BufferCapacity;
+    UINTN EndIndex;
     PSHELL_EXPANSION_RANGE Expansion;
     LIST_ENTRY ExpansionList;
     PSTR Field;
     ULONG FieldIndex;
-    ULONGLONG Index;
+    UINTN Index;
     BOOL Result;
 
     INITIALIZE_LIST_HEAD(&ExpansionList);
@@ -463,9 +463,9 @@ BOOL
 ShExpandPrompt (
     PSHELL Shell,
     PSTR String,
-    ULONGLONG StringSize,
+    UINTN StringSize,
     PSTR *ExpandedString,
-    PULONGLONG ExpandedStringSize
+    PUINTN ExpandedStringSize
     )
 
 /*++
@@ -502,13 +502,13 @@ Return Value:
 
     UINTN CharacterIndex;
     PSTR CurrentDirectory;
-    ULONGLONG CurrentDirectorySize;
+    UINTN CurrentDirectorySize;
     INT Difference;
     PSTR Expansion;
     CHAR ExpansionBuffer[SHELL_PROMPT_EXPANSION_MAX];
     INTN ExpansionSize;
     PSTR Home;
-    ULONGLONG HomeSize;
+    UINTN HomeSize;
     UINTN Index;
     PSTR Period;
     UINTN RangeSize;
@@ -521,8 +521,8 @@ Return Value:
     CHAR TimeFormatBuffer[SHELL_PROMPT_TIME_FORMAT_MAX];
     PSTR UserName;
     PSTR Working;
-    ULONGLONG WorkingCapacity;
-    ULONGLONG WorkingSize;
+    UINTN WorkingCapacity;
+    UINTN WorkingSize;
 
     UserName = NULL;
     WorkingSize = StringSize;
@@ -1002,10 +1002,10 @@ ShPerformExpansionsCore (
     PSHELL Shell,
     ULONG Options,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     )
 
@@ -1060,7 +1060,7 @@ Return Value:
     CHAR NextCharacter;
     BOOL Quoted;
     BOOL Result;
-    ULONGLONG Start;
+    UINTN Start;
     BOOL TildeExpansion;
     BOOL ValidFirstName;
 
@@ -1251,10 +1251,10 @@ ShExpandNormalParameter (
     PSHELL Shell,
     BOOL Quoted,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     )
 
@@ -1305,40 +1305,40 @@ Return Value:
 {
 
     PSTR AllocatedValue;
-    ULONGLONG ArgumentEnd;
+    UINTN ArgumentEnd;
     BOOL Curly;
     PLIST_ENTRY CurrentEntry;
-    ULONGLONG CurrentIndex;
-    ULONGLONG Delta;
+    UINTN CurrentIndex;
+    UINTN Delta;
     BOOL EndModifierFound;
     PSHELL_EXPANSION_RANGE Expansion;
-    ULONG ExpansionInnerBegin;
-    ULONG ExpansionInnerEnd;
-    ULONG ExpansionOuterBegin;
-    ULONGLONG ExpansionOuterEnd;
+    UINTN ExpansionInnerBegin;
+    UINTN ExpansionInnerEnd;
+    UINTN ExpansionOuterBegin;
+    UINTN ExpansionOuterEnd;
     SHELL_EXPANSION_TYPE ExpansionType;
     CHAR FirstCharacter;
-    ULONGLONG Length;
+    UINTN Length;
     CHAR LengthBuffer[SHELL_ARGUMENT_LENGTH_STRING_BUFFER_SIZE];
     SHELL_PARAMETER_MODIFIER Modifier;
-    ULONGLONG ModifierBegin;
+    UINTN ModifierBegin;
     LIST_ENTRY ModifierExpansionList;
     PSTR ModifierWord;
-    ULONGLONG ModifierWordSize;
+    UINTN ModifierWordSize;
     BOOL NullIsUnset;
     ULONG Options;
-    ULONGLONG OriginalEnd;
+    UINTN OriginalEnd;
     LONG ParameterNumber;
     BOOL PropagateExpansions;
     BOOL Result;
     PSTR String;
     BOOL UsedModifier;
     PSTR Value;
-    ULONGLONG ValueCapacity;
-    ULONGLONG ValueSize;
+    UINTN ValueCapacity;
+    UINTN ValueSize;
     PSTR VariableName;
     PSTR VariableNameCopy;
-    ULONGLONG VariableNameSize;
+    UINTN VariableNameSize;
 
     AllocatedValue = NULL;
     ExpansionOuterBegin = *ExpansionIndex;
@@ -1655,7 +1655,7 @@ Return Value:
         ValueSize = snprintf(LengthBuffer,
                              SHELL_ARGUMENT_LENGTH_STRING_BUFFER_SIZE,
                              "%d",
-                             Length) + 1;
+                             (LONG)Length) + 1;
 
         Value = LengthBuffer;
         if (AllocatedValue != NULL) {
@@ -1908,10 +1908,10 @@ ShExpandSpecialParameter (
     PSHELL Shell,
     BOOL Quoted,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     )
 
@@ -1962,16 +1962,16 @@ Return Value:
 {
 
     PSTR AllocatedValue;
-    ULONGLONG Delta;
-    ULONGLONG ExpansionOuterBegin;
-    ULONGLONG ExpansionOuterEnd;
+    UINTN Delta;
+    UINTN ExpansionOuterBegin;
+    UINTN ExpansionOuterEnd;
     CHAR LocalBuffer[SHELL_ARGUMENT_COUNT_STRING_BUFFER_SIZE];
     BOOL Result;
     CHAR SpecialCharacter;
     PSTR String;
     SHELL_EXPANSION_TYPE Type;
     PSTR Value;
-    ULONGLONG ValueSize;
+    UINTN ValueSize;
 
     AllocatedValue = NULL;
     Result = FALSE;
@@ -2202,10 +2202,10 @@ ShExpandSubshell (
     PSHELL Shell,
     BOOL Quoted,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     )
 
@@ -2255,15 +2255,15 @@ Return Value:
 
 {
 
-    ULONGLONG Delta;
+    UINTN Delta;
     BOOL DequoteForSubshell;
     PSTR Input;
-    ULONGLONG InputIndex;
-    ULONGLONG InputSize;
-    ULONGLONG OuterEndIndex;
+    UINTN InputIndex;
+    UINTN InputSize;
+    UINTN OuterEndIndex;
     PSTR Output;
-    ULONGLONG OutputSize;
-    ULONG QuoteIndex;
+    UINTN OutputSize;
+    UINTN QuoteIndex;
     BOOL Result;
     INT ReturnValue;
     PSTR String;
@@ -2456,10 +2456,10 @@ BOOL
 ShExpandTilde (
     PSHELL Shell,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     )
 
@@ -2507,14 +2507,14 @@ Return Value:
 {
 
     PSTR AllocatedHome;
-    ULONGLONG Delta;
+    UINTN Delta;
     BOOL DidExpansion;
     PSTR Home;
     INT HomeSize;
-    ULONGLONG HomeSizeBig;
-    ULONGLONG InputIndex;
-    ULONGLONG InputSize;
-    ULONGLONG OuterEndIndex;
+    UINTN HomeSizeBig;
+    UINTN InputIndex;
+    UINTN InputSize;
+    UINTN OuterEndIndex;
     BOOL Result;
     PSTR String;
 
@@ -2644,10 +2644,10 @@ BOOL
 ShExpandArithmeticExpression (
     PSHELL Shell,
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    PULONGLONG ExpansionIndex,
-    PULONGLONG ExpansionEndIndex,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    PUINTN ExpansionIndex,
+    PUINTN ExpansionEndIndex,
     PLIST_ENTRY ExpansionList
     )
 
@@ -2694,15 +2694,15 @@ Return Value:
 
 {
 
-    ULONGLONG Delta;
+    UINTN Delta;
     PSTR ExpandedString;
-    ULONGLONG ExpandedStringSize;
-    ULONGLONG InputIndex;
-    ULONGLONG InputSize;
+    UINTN ExpandedStringSize;
+    UINTN InputIndex;
+    UINTN InputSize;
     ULONG Options;
-    ULONGLONG OuterIndex;
+    UINTN OuterIndex;
     PSTR Output;
-    ULONG OutputSize;
+    UINTN OutputSize;
     BOOL Result;
     PSTR String;
 
@@ -2820,7 +2820,7 @@ ShCreateAllParametersString (
     PSHELL Shell,
     CHAR Separator,
     PSTR *NewString,
-    PULONGLONG NewStringSize
+    PUINTN NewStringSize
     )
 
 /*++
@@ -2856,14 +2856,14 @@ Return Value:
 
     PSHELL_ARGUMENT Argument;
     PLIST_ENTRY ArgumentList;
-    ULONG BufferSize;
+    UINTN BufferSize;
     PLIST_ENTRY CurrentEntry;
     PSTR CurrentString;
     PSTR Line;
     BOOL NoSeparator;
     BOOL Result;
     PSTR Separators;
-    ULONGLONG SeparatorsSize;
+    UINTN SeparatorsSize;
 
     ArgumentList = ShGetCurrentArgumentList(Shell);
     Line = NULL;
@@ -2997,7 +2997,7 @@ BOOL
 ShCreateParameterCountString (
     PSHELL Shell,
     PSTR *NewString,
-    PULONGLONG NewStringSize
+    PUINTN NewStringSize
     )
 
 /*++
@@ -3030,7 +3030,7 @@ Return Value:
 
     ULONG ArgumentCount;
     PLIST_ENTRY ArgumentList;
-    ULONGLONG BufferSize;
+    UINTN BufferSize;
     PLIST_ENTRY CurrentEntry;
     PSTR Line;
     CHAR LocalBuffer[SHELL_ARGUMENT_COUNT_STRING_BUFFER_SIZE];
@@ -3095,7 +3095,7 @@ BOOL
 ShCreateOptionsString (
     PSHELL Shell,
     PSTR *NewString,
-    PULONGLONG NewStringSize
+    PUINTN NewStringSize
     )
 
 /*++
@@ -3128,7 +3128,7 @@ Return Value:
 
     ULONG Options;
     PSTR OptionsString;
-    ULONGLONG OutputIndex;
+    UINTN OutputIndex;
 
     OptionsString = malloc(SHELL_OPTION_STRING_SIZE);
     if (OptionsString == NULL) {
@@ -3227,7 +3227,7 @@ ShGetPositionalArgument (
     PSHELL Shell,
     ULONG ArgumentNumber,
     PSTR *Argument,
-    PULONGLONG ArgumentSize
+    PUINTN ArgumentSize
     )
 
 /*++
@@ -3293,8 +3293,8 @@ BOOL
 ShAddExpansionRangeEntry (
     PLIST_ENTRY ListHead,
     SHELL_EXPANSION_TYPE Type,
-    ULONG Index,
-    ULONG Length
+    UINTN Index,
+    UINTN Length
     )
 
 /*++
@@ -3348,9 +3348,9 @@ Return Value:
 VOID
 ShTrimVariableValue (
     PSTR *Value,
-    PULONGLONG ValueSize,
+    PUINTN ValueSize,
     PSTR Pattern,
-    ULONGLONG PatternSize,
+    UINTN PatternSize,
     BOOL Prefix,
     BOOL Longest
     )
@@ -3391,8 +3391,8 @@ Return Value:
 {
 
     BOOL Match;
-    ULONGLONG Size;
-    ULONGLONG ValueIndex;
+    UINTN Size;
+    UINTN ValueIndex;
 
     if (*ValueSize <= 1) {
         return;
@@ -3500,7 +3500,7 @@ BOOL
 ShEscapeSpecialCharacters (
     BOOL Quoted,
     PSTR *Value,
-    PULONGLONG ValueSize
+    PUINTN ValueSize
     )
 
 /*++

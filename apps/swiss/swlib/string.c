@@ -269,7 +269,7 @@ Return Value:
 PSTR
 SwStringDuplicate (
     PSTR String,
-    ULONGLONG StringSize
+    UINTN StringSize
     )
 
 /*++
@@ -311,12 +311,12 @@ Return Value:
 BOOL
 SwStringReplaceRegion (
     PSTR *StringBufferAddress,
-    PULONGLONG StringBufferSize,
-    PULONGLONG StringBufferCapacity,
-    ULONGLONG SourceRegionBegin,
-    ULONGLONG SourceRegionEnd,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
+    UINTN SourceRegionBegin,
+    UINTN SourceRegionEnd,
     PSTR Replacement,
-    ULONGLONG ReplacementSize
+    UINTN ReplacementSize
     )
 
 /*++
@@ -360,12 +360,12 @@ Return Value:
 {
 
     PSTR Buffer;
-    LONGLONG CharacterIndex;
-    ULONGLONG NewBufferSize;
-    ULONGLONG OverlapCount;
-    LONGLONG OverlapIndex;
-    ULONGLONG RegionSize;
-    ULONGLONG SizeNeeded;
+    INTN CharacterIndex;
+    UINTN NewBufferSize;
+    UINTN OverlapCount;
+    INTN OverlapIndex;
+    UINTN RegionSize;
+    UINTN SizeNeeded;
 
     //
     // This logic would need to be a little more careful if there wasn't
@@ -464,9 +464,9 @@ Return Value:
 VOID
 SwStringRemoveRegion (
     PSTR String,
-    PULONGLONG StringSize,
-    ULONGLONG RemoveIndex,
-    ULONGLONG RemoveLength
+    PUINTN StringSize,
+    UINTN RemoveIndex,
+    UINTN RemoveLength
     )
 
 /*++
@@ -495,7 +495,7 @@ Return Value:
 
 {
 
-    ULONG CharacterIndex;
+    UINTN CharacterIndex;
 
     assert((RemoveIndex < *StringSize) &&
            (RemoveIndex + RemoveLength <= *StringSize));

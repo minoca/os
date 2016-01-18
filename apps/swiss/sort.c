@@ -188,8 +188,8 @@ Members:
 
 typedef struct _SORT_ARRAY {
     PVOID *Data;
-    ULONGLONG Size;
-    ULONGLONG Capacity;
+    UINTN Size;
+    UINTN Capacity;
 } SORT_ARRAY, *PSORT_ARRAY;
 
 /*++
@@ -211,8 +211,8 @@ Members:
 
 typedef struct _SORT_STRING {
     PSTR Data;
-    ULONGLONG Size;
-    ULONGLONG Capacity;
+    UINTN Size;
+    UINTN Capacity;
 } SORT_STRING, *PSORT_STRING;
 
 /*++
@@ -362,7 +362,7 @@ SortStringAddCharacter (
 PSORT_STRING
 SortCreateString (
     PSTR InitialData,
-    ULONGLONG InitialDataSize
+    UINTN InitialDataSize
     );
 
 VOID
@@ -466,8 +466,8 @@ Return Value:
     SORT_ARRAY InputLines;
     SORT_STRING InputString;
     PSORT_KEY Key;
-    ULONG KeyIndex;
-    ULONGLONG LineIndex;
+    UINTN KeyIndex;
+    UINTN LineIndex;
     INT Option;
     FILE *Output;
     PSORT_STRING PreviousLine;
@@ -946,7 +946,7 @@ Return Value:
 
     INT Comparison;
     PSORT_INPUT Input;
-    ULONG InputIndex;
+    UINTN InputIndex;
     PSORT_STRING PreviousWinner;
     INT Status;
     PSORT_INPUT Winner;
@@ -1094,7 +1094,7 @@ Return Value:
 
     PSORT_CONTEXT Context;
     PSORT_KEY Key;
-    ULONG KeyIndex;
+    UINTN KeyIndex;
     PSORT_STRING Left;
     CHAR LeftCharacter;
     ULONG LeftEndIndex;
@@ -1685,7 +1685,7 @@ Return Value:
 {
 
     PVOID NewBuffer;
-    ULONGLONG NewCapacity;
+    UINTN NewCapacity;
 
     if (Array->Size == Array->Capacity) {
         if (Array->Capacity == 0) {
@@ -1738,7 +1738,7 @@ Return Value:
 {
 
     PVOID NewBuffer;
-    ULONGLONG NewCapacity;
+    UINTN NewCapacity;
 
     if (String->Size == String->Capacity) {
         if (String->Capacity == 0) {
@@ -1765,7 +1765,7 @@ Return Value:
 PSORT_STRING
 SortCreateString (
     PSTR InitialData,
-    ULONGLONG InitialDataSize
+    UINTN InitialDataSize
     )
 
 /*++
@@ -1895,7 +1895,7 @@ Return Value:
 
 {
 
-    ULONG ElementIndex;
+    UINTN ElementIndex;
 
     for (ElementIndex = 0; ElementIndex < Array->Size; ElementIndex += 1) {
         DestroyElementRoutine(Array->Data[ElementIndex]);

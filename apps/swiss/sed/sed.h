@@ -177,8 +177,8 @@ Members:
 
 typedef struct _SED_STRING {
     PSTR Data;
-    ULONGLONG Size;
-    ULONGLONG Capacity;
+    UINTN Size;
+    UINTN Capacity;
 } SED_STRING, *PSED_STRING;
 
 /*++
@@ -743,7 +743,7 @@ Return Value:
 PSED_STRING
 SedCreateString (
     PSTR Data,
-    ULONGLONG Size,
+    UINTN Size,
     BOOL NullTerminate
     );
 
@@ -777,7 +777,7 @@ BOOL
 SedAppendString (
     PSED_STRING String,
     PSTR Data,
-    ULONGLONG Size
+    UINTN Size
     );
 
 /*++
@@ -891,7 +891,7 @@ INT
 SedWrite (
     PSED_WRITE_FILE WriteFile,
     PVOID Buffer,
-    ULONGLONG Size,
+    UINTN Size,
     INT LineTerminator
     );
 

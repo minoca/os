@@ -99,18 +99,18 @@ typedef enum _CHARACTER_CLASS {
 ULONG
 SwpMatchBracketExpression (
     PSTR Input,
-    ULONG InputSize,
+    UINTN InputSize,
     PSTR BracketExpansion,
-    ULONG BracketExpansionSize,
+    UINTN BracketExpansionSize,
     CHAR NotCharacter,
-    PULONG BracketExpansionLength
+    PUINTN BracketExpansionLength
     );
 
 CHARACTER_CLASS
 SwpIsCharacterClassExpression (
     PSTR String,
-    ULONG StringSize,
-    PULONG ExpressionSize
+    UINTN StringSize,
+    PUINTN ExpressionSize
     );
 
 //
@@ -124,9 +124,9 @@ SwpIsCharacterClassExpression (
 BOOL
 SwDoesPathPatternMatch (
     PSTR Path,
-    ULONG PathSize,
+    UINTN PathSize,
     PSTR Pattern,
-    ULONG PatternSize
+    UINTN PatternSize
     )
 
 /*++
@@ -180,9 +180,9 @@ Return Value:
 BOOL
 SwDoesPatternMatch (
     PSTR Input,
-    ULONG InputSize,
+    UINTN InputSize,
     PSTR Pattern,
-    ULONG PatternSize
+    UINTN PatternSize
     )
 
 /*++
@@ -213,13 +213,13 @@ Return Value:
 
 {
 
-    ULONG BracketExpansionLength;
-    ULONG InputIndex;
-    ULONG LengthMatched;
+    UINTN BracketExpansionLength;
+    UINTN InputIndex;
+    UINTN LengthMatched;
     BOOL Match;
     CHAR PatternCharacter;
-    ULONG PatternIndex;
-    ULONG TrialInputIndex;
+    UINTN PatternIndex;
+    UINTN TrialInputIndex;
 
     InputIndex = 0;
     PatternIndex = 0;
@@ -371,11 +371,11 @@ Return Value:
 ULONG
 SwpMatchBracketExpression (
     PSTR Input,
-    ULONG InputSize,
+    UINTN InputSize,
     PSTR BracketExpansion,
-    ULONG BracketExpansionSize,
+    UINTN BracketExpansionSize,
     CHAR NotCharacter,
-    PULONG BracketExpansionLength
+    PUINTN BracketExpansionLength
     )
 
 /*++
@@ -413,13 +413,13 @@ Return Value:
 {
 
     CHARACTER_CLASS CharacterClass;
-    ULONG ExpansionIndex;
-    ULONG ExpansionSize;
+    UINTN ExpansionIndex;
+    UINTN ExpansionSize;
     BOOL FoundClosingBracket;
-    ULONG InnerExpansionSize;
+    UINTN InnerExpansionSize;
     CHAR InputCharacter;
     BOOL Match;
-    ULONG MatchCount;
+    UINTN MatchCount;
     BOOL Not;
     CHAR PatternCharacter;
     CHAR RangeBegin;
@@ -689,8 +689,8 @@ MatchBracketExpressionEnd:
 CHARACTER_CLASS
 SwpIsCharacterClassExpression (
     PSTR String,
-    ULONG StringSize,
-    PULONG ExpressionSize
+    UINTN StringSize,
+    PUINTN ExpressionSize
     )
 
 /*++

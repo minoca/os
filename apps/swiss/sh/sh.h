@@ -325,7 +325,7 @@ typedef struct _SHELL_SIGNAL_ACTION {
     LIST_ENTRY ListEntry;
     SHELL_SIGNAL SignalNumber;
     PSTR Action;
-    ULONG ActionSize;
+    UINTN ActionSize;
 } SHELL_SIGNAL_ACTION, *PSHELL_SIGNAL_ACTION;
 
 /*++
@@ -352,9 +352,9 @@ Members:
 typedef struct _SHELL_ALIAS {
     LIST_ENTRY ListEntry;
     PSTR Name;
-    ULONG NameSize;
+    UINTN NameSize;
     PSTR Value;
-    ULONG ValueSize;
+    UINTN ValueSize;
 } SHELL_ALIAS, *PSHELL_ALIAS;
 
 /*++
@@ -374,7 +374,7 @@ Members:
 
 typedef struct _SHELL_DIRECTORY_ENTRY {
     PSTR Name;
-    ULONG NameSize;
+    UINTN NameSize;
 } SHELL_DIRECTORY_ENTRY, *PSHELL_DIRECTORY_ENTRY;
 
 /*++
@@ -420,9 +420,9 @@ typedef struct _SHELL_VARIABLE {
     LIST_ENTRY ListEntry;
     ULONG Hash;
     PSTR Name;
-    ULONG NameSize;
+    UINTN NameSize;
     PSTR Value;
-    ULONG ValueSize;
+    UINTN ValueSize;
     PSTR OriginalValue;
     ULONG OriginalValueSize;
     BOOL Exported;
@@ -518,7 +518,7 @@ Members:
 typedef struct _SHELL_ARGUMENT {
     LIST_ENTRY ListEntry;
     PSTR Name;
-    ULONG NameSize;
+    UINTN NameSize;
 } SHELL_ARGUMENT, *PSHELL_ARGUMENT;
 
 /*++
@@ -543,8 +543,8 @@ Members:
 typedef struct _SHELL_EXPANSION_RANGE {
     LIST_ENTRY ListEntry;
     SHELL_EXPANSION_TYPE Type;
-    LONG Index;
-    ULONG Length;
+    INTN Index;
+    UINTN Length;
 } SHELL_EXPANSION_RANGE, *PSHELL_EXPANSION_RANGE;
 
 /*++
@@ -597,14 +597,14 @@ Members:
 typedef struct _SHELL_LEXER_STATE {
     FILE *InputFile;
     PSTR InputBuffer;
-    ULONGLONG InputBufferCapacity;
-    ULONGLONG InputBufferSize;
-    ULONGLONG InputBufferNextIndex;
+    UINTN InputBufferCapacity;
+    UINTN InputBufferSize;
+    UINTN InputBufferNextIndex;
     ULONG LineNumber;
     ULONG TokenType;
     PSTR TokenBuffer;
-    ULONG TokenBufferCapacity;
-    ULONG TokenBufferSize;
+    UINTN TokenBufferCapacity;
+    UINTN TokenBufferSize;
     CHAR UnputCharacter;
     BOOL UnputCharacterValid;
     BOOL LexerPrimed;
@@ -692,7 +692,7 @@ typedef struct _SHELL {
     LIST_ENTRY AliasList;
     LIST_ENTRY SignalActionList;
     PSTR CommandName;
-    ULONG CommandNameSize;
+    UINTN CommandNameSize;
     INT ReturnValue;
     INT LastReturnValue;
     LONG ProcessId;
@@ -818,7 +818,7 @@ BOOL
 ShSetOptions (
     PSHELL Shell,
     PSTR String,
-    ULONG StringSize,
+    UINTN StringSize,
     BOOL LongForm,
     BOOL Set
     );
@@ -1013,7 +1013,7 @@ Return Value:
 PSHELL
 ShCreateShell (
     PSTR CommandName,
-    ULONG CommandNameSize
+    UINTN CommandNameSize
     );
 
 /*++
@@ -1063,7 +1063,7 @@ PSHELL
 ShCreateSubshell (
     PSHELL Shell,
     PSTR Input,
-    ULONGLONG InputSize,
+    UINTN InputSize,
     BOOL DequoteForSubshell
     );
 
@@ -1098,7 +1098,7 @@ ShExecuteSubshell (
     PSHELL Subshell,
     BOOL Asynchronous,
     PSTR *Output,
-    PULONGLONG OutputSize,
+    PUINTN OutputSize,
     PINT ReturnValue
     );
 
@@ -1163,9 +1163,9 @@ Return Value:
 VOID
 ShStringDequote (
     PSTR String,
-    ULONGLONG StringSize,
+    UINTN StringSize,
     ULONG Options,
-    PULONGLONG NewStringSize
+    PUINTN NewStringSize
     );
 
 /*++
@@ -1196,10 +1196,10 @@ Return Value:
 BOOL
 ShStringAppend (
     PSTR *StringBufferAddress,
-    PULONG StringBufferSize,
-    PULONG StringBufferCapacity,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
     PSTR Component,
-    ULONG ComponentSize
+    UINTN ComponentSize
     );
 
 /*++
@@ -1239,9 +1239,9 @@ Return Value:
 BOOL
 ShStringFormatForReentry (
     PSTR String,
-    ULONG StringSize,
+    UINTN StringSize,
     PSTR *FormattedString,
-    PULONG FormattedStringSize
+    PUINTN FormattedStringSize
     );
 
 /*++
@@ -1278,7 +1278,7 @@ BOOL
 ShFieldSplit (
     PSHELL Shell,
     PSTR *StringBuffer,
-    PULONGLONG StringBufferSize,
+    PUINTN StringBufferSize,
     PLIST_ENTRY ExpansionList,
     ULONG MaxFieldCount,
     PSTR **FieldsArray,
@@ -1330,7 +1330,7 @@ VOID
 ShDeNullExpansions (
     PSHELL Shell,
     PSTR String,
-    ULONGLONG StringSize
+    UINTN StringSize
     );
 
 /*++
@@ -1484,10 +1484,10 @@ BOOL
 ShPerformExpansions (
     PSHELL Shell,
     PSTR String,
-    ULONGLONG StringSize,
+    UINTN StringSize,
     ULONG Options,
     PSTR *ExpandedString,
-    PULONGLONG ExpandedStringSize,
+    PUINTN ExpandedStringSize,
     PSTR **Fields,
     PULONG FieldCount
     );
@@ -1560,9 +1560,9 @@ BOOL
 ShExpandPrompt (
     PSHELL Shell,
     PSTR String,
-    ULONGLONG StringSize,
+    UINTN StringSize,
     PSTR *ExpandedString,
-    PULONGLONG ExpandedStringSize
+    PUINTN ExpandedStringSize
     );
 
 /*++
@@ -1627,9 +1627,9 @@ BOOL
 ShGetVariable (
     PSHELL Shell,
     PSTR Name,
-    ULONGLONG NameSize,
+    UINTN NameSize,
     PSTR *Value,
-    PULONGLONG ValueSize
+    PUINTN ValueSize
     );
 
 /*++
@@ -1666,9 +1666,9 @@ BOOL
 ShSetVariable (
     PSHELL Shell,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     PSTR Value,
-    ULONG ValueSize
+    UINTN ValueSize
     );
 
 /*++
@@ -1705,9 +1705,9 @@ BOOL
 ShSetVariableWithProperties (
     PSHELL Shell,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     PSTR Value,
-    ULONG ValueSize,
+    UINTN ValueSize,
     BOOL Exported,
     BOOL ReadOnly,
     BOOL Set
@@ -1756,7 +1756,7 @@ BOOL
 ShUnsetVariableOrFunction (
     PSHELL Shell,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     SHELL_UNSET_TYPE Type
     );
 
@@ -1867,7 +1867,7 @@ PSHELL_FUNCTION
 ShGetFunction (
     PSHELL Shell,
     PSTR Name,
-    ULONG NameSize
+    UINTN NameSize
     );
 
 /*++
@@ -2213,9 +2213,9 @@ BOOL
 ShEvaluateArithmeticExpression (
     PSHELL Shell,
     PSTR String,
-    ULONG Length,
+    UINTN Length,
     PSTR *Answer,
-    PULONG AnswerSize
+    PUINTN AnswerSize
     );
 
 /*++
@@ -2255,7 +2255,7 @@ Return Value:
 BOOL
 ShGetCurrentDirectory (
     PSTR *Directory,
-    PULONGLONG DirectorySize
+    PUINTN DirectorySize
     );
 
 /*++
@@ -2324,7 +2324,7 @@ BOOL
 ShPerformPathExpansions (
     PSHELL Shell,
     PSTR *StringBuffer,
-    PULONGLONG StringBufferSize,
+    PUINTN StringBufferSize,
     PSTR **FieldArray,
     PULONG FieldArrayCount
     );

@@ -62,7 +62,7 @@ PSHELL_VARIABLE
 ShGetVariableInScope (
     PSHELL Shell,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     PLIST_ENTRY *ListHead
     );
 
@@ -70,7 +70,7 @@ PSHELL_VARIABLE
 ShGetVariableInList (
     PLIST_ENTRY ListHead,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     ULONG NameHash
     );
 
@@ -78,9 +78,9 @@ BOOL
 ShSetVariableInList (
     PLIST_ENTRY ListHead,
     PSTR Name,
-    ULONGLONG NameSize,
+    UINTN NameSize,
     PSTR Value,
-    ULONGLONG ValueSize,
+    UINTN ValueSize,
     BOOL Exported,
     BOOL ReadOnly,
     BOOL Set
@@ -89,10 +89,10 @@ ShSetVariableInList (
 PSHELL_VARIABLE
 ShCreateVariable (
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     ULONG NameHash,
     PSTR Value,
-    ULONG ValueSize,
+    UINTN ValueSize,
     BOOL Exported,
     BOOL ReadOnly,
     BOOL Set
@@ -175,17 +175,18 @@ Return Value:
 {
 
     struct stat DotStat;
-    ULONG EnvironmentIndex;
+    UINTN EnvironmentIndex;
     PSTR EnvironmentVariable;
     PSTR Equals;
     PSTR Name;
     ULONG NameHash;
-    ULONG NameIndex;
-    ULONG NameSize;
+    UINTN NameIndex;
+    UINTN NameSize;
+    unsigned long PathSize;
     struct stat PwdStat;
     BOOL Result;
     PSTR Value;
-    ULONGLONG ValueSize;
+    UINTN ValueSize;
     PSHELL_VARIABLE Variable;
 
     //
@@ -316,7 +317,9 @@ Return Value:
         if (Result != FALSE) {
             Value = SwStringDuplicate(Value, ValueSize);
             if (Value != NULL) {
-                if (ShFixUpPath(&Value, &ValueSize) != 0) {
+                PathSize = ValueSize;
+                if (ShFixUpPath(&Value, &PathSize) != 0) {
+                    ValueSize = PathSize;
                     ShSetVariableWithProperties(Shell,
                                                 SHELL_PATH,
                                                 sizeof(SHELL_PATH),
@@ -451,9 +454,9 @@ BOOL
 ShGetVariable (
     PSHELL Shell,
     PSTR Name,
-    ULONGLONG NameSize,
+    UINTN NameSize,
     PSTR *Value,
-    PULONGLONG ValueSize
+    PUINTN ValueSize
     )
 
 /*++
@@ -490,7 +493,7 @@ Return Value:
 
     INT Difference;
     PSHELL_VARIABLE Variable;
-    ULONG VariableValueSize;
+    UINTN VariableValueSize;
 
     Variable = ShGetVariableInScope(Shell, Name, NameSize, NULL);
     VariableValueSize = 0;
@@ -563,9 +566,9 @@ BOOL
 ShSetVariable (
     PSHELL Shell,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     PSTR Value,
-    ULONG ValueSize
+    UINTN ValueSize
     )
 
 /*++
@@ -625,9 +628,9 @@ BOOL
 ShSetVariableWithProperties (
     PSHELL Shell,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     PSTR Value,
-    ULONG ValueSize,
+    UINTN ValueSize,
     BOOL Exported,
     BOOL ReadOnly,
     BOOL Set
@@ -699,7 +702,7 @@ BOOL
 ShUnsetVariableOrFunction (
     PSHELL Shell,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     SHELL_UNSET_TYPE Type
     )
 
@@ -813,7 +816,7 @@ Return Value:
     PSHELL_ASSIGNMENT Assignment;
     PLIST_ENTRY CurrentEntry;
     PSTR ExpandedValue;
-    ULONGLONG ExpandedValueSize;
+    UINTN ExpandedValueSize;
     PSHELL_NODE Node;
     BOOL Result;
     BOOL SetInShell;
@@ -1021,7 +1024,7 @@ PSHELL_FUNCTION
 ShGetFunction (
     PSHELL Shell,
     PSTR Name,
-    ULONG NameSize
+    UINTN NameSize
     )
 
 /*++
@@ -1274,7 +1277,7 @@ Return Value:
 
     ULONG ArgumentIndex;
     PSTR ArgumentString;
-    ULONG NameLength;
+    UINTN NameLength;
     PSHELL_ARGUMENT NewArgument;
     BOOL Result;
 
@@ -1454,9 +1457,9 @@ Return Value:
 {
 
     PSTR Argument;
-    ULONG ArgumentIndex;
+    INT ArgumentIndex;
     PLIST_ENTRY ArgumentList;
-    ULONG ArgumentSize;
+    UINTN ArgumentSize;
     BOOL GotDoubleDash;
     BOOL Result;
     BOOL Set;
@@ -1594,7 +1597,7 @@ Return Value:
 {
 
     PSTR Argument;
-    ULONG ArgumentIndex;
+    INT  ArgumentIndex;
     BOOL ProcessOptions;
     BOOL Result;
     ULONG ReturnValue;
@@ -1944,7 +1947,7 @@ PSHELL_VARIABLE
 ShGetVariableInScope (
     PSHELL Shell,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     PLIST_ENTRY *ListHead
     )
 
@@ -2035,7 +2038,7 @@ PSHELL_VARIABLE
 ShGetVariableInList (
     PLIST_ENTRY ListHead,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     ULONG NameHash
     )
 
@@ -2098,9 +2101,9 @@ BOOL
 ShSetVariableInList (
     PLIST_ENTRY ListHead,
     PSTR Name,
-    ULONGLONG NameSize,
+    UINTN NameSize,
     PSTR Value,
-    ULONGLONG ValueSize,
+    UINTN ValueSize,
     BOOL Exported,
     BOOL ReadOnly,
     BOOL Set
@@ -2150,6 +2153,7 @@ Return Value:
 {
 
     ULONG NameHash;
+    unsigned long PathSize;
     BOOL Result;
     PSTR ValueCopy;
     PSHELL_VARIABLE Variable;
@@ -2172,7 +2176,9 @@ Return Value:
     //
 
     if ((ValueCopy != NULL) && (strncmp(Name, SHELL_PATH, NameSize - 1) == 0)) {
-        Result = ShFixUpPath(&ValueCopy, &ValueSize);
+        PathSize = ValueSize;
+        Result = ShFixUpPath(&ValueCopy, &PathSize);
+        ValueSize = PathSize;
         if (Result == FALSE) {
             goto SetVariableInListEnd;
         }
@@ -2269,10 +2275,10 @@ SetVariableInListEnd:
 PSHELL_VARIABLE
 ShCreateVariable (
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     ULONG NameHash,
     PSTR Value,
-    ULONG ValueSize,
+    UINTN ValueSize,
     BOOL Exported,
     BOOL ReadOnly,
     BOOL Set
@@ -2585,7 +2591,7 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PSTR FormattedString;
-    ULONG FormattedStringSize;
+    UINTN FormattedStringSize;
     BOOL Result;
     PSHELL_VARIABLE Variable;
 
@@ -2693,16 +2699,16 @@ Return Value:
 {
 
     PSTR Argument;
-    ULONG ArgumentIndex;
-    ULONG ArgumentSize;
+    UINTN ArgumentIndex;
+    UINTN ArgumentSize;
     PSTR CommandName;
     PSTR Equals;
     PSTR Name;
-    ULONG NameSize;
+    UINTN NameSize;
     BOOL Result;
     INT ReturnValue;
     PSTR Value;
-    ULONG ValueSize;
+    UINTN ValueSize;
 
     //
     // Exactly one of these flags is supposed to be set.

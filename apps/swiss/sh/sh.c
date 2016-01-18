@@ -154,7 +154,7 @@ Return Value:
     PSTR Argument;
     ULONG ArgumentIndex;
     BOOL ArgumentIsInput;
-    ULONG ArgumentSize;
+    UINTN ArgumentSize;
     INT InputDescriptor;
     INT InputDescriptorHigh;
     BOOL Result;
@@ -494,7 +494,7 @@ BOOL
 ShSetOptions (
     PSHELL Shell,
     PSTR String,
-    ULONG StringSize,
+    UINTN StringSize,
     BOOL LongForm,
     BOOL Set
     )
@@ -530,10 +530,10 @@ Return Value:
 
 {
 
-    ULONG Index;
-    ULONG OptionCount;
+    UINTN Index;
+    UINTN OptionCount;
     ULONG Options;
-    ULONG StringIndex;
+    UINTN StringIndex;
     BOOL WriteOptions;
 
     WriteOptions = FALSE;
@@ -667,13 +667,13 @@ Return Value:
     int EnvironmentDescriptor;
     FILE *EnvironmentFile;
     PSTR ExpandedScript;
-    ULONGLONG ExpandedScriptSize;
+    UINTN ExpandedScriptSize;
     SHELL_LEXER_STATE OriginalLexer;
     ULONG OriginalOptions;
     BOOL Result;
     INT ReturnValue;
     PSTR Value;
-    ULONGLONG ValueSize;
+    UINTN ValueSize;
 
     EnvironmentFile = NULL;
     ExpandedScript = NULL;

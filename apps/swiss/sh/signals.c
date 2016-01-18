@@ -81,7 +81,7 @@ PSHELL_SIGNAL_ACTION
 ShCreateSignalAction (
     SHELL_SIGNAL SignalNumber,
     PSTR ActionString,
-    ULONG ActionStringSize
+    UINTN ActionStringSize
     );
 
 VOID
@@ -581,7 +581,7 @@ Return Value:
 {
 
     PSHELL_SIGNAL_ACTION Action;
-    ULONG ActionStringSize;
+    UINTN ActionStringSize;
     BOOL Result;
 
     assert(Signal < ShellSignalCount);
@@ -833,7 +833,7 @@ PSHELL_SIGNAL_ACTION
 ShCreateSignalAction (
     SHELL_SIGNAL SignalNumber,
     PSTR ActionString,
-    ULONG ActionStringSize
+    UINTN ActionStringSize
     )
 
 /*++
@@ -955,7 +955,7 @@ Return Value:
     PSHELL_SIGNAL_ACTION Action;
     PLIST_ENTRY CurrentEntry;
     PSTR QuotedString;
-    ULONG QuotedStringSize;
+    UINTN QuotedStringSize;
     BOOL Result;
     PSTR SignalName;
 

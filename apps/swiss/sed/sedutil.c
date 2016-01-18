@@ -164,7 +164,7 @@ ReadFileInEnd:
 PSED_STRING
 SedCreateString (
     PSTR Data,
-    ULONGLONG Size,
+    UINTN Size,
     BOOL NullTerminate
     )
 
@@ -196,8 +196,8 @@ Return Value:
 
 {
 
-    ULONGLONG Capacity;
-    ULONGLONG NeededSize;
+    UINTN Capacity;
+    UINTN NeededSize;
     BOOL Result;
     PSED_STRING String;
 
@@ -264,7 +264,7 @@ BOOL
 SedAppendString (
     PSED_STRING String,
     PSTR Data,
-    ULONGLONG Size
+    UINTN Size
     )
 
 /*++
@@ -293,7 +293,7 @@ Return Value:
 
 {
 
-    ULONGLONG Index;
+    UINTN Index;
     BOOL NullTerminated;
     BOOL Result;
 
@@ -530,7 +530,7 @@ INT
 SedWrite (
     PSED_WRITE_FILE WriteFile,
     PVOID Buffer,
-    ULONGLONG Size,
+    UINTN Size,
     INT LineTerminator
     )
 
@@ -564,7 +564,7 @@ Return Value:
     size_t BytesThisRound;
     ssize_t BytesWritten;
     INT Result;
-    ULONGLONG TotalBytesWritten;
+    UINTN TotalBytesWritten;
 
     assert(WriteFile->File != NULL);
 

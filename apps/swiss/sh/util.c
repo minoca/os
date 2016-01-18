@@ -61,7 +61,7 @@ Environment:
 VOID
 ShStringDequoteSubshellCommand (
     PSTR Input,
-    PULONGLONG InputSize
+    PUINTN InputSize
     );
 
 //
@@ -77,7 +77,7 @@ CHAR ShEmptyQuotedString[3] = {SHELL_CONTROL_QUOTE, SHELL_CONTROL_QUOTE, '\0'};
 PSHELL
 ShCreateShell (
     PSTR CommandName,
-    ULONG CommandNameSize
+    UINTN CommandNameSize
     )
 
 /*++
@@ -242,7 +242,7 @@ PSHELL
 ShCreateSubshell (
     PSHELL Shell,
     PSTR Input,
-    ULONGLONG InputSize,
+    UINTN InputSize,
     BOOL DequoteForSubshell
     )
 
@@ -355,7 +355,7 @@ ShExecuteSubshell (
     PSHELL Subshell,
     BOOL Asynchronous,
     PSTR *Output,
-    PULONGLONG OutputSize,
+    PUINTN OutputSize,
     PINT ReturnValue
     )
 
@@ -618,14 +618,14 @@ Return Value:
 {
 
     PSTR ExpandedValue;
-    ULONGLONG ExpandedValueSize;
+    UINTN ExpandedValueSize;
     PSTR Name;
     ULONG NameSize;
     BOOL Result;
     PSTR SpecialExpansions;
-    ULONGLONG SpecialExpansionsSize;
+    UINTN SpecialExpansionsSize;
     PSTR Value;
-    ULONGLONG ValueSize;
+    UINTN ValueSize;
 
     if ((PromptNumber != 4) &&
         (Shell->Options & SHELL_OPTION_PRINT_PROMPTS) == 0) {
@@ -717,9 +717,9 @@ Return Value:
 VOID
 ShStringDequote (
     PSTR String,
-    ULONGLONG StringSize,
+    UINTN StringSize,
     ULONG Options,
-    PULONGLONG NewStringSize
+    PUINTN NewStringSize
     )
 
 /*++
@@ -805,10 +805,10 @@ Return Value:
 BOOL
 ShStringAppend (
     PSTR *StringBufferAddress,
-    PULONG StringBufferSize,
-    PULONG StringBufferCapacity,
+    PUINTN StringBufferSize,
+    PUINTN StringBufferCapacity,
     PSTR Component,
-    ULONG ComponentSize
+    UINTN ComponentSize
     )
 
 /*++
@@ -847,8 +847,8 @@ Return Value:
 
 {
 
-    ULONG NewBufferSize;
-    ULONG SizeNeeded;
+    UINTN NewBufferSize;
+    UINTN SizeNeeded;
 
     assert(ComponentSize != 0);
 
@@ -909,9 +909,9 @@ Return Value:
 BOOL
 ShStringFormatForReentry (
     PSTR String,
-    ULONG StringSize,
+    UINTN StringSize,
     PSTR *FormattedString,
-    PULONG FormattedStringSize
+    PUINTN FormattedStringSize
     )
 
 /*++
@@ -946,10 +946,10 @@ Return Value:
 
 {
 
-    ULONG AllocationSize;
-    ULONG InputIndex;
+    UINTN AllocationSize;
+    UINTN InputIndex;
     PSTR Output;
-    ULONG OutputIndex;
+    UINTN OutputIndex;
     BOOL Result;
 
     Result = FALSE;
@@ -1039,7 +1039,7 @@ BOOL
 ShFieldSplit (
     PSHELL Shell,
     PSTR *StringBuffer,
-    PULONGLONG StringBufferSize,
+    PUINTN StringBufferSize,
     PLIST_ENTRY ExpansionList,
     ULONG MaxFieldCount,
     PSTR **FieldsArray,
@@ -1090,7 +1090,7 @@ Return Value:
 {
 
     CHAR Character;
-    ULONG CurrentFieldSize;
+    UINTN CurrentFieldSize;
     BOOL DeleteField;
     BOOL Delimit;
     PSHELL_EXPANSION_RANGE Expansion;
@@ -1104,12 +1104,12 @@ Return Value:
     PVOID NewBuffer;
     BOOL Quoted;
     BOOL Result;
-    ULONGLONG SeparatorCount;
-    ULONG SeparatorIndex;
+    UINTN SeparatorCount;
+    UINTN SeparatorIndex;
     PSTR Separators;
     BOOL SkipCharacter;
     PSTR String;
-    ULONGLONG StringSize;
+    UINTN StringSize;
 
     String = *StringBuffer;
     StringSize = *StringBufferSize;
@@ -1489,7 +1489,7 @@ VOID
 ShDeNullExpansions (
     PSHELL Shell,
     PSTR String,
-    ULONGLONG StringSize
+    UINTN StringSize
     )
 
 /*++
@@ -1518,10 +1518,10 @@ Return Value:
 
 {
 
-    ULONGLONG Index;
+    UINTN Index;
     CHAR Separator;
     PSTR Value;
-    ULONGLONG ValueSize;
+    UINTN ValueSize;
 
     //
     // Use the first character of IFS if set, or NULL if IFS is unset.
@@ -1728,7 +1728,7 @@ Return Value:
 VOID
 ShStringDequoteSubshellCommand (
     PSTR Input,
-    PULONGLONG InputSize
+    PUINTN InputSize
     )
 
 /*++
@@ -1755,7 +1755,7 @@ Return Value:
 {
 
     CHAR Character;
-    ULONGLONG Index;
+    UINTN Index;
     BOOL WasBackslash;
 
     Index = 0;

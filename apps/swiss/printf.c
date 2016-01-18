@@ -459,7 +459,7 @@ Return Value:
     ULONG DigitIndex;
     ULONG Index;
     BOOL Stop;
-    ULONGLONG StringSize;
+    UINTN StringSize;
     BOOL WasBackslash;
 
     Index = 0;
@@ -572,8 +572,8 @@ Return Value:
 
 {
 
-    ULONGLONG Index;
-    ULONGLONG StringSize;
+    UINTN Index;
+    UINTN StringSize;
 
     StringSize = strlen(String) + 1;
     Index = 0;

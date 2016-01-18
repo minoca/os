@@ -719,8 +719,8 @@ Return Value:
 
 {
 
-    ULONGLONG BigCommandCapacity;
-    ULONGLONG BigCommandSize;
+    UINTN BigCommandCapacity;
+    UINTN BigCommandSize;
     ULONG ColumnCount;
     ULONG ColumnIndex;
     size_t ColumnSize;
@@ -1346,15 +1346,15 @@ Return Value:
     CHAR Character;
     ULONG CommandEnd;
     PSTR ExpandedField;
-    ULONGLONG ExpandedFieldSize;
+    UINTN ExpandedFieldSize;
     ULONG ExpandOptions;
     PSTR Guess;
     PSTR GuessBaseName;
-    ULONGLONG GuessSize;
+    UINTN GuessSize;
     ULONG Index;
     PSTR LastField;
     ULONG LastFieldIndex;
-    ULONGLONG LastFieldLength;
+    UINTN LastFieldLength;
     CHAR Quote;
     BOOL Result;
     BOOL TrailingSlash;

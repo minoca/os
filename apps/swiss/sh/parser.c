@@ -137,14 +137,14 @@ PSHELL_NODE
 ShParseSimpleCommand (
     PSHELL Shell,
     PSTR FirstWord,
-    ULONG FirstWordSize
+    UINTN FirstWordSize
     );
 
 PSHELL_NODE
 ShParseFunctionDefinition (
     PSHELL Shell,
     PSTR FunctionName,
-    ULONG FunctionNameSize
+    UINTN FunctionNameSize
     );
 
 BOOL
@@ -209,7 +209,7 @@ ShCreateRedirection (
     SHELL_IO_REDIRECTION_TYPE Type,
     INT FileNumber,
     PSTR FileName,
-    ULONG FileNameSize
+    UINTN FileNameSize
     );
 
 VOID
@@ -221,9 +221,9 @@ BOOL
 ShCreateAssignment (
     PSHELL_NODE Node,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     PSTR Value,
-    ULONG ValueSize
+    UINTN ValueSize
     );
 
 VOID
@@ -235,7 +235,7 @@ BOOL
 ShAddPatternToSet (
     PSHELL_CASE_PATTERN_SET Set,
     PSTR Pattern,
-    ULONG PatternSize
+    UINTN PatternSize
     );
 
 VOID
@@ -247,7 +247,7 @@ BOOL
 ShAddComponentToCommand (
     PSHELL_NODE Command,
     PSTR Component,
-    ULONG ComponentSize
+    UINTN ComponentSize
     );
 
 BOOL
@@ -438,7 +438,7 @@ Return Value:
 BOOL
 ShIsName (
     PSTR String,
-    ULONG StringSize
+    UINTN StringSize
     )
 
 /*++
@@ -2343,7 +2343,7 @@ Return Value:
 
     PSHELL_NODE Command;
     PSTR FirstWord;
-    ULONG FirstWordSize;
+    UINTN FirstWordSize;
     BOOL Result;
 
     Command = NULL;
@@ -2394,7 +2394,7 @@ PSHELL_NODE
 ShParseSimpleCommand (
     PSHELL Shell,
     PSTR FirstWord,
-    ULONG FirstWordSize
+    UINTN FirstWordSize
     )
 
 /*++
@@ -2555,7 +2555,7 @@ PSHELL_NODE
 ShParseFunctionDefinition (
     PSHELL Shell,
     PSTR FunctionName,
-    ULONG FunctionNameSize
+    UINTN FunctionNameSize
     )
 
 /*++
@@ -2755,7 +2755,7 @@ Return Value:
 
     ULONG DefaultFileNumber;
     PSTR FileName;
-    ULONG FileNameSize;
+    UINTN FileNameSize;
     ULONG FileNumber;
     BOOL Result;
     SHELL_IO_REDIRECTION_TYPE Type;
@@ -2916,12 +2916,12 @@ Return Value:
 {
 
     PSTR Name;
-    ULONG NameSize;
+    UINTN NameSize;
     BOOL Result;
     PSTR Token;
-    ULONG TokenSize;
+    UINTN TokenSize;
     PSTR Value;
-    ULONG ValueSize;
+    UINTN ValueSize;
 
     Token = Shell->Lexer.TokenBuffer;
     TokenSize = Shell->Lexer.TokenBufferSize;
@@ -3558,7 +3558,7 @@ ShCreateRedirection (
     SHELL_IO_REDIRECTION_TYPE Type,
     INT FileNumber,
     PSTR FileName,
-    ULONG FileNameSize
+    UINTN FileNameSize
     )
 
 /*++
@@ -3718,9 +3718,9 @@ BOOL
 ShCreateAssignment (
     PSHELL_NODE Node,
     PSTR Name,
-    ULONG NameSize,
+    UINTN NameSize,
     PSTR Value,
-    ULONG ValueSize
+    UINTN ValueSize
     )
 
 /*++
@@ -3843,7 +3843,7 @@ BOOL
 ShAddPatternToSet (
     PSHELL_CASE_PATTERN_SET Set,
     PSTR Pattern,
-    ULONG PatternSize
+    UINTN PatternSize
     )
 
 /*++
@@ -3956,7 +3956,7 @@ BOOL
 ShAddComponentToCommand (
     PSHELL_NODE Command,
     PSTR Component,
-    ULONG ComponentSize
+    UINTN ComponentSize
     )
 
 /*++

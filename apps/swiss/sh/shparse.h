@@ -178,10 +178,10 @@ typedef struct _SHELL_HERE_DOCUMENT {
     LIST_ENTRY ListEntry;
     BOOL StripLeadingTabs;
     PSTR EndWord;
-    ULONGLONG EndWordSize;
+    UINTN EndWordSize;
     BOOL EndWordWasQuoted;
     PSTR Document;
-    ULONGLONG DocumentSize;
+    UINTN DocumentSize;
 } SHELL_HERE_DOCUMENT, *PSHELL_HERE_DOCUMENT;
 
 /*++
@@ -223,7 +223,7 @@ Members:
 typedef struct _SHELL_NODE_SIMPLE_COMMAND {
     LIST_ENTRY AssignmentList;
     PSTR Arguments;
-    ULONG ArgumentsSize;
+    UINTN ArgumentsSize;
     ULONG ArgumentsBufferCapacity;
 } SHELL_NODE_SIMPLE_COMMAND, *PSHELL_NODE_SIMPLE_COMMAND;
 
@@ -244,7 +244,7 @@ Members:
 
 typedef struct _SHELL_NODE_FUNCTION {
     PSTR Name;
-    ULONG NameSize;
+    UINTN NameSize;
 } SHELL_NODE_FUNCTION, *PSHELL_NODE_FUNCTION;
 
 /*++
@@ -271,10 +271,10 @@ Members:
 
 typedef struct _SHELL_NODE_FOR {
     PSTR Name;
-    ULONG NameSize;
+    UINTN NameSize;
     PSTR WordListBuffer;
-    ULONG WordListBufferSize;
-    ULONG WordListBufferCapacity;
+    UINTN WordListBufferSize;
+    UINTN WordListBufferCapacity;
 } SHELL_NODE_FOR, *PSHELL_NODE_FOR;
 
 /*++
@@ -321,7 +321,7 @@ Members:
 typedef struct _SHELL_CASE_PATTERN_ENTRY {
     LIST_ENTRY ListEntry;
     PSTR Pattern;
-    ULONG PatternSize;
+    UINTN PatternSize;
 } SHELL_CASE_PATTERN_ENTRY, *PSHELL_CASE_PATTERN_ENTRY;
 
 /*++
@@ -343,7 +343,7 @@ Members:
 
 typedef struct _SHELL_NODE_CASE {
     PSTR Name;
-    ULONG NameSize;
+    UINTN NameSize;
     LIST_ENTRY PatternList;
 } SHELL_NODE_CASE, *PSHELL_NODE_CASE;
 
@@ -377,7 +377,7 @@ typedef struct _SHELL_IO_REDIRECT {
     SHELL_IO_REDIRECTION_TYPE Type;
     INT FileNumber;
     PSTR FileName;
-    ULONG FileNameSize;
+    UINTN FileNameSize;
     PSHELL_HERE_DOCUMENT HereDocument;
 } SHELL_IO_REDIRECT, *PSHELL_IO_REDIRECT;
 
@@ -408,9 +408,9 @@ Members:
 typedef struct _SHELL_ASSIGNMENT {
     LIST_ENTRY ListEntry;
     PSTR Name;
-    ULONG NameSize;
+    UINTN NameSize;
     PSTR Value;
-    ULONG ValueSize;
+    UINTN ValueSize;
 } SHELL_ASSIGNMENT, *PSHELL_ASSIGNMENT;
 
 /*++
@@ -506,7 +506,7 @@ ShInitializeLexer (
     PSHELL_LEXER_STATE Lexer,
     FILE *InputFile,
     PSTR InputBuffer,
-    ULONG InputBufferSize
+    UINTN InputBufferSize
     );
 
 /*++
@@ -588,8 +588,8 @@ Return Value:
 BOOL
 ShScanPastExpansion (
     PSTR String,
-    ULONG StringSize,
-    PULONGLONG ExpansionSize
+    UINTN StringSize,
+    PUINTN ExpansionSize
     );
 
 /*++
@@ -684,7 +684,7 @@ Return Value:
 BOOL
 ShIsName (
     PSTR String,
-    ULONG StringSize
+    UINTN StringSize
     );
 
 /*++

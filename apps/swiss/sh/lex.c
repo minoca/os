@@ -199,7 +199,7 @@ ShInitializeLexer (
     PSHELL_LEXER_STATE Lexer,
     FILE *InputFile,
     PSTR InputBuffer,
-    ULONG InputBufferSize
+    UINTN InputBufferSize
     )
 
 /*++
@@ -356,7 +356,7 @@ Return Value:
 
     BOOL AddCharacter;
     INT Character;
-    ULONG CharacterIndex;
+    UINTN CharacterIndex;
     BOOL Delimit;
     BOOL InComment;
     BOOL IsOperator;
@@ -979,8 +979,8 @@ GetTokenEnd:
 BOOL
 ShScanPastExpansion (
     PSTR String,
-    ULONG StringSize,
-    PULONGLONG ExpansionSize
+    UINTN StringSize,
+    PUINTN ExpansionSize
     )
 
 /*++
@@ -1010,9 +1010,9 @@ Return Value:
 {
 
     CHAR Character;
-    ULONG Index;
-    ULONGLONG InnerExpansionSize;
-    ULONG OpenCount;
+    UINTN Index;
+    UINTN InnerExpansionSize;
+    UINTN OpenCount;
     CHAR Quote;
     BOOL RecognizeComments;
     BOOL RecognizeQuotes;
@@ -1391,7 +1391,7 @@ Return Value:
     size_t BytesToRead;
     PSHELL_LEXER_STATE Lexer;
     PSTR NewInputBuffer;
-    ULONG NewInputBufferSize;
+    UINTN NewInputBufferSize;
     BOOL Result;
 
     Lexer = &(Shell->Lexer);
@@ -1566,7 +1566,7 @@ Return Value:
 {
 
     PSHELL_LEXER_STATE Lexer;
-    ULONG NewCapacity;
+    UINTN NewCapacity;
 
     Lexer = &(Shell->Lexer);
     if (Lexer->TokenBufferSize < Lexer->TokenBufferCapacity) {
@@ -2258,8 +2258,8 @@ Return Value:
     UINTN EndWordSize;
     PSHELL_LEXER_STATE Lexer;
     PSTR Line;
-    ULONG LineBegin;
-    ULONG LineSize;
+    UINTN LineBegin;
+    UINTN LineSize;
     BOOL Result;
     INT StringDifference;
     BOOL WasBackslash;

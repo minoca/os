@@ -266,16 +266,16 @@ Return Value:
 
     PSHELL_ALIAS Alias;
     PSTR Argument;
-    ULONG ArgumentIndex;
-    ULONG ArgumentSize;
+    INT ArgumentIndex;
+    UINTN ArgumentSize;
     PLIST_ENTRY CurrentEntry;
     PSTR Equals;
     PSTR Name;
-    ULONG NameSize;
+    UINTN NameSize;
     BOOL Result;
     ULONG ReturnValue;
     PSTR Value;
-    ULONG ValueSize;
+    UINTN ValueSize;
 
     Alias = NULL;
     Name = NULL;
@@ -575,7 +575,7 @@ Return Value:
 
     BOOL Result;
     PSTR Value;
-    ULONG ValueSize;
+    UINTN ValueSize;
 
     printf("%s=", Alias->Name);
     Result = ShStringFormatForReentry(Alias->Value,

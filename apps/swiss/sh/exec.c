@@ -1070,7 +1070,7 @@ Return Value:
     BOOL Asynchronous;
     PSHELL_BUILTIN_COMMAND BuiltinCommand;
     PSTR ExpandedArguments;
-    ULONGLONG ExpandedArgumentsSize;
+    UINTN ExpandedArgumentsSize;
     PSHELL_FUNCTION Function;
     PSHELL_EXECUTION_NODE LatestExecutionNode;
     PSHELL_NODE Node;
@@ -1508,7 +1508,7 @@ Return Value:
     ULONG WordCount;
     ULONG WordIndex;
     PSTR WordListString;
-    ULONGLONG WordListStringSize;
+    UINTN WordListStringSize;
     PSTR *Words;
 
     Node = ExecutionNode->Node;
@@ -1643,9 +1643,9 @@ Return Value:
     PLIST_ENTRY CurrentPatternEntry;
     PLIST_ENTRY CurrentSetEntry;
     PSTR ExpandedPattern;
-    ULONGLONG ExpandedPatternSize;
+    UINTN ExpandedPatternSize;
     PSTR Input;
-    ULONGLONG InputSize;
+    UINTN InputSize;
     BOOL Match;
     PSHELL_NODE Node;
     ULONG Options;
@@ -2134,17 +2134,18 @@ Return Value:
     PSTR AfterScan;
     PLIST_ENTRY CurrentEntry;
     PSTR DocumentText;
-    ULONGLONG DocumentTextSize;
+    UINTN DocumentTextSize;
     PSTR ExpandedFileName;
-    ULONGLONG ExpandedFileNameSize;
+    UINTN ExpandedFileNameSize;
     PSTR ExpandedString;
-    ULONGLONG ExpandedStringSize;
+    UINTN ExpandedStringSize;
     PSHELL_HERE_DOCUMENT HereDocument;
     INT NewDescriptor;
     INT NewDescriptorAnywhere;
     INT OpenFlags;
     ULONG Options;
     INT OriginalDescriptor;
+    unsigned long PathSize;
     INT Pipe[2];
     PSHELL_IO_REDIRECT Redirect;
     BOOL Result;
@@ -2203,7 +2204,8 @@ Return Value:
             // Let the OS layer play with the path if it wants.
             //
 
-            Result = ShFixUpPath(&ExpandedFileName, &ExpandedFileNameSize);
+            PathSize = ExpandedFileNameSize;
+            Result = ShFixUpPath(&ExpandedFileName, &PathSize);
             if (Result == FALSE) {
                 goto ApplyRedirectionsEnd;
             }

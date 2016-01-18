@@ -104,17 +104,17 @@ BOOL
 ShLocateDirectoryOnCdPath (
     PSHELL Shell,
     PSTR Directory,
-    ULONGLONG DirectorySize,
+    UINTN DirectorySize,
     PSTR *FullDirectoryPath,
-    PULONGLONG FullDirectoryPathSize
+    PUINTN FullDirectoryPathSize
     );
 
 INT
 ShCleanLogicalDirectoryPath (
     PSTR PathString,
-    ULONGLONG PathStringSize,
+    UINTN PathStringSize,
     PSTR *CleanedPathString,
-    PULONGLONG CleanedPathStringSize
+    PUINTN CleanedPathStringSize
     );
 
 PSTR
@@ -140,7 +140,7 @@ ShPathCompareStrings (
 BOOL
 ShGetCurrentDirectory (
     PSTR *Directory,
-    PULONGLONG DirectorySize
+    PUINTN DirectorySize
     )
 
 /*++
@@ -168,7 +168,8 @@ Return Value:
 {
 
     PSTR Buffer;
-    ULONG Capacity;
+    UINTN Capacity;
+    unsigned long PathSize;
 
     *Directory = NULL;
     *DirectorySize = 0;
@@ -193,8 +194,9 @@ Return Value:
 
         } else {
             *Directory = Buffer;
-            *DirectorySize = strlen(Buffer) + 1;
-            ShFixUpPath(Directory, DirectorySize);
+            PathSize = strlen(Buffer) + 1;
+            ShFixUpPath(Directory, &PathSize);
+            *DirectorySize = PathSize;
             return TRUE;
         }
     }
@@ -248,14 +250,14 @@ Return Value:
     DIR *Directory;
     PSHELL_DIRECTORY_ENTRY Entries;
     struct dirent *Entry;
-    ULONG EntryCapacity;
-    ULONG EntrySize;
+    UINTN EntryCapacity;
+    UINTN EntrySize;
     PSTR FileNames;
-    ULONG FileNamesCapacity;
-    ULONG FileNamesSize;
+    UINTN  FileNamesCapacity;
+    UINTN FileNamesSize;
     ULONG FixIndex;
-    ULONG NameSize;
-    ULONG NewBufferSize;
+    UINTN NameSize;
+    UINTN NewBufferSize;
     UINTN OriginalFileNames;
     BOOL Result;
 
@@ -397,7 +399,7 @@ BOOL
 ShPerformPathExpansions (
     PSHELL Shell,
     PSTR *StringBuffer,
-    PULONGLONG StringBufferSize,
+    PUINTN StringBufferSize,
     PSTR **FieldArray,
     PULONG FieldArrayCount
     )
@@ -455,8 +457,8 @@ Return Value:
     UINTN OriginalStringAddress;
     BOOL Result;
     PSTR String;
-    ULONGLONG StringCapacity;
-    ULONGLONG StringSize;
+    UINTN StringCapacity;
+    UINTN StringSize;
 
     FieldCount = *FieldArrayCount;
     FieldCapacity = FieldCount;
@@ -687,7 +689,7 @@ Return Value:
     CHAR ListSeparator;
     PSTR NextListSeparator;
     PSTR Path;
-    ULONGLONG PathSize;
+    UINTN PathSize;
     BOOL Result;
     struct stat Stat;
     INT Status;
@@ -1001,19 +1003,19 @@ Return Value:
     ULONG ArgumentIndex;
     ULONG ArgumentSize;
     PSTR CdPathDirectory;
-    ULONGLONG CdPathDirectorySize;
+    UINTN CdPathDirectorySize;
     ULONG CharacterIndex;
     PSTR CleanedDirectory;
-    ULONGLONG CleanedDirectorySize;
+    UINTN CleanedDirectorySize;
     PSTR CurrentDirectory;
-    ULONGLONG CurrentDirectorySize;
+    UINTN CurrentDirectorySize;
     PSTR Destination;
-    ULONGLONG DestinationSize;
+    UINTN DestinationSize;
     PSTR FullDirectory;
     ULONG FullDirectorySize;
     BOOL LogicalMode;
     PSTR NewOldCurrentDirectory;
-    ULONGLONG NewOldCurrentDirectorySize;
+    UINTN NewOldCurrentDirectorySize;
     BOOL RelativeToCurrent;
     BOOL Result;
     INT ReturnValue;
@@ -1384,9 +1386,9 @@ Return Value:
     ULONG CompletePathSize;
     PSTR CompletePrefix;
     PSTR Component;
-    ULONG ComponentLength;
+    UINTN ComponentLength;
     PSTR FieldCopy;
-    ULONGLONG FieldCopySize;
+    UINTN FieldCopySize;
     ULONG FileCount;
     PSTR *Files;
     ULONG FilesCapacity;
@@ -2047,9 +2049,9 @@ BOOL
 ShLocateDirectoryOnCdPath (
     PSHELL Shell,
     PSTR Directory,
-    ULONGLONG DirectorySize,
+    UINTN DirectorySize,
     PSTR *FullDirectoryPath,
-    PULONGLONG FullDirectoryPathSize
+    PUINTN FullDirectoryPathSize
     )
 
 /*++
@@ -2086,11 +2088,11 @@ Return Value:
     PSTR CompletePath;
     ULONG CompletePathSize;
     PSTR CurrentPath;
-    ULONGLONG CurrentPathSize;
+    UINTN CurrentPathSize;
     CHAR ListSeparator;
     PSTR NextListSeparator;
     PSTR Path;
-    ULONGLONG PathSize;
+    UINTN PathSize;
     BOOL Result;
     struct stat Stat;
     INT Status;
@@ -2195,9 +2197,9 @@ LocateDirectoryOnCdPathEnd:
 INT
 ShCleanLogicalDirectoryPath (
     PSTR PathString,
-    ULONGLONG PathStringSize,
+    UINTN PathStringSize,
     PSTR *CleanedPathString,
-    PULONGLONG CleanedPathStringSize
+    PUINTN CleanedPathStringSize
     )
 
 /*++
@@ -2234,14 +2236,14 @@ Return Value:
 
 {
 
-    ULONGLONG ComponentSize;
+    UINTN ComponentSize;
     PSTR CurrentOutput;
     PSTR NextSeparator;
     PSTR OriginalPathString;
     PSTR Output;
-    ULONGLONG OutputCapacity;
-    ULONGLONG OutputSize;
-    ULONGLONG RemainingSize;
+    UINTN OutputCapacity;
+    UINTN OutputSize;
+    UINTN RemainingSize;
     INT Result;
     struct stat Stat;
 

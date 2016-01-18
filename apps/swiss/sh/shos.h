@@ -378,7 +378,7 @@ Return Value:
 int
 ShFixUpPath (
     char **Path,
-    unsigned long long *PathSize
+    unsigned long *PathSize
     );
 
 /*++

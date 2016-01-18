@@ -215,7 +215,7 @@ typedef struct _OD_CONTEXT {
     INT AddressWidth;
     ULONGLONG SkipCount;
     ULONGLONG Count;
-    ULONGLONG Width;
+    UINTN Width;
     LIST_ENTRY InputList;
     POD_INPUT_ENTRY CurrentInput;
     ULONG FormatCount;
