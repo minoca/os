@@ -26,6 +26,7 @@ Author:
 //
 
 #include <libcbase.h>
+#include <endian.h>
 #include <limits.h>
 
 //
