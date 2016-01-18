@@ -45,7 +45,7 @@ git archive HEAD > $TMPDIR/os.tar
 mkdir $TMPDIR/src/os
 tar -xf $TMPDIR/os.tar -C $TMPDIR/src/os
 rm $TMPDIR/os.tar
-git rev-list --count HEAD > $TMPDIR/src/os/revision
+echo $((`git rev-list --count HEAD` + 1000)) > $TMPDIR/src/os/revision
 
 echo "Exporting third-party"
 cd $SRCROOT/third-party
