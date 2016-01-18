@@ -1,0 +1,14 @@
+##
+## To activate this configuration (recommended), add the following to your
+## .git/config file, removing the # characters.
+##
+## [include]
+##     path = ../.gitconfig
+##
+
+##
+## Set a better diff hunk header filter that ignores function comments.
+##
+
+[diff "cpp"]
+	xfuncname = "!^[ \t]*[A-Za-z_][A-Za-z_0-9]*:[[:space:]]*($|/[/*])\n!:$\n^((::[[:space:]]*)?[A-Za-z_].*)$"
