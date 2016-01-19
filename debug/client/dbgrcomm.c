@@ -3760,19 +3760,19 @@ Return Value:
         if (SourceLine != NULL) {
             CurrentSource = SourceLine->ParentSource;
         }
-    }
 
-    FunctionSearch.Variety = SymbolResultInvalid;
-    ResultValid = DbgFindFunctionSymbol(CurrentModule->Symbols,
-                                        NULL,
-                                        DebasedInstructionPointer,
-                                        &FunctionSearch);
+        FunctionSearch.Variety = SymbolResultInvalid;
+        ResultValid = DbgFindFunctionSymbol(CurrentModule->Symbols,
+                                            NULL,
+                                            DebasedInstructionPointer,
+                                            &FunctionSearch);
 
-    if (ResultValid != NULL) {
+        if (ResultValid != NULL) {
 
-        assert(FunctionSearch.Variety == SymbolResultFunction);
+            assert(FunctionSearch.Variety == SymbolResultFunction);
 
-        CurrentFunction = FunctionSearch.U.FunctionResult;
+            CurrentFunction = FunctionSearch.U.FunctionResult;
+        }
     }
 
     //
