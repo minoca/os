@@ -1,2 +1,10 @@
-*.c diff=cpp
-*.h diff=cpp
+*.c diff=cpp text=auto
+*.h diff=cpp text=auto
+*.S text=auto
+Makefile text=auto
+*.mk text=auto
+sources text=auto
+*.sh text=auto
+*.py text=auto
+*.asl text=auto
+common text=auto
