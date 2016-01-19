@@ -89,7 +89,7 @@ Environment:
 #define SETUP_ADD_PARTITION_SCRIPT_FORMAT \
     "Partitions += [{" \
     "\"Index\": %d," \
-    "\"Size\": %I64d," \
+    "\"Size\": %lld," \
     "\"PartitionType\": PARTITION_TYPE_MINOCA," \
     "\"MbrType\": PARTITION_ID_MINOCA," \
     "\"Attributes\": 0," \

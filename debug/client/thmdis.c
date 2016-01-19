@@ -908,7 +908,7 @@ Return Value:
     Context->Result->AddressIsValid = TRUE;
     snprintf(Context->Operand2,
              sizeof(Context->Operand2),
-             "[0x%08I64x]",
+             "[0x%08llx]",
              OperandAddress);
 
     return;
@@ -1216,7 +1216,7 @@ Return Value:
         Context->Result->AddressIsValid = TRUE;
         snprintf(Context->Operand2,
                  sizeof(Context->Operand2),
-                 "[0x%08I64x]",
+                 "[0x%08llx]",
                  OperandAddress);
     }
 
@@ -1374,7 +1374,7 @@ Return Value:
         Context->Result->AddressIsValid = TRUE;
         snprintf(Context->Operand1,
                  sizeof(Context->Operand1),
-                 "[0x%08I64x]",
+                 "[0x%08llx]",
                  OperandAddress);
     }
 
@@ -1434,7 +1434,7 @@ Return Value:
     Context->Result->AddressIsValid = TRUE;
     snprintf(Context->Operand1,
              sizeof(Context->Operand1),
-             "[0x%08I64x]",
+             "[0x%08llx]",
              OperandAddress);
 
     return;
@@ -1549,7 +1549,7 @@ Return Value:
     Context->Result->AddressIsValid = TRUE;
     snprintf(Context->Operand2,
              sizeof(Context->Operand2),
-             "[0x%08I64x]",
+             "[0x%08llx]",
              OperandAddress);
 
     return;

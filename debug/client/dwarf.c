@@ -709,7 +709,7 @@ Return Value:
 
             snprintf(PieceLocation,
                      sizeof(PieceLocation),
-                     "[0x%I64x]",
+                     "[0x%llx]",
                      CurrentLocation->Value.Address);
 
             break;

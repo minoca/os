@@ -122,7 +122,6 @@ typedef long long off_t;
 //
 
 typedef off_t off64_t;
-typedef off64_t loff_t;
 
 //
 // Define a process identifier type.

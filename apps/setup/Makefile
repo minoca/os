@@ -60,7 +60,7 @@ DIRS += uos
 
 endif
 
-EXTRA_SRC_DIRS = uos
+EXTRA_SRC_DIRS = minoca
 
 include $(SRCROOT)/os/minoca.mk
 
@@ -70,3 +70,5 @@ postbuild:
 	    $(STRIP) -o $(BINROOT)/skel/bin/$(BINARY) $(BINROOT)/$(BINARY); \
 	fi
 
+uos win32: config
+$(OBJROOT)/os/apps/setup/config/msetplat.a: config

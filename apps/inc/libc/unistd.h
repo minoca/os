@@ -1133,45 +1133,6 @@ Return Value:
 --*/
 
 LIBC_API
-loff_t
-llseek (
-    int FileDescriptor,
-    loff_t Offset,
-    int Whence
-    );
-
-/*++
-
-Routine Description:
-
-    This routine sets the 64-bit file offset for the open file descriptor.
-
-Arguments:
-
-    FileDescriptor - Supplies the file descriptor returned by the open function.
-
-    Offset - Supplies the offset from the reference location given in the
-        Whence argument.
-
-    Whence - Supplies the reference location to base the offset off of. Valid
-        value are:
-
-        SEEK_SET - The offset will be added to the the beginning of the file.
-
-        SEEK_CUR - The offset will be added to the current file position.
-
-        SEEK_END - The offset will be added to the end of the file.
-
-Return Value:
-
-    Returns the resulting file offset after the operation.
-
-    -1 on failure, and errno will contain more information. The file offset
-    will remain unchanged.
-
---*/
-
-LIBC_API
 int
 ftruncate (
     int FileDescriptor,

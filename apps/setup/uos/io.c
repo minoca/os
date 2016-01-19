@@ -25,13 +25,18 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+#define _FILE_OFFSET_BITS 64
+
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
 #include <utime.h>
 
 #include "../setup.h"
@@ -312,7 +317,7 @@ Return Value:
 
 {
 
-    return llseek((INTN)Handle, Offset, SEEK_SET);
+    return lseek((INTN)Handle, Offset, SEEK_SET);
 }
 
 ULONGLONG
@@ -341,7 +346,7 @@ Return Value:
 
 {
 
-    return llseek((INTN)Handle, 0, SEEK_CUR);
+    return lseek((INTN)Handle, 0, SEEK_CUR);
 }
 
 INT
