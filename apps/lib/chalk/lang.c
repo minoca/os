@@ -647,7 +647,7 @@ Return Value:
     Lexer.ExpressionNames = ChalkLexerTokenNames;
     Lexer.TokenBase = CHALK_TOKEN_BASE;
     YyLexInitialize(&Lexer);
-    Parser = Interpreter->Parser;
+    Parser = Script->Parser;
     Parser->Context = &Lexer;
     Parser->Lexer = &Lexer;
     YyParserInitialize(Parser);

@@ -744,6 +744,7 @@ Return Value:
         ChalkObjectAddReference(Key);
         INSERT_BEFORE(&(Entry->ListEntry), &(DictObject->Dict.EntryList));
         DictObject->Dict.Generation += 1;
+        DictObject->Dict.Count += 1;
     }
 
     ChalkObjectAddReference(Value);
@@ -1283,7 +1284,8 @@ ChalkFunctionPrint (
 
 Routine Description:
 
-    This routine implements the binding prototype between Chalk and C.
+    This routine implements the built in print function in the Chalk
+    interpreter.
 
 Arguments:
 
@@ -1338,6 +1340,73 @@ Return Value:
 
     } else {
         ChalkPrintObject(Object, 0);
+    }
+
+    return 0;
+}
+
+INT
+ChalkFunctionLength (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the built in len function.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    PCHALK_OBJECT Object;
+    UINTN Value;
+
+    Object = ChalkCGetVariable(Interpreter, "object");
+
+    assert(Object != NULL);
+
+    Value = 0;
+    switch (Object->Header.Type) {
+    case ChalkObjectString:
+        Value = strlen(Object->String.String);
+        break;
+
+    case ChalkObjectList:
+        Value = Object->List.Count;
+        break;
+
+    case ChalkObjectDict:
+        Value = Object->Dict.Count;
+        break;
+
+    default:
+        Value = 0;
+        break;
+    }
+
+    *ReturnValue = ChalkCreateInteger(Value);
+    if (*ReturnValue == NULL) {
+        return ENOMEM;
     }
 
     return 0;
@@ -1674,7 +1743,10 @@ Return Value:
                            ListEntry);
 
         ChalkDestroyDictEntry(Entry);
+        Dict->Dict.Count -= 1;
     }
+
+    assert(Dict->Dict.Count == 0);
 
     return;
 }

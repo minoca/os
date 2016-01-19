@@ -1027,6 +1027,7 @@ Return Value:
 {
 
     PCHALK_OBJECT Argument;
+    ULONG ArgumentCount;
     PCHALK_OBJECT Arguments;
     PPARSER_NODE Body;
     PCHALK_OBJECT Function;
@@ -1071,7 +1072,8 @@ Return Value:
                (IdentifierList->NodeCount == 0));
 
         //
-        // Create a list to hold all the argument names.
+        // Create a list to hold all the argument names. The argument list goes
+        // ID , ID , etc, so only every other token is an argument.
         //
 
         if (IdentifierList->TokenCount >= MAX_LONG) {
@@ -1079,7 +1081,8 @@ Return Value:
             goto VisitFunctionDefinitionEnd;
         }
 
-        Arguments = ChalkCreateList(NULL, IdentifierList->TokenCount);
+        ArgumentCount = (IdentifierList->TokenCount + 1) / 2;
+        Arguments = ChalkCreateList(NULL, ArgumentCount);
         if (Arguments == NULL) {
             Status = ENOMEM;
             goto VisitFunctionDefinitionEnd;
@@ -1090,8 +1093,8 @@ Return Value:
         // list.
         //
 
-        for (Index = 0; Index < IdentifierList->TokenCount; Index += 1) {
-            Token = IdentifierList->Tokens[Index];
+        for (Index = 0; Index < ArgumentCount; Index += 1) {
+            Token = IdentifierList->Tokens[Index * 2];
             TokenString = Node->Script->Data + Token->Position;
             Argument = ChalkCreateString(TokenString, Token->Size);
             if (Argument == NULL) {

@@ -50,13 +50,14 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-PSTR ChalkFunctionPrintArguments[] = {
+PSTR ChalkFunctionOneObjectArgument[] = {
     "object",
     NULL,
 };
 
 CHALK_FUNCTION_PROTOTYPE ChalkBuiltinFunctions[] = {
-    {"print", ChalkFunctionPrintArguments, ChalkFunctionPrint},
+    {"print", ChalkFunctionOneObjectArgument, ChalkFunctionPrint},
+    {"len", ChalkFunctionOneObjectArgument, ChalkFunctionLength},
     {NULL, NULL, NULL}
 };
 
@@ -292,6 +293,10 @@ Return Value:
 
             break;
 
+        case ChalkCObjectPointer:
+            *((PCHALK_OBJECT *)Pointer) = Value;
+            break;
+
         default:
 
             assert(FALSE);
@@ -466,6 +471,10 @@ Return Value:
                 goto ConvertStructureToDictEnd;
             }
 
+            break;
+
+        case ChalkCObjectPointer:
+            Value = *((PCHALK_OBJECT *)Pointer);
             break;
 
         default:

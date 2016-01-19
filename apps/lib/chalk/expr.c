@@ -28,6 +28,7 @@ Environment:
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "chalkp.h"
 
@@ -46,6 +47,14 @@ Environment:
      ((_Operator) == ChalkTokenBitNot) || \
      ((_Operator) == ChalkTokenIncrement) || \
      ((_Operator) == ChalkTokenDecrement))
+
+#define CHALK_COMPARE_OPERATOR(_Operator) \
+    (((_Operator) == ChalkTokenIsEqual) || \
+     ((_Operator) == ChalkTokenIsNotEqual) || \
+     ((_Operator) == ChalkTokenLessThan) || \
+     ((_Operator) == ChalkTokenLessOrEqual) || \
+     ((_Operator) == ChalkTokenGreaterThan) || \
+     ((_Operator) == ChalkTokenGreaterOrEqual))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -1566,6 +1575,7 @@ Return Value:
 
 {
 
+    INT CompareValue;
     PCHALK_OBJECT Copy;
     INT Status;
     CHALK_OBJECT_TYPE Type;
@@ -1612,6 +1622,55 @@ Return Value:
             } else if (Type == ChalkObjectString) {
                 return ChalkStringAdd(Left, Right, Result);
             }
+        }
+
+    } else if (CHALK_COMPARE_OPERATOR(Operator)) {
+        Type = Left->Header.Type;
+
+        //
+        // Strings can be compared.
+        //
+
+        if ((Type == ChalkObjectString) && (Type == Right->Header.Type)) {
+            CompareValue = strcmp(Left->String.String, Right->String.String);
+            switch (Operator) {
+            case ChalkTokenIsEqual:
+                CompareValue = CompareValue == 0;
+                break;
+
+            case ChalkTokenIsNotEqual:
+                CompareValue = CompareValue != 0;
+                break;
+
+            case ChalkTokenLessThan:
+                CompareValue = CompareValue < 0;
+                break;
+
+            case ChalkTokenLessOrEqual:
+                CompareValue = CompareValue <= 0;
+                break;
+
+            case ChalkTokenGreaterThan:
+                CompareValue = CompareValue > 0;
+                break;
+
+            case ChalkTokenGreaterOrEqual:
+                CompareValue = CompareValue >= 0;
+                break;
+
+            default:
+
+                assert(FALSE);
+
+                break;
+            }
+
+            *Result = ChalkCreateInteger(CompareValue);
+            if (*Result == NULL) {
+                return ENOMEM;
+            }
+
+            return 0;
         }
     }
 

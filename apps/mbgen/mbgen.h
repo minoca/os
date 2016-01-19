@@ -30,10 +30,13 @@ Author:
 
 #define MBGEN_PROJECT_FILE ".mbproj"
 #define MBGEN_BUILD_FILE "build.mb"
+#define MBGEN_DEFAULT_NAME "//:"
 
 #define MBGEN_OPTION_VERBOSE 0x00000001
 #define MBGEN_OPTION_DEBUG 0x00000002
 #define MBGEN_OPTION_DRY_RUN 0x00000004
+
+#define MBGEN_TARGET_PHONY 0x00000001
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -45,6 +48,16 @@ typedef enum _MBGEN_DIRECTORY_TREE {
     MbgenBuildTree,
     MbgenAbsolutePath,
 } MBGEN_DIRECTORY_TREE, *PMBGEN_DIRECTORY_TREE;
+
+typedef enum _MBGEN_SCRIPT_ORDER {
+    MbgenScriptOrderInvalid,
+    MbgenScriptOrderCommandLine,
+    MbgenScriptOrderProjectRoot,
+    MbgenScriptOrderGlobal,
+    MbgenScriptOrderTarget,
+} MBGEN_SCRIPT_ORDER, *PMBGEN_SCRIPT_ORDER;
+
+typedef struct _MBGEN_TARGET MBGEN_TARGET, *PMBGEN_TARGET;
 
 /*++
 
@@ -72,6 +85,15 @@ Members:
 
     ScriptList - Stores the head of the list of loaded scripts.
 
+    GlobalName - Stores a pointer to the name of the global environment file
+        to load into all targets.
+
+    DefaultName - Stores a pointer to the name of the default target. If not
+        specified, defaults to //:.
+
+    ToolList - Stores a pointer to a list of tools defined. Tools are global
+        across the build.
+
 --*/
 
 typedef struct _MBGEN_CONTEXT {
@@ -82,6 +104,9 @@ typedef struct _MBGEN_CONTEXT {
     PSTR SourceRoot;
     PSTR BuildRoot;
     LIST_ENTRY ScriptList;
+    PSTR GlobalName;
+    PSTR DefaultName;
+    LIST_ENTRY ToolList;
 } MBGEN_CONTEXT, *PMBGEN_CONTEXT;
 
 /*++
@@ -98,16 +123,92 @@ Members:
 
     Target - Stores the target name.
 
-    Toolchain - Stores the target toolchain.
-
 --*/
 
 typedef struct _MBGEN_TARGET_SPECIFIER {
     MBGEN_DIRECTORY_TREE Root;
     PSTR Path;
     PSTR Target;
-    PSTR Toolchain;
 } MBGEN_TARGET_SPECIFIER, *PMBGEN_TARGET_SPECIFIER;
+
+/*++
+
+Structure Description:
+
+    This structure stores an array of strings.
+
+Members:
+
+    Strings - Stores an array of strings.
+
+    Count - Stores the number of elements in the array.
+
+    Capacity - Stores the maximum number of elements in the array before the
+        array must be resized.
+
+--*/
+
+typedef struct _MBGEN_STRINGS {
+    PSTR *Strings;
+    ULONG Count;
+    ULONG Capacity;
+} MBGEN_STRINGS, *PMBGEN_STRINGS;
+
+/*++
+
+Structure Description:
+
+    This structure stores an array of targets.
+
+Members:
+
+    List - Stores the array of targets.
+
+    Count - Stores the number of valid elements in the array.
+
+    Capacity - Stores the maximum number of elements in the array before the
+        array will need to be reallocated.
+
+--*/
+
+typedef struct _MBGEN_TARGET_LIST {
+    PMBGEN_TARGET *List;
+    ULONG Count;
+    ULONG Capacity;
+} MBGEN_TARGET_LIST, *PMBGEN_TARGET_LIST;
+
+/*++
+
+Structure Description:
+
+    This structure stores a tool definition.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous tools in the build.
+
+    Name - Stores a pointer to the name of the tool. This must be unique across
+        the build.
+
+    Command - Stores a pointer to the command to run to execute the tool.
+
+    Description - Stores a pointer to the description to print when executing
+        the tool.
+
+    Depfile - Stores a pointer to the dependency file output name.
+
+    DepsFormat - Stores a pointer to the dependency file format: MSVC or GCC.
+
+--*/
+
+typedef struct _MBGEN_TOOL {
+    LIST_ENTRY ListEntry;
+    PSTR Name;
+    PSTR Command;
+    PSTR Description;
+    PSTR Depfile;
+    PSTR DepsFormat;
+} MBGEN_TOOL, *PMBGEN_TOOL;
 
 /*++
 
@@ -121,8 +222,8 @@ Members:
 
     Root - Stores the directory tree root for the target.
 
-    Path - Stores the directory path relative to the root of the target, not
-        including the actual file name.
+    Path - Stores the directory path relative to the root, not including the
+        actual file name.
 
     CompletePath - Stores the complete file path to the script.
 
@@ -132,6 +233,10 @@ Members:
         artificially appended null terminator.
 
     Result - Stores the result returned from executing the script.
+
+    TargetList - Stores the head of the list of targets in this script.
+
+    TargetCount - Stores the number of targets on the target list.
 
 --*/
 
@@ -143,7 +248,69 @@ typedef struct _MBGEN_SCRIPT {
     PSTR Script;
     UINTN Size;
     PCHALK_OBJECT Result;
+    LIST_ENTRY TargetList;
+    ULONG TargetCount;
 } MBGEN_SCRIPT, *PMBGEN_SCRIPT;
+
+/*++
+
+Structure Description:
+
+    This structure stores a target definition.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous tools in the build.
+
+    Script - Stores a pointer back to the script that owns this target.
+
+    Label - Stores a pointer to the name of the target.
+
+    Output - Stores a pointer to the output name.
+
+    Tool - Stores the name of the tool used to build this target.
+
+    Flags - Stores a bitfield of flags regarding the target. See MBGEN_TARGET_*
+        definitions.
+
+    Sources - Stores the required sources.
+
+    Deps - Stores the array of dependencies for this target.
+
+    PublicDeps - Stores the array of public dependencies for this target.
+
+    SourcesList - Stores a pointer to the list of sources, straight from the
+        dictionary.
+
+    DepsList - Stores a pointer to the list of dependencies, straight from the
+        dictionary.
+
+    PublicDepsList - Stores a pointer to the dependencies added to any target
+        that lists this one as a dependency.
+
+    Config - Stores a pointer to the configuration information for this target.
+
+    PublicConfig - Stores a pointer to the configuration information that is
+        added to any target that lists this target as a dependency.
+
+--*/
+
+struct _MBGEN_TARGET {
+    LIST_ENTRY ListEntry;
+    PMBGEN_SCRIPT Script;
+    PSTR Label;
+    PSTR Output;
+    PSTR Tool;
+    ULONG Flags;
+    MBGEN_STRINGS Sources;
+    MBGEN_TARGET_LIST Deps;
+    MBGEN_TARGET_LIST PublicDeps;
+    PCHALK_OBJECT SourcesList;
+    PCHALK_OBJECT DepsList;
+    PCHALK_OBJECT PublicDepsList;
+    PCHALK_OBJECT Config;
+    PCHALK_OBJECT PublicConfig;
+};
 
 //
 // -------------------------------------------------------------------- Globals
@@ -154,8 +321,93 @@ typedef struct _MBGEN_SCRIPT {
 //
 
 //
+// Main application functions
+//
+
+INT
+MbgenParseScriptResults (
+    PMBGEN_CONTEXT Context,
+    PMBGEN_SCRIPT Script
+    );
+
+/*++
+
+Routine Description:
+
+    This routine parses the return value of a target script.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    Script - Supplies a pointer to the script that just finished executing.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+VOID
+MbgenDestroyTarget (
+    PMBGEN_TARGET Target
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys a target entry.
+
+Arguments:
+
+    Target - Supplies a pointer to the target to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+//
 // Script utility functions
 //
+
+INT
+MbgenLoadTargetScript (
+    PMBGEN_CONTEXT Context,
+    PSTR TargetSpecifier,
+    MBGEN_SCRIPT_ORDER Order,
+    PMBGEN_SCRIPT *Script
+    );
+
+/*++
+
+Routine Description:
+
+    This routine loads the script corresponding to the given target specifier
+    string.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    TargetSpecifier - Supplies a pointer to the target specifier string.
+
+    Order - Supplies the order to apply to the script.
+
+    Script - Supplies a pointer where a pointer to the loaded or found script
+        will be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
 
 INT
 MbgenLoadProjectRoot (
@@ -183,7 +435,9 @@ Return Value:
 INT
 MbgenLoadScript (
     PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET_SPECIFIER TargetPath
+    MBGEN_SCRIPT_ORDER Order,
+    PMBGEN_TARGET_SPECIFIER TargetPath,
+    PMBGEN_SCRIPT *FinalScript
     );
 
 /*++
@@ -197,8 +451,13 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
+    Order - Supplies the order to apply to the script.
+
     TargetPath - Supplies a pointer to the target path to load. The target
-        name and toolchain are ignored, only the root and path are observed.
+        name is ignored, only the root and path are observed.
+
+    FinalScript - Supplies a pointer where a pointer to the newly loaded or
+        found script will be returned on success.
 
 Return Value:
 
@@ -234,6 +493,43 @@ Return Value:
 //
 // Path utility functions
 //
+
+INT
+MbgenParseTargetSpecifier (
+    PMBGEN_CONTEXT Context,
+    PSTR Name,
+    MBGEN_DIRECTORY_TREE RelativeTree,
+    PSTR RelativePath,
+    PMBGEN_TARGET_SPECIFIER Target
+    );
+
+/*++
+
+Routine Description:
+
+    This routine breaks a target specifier string down into its components.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    Name - Supplies a pointer to the name string.
+
+    RelativeTree - Supplies the tree type (usually source or build) that
+        relative paths are rooted against.
+
+    RelativePath - Supplies a pointer to the path to prepend to relative paths.
+
+    Target - Supplies a pointer where the target will be returned on success.
+        The caller will be responsible for freeing the string buffers.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
 
 PSTR
 MbgenAppendPaths3 (
@@ -337,6 +633,64 @@ Arguments:
 Return Value:
 
     Returns the path of the given tree. The caller does not own this memory.
+
+--*/
+
+PSTR
+MbgenSplitExtension (
+    PSTR Path,
+    PSTR *Extension
+    );
+
+/*++
+
+Routine Description:
+
+    This routine splits the extension portion off the end of a file path.
+
+Arguments:
+
+    Path - Supplies a pointer to the path to split.
+
+    Extension - Supplies a pointer where a pointer to the extension will be
+        returned on success. This memory will be part of the return value
+        allocation, and does not need to be explicitly freed. This returns NULL
+        if the path contains no extension or is a directory (ends in a slash).
+
+Return Value:
+
+    Returns a copy of the string, chopped before the last period. It is the
+    caller's responsibility to free this memory.
+
+    NULL on allocation failure.
+
+--*/
+
+//
+// Chalk support functions
+//
+
+INT
+MbgenAddChalkBuiltins (
+    PMBGEN_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds the functions in the global scope of the Chalk
+    interpreter for the mbgen program.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
 
 --*/
 

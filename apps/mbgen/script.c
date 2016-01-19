@@ -27,6 +27,7 @@ Environment:
 
 #include <assert.h>
 #include <errno.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -61,9 +62,126 @@ MbgenDestroyScript (
 // -------------------------------------------------------------------- Globals
 //
 
+CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
+    {
+        ChalkCString,
+        "globalenv",
+        offsetof(MBGEN_CONTEXT, GlobalName),
+        FALSE,
+        {0}
+    },
+
+    {
+        ChalkCString,
+        "default_target",
+        offsetof(MBGEN_CONTEXT, DefaultName),
+        FALSE,
+        {0}
+    },
+
+    {0}
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
+
+INT
+MbgenLoadTargetScript (
+    PMBGEN_CONTEXT Context,
+    PSTR TargetSpecifier,
+    MBGEN_SCRIPT_ORDER Order,
+    PMBGEN_SCRIPT *Script
+    )
+
+/*++
+
+Routine Description:
+
+    This routine loads the script corresponding to the given target specifier
+    string.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    TargetSpecifier - Supplies a pointer to the target specifier string.
+
+    Order - Supplies the order to apply to the script.
+
+    Script - Supplies a pointer where a pointer to the loaded or found script
+        will be returned on success.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+{
+
+    INT Status;
+    MBGEN_TARGET_SPECIFIER Target;
+
+    memset(&Target, 0, sizeof(MBGEN_TARGET_SPECIFIER));
+    Status = MbgenParseTargetSpecifier(Context,
+                                       TargetSpecifier,
+                                       MbgenSourceTree,
+                                       NULL,
+                                       &Target);
+
+    if (Status != 0) {
+        goto LoadTargetScriptEnd;
+    }
+
+    //
+    // Reset the context to give each run a fresh slate.
+    //
+
+    Status = ChalkClearInterpreter(&(Context->Interpreter));
+    if (Status != 0) {
+        goto LoadTargetScriptEnd;
+    }
+
+    Status = MbgenAddChalkBuiltins(Context);
+    if (Status != 0) {
+        goto LoadTargetScriptEnd;
+    }
+
+    //
+    // Execute the command line arguments and global contents.
+    //
+
+    Status = ChalkExecuteDeferredScripts(&(Context->Interpreter),
+                                         MbgenScriptOrderCommandLine);
+
+    if (Status != 0) {
+        goto LoadTargetScriptEnd;
+    }
+
+    if (Order > MbgenScriptOrderGlobal) {
+        Status = ChalkExecuteDeferredScripts(&(Context->Interpreter),
+                                             MbgenScriptOrderGlobal);
+
+        if (Status != 0) {
+            goto LoadTargetScriptEnd;
+        }
+    }
+
+    Status = MbgenLoadScript(Context, Order, &Target, Script);
+    if (Status != 0) {
+        goto LoadTargetScriptEnd;
+    }
+
+LoadTargetScriptEnd:
+    if (Target.Path != NULL) {
+        free(Target.Path);
+    }
+
+    return Status;
+}
 
 INT
 MbgenLoadProjectRoot (
@@ -95,7 +213,11 @@ Return Value:
 
     memset(&TargetPath, 0, sizeof(MBGEN_TARGET_SPECIFIER));
     TargetPath.Root = MbgenSourceTree;
-    Status = MbgenLoadScript(Context, &TargetPath);
+    Status = MbgenLoadScript(Context,
+                             MbgenScriptOrderProjectRoot,
+                             &TargetPath,
+                             NULL);
+
     if (Status != 0) {
         return Status;
     }
@@ -103,6 +225,62 @@ Return Value:
     if ((Context->Options & MBGEN_OPTION_DEBUG) != 0) {
         printf("Global context after project root:\n");
         ChalkPrintObject(Context->Interpreter.Global.Dict, 0);
+        printf("\n");
+    }
+
+    //
+    // Read the important variables into the context structure.
+    //
+
+    Status = ChalkConvertDictToStructure(&(Context->Interpreter),
+                                         Context->Interpreter.Global.Dict,
+                                         MbgenProjectRootMembers,
+                                         Context);
+
+    if (Status != 0) {
+        return Status;
+    }
+
+    if (Context->DefaultName == NULL) {
+        Context->DefaultName = strdup(MBGEN_DEFAULT_NAME);
+        if (Context->DefaultName == NULL) {
+            return ENOMEM;
+        }
+    }
+
+    //
+    // Load up the global environment script to get it loaded with the correct
+    // order.
+    //
+
+    if (Context->GlobalName != NULL) {
+        Status = MbgenLoadTargetScript(Context,
+                                       Context->GlobalName,
+                                       MbgenScriptOrderGlobal,
+                                       NULL);
+
+        if (Status != 0) {
+            fprintf(stderr,
+                    "Error: Failed to load global environment script.\n");
+
+            return Status;
+        }
+    }
+
+    //
+    // Load the default target.
+    //
+
+    if (Context->DefaultName != NULL) {
+        Status = MbgenLoadTargetScript(Context,
+                                       Context->DefaultName,
+                                       MbgenScriptOrderTarget,
+                                       NULL);
+
+        if (Status != 0) {
+            fprintf(stderr, "Error: Failed to load default target.\n");
+            return Status;
+        }
     }
 
     return 0;
@@ -111,7 +289,9 @@ Return Value:
 INT
 MbgenLoadScript (
     PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET_SPECIFIER TargetPath
+    MBGEN_SCRIPT_ORDER Order,
+    PMBGEN_TARGET_SPECIFIER TargetPath,
+    PMBGEN_SCRIPT *FinalScript
     )
 
 /*++
@@ -125,8 +305,13 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
+    Order - Supplies the order to apply to the script.
+
     TargetPath - Supplies a pointer to the target path to load. The target
-        name and toolchain are ignored, only the root and path are observed.
+        name is ignored, only the root and path are observed.
+
+    FinalScript - Supplies a pointer where a pointer to the newly loaded or
+        found script will be returned on success.
 
 Return Value:
 
@@ -138,6 +323,7 @@ Return Value:
 
 {
 
+    ULONG ExecuteOrder;
     FILE *File;
     PSTR FinalPath;
     PMBGEN_SCRIPT Script;
@@ -148,14 +334,7 @@ Return Value:
     File = NULL;
     FinalPath = NULL;
     Script = NULL;
-
-    //
-    // If the path is NULL, then that special case is treated as the project
-    // root script. Skip searching for an existing script in that case as the
-    // string compare would fault on NULL.
-    //
-
-    if (TargetPath->Path == NULL) {
+    if (Order == MbgenScriptOrderProjectRoot) {
 
         assert((TargetPath->Root == MbgenSourceTree) &&
                (LIST_EMPTY(&(Context->ScriptList))));
@@ -169,9 +348,14 @@ Return Value:
         }
 
         Tree = MbgenPathForTree(Context, TargetPath->Root);
-        FinalPath = MbgenAppendPaths3(Tree,
-                                      TargetPath->Path,
-                                      Context->BuildFileName);
+        if (Order == MbgenScriptOrderGlobal) {
+            FinalPath = MbgenAppendPaths(Tree, TargetPath->Path);
+
+        } else {
+            FinalPath = MbgenAppendPaths3(Tree,
+                                          TargetPath->Path,
+                                          Context->BuildFileName);
+        }
     }
 
     if (FinalPath == NULL) {
@@ -209,6 +393,7 @@ Return Value:
     }
 
     memset(Script, 0, sizeof(MBGEN_SCRIPT));
+    INITIALIZE_LIST_HEAD(&(Script->TargetList));
     Script->Root = TargetPath->Root;
     Script->CompletePath = FinalPath;
     if (TargetPath->Path != NULL) {
@@ -235,14 +420,20 @@ Return Value:
     Script->Script[Script->Size] = '\0';
 
     //
-    // Execute the script.
+    // Execute the script. If it's a target script, execute now to get the
+    // return value.
     //
+
+    ExecuteOrder = Order;
+    if (Order == MbgenScriptOrderTarget) {
+        ExecuteOrder = 0;
+    }
 
     Status = ChalkLoadScriptBuffer(&(Context->Interpreter),
                                    FinalPath,
                                    Script->Script,
                                    Script->Size,
-                                   0,
+                                   ExecuteOrder,
                                    &(Script->Result));
 
     if (Status != 0) {
@@ -254,11 +445,22 @@ Return Value:
         goto LoadScriptEnd;
     }
 
-    if ((Context->Options & MBGEN_OPTION_DEBUG) != 0) {
-        ChalkPrintObject(Script->Result, 0);
+    if (ExecuteOrder != 0) {
+        Status = ChalkExecuteDeferredScripts(&(Context->Interpreter), Order);
+        if (Status != 0) {
+            goto LoadScriptEnd;
+        }
+
+        INSERT_BEFORE(&(Script->ListEntry), &(Context->ScriptList));
+
+    } else {
+        INSERT_BEFORE(&(Script->ListEntry), &(Context->ScriptList));
+        Status = MbgenParseScriptResults(Context, Script);
+        if (Status != 0) {
+            goto LoadScriptEnd;
+        }
     }
 
-    INSERT_BEFORE(&(Script->ListEntry), &(Context->ScriptList));
     Status = 0;
 
 LoadScriptEnd:
@@ -272,8 +474,17 @@ LoadScriptEnd:
 
     if (Status != 0) {
         if (Script != NULL) {
+            if (Script->ListEntry.Next != NULL) {
+                LIST_REMOVE(&(Script->ListEntry));
+            }
+
             MbgenDestroyScript(Script);
+            Script = NULL;
         }
+    }
+
+    if (FinalScript != NULL) {
+        *FinalScript = Script;
     }
 
     return Status;
@@ -360,6 +571,7 @@ Return Value:
         Script = LIST_VALUE(CurrentEntry, MBGEN_SCRIPT, ListEntry);
         CurrentEntry = CurrentEntry->Next;
         if ((Script->Root == TargetPath->Root) &&
+            (Script->Path != NULL) &&
             (strcmp(Script->Path, TargetPath->Path) == 0)) {
 
             return Script;
@@ -392,6 +604,8 @@ Return Value:
 
 {
 
+    PMBGEN_TARGET Target;
+
     if (Script->Script != NULL) {
         free(Script->Script);
     }
@@ -407,6 +621,15 @@ Return Value:
     if (Script->Result != NULL) {
         ChalkObjectReleaseReference(Script->Result);
     }
+
+    while (!LIST_EMPTY(&(Script->TargetList))) {
+        Target = LIST_VALUE(Script->TargetList.Next, MBGEN_TARGET, ListEntry);
+        LIST_REMOVE(&(Target->ListEntry));
+        Script->TargetCount -= 1;
+        MbgenDestroyTarget(Target);
+    }
+
+    assert(Script->TargetCount == 0);
 
     free(Script);
     return;

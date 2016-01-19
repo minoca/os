@@ -59,6 +59,13 @@ ChalkExecute (
     PCHALK_OBJECT *ReturnValue
     );
 
+PCHALK_SCRIPT
+ChalkCreateScript (
+    PCHALK_INTERPRETER Interpreter,
+    PSTR Path,
+    ULONG Order
+    );
+
 VOID
 ChalkUnloadScript (
     PCHALK_INTERPRETER Interpreter,
@@ -147,7 +154,6 @@ Return Value:
 
 {
 
-    PPARSER Parser;
     INT Status;
 
     memset(Interpreter, 0, sizeof(CHALK_INTERPRETER));
@@ -158,23 +164,7 @@ Return Value:
         goto InitializeInterpreterEnd;
     }
 
-    Parser = ChalkAllocate(sizeof(PARSER));
-    if (Parser == NULL) {
-        Status = ENOMEM;
-        goto InitializeInterpreterEnd;
-    }
-
-    memset(Parser, 0, sizeof(PARSER));
-    Interpreter->Parser = Parser;
-    Parser->Flags = 0;
-    Parser->Allocate = (PYY_ALLOCATE)ChalkAllocate;
-    Parser->Free = ChalkFree;
-    Parser->GetToken = ChalkLexGetToken;
-    Parser->Grammar = ChalkGrammar;
-    Parser->GrammarBase = ChalkNodeBegin;
-    Parser->GrammarEnd = ChalkNodeEnd;
-    Parser->GrammarStart = ChalkNodeTranslationUnit;
-    Parser->MaxRecursion = 500;
+    Interpreter->Generation = 1;
 
     //
     // Add the builtin functions.
@@ -233,13 +223,61 @@ Return Value:
         ChalkUnloadScript(Interpreter, Script);
     }
 
-    if (Interpreter->Parser != NULL) {
-        YyParserDestroy(Interpreter->Parser);
-        ChalkFree(Interpreter->Parser);
-        Interpreter->Parser = NULL;
+    return;
+}
+
+INT
+ChalkClearInterpreter (
+    PCHALK_INTERPRETER Interpreter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine clears the global variable scope back to its original state
+    for the given Chalk interpreter. Loaded scripts are still saved, but the
+    interpreter state is as if they had never been executed.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter to reset.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number if the context could not be fully reinitialized.
+
+--*/
+
+{
+
+    INT Status;
+
+    if (Interpreter->Global.Dict != NULL) {
+        ChalkObjectReleaseReference(Interpreter->Global.Dict);
+        Interpreter->Global.Dict = NULL;
     }
 
-    return;
+    Interpreter->Generation += 1;
+    Interpreter->Global.Dict = ChalkCreateDict(NULL);
+    if (Interpreter->Global.Dict == NULL) {
+        Status = ENOMEM;
+        goto ClearInterpreterEnd;
+    }
+
+    //
+    // Add the builtin functions.
+    //
+
+    Status = ChalkRegisterFunctions(Interpreter, NULL, ChalkBuiltinFunctions);
+    if (Status != 0) {
+        goto ClearInterpreterEnd;
+    }
+
+ClearInterpreterEnd:
+    return Status;
 }
 
 INT
@@ -263,8 +301,7 @@ Arguments:
     Interpreter - Supplies a pointer to the initialized interpreter.
 
     Path - Supplies a pointer to a string describing where this script came
-        from. This pointer is used directly and should stick around while the
-        script is loaded.
+        from. A copy of this string is made.
 
     Buffer - Supplies a pointer to the buffer containing the script to
         execute. A copy of this buffer is created.
@@ -297,18 +334,15 @@ Return Value:
         return EINVAL;
     }
 
-    Script = ChalkAllocate(sizeof(CHALK_SCRIPT));
+    Script = ChalkCreateScript(Interpreter, Path, Order);
     if (Script == NULL) {
         return ENOMEM;
     }
 
     Status = 0;
-    memset(Script, 0, sizeof(CHALK_SCRIPT));
-    Script->Order = Order;
-    Script->Path = Path;
     Script->Data = ChalkAllocate(Size + 1);
     if (Script->Data == NULL) {
-        ChalkFree(Script);
+        ChalkUnloadScript(Interpreter, Script);
     }
 
     memcpy(Script->Data, Buffer, Size);
@@ -318,9 +352,7 @@ Return Value:
     if (Script->Order == 0) {
         Status = ChalkExecuteScript(Interpreter, Script, ReturnValue);
         if (Status != 0) {
-            LIST_REMOVE(&(Script->ListEntry));
-            ChalkFree(Script->Data);
-            ChalkFree(Script);
+            ChalkUnloadScript(Interpreter, Script);
         }
     }
 
@@ -345,7 +377,8 @@ Arguments:
 
     Interpreter - Supplies a pointer to the initialized interpreter.
 
-    Path - Supplies a pointer to the path of the file to load.
+    Path - Supplies a pointer to the path of the file to load. A copy of this
+        string is made.
 
     Order - Supplies the order identifier for ordering which scripts should run
         when. Supply 0 to run the script now.
@@ -394,15 +427,12 @@ Return Value:
         goto LoadScriptFileEnd;
     }
 
-    Script = ChalkAllocate(sizeof(CHALK_SCRIPT));
+    Script = ChalkCreateScript(Interpreter, Path, Order);
     if (Script == NULL) {
-        Status = errno;
+        Status = ENOMEM;
         goto LoadScriptFileEnd;
     }
 
-    memset(Script, 0, sizeof(CHALK_SCRIPT));
-    Script->Order = Order;
-    Script->Path = Path;
     Script->Data = ChalkAllocate(Stat.st_size + 1);
     if (Script->Data == NULL) {
         Status = errno;
@@ -451,11 +481,7 @@ LoadScriptFileEnd:
     if (Status != 0) {
         perror("Error");
         if (Script != NULL) {
-            if (Script->Data != NULL) {
-                ChalkFree(Script->Data);
-            }
-
-            ChalkFree(Script);
+            ChalkUnloadScript(Interpreter, Script);
         }
     }
 
@@ -500,7 +526,9 @@ Return Value:
     while (CurrentEntry != &(Interpreter->ScriptList)) {
         Script = LIST_VALUE(CurrentEntry, CHALK_SCRIPT, ListEntry);
         CurrentEntry = CurrentEntry->Next;
-        if ((Script->ParseTree != NULL) || (Script->Order != Order)) {
+        if ((Script->Generation == Interpreter->Generation) ||
+            (Script->Order != Order)) {
+
             continue;
         }
 
@@ -511,6 +539,68 @@ Return Value:
     }
 
 ExecuteDeferredScriptsEnd:
+    return Status;
+}
+
+INT
+ChalkUnloadScriptsByOrder (
+    PCHALK_INTERPRETER Interpreter,
+    ULONG Order
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unloads all scripts of a given order. It also resets the
+    interpreter context.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the initialized interpreter.
+
+    Order - Supplies the order identifier. Any scripts with this order
+        identifier will be unloaded. Supply 0 to unload all scripts.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PCHALK_SCRIPT Script;
+    INT Status;
+
+    Status = ChalkClearInterpreter(Interpreter);
+    if (Status != 0) {
+        goto UnloadScriptsByOrderEnd;
+    }
+
+    CurrentEntry = Interpreter->ScriptList.Next;
+    while (CurrentEntry != &(Interpreter->ScriptList)) {
+        Script = LIST_VALUE(CurrentEntry, CHALK_SCRIPT, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        if ((Order == 0) || (Script->Order == Order)) {
+
+            //
+            // It would be bad to unload a script whose functions are
+            // still visible in the global context.
+            //
+
+            assert(Script->Generation != Interpreter->Generation);
+
+            ChalkUnloadScript(Interpreter, Script);
+        }
+    }
+
+    Status = 0;
+
+UnloadScriptsByOrderEnd:
     return Status;
 }
 
@@ -809,12 +899,12 @@ Return Value:
 
     INT Status;
 
-    assert(Script->ParseTree == NULL);
-
-    Status = ChalkParseScript(Interpreter, Script, &(Script->ParseTree));
-    if (Status != 0) {
-        Status = ENOMEM;
-        goto ExecuteScriptEnd;
+    if (Script->ParseTree == NULL) {
+        Status = ChalkParseScript(Interpreter, Script, &(Script->ParseTree));
+        if (Status != 0) {
+            Status = ENOMEM;
+            goto ExecuteScriptEnd;
+        }
     }
 
     Status = ChalkPushNode(Interpreter, Script->ParseTree, Script, FALSE);
@@ -822,6 +912,7 @@ Return Value:
         goto ExecuteScriptEnd;
     }
 
+    Script->Generation = Interpreter->Generation;
     Status = ChalkExecute(Interpreter, ReturnValue);
     if (Status != 0) {
         goto ExecuteScriptEnd;
@@ -933,6 +1024,85 @@ Return Value:
     return Status;
 }
 
+PCHALK_SCRIPT
+ChalkCreateScript (
+    PCHALK_INTERPRETER Interpreter,
+    PSTR Path,
+    ULONG Order
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new chalk script object.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Path - Supplies a pointer to a string describing where this script came
+        from. A copy of this pointer is made.
+
+    Order - Supplies the order identifier for ordering which scripts should run
+        when.
+
+Return Value:
+
+    Returns a pointer to the script on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    PPARSER Parser;
+    PCHALK_SCRIPT Script;
+    INT Status;
+
+    Script = ChalkAllocate(sizeof(CHALK_SCRIPT));
+    if (Script == NULL) {
+        Status = ENOMEM;
+        goto CreateScriptEnd;
+    }
+
+    memset(Script, 0, sizeof(CHALK_SCRIPT));
+    Parser = ChalkAllocate(sizeof(PARSER));
+    if (Parser == NULL) {
+        Status = ENOMEM;
+        goto CreateScriptEnd;
+    }
+
+    memset(Parser, 0, sizeof(PARSER));
+    Script->Parser = Parser;
+    Script->Order = Order;
+    Script->Path = strdup(Path);
+    if (Script->Path == NULL) {
+        Status = ENOMEM;
+        goto CreateScriptEnd;
+    }
+
+    Parser->Flags = 0;
+    Parser->Allocate = (PYY_ALLOCATE)ChalkAllocate;
+    Parser->Free = ChalkFree;
+    Parser->GetToken = ChalkLexGetToken;
+    Parser->Grammar = ChalkGrammar;
+    Parser->GrammarBase = ChalkNodeBegin;
+    Parser->GrammarEnd = ChalkNodeEnd;
+    Parser->GrammarStart = ChalkNodeTranslationUnit;
+    Parser->MaxRecursion = 500;
+    Status = 0;
+
+CreateScriptEnd:
+    if (Status != 0) {
+        ChalkUnloadScript(Interpreter, Script);
+        Script = NULL;
+    }
+
+    return Script;
+}
+
 VOID
 ChalkUnloadScript (
     PCHALK_INTERPRETER Interpreter,
@@ -968,7 +1138,16 @@ Return Value:
     }
 
     if (Script->ParseTree != NULL) {
-        YyDestroyNode(Interpreter->Parser, Script->ParseTree);
+        YyDestroyNode(Script->Parser, Script->ParseTree);
+    }
+
+    if (Script->Parser != NULL) {
+        YyParserDestroy(Script->Parser);
+        ChalkFree(Script->Parser);
+    }
+
+    if (Script->Path != NULL) {
+        free(Script->Path);
     }
 
     ChalkFree(Script);

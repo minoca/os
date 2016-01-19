@@ -80,6 +80,9 @@ Members:
     Results - Stores the evaluation of intermediate items found while
         processing this node.
 
+    Data - Stores a pointer's worth of additinal data, for example the
+        iteration context in an interation statement.
+
 --*/
 
 struct _CHALK_NODE {
@@ -89,6 +92,7 @@ struct _CHALK_NODE {
     ULONG ChildIndex;
     PCHALK_SCRIPT Script;
     PCHALK_OBJECT *Results;
+    PVOID Data;
 };
 
 /*++
@@ -113,7 +117,8 @@ Members:
         assignments to know how to set the value of a dictionary element, list,
         or variable (which is really just another dict).
 
-    Parser - Stores a pointer to the parser object, currently of type PARSER.
+    Generation - Stores the interpreter generation number. This is incremented
+        whenever the interpreter context is cleared.
 
 --*/
 
@@ -124,7 +129,7 @@ struct _CHALK_INTERPRETER {
     ULONG NodeDepth;
     LIST_ENTRY ScriptList;
     PCHALK_OBJECT *LValue;
-    PVOID Parser;
+    ULONG Generation;
 };
 
 //
@@ -146,6 +151,7 @@ typedef enum _CHALK_C_TYPE {
     ChalkCFlag32,
     ChalkCSubStructure,
     ChalkCStructurePointer,
+    ChalkCObjectPointer,
 } CHALK_C_TYPE, *PCHALK_C_TYPE;
 
 typedef struct _CHALK_C_STRUCTURE_MEMBER
@@ -268,6 +274,31 @@ Return Value:
 --*/
 
 INT
+ChalkClearInterpreter (
+    PCHALK_INTERPRETER Interpreter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine clears the global variable scope back to its original state
+    for the given Chalk interpreter. Loaded scripts are still saved, but the
+    interpreter state is as if they had never been executed.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter to reset.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number if the context could not be fully reinitialized.
+
+--*/
+
+INT
 ChalkLoadScriptBuffer (
     PCHALK_INTERPRETER Interpreter,
     PSTR Path,
@@ -288,8 +319,7 @@ Arguments:
     Interpreter - Supplies a pointer to the initialized interpreter.
 
     Path - Supplies a pointer to a string describing where this script came
-        from. This pointer is used directly and should stick around while the
-        script is loaded.
+        from. A copy of this string is made.
 
     Buffer - Supplies a pointer to the buffer containing the script to
         execute. A copy of this buffer is created.
@@ -331,7 +361,8 @@ Arguments:
 
     Interpreter - Supplies a pointer to the initialized interpreter.
 
-    Path - Supplies a pointer to the path of the file to load.
+    Path - Supplies a pointer to the path of the file to load. A copy of this
+        string is made.
 
     Order - Supplies the order identifier for ordering which scripts should run
         when. Supply 0 to run the script now.
@@ -367,6 +398,34 @@ Arguments:
 
     Order - Supplies the order identifier. Any scripts with this order
         identifier that have not yet been run will be run now.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+ChalkUnloadScriptsByOrder (
+    PCHALK_INTERPRETER Interpreter,
+    ULONG Order
+    );
+
+/*++
+
+Routine Description:
+
+    This routine unloads all scripts of a given order. It also resets the
+    interpreter context.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the initialized interpreter.
+
+    Order - Supplies the order identifier. Any scripts with this order
+        identifier will be unloaded. Supply 0 to unload all scripts.
 
 Return Value:
 

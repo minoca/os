@@ -347,7 +347,7 @@ Return Value:
     PCHALK_OBJECT Condition;
     PCHALK_OBJECT Iteratee;
     PCHALK_OBJECT Iteration;
-    PVOID IteratorContext;
+    PVOID *IteratorContext;
     PCHALK_OBJECT Name;
     PPARSER_NODE ParseNode;
     INT PushIndex;
@@ -396,7 +396,7 @@ Return Value:
         //
 
         if (ParseNode->TokenCount == 5) {
-            IteratorContext = (PVOID *)&(Node->Results[1]);
+            IteratorContext = (PVOID *)&(Node->Data);
 
             //
             // If the expression hasn't even been evaluated yet, then go get it.
@@ -468,6 +468,7 @@ Return Value:
             }
 
             if (Status != 0) {
+                *IteratorContext = NULL;
                 return Status;
             }
 

@@ -104,7 +104,7 @@ typedef enum _CHALK_NODE_TYPE {
     ChalkNodePrimaryExpression,
     ChalkNodePostfixExpression,
     ChalkNodeArgumentExpressionList,
-    ChalkNodeUnaryExpression,
+    ChalkNodeUnaryExpression, // 8
     ChalkNodeUnaryOperator,
     ChalkNodeMultiplicativeExpression,
     ChalkNodeAdditiveExpression,
@@ -112,7 +112,7 @@ typedef enum _CHALK_NODE_TYPE {
     ChalkNodeRelationalExpression,
     ChalkNodeEqualityExpression,
     ChalkNodeAndExpression,
-    ChalkNodeExclusiveOrExpression,
+    ChalkNodeExclusiveOrExpression, // 0x10
     ChalkNodeInclusiveOrExpression,
     ChalkNodeLogicalAndExpression,
     ChalkNodeLogicalOrExpression,
@@ -120,7 +120,7 @@ typedef enum _CHALK_NODE_TYPE {
     ChalkNodeAssignmentExpression,
     ChalkNodeAssignmentOperator,
     ChalkNodeExpression,
-    ChalkNodeStatement,
+    ChalkNodeStatement, // 0x18
     ChalkNodeCompoundStatement,
     ChalkNodeStatementList,
     ChalkNodeExpressionStatement,
@@ -128,7 +128,7 @@ typedef enum _CHALK_NODE_TYPE {
     ChalkNodeIterationStatement,
     ChalkNodeJumpStatement,
     ChalkNodeTranslationUnit,
-    ChalkNodeExternalDeclaration,
+    ChalkNodeExternalDeclaration, // 0x20
     ChalkNodeIdentifierList,
     ChalkNodeFunctionDefinition,
     ChalkNodeEnd
@@ -200,6 +200,11 @@ Members:
 
     Order - Stores the order identifier of the script.
 
+    Generation - Stores the interpreter generation this script was run in,
+        or 0 if the script has not yet been executed.
+
+    Parser - Stores a pointer to the parser context for this script.
+
 --*/
 
 typedef struct _CHALK_SCRIPT {
@@ -209,6 +214,8 @@ typedef struct _CHALK_SCRIPT {
     ULONG Size;
     PVOID ParseTree;
     ULONG Order;
+    ULONG Generation;
+    PVOID Parser;
 } CHALK_SCRIPT, *PCHALK_SCRIPT;
 
 /*++
@@ -326,6 +333,8 @@ Members:
 
     EntryList - Stores the head of the list of CHALK_DICT_ENTRY entries.
 
+    Count - Stores the number of entries in the dictionary.
+
     Generation - Stores the dictionary generation, used to detect if a
         dictionary has changed out from under an iteration.
 
@@ -334,6 +343,7 @@ Members:
 typedef struct _CHALK_DICT {
     CHALK_OBJECT_HEADER Header;
     LIST_ENTRY EntryList;
+    UINTN Count;
     UINTN Generation;
 } CHALK_DICT, *PCHALK_DICT;
 
@@ -1035,6 +1045,37 @@ ChalkFunctionPrint (
 Routine Description:
 
     This routine implements the binding prototype between Chalk and C.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+INT
+ChalkFunctionLength (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the built in len function.
 
 Arguments:
 
