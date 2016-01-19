@@ -36,6 +36,7 @@ all:
 ## Define the architecture and object of the build machine.
 ##
 
+OS ?= $(shell uname -s)
 BUILD_ARCH = $(shell uname -m)
 ifeq ($(BUILD_ARCH), $(filter i686 i586,$(BUILD_ARCH)))
 BUILD_ARCH := x86
@@ -119,7 +120,12 @@ CC_FOR_BUILD ?= gcc
 AR_FOR_BUILD ?= ar
 OBJCOPY_FOR_BUILD ?= objcopy
 STRIP_FOR_BUILD ?= strip
+
+ifeq ($(OS), $(filter Windows_NT Minoca,$(OS)))
 CECHO_CYAN ?= cecho -fC
+else
+CECHO_CYAN ?= echo
+endif
 
 ifeq (x86, $(ARCH))
 CC := i686-pc-minoca-gcc

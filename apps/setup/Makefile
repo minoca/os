@@ -54,7 +54,13 @@ ifeq ($(OS),Windows_NT)
 
 DIRS += win32
 
+else
+
+DIRS += uos
+
 endif
+
+EXTRA_SRC_DIRS = uos
 
 include $(SRCROOT)/os/minoca.mk
 

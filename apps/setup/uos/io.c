@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2014 Minoca Corp. All Rights Reserved
+Copyright (c) 2016 Minoca Corp. All Rights Reserved
 
 Module Name:
 
@@ -8,12 +8,12 @@ Module Name:
 
 Abstract:
 
-    This module implements support for doing I/O on Minoca OS in the setup
-    application.
+    This module implements support for doing I/O on generic POSIX systems in
+    the setup application.
 
 Author:
 
-    Evan Green 11-Apr-2014
+    Evan Green 19-Jan-2016
 
 Environment:
 
@@ -35,7 +35,6 @@ Environment:
 #include <utime.h>
 
 #include "../setup.h"
-#include <mlibc.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -44,22 +43,6 @@ Environment:
 //
 // ------------------------------------------------------ Data Type Definitions
 //
-
-/*++
-
-Structure Description:
-
-    This structure describes a handle to an I/O object in the setup app.
-
-Members:
-
-    Handle - Stores the device handle.
-
---*/
-
-typedef struct _SETUP_OS_HANDLE {
-    HANDLE Handle;
-} SETUP_OS_HANDLE, *PSETUP_OS_HANDLE;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -189,40 +172,20 @@ Return Value:
 
 {
 
-    PSETUP_OS_HANDLE IoHandle;
-    KSTATUS Status;
+    int Descriptor;
 
-    IoHandle = malloc(sizeof(SETUP_OS_HANDLE));
-    if (IoHandle == NULL) {
-        errno = ENOMEM;
+    if (Destination->Path == NULL) {
+        fprintf(stderr, "Error: Device ID paths not supported.\n");
+        errno = ENOENT;
         return NULL;
     }
 
-    memset(IoHandle, 0, sizeof(SETUP_OS_HANDLE));
-    IoHandle->Handle = INVALID_HANDLE;
-    if (Destination->Path != NULL) {
-        IoHandle->Handle = (HANDLE)open(Destination->Path,
-                                        Flags,
-                                        CreatePermissions);
-
-        if (IoHandle->Handle == (HANDLE)-1) {
-            free(IoHandle);
-            return NULL;
-        }
-
-    } else {
-        Status = OsOpenDevice(Destination->DeviceId,
-                              SYS_OPEN_FLAG_READ | SYS_OPEN_FLAG_WRITE,
-                              &(IoHandle->Handle));
-
-        if (!KSUCCESS(Status)) {
-            free(IoHandle);
-            errno = ClConvertKstatusToErrorNumber(Status);
-            return NULL;
-        }
+    Descriptor = open(Destination->Path, Flags, CreatePermissions);
+    if (Descriptor == -1) {
+        return NULL;
     }
 
-    return IoHandle;
+    return (PVOID)(INTN)Descriptor;
 }
 
 VOID
@@ -248,14 +211,7 @@ Return Value:
 
 {
 
-    PSETUP_OS_HANDLE IoHandle;
-
-    IoHandle = Handle;
-    if (IoHandle->Handle != INVALID_HANDLE) {
-        OsClose(IoHandle->Handle);
-    }
-
-    free(IoHandle);
+    close((INTN)Handle);
     return;
 }
 
@@ -290,27 +246,7 @@ Return Value:
 
 {
 
-    UINTN BytesCompleted;
-    PSETUP_OS_HANDLE IoHandle;
-    KSTATUS Status;
-
-    IoHandle = Handle;
-    Status = OsPerformIo(IoHandle->Handle,
-                         IO_OFFSET_NONE,
-                         ByteCount,
-                         0,
-                         SYS_WAIT_TIME_INDEFINITE,
-                         Buffer,
-                         &BytesCompleted);
-
-    if ((!KSUCCESS(Status)) && (Status != STATUS_END_OF_FILE)) {
-        errno = ClConvertKstatusToErrorNumber(Status);
-        if (BytesCompleted == 0) {
-            BytesCompleted = -1;
-        }
-    }
-
-    return (ssize_t)BytesCompleted;
+    return read((INTN)Handle, Buffer, ByteCount);
 }
 
 ssize_t
@@ -344,27 +280,7 @@ Return Value:
 
 {
 
-    UINTN BytesCompleted;
-    PSETUP_OS_HANDLE IoHandle;
-    KSTATUS Status;
-
-    IoHandle = Handle;
-    Status = OsPerformIo(IoHandle->Handle,
-                         IO_OFFSET_NONE,
-                         ByteCount,
-                         SYS_IO_FLAG_WRITE,
-                         SYS_WAIT_TIME_INDEFINITE,
-                         Buffer,
-                         &BytesCompleted);
-
-    if ((!KSUCCESS(Status)) && (Status != STATUS_END_OF_FILE)) {
-        errno = ClConvertKstatusToErrorNumber(Status);
-        if (BytesCompleted == 0) {
-            BytesCompleted = -1;
-        }
-    }
-
-    return (ssize_t)BytesCompleted;
+    return write((INTN)Handle, Buffer, ByteCount);
 }
 
 ULONGLONG
@@ -396,30 +312,7 @@ Return Value:
 
 {
 
-    PSETUP_OS_HANDLE IoHandle;
-    ULONGLONG NewOffset;
-    SEEK_COMMAND SeekCommand;
-    KSTATUS Status;
-
-    IoHandle = Handle;
-    SeekCommand = SeekCommandFromBeginning;
-    Status = OsSeek(IoHandle->Handle, SeekCommand, Offset, &NewOffset);
-    if (!KSUCCESS(Status)) {
-        goto OsSeekEnd;
-    }
-
-    if (NewOffset > MAX_LONGLONG) {
-        Status = STATUS_INTEGER_OVERFLOW;
-        goto OsSeekEnd;
-    }
-
-OsSeekEnd:
-    if (!KSUCCESS(Status)) {
-        errno = ClConvertKstatusToErrorNumber(Status);
-        return -1;
-    }
-
-    return NewOffset;
+    return llseek((INTN)Handle, Offset, SEEK_SET);
 }
 
 ULONGLONG
@@ -448,18 +341,7 @@ Return Value:
 
 {
 
-    PSETUP_OS_HANDLE IoHandle;
-    ULONGLONG Offset;
-    KSTATUS Status;
-
-    IoHandle = Handle;
-    Status = OsSeek(IoHandle->Handle, SeekCommandFromCurrentOffset, 0, &Offset);
-    if (!KSUCCESS(Status)) {
-        errno = ClConvertKstatusToErrorNumber(Status);
-        return -1;
-    }
-
-    return Offset;
+    return llseek((INTN)Handle, 0, SEEK_CUR);
 }
 
 INT
@@ -499,12 +381,10 @@ Return Value:
 
 {
 
-    PSETUP_OS_HANDLE IoHandle;
     int Result;
     struct stat Stat;
 
-    IoHandle = Handle;
-    Result = fstat((int)(IoHandle->Handle), &Stat);
+    Result = fstat((INTN)Handle, &Stat);
     if (Result != 0) {
         return Result;
     }
@@ -552,11 +432,9 @@ Return Value:
 
 {
 
-    PSETUP_OS_HANDLE IoHandle;
     int Result;
 
-    IoHandle = Handle;
-    Result = ftruncate((int)(IoHandle->Handle), NewSize);
+    Result = ftruncate((INTN)Handle, NewSize);
     if (Result != 0) {
         return Result;
     }
@@ -835,8 +713,8 @@ Return Value:
 {
 
     //
-    // Since Minoca OS has support for executable bits, don't screw with the
-    // permissions that are already set.
+    // Since POSIX systems have support for executable bits, don't screw with
+    // the permissions that are already set.
     //
 
     return;

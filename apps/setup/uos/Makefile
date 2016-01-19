@@ -1,19 +1,19 @@
 ################################################################################
 #
-#   Copyright (c) 2013 Minoca Corp. All Rights Reserved
+#   Copyright (c) 2016 Minoca Corp. All Rights Reserved
 #
 #   Binary Name:
 #
-#       msetup (Win32)
+#       msetup_build
 #
 #   Abstract:
 #
-#       This executable implements the setup (OS installer) executable running
-#       on a Windows host.
+#       This executable implements the setup (OS installer) executable for
+#       POSIX based build machines.
 #
 #   Author:
 #
-#       Evan Green 8-Oct-2014
+#       Evan Green 19-Jan-2016
 #
 #   Environment:
 #
@@ -21,13 +21,13 @@
 #
 ################################################################################
 
-BINARY = msetup_build.exe
+BINARY = msetup_build
 
 BINPLACE = bin
 
 BUILD = yes
 
-BINARYTYPE = ntconsole
+BINARYTYPE = app
 
 INCLUDES += $(SRCROOT)/os/apps/inc;             \
             $(SRCROOT)/os/apps/lib/chalk;       \
@@ -36,12 +36,23 @@ VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
+ifeq ($(OS),Minoca)
+
 OBJS = $(COMMON_OBJS)   \
-       io.o             \
-       misc.o           \
-       msetuprc.rsc     \
-       part.o           \
-       win32sup.o       \
+       minoca/io.o      \
+       minoca/misc.o    \
+       minoca/part.o    \
+
+DYNLIBS = -lminocaos
+
+else
+
+OBJS = $(COMMON_OBJS)   \
+       io.o      \
+       misc.o    \
+       part.o    \
+
+endif
 
 TARGETLIBS = $(OBJROOT)/os/lib/partlib/build/partlib.a         \
              $(OBJROOT)/os/lib/fatlib/build/fat.a              \
@@ -52,17 +63,5 @@ TARGETLIBS = $(OBJROOT)/os/lib/partlib/build/partlib.a         \
              $(OBJROOT)/os/apps/setup/config/build/msetplat.a  \
              $(OBJROOT)/os/apps/lib/chalk/build/chalk.a        \
 
-DYNLIBS = -lsetupapi
-
 include $(SRCROOT)/os/minoca.mk
-
-##
-## Override the compiler since this is a Windows app.
-##
-
-CC := gcc
-LD := ld
-RCC := windres
-AR := ar
-AS := as
 
