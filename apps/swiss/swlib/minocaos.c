@@ -25,9 +25,11 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <osbase.h>
 #include <assert.h>
 #include <errno.h>
+#include <unistd.h>
+
+#include <osbase.h>
 #include <mlibc.h>
 #include "swlib.h"
 
@@ -246,6 +248,35 @@ Return Value:
 
     OsHeapFree(ProcessInformation);
     return;
+}
+
+int
+SwCloseFrom (
+    int Descriptor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine closes all open file descriptors greater than or equal to
+    the given descriptor.
+
+Arguments:
+
+    Descriptor - Supplies the minimum descriptor to close.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+{
+
+    return closefrom(Descriptor);
 }
 
 int

@@ -137,7 +137,7 @@ SwpReadSheBang (
 //
 
 SWISS_SIGNAL_NAME SwSignalMap[] = {
-    {0, "0"},
+    {0, "T"},
     {SIGHUP, "HUP"},
     {SIGINT, "INT"},
     {SIGQUIT, "QUIT"},

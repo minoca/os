@@ -28,9 +28,11 @@ Environment:
 #include <minoca/types.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
@@ -450,7 +452,12 @@ Return Value:
         }
     }
 
-    fchown(STDIN_FILENO, User->pw_uid, User->pw_gid);
+    Status = fchown(STDIN_FILENO, User->pw_uid, User->pw_gid);
+    if (Status != 0) {
+        Status = errno;
+        goto MainEnd;
+    }
+
     fchmod(STDIN_FILENO, S_IRUSR | S_IWUSR);
     SwUpdateUtmp(getpid(), USER_PROCESS, TtyName, UserName, Host);
     SwBecomeUser(User);
@@ -476,7 +483,7 @@ Return Value:
 
     signal(SIGINT, SIG_DFL);
     closelog();
-    closefrom(STDERR_FILENO + 1);
+    SwCloseFrom(STDERR_FILENO + 1);
     SwExecuteShell(User->pw_shell, TRUE, NULL, NULL);
     Status = 1;
 

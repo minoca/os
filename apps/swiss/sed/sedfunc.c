@@ -1651,7 +1651,7 @@ Return Value:
 
     snprintf(LineNumberBuffer,
              sizeof(LineNumberBuffer),
-             "%I64d",
+             "%lld",
              Context->LineNumber);
 
     SedPrint(Context, LineNumberBuffer, '\n');

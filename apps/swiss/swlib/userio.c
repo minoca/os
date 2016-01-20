@@ -296,7 +296,7 @@ Return Value:
 
     printf("Minoca %s version %d.%d.%d\n"
            "Built on %s\n"
-           "Copyright (c) 2013, Minoca Corp. All Rights Reserved.\n\n",
+           "Copyright (c) 2013-2016 Minoca Corp. All Rights Reserved.\n\n",
            SwCurrentApplication,
            MajorVersion,
            MinorVersion,

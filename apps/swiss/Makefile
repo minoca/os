@@ -32,30 +32,10 @@ INCLUDES += $(SRCDIR)/;$(SRCROOT)/os/apps/inc/libc;$(SRCROOT)/os/apps/inc;
 include $(SRCDIR)/sources
 
 OBJS = $(COMMON_OBJS)   \
-       chown.o          \
+       $(UOS_OBJS)      \
        cmds.o           \
-       init.o           \
-       login/chpasswd.o \
-       login/getty.o    \
-       login/groupadd.o \
-       login/groupdel.o \
-       login/login.o    \
-       login/lutil.o    \
-       login/passwd.o   \
-       login/su.o       \
-       login/sulogin.o  \
-       login/useradd.o  \
-       login/userdel.o  \
-       login/vlock.o    \
-       mkfifo.o         \
-       readlink.o       \
-       sh/shuos.o       \
-       ssdaemon.o       \
-       swlib/chownutl.o \
+       dw.o             \
        swlib/minocaos.o \
-       swlib/uos.o      \
-       telnet.o         \
-       telnetd.o        \
 
 TARGETLIBS = $(OBJROOT)/os/lib/termlib/termlib.a     \
 
@@ -64,6 +44,10 @@ DYNLIBS = -lminocaos
 ifeq ($(OS),Windows_NT)
 
 DIRS = win32
+
+else
+
+DIRS = uos
 
 endif
 

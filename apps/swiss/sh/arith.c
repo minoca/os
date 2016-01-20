@@ -356,7 +356,7 @@ Return Value:
 
     *AnswerSize = snprintf(AnswerBuffer,
                            SHELL_ARITHMETIC_INTEGER_STRING_BUFFER_SIZE,
-                           "%ld",
+                           "%d",
                            NumericAnswer) + 1;
 
     Result = TRUE;
@@ -1302,7 +1302,7 @@ Return Value:
 
     StringSize = snprintf(StringBuffer,
                           SHELL_ARITHMETIC_INTEGER_STRING_BUFFER_SIZE,
-                          "%ld",
+                          "%d",
                           Value) + 1;
 
     assert((Lexer->AssignmentName != NULL) && (Lexer->AssignmentNameSize != 0));

@@ -32,6 +32,7 @@ Environment:
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "swlib.h"
 
 //
@@ -403,6 +404,7 @@ Return Value:
     PSTR OutputString;
     INT Pipe[2];
     INT Result;
+    INT Status;
 
     Child = -1;
     OriginalDirectory = NULL;
@@ -583,7 +585,11 @@ ExecuteSubshellEnd:
     //
 
     if (OriginalDirectory != NULL) {
-        chdir(OriginalDirectory);
+        Status = chdir(OriginalDirectory);
+        if (Status != 0) {
+            Result = FALSE;
+        }
+
         free(OriginalDirectory);
     }
 

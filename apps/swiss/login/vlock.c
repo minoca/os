@@ -33,6 +33,7 @@ Environment:
 #include <grp.h>
 #include <pwd.h>
 #include <shadow.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>

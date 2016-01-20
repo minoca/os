@@ -24,6 +24,7 @@ Author:
 #include <stdarg.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include "swlibos.h"
 
 //

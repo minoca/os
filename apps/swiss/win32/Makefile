@@ -21,7 +21,7 @@
 #
 ################################################################################
 
-BINARY = swiss.exe
+BINARY = swiss_build.exe
 
 BINPLACE = bin
 
@@ -36,6 +36,7 @@ VPATH += $(SRCDIR)/..:
 include $(SRCDIR)/../sources
 
 X86_OBJS = $(COMMON_OBJS)   \
+           dw.o             \
            swiss.rsc        \
            w32cmds.o        \
            sh/shntos.o      \

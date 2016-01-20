@@ -28,9 +28,11 @@ Environment:
 #include <minoca/types.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>
@@ -264,17 +266,17 @@ Return Value:
         close(STDOUT_FILENO);
         File = open(Terminal, O_RDWR);
         if (File >= 0) {
-            dup(File);
+            dup2(File, STDOUT_FILENO);
             close(STDERR_FILENO);
-            dup(File);
+            dup2(File, STDERR_FILENO);
 
         //
         // On failure, try to copy stderr back to stdin and stdout.
         //
 
         } else {
-            dup(STDERR_FILENO);
-            dup(STDERR_FILENO);
+            dup2(STDERR_FILENO, STDIN_FILENO);
+            dup2(STDERR_FILENO, STDOUT_FILENO);
         }
     }
 

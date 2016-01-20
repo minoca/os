@@ -25,6 +25,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+#define _GNU_SOURCE 1
+
 #include <minoca/types.h>
 #include <minoca/termlib.h>
 
@@ -33,17 +35,18 @@ Environment:
 #include <dirent.h>
 #include <grp.h>
 #include <pwd.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/times.h>
 #include <sys/utsname.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <time.h>
-#include <sys/times.h>
-#include <sys/time.h>
 #include <unistd.h>
 #include "swlib.h"
 
@@ -109,7 +112,7 @@ SwpSetColors (
 //
 
 SWISS_SIGNAL_NAME SwSignalMap[] = {
-    {0, "0"},
+    {0, "T"},
     {SIGHUP, "HUP"},
     {SIGINT, "INT"},
     {SIGQUIT, "QUIT"},
@@ -138,8 +141,6 @@ SWISS_SIGNAL_NAME SwSignalMap[] = {
     {SIGPROF, "PROF"},
     {SIGWINCH, "WINCH"},
     {SIGPOLL, "POLL"},
-    {SIGRTMIN, "RTMIN"},
-    {SIGRTMAX, "RTMAX"},
     {-1, NULL},
 };
 
@@ -1282,41 +1283,6 @@ Return Value:
 {
 
     if (mkfifo(Path, Permissions) == 0) {
-        return 0;
-    }
-
-    return errno;
-}
-
-INT
-SwCreateSymlink (
-    PSTR LinkTarget,
-    PSTR LinkName
-    )
-
-/*++
-
-Routine Description:
-
-    This routine creates a symbolic link.
-
-Arguments:
-
-    LinkTarget - Supplies the destination that the symbolic link will point to.
-
-    LinkName - Supplies the file path of the symbolic link itself.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-{
-
-    if (symlink(LinkTarget, LinkName) == 0) {
         return 0;
     }
 

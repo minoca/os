@@ -32,6 +32,7 @@ Environment:
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "swlib.h"
 
 //
@@ -1931,6 +1932,7 @@ Return Value:
     PSHELL_NODE Node;
     PSTR OriginalDirectory;
     BOOL Result;
+    INT Status;
     PSHELL Subshell;
     pid_t WaitResult;
 
@@ -2026,7 +2028,11 @@ ExecuteSubshellGroupEnd:
     //
 
     if (OriginalDirectory != NULL) {
-        chdir(OriginalDirectory);
+        Status = chdir(OriginalDirectory);
+        if (Status != 0) {
+            Result = FALSE;
+        }
+
         free(OriginalDirectory);
     }
 

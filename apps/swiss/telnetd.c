@@ -26,6 +26,8 @@ Environment:
 
 #include <minoca/types.h>
 
+#define TELOPTS 1
+
 #include <arpa/inet.h>
 #include <arpa/telnet.h>
 #include <assert.h>
@@ -574,7 +576,7 @@ Return Value:
             close(DevNull);
         }
 
-        closefrom(STDERR_FILENO + 1);
+        SwCloseFrom(STDERR_FILENO + 1);
 
         //
         // Double fork. Do this to prevent the grandchild process from ever

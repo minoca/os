@@ -28,9 +28,11 @@ Environment:
 #include <minoca/types.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -576,7 +578,7 @@ Return Value:
     // Close all other descriptors, open the log, and open the terminal.
     //
 
-    closefrom(STDERR_FILENO + 1);
+    SwCloseFrom(STDERR_FILENO + 1);
     openlog("getty", LOG_PID, LOG_AUTH);
     Null = open("/dev/null", O_RDWR);
     if (Null < 0) {
@@ -987,7 +989,12 @@ Return Value:
         }
 
         dup2(Descriptor, STDIN_FILENO);
-        fchown(STDIN_FILENO, 0, 0);
+        Result = fchown(STDIN_FILENO, 0, 0);
+        if (Result != 0) {
+            free(FinalName);
+            return NULL;
+        }
+
         fchmod(STDIN_FILENO, S_IRUSR | S_IWUSR | S_IWGRP);
         if (Descriptor != STDIN_FILENO) {
             close(Descriptor);

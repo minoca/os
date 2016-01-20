@@ -28,6 +28,7 @@ Environment:
 #include <minoca/types.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -304,7 +305,12 @@ Return Value:
             goto MainEnd;
         }
 
-        chdir("/");
+        Status = chdir("/");
+        if (Status != 0) {
+            Status = errno;
+            SwPrintError(Status, RootDirectory, "Failed to chdir");
+            goto MainEnd;
+        }
     }
 
     //
@@ -450,7 +456,7 @@ Return Value:
 
             if (Status != 0) {
                 syslog(LOG_ERR,
-                       "Failed to change password for user %s on line %I64d",
+                       "Failed to change password for user %s on line %lld",
                        UserName,
                        LineNumber);
 

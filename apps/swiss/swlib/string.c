@@ -29,6 +29,7 @@ Environment:
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -613,33 +614,68 @@ Return Value:
 {
 
     PSTR AfterScan;
+    PSTR Copy;
     PSWISS_SIGNAL_NAME Entry;
+    INT Extra;
+    PSTR Operator;
     INT Signal;
 
+    Signal = -1;
     if (isdigit(*SignalName)) {
         Signal = strtoul(SignalName, &AfterScan, 10);
         if (AfterScan == SignalName) {
-            return -1;
+            Signal = -1;
         }
-
-        return Signal;
 
     } else {
         if (strncasecmp(SignalName, "SIG", 3) == 0) {
             SignalName += 3;
         }
 
+        //
+        // If there's a plus or minus on the end, chop it off and
+        // get the extra part.
+        //
+
+        Copy = NULL;
+        Extra = 0;
+        Operator = strchr(SignalName, '+');
+        if (Operator == NULL) {
+            Operator = strchr(SignalName, '-');
+        }
+
+        if (Operator != NULL) {
+            Extra = strtol(Operator, &AfterScan, 10);
+            if (AfterScan == Operator) {
+                return -1;
+            }
+
+            Copy = strdup(SignalName);
+            if (Copy == NULL) {
+                return -1;
+            }
+
+            Operator = Copy + (Operator - SignalName);
+            *Operator = '\0';
+            SignalName = Copy;
+        }
+
         Entry = &(SwSignalMap[0]);
         while (Entry->SignalName != NULL) {
             if (strcasecmp(SignalName, Entry->SignalName) == 0) {
-                return Entry->SignalNumber;
+                Signal = Entry->SignalNumber + Extra;
+                break;
             }
 
             Entry += 1;
         }
+
+        if (Copy != NULL) {
+            free(Copy);
+        }
     }
 
-    return -1;
+    return Signal;
 }
 
 PSTR
@@ -671,6 +707,15 @@ Return Value:
     PSWISS_SIGNAL_NAME Entry;
 
     Entry = &(SwSignalMap[0]);
+    if (SIGRTMAX > SIGRTMIN) {
+        if (SignalNumber == SIGRTMIN) {
+            return "RTMIN";
+
+        } else if (SignalNumber == SIGRTMAX) {
+            return "RTMAX";
+        }
+    }
+
     while (Entry->SignalName != NULL) {
         if (Entry->SignalNumber == SignalNumber) {
             return Entry->SignalName;

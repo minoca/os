@@ -24,9 +24,12 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+#define _GNU_SOURCE 1
+
 #include <minoca/types.h>
 
 #include <assert.h>
+#include <ctype.h>
 #include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -116,6 +119,8 @@ SwpWriteNewUtmpEntry (
 //
 // -------------------------------------------------------------------- Globals
 //
+
+extern char **environ;
 
 PASSWD_ALGORITHM SwPasswordAlgorithms[] = {
     {"md5", "$1$"},
@@ -488,7 +493,11 @@ Return Value:
 
     if (fstat(fileno(OldFile), &Stat) == 0) {
         fchmod(NewFileDescriptor, Stat.st_mode & ALLPERMS);
-        fchown(NewFileDescriptor, Stat.st_uid, Stat.st_gid);
+        Status = fchown(NewFileDescriptor, Stat.st_uid, Stat.st_gid);
+        if (Status != 0) {
+            Status = errno;
+            goto UpdatePasswordFileEnd;
+        }
     }
 
     if (NewFileDescriptor <= 0) {
@@ -1217,7 +1226,6 @@ Return Value:
         if ((User->pw_dir != NULL) && (User->pw_dir[0] != '\0')) {
             if (chdir(User->pw_dir) < 0) {
                 SwPrintError(errno, User->pw_dir, "Cannot change to directory");
-                chdir("/");
             }
         }
     }

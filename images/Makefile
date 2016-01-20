@@ -95,7 +95,7 @@ IMAGES += $(BINROOT)/bbone.img \
 $(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
 	@echo Building - $(notdir $@)
 	@mkdir -p $(BINROOT)/apps
-	@cd $(BINROOT) && $(MSETUP) -ql install-armv7 -i.. -d $@
+	@cd $(BINROOT) && $(MSETUP) -ql install-armv7 -i.. -d $@ \
 	    $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/bbone.img: $(INSTALL_IMAGE)
@@ -153,7 +153,7 @@ IMAGES += $(BINROOT)/rpi.img \
 $(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
 	@echo Building - $(notdir $@)
 	@mkdir -p $(BINROOT)/apps
-	@cd $(BINROOT) && $(MSETUP) -ql install-armv6 -i.. -d $@
+	@cd $(BINROOT) && $(MSETUP) -ql install-armv6 -i.. -d $@ \
 	    $(MSETUP_IMAGE_SIZE)
 
 $(BINROOT)/rpi.img: $(INSTALL_IMAGE)

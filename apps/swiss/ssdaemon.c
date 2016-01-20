@@ -32,6 +32,7 @@ Environment:
 #include <fcntl.h>
 #include <getopt.h>
 #include <libgen.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -640,7 +641,12 @@ Return Value:
             goto MainEnd;
         }
 
-        chdir("/");
+        Status = chdir("/");
+        if (Status != 0) {
+            Status = errno;
+            SwPrintError(Status, Context.RootDirectory, "Failed to chdir");
+            goto MainEnd;
+        }
     }
 
     //
@@ -781,7 +787,7 @@ Return Value:
                 close(DevNull);
             }
 
-            closefrom(STDERR_FILENO + 1);
+            SwCloseFrom(STDERR_FILENO + 1);
         }
 
         //
@@ -826,7 +832,13 @@ Return Value:
         SwBecomeUser(User);
 
     } else if (Context.ChangeGroup != -1) {
-        setgid(Context.ChangeGroup);
+        Status = setgid(Context.ChangeGroup);
+        if (Status != 0) {
+            Status = errno;
+            SwPrintError(Status, NULL, "setgid failed");
+            goto MainEnd;
+        }
+
         setgroups(1, &(Context.ChangeGroup));
     }
 
@@ -835,7 +847,12 @@ Return Value:
     //
 
     if ((Options & SS_DAEMON_OPTION_NICE) != 0) {
-        nice(Context.NiceLevel);
+        Status = nice(Context.NiceLevel);
+        if (Status != 0) {
+            Status = errno;
+            SwPrintError(Status, NULL, "nice failed");
+            goto MainEnd;
+        }
     }
 
     //
@@ -946,7 +963,7 @@ Return Value:
     int Size;
     size_t TotalBytesWritten;
 
-    File = open(Context->PidFilePath, O_WRONLY | O_TRUNC | O_CREAT);
+    File = open(Context->PidFilePath, O_WRONLY | O_TRUNC | O_CREAT, 0644);
     if (File >= 0) {
         Size = snprintf(Buffer,
                         sizeof(Buffer),

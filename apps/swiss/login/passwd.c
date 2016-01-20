@@ -304,7 +304,12 @@ Return Value:
             goto MainEnd;
         }
 
-        chdir("/");
+        Status = chdir("/");
+        if (Status != 0) {
+            Status = errno;
+            SwPrintError(Status, RootDirectory, "Failed to chdir");
+            goto MainEnd;
+        }
     }
 
     if (ArgumentIndex < ArgumentCount) {

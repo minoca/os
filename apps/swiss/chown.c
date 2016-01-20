@@ -29,6 +29,7 @@ Environment:
 
 #include <assert.h>
 #include <errno.h>
+#include <ctype.h>
 #include <getopt.h>
 #include <grp.h>
 #include <pwd.h>

@@ -279,9 +279,15 @@ Return Value:
         if (Status != 0) {
             Status = errno;
             SwPrintError(Status, RootDirectory, "Failed to chroot");
+            goto MainEnd;
         }
 
-        chdir("/");
+        Status = chdir("/");
+        if (Status != 0) {
+            Status = errno;
+            SwPrintError(Status, RootDirectory, "Failed to chdir");
+            goto MainEnd;
+        }
     }
 
     Group.gr_name = GroupName;

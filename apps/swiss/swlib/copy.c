@@ -899,7 +899,7 @@ Return Value:
             goto CopyNonRegularFileEnd;
         }
 
-        Result = SwCreateSymlink(LinkDestination, Destination);
+        Result = SwCreateSymbolicLink(LinkDestination, Destination);
         if (Result != 0) {
             SwPrintError(Result, Source, "Failed to create symlink");
             goto CopyNonRegularFileEnd;

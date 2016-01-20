@@ -29,20 +29,20 @@ Environment:
 // also relies on the client having the string declarations here.
 //
 
-#define TELOPTS 1
 #define TELCMDS 1
 
 #include <minoca/types.h>
 
+#include <arpa/telnet.h>
 #include <assert.h>
 #include <errno.h>
 #include <getopt.h>
 #include <netdb.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <arpa/telnet.h>
 #include <unistd.h>
 
 #include "swlib.h"

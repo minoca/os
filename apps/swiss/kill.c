@@ -31,7 +31,7 @@ Environment:
 #include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
-#include <libgen.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -100,7 +100,7 @@ KillpPrintSignals (
     VOID
     );
 
-VOID
+INT
 KillpPrintSignal (
     PSTR Argument
     );
@@ -346,7 +346,10 @@ Return Value:
 
         } else {
             for (Index = ArgumentIndex; Index < ArgumentCount; Index += 1) {
-                KillpPrintSignal(Arguments[Index]);
+                Status = KillpPrintSignal(Arguments[Index]);
+                if (Status != 0) {
+                    goto MainEnd;
+                }
             }
         }
 
@@ -432,18 +435,39 @@ Return Value:
 
 {
 
-    PSWISS_SIGNAL_NAME MapEntry;
+    PSTR Name;
+    INT Signal;
 
-    MapEntry = &(SwSignalMap[0]);
-    while (MapEntry->SignalName != NULL) {
-        printf("%d) %s\n", MapEntry->SignalNumber, MapEntry->SignalName);
-        MapEntry += 1;
+    //
+    // Print all signals, skipping the zero signal.
+    //
+
+    for (Signal = 1; Signal <= NSIG; Signal += 1) {
+        if ((SIGRTMAX > SIGRTMIN) &&
+            (Signal >= SIGRTMIN) && (Signal <= SIGRTMAX)) {
+
+            if (Signal == SIGRTMIN) {
+                printf("%d) SIGRTMIN\n", Signal);
+
+            } else if (Signal == SIGRTMAX) {
+                printf("%d) SIGRTMAX\n", Signal);
+
+            } else {
+                printf("%d) SIGRTMIN+%d\n", Signal - SIGRTMIN);
+            }
+
+        } else {
+            Name = SwGetSignalNameFromNumber(Signal);
+            if (Name != NULL) {
+                printf("%d) %s\n", Signal, Name);
+            }
+        }
     }
 
     return;
 }
 
-VOID
+INT
 KillpPrintSignal (
     PSTR Argument
     )
@@ -462,28 +486,57 @@ Arguments:
 
 Return Value:
 
-    None.
+    0 on success.
+
+    EINVAL if the signal argument is invalid.
 
 --*/
 
 {
 
+    PSTR Name;
     INT SignalNumber;
+    INT Status;
 
+    Status = 0;
     SignalNumber = SwGetSignalNumberFromName(Argument);
     if (SignalNumber == -1) {
         SwPrintError(0, Argument, "Invalid signal specification");
+        Status = EINVAL;
 
     } else {
-        if (isdigit(*Argument)) {
+        if (!isdigit(*Argument)) {
             printf("%d\n", SignalNumber);
 
         } else {
-            printf("%s\n", SwGetSignalNameFromNumber(SignalNumber));
+            if ((SIGRTMAX > SIGRTMIN) &&
+                (SignalNumber >= SIGRTMIN) &&
+                (SignalNumber <= SIGRTMAX)) {
+
+                if (SignalNumber == SIGRTMIN) {
+                    printf("RTMIN\n");
+
+                } else if (SignalNumber < SIGRTMAX) {
+                    printf("RTMAX\n");
+
+                } else {
+                    printf("RTMIN+%d", SignalNumber - SIGRTMIN);
+                }
+
+            } else {
+                Name = SwGetSignalNameFromNumber(SignalNumber);
+                if (Name == NULL) {
+                    SwPrintError(0, Argument, "Invalid signal specification");
+                    Status = EINVAL;
+
+                } else {
+                    printf("%s\n", Name);
+                }
+            }
         }
     }
 
-    return;
+    return Status;
 }
 
 INT

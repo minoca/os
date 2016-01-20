@@ -29,6 +29,7 @@ Environment:
 
 #include <alloca.h>
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -342,6 +343,8 @@ InitSignalHandler (
 // -------------------------------------------------------------------- Globals
 //
 
+extern char **environ;
+
 struct option InitLongOptions[] = {
     {"debug", no_argument, 0, 'd'},
     {"single", no_argument, 0, 's'},
@@ -486,7 +489,12 @@ Return Value:
     Context.Options = Options;
     InitInitializeConsole(&Context);
     InitConfigureTerminal();
-    chdir("/");
+    Status = chdir("/");
+    if (Status != 0) {
+        Status = errno;
+        goto MainEnd;
+    }
+
     setsid();
 
     //

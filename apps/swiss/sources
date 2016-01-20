@@ -20,6 +20,10 @@
 #
 ################################################################################
 
+##
+## Objects common to all implementations.
+##
+
 COMMON_OBJS = basename.o       \
               cat.o            \
               cecho.o          \
@@ -33,7 +37,6 @@ COMMON_OBJS = basename.o       \
               dd.o             \
               diff.o           \
               dirname.o        \
-              dw.o             \
               easy.o           \
               echo.o           \
               env.o            \
@@ -95,6 +98,33 @@ COMMON_OBJS = basename.o       \
               uniq.o           \
               wc.o             \
               xargs.o          \
+
+##
+## POSIX OS objects.
+##
+
+UOS_OBJS = chown.o          \
+           init.o           \
+           login/chpasswd.o \
+           login/getty.o    \
+           login/groupadd.o \
+           login/groupdel.o \
+           login/login.o    \
+           login/lutil.o    \
+           login/passwd.o   \
+           login/su.o       \
+           login/sulogin.o  \
+           login/useradd.o  \
+           login/userdel.o  \
+           login/vlock.o    \
+           mkfifo.o         \
+           readlink.o       \
+           sh/shuos.o       \
+           ssdaemon.o       \
+           swlib/chownutl.o \
+           swlib/uos.o      \
+           telnet.o         \
+           telnetd.o        \
 
 EXTRA_SRC_DIRS = login ls sed sh swlib
 

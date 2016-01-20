@@ -23,6 +23,7 @@ Author:
 #include <minoca/types.h>
 
 #include <stdio.h>
+#include <sys/types.h>
 #include "shos.h"
 
 //

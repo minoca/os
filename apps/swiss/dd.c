@@ -31,6 +31,7 @@ Environment:
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>

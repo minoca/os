@@ -376,6 +376,30 @@ Author:
 
 #endif
 
+#ifndef O_BINARY
+
+#define O_BINARY 0x0000
+
+#endif
+
+#ifndef O_TEXT
+
+#define O_TEXT 0x0000
+
+#endif
+
+#ifndef SIGRTMIN
+
+#define SIGRTMIN NSIG
+
+#endif
+
+#ifndef SIGRTMAX
+
+#define SIGRTMAX NSIG
+
+#endif
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -1186,32 +1210,6 @@ Arguments:
     Path - Supplies a pointer to the path to create the FIFO at.
 
     Permissions - Supplies the permission bits.
-
-Return Value:
-
-    0 on success.
-
-    Returns an error number on failure.
-
---*/
-
-INT
-SwCreateSymlink (
-    PSTR LinkTarget,
-    PSTR LinkName
-    );
-
-/*++
-
-Routine Description:
-
-    This routine creates a symbolic link.
-
-Arguments:
-
-    LinkTarget - Supplies the destination that the symbolic link will point to.
-
-    LinkName - Supplies the file path of the symbolic link itself.
 
 Return Value:
 
@@ -2393,6 +2391,30 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+int
+SwCloseFrom (
+    int Descriptor
+    );
+
+/*++
+
+Routine Description:
+
+    This routine closes all open file descriptors greater than or equal to
+    the given descriptor.
+
+Arguments:
+
+    Descriptor - Supplies the minimum descriptor to close.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to contain more information.
 
 --*/
 
