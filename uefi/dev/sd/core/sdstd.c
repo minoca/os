@@ -404,8 +404,8 @@ Return Value:
             break;
         }
 
-        EfiStall(50);
-        Time += 50;
+        EfiStall(5);
+        Time += 5;
 
     } while (Time <= Timeout);
 
@@ -500,8 +500,8 @@ Return Value:
             break;
         }
 
-        EfiStall(50);
-        Time += 50;
+        EfiStall(5);
+        Time += 5;
 
     } while (Time <= Timeout);
 
@@ -869,8 +869,8 @@ Return Value:
                 break;
             }
 
-            EfiStall(50);
-            Time += 50;
+            EfiStall(5);
+            Time += 5;
 
         } while (Time <= Timeout);
 
@@ -983,8 +983,8 @@ Return Value:
                 break;
             }
 
-            Time += 50;
-            EfiStall(50);
+            Time += 5;
+            EfiStall(5);
 
         } while (Time <= Timeout);
 
