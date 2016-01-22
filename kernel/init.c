@@ -144,12 +144,6 @@ KepDistributionTimerWorkRoutine (
 //
 
 //
-// Define an override that limits the system to one processor.
-//
-
-BOOL KeRunSingleProcessor = FALSE;
-
-//
 // Define a lock used to serializes parts of the AP startup execution.
 //
 
@@ -337,17 +331,12 @@ Return Value:
     // allowing the debugger to start broadcasting NMIs.
     //
 
-    if (KeRunSingleProcessor == FALSE) {
-        Status = HlStartAllProcessors(KepApplicationProcessorStartup,
-                                      &ProcessorCount);
+    Status = HlStartAllProcessors(KepApplicationProcessorStartup,
+                                  &ProcessorCount);
 
-        if (!KSUCCESS(Status)) {
-            FailingSubsystem = KernelSubsystemHardwareLayer;
-            goto StartSystemEnd;
-        }
-
-    } else {
-        ProcessorCount = 1;
+    if (!KSUCCESS(Status)) {
+        FailingSubsystem = KernelSubsystemHardwareLayer;
+        goto StartSystemEnd;
     }
 
     KeAllProcessorsInitialize = TRUE;

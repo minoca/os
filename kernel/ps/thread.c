@@ -1063,7 +1063,7 @@ Return Value:
 
     if (NewThread == NULL) {
         Status = STATUS_UNSUCCESSFUL;
-        goto CreateThreadEnd;
+        goto CloneThreadEnd;
     }
 
     //
@@ -1072,7 +1072,12 @@ Return Value:
 
     Status = PspCopyThreadCredentials(NewThread, Thread);
     if (!KSUCCESS(Status)) {
-        goto CreateThreadEnd;
+        goto CloneThreadEnd;
+    }
+
+    Status = PspArchCloneThread(Thread, NewThread);
+    if (!KSUCCESS(Status)) {
+        goto CloneThreadEnd;
     }
 
     //
@@ -1094,7 +1099,7 @@ Return Value:
     KeSetThreadReady(NewThread);
     Status = STATUS_SUCCESS;
 
-CreateThreadEnd:
+CloneThreadEnd:
     if (!KSUCCESS(Status)) {
         if (NewThread != NULL) {
 

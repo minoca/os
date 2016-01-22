@@ -344,16 +344,19 @@ Return Value:
 {
 
     UINTN AllocationSize;
-    PFPU_CONTEXT Context;
+    PVOID Context;
+    PFPU_CONTEXT ContextStructure;
     PUSER_SHARED_DATA UserSharedData;
 
-    AllocationSize = sizeof(FPU_CONTEXT);
+    AllocationSize = sizeof(FPU_CONTEXT) + FPU_CONTEXT_ALIGNMENT;
     Context = MmAllocateNonPagedPool(AllocationSize, AllocationTag);
     if (Context == NULL) {
         return NULL;
     }
 
-    RtlZeroMemory(Context, sizeof(FPU_CONTEXT));
+    RtlZeroMemory(Context, AllocationSize);
+    ContextStructure = (PVOID)(UINTN)ALIGN_RANGE_UP((UINTN)Context,
+                                                    FPU_CONTEXT_ALIGNMENT);
 
     //
     // Currently the software assist support needed for VFPv2 and older is not
@@ -365,7 +368,7 @@ Return Value:
 
     UserSharedData = MmGetUserSharedData();
     if ((UserSharedData->ProcessorFeatures & ARM_FEATURE_VFP3) == 0) {
-        Context->Fpscr |= ARM_FPSCR_FLUSH_TO_ZERO;
+        ContextStructure->Fpscr |= ARM_FPSCR_FLUSH_TO_ZERO;
     }
 
     return Context;
@@ -448,7 +451,7 @@ Return Value:
 
     if (Thread->FpuContext == NULL) {
 
-        ASSERT((Thread->Flags & THREAD_FLAG_USING_FPU) == 0);
+        ASSERT((Thread->FpuFlags & THREAD_FPU_FLAG_IN_USE) == 0);
 
         Thread->FpuContext =
                            ArAllocateFpuContext(PS_FPU_CONTEXT_ALLOCATION_TAG);
@@ -467,11 +470,11 @@ Return Value:
     //
 
     ArpEnableFpu();
-    if ((Thread->Flags & THREAD_FLAG_FPU_OWNER) == 0) {
+    if ((Thread->FpuFlags & THREAD_FPU_FLAG_OWNER) == 0) {
         ArRestoreVfp(Thread->FpuContext, ArVfpRegisters32);
     }
 
-    Thread->Flags |= THREAD_FLAG_FPU_OWNER | THREAD_FLAG_USING_FPU;
+    Thread->FpuFlags |= THREAD_FPU_FLAG_OWNER | THREAD_FPU_FLAG_IN_USE;
     KeLowerRunLevel(OldRunLevel);
 
 HandleVfpExceptionEnd:

@@ -849,6 +849,31 @@ Return Value:
 --*/
 
 KSTATUS
+PspArchCloneThread (
+    PKTHREAD OldThread,
+    PKTHREAD NewThread
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs architecture specific operations upon cloning a
+    thread.
+
+Arguments:
+
+    OldThread - Supplies a pointer to the thread being copied.
+
+    NewThread - Supplies a pointer to the newly created thread.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
 PspArchGetDebugBreakInformation (
     PTRAP_FRAME TrapFrame
     );

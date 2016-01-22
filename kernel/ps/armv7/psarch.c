@@ -374,12 +374,95 @@ Return Value:
         TrapFrame->Cpsr |= PSR_FLAG_THUMB;
     }
 
-    if ((Thread->Flags & THREAD_FLAG_USING_FPU) != 0) {
-        Thread->Flags &= ~(THREAD_FLAG_USING_FPU | THREAD_FLAG_FPU_OWNER);
+    if ((Thread->FpuFlags & THREAD_FPU_FLAG_IN_USE) != 0) {
+        Thread->FpuFlags &= ~(THREAD_FPU_FLAG_IN_USE | THREAD_FPU_FLAG_OWNER);
         ArDisableFpu();
     }
 
     return;
+}
+
+KSTATUS
+PspArchCloneThread (
+    PKTHREAD OldThread,
+    PKTHREAD NewThread
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs architecture specific operations upon cloning a
+    thread.
+
+Arguments:
+
+    OldThread - Supplies a pointer to the thread being copied.
+
+    NewThread - Supplies a pointer to the newly created thread.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PFPU_CONTEXT NewContext;
+    PFPU_CONTEXT OldContext;
+    KSTATUS Status;
+
+    //
+    // Copy the FPU state across, since there are some non-volatile FPU
+    // registers across function calls.
+    //
+
+    Status = STATUS_SUCCESS;
+    if ((OldThread->FpuFlags & THREAD_FPU_FLAG_IN_USE) != 0) {
+
+        ASSERT(OldThread->FpuContext != NULL);
+
+        NewThread->FpuContext =
+                           ArAllocateFpuContext(PS_FPU_CONTEXT_ALLOCATION_TAG);
+
+        if (NewThread->FpuContext == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto ArchCloneThreadEnd;
+        }
+
+        //
+        // If it's also the owner, save the latest context into the new.
+        //
+
+        if ((OldThread->FpuFlags & THREAD_FPU_FLAG_OWNER) != 0) {
+
+            ASSERT(KeGetCurrentThread() == OldThread);
+
+            ArSaveFpuState(NewThread->FpuContext);
+
+        //
+        // If it's not the owner, copy the latest context into the new
+        // structure.
+        //
+
+        } else {
+            NewContext = (PVOID)(UINTN)ALIGN_RANGE_UP(
+                                                  (UINTN)NewThread->FpuContext,
+                                                  FPU_CONTEXT_ALIGNMENT);
+
+            OldContext = (PVOID)(UINTN)ALIGN_RANGE_UP(
+                                                  (UINTN)OldThread->FpuContext,
+                                                  FPU_CONTEXT_ALIGNMENT);
+
+            RtlCopyMemory(NewContext, OldContext, sizeof(FPU_CONTEXT));
+        }
+
+        NewThread->FpuFlags |= THREAD_FPU_FLAG_IN_USE;
+    }
+
+ArchCloneThreadEnd:
+    return Status;
 }
 
 KSTATUS

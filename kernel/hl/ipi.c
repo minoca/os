@@ -75,6 +75,12 @@ HlpInterruptFindIpiLine (
 //
 
 //
+// Define an override that limits the system to one processor.
+//
+
+BOOL HlRunSingleProcessor = TRUE;
+
+//
 // Store the maximum number of processors in the system.
 //
 
@@ -365,6 +371,15 @@ Return Value:
 
     Status = HlpInterruptPrepareForProcessorStart(0, NULL, NULL, NULL);
     if (!KSUCCESS(Status)) {
+        goto StartAllProcessorsEnd;
+    }
+
+    //
+    // Don't start any other cores if the debug flag is set.
+    //
+
+    if (HlRunSingleProcessor != FALSE) {
+        Status = STATUS_SUCCESS;
         goto StartAllProcessorsEnd;
     }
 

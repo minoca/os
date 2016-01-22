@@ -470,6 +470,12 @@ Author:
 #define ARM_FPSCR_FLUSH_TO_ZERO (1 << 24)
 
 //
+// Define the required alignment for FPU context.
+//
+
+#define FPU_CONTEXT_ALIGNMENT 16
+
+//
 // Define ARM Main ID register values.
 //
 

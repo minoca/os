@@ -427,12 +427,42 @@ Return Value:
     TrapFrame->Eflags = IA32_EFLAG_ALWAYS_1 | IA32_EFLAG_IF;
     TrapFrame->Esp = (UINTN)UserStackPointer;
     TrapFrame->Ecx = (UINTN)Thread->ThreadParameter;
-    if ((Thread->Flags & THREAD_FLAG_USING_FPU) != 0) {
-        Thread->Flags &= ~(THREAD_FLAG_USING_FPU | THREAD_FLAG_FPU_OWNER);
+    if ((Thread->FpuFlags & THREAD_FPU_FLAG_IN_USE) != 0) {
+        Thread->FpuFlags &= ~(THREAD_FPU_FLAG_IN_USE | THREAD_FPU_FLAG_OWNER);
         ArDisableFpu();
     }
 
     return;
+}
+
+KSTATUS
+PspArchCloneThread (
+    PKTHREAD OldThread,
+    PKTHREAD NewThread
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs architecture specific operations upon cloning a
+    thread.
+
+Arguments:
+
+    OldThread - Supplies a pointer to the thread being copied.
+
+    NewThread - Supplies a pointer to the newly created thread.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    return STATUS_SUCCESS;
 }
 
 KSTATUS

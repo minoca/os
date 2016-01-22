@@ -412,7 +412,7 @@ Return Value:
 
     if (Thread->FpuContext == NULL) {
 
-        ASSERT((Thread->Flags & THREAD_FLAG_USING_FPU) == 0);
+        ASSERT((Thread->FpuFlags & THREAD_FPU_FLAG_IN_USE) == 0);
 
         Thread->FpuContext =
                            ArAllocateFpuContext(PS_FPU_CONTEXT_ALLOCATION_TAG);
@@ -431,8 +431,8 @@ Return Value:
     // need to do the restore.
     //
 
-    if ((Thread->Flags & THREAD_FLAG_USING_FPU) != 0) {
-        if ((Thread->Flags & THREAD_FLAG_FPU_OWNER) != 0) {
+    if ((Thread->FpuFlags & THREAD_FPU_FLAG_IN_USE) != 0) {
+        if ((Thread->FpuFlags & THREAD_FPU_FLAG_OWNER) != 0) {
             ArEnableFpu();
 
         } else {
@@ -448,10 +448,10 @@ Return Value:
     } else {
         ArEnableFpu();
         ArInitializeFpu();
-        Thread->Flags |= THREAD_FLAG_USING_FPU;
+        Thread->FpuFlags |= THREAD_FPU_FLAG_IN_USE;
     }
 
-    Thread->Flags |= THREAD_FLAG_FPU_OWNER;
+    Thread->FpuFlags |= THREAD_FPU_FLAG_OWNER;
     KeLowerRunLevel(OldRunLevel);
 
 DispatchFpuAccessTrapEnd:

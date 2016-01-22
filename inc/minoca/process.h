@@ -404,13 +404,22 @@ Author:
 // Define thread flags.
 //
 
-#define THREAD_FLAG_USER_MODE       0x00000001
-#define THREAD_FLAG_ADD_REFERENCE   0x00000002
-#define THREAD_FLAG_USING_FPU       0x00000004
-#define THREAD_FLAG_FPU_OWNER       0x00000008
-#define THREAD_FLAG_IN_SYSTEM_CALL  0x00000010
-#define THREAD_FLAG_SINGLE_STEP     0x00000020
-#define THREAD_FLAG_FREE_USER_STACK 0x00000040
+#define THREAD_FLAG_USER_MODE       0x0001
+#define THREAD_FLAG_ADD_REFERENCE   0x0002
+#define THREAD_FLAG_IN_SYSTEM_CALL  0x0004
+#define THREAD_FLAG_SINGLE_STEP     0x0008
+#define THREAD_FLAG_FREE_USER_STACK 0x0010
+
+//
+// Define thread FPU flags.
+//
+
+#define THREAD_FPU_FLAG_IN_USE      0x0001
+#define THREAD_FPU_FLAG_OWNER       0x0002
+
+#define THREAD_FLAG_HAS_FPU2 0x00010000
+#define THREAD_FLAG_FPU_DISABLED 0x00020000
+#define THREAD_FLAG_FPU_ENABLED 0x00040000
 
 //
 // Define the set of thread flags that can be specified on creation. This is
@@ -1413,6 +1422,11 @@ Members:
     Flags - Stores the bitfield of flags the thread was created with. See
         THREAD_FLAG_* definitions.
 
+    FpuFlags - Stores the bitfield of floating point unit flags governing the
+        thread. This is separate from the flags member because it is altered
+        during context switch, which can land on top of other kernel level flag
+        manipulation.
+
     SchedulerEntry - Stores the scheduler information for this thread.
 
     BuiltinTimer - Stores a pointer to the thread's default timeout timer.
@@ -1489,7 +1503,8 @@ struct _KTHREAD {
     ULONGLONG ThreadPointer;
     volatile THREAD_STATE State;
     THREAD_SIGNAL_PENDING_TYPE SignalPending;
-    ULONG Flags;
+    USHORT Flags;
+    USHORT FpuFlags;
     SCHEDULER_ENTRY SchedulerEntry;
     PVOID BuiltinTimer;
     PWAIT_BLOCK BuiltinWaitBlock;

@@ -93,7 +93,7 @@ Return Value:
     // state, as FPU state is volatile across function calls.
     //
 
-    if ((CurrentThread->Flags & THREAD_FLAG_USING_FPU) != 0) {
+    if ((CurrentThread->FpuFlags & THREAD_FPU_FLAG_IN_USE) != 0) {
 
         //
         // The FPU context could be NULL if a thread got context swapped while
@@ -110,7 +110,7 @@ Return Value:
             // case.
             //
 
-            if ((CurrentThread->Flags & THREAD_FLAG_FPU_OWNER) != 0) {
+            if ((CurrentThread->FpuFlags & THREAD_FPU_FLAG_OWNER) != 0) {
                 ArSaveFpuState(CurrentThread->FpuContext);
             }
 
@@ -120,10 +120,10 @@ Return Value:
         //
 
         } else {
-            CurrentThread->Flags &= ~THREAD_FLAG_USING_FPU;
+            CurrentThread->FpuFlags &= ~THREAD_FPU_FLAG_IN_USE;
         }
 
-        CurrentThread->Flags &= ~THREAD_FLAG_FPU_OWNER;
+        CurrentThread->FpuFlags &= ~THREAD_FPU_FLAG_OWNER;
         ArDisableFpu();
     }
 
