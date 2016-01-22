@@ -74,6 +74,27 @@ Author:
     (_Header)->PacketNumberHigh = ((_PacketNumber) & 0xFFFFFFFF0000) >> 16; \
 
 //
+// This macro gets the ID from the given information element.
+//
+
+#define NET80211_GET_ELEMENT_ID(_Element) \
+    ((PUCHAR)(_Element))[NET80211_ELEMENT_ID_OFFSET]
+
+//
+// This macro gets the length from the given information element.
+//
+
+#define NET80211_GET_ELEMENT_LENGTH(_Element) \
+    ((PUCHAR)(_Element))[NET80211_ELEMENT_LENGTH_OFFSET]
+
+//
+// This macro returns a pointer to the first byte of the element data array.
+//
+
+#define NET80211_GET_ELEMENT_DATA(_Element) \
+    ((PUCHAR)(_Element) + NET80211_ELEMENT_DATA_OFFSET)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -94,7 +115,7 @@ Author:
 // Define the current version number of the 802.11 BSS information structure.
 //
 
-#define NET80211_BSS_INFORMATION_VERSION 1
+#define NET80211_BSS_VERSION 1
 
 //
 // Define the size of an 802.11 MAC address.
@@ -306,7 +327,10 @@ Author:
 // Define the base size that is common to all elements.
 //
 
-#define NET80211_BASE_ELEMENT_SIZE 2
+#define NET80211_ELEMENT_HEADER_SIZE 2
+#define NET80211_ELEMENT_ID_OFFSET 0
+#define NET80211_ELEMENT_LENGTH_OFFSET 1
+#define NET80211_ELEMENT_DATA_OFFSET 2
 
 //
 // Define the sizes for the fixed-size 802.11 information element fields.
@@ -321,6 +345,13 @@ Author:
 #define NET80211_RATE_BASIC       0x80
 #define NET80211_RATE_VALUE_MASK  0x7F
 #define NET80211_RATE_VALUE_SHIFT 0
+
+//
+// Define the BSS membership selector values encoded into the suppored rates
+// element.
+//
+
+#define NET80211_MEMBERSHIP_SELECTOR_HT_PHY 127
 
 //
 // Define the 802.11 authentication management frame algorithm numbers.
@@ -349,7 +380,7 @@ Author:
 // Define the maximum SSID supported in the 802.11 SSID element.
 //
 
-#define NET80211_SSID_MAX_LENGTH 32
+#define NET80211_MAX_SSID_LENGTH 32
 
 //
 // Define the maximum number of rates allowed in the 802.11 supported rates
@@ -414,6 +445,12 @@ Author:
 #define NET80211_RNS_CAPABILITY_PTKSA_REPLAY_COUNTER_SHIFT 2
 #define NET80211_RSN_CAPABILITY_NO_PAIRWISE                0x0002
 #define NET80211_RSN_CAPABILITY_PREAUTHENTICATION          0x0001
+
+//
+// Define the length, in bytes, of an pairwise master key identifier (PMKID).
+//
+
+#define NET80211_RSN_PMKID_LENGTH 16
 
 //
 // Define the values for the RSN capability replay counter fields.
@@ -550,6 +587,14 @@ Author:
 #define NET80211_KEY_FLAG_TRANSMIT 0x00000004
 
 //
+// Define the data rates that define the different 802.11 modes in bits per
+// second.
+//
+
+#define NET80211_MODE_B_MAX_RATE 11000000ULL
+#define NET80211_MODE_G_MAX_RATE 54000000ULL
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -654,7 +699,7 @@ Members:
 
     SourceAddressAddress - Stores the source address of the packet.
 
-    Bssid- Stores a third address whose meaning depends on the packet type.
+    Bssid - Stores a third address whose meaning depends on the packet type.
 
     SequenceControl - Stores the sequence and fragment numbers.
 
@@ -752,19 +797,21 @@ typedef struct _NET80211_CCM_NONCE {
 } PACKED NET80211_CCM_NONCE, *PNET80211_CCM_NONCE;
 
 typedef enum _NET80211_STATE {
-    Net80211StateInvalid,
+    Net80211StateUninitialized,
     Net80211StateInitialized,
-    Net80211StateStarted,
-    Net80211StateStopped,
     Net80211StateProbing,
     Net80211StateAuthenticating,
-    Net80211StateDeauthenticating,
-    Net80211StateAuthenticated,
     Net80211StateAssociating,
     Net80211StateReassociating,
-    Net80211StateDisassociating,
     Net80211StateAssociated,
+    Net80211StateEncrypted
 } NET80211_STATE, *PNET80211_STATE;
+
+typedef enum _NET80211_MODE {
+    Net80211ModeB,
+    Net80211ModeG,
+    Net80211ModeN
+} NET80211_MODE, *PNET80211_MODE;
 
 /*++
 
@@ -776,13 +823,13 @@ Members:
 
     Count - Stores the number of valid rates in the array.
 
-    Rates - Stores an array of rates supported by the device.
+    Rate - Stores an array of rates supported by the device.
 
 --*/
 
 typedef struct _NET80211_RATE_INFORMATION {
     UCHAR Count;
-    PUCHAR Rates;
+    PUCHAR Rate;
 } NET80211_RATE_INFORMATION, *PNET80211_RATE_INFORMATION;
 
 /*++
@@ -795,7 +842,7 @@ Structure Description:
 Members:
 
     Version - Stores the version number of the structure. Set this to
-        NET80211_BSS_INFORMATION_VERSION.
+        NET80211_BSS_VERSION.
 
     Bssid - Stores the MAC address of the BSS's access point (a.k.a. the BSSID).
 
@@ -805,24 +852,39 @@ Members:
     Capabilities - Stores the bitmask of 802.11 capabilities for the BSS. See
         NET80211_CAPABILTY_FLAG_* for definitions.
 
+    AssociationId - Stores the ID of the local station's association with the
+        BSS.
+
     Timestamp - Stores the timestamp taken from the BSS access point when
         probing.
 
     Channel - Stores the current channel to which the device is set.
 
+    Rssi - Stores the received signal strength indication value for the BSS.
+
+    Mode - Stores the maximum available mode for the BSS, based on the
+        AP and local station's rates.
+
+    MaxRate - Stores the maximum supported rate shared between the BSS's AP and
+        the local station.
+
     Rates - Stores the rates supported by the BSS.
 
 --*/
 
-typedef struct _NET80211_BSS_INFORMATION {
+typedef struct _NET80211_BSS {
     ULONG Version;
     UCHAR Bssid[NET80211_ADDRESS_SIZE];
     USHORT BeaconInterval;
     USHORT Capabilities;
+    USHORT AssociationId;
     ULONGLONG Timestamp;
     ULONG Channel;
-    PNET80211_RATE_INFORMATION Rates;
-} NET80211_BSS_INFORMATION, *PNET80211_BSS_INFORMATION;
+    ULONG Rssi;
+    NET80211_MODE Mode;
+    UCHAR MaxRate;
+    NET80211_RATE_INFORMATION Rates;
+} NET80211_BSS, *PNET80211_BSS;
 
 typedef
 KSTATUS
@@ -855,7 +917,7 @@ KSTATUS
 (*PNET80211_DEVICE_LINK_SET_STATE) (
     PVOID DriverContext,
     NET80211_STATE State,
-    PNET80211_BSS_INFORMATION BssInformation
+    PNET80211_BSS Bss
     );
 
 /*++
@@ -872,8 +934,8 @@ Arguments:
 
     State - Supplies the state to which the link is being set.
 
-    BssInformation - Supplies a pointer to the BSS information collected by the
-        802.11 core.
+    Bss - Supplies an optional pointer to information on the BSS with which the
+        link is authenticating or associating.
 
 Return Value:
 

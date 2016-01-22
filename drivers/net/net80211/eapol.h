@@ -83,8 +83,7 @@ Members:
     Ssid - Stores a pointer to the SSID of the BSS for which the authentication
         is taking place.
 
-    SsidLength - Stores the length of the SSID string, including the NULL
-        terminator.
+    SsidLength - Stores the length of the SSID.
 
     Passphrase - Stores a pointer to the passphrase for the BSS.
 
@@ -112,7 +111,7 @@ typedef struct _EAPOL_CREATION_PARAMETERS {
     PNET_LINK Link;
     PNETWORK_ADDRESS SupplicantAddress;
     PNETWORK_ADDRESS AuthenticatorAddress;
-    PSTR Ssid;
+    PUCHAR Ssid;
     ULONG SsidLength;
     PUCHAR Passphrase;
     ULONG PassphraseLength;
@@ -133,7 +132,7 @@ typedef struct _EAPOL_CREATION_PARAMETERS {
 //
 
 KSTATUS
-Net80211pEapolInstanceCreate (
+Net80211pEapolCreateInstance (
     PEAPOL_CREATION_PARAMETERS Parameters,
     PHANDLE EapolHandle
     );
@@ -160,7 +159,7 @@ Return Value:
 --*/
 
 VOID
-Net80211pEapolInstanceDestroy (
+Net80211pEapolDestroyInstance (
     HANDLE EapolHandle
     );
 

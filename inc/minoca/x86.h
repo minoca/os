@@ -775,7 +775,8 @@ extern PAR_SAVE_RESTORE_FPU_CONTEXT ArRestoreFpuState;
 
 VOID
 ArLoadKernelDataSegments (
-     );
+    VOID
+    );
 
 /*++
 

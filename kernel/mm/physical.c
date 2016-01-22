@@ -1760,7 +1760,7 @@ MmpMigratePagingEntries (
 Routine Description:
 
     This routine migrates all existing paging entries in the given virtual
-    addre space over to a new image section.
+    address space over to a new image section.
 
 Arguments:
 

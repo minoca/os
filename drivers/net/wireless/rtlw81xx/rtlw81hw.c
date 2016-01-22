@@ -1573,15 +1573,15 @@ KSTATUS
 Rtlw81SetState (
     PVOID DriverContext,
     NET80211_STATE State,
-    PNET80211_BSS_INFORMATION BssInformation
+    PNET80211_BSS Bss
     )
 
 /*++
 
 Routine Description:
 
-    This routine sets the 802.11 link to the given state. State information is
-    provided to communicate the details of the 802.11 core's current state.
+    This routine sets the 802.11 link to the given state. BSS information is
+    provided to communicate the 802.11 core's current connection status.
 
 Arguments:
 
@@ -1590,8 +1590,8 @@ Arguments:
 
     State - Supplies the state to which the link is being set.
 
-    BssInformation - Supplies a pointer to the BSS information collected by the
-        802.11 core.
+    Bss - Supplies an optional pointer to information on the BSS with which the
+        link is authenticating or associating.
 
 Return Value:
 
@@ -1611,6 +1611,7 @@ Return Value:
     RTLW81_MAC_ID_CONFIG_COMMAND MacIdCommand;
     ULONG MaxBasicRateIndex;
     ULONG MaxRateIndex;
+    ULONG Mode;
     ULONG Rates;
     USHORT Register;
     KSTATUS Status;
@@ -1675,6 +1676,10 @@ Return Value:
         break;
 
     case Net80211StateAssociated:
+        if (Bss == NULL) {
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
 
         //
         // Set the network type to associated.
@@ -1691,28 +1696,26 @@ Return Value:
         // Filter out traffic that is not coming from the BSSID.
         //
 
-        Value = *((PULONG)&(BssInformation->Bssid[0]));
+        Value = *((PULONG)&(Bss->Bssid[0]));
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterBssid0, Value);
-        Value = *((PUSHORT)&(BssInformation->Bssid[4]));
+        Value = *((PUSHORT)&(Bss->Bssid[4]));
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterBssid1, Value);
 
         //
-        // Set the rate for 11b/g.
-        //
-        // TODO: Detect the real mode from Net80211 Core to handle 11b.
-        //
-
-        RTLW81_WRITE_REGISTER8(Device,
-                               Rtlw81RegisterIniRtsRateSelect,
-                               RTLW81_INI_RTS_RATE_SELECT_11BG);
-
-        //
-        // Accept all data frames.
+        // Set the rate based on the mode. Only 11b and 11b/g are currently
+        // supported.
         //
 
-        RTLW81_WRITE_REGISTER16(Device,
-                                Rtlw81RegisterReceiveDataFilter,
-                                0xFFFF);
+        if (Bss->Mode == Net80211ModeB) {
+            RTLW81_WRITE_REGISTER8(Device,
+                                   Rtlw81RegisterIniRtsRateSelect,
+                                   RTLW81_INI_RTS_RATE_SELECT_11B);
+
+        } else {
+            RTLW81_WRITE_REGISTER8(Device,
+                                   Rtlw81RegisterIniRtsRateSelect,
+                                   RTLW81_INI_RTS_RATE_SELECT_11BG);
+        }
 
         //
         // Flush all access control queues and enable transmit.
@@ -1726,7 +1729,7 @@ Return Value:
 
         RTLW81_WRITE_REGISTER16(Device,
                                 Rtlw81RegisterBeaconInterval,
-                                BssInformation->BeaconInterval);
+                                Bss->BeaconInterval);
 
         //
         // Enable filtering based on the BSSID.
@@ -1743,6 +1746,14 @@ Return Value:
                                 Value);
 
         //
+        // Accept all data frames.
+        //
+
+        RTLW81_WRITE_REGISTER16(Device,
+                                Rtlw81RegisterReceiveDataFilter,
+                                0xFFFF);
+
+        //
         // Initialize TSF for the device. This keeps it in sync with the rest
         // of the BSS.
         //
@@ -1753,8 +1764,8 @@ Return Value:
         Value = RTLW81_READ_REGISTER8(Device, Rtlw81RegisterBeaconControl);
         Value &= ~RTLW81_BEACON_CONTROL_ENABLE_BEACON;
         RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterBeaconControl, Value);
-        Timestamp = BssInformation->Timestamp;
-        BeaconInterval = BssInformation->BeaconInterval * NET80211_TIME_UNIT;
+        Timestamp = Bss->Timestamp;
+        BeaconInterval = Bss->BeaconInterval * NET80211_TIME_UNIT;
         Timestamp -= Timestamp % BeaconInterval;
         Timestamp -= NET80211_TIME_UNIT;
         RTLW81_WRITE_REGISTER32(Device, Rtlw81RegisterTsftr0, (ULONG)Timestamp);
@@ -1810,16 +1821,16 @@ Return Value:
             MaxRateIndex = 0;
             MaxBasicRateIndex = 0;
             for (BssIndex = 0;
-                 BssIndex < BssInformation->Rates->Count;
+                 BssIndex < Bss->Rates.Count;
                  BssIndex += 1) {
 
-                BssRate = BssInformation->Rates->Rates[BssIndex];
+                BssRate = Bss->Rates.Rate[BssIndex];
                 BssRate &= NET80211_RATE_VALUE_MASK;
                 for (LocalIndex = 0;
                      LocalIndex < RtlwDefaultRateInformation.Count;
                      LocalIndex += 1) {
 
-                    LocalRate = RtlwDefaultRateInformation.Rates[LocalIndex];
+                    LocalRate = RtlwDefaultRateInformation.Rate[LocalIndex];
                     LocalRate &= NET80211_RATE_VALUE_MASK;
                     if (LocalRate == BssRate) {
                         break;
@@ -1835,7 +1846,7 @@ Return Value:
                     MaxRateIndex = LocalIndex;
                 }
 
-                BssRate = BssInformation->Rates->Rates[BssIndex];
+                BssRate = Bss->Rates.Rate[BssIndex];
                 if ((BssRate & NET80211_RATE_BASIC) != 0) {
                     BasicRates |= (1 << LocalIndex);
                     if (LocalIndex > MaxBasicRateIndex) {
@@ -1847,15 +1858,20 @@ Return Value:
             //
             // Set the basic rate information.
             //
-            // TODO: Get the mode information from Net80211 Core.
-            //
+
+            if (Bss->Mode == Net80211ModeB) {
+                Mode = RTLW81_TRANSMIT_IDENTIFICATION_RAID_11B;
+
+            } else {
+                Mode = RTLW81_TRANSMIT_IDENTIFICATION_RAID_11BG;
+            }
 
             MacIdCommand.MacId = RTLW81_MAC_ID_CONFIG_COMMAND_ID_BROADCAST |
                                  RTLW81_MAC_ID_CONFIG_COMMAND_ID_VALID;
 
-            MacIdCommand.Mask = (RTLW81_TRANSMIT_IDENTIFICATION_RAID_11BG <<
-                                 RTLW81_MAC_ID_CONFIG_COMMAND_MASK_MODE_SHIFT) |
-                                BasicRates;
+            MacIdCommand.Mask =
+                       (Mode << RTLW81_MAC_ID_CONFIG_COMMAND_MASK_MODE_SHIFT) |
+                       BasicRates;
 
             Status = Rtlw81pSendFirmwareCommand(
                                          Device,
@@ -1878,9 +1894,9 @@ Return Value:
             MacIdCommand.MacId = RTLW81_MAC_ID_CONFIG_COMMAND_ID_BSS |
                                  RTLW81_MAC_ID_CONFIG_COMMAND_ID_VALID;
 
-            MacIdCommand.Mask = (RTLW81_TRANSMIT_IDENTIFICATION_RAID_11BG <<
-                                 RTLW81_MAC_ID_CONFIG_COMMAND_MASK_MODE_SHIFT) |
-                                Rates;
+            MacIdCommand.Mask =
+                       (Mode << RTLW81_MAC_ID_CONFIG_COMMAND_MASK_MODE_SHIFT) |
+                       Rates;
 
             Status = Rtlw81pSendFirmwareCommand(
                                          Device,

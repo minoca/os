@@ -26,6 +26,7 @@ Environment:
 //
 
 #include "net80211.h"
+#include "eapol.h"
 #include <minoca/crypto.h>
 
 //
@@ -86,6 +87,12 @@ Net80211pCcmComputeAuthenticationField (
     PUCHAR AuthenticationField,
     ULONG AuthenticationFieldSize,
     ULONG LengthFieldSize
+    );
+
+VOID
+Net80211pEapolCompletionRoutine (
+    PVOID Context,
+    KSTATUS Status
     );
 
 //
@@ -166,12 +173,15 @@ Return Value:
     RtlCopyMemory(Key->Value, KeyValue, KeyLength);
 
     //
-    // Update the pointer in the array of keys.
+    // Update the pointer in the array of keys for the active BSS.
     //
 
     KeAcquireQueuedLock(Net80211Link->Lock);
-    OldKey = Net80211Link->Keys[KeyId];
-    Net80211Link->Keys[KeyId] = Key;
+
+    ASSERT(Net80211Link->ActiveBss != NULL);
+
+    OldKey = Net80211Link->ActiveBss->Encryption.Keys[KeyId];
+    Net80211Link->ActiveBss->Encryption.Keys[KeyId] = Key;
     KeReleaseQueuedLock(Net80211Link->Lock);
     if (OldKey != NULL) {
         MmFreePagedPool(OldKey);
@@ -187,6 +197,139 @@ SetKeyEnd:
     }
 
     return Status;
+}
+
+KSTATUS
+Net80211pInitializeEncryption (
+    PNET_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes the 802.11 core to handle the completion of an
+    advanced encryption handshake.
+
+Arguments:
+
+    Link - Supplies a pointer to the link involved in the upcoming handshake.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG ApRsnSize;
+    NETWORK_ADDRESS AuthenticatorAddress;
+    PNET80211_BSS_ENTRY Bss;
+    PNET80211_LINK Net80211Link;
+    EAPOL_CREATION_PARAMETERS Parameters;
+    ULONG StationRsnSize;
+    KSTATUS Status;
+
+    Net80211Link = Link->DataLinkContext;
+    Bss = Net80211Link->ActiveBss;
+
+    ASSERT(Bss != NULL);
+    ASSERT(Bss->EapolHandle == INVALID_HANDLE);
+
+    //
+    // If there is no encryption required by the BSS or it is using the basic
+    // authentication built into 802.11, there is no work to be done.
+    //
+
+    if ((Bss->Encryption.Pairwise == Net80211EncryptionNone) ||
+        (Bss->Encryption.Pairwise == Net80211EncryptionWep)) {
+
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // Otherwise, EAPOL must be invoked in order to derive the PTK.
+    //
+
+    ASSERT(Bss->Encryption.Pairwise != Net80211EncryptionNone);
+
+    RtlZeroMemory(&AuthenticatorAddress, sizeof(NETWORK_ADDRESS));
+    AuthenticatorAddress.Network = SocketNetworkPhysical80211;
+    RtlCopyMemory(AuthenticatorAddress.Address,
+                  Bss->State.Bssid,
+                  NET80211_ADDRESS_SIZE);
+
+    RtlZeroMemory(&Parameters, sizeof(EAPOL_CREATION_PARAMETERS));
+    Parameters.Mode = EapolModeSupplicant;
+    Parameters.Link = Link;
+    Parameters.SupplicantAddress = &(Link->Properties.PhysicalAddress);
+    Parameters.AuthenticatorAddress = &AuthenticatorAddress;
+    Parameters.Ssid = Bss->Ssid;
+    Parameters.SsidLength = Bss->SsidLength;
+    Parameters.Passphrase = Bss->Passphrase;
+    Parameters.PassphraseLength = Bss->PassphraseLength;
+    Parameters.SupplicantRsn = Bss->Encryption.StationRsn;
+    StationRsnSize = NET80211_GET_ELEMENT_LENGTH(Bss->Encryption.StationRsn) +
+                     NET80211_ELEMENT_HEADER_SIZE;
+
+    Parameters.SupplicantRsnSize = StationRsnSize;
+    Parameters.AuthenticatorRsn = Bss->Encryption.ApRsn;
+    ApRsnSize = NET80211_GET_ELEMENT_LENGTH(Bss->Encryption.ApRsn) +
+                NET80211_ELEMENT_HEADER_SIZE;
+
+    Parameters.AuthenticatorRsnSize = ApRsnSize;
+    Parameters.CompletionRoutine = Net80211pEapolCompletionRoutine;
+    Parameters.CompletionContext = Link;
+    Status = Net80211pEapolCreateInstance(&Parameters, &(Bss->EapolHandle));
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+VOID
+Net80211pDestroyEncryption (
+    PNET_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys the context used to handle encryption initialization.
+    It is not necessary to keep this context once the encrypted state is
+    reached.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose encryption state is to be
+        destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_BSS_ENTRY Bss;
+    PNET80211_LINK Net80211Link;
+
+    Net80211Link = Link->DataLinkContext;
+    Bss = Net80211Link->ActiveBss;
+
+    ASSERT(Bss != NULL);
+
+    if (Bss->EapolHandle == INVALID_HANDLE) {
+        return;
+    }
+
+    Net80211pEapolDestroyInstance(Bss->EapolHandle);
+    Bss->EapolHandle = INVALID_HANDLE;
+    return;
 }
 
 KSTATUS
@@ -232,12 +375,14 @@ Return Value:
     PUCHAR PacketNumberArray;
     KSTATUS Status;
 
+    ASSERT(Link->ActiveBss != NULL);
+
     //
     // Use the default key.
     //
 
     KeyId = NET80211_DEFAULT_ENCRYPTION_KEY;
-    Key = Link->Keys[KeyId];
+    Key = Link->ActiveBss->Encryption.Keys[KeyId];
     if ((Key == NULL) || ((Key->Flags & NET80211_KEY_FLAG_TRANSMIT) == 0)) {
         RtlDebugPrint("802.11: Failed to find valid key for transmit.\n");
         Status = STATUS_INVALID_CONFIGURATION;
@@ -384,6 +529,11 @@ Return Value:
     PUCHAR PacketNumberArray;
     KSTATUS Status;
 
+    if (Link->ActiveBss == NULL) {
+        Status = STATUS_UNSUCCESSFUL;
+        goto DecryptPacketEnd;
+    }
+
     //
     // The start of the packet's valid data should point to the 802.11 header.
     //
@@ -401,7 +551,7 @@ Return Value:
     KeyId = (CcmpHeader->Flags & NET80211_CCMP_FLAG_KEY_ID_MASK) >>
             NET80211_CCMP_FLAG_KEY_ID_SHIFT;
 
-    Key = Link->Keys[KeyId];
+    Key = Link->ActiveBss->Encryption.Keys[KeyId];
     if (Key == NULL) {
         Status = STATUS_UNSUCCESSFUL;
         goto DecryptPacketEnd;
@@ -978,6 +1128,48 @@ Return Value:
     //
 
     RtlCopyMemory(AuthenticationField, BlockOut, AuthenticationFieldSize);
+    return;
+}
+
+VOID
+Net80211pEapolCompletionRoutine (
+    PVOID Context,
+    KSTATUS Status
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when an EAPOL exchange completes. It is supplied by
+    the creator of the EAPOL instance.
+
+Arguments:
+
+    Context - Supplies a pointer to the context supplied by the creator of the
+        EAPOL instance.
+
+    Status - Supplies the completion status of the EAPOL exchange.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET_LINK Link;
+    NET80211_STATE State;
+
+    Link = (PNET_LINK)Context;
+    State = Net80211StateEncrypted;
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("802.11: EAPOL failed with status 0x%08x\n", Status);
+        State = Net80211StateInitialized;
+    }
+
+    Net80211pSetState(Link, State);
     return;
 }
 

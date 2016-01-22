@@ -26,25 +26,10 @@ Environment:
 //
 
 #include "net80211.h"
-#include "eapol.h"
 
 //
 // ---------------------------------------------------------------- Definitions
 //
-
-//
-// Define the default amount of time to wait for a reply management frame to
-// arrive.
-//
-
-#define NET80211_MANAGEMENT_FRAME_TIMEOUT (1 * MILLISECONDS_PER_SECOND)
-
-//
-// Define the default number of times to retry a management frame before giving
-// up.
-//
-
-#define NET80211_MANAGEMENT_RETRY_COUNT 5
 
 //
 // Define default values for the local station's RSN capabilities.
@@ -79,10 +64,10 @@ Environment:
 #define NET80211_DEFAULT_RSN_AKM_SUITE 0x02AC0F00
 
 //
-// Define the default timeout period to wait for the EAPOL instance to complete.
+// Define the number of times to retry a scan before giving up.
 //
 
-#define NET80211_EAPOL_TIMEOUT (10 * MILLISECONDS_PER_SECOND)
+#define NET80211_SCAN_RETRY_COUNT 5
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -92,101 +77,45 @@ Environment:
 
 Structure Description:
 
-    This structure defines the context used to join an basic service set (BSS).
+    This structure defines the set of information gathered from a probe
+    response management frame or a beacon management frame.
 
 Members:
 
-    Link - Stores a pointer to the link that is trying to join the BSS.
+    Bssid - Stores a pointer to the BSSID, which is always
+        NET80211_ADDRESS_SIZE bytes long.
 
-    LinkAddress - Stores a pointer to the link's local address to be used in
-        joining the BSS.
+    BeaconInterval - Stores the interval between beacons sent by an AP.
 
-    EapolCompletionEvent - Stores a pointer to the event that is signaled when
-        EAPOL authentication completes.
+    Capabilities - Stores the 802.11 capabilities of the AP. See
+        NET80211_CAPABILITY_FLAG_* for definitions.
 
-    EapolCompletionStatus - Stores the status of the completed EAPOL exchange.
+    Timestamp - Stores the timestamp from the AP.
 
-    Ssid - Stores the string identifying the BSS to join.
+    Channel - Stores a pointer to the channel element, that indicates the
+        channel on which the AP is operating.
 
-    SsidLength - Stores the length of the BSS identifier string, including the
-        NULL terminator.
+    Ssid - Stores a pointer to the SSID element from the AP.
 
-    Passphrase - Stores an optional pointer to the passphrase for the BSS. The
-        passphrase may be a sequence of bytes or ASCII characters depending on
-        the security implemented by the BSS.
+    Rates - Stores a pointer to the supported rates element.
 
-    PassphraseLength - Stores the length of the passphrase, in bytes.
+    ExtendedRates - Stores a pointer to the extended supported rates element.
 
-    Bssid - Stores the MAC address of the BSS's access point (a.k.a the BSSID).
-
-    Timestamp - Stores the timestamp taken from the access point when probing.
-
-    BeaconInterval - Stores the beacon interval for the BSS to which the
-        station is attempting to join.
-
-    Capabilities - Stores the capabilities for the BSS to which the station is
-        attempting to join.
-
-    AssociationId - Stores the association ID assigned to the station by the AP.
-
-    RateInformation - Stores the rate information for the BSS, supplied by the
-        AP.
-
-    GroupEncryption - Stores the group encryption policy for the BSS.
-
-    PairwiseEncryption - Stores the pairwise encryption policy for the BSS.
-
-    ApRsnInformation - Stores the AP's robust security network (RSN)
-        information.
-
-    ApRsnInformationLength - Stores the length of the AP's RSN information.
+    Rsn - Stores the optional RSN element broadcasted by the AP.
 
 --*/
 
-typedef struct _NET80211_BSS_CONTEXT {
-    PNET_LINK Link;
-    PNET_LINK_ADDRESS_ENTRY LinkAddress;
-    PKEVENT EapolCompletionEvent;
-    KSTATUS EapolCompletionStatus;
-    PSTR Ssid;
-    ULONG SsidLength;
-    PUCHAR Passphrase;
-    ULONG PassphraseLength;
-    NETWORK_ADDRESS Bssid;
-    ULONGLONG Timestamp;
+typedef struct _NET80211_PROBE_RESPONSE {
+    PUCHAR Bssid;
     USHORT BeaconInterval;
     USHORT Capabilities;
-    USHORT AssociationId;
-    PNET80211_RATE_INFORMATION RateInformation;
-    NET80211_ENCRYPTION_TYPE GroupEncryption;
-    NET80211_ENCRYPTION_TYPE PairwiseEncryption;
-    PUCHAR ApRsnInformation;
-    ULONG ApRsnInformationLength;
-} NET80211_BSS_CONTEXT, *PNET80211_BSS_CONTEXT;
-
-/*++
-
-Structure Description:
-
-    This structure defines a cached management frame.
-
-Members:
-
-    ListEntry - Stores a set of pointers to the next and previous saved
-        management frames.
-
-    Buffer - Stores a pointer to the management frame data, including the 802.11
-        header.
-
-    BufferSize - Stores the size of the management frame, in bytes.
-
---*/
-
-typedef struct _NET80211_MANAGEMENT_FRAME {
-    LIST_ENTRY ListEntry;
-    PVOID Buffer;
-    ULONG BufferSize;
-} NET80211_MANAGEMENT_FRAME, *PNET80211_MANAGEMENT_FRAME;
+    ULONGLONG Timestamp;
+    PUCHAR Channel;
+    PUCHAR Ssid;
+    PUCHAR Rates;
+    PUCHAR ExtendedRates;
+    PUCHAR Rsn;
+} NET80211_PROBE_RESPONSE, *PNET80211_PROBE_RESPONSE;
 
 /*++
 
@@ -262,80 +191,81 @@ typedef struct _NET80211_DEFAULT_RSN_INFORMATION {
 //
 
 VOID
-Net80211pJoinBssThread (
+Net80211pSetStateUnlocked (
+    PNET_LINK Link,
+    NET80211_STATE State
+    );
+
+VOID
+Net80211pScanThread (
     PVOID Parameter
     );
 
 KSTATUS
 Net80211pSendProbeRequest (
-    PNET80211_BSS_CONTEXT Context,
-    ULONG Channel
+    PNET_LINK Link,
+    PNET80211_SCAN_STATE Scan
     );
 
-KSTATUS
-Net80211pReceiveProbeResponse (
-    PNET80211_BSS_CONTEXT Context,
-    ULONG Channel
+VOID
+Net80211pProcessProbeResponse (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet
     );
 
 KSTATUS
 Net80211pSendAuthenticationRequest (
-    PNET80211_BSS_CONTEXT Context
+    PNET_LINK Link
     );
 
-KSTATUS
-Net80211pReceiveAuthenticationResponse (
-    PNET80211_BSS_CONTEXT Context
+VOID
+Net80211pProcessAuthenticationResponse (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet
     );
 
 KSTATUS
 Net80211pSendAssociationRequest (
-    PNET80211_BSS_CONTEXT Context
+    PNET_LINK Link
     );
 
-KSTATUS
-Net80211pReceiveAssociationResponse (
-    PNET80211_BSS_CONTEXT Context
+VOID
+Net80211pProcessAssociationResponse (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet
     );
 
 KSTATUS
 Net80211pSendManagementFrame (
     PNET_LINK Link,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress,
-    PNETWORK_ADDRESS Bssid,
+    PUCHAR DestinationAddress,
+    PUCHAR Bssid,
     ULONG FrameSubtype,
     PVOID FrameBody,
     ULONG FrameBodySize
     );
 
 KSTATUS
-Net80211pReceiveManagementFrame (
-    PNET_LINK Link,
-    PNET_LINK_ADDRESS_ENTRY LinkAddress,
-    ULONG FrameSubtype,
-    PNET80211_MANAGEMENT_FRAME *Frame
+Net80211pValidateRates (
+    PNET80211_LINK Link,
+    PNET80211_BSS_ENTRY Bss
     );
 
-PNET80211_BSS_CONTEXT
-Net80211pCreateBssContext (
-    PNET_LINK Link,
-    PNET_LINK_ADDRESS_ENTRY LinkAddress,
-    PSTR Ssid,
-    ULONG SsidLength,
-    PUCHAR Passphrase,
-    ULONG PassphraseLength
+KSTATUS
+Net80211pParseRsnElement (
+    PUCHAR Rsn,
+    PNET80211_ENCRYPTION Encryption
     );
 
 VOID
-Net80211pDestroyBssContext (
-    PNET80211_BSS_CONTEXT Context
+Net80211pUpdateBssCache (
+    PNET_LINK Link,
+    PNET80211_PROBE_RESPONSE Response
     );
 
 VOID
-Net80211pJoinBssEapolCompletionRoutine (
-    PVOID Context,
-    KSTATUS Status
+Net80211pDestroyBssEntry (
+    PNET80211_BSS_ENTRY BssEntry
     );
 
 //
@@ -361,92 +291,6 @@ NET80211_DEFAULT_RSN_INFORMATION Net80211DefaultRsnInformation = {
 //
 // ------------------------------------------------------------------ Functions
 //
-
-KSTATUS
-Net80211pJoinBss (
-    PNET_LINK Link,
-    PNET_LINK_ADDRESS_ENTRY LinkAddress,
-    PSTR Ssid,
-    ULONG SsidLength,
-    PUCHAR Passphrase,
-    ULONG PassphraseLength
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to join the link to the service set identified by the
-    given SSID.
-
-Arguments:
-
-    Link - Supplies a pointer to the link that is requesting to join a network.
-
-    LinkAddress - Supplies the link address for the link that wants to join the
-         network.
-
-    Ssid - Supplies the SSID of the network to join.
-
-    SsidLength - Supplies the length of the SSID string, including the NULL
-        terminator.
-
-    Passphrase - Supplies an optional pointer to the passphrase for the BSS.
-        This is only required if the BSS is secured. The passphrase may be a
-        sequence of bytes or an ASCII password.
-
-    PassphraseLength - Supplies the length of the passphrase, in bytes.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PNET80211_BSS_CONTEXT Context;
-    PNET80211_LINK Net80211Link;
-    KSTATUS Status;
-
-    Net80211Link = Link->DataLinkContext;
-    if (Net80211Link->State != Net80211StateStarted) {
-        return STATUS_NOT_INITIALIZED;
-    }
-
-    if ((Ssid == NULL) && (SsidLength != 0)) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    Context = Net80211pCreateBssContext(Link,
-                                        LinkAddress,
-                                        Ssid,
-                                        SsidLength,
-                                        Passphrase,
-                                        PassphraseLength);
-
-    if (Context == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto JoinBssEnd;
-    }
-
-    Status = PsCreateKernelThread(Net80211pJoinBssThread,
-                                  Context,
-                                  "Net80211pJoinBssThread");
-
-    if (!KSUCCESS(Status)) {
-        goto JoinBssEnd;
-    }
-
-JoinBssEnd:
-    if (!KSUCCESS(Status)) {
-        if (Context != NULL) {
-            Net80211pDestroyBssContext(Context);
-        }
-    }
-
-    return Status;
-}
 
 VOID
 Net80211pProcessManagementFrame (
@@ -474,41 +318,22 @@ Return Value:
 
 {
 
-    ULONG AllocationSize;
-    PNET80211_MANAGEMENT_FRAME Frame;
-    ULONG FrameSize;
     ULONG FrameSubtype;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
-    PNET80211_LINK Net80211Link;
-    BOOL SaveAndSignal;
 
-    Net80211Link = Link->DataLinkContext;
     Header = Packet->Buffer + Packet->DataOffset;
-    SaveAndSignal = FALSE;
     FrameSubtype = NET80211_GET_FRAME_SUBTYPE(Header);
     switch (FrameSubtype) {
-    case NET80211_MANAGEMENT_FRAME_SUBTYPE_ASSOCIATION_RESPONSE:
-        if (Net80211Link->State != Net80211StateAssociating) {
-            break;
-        }
-
-        SaveAndSignal = TRUE;
-        break;
-
     case NET80211_MANAGEMENT_FRAME_SUBTYPE_PROBE_RESPONSE:
-        if (Net80211Link->State != Net80211StateProbing) {
-            break;
-        }
-
-        SaveAndSignal = TRUE;
+        Net80211pProcessProbeResponse(Link, Packet);
         break;
 
     case NET80211_MANAGEMENT_FRAME_SUBTYPE_AUTHENTICATION:
-        if (Net80211Link->State != Net80211StateAuthenticating) {
-            break;
-        }
+        Net80211pProcessAuthenticationResponse(Link, Packet);
+        break;
 
-        SaveAndSignal = TRUE;
+    case NET80211_MANAGEMENT_FRAME_SUBTYPE_ASSOCIATION_RESPONSE:
+        Net80211pProcessAssociationResponse(Link, Packet);
         break;
 
     //
@@ -536,36 +361,115 @@ Return Value:
         break;
     }
 
-    //
-    // If the frame is to be saved and its arrival is to be signaled for a
-    // waiting thread to pick up do that now.
-    //
+    return;
+}
 
-    if (SaveAndSignal != FALSE) {
-        FrameSize = Packet->FooterOffset - Packet->DataOffset;
-        AllocationSize = FrameSize + sizeof(NET80211_MANAGEMENT_FRAME);
-        Frame = MmAllocatePagedPool(AllocationSize, NET80211_ALLOCATION_TAG);
-        if (Frame == NULL) {
-            goto ProcessManagementFrameEnd;
-        }
+KSTATUS
+Net80211pStartScan (
+    PNET_LINK Link,
+    PNET80211_SCAN_STATE Parameters
+    )
 
-        Frame->Buffer = (Frame + 1);
-        Frame->BufferSize = FrameSize;
-        RtlCopyMemory(Frame->Buffer,
-                      Packet->Buffer + Packet->DataOffset,
-                      FrameSize);
+/*++
 
-        KeAcquireQueuedLock(Net80211Link->Lock);
-        INSERT_BEFORE(&(Frame->ListEntry),
-                      &(Net80211Link->ManagementFrameList));
+Routine Description:
 
-        KeSignalEvent(Net80211Link->ManagementFrameEvent,
-                      SignalOptionSignalAll);
+    This routine starts a scan for one or more BSSs within range of this
+    station.
 
-        KeReleaseQueuedLock(Net80211Link->Lock);
+Arguments:
+
+    Link - Supplies a pointer to the link on which to perform the scan.
+
+    Parameters - Supplies a pointer to a scan state used to initialize the
+        scan. This memory will not be referenced after the function returns,
+        so this may be a stack allocated structure.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PNET80211_SCAN_STATE ScanState;
+    KSTATUS Status;
+
+    ASSERT(Parameters->SsidLength <= NET80211_MAX_SSID_LENGTH);
+    ASSERT(Parameters->PassphraseLength <= NET80211_MAX_PASSPHRASE_LENGTH);
+
+    ScanState = MmAllocatePagedPool(sizeof(NET80211_SCAN_STATE),
+                                    NET80211_ALLOCATION_TAG);
+
+    if (ScanState == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto StartScanEnd;
     }
 
-ProcessManagementFrameEnd:
+    RtlCopyMemory(ScanState, Parameters, sizeof(NET80211_SCAN_STATE));
+    NetLinkAddReference(Link);
+    ScanState->Link = Link;
+
+    //
+    // Kick off a thread to complete the scan.
+    //
+
+    Net80211pSetState(Link, Net80211StateProbing);
+    Status = PsCreateKernelThread(Net80211pScanThread,
+                                  ScanState,
+                                  "Net80211ScanThread");
+
+    if (!KSUCCESS(Status)) {
+        goto StartScanEnd;
+    }
+
+StartScanEnd:
+    if (!KSUCCESS(Status)) {
+        if (ScanState != NULL) {
+            Net80211pSetState(Link, Net80211StateInitialized);
+            NetLinkReleaseReference(ScanState->Link);
+            MmFreePagedPool(ScanState);
+        }
+    }
+
+    return Status;
+}
+
+VOID
+Net80211pSetState (
+    PNET_LINK Link,
+    NET80211_STATE State
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the given link's 802.11 state by alerting the driver of
+    the state change and then performing any necessary actions based on the
+    state transition.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose state is being updated.
+
+    State - Supplies the state to which the link is transitioning.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_LINK Net80211Link;
+
+    Net80211Link = Link->DataLinkContext;
+    KeAcquireQueuedLock(Net80211Link->Lock);
+    Net80211pSetStateUnlocked(Link, State);
+    KeReleaseQueuedLock(Net80211Link->Lock);
     return;
 }
 
@@ -574,7 +478,177 @@ ProcessManagementFrameEnd:
 //
 
 VOID
-Net80211pJoinBssThread (
+Net80211pSetStateUnlocked (
+    PNET_LINK Link,
+    NET80211_STATE State
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the given link's 802.11 state by alerting the driver of
+    the state change and then performing any necessary actions based on the
+    state transition. This routine assumes that the 802.11 link's lock is held.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose state is being updated.
+
+    State - Supplies the state to which the link is transitioning.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_BSS_ENTRY Bss;
+    PNET80211_BSS BssState;
+    PVOID DriverContext;
+    PNET80211_LINK Net80211Link;
+    BOOL StartLink;
+    KSTATUS Status;
+
+    Net80211Link = Link->DataLinkContext;
+
+    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+
+    Bss = Net80211Link->ActiveBss;
+
+    //
+    // Notify the driver about the state transition first, allowing it to
+    // prepare for the type of packets to be sent and received in the new state.
+    //
+
+    BssState = NULL;
+    if (Bss != NULL) {
+        BssState = &(Bss->State);
+    }
+
+    DriverContext = Net80211Link->Properties.DriverContext;
+    Status = Net80211Link->Properties.Interface.SetState(DriverContext,
+                                                         State,
+                                                         BssState);
+
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("802.11: Failed to set state %d: 0x%08x\n",
+                      State,
+                      Status);
+
+        goto SetStateEnd;
+    }
+
+    //
+    // Officially update the state.
+    //
+
+    Net80211Link->State = State;
+
+    //
+    // Perform the necessary steps according to the state transition.
+    //
+
+    StartLink = FALSE;
+    switch (State) {
+    case Net80211StateAuthenticating:
+        Status = Net80211pSendAuthenticationRequest(Link);
+        if (!KSUCCESS(Status)) {
+            goto SetStateEnd;
+        }
+
+        break;
+
+    case Net80211StateAssociating:
+
+        ASSERT(Bss != NULL);
+
+        //
+        // Initialize the encryption authentication process so that it is ready
+        // to receive packets assuming association succeeds.
+        //
+
+        Status = Net80211pInitializeEncryption(Link);
+        if (!KSUCCESS(Status)) {
+            goto SetStateEnd;
+        }
+
+        //
+        // Send out an association request.
+        //
+
+        Status = Net80211pSendAssociationRequest(Link);
+        if (!KSUCCESS(Status)) {
+            goto SetStateEnd;
+        }
+
+        break;
+
+    //
+    // In the associated state, if no advanced encryption is involved, the link
+    // is ready to start transmitting and receiving data.
+    //
+
+    case Net80211StateAssociated:
+
+        ASSERT(Bss != NULL);
+
+        if ((Bss->Encryption.Pairwise == Net80211EncryptionNone) ||
+            (Bss->Encryption.Pairwise == Net80211EncryptionWep)) {
+
+            StartLink = TRUE;
+        }
+
+        break;
+
+    //
+    // If advanced encryption was involved, then the link is not ready until
+    // the encrypted state is reached.
+    //
+
+    case Net80211StateEncrypted:
+
+        ASSERT((Bss->Encryption.Pairwise == Net80211EncryptionWpaPsk) ||
+               (Bss->Encryption.Pairwise == Net80211EncryptionWpa2Psk));
+
+        Net80211pDestroyEncryption(Link);
+        StartLink = TRUE;
+        break;
+
+    case Net80211StateInitialized:
+        if (Bss != NULL) {
+            Net80211pDestroyEncryption(Link);
+            Net80211Link->ActiveBss = NULL;
+            NetSetLinkState(Link, FALSE, 0);
+        }
+
+        break;
+
+    default:
+        break;
+    }
+
+    //
+    // If requested, fire up the link and get traffic going in the upper layers.
+    //
+
+    if (StartLink != FALSE) {
+        Status = NetStartLink(Link);
+        if (!KSUCCESS(Status)) {
+            goto SetStateEnd;
+        }
+
+        NetSetLinkState(Link, TRUE, Bss->State.MaxRate * NET80211_RATE_UNIT);
+    }
+
+SetStateEnd:
+    return;
+}
+
+VOID
+Net80211pScanThread (
     PVOID Parameter
     )
 
@@ -582,320 +656,245 @@ Net80211pJoinBssThread (
 
 Routine Description:
 
-    This routine attempts to join a basic service set (BSS) using the 802.11
-    association sequence.
+    This routine is the entry point for the scan thread.
 
 Arguments:
 
-    Parameter - Supplies a pointer supplied by the creator of the thread, in
-        this case a pointer to the BSS context.
+    Parameter - Supplies a pointer supplied by the creator of the thread. In
+        this can it is a pointer to an 802.11 scan state structure.
 
 Return Value:
 
-    Status code.
+    None.
 
 --*/
 
 {
 
-    ULONG ApIndex;
-    UCHAR ApRate;
-    ULONG Attempts;
-    ULONG Channel;
-    PNET80211_BSS_CONTEXT Context;
-    HANDLE EapolHandle;
-    ULONG LocalIndex;
-    UCHAR LocalRate;
-    UCHAR MaxRate;
+    PNET80211_BSS_ENTRY BssEntry;
+    PLIST_ENTRY CurrentEntry;
+    PNET80211_BSS_ENTRY FoundEntry;
+    PNET_LINK Link;
+    BOOL LockHeld;
+    BOOL Match;
+    ULONG MaxRssi;
     PNET80211_LINK Net80211Link;
-    EAPOL_CREATION_PARAMETERS Parameters;
-    BOOL ServiceSetFound;
+    ULONG Retries;
+    PNET80211_SCAN_STATE Scan;
     KSTATUS Status;
 
-    Context = (PNET80211_BSS_CONTEXT)Parameter;
-    EapolHandle = INVALID_HANDLE;
-    Net80211Link = (PNET80211_LINK)Context->Link->DataLinkContext;
-    ServiceSetFound = FALSE;
+    LockHeld = FALSE;
+    Scan = (PNET80211_SCAN_STATE)Parameter;
+    Link = Scan->Link;
+    Net80211Link = Link->DataLinkContext;
+    Retries = 0;
+    while (Retries < NET80211_SCAN_RETRY_COUNT) {
 
-    //
-    // TODO: Look for the SSID in the cache of networks collected from beacons.
-    //
+        //
+        // Always start scanning on channel 1.
+        //
 
-    //
-    // If it was not found in the beacon cache, then send a probe request and
-    // wait for a response.
-    //
+        Scan->Channel = 1;
 
-    if (ServiceSetFound == FALSE) {
-        Net80211pSetState(Context->Link, Net80211StateProbing);
-        for (Channel = 1;
-             Channel <= Net80211Link->Properties.MaxChannel;
-             Channel += 1) {
+        //
+        // Search for BSS entries on all channels.
+        //
 
-            Attempts = NET80211_MANAGEMENT_RETRY_COUNT;
-            while (Attempts != 0) {
-                Attempts -= 1;
-                Status = Net80211pSendProbeRequest(Context, Channel);
-                if (!KSUCCESS(Status)) {
-                    goto JoinBssThreadEnd;
+        Status = STATUS_UNSUCCESSFUL;
+        FoundEntry = NULL;
+        while (Scan->Channel < Net80211Link->Properties.MaxChannel) {
+
+            //
+            // Set the channel to send the packet over.
+            //
+
+            Status = Net80211pSetChannel(Link, Scan->Channel);
+            if (!KSUCCESS(Status)) {
+                goto ScanThreadEnd;
+            }
+
+            //
+            // Send a probe request over the link, this will look in the
+            // current scan state and set the correct channel and BSSID
+            // (broadcast or a specific ID).
+            //
+
+            Status = Net80211pSendProbeRequest(Link, Scan);
+            if (!KSUCCESS(Status)) {
+                goto ScanThreadEnd;
+            }
+
+            //
+            // Wait the default dwell time before moving to the next channel.
+            //
+
+            KeDelayExecution(FALSE, FALSE, NET80211_DEFAULT_SCAN_DWELL_TIME);
+
+            //
+            // Now that the channel has been probed, search to see if the
+            // targeted BSS is in range. This should only be done if a specific
+            // BSSID is being probed.
+            //
+
+            if (((Scan->Flags & NET80211_SCAN_FLAG_BROADCAST) == 0) &&
+                ((Scan->Flags & NET80211_SCAN_FLAG_JOIN) != 0)) {
+
+                LockHeld = TRUE;
+                KeAcquireQueuedLock(Net80211Link->Lock);
+                CurrentEntry = Net80211Link->BssList.Next;
+                while (CurrentEntry != &(Net80211Link->BssList)) {
+                    BssEntry = LIST_VALUE(CurrentEntry,
+                                          NET80211_BSS_ENTRY,
+                                          ListEntry);
+
+                    Match = RtlCompareMemory(Scan->Bssid,
+                                             BssEntry->State.Bssid,
+                                             NET80211_ADDRESS_SIZE);
+
+                    if (Match != FALSE) {
+                        FoundEntry = BssEntry;
+                        break;
+                    }
+
+                    CurrentEntry = CurrentEntry->Next;
                 }
 
-                Status = Net80211pReceiveProbeResponse(Context, Channel);
-                if (Status == STATUS_TIMEOUT) {
+                if (FoundEntry != NULL) {
+                    Status = Net80211pValidateRates(Net80211Link, FoundEntry);
+                    if (!KSUCCESS(Status)) {
+                       goto ScanThreadEnd;
+                    }
+
+                    break;
+                }
+
+                KeReleaseQueuedLock(Net80211Link->Lock);
+                LockHeld = FALSE;
+            }
+
+            Scan->Channel += 1;
+        }
+
+        //
+        // If the scan completed and a join is required, then search for the
+        // BSS with the most signal strength.
+        //
+
+        if (((Scan->Flags & NET80211_SCAN_FLAG_BROADCAST) != 0) &&
+            ((Scan->Flags & NET80211_SCAN_FLAG_JOIN) != 0)) {
+
+            ASSERT(Scan->SsidLength != 0);
+            ASSERT(FoundEntry == NULL);
+
+            MaxRssi = 0;
+            LockHeld = TRUE;
+            KeAcquireQueuedLock(Net80211Link->Lock);
+            CurrentEntry = Net80211Link->BssList.Next;
+            while (CurrentEntry != &(Net80211Link->BssList)) {
+                BssEntry = LIST_VALUE(CurrentEntry,
+                                      NET80211_BSS_ENTRY,
+                                      ListEntry);
+
+                CurrentEntry = CurrentEntry->Next;
+                if (BssEntry->SsidLength != Scan->SsidLength) {
                     continue;
                 }
 
-                if (KSUCCESS(Status)) {
-                    ServiceSetFound = TRUE;
+                Match = RtlCompareMemory(BssEntry->Ssid,
+                                         Scan->Ssid,
+                                         Scan->SsidLength);
+
+                if (Match == FALSE) {
+                    continue;
                 }
 
-                break;
+                //
+                // Validate that the BSS and station agree on a basic rate set.
+                // Also determine the mode at which it would connect.
+                //
+
+                Status = Net80211pValidateRates(Net80211Link, BssEntry);
+                if (!KSUCCESS(Status)) {
+                    continue;
+                }
+
+                if (BssEntry->State.Rssi >= MaxRssi) {
+                    MaxRssi = BssEntry->State.Rssi;
+                    FoundEntry = BssEntry;
+                }
             }
 
-            if (ServiceSetFound != FALSE) {
-                break;
+            if (FoundEntry == NULL) {
+                KeReleaseQueuedLock(Net80211Link->Lock);
+                LockHeld = FALSE;
             }
         }
-    }
 
-    //
-    // If the service set could not be found, then exit.
-    //
+        //
+        // If an entry was found, make it the active BSS and start the
+        // authentication process.
+        //
 
-    if (ServiceSetFound == FALSE) {
-        RtlDebugPrint("802.11: Failed to find BSS %s.\n", Context->Ssid);
-        Status = STATUS_UNSUCCESSFUL;
-        goto JoinBssThreadEnd;
-    }
+        if (FoundEntry != NULL) {
 
-    //
-    // Before going any further, if the BSS required private data packets, then
-    // make sure a passphrase was supplied.
-    //
+            ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
 
-    if (((Context->Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) &&
-        (Context->Passphrase == NULL)) {
+            if (FoundEntry->Encryption.Pairwise != Net80211EncryptionNone) {
+                if (Scan->PassphraseLength == 0) {
+                    Status = STATUS_ACCESS_DENIED;
+                    break;
+                }
 
-        Status = STATUS_INVALID_PARAMETER;
-        goto JoinBssThreadEnd;
-    }
+                RtlCopyMemory(FoundEntry->Passphrase,
+                              Scan->Passphrase,
+                              Scan->PassphraseLength);
 
-    //
-    // Now that the access point for the BSS is within communication, start the
-    // authentication sequence. The authentication request is a unicast packet
-    // so the hardware will handle the retransmission process.
-    //
-
-    Net80211pSetState(Context->Link, Net80211StateAuthenticating);
-    Status = Net80211pSendAuthenticationRequest(Context);
-    if (!KSUCCESS(Status)) {
-        goto JoinBssThreadEnd;
-    }
-
-    //
-    // Wait for the authentication response.
-    //
-
-    Status = Net80211pReceiveAuthenticationResponse(Context);
-    if (!KSUCCESS(Status)) {
-        goto JoinBssThreadEnd;
-    }
-
-    Net80211pSetState(Context->Link, Net80211StateAuthenticated);
-
-    //
-    // Before attempting to associate, initialize an EAPOL instance, if
-    // necessary. As soon as association completes, the AP will begin the EAPOL
-    // handshake. Be ready to receive that first message.
-    //
-
-    if (((Context->Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) &&
-        (Context->PairwiseEncryption != Net80211EncryptionWep)) {
-
-        ASSERT(Context->PairwiseEncryption != Net80211EncryptionNone);
-
-        RtlZeroMemory(&Parameters, sizeof(EAPOL_CREATION_PARAMETERS));
-        Parameters.Mode = EapolModeSupplicant;
-        Parameters.Link = Context->Link;
-        Parameters.SupplicantAddress = &(Context->LinkAddress->PhysicalAddress);
-        Parameters.AuthenticatorAddress = &(Context->Bssid);
-        Parameters.Ssid = Context->Ssid;
-        Parameters.SsidLength = Context->SsidLength;
-        Parameters.Passphrase = Context->Passphrase;
-        Parameters.PassphraseLength = Context->PassphraseLength;
-        Parameters.SupplicantRsn = (PUCHAR)&Net80211DefaultRsnInformation;
-        Parameters.SupplicantRsnSize = sizeof(NET80211_DEFAULT_RSN_INFORMATION);
-        Parameters.AuthenticatorRsn = Context->ApRsnInformation;
-        Parameters.AuthenticatorRsnSize = Context->ApRsnInformationLength;
-        Parameters.CompletionRoutine = Net80211pJoinBssEapolCompletionRoutine;
-        Parameters.CompletionContext = Context;
-        Status = Net80211pEapolInstanceCreate(&Parameters, &EapolHandle);
-        if (!KSUCCESS(Status)) {
-            goto JoinBssThreadEnd;
-        }
-    }
-
-    //
-    // The link is authentication with the BSS. Attempt to join it via the
-    // association sequence. The association request is a unicast packet so the
-    // hardware will handle the retransmission process.
-    //
-
-    Net80211pSetState(Context->Link, Net80211StateAssociating);
-    Status = Net80211pSendAssociationRequest(Context);
-    if (!KSUCCESS(Status)) {
-        goto JoinBssThreadEnd;
-    }
-
-    //
-    // Wait for the association response.
-    //
-
-    Status = Net80211pReceiveAssociationResponse(Context);
-    if (!KSUCCESS(Status)) {
-        goto JoinBssThreadEnd;
-    }
-
-    //
-    // Determine the link speed by taking the maximum rate supported by both
-    // the local station and the BSS's access point. This is O(N^2), but there
-    // are never many rates and an O(N) algorithm would add space complexity
-    // due to hashing. This is not a common operation.
-    //
-
-    MaxRate = 0;
-    for (LocalIndex = 0;
-         LocalIndex < Net80211Link->Properties.SupportedRates->Count;
-         LocalIndex += 1) {
-
-        LocalRate = Net80211Link->Properties.SupportedRates->Rates[LocalIndex];
-        LocalRate &= ~NET80211_RATE_BASIC;
-        if (LocalRate <= MaxRate) {
-            continue;
-        }
-
-        for (ApIndex = 0;
-             ApIndex < Context->RateInformation->Count;
-             ApIndex += 1) {
-
-            ApRate = Context->RateInformation->Rates[ApIndex];
-            ApRate &= ~NET80211_RATE_BASIC;
-            if (ApRate == LocalRate) {
-                MaxRate = LocalRate;
-                break;
+                FoundEntry->PassphraseLength = Scan->PassphraseLength;
             }
-        }
-    }
 
-    //
-    // There are no matching rates. This should really not happen given that
-    // APs should not respond to probes unless the rates and capabilities are
-    // agreeable.
-    //
-
-    if (MaxRate == 0) {
-        RtlDebugPrint("802.11: Failing to join BSS %s because the AP and "
-                      "station have no matching rates.\n",
-                      Context->Ssid);
-
-        Status = STATUS_UNSUCCESSFUL;
-        goto JoinBssThreadEnd;
-    }
-
-    //
-    // The station is associated. Copy the context information to the 802.11
-    // link's state and then update the device link with the new state.
-    //
-
-    RtlCopyMemory(Net80211Link->BssState.Bssid,
-                  Context->Bssid.Address,
-                  NET80211_ADDRESS_SIZE);
-
-    Net80211Link->BssState.Timestamp = Context->Timestamp;
-    Net80211Link->BssState.BeaconInterval = Context->BeaconInterval;
-    Net80211Link->BssState.Capabilities = Context->Capabilities;
-    Net80211Link->BssState.Rates = Context->RateInformation;
-    Context->RateInformation = NULL;
-    Net80211pSetState(Context->Link, Net80211StateAssociated);
-
-    //
-    // Wait for the EAPOL exchange to complete if necessary.
-    //
-
-    if (EapolHandle != INVALID_HANDLE) {
-        Status = KeWaitForEvent(Context->EapolCompletionEvent,
-                                FALSE,
-                                NET80211_EAPOL_TIMEOUT);
-
-        if (!KSUCCESS(Status)) {
-            goto JoinBssThreadEnd;
+            Net80211Link->ActiveBss = FoundEntry;
+            Net80211pSetChannel(Link, FoundEntry->State.Channel);
+            Net80211pSetStateUnlocked(Link, Net80211StateAuthenticating);
+            Status = STATUS_SUCCESS;
+            break;
         }
 
-        Status = Context->EapolCompletionStatus;
-        if (!KSUCCESS(Status)) {
-            goto JoinBssThreadEnd;
-        }
-
-        //
-        // Now that the link is ready for encryption, updates its state.
-        //
-
-        Net80211Link->PairwiseEncryption = Context->PairwiseEncryption;
-        Net80211Link->GroupEncryption = Context->GroupEncryption;
+        Retries += 1;
     }
 
-    //
-    // The link is finally read to start transmitting and receiving data for
-    // upper level layers.
-    //
+ScanThreadEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseQueuedLock(Net80211Link->Lock);
+    }
 
-    Status = NetStartLink(Context->Link);
     if (!KSUCCESS(Status)) {
-        goto JoinBssThreadEnd;
+        Net80211pSetState(Link, Net80211StateInitialized);
     }
 
-    NetSetLinkState(Context->Link, TRUE, MaxRate * NET80211_RATE_UNIT);
-
-JoinBssThreadEnd:
-    if (!KSUCCESS(Status)) {
-        RtlDebugPrint("802.11: Joining BSS %s failed with status 0x%08x\n",
-                      Context->Ssid,
-                      Status);
-
-        //
-        // TODO: Perform 802.11 disassociation and deauthentication.
-        //
-
-        Net80211pSetState(Context->Link, Net80211StateStarted);
-    }
-
-    if (EapolHandle != INVALID_HANDLE) {
-        Net80211pEapolInstanceDestroy(EapolHandle);
-    }
-
-    Net80211pDestroyBssContext(Context);
+    NetLinkReleaseReference(Link);
+    MmFreePagedPool(Scan);
     return;
 }
 
 KSTATUS
 Net80211pSendProbeRequest (
-    PNET80211_BSS_CONTEXT Context,
-    ULONG Channel
+    PNET_LINK Link,
+    PNET80211_SCAN_STATE Scan
     )
 
 /*++
 
 Routine Description:
 
-    This routine sends an 802.11 management probe request frame on the
-    specified channel targeting the SSID stored in the BSS context.
+    This routine sends an 802.11 management probe request frame based on the
+    given scan state.
 
 Arguments:
 
-    Context - Supplies a pointer to the current BSS context being used to join
-        a BSS.
+    Link - Supplies a pointer to the network link on which to send the probe
+        request.
 
-    Channel - Supplies the channel on which to send the probe request.
+    Scan - Supplies a pointer to the scan state that is requesting the probe.
 
 Return Value:
 
@@ -905,57 +904,41 @@ Return Value:
 
 {
 
+    PUCHAR Bssid;
+    PUCHAR DestinationAddress;
     PUCHAR FrameBody;
     ULONG FrameBodySize;
     ULONG FrameSubtype;
-    ULONG Index;
     PUCHAR InformationByte;
     PNET80211_LINK Net80211Link;
     PNET80211_RATE_INFORMATION Rates;
-    PNETWORK_ADDRESS SourceAddress;
-    ULONG SsidLength;
     KSTATUS Status;
 
-    Net80211Link = Context->Link->DataLinkContext;
+    Net80211Link = Link->DataLinkContext;
     FrameBody = NULL;
 
     //
-    // Determine the size of the probe request packet.
+    // The probe request packed always includes the SSID, supported rates and
+    // channel (DSSS).
     //
+
+    ASSERT(Scan->SsidLength <= NET80211_MAX_SSID_LENGTH);
 
     FrameBodySize = 0;
-
-    //
-    // Get the SSID size.
-    //
-
-    FrameBodySize += NET80211_BASE_ELEMENT_SIZE;
-    SsidLength = Context->SsidLength - 1;
-    if (SsidLength > NET80211_SSID_MAX_LENGTH) {
-        Status = STATUS_INVALID_PARAMETER;
-        goto SendProbeRequestEnd;
-    }
-
-    if (Context->Ssid == NULL) {
-        SsidLength = 0;
-    }
-
-    FrameBodySize += SsidLength;
+    FrameBodySize += NET80211_ELEMENT_HEADER_SIZE;
+    FrameBodySize += Scan->SsidLength;
 
     //
     // Get the supported rates size.
     //
 
     Rates = Net80211Link->Properties.SupportedRates;
-    FrameBodySize += NET80211_BASE_ELEMENT_SIZE;
-    if (Rates->Count <= NET80211_MAX_SUPPORTED_RATES) {
-        FrameBodySize += Rates->Count;
-
-    } else {
-        FrameBodySize += NET80211_MAX_SUPPORTED_RATES;
-        FrameBodySize += NET80211_BASE_ELEMENT_SIZE;
-        FrameBodySize += Rates->Count - NET80211_MAX_SUPPORTED_RATES;
+    FrameBodySize += NET80211_ELEMENT_HEADER_SIZE;
+    if (Rates->Count > NET80211_MAX_SUPPORTED_RATES) {
+        FrameBodySize += NET80211_ELEMENT_HEADER_SIZE;
     }
+
+    FrameBodySize += Rates->Count;
 
     //
     // Get the DSSS (channel) size.
@@ -981,11 +964,11 @@ Return Value:
     InformationByte = FrameBody;
     *InformationByte = NET80211_ELEMENT_SSID;
     InformationByte += 1;
-    *InformationByte = SsidLength;
+    *InformationByte = Scan->SsidLength;
     InformationByte += 1;
-    if (SsidLength != 0) {
-        RtlCopyMemory(InformationByte, Context->Ssid, SsidLength);
-        InformationByte += SsidLength;
+    if (Scan->SsidLength != 0) {
+        RtlCopyMemory(InformationByte, Scan->Ssid, Scan->SsidLength);
+        InformationByte += Scan->SsidLength;
     }
 
     *InformationByte = NET80211_ELEMENT_SUPPORTED_RATES;
@@ -993,60 +976,54 @@ Return Value:
     if (Rates->Count <= NET80211_MAX_SUPPORTED_RATES) {
         *InformationByte = Rates->Count;
         InformationByte += 1;
-        for (Index = 0; Index < Rates->Count; Index += 1) {
-            *InformationByte = Rates->Rates[Index];
-            InformationByte += 1;
-        }
+        RtlCopyMemory(InformationByte, Rates->Rate, Rates->Count);
+        InformationByte += Rates->Count;
 
     } else {
         *InformationByte = NET80211_MAX_SUPPORTED_RATES;
         InformationByte += 1;
-        for (Index = 0; Index < NET80211_MAX_SUPPORTED_RATES; Index += 1) {
-            *InformationByte = Rates->Rates[Index];
-            InformationByte += 1;
-        }
+        RtlCopyMemory(InformationByte,
+                      Rates->Rate,
+                      NET80211_MAX_SUPPORTED_RATES);
 
+        InformationByte += NET80211_MAX_SUPPORTED_RATES;
         *InformationByte = NET80211_ELEMENT_EXTENDED_SUPPORTED_RATES;
         InformationByte += 1;
         *InformationByte = Rates->Count - NET80211_MAX_SUPPORTED_RATES;
         InformationByte += 1;
-        for (Index = NET80211_MAX_SUPPORTED_RATES;
-             Index < Rates->Count;
-             Index += 1) {
+        RtlCopyMemory(InformationByte,
+                      &(Rates->Rate[NET80211_MAX_SUPPORTED_RATES]),
+                      Rates->Count - NET80211_MAX_SUPPORTED_RATES);
 
-            *InformationByte = Rates->Rates[Index];
-            InformationByte += 1;
-        }
+        InformationByte += Rates->Count - NET80211_MAX_SUPPORTED_RATES;
     }
 
     *InformationByte = NET80211_ELEMENT_DSSS;
     InformationByte += 1;
     *InformationByte = 1;
     InformationByte += 1;
-    *InformationByte = (UCHAR)Channel;
+    *InformationByte = (UCHAR)Scan->Channel;
     InformationByte += 1;
 
     ASSERT(FrameBodySize == (InformationByte - FrameBody));
 
     //
-    // Set the channel to send the packet over.
+    // Send the management frame down to the lower layers.
     //
 
-    Status = Net80211pSetChannel(Context->Link, Channel);
-    if (!KSUCCESS(Status)) {
-        goto SendProbeRequestEnd;
+    if ((Scan->Flags & NET80211_SCAN_FLAG_BROADCAST) != 0) {
+        Bssid = NULL;
+        DestinationAddress = NULL;
+
+    } else {
+        Bssid = Scan->Bssid;
+        DestinationAddress = Scan->Bssid;
     }
 
-    //
-    // Send the management frame down the lower layers.
-    //
-
     FrameSubtype = NET80211_MANAGEMENT_FRAME_SUBTYPE_PROBE_REQUEST;
-    SourceAddress = &(Context->LinkAddress->PhysicalAddress);
-    Status = Net80211pSendManagementFrame(Context->Link,
-                                          SourceAddress,
-                                          NULL,
-                                          NULL,
+    Status = Net80211pSendManagementFrame(Link,
+                                          DestinationAddress,
+                                          Bssid,
                                           FrameSubtype,
                                           FrameBody,
                                           FrameBodySize);
@@ -1063,474 +1040,218 @@ SendProbeRequestEnd:
     return Status;
 }
 
-KSTATUS
-Net80211pReceiveProbeResponse (
-    PNET80211_BSS_CONTEXT Context,
-    ULONG Channel
+VOID
+Net80211pProcessProbeResponse (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet
     )
 
 /*++
 
 Routine Description:
 
-    This routine receives an 802.11 management probe response frame on the
-    specified channel targeting the SSID stored in the BSS context.
+    This routine processes an 802.11 management probe response frame. It stores
+    the information for the transmitting BSS in the BSS cache.
 
 Arguments:
 
-    Context - Supplies a pointer to the current BSS context being used to join
-        a BSS.
+    Link - Supplies a pointer to the network link that received the probe
+        response.
 
-    Channel - Supplies the channel on which to receive the probe request.
+    Packet - Supplies a pointer to the packet to process.
 
 Return Value:
 
-    Status code.
+    None.
 
 --*/
 
 {
 
-    BOOL AcceptedResponse;
-    ULONG Attempts;
-    USHORT BeaconInterval;
-    USHORT Capabilities;
-    PUCHAR ElementBytePointer;
     UCHAR ElementId;
     ULONG ElementLength;
-    PNET80211_MANAGEMENT_FRAME Frame;
-    ULONG FrameSubtype;
-    NET80211_ENCRYPTION_TYPE GroupEncryption;
+    ULONG ExpectedFrameSize;
+    PUCHAR FrameBody;
+    ULONG FrameSize;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
-    ULONG Index;
-    BOOL Match;
+    PNET80211_LINK Net80211Link;
     ULONG Offset;
-    NET80211_ENCRYPTION_TYPE PairwiseEncryption;
-    ULONG ResponseChannel;
-    ULONG RsnElementLength;
-    ULONG RsnElementOffset;
-    ULONG RsnOffset;
-    USHORT RsnPmkidCount;
-    BOOL RsnPskSupported;
-    ULONG RsnSuite;
-    USHORT RsnSuiteCount;
-    KSTATUS Status;
-    ULONGLONG Timestamp;
-    USHORT Version;
+    NET80211_PROBE_RESPONSE Response;
+    ULONG Subtype;
+
+    Net80211Link = Link->DataLinkContext;
+    if (Net80211Link->State != Net80211StateProbing) {
+        goto ProcessProbeResponseEnd;
+    }
+
+    Header = Packet->Buffer + Packet->DataOffset;
+    Subtype = NET80211_GET_FRAME_SUBTYPE(Header);
+    RtlZeroMemory(&Response, sizeof(NET80211_PROBE_RESPONSE));
+
+    ASSERT((Subtype == NET80211_MANAGEMENT_FRAME_SUBTYPE_BEACON) ||
+           (Subtype == NET80211_MANAGEMENT_FRAME_SUBTYPE_PROBE_RESPONSE));
 
     //
-    // Attempt to receive a probe response. Retry a few times in case an
-    // erroneous packet arrives.
+    // Parse the response. It should at least have a timestamp, beacon
+    // interval, and capabilities field.
     //
 
-    Attempts = NET80211_MANAGEMENT_RETRY_COUNT;
-    while (Attempts != 0) {
-        Attempts -= 1;
-        FrameSubtype = NET80211_MANAGEMENT_FRAME_SUBTYPE_PROBE_RESPONSE;
-        Status = Net80211pReceiveManagementFrame(Context->Link,
-                                                 Context->LinkAddress,
-                                                 FrameSubtype,
-                                                 &Frame);
+    FrameBody = Packet->Buffer + Packet->DataOffset;
+    FrameSize = Packet->FooterOffset - Packet->DataOffset;
+    Offset = sizeof(NET80211_MANAGEMENT_FRAME_HEADER);
+    ExpectedFrameSize = Offset +
+                        NET80211_TIMESTAMP_SIZE +
+                        NET80211_BEACON_INTERVAL_SIZE +
+                        NET80211_CAPABILITY_SIZE;
 
-        if (Status == STATUS_TIMEOUT) {
+    if (ExpectedFrameSize > FrameSize) {
+        goto ProcessProbeResponseEnd;
+    }
+
+    //
+    // Save the timestamp.
+    //
+
+    Response.Timestamp = *((PULONGLONG)&(FrameBody[Offset]));
+    Offset += NET80211_TIMESTAMP_SIZE;
+
+    //
+    // Save the beacon internval.
+    //
+
+    Response.BeaconInterval = *((PUSHORT)&(FrameBody[Offset]));
+    Offset += NET80211_BEACON_INTERVAL_SIZE;
+
+    //
+    // Save the capabilities.
+    //
+
+    Response.Capabilities = *((PUSHORT)&(FrameBody[Offset]));
+    Offset += NET80211_CAPABILITY_SIZE;
+
+    //
+    // Collect the information elements.
+    //
+
+    while (Offset < FrameSize) {
+        if ((Offset + NET80211_ELEMENT_HEADER_SIZE) > FrameSize) {
+            goto ProcessProbeResponseEnd;
+        }
+
+        ElementId = FrameBody[Offset + NET80211_ELEMENT_ID_OFFSET];
+        ElementLength = FrameBody[Offset + NET80211_ELEMENT_LENGTH_OFFSET];
+        ExpectedFrameSize = Offset +
+                            NET80211_ELEMENT_HEADER_SIZE +
+                            ElementLength;
+
+        if (ExpectedFrameSize > FrameSize) {
+            goto ProcessProbeResponseEnd;
+        }
+
+        switch (ElementId) {
+        case NET80211_ELEMENT_SSID:
+            Response.Ssid = FrameBody + Offset;
+            break;
+
+        case NET80211_ELEMENT_DSSS:
+            if (ElementLength == 0) {
+                goto ProcessProbeResponseEnd;
+            }
+
+            Response.Channel = FrameBody + Offset;
+            break;
+
+        case NET80211_ELEMENT_RSN:
+            Response.Rsn = FrameBody + Offset;
+            break;
+
+        case NET80211_ELEMENT_SUPPORTED_RATES:
+            if (ElementLength == 0) {
+                goto ProcessProbeResponseEnd;
+            }
+
+            Response.Rates = FrameBody + Offset;
+            break;
+
+        case NET80211_ELEMENT_EXTENDED_SUPPORTED_RATES:
+            if (ElementLength == 0) {
+                goto ProcessProbeResponseEnd;
+            }
+
+            Response.ExtendedRates = FrameBody + Offset;
+            break;
+
+        default:
             break;
         }
 
-        if (!KSUCCESS(Status)) {
-            continue;
+        Offset += NET80211_ELEMENT_HEADER_SIZE + ElementLength;
+    }
+
+    //
+    // Toss out the packet if not all of the expected information is present.
+    //
+
+    if ((Response.Rates == NULL) ||
+        (Response.Channel == NULL) ||
+        (Response.Ssid == NULL)) {
+
+        goto ProcessProbeResponseEnd;
+    }
+
+    //
+    // Filter out any beacon/probe responses that claim to be open but still
+    // include encryption information. Also filter out the opposite where
+    // privacy is a required capability, but no encryption information was
+    // provided.
+    //
+
+    if (Response.Rsn != NULL) {
+        if ((Response.Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) == 0) {
+            RtlDebugPrint("802.11: Found RSN element in probe/beacon that does "
+                          "not require privacy.\n");
+
+            goto ProcessProbeResponseEnd;
         }
 
-        //
-        // OK! Parse the response. It should at least have a timestamp, beacon
-        // interval, and capabilities field.
-        //
-
-        ElementBytePointer = Frame->Buffer;
-        Offset = sizeof(NET80211_MANAGEMENT_FRAME_HEADER);
-        if ((Offset +
-             NET80211_TIMESTAMP_SIZE +
-             NET80211_BEACON_INTERVAL_SIZE +
-             NET80211_CAPABILITY_SIZE) > Frame->BufferSize) {
-
-            Status = STATUS_DATA_LENGTH_MISMATCH;
-            continue;
-        }
-
-        //
-        // Save the timestamp.
-        //
-
-        Timestamp = *((PULONGLONG)&(ElementBytePointer[Offset]));
-        Offset += NET80211_TIMESTAMP_SIZE;
-
-        //
-        // Save the beacon internval.
-        //
-
-        BeaconInterval = *((PUSHORT)&(ElementBytePointer[Offset]));
-        Offset += NET80211_BEACON_INTERVAL_SIZE;
-
-        //
-        // Save the capabilities.
-        //
-
-        Capabilities = *((PUSHORT)&(ElementBytePointer[Offset]));
-        Offset += NET80211_CAPABILITY_SIZE;
-
-        //
-        // Now look at the information elements.
-        //
-
-        RsnElementOffset = -1;
-        RsnElementLength = -1;
-        ResponseChannel = -1;
-        PairwiseEncryption = Net80211EncryptionNone;
-        GroupEncryption = Net80211EncryptionNone;
-        AcceptedResponse = TRUE;
-        while ((AcceptedResponse != FALSE) && (Offset < Frame->BufferSize)) {
-            ElementId = ElementBytePointer[Offset];
-            Offset += 1;
-            if (Offset >= Frame->BufferSize) {
-                Status = STATUS_DATA_LENGTH_MISMATCH;
-                AcceptedResponse = FALSE;
-                break;
-            }
-
-            ElementLength = ElementBytePointer[Offset];
-            Offset += 1;
-            if ((Offset + ElementLength) > Frame->BufferSize) {
-                Status = STATUS_DATA_LENGTH_MISMATCH;
-                AcceptedResponse = FALSE;
-                break;
-            }
-
-            switch (ElementId) {
-
-            //
-            // If the SSID does not match the given SSID, then it is a response
-            // from the wrong SSID.
-            //
-
-            case NET80211_ELEMENT_SSID:
-                if (ElementLength != (Context->SsidLength - 1)) {
-                    AcceptedResponse = FALSE;
-                    break;
-                }
-
-                Match = RtlCompareMemory(&(ElementBytePointer[Offset]),
-                                         Context->Ssid,
-                                         ElementLength);
-
-                if (Match == FALSE) {
-                    AcceptedResponse = FALSE;
-                }
-
-                break;
-
-            case NET80211_ELEMENT_DSSS:
-                ResponseChannel = (ULONG)ElementBytePointer[Offset];
-                break;
-
-            case NET80211_ELEMENT_RSN:
-                RsnElementOffset = Offset - NET80211_BASE_ELEMENT_SIZE;
-                RsnElementLength = ElementLength + NET80211_BASE_ELEMENT_SIZE;
-                if ((Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) == 0) {
-                    RtlDebugPrint("802.11: Found RSN element in probe response "
-                                  "that does not require privacy.\n");
-
-                    Status = STATUS_NOT_SUPPORTED;
-                    AcceptedResponse = FALSE;
-                    break;
-                }
-
-                RsnOffset = 0;
-                if ((RsnOffset + sizeof(USHORT)) > ElementLength) {
-                    Status = STATUS_DATA_LENGTH_MISMATCH;
-                    AcceptedResponse = FALSE;
-                    break;
-                }
-
-                Version = *((PUSHORT)&(ElementBytePointer[Offset + RsnOffset]));
-                RsnOffset += sizeof(USHORT);
-                if (Version != NET80211_RSN_VERSION) {
-                    RtlDebugPrint("802.11: Unexpected RSN version %d\n",
-                                  Version);
-
-                    Status = STATUS_VERSION_MISMATCH;
-                    AcceptedResponse = FALSE;
-                    break;
-                }
-
-                //
-                // Group suite.
-                //
-
-                if ((RsnOffset + sizeof(ULONG)) > ElementLength) {
-                    break;
-                }
-
-                RsnSuite = *((PULONG)&(ElementBytePointer[Offset + RsnOffset]));
-                RsnOffset += sizeof(ULONG);
-                switch (NETWORK_TO_CPU32(RsnSuite)) {
-                case NET80211_CIPHER_SUITE_CCMP:
-                    GroupEncryption = Net80211EncryptionWpa2Psk;
-                    break;
-
-                default:
-                    RtlDebugPrint("802.11: Group cipher suite not supported "
-                                  "0x%08x\n",
-                                  RsnSuite);
-
-                    break;
-                }
-
-                if (GroupEncryption == Net80211EncryptionNone) {
-                    Status = STATUS_NOT_SUPPORTED;
-                    AcceptedResponse = FALSE;
-                    break;
-                }
-
-                //
-                // Pairwise suites.
-                //
-
-                PairwiseEncryption = Net80211EncryptionNone;
-                if ((RsnOffset + sizeof(USHORT)) > ElementLength) {
-                    break;
-                }
-
-                RsnSuiteCount =
-                         *((PUSHORT)&(ElementBytePointer[Offset + RsnOffset]));
-
-                RsnOffset += sizeof(USHORT);
-                for (Index = 0; Index < RsnSuiteCount; Index += 1) {
-                    if ((RsnOffset + sizeof(ULONG)) > ElementLength) {
-                        Status = STATUS_DATA_LENGTH_MISMATCH;
-                        break;
-                    }
-
-                    RsnSuite =
-                          *((PULONG)&(ElementBytePointer[Offset + RsnOffset]));
-
-                    RsnOffset += sizeof(ULONG);
-                    switch (NETWORK_TO_CPU32(RsnSuite)) {
-                    case NET80211_CIPHER_SUITE_CCMP:
-                        PairwiseEncryption = Net80211EncryptionWpa2Psk;
-                        break;
-
-                    default:
-                        RtlDebugPrint("802.11: Pairwise cipher suite not "
-                                      "supported 0x%08x\n",
-                                      RsnSuite);
-
-                        break;
-                    }
-                }
-
-                if (PairwiseEncryption == Net80211EncryptionNone) {
-                    Status = STATUS_NOT_SUPPORTED;
-                    AcceptedResponse = FALSE;
-                    break;
-                }
-
-                //
-                // AKM suites.
-                //
-
-                if ((RsnOffset + sizeof(USHORT)) > ElementLength) {
-                    break;
-                }
-
-                RsnSuiteCount =
-                         *((PUSHORT)&(ElementBytePointer[Offset + RsnOffset]));
-
-                RsnOffset += sizeof(USHORT);
-                RsnPskSupported = FALSE;
-                for (Index = 0; Index < RsnSuiteCount; Index += 1) {
-                    if ((RsnOffset + sizeof(ULONG)) > ElementLength) {
-                        Status = STATUS_DATA_LENGTH_MISMATCH;
-                        AcceptedResponse = FALSE;
-                        break;
-                    }
-
-                    RsnSuite =
-                          *((PULONG)&(ElementBytePointer[Offset + RsnOffset]));
-
-                    RsnOffset += sizeof(ULONG);
-                    switch (NETWORK_TO_CPU32(RsnSuite)) {
-                    case NET80211_AKM_SUITE_PSK:
-                        RsnPskSupported = TRUE;
-                        break;
-
-                    default:
-                        RtlDebugPrint("802.11: AKM suite not supported "
-                                      "0x%08x\n",
-                                      RsnSuite);
-
-                        break;
-                    }
-                }
-
-                if (RsnPskSupported == FALSE) {
-                    Status = STATUS_NOT_SUPPORTED;
-                    AcceptedResponse = FALSE;
-                    break;
-                }
-
-                //
-                // Capabilities.
-                //
-
-                if ((RsnOffset + sizeof(USHORT)) > ElementLength) {
-                    break;
-                }
-
-                RsnOffset += sizeof(USHORT);
-
-                //
-                // PMKID.
-                //
-
-                if ((RsnOffset + sizeof(USHORT)) > ElementLength) {
-                    break;
-                }
-
-                RsnPmkidCount =
-                         *((PUSHORT)&(ElementBytePointer[Offset + RsnOffset]));
-
-                RsnOffset += sizeof(USHORT);
-                for (Index = 0; Index < RsnPmkidCount; Index += 1) {
-                    if ((RsnOffset + 16) > ElementLength) {
-                        Status = STATUS_DATA_LENGTH_MISMATCH;
-                        AcceptedResponse = FALSE;
-                        break;
-                    }
-
-                    RsnOffset += 16;
-                }
-
-                if (!KSUCCESS(Status)) {
-                    AcceptedResponse = FALSE;
-                    break;
-                }
-
-                //
-                // Group management suite.
-                //
-
-                if ((RsnOffset + sizeof(ULONG)) > ElementLength) {
-                    break;
-                }
-
-                RsnSuite = *((PULONG)&(ElementBytePointer[Offset + RsnOffset]));
-                RsnOffset += sizeof(ULONG);
-                switch (NETWORK_TO_CPU32(RsnSuite)) {
-                case NET80211_CIPHER_SUITE_CCMP:
-                    break;
-
-                default:
-                    RtlDebugPrint("802.11: Group cipher suite not supported "
-                                  "0x%08x\n",
-                                  RsnSuite);
-
-                    Status = STATUS_NOT_SUPPORTED;
-                    break;
-                }
-
-                if (!KSUCCESS(Status)) {
-                    AcceptedResponse = FALSE;
-                    break;
-                }
-
-                break;
-
-            case NET80211_ELEMENT_SUPPORTED_RATES:
-            case NET80211_ELEMENT_EXTENDED_SUPPORTED_RATES:
-                break;
-
-            default:
-                break;
-            }
-
-            Offset += ElementLength;
-        }
-
-        if (AcceptedResponse != FALSE) {
-
-            ASSERT(KSUCCESS(Status));
-
-            //
-            // If the probe response came in on a different channel, then the
-            // channel needs to be switched.
-            //
-
-            if (ResponseChannel != Channel) {
-                if (ResponseChannel == -1) {
-                    Status = STATUS_INVALID_CONFIGURATION;
-                    break;
-                }
-
-                Status = Net80211pSetChannel(Context->Link, ResponseChannel);
-                if (!KSUCCESS(Status)) {
-                    break;
-                }
-            }
-
-            Header = Frame->Buffer;
-            Context->Bssid.Network = SocketNetworkPhysical80211;
-            RtlCopyMemory(Context->Bssid.Address,
-                          Header->SourceAddress,
-                          NET80211_ADDRESS_SIZE);
-
-            Context->BeaconInterval = BeaconInterval;
-            Context->Capabilities = Capabilities;
-            Context->Timestamp = Timestamp;
-            Context->GroupEncryption = GroupEncryption;
-            Context->PairwiseEncryption = PairwiseEncryption;
-            if ((Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) {
-                if ((RsnElementOffset == -1) || (RsnElementLength == -1)) {
-                    Status = STATUS_INVALID_CONFIGURATION;
-                    break;
-                }
-
-                Context->ApRsnInformation = MmAllocatePagedPool(
-                                                      RsnElementLength,
-                                                      NET80211_ALLOCATION_TAG);
-
-                if (Context->ApRsnInformation == NULL) {
-                    Status = STATUS_INSUFFICIENT_RESOURCES;
-                    break;
-                }
-
-                RtlCopyMemory(Context->ApRsnInformation,
-                              &(ElementBytePointer[RsnElementOffset]),
-                              RsnElementLength);
-
-                Context->ApRsnInformationLength = RsnElementLength;
-            }
-
-            break;
+    } else {
+        if ((Response.Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) {
+            RtlDebugPrint("802.11: Did not find RSN element in probe/beacon "
+                          "that requires privacy.\n");
+
+            goto ProcessProbeResponseEnd;
         }
     }
 
-    return Status;
+    //
+    // Update the BSS cache with the latest information from this beacon /
+    // probe response. The SSID, encryption method, and rates are subject to
+    // change for a BSSID.
+    //
+
+    Response.Bssid = Header->SourceAddress;
+    Net80211pUpdateBssCache(Link, &Response);
+
+ProcessProbeResponseEnd:
+    return;
 }
 
 KSTATUS
 Net80211pSendAuthenticationRequest (
-    PNET80211_BSS_CONTEXT Context
+    PNET_LINK Link
     )
 
 /*++
 
 Routine Description:
 
-    This routine sends an 802.11 management authentication frame to the AP
-    indicated by the given BSS context.
+    This routine sends an 802.11 management authentication frame to the AP of
+    the link's active BSS.
 
 Arguments:
 
-    Context - Supplies a pointer to the context in use to join a BSS.
+    Link - Supplies a pointer to the network link on which to send an
+        authentication request.
 
 Return Value:
 
@@ -1540,52 +1261,42 @@ Return Value:
 
 {
 
-    PNET80211_AUTHENTICATION_OPEN_BODY FrameBody;
+    PNET80211_BSS_ENTRY Bss;
+    NET80211_AUTHENTICATION_OPEN_BODY FrameBody;
     ULONG FrameBodySize;
     ULONG FrameSubtype;
-    PNETWORK_ADDRESS SourceAddress;
+    PNET80211_LINK Net80211Link;
     KSTATUS Status;
 
-    //
-    // The body is the size of the standard 802.11 authentication body when
-    // using the open system authentication algorithm.
-    //
+    Net80211Link = Link->DataLinkContext;
 
-    FrameBodySize = sizeof(NET80211_AUTHENTICATION_OPEN_BODY);
+    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+    ASSERT(Net80211Link->ActiveBss != NULL);
 
-    //
-    // Allocate a buffer to hold the authentication request frame body.
-    //
-
-    FrameBody = MmAllocatePagedPool(FrameBodySize, NET80211_ALLOCATION_TAG);
-    if (FrameBody == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto SendAuthenticationEnd;
-    }
+    Bss = Net80211Link->ActiveBss;
 
     //
     // Fill out the authentication body.
     //
 
-    FrameBody->AlgorithmNumber = NET80211_AUTHENTICATION_ALGORITHM_OPEN;
-    FrameBody->TransactionSequenceNumber =
+    FrameBody.AlgorithmNumber = NET80211_AUTHENTICATION_ALGORITHM_OPEN;
+    FrameBody.TransactionSequenceNumber =
                                NET80211_AUTHENTICATION_REQUEST_SEQUENCE_NUMBER;
 
-    FrameBody->StatusCode = NET80211_STATUS_CODE_SUCCESS;
+    FrameBody.StatusCode = NET80211_STATUS_CODE_SUCCESS;
 
     //
     // Send the authentication frame off. The destination address and BSSID
     // should match.
     //
 
+    FrameBodySize = sizeof(NET80211_AUTHENTICATION_OPEN_BODY);
     FrameSubtype = NET80211_MANAGEMENT_FRAME_SUBTYPE_AUTHENTICATION;
-    SourceAddress = &(Context->LinkAddress->PhysicalAddress);
-    Status = Net80211pSendManagementFrame(Context->Link,
-                                          SourceAddress,
-                                          &(Context->Bssid),
-                                          &(Context->Bssid),
+    Status = Net80211pSendManagementFrame(Link,
+                                          Bss->State.Bssid,
+                                          Bss->State.Bssid,
                                           FrameSubtype,
-                                          FrameBody,
+                                          &FrameBody,
                                           FrameBodySize);
 
     if (!KSUCCESS(Status)) {
@@ -1593,138 +1304,141 @@ Return Value:
     }
 
 SendAuthenticationEnd:
-    if (FrameBody != NULL) {
-        MmFreePagedPool(FrameBody);
-    }
-
     return Status;
 }
 
-KSTATUS
-Net80211pReceiveAuthenticationResponse (
-    PNET80211_BSS_CONTEXT Context
+VOID
+Net80211pProcessAuthenticationResponse (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet
     )
 
 /*++
 
 Routine Description:
 
-    This routine receives an authentication response frame. It is expected to
-    be sent from the BSSID stored in the BSS context.
+    This routine processes an authentication response frame. It is expected to
+    be sent from the BSSID stored in the link's BSS context.
 
 Arguments:
 
-    Context - Supplies a pointer to the context in use to join a BSS.
+    Link - Supplies a pointer to the network link on which the authentication
+        packet was received.
+
+    Packet - Supplies a pointer to the network packet containing the
+        authentication frame.
 
 Return Value:
 
-    Status code.
+    None.
 
 --*/
 
 {
 
-    ULONG Attempts;
     PNET80211_AUTHENTICATION_OPEN_BODY Body;
-    PNET80211_MANAGEMENT_FRAME Frame;
-    ULONG FrameSubtype;
+    PNET80211_BSS_ENTRY Bss;
+    ULONG ExpectedFrameSize;
+    ULONG FrameSize;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
     BOOL Match;
+    PNET80211_LINK Net80211Link;
     KSTATUS Status;
 
-    //
-    // Attempt to receive a management frame from the access point. Try a few
-    // times in case there are unwanted packets sitting in list of received
-    // packets.
-    //
-
-    Attempts = NET80211_MANAGEMENT_RETRY_COUNT;
-    while (Attempts != 0) {
-        Attempts -= 1;
-        FrameSubtype = NET80211_MANAGEMENT_FRAME_SUBTYPE_AUTHENTICATION;
-        Status = Net80211pReceiveManagementFrame(Context->Link,
-                                                 Context->LinkAddress,
-                                                 FrameSubtype,
-                                                 &Frame);
-
-        if (Status == STATUS_TIMEOUT) {
-            break;
-        }
-
-        if (!KSUCCESS(Status)) {
-            continue;
-        }
-
-        //
-        // Make sure the this frame was sent from the AP of the BSS.
-        //
-
-        Header = Frame->Buffer;
-        Match = RtlCompareMemory(Header->SourceAddress,
-                                 Context->Bssid.Address,
-                                 NET80211_ADDRESS_SIZE);
-
-        if (Match == FALSE) {
-            Status = STATUS_INVALID_ADDRESS;
-            continue;
-        }
-
-        //
-        // Make sure it is large enough to hold the authentication body.
-        //
-
-        if (Frame->BufferSize <
-            (sizeof(NET80211_MANAGEMENT_FRAME_HEADER) +
-             sizeof(NET80211_AUTHENTICATION_OPEN_BODY))) {
-
-            Status = STATUS_DATA_LENGTH_MISMATCH;
-            continue;
-        }
-
-        //
-        // The authentication response has a very fixed frame body.
-        //
-
-        Body = Frame->Buffer + sizeof(NET80211_MANAGEMENT_FRAME_HEADER);
-        if (Body->AlgorithmNumber != NET80211_AUTHENTICATION_ALGORITHM_OPEN) {
-            RtlDebugPrint("802.11: Unexpected algorithm type %d. Expected "
-                          "%d.\n",
-                          Body->AlgorithmNumber,
-                          NET80211_AUTHENTICATION_ALGORITHM_OPEN);
-
-            continue;
-        }
-
-        if (Body->TransactionSequenceNumber !=
-            NET80211_AUTHENTICATION_RESPONSE_SEQUENCE_NUMBER) {
-
-            RtlDebugPrint("802.11: Unexpected authentication transaction "
-                          "sequence number 0x%04x. Expected 0x%04x.\n",
-                          Body->TransactionSequenceNumber,
-                          NET80211_AUTHENTICATION_RESPONSE_SEQUENCE_NUMBER);
-
-            continue;
-        }
-
-        if (Body->StatusCode != NET80211_STATUS_CODE_SUCCESS) {
-            RtlDebugPrint("802.11: Authentication failed with status %d\n",
-                          Body->StatusCode);
-
-            Status = STATUS_UNSUCCESSFUL;
-            break;
-        }
-
-        ASSERT(KSUCCESS(Status));
-
-        break;
+    Status = STATUS_SUCCESS;
+    Net80211Link = Link->DataLinkContext;
+    if (Net80211Link->State != Net80211StateAuthenticating) {
+        return;
     }
 
-    return Status;
+    KeAcquireQueuedLock(Net80211Link->Lock);
+    if (Net80211Link->State != Net80211StateAuthenticating) {
+        goto ProcessAuthenticationResponseEnd;
+    }
+
+    ASSERT(Net80211Link->ActiveBss != NULL);
+
+    Bss = Net80211Link->ActiveBss;
+
+    //
+    // Make sure the this frame was sent from the AP of the BSS.
+    //
+
+    Header = Packet->Buffer + Packet->DataOffset;
+    Match = RtlCompareMemory(Header->SourceAddress,
+                             Bss->State.Bssid,
+                             NET80211_ADDRESS_SIZE);
+
+    if (Match == FALSE) {
+        Status = STATUS_INVALID_ADDRESS;
+        goto ProcessAuthenticationResponseEnd;
+    }
+
+    //
+    // Make sure it is large enough to hold the authentication body.
+    //
+
+    FrameSize = Packet->FooterOffset - Packet->DataOffset;
+    ExpectedFrameSize = sizeof(NET80211_MANAGEMENT_FRAME_HEADER) +
+                        sizeof(NET80211_AUTHENTICATION_OPEN_BODY);
+
+    if (FrameSize < ExpectedFrameSize) {
+        Status = STATUS_DATA_LENGTH_MISMATCH;
+        goto ProcessAuthenticationResponseEnd;
+    }
+
+    //
+    // The authentication response has a very fixed frame body.
+    //
+
+    Body = Packet->Buffer +
+           Packet->DataOffset +
+           sizeof(NET80211_MANAGEMENT_FRAME_HEADER);
+
+    if (Body->AlgorithmNumber != NET80211_AUTHENTICATION_ALGORITHM_OPEN) {
+        RtlDebugPrint("802.11: Unexpected algorithm type %d. Expected %d.\n",
+                      Body->AlgorithmNumber,
+                      NET80211_AUTHENTICATION_ALGORITHM_OPEN);
+
+        Status = STATUS_NOT_SUPPORTED;
+        goto ProcessAuthenticationResponseEnd;
+    }
+
+    if (Body->TransactionSequenceNumber !=
+        NET80211_AUTHENTICATION_RESPONSE_SEQUENCE_NUMBER) {
+
+        RtlDebugPrint("802.11: Unexpected authentication transaction "
+                      "sequence number 0x%04x. Expected 0x%04x.\n",
+                      Body->TransactionSequenceNumber,
+                      NET80211_AUTHENTICATION_RESPONSE_SEQUENCE_NUMBER);
+
+        Status = STATUS_UNSUCCESSFUL;
+        goto ProcessAuthenticationResponseEnd;
+    }
+
+    if (Body->StatusCode != NET80211_STATUS_CODE_SUCCESS) {
+        RtlDebugPrint("802.11: Authentication failed with status %d\n",
+                      Body->StatusCode);
+
+        Status = STATUS_UNSUCCESSFUL;
+        goto ProcessAuthenticationResponseEnd;
+    }
+
+    Net80211pSetStateUnlocked(Link, Net80211StateAssociating);
+    Status = STATUS_SUCCESS;
+
+ProcessAuthenticationResponseEnd:
+    if (!KSUCCESS(Status)) {
+        Net80211pSetStateUnlocked(Link, Net80211StateInitialized);
+    }
+
+    KeReleaseQueuedLock(Net80211Link->Lock);
+    return;
 }
 
 KSTATUS
 Net80211pSendAssociationRequest (
-    PNET80211_BSS_CONTEXT Context
+    PNET_LINK Link
     )
 
 /*++
@@ -1732,11 +1446,12 @@ Net80211pSendAssociationRequest (
 Routine Description:
 
     This routine sends an 802.11 management association request frame to the
-    access point stores in the BSS context.
+    to the AP of the link's active BSS.
 
 Arguments:
 
-    Context - Supplies a pointer to the context in use to join a BSS.
+    Link - Supplies a pointer to the network link over which to send the
+        association request.
 
 Return Value:
 
@@ -1746,74 +1461,51 @@ Return Value:
 
 {
 
+    PNET80211_BSS_ENTRY Bss;
     PUCHAR FrameBody;
     ULONG FrameBodySize;
     ULONG FrameSubtype;
-    ULONG Index;
     PUCHAR InformationByte;
     PNET80211_LINK Net80211Link;
     PNET80211_RATE_INFORMATION Rates;
-    PNETWORK_ADDRESS SourceAddress;
-    ULONG SsidLength;
     KSTATUS Status;
 
-    Net80211Link = Context->Link->DataLinkContext;
+    Net80211Link = Link->DataLinkContext;
+    Bss = Net80211Link->ActiveBss;
     FrameBody = NULL;
 
-    ASSERT((Context->Ssid != NULL) && (Context->SsidLength > 1));
+    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+    ASSERT(Bss != NULL);
+    ASSERT(Bss->SsidLength != 0);
 
     //
-    // Determine the size of the probe response packet.
+    // Determine the size of the probe response packet, which always includes
+    // the capabilities, listen interval, SSID, and supported rates.
     //
 
-    FrameBodySize = 0;
+    ASSERT(Bss->SsidLength <= NET80211_MAX_SSID_LENGTH);
+
+    FrameBodySize = NET80211_CAPABILITY_SIZE + NET80211_LISTEN_INTERVAL_SIZE;
+    FrameBodySize += NET80211_ELEMENT_HEADER_SIZE + Bss->SsidLength;
 
     //
-    // Account for the capability size.
-    //
-
-    FrameBodySize += NET80211_CAPABILITY_SIZE;
-
-    //
-    // Account for the listen interval.
-    //
-
-    FrameBodySize += NET80211_LISTEN_INTERVAL_SIZE;
-
-    //
-    // Get the SSID size.
-    //
-
-    FrameBodySize += NET80211_BASE_ELEMENT_SIZE;
-    SsidLength = Context->SsidLength - 1;
-    if (SsidLength > 32) {
-        Status = STATUS_INVALID_PARAMETER;
-        goto SendAssociationRequestEnd;
-    }
-
-    FrameBodySize += SsidLength;
-
-    //
-    // Get the supported rates size.
+    // Get the supported rates size, including the extended rates if necessary.
     //
 
     Rates = Net80211Link->Properties.SupportedRates;
-    FrameBodySize += NET80211_BASE_ELEMENT_SIZE;
-    if (Rates->Count <= NET80211_MAX_SUPPORTED_RATES) {
-        FrameBodySize += Rates->Count;
-
-    } else {
-        FrameBodySize += NET80211_MAX_SUPPORTED_RATES;
-        FrameBodySize += NET80211_BASE_ELEMENT_SIZE;
-        FrameBodySize += Rates->Count - NET80211_MAX_SUPPORTED_RATES;
+    FrameBodySize += NET80211_ELEMENT_HEADER_SIZE;
+    if (Rates->Count > NET80211_MAX_SUPPORTED_RATES) {
+        FrameBodySize += NET80211_ELEMENT_HEADER_SIZE;
     }
 
+    FrameBodySize += Rates->Count;
+
     //
-    // Get the RSN size.
+    // Only include the RSN information if advanced encryption is required.
     //
 
-    if (((Context->Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) &&
-        (Context->PairwiseEncryption != Net80211EncryptionWep)) {
+    if ((Bss->Encryption.Pairwise != Net80211EncryptionNone) &&
+        (Bss->Encryption.Pairwise != Net80211EncryptionWep)) {
 
         FrameBodySize += sizeof(NET80211_DEFAULT_RSN_INFORMATION);
     }
@@ -1824,6 +1516,7 @@ Return Value:
 
     FrameBody = MmAllocatePagedPool(FrameBodySize, NET80211_ALLOCATION_TAG);
     if (FrameBody == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
         goto SendAssociationRequestEnd;
     }
 
@@ -1846,47 +1539,43 @@ Return Value:
     InformationByte += NET80211_LISTEN_INTERVAL_SIZE;
     *InformationByte = NET80211_ELEMENT_SSID;
     InformationByte += 1;
-    *InformationByte = SsidLength;
+    *InformationByte = Bss->SsidLength;
     InformationByte += 1;
-    RtlCopyMemory(InformationByte, Context->Ssid, SsidLength);
-    InformationByte += SsidLength;
+    RtlCopyMemory(InformationByte, Bss->Ssid, Bss->SsidLength);
+    InformationByte += Bss->SsidLength;
     *InformationByte = NET80211_ELEMENT_SUPPORTED_RATES;
     InformationByte += 1;
     if (Rates->Count <= NET80211_MAX_SUPPORTED_RATES) {
         *InformationByte = Rates->Count;
         InformationByte += 1;
-        for (Index = 0; Index < Rates->Count; Index += 1) {
-            *InformationByte = Rates->Rates[Index];
-            InformationByte += 1;
-        }
+        RtlCopyMemory(InformationByte, Rates->Rate, Rates->Count);
+        InformationByte += Rates->Count;
 
     } else {
         *InformationByte = NET80211_MAX_SUPPORTED_RATES;
         InformationByte += 1;
-        for (Index = 0; Index < NET80211_MAX_SUPPORTED_RATES; Index += 1) {
-            *InformationByte = Rates->Rates[Index];
-            InformationByte += 1;
-        }
+        RtlCopyMemory(InformationByte,
+                      Rates->Rate,
+                      NET80211_MAX_SUPPORTED_RATES);
 
+        InformationByte += NET80211_MAX_SUPPORTED_RATES;
         *InformationByte = NET80211_ELEMENT_EXTENDED_SUPPORTED_RATES;
         InformationByte += 1;
         *InformationByte = Rates->Count - NET80211_MAX_SUPPORTED_RATES;
         InformationByte += 1;
-        for (Index = NET80211_MAX_SUPPORTED_RATES;
-             Index < Rates->Count;
-             Index += 1) {
+        RtlCopyMemory(InformationByte,
+                      &(Rates->Rate[NET80211_MAX_SUPPORTED_RATES]),
+                      Rates->Count - NET80211_MAX_SUPPORTED_RATES);
 
-            *InformationByte = Rates->Rates[Index];
-            InformationByte += 1;
-        }
+        InformationByte += Rates->Count - NET80211_MAX_SUPPORTED_RATES;
     }
 
     //
-    // Set the RSN information.
+    // Set the RSN information if advanced encryption is required.
     //
 
-    if (((Context->Capabilities & NET80211_CAPABILITY_FLAG_PRIVACY) != 0) &&
-        (Context->PairwiseEncryption != Net80211EncryptionWep)) {
+    if ((Bss->Encryption.Pairwise != Net80211EncryptionNone) &&
+        (Bss->Encryption.Pairwise != Net80211EncryptionWep)) {
 
         RtlCopyMemory(InformationByte,
                       &Net80211DefaultRsnInformation,
@@ -1898,15 +1587,13 @@ Return Value:
     ASSERT(FrameBodySize == (InformationByte - FrameBody));
 
     //
-    // Send the management frame down the lower layers.
+    // Send the management frame down to the lower layers.
     //
 
     FrameSubtype = NET80211_MANAGEMENT_FRAME_SUBTYPE_ASSOCIATION_REQUEST;
-    SourceAddress = &(Context->LinkAddress->PhysicalAddress);
-    Status = Net80211pSendManagementFrame(Context->Link,
-                                          SourceAddress,
-                                          &(Context->Bssid),
-                                          &(Context->Bssid),
+    Status = Net80211pSendManagementFrame(Link,
+                                          Bss->State.Bssid,
+                                          Bss->State.Bssid,
                                           FrameSubtype,
                                           FrameBody,
                                           FrameBodySize);
@@ -1923,245 +1610,231 @@ SendAssociationRequestEnd:
     return Status;
 }
 
-KSTATUS
-Net80211pReceiveAssociationResponse (
-    PNET80211_BSS_CONTEXT Context
+VOID
+Net80211pProcessAssociationResponse (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet
     )
 
 /*++
 
 Routine Description:
 
-    This routine receives an 802.11 management association response frame from
-    the access point stores in the BSS context.
+    This routine processes an 802.11 management association response frame from
+    an access point.
 
 Arguments:
 
-    Context - Supplies a pointer to the context in use to join a BSS.
+    Link - Supplies a pointer to the network link that received the association
+        response.
+
+    Packet - Supplies a pointer to the network packet that contains the
+        association response frame.
 
 Return Value:
 
-    Status code.
+    None.
 
 --*/
 
 {
 
-    BOOL AcceptedResponse;
-    PVOID Allocation;
-    ULONG AllocationSize;
     USHORT AssociationId;
-    ULONG Attempts;
+    PNET80211_BSS_ENTRY Bss;
     USHORT Capabilities;
     PUCHAR ElementBytePointer;
     UCHAR ElementId;
     ULONG ElementLength;
+    ULONG ExpectedFrameSize;
     ULONG ExtendedRateCount;
-    ULONG ExtendedRateOffset;
-    PNET80211_MANAGEMENT_FRAME Frame;
+    PUCHAR ExtendedRates;
+    ULONG FrameSize;
     USHORT FrameStatus;
-    ULONG FrameSubtype;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
-    ULONG Index;
     BOOL Match;
+    PNET80211_LINK Net80211Link;
     ULONG Offset;
     ULONG RateCount;
-    ULONG RateOffset;
+    PUCHAR Rates;
     KSTATUS Status;
     ULONG TotalRateCount;
 
-    //
-    // Attempt to receive a management frame from the access point. Retry a few
-    // times in case a bad packet comes in.
-    //
-
-    Attempts = NET80211_MANAGEMENT_RETRY_COUNT;
-    while (Attempts != 0) {
-        Attempts -= 1;
-        FrameSubtype = NET80211_MANAGEMENT_FRAME_SUBTYPE_ASSOCIATION_RESPONSE;
-        Status = Net80211pReceiveManagementFrame(Context->Link,
-                                                 Context->LinkAddress,
-                                                 FrameSubtype,
-                                                 &Frame);
-
-        if (Status == STATUS_TIMEOUT) {
-            break;
-        }
-
-        if (!KSUCCESS(Status)) {
-            continue;
-        }
-
-        //
-        // Make sure the this frame was sent from the destination.
-        //
-
-        Header = Frame->Buffer;
-        Match = RtlCompareMemory(Header->SourceAddress,
-                                 Context->Bssid.Address,
-                                 NET80211_ADDRESS_SIZE);
-
-        if (Match == FALSE) {
-            Status = STATUS_INVALID_ADDRESS;
-            continue;
-        }
-
-        //
-        // OK! Parse the response. There should at least be capabilities, a
-        // status code and the AID.
-        //
-
-        ElementBytePointer = Frame->Buffer;
-        Offset = sizeof(NET80211_MANAGEMENT_FRAME_HEADER);
-        if ((Offset +
-             NET80211_CAPABILITY_SIZE +
-             NET80211_STATUS_CODE_SIZE +
-             NET80211_ASSOCIATION_ID_SIZE) > Frame->BufferSize) {
-
-            Status = STATUS_DATA_LENGTH_MISMATCH;
-            continue;
-        }
-
-        //
-        // Save the capabilities.
-        //
-
-        Capabilities = *((PUSHORT)&(ElementBytePointer[Offset]));
-        Offset += NET80211_CAPABILITY_SIZE;
-
-        //
-        // Check the frame status.
-        //
-
-        FrameStatus = *((PUSHORT)(&(ElementBytePointer[Offset])));
-        if (FrameStatus != NET80211_STATUS_CODE_SUCCESS) {
-            RtlDebugPrint("802.11: Association response failed with status "
-                          "0x%04x.\n",
-                          FrameStatus);
-
-            Status = STATUS_UNSUCCESSFUL;
-            break;
-        }
-
-        Offset += NET80211_STATUS_CODE_SIZE;
-
-        //
-        // Save the association ID.
-        //
-
-        AssociationId = *((PUSHORT)&(ElementBytePointer[Offset]));
-        Offset += NET80211_ASSOCIATION_ID_SIZE;
-
-        //
-        // Now look at the supplied elements.
-        //
-
-        RateCount = 0;
-        RateOffset = 0;
-        ExtendedRateCount = 0;
-        ExtendedRateOffset = 0;
-        AcceptedResponse = TRUE;
-        while ((AcceptedResponse != FALSE) && (Offset < Frame->BufferSize)) {
-            ElementId = ElementBytePointer[Offset];
-            Offset += 1;
-            if (Offset >= Frame->BufferSize) {
-                Status = STATUS_DATA_LENGTH_MISMATCH;
-                break;
-            }
-
-            ElementLength = ElementBytePointer[Offset];
-            Offset += 1;
-            if (Offset + ElementLength > Frame->BufferSize) {
-                break;
-            }
-
-            switch (ElementId) {
-            case NET80211_ELEMENT_SUPPORTED_RATES:
-                RateCount = ElementLength;
-                RateOffset = Offset;
-                break;
-
-            case NET80211_ELEMENT_EXTENDED_SUPPORTED_RATES:
-                ExtendedRateCount = ElementLength;
-                ExtendedRateOffset = Offset;
-                break;
-
-            case NET80211_ELEMENT_EDCA:
-                break;
-
-            default:
-                break;
-            }
-
-            Offset += ElementLength;
-        }
-
-        if (AcceptedResponse != FALSE) {
-
-            ASSERT(KSUCCESS(Status));
-
-            //
-            // Save the supported rates into the BSS context so that the
-            // maximum link speed can be determined.
-            //
-
-            TotalRateCount = RateCount + ExtendedRateCount;
-            if (TotalRateCount != 0) {
-                if ((Context->RateInformation != NULL) &&
-                    (Context->RateInformation->Count < TotalRateCount)) {
-
-                    MmFreePagedPool(Context->RateInformation);
-                    Context->RateInformation = NULL;
-                }
-
-                if (Context->RateInformation == NULL) {
-                    AllocationSize = sizeof(NET80211_RATE_INFORMATION) +
-                                     (TotalRateCount * sizeof(UCHAR));
-
-                    Allocation = MmAllocatePagedPool(AllocationSize,
-                                                     NET80211_ALLOCATION_TAG);
-
-                    if (Allocation == NULL) {
-                        Status = STATUS_INSUFFICIENT_RESOURCES;
-                        break;
-                    }
-
-                    Context->RateInformation = Allocation;
-                    Context->RateInformation->Rates =
-                                Allocation + sizeof(NET80211_RATE_INFORMATION);
-                }
-
-                Context->RateInformation->Count = TotalRateCount;
-                for (Index = 0; Index < RateCount; Index += 1) {
-                    Context->RateInformation->Rates[Index] =
-                                                ElementBytePointer[RateOffset];
-
-                    RateOffset += 1;
-                }
-
-                for (Index = RateCount; Index < TotalRateCount; Index += 1) {
-                    Context->RateInformation->Rates[Index] =
-                                        ElementBytePointer[ExtendedRateOffset];
-
-                    ExtendedRateOffset += 1;
-                }
-            }
-
-            Context->Capabilities = Capabilities;
-            Context->AssociationId = AssociationId;
-            break;
-        }
+    Status = STATUS_SUCCESS;
+    Net80211Link = Link->DataLinkContext;
+    if (Net80211Link->State != Net80211StateAssociating) {
+        return;
     }
 
-    return Status;
+    KeAcquireQueuedLock(Net80211Link->Lock);
+    if (Net80211Link->State != Net80211StateAssociating) {
+        goto ProcessAssociationResponseEnd;
+    }
+
+    ASSERT(Net80211Link->ActiveBss != NULL);
+
+    Bss = Net80211Link->ActiveBss;
+
+    //
+    // Make sure the this frame was sent from the destination.
+    //
+
+    Header = Packet->Buffer + Packet->DataOffset;
+    Match = RtlCompareMemory(Header->SourceAddress,
+                             Bss->State.Bssid,
+                             NET80211_ADDRESS_SIZE);
+
+    if (Match == FALSE) {
+        Status = STATUS_INVALID_ADDRESS;
+        goto ProcessAssociationResponseEnd;
+    }
+
+    //
+    // There should at least be capabilities, a status code and the AID.
+    //
+
+    FrameSize = Packet->FooterOffset - Packet->DataOffset;
+    Offset = sizeof(NET80211_MANAGEMENT_FRAME_HEADER);
+    ExpectedFrameSize = Offset +
+                        NET80211_CAPABILITY_SIZE +
+                        NET80211_STATUS_CODE_SIZE +
+                        NET80211_ASSOCIATION_ID_SIZE;
+
+    if (FrameSize < ExpectedFrameSize) {
+        Status = STATUS_DATA_LENGTH_MISMATCH;
+        goto ProcessAssociationResponseEnd;
+    }
+
+    ElementBytePointer = Packet->Buffer + Packet->DataOffset;
+
+    //
+    // Save the capabilities.
+    //
+
+    Capabilities = *((PUSHORT)&(ElementBytePointer[Offset]));
+    Offset += NET80211_CAPABILITY_SIZE;
+
+    //
+    // Don't continue unless the association was a success.
+    //
+
+    FrameStatus = *((PUSHORT)(&(ElementBytePointer[Offset])));
+    if (FrameStatus != NET80211_STATUS_CODE_SUCCESS) {
+        RtlDebugPrint("802.11: Association response failed with status "
+                      "0x%04x.\n",
+                      FrameStatus);
+
+        Status = STATUS_UNSUCCESSFUL;
+        goto ProcessAssociationResponseEnd;
+    }
+
+    Offset += NET80211_STATUS_CODE_SIZE;
+
+    //
+    // Save the association ID.
+    //
+
+    AssociationId = *((PUSHORT)&(ElementBytePointer[Offset]));
+    Offset += NET80211_ASSOCIATION_ID_SIZE;
+
+    //
+    // Now look at the supplied elements.
+    //
+
+    Rates = NULL;
+    RateCount = 0;
+    ExtendedRates = NULL;
+    ExtendedRateCount = 0;
+    while (Offset < FrameSize) {
+        ElementId = ElementBytePointer[Offset];
+        Offset += 1;
+        if (Offset >= FrameSize) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            goto ProcessAssociationResponseEnd;
+        }
+
+        ElementLength = ElementBytePointer[Offset];
+        Offset += 1;
+        if ((Offset + ElementLength) > FrameSize) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            goto ProcessAssociationResponseEnd;
+        }
+
+        switch (ElementId) {
+        case NET80211_ELEMENT_SUPPORTED_RATES:
+            if (ElementLength == 0) {
+                Status = STATUS_INVALID_CONFIGURATION;
+                goto ProcessAssociationResponseEnd;
+            }
+
+            Rates = ElementBytePointer + Offset;
+            RateCount = ElementLength;
+            break;
+
+        case NET80211_ELEMENT_EXTENDED_SUPPORTED_RATES:
+            if (ElementLength == 0) {
+                Status = STATUS_INVALID_CONFIGURATION;
+                goto ProcessAssociationResponseEnd;
+            }
+
+            ExtendedRates = ElementBytePointer + Offset;
+            ExtendedRateCount = ElementLength;
+            break;
+
+        default:
+            break;
+        }
+
+        Offset += ElementLength;
+    }
+
+    //
+    // If the capabilities or rates have changed from the probe response or
+    // beacon, do not proceed with the association. The AP has changed since
+    // the association process began. Deauthenticate instead.
+    //
+
+    if (Capabilities != Bss->State.Capabilities) {
+        Status = STATUS_OPERATION_CANCELLED;
+        goto ProcessAssociationResponseEnd;
+    }
+
+    TotalRateCount = RateCount + ExtendedRateCount;
+    if (TotalRateCount != Bss->State.Rates.Count) {
+        Status = STATUS_OPERATION_CANCELLED;
+        goto ProcessAssociationResponseEnd;
+    }
+
+    //
+    // Copy the current rates into the BSS entry.
+    //
+
+    RtlCopyMemory(Bss->State.Rates.Rate, Rates, RateCount);
+    RtlCopyMemory(Bss->State.Rates.Rate + RateCount,
+                  ExtendedRates,
+                  ExtendedRateCount);
+
+    Status = Net80211pValidateRates(Net80211Link, Bss);
+    if (!KSUCCESS(Status)) {
+        goto ProcessAssociationResponseEnd;
+    }
+
+    Bss->State.AssociationId = AssociationId;
+    Net80211pSetStateUnlocked(Link, Net80211StateAssociated);
+
+ProcessAssociationResponseEnd:
+    if (!KSUCCESS(Status)) {
+        Net80211pSetStateUnlocked(Link, Net80211StateInitialized);
+    }
+
+    KeReleaseQueuedLock(Net80211Link->Lock);
+    return;
 }
 
 KSTATUS
 Net80211pSendManagementFrame (
     PNET_LINK Link,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress,
-    PNETWORK_ADDRESS Bssid,
+    PUCHAR DestinationAddress,
+    PUCHAR Bssid,
     ULONG FrameSubtype,
     PVOID FrameBody,
     ULONG FrameBodySize
@@ -2177,9 +1850,6 @@ Routine Description:
 Arguments:
 
     Link - Supplies a pointer to the link on which to send the management frame.
-
-    SourceAddress - Supplies a pointer to the source address for the managment
-        frame.
 
     DestinationAddress - Supplies a pointer to an optional destination address
         for the management frame. Supply NULL to indicate the broadcast address.
@@ -2204,7 +1874,6 @@ Return Value:
     PVOID DriverContext;
     ULONG Flags;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
-    ULONG Index;
     PNET_PACKET_BUFFER Packet;
     NET_PACKET_LIST PacketList;
     KSTATUS Status;
@@ -2264,26 +1933,27 @@ Return Value:
 
     if (DestinationAddress != NULL) {
         RtlCopyMemory(Header->DestinationAddress,
-                      DestinationAddress->Address,
+                      DestinationAddress,
                       NET80211_ADDRESS_SIZE);
 
     } else {
-        for (Index = 0; Index < NET80211_ADDRESS_SIZE; Index += 1) {
-            Header->DestinationAddress[Index] = 0xFF;
-        }
+        RtlSetMemory(Header->DestinationAddress, 0xFF, NET80211_ADDRESS_SIZE);
     }
 
+    //
+    // The source address is always the local link's physical address (i.e. the
+    // MAC address).
+    //
+
     RtlCopyMemory(Header->SourceAddress,
-                  SourceAddress->Address,
+                  Link->Properties.PhysicalAddress.Address,
                   NET80211_ADDRESS_SIZE);
 
     if (Bssid != NULL) {
-        RtlCopyMemory(Header->Bssid, Bssid->Address, NET80211_ADDRESS_SIZE);
+        RtlCopyMemory(Header->Bssid, Bssid, NET80211_ADDRESS_SIZE);
 
     } else {
-        for (Index = 0; Index < NET80211_ADDRESS_SIZE; Index += 1) {
-            Header->Bssid[Index] = 0xFF;
-        }
+        RtlSetMemory(Header->Bssid, 0xFF, NET80211_ADDRESS_SIZE);
     }
 
     //
@@ -2321,32 +1991,25 @@ SendManagementFrameEnd:
 }
 
 KSTATUS
-Net80211pReceiveManagementFrame (
-    PNET_LINK Link,
-    PNET_LINK_ADDRESS_ENTRY LinkAddress,
-    ULONG FrameSubtype,
-    PNET80211_MANAGEMENT_FRAME *Frame
+Net80211pValidateRates (
+    PNET80211_LINK Link,
+    PNET80211_BSS_ENTRY Bss
     )
 
 /*++
 
 Routine Description:
 
-    This routine receives one management frame for the given link and returns
-    it.
+    This routine validates that the link and BSS share the same basic rates and
+    detects the maximum mode for a future connection, storing the result in the
+    BSS entry.
 
 Arguments:
 
-    Link - Supplies a pointer to the network link on which to receive a
-        management frame.
+    Link - Supplies a pointer to the 802.11 link for which to validate the BSS
+        entry's rates.
 
-    LinkAddress - Supplies a pointer to the link address that is expected to
-        receive the frame.
-
-    FrameSubtype - Supplies the expected subtype of the management frame.
-
-    Frame - Supplies a pointer that receives a pointer to the received
-        management frame.
+    Bss - Supplies a pointer to a BSS entry.
 
 Return Value:
 
@@ -2356,228 +2019,351 @@ Return Value:
 
 {
 
-    PNET80211_MANAGEMENT_FRAME FirstFrame;
-    PLIST_ENTRY FirstFrameEntry;
-    PNET80211_MANAGEMENT_FRAME_HEADER Header;
-    BOOL Match;
-    PNET80211_LINK Net80211Link;
-    ULONG ReceivedSubtype;
+    ULONG BssIndex;
+    UCHAR BssRate;
+    PNET80211_RATE_INFORMATION BssRates;
+    UCHAR BssRateValue;
+    ULONGLONG LinkSpeed;
+    ULONG LocalIndex;
+    UCHAR LocalRate;
+    PNET80211_RATE_INFORMATION LocalRates;
+    UCHAR MaxRate;
     KSTATUS Status;
 
-    FirstFrame = NULL;
-    Net80211Link = Link->DataLinkContext;
+    BssRates = &(Bss->State.Rates);
+    LocalRates = Link->Properties.SupportedRates;
 
     //
-    // Wait for the event to signal that a management frame arrived.
+    // Make sure the basic rates are supported. Unfortunately, there is no
+    // guarantee about the ordering of the rates. There aren't that many so do
+    // not bother sorting.
     //
 
-    Status = KeWaitForEvent(Net80211Link->ManagementFrameEvent,
-                            FALSE,
-                            NET80211_MANAGEMENT_FRAME_TIMEOUT);
+    MaxRate = 0;
+    for (BssIndex = 0; BssIndex < BssRates->Count; BssIndex += 1) {
+        BssRate = BssRates->Rate[BssIndex];
+        BssRateValue = BssRate & NET80211_RATE_VALUE_MASK;
+        if ((BssRate & NET80211_RATE_BASIC) != 0) {
+            if (BssRateValue == NET80211_MEMBERSHIP_SELECTOR_HT_PHY) {
+                continue;
+            }
 
-    if (Status == STATUS_TIMEOUT) {
-        goto ReceiveManagementFrameEnd;
-    }
+        } else if (BssRateValue <= MaxRate) {
+            continue;
+        }
 
-    //
-    // There should be at least one management frame on the list. Pick it off
-    // and return it.
-    //
+        //
+        // Attempt to find the rate in the local supported rates.
+        //
 
-    KeAcquireQueuedLock(Net80211Link->Lock);
+        for (LocalIndex = 0; LocalIndex < LocalRates->Count; LocalIndex += 1) {
+            LocalRate = LocalRates->Rate[LocalIndex] & NET80211_RATE_VALUE_MASK;
+            if (LocalRate == BssRateValue) {
+                break;
+            }
+        }
 
-    ASSERT(LIST_EMPTY(&(Net80211Link->ManagementFrameList)) == FALSE);
+        //
+        // If this is a basic rate and it is not supported locally, then
+        // connecting to this BSS is not allowed.
+        //
 
-    FirstFrameEntry = Net80211Link->ManagementFrameList.Next;
-    LIST_REMOVE(FirstFrameEntry);
+        if (LocalIndex == LocalRates->Count) {
+            if ((BssRate & NET80211_RATE_BASIC) != 0) {
+                Status = STATUS_NOT_SUPPORTED;
+                goto ValidateRatesEnd;
+            }
 
-    //
-    // If the list is now empty, unsignal the event so the next request to
-    // receive a frame waits first.
-    //
+            continue;
+        }
 
-    if (LIST_EMPTY(&(Net80211Link->ManagementFrameList)) != FALSE) {
-        KeSignalEvent(Net80211Link->ManagementFrameEvent, SignalOptionUnsignal);
-    }
-
-    KeReleaseQueuedLock(Net80211Link->Lock);
-    FirstFrame = LIST_VALUE(FirstFrameEntry,
-                            NET80211_MANAGEMENT_FRAME,
-                            ListEntry);
-
-    //
-    // Perform some common validation on the frame.
-    //
-
-    if (FirstFrame->BufferSize < sizeof(NET80211_MANAGEMENT_FRAME_HEADER)) {
-        RtlDebugPrint("802.11: Skipping management frame as it was too "
-                      "small to contain header. Frame was size %d, "
-                      "expected at least %d bytes.\n",
-                      FirstFrame->BufferSize,
-                      sizeof(NET80211_MANAGEMENT_FRAME_HEADER));
-
-        Status = STATUS_BUFFER_TOO_SMALL;
-        goto ReceiveManagementFrameEnd;
-    }
-
-    //
-    // Make sure it is the write management subtype.
-    //
-
-    Header = FirstFrame->Buffer;
-
-    ASSERT(NET80211_GET_FRAME_TYPE(Header) == NET80211_FRAME_TYPE_MANAGEMENT);
-
-    ReceivedSubtype = NET80211_GET_FRAME_SUBTYPE(Header);
-    if (ReceivedSubtype != FrameSubtype) {
-        RtlDebugPrint("802.11: Skipping management frame as it wasn't of "
-                      "type %d, but it was of type %d.\n",
-                      FrameSubtype,
-                      ReceivedSubtype);
-
-        Status = STATUS_UNEXPECTED_TYPE;
-        goto ReceiveManagementFrameEnd;
-    }
-
-    //
-    // Make sure the destination address matches.
-    //
-
-    Match = RtlCompareMemory(Header->DestinationAddress,
-                             LinkAddress->PhysicalAddress.Address,
-                             NET80211_ADDRESS_SIZE);
-
-    if (Match == FALSE) {
-        RtlDebugPrint("802.11: Skipping management frame with wrong "
-                      "destination address.\n");
-
-        Status = STATUS_INVALID_ADDRESS;
-        goto ReceiveManagementFrameEnd;
-    }
-
-ReceiveManagementFrameEnd:
-    if (!KSUCCESS(Status)) {
-        if (FirstFrame != NULL) {
-            MmFreePagedPool(FirstFrame);
-            FirstFrame = NULL;
+        if (BssRateValue > MaxRate) {
+            MaxRate = BssRateValue;
         }
     }
 
-    *Frame = FirstFrame;
-    return Status;
-}
+    //
+    // If no rate could be agreed upon, then fail to connect to the BSS.
+    //
 
-PNET80211_BSS_CONTEXT
-Net80211pCreateBssContext (
-    PNET_LINK Link,
-    PNET_LINK_ADDRESS_ENTRY LinkAddress,
-    PSTR Ssid,
-    ULONG SsidLength,
-    PUCHAR Passphrase,
-    ULONG PassphraseLength
-    )
-
-/*++
-
-Routine Description:
-
-    This routine creates a BSS context to be used to join the BSS indicated by
-    the given SSID.
-
-Arguments:
-
-    Link - Supplies a pointer to the link that is requesting to join a network.
-
-    LinkAddress - Supplies the link address for the link that wants to join the
-         network.
-
-    Ssid - Supplies the SSID of the network to join.
-
-    SsidLength - Supplies the length of the SSID string, including the NULL
-        terminator.
-
-    Passphrase - Supplies an optional pointer to the passphrase for the BSS.
-        This is only required if the BSS is secured. The passphrase may be a
-        sequence of bytes or an ASCII password.
-
-    PassphraseLength - Supplies the length of the passphrase, in bytes.
-
-Return Value:
-
-    Returns a pointer to the created BSS context on success or NULL on failure.
-
---*/
-
-{
-
-    ULONG AllocationSize;
-    PNET80211_BSS_CONTEXT Context;
-    KSTATUS Status;
-
-    AllocationSize = sizeof(NET80211_BSS_CONTEXT) +
-                     SsidLength +
-                     PassphraseLength;
-
-    Context = MmAllocatePagedPool(AllocationSize, NET80211_ALLOCATION_TAG);
-    if (Context == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateBssContextEnd;
+    if (MaxRate == 0) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto ValidateRatesEnd;
     }
 
-    RtlZeroMemory(Context, sizeof(NET80211_BSS_CONTEXT));
-    NetLinkAddReference(Link);
-    Context->Link = Link;
-    Context->LinkAddress = LinkAddress;
-    Context->EapolCompletionEvent = KeCreateEvent(NULL);
-    if (Context->EapolCompletionEvent == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateBssContextEnd;
-    }
+    //
+    // Fill in the connection mode based on the maximum supported rate.
+    //
 
-    if (Ssid != NULL) {
+    Bss->State.MaxRate = MaxRate;
+    LinkSpeed = MaxRate * NET80211_RATE_UNIT;
+    if (LinkSpeed <= NET80211_MODE_B_MAX_RATE) {
+        Bss->State.Mode = Net80211ModeB;
 
-        ASSERT(SsidLength != 0);
+    } else if (LinkSpeed <= NET80211_MODE_G_MAX_RATE) {
+        Bss->State.Mode = Net80211ModeG;
 
-        Context->Ssid = (PSTR)(Context + 1);
-        Context->SsidLength = SsidLength;
-        RtlCopyMemory(Context->Ssid, Ssid, SsidLength);
-    }
-
-    if (Passphrase != NULL) {
-
-        ASSERT(PassphraseLength != 0);
-
-        Context->Passphrase = (PUCHAR)(Context + 1) + Context->SsidLength;
-        Context->PassphraseLength = PassphraseLength;
-        RtlCopyMemory(Context->Passphrase, Passphrase, PassphraseLength);
+    } else {
+        Status = STATUS_NOT_SUPPORTED;
+        goto ValidateRatesEnd;
     }
 
     Status = STATUS_SUCCESS;
 
-CreateBssContextEnd:
-    if (!KSUCCESS(Status)) {
-        if (Context != NULL) {
-            Net80211pDestroyBssContext(Context);
-        }
-    }
-
-    return Context;
+ValidateRatesEnd:
+    return Status;
 }
 
-VOID
-Net80211pDestroyBssContext (
-    PNET80211_BSS_CONTEXT Context
+KSTATUS
+Net80211pParseRsnElement (
+    PUCHAR Rsn,
+    PNET80211_ENCRYPTION Encryption
     )
 
 /*++
 
 Routine Description:
 
-    This routine destroys the given BSS context.
+    This routine parses the RSN information element in order to detect which
+    encryption methods are supported by the BSS to which it belongs.
 
 Arguments:
 
-    Context - Supplies a pointer to a BSS context.
+    Rsn - Supplies a pointer to the RSN element, the first byte of which must
+        be the element ID.
+
+    Encryption - Supplies a pointer to an 802.11 encryption structure that
+        receives the parsed data from the RSN element.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    NET80211_ENCRYPTION_TYPE GroupEncryption;
+    ULONG Index;
+    ULONG Offset;
+    NET80211_ENCRYPTION_TYPE PairwiseEncryption;
+    USHORT PmkidCount;
+    BOOL PskSupported;
+    ULONG RsnLength;
+    KSTATUS Status;
+    ULONG Suite;
+    USHORT SuiteCount;
+    USHORT Version;
+
+    ASSERT(NET80211_GET_ELEMENT_ID(Rsn) == NET80211_ELEMENT_RSN);
+
+    Status = STATUS_SUCCESS;
+    Offset = NET80211_ELEMENT_HEADER_SIZE;
+    PairwiseEncryption = Net80211EncryptionNone;
+    GroupEncryption = Net80211EncryptionNone;
+    RsnLength = NET80211_GET_ELEMENT_LENGTH(Rsn);
+
+    //
+    // The version field is the only non-optional field.
+    //
+
+    if ((Offset + sizeof(USHORT)) > RsnLength) {
+        Status = STATUS_DATA_LENGTH_MISMATCH;
+        goto ParseRsnElementEnd;
+    }
+
+    Version = *((PUSHORT)&(Rsn[Offset]));
+    Offset += sizeof(USHORT);
+    if (Version != NET80211_RSN_VERSION) {
+        RtlDebugPrint("802.11: Unexpected RSN version %d\n", Version);
+        Status = STATUS_VERSION_MISMATCH;
+        goto ParseRsnElementEnd;
+    }
+
+    //
+    // Get the optional group suite. Do not support anything less secure than
+    // CCMP (i.e. WPA2-PSK) as the older algorithms have proven to be insecure.
+    //
+
+    if ((Offset + sizeof(ULONG)) > RsnLength) {
+        goto ParseRsnElementEnd;
+    }
+
+    Suite = NETWORK_TO_CPU32(*((PULONG)&(Rsn[Offset])));
+    Offset += sizeof(ULONG);
+    switch (Suite) {
+    case NET80211_CIPHER_SUITE_CCMP:
+        GroupEncryption = Net80211EncryptionWpa2Psk;
+        break;
+
+    default:
+        RtlDebugPrint("802.11: Group cipher suite not supported 0x%08x\n",
+                      Suite);
+
+        break;
+    }
+
+    if (GroupEncryption == Net80211EncryptionNone) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto ParseRsnElementEnd;
+    }
+
+    //
+    // Gather the pairwise suites. The BSS must at least support CCMP (i.e.
+    // WPA2-PSK), but may support others.
+    //
+
+    PairwiseEncryption = Net80211EncryptionNone;
+    if ((Offset + sizeof(USHORT)) > RsnLength) {
+        goto ParseRsnElementEnd;
+    }
+
+    SuiteCount = *((PUSHORT)&(Rsn[Offset]));
+    Offset += sizeof(USHORT);
+    for (Index = 0; Index < SuiteCount; Index += 1) {
+        if ((Offset + sizeof(ULONG)) > RsnLength) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            goto ParseRsnElementEnd;
+        }
+
+        Suite = NETWORK_TO_CPU32(*((PULONG)&(Rsn[Offset])));
+        Offset += sizeof(ULONG);
+        switch (Suite) {
+        case NET80211_CIPHER_SUITE_CCMP:
+            PairwiseEncryption = Net80211EncryptionWpa2Psk;
+            break;
+
+        default:
+            RtlDebugPrint("802.11: Pairwise cipher suite not supported "
+                          "0x%08x\n",
+                          Suite);
+
+            break;
+        }
+    }
+
+    if (PairwiseEncryption == Net80211EncryptionNone) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto ParseRsnElementEnd;
+    }
+
+    //
+    // The PSK authentication and key management (AKM) must be one of the
+    // optional AKM suites.
+    //
+
+    if ((Offset + sizeof(USHORT)) > RsnLength) {
+        goto ParseRsnElementEnd;
+    }
+
+    SuiteCount = *((PUSHORT)&(Rsn[Offset]));
+    Offset += sizeof(USHORT);
+    PskSupported = FALSE;
+    for (Index = 0; Index < SuiteCount; Index += 1) {
+        if ((Offset + sizeof(ULONG)) > RsnLength) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            goto ParseRsnElementEnd;
+        }
+
+        Suite = *((PULONG)&(Rsn[Offset]));
+        Offset += sizeof(ULONG);
+        switch (NETWORK_TO_CPU32(Suite)) {
+        case NET80211_AKM_SUITE_PSK:
+            PskSupported = TRUE;
+            break;
+
+        default:
+            RtlDebugPrint("802.11: AKM suite not supported 0x%08x\n", Suite);
+            break;
+        }
+    }
+
+    if (PskSupported == FALSE) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto ParseRsnElementEnd;
+    }
+
+    //
+    // Skip the RSN capabilities.
+    //
+
+    if ((Offset + sizeof(USHORT)) > RsnLength) {
+        goto ParseRsnElementEnd;
+    }
+
+    Offset += sizeof(USHORT);
+
+    //
+    // Skip the PMKIDs.
+    //
+
+    if ((Offset + sizeof(USHORT)) > RsnLength) {
+        goto ParseRsnElementEnd;
+    }
+
+    PmkidCount = *((PUSHORT)&(Rsn[Offset]));
+    Offset += sizeof(USHORT);
+    for (Index = 0; Index < PmkidCount; Index += 1) {
+        if ((Offset + NET80211_RSN_PMKID_LENGTH) > RsnLength) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            goto ParseRsnElementEnd;
+        }
+
+        Offset += NET80211_RSN_PMKID_LENGTH;
+    }
+
+    //
+    // Skip the group management suite, but make sure that it is CCMP if it's
+    // present.
+    //
+
+    if ((Offset + sizeof(ULONG)) > RsnLength) {
+        goto ParseRsnElementEnd;
+    }
+
+    Suite = *((PULONG)&(Rsn[Offset]));
+    Offset += sizeof(ULONG);
+    switch (NETWORK_TO_CPU32(Suite)) {
+    case NET80211_CIPHER_SUITE_CCMP:
+        break;
+
+    default:
+        RtlDebugPrint("802.11: Group cipher suite not supported 0x%08x\n",
+                      Suite);
+
+        Status = STATUS_NOT_SUPPORTED;
+        break;
+    }
+
+    if (!KSUCCESS(Status)) {
+        goto ParseRsnElementEnd;
+    }
+
+ParseRsnElementEnd:
+    Encryption->Pairwise = PairwiseEncryption;
+    Encryption->Group = GroupEncryption;
+    return Status;
+}
+
+VOID
+Net80211pUpdateBssCache (
+    PNET_LINK Link,
+    PNET80211_PROBE_RESPONSE Response
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates the given BSS cache based on the data found in a
+    beacon or probe response packet.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link that received the packet.
+
+    Response - Supplies a pointer to a parsed representation of a beacon or
+        probe response packet.
 
 Return Value:
 
@@ -2587,38 +2373,249 @@ Return Value:
 
 {
 
-    if (Context->EapolCompletionEvent != NULL) {
-        KeDestroyEvent(Context->EapolCompletionEvent);
+    PNET80211_BSS_ENTRY Bss;
+    ULONG Channel;
+    PLIST_ENTRY CurrentEntry;
+    BOOL LinkDown;
+    BOOL Match;
+    PNET80211_LINK Net80211Link;
+    PUCHAR NewRsn;
+    ULONG NewRsnLength;
+    PUCHAR OldRsn;
+    ULONG OldRsnLength;
+    PUCHAR RatesArray;
+    ULONG SsidLength;
+    KSTATUS Status;
+    ULONG TotalRateCount;
+
+    Net80211Link = Link->DataLinkContext;
+    TotalRateCount = NET80211_GET_ELEMENT_LENGTH(Response->Rates);
+    if (Response->ExtendedRates != NULL) {
+        TotalRateCount += NET80211_GET_ELEMENT_LENGTH(Response->ExtendedRates);
     }
 
-    if (Context->RateInformation != NULL) {
-        MmFreePagedPool(Context->RateInformation);
+    //
+    // First look for an existing BSS entry based on the BSSID.
+    //
+
+    KeAcquireQueuedLock(Net80211Link->Lock);
+    CurrentEntry = Net80211Link->BssList.Next;
+    while (CurrentEntry != &(Net80211Link->BssList)) {
+        Bss = LIST_VALUE(CurrentEntry, NET80211_BSS_ENTRY, ListEntry);
+        Match = RtlCompareMemory(Response->Bssid,
+                                 Bss->State.Bssid,
+                                 NET80211_ADDRESS_SIZE);
+
+        if (Match != FALSE) {
+            break;
+        }
+
+        Bss = NULL;
     }
 
-    NetLinkReleaseReference(Context->Link);
-    MmFreePagedPool(Context);
+    //
+    // If no matching BSS entry was found, then create a new one and insert it
+    // into the list.
+    //
+
+    if (Bss == NULL) {
+        Bss = MmAllocatePagedPool(sizeof(NET80211_BSS_ENTRY),
+                                  NET80211_ALLOCATION_TAG);
+
+        if (Bss == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto UpdateBssCacheEnd;
+        }
+
+        RtlZeroMemory(Bss, sizeof(NET80211_BSS_ENTRY));
+        Bss->State.Version = NET80211_BSS_VERSION;
+        RtlCopyMemory(Bss->State.Bssid, Response->Bssid, NET80211_ADDRESS_SIZE);
+        Bss->EapolHandle = INVALID_HANDLE;
+        INSERT_BEFORE(&(Bss->ListEntry), &(Net80211Link->BssList));
+    }
+
+    //
+    // Gather some locals from the response elements.
+    //
+
+    Channel = *NET80211_GET_ELEMENT_DATA(Response->Channel);
+    SsidLength = NET80211_GET_ELEMENT_LENGTH(Response->Ssid);
+    NewRsnLength = 0;
+    NewRsn = Response->Rsn;
+    if (NewRsn != NULL) {
+        NewRsnLength = NET80211_ELEMENT_HEADER_SIZE +
+                       NET80211_GET_ELEMENT_LENGTH(Response->Rsn);
+    }
+
+    OldRsnLength = 0;
+    OldRsn = Bss->Encryption.ApRsn;
+    if (OldRsn != NULL) {
+        OldRsnLength = NET80211_ELEMENT_HEADER_SIZE +
+                       NET80211_GET_ELEMENT_LENGTH(Bss->Encryption.ApRsn);
+    }
+
+    ASSERT(SsidLength <= NET80211_MAX_SSID_LENGTH);
+
+    //
+    // If this is an update for the active BSS, then any changes will cause
+    // the link to go down.
+    //
+
+    if (Net80211Link->ActiveBss == Bss) {
+        LinkDown = FALSE;
+        if ((Bss->State.BeaconInterval != Response->BeaconInterval) ||
+            (Bss->State.Capabilities != Response->Capabilities) ||
+            (Bss->State.Channel != Channel) ||
+            (Bss->State.Rates.Count != TotalRateCount) ||
+            (Bss->SsidLength != SsidLength) ||
+            (OldRsnLength != NewRsnLength)) {
+
+            LinkDown = TRUE;
+        }
+
+        if (LinkDown == FALSE) {
+            Match = RtlCompareMemory(Bss->Ssid,
+                                     NET80211_GET_ELEMENT_DATA(Response->Ssid),
+                                     SsidLength);
+
+            if (Match == FALSE) {
+                LinkDown = TRUE;
+            }
+        }
+
+        if (LinkDown == FALSE) {
+            Match = RtlCompareMemory(OldRsn, NewRsn, NewRsnLength);
+            if (Match == FALSE) {
+                LinkDown = TRUE;
+            }
+        }
+
+        if (LinkDown != FALSE) {
+            NetSetLinkState(Link, FALSE, 0);
+        }
+    }
+
+    //
+    // Update the BSS entry with the latest information from the AP.
+    //
+
+    Bss->State.BeaconInterval = Response->BeaconInterval;
+    Bss->State.Capabilities = Response->Capabilities;
+    Bss->State.Channel = Channel;
+    Bss->State.Timestamp = Response->Timestamp;
+    Bss->SsidLength = SsidLength;
+    RtlCopyMemory(Bss->Ssid,
+                  NET80211_GET_ELEMENT_DATA(Response->Ssid),
+                  SsidLength);
+
+    //
+    // Gather the rates from the response into one array.
+    //
+
+    ASSERT(TotalRateCount != 0);
+
+    RatesArray = Bss->State.Rates.Rate;
+    if (Bss->State.Rates.Count < TotalRateCount) {
+        if (RatesArray != NULL) {
+            MmFreePagedPool(RatesArray);
+            Bss->State.Rates.Rate = NULL;
+        }
+
+        RatesArray = MmAllocatePagedPool(TotalRateCount * sizeof(UCHAR),
+                                         NET80211_ALLOCATION_TAG);
+
+        if (RatesArray == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto UpdateBssCacheEnd;
+        }
+
+        Bss->State.Rates.Rate = RatesArray;
+    }
+
+    Bss->State.Rates.Count = TotalRateCount;
+    RtlCopyMemory(RatesArray,
+                  NET80211_GET_ELEMENT_DATA(Response->Rates),
+                  NET80211_GET_ELEMENT_LENGTH(Response->Rates));
+
+    if (Response->ExtendedRates != NULL) {
+        RtlCopyMemory(RatesArray + NET80211_GET_ELEMENT_LENGTH(Response->Rates),
+                      NET80211_GET_ELEMENT_DATA(Response->ExtendedRates),
+                      NET80211_GET_ELEMENT_LENGTH(Response->ExtendedRates));
+    }
+
+    //
+    // Copy the RSN information into the BSS entry.
+    //
+
+    if (NewRsnLength != 0) {
+        if (OldRsnLength < NewRsnLength) {
+            if (OldRsn != NULL) {
+                MmFreePagedPool(OldRsn);
+                Bss->Encryption.ApRsn = NULL;
+            }
+
+            OldRsn = MmAllocatePagedPool(NewRsnLength, NET80211_ALLOCATION_TAG);
+            if (OldRsn == NULL) {
+                Status = STATUS_INSUFFICIENT_RESOURCES;
+                goto UpdateBssCacheEnd;
+            }
+
+            Bss->Encryption.ApRsn = OldRsn;
+        }
+
+        RtlCopyMemory(OldRsn, NewRsn, NewRsnLength);
+
+        //
+        // Parse the RSN information to determine the encryption algorithms in
+        // use by the BSS.
+        //
+
+        Status = Net80211pParseRsnElement(NewRsn, &(Bss->Encryption));
+        if (!KSUCCESS(Status)) {
+            goto UpdateBssCacheEnd;
+        }
+
+    } else if (OldRsnLength != 0) {
+
+        ASSERT((OldRsn != NULL) && (OldRsn == Bss->Encryption.ApRsn));
+
+        MmFreePagedPool(OldRsn);
+        Bss->Encryption.ApRsn = NULL;
+    }
+
+    //
+    // For now, the station always advertises the same RSN information. Just
+    // point at the global.
+    //
+
+    Bss->Encryption.StationRsn = (PUCHAR)&Net80211DefaultRsnInformation;
+
+UpdateBssCacheEnd:
+    if (!KSUCCESS(Status)) {
+        if (Bss != NULL) {
+            LIST_REMOVE(&(Bss->ListEntry));
+            Net80211pDestroyBssEntry(Bss);
+        }
+    }
+
+    KeReleaseQueuedLock(Net80211Link->Lock);
     return;
 }
 
 VOID
-Net80211pJoinBssEapolCompletionRoutine (
-    PVOID Context,
-    KSTATUS Status
+Net80211pDestroyBssEntry (
+    PNET80211_BSS_ENTRY BssEntry
     )
 
 /*++
 
 Routine Description:
 
-    This routine is called when an EAPOL exchange completes. It is supplied by
-    the creator of the EAPOL instance.
+    This routine destroys the resources for the given BSS entry.
 
 Arguments:
 
-    Context - Supplies a pointer to the context supplied by the creator of the
-        EAPOL instance.
-
-    Status - Supplies the completion status of the EAPOL exchange.
+    BssEntry - Supplies a pointer to the BSS entry to destroy.
 
 Return Value:
 
@@ -2628,11 +2625,17 @@ Return Value:
 
 {
 
-    PNET80211_BSS_CONTEXT BssContext;
+    ASSERT(BssEntry->EapolHandle == INVALID_HANDLE);
 
-    BssContext = (PNET80211_BSS_CONTEXT)Context;
-    BssContext->EapolCompletionStatus = Status;
-    KeSignalEvent(BssContext->EapolCompletionEvent, SignalOptionSignalAll);
+    if (BssEntry->State.Rates.Rate != NULL) {
+        MmFreePagedPool(BssEntry->State.Rates.Rate);
+    }
+
+    if (BssEntry->Encryption.ApRsn != NULL) {
+        MmFreePagedPool(BssEntry->Encryption.ApRsn);
+    }
+
+    MmFreePagedPool(BssEntry);
     return;
 }
 

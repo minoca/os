@@ -38,11 +38,14 @@ Environment:
 #define NET80211_ADDRESS_STRING_LENGTH 18
 
 //
-// Define the test SSID to join for now.
+// Define the test SSID and its passphrase.
 //
 
 #define NET80211_TEST_SSID "mtest"
-#define NET80211_TEST_SSID_LENGTH (RtlStringLength(NET80211_TEST_SSID) + 1)
+#define NET80211_TEST_SSID_LENGTH RtlStringLength(NET80211_TEST_SSID)
+#define NET80211_TEST_PASSPHRASE "minocatest"
+#define NET80211_TEST_PASSPHRASE_LENGTH \
+    RtlStringLength(NET80211_TEST_PASSPHRASE)
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -110,14 +113,6 @@ Net80211pDestroy80211Link (
 //
 
 HANDLE Net80211DataLinkLayerHandle = INVALID_HANDLE;
-
-//
-// Define the passphrase for the test BSS.
-//
-
-UCHAR Net80211TestPassphrase[] = {
-    'm', 'i', 'n', 'o', 'c', 'a', 't', 'e', 's', 't'
-};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -312,6 +307,12 @@ Return Value:
     Net80211Link->Properties.SupportedRates = NULL;
 
     //
+    // All supported station modes currently set the ESS capability.
+    //
+
+    Net80211Link->Properties.Capabilities |= NET80211_CAPABILITY_FLAG_ESS;
+
+    //
     // The rate information has a dynamic length, so it needs to be reallocated
     // and copied.
     //
@@ -329,9 +330,9 @@ Return Value:
                   Properties->SupportedRates,
                   sizeof(NET80211_RATE_INFORMATION));
 
-    Rates->Rates = (PUCHAR)(Rates + 1);
-    RtlCopyMemory(Rates->Rates,
-                  Properties->SupportedRates->Rates,
+    Rates->Rate = (PUCHAR)(Rates + 1);
+    RtlCopyMemory(Rates->Rate,
+                  Properties->SupportedRates->Rate,
                   Rates->Count * sizeof(UCHAR));
 
     Net80211Link->Properties.SupportedRates = Rates;
@@ -370,29 +371,22 @@ Return Value:
 
 {
 
-    PNET_LINK_ADDRESS_ENTRY LinkAddress;
     PNET80211_LINK Net80211Link;
-    KSTATUS Status;
+    NET80211_SCAN_STATE Scan;
 
     Net80211Link = Link->DataLinkContext;
-    Net80211Link->State = Net80211StateStarted;
+    Net80211Link->State = Net80211StateInitialized;
+    RtlZeroMemory(&Scan, sizeof(NET80211_SCAN_STATE));
+    Scan.Link = Link;
+    Scan.Flags = NET80211_SCAN_FLAG_JOIN | NET80211_SCAN_FLAG_BROADCAST;
+    Scan.SsidLength = NET80211_TEST_SSID_LENGTH;
+    RtlCopyMemory(Scan.Ssid, NET80211_TEST_SSID, NET80211_TEST_SSID_LENGTH);
+    Scan.PassphraseLength = NET80211_TEST_PASSPHRASE_LENGTH;
+    RtlCopyMemory(Scan.Passphrase,
+                  NET80211_TEST_PASSPHRASE,
+                  NET80211_TEST_PASSPHRASE_LENGTH);
 
-    //
-    // Request an address for the first link.
-    //
-
-    LinkAddress = LIST_VALUE(Link->LinkAddressList.Next,
-                             NET_LINK_ADDRESS_ENTRY,
-                             ListEntry);
-
-    Status = Net80211pJoinBss(Link,
-                              LinkAddress,
-                              NET80211_TEST_SSID,
-                              NET80211_TEST_SSID_LENGTH,
-                              Net80211TestPassphrase,
-                              sizeof(Net80211TestPassphrase));
-
-    return Status;
+    return Net80211pStartScan(Link, &Scan);
 }
 
 NET80211_API
@@ -424,7 +418,7 @@ Return Value:
     PNET80211_LINK Net80211Link;
 
     Net80211Link = Link->DataLinkContext;
-    Net80211Link->State = Net80211StateStopped;
+    Net80211Link->State = Net80211StateUninitialized;
     NetSetLinkState(Link, FALSE, NET_SPEED_NONE);
     return;
 }
@@ -465,23 +459,14 @@ Return Value:
     }
 
     RtlZeroMemory(Net80211Link, sizeof(NET80211_LINK));
-    INITIALIZE_LIST_HEAD(&(Net80211Link->ManagementFrameList));
     Net80211Link->Lock = KeCreateQueuedLock();
     if (Net80211Link->Lock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeLinkEnd;
     }
 
-    Net80211Link->ManagementFrameEvent = KeCreateEvent(NULL);
-    if (Net80211Link->ManagementFrameEvent == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeLinkEnd;
-    }
-
-    Net80211Link->State = Net80211StateInitialized;
-    Net80211Link->BssState.Version = NET80211_BSS_INFORMATION_VERSION;
-    Net80211Link->PairwiseEncryption = Net80211EncryptionNone;
-    Net80211Link->GroupEncryption = Net80211EncryptionNone;
+    Net80211Link->State = Net80211StateUninitialized;
+    INITIALIZE_LIST_HEAD(&(Net80211Link->BssList));
     Link->DataLinkContext = Net80211Link;
     Status = STATUS_SUCCESS;
 
@@ -574,7 +559,9 @@ Return Value:
     //
 
     Net80211Link = Link->DataLinkContext;
-    if (Net80211Link->State != Net80211StateAssociated) {
+    if ((Net80211Link->State != Net80211StateAssociated) &&
+        (Net80211Link->State != Net80211StateEncrypted)) {
+
         return STATUS_NOT_READY;
     }
 
@@ -800,7 +787,7 @@ Return Value:
     // and an additional footer.
     //
 
-    if (Net80211Link->PairwiseEncryption == Net80211EncryptionWpa2Psk) {
+    if (Net80211Link->State == Net80211StateEncrypted) {
         PacketSizeInformation->HeaderSize += sizeof(NET80211_CCMP_HEADER);
         PacketSizeInformation->FooterSize += NET80211_CCMP_MIC_SIZE;
     }
@@ -875,60 +862,11 @@ Return Value:
     KSTATUS Status;
 
     Net80211Link = Link->DataLinkContext;
-    Net80211Link->BssState.Channel = Channel;
     DriverContext = Net80211Link->Properties.DriverContext;
     Status = Net80211Link->Properties.Interface.SetChannel(DriverContext,
                                                            Channel);
 
     return Status;
-}
-
-VOID
-Net80211pSetState (
-    PNET_LINK Link,
-    NET80211_STATE State
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sets the given link's 802.11 state.
-
-Arguments:
-
-    Link - Supplies a pointer to the link whose state is being updated.
-
-    State - Supplies the state to which the link is transitioning.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    PNET80211_BSS_INFORMATION BssState;
-    PVOID DriverContext;
-    PNET80211_LINK Net80211Link;
-    KSTATUS Status;
-
-    Net80211Link = Link->DataLinkContext;
-    Net80211Link->State = State;
-    BssState = &(Net80211Link->BssState);
-    DriverContext = Net80211Link->Properties.DriverContext;
-    Status = Net80211Link->Properties.Interface.SetState(DriverContext,
-                                                         State,
-                                                         BssState);
-
-    if (!KSUCCESS(Status)) {
-        RtlDebugPrint("802.11: Failed to set state %d: 0x%08x\n",
-                      State,
-                      Status);
-    }
-
-    return;
 }
 
 //
@@ -958,16 +896,8 @@ Return Value:
 
 {
 
-    if (Net80211Link->BssState.Rates != NULL) {
-        MmFreePagedPool(Net80211Link->BssState.Rates);
-    }
-
     if (Net80211Link->Properties.SupportedRates != NULL) {
         MmFreePagedPool(Net80211Link->Properties.SupportedRates);
-    }
-
-    if (Net80211Link->ManagementFrameEvent != NULL) {
-        KeDestroyEvent(Net80211Link->ManagementFrameEvent);
     }
 
     if (Net80211Link->Lock != NULL) {

@@ -101,6 +101,8 @@ Return Value:
 
     Net80211Link = Link->DataLinkContext;
 
+    ASSERT(Net80211Link->ActiveBss != NULL);
+
     //
     // Fill out the 802.11 headers for these data frames.
     //
@@ -164,7 +166,7 @@ Return Value:
         }
 
         RtlCopyMemory(Header->ReceiverAddress,
-                      Net80211Link->BssState.Bssid,
+                      Net80211Link->ActiveBss->State.Bssid,
                       NET80211_ADDRESS_SIZE);
 
         RtlCopyMemory(Header->TransmitterAddress,
@@ -175,7 +177,7 @@ Return Value:
         Header->SequenceControl <<=
                                NET80211_SEQUENCE_CONTROL_SEQUENCE_NUMBER_SHIFT;
 
-        if (Net80211Link->PairwiseEncryption != Net80211EncryptionNone) {
+        if (Net80211Link->State == Net80211StateEncrypted) {
             Header->FrameControl |= NET80211_FRAME_CONTROL_PROTECTED_FRAME;
             Net80211pEncryptPacket(Link->DataLinkContext, Packet);
         }
@@ -232,6 +234,7 @@ Return Value:
 
 {
 
+    ULONG BytesRemaining;
     UCHAR DestinationSap;
     PNET80211_DATA_FRAME_HEADER Header;
     PNET8022_LLC_HEADER LlcHeader;
@@ -240,6 +243,20 @@ Return Value:
     PNET8022_SNAP_EXTENSION SnapExtension;
     UCHAR SourceSap;
     KSTATUS Status;
+
+    //
+    // Make sure there are at least enough bytes for a data frame header.
+    //
+
+    BytesRemaining = Packet->FooterOffset - Packet->DataOffset;
+    if (BytesRemaining < sizeof(NET80211_DATA_FRAME_HEADER)) {
+        RtlDebugPrint("802.2: malformed data packet missing bytes for data "
+                      "frame header. Expected %d bytes, has %d.\n",
+                      sizeof(NET80211_DATA_FRAME_HEADER),
+                      BytesRemaining);
+
+        return;
+    }
 
     //
     // If the packet is protected, then decrypt it. The decryption leaves the
@@ -264,6 +281,20 @@ Return Value:
     }
 
     //
+    // Reject packets that do not have enough room for the LLC header.
+    //
+
+    BytesRemaining = Packet->FooterOffset - Packet->DataOffset;
+    if (BytesRemaining < sizeof(NET8022_LLC_HEADER)) {
+        RtlDebugPrint("802.2: malformed data packet missing bytes for LLC "
+                      "header. Expected %d bytes, has %d.\n",
+                      sizeof(NET8022_LLC_HEADER),
+                      BytesRemaining);
+
+        return;
+    }
+
+    //
     // Check the LLC header to look for the SNAP extension and unnumbered
     // control type. The 802.11 core does not handle any other packet types.
     //
@@ -284,6 +315,20 @@ Return Value:
     }
 
     Packet->DataOffset += sizeof(NET8022_LLC_HEADER);
+
+    //
+    // Reject packets that do not have enough room for the SNAP extension.
+    //
+
+    BytesRemaining = Packet->FooterOffset - Packet->DataOffset;
+    if (BytesRemaining < sizeof(NET8022_SNAP_EXTENSION)) {
+        RtlDebugPrint("802.2: malformed data packet missing bytes for SNAP "
+                      "extension. Expected %d bytes, has %d.\n",
+                      sizeof(NET8022_SNAP_EXTENSION),
+                      BytesRemaining);
+
+        return;
+    }
 
     //
     // Get the network protocol out of the SNAP extension.

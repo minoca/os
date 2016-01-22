@@ -3034,7 +3034,7 @@ Return Value:
     ASSERT(Process->ControllingTerminal == NULL);
 
     //
-    // There should at most one remaining page mapped: the shared user data
+    // There should be at most one remaining page mapped: the shared user data
     // page.
     //
 

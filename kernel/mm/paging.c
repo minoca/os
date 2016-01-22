@@ -1559,7 +1559,6 @@ Return Value:
     ULONG PageShift;
     PIMAGE_SECTION PreviousSection;
     PIMAGE_SECTION PreviousSibling;
-//    PKPROCESS Process;
     BOOL ThisPageWasDirty;
     BOOL TraverseChildren;
     PVOID VirtualAddress;

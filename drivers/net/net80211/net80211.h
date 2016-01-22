@@ -46,6 +46,27 @@ Author:
 #define NET80211_MAX_KEY_COUNT NET80211_CCMP_MAX_KEY_COUNT
 
 //
+// Define the maximum passphrase supported by 802.11 encryption. WPA2-PSK has
+// a maximum of 64 characters. This is internal as it may change over time.
+//
+
+#define NET80211_MAX_PASSPHRASE_LENGTH 64
+
+//
+// Define the set of scan flags.
+//
+
+#define NET80211_SCAN_FLAG_BACKGROUND 0x00000001
+#define NET80211_SCAN_FLAG_BROADCAST  0x00000002
+#define NET80211_SCAN_FLAG_JOIN       0x00000004
+
+//
+// Define the default amount of time to wait on a channel during a scan.
+//
+
+#define NET80211_DEFAULT_SCAN_DWELL_TIME (100 * MICROSECONDS_PER_MILLISECOND)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -55,6 +76,49 @@ typedef enum _NET80211_ENCRYPTION_TYPE {
     Net80211EncryptionWpaPsk,
     Net80211EncryptionWpa2Psk
 } NET80211_ENCRYPTION_TYPE, *PNET80211_ENCRYPTION_TYPE;
+
+/*++
+
+Structure Description:
+
+    This structure defines the scan state for the 802.11 node.
+
+Members:
+
+    Link - Stores a pointer to the network link over which the scan will be
+        performed.
+
+    Flags - Stores a bitmask of flags that dictate the scan's behavior. See
+        NET80211_SCAN_FLAG_* for definitions.
+
+    Channel - Stores the current channel that is being scanned.
+
+    Bssid - Stores an optional BSSID to be used when scanning for a specific
+        BSS. This is only valid when the broadcast flag is not set.
+
+    SsidLength - Stores the number of characters in the SSID for which the scan
+        is searching.
+
+    Ssid - Stores the SSID of the ESS for which the scan is searching.
+
+    PassphraseLength - Stores the number of characters in the passphrase of the
+        ESS for which the scan is searching.
+
+    Passphrase - Stores the passphrase of the ESS for which the scan is
+        searching.
+
+--*/
+
+typedef struct _NET80211_SCAN_STATE {
+    PNET_LINK Link;
+    ULONG Flags;
+    ULONG Channel;
+    UCHAR Bssid[NET80211_ADDRESS_SIZE];
+    ULONG SsidLength;
+    UCHAR Ssid[NET80211_MAX_SSID_LENGTH];
+    ULONG PassphraseLength;
+    UCHAR Passphrase[NET80211_MAX_PASSPHRASE_LENGTH];
+} NET80211_SCAN_STATE, *PNET80211_SCAN_STATE;
 
 /*++
 
@@ -95,6 +159,73 @@ typedef struct _NET80211_KEY {
 
 Structure Description:
 
+    This structure defines the encryption information for a BSS.
+
+Members:
+
+    Pairwise - Stores the pairwise encryption algorithm.
+
+    Group - Stores the group encryption algorithm.
+
+    Keys - Stores an array of keys for an authenticated connection.
+
+    ApRsn - Stores a pointer to the RSN information gathered from the BSS's AP.
+
+    StationRsn - Stores a pointer to the local RSN information for this station.
+
+--*/
+
+typedef struct _NET80211_ENCRYPTION {
+    NET80211_ENCRYPTION_TYPE Pairwise;
+    NET80211_ENCRYPTION_TYPE Group;
+    PNET80211_KEY Keys[NET80211_MAX_KEY_COUNT];
+    PUCHAR ApRsn;
+    PUCHAR StationRsn;
+} NET80211_ENCRYPTION, *PNET80211_ENCRYPTION;
+
+/*++
+
+Structure Description:
+
+    This structure defines an available BSS that is within range of the 802.11
+    wireless device.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous BSS entries.
+
+    State - Stores the BSS state.
+
+    Encryption - Stores the encryption information for the BSS including the
+        active keys.
+
+    EapolHandle - Stores a pointer to the encryption handshake handle.
+
+    SsidLength - Stores the number of characters in the SSID.
+
+    Ssid - Stores the SSID for the BSS.
+
+    PassphraseLength - Stores the number of characters in the passphrase.
+
+    Passphrase - Stores the passphrase for the BSS.
+
+--*/
+
+typedef struct _NET80211_BSS_ENTRY {
+    LIST_ENTRY ListEntry;
+    NET80211_BSS State;
+    NET80211_ENCRYPTION Encryption;
+    HANDLE EapolHandle;
+    ULONG SsidLength;
+    UCHAR Ssid[NET80211_MAX_SSID_LENGTH];
+    ULONG PassphraseLength;
+    UCHAR Passphrase[NET80211_MAX_PASSPHRASE_LENGTH];
+} NET80211_BSS_ENTRY, *PNET80211_BSS_ENTRY;
+
+/*++
+
+Structure Description:
+
     This structure defines link information that is private to the 802.11 core.
 
 Members:
@@ -106,22 +237,12 @@ Members:
     Lock - Stores a pointer to a queued lock that synchronizes access to the
         802.11 link structure.
 
-    ManagementFrameEvent - Stores an event that is signaled when an expected
-        management frame arrives.
+    BssList - Stores a list of BSSs that are within range of this 802.11 device.
 
-    ManagementFrameList - Stores the list of saved received management frames.
-
-    BssState - Stores state information for the BSS to which this link is
-        associated.
+    ActiveBss - Stores a pointer to the entry of the BSS to which the link is
+        connected.
 
     Properites - Stores the 802.11 link properties.
-
-    GroupEncryption - Stores the group encryption policy for the BSS.
-
-    PairwiseEncryption - Stores the pairwise encryption policy for the BSS.
-
-    Keys - Stores an array of pointers to keys used for encrypting and
-        decrypting packets.
 
 --*/
 
@@ -129,13 +250,9 @@ typedef struct _NET80211_LINK {
     NET80211_STATE State;
     volatile ULONG SequenceNumber;
     PQUEUED_LOCK Lock;
-    PKEVENT ManagementFrameEvent;
-    LIST_ENTRY ManagementFrameList;
-    NET80211_BSS_INFORMATION BssState;
+    LIST_ENTRY BssList;
+    PNET80211_BSS_ENTRY ActiveBss;
     NET80211_LINK_PROPERTIES Properties;
-    NET80211_ENCRYPTION_TYPE PairwiseEncryption;
-    NET80211_ENCRYPTION_TYPE GroupEncryption;
-    PNET80211_KEY Keys[NET80211_MAX_KEY_COUNT];
 } NET80211_LINK, *PNET80211_LINK;
 
 //
@@ -145,47 +262,6 @@ typedef struct _NET80211_LINK {
 //
 // -------------------------------------------------------- Function Prototypes
 //
-
-KSTATUS
-Net80211pJoinBss (
-    PNET_LINK Link,
-    PNET_LINK_ADDRESS_ENTRY LinkAddress,
-    PSTR Ssid,
-    ULONG SsidLength,
-    PUCHAR Passphrase,
-    ULONG PassphraseLength
-    );
-
-/*++
-
-Routine Description:
-
-    This routine attempts to join the link to the service set identified by the
-    given SSID.
-
-Arguments:
-
-    Link - Supplies a pointer to the link that is requesting to join a network.
-
-    LinkAddress - Supplies the link address for the link that wants to join the
-         network.
-
-    Ssid - Supplies the SSID of the network to join.
-
-    SsidLength - Supplies the length of the SSID string, including the NULL
-        terminator.
-
-    Passphrase - Supplies an optional pointer to the passphrase for the BSS.
-        This is only required if the BSS is secured. The passphrase may be a
-        sequence of bytes or an ASCII password.
-
-    PassphraseLength - Supplies the length of the passphrase, in bytes.
-
-Return Value:
-
-    Status code.
-
---*/
 
 VOID
 Net80211pProcessManagementFrame (
@@ -204,6 +280,59 @@ Arguments:
     Link - Supplies a pointer to the network link on which the frame arrived.
 
     Packet - Supplies a pointer to the network packet.
+
+Return Value:
+
+    None.
+
+--*/
+
+KSTATUS
+Net80211pStartScan (
+    PNET_LINK Link,
+    PNET80211_SCAN_STATE Parameters
+    );
+
+/*++
+
+Routine Description:
+
+    This routine starts a scan for one or more BSSs within range of this
+    station.
+
+Arguments:
+
+    Link - Supplies a pointer to the link on which to perform the scan.
+
+    Parameters - Supplies a pointer to a scan state used to initialize the
+        scan. This memory will not be referenced after the function returns,
+        so this may be a stack allocated structure.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+VOID
+Net80211pSetState (
+    PNET_LINK Link,
+    NET80211_STATE State
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the given link's 802.11 state by alerting the driver of
+    the state change and then performing any necessary actions based on the
+    state transition.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose state is being updated.
+
+    State - Supplies the state to which the link is transitioning.
 
 Return Value:
 
@@ -344,30 +473,6 @@ Return Value:
 
 --*/
 
-VOID
-Net80211pSetState (
-    PNET_LINK Link,
-    NET80211_STATE State
-    );
-
-/*++
-
-Routine Description:
-
-    This routine sets the given link's 802.11 state.
-
-Arguments:
-
-    Link - Supplies a pointer to the link whose state is being updated.
-
-    State - Supplies the state to which the link is transitioning.
-
-Return Value:
-
-    None.
-
---*/
-
 KSTATUS
 Net80211pEapolInitialize (
     VOID
@@ -403,6 +508,52 @@ Routine Description:
 Arguments:
 
     None.
+
+Return Value:
+
+    None.
+
+--*/
+
+KSTATUS
+Net80211pInitializeEncryption (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the 802.11 core to handle the completion of an
+    advanced encryption handshake.
+
+Arguments:
+
+    Link - Supplies a pointer to the link involved in the upcoming handshake.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+VOID
+Net80211pDestroyEncryption (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys the context used to handle encryption initialization.
+    It is not necessary to keep this context once the encrypted state is
+    reached.
+
+Arguments:
+
+    Link - Supplies a pointer to the link whose encryption state is to be
+        destroyed.
 
 Return Value:
 

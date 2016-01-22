@@ -679,8 +679,8 @@ typedef struct _ADDRESS_SPACE {
     PVOID Lock;
     LIST_ENTRY SectionListHead;
     PMEMORY_ACCOUNTING Accountant;
-    UINTN ResidentSet;
-    UINTN MaxResidentSet;
+    volatile UINTN ResidentSet;
+    volatile UINTN MaxResidentSet;
 } ADDRESS_SPACE, *PADDRESS_SPACE;
 
 //

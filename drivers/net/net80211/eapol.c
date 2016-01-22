@@ -632,7 +632,7 @@ KSTATUS
 Net80211pEapolConvertPassphraseToPsk (
     PUCHAR Passphrase,
     ULONG PassphraseLength,
-    PSTR Ssid,
+    PUCHAR Ssid,
     ULONG SsidLength,
     PUCHAR Psk,
     ULONG PskLength
@@ -736,7 +736,7 @@ Net80211pEapolDestroyContext (
     );
 
 VOID
-Net80211pEapolInstanceComplete (
+Net80211pEapolCompleteInstance (
     PEAPOL_CONTEXT Context,
     KSTATUS CompletionStatus
     );
@@ -878,7 +878,7 @@ Return Value:
 }
 
 KSTATUS
-Net80211pEapolInstanceCreate (
+Net80211pEapolCreateInstance (
     PEAPOL_CREATION_PARAMETERS Parameters,
     PHANDLE EapolHandle
     )
@@ -1114,7 +1114,7 @@ CreateEnd:
 }
 
 VOID
-Net80211pEapolInstanceDestroy (
+Net80211pEapolDestroyInstance (
     HANDLE EapolHandle
     )
 
@@ -2026,7 +2026,7 @@ SupplicantProcessKeyFrameEnd:
     //
 
     if (CompleteExchange != FALSE) {
-        Net80211pEapolInstanceComplete(Context, CompletionStatus);
+        Net80211pEapolCompleteInstance(Context, CompletionStatus);
     }
 
     if (KeyData != NULL) {
@@ -2262,7 +2262,7 @@ KSTATUS
 Net80211pEapolConvertPassphraseToPsk (
     PUCHAR Passphrase,
     ULONG PassphraseLength,
-    PSTR Ssid,
+    PUCHAR Ssid,
     ULONG SsidLength,
     PUCHAR Psk,
     ULONG PskLength
@@ -2283,7 +2283,7 @@ Arguments:
 
     Ssid - Supplies the SSID string for the BSS to which the passphrase belongs.
 
-    SsidLength - Supplies the length of the SSID, including the NULL terminator.
+    SsidLength - Supplies the length of the SSID.
 
     Psk - Supplies a pointer that receives the 256-bit PSK derived from the
         passphrase.
@@ -2310,12 +2310,6 @@ Return Value:
     ULONG XorIndex;
 
     PskBuffer = NULL;
-
-    //
-    // Stip off the NULL terminator from the SSID length.
-    //
-
-    SsidLength -= 1;
 
     //
     // Allocate a buffer to hold the SSID plus the PSK index. It must be at
@@ -3567,7 +3561,7 @@ Return Value:
 }
 
 VOID
-Net80211pEapolInstanceComplete (
+Net80211pEapolCompleteInstance (
     PEAPOL_CONTEXT Context,
     KSTATUS CompletionStatus
     )
