@@ -36,8 +36,8 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define SETUP_CACHE_BLOCK_SIZE 512
-#define SETUP_CACHE_BLOCK_SHIFT 9
+#define SETUP_CACHE_BLOCK_SIZE (64 * 1024)
+#define SETUP_CACHE_BLOCK_SHIFT 16
 
 #define SETUP_MAX_CACHE_SIZE (1024 * 1024 * 10)
 
@@ -292,8 +292,12 @@ Return Value:
 {
 
     ssize_t BytesRead;
+    size_t BytesThisRound;
     PSETUP_CACHE_DATA CacheData;
+    size_t CacheDataOffset;
+    ULONGLONG CacheOffset;
     PSETUP_HANDLE IoHandle;
+    PVOID ReadBuffer;
     size_t TotalBytesRead;
 
     IoHandle = Handle;
@@ -301,55 +305,81 @@ Return Value:
         return SetupOsRead(IoHandle->Handle, Buffer, ByteCount);
     }
 
-    assert(((ByteCount >> SETUP_CACHE_BLOCK_SHIFT) <<
-            SETUP_CACHE_BLOCK_SHIFT) == ByteCount);
-
     TotalBytesRead = 0;
     while (ByteCount != 0) {
-        CacheData = SetupGetCacheData(IoHandle, IoHandle->NextOffset);
+        CacheOffset = ALIGN_RANGE_DOWN(IoHandle->NextOffset,
+                                       SETUP_CACHE_BLOCK_SIZE);
+
+        CacheDataOffset = IoHandle->NextOffset - CacheOffset;
+        BytesThisRound = SETUP_CACHE_BLOCK_SIZE - CacheDataOffset;
+        if (BytesThisRound > ByteCount) {
+            BytesThisRound = ByteCount;
+        }
+
+        CacheData = SetupGetCacheData(IoHandle, CacheOffset);
         if (CacheData != NULL) {
-            memcpy(Buffer, CacheData->Data, SETUP_CACHE_BLOCK_SIZE);
+            memcpy(Buffer, CacheData->Data + CacheDataOffset, BytesThisRound);
 
         } else {
-            if (IoHandle->NextOffset != IoHandle->NextOsOffset) {
+            if (IoHandle->NextOsOffset != CacheOffset) {
                 IoHandle->NextOsOffset = SetupOsSeek(IoHandle->Handle,
-                                                     IoHandle->NextOffset);
+                                                     CacheOffset);
 
-                if (IoHandle->NextOsOffset != IoHandle->NextOffset) {
+                if (IoHandle->NextOsOffset != CacheOffset) {
 
                     assert(FALSE);
 
+                    TotalBytesRead = -1;
+                    break;
+                }
+            }
+
+            //
+            // Read directly into the destination buffer, or allocate a new
+            // buffer if the destination is too small.
+            //
+
+            ReadBuffer = Buffer;
+            if (BytesThisRound != SETUP_CACHE_BLOCK_SIZE) {
+                ReadBuffer = malloc(SETUP_CACHE_BLOCK_SIZE);
+                if (ReadBuffer == NULL) {
+                    TotalBytesRead = -1;
                     break;
                 }
             }
 
             BytesRead = SetupOsRead(IoHandle->Handle,
-                                    Buffer,
+                                    ReadBuffer,
                                     SETUP_CACHE_BLOCK_SIZE);
 
             //
-            // Allow a zero read in case the disk is actually a file that
+            // Allow a partial read in case the disk is actually a file that
             // hasn't grown all the way out.
             //
 
-            if (BytesRead == 0) {
-                memset(Buffer, 0, SETUP_CACHE_BLOCK_SIZE);
-
-            } else if (BytesRead != SETUP_CACHE_BLOCK_SIZE) {
-
-                assert(FALSE);
-
+            if (BytesRead < 0) {
+                perror("Read error");
+                TotalBytesRead = -1;
                 break;
+
+            } else if (BytesRead < SETUP_CACHE_BLOCK_SIZE) {
+                memset(ReadBuffer + BytesRead,
+                       0,
+                       SETUP_CACHE_BLOCK_SIZE - BytesRead);
             }
 
             IoHandle->NextOsOffset += BytesRead;
-            SetupAddCacheData(IoHandle, IoHandle->NextOffset, Buffer, FALSE);
+            SetupAddCacheData(IoHandle, CacheOffset, ReadBuffer, FALSE);
+            if (ReadBuffer != Buffer) {
+                memcpy(Buffer, ReadBuffer +CacheDataOffset, BytesThisRound);
+                free(ReadBuffer);
+            }
         }
 
-        IoHandle->NextOffset += SETUP_CACHE_BLOCK_SIZE;
-        Buffer += SETUP_CACHE_BLOCK_SIZE;
-        ByteCount -= SETUP_CACHE_BLOCK_SIZE;
-        TotalBytesRead += SETUP_CACHE_BLOCK_SIZE;
+        IoHandle->NextOffset += BytesThisRound;
+        Buffer += BytesThisRound;
+        ByteCount -= BytesThisRound;
+        TotalBytesRead += BytesThisRound;
     }
 
     return TotalBytesRead;
@@ -386,8 +416,13 @@ Return Value:
 
 {
 
+    size_t BytesRead;
+    size_t BytesThisRound;
     PSETUP_CACHE_DATA CacheData;
+    size_t CacheDataOffset;
+    ULONGLONG CacheOffset;
     PSETUP_HANDLE IoHandle;
+    PVOID ReadBuffer;
     size_t TotalBytesWritten;
 
     IoHandle = Handle;
@@ -395,24 +430,95 @@ Return Value:
         return SetupOsWrite(IoHandle->Handle, Buffer, ByteCount);
     }
 
-    assert(((ByteCount >> SETUP_CACHE_BLOCK_SHIFT) <<
-            SETUP_CACHE_BLOCK_SHIFT) == ByteCount);
-
+    ReadBuffer = NULL;
     TotalBytesWritten = 0;
     while (ByteCount != 0) {
-        CacheData = SetupGetCacheData(IoHandle, IoHandle->NextOffset);
+        CacheOffset = ALIGN_RANGE_DOWN(IoHandle->NextOffset,
+                                       SETUP_CACHE_BLOCK_SIZE);
+
+        CacheDataOffset = IoHandle->NextOffset - CacheOffset;
+        BytesThisRound = SETUP_CACHE_BLOCK_SIZE - CacheDataOffset;
+        if (BytesThisRound > ByteCount) {
+            BytesThisRound = ByteCount;
+        }
+
+        CacheData = SetupGetCacheData(IoHandle, CacheOffset);
         if (CacheData != NULL) {
-            memcpy(CacheData->Data, Buffer, SETUP_CACHE_BLOCK_SIZE);
+            memcpy(CacheData->Data + CacheDataOffset, Buffer, BytesThisRound);
             CacheData->Dirty = TRUE;
 
         } else {
-            SetupAddCacheData(IoHandle, IoHandle->NextOffset, Buffer, TRUE);
+
+            //
+            // The block was not in the cache. If it's a complete block, just
+            // slam it in.
+            //
+
+            if ((BytesThisRound == SETUP_CACHE_BLOCK_SIZE) &&
+                (CacheDataOffset == 0)) {
+
+                SetupAddCacheData(IoHandle, CacheOffset, Buffer, TRUE);
+
+            //
+            // Go read the data first, then do the partial write.
+            //
+
+            } else {
+                if (IoHandle->NextOsOffset != CacheOffset) {
+                    IoHandle->NextOsOffset = SetupOsSeek(IoHandle->Handle,
+                                                         CacheOffset);
+
+                    if (IoHandle->NextOsOffset != CacheOffset) {
+
+                        assert(FALSE);
+
+                        TotalBytesWritten = -1;
+                        break;
+                    }
+                }
+
+                if (ReadBuffer == NULL) {
+                    ReadBuffer = malloc(SETUP_CACHE_BLOCK_SIZE);
+                    if (ReadBuffer == NULL) {
+                        TotalBytesWritten = -1;
+                        break;
+                    }
+                }
+
+                BytesRead = SetupOsRead(IoHandle->Handle,
+                                        ReadBuffer,
+                                        SETUP_CACHE_BLOCK_SIZE);
+
+                //
+                // Allow a partial read in case the disk is actually a file that
+                // hasn't grown all the way out.
+                //
+
+                if (BytesRead < 0) {
+                    perror("Read error");
+                    TotalBytesWritten = -1;
+                    break;
+
+                } else if (BytesRead < SETUP_CACHE_BLOCK_SIZE) {
+                    memset(ReadBuffer + BytesRead,
+                           0,
+                           SETUP_CACHE_BLOCK_SIZE - BytesRead);
+                }
+
+                IoHandle->NextOsOffset += BytesRead;
+                memcpy(ReadBuffer + CacheDataOffset, Buffer, BytesThisRound);
+                SetupAddCacheData(IoHandle, CacheOffset, ReadBuffer, TRUE);
+            }
         }
 
-        IoHandle->NextOffset += SETUP_CACHE_BLOCK_SIZE;
-        Buffer += SETUP_CACHE_BLOCK_SIZE;
-        ByteCount -= SETUP_CACHE_BLOCK_SIZE;
-        TotalBytesWritten += SETUP_CACHE_BLOCK_SIZE;
+        IoHandle->NextOffset += BytesThisRound;
+        Buffer += BytesThisRound;
+        ByteCount -= BytesThisRound;
+        TotalBytesWritten += BytesThisRound;
+    }
+
+    if (ReadBuffer != NULL) {
+        free(ReadBuffer);
     }
 
     return TotalBytesWritten;
@@ -722,6 +828,8 @@ Return Value:
 {
 
     PSETUP_CACHE_DATA Data;
+
+    assert(ALIGN_RANGE_DOWN(Offset, SETUP_CACHE_BLOCK_SIZE) == Offset);
 
     //
     // If the cache is at it's max, evict and reclaim the least recently used
