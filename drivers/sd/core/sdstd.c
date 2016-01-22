@@ -279,64 +279,81 @@ Return Value:
         return STATUS_NO_MEDIA;
     }
 
-    if ((Controller->HostCapabilities & SD_MODE_ADMA2) == 0) {
-        return STATUS_NOT_SUPPORTED;
-    }
-
     if ((Controller->HostCapabilities & SD_MODE_AUTO_CMD12) == 0) {
         return STATUS_NOT_SUPPORTED;
     }
 
     //
-    // Create the DMA descriptor table if not already done.
+    // Enable ADMA2 mode if available.
     //
 
-    if (Controller->DmaDescriptorTable == NULL) {
-        IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS |
-                        IO_BUFFER_FLAG_MAP_NON_CACHED;
+    if ((Controller->HostCapabilities & SD_MODE_ADMA2) != 0) {
 
-        Controller->DmaDescriptorTable = MmAllocateNonPagedIoBuffer(
+        //
+        // Create the DMA descriptor table if not already done.
+        //
+
+        if (Controller->DmaDescriptorTable == NULL) {
+            IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS |
+                            IO_BUFFER_FLAG_MAP_NON_CACHED;
+
+            Controller->DmaDescriptorTable = MmAllocateNonPagedIoBuffer(
                                                 0,
                                                 MAX_ULONG,
                                                 4,
                                                 SD_ADMA2_DESCRIPTOR_TABLE_SIZE,
                                                 IoBufferFlags);
 
-        if (Controller->DmaDescriptorTable == NULL) {
-            return STATUS_INSUFFICIENT_RESOURCES;
+            if (Controller->DmaDescriptorTable == NULL) {
+                return STATUS_INSUFFICIENT_RESOURCES;
+            }
+
+            ASSERT(Controller->DmaDescriptorTable->FragmentCount == 1);
         }
 
-        ASSERT(Controller->DmaDescriptorTable->FragmentCount == 1);
-    }
+        Descriptor = Controller->DmaDescriptorTable->Fragment[0].VirtualAddress;
+        RtlZeroMemory(Descriptor, SD_ADMA2_DESCRIPTOR_TABLE_SIZE);
 
-    Descriptor = Controller->DmaDescriptorTable->Fragment[0].VirtualAddress;
-    RtlZeroMemory(Descriptor, SD_ADMA2_DESCRIPTOR_TABLE_SIZE);
+        //
+        // Enable ADMA2 in the host control register.
+        //
+
+        Value = SD_READ_REGISTER(Controller, SdRegisterHostControl);
+        Value &= ~SD_HOST_CONTROL_DMA_MODE_MASK;
+        Value |= SD_HOST_CONTROL_32BIT_ADMA2;
+        SD_WRITE_REGISTER(Controller, SdRegisterHostControl, Value);
+
+        //
+        // Read it to make sure the write stuck.
+        //
+
+        Value = SD_READ_REGISTER(Controller, SdRegisterHostControl);
+        if ((Value & SD_HOST_CONTROL_DMA_MODE_MASK) !=
+            SD_HOST_CONTROL_32BIT_ADMA2) {
+
+            return STATUS_NOT_SUPPORTED;
+        }
+
+        //
+        // Record that DMA is enabled in the host controller.
+        //
+
+        RtlAtomicOr32(&(Controller->Flags), SD_CONTROLLER_FLAG_DMA_ENABLED);
 
     //
-    // Enable ADMA2 in the host control register.
+    // Enable SDMA mode if ADMA2 mode is not around.
     //
 
-    Value = SD_READ_REGISTER(Controller, SdRegisterHostControl);
-    Value &= ~SD_HOST_CONTROL_DMA_MODE_MASK;
-    Value |= SD_HOST_CONTROL_32BIT_ADMA2;
-    SD_WRITE_REGISTER(Controller, SdRegisterHostControl, Value);
+    } else if ((Controller->HostCapabilities & SD_MODE_SDMA) != 0) {
+        Value = SD_READ_REGISTER(Controller, SdRegisterHostControl);
+        Value &= ~SD_HOST_CONTROL_DMA_MODE_MASK;
+        SD_WRITE_REGISTER(Controller, SdRegisterHostControl, Value);
+        RtlAtomicOr32(&(Controller->Flags), SD_CONTROLLER_FLAG_DMA_ENABLED);
 
-    //
-    // Read it to make sure the write stuck.
-    //
-
-    Value = SD_READ_REGISTER(Controller, SdRegisterHostControl);
-    if ((Value & SD_HOST_CONTROL_DMA_MODE_MASK) !=
-        SD_HOST_CONTROL_32BIT_ADMA2) {
-
+    } else {
         return STATUS_NOT_SUPPORTED;
     }
 
-    //
-    // Record that ADMA2 is enabled in the host controller.
-    //
-
-    RtlAtomicOr32(&(Controller->Flags), SD_CONTROLLER_FLAG_ADMA2_ENABLED);
     return STATUS_SUCCESS;
 }
 
@@ -394,6 +411,7 @@ Return Value:
 {
 
     ULONG BlockLength;
+    PHYSICAL_ADDRESS Boundary;
     SD_COMMAND Command;
     ULONG DescriptorCount;
     UINTN DescriptorSize;
@@ -466,67 +484,104 @@ Return Value:
     }
 
     //
-    // Fill out the DMA descriptors.
+    // Fill out the DMA descriptors for ADMA2.
     //
 
-    DmaDescriptorTable = Controller->DmaDescriptorTable;
-    DmaDescriptor = DmaDescriptorTable->Fragment[0].VirtualAddress;
-    DescriptorCount = 0;
     TransferSizeRemaining = TransferSize;
-    while ((TransferSizeRemaining != 0) &&
-           (DescriptorCount < SD_ADMA2_DESCRIPTOR_COUNT - 1)) {
+    if ((Controller->HostCapabilities & SD_MODE_ADMA2) != 0) {
+        DmaDescriptorTable = Controller->DmaDescriptorTable;
+        DmaDescriptor = DmaDescriptorTable->Fragment[0].VirtualAddress;
+        DescriptorCount = 0;
+        while ((TransferSizeRemaining != 0) &&
+               (DescriptorCount < SD_ADMA2_DESCRIPTOR_COUNT - 1)) {
 
-        ASSERT(FragmentIndex < IoBuffer->FragmentCount);
+            ASSERT(FragmentIndex < IoBuffer->FragmentCount);
 
-        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
+            Fragment = &(IoBuffer->Fragment[FragmentIndex]);
 
-        //
-        // This descriptor size is going to the the minimum of the total
-        // remaining size, the size that can fit in a DMA descriptor, and the
-        // remaining size of the fragment.
-        //
+            //
+            // This descriptor size is going to the the minimum of the total
+            // remaining size, the size that can fit in a DMA descriptor, and
+            // the remaining size of the fragment.
+            //
 
-        DescriptorSize = TransferSizeRemaining;
-        if (DescriptorSize > SD_ADMA2_MAX_TRANSFER_SIZE) {
-            DescriptorSize = SD_ADMA2_MAX_TRANSFER_SIZE;
+            DescriptorSize = TransferSizeRemaining;
+            if (DescriptorSize > SD_ADMA2_MAX_TRANSFER_SIZE) {
+                DescriptorSize = SD_ADMA2_MAX_TRANSFER_SIZE;
+            }
+
+            if (DescriptorSize > Fragment->Size - FragmentOffset) {
+                DescriptorSize = Fragment->Size - FragmentOffset;
+            }
+
+            TransferSizeRemaining -= DescriptorSize;
+            PhysicalAddress = Fragment->PhysicalAddress + FragmentOffset;
+
+            //
+            // Assert that the buffer is within the first 4GB.
+            //
+
+            ASSERT(((ULONG)PhysicalAddress == PhysicalAddress) &&
+                   ((ULONG)(PhysicalAddress + DescriptorSize) ==
+                    PhysicalAddress + DescriptorSize));
+
+            DmaDescriptor->Address = PhysicalAddress;
+            DmaDescriptor->Attributes = SD_ADMA2_VALID |
+                                        SD_ADMA2_ACTION_TRANSFER |
+                                        (DescriptorSize <<
+                                         SD_ADMA2_LENGTH_SHIFT);
+
+            DmaDescriptor += 1;
+            DescriptorCount += 1;
+            FragmentOffset += DescriptorSize;
+            if (FragmentOffset >= Fragment->Size) {
+                FragmentIndex += 1;
+                FragmentOffset = 0;
+            }
         }
 
+        //
+        // Mark the last DMA descriptor as the end of the transfer.
+        //
+
+        DmaDescriptor -= 1;
+        DmaDescriptor->Attributes |= SD_ADMA2_INTERRUPT | SD_ADMA2_END;
+        RtlMemoryBarrier();
+        TableAddress = (ULONG)(DmaDescriptorTable->Fragment[0].PhysicalAddress);
+        SD_WRITE_REGISTER(Controller, SdRegisterAdmaAddressLow, TableAddress);
+
+    //
+    // Perform a single SDMA transfer. The transfer will stop on SDMA
+    // boundaries, so limit this transfer to that next boundary.
+    //
+
+    } else {
+        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
+        PhysicalAddress = Fragment->PhysicalAddress + FragmentOffset;
+        Boundary = ALIGN_RANGE_DOWN(PhysicalAddress + SD_SDMA_MAX_TRANSFER_SIZE,
+                                    SD_SDMA_MAX_TRANSFER_SIZE);
+
+        DescriptorSize = Boundary - PhysicalAddress;
         if (DescriptorSize > Fragment->Size - FragmentOffset) {
             DescriptorSize = Fragment->Size - FragmentOffset;
         }
 
-        TransferSizeRemaining -= DescriptorSize;
-        PhysicalAddress = Fragment->PhysicalAddress + FragmentOffset;
+        if (DescriptorSize > TransferSizeRemaining) {
+            DescriptorSize = TransferSizeRemaining;
+        }
 
         //
-        // Assert that the buffer is within the first 4GB.
+        // The physical region had better be in the first 4GB.
         //
 
         ASSERT(((ULONG)PhysicalAddress == PhysicalAddress) &&
                ((ULONG)(PhysicalAddress + DescriptorSize) ==
                 PhysicalAddress + DescriptorSize));
 
-        DmaDescriptor->Address = PhysicalAddress;
-        DmaDescriptor->Attributes = SD_ADMA2_VALID |
-                                    SD_ADMA2_ACTION_TRANSFER |
-                                    (DescriptorSize << SD_ADMA2_LENGTH_SHIFT);
-
-        DmaDescriptor += 1;
-        DescriptorCount += 1;
-        FragmentOffset += DescriptorSize;
-        if (FragmentOffset >= Fragment->Size) {
-            FragmentIndex += 1;
-            FragmentOffset = 0;
-        }
+        SD_WRITE_REGISTER(Controller, SdRegisterSdmaAddress, PhysicalAddress);
+        TransferSizeRemaining -= DescriptorSize;
     }
 
-    //
-    // Mark the last DMA descriptor as the end of the transfer.
-    //
-
-    DmaDescriptor -= 1;
-    DmaDescriptor->Attributes |= SD_ADMA2_INTERRUPT | SD_ADMA2_END;
-    RtlMemoryBarrier();
     Command.ResponseType = SD_RESPONSE_R1;
     if ((Controller->Flags & SD_CONTROLLER_FLAG_HIGH_CAPACITY) != 0) {
         Command.CommandArgument = BlockOffset;
@@ -545,8 +600,6 @@ Return Value:
     Controller->IoCompletionRoutine = CompletionRoutine;
     Controller->IoCompletionContext = CompletionContext;
     Controller->IoRequestSize = Command.BufferSize;
-    TableAddress = (ULONG)(DmaDescriptorTable->Fragment[0].PhysicalAddress);
-    SD_WRITE_REGISTER(Controller, SdRegisterAdmaAddressLow, TableAddress);
     Status = Controller->FunctionTable.SendCommand(Controller,
                                                    Controller->ConsumerContext,
                                                    &Command);
@@ -636,6 +689,10 @@ Return Value:
         Capabilities = SD_READ_REGISTER(Controller, SdRegisterCapabilities);
         if ((Capabilities & SD_CAPABILITY_ADMA2) != 0) {
             Controller->HostCapabilities |= SD_MODE_ADMA2;
+        }
+
+        if ((Capabilities & SD_CAPABILITY_SDMA) != 0) {
+            Controller->HostCapabilities |= SD_MODE_SDMA;
         }
 
         if ((Capabilities & SD_CAPABILITY_HIGH_SPEED) != 0) {
@@ -942,14 +999,17 @@ Return Value:
 
             ASSERT(BlockCount <= SD_MAX_BLOCK_COUNT);
 
-            Value = SD_BLOCK_SIZE | (BlockCount << 16);
+            Value = SD_BLOCK_SIZE |
+                    SD_SIZE_SDMA_BOUNDARY_512K |
+                    (BlockCount << 16);
+
             SD_WRITE_REGISTER(Controller, SdRegisterBlockSizeCount, Value);
 
         } else {
 
             ASSERT(Command->BufferSize <= SD_BLOCK_SIZE);
 
-            Value = Command->BufferSize;
+            Value = Command->BufferSize | SD_SIZE_SDMA_BOUNDARY_512K;
             SD_WRITE_REGISTER(Controller, SdRegisterBlockSizeCount, Value);
         }
 
@@ -964,7 +1024,7 @@ Return Value:
         if (Command->Dma != FALSE) {
 
             ASSERT((Controller->Flags &
-                    SD_CONTROLLER_FLAG_ADMA2_ENABLED) != 0);
+                    SD_CONTROLLER_FLAG_DMA_ENABLED) != 0);
 
             ASSERT((Controller->Flags &
                     SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) != 0);
@@ -997,13 +1057,16 @@ Return Value:
     ASSERT((Controller->Flags &
             SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) == 0);
 
-    Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
+    Timeout = 0;
     Status = STATUS_TIMEOUT;
     do {
         Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
         if (Value != 0) {
             Status = STATUS_SUCCESS;
             break;
+
+        } else if (Timeout == 0) {
+            Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
         }
 
     } while (SdQueryTimeCounter(Controller) <= Timeout);
@@ -1438,13 +1501,17 @@ Return Value:
         // Get the interrupt status register.
         //
 
-        Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
+        Timeout = 0;
         Status = STATUS_TIMEOUT;
         do {
             Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
             if (Value != 0) {
                 Status = STATUS_SUCCESS;
                 break;
+            }
+
+            if (Timeout == 0) {
+                Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
             }
 
         } while (SdQueryTimeCounter(Controller) <= Timeout);
@@ -1553,13 +1620,17 @@ Return Value:
         // Get the interrupt status register.
         //
 
-        Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
+        Timeout = 0;
         Status = STATUS_TIMEOUT;
         do {
             Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
             if (Value != 0) {
                 Status = STATUS_SUCCESS;
                 break;
+            }
+
+            if (Timeout == 0) {
+                Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
             }
 
         } while (SdQueryTimeCounter(Controller) <= Timeout);

@@ -1411,16 +1411,19 @@ Return Value:
         NewChild->BlockShift = RtlCountTrailingZeros32(BlockSize);
 
         //
-        // Try to enable DMA, but it's okay if it doesn't succeed.
+        // Try to enable DMA, but it's okay if it doesn't succeed. DMA is
+        // currently disabled on the TI AM33xx until EDMA is implemented.
         //
 
-        Status = SdStandardInitializeDma(Device->Controller);
-        if (KSUCCESS(Status)) {
-            NewChild->Flags |= SD_OMAP4_CHILD_FLAG_DMA_SUPPORTED;
+        if (Device->Soc != SdTiSocAm335) {
+            Status = SdStandardInitializeDma(Device->Controller);
+            if (KSUCCESS(Status)) {
+                NewChild->Flags |= SD_OMAP4_CHILD_FLAG_DMA_SUPPORTED;
 
-        } else if (Status == STATUS_NO_MEDIA) {
-            Status = STATUS_SUCCESS;
-            goto ParentQueryChildrenEnd;
+            } else if (Status == STATUS_NO_MEDIA) {
+                Status = STATUS_SUCCESS;
+                goto ParentQueryChildrenEnd;
+            }
         }
 
         NewChild->Flags |= SD_OMAP4_CHILD_FLAG_MEDIA_PRESENT;

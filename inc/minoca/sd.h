@@ -84,6 +84,20 @@ Author:
 #define SD_MODE_AUTO_CMD12          0x0040
 #define SD_MODE_ADMA2               0x0080
 #define SD_MODE_RESPONSE136_SHIFTED 0x0100
+#define SD_MODE_SDMA                0x0200
+
+//
+// SD block size/count registeer definitions.
+//
+
+#define SD_SIZE_SDMA_BOUNDARY_4K (0x0 << 12)
+#define SD_SIZE_SDMA_BOUNDARY_8K (0x1 << 12)
+#define SD_SIZE_SDMA_BOUNDARY_16K (0x2 << 12)
+#define SD_SIZE_SDMA_BOUNDARY_32K (0x3 << 12)
+#define SD_SIZE_SDMA_BOUNDARY_64K (0x4 << 12)
+#define SD_SIZE_SDMA_BOUNDARY_128K (0x5 << 12)
+#define SD_SIZE_SDMA_BOUNDARY_256K (0x6 << 12)
+#define SD_SIZE_SDMA_BOUNDARY_512K (0x7 << 12)
 
 //
 // SD Command register definitions.
@@ -531,6 +545,12 @@ Author:
 #define SD_ADMA2_LENGTH_SHIFT 16
 
 //
+// Define the maximum transfer length for SDMA.
+//
+
+#define SD_SDMA_MAX_TRANSFER_SIZE 0x80000
+
+//
 // Define the maximum transfer length to put in one descriptor. Technically
 // it's 0xFFFF, but round it down to the nearest page for better arithmetic.
 //
@@ -551,7 +571,7 @@ Author:
 
 #define SD_CONTROLLER_FLAG_HIGH_CAPACITY          0x00000001
 #define SD_CONTROLLER_FLAG_MEDIA_PRESENT          0x00000002
-#define SD_CONTROLLER_FLAG_ADMA2_ENABLED          0x00000004
+#define SD_CONTROLLER_FLAG_DMA_ENABLED            0x00000004
 #define SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED 0x00000008
 #define SD_CONTROLLER_FLAG_CRITICAL_MODE          0x00000010
 
