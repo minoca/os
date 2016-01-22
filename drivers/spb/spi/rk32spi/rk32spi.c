@@ -688,11 +688,20 @@ Return Value:
 {
 
     PRK32_SPI_CONTROLLER Controller;
+    ULONG Mask;
     ULONG Status;
 
     Controller = Context;
     Status = RK32_READ_SPI(Controller, Rk32SpiInterruptStatus);
     if (Status != 0) {
+
+        //
+        // Clear the bits out of the mask to avoid an interrupt storm.
+        //
+
+        Mask = RK32_READ_SPI(Controller, Rk32SpiInterruptMask);
+        Mask &= ~Status;
+        RK32_WRITE_SPI(Controller, Rk32SpiInterruptMask, Mask);
         RK32_WRITE_SPI(Controller, Rk32SpiInterruptClear, Status);
         RtlAtomicOr32(&(Controller->PendingInterrupts), Status);
         return InterruptStatusClaimed;
@@ -1500,9 +1509,6 @@ Return Value:
         //
 
         Controller->InterruptMask |= RK32_SPI_INTERRUPT_TX_EMPTY;
-        RK32_WRITE_SPI(Controller,
-                       Rk32SpiInterruptMask,
-                       Controller->InterruptMask);
     }
 
     //
@@ -1556,12 +1562,16 @@ TransferDataEnd:
         //
 
         Controller->InterruptMask &= ~RK32_SPI_INTERRUPT_TX_EMPTY;
-        RK32_WRITE_SPI(Controller,
-                       Rk32SpiInterruptMask,
-                       Controller->InterruptMask);
-
         Controller->Transfer = NULL;
     }
+
+    //
+    // Refresh the mask, as the ISR disables interrupts in the mask.
+    //
+
+    RK32_WRITE_SPI(Controller,
+                   Rk32SpiInterruptMask,
+                   Controller->InterruptMask);
 
     if ((KSUCCESS(Status)) && (TransferDone == FALSE)) {
         Status = STATUS_MORE_PROCESSING_REQUIRED;
