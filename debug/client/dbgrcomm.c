@@ -1821,6 +1821,7 @@ Return Value:
     PLIST_ENTRY CurrentModuleEntry;
     PSTR ModuleEnd;
     ULONG ModuleLength;
+    ULONGLONG Pc;
     INT Result;
     PSYMBOL_SEARCH_RESULT ResultValid;
     SYMBOL_SEARCH_RESULT SearchResult;
@@ -1923,22 +1924,23 @@ Return Value:
                 break;
 
             case SymbolResultData:
-                if (SearchResult.U.DataResult->LocationType !=
-                    DataLocationAbsoluteAddress) {
+                Pc = DbgGetPc(Context, &(Context->FrameRegisters)) -
+                     CurrentModule->BaseDifference;
 
-                    DbgOut("ERROR: Found data symbol with location type %d!\n",
-                           SearchResult.U.DataResult->LocationType);
+                Result = DbgGetDataSymbolAddress(Context,
+                                                 CurrentModule->Symbols,
+                                                 SearchResult.U.DataResult,
+                                                 Pc,
+                                                 &Address);
 
+                if (Result == 0) {
+                    DbgOut("%s!%s @ 0x%08x\n",
+                           CurrentModule->ModuleName,
+                           SearchResult.U.DataResult->Name,
+                           Address + CurrentModule->BaseDifference);
                 }
 
-                Address = SearchResult.U.DataResult->Location.Address +
-                          CurrentModule->BaseDifference;
-
-                DbgOut("%s!%s @ 0x%08x\n",
-                       CurrentModule->ModuleName,
-                       SearchResult.U.DataResult->Name,
-                       Address);
-
+                Result = TRUE;
                 break;
 
             case SymbolResultType:

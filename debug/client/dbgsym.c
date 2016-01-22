@@ -3152,6 +3152,7 @@ Return Value:
     PSTRUCTURE_MEMBER Member;
     PVOID NewData;
     ULONG NewDataSize;
+    CHAR OriginalCharacter;
     PTYPE_SYMBOL RelativeType;
     UINT ShiftAmount;
     INT Status;
@@ -3316,10 +3317,12 @@ Return Value:
                 Current += 1;
             }
 
+            OriginalCharacter = *Current;
             *Current = '\0';
-            Current += 1;
             if (Type->Type != DataTypeStructure) {
                 DbgOut("Error: %s is not a structure.\n", Type->Name);
+                Status = EINVAL;
+                goto GetStructureMemberEnd;
             }
 
             //
@@ -3391,6 +3394,7 @@ Return Value:
             }
 
             NewDataSize = DbgGetTypeSize(Type, 0);
+            *Current = OriginalCharacter;
 
         } else {
 

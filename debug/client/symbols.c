@@ -1593,7 +1593,7 @@ Return Value:
 
             } else {
 
-                assert (Query != NULL);
+                assert(Query != NULL);
 
                 //
                 // Check for a string-based match.
