@@ -121,6 +121,7 @@ emptyrd:
 	@echo Minoca > $@
 
 runtime/rpirt.ffs: runtime
+acpi/acpi.ffs: acpi
 
 postbuild: rpifw
 

@@ -113,6 +113,7 @@ emptyrd:
 	@echo Minoca > $@
 
 runtime/integrt.ffs: runtime
+acpi/acpi.ffs: acpi
 
 ##
 ## Manually copy to binroot, since the binplace variable isn't set for the

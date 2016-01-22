@@ -123,6 +123,7 @@ emptyrd:
 	@echo Minoca > $@
 
 runtime/rpi2rt.ffs: runtime
+acpi/acpi.ffs: acpi
 
 postbuild: rpi2fw
 

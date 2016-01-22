@@ -112,6 +112,7 @@ emptyrd:
 	@echo Minoca > $@
 
 runtime/bbonert.ffs: runtime
+acpi/acpi.ffs: acpi
 
 ##
 ## Handle any post build steps to fix up the firmware images.
