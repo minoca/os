@@ -124,16 +124,18 @@ Return Value:
     CallStackIndex += 1;
 
     //
-    // TODO: Handle leaf routines and break-ins at the start of routines.
-    //
-
-    //
     // Trace back through the stack. The two values on the stack before the
     // base pointer are the next base pointer and the return address. Save the
     // return address and carry on up the call stack.
     //
 
-    BasePointer = (PVOID)TrapFrame->R11;
+    if ((TrapFrame->Cpsr & PSR_FLAG_THUMB) != 0) {
+        BasePointer = (PVOID)TrapFrame->R7;
+
+    } else {
+        BasePointer = (PVOID)TrapFrame->R11;
+    }
+
     TopOfStack = (UINTN)Thread->KernelStack + Thread->KernelStackSize;
     while (BasePointer != 0) {
 

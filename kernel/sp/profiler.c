@@ -417,6 +417,7 @@ Return Value:
     ASSERT(KeGetRunLevel() >= RunLevelClock);
 
     if (SpEnabledFlags == 0) {
+        KdPollForBreakRequest();
         return;
     }
 
