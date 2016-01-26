@@ -74,6 +74,9 @@ Members:
 
     MaxCacheSize - Stores the maximum size the cache can grow, in entries.
 
+    CheckBlock - Stores a single block's worth of buffer space, used to verify
+        writes.
+
 --*/
 
 typedef struct _SETUP_HANDLE {
@@ -85,6 +88,7 @@ typedef struct _SETUP_HANDLE {
     LIST_ENTRY CacheLruList;
     UINTN CacheSize;
     UINTN MaxCacheSize;
+    PVOID CheckBlock;
 } SETUP_HANDLE, *PSETUP_HANDLE;
 
 /*++
@@ -156,6 +160,12 @@ SetupCompareCacheTreeNodes (
 //
 
 //
+// Set this boolean to verify all writes.
+//
+
+BOOL SetupVerifyWrites = TRUE;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -190,15 +200,18 @@ Return Value:
 
 {
 
+    UINTN AllocationSize;
     PSETUP_HANDLE IoHandle;
 
-    IoHandle = malloc(sizeof(SETUP_HANDLE));
+    AllocationSize = sizeof(SETUP_HANDLE) + SETUP_CACHE_BLOCK_SIZE;
+    IoHandle = malloc(AllocationSize);
     if (IoHandle == NULL) {
         errno = ENOMEM;
         return NULL;
     }
 
     memset(IoHandle, 0, sizeof(SETUP_HANDLE));
+    IoHandle->CheckBlock = (PVOID)(IoHandle + 1);
     if ((Destination->Type == SetupDestinationDisk) ||
         (Destination->Type == SetupDestinationPartition) ||
         (Destination->Type == SetupDestinationImage)) {
@@ -899,7 +912,13 @@ Return Value:
 
 {
 
+    PUCHAR Bytes;
     ssize_t BytesWritten;
+    UINTN Errors;
+    UINTN FirstBad;
+    UINTN Index;
+    UINTN LastBad;
+    PUCHAR ReadBytes;
 
     assert(Data->Dirty != FALSE);
 
@@ -918,6 +937,45 @@ Return Value:
     if (BytesWritten != SETUP_CACHE_BLOCK_SIZE) {
         fprintf(stderr, "Error: Write failed.\n");
         return -1;
+    }
+
+    if (SetupVerifyWrites != FALSE) {
+        Bytes = Data->Data;
+        ReadBytes = Handle->CheckBlock;
+        SetupOsSeek(Handle->Handle, Data->Offset);
+        SetupOsRead(Handle->Handle, ReadBytes, SETUP_CACHE_BLOCK_SIZE);
+        if (memcmp(ReadBytes, Bytes, SETUP_CACHE_BLOCK_SIZE) != 0) {
+            FirstBad = SETUP_CACHE_BLOCK_SIZE;
+            LastBad = 0;
+            Errors = 0;
+            for (Index = 0; Index < SETUP_CACHE_BLOCK_SIZE; Index += 1) {
+                if (Bytes[Index] != ReadBytes[Index]) {
+                    Errors += 1;
+                    if (Errors < 10) {
+                        fprintf(stderr,
+                                "    Offset %x: Got %02x, expected %02x\n",
+                                Index,
+                                ReadBytes[Index],
+                                Bytes[Index]);
+                    }
+
+                    if (Index < FirstBad) {
+                        FirstBad = Index;
+                    }
+
+                    if (Index > LastBad) {
+                        LastBad = Index;
+                    }
+                }
+            }
+
+            fprintf(stderr,
+                    "%d errors (offsets %x - %x) at offset %I64x\n",
+                    Errors,
+                    FirstBad,
+                    LastBad,
+                    Data->Offset);
+        }
     }
 
     Handle->NextOsOffset += SETUP_CACHE_BLOCK_SIZE;
