@@ -187,8 +187,10 @@ Return Value:
 {
 
     PFILE_OBJECT FileObject;
+    UINTN FlushCount;
     BOOL Modified;
     ULONGLONG OriginalOffset;
+    ULONG PageShift;
     KSTATUS Status;
 
     FileObject = Handle->PathPoint.PathEntry->FileObject;
@@ -212,6 +214,27 @@ Return Value:
     //
 
     if (IoContext->Write != FALSE) {
+
+        //
+        // In an effort to prevent runaway writers from causing the page cache
+        // to fill all of memory, ask the page cache if it's feeling
+        // uncomfortably dirty. If so, make this thread do some of the page
+        // cache's work before it can create its own junk.
+        //
+
+        if (IopIsPageCacheTooDirty() != FALSE) {
+            PageShift = MmPageShift();
+            FlushCount = PAGE_CACHE_DIRTY_PENANCE_PAGES;
+            if ((IoContext->SizeInBytes >> PageShift) >= FlushCount) {
+                FlushCount = (IoContext->SizeInBytes >> PageShift) + 1;
+            }
+
+            Status = IopFlushFileObjects(0, 0, &FlushCount);
+            if (!KSUCCESS(Status)) {
+                return Status;
+            }
+        }
+
         if (FileObject->Lock != NULL) {
             KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
         }
@@ -811,19 +834,6 @@ Return Value:
                 return STATUS_OUT_OF_BOUNDS;
             }
         }
-    }
-
-    //
-    // In an effort to prevent runaway writers from causing the page cache to
-    // fill all of memory, ask the page cache if it's feeling uncomfortably
-    // dirty. If so, make this a synchronized write to at least stop the
-    // bleeding. This does not set the metadata synchronized flag because that
-    // tends to cause very bad non-sequential I/O performance, which matters
-    // even on media like SD.
-    //
-
-    if (IopIsPageCacheTooDirty() != FALSE) {
-        IoContext->Flags |= IO_FLAG_DATA_SYNCHRONIZED;
     }
 
     //

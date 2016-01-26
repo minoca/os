@@ -1337,7 +1337,7 @@ Return Value:
     // to the device.
     //
 
-    Status = IopFlushFileObjects(Volume->Device.DeviceId, 0);
+    Status = IopFlushFileObjects(Volume->Device.DeviceId, 0, NULL);
     if (!KSUCCESS(Status)) {
         Volume->Flags &= ~VOLUME_FLAG_UNMOUNTING;
         IopSetDeviceProblem(&(Volume->Device),
@@ -1354,7 +1354,7 @@ Return Value:
     // flush once all the volumes are unmounted.
     //
 
-    Status = IopFlushFileObjects(TargetDevice->DeviceId, 0);
+    Status = IopFlushFileObjects(TargetDevice->DeviceId, 0, NULL);
     if (!KSUCCESS(Status)) {
         Volume->Flags &= ~VOLUME_FLAG_UNMOUNTING;
         IopSetDeviceProblem(&(Volume->Device),

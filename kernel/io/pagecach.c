@@ -1756,7 +1756,8 @@ IopFlushPageCacheEntries (
     PFILE_OBJECT FileObject,
     ULONGLONG Offset,
     ULONGLONG Size,
-    ULONG Flags
+    ULONG Flags,
+    PUINTN PageCount
     )
 
 /*++
@@ -1780,6 +1781,10 @@ Arguments:
 
     Flags - Supplies a bitmask of I/O flags. See IO_FLAG_* for definitions.
 
+    PageCount - Supplies an optional pointer describing how many pages to flush.
+        On output this value will be decreased by the number of pages actually
+        flushed. Supply NULL to flush all pages in the size range.
+
 Return Value:
 
     Status code.
@@ -1801,6 +1806,7 @@ Return Value:
     BOOL LockHeld;
     PRED_BLACK_TREE_NODE Node;
     BOOL PageCacheThread;
+    UINTN PagesFlushed;
     ULONG PageShift;
     ULONG PageSize;
     PAGE_CACHE_ENTRY SearchEntry;
@@ -1815,6 +1821,7 @@ Return Value:
     INITIALIZE_LIST_HEAD(&DestroyListHead);
     FlushBuffer = NULL;
     LockHeld = FALSE;
+    PagesFlushed = 0;
     PageShift = MmPageShift();
     Status = STATUS_SUCCESS;
 
@@ -2011,6 +2018,7 @@ Return Value:
         //
 
         } else {
+            PagesFlushed += 1;
             if (FlushSize == 0) {
                 AddCacheEntry = TRUE;
                 CacheEntryProcessed = TRUE;
@@ -2144,6 +2152,14 @@ Return Value:
         CacheEntry = NULL;
 
         //
+        // Stop if enough pages were flushed.
+        //
+
+        if ((PageCount != NULL) && (PagesFlushed >= *PageCount)) {
+            break;
+        }
+
+        //
         // Determine whether to move on to the next cache entry or not.
         //
 
@@ -2250,6 +2266,15 @@ FlushPageCacheEntriesEnd:
     //
 
     IopDestroyPageCacheEntries(&DestroyListHead, FALSE);
+    if (PageCount != NULL) {
+        if (PagesFlushed > *PageCount) {
+            *PageCount = 0;
+
+        } else {
+            *PageCount -= PagesFlushed;
+        }
+    }
+
     return Status;
 }
 
@@ -4188,7 +4213,7 @@ Return Value:
                 // page cache dirty again or that there are deleted files.
                 //
 
-                Status = IopFlushFileObjects(0, 0);
+                Status = IopFlushFileObjects(0, 0, NULL);
                 if (!KSUCCESS(Status)) {
                     if (FlushDirtyEntries != FALSE) {
                         RtlAtomicExchange32(&IoPageCacheFlushDirtyEntries,

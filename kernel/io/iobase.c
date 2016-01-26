@@ -867,7 +867,7 @@ Return Value:
         // device data that has no association with the file layer.
         //
 
-        Status = IopFlushFileObjects(0, IoFlags);
+        Status = IopFlushFileObjects(0, IoFlags, NULL);
         goto FlushEnd;
 
     //
@@ -913,7 +913,7 @@ Return Value:
             goto FlushEnd;
         }
 
-        Status = IopFlushFileObject(FileObject, Offset, Size, IoFlags);
+        Status = IopFlushFileObject(FileObject, Offset, Size, IoFlags, NULL);
         if (!KSUCCESS(Status)) {
             goto FlushEnd;
         }

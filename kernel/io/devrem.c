@@ -326,7 +326,8 @@ Return Value:
 
     IopFlushFileObjects(
                     Device->DeviceId,
-                    IO_FLAG_DATA_SYNCHRONIZED | IO_FLAG_METADATA_SYNCHRONIZED);
+                    IO_FLAG_DATA_SYNCHRONIZED | IO_FLAG_METADATA_SYNCHRONIZED,
+                    NULL);
 
     //
     // Release any lingering file objects that may be stuck open for this

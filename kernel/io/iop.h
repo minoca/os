@@ -225,6 +225,13 @@ Author:
 #define PAGE_CACHE_CLEAN_DELAY_MIN (5000 * MICROSECONDS_PER_MILLISECOND)
 
 //
+// Define the number of pages to clean if a random write stumbles into a page
+// cache that is too dirty.
+//
+
+#define PAGE_CACHE_DIRTY_PENANCE_PAGES 128
+
+//
 // The resource allocation work is currently assigned to the system work queue.
 //
 
@@ -2548,7 +2555,8 @@ IopFlushFileObject (
     PFILE_OBJECT FileObject,
     ULONGLONG Offset,
     ULONGLONG Size,
-    ULONG Flags
+    ULONG Flags,
+    PUINTN PageCount
     );
 
 /*++
@@ -2571,6 +2579,10 @@ Arguments:
 
     Flags - Supplies a bitmask of I/O flags. See IO_FLAG_* for definitions.
 
+    PageCount - Supplies an optional pointer describing how many pages to flush.
+        On output this value will be decreased by the number of pages actually
+        flushed. Supply NULL to flush all pages in the size range.
+
 Return Value:
 
     Status code.
@@ -2580,7 +2592,8 @@ Return Value:
 KSTATUS
 IopFlushFileObjects (
     DEVICE_ID DeviceId,
-    ULONG Flags
+    ULONG Flags,
+    PUINTN PageCount
     );
 
 /*++
@@ -2597,6 +2610,10 @@ Arguments:
         dirty file objects for all devices.
 
     Flags - Supplies a bitmask of I/O flags. See IO_FLAG_* for definitions.
+
+    PageCount - Supplies an optional pointer describing how many pages to flush.
+        On output this value will be decreased by the number of pages actually
+        flushed. Supply NULL to flush all pages.
 
 Return Value:
 
@@ -4872,7 +4889,8 @@ IopFlushPageCacheEntries (
     PFILE_OBJECT FileObject,
     ULONGLONG Offset,
     ULONGLONG Size,
-    ULONG Flags
+    ULONG Flags,
+    PUINTN PageCount
     );
 
 /*++
@@ -4895,6 +4913,10 @@ Arguments:
         of -1 to flush from the given offset to the end of the file.
 
     Flags - Supplies a bitmask of I/O flags. See IO_FLAG_* for definitions.
+
+    PageCount - Supplies an optional pointer describing how many pages to flush.
+        On output this value will be decreased by the number of pages actually
+        flushed. Supply NULL to flush all pages in the size range.
 
 Return Value:
 
