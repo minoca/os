@@ -375,15 +375,20 @@ Return Value:
     ULONGLONG UnmapEndOffset;
     ULONGLONG UnmapStartOffset;
 
-    ASSERT(IS_ALIGNED(Offset, MmPageSize()) != FALSE);
-    ASSERT(IS_ALIGNED(Size, MmPageSize()) != FALSE);
-    ASSERT((Offset + Size) > Offset);
-
-    PageShift = MmPageShift();
-    ReleaseSection = NULL;
     if (PageWasDirty != NULL) {
         *PageWasDirty = FALSE;
     }
+
+    if (LIST_EMPTY(&(ImageSectionList->ListHead))) {
+        return STATUS_SUCCESS;
+    }
+
+    PageShift = MmPageShift();
+    ReleaseSection = NULL;
+
+    ASSERT(IS_ALIGNED(Offset, MmPageSize()) != FALSE);
+    ASSERT(IS_ALIGNED(Size, MmPageSize()) != FALSE);
+    ASSERT((Offset + Size) > Offset);
 
     //
     // Iterate over the sections in the list. Sections are added to the list

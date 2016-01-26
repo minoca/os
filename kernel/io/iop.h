@@ -5168,8 +5168,8 @@ Return Value:
 
 BOOL
 IopLinkPageCacheEntries (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
-    PPAGE_CACHE_ENTRY LinkEntry
+    PPAGE_CACHE_ENTRY LowerEntry,
+    PPAGE_CACHE_ENTRY UpperEntry
     );
 
 /*++
@@ -5182,13 +5182,13 @@ Routine Description:
 
 Arguments:
 
-    PageCacheEntry - Supplies a pointer to the page cache entry whose physical
-        address is to be modified. The caller should ensure that its reference
-        on this entry does not come from an I/O buffer or else the physical
-        address in the I/O buffer would be invalid.
+    LowerEntry - Supplies a pointer to the lower (disk) level page cache entry
+        whose physical address is to be modified. The caller should ensure that
+        its reference on this entry does not come from an I/O buffer or else
+        the physical address in the I/O buffer would be invalid.
 
-    LinkEntry - Supplies a pointer to page cache entry that currently owns the
-        physical page that is to be shared.
+    UpperEntry - Supplies a pointer to the upper (file) page cache entry
+        that currently owns the physical page to be shared.
 
 Return Value:
 
