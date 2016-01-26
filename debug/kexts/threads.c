@@ -25,6 +25,7 @@ Environment:
 //
 
 #include <minoca/driver.h>
+#include <minoca/arm.h>
 #include "dbgext.h"
 
 #include <errno.h>
@@ -100,6 +101,7 @@ Return Value:
 
     ULONG AddressSize;
     ULONGLONG BasePointer;
+    ULONGLONG BasePointerAddress;
     ULONG BytesRead;
     PVOID Data;
     ULONG DataSize;
@@ -449,14 +451,14 @@ Return Value:
     case MACHINE_TYPE_ARM:
         Status = DbgReadMemory(Context,
                                TRUE,
-                               StackPointer + 32,
+                               StackPointer + 40,
                                AddressSize,
-                               &BasePointer,
+                               &InstructionPointer,
                                &BytesRead);
 
         if ((Status != 0) || (BytesRead != AddressSize)) {
-            DbgOut("Error: Could not get base pointer at 0x%08I64x.\n",
-                   StackPointer + 32);
+            DbgOut("Error: Could not get return address at 0x%08I64x.\n",
+                   StackPointer + 36);
 
             if (Status == 0) {
                 Status = EINVAL;
@@ -465,16 +467,21 @@ Return Value:
             return Status;
         }
 
+        BasePointerAddress = StackPointer + 32;
+        if ((InstructionPointer & ARM_THUMB_BIT) != 0) {
+            BasePointerAddress = StackPointer + 16;
+        }
+
         Status = DbgReadMemory(Context,
                                TRUE,
-                               StackPointer + 36,
+                               BasePointerAddress,
                                AddressSize,
-                               &InstructionPointer,
+                               &BasePointer,
                                &BytesRead);
 
         if ((Status != 0) || (BytesRead != AddressSize)) {
-            DbgOut("Error: Could not get return address at 0x%08I64x.\n",
-                   StackPointer + 36);
+            DbgOut("Error: Could not get base pointer at 0x%08I64x.\n",
+                   BasePointerAddress);
 
             if (Status == 0) {
                 Status = EINVAL;

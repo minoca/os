@@ -1375,7 +1375,9 @@ Return Value:
 
         FrameIndex += 1;
         if (SearchIndex != FrameIndex - 1) {
-            DbgOut("Stack frame loops.\n");
+            DbgOut("Stack frame loops, frame %I64x.\n",
+                   Frames[FrameIndex].FramePointer);
+
             break;
         }
     }
