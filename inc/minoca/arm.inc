@@ -264,6 +264,11 @@ Environment:
     .globl \FunctionName
     .cfi_startproc
     .cfi_same_value r14
+    .if THUMB
+        .cfi_def_cfa_register r7
+    .else
+        .cfi_def_cfa_register r11
+    .endif
     \FunctionName:
 .endm
 
