@@ -3209,9 +3209,7 @@ Return Value:
     //
 
     if ((LowerType == IoObjectBlockDevice) &&
-        ((UpperType == IoObjectRegularFile) ||
-         (UpperType == IoObjectSymbolicLink) ||
-         (UpperType == IoObjectSharedMemoryObject))) {
+        (IO_IS_CACHEABLE_FILE(UpperType))) {
 
         if (UpperEntry->BackingEntry == LowerEntry) {
             return TRUE;
@@ -3266,11 +3264,11 @@ Return Value:
     }
 
     //
-    // The lower entry better not be dirty, because it's about to get clobbered.
-    // This can be supported, but the accounting numbers may need updating.
+    // The upper entry better not be dirty, because the accounting numbers
+    // would be off otherwise, and it would result in a dirty non page owner.
     //
 
-    ASSERT((LowerEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
+    ASSERT((UpperEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
 
     //
     // Save the address of the physical page that is to be released and update
@@ -3923,18 +3921,14 @@ Return Value:
         ASSERT(LinkEntry->VirtualAddress == NewEntry->VirtualAddress);
 
         if ((LinkType == IoObjectBlockDevice) &&
-            ((NewType == IoObjectRegularFile) ||
-             (NewType == IoObjectSymbolicLink) ||
-             (NewType == IoObjectSharedMemoryObject))) {
+            (IO_IS_CACHEABLE_FILE(NewType))) {
 
             IoPageCacheEntryAddReference(LinkEntry);
             NewEntry->BackingEntry = LinkEntry;
 
         } else {
 
-            ASSERT(((LinkType == IoObjectRegularFile) ||
-                    (LinkType == IoObjectSymbolicLink) ||
-                    (LinkType == IoObjectSharedMemoryObject)) &&
+            ASSERT((IO_IS_CACHEABLE_FILE(LinkType)) &&
                    (NewType == IoObjectBlockDevice));
 
             IoPageCacheEntryAddReference(NewEntry);

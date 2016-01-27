@@ -286,21 +286,29 @@ Author:
     ((_PathPoint)->PathEntry == (_PathPoint)->MountPoint->TargetEntry)
 
 //
+// This macro determines whether this is a cacheable file-ish object. It
+// excludes block and character devices.
+//
+
+#define IO_IS_CACHEABLE_FILE(_IoObjectType)         \
+    ((_IoObjectType == IoObjectRegularFile) ||      \
+     (_IoObjectType == IoObjectSymbolicLink) ||     \
+     (_IoObjectType == IoObjectSharedMemoryObject))
+
+//
 // This macro determines whether or not a file type is cacheable.
 //
 
-#define IO_IS_OBJECT_TYPE_CACHEABLE(_IoObjectType)  \
+#define IO_IS_CACHEABLE_TYPE(_IoObjectType)         \
     ((_IoObjectType == IoObjectBlockDevice) ||      \
-     (_IoObjectType == IoObjectRegularFile) ||      \
-     (_IoObjectType == IoObjectSymbolicLink) ||     \
-     (_IoObjectType == IoObjectSharedMemoryObject))
+     IO_IS_CACHEABLE_FILE(_IoObjectType))
 
 //
 // This macro determines whether or not a file object is cacheable.
 //
 
 #define IO_IS_FILE_OBJECT_CACHEABLE(_FileObject)                             \
-    ((IO_IS_OBJECT_TYPE_CACHEABLE(_FileObject->Properties.Type) != FALSE) && \
+    ((IO_IS_CACHEABLE_TYPE(_FileObject->Properties.Type) != FALSE) &&        \
      ((_FileObject->Flags & FILE_OBJECT_FLAG_NON_CACHED) == 0))
 
 //

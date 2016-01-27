@@ -61,6 +61,10 @@ Members:
     CacheBuffer - Stores a pointer to the cache buffer to be used for the flush
         on synchronized writes.
 
+    CacheBufferOffset - Stores the file offset that the cache buffer begins at.
+        This may not be the file offset of the write if the first few pages
+        were page cache entry hits.
+
     BytesThisRound - Stores the number of bytes to be written during the
         current round of I/O.
 
@@ -78,6 +82,7 @@ typedef struct _IO_WRITE_CONTEXT {
     UINTN SourceOffset;
     PIO_BUFFER SourceBuffer;
     PIO_BUFFER CacheBuffer;
+    ULONGLONG CacheBufferOffset;
     ULONG BytesThisRound;
     ULONG PageByteOffset;
 } IO_WRITE_CONTEXT, *PIO_WRITE_CONTEXT;
@@ -103,7 +108,8 @@ IopHandleCacheWriteMiss (
     PFILE_OBJECT FileObject,
     PIO_WRITE_CONTEXT WriteContext,
     ULONG Flags,
-    ULONG TimeoutInMilliseconds
+    ULONG TimeoutInMilliseconds,
+    PBOOL WriteOut
     );
 
 KSTATUS
@@ -122,7 +128,8 @@ IopHandleCacheReadMiss (
 KSTATUS
 IopPerformCachedIoBufferWrite (
     PFILE_OBJECT FileObject,
-    PIO_CONTEXT IoContext
+    PIO_CONTEXT IoContext,
+    BOOL WriteOutNow
     );
 
 KSTATUS
@@ -197,7 +204,7 @@ Return Value:
 
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT((IoContext->Flags & IO_FLAG_NO_ALLOCATE) == 0);
-    ASSERT(IO_IS_OBJECT_TYPE_CACHEABLE(FileObject->Properties.Type) != FALSE);
+    ASSERT(IO_IS_CACHEABLE_TYPE(FileObject->Properties.Type) != FALSE);
 
     //
     // Get the current offset if an offset is not provided.
@@ -349,7 +356,7 @@ Return Value:
     IoObjectType = FileObject->Properties.Type;
 
     ASSERT(IoContext->Write == FALSE);
-    ASSERT(IO_IS_OBJECT_TYPE_CACHEABLE(IoObjectType) != FALSE);
+    ASSERT(IO_IS_CACHEABLE_TYPE(IoObjectType) != FALSE);
 
     switch (IoObjectType) {
     case IoObjectSharedMemoryObject:
@@ -414,9 +421,9 @@ Return Value:
     ASSERT(IoContext->Write != FALSE);
 
     IoObjectType = FileObject->Properties.Type;
-    if (IO_IS_OBJECT_TYPE_CACHEABLE(IoObjectType) == FALSE) {
+    if (IO_IS_CACHEABLE_TYPE(IoObjectType) == FALSE) {
 
-        ASSERT(IO_IS_OBJECT_TYPE_CACHEABLE(IoObjectType) != FALSE);
+        ASSERT(IO_IS_CACHEABLE_TYPE(IoObjectType) != FALSE);
 
         return STATUS_NOT_SUPPORTED;
     }
@@ -784,20 +791,20 @@ Return Value:
 
 {
 
+    UINTN AdjustedSize;
     BOOL CacheBacked;
-    UINTN CacheBufferSize;
-    PIO_BUFFER CacheIoBuffer;
     IO_CONTEXT CacheIoContext;
     ULONGLONG EndOffset;
     ULONGLONG FileSize;
+    UINTN FullPageSize;
     ULONGLONG PageAlignedOffset;
-    UINTN PageAlignedSize;
     ULONG PageByteOffset;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
     UINTN SizeInBytes;
     KSTATUS Status;
     IO_WRITE_CONTEXT WriteContext;
+    BOOL WriteOutNow;
 
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT(IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE);
@@ -813,13 +820,15 @@ Return Value:
            IO_FLAG_METADATA_SYNCHRONIZED);
 
     IoContext->BytesCompleted = 0;
-    CacheBufferSize = 0;
-    CacheIoBuffer = NULL;
     WriteContext.BytesCompleted = 0;
     WriteContext.CacheBuffer = NULL;
     PageByteOffset = 0;
     PageSize = MmPageSize();
     SizeInBytes = IoContext->SizeInBytes;
+    WriteOutNow = FALSE;
+    if ((IoContext->Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
+        WriteOutNow = TRUE;
+    }
 
     //
     // Do not allow the system to write beyond the end of block devices.
@@ -857,17 +866,12 @@ Return Value:
                                                    SizeInBytes);
 
         if (CacheBacked != FALSE) {
-            Status = IopPerformCachedIoBufferWrite(FileObject, IoContext);
+            Status = IopPerformCachedIoBufferWrite(FileObject,
+                                                   IoContext,
+                                                   WriteOutNow);
+
             goto PerformCachedWriteEnd;
         }
-
-        //
-        // Since the offset is aligned, copies to cache entries will start
-        // immediately. And the size remains the same. Never align a write size
-        // up; this should not write more than is prescribed.
-        //
-
-        PageAlignedSize = SizeInBytes;
 
     //
     // Otherwise, increase the number of bytes that need to be be written
@@ -877,10 +881,11 @@ Return Value:
 
     } else {
         PageByteOffset = IoContext->Offset - PageAlignedOffset;
-        PageAlignedSize = PageByteOffset + SizeInBytes;
 
         ASSERT(PageByteOffset < PageSize);
     }
+
+    AdjustedSize = SizeInBytes + PageByteOffset;
 
     //
     // If this is a synchronized operation, then the "bytes completed" reported
@@ -891,9 +896,11 @@ Return Value:
     //
 
     if ((IoContext->Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
-        CacheBufferSize = ALIGN_RANGE_UP(PageAlignedSize, PageSize);
-        CacheIoBuffer = MmAllocateUninitializedIoBuffer(CacheBufferSize, 0);
-        if (CacheIoBuffer == NULL) {
+        FullPageSize = ALIGN_RANGE_UP(AdjustedSize, PageSize);
+        WriteContext.CacheBuffer =
+                              MmAllocateUninitializedIoBuffer(FullPageSize, 0);
+
+        if (WriteContext.CacheBuffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto PerformCachedWriteEnd;
         }
@@ -910,7 +917,7 @@ Return Value:
     WriteContext.BytesRemaining = SizeInBytes;
     WriteContext.SourceOffset = 0;
     WriteContext.SourceBuffer = IoContext->IoBuffer;
-    WriteContext.CacheBuffer = CacheIoBuffer;
+    WriteContext.CacheBufferOffset = WriteContext.FileOffset;
     WriteContext.BytesThisRound = 0;
     WriteContext.PageByteOffset = PageByteOffset;
     while (WriteContext.BytesRemaining != 0) {
@@ -974,7 +981,8 @@ Return Value:
             Status = IopHandleCacheWriteMiss(FileObject,
                                              &WriteContext,
                                              IoContext->Flags,
-                                             IoContext->TimeoutInMilliseconds);
+                                             IoContext->TimeoutInMilliseconds,
+                                             &WriteOutNow);
 
             if (!KSUCCESS(Status)) {
                 goto PerformCachedWriteEnd;
@@ -994,17 +1002,32 @@ Return Value:
     // cache. Flush it out.
     //
 
-    if ((IoContext->Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
+    if (WriteOutNow != FALSE) {
 
-        ASSERT(WriteContext.CacheBuffer == CacheIoBuffer);
+        //
+        // The cache I/O buffer might start partially through this write if the
+        // first few page cache entries were hits.
+        //
 
-        CacheIoContext.IoBuffer = CacheIoBuffer;
-        CacheIoContext.Offset = PageAlignedOffset;
-        CacheIoContext.SizeInBytes = PageAlignedSize;
+        CacheIoContext.IoBuffer = WriteContext.CacheBuffer;
+        CacheIoContext.Offset = WriteContext.CacheBufferOffset;
+        CacheIoContext.SizeInBytes =
+                          AdjustedSize -
+                          (WriteContext.CacheBufferOffset - PageAlignedOffset);
+
+        ASSERT(MmGetIoBufferSize(CacheIoContext.IoBuffer) >=
+               CacheIoContext.SizeInBytes);
+
         CacheIoContext.Flags = IoContext->Flags;
         CacheIoContext.TimeoutInMilliseconds = IoContext->TimeoutInMilliseconds;
         CacheIoContext.Write = TRUE;
-        Status = IopPerformCachedIoBufferWrite(FileObject, &CacheIoContext);
+        Status = IopPerformCachedIoBufferWrite(FileObject,
+                                               &CacheIoContext,
+                                               WriteOutNow);
+
+        CacheIoContext.BytesCompleted +=
+                            WriteContext.CacheBufferOffset - PageAlignedOffset;
+
         if (CacheIoContext.BytesCompleted > WriteContext.BytesCompleted) {
             IoContext->BytesCompleted = WriteContext.BytesCompleted;
 
@@ -1026,7 +1049,7 @@ PerformCachedWriteEnd:
     // file size and notify the page cache that it's dirty.
     //
 
-    if ((IoContext->Flags & IO_FLAG_DATA_SYNCHRONIZED) == 0) {
+    if (WriteOutNow == FALSE) {
         if (IoContext->BytesCompleted == 0) {
             IoContext->BytesCompleted = WriteContext.BytesCompleted;
         }
@@ -1038,11 +1061,8 @@ PerformCachedWriteEnd:
         }
     }
 
-    ASSERT((WriteContext.CacheBuffer == NULL) ||
-           (WriteContext.CacheBuffer == CacheIoBuffer));
-
-    if (CacheIoBuffer != NULL) {
-        MmFreeIoBuffer(CacheIoBuffer);
+    if (WriteContext.CacheBuffer != NULL) {
+        MmFreeIoBuffer(WriteContext.CacheBuffer);
     }
 
     return Status;
@@ -1053,7 +1073,8 @@ IopHandleCacheWriteMiss (
     PFILE_OBJECT FileObject,
     PIO_WRITE_CONTEXT WriteContext,
     ULONG Flags,
-    ULONG TimeoutInMilliseconds
+    ULONG TimeoutInMilliseconds,
+    PBOOL WriteOut
     )
 
 /*++
@@ -1082,6 +1103,11 @@ Arguments:
         operation should be waited on before timing out. Use
         WAIT_TIME_INDEFINITE to wait forever on the I/O.
 
+    WriteOut - Supplies a pointer to a boolean set if the given I/O needs to
+        make it out to the driver now. This is set if a new portion of a file
+        is written, or left unchanged if the page does not need to be written
+        out now.
+
 Return Value:
 
     Status code.
@@ -1090,6 +1116,7 @@ Return Value:
 
 {
 
+    UINTN CacheBufferSize;
     BOOL Created;
     ULONGLONG FileOffset;
     PSHARED_EXCLUSIVE_LOCK IoLock;
@@ -1191,14 +1218,10 @@ Return Value:
                                   FALSE);
 
         //
-        // If this is a synchronized I/O operation, then prepare the cache
-        // buffer for the flush by adding in the page cache entry.
+        // If there's a cache buffer, add this page cache entry to it.
         //
 
-        if ((Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
-
-            ASSERT(WriteContext->CacheBuffer != NULL);
-
+        if (WriteContext->CacheBuffer != NULL) {
             MmIoBufferAppendPage(WriteContext->CacheBuffer,
                                  PageCacheEntry,
                                  NULL,
@@ -1377,15 +1400,37 @@ Return Value:
             }
 
             //
-            // If this is a synchronized I/O call then back the cache buffer
-            // with this new page cache entry. It will be used for the pending
-            // flush.
+            // This page cache entry was created, so if it's a cacheable file
+            // type, it will need to go down through the file system to ensure
+            // there's disk space allocated to it. Create a cache buffer if one
+            // has not been created yet.
             //
 
-            if ((Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
+            if (IO_IS_CACHEABLE_FILE(FileObject->Properties.Type)) {
+                *WriteOut = TRUE;
+                if (WriteContext->CacheBuffer == NULL) {
+                    CacheBufferSize = WriteContext->PageByteOffset +
+                                      WriteContext->BytesRemaining;
 
-                ASSERT(WriteContext->CacheBuffer != NULL);
+                    CacheBufferSize = ALIGN_RANGE_UP(CacheBufferSize, PageSize);
+                    WriteContext->CacheBuffer =
+                           MmAllocateUninitializedIoBuffer(CacheBufferSize, 0);
 
+                    if (WriteContext->CacheBuffer == NULL) {
+                        Status = STATUS_INSUFFICIENT_RESOURCES;
+                        goto HandleCacheWriteMissEnd;
+                    }
+
+                    WriteContext->CacheBufferOffset = WriteContext->FileOffset;
+                }
+            }
+
+            //
+            // Back the cache buffer with this page cache entry, since it will
+            // be flushed later.
+            //
+
+            if (WriteContext->CacheBuffer != NULL) {
                 MmIoBufferAppendPage(WriteContext->CacheBuffer,
                                      PageCacheEntry,
                                      NULL,
@@ -1502,14 +1547,10 @@ Return Value:
     WriteContext->BytesCompleted += WriteContext->BytesThisRound;
 
     //
-    // If this is a synchronized operation, then initialize the cache buffer
-    // with the cached page to prepare it for the flush.
+    // If there's a cache buffer, add this page cache entry to it.
     //
 
-    if ((Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
-
-        ASSERT(WriteContext->CacheBuffer != NULL);
-
+    if (WriteContext->CacheBuffer != NULL) {
         MmIoBufferAppendPage(WriteContext->CacheBuffer,
                              PageCacheEntry,
                              NULL,
@@ -1562,14 +1603,10 @@ Return Value:
     IO_CONTEXT ReadIoContext;
     KSTATUS Status;
 
-    ASSERT((FileObject->Properties.Type == IoObjectBlockDevice) ||
-           (FileObject->Properties.Type == IoObjectRegularFile) ||
-           (FileObject->Properties.Type == IoObjectSymbolicLink) ||
-           (FileObject->Properties.Type == IoObjectSharedMemoryObject));
-
     PageSize = MmPageSize();
     IoContext->BytesCompleted = 0;
 
+    ASSERT(IO_IS_CACHEABLE_TYPE(FileObject->Properties.Type));
     ASSERT(IS_ALIGNED(IoContext->Offset, PageSize) != FALSE);
 
     //
@@ -1717,7 +1754,8 @@ HandleDefaultCacheReadMissEnd:
 KSTATUS
 IopPerformCachedIoBufferWrite (
     PFILE_OBJECT FileObject,
-    PIO_CONTEXT IoContext
+    PIO_CONTEXT IoContext,
+    BOOL WriteOutNow
     )
 
 /*++
@@ -1734,6 +1772,9 @@ Arguments:
 
     IoContext - Supplies a pointer to the I/O context.
 
+    WriteOutNow - Supplies a boolean indicating whether to flush the data out
+        synchronously (TRUE) or just mark it dirty in the page cache (FALSE).
+
 Return Value:
 
     Status code.
@@ -1745,6 +1786,7 @@ Return Value:
     UINTN BufferOffset;
     UINTN BytesRemaining;
     UINTN BytesThisRound;
+    ULONGLONG FileOffset;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
     KSTATUS Status;
@@ -1775,7 +1817,7 @@ Return Value:
         // are about to be flushed. Otherwise mark them dirty.
         //
 
-        if ((IoContext->Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
+        if (WriteOutNow != FALSE) {
             IopMarkPageCacheEntryClean(PageCacheEntry, TRUE);
 
         } else {
@@ -1790,37 +1832,22 @@ Return Value:
     // If this is a synchronized I/O call, just flush the buffer immediately.
     //
 
-    if ((IoContext->Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
+    if (WriteOutNow != FALSE) {
         Status = IopPerformNonCachedWrite(FileObject, IoContext, NULL, TRUE);
 
         //
-        // If this did not write out all the bytes then the pages were
-        // incorrectly marked clean. Flip them back to being dirty now.
+        // If this did not write out all the bytes then some pages may be
+        // incorrectly marked clean, others may be beyond the end of the file
+        // and there's no disk space for them. Since it's not clear which ones
+        // are which, remove all entires at and above the given offset.
         //
 
-        if (IoContext->BytesCompleted != IoContext->SizeInBytes) {
-            BufferOffset = ALIGN_RANGE_DOWN(IoContext->BytesCompleted,
-                                            PageSize);
-
-            BytesRemaining = IoContext->SizeInBytes - BufferOffset;
-            while (BytesRemaining != 0) {
-                BytesThisRound = PageSize;
-                if (BytesThisRound > BytesRemaining) {
-                    BytesThisRound = BytesRemaining;
-                }
-
-                PageCacheEntry = MmGetIoBufferPageCacheEntry(
-                                                           IoContext->IoBuffer,
-                                                           BufferOffset);
-
-                IoMarkPageCacheEntryDirty(PageCacheEntry,
-                                          0,
-                                          BytesThisRound,
-                                          TRUE);
-
-                BufferOffset += BytesThisRound;
-                BytesRemaining -= BytesThisRound;
-            }
+        if (IoContext->BytesCompleted < IoContext->SizeInBytes) {
+            FileOffset = IoContext->Offset + IoContext->BytesCompleted;
+            FileOffset = ALIGN_RANGE_DOWN(FileOffset, PageSize);
+            IopEvictPageCacheEntries(FileObject,
+                                     BufferOffset,
+                                     PAGE_CACHE_EVICTION_FLAG_TRUNCATE);
         }
 
     //
@@ -1884,9 +1911,7 @@ Return Value:
 
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT(FileObject != NULL);
-    ASSERT((FileObject->Properties.Type == IoObjectBlockDevice) ||
-           (FileObject->Properties.Type == IoObjectRegularFile) ||
-           (FileObject->Properties.Type == IoObjectSymbolicLink));
+    ASSERT(IO_IS_CACHEABLE_TYPE(FileObject->Properties.Type));
 
     //
     // This routine assumes the file object's lock is held in shared or
@@ -2057,10 +2082,7 @@ Return Value:
     KSTATUS Status;
 
     ASSERT(IoContext->IoBuffer != NULL);
-    ASSERT((FileObject->Properties.Type == IoObjectBlockDevice) ||
-           (FileObject->Properties.Type == IoObjectRegularFile) ||
-           (FileObject->Properties.Type == IoObjectSymbolicLink));
-
+    ASSERT(IO_IS_CACHEABLE_TYPE(FileObject->Properties.Type));
     ASSERT(MmGetIoBufferSize(IoContext->IoBuffer) >= IoContext->SizeInBytes);
     ASSERT((FileObject->Lock == NULL) ||
            (KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE));
@@ -2101,15 +2123,36 @@ Return Value:
         Offset += PartialContext.BytesCompleted;
     }
 
+    BytesToWrite = 0;
+    if (IoContext->SizeInBytes > IoContext->BytesCompleted) {
+        BytesToWrite = IoContext->SizeInBytes - IoContext->BytesCompleted;
+    }
+
+    AlignedIoBufferSize = ALIGN_RANGE_DOWN(BytesToWrite, BlockSize);
+
     //
-    // With the first partial block handled, write as many full blocks as
-    // possible. Make sure there wasn't any underflow in the subtraction of the
-    // bytes written.
+    // Glom the last partial write onto the full blocks if:
+    // 1) There is a partial write at the end, and
+    // 2) The write goes beyond the end of the file, and
+    // 3) The supplied buffer is big enough to align up the next block.
     //
 
-    BytesToWrite = IoContext->SizeInBytes - IoContext->BytesCompleted;
-    if ((IoContext->SizeInBytes > IoContext->BytesCompleted) &&
-        (BytesToWrite >= BlockSize)) {
+    if (BytesToWrite > AlignedIoBufferSize) {
+        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+        if ((IoContext->Offset + BytesToWrite >= FileSize) &&
+            (MmGetIoBufferSize(IoContext->IoBuffer) >=
+             ALIGN_RANGE_UP(BytesToWrite, BlockSize))) {
+
+             AlignedIoBufferSize += BlockSize;
+        }
+    }
+
+    //
+    // With the first partial block handled, write as many full blocks as
+    // possible.
+    //
+
+    if (AlignedIoBufferSize >= BlockSize) {
 
         ASSERT(IS_ALIGNED(Offset, BlockSize) != FALSE);
 
@@ -2119,7 +2162,6 @@ Return Value:
         //
 
         AlignedOffset = Offset;
-        AlignedIoBufferSize = ALIGN_RANGE_DOWN(BytesToWrite, BlockSize);
         AlignedIoBuffer = IoContext->IoBuffer;
         MmIoBufferIncrementOffset(AlignedIoBuffer, IoContext->BytesCompleted);
 
@@ -2164,6 +2206,15 @@ Return Value:
             ASSERT(Parameters.IoBytesCompleted <= AlignedIoBufferSize);
             ASSERT(FileSize == Parameters.NewIoOffset);
 
+            //
+            // If the partial block at the end was glommed on to this write,
+            // then the file size might need to be adjusted down a little.
+            //
+
+            if (FileSize > Offset + BytesToWrite) {
+                FileSize = Offset + BytesToWrite;
+            }
+
             IopUpdateFileObjectFileSize(FileObject,
                                         FileSize,
                                         UpdateFileSize,
@@ -2176,7 +2227,10 @@ Return Value:
         }
 
         Offset = Parameters.NewIoOffset;
-        BytesToWrite = IoContext->SizeInBytes - IoContext->BytesCompleted;
+        BytesToWrite = 0;
+        if (IoContext->SizeInBytes > IoContext->BytesCompleted) {
+            BytesToWrite = IoContext->SizeInBytes - IoContext->BytesCompleted;
+        }
     }
 
     //
@@ -2186,9 +2240,7 @@ Return Value:
     // underflow in the subtraction of the bytes written.
     //
 
-    if ((IoContext->SizeInBytes > IoContext->BytesCompleted) &&
-        (BytesToWrite != 0)) {
-
+    if (BytesToWrite != 0) {
         PartialContext.IoBuffer = IoContext->IoBuffer;
         PartialContext.Offset = Offset;
         PartialContext.SizeInBytes = BytesToWrite;
@@ -2266,9 +2318,7 @@ Return Value:
     IRP_READ_WRITE Parameters;
     KSTATUS Status;
 
-    ASSERT((FileObject->Properties.Type == IoObjectBlockDevice) ||
-           (FileObject->Properties.Type == IoObjectRegularFile) ||
-           (FileObject->Properties.Type == IoObjectSymbolicLink));
+    ASSERT(IO_IS_CACHEABLE_TYPE(FileObject->Properties.Type));
 
     //
     // The lock really should be held exclusively, except that the page cache
