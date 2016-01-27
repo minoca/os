@@ -195,18 +195,27 @@ ifeq ($(REVISION),)
 REVISION := 0
 endif
 
-export REVISION
+BUILD_TIME ?= $(shell echo $$((`date "+%s"` - 978307200)))
+BUILD_TIME_STRING ?= "$(shell date "+%a %b %d %Y %H:%M:%S")"
+BUILD_STRING ?= "($(USERNAME))"
 
-BUILD_TIME := $(shell echo $$((`date "+%s"` - 978307200)))
-BUILD_TIME_STRING := "$(shell date "+%a %b %d %Y %H:%M:%S")"
-BUILD_STRING := "($(USERNAME))"
+##
+## Export time and revision variables so they don't get re-evaluated at every
+## recursive make.
+##
+
+export REVISION
+export REVISION_EXTRA
+export BUILD_TIME
+export BUILD_TIME_STRING
+export BUILD_STRING
 
 ##
 ## Define a file that gets touched to indicate that something has changed and
 ## images need to be rebuilt.
 ##
 
-LAST_UPDATE_FILE :=  $(OBJROOT)/last-update
+LAST_UPDATE_FILE := $(OBJROOT)/last-update
 UPDATE_LAST_UPDATE := date > $(LAST_UPDATE_FILE)
 
 ##
