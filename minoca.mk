@@ -195,6 +195,8 @@ ifeq ($(REVISION),)
 REVISION := 0
 endif
 
+export REVISION
+
 BUILD_TIME := $(shell echo $$((`date "+%s"` - 978307200)))
 BUILD_TIME_STRING := "$(shell date "+%a %b %d %Y %H:%M:%S")"
 BUILD_STRING := "($(USERNAME))"
