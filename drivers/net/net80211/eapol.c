@@ -2092,7 +2092,8 @@ Return Value:
     Flags = NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS |
             NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS |
             NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS |
-            NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS;
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS |
+            NET_ALLOCATE_BUFFER_FLAG_UNENCRYPTED;
 
     Packet = NULL;
     PacketSize = sizeof(EAPOL_KEY_FRAME) + KeyDataLength;
@@ -2106,6 +2107,14 @@ Return Value:
     if (!KSUCCESS(Status)) {
         goto SupplicantSendMessageEnd;
     }
+
+    //
+    // EAPOL packets may need to be sent while the transmit queue is paused.
+    // Force the transmission through.
+    //
+
+    Packet->Flags |= NET_PACKET_FLAG_FORCE_TRANSMIT |
+                     NET_PACKET_FLAG_UNENCRYPTED;
 
     //
     // Initialize the key frame.
@@ -2178,14 +2187,7 @@ Return Value:
 
 SupplicantSendMessageEnd:
     if (!KSUCCESS(Status)) {
-        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
-            Packet = LIST_VALUE(PacketList.Head.Next,
-                                NET_PACKET_BUFFER,
-                                ListEntry);
-
-            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
-            NetFreeBuffer(Packet);
-        }
+        NetDestroyBufferList(&PacketList);
     }
 
     return Status;

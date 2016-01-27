@@ -2707,7 +2707,6 @@ Return Value:
 
     USHORT CurrentIndex;
     USHORT DescriptorIndex;
-    PNET_PACKET_BUFFER Packet;
 
     ASSERT(KeIsQueuedLockHeld(Device->TransmitLock) != FALSE);
 
@@ -2741,14 +2740,7 @@ Return Value:
     // Destroy the list of packets waiting to be sent.
     //
 
-    while (NET_PACKET_LIST_EMPTY(&(Device->TransmitPacketList)) == FALSE) {
-        Packet = LIST_VALUE(Device->TransmitPacketList.Head.Next,
-                            NET_PACKET_BUFFER,
-                            ListEntry);
-
-        NET_REMOVE_PACKET_FROM_LIST(Packet, &(Device->TransmitPacketList));
-        NetFreeBuffer(Packet);
-    }
+    NetDestroyBufferList(&(Device->TransmitPacketList));
 
     //
     // Reset the counters in software and hardware based on the current index.

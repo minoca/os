@@ -1176,7 +1176,10 @@ Return Value:
     //
 
     Device->InitializationPhase = 0;
-    Net80211StopLink(Device->NetworkLink);
+    if (Device->NetworkLink != NULL) {
+        Net80211StopLink(Device->NetworkLink);
+    }
+
     return STATUS_SUCCESS;
 }
 

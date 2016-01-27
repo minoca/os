@@ -89,24 +89,48 @@ Return Value:
 
 {
 
+    PNET80211_BSS_ENTRY Bss;
     PLIST_ENTRY CurrentEntry;
+    BOOL DataPaused;
     PVOID DriverContext;
     PNET80211_DATA_FRAME_HEADER Header;
     ULONG Index;
     PNET8022_LLC_HEADER LlcHeader;
     PNET80211_LINK Net80211Link;
     PNET_PACKET_BUFFER Packet;
+    NET_PACKET_LIST PausedPacketList;
     PNET8022_SNAP_EXTENSION SnapExtension;
     KSTATUS Status;
 
     Net80211Link = Link->DataLinkContext;
 
-    ASSERT(Net80211Link->ActiveBss != NULL);
+    //
+    // Get the active BSS in order to determine the correct receiver address
+    // and whether or not the data needs to be encrypted.
+    //
+
+    Bss = Net80211pGetBss(Net80211Link);
+    if (Bss == NULL) {
+        return STATUS_NOT_CONNECTED;
+    }
+
+    //
+    // Determine if transmission is paused. If it is, then the BSS may no
+    // longer be active. Fill out as much of the headers as possible and queue
+    // the packets for later.
+    //
+
+    DataPaused = FALSE;
+    if ((Net80211Link->Flags & NET80211_LINK_FLAG_DATA_PAUSED) != 0) {
+        DataPaused = TRUE;
+        NET_INITIALIZE_PACKET_LIST(&PausedPacketList);
+    }
 
     //
     // Fill out the 802.11 headers for these data frames.
     //
 
+    Status = STATUS_SUCCESS;
     CurrentEntry = PacketList->Head.Next;
     while (CurrentEntry != &(PacketList->Head)) {
         Packet = LIST_VALUE(CurrentEntry, NET_PACKET_BUFFER, ListEntry);
@@ -165,46 +189,83 @@ Return Value:
             }
         }
 
-        RtlCopyMemory(Header->ReceiverAddress,
-                      Net80211Link->ActiveBss->State.Bssid,
-                      NET80211_ADDRESS_SIZE);
-
         RtlCopyMemory(Header->TransmitterAddress,
                       SourcePhysicalAddress->Address,
                       NET80211_ADDRESS_SIZE);
+
+        //
+        // If data transmission is paused and this packet should not be forced
+        // down to the driver, add it to the local list of packets to send
+        // later. Do not fill out any BSS specific information or the sequence
+        // number. The BSS may change by the time data transmission is resumed.
+        //
+
+        if ((DataPaused != FALSE) &&
+            ((Packet->Flags & NET_PACKET_FLAG_FORCE_TRANSMIT) == 0)) {
+
+            NET_REMOVE_PACKET_FROM_LIST(Packet, PacketList);
+            NET_ADD_PACKET_TO_LIST(Packet, &PausedPacketList);
+            continue;
+        }
 
         Header->SequenceControl = Net80211pGetSequenceNumber(Link);
         Header->SequenceControl <<=
                                NET80211_SEQUENCE_CONTROL_SEQUENCE_NUMBER_SHIFT;
 
-        if (Net80211Link->State == Net80211StateEncrypted) {
+        RtlCopyMemory(Header->ReceiverAddress,
+                      Bss->State.Bssid,
+                      NET80211_ADDRESS_SIZE);
+
+        //
+        // Only encrypt the packet if transmission is not paused. If it is
+        // paused then this station may be in the middle of acquiring new keys
+        // for the BSS.
+        //
+
+        if (((Bss->Flags & NET80211_BSS_FLAG_ENCRYPT_DATA) != 0) &&
+            ((Packet->Flags & NET_PACKET_FLAG_UNENCRYPTED) == 0)) {
+
             Header->FrameControl |= NET80211_FRAME_CONTROL_PROTECTED_FRAME;
-            Net80211pEncryptPacket(Link->DataLinkContext, Packet);
+            Net80211pEncryptPacket(Link->DataLinkContext, Bss, Packet);
         }
     }
 
-    DriverContext = Link->Properties.DriverContext;
-    Status =  Link->Properties.Interface.Send(DriverContext, PacketList);
-
     //
-    // If the link layer returns that the resource is in use it means it was
-    // too busy to send all of the packets. Release the packets for it and
-    // convert this into a success status.
+    // If any packets were added to the local paused list, then add them to the
+    // link's list.
     //
 
-    if (Status == STATUS_RESOURCE_IN_USE) {
-        while (NET_PACKET_LIST_EMPTY(PacketList) == FALSE) {
-            Packet = LIST_VALUE(PacketList->Head.Next,
-                                NET_PACKET_BUFFER,
-                                ListEntry);
+    if ((DataPaused != FALSE) &&
+        (NET_PACKET_LIST_EMPTY(&PausedPacketList) == FALSE)) {
 
-            NET_REMOVE_PACKET_FROM_LIST(Packet, PacketList);
-            NetFreeBuffer(Packet);
-        }
+        KeAcquireQueuedLock(Net80211Link->Lock);
+        NET_APPEND_PACKET_LIST(&PausedPacketList,
+                               &(Net80211Link->PausedPacketList));
 
-        Status = STATUS_SUCCESS;
+        KeReleaseQueuedLock(Net80211Link->Lock);
     }
 
+    //
+    // Send any remaining packets down to the physical device layer.
+    //
+
+    if (NET_PACKET_LIST_EMPTY(PacketList) == FALSE) {
+        DriverContext = Link->Properties.DriverContext;
+        Status =  Link->Properties.Interface.Send(DriverContext, PacketList);
+
+        //
+        // If the link layer returns that the resource is in use it means it
+        // was too busy to send all of the packets. Release the packets for it
+        // and convert this into a success status.
+        //
+
+        if (Status == STATUS_RESOURCE_IN_USE) {
+            NetDestroyBufferList(PacketList);
+            Status = STATUS_SUCCESS;
+        }
+    }
+
+    Net80211pBssEntryReleaseReference(Bss);
     return Status;
 }
 
@@ -234,6 +295,7 @@ Return Value:
 
 {
 
+    PNET80211_BSS_ENTRY Bss;
     ULONG BytesRemaining;
     UCHAR DestinationSap;
     PNET80211_DATA_FRAME_HEADER Header;
@@ -265,7 +327,13 @@ Return Value:
 
     Header = Packet->Buffer + Packet->DataOffset;
     if ((Header->FrameControl & NET80211_FRAME_CONTROL_PROTECTED_FRAME) != 0) {
-        Status = Net80211pDecryptPacket(Link->DataLinkContext, Packet);
+        Bss = Net80211pGetBss(Link->DataLinkContext);
+        if (Bss == NULL) {
+            return;
+        }
+
+        Status = Net80211pDecryptPacket(Link->DataLinkContext, Bss, Packet);
+        Net80211pBssEntryReleaseReference(Bss);
         if (!KSUCCESS(Status)) {
             return;
         }
@@ -351,6 +419,139 @@ Return Value:
 
     Packet->DataOffset += sizeof(NET8022_SNAP_EXTENSION);
     NetworkEntry->Interface.ProcessReceivedData(Link, Packet);
+    return;
+}
+
+VOID
+Net80211pPauseDataFrames (
+    PNET_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine pauses the outgoing data frame traffic on the given network
+    link. It assumes that the 802.11 link's queued lock is held.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link on which to pause the
+        outgoing data frames.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_LINK Net80211Link;
+
+    Net80211Link = Link->DataLinkContext;
+
+    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+
+    Net80211Link->Flags |= NET80211_LINK_FLAG_DATA_PAUSED;
+    return;
+}
+
+VOID
+Net80211pResumeDataFrames (
+    PNET_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine resumes the outgoing data frame traffic on the given network
+    link, flushing any packets that were held while the link was paused. It
+    assumes that the 802.11 link's queued lock is held.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link on which to resume the
+        outgoing data frames.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_BSS_ENTRY Bss;
+    PLIST_ENTRY CurrentEntry;
+    PVOID DriverContext;
+    PNET80211_DATA_FRAME_HEADER Header;
+    PNET80211_LINK Net80211Link;
+    PNET_PACKET_BUFFER Packet;
+    NET_PACKET_LIST PacketList;
+    KSTATUS Status;
+
+    Net80211Link = Link->DataLinkContext;
+
+    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+
+    //
+    // There is nothing to be done if the data frames were not paused.
+    //
+
+    if ((Net80211Link->Flags & NET80211_LINK_FLAG_DATA_PAUSED) == 0) {
+        return;
+    }
+
+    //
+    // Otherwise attempt to flush the packets that were queued up.
+    //
+
+    Net80211Link->Flags &= ~NET80211_LINK_FLAG_DATA_PAUSED;
+    if (NET_PACKET_LIST_EMPTY(&(Net80211Link->PausedPacketList)) != FALSE) {
+        return;
+    }
+
+    NET_INITIALIZE_PACKET_LIST(&PacketList);
+    NET_APPEND_PACKET_LIST(&(Net80211Link->PausedPacketList), &PacketList);
+
+    //
+    // With the link lock held, just use the active BSS to fill out and encrypt
+    // the queued packets.
+    //
+
+    Bss = Net80211Link->ActiveBss;
+
+    ASSERT(Bss != NULL);
+
+    CurrentEntry = PacketList.Head.Next;
+    while (CurrentEntry != &(PacketList.Head)) {
+        Packet = LIST_VALUE(CurrentEntry, NET_PACKET_BUFFER, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        Header = Packet->Buffer + Packet->DataOffset;
+        RtlCopyMemory(Header->ReceiverAddress,
+                      Bss->State.Bssid,
+                      NET80211_ADDRESS_SIZE);
+
+        Header->SequenceControl = Net80211pGetSequenceNumber(Link);
+        Header->SequenceControl <<=
+                               NET80211_SEQUENCE_CONTROL_SEQUENCE_NUMBER_SHIFT;
+
+        if (((Bss->Flags & NET80211_BSS_FLAG_ENCRYPT_DATA) != 0) &&
+            ((Packet->Flags & NET_PACKET_FLAG_UNENCRYPTED) == 0)) {
+
+            Header->FrameControl |= NET80211_FRAME_CONTROL_PROTECTED_FRAME;
+            Net80211pEncryptPacket(Link->DataLinkContext, Bss, Packet);
+        }
+    }
+
+    DriverContext = Link->Properties.DriverContext;
+    Status = Link->Properties.Interface.Send(DriverContext, &PacketList);
+    if (Status == STATUS_RESOURCE_IN_USE) {
+        NetDestroyBufferList(&PacketList);
+    }
+
     return;
 }
 

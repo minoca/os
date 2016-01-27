@@ -312,6 +312,12 @@ Author:
 #define NET80211_CAPABILITY_FLAG_ESS                 0x0001
 
 //
+// Define the mask for the association ID. The upper 2 bits are always set.
+//
+
+#define NET80211_ASSOCIATION_ID_MASK 0x3FFF
+
+//
 // Define the set of 802.11 information element IDs.
 //
 

@@ -183,6 +183,7 @@ Author:
 #define NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS 0x00000002
 #define NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS   0x00000004
 #define NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS   0x00000008
+#define NET_ALLOCATE_BUFFER_FLAG_UNENCRYPTED             0x00000010
 
 //
 // Define the network packet flags.
@@ -194,6 +195,8 @@ Author:
 #define NET_PACKET_FLAG_IP_CHECKSUM_FAILED   0x00000008
 #define NET_PACKET_FLAG_UDP_CHECKSUM_FAILED  0x00000010
 #define NET_PACKET_FLAG_TCP_CHECKSUM_FAILED  0x00000020
+#define NET_PACKET_FLAG_FORCE_TRANSMIT       0x00000040
+#define NET_PACKET_FLAG_UNENCRYPTED          0x00000080
 
 //
 // Define the network link feature flags.
@@ -215,6 +218,12 @@ Author:
     (NET_LINK_CHECKSUM_FLAG_RECEIVE_IP_OFFLOAD |    \
      NET_LINK_CHECKSUM_FLAG_RECEIVE_UDP_OFFLOAD |   \
      NET_LINK_CHECKSUM_FLAG_RECEIVE_TCP_OFFLOAD)
+
+//
+// Define the network packet size information flags.
+//
+
+#define NET_PACKET_SIZE_FLAG_UNENCRYPTED 0x00000001
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -763,7 +772,8 @@ typedef
 VOID
 (*PNET_DATA_LINK_GET_PACKET_SIZE_INFORMATION) (
     PNET_LINK Link,
-    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation,
+    ULONG Flags
     );
 
 /*++
@@ -781,6 +791,9 @@ Arguments:
 
     PacketSizeInformation - Supplies a pointer to a structure that receives the
         link's data link layer packet size information.
+
+    Flags - Supplies a bitmask of flags indicating which packet size
+        information is desired. See NET_PACKET_SIZE_FLAG_* for definitions.
 
 Return Value:
 
@@ -3068,6 +3081,29 @@ Arguments:
 
     Buffer - Supplies a pointer to the buffer returned by the allocation
         routine.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+VOID
+NetDestroyBufferList (
+    PNET_PACKET_LIST BufferList
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys a list of network packet buffers, releasing all of
+    its associated resources, not including the buffer list structure.
+
+Arguments:
+
+    BufferList - Supplies a pointer to the buffer list to be destroyed.
 
 Return Value:
 

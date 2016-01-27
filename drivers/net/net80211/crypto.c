@@ -146,7 +146,6 @@ Return Value:
     ULONG AllocationSize;
     PNET80211_KEY Key;
     PNET80211_LINK Net80211Link;
-    PNET80211_KEY OldKey;
     KSTATUS Status;
 
     //
@@ -177,17 +176,20 @@ Return Value:
     //
 
     KeAcquireQueuedLock(Net80211Link->Lock);
+    if ((Net80211Link->ActiveBss == NULL) ||
+        (Net80211Link->State != Net80211StateAssociated)) {
 
-    ASSERT(Net80211Link->ActiveBss != NULL);
+        Status = STATUS_NOT_READY;
 
-    OldKey = Net80211Link->ActiveBss->Encryption.Keys[KeyId];
-    Net80211Link->ActiveBss->Encryption.Keys[KeyId] = Key;
-    KeReleaseQueuedLock(Net80211Link->Lock);
-    if (OldKey != NULL) {
-        MmFreePagedPool(OldKey);
+    } else {
+
+        ASSERT(Net80211Link->ActiveBss->Encryption.Keys[KeyId] == NULL);
+
+        Net80211Link->ActiveBss->Encryption.Keys[KeyId] = Key;
+        Status = STATUS_SUCCESS;
     }
 
-    Status = STATUS_SUCCESS;
+    KeReleaseQueuedLock(Net80211Link->Lock);
 
 SetKeyEnd:
     if (!KSUCCESS(Status)) {
@@ -201,7 +203,8 @@ SetKeyEnd:
 
 KSTATUS
 Net80211pInitializeEncryption (
-    PNET_LINK Link
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY Bss
     )
 
 /*++
@@ -215,6 +218,9 @@ Arguments:
 
     Link - Supplies a pointer to the link involved in the upcoming handshake.
 
+    Bss - Supplies a pointer to the BSS on which the encryption handshake will
+        take place.
+
 Return Value:
 
     Status code.
@@ -225,17 +231,20 @@ Return Value:
 
     ULONG ApRsnSize;
     NETWORK_ADDRESS AuthenticatorAddress;
-    PNET80211_BSS_ENTRY Bss;
-    PNET80211_LINK Net80211Link;
     EAPOL_CREATION_PARAMETERS Parameters;
     ULONG StationRsnSize;
     KSTATUS Status;
 
-    Net80211Link = Link->DataLinkContext;
-    Bss = Net80211Link->ActiveBss;
-
     ASSERT(Bss != NULL);
-    ASSERT(Bss->EapolHandle == INVALID_HANDLE);
+
+    //
+    // The BSS is good to go if there is alreayd an EAPOL instance associated
+    // with it.
+    //
+
+    if (Bss->EapolHandle != INVALID_HANDLE) {
+        return STATUS_SUCCESS;
+    }
 
     //
     // If there is no encryption required by the BSS or it is using the basic
@@ -291,7 +300,7 @@ Return Value:
 
 VOID
 Net80211pDestroyEncryption (
-    PNET_LINK Link
+    PNET80211_BSS_ENTRY Bss
     )
 
 /*++
@@ -304,8 +313,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link whose encryption state is to be
-        destroyed.
+    Bss - Supplies a pointer to the BSS on which encryption initialization took
+        place.
 
 Return Value:
 
@@ -314,12 +323,6 @@ Return Value:
 --*/
 
 {
-
-    PNET80211_BSS_ENTRY Bss;
-    PNET80211_LINK Net80211Link;
-
-    Net80211Link = Link->DataLinkContext;
-    Bss = Net80211Link->ActiveBss;
 
     ASSERT(Bss != NULL);
 
@@ -335,6 +338,7 @@ Return Value:
 KSTATUS
 Net80211pEncryptPacket (
     PNET80211_LINK Link,
+    PNET80211_BSS_ENTRY Bss,
     PNET_PACKET_BUFFER Packet
     )
 
@@ -349,6 +353,8 @@ Routine Description:
 Arguments:
 
     Link - Supplies a pointer to the 802.11 network link that owns the packet.
+
+    Bss - Supplies a pointer to the BSS over which this packet should be sent.
 
     Packet - Supplies a pointer to the packet to encrypt.
 
@@ -375,14 +381,12 @@ Return Value:
     PUCHAR PacketNumberArray;
     KSTATUS Status;
 
-    ASSERT(Link->ActiveBss != NULL);
-
     //
     // Use the default key.
     //
 
     KeyId = NET80211_DEFAULT_ENCRYPTION_KEY;
-    Key = Link->ActiveBss->Encryption.Keys[KeyId];
+    Key = Bss->Encryption.Keys[KeyId];
     if ((Key == NULL) || ((Key->Flags & NET80211_KEY_FLAG_TRANSMIT) == 0)) {
         RtlDebugPrint("802.11: Failed to find valid key for transmit.\n");
         Status = STATUS_INVALID_CONFIGURATION;
@@ -490,6 +494,7 @@ EncryptPacketEnd:
 KSTATUS
 Net80211pDecryptPacket (
     PNET80211_LINK Link,
+    PNET80211_BSS_ENTRY Bss,
     PNET_PACKET_BUFFER Packet
     )
 
@@ -504,6 +509,8 @@ Routine Description:
 Arguments:
 
     Link - Supplies a pointer to the 802.11 network link that owns the packet.
+
+    Bss - Supplies a pointer to the BSS over which this packet was received.
 
     Packet - Supplies a pointer to the packet to decrypt.
 
@@ -529,11 +536,6 @@ Return Value:
     PUCHAR PacketNumberArray;
     KSTATUS Status;
 
-    if (Link->ActiveBss == NULL) {
-        Status = STATUS_UNSUCCESSFUL;
-        goto DecryptPacketEnd;
-    }
-
     //
     // The start of the packet's valid data should point to the 802.11 header.
     //
@@ -551,7 +553,7 @@ Return Value:
     KeyId = (CcmpHeader->Flags & NET80211_CCMP_FLAG_KEY_ID_MASK) >>
             NET80211_CCMP_FLAG_KEY_ID_SHIFT;
 
-    Key = Link->ActiveBss->Encryption.Keys[KeyId];
+    Key = Bss->Encryption.Keys[KeyId];
     if (Key == NULL) {
         Status = STATUS_UNSUCCESSFUL;
         goto DecryptPacketEnd;

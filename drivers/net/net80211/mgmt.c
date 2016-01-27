@@ -202,6 +202,24 @@ Net80211pScanThread (
     );
 
 KSTATUS
+Net80211pPrepareForReconnect (
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY *Bss
+    );
+
+VOID
+Net80211pJoinBss (
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY Bss
+    );
+
+VOID
+Net80211pLeaveBss (
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY Bss
+    );
+
+KSTATUS
 Net80211pSendProbeRequest (
     PNET_LINK Link,
     PNET80211_SCAN_STATE Scan
@@ -215,7 +233,8 @@ Net80211pProcessProbeResponse (
 
 KSTATUS
 Net80211pSendAuthenticationRequest (
-    PNET_LINK Link
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY Bss
     );
 
 VOID
@@ -226,7 +245,8 @@ Net80211pProcessAuthenticationResponse (
 
 KSTATUS
 Net80211pSendAssociationRequest (
-    PNET_LINK Link
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY Bss
     );
 
 VOID
@@ -261,6 +281,16 @@ VOID
 Net80211pUpdateBssCache (
     PNET_LINK Link,
     PNET80211_PROBE_RESPONSE Response
+    );
+
+PNET80211_BSS_ENTRY
+Net80211pCopyBssEntry (
+    PNET80211_BSS_ENTRY Bss
+    );
+
+PNET80211_BSS_ENTRY
+Net80211pCreateBssEntry (
+    PUCHAR Bssid
     );
 
 VOID
@@ -320,7 +350,9 @@ Return Value:
 
     ULONG FrameSubtype;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
+    PNET80211_LINK Net80211Link;
 
+    Net80211Link = Link->DataLinkContext;
     Header = Packet->Buffer + Packet->DataOffset;
     FrameSubtype = NET80211_GET_FRAME_SUBTYPE(Header);
     switch (FrameSubtype) {
@@ -336,13 +368,33 @@ Return Value:
         Net80211pProcessAssociationResponse(Link, Packet);
         break;
 
+    case NET80211_MANAGEMENT_FRAME_SUBTYPE_DISASSOCIATION:
+        if ((Net80211Link->State != Net80211StateAssociated) &&
+            (Net80211Link->State != Net80211StateEncrypted)) {
+
+            break;
+        }
+
+        Net80211pSetState(Link, Net80211StateAssociating);
+        break;
+
+    case NET80211_MANAGEMENT_FRAME_SUBTYPE_DEAUTHENTICATION:
+        if ((Net80211Link->State != Net80211StateAssociating) &&
+            (Net80211Link->State != Net80211StateReassociating) &&
+            (Net80211Link->State != Net80211StateAssociated) &&
+            (Net80211Link->State != Net80211StateEncrypted)) {
+
+            break;
+        }
+
+        Net80211pSetState(Link, Net80211StateAuthenticating);
+        break;
+
     //
     // Ignore packets that are not yet handled.
     //
 
     case NET80211_MANAGEMENT_FRAME_SUBTYPE_REASSOCIATION_RESPONSE:
-    case NET80211_MANAGEMENT_FRAME_SUBTYPE_DISASSOCIATION:
-    case NET80211_MANAGEMENT_FRAME_SUBTYPE_DEAUTHENTICATION:
     case NET80211_MANAGEMENT_FRAME_SUBTYPE_BEACON:
     case NET80211_MANAGEMENT_FRAME_SUBTYPE_TIMING_ADVERTISEMENT:
     case NET80211_MANAGEMENT_FRAME_SUBTYPE_ATIM:
@@ -473,6 +525,118 @@ Return Value:
     return;
 }
 
+PNET80211_BSS_ENTRY
+Net80211pGetBss (
+    PNET80211_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the link's active BSS entry and hands back a pointer with
+    a reference to the caller.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link whose active BSS is to be
+        returned.
+
+Return Value:
+
+    Returns a pointer to the active BSS.
+
+--*/
+
+{
+
+    PNET80211_BSS_ENTRY Bss;
+
+    Bss = NULL;
+    if (Link->ActiveBss != NULL) {
+        KeAcquireQueuedLock(Link->Lock);
+        Bss = Link->ActiveBss;
+        if (Bss != NULL) {
+            Net80211pBssEntryAddReference(Bss);
+        }
+
+        KeReleaseQueuedLock(Link->Lock);
+    }
+
+    return Bss;
+}
+
+VOID
+Net80211pBssEntryAddReference (
+    PNET80211_BSS_ENTRY BssEntry
+    )
+
+/*++
+
+Routine Description:
+
+    This routine increments the reference count of the given BSS entry.
+
+Arguments:
+
+    BssEntry - Supplies a pointer to the BSS entry whose reference count is to
+        be incremented.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(BssEntry->ReferenceCount), 1);
+
+    ASSERT((OldReferenceCount != 0) && (OldReferenceCount < 0x10000000));
+
+    return;
+}
+
+VOID
+Net80211pBssEntryReleaseReference (
+    PNET80211_BSS_ENTRY BssEntry
+    )
+
+/*++
+
+Routine Description:
+
+    This routine decrements the reference count of the given BSS entry,
+    destroying the entry if there are no more references.
+
+Arguments:
+
+    BssEntry - Supplies a pointer to the BSS entry whose reference count is to
+        be decremented.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(BssEntry->ReferenceCount), -1);
+
+    ASSERT((OldReferenceCount != 0) && (OldReferenceCount < 0x10000000));
+
+    if (OldReferenceCount == 1) {
+        Net80211pDestroyBssEntry(BssEntry);
+    }
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -509,7 +673,8 @@ Return Value:
     PNET80211_BSS BssState;
     PVOID DriverContext;
     PNET80211_LINK Net80211Link;
-    BOOL StartLink;
+    NET80211_STATE OldState;
+    BOOL SetLinkUp;
     KSTATUS Status;
 
     Net80211Link = Link->DataLinkContext;
@@ -545,43 +710,82 @@ Return Value:
     // Officially update the state.
     //
 
+    OldState = Net80211Link->State;
     Net80211Link->State = State;
 
     //
     // Perform the necessary steps according to the state transition.
     //
 
-    StartLink = FALSE;
+    SetLinkUp = FALSE;
     switch (State) {
     case Net80211StateAuthenticating:
-        Status = Net80211pSendAuthenticationRequest(Link);
-        if (!KSUCCESS(Status)) {
-            goto SetStateEnd;
+        switch (OldState) {
+        case Net80211StateAssociated:
+        case Net80211StateEncrypted:
+            Status = Net80211pPrepareForReconnect(Link, &Bss);
+            if (!KSUCCESS(Status)) {
+                goto SetStateEnd;
+            }
+
+            //
+            // Fall through to send the authentication request.
+            //
+
+        case Net80211StateProbing:
+        case Net80211StateAssociating:
+        case Net80211StateReassociating:
+            Status = Net80211pSendAuthenticationRequest(Link, Bss);
+            if (!KSUCCESS(Status)) {
+                goto SetStateEnd;
+            }
+
+            break;
+
+        default:
+            break;
         }
 
         break;
 
     case Net80211StateAssociating:
+        switch (OldState) {
+        case Net80211StateAssociated:
+        case Net80211StateEncrypted:
+            Status = Net80211pPrepareForReconnect(Link, &Bss);
+            if (!KSUCCESS(Status)) {
+                goto SetStateEnd;
+            }
 
-        ASSERT(Bss != NULL);
+            //
+            // Fall through to send the association request.
+            //
 
-        //
-        // Initialize the encryption authentication process so that it is ready
-        // to receive packets assuming association succeeds.
-        //
+        case Net80211StateAuthenticating:
 
-        Status = Net80211pInitializeEncryption(Link);
-        if (!KSUCCESS(Status)) {
-            goto SetStateEnd;
-        }
+            //
+            // Initialize the encryption authentication process so that it is
+            // ready to receive packets assuming association succeeds.
+            //
 
-        //
-        // Send out an association request.
-        //
+            Status = Net80211pInitializeEncryption(Link, Bss);
+            if (!KSUCCESS(Status)) {
+                goto SetStateEnd;
+            }
 
-        Status = Net80211pSendAssociationRequest(Link);
-        if (!KSUCCESS(Status)) {
-            goto SetStateEnd;
+            //
+            // Send out an association request.
+            //
+
+            Status = Net80211pSendAssociationRequest(Link, Bss);
+            if (!KSUCCESS(Status)) {
+                goto SetStateEnd;
+            }
+
+            break;
+
+        default:
+            break;
         }
 
         break;
@@ -598,7 +802,7 @@ Return Value:
         if ((Bss->Encryption.Pairwise == Net80211EncryptionNone) ||
             (Bss->Encryption.Pairwise == Net80211EncryptionWep)) {
 
-            StartLink = TRUE;
+            SetLinkUp = TRUE;
         }
 
         break;
@@ -613,14 +817,14 @@ Return Value:
         ASSERT((Bss->Encryption.Pairwise == Net80211EncryptionWpaPsk) ||
                (Bss->Encryption.Pairwise == Net80211EncryptionWpa2Psk));
 
-        Net80211pDestroyEncryption(Link);
-        StartLink = TRUE;
+        Net80211pDestroyEncryption(Bss);
+        SetLinkUp = TRUE;
         break;
 
     case Net80211StateInitialized:
         if (Bss != NULL) {
-            Net80211pDestroyEncryption(Link);
-            Net80211Link->ActiveBss = NULL;
+            Net80211pDestroyEncryption(Bss);
+            Net80211pLeaveBss(Link, Bss);
             NetSetLinkState(Link, FALSE, 0);
         }
 
@@ -634,12 +838,8 @@ Return Value:
     // If requested, fire up the link and get traffic going in the upper layers.
     //
 
-    if (StartLink != FALSE) {
-        Status = NetStartLink(Link);
-        if (!KSUCCESS(Status)) {
-            goto SetStateEnd;
-        }
-
+    if (SetLinkUp != FALSE) {
+        Net80211pResumeDataFrames(Link);
         NetSetLinkState(Link, TRUE, Bss->State.MaxRate * NET80211_RATE_UNIT);
     }
 
@@ -831,8 +1031,8 @@ Return Value:
         }
 
         //
-        // If an entry was found, make it the active BSS and start the
-        // authentication process.
+        // If an entry was found, join that BSS and start the authentication
+        // process.
         //
 
         if (FoundEntry != NULL) {
@@ -852,7 +1052,7 @@ Return Value:
                 FoundEntry->PassphraseLength = Scan->PassphraseLength;
             }
 
-            Net80211Link->ActiveBss = FoundEntry;
+            Net80211pJoinBss(Link, FoundEntry);
             Net80211pSetChannel(Link, FoundEntry->State.Channel);
             Net80211pSetStateUnlocked(Link, Net80211StateAuthenticating);
             Status = STATUS_SUCCESS;
@@ -873,6 +1073,166 @@ ScanThreadEnd:
 
     NetLinkReleaseReference(Link);
     MmFreePagedPool(Scan);
+    return;
+}
+
+KSTATUS
+Net80211pPrepareForReconnect (
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY *Bss
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prepares the network link for reconnecting to the given BSS.
+    This includes pausing all outgoing data traffic and creating a copy of the
+    BSS entry to use for the new association.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link to be connected to the BSS.
+
+    Bss - Supplies a pointer to a BSS on entry on input that is being left and
+        on output, receives a pointer to the copied BSS entry to join.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PNET80211_BSS_ENTRY BssCopy;
+    PNET80211_BSS_ENTRY BssOriginal;
+    PNET80211_LINK Net80211Link;
+    KSTATUS Status;
+
+    Net80211Link = Link->DataLinkContext;
+    BssOriginal = *Bss;
+
+    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+    ASSERT(BssOriginal = Net80211Link->ActiveBss);
+
+    //
+    // Copy the BSS so a fresh state is used for the reconnection. Old
+    // encryption keys must be reacquired.
+    //
+
+    BssCopy = Net80211pCopyBssEntry(BssOriginal);
+    if (BssCopy == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto PrepareForReconnectEnd;
+    }
+
+    //
+    // Pause all data frames while the link is attempting to reconnect to the
+    // BSS.
+    //
+
+    Net80211pPauseDataFrames(Link);
+
+    //
+    // Leave the original BSS and join the copy.
+    //
+
+    Net80211pLeaveBss(Link, BssOriginal);
+    Net80211pJoinBss(Link, BssCopy);
+
+    //
+    // Remove the original from the BSS list and replace it with the copy.
+    //
+
+    LIST_REMOVE(&(BssOriginal->ListEntry));
+    INSERT_BEFORE(&(BssCopy->ListEntry), &(Net80211Link->BssList));
+
+    //
+    // Release the list's reference on the original.
+    //
+
+    Net80211pBssEntryReleaseReference(BssOriginal);
+    *Bss = BssCopy;
+    Status = STATUS_SUCCESS;
+
+PrepareForReconnectEnd:
+    return Status;
+}
+
+VOID
+Net80211pJoinBss (
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY Bss
+    )
+
+/*++
+
+Routine Description:
+
+    This routine joins the given network link to the BSS.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link that is joining the BSS.
+
+    Bss - Supplies a pointer to the BSS to join.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_LINK Net80211Link;
+
+    Net80211Link = Link->DataLinkContext;
+
+    ASSERT(Net80211Link->ActiveBss == NULL);
+    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+
+    Net80211Link->ActiveBss = Bss;
+    Net80211pBssEntryAddReference(Bss);
+    return;
+}
+
+VOID
+Net80211pLeaveBss (
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY Bss
+    )
+
+/*++
+
+Routine Description:
+
+    This routine disconnects the network link from the given BSS.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link that is leaving the BSS.
+
+    Bss - Supplies a pointer to the BSS to leave.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_LINK Net80211Link;
+
+    Net80211Link = Link->DataLinkContext;
+
+    ASSERT(Net80211Link->ActiveBss == Bss);
+    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+
+    Net80211Link->ActiveBss = NULL;
+    Net80211pBssEntryReleaseReference(Bss);
     return;
 }
 
@@ -1238,7 +1598,8 @@ ProcessProbeResponseEnd:
 
 KSTATUS
 Net80211pSendAuthenticationRequest (
-    PNET_LINK Link
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY Bss
     )
 
 /*++
@@ -1246,12 +1607,15 @@ Net80211pSendAuthenticationRequest (
 Routine Description:
 
     This routine sends an 802.11 management authentication frame to the AP of
-    the link's active BSS.
+    the given BSS.
 
 Arguments:
 
     Link - Supplies a pointer to the network link on which to send an
         authentication request.
+
+    Bss - Supplies a pointer to the BSS over which to send the authentication
+        frame.
 
 Return Value:
 
@@ -1261,19 +1625,10 @@ Return Value:
 
 {
 
-    PNET80211_BSS_ENTRY Bss;
     NET80211_AUTHENTICATION_OPEN_BODY FrameBody;
     ULONG FrameBodySize;
     ULONG FrameSubtype;
-    PNET80211_LINK Net80211Link;
     KSTATUS Status;
-
-    Net80211Link = Link->DataLinkContext;
-
-    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
-    ASSERT(Net80211Link->ActiveBss != NULL);
-
-    Bss = Net80211Link->ActiveBss;
 
     //
     // Fill out the authentication body.
@@ -1438,7 +1793,8 @@ ProcessAuthenticationResponseEnd:
 
 KSTATUS
 Net80211pSendAssociationRequest (
-    PNET_LINK Link
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY Bss
     )
 
 /*++
@@ -1446,12 +1802,15 @@ Net80211pSendAssociationRequest (
 Routine Description:
 
     This routine sends an 802.11 management association request frame to the
-    to the AP of the link's active BSS.
+    to the AP of the given BSS.
 
 Arguments:
 
     Link - Supplies a pointer to the network link over which to send the
         association request.
+
+    Bss - Supplies a pointer to the BSS over which to send the association
+        request.
 
 Return Value:
 
@@ -1461,7 +1820,6 @@ Return Value:
 
 {
 
-    PNET80211_BSS_ENTRY Bss;
     PUCHAR FrameBody;
     ULONG FrameBodySize;
     ULONG FrameSubtype;
@@ -1470,13 +1828,11 @@ Return Value:
     PNET80211_RATE_INFORMATION Rates;
     KSTATUS Status;
 
-    Net80211Link = Link->DataLinkContext;
-    Bss = Net80211Link->ActiveBss;
-    FrameBody = NULL;
-
-    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
     ASSERT(Bss != NULL);
     ASSERT(Bss->SsidLength != 0);
+
+    Net80211Link = Link->DataLinkContext;
+    FrameBody = NULL;
 
     //
     // Determine the size of the probe response packet, which always includes
@@ -1734,6 +2090,7 @@ Return Value:
     //
 
     AssociationId = *((PUSHORT)&(ElementBytePointer[Offset]));
+    AssociationId &= NET80211_ASSOCIATION_ID_MASK;
     Offset += NET80211_ASSOCIATION_ID_SIZE;
 
     //
@@ -1977,14 +2334,7 @@ Return Value:
 
 SendManagementFrameEnd:
     if (!KSUCCESS(Status)) {
-        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
-            Packet = LIST_VALUE(PacketList.Head.Next,
-                                NET_PACKET_BUFFER,
-                                ListEntry);
-
-            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
-            NetFreeBuffer(Packet);
-        }
+        NetDestroyBufferList(&PacketList);
     }
 
     return Status;
@@ -2419,18 +2769,12 @@ Return Value:
     //
 
     if (Bss == NULL) {
-        Bss = MmAllocatePagedPool(sizeof(NET80211_BSS_ENTRY),
-                                  NET80211_ALLOCATION_TAG);
-
+        Bss = Net80211pCreateBssEntry(Response->Bssid);
         if (Bss == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto UpdateBssCacheEnd;
         }
 
-        RtlZeroMemory(Bss, sizeof(NET80211_BSS_ENTRY));
-        Bss->State.Version = NET80211_BSS_VERSION;
-        RtlCopyMemory(Bss->State.Bssid, Response->Bssid, NET80211_ADDRESS_SIZE);
-        Bss->EapolHandle = INVALID_HANDLE;
         INSERT_BEFORE(&(Bss->ListEntry), &(Net80211Link->BssList));
     }
 
@@ -2583,6 +2927,10 @@ Return Value:
         Bss->Encryption.ApRsn = NULL;
     }
 
+    if (Bss->Encryption.Pairwise != Net80211EncryptionNone) {
+        Bss->Flags |= NET80211_BSS_FLAG_ENCRYPT_DATA;
+    }
+
     //
     // For now, the station always advertises the same RSN information. Just
     // point at the global.
@@ -2594,12 +2942,159 @@ UpdateBssCacheEnd:
     if (!KSUCCESS(Status)) {
         if (Bss != NULL) {
             LIST_REMOVE(&(Bss->ListEntry));
-            Net80211pDestroyBssEntry(Bss);
+            Net80211pBssEntryReleaseReference(Bss);
         }
     }
 
     KeReleaseQueuedLock(Net80211Link->Lock);
     return;
+}
+
+PNET80211_BSS_ENTRY
+Net80211pCopyBssEntry (
+    PNET80211_BSS_ENTRY Bss
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a copy of the given BSS entry with the encryption keys
+    removed.
+
+Arguments:
+
+    Bss - Supplies a pointer to the BSS from a prior connection that the link
+        is now trying to reconnect with.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PUCHAR ApRsn;
+    PNET80211_BSS_ENTRY BssCopy;
+    ULONG RatesSize;
+    ULONG RsnSize;
+    KSTATUS Status;
+
+    BssCopy = NULL;
+
+    //
+    // Allocate a copy of the BSS entry, but do not copy any encryption keys as
+    // those are associated with a single connection to a BSS.
+    //
+
+    BssCopy = Net80211pCreateBssEntry(Bss->State.Bssid);
+    if (BssCopy == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CopyBssEntryEnd;
+    }
+
+    BssCopy->Flags = Bss->Flags;
+    RtlCopyMemory(&(BssCopy->State), &(Bss->State), sizeof(NET80211_BSS));
+    RtlCopyMemory(&(BssCopy->Encryption),
+                  &(Bss->Encryption),
+                  sizeof(NET80211_ENCRYPTION));
+
+    RtlCopyMemory(BssCopy->Ssid, Bss->Ssid, Bss->SsidLength);
+    BssCopy->SsidLength = Bss->SsidLength;
+    RtlCopyMemory(BssCopy->Passphrase, Bss->Passphrase, Bss->PassphraseLength);
+    BssCopy->PassphraseLength = Bss->PassphraseLength;
+    BssCopy->State.Rates.Rate = NULL;
+    BssCopy->Encryption.ApRsn = NULL;
+    RtlZeroMemory(BssCopy->Encryption.Keys,
+                  sizeof(PNET80211_KEY) * NET80211_MAX_KEY_COUNT);
+
+    ASSERT(BssCopy->Encryption.StationRsn ==
+           (PUCHAR)&Net80211DefaultRsnInformation);
+
+    RatesSize = BssCopy->State.Rates.Count * sizeof(UCHAR);
+    BssCopy->State.Rates.Rate = MmAllocatePagedPool(RatesSize,
+                                                    NET80211_ALLOCATION_TAG);
+
+    if (BssCopy->State.Rates.Rate == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto CopyBssEntryEnd;
+    }
+
+    RtlCopyMemory(BssCopy->State.Rates.Rate, Bss->State.Rates.Rate, RatesSize);
+
+    //
+    // For the AP, RSN information is optional.
+    //
+
+    if (Bss->Encryption.ApRsn != NULL) {
+        RsnSize = NET80211_GET_ELEMENT_LENGTH(Bss->Encryption.ApRsn) +
+                  NET80211_ELEMENT_HEADER_SIZE;
+
+        ApRsn = MmAllocatePagedPool(RsnSize, NET80211_ALLOCATION_TAG);
+        if (ApRsn == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto CopyBssEntryEnd;
+        }
+
+        RtlCopyMemory(ApRsn, Bss->Encryption.ApRsn, RsnSize);
+        BssCopy->Encryption.ApRsn = ApRsn;
+    }
+
+    Status = STATUS_SUCCESS;
+
+CopyBssEntryEnd:
+    if (!KSUCCESS(Status)) {
+        if (BssCopy != NULL) {
+            Net80211pBssEntryReleaseReference(BssCopy);
+            BssCopy = NULL;
+        }
+    }
+
+    return BssCopy;
+}
+
+PNET80211_BSS_ENTRY
+Net80211pCreateBssEntry (
+    PUCHAR Bssid
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a BSS entry.
+
+Arguments:
+
+    Bssid - Supplies a pointer to the BSSID.
+
+Return Value:
+
+    Returns a pointer to the newly allocated BSS entry on success or NULL on
+    failure.
+
+--*/
+
+{
+
+    PNET80211_BSS_ENTRY Bss;
+
+    Bss = MmAllocatePagedPool(sizeof(NET80211_BSS_ENTRY),
+                              NET80211_ALLOCATION_TAG);
+
+    if (Bss == NULL) {
+        goto CreateBssEntryEnd;
+    }
+
+    RtlZeroMemory(Bss, sizeof(NET80211_BSS_ENTRY));
+    Bss->State.Version = NET80211_BSS_VERSION;
+    Bss->ReferenceCount = 1;
+    Bss->EapolHandle = INVALID_HANDLE;
+    RtlCopyMemory(Bss->State.Bssid, Bssid, NET80211_ADDRESS_SIZE);
+
+CreateBssEntryEnd:
+    return Bss;
 }
 
 VOID
@@ -2625,14 +3120,24 @@ Return Value:
 
 {
 
-    ASSERT(BssEntry->EapolHandle == INVALID_HANDLE);
+    ULONG Index;
 
+    ASSERT(BssEntry->Encryption.StationRsn ==
+           (PUCHAR)&Net80211DefaultRsnInformation);
+
+    Net80211pDestroyEncryption(BssEntry);
     if (BssEntry->State.Rates.Rate != NULL) {
         MmFreePagedPool(BssEntry->State.Rates.Rate);
     }
 
     if (BssEntry->Encryption.ApRsn != NULL) {
         MmFreePagedPool(BssEntry->Encryption.ApRsn);
+    }
+
+    for (Index = 0; Index < NET80211_MAX_KEY_COUNT; Index += 1) {
+        if (BssEntry->Encryption.Keys[Index] != NULL) {
+            MmFreePagedPool(BssEntry->Encryption.Keys[Index]);
+        }
     }
 
     MmFreePagedPool(BssEntry);

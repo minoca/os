@@ -106,7 +106,8 @@ NetpEthernetPrintAddress (
 VOID
 NetpEthernetGetPacketSizeInformation (
     PNET_LINK Link,
-    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation,
+    ULONG Flags
     );
 
 KSTATUS
@@ -477,15 +478,7 @@ Return Value:
                           PacketList->Count);
         }
 
-        while (NET_PACKET_LIST_EMPTY(PacketList) == FALSE) {
-            Packet = LIST_VALUE(PacketList->Head.Next,
-                                NET_PACKET_BUFFER,
-                                ListEntry);
-
-            NET_REMOVE_PACKET_FROM_LIST(Packet, PacketList);
-            NetFreeBuffer(Packet);
-        }
-
+        NetDestroyBufferList(PacketList);
         Status = STATUS_SUCCESS;
     }
 
@@ -654,7 +647,8 @@ Return Value:
 VOID
 NetpEthernetGetPacketSizeInformation (
     PNET_LINK Link,
-    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation,
+    ULONG Flags
     )
 
 /*++
@@ -672,6 +666,9 @@ Arguments:
 
     PacketSizeInformation - Supplies a pointer to a structure that receives the
         link's data link layer packet size information.
+
+    Flags - Supplies a bitmask of flags indicating which packet size
+        information is desired. See NET_PACKET_SIZE_FLAG_* for definitions.
 
 Return Value:
 

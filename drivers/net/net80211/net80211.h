@@ -67,6 +67,18 @@ Author:
 #define NET80211_DEFAULT_SCAN_DWELL_TIME (100 * MICROSECONDS_PER_MILLISECOND)
 
 //
+// Define the set of 802.11 link flags.
+//
+
+#define NET80211_LINK_FLAG_DATA_PAUSED 0x00000001
+
+//
+// Define the set of BSS entry flags.
+//
+
+#define NET80211_BSS_FLAG_ENCRYPT_DATA 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -194,12 +206,17 @@ Members:
 
     ListEntry - Stores pointers to the next and previous BSS entries.
 
+    ReferenceCount - Stores the reference count on the BSS entry.
+
     State - Stores the BSS state.
 
     Encryption - Stores the encryption information for the BSS including the
         active keys.
 
     EapolHandle - Stores a pointer to the encryption handshake handle.
+
+    Flags - Stores a bitmask of flags describing the BSS entry. See
+        NET80211_BSS_FLAG_* for definitions.
 
     SsidLength - Stores the number of characters in the SSID.
 
@@ -213,9 +230,11 @@ Members:
 
 typedef struct _NET80211_BSS_ENTRY {
     LIST_ENTRY ListEntry;
+    volatile ULONG ReferenceCount;
     NET80211_BSS State;
     NET80211_ENCRYPTION Encryption;
     HANDLE EapolHandle;
+    ULONG Flags;
     ULONG SsidLength;
     UCHAR Ssid[NET80211_MAX_SSID_LENGTH];
     ULONG PassphraseLength;
@@ -232,6 +251,9 @@ Members:
 
     State - Stores the current state of the 802.11 link.
 
+    Flags - Stores a bitmask of flags describing the link.
+        See NET80211_LINK_FLAG_* for definitions.
+
     SequenceNumber - Stores the current sequence for the 802.11 link.
 
     Lock - Stores a pointer to a queued lock that synchronizes access to the
@@ -239,8 +261,11 @@ Members:
 
     BssList - Stores a list of BSSs that are within range of this 802.11 device.
 
-    ActiveBss - Stores a pointer to the entry of the BSS to which the link is
-        connected.
+    ActiveBss - Stores a pointer to the BSS to which the link is attempting to
+        connect or is already connected.
+
+    PausedPacketList - Stores a list of paused 802.11 packets that are ready
+        for transmission.
 
     Properites - Stores the 802.11 link properties.
 
@@ -248,10 +273,12 @@ Members:
 
 typedef struct _NET80211_LINK {
     NET80211_STATE State;
+    ULONG Flags;
     volatile ULONG SequenceNumber;
     PQUEUED_LOCK Lock;
     LIST_ENTRY BssList;
     PNET80211_BSS_ENTRY ActiveBss;
+    NET_PACKET_LIST PausedPacketList;
     NET80211_LINK_PROPERTIES Properties;
 } NET80211_LINK, *PNET80211_LINK;
 
@@ -340,6 +367,74 @@ Return Value:
 
 --*/
 
+PNET80211_BSS_ENTRY
+Net80211pGetBss (
+    PNET80211_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the link's active BSS entry and hands back a pointer with
+    a reference to the caller.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link whose active BSS is to be
+        returned.
+
+Return Value:
+
+    Returns a pointer to the active BSS.
+
+--*/
+
+VOID
+Net80211pBssEntryAddReference (
+    PNET80211_BSS_ENTRY BssEntry
+    );
+
+/*++
+
+Routine Description:
+
+    This routine increments the reference count of the given BSS entry.
+
+Arguments:
+
+    BssEntry - Supplies a pointer to the BSS entry whose reference count is to
+        be incremented.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+Net80211pBssEntryReleaseReference (
+    PNET80211_BSS_ENTRY BssEntry
+    );
+
+/*++
+
+Routine Description:
+
+    This routine decrements the reference count of the given BSS entry,
+    destroying the entry if there are no more references.
+
+Arguments:
+
+    BssEntry - Supplies a pointer to the BSS entry whose reference count is to
+        be decremented.
+
+Return Value:
+
+    None.
+
+--*/
+
 VOID
 Net80211pProcessControlFrame (
     PNET_LINK Link,
@@ -421,6 +516,53 @@ Arguments:
     Link - Supplies a pointer to the network link on which the frame arrived.
 
     Packet - Supplies a pointer to the network packet.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+Net80211pPauseDataFrames (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine pauses the outgoing data frame traffic on the given network
+    link. It assumes that the 802.11 link's queued lock is held.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link on which to pause the
+        outgoing data frames.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+Net80211pResumeDataFrames (
+    PNET_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine resumes the outgoing data frame traffic on the given network
+    link, flushing any packets that were held while the link was paused. It
+    assumes that the 802.11 link's queued lock is held.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link on which to resume the
+        outgoing data frames.
 
 Return Value:
 
@@ -517,7 +659,8 @@ Return Value:
 
 KSTATUS
 Net80211pInitializeEncryption (
-    PNET_LINK Link
+    PNET_LINK Link,
+    PNET80211_BSS_ENTRY Bss
     );
 
 /*++
@@ -531,6 +674,9 @@ Arguments:
 
     Link - Supplies a pointer to the link involved in the upcoming handshake.
 
+    Bss - Supplies a pointer to the BSS on which the encryption handshake will
+        take place.
+
 Return Value:
 
     Status code.
@@ -539,7 +685,7 @@ Return Value:
 
 VOID
 Net80211pDestroyEncryption (
-    PNET_LINK Link
+    PNET80211_BSS_ENTRY Bss
     );
 
 /*++
@@ -552,8 +698,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link whose encryption state is to be
-        destroyed.
+    Bss - Supplies a pointer to the BSS on which encryption initialization took
+        place.
 
 Return Value:
 
@@ -564,6 +710,7 @@ Return Value:
 KSTATUS
 Net80211pEncryptPacket (
     PNET80211_LINK Link,
+    PNET80211_BSS_ENTRY Bss,
     PNET_PACKET_BUFFER Packet
     );
 
@@ -579,6 +726,8 @@ Arguments:
 
     Link - Supplies a pointer to the 802.11 network link that owns the packet.
 
+    Bss - Supplies a pointer to the BSS over which this packet should be sent.
+
     Packet - Supplies a pointer to the packet to encrypt.
 
 Return Value:
@@ -590,6 +739,7 @@ Return Value:
 KSTATUS
 Net80211pDecryptPacket (
     PNET80211_LINK Link,
+    PNET80211_BSS_ENTRY Bss,
     PNET_PACKET_BUFFER Packet
     );
 
@@ -604,6 +754,8 @@ Routine Description:
 Arguments:
 
     Link - Supplies a pointer to the 802.11 network link that owns the packet.
+
+    Bss - Supplies a pointer to the BSS over which this packet was received.
 
     Packet - Supplies a pointer to the packet to decrypt.
 

@@ -5580,14 +5580,7 @@ Return Value:
 
 TcpSendControlPacketEnd:
     if (!KSUCCESS(Status)) {
-        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
-            Packet = LIST_VALUE(PacketList.Head.Next,
-                                NET_PACKET_BUFFER,
-                                ListEntry);
-
-            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
-            NetFreeBuffer(Packet);
-        }
+        NetDestroyBufferList(&PacketList);
     }
 
     return;
@@ -6543,14 +6536,7 @@ Return Value:
 
 TcpSendPendingSegmentsEnd:
     if (!KSUCCESS(Status)) {
-        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
-            Packet = LIST_VALUE(PacketList.Head.Next,
-                                NET_PACKET_BUFFER,
-                                ListEntry);
-
-            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
-            NetFreeBuffer(Packet);
-        }
+        NetDestroyBufferList(&PacketList);
     }
 
     if (CurrentTime != NULL) {
@@ -6655,14 +6641,7 @@ Return Value:
 
 TcpSendSegmentEnd:
     if (!KSUCCESS(Status)) {
-        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
-            Packet = LIST_VALUE(PacketList.Head.Next,
-                                NET_PACKET_BUFFER,
-                                ListEntry);
-
-            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
-            NetFreeBuffer(Packet);
-        }
+        NetDestroyBufferList(&PacketList);
     }
 
     return Status;
@@ -8071,14 +8050,7 @@ Return Value:
 
 TcpSendSynEnd:
     if (!KSUCCESS(Status)) {
-        while (NET_PACKET_LIST_EMPTY(&PacketList) == FALSE) {
-            Packet = LIST_VALUE(PacketList.Head.Next,
-                                NET_PACKET_BUFFER,
-                                ListEntry);
-
-            NET_REMOVE_PACKET_FROM_LIST(Packet, &PacketList);
-            NetFreeBuffer(Packet);
-        }
+        NetDestroyBufferList(&PacketList);
     }
 
     return Status;

@@ -429,14 +429,7 @@ ArpSendRequestEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        while (NET_PACKET_LIST_EMPTY(&NetPacketList) == FALSE) {
-            NetPacket = LIST_VALUE(NetPacketList.Head.Next,
-                                   NET_PACKET_BUFFER,
-                                   ListEntry);
-
-            NET_REMOVE_PACKET_FROM_LIST(NetPacket, &NetPacketList);
-            NetFreeBuffer(NetPacket);
-        }
+        NetDestroyBufferList(&NetPacketList);
     }
 
     return Status;
@@ -1205,14 +1198,7 @@ ArpSendReplyEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        while (NET_PACKET_LIST_EMPTY(&NetPacketList) == FALSE) {
-            NetPacket = LIST_VALUE(NetPacketList.Head.Next,
-                                   NET_PACKET_BUFFER,
-                                   ListEntry);
-
-            NET_REMOVE_PACKET_FROM_LIST(NetPacket, &NetPacketList);
-            NetFreeBuffer(NetPacket);
-        }
+        NetDestroyBufferList(&NetPacketList);
     }
 
     return Status;

@@ -113,6 +113,7 @@ Return Value:
     BOOL LockHeld;
     PHYSICAL_ADDRESS MaximumPhysicalAddress;
     ULONG MinPacketSize;
+    ULONG PacketSizeFlags;
     ULONG Padding;
     NET_PACKET_SIZE_INFORMATION SizeInformation;
     KSTATUS Status;
@@ -144,9 +145,15 @@ Return Value:
                    NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS;
 
     if ((Flags & DataLinkMask) != 0) {
+        PacketSizeFlags = 0;
+        if ((Flags & NET_ALLOCATE_BUFFER_FLAG_UNENCRYPTED) != 0) {
+            PacketSizeFlags |= NET_PACKET_SIZE_FLAG_UNENCRYPTED;
+        }
+
         DataLinkEntry = Link->DataLinkEntry;
         DataLinkEntry->Interface.GetPacketSizeInformation(Link,
-                                                          &SizeInformation);
+                                                          &SizeInformation,
+                                                          PacketSizeFlags);
 
         if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS) != 0) {
             HeaderSize += SizeInformation.HeaderSize;
@@ -264,6 +271,10 @@ AllocateBufferEnd:
 
     } else {
         Buffer->Flags = 0;
+        if ((Flags & NET_ALLOCATE_BUFFER_FLAG_UNENCRYPTED) != 0) {
+            Buffer->Flags |= NET_PACKET_FLAG_UNENCRYPTED;
+        }
+
         Buffer->BufferSize = TotalSize;
         Buffer->DataSize = DataSize;
         Buffer->DataOffset = HeaderSize;
@@ -310,6 +321,45 @@ Return Value:
     KeAcquireQueuedLock(NetBufferListLock);
     INSERT_AFTER(&(Buffer->ListEntry), &NetFreeBufferList);
     KeReleaseQueuedLock(NetBufferListLock);
+    return;
+}
+
+NET_API
+VOID
+NetDestroyBufferList (
+    PNET_PACKET_LIST BufferList
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a list of network packet buffers, releasing all of
+    its associated resources, not including the buffer list structure.
+
+Arguments:
+
+    BufferList - Supplies a pointer to the buffer list to be destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET_PACKET_BUFFER Buffer;
+
+    while (NET_PACKET_LIST_EMPTY(BufferList) == FALSE) {
+        Buffer = LIST_VALUE(BufferList->Head.Next,
+                            NET_PACKET_BUFFER,
+                            ListEntry);
+
+        NET_REMOVE_PACKET_FROM_LIST(Buffer, BufferList);
+        NetFreeBuffer(Buffer);
+    }
+
     return;
 }
 

@@ -100,7 +100,8 @@ Net80211pPrintAddress (
 VOID
 Net80211pGetPacketSizeInformation (
     PNET_LINK Link,
-    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation,
+    ULONG Flags
     );
 
 VOID
@@ -305,6 +306,7 @@ Return Value:
                   sizeof(NET80211_LINK_PROPERTIES));
 
     Net80211Link->Properties.SupportedRates = NULL;
+    NET_INITIALIZE_PACKET_LIST(&(Net80211Link->PausedPacketList));
 
     //
     // All supported station modes currently set the ESS capability.
@@ -373,6 +375,12 @@ Return Value:
 
     PNET80211_LINK Net80211Link;
     NET80211_SCAN_STATE Scan;
+    KSTATUS Status;
+
+    Status = NetStartLink(Link);
+    if (!KSUCCESS(Status)) {
+        goto StartLinkEnd;
+    }
 
     Net80211Link = Link->DataLinkContext;
     Net80211Link->State = Net80211StateInitialized;
@@ -386,7 +394,13 @@ Return Value:
                   NET80211_TEST_PASSPHRASE,
                   NET80211_TEST_PASSPHRASE_LENGTH);
 
-    return Net80211pStartScan(Link, &Scan);
+    Status = Net80211pStartScan(Link, &Scan);
+    if (!KSUCCESS(Status)) {
+        goto StartLinkEnd;
+    }
+
+StartLinkEnd:
+    return Status;
 }
 
 NET80211_API
@@ -738,7 +752,8 @@ Return Value:
 VOID
 Net80211pGetPacketSizeInformation (
     PNET_LINK Link,
-    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation
+    PNET_PACKET_SIZE_INFORMATION PacketSizeInformation,
+    ULONG Flags
     )
 
 /*++
@@ -757,6 +772,9 @@ Arguments:
     PacketSizeInformation - Supplies a pointer to a structure that receives the
         link's data link layer packet size information.
 
+    Flags - Supplies a bitmask of flags indicating which packet size
+        information is desired. See NET_PACKET_SIZE_FLAG_* for definitions.
+
 Return Value:
 
     None.
@@ -765,6 +783,7 @@ Return Value:
 
 {
 
+    PNET80211_BSS_ENTRY Bss;
     PNET80211_LINK Net80211Link;
 
     Net80211Link = (PNET80211_LINK)Link->DataLinkContext;
@@ -783,13 +802,21 @@ Return Value:
     PacketSizeInformation->FooterSize = 0;
 
     //
-    // If encryption is enable on the link, then there is an additional header
-    // and an additional footer.
+    // If encryption is required for the current BSS, then there is an
+    // additional header and an additional footer.
     //
 
-    if (Net80211Link->State == Net80211StateEncrypted) {
-        PacketSizeInformation->HeaderSize += sizeof(NET80211_CCMP_HEADER);
-        PacketSizeInformation->FooterSize += NET80211_CCMP_MIC_SIZE;
+    if ((Flags & NET_PACKET_SIZE_FLAG_UNENCRYPTED) == 0) {
+        Bss = Net80211pGetBss(Net80211Link);
+        if (Bss != NULL) {
+            if (Bss->Encryption.Pairwise != Net80211EncryptionNone) {
+                PacketSizeInformation->FooterSize += NET80211_CCMP_MIC_SIZE;
+                PacketSizeInformation->HeaderSize +=
+                                                  sizeof(NET80211_CCMP_HEADER);
+            }
+
+            Net80211pBssEntryReleaseReference(Bss);
+        }
     }
 
     PacketSizeInformation->MaxPacketSize = NET80211_MAX_DATA_FRAME_BODY_SIZE +

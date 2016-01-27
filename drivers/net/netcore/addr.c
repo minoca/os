@@ -4911,7 +4911,8 @@ Return Value:
 
     DataLinkEntry = Link->DataLinkEntry;
     DataLinkEntry->Interface.GetPacketSizeInformation(Link,
-                                                      &DataLinkInformation);
+                                                      &DataLinkInformation,
+                                                      0);
 
     MaxPacketSize = DataLinkInformation.HeaderSize +
                     Socket->UnboundPacketSizeInformation.MaxPacketSize +
