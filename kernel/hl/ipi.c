@@ -78,7 +78,7 @@ HlpInterruptFindIpiLine (
 // Define an override that limits the system to one processor.
 //
 
-BOOL HlRunSingleProcessor = TRUE;
+BOOL HlRunSingleProcessor;
 
 //
 // Store the maximum number of processors in the system.
