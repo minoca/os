@@ -139,6 +139,7 @@ Return Value:
     ULONGLONG Identifier;
     PFAT32_INFORMATION_SECTOR Information;
     ULONGLONG InformationSector;
+    ULONG IoFlags;
     BYTE Media;
     ULONG NameIndex;
     UCHAR NumberOfFats;
@@ -154,6 +155,7 @@ Return Value:
     ULONG ThisCluster;
     ULONGLONG TotalClusters;
 
+    IoFlags = IO_FLAG_FS_DATA | IO_FLAG_FS_METADATA;
     Scratch = NULL;
     ScratchIoBuffer = NULL;
     Media = FAT_MEDIA_DISK;
@@ -370,7 +372,7 @@ Return Value:
         Status = FatWriteDevice(BlockDeviceParameters->DeviceToken,
                                 CurrentBlock,
                                 1,
-                                0,
+                                IoFlags,
                                 NULL,
                                 ScratchIoBuffer);
 
@@ -413,7 +415,7 @@ Return Value:
             Status = FatWriteDevice(BlockDeviceParameters->DeviceToken,
                                     FatBlock,
                                     BlocksPerFat,
-                                    0,
+                                    IoFlags,
                                     NULL,
                                     ScratchIoBuffer);
 
@@ -503,7 +505,7 @@ Return Value:
                 Status = FatWriteDevice(BlockDeviceParameters->DeviceToken,
                                         FatBlock,
                                         1,
-                                        0,
+                                        IoFlags,
                                         NULL,
                                         ScratchIoBuffer);
 
@@ -563,7 +565,7 @@ Return Value:
     Status = FatWriteDevice(BlockDeviceParameters->DeviceToken,
                             RootDirectoryBlock,
                             1,
-                            0,
+                            IoFlags,
                             NULL,
                             ScratchIoBuffer);
 
@@ -588,7 +590,7 @@ Return Value:
         Status = FatWriteDevice(BlockDeviceParameters->DeviceToken,
                                 InformationSector,
                                 1,
-                                0,
+                                IoFlags,
                                 NULL,
                                 ScratchIoBuffer);
 
@@ -709,7 +711,7 @@ Return Value:
     Status = FatWriteDevice(BlockDeviceParameters->DeviceToken,
                             0,
                             1,
-                            0,
+                            IoFlags,
                             NULL,
                             ScratchIoBuffer);
 
@@ -812,7 +814,13 @@ Return Value:
         goto MountEnd;
     }
 
-    Status = FatReadDevice(Device, 0, 1, 0, NULL, BootSectorIoBuffer);
+    Status = FatReadDevice(Device,
+                           0,
+                           1,
+                           IO_FLAG_FS_DATA | IO_FLAG_FS_METADATA,
+                           NULL,
+                           BootSectorIoBuffer);
+
     if (!KSUCCESS(Status)) {
         goto MountEnd;
     }
@@ -1065,7 +1073,7 @@ Return Value:
         Status = FatReadDevice(FatVolume->Device.DeviceToken,
                                InformationBlock,
                                1,
-                               0,
+                               IO_FLAG_FS_DATA | IO_FLAG_FS_METADATA,
                                NULL,
                                InformationIoBuffer);
 
@@ -3720,6 +3728,7 @@ Return Value:
     ClusterShift = Volume->ClusterShift;
     ClusterSize = Volume->ClusterSize;
     ClusterBad = Volume->ClusterBad;
+    IoFlags |= IO_FLAG_FS_DATA;
     MaxContiguousBytes = 0;
     NewTerritory = FALSE;
     ScratchIoBuffer = NULL;

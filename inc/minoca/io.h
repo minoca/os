@@ -302,6 +302,13 @@ Author:
 #define IO_FLAG_SERVICING_FAULT 0x40000000
 
 //
+// This flag indicates that a write I/O operation should flush all the file
+// data provided before returning.
+//
+
+#define IO_FLAG_DATA_SYNCHRONIZED 0x00000002
+
+//
 // This flag, along with the data synchronized flag, indicates that the
 // file data and metadata should be flushed. It is illegal to set this flag
 // without also setting the data synchronized flag.
@@ -310,11 +317,19 @@ Author:
 #define IO_FLAG_METADATA_SYNCHRONIZED 0x00000004
 
 //
-// This flag indicates that a write I/O operation should flush all the file
-// data provided before returning.
+// This flag indicates that this request represents the file system fetching
+// data or metadata to service a request. It allows the physical memory to be
+// shared with the file layer request.
 //
 
-#define IO_FLAG_DATA_SYNCHRONIZED 0x00000002
+#define IO_FLAG_FS_DATA 0x00000008
+
+//
+// This flag indicates that this request represents the file system fetching
+// metadata to service a request. the FS data flag must also be set.
+//
+
+#define IO_FLAG_FS_METADATA 0x00000010
 
 //
 // Set this flag if the IRP needs to execute in a no-allocate code path. As a

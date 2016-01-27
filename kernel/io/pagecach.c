@@ -1813,6 +1813,7 @@ Return Value:
     BOOL SkipEntry;
     KSTATUS Status;
     BOOL ThisEntryInCleanStreak;
+    KSTATUS TotalStatus;
 
     PageCacheThread = FALSE;
     BytesFlushed = FALSE;
@@ -1824,6 +1825,7 @@ Return Value:
     PagesFlushed = 0;
     PageShift = MmPageShift();
     Status = STATUS_SUCCESS;
+    TotalStatus = STATUS_SUCCESS;
 
     //
     // Only allow the page cache thread to perform writes while holding the
@@ -1834,10 +1836,18 @@ Return Value:
         PageCacheThread = TRUE;
     }
 
-    ASSERT((Size == -1) || ((Offset + Size) > Offset));
+    ASSERT((Size == -1ULL) || ((Offset + Size) > Offset));
 
     if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) == FALSE) {
         goto FlushPageCacheEntriesEnd;
+    }
+
+    //
+    // Optimistically mark the file object clean.
+    //
+
+    if ((Offset == 0) && (Size == -1ULL) && (PageCount == NULL)) {
+        RtlAtomicAnd32(&(FileObject->Flags), ~FILE_OBJECT_FLAG_DIRTY_DATA);
     }
 
     //
@@ -1881,7 +1891,7 @@ Return Value:
 
     while (Node != NULL) {
         CacheEntry = RED_BLACK_TREE_VALUE(Node, PAGE_CACHE_ENTRY, Node);
-        if ((Size != -1) && (CacheEntry->Offset >= (Offset + Size))) {
+        if ((Size != -1ULL) && (CacheEntry->Offset >= (Offset + Size))) {
             break;
         }
 
@@ -1974,7 +1984,7 @@ Return Value:
             if ((CacheEntry->Offset + PageSize) <= Offset) {
                 SkipEntry = TRUE;
 
-            } else if ((Size != -1) &&
+            } else if ((Size != -1ULL) &&
                        (CacheEntry->Offset >= (Offset + Size))) {
 
                 SkipEntry = TRUE;
@@ -2119,6 +2129,7 @@ Return Value:
         }
 
         if (!KSUCCESS(Status)) {
+            TotalStatus = Status;
             if (PageCacheThread == FALSE) {
                 goto FlushPageCacheEntriesEnd;
             }
@@ -2222,6 +2233,7 @@ Return Value:
         }
 
         if (!KSUCCESS(Status)) {
+            TotalStatus = Status;
             if (PageCacheThread == FALSE) {
                 goto FlushPageCacheEntriesEnd;
             }
@@ -2234,6 +2246,9 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 FlushPageCacheEntriesEnd:
+    if ((!KSUCCESS(Status)) && (KSUCCESS(TotalStatus))) {
+        TotalStatus = Status;
+    }
 
     ASSERT(LockHeld == FALSE);
 
@@ -2246,7 +2261,10 @@ FlushPageCacheEntriesEnd:
         (FileObject->Properties.Type == IoObjectBlockDevice) &&
         ((Flags & IO_FLAG_DATA_SYNCHRONIZED) == 0)) {
 
-        IopSynchronizeBlockDevice(FileObject->Device);
+        Status = IopSynchronizeBlockDevice(FileObject->Device);
+        if (!KSUCCESS(Status)) {
+            TotalStatus = Status;
+        }
     }
 
     if (CacheEntry != NULL) {
@@ -2275,7 +2293,15 @@ FlushPageCacheEntriesEnd:
         }
     }
 
-    return Status;
+    //
+    // Mark the file object as dirty if something went wrong.
+    //
+
+    if (!KSUCCESS(TotalStatus)) {
+        RtlAtomicOr32(&(FileObject->Flags), FILE_OBJECT_FLAG_DIRTY_DATA);
+    }
+
+    return TotalStatus;
 }
 
 VOID
@@ -5019,7 +5045,7 @@ Return Value:
         //
         // If this page cache entry owns the physical page, then it is not
         // serving as a backing entry to any other page cache entry (as it has
-        // no refernences). Freely unmap it.
+        // no references). Freely unmap it.
         //
 
         ASSERT(PageCacheEntry->ReferenceCount == 0);

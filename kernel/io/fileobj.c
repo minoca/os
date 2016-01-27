@@ -35,13 +35,6 @@ Environment:
 #define FILE_OBJECT_MAX_REFERENCE_COUNT 0x10000000
 
 //
-// Define the maximum number of times to attempt to flush the cache before
-// declaring that it can't be done.
-//
-
-#define FILE_OBJECT_MAX_FLUSH_ATTEMPTS 5
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -69,17 +62,6 @@ IopLookupFileObjectByProperties (
     PFILE_PROPERTIES Properties
     );
 
-BOOL
-IopIsFileObjectClean (
-    PFILE_OBJECT FileObject
-    );
-
-KSTATUS
-IopFlushFileObjectPropertiesIterator (
-    PFILE_OBJECT FileObject,
-    PVOID Context
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -100,7 +82,7 @@ LIST_ENTRY IoFileObjectsDirtyList;
 // Store the lock synchronizing access to the dirty file objects list.
 //
 
-PSHARED_EXCLUSIVE_LOCK IoFileObjectsDirtyListLock;
+PQUEUED_LOCK IoFileObjectsDirtyListLock;
 
 //
 // Store the global list of orphaned file objects.
@@ -554,7 +536,7 @@ Return Value:
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
-    IoFileObjectsDirtyListLock = KeCreateSharedExclusiveLock();
+    IoFileObjectsDirtyListLock = KeCreateQueuedLock();
     if (IoFileObjectsDirtyListLock == NULL) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
@@ -1356,20 +1338,21 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PFILE_OBJECT CurrentObject;
-    BOOL FlushComplete;
+    ULONG FlushCount;
     ULONG FlushIndex;
+    PFILE_OBJECT NextObject;
     KSTATUS Status;
     KSTATUS TotalStatus;
 
     CurrentObject = NULL;
     TotalStatus = STATUS_SUCCESS;
-    FlushComplete = TRUE;
 
     //
     // Synchronized flushes need to guarantee that all the data is out to disk
     // before returning.
     //
 
+    FlushCount = 1;
     if ((Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
 
         //
@@ -1384,7 +1367,7 @@ Return Value:
             Flags &= ~(IO_FLAG_DATA_SYNCHRONIZED |
                        IO_FLAG_METADATA_SYNCHRONIZED);
 
-            FlushComplete = FALSE;
+            FlushCount = 2;
         }
 
     //
@@ -1405,21 +1388,18 @@ Return Value:
     //
 
     Status = STATUS_SUCCESS;
-    for (FlushIndex = 0;
-         FlushIndex < FILE_OBJECT_MAX_FLUSH_ATTEMPTS;
-         FlushIndex += 1) {
-
-        KeAcquireSharedExclusiveLockShared(IoFileObjectsDirtyListLock);
+    for (FlushIndex = 0; FlushIndex < FlushCount; FlushIndex += 1) {
 
         //
-        // Set up the object to start from.
+        // Get the first entry on the list, or the specific device in question.
         //
 
+        KeAcquireQueuedLock(IoFileObjectsDirtyListLock);
+        CurrentEntry = IoFileObjectsDirtyList.Next;
         if (DeviceId == 0) {
-            CurrentEntry = IoFileObjectsDirtyList.Next;
+            CurrentObject = LIST_VALUE(CurrentEntry, FILE_OBJECT, ListEntry);
 
         } else {
-            CurrentEntry = IoFileObjectsDirtyList.Next;
             while (CurrentEntry != &IoFileObjectsDirtyList) {
                 CurrentObject = LIST_VALUE(CurrentEntry,
                                            FILE_OBJECT,
@@ -1431,28 +1411,26 @@ Return Value:
 
                 CurrentEntry = CurrentEntry->Next;
             }
+        }
 
-            if (CurrentEntry == &IoFileObjectsDirtyList) {
-                TotalStatus = STATUS_NO_SUCH_DEVICE;
-                KeReleaseSharedExclusiveLockShared(IoFileObjectsDirtyListLock);
-                break;
-            }
+        if (CurrentEntry == &IoFileObjectsDirtyList) {
+            CurrentObject = NULL;
+
+        } else {
+            IopFileObjectAddReference(CurrentObject);
+        }
+
+        KeReleaseQueuedLock(IoFileObjectsDirtyListLock);
+        if ((CurrentObject == NULL) && (DeviceId != 0)) {
+            TotalStatus = STATUS_NO_SUCH_DEVICE;
+            break;
         }
 
         //
-        // Iterate over the dirty file object list.
+        // Loop cleaning file objects.
         //
 
-        while (CurrentEntry != &IoFileObjectsDirtyList) {
-            CurrentObject = LIST_VALUE(CurrentEntry, FILE_OBJECT, ListEntry);
-
-            //
-            // As the dirty list held a reference on the file object. The
-            // reference count must be greater than or equal to 2.
-            //
-
-            ASSERT(CurrentObject->ReferenceCount >= 2);
-
+        while (CurrentObject != NULL) {
             Status = IopFlushFileObject(CurrentObject, 0, -1, Flags, PageCount);
             if (!KSUCCESS(Status)) {
                 if (KSUCCESS(TotalStatus)) {
@@ -1460,59 +1438,50 @@ Return Value:
                 }
             }
 
-            if (DeviceId != 0) {
+            if ((DeviceId != 0) || ((PageCount != NULL) && (*PageCount == 0))) {
                 break;
             }
 
-            if ((PageCount != NULL) && (*PageCount == 0)) {
-                break;
-            }
+            //
+            // Re-lock the list, and get the next object.
+            //
 
-            CurrentEntry = CurrentEntry->Next;
-        }
+            KeAcquireQueuedLock(IoFileObjectsDirtyListLock);
+            NextObject = NULL;
+            if (DeviceId == 0) {
+                if (CurrentObject->ListEntry.Next != NULL) {
+                    CurrentEntry = CurrentObject->ListEntry.Next;
 
-        KeReleaseSharedExclusiveLockShared(IoFileObjectsDirtyListLock);
+                } else {
+                    CurrentEntry = IoFileObjectsDirtyList.Next;
+                }
 
-        //
-        // Now go through the list again and prune any cleaned up entries.
-        //
-
-        KeAcquireSharedExclusiveLockExclusive(IoFileObjectsDirtyListLock);
-        if (DeviceId != 0) {
-            if (IopIsFileObjectClean(CurrentObject) != FALSE) {
-                LIST_REMOVE(&(CurrentObject->ListEntry));
-                CurrentObject->ListEntry.Next = NULL;
-                FlushComplete = TRUE;
-            }
-
-        } else {
-            CurrentEntry = IoFileObjectsDirtyList.Next;
-            while (CurrentEntry != &IoFileObjectsDirtyList) {
-                CurrentObject = LIST_VALUE(CurrentEntry,
-                                           FILE_OBJECT,
-                                           ListEntry);
-
-                CurrentEntry = CurrentEntry->Next;
-                if (IopIsFileObjectClean(CurrentObject) != FALSE) {
-                    LIST_REMOVE(&(CurrentObject->ListEntry));
-                    CurrentObject->ListEntry.Next = NULL;
+                if (CurrentEntry != &IoFileObjectsDirtyList) {
+                    NextObject = LIST_VALUE(CurrentEntry,
+                                            FILE_OBJECT,
+                                            ListEntry);
                 }
             }
 
-            if (LIST_EMPTY(&IoFileObjectsDirtyList)) {
-                FlushComplete = TRUE;
+            //
+            // Remove the file object from the list if it is clean now.
+            //
+
+            if (IS_FILE_OBJECT_CLEAN(CurrentObject)) {
+                if (CurrentObject->ListEntry.Next != NULL) {
+                    LIST_REMOVE(&(CurrentObject->ListEntry));
+                    CurrentObject->ListEntry.Next = NULL;
+                    IopFileObjectReleaseReference(CurrentObject, FALSE);
+                }
             }
-        }
 
-        KeReleaseSharedExclusiveLockExclusive(IoFileObjectsDirtyListLock);
-        if (FlushComplete != FALSE) {
-            break;
-        }
-    }
+            if (NextObject != NULL) {
+                IopFileObjectAddReference(NextObject);
+            }
 
-    if (FlushIndex == FILE_OBJECT_MAX_FLUSH_ATTEMPTS) {
-        if (KSUCCESS(TotalStatus)) {
-            TotalStatus = STATUS_TRY_AGAIN;
+            KeReleaseQueuedLock(IoFileObjectsDirtyListLock);
+            IopFileObjectReleaseReference(CurrentObject, FALSE);
+            CurrentObject = NextObject;
         }
     }
 
@@ -2479,7 +2448,8 @@ Return Value:
 {
 
     if (FileObject->ListEntry.Next == NULL) {
-        KeAcquireSharedExclusiveLockExclusive(IoFileObjectsDirtyListLock);
+        KeAcquireQueuedLock(IoFileObjectsDirtyListLock);
+        RtlAtomicOr32(&(FileObject->Flags), FILE_OBJECT_FLAG_DIRTY_DATA);
         if (FileObject->ListEntry.Next == NULL) {
             IopFileObjectAddReference(FileObject);
 
@@ -2498,7 +2468,7 @@ Return Value:
             }
         }
 
-        KeReleaseSharedExclusiveLockExclusive(IoFileObjectsDirtyListLock);
+        KeReleaseQueuedLock(IoFileObjectsDirtyListLock);
     }
 
     return;
@@ -2687,40 +2657,5 @@ Return Value:
     }
 
     return Object;
-}
-
-BOOL
-IopIsFileObjectClean (
-    PFILE_OBJECT FileObject
-    )
-
-/*++
-
-Routine Description:
-
-    This routine determines if the given file object is clean. Note that this
-    information is immediately stale.
-
-Arguments:
-
-    FileObject - Supplies a pointer to the file object to test.
-
-Return Value:
-
-    TRUE if the file object has no outstanding writes.
-
-    FALSE if the file object data or metadata is dirty.
-
---*/
-
-{
-
-    if ((RED_BLACK_TREE_EMPTY(&(FileObject->PageCacheEntryTree)) != FALSE) &&
-        ((FileObject->Flags & FILE_OBJECT_FLAG_DIRTY_PROPERTIES) == 0)) {
-
-        return TRUE;
-    }
-
-    return FALSE;
 }
 

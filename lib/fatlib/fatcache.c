@@ -712,7 +712,7 @@ Return Value:
     Status = FatReadDevice(Volume->Device.DeviceToken,
                            BlockAddress,
                            BlockCount,
-                           0,
+                           IO_FLAG_FS_DATA | IO_FLAG_FS_METADATA,
                            NULL,
                            FatIoBuffer);
 
@@ -807,6 +807,7 @@ Return Value:
 
     ASSERT(FatIoBuffer != NULL);
 
+    IoFlags |= IO_FLAG_FS_DATA | IO_FLAG_FS_METADATA;
     WindowSize = Volume->FatCache.WindowSize;
     BlockCount = WindowSize >> BlockShift;
 

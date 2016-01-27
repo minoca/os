@@ -34,6 +34,15 @@ Author:
      (((POBJECT_HEADER)(_Object))->Type == ObjectVolume))
 
 //
+// This macro evaluates to non-zero if the given file object has no dirty data
+// and no dirty properties.
+//
+
+#define IS_FILE_OBJECT_CLEAN(_FileObject)   \
+    (((_FileObject)->Flags &                \
+     (FILE_OBJECT_FLAG_DIRTY_DATA | FILE_OBJECT_FLAG_DIRTY_PROPERTIES)) == 0)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -192,6 +201,12 @@ Author:
 //
 
 #define FILE_OBJECT_FLAG_EXTERNAL_IO_STATE 0x00000020
+
+//
+// This flag is set if the file object has any dirty page cache entries.
+//
+
+#define FILE_OBJECT_FLAG_DIRTY_DATA 0x00000040
 
 //
 // This flag is set to indicate that the page cache eviction operation is

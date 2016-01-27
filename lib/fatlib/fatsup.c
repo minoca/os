@@ -1310,6 +1310,7 @@ Return Value:
     PFAT32_INFORMATION_SECTOR Information;
     ULONGLONG InformationBlock;
     PFAT_IO_BUFFER InformationIoBuffer;
+    ULONG IoFlags;
     ULONG SearchStart;
     KSTATUS Status;
     ULONG Value;
@@ -1323,6 +1324,7 @@ Return Value:
     BlockShift = Volume->BlockShift;
     ClusterCount = Volume->ClusterCount;
     InformationIoBuffer = NULL;
+    IoFlags = IO_FLAG_FS_DATA | IO_FLAG_FS_METADATA;
 
     ASSERT((PreviousCluster >= Volume->ClusterBad) ||
            (PreviousCluster < ClusterCount));
@@ -1463,7 +1465,7 @@ Return Value:
         Status = FatReadDevice(Volume->Device.DeviceToken,
                                InformationBlock,
                                1,
-                               0,
+                               IoFlags,
                                NULL,
                                InformationIoBuffer);
 
@@ -1488,7 +1490,7 @@ Return Value:
         Status = FatWriteDevice(Volume->Device.DeviceToken,
                                 InformationBlock,
                                 1,
-                                0,
+                                IoFlags,
                                 NULL,
                                 InformationIoBuffer);
 
@@ -1568,11 +1570,13 @@ Return Value:
     PFAT32_INFORMATION_SECTOR Information;
     ULONGLONG InformationBlock;
     PFAT_IO_BUFFER InformationIoBuffer;
+    ULONG IoFlags;
     ULONG NextCluster;
     KSTATUS Status;
     ULONG TotalClusters;
 
     InformationIoBuffer = NULL;
+    IoFlags = IO_FLAG_FS_DATA | IO_FLAG_FS_METADATA;
     FatAcquireLock(Volume->Lock);
     TotalClusters = Volume->ClusterCount;
     if ((FirstCluster < FAT_CLUSTER_BEGIN) || (FirstCluster >= TotalClusters)) {
@@ -1641,7 +1645,7 @@ Return Value:
         Status = FatReadDevice(Volume->Device.DeviceToken,
                                InformationBlock,
                                1,
-                               0,
+                               IoFlags,
                                Irp,
                                InformationIoBuffer);
 
@@ -1664,7 +1668,7 @@ Return Value:
         Status = FatWriteDevice(Volume->Device.DeviceToken,
                                 InformationBlock,
                                 1,
-                                0,
+                                IoFlags,
                                 Irp,
                                 InformationIoBuffer);
 

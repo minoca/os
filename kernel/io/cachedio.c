@@ -72,6 +72,8 @@ Members:
         performed. The file offset plus the page byte offset gets the exact
         byte offset.
 
+    IoFlags - Stores the I/O flags from the request. See IO_FLAG_* definitions.
+
 --*/
 
 typedef struct _IO_WRITE_CONTEXT {
@@ -85,6 +87,7 @@ typedef struct _IO_WRITE_CONTEXT {
     ULONGLONG CacheBufferOffset;
     ULONG BytesThisRound;
     ULONG PageByteOffset;
+    ULONG IoFlags;
 } IO_WRITE_CONTEXT, *PIO_WRITE_CONTEXT;
 
 //
@@ -107,7 +110,6 @@ KSTATUS
 IopHandleCacheWriteMiss (
     PFILE_OBJECT FileObject,
     PIO_WRITE_CONTEXT WriteContext,
-    ULONG Flags,
     ULONG TimeoutInMilliseconds,
     PBOOL WriteOut
     );
@@ -115,8 +117,7 @@ IopHandleCacheWriteMiss (
 KSTATUS
 IopHandleCacheWriteHit (
     PPAGE_CACHE_ENTRY PageCacheEntry,
-    PIO_WRITE_CONTEXT WriteContext,
-    ULONG Flags
+    PIO_WRITE_CONTEXT WriteContext
     );
 
 KSTATUS
@@ -223,22 +224,31 @@ Return Value:
     if (IoContext->Write != FALSE) {
 
         //
-        // In an effort to prevent runaway writers from causing the page cache
-        // to fill all of memory, ask the page cache if it's feeling
-        // uncomfortably dirty. If so, make this thread do some of the page
-        // cache's work before it can create its own junk.
+        // It's important to prevent runaway writers from making things
+        // overwhelmingly dirty.
+        // 1) If it's a write to a block device, make it synchronized. This
+        //    covers the case of the file system writing tons of zeros to catch
+        //    up to a far offset.
+        // 2) Otherwise if the FS flags are set, let the write go through
+        //    unimpeded.
+        // 3) Otherwise go clean some entries.
         //
 
         if (IopIsPageCacheTooDirty() != FALSE) {
-            PageShift = MmPageShift();
-            FlushCount = PAGE_CACHE_DIRTY_PENANCE_PAGES;
-            if ((IoContext->SizeInBytes >> PageShift) >= FlushCount) {
-                FlushCount = (IoContext->SizeInBytes >> PageShift) + 1;
-            }
+            if (FileObject->Properties.Type == IoObjectBlockDevice) {
+                IoContext->Flags |= IO_FLAG_DATA_SYNCHRONIZED;
 
-            Status = IopFlushFileObjects(0, 0, &FlushCount);
-            if (!KSUCCESS(Status)) {
-                return Status;
+            } else if ((IoContext->Flags & IO_FLAG_FS_DATA) == 0) {
+                PageShift = MmPageShift();
+                FlushCount = PAGE_CACHE_DIRTY_PENANCE_PAGES;
+                if ((IoContext->SizeInBytes >> PageShift) >= FlushCount) {
+                    FlushCount = (IoContext->SizeInBytes >> PageShift) + 1;
+                }
+
+                Status = IopFlushFileObjects(0, 0, &FlushCount);
+                if (!KSUCCESS(Status)) {
+                    return Status;
+                }
             }
         }
 
@@ -819,9 +829,13 @@ Return Value:
             (IO_FLAG_DATA_SYNCHRONIZED | IO_FLAG_METADATA_SYNCHRONIZED)) !=
            IO_FLAG_METADATA_SYNCHRONIZED);
 
+    ASSERT((IoContext->Flags & (IO_FLAG_FS_DATA | IO_FLAG_FS_METADATA)) !=
+           IO_FLAG_FS_METADATA);
+
     IoContext->BytesCompleted = 0;
     WriteContext.BytesCompleted = 0;
     WriteContext.CacheBuffer = NULL;
+    WriteContext.IoFlags = IoContext->Flags;
     PageByteOffset = 0;
     PageSize = MmPageSize();
     SizeInBytes = IoContext->SizeInBytes;
@@ -963,10 +977,7 @@ Return Value:
                                                  TRUE);
 
         if (PageCacheEntry != NULL) {
-            Status = IopHandleCacheWriteHit(PageCacheEntry,
-                                            &WriteContext,
-                                            IoContext->Flags);
-
+            Status = IopHandleCacheWriteHit(PageCacheEntry, &WriteContext);
             IoPageCacheEntryReleaseReference(PageCacheEntry);
             if (!KSUCCESS(Status)) {
                 goto PerformCachedWriteEnd;
@@ -980,7 +991,6 @@ Return Value:
         } else {
             Status = IopHandleCacheWriteMiss(FileObject,
                                              &WriteContext,
-                                             IoContext->Flags,
                                              IoContext->TimeoutInMilliseconds,
                                              &WriteOutNow);
 
@@ -1072,7 +1082,6 @@ KSTATUS
 IopHandleCacheWriteMiss (
     PFILE_OBJECT FileObject,
     PIO_WRITE_CONTEXT WriteContext,
-    ULONG Flags,
     ULONG TimeoutInMilliseconds,
     PBOOL WriteOut
     )
@@ -1095,9 +1104,6 @@ Arguments:
     WriteContext - Supplies a pointer to the I/O context that stores the
         current processing information for the write operation. This routine
         updates this information if it processes any bytes.
-
-    Flags - Supplies a bitmask of flags for this I/O operation. See IO_FLAG_*
-        for definitions.
 
     TimeoutInMilliseconds - Supplies the number of milliseconds that the I/O
         operation should be waited on before timing out. Use
@@ -1179,7 +1185,7 @@ Return Value:
         MissContext.IoBuffer = &PageCacheBuffer;
         MissContext.Offset = WriteContext->FileOffset;
         MissContext.SizeInBytes = PageSize;
-        MissContext.Flags = Flags;
+        MissContext.Flags = WriteContext->IoFlags;
         MissContext.TimeoutInMilliseconds = TimeoutInMilliseconds;
         MissContext.Write = TRUE;
         Status = IopHandleCacheReadMiss(FileObject, &MissContext);
@@ -1372,10 +1378,7 @@ Return Value:
         //
 
         if (Created == FALSE) {
-            Status = IopHandleCacheWriteHit(PageCacheEntry,
-                                            WriteContext,
-                                            Flags);
-
+            Status = IopHandleCacheWriteHit(PageCacheEntry, WriteContext);
             if (!KSUCCESS(Status)) {
                 goto HandleCacheWriteMissEnd;
             }
@@ -1459,8 +1462,7 @@ HandleCacheWriteMissEnd:
 KSTATUS
 IopHandleCacheWriteHit (
     PPAGE_CACHE_ENTRY PageCacheEntry,
-    PIO_WRITE_CONTEXT WriteContext,
-    ULONG Flags
+    PIO_WRITE_CONTEXT WriteContext
     )
 
 /*++
@@ -1481,9 +1483,6 @@ Arguments:
         current processing information for the write operation. This routine
         updates this information if it processes any bytes.
 
-    Flags - Supplies a bitmask of flags for this I/O operation. See IO_FLAG_*
-        for definitions.
-
 Return Value:
 
     Status code.
@@ -1500,12 +1499,15 @@ Return Value:
     //
     // If this is a full page aligned write and the source is backed by the
     // page cache, then try to share the source's physical page with the found
-    // page cache entry.
+    // page cache entry. Only do this if the FS flag is set, as it would be
+    // bad to associate regions of a file with an unassociated portion of the
+    // disk.
     //
 
     Linked = FALSE;
     PageSize = MmPageSize();
-    if ((WriteContext->PageByteOffset == 0) &&
+    if (((WriteContext->IoFlags & IO_FLAG_FS_DATA) != 0) &&
+        (WriteContext->PageByteOffset == 0) &&
         (WriteContext->BytesThisRound == PageSize) &&
         (IS_ALIGNED(WriteContext->SourceOffset, PageSize) != 0)) {
 
