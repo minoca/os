@@ -1535,8 +1535,6 @@ Return Value:
     PATH_POINT DestinationPathPoint;
     PPATH_POINT DestinationStartPathPoint;
     PDEVICE Device;
-    PFILE_OBJECT FileArray[4];
-    ULONG FileArraySize;
     PATH_POINT FoundPathPoint;
     PSTR LocalDestinationPath;
     ULONG LocalDestinationPathSize;
@@ -1896,23 +1894,20 @@ Return Value:
         // locked to synchronize with file property writes. Because the FAT
         // file system writes properties to the parent directory, file property
         // writes always need to be able to find a valid parent directory.
+        // Directories are always locked before files.
         //
 
-        FileArray[0] = SourceDirectoryFileObject;
-        FileArray[1] = DestinationDirectoryFileObject;
-        FileArray[2] = SourceFileObject;
+        IopAcquireFileObjectLocksExclusive(SourceDirectoryFileObject,
+                                           DestinationDirectoryFileObject);
+
         if (DestinationFileObject != NULL) {
-
-            ASSERT(DestinationPathPoint.PathEntry != NULL);
-
-            FileArray[3] = DestinationFileObject;
-            FileArraySize = 4;
+            IopAcquireFileObjectLocksExclusive(SourceFileObject,
+                                               DestinationFileObject);
 
         } else {
-            FileArraySize = 3;
+            KeAcquireSharedExclusiveLockExclusive(SourceFileObject->Lock);
         }
 
-        IopAcquireFileObjectIoLocksExclusive(FileArray, FileArraySize);
         LocksHeld = TRUE;
 
         //
@@ -2028,7 +2023,17 @@ Return Value:
         // tried again. Release the locks and any references taken.
         //
 
-        IopReleaseFileObjectIoLocksExclusive(FileArray, FileArraySize);
+        KeReleaseSharedExclusiveLockExclusive(SourceFileObject->Lock);
+        if (DestinationFileObject != NULL) {
+            KeReleaseSharedExclusiveLockExclusive(DestinationFileObject->Lock);
+        }
+
+        KeReleaseSharedExclusiveLockExclusive(SourceDirectoryFileObject->Lock);
+        if (DestinationDirectoryFileObject != SourceDirectoryFileObject) {
+            KeReleaseSharedExclusiveLockExclusive(
+                                         DestinationDirectoryFileObject->Lock);
+        }
+
         LocksHeld = FALSE;
         IO_PATH_POINT_RELEASE_REFERENCE(&SourcePathPoint);
         SourcePathPoint.PathEntry = NULL;
@@ -2153,19 +2158,18 @@ Return Value:
                                     TRUE);
     }
 
-    //
-    // Release the file object locks.
-    //
-
-    IopReleaseFileObjectIoLocksExclusive(FileArray, FileArraySize);
-    LocksHeld = FALSE;
-    if (!KSUCCESS(Status)) {
-        goto RenameEnd;
-    }
-
 RenameEnd:
     if (LocksHeld != FALSE) {
-        IopReleaseFileObjectIoLocksExclusive(FileArray, FileArraySize);
+        KeReleaseSharedExclusiveLockExclusive(SourceFileObject->Lock);
+        if (DestinationFileObject != NULL) {
+            KeReleaseSharedExclusiveLockExclusive(DestinationFileObject->Lock);
+        }
+
+        KeReleaseSharedExclusiveLockExclusive(SourceDirectoryFileObject->Lock);
+        if (DestinationDirectoryFileObject != SourceDirectoryFileObject) {
+            KeReleaseSharedExclusiveLockExclusive(
+                                         DestinationDirectoryFileObject->Lock);
+        }
     }
 
     if (SourcePathPoint.PathEntry != NULL) {
@@ -3763,8 +3767,6 @@ Return Value:
 
     PDEVICE Device;
     PFILE_OBJECT DirectoryFileObject;
-    PFILE_OBJECT FileArray[2];
-    ULONG FileArraySize;
     PFILE_OBJECT FileObject;
     BOOL LocksHeld;
     PATH_POINT ParentPathPoint;
@@ -3876,18 +3878,14 @@ Return Value:
 
     //
     // The unlink operation needs to modify the parent directory and the file
-    // properties of the child. Hold both locks exclusively. Be wary of lock
-    // ordering here, so use the special lock routine.
+    // properties of the child. Hold both locks exclusively. Directories are
+    // always acquired first.
     //
 
     ASSERT(DirectoryFileObject != FileObject);
-    ASSERT(DirectoryFileObject->Properties.FileId !=
-           FileObject->Properties.FileId);
 
-    FileArray[0] = DirectoryFileObject;
-    FileArray[1] = FileObject;
-    FileArraySize = 2;
-    IopAcquireFileObjectIoLocksExclusive(FileArray, FileArraySize);
+    KeAcquireSharedExclusiveLockExclusive(DirectoryFileObject->Lock);
+    KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
     LocksHeld = TRUE;
 
     //
@@ -3962,7 +3960,8 @@ Return Value:
         IopPathUnlink(PathPoint->PathEntry);
     }
 
-    IopReleaseFileObjectIoLocksExclusive(FileArray, FileArraySize);
+    KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+    KeReleaseSharedExclusiveLockExclusive(DirectoryFileObject->Lock);
     LocksHeld = FALSE;
 
     //
@@ -3981,7 +3980,8 @@ Return Value:
 
 DeletePathPointEnd:
     if (LocksHeld != FALSE) {
-        IopReleaseFileObjectIoLocksExclusive(FileArray, FileArraySize);
+        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+        KeReleaseSharedExclusiveLockExclusive(DirectoryFileObject->Lock);
     }
 
     if (ParentPathPoint.PathEntry != NULL) {

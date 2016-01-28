@@ -2181,24 +2181,23 @@ Return Value:
 }
 
 VOID
-IopAcquireFileObjectIoLocksExclusive (
-    PFILE_OBJECT *FileArray,
-    ULONG FileArraySize
+IopAcquireFileObjectLocksExclusive (
+    PFILE_OBJECT Object1,
+    PFILE_OBJECT Object2
     )
 
 /*++
 
 Routine Description:
 
-    This routine sorts the file objects into the appropriate locking order and
-    then acquires their locks exclusively. It only operates on arrays that have
-    length between 1 and 4, inclusive.
+    This routine acquires two file object locks exclusive in the right order.
+    The order is to sort first by file object type, then by file object pointer.
 
 Arguments:
 
-    FileArray - Supplies an array of file objects to sort.
+    Object1 - Supplies a pointer to the first file object.
 
-    FileArraySize - Supplies the size of the file array.
+    Object2 - Supplies a pointer to the second file object.
 
 Return Value:
 
@@ -2208,162 +2207,36 @@ Return Value:
 
 {
 
-    PFILE_OBJECT FileObject;
-    ULONG Index;
-    PFILE_OBJECT PreviousFile;
-    PFILE_OBJECT SortedArray[4];
+    PFILE_OBJECT Swap;
 
-    ASSERT((FileArraySize >= 1) && (FileArraySize <= 4));
-    ASSERT(FileArray[0] != NULL);
-
-    if (FileArraySize == 1) {
-        SortedArray[0] = FileArray[0];
-        goto AcquireFileObjectIoLocksExclusiveEnd;
+    if (Object1 == Object2) {
+        KeAcquireSharedExclusiveLockExclusive(Object1->Lock);
+        return;
     }
 
     //
-    // Sort the first two elements.
+    // If the types are in the wrong order, swap them.
     //
 
-    if (FileArray[0]->Properties.FileId < FileArray[1]->Properties.FileId) {
-        SortedArray[0] = FileArray[0];
-        SortedArray[1] = FileArray[1];
-
-    } else {
-        SortedArray[0] = FileArray[1];
-        SortedArray[1] = FileArray[0];
-    }
-
-    if (FileArraySize == 2) {
-        goto AcquireFileObjectIoLocksExclusiveEnd;
-    }
+    if (Object1->Properties.Type > Object2->Properties.Type) {
+        Swap = Object1;
+        Object1 = Object2;
+        Object2 = Swap;
 
     //
-    // Either fill in the third, or sort the third and fourth.
+    // Otherwise, if they're equal, compare pointers.
     //
 
-    if (FileArraySize == 3) {
-        SortedArray[2] = FileArray[2];
-
-    } else {
-
-        ASSERT(FileArraySize == 4);
-
-        if (FileArray[2]->Properties.FileId < FileArray[3]->Properties.FileId) {
-            SortedArray[2] = FileArray[2];
-            SortedArray[3] = FileArray[3];
-
-        } else {
-            SortedArray[2] = FileArray[3];
-            SortedArray[3] = FileArray[2];
+    } else if (Object1->Properties.Type == Object2->Properties.Type) {
+        if (Object1 > Object2) {
+            Swap = Object1;
+            Object1 = Object2;
+            Object2 = Swap;
         }
     }
 
-    //
-    // Now compare sorted 0 to sorted 2. Swap if they are out of order.
-    //
-
-    if (SortedArray[0]->Properties.FileId > SortedArray[2]->Properties.FileId) {
-        FileObject = SortedArray[0];
-        SortedArray[0] = SortedArray[2];
-        SortedArray[2] = FileObject;
-    }
-
-    //
-    // Sort the two high elements if the array is of size four.
-    //
-
-    if ((FileArraySize == 4) &&
-        (SortedArray[1]->Properties.FileId >
-         SortedArray[3]->Properties.FileId)) {
-
-        FileObject = SortedArray[1];
-        SortedArray[1] = SortedArray[3];
-        SortedArray[3] = FileObject;
-    }
-
-    //
-    // Finish by sorting the two middle elements.
-    //
-
-    if (SortedArray[1]->Properties.FileId > SortedArray[2]->Properties.FileId) {
-        FileObject = SortedArray[1];
-        SortedArray[1] = SortedArray[2];
-        SortedArray[2] = FileObject;
-    }
-
-AcquireFileObjectIoLocksExclusiveEnd:
-
-    //
-    // Lock the file objects, making sure not to lock the same element twice.
-    // Equal elements are neighbors in the array, so just check the current
-    // file against the file that was locked last.
-    //
-
-    PreviousFile = NULL;
-    for (Index = 0; Index < FileArraySize; Index += 1) {
-        FileArray[Index] = SortedArray[Index];
-        if (FileArray[Index] != PreviousFile) {
-
-            ASSERT(FileArray[Index] != NULL);
-
-            KeAcquireSharedExclusiveLockExclusive(FileArray[Index]->Lock);
-            PreviousFile = FileArray[Index];
-        }
-    }
-
-    return;
-}
-
-VOID
-IopReleaseFileObjectIoLocksExclusive (
-    PFILE_OBJECT *FileArray,
-    ULONG FileArraySize
-    )
-
-/*++
-
-Routine Description:
-
-    This routine release the given files' locks in reverse order. The array
-    should already be correctly sorted.
-
-Arguments:
-
-    FileArray - Supplies an array of file objects whose locks need to be
-        released.
-
-    FileArraySize - Supplies the number of files in the array.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ULONG Index;
-    PFILE_OBJECT PreviousFile;
-
-    ASSERT((FileArraySize >= 1) && (FileArraySize <= 4));
-    ASSERT(FileArray[0] != NULL);
-
-    //
-    // Release the file objects' locks in reverse order. If there are any
-    // duplicates in the list, they will be appropriately skipped.
-    //
-
-    PreviousFile = NULL;
-    for (Index = FileArraySize; Index > 0; Index -= 1) {
-        if ((FileArray[Index - 1] != PreviousFile) &&
-            (FileArray[Index - 1] != NULL)) {
-
-            KeReleaseSharedExclusiveLockExclusive(FileArray[Index - 1]->Lock);
-            PreviousFile = FileArray[Index - 1];
-        }
-    }
-
+    KeAcquireSharedExclusiveLockExclusive(Object1->Lock);
+    KeAcquireSharedExclusiveLockExclusive(Object2->Lock);
     return;
 }
 

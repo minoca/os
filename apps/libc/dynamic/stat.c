@@ -78,8 +78,8 @@ ClpConvertFilePropertiesToStat (
 
 mode_t ClStatFileTypeConversions[IoObjectTypeCount] = {
     0,
-    S_IFREG,
     S_IFDIR,
+    S_IFREG,
     S_IFBLK,
     S_IFCHR,
     S_IFIFO,

@@ -105,8 +105,8 @@ ClpDestroyDirectoryStructure (
 
 CHAR ClDirectoryEntryTypeConversions[IoObjectTypeCount] = {
     DT_UNKNOWN,
-    DT_REG,
     DT_DIR,
+    DT_REG,
     DT_BLK,
     DT_CHR,
     DT_FIFO,

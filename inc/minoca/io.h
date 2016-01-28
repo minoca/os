@@ -1434,8 +1434,8 @@ Return Value:
 
 typedef enum _IO_OBJECT_TYPE {
     IoObjectInvalid,
-    IoObjectRegularFile,
     IoObjectRegularDirectory,
+    IoObjectRegularFile,
     IoObjectBlockDevice,
     IoObjectCharacterDevice,
     IoObjectPipe,

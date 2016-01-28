@@ -2922,50 +2922,23 @@ Return Value:
 --*/
 
 VOID
-IopAcquireFileObjectIoLocksExclusive (
-    PFILE_OBJECT *FileArray,
-    ULONG FileArraySize
+IopAcquireFileObjectLocksExclusive (
+    PFILE_OBJECT Object1,
+    PFILE_OBJECT Object2
     );
 
 /*++
 
 Routine Description:
 
-    This routine sorts the file objects into the appropriate locking order and
-    then acquires their locks exclusively. It only operates on arrays that have
-    length between 1 and 4, inclusive.
+    This routine acquires two file object locks exclusive in the right order.
+    The order is to sort first by file object type, then by file object pointer.
 
 Arguments:
 
-    FileArray - Supplies an array of file objects to sort.
+    Object1 - Supplies a pointer to the first file object.
 
-    FileArraySize - Supplies the size of the file array.
-
-Return Value:
-
-    None.
-
---*/
-
-VOID
-IopReleaseFileObjectIoLocksExclusive (
-    PFILE_OBJECT *FileArray,
-    ULONG FileArraySize
-    );
-
-/*++
-
-Routine Description:
-
-    This routine release the given files' locks in reverse order. The array
-    should already be correctly sorted.
-
-Arguments:
-
-    FileArray - Supplies an array of file objects whose locks need to be
-        released.
-
-    FileArraySize - Supplies the number of files in the array.
+    Object2 - Supplies a pointer to the second file object.
 
 Return Value:
 
