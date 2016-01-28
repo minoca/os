@@ -70,7 +70,8 @@ Author:
 // Define the set of 802.11 link flags.
 //
 
-#define NET80211_LINK_FLAG_DATA_PAUSED 0x00000001
+#define NET80211_LINK_FLAG_DATA_PAUSED  0x00000001
+#define NET80211_LINK_FLAG_TIMER_QUEUED 0x00000002
 
 //
 // Define the set of BSS entry flags.
@@ -259,6 +260,14 @@ Members:
     Lock - Stores a pointer to a queued lock that synchronizes access to the
         802.11 link structure.
 
+    StateTimer - Stores a pointer to a timer used to monitor state transitions.
+
+    TimeoutDpc- Stores a pointer to a DPC that is executed when the state timer
+        expires.
+
+    TimeoutWorkItem - Stores a pointer to a low level work item queued by the
+        DPC on state transition timeouts.
+
     BssList - Stores a list of BSSs that are within range of this 802.11 device.
 
     ActiveBss - Stores a pointer to the BSS to which the link is attempting to
@@ -276,6 +285,9 @@ typedef struct _NET80211_LINK {
     ULONG Flags;
     volatile ULONG SequenceNumber;
     PQUEUED_LOCK Lock;
+    PKTIMER StateTimer;
+    PDPC TimeoutDpc;
+    PWORK_ITEM TimeoutWorkItem;
     LIST_ENTRY BssList;
     PNET80211_BSS_ENTRY ActiveBss;
     NET_PACKET_LIST PausedPacketList;
@@ -428,6 +440,51 @@ Arguments:
 
     BssEntry - Supplies a pointer to the BSS entry whose reference count is to
         be decremented.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+Net80211pStateTimeoutDpcRoutine (
+    PDPC Dpc
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the 802.11 state transition timeout DPC that gets
+    called after a remote node does not respond to a management frame.
+
+Arguments:
+
+    Dpc - Supplies a pointer to the DPC that is running.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+Net80211pStateTimeoutWorker (
+    PVOID Parameter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs the low level work when an 802.11 state transition
+    times out due to a remote node not responding.
+
+Arguments:
+
+    Parameter - Supplies a pointer to the nework link whose 802.11 state
+        transition has timed out.
 
 Return Value:
 

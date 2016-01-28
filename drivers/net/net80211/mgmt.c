@@ -70,6 +70,18 @@ Environment:
 #define NET80211_SCAN_RETRY_COUNT 5
 
 //
+// Define the time to wait for a state management frame.
+//
+
+#define NET80211_STATE_TIMEOUT (2 * MICROSECONDS_PER_SECOND)
+
+//
+// Define the time to wait for advanced authentication.
+//
+
+#define NET80211_AUTHENTICATION_TIMEOUT (5 * MICROSECONDS_PER_SECOND)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -266,8 +278,19 @@ Net80211pSendManagementFrame (
     );
 
 KSTATUS
+Net80211pQueueStateTransitionTimer (
+    PNET_LINK Link,
+    ULONGLONG Timeout
+    );
+
+VOID
+Net80211pCancelStateTransitionTimer (
+    PNET_LINK Link
+    );
+
+KSTATUS
 Net80211pValidateRates (
-    PNET80211_LINK Link,
+    PNET_LINK Link,
     PNET80211_BSS_ENTRY Bss
     );
 
@@ -637,6 +660,85 @@ Return Value:
     return;
 }
 
+VOID
+Net80211pStateTimeoutDpcRoutine (
+    PDPC Dpc
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the 802.11 state transition timeout DPC that gets
+    called after a remote node does not respond to a management frame.
+
+Arguments:
+
+    Dpc - Supplies a pointer to the DPC that is running.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET_LINK Link;
+    PNET80211_LINK Net80211Link;
+
+    Link = (PNET_LINK)Dpc->UserData;
+    Net80211Link = Link->DataLinkContext;
+    KeQueueWorkItem(Net80211Link->TimeoutWorkItem);
+    return;
+}
+
+VOID
+Net80211pStateTimeoutWorker (
+    PVOID Parameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs the low level work when an 802.11 state transition
+    times out due to a remote node not responding.
+
+Arguments:
+
+    Parameter - Supplies a pointer to the nework link whose 802.11 state
+        transition has timed out.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET_LINK Link;
+    PNET80211_LINK Net80211Link;
+
+    Link = (PNET_LINK)Parameter;
+    Net80211Link = Link->DataLinkContext;
+
+    //
+    // If a packet did not arrive to advance the state and cancel the timer,
+    // then this really is a timeout. Set the state back to initialized.
+    //
+
+    KeAcquireQueuedLock(Net80211Link->Lock);
+    if ((Net80211Link->Flags & NET80211_LINK_FLAG_TIMER_QUEUED) != 0) {
+        Net80211Link->Flags &= ~NET80211_LINK_FLAG_TIMER_QUEUED;
+        Net80211pSetStateUnlocked(Link, Net80211StateInitialized);
+    }
+
+    KeReleaseQueuedLock(Net80211Link->Lock);
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -714,6 +816,12 @@ Return Value:
     Net80211Link->State = State;
 
     //
+    // Make sure the state transition timer is canceled.
+    //
+
+    Net80211pCancelStateTransitionTimer(Link);
+
+    //
     // Perform the necessary steps according to the state transition.
     //
 
@@ -736,6 +844,13 @@ Return Value:
         case Net80211StateAssociating:
         case Net80211StateReassociating:
             Status = Net80211pSendAuthenticationRequest(Link, Bss);
+            if (!KSUCCESS(Status)) {
+                goto SetStateEnd;
+            }
+
+            Status = Net80211pQueueStateTransitionTimer(Link,
+                                                        NET80211_STATE_TIMEOUT);
+
             if (!KSUCCESS(Status)) {
                 goto SetStateEnd;
             }
@@ -764,20 +879,17 @@ Return Value:
         case Net80211StateAuthenticating:
 
             //
-            // Initialize the encryption authentication process so that it is
-            // ready to receive packets assuming association succeeds.
+            // Send out an association request and set the timeout.
             //
 
-            Status = Net80211pInitializeEncryption(Link, Bss);
+            Status = Net80211pSendAssociationRequest(Link, Bss);
             if (!KSUCCESS(Status)) {
                 goto SetStateEnd;
             }
 
-            //
-            // Send out an association request.
-            //
+            Status = Net80211pQueueStateTransitionTimer(Link,
+                                                        NET80211_STATE_TIMEOUT);
 
-            Status = Net80211pSendAssociationRequest(Link, Bss);
             if (!KSUCCESS(Status)) {
                 goto SetStateEnd;
             }
@@ -803,6 +915,26 @@ Return Value:
             (Bss->Encryption.Pairwise == Net80211EncryptionWep)) {
 
             SetLinkUp = TRUE;
+
+        } else {
+
+            //
+            // Initialize the encryption authentication process so that it is
+            // ready to receive key exchange packets.
+            //
+
+            Status = Net80211pInitializeEncryption(Link, Bss);
+            if (!KSUCCESS(Status)) {
+                goto SetStateEnd;
+            }
+
+            Status = Net80211pQueueStateTransitionTimer(
+                                              Link,
+                                              NET80211_AUTHENTICATION_TIMEOUT);
+
+            if (!KSUCCESS(Status)) {
+                goto SetStateEnd;
+            }
         }
 
         break;
@@ -960,7 +1092,7 @@ Return Value:
                 }
 
                 if (FoundEntry != NULL) {
-                    Status = Net80211pValidateRates(Net80211Link, FoundEntry);
+                    Status = Net80211pValidateRates(Link, FoundEntry);
                     if (!KSUCCESS(Status)) {
                        goto ScanThreadEnd;
                     }
@@ -1013,7 +1145,7 @@ Return Value:
                 // Also determine the mode at which it would connect.
                 //
 
-                Status = Net80211pValidateRates(Net80211Link, BssEntry);
+                Status = Net80211pValidateRates(Link, BssEntry);
                 if (!KSUCCESS(Status)) {
                     continue;
                 }
@@ -2170,7 +2302,7 @@ Return Value:
                   ExtendedRates,
                   ExtendedRateCount);
 
-    Status = Net80211pValidateRates(Net80211Link, Bss);
+    Status = Net80211pValidateRates(Link, Bss);
     if (!KSUCCESS(Status)) {
         goto ProcessAssociationResponseEnd;
     }
@@ -2341,8 +2473,108 @@ SendManagementFrameEnd:
 }
 
 KSTATUS
+Net80211pQueueStateTransitionTimer (
+    PNET_LINK Link,
+    ULONGLONG Timeout
+    )
+
+/*++
+
+Routine Description:
+
+    This routine queues the given network link's state transition timer.
+
+Arguments:
+
+    Link - Supplies a pointer to a network link.
+
+    Timeout - Supplies the desired timeout in microseconds.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONGLONG DueTime;
+    PNET80211_LINK Net80211Link;
+    KSTATUS Status;
+
+    Net80211Link = Link->DataLinkContext;
+
+    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+
+    DueTime = KeGetRecentTimeCounter();
+    DueTime += KeConvertMicrosecondsToTimeTicks(Timeout);
+    Status = KeQueueTimer(Net80211Link->StateTimer,
+                          TimerQueueSoft,
+                          DueTime,
+                          0,
+                          0,
+                          Net80211Link->TimeoutDpc);
+
+    if (KSUCCESS(Status)) {
+        Net80211Link->Flags |= NET80211_LINK_FLAG_TIMER_QUEUED;
+    }
+
+    return Status;
+}
+
+VOID
+Net80211pCancelStateTransitionTimer (
+    PNET_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine cancels the given link's state transition timer if it is
+    queued.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link whose state transition timer
+        shall be canceled.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_LINK Net80211Link;
+    KSTATUS Status;
+
+    Net80211Link = Link->DataLinkContext;
+
+    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+
+    //
+    // Cancel the timer if it is queued. Also make sure the DPC is flushed if
+    // the timer just expired. The timer may be requeued at any time and a DPC
+    // cannot be queued twice.
+    //
+
+    if ((Net80211Link->Flags & NET80211_LINK_FLAG_TIMER_QUEUED) != 0) {
+        Status = KeCancelTimer(Net80211Link->StateTimer);
+        if (!KSUCCESS(Status)) {
+            KeFlushDpc(Net80211Link->TimeoutDpc);
+        }
+
+        Net80211Link->Flags &= ~NET80211_LINK_FLAG_TIMER_QUEUED;
+    }
+
+    return;
+}
+
+KSTATUS
 Net80211pValidateRates (
-    PNET80211_LINK Link,
+    PNET_LINK Link,
     PNET80211_BSS_ENTRY Bss
     )
 
@@ -2356,7 +2588,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the 802.11 link for which to validate the BSS
+    Link - Supplies a pointer to the network link for which to validate the BSS
         entry's rates.
 
     Bss - Supplies a pointer to a BSS entry.
@@ -2378,10 +2610,12 @@ Return Value:
     UCHAR LocalRate;
     PNET80211_RATE_INFORMATION LocalRates;
     UCHAR MaxRate;
+    PNET80211_LINK Net80211Link;
     KSTATUS Status;
 
     BssRates = &(Bss->State.Rates);
-    LocalRates = Link->Properties.SupportedRates;
+    Net80211Link = Link->DataLinkContext;
+    LocalRates = Net80211Link->Properties.SupportedRates;
 
     //
     // Make sure the basic rates are supported. Unfortunately, there is no

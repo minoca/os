@@ -479,6 +479,32 @@ Return Value:
         goto InitializeLinkEnd;
     }
 
+    Net80211Link->StateTimer = KeCreateTimer(NET80211_ALLOCATION_TAG);
+    if (Net80211Link->StateTimer == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeLinkEnd;
+    }
+
+    Net80211Link->TimeoutDpc = KeCreateDpc(Net80211pStateTimeoutDpcRoutine,
+                                           Link);
+
+    if (Net80211Link->TimeoutDpc == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeLinkEnd;
+    }
+
+    Net80211Link->TimeoutWorkItem = KeCreateWorkItem(
+                                                   NULL,
+                                                   WorkPriorityNormal,
+                                                   Net80211pStateTimeoutWorker,
+                                                   Link,
+                                                   NET80211_ALLOCATION_TAG);
+
+    if (Net80211Link->TimeoutWorkItem == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeLinkEnd;
+    }
+
     Net80211Link->State = Net80211StateUninitialized;
     INITIALIZE_LIST_HEAD(&(Net80211Link->BssList));
     Link->DataLinkContext = Net80211Link;
@@ -565,19 +591,7 @@ Return Value:
 
 {
 
-    PNET80211_LINK Net80211Link;
     KSTATUS Status;
-
-    //
-    // Packets can only be sent if the link has associated with an access point.
-    //
-
-    Net80211Link = Link->DataLinkContext;
-    if ((Net80211Link->State != Net80211StateAssociated) &&
-        (Net80211Link->State != Net80211StateEncrypted)) {
-
-        return STATUS_NOT_READY;
-    }
 
     Status = Net80211pSendDataFrames(Link,
                                      PacketList,
@@ -929,6 +943,18 @@ Return Value:
 
     if (Net80211Link->Lock != NULL) {
         KeDestroyQueuedLock(Net80211Link->Lock);
+    }
+
+    if (Net80211Link->StateTimer != NULL) {
+        KeDestroyTimer(Net80211Link->StateTimer);
+    }
+
+    if (Net80211Link->TimeoutDpc != NULL) {
+        KeDestroyDpc(Net80211Link->TimeoutDpc);
+    }
+
+    if (Net80211Link->TimeoutWorkItem != NULL) {
+        KeDestroyWorkItem(Net80211Link->TimeoutWorkItem);
     }
 
     MmFreePagedPool(Net80211Link);
