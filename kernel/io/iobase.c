@@ -5446,7 +5446,6 @@ Return Value:
     FileObject = Handle->PathPoint.PathEntry->FileObject;
 
     ASSERT(FileObject != NULL);
-    ASSERT(FileObject->Lock != NULL);
 
     if (Context->Offset != IO_OFFSET_NONE) {
         Parameters.IoOffset = Context->Offset;

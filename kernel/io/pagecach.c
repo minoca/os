@@ -1488,7 +1488,6 @@ Return Value:
 
     PPAGE_CACHE_ENTRY PageCacheEntry;
 
-    ASSERT(FileObject->Lock != NULL);
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE);
     ASSERT((LinkEntry == NULL) ||
            (LinkEntry->PhysicalAddress == PhysicalAddress));
@@ -1803,7 +1802,6 @@ Return Value:
     PIO_BUFFER FlushBuffer;
     ULONGLONG FlushNextOffset;
     UINTN FlushSize;
-    BOOL LockHeld;
     PRED_BLACK_TREE_NODE Node;
     BOOL PageCacheThread;
     UINTN PagesFlushed;
@@ -1821,7 +1819,6 @@ Return Value:
     CleanStreak = 0;
     INITIALIZE_LIST_HEAD(&DestroyListHead);
     FlushBuffer = NULL;
-    LockHeld = FALSE;
     PagesFlushed = 0;
     PageShift = MmPageShift();
     Status = STATUS_SUCCESS;
@@ -2106,26 +2103,19 @@ Return Value:
         // lock shared is the page cache thread as asserted above.
         //
 
-        if (FileObject->Lock != NULL) {
-            LockHeld = TRUE;
-            if (PageCacheThread != FALSE) {
-                KeAcquireSharedExclusiveLockShared(FileObject->Lock);
+        if (PageCacheThread != FALSE) {
+            KeAcquireSharedExclusiveLockShared(FileObject->Lock);
 
-            } else {
-                KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
-            }
+        } else {
+            KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
         }
 
         Status = IopFlushPageCacheBuffer(FlushBuffer, FlushSize, Flags);
-        if (LockHeld != FALSE) {
-            if (PageCacheThread != FALSE) {
-                KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+        if (PageCacheThread != FALSE) {
+            KeReleaseSharedExclusiveLockShared(FileObject->Lock);
 
-            } else {
-                KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-            }
-
-            LockHeld = FALSE;
+        } else {
+            KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
         }
 
         if (!KSUCCESS(Status)) {
@@ -2210,26 +2200,19 @@ Return Value:
     //
 
     if (FlushSize != 0) {
-        if (FileObject->Lock != NULL) {
-            LockHeld = TRUE;
-            if (PageCacheThread != FALSE) {
-                KeAcquireSharedExclusiveLockShared(FileObject->Lock);
+        if (PageCacheThread != FALSE) {
+            KeAcquireSharedExclusiveLockShared(FileObject->Lock);
 
-            } else {
-                KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
-            }
+        } else {
+            KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
         }
 
         Status = IopFlushPageCacheBuffer(FlushBuffer, FlushSize, Flags);
-        if (LockHeld != FALSE) {
-            if (PageCacheThread != FALSE) {
-                KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+        if (PageCacheThread != FALSE) {
+            KeReleaseSharedExclusiveLockShared(FileObject->Lock);
 
-            } else {
-                KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-            }
-
-            LockHeld = FALSE;
+        } else {
+            KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
         }
 
         if (!KSUCCESS(Status)) {
@@ -2249,8 +2232,6 @@ FlushPageCacheEntriesEnd:
     if ((!KSUCCESS(Status)) && (KSUCCESS(TotalStatus))) {
         TotalStatus = Status;
     }
-
-    ASSERT(LockHeld == FALSE);
 
     //
     // If writing to a disk and the synchronized flag is not set, then
@@ -2364,8 +2345,7 @@ Return Value:
     //
 
     ASSERT(((Flags & PAGE_CACHE_EVICTION_FLAG_TRUNCATE) == 0) ||
-           ((FileObject->Lock != NULL) &&
-            (KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock))));
+           (KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock)));
 
     //
     // Quickly exit if there is nothing to evict.
@@ -4369,8 +4349,7 @@ Return Value:
     PageSize = MmPageSize();
 
     ASSERT(FlushSize <= PAGE_CACHE_FLUSH_MAX);
-    ASSERT((FileObject->Lock == NULL) ||
-           (KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE));
+    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
 
     //
     // Try to mark all the pages clean. If they are all already clean, then

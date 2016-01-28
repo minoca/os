@@ -252,9 +252,7 @@ Return Value:
             }
         }
 
-        if (FileObject->Lock != NULL) {
-            KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
-        }
+        KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
 
         //
         // In append mode, set the offset to the end of the file.
@@ -274,10 +272,7 @@ Return Value:
                                               TRUE);
         }
 
-        if (FileObject->Lock != NULL) {
-            KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-        }
-
+        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
         Modified = TRUE;
 
     //
@@ -286,10 +281,7 @@ Return Value:
     //
 
     } else {
-        if (FileObject->Lock != NULL) {
-            KeAcquireSharedExclusiveLockShared(FileObject->Lock);
-        }
-
+        KeAcquireSharedExclusiveLockShared(FileObject->Lock);
         if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE) {
             Status = IopPerformCachedRead(FileObject, IoContext);
 
@@ -299,10 +291,7 @@ Return Value:
                                              Handle->DeviceContext);
         }
 
-        if (FileObject->Lock != NULL) {
-            KeReleaseSharedExclusiveLockShared(FileObject->Lock);
-        }
-
+        KeReleaseSharedExclusiveLockShared(FileObject->Lock);
         Modified = FALSE;
     }
 
@@ -513,8 +502,7 @@ Return Value:
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT(IoContext->SizeInBytes != 0);
     ASSERT(IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE);
-    ASSERT((FileObject->Lock == NULL) ||
-           (KeIsSharedExclusiveLockHeldShared(FileObject->Lock) != FALSE));
+    ASSERT(KeIsSharedExclusiveLockHeldShared(FileObject->Lock) != FALSE);
 
     IoContext->BytesCompleted = 0;
     DestinationIoBuffer = IoContext->IoBuffer;
@@ -818,8 +806,7 @@ Return Value:
 
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT(IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE);
-    ASSERT((FileObject->Lock == NULL) ||
-           (KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE));
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE);
 
     //
     // If the metadata flag is set, the data flag better be set as well.
@@ -1123,9 +1110,7 @@ Return Value:
 {
 
     UINTN CacheBufferSize;
-    BOOL Created;
     ULONGLONG FileOffset;
-    PSHARED_EXCLUSIVE_LOCK IoLock;
     IO_CONTEXT MissContext;
     ULONG PageByteOffset;
     IO_BUFFER PageCacheBuffer;
@@ -1330,41 +1315,15 @@ Return Value:
             VirtualAddress = IoGetPageCacheEntryVirtualAddress(SourceEntry);
         }
 
-        //
-        // If the file object has a lock, it should be held exclusively and
-        // this insert cannot race with a read or write. Consider it created.
-        //
+        ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE);
 
-        IoLock = FileObject->Lock;
-        if (IoLock != NULL) {
-
-            ASSERT(KeIsSharedExclusiveLockHeldExclusive(IoLock) != FALSE);
-
-            FileOffset = WriteContext->FileOffset;
-            PageCacheEntry = IopCreateAndInsertPageCacheEntry(FileObject,
-                                                              VirtualAddress,
-                                                              PhysicalAddress,
-                                                              FileOffset,
-                                                              SourceEntry,
-                                                              TRUE);
-
-            Created = TRUE;
-
-        //
-        // If there is no lock, then it could race with other inserts (e.g.
-        // device read ahead). Use the create or lookup routine.
-        //
-
-        } else {
-            FileOffset = WriteContext->FileOffset;
-            PageCacheEntry = IopCreateOrLookupPageCacheEntry(FileObject,
-                                                             VirtualAddress,
-                                                             PhysicalAddress,
-                                                             FileOffset,
-                                                             SourceEntry,
-                                                             TRUE,
-                                                             &Created);
-        }
+        FileOffset = WriteContext->FileOffset;
+        PageCacheEntry = IopCreateAndInsertPageCacheEntry(FileObject,
+                                                          VirtualAddress,
+                                                          PhysicalAddress,
+                                                          FileOffset,
+                                                          SourceEntry,
+                                                          TRUE);
 
         if (PageCacheEntry == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1372,76 +1331,62 @@ Return Value:
         }
 
         //
-        // If something sneaked in and created the page cache entry before
-        // this had a chance, treat it like it was a cache hit all along. The
-        // cache hit routine handles synchronized I/O appropriately.
+        // Mark the new page cache entry dirty.
         //
 
-        if (Created == FALSE) {
-            Status = IopHandleCacheWriteHit(PageCacheEntry, WriteContext);
-            if (!KSUCCESS(Status)) {
-                goto HandleCacheWriteMissEnd;
-            }
+        IoMarkPageCacheEntryDirty(PageCacheEntry,
+                                  WriteContext->PageByteOffset,
+                                  WriteContext->BytesThisRound,
+                                  FALSE);
 
         //
-        // Otherwise mark the new page cache entry dirty.
+        // If the page cache entry was created from a physical page owned
+        // by the scratch buffer, connect them.
         //
 
-        } else {
-            IoMarkPageCacheEntryDirty(PageCacheEntry,
-                                      WriteContext->PageByteOffset,
-                                      WriteContext->BytesThisRound,
-                                      FALSE);
-
-            //
-            // If the page cache entry was created from a physical page owned
-            // by the scratch buffer, connect them.
-            //
-
-            if (ScratchIoBuffer != NULL) {
-                MmSetIoBufferPageCacheEntry(ScratchIoBuffer, 0, PageCacheEntry);
-            }
-
-            //
-            // This page cache entry was created, so if it's a cacheable file
-            // type, it will need to go down through the file system to ensure
-            // there's disk space allocated to it. Create a cache buffer if one
-            // has not been created yet.
-            //
-
-            if (IO_IS_CACHEABLE_FILE(FileObject->Properties.Type)) {
-                *WriteOut = TRUE;
-                if (WriteContext->CacheBuffer == NULL) {
-                    CacheBufferSize = WriteContext->PageByteOffset +
-                                      WriteContext->BytesRemaining;
-
-                    CacheBufferSize = ALIGN_RANGE_UP(CacheBufferSize, PageSize);
-                    WriteContext->CacheBuffer =
-                           MmAllocateUninitializedIoBuffer(CacheBufferSize, 0);
-
-                    if (WriteContext->CacheBuffer == NULL) {
-                        Status = STATUS_INSUFFICIENT_RESOURCES;
-                        goto HandleCacheWriteMissEnd;
-                    }
-
-                    WriteContext->CacheBufferOffset = WriteContext->FileOffset;
-                }
-            }
-
-            //
-            // Back the cache buffer with this page cache entry, since it will
-            // be flushed later.
-            //
-
-            if (WriteContext->CacheBuffer != NULL) {
-                MmIoBufferAppendPage(WriteContext->CacheBuffer,
-                                     PageCacheEntry,
-                                     NULL,
-                                     INVALID_PHYSICAL_ADDRESS);
-            }
-
-            WriteContext->BytesCompleted += WriteContext->BytesThisRound;
+        if (ScratchIoBuffer != NULL) {
+            MmSetIoBufferPageCacheEntry(ScratchIoBuffer, 0, PageCacheEntry);
         }
+
+        //
+        // This page cache entry was created, so if it's a cacheable file
+        // type, it will need to go down through the file system to ensure
+        // there's disk space allocated to it. Create a cache buffer if one
+        // has not been created yet.
+        //
+
+        if (IO_IS_CACHEABLE_FILE(FileObject->Properties.Type)) {
+            *WriteOut = TRUE;
+            if (WriteContext->CacheBuffer == NULL) {
+                CacheBufferSize = WriteContext->PageByteOffset +
+                                  WriteContext->BytesRemaining;
+
+                CacheBufferSize = ALIGN_RANGE_UP(CacheBufferSize, PageSize);
+                WriteContext->CacheBuffer =
+                       MmAllocateUninitializedIoBuffer(CacheBufferSize, 0);
+
+                if (WriteContext->CacheBuffer == NULL) {
+                    Status = STATUS_INSUFFICIENT_RESOURCES;
+                    goto HandleCacheWriteMissEnd;
+                }
+
+                WriteContext->CacheBufferOffset = WriteContext->FileOffset;
+            }
+        }
+
+        //
+        // Back the cache buffer with this page cache entry, since it will
+        // be flushed later.
+        //
+
+        if (WriteContext->CacheBuffer != NULL) {
+            MmIoBufferAppendPage(WriteContext->CacheBuffer,
+                                 PageCacheEntry,
+                                 NULL,
+                                 INVALID_PHYSICAL_ADDRESS);
+        }
+
+        WriteContext->BytesCompleted += WriteContext->BytesThisRound;
     }
 
 HandleCacheWriteMissEnd:
@@ -1672,8 +1617,7 @@ Return Value:
     // The file object's lock should already be held, if it exists.
     //
 
-    ASSERT((FileObject->Lock == NULL) ||
-           (KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE));
+    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
 
     //
     // This read needs to happen without re-acquiring the I/O lock. So directly
@@ -1920,8 +1864,7 @@ Return Value:
     // exclusive mode.
     //
 
-    ASSERT((FileObject->Lock == NULL) ||
-           (KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE));
+    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
 
     BlockSize = FileObject->Properties.BlockSize;
 
@@ -2086,8 +2029,7 @@ Return Value:
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT(IO_IS_CACHEABLE_TYPE(FileObject->Properties.Type));
     ASSERT(MmGetIoBufferSize(IoContext->IoBuffer) >= IoContext->SizeInBytes);
-    ASSERT((FileObject->Lock == NULL) ||
-           (KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE));
+    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
 
     BlockSize = FileObject->Properties.BlockSize;
     IoContext->BytesCompleted = 0;
@@ -2329,8 +2271,7 @@ Return Value:
     // threaded and everyone else acquires it exclusive, this is okay.
     //
 
-    ASSERT((FileObject->Lock == NULL) ||
-           (KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE));
+    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
 
     IoContext->BytesCompleted = 0;
     Device = FileObject->Device;

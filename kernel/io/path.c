@@ -1429,7 +1429,6 @@ Return Value:
     // better be held.
     //
 
-    ASSERT(DirectoryFileObject->Lock != NULL);
     ASSERT((DirectoryLockHeld == FALSE) ||
            (KeIsSharedExclusiveLockHeldExclusive(DirectoryFileObject->Lock)));
 
@@ -1584,14 +1583,9 @@ Return Value:
         ASSERT(RootPath->Parent != NULL);
 
         FileObject = RootPath->Parent->FileObject;
-        if (FileObject->Lock != NULL) {
-            KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
-        }
-
+        KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
         IopPathUnlink(RootPath);
-        if (FileObject->Lock != NULL) {
-            KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-        }
+        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
     }
 
     //
@@ -1626,9 +1620,7 @@ Return Value:
         FileObject = NULL;
         if (CurrentPath->Negative == FALSE) {
             FileObject = CurrentPath->FileObject;
-            if (FileObject->Lock != NULL) {
-                KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
-            }
+            KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
         }
 
         //
@@ -1647,7 +1639,7 @@ Return Value:
             INSERT_BEFORE(&(ChildPath->SiblingListEntry), &ProcessList);
         }
 
-        if ((FileObject != NULL) && (FileObject->Lock != NULL)) {
+        if (FileObject != NULL) {
             KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
         }
 
@@ -2302,7 +2294,6 @@ Return Value:
     // The directory's I/O lock should be held exclusively.
     //
 
-    ASSERT(DirectoryFileObject->Lock != NULL);
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(DirectoryFileObject->Lock));
 
     //
@@ -3221,8 +3212,7 @@ Return Value:
     ParentFileObject = Parent->PathEntry->FileObject;
 
     ASSERT(NameSize != 0);
-    ASSERT((ParentFileObject->Lock == NULL) ||
-           (KeIsSharedExclusiveLockHeld(ParentFileObject->Lock) != FALSE));
+    ASSERT(KeIsSharedExclusiveLockHeld(ParentFileObject->Lock) != FALSE);
 
     //
     // Cruise through the cached list looking for this entry.

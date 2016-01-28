@@ -1215,9 +1215,6 @@ Return Value:
     //
 
     FileObject = Mount->PathEntry->FileObject;
-
-    ASSERT(FileObject->Lock != NULL);
-
     KeAcquireSharedExclusiveLockShared(FileObject->Lock);
     IopPathEntryIncrementMountCount(Mount->PathEntry);
     MountCountIncremented = TRUE;

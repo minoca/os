@@ -636,14 +636,10 @@ Return Value:
                                           0,
                                           IopComparePageCacheEntries);
 
-                if ((Properties->Type != IoObjectBlockDevice) &&
-                    (Properties->Type != IoObjectCharacterDevice)) {
-
-                    NewObject->Lock = KeCreateSharedExclusiveLock();
-                    if (NewObject->Lock == NULL) {
-                        Status = STATUS_INSUFFICIENT_RESOURCES;
-                        goto CreateOrLookupFileObjectEnd;
-                    }
+                NewObject->Lock = KeCreateSharedExclusiveLock();
+                if (NewObject->Lock == NULL) {
+                    Status = STATUS_INSUFFICIENT_RESOURCES;
+                    goto CreateOrLookupFileObjectEnd;
                 }
 
                 if ((Flags & FILE_OBJECT_FLAG_EXTERNAL_IO_STATE) == 0) {
@@ -1669,10 +1665,8 @@ Return Value:
         // to the hard link count.
         //
 
-        if (FileObject->Lock != NULL) {
-            KeAcquireSharedExclusiveLockShared(FileObject->Lock);
-            LockHeld = TRUE;
-        }
+        KeAcquireSharedExclusiveLockShared(FileObject->Lock);
+        LockHeld = TRUE;
 
         //
         // If the hard link count sneaked down to zero then do not write out
@@ -1801,8 +1795,7 @@ Return Value:
     ULONGLONG FileSize;
     BOOL Updated;
 
-    ASSERT((FileObject->Lock == NULL) ||
-           (KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE));
+    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
 
     //
     // If specified, try to update the file size stored in the file object.
@@ -1921,9 +1914,7 @@ Return Value:
     // If the file object synchronizes I/O, then acquire the lock exclusively.
     //
 
-    if (FileObject->Lock != NULL) {
-        KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
-    }
+    KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
 
     //
     // If the new size is the same as the old file size then just exit.
@@ -2045,10 +2036,7 @@ ModifyFileObjectSizeEnd:
     // Release the lock if it exists.
     //
 
-    if (FileObject->Lock != NULL) {
-        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-    }
-
+    KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
     return Status;
 }
 
