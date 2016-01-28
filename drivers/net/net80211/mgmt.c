@@ -228,7 +228,10 @@ Net80211pJoinBss (
 VOID
 Net80211pLeaveBss (
     PNET_LINK Link,
-    PNET80211_BSS_ENTRY Bss
+    PNET80211_BSS_ENTRY Bss,
+    BOOL SendNotification,
+    ULONG Subtype,
+    USHORT Reason
     );
 
 KSTATUS
@@ -775,9 +778,12 @@ Return Value:
     PNET80211_BSS BssState;
     PVOID DriverContext;
     PNET80211_LINK Net80211Link;
+    BOOL Notify;
     NET80211_STATE OldState;
+    USHORT Reason;
     BOOL SetLinkUp;
     KSTATUS Status;
+    ULONG Subtype;
 
     Net80211Link = Link->DataLinkContext;
 
@@ -954,9 +960,30 @@ Return Value:
         break;
 
     case Net80211StateInitialized:
+        switch (OldState) {
+        case Net80211StateAssociated:
+        case Net80211StateEncrypted:
+            Notify = TRUE;
+            Subtype = NET80211_MANAGEMENT_FRAME_SUBTYPE_DISASSOCIATION;
+            Reason = NET80211_REASON_CODE_DISASSOCIATION_LEAVING;
+            break;
+
+        case Net80211StateAssociating:
+            Notify = TRUE;
+            Subtype = NET80211_MANAGEMENT_FRAME_SUBTYPE_DEAUTHENTICATION;
+            Reason = NET80211_REASON_CODE_DEAUTHENTICATION_LEAVING;
+            break;
+
+        default:
+            Notify = FALSE;
+            Subtype = 0;
+            Reason = 0;
+            break;
+        }
+
         if (Bss != NULL) {
             Net80211pDestroyEncryption(Bss);
-            Net80211pLeaveBss(Link, Bss);
+            Net80211pLeaveBss(Link, Bss, Notify, Subtype, Reason);
             NetSetLinkState(Link, FALSE, 0);
         }
 
@@ -1270,7 +1297,7 @@ Return Value:
     // Leave the original BSS and join the copy.
     //
 
-    Net80211pLeaveBss(Link, BssOriginal);
+    Net80211pLeaveBss(Link, BssOriginal, FALSE, 0, 0);
     Net80211pJoinBss(Link, BssCopy);
 
     //
@@ -1333,7 +1360,10 @@ Return Value:
 VOID
 Net80211pLeaveBss (
     PNET_LINK Link,
-    PNET80211_BSS_ENTRY Bss
+    PNET80211_BSS_ENTRY Bss,
+    BOOL SendNotification,
+    ULONG Subtype,
+    USHORT Reason
     )
 
 /*++
@@ -1347,6 +1377,15 @@ Arguments:
     Link - Supplies a pointer to the network link that is leaving the BSS.
 
     Bss - Supplies a pointer to the BSS to leave.
+
+    SendNotification - Supplies a boolean indicating whether or not this
+        station should notify the BSS that it is leaving.
+
+    Subtype - Supplies the notification type in the form of a management frame
+        subtype. It should either be disassociation or deauthentication.
+
+    Reason - Supplies the reason for leaving. See NET80211_REASON_CODE_* for
+        definitions.
 
 Return Value:
 
@@ -1362,6 +1401,15 @@ Return Value:
 
     ASSERT(Net80211Link->ActiveBss == Bss);
     ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+
+    if (SendNotification != FALSE) {
+        Net80211pSendManagementFrame(Link,
+                                     Bss->State.Bssid,
+                                     Bss->State.Bssid,
+                                     Subtype,
+                                     &Reason,
+                                     sizeof(USHORT));
+    }
 
     Net80211Link->ActiveBss = NULL;
     Net80211pBssEntryReleaseReference(Bss);
