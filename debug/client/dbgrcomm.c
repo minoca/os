@@ -3378,14 +3378,9 @@ Return Value:
             }
 
             if (Breakpoint->Enabled != FALSE) {
-                Status = DbgrpClearBreakpointAtAddress(
-                                                Context,
-                                                Breakpoint->Address,
-                                                Breakpoint->OriginalValue);
-
-                if (Status != 0) {
-                    goto DeleteBreakPointEnd;
-                }
+                DbgrpClearBreakpointAtAddress(Context,
+                                              Breakpoint->Address,
+                                              Breakpoint->OriginalValue);
             }
 
             LIST_REMOVE(&(Breakpoint->ListEntry));
@@ -6260,20 +6255,11 @@ Return Value:
             Result = EINVAL;
         }
 
-        return Result;
-    }
-
-    if ((CurrentValue != BreakInstruction) && (CurrentValue != OriginalValue)) {
-        DbgOut("Warning: Restoring a breakpoint at address %I64x, but instead "
-               "of finding the breakpoint instruction %x at that address, %x "
-               "was found instead.\n",
-               Address,
-               BreakInstruction,
-               CurrentValue);
+        goto ClearBreakpointAtAddressEnd;
     }
 
     if (CurrentValue == OriginalValue) {
-        return 0;
+        goto ClearBreakpointAtAddressEnd;
     }
 
     //
@@ -6292,10 +6278,23 @@ Return Value:
             Result = EINVAL;
         }
 
-        return Result;
+        goto ClearBreakpointAtAddressEnd;
     }
 
-    return 0;
+ClearBreakpointAtAddressEnd:
+    if ((Result != 0) &&
+        (CurrentValue != BreakInstruction) &&
+        (CurrentValue != OriginalValue)) {
+
+        DbgOut("Warning: Clearing a breakpoint at address %I64x, but instead "
+               "of finding the breakpoint instruction %x at that address, %x "
+               "was found instead.\n",
+               Address,
+               BreakInstruction,
+               CurrentValue);
+    }
+
+    return Result;
 }
 
 ULONG
@@ -8265,6 +8264,7 @@ Return Value:
     ULONG RelativeSize;
     PTYPE_SYMBOL RelativeType;
     INT Result;
+    SYMBOL_SEARCH_RESULT SearchResult;
 
     CurrentData = *Data;
     CurrentSize = *DataSize;
@@ -8308,6 +8308,24 @@ Return Value:
         }
 
         //
+        // If the relative type is a structure with zero size, search for a
+        // structure with the same name and a non-zero size.
+        //
+
+        RelativeSize = DbgGetTypeSize(RelativeType, 0);
+        if ((RelativeType->Type == DataTypeStructure) && (RelativeSize == 0)) {
+            SearchResult.Variety = SymbolResultType;
+            Result = DbgpFindSymbol(Context,
+                                    RelativeType->Name,
+                                    &SearchResult);
+
+            if (Result != FALSE) {
+                RelativeType = SearchResult.U.TypeResult;
+                RelativeSize = DbgGetTypeSize(RelativeType, 0);
+            }
+        }
+
+        //
         // Follow pointers, reading the relative type data from the pointer.
         // The pointer value is stored in the current data and the size of the
         // current data should not be bigger than a pointer size.
@@ -8343,7 +8361,6 @@ Return Value:
         // Allocate a new buffer and read the type data.
         //
 
-        RelativeSize = DbgGetTypeSize(RelativeType, 0);
         free(CurrentData);
         CurrentSize = RelativeSize;
         CurrentData = malloc(CurrentSize);
