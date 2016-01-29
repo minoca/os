@@ -26,6 +26,7 @@ Environment:
 
 #include <minoca/kernel.h>
 #include "iop.h"
+#include "pagecach.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -150,6 +151,13 @@ Environment:
 #define PAGE_CACHE_MAX_DIRTY_SHIFT 1
 
 //
+// This defines the amount of time the page cache worker will delay until
+// executing another cleaning. This allows writes to pool.
+//
+
+#define PAGE_CACHE_CLEAN_DELAY_MIN (5000 * MICROSECONDS_PER_MILLISECOND)
+
+//
 // --------------------------------------------------------------------- Macros
 //
 
@@ -167,8 +175,6 @@ typedef enum _PAGE_CACHE_STATE {
     PageCacheStateInvalid,
     PageCacheStateClean,
     PageCacheStateDirty,
-    PageCacheStateWorkerQueued,
-    PageCacheStateWorkerBusy
 } PAGE_CACHE_STATE, *PPAGE_CACHE_STATE;
 
 /*++
@@ -459,6 +465,12 @@ UINTN IoPageCacheHeadroomVirtualPagesRetreat = 0;
 UINTN IoPageCacheHeadroomVirtualPagesTrigger = 0;
 
 //
+// Store the page cache timer interval.
+//
+
+ULONGLONG IoPageCacheCleanInterval;
+
+//
 // Store the timer used to trigger the page cache worker.
 //
 
@@ -469,36 +481,7 @@ PKTIMER IoPageCacheWorkTimer;
 // This is of type PAGE_CACHE_STATE.
 //
 
-volatile ULONG IoPageCacheState;
-
-//
-// The next due time records the next due time the page cache should be
-// scheduled to run.
-//
-
-ULONGLONG IoPageCacheDueTime;
-KSPIN_LOCK IoPageCacheDueTimeLock;
-
-//
-// This boolean stores whether or not the page cache cleaner should flush dirty
-// page cache entries.
-//
-
-volatile ULONG IoPageCacheFlushDirtyEntries;
-
-//
-// This boolean stores whether or not the page cache cleaner should also flush
-// file properties. It always flushes dirty pages.
-//
-
-volatile ULONG IoPageCacheFlushProperties;
-
-//
-// This boolean indicates that there is a deleted file to remove from the page
-// cache.
-//
-
-volatile ULONG IoPageCacheDeletedFiles;
+volatile ULONG IoPageCacheState = PageCacheStateClean;
 
 //
 // This stores the last time the page cache was cleaned.
@@ -530,7 +513,7 @@ PKTHREAD IoPageCacheThread;
 // virtual addresses.
 //
 
-BOOL IoPageCacheDisableVirtualAddresses = FALSE;
+BOOL IoPageCacheDisableVirtualAddresses;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -1134,12 +1117,9 @@ Return Value:
                   PAGE_CACHE_LARGE_VIRTUAL_HEADROOM_RETREAT_BYTES >> PageShift;
     }
 
-    IoPageCacheState = PageCacheStateClean;
-    IoPageCacheFlushDirtyEntries = FALSE;
-    IoPageCacheFlushProperties = FALSE;
-    IoPageCacheDeletedFiles = FALSE;
-    IoPageCacheDueTime = 0;
-    KeInitializeSpinLock(&IoPageCacheDueTimeLock);
+    IoPageCacheCleanInterval =
+                  KeConvertMicrosecondsToTimeTicks(PAGE_CACHE_CLEAN_DELAY_MIN);
+
     CurrentTime = HlQueryTimeCounter();
     WRITE_INT64_SYNC(&IoLastPageCacheCleanTime, CurrentTime);
 
@@ -1783,16 +1763,16 @@ Return Value:
 
     ASSERT((Size == -1ULL) || ((Offset + Size) > Offset));
 
-    if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) == FALSE) {
-        goto FlushPageCacheEntriesEnd;
-    }
-
     //
     // Optimistically mark the file object clean.
     //
 
     if ((Offset == 0) && (Size == -1ULL) && (PageCount == NULL)) {
         RtlAtomicAnd32(&(FileObject->Flags), ~FILE_OBJECT_FLAG_DIRTY_DATA);
+    }
+
+    if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) == FALSE) {
+        goto FlushPageCacheEntriesEnd;
     }
 
     //
@@ -2394,7 +2374,7 @@ Return Value:
 }
 
 VOID
-IopNotifyPageCacheFilePropertiesUpdate (
+IopSchedulePageCacheThread (
     VOID
     )
 
@@ -2402,8 +2382,8 @@ IopNotifyPageCacheFilePropertiesUpdate (
 
 Routine Description:
 
-    This routine is used to notify the page cache subsystem that a change to
-    file properties occurred. It decides what actions to take.
+    This routine schedules a cleaning of the page cache for some time in the
+    future.
 
 Arguments:
 
@@ -2417,315 +2397,38 @@ Return Value:
 
 {
 
-    BOOL OldValue;
-
-    //
-    // Try to alert the page cache system that some file properties are dirty.
-    // This ensures that the next time the page cache cleaner runs it will
-    // flush file properties as well as pages.
-    //
-
-    OldValue = RtlAtomicExchange32(&IoPageCacheFlushProperties, TRUE);
-
-    //
-    // If this thread toggled the status, then it needs to make sure a cleaning
-    // is scheduled.
-    //
-
-    if (OldValue == FALSE) {
-        IopSchedulePageCacheCleaning(PAGE_CACHE_CLEAN_DELAY_MIN * 2);
-    }
-
-    return;
-}
-
-VOID
-IopNotifyPageCacheFileDeleted (
-    VOID
-    )
-
-/*++
-
-Routine Description:
-
-    This routine notifies the page cache that a file has been deleted and that
-    it can clean up any cached entries for the file.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    BOOL OldValue;
-
-    //
-    // Attempt to mark that a cacheable file object has been deleted.
-    //
-
-    OldValue = RtlAtomicExchange32(&IoPageCacheDeletedFiles, TRUE);
-
-    //
-    // If this thread won the race to flip the deleted file status, then it
-    // is responsible to clean the cache.
-    //
-
-    if (OldValue == FALSE) {
-        IopSchedulePageCacheCleaning(PAGE_CACHE_CLEAN_DELAY_MIN);
-    }
-
-    return;
-}
-
-VOID
-IopNotifyPageCacheWrite (
-    VOID
-    )
-
-/*++
-
-Routine Description:
-
-    This routine is used to notify the page cache subsystem that a write to the
-    page cache occurred. It decides what actions to take.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    BOOL OldValue;
-
-    //
-    // Attempt to mark that there are dirty page cache entries.
-    //
-
-    OldValue = RtlAtomicExchange32(&IoPageCacheFlushDirtyEntries, TRUE);
-
-    //
-    // If this thread succeeded it toggling the state, then it has to schedule
-    // a cleaning.
-    //
-
-    if (OldValue == FALSE) {
-        IopSchedulePageCacheCleaning(PAGE_CACHE_CLEAN_DELAY_MIN);
-    }
-
-    return;
-}
-
-VOID
-IopSchedulePageCacheCleaning (
-    ULONGLONG Delay
-    )
-
-/*++
-
-Routine Description:
-
-    This routine schedules a cleaning of the page cache or waits until it is
-    sure a cleaning is about to be scheduled by another caller. The only
-    guarantee is that it will get cleaned. It may not run exactly within the
-    requested delay period.
-
-Arguments:
-
-    Delay - Supplies the desired delay time before the cleaning begins,
-        in microseconds.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ULONGLONG CurrentDueTime;
-    ULONGLONG DueTime;
     PAGE_CACHE_STATE OldState;
     KSTATUS Status;
 
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
     //
-    // The delay should be at least the minimum.
+    // Do a quick exit check without the atomic first.
     //
 
-    if (Delay < PAGE_CACHE_CLEAN_DELAY_MIN) {
-        Delay = PAGE_CACHE_CLEAN_DELAY_MIN;
+    if (IoPageCacheState == PageCacheStateDirty) {
+        return;
     }
 
     //
-    // Calculate the desired due time.
+    // Try to take the state from clean to dirty. If this thread won, then
+    // queue the timer.
     //
 
-    DueTime = KeGetRecentTimeCounter();
-    DueTime += KeConvertMicrosecondsToTimeTicks(Delay);
+    OldState = RtlAtomicCompareExchange32(&IoPageCacheState,
+                                          PageCacheStateDirty,
+                                          PageCacheStateClean);
 
-    //
-    // Try to update the global due time if this due time is earlier than the
-    // previously recorded due time.
-    //
+    if (OldState == PageCacheStateClean) {
 
-    KeAcquireSpinLock(&IoPageCacheDueTimeLock);
-    if ((IoPageCacheDueTime == 0) || (DueTime < IoPageCacheDueTime)) {
-        IoPageCacheDueTime = DueTime;
-    }
+        ASSERT(IoPageCacheCleanInterval != 0);
 
-    KeReleaseSpinLock(&IoPageCacheDueTimeLock);
+        Status = KeQueueTimer(IoPageCacheWorkTimer,
+                              TimerQueueSoftWake,
+                              0,
+                              IoPageCacheCleanInterval,
+                              0,
+                              NULL);
 
-    //
-    // Try to queue the page cache work item by transitioning the state from
-    // clean to worker queued.
-    //
-
-    while (TRUE) {
-        OldState = RtlAtomicCompareExchange32(&IoPageCacheState,
-                                              PageCacheStateWorkerQueued,
-                                              PageCacheStateClean);
-
-        //
-        // If it used to be clean, queue the work item.
-        //
-
-        if (OldState == PageCacheStateClean) {
-
-            //
-            // Queue the timer using the global due time.
-            //
-
-            KeAcquireSpinLock(&IoPageCacheDueTimeLock);
-            KeQueueTimer(IoPageCacheWorkTimer,
-                         TimerQueueSoftWake,
-                         IoPageCacheDueTime,
-                         0,
-                         0,
-                         NULL);
-
-            IoPageCacheDueTime = 0;
-            KeReleaseSpinLock(&IoPageCacheDueTimeLock);
-            break;
-
-        //
-        // If it was marked busy, that means that the worker is in the middle
-        // of running. This write or file properties update may have been too
-        // late, so try to notify the worker to run again by marking the cache
-        // dirty.
-        //
-
-        } else if (OldState == PageCacheStateWorkerBusy) {
-            OldState = RtlAtomicCompareExchange32(&IoPageCacheState,
-                                                  PageCacheStateDirty,
-                                                  PageCacheStateWorkerBusy);
-
-            //
-            // If the state got back to being clean again. This update needs to
-            // try to queue the work item. Loop back around.
-            //
-
-            if (OldState == PageCacheStateClean) {
-                continue;
-
-            //
-            // If the state used to be busy, then the state is now dirty. The
-            // worker will see this when it's done and re-queue the work item.
-            //
-
-            } else if (OldState == PageCacheStateWorkerBusy) {
-                break;
-
-            //
-            // If the page cache state is now already dirty or the worker is
-            // about to run, then it will flush the update. Exit. In this case
-            // do not try to cancel and requeue the timer for earlier. The page
-            // cache worker will reschedule work for the minimum delay period.
-            //
-
-            } else {
-                break;
-            }
-
-        //
-        // If the worker is already queued, then potentially cancel the timer
-        // if the current due time is greater than the requested due time.
-        //
-
-        } else if (OldState == PageCacheStateWorkerQueued) {
-
-            //
-            // Collect the current due time. If it is less than the requested
-            // due time, just exit. If it is yet to be queued, then the queuer
-            // will pick up the global due time and satisfy this caller's
-            // request. If it is currently queued, but has an earlier due time,
-            // then this callers request is satisfied. If it just popped off
-            // the queue (and returned 0 for due time), it is about to run, but
-            // this caller's request was in time because it saw the state as
-            // queued and not busy.
-            //
-
-            KeAcquireSpinLock(&IoPageCacheDueTimeLock);
-            CurrentDueTime = KeGetTimerDueTime(IoPageCacheWorkTimer);
-            if (CurrentDueTime <= DueTime) {
-                KeReleaseSpinLock(&IoPageCacheDueTimeLock);
-                break;
-            }
-
-            //
-            // Reaching here means that the timer was still on the queue with
-            // a due time that was greater than the requested due time. Try to
-            // cancel and reschedule it for earlier. If this fails, then the
-            // timer expired. The due time and the requested due time must have
-            // been extremely close together. It's good enough.
-            //
-
-            Status = KeCancelTimer(IoPageCacheWorkTimer);
-            if (!KSUCCESS(Status)) {
-                IoPageCacheDueTime = 0;
-                KeReleaseSpinLock(&IoPageCacheDueTimeLock);
-                break;
-            }
-
-            //
-            // Schedule the timer for the next due time. No need to change the
-            // page cache state.
-            //
-
-            KeQueueTimer(IoPageCacheWorkTimer,
-                         TimerQueueSoftWake,
-                         IoPageCacheDueTime,
-                         0,
-                         0,
-                         NULL);
-
-            IoPageCacheDueTime = 0;
-            KeReleaseSpinLock(&IoPageCacheDueTimeLock);
-            break;
-
-        //
-        // If the state is dirty then the worker is about to re-queue the work
-        // item and this caller got its chance to update the global due time.
-        //
-
-        } else {
-
-            ASSERT(OldState == PageCacheStateDirty);
-
-            break;
-        }
+        ASSERT(KSUCCESS(Status));
     }
 
     return;
@@ -3933,12 +3636,6 @@ Return Value:
 {
 
     ULONGLONG CurrentTime;
-    BOOL DeletedEntries;
-    ULONGLONG DueTime;
-    BOOL FlushDirtyEntries;
-    BOOL FlushProperties;
-    PAGE_CACHE_STATE NextState;
-    PAGE_CACHE_STATE OldState;
     PKEVENT PhysicalMemoryWarningEvent;
     PVOID SignalingObject;
     KSTATUS Status;
@@ -3985,50 +3682,6 @@ Return Value:
         ASSERT(KSUCCESS(Status));
 
         //
-        // If the memory manager signaled but not for the warning levels the
-        // page cache is interested in, loop back and wait. If one signaled,
-        // always check the state of both in case the non-signaling signal was
-        // also pulsed.
-        //
-
-        if ((SignalingObject == PhysicalMemoryWarningEvent) ||
-            (SignalingObject == VirtualMemoryWarningEvent)) {
-
-            //
-            // The cache's state never reached the queued state. Try to
-            // transition it from clean to queued so that it can be safely
-            // transitioned to the busy state below.
-            //
-
-            OldState = RtlAtomicExchange32(&IoPageCacheState,
-                                           PageCacheStateWorkerQueued);
-
-            ASSERT((OldState == PageCacheStateWorkerQueued) ||
-                   (OldState == PageCacheStateClean));
-        }
-
-        //
-        // The page cache worker is about to clean the page cache. Mark it busy
-        // now so writes that arrive during this routine's execution get
-        // noticed at the end of the routine. They might be missed and the
-        // worker needs to run again to make sure they get to disk.
-        //
-
-        OldState = RtlAtomicExchange32(&IoPageCacheState,
-                                       PageCacheStateWorkerBusy);
-
-        ASSERT(OldState == PageCacheStateWorkerQueued);
-
-        //
-        // Always cancel the page cache timer in order to acknowledge it.
-        // Even if it did not wake up the thread, it may be queued. It needs
-        // to be cancelled now as this thread may queue it or another might
-        // queue it once the cache state is transitioned to clean.
-        //
-
-        KeCancelTimer(IoPageCacheWorkTimer);
-
-        //
         // The page cache cleaning is about to start. Mark down the current
         // time as the last time the cleaning ran. The leaves a record that an
         // attempt was made to flush any writes that occurred before this time.
@@ -4064,109 +3717,45 @@ Return Value:
             IopTrimPageCache();
 
             //
-            // Check to see if dirty page cache entries need to be flushed or
-            // there are files to delete.
+            // Flush some dirty file objects.
             //
 
-            FlushDirtyEntries = RtlAtomicExchange32(
-                                                 &IoPageCacheFlushDirtyEntries,
-                                                 FALSE);
+            Status = IopFlushFileObjects(0, 0, NULL);
+            if (Status == STATUS_TRY_AGAIN) {
+                continue;
+            }
 
-            DeletedEntries = RtlAtomicExchange32(&IoPageCacheDeletedFiles,
-                                                 FALSE);
+            //
+            // If there's still more work to do, go do it.
+            //
 
-            FlushProperties = RtlAtomicExchange32(&IoPageCacheFlushProperties,
-                                                  FALSE);
+            if ((!LIST_EMPTY(&IoFileObjectsDirtyList)) ||
+                (IoPageCacheDirtyPageCount != 0)) {
 
-            if ((FlushDirtyEntries != FALSE) ||
-                (DeletedEntries != FALSE) ||
-                (FlushProperties != FALSE)) {
+                continue;
+            }
 
-                //
-                // Flush the dirty page cache entries. If this fails, mark the
-                // page cache dirty again or that there are deleted files.
-                //
+            //
+            // If the page cache appears to be completely clean, try to kill the
+            // timer and go dormant. Kill the timer, change the state to clean,
+            // and then see if any dirtiness snuck in while that was happening.
+            // If so, set it back to dirty (racing with everyone else that
+            // may have already done that).
+            //
 
-                Status = IopFlushFileObjects(0, 0, NULL);
-                if (!KSUCCESS(Status)) {
-                    if (FlushDirtyEntries != FALSE) {
-                        RtlAtomicExchange32(&IoPageCacheFlushDirtyEntries,
-                                            TRUE);
-                    }
+            KeCancelTimer(IoPageCacheWorkTimer);
 
-                    if (DeletedEntries != FALSE) {
-                        RtlAtomicExchange32(&IoPageCacheDeletedFiles, TRUE);
-                    }
+            ASSERT(IoPageCacheState == PageCacheStateDirty);
 
-                    if (FlushProperties != FALSE) {
-                        RtlAtomicExchange32(&IoPageCacheFlushProperties, TRUE);
-                    }
+            RtlAtomicExchange32(&IoPageCacheState, PageCacheStateClean);
+            if ((!LIST_EMPTY(&IoFileObjectsDirtyList)) ||
+                (IoPageCacheDirtyPageCount != 0)) {
 
-                    if (Status == STATUS_TRY_AGAIN) {
-                        continue;
-                    }
-                }
+                IopSchedulePageCacheThread();
+                continue;
             }
 
             break;
-        }
-
-        //
-        // If this routine failed, then things might still be dirty, try to
-        // transition back to dirty.
-        //
-
-        if (!KSUCCESS(Status)) {
-            NextState = PageCacheStateDirty;
-
-        //
-        // Otherwise try to transition to clean. If new writes arrived while
-        // this routine was flushing, then they switched the state to dirty and
-        // this routine needs to schedule work.
-        //
-
-        } else {
-            NextState = PageCacheStateClean;
-        }
-
-        OldState = RtlAtomicCompareExchange32(&IoPageCacheState,
-                                              NextState,
-                                              PageCacheStateWorkerBusy);
-
-        ASSERT(OldState != PageCacheStateClean);
-        ASSERT(OldState != PageCacheStateWorkerQueued);
-
-        if ((OldState == PageCacheStateDirty) ||
-            (NextState == PageCacheStateDirty)) {
-
-            OldState = RtlAtomicExchange32(&IoPageCacheState,
-                                           PageCacheStateWorkerQueued);
-
-            ASSERT(OldState == PageCacheStateDirty);
-
-            //
-            // Since something is dirty again, clean the cache again after the
-            // minimum delay unless the request was for some longer wait period.
-            //
-
-            DueTime = KeGetRecentTimeCounter();
-            DueTime += KeConvertMicrosecondsToTimeTicks(
-                                                   PAGE_CACHE_CLEAN_DELAY_MIN);
-
-            KeAcquireSpinLock(&IoPageCacheDueTimeLock);
-            if ((IoPageCacheDueTime != 0) && (DueTime < IoPageCacheDueTime)) {
-                DueTime = IoPageCacheDueTime;
-            }
-
-            KeQueueTimer(IoPageCacheWorkTimer,
-                         TimerQueueSoftWake,
-                         DueTime,
-                         0,
-                         0,
-                         NULL);
-
-            IoPageCacheDueTime = 0;
-            KeReleaseSpinLock(&IoPageCacheDueTimeLock);
         }
     }
 
@@ -4364,7 +3953,6 @@ FlushPageCacheBufferEnd:
 
         if (IoContext.BytesCompleted != BytesToWrite) {
             IopMarkFileObjectDirty(CacheEntry->FileObject);
-            IopNotifyPageCacheWrite();
         }
     }
 

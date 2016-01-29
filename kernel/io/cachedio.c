@@ -26,6 +26,7 @@ Environment:
 
 #include <minoca/kernel.h>
 #include "iop.h"
+#include "pagecach.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -1100,7 +1101,7 @@ PerformCachedWriteEnd:
         if (IoContext->BytesCompleted != 0) {
             FileSize = IoContext->Offset + IoContext->BytesCompleted;
             IopUpdateFileObjectFileSize(FileObject, FileSize, TRUE, FALSE);
-            IopNotifyPageCacheWrite();
+            IopSchedulePageCacheThread();
         }
     }
 
@@ -1849,7 +1850,7 @@ Return Value:
     //
 
     } else {
-        IopNotifyPageCacheWrite();
+        IopSchedulePageCacheThread();
         IoContext->BytesCompleted = IoContext->SizeInBytes;
         Status = STATUS_SUCCESS;
     }

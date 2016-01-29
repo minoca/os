@@ -27,6 +27,7 @@ Environment:
 #include <minoca/kernel.h>
 #include "iop.h"
 #include "pmp.h"
+#include "pagecach.h"
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -27,6 +27,7 @@ Environment:
 #include <minoca/kernel.h>
 #include <minoca/intrface/disk.h>
 #include "iop.h"
+#include "pagecach.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -886,7 +887,7 @@ Return Value:
             goto FlushEnd;
         }
 
-        IopSchedulePageCacheCleaning(PAGE_CACHE_CLEAN_DELAY_MIN);
+        IopSchedulePageCacheThread();
         Status = STATUS_SUCCESS;
         goto FlushEnd;
     }

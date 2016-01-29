@@ -28,6 +28,7 @@ Environment:
 #include <minoca/bootload.h>
 #include <minoca/bconflib.h>
 #include "iop.h"
+#include "pagecach.h"
 
 //
 // ---------------------------------------------------------------- Definitions

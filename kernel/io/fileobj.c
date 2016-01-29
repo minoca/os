@@ -26,6 +26,7 @@ Environment:
 
 #include <minoca/kernel.h>
 #include "iop.h"
+#include "pagecach.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -1202,7 +1203,6 @@ Return Value:
         (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE)) {
 
         IopMarkFileObjectDirty(FileObject);
-        IopNotifyPageCacheFileDeleted();
     }
 
     return;
@@ -1249,6 +1249,7 @@ Return Value:
 
 {
 
+    ULONG ClearFlags;
     BOOL Exclusive;
     KSTATUS Status;
 
@@ -1262,6 +1263,11 @@ Return Value:
         IopEvictPageCacheEntries(FileObject,
                                  0,
                                  PAGE_CACHE_EVICTION_FLAG_REMOVE);
+
+        ClearFlags = FILE_OBJECT_FLAG_DIRTY_PROPERTIES |
+                     FILE_OBJECT_FLAG_DIRTY_DATA;
+
+        RtlAtomicAnd32(&(FileObject->Flags), ~ClearFlags);
 
     } else {
         Status = IopFlushPageCacheEntries(FileObject,
@@ -2245,6 +2251,7 @@ Return Value:
         }
 
         KeReleaseQueuedLock(IoFileObjectsDirtyListLock);
+        IopSchedulePageCacheThread();
     }
 
     return;
@@ -2290,7 +2297,6 @@ Return Value:
         (FileObject->Properties.HardLinkCount != 0)) {
 
         IopMarkFileObjectDirty(FileObject);
-        IopNotifyPageCacheFilePropertiesUpdate();
     }
 
     return;
