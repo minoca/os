@@ -414,7 +414,7 @@ CreatePipeEnd:
     if (!KSUCCESS(Status)) {
         if (NewFileObject != NULL) {
             *FileObject = NULL;
-            IopFileObjectReleaseReference(NewFileObject, FALSE);
+            IopFileObjectReleaseReference(NewFileObject);
         }
 
         if (NewPipe != NULL) {

@@ -916,6 +916,57 @@ Return Value:
 }
 
 KERNEL_API
+VOID
+KeSharedExclusiveLockConvertToExclusive (
+    PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a lock that the caller holds shared into one that
+    the caller holds exclusive. This routine will most likely fully release
+    and reacquire the lock.
+
+Arguments:
+
+    SharedExclusiveLock - Supplies a pointer to the shared-exclusive lock.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG State;
+
+    //
+    // Try a shortcut in the case that this caller is the only one that has it
+    // shared.
+    //
+
+    State = RtlAtomicCompareExchange32(&(SharedExclusiveLock->State),
+                                       SHARED_EXCLUSIVE_LOCK_EXCLUSIVE,
+                                       1);
+
+    ASSERT((State >= 1) && (State < SHARED_EXCLUSIVE_LOCK_EXCLUSIVE));
+
+    //
+    // If the fast conversion failed, get in line like everybody else.
+    //
+
+    if (State != 1) {
+        KeReleaseSharedExclusiveLockShared(SharedExclusiveLock);
+        KeAcquireSharedExclusiveLockExclusive(SharedExclusiveLock);
+    }
+
+    return;
+}
+
+KERNEL_API
 BOOL
 KeIsSharedExclusiveLockHeld (
     PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock

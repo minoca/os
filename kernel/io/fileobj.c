@@ -42,12 +42,10 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-VOID
-IopRemoveFailedFileObjects (
-    PRED_BLACK_TREE Tree,
-    PRED_BLACK_TREE_NODE Node,
-    ULONG Level,
-    PVOID Context
+KSTATUS
+IopFlushFileObjectProperties (
+    PFILE_OBJECT FileObject,
+    ULONG Flags
     );
 
 COMPARISON_RESULT
@@ -498,7 +496,7 @@ Return Value:
 
     KSTATUS Status;
 
-    Status = IopFileObjectReleaseReference(FileObject, FALSE);
+    Status = IopFileObjectReleaseReference(FileObject);
 
     ASSERT(KSUCCESS(Status));
 
@@ -750,7 +748,7 @@ Return Value:
         //
 
         if ((Object->Flags & FILE_OBJECT_FLAG_CLOSING) != 0) {
-            IopFileObjectReleaseReference(Object, FALSE);
+            IopFileObjectReleaseReference(Object);
             Object = NULL;
             continue;
         }
@@ -769,7 +767,7 @@ CreateOrLookupFileObjectEnd:
 
     if (!KSUCCESS(Status)) {
         if (Object != NULL) {
-            IopFileObjectReleaseReference(Object, FALSE);
+            IopFileObjectReleaseReference(Object);
             Object = NULL;
 
             ASSERT(Object != NewObject);
@@ -838,8 +836,7 @@ Return Value:
 
 KSTATUS
 IopFileObjectReleaseReference (
-    PFILE_OBJECT Object,
-    BOOL FailIfLastReference
+    PFILE_OBJECT Object
     )
 
 /*++
@@ -862,9 +859,6 @@ Arguments:
 Return Value:
 
     STATUS_SUCCESS on success.
-
-    STATUS_OPERATION_CANCELLED if the caller passed in the fail if last
-    reference flag and this is the final reference on the file object.
 
     Other error codes on failure to write out the file properties to the file
     system or device.
@@ -915,20 +909,6 @@ Return Value:
 
         if ((Object->Flags & FILE_OBJECT_FLAG_CLOSING) != 0) {
             KeReleaseQueuedLock(IoFileObjectsLock);
-            goto FileObjectReleaseReferenceEnd;
-        }
-
-        //
-        // If the caller doesn't want to release the last reference, bump the
-        // reference count back up and cancel the operation. This is done
-        // under the lock to prevent new folks from coming in and finding it.
-        //
-
-        if (FailIfLastReference != FALSE) {
-            RtlAtomicAdd32(&(Object->ReferenceCount), 1);
-            KeReleaseQueuedLock(IoFileObjectsLock);
-            Cancelled = TRUE;
-            Status = STATUS_OPERATION_CANCELLED;
             goto FileObjectReleaseReferenceEnd;
         }
 
@@ -1034,10 +1014,7 @@ Return Value:
         //
 
         KeSignalEvent(Object->ReadyEvent, SignalOptionSignalAll);
-
-        ASSERT(FailIfLastReference == FALSE);
-
-        IopFileObjectReleaseReference(Object, FALSE);
+        IopFileObjectReleaseReference(Object);
 
     //
     // If this is the very last reference, then actually destroy the object.
@@ -1272,24 +1249,47 @@ Return Value:
 
 {
 
+    BOOL Exclusive;
     KSTATUS Status;
 
-    Status = IopFlushPageCacheEntries(FileObject,
-                                      Offset,
-                                      Size,
-                                      Flags,
-                                      PageCount);
+    Exclusive = FALSE;
+    KeAcquireSharedExclusiveLockShared(FileObject->Lock);
+    if ((FileObject->Properties.HardLinkCount == 0) &&
+        (FileObject->PathEntryCount == 0)) {
 
-    if (!KSUCCESS(Status)) {
-        goto FlushFileObjectEnd;
+        KeSharedExclusiveLockConvertToExclusive(FileObject->Lock);
+        Exclusive = TRUE;
+        IopEvictPageCacheEntries(FileObject,
+                                 0,
+                                 PAGE_CACHE_EVICTION_FLAG_REMOVE);
+
+    } else {
+        Status = IopFlushPageCacheEntries(FileObject,
+                                          Offset,
+                                          Size,
+                                          Flags,
+                                          PageCount);
+
+        if (!KSUCCESS(Status)) {
+            goto FlushFileObjectEnd;
+        }
+
+        Status = IopFlushFileObjectProperties(FileObject, Flags);
+        if (!KSUCCESS(Status)) {
+            goto FlushFileObjectEnd;
+        }
     }
 
-    Status = IopFlushFileObjectProperties(FileObject, Flags);
-    if (!KSUCCESS(Status)) {
-        goto FlushFileObjectEnd;
-    }
+    Status = STATUS_SUCCESS;
 
 FlushFileObjectEnd:
+    if (Exclusive != FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+
+    } else {
+        KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+    }
+
     return Status;
 }
 
@@ -1467,7 +1467,7 @@ Return Value:
                 if (CurrentObject->ListEntry.Next != NULL) {
                     LIST_REMOVE(&(CurrentObject->ListEntry));
                     CurrentObject->ListEntry.Next = NULL;
-                    IopFileObjectReleaseReference(CurrentObject, FALSE);
+                    IopFileObjectReleaseReference(CurrentObject);
                 }
             }
 
@@ -1476,7 +1476,7 @@ Return Value:
             }
 
             KeReleaseQueuedLock(IoFileObjectsDirtyListLock);
-            IopFileObjectReleaseReference(CurrentObject, FALSE);
+            IopFileObjectReleaseReference(CurrentObject);
             CurrentObject = NextObject;
         }
     }
@@ -1557,6 +1557,7 @@ Return Value:
 
         IopFileObjectAddReference(CurrentObject);
         KeReleaseQueuedLock(IoFileObjectsLock);
+        KeAcquireSharedExclusiveLockExclusive(CurrentObject->Lock);
 
         //
         // Call the eviction routine for the current file object.
@@ -1572,10 +1573,11 @@ Return Value:
 
             ASSERT(ReleaseObject->ReferenceCount >= 2);
 
-            IopFileObjectReleaseReference(ReleaseObject, FALSE);
+            IopFileObjectReleaseReference(ReleaseObject);
             ReleaseObject = NULL;
         }
 
+        KeReleaseSharedExclusiveLockExclusive(CurrentObject->Lock);
         KeAcquireQueuedLock(IoFileObjectsLock);
 
         //
@@ -1602,117 +1604,23 @@ Return Value:
 
         ASSERT(ReleaseObject->ReferenceCount >= 2);
 
-        IopFileObjectReleaseReference(ReleaseObject, FALSE);
+        IopFileObjectReleaseReference(ReleaseObject);
     }
 
     if (CurrentObject != NULL) {
 
         ASSERT(ReleaseObject->ReferenceCount >= 2);
 
-        IopFileObjectReleaseReference(CurrentObject, FALSE);
+        IopFileObjectReleaseReference(CurrentObject);
     }
 
     return;
 }
 
-KSTATUS
-IopFlushFileObjectProperties (
-    PFILE_OBJECT FileObject,
-    ULONG Flags
-    )
-
-/*++
-
-Routine Description:
-
-    This routine flushes the file properties for the given file object.
-
-Arguments:
-
-    FileObject - Supplies a pointer to a file object.
-
-    Flags - Supplies a bitmask of I/O flags. See IO_FLAG_* for definitions.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    BOOL LockHeld;
-    IRP_MINOR_CODE MinorCode;
-    ULONG OldFlags;
-    KSTATUS Status;
-
-    LockHeld = FALSE;
-
-    //
-    // Write out the file properties if a flush is required. A flush is
-    // required if the file properties are dirty and the hard link count is not
-    // zero.
-    //
-
-    OldFlags = RtlAtomicAnd32(&(FileObject->Flags),
-                              ~FILE_OBJECT_FLAG_DIRTY_PROPERTIES);
-
-    if (((OldFlags & FILE_OBJECT_FLAG_DIRTY_PROPERTIES) != 0) &&
-        (FileObject->Properties.HardLinkCount != 0)) {
-
-        //
-        // Acquire the file's lock shared to synchronize with exclusive changes
-        // to the hard link count.
-        //
-
-        KeAcquireSharedExclusiveLockShared(FileObject->Lock);
-        LockHeld = TRUE;
-
-        //
-        // If the hard link count sneaked down to zero then do not write out
-        // the file properties.
-        //
-
-        if (FileObject->Properties.HardLinkCount == 0) {
-            Status = STATUS_SUCCESS;
-            goto FlushFilePropertiesEnd;
-        }
-
-        //
-        // Write out the file properties. Don't report a failure if the device
-        // got yanked in the middle of this operation. Other failures should
-        // reset the properties as dirty. Something else may have marked them
-        // dirty already and they may already have been cleaned successfully.
-        // But this at least guarantees it will be tried again.
-        //
-
-        MinorCode = IrpMinorSystemControlWriteFileProperties;
-        Status = IopSendFileOperationIrp(MinorCode, FileObject, NULL, Flags);
-        if ((!KSUCCESS(Status)) && (Status != STATUS_DEVICE_NOT_CONNECTED)) {
-            IopMarkFileObjectPropertiesDirty(FileObject);
-            goto FlushFilePropertiesEnd;
-        }
-
-        if (LockHeld != FALSE) {
-            KeReleaseSharedExclusiveLockShared(FileObject->Lock);
-            LockHeld = FALSE;
-        }
-    }
-
-    Status = STATUS_SUCCESS;
-
-FlushFilePropertiesEnd:
-    if (LockHeld != FALSE) {
-        KeReleaseSharedExclusiveLockShared(FileObject->Lock);
-    }
-
-    return Status;
-}
-
 VOID
 IopUpdateFileObjectTime (
     PFILE_OBJECT FileObject,
-    BOOL Modified
+    FILE_OBJECT_TIME_TYPE TimeType
     )
 
 /*++
@@ -1726,8 +1634,8 @@ Arguments:
 
     FileObject - Supplies a pointer to a file object.
 
-    Modified - Supplies a boolean indicating whether or not the modified time
-        needs to be updated.
+    TimeType - Supplies the type of time to update. Updating modified time also
+        updates status change time.
 
 Return Value:
 
@@ -1743,9 +1651,20 @@ Return Value:
 
     KeAcquireSpinLock(&(FileObject->PropertiesLock));
     KeGetSystemTime(&CurrentTime);
-    FileObject->Properties.AccessTime = CurrentTime;
-    if (Modified != FALSE) {
+    if (TimeType == FileObjectAccessTime) {
+        FileObject->Properties.AccessTime = CurrentTime;
+
+    } else if (TimeType == FileObjectModifiedTime) {
         FileObject->Properties.ModifiedTime = CurrentTime;
+        FileObject->Properties.StatusChangeTime = CurrentTime;
+
+    } else if (TimeType == FileObjectStatusTime) {
+        FileObject->Properties.StatusChangeTime = CurrentTime;
+
+    } else {
+
+        ASSERT(FALSE);
+
     }
 
     KeReleaseSpinLock(&(FileObject->PropertiesLock));
@@ -1910,10 +1829,6 @@ Return Value:
     ULONGLONG UnmapOffset;
     ULONGLONG UnmapSize;
 
-    //
-    // If the file object synchronizes I/O, then acquire the lock exclusively.
-    //
-
     KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
 
     //
@@ -2066,7 +1981,7 @@ Return Value:
     KeAcquireSpinLock(&(FileObject->PropertiesLock));
     FileObject->Properties.HardLinkCount += 1;
     KeReleaseSpinLock(&(FileObject->PropertiesLock));
-    IopMarkFileObjectPropertiesDirty(FileObject);
+    IopUpdateFileObjectTime(FileObject, FileObjectStatusTime);
     return;
 }
 
@@ -2098,7 +2013,7 @@ Return Value:
     KeAcquireSpinLock(&(FileObject->PropertiesLock));
     FileObject->Properties.HardLinkCount -= 1;
     KeReleaseSpinLock(&(FileObject->PropertiesLock));
-    IopMarkFileObjectPropertiesDirty(FileObject);
+    IopUpdateFileObjectTime(FileObject, FileObjectStatusTime);
     return;
 }
 
@@ -2160,7 +2075,7 @@ Return Value:
 
         IopFileObjectAddReference(CurrentObject);
         KeReleaseQueuedLock(IoFileObjectsLock);
-        IopFileObjectReleaseReference(CurrentObject, FALSE);
+        IopFileObjectReleaseReference(CurrentObject);
         KeAcquireQueuedLock(IoFileObjectsLock);
     }
 
@@ -2384,6 +2299,73 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+KSTATUS
+IopFlushFileObjectProperties (
+    PFILE_OBJECT FileObject,
+    ULONG Flags
+    )
+
+/*++
+
+Routine Description:
+
+    This routine flushes the file properties for the given file object. The
+    file object lock must already be held at least shared.
+
+Arguments:
+
+    FileObject - Supplies a pointer to a file object.
+
+    Flags - Supplies a bitmask of I/O flags. See IO_FLAG_* for definitions.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    IRP_MINOR_CODE MinorCode;
+    ULONG OldFlags;
+    KSTATUS Status;
+
+    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock));
+
+    //
+    // Write out the file properties if a flush is required. A flush is
+    // required if the file properties are dirty and the hard link count is not
+    // zero.
+    //
+
+    OldFlags = RtlAtomicAnd32(&(FileObject->Flags),
+                              ~FILE_OBJECT_FLAG_DIRTY_PROPERTIES);
+
+    if (((OldFlags & FILE_OBJECT_FLAG_DIRTY_PROPERTIES) != 0) &&
+        (FileObject->Properties.HardLinkCount != 0)) {
+
+        //
+        // Write out the file properties. Don't report a failure if the device
+        // got yanked in the middle of this operation. Other failures should
+        // reset the properties as dirty. Something else may have marked them
+        // dirty already and they may already have been cleaned successfully.
+        // But this at least guarantees it will be tried again.
+        //
+
+        MinorCode = IrpMinorSystemControlWriteFileProperties;
+        Status = IopSendFileOperationIrp(MinorCode, FileObject, NULL, Flags);
+        if ((!KSUCCESS(Status)) && (Status != STATUS_DEVICE_NOT_CONNECTED)) {
+            IopMarkFileObjectPropertiesDirty(FileObject);
+            goto FlushFilePropertiesEnd;
+        }
+    }
+
+    Status = STATUS_SUCCESS;
+
+FlushFilePropertiesEnd:
+    return Status;
+}
 
 COMPARISON_RESULT
 IopCompareFileObjectNodes (

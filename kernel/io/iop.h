@@ -330,6 +330,12 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef enum _FILE_OBJECT_TIME_TYPE {
+    FileObjectAccessTime,
+    FileObjectModifiedTime,
+    FileObjectStatusTime,
+} FILE_OBJECT_TIME_TYPE, *PFILE_OBJECT_TIME_TYPE;
+
 typedef struct _DEVICE_POWER DEVICE_POWER, *PDEVICE_POWER;
 
 /*++
@@ -2498,8 +2504,7 @@ Return Value:
 
 KSTATUS
 IopFileObjectReleaseReference (
-    PFILE_OBJECT Object,
-    BOOL FailIfLastReference
+    PFILE_OBJECT Object
     );
 
 /*++
@@ -2517,14 +2522,11 @@ Arguments:
         count not to be decremented if this would involve releasing the very
         last reference on the file object. Callers that set this flag must be
         able to take responsibility for the reference they continue to own in
-        the failure case. Most set this to FALSE.
+        the failure case. Set this to FALSE.
 
 Return Value:
 
     STATUS_SUCCESS on success.
-
-    STATUS_OPERATION_CANCELLED if the caller passed in the fail if last
-    reference flag and this is the final reference on the file object.
 
     Other error codes on failure to write out the file properties to the file
     system or device.
@@ -2738,34 +2740,10 @@ Return Value:
 
 --*/
 
-KSTATUS
-IopFlushFileObjectProperties (
-    PFILE_OBJECT FileObject,
-    ULONG Flags
-    );
-
-/*++
-
-Routine Description:
-
-    This routine flushes the file properties for the given file object.
-
-Arguments:
-
-    FileObject - Supplies a pointer to a file object.
-
-    Flags - Supplies a bitmask of I/O flags. See IO_FLAG_* for definitions.
-
-Return Value:
-
-    Status code.
-
---*/
-
 VOID
 IopUpdateFileObjectTime (
     PFILE_OBJECT FileObject,
-    BOOL Modified
+    FILE_OBJECT_TIME_TYPE TimeType
     );
 
 /*++
@@ -2779,8 +2757,8 @@ Arguments:
 
     FileObject - Supplies a pointer to a file object.
 
-    Modified - Supplies a boolean indicating whether or not the modified time
-        needs to be updated.
+    TimeType - Supplies the type of time to update. Updating modified time also
+        updates status change time.
 
 Return Value:
 
@@ -4752,7 +4730,8 @@ Routine Description:
 
     This routine creates a page cache entry and inserts it into the cache. Or,
     if a page cache entry already exists for the supplied file object and
-    offset, it returns the existing entry.
+    offset, it returns the existing entry. The file object lock must be held
+    exclusive already.
 
 Arguments:
 
@@ -4845,7 +4824,8 @@ Routine Description:
 
     This routine iterates over the source buffer, caching each page and copying
     the pages to the destination buffer starting at the given copy offsets and
-    up to the given copy size.
+    up to the given copy size. The file object lock must be held exclusive
+    already.
 
 Arguments:
 
@@ -4933,7 +4913,7 @@ Routine Description:
 
     This routine attempts to evict the page cache entries for a given file or
     device, as specified by the file object. The flags specify how aggressive
-    this routine should be.
+    this routine should be. The file object lock must already be held exclusive.
 
 Arguments:
 
@@ -5203,7 +5183,8 @@ Arguments:
     LowerEntry - Supplies a pointer to the lower (disk) level page cache entry
         whose physical address is to be modified. The caller should ensure that
         its reference on this entry does not come from an I/O buffer or else
-        the physical address in the I/O buffer would be invalid.
+        the physical address in the I/O buffer would be invalid. The file
+        object lock for this entry must already be held exclusive.
 
     UpperEntry - Supplies a pointer to the upper (file) page cache entry
         that currently owns the physical page to be shared.
@@ -5213,6 +5194,29 @@ Return Value:
     Returns TRUE if the two page cache entries are already connected or if the
     routine is successful. It returns FALSE otherwise and both page cache
     entries should continue to use their own physical pages.
+
+--*/
+
+VOID
+IopTrimPageCache (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine removes as many clean page cache entries as is necessary to
+    bring the size of the page cache back down to a reasonable level. It evicts
+    the page cache entries in LRU order.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
 
 --*/
 

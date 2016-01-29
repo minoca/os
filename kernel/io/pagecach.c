@@ -82,18 +82,10 @@ Environment:
 #define PAGE_CACHE_ENTRY_FLAG_EVICTED 0x00000002
 
 //
-// Set this flag if the page cache entry is busy and cannot be removed from the
-// page cache tree, typically because it is being used as part of tree
-// iteration.
-//
-
-#define PAGE_CACHE_ENTRY_FLAG_BUSY 0x00000004
-
-//
 // Set this flag if the page cache entry owns the physical page it uses.
 //
 
-#define PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER 0x00000008
+#define PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER 0x00000004
 
 //
 // Set this flag if the page cache entry is mapped. This needs to be a flag as
@@ -103,7 +95,7 @@ Environment:
 // count", and so it is not set on non page owners.
 //
 
-#define PAGE_CACHE_ENTRY_FLAG_MAPPED 0x00000010
+#define PAGE_CACHE_ENTRY_FLAG_MAPPED 0x00000008
 
 //
 // Define page cache debug flags.
@@ -240,14 +232,12 @@ IopCreatePageCacheEntry (
 
 VOID
 IopDestroyPageCacheEntries (
-    PLIST_ENTRY ListHead,
-    BOOL FailIfLastFileObjectReference
+    PLIST_ENTRY ListHead
     );
 
 KSTATUS
 IopDestroyPageCacheEntry (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
-    BOOL FailIfLastFileObjectReference
+    PPAGE_CACHE_ENTRY PageCacheEntry
     );
 
 VOID
@@ -275,11 +265,6 @@ IopFlushPageCacheBuffer (
     );
 
 VOID
-IopTrimLruPageCacheList (
-    BOOL AvoidDestroyingFileObjects
-    );
-
-VOID
 IopTrimRemovalPageCacheList (
     VOID
     );
@@ -292,7 +277,7 @@ IopRemovePageCacheEntriesFromList (
     );
 
 VOID
-IopUnmapLruPageCacheList (
+IopTrimPageCacheVirtual (
     VOID
     );
 
@@ -308,6 +293,12 @@ KSTATUS
 IopUnmapPageCacheEntrySections (
     PPAGE_CACHE_ENTRY PageCacheEntry,
     PBOOL PageWasDirty
+    );
+
+KSTATUS
+IopRemovePageCacheEntryVirtualAddress (
+    PPAGE_CACHE_ENTRY Entry,
+    PVOID *VirtualAddress
     );
 
 VOID
@@ -342,12 +333,6 @@ IopIsPageCacheTooMapped (
 //
 // -------------------------------------------------------------------- Globals
 //
-
-//
-// Stores the tree of page cache entries and the lock to go with it.
-//
-
-PSHARED_EXCLUSIVE_LOCK IoPageCacheTreeLock;
 
 //
 // Stores the list head for the page cache entries that are ordered from least
@@ -847,17 +832,6 @@ Return Value:
         Set = TRUE;
         UnmappedEntry->VirtualAddress = VirtualAddress;
         RtlAtomicAdd(&IoPageCacheMappedPageCount, 1);
-
-        //
-        // Another page cache entry was successfully mapped. Make sure the
-        // mapping thread cannot map too many entries. Make it do some
-        // cleanup work to unmap clean LRU entries if there is a memory
-        // warning level.
-        //
-
-        if (IopIsPageCacheTooMapped(NULL) != FALSE) {
-            IopUnmapLruPageCacheList();
-        }
     }
 
     //
@@ -1043,12 +1017,6 @@ Return Value:
         goto InitializePageCacheEnd;
     }
 
-    IoPageCacheTreeLock = KeCreateSharedExclusiveLock();
-    if (IoPageCacheTreeLock == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializePageCacheEnd;
-    }
-
     //
     // Create a timer to schedule the page cache worker.
     //
@@ -1197,11 +1165,6 @@ InitializePageCacheEnd:
             IoPageCacheListLock = NULL;
         }
 
-        if (IoPageCacheTreeLock != NULL) {
-            KeDestroySharedExclusiveLock(IoPageCacheTreeLock);
-            IoPageCacheTreeLock = NULL;
-        }
-
         if (IoPageCacheWorkTimer != NULL) {
             KeDestroyTimer(IoPageCacheWorkTimer);
             IoPageCacheWorkTimer = NULL;
@@ -1250,14 +1213,9 @@ Return Value:
 
     PPAGE_CACHE_ENTRY FoundEntry;
 
-    //
-    // Acquire the page cache lock shared to allow multiple look-ups at the
-    // same time.
-    //
+    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock));
 
-    KeAcquireSharedExclusiveLockShared(IoPageCacheTreeLock);
     FoundEntry = IopLookupPageCacheEntryHelper(FileObject, Offset);
-    KeReleaseSharedExclusiveLockShared(IoPageCacheTreeLock);
 
     //
     // If the entry was found for a write operation, then update its list
@@ -1309,7 +1267,8 @@ Routine Description:
 
     This routine creates a page cache entry and inserts it into the cache. Or,
     if a page cache entry already exists for the supplied file object and
-    offset, it returns the existing entry.
+    offset, it returns the existing entry. The file object lock must be held
+    exclusive already.
 
 Arguments:
 
@@ -1347,6 +1306,7 @@ Return Value:
     PPAGE_CACHE_ENTRY PageCacheEntry;
     KSTATUS Status;
 
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock));
     ASSERT((LinkEntry == NULL) ||
            (LinkEntry->PhysicalAddress == PhysicalAddress));
 
@@ -1370,14 +1330,11 @@ Return Value:
     // use the existing cache entry.
     //
 
-    KeAcquireSharedExclusiveLockExclusive(IoPageCacheTreeLock);
     ExistingCacheEntry = IopLookupPageCacheEntryHelper(FileObject, Offset);
     if (ExistingCacheEntry == NULL) {
         IopInsertPageCacheEntry(PageCacheEntry, LinkEntry);
         Created = TRUE;
     }
-
-    KeReleaseSharedExclusiveLockExclusive(IoPageCacheTreeLock);
 
     //
     // If an existing entry was found, then release the allocated entry.
@@ -1388,7 +1345,7 @@ Return Value:
         ASSERT(PageCacheEntry->ReferenceCount == 1);
 
         PageCacheEntry->ReferenceCount = 0;
-        Status = IopDestroyPageCacheEntry(PageCacheEntry, FALSE);
+        Status = IopDestroyPageCacheEntry(PageCacheEntry);
 
         //
         // This has to succeed because there's another page cache entry for
@@ -1509,12 +1466,9 @@ Return Value:
     // Insert the entry. Nothing should beat this to the punch.
     //
 
-    KeAcquireSharedExclusiveLockExclusive(IoPageCacheTreeLock);
-
     ASSERT(IopLookupPageCacheEntryHelper(FileObject, Offset) == NULL);
 
     IopInsertPageCacheEntry(PageCacheEntry, LinkEntry);
-    KeReleaseSharedExclusiveLockExclusive(IoPageCacheTreeLock);
 
     //
     // Add the newly created page cach entry to the appropriate list.
@@ -1557,7 +1511,8 @@ Routine Description:
 
     This routine iterates over the source buffer, caching each page and copying
     the pages to the destination buffer starting at the given copy offsets and
-    up to the given copy size.
+    up to the given copy size. The file object lock must be held exclusive
+    already.
 
 Arguments:
 
@@ -1610,6 +1565,7 @@ Return Value:
     *BytesCopied = 0;
     PageSize = MmPageSize();
 
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE);
     ASSERT(IS_ALIGNED(SourceSize, PageSize) != FALSE);
     ASSERT(IS_ALIGNED(CopySize, PageSize) != FALSE);
 
@@ -1798,7 +1754,6 @@ Return Value:
     PPAGE_CACHE_ENTRY CacheEntry;
     BOOL CacheEntryProcessed;
     UINTN CleanStreak;
-    LIST_ENTRY DestroyListHead;
     PIO_BUFFER FlushBuffer;
     ULONGLONG FlushNextOffset;
     UINTN FlushSize;
@@ -1817,18 +1772,11 @@ Return Value:
     BytesFlushed = FALSE;
     CacheEntry = NULL;
     CleanStreak = 0;
-    INITIALIZE_LIST_HEAD(&DestroyListHead);
     FlushBuffer = NULL;
     PagesFlushed = 0;
     PageShift = MmPageShift();
     Status = STATUS_SUCCESS;
     TotalStatus = STATUS_SUCCESS;
-
-    //
-    // Only allow the page cache thread to perform writes while holding the
-    // file object lock shared.
-    //
-
     if (KeGetCurrentThread() == IoPageCacheThread) {
         PageCacheThread = TRUE;
     }
@@ -1873,7 +1821,8 @@ Return Value:
     FlushNextOffset = 0;
     FlushSize = 0;
     PageSize = MmPageSize();
-    KeAcquireSharedExclusiveLockExclusive(IoPageCacheTreeLock);
+
+    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock));
 
     //
     // Determine which page cache entry the flush should start on.
@@ -1901,27 +1850,6 @@ Return Value:
         ThisEntryInCleanStreak = FALSE;
 
         ASSERT(CacheEntry->FileObject == FileObject);
-
-        //
-        // If the file object has been deleted, then just remove the entry and
-        // continue.
-        //
-
-        if ((FileObject->Properties.HardLinkCount == 0) &&
-            (FileObject->PathEntryCount == 0)) {
-
-            Node = RtlRedBlackTreeGetNextNode(&(FileObject->PageCacheEntryTree),
-                                              FALSE,
-                                              Node);
-
-            IopRemovePageCacheEntryFromTree(CacheEntry);
-            IopMarkPageCacheEntryClean(CacheEntry, FALSE);
-            IopRemovePageCacheEntryFromList(CacheEntry,
-                                            FALSE,
-                                            &DestroyListHead);
-
-            continue;
-        }
 
         //
         // If the entry has been evicted, it can be skipped.
@@ -2070,16 +1998,6 @@ Return Value:
         ASSERT(FlushSize != 0);
 
         //
-        // Take a reference on the current entry and release the lock to do
-        // the required flushing. Note that it is busy so that it does not get
-        // removed from the tree.
-        //
-
-        RtlAtomicOr32(&(CacheEntry->Flags), PAGE_CACHE_ENTRY_FLAG_BUSY);
-        IoPageCacheEntryAddReference(CacheEntry);
-        KeReleaseSharedExclusiveLockExclusive(IoPageCacheTreeLock);
-
-        //
         // No need to flush any trailing clean entries on the end. If this
         // cache entry was part of the clean streak but is not in the entries
         // being flushed, then it's not really part of the clean streak.
@@ -2096,61 +2014,22 @@ Return Value:
         ASSERT(FlushSize > (CleanStreak << PageShift));
 
         FlushSize -= CleanStreak << PageShift;
-
-        //
-        // Acquire the file object lock to prevent writes from occurring during
-        // this flush operation. The only thread that should be acquiring the
-        // lock shared is the page cache thread as asserted above.
-        //
-
-        if (PageCacheThread != FALSE) {
-            KeAcquireSharedExclusiveLockShared(FileObject->Lock);
-
-        } else {
-            KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
-        }
-
         Status = IopFlushPageCacheBuffer(FlushBuffer, FlushSize, Flags);
-        if (PageCacheThread != FALSE) {
-            KeReleaseSharedExclusiveLockShared(FileObject->Lock);
-
-        } else {
-            KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-        }
-
         if (!KSUCCESS(Status)) {
             TotalStatus = Status;
-            if (PageCacheThread == FALSE) {
-                goto FlushPageCacheEntriesEnd;
-            }
 
         } else {
             BytesFlushed = TRUE;
         }
 
         //
-        // Prepare the flush buffer to be used again. Do this while the page
-        // cache lock is released.
+        // Prepare the flush buffer to be used again.
         //
 
         MmResetIoBuffer(FlushBuffer);
         FlushSize = 0;
         FlushNextOffset = 0;
         CleanStreak = 0;
-
-        //
-        // Re-acquire the page cache lock to move to the next entry.
-        //
-
-        KeAcquireSharedExclusiveLockExclusive(IoPageCacheTreeLock);
-
-        //
-        // Clear the busy flag in the cache entry with the current focus.
-        //
-
-        RtlAtomicAnd32(&(CacheEntry->Flags), ~PAGE_CACHE_ENTRY_FLAG_BUSY);
-        IoPageCacheEntryReleaseReference(CacheEntry);
-        CacheEntry = NULL;
 
         //
         // Stop if enough pages were flushed.
@@ -2185,41 +2064,20 @@ Return Value:
                   IoPageCacheDirtyPageCount) >
                  IoPageCacheLowMemoryCleanPageMinimum)) {
 
-                KeReleaseSharedExclusiveLockExclusive(IoPageCacheTreeLock);
                 Status = STATUS_TRY_AGAIN;
                 goto FlushPageCacheEntriesEnd;
             }
         }
     }
 
-    KeReleaseSharedExclusiveLockExclusive(IoPageCacheTreeLock);
-    CacheEntry = NULL;
-
     //
     // If the loop completed and there was something left to flush, do it now.
     //
 
     if (FlushSize != 0) {
-        if (PageCacheThread != FALSE) {
-            KeAcquireSharedExclusiveLockShared(FileObject->Lock);
-
-        } else {
-            KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
-        }
-
         Status = IopFlushPageCacheBuffer(FlushBuffer, FlushSize, Flags);
-        if (PageCacheThread != FALSE) {
-            KeReleaseSharedExclusiveLockShared(FileObject->Lock);
-
-        } else {
-            KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-        }
-
         if (!KSUCCESS(Status)) {
             TotalStatus = Status;
-            if (PageCacheThread == FALSE) {
-                goto FlushPageCacheEntriesEnd;
-            }
 
         } else {
             BytesFlushed = TRUE;
@@ -2248,23 +2106,10 @@ FlushPageCacheEntriesEnd:
         }
     }
 
-    if (CacheEntry != NULL) {
-        RtlAtomicAnd32(&(CacheEntry->Flags), ~PAGE_CACHE_ENTRY_FLAG_BUSY);
-        IoPageCacheEntryReleaseReference(CacheEntry);
-    }
-
     if (FlushBuffer != NULL) {
         MmFreeIoBuffer(FlushBuffer);
     }
 
-    //
-    // Destroy any page cache entries that were removed from the tree and
-    // placed on the destroyed list. The flush routine should not be called by
-    // any lower layer I/O routines, so it should always be safe to write out
-    // file properties if a file objects last reference is released.
-    //
-
-    IopDestroyPageCacheEntries(&DestroyListHead, FALSE);
     if (PageCount != NULL) {
         if (PagesFlushed > *PageCount) {
             *PageCount = 0;
@@ -2298,7 +2143,7 @@ Routine Description:
 
     This routine attempts to evict the page cache entries for a given file or
     device, as specified by the file object. The flags specify how aggressive
-    this routine should be.
+    this routine should be. The file object lock must already be held exclusive.
 
 Arguments:
 
@@ -2324,6 +2169,8 @@ Return Value:
     ULONG PreviousFlags;
     PAGE_CACHE_ENTRY SearchEntry;
 
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE);
+
     if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) == FALSE) {
         return;
     }
@@ -2340,12 +2187,11 @@ Return Value:
     }
 
     //
-    // If this is a truncate, then the file object's lock must be held
-    // exclusively. It also doesn't make sense to truncate a device.
+    // The tree is being modified, so the file object lock must be held
+    // exclusively.
     //
 
-    ASSERT(((Flags & PAGE_CACHE_EVICTION_FLAG_TRUNCATE) == 0) ||
-           (KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock)));
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock));
 
     //
     // Quickly exit if there is nothing to evict.
@@ -2360,7 +2206,6 @@ Return Value:
     //
 
     INITIALIZE_LIST_HEAD(&DestroyListHead);
-    KeAcquireSharedExclusiveLockExclusive(IoPageCacheTreeLock);
 
     //
     // Find the page cache entry in the file object's tree that is closest (but
@@ -2392,11 +2237,7 @@ Return Value:
         // is not from the flush worker (i.e. the busy flag), then skip it.
         //
 
-        if ((Flags == 0) &&
-            (CacheEntry->ReferenceCount != 0) &&
-            (((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_BUSY) == 0) ||
-             (CacheEntry->ReferenceCount > 1))) {
-
+        if ((Flags == 0) && (CacheEntry->ReferenceCount != 0)) {
             if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_EVICTION) != 0) {
                 RtlDebugPrint("PAGE CACHE: Skip evicting entry 0x%08x: file "
                               "object 0x%08x, offset 0x%I64x, physical "
@@ -2437,31 +2278,6 @@ Return Value:
         IopMarkPageCacheEntryClean(CacheEntry, FALSE);
 
         //
-        // If the entry is in the middle of a flush iteration (i.e. its busy
-        // flag is set), it cannot be removed from the tree as those routines
-        // need to iterate to the next entry. Just move it to evicted list and
-        // it will get removed the next time the worker runs.
-        //
-
-        if ((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_BUSY) != 0) {
-            IopRemovePageCacheEntryFromList(CacheEntry, TRUE, NULL);
-            if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_EVICTION) != 0) {
-                RtlDebugPrint("PAGE CACHE: Skip removing entry 0x%08x: file "
-                              "object 0x%08x, offset 0x%I64x, physical "
-                              "address 0x%I64x, reference count %d, flags "
-                              "0x%08x.\n",
-                              CacheEntry,
-                              CacheEntry->FileObject,
-                              CacheEntry->Offset,
-                              CacheEntry->PhysicalAddress,
-                              CacheEntry->ReferenceCount,
-                              CacheEntry->Flags);
-            }
-
-            continue;
-        }
-
-        //
         // If this is a delete operation, then there should not be any open
         // handles for this file object. Therefore there should be no I/O
         // buffers with references to this file object's page cache entries.
@@ -2499,8 +2315,6 @@ Return Value:
         }
     }
 
-    KeReleaseSharedExclusiveLockExclusive(IoPageCacheTreeLock);
-
     //
     // With the evicted page cache entries removed from the cache, loop through
     // and destroy them. This gets called by truncate and device removal, so
@@ -2508,7 +2322,7 @@ Return Value:
     // here should be okay (this should not be in a recursive I/O path).
     //
 
-    IopDestroyPageCacheEntries(&DestroyListHead, FALSE);
+    IopDestroyPageCacheEntries(&DestroyListHead);
     return;
 }
 
@@ -2976,12 +2790,11 @@ Return Value:
 
     //
     // Marking a page cache entry clean requires having a reference on the
-    // entry or holding the tree lock exclusively.
+    // entry or holding the tree lock.
     //
 
     ASSERT((PageCacheEntry->ReferenceCount != 0) ||
-           (KeIsSharedExclusiveLockHeldExclusive(IoPageCacheTreeLock) !=
-            FALSE));
+           (KeIsSharedExclusiveLockHeld(PageCacheEntry->FileObject->Lock)));
 
     OldFlags = RtlAtomicAnd32(&(PageCacheEntry->Flags),
                               ~PAGE_CACHE_ENTRY_FLAG_DIRTY);
@@ -3171,7 +2984,8 @@ Arguments:
     LowerEntry - Supplies a pointer to the lower (disk) level page cache entry
         whose physical address is to be modified. The caller should ensure that
         its reference on this entry does not come from an I/O buffer or else
-        the physical address in the I/O buffer would be invalid.
+        the physical address in the I/O buffer would be invalid. The file
+        object lock for this entry must already be held exclusive.
 
     UpperEntry - Supplies a pointer to the upper (file) page cache entry
         that currently owns the physical page to be shared.
@@ -3196,6 +3010,12 @@ Return Value:
     IO_OBJECT_TYPE UpperType;
     PVOID VirtualAddress;
 
+    //
+    // The lower file object lock must be held exclusively so that no more
+    // references can be taken on the page cache entries.
+    //
+
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(LowerEntry->FileObject->Lock));
     ASSERT(LowerEntry->ReferenceCount > 0);
     ASSERT(UpperEntry->ReferenceCount > 0);
 
@@ -3237,19 +3057,8 @@ Return Value:
         return FALSE;
     }
 
-    //
-    // Acquire the page cache tree lock exclusively so that no more references
-    // can be taken on the page cache entries then check the reference again to
-    // make sure it is OK to proceed.
-    //
-
     VirtualAddress = NULL;
     PhysicalAddress = INVALID_PHYSICAL_ADDRESS;
-    KeAcquireSharedExclusiveLockExclusive(IoPageCacheTreeLock);
-    if (LowerEntry->ReferenceCount != 1) {
-        Result = FALSE;
-        goto LinkPageCacheEntriesEnd;
-    }
 
     //
     // Both entries should be page owners.
@@ -3312,7 +3121,6 @@ Return Value:
     Result = TRUE;
 
 LinkPageCacheEntriesEnd:
-    KeReleaseSharedExclusiveLockExclusive(IoPageCacheTreeLock);
 
     //
     // If the physical page removed from the entry was mapped, unmap it.
@@ -3333,6 +3141,130 @@ LinkPageCacheEntriesEnd:
     }
 
     return Result;
+}
+
+VOID
+IopTrimPageCache (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine removes as many clean page cache entries as is necessary to
+    bring the size of the page cache back down to a reasonable level. It evicts
+    the page cache entries in LRU order.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    LIST_ENTRY DestroyListHead;
+    UINTN FreePageTarget;
+    UINTN FreePhysicalPages;
+    UINTN PageOutCount;
+    UINTN TargetRemoveCount;
+
+    TargetRemoveCount = 0;
+    FreePhysicalPages = -1;
+    if (IopIsPageCacheTooBig(&FreePhysicalPages) == FALSE) {
+        goto TrimPageCacheEnd;
+    }
+
+    //
+    // The page cache is not leaving enough free physical pages; determine how
+    // many entries must be evicted.
+    //
+
+    ASSERT(FreePhysicalPages < IoPageCacheHeadroomPagesRetreat);
+
+    TargetRemoveCount = IoPageCacheHeadroomPagesRetreat -
+                        FreePhysicalPages;
+
+    if (TargetRemoveCount > IoPageCachePhysicalPageCount) {
+        TargetRemoveCount = IoPageCachePhysicalPageCount;
+    }
+
+    if (IoPageCachePhysicalPageCount - TargetRemoveCount <
+        IoPageCacheMinimumPages) {
+
+        TargetRemoveCount = IoPageCachePhysicalPageCount -
+                            IoPageCacheMinimumPages;
+    }
+
+    if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_SIZE_MANAGEMENT) != 0) {
+        RtlDebugPrint("PAGE CACHE: Attempt to remove at least %lu entries.\n",
+                      TargetRemoveCount);
+    }
+
+    //
+    // Iterate over the clean LRU page cache list trying to find which page
+    // cache entries can be removed. Stop as soon as the target count has been
+    // reached.
+    //
+
+    INITIALIZE_LIST_HEAD(&DestroyListHead);
+    if (!LIST_EMPTY(&IoPageCacheCleanUnmappedList)) {
+        IopRemovePageCacheEntriesFromList(&IoPageCacheCleanUnmappedList,
+                                          &DestroyListHead,
+                                          &TargetRemoveCount);
+    }
+
+    if (TargetRemoveCount != 0) {
+        IopRemovePageCacheEntriesFromList(&IoPageCacheCleanList,
+                                          &DestroyListHead,
+                                          &TargetRemoveCount);
+    }
+
+    //
+    // Destroy the evicted page cache entries. This will reduce the page
+    // cache's physical page count for any page that it ends up releasing.
+    //
+
+    IopDestroyPageCacheEntries(&DestroyListHead);
+
+TrimPageCacheEnd:
+
+    //
+    // Also unmap things if the remaining page cache is causing too much
+    // virtual memory pressure.
+    //
+
+    IopTrimPageCacheVirtual();
+
+    //
+    // If the page cache is smaller than its target, ask MM to page out some
+    // things so the page cache can grow back up to its target. This throws
+    // pageable data into the mix, so if a process allocates a boatload of
+    // memory, the page cache doesn't shrink to a dot and constantly lose the
+    // working set of the process.
+    //
+
+    if ((TargetRemoveCount != 0) &&
+        (IoPageCachePhysicalPageCount < IoPageCacheMinimumPagesTarget)) {
+
+        PageOutCount = IoPageCacheMinimumPagesTarget -
+                       IoPageCachePhysicalPageCount;
+
+        FreePageTarget = FreePhysicalPages + PageOutCount;
+        if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_SIZE_MANAGEMENT) != 0) {
+            RtlDebugPrint("PAGE CACHE: Requesting page out: 0x%I64x\n",
+                          PageOutCount);
+        }
+
+        MmRequestPagingOut(FreePageTarget);
+    }
+
+    return;
 }
 
 BOOL
@@ -3403,10 +3335,6 @@ Return Value:
     }
 
 IsPageCacheTooDirtyEnd:
-    if (TooDirty == FALSE) {
-        TooDirty = IopIsPageCacheTooMapped(NULL);
-    }
-
     return TooDirty;
 }
 
@@ -3529,42 +3457,12 @@ Return Value:
 
 {
 
-    MEMORY_WARNING_LEVEL MemoryWarningLevel;
     PPAGE_CACHE_ENTRY PageCacheEntry;
 
     ASSERT(IS_ALIGNED(PhysicalAddress, MmPageSize()) != FALSE);
     ASSERT((FileObject->Properties.Type != IoObjectBlockDevice) ||
            (Offset < (FileObject->Properties.BlockSize *
                       FileObject->Properties.BlockCount)));
-
-    //
-    // Before allowing the current thread to create a new page cache entry,
-    // check the memory warning level and force this thread to do a bit of
-    // cleanup work (throttling threads that are madly generating page cache
-    // entries). This may be a recursive I/O operation (ie a disk I/O running
-    // inside of a file I/O operation). Don't destroy any file objects, as that
-    // may cause additional I/O to the same object as is already being written
-    // to, causing a deadlock. An example of this is a directory read doing a
-    // disk read, which here might release the last reference on a file within
-    // that directory, which tries to do a directory write but can't acquire
-    // the lock as it's already held further up in this thread.
-    //
-
-    MemoryWarningLevel = MmGetPhysicalMemoryWarningLevel();
-    if (MemoryWarningLevel != MemoryWarningLevelNone) {
-        IopTrimLruPageCacheList(TRUE);
-    }
-
-    //
-    // By the same logic, if there is a virtual memory warning and the new page
-    // cache entry will be mapped, do a bit of cleanup work.
-    //
-
-    if (VirtualAddress != NULL) {
-        if (IopIsPageCacheTooMapped(NULL) != FALSE) {
-            IopUnmapLruPageCacheList();
-        }
-    }
 
     //
     // Allocate and initialize a new page cache entry.
@@ -3599,8 +3497,7 @@ CreatePageCacheEntryEnd:
 
 VOID
 IopDestroyPageCacheEntries (
-    PLIST_ENTRY ListHead,
-    BOOL FailIfLastFileObjectReference
+    PLIST_ENTRY ListHead
     )
 
 /*++
@@ -3615,11 +3512,6 @@ Arguments:
 
     ListHead - Supplies a pointer to the head of the list of entries to
         destroy.
-
-    FailIfLastFileObjectReference - Supplies a boolean indicating that this
-        operation may be inside of recursive I/O, and therefore shouldn't
-        release the last reference on a file object (which might generate more
-        I/O and deadlock).
 
 Return Value:
 
@@ -3662,9 +3554,7 @@ Return Value:
                           PageCacheEntry->Flags);
         }
 
-        Status = IopDestroyPageCacheEntry(PageCacheEntry,
-                                          FailIfLastFileObjectReference);
-
+        Status = IopDestroyPageCacheEntry(PageCacheEntry);
         if (!KSUCCESS(Status)) {
             if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_EVICTION) != 0) {
                 RtlDebugPrint("PAGE CACHE: Failed to destroy entry 0x%08x: "
@@ -3734,8 +3624,7 @@ Return Value:
 
 KSTATUS
 IopDestroyPageCacheEntry (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
-    BOOL FailIfLastFileObjectReference
+    PPAGE_CACHE_ENTRY PageCacheEntry
     )
 
 /*++
@@ -3749,11 +3638,6 @@ Routine Description:
 Arguments:
 
     PageCacheEntry - Supplies a pointer to the page cache entry.
-
-    FailIfLastFileObjectReference - Supplies a boolean indicating that this
-        may be a recursive I/O operation and that the page cache entry should
-        not release the final file object reference (as that may cause
-        additional I/O which might deadlock).
 
 Return Value:
 
@@ -3830,12 +3714,10 @@ Return Value:
     }
 
     //
-    // Release the reference on the system's I/O handle.
+    // Release the reference on the file object.
     //
 
-    Status = IopFileObjectReleaseReference(FileObject,
-                                           FailIfLastFileObjectReference);
-
+    Status = IopFileObjectReleaseReference(FileObject);
     if (!KSUCCESS(Status)) {
 
         //
@@ -3898,7 +3780,7 @@ Return Value:
     ULONG OldFlags;
     PVOID VirtualAddress;
 
-    ASSERT(KeIsSharedExclusiveLockHeldExclusive(IoPageCacheTreeLock) != FALSE);
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(NewEntry->FileObject->Lock));
     ASSERT(NewEntry->Flags == 0);
 
     //
@@ -4179,15 +4061,7 @@ Return Value:
             // objects).
             //
 
-            IopTrimLruPageCacheList(FALSE);
-
-            //
-            // Now that some page cache entries may have been destroyed, and
-            // thus unmapped, attempt to unmap page cache entries to keep the
-            // virtual address usage in check.
-            //
-
-            IopUnmapLruPageCacheList();
+            IopTrimPageCache();
 
             //
             // Check to see if dirty page cache entries need to be flushed or
@@ -4498,131 +4372,6 @@ FlushPageCacheBufferEnd:
 }
 
 VOID
-IopTrimLruPageCacheList (
-    BOOL AvoidDestroyingFileObjects
-    )
-
-/*++
-
-Routine Description:
-
-    This routine removes as many clean page cache entries as is necessary to
-    bring the size of the page cache back down to a reasonable level. It evicts
-    the page cache entries in LRU order.
-
-Arguments:
-
-    AvoidDestroyingFileObjects - Supplies a boolean indicating whether to
-        avoid releasing the last reference on any file object as a result of
-        trying to destroy page cache entries. Callers that may be doing I/O
-        recursively should set this flag. The root page cache thread does not
-        set this flag, so gutted page cache entries always get cleaned up
-        there.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    LIST_ENTRY DestroyListHead;
-    UINTN FreePageTarget;
-    UINTN FreePhysicalPages;
-    UINTN PageOutCount;
-    UINTN TargetRemoveCount;
-
-    TargetRemoveCount = 0;
-    FreePhysicalPages = -1;
-    if (IopIsPageCacheTooBig(&FreePhysicalPages) == FALSE) {
-        goto TrimLruPageCacheListEnd;
-    }
-
-    //
-    // The page cache is not leaving enough free physical pages; determine how
-    // many entries must be evicted.
-    //
-
-    ASSERT(FreePhysicalPages < IoPageCacheHeadroomPagesRetreat);
-
-    TargetRemoveCount = IoPageCacheHeadroomPagesRetreat -
-                        FreePhysicalPages;
-
-    if (TargetRemoveCount > IoPageCachePhysicalPageCount) {
-        TargetRemoveCount = IoPageCachePhysicalPageCount;
-    }
-
-    if (IoPageCachePhysicalPageCount - TargetRemoveCount <
-        IoPageCacheMinimumPages) {
-
-        TargetRemoveCount = IoPageCachePhysicalPageCount -
-                            IoPageCacheMinimumPages;
-    }
-
-    if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_SIZE_MANAGEMENT) != 0) {
-        RtlDebugPrint("PAGE CACHE: Attempt to remove at least %lu entries.\n",
-                      TargetRemoveCount);
-    }
-
-    //
-    // Iterate over the clean LRU page cache list trying to find which page
-    // cache entries can be removed. Stop as soon as the target count has been
-    // reached.
-    //
-
-    INITIALIZE_LIST_HEAD(&DestroyListHead);
-    KeAcquireSharedExclusiveLockExclusive(IoPageCacheTreeLock);
-    if (!LIST_EMPTY(&IoPageCacheCleanUnmappedList)) {
-        IopRemovePageCacheEntriesFromList(&IoPageCacheCleanUnmappedList,
-                                          &DestroyListHead,
-                                          &TargetRemoveCount);
-    }
-
-    if (TargetRemoveCount != 0) {
-        IopRemovePageCacheEntriesFromList(&IoPageCacheCleanList,
-                                          &DestroyListHead,
-                                          &TargetRemoveCount);
-    }
-
-    KeReleaseSharedExclusiveLockExclusive(IoPageCacheTreeLock);
-
-    //
-    // Destroy the evicted page cache entries. This will reduce the page
-    // cache's physical page count for any page that it ends up releasing.
-    //
-
-    IopDestroyPageCacheEntries(&DestroyListHead, AvoidDestroyingFileObjects);
-
-TrimLruPageCacheListEnd:
-
-    //
-    // If the page cache is smaller than its target, ask MM to page out some
-    // things so the page cache can grow back up to its target. This throws
-    // pageable data into the mix, so if a process allocates a boatload of
-    // memory, the page cache doesn't shrink to a dot and constantly lose the
-    // working set of the process.
-    //
-
-    if ((TargetRemoveCount != 0) &&
-        (IoPageCachePhysicalPageCount < IoPageCacheMinimumPagesTarget)) {
-
-        PageOutCount = IoPageCacheMinimumPagesTarget -
-                       IoPageCachePhysicalPageCount;
-
-        FreePageTarget = FreePhysicalPages + PageOutCount;
-        if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_SIZE_MANAGEMENT) != 0) {
-            RtlDebugPrint("PAGE CACHE: Requesting page out: 0x%I64x\n",
-                          PageOutCount);
-        }
-
-        MmRequestPagingOut(FreePageTarget);
-    }
-
-    return;
-}
-
-VOID
 IopTrimRemovalPageCacheList (
     VOID
     )
@@ -4653,19 +4402,16 @@ Return Value:
     }
 
     INITIALIZE_LIST_HEAD(&DestroyListHead);
-    KeAcquireSharedExclusiveLockExclusive(IoPageCacheTreeLock);
     IopRemovePageCacheEntriesFromList(&IoPageCacheRemovalList,
                                       &DestroyListHead,
                                       NULL);
-
-    KeReleaseSharedExclusiveLockExclusive(IoPageCacheTreeLock);
 
     //
     // Destroy the evicted page cache entries. This will reduce the page
     // cache's physical page count for any page that it ends up releasing.
     //
 
-    IopDestroyPageCacheEntries(&DestroyListHead, FALSE);
+    IopDestroyPageCacheEntries(&DestroyListHead);
     return;
 }
 
@@ -4709,16 +4455,12 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PFILE_OBJECT FileObject;
-    PPAGE_CACHE_ENTRY FirstWithReference;
     ULONG Flags;
-    BOOL MarkedDirty;
     PPAGE_CACHE_ENTRY PageCacheEntry;
+    BOOL PageTakenDown;
     BOOL PageWasDirty;
     KSTATUS Status;
 
-    ASSERT(KeIsSharedExclusiveLockHeldExclusive(IoPageCacheTreeLock) != FALSE);
-
-    FirstWithReference = NULL;
     KeAcquireQueuedLock(IoPageCacheListLock);
     CurrentEntry = PageCacheListHead->Next;
     while ((CurrentEntry != PageCacheListHead) &&
@@ -4730,28 +4472,20 @@ Return Value:
         Flags = PageCacheEntry->Flags;
 
         //
-        // Skip over all page cache entries with references, moving them to the
-        // back of the list. They cannot be removed at the moment. Break out if
-        // the first page cache entry with a reference has been seen twice.
+        // Remove anything with a reference to avoid iterating through it
+        // over and over. When that last reference is dropped, it will be put
+        // back on.
         //
 
-        if (PageCacheEntry == FirstWithReference) {
-            break;
-        }
-
         if (PageCacheEntry->ReferenceCount != 0) {
-            if (FirstWithReference == NULL) {
-                FirstWithReference = PageCacheEntry;
-            }
-
             LIST_REMOVE(&(PageCacheEntry->ListEntry));
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry), PageCacheListHead);
+            PageCacheEntry->ListEntry.Next = NULL;
             continue;
         }
 
         //
-        // Skip over the page cache entry if it is dirty, belongs to a live
-        // file (not deleted), and it has not been evicted.
+        // Skip over the page cache entry if it is dirty. Dead files and
+        // evicted files are never flushed, so those could be removed.
         //
 
         if (((Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) &&
@@ -4771,126 +4505,125 @@ Return Value:
             continue;
         }
 
-        ASSERT(PageCacheEntry->ReferenceCount == 0);
-
         //
-        // Unmap this page cache entry from any image sections that may be
-        // mapping it. If the mappings note that the page is dirty, then mark
-        // it dirty and skip removing the page if it became dirty. As the list
-        // lock is already held, the helper routine cannot move it to the dirty
-        // list. This routine must do it on its own, but make sure to move the
-        // page cache entry that was marked dirty (i.e. the page owner).
-        //
-        // N.B. Keep hold of the page cache locks or else another image section
-        //      could start using this page in the middle of the unmap process.
-        //
-        // Evicted page cache entries and entries for deleted file objects
-        // should not have any mappings.
+        // Add a reference to the entry, drop the list lock, and acquire the
+        // file object lock to prevent lock ordering trouble.
         //
 
-        Flags = PageCacheEntry->Flags;
-        if (((FileObject->Properties.HardLinkCount != 0) ||
-             (FileObject->PathEntryCount != 0)) &&
-            ((Flags & PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0)) {
+        IoPageCacheEntryAddReference(PageCacheEntry);
+        KeReleaseQueuedLock(IoPageCacheListLock);
+        KeAcquireSharedExclusiveLockExclusive(PageCacheEntry->FileObject->Lock);
+        PageTakenDown = FALSE;
+        if (PageCacheEntry->ReferenceCount == 1) {
 
             //
-            // Unmapping a page cache entry can fail if a non-paged image
-            // section maps it.
+            // Unmap this page cache entry from any image sections that may be
+            // mapping it. If the mappings note that the page is dirty, then
+            // mark it dirty and skip removing the page if it became dirty. The
+            // file object lock holds off any new mappings from getting at this
+            // entry. Unmapping a page cache entry can fail if a non-paged
+            // image section maps it.
             //
 
+            Flags = PageCacheEntry->Flags;
             Status = IopUnmapPageCacheEntrySections(PageCacheEntry,
                                                     &PageWasDirty);
 
-            if (!KSUCCESS(Status)) {
-                continue;
-            }
-
-            if (PageWasDirty != FALSE) {
-                MarkedDirty = IoMarkPageCacheEntryDirty(PageCacheEntry,
-                                                        0,
-                                                        0,
-                                                        FALSE);
-
-                if (MarkedDirty != FALSE) {
-                    if (PageCacheEntry->BackingEntry != NULL) {
-                        PageCacheEntry = PageCacheEntry->BackingEntry;
-                    }
-
-                    if (((PageCacheEntry->Flags &
-                          PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0) &&
-                        (PageCacheEntry->ListEntry.Next != NULL)) {
-
-                        //
-                        // Watch out for the next pointer being this backing
-                        // entry, it would be bad to loop through this now
-                        // defunct entry.
-                        //
-
-                        if (CurrentEntry == &(PageCacheEntry->ListEntry)) {
-                            CurrentEntry = CurrentEntry->Next;
-                        }
-
-                        LIST_REMOVE(&(PageCacheEntry->ListEntry));
-                        PageCacheEntry->ListEntry.Next = NULL;
-
-                        //
-                        // Watch out for the loop searching for an entry
-                        // that is no longer on the list.
-                        //
-
-                        if (PageCacheEntry == FirstWithReference) {
-                            FirstWithReference = NULL;
-                        }
-                    }
-
-                    continue;
+            if (KSUCCESS(Status)) {
+                if (PageWasDirty != FALSE) {
+                    IoMarkPageCacheEntryDirty(PageCacheEntry, 0, 0, FALSE);
+                    Flags = PageCacheEntry->Flags;
                 }
 
-                ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) ==
-                       0);
+                if ((Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+
+                    //
+                    // Make sure the cache entry is clean to keep the metrics
+                    // correct.
+                    //
+
+                    IopMarkPageCacheEntryClean(PageCacheEntry, FALSE);
+
+                    //
+                    // Remove the node for the page cache entry tree if
+                    // necessary.
+                    //
+
+                    if (PageCacheEntry->Node.Parent != NULL) {
+                        IopRemovePageCacheEntryFromTree(PageCacheEntry);
+                    }
+
+                    PageTakenDown = TRUE;
+
+                    //
+                    // If this page cache entry owns its physical page, then it
+                    // counts towards the removal count.
+                    //
+
+                    if ((Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0) {
+                        if (TargetRemoveCount != NULL) {
+                            *TargetRemoveCount -= 1;
+                        }
+                    }
+
+                    //
+                    // If this entry had been evicted, it is about to get
+                    // destroyed so decrement the evicted count.
+                    //
+
+                    if ((Flags & PAGE_CACHE_ENTRY_FLAG_EVICTED) != 0) {
+                        IoPageCacheEvictedCount -= 1;
+                    }
+                }
             }
         }
 
         //
-        // Make sure the cache entry is clean to keep the metrics correct.
+        // Drop the file object lock and reacquire the list lock.
         //
 
-        IopMarkPageCacheEntryClean(PageCacheEntry, FALSE);
+        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+        KeAcquireQueuedLock(IoPageCacheListLock);
 
         //
-        // Remove the node for the page cache entry tree if necessary.
+        // Figure out the next entry. The page cache entry has been in the list
+        // the whole time. Try to continue where it left off, but if it got
+        // removed or moved while the locks weren't held, just start over.
         //
 
-        if (PageCacheEntry->Node.Parent != NULL) {
-            IopRemovePageCacheEntryFromTree(PageCacheEntry);
+        if (CurrentEntry != PageCacheEntry->ListEntry.Next) {
+            CurrentEntry = PageCacheListHead->Next;
         }
 
         //
-        // If this page cache entry owns its physical page, then it counts
-        // towards the removal count.
+        // If the page was successfully destroyed, move it over to the destroy
+        // list.
         //
 
-        if ((Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0) {
-            if (TargetRemoveCount != NULL) {
-                *TargetRemoveCount -= 1;
+        if (PageTakenDown != FALSE) {
+            if (PageCacheEntry->ListEntry.Next != NULL) {
+                LIST_REMOVE(&(PageCacheEntry->ListEntry));
+            }
+
+            INSERT_BEFORE(&(PageCacheEntry->ListEntry), DestroyListHead);
+
+        //
+        // Otherwise, either remove it from this list, or stick it on the
+        // end. The list assignment has to be correct because releasing
+        // the reference might try to stick it on the list if it sees its clean
+        // and not on one, but the list lock is already held here.
+        //
+
+        } else {
+            if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+                if (PageCacheEntry->ListEntry.Next == NULL) {
+                    INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                                  &IoPageCacheCleanList);
+                }
             }
         }
 
-        //
-        // If this entry had been evicted, it is about to get destroyed so
-        // decrement the evicted count.
-        //
-
-        if ((Flags & PAGE_CACHE_ENTRY_FLAG_EVICTED) != 0) {
-            IoPageCacheEvictedCount -= 1;
-        }
-
-        //
-        // Remove the entry from the list and add it to the destroy list.
-        //
-
-        LIST_REMOVE(&(PageCacheEntry->ListEntry));
-        INSERT_BEFORE(&(PageCacheEntry->ListEntry), DestroyListHead);
+        IoPageCacheEntryReleaseReference(PageCacheEntry);
     }
 
     KeReleaseQueuedLock(IoPageCacheListLock);
@@ -4898,7 +4631,7 @@ Return Value:
 }
 
 VOID
-IopUnmapLruPageCacheList (
+IopTrimPageCacheVirtual (
     VOID
     )
 
@@ -4922,11 +4655,10 @@ Return Value:
 
 {
 
-    PPAGE_CACHE_ENTRY BackingEntry;
     PLIST_ENTRY CurrentEntry;
+    PFILE_OBJECT FileObject;
     UINTN FreeVirtualPages;
     UINTN MappedCleanPageCount;
-    ULONG OldFlags;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
     UINTN TargetUnmapCount;
@@ -4984,7 +4716,6 @@ Return Value:
     UnmapSize = 0;
     UnmapCount = 0;
     PageSize = MmPageSize();
-    KeAcquireSharedExclusiveLockExclusive(IoPageCacheTreeLock);
     KeAcquireQueuedLock(IoPageCacheListLock);
     CurrentEntry = IoPageCacheCleanList.Next;
     while ((CurrentEntry != &IoPageCacheCleanList) &&
@@ -5022,101 +4753,71 @@ Return Value:
         }
 
         //
-        // If this page cache entry owns the physical page, then it is not
-        // serving as a backing entry to any other page cache entry (as it has
-        // no references). Freely unmap it.
+        // Add a reference to the page cache entry, drop the list lock, and
+        // acquire the file object lock to ensure no new references come in
+        // while the VA is being torn down.
         //
 
-        ASSERT(PageCacheEntry->ReferenceCount == 0);
+        IoPageCacheEntryAddReference(PageCacheEntry);
+        KeReleaseQueuedLock(IoPageCacheListLock);
+        FileObject = PageCacheEntry->FileObject;
+        KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
+        IopRemovePageCacheEntryVirtualAddress(PageCacheEntry, &VirtualAddress);
+        if (VirtualAddress != NULL) {
+            UnmapCount += 1;
 
-        if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0) {
-            OldFlags = RtlAtomicAnd32(&(PageCacheEntry->Flags),
-                                      ~PAGE_CACHE_ENTRY_FLAG_MAPPED);
+            //
+            // If this page is not contiguous with the previous run, unmap the
+            // previous run.
+            //
 
-            if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
-                VirtualAddress = PageCacheEntry->VirtualAddress;
-                PageCacheEntry->VirtualAddress = NULL;
-                UnmapCount += 1;
-            }
+            if ((UnmapStart != NULL) &&
+                (VirtualAddress != (UnmapStart + UnmapSize))) {
 
-        //
-        // The page cache entry is not the owner, but it may be eligible for
-        // unmap if the owner only has 1 reference. A page cache entry should
-        // not back more than one other page cache entry.
-        //
-
-        } else {
-            BackingEntry = PageCacheEntry->BackingEntry;
-
-            ASSERT(BackingEntry != NULL);
-            ASSERT(BackingEntry->VirtualAddress ==
-                   PageCacheEntry->VirtualAddress);
-
-            if (BackingEntry->ReferenceCount != 1) {
-                continue;
+                MmUnmapAddress(UnmapStart, UnmapSize);
+                UnmapStart = NULL;
+                UnmapSize = 0;
             }
 
             //
-            // Only the owner should be marked mapped or dirty.
+            // Either start a new run or append it to the previous run.
             //
 
-            ASSERT((PageCacheEntry->Flags &
-                    (PAGE_CACHE_ENTRY_FLAG_MAPPED |
-                     PAGE_CACHE_ENTRY_FLAG_DIRTY)) == 0);
-
-            OldFlags = RtlAtomicAnd32(&(BackingEntry->Flags),
-                                      ~PAGE_CACHE_ENTRY_FLAG_MAPPED);
-
-            if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
-                VirtualAddress = BackingEntry->VirtualAddress;
-                BackingEntry->VirtualAddress = NULL;
-                PageCacheEntry->VirtualAddress = NULL;
-                UnmapCount += 1;
+            if (UnmapStart == NULL) {
+                UnmapStart = VirtualAddress;
             }
+
+            UnmapSize += PageSize;
         }
 
         //
-        // If it wasn't actually mapped, continue.
+        // Drop the file object lock and reacquire the list lock.
         //
 
-        if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) {
-            continue;
+        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+        KeAcquireQueuedLock(IoPageCacheListLock);
+
+        //
+        // Figure out the next entry. The page cache entry has been in the list
+        // the whole time. Try to continue where it left off, but if it got
+        // removed or moved while the locks weren't held, just start over.
+        //
+
+        if (CurrentEntry != PageCacheEntry->ListEntry.Next) {
+            CurrentEntry = IoPageCacheCleanList.Next;
         }
 
-        //
-        // If the unmapped page was also dirty, decrement the count.
-        //
-
-        if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
-            RtlAtomicAdd(&IoPageCacheMappedDirtyPageCount, (UINTN)-1);
+        if (PageCacheEntry->ListEntry.Next != NULL) {
+            LIST_REMOVE(&(PageCacheEntry->ListEntry));
         }
 
-        //
-        // If this page is not contiguous with the previous run, unmap the
-        // previous run.
-        //
+        INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                      &IoPageCacheCleanUnmappedList);
 
-        if ((UnmapStart != NULL) &&
-            (VirtualAddress != (UnmapStart + UnmapSize))) {
-
-            MmUnmapAddress(UnmapStart, UnmapSize);
-            UnmapStart = NULL;
-            UnmapSize = 0;
-        }
-
-        //
-        // Either start a new run or append it to the previous run.
-        //
-
-        if (UnmapStart == NULL) {
-            UnmapStart = VirtualAddress;
-        }
-
-        UnmapSize += PageSize;
+        IoPageCacheEntryReleaseReference(PageCacheEntry);
     }
 
     KeReleaseQueuedLock(IoPageCacheListLock);
-    KeReleaseSharedExclusiveLockExclusive(IoPageCacheTreeLock);
 
     //
     // If there is a remaining region of contiguous virtual memory that needs
@@ -5270,6 +4971,141 @@ Return Value:
     return Status;
 }
 
+KSTATUS
+IopRemovePageCacheEntryVirtualAddress (
+    PPAGE_CACHE_ENTRY Entry,
+    PVOID *VirtualAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attmepts to separate a page cache entry from its associated
+    virtual address. It assumes the file object lock for this entry (but not
+    the backing entry if there is one) is held.
+
+Arguments:
+
+    Entry - Supplies a pointer to the page cache entry.
+
+    VirtualAddress - Supplies a pointer where the virtual address to unmap will
+        be returned on success. NULL will be returned on failure or if there
+        was no VA.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_RESOURCE_IN_USE if the page cache entry has references and cannot
+    be unmapped.
+
+--*/
+
+{
+
+    PPAGE_CACHE_ENTRY BackingEntry;
+    ULONG OldFlags;
+    KSTATUS Status;
+
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(Entry->FileObject->Lock));
+
+    Status = STATUS_RESOURCE_IN_USE;
+    *VirtualAddress = NULL;
+    BackingEntry = NULL;
+    if ((Entry->ReferenceCount != 1) ||
+        ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0)) {
+
+        goto RemovePageCacheEntryVirtualAddressEnd;
+    }
+
+    //
+    // If this page cache entry owns the physical page, then it is not
+    // serving as a backing entry to any other page cache entry (as it has
+    // no references). Freely unmap it.
+    //
+
+    if ((Entry->Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0) {
+        OldFlags = RtlAtomicAnd32(&(Entry->Flags),
+                                  ~PAGE_CACHE_ENTRY_FLAG_MAPPED);
+
+        if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
+            *VirtualAddress = Entry->VirtualAddress;
+            Entry->VirtualAddress = NULL;
+        }
+
+    //
+    // The page cache entry is not the owner, but it may be eligible for
+    // unmap if the owner only has 1 reference (from the backee).
+    //
+
+    } else {
+
+        //
+        // Grab the backing entry lock, too. Lock ordering shouldn't be a
+        // problem since files are always grabbed before block devices.
+        //
+
+        BackingEntry = Entry->BackingEntry;
+
+        ASSERT(BackingEntry != NULL);
+
+        KeAcquireSharedExclusiveLockExclusive(BackingEntry->FileObject->Lock);
+
+        ASSERT((Entry->VirtualAddress == NULL) ||
+               (BackingEntry->VirtualAddress ==
+                Entry->VirtualAddress));
+
+        if ((BackingEntry->ReferenceCount != 1) ||
+            ((BackingEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0)) {
+
+            goto RemovePageCacheEntryVirtualAddressEnd;
+        }
+
+        //
+        // Only the owner should be marked mapped or dirty.
+        //
+
+        ASSERT((Entry->Flags &
+                (PAGE_CACHE_ENTRY_FLAG_MAPPED |
+                 PAGE_CACHE_ENTRY_FLAG_DIRTY)) == 0);
+
+        OldFlags = RtlAtomicAnd32(&(BackingEntry->Flags),
+                                  ~PAGE_CACHE_ENTRY_FLAG_MAPPED);
+
+        if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
+            *VirtualAddress = BackingEntry->VirtualAddress;
+            BackingEntry->VirtualAddress = NULL;
+            Entry->VirtualAddress = NULL;
+        }
+    }
+
+    //
+    // If it wasn't actually mapped, continue.
+    //
+
+    if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) {
+        *VirtualAddress = NULL;
+    }
+
+    //
+    // If the unmapped page was also dirty, decrement the count.
+    //
+
+    if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
+        RtlAtomicAdd(&IoPageCacheMappedDirtyPageCount, (UINTN)-1);
+    }
+
+    Status = STATUS_SUCCESS;
+
+RemovePageCacheEntryVirtualAddressEnd:
+    if (BackingEntry != NULL) {
+        KeReleaseSharedExclusiveLockExclusive(BackingEntry->FileObject->Lock);
+    }
+
+    return Status;;
+}
+
 VOID
 IopRemovePageCacheEntryFromTree (
     PPAGE_CACHE_ENTRY PageCacheEntry
@@ -5294,8 +5130,9 @@ Return Value:
 
 {
 
-    ASSERT(KeIsSharedExclusiveLockHeldExclusive(IoPageCacheTreeLock) != FALSE);
-    ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_BUSY) == 0);
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(
+                                            PageCacheEntry->FileObject->Lock));
+
     ASSERT(PageCacheEntry->Node.Parent != NULL);
 
     //
@@ -5366,7 +5203,8 @@ Return Value:
 
 {
 
-    ASSERT(KeIsSharedExclusiveLockHeldExclusive(IoPageCacheTreeLock) != FALSE);
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(
+                                            PageCacheEntry->FileObject->Lock));
 
     KeAcquireQueuedLock(IoPageCacheListLock);
     if ((Eviction == FALSE) &&

@@ -1133,7 +1133,7 @@ Return Value:
         //
 
         if (Terminal->SlaveFileObject != NULL) {
-            IopFileObjectReleaseReference(Terminal->SlaveFileObject, FALSE);
+            IopFileObjectReleaseReference(Terminal->SlaveFileObject);
         }
     }
 
@@ -1388,7 +1388,7 @@ Return Value:
     //
 
     ObReleaseReference(Slave->Master);
-    IopFileObjectReleaseReference(Slave->Master->MasterFileObject, FALSE);
+    IopFileObjectReleaseReference(Slave->Master->MasterFileObject);
     return STATUS_SUCCESS;
 }
 

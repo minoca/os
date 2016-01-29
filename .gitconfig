@@ -1,6 +1,6 @@
 ##
-## To activate this configuration (recommended), add the following to your
-## .git/config file, removing the # characters.
+## To activate this configuration (recommended), add the following include
+## section to your .git/config file (without the # characters).
 ##
 ## [include]
 ##     path = ../.gitconfig

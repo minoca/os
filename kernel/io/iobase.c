@@ -2123,6 +2123,8 @@ Return Value:
 
         if (RenameRequest.SourceFileHardLinkDelta == 1) {
             IopFileObjectIncrementHardLinkCount(SourceFileObject);
+            IopUpdateFileObjectTime(DestinationDirectoryFileObject,
+                                    FileObjectModifiedTime);
 
         //
         // Otherwise, the delta is -1. Decrement the hard link count and unlink
@@ -2136,6 +2138,8 @@ Return Value:
 
             IopFileObjectDecrementHardLinkCount(SourceFileObject);
             IopPathUnlink(SourcePathPoint.PathEntry);
+            IopUpdateFileObjectTime(SourceDirectoryFileObject,
+                                    FileObjectModifiedTime);
         }
 
     //
@@ -2156,7 +2160,15 @@ Return Value:
                                     RenameRequest.DestinationDirectorySize,
                                     TRUE,
                                     TRUE);
+
+        IopUpdateFileObjectTime(DestinationDirectoryFileObject,
+                                FileObjectModifiedTime);
+
+        IopUpdateFileObjectTime(SourceDirectoryFileObject,
+                                FileObjectModifiedTime);
     }
+
+    IopUpdateFileObjectTime(SourceFileObject, FileObjectStatusTime);
 
 RenameEnd:
     if (LocksHeld != FALSE) {
@@ -3945,7 +3957,8 @@ Return Value:
 
         if (Unlinked != FALSE) {
             IopFileObjectDecrementHardLinkCount(FileObject);
-            IopUpdateFileObjectTime(DirectoryFileObject, TRUE);
+            IopUpdateFileObjectTime(DirectoryFileObject,
+                                    FileObjectModifiedTime);
         }
     }
 
@@ -4221,7 +4234,7 @@ Return Value:
     //
 
     if (KSUCCESS(Status)) {
-        IopUpdateFileObjectTime(Directory, TRUE);
+        IopUpdateFileObjectTime(Directory, FileObjectModifiedTime);
         IopUpdateFileObjectFileSize(Directory,
                                     Request.DirectorySize,
                                     TRUE,
@@ -4308,7 +4321,7 @@ Return Value:
         // The directory was modified, update its times.
         //
 
-        IopUpdateFileObjectTime(DirectoryObject, TRUE);
+        IopUpdateFileObjectTime(DirectoryObject, FileObjectModifiedTime);
     }
 
     *Unlinked = UnlinkRequest.Unlinked;
@@ -5099,7 +5112,7 @@ CreateAnonymousObjectEnd:
     }
 
     if (FileObject != NULL) {
-        IopFileObjectReleaseReference(FileObject, FALSE);
+        IopFileObjectReleaseReference(FileObject);
     }
 
     PathPoint->PathEntry = PathEntry;
@@ -5447,6 +5460,7 @@ Return Value:
 
     ASSERT(FileObject != NULL);
 
+    KeAcquireSharedExclusiveLockShared(FileObject->Lock);
     if (Context->Offset != IO_OFFSET_NONE) {
         Parameters.IoOffset = Context->Offset;
 
@@ -5503,15 +5517,12 @@ Return Value:
 
     ASSERT(IS_DEVICE_OR_VOLUME(Device));
 
-    KeAcquireSharedExclusiveLockShared(FileObject->Lock);
     Status = IopSendIoIrp(Device, IrpMinorIoRead, &Parameters);
     if (KSUCCESS(Status) || (Status == STATUS_END_OF_FILE)) {
         if ((Handle->OpenFlags & OPEN_FLAG_NO_ACCESS_TIME) == 0) {
-            IopUpdateFileObjectTime(FileObject, FALSE);
+            IopUpdateFileObjectTime(FileObject, FileObjectAccessTime);
         }
     }
-
-    KeReleaseSharedExclusiveLockShared(FileObject->Lock);
 
 PerformDirectoryIoOperationEnd:
 
@@ -5523,6 +5534,8 @@ PerformDirectoryIoOperationEnd:
         RtlAtomicExchange64(&(Handle->CurrentOffset),
                             Parameters.NewIoOffset);
     }
+
+    KeReleaseSharedExclusiveLockShared(FileObject->Lock);
 
     //
     // Modify the file IDs of any directory entries that are mount points.

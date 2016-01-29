@@ -513,7 +513,7 @@ InitializePathSupportEnd:
         }
 
         if (FileObject != NULL) {
-            IopFileObjectReleaseReference(FileObject, FALSE);
+            IopFileObjectReleaseReference(FileObject);
         }
     }
 
@@ -2948,7 +2948,7 @@ PathLookupThroughFileSystemEnd:
     }
 
     if (FileObject != NULL) {
-        IopFileObjectReleaseReference(FileObject, FALSE);
+        IopFileObjectReleaseReference(FileObject);
     }
 
     return Status;
@@ -3579,7 +3579,7 @@ Return Value:
 
     if (Entry->Negative == FALSE) {
         IopFileObjectReleasePathEntryReference(Entry->FileObject);
-        IopFileObjectReleaseReference(Entry->FileObject, FALSE);
+        IopFileObjectReleaseReference(Entry->FileObject);
     }
 
     MmFreePagedPool(Entry);

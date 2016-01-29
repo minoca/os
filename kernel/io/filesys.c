@@ -1000,7 +1000,7 @@ VolumeArrivalEnd:
     }
 
     if (FileObject != NULL) {
-        IopFileObjectReleaseReference(FileObject, FALSE);
+        IopFileObjectReleaseReference(FileObject);
     }
 
     if (VolumeHandle != NULL) {

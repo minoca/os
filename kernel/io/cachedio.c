@@ -97,7 +97,8 @@ typedef struct _IO_WRITE_CONTEXT {
 KSTATUS
 IopPerformCachedRead (
     PFILE_OBJECT FileObject,
-    PIO_CONTEXT IoContext
+    PIO_CONTEXT IoContext,
+    PBOOL LockHeldExclusive
     );
 
 KSTATUS
@@ -196,10 +197,12 @@ Return Value:
 
     PFILE_OBJECT FileObject;
     UINTN FlushCount;
-    BOOL Modified;
+    BOOL LockHeldExclusive;
     ULONGLONG OriginalOffset;
     ULONG PageShift;
+    ULONGLONG StartOffset;
     KSTATUS Status;
+    FILE_OBJECT_TIME_TYPE TimeType;
 
     FileObject = Handle->PathPoint.PathEntry->FileObject;
 
@@ -207,13 +210,16 @@ Return Value:
     ASSERT((IoContext->Flags & IO_FLAG_NO_ALLOCATE) == 0);
     ASSERT(IO_IS_CACHEABLE_TYPE(FileObject->Properties.Type) != FALSE);
 
+    OriginalOffset = IoContext->Offset;
+    StartOffset = OriginalOffset;
+
     //
-    // Get the current offset if an offset is not provided.
+    // Assuming this call is going to generate more pages, ask this thread to
+    // do some trimming if things are too big.
     //
 
-    OriginalOffset = IoContext->Offset;
-    if (OriginalOffset == IO_OFFSET_NONE) {
-        IoContext->Offset = RtlAtomicOr64(&(Handle->CurrentOffset), 0);
+    if ((IoContext->Flags & IO_FLAG_FS_DATA) == 0) {
+        IopTrimPageCache();
     }
 
     //
@@ -253,6 +259,11 @@ Return Value:
         }
 
         KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
+        LockHeldExclusive = TRUE;
+        if (OriginalOffset == IO_OFFSET_NONE) {
+            IoContext->Offset = RtlAtomicOr64(&(Handle->CurrentOffset), 0);
+            StartOffset = IoContext->Offset;
+        }
 
         //
         // In append mode, set the offset to the end of the file.
@@ -272,8 +283,7 @@ Return Value:
                                               TRUE);
         }
 
-        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-        Modified = TRUE;
+        TimeType = FileObjectModifiedTime;
 
     //
     // Read operations acquire the file object's lock in shared mode and then
@@ -282,8 +292,16 @@ Return Value:
 
     } else {
         KeAcquireSharedExclusiveLockShared(FileObject->Lock);
+        if (OriginalOffset == IO_OFFSET_NONE) {
+            IoContext->Offset = RtlAtomicOr64(&(Handle->CurrentOffset), 0);
+            StartOffset = IoContext->Offset;
+        }
+
+        LockHeldExclusive = FALSE;
         if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE) {
-            Status = IopPerformCachedRead(FileObject, IoContext);
+            Status = IopPerformCachedRead(FileObject,
+                                          IoContext,
+                                          &LockHeldExclusive);
 
         } else {
             Status = IopPerformNonCachedRead(FileObject,
@@ -291,20 +309,7 @@ Return Value:
                                              Handle->DeviceContext);
         }
 
-        KeReleaseSharedExclusiveLockShared(FileObject->Lock);
-        Modified = FALSE;
-    }
-
-    //
-    // Update the access and modified times if some bytes were read or written.
-    //
-
-    if (IoContext->BytesCompleted != 0) {
-        if ((Modified != FALSE) ||
-            ((Handle->OpenFlags & OPEN_FLAG_NO_ACCESS_TIME) == 0)) {
-
-            IopUpdateFileObjectTime(FileObject, Modified);
-        }
+        TimeType = FileObjectAccessTime;
     }
 
     //
@@ -312,7 +317,27 @@ Return Value:
     //
 
     if (OriginalOffset == IO_OFFSET_NONE) {
-        RtlAtomicAdd64(&(Handle->CurrentOffset), IoContext->BytesCompleted);
+        RtlAtomicExchange64(&(Handle->CurrentOffset),
+                            StartOffset + IoContext->BytesCompleted);
+    }
+
+    //
+    // Update the access and modified times if some bytes were read or written.
+    //
+
+    if (IoContext->BytesCompleted != 0) {
+        if ((TimeType == FileObjectModifiedTime) ||
+            ((Handle->OpenFlags & OPEN_FLAG_NO_ACCESS_TIME) == 0)) {
+
+            IopUpdateFileObjectTime(FileObject, TimeType);
+        }
+    }
+
+    if (LockHeldExclusive != FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+
+    } else {
+        KeReleaseSharedExclusiveLockShared(FileObject->Lock);
     }
 
     return Status;
@@ -454,7 +479,8 @@ Return Value:
 KSTATUS
 IopPerformCachedRead (
     PFILE_OBJECT FileObject,
-    PIO_CONTEXT IoContext
+    PIO_CONTEXT IoContext,
+    PBOOL LockHeldExclusive
     )
 
 /*++
@@ -470,6 +496,11 @@ Arguments:
     FileObject - Supplies a pointer to the file object for the device or file.
 
     IoContext - Supplies a pointer to the I/O context.
+
+    LockHeldExclusive - Supplies a pointer indicating whether the file object
+        lock is held shared (FALSE) or exclusive (TRUE). This routine may
+        convert a shared acquire into an exclusive one if new entries need to
+        be inserted into the page cache.
 
 Return Value:
 
@@ -619,6 +650,16 @@ Return Value:
                 ASSERT(CurrentOffset < FileSize);
                 ASSERT((CurrentOffset - CacheMissOffset) <= MAX_UINTN);
 
+                //
+                // Cache misses are going to modify the page cache tree, so
+                // the lock needs to be held exclusive.
+                //
+
+                if (*LockHeldExclusive == FALSE) {
+                    KeSharedExclusiveLockConvertToExclusive(FileObject->Lock);
+                    *LockHeldExclusive = TRUE;
+                }
+
                 MissContext.IoBuffer = PageAlignedIoBuffer;
                 MissContext.Offset = CacheMissOffset;
                 MissSize = (UINTN)(CurrentOffset - CacheMissOffset);
@@ -689,6 +730,11 @@ Return Value:
 
         ASSERT(CurrentOffset <= FileSize);
         ASSERT(CurrentOffset == (IoContext->Offset + SizeInBytes));
+
+        if (*LockHeldExclusive == FALSE) {
+            KeSharedExclusiveLockConvertToExclusive(FileObject->Lock);
+            *LockHeldExclusive = TRUE;
+        }
 
         MissContext.IoBuffer = PageAlignedIoBuffer;
         MissContext.Offset = CacheMissOffset;
@@ -1523,6 +1569,7 @@ Routine Description:
     This routine handles a cache miss. It performs an aligned read on the given
     handle at the miss offset and then caches the read data. It will update the
     given destination I/O buffer with physical pages from the page cache.
+    The file object lock must be held exclusive already.
 
 Arguments:
 
@@ -1553,6 +1600,7 @@ Return Value:
     PageSize = MmPageSize();
     IoContext->BytesCompleted = 0;
 
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE);
     ASSERT(IO_IS_CACHEABLE_TYPE(FileObject->Properties.Type));
     ASSERT(IS_ALIGNED(IoContext->Offset, PageSize) != FALSE);
 

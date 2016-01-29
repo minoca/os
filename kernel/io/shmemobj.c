@@ -591,7 +591,7 @@ CreateSharedMemoryObjectEnd:
 
     if (!KSUCCESS(Status)) {
         if (NewFileObject != NULL) {
-            IopFileObjectReleaseReference(NewFileObject, FALSE);
+            IopFileObjectReleaseReference(NewFileObject);
             NewFileObject = NULL;
             *FileObject = NULL;
         }
@@ -716,7 +716,7 @@ Return Value:
 
         ASSERT(SharedMemoryObject->FileObject == FileObject);
 
-        IopFileObjectReleaseReference(SharedMemoryObject->FileObject, FALSE);
+        IopFileObjectReleaseReference(SharedMemoryObject->FileObject);
         SharedMemoryObject->FileObject = NULL;
         *Unlinked = TRUE;
     }

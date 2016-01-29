@@ -2257,7 +2257,7 @@ CreateSocketEnd:
         }
 
         if (NewFileObject != NULL) {
-            IopFileObjectReleaseReference(NewFileObject, FALSE);
+            IopFileObjectReleaseReference(NewFileObject);
             *FileObject = NULL;
         }
     }

@@ -1437,6 +1437,30 @@ Return Value:
 --*/
 
 KERNEL_API
+VOID
+KeSharedExclusiveLockConvertToExclusive (
+    PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts a lock that the caller holds shared into one that
+    the caller holds exclusive. This routine will most likely fully release
+    and reacquire the lock.
+
+Arguments:
+
+    SharedExclusiveLock - Supplies a pointer to the shared-exclusive lock.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
 BOOL
 KeIsSharedExclusiveLockHeld (
     PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock
