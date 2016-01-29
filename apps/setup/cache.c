@@ -922,6 +922,7 @@ Return Value:
 
     assert(Data->Dirty != FALSE);
 
+    errno = 0;
     if (Data->Offset != Handle->NextOsOffset) {
         Handle->NextOsOffset = SetupOsSeek(Handle->Handle, Data->Offset);
         if (Handle->NextOsOffset != Data->Offset) {
@@ -935,8 +936,16 @@ Return Value:
                                 SETUP_CACHE_BLOCK_SIZE);
 
     if (BytesWritten != SETUP_CACHE_BLOCK_SIZE) {
-        fprintf(stderr, "Error: Write failed.\n");
-        return -1;
+        if (errno != 0) {
+            fprintf(stderr,
+                    "Error: Write failed at offset %I64x: %d bytes "
+                    "written: %s.\n",
+                    Data->Offset,
+                    BytesWritten,
+                    strerror(errno));
+
+            return -1;
+        }
     }
 
     if (SetupVerifyWrites != FALSE) {
