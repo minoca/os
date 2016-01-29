@@ -72,7 +72,7 @@ Net80211pDestroyLink (
 
 KSTATUS
 Net80211pSend (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
@@ -81,7 +81,7 @@ Net80211pSend (
 
 VOID
 Net80211pProcessReceivedPacket (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_BUFFER Packet
     );
 
@@ -99,7 +99,7 @@ Net80211pPrintAddress (
 
 VOID
 Net80211pGetPacketSizeInformation (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation,
     ULONG Flags
     );
@@ -244,9 +244,9 @@ Return Value:
 
 NET80211_API
 KSTATUS
-Net80211InitializeLink (
-    PNET_LINK Link,
-    PNET80211_LINK_PROPERTIES Properties
+Net80211CreateLink (
+    PNET80211_LINK_PROPERTIES Properties,
+    PNET80211_LINK *NewLink
     )
 
 /*++
@@ -259,12 +259,12 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link that was created for the
-        802.11 device by the networking core.
-
     Properties - Supplies a pointer describing the properties and interface of
         the 802.11 link. This memory will not be referenced after the function
         returns, so this may be a stack allocated structure.
+
+    NewLink - Supplies a pointer where a pointer to the new 802.11 link will be
+        returned on success.
 
 Return Value:
 
@@ -275,44 +275,65 @@ Return Value:
 {
 
     ULONG AllocationSize;
-    PNET80211_LINK Net80211Link;
+    PNET80211_LINK Link;
+    NET_LINK_PROPERTIES NetProperties;
+    PNET_LINK NetworkLink;
     PNET80211_RATE_INFORMATION Rates;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    if (Link->Properties.DataLinkType != NetDataLink80211) {
-        Status = STATUS_INVALID_PARAMETER;
-        goto InitializeLinkEnd;
-    }
-
-    if (Properties->Version < NET_LINK_PROPERTIES_VERSION) {
+    if (Properties->Version < NET80211_LINK_PROPERTIES_VERSION) {
         Status = STATUS_VERSION_MISMATCH;
-        goto InitializeLinkEnd;
+        goto CreateLinkEnd;
     }
 
-    Net80211Link = Link->DataLinkContext;
-    if (Net80211Link == NULL) {
-        Status = STATUS_INVALID_PARAMETER;
-        goto InitializeLinkEnd;
+    //
+    // Convert the 802.11 properties to the networking core properties and
+    // create the networking core link. In order for this to work like the
+    // data link layers built into the networking core (e.g. Ethernet) the
+    // networking core routine will call 802.11 back to have it create it's
+    // private context.
+    //
+
+    NetworkLink = NULL;
+    RtlZeroMemory(&NetProperties, sizeof(NET_LINK_PROPERTIES));
+    NetProperties.Version = NET_LINK_PROPERTIES_VERSION;
+    NetProperties.TransmitAlignment = Properties->TransmitAlignment;
+    NetProperties.DriverContext = Properties->DriverContext;
+    NetProperties.PacketSizeInformation = Properties->PacketSizeInformation;
+    NetProperties.ChecksumFlags = Properties->ChecksumFlags;
+    NetProperties.DataLinkType = NetDataLink80211;
+    NetProperties.MaxPhysicalAddress = Properties->MaxPhysicalAddress;
+    NetProperties.PhysicalAddress = Properties->PhysicalAddress;
+    NetProperties.Interface.Send = Properties->Interface.Send;
+    NetProperties.Interface.GetSetInformation =
+                                       Properties->Interface.GetSetInformation;
+
+    Status = NetCreateLink(&NetProperties, &NetworkLink);
+    if (!KSUCCESS(Status)) {
+        goto CreateLinkEnd;
     }
+
+    ASSERT(NetworkLink->DataLinkContext != NULL);
+
+    Link = (PNET80211_LINK)NetworkLink->DataLinkContext;
 
     //
     // Copy the properties, except the pointer to the supported rates.
     //
 
-    RtlCopyMemory(&(Net80211Link->Properties),
+    RtlCopyMemory(&(Link->Properties),
                   Properties,
                   sizeof(NET80211_LINK_PROPERTIES));
 
-    Net80211Link->Properties.SupportedRates = NULL;
-    NET_INITIALIZE_PACKET_LIST(&(Net80211Link->PausedPacketList));
+    Link->Properties.SupportedRates = NULL;
 
     //
     // All supported station modes currently set the ESS capability.
     //
 
-    Net80211Link->Properties.Capabilities |= NET80211_CAPABILITY_FLAG_ESS;
+    Link->Properties.Capabilities |= NET80211_CAPABILITY_FLAG_ESS;
 
     //
     // The rate information has a dynamic length, so it needs to be reallocated
@@ -325,29 +346,148 @@ Return Value:
     Rates = MmAllocatePagedPool(AllocationSize, NET80211_ALLOCATION_TAG);
     if (Rates == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto InitializeLinkEnd;
+        goto CreateLinkEnd;
     }
 
-    RtlCopyMemory(Rates,
-                  Properties->SupportedRates,
-                  sizeof(NET80211_RATE_INFORMATION));
-
+    Rates->Count = Properties->SupportedRates->Count;
     Rates->Rate = (PUCHAR)(Rates + 1);
     RtlCopyMemory(Rates->Rate,
                   Properties->SupportedRates->Rate,
                   Rates->Count * sizeof(UCHAR));
 
-    Net80211Link->Properties.SupportedRates = Rates;
+    Link->Properties.SupportedRates = Rates;
+    *NewLink = Link;
     Status = STATUS_SUCCESS;
 
-InitializeLinkEnd:
+CreateLinkEnd:
+    if (!KSUCCESS(Status)) {
+        if (NetworkLink != NULL) {
+            NetDestroyLink(NetworkLink);
+        }
+    }
+
     return Status;
+}
+
+NET80211_API
+VOID
+Net80211DestroyLink (
+    PNET80211_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys an 802.11 link after it's device has been removed.
+
+Arguments:
+
+    Link - Supplies a pointer to the link to destroy. The link must be all
+        cleaned up before this routine can be called.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // Destroy the network link. When the last reference is released on the
+    // network link it will call the data link destruction routine to destroy
+    // the context.
+    //
+
+    NetDestroyLink(Link->NetworkLink);
+    Net80211LinkReleaseReference(Link);
+    return;
+}
+
+NET80211_API
+VOID
+Net80211LinkAddReference (
+    PNET80211_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine increases the reference count on a 802.11 link.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link whose reference count
+        should be incremented.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(Link->ReferenceCount), 1);
+
+    ASSERT((OldReferenceCount != 0) & (OldReferenceCount < 0x20000000));
+
+    return;
+}
+
+NET80211_API
+VOID
+Net80211LinkReleaseReference (
+    PNET80211_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine decreases the reference count of a 802.11 link, and destroys
+    the link if the reference count drops to zero.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link whose reference count
+        should be decremented.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(Link->ReferenceCount), -1);
+
+    ASSERT(OldReferenceCount != 0);
+
+    //
+    // Since the 802.11 link is owned by the network link. It cannot and should
+    // not actually be destroyed until the network link's last reference goes
+    // away. So release the initial reference taken on the network link.
+    //
+
+    if (OldReferenceCount == 1) {
+        NetLinkReleaseReference(Link->NetworkLink);
+    }
+
+    return;
 }
 
 NET80211_API
 KSTATUS
 Net80211StartLink (
-    PNET_LINK Link
+    PNET80211_LINK Link
     )
 
 /*++
@@ -373,17 +513,15 @@ Return Value:
 
 {
 
-    PNET80211_LINK Net80211Link;
     NET80211_SCAN_STATE Scan;
     KSTATUS Status;
 
-    Status = NetStartLink(Link);
+    Status = NetStartLink(Link->NetworkLink);
     if (!KSUCCESS(Status)) {
         goto StartLinkEnd;
     }
 
-    Net80211Link = Link->DataLinkContext;
-    Net80211Link->State = Net80211StateInitialized;
+    Net80211pSetState(Link, Net80211StateInitialized);
     RtlZeroMemory(&Scan, sizeof(NET80211_SCAN_STATE));
     Scan.Link = Link;
     Scan.Flags = NET80211_SCAN_FLAG_JOIN | NET80211_SCAN_FLAG_BROADCAST;
@@ -406,7 +544,7 @@ StartLinkEnd:
 NET80211_API
 VOID
 Net80211StopLink (
-    PNET_LINK Link
+    PNET80211_LINK Link
     )
 
 /*++
@@ -429,12 +567,100 @@ Return Value:
 
 {
 
-    PNET80211_LINK Net80211Link;
-
-    Net80211Link = Link->DataLinkContext;
-    Net80211Link->State = Net80211StateUninitialized;
-    NetSetLinkState(Link, FALSE, NET_SPEED_NONE);
+    Net80211pSetState(Link, Net80211StateUninitialized);
+    NetSetLinkState(Link->NetworkLink, FALSE, NET_SPEED_NONE);
     return;
+}
+
+NET80211_API
+VOID
+Net80211ProcessReceivedPacket (
+    PNET80211_LINK Link,
+    PNET_PACKET_BUFFER Packet
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called by the low level WiFi driver to pass received
+    packets onto the 802.11 core networking library for dispatching.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may be used as a scratch space while this routine
+        executes and the packet travels up the stack, but will not be accessed
+        after this routine returns.
+
+Return Value:
+
+    None. When the function returns, the memory associated with the packet may
+    be reclaimed and reused.
+
+--*/
+
+{
+
+    NetProcessReceivedPacket(Link->NetworkLink, Packet);
+    return;
+}
+
+NET80211_API
+KSTATUS
+Net80211GetSetLinkDeviceInformation (
+    PNET80211_LINK Link,
+    PUUID Uuid,
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets device information for an 802.11 link.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link whose device information is
+        being retrieved or set.
+
+    Uuid - Supplies a pointer to the information identifier.
+
+    Data - Supplies a pointer to the data buffer.
+
+    DataSize - Supplies a pointer that on input contains the size of the data
+        buffer in bytes. On output, returns the needed size of the data buffer,
+        even if the supplied buffer was nonexistant or too small.
+
+    Set - Supplies a boolean indicating whether to get the information (FALSE)
+        or set the information (TRUE).
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_BUFFER_TOO_SMALL if the supplied buffer was too small.
+
+    STATUS_NOT_HANDLED if the given UUID was not recognized.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    Status = NetGetSetLinkDeviceInformation(Link->NetworkLink,
+                                            Uuid,
+                                            Data,
+                                            DataSize,
+                                            Set);
+
+    return Status;
 }
 
 KSTATUS
@@ -473,6 +699,8 @@ Return Value:
     }
 
     RtlZeroMemory(Net80211Link, sizeof(NET80211_LINK));
+    Net80211Link->ReferenceCount = 1;
+    NET_INITIALIZE_PACKET_LIST(&(Net80211Link->PausedPacketList));
     Net80211Link->Lock = KeCreateQueuedLock();
     if (Net80211Link->Lock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -507,6 +735,8 @@ Return Value:
 
     Net80211Link->State = Net80211StateUninitialized;
     INITIALIZE_LIST_HEAD(&(Net80211Link->BssList));
+    NetLinkAddReference(Link);
+    Net80211Link->NetworkLink = Link;
     Link->DataLinkContext = Net80211Link;
     Status = STATUS_SUCCESS;
 
@@ -552,7 +782,7 @@ Return Value:
 
 KSTATUS
 Net80211pSend (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
@@ -567,7 +797,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link on which to send the data.
+    DataLinkContext - Supplies a pointer to the data link context for the
+        link on which to send the data.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -591,8 +822,10 @@ Return Value:
 
 {
 
+    PNET80211_LINK Link;
     KSTATUS Status;
 
+    Link = (PNET80211_LINK)DataLinkContext;
     Status = Net80211pSendDataFrames(Link,
                                      PacketList,
                                      SourcePhysicalAddress,
@@ -604,7 +837,7 @@ Return Value:
 
 VOID
 Net80211pProcessReceivedPacket (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_BUFFER Packet
     )
 
@@ -616,7 +849,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
+    DataLinkContext - Supplies a pointer to the data link context for the link
+        that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
         This structure may be used as a scratch space while this routine
@@ -634,24 +868,26 @@ Return Value:
 
     ULONG FrameType;
     PNET80211_FRAME_HEADER Header;
+    PNET80211_LINK Link;
 
     //
     // Parse the the 802.11 header to determine the kind of packet.
     //
 
+    Link = (PNET80211_LINK)DataLinkContext;
     Header = Packet->Buffer + Packet->DataOffset;
     FrameType = NET80211_GET_FRAME_TYPE(Header);
     switch (FrameType) {
-    case NET80211_FRAME_TYPE_CONTROL:
-        Net80211pProcessControlFrame(Link, Packet);
-        break;
-
     case NET80211_FRAME_TYPE_DATA:
         Net80211pProcessDataFrame(Link, Packet);
         break;
 
     case NET80211_FRAME_TYPE_MANAGEMENT:
         Net80211pProcessManagementFrame(Link, Packet);
+        break;
+
+    case NET80211_FRAME_TYPE_CONTROL:
+        Net80211pProcessControlFrame(Link, Packet);
         break;
 
     default:
@@ -765,7 +1001,7 @@ Return Value:
 
 VOID
 Net80211pGetPacketSizeInformation (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation,
     ULONG Flags
     )
@@ -780,8 +1016,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link whose packet size information is
-        being queried.
+    DataLinkContext - Supplies a pointer to the data link context of the link
+        whose packet size information is being queried.
 
     PacketSizeInformation - Supplies a pointer to a structure that receives the
         link's data link layer packet size information.
@@ -798,9 +1034,9 @@ Return Value:
 {
 
     PNET80211_BSS_ENTRY Bss;
-    PNET80211_LINK Net80211Link;
+    PNET80211_LINK Link;
 
-    Net80211Link = (PNET80211_LINK)Link->DataLinkContext;
+    Link = (PNET80211_LINK)DataLinkContext;
 
     //
     // The header size depends on whether QoS is implemented. If QoS is not
@@ -821,7 +1057,7 @@ Return Value:
     //
 
     if ((Flags & NET_PACKET_SIZE_FLAG_UNENCRYPTED) == 0) {
-        Bss = Net80211pGetBss(Net80211Link);
+        Bss = Net80211pGetBss(Link);
         if (Bss != NULL) {
             if (Bss->Encryption.Pairwise != Net80211EncryptionNone) {
                 PacketSizeInformation->FooterSize += NET80211_CCMP_MIC_SIZE;
@@ -843,7 +1079,7 @@ Return Value:
 
 ULONG
 Net80211pGetSequenceNumber (
-    PNET_LINK Link
+    PNET80211_LINK Link
     )
 
 /*++
@@ -854,7 +1090,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link whose sequence number is requested.
+    Link - Supplies a pointer to the 802.11 link whose sequence number is
+        requested.
 
 Return Value:
 
@@ -864,17 +1101,12 @@ Return Value:
 
 {
 
-    PNET80211_LINK Net80211Link;
-    ULONG SequenceNumber;
-
-    Net80211Link = Link->DataLinkContext;
-    SequenceNumber = RtlAtomicAdd32(&(Net80211Link->SequenceNumber), 1);
-    return SequenceNumber;
+    return RtlAtomicAdd32(&(Link->SequenceNumber), 1);
 }
 
 KSTATUS
 Net80211pSetChannel (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     ULONG Channel
     )
 
@@ -886,7 +1118,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link whose channel is being updated.
+    Link - Supplies a pointer to the 802.11 link whose channel is being updated.
 
     Channel - Supplies the channel to which the link should be set.
 
@@ -899,15 +1131,9 @@ Return Value:
 {
 
     PVOID DriverContext;
-    PNET80211_LINK Net80211Link;
-    KSTATUS Status;
 
-    Net80211Link = Link->DataLinkContext;
-    DriverContext = Net80211Link->Properties.DriverContext;
-    Status = Net80211Link->Properties.Interface.SetChannel(DriverContext,
-                                                           Channel);
-
-    return Status;
+    DriverContext = Link->Properties.DriverContext;
+    return Link->Properties.Interface.SetChannel(DriverContext, Channel);
 }
 
 //

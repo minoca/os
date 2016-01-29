@@ -620,6 +620,8 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef struct _NET80211_LINK NET80211_LINK, *PNET80211_LINK;
+
 /*++
 
 Structure Description:
@@ -910,6 +912,77 @@ typedef struct _NET80211_BSS {
 
 typedef
 KSTATUS
+(*PNET80211_DEVICE_LINK_SEND) (
+    PVOID DriverContext,
+    PNET_PACKET_LIST PacketList
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends data through the network.
+
+Arguments:
+
+    DriverContext - Supplies a pointer to the driver context associated with the
+        link down which this data is to be sent.
+
+    PacketList - Supplies a pointer to a list of network packets to send. Data
+        in these packets may be modified by this routine, but must not be used
+        once this routine returns.
+
+Return Value:
+
+    STATUS_SUCCESS if all packets were sent.
+
+    STATUS_RESOURCE_IN_USE if some or all of the packets were dropped due to
+    the hardware being backed up with too many packets to send.
+
+    Other failure codes indicate that none of the packets were sent.
+
+--*/
+
+typedef
+KSTATUS
+(*PNET80211_DEVICE_LINK_GET_SET_INFORMATION) (
+    PVOID DriverContext,
+    NET_LINK_INFORMATION_TYPE InformationType,
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the network device layer's link information.
+
+Arguments:
+
+    DriverContext - Supplies a pointer to the driver context associated with the
+        link for which information is being set or queried.
+
+    InformationType - Supplies the type of information being queried or set.
+
+    Data - Supplies a pointer to the data buffer where the data is either
+        returned for a get operation or given for a set operation.
+
+    DataSize - Supplies a pointer that on input contains the size of the data
+        buffer. On output, contains the required size of the data buffer.
+
+    Set - Supplies a boolean indicating if this is a get operation (FALSE) or a
+        set operation (TRUE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
 (*PNET80211_DEVICE_LINK_SET_CHANNEL) (
     PVOID DriverContext,
     ULONG Channel
@@ -974,6 +1047,11 @@ Structure Description:
 
 Members:
 
+    Send - Stores a pointer to a function used to transmit data to the network.
+
+    GetSetInformation - Supplies a pointer to a function used to get or set
+        network link information.
+
     SetChannel - Stores a pointer to a function used to set the channel.
 
     SetState - Stores a pointer to a function used to set the state.
@@ -981,6 +1059,8 @@ Members:
 --*/
 
 typedef struct _NET80211_DEVICE_LINK_INTERFACE {
+    PNET80211_DEVICE_LINK_SEND Send;
+    PNET80211_DEVICE_LINK_GET_SET_INFORMATION GetSetInformation;
     PNET80211_DEVICE_LINK_SET_CHANNEL SetChannel;
     PNET80211_DEVICE_LINK_SET_STATE SetState;
 } NET80211_DEVICE_LINK_INTERFACE, *PNET80211_DEVICE_LINK_INTERFACE;
@@ -996,14 +1076,29 @@ Members:
     Version - Stores the version number of the structure. Set this to
         NET80211_LINK_PROPERTIES_VERSION.
 
-    DriverContext - Stores a pointer to driver-specific context on this 802.11
+    TransmitAlignment - Stores the alignment requirement for transmit buffers.
+
+    DriverContext - Stores a pointer to driver-specific context on this
         link.
+
+    ChecksumFlags - Stores a bitmask of flags indicating whether certain
+        checksum features are enabled. See NET_LINK_CHECKSUM_FLAG_* for
+        definitions.
+
+    MaxChannel - Stores the maximum supported channel the 802.11 device
+        supports.
 
     Capabilities - Stores a bitmask of 802.11 capabilities for the link. See
         NET80211_CAPABILITY_FLAG_* for definitions.
 
-    MaxChannel - Stores the maximum supported channel the 802.11 device
-        supports.
+    PacketSizeInformation - Stores the packet size information that includes
+        the maximum number of bytes that can be sent over the physical link and
+        the header and footer sizes.
+
+    MaxPhysicalAddress - Stores the maximum physical address that the network
+        controller can access.
+
+    PhysicalAddress - Stores the original primary physical address of the link.
 
     SupportedRates - Stores a pointer to the set of rates supported by the
         802.11 device.
@@ -1015,9 +1110,14 @@ Members:
 
 typedef struct _NET80211_LINK_PROPERTIES {
     ULONG Version;
+    ULONG TransmitAlignment;
     PVOID DriverContext;
-    USHORT Capabilities;
+    ULONG ChecksumFlags;
     ULONG MaxChannel;
+    USHORT Capabilities;
+    NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
+    PHYSICAL_ADDRESS MaxPhysicalAddress;
+    NETWORK_ADDRESS PhysicalAddress;
     PNET80211_RATE_INFORMATION SupportedRates;
     NET80211_DEVICE_LINK_INTERFACE Interface;
 } NET80211_LINK_PROPERTIES, *PNET80211_LINK_PROPERTIES;
@@ -1032,9 +1132,9 @@ typedef struct _NET80211_LINK_PROPERTIES {
 
 NET80211_API
 KSTATUS
-Net80211InitializeLink (
-    PNET_LINK Link,
-    PNET80211_LINK_PROPERTIES Properties
+Net80211CreateLink (
+    PNET80211_LINK_PROPERTIES Properties,
+    PNET80211_LINK *NewLink
     );
 
 /*++
@@ -1061,9 +1161,79 @@ Return Value:
 --*/
 
 NET80211_API
+VOID
+Net80211DestroyLink (
+    PNET80211_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys an 802.11 link after it's device has been removed.
+
+Arguments:
+
+    Link - Supplies a pointer to the link to destroy. The link must be all
+        cleaned up before this routine can be called.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET80211_API
+VOID
+Net80211LinkAddReference (
+    PNET80211_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine increases the reference count on a 802.11 link.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link whose reference count
+        should be incremented.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET80211_API
+VOID
+Net80211LinkReleaseReference (
+    PNET80211_LINK Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine decreases the reference count of a 802.11 link, and destroys
+    the link if the reference count drops to zero.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link whose reference count
+        should be decremented.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET80211_API
 KSTATUS
 Net80211StartLink (
-    PNET_LINK Link
+    PNET80211_LINK Link
     );
 
 /*++
@@ -1090,7 +1260,7 @@ Return Value:
 NET80211_API
 VOID
 Net80211StopLink (
-    PNET_LINK Link
+    PNET80211_LINK Link
     );
 
 /*++
@@ -1112,9 +1282,81 @@ Return Value:
 --*/
 
 NET80211_API
+VOID
+Net80211ProcessReceivedPacket (
+    PNET80211_LINK Link,
+    PNET_PACKET_BUFFER Packet
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called by the low level WiFi driver to pass received
+    packets onto the 802.11 core networking library for dispatching.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may be used as a scratch space while this routine
+        executes and the packet travels up the stack, but will not be accessed
+        after this routine returns.
+
+Return Value:
+
+    None. When the function returns, the memory associated with the packet may
+    be reclaimed and reused.
+
+--*/
+
+NET80211_API
+KSTATUS
+Net80211GetSetLinkDeviceInformation (
+    PNET80211_LINK Link,
+    PUUID Uuid,
+    PVOID Data,
+    PUINTN DataSize,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets device information for an 802.11 link.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link whose device information is
+        being retrieved or set.
+
+    Uuid - Supplies a pointer to the information identifier.
+
+    Data - Supplies a pointer to the data buffer.
+
+    DataSize - Supplies a pointer that on input contains the size of the data
+        buffer in bytes. On output, returns the needed size of the data buffer,
+        even if the supplied buffer was nonexistant or too small.
+
+    Set - Supplies a boolean indicating whether to get the information (FALSE)
+        or set the information (TRUE).
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_BUFFER_TOO_SMALL if the supplied buffer was too small.
+
+    STATUS_NOT_HANDLED if the given UUID was not recognized.
+
+--*/
+
+NET80211_API
 KSTATUS
 Net80211SetKey (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PUCHAR KeyValue,
     ULONG KeyLength,
     ULONG KeyFlags,

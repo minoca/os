@@ -98,7 +98,7 @@ Structure Description:
 
 Members:
 
-    Link - Stores a pointer to the network link over which the scan will be
+    Link - Stores a pointer to the 802.11 link over which the scan will be
         performed.
 
     Flags - Stores a bitmask of flags that dictate the scan's behavior. See
@@ -123,7 +123,7 @@ Members:
 --*/
 
 typedef struct _NET80211_SCAN_STATE {
-    PNET_LINK Link;
+    PNET80211_LINK Link;
     ULONG Flags;
     ULONG Channel;
     UCHAR Bssid[NET80211_ADDRESS_SIZE];
@@ -250,6 +250,10 @@ Structure Description:
 
 Members:
 
+    NetworkLink - Stores a pointer to the networking core's link context.
+
+    ReferenceCount - Stores the reference count of the link.
+
     State - Stores the current state of the 802.11 link.
 
     Flags - Stores a bitmask of flags describing the link.
@@ -280,7 +284,9 @@ Members:
 
 --*/
 
-typedef struct _NET80211_LINK {
+struct _NET80211_LINK {
+    PNET_LINK NetworkLink;
+    volatile ULONG ReferenceCount;
     NET80211_STATE State;
     ULONG Flags;
     volatile ULONG SequenceNumber;
@@ -292,7 +298,7 @@ typedef struct _NET80211_LINK {
     PNET80211_BSS_ENTRY ActiveBss;
     NET_PACKET_LIST PausedPacketList;
     NET80211_LINK_PROPERTIES Properties;
-} NET80211_LINK, *PNET80211_LINK;
+};
 
 //
 // -------------------------------------------------------------------- Globals
@@ -304,7 +310,7 @@ typedef struct _NET80211_LINK {
 
 VOID
 Net80211pProcessManagementFrame (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_BUFFER Packet
     );
 
@@ -316,7 +322,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link on which the frame arrived.
+    Link - Supplies a pointer to the 802.11 link on which the frame arrived.
 
     Packet - Supplies a pointer to the network packet.
 
@@ -328,7 +334,7 @@ Return Value:
 
 KSTATUS
 Net80211pStartScan (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_SCAN_STATE Parameters
     );
 
@@ -355,7 +361,7 @@ Return Value:
 
 VOID
 Net80211pSetState (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     NET80211_STATE State
     );
 
@@ -369,7 +375,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link whose state is being updated.
+    Link - Supplies a pointer to the 802.11 link whose state is being updated.
 
     State - Supplies the state to which the link is transitioning.
 
@@ -494,7 +500,7 @@ Return Value:
 
 VOID
 Net80211pProcessControlFrame (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_BUFFER Packet
     );
 
@@ -506,7 +512,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link on which the frame arrived.
+    Link - Supplies a pointer to the 802.11 link on which the frame arrived.
 
     Packet - Supplies a pointer to the network packet.
 
@@ -518,7 +524,7 @@ Return Value:
 
 KSTATUS
 Net80211pSendDataFrames (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
@@ -534,7 +540,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link on which to send the data.
+    Link - Supplies a pointer to the 802.11 link on which to send the data.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -558,7 +564,7 @@ Return Value:
 
 VOID
 Net80211pProcessDataFrame (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_BUFFER Packet
     );
 
@@ -570,7 +576,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link on which the frame arrived.
+    Link - Supplies a pointer to the 802.11 link on which the frame arrived.
 
     Packet - Supplies a pointer to the network packet.
 
@@ -582,7 +588,7 @@ Return Value:
 
 VOID
 Net80211pPauseDataFrames (
-    PNET_LINK Link
+    PNET80211_LINK Link
     );
 
 /*++
@@ -594,8 +600,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link on which to pause the
-        outgoing data frames.
+    Link - Supplies a pointer to the 802.11 link on which to pause the outgoing
+        data frames.
 
 Return Value:
 
@@ -605,7 +611,7 @@ Return Value:
 
 VOID
 Net80211pResumeDataFrames (
-    PNET_LINK Link
+    PNET80211_LINK Link
     );
 
 /*++
@@ -618,7 +624,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link on which to resume the
+    Link - Supplies a pointer to the 802.11 link on which to resume the
         outgoing data frames.
 
 Return Value:
@@ -629,7 +635,7 @@ Return Value:
 
 ULONG
 Net80211pGetSequenceNumber (
-    PNET_LINK Link
+    PNET80211_LINK Link
     );
 
 /*++
@@ -640,7 +646,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link whose sequence number is requested.
+    Link - Supplies a pointer to the 802.11 link whose sequence number is
+        requested.
 
 Return Value:
 
@@ -650,7 +657,7 @@ Return Value:
 
 KSTATUS
 Net80211pSetChannel (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     ULONG Channel
     );
 
@@ -662,7 +669,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link whose channel is being updated.
+    Link - Supplies a pointer to the 802.11 link whose channel is being updated.
 
     Channel - Supplies the channel to which the link should be set.
 
@@ -673,50 +680,8 @@ Return Value:
 --*/
 
 KSTATUS
-Net80211pEapolInitialize (
-    VOID
-    );
-
-/*++
-
-Routine Description:
-
-    This routine initializes support for EAPOL packets.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    Status code.
-
---*/
-
-VOID
-Net80211pEapolDestroy (
-    VOID
-    );
-
-/*++
-
-Routine Description:
-
-    This routine tears down support for EAPOL packets.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-KSTATUS
 Net80211pInitializeEncryption (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss
     );
 
@@ -729,7 +694,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link involved in the upcoming handshake.
+    Link - Supplies a pointer to the 802.11 link establishing an ecrypted
+        connection.
 
     Bss - Supplies a pointer to the BSS on which the encryption handshake will
         take place.
@@ -819,6 +785,48 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+KSTATUS
+Net80211pEapolInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for EAPOL packets.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+VOID
+Net80211pEapolDestroy (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine tears down support for EAPOL packets.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
 
 --*/
 

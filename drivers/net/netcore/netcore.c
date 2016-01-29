@@ -1029,7 +1029,9 @@ Return Value:
     // Call the data link layer to process the packet.
     //
 
-    Link->DataLinkEntry->Interface.ProcessReceivedPacket(Link, Packet);
+    Link->DataLinkEntry->Interface.ProcessReceivedPacket(Link->DataLinkContext,
+                                                         Packet);
+
     return;
 }
 

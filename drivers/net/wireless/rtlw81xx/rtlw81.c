@@ -546,8 +546,8 @@ Return Value:
         switch (Irp->MinorCode) {
         case IrpMinorSystemControlDeviceInformation:
             DeviceInformationRequest = Irp->U.SystemControl.SystemContext;
-            Status = NetGetSetLinkDeviceInformation(
-                                         Device->NetworkLink,
+            Status = Net80211GetSetLinkDeviceInformation(
+                                         Device->Net80211Link,
                                          &(DeviceInformationRequest->Uuid),
                                          DeviceInformationRequest->Data,
                                          &(DeviceInformationRequest->DataSize),
@@ -587,54 +587,40 @@ Return Value:
 
 {
 
-    NET80211_LINK_PROPERTIES Net80211Properties;
-    NET_LINK_PROPERTIES Properties;
+    NET80211_LINK_PROPERTIES Properties;
     KSTATUS Status;
 
-    if (Device->NetworkLink != NULL) {
+    if (Device->Net80211Link != NULL) {
         Status = STATUS_SUCCESS;
         goto CreateNetworkDeviceEnd;
     }
 
     //
-    // Create a link with the core networking library.
+    // Create a link with the 802.11 core networking library.
     //
 
-    RtlZeroMemory(&Properties, sizeof(NET_LINK_PROPERTIES));
-    Properties.Version = NET_LINK_PROPERTIES_VERSION;
+    RtlZeroMemory(&Properties, sizeof(NET80211_LINK_PROPERTIES));
+    Properties.Version = NET80211_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = MmGetIoBufferAlignment();
     Properties.DriverContext = Device;
+    Properties.MaxChannel = RTLW81_MAX_CHANNEL;
+    Properties.Capabilities = NET80211_CAPABILITY_FLAG_SHORT_PREAMBLE |
+                              NET80211_CAPABILITY_FLAG_SHORT_SLOT_TIME;
+
     Properties.PacketSizeInformation.MaxPacketSize = RTLW81_MAX_PACKET_SIZE;
     Properties.PacketSizeInformation.HeaderSize = RTLW81_TRANSMIT_HEADER_SIZE;
-    Properties.DataLinkType = NetDataLink80211;
     Properties.MaxPhysicalAddress = MAX_ULONG;
     Properties.PhysicalAddress.Network = SocketNetworkPhysical80211;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->MacAddress),
                   sizeof(Device->MacAddress));
 
+    Properties.SupportedRates = &RtlwDefaultRateInformation;
     Properties.Interface.Send = Rtlw81Send;
     Properties.Interface.GetSetInformation = Rtlw81GetSetInformation;
-    Status = NetCreateLink(&Properties, &(Device->NetworkLink));
-    if (!KSUCCESS(Status)) {
-        goto CreateNetworkDeviceEnd;
-    }
-
-    //
-    // Now initialize that link with the 802.11 networking library.
-    //
-
-    RtlZeroMemory(&Net80211Properties, sizeof(NET80211_LINK_PROPERTIES));
-    Net80211Properties.Version = NET80211_LINK_PROPERTIES_VERSION;
-    Net80211Properties.DriverContext = Device;
-    Net80211Properties.Capabilities = NET80211_CAPABILITY_FLAG_SHORT_PREAMBLE |
-                                      NET80211_CAPABILITY_FLAG_SHORT_SLOT_TIME;
-
-    Net80211Properties.MaxChannel = RTLW81_MAX_CHANNEL;
-    Net80211Properties.SupportedRates = &RtlwDefaultRateInformation;
-    Net80211Properties.Interface.SetChannel = Rtlw81SetChannel;
-    Net80211Properties.Interface.SetState = Rtlw81SetState;
-    Status = Net80211InitializeLink(Device->NetworkLink, &Net80211Properties);
+    Properties.Interface.SetChannel = Rtlw81SetChannel;
+    Properties.Interface.SetState = Rtlw81SetState;
+    Status = Net80211CreateLink(&Properties, &(Device->Net80211Link));
     if (!KSUCCESS(Status)) {
         goto CreateNetworkDeviceEnd;
     }
@@ -653,9 +639,9 @@ Return Value:
 
 CreateNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
-        if (Device->NetworkLink != NULL) {
-            NetDestroyLink(Device->NetworkLink);
-            Device->NetworkLink = NULL;
+        if (Device->Net80211Link != NULL) {
+            Net80211DestroyLink(Device->Net80211Link);
+            Device->Net80211Link = NULL;
         }
     }
 
@@ -899,9 +885,9 @@ Return Value:
                                 &Rtlw81NetworkDeviceInformationUuid,
                                 FALSE);
 
-    if (Device->NetworkLink != NULL) {
-        NetDestroyLink(Device->NetworkLink);
-        Device->NetworkLink = NULL;
+    if (Device->Net80211Link != NULL) {
+        Net80211DestroyLink(Device->Net80211Link);
+        Device->Net80211Link = NULL;
     }
 
     //
@@ -1176,8 +1162,8 @@ Return Value:
     //
 
     Device->InitializationPhase = 0;
-    if (Device->NetworkLink != NULL) {
-        Net80211StopLink(Device->NetworkLink);
+    if (Device->Net80211Link != NULL) {
+        Net80211StopLink(Device->Net80211Link);
     }
 
     return STATUS_SUCCESS;

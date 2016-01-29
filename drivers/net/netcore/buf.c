@@ -151,7 +151,7 @@ Return Value:
         }
 
         DataLinkEntry = Link->DataLinkEntry;
-        DataLinkEntry->Interface.GetPacketSizeInformation(Link,
+        DataLinkEntry->Interface.GetPacketSizeInformation(Link->DataLinkContext,
                                                           &SizeInformation,
                                                           PacketSizeFlags);
 

@@ -1787,7 +1787,7 @@ Members:
 
     OsDevice - Stores a pointer to the system device object.
 
-    NetworkLink - Stores a pointer to the core networking link.
+    Net80211Link - Stores a pointer to the 802.11 core networking link.
 
     UsbCoreHandle - Stores the handle returned by the USB core.
 
@@ -1867,7 +1867,7 @@ Members:
 
 typedef struct _RTLW81_DEVICE {
     PDEVICE OsDevice;
-    PNET_LINK NetworkLink;
+    PNET80211_LINK Net80211Link;
     HANDLE UsbCoreHandle;
     ULONG Flags;
     ULONG TransmitChainCount;

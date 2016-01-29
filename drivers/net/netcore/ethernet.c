@@ -78,7 +78,7 @@ NetpEthernetDestroyLink (
 
 KSTATUS
 NetpEthernetSend (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
@@ -87,7 +87,7 @@ NetpEthernetSend (
 
 VOID
 NetpEthernetProcessReceivedPacket (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_BUFFER Packet
     );
 
@@ -105,7 +105,7 @@ NetpEthernetPrintAddress (
 
 VOID
 NetpEthernetGetPacketSizeInformation (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation,
     ULONG Flags
     );
@@ -326,6 +326,14 @@ Return Value:
 
 {
 
+    //
+    // Ethernet does not need any extra state. It just expects to get the
+    // network link passed back as the data context. No extra references on the
+    // network link are taken because this data link context gets "destroyed"
+    // when the network link's last reference is released.
+    //
+
+    Link->DataLinkContext = Link;
     return STATUS_SUCCESS;
 }
 
@@ -353,12 +361,13 @@ Return Value:
 
 {
 
+    Link->DataLinkContext = NULL;
     return;
 }
 
 KSTATUS
 NetpEthernetSend (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
@@ -373,7 +382,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link on which to send the data.
+    DataLinkContext - Supplies a pointer to the data link context for the
+        link on which to send the data.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -401,9 +411,11 @@ Return Value:
     PUCHAR CurrentElement;
     PLIST_ENTRY CurrentEntry;
     PVOID DriverContext;
+    PNET_LINK Link;
     PNET_PACKET_BUFFER Packet;
     KSTATUS Status;
 
+    Link = (PNET_LINK)DataLinkContext;
     CurrentEntry = PacketList->Head.Next;
     while (CurrentEntry != &(PacketList->Head)) {
         Packet = LIST_VALUE(CurrentEntry, NET_PACKET_BUFFER, ListEntry);
@@ -487,7 +499,7 @@ Return Value:
 
 VOID
 NetpEthernetProcessReceivedPacket (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_BUFFER Packet
     )
 
@@ -499,7 +511,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
+    DataLinkContext - Supplies a pointer to the data link context for the link
+        that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
         This structure may be used as a scratch space while this routine
@@ -515,8 +528,11 @@ Return Value:
 
 {
 
+    PNET_LINK Link;
     PNET_NETWORK_ENTRY NetworkEntry;
     ULONG NetworkProtocol;
+
+    Link = (PNET_LINK)DataLinkContext;
 
     //
     // Get the network layer to deal with this.
@@ -646,7 +662,7 @@ Return Value:
 
 VOID
 NetpEthernetGetPacketSizeInformation (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation,
     ULONG Flags
     )
@@ -661,8 +677,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link whose packet size information is
-        being queried.
+    DataLinkContext - Supplies a pointer to the data link context of the link
+        whose packet size information is being queried.
 
     PacketSizeInformation - Supplies a pointer to a structure that receives the
         link's data link layer packet size information.

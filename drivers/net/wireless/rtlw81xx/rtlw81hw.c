@@ -2040,7 +2040,7 @@ Return Value:
         Packet.DataSize = Packet.BufferSize;
         Packet.DataOffset = 0;
         Packet.FooterOffset = Packet.DataSize;
-        NetProcessReceivedPacket(Device->NetworkLink, &Packet);
+        Net80211ProcessReceivedPacket(Device->Net80211Link, &Packet);
 
         //
         // TODO: Get receive signal strength indicator (RSSI).
@@ -3043,7 +3043,7 @@ Return Value:
                 goto InitializeEnd;
             }
 
-            Status = Net80211StartLink(Device->NetworkLink);
+            Status = Net80211StartLink(Device->Net80211Link);
             if (!KSUCCESS(Status)) {
                 goto InitializeEnd;
             }

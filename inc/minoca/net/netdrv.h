@@ -643,7 +643,7 @@ Return Value:
 typedef
 KSTATUS
 (*PNET_DATA_LINK_SEND) (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_LIST PacketList,
     PNETWORK_ADDRESS SourcePhysicalAddress,
     PNETWORK_ADDRESS DestinationPhysicalAddress,
@@ -658,7 +658,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link on which to send the data.
+    DataLinkContext - Supplies a pointer to the data link context for the
+        link on which to send the data.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -683,7 +684,7 @@ Return Value:
 typedef
 VOID
 (*PNET_DATA_LINK_PROCESS_RECEIVED_PACKET) (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_BUFFER Packet
     );
 
@@ -695,7 +696,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link that received the packet.
+    DataLinkContext - Supplies a pointer to the data link context for the link
+        that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
         This structure may be used as a scratch space while this routine
@@ -771,7 +773,7 @@ Return Value:
 typedef
 VOID
 (*PNET_DATA_LINK_GET_PACKET_SIZE_INFORMATION) (
-    PNET_LINK Link,
+    PVOID DataLinkContext,
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation,
     ULONG Flags
     );
@@ -786,8 +788,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link whose packet size information is
-        being queried.
+    DataLinkContext - Supplies a pointer to the data link context of the link
+        whose packet size information is being queried.
 
     PacketSizeInformation - Supplies a pointer to a structure that receives the
         link's data link layer packet size information.

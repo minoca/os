@@ -298,11 +298,11 @@ Return Value:
 
     PARP_PACKET ArpPacket;
     PUCHAR CurrentPointer;
-    PNET_DATA_LINK_ENTRY DataLinkEntry;
     ULONG Flags;
     BOOL LockHeld;
     PNET_PACKET_BUFFER NetPacket;
     NET_PACKET_LIST NetPacketList;
+    PNET_DATA_LINK_SEND Send;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -412,12 +412,12 @@ Return Value:
     // Send the request off to the link.
     //
 
-    DataLinkEntry = Link->DataLinkEntry;
-    Status = DataLinkEntry->Interface.Send(Link,
-                                           &NetPacketList,
-                                           &(LinkAddress->PhysicalAddress),
-                                           NULL,
-                                           ARP_PROTOCOL_NUMBER);
+    Send = Link->DataLinkEntry->Interface.Send;
+    Status = Send(Link->DataLinkContext,
+                  &NetPacketList,
+                  &(LinkAddress->PhysicalAddress),
+                  NULL,
+                  ARP_PROTOCOL_NUMBER);
 
     if (!KSUCCESS(Status)) {
         goto ArpSendRequestEnd;
@@ -1046,12 +1046,12 @@ Return Value:
 
     PARP_PACKET ArpPacket;
     PUCHAR CurrentPointer;
-    PNET_DATA_LINK_ENTRY DataLinkEntry;
     ULONG Flags;
     BOOL LockHeld;
     PNET_PACKET_BUFFER NetPacket;
     NET_PACKET_LIST NetPacketList;
     NETWORK_ADDRESS NetworkAddress;
+    PNET_DATA_LINK_SEND Send;
     KSTATUS Status;
 
     LockHeld = FALSE;
@@ -1181,12 +1181,12 @@ Return Value:
     // Send the request off to the link.
     //
 
-    DataLinkEntry = Link->DataLinkEntry;
-    Status = DataLinkEntry->Interface.Send(Link,
-                                           &NetPacketList,
-                                           &(LinkAddress->PhysicalAddress),
-                                           DestinationPhysicalAddress,
-                                           ARP_PROTOCOL_NUMBER);
+    Send = Link->DataLinkEntry->Interface.Send;
+    Status = Send(Link->DataLinkContext,
+                  &NetPacketList,
+                  &(LinkAddress->PhysicalAddress),
+                  DestinationPhysicalAddress,
+                  ARP_PROTOCOL_NUMBER);
 
     if (!KSUCCESS(Status)) {
         goto ArpSendReplyEnd;

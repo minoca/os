@@ -891,6 +891,7 @@ Return Value:
     PNETWORK_ADDRESS PhysicalNetworkAddress;
     NETWORK_ADDRESS PhysicalNetworkAddressBuffer;
     PIP4_ADDRESS RemoteAddress;
+    PNET_DATA_LINK_SEND Send;
     PNETWORK_ADDRESS Source;
     KSTATUS Status;
     ULONG TotalLength;
@@ -1216,12 +1217,12 @@ Return Value:
     // The packets are all ready to go, send them down the link.
     //
 
-    Status = Link->DataLinkEntry->Interface.Send(
-                                        Link,
-                                        PacketList,
-                                        &(LinkAddress->PhysicalAddress),
-                                        PhysicalNetworkAddress,
-                                        Socket->Network->ParentProtocolNumber);
+    Send = Link->DataLinkEntry->Interface.Send;
+    Status = Send(Link->DataLinkContext,
+                  PacketList,
+                  &(LinkAddress->PhysicalAddress),
+                  PhysicalNetworkAddress,
+                  Socket->Network->ParentProtocolNumber);
 
     if (!KSUCCESS(Status)) {
         goto Ip4SendEnd;

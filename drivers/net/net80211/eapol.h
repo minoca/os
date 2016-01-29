@@ -72,8 +72,11 @@ Members:
 
     Mode - Store the mode in which this EAPOL instance should act.
 
-    Link - Stores a pointer to the physical link over which this EAPOL instance
-        will send and receive data.
+    NetworkLink - Stores a pointer to the network link over which this EAPOL
+        instance will send and receive data.
+
+    Net80211Link - Stores a pointer to the 802.11 link over which this EAPOL
+        instance will send and receive data.
 
     SupplicantAddress - Stores the physical address of the EAPOL supplicant.
 
@@ -108,7 +111,8 @@ Members:
 
 typedef struct _EAPOL_CREATION_PARAMETERS {
     EAPOL_MODE Mode;
-    PNET_LINK Link;
+    PNET_LINK NetworkLink;
+    PNET80211_LINK Net80211Link;
     PNETWORK_ADDRESS SupplicantAddress;
     PNETWORK_ADDRESS AuthenticatorAddress;
     PUCHAR Ssid;

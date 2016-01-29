@@ -204,7 +204,7 @@ typedef struct _NET80211_DEFAULT_RSN_INFORMATION {
 
 VOID
 Net80211pSetStateUnlocked (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     NET80211_STATE State
     );
 
@@ -215,19 +215,19 @@ Net80211pScanThread (
 
 KSTATUS
 Net80211pPrepareForReconnect (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY *Bss
     );
 
 VOID
 Net80211pJoinBss (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss
     );
 
 VOID
 Net80211pLeaveBss (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss,
     BOOL SendNotification,
     ULONG Subtype,
@@ -236,43 +236,43 @@ Net80211pLeaveBss (
 
 KSTATUS
 Net80211pSendProbeRequest (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_SCAN_STATE Scan
     );
 
 VOID
 Net80211pProcessProbeResponse (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_BUFFER Packet
     );
 
 KSTATUS
 Net80211pSendAuthenticationRequest (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss
     );
 
 VOID
 Net80211pProcessAuthenticationResponse (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_BUFFER Packet
     );
 
 KSTATUS
 Net80211pSendAssociationRequest (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss
     );
 
 VOID
 Net80211pProcessAssociationResponse (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_BUFFER Packet
     );
 
 KSTATUS
 Net80211pSendManagementFrame (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PUCHAR DestinationAddress,
     PUCHAR Bssid,
     ULONG FrameSubtype,
@@ -282,18 +282,18 @@ Net80211pSendManagementFrame (
 
 KSTATUS
 Net80211pQueueStateTransitionTimer (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     ULONGLONG Timeout
     );
 
 VOID
 Net80211pCancelStateTransitionTimer (
-    PNET_LINK Link
+    PNET80211_LINK Link
     );
 
 KSTATUS
 Net80211pValidateRates (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss
     );
 
@@ -305,7 +305,7 @@ Net80211pParseRsnElement (
 
 VOID
 Net80211pUpdateBssCache (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_PROBE_RESPONSE Response
     );
 
@@ -350,7 +350,7 @@ NET80211_DEFAULT_RSN_INFORMATION Net80211DefaultRsnInformation = {
 
 VOID
 Net80211pProcessManagementFrame (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_BUFFER Packet
     )
 
@@ -362,7 +362,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link on which the frame arrived.
+    Link - Supplies a pointer to the 802.11 link on which the frame arrived.
 
     Packet - Supplies a pointer to the network packet.
 
@@ -376,9 +376,7 @@ Return Value:
 
     ULONG FrameSubtype;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
-    PNET80211_LINK Net80211Link;
 
-    Net80211Link = Link->DataLinkContext;
     Header = Packet->Buffer + Packet->DataOffset;
     FrameSubtype = NET80211_GET_FRAME_SUBTYPE(Header);
     switch (FrameSubtype) {
@@ -395,8 +393,8 @@ Return Value:
         break;
 
     case NET80211_MANAGEMENT_FRAME_SUBTYPE_DISASSOCIATION:
-        if ((Net80211Link->State != Net80211StateAssociated) &&
-            (Net80211Link->State != Net80211StateEncrypted)) {
+        if ((Link->State != Net80211StateAssociated) &&
+            (Link->State != Net80211StateEncrypted)) {
 
             break;
         }
@@ -405,10 +403,10 @@ Return Value:
         break;
 
     case NET80211_MANAGEMENT_FRAME_SUBTYPE_DEAUTHENTICATION:
-        if ((Net80211Link->State != Net80211StateAssociating) &&
-            (Net80211Link->State != Net80211StateReassociating) &&
-            (Net80211Link->State != Net80211StateAssociated) &&
-            (Net80211Link->State != Net80211StateEncrypted)) {
+        if ((Link->State != Net80211StateAssociating) &&
+            (Link->State != Net80211StateReassociating) &&
+            (Link->State != Net80211StateAssociated) &&
+            (Link->State != Net80211StateEncrypted)) {
 
             break;
         }
@@ -444,7 +442,7 @@ Return Value:
 
 KSTATUS
 Net80211pStartScan (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_SCAN_STATE Parameters
     )
 
@@ -457,7 +455,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link on which to perform the scan.
+    Link - Supplies a pointer to the 802.11 link on which to perform the scan.
 
     Parameters - Supplies a pointer to a scan state used to initialize the
         scan. This memory will not be referenced after the function returns,
@@ -486,7 +484,7 @@ Return Value:
     }
 
     RtlCopyMemory(ScanState, Parameters, sizeof(NET80211_SCAN_STATE));
-    NetLinkAddReference(Link);
+    Net80211LinkAddReference(Link);
     ScanState->Link = Link;
 
     //
@@ -506,7 +504,7 @@ StartScanEnd:
     if (!KSUCCESS(Status)) {
         if (ScanState != NULL) {
             Net80211pSetState(Link, Net80211StateInitialized);
-            NetLinkReleaseReference(ScanState->Link);
+            Net80211LinkReleaseReference(ScanState->Link);
             MmFreePagedPool(ScanState);
         }
     }
@@ -516,7 +514,7 @@ StartScanEnd:
 
 VOID
 Net80211pSetState (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     NET80211_STATE State
     )
 
@@ -530,7 +528,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link whose state is being updated.
+    Link - Supplies a pointer to the 802.11 link whose state is being updated.
 
     State - Supplies the state to which the link is transitioning.
 
@@ -542,12 +540,9 @@ Return Value:
 
 {
 
-    PNET80211_LINK Net80211Link;
-
-    Net80211Link = Link->DataLinkContext;
-    KeAcquireQueuedLock(Net80211Link->Lock);
+    KeAcquireQueuedLock(Link->Lock);
     Net80211pSetStateUnlocked(Link, State);
-    KeReleaseQueuedLock(Net80211Link->Lock);
+    KeReleaseQueuedLock(Link->Lock);
     return;
 }
 
@@ -721,24 +716,22 @@ Return Value:
 
 {
 
-    PNET_LINK Link;
-    PNET80211_LINK Net80211Link;
+    PNET80211_LINK Link;
 
-    Link = (PNET_LINK)Parameter;
-    Net80211Link = Link->DataLinkContext;
+    Link = (PNET80211_LINK)Parameter;
 
     //
     // If a packet did not arrive to advance the state and cancel the timer,
     // then this really is a timeout. Set the state back to initialized.
     //
 
-    KeAcquireQueuedLock(Net80211Link->Lock);
-    if ((Net80211Link->Flags & NET80211_LINK_FLAG_TIMER_QUEUED) != 0) {
-        Net80211Link->Flags &= ~NET80211_LINK_FLAG_TIMER_QUEUED;
+    KeAcquireQueuedLock(Link->Lock);
+    if ((Link->Flags & NET80211_LINK_FLAG_TIMER_QUEUED) != 0) {
+        Link->Flags &= ~NET80211_LINK_FLAG_TIMER_QUEUED;
         Net80211pSetStateUnlocked(Link, Net80211StateInitialized);
     }
 
-    KeReleaseQueuedLock(Net80211Link->Lock);
+    KeReleaseQueuedLock(Link->Lock);
     return;
 }
 
@@ -748,7 +741,7 @@ Return Value:
 
 VOID
 Net80211pSetStateUnlocked (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     NET80211_STATE State
     )
 
@@ -777,7 +770,7 @@ Return Value:
     PNET80211_BSS_ENTRY Bss;
     PNET80211_BSS BssState;
     PVOID DriverContext;
-    PNET80211_LINK Net80211Link;
+    ULONGLONG LinkSpeed;
     BOOL Notify;
     NET80211_STATE OldState;
     USHORT Reason;
@@ -785,11 +778,9 @@ Return Value:
     KSTATUS Status;
     ULONG Subtype;
 
-    Net80211Link = Link->DataLinkContext;
+    ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
 
-    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
-
-    Bss = Net80211Link->ActiveBss;
+    Bss = Link->ActiveBss;
 
     //
     // Notify the driver about the state transition first, allowing it to
@@ -801,10 +792,10 @@ Return Value:
         BssState = &(Bss->State);
     }
 
-    DriverContext = Net80211Link->Properties.DriverContext;
-    Status = Net80211Link->Properties.Interface.SetState(DriverContext,
-                                                         State,
-                                                         BssState);
+    DriverContext = Link->Properties.DriverContext;
+    Status = Link->Properties.Interface.SetState(DriverContext,
+                                                 State,
+                                                 BssState);
 
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("802.11: Failed to set state %d: 0x%08x\n",
@@ -818,8 +809,8 @@ Return Value:
     // Officially update the state.
     //
 
-    OldState = Net80211Link->State;
-    Net80211Link->State = State;
+    OldState = Link->State;
+    Link->State = State;
 
     //
     // Make sure the state transition timer is canceled.
@@ -984,7 +975,7 @@ Return Value:
         if (Bss != NULL) {
             Net80211pDestroyEncryption(Bss);
             Net80211pLeaveBss(Link, Bss, Notify, Subtype, Reason);
-            NetSetLinkState(Link, FALSE, 0);
+            NetSetLinkState(Link->NetworkLink, FALSE, 0);
         }
 
         break;
@@ -999,7 +990,8 @@ Return Value:
 
     if (SetLinkUp != FALSE) {
         Net80211pResumeDataFrames(Link);
-        NetSetLinkState(Link, TRUE, Bss->State.MaxRate * NET80211_RATE_UNIT);
+        LinkSpeed = Bss->State.MaxRate * NET80211_RATE_UNIT;
+        NetSetLinkState(Link->NetworkLink, TRUE, LinkSpeed);
     }
 
 SetStateEnd:
@@ -1033,11 +1025,10 @@ Return Value:
     PNET80211_BSS_ENTRY BssEntry;
     PLIST_ENTRY CurrentEntry;
     PNET80211_BSS_ENTRY FoundEntry;
-    PNET_LINK Link;
+    PNET80211_LINK Link;
     BOOL LockHeld;
     BOOL Match;
     ULONG MaxRssi;
-    PNET80211_LINK Net80211Link;
     ULONG Retries;
     PNET80211_SCAN_STATE Scan;
     KSTATUS Status;
@@ -1045,7 +1036,6 @@ Return Value:
     LockHeld = FALSE;
     Scan = (PNET80211_SCAN_STATE)Parameter;
     Link = Scan->Link;
-    Net80211Link = Link->DataLinkContext;
     Retries = 0;
     while (Retries < NET80211_SCAN_RETRY_COUNT) {
 
@@ -1061,7 +1051,7 @@ Return Value:
 
         Status = STATUS_UNSUCCESSFUL;
         FoundEntry = NULL;
-        while (Scan->Channel < Net80211Link->Properties.MaxChannel) {
+        while (Scan->Channel < Link->Properties.MaxChannel) {
 
             //
             // Set the channel to send the packet over.
@@ -1099,9 +1089,9 @@ Return Value:
                 ((Scan->Flags & NET80211_SCAN_FLAG_JOIN) != 0)) {
 
                 LockHeld = TRUE;
-                KeAcquireQueuedLock(Net80211Link->Lock);
-                CurrentEntry = Net80211Link->BssList.Next;
-                while (CurrentEntry != &(Net80211Link->BssList)) {
+                KeAcquireQueuedLock(Link->Lock);
+                CurrentEntry = Link->BssList.Next;
+                while (CurrentEntry != &(Link->BssList)) {
                     BssEntry = LIST_VALUE(CurrentEntry,
                                           NET80211_BSS_ENTRY,
                                           ListEntry);
@@ -1127,7 +1117,7 @@ Return Value:
                     break;
                 }
 
-                KeReleaseQueuedLock(Net80211Link->Lock);
+                KeReleaseQueuedLock(Link->Lock);
                 LockHeld = FALSE;
             }
 
@@ -1147,9 +1137,9 @@ Return Value:
 
             MaxRssi = 0;
             LockHeld = TRUE;
-            KeAcquireQueuedLock(Net80211Link->Lock);
-            CurrentEntry = Net80211Link->BssList.Next;
-            while (CurrentEntry != &(Net80211Link->BssList)) {
+            KeAcquireQueuedLock(Link->Lock);
+            CurrentEntry = Link->BssList.Next;
+            while (CurrentEntry != &(Link->BssList)) {
                 BssEntry = LIST_VALUE(CurrentEntry,
                                       NET80211_BSS_ENTRY,
                                       ListEntry);
@@ -1184,7 +1174,7 @@ Return Value:
             }
 
             if (FoundEntry == NULL) {
-                KeReleaseQueuedLock(Net80211Link->Lock);
+                KeReleaseQueuedLock(Link->Lock);
                 LockHeld = FALSE;
             }
         }
@@ -1196,7 +1186,7 @@ Return Value:
 
         if (FoundEntry != NULL) {
 
-            ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+            ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
 
             if (FoundEntry->Encryption.Pairwise != Net80211EncryptionNone) {
                 if (Scan->PassphraseLength == 0) {
@@ -1223,21 +1213,21 @@ Return Value:
 
 ScanThreadEnd:
     if (LockHeld != FALSE) {
-        KeReleaseQueuedLock(Net80211Link->Lock);
+        KeReleaseQueuedLock(Link->Lock);
     }
 
     if (!KSUCCESS(Status)) {
         Net80211pSetState(Link, Net80211StateInitialized);
     }
 
-    NetLinkReleaseReference(Link);
+    Net80211LinkReleaseReference(Link);
     MmFreePagedPool(Scan);
     return;
 }
 
 KSTATUS
 Net80211pPrepareForReconnect (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY *Bss
     )
 
@@ -1251,7 +1241,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link to be connected to the BSS.
+    Link - Supplies a pointer to the 802.11 link to be connected to the BSS.
 
     Bss - Supplies a pointer to a BSS on entry on input that is being left and
         on output, receives a pointer to the copied BSS entry to join.
@@ -1266,14 +1256,12 @@ Return Value:
 
     PNET80211_BSS_ENTRY BssCopy;
     PNET80211_BSS_ENTRY BssOriginal;
-    PNET80211_LINK Net80211Link;
     KSTATUS Status;
 
-    Net80211Link = Link->DataLinkContext;
     BssOriginal = *Bss;
 
-    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
-    ASSERT(BssOriginal = Net80211Link->ActiveBss);
+    ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
+    ASSERT(BssOriginal = Link->ActiveBss);
 
     //
     // Copy the BSS so a fresh state is used for the reconnection. Old
@@ -1305,7 +1293,7 @@ Return Value:
     //
 
     LIST_REMOVE(&(BssOriginal->ListEntry));
-    INSERT_BEFORE(&(BssCopy->ListEntry), &(Net80211Link->BssList));
+    INSERT_BEFORE(&(BssCopy->ListEntry), &(Link->BssList));
 
     //
     // Release the list's reference on the original.
@@ -1321,7 +1309,7 @@ PrepareForReconnectEnd:
 
 VOID
 Net80211pJoinBss (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss
     )
 
@@ -1333,7 +1321,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link that is joining the BSS.
+    Link - Supplies a pointer to the 802.11 link that is joining the BSS.
 
     Bss - Supplies a pointer to the BSS to join.
 
@@ -1345,21 +1333,17 @@ Return Value:
 
 {
 
-    PNET80211_LINK Net80211Link;
+    ASSERT(Link->ActiveBss == NULL);
+    ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
 
-    Net80211Link = Link->DataLinkContext;
-
-    ASSERT(Net80211Link->ActiveBss == NULL);
-    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
-
-    Net80211Link->ActiveBss = Bss;
+    Link->ActiveBss = Bss;
     Net80211pBssEntryAddReference(Bss);
     return;
 }
 
 VOID
 Net80211pLeaveBss (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss,
     BOOL SendNotification,
     ULONG Subtype,
@@ -1374,7 +1358,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link that is leaving the BSS.
+    Link - Supplies a pointer to the 802.11 link that is leaving the BSS.
 
     Bss - Supplies a pointer to the BSS to leave.
 
@@ -1395,12 +1379,8 @@ Return Value:
 
 {
 
-    PNET80211_LINK Net80211Link;
-
-    Net80211Link = Link->DataLinkContext;
-
-    ASSERT(Net80211Link->ActiveBss == Bss);
-    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+    ASSERT(Link->ActiveBss == Bss);
+    ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
 
     if (SendNotification != FALSE) {
         Net80211pSendManagementFrame(Link,
@@ -1411,14 +1391,14 @@ Return Value:
                                      sizeof(USHORT));
     }
 
-    Net80211Link->ActiveBss = NULL;
+    Link->ActiveBss = NULL;
     Net80211pBssEntryReleaseReference(Bss);
     return;
 }
 
 KSTATUS
 Net80211pSendProbeRequest (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_SCAN_STATE Scan
     )
 
@@ -1431,7 +1411,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link on which to send the probe
+    Link - Supplies a pointer to the 802.11 link on which to send the probe
         request.
 
     Scan - Supplies a pointer to the scan state that is requesting the probe.
@@ -1450,11 +1430,9 @@ Return Value:
     ULONG FrameBodySize;
     ULONG FrameSubtype;
     PUCHAR InformationByte;
-    PNET80211_LINK Net80211Link;
     PNET80211_RATE_INFORMATION Rates;
     KSTATUS Status;
 
-    Net80211Link = Link->DataLinkContext;
     FrameBody = NULL;
 
     //
@@ -1472,7 +1450,7 @@ Return Value:
     // Get the supported rates size.
     //
 
-    Rates = Net80211Link->Properties.SupportedRates;
+    Rates = Link->Properties.SupportedRates;
     FrameBodySize += NET80211_ELEMENT_HEADER_SIZE;
     if (Rates->Count > NET80211_MAX_SUPPORTED_RATES) {
         FrameBodySize += NET80211_ELEMENT_HEADER_SIZE;
@@ -1582,7 +1560,7 @@ SendProbeRequestEnd:
 
 VOID
 Net80211pProcessProbeResponse (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_BUFFER Packet
     )
 
@@ -1595,7 +1573,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link that received the probe
+    Link - Supplies a pointer to the 802.11 link that received the probe
         response.
 
     Packet - Supplies a pointer to the packet to process.
@@ -1614,13 +1592,11 @@ Return Value:
     PUCHAR FrameBody;
     ULONG FrameSize;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
-    PNET80211_LINK Net80211Link;
     ULONG Offset;
     NET80211_PROBE_RESPONSE Response;
     ULONG Subtype;
 
-    Net80211Link = Link->DataLinkContext;
-    if (Net80211Link->State != Net80211StateProbing) {
+    if (Link->State != Net80211StateProbing) {
         goto ProcessProbeResponseEnd;
     }
 
@@ -1778,7 +1754,7 @@ ProcessProbeResponseEnd:
 
 KSTATUS
 Net80211pSendAuthenticationRequest (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss
     )
 
@@ -1791,7 +1767,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link on which to send an
+    Link - Supplies a pointer to the 802.11 link on which to send an
         authentication request.
 
     Bss - Supplies a pointer to the BSS over which to send the authentication
@@ -1844,7 +1820,7 @@ SendAuthenticationEnd:
 
 VOID
 Net80211pProcessAuthenticationResponse (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_BUFFER Packet
     )
 
@@ -1857,7 +1833,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link on which the authentication
+    Link - Supplies a pointer to the 802.11 link on which the authentication
         packet was received.
 
     Packet - Supplies a pointer to the network packet containing the
@@ -1877,23 +1853,21 @@ Return Value:
     ULONG FrameSize;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
     BOOL Match;
-    PNET80211_LINK Net80211Link;
     KSTATUS Status;
 
     Status = STATUS_SUCCESS;
-    Net80211Link = Link->DataLinkContext;
-    if (Net80211Link->State != Net80211StateAuthenticating) {
+    if (Link->State != Net80211StateAuthenticating) {
         return;
     }
 
-    KeAcquireQueuedLock(Net80211Link->Lock);
-    if (Net80211Link->State != Net80211StateAuthenticating) {
+    KeAcquireQueuedLock(Link->Lock);
+    if (Link->State != Net80211StateAuthenticating) {
         goto ProcessAuthenticationResponseEnd;
     }
 
-    ASSERT(Net80211Link->ActiveBss != NULL);
+    ASSERT(Link->ActiveBss != NULL);
 
-    Bss = Net80211Link->ActiveBss;
+    Bss = Link->ActiveBss;
 
     //
     // Make sure the this frame was sent from the AP of the BSS.
@@ -1967,13 +1941,13 @@ ProcessAuthenticationResponseEnd:
         Net80211pSetStateUnlocked(Link, Net80211StateInitialized);
     }
 
-    KeReleaseQueuedLock(Net80211Link->Lock);
+    KeReleaseQueuedLock(Link->Lock);
     return;
 }
 
 KSTATUS
 Net80211pSendAssociationRequest (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss
     )
 
@@ -1986,7 +1960,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link over which to send the
+    Link - Supplies a pointer to the 802.11 link over which to send the
         association request.
 
     Bss - Supplies a pointer to the BSS over which to send the association
@@ -2004,14 +1978,12 @@ Return Value:
     ULONG FrameBodySize;
     ULONG FrameSubtype;
     PUCHAR InformationByte;
-    PNET80211_LINK Net80211Link;
     PNET80211_RATE_INFORMATION Rates;
     KSTATUS Status;
 
     ASSERT(Bss != NULL);
     ASSERT(Bss->SsidLength != 0);
 
-    Net80211Link = Link->DataLinkContext;
     FrameBody = NULL;
 
     //
@@ -2028,7 +2000,7 @@ Return Value:
     // Get the supported rates size, including the extended rates if necessary.
     //
 
-    Rates = Net80211Link->Properties.SupportedRates;
+    Rates = Link->Properties.SupportedRates;
     FrameBodySize += NET80211_ELEMENT_HEADER_SIZE;
     if (Rates->Count > NET80211_MAX_SUPPORTED_RATES) {
         FrameBodySize += NET80211_ELEMENT_HEADER_SIZE;
@@ -2062,7 +2034,7 @@ Return Value:
     //
 
     InformationByte = FrameBody;
-    *((PUSHORT)InformationByte) = Net80211Link->Properties.Capabilities |
+    *((PUSHORT)InformationByte) = Link->Properties.Capabilities |
                                   NET80211_CAPABILITY_FLAG_ESS;
 
     InformationByte += NET80211_CAPABILITY_SIZE;
@@ -2148,7 +2120,7 @@ SendAssociationRequestEnd:
 
 VOID
 Net80211pProcessAssociationResponse (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_BUFFER Packet
     )
 
@@ -2161,7 +2133,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link that received the association
+    Link - Supplies a pointer to the 802.11 link that received the association
         response.
 
     Packet - Supplies a pointer to the network packet that contains the
@@ -2188,7 +2160,6 @@ Return Value:
     USHORT FrameStatus;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
     BOOL Match;
-    PNET80211_LINK Net80211Link;
     ULONG Offset;
     ULONG RateCount;
     PUCHAR Rates;
@@ -2196,19 +2167,18 @@ Return Value:
     ULONG TotalRateCount;
 
     Status = STATUS_SUCCESS;
-    Net80211Link = Link->DataLinkContext;
-    if (Net80211Link->State != Net80211StateAssociating) {
+    if (Link->State != Net80211StateAssociating) {
         return;
     }
 
-    KeAcquireQueuedLock(Net80211Link->Lock);
-    if (Net80211Link->State != Net80211StateAssociating) {
+    KeAcquireQueuedLock(Link->Lock);
+    if (Link->State != Net80211StateAssociating) {
         goto ProcessAssociationResponseEnd;
     }
 
-    ASSERT(Net80211Link->ActiveBss != NULL);
+    ASSERT(Link->ActiveBss != NULL);
 
-    Bss = Net80211Link->ActiveBss;
+    Bss = Link->ActiveBss;
 
     //
     // Make sure the this frame was sent from the destination.
@@ -2363,13 +2333,13 @@ ProcessAssociationResponseEnd:
         Net80211pSetStateUnlocked(Link, Net80211StateInitialized);
     }
 
-    KeReleaseQueuedLock(Net80211Link->Lock);
+    KeReleaseQueuedLock(Link->Lock);
     return;
 }
 
 KSTATUS
 Net80211pSendManagementFrame (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PUCHAR DestinationAddress,
     PUCHAR Bssid,
     ULONG FrameSubtype,
@@ -2428,7 +2398,7 @@ Return Value:
     Status = NetAllocateBuffer(sizeof(NET80211_MANAGEMENT_FRAME_HEADER),
                                FrameBodySize,
                                0,
-                               Link,
+                               Link->NetworkLink,
                                Flags,
                                &Packet);
 
@@ -2522,7 +2492,7 @@ SendManagementFrameEnd:
 
 KSTATUS
 Net80211pQueueStateTransitionTimer (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     ULONGLONG Timeout
     )
 
@@ -2534,7 +2504,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to a network link.
+    Link - Supplies a pointer to a 802.11 link.
 
     Timeout - Supplies the desired timeout in microseconds.
 
@@ -2547,24 +2517,21 @@ Return Value:
 {
 
     ULONGLONG DueTime;
-    PNET80211_LINK Net80211Link;
     KSTATUS Status;
 
-    Net80211Link = Link->DataLinkContext;
-
-    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+    ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
 
     DueTime = KeGetRecentTimeCounter();
     DueTime += KeConvertMicrosecondsToTimeTicks(Timeout);
-    Status = KeQueueTimer(Net80211Link->StateTimer,
+    Status = KeQueueTimer(Link->StateTimer,
                           TimerQueueSoft,
                           DueTime,
                           0,
                           0,
-                          Net80211Link->TimeoutDpc);
+                          Link->TimeoutDpc);
 
     if (KSUCCESS(Status)) {
-        Net80211Link->Flags |= NET80211_LINK_FLAG_TIMER_QUEUED;
+        Link->Flags |= NET80211_LINK_FLAG_TIMER_QUEUED;
     }
 
     return Status;
@@ -2572,7 +2539,7 @@ Return Value:
 
 VOID
 Net80211pCancelStateTransitionTimer (
-    PNET_LINK Link
+    PNET80211_LINK Link
     )
 
 /*++
@@ -2584,7 +2551,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link whose state transition timer
+    Link - Supplies a pointer to the 802.11 link whose state transition timer
         shall be canceled.
 
 Return Value:
@@ -2595,12 +2562,9 @@ Return Value:
 
 {
 
-    PNET80211_LINK Net80211Link;
     KSTATUS Status;
 
-    Net80211Link = Link->DataLinkContext;
-
-    ASSERT(KeIsQueuedLockHeld(Net80211Link->Lock) != FALSE);
+    ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
 
     //
     // Cancel the timer if it is queued. Also make sure the DPC is flushed if
@@ -2608,13 +2572,13 @@ Return Value:
     // cannot be queued twice.
     //
 
-    if ((Net80211Link->Flags & NET80211_LINK_FLAG_TIMER_QUEUED) != 0) {
-        Status = KeCancelTimer(Net80211Link->StateTimer);
+    if ((Link->Flags & NET80211_LINK_FLAG_TIMER_QUEUED) != 0) {
+        Status = KeCancelTimer(Link->StateTimer);
         if (!KSUCCESS(Status)) {
-            KeFlushDpc(Net80211Link->TimeoutDpc);
+            KeFlushDpc(Link->TimeoutDpc);
         }
 
-        Net80211Link->Flags &= ~NET80211_LINK_FLAG_TIMER_QUEUED;
+        Link->Flags &= ~NET80211_LINK_FLAG_TIMER_QUEUED;
     }
 
     return;
@@ -2622,7 +2586,7 @@ Return Value:
 
 KSTATUS
 Net80211pValidateRates (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss
     )
 
@@ -2636,7 +2600,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link for which to validate the BSS
+    Link - Supplies a pointer to the 802.11 link for which to validate the BSS
         entry's rates.
 
     Bss - Supplies a pointer to a BSS entry.
@@ -2658,12 +2622,10 @@ Return Value:
     UCHAR LocalRate;
     PNET80211_RATE_INFORMATION LocalRates;
     UCHAR MaxRate;
-    PNET80211_LINK Net80211Link;
     KSTATUS Status;
 
     BssRates = &(Bss->State.Rates);
-    Net80211Link = Link->DataLinkContext;
-    LocalRates = Net80211Link->Properties.SupportedRates;
+    LocalRates = Link->Properties.SupportedRates;
 
     //
     // Make sure the basic rates are supported. Unfortunately, there is no
@@ -2979,7 +2941,7 @@ ParseRsnElementEnd:
 
 VOID
 Net80211pUpdateBssCache (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_PROBE_RESPONSE Response
     )
 
@@ -2992,7 +2954,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link that received the packet.
+    Link - Supplies a pointer to the 802.11 link that received the packet.
 
     Response - Supplies a pointer to a parsed representation of a beacon or
         probe response packet.
@@ -3010,7 +2972,6 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     BOOL LinkDown;
     BOOL Match;
-    PNET80211_LINK Net80211Link;
     PUCHAR NewRsn;
     ULONG NewRsnLength;
     PUCHAR OldRsn;
@@ -3020,7 +2981,6 @@ Return Value:
     KSTATUS Status;
     ULONG TotalRateCount;
 
-    Net80211Link = Link->DataLinkContext;
     TotalRateCount = NET80211_GET_ELEMENT_LENGTH(Response->Rates);
     if (Response->ExtendedRates != NULL) {
         TotalRateCount += NET80211_GET_ELEMENT_LENGTH(Response->ExtendedRates);
@@ -3030,9 +2990,9 @@ Return Value:
     // First look for an existing BSS entry based on the BSSID.
     //
 
-    KeAcquireQueuedLock(Net80211Link->Lock);
-    CurrentEntry = Net80211Link->BssList.Next;
-    while (CurrentEntry != &(Net80211Link->BssList)) {
+    KeAcquireQueuedLock(Link->Lock);
+    CurrentEntry = Link->BssList.Next;
+    while (CurrentEntry != &(Link->BssList)) {
         Bss = LIST_VALUE(CurrentEntry, NET80211_BSS_ENTRY, ListEntry);
         Match = RtlCompareMemory(Response->Bssid,
                                  Bss->State.Bssid,
@@ -3057,7 +3017,7 @@ Return Value:
             goto UpdateBssCacheEnd;
         }
 
-        INSERT_BEFORE(&(Bss->ListEntry), &(Net80211Link->BssList));
+        INSERT_BEFORE(&(Bss->ListEntry), &(Link->BssList));
     }
 
     //
@@ -3087,7 +3047,7 @@ Return Value:
     // the link to go down.
     //
 
-    if (Net80211Link->ActiveBss == Bss) {
+    if (Link->ActiveBss == Bss) {
         LinkDown = FALSE;
         if ((Bss->State.BeaconInterval != Response->BeaconInterval) ||
             (Bss->State.Capabilities != Response->Capabilities) ||
@@ -3117,7 +3077,7 @@ Return Value:
         }
 
         if (LinkDown != FALSE) {
-            NetSetLinkState(Link, FALSE, 0);
+            NetSetLinkState(Link->NetworkLink, FALSE, 0);
         }
     }
 
@@ -3228,7 +3188,7 @@ UpdateBssCacheEnd:
         }
     }
 
-    KeReleaseQueuedLock(Net80211Link->Lock);
+    KeReleaseQueuedLock(Link->Lock);
     return;
 }
 

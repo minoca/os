@@ -460,8 +460,11 @@ Members:
 
     ReferenceCount - Stores the reference count of the EAPOL link context.
 
-    Link - Stores a pointer to the network link associated with this EAPOL
-        entry.
+    NetworkLink - Stores a pointer to the network link associated with this
+        EAPOL entry.
+
+    Net80211Link - Stores a pointer to the 802.11 link associated with this
+        EAPOL entry.
 
     Lock - Stores a pointer to a queued lock that protects access to the global
         key counter.
@@ -508,7 +511,8 @@ typedef struct _EAPOL_CONTEXT {
     RED_BLACK_TREE_NODE TreeEntry;
     EAPOL_MODE Mode;
     volatile ULONG ReferenceCount;
-    PNET_LINK Link;
+    PNET_LINK NetworkLink;
+    PNET80211_LINK Net80211Link;
     PQUEUED_LOCK Lock;
     PEAPOL_COMPLETION_ROUTINE CompletionRoutine;
     PVOID CompletionContext;
@@ -920,7 +924,8 @@ Return Value:
     // Check for valid parameters.
     //
 
-    if ((Parameters->Link == NULL) ||
+    if ((Parameters->NetworkLink == NULL) ||
+        (Parameters->Net80211Link == NULL) ||
         (Parameters->SupplicantAddress == NULL) ||
         (Parameters->AuthenticatorAddress == NULL) ||
         (Parameters->Ssid == NULL) ||
@@ -952,10 +957,12 @@ Return Value:
     }
 
     RtlZeroMemory(Context, sizeof(EAPOL_CONTEXT));
-    NetLinkAddReference(Parameters->Link);
+    NetLinkAddReference(Parameters->NetworkLink);
+    Net80211LinkAddReference(Parameters->Net80211Link);
     Context->ReferenceCount = 1;
     Context->Mode = Parameters->Mode;
-    Context->Link = Parameters->Link;
+    Context->NetworkLink = Parameters->NetworkLink;
+    Context->Net80211Link = Parameters->Net80211Link;
     Context->CompletionRoutine = Parameters->CompletionRoutine;
     Context->CompletionContext = Parameters->CompletionContext;
     Context->Lock = KeCreateQueuedLock();
@@ -1491,7 +1498,7 @@ Return Value:
     //
 
     Context = NULL;
-    SearchEntry.Link = Link;
+    SearchEntry.NetworkLink = Link;
     KeAcquireQueuedLock(Net80211EapolTreeLock);
     FoundNode = RtlRedBlackTreeSearch(&Net80211EapolTree,
                                       &(SearchEntry.TreeEntry));
@@ -2075,6 +2082,7 @@ Return Value:
     PNET_PACKET_BUFFER Packet;
     NET_PACKET_LIST PacketList;
     ULONG PacketSize;
+    PNET_DATA_LINK_SEND Send;
     KSTATUS Status;
 
     ASSERT((Type == EapolMessageType2) || (Type == EapolMessageType4));
@@ -2100,7 +2108,7 @@ Return Value:
     Status = NetAllocateBuffer(0,
                                PacketSize,
                                0,
-                               Context->Link,
+                               Context->NetworkLink,
                                Flags,
                                &Packet);
 
@@ -2174,12 +2182,12 @@ Return Value:
 
     NET_INITIALIZE_PACKET_LIST(&PacketList);
     NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
-    Status = Context->Link->DataLinkEntry->Interface.Send(
-                                             Context->Link,
-                                             &PacketList,
-                                             &(Context->Supplicant.Address),
-                                             &(Context->Authenticator.Address),
-                                             EAPOL_PROTOCOL_NUMBER);
+    Send = Context->NetworkLink->DataLinkEntry->Interface.Send;
+    Status = Send(Context->NetworkLink->DataLinkContext,
+                  &PacketList,
+                  &(Context->Supplicant.Address),
+                  &(Context->Authenticator.Address),
+                  EAPOL_PROTOCOL_NUMBER);
 
     if (!KSUCCESS(Status)) {
         goto SupplicantSendMessageEnd;
@@ -3437,10 +3445,10 @@ Return Value:
 
     FirstEntry = RED_BLACK_TREE_VALUE(FirstNode, EAPOL_CONTEXT, TreeEntry);
     SecondEntry = RED_BLACK_TREE_VALUE(SecondNode, EAPOL_CONTEXT, TreeEntry);
-    if (FirstEntry->Link < SecondEntry->Link) {
+    if (FirstEntry->NetworkLink < SecondEntry->NetworkLink) {
         return ComparisonResultAscending;
 
-    } else if (FirstEntry->Link > SecondEntry->Link) {
+    } else if (FirstEntry->NetworkLink > SecondEntry->NetworkLink) {
         return ComparisonResultDescending;
     }
 
@@ -3554,8 +3562,12 @@ Return Value:
         MmFreePagedPool(Context->Gtk);
     }
 
-    if (Context->Link != NULL) {
-        NetLinkReleaseReference(Context->Link);
+    if (Context->NetworkLink != NULL) {
+        NetLinkReleaseReference(Context->NetworkLink);
+    }
+
+    if (Context->Net80211Link != NULL) {
+        Net80211LinkReleaseReference(Context->Net80211Link);
     }
 
     MmFreePagedPool(Context);
@@ -3599,7 +3611,7 @@ Return Value:
 
     if (Context->Ptk != NULL) {
         KeyFlags = NET80211_KEY_FLAG_CCMP | NET80211_KEY_FLAG_TRANSMIT;
-        CompletionStatus = Net80211SetKey(Context->Link,
+        CompletionStatus = Net80211SetKey(Context->Net80211Link,
                                           EAPOL_PTK_GET_TK(Context->Ptk),
                                           Context->TemporalKeySize,
                                           KeyFlags,
@@ -3619,7 +3631,7 @@ Return Value:
         KeyId = (Context->GtkFlags & EAPOL_KDE_GTK_FLAG_KEY_ID_MASK) >>
                 EAPOL_KDE_GTK_FLAG_KEY_ID_SHIFT;
 
-        CompletionStatus = Net80211SetKey(Context->Link,
+        CompletionStatus = Net80211SetKey(Context->Net80211Link,
                                           EAPOL_GTK_GET_TK(Context->Gtk),
                                           Context->TemporalKeySize,
                                           KeyFlags,

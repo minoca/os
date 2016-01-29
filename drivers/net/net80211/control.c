@@ -49,7 +49,7 @@ Environment:
 
 VOID
 Net80211pProcessControlFrame (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET_PACKET_BUFFER Packet
     )
 
@@ -61,7 +61,7 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the network link on which the frame arrived.
+    Link - Supplies a pointer to the 802.11 link on which the frame arrived.
 
     Packet - Supplies a pointer to the network packet.
 

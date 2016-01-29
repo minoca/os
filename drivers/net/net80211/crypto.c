@@ -106,7 +106,7 @@ Net80211pEapolCompletionRoutine (
 NET80211_API
 KSTATUS
 Net80211SetKey (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PUCHAR KeyValue,
     ULONG KeyLength,
     ULONG KeyFlags,
@@ -145,7 +145,6 @@ Return Value:
 
     ULONG AllocationSize;
     PNET80211_KEY Key;
-    PNET80211_LINK Net80211Link;
     KSTATUS Status;
 
     //
@@ -157,7 +156,6 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    Net80211Link = Link->DataLinkContext;
     AllocationSize = sizeof(NET80211_KEY) + KeyLength - ANYSIZE_ARRAY;
     Key = MmAllocatePagedPool(AllocationSize, NET80211_ALLOCATION_TAG);
     if (Key == NULL) {
@@ -175,21 +173,21 @@ Return Value:
     // Update the pointer in the array of keys for the active BSS.
     //
 
-    KeAcquireQueuedLock(Net80211Link->Lock);
-    if ((Net80211Link->ActiveBss == NULL) ||
-        (Net80211Link->State != Net80211StateAssociated)) {
+    KeAcquireQueuedLock(Link->Lock);
+    if ((Link->ActiveBss == NULL) ||
+        (Link->State != Net80211StateAssociated)) {
 
         Status = STATUS_NOT_READY;
 
     } else {
 
-        ASSERT(Net80211Link->ActiveBss->Encryption.Keys[KeyId] == NULL);
+        ASSERT(Link->ActiveBss->Encryption.Keys[KeyId] == NULL);
 
-        Net80211Link->ActiveBss->Encryption.Keys[KeyId] = Key;
+        Link->ActiveBss->Encryption.Keys[KeyId] = Key;
         Status = STATUS_SUCCESS;
     }
 
-    KeReleaseQueuedLock(Net80211Link->Lock);
+    KeReleaseQueuedLock(Link->Lock);
 
 SetKeyEnd:
     if (!KSUCCESS(Status)) {
@@ -203,7 +201,7 @@ SetKeyEnd:
 
 KSTATUS
 Net80211pInitializeEncryption (
-    PNET_LINK Link,
+    PNET80211_LINK Link,
     PNET80211_BSS_ENTRY Bss
     )
 
@@ -216,7 +214,8 @@ Routine Description:
 
 Arguments:
 
-    Link - Supplies a pointer to the link involved in the upcoming handshake.
+    Link - Supplies a pointer to the 802.11 link establishing an ecrypted
+        connection.
 
     Bss - Supplies a pointer to the BSS on which the encryption handshake will
         take place.
@@ -271,7 +270,8 @@ Return Value:
 
     RtlZeroMemory(&Parameters, sizeof(EAPOL_CREATION_PARAMETERS));
     Parameters.Mode = EapolModeSupplicant;
-    Parameters.Link = Link;
+    Parameters.NetworkLink = Link->NetworkLink;
+    Parameters.Net80211Link = Link;
     Parameters.SupplicantAddress = &(Link->Properties.PhysicalAddress);
     Parameters.AuthenticatorAddress = &AuthenticatorAddress;
     Parameters.Ssid = Bss->Ssid;
@@ -1161,10 +1161,10 @@ Return Value:
 
 {
 
-    PNET_LINK Link;
+    PNET80211_LINK Link;
     NET80211_STATE State;
 
-    Link = (PNET_LINK)Context;
+    Link = (PNET80211_LINK)Context;
     State = Net80211StateEncrypted;
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("802.11: EAPOL failed with status 0x%08x\n", Status);

@@ -4910,7 +4910,7 @@ Return Value:
     //
 
     DataLinkEntry = Link->DataLinkEntry;
-    DataLinkEntry->Interface.GetPacketSizeInformation(Link,
+    DataLinkEntry->Interface.GetPacketSizeInformation(Link->DataLinkContext,
                                                       &DataLinkInformation,
                                                       0);
 
