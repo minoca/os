@@ -41,17 +41,17 @@ TARGETLIBS = $(OBJROOT)/os/lib/termlib/termlib.a     \
 
 DYNLIBS = -lminocaos
 
+include $(SRCROOT)/os/minoca.mk
+
 ifeq ($(OS),Windows_NT)
 
 DIRS = win32
 
 else
-
+ifneq ($(OS),Minoca)
 DIRS = uos
-
 endif
-
-include $(SRCROOT)/os/minoca.mk
+endif
 
 EXTRA_LDFLAGS += -L$(BINROOT)
 EXTRA_CFLAGS += -ftls-model=initial-exec
