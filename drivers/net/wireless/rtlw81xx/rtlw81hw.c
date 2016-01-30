@@ -329,6 +329,15 @@ Rtlw81pSetLed (
     BOOL Enable
     );
 
+KSTATUS
+Rtlw81pGetRssi (
+    PRTLW81_DEVICE Device,
+    PVOID PhyStatus,
+    ULONG PhyStatusSize,
+    ULONG Rate,
+    PLONG Rssi
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -1198,6 +1207,7 @@ RTLW81_8188E_TRANSMIT_POWER_DATA Rtlw8188eTransmitPowerData[] = {
 };
 
 BOOL Rtlw81DisablePacketDropping = FALSE;
+CHAR Rtlw81DefaultCckAgcReportOffsets[] = { 16, -12, -26, -46 };
 
 //
 // ------------------------------------------------------------------ Functions
@@ -1953,10 +1963,14 @@ Return Value:
     PRTLW81_RECEIVE_HEADER Header;
     ULONG InfoSize;
     ULONG Length;
-    NET_PACKET_BUFFER Packet;
+    NET_PACKET_BUFFER NetPacket;
     ULONG PacketCount;
     ULONG PacketLength;
     PHYSICAL_ADDRESS PhysicalAddress;
+    PVOID PhyStatus;
+    ULONG Rate;
+    NET80211_RECEIVE_PACKET ReceivePacket;
+    LONG Rssi;
     KSTATUS Status;
     ULONG TotalLength;
 
@@ -1994,8 +2008,10 @@ Return Value:
 
     Header = (PRTLW81_RECEIVE_HEADER)Data;
     PacketCount = Header->PacketCount;
-    Packet.IoBuffer = NULL;
-    Packet.Flags = 0;
+    ReceivePacket.Version = NET80211_RECEIVE_PACKET_VERSION;
+    ReceivePacket.NetPacket = &NetPacket;
+    NetPacket.IoBuffer = NULL;
+    NetPacket.Flags = 0;
     while (PacketCount != 0) {
         if (Length < sizeof(RTLW81_RECEIVE_HEADER)) {
             RtlDebugPrint("RTLW81: Received odd sized data (%d).\n", Length);
@@ -2031,20 +2047,41 @@ Return Value:
             break;
         }
 
-        Packet.Buffer = Data + sizeof(RTLW81_RECEIVE_HEADER) + InfoSize;
-        Packet.BufferPhysicalAddress = PhysicalAddress +
+        //
+        // Get the received signal strength indicator (RSSI), if present.
+        //
+
+        ReceivePacket.Rssi = 0;
+        if ((InfoSize != 0) &&
+            ((Header->Status & RTLW81_RECEIVE_STATUS_PHY_STATUS) != 0)) {
+
+            PhyStatus = (PVOID)(Header + 1);
+            Rate = (Header->RateInformation &
+                    RTLW81_RECEIVE_RATE_INFORMATION_RATE_MASK) >>
+                   RTLW81_RECEIVE_RATE_INFORMATION_RATE_SHIFT;
+
+            Status = Rtlw81pGetRssi(Device, PhyStatus, InfoSize, Rate, &Rssi);
+            if (!KSUCCESS(Status)) {
+                RtlDebugPrint("RTLW81: Failed to get RSSI information from "
+                              "packet with status 0x%08x\n",
+                              Status);
+
+                break;
+            }
+
+            ReceivePacket.Rssi = Rssi;
+        }
+
+        NetPacket.Buffer = Data + sizeof(RTLW81_RECEIVE_HEADER) + InfoSize;
+        NetPacket.BufferPhysicalAddress = PhysicalAddress +
                                        sizeof(RTLW81_RECEIVE_HEADER) +
                                        InfoSize;
 
-        Packet.BufferSize = PacketLength;
-        Packet.DataSize = Packet.BufferSize;
-        Packet.DataOffset = 0;
-        Packet.FooterOffset = Packet.DataSize;
-        Net80211ProcessReceivedPacket(Device->Net80211Link, &Packet);
-
-        //
-        // TODO: Get receive signal strength indicator (RSSI).
-        //
+        NetPacket.BufferSize = PacketLength;
+        NetPacket.DataSize = NetPacket.BufferSize;
+        NetPacket.DataOffset = 0;
+        NetPacket.FooterOffset = NetPacket.DataSize;
+        Net80211ProcessReceivedPacket(Device->Net80211Link, &ReceivePacket);
 
         //
         // Advance to the next packet, adding an extra 4 and aligning the total
@@ -2064,11 +2101,6 @@ Return Value:
     }
 
 BulkInTransferCompletionEnd:
-
-    //
-    // TODO: Only resubmit the transfer if the link is still up.
-    //
-
     Status = UsbSubmitTransfer(Transfer);
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("RTLW81: Failed to resubmit bulk IN transfer.\n");
@@ -5718,5 +5750,174 @@ Return Value:
 
     RTLW81_WRITE_REGISTER8(Device, Rtlw81RegisterLedConfig0, Value);
     return;
+}
+
+KSTATUS
+Rtlw81pGetRssi (
+    PRTLW81_DEVICE Device,
+    PVOID PhyStatus,
+    ULONG PhyStatusSize,
+    ULONG Rate,
+    PLONG Rssi
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines the RSSI value from a received network packet based
+    on the PHY status and the rate.
+
+Arguments:
+
+    Device - Supplies a pointer to the RTL81xx wireless device that received
+        the PHY status.
+
+    PhyStatus - Supplies a pointer to the PHY status to parse for RSSI
+        information.
+
+    PhyStatusSize - Supplies the size of the PHY status in bytes.
+
+    Rate - Supplies the data rate at which the PHY status was received.
+
+    Rssi - Supplies a pointer that receives the RSSI value.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG AgcIndexMask;
+    ULONG AgcIndexShift;
+    UCHAR AgcReport;
+    ULONG AgcValueMask;
+    ULONG AgcValueShift;
+    PRTLW81_8188E_PHY_STATUS_CCK Cck8188e;
+    PRTLW81_DEFAULT_PHY_STATUS_CCK CckDefault;
+    UCHAR LnaIndex;
+    PRTLW81_PHY_STATUS_OFDM Ofdm;
+    ULONG OfdmStatus;
+    UCHAR ReportIndex;
+    CHAR RssiValue;
+    KSTATUS Status;
+    UCHAR VgaIndex;
+
+    //
+    // If the packet's rate is not high throughput then the PHY status is CCK
+    // data.
+    //
+
+    if (Rate <= RTLW81_PHY_STATUS_MAX_CCK_RATE) {
+        if ((Device->Flags & RTLW81_FLAG_8188E) != 0) {
+            if (PhyStatusSize < sizeof(RTLW81_8188E_PHY_STATUS_CCK)) {
+                Status = STATUS_DATA_LENGTH_MISMATCH;
+                goto GetRssiEnd;
+            }
+
+            Cck8188e = (PRTLW81_8188E_PHY_STATUS_CCK)PhyStatus;
+            AgcReport = Cck8188e->AgcReport;
+            LnaIndex = (AgcReport & RTLW81_8188E_PHY_CCK_AGC_REPORT_LNA_MASK) >>
+                       RTLW81_8188E_PHY_CCK_AGC_REPORT_LNA_SHIFT;
+
+            VgaIndex = (AgcReport & RTLW81_8188E_PHY_CCK_AGC_REPORT_VGA_MASK) >>
+                       RTLW81_8188E_PHY_CCK_AGC_REPORT_VGA_SHIFT;
+
+            switch (LnaIndex) {
+            case 7:
+                if (VgaIndex <= 27) {
+                    RssiValue = -100 + 2 * (27 - VgaIndex);
+
+                } else {
+                    RssiValue = -100;
+                }
+
+                break;
+
+            case 6:
+                RssiValue = -48 + (2 * (2 - VgaIndex));
+                break;
+
+            case 5:
+                RssiValue = -42 + (2 * (7 - VgaIndex));
+                break;
+
+            case 4:
+                RssiValue = -36 + (2 * (7 - VgaIndex));
+                break;
+
+            case 3:
+                RssiValue = -24 + (2 * (7 - VgaIndex));
+                break;
+
+            case 2:
+                RssiValue = -12 + (2 * (5 - VgaIndex));
+                break;
+
+            case 1:
+                RssiValue = 8 - (2 * VgaIndex);
+                break;
+
+            case 0:
+                RssiValue = 14 - (2 * VgaIndex);
+                break;
+
+            default:
+                RssiValue = 0;
+                break;
+            }
+
+            RssiValue += 6;
+
+        } else {
+            if (PhyStatusSize < sizeof(RTLW81_DEFAULT_PHY_STATUS_CCK)) {
+                Status = STATUS_DATA_LENGTH_MISMATCH;
+                goto GetRssiEnd;
+            }
+
+            CckDefault = (PRTLW81_DEFAULT_PHY_STATUS_CCK)PhyStatus;
+            AgcReport = CckDefault->AgcReport;
+            AgcIndexMask = RTLW81_DEFAULT_PHY_CCK_HP_AGC_REPORT_INDEX_MASK;
+            AgcIndexShift = RTLW81_DEFAULT_PHY_CCK_HP_AGC_REPORT_INDEX_SHIFT;
+            AgcValueMask = RTLW81_DEFAULT_PHY_CCK_HP_AGC_REPORT_VALUE_MASK;
+            AgcValueShift = RTLW81_DEFAULT_PHY_CCK_HP_AGC_REPORT_VALUE_SHIFT;
+            if ((Device->Flags & RTLW81_FLAG_CCK_HIGH_POWER) == 0) {
+                AgcIndexMask = RTLW81_DEFAULT_PHY_CCK_AGC_REPORT_INDEX_MASK;
+                AgcIndexShift = RTLW81_DEFAULT_PHY_CCK_AGC_REPORT_INDEX_SHIFT;
+                AgcValueMask = RTLW81_DEFAULT_PHY_CCK_AGC_REPORT_VALUE_MASK;
+                AgcValueShift = RTLW81_DEFAULT_PHY_CCK_AGC_REPORT_VALUE_SHIFT;
+            }
+
+            ReportIndex = (AgcReport & AgcIndexMask) >> AgcIndexShift;
+            RssiValue = ((AgcReport & AgcValueMask) >> AgcValueShift) << 1;
+            RssiValue = Rtlw81DefaultCckAgcReportOffsets[ReportIndex] -
+                        RssiValue;
+        }
+
+    //
+    // Otherwise the PHY status is OFDM data.
+    //
+
+    } else {
+        if (PhyStatusSize < sizeof(RTLW81_PHY_STATUS_OFDM)) {
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            goto GetRssiEnd;
+        }
+
+        Ofdm = (PRTLW81_PHY_STATUS_OFDM)PhyStatus;
+        OfdmStatus = Ofdm->PhyStatus[RTLW81_PHY_OFDM_AGC_REPORT_INDEX];
+        OfdmStatus = (OfdmStatus & RTLW81_PHY_OFDM_AGC_REPORT_MASK) >>
+                     RTLW81_PHY_OFDM_AGC_REPORT_SHIFT;
+
+        RssiValue = OfdmStatus - RTLW81_PHY_OFDM_AGC_REPORT_OFFSET;
+    }
+
+    *Rssi = RssiValue;
+    Status = STATUS_SUCCESS;
+
+GetRssiEnd:
+    return Status;
 }
 

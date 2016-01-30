@@ -576,7 +576,7 @@ NET80211_API
 VOID
 Net80211ProcessReceivedPacket (
     PNET80211_LINK Link,
-    PNET_PACKET_BUFFER Packet
+    PNET80211_RECEIVE_PACKET Packet
     )
 
 /*++
@@ -591,9 +591,9 @@ Arguments:
     Link - Supplies a pointer to the 802.11 link that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
+        This structure and the network packet it contains may be used as a
+        scratch space while this routine executes and the packet travels up the
+        stack, but will not be accessed after this routine returns.
 
 Return Value:
 
@@ -604,7 +604,7 @@ Return Value:
 
 {
 
-    NetProcessReceivedPacket(Link->NetworkLink, Packet);
+    NetProcessReceivedPacket(Link->NetworkLink, Packet->NetPacket);
     return;
 }
 

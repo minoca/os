@@ -1158,12 +1158,21 @@ Author:
 //
 
 #define RTLW81_RECEIVE_STATUS_DECRYPTED       0x0800
-#define RTLW81_RECEIVE_STATUS_PHYST           0x0400
+#define RTLW81_RECEIVE_STATUS_PHY_STATUS      0x0400
 #define RTLW81_RECEIVE_STATUS_SHIFT_MASK      0x0300
 #define RTLW81_RECEIVE_STATUS_SHIFT_SHIFT     8
 #define RTLW81_RECEIVE_STATUS_QOS             0x0080
 #define RTLW81_RECEIVE_STATUS_INFO_SIZE_MASK  0x000F
 #define RTLW81_RECEIVE_STATUS_INFO_SIZE_SHIFT 0
+
+//
+// Define the bits for the receive packet header rate information.
+//
+
+#define RTLW81_RECEIVE_RATE_INFORMATION_RATE_MASK         0x0000003F
+#define RTLW81_RECEIVE_RATE_INFORMATION_RATE_SHIFT        0
+#define RTWL81_RECEIVE_RATE_INFORMATION_HIGH_THROUGHPUT   0x00000040
+#define RTLW81_RECEIVE_RATE_INFORMATION_HIGH_THROUGHPUT_C 0x00000400
 
 //
 // Define the transmit packet header type flags.
@@ -1319,6 +1328,54 @@ Author:
 #define RTLW81_MAC_ID_CONFIG_COMMAND_MASK_MODE_SHIFT 28
 #define RTLW81_MAC_ID_CONFIG_COMMAND_MASK_RATE_MASK  0x0FFFFFFF
 #define RTLW81_MAC_ID_CONFIG_COMMAND_MASK_RATE_SHIFT 0
+
+//
+// Define the maximum received packet rate that stores CCK PHY status.
+//
+
+#define RTLW81_PHY_STATUS_MAX_CCK_RATE 3
+
+//
+// Define the AGC report bits for the RTL8188E CCK PHY status.
+//
+
+#define RTLW81_8188E_PHY_CCK_AGC_REPORT_LNA_MASK  0xE0
+#define RTLW81_8188E_PHY_CCK_AGC_REPORT_LNA_SHIFT 5
+#define RTLW81_8188E_PHY_CCK_AGC_REPORT_VGA_MASK  0x1F
+#define RTLW81_8188E_PHY_CCK_AGC_REPORT_VGA_SHIFT 0
+
+//
+// Define the AGC report bits for the high powered CCK PHY status.
+//
+
+#define RTLW81_DEFAULT_PHY_CCK_HP_AGC_REPORT_INDEX_MASK  0x60
+#define RTLW81_DEFAULT_PHY_CCK_HP_AGC_REPORT_INDEX_SHIFT 5
+#define RTLW81_DEFAULT_PHY_CCK_HP_AGC_REPORT_VALUE_MASK  0x1F
+#define RTLW81_DEFAULT_PHY_CCK_HP_AGC_REPORT_VALUE_SHIFT 0
+
+//
+// Define the AGC report bits for the default CCK PHY status.
+//
+
+#define RTLW81_DEFAULT_PHY_CCK_AGC_REPORT_INDEX_MASK  0xC0
+#define RTLW81_DEFAULT_PHY_CCK_AGC_REPORT_INDEX_SHIFT 6
+#define RTLW81_DEFAULT_PHY_CCK_AGC_REPORT_VALUE_MASK  0x3E
+#define RTLW81_DEFAULT_PHY_CCK_AGC_REPORT_VALUE_SHIFT 1
+
+//
+// Define the AGC report bits for the high throughput OFDM PHY status.
+//
+
+#define RTLW81_PHY_OFDM_AGC_REPORT_INDEX 1
+#define RTLW81_PHY_OFDM_AGC_REPORT_MASK  0xFE
+#define RTLW81_PHY_OFDM_AGC_REPORT_SHIFT 1
+
+//
+// Default the value to subtract from the AGC report to get an RSSI value in
+// decibels.
+//
+
+#define RTLW81_PHY_OFDM_AGC_REPORT_OFFSET 110
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -1575,8 +1632,10 @@ Structure Description:
 Members:
 
     LengthAndErrorFlags - Stores the length of the packet and the error flags.
+        See RTLW81_RECEIVE_* for definitions.
 
-    Status - Stores status information for the received packet.
+    Status - Stores status information for the received packet. See
+        RTLW81_RECEIVE_STATUS_* for definitions.
 
     Reserved1 - Stores 4 reserved bytes.
 
@@ -1587,7 +1646,8 @@ Members:
 
     Reserved3 - Stores 1 reserved byte.
 
-    RateInformation - Stores rate and high throughput status information.
+    RateInformation - Stores rate and high throughput status information. See
+        RTLW81_RECEIVE_RATE_INFORMATION_* for definitions.
 
     Reserved4 - Stores 4 reserved bytes.
 
@@ -1606,6 +1666,105 @@ typedef struct _RTLW81_RECEIVE_HEADER {
     ULONG Reserved4;
     ULONG Reserved5;
 } PACKED RTLW81_RECEIVE_HEADER, *PRTLW81_RECEIVE_HEADER;
+
+/*++
+
+Structure Description:
+
+    This structure defines the RTL8188E devices CCK PHY status.
+
+Members:
+
+    PathAgc - Stores the path automatic gain control.
+
+    SignalQuality - Stores the signal quality information.
+
+    AgcReport - Stores the automatic gain control report.
+
+    Reserved0 - Stores 1 reserved byte.
+
+    Reserved1 - Stores 1 reserved byte.
+
+    NoisePower - Stores the noise power information.
+
+    PathCfoTail - Stores the path's CFO tail.
+
+    PacketsMask - Stores packet mask information.
+
+    StreamReceiveEvm - Stores EVM status for the receive stream.
+
+    PathReceiveSnr - Stores the SNR status for the receive path.
+
+    NoisePowerDbLsb - Stores the noise power level information.
+
+    Reserved2 - Stores 2 reserved bytes.
+
+    StreamCsi - Stores stream CSI status.
+
+    StreamTargetCsi - Stores the stream's target CSI value.
+
+    SignalEvm - Stores the signal EVM status.
+
+    Reserved3 - Stores 3 reserved bytes.
+
+--*/
+
+typedef struct _RTLW81_8188E_PHY_STATUS_CCK {
+    UCHAR PathAgc[2];
+    UCHAR SignalQuality;
+    UCHAR AgcReport;
+    UCHAR Reserved0;
+    UCHAR Reserved1;
+    UCHAR NoisePower;
+    UCHAR PathCfoTail[2];
+    UCHAR PacketsMask[2];
+    UCHAR StreamReceiveEvm[2];
+    UCHAR PathReceiveSnr[2];
+    UCHAR NoisePowerDbLsb;
+    UCHAR Reserved2[3];
+    UCHAR StreamCsi[2];
+    UCHAR StreamTargetCsi[2];
+    UCHAR SignalEvm;
+    UCHAR Reserved3[2];
+} PACKED RTLW81_8188E_PHY_STATUS_CCK, *PRTLW81_8188E_PHY_STATUS_CCK;
+
+/*++
+
+Structure Description:
+
+    This structure defines the default RTL81xx wireless CCK PHY status.
+
+Members:
+
+    AdcPowerDb - Stores the ADC power decibel readings.
+
+    SignalQualityReport - Stores the signal quality report.
+
+    AgcReport - Stores the automatic gain control report.
+
+--*/
+
+typedef struct _RTLW81_DEFAULT_PHY_STATUS_CCK {
+    UCHAR AdcPowerDb[4];
+    UCHAR SignalQualityReport;
+    UCHAR AgcReport;
+} PACKED RTLW81_DEFAULT_PHY_STATUS_CCK, *PRTLW81_DEFAULT_PHY_STATUS_CCK;
+
+/*++
+
+Structure Description:
+
+    This structure defines the RTL81xx high throughput PHY status.
+
+Members:
+
+    PhyStatus - Stores an array of PHY status information.
+
+--*/
+
+typedef struct _RTLW81_PHY_STATUS_OFDM {
+    ULONG PhyStatus[8];
+} PACKED RTLW81_PHY_STATUS_OFDM, *PRTLW81_PHY_STATUS_OFDM;
 
 /*++
 

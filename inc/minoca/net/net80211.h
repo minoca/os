@@ -118,6 +118,12 @@ Author:
 #define NET80211_BSS_VERSION 1
 
 //
+// Define the current version number of the 802.11 received packet structure.
+//
+
+#define NET80211_RECEIVE_PACKET_VERSION 1
+
+//
 // Define the size of an 802.11 MAC address.
 //
 
@@ -910,6 +916,30 @@ typedef struct _NET80211_BSS {
     NET80211_RATE_INFORMATION Rates;
 } NET80211_BSS, *PNET80211_BSS;
 
+/*++
+
+Structure Description:
+
+    This structure defines information about a received 802.11 packet.
+
+Members:
+
+    Version - Stores the version number of the structure. SEt this to
+        NET80211_RECEIVE_PACKET_VERSION.
+
+    NetPacket - Stores a pointer to the network packet that holds the actual
+        data.
+
+    Rssi - Stores the received signal strength indication for the packet.
+
+--*/
+
+typedef struct _NET80211_RECEIVE_PACKET {
+    ULONG Version;
+    PNET_PACKET_BUFFER NetPacket;
+    LONG Rssi;
+} NET80211_RECEIVE_PACKET, *PNET80211_RECEIVE_PACKET;
+
 typedef
 KSTATUS
 (*PNET80211_DEVICE_LINK_SEND) (
@@ -1285,7 +1315,7 @@ NET80211_API
 VOID
 Net80211ProcessReceivedPacket (
     PNET80211_LINK Link,
-    PNET_PACKET_BUFFER Packet
+    PNET80211_RECEIVE_PACKET Packet
     );
 
 /*++
@@ -1300,9 +1330,9 @@ Arguments:
     Link - Supplies a pointer to the 802.11 link that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
+        This structure and the network packet it contains may be used as a
+        scratch space while this routine executes and the packet travels up the
+        stack, but will not be accessed after this routine returns.
 
 Return Value:
 
