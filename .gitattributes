@@ -8,4 +8,6 @@ sources text=auto whitespace=trailing-space,space-before-tab
 *.sh text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
 *.py text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
 *.asl text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
+*.y text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
+*.l text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
 common text=auto whitespace=trailing-space,space-before-tab
