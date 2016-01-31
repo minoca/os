@@ -235,3 +235,31 @@ Return Value:
 
 --*/
 
+BOOL
+ChalkIsNodeAssignmentLValue (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given node is the left child of an
+    assignment expression. This is used to determine whether or not to create
+    new variables on dereference or complain that a variable or key is used
+    before creation.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+Return Value:
+
+    TRUE if this node is the left child of an assignment expression.
+
+    FALSE if not.
+
+--*/

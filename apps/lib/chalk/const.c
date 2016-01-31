@@ -558,7 +558,21 @@ Return Value:
             //
 
             if (Value == NULL) {
-                Value = ChalkCreateInteger(0);
+
+                //
+                // Fail if this is a variable being used before being created.
+                //
+
+                if (ChalkIsNodeAssignmentLValue(Interpreter, Node) == FALSE) {
+                    fprintf(stderr,
+                            "Error: '%s' used before assignment.\n",
+                            Name->String.String);
+
+                    Status = EINVAL;
+                    goto VisitPrimaryExpressionEnd;
+                }
+
+                Value = ChalkCreateNull();
                 if (Value == NULL) {
                     Status = ENOMEM;
                     goto VisitPrimaryExpressionEnd;
@@ -699,6 +713,16 @@ Return Value:
             *Destination = '\0';
             Value->String.Size = Destination - Value->String.String;
             break;
+
+        case ChalkTokenNull:
+            Value = ChalkCreateNull();
+            break;
+
+        default:
+
+            assert(FALSE);
+
+            break;
         }
 
         if (Value == NULL) {
@@ -724,7 +748,7 @@ VisitPrimaryExpressionEnd:
         ChalkObjectReleaseReference(Name);
     }
 
-    return 0;
+    return Status;
 }
 
 INT

@@ -55,9 +55,16 @@ PSTR ChalkFunctionOneObjectArgument[] = {
     NULL,
 };
 
+PSTR ChalkFunctionGetArguments[] = {
+    "object",
+    "key",
+    NULL
+};
+
 CHALK_FUNCTION_PROTOTYPE ChalkBuiltinFunctions[] = {
     {"print", ChalkFunctionOneObjectArgument, ChalkFunctionPrint},
     {"len", ChalkFunctionOneObjectArgument, ChalkFunctionLength},
+    {"get", ChalkFunctionGetArguments, ChalkFunctionGet},
     {NULL, NULL, NULL}
 };
 
@@ -131,7 +138,9 @@ Return Value:
         LocalKeyString.Size = strlen(Members->Key);
         Pointer = Structure + Members->Offset;
         DictEntry = ChalkDictLookup(Dict, (PCHALK_OBJECT)&LocalKeyString);
-        if (DictEntry == NULL) {
+        if ((DictEntry == NULL) ||
+            (DictEntry->Value->Header.Type == ChalkObjectNull)) {
+
             if (Members->Required != FALSE) {
                 fprintf(stderr,
                         "Error: Member %s is required.\n",
@@ -444,12 +453,22 @@ Return Value:
                 String = *((PSTR *)Pointer);
             }
 
-            Size = strlen(String);
-            Value = ChalkCreateString(String, Size);
+            if (String == NULL) {
+                Value = ChalkCreateNull();
+
+            } else {
+                Size = strlen(String);
+                Value = ChalkCreateString(String, Size);
+            }
+
             break;
 
         case ChalkCStructurePointer:
             Pointer = *((PVOID *)Pointer);
+            if (Pointer == NULL) {
+                Value = ChalkCreateNull();
+                break;
+            }
 
             //
             // Fall through.
@@ -475,6 +494,10 @@ Return Value:
 
         case ChalkCObjectPointer:
             Value = *((PCHALK_OBJECT *)Pointer);
+            if (Value == NULL) {
+                Value = ChalkCreateNull();
+            }
+
             break;
 
         default:

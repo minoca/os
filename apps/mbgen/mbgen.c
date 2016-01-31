@@ -54,7 +54,7 @@ Environment:
     "      This can be specified multiple times.\n" \
     "  -D, --debug -- Print lots of information during execution.\n" \
     "  -B, --build-file=file_name -- Use the given file as the name of the \n" \
-    "      build files, rather than the default, build.mb." \
+    "      build files, rather than the default, build.mb.\n" \
     "  -n, --dry-run -- Do all the processing, but do not actually create \n" \
     "      any output files.\n" \
     "  -p, --project=file_name -- Search for the given file name when \n" \
@@ -557,7 +557,7 @@ Return Value:
 
     List = Script->Result;
     if ((Context->Options & MBGEN_OPTION_DEBUG) != 0) {
-        ChalkPrintObject(List, 0);
+        ChalkPrintObject(stdout, List, 0);
         printf("\n");
     }
 
@@ -1576,6 +1576,7 @@ Return Value:
     UINTN Index;
     PMBGEN_SCRIPT Script;
     PLIST_ENTRY ScriptEntry;
+    PSTR ScriptPath;
     PSTR ScriptRoot;
     PMBGEN_TARGET Target;
     PMBGEN_TOOL Tool;
@@ -1621,9 +1622,14 @@ Return Value:
             break;
         }
 
+        ScriptPath = Script->Path;
+        if (Script->Path == NULL) {
+            ScriptPath = Context->ProjectFileName;
+        }
+
         printf("Script: %s%s (%d bytes, %d targets)\n",
                ScriptRoot,
-               Script->Path,
+               ScriptPath,
                Script->Size,
                Script->TargetCount);
 
@@ -1655,13 +1661,13 @@ Return Value:
 
             if (Target->Config != NULL) {
                 printf("\t\tConfig: ");
-                ChalkPrintObject(Target->Config, 24);
+                ChalkPrintObject(stdout, Target->Config, 24);
                 printf("\n");
             }
 
             if (Target->PublicConfig != NULL) {
                 printf("\t\tPublicConfig: ");
-                ChalkPrintObject(Target->PublicConfig, 24);
+                ChalkPrintObject(stdout, Target->PublicConfig, 24);
                 printf("\n");
             }
 

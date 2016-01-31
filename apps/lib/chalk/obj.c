@@ -96,6 +96,7 @@ ChalkCompareObjects (
 
 PSTR ChalkObjectTypeNames[ChalkObjectCount] = {
     "INVALID",
+    "null",
     "integer",
     "string",
     "dict",
@@ -104,8 +105,49 @@ PSTR ChalkObjectTypeNames[ChalkObjectCount] = {
 };
 
 //
+// The one and only null object. It starts with a single reference. If
+// reference counting is done correctly, this will mean it is never destroyed.
+//
+
+CHALK_OBJECT_HEADER ChalkNull = {
+    ChalkObjectNull,
+    1
+};
+
+//
 // ------------------------------------------------------------------ Functions
 //
+
+PCHALK_OBJECT
+ChalkCreateNull (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new null object with an initial reference. Really it
+    just returns the same object every time with an incremented reference, but
+    the caller should not assume this.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a pointer to the new null object on success.
+
+    NULL on allocation failure.
+
+--*/
+
+{
+
+    ChalkObjectAddReference((PCHALK_OBJECT)&ChalkNull);
+    return (PCHALK_OBJECT)&ChalkNull;
+}
 
 PCHALK_OBJECT
 ChalkCreateInteger (
@@ -1104,6 +1146,10 @@ Return Value:
 
     Object = Source;
     switch (Object->Header.Type) {
+    case ChalkObjectNull:
+        NewObject = ChalkCreateNull();
+        break;
+
     case ChalkObjectInteger:
         NewObject = ChalkCreateInteger(Object->Integer.Value);
         break;
@@ -1167,6 +1213,10 @@ Return Value:
     BOOL Result;
 
     switch (Object->Header.Type) {
+    case ChalkObjectNull:
+        Result = FALSE;
+        break;
+
     case ChalkObjectInteger:
         Result = (Object->Integer.Value != 0);
         break;
@@ -1335,11 +1385,11 @@ Return Value:
                 First = FALSE;
             }
 
-            ChalkPrintObject(Element, 0);
+            ChalkPrintObject(stdout, Element, 0);
         }
 
     } else {
-        ChalkPrintObject(Object, 0);
+        ChalkPrintObject(stdout, Object, 0);
     }
 
     return 0;
@@ -1412,8 +1462,77 @@ Return Value:
     return 0;
 }
 
+INT
+ChalkFunctionGet (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the built in get function, which returns the
+    value at a dictionary key or null if the dictionary key doesn't exist.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    PCHALK_DICT_ENTRY Entry;
+    PCHALK_OBJECT Key;
+    PCHALK_OBJECT Object;
+    PCHALK_OBJECT Value;
+
+    Object = ChalkCGetVariable(Interpreter, "object");
+    Key = ChalkCGetVariable(Interpreter, "key");
+    Value = NULL;
+
+    assert((Object != NULL) && (Key != NULL));
+
+    if ((Object->Header.Type != ChalkObjectDict) &&
+        (Object->Header.Type != ChalkObjectNull)) {
+
+        fprintf(stderr, "Error: get() passed non-dictionary object\n");
+        return EINVAL;
+    }
+
+    if (Object->Header.Type == ChalkObjectDict) {
+        Entry = ChalkDictLookup(Object, Key);
+        if (Entry != NULL) {
+            Value = Entry->Value;
+            ChalkObjectAddReference(Value);
+        }
+    }
+
+    if (Value == NULL) {
+        Value = ChalkCreateNull();
+    }
+
+    *ReturnValue = Value;
+    return 0;
+}
+
 VOID
 ChalkPrintObject (
+    FILE *File,
     PCHALK_OBJECT Object,
     ULONG RecursionDepth
     )
@@ -1425,6 +1544,8 @@ Routine Description:
     This routine prints an object.
 
 Arguments:
+
+    File - Supplies a pointer to the file to print to.
 
     Object - Supplies a pointer to the object to print.
 
@@ -1449,7 +1570,7 @@ Return Value:
     CHALK_OBJECT_TYPE Type;
 
     if (Object == NULL) {
-        printf("0");
+        fprintf(File, "0");
         return;
     }
 
@@ -1461,13 +1582,13 @@ Return Value:
 
     if (Object->Header.ReferenceCount == (ULONG)-1) {
         if (Type == ChalkObjectList) {
-            printf("[...]");
+            fprintf(File, "[...]");
 
         } else {
 
             assert(Type == ChalkObjectDict);
 
-            printf("{...}");
+            fprintf(File, "{...}");
         }
 
         return;
@@ -1480,67 +1601,71 @@ Return Value:
     ReferenceCount = Object->Header.ReferenceCount;
     Object->Header.ReferenceCount = (ULONG)-1;
     switch (Type) {
+    case ChalkObjectNull:
+        fprintf(File, "null");
+        break;
+
     case ChalkObjectInteger:
-        printf("%I64d", Object->Integer.Value);
+        fprintf(File, "%I64d", Object->Integer.Value);
         break;
 
     case ChalkObjectString:
         if (RecursionDepth == 0) {
-            printf("%s", Object->String.String);
+            fprintf(File, "%s", Object->String.String);
             break;
         }
 
         if (Object->String.Size == 0) {
-            printf("\"\"");
+            fprintf(File, "\"\"");
 
         } else {
             String = Object->String.String;
             Size = Object->String.Size;
-            printf("\"");
+            fprintf(File, "\"");
             while (Size != 0) {
                 switch (*String) {
                 case '\r':
-                    printf("\\r");
+                    fprintf(File, "\\r");
                     break;
 
                 case '\n':
-                    printf("\\n");
+                    fprintf(File, "\\n");
                     break;
 
                 case '\v':
-                    printf("\\v");
+                    fprintf(File, "\\v");
                     break;
 
                 case '\t':
-                    printf("\\t");
+                    fprintf(File, "\\t");
                     break;
 
                 case '\f':
-                    printf("\\f");
+                    fprintf(File, "\\f");
                     break;
 
                 case '\b':
-                    printf("\\b");
+                    fprintf(File, "\\b");
                     break;
 
                 case '\a':
-                    printf("\\a");
+                    fprintf(File, "\\a");
                     break;
 
                 case '\\':
-                    printf("\\\\");
+                    fprintf(File, "\\\\");
                     break;
 
                 case '"':
-                    printf("\\\"");
+                    fprintf(File, "\\\"");
                     break;
 
                 default:
                     if ((*String < ' ') || ((UCHAR)*String >= 0x80)) {
-                        printf("\\x%02X", (UCHAR)*String);
+                        fprintf(File, "\\x%02X", (UCHAR)*String);
 
                     } else {
-                        printf("%c", *String);
+                        fprintf(File, "%c", *String);
                     }
 
                     break;
@@ -1550,47 +1675,47 @@ Return Value:
                 Size -= 1;
             }
 
-            printf("\"");
+            fprintf(File, "\"");
         }
 
         break;
 
     case ChalkObjectList:
-        printf("[");
+        fprintf(File, "[");
         Array = Object->List.Array;
         Count = Object->List.Count;
         for (Index = 0; Index < Count; Index += 1) {
-            ChalkPrintObject(Array[Index], RecursionDepth + 1);
+            ChalkPrintObject(File, Array[Index], RecursionDepth + 1);
             if (Index < Count - 1) {
-                printf(", ");
+                fprintf(File, ", ");
                 if (Count >= 5) {
-                    printf("\n%*s", RecursionDepth + 1, "");
+                    fprintf(File, "\n%*s", RecursionDepth + 1, "");
                 }
             }
         }
 
-        printf("]");
+        fprintf(File, "]");
         break;
 
     case ChalkObjectDict:
-        printf("{");
+        fprintf(File, "{");
         CurrentEntry = Object->Dict.EntryList.Next;
         while (CurrentEntry != &(Object->Dict.EntryList)) {
             Entry = LIST_VALUE(CurrentEntry, CHALK_DICT_ENTRY, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            ChalkPrintObject(Entry->Key, RecursionDepth + 1);
-            printf(" : ");
-            ChalkPrintObject(Entry->Value, RecursionDepth + 1);
+            ChalkPrintObject(File, Entry->Key, RecursionDepth + 1);
+            fprintf(File, " : ");
+            ChalkPrintObject(File, Entry->Value, RecursionDepth + 1);
             if (CurrentEntry != &(Object->Dict.EntryList)) {
-                printf("\n%*s", RecursionDepth + 1, "");
+                fprintf(File, "\n%*s", RecursionDepth + 1, "");
             }
         }
 
-        printf("}");
+        fprintf(File, "}");
         break;
 
     case ChalkObjectFunction:
-        printf("Function at 0x%x", Object->Function.Body);
+        fprintf(File, "Function at 0x%x", Object->Function.Body);
         break;
 
     default:
@@ -1632,6 +1757,13 @@ Return Value:
 {
 
     switch (Object->Header.Type) {
+    case ChalkObjectNull:
+        fprintf(stderr, "Error: Reference counting problem on null object.\n");
+
+        assert(FALSE);
+
+        break;
+
     case ChalkObjectInteger:
         break;
 
@@ -1833,6 +1965,15 @@ Return Value:
 
     Result = 0;
     switch (Left->Header.Type) {
+
+    //
+    // Two nulls are always equal.
+    //
+
+    case ChalkObjectNull:
+        Result = 0;
+        break;
+
     case ChalkObjectInteger:
         if (Left->Integer.Value < Right->Integer.Value) {
             Result = -1;

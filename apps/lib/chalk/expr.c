@@ -71,6 +71,7 @@ Environment:
 INT
 ChalkDereference (
     PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
     PCHALK_OBJECT Object,
     PCHALK_OBJECT Index,
     PCHALK_OBJECT *Result
@@ -181,6 +182,7 @@ Return Value:
 
         Key = Node->Results[1];
         Status = ChalkDereference(Interpreter,
+                                  Node,
                                   Expression,
                                   Key,
                                   Result);
@@ -1385,6 +1387,58 @@ Return Value:
     return Status;
 }
 
+BOOL
+ChalkIsNodeAssignmentLValue (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given node is the left child of an
+    assignment expression. This is used to determine whether or not to create
+    new variables on dereference or complain that a variable or key is used
+    before creation.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the node.
+
+Return Value:
+
+    TRUE if this node is the left child of an assignment expression.
+
+    FALSE if not.
+
+--*/
+
+{
+
+    PCHALK_NODE Parent;
+    PPARSER_NODE ParseNode;
+
+    Parent = Node->Parent;
+    if (Parent == NULL) {
+        return FALSE;
+    }
+
+    ParseNode = Parent->ParseNode;
+    if (ParseNode->GrammarElement == ChalkNodeAssignmentExpression) {
+
+        assert(ParseNode->NodeCount > 1);
+
+        if (ParseNode->Nodes[0] == Node->ParseNode) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -1392,6 +1446,7 @@ Return Value:
 INT
 ChalkDereference (
     PCHALK_INTERPRETER Interpreter,
+    PCHALK_NODE Node,
     PCHALK_OBJECT Object,
     PCHALK_OBJECT Index,
     PCHALK_OBJECT *Result
@@ -1406,6 +1461,8 @@ Routine Description:
 Arguments:
 
     Interpreter - Supplies a pointer to the interpreter.
+
+    Node - Supplies a pointer to the language node being operated on.
 
     Object - Supplies a pointer to the object to peek inside of.
 
@@ -1455,14 +1512,26 @@ Return Value:
         }
 
         //
-        // If the value isn't there, create a zero and stick it in
-        // there.
+        // Handle the item not being there.
         //
 
         if ((ListIndex >= Object->List.Count) ||
             (Object->List.Array[ListIndex] == NULL)) {
 
-            Element = ChalkCreateInteger(0);
+            //
+            // If this is not part of an assignment, fail.
+            //
+
+            if (ChalkIsNodeAssignmentLValue(Interpreter, Node) == FALSE) {
+                fprintf(stderr,
+                        "Error: List index %d used before assignment.\n",
+                        ListIndex);
+
+                Status = EINVAL;
+                goto DereferenceEnd;
+            }
+
+            Element = ChalkCreateNull();
             if (Element == NULL) {
                 Status = ENOMEM;
                 goto DereferenceEnd;
@@ -1500,10 +1569,20 @@ Return Value:
         } else {
 
             //
-            // Add a zero there if there wasn't one before.
+            // Fail if this is not part of an assignment.
             //
 
-            Element = ChalkCreateInteger(0);
+            if (ChalkIsNodeAssignmentLValue(Interpreter, Node) == FALSE) {
+                fprintf(stderr,
+                        "Error: Key used before assignment: ");
+
+                ChalkPrintObject(stderr, Index, 0);
+                fprintf(stderr, "\n");
+                Status = EINVAL;
+                goto DereferenceEnd;
+            }
+
+            Element = ChalkCreateNull();
             if (Element == NULL) {
                 Status = ENOMEM;
                 goto DereferenceEnd;

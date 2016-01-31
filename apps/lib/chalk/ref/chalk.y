@@ -7,7 +7,7 @@
 
 %token BREAK CONTINUE DO FOR ELSE IF RETURN WHILE
 
-%token FUNCTION IN
+%token FUNCTION IN NULL_TOKEN
 
 %start translation_unit
 
@@ -43,6 +43,7 @@ primary_expression
     : IDENTIFIER
     | CONSTANT
     | STRING_LITERAL
+    | NULL_TOKEN
     | dictionary
     | list
     | '(' expression ')'

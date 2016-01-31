@@ -178,7 +178,7 @@ Return Value:
     }
 
     fprintf(stderr, "Assertion failure: ");
-    ChalkPrintObject(ChalkCGetVariable(Interpreter, "complaint"), 0);
+    ChalkPrintObject(stderr, ChalkCGetVariable(Interpreter, "complaint"), 0);
     return EINVAL;
 }
 

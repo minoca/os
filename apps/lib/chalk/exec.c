@@ -920,7 +920,7 @@ Return Value:
 
     if (ChalkDebugFinalGlobals != FALSE) {
         printf("Globals: ");
-        ChalkPrintObject(Interpreter->Global.Dict, 0);
+        ChalkPrintObject(stdout, Interpreter->Global.Dict, 0);
         printf("\n");
     }
 

@@ -224,7 +224,7 @@ Return Value:
 
     if ((Context->Options & MBGEN_OPTION_DEBUG) != 0) {
         printf("Global context after project root:\n");
-        ChalkPrintObject(Context->Interpreter.Global.Dict, 0);
+        ChalkPrintObject(stdout, Context->Interpreter.Global.Dict, 0);
         printf("\n");
     }
 

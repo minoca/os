@@ -44,6 +44,7 @@ typedef enum _CHALK_TOKEN_TYPE {
     ChalkTokenWhile,
     ChalkTokenFunction,
     ChalkTokenIn,
+    ChalkTokenNull,
     ChalkTokenIdentifier,
     ChalkTokenHexInteger,
     ChalkTokenOctalInteger,
@@ -104,7 +105,7 @@ typedef enum _CHALK_NODE_TYPE {
     ChalkNodePrimaryExpression,
     ChalkNodePostfixExpression,
     ChalkNodeArgumentExpressionList,
-    ChalkNodeUnaryExpression, // 8
+    ChalkNodeUnaryExpression, // 0x8
     ChalkNodeUnaryOperator,
     ChalkNodeMultiplicativeExpression,
     ChalkNodeAdditiveExpression,
@@ -136,6 +137,7 @@ typedef enum _CHALK_NODE_TYPE {
 
 typedef enum _CHALK_OBJECT_TYPE {
     ChalkObjectInvalid,
+    ChalkObjectNull,
     ChalkObjectInteger,
     ChalkObjectString,
     ChalkObjectDict,
@@ -444,6 +446,31 @@ extern PSTR ChalkObjectTypeNames[ChalkObjectCount];
 //
 // -------------------------------------------------------- Function Prototypes
 //
+
+PCHALK_OBJECT
+ChalkCreateNull (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new null object with an initial reference. Really it
+    just returns the same object every time with an incremented reference, but
+    the caller should not assume this.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a pointer to the new null object on success.
+
+    NULL on allocation failure.
+
+--*/
 
 PCHALK_OBJECT
 ChalkCreateInteger (
@@ -1095,8 +1122,41 @@ Return Value:
 
 --*/
 
+INT
+ChalkFunctionGet (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the built in get function, which returns the
+    value at a dictionary key or null if the dictionary key doesn't exist.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
 VOID
 ChalkPrintObject (
+    FILE *File,
     PCHALK_OBJECT Object,
     ULONG RecursionDepth
     );
@@ -1108,6 +1168,8 @@ Routine Description:
     This routine prints an object.
 
 Arguments:
+
+    File - Supplies a pointer to the file to print to.
 
     Object - Supplies a pointer to the object to print.
 

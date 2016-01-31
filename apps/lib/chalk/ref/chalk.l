@@ -22,6 +22,7 @@ void count();
 "while"         { count(); return(WHILE); }
 "function"      { count(); return(FUNCTION); }
 "in"            { count(); return(IN); }
+"null"          { count(); return(NULL_TOKEN); }
 
 {L}({L}|{D})*       { count(); return(IDENTIFIER); }
 

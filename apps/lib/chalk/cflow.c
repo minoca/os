@@ -187,7 +187,7 @@ Return Value:
         }
 
         if (*Result == NULL) {
-            *Result = ChalkCreateInteger(0);
+            *Result = ChalkCreateNull();
             if (*Result == NULL) {
                 Status = ENOMEM;
                 goto InvokeFunctionEnd;
