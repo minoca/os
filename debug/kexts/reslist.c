@@ -315,13 +315,13 @@ Return Value:
     DbgOut("Device %I64x:\n", DeviceAddress);
     Status = DbgReadTypeByName(Context,
                                Address,
-                               "DEVICE",
+                               "_DEVICE",
                                &DeviceType,
                                &Data,
                                &DataSize);
 
     if (Status != 0) {
-        DbgOut("Error: Could not read DEVICE at 0x%I64x\n", Address);
+        DbgOut("Error: Could not read _DEVICE at 0x%I64x\n", Address);
         goto PrintDeviceResourcesEnd;
     }
 
@@ -553,7 +553,7 @@ Return Value:
     DbgOut("Resource Configuration List @ %08I64x\n", Address);
     Status = DbgReadTypeByName(Context,
                                Address,
-                               "RESOURCE_CONFIGURATION_LIST",
+                               "_RESOURCE_CONFIGURATION_LIST",
                                &ConfigurationListType,
                                &Data,
                                &DataSize);
@@ -581,7 +581,7 @@ Return Value:
     }
 
     Status = DbgGetTypeByName(Context,
-                              "RESOURCE_REQUIREMENT_LIST",
+                              "_RESOURCE_REQUIREMENT_LIST",
                               &RequirementListType);
 
     if (Status != 0) {
@@ -744,7 +744,7 @@ Return Value:
     DbgOut("Resource Requirement List @ %08I64x\n", Address);
     Status = DbgReadTypeByName(Context,
                                Address,
-                               "RESOURCE_REQUIREMENT_LIST",
+                               "_RESOURCE_REQUIREMENT_LIST",
                                &RequirementListType,
                                &Data,
                                &DataSize);
@@ -772,7 +772,7 @@ Return Value:
     }
 
     Status = DbgGetTypeByName(Context,
-                              "RESOURCE_REQUIREMENT",
+                              "_RESOURCE_REQUIREMENT",
                               &RequirementType);
 
     if (Status != 0) {
@@ -938,7 +938,7 @@ Return Value:
     DbgOut("%*s", IndentationLevel, "");
     Status = DbgReadTypeByName(Context,
                                Address,
-                               "RESOURCE_REQUIREMENT",
+                               "_RESOURCE_REQUIREMENT",
                                &RequirementType,
                                &Data,
                                &DataSize);
@@ -1091,7 +1091,7 @@ Return Value:
     if (RequirementDataSize != 0) {
         Status = DbgReadIntegerMember(Context,
                                       RequirementType,
-                                      "Requirement.Data",
+                                      "Data",
                                       Address,
                                       Data,
                                       DataSize,
@@ -1101,7 +1101,7 @@ Return Value:
             goto PrintResourceRequirementEnd;
         }
 
-        DbgOut(", Data %I64x Size 0x%I64x", Value, RequirementDataSize);
+        DbgOut(", Data 0x%I64x Size 0x%I64x", Value, RequirementDataSize);
     }
 
     DbgOut("\n");
@@ -1293,7 +1293,7 @@ Return Value:
     DbgOut("Resource Allocation List @ %08I64x\n", Address);
     Status = DbgReadTypeByName(Context,
                                Address,
-                               "RESOURCE_ALLOCATION_LIST",
+                               "_RESOURCE_ALLOCATION_LIST",
                                &AllocationListType,
                                &Data,
                                &DataSize);
@@ -1318,7 +1318,7 @@ Return Value:
         goto PrintResourceAllocationListEnd;
     }
 
-    Status = DbgGetTypeByName(Context, "RESOURCE_ALLOCATION", &AllocationType);
+    Status = DbgGetTypeByName(Context, "_RESOURCE_ALLOCATION", &AllocationType);
     if (Status != 0) {
         goto PrintResourceAllocationListEnd;
     }
@@ -1476,7 +1476,7 @@ Return Value:
     DbgOut("%*s", IndentationLevel, "");
     Status = DbgReadTypeByName(Context,
                                Address,
-                               "RESOURCE_ALLOCATION",
+                               "_RESOURCE_ALLOCATION",
                                &AllocationType,
                                &Data,
                                &DataSize);
@@ -1712,7 +1712,7 @@ Return Value:
     OriginalDeviceAddress = Address;
     Status = DbgReadTypeByName(Context,
                                Address,
-                               "DEVICE",
+                               "_DEVICE",
                                &DeviceType,
                                &Data,
                                &DataSize);
@@ -1737,7 +1737,7 @@ Return Value:
         goto PrintDeviceArbitersEnd;
     }
 
-    Status = DbgGetTypeByName(Context, "RESOURCE_ARBITER", &ArbiterType);
+    Status = DbgGetTypeByName(Context, "_RESOURCE_ARBITER", &ArbiterType);
     if (Status != 0) {
         goto PrintDeviceArbitersEnd;
     }
@@ -2058,13 +2058,13 @@ Return Value:
     DbgOut("%*s", IndentationLevel, "");
     Status = DbgReadTypeByName(Context,
                                Address,
-                               "RESOURCE_ARBITER",
+                               "_RESOURCE_ARBITER",
                                &ArbiterType,
                                &Data,
                                &DataSize);
 
     if (Status != 0) {
-        DbgOut("Failed to read RESOURCE_ARBITER at %I64x.\n", Address);
+        DbgOut("Failed to read _RESOURCE_ARBITER at %I64x.\n", Address);
         goto PrintResourceArbiterEnd;
     }
 
@@ -2263,7 +2263,7 @@ Return Value:
     DbgOut("%*s", IndentationLevel, "");
     Status = DbgReadTypeByName(Context,
                                Address,
-                               "ARBITER_ENTRY",
+                               "_ARBITER_ENTRY",
                                &EntryType,
                                &Data,
                                &DataSize);
