@@ -130,6 +130,13 @@ AcpipParseSpbUartDescriptor (
     PRESOURCE_SPB_UART Descriptor
     );
 
+KSTATUS
+AcpipParseLargeVendorDescriptor (
+    PVOID Buffer,
+    ULONG BufferLength,
+    PRESOURCE_REQUIREMENT_LIST RequirementList
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -590,9 +597,13 @@ Return Value:
                 break;
 
             case LARGE_RESOURCE_TYPE_VENDOR_DEFINED:
-                RtlDebugPrint("Vendor Defined, Length %x\n", DescriptorLength);
+                Status = AcpipParseLargeVendorDescriptor(Buffer,
+                                                         DescriptorLength,
+                                                         CurrentConfiguration);
 
-                ASSERT(FALSE);
+                if (!KSUCCESS(Status)) {
+                    goto ConvertFromAcpiResourceBufferEnd;
+                }
 
                 break;
 
@@ -2838,5 +2849,54 @@ Return Value:
                             ACPI_SPB_UART_DATA_BITS_SHIFT) + 5;
 
     return STATUS_SUCCESS;
+}
+
+KSTATUS
+AcpipParseLargeVendorDescriptor (
+    PVOID Buffer,
+    ULONG BufferLength,
+    PRESOURCE_REQUIREMENT_LIST RequirementList
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts an ACPI large vendor-defined descriptor into a
+    resource requirement, and puts that requirement on the given requirement
+    list.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the IRQ descriptor buffer, pointing after the
+        length bytes.
+
+    BufferLength - Supplies the length of the descriptor buffer.
+
+    RequirementList - Supplies a pointer to the resource requirement list to
+        put the descriptor on.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PRESOURCE_REQUIREMENT CreatedRequirement;
+    RESOURCE_REQUIREMENT Requirement;
+    KSTATUS Status;
+
+    CreatedRequirement = NULL;
+    RtlZeroMemory(&Requirement, sizeof(RESOURCE_REQUIREMENT));
+    Requirement.Type = ResourceTypeVendorSpecific;
+    Requirement.Data = Buffer;
+    Requirement.DataSize = BufferLength;
+    Status = IoCreateAndAddResourceRequirement(&Requirement,
+                                               RequirementList,
+                                               &CreatedRequirement);
+
+    return Status;
 }
 

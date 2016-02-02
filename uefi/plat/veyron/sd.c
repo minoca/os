@@ -72,6 +72,14 @@ Environment:
 #define EFI_SD_RK32_TIMEOUT 1000000
 
 //
+// Define the speed of the SD fundamental clock. This is based on the clock
+// select 11 bits (which are set to general PLL divided by 6), and the
+// configuration of the general PLL.
+//
+
+#define EFI_SD_RK32_CLOCK_SPEED 99000000
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -165,6 +173,12 @@ typedef struct _EFI_SD_RK32_DEVICE_PATH {
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+EFI_STATUS
+EfipVeyronEnumerateSdController (
+    UINT32 ControllerBase,
+    BOOLEAN RemovableMedia
+    );
 
 EFIAPI
 EFI_STATUS
@@ -291,15 +305,65 @@ Return Value:
 
 {
 
+    EFI_STATUS Status;
+
+    Status = EfipVeyronEnumerateSdController(RK32_SD_BASE, TRUE);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    //
+    // Only enumerate eMMC if the firmware was not loaded from SD. Enumerating
+    // eMMC will cause NV variables to be loaded from there, which will specify
+    // a BootOrder of eMMC first. The user likely didn't go to all the trouble
+    // of booting via SD only to have this firmware launch the eMMC boot option.
+    //
+
+    if (EfiBootedViaSd == FALSE) {
+        Status = EfipVeyronEnumerateSdController(RK32_EMMC_BASE, FALSE);
+    }
+
+    return Status;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+EFI_STATUS
+EfipVeyronEnumerateSdController (
+    UINT32 ControllerBase,
+    BOOLEAN RemovableMedia
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enumerates the an SD or eMMC controller on the Veyron.
+
+Arguments:
+
+    ControllerBase - Supplies the physical address of the controller to
+        enumerate.
+
+    RemovableMedia - Supplies a boolean whether or not the controller is
+        connected to removable media.
+
+Return Value:
+
+    EFI status code.
+
+--*/
+
+{
+
     UINT64 BlockCount;
     UINT32 BlockSize;
-    UINT32 ControllerBase;
     PEFI_SD_RK32_DEVICE_PATH DevicePath;
     PEFI_SD_RK32_CONTEXT Disk;
     EFI_SD_DWC_INITIALIZATION_BLOCK SdDwcParameters;
     EFI_STATUS Status;
-
-    ControllerBase = RK32_SD_BASE;
 
     //
     // Allocate and initialize the context structure.
@@ -317,7 +381,7 @@ Return Value:
     Disk->Handle = NULL;
     Disk->ControllerBase = (VOID *)(UINTN)ControllerBase;
     Disk->BlockIo.Media = &(Disk->Media);
-    Disk->Media.RemovableMedia = TRUE;
+    Disk->Media.RemovableMedia = RemovableMedia;
 
     //
     // Create the device path.
@@ -328,7 +392,7 @@ Return Value:
                              (VOID **)&DevicePath);
 
     if (EFI_ERROR(Status)) {
-        goto VeyronEnumerateSdEnd;
+        goto VeyronEnumerateSdControllerEnd;
     }
 
     EfiCopyMem(DevicePath,
@@ -336,10 +400,11 @@ Return Value:
                sizeof(EFI_SD_RK32_DEVICE_PATH));
 
     DevicePath->Disk.ControllerBase = ControllerBase;
+    DevicePath->Disk.DevicePath.Guid.Data4[0] += RemovableMedia;
     Disk->DevicePath = (EFI_DEVICE_PATH_PROTOCOL *)DevicePath;
     Status = EfipSdRk32GetFundamentalClock(Disk, &(Disk->FundamentalClock));
     if (EFI_ERROR(Status)) {
-        goto VeyronEnumerateSdEnd;
+        goto VeyronEnumerateSdControllerEnd;
     }
 
     //
@@ -360,7 +425,7 @@ Return Value:
     Disk->Controller = EfiSdDwcCreateController(&SdDwcParameters);
     if (Disk->Controller == NULL) {
         Status = EFI_OUT_OF_RESOURCES;
-        goto VeyronEnumerateSdEnd;
+        goto VeyronEnumerateSdControllerEnd;
     }
 
     //
@@ -369,7 +434,7 @@ Return Value:
 
     Status = EfipSdRk32HardResetController(Disk);
     if (EFI_ERROR(Status)) {
-        goto VeyronEnumerateSdEnd;
+        goto VeyronEnumerateSdControllerEnd;
     }
 
     //
@@ -399,7 +464,7 @@ Return Value:
                                                   &(Disk->BlockIo),
                                                   NULL);
 
-VeyronEnumerateSdEnd:
+VeyronEnumerateSdControllerEnd:
     if (EFI_ERROR(Status)) {
         if (Disk != NULL) {
             if (Disk->DevicePath != NULL) {
@@ -416,10 +481,6 @@ VeyronEnumerateSdEnd:
 
     return Status;
 }
-
-//
-// --------------------------------------------------------- Internal Functions
-//
 
 EFIAPI
 EFI_STATUS
@@ -674,63 +735,7 @@ Return Value:
 
 {
 
-    UINT32 ClockSource;
-    VOID *CruBase;
-    UINT32 Divisor;
-    UINT32 Frequency;
-    EFI_STATUS Status;
-    UINT32 Value;
-
-    CruBase = (VOID *)RK32_CRU_BASE;
-
-    //
-    // Read the current MMC0 clock source.
-    //
-
-    Value = EfiReadRegister32(CruBase + Rk32CruClockSelect11);
-    ClockSource = (Value & RK32_CRU_CLOCK_SELECT11_MMC0_CLOCK_MASK) >>
-                  RK32_CRU_CLOCK_SELECT11_MMC0_CLOCK_SHIFT;
-
-    Divisor = (Value & RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_MASK) >>
-              RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_SHIFT;
-
-    Divisor += 1;
-
-    //
-    // Get the fundamental clock frequency base on the source.
-    //
-
-    switch (ClockSource) {
-    case RK32_CRU_CLOCK_SELECT11_MMC0_CODEC_PLL:
-        Status = EfipRk32GetPllClockFrequency(Rk32PllCodec, &Frequency);
-        if (EFI_ERROR(Status)) {
-            return Status;
-        }
-
-        break;
-
-    case RK32_CRU_CLOCK_SELECT11_MMC0_GENERAL_PLL:
-        Status = EfipRk32GetPllClockFrequency(Rk32PllGeneral, &Frequency);
-        if (EFI_ERROR(Status)) {
-            return Status;
-        }
-
-        break;
-
-    case RK32_CRU_CLOCK_SELECT11_MMC0_24MHZ:
-        Frequency = RK32_SDMMC_FREQUENCY_24MHZ;
-        break;
-
-    default:
-        return EFI_DEVICE_ERROR;
-    }
-
-    //
-    // To get the MMC0 clock speed, the clock source frequency must be divided
-    // by the divisor.
-    //
-
-    *FundamentalClock = Frequency / Divisor;
+    *FundamentalClock = EFI_SD_RK32_CLOCK_SPEED;
     return EFI_SUCCESS;
 }
 
@@ -757,8 +762,6 @@ Return Value:
 
 {
 
-    VOID *CruBase;
-    VOID *GrfBase;
     UINT32 ResetMask;
     EFI_STATUS Status;
     UINT64 Time;
@@ -775,26 +778,6 @@ Return Value:
     SD_RK32_WRITE_REGISTER(Device, SdDwcPower, SD_DWC_POWER_ENABLE);
     SD_RK32_WRITE_REGISTER(Device, SdDwcResetN, 0);
     EfiStall(1000);
-
-    //
-    // Reset the SD/MMC.
-    //
-
-    CruBase = (VOID *)RK32_CRU_BASE;
-    Value = RK32_CRU_SOFT_RESET8_MMC0 << RK32_CRU_SOFT_RESET8_PROTECT_SHIFT;
-    Value |= RK32_CRU_SOFT_RESET8_MMC0;
-    EfiWriteRegister32(CruBase + Rk32CruSoftReset8, Value);
-    EfiStall(100);
-    Value &= ~RK32_CRU_SOFT_RESET8_MMC0;
-    EfiWriteRegister32(CruBase + Rk32CruSoftReset8, Value);
-
-    //
-    // Reset the IOMUX to the correct value for SD/MMC.
-    //
-
-    GrfBase = (VOID *)RK32_GRF_BASE;
-    Value = RK32_GRF_GPIO6C_IOMUX_VALUE;
-    EfiWriteRegister32(GrfBase + Rk32GrfGpio6cIomux, Value);
 
     //
     // Perform a complete controller reset and wait for it to complete.

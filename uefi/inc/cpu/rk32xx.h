@@ -41,6 +41,7 @@ Author:
 //
 
 #define RK32_SD_BASE 0xFF0C0000
+#define RK32_EMMC_BASE 0xFF0F0000
 #define RK32_I2C_PMU_BASE 0xFF650000
 #define RK32_TIMER0_5_BASE 0xFF6B0000
 #define RK32_UART_DEBUG_BASE 0xFF690000
@@ -172,6 +173,19 @@ Author:
 #define RK32_CRU_CLOCK_SELECT11_MMC0_CLOCK_SHIFT        6
 #define RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_MASK       (0x3F << 0)
 #define RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_SHIFT      0
+
+//
+// Define CRU clock select 12 register bits.
+//
+
+#define RK32_CRU_CLOCK_SELECT12_EMMC_CODEC_PLL          0
+#define RK32_CRU_CLOCK_SELECT12_EMMC_GENERAL_PLL        1
+#define RK32_CRU_CLOCK_SELECT12_EMMC_24MHZ              2
+#define RK32_CRU_CLOCK_SELECT12_EMMC_CLOCK_SHIFT        14
+#define RK32_CRU_CLOCK_SELECT12_EMMC_DIVIDER_SHIFT      8
+#define RK32_CRU_CLOCK_SELECT12_EMMC_CLOCK_MASK         (0x3 << 14)
+#define RK32_CRU_CLOCK_SELECT12_EMMC_DIVIDER_MASK       (0x3F << 8)
+#define RK32_CRU_CLOCK_SELECT12_PROTECT_SHIFT           16
 
 //
 // Define the CRU clock select 33 register bits.
@@ -443,6 +457,7 @@ typedef enum _RK32_CRU_REGISTER {
     Rk32CruClockSelect0 = 0x60,
     Rk32CruClockSelect1 = 0x64,
     Rk32CruClockSelect11 = 0x8C,
+    Rk32CruClockSelect12 = 0x90,
     Rk32CruClockSelect33 = 0xE4,
     Rk32CruGlobalReset1 = 0x1B0,
     Rk32CruGlobalReset2 = 0x1B4,

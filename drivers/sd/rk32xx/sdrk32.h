@@ -23,11 +23,17 @@ Author:
 #include <minoca/sd.h>
 #include <minoca/sddwc.h>
 #include <minoca/intrface/disk.h>
-#include <minoca/dev/rk32xx.h>
 
 //
 // ---------------------------------------------------------------- Definitions
 //
+
+//
+// Define the UUID of the SD RK32xx vendor resource.
+//
+
+#define SD_RK32_VENDOR_RESOURCE_UUID \
+    {{0x9439320C, 0xC6FA11E5, 0x9912BA0B, 0x0483C18E}}
 
 //
 // Define the minimum expected length of the HSMMC block.
@@ -151,6 +157,8 @@ Members:
     ControllerBase - Stores a pointer to the virtual address of the HSMMC
         registers.
 
+    PhysicalAddress - Stores the physical address of the controller.
+
     FundamentalClock - Stores the frequency of the SD/MMC fundamental clock, in
         Hertz.
 
@@ -173,6 +181,7 @@ struct _SD_RK32_CONTEXT {
     SD_RK32_DEVICE_TYPE Type;
     PSD_CONTROLLER Controller;
     PVOID ControllerBase;
+    PHYSICAL_ADDRESS PhysicalAddress;
     ULONG FundamentalClock;
     ULONGLONG InterruptLine;
     ULONGLONG InterruptVector;
@@ -181,6 +190,30 @@ struct _SD_RK32_CONTEXT {
     PSD_RK32_CHILD Child;
     PQUEUED_LOCK Lock;
 };
+
+/*++
+
+Structure Description:
+
+    This structure describes the SD RK32xx vendor specific resource data passed
+    in through the firmware.
+
+Members:
+
+    SubType - Stores the subtype, currently zero.
+
+    Uuid - Stores the UUID constant identifying this resource type. This will
+        be SD_RK32_VENDOR_RESOURCE_UUID.
+
+    FundamentalClock - Stores the fundamental clock frequency of the controller.
+
+--*/
+
+typedef struct _SD_RK32_VENDOR_RESOURCE {
+    UCHAR SubType;
+    UUID Uuid;
+    ULONG FundamentalClock;
+} PACKED SD_RK32_VENDOR_RESOURCE, *PSD_RK32_VENDOR_RESOURCE;
 
 //
 // -------------------------------------------------------------------- Globals

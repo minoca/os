@@ -80,6 +80,12 @@ extern VOID *EfiRk32Gpio0Base;
 extern VOID *EfiRk32I2cPmuBase;
 
 //
+// Define a boolean indicating whether the firmware was loaded via SD or eMMC.
+//
+
+extern BOOLEAN EfiBootedViaSd;
+
+//
 // -------------------------------------------------------- Function Prototypes
 //
 

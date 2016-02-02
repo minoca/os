@@ -131,6 +131,19 @@ Author:
 #define RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_SHIFT      0
 
 //
+// Define CRU clock select 12 register bits.
+//
+
+#define RK32_CRU_CLOCK_SELECT12_EMMC_CODEC_PLL          0
+#define RK32_CRU_CLOCK_SELECT12_EMMC_GENERAL_PLL        1
+#define RK32_CRU_CLOCK_SELECT12_EMMC_24MHZ              2
+#define RK32_CRU_CLOCK_SELECT12_EMMC_CLOCK_SHIFT        14
+#define RK32_CRU_CLOCK_SELECT12_EMMC_DIVIDER_SHIFT      8
+#define RK32_CRU_CLOCK_SELECT12_EMMC_CLOCK_MASK         (0x3 << 14)
+#define RK32_CRU_CLOCK_SELECT12_EMMC_DIVIDER_MASK       (0x3F << 8)
+#define RK32_CRU_CLOCK_SELECT12_PROTECT_SHIFT           16
+
+//
 // Define CRU soft reset 8 register bits.
 //
 
@@ -178,6 +191,7 @@ typedef enum _RK32_CRU_REGISTER {
     Rk32CruClockSelect0 = 0x60,
     Rk32CruClockSelect1 = 0x64,
     Rk32CruClockSelect11 = 0x8C,
+    Rk32CruClockSelect12 = 0x90,
     Rk32CruClockSelect33 = 0xE4,
     Rk32CruGlobalReset1 = 0x1B0,
     Rk32CruGlobalReset2 = 0x1B4,
@@ -241,8 +255,6 @@ Members:
     TimerEnabledMask - Stores a bitfield of which timers are available for use
         by the kernel.
 
-    CruBase - Stores the physical address of the clock and reset unit.
-
 --*/
 
 typedef struct _RK32XX_TABLE {
@@ -251,7 +263,6 @@ typedef struct _RK32XX_TABLE {
     ULONG TimerGsi[RK32_TIMER_COUNT];
     ULONG TimerCountDownMask;
     ULONG TimerEnabledMask;
-    ULONGLONG CruBase;
 } PACKED RK32XX_TABLE, *PRK32XX_TABLE;
 
 //

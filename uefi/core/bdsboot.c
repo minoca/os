@@ -47,14 +47,12 @@ Environment:
 VOID
 EfipBdsBuildOptionFromHandle (
     EFI_HANDLE Handle,
-    PLIST_ENTRY OptionList,
     CHAR16 *String
     );
 
 VOID
 EfipBdsBuildOptionFromShell (
-    EFI_HANDLE Handle,
-    PLIST_ENTRY OptionList
+    EFI_HANDLE Handle
     );
 
 UINT32
@@ -450,10 +448,7 @@ Return Value:
                                                sizeof(Buffer));
                 }
 
-                EfipBdsBuildOptionFromHandle(BlockIoHandles[Index],
-                                             OptionList,
-                                             Buffer);
-
+                EfipBdsBuildOptionFromHandle(BlockIoHandles[Index], Buffer);
                 FloppyNumber += 1;
                 break;
 
@@ -488,10 +483,7 @@ Return Value:
                     HarddriveNumber += 1;
                 }
 
-                EfipBdsBuildOptionFromHandle(BlockIoHandles[Index],
-                                             OptionList,
-                                             Buffer);
-
+                EfipBdsBuildOptionFromHandle(BlockIoHandles[Index], Buffer);
                 break;
 
             case BDS_EFI_MESSAGE_USB_DEVICE_BOOT:
@@ -505,10 +497,7 @@ Return Value:
                                                sizeof(Buffer));
                 }
 
-                EfipBdsBuildOptionFromHandle(BlockIoHandles[Index],
-                                             OptionList,
-                                             Buffer);
-
+                EfipBdsBuildOptionFromHandle(BlockIoHandles[Index], Buffer);
                 UsbNumber += 1;
                 break;
 
@@ -523,10 +512,7 @@ Return Value:
                                                sizeof(Buffer));
                 }
 
-                EfipBdsBuildOptionFromHandle(BlockIoHandles[Index],
-                                             OptionList,
-                                             Buffer);
-
+                EfipBdsBuildOptionFromHandle(BlockIoHandles[Index], Buffer);
                 ScsiNumber += 1;
                 break;
 
@@ -541,10 +527,7 @@ Return Value:
                                                sizeof(Buffer));
                 }
 
-                EfipBdsBuildOptionFromHandle(BlockIoHandles[Index],
-                                             OptionList,
-                                             Buffer);
-
+                EfipBdsBuildOptionFromHandle(BlockIoHandles[Index], Buffer);
                 MiscNumber += 1;
                 break;
 
@@ -626,10 +609,7 @@ Return Value:
                                            sizeof(Buffer));
             }
 
-            EfipBdsBuildOptionFromHandle(FileSystemHandles[Index],
-                                         OptionList,
-                                         Buffer);
-
+            EfipBdsBuildOptionFromHandle(FileSystemHandles[Index], Buffer);
             NonBlockNumber += 1;
         }
     }
@@ -660,9 +640,7 @@ Return Value:
                                        sizeof(Buffer));
         }
 
-        EfipBdsBuildOptionFromHandle(LoadFileHandles[Index],
-                                     OptionList,
-                                     Buffer);
+        EfipBdsBuildOptionFromHandle(LoadFileHandles[Index], Buffer);
     }
 
     if (LoadFileHandleCount != 0) {
@@ -701,7 +679,7 @@ Return Value:
             continue;
         }
 
-        EfipBdsBuildOptionFromShell(FirmwareVolumeHandles[Index], OptionList);
+        EfipBdsBuildOptionFromShell(FirmwareVolumeHandles[Index]);
     }
 
     if (FirmwareVolumeHandleCount != 0) {
@@ -720,7 +698,6 @@ Return Value:
 VOID
 EfipBdsBuildOptionFromHandle (
     EFI_HANDLE Handle,
-    PLIST_ENTRY OptionList,
     CHAR16 *String
     )
 
@@ -751,14 +728,13 @@ Return Value:
     EFI_DEVICE_PATH_PROTOCOL *DevicePath;
 
     DevicePath = EfiCoreGetDevicePathFromHandle(Handle);
-    EfipBdsRegisterNewOption(OptionList, DevicePath, String, L"BootOrder");
+    EfipBdsRegisterNewOption(DevicePath, String, L"BootOrder");
     return;
 }
 
 VOID
 EfipBdsBuildOptionFromShell (
-    EFI_HANDLE Handle,
-    PLIST_ENTRY OptionList
+    EFI_HANDLE Handle
     )
 
 /*++
@@ -794,11 +770,7 @@ Return Value:
                                        DevicePath,
                                        (EFI_DEVICE_PATH_PROTOCOL *)&ShellNode);
 
-    EfipBdsRegisterNewOption(OptionList,
-                             DevicePath,
-                             L"EFI Shell",
-                             L"BootOrder");
-
+    EfipBdsRegisterNewOption(DevicePath, L"EFI Shell", L"BootOrder");
     return;
 }
 UINT32

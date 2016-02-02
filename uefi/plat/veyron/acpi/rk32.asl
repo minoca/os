@@ -71,10 +71,4 @@ Environment:
 //
 
                                    UINT32 : 000000FF
-                                   
-//
-// The CRU physical address.
-//
-
-                                   UINT64 : 00000000FF760000
 

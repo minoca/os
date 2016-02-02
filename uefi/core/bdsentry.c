@@ -263,12 +263,14 @@ Return Value:
     CHAR16 *ExitData;
     UINTN ExitDataSize;
     EFI_STATUS Status;
+    BOOLEAN TriedEverything;
 
     BootNextEntry = NULL;
     BootNextExists = FALSE;
     CurrentEntry = NULL;
     ConnectInputEvent = NULL;
     INITIALIZE_LIST_HEAD(&BootList);
+    TriedEverything = FALSE;
     EfiCoreSetMemory(Buffer, sizeof(Buffer), 0);
 
     //
@@ -332,6 +334,7 @@ Return Value:
 
     if (LIST_EMPTY(&BootList)) {
         EfipBdsEnumerateAllBootOptions(&BootList);
+        TriedEverything = TRUE;
     }
 
     CurrentEntry = BootList.Next;
@@ -353,6 +356,13 @@ Return Value:
         //
 
         if (CurrentEntry == &BootList) {
+            if (TriedEverything == FALSE) {
+                EfipBdsEnumerateAllBootOptions(&BootList);
+                TriedEverything = TRUE;
+                CurrentEntry = BootList.Next;
+                continue;
+            }
+
             if (ConnectInputEvent != NULL) {
                 EfiSignalEvent(ConnectInputEvent);
             }

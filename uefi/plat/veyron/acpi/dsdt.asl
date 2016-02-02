@@ -40,10 +40,10 @@ DefinitionBlock (
             Name(_HID, EISAID("DWC0000"))
             Name(_UID, 0)
 
-            /*
-             * Define the operation region to access the DWC configuration
-             * space.
-             */
+            //
+            // Define the operation region to access the DWC configuration
+            // space.
+            //
 
             OperationRegion(DWCR, SystemMemory, 0xFF580000, 0x104)
             Field(DWCR, DWordAcc, NoLock, Preserve) {
@@ -65,16 +65,16 @@ DefinitionBlock (
                 PDFS, 16,
             }
 
-            /*
-             * Set the AHB configuration register to have a burst length of 16,
-             * the receive FIFO to 516 bytes, the non-periodic transmit FIFO to
-             * 128 bytes, and the periodic transmit FIFO to 256 bytes. The
-             * Veyron's DWC USB controller allows dynamic FIFO sizes and the
-             * maximum FIFO depth is greater than the total FIFO sizes
-             * programmed here. Despite the Hardware 2 Configuration register's
-             * claims that this device supports SRP and HNP, it does not. Also
-             * clear those bits in the USB configuration register.
-             */
+            //
+            // Set the AHB configuration register to have a burst length of 16,
+            // the receive FIFO to 516 bytes, the non-periodic transmit FIFO to
+            // 128 bytes, and the periodic transmit FIFO to 256 bytes. The
+            // Veyron's DWC USB controller allows dynamic FIFO sizes and the
+            // maximum FIFO depth is greater than the total FIFO sizes
+            // programmed here. Despite the Hardware 2 Configuration register's
+            // claims that this device supports SRP and HNP, it does not. Also
+            // clear those bits in the USB configuration register.
+            //
 
             Method(_INI, 0) {
                 Store(0x204, RXFS)
@@ -109,10 +109,10 @@ DefinitionBlock (
             Name(_HID, EISAID("DWC0000"))
             Name(_UID, 0)
 
-            /*
-             * Define the operation region to access the DWC configuration
-             * space.
-             */
+            //
+            // Define the operation region to access the DWC configuration
+            // space.
+            //
 
             OperationRegion(DWCR, SystemMemory, 0xFF540000, 0x104)
             Field(DWCR, DWordAcc, NoLock, Preserve) {
@@ -134,15 +134,15 @@ DefinitionBlock (
                 PDFS, 16,
             }
 
-            /*
-             * Set the AHB configuration register to have a burst length of 16,
-             * the receive FIFO to 516 bytes, the non-periodic transmit FIFO to
-             * 128 bytes, and the periodic transmit FIFO to 256 bytes. The
-             * Veyron's DWC USB controller allows dynamic FIFO sizes and the
-             * maximum FIFO depth is greater than the total FIFO sizes
-             * programmed here. This controller accurately describes its mode.
-             * The USB configuration register does not need modifications.
-             */
+            //
+            // Set the AHB configuration register to have a burst length of 16,
+            // the receive FIFO to 516 bytes, the non-periodic transmit FIFO to
+            // 128 bytes, and the periodic transmit FIFO to 256 bytes. The
+            // Veyron's DWC USB controller allows dynamic FIFO sizes and the
+            // maximum FIFO depth is greater than the total FIFO sizes
+            // programmed here. This controller accurately describes its mode.
+            // The USB configuration register does not need modifications.
+            //
 
             Method(_INI, 0) {
                 Store(0x204, RXFS)
@@ -188,6 +188,12 @@ DefinitionBlock (
                             0x00001000)
 
                 Interrupt(, Level, ActiveHigh,) {64}
+                VendorLong() {
+                    0x00, // SubType
+                    0x0C, 0x32, 0x39, 0x94, 0xE5, 0x11, 0xFA, 0xC6, // UUID
+                    0x0B, 0xBA, 0x12, 0x99, 0x8E, 0xC1, 0x83, 0x04, // UUID
+                    0xC0, 0x9E, 0xE6, 0x05, // FundamentalClock (99MHz)
+                }
             })
         }
 
@@ -208,6 +214,12 @@ DefinitionBlock (
                             0x00001000)
 
                 Interrupt(, Level, ActiveHigh,) {67}
+                VendorLong() {
+                    0x00, // SubType
+                    0x0C, 0x32, 0x39, 0x94, 0xE5, 0x11, 0xFA, 0xC6, // UUID
+                    0x0B, 0xBA, 0x12, 0x99, 0x8E, 0xC1, 0x83, 0x04, // UUID
+                    0xC0, 0x9E, 0xE6, 0x05, // FundamentalClock (99MHz)
+                }
             })
         }
 

@@ -237,27 +237,25 @@ Return Value:
     // Set the boot order variable if requested.
     //
 
-    if (BootOrder != NULL) {
-        Attributes = EFI_VARIABLE_NON_VOLATILE |
-                     EFI_VARIABLE_RUNTIME_ACCESS |
-                     EFI_VARIABLE_BOOTSERVICE_ACCESS;
+    Attributes = EFI_VARIABLE_NON_VOLATILE |
+                 EFI_VARIABLE_RUNTIME_ACCESS |
+                 EFI_VARIABLE_BOOTSERVICE_ACCESS;
 
-        Status = EfibootGetSetVariable(TRUE,
-                                       L"BootOrder",
-                                       &EfibootGlobalVariableGuid,
-                                       &Attributes,
-                                       &BootOrderSize,
-                                       BootOrder);
+    Status = EfibootGetSetVariable(TRUE,
+                                   L"BootOrder",
+                                   &EfibootGlobalVariableGuid,
+                                   &Attributes,
+                                   &BootOrderSize,
+                                   BootOrder);
 
-        if (!KSUCCESS(Status)) {
-            Result = ClConvertKstatusToErrorNumber(Status);
-            fprintf(stderr,
-                    "efiboot: Error: Failed to set BootOrder: %x: %s.\n",
-                    Status,
-                    strerror(Result));
+    if (!KSUCCESS(Status)) {
+        Result = ClConvertKstatusToErrorNumber(Status);
+        fprintf(stderr,
+                "efiboot: Error: Failed to set BootOrder: %x: %s.\n",
+                Status,
+                strerror(Result));
 
-            goto mainEnd;
-        }
+        goto mainEnd;
     }
 
 mainEnd:
@@ -427,6 +425,12 @@ Return Value:
     INT ItemsScanned;
     INT Result;
     UINT16 *Variable;
+
+    if ((BootOrderString == NULL) || (*BootOrderString == '\0')) {
+        *BootOrder = NULL;
+        *BootOrderSize = 0;
+        return 0;
+    }
 
     //
     // Count the commas to determine how many boot entries there are.

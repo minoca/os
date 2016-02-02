@@ -58,6 +58,11 @@ EfipVeyronConfigureI2cClock (
     VOID
     );
 
+VOID
+EfipVeyronConfigureMmcClocks (
+    VOID
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -77,6 +82,12 @@ extern INT8 __executable_start;
 //
 
 BOOLEAN EfiDisableWatchdog = TRUE;
+
+//
+// Define a boolean indicating whether the firmware was loaded via SD or eMMC.
+//
+
+BOOLEAN EfiBootedViaSd;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -161,6 +172,7 @@ Return Value:
         }
 
         EfipVeyronConfigureArmPll();
+        EfipVeyronConfigureMmcClocks();
 
         //
         // Initialize the I2C clock so that the clock frequency querying code
@@ -567,5 +579,95 @@ Return Value:
 
     EfiWriteRegister32(I2cPmuBase + Rk32I2cClockDivisor, Value);
     return EFI_SUCCESS;
+}
+
+VOID
+EfipVeyronConfigureMmcClocks (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine configures the MMC clock.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINT32 Mask;
+    UINT32 Mmc;
+    UINT32 Value;
+
+    //
+    // To figure out if the firmware was loaded from SD or eMMC, check to see
+    // which clock was configured. If SD was configured for high speed, assume
+    // boot came from there.
+    //
+
+    Mmc = EfiReadRegister32((VOID *)RK32_CRU_BASE + Rk32CruClockSelect11);
+    if ((Mmc & RK32_CRU_CLOCK_SELECT11_MMC0_CLOCK_MASK) !=
+        (RK32_CRU_CLOCK_SELECT11_MMC0_24MHZ <<
+         RK32_CRU_CLOCK_SELECT11_MMC0_CLOCK_SHIFT)) {
+
+        EfiBootedViaSd = TRUE;
+    }
+
+    //
+    // Set up MMC0 to clock off of the general PLL / 6, which comes out to
+    // 99MHz.
+    //
+
+    Mmc = (RK32_CRU_CLOCK_SELECT11_MMC0_GENERAL_PLL <<
+           RK32_CRU_CLOCK_SELECT11_MMC0_CLOCK_SHIFT) |
+          (5 << RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_SHIFT);
+
+    Mask = RK32_CRU_CLOCK_SELECT11_MMC0_CLOCK_MASK |
+           RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_MASK;
+
+    Mmc |= Mask << RK32_CRU_CLOCK_SELECT11_PROTECT_SHIFT;
+    EfiWriteRegister32((VOID *)RK32_CRU_BASE + Rk32CruClockSelect11, Mmc);
+
+    //
+    // Set up eMMC like the MMC0.
+    //
+
+    Mmc = (RK32_CRU_CLOCK_SELECT12_EMMC_GENERAL_PLL <<
+           RK32_CRU_CLOCK_SELECT12_EMMC_CLOCK_SHIFT) |
+          (5 << RK32_CRU_CLOCK_SELECT12_EMMC_DIVIDER_SHIFT);
+
+    Mask = RK32_CRU_CLOCK_SELECT12_EMMC_CLOCK_MASK |
+           RK32_CRU_CLOCK_SELECT12_EMMC_DIVIDER_MASK;
+
+    Mmc |= Mask << RK32_CRU_CLOCK_SELECT12_PROTECT_SHIFT;
+    EfiWriteRegister32((VOID *)RK32_CRU_BASE + Rk32CruClockSelect12, Mmc);
+
+    //
+    // Reset the SD/MMC.
+    //
+
+    Value = RK32_CRU_SOFT_RESET8_MMC0 << RK32_CRU_SOFT_RESET8_PROTECT_SHIFT;
+    Value |= RK32_CRU_SOFT_RESET8_MMC0;
+    EfiWriteRegister32((VOID *)RK32_CRU_BASE + Rk32CruSoftReset8, Value);
+    EfiStall(100);
+    Value &= ~RK32_CRU_SOFT_RESET8_MMC0;
+    EfiWriteRegister32((VOID *)RK32_CRU_BASE + Rk32CruSoftReset8, Value);
+
+    //
+    // Reset the IOMUX to the correct value for SD/MMC.
+    //
+
+    Value = RK32_GRF_GPIO6C_IOMUX_VALUE;
+    EfiWriteRegister32((VOID *)RK32_GRF_BASE + Rk32GrfGpio6cIomux, Value);
+    return;
 }
 

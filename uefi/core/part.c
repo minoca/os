@@ -256,6 +256,9 @@ Return Value:
     // Initialize the media.
     //
 
+    Private->Media.RemovableMedia = BlockIo->Media->RemovableMedia;
+    Private->Media.ReadOnly = BlockIo->Media->ReadOnly;
+    Private->Media.WriteCaching = BlockIo->Media->WriteCaching;
     Private->Media.IoAlign = 0;
     Private->Media.LogicalPartition = TRUE;
     Private->Media.LastBlock = ALIGN_VALUE(End - Start + 1, BlockSize) - 1;

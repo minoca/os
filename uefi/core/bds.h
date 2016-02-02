@@ -426,7 +426,6 @@ Return Value:
 
 EFI_STATUS
 EfipBdsRegisterNewOption (
-    PLIST_ENTRY OptionList,
     EFI_DEVICE_PATH_PROTOCOL *DevicePath,
     CHAR16 *String,
     CHAR16 *VariableName
@@ -440,9 +439,6 @@ Routine Description:
     given variable name. The BootOrder or DriverOrder will also be updated.
 
 Arguments:
-
-    OptionList - Supplies a pointer to the head of the boot or driver option
-        list.
 
     DevicePath - Supplies a pointer to the device path of the option.
 

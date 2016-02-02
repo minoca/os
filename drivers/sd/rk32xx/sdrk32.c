@@ -138,7 +138,8 @@ SdRk32HardResetController (
 
 KSTATUS
 SdRk32InitializeFundamentalClock (
-    PSD_RK32_CONTEXT Device
+    PSD_RK32_CONTEXT Device,
+    PRESOURCE_ALLOCATION Resource
     );
 
 INTERRUPT_STATUS
@@ -303,6 +304,7 @@ SdRk32SetDmaInterrupts (
 
 PDRIVER SdRk32Driver = NULL;
 UUID SdRk32DiskInterfaceUuid = UUID_DISK_INTERFACE;
+UUID SdRk32VendorResourceUuid = SD_RK32_VENDOR_RESOURCE_UUID;
 
 DISK_INTERFACE SdRk32DiskInterfaceTemplate = {
     DISK_INTERFACE_VERSION,
@@ -1238,8 +1240,10 @@ Return Value:
     PRESOURCE_ALLOCATION LineAllocation;
     SD_INITIALIZATION_BLOCK Parameters;
     KSTATUS Status;
+    PRESOURCE_ALLOCATION VendorResource;
 
     ControllerBase = NULL;
+    VendorResource = NULL;
 
     //
     // Loop through the allocated resources to get the controller base and the
@@ -1281,6 +1285,12 @@ Return Value:
             ASSERT(ControllerBase == NULL);
 
             ControllerBase = Allocation;
+
+        } else if (Allocation->Type == ResourceTypeVendorSpecific) {
+
+            ASSERT(VendorResource == NULL);
+
+            VendorResource = Allocation;
         }
 
         //
@@ -1295,7 +1305,8 @@ Return Value:
     //
 
     if ((ControllerBase == NULL) ||
-        (ControllerBase->Length < SD_RK32_CONTROLLER_LENGTH)) {
+        (ControllerBase->Length < SD_RK32_CONTROLLER_LENGTH) ||
+        (VendorResource == NULL)) {
 
         Status = STATUS_INVALID_CONFIGURATION;
         goto StartDeviceEnd;
@@ -1306,6 +1317,7 @@ Return Value:
     //
 
     if (Device->ControllerBase == NULL) {
+        Device->PhysicalAddress = ControllerBase->Allocation;
         Device->ControllerBase = MmMapPhysicalAddress(
                                                     ControllerBase->Allocation,
                                                     ControllerBase->Length,
@@ -1319,7 +1331,7 @@ Return Value:
         }
     }
 
-    Status = SdRk32InitializeFundamentalClock(Device);
+    Status = SdRk32InitializeFundamentalClock(Device, VendorResource);
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("SdRk32InitializeFundamentalClock Failed: %x\n", Status);
         goto StartDeviceEnd;
@@ -1743,7 +1755,8 @@ HardResetControllerEnd:
 
 KSTATUS
 SdRk32InitializeFundamentalClock (
-    PSD_RK32_CONTEXT Device
+    PSD_RK32_CONTEXT Device,
+    PRESOURCE_ALLOCATION Resource
     )
 
 /*++
@@ -1757,6 +1770,8 @@ Arguments:
 
     Device - Supplies a pointer to the SD RK32 device.
 
+    Resource - Supplies a pointer to the vendor specific resource data.
+
 Return Value:
 
     Status code.
@@ -1765,160 +1780,19 @@ Return Value:
 
 {
 
-    ULONG ClockSource;
-    PVOID CruBase;
-    ULONG Divisor;
-    ULONG Frequency;
-    ULONG Mode;
-    ULONG Nf;
-    ULONG No;
-    ULONG Nr;
-    ULONG PageSize;
-    PRK32XX_TABLE Rk32xxTable;
-    KSTATUS Status;
-    ULONG Value;
+    PSD_RK32_VENDOR_RESOURCE Data;
 
-    //
-    // Find the RK32xx ACPI table in order to retrieve the physical addresses
-    // for the CRU and GRF.
-    //
-
-    Rk32xxTable = AcpiFindTable(RK32XX_SIGNATURE, NULL);
-    if (Rk32xxTable == NULL) {
-        return STATUS_NOT_SUPPORTED;
+    Data = Resource->Data;
+    if (Resource->DataSize < sizeof(SD_RK32_VENDOR_RESOURCE)) {
+        return STATUS_DATA_LENGTH_MISMATCH;
     }
 
-    PageSize = MmPageSize();
-    CruBase = MmMapPhysicalAddress(Rk32xxTable->CruBase,
-                                   PageSize,
-                                   TRUE,
-                                   FALSE,
-                                   TRUE);
-
-    if (CruBase == NULL) {
-        return STATUS_INSUFFICIENT_RESOURCES;
+    if (RtlAreUuidsEqual(&(Data->Uuid), &SdRk32VendorResourceUuid) == FALSE) {
+        return STATUS_INVALID_CONFIGURATION;
     }
 
-    //
-    // Read the current MMC0 clock source.
-    //
-
-    Value = HlReadRegister32(CruBase + Rk32CruClockSelect11);
-    ClockSource = (Value & RK32_CRU_CLOCK_SELECT11_MMC0_CLOCK_MASK) >>
-                  RK32_CRU_CLOCK_SELECT11_MMC0_CLOCK_SHIFT;
-
-    Divisor = (Value & RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_MASK) >>
-              RK32_CRU_CLOCK_SELECT11_MMC0_DIVIDER_SHIFT;
-
-    Divisor += 1;
-
-    //
-    // Get the fundamental clock frequency base on the source.
-    //
-
-    switch (ClockSource) {
-    case RK32_CRU_CLOCK_SELECT11_MMC0_CODEC_PLL:
-        Mode = HlReadRegister32(CruBase + Rk32CruModeControl);
-        Mode = (Mode & RK32_CRU_MODE_CONTROL_CODEC_PLL_MODE_MASK) >>
-                RK32_CRU_MODE_CONTROL_CODEC_PLL_MODE_SHIFT;
-
-        if (Mode == RK32_CRU_MODE_CONTROL_SLOW_MODE) {
-            Frequency = RK32_CRU_PLL_SLOW_MODE_FREQUENCY;
-
-        } else if (Mode == RK32_CRU_MODE_CONTROL_NORMAL_MODE) {
-
-            //
-            // Calculate the clock speed based on the formula described in
-            // section 3.9 of the RK3288 TRM.
-            //
-
-            Value = HlReadRegister32(CruBase + Rk32CruCodecPllConfiguration0);
-            No = (Value & RK32_CRU_CODEC_PLL_CONTROL0_CLKOD_MASK) >>
-                 RK32_CRU_CODEC_PLL_CONTROL0_CLKOD_SHIFT;
-
-            No += 1;
-            Nr = (Value & RK32_CRU_CODEC_PLL_CONTROL0_CLKR_MASK) >>
-                 RK32_CRU_CODEC_PLL_CONTROL0_CLKR_SHIFT;
-
-            Nr += 1;
-            Value = HlReadRegister32(CruBase + Rk32CruCodecPllConfiguration1);
-            Nf = (Value & RK32_CRU_CODEC_PLL_CONTROL1_CLKF_MASK) >>
-                 RK32_CRU_CODEC_PLL_CONTROL1_CLKF_SHIFT;
-
-            Nf += 1;
-            Frequency = RK32_CRU_PLL_COMPUTE_CLOCK_FREQUENCY(Nf, Nr, No);
-
-        } else if (Mode == RK32_CRU_MODE_CONTROL_DEEP_SLOW_MODE) {
-            Frequency = RK32_CRU_PLL_DEEP_SLOW_MODE_FREQUENCY;
-
-        } else {
-            Status = STATUS_DEVICE_IO_ERROR;
-            goto GetFundamentalClockEnd;
-        }
-
-        break;
-
-    case RK32_CRU_CLOCK_SELECT11_MMC0_GENERAL_PLL:
-        Mode = HlReadRegister32(CruBase + Rk32CruModeControl);
-        Mode = (Mode & RK32_CRU_MODE_CONTROL_GENERAL_PLL_MODE_MASK) >>
-                RK32_CRU_MODE_CONTROL_GENERAL_PLL_MODE_SHIFT;
-
-        if (Mode == RK32_CRU_MODE_CONTROL_SLOW_MODE) {
-            Frequency = RK32_CRU_PLL_SLOW_MODE_FREQUENCY;
-
-        } else if (Mode == RK32_CRU_MODE_CONTROL_NORMAL_MODE) {
-
-            //
-            // Calculate the clock speed based on the formula described in
-            // section 3.9 of the RK3288 TRM.
-            //
-
-            Value = HlReadRegister32(CruBase + Rk32CruGeneralPllConfiguration0);
-            No = (Value & RK32_CRU_GENERAL_PLL_CONTROL0_CLKOD_MASK) >>
-                 RK32_CRU_GENERAL_PLL_CONTROL0_CLKOD_SHIFT;
-
-            No += 1;
-            Nr = (Value & RK32_CRU_GENERAL_PLL_CONTROL0_CLKR_MASK) >>
-                 RK32_CRU_GENERAL_PLL_CONTROL0_CLKR_SHIFT;
-
-            Nr += 1;
-            Value = HlReadRegister32(CruBase + Rk32CruGeneralPllConfiguration1);
-            Nf = (Value & RK32_CRU_GENERAL_PLL_CONTROL1_CLKF_MASK) >>
-                 RK32_CRU_GENERAL_PLL_CONTROL1_CLKF_SHIFT;
-
-            Nf += 1;
-            Frequency = RK32_CRU_PLL_COMPUTE_CLOCK_FREQUENCY(Nf, Nr, No);
-
-        } else if (Mode == RK32_CRU_MODE_CONTROL_DEEP_SLOW_MODE) {
-            Frequency = RK32_CRU_PLL_DEEP_SLOW_MODE_FREQUENCY;
-
-        } else {
-            Status = STATUS_DEVICE_IO_ERROR;
-            goto GetFundamentalClockEnd;
-        }
-
-        break;
-
-    case RK32_CRU_CLOCK_SELECT11_MMC0_24MHZ:
-        Frequency = RK32_SDMMC_FREQUENCY_24MHZ;
-        break;
-
-    default:
-        Status = STATUS_DEVICE_IO_ERROR;
-        goto GetFundamentalClockEnd;
-    }
-
-    //
-    // To get the MMC0 clock speed, the clock source frequency must be divided
-    // by the divisor.
-    //
-
-    Device->FundamentalClock = Frequency / Divisor;
-    Status = STATUS_SUCCESS;
-
-GetFundamentalClockEnd:
-    MmUnmapAddress(CruBase, PageSize);
-    return Status;
+    Device->FundamentalClock = Data->FundamentalClock;
+    return STATUS_SUCCESS;
 }
 
 INTERRUPT_STATUS
