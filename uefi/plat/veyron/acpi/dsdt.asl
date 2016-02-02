@@ -171,58 +171,6 @@ DefinitionBlock (
             })
         }
 
-        Device(SDMC) {
-            Name(_HID, "RKC0D40")
-            Name(_UID, 0)
-            Method(_STA, 0, NotSerialized) {
-                Return(0x0F)
-            }
-
-            Name(_CRS, ResourceTemplate() {
-                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
-                            NonCacheable, ReadWrite,
-                            0x00000000,
-                            0xFF0C0000,
-                            0xFF0C0FFF,
-                            0x00000000,
-                            0x00001000)
-
-                Interrupt(, Level, ActiveHigh,) {64}
-                VendorLong() {
-                    0x00, // SubType
-                    0x0C, 0x32, 0x39, 0x94, 0xE5, 0x11, 0xFA, 0xC6, // UUID
-                    0x0B, 0xBA, 0x12, 0x99, 0x8E, 0xC1, 0x83, 0x04, // UUID
-                    0xC0, 0x9E, 0xE6, 0x05, // FundamentalClock (99MHz)
-                }
-            })
-        }
-
-        Device(EMMC) {
-            Name(_HID, "RKC0D40")
-            Name(_UID, 0)
-            Method(_STA, 0, NotSerialized) {
-                Return(0x0F)
-            }
-
-            Name(_CRS, ResourceTemplate() {
-                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
-                            NonCacheable, ReadWrite,
-                            0x00000000,
-                            0xFF0F0000,
-                            0xFF0F0FFF,
-                            0x00000000,
-                            0x00001000)
-
-                Interrupt(, Level, ActiveHigh,) {67}
-                VendorLong() {
-                    0x00, // SubType
-                    0x0C, 0x32, 0x39, 0x94, 0xE5, 0x11, 0xFA, 0xC6, // UUID
-                    0x0B, 0xBA, 0x12, 0x99, 0x8E, 0xC1, 0x83, 0x04, // UUID
-                    0xC0, 0x9E, 0xE6, 0x05, // FundamentalClock (99MHz)
-                }
-            })
-        }
-
         Device(GPI0) {
             Name(_HID, "RKC0002")
             Name(_UID, 0)
@@ -437,6 +385,61 @@ DefinitionBlock (
                             "\\_SB_GPI7") {7}
                 })
             }
+        }
+
+        Device(SDMC) {
+            Name(_HID, "RKC0D40")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0xFF0C0000,
+                            0xFF0C0FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {64}
+                GpioInt(Edge, ActiveLow, Exclusive, PullNone, ,
+                        "\\_SB_GPI7") {5}
+
+                VendorLong() {
+                    0x00, // SubType
+                    0x0C, 0x32, 0x39, 0x94, 0xE5, 0x11, 0xFA, 0xC6, // UUID
+                    0x0B, 0xBA, 0x12, 0x99, 0x8E, 0xC1, 0x83, 0x04, // UUID
+                    0xC0, 0x9E, 0xE6, 0x05, // FundamentalClock (99MHz)
+                }
+            })
+        }
+
+        Device(EMMC) {
+            Name(_HID, "RKC0D40")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0xFF0F0000,
+                            0xFF0F0FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {67}
+                VendorLong() {
+                    0x00, // SubType
+                    0x0C, 0x32, 0x39, 0x94, 0xE5, 0x11, 0xFA, 0xC6, // UUID
+                    0x0B, 0xBA, 0x12, 0x99, 0x8E, 0xC1, 0x83, 0x04, // UUID
+                    0xC0, 0x9E, 0xE6, 0x05, // FundamentalClock (99MHz)
+                }
+            })
         }
     }
 

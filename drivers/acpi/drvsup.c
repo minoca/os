@@ -1475,6 +1475,85 @@ EnableAcpiModeEnd:
     return Status;
 }
 
+KSTATUS
+AcpipCreateDeviceDependency (
+    PDEVICE DependentDevice,
+    PACPI_OBJECT Provider
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a device dependency. ACPI will attempt to restart the
+    given device once its dependency has come online.
+
+Arguments:
+
+    DependentDevice - Supplies a pointer to the OS device that is dependent on
+        something else.
+
+    Provider - Supplies a pointer to the ACPI object containing the device that
+        satisfies the dependency.
+
+Return Value:
+
+    STATUS_TOO_LATE if the device actually did start in the meantime.
+
+    Status code.
+
+--*/
+
+{
+
+    PACPI_DEVICE_DEPENDENCY Dependency;
+    KSTATUS Status;
+
+    ASSERT((DependentDevice != NULL) && (Provider != NULL));
+
+    Dependency = MmAllocatePagedPool(sizeof(ACPI_DEVICE_DEPENDENCY),
+                                     ACPI_ALLOCATION_TAG);
+
+    if (Dependency == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    RtlZeroMemory(Dependency, sizeof(ACPI_DEVICE_DEPENDENCY));
+    Dependency->DependentDevice = DependentDevice;
+    Dependency->Dependency = Provider;
+
+    //
+    // Check one more time after acquiring the lock in case the device
+    // suddenly came online during the gap.
+    //
+
+    KeAcquireSpinLock(&AcpiDeviceListLock);
+
+    //
+    // If the routing device suddenly appeared, back out and keep going.
+    //
+
+    if (Provider->U.Device.IsDeviceStarted != FALSE) {
+        KeReleaseSpinLock(&AcpiDeviceListLock);
+        MmFreePagedPool(Dependency);
+        Status = STATUS_TOO_LATE;
+
+    //
+    // Otherwise, add this dependency entry and fail for now. This device
+    // will get restarted when the dependency comes online.
+    //
+
+    } else {
+        INSERT_BEFORE(&(Dependency->ListEntry),
+                      &AcpiDeviceDependencyList);
+
+        KeReleaseSpinLock(&AcpiDeviceListLock);
+        Status = STATUS_SUCCESS;
+    }
+
+    return Status;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -2231,7 +2310,6 @@ Return Value:
 {
 
     PRESOURCE_ALLOCATION Allocation;
-    PACPI_DEVICE_DEPENDENCY Dependency;
     PPCI_ROUTING_TABLE_ENTRY Entry;
     ULONG EntryIndex;
     USHORT Line;
@@ -2239,6 +2317,7 @@ Return Value:
     PRESOURCE_ALLOCATION_LIST Resources;
     PDEVICE RoutingDevice;
     USHORT Slot;
+    KSTATUS Status;
 
     Entry = NULL;
     Slot = (USHORT)(BusAddress >> 16);
@@ -2299,7 +2378,6 @@ Return Value:
 
     ASSERT(Entry->RoutingDevice->Type == AcpiObjectDevice);
 
-    RoutingDevice = Entry->RoutingDevice->U.Device.OsDevice;
     if (Entry->RoutingDevice->U.Device.IsDeviceStarted == FALSE) {
         if (AcpiDebugInterruptRouting != FALSE) {
             RtlDebugPrint("Delaying because routing device %x is not "
@@ -2307,51 +2385,21 @@ Return Value:
                           Entry->RoutingDevice);
         }
 
-        Dependency = MmAllocatePagedPool(sizeof(ACPI_DEVICE_DEPENDENCY),
-                                         ACPI_ALLOCATION_TAG);
+        Status = AcpipCreateDeviceDependency(Device->OsDevice,
+                                             Entry->RoutingDevice);
 
-        if (Dependency == NULL) {
-            return STATUS_INSUFFICIENT_RESOURCES;
-        }
+        if (Status != STATUS_TOO_LATE) {
+            if (KSUCCESS(Status)) {
+                Status = STATUS_NOT_READY;
+            }
 
-        RtlZeroMemory(Dependency,
-                      sizeof(ACPI_DEVICE_DEPENDENCY));
-
-        Dependency->DependentDevice = Device->OsDevice;
-        Dependency->Dependency = Entry->RoutingDevice;
-
-        ASSERT((Dependency->DependentDevice != NULL) &&
-               (Dependency->Dependency != NULL));
-
-        //
-        // Check one more time after acquiring the lock in case the device
-        // suddenly came online during the gap.
-        //
-
-        KeAcquireSpinLock(&AcpiDeviceListLock);
-        RoutingDevice = Entry->RoutingDevice->U.Device.OsDevice;
-
-        //
-        // If the routing device suddenly appeared, back out and keep going.
-        //
-
-        if (Entry->RoutingDevice->U.Device.IsDeviceStarted != FALSE) {
-            KeReleaseSpinLock(&AcpiDeviceListLock);
-            MmFreePagedPool(Dependency);
-
-        //
-        // Otherwise, add this dependency entry and fail for now. This device
-        // will get restarted when the dependency comes online.
-        //
-
-        } else {
-            INSERT_BEFORE(&(Dependency->ListEntry),
-                          &AcpiDeviceDependencyList);
-
-            KeReleaseSpinLock(&AcpiDeviceListLock);
-            return STATUS_NOT_READY;
+            return Status;
         }
     }
+
+    RoutingDevice = Entry->RoutingDevice->U.Device.OsDevice;
+
+    ASSERT(RoutingDevice != NULL);
 
     Resources = IoGetProcessorLocalResources(RoutingDevice);
     if (Resources == NULL) {

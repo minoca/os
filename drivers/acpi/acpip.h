@@ -563,3 +563,31 @@ Return Value:
 
 --*/
 
+KSTATUS
+AcpipCreateDeviceDependency (
+    PDEVICE DependentDevice,
+    PACPI_OBJECT Provider
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a device dependency. ACPI will attempt to restart the
+    given device once its dependency has come online.
+
+Arguments:
+
+    DependentDevice - Supplies a pointer to the OS device that is dependent on
+        something else.
+
+    Provider - Supplies a pointer to the ACPI object containing the device that
+        satisfies the dependency.
+
+Return Value:
+
+    STATUS_TOO_LATE if the device actually did start in the meantime.
+
+    Status code.
+
+--*/

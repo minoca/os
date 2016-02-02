@@ -72,9 +72,8 @@ Author:
 // Define the set of flags for the parent SD device.
 //
 
-#define SD_RK32_DEVICE_FLAG_INTERRUPT_RESOURCES_FOUND 0x00000001
-#define SD_RK32_DEVICE_FLAG_INSERTION_PENDING         0x00000002
-#define SD_RK32_DEVICE_FLAG_REMOVAL_PENDING           0x00000004
+#define SD_RK32_DEVICE_FLAG_INSERTION_PENDING         0x00000001
+#define SD_RK32_DEVICE_FLAG_REMOVAL_PENDING           0x00000002
 
 //
 // Define the set of flags for the child SD disk.
@@ -166,14 +165,22 @@ Members:
 
     InterruptVector - Stores the interrupt vector of the controller.
 
+    InterruptHandle - Stores the interrupt connection handle.
+
     Flags - Stores a bitmask of flags for the device. See
         SD_RK32_DEVICE_FLAG_* for definitions.
 
-    InterruptHandle - Stores the interrupt connection handle.
+    CardInterruptLine - Stores ths card detect interrupt line.
+
+    CardInterruptVector - Stores the card detect interrupt vector.
+
+    CardInterruptHandle - Stores the card detect interrupt connection handle.
 
     Child - Stores a pointer to the child device context.
 
     Lock - Stores a pointer to a lock used to serialize I/O requests.
+
+    Device - Stores a pointer to the OS device.
 
 --*/
 
@@ -185,10 +192,14 @@ struct _SD_RK32_CONTEXT {
     ULONG FundamentalClock;
     ULONGLONG InterruptLine;
     ULONGLONG InterruptVector;
-    volatile ULONG Flags;
     HANDLE InterruptHandle;
+    ULONGLONG CardInterruptLine;
+    ULONGLONG CardInterruptVector;
+    HANDLE CardInterruptHandle;
+    volatile ULONG Flags;
     PSD_RK32_CHILD Child;
     PQUEUED_LOCK Lock;
+    PDEVICE OsDevice;
 };
 
 /*++

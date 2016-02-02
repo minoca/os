@@ -2227,8 +2227,16 @@ Return Value:
     //
 
     if (Provider->U.Device.IsDeviceStarted == FALSE) {
-        Status = STATUS_NOT_READY;
-        goto ParseGpioDescriptorEnd;
+        Status = AcpipCreateDeviceDependency(NamespaceStart->U.Device.OsDevice,
+                                             Provider);
+
+        if (Status != STATUS_TOO_LATE) {
+            if (KSUCCESS(Status)) {
+                Status = STATUS_NOT_READY;
+            }
+
+            goto ParseGpioDescriptorEnd;
+        }
     }
 
     Requirement.Provider = Provider->U.Device.OsDevice;
@@ -2497,8 +2505,16 @@ Return Value:
     //
 
     if (Provider->U.Device.IsDeviceStarted == FALSE) {
-        Status = STATUS_NOT_READY;
-        goto ParseSpbDescriptorEnd;
+        Status = AcpipCreateDeviceDependency(NamespaceStart->U.Device.OsDevice,
+                                             Provider);
+
+        if (Status != STATUS_TOO_LATE) {
+            if (KSUCCESS(Status)) {
+                Status = STATUS_NOT_READY;
+            }
+
+            goto ParseSpbDescriptorEnd;
+        }
     }
 
     Requirement.Type = ResourceTypeSimpleBus;

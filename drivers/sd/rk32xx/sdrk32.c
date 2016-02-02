@@ -152,6 +152,11 @@ SdRk32InterruptServiceDispatch (
     PVOID Context
     );
 
+INTERRUPT_STATUS
+SdRk32CardInterruptWorker (
+    PVOID Context
+    );
+
 VOID
 SdRk32DmaCompletion (
     PSD_CONTROLLER Controller,
@@ -434,7 +439,11 @@ Return Value:
     RtlZeroMemory(Context, sizeof(SD_RK32_CONTEXT));
     Context->Type = SdRk32Parent;
     Context->Flags = SD_RK32_DEVICE_FLAG_INSERTION_PENDING;
+    Context->InterruptVector = -1ULL;
+    Context->CardInterruptVector = -1ULL;
     Context->InterruptHandle = INVALID_HANDLE;
+    Context->CardInterruptHandle = INVALID_HANDLE;
+    Context->OsDevice = DeviceToken;
     Context->Lock = KeCreateQueuedLock();
     if (Context->Lock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1261,24 +1270,25 @@ Return Value:
 
         if (Allocation->Type == ResourceTypeInterruptVector) {
 
-            //
-            // Currently only one interrupt resource is expected.
-            //
-
-            ASSERT((Device->Flags &
-                    SD_RK32_DEVICE_FLAG_INTERRUPT_RESOURCES_FOUND) == 0);
-
             ASSERT(Allocation->OwningAllocation != NULL);
 
             //
-            // Save the line and vector number.
+            // Save the line and vector number. The first one is the main
+            // interrupt, the second one is the card detect interrupt.
             //
 
             LineAllocation = Allocation->OwningAllocation;
-            Device->InterruptLine = LineAllocation->Allocation;
-            Device->InterruptVector = Allocation->Allocation;
-            RtlAtomicOr32(&(Device->Flags),
-                          SD_RK32_DEVICE_FLAG_INTERRUPT_RESOURCES_FOUND);
+            if (Device->InterruptVector == -1ULL) {
+                Device->InterruptLine = LineAllocation->Allocation;
+                Device->InterruptVector = Allocation->Allocation;
+
+            } else {
+
+                ASSERT(Device->CardInterruptVector == -1ULL);
+
+                Device->CardInterruptLine = LineAllocation->Allocation;
+                Device->CardInterruptVector = Allocation->Allocation;
+            }
 
         } else if (Allocation->Type == ResourceTypePhysicalAddressSpace) {
 
@@ -1397,6 +1407,27 @@ Return Value:
         Device->Controller->InterruptHandle = Device->InterruptHandle;
     }
 
+    //
+    // Also wire up the card detect interrupt if it's present.
+    //
+
+    if ((Device->CardInterruptHandle == INVALID_HANDLE) &&
+        (Device->CardInterruptVector != -1ULL)) {
+
+        RtlZeroMemory(&Connect, sizeof(IO_CONNECT_INTERRUPT_PARAMETERS));
+        Connect.Version = IO_CONNECT_INTERRUPT_PARAMETERS_VERSION;
+        Connect.Device = Irp->Device;
+        Connect.LineNumber = Device->CardInterruptLine;
+        Connect.Vector = Device->CardInterruptVector;
+        Connect.LowLevelServiceRoutine = SdRk32CardInterruptWorker;
+        Connect.Context = Device;
+        Connect.Interrupt = &(Device->InterruptHandle);
+        Status = IoConnectInterrupt(&Connect);
+        if (!KSUCCESS(Status)) {
+            goto StartDeviceEnd;
+        }
+    }
+
     Status = STATUS_SUCCESS;
 
 StartDeviceEnd:
@@ -1404,6 +1435,11 @@ StartDeviceEnd:
         if (Device->InterruptHandle != INVALID_HANDLE) {
             IoDisconnectInterrupt(Device->InterruptHandle);
             Device->InterruptHandle = INVALID_HANDLE;
+            Device->Controller->InterruptHandle = INVALID_HANDLE;
+        }
+
+        if (Device->CardInterruptHandle != INVALID_HANDLE) {
+            IoDisconnectInterrupt(Device->CardInterruptHandle);
         }
 
         if (Device->Controller != NULL) {
@@ -1454,19 +1490,16 @@ Return Value:
     // Check to see if any changes to the children are pending.
     //
 
-    FlagsMask = ~(SD_RK32_DEVICE_FLAG_INSERTION_PENDING |
-                  SD_RK32_DEVICE_FLAG_REMOVAL_PENDING);
+    FlagsMask = SD_RK32_DEVICE_FLAG_INSERTION_PENDING |
+                SD_RK32_DEVICE_FLAG_REMOVAL_PENDING;
 
-    OldFlags = RtlAtomicAnd32(&(Device->Flags), FlagsMask);
+    OldFlags = RtlAtomicAnd32(&(Device->Flags), ~FlagsMask);
 
     //
     // If either a removal or insertion is pending, clean out the old child.
     // In practice, not all removals interrupt, meaning that two insertions can
     // arrive in a row.
     //
-
-    FlagsMask = SD_RK32_DEVICE_FLAG_INSERTION_PENDING |
-                SD_RK32_DEVICE_FLAG_REMOVAL_PENDING;
 
     if ((OldFlags & FlagsMask) != 0) {
         if (Device->Child != NULL) {
@@ -1929,6 +1962,51 @@ Return Value:
                                                    Controller->ConsumerContext,
                                                    Removed,
                                                    Inserted);
+    }
+
+    return InterruptStatusClaimed;
+}
+
+INTERRUPT_STATUS
+SdRk32CardInterruptWorker (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the RK32xx SD low level card detect interrupt
+    service work routine.
+
+Arguments:
+
+    Context - Supplies the context pointer given to the system when the
+        interrupt was connected. In this case, this points to the RK32xx SD
+        controller.
+
+Return Value:
+
+    Interrupt status.
+
+--*/
+
+{
+
+    PSD_RK32_CONTEXT Device;
+    ULONG OldFlags;
+    KSTATUS Status;
+
+    Device = (PSD_RK32_CONTEXT)Context;
+    OldFlags = RtlAtomicOr32(&(Device->Flags),
+                             SD_RK32_DEVICE_FLAG_INSERTION_PENDING);
+
+    if ((OldFlags & SD_RK32_DEVICE_FLAG_INSERTION_PENDING) == 0) {
+        Status = IoNotifyDeviceTopologyChange(Device->OsDevice);
+        if (!KSUCCESS(Status)) {
+            RtlAtomicAnd32(&(Device->Flags),
+                           ~SD_RK32_DEVICE_FLAG_INSERTION_PENDING);
+        }
     }
 
     return InterruptStatusClaimed;

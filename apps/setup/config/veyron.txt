@@ -32,6 +32,7 @@ DriverFiles += [
 
 BootDrivers += [
     "sdrk32xx.drv",
+    "rk32gpio.drv"
 ];
 
 VeyronFirmwareCopy = {
