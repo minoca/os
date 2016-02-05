@@ -74,7 +74,6 @@ fi
 ##
 
 cp -Rp $BINROOT/skel/* $BINROOT/apps/
-cp -p $BINROOT/msetup $BINROOT/apps/bin/msetup
 
 ##
 ## Copy the script that automatically loads the Python build client.

@@ -71,7 +71,33 @@ if test x$DEBUG = xchk; then
     DEBUG_FLAG='-D'
 fi
 
-echo "Running msetup -v $DEBUG_FLAG --autodeploy"
-msetup -v $DEBUG_FLAG --autodeploy
+##
+## If an alternate root was specified, then add that to the build.
+##
+
+AUTO_ROOT_ARGS=
+if [ -n "$AUTO_ROOT" ]; then
+    AUTO_ROOT_ARGS="--script=./auto_root_script"
+    echo "$AUTO_ROOT" > ./auto_root
+
+    ##
+    ## This script copies the auto_root file in the current directory to
+    ## /auto/auto_root at the setup destination.
+    ##
+
+    cat > ./auto_root_script <<_EOS
+AutoRootCopy = {
+    "Destination": "/apps/auto/auto_root",
+    "Source": "./auto_root",
+    "SourceVolume": -1,
+};
+
+SystemPartition["Files"] += [AutoRootCopy];
+_EOS
+
+fi
+
+echo "Running msetup -v $DEBUG_FLAG $AUTO_ROOT_ARGS --autodeploy"
+msetup -v $DEBUG_FLAG $AUTO_ROOT_ARGS --autodeploy
 echo "Done running setup."
 
