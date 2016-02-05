@@ -284,10 +284,9 @@ EXTRA_CFLAGS += -fno-builtin -fno-omit-frame-pointer -g -save-temps=obj \
 
 EXTRA_CFLAGS_FOR_BUILD := $(EXTRA_CFLAGS)
 
-EXTRA_CFLAGS += -fvisibility=hidden
-
-ifeq ($(BINARYTYPE), $(filter so app dll library,$(BINARYTYPE)))
-EXTRA_CFLAGS += -fPIC
+EXTRA_CFLAGS += -fpic
+ifneq ($(OS),Windows_NT)
+EXTRA_CFLAGS_FOR_BUILD += -fpic
 endif
 
 ##
