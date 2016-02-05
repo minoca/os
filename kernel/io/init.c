@@ -600,13 +600,13 @@ Return Value:
     // Create a DMA line arbiter.
     //
 
-    Status = IoCreateResourceArbiter(IoRootDevice, ResourceTypeDmaLine);
+    Status = IoCreateResourceArbiter(IoRootDevice, ResourceTypeDmaChannel);
     if (!KSUCCESS(Status)) {
         goto InitializeResourceAllocationEnd;
     }
 
     Status = IoAddFreeSpaceToArbiter(IoRootDevice,
-                                     ResourceTypeDmaLine,
+                                     ResourceTypeDmaChannel,
                                      0,
                                      -1,
                                      0,

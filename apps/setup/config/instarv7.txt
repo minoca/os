@@ -39,8 +39,10 @@ Files = [
     "dev2drv.set",
     "devmap.set",
     "devrem.drv",
+    "dma.drv",
     "dwceth.drv",
     "dwhci.drv",
+    "edma3.drv",
     "ehci.drv",
     "fat.drv",
     "goec.drv",
@@ -128,3 +130,4 @@ DiskData["Format"] = PARTITION_FORMAT_NONE;
 Settings = {
     "Disk": DiskData
 };
+

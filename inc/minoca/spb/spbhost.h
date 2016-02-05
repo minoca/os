@@ -204,8 +204,8 @@ Members:
     Features - Stores a bitfield of features about this controller. See
         SPB_FEATURE_* definitions.
 
-    Function - Stores the function table of functions the library uses to call
-        back into the controller.
+    FunctionTable - Stores the table of functions the library uses to call back
+        into the controller.
 
 --*/
 

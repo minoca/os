@@ -1804,8 +1804,8 @@ Return Value:
         ResourceType = "Bus Number";
         break;
 
-    case ResourceTypeDmaLine:
-        ResourceType = "DMA Line";
+    case ResourceTypeDmaChannel:
+        ResourceType = "DMA Channel";
         break;
 
     case ResourceTypeVendorSpecific:

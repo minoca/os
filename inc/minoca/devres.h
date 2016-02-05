@@ -64,16 +64,20 @@ Author:
 // Define DMA characteristics.
 //
 
-#define DMA_TYPE_ISA            0x00000001
-#define DMA_TYPE_EISA_A         0x00000002
-#define DMA_TYPE_EISA_B         0x00000004
-#define DMA_TYPE_EISA_F         0x00000008
-#define DMA_BUS_MASTER          0x00000010
-#define DMA_TRANSFER_SIZE_8     0x00000020
-#define DMA_TRANSFER_SIZE_16    0x00000040
-#define DMA_TRANSFER_SIZE_32    0x00000080
-#define DMA_TRANSFER_SIZE_64    0x00000100
-#define DMA_TRANSFER_SIZE_128   0x00000200
+#define DMA_TYPE_ISA              0x00000001
+#define DMA_TYPE_EISA_A           0x00000002
+#define DMA_TYPE_EISA_B           0x00000004
+#define DMA_TYPE_EISA_F           0x00000008
+#define DMA_BUS_MASTER            0x00000010
+#define DMA_TRANSFER_SIZE_8       0x00000020
+#define DMA_TRANSFER_SIZE_16      0x00000040
+#define DMA_TRANSFER_SIZE_32      0x00000080
+#define DMA_TRANSFER_SIZE_64      0x00000100
+#define DMA_TRANSFER_SIZE_128     0x00000200
+#define DMA_TRANSFER_SIZE_256     0x00000400
+#define DMA_TRANSFER_SIZE_CUSTOM  0x00010000
+
+#define RESOURCE_DMA_DATA_VERSION 1
 
 //
 // Define memory characteristics.
@@ -166,7 +170,7 @@ typedef enum _RESOURCE_TYPE {
     ResourceTypeInterruptLine,
     ResourceTypeInterruptVector,
     ResourceTypeBusNumber,
-    ResourceTypeDmaLine,
+    ResourceTypeDmaChannel,
     ResourceTypeVendorSpecific,
     ResourceTypeGpio,
     ResourceTypeSimpleBus,
@@ -359,6 +363,32 @@ Members:
 typedef struct _RESOURCE_ALLOCATION_LIST {
     LIST_ENTRY AllocationListHead;
 } RESOURCE_ALLOCATION_LIST, *PRESOURCE_ALLOCATION_LIST;
+
+/*++
+
+Structure Description:
+
+    This structure defines the contents of the additional data stored along
+    with a DMA resource.
+
+Members:
+
+    Version - Stores the constant RESOURCE_DMA_DATA_VERSION.
+
+    Request - Stores the request line number associated with the allocation,
+        for controllers whose channels and request lines are mappable. The
+        channel number is stored in the allocation portion.
+
+    Width - Stores the transfer width in bits that the device connected to this
+        request line supports.
+
+--*/
+
+typedef struct _RESOURCE_DMA_DATA {
+    ULONG Version;
+    ULONG Request;
+    ULONG Width;
+} RESOURCE_DMA_DATA, *PRESOURCE_DMA_DATA;
 
 /*++
 

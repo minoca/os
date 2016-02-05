@@ -117,6 +117,7 @@ DriverFilesX86 = [
 ];
 
 DriverFilesArm = [
+    "dma.drv",
     "gpio.drv",
     "spb.drv",
 ];

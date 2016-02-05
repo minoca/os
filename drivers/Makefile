@@ -24,6 +24,7 @@
 DIRS = acpi      \
        ata       \
        devrem    \
+       dma       \
        fat       \
        gpio      \
        i8042     \

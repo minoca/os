@@ -85,6 +85,7 @@ Author:
 #define SD_MODE_ADMA2               0x0080
 #define SD_MODE_RESPONSE136_SHIFTED 0x0100
 #define SD_MODE_SDMA                0x0200
+#define SD_MODE_SYSTEM_DMA          0x0400
 
 //
 // SD block size/count registeer definitions.

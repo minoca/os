@@ -61,6 +61,7 @@ DTEX3002=tps65217.drv
 DTEX3003=am3usb.drv
 DTEX3004=sdomap4.drv
 DTEX3005=am3eth.drv
+DTEX3006=edma3.drv
 DTEX3359=am3soc.drv
 DTEX4004=sdomap4.drv
 DTEX4006=om4gpio.drv

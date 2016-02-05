@@ -72,6 +72,13 @@ AcpipParseSmallDmaDescriptor (
     );
 
 KSTATUS
+AcpipParseSmallFixedDmaDescriptor (
+    PVOID Buffer,
+    ULONG BufferLength,
+    PRESOURCE_REQUIREMENT_LIST RequirementList
+    );
+
+KSTATUS
 AcpipParseSmallIrqDescriptor (
     PVOID Buffer,
     ULONG BufferLength,
@@ -337,11 +344,6 @@ Return Value:
                 break;
 
             case SMALL_RESOURCE_TYPE_DMA:
-                if (DescriptorLength < 2) {
-                    Status = STATUS_MALFORMED_DATA_STREAM;
-                    goto ConvertFromAcpiResourceBufferEnd;
-                }
-
                 Status = AcpipParseSmallDmaDescriptor(Buffer,
                                                       DescriptorLength,
                                                       CurrentConfiguration);
@@ -417,6 +419,18 @@ Return Value:
                 Status = IoCreateAndAddResourceRequirement(&Requirement,
                                                            CurrentConfiguration,
                                                            NULL);
+
+                if (!KSUCCESS(Status)) {
+                    goto ConvertFromAcpiResourceBufferEnd;
+                }
+
+                break;
+
+            case SMALL_RESOURCE_TYPE_FIXED_DMA:
+                Status = AcpipParseSmallFixedDmaDescriptor(
+                                                         Buffer,
+                                                         DescriptorLength,
+                                                         CurrentConfiguration);
 
                 if (!KSUCCESS(Status)) {
                     goto ConvertFromAcpiResourceBufferEnd;
@@ -1603,7 +1617,7 @@ Return Value:
     }
 
     RtlZeroMemory(&Requirement, sizeof(RESOURCE_REQUIREMENT));
-    Requirement.Type = ResourceTypeDmaLine;
+    Requirement.Type = ResourceTypeDmaChannel;
     Mask = *((PUCHAR)Buffer);
     Flags = *((PUCHAR)Buffer + 1);
 
@@ -1690,10 +1704,127 @@ Return Value:
         goto ParseSmallDmaDescriptorEnd;
     }
 
-    Requirement.Minimum = Requirement.Maximum;
     Status = STATUS_SUCCESS;
 
 ParseSmallDmaDescriptorEnd:
+    if (!KSUCCESS(Status)) {
+        if (NewRequirement != NULL) {
+            IoRemoveResourceRequirement(NewRequirement);
+        }
+    }
+
+    return Status;
+}
+
+KSTATUS
+AcpipParseSmallFixedDmaDescriptor (
+    PVOID Buffer,
+    ULONG BufferLength,
+    PRESOURCE_REQUIREMENT_LIST RequirementList
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts an ACPI small fixed DMA descriptor into a resource
+    requirement, and puts that requirement on the given requirement list.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the DMA descriptor buffer, pointing after the
+        byte identifying the descriptor as a short fixed DMA descriptor.
+
+    BufferLength - Supplies the length of the descriptor buffer.
+
+    RequirementList - Supplies a pointer to the resource requirement list to
+        put the descriptor on.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    RESOURCE_DMA_DATA DmaData;
+    PRESOURCE_REQUIREMENT NewRequirement;
+    RESOURCE_REQUIREMENT Requirement;
+    KSTATUS Status;
+    UCHAR Width;
+
+    NewRequirement = NULL;
+    if (BufferLength < 5) {
+        Status = STATUS_MALFORMED_DATA_STREAM;
+        goto ParseSmallFixedDmaDescriptorEnd;
+    }
+
+    RtlZeroMemory(&Requirement, sizeof(RESOURCE_REQUIREMENT));
+    RtlZeroMemory(&DmaData, sizeof(RESOURCE_DMA_DATA));
+    DmaData.Version = RESOURCE_DMA_DATA_VERSION;
+    Requirement.Type = ResourceTypeDmaChannel;
+    DmaData.Request = READ_UNALIGNED16(Buffer);
+    Buffer += 2;
+    Requirement.Minimum = READ_UNALIGNED16(Buffer);
+    Buffer += 1;
+    Requirement.Maximum = Requirement.Minimum + 1;
+    Requirement.Length = 1;;
+    Width = *((PUCHAR)Buffer);
+    Buffer += 1;
+    switch (Width) {
+    case ACPI_SMALL_FIXED_DMA_8BIT:
+        Requirement.Characteristics |= DMA_TRANSFER_SIZE_8;
+        DmaData.Width = 8;
+        break;
+
+    case ACPI_SMALL_FIXED_DMA_16BIT:
+        Requirement.Characteristics |= DMA_TRANSFER_SIZE_16;
+        DmaData.Width = 16;
+        break;
+
+    case ACPI_SMALL_FIXED_DMA_32BIT:
+        Requirement.Characteristics |= DMA_TRANSFER_SIZE_32;
+        DmaData.Width = 32;
+        break;
+
+    case ACPI_SMALL_FIXED_DMA_64BIT:
+        Requirement.Characteristics |= DMA_TRANSFER_SIZE_64;
+        DmaData.Width = 64;
+        break;
+
+    case ACPI_SMALL_FIXED_DMA_128BIT:
+        Requirement.Characteristics |= DMA_TRANSFER_SIZE_128;
+        DmaData.Width = 128;
+        break;
+
+    case ACPI_SMALL_FIXED_DMA_256BIT:
+        Requirement.Characteristics |= DMA_TRANSFER_SIZE_256;
+        DmaData.Width = 256;
+        break;
+
+    default:
+        Status = STATUS_MALFORMED_DATA_STREAM;
+        goto ParseSmallFixedDmaDescriptorEnd;
+    }
+
+    Requirement.Flags = RESOURCE_FLAG_NOT_SHAREABLE;
+
+    //
+    // Register the requirement.
+    //
+
+    Status = IoCreateAndAddResourceRequirement(&Requirement,
+                                               RequirementList,
+                                               &NewRequirement);
+
+    if (!KSUCCESS(Status)) {
+        goto ParseSmallFixedDmaDescriptorEnd;
+    }
+
+    Status = STATUS_SUCCESS;
+
+ParseSmallFixedDmaDescriptorEnd:
     if (!KSUCCESS(Status)) {
         if (NewRequirement != NULL) {
             IoRemoveResourceRequirement(NewRequirement);

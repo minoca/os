@@ -136,8 +136,8 @@ DefinitionBlock (
     }
 
     Scope(\_SB.SOCD) {
-        Device(MMC0) {
-            Name(_HID, "TEX3004")
+        Device(EDMA) {
+            Name(_HID, "TEX3006")
             Name(_UID, 0)
             Method(_STA, 0, NotSerialized) {
                 Return(0x0F)
@@ -147,32 +147,14 @@ DefinitionBlock (
                 DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
                             NonCacheable, ReadWrite,
                             0x00000000,
-                            0x48060000,
-                            0x48060FFF,
+                            0x49000000,
+                            0x49005FFF,
                             0x00000000,
-                            0x00001000)
+                            0x00006000)
 
-                Interrupt(, Level, ActiveHigh,) {64}
-            })
-        }
-
-        Device(MMC1) {
-            Name(_HID, "TEX3004")
-            Name(_UID, 0)
-            Method(_STA, 0, NotSerialized) {
-                Return(0x0F)
-            }
-
-            Name(_CRS, ResourceTemplate() {
-                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
-                            NonCacheable, ReadWrite,
-                            0x00000000,
-                            0x481D8000,
-                            0x481D8FFF,
-                            0x00000000,
-                            0x00001000)
-
-                Interrupt(, Level, ActiveHigh,) {28}
+                Interrupt(, Level, ActiveHigh,) {12} // Completion interrupt
+                Interrupt(, Level, ActiveHigh,) {13} // Mem. Protect interrupt
+                Interrupt(, Level, ActiveHigh,) {14} // Error interrupt
             })
         }
 
@@ -253,7 +235,56 @@ DefinitionBlock (
                 })
             }
         }
+    }
 
+    //
+    // Stick things that use system DMA underneath the DMA controller.
+    //
+
+    Scope(\_SB.SOCD.EDMA) {
+        Device(MMC0) {
+            Name(_HID, "TEX3004")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x48060000,
+                            0x48060FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {64}
+                FixedDMA(24, 24, Width32Bit, ) // TX
+                FixedDMA(25, 25, Width32Bit, ) // RX
+            })
+        }
+
+        Device(MMC1) {
+            Name(_HID, "TEX3004")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x481D8000,
+                            0x481D8FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {28}
+                FixedDMA(2, 2, Width32Bit, ) // TX
+                FixedDMA(3, 3, Width32Bit, ) // RX
+            })
+        }
     }
 
     Name(\_S3, Package (0x04) {

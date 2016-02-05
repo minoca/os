@@ -551,6 +551,13 @@ Return Value:
         SD_WRITE_REGISTER(Controller, SdRegisterAdmaAddressLow, TableAddress);
 
     //
+    // If system DMA is active, assume that the whole transfer can occur.
+    //
+
+    } else if ((Controller->HostCapabilities & SD_MODE_SYSTEM_DMA) != 0) {
+        TransferSizeRemaining = 0;
+
+    //
     // Perform a single SDMA transfer. The transfer will stop on SDMA
     // boundaries, so limit this transfer to that next boundary.
     //

@@ -145,7 +145,7 @@ SdOmap4InterruptServiceDispatch (
     );
 
 VOID
-SdOmap4DmaCompletion (
+SdOmap4SdDmaCompletion (
     PSD_CONTROLLER Controller,
     PVOID Context,
     UINTN BytesTransferred,
@@ -210,12 +210,52 @@ SdOmap4GetSetBusWidth (
     BOOL Set
     );
 
+KSTATUS
+SdOmap4InitializeDma (
+    PSD_OMAP4_CONTEXT Device
+    );
+
+VOID
+SdOmap4DmaInterfaceCallback (
+    PVOID Context,
+    PDEVICE Device,
+    PVOID InterfaceBuffer,
+    ULONG InterfaceBufferSize,
+    BOOL Arrival
+    );
+
+VOID
+SdOmap4PerformDmaIo (
+    PSD_OMAP4_CHILD Child,
+    PIRP Irp
+    );
+
+KSTATUS
+SdOmap4SetupEdma (
+    PSD_OMAP4_CHILD Child
+    );
+
+VOID
+SdOmap4EdmaCompletion (
+    PDMA_TRANSFER Transfer
+    );
+
+VOID
+SdOmap4DmaCompletion (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    UINTN BytesTransferred,
+    KSTATUS Status
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
 
 PDRIVER SdOmap4Driver = NULL;
 UUID SdOmap4DiskInterfaceUuid = UUID_DISK_INTERFACE;
+UUID SdOmap4DmaUuid = UUID_DMA_INTERFACE;
+UUID SdOmap4Edma3Uuid = UUID_EDMA_CONTROLLER;
 
 DISK_INTERFACE SdOmap4DiskInterfaceTemplate = {
     DISK_INTERFACE_VERSION,
@@ -553,12 +593,8 @@ Return Value:
 
 {
 
-    UINTN BlockCount;
-    ULONGLONG BlockOffset;
-    UINTN BytesToComplete;
     PSD_OMAP4_CHILD Child;
     BOOL CompleteIrp;
-    ULONGLONG IoOffset;
     ULONG IrpReadWriteFlags;
     KSTATUS Status;
     BOOL Write;
@@ -628,14 +664,16 @@ Return Value:
     //
 
     } else {
-        BytesToComplete = Irp->U.ReadWrite.IoSizeInBytes;
-        IoOffset = Irp->U.ReadWrite.IoOffset;
         Irp->U.ReadWrite.IoBytesCompleted = 0;
+        Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
 
         ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
         ASSERT((Child->BlockCount != 0) && (Child->BlockShift != 0));
-        ASSERT(IS_ALIGNED(IoOffset, 1 << Child->BlockShift) != FALSE);
-        ASSERT(IS_ALIGNED(BytesToComplete, 1 << Child->BlockShift) != FALSE);
+        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset,
+                          1 << Child->BlockShift) != FALSE);
+
+        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoSizeInBytes,
+                          1 << Child->BlockShift) != FALSE);
 
         //
         // Before acquiring the controller's lock and starting the DMA, prepare
@@ -669,29 +707,10 @@ Return Value:
         // If it's DMA, just send it on through.
         //
 
-        Irp->U.ReadWrite.NewIoOffset = IoOffset;
         Child->Irp = Irp;
-        BlockOffset = IoOffset >> Child->BlockShift;
-        BlockCount = BytesToComplete >> Child->BlockShift;
         CompleteIrp = FALSE;
         IoPendIrp(SdOmap4Driver, Irp);
-
-        //
-        // Make sure the system isn't trying to do I/O off the end of the
-        // disk.
-        //
-
-        ASSERT(BlockOffset < Child->BlockCount);
-        ASSERT(BlockCount >= 1);
-
-        SdStandardBlockIoDma(Child->Controller,
-                             BlockOffset,
-                             BlockCount,
-                             Irp->U.ReadWrite.IoBuffer,
-                             0,
-                             Write,
-                             SdOmap4DmaCompletion,
-                             Child);
+        SdOmap4PerformDmaIo(Child, Irp);
 
         //
         // DMA transfers are self perpetuating, so after kicking off this
@@ -700,7 +719,6 @@ Return Value:
         //
 
         ASSERT(KeIsQueuedLockHeld(Child->ControllerLock) != FALSE);
-        ASSERT(CompleteIrp == FALSE);
     }
 
 DispatchIoEnd:
@@ -1131,11 +1149,15 @@ Return Value:
     PRESOURCE_ALLOCATION_LIST AllocationList;
     IO_CONNECT_INTERRUPT_PARAMETERS Connect;
     PRESOURCE_ALLOCATION ControllerBase;
+    PRESOURCE_ALLOCATION DmaRx;
+    PRESOURCE_ALLOCATION DmaTx;
     PRESOURCE_ALLOCATION LineAllocation;
     SD_INITIALIZATION_BLOCK Parameters;
     KSTATUS Status;
 
     ControllerBase = NULL;
+    DmaRx = NULL;
+    DmaTx = NULL;
 
     //
     // Loop through the allocated resources to get the controller base and the
@@ -1177,6 +1199,14 @@ Return Value:
             ASSERT(ControllerBase == NULL);
 
             ControllerBase = Allocation;
+
+        } else if (Allocation->Type == ResourceTypeDmaChannel) {
+            if (DmaTx == NULL) {
+                DmaTx = Allocation;
+
+            } else if (DmaRx == NULL) {
+                DmaRx = Allocation;
+            }
         }
 
         //
@@ -1201,6 +1231,7 @@ Return Value:
     // Initialize OMAP4 specific stuff.
     //
 
+    Device->ControllerPhysical = ControllerBase->Allocation;
     if (Device->ControllerBase == NULL) {
         Device->ControllerBase = MmMapPhysicalAddress(
                                                     ControllerBase->Allocation,
@@ -1223,6 +1254,22 @@ Return Value:
             ASSERT(FALSE);
 
             goto StartDeviceEnd;
+        }
+
+    } else if (Device->Soc == SdTiSocAm335) {
+
+        //
+        // Try to fire up system DMA.
+        //
+
+        Device->TxDmaResource = DmaTx;
+        Device->RxDmaResource = DmaRx;
+        if ((DmaTx != NULL) && (DmaRx != NULL)) {
+            Status = SdOmap4InitializeDma(Device);
+            if (!KSUCCESS(Status)) {
+                Device->TxDmaResource = NULL;
+                Device->RxDmaResource = NULL;
+            }
         }
     }
 
@@ -1253,6 +1300,10 @@ Return Value:
                                       SD_MODE_8BIT |
                                       SD_MODE_HIGH_SPEED |
                                       SD_MODE_AUTO_CMD12;
+
+        if (Device->Dma != NULL) {
+            Parameters.HostCapabilities |= SD_MODE_SYSTEM_DMA;
+        }
 
         Parameters.FundamentalClock = SD_OMAP4_FUNDAMENTAL_CLOCK_SPEED;
         Parameters.FunctionTable.GetSetBusWidth = SdOmap4GetSetBusWidth;
@@ -1415,7 +1466,7 @@ Return Value:
         // currently disabled on the TI AM33xx until EDMA is implemented.
         //
 
-        if (Device->Soc != SdTiSocAm335) {
+        if ((Device->Dma != NULL) || (Device->Soc != SdTiSocAm335)) {
             Status = SdStandardInitializeDma(Device->Controller);
             if (KSUCCESS(Status)) {
                 NewChild->Flags |= SD_OMAP4_CHILD_FLAG_DMA_SUPPORTED;
@@ -1758,7 +1809,7 @@ Return Value:
 }
 
 VOID
-SdOmap4DmaCompletion (
+SdOmap4SdDmaCompletion (
     PSD_CONTROLLER Controller,
     PVOID Context,
     UINTN BytesTransferred,
@@ -1792,58 +1843,25 @@ Return Value:
 
 {
 
-    UINTN BlockCount;
-    ULONGLONG BlockOffset;
     PSD_OMAP4_CHILD Child;
-    ULONGLONG IoOffset;
-    UINTN IoSize;
-    PIRP Irp;
-    BOOL Write;
 
     Child = Context;
-    Irp = Child->Irp;
+    if ((!KSUCCESS(Status)) || (Child->Parent->Dma == NULL)) {
+        if (!KSUCCESS(Status)) {
+            Child->Parent->Dma->Cancel(Child->Parent->Dma,
+                                       Child->Parent->DmaTransfer);
+        }
 
-    ASSERT(Irp != NULL);
-
-    if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SD OMAP4 Failed: %x\n", Status);
-        IoCompleteIrp(SdOmap4Driver, Irp, Status);
-        return;
-    }
-
-    Irp->U.ReadWrite.IoBytesCompleted += BytesTransferred;
-    Irp->U.ReadWrite.NewIoOffset += BytesTransferred;
+        SdOmap4DmaCompletion(Controller, Context, BytesTransferred, Status);
 
     //
-    // If this transfer's over, unlock and complete the IRP.
+    // If this is an SD interrupt coming in and system DMA is enabled, only
+    // complete the transfer if SD came in last.
     //
 
-    if (Irp->U.ReadWrite.IoBytesCompleted ==
-        Irp->U.ReadWrite.IoSizeInBytes) {
-
-        IoCompleteIrp(SdOmap4Driver, Irp, Status);
-        return;
+    } else if (RtlAtomicAdd32(&(Child->RemainingInterrupts), -1) == 1) {
+        SdOmap4DmaCompletion(Controller, Context, 0, Status);
     }
-
-    IoOffset = Irp->U.ReadWrite.IoOffset + Irp->U.ReadWrite.IoBytesCompleted;
-    BlockOffset = IoOffset >> Child->BlockShift;
-    IoSize = Irp->U.ReadWrite.IoSizeInBytes -
-             Irp->U.ReadWrite.IoBytesCompleted;
-
-    BlockCount = IoSize >> Child->BlockShift;
-    Write = FALSE;
-    if (Irp->MinorCode == IrpMinorIoWrite) {
-        Write = TRUE;
-    }
-
-    SdStandardBlockIoDma(Child->Controller,
-                         BlockOffset,
-                         BlockCount,
-                         Irp->U.ReadWrite.IoBuffer,
-                         Irp->U.ReadWrite.IoBytesCompleted,
-                         Write,
-                         SdOmap4DmaCompletion,
-                         Child);
 
     return;
 }
@@ -2424,5 +2442,451 @@ Return Value:
 
     SD_OMAP4_WRITE_REGISTER(Device, SD_OMAP4_CON_REGISTER, Value);
     return STATUS_SUCCESS;
+}
+
+KSTATUS
+SdOmap4InitializeDma (
+    PSD_OMAP4_CONTEXT Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to wire up EDMA on the SD controller.
+
+Arguments:
+
+    Device - Supplies a pointer to this SD OMAP4 device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINTN AllocationSize;
+    PEDMA_CONFIGURATION Configuration;
+    DMA_INFORMATION Information;
+    PRESOURCE_ALLOCATION Resource;
+    KSTATUS Status;
+    PDMA_TRANSFER Transfer;
+
+    Resource = Device->TxDmaResource;
+
+    ASSERT((Resource != NULL) &&
+           (Device->RxDmaResource != NULL) &&
+           (Resource->Provider == Device->RxDmaResource->Provider));
+
+    Status = IoRegisterForInterfaceNotifications(&SdOmap4DmaUuid,
+                                                 SdOmap4DmaInterfaceCallback,
+                                                 Resource->Provider,
+                                                 Device,
+                                                 TRUE);
+
+    if (!KSUCCESS(Status)) {
+        goto InitializeDmaEnd;
+    }
+
+    if (Device->Dma == NULL) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto InitializeDmaEnd;
+    }
+
+    RtlZeroMemory(&Information, sizeof(DMA_INFORMATION));
+    Information.Version = DMA_INFORMATION_VERSION;
+    Status = Device->Dma->GetInformation(Device->Dma, &Information);
+    if (!KSUCCESS(Status)) {
+        goto InitializeDmaEnd;
+    }
+
+    if (RtlAreUuidsEqual(&(Information.ControllerUuid), &SdOmap4Edma3Uuid) ==
+        FALSE) {
+
+        Status = STATUS_NOT_SUPPORTED;
+        goto InitializeDmaEnd;
+    }
+
+    if (Device->DmaTransfer == NULL) {
+        AllocationSize = sizeof(DMA_TRANSFER) + sizeof(EDMA_CONFIGURATION);
+        Transfer = MmAllocateNonPagedPool(AllocationSize, SD_ALLOCATION_TAG);
+        if (Transfer == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeDmaEnd;
+        }
+
+        RtlZeroMemory(Transfer, AllocationSize);
+        Device->DmaTransfer = Transfer;
+        Configuration = (PEDMA_CONFIGURATION)(Transfer + 1);
+        Device->EdmaConfiguration = Configuration;
+
+        //
+        // Fill in some of the fields that will never change transfer to
+        // transfer.
+        //
+
+        Transfer->Configuration = Configuration;
+        Transfer->ConfigurationSize = sizeof(EDMA_CONFIGURATION);
+        Transfer->CompletionCallback = SdOmap4EdmaCompletion;
+        Transfer->Width = 32;
+        Transfer->Device.Address = Device->ControllerPhysical +
+                                   SD_OMAP4_CONTROLLER_SD_REGISTER_OFFSET +
+                                   SdRegisterBufferDataPort;
+
+        Configuration->Mode = EdmaTriggerModeEvent;
+        Configuration->Param.ACount = 4;
+    }
+
+InitializeDmaEnd:
+    if (!KSUCCESS(Status)) {
+        IoUnregisterForInterfaceNotifications(&SdOmap4DmaUuid,
+                                              SdOmap4DmaInterfaceCallback,
+                                              Resource->Provider,
+                                              Device);
+    }
+
+    return Status;
+}
+
+VOID
+SdOmap4DmaInterfaceCallback (
+    PVOID Context,
+    PDEVICE Device,
+    PVOID InterfaceBuffer,
+    ULONG InterfaceBufferSize,
+    BOOL Arrival
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to notify listeners that an interface has arrived
+    or departed.
+
+Arguments:
+
+    Context - Supplies the caller's context pointer, supplied when the caller
+        requested interface notifications.
+
+    Device - Supplies a pointer to the device exposing or deleting the
+        interface.
+
+    InterfaceBuffer - Supplies a pointer to the interface buffer of the
+        interface.
+
+    InterfaceBufferSize - Supplies the buffer size.
+
+    Arrival - Supplies TRUE if a new interface is arriving, or FALSE if an
+        interface is departing.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSD_OMAP4_CONTEXT Sd;
+
+    Sd = Context;
+
+    ASSERT(InterfaceBufferSize >= sizeof(DMA_INTERFACE));
+    ASSERT((Sd->Dma == NULL) || (Sd->Dma == InterfaceBuffer));
+
+    if (Arrival != FALSE) {
+        Sd->Dma = InterfaceBuffer;
+
+    } else {
+        Sd->Dma = NULL;
+    }
+
+    return;
+}
+
+VOID
+SdOmap4PerformDmaIo (
+    PSD_OMAP4_CHILD Child,
+    PIRP Irp
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs DMA-based I/O for the OMAP SD controller.
+
+Arguments:
+
+    Child - Supplies a pointer to the child device.
+
+    Irp - Supplies a pointer to the partially completed IRP.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINTN BlockCount;
+    ULONGLONG BlockOffset;
+    ULONGLONG IoOffset;
+    ULONGLONG IoSize;
+    KSTATUS Status;
+    BOOL Write;
+
+    IoOffset = Irp->U.ReadWrite.IoOffset + Irp->U.ReadWrite.IoBytesCompleted;
+    BlockOffset = IoOffset >> Child->BlockShift;
+    IoSize = Irp->U.ReadWrite.IoSizeInBytes - Irp->U.ReadWrite.IoBytesCompleted;
+    BlockCount = IoSize >> Child->BlockShift;
+    Write = FALSE;
+    if (Irp->MinorCode == IrpMinorIoWrite) {
+        Write = TRUE;
+    }
+
+    ASSERT(BlockOffset < Child->BlockCount);
+    ASSERT(BlockCount >= 1);
+
+    //
+    // Set up the DMA transfer if the controller uses system DMA.
+    //
+
+    if (Child->Parent->Dma != NULL) {
+
+        ASSERT(Child->Parent->Soc == SdTiSocAm335);
+
+        Status = SdOmap4SetupEdma(Child);
+        if (!KSUCCESS(Status)) {
+            IoCompleteIrp(SdOmap4Driver, Irp, Status);
+            return;
+        }
+    }
+
+    SdStandardBlockIoDma(Child->Controller,
+                         BlockOffset,
+                         BlockCount,
+                         Irp->U.ReadWrite.IoBuffer,
+                         Irp->U.ReadWrite.IoBytesCompleted,
+                         Write,
+                         SdOmap4SdDmaCompletion,
+                         Child);
+
+    return;
+}
+
+KSTATUS
+SdOmap4SetupEdma (
+    PSD_OMAP4_CHILD Child
+    )
+
+/*++
+
+Routine Description:
+
+    This routine submits a system DMA request on behalf of the SD controller.
+
+Arguments:
+
+    Child - Supplies a pointer to the child device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG BlockLength;
+    ULONG Channel;
+    PEDMA_CONFIGURATION Configuration;
+    PDMA_INTERFACE Dma;
+    PDMA_TRANSFER DmaTransfer;
+    PIRP Irp;
+    KSTATUS Status;
+
+    Dma = Child->Parent->Dma;
+    DmaTransfer = Child->Parent->DmaTransfer;
+    Configuration = DmaTransfer->Configuration;
+    Irp = Child->Irp;
+    DmaTransfer->Memory = Irp->U.ReadWrite.IoBuffer;
+    DmaTransfer->Completed = Irp->U.ReadWrite.IoBytesCompleted;
+    DmaTransfer->Size = Irp->U.ReadWrite.IoSizeInBytes;
+    DmaTransfer->UserContext = Child;
+    Configuration->Param.Options = EDMA_TRANSFER_AB_SYNCHRONIZED |
+                                   EDMA_TRANSFER_FIFO_WIDTH_32;
+
+    if (Irp->MinorCode == IrpMinorIoWrite) {
+        DmaTransfer->Allocation = Child->Parent->TxDmaResource;
+        Channel = DmaTransfer->Allocation->Allocation;
+        DmaTransfer->Direction = DmaTransferToDevice;
+        BlockLength = Child->Controller->WriteBlockLength;
+        Configuration->Param.BCount = BlockLength / Configuration->Param.ACount;
+        Configuration->Param.SourceBIndex = Configuration->Param.ACount;
+        Configuration->Param.SourceCIndex = BlockLength;
+        Configuration->Param.DestinationBIndex = 0;
+        Configuration->Param.DestinationCIndex = 0;
+        Configuration->Param.Options |= EDMA_TRANSFER_DESTINATION_FIFO |
+                                        ((Channel <<
+                                          EDMA_TRANSFER_COMPLETION_CODE_SHIFT) &
+                                         EDMA_TRANSFER_COMPLETION_CODE_MASK);
+
+    } else {
+        DmaTransfer->Allocation = Child->Parent->RxDmaResource;
+        Channel = DmaTransfer->Allocation->Allocation;
+        DmaTransfer->Direction = DmaTransferFromDevice;
+        BlockLength = Child->Controller->ReadBlockLength;
+        Configuration->Param.BCount = BlockLength / Configuration->Param.ACount;
+        Configuration->Param.DestinationBIndex = Configuration->Param.ACount;
+        Configuration->Param.DestinationCIndex = BlockLength;
+        Configuration->Param.SourceBIndex = 0;
+        Configuration->Param.SourceCIndex = 0;
+        Configuration->Param.Options |= EDMA_TRANSFER_SOURCE_FIFO |
+                                        ((Channel <<
+                                          EDMA_TRANSFER_COMPLETION_CODE_SHIFT) &
+                                         EDMA_TRANSFER_COMPLETION_CODE_MASK);
+    }
+
+    ASSERT(Child->RemainingInterrupts == 0);
+
+    Child->RemainingInterrupts = 2;
+    Status = Dma->Submit(Dma, DmaTransfer);
+    return Status;
+}
+
+VOID
+SdOmap4EdmaCompletion (
+    PDMA_TRANSFER Transfer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when a transfer set has completed or errored out.
+
+Arguments:
+
+    Transfer - Supplies a pointer to the transfer that completed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSD_OMAP4_CHILD Child;
+    KSTATUS Status;
+
+    Child = Transfer->UserContext;
+    Status = Transfer->Status;
+    if (!KSUCCESS(Status)) {
+
+        //
+        // Cancel the SD transfer here.
+        //
+
+        SdErrorRecovery(Child->Controller);
+    }
+
+    SdOmap4DmaCompletion(Child->Controller,
+                         Child,
+                         Transfer->Completed,
+                         Status);
+
+    return;
+}
+
+VOID
+SdOmap4DmaCompletion (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    UINTN BytesTransferred,
+    KSTATUS Status
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called indirectly by either the EDMA code or the SD library
+    code once the transfer has actually completed. It either completes the IRP
+    or fires up a new transfer.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the library when the DMA
+        request was issued.
+
+    BytesTransferred - Supplies the number of bytes transferred in the request.
+
+    Status - Supplies the status code representing the completion of the I/O.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSD_OMAP4_CHILD Child;
+    PIRP Irp;
+
+    Child = Context;
+    Irp = Child->Irp;
+
+    ASSERT(Irp != NULL);
+
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("SD OMAP4 Failed: %x\n", Status);
+        IoCompleteIrp(SdOmap4Driver, Irp, Status);
+        return;
+    }
+
+    if (BytesTransferred != 0) {
+        Irp->U.ReadWrite.IoBytesCompleted += BytesTransferred;
+        Irp->U.ReadWrite.NewIoOffset += BytesTransferred;
+
+        //
+        // If more interrupts are expected, don't complete just yet.
+        //
+
+        if (RtlAtomicAdd32(&(Child->RemainingInterrupts), -1) != 1) {
+            return;
+        }
+
+    //
+    // Otherwise if this is SD and it was the last remaining interrupt, the
+    // DMA portion better be complete already.
+    //
+
+    } else {
+
+        ASSERT(Child->RemainingInterrupts == 0);
+    }
+
+    //
+    // If this transfer's over, complete the IRP.
+    //
+
+    if (Irp->U.ReadWrite.IoBytesCompleted ==
+        Irp->U.ReadWrite.IoSizeInBytes) {
+
+        IoCompleteIrp(SdOmap4Driver, Irp, Status);
+        return;
+    }
+
+    SdOmap4PerformDmaIo(Child, Irp);
+    return;
 }
 

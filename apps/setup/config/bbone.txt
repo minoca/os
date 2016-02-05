@@ -22,16 +22,18 @@ Environment:
 
 DriverFiles += DriverFilesArm;
 DriverFiles += [
-    "sdomap4.drv",
     "am3eth.drv",
     "am3i2c.drv",
-    "tps65217.drv",
     "am3soc.drv",
     "am3usb.drv",
+    "edma3.drv",
+    "sdomap4.drv",
+    "tps65217.drv",
 ];
 
 BootDrivers += [
     "am3soc.drv",
+    "edma3.drv",
     "sdomap4.drv",
 ];
 
@@ -83,3 +85,4 @@ BootPartition["Alignment"] = 1 * MEGABYTE;
 //
 
 BootmefiCopy["Destination"] += EFI_DEFAULT_APP_ARM;
+

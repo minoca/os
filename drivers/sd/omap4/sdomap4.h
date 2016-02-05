@@ -22,6 +22,8 @@ Author:
 
 #include <minoca/sd.h>
 #include <minoca/intrface/disk.h>
+#include <minoca/dma/dma.h>
+#include <minoca/dma/edma3.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -165,6 +167,9 @@ Members:
 
     DiskInterface - Stores the disk interface presented to the system.
 
+    RemainingInterrupts - Stores the count of remaining interrupts expected to
+        come in before the transfer is complete.
+
 --*/
 
 typedef struct _SD_OMAP4_CHILD {
@@ -179,6 +184,7 @@ typedef struct _SD_OMAP4_CHILD {
     ULONG BlockShift;
     ULONGLONG BlockCount;
     DISK_INTERFACE DiskInterface;
+    ULONG RemainingInterrupts;
 } SD_OMAP4_CHILD, *PSD_OMAP4_CHILD;
 
 /*++
@@ -196,6 +202,8 @@ Members:
     ControllerBase - Stores a pointer to the virtual address of the HSMMC
         registers.
 
+    ControllerPhysical - Stores the physical address of the HSMMC registers.
+
     InterruptLine - Stores ths interrupt line of the controller.
 
     InterruptVector - Stores the interrupt vector of the controller.
@@ -211,12 +219,24 @@ Members:
 
     Soc - Stores the type of system-on-chip this driver is servicing.
 
+    TxDmaResource - Stores a pointer to the transmit DMA resource.
+
+    RxDmaResource - Stores a pointer to the receive DMA resource.
+
+    DmaTransfer - Stores a pointer to the DMA transfer used on I/O.
+
+    EdmaConfiguration - Stores a pointer to the EDMA configuration used for the
+        transfer.
+
+    Dma - Stores a pointer to the DMA interface.
+
 --*/
 
 struct _SD_OMAP4_CONTEXT {
     SD_OMAP4_DEVICE_TYPE Type;
     PSD_CONTROLLER Controller;
     PVOID ControllerBase;
+    PHYSICAL_ADDRESS ControllerPhysical;
     ULONGLONG InterruptLine;
     ULONGLONG InterruptVector;
     volatile ULONG Flags;
@@ -224,6 +244,11 @@ struct _SD_OMAP4_CONTEXT {
     PSD_OMAP4_CHILD Child;
     PQUEUED_LOCK Lock;
     SD_TI_SOC Soc;
+    PRESOURCE_ALLOCATION TxDmaResource;
+    PRESOURCE_ALLOCATION RxDmaResource;
+    PDMA_TRANSFER DmaTransfer;
+    PEDMA_CONFIGURATION EdmaConfiguration;
+    PDMA_INTERFACE Dma;
 };
 
 //
