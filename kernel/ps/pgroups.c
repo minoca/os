@@ -415,8 +415,8 @@ Return Value:
     // process group and session changes.
     //
 
-    GroupLockHeld = TRUE;
     KeAcquireQueuedLock(PsProcessGroupListLock);
+    GroupLockHeld = TRUE;
 
     //
     // If the process is already a session leader, then do not allow it to
@@ -534,8 +534,8 @@ Return Value:
     // if there is no new session and it is not the current process.
     //
 
-    ProcessLockHeld = TRUE;
     KeAcquireQueuedLock(Process->QueuedLock);
+    ProcessLockHeld = TRUE;
     if ((Process != CurrentProcess) &&
         ((Process->Flags & PROCESS_FLAG_EXECUTED_IMAGE) != 0)) {
 

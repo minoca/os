@@ -1088,8 +1088,8 @@ Return Value:
             if (((Scan->Flags & NET80211_SCAN_FLAG_BROADCAST) == 0) &&
                 ((Scan->Flags & NET80211_SCAN_FLAG_JOIN) != 0)) {
 
-                LockHeld = TRUE;
                 KeAcquireQueuedLock(Link->Lock);
+                LockHeld = TRUE;
                 CurrentEntry = Link->BssList.Next;
                 while (CurrentEntry != &(Link->BssList)) {
                     BssEntry = LIST_VALUE(CurrentEntry,
@@ -1136,8 +1136,8 @@ Return Value:
             ASSERT(FoundEntry == NULL);
 
             MaxRssi = 0;
-            LockHeld = TRUE;
             KeAcquireQueuedLock(Link->Lock);
+            LockHeld = TRUE;
             CurrentEntry = Link->BssList.Next;
             while (CurrentEntry != &(Link->BssList)) {
                 BssEntry = LIST_VALUE(CurrentEntry,

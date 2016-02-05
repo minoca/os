@@ -226,7 +226,7 @@ NetpDebugPrintNetworkAddress (
 //
 
 LIST_ENTRY NetRawSocketsList;
-PQUEUED_LOCK NetRawSocketsLock;
+PSHARED_EXCLUSIVE_LOCK NetRawSocketsLock;
 
 //
 // Define the list of available network links (things that can actually send
@@ -235,7 +235,7 @@ PQUEUED_LOCK NetRawSocketsLock;
 //
 
 LIST_ENTRY NetLinkList;
-PQUEUED_LOCK NetLinkListLock;
+PSHARED_EXCLUSIVE_LOCK NetLinkListLock;
 
 UUID NetNetworkDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
 
@@ -284,12 +284,14 @@ Return Value:
     PNET_DATA_LINK_ENTRY FoundDataLink;
     PLIST_ENTRY LastEntry;
     PNET_LINK Link;
+    BOOL LockHeld;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     LastEntry = NULL;
     Link = NULL;
+    LockHeld = FALSE;
     Status = STATUS_SUCCESS;
     if (Properties->Version < NET_LINK_PROPERTIES_VERSION) {
         Status = STATUS_VERSION_MISMATCH;
@@ -341,7 +343,8 @@ Return Value:
     //
 
     FoundDataLink = NULL;
-    KeAcquireQueuedLock(NetPluginListLock);
+    KeAcquireSharedExclusiveLockShared(NetPluginListLock);
+    LockHeld = TRUE;
     CurrentEntry = NetDataLinkList.Next;
     while (CurrentEntry != &NetDataLinkList) {
         CurrentDataLink = LIST_VALUE(CurrentEntry,
@@ -356,7 +359,6 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
     }
 
-    KeReleaseQueuedLock(NetPluginListLock);
     if (FoundDataLink == NULL) {
         Status = STATUS_NOT_SUPPORTED;
         goto CreateLinkEnd;
@@ -374,24 +376,20 @@ Return Value:
     // link.
     //
 
-    KeAcquireQueuedLock(NetPluginListLock);
     CurrentEntry = NetNetworkList.Next;
     while (CurrentEntry != &NetNetworkList) {
         CurrentNetwork = LIST_VALUE(CurrentEntry, NET_NETWORK_ENTRY, ListEntry);
         Status = CurrentNetwork->Interface.InitializeLink(Link);
         if (!KSUCCESS(Status)) {
-            LastEntry = CurrentEntry;
-            break;
+            goto CreateLinkEnd;
         }
 
         CurrentEntry = CurrentEntry->Next;
+        LastEntry = CurrentEntry;
     }
 
-    KeReleaseQueuedLock(NetPluginListLock);
-    if (!KSUCCESS(Status)) {
-        goto CreateLinkEnd;
-    }
-
+    KeReleaseSharedExclusiveLockShared(NetPluginListLock);
+    LockHeld = FALSE;
     Status = STATUS_SUCCESS;
 
 CreateLinkEnd:
@@ -404,7 +402,11 @@ CreateLinkEnd:
             //
 
             if (LastEntry != NULL) {
-                KeAcquireQueuedLock(NetPluginListLock);
+                if (LockHeld == FALSE) {
+                    KeAcquireSharedExclusiveLockShared(NetPluginListLock);
+                    LockHeld = TRUE;
+                }
+
                 CurrentEntry = NetNetworkList.Next;
                 while (CurrentEntry != LastEntry) {
                     CurrentNetwork = LIST_VALUE(CurrentEntry,
@@ -415,7 +417,11 @@ CreateLinkEnd:
                     CurrentEntry = CurrentEntry->Next;
                 }
 
-                KeReleaseQueuedLock(NetPluginListLock);
+            }
+
+            if (LockHeld != FALSE) {
+                KeReleaseSharedExclusiveLockShared(NetPluginListLock);
+                LockHeld = FALSE;
             }
 
             if (Link->DataLinkEntry != NULL) {
@@ -434,6 +440,8 @@ CreateLinkEnd:
             Link = NULL;
         }
     }
+
+    ASSERT(LockHeld == FALSE);
 
     *NewLink = Link;
     return Status;
@@ -560,7 +568,7 @@ Return Value:
     // Link state is synchronized under the global link list lock.
     //
 
-    KeAcquireQueuedLock(NetLinkListLock);
+    KeAcquireSharedExclusiveLockExclusive(NetLinkListLock);
     OriginalLinkUp = Link->LinkUp;
     Link->LinkUp = LinkUp;
     Link->LinkSpeed = LinkSpeed;
@@ -573,7 +581,7 @@ Return Value:
         RtlDebugPrint(" down\n");
     }
 
-    KeReleaseQueuedLock(NetLinkListLock);
+    KeReleaseSharedExclusiveLockExclusive(NetLinkListLock);
 
     //
     // If the link state was not changed, then take no action.
@@ -870,10 +878,10 @@ Return Value:
     //
 
     if (Link->ListEntry.Next != NULL) {
-        KeAcquireQueuedLock(NetLinkListLock);
+        KeAcquireSharedExclusiveLockExclusive(NetLinkListLock);
         LIST_REMOVE(&(Link->ListEntry));
         Link->ListEntry.Next = NULL;
-        KeReleaseQueuedLock(NetLinkListLock);
+        KeReleaseSharedExclusiveLockExclusive(NetLinkListLock);
     }
 
     //
@@ -913,12 +921,12 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    KeAcquireQueuedLock(NetLinkListLock);
+    KeAcquireSharedExclusiveLockExclusive(NetLinkListLock);
 
     ASSERT(Link->ListEntry.Next == NULL);
 
     INSERT_BEFORE(&(Link->ListEntry), &NetLinkList);
-    KeReleaseQueuedLock(NetLinkListLock);
+    KeReleaseSharedExclusiveLockExclusive(NetLinkListLock);
     return STATUS_SUCCESS;
 }
 
@@ -973,7 +981,7 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     Status = STATUS_INVALID_ADDRESS;
-    KeAcquireQueuedLock(NetLinkListLock);
+    KeAcquireSharedExclusiveLockShared(NetLinkListLock);
     if (LIST_EMPTY(&NetLinkList)) {
         Status = STATUS_NO_NETWORK_CONNECTION;
         goto FindLinkForLocalAddress;
@@ -1039,7 +1047,7 @@ Return Value:
     }
 
 FindLinkForLocalAddress:
-    KeReleaseQueuedLock(NetLinkListLock);
+    KeReleaseSharedExclusiveLockShared(NetLinkListLock);
     return Status;
 }
 
@@ -1082,7 +1090,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    KeAcquireQueuedLock(NetLinkListLock);
+    KeAcquireSharedExclusiveLockShared(NetLinkListLock);
     if (LIST_EMPTY(&NetLinkList)) {
         Status = STATUS_NO_NETWORK_CONNECTION;
         goto FindLinkForDestinationAddressEnd;
@@ -1150,7 +1158,7 @@ Return Value:
     }
 
 FindLinkForDestinationAddressEnd:
-    KeReleaseQueuedLock(NetLinkListLock);
+    KeReleaseSharedExclusiveLockShared(NetLinkListLock);
     return Status;
 }
 
@@ -1705,9 +1713,9 @@ Return Value:
     }
 
     if (Socket->KernelSocket.Type == SocketTypeRaw) {
-        KeAcquireQueuedLock(NetRawSocketsLock);
+        KeAcquireSharedExclusiveLockExclusive(NetRawSocketsLock);
         NetpDeactivateRawSocketUnlocked(Socket);
-        KeReleaseQueuedLock(NetRawSocketsLock);
+        KeReleaseSharedExclusiveLockExclusive(NetRawSocketsLock);
 
     } else {
         KeAcquireSharedExclusiveLockExclusive(Socket->Protocol->SocketLock);
@@ -2249,7 +2257,7 @@ Return Value:
 
     Protocol = Socket->Protocol;
     if (Socket->KernelSocket.Type == SocketTypeRaw) {
-        KeAcquireQueuedLock(NetRawSocketsLock);
+        KeAcquireSharedExclusiveLockExclusive(NetRawSocketsLock);
         if (Socket->BindingType != SocketFullyBound) {
             Status = STATUS_INVALID_PARAMETER;
             goto DisconnectSocketEnd;
@@ -2319,7 +2327,7 @@ Return Value:
 
 DisconnectSocketEnd:
     if (Socket->KernelSocket.Type == SocketTypeRaw) {
-        KeReleaseQueuedLock(NetRawSocketsLock);
+        KeReleaseSharedExclusiveLockExclusive(NetRawSocketsLock);
 
     } else {
         KeReleaseSharedExclusiveLockExclusive(Protocol->SocketLock);
@@ -2925,7 +2933,7 @@ Return Value:
     // packet, allow it to process the data.
     //
 
-    KeAcquireQueuedLock(NetRawSocketsLock);
+    KeAcquireSharedExclusiveLockShared(NetRawSocketsLock);
     CurrentEntry = NetRawSocketsList.Next;
     while (CurrentEntry != &NetRawSocketsList) {
         Socket = LIST_VALUE(CurrentEntry, NET_SOCKET, U.ListEntry);
@@ -3013,7 +3021,7 @@ Return Value:
         NetpRawSocketProcessReceivedData(Socket, Packet, SourceAddress);
     }
 
-    KeReleaseQueuedLock(NetRawSocketsLock);
+    KeReleaseSharedExclusiveLockShared(NetRawSocketsLock);
     return;
 }
 
@@ -3076,13 +3084,13 @@ Return Value:
 
     KSTATUS Status;
 
-    NetLinkListLock = KeCreateQueuedLock();
+    NetLinkListLock = KeCreateSharedExclusiveLock();
     if (NetLinkListLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeNetworkLayerEnd;
     }
 
-    NetRawSocketsLock = KeCreateQueuedLock();
+    NetRawSocketsLock = KeCreateSharedExclusiveLock();
     if (NetRawSocketsLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto InitializeNetworkLayerEnd;
@@ -3095,8 +3103,13 @@ Return Value:
 InitializeNetworkLayerEnd:
     if (!KSUCCESS(Status)) {
         if (NetLinkListLock != NULL) {
-            KeDestroyQueuedLock(NetLinkListLock);
+            KeDestroySharedExclusiveLock(NetLinkListLock);
             NetLinkListLock = NULL;
+        }
+
+        if (NetRawSocketsLock != NULL) {
+            KeDestroySharedExclusiveLock(NetRawSocketsLock);
+            NetRawSocketsLock = NULL;
         }
     }
 
@@ -3407,7 +3420,7 @@ Return Value:
     }
 
     KeDestroyEvent(Link->AddressTranslationEvent);
-    KeAcquireQueuedLock(NetPluginListLock);
+    KeAcquireSharedExclusiveLockShared(NetPluginListLock);
     CurrentEntry = NetNetworkList.Next;
     while (CurrentEntry != &NetNetworkList) {
         CurrentNetwork = LIST_VALUE(CurrentEntry, NET_NETWORK_ENTRY, ListEntry);
@@ -3415,7 +3428,7 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
     }
 
-    KeReleaseQueuedLock(NetPluginListLock);
+    KeReleaseSharedExclusiveLockShared(NetPluginListLock);
     Link->DataLinkEntry->Interface.DestroyLink(Link);
     MmFreePagedPool(Link);
     return;
@@ -3532,7 +3545,7 @@ Return Value:
 
 {
 
-    ASSERT(KeIsQueuedLockHeld(NetRawSocketsLock) != FALSE);
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetRawSocketsLock) != FALSE);
     ASSERT(Socket->KernelSocket.Type == SocketTypeRaw);
 
     if (((Socket->Flags & NET_SOCKET_FLAG_ACTIVE) == 0) &&
@@ -3605,7 +3618,7 @@ Return Value:
     // protocol.
     //
 
-    KeAcquireQueuedLock(NetPluginListLock);
+    KeAcquireSharedExclusiveLockShared(NetPluginListLock);
     CurrentEntry = NetProtocolList.Next;
     while (CurrentEntry != &NetProtocolList) {
         Protocol = LIST_VALUE(CurrentEntry, NET_PROTOCOL_ENTRY, ListEntry);
@@ -3648,13 +3661,13 @@ Return Value:
         KeReleaseSharedExclusiveLockExclusive(Protocol->SocketLock);
     }
 
-    KeReleaseQueuedLock(NetPluginListLock);
+    KeReleaseSharedExclusiveLockShared(NetPluginListLock);
 
     //
     // Detach all the raw sockets that were using this link.
     //
 
-    KeAcquireQueuedLock(NetRawSocketsLock);
+    KeAcquireSharedExclusiveLockExclusive(NetRawSocketsLock);
     CurrentEntry = NetRawSocketsList.Next;
     while (CurrentEntry != &NetRawSocketsList) {
         Socket = LIST_VALUE(CurrentEntry, NET_SOCKET, U.ListEntry);
@@ -3668,7 +3681,7 @@ Return Value:
         NetpDetachRawSocket(Socket);
     }
 
-    KeReleaseQueuedLock(NetRawSocketsLock);
+    KeReleaseSharedExclusiveLockExclusive(NetRawSocketsLock);
     return;
 }
 
@@ -3737,7 +3750,6 @@ Return Value:
 
 {
 
-    ASSERT(KeIsQueuedLockHeld(NetRawSocketsLock) != FALSE);
     ASSERT((Socket->Link->LinkUp == FALSE) ||
            (Socket->LinkAddress->Configured == FALSE));
 
@@ -3805,7 +3817,7 @@ Return Value:
     // the socket.
     //
 
-    KeAcquireQueuedLock(NetRawSocketsLock);
+    KeAcquireSharedExclusiveLockExclusive(NetRawSocketsLock);
 
     //
     // If the socket is locally bound and destined to be fully bound, then the
@@ -3970,7 +3982,7 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 BindRawSocketEnd:
-    KeReleaseQueuedLock(NetRawSocketsLock);
+    KeReleaseSharedExclusiveLockExclusive(NetRawSocketsLock);
     return Status;
 }
 

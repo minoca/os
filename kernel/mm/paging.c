@@ -2046,8 +2046,8 @@ Return Value:
     // allocated.
     //
 
-    LockHeld = TRUE;
     KeAcquireQueuedLock(MmPageFileListLock);
+    LockHeld = TRUE;
 
     //
     // If the paging thread has not yet been created, attempt to create the

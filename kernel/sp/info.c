@@ -177,8 +177,8 @@ Return Value:
     } else if (Information->Operation != SpGetSetStateOperationNone) {
         DisableFlags = 0;
         EnableFlags = 0;
-        LockHeld = TRUE;
         KeAcquireQueuedLock(SpProfilingQueuedLock);
+        LockHeld = TRUE;
         switch (Information->Operation) {
         case SpGetSetStateOperationOverwrite:
             ChangedFlags = SpEnabledFlags ^ Information->ProfilerTypeFlags;

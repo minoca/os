@@ -1097,7 +1097,7 @@ Return Value:
         // beginning.
         //
 
-        MmReleaseAddressSpaceLock(AddressSpace);
+        MmAcquireAddressSpaceLock(AddressSpace);
         LockHeld = TRUE;
         if (CurrentSection->AddressListEntry.Next == NULL) {
             CurrentEntry = AddressSpace->SectionListHead.Next;

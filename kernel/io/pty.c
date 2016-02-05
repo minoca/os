@@ -1709,8 +1709,8 @@ Return Value:
             //
 
             Number = 0;
-            ListLockHeld = TRUE;
             KeAcquireQueuedLock(IoTerminalListLock);
+            ListLockHeld = TRUE;
             LIST_REMOVE(&(Terminal->ListEntry));
             CurrentEntry = IoTerminalList.Next;
             TerminalAfterEntry = &IoTerminalList;

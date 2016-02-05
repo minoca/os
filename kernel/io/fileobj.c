@@ -698,8 +698,8 @@ Return Value:
             // added this entry since the lock was dropped, so check once more.
             //
 
-            LockHeld = TRUE;
             KeAcquireQueuedLock(IoFileObjectsLock);
+            LockHeld = TRUE;
             Object = IopLookupFileObjectByProperties(Properties);
             if (Object == NULL) {
                 RtlRedBlackTreeInsert(&IoFileObjectsTree,

@@ -882,9 +882,9 @@ Return Value:
     // Acquire the wait block lock and loop through each object in the array.
     //
 
-    LockHeld = TRUE;
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     KeAcquireSpinLock(&(WaitBlock->Lock));
+    LockHeld = TRUE;
     WaitBlock->SignalingQueue = NULL;
     for (Index = 0; Index < Count; Index += 1) {
 
@@ -1490,10 +1490,10 @@ Return Value:
     // release threads.
     //
 
-    LockHeld = TRUE;
     INITIALIZE_LIST_HEAD(&ReleaseList);
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     KeAcquireSpinLock(&(Queue->Lock));
+    LockHeld = TRUE;
 
     //
     // Loop attempting to run the waiters. If only signalling for one, the

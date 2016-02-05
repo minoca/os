@@ -1224,8 +1224,8 @@ Return Value:
     // Acquire the mount lock exclusively throughout the whole mount process.
     //
 
-    LockHeld = TRUE;
     KeAcquireSharedExclusiveLockExclusive(IoMountLock);
+    LockHeld = TRUE;
 
     //
     // Allocate the new mount point and copy the child mount points of the

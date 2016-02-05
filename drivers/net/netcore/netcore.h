@@ -69,21 +69,14 @@ extern BOOL NetGlobalDebug;
 extern LIST_ENTRY NetProtocolList;
 extern LIST_ENTRY NetNetworkList;
 extern LIST_ENTRY NetDataLinkList;
-extern PQUEUED_LOCK NetPluginListLock;
-
-//
-// Define the trees that hold all the sockets.
-//
-
-extern RED_BLACK_TREE NetSocketTree[SocketBindingTypeCount];
-extern PQUEUED_LOCK NetSocketsLock;
+extern PSHARED_EXCLUSIVE_LOCK NetPluginListLock;
 
 //
 // Define the list of raw sockets. These do not get put in the socket trees.
 //
 
 extern LIST_ENTRY NetRawSocketsList;
-extern PQUEUED_LOCK NetRawSocketsLock;
+extern PSHARED_EXCLUSIVE_LOCK NetRawSocketsLock;
 
 //
 // -------------------------------------------------------- Function Prototypes

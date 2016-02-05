@@ -141,7 +141,7 @@ NetpDestroyProtocol (
 LIST_ENTRY NetProtocolList;
 LIST_ENTRY NetNetworkList;
 LIST_ENTRY NetDataLinkList;
-PQUEUED_LOCK NetPluginListLock;
+PSHARED_EXCLUSIVE_LOCK NetPluginListLock;
 
 BOOL NetInitialized = FALSE;
 
@@ -224,7 +224,7 @@ Return Value:
     INITIALIZE_LIST_HEAD(&NetProtocolList);
     INITIALIZE_LIST_HEAD(&NetNetworkList);
     INITIALIZE_LIST_HEAD(&NetDataLinkList);
-    NetPluginListLock = KeCreateQueuedLock();
+    NetPluginListLock = KeCreateSharedExclusiveLock();
     if (NetPluginListLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto DriverEntryEnd;
@@ -265,7 +265,7 @@ Return Value:
 DriverEntryEnd:
     if (!KSUCCESS(Status)) {
         if (NetPluginListLock != NULL) {
-            KeDestroyQueuedLock(NetPluginListLock);
+            KeDestroySharedExclusiveLock(NetPluginListLock);
             NetPluginListLock = NULL;
         }
 
@@ -317,12 +317,14 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     HANDLE Handle;
+    BOOL LockHeld;
     PNET_PROTOCOL_ENTRY NewProtocolCopy;
     PNET_PROTOCOL_ENTRY Protocol;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    LockHeld = FALSE;
     Handle = INVALID_HANDLE;
     NewProtocolCopy = NULL;
     if ((NewProtocol->Type == SocketTypeInvalid) ||
@@ -376,7 +378,8 @@ Return Value:
                               0,
                               NetpCompareFullyBoundSockets);
 
-    KeAcquireQueuedLock(NetPluginListLock);
+    KeAcquireSharedExclusiveLockExclusive(NetPluginListLock);
+    LockHeld = TRUE;
 
     //
     // Loop through looking for a previous registration with this protocol type
@@ -427,7 +430,10 @@ Return Value:
     Handle = NewProtocolCopy;
 
 RegisterProtocolEnd:
-    KeReleaseQueuedLock(NetPluginListLock);
+    if (LockHeld != FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(NetPluginListLock);
+    }
+
     if (!KSUCCESS(Status)) {
         if (NewProtocolCopy != NULL) {
             NetpDestroyProtocol(NewProtocolCopy);
@@ -477,7 +483,7 @@ Return Value:
     // handle.
     //
 
-    KeAcquireQueuedLock(NetPluginListLock);
+    KeAcquireSharedExclusiveLockExclusive(NetPluginListLock);
     CurrentEntry = NetProtocolList.Next;
     while (CurrentEntry != &NetProtocolList) {
         Protocol = LIST_VALUE(CurrentEntry, NET_PROTOCOL_ENTRY, ListEntry);
@@ -490,7 +496,7 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
     }
 
-    KeReleaseQueuedLock(NetPluginListLock);
+    KeReleaseSharedExclusiveLockExclusive(NetPluginListLock);
     if (FoundProtocol != NULL) {
         NetpDestroyProtocol(FoundProtocol);
     }
@@ -537,12 +543,14 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     HANDLE Handle;
+    BOOL LockHeld;
     PNET_NETWORK_ENTRY Network;
     PNET_NETWORK_ENTRY NewNetworkCopy;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    LockHeld = FALSE;
     Handle = INVALID_HANDLE;
     NewNetworkCopy = NULL;
     if ((NewNetworkEntry->Type == SocketNetworkInvalid) ||
@@ -576,7 +584,8 @@ Return Value:
     }
 
     RtlCopyMemory(NewNetworkCopy, NewNetworkEntry, sizeof(NET_NETWORK_ENTRY));
-    KeAcquireQueuedLock(NetPluginListLock);
+    KeAcquireSharedExclusiveLockExclusive(NetPluginListLock);
+    LockHeld = TRUE;
 
     //
     // Loop through looking for a previous registration with this network layer
@@ -618,7 +627,10 @@ Return Value:
     Handle = NewNetworkCopy;
 
 RegisterNetworkLayerEnd:
-    KeReleaseQueuedLock(NetPluginListLock);
+    if (LockHeld != FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(NetPluginListLock);
+    }
+
     if (!KSUCCESS(Status)) {
         if (NewNetworkCopy != NULL) {
             MmFreePagedPool(NewNetworkCopy);
@@ -668,7 +680,7 @@ Return Value:
     // handle.
     //
 
-    KeAcquireQueuedLock(NetPluginListLock);
+    KeAcquireSharedExclusiveLockExclusive(NetPluginListLock);
     CurrentEntry = NetNetworkList.Next;
     while (CurrentEntry != &NetNetworkList) {
         Network = LIST_VALUE(CurrentEntry, NET_NETWORK_ENTRY, ListEntry);
@@ -681,7 +693,7 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
     }
 
-    KeReleaseQueuedLock(NetPluginListLock);
+    KeReleaseSharedExclusiveLockExclusive(NetPluginListLock);
     if (FoundNetwork != NULL) {
         MmFreePagedPool(FoundNetwork);
     }
@@ -730,11 +742,13 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PNET_DATA_LINK_ENTRY DataLink;
     HANDLE Handle;
+    BOOL LockHeld;
     PNET_DATA_LINK_ENTRY NewDataLinkCopy;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    LockHeld = FALSE;
     Handle = INVALID_HANDLE;
     NewDataLinkCopy = NULL;
     if ((NewDataLinkEntry->Type == NetDataLinkInvalid) ||
@@ -766,7 +780,8 @@ Return Value:
                   NewDataLinkEntry,
                   sizeof(NET_DATA_LINK_ENTRY));
 
-    KeAcquireQueuedLock(NetPluginListLock);
+    KeAcquireSharedExclusiveLockExclusive(NetPluginListLock);
+    LockHeld = TRUE;
 
     //
     // Loop through looking for a previous registration with this data link
@@ -793,7 +808,10 @@ Return Value:
     Handle = NewDataLinkCopy;
 
 RegisterDataLinkLayerEnd:
-    KeReleaseQueuedLock(NetPluginListLock);
+    if (LockHeld != FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(NetPluginListLock);
+    }
+
     if (!KSUCCESS(Status)) {
         if (NewDataLinkCopy != NULL) {
             MmFreePagedPool(NewDataLinkCopy);
@@ -843,7 +861,7 @@ Return Value:
     // handle.
     //
 
-    KeAcquireQueuedLock(NetPluginListLock);
+    KeAcquireSharedExclusiveLockExclusive(NetPluginListLock);
     CurrentEntry = NetDataLinkList.Next;
     while (CurrentEntry != &NetDataLinkList) {
         DataLink = LIST_VALUE(CurrentEntry, NET_DATA_LINK_ENTRY, ListEntry);
@@ -856,7 +874,7 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
     }
 
-    KeReleaseQueuedLock(NetPluginListLock);
+    KeReleaseSharedExclusiveLockExclusive(NetPluginListLock);
     if (FoundDataLink != NULL) {
         MmFreePagedPool(FoundDataLink);
     }
@@ -916,7 +934,7 @@ Return Value:
 
         NetworkEntry = NULL;
         NetworkFound = FALSE;
-        KeAcquireQueuedLock(NetPluginListLock);
+        KeAcquireSharedExclusiveLockShared(NetPluginListLock);
         CurrentEntry = NetNetworkList.Next;
         while (CurrentEntry != &NetNetworkList) {
             NetworkEntry = LIST_VALUE(CurrentEntry,
@@ -931,7 +949,7 @@ Return Value:
             CurrentEntry = CurrentEntry->Next;
         }
 
-        KeReleaseQueuedLock(NetPluginListLock);
+        KeReleaseSharedExclusiveLockShared(NetPluginListLock);
         if (NetworkFound == FALSE) {
             return NULL;
         }
@@ -991,7 +1009,7 @@ Return Value:
 
         ProtocolEntry = NULL;
         ProtocolFound = FALSE;
-        KeAcquireQueuedLock(NetPluginListLock);
+        KeAcquireSharedExclusiveLockShared(NetPluginListLock);
         CurrentEntry = NetProtocolList.Next;
         while (CurrentEntry != &NetProtocolList) {
             ProtocolEntry = LIST_VALUE(CurrentEntry,
@@ -1006,7 +1024,7 @@ Return Value:
             CurrentEntry = CurrentEntry->Next;
         }
 
-        KeReleaseQueuedLock(NetPluginListLock);
+        KeReleaseSharedExclusiveLockShared(NetPluginListLock);
         if (ProtocolFound == FALSE) {
             return NULL;
         }
@@ -1129,7 +1147,7 @@ Return Value:
     // string.
     //
 
-    KeAcquireQueuedLock(NetPluginListLock);
+    KeAcquireSharedExclusiveLockShared(NetPluginListLock);
     if (SOCKET_IS_NETWORK_PHYSICAL(Address->Network) != FALSE) {
         CurrentEntry = NetDataLinkList.Next;
         while (CurrentEntry != &NetDataLinkList) {
@@ -1177,7 +1195,7 @@ Return Value:
         }
     }
 
-    KeReleaseQueuedLock(NetPluginListLock);
+    KeReleaseSharedExclusiveLockShared(NetPluginListLock);
     StringBuffer[NET_PRINT_ADDRESS_STRING_LENGTH - 1] = '\0';
     RtlDebugPrint("%s", StringBuffer);
     return;
@@ -1243,7 +1261,7 @@ Return Value:
     ProtocolFound = FALSE;
     NetworkEntry = NULL;
     NetworkFound = FALSE;
-    KeAcquireQueuedLock(NetPluginListLock);
+    KeAcquireSharedExclusiveLockShared(NetPluginListLock);
     CurrentEntry = NetProtocolList.Next;
     while (CurrentEntry != &NetProtocolList) {
         ProtocolEntry = LIST_VALUE(CurrentEntry, NET_PROTOCOL_ENTRY, ListEntry);
@@ -1252,7 +1270,8 @@ Return Value:
             continue;
         }
 
-        if ((Protocol != 0) &&
+        if ((Type != SocketTypeRaw) &&
+            (Protocol != 0) &&
             (ProtocolEntry->ParentProtocolNumber != Protocol)) {
 
             continue;
@@ -1273,7 +1292,7 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
     }
 
-    KeReleaseQueuedLock(NetPluginListLock);
+    KeReleaseSharedExclusiveLockShared(NetPluginListLock);
     if ((ProtocolFound == FALSE) || (NetworkFound == FALSE)) {
         Status = STATUS_NOT_SUPPORTED;
         goto CreateSocketEnd;
@@ -1889,7 +1908,7 @@ Return Value:
             //
 
             if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
-                KeAcquireQueuedLock(NetRawSocketsLock);
+                KeAcquireSharedExclusiveLockShared(NetRawSocketsLock);
 
             } else {
                 KeAcquireSharedExclusiveLockShared(Protocol->SocketLock);
@@ -1910,6 +1929,10 @@ Return Value:
                     AddressOption->Network = NetSocket->KernelSocket.Network;
                 }
 
+                if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
+                    AddressOption->Port = NetSocket->KernelSocket.Protocol;
+                }
+
             } else {
 
                 ASSERT(BasicOption == SocketBasicOptionRemoteAddress);
@@ -1920,7 +1943,7 @@ Return Value:
             }
 
             if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
-                KeReleaseQueuedLock(NetRawSocketsLock);
+                KeReleaseSharedExclusiveLockShared(NetRawSocketsLock);
 
             } else {
                 KeReleaseSharedExclusiveLockShared(Protocol->SocketLock);
