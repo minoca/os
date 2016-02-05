@@ -50,7 +50,7 @@ Structure Description:
 
 Members:
 
-    Lock - Stores a pointer to the lock serializing access to this channel.
+    Lock - Stores the lock serializing access to this channel.
 
     Transfer - Stores a pointer to the transfer currently in progress on this
         channel.
@@ -60,7 +60,7 @@ Members:
 --*/
 
 typedef struct _DMA_CHANNEL {
-    PQUEUED_LOCK Lock;
+    KSPIN_LOCK Lock;
     PDMA_TRANSFER Transfer;
     LIST_ENTRY Queue;
 } DMA_CHANNEL, *PDMA_CHANNEL;
@@ -87,9 +87,6 @@ Members:
     ArbiterCreated - Stores a boolean indicating whether or not the DMA
         arbiter has been created yet.
 
-    Lock - Stores a pointer to the lock serializing access to internal data
-        structures.
-
 --*/
 
 struct _DMA_CONTROLLER {
@@ -99,7 +96,6 @@ struct _DMA_CONTROLLER {
     PDMA_CHANNEL Channels;
     ULONG ChannelCount;
     BOOL ArbiterCreated;
-    PQUEUED_LOCK Lock;
 };
 
 //

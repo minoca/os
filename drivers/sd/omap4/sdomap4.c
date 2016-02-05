@@ -2510,16 +2510,22 @@ Return Value:
     }
 
     if (Device->DmaTransfer == NULL) {
-        AllocationSize = sizeof(DMA_TRANSFER) + sizeof(EDMA_CONFIGURATION);
-        Transfer = MmAllocateNonPagedPool(AllocationSize, SD_ALLOCATION_TAG);
-        if (Transfer == NULL) {
+        Status = Device->Dma->AllocateTransfer(Device->Dma, &Transfer);
+        if (!KSUCCESS(Status)) {
+            goto InitializeDmaEnd;
+        }
+
+        Device->DmaTransfer = Transfer;
+        AllocationSize = sizeof(EDMA_CONFIGURATION);
+        Configuration = MmAllocateNonPagedPool(AllocationSize,
+                                               SD_ALLOCATION_TAG);
+
+        if (Configuration == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto InitializeDmaEnd;
         }
 
-        RtlZeroMemory(Transfer, AllocationSize);
-        Device->DmaTransfer = Transfer;
-        Configuration = (PEDMA_CONFIGURATION)(Transfer + 1);
+        RtlZeroMemory(Configuration, AllocationSize);
         Device->EdmaConfiguration = Configuration;
 
         //
@@ -2541,6 +2547,16 @@ Return Value:
 
 InitializeDmaEnd:
     if (!KSUCCESS(Status)) {
+        if (Device->DmaTransfer != NULL) {
+            Device->Dma->FreeTransfer(Device->Dma, Device->DmaTransfer);
+            Device->DmaTransfer = NULL;
+        }
+
+        if (Device->EdmaConfiguration != NULL) {
+            MmFreeNonPagedPool(Device->EdmaConfiguration);
+            Device->EdmaConfiguration = NULL;
+        }
+
         IoUnregisterForInterfaceNotifications(&SdOmap4DmaUuid,
                                               SdOmap4DmaInterfaceCallback,
                                               Resource->Provider,

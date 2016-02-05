@@ -71,6 +71,31 @@ DmaControlRequest (
     UINTN RequestSize
     );
 
+KSTATUS
+DmaAllocateTransfer (
+    PDMA_INTERFACE Interface,
+    PDMA_TRANSFER *Transfer
+    );
+
+VOID
+DmaFreeTransfer (
+    PDMA_INTERFACE Interface,
+    PDMA_TRANSFER Transfer
+    );
+
+RUNLEVEL
+DmapAcquireChannelLock (
+    PDMA_CONTROLLER Controller,
+    PDMA_CHANNEL Channel
+    );
+
+VOID
+DmapReleaseChannelLock (
+    PDMA_CONTROLLER Controller,
+    PDMA_CHANNEL Channel,
+    RUNLEVEL OldRunLevel
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -82,7 +107,9 @@ DMA_INTERFACE DmaInterfaceTemplate = {
     DmaGetInformation,
     DmaSubmit,
     DmaCancel,
-    DmaControlRequest
+    DmaControlRequest,
+    DmaAllocateTransfer,
+    DmaFreeTransfer
 };
 
 //
@@ -152,7 +179,9 @@ Return Value:
 {
 
     UINTN AllocationSize;
+    PDMA_CHANNEL Channel;
     ULONG ChannelCount;
+    ULONG ChannelIndex;
     PDMA_CONTROLLER NewController;
     KSTATUS Status;
 
@@ -167,7 +196,7 @@ Return Value:
     AllocationSize = sizeof(DMA_CONTROLLER) +
                      (ChannelCount * sizeof(DMA_CHANNEL));
 
-    NewController = MmAllocatePagedPool(AllocationSize, DMA_ALLOCATION_TAG);
+    NewController = MmAllocateNonPagedPool(AllocationSize, DMA_ALLOCATION_TAG);
     if (NewController == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateControllerEnd;
@@ -185,10 +214,10 @@ Return Value:
     NewController->Magic = DMA_CONTROLLER_MAGIC;
     NewController->ChannelCount = ChannelCount;
     NewController->Channels = (PDMA_CHANNEL)(NewController + 1);
-    NewController->Lock = KeCreateQueuedLock();
-    if (NewController->Lock == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateControllerEnd;
+    for (ChannelIndex = 0; ChannelIndex < ChannelCount; ChannelIndex += 1) {
+        Channel = &(NewController->Channels[ChannelIndex]);
+        INITIALIZE_LIST_HEAD(&(Channel->Queue));
+        KeInitializeSpinLock(&(Channel->Lock));
     }
 
     Status = STATUS_SUCCESS;
@@ -196,11 +225,7 @@ Return Value:
 CreateControllerEnd:
     if (!KSUCCESS(Status)) {
         if (NewController != NULL) {
-            if (NewController->Lock != NULL) {
-                KeDestroyQueuedLock(NewController->Lock);
-            }
-
-            MmFreePagedPool(NewController);
+            MmFreeNonPagedPool(NewController);
             NewController = NULL;
         }
     }
@@ -245,14 +270,6 @@ Return Value:
         ASSERT((Channel->Transfer == NULL) &&
                ((Channel->Queue.Next == NULL) ||
                 (LIST_EMPTY(&(Channel->Queue)))));
-
-        if (Channel->Lock != NULL) {
-            KeDestroyQueuedLock(Channel->Lock);
-        }
-    }
-
-    if (Controller->Lock != NULL) {
-        KeDestroyQueuedLock(Controller->Lock);
     }
 
     //
@@ -260,7 +277,7 @@ Return Value:
     //
 
     Controller->Magic += 1;
-    MmFreePagedPool(Controller);
+    MmFreeNonPagedPool(Controller);
     return;
 }
 
@@ -274,7 +291,9 @@ DmaStartController (
 
 Routine Description:
 
-    This routine starts a Direct Memory Access controller.
+    This routine starts a Direct Memory Access controller. This function is
+    not thread safe, as it is meant to be called during the start IRP, which is
+    always serialized.
 
 Arguments:
 
@@ -294,7 +313,6 @@ Return Value:
     ASSERT(Controller->Interface.Context == NULL);
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    KeAcquireQueuedLock(Controller->Lock);
     Host = &(Controller->Host);
     Controller->Interface.Context = Controller;
     Status = IoCreateInterface(&DmaInterfaceUuid,
@@ -334,7 +352,6 @@ Return Value:
     }
 
 StartControllerEnd:
-    KeReleaseQueuedLock(Controller->Lock);
     return Status;
 }
 
@@ -348,7 +365,9 @@ DmaStopController (
 
 Routine Description:
 
-    This routine stops a Direct Memory Access controller.
+    This routine stops a Direct Memory Access controller. This function is not
+    thread safe, as it is meant to be called during a state transition IRP,
+    which is always serialized.
 
 Arguments:
 
@@ -367,7 +386,6 @@ Return Value:
     ASSERT(Controller->Interface.Context == &(Controller->Interface));
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    KeAcquireQueuedLock(Controller->Lock);
     Status = IoDestroyInterface(&DmaInterfaceUuid,
                                 Controller->Host.Device,
                                 &(Controller->Interface));
@@ -375,7 +393,6 @@ Return Value:
     ASSERT(KSUCCESS(Status));
 
     Controller->Interface.Context = NULL;
-    KeReleaseQueuedLock(Controller->Lock);
     return;
 }
 
@@ -391,8 +408,9 @@ DmaTransferCompletion (
 Routine Description:
 
     This routine is called by a DMA host controller when a transfer has
-    completed. This function must be called at low level. The host should have
-    already filled in the number of bytes completed and the status.
+    completed. This function must be called at or below dispatch level. The
+    host should have already filled in the number of bytes completed and the
+    status.
 
 Arguments:
 
@@ -412,14 +430,14 @@ Return Value:
 
     PDMA_CHANNEL Channel;
     PDMA_TRANSFER NextTransfer;
+    RUNLEVEL OldRunLevel;
 
     ASSERT(Transfer->Allocation->Allocation < Controller->ChannelCount);
     ASSERT(Transfer->ListEntry.Next == NULL);
-    ASSERT(KeGetRunLevel() == RunLevelLow);
 
     NextTransfer = NULL;
     Channel = &(Controller->Channels[Transfer->Allocation->Allocation]);
-    KeAcquireQueuedLock(Channel->Lock);
+    OldRunLevel = DmapAcquireChannelLock(Controller, Channel);
 
     ASSERT(Channel->Transfer == Transfer);
 
@@ -431,7 +449,7 @@ Return Value:
         Channel->Transfer = NextTransfer;
     }
 
-    KeReleaseQueuedLock(Channel->Lock);
+    DmapReleaseChannelLock(Controller, Channel, OldRunLevel);
     Transfer->CompletionCallback(Transfer);
     return NextTransfer;
 }
@@ -560,7 +578,7 @@ Return Value:
     PDMA_CONTROLLER Controller;
     PRESOURCE_DMA_DATA DmaAllocation;
     ULONG Mask;
-    PQUEUED_LOCK NewLock;
+    RUNLEVEL OldRunLevel;
     KSTATUS Status;
     ULONG Width;
 
@@ -619,31 +637,7 @@ Return Value:
     ASSERT(Transfer->ListEntry.Next == NULL);
 
     Channel = &(Controller->Channels[Transfer->Allocation->Allocation]);
-
-    //
-    // If there is no lock, race to initialize the channel.
-    //
-
-    if (Channel->Lock == NULL) {
-        NewLock = KeCreateQueuedLock();
-        if (NewLock == NULL) {
-            return STATUS_INSUFFICIENT_RESOURCES;
-        }
-
-        KeAcquireQueuedLock(Controller->Lock);
-        if (Channel->Lock == NULL) {
-            Channel->Lock = NewLock;
-            INITIALIZE_LIST_HEAD(&(Channel->Queue));
-            NewLock = NULL;
-        }
-
-        KeReleaseQueuedLock(Controller->Lock);
-        if (NewLock != NULL) {
-            KeDestroyQueuedLock(NewLock);
-        }
-    }
-
-    KeAcquireQueuedLock(Channel->Lock);
+    OldRunLevel = DmapAcquireChannelLock(Controller, Channel);
     if (Channel->Transfer == NULL) {
         Channel->Transfer = Transfer;
         Transfer->ListEntry.Next = NULL;
@@ -653,7 +647,7 @@ Return Value:
         Transfer = NULL;
     }
 
-    KeReleaseQueuedLock(Channel->Lock);
+    DmapReleaseChannelLock(Controller, Channel, OldRunLevel);
     Status = STATUS_SUCCESS;
 
     //
@@ -702,6 +696,7 @@ Return Value:
     PDMA_CHANNEL Channel;
     PDMA_CONTROLLER Controller;
     PDMA_TRANSFER NextTransfer;
+    RUNLEVEL OldRunLevel;
     KSTATUS Status;
     KSTATUS SubmitStatus;
 
@@ -713,12 +708,8 @@ Return Value:
     }
 
     Channel = &(Controller->Channels[Transfer->Allocation->Allocation]);
-    if (Channel->Lock == NULL) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
     NextTransfer = NULL;
-    KeAcquireQueuedLock(Channel->Lock);
+    OldRunLevel = DmapAcquireChannelLock(Controller, Channel);
     if (Channel->Transfer == Transfer) {
         Status = Controller->Host.FunctionTable.CancelTransfer(
                                                       Controller->Host.Context,
@@ -755,7 +746,7 @@ Return Value:
         Status = STATUS_TOO_LATE;
     }
 
-    KeReleaseQueuedLock(Channel->Lock);
+    DmapReleaseChannelLock(Controller, Channel, OldRunLevel);
 
     //
     // If there's a next transfer, try to submit that. If that one fails,
@@ -837,7 +828,150 @@ Return Value:
     return Status;
 }
 
+KSTATUS
+DmaAllocateTransfer (
+    PDMA_INTERFACE Interface,
+    PDMA_TRANSFER *Transfer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a new DMA transfer structure.
+
+Arguments:
+
+    Interface - Supplies a pointer to the DMA controller interface.
+
+    Transfer - Supplies a pointer where a pointer to the newly allocated
+        transfer is returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PDMA_TRANSFER DmaTransfer;
+
+    *Transfer = NULL;
+    DmaTransfer = MmAllocateNonPagedPool(sizeof(DMA_TRANSFER),
+                                         DMA_ALLOCATION_TAG);
+
+    if (DmaTransfer == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    RtlZeroMemory(DmaTransfer, sizeof(DMA_TRANSFER));
+    *Transfer = DmaTransfer;
+    return STATUS_SUCCESS;
+}
+
+VOID
+DmaFreeTransfer (
+    PDMA_INTERFACE Interface,
+    PDMA_TRANSFER Transfer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a previously created DMA transfer. This transfer
+    must not be actively submitted to any controller.
+
+Arguments:
+
+    Interface - Supplies a pointer to the DMA controller interface.
+
+    Transfer - Supplies a pointer to the transfer to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    MmFreeNonPagedPool(Transfer);
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+RUNLEVEL
+DmapAcquireChannelLock (
+    PDMA_CONTROLLER Controller,
+    PDMA_CHANNEL Channel
+    )
+
+/*++
+
+Routine Description:
+
+    This routine raises to dispatch and acquires the DMA controller's channel
+    lock.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller that owns the channel.
+
+    Channel - Supplies a pointer to the channel to lock.
+
+Return Value:
+
+    Returns the previous runlevel, which should be passed into the release
+    function.
+
+--*/
+
+{
+
+    RUNLEVEL OldRunLevel;
+
+    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    KeAcquireSpinLock(&(Channel->Lock));
+    return OldRunLevel;
+}
+
+VOID
+DmapReleaseChannelLock (
+    PDMA_CONTROLLER Controller,
+    PDMA_CHANNEL Channel,
+    RUNLEVEL OldRunLevel
+    )
+
+/*++
+
+Routine Description:
+
+    This routine releases the DMA channel's lock and lowers to the runlevel
+    the system was at before the acquire.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Channel - Supplies a pointer to the channel to unlock.
+
+    OldRunLevel - Supplies the runlevel returned by the acquire function.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    KeReleaseSpinLock(&(Channel->Lock));
+    KeLowerRunLevel(OldRunLevel);
+    return;
+}
 

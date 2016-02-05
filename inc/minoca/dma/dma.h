@@ -162,13 +162,13 @@ Members:
         "device memory" member.
 
     Memory - Stores a pointer to the memory side of the transfer. This is the
-        non-device side.
+        non-device side. This must be a non-paged I/O buffer.
 
     Device - Stores a pointer to the device side of the transfer, or the
         destination for memory to memory transfers.
 
     CompletionCallback - Stores a pointer to the routine to call when the
-        transfer is complete. This callback will occur at low level.
+        transfer is complete. This callback will occur at dispatch level.
 
     UserContext - Stores a pointer's worth of context information that is
         unused by the DMA library or host controller. The user can store
@@ -332,6 +332,58 @@ Return Value:
 
 --*/
 
+typedef
+KSTATUS
+(*PDMA_ALLOCATE_TRANSFER) (
+    PDMA_INTERFACE Interface,
+    PDMA_TRANSFER *Transfer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a new DMA transfer structure.
+
+Arguments:
+
+    Interface - Supplies a pointer to the DMA controller interface.
+
+    Transfer - Supplies a pointer where a pointer to the newly allocated
+        transfer is returned on success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+VOID
+(*PDMA_FREE_TRANSFER) (
+    PDMA_INTERFACE Interface,
+    PDMA_TRANSFER Transfer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys a previously created DMA transfer. This transfer
+    must not be actively submitted to any controller.
+
+Arguments:
+
+    Interface - Supplies a pointer to the DMA controller interface.
+
+    Transfer - Supplies a pointer to the transfer to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -356,6 +408,11 @@ Members:
     ControlRequest - Stores a pointer to a function used to implement
         controller-specific features.
 
+    AllocateTransfer - Stores a pointer to a function used to allocate a DMA
+        transfer.
+
+    FreeTransfer - Stores a pointer to a function used to free a DMA transfer.
+
 --*/
 
 struct _DMA_INTERFACE {
@@ -364,6 +421,8 @@ struct _DMA_INTERFACE {
     PDMA_SUBMIT_TRANSFER Submit;
     PDMA_CANCEL_TRANSFER Cancel;
     PDMA_CONTROL_REQUEST ControlRequest;
+    PDMA_ALLOCATE_TRANSFER AllocateTransfer;
+    PDMA_FREE_TRANSFER FreeTransfer;
 };
 
 //

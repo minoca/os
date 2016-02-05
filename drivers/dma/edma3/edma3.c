@@ -152,8 +152,8 @@ Members:
 
     DmaController - Stores a pointer to the library DMA controller.
 
-    Lock - Stores a pointer to the lock serializing access to the sensitive
-        parts of the structure.
+    Lock - Stores the lock serializing access to the sensitive parts of the
+        structure.
 
     TransferList - Stores the head of the list of transfers.
 
@@ -179,7 +179,7 @@ typedef struct _EDMA_CONTROLLER {
     HANDLE ErrorInterruptHandle;
     PVOID ControllerBase;
     PDMA_CONTROLLER DmaController;
-    PQUEUED_LOCK Lock;
+    KSPIN_LOCK Lock;
     LIST_ENTRY TransferList;
     LIST_ENTRY FreeList;
     UINTN Params[EDMA_PARAM_WORDS];
@@ -275,7 +275,7 @@ EdmaErrorInterruptService (
     );
 
 INTERRUPT_STATUS
-EdmaInterruptServiceWorker (
+EdmaInterruptServiceDispatch (
     PVOID Context
     );
 
@@ -384,6 +384,17 @@ VOID
 EdmapClearMissEvent (
     PEDMA_CONTROLLER Controller,
     ULONG Channel
+    );
+
+RUNLEVEL
+EdmapAcquireLock (
+    PEDMA_CONTROLLER Controller
+    );
+
+VOID
+EdmapReleaseLock (
+    PEDMA_CONTROLLER Controller,
+    RUNLEVEL OldRunLevel
     );
 
 //
@@ -512,11 +523,7 @@ Return Value:
     Controller->ErrorInterruptHandle = INVALID_HANDLE;
     INITIALIZE_LIST_HEAD(&(Controller->TransferList));
     INITIALIZE_LIST_HEAD(&(Controller->FreeList));
-    Controller->Lock = KeCreateQueuedLock();
-    if (Controller->Lock == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto AddDeviceEnd;
-    }
+    KeInitializeSpinLock(&(Controller->Lock));
 
     //
     // PaRAM zero is reserved for a null entry at all times.
@@ -524,14 +531,13 @@ Return Value:
 
     Controller->Params[0] = 1;
     Status = IoAttachDriverToDevice(Driver, DeviceToken, Controller);
+    if (!KSUCCESS(Status)) {
+        goto AddDeviceEnd;
+    }
 
 AddDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Controller != NULL) {
-            if (Controller->Lock != NULL) {
-                KeDestroyQueuedLock(Controller->Lock);
-            }
-
             MmFreeNonPagedPool(Controller);
         }
     }
@@ -863,7 +869,7 @@ Return Value:
 }
 
 INTERRUPT_STATUS
-EdmaInterruptServiceWorker (
+EdmaInterruptServiceDispatch (
     PVOID Context
     )
 
@@ -871,7 +877,7 @@ EdmaInterruptServiceWorker (
 
 Routine Description:
 
-    This routine handles interrupts for the EDMA controller at low level.
+    This routine handles interrupts for the EDMA controller at dispatch level.
 
 Arguments:
 
@@ -895,11 +901,13 @@ Return Value:
 
     Controller = Context;
 
+    ASSERT(KeGetRunLevel() == RunLevelDispatch);
+
     //
     // Handle completion interrupts.
     //
 
-    KeAcquireQueuedLock(Controller->Lock);
+    KeAcquireSpinLock(&(Controller->Lock));
     Bits = RtlAtomicExchange32(&(Controller->Pending.CompletionLow), 0);
     Value = RtlAtomicExchange32(&(Controller->Pending.CompletionHigh), 0);
     Bits |= (ULONGLONG)Value << 32;
@@ -936,7 +944,7 @@ Return Value:
         }
     }
 
-    KeReleaseQueuedLock(Controller->Lock);
+    KeReleaseSpinLock(&(Controller->Lock));
     return InterruptStatusClaimed;
 }
 
@@ -1188,7 +1196,7 @@ Return Value:
         Connect.LineNumber = Device->CompletionInterruptLine;
         Connect.Vector = Device->CompletionInterruptVector;
         Connect.InterruptServiceRoutine = EdmaCompletionInterruptService;
-        Connect.LowLevelServiceRoutine = EdmaInterruptServiceWorker;
+        Connect.DispatchServiceRoutine = EdmaInterruptServiceDispatch;
         Connect.Context = Device;
         Connect.Interrupt = &(Device->CompletionInterruptHandle);
         Status = IoConnectInterrupt(&Connect);
@@ -1212,7 +1220,7 @@ Return Value:
         Connect.LineNumber = Device->ErrorInterruptLine;
         Connect.Vector = Device->ErrorInterruptVector;
         Connect.InterruptServiceRoutine = EdmaErrorInterruptService;
-        Connect.LowLevelServiceRoutine = EdmaInterruptServiceWorker;
+        Connect.DispatchServiceRoutine = EdmaInterruptServiceDispatch;
         Connect.Context = Device;
         Connect.Interrupt = &(Device->ErrorInterruptHandle);
         Status = IoConnectInterrupt(&Connect);
@@ -1278,10 +1286,11 @@ Return Value:
 
     PEDMA_CONTROLLER Controller;
     PEDMA_TRANSFER EdmaTransfer;
+    RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     Controller = Context;
-    KeAcquireQueuedLock(Controller->Lock);
+    OldRunLevel = EdmapAcquireLock(Controller);
     EdmaTransfer = EdmapAllocateTransfer(Controller, Transfer);
     if (EdmaTransfer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1307,7 +1316,7 @@ SubmitEnd:
         }
     }
 
-    KeReleaseQueuedLock(Controller->Lock);
+    EdmapReleaseLock(Controller, OldRunLevel);
     return Status;
 }
 
@@ -1323,7 +1332,8 @@ Routine Description:
 
     This routine is called to cancel an in-progress transfer. Once this routine
     returns, the transfer should be all the way out of the DMA controller and
-    the controller should no longer interrupt because of this transfer.
+    the controller should no longer interrupt because of this transfer. This
+    routine is called at dispatch level.
 
 Arguments:
 
@@ -1346,6 +1356,7 @@ Return Value:
     PEDMA_CONTROLLER Controller;
     PLIST_ENTRY CurrentEntry;
     PEDMA_TRANSFER EdmaTransfer;
+    RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     Controller = Context;
@@ -1355,7 +1366,7 @@ Return Value:
     // transfer in the transfer list.
     //
 
-    KeAcquireQueuedLock(Controller->Lock);
+    OldRunLevel = EdmapAcquireLock(Controller);
     CurrentEntry = Controller->TransferList.Next;
     while (CurrentEntry != &(Controller->TransferList)) {
         EdmaTransfer = LIST_VALUE(CurrentEntry, EDMA_TRANSFER, ListEntry);
@@ -1383,7 +1394,7 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 CancelEnd:
-    KeReleaseQueuedLock(Controller->Lock);
+    EdmapReleaseLock(Controller, OldRunLevel);
     return Status;
 }
 
@@ -2207,8 +2218,8 @@ Return Value:
         LIST_REMOVE(&(Transfer->ListEntry));
 
     } else {
-        Transfer = MmAllocatePagedPool(sizeof(EDMA_TRANSFER),
-                                       EDMA_ALLOCATION_TAG);
+        Transfer = MmAllocateNonPagedPool(sizeof(EDMA_TRANSFER),
+                                          EDMA_ALLOCATION_TAG);
 
         if (Transfer == NULL) {
             return NULL;
@@ -2479,6 +2490,69 @@ Return Value:
                       1 << Channel);
 
     EDMA_WRITE(Controller, EdmaEventMissedClearLow + Offset, 1 << Channel);
+    return;
+}
+
+RUNLEVEL
+EdmapAcquireLock (
+    PEDMA_CONTROLLER Controller
+    )
+
+/*++
+
+Routine Description:
+
+    This routine raises to dispatch and acquires the DMA controller's lock.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller to lock.
+
+Return Value:
+
+    Returns the previous runlevel, which should be passed into the release
+    function.
+
+--*/
+
+{
+
+    RUNLEVEL OldRunLevel;
+
+    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+    KeAcquireSpinLock(&(Controller->Lock));
+    return OldRunLevel;
+}
+
+VOID
+EdmapReleaseLock (
+    PEDMA_CONTROLLER Controller,
+    RUNLEVEL OldRunLevel
+    )
+
+/*++
+
+Routine Description:
+
+    This routine releases the DMA controller's lock and lowers to the runlevel
+    the system was at before the acquire.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller to unlock.
+
+    OldRunLevel - Supplies the runlevel returned by the acquire function.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    KeReleaseSpinLock(&(Controller->Lock));
+    KeLowerRunLevel(OldRunLevel);
     return;
 }
 

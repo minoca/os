@@ -82,7 +82,8 @@ Routine Description:
 
     This routine is called to cancel an in-progress transfer. Once this routine
     returns, the transfer should be all the way out of the DMA controller and
-    the controller should no longer interrupt because of this transfer.
+    the controller should no longer interrupt because of this transfer. This
+    routine is called at dispatch level.
 
 Arguments:
 
@@ -261,7 +262,9 @@ DmaStartController (
 
 Routine Description:
 
-    This routine starts a Direct Memory Access controller.
+    This routine starts a Direct Memory Access controller. This function is
+    not thread safe, as it is meant to be called during the start IRP, which is
+    always serialized.
 
 Arguments:
 
@@ -283,7 +286,9 @@ DmaStopController (
 
 Routine Description:
 
-    This routine stops a Direct Memory Access controller.
+    This routine stops a Direct Memory Access controller. This function is not
+    thread safe, as it is meant to be called during a state transition IRP,
+    which is always serialized.
 
 Arguments:
 
@@ -307,8 +312,9 @@ DmaTransferCompletion (
 Routine Description:
 
     This routine is called by a DMA host controller when a transfer has
-    completed. This function must be called at low level. The host should have
-    already filled in the number of bytes completed and the status.
+    completed. This function must be called at or below dispatch level. The
+    host should have already filled in the number of bytes completed and the
+    status.
 
 Arguments:
 
