@@ -401,6 +401,9 @@ NET_PROTOCOL_ENTRY NetTcpProtocol = {
     {NULL, NULL},
     SocketTypeStream,
     SOCKET_INTERNET_PROTOCOL_TCP,
+    NULL,
+    NULL,
+    {{0}, {0}, {0}},
     {
         NetpTcpCreateSocket,
         NetpTcpDestroySocket,

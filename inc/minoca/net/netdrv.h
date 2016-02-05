@@ -1506,6 +1506,14 @@ Members:
     ParentProtocolNumber - Stores the protocol number in the parent layer's
         protocol.
 
+    LastSocket - Stores a pointer to the last socket that received a packet.
+
+    SocketLock - Stores a pointer to a shared exclusive lock that protects the
+        socket trees.
+
+    SocketTree - Stores an array of Red Black Trees, one each for fully bound,
+        locally bound, and unbound sockets.
+
     Interface - Stores the interface presented to the kernel for this type of
         socket.
 
@@ -1515,6 +1523,9 @@ struct _NET_PROTOCOL_ENTRY {
     LIST_ENTRY ListEntry;
     SOCKET_TYPE Type;
     ULONG ParentProtocolNumber;
+    volatile PNET_SOCKET LastSocket;
+    PSHARED_EXCLUSIVE_LOCK SocketLock;
+    RED_BLACK_TREE SocketTree[SocketBindingTypeCount];
     NET_PROTOCOL_INTERFACE Interface;
 };
 
@@ -2258,7 +2269,7 @@ Routine Description:
 
 Arguments:
 
-    Address - Supplies a pointer to the string to print.
+    Address - Supplies a pointer to the address to print.
 
 Return Value:
 

@@ -295,6 +295,9 @@ NET_PROTOCOL_ENTRY NetUdpProtocol = {
     {NULL, NULL},
     SocketTypeDatagram,
     SOCKET_INTERNET_PROTOCOL_UDP,
+    NULL,
+    NULL,
+    {{0}, {0}, {0}},
     {
         NetpUdpCreateSocket,
         NetpUdpDestroySocket,
@@ -964,14 +967,15 @@ Return Value:
 
     //
     // If the socket is not yet bound, then at least try to bind it to a local
-    // port. Ignore the failure case where it is found to be already connected.
+    // port. This bind attempt may race with another bind attempt, but leave it
+    // to the socket owner to synchronize bind and send.
     //
 
     if (Socket->BindingType == SocketBindingInvalid) {
         RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
         LocalAddress.Network = Socket->Network->Type;
         Status = NetpUdpBindToAddress(Socket, NULL, &LocalAddress);
-        if (!KSUCCESS(Status) && (Status != STATUS_CONNECTION_EXISTS)) {
+        if (!KSUCCESS(Status)) {
             goto UdpSendEnd;
         }
     }

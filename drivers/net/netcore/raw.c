@@ -69,7 +69,7 @@ Environment:
 #define RAW_SEND_MINIMUM 1
 
 //
-// Define the maximum packet size allowed on raw socket.
+// Define the maximum packet size allowed on a raw socket.
 //
 
 #define RAW_MAX_PACKET_SIZE MAX_ULONG
@@ -262,6 +262,9 @@ NET_PROTOCOL_ENTRY NetRawProtocol = {
     {NULL, NULL},
     SocketTypeRaw,
     SOCKET_INTERNET_PROTOCOL_RAW,
+    NULL,
+    NULL,
+    {{0}, {0}, {0}},
     {
         NetpRawCreateSocket,
         NetpRawDestroySocket,
@@ -542,7 +545,7 @@ Return Value:
     }
 
     //
-    // The port doesn't make a different on raw sockets, so zero it out.
+    // The port doesn't make a difference on raw sockets, so zero it out.
     //
 
     OriginalPort = Address->Port;

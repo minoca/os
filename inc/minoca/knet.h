@@ -196,16 +196,17 @@ Author:
 #define SOCKET_INTERNET_PROTOCOL_IPV6 41
 
 //
+// Define non-IANA protocol numbers starting with the raw protocol at 255, the
+// highest reserved IANA value.
+//
+
+#define SOCKET_INTERNET_PROTOCOL_RAW 255
+
+//
 // Define the socket level of control messages.
 //
 
 #define SOCKET_LEVEL_SOCKET 0xFFFF
-
-//
-// There is no raw protocol value, so give it a wildcard value of negative one.
-//
-
-#define SOCKET_INTERNET_PROTOCOL_RAW -1
 
 //
 // Define socket level control message types, currently only used by local
@@ -236,13 +237,6 @@ typedef enum _SOCKET_TYPE {
     SocketTypeStream
 } SOCKET_TYPE, *PSOCKET_TYPE;
 
-typedef enum _SOCKET_PROTOCOL {
-    SocketProtocolInvalid,
-    SocketProtocolTcp,
-    SocketProtocolUdp,
-    SocketProtocolRaw
-} SOCKET_PROTOCOL, *PSOCKET_PROTOCOL;
-
 typedef enum _NET_DATA_LINK_TYPE {
     NetDataLinkInvalid,
     NetDataLinkEthernet = 0x8000,
@@ -256,6 +250,7 @@ typedef enum _SOCKET_NETWORK {
     SocketNetworkIp4,
     SocketNetworkIp6,
     SocketNetworkEapol,
+    SocketNetworkNetlink,
     SocketNetworkPhysicalEthernet = NetDataLinkEthernet,
     SocketNetworkPhysical80211 = NetDataLink80211,
 } SOCKET_NETWORK, *PSOCKET_NETWORK;
@@ -311,6 +306,12 @@ Values:
     SocketInformationTypeUdp - Indicates that the socket option should be
         interpreted as an UDP socket option.
 
+    SocketInformationTypeNetlink - Indicates that the socket option should be
+        interpreted as a netlink socket option.
+
+    SocketInformationTypeNetlinkGeneric - Indicates that the socket option
+        should be interpreted as a generic netlink socket option.
+
     SocketInformationTypeCount - Indicates the number of socket information
         types.
 
@@ -324,6 +325,8 @@ typedef enum _SOCKET_INFORMATION_TYPE {
     SocketInformationTypeTcp,
     SocketInformationTypeUdp,
     SocketInformationTypeRaw,
+    SocketInformationTypeNetlink,
+    SocketInformationTypeNetlinkGeneric,
     SocketInformationTypeCount
 } SOCKET_INFORMATION_TYPE, *PSOCKET_INFORMATION_TYPE;
 

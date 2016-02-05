@@ -32,8 +32,6 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define PRINT_ADDRESS_STRING_LENGTH 200
-
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -125,6 +123,11 @@ NetUserControl (
     BOOL FromKernelMode,
     PVOID ContextBuffer,
     UINTN ContextBufferSize
+    );
+
+VOID
+NetpDestroyProtocol (
+    PNET_PROTOCOL_ENTRY Protocol
     );
 
 //
@@ -354,6 +357,25 @@ Return Value:
     }
 
     RtlCopyMemory(NewProtocolCopy, NewProtocol, sizeof(NET_PROTOCOL_ENTRY));
+    NewProtocolCopy->SocketLock = KeCreateSharedExclusiveLock();
+    if (NewProtocolCopy->SocketLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto RegisterProtocolEnd;
+    }
+
+    RtlRedBlackTreeInitialize(&(NewProtocolCopy->SocketTree[SocketUnbound]),
+                              0,
+                              NetpCompareUnboundSockets);
+
+    RtlRedBlackTreeInitialize(
+                            &(NewProtocolCopy->SocketTree[SocketLocallyBound]),
+                            0,
+                            NetpCompareLocallyBoundSockets);
+
+    RtlRedBlackTreeInitialize(&(NewProtocolCopy->SocketTree[SocketFullyBound]),
+                              0,
+                              NetpCompareFullyBoundSockets);
+
     KeAcquireQueuedLock(NetPluginListLock);
 
     //
@@ -408,7 +430,7 @@ RegisterProtocolEnd:
     KeReleaseQueuedLock(NetPluginListLock);
     if (!KSUCCESS(Status)) {
         if (NewProtocolCopy != NULL) {
-            MmFreePagedPool(NewProtocolCopy);
+            NetpDestroyProtocol(NewProtocolCopy);
         }
     }
 
@@ -470,7 +492,7 @@ Return Value:
 
     KeReleaseQueuedLock(NetPluginListLock);
     if (FoundProtocol != NULL) {
-        MmFreePagedPool(FoundProtocol);
+        NetpDestroyProtocol(FoundProtocol);
     }
 
     return;
@@ -1079,7 +1101,7 @@ Routine Description:
 
 Arguments:
 
-    Address - Supplies a pointer to the string to print.
+    Address - Supplies a pointer to the address to print.
 
 Return Value:
 
@@ -1093,7 +1115,7 @@ Return Value:
     PNET_DATA_LINK_ENTRY DataLinkEntry;
     ULONG Length;
     PNET_NETWORK_ENTRY NetworkEntry;
-    CHAR StringBuffer[PRINT_ADDRESS_STRING_LENGTH];
+    CHAR StringBuffer[NET_PRINT_ADDRESS_STRING_LENGTH];
 
     if (Address == NULL) {
         RtlDebugPrint("(NullNetworkAddress)");
@@ -1117,11 +1139,11 @@ Return Value:
 
             if (DataLinkEntry->Type == (NET_DATA_LINK_TYPE)Address->Network) {
                 Length = DataLinkEntry->Interface.PrintAddress(
-                                                  Address,
-                                                  StringBuffer,
-                                                  PRINT_ADDRESS_STRING_LENGTH);
+                                              Address,
+                                              StringBuffer,
+                                              NET_PRINT_ADDRESS_STRING_LENGTH);
 
-                ASSERT(Length <= PRINT_ADDRESS_STRING_LENGTH);
+                ASSERT(Length <= NET_PRINT_ADDRESS_STRING_LENGTH);
 
                 break;
             }
@@ -1142,11 +1164,11 @@ Return Value:
 
             if (NetworkEntry->Type == Address->Network) {
                 Length = NetworkEntry->Interface.PrintAddress(
-                                                  Address,
-                                                  StringBuffer,
-                                                  PRINT_ADDRESS_STRING_LENGTH);
+                                              Address,
+                                              StringBuffer,
+                                              NET_PRINT_ADDRESS_STRING_LENGTH);
 
-                ASSERT(Length <= PRINT_ADDRESS_STRING_LENGTH);
+                ASSERT(Length <= NET_PRINT_ADDRESS_STRING_LENGTH);
 
                 break;
             }
@@ -1156,7 +1178,7 @@ Return Value:
     }
 
     KeReleaseQueuedLock(NetPluginListLock);
-    StringBuffer[PRINT_ADDRESS_STRING_LENGTH - 1] = '\0';
+    StringBuffer[NET_PRINT_ADDRESS_STRING_LENGTH - 1] = '\0';
     RtlDebugPrint("%s", StringBuffer);
     return;
 }
@@ -1230,8 +1252,7 @@ Return Value:
             continue;
         }
 
-        if ((Type != SocketTypeRaw) &&
-            (Protocol != 0) &&
+        if ((Protocol != 0) &&
             (ProtocolEntry->ParentProtocolNumber != Protocol)) {
 
             continue;
@@ -1798,10 +1819,12 @@ Return Value:
     ULONG Flags;
     PNET_SOCKET NetSocket;
     PSOCKET_NETWORK Network;
+    PNET_PROTOCOL_ENTRY Protocol;
     KSTATUS Status;
     PSOCKET_TYPE Type;
 
     NetSocket = (PNET_SOCKET)Socket;
+    Protocol = NetSocket->Protocol;
     Status = STATUS_SUCCESS;
 
     //
@@ -1861,29 +1884,22 @@ Return Value:
             }
 
             //
-            // Socket addresses are synchronized on the global socket tree.
+            // Socket addresses are synchronized on the protocol's socket tree.
             // Acquire the lock to not return a torn address.
             //
 
+            if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
+                KeAcquireQueuedLock(NetRawSocketsLock);
+
+            } else {
+                KeAcquireSharedExclusiveLockShared(Protocol->SocketLock);
+            }
+
             AddressOption = Data;
             if (BasicOption == SocketBasicOptionLocalAddress) {
-                if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
-                    KeAcquireQueuedLock(NetRawSocketsLock);
-
-                } else {
-                    KeAcquireQueuedLock(NetSocketsLock);
-                }
-
                 RtlCopyMemory(AddressOption,
                               &(NetSocket->LocalAddress),
                               sizeof(NETWORK_ADDRESS));
-
-                if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
-                    KeReleaseQueuedLock(NetRawSocketsLock);
-
-                } else {
-                    KeReleaseQueuedLock(NetSocketsLock);
-                }
 
                 //
                 // Even if the local address is not yet initialized, return the
@@ -1898,23 +1914,16 @@ Return Value:
 
                 ASSERT(BasicOption == SocketBasicOptionRemoteAddress);
 
-                if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
-                    KeAcquireQueuedLock(NetRawSocketsLock);
-
-                } else {
-                    KeAcquireQueuedLock(NetSocketsLock);
-                }
-
                 RtlCopyMemory(AddressOption,
                               &(NetSocket->RemoteAddress),
                               sizeof(NETWORK_ADDRESS));
+            }
 
-                if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
-                    KeReleaseQueuedLock(NetRawSocketsLock);
+            if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
+                KeReleaseQueuedLock(NetRawSocketsLock);
 
-                } else {
-                    KeReleaseQueuedLock(NetSocketsLock);
-                }
+            } else {
+                KeReleaseSharedExclusiveLockShared(Protocol->SocketLock);
             }
 
             *DataSize = sizeof(NETWORK_ADDRESS);
@@ -2249,4 +2258,35 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+NetpDestroyProtocol (
+    PNET_PROTOCOL_ENTRY Protocol
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys the given protocol and all its resources.
+
+Arguments:
+
+    Protocol - Supplies a pointer to the protocol to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (Protocol->SocketLock != NULL) {
+        KeDestroySharedExclusiveLock(Protocol->SocketLock);
+    }
+
+    MmFreePagedPool(Protocol);
+    return;
+}
 

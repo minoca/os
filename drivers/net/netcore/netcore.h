@@ -45,6 +45,8 @@ Author:
 
 #define NET_MAX_INCOMING_CONNECTIONS 32
 
+#define NET_PRINT_ADDRESS_STRING_LENGTH 200
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -168,6 +170,102 @@ Arguments:
     FirstAddress - Supplies a pointer to the left side of the comparison.
 
     SecondAddress - Supplies a pointer to the second side of the comparison.
+
+Return Value:
+
+    Same if the two nodes have the same value.
+
+    Ascending if the first node is less than the second node.
+
+    Descending if the second node is less than the first node.
+
+--*/
+
+COMPARISON_RESULT
+NetpCompareFullyBoundSockets (
+    PRED_BLACK_TREE Tree,
+    PRED_BLACK_TREE_NODE FirstNode,
+    PRED_BLACK_TREE_NODE SecondNode
+    );
+
+/*++
+
+Routine Description:
+
+    This routine compares two fully bound sockets, where both the local and
+    remote addresses are fixed.
+
+Arguments:
+
+    Tree - Supplies a pointer to the Red-Black tree that owns both nodes.
+
+    FirstNode - Supplies a pointer to the left side of the comparison.
+
+    SecondNode - Supplies a pointer to the second side of the comparison.
+
+Return Value:
+
+    Same if the two nodes have the same value.
+
+    Ascending if the first node is less than the second node.
+
+    Descending if the second node is less than the first node.
+
+--*/
+
+COMPARISON_RESULT
+NetpCompareLocallyBoundSockets (
+    PRED_BLACK_TREE Tree,
+    PRED_BLACK_TREE_NODE FirstNode,
+    PRED_BLACK_TREE_NODE SecondNode
+    );
+
+/*++
+
+Routine Description:
+
+    This routine compares two locally bound sockets, where the local address
+    and port are fixed.
+
+Arguments:
+
+    Tree - Supplies a pointer to the Red-Black tree that owns both nodes.
+
+    FirstNode - Supplies a pointer to the left side of the comparison.
+
+    SecondNode - Supplies a pointer to the second side of the comparison.
+
+Return Value:
+
+    Same if the two nodes have the same value.
+
+    Ascending if the first node is less than the second node.
+
+    Descending if the second node is less than the first node.
+
+--*/
+
+COMPARISON_RESULT
+NetpCompareUnboundSockets (
+    PRED_BLACK_TREE Tree,
+    PRED_BLACK_TREE_NODE FirstNode,
+    PRED_BLACK_TREE_NODE SecondNode
+    );
+
+/*++
+
+Routine Description:
+
+    This routine compares two unbound sockets, meaning only the local port
+    number is known.
+
+Arguments:
+
+    Tree - Supplies a pointer to the Red-Black tree that owns both nodes.
+
+    FirstNode - Supplies a pointer to the left side of the comparison.
+
+    SecondNode - Supplies a pointer to the second side of the comparison.
 
 Return Value:
 
