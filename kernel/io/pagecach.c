@@ -3726,16 +3726,6 @@ Return Value:
             }
 
             //
-            // If there's still more work to do, go do it.
-            //
-
-            if ((!LIST_EMPTY(&IoFileObjectsDirtyList)) ||
-                (IoPageCacheDirtyPageCount != 0)) {
-
-                continue;
-            }
-
-            //
             // If the page cache appears to be completely clean, try to kill the
             // timer and go dormant. Kill the timer, change the state to clean,
             // and then see if any dirtiness snuck in while that was happening.
@@ -3744,9 +3734,6 @@ Return Value:
             //
 
             KeCancelTimer(IoPageCacheWorkTimer);
-
-            ASSERT(IoPageCacheState == PageCacheStateDirty);
-
             RtlAtomicExchange32(&IoPageCacheState, PageCacheStateClean);
             if ((!LIST_EMPTY(&IoFileObjectsDirtyList)) ||
                 (IoPageCacheDirtyPageCount != 0)) {
