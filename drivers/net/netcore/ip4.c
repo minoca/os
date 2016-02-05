@@ -1434,7 +1434,8 @@ Return Value:
     // Give raw sockets a chance to look at the packet.
     //
 
-    NetRawSocketsProcessReceivedData(Packet,
+    NetRawSocketsProcessReceivedData(Link,
+                                     Packet,
                                      (PNETWORK_ADDRESS)&SourceAddress,
                                      (PNETWORK_ADDRESS)&DestinationAddress,
                                      Header->Protocol);

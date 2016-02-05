@@ -340,7 +340,8 @@ Return Value:
         (NewProtocol->Interface.ProcessReceivedData == NULL) ||
         (NewProtocol->Interface.Receive == NULL) ||
         (NewProtocol->Interface.GetSetInformation == NULL) ||
-        (NewProtocol->Interface.UserControl == NULL)) {
+        (NewProtocol->Interface.UserControl == NULL) ||
+        (NewProtocol->Interface.ProcessReceivedSocketData == NULL)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto RegisterProtocolEnd;

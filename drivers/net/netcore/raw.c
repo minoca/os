@@ -227,6 +227,15 @@ NetpRawProcessReceivedData (
     PNET_PROTOCOL_ENTRY ProtocolEntry
     );
 
+VOID
+NetpRawProcessReceivedSocketData (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    );
+
 KSTATUS
 NetpRawReceive (
     BOOL FromKernelMode,
@@ -276,6 +285,7 @@ NET_PROTOCOL_ENTRY NetRawProtocol = {
         NetpRawShutdown,
         NetpRawSend,
         NetpRawProcessReceivedData,
+        NetpRawProcessReceivedSocketData,
         NetpRawReceive,
         NetpRawGetSetInformation,
         NetpRawUserControl
@@ -1085,30 +1095,38 @@ Return Value:
 }
 
 VOID
-NetpRawSocketProcessReceivedData (
+NetpRawProcessReceivedSocketData (
+    PNET_LINK Link,
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
     )
 
 /*++
 
 Routine Description:
 
-    This routine is called to process a received packet for a particular raw
-    socket.
+    This routine is called for a particular socket to process a received packet
+    that was sent to it.
 
 Arguments:
 
-    Socket - Supplies a pointer to the socket that is meant to receive this
-        data.
+    Link - Supplies a pointer to the network link that received the packet.
+
+    Socket - Supplies a pointer to the socket that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
-        The packet is not modified by the routine.
+        This structure may not be used as a scratch space and must not be
+        modified by this routine.
 
     SourceAddress - Supplies a pointer to the source (remote) address that the
         packet originated from. This memory will not be referenced once the
         function returns, it can be stack allocated.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        that the packet is heading to. This memory will not be referenced once
+        the function returns, it can be stack allocated.
 
 Return Value:
 

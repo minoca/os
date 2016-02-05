@@ -122,6 +122,15 @@ NetpTcpProcessReceivedData (
     PNET_PROTOCOL_ENTRY ProtocolEntry
     );
 
+VOID
+NetpTcpProcessReceivedSocketData (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    );
+
 KSTATUS
 NetpTcpReceive (
     BOOL FromKernelMode,
@@ -415,6 +424,7 @@ NET_PROTOCOL_ENTRY NetTcpProtocol = {
         NetpTcpShutdown,
         NetpTcpSend,
         NetpTcpProcessReceivedData,
+        NetpTcpProcessReceivedSocketData,
         NetpTcpReceive,
         NetpTcpGetSetInformation,
         NetpTcpUserControl
@@ -2177,6 +2187,59 @@ Return Value:
     //
 
     IoSocketReleaseReference(&(Socket->KernelSocket));
+    return;
+}
+
+VOID
+NetpTcpProcessReceivedSocketData (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called for a particular socket to process a received packet
+    that was sent to it.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link that received the packet.
+
+    Socket - Supplies a pointer to the socket that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may not be used as a scratch space and must not be
+        modified by this routine.
+
+    SourceAddress - Supplies a pointer to the source (remote) address that the
+        packet originated from. This memory will not be referenced once the
+        function returns, it can be stack allocated.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        that the packet is heading to. This memory will not be referenced once
+        the function returns, it can be stack allocated.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    //
+    // This packet processing routine is used by the network core for multicast
+    // packets. Since TCP is a connection based stream protocol, multicast
+    // packets should not be arriving here.
+    //
+
+    ASSERT(FALSE);
+
     return;
 }
 

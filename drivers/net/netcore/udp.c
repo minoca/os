@@ -260,6 +260,15 @@ NetpUdpProcessReceivedData (
     PNET_PROTOCOL_ENTRY ProtocolEntry
     );
 
+VOID
+NetpUdpProcessReceivedSocketData (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    );
+
 KSTATUS
 NetpUdpReceive (
     BOOL FromKernelMode,
@@ -309,6 +318,7 @@ NET_PROTOCOL_ENTRY NetUdpProtocol = {
         NetpUdpShutdown,
         NetpUdpSend,
         NetpUdpProcessReceivedData,
+        NetpUdpProcessReceivedSocketData,
         NetpUdpReceive,
         NetpUdpGetSetInformation,
         NetpUdpUserControl
@@ -1176,14 +1186,9 @@ Return Value:
 
 {
 
-    ULONG AllocationSize;
-    ULONG AvailableBytes;
     PUDP_HEADER Header;
     USHORT Length;
-    USHORT PayloadLength;
     PNET_SOCKET Socket;
-    PUDP_RECEIVED_PACKET UdpPacket;
-    PUDP_SOCKET UdpSocket;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
@@ -1210,7 +1215,97 @@ Return Value:
         return;
     }
 
+    //
+    // Pass the packet onto the socket for copying and safe keeping until the
+    // data is read.
+    //
+
+    NetpUdpProcessReceivedSocketData(Link,
+                                     Socket,
+                                     Packet,
+                                     SourceAddress,
+                                     DestinationAddress);
+
+    //
+    // Release the reference on the socket added by the find socket call.
+    //
+
+    IoSocketReleaseReference(&(Socket->KernelSocket));
+    return;
+}
+
+VOID
+NetpUdpProcessReceivedSocketData (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called for a particular socket to process a received packet
+    that was sent to it.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link that received the packet.
+
+    Socket - Supplies a pointer to the socket that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may not be used as a scratch space and must not be
+        modified by this routine.
+
+    SourceAddress - Supplies a pointer to the source (remote) address that the
+        packet originated from. This memory will not be referenced once the
+        function returns, it can be stack allocated.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        that the packet is heading to. This memory will not be referenced once
+        the function returns, it can be stack allocated.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG AllocationSize;
+    ULONG AvailableBytes;
+    PUDP_HEADER Header;
+    USHORT Length;
+    USHORT PayloadLength;
+    PUDP_RECEIVED_PACKET UdpPacket;
+    PUDP_SOCKET UdpSocket;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
     UdpSocket = (PUDP_SOCKET)Socket;
+    Header = (PUDP_HEADER)(Packet->Buffer + Packet->DataOffset);
+    Length = NETWORK_TO_CPU16(Header->Length);
+    if (Length > (Packet->FooterOffset - Packet->DataOffset)) {
+        RtlDebugPrint("Invalid UDP length %d is bigger than packet data, "
+                      "which is only %d bytes large.\n",
+                      Length,
+                      (Packet->FooterOffset - Packet->DataOffset));
+
+        return;
+    }
+
+    //
+    // Since the socket has already been matched, the source and destination
+    // addresses better be completely filled in.
+    //
+
+    ASSERT(SourceAddress->Port == NETWORK_TO_CPU16(Header->SourcePort));
+    ASSERT(DestinationAddress->Port ==
+           NETWORK_TO_CPU16(Header->DestinationPort));
 
     //
     // Create a received packet entry for this data.
@@ -1282,11 +1377,6 @@ Return Value:
         MmFreePagedPool(UdpPacket);
     }
 
-    //
-    // Release the reference on the socket added by the find socket call.
-    //
-
-    IoSocketReleaseReference(&(Socket->KernelSocket));
     return;
 }
 

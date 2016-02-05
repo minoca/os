@@ -1298,6 +1298,47 @@ Return Value:
 --*/
 
 typedef
+VOID
+(*PNET_PROTOCOL_PROCESS_RECEIVED_SOCKET_DATA) (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called for a particular socket to process a received packet
+    that was sent to it.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link that received the packet.
+
+    Socket - Supplies a pointer to the socket that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may not be used as a scratch space and must not be
+        modified by this routine.
+
+    SourceAddress - Supplies a pointer to the source (remote) address that the
+        packet originated from. This memory will not be referenced once the
+        function returns, it can be stack allocated.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        that the packet is heading to. This memory will not be referenced once
+        the function returns, it can be stack allocated.
+
+Return Value:
+
+    None.
+
+--*/
+
+typedef
 KSTATUS
 (*PNET_PROTOCOL_RECEIVE) (
     BOOL FromKernelMode,
@@ -1463,6 +1504,9 @@ Members:
     ProcessReceivedData - Stores a pointer to a function called when a packet
         is received from the network.
 
+    ProcessReceivedSocketData - Stores a pointer to a function that processes a
+        packet targeting a specific socket.
+
     Receive - Stores a pointer to a function called by the user to receive
         data from the socket.
 
@@ -1485,6 +1529,7 @@ typedef struct _NET_PROTOCOL_INTERFACE {
     PNET_PROTOCOL_SHUTDOWN Shutdown;
     PNET_PROTOCOL_SEND Send;
     PNET_PROTOCOL_PROCESS_RECEIVED_DATA ProcessReceivedData;
+    PNET_PROTOCOL_PROCESS_RECEIVED_SOCKET_DATA ProcessReceivedSocketData;
     PNET_PROTOCOL_RECEIVE Receive;
     PNET_PROTOCOL_GET_SET_INFORMATION GetSetInformation;
     PNET_PROTOCOL_USER_CONTROL UserControl;
@@ -2972,6 +3017,7 @@ Return Value:
 NET_API
 VOID
 NetRawSocketsProcessReceivedData (
+    PNET_LINK Link,
     PNET_PACKET_BUFFER Packet,
     PNETWORK_ADDRESS SourceAddress,
     PNETWORK_ADDRESS DestinationAddress,
@@ -2988,6 +3034,8 @@ Routine Description:
 
 Arguments:
 
+    Link - Supplies a pointer to the link that received the packet.
+
     Packet - Supplies a pointer to the network packet. It is only guaranteed to
         include network layer headers, not physical layer headers.
 
@@ -2998,6 +3046,44 @@ Arguments:
         of the packet.
 
     NetworkProtocol - Supplies the network protocol of the packet.
+
+Return Value:
+
+    None.
+
+--*/
+
+NET_API
+VOID
+NetProcessReceivedMulticastData (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet,
+    PNET_PROTOCOL_ENTRY ProtocolEntry,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine processes the received packet and replays it for all of the
+    active sockets that match the given addresses. The protocol's socket data
+    processing routine will be invoked for each socket.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link that received the packet.
+
+    Packet - Supplies a pointer to the multicast packet.
+
+    ProtocolEntry - Supplies the protocol the socket must be on.
+
+    SourceAddress - Supplies a pointer to the source (remote) address of the
+        packet.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        of the packet.
 
 Return Value:
 

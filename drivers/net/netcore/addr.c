@@ -217,6 +217,16 @@ NetpDebugPrintNetworkAddress (
     PNETWORK_ADDRESS Address
     );
 
+VOID
+NetpProcessReceivedDataOnMatchingSockets (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet,
+    PNET_PROTOCOL_ENTRY Protocol,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress,
+    PNET_SOCKET SearchSocket
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -2866,6 +2876,7 @@ GetSetNetworkDeviceInformationEnd:
 NET_API
 VOID
 NetRawSocketsProcessReceivedData (
+    PNET_LINK Link,
     PNET_PACKET_BUFFER Packet,
     PNETWORK_ADDRESS SourceAddress,
     PNETWORK_ADDRESS DestinationAddress,
@@ -2881,6 +2892,8 @@ Routine Description:
     destination address.
 
 Arguments:
+
+    Link - Supplies a pointer to the link that received the packet.
 
     Packet - Supplies a pointer to the network packet. It is only guaranteed to
         include network layer headers, not physical layer headers.
@@ -3018,10 +3031,109 @@ Return Value:
         // This raw socket is lucky. It gets to look at the packet.
         //
 
-        NetpRawSocketProcessReceivedData(Socket, Packet, SourceAddress);
+        RawProtocol->Interface.ProcessReceivedSocketData(Link,
+                                                         Socket,
+                                                         Packet,
+                                                         SourceAddress,
+                                                         DestinationAddress);
     }
 
     KeReleaseSharedExclusiveLockShared(NetRawSocketsLock);
+    return;
+}
+
+NET_API
+VOID
+NetProcessReceivedMulticastData (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet,
+    PNET_PROTOCOL_ENTRY ProtocolEntry,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes the received packet and replays it for all of the
+    active sockets that match the given addresses. The protocol's socket data
+    processing routine will be invoked for each socket.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link that received the packet.
+
+    Packet - Supplies a pointer to the multicast packet.
+
+    ProtocolEntry - Supplies the protocol the socket must be on.
+
+    SourceAddress - Supplies a pointer to the source (remote) address of the
+        packet.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        of the packet.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    NET_SOCKET SearchSocket;
+
+    RtlCopyMemory(&(SearchSocket.RemoteAddress),
+                  SourceAddress,
+                  sizeof(NETWORK_ADDRESS));
+
+    RtlCopyMemory(&(SearchSocket.LocalAddress),
+                  DestinationAddress,
+                  sizeof(NETWORK_ADDRESS));
+
+    KeAcquireSharedExclusiveLockShared(ProtocolEntry->SocketLock);
+
+    //
+    // Iterate over the fully bound tree and send the packet off each socket
+    // that matches on both the source and destination addresses.
+    //
+
+    SearchSocket.BindingType = SocketFullyBound;
+    NetpProcessReceivedDataOnMatchingSockets(Link,
+                                             Packet,
+                                             ProtocolEntry,
+                                             SourceAddress,
+                                             DestinationAddress,
+                                             &SearchSocket);
+
+    //
+    // Iterate over the locally bound tree and send the packet to each socket
+    // the matches on the destination address.
+    //
+
+    SearchSocket.BindingType = SocketLocallyBound;
+    NetpProcessReceivedDataOnMatchingSockets(Link,
+                                             Packet,
+                                             ProtocolEntry,
+                                             SourceAddress,
+                                             DestinationAddress,
+                                             &SearchSocket);
+
+    //
+    // Iterate over the unbound tree and send the packet to each socket that
+    // matches the network and port of the destination address.
+    //
+
+    SearchSocket.BindingType = SocketUnbound;
+    NetpProcessReceivedDataOnMatchingSockets(Link,
+                                             Packet,
+                                             ProtocolEntry,
+                                             SourceAddress,
+                                             DestinationAddress,
+                                             &SearchSocket);
+
+    KeReleaseSharedExclusiveLockShared(ProtocolEntry->SocketLock);
     return;
 }
 
@@ -4283,7 +4395,7 @@ Return Value:
     RtlZeroMemory(&(SearchSocket.RemoteAddress), sizeof(NETWORK_ADDRESS));
 
     //
-    // Assume this is going to be an resounding success.
+    // Assume this is going to be a resounding success.
     //
 
     AvailableAddress = TRUE;
@@ -4292,9 +4404,9 @@ Return Value:
     // Search the tree of fully bound sockets for any using this local address
     // and port combination. Because the search entry's remote address is zero,
     // this should never match exactly, and just return the lowest entry in the
-    // tree that matches on protocol, network, and local port. The compare
-    // routine looks at remote address before local address, so this may end up
-    // doing a bit of iterating to get through all the necessary entries.
+    // tree that matches on network and local port. The compare routine looks
+    // at remote address before local address, so this may end up doing a bit
+    // of iterating to get through all the necessary entries.
     //
 
     DeactivateSocket = FALSE;
@@ -4402,8 +4514,8 @@ Return Value:
     // Search the tree of locally bound sockets for any using this local
     // address and port combination. If the search socket is using the
     // unspecified address, then this will not match. It should return the
-    // lowest entry in the tree that shares the same protocol, port, and
-    // network. This makes iteration easy.
+    // lowest entry in the tree that shares the same port and network. This
+    // makes iteration easy.
     //
 
     Tree = &(Protocol->SocketTree[SocketLocallyBound]);
@@ -4909,5 +5021,118 @@ Return Value:
     StringBuffer[NET_PRINT_ADDRESS_STRING_LENGTH - 1] = '\0';
     RtlDebugPrint("%s", StringBuffer);
     return;
+}
+
+VOID
+NetpProcessReceivedDataOnMatchingSockets (
+    PNET_LINK Link,
+    PNET_PACKET_BUFFER Packet,
+    PNET_PROTOCOL_ENTRY Protocol,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress,
+    PNET_SOCKET SearchSocket
+    )
+
+/*++
+
+Routine Description:
+
+    This routine iterates over the protocol's socket tree and replays the
+    packet to each socket that matches the given search socket. Which of the
+    protocol's socket trees is searched is dictated by the search socket's
+    binding type. The local and remote addresses of the socket must be filled
+    out with enough information for the binding type.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link that received the packet.
+
+    Packet - Supplies a pointer to the multicast packet.
+
+    Protocol - Supplies the protocol the socket must be on.
+
+    SourceAddress - Supplies a pointer to the source (remote) address of the
+        packet.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        of the packet.
+
+    SearchSocket - Supplies a pointer to a socket that is used to search the
+        protocol's socket tree for matches. The binding type of this search
+        socket dictates which of the protocol's socket trees will be searched.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    BOOL Descending;
+    PRED_BLACK_TREE_NODE FirstNode;
+    PRED_BLACK_TREE_NODE FoundNode;
+    PNET_SOCKET FoundSocket;
+    COMPARISON_RESULT Result;
+    PRED_BLACK_TREE Tree;
+
+    ASSERT(KeIsSharedExclusiveLockHeldShared(Protocol->SocketLock) != FALSE);
+
+    //
+    // Iterate over the tree and send the packet to each socket that matches on
+    // the trees comparison routine. There may be more than one due to the
+    // port/address reuse socket options. As such, find the first one and then
+    // search the tree in both directions.
+    //
+
+    Tree = &(Protocol->SocketTree[SearchSocket->BindingType]);
+    FirstNode = RtlRedBlackTreeSearch(Tree, &(SearchSocket->U.TreeEntry));
+    if (FirstNode == NULL) {
+        return;
+    }
+
+    FoundSocket = RED_BLACK_TREE_VALUE(FirstNode, NET_SOCKET, U.TreeEntry);
+    Protocol->Interface.ProcessReceivedSocketData(Link,
+                                                  FoundSocket,
+                                                  Packet,
+                                                  SourceAddress,
+                                                  DestinationAddress);
+
+    Descending = TRUE;
+    while (TRUE) {
+        FoundNode = FirstNode;
+        while (TRUE) {
+            FoundNode = RtlRedBlackTreeGetNextNode(Tree, Descending, FoundNode);
+            if (FoundNode == NULL) {
+                break;
+            }
+
+            Result = Tree->CompareFunction(Tree,
+                                           &(SearchSocket->U.TreeEntry),
+                                           FoundNode);
+
+            if (Result != ComparisonResultSame) {
+                break;
+            }
+
+            FoundSocket = RED_BLACK_TREE_VALUE(FoundNode,
+                                               NET_SOCKET,
+                                               U.TreeEntry);
+
+            Protocol->Interface.ProcessReceivedSocketData(Link,
+                                                          FoundSocket,
+                                                          Packet,
+                                                          SourceAddress,
+                                                          DestinationAddress);
+        }
+
+        if (Descending == FALSE) {
+            break;
+        }
+
+        Descending = FALSE;
+    }
+
+   return;
 }
 
