@@ -3739,7 +3739,6 @@ Return Value:
                 (IoPageCacheDirtyPageCount != 0)) {
 
                 IopSchedulePageCacheThread();
-                continue;
             }
 
             break;
