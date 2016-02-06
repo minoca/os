@@ -1685,7 +1685,7 @@ Return Value:
         // Mark it dirty.
         //
 
-        MarkedDirty = IoMarkPageCacheEntryDirty(CacheEntry, 0, 0, TRUE);
+        MarkedDirty = IoMarkPageCacheEntryDirty(CacheEntry);
         if (MarkedDirty != FALSE) {
             DirtyPageCount += 1;
         }
@@ -3691,7 +3691,7 @@ Return Value:
 
                 ASSERT(PageCacheEntry != NULL);
 
-                IoMarkPageCacheEntryDirty(PageCacheEntry, 0, 0, TRUE);
+                IoMarkPageCacheEntryDirty(PageCacheEntry);
                 DirtyPageCount += 1;
 
             //
@@ -4082,7 +4082,7 @@ Return Value:
             // Mark it dirty.
             //
 
-            MarkedDirty = IoMarkPageCacheEntryDirty(PageCacheEntry, 0, 0, TRUE);
+            MarkedDirty = IoMarkPageCacheEntryDirty(PageCacheEntry);
             if (MarkedDirty != FALSE) {
                 DirtyPageCount += 1;
             }

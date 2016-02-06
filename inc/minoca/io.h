@@ -7645,36 +7645,18 @@ Return Value:
 
 BOOL
 IoMarkPageCacheEntryDirty (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
-    ULONG DirtyOffset,
-    ULONG DirtyBytes,
-    BOOL MoveToDirtyList
+    PPAGE_CACHE_ENTRY PageCacheEntry
     );
 
 /*++
 
 Routine Description:
 
-    This routine marks the given page cache entry as dirty and extends the
-    owning file's size if the page cache entry down not own the page. Supply 0
-    for dirty bytes to not alter the file size.
+    This routine marks the given page cache entry as dirty.
 
 Arguments:
 
     PageCacheEntry - Supplies a pointer to a page cache entry.
-
-    DirtyOffset - Supplies the offset into the page where the dirty bytes
-        start.
-
-    DirtyBytes - Supplies the number of dirty bytes.
-
-    MoveToDirtyList - Supplies a boolean indicating if the page cache entry
-        should be moved to the list of dirty page cache entries. This should
-        only be set to TRUE in special circumstances where the page was marked
-        clean and then failed to be flushed or if the page was found to be
-        dirty only after it was unmapped. Normal behavior is that the page
-        cache entry migrates to the dirty list during lookup for write
-        operations.
 
 Return Value:
 

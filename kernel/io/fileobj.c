@@ -589,7 +589,6 @@ Return Value:
 {
 
     BOOL Created;
-    ULONGLONG FileSize;
     BOOL LockHeld;
     PFILE_OBJECT NewObject;
     PFILE_OBJECT Object;
@@ -692,17 +691,6 @@ Return Value:
                 RtlCopyMemory(&(NewObject->Properties),
                               Properties,
                               sizeof(FILE_PROPERTIES));
-
-                //
-                // Copy the file size out of the properties and into the file
-                // object proper. The system will update the version in the
-                // file object as it modifies the file size and then will
-                // reflect any changes to the file properties version when the
-                // bytes actually reach the device.
-                //
-
-                READ_INT64_SYNC(&(Properties->FileSize), &FileSize);
-                WRITE_INT64_SYNC(&(NewObject->FileSize), FileSize);
             }
 
             //
@@ -1681,32 +1669,23 @@ Return Value:
 VOID
 IopUpdateFileObjectFileSize (
     PFILE_OBJECT FileObject,
-    ULONGLONG NewSize,
-    BOOL UpdateFileObject,
-    BOOL UpdateProperties
+    ULONGLONG NewSize
     )
 
 /*++
 
 Routine Description:
 
-    This routine decides whether or not to update the file size based on the
-    supplied size. This routine will never decrease the file size. It is not
-    intended to change the file size, just to update the size based on changes
-    that other parts of the system have already completed. Use
-    IopModifyFileObjectSize to actually change the size (e.g. truncate).
+    This routine will make sure the file object file size is at least the
+    given size. If it is not, it will be set to the given size. If it is, no
+    change will be performed. Use the modify file object size function to
+    forcibly set a new size (eg for truncate).
 
 Arguments:
 
     FileObject - Supplies a pointer to a file object.
 
     NewSize - Supplies the new file size.
-
-    UpdateFileObject - Supplies a boolean indicating whether or not to update
-        the file size that is in the file object.
-
-    UpdateProperties - Supplies a boolean indicating whether or not to update
-        the file size that is within the file properties.
 
 Return Value:
 
@@ -1722,69 +1701,33 @@ Return Value:
 
     ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
 
-    //
-    // If specified, try to update the file size stored in the file object.
-    //
+    Updated = FALSE;
+    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+    if (FileSize < NewSize) {
 
-    if (UpdateFileObject != FALSE) {
-        READ_INT64_SYNC(&(FileObject->FileSize), &FileSize);
-        if (FileSize < NewSize) {
+        ASSERT(KeGetRunLevel() == RunLevelLow);
 
-            ASSERT(KeGetRunLevel() == RunLevelLow);
-
-            KeAcquireSpinLock(&(FileObject->PropertiesLock));
-            READ_INT64_SYNC(&(FileObject->FileSize), &FileSize);
-            if (FileSize < NewSize) {
-                WRITE_INT64_SYNC(&(FileObject->FileSize), NewSize);
-                BlockSize = FileObject->Properties.BlockSize;
-                FileObject->Properties.BlockCount =
-                                ALIGN_RANGE_UP(NewSize, BlockSize) / BlockSize;
-            }
-
-            KeReleaseSpinLock(&(FileObject->PropertiesLock));
-        }
-    }
-
-    //
-    // If specified, try to update the file size stored in the file properties.
-    //
-
-    if (UpdateProperties != FALSE) {
-
-        //
-        // If this call did not also update the file object's file size, then
-        // the new size should be truncated by the size in the file object.
-        // This is necessary because there are cases where the page cache is
-        // flushing a full page to disk but the file size does not extend to
-        // the end of that page.
-        //
-
-        if (UpdateFileObject == FALSE) {
-            READ_INT64_SYNC(&(FileObject->FileSize), &FileSize);
-            if (FileSize < NewSize) {
-                NewSize = FileSize;
-            }
-        }
-
-        Updated = FALSE;
+        KeAcquireSpinLock(&(FileObject->PropertiesLock));
         READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
         if (FileSize < NewSize) {
+            WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewSize);
 
-            ASSERT(KeGetRunLevel() == RunLevelLow);
+            //
+            // TODO: Block count should be managed by the file system.
+            //
 
-            KeAcquireSpinLock(&(FileObject->PropertiesLock));
-            READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
-            if (FileSize < NewSize) {
-                WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewSize);
-                Updated = TRUE;
-            }
+            BlockSize = FileObject->Properties.BlockSize;
+            FileObject->Properties.BlockCount =
+                            ALIGN_RANGE_UP(NewSize, BlockSize) / BlockSize;
 
-            KeReleaseSpinLock(&(FileObject->PropertiesLock));
+            Updated = TRUE;
         }
 
-        if (Updated != FALSE) {
-            IopMarkFileObjectPropertiesDirty(FileObject);
-        }
+        KeReleaseSpinLock(&(FileObject->PropertiesLock));
+    }
+
+    if (Updated != FALSE) {
+        IopMarkFileObjectPropertiesDirty(FileObject);
     }
 
     return;
@@ -1830,7 +1773,6 @@ Return Value:
     ULONGLONG EvictionOffset;
     ULONGLONG FileSize;
     ULONG PageSize;
-    ULONGLONG PropertiesSize;
     KSTATUS Status;
     ULONGLONG UnmapOffset;
     ULONGLONG UnmapSize;
@@ -1841,7 +1783,7 @@ Return Value:
     // If the new size is the same as the old file size then just exit.
     //
 
-    READ_INT64_SYNC(&(FileObject->FileSize), &FileSize);
+    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
     if (FileSize == NewFileSize) {
         Status = STATUS_SUCCESS;
         goto ModifyFileObjectSizeEnd;
@@ -1853,19 +1795,8 @@ Return Value:
     //
 
     if (NewFileSize < FileSize) {
-
-        //
-        // Set both the file object's file size and the file properties file
-        // size.
-        //
-
         KeAcquireSpinLock(&(FileObject->PropertiesLock));
-        WRITE_INT64_SYNC(&(FileObject->FileSize), NewFileSize);
-        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &PropertiesSize);
-        if (NewFileSize < PropertiesSize) {
-            WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewFileSize);
-        }
-
+        WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewFileSize);
         BlockSize = FileObject->Properties.BlockSize;
         FileObject->Properties.BlockCount =
                            ALIGN_RANGE_UP(NewFileSize, BlockSize) / BlockSize;
@@ -1874,40 +1805,31 @@ Return Value:
         IopMarkFileObjectPropertiesDirty(FileObject);
 
         //
-        // If the new file size is less than the size that was stored in the
-        // file properties, then the file properties were updated above and the
-        // file needs to be truncated.
+        // If this is a shared memory object, then handle that separately.
         //
 
-        if (NewFileSize < PropertiesSize) {
+        if (FileObject->Properties.Type == IoObjectSharedMemoryObject) {
+            Status = IopTruncateSharedMemoryObject(FileObject);
 
-            //
-            // If this is a shared memory object, then handle that separately.
-            //
+        //
+        // Otherwise call the driver to truncate the file or device. The
+        // driver will check the file size and truncate the file down to
+        // the new size.
+        //
 
-            if (FileObject->Properties.Type == IoObjectSharedMemoryObject) {
-                Status = IopTruncateSharedMemoryObject(FileObject);
-
-            //
-            // Otherwise call the driver to truncate the file or device. The
-            // driver will check the file size and truncate the file down to
-            // the new size.
-            //
-
-            } else {
-                if (DeviceContext == NULL) {
-                    DeviceContext = FileObject->DeviceContext;
-                }
-
-                Status = IopSendFileOperationIrp(IrpMinorSystemControlTruncate,
-                                                 FileObject,
-                                                 DeviceContext,
-                                                 0);
+        } else {
+            if (DeviceContext == NULL) {
+                DeviceContext = FileObject->DeviceContext;
             }
 
-            if (!KSUCCESS(Status)) {
-                goto ModifyFileObjectSizeEnd;
-            }
+            Status = IopSendFileOperationIrp(IrpMinorSystemControlTruncate,
+                                             FileObject,
+                                             DeviceContext,
+                                             0);
+        }
+
+        if (!KSUCCESS(Status)) {
+            goto ModifyFileObjectSizeEnd;
         }
 
         //
@@ -1947,7 +1869,7 @@ Return Value:
     //
 
     } else {
-        IopUpdateFileObjectFileSize(FileObject, NewFileSize, TRUE, FALSE);
+        IopUpdateFileObjectFileSize(FileObject, NewFileSize);
         Status = STATUS_SUCCESS;
     }
 

@@ -77,16 +77,10 @@ Environment:
 #define PAGE_CACHE_ENTRY_FLAG_DIRTY 0x00000001
 
 //
-// Set this flag if the page cache entry has been evicted.
-//
-
-#define PAGE_CACHE_ENTRY_FLAG_EVICTED 0x00000002
-
-//
 // Set this flag if the page cache entry owns the physical page it uses.
 //
 
-#define PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER 0x00000004
+#define PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER 0x00000002
 
 //
 // Set this flag if the page cache entry is mapped. This needs to be a flag as
@@ -96,7 +90,7 @@ Environment:
 // count", and so it is not set on non page owners.
 //
 
-#define PAGE_CACHE_ENTRY_FLAG_MAPPED 0x00000008
+#define PAGE_CACHE_ENTRY_FLAG_MAPPED 0x00000004
 
 //
 // Define page cache debug flags.
@@ -241,7 +235,7 @@ IopDestroyPageCacheEntries (
     PLIST_ENTRY ListHead
     );
 
-KSTATUS
+VOID
 IopDestroyPageCacheEntry (
     PPAGE_CACHE_ENTRY PageCacheEntry
     );
@@ -315,7 +309,6 @@ IopRemovePageCacheEntryFromTree (
 VOID
 IopRemovePageCacheEntryFromList (
     PPAGE_CACHE_ENTRY PageCacheEntry,
-    BOOL Eviction,
     PLIST_ENTRY DestroyListHead
     );
 
@@ -379,14 +372,6 @@ PQUEUED_LOCK IoPageCacheListLock;
 //
 
 UINTN IoPageCacheEntryCount = 0;
-
-//
-// The evicted count tracks the number of entries that are marked evicted but
-// have not been destroyed. They are on the evicted list, but may or may not be
-// in the tree. This variable is protected by the list lock.
-//
-
-UINTN IoPageCacheEvictedCount = 0;
 
 //
 // Store the target number of free pages in the system the page cache shoots
@@ -842,36 +827,18 @@ Return Value:
 
 BOOL
 IoMarkPageCacheEntryDirty (
-    PPAGE_CACHE_ENTRY PageCacheEntry,
-    ULONG DirtyOffset,
-    ULONG DirtyBytes,
-    BOOL MoveToDirtyList
+    PPAGE_CACHE_ENTRY PageCacheEntry
     )
 
 /*++
 
 Routine Description:
 
-    This routine marks the given page cache entry as dirty and extends the
-    owning file's size if the page cache entry down not own the page. Supply 0
-    for dirty bytes to not alter the file size.
+    This routine marks the given page cache entry as dirty.
 
 Arguments:
 
     PageCacheEntry - Supplies a pointer to a page cache entry.
-
-    DirtyOffset - Supplies the offset into the page where the dirty bytes
-        start.
-
-    DirtyBytes - Supplies the number of dirty bytes.
-
-    MoveToDirtyList - Supplies a boolean indicating if the page cache entry
-        should be moved to the list of dirty page cache entries. This should
-        only be set to TRUE in special circumstances where the page was marked
-        clean and then failed to be flushed or if the page was found to be
-        dirty only after it was unmapped. Normal behavior is that the page
-        cache entry migrates to the dirty list during lookup for write
-        operations.
 
 Return Value:
 
@@ -883,7 +850,6 @@ Return Value:
 {
 
     PPAGE_CACHE_ENTRY DirtyEntry;
-    ULONGLONG FileSize;
     BOOL MarkedDirty;
     ULONG OldFlags;
 
@@ -896,13 +862,6 @@ Return Value:
 
     if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) == 0) {
         DirtyEntry = PageCacheEntry->BackingEntry;
-        if (DirtyBytes != 0) {
-            FileSize = PageCacheEntry->Offset + DirtyOffset + DirtyBytes;
-            IopUpdateFileObjectFileSize(PageCacheEntry->FileObject,
-                                        FileSize,
-                                        TRUE,
-                                        TRUE);
-        }
 
     } else {
 
@@ -928,22 +887,12 @@ Return Value:
         MarkedDirty = TRUE;
 
         //
-        // If requested, move the page to the back of the dirty "list". There
-        // is no actual list. Dirty pages are just identified by a NULL next
-        // pointer.
+        // Remove the page cache entry from the clean LRU if it's on one.
         //
 
-        if (MoveToDirtyList != FALSE) {
+        if (DirtyEntry->ListEntry.Next != NULL) {
             KeAcquireQueuedLock(IoPageCacheListLock);
-
-            //
-            // Only modify the page cache entry's list entry if it is on a list
-            // and not evicted.
-            //
-
-            if (((DirtyEntry->Flags & PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0) &&
-                (DirtyEntry->ListEntry.Next != NULL)) {
-
+            if (DirtyEntry->ListEntry.Next != NULL) {
                 LIST_REMOVE(&(DirtyEntry->ListEntry));
                 DirtyEntry->ListEntry.Next = NULL;
             }
@@ -1284,7 +1233,6 @@ Return Value:
     BOOL Created;
     PPAGE_CACHE_ENTRY ExistingCacheEntry;
     PPAGE_CACHE_ENTRY PageCacheEntry;
-    KSTATUS Status;
 
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock));
     ASSERT((LinkEntry == NULL) ||
@@ -1325,16 +1273,7 @@ Return Value:
         ASSERT(PageCacheEntry->ReferenceCount == 1);
 
         PageCacheEntry->ReferenceCount = 0;
-        Status = IopDestroyPageCacheEntry(PageCacheEntry);
-
-        //
-        // This has to succeed because there's another page cache entry for
-        // this file object, so it must not be the last reference and therefore
-        // couldn't fail.
-        //
-
-        ASSERT(KSUCCESS(Status));
-
+        IopDestroyPageCacheEntry(PageCacheEntry);
         PageCacheEntry = ExistingCacheEntry;
     }
 
@@ -1832,17 +1771,10 @@ Return Value:
         ASSERT(CacheEntry->FileObject == FileObject);
 
         //
-        // If the entry has been evicted, it can be skipped.
-        //
-
-        if ((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_EVICTED) != 0) {
-            SkipEntry = TRUE;
-
-        //
         // If the entry is clean, then it can probably be skipped.
         //
 
-        } else if ((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+        if ((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
             SkipEntry = TRUE;
 
             //
@@ -2146,7 +2078,6 @@ Return Value:
     PPAGE_CACHE_ENTRY CacheEntry;
     LIST_ENTRY DestroyListHead;
     PRED_BLACK_TREE_NODE Node;
-    ULONG PreviousFlags;
     PAGE_CACHE_ENTRY SearchEntry;
 
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock) != FALSE);
@@ -2235,20 +2166,6 @@ Return Value:
         }
 
         //
-        // Otherwise mark it as evicted. This does not invalidate the Red-Black
-        // tree because there should only ever be one valid cache entry for a
-        // given file and offset pair. So, at most this will make this entry
-        // equal to other evicted entries for its file and offset pair.
-        //
-
-        PreviousFlags = RtlAtomicOr32(&(CacheEntry->Flags),
-                                      PAGE_CACHE_ENTRY_FLAG_EVICTED);
-
-        if ((PreviousFlags & PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0) {
-            IoPageCacheEvictedCount += 1;
-        }
-
-        //
         // Clean the page to keep the statistics accurate. It's been evicted
         // and will not be written out. Don't move it to the clean list, as
         // this routine will place it on either the evicted list or the local
@@ -2280,19 +2197,7 @@ Return Value:
         // Remove the cache entry from its current list.
         //
 
-        IopRemovePageCacheEntryFromList(CacheEntry, TRUE, &DestroyListHead);
-
-        //
-        // If the reference count is zero, then it was added to the local
-        // destroy list. Decrement the evicted count if it was incremented
-        // above.
-        //
-
-        if ((CacheEntry->ReferenceCount == 0) &&
-            ((PreviousFlags & PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0)) {
-
-            IoPageCacheEvictedCount -= 1;
-        }
+        IopRemovePageCacheEntryFromList(CacheEntry, &DestroyListHead);
     }
 
     //
@@ -2617,7 +2522,7 @@ Return Value:
         goto CopyIoBufferToPageCacheEntryEnd;
     }
 
-    IoMarkPageCacheEntryDirty(PageCacheEntry, PageOffset, ByteCount, FALSE);
+    IoMarkPageCacheEntryDirty(PageCacheEntry);
 
 CopyIoBufferToPageCacheEntryEnd:
     MmFreeIoBuffer(&PageCacheBuffer);
@@ -3076,50 +2981,18 @@ Return Value:
 {
 
     PPAGE_CACHE_ENTRY FirstEntry;
-    ULONG FirstFlags;
     PPAGE_CACHE_ENTRY SecondEntry;
-    ULONG SecondFlags;
 
     FirstEntry = RED_BLACK_TREE_VALUE(FirstNode, PAGE_CACHE_ENTRY, Node);
     SecondEntry = RED_BLACK_TREE_VALUE(SecondNode, PAGE_CACHE_ENTRY, Node);
-
-    ASSERT(FirstEntry->FileObject == SecondEntry->FileObject);
-
-    //
-    // If the offsets match, then further compare their flags. One might be
-    // evicted. Consider an evicted entry higher.
-    //
-
-    if (FirstEntry->Offset == SecondEntry->Offset) {
-        FirstFlags = FirstEntry->Flags;
-        SecondFlags = SecondEntry->Flags;
-        if ((FirstFlags & PAGE_CACHE_ENTRY_FLAG_EVICTED) ==
-            (SecondFlags & PAGE_CACHE_ENTRY_FLAG_EVICTED)) {
-
-            return ComparisonResultSame;
-
-        } else if (((FirstFlags & PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0) &&
-                   ((SecondFlags & PAGE_CACHE_ENTRY_FLAG_EVICTED) != 0)) {
-
-            return ComparisonResultAscending;
-        }
-
-        ASSERT(((FirstFlags & PAGE_CACHE_ENTRY_FLAG_EVICTED) != 0) &&
-               ((SecondFlags & PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0));
-
-    //
-    // If the first entry has a lower offset, then return ascending.
-    //
-
-    } else if (FirstEntry->Offset < SecondEntry->Offset) {
+    if (FirstEntry->Offset < SecondEntry->Offset) {
         return ComparisonResultAscending;
+
+    } else if (FirstEntry->Offset > SecondEntry->Offset) {
+        return ComparisonResultDescending;
     }
 
-    //
-    // The second entry must be less than the first. Return descending.
-    //
-
-    return ComparisonResultDescending;
+    return ComparisonResultSame;
 }
 
 //
@@ -3226,17 +3099,12 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    UINTN FailCount;
-    LIST_ENTRY FailedListHead;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     UINTN RemovedCount;
-    KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    FailCount = 0;
     RemovedCount = 0;
-    INITIALIZE_LIST_HEAD(&FailedListHead);
     while (LIST_EMPTY(ListHead) == FALSE) {
         CurrentEntry = ListHead->Next;
         PageCacheEntry = LIST_VALUE(CurrentEntry, PAGE_CACHE_ENTRY, ListEntry);
@@ -3257,21 +3125,8 @@ Return Value:
                           PageCacheEntry->Flags);
         }
 
-        Status = IopDestroyPageCacheEntry(PageCacheEntry);
-        if (!KSUCCESS(Status)) {
-            if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_EVICTION) != 0) {
-                RtlDebugPrint("PAGE CACHE: Failed to destroy entry 0x%08x: "
-                              "%x.\n",
-                              PageCacheEntry,
-                              Status);
-            }
-
-            FailCount += 1;
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry), &FailedListHead);
-
-        } else {
-            RemovedCount += 1;
-        }
+        IopDestroyPageCacheEntry(PageCacheEntry);
+        RemovedCount += 1;
     }
 
     //
@@ -3280,52 +3135,15 @@ Return Value:
     //
 
     if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_SIZE_MANAGEMENT) != 0) {
-        if (FailCount != 0) {
-            RtlDebugPrint("PAGE CACHE: Failed to destroy %d entries.\n",
-                          FailCount);
-        }
-
         if (RemovedCount != 0) {
             RtlDebugPrint("PAGE CACHE: Removed %d entries.\n", RemovedCount);
         }
     }
 
-    //
-    // Stick any page cache entries that failed back onto removal list. The
-    // page cache thread will pick them up next time around.
-    //
-
-    if (LIST_EMPTY(&FailedListHead) == FALSE) {
-        KeAcquireQueuedLock(IoPageCacheListLock);
-        while (LIST_EMPTY(&FailedListHead) == FALSE) {
-            PageCacheEntry = LIST_VALUE(FailedListHead.Next,
-                                        PAGE_CACHE_ENTRY,
-                                        ListEntry);
-
-            //
-            // Failed page cache entries are always evicted.
-            //
-
-            ASSERT((PageCacheEntry->Flags &
-                    PAGE_CACHE_ENTRY_FLAG_EVICTED) != 0);
-
-            IoPageCacheEvictedCount += 1;
-
-            ASSERT((PageCacheEntry->Flags &
-                    PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) == 0);
-
-            LIST_REMOVE(&(PageCacheEntry->ListEntry));
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                          &IoPageCacheRemovalList);
-        }
-
-        KeReleaseQueuedLock(IoPageCacheListLock);
-    }
-
     return;
 }
 
-KSTATUS
+VOID
 IopDestroyPageCacheEntry (
     PPAGE_CACHE_ENTRY PageCacheEntry
     )
@@ -3344,8 +3162,7 @@ Arguments:
 
 Return Value:
 
-    Status code indicating if the file object reference (and therefore the page
-    cache entry itself) was successfully released or not.
+    None.
 
 --*/
 
@@ -3354,7 +3171,6 @@ Return Value:
     PPAGE_CACHE_ENTRY BackingEntry;
     PFILE_OBJECT FileObject;
     ULONG PageSize;
-    KSTATUS Status;
 
     FileObject = PageCacheEntry->FileObject;
 
@@ -3409,31 +3225,10 @@ Return Value:
     }
 
     //
-    // Mark it as evicted.
-    //
-
-    if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0) {
-        RtlAtomicOr32(&(PageCacheEntry->Flags), PAGE_CACHE_ENTRY_FLAG_EVICTED);
-    }
-
-    //
     // Release the reference on the file object.
     //
 
-    Status = IopFileObjectReleaseReference(FileObject);
-    if (!KSUCCESS(Status)) {
-
-        //
-        // Mark this page as evicted and not the page owner, since the physical
-        // page is gone.
-        //
-
-        RtlAtomicOr32(&(PageCacheEntry->Flags), PAGE_CACHE_ENTRY_FLAG_EVICTED);
-        RtlAtomicAnd32(&(PageCacheEntry->Flags),
-                       ~PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER);
-
-        return Status;
-    }
+    IopFileObjectReleaseReference(FileObject);
 
     ASSERT((PageCacheEntry->ReferenceCount == 0) &&
            (PageCacheEntry->Node.Parent == NULL));
@@ -3443,7 +3238,7 @@ Return Value:
     //
 
     MmFreeBlock(IoPageCacheBlockAllocator, PageCacheEntry);
-    return Status;
+    return;
 }
 
 VOID
@@ -3788,7 +3583,6 @@ Return Value:
     ULONGLONG FileOffset;
     IO_CONTEXT IoContext;
     BOOL MarkedClean;
-    ULONG OldFlags;
     ULONG PageSize;
     KSTATUS Status;
 
@@ -3813,7 +3607,7 @@ Return Value:
     Clean = TRUE;
     while (BufferOffset < FlushSize) {
         CacheEntry = MmGetIoBufferPageCacheEntry(FlushBuffer, BufferOffset);
-        if ((CacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_EVICTED) != 0) {
+        if (CacheEntry->Node.Parent == NULL) {
             break;
         }
 
@@ -3853,7 +3647,7 @@ Return Value:
     IoContext.Flags = Flags;
     IoContext.TimeoutInMilliseconds = WAIT_TIME_INDEFINITE;
     IoContext.Write = TRUE;
-    Status = IopPerformNonCachedWrite(FileObject, &IoContext, NULL, FALSE);
+    Status = IopPerformNonCachedWrite(FileObject, &IoContext, NULL);
     if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_FLUSH) != 0) {
         if ((!KSUCCESS(Status)) || (Flags != 0) ||
             (IoContext.BytesCompleted != BytesToWrite)) {
@@ -3893,47 +3687,13 @@ FlushPageCacheBufferEnd:
     if (!KSUCCESS(Status)) {
 
         //
-        // Mark the non-written pages as dirty. Do this directly as opposed to
-        // using the helper function because the write may need to go through
-        // the upper layer again, for instance to increase the file size in the
-        // file system. The helper function would have just marked the lowest
-        // layer dirty, leaving the file system with a "clean" page beyond the
-        // end of the file.
+        // Mark the non-written pages as dirty again.
         //
 
         BufferOffset = ALIGN_RANGE_DOWN(IoContext.BytesCompleted, PageSize);
         while (BufferOffset < BytesToWrite) {
             CacheEntry = MmGetIoBufferPageCacheEntry(FlushBuffer, BufferOffset);
-            OldFlags = RtlAtomicOr32(&(CacheEntry->Flags),
-                                     PAGE_CACHE_ENTRY_FLAG_DIRTY);
-
-            ASSERT((OldFlags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0);
-
-            if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
-                RtlAtomicAdd(&IoPageCacheDirtyPageCount, 1);
-                if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_MAPPED) != 0) {
-                    RtlAtomicAdd(&IoPageCacheMappedDirtyPageCount, 1);
-                }
-
-                //
-                // Carefully try to remove the page cache entry from the LRU
-                // list as it is now dirty again. But, if it got evicted during
-                // the write, leave it be; another thread is moving it towards
-                // destruction.
-                //
-
-                KeAcquireQueuedLock(IoPageCacheListLock);
-                if (((CacheEntry->Flags &
-                      PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0) &&
-                    (CacheEntry->ListEntry.Next != NULL)) {
-
-                    LIST_REMOVE(&(CacheEntry->ListEntry));
-                    CacheEntry->ListEntry.Next = NULL;
-                }
-
-                KeReleaseQueuedLock(IoPageCacheListLock);
-            }
-
+            IoMarkPageCacheEntryDirty(CacheEntry);
             BufferOffset += PageSize;
         }
 
@@ -4063,9 +3823,9 @@ Return Value:
         //
 
         if (((Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) &&
+            (PageCacheEntry->Node.Parent != NULL) &&
             ((FileObject->Properties.HardLinkCount != 0) ||
-             (FileObject->PathEntryCount != 0)) &&
-            ((Flags & PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0)) {
+             (FileObject->PathEntryCount != 0))) {
 
             //
             // This page cache entry really shouldn't be on a list. Remove it.
@@ -4105,7 +3865,7 @@ Return Value:
 
             if (KSUCCESS(Status)) {
                 if (PageWasDirty != FALSE) {
-                    IoMarkPageCacheEntryDirty(PageCacheEntry, 0, 0, FALSE);
+                    IoMarkPageCacheEntryDirty(PageCacheEntry);
                     Flags = PageCacheEntry->Flags;
                 }
 
@@ -4138,15 +3898,6 @@ Return Value:
                         if (TargetRemoveCount != NULL) {
                             *TargetRemoveCount -= 1;
                         }
-                    }
-
-                    //
-                    // If this entry had been evicted, it is about to get
-                    // destroyed so decrement the evicted count.
-                    //
-
-                    if ((Flags & PAGE_CACHE_ENTRY_FLAG_EVICTED) != 0) {
-                        IoPageCacheEvictedCount -= 1;
                     }
                 }
             }
@@ -4471,7 +4222,7 @@ Return Value:
         PageCacheEntry = MmGetIoBufferPageCacheEntry(IoBuffer, BufferOffset);
         if ((PageCacheEntry == NULL) ||
             (PageCacheEntry->FileObject != FileObject) ||
-            ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_EVICTED) != 0) ||
+            (PageCacheEntry->Node.Parent == NULL) ||
             (PageCacheEntry->Offset != Offset)) {
 
             return FALSE;
@@ -4742,7 +4493,6 @@ Return Value:
 VOID
 IopRemovePageCacheEntryFromList (
     PPAGE_CACHE_ENTRY PageCacheEntry,
-    BOOL Eviction,
     PLIST_ENTRY DestroyListHead
     )
 
@@ -4762,9 +4512,6 @@ Arguments:
     PageCacheEntry - Supplies a pointer to the page cache entry that is to be
         removed from its list.
 
-    Eviction - Supplies a boolean indicating if the page cache entry is being
-        removed from its list for eviction.
-
     DestroyListHead - Supplies an optional pointer to the head of a list of
         page cache entries that the caller plans to destroy when ready.
 
@@ -4781,12 +4528,6 @@ Return Value:
                                             PageCacheEntry->FileObject->Lock));
 
     KeAcquireQueuedLock(IoPageCacheListLock);
-    if ((Eviction == FALSE) &&
-        ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_EVICTED) != 0)) {
-
-        goto RemovePageCacheEntryFromListEnd;
-    }
-
     if (PageCacheEntry->ListEntry.Next != NULL) {
         LIST_REMOVE(&(PageCacheEntry->ListEntry));
     }
@@ -4798,7 +4539,6 @@ Return Value:
         INSERT_BEFORE(&(PageCacheEntry->ListEntry), &IoPageCacheRemovalList);
     }
 
-RemovePageCacheEntryFromListEnd:
     KeReleaseQueuedLock(IoPageCacheListLock);
     return;
 }
@@ -4869,19 +4609,13 @@ Return Value:
                     DirtyEntry = PageCacheEntry;
                 }
 
-                if ((DirtyEntry->ListEntry.Next != NULL) &&
-                    ((DirtyEntry->Flags &
-                      PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0)) {
-
+                if (DirtyEntry->ListEntry.Next != NULL) {
                     LIST_REMOVE(&(DirtyEntry->ListEntry));
                     DirtyEntry->ListEntry.Next = NULL;
                 }
 
             } else {
-                if ((PageCacheEntry->ListEntry.Next != NULL) &&
-                    ((PageCacheEntry->Flags &
-                      PAGE_CACHE_ENTRY_FLAG_EVICTED) == 0)) {
-
+                if (PageCacheEntry->ListEntry.Next != NULL) {
                     LIST_REMOVE(&(PageCacheEntry->ListEntry));
                     INSERT_BEFORE(&(PageCacheEntry->ListEntry),
                                   &IoPageCacheCleanList);

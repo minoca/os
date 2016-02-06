@@ -70,6 +70,7 @@ Environment:
     "  -s, --file-size <size> -- Set the size of each file in bytes.\n"        \
     "  -i, --iterations <count> -- Set the number of operations to perform.\n" \
     "  -p, --threads <count> -- Set the number of threads to spin up.\n"       \
+    "  -r, --seed=int -- Set the random seed for deterministic results.\n"     \
     "  -t, --test -- Set the test to perform. Valid values are all, \n"        \
     "      consistency, concurrency, seek, streamseek, append, and \n"         \
     "      uninitialized.\n"                                                   \
@@ -79,7 +80,7 @@ Environment:
     "  --help -- Print this help text and exit.\n"                             \
     "  --version -- Print the test version and exit.\n"                        \
 
-#define FILE_TEST_OPTIONS_STRING "c:s:i:t:p:ndqhV"
+#define FILE_TEST_OPTIONS_STRING "c:s:i:t:p:r:ndqhV"
 
 #define FILE_TEST_CREATE_PERMISSIONS (S_IRUSR | S_IWUSR)
 
@@ -190,6 +191,7 @@ struct option FileTestLongOptions[] = {
     {"file-count", required_argument, 0, 'c'},
     {"file-size", required_argument, 0, 's'},
     {"iterations", required_argument, 0, 'i'},
+    {"seed", required_argument, 0, 'r'},
     {"threads", required_argument, 0, 'p'},
     {"test", required_argument, 0, 't'},
     {"no-cleanup", no_argument, 0, 'n'},
@@ -243,6 +245,7 @@ Return Value:
     BOOL IsParent;
     INT Iterations;
     INT Option;
+    INT Seed;
     INT Status;
     FILE_TEST_TYPE Test;
     INT Threads;
@@ -252,12 +255,12 @@ Return Value:
     FileCount = DEFAULT_FILE_COUNT;
     FileSize = DEFAULT_FILE_SIZE;
     Iterations = DEFAULT_OPERATION_COUNT;
+    Seed = time(NULL) ^ getpid();
     Test = FileTestAll;
     Threads = DEFAULT_THREAD_COUNT;
     Status = 0;
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
-    srand(time(NULL));
 
     //
     // Process the control arguments.
@@ -324,6 +327,16 @@ Return Value:
 
             break;
 
+        case 'r':
+            Seed = strtol(optarg, &AfterScan, 0);
+            if (AfterScan == optarg) {
+                PRINT_ERROR("Invalid seed %s.\n", optarg);
+                Status = 1;
+                goto MainEnd;
+            }
+
+            break;
+
         case 't':
             if (strcasecmp(optarg, "all") == 0) {
                 Test = FileTestAll;
@@ -383,6 +396,8 @@ Return Value:
         }
     }
 
+    srand(Seed);
+    DEBUG_PRINT("Seed: %d.\n", Seed);
     IsParent = TRUE;
     if (Threads > 1) {
         Children = malloc(sizeof(pid_t) * (Threads - 1));
@@ -2110,14 +2125,16 @@ Return Value:
 
 {
 
+    size_t ArraySize;
     ssize_t BytesComplete;
+    INT Expected;
     ULONG Failures;
     INT File;
     INT FileIndex;
     CHAR FileName[16];
     PBYTE *FileState;
     INT Iteration;
-    off_t Offset;
+    ULONGLONG Offset;
     INT OpenFlags;
     INT Percent;
     pid_t Process;
@@ -2300,8 +2317,9 @@ Return Value:
         //
 
         if (FileState[FileIndex] == 0) {
-            FileState[FileIndex] = malloc(FileSize);
-            memset(FileState[FileIndex], 0, FileSize);
+            ArraySize = FileSize + UNINITIALIZED_DATA_SEEK_MAX + 1;
+            FileState[FileIndex] = malloc(ArraySize);
+            memset(FileState[FileIndex], 0, ArraySize);
             OpenFlags = O_RDWR | O_CREAT;
             File = open(FileName, OpenFlags, FILE_TEST_CREATE_PERMISSIONS);
             if (File < 0) {
@@ -2442,8 +2460,8 @@ Return Value:
                  ((FileState[FileIndex][Offset] == 1) &&
                   (Value != (Offset & 0xFF))))) {
 
-                PRINT_ERROR("Error: read of file %s at offset 0x%I64x turned "
-                            "up %x (should have been %x or 0).\n",
+                PRINT_ERROR("Error: initial read of file %s at offset 0x%I64x "
+                            "turned up %x (should have been %x or 0).\n",
                             FileName,
                             Offset,
                             Value,
@@ -2458,7 +2476,7 @@ Return Value:
         }
 
         //
-        // Picks a random spot and writes a byte. Then reads a few bytes after
+        // Picks a random spot and writes a byte. Then read a few bytes after
         // that to make sure the expected value is there.
         //
 
@@ -2534,17 +2552,18 @@ Return Value:
             break;
         }
 
-        if ((BytesComplete == 1) &&
-            (((FileState[FileIndex][Offset] == 0) && (Value != 0)) ||
-             ((FileState[FileIndex][Offset] == 1) &&
-              (Value != (Offset & 0xFF))))) {
+        Expected = 0;
+        if (FileState[FileIndex][Offset] != 0) {
+            Expected = (Offset & 0xFF);
+        }
 
-            PRINT_ERROR("Error: read of file %s at offset 0x%I64x turned up "
-                        "%x (should have been %x or 0).\n",
+        if ((BytesComplete == 1) && (Value != Expected)) {
+            PRINT_ERROR("Error: Read of file %s at offset 0x%I64x turned up "
+                        "%x (should have been %x).\n",
                         FileName,
                         Offset,
                         Value,
-                        Offset & 0xFF);
+                        Expected);
         }
 
         if (close(File) != 0) {

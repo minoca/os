@@ -727,8 +727,7 @@ Return Value:
 KSTATUS
 IopPerformSharedMemoryIoOperation (
     PFILE_OBJECT FileObject,
-    PIO_CONTEXT IoContext,
-    BOOL UpdateFileSize
+    PIO_CONTEXT IoContext
     )
 
 /*++
@@ -745,10 +744,6 @@ Arguments:
     FileObject - Supplies a pointer to the file object for the device or file.
 
     IoContext - Supplies a pointer to the I/O context.
-
-    UpdateFileSize - Supplies a boolean indicating whether or not this routine
-        should update the file size in the file object. Only the page cache
-        code should supply FALSE.
 
 Return Value:
 
@@ -819,10 +814,7 @@ Return Value:
 
         if (IoContext->BytesCompleted != 0) {
             FileSize = IoContext->Offset + IoContext->BytesCompleted;
-            IopUpdateFileObjectFileSize(FileObject,
-                                        FileSize,
-                                        UpdateFileSize,
-                                        TRUE);
+            IopUpdateFileObjectFileSize(FileObject, FileSize);
         }
     }
 

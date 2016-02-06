@@ -354,9 +354,6 @@ Members:
     PropertiesLock - Stores a the spin lock that serializes access to this
         file's properties and file size.
 
-    FileSize - Store the system's value for the file size. This is not always
-        in sync with the file size stored within the properties.
-
     Properties - Stores the characteristics for this file.
 
     FileLockList - Stores the head of the list of file locks held on this
@@ -383,7 +380,6 @@ struct _FILE_OBJECT {
     volatile PVOID DeviceContext;
     volatile ULONG Flags;
     KSPIN_LOCK PropertiesLock;
-    INT64_SYNC FileSize;
     FILE_PROPERTIES Properties;
     LIST_ENTRY FileLockList;
     PKEVENT FileLockEvent;
@@ -2299,8 +2295,7 @@ KSTATUS
 IopPerformNonCachedWrite (
     PFILE_OBJECT FileObject,
     PIO_CONTEXT IoContext,
-    PVOID DeviceContext,
-    BOOL UpdateFileSize
+    PVOID DeviceContext
     );
 
 /*++
@@ -2320,10 +2315,6 @@ Arguments:
 
     DeviceContext - Supplies a pointer to the device context to use when
         writing to the backing device.
-
-    UpdateFileSize - Supplies a boolean indicating whether or not this routine
-        should update the file size in the file object. Only the page cache
-        code should supply FALSE.
 
 Return Value:
 
@@ -2731,32 +2722,23 @@ Return Value:
 VOID
 IopUpdateFileObjectFileSize (
     PFILE_OBJECT FileObject,
-    ULONGLONG NewSize,
-    BOOL UpdateFileObject,
-    BOOL UpdateProperties
+    ULONGLONG NewSize
     );
 
 /*++
 
 Routine Description:
 
-    This routine decides whether or not to update the file size based on the
-    supplied size. This routine will never decrease the file size. It is not
-    intended to change the file size, just to update the size based on changes
-    that other parts of the system have already completed. Use
-    IopModifyFileObjectSize to actually change the size (e.g. truncate).
+    This routine will make sure the file object file size is at least the
+    given size. If it is not, it will be set to the given size. If it is, no
+    change will be performed. Use the modify file object size function to
+    forcibly set a new size (eg for truncate).
 
 Arguments:
 
     FileObject - Supplies a pointer to a file object.
 
     NewSize - Supplies the new file size.
-
-    UpdateFileObject - Supplies a boolean indicating whether or not to update
-        the file size that is in the file object.
-
-    UpdateProperties - Supplies a boolean indicating whether or not to update
-        the file size that is within the file properties.
 
 Return Value:
 
@@ -3651,8 +3633,7 @@ Return Value:
 KSTATUS
 IopPerformSharedMemoryIoOperation (
     PFILE_OBJECT FileObject,
-    PIO_CONTEXT IoContext,
-    BOOL UpdateFileSize
+    PIO_CONTEXT IoContext
     );
 
 /*++
@@ -3669,10 +3650,6 @@ Arguments:
     FileObject - Supplies a pointer to the file object for the device or file.
 
     IoContext - Supplies a pointer to the I/O context.
-
-    UpdateFileSize - Supplies a boolean indicating whether or not this routine
-        should update the file size in the file object. Only the page cache
-        code should supply FALSE.
 
 Return Value:
 

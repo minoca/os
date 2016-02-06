@@ -295,7 +295,7 @@ Return Value:
         //
 
         FileObject = IoHandle->PathPoint.PathEntry->FileObject;
-        READ_INT64_SYNC(&(FileObject->FileSize), &LocalFileSize);
+        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &LocalFileSize);
         if (IoOffsetAlignment != NULL) {
             *IoOffsetAlignment = FileObject->Properties.BlockSize;
         }
@@ -1002,7 +1002,7 @@ Return Value:
     //
 
     case SeekCommandFromEnd:
-        READ_INT64_SYNC(&(FileObject->FileSize), &FileSize);
+        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
         Offset += FileSize;
 
     case SeekCommandFromBeginning:
@@ -1058,7 +1058,7 @@ Return Value:
 
     PathPoint = IoGetPathPoint(Handle);
     FileObject = PathPoint->PathEntry->FileObject;
-    READ_INT64_SYNC(&(FileObject->FileSize), &LocalFileSize);
+    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &LocalFileSize);
     *FileSize = LocalFileSize;
     Status = STATUS_SUCCESS;
     return Status;
@@ -1362,7 +1362,7 @@ Return Value:
                       &(FileObject->Properties),
                       sizeof(FILE_PROPERTIES));
 
-        READ_INT64_SYNC(&(FileObject->FileSize), &FileSize);
+        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
         WRITE_INT64_SYNC(&(FileProperties->FileSize), FileSize);
     }
 
@@ -2158,9 +2158,7 @@ Return Value:
         //
 
         IopUpdateFileObjectFileSize(DestinationDirectoryFileObject,
-                                    RenameRequest.DestinationDirectorySize,
-                                    TRUE,
-                                    TRUE);
+                                    RenameRequest.DestinationDirectorySize);
 
         IopUpdateFileObjectTime(DestinationDirectoryFileObject,
                                 FileObjectModifiedTime);
@@ -2788,7 +2786,7 @@ Return Value:
 
     NewHandle->DeviceContext = IoHandle->DeviceContext;
     NewHandle->Device = Device;
-    READ_INT64_SYNC(&(FileObject->FileSize), &LocalFileSize);
+    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &LocalFileSize);
     NewHandle->Capacity = LocalFileSize;
     NewHandle->IoHandle = IoHandle;
     NewHandle->OffsetAlignment = FileObject->Properties.BlockSize;
@@ -4236,10 +4234,7 @@ Return Value:
 
     if (KSUCCESS(Status)) {
         IopUpdateFileObjectTime(Directory, FileObjectModifiedTime);
-        IopUpdateFileObjectFileSize(Directory,
-                                    Request.DirectorySize,
-                                    TRUE,
-                                    TRUE);
+        IopUpdateFileObjectFileSize(Directory, Request.DirectorySize);
     }
 
     return Status;
@@ -4961,7 +4956,9 @@ Return Value:
     PagingHandle->Device = Device;
     PagingHandle->DeviceContext = IoHandle->DeviceContext;
     FileObject = IoHandle->PathPoint.PathEntry->FileObject;
-    READ_INT64_SYNC(&(FileObject->FileSize), &(PagingHandle->Capacity));
+    READ_INT64_SYNC(&(FileObject->Properties.FileSize),
+                    &(PagingHandle->Capacity));
+
     PagingHandle->OffsetAlignment = FileObject->Properties.BlockSize;
     PagingHandle->SizeAlignment = PagingHandle->OffsetAlignment;
     *IoOffsetAlignment = PagingHandle->OffsetAlignment;

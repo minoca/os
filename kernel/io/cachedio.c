@@ -112,8 +112,7 @@ KSTATUS
 IopHandleCacheWriteMiss (
     PFILE_OBJECT FileObject,
     PIO_WRITE_CONTEXT WriteContext,
-    ULONG TimeoutInMilliseconds,
-    PBOOL WriteOut
+    ULONG TimeoutInMilliseconds
     );
 
 KSTATUS
@@ -146,8 +145,7 @@ KSTATUS
 IopPerformDefaultNonCachedWrite (
     PFILE_OBJECT FileObject,
     PIO_CONTEXT IoContext,
-    PVOID DeviceContext,
-    BOOL UpdateFileSize
+    PVOID DeviceContext
     );
 
 KSTATUS
@@ -155,8 +153,7 @@ IopPerformDefaultPartialWrite (
     PFILE_OBJECT FileObject,
     PIO_CONTEXT IoContext,
     PVOID DeviceContext,
-    UINTN IoBufferOffset,
-    BOOL UpdateFileSize
+    UINTN IoBufferOffset
     );
 
 //
@@ -271,7 +268,8 @@ Return Value:
         //
 
         if ((Handle->OpenFlags & OPEN_FLAG_APPEND) != 0) {
-            READ_INT64_SYNC(&(FileObject->FileSize), &(IoContext->Offset));
+            READ_INT64_SYNC(&(FileObject->Properties.FileSize),
+                            &(IoContext->Offset));
         }
 
         if (IO_IS_FILE_OBJECT_CACHEABLE(FileObject) != FALSE) {
@@ -280,8 +278,7 @@ Return Value:
         } else {
             Status = IopPerformNonCachedWrite(FileObject,
                                               IoContext,
-                                              Handle->DeviceContext,
-                                              TRUE);
+                                              Handle->DeviceContext);
         }
 
         TimeType = FileObjectModifiedTime;
@@ -385,10 +382,7 @@ Return Value:
 
     switch (IoObjectType) {
     case IoObjectSharedMemoryObject:
-        Status = IopPerformSharedMemoryIoOperation(FileObject,
-                                                   IoContext,
-                                                   FALSE);
-
+        Status = IopPerformSharedMemoryIoOperation(FileObject, IoContext);
         break;
 
     default:
@@ -406,8 +400,7 @@ KSTATUS
 IopPerformNonCachedWrite (
     PFILE_OBJECT FileObject,
     PIO_CONTEXT IoContext,
-    PVOID DeviceContext,
-    BOOL UpdateFileSize
+    PVOID DeviceContext
     )
 
 /*++
@@ -427,10 +420,6 @@ Arguments:
 
     DeviceContext - Supplies a pointer to the device context to use when
         writing to the backing device.
-
-    UpdateFileSize - Supplies a boolean indicating whether or not this routine
-        should update the file size in the file object. Only the page cache
-        code should supply FALSE.
 
 Return Value:
 
@@ -455,17 +444,13 @@ Return Value:
 
     switch (IoObjectType) {
     case IoObjectSharedMemoryObject:
-        Status = IopPerformSharedMemoryIoOperation(FileObject,
-                                                   IoContext,
-                                                   UpdateFileSize);
-
+        Status = IopPerformSharedMemoryIoOperation(FileObject, IoContext);
         break;
 
     default:
         Status = IopPerformDefaultNonCachedWrite(FileObject,
                                                  IoContext,
-                                                 DeviceContext,
-                                                 UpdateFileSize);
+                                                 DeviceContext);
 
         break;
     }
@@ -549,7 +534,7 @@ Return Value:
     // Do not read past the end of the file.
     //
 
-    READ_INT64_SYNC(&(FileObject->FileSize), &FileSize);
+    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
     if (IoContext->Offset >= FileSize) {
         Status = STATUS_END_OF_FILE;
         goto PerformCachedReadEnd;
@@ -842,6 +827,7 @@ Return Value:
     ULONGLONG EndOffset;
     ULONGLONG FileSize;
     UINTN FullPageSize;
+    ULONGLONG NewFileSize;
     ULONGLONG PageAlignedOffset;
     ULONG PageByteOffset;
     PPAGE_CACHE_ENTRY PageCacheEntry;
@@ -884,7 +870,7 @@ Return Value:
 
     if (FileObject->Properties.Type == IoObjectBlockDevice) {
         EndOffset = IoContext->Offset + SizeInBytes;
-        READ_INT64_SYNC(&(FileObject->FileSize), &FileSize);
+        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
         if (EndOffset > FileSize) {
             SizeInBytes = FileSize - IoContext->Offset;
             if (SizeInBytes == 0) {
@@ -954,7 +940,7 @@ Return Value:
         }
     }
 
-    READ_INT64_SYNC(&(FileObject->FileSize), &FileSize);
+    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
 
     //
     // Iterate over each page, searching for page cache entries to copy into.
@@ -982,21 +968,9 @@ Return Value:
         // Determine how many bytes to handle this round.
         //
 
-        if (WriteContext.PageByteOffset != 0) {
-            WriteContext.BytesThisRound = PageSize -
-                                          WriteContext.PageByteOffset;
-
-            if (WriteContext.BytesThisRound > WriteContext.BytesRemaining) {
-                WriteContext.BytesThisRound = WriteContext.BytesRemaining;
-            }
-
-        } else {
-            if (WriteContext.BytesRemaining >= PageSize) {
-                WriteContext.BytesThisRound = PageSize;
-
-            } else {
-                WriteContext.BytesThisRound = WriteContext.BytesRemaining;
-            }
+        WriteContext.BytesThisRound = PageSize - WriteContext.PageByteOffset;
+        if (WriteContext.BytesThisRound > WriteContext.BytesRemaining) {
+            WriteContext.BytesThisRound = WriteContext.BytesRemaining;
         }
 
         //
@@ -1017,6 +991,19 @@ Return Value:
                 goto PerformCachedWriteEnd;
             }
 
+            //
+            // Hits need to update the file size so that future misses don't
+            // hit the file size and end up zeroing this region.
+            //
+
+            NewFileSize = WriteContext.FileOffset +
+                          WriteContext.PageByteOffset +
+                          WriteContext.BytesThisRound;
+
+            if (NewFileSize > FileSize) {
+                IopUpdateFileObjectFileSize(FileObject, NewFileSize);
+            }
+
         //
         // If no page cache entry was found at this file offset, then handle
         // the write miss.
@@ -1025,11 +1012,14 @@ Return Value:
         } else {
             Status = IopHandleCacheWriteMiss(FileObject,
                                              &WriteContext,
-                                             IoContext->TimeoutInMilliseconds,
-                                             &WriteOutNow);
+                                             IoContext->TimeoutInMilliseconds);
 
             if (!KSUCCESS(Status)) {
                 goto PerformCachedWriteEnd;
+            }
+
+            if (IO_IS_CACHEABLE_FILE(FileObject->Properties.Type)) {
+                WriteOutNow = TRUE;
             }
         }
 
@@ -1047,12 +1037,6 @@ Return Value:
     //
 
     if (WriteOutNow != FALSE) {
-
-        //
-        // The cache I/O buffer might start partially through this write if the
-        // first few page cache entries were hits.
-        //
-
         CacheIoContext.IoBuffer = WriteContext.CacheBuffer;
         CacheIoContext.Offset = WriteContext.CacheBufferOffset;
         CacheIoContext.SizeInBytes =
@@ -1097,12 +1081,6 @@ PerformCachedWriteEnd:
         if (IoContext->BytesCompleted == 0) {
             IoContext->BytesCompleted = WriteContext.BytesCompleted;
         }
-
-        if (IoContext->BytesCompleted != 0) {
-            FileSize = IoContext->Offset + IoContext->BytesCompleted;
-            IopUpdateFileObjectFileSize(FileObject, FileSize, TRUE, FALSE);
-            IopSchedulePageCacheThread();
-        }
     }
 
     if (WriteContext.CacheBuffer != NULL) {
@@ -1116,8 +1094,7 @@ KSTATUS
 IopHandleCacheWriteMiss (
     PFILE_OBJECT FileObject,
     PIO_WRITE_CONTEXT WriteContext,
-    ULONG TimeoutInMilliseconds,
-    PBOOL WriteOut
+    ULONG TimeoutInMilliseconds
     )
 
 /*++
@@ -1142,11 +1119,6 @@ Arguments:
     TimeoutInMilliseconds - Supplies the number of milliseconds that the I/O
         operation should be waited on before timing out. Use
         WAIT_TIME_INDEFINITE to wait forever on the I/O.
-
-    WriteOut - Supplies a pointer to a boolean set if the given I/O needs to
-        make it out to the driver now. This is set if a new portion of a file
-        is written, or left unchanged if the page does not need to be written
-        out now.
 
 Return Value:
 
@@ -1249,22 +1221,6 @@ Return Value:
         PageCacheEntry = MmGetIoBufferPageCacheEntry(&PageCacheBuffer, 0);
 
         ASSERT(PageCacheEntry != NULL);
-
-        IoMarkPageCacheEntryDirty(PageCacheEntry,
-                                  WriteContext->PageByteOffset,
-                                  WriteContext->BytesThisRound,
-                                  FALSE);
-
-        //
-        // If there's a cache buffer, add this page cache entry to it.
-        //
-
-        if (WriteContext->CacheBuffer != NULL) {
-            MmIoBufferAppendPage(WriteContext->CacheBuffer,
-                                 PageCacheEntry,
-                                 NULL,
-                                 INVALID_PHYSICAL_ADDRESS);
-        }
 
         WriteContext->BytesCompleted += WriteContext->BytesThisRound;
 
@@ -1378,15 +1334,6 @@ Return Value:
         }
 
         //
-        // Mark the new page cache entry dirty.
-        //
-
-        IoMarkPageCacheEntryDirty(PageCacheEntry,
-                                  WriteContext->PageByteOffset,
-                                  WriteContext->BytesThisRound,
-                                  FALSE);
-
-        //
         // If the page cache entry was created from a physical page owned
         // by the scratch buffer, connect them.
         //
@@ -1395,45 +1342,46 @@ Return Value:
             MmSetIoBufferPageCacheEntry(ScratchIoBuffer, 0, PageCacheEntry);
         }
 
-        //
-        // This page cache entry was created, so if it's a cacheable file
-        // type, it will need to go down through the file system to ensure
-        // there's disk space allocated to it. Create a cache buffer if one
-        // has not been created yet.
-        //
-
-        if (IO_IS_CACHEABLE_FILE(FileObject->Properties.Type)) {
-            *WriteOut = TRUE;
-            if (WriteContext->CacheBuffer == NULL) {
-                CacheBufferSize = WriteContext->PageByteOffset +
-                                  WriteContext->BytesRemaining;
-
-                CacheBufferSize = ALIGN_RANGE_UP(CacheBufferSize, PageSize);
-                WriteContext->CacheBuffer =
-                       MmAllocateUninitializedIoBuffer(CacheBufferSize, 0);
-
-                if (WriteContext->CacheBuffer == NULL) {
-                    Status = STATUS_INSUFFICIENT_RESOURCES;
-                    goto HandleCacheWriteMissEnd;
-                }
-
-                WriteContext->CacheBufferOffset = WriteContext->FileOffset;
-            }
-        }
-
-        //
-        // Back the cache buffer with this page cache entry, since it will
-        // be flushed later.
-        //
-
-        if (WriteContext->CacheBuffer != NULL) {
-            MmIoBufferAppendPage(WriteContext->CacheBuffer,
-                                 PageCacheEntry,
-                                 NULL,
-                                 INVALID_PHYSICAL_ADDRESS);
-        }
-
         WriteContext->BytesCompleted += WriteContext->BytesThisRound;
+    }
+
+    IoMarkPageCacheEntryDirty(PageCacheEntry);
+
+    //
+    // This page cache entry was created or read, so if it's a cacheable file
+    // type, it will need to go down through the file system to ensure
+    // there's disk space allocated to it. Create a cache buffer if one
+    // has not been created yet.
+    //
+
+    if (IO_IS_CACHEABLE_FILE(FileObject->Properties.Type)) {
+        if (WriteContext->CacheBuffer == NULL) {
+            CacheBufferSize = WriteContext->PageByteOffset +
+                              WriteContext->BytesRemaining;
+
+            CacheBufferSize = ALIGN_RANGE_UP(CacheBufferSize, PageSize);
+            WriteContext->CacheBuffer =
+                   MmAllocateUninitializedIoBuffer(CacheBufferSize, 0);
+
+            if (WriteContext->CacheBuffer == NULL) {
+                Status = STATUS_INSUFFICIENT_RESOURCES;
+                goto HandleCacheWriteMissEnd;
+            }
+
+            WriteContext->CacheBufferOffset = WriteContext->FileOffset;
+        }
+    }
+
+    //
+    // Back the cache buffer with this page cache entry, since it will
+    // be flushed later.
+    //
+
+    if (WriteContext->CacheBuffer != NULL) {
+        MmIoBufferAppendPage(WriteContext->CacheBuffer,
+                             PageCacheEntry,
+                             NULL,
+                             INVALID_PHYSICAL_ADDRESS);
     }
 
 HandleCacheWriteMissEnd:
@@ -1527,15 +1475,8 @@ Return Value:
             goto HandleCacheWriteHitEnd;
         }
 
-    //
-    // Otherwise just mark the newly linked entry as dirty.
-    //
-
     } else {
-        IoMarkPageCacheEntryDirty(PageCacheEntry,
-                                  WriteContext->PageByteOffset,
-                                  WriteContext->BytesThisRound,
-                                  FALSE);
+        IoMarkPageCacheEntryDirty(PageCacheEntry);
     }
 
     WriteContext->BytesCompleted += WriteContext->BytesThisRound;
@@ -1816,7 +1757,7 @@ Return Value:
             IopMarkPageCacheEntryClean(PageCacheEntry, TRUE);
 
         } else {
-            IoMarkPageCacheEntryDirty(PageCacheEntry, 0, BytesThisRound, TRUE);
+            IoMarkPageCacheEntryDirty(PageCacheEntry);
         }
 
         BufferOffset += BytesThisRound;
@@ -1828,7 +1769,7 @@ Return Value:
     //
 
     if (WriteOutNow != FALSE) {
-        Status = IopPerformNonCachedWrite(FileObject, IoContext, NULL, TRUE);
+        Status = IopPerformNonCachedWrite(FileObject, IoContext, NULL);
 
         //
         // If this did not write out all the bytes then some pages may be
@@ -2029,8 +1970,7 @@ KSTATUS
 IopPerformDefaultNonCachedWrite (
     PFILE_OBJECT FileObject,
     PIO_CONTEXT IoContext,
-    PVOID DeviceContext,
-    BOOL UpdateFileSize
+    PVOID DeviceContext
     )
 
 /*++
@@ -2050,10 +1990,6 @@ Arguments:
 
     DeviceContext - Supplies a pointer to the device context to use when
         writing to the backing device.
-
-    UpdateFileSize - Supplies a boolean indicating whether or not this routine
-        should update the file size in the file object. Only the page cache
-        code should supply FALSE.
 
 Return Value:
 
@@ -2105,8 +2041,7 @@ Return Value:
         Status = IopPerformDefaultPartialWrite(FileObject,
                                                &PartialContext,
                                                DeviceContext,
-                                               IoContext->BytesCompleted,
-                                               UpdateFileSize);
+                                               IoContext->BytesCompleted);
 
         IoContext->BytesCompleted += PartialContext.BytesCompleted;
         if (!KSUCCESS(Status)) {
@@ -2208,10 +2143,7 @@ Return Value:
                 FileSize = Offset + BytesToWrite;
             }
 
-            IopUpdateFileObjectFileSize(FileObject,
-                                        FileSize,
-                                        UpdateFileSize,
-                                        TRUE);
+            IopUpdateFileObjectFileSize(FileObject, FileSize);
         }
 
         IoContext->BytesCompleted += Parameters.IoBytesCompleted;
@@ -2243,8 +2175,7 @@ Return Value:
         Status = IopPerformDefaultPartialWrite(FileObject,
                                                &PartialContext,
                                                DeviceContext,
-                                               IoContext->BytesCompleted,
-                                               UpdateFileSize);
+                                               IoContext->BytesCompleted);
 
         IoContext->BytesCompleted += PartialContext.BytesCompleted;
         Offset += PartialContext.BytesCompleted;
@@ -2268,8 +2199,7 @@ IopPerformDefaultPartialWrite (
     PFILE_OBJECT FileObject,
     PIO_CONTEXT IoContext,
     PVOID DeviceContext,
-    UINTN IoBufferOffset,
-    BOOL UpdateFileSize
+    UINTN IoBufferOffset
     )
 
 /*++
@@ -2289,10 +2219,6 @@ Arguments:
 
     IoBufferOffset - Supplies the offset into the context's I/O buffer to get
         data from.
-
-    UpdateFileSize - Supplies a boolean indicating whether or not this routine
-        should update the file size in the file object. Only the page cache
-        code should supply FALSE.
 
 Return Value:
 
@@ -2434,7 +2360,7 @@ Return Value:
 
     if (IoContext->BytesCompleted != 0) {
         FileSize = IoContext->Offset + IoContext->BytesCompleted;
-        IopUpdateFileObjectFileSize(FileObject, FileSize, UpdateFileSize, TRUE);
+        IopUpdateFileObjectFileSize(FileObject, FileSize);
     }
 
 PerformDefaultPartialWriteEnd:
