@@ -3597,13 +3597,6 @@ Return Value:
     }
 
     //
-    // Ahem... the entry had better be in here.
-    //
-
-    ASSERT(RtlRedBlackTreeSearch(Tree, &(Socket->U.TreeEntry)) ==
-           &(Socket->U.TreeEntry));
-
-    //
     // Remove this old friend from the tree.
     //
 
@@ -4355,6 +4348,7 @@ Return Value:
     BOOL AddressesMatch;
     BOOL AvailableAddress;
     BOOL DeactivateSocket;
+    BOOL Descending;
     PRED_BLACK_TREE_NODE FirstFound;
     BOOL FirstFoundMatched;
     PRED_BLACK_TREE_NODE FoundNode;
@@ -4366,6 +4360,7 @@ Return Value:
     BOOL UnspecifiedAddress;
 
     Protocol = Socket->Protocol;
+    FoundSocket = NULL;
 
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(Protocol->SocketLock) != FALSE);
 
@@ -4514,8 +4509,9 @@ Return Value:
     // Search the tree of locally bound sockets for any using this local
     // address and port combination. If the search socket is using the
     // unspecified address, then this will not match. It should return the
-    // lowest entry in the tree that shares the same port and network. This
-    // makes iteration easy.
+    // lowest entry in the tree that shares the same port and network. If the
+    // search socket is using a complete local address, then this may need to
+    // search in both directions on the tree if the first node matches.
     //
 
     Tree = &(Protocol->SocketTree[SocketLocallyBound]);
@@ -4523,108 +4519,10 @@ Return Value:
                                               &(SearchSocket.U.TreeEntry),
                                               TRUE);
 
+    Descending = FALSE;
     FoundNode = FirstFound;
     FirstFoundMatched = FALSE;
     while (FoundNode != NULL) {
-        FoundSocket = RED_BLACK_TREE_VALUE(FoundNode, NET_SOCKET, U.TreeEntry);
-        if (FoundSocket->LocalAddress.Port != LocalAddress->Port) {
-            break;
-        }
-
-        if (FoundSocket->LocalAddress.Network != LocalAddress->Network) {
-            break;
-        }
-
-        //
-        // Locally bound sockets should not be in the time wait state.
-        //
-
-        ASSERT((FoundSocket->Flags & NET_SOCKET_FLAG_TIME_WAIT) == 0);
-
-        //
-        // If the supplied socket contains the unspecified address, do not
-        // compare it with the found address. It should never match. But if
-        // both sockets do not allow any address reuse, then do not allow the
-        // unspecified address to use the port.
-        //
-
-        if (UnspecifiedAddress != FALSE) {
-            if (CAN_REUSE_ANY_ADDRESS(Socket, FoundSocket) == FALSE) {
-                AvailableAddress = FALSE;
-                break;
-            }
-
-        //
-        // Otherwise test to see if the addresses match.
-        //
-
-        } else {
-            AddressesMatch = TRUE;
-            for (PartIndex = 0;
-                 PartIndex < MAX_NETWORK_ADDRESS_SIZE / sizeof(UINTN);
-                 PartIndex += 1) {
-
-                if (FoundSocket->LocalAddress.Address[PartIndex] !=
-                    LocalAddress->Address[PartIndex]) {
-
-                    AddressesMatch = FALSE;
-                    break;
-                }
-            }
-
-            //
-            // If the local addresses do not match, then this has gone beyond
-            // the range of any matches.
-            //
-
-            if (AddressesMatch == FALSE) {
-                break;
-            }
-
-            //
-            // Record if this was the first found and it matched.
-            //
-
-            if (FoundNode == FirstFound) {
-                FirstFoundMatched = TRUE;
-            }
-
-            //
-            // If the addresses match, then the new socket is only allowed to
-            // use the address if both sockets allow exact address reuse.
-            //
-
-            if (CAN_REUSE_EXACT_ADDRESS(Socket, FoundSocket) == FALSE) {
-                AvailableAddress = FALSE;
-                break;
-            }
-        }
-
-        //
-        // So far, so good. Try the next node.
-        //
-
-        FoundNode = RtlRedBlackTreeGetNextNode(Tree, FALSE, FoundNode);
-    }
-
-    //
-    // Exit now if it has already been determined that the address is not valid
-    // for use.
-    //
-
-    if (AvailableAddress == FALSE) {
-        goto CheckLocalAddressAvailabilityEnd;
-    }
-
-    //
-    // If this is not the unspecified address, then the first found node above
-    // may have been a match. If it was, then there may be other matching
-    // entries "lower" in the tree that also need to be checked. Iterate in
-    // that direction.
-    //
-
-    if ((UnspecifiedAddress == FALSE) && (FirstFoundMatched != FALSE)) {
-        FoundNode = RtlRedBlackTreeGetNextNode(Tree, TRUE, FirstFound);
         while (FoundNode != NULL) {
             FoundSocket = RED_BLACK_TREE_VALUE(FoundNode,
                                                NET_SOCKET,
@@ -4645,56 +4543,102 @@ Return Value:
             ASSERT((FoundSocket->Flags & NET_SOCKET_FLAG_TIME_WAIT) == 0);
 
             //
-            // Test to see if the addresses match.
+            // If the supplied socket contains the unspecified address, do not
+            // compare it with the found address. It should never match. But if
+            // both sockets do not allow any address reuse, then do not allow
+            // the unspecified address to use the port.
             //
 
-            AddressesMatch = TRUE;
-            for (PartIndex = 0;
-                 PartIndex < MAX_NETWORK_ADDRESS_SIZE / sizeof(UINTN);
-                 PartIndex += 1) {
-
-                if (FoundSocket->LocalAddress.Address[PartIndex] !=
-                    LocalAddress->Address[PartIndex]) {
-
-                    AddressesMatch = FALSE;
+            if (UnspecifiedAddress != FALSE) {
+                if (CAN_REUSE_ANY_ADDRESS(Socket, FoundSocket) == FALSE) {
+                    AvailableAddress = FALSE;
                     break;
                 }
-            }
 
             //
-            // If the local addresses do not match, then this has gone beyond
-            // the range of any matches.
+            // Otherwise test to see if the addresses match.
             //
 
-            if (AddressesMatch == FALSE) {
-                break;
-            }
+            } else {
+                AddressesMatch = TRUE;
+                for (PartIndex = 0;
+                     PartIndex < MAX_NETWORK_ADDRESS_SIZE / sizeof(UINTN);
+                     PartIndex += 1) {
 
-            //
-            // If the addresses match, then the new socket is only allowed to
-            // use the address if both sockets allow exact address reuse.
-            //
+                    if (FoundSocket->LocalAddress.Address[PartIndex] !=
+                        LocalAddress->Address[PartIndex]) {
 
-            if (CAN_REUSE_EXACT_ADDRESS(Socket, FoundSocket) == FALSE) {
-                AvailableAddress = FALSE;
-                break;
+                        AddressesMatch = FALSE;
+                        break;
+                    }
+                }
+
+                //
+                // If the local addresses do not match, then this has gone
+                // beyond the range of any matches.
+                //
+
+                if (AddressesMatch == FALSE) {
+                    break;
+                }
+
+                //
+                // Record if this was the first found and it matched.
+                //
+
+                if (FoundNode == FirstFound) {
+                    FirstFoundMatched = TRUE;
+                }
+
+                //
+                // If the addresses match, then the new socket is only allowed
+                // to use the address if both sockets allow exact address reuse.
+                //
+
+                if (CAN_REUSE_EXACT_ADDRESS(Socket, FoundSocket) == FALSE) {
+                    AvailableAddress = FALSE;
+                    break;
+                }
             }
 
             //
             // So far, so good. Try the next node.
             //
 
-            FoundNode = RtlRedBlackTreeGetNextNode(Tree, TRUE, FoundNode);
+            FoundNode = RtlRedBlackTreeGetNextNode(Tree, Descending, FoundNode);
         }
-    }
 
-    //
-    // Exit now if it has already been determined that the address is not valid
-    // for use.
-    //
+        //
+        // Exit now if it has already been determined that the address is not
+        // valid for use.
+        //
 
-    if (AvailableAddress == FALSE) {
-        goto CheckLocalAddressAvailabilityEnd;
+        if (AvailableAddress == FALSE) {
+            goto CheckLocalAddressAvailabilityEnd;
+        }
+
+        //
+        // If the first found was not a match, then the tree does not need to
+        // be searched in the descending direction.
+        //
+
+        if (FirstFoundMatched == FALSE) {
+            break;
+        }
+
+        ASSERT(UnspecifiedAddress == FALSE);
+
+        //
+        // Switch the search direction once and start over from the node before
+        // the first found.
+        //
+
+        if (Descending != FALSE) {
+            break;
+        }
+
+        Descending = TRUE;
+        FoundNode = RtlRedBlackTreeGetNextNode(Tree, Descending, FirstFound);
     }
 
     //
@@ -4709,78 +4653,10 @@ Return Value:
                                               &(SearchSocket.U.TreeEntry),
                                               TRUE);
 
+    Descending = FALSE;
     FoundNode = FirstFound;
     FirstFoundMatched = FALSE;
     while (FoundNode != NULL) {
-        FoundSocket = RED_BLACK_TREE_VALUE(FoundNode, NET_SOCKET, U.TreeEntry);
-        if (FoundSocket->LocalAddress.Port != LocalAddress->Port) {
-            break;
-        }
-
-        if (FoundSocket->LocalAddress.Network != LocalAddress->Network) {
-            break;
-        }
-
-        //
-        // If the first found got this far, then it's a match.
-        //
-
-        if (FoundNode == FirstFound) {
-            FirstFoundMatched = TRUE;
-        }
-
-        //
-        // An unbound socket should not be in the time-wait state.
-        //
-
-        ASSERT((FoundSocket->Flags & NET_SOCKET_FLAG_TIME_WAIT) == 0);
-
-        //
-        // If the supplied socket has an unspecified address, then the
-        // addresses match as well. The only way for the new socket to use the
-        // address is if reusing the exact address is allowed on both sockets.
-        //
-
-        if (UnspecifiedAddress != FALSE) {
-            if (CAN_REUSE_EXACT_ADDRESS(Socket, FoundSocket) == FALSE) {
-                AvailableAddress = FALSE;
-                break;
-            }
-
-        //
-        // Otherwise, the addresses are different. Reuse of the port is only
-        // allowed if address reusing the any address allowed on both sockets.
-        //
-
-        } else {
-            if (CAN_REUSE_ANY_ADDRESS(Socket, FoundSocket) == FALSE) {
-                AvailableAddress = FALSE;
-                break;
-            }
-        }
-
-        //
-        // So far, so good. Try the next node.
-        //
-
-        FoundNode = RtlRedBlackTreeGetNextNode(Tree, FALSE, FoundNode);
-    }
-
-    //
-    // Exit now if it has already been determined that the address is not valid
-    // for use.
-    //
-
-    if (AvailableAddress == FALSE) {
-        goto CheckLocalAddressAvailabilityEnd;
-    }
-
-    //
-    // If the first found was a match, then also search lower in the tree.
-    //
-
-    if (FirstFoundMatched != FALSE) {
-        FoundNode = RtlRedBlackTreeGetNextNode(Tree, TRUE, FirstFound);
         while (FoundNode != NULL) {
             FoundSocket = RED_BLACK_TREE_VALUE(FoundNode,
                                                NET_SOCKET,
@@ -4792,6 +4668,14 @@ Return Value:
 
             if (FoundSocket->LocalAddress.Network != LocalAddress->Network) {
                 break;
+            }
+
+            //
+            // If the first found got this far, then it's a match.
+            //
+
+            if (FoundNode == FirstFound) {
+                FirstFoundMatched = TRUE;
             }
 
             //
@@ -4814,8 +4698,8 @@ Return Value:
                 }
 
             //
-            // Otherwise, the addresses are different. Reuse of the port is
-            // only allowed if address reusing the any address allowed on both
+            // Otherwise, the addresses are different. Reuse of the port is only
+            // allowed if address reusing the any address allowed on both
             // sockets.
             //
 
@@ -4830,17 +4714,38 @@ Return Value:
             // So far, so good. Try the next node.
             //
 
-            FoundNode = RtlRedBlackTreeGetNextNode(Tree, TRUE, FoundNode);
+            FoundNode = RtlRedBlackTreeGetNextNode(Tree, Descending, FoundNode);
         }
-    }
 
-    //
-    // Exit now if it has already been determined that the address is not valid
-    // for use.
-    //
+        //
+        // Exit now if it has already been determined that the address is not
+        // valid for use.
+        //
 
-    if (AvailableAddress == FALSE) {
-        goto CheckLocalAddressAvailabilityEnd;
+        if (AvailableAddress == FALSE) {
+            goto CheckLocalAddressAvailabilityEnd;
+        }
+
+        //
+        // If the first found was not a match, then the tree does not need to
+        // be searched in the descending direction.
+        //
+
+        if (FirstFoundMatched == FALSE) {
+            break;
+        }
+
+        //
+        // Switch the search direction once and start over from the node before
+        // the first found.
+        //
+
+        if (Descending != FALSE) {
+            break;
+        }
+
+        Descending = TRUE;
+        FoundNode = RtlRedBlackTreeGetNextNode(Tree, Descending, FirstFound);
     }
 
 CheckLocalAddressAvailabilityEnd:
