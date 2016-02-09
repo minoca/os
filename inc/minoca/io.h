@@ -2661,6 +2661,50 @@ Return Value:
 --*/
 
 KERNEL_API
+VOID
+IoDeviceAddReference (
+    PDEVICE Device
+    );
+
+/*++
+
+Routine Description:
+
+    This routine increments the reference count on a device.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
+VOID
+IoDeviceReleaseReference (
+    PDEVICE Device
+    );
+
+/*++
+
+Routine Description:
+
+    This routine decrements the reference count on a device.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
 KSTATUS
 IoSetTargetDevice (
     PDEVICE Device,

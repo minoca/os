@@ -244,7 +244,7 @@ Return Value:
 
 NET80211_API
 KSTATUS
-Net80211CreateLink (
+Net80211AddLink (
     PNET80211_LINK_PROPERTIES Properties,
     PNET80211_LINK *NewLink
     )
@@ -253,9 +253,9 @@ Net80211CreateLink (
 
 Routine Description:
 
-    This routine initializes the networking core link for use by the 802.11
-    core. The link starts disassociated from any BSS and must be started first
-    before it can join a BSS.
+    This routine adds the device link to the 802.11 networking core. The device
+    must be ready to start sending and receiving 802.11 management frames in
+    order to establish a BSS connection.
 
 Arguments:
 
@@ -279,18 +279,19 @@ Return Value:
     NET_LINK_PROPERTIES NetProperties;
     PNET_LINK NetworkLink;
     PNET80211_RATE_INFORMATION Rates;
+    NET80211_SCAN_STATE Scan;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     if (Properties->Version < NET80211_LINK_PROPERTIES_VERSION) {
         Status = STATUS_VERSION_MISMATCH;
-        goto CreateLinkEnd;
+        goto AddLinkEnd;
     }
 
     //
     // Convert the 802.11 properties to the networking core properties and
-    // create the networking core link. In order for this to work like the
+    // add the networking core link. In order for this to work like the
     // data link layers built into the networking core (e.g. Ethernet) the
     // networking core routine will call 802.11 back to have it create it's
     // private context.
@@ -300,7 +301,8 @@ Return Value:
     RtlZeroMemory(&NetProperties, sizeof(NET_LINK_PROPERTIES));
     NetProperties.Version = NET_LINK_PROPERTIES_VERSION;
     NetProperties.TransmitAlignment = Properties->TransmitAlignment;
-    NetProperties.DriverContext = Properties->DriverContext;
+    NetProperties.Device = Properties->Device;
+    NetProperties.DeviceContext = Properties->DeviceContext;
     NetProperties.PacketSizeInformation = Properties->PacketSizeInformation;
     NetProperties.ChecksumFlags = Properties->ChecksumFlags;
     NetProperties.DataLinkType = NetDataLink80211;
@@ -310,9 +312,10 @@ Return Value:
     NetProperties.Interface.GetSetInformation =
                                        Properties->Interface.GetSetInformation;
 
-    Status = NetCreateLink(&NetProperties, &NetworkLink);
+    NetProperties.Interface.DestroyLink = Properties->Interface.DestroyLink;
+    Status = NetAddLink(&NetProperties, &NetworkLink);
     if (!KSUCCESS(Status)) {
-        goto CreateLinkEnd;
+        goto AddLinkEnd;
     }
 
     ASSERT(NetworkLink->DataLinkContext != NULL);
@@ -346,7 +349,7 @@ Return Value:
     Rates = MmAllocatePagedPool(AllocationSize, NET80211_ALLOCATION_TAG);
     if (Rates == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateLinkEnd;
+        goto AddLinkEnd;
     }
 
     Rates->Count = Properties->SupportedRates->Count;
@@ -356,13 +359,37 @@ Return Value:
                   Rates->Count * sizeof(UCHAR));
 
     Link->Properties.SupportedRates = Rates;
+
+    //
+    // Set the link as initialized and start an active scan to join the default
+    // BSS.
+    //
+    // TODO: Remove this in favor of a user-mode initiated connection.
+    //
+
+    Net80211pSetState(Link, Net80211StateInitialized);
+    RtlZeroMemory(&Scan, sizeof(NET80211_SCAN_STATE));
+    Scan.Link = Link;
+    Scan.Flags = NET80211_SCAN_FLAG_JOIN | NET80211_SCAN_FLAG_BROADCAST;
+    Scan.SsidLength = NET80211_TEST_SSID_LENGTH;
+    RtlCopyMemory(Scan.Ssid, NET80211_TEST_SSID, NET80211_TEST_SSID_LENGTH);
+    Scan.PassphraseLength = NET80211_TEST_PASSPHRASE_LENGTH;
+    RtlCopyMemory(Scan.Passphrase,
+                  NET80211_TEST_PASSPHRASE,
+                  NET80211_TEST_PASSPHRASE_LENGTH);
+
+    Status = Net80211pStartScan(Link, &Scan);
+    if (!KSUCCESS(Status)) {
+        goto AddLinkEnd;
+    }
+
     *NewLink = Link;
     Status = STATUS_SUCCESS;
 
-CreateLinkEnd:
+AddLinkEnd:
     if (!KSUCCESS(Status)) {
         if (NetworkLink != NULL) {
-            NetDestroyLink(NetworkLink);
+            NetRemoveLink(NetworkLink);
         }
     }
 
@@ -371,7 +398,7 @@ CreateLinkEnd:
 
 NET80211_API
 VOID
-Net80211DestroyLink (
+Net80211RemoveLink (
     PNET80211_LINK Link
     )
 
@@ -379,12 +406,14 @@ Net80211DestroyLink (
 
 Routine Description:
 
-    This routine destroys an 802.11 link after it's device has been removed.
+    This routine removes a link from the 802.11 core after its device has been
+    removed. There may be outstanding references on the link, so the 802.11
+    core will invoke the link destruction callback when all the references are
+    released.
 
 Arguments:
 
-    Link - Supplies a pointer to the link to destroy. The link must be all
-        cleaned up before this routine can be called.
+    Link - Supplies a pointer to the link to remove.
 
 Return Value:
 
@@ -395,12 +424,13 @@ Return Value:
 {
 
     //
-    // Destroy the network link. When the last reference is released on the
+    // Remove the network link. When the last reference is released on the
     // network link it will call the data link destruction routine to destroy
     // the context.
     //
 
-    NetDestroyLink(Link->NetworkLink);
+    Net80211pSetState(Link, Net80211StateUninitialized);
+    NetRemoveLink(Link->NetworkLink);
     Net80211LinkReleaseReference(Link);
     return;
 }
@@ -481,94 +511,6 @@ Return Value:
         NetLinkReleaseReference(Link->NetworkLink);
     }
 
-    return;
-}
-
-NET80211_API
-KSTATUS
-Net80211StartLink (
-    PNET80211_LINK Link
-    )
-
-/*++
-
-Routine Description:
-
-    This routine is called when an 802.11 link is fully set up and ready to
-    send and receive frames. It will kick off the background task of
-    associating with the default BSS, determine the link's data rate and bring
-    the link to the point at which it can begin handling socket traffic. As a
-    result, there is no need for an 802.11 device driver to set the link state
-    to "up". This routine must be called at low level.
-
-Arguments:
-
-    Link - Supplies a pointer to the link to start.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    NET80211_SCAN_STATE Scan;
-    KSTATUS Status;
-
-    Status = NetStartLink(Link->NetworkLink);
-    if (!KSUCCESS(Status)) {
-        goto StartLinkEnd;
-    }
-
-    Net80211pSetState(Link, Net80211StateInitialized);
-    RtlZeroMemory(&Scan, sizeof(NET80211_SCAN_STATE));
-    Scan.Link = Link;
-    Scan.Flags = NET80211_SCAN_FLAG_JOIN | NET80211_SCAN_FLAG_BROADCAST;
-    Scan.SsidLength = NET80211_TEST_SSID_LENGTH;
-    RtlCopyMemory(Scan.Ssid, NET80211_TEST_SSID, NET80211_TEST_SSID_LENGTH);
-    Scan.PassphraseLength = NET80211_TEST_PASSPHRASE_LENGTH;
-    RtlCopyMemory(Scan.Passphrase,
-                  NET80211_TEST_PASSPHRASE,
-                  NET80211_TEST_PASSPHRASE_LENGTH);
-
-    Status = Net80211pStartScan(Link, &Scan);
-    if (!KSUCCESS(Status)) {
-        goto StartLinkEnd;
-    }
-
-StartLinkEnd:
-    return Status;
-}
-
-NET80211_API
-VOID
-Net80211StopLink (
-    PNET80211_LINK Link
-    )
-
-/*++
-
-Routine Description:
-
-    This routine is called when an 802.11 link has gone down and is no longer
-    able to send or receive frames. This will update the link state and reset
-    the 802.11 core in preparation for a subsequence start request.
-
-Arguments:
-
-    Link - Supplies a pointer to the link to stop.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    Net80211pSetState(Link, Net80211StateUninitialized);
-    NetSetLinkState(Link->NetworkLink, FALSE, NET_SPEED_NONE);
     return;
 }
 
@@ -1130,10 +1072,10 @@ Return Value:
 
 {
 
-    PVOID DriverContext;
+    PVOID DeviceContext;
 
-    DriverContext = Link->Properties.DriverContext;
-    return Link->Properties.Interface.SetChannel(DriverContext, Channel);
+    DeviceContext = Link->Properties.DeviceContext;
+    return Link->Properties.Interface.SetChannel(DeviceContext, Channel);
 }
 
 //

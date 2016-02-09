@@ -104,6 +104,11 @@ Rtlw81DispatchSystemControl (
     PVOID IrpContext
     );
 
+VOID
+Rtlw81DestroyLink (
+    PVOID DeviceContext
+    );
+
 KSTATUS
 Rtlw81pInitializeDeviceStructures (
     PVOID OsDevice,
@@ -112,6 +117,16 @@ Rtlw81pInitializeDeviceStructures (
 
 VOID
 Rtlw81pDestroyDeviceStructures (
+    PRTLW81_DEVICE Device
+    );
+
+VOID
+Rtlw81pDeviceAddReference (
+    PRTLW81_DEVICE Device
+    );
+
+VOID
+Rtlw81pDeviceReleaseReference (
     PRTLW81_DEVICE Device
     );
 
@@ -322,7 +337,7 @@ Return Value:
 AddDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device != NULL) {
-            Rtlw81pDestroyDeviceStructures(Device);
+            Rtlw81pDeviceReleaseReference(Device);
         }
     }
 
@@ -387,7 +402,6 @@ Return Value:
                 break;
             }
 
-            Rtlw81pDestroyDeviceStructures(DeviceContext);
             break;
 
         default:
@@ -565,7 +579,7 @@ Return Value:
 }
 
 KSTATUS
-Rtlw81pCreateNetworkDevice (
+Rtlw81pAddNetworkDevice (
     PRTLW81_DEVICE Device
     )
 
@@ -573,11 +587,11 @@ Rtlw81pCreateNetworkDevice (
 
 Routine Description:
 
-    This routine creates a core networking device object.
+    This routine adds the device to 802.11 core networking's available links.
 
 Arguments:
 
-    Device - Supplies a pointer to the device to create an object for.
+    Device - Supplies a pointer to the device to add.
 
 Return Value:
 
@@ -592,17 +606,18 @@ Return Value:
 
     if (Device->Net80211Link != NULL) {
         Status = STATUS_SUCCESS;
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
     //
-    // Create a link with the 802.11 core networking library.
+    // Add a link to the 802.11 core networking library.
     //
 
     RtlZeroMemory(&Properties, sizeof(NET80211_LINK_PROPERTIES));
     Properties.Version = NET80211_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = MmGetIoBufferAlignment();
-    Properties.DriverContext = Device;
+    Properties.Device = Device->OsDevice;
+    Properties.DeviceContext = Device;
     Properties.MaxChannel = RTLW81_MAX_CHANNEL;
     Properties.Capabilities = NET80211_CAPABILITY_FLAG_SHORT_PREAMBLE |
                               NET80211_CAPABILITY_FLAG_SHORT_SLOT_TIME;
@@ -618,12 +633,20 @@ Return Value:
     Properties.SupportedRates = &RtlwDefaultRateInformation;
     Properties.Interface.Send = Rtlw81Send;
     Properties.Interface.GetSetInformation = Rtlw81GetSetInformation;
+    Properties.Interface.DestroyLink = Rtlw81DestroyLink;
     Properties.Interface.SetChannel = Rtlw81SetChannel;
     Properties.Interface.SetState = Rtlw81SetState;
-    Status = Net80211CreateLink(&Properties, &(Device->Net80211Link));
+    Status = Net80211AddLink(&Properties, &(Device->Net80211Link));
     if (!KSUCCESS(Status)) {
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
+
+    //
+    // The 802.11 core now has a pointer to the device context. Add a reference
+    // for it.
+    //
+
+    Rtlw81pDeviceAddReference(Device);
 
     //
     // Register for network device information requests.
@@ -634,18 +657,53 @@ Return Value:
                                          TRUE);
 
     if (!KSUCCESS(Status)) {
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
-CreateNetworkDeviceEnd:
+AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->Net80211Link != NULL) {
-            Net80211DestroyLink(Device->Net80211Link);
+            IoRegisterDeviceInformation(Device->OsDevice,
+                                        &Rtlw81NetworkDeviceInformationUuid,
+                                        FALSE);
+
+            Net80211RemoveLink(Device->Net80211Link);
             Device->Net80211Link = NULL;
         }
     }
 
     return Status;
+}
+
+VOID
+Rtlw81DestroyLink (
+    PVOID DeviceContext
+    )
+
+/*++
+
+Routine Description:
+
+    This routine notifies the device layer that the 802.11 core is in the
+    process of destroying the link and will no longer call into the device for
+    this link. This allows the device layer to release any context that was
+    supporting the device link interface.
+
+Arguments:
+
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link being destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    Rtlw81pDeviceReleaseReference(DeviceContext);
+    return;
 }
 
 //
@@ -662,7 +720,7 @@ Rtlw81pInitializeDeviceStructures (
 
 Routine Description:
 
-    This routine initializes an SMSC95xx device.
+    This routine initializes an RTLW81xx device.
 
 Arguments:
 
@@ -700,6 +758,7 @@ Return Value:
     RtlZeroMemory(Device, sizeof(RTLW81_DEVICE));
     Device->OsDevice = OsDevice;
     Device->UsbCoreHandle = INVALID_HANDLE;
+    Device->ReferenceCount = 1;
     for (Index = 0; Index < RTLW81_MAX_BULK_OUT_ENDPOINT_COUNT; Index += 1) {
         INITIALIZE_LIST_HEAD(&(Device->BulkOutFreeTransferList[Index]));
     }
@@ -808,7 +867,7 @@ Return Value:
 InitializeDeviceStructuresEnd:
     if (!KSUCCESS(Status)) {
         if (Device != NULL) {
-            Rtlw81pDestroyDeviceStructures(Device);
+            Rtlw81pDeviceReleaseReference(Device);
             Device = NULL;
         }
     }
@@ -826,7 +885,7 @@ Rtlw81pDestroyDeviceStructures (
 
 Routine Description:
 
-    This routine destroys an SMSC95xx device structure.
+    This routine destroys an RTLW81xx device structure.
 
 Arguments:
 
@@ -841,16 +900,6 @@ Return Value:
 {
 
     ULONG Index;
-
-    //
-    // Detach the device. This will cancel all transfer attached to the device,
-    // including the in-flight bulk out transfers that this driver does not
-    // track.
-    //
-
-    if (Device->UsbCoreHandle != INVALID_HANDLE) {
-        UsbDetachDevice(Device->UsbCoreHandle);
-    }
 
     //
     // Destroy all the allocated transfers. For good measure, make sure they
@@ -869,25 +918,8 @@ Return Value:
         UsbDestroyTransfer(Device->ControlTransfer);
     }
 
-    if (Device->InterfaceClaimed != FALSE) {
-        UsbReleaseInterface(Device->UsbCoreHandle, Device->InterfaceNumber);
-    }
-
-    if (Device->UsbCoreHandle != INVALID_HANDLE) {
-        UsbDeviceClose(Device->UsbCoreHandle);
-    }
-
     if (Device->IoBuffer != NULL) {
         MmFreeIoBuffer(Device->IoBuffer);
-    }
-
-    IoRegisterDeviceInformation(Device->OsDevice,
-                                &Rtlw81NetworkDeviceInformationUuid,
-                                FALSE);
-
-    if (Device->Net80211Link != NULL) {
-        Net80211DestroyLink(Device->Net80211Link);
-        Device->Net80211Link = NULL;
     }
 
     //
@@ -901,6 +933,74 @@ Return Value:
     }
 
     MmFreePagedPool(Device);
+    return;
+}
+
+VOID
+Rtlw81pDeviceAddReference (
+    PRTLW81_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine increments the reference count of the given RTLW81xx device.
+
+Arguments:
+
+    Device - Supplies a pointer to the SM95 device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(Device->ReferenceCount), 1);
+
+    ASSERT((OldReferenceCount != 0) & (OldReferenceCount < 0x20000000));
+
+    return;
+}
+
+VOID
+Rtlw81pDeviceReleaseReference (
+    PRTLW81_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine decrements the reference count of the given RTLW81xx device.
+
+Arguments:
+
+    Device - Supplies a pointer to the SM95 device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(Device->ReferenceCount), -1);
+
+    ASSERT(OldReferenceCount != 0);
+
+    if (OldReferenceCount == 1) {
+        Rtlw81pDestroyDeviceStructures(Device);
+    }
+
     return;
 }
 
@@ -1157,15 +1257,37 @@ Return Value:
 {
 
     //
-    // Reset the initialization phase so that the device starts over it gets
-    // restarted.
+    // Detach the device from USB core. This will cancel all transfer attached
+    // to the device, including the in-flight bulk out transfers that this
+    // driver does not track.
     //
 
-    Device->InitializationPhase = 0;
-    if (Device->Net80211Link != NULL) {
-        Net80211StopLink(Device->Net80211Link);
+    if (Device->UsbCoreHandle != INVALID_HANDLE) {
+        UsbDetachDevice(Device->UsbCoreHandle);
     }
 
+    if (Device->InterfaceClaimed != FALSE) {
+        UsbReleaseInterface(Device->UsbCoreHandle, Device->InterfaceNumber);
+    }
+
+    if (Device->UsbCoreHandle != INVALID_HANDLE) {
+        UsbDeviceClose(Device->UsbCoreHandle);
+    }
+
+    //
+    // Remove the link from 802.11 core. It is no longer in service.
+    //
+
+    IoRegisterDeviceInformation(Device->OsDevice,
+                                &Rtlw81NetworkDeviceInformationUuid,
+                                FALSE);
+
+    if (Device->Net80211Link != NULL) {
+        Net80211RemoveLink(Device->Net80211Link);
+        Device->Net80211Link = NULL;
+    }
+
+    Rtlw81pDeviceReleaseReference(Device);
     return STATUS_SUCCESS;
 }
 

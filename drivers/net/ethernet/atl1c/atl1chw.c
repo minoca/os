@@ -220,7 +220,7 @@ BOOL AtlDisablePacketDropping = FALSE;
 
 KSTATUS
 AtlSend (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     PNET_PACKET_LIST PacketList
     )
 
@@ -232,8 +232,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link down which this data is to be sent.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link down which this data is to be sent.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -258,7 +258,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    Device = (PATL1C_DEVICE)DriverContext;
+    Device = (PATL1C_DEVICE)DeviceContext;
     KeAcquireQueuedLock(Device->TransmitLock);
     if (Device->LinkActive == FALSE) {
         Status = STATUS_NO_NETWORK_CONNECTION;
@@ -294,7 +294,7 @@ SendEnd:
 
 KSTATUS
 AtlGetSetInformation (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET_LINK_INFORMATION_TYPE InformationType,
     PVOID Data,
     PUINTN DataSize,
@@ -309,8 +309,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link for which information is being set or queried.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link for which information is being set or queried.
 
     InformationType - Supplies the type of information being queried or set.
 
@@ -587,20 +587,15 @@ Return Value:
     }
 
     //
-    // Create a network device object now that the device has been fired up
-    // enough to read the network address out of it.
+    // Notify the networking core of this new link now that the device is ready
+    // to send and receive data, pending media being present.
     //
 
     if (Device->NetworkLink == NULL) {
-        Status = AtlpCreateNetworkDevice(Device);
+        Status = AtlpAddNetworkDevice(Device);
         if (!KSUCCESS(Status)) {
             goto ResetDeviceEnd;
         }
-    }
-
-    Status = NetStartLink(Device->NetworkLink);
-    if (!KSUCCESS(Status)) {
-        goto ResetDeviceEnd;
     }
 
     KeAcquireQueuedLock(Device->ReceiveLock);

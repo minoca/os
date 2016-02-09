@@ -292,6 +292,8 @@ Members:
 
     UsbCoreHandle - Stores the handle returned by the USB core.
 
+    ReferenceCount - Stores the reference count for the device.
+
     IoBuffer - Stores a pointer to the I/O buffer used for both the bulk
         receive and the control transfers.
 
@@ -340,6 +342,7 @@ typedef struct _SM95_DEVICE {
     PDEVICE OsDevice;
     PNET_LINK NetworkLink;
     HANDLE UsbCoreHandle;
+    volatile ULONG ReferenceCount;
     PIO_BUFFER IoBuffer;
     PUSB_TRANSFER ControlTransfer;
     PUSB_TRANSFER InterruptTransfer;
@@ -367,7 +370,7 @@ typedef struct _SM95_DEVICE {
 
 KSTATUS
 Sm95Send (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     PNET_PACKET_LIST PacketList
     );
 
@@ -379,8 +382,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link down which this data is to be sent.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link down which this data is to be sent.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -399,7 +402,7 @@ Return Value:
 
 KSTATUS
 Sm95GetSetInformation (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET_LINK_INFORMATION_TYPE InformationType,
     PVOID Data,
     PUINTN DataSize,
@@ -414,8 +417,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link for which information is being set or queried.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link for which information is being set or queried.
 
     InformationType - Supplies the type of information being queried or set.
 
@@ -521,7 +524,7 @@ Return Value:
 --*/
 
 KSTATUS
-Sm95pCreateNetworkDevice (
+Sm95pAddNetworkDevice (
     PSM95_DEVICE Device
     );
 
@@ -529,11 +532,11 @@ Sm95pCreateNetworkDevice (
 
 Routine Description:
 
-    This routine creates a core networking device object.
+    This routine adds the device to core networking's available links.
 
 Arguments:
 
-    Device - Supplies a pointer to the device to create an object for.
+    Device - Supplies a pointer to the device to add.
 
 Return Value:
 

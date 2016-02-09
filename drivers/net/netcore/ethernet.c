@@ -410,7 +410,7 @@ Return Value:
     ULONG ByteIndex;
     PUCHAR CurrentElement;
     PLIST_ENTRY CurrentEntry;
-    PVOID DriverContext;
+    PVOID DeviceContext;
     PNET_LINK Link;
     PNET_PACKET_BUFFER Packet;
     KSTATUS Status;
@@ -475,8 +475,8 @@ Return Value:
         *((PUSHORT)CurrentElement) = CPU_TO_NETWORK16((USHORT)ProtocolNumber);
     }
 
-    DriverContext = Link->Properties.DriverContext;
-    Status = Link->Properties.Interface.Send(DriverContext, PacketList);
+    DeviceContext = Link->Properties.DeviceContext;
+    Status = Link->Properties.Interface.Send(DeviceContext, PacketList);
 
     //
     // If the link layer returns that the resource is in use it means it was

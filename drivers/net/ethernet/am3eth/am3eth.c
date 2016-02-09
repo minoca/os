@@ -84,6 +84,11 @@ A3eDispatchSystemControl (
     PVOID IrpContext
     );
 
+VOID
+A3eDestroyLink (
+    PVOID DeviceContext
+    );
+
 KSTATUS
 A3epProcessResourceRequirements (
     PIRP Irp
@@ -447,7 +452,7 @@ Return Value:
 }
 
 KSTATUS
-A3epCreateNetworkDevice (
+A3epAddNetworkDevice (
     PA3E_DEVICE Device
     )
 
@@ -455,11 +460,11 @@ A3epCreateNetworkDevice (
 
 Routine Description:
 
-    This routine creates a core networking device object.
+    This routine adds the device to core networking's available links.
 
 Arguments:
 
-    Device - Supplies a pointer to the device to create an object for.
+    Device - Supplies a pointer to the device to add.
 
 Return Value:
 
@@ -475,17 +480,18 @@ Return Value:
 
     if (Device->NetworkLink != NULL) {
         Status = STATUS_SUCCESS;
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
     //
-    // Create a link with the core networking library.
+    // Add a link to the core networking library.
     //
 
     RtlZeroMemory(&Properties, sizeof(NET_LINK_PROPERTIES));
     Properties.Version = NET_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = Device->DataAlignment;
-    Properties.DriverContext = Device;
+    Properties.Device = Device->OsDevice;
+    Properties.DeviceContext = Device;
     PacketSizeInformation = &(Properties.PacketSizeInformation);
     PacketSizeInformation->MaxPacketSize = Device->ReceiveFrameDataSize;
     PacketSizeInformation->MinPacketSize = A3E_TRANSMIT_MINIMUM_PACKET_SIZE;
@@ -501,9 +507,10 @@ Return Value:
 
     Properties.Interface.Send = A3eSend;
     Properties.Interface.GetSetInformation = A3eGetSetInformation;
-    Status = NetCreateLink(&Properties, &(Device->NetworkLink));
+    Properties.Interface.DestroyLink = A3eDestroyLink;
+    Status = NetAddLink(&Properties, &(Device->NetworkLink));
     if (!KSUCCESS(Status)) {
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
     Status = IoRegisterDeviceInformation(Device->OsDevice,
@@ -511,22 +518,52 @@ Return Value:
                                          TRUE);
 
     if (!KSUCCESS(Status)) {
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
-CreateNetworkDeviceEnd:
+AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->NetworkLink != NULL) {
             IoRegisterDeviceInformation(Device->OsDevice,
                                         &A3eNetworkDeviceInformationUuid,
                                         FALSE);
 
-            NetDestroyLink(Device->NetworkLink);
+            NetRemoveLink(Device->NetworkLink);
             Device->NetworkLink = NULL;
         }
     }
 
     return Status;
+}
+
+VOID
+A3eDestroyLink (
+    PVOID DeviceContext
+    )
+
+/*++
+
+Routine Description:
+
+    This routine notifies the device layer that the networking core is in the
+    process of destroying the link and will no longer call into the device for
+    this link. This allows the device layer to release any context that was
+    supporting the device link interface.
+
+Arguments:
+
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link being destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return;
 }
 
 //

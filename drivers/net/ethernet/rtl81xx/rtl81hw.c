@@ -143,7 +143,7 @@ BOOL Rtl81DisablePacketDropping = FALSE;
 
 KSTATUS
 Rtl81Send (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     PNET_PACKET_LIST PacketList
     )
 
@@ -155,8 +155,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link down which this data is to be sent.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link down which this data is to be sent.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -181,7 +181,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    Device = (PRTL81_DEVICE)DriverContext;
+    Device = (PRTL81_DEVICE)DeviceContext;
     KeAcquireQueuedLock(Device->TransmitLock);
 
     //
@@ -212,7 +212,7 @@ Return Value:
 
 KSTATUS
 Rtl81GetSetInformation (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET_LINK_INFORMATION_TYPE InformationType,
     PVOID Data,
     PUINTN DataSize,
@@ -227,8 +227,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link for which information is being set or queried.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link for which information is being set or queried.
 
     InformationType - Supplies the type of information being queried or set.
 
@@ -255,7 +255,7 @@ Return Value:
     KSTATUS Status;
     USHORT Value;
 
-    Device = (PRTL81_DEVICE)DriverContext;
+    Device = (PRTL81_DEVICE)DeviceContext;
     switch (InformationType) {
     case NetLinkInformationChecksumOffload:
         if (*DataSize != sizeof(ULONG)) {
@@ -888,20 +888,11 @@ Return Value:
     }
 
     //
-    // Create the core networking device.
+    // Notify the networking core of this new link now that the device is ready
+    // to send and receive data, pending media being present.
     //
 
-    Status = Rtl81pCreateNetworkDevice(Device);
-    if (!KSUCCESS(Status)) {
-        goto InitializeEnd;
-    }
-
-    //
-    // Tell core networking this is a valid interface (but media is not
-    // necessarily connected).
-    //
-
-    Status = NetStartLink(Device->NetworkLink);
+    Status = Rtl81pAddNetworkDevice(Device);
     if (!KSUCCESS(Status)) {
         goto InitializeEnd;
     }

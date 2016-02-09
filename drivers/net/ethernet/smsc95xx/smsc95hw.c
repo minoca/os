@@ -197,7 +197,7 @@ BOOL Sm95DisablePacketDropping = FALSE;
 
 KSTATUS
 Sm95Send (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     PNET_PACKET_LIST PacketList
     )
 
@@ -209,8 +209,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link down which this data is to be sent.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link down which this data is to be sent.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -237,7 +237,7 @@ Return Value:
     KSTATUS Status;
     PUSB_TRANSFER UsbTransfer;
 
-    Device = (PSM95_DEVICE)DriverContext;
+    Device = (PSM95_DEVICE)DeviceContext;
 
     //
     // If there are more bulk out transfers in transit that allowed, drop all
@@ -314,6 +314,7 @@ Return Value:
             RtlDebugPrint("SM95: Failed to submit transmit packet: %x\n",
                           Status);
 
+            Sm95Transfer->Packet = NULL;
             Sm95pFreeBulkOutTransfer(Sm95Transfer);
             NetFreeBuffer(Packet);
             RtlAtomicAdd32(&(Device->BulkOutTransferCount), -1);
@@ -326,7 +327,7 @@ Return Value:
 
 KSTATUS
 Sm95GetSetInformation (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET_LINK_INFORMATION_TYPE InformationType,
     PVOID Data,
     PUINTN DataSize,
@@ -341,8 +342,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link for which information is being set or queried.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link for which information is being set or queried.
 
     InformationType - Supplies the type of information being queried or set.
 
@@ -810,16 +811,6 @@ Return Value:
     }
 
     //
-    // Now that the MAC address question is settled, create the core networking
-    // device.
-    //
-
-    Status = Sm95pCreateNetworkDevice(Device);
-    if (!KSUCCESS(Status)) {
-        goto InitializeEnd;
-    }
-
-    //
     // Enable BIR.
     //
 
@@ -1009,11 +1000,11 @@ Return Value:
     }
 
     //
-    // Tell core networking this is a valid interface (but media is not
-    // necessarily connected).
+    // Notify the networking core of this new link now that the device is ready
+    // to send and receive data, pending media being present.
     //
 
-    Status = NetStartLink(Device->NetworkLink);
+    Status = Sm95pAddNetworkDevice(Device);
     if (!KSUCCESS(Status)) {
         goto InitializeEnd;
     }

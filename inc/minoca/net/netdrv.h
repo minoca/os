@@ -396,7 +396,7 @@ typedef struct _NET_PACKET_LIST {
 typedef
 KSTATUS
 (*PNET_DEVICE_LINK_SEND) (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     PNET_PACKET_LIST PacketList
     );
 
@@ -408,8 +408,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link down which this data is to be sent.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link down which this data is to be sent.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -429,7 +429,7 @@ Return Value:
 typedef
 KSTATUS
 (*PNET_DEVICE_LINK_GET_SET_INFORMATION) (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET_LINK_INFORMATION_TYPE InformationType,
     PVOID Data,
     PUINTN DataSize,
@@ -444,8 +444,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link for which information is being set or queried.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link for which information is being set or queried.
 
     InformationType - Supplies the type of information being queried or set.
 
@@ -464,6 +464,32 @@ Return Value:
 
 --*/
 
+typedef
+VOID
+(*PNET_DEVICE_LINK_DESTROY_LINK) (
+    PVOID DeviceContext
+    );
+
+/*++
+
+Routine Description:
+
+    This routine notifies the device layer that the networking core is in the
+    process of destroying the link and will no longer call into the device for
+    this link. This allows the device layer to release any context that was
+    supporting the device link interface.
+
+Arguments:
+
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link being destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -478,11 +504,16 @@ Members:
     GetSetInformation - Supplies a pointer to a function used to get or set
         network link information.
 
+    DestroyLink - Supplies a pointer to a function used to notify the device
+        that the network link is no longer in use by the networking core and
+        any link interface context can be destroyed.
+
 --*/
 
 typedef struct _NET_DEVICE_LINK_INTERFACE {
     PNET_DEVICE_LINK_SEND Send;
     PNET_DEVICE_LINK_GET_SET_INFORMATION GetSetInformation;
+    PNET_DEVICE_LINK_DESTROY_LINK DestroyLink;
 } NET_DEVICE_LINK_INTERFACE, *PNET_DEVICE_LINK_INTERFACE;
 
 /*++
@@ -498,8 +529,9 @@ Members:
 
     TransmitAlignment - Stores the alignment requirement for transmit buffers.
 
-    DriverContext - Stores a pointer to driver-specific context on this
-        link.
+    Device - Stores a pointer to the physical layer device backing the link.
+
+    DeviceContext - Stores a pointer to device-specific context on this link.
 
     PacketSizeInformation - Stores the packet size information that includes
         the maximum number of bytes that can be sent over the physical link and
@@ -525,7 +557,8 @@ Members:
 typedef struct _NET_LINK_PROPERTIES {
     ULONG Version;
     ULONG TransmitAlignment;
-    PVOID DriverContext;
+    PDEVICE Device;
+    PVOID DeviceContext;
     NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     ULONG ChecksumFlags;
     NET_DATA_LINK_TYPE DataLinkType;
@@ -2324,7 +2357,7 @@ Return Value:
 
 NET_API
 KSTATUS
-NetCreateLink (
+NetAddLink (
     PNET_LINK_PROPERTIES Properties,
     PNET_LINK *NewLink
     );
@@ -2333,9 +2366,9 @@ NetCreateLink (
 
 Routine Description:
 
-    This routine creates a new network link, something that will eventually
-    be able to send and receive network traffic. The link is initially created
-    as having no physical and no link layer addresses assigned to it.
+    This routine adds a new network link based on the given properties. The
+    link must be ready to send and receive traffic and have a valid physical
+    layer address supplied in the properties.
 
 Arguments:
 
@@ -2507,7 +2540,7 @@ Return Value:
 
 NET_API
 VOID
-NetDestroyLink (
+NetRemoveLink (
     PNET_LINK Link
     );
 
@@ -2515,42 +2548,19 @@ NetDestroyLink (
 
 Routine Description:
 
-    This routine destroys a link after it's device has been removed. This
-    should not be used if the media has simply been removed. In that case,
-    setting the link state to 'down' is suffiient.
+    This routine removes a link from the networking core after its device has
+    been removed. This should not be used if the media has simply been removed.
+    In that case, setting the link state to 'down' is suffiient. There may
+    still be outstanding references on the link, so the networking core will
+    call the device back to notify it when the link is destroyed.
 
 Arguments:
 
-    Link - Supplies a pointer to the link to destroy. The link must be all
-        cleaned up before this routine can be called.
+    Link - Supplies a pointer to the link to remove.
 
 Return Value:
 
     None.
-
---*/
-
-NET_API
-KSTATUS
-NetStartLink (
-    PNET_LINK Link
-    );
-
-/*++
-
-Routine Description:
-
-    This routine is called when a link is fully set up and ready to send and
-    indicates its readiness to create sockets and send data. This routine must
-    be called at low level.
-
-Arguments:
-
-    Link - Supplies a pointer to the link to start.
-
-Return Value:
-
-    Status code.
 
 --*/
 

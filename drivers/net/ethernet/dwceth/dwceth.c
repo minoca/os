@@ -84,6 +84,11 @@ DweDispatchSystemControl (
     PVOID IrpContext
     );
 
+VOID
+DweDestroyLink (
+    PVOID DeviceContext
+    );
+
 KSTATUS
 DwepProcessResourceRequirements (
     PIRP Irp
@@ -446,7 +451,7 @@ Return Value:
 }
 
 KSTATUS
-DwepCreateNetworkDevice (
+DwepAddNetworkDevice (
     PDWE_DEVICE Device
     )
 
@@ -454,11 +459,11 @@ DwepCreateNetworkDevice (
 
 Routine Description:
 
-    This routine creates a core networking device object.
+    This routine adds the device to core networking's available links.
 
 Arguments:
 
-    Device - Supplies a pointer to the device to create an object for.
+    Device - Supplies a pointer to the device to add.
 
 Return Value:
 
@@ -474,17 +479,18 @@ Return Value:
 
     if (Device->NetworkLink != NULL) {
         Status = STATUS_SUCCESS;
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
     //
-    // Create a link with the core networking library.
+    // Add a link to the core networking library.
     //
 
     RtlZeroMemory(&Properties, sizeof(NET_LINK_PROPERTIES));
     Properties.Version = NET_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = 1;
-    Properties.DriverContext = Device;
+    Properties.Device = Device->OsDevice;
+    Properties.DeviceContext = Device;
     PacketSizeInformation = &(Properties.PacketSizeInformation);
     PacketSizeInformation->MaxPacketSize = DWE_RECEIVE_FRAME_DATA_SIZE;
     Properties.DataLinkType = NetDataLinkEthernet;
@@ -499,6 +505,7 @@ Return Value:
 
     Properties.Interface.Send = DweSend;
     Properties.Interface.GetSetInformation = DweGetSetInformation;
+    Properties.Interface.DestroyLink = DweDestroyLink;
     Properties.ChecksumFlags = NET_LINK_CHECKSUM_FLAG_TRANSMIT_IP_OFFLOAD |
                                NET_LINK_CHECKSUM_FLAG_TRANSMIT_UDP_OFFLOAD |
                                NET_LINK_CHECKSUM_FLAG_TRANSMIT_TCP_OFFLOAD |
@@ -507,9 +514,9 @@ Return Value:
                                NET_LINK_CHECKSUM_FLAG_RECEIVE_UDP_OFFLOAD;
 
     Device->ChecksumFlags = Properties.ChecksumFlags;
-    Status = NetCreateLink(&Properties, &(Device->NetworkLink));
+    Status = NetAddLink(&Properties, &(Device->NetworkLink));
     if (!KSUCCESS(Status)) {
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
     Status = IoRegisterDeviceInformation(Device->OsDevice,
@@ -517,22 +524,52 @@ Return Value:
                                          TRUE);
 
     if (!KSUCCESS(Status)) {
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
-CreateNetworkDeviceEnd:
+AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->NetworkLink != NULL) {
             IoRegisterDeviceInformation(Device->OsDevice,
                                         &DweNetworkDeviceInformationUuid,
                                         FALSE);
 
-            NetDestroyLink(Device->NetworkLink);
+            NetRemoveLink(Device->NetworkLink);
             Device->NetworkLink = NULL;
         }
     }
 
     return Status;
+}
+
+VOID
+DweDestroyLink (
+    PVOID DeviceContext
+    )
+
+/*++
+
+Routine Description:
+
+    This routine notifies the device layer that the networking core is in the
+    process of destroying the link and will no longer call into the device for
+    this link. This allows the device layer to release any context that was
+    supporting the device link interface.
+
+Arguments:
+
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link being destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return;
 }
 
 //

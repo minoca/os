@@ -248,7 +248,7 @@ Return Value:
 
     if (NET_PACKET_LIST_EMPTY(PacketList) == FALSE) {
         Send = Link->Properties.Interface.Send;
-        Status = Send(Link->Properties.DriverContext, PacketList);
+        Status = Send(Link->Properties.DeviceContext, PacketList);
 
         //
         // If the link layer returns that the resource is in use it means it
@@ -537,7 +537,7 @@ Return Value:
     }
 
     Send = Link->Properties.Interface.Send;
-    Status = Send(Link->Properties.DriverContext, &PacketList);
+    Status = Send(Link->Properties.DeviceContext, &PacketList);
     if (Status == STATUS_RESOURCE_IN_USE) {
         NetDestroyBufferList(&PacketList);
     }

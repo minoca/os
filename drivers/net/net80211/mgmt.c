@@ -769,7 +769,7 @@ Return Value:
 
     PNET80211_BSS_ENTRY Bss;
     PNET80211_BSS BssState;
-    PVOID DriverContext;
+    PVOID DeviceContext;
     ULONGLONG LinkSpeed;
     BOOL Notify;
     NET80211_STATE OldState;
@@ -792,8 +792,8 @@ Return Value:
         BssState = &(Bss->State);
     }
 
-    DriverContext = Link->Properties.DriverContext;
-    Status = Link->Properties.Interface.SetState(DriverContext,
+    DeviceContext = Link->Properties.DeviceContext;
+    Status = Link->Properties.Interface.SetState(DeviceContext,
                                                  State,
                                                  BssState);
 
@@ -2378,7 +2378,7 @@ Return Value:
 
 {
 
-    PVOID DriverContext;
+    PVOID DeviceContext;
     ULONG Flags;
     PNET80211_MANAGEMENT_FRAME_HEADER Header;
     PNET_PACKET_BUFFER Packet;
@@ -2476,8 +2476,8 @@ Return Value:
     //
 
     NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
-    DriverContext = Link->Properties.DriverContext;
-    Status = Link->Properties.Interface.Send(DriverContext, &PacketList);
+    DeviceContext = Link->Properties.DeviceContext;
+    Status = Link->Properties.Interface.Send(DeviceContext, &PacketList);
     if (!KSUCCESS(Status)) {
         goto SendManagementFrameEnd;
     }

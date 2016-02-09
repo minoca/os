@@ -128,7 +128,7 @@ BOOL Sm91c1DisablePacketDropping = FALSE;
 
 KSTATUS
 Sm91c1Send (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     PNET_PACKET_LIST PacketList
     )
 
@@ -140,8 +140,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link down which this data is to be sent.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link down which this data is to be sent.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -170,7 +170,7 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     AllocatePacket = FALSE;
-    Device = (PSM91C1_DEVICE)DriverContext;
+    Device = (PSM91C1_DEVICE)DeviceContext;
 
     //
     // If there is any room in the packet list (or dropping packets is
@@ -230,7 +230,7 @@ Return Value:
 
 KSTATUS
 Sm91c1GetSetInformation (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET_LINK_INFORMATION_TYPE InformationType,
     PVOID Data,
     PUINTN DataSize,
@@ -245,8 +245,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link for which information is being set or queried.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link for which information is being set or queried.
 
     InformationType - Supplies the type of information being queried or set.
 
@@ -500,20 +500,11 @@ Return Value:
     }
 
     //
-    // With the MAC address obtained, create the network device.
+    // Notify the networking core of this new link now that the device is ready
+    // to send and receive data, pending media being present.
     //
 
-    Status = Sm91c1pCreateNetworkDevice(Device);
-    if (!KSUCCESS(Status)) {
-        goto InitializeEnd;
-    }
-
-    //
-    // Tell core networking this is a valid interface (but media is not
-    // necessarily connected).
-    //
-
-    Status = NetStartLink(Device->NetworkLink);
+    Status = Sm91c1pAddNetworkDevice(Device);
     if (!KSUCCESS(Status)) {
         goto InitializeEnd;
     }

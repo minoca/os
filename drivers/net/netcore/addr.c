@@ -255,7 +255,7 @@ UUID NetNetworkDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
 
 NET_API
 KSTATUS
-NetCreateLink (
+NetAddLink (
     PNET_LINK_PROPERTIES Properties,
     PNET_LINK *NewLink
     )
@@ -264,9 +264,9 @@ NetCreateLink (
 
 Routine Description:
 
-    This routine creates a new network link, something that will eventually
-    be able to send and receive network traffic. The link is initially created
-    as having no physical and no link layer addresses assigned to it.
+    This routine adds a new network link based on the given properties. The
+    link must be ready to send and receive traffic and have a valid physical
+    layer address supplied in the properties.
 
 Arguments:
 
@@ -305,7 +305,7 @@ Return Value:
     Status = STATUS_SUCCESS;
     if (Properties->Version < NET_LINK_PROPERTIES_VERSION) {
         Status = STATUS_VERSION_MISMATCH;
-        goto CreateLinkEnd;
+        goto AddLinkEnd;
     }
 
     if (Properties->TransmitAlignment == 0) {
@@ -313,18 +313,19 @@ Return Value:
     }
 
     if ((!POWER_OF_2(Properties->TransmitAlignment)) ||
+        (Properties->PhysicalAddress.Network == SocketNetworkInvalid) ||
         (Properties->MaxPhysicalAddress == 0) ||
         (Properties->Interface.Send == NULL) ||
         (Properties->Interface.GetSetInformation == NULL)) {
 
         Status = STATUS_INVALID_PARAMETER;
-        goto CreateLinkEnd;
+        goto AddLinkEnd;
     }
 
     Link = MmAllocatePagedPool(sizeof(NET_LINK), NET_CORE_ALLOCATION_TAG);
     if (Link == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateLinkEnd;
+        goto AddLinkEnd;
     }
 
     RtlZeroMemory(Link, sizeof(NET_LINK));
@@ -333,14 +334,14 @@ Return Value:
     Link->QueuedLock = KeCreateQueuedLock();
     if (Link->QueuedLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateLinkEnd;
+        goto AddLinkEnd;
     }
 
     INITIALIZE_LIST_HEAD(&(Link->LinkAddressList));
     Link->AddressTranslationEvent = KeCreateEvent(NULL);
     if (Link->AddressTranslationEvent == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateLinkEnd;
+        goto AddLinkEnd;
     }
 
     KeSignalEvent(Link->AddressTranslationEvent, SignalOptionUnsignal);
@@ -371,12 +372,12 @@ Return Value:
 
     if (FoundDataLink == NULL) {
         Status = STATUS_NOT_SUPPORTED;
-        goto CreateLinkEnd;
+        goto AddLinkEnd;
     }
 
     Status = FoundDataLink->Interface.InitializeLink(Link);
     if (!KSUCCESS(Status)) {
-        goto CreateLinkEnd;
+        goto AddLinkEnd;
     }
 
     Link->DataLinkEntry = FoundDataLink;
@@ -391,7 +392,7 @@ Return Value:
         CurrentNetwork = LIST_VALUE(CurrentEntry, NET_NETWORK_ENTRY, ListEntry);
         Status = CurrentNetwork->Interface.InitializeLink(Link);
         if (!KSUCCESS(Status)) {
-            goto CreateLinkEnd;
+            goto AddLinkEnd;
         }
 
         CurrentEntry = CurrentEntry->Next;
@@ -400,9 +401,29 @@ Return Value:
 
     KeReleaseSharedExclusiveLockShared(NetPluginListLock);
     LockHeld = FALSE;
+
+    //
+    // With success a sure thing, take a reference on the OS device that
+    // registered the link with netcore. Its device context and driver need to
+    // remain available as long as netcore can access the device link interface.
+    //
+
+    IoDeviceAddReference(Link->Properties.Device);
+
+    //
+    // Add the link to the global list. It is all ready to send and receive
+    // data.
+    //
+
+    KeAcquireSharedExclusiveLockExclusive(NetLinkListLock);
+
+    ASSERT(Link->ListEntry.Next == NULL);
+
+    INSERT_BEFORE(&(Link->ListEntry), &NetLinkList);
+    KeReleaseSharedExclusiveLockExclusive(NetLinkListLock);
     Status = STATUS_SUCCESS;
 
-CreateLinkEnd:
+AddLinkEnd:
     if (!KSUCCESS(Status)) {
         if (Link != NULL) {
 
@@ -847,7 +868,7 @@ GetSetLinkDeviceInformationEnd:
 
 NET_API
 VOID
-NetDestroyLink (
+NetRemoveLink (
     PNET_LINK Link
     )
 
@@ -855,14 +876,15 @@ NetDestroyLink (
 
 Routine Description:
 
-    This routine destroys a link after it's device has been removed. This
-    should not be used if the media has simply been removed. In that case,
-    setting the link state to 'down' is suffiient.
+    This routine removes a link from the networking core after its device has
+    been removed. This should not be used if the media has simply been removed.
+    In that case, setting the link state to 'down' is suffiient. There may
+    still be outstanding references on the link, so the networking core will
+    call the device back to notify it when the link is destroyed.
 
 Arguments:
 
-    Link - Supplies a pointer to the link to destroy. The link must be all
-        cleaned up before this routine can be called.
+    Link - Supplies a pointer to the link to remove.
 
 Return Value:
 
@@ -901,43 +923,6 @@ Return Value:
 
     NetLinkReleaseReference(Link);
     return;
-}
-
-NET_API
-KSTATUS
-NetStartLink (
-    PNET_LINK Link
-    )
-
-/*++
-
-Routine Description:
-
-    This routine is called when a link is fully set up and ready to send and
-    indicates its readiness to create sockets and send data. This routine must
-    be called at low level.
-
-Arguments:
-
-    Link - Supplies a pointer to the link to start.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
-    KeAcquireSharedExclusiveLockExclusive(NetLinkListLock);
-
-    ASSERT(Link->ListEntry.Next == NULL);
-
-    INSERT_BEFORE(&(Link->ListEntry), &NetLinkList);
-    KeReleaseSharedExclusiveLockExclusive(NetLinkListLock);
-    return STATUS_SUCCESS;
 }
 
 NET_API
@@ -3542,6 +3527,8 @@ Return Value:
 
     KeReleaseSharedExclusiveLockShared(NetPluginListLock);
     Link->DataLinkEntry->Interface.DestroyLink(Link);
+    Link->Properties.Interface.DestroyLink(Link->Properties.DeviceContext);
+    IoDeviceReleaseReference(Link->Properties.Device);
     MmFreePagedPool(Link);
     return;
 }

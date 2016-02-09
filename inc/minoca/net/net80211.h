@@ -943,7 +943,7 @@ typedef struct _NET80211_RECEIVE_PACKET {
 typedef
 KSTATUS
 (*PNET80211_DEVICE_LINK_SEND) (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     PNET_PACKET_LIST PacketList
     );
 
@@ -955,8 +955,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link down which this data is to be sent.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link down which this data is to be sent.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -976,7 +976,7 @@ Return Value:
 typedef
 KSTATUS
 (*PNET80211_DEVICE_LINK_GET_SET_INFORMATION) (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET_LINK_INFORMATION_TYPE InformationType,
     PVOID Data,
     PUINTN DataSize,
@@ -991,8 +991,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link for which information is being set or queried.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link for which information is being set or queried.
 
     InformationType - Supplies the type of information being queried or set.
 
@@ -1012,9 +1012,35 @@ Return Value:
 --*/
 
 typedef
+VOID
+(*PNET80211_DEVICE_LINK_DESTROY_LINK) (
+    PVOID DeviceContext
+    );
+
+/*++
+
+Routine Description:
+
+    This routine notifies the device layer that the 802.11 core is in the
+    process of destroying the link and will no longer call into the device for
+    this link. This allows the device layer to release any context that was
+    supporting the device link interface.
+
+Arguments:
+
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link being destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+typedef
 KSTATUS
 (*PNET80211_DEVICE_LINK_SET_CHANNEL) (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     ULONG Channel
     );
 
@@ -1026,7 +1052,7 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with
+    DeviceContext - Supplies a pointer to the device context associated with
         the 802.11 link whose channel is to be set.
 
     Channel - Supplies the channel to which the device should be set.
@@ -1040,7 +1066,7 @@ Return Value:
 typedef
 KSTATUS
 (*PNET80211_DEVICE_LINK_SET_STATE) (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET80211_STATE State,
     PNET80211_BSS Bss
     );
@@ -1054,7 +1080,7 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with
+    DeviceContext - Supplies a pointer to the device context associated with
         the 802.11 link whose state is to be set.
 
     State - Supplies the state to which the link is being set.
@@ -1082,6 +1108,10 @@ Members:
     GetSetInformation - Supplies a pointer to a function used to get or set
         network link information.
 
+    DestroyLink - Supplies a pointer to a function used to notify the device
+        that the 802.11 link is no longer in use by the 802.11 core and any
+        link interface context can be destroyed.
+
     SetChannel - Stores a pointer to a function used to set the channel.
 
     SetState - Stores a pointer to a function used to set the state.
@@ -1091,6 +1121,7 @@ Members:
 typedef struct _NET80211_DEVICE_LINK_INTERFACE {
     PNET80211_DEVICE_LINK_SEND Send;
     PNET80211_DEVICE_LINK_GET_SET_INFORMATION GetSetInformation;
+    PNET80211_DEVICE_LINK_DESTROY_LINK DestroyLink;
     PNET80211_DEVICE_LINK_SET_CHANNEL SetChannel;
     PNET80211_DEVICE_LINK_SET_STATE SetState;
 } NET80211_DEVICE_LINK_INTERFACE, *PNET80211_DEVICE_LINK_INTERFACE;
@@ -1108,8 +1139,9 @@ Members:
 
     TransmitAlignment - Stores the alignment requirement for transmit buffers.
 
-    DriverContext - Stores a pointer to driver-specific context on this
-        link.
+    Device - Stores a pointer to the physical layer device backing the link.
+
+    DeviceContext - Stores a pointer to device-specific context on this link.
 
     ChecksumFlags - Stores a bitmask of flags indicating whether certain
         checksum features are enabled. See NET_LINK_CHECKSUM_FLAG_* for
@@ -1141,7 +1173,8 @@ Members:
 typedef struct _NET80211_LINK_PROPERTIES {
     ULONG Version;
     ULONG TransmitAlignment;
-    PVOID DriverContext;
+    PDEVICE Device;
+    PVOID DeviceContext;
     ULONG ChecksumFlags;
     ULONG MaxChannel;
     USHORT Capabilities;
@@ -1162,7 +1195,7 @@ typedef struct _NET80211_LINK_PROPERTIES {
 
 NET80211_API
 KSTATUS
-Net80211CreateLink (
+Net80211AddLink (
     PNET80211_LINK_PROPERTIES Properties,
     PNET80211_LINK *NewLink
     );
@@ -1171,9 +1204,9 @@ Net80211CreateLink (
 
 Routine Description:
 
-    This routine initializes the networking core link for use by the 802.11
-    core. The link starts disassociated from any BSS and must be started first
-    before it can join a BSS.
+    This routine adds the device link to the 802.11 networking core. The device
+    must be ready to start sending and receiving 802.11 management frames in
+    order to establish a BSS connection.
 
 Arguments:
 
@@ -1192,7 +1225,7 @@ Return Value:
 
 NET80211_API
 VOID
-Net80211DestroyLink (
+Net80211RemoveLink (
     PNET80211_LINK Link
     );
 
@@ -1200,7 +1233,10 @@ Net80211DestroyLink (
 
 Routine Description:
 
-    This routine destroys an 802.11 link after it's device has been removed.
+    This routine removes a link from the 802.11 core after its device has been
+    removed. There may be outstanding references on the link, so the 802.11
+    core will invoke the link destruction callback when all the references are
+    released.
 
 Arguments:
 
@@ -1253,57 +1289,6 @@ Arguments:
 
     Link - Supplies a pointer to the 802.11 link whose reference count
         should be decremented.
-
-Return Value:
-
-    None.
-
---*/
-
-NET80211_API
-KSTATUS
-Net80211StartLink (
-    PNET80211_LINK Link
-    );
-
-/*++
-
-Routine Description:
-
-    This routine is called when an 802.11 link is fully set up and ready to
-    send and receive frames. It will kick off the background task of
-    associating with the default BSS, determine the link's data rate and bring
-    the link to the point at which it can begin handling socket traffic. As a
-    result, there is no need for an 802.11 device driver to set the link state
-    to "up". This routine must be called at low level.
-
-Arguments:
-
-    Link - Supplies a pointer to the link to start.
-
-Return Value:
-
-    Status code.
-
---*/
-
-NET80211_API
-VOID
-Net80211StopLink (
-    PNET80211_LINK Link
-    );
-
-/*++
-
-Routine Description:
-
-    This routine is called when an 802.11 link has gone down and is no longer
-    able to send or receive frames. This will update the link state and reset
-    the 802.11 core in preparation for a subsequence start request.
-
-Arguments:
-
-    Link - Supplies a pointer to the link to stop.
 
 Return Value:
 

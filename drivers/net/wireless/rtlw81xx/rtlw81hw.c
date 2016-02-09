@@ -1215,7 +1215,7 @@ CHAR Rtlw81DefaultCckAgcReportOffsets[] = { 16, -12, -26, -46 };
 
 KSTATUS
 Rtlw81Send (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     PNET_PACKET_LIST PacketList
     )
 
@@ -1227,8 +1227,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link down which this data is to be sent.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link down which this data is to be sent.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -1265,7 +1265,7 @@ Return Value:
     KSTATUS Status;
     PUSB_TRANSFER UsbTransfer;
 
-    Device = (PRTLW81_DEVICE)DriverContext;
+    Device = (PRTLW81_DEVICE)DeviceContext;
 
     //
     // If there are more bulk out transfers in transit that allowed, drop all
@@ -1471,6 +1471,7 @@ Return Value:
             RtlDebugPrint("RTLW81: Failed to submit transmit packet: %x\n",
                           Status);
 
+            Rtlw81Transfer->Packet = NULL;
             Rtlw81pFreeBulkOutTransfer(Rtlw81Transfer);
             NetFreeBuffer(Packet);
             RtlAtomicAdd32(&(Device->BulkOutTransferCount), -1);
@@ -1483,7 +1484,7 @@ Return Value:
 
 KSTATUS
 Rtlw81GetSetInformation (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET_LINK_INFORMATION_TYPE InformationType,
     PVOID Data,
     PUINTN DataSize,
@@ -1498,8 +1499,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link for which information is being set or queried.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link for which information is being set or queried.
 
     InformationType - Supplies the type of information being queried or set.
 
@@ -1547,7 +1548,7 @@ Return Value:
 
 KSTATUS
 Rtlw81SetChannel (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     ULONG Channel
     )
 
@@ -1559,7 +1560,7 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with
+    DeviceContext - Supplies a pointer to the device context associated with
         the 802.11 link whose channel is to be set.
 
     Channel - Supplies the channel to which the device should be set.
@@ -1574,14 +1575,14 @@ Return Value:
 
     PRTLW81_DEVICE Device;
 
-    Device = (PRTLW81_DEVICE)DriverContext;
+    Device = (PRTLW81_DEVICE)DeviceContext;
     Rtlw81pSetChannel(Device, Channel);
     return STATUS_SUCCESS;
 }
 
 KSTATUS
 Rtlw81SetState (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET80211_STATE State,
     PNET80211_BSS Bss
     )
@@ -1595,7 +1596,7 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with
+    DeviceContext - Supplies a pointer to the device context associated with
         the 802.11 link whose state is to be set.
 
     State - Supplies the state to which the link is being set.
@@ -1628,7 +1629,7 @@ Return Value:
     ULONGLONG Timestamp;
     ULONG Value;
 
-    Device = DriverContext;
+    Device = DeviceContext;
     Status = STATUS_SUCCESS;
     switch (State) {
     case Net80211StateProbing:
@@ -3070,12 +3071,7 @@ Return Value:
             // Create the core networking device.
             //
 
-            Status = Rtlw81pCreateNetworkDevice(Device);
-            if (!KSUCCESS(Status)) {
-                goto InitializeEnd;
-            }
-
-            Status = Net80211StartLink(Device->Net80211Link);
+            Status = Rtlw81pAddNetworkDevice(Device);
             if (!KSUCCESS(Status)) {
                 goto InitializeEnd;
             }

@@ -1950,6 +1950,8 @@ Members:
 
     UsbCoreHandle - Stores the handle returned by the USB core.
 
+    ReferenceCount - Stores the number of references on the structure.
+
     Flags - Stores a bitmask of flags that hold device state or type
         information. See RTLW81_FLAG_* for definitions.
 
@@ -2028,6 +2030,7 @@ typedef struct _RTLW81_DEVICE {
     PDEVICE OsDevice;
     PNET80211_LINK Net80211Link;
     HANDLE UsbCoreHandle;
+    volatile ULONG ReferenceCount;
     ULONG Flags;
     ULONG TransmitChainCount;
     ULONG ReceiveChainCount;
@@ -2074,7 +2077,7 @@ extern NET80211_RATE_INFORMATION RtlwDefaultRateInformation;
 
 KSTATUS
 Rtlw81Send (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     PNET_PACKET_LIST PacketList
     );
 
@@ -2086,8 +2089,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link down which this data is to be sent.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link down which this data is to be sent.
 
     PacketList - Supplies a pointer to a list of network packets to send. Data
         in these packets may be modified by this routine, but must not be used
@@ -2106,7 +2109,7 @@ Return Value:
 
 KSTATUS
 Rtlw81GetSetInformation (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET_LINK_INFORMATION_TYPE InformationType,
     PVOID Data,
     PUINTN DataSize,
@@ -2121,8 +2124,8 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with the
-        link for which information is being set or queried.
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link for which information is being set or queried.
 
     InformationType - Supplies the type of information being queried or set.
 
@@ -2143,7 +2146,7 @@ Return Value:
 
 KSTATUS
 Rtlw81SetChannel (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     ULONG Channel
     );
 
@@ -2155,7 +2158,7 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with
+    DeviceContext - Supplies a pointer to the device context associated with
         the 802.11 link whose channel is to be set.
 
     Channel - Supplies the channel to which the device should be set.
@@ -2168,7 +2171,7 @@ Return Value:
 
 KSTATUS
 Rtlw81SetState (
-    PVOID DriverContext,
+    PVOID DeviceContext,
     NET80211_STATE State,
     PNET80211_BSS BssInformation
     );
@@ -2182,7 +2185,7 @@ Routine Description:
 
 Arguments:
 
-    DriverContext - Supplies a pointer to the driver context associated with
+    DeviceContext - Supplies a pointer to the device context associated with
         the 802.11 link whose state is to be set.
 
     State - Supplies the state to which the link is being set.
@@ -2264,7 +2267,7 @@ Return Value:
 --*/
 
 KSTATUS
-Rtlw81pCreateNetworkDevice (
+Rtlw81pAddNetworkDevice (
     PRTLW81_DEVICE Device
     );
 
@@ -2272,11 +2275,11 @@ Rtlw81pCreateNetworkDevice (
 
 Routine Description:
 
-    This routine creates a core networking device object.
+    This routine adds the device to 802.11 core networking's available links.
 
 Arguments:
 
-    Device - Supplies a pointer to the device to create an object for.
+    Device - Supplies a pointer to the device to add.
 
 Return Value:
 

@@ -85,6 +85,11 @@ Sm91c1DispatchSystemControl (
     PVOID IrpContext
     );
 
+VOID
+Sm91c1DestroyLink (
+    PVOID DeviceContext
+    );
+
 KSTATUS
 Sm91c1pProcessResourceRequirements (
     PIRP Irp
@@ -450,7 +455,7 @@ Return Value:
 }
 
 KSTATUS
-Sm91c1pCreateNetworkDevice (
+Sm91c1pAddNetworkDevice (
     PSM91C1_DEVICE Device
     )
 
@@ -458,11 +463,11 @@ Sm91c1pCreateNetworkDevice (
 
 Routine Description:
 
-    This routine creates a core networking device object.
+    This routine adds the device to core networking's available links.
 
 Arguments:
 
-    Device - Supplies a pointer to the device to create an object for.
+    Device - Supplies a pointer to the device to add.
 
 Return Value:
 
@@ -477,17 +482,18 @@ Return Value:
 
     if (Device->NetworkLink != NULL) {
         Status = STATUS_SUCCESS;
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
     //
-    // Create a link with the core networking library.
+    // Add a link to the core networking library.
     //
 
     RtlZeroMemory(&Properties, sizeof(NET_LINK_PROPERTIES));
     Properties.Version = NET_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = 0;
-    Properties.DriverContext = Device;
+    Properties.Device = Device->OsDevice;
+    Properties.DeviceContext = Device;
     Properties.PacketSizeInformation.MaxPacketSize = SM91C1_MAX_PACKET_SIZE;
     Properties.PacketSizeInformation.HeaderSize = SM91C1_PACKET_HEADER_SIZE;
     Properties.PacketSizeInformation.FooterSize = SM91C1_PACKET_FOOTER_SIZE;
@@ -500,9 +506,10 @@ Return Value:
 
     Properties.Interface.Send = Sm91c1Send;
     Properties.Interface.GetSetInformation = Sm91c1GetSetInformation;
-    Status = NetCreateLink(&Properties, &(Device->NetworkLink));
+    Properties.Interface.DestroyLink = Sm91c1DestroyLink;
+    Status = NetAddLink(&Properties, &(Device->NetworkLink));
     if (!KSUCCESS(Status)) {
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
     Status = IoRegisterDeviceInformation(Device->OsDevice,
@@ -510,22 +517,52 @@ Return Value:
                                          TRUE);
 
     if (!KSUCCESS(Status)) {
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
-CreateNetworkDeviceEnd:
+AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->NetworkLink != NULL) {
             IoRegisterDeviceInformation(Device->OsDevice,
                                         &Sm91c1NetworkDeviceInformationUuid,
                                         FALSE);
 
-            NetDestroyLink(Device->NetworkLink);
+            NetRemoveLink(Device->NetworkLink);
             Device->NetworkLink = NULL;
         }
     }
 
     return Status;
+}
+
+VOID
+Sm91c1DestroyLink (
+    PVOID DeviceContext
+    )
+
+/*++
+
+Routine Description:
+
+    This routine notifies the device layer that the networking core is in the
+    process of destroying the link and will no longer call into the device for
+    this link. This allows the device layer to release any context that was
+    supporting the device link interface.
+
+Arguments:
+
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link being destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return;
 }
 
 //
@@ -769,7 +806,7 @@ StartDeviceEnd:
 
             ASSERT(Device->NetworkLink != NULL);
 
-            NetDestroyLink(Device->NetworkLink);
+            NetRemoveLink(Device->NetworkLink);
             Device->NetworkLink = NULL;
         }
 

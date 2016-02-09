@@ -86,6 +86,11 @@ Sm95DispatchSystemControl (
     PVOID IrpContext
     );
 
+VOID
+Sm95DestroyLink (
+    PVOID DeviceContext
+    );
+
 KSTATUS
 Sm95pInitializeDeviceStructures (
     PVOID OsDevice,
@@ -94,6 +99,16 @@ Sm95pInitializeDeviceStructures (
 
 VOID
 Sm95pDestroyDeviceStructures (
+    PSM95_DEVICE Device
+    );
+
+VOID
+Sm95pDeviceAddReference (
+    PSM95_DEVICE Device
+    );
+
+VOID
+Sm95pDeviceReleaseReference (
     PSM95_DEVICE Device
     );
 
@@ -225,7 +240,7 @@ Return Value:
 AddDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device != NULL) {
-            Sm95pDestroyDeviceStructures(Device);
+            Sm95pDeviceReleaseReference(Device);
         }
     }
 
@@ -290,7 +305,6 @@ Return Value:
                 break;
             }
 
-            Sm95pDestroyDeviceStructures(DeviceContext);
             break;
 
         default:
@@ -468,7 +482,7 @@ Return Value:
 }
 
 KSTATUS
-Sm95pCreateNetworkDevice (
+Sm95pAddNetworkDevice (
     PSM95_DEVICE Device
     )
 
@@ -476,11 +490,11 @@ Sm95pCreateNetworkDevice (
 
 Routine Description:
 
-    This routine creates a core networking device object.
+    This routine adds the device to core networking's available links.
 
 Arguments:
 
-    Device - Supplies a pointer to the device to create an object for.
+    Device - Supplies a pointer to the device to add.
 
 Return Value:
 
@@ -495,17 +509,18 @@ Return Value:
 
     if (Device->NetworkLink != NULL) {
         Status = STATUS_SUCCESS;
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
     //
-    // Create a link with the core networking library.
+    // Add a link to the core networking library.
     //
 
     RtlZeroMemory(&Properties, sizeof(NET_LINK_PROPERTIES));
     Properties.Version = NET_LINK_PROPERTIES_VERSION;
     Properties.TransmitAlignment = MmGetIoBufferAlignment();
-    Properties.DriverContext = Device;
+    Properties.Device = Device->OsDevice;
+    Properties.DeviceContext = Device;
     Properties.PacketSizeInformation.MaxPacketSize = SM95_MAX_PACKET_SIZE;
     Properties.PacketSizeInformation.HeaderSize = SM95_TRANSMIT_HEADER_SIZE;
     Properties.DataLinkType = NetDataLinkEthernet;
@@ -517,10 +532,18 @@ Return Value:
 
     Properties.Interface.Send = Sm95Send;
     Properties.Interface.GetSetInformation = Sm95GetSetInformation;
-    Status = NetCreateLink(&Properties, &(Device->NetworkLink));
+    Properties.Interface.DestroyLink = Sm95DestroyLink;
+    Status = NetAddLink(&Properties, &(Device->NetworkLink));
     if (!KSUCCESS(Status)) {
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
+
+    //
+    // The networking core now references the device structure. Add a
+    // reference for it.
+    //
+
+    Sm95pDeviceAddReference(Device);
 
     //
     // Register for network device information requests.
@@ -531,18 +554,53 @@ Return Value:
                                          TRUE);
 
     if (!KSUCCESS(Status)) {
-        goto CreateNetworkDeviceEnd;
+        goto AddNetworkDeviceEnd;
     }
 
-CreateNetworkDeviceEnd:
+AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->NetworkLink != NULL) {
-            NetDestroyLink(Device->NetworkLink);
+            IoRegisterDeviceInformation(Device->OsDevice,
+                                        &Sm95NetworkDeviceInformationUuid,
+                                        FALSE);
+
+            NetRemoveLink(Device->NetworkLink);
             Device->NetworkLink = NULL;
         }
     }
 
     return Status;
+}
+
+VOID
+Sm95DestroyLink (
+    PVOID DeviceContext
+    )
+
+/*++
+
+Routine Description:
+
+    This routine notifies the device layer that the networking core is in the
+    process of destroying the link and will no longer call into the device for
+    this link. This allows the device layer to release any context that was
+    supporting the device link interface.
+
+Arguments:
+
+    DeviceContext - Supplies a pointer to the device context associated with
+        the link being destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    Sm95pDeviceReleaseReference(DeviceContext);
+    return;
 }
 
 //
@@ -598,6 +656,7 @@ Return Value:
     RtlZeroMemory(Device, sizeof(SM95_DEVICE));
     Device->OsDevice = OsDevice;
     Device->UsbCoreHandle = INVALID_HANDLE;
+    Device->ReferenceCount = 1;
     INITIALIZE_LIST_HEAD(&(Device->BulkOutFreeTransferList));
     Device->BulkOutListLock = KeCreateQueuedLock();
     if (Device->BulkOutListLock == NULL) {
@@ -731,7 +790,7 @@ Return Value:
 InitializeDeviceStructuresEnd:
     if (!KSUCCESS(Status)) {
         if (Device != NULL) {
-            Sm95pDestroyDeviceStructures(Device);
+            Sm95pDeviceReleaseReference(Device);
             Device = NULL;
         }
     }
@@ -766,16 +825,6 @@ Return Value:
     ULONG Index;
 
     //
-    // Detach the device. This will cancel all transfer attached to the device,
-    // including the in-flight bulk out transfers that this driver does not
-    // track.
-    //
-
-    if (Device->UsbCoreHandle != INVALID_HANDLE) {
-        UsbDetachDevice(Device->UsbCoreHandle);
-    }
-
-    //
     // Destroy all the allocated transfers. For good measure, make sure they
     // are cancelled.
     //
@@ -797,25 +846,8 @@ Return Value:
         UsbDestroyTransfer(Device->InterruptTransfer);
     }
 
-    if (Device->InterfaceClaimed != FALSE) {
-        UsbReleaseInterface(Device->UsbCoreHandle, Device->InterfaceNumber);
-    }
-
-    if (Device->UsbCoreHandle != INVALID_HANDLE) {
-        UsbDeviceClose(Device->UsbCoreHandle);
-    }
-
     if (Device->IoBuffer != NULL) {
         MmFreeIoBuffer(Device->IoBuffer);
-    }
-
-    IoRegisterDeviceInformation(Device->OsDevice,
-                                &Sm95NetworkDeviceInformationUuid,
-                                FALSE);
-
-    if (Device->NetworkLink != NULL) {
-        NetDestroyLink(Device->NetworkLink);
-        Device->NetworkLink = NULL;
     }
 
     //
@@ -829,6 +861,74 @@ Return Value:
     }
 
     MmFreePagedPool(Device);
+    return;
+}
+
+VOID
+Sm95pDeviceAddReference (
+    PSM95_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine increments the reference count of the given SM95 device.
+
+Arguments:
+
+    Device - Supplies a pointer to the SM95 device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(Device->ReferenceCount), 1);
+
+    ASSERT((OldReferenceCount != 0) & (OldReferenceCount < 0x20000000));
+
+    return;
+}
+
+VOID
+Sm95pDeviceReleaseReference (
+    PSM95_DEVICE Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine decrements the reference count of the given SM95 device.
+
+Arguments:
+
+    Device - Supplies a pointer to the SM95 device.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(Device->ReferenceCount), -1);
+
+    ASSERT(OldReferenceCount != 0);
+
+    if (OldReferenceCount == 1) {
+        Sm95pDestroyDeviceStructures(Device);
+    }
+
     return;
 }
 
@@ -1063,7 +1163,39 @@ Return Value:
 
 {
 
-    NetSetLinkState(Device->NetworkLink, FALSE, 0);
+    //
+    // Detach the device from USB. This will cancel all transfer attached to
+    // the device, including the in-flight bulk out transfers that this driver
+    // does not track.
+    //
+
+    if (Device->UsbCoreHandle != INVALID_HANDLE) {
+        UsbDetachDevice(Device->UsbCoreHandle);
+    }
+
+    if (Device->InterfaceClaimed != FALSE) {
+        UsbReleaseInterface(Device->UsbCoreHandle, Device->InterfaceNumber);
+    }
+
+    if (Device->UsbCoreHandle != INVALID_HANDLE) {
+        UsbDeviceClose(Device->UsbCoreHandle);
+    }
+
+    //
+    // The device is gone, notify the networking core that the link has bene
+    // removed.
+    //
+
+    IoRegisterDeviceInformation(Device->OsDevice,
+                                &Sm95NetworkDeviceInformationUuid,
+                                FALSE);
+
+    if (Device->NetworkLink != NULL) {
+        NetRemoveLink(Device->NetworkLink);
+        Device->NetworkLink = NULL;
+    }
+
+    Sm95pDeviceReleaseReference(Device);
     return STATUS_SUCCESS;
 }
 
