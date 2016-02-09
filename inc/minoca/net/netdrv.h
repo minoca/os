@@ -167,6 +167,7 @@ Author:
 #define NET_SOCKET_FLAG_TIME_WAIT               0x00000040
 #define NET_SOCKET_FLAG_FORKED_LISTENER         0x00000080
 #define NET_SOCKET_FLAG_NETWORK_HEADER_INCLUDED 0x00000100
+#define NET_SOCKET_FLAG_KERNEL                  0x00000200
 
 //
 // Define the set of network socket flags that should be carried over to a
@@ -197,6 +198,7 @@ Author:
 #define NET_PACKET_FLAG_TCP_CHECKSUM_FAILED  0x00000020
 #define NET_PACKET_FLAG_FORCE_TRANSMIT       0x00000040
 #define NET_PACKET_FLAG_UNENCRYPTED          0x00000080
+#define NET_PACKET_FLAG_MULTICAST            0x00000100
 
 //
 // Define the network link feature flags.
@@ -224,6 +226,13 @@ Author:
 //
 
 #define NET_PACKET_SIZE_FLAG_UNENCRYPTED 0x00000001
+
+//
+// Define the socket binding flags.
+//
+
+#define NET_SOCKET_BINDING_FLAG_ACTIVATE           0x00000001
+#define NET_SOCKET_BINDING_FLAG_NO_PORT_ASSIGNMENT 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -2862,7 +2871,7 @@ NetBindSocket (
     NET_SOCKET_BINDING_TYPE TreeType,
     PNET_LINK_LOCAL_ADDRESS LocalInformation,
     PNETWORK_ADDRESS RemoteAddress,
-    BOOL Activate
+    ULONG Flags
     );
 
 /*++
@@ -2889,8 +2898,8 @@ Arguments:
     RemoteAddress - Supplies an optional pointer to a remote address to use
         when fully binding the socket.
 
-    Activate - Supplies a boolean indicating whether or not the socket should
-        be made active (ready to receive) upon binding it.
+    Flags - Supplies a bitmask of binding flags. See NET_SOCKET_BINDING_FLAG_*
+        for definitions.
 
 Return Value:
 
@@ -3158,7 +3167,7 @@ Arguments:
     Link - Supplies a pointer to the link the buffer will be sent through.
 
     Flags - Supplies a bitmask of allocation flags. See
-        NET_ALLOCATOR_BUFFER_FLAG_* for definitions.
+        NET_ALLOCATE_BUFFER_FLAG_* for definitions.
 
     NewBuffer - Supplies a pointer where a pointer to the new allocation will be
         returned on success.

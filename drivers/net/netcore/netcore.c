@@ -253,6 +253,8 @@ Return Value:
     NetpTcpInitialize();
     NetpRawInitialize();
     NetpDhcpInitialize();
+    NetpNetlinkInitialize();
+    NetpNetlinkGenericInitialize();
 
     //
     // Set up the networking interface to the kernel.
@@ -2120,6 +2122,7 @@ Return Value:
 
     case SocketInformationTypeIp4:
     case SocketInformationTypeIp6:
+    case SocketInformationTypeNetlink:
         Status = NetSocket->Network->Interface.GetSetInformation(
                                                                NetSocket,
                                                                InformationType,
@@ -2140,6 +2143,7 @@ Return Value:
 
     case SocketInformationTypeTcp:
     case SocketInformationTypeUdp:
+    case SocketInformationTypeNetlinkGeneric:
         Status = NetSocket->Protocol->Interface.GetSetInformation(
                                                                NetSocket,
                                                                InformationType,

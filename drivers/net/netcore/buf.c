@@ -83,7 +83,7 @@ Arguments:
     Link - Supplies a pointer to the link the buffer will be sent through.
 
     Flags - Supplies a bitmask of allocation flags. See
-        NET_ALLOCATOR_BUFFER_FLAG_* for definitions.
+        NET_ALLOCATE_BUFFER_FLAG_* for definitions.
 
     NewBuffer - Supplies a pointer where a pointer to the new allocation will be
         returned on success.
@@ -120,51 +120,61 @@ Return Value:
     ULONG TotalSize;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
-    ASSERT(Link != NULL);
 
-    Alignment = Link->Properties.TransmitAlignment;
-    if (Alignment == 0) {
+    if (Link != NULL) {
+
+        //
+        // If requested, add the additional headers and footers.
+        //
+
+        if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS) != 0) {
+            HeaderSize += Link->Properties.PacketSizeInformation.HeaderSize;
+        }
+
+        if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS) != 0) {
+            FooterSize += Link->Properties.PacketSizeInformation.FooterSize;
+        }
+
+        DataLinkMask = NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS |
+                       NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS;
+
+        if ((Flags & DataLinkMask) != 0) {
+            PacketSizeFlags = 0;
+            if ((Flags & NET_ALLOCATE_BUFFER_FLAG_UNENCRYPTED) != 0) {
+                PacketSizeFlags |= NET_PACKET_SIZE_FLAG_UNENCRYPTED;
+            }
+
+            DataLinkEntry = Link->DataLinkEntry;
+            DataLinkEntry->Interface.GetPacketSizeInformation(
+                                                         Link->DataLinkContext,
+                                                         &SizeInformation,
+                                                         PacketSizeFlags);
+
+            if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS) != 0) {
+                HeaderSize += SizeInformation.HeaderSize;
+            }
+
+            if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS) != 0) {
+                FooterSize += SizeInformation.FooterSize;
+            }
+        }
+
+        Alignment = Link->Properties.TransmitAlignment;
+        if (Alignment == 0) {
+            Alignment = 1;
+        }
+
+        ASSERT(POWER_OF_2(Alignment));
+
+        MaximumPhysicalAddress = Link->Properties.MaxPhysicalAddress;
+        MinPacketSize = Link->Properties.PacketSizeInformation.MinPacketSize;
+
+    } else {
         Alignment = 1;
+        MaximumPhysicalAddress = MAX_UINTN;
+        MinPacketSize = 0;
     }
 
-    ASSERT(POWER_OF_2(Alignment));
-
-    //
-    // If requested, add the additional headers and footers.
-    //
-
-    if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS) != 0) {
-        HeaderSize += Link->Properties.PacketSizeInformation.HeaderSize;
-    }
-
-    if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS) != 0) {
-        FooterSize += Link->Properties.PacketSizeInformation.FooterSize;
-    }
-
-    DataLinkMask = NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS |
-                   NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS;
-
-    if ((Flags & DataLinkMask) != 0) {
-        PacketSizeFlags = 0;
-        if ((Flags & NET_ALLOCATE_BUFFER_FLAG_UNENCRYPTED) != 0) {
-            PacketSizeFlags |= NET_PACKET_SIZE_FLAG_UNENCRYPTED;
-        }
-
-        DataLinkEntry = Link->DataLinkEntry;
-        DataLinkEntry->Interface.GetPacketSizeInformation(Link->DataLinkContext,
-                                                          &SizeInformation,
-                                                          PacketSizeFlags);
-
-        if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_HEADERS) != 0) {
-            HeaderSize += SizeInformation.HeaderSize;
-        }
-
-        if ((Flags & NET_ALLOCATE_BUFFER_FLAG_ADD_DATA_LINK_FOOTERS) != 0) {
-            FooterSize += SizeInformation.FooterSize;
-        }
-    }
-
-    MaximumPhysicalAddress = Link->Properties.MaxPhysicalAddress;
     DataSize = HeaderSize + Size + FooterSize;
 
     //
@@ -173,7 +183,6 @@ Return Value:
     //
 
     Padding = 0;
-    MinPacketSize = Link->Properties.PacketSizeInformation.MinPacketSize;
     if (DataSize < MinPacketSize) {
         Padding = MinPacketSize - DataSize;
     }

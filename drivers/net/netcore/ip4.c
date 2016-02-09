@@ -643,7 +643,7 @@ Return Value:
     // unable to receive packets.
     //
 
-    Status = NetBindSocket(Socket, BindingType, &LocalInformation, NULL, FALSE);
+    Status = NetBindSocket(Socket, BindingType, &LocalInformation, NULL, 0);
     if (!KSUCCESS(Status)) {
         goto Ip4BindToAddressEnd;
     }
@@ -731,13 +731,15 @@ Return Value:
 
 {
 
+    ULONG Flags;
     KSTATUS Status;
 
     //
     // Fully bind the socket and activate it. It's ready to receive.
     //
 
-    Status = NetBindSocket(Socket, SocketFullyBound, NULL, Address, TRUE);
+    Flags = NET_SOCKET_BINDING_FLAG_ACTIVATE;
+    Status = NetBindSocket(Socket, SocketFullyBound, NULL, Address, Flags);
     if (!KSUCCESS(Status)) {
         goto Ip4ConnectEnd;
     }

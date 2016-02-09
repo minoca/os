@@ -28,17 +28,21 @@ BINARYTYPE = so
 
 BINPLACE = bin
 
-OBJS = addr.o     \
-       arp.o      \
-       buf.o      \
-       dhcp.o     \
-       ethernet.o \
-       ip4.o      \
-       netcore.o  \
-       raw.o      \
-       tcp.o      \
-       tcpcong.o  \
-       udp.o      \
+OBJS = addr.o            \
+       arp.o             \
+       buf.o             \
+       dhcp.o            \
+       ethernet.o        \
+       ip4.o             \
+       netcore.o         \
+       raw.o             \
+       tcp.o             \
+       tcpcong.o         \
+       udp.o             \
+       netlink/netlink.o \
+       netlink/generic.o \
+
+EXTRA_SRC_DIRS = netlink
 
 DYNLIBS = $(BINROOT)/kernel             \
 

@@ -201,6 +201,7 @@ Author:
 //
 
 #define SOCKET_INTERNET_PROTOCOL_RAW 255
+#define SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC 256
 
 //
 // Define the socket level of control messages.

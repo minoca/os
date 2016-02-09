@@ -337,6 +337,27 @@ Return Value:
 
 --*/
 
+VOID
+NetpNetlinkGenericInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for UDP sockets.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
 //
 // Prototypes to entry points for built in networks.
 //
@@ -372,6 +393,27 @@ NetpArpInitialize (
 Routine Description:
 
     This routine initializes support for ARP packets.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+NetpNetlinkInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes support for netlink packets.
 
 Arguments:
 

@@ -1,18 +1,18 @@
 /*++
 
-Copyright (c) 2014 Minoca Corp. All Rights Reserved
+Copyright (c) 2015 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    raw.c
+    generic.c
 
 Abstract:
 
-    This module implements the raw socket protocol.
+    This module implements the generic netlink socket protocol.
 
 Author:
 
-    Chris Stevens 20-May-2014
+    Chris Stevens 9-Feb-2016
 
 Environment:
 
@@ -35,58 +35,60 @@ Environment:
 
 #include <minoca/driver.h>
 #include <minoca/net/netdrv.h>
+#include <minoca/net/netlink.h>
 
 //
 // ---------------------------------------------------------------- Definitions
 //
 
-//
-// Define the allocation tag used by the raw socket protocol.
-//
-
-#define RAW_PROTOCOL_ALLOCATION_TAG 0x21707352 // '!psR'
+#define NETLINK_GENERIC_ALLOCATION_TAG 0x65676C4E // 'eglN'
 
 //
-// Define the default size of the RAW socket's receive data buffer, in bytes.
+// Define the maximum supported packet size of the generic netlink protocol,
+// including the message headers.
 //
 
-#define RAW_DEFAULT_RECEIVE_BUFFER_SIZE (256 * _1KB)
+#define NETLINK_GENERIC_MAX_PACKET_SIZE \
+    (NETLINK_MAX_PACKET_SIZE - sizeof(NETLINK_HEADER))
+
+//
+// Define the default size of the generic netlink's receive data buffer, in
+// bytes.
+//
+
+#define NETLINK_GENERIC_DEFAULT_RECEIVE_BUFFER_SIZE (256 * _1KB)
 
 //
 // Define the minimum receive buffer size.
 //
 
-#define RAW_MIN_RECEIVE_BUFFER_SIZE _2KB
+#define NETLINK_GENERIC_MIN_RECEIVE_BUFFER_SIZE _2KB
 
 //
-// Define the default minimum number of bytes necessary for the RAW socket to
-// become readable.
+// Define the default minimum number of bytes necessary for the generic netlink
+// socket to become readable.
 //
 
-#define RAW_DEFAULT_RECEIVE_MINIMUM 1
+#define NETLINK_GENERIC_DEFAULT_RECEIVE_MINIMUM 1
 
 //
-// Define the minimum number of bytes necessary for RAW sockets to become
-// writable. There is no minimum and bytes are immediately sent on the wire.
+// Define the minmum number of bytes necessary for generic netlink sockets to
+// become writable. There is no minimum and bytes are immediately sent on the
+// wire.
 //
 
-#define RAW_SEND_MINIMUM 1
-
-//
-// Define the maximum packet size allowed on a raw socket.
-//
-
-#define RAW_MAX_PACKET_SIZE MAX_ULONG
+#define NETLINK_GENERIC_SEND_MINIMUM 1
 
 //
 // ------------------------------------------------------ Data Type Definitions
 //
 
+
 /*++
 
 Structure Description:
 
-    This structure defines a raw socket protocol's data socket.
+    This structure defines a generic netlink socket.
 
 Members:
 
@@ -95,7 +97,7 @@ Members:
     ReceivedPacketList - Stores the list of packets ready to be read by the
         user.
 
-    ReceiveLock - Stores the spin lock that protects the received packets list,
+    ReceiveLock - Stores the lock that protects the received packets list,
         dropped packet count, and various receive buffer parameters. This lock
         must always be acquired at low level.
 
@@ -116,31 +118,27 @@ Members:
     DroppedPacketCount - Stores the number of packets that have been dropped
         because the receive queue was full.
 
-    ShutdownTypes - Stores the mask of shutdowns that have occurred on this
-        socket.
-
-    MaxPacketSize - Stores the maximum size of RAW datagrams.
+    MaxPacketSize - Stores the maximum size of UDP datagrams.
 
 --*/
 
-typedef struct _RAW_SOCKET {
+typedef struct _NETLINK_GENERIC_SOCKET {
     NET_SOCKET NetSocket;
     LIST_ENTRY ReceivedPacketList;
-    KSPIN_LOCK ReceiveLock;
+    PQUEUED_LOCK ReceiveLock;
     ULONG ReceiveBufferTotalSize;
     ULONG ReceiveBufferFreeSize;
     ULONG ReceiveTimeout;
     ULONG ReceiveMinimum;
     ULONG DroppedPacketCount;
-    ULONG MaxPacketSize;
-    ULONG ShutdownTypes;
-} RAW_SOCKET, *PRAW_SOCKET;
+    UINTN MaxPacketSize;
+} NETLINK_GENERIC_SOCKET, *PNETLINK_GENERIC_SOCKET;
 
 /*++
 
 Structure Description:
 
-    This structure defines a raw socket protocol received message.
+    This structure defines a generic netlink received message.
 
 Members:
 
@@ -148,25 +146,22 @@ Members:
 
     Address - Stores the network address where this data came from.
 
-    DataBuffer - Stores a pointer to the buffer containing the actual data.
-
-    Size - Stores the number of bytes in the data buffer.
+    NetPacket - Stores a pointer to the network packet buffer holding the data.
 
 --*/
 
-typedef struct _RAW_RECEIVED_PACKET {
+typedef struct _NETLINK_GENERIC_RECEIVED_PACKET {
     LIST_ENTRY ListEntry;
     NETWORK_ADDRESS Address;
-    PVOID DataBuffer;
-    ULONG Size;
-} RAW_RECEIVED_PACKET, *PRAW_RECEIVED_PACKET;
+    PNET_PACKET_BUFFER NetPacket;
+} NETLINK_GENERIC_RECEIVED_PACKET, *PNETLINK_GENERIC_RECEIVED_PACKET;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
 
 KSTATUS
-NetpRawCreateSocket (
+NetpNetlinkGenericCreateSocket (
     PNET_PROTOCOL_ENTRY ProtocolEntry,
     PNET_NETWORK_ENTRY NetworkEntry,
     ULONG NetworkProtocol,
@@ -174,48 +169,48 @@ NetpRawCreateSocket (
     );
 
 VOID
-NetpRawDestroySocket (
+NetpNetlinkGenericDestroySocket (
     PNET_SOCKET Socket
     );
 
 KSTATUS
-NetpRawBindToAddress (
+NetpNetlinkGenericBindToAddress (
     PNET_SOCKET Socket,
     PNET_LINK Link,
     PNETWORK_ADDRESS Address
     );
 
 KSTATUS
-NetpRawListen (
+NetpNetlinkGenericListen (
     PNET_SOCKET Socket
     );
 
 KSTATUS
-NetpRawAccept (
+NetpNetlinkGenericAccept (
     PNET_SOCKET Socket,
     PIO_HANDLE *NewConnectionSocket,
     PNETWORK_ADDRESS RemoteAddress
     );
 
 KSTATUS
-NetpRawConnect (
+NetpNetlinkGenericConnect (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Address
     );
 
 KSTATUS
-NetpRawClose (
+NetpNetlinkGenericClose (
     PNET_SOCKET Socket
     );
 
 KSTATUS
-NetpRawShutdown (
+NetpNetlinkGenericShutdown (
     PNET_SOCKET Socket,
     ULONG ShutdownType
     );
 
 KSTATUS
-NetpRawSend (
+NetpNetlinkGenericSend (
     BOOL FromKernelMode,
     PNET_SOCKET Socket,
     PSOCKET_IO_PARAMETERS Parameters,
@@ -223,7 +218,7 @@ NetpRawSend (
     );
 
 VOID
-NetpRawProcessReceivedData (
+NetpNetlinkGenericProcessReceivedData (
     PNET_LINK Link,
     PNET_PACKET_BUFFER Packet,
     PNETWORK_ADDRESS SourceAddress,
@@ -232,7 +227,7 @@ NetpRawProcessReceivedData (
     );
 
 VOID
-NetpRawProcessReceivedSocketData (
+NetpNetlinkGenericProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
@@ -241,7 +236,7 @@ NetpRawProcessReceivedSocketData (
     );
 
 KSTATUS
-NetpRawReceive (
+NetpNetlinkGenericReceive (
     BOOL FromKernelMode,
     PNET_SOCKET Socket,
     PSOCKET_IO_PARAMETERS Parameters,
@@ -249,7 +244,7 @@ NetpRawReceive (
     );
 
 KSTATUS
-NetpRawGetSetInformation (
+NetpNetlinkGenericGetSetInformation (
     PNET_SOCKET Socket,
     SOCKET_INFORMATION_TYPE InformationType,
     UINTN SocketOption,
@@ -259,7 +254,7 @@ NetpRawGetSetInformation (
     );
 
 KSTATUS
-NetpRawUserControl (
+NetpNetlinkGenericUserControl (
     PNET_SOCKET Socket,
     ULONG CodeNumber,
     BOOL FromKernelMode,
@@ -267,32 +262,38 @@ NetpRawUserControl (
     UINTN ContextBufferSize
     );
 
+VOID
+NetpNetlinkGenericInsertReceivedPacket (
+    PNETLINK_GENERIC_SOCKET Socket,
+    PNETLINK_GENERIC_RECEIVED_PACKET Packet
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
 
-NET_PROTOCOL_ENTRY NetRawProtocol = {
+NET_PROTOCOL_ENTRY NetNetlinkGenericProtocol = {
     {NULL, NULL},
     SocketTypeRaw,
-    SOCKET_INTERNET_PROTOCOL_RAW,
+    SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
     NULL,
     NULL,
     {{0}, {0}, {0}},
     {
-        NetpRawCreateSocket,
-        NetpRawDestroySocket,
-        NetpRawBindToAddress,
-        NetpRawListen,
-        NetpRawAccept,
-        NetpRawConnect,
-        NetpRawClose,
-        NetpRawShutdown,
-        NetpRawSend,
-        NetpRawProcessReceivedData,
-        NetpRawProcessReceivedSocketData,
-        NetpRawReceive,
-        NetpRawGetSetInformation,
-        NetpRawUserControl
+        NetpNetlinkGenericCreateSocket,
+        NetpNetlinkGenericDestroySocket,
+        NetpNetlinkGenericBindToAddress,
+        NetpNetlinkGenericListen,
+        NetpNetlinkGenericAccept,
+        NetpNetlinkGenericConnect,
+        NetpNetlinkGenericClose,
+        NetpNetlinkGenericShutdown,
+        NetpNetlinkGenericSend,
+        NetpNetlinkGenericProcessReceivedData,
+        NetpNetlinkGenericProcessReceivedSocketData,
+        NetpNetlinkGenericReceive,
+        NetpNetlinkGenericGetSetInformation,
+        NetpNetlinkGenericUserControl
     }
 };
 
@@ -301,7 +302,7 @@ NET_PROTOCOL_ENTRY NetRawProtocol = {
 //
 
 VOID
-NetpRawInitialize (
+NetpNetlinkGenericInitialize (
     VOID
     )
 
@@ -309,7 +310,7 @@ NetpRawInitialize (
 
 Routine Description:
 
-    This routine initializes support for raw sockets.
+    This routine initializes support for UDP sockets.
 
 Arguments:
 
@@ -326,12 +327,11 @@ Return Value:
     KSTATUS Status;
 
     //
-    // Register the raw socket handler with the core networking library. There
-    // is no real "raw protocol", so this is a special protocol that gets to
-    // filter packets from every protocol.
+    // Register the generic netlink socket handlers with the core networking
+    // library.
     //
 
-    Status = NetRegisterProtocol(&NetRawProtocol, NULL);
+    Status = NetRegisterProtocol(&NetNetlinkGenericProtocol, NULL);
     if (!KSUCCESS(Status)) {
 
         ASSERT(FALSE);
@@ -342,7 +342,7 @@ Return Value:
 }
 
 KSTATUS
-NetpRawCreateSocket (
+NetpNetlinkGenericCreateSocket (
     PNET_PROTOCOL_ENTRY ProtocolEntry,
     PNET_NETWORK_ENTRY NetworkEntry,
     ULONG NetworkProtocol,
@@ -381,71 +381,95 @@ Return Value:
 
 {
 
+    PNET_NETWORK_INITIALIZE_SOCKET InitializeSocket;
+    ULONG MaxPacketSize;
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
-    PRAW_SOCKET RawSocket;
     KSTATUS Status;
+    PNETLINK_GENERIC_SOCKET GenericSocket;
 
     ASSERT(ProtocolEntry->Type == SocketTypeRaw);
-    ASSERT(ProtocolEntry->ParentProtocolNumber == SOCKET_INTERNET_PROTOCOL_RAW);
+    ASSERT(NetworkProtocol == ProtocolEntry->ParentProtocolNumber);
+    ASSERT(NetworkProtocol == SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC);
 
-    RawSocket = MmAllocatePagedPool(sizeof(RAW_SOCKET),
-                                    RAW_PROTOCOL_ALLOCATION_TAG);
+    GenericSocket = MmAllocatePagedPool(sizeof(NETLINK_GENERIC_SOCKET),
+                                        NETLINK_GENERIC_ALLOCATION_TAG);
 
-    if (RawSocket == NULL) {
+    if (GenericSocket == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto RawCreateSocketEnd;
+        goto NetlinkGenericCreateSocketEnd;
     }
 
-    RtlZeroMemory(RawSocket, sizeof(RAW_SOCKET));
-    RawSocket->NetSocket.KernelSocket.Protocol = NetworkProtocol;
-    RawSocket->NetSocket.KernelSocket.ReferenceCount = 1;
-    INITIALIZE_LIST_HEAD(&(RawSocket->ReceivedPacketList));
-    KeInitializeSpinLock(&(RawSocket->ReceiveLock));
-    RawSocket->ReceiveTimeout = WAIT_TIME_INDEFINITE;
-    RawSocket->ReceiveBufferTotalSize = RAW_DEFAULT_RECEIVE_BUFFER_SIZE;
-    RawSocket->ReceiveBufferFreeSize = RawSocket->ReceiveBufferTotalSize;
-    RawSocket->ReceiveMinimum = RAW_DEFAULT_RECEIVE_MINIMUM;
-    RawSocket->MaxPacketSize = RAW_MAX_PACKET_SIZE;
+    RtlZeroMemory(GenericSocket, sizeof(NETLINK_GENERIC_SOCKET));
+    GenericSocket->NetSocket.KernelSocket.Protocol = NetworkProtocol;
+    GenericSocket->NetSocket.KernelSocket.ReferenceCount = 1;
+    INITIALIZE_LIST_HEAD(&(GenericSocket->ReceivedPacketList));
+    GenericSocket->ReceiveTimeout = WAIT_TIME_INDEFINITE;
+    GenericSocket->ReceiveBufferTotalSize =
+                                   NETLINK_GENERIC_DEFAULT_RECEIVE_BUFFER_SIZE;
+
+    GenericSocket->ReceiveBufferFreeSize =
+                                         GenericSocket->ReceiveBufferTotalSize;
+
+    GenericSocket->ReceiveMinimum = NETLINK_GENERIC_DEFAULT_RECEIVE_MINIMUM;
+    GenericSocket->MaxPacketSize = NETLINK_GENERIC_MAX_PACKET_SIZE;
+    GenericSocket->ReceiveLock = KeCreateQueuedLock();
+    if (GenericSocket->ReceiveLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto NetlinkGenericCreateSocketEnd;
+    }
 
     //
     // Give the lower layers a chance to initialize. Start the maximum packet
     // size at the largest possible value.
     //
 
-    ASSERT(RAW_MAX_PACKET_SIZE == MAX_ULONG);
-
-    PacketSizeInformation = &(RawSocket->NetSocket.PacketSizeInformation);
-    PacketSizeInformation->MaxPacketSize = RAW_MAX_PACKET_SIZE;
-    Status = NetworkEntry->Interface.InitializeSocket(ProtocolEntry,
-                                                      NetworkEntry,
-                                                      NetworkProtocol,
-                                                      &(RawSocket->NetSocket));
+    PacketSizeInformation = &(GenericSocket->NetSocket.PacketSizeInformation);
+    PacketSizeInformation->MaxPacketSize = MAX_ULONG;
+    InitializeSocket = NetworkEntry->Interface.InitializeSocket;
+    Status = InitializeSocket(ProtocolEntry,
+                              NetworkEntry,
+                              NetworkProtocol,
+                              &(GenericSocket->NetSocket));
 
     if (!KSUCCESS(Status)) {
-        goto RawCreateSocketEnd;
+        goto NetlinkGenericCreateSocketEnd;
     }
 
     //
-    // Broadcast is disabled by default on RAW sockets.
+    // If the max packet size is greater than what is allowed for a generic
+    // netlink packet plus all the previous headers and footers, then truncate
+    // the max packet size. Note that there is no additional header for generic
+    // netlink packets.
     //
 
-    RawSocket->NetSocket.Flags |= NET_SOCKET_FLAG_BROADCAST_DISABLED;
+    MaxPacketSize = PacketSizeInformation->HeaderSize +
+                    NETLINK_GENERIC_MAX_PACKET_SIZE +
+                    PacketSizeInformation->FooterSize;
+
+    if (PacketSizeInformation->MaxPacketSize > MaxPacketSize) {
+        PacketSizeInformation->MaxPacketSize = MaxPacketSize;
+    }
+
     Status = STATUS_SUCCESS;
 
-RawCreateSocketEnd:
+NetlinkGenericCreateSocketEnd:
     if (!KSUCCESS(Status)) {
-        if (RawSocket != NULL) {
-            MmFreePagedPool(RawSocket);
-            RawSocket = NULL;
+        if (GenericSocket != NULL) {
+            if (GenericSocket->ReceiveLock != NULL) {
+                KeDestroyQueuedLock(GenericSocket->ReceiveLock);
+            }
+
+            MmFreePagedPool(GenericSocket);
+            GenericSocket = NULL;
         }
     }
 
-    *NewSocket = &(RawSocket->NetSocket);
+    *NewSocket = &(GenericSocket->NetSocket);
     return Status;
 }
 
 VOID
-NetpRawDestroySocket (
+NetpNetlinkGenericDestroySocket (
     PNET_SOCKET Socket
     )
 
@@ -473,36 +497,38 @@ Return Value:
 
 {
 
-    PRAW_RECEIVED_PACKET Packet;
-    PRAW_SOCKET RawSocket;
+    PNETLINK_GENERIC_RECEIVED_PACKET Packet;
+    PNETLINK_GENERIC_SOCKET GenericSocket;
 
-    RawSocket = (PRAW_SOCKET)Socket;
+    GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
 
     //
     // Loop through and free any leftover packets.
     //
 
-    KeAcquireSpinLock(&(RawSocket->ReceiveLock));
-    while (!LIST_EMPTY(&(RawSocket->ReceivedPacketList))) {
-        Packet = LIST_VALUE(RawSocket->ReceivedPacketList.Next,
-                            RAW_RECEIVED_PACKET,
+    KeAcquireQueuedLock(GenericSocket->ReceiveLock);
+    while (!LIST_EMPTY(&(GenericSocket->ReceivedPacketList))) {
+        Packet = LIST_VALUE(GenericSocket->ReceivedPacketList.Next,
+                            NETLINK_GENERIC_RECEIVED_PACKET,
                             ListEntry);
 
         LIST_REMOVE(&(Packet->ListEntry));
-        RawSocket->ReceiveBufferFreeSize += Packet->Size;
+        GenericSocket->ReceiveBufferFreeSize += Packet->NetPacket->DataSize;
+        NetFreeBuffer(Packet->NetPacket);
         MmFreePagedPool(Packet);
     }
 
-    ASSERT(RawSocket->ReceiveBufferFreeSize ==
-           RawSocket->ReceiveBufferTotalSize);
+    ASSERT(GenericSocket->ReceiveBufferFreeSize ==
+           GenericSocket->ReceiveBufferTotalSize);
 
-    KeReleaseSpinLock(&(RawSocket->ReceiveLock));
-    MmFreePagedPool(RawSocket);
+    KeReleaseQueuedLock(GenericSocket->ReceiveLock);
+    KeDestroyQueuedLock(GenericSocket->ReceiveLock);
+    MmFreePagedPool(GenericSocket);
     return;
 }
 
 KSTATUS
-NetpRawBindToAddress (
+NetpNetlinkGenericBindToAddress (
     PNET_SOCKET Socket,
     PNET_LINK Link,
     PNETWORK_ADDRESS Address
@@ -532,69 +558,39 @@ Return Value:
 
 {
 
-    ULONG OriginalPort;
-    PRAW_SOCKET RawSocket;
     KSTATUS Status;
 
-    RawSocket = (PRAW_SOCKET)Socket;
-
-    //
-    // Allow raw sockets to get bound multiple times, unless they are already
-    // connected to a peer address. They get bound to the any address upon
-    // creation.
-    //
-
-    if (Socket->RemoteAddress.Network != SocketNetworkInvalid) {
+    if (Socket->LocalAddress.Network != SocketNetworkInvalid) {
         Status = STATUS_INVALID_PARAMETER;
-        goto RawBindToAddressEnd;
+        goto NetlinkGenericBindToAddressEnd;
     }
 
     //
-    // Currently only IPv4 addresses are supported.
+    // Only netlink addresses are supported.
     //
 
-    if (Address->Network != SocketNetworkIp4) {
+    if (Address->Network != SocketNetworkNetlink) {
         Status = STATUS_NOT_SUPPORTED;
-        goto RawBindToAddressEnd;
+        goto NetlinkGenericBindToAddressEnd;
     }
-
-    //
-    // The port doesn't make a difference on raw sockets, so zero it out.
-    //
-
-    OriginalPort = Address->Port;
-    Address->Port = 0;
 
     //
     // Pass the request down to the network layer.
     //
 
     Status = Socket->Network->Interface.BindToAddress(Socket, Link, Address);
-    Address->Port = OriginalPort;
     if (!KSUCCESS(Status)) {
-        goto RawBindToAddressEnd;
+        goto NetlinkGenericBindToAddressEnd;
     }
 
-    //
-    // Begin listening immediately, as there is no explicit listen step for raw
-    // sockets.
-    //
+    IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
 
-    Status = Socket->Network->Interface.Listen(Socket);
-    if (!KSUCCESS(Status)) {
-        goto RawBindToAddressEnd;
-    }
-
-    IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                       POLL_EVENT_OUT,
-                       TRUE);
-
-RawBindToAddressEnd:
+NetlinkGenericBindToAddressEnd:
     return Status;
 }
 
 KSTATUS
-NetpRawListen (
+NetpNetlinkGenericListen (
     PNET_SOCKET Socket
     )
 
@@ -621,7 +617,7 @@ Return Value:
 }
 
 KSTATUS
-NetpRawAccept (
+NetpNetlinkGenericAccept (
     PNET_SOCKET Socket,
     PIO_HANDLE *NewConnectionSocket,
     PNETWORK_ADDRESS RemoteAddress
@@ -657,7 +653,7 @@ Return Value:
 }
 
 KSTATUS
-NetpRawConnect (
+NetpNetlinkGenericConnect (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Address
     )
@@ -682,41 +678,25 @@ Return Value:
 
 {
 
-    ULONG OriginalPort;
-    PRAW_SOCKET RawSocket;
     KSTATUS Status;
-
-    RawSocket = (PRAW_SOCKET)Socket;
-
-    //
-    // The port doesn't make a different on raw sockets, so zero it out.
-    //
-
-    OriginalPort = Address->Port;
-    Address->Port = 0;
 
     //
     // Pass the request down to the network layer.
     //
 
     Status = Socket->Network->Interface.Connect(Socket, Address);
-    Address->Port = OriginalPort;
     if (!KSUCCESS(Status)) {
-        goto RawConnectEnd;
+        goto NetlinkGenericConnectEnd;
     }
 
-    IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                       POLL_EVENT_OUT,
-                       TRUE);
+    IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
 
-    Status = STATUS_SUCCESS;
-
-RawConnectEnd:
+NetlinkGenericConnectEnd:
     return Status;
 }
 
 KSTATUS
-NetpRawClose (
+NetpNetlinkGenericClose (
     PNET_SOCKET Socket
     )
 
@@ -747,17 +727,17 @@ Return Value:
 
     Status = Socket->Network->Interface.Close(Socket);
     if (!KSUCCESS(Status)) {
-        goto RawCloseEnd;
+        goto NetlinkGenericCloseEnd;
     }
 
     IoSocketReleaseReference(&(Socket->KernelSocket));
 
-RawCloseEnd:
+NetlinkGenericCloseEnd:
     return Status;
 }
 
 KSTATUS
-NetpRawShutdown (
+NetpNetlinkGenericShutdown (
     PNET_SOCKET Socket,
     ULONG ShutdownType
     )
@@ -783,35 +763,11 @@ Return Value:
 
 {
 
-    PRAW_SOCKET RawSocket;
-
-    RawSocket = (PRAW_SOCKET)Socket;
-    RtlAtomicOr32(&(RawSocket->ShutdownTypes), ShutdownType);
-
-    //
-    // Signal the read event if the read end was shut down.
-    //
-
-    if ((ShutdownType & SOCKET_SHUTDOWN_READ) != 0) {
-        KeAcquireSpinLock(&(RawSocket->ReceiveLock));
-        IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                           POLL_EVENT_IN,
-                           TRUE);
-
-        KeReleaseSpinLock(&(RawSocket->ReceiveLock));
-    }
-
-    if ((ShutdownType & SOCKET_SHUTDOWN_WRITE) != 0) {
-        IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                           POLL_EVENT_OUT,
-                           TRUE);
-    }
-
-    return STATUS_SUCCESS;
+    return STATUS_NOT_SUPPORTED;
 }
 
 KSTATUS
-NetpRawSend (
+NetpNetlinkGenericSend (
     BOOL FromKernelMode,
     PNET_SOCKET Socket,
     PSOCKET_IO_PARAMETERS Parameters,
@@ -849,28 +805,21 @@ Return Value:
     UINTN BytesComplete;
     PNETWORK_ADDRESS Destination;
     NETWORK_ADDRESS DestinationLocal;
-    ULONG Flags;
-    ULONG FooterSize;
-    ULONG HeaderSize;
-    PNET_LINK Link;
-    NET_LINK_LOCAL_ADDRESS LinkInformation;
-    PNET_SOCKET_LINK_OVERRIDE LinkOverride;
-    NET_SOCKET_LINK_OVERRIDE LinkOverrideBuffer;
+    NETWORK_ADDRESS LocalAddress;
     PNET_PACKET_BUFFER Packet;
     NET_PACKET_LIST PacketList;
-    PRAW_SOCKET RawSocket;
     UINTN Size;
     KSTATUS Status;
+    PNETLINK_GENERIC_SOCKET GenericSocket;
+
+    ASSERT(Socket->PacketSizeInformation.MaxPacketSize >
+           sizeof(NETLINK_HEADER));
 
     BytesComplete = 0;
-    Flags = Parameters->SocketIoFlags;
-    Parameters->SocketIoFlags = 0;
-    Link = NULL;
-    LinkInformation.Link = NULL;
-    LinkOverride = NULL;
     NET_INITIALIZE_PACKET_LIST(&PacketList);
     Size = Parameters->Size;
-    RawSocket = (PRAW_SOCKET)Socket;
+    GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
+    Parameters->SocketIoFlags = 0;
     Destination = Parameters->NetworkAddress;
     if ((Destination != NULL) && (FromKernelMode == FALSE)) {
         Status = MmCopyFromUserMode(&DestinationLocal,
@@ -879,43 +828,19 @@ Return Value:
 
         Destination = &DestinationLocal;
         if (!KSUCCESS(Status)) {
-            goto RawSendEnd;
+            goto NetlinkGenericSendEnd;
         }
     }
 
     if ((Destination == NULL) ||
         (Destination->Network == SocketNetworkInvalid)) {
 
-        if (Socket->RemoteAddress.Port == 0) {
+        if (Socket->BindingType != SocketFullyBound) {
             Status = STATUS_NOT_CONFIGURED;
-            goto RawSendEnd;
+            goto NetlinkGenericSendEnd;
         }
 
         Destination = &(Socket->RemoteAddress);
-    }
-
-    //
-    // Fail if the socket has already been closed for writing.
-    //
-
-    if ((RawSocket->ShutdownTypes & SOCKET_SHUTDOWN_WRITE) != 0) {
-        if ((Flags & SOCKET_IO_NO_SIGNAL) != 0) {
-            Status = STATUS_BROKEN_PIPE_SILENT;
-
-        } else {
-            Status = STATUS_BROKEN_PIPE;
-        }
-
-        goto RawSendEnd;
-    }
-
-    //
-    // Fail if the socket's link went down.
-    //
-
-    if ((Socket->KernelSocket.IoState->Events & POLL_EVENT_DISCONNECTED) != 0) {
-        Status = STATUS_NO_NETWORK_CONNECTION;
-        goto RawSendEnd;
     }
 
     //
@@ -924,78 +849,53 @@ Return Value:
 
     if (Parameters->ControlDataSize != 0) {
         Status = STATUS_NOT_SUPPORTED;
-        goto RawSendEnd;
+        goto NetlinkGenericSendEnd;
     }
 
     //
-    // If the socket has no link, then try to find a link that can service the
-    // destination address.
+    // If the size is greater than the generic netlink socket's maximum packet
+    // size, fail.
     //
 
-    if (Socket->Link == NULL) {
-        Status = NetFindLinkForRemoteAddress(Destination, &LinkInformation);
-        if (KSUCCESS(Status)) {
-
-            //
-            // Synchronously get the correct header, footer, and max packet
-            // sizes.
-            //
-
-            Status = NetInitializeSocketLinkOverride(Socket,
-                                                     &LinkInformation,
-                                                     &LinkOverrideBuffer);
-
-            if (KSUCCESS(Status)) {
-                LinkOverride = &LinkOverrideBuffer;
-            }
-        }
-
-        if (!KSUCCESS(Status) && (Status != STATUS_CONNECTION_EXISTS)) {
-            goto RawSendEnd;
-        }
+    if (Size > GenericSocket->MaxPacketSize) {
+        Status = STATUS_MESSAGE_TOO_LONG;
+        goto NetlinkGenericSendEnd;
     }
 
     //
-    // Set the necessary local variables based on whether the socket's link or
-    // an override link will be used to send the data.
+    // If the socket is not yet bound, then at least try to bind it to a local
+    // port. This bind attempt may race with another bind attempt, but leave it
+    // to the socket owner to synchronize bind and send.
     //
 
-    if (LinkOverride != NULL) {
-
-        ASSERT(LinkOverride == &LinkOverrideBuffer);
-
-        Link = LinkOverrideBuffer.LinkInformation.Link;
-        HeaderSize = LinkOverrideBuffer.PacketSizeInformation.HeaderSize;
-        FooterSize = LinkOverrideBuffer.PacketSizeInformation.FooterSize;
-
-    } else {
-
-        ASSERT(Socket->Link != NULL);
-
-        Link = Socket->Link;
-        HeaderSize = Socket->PacketSizeInformation.HeaderSize;
-        FooterSize = Socket->PacketSizeInformation.FooterSize;
+    if (Socket->BindingType == SocketBindingInvalid) {
+        RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
+        LocalAddress.Network = Socket->Network->Type;
+        Status = NetpNetlinkGenericBindToAddress(Socket, NULL, &LocalAddress);
+        if (!KSUCCESS(Status)) {
+            goto NetlinkGenericSendEnd;
+        }
     }
 
     //
     // Allocate a buffer for the packet.
     //
 
-    Status = NetAllocateBuffer(HeaderSize,
+    Status = NetAllocateBuffer(0,
                                Size,
-                               FooterSize,
-                               Link,
+                               0,
+                               NULL,
                                0,
                                &Packet);
 
     if (!KSUCCESS(Status)) {
-        goto RawSendEnd;
+        goto NetlinkGenericSendEnd;
     }
 
     NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
 
     //
-    // Copy the packet data.
+    // Copy the data to the packet's buffer.
     //
 
     Status = MmCopyIoBufferData(IoBuffer,
@@ -1005,48 +905,36 @@ Return Value:
                                 FALSE);
 
     if (!KSUCCESS(Status)) {
-        goto RawSendEnd;
+        goto NetlinkGenericSendEnd;
     }
 
     //
-    // Send the datagram down to the network layer, which may have to send it
-    // in fragments.
+    // Send the packet down to the network layer.
     //
 
     Status = Socket->Network->Interface.Send(Socket,
                                              Destination,
-                                             LinkOverride,
+                                             NULL,
                                              &PacketList);
 
     if (!KSUCCESS(Status)) {
-        goto RawSendEnd;
+        goto NetlinkGenericSendEnd;
     }
 
     Packet = NULL;
     BytesComplete = Size;
 
-RawSendEnd:
+NetlinkGenericSendEnd:
     Parameters->Size = BytesComplete;
     if (!KSUCCESS(Status)) {
         NetDestroyBufferList(&PacketList);
-    }
-
-    if (LinkInformation.Link != NULL) {
-        NetLinkReleaseReference(LinkInformation.Link);
-    }
-
-    if (LinkOverride == &(LinkOverrideBuffer)) {
-
-        ASSERT(LinkOverrideBuffer.LinkInformation.Link != NULL);
-
-        NetLinkReleaseReference(LinkOverrideBuffer.LinkInformation.Link);
     }
 
     return Status;
 }
 
 VOID
-NetpRawProcessReceivedData (
+NetpNetlinkGenericProcessReceivedData (
     PNET_LINK Link,
     PNET_PACKET_BUFFER Packet,
     PNETWORK_ADDRESS SourceAddress,
@@ -1088,18 +976,105 @@ Return Value:
 
 {
 
+    ULONG AllocationSize;
+    PNETLINK_GENERIC_SOCKET GenericSocket;
+    PNETLINK_HEADER Header;
+    PNETLINK_GENERIC_RECEIVED_PACKET ReceivePacket;
+    PNET_SOCKET Socket;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    Header = (PNETLINK_HEADER)(Packet->Buffer + Packet->DataOffset);
+    if (Header->Length > (Packet->FooterOffset - Packet->DataOffset)) {
+        RtlDebugPrint("Invalid generic netlink length %d is bigger than packet "
+                      "data, which is only %d bytes large.\n",
+                      Header->Length,
+                      (Packet->FooterOffset - Packet->DataOffset));
+
+        return;
+    }
+
     //
-    // No incoming packets should match the raw socket protocol. Raw sockets
-    // receive data directly from net core and not their networking layer.
+    // If this is a multicast packet, then send it to all appropriate sockets
+    // with the help of netcore. Once complete, release the packet.
     //
 
-    ASSERT(FALSE);
+    if ((Packet->Flags & NET_PACKET_FLAG_MULTICAST) != 0) {
+        NetProcessReceivedMulticastData(Link,
+                                        Packet,
+                                        ProtocolEntry,
+                                        SourceAddress,
+                                        DestinationAddress);
 
+        NetFreeBuffer(Packet);
+        return;
+    }
+
+    //
+    // Find a socket willing to take this packet.
+    //
+
+    Socket = NetFindSocket(ProtocolEntry, DestinationAddress, SourceAddress);
+    if (Socket == NULL) {
+        return;
+    }
+
+    GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
+
+    //
+    // If this is a kernel socket is on the receiving end, then route the
+    // packet directly to the kernel component.
+    //
+
+    if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
+
+        //
+        // TODO: Route the packet to the netlink generic kernel component.
+        //
+
+        return;
+    }
+
+    //
+    // Create a received packet entry for this data.
+    //
+
+    AllocationSize = sizeof(NETLINK_GENERIC_RECEIVED_PACKET);
+    ReceivePacket = MmAllocatePagedPool(AllocationSize,
+                                        NETLINK_GENERIC_ALLOCATION_TAG);
+
+    if (ReceivePacket == NULL) {
+        return;
+    }
+
+    RtlCopyMemory(&(ReceivePacket->Address),
+                  SourceAddress,
+                  sizeof(NETWORK_ADDRESS));
+
+    //
+    // Netlink sockets are an exception to the rule of the packet not being
+    // touched after this routine returns. The packet is not owned by a link
+    // and thus is not backed by device memory. So it is safe to borrow it.
+    //
+
+    ReceivePacket->NetPacket = Packet;
+
+    //
+    // Work to insert the packet on the list of received packets.
+    //
+
+    NetpNetlinkGenericInsertReceivedPacket(GenericSocket, ReceivePacket);
+
+    //
+    // Release the reference on the socket added by the find socket call.
+    //
+
+    IoSocketReleaseReference(&(Socket->KernelSocket));
     return;
 }
 
 VOID
-NetpRawProcessReceivedSocketData (
+NetpNetlinkGenericProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
@@ -1141,93 +1116,85 @@ Return Value:
 {
 
     ULONG AllocationSize;
-    ULONG AvailableBytes;
-    ULONG Length;
-    PRAW_RECEIVED_PACKET RawPacket;
-    PRAW_SOCKET RawSocket;
+    PNETLINK_GENERIC_SOCKET GenericSocket;
+    PNET_PACKET_BUFFER PacketCopy;
+    ULONG PacketLength;
+    PNETLINK_GENERIC_RECEIVED_PACKET ReceivePacket;
+    KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
-    ASSERT(Socket != NULL);
 
-    RawSocket = (PRAW_SOCKET)Socket;
-    Length = Packet->FooterOffset - Packet->DataOffset;
+    PacketCopy = NULL;
+    GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
 
     //
-    // Create a received packet entry for this data.
+    // If this is a kernel socket is on the receiving end, then route the
+    // packet directly to the kernel component.
     //
 
-    AllocationSize = sizeof(RAW_RECEIVED_PACKET) + Length;
-    RawPacket = MmAllocatePagedPool(AllocationSize,
-                                    RAW_PROTOCOL_ALLOCATION_TAG);
+    if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
 
-    if (RawPacket == NULL) {
+        //
+        // TODO: Route the packet to the netlink generic kernel component.
+        //
+
         return;
     }
 
-    RtlCopyMemory(&(RawPacket->Address),
+    //
+    // Create a received packet entry for this data. This routine is invoked by
+    // the network core on multicast packets. Create a copy of the network
+    // packet as it may need to be sent to multiple sockets, no single socket
+    // can own it.
+    //
+
+    AllocationSize = sizeof(NETLINK_GENERIC_RECEIVED_PACKET);
+    ReceivePacket = MmAllocatePagedPool(AllocationSize,
+                                        NETLINK_GENERIC_ALLOCATION_TAG);
+
+    if (ReceivePacket == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto ProcessReceivedSocketDataEnd;
+    }
+
+    RtlCopyMemory(&(ReceivePacket->Address),
                   SourceAddress,
                   sizeof(NETWORK_ADDRESS));
 
-    RawPacket->DataBuffer = (PVOID)(RawPacket + 1);
-    RawPacket->Size = Length;
+    PacketLength = Packet->FooterOffset - Packet->DataOffset;
+    Status = NetAllocateBuffer(0, PacketLength, 0, NULL, 0, &PacketCopy);
+    if (!KSUCCESS(Status)) {
+        goto ProcessReceivedSocketDataEnd;
+    }
 
-    //
-    // Copy the packet contents into the receive packet buffer.
-    //
-
-    RtlCopyMemory(RawPacket->DataBuffer,
+    RtlCopyMemory(PacketCopy->Buffer + PacketCopy->DataOffset,
                   Packet->Buffer + Packet->DataOffset,
-                  Length);
+                  PacketLength);
+
+    ReceivePacket->NetPacket = PacketCopy;
 
     //
     // Work to insert the packet on the list of received packets.
     //
 
-    KeAcquireSpinLock(&(RawSocket->ReceiveLock));
-    if (RawPacket->Size <= RawSocket->ReceiveBufferFreeSize) {
-        INSERT_BEFORE(&(RawPacket->ListEntry),
-                      &(RawSocket->ReceivedPacketList));
+    NetpNetlinkGenericInsertReceivedPacket(GenericSocket, ReceivePacket);
 
-        RawSocket->ReceiveBufferFreeSize -= RawPacket->Size;
-
-        ASSERT(RawSocket->ReceiveBufferFreeSize <
-               RawSocket->ReceiveBufferTotalSize);
-
-        //
-        // Signal the event if enough bytes have been received.
-        //
-
-        AvailableBytes = RawSocket->ReceiveBufferTotalSize -
-                         RawSocket->ReceiveBufferFreeSize;
-
-        if (AvailableBytes >= RawSocket->ReceiveMinimum) {
-            IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                               POLL_EVENT_IN,
-                               TRUE);
+ProcessReceivedSocketDataEnd:
+    if (!KSUCCESS(Status)) {
+        if (ReceivePacket != NULL) {
+            MmFreePagedPool(ReceivePacket);
         }
 
-        RawPacket = NULL;
-
-    } else {
-        RawSocket->DroppedPacketCount += 1;
-    }
-
-    KeReleaseSpinLock(&(RawSocket->ReceiveLock));
-
-    //
-    // If the packet wasn't nulled out, that's an indication it wasn't added to
-    // the list, so free it up.
-    //
-
-    if (RawPacket != NULL) {
-        MmFreePagedPool(RawPacket);
+        if (PacketCopy != NULL) {
+            NetFreeBuffer(PacketCopy);
+        }
     }
 
     return;
 }
 
 KSTATUS
-NetpRawReceive (
+NetpNetlinkGenericReceive (
     BOOL FromKernelMode,
     PNET_SOCKET Socket,
     PSOCKET_IO_PARAMETERS Parameters,
@@ -1268,17 +1235,22 @@ Return Value:
 
 {
 
+    ULONG AvailableBytes;
+    PVOID Buffer;
     UINTN BytesComplete;
-    ULONG CopySize;
+    COMPARISON_RESULT Compare;
+    PLIST_ENTRY CurrentEntry;
     ULONGLONG CurrentTime;
     ULONGLONG EndTime;
+    ULONG Flags;
+    PNETLINK_GENERIC_SOCKET GenericSocket;
     PIO_OBJECT_STATE IoState;
-    PRAW_RECEIVED_PACKET Packet;
-    PLIST_ENTRY PacketEntry;
-    PRAW_SOCKET RawSocket;
-    KSTATUS RemoteCopyStatus;
+    ULONG OriginallyAvailable;
+    PNETLINK_GENERIC_RECEIVED_PACKET Packet;
+    ULONG PacketSize;
     ULONG ReturnedEvents;
     UINTN Size;
+    NETWORK_ADDRESS SourceAddressLocal;
     KSTATUS Status;
     ULONGLONG TimeCounterFrequency;
     ULONG Timeout;
@@ -1288,12 +1260,12 @@ Return Value:
 
     BytesComplete = 0;
     EndTime = 0;
+    Flags = Parameters->SocketIoFlags;
     Parameters->SocketIoFlags = 0;
-    Packet = NULL;
-    Size = Parameters->Size;
-    TimeCounterFrequency = 0;
-    Timeout = Parameters->TimeoutInMilliseconds;
-    RawSocket = (PRAW_SOCKET)Socket;
+    if ((Flags & SOCKET_IO_OUT_OF_BAND) != 0) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto NetlinkGenericReceiveEnd;
+    }
 
     //
     // Fail if there's ancillary data.
@@ -1301,15 +1273,21 @@ Return Value:
 
     if (Parameters->ControlDataSize != 0) {
         Status = STATUS_NOT_SUPPORTED;
-        goto RawReceiveEnd;
+        goto NetlinkGenericReceiveEnd;
     }
+
+    Packet = NULL;
+    Size = Parameters->Size;
+    TimeCounterFrequency = 0;
+    Timeout = Parameters->TimeoutInMilliseconds;
+    GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
 
     //
     // Set a timeout timer to give up on. The socket stores the maximum timeout.
     //
 
-    if (Timeout > RawSocket->ReceiveTimeout) {
-        Timeout = RawSocket->ReceiveTimeout;
+    if (Timeout > GenericSocket->ReceiveTimeout) {
+        Timeout = GenericSocket->ReceiveTimeout;
     }
 
     if ((Timeout != 0) && (Timeout != WAIT_TIME_INDEFINITE)) {
@@ -1324,7 +1302,8 @@ Return Value:
     // Loop trying to get some data.
     //
 
-    while (TRUE) {
+    Status = STATUS_SUCCESS;
+    while (BytesComplete < Size) {
 
         //
         // Wait for a packet to become available. Start by computing the wait
@@ -1350,7 +1329,7 @@ Return Value:
         // receive minimum bytes available.
         //
 
-        IoState = RawSocket->NetSocket.KernelSocket.IoState;
+        IoState = GenericSocket->NetSocket.KernelSocket.IoState;
         Status = IoWaitForIoObjectState(IoState,
                                         POLL_EVENT_IN,
                                         TRUE,
@@ -1366,7 +1345,7 @@ Return Value:
                 Status = STATUS_NO_NETWORK_CONNECTION;
 
             } else {
-                Status = NET_SOCKET_GET_LAST_ERROR(&(RawSocket->NetSocket));
+                Status = NET_SOCKET_GET_LAST_ERROR(&(GenericSocket->NetSocket));
                 if (KSUCCESS(Status)) {
                     Status = STATUS_DEVICE_IO_ERROR;
                 }
@@ -1375,82 +1354,68 @@ Return Value:
             break;
         }
 
-        KeAcquireSpinLock(&(RawSocket->ReceiveLock));
+        KeAcquireQueuedLock(GenericSocket->ReceiveLock);
+        OriginallyAvailable = GenericSocket->ReceiveBufferTotalSize -
+                              GenericSocket->ReceiveBufferFreeSize;
 
-        //
-        // Fail with EOF if the socket has already been closed for reading.
-        //
+        CurrentEntry = GenericSocket->ReceivedPacketList.Next;
+        while (CurrentEntry != &(GenericSocket->ReceivedPacketList)) {
+            Packet = LIST_VALUE(CurrentEntry,
+                                NETLINK_GENERIC_RECEIVED_PACKET,
+                                ListEntry);
 
-        if ((RawSocket->ShutdownTypes & SOCKET_SHUTDOWN_READ) != 0) {
-            KeReleaseSpinLock(&(RawSocket->ReceiveLock));
-            Status = STATUS_END_OF_FILE;
-            goto RawReceiveEnd;
-        }
-
-        //
-        // If there is data to read, then read it. This routine can only get
-        // here if the receive minimum bytes have become available, which means
-        // it is open season to read until all the packets are gone.
-        //
-
-        if (LIST_EMPTY(&(RawSocket->ReceivedPacketList)) == FALSE) {
-            PacketEntry = RawSocket->ReceivedPacketList.Next;
-            LIST_REMOVE(PacketEntry);
-            Packet = LIST_VALUE(PacketEntry, RAW_RECEIVED_PACKET, ListEntry);
-            RawSocket->ReceiveBufferFreeSize += Packet->Size;
+            CurrentEntry = CurrentEntry->Next;
 
             //
-            // The total receive buffer size may have been decreased. Don't
-            // increment the free size above the total.
+            // Don't cross boundaries between different remotes.
             //
 
-            if (RawSocket->ReceiveBufferFreeSize >
-                RawSocket->ReceiveBufferTotalSize) {
+            if (BytesComplete != 0) {
+                Compare = NetCompareNetworkAddresses(&SourceAddressLocal,
+                                                     &(Packet->Address));
 
-                RawSocket->ReceiveBufferFreeSize =
-                                             RawSocket->ReceiveBufferTotalSize;
+                if (Compare != ComparisonResultSame) {
+                    break;
+                }
             }
 
-            //
-            // If the list is now empty, unsignal the event.
-            //
+            PacketSize = Packet->NetPacket->FooterOffset -
+                         Packet->NetPacket->DataOffset;
 
-            if (LIST_EMPTY(&(RawSocket->ReceivedPacketList)) != FALSE) {
-                IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                                   POLL_EVENT_IN,
-                                   FALSE);
-            }
-        }
+            if (PacketSize > (Size - BytesComplete)) {
+                if (BytesComplete != 0) {
+                    break;
+                }
 
-        KeReleaseSpinLock(&(RawSocket->ReceiveLock));
-
-        //
-        // If a packet was grabbed, return it.
-        //
-
-        if (Packet != NULL) {
-            Status = STATUS_SUCCESS;
-            Packet = LIST_VALUE(PacketEntry, RAW_RECEIVED_PACKET, ListEntry);
-            CopySize = Packet->Size;
-            if (Size < CopySize) {
-                CopySize = Size;
-                Status = STATUS_BUFFER_TOO_SMALL;
                 Parameters->SocketIoFlags |= SOCKET_IO_DATA_TRUNCATED;
+                PacketSize = Size - BytesComplete;
+                Status = STATUS_BUFFER_TOO_SMALL;
             }
 
+            Buffer = Packet->NetPacket->Buffer + Packet->NetPacket->DataOffset;
             Status = MmCopyIoBufferData(IoBuffer,
-                                        Packet->DataBuffer,
+                                        Buffer,
                                         BytesComplete,
-                                        CopySize,
+                                        PacketSize,
                                         TRUE);
 
-            if (KSUCCESS(Status)) {
-                BytesComplete += CopySize;
+            if (!KSUCCESS(Status)) {
+                break;
             }
 
+            BytesComplete += PacketSize;
+
             //
-            // If the caller wants the remote address, copy it over, regardless
-            // of whether the main copy succeeded or not.
+            // Copy the packet address over to the local variable to avoid
+            // crossing remote host boundaries.
+            //
+
+            RtlCopyMemory(&SourceAddressLocal,
+                          &(Packet->Address),
+                          sizeof(NETWORK_ADDRESS));
+
+            //
+            // Copy the packet address out to the caller if requested.
             //
 
             if (Parameters->NetworkAddress != NULL) {
@@ -1460,35 +1425,80 @@ Return Value:
                                   sizeof(NETWORK_ADDRESS));
 
                 } else {
-                    RemoteCopyStatus = MmCopyToUserMode(
-                                                    Parameters->NetworkAddress,
-                                                    &(Packet->Address),
-                                                    sizeof(NETWORK_ADDRESS));
+                    Status = MmCopyToUserMode(Parameters->NetworkAddress,
+                                              &(Packet->Address),
+                                              sizeof(NETWORK_ADDRESS));
 
-                    if (!KSUCCESS(RemoteCopyStatus)) {
-                        Status = RemoteCopyStatus;
+                    if (!KSUCCESS(Status)) {
+                        break;
                     }
                 }
             }
 
             //
-            // Release the packet and break out of this loop. If this loop
-            // were made not to break, the failing status would need to be
-            // dealt with here.
+            // Remove the packet if not peeking.
             //
 
-            MmFreePagedPool(Packet);
+            if ((Flags & SOCKET_IO_PEEK) == 0) {
+                LIST_REMOVE(&(Packet->ListEntry));
+                GenericSocket->ReceiveBufferFreeSize += PacketSize;
+
+                //
+                // The total receive buffer size may have been decreased. Don't
+                // increment the free size above the total.
+                //
+
+                if (GenericSocket->ReceiveBufferFreeSize >
+                    GenericSocket->ReceiveBufferTotalSize) {
+
+                    GenericSocket->ReceiveBufferFreeSize =
+                                         GenericSocket->ReceiveBufferTotalSize;
+                }
+
+                MmFreePagedPool(Packet);
+            }
+        }
+
+        //
+        // Unsignal the IN event if this read caused the avaiable data to drop
+        // below the minimum.
+        //
+
+        AvailableBytes = GenericSocket->ReceiveBufferTotalSize -
+                         GenericSocket->ReceiveBufferFreeSize;
+
+        if ((OriginallyAvailable >= GenericSocket->ReceiveMinimum) &&
+            (AvailableBytes < GenericSocket->ReceiveMinimum)) {
+
+            IoSetIoObjectState(GenericSocket->NetSocket.KernelSocket.IoState,
+                               POLL_EVENT_IN,
+                               FALSE);
+        }
+
+        KeReleaseQueuedLock(GenericSocket->ReceiveLock);
+        if (!KSUCCESS(Status)) {
             break;
+        }
+
+        //
+        // Unless being forced to receive everything, break out if something
+        // was read.
+        //
+
+        if ((Flags & SOCKET_IO_WAIT_ALL) == 0) {
+            if (BytesComplete != 0) {
+                break;
+            }
         }
     }
 
-RawReceiveEnd:
+NetlinkGenericReceiveEnd:
     Parameters->Size = BytesComplete;
     return Status;
 }
 
 KSTATUS
-NetpRawGetSetInformation (
+NetpNetlinkGenericGetSetInformation (
     PNET_SOCKET Socket,
     SOCKET_INFORMATION_TYPE InformationType,
     UINTN Option,
@@ -1541,18 +1551,18 @@ Return Value:
 
     SOCKET_BASIC_OPTION BasicOption;
     PBOOL BooleanOption;
-    PRAW_SOCKET RawSocket;
     PNET_PACKET_SIZE_INFORMATION SizeInformation;
     PULONG SizeOption;
     KSTATUS Status;
     PULONG TimeoutOption;
+    PNETLINK_GENERIC_SOCKET GenericSocket;
 
-    RawSocket = (PRAW_SOCKET)Socket;
+    GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
     if ((InformationType != SocketInformationTypeBasic) &&
-        (InformationType != SocketInformationTypeUdp)) {
+        (InformationType != SocketInformationTypeNetlinkGeneric)) {
 
         Status = STATUS_INVALID_PARAMETER;
-        goto RawGetSetInformationEnd;
+        goto UdpGetSetInformationEnd;
     }
 
     Status = STATUS_SUCCESS;
@@ -1568,14 +1578,16 @@ Return Value:
 
                 SizeOption = (PULONG)Data;
                 SizeInformation = &(Socket->PacketSizeInformation);
-                if (*SizeOption > RAW_MAX_PACKET_SIZE) {
-                    RawSocket->MaxPacketSize = RAW_MAX_PACKET_SIZE;
+                if (*SizeOption > NETLINK_GENERIC_MAX_PACKET_SIZE) {
+                    GenericSocket->MaxPacketSize =
+                                               NETLINK_GENERIC_MAX_PACKET_SIZE;
 
                 } else if (*SizeOption < SizeInformation->MaxPacketSize) {
-                    RawSocket->MaxPacketSize = SizeInformation->MaxPacketSize;
+                    GenericSocket->MaxPacketSize =
+                                                SizeInformation->MaxPacketSize;
 
                 } else {
-                    RawSocket->MaxPacketSize = *SizeOption;
+                    GenericSocket->MaxPacketSize = *SizeOption;
                 }
 
             } else {
@@ -1586,7 +1598,7 @@ Return Value:
                 }
 
                 SizeOption = (PULONG)Data;
-                *SizeOption = RawSocket->MaxPacketSize;
+                *SizeOption = GenericSocket->MaxPacketSize;
             }
 
             break;
@@ -1603,7 +1615,7 @@ Return Value:
                 }
 
                 SizeOption = (PULONG)Data;
-                *SizeOption = RAW_SEND_MINIMUM;
+                *SizeOption = NETLINK_GENERIC_SEND_MINIMUM;
             }
 
             break;
@@ -1633,13 +1645,13 @@ Return Value:
                 }
 
                 SizeOption = (PULONG)Data;
-                KeAcquireSpinLock(&(RawSocket->ReceiveLock));
-                if (*SizeOption < RAW_MIN_RECEIVE_BUFFER_SIZE) {
-                    RawSocket->ReceiveBufferTotalSize =
-                                                   RAW_MIN_RECEIVE_BUFFER_SIZE;
+                KeAcquireQueuedLock(GenericSocket->ReceiveLock);
+                if (*SizeOption < NETLINK_GENERIC_MIN_RECEIVE_BUFFER_SIZE) {
+                    GenericSocket->ReceiveBufferTotalSize =
+                                       NETLINK_GENERIC_MIN_RECEIVE_BUFFER_SIZE;
 
                 } else {
-                    RawSocket->ReceiveBufferTotalSize = *SizeOption;
+                    GenericSocket->ReceiveBufferTotalSize = *SizeOption;
                 }
 
                 //
@@ -1648,14 +1660,14 @@ Return Value:
                 // not meant to be a truncate call.
                 //
 
-                if (RawSocket->ReceiveBufferFreeSize >
-                    RawSocket->ReceiveBufferTotalSize) {
+                if (GenericSocket->ReceiveBufferFreeSize >
+                    GenericSocket->ReceiveBufferTotalSize) {
 
-                    RawSocket->ReceiveBufferFreeSize =
-                                             RawSocket->ReceiveBufferTotalSize;
+                    GenericSocket->ReceiveBufferFreeSize =
+                                         GenericSocket->ReceiveBufferTotalSize;
                 }
 
-                KeReleaseSpinLock(&(RawSocket->ReceiveLock));
+                KeReleaseQueuedLock(GenericSocket->ReceiveLock);
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -1665,7 +1677,7 @@ Return Value:
                 }
 
                 SizeOption = (PULONG)Data;
-                *SizeOption = RawSocket->ReceiveBufferTotalSize;
+                *SizeOption = GenericSocket->ReceiveBufferTotalSize;
             }
 
             break;
@@ -1678,7 +1690,7 @@ Return Value:
                 }
 
                 SizeOption = (PULONG)Data;
-                RawSocket->ReceiveMinimum = *SizeOption;
+                GenericSocket->ReceiveMinimum = *SizeOption;
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -1688,7 +1700,7 @@ Return Value:
                 }
 
                 SizeOption = (PULONG)Data;
-                *SizeOption = RawSocket->ReceiveMinimum;
+                *SizeOption = GenericSocket->ReceiveMinimum;
             }
 
             break;
@@ -1701,7 +1713,7 @@ Return Value:
                 }
 
                 TimeoutOption = (PULONG)Data;
-                RawSocket->ReceiveTimeout = *TimeoutOption;
+                GenericSocket->ReceiveTimeout = *TimeoutOption;
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -1711,7 +1723,7 @@ Return Value:
                 }
 
                 TimeoutOption = (PULONG)Data;
-                *TimeoutOption = RawSocket->ReceiveTimeout;
+                *TimeoutOption = GenericSocket->ReceiveTimeout;
             }
 
             break;
@@ -1735,20 +1747,7 @@ Return Value:
 
         case SocketBasicOptionBroadcastEnabled:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(BOOL)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                BooleanOption = (PBOOL)Data;
-                if (*BooleanOption != FALSE) {
-                    RtlAtomicAnd32(&(Socket->Flags),
-                                   ~NET_SOCKET_FLAG_BROADCAST_DISABLED);
-
-                } else {
-                    RtlAtomicOr32(&(Socket->Flags),
-                                  NET_SOCKET_FLAG_BROADCAST_DISABLED);
-                }
+                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
 
             } else {
                 if (*DataSize < sizeof(BOOL)) {
@@ -1758,12 +1757,7 @@ Return Value:
                 }
 
                 BooleanOption = (PBOOL)Data;
-                if ((Socket->Flags & NET_SOCKET_FLAG_BROADCAST_DISABLED) == 0) {
-                    *BooleanOption = TRUE;
-
-                } else {
-                    *BooleanOption = FALSE;
-                }
+                *BooleanOption = FALSE;
             }
 
             break;
@@ -1775,17 +1769,17 @@ Return Value:
 
     } else {
 
-        ASSERT(InformationType == SocketInformationTypeRaw);
+        ASSERT(InformationType == SocketInformationTypeNetlinkGeneric);
 
         Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
     }
 
-RawGetSetInformationEnd:
+UdpGetSetInformationEnd:
     return Status;
 }
 
 KSTATUS
-NetpRawUserControl (
+NetpNetlinkGenericUserControl (
     PNET_SOCKET Socket,
     ULONG CodeNumber,
     BOOL FromKernelMode,
@@ -1828,4 +1822,82 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+NetpNetlinkGenericInsertReceivedPacket (
+    PNETLINK_GENERIC_SOCKET Socket,
+    PNETLINK_GENERIC_RECEIVED_PACKET Packet
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to insert the given packet into the socket's list of
+    received packets.
+
+Arguments:
+
+    Socket - Supplies a pointer to the generic netlink socket that received the
+        packet.
+
+    Packet - Supplies a pointer to the generic netlink packet that was received.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG AvailableBytes;
+    ULONG PacketLength;
+
+    PacketLength = Packet->NetPacket->FooterOffset -
+                   Packet->NetPacket->DataOffset;
+
+    KeAcquireQueuedLock(Socket->ReceiveLock);
+    if (PacketLength <= Socket->ReceiveBufferFreeSize) {
+        INSERT_BEFORE(&(Packet->ListEntry),
+                      &(Socket->ReceivedPacketList));
+
+        Socket->ReceiveBufferFreeSize -= PacketLength;
+
+        ASSERT(Socket->ReceiveBufferFreeSize <
+               Socket->ReceiveBufferTotalSize);
+
+        //
+        // Signal the event if enough bytes have been received.
+        //
+
+        AvailableBytes = Socket->ReceiveBufferTotalSize -
+                         Socket->ReceiveBufferFreeSize;
+
+        if (AvailableBytes >= Socket->ReceiveMinimum) {
+            IoSetIoObjectState(Socket->NetSocket.KernelSocket.IoState,
+                               POLL_EVENT_IN,
+                               TRUE);
+        }
+
+        Packet = NULL;
+
+    } else {
+        Socket->DroppedPacketCount += 1;
+    }
+
+    KeReleaseQueuedLock(Socket->ReceiveLock);
+
+    //
+    // If the packet wasn't nulled out, that's an indication it wasn't added to
+    // the list, so free it up.
+    //
+
+    if (Packet != NULL) {
+        NetFreeBuffer(Packet->NetPacket);
+        MmFreePagedPool(Packet);
+    }
+
+    return;
+}
 

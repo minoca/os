@@ -153,7 +153,7 @@ NetpBindRawSocket (
     NET_SOCKET_BINDING_TYPE BindingType,
     PNET_LINK_LOCAL_ADDRESS LocalInformation,
     PNETWORK_ADDRESS RemoteAddress,
-    BOOL Activate
+    ULONG Flags
     );
 
 KSTATUS
@@ -1728,7 +1728,7 @@ NetBindSocket (
     NET_SOCKET_BINDING_TYPE BindingType,
     PNET_LINK_LOCAL_ADDRESS LocalInformation,
     PNETWORK_ADDRESS RemoteAddress,
-    BOOL Activate
+    ULONG Flags
     )
 
 /*++
@@ -1755,8 +1755,8 @@ Arguments:
     RemoteAddress - Supplies an optional pointer to a remote address to use
         when fully binding the socket.
 
-    Activate - Supplies a boolean indicating whether or not the socket should
-        be made active (ready to receive) upon binding it.
+    Flags - Supplies a bitmask of binding flags. See NET_SOCKET_BINDING_FLAG_*
+        for definitions.
 
 Return Value:
 
@@ -1793,30 +1793,22 @@ Return Value:
 
     //
     // If the socket is to be fully bound, then a remote address must have been
-    // supplied. Make sure local information is present as well.
+    // supplied. Make sure local information is present as well via an implicit
+    // local binding.
     //
 
-    if (BindingType == SocketFullyBound) {
+    if ((BindingType == SocketFullyBound) && (LocalInformation == NULL)) {
+        OriginalPort = RemoteAddress->Port;
+        RemoteAddress->Port = 0;
+        Status = NetFindLinkForRemoteAddress(RemoteAddress,
+                                             &LocalInformationBuffer);
 
-        //
-        // If the local information is not present or does not include a link,
-        // then search for a link to use for the remote address. This is an
-        // implicit local binding.
-        //
-
-        if ((LocalInformation == NULL) || (LocalInformation->Link == NULL)) {
-            OriginalPort = RemoteAddress->Port;
-            RemoteAddress->Port = 0;
-            Status = NetFindLinkForRemoteAddress(RemoteAddress,
-                                                 &LocalInformationBuffer);
-
-            RemoteAddress->Port = OriginalPort;
-            if (!KSUCCESS(Status)) {
-                goto BindSocketEnd;
-            }
-
-            LocalInformation = &LocalInformationBuffer;
+        RemoteAddress->Port = OriginalPort;
+        if (!KSUCCESS(Status)) {
+            goto BindSocketEnd;
         }
+
+        LocalInformation = &LocalInformationBuffer;
     }
 
     //
@@ -1828,7 +1820,7 @@ Return Value:
                                    BindingType,
                                    LocalInformation,
                                    RemoteAddress,
-                                   Activate);
+                                   Flags);
 
         goto BindSocketEnd;
     }
@@ -2003,10 +1995,12 @@ Return Value:
     //
     // If no local port number is assigned, attempt to assign one from the
     // ephemeral port range. This will result in a unique tuple, even for fully
-    // bound sockets.
+    // bound sockets. Some networks allow use of port zero, so skip this if
+    // indicated by the binding flags.
     //
 
-    if (LocalAddress->Port == 0) {
+    if ((LocalAddress->Port == 0) &&
+        ((Flags & NET_SOCKET_BINDING_FLAG_NO_PORT_ASSIGNMENT) == 0)) {
 
         ASSERT(SkipValidation == FALSE);
 
@@ -2162,7 +2156,7 @@ Return Value:
     // active.
     //
 
-    if (Activate != FALSE) {
+    if ((Flags & NET_SOCKET_BINDING_FLAG_ACTIVATE) != 0) {
         OldFlags = RtlAtomicOr32(&(Socket->Flags), NET_SOCKET_FLAG_ACTIVE);
         if ((BindingType == SocketFullyBound) &&
             (Socket->BindingType != SocketFullyBound) &&
@@ -3863,7 +3857,7 @@ NetpBindRawSocket (
     NET_SOCKET_BINDING_TYPE BindingType,
     PNET_LINK_LOCAL_ADDRESS LocalInformation,
     PNETWORK_ADDRESS RemoteAddress,
-    BOOL Activate
+    ULONG Flags
     )
 
 /*++
@@ -3887,8 +3881,8 @@ Arguments:
     RemoteAddress - Supplies an optional pointer to a remote address to use
         when fully binding the socket.
 
-    Activate - Supplies a boolean indicating whether or not the socket should
-        be made active (ready to receive) upon binding it.
+    Flags - Supplies a bitmask of binding flags. See NET_SOCKET_BINDING_FLAG_*
+        for definitions.
 
 Return Value:
 
@@ -4044,7 +4038,7 @@ Return Value:
     // active.
     //
 
-    if (Activate != FALSE) {
+    if ((Flags & NET_SOCKET_BINDING_FLAG_ACTIVATE) != 0) {
         OldFlags = RtlAtomicOr32(&(Socket->Flags), NET_SOCKET_FLAG_ACTIVE);
         if ((BindingType == SocketFullyBound) &&
             (Socket->BindingType != SocketFullyBound) &&
