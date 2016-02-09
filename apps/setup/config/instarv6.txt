@@ -37,6 +37,7 @@ Files = [
     "dev2drv.set",
     "devmap.set",
     "devrem.drv",
+    "dma.drv",
     "dwceth.drv",
     "dwhci.drv",
     "ehci.drv",
