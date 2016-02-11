@@ -40,6 +40,7 @@ OBJS = addr.o            \
        tcpcong.o         \
        udp.o             \
        netlink/netlink.o \
+       netlink/genctrl.o \
        netlink/generic.o \
 
 EXTRA_SRC_DIRS = netlink

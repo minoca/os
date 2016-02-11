@@ -254,7 +254,7 @@ Return Value:
     NetpRawInitialize();
     NetpDhcpInitialize();
     NetpNetlinkInitialize();
-    NetpNetlinkGenericInitialize();
+    NetpNetlinkGenericInitialize(0);
 
     //
     // Set up the networking interface to the kernel.
@@ -263,6 +263,13 @@ Return Value:
     IoInitializeCoreNetworking(&NetInterface);
     NetInitialized = TRUE;
     Status = STATUS_SUCCESS;
+
+    //
+    // Handle any post-registration work for the built in protocols, networks,
+    // data links and miscellaneous components.
+    //
+
+    NetpNetlinkGenericInitialize(1);
 
 DriverEntryEnd:
     if (!KSUCCESS(Status)) {

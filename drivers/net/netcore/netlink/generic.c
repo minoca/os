@@ -36,12 +36,11 @@ Environment:
 #include <minoca/driver.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/net/netlink.h>
+#include "generic.h"
 
 //
 // ---------------------------------------------------------------- Definitions
 //
-
-#define NETLINK_GENERIC_ALLOCATION_TAG 0x65676C4E // 'eglN'
 
 //
 // Define the maximum supported packet size of the generic netlink protocol,
@@ -82,7 +81,6 @@ Environment:
 //
 // ------------------------------------------------------ Data Type Definitions
 //
-
 
 /*++
 
@@ -268,13 +266,44 @@ NetpNetlinkGenericInsertReceivedPacket (
     PNETLINK_GENERIC_RECEIVED_PACKET Packet
     );
 
+VOID
+NetpNetlinkGenericProcessReceivedKernelData (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    );
+
+PNETLINK_GENERIC_FAMILY
+NetpNetlinkGenericLookupFamilyById (
+    ULONG MessageType
+    );
+
+COMPARISON_RESULT
+NetpNetlinkGenericCompareFamilies (
+    PRED_BLACK_TREE Tree,
+    PRED_BLACK_TREE_NODE FirstNode,
+    PRED_BLACK_TREE_NODE SecondNode
+    );
+
+VOID
+NetpNetlinkGenericDestroyFamily (
+    PNETLINK_GENERIC_FAMILY Family
+    );
+
+KSTATUS
+NetpNetlinkGenericAllocateFamilyId (
+    PULONG FamilyId
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
 
 NET_PROTOCOL_ENTRY NetNetlinkGenericProtocol = {
     {NULL, NULL},
-    SocketTypeRaw,
+    SocketTypeDatagram,
     SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
     NULL,
     NULL,
@@ -297,13 +326,267 @@ NET_PROTOCOL_ENTRY NetNetlinkGenericProtocol = {
     }
 };
 
+PIO_HANDLE NetNetlinkGenericSocketHandle;
+PNET_SOCKET NetNetlinkGenericSocket;
+
+//
+// Store the lock and tree for storing the generic netlink families.
+//
+
+PSHARED_EXCLUSIVE_LOCK NetNetlinkGenericFamilyLock;
+RED_BLACK_TREE NetNetlinkGenericFamilyTree;
+
+//
+// Store the next generic family message type to allocate.
+//
+
+ULONG NetNetlinkGenericFamilyNextId = NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM;
+
 //
 // ------------------------------------------------------------------ Functions
 //
 
+NET_API
+KSTATUS
+NetNetlinkGenericRegisterFamily (
+    PNETLINK_GENERIC_FAMILY_PROPERTIES Properties,
+    PHANDLE FamilyHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine registers a generic netlink family with the generic netlink
+    core. The core will route messages with a message type equal to the
+    family's ID to the provided interface.
+
+Arguments:
+
+    Properties - Supplies a pointer to the family properties. The netlink
+        library  will not reference this memory after the function returns, a
+        copy will be made.
+
+    FamilyHandle - Supplies an optional pointer that receives a handle to the
+        registered family.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PNETLINK_GENERIC_FAMILY Family;
+    PNETLINK_GENERIC_FAMILY FoundFamily;
+    PRED_BLACK_TREE_NODE FoundNode;
+    BOOL LockHeld;
+    BOOL Match;
+    ULONG NameLength;
+    ULONG NewId;
+    KSTATUS Status;
+
+    LockHeld = FALSE;
+    Family = NULL;
+    if (Properties->Version < NETLINK_GENERIC_FAMILY_PROPERTIES_VERSION) {
+        Status = STATUS_VERSION_MISMATCH;
+        goto RegisterFamilyEnd;
+    }
+
+    if (Properties->Interface.ProcessReceivedData == NULL) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto RegisterFamilyEnd;
+    }
+
+    NameLength = RtlStringLength(Properties->Name) + 1;
+    if ((NameLength == 1) ||
+        (NameLength > NETLINK_GENERIC_MAX_FAMILY_NAME_LENGTH)) {
+
+        Status = STATUS_INVALID_PARAMETER;
+        goto RegisterFamilyEnd;
+    }
+
+    if ((Properties->Id < NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM) &&
+        (Properties->Id != 0)) {
+
+        Status = STATUS_INVALID_PARAMETER;
+        goto RegisterFamilyEnd;
+    }
+
+    //
+    // Allocate and initialize the new generic netlink family.
+    //
+
+    Family = MmAllocatePagedPool(sizeof(NETLINK_GENERIC_FAMILY),
+                                 NETLINK_GENERIC_ALLOCATION_TAG);
+
+    if (Family == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto RegisterFamilyEnd;
+    }
+
+    RtlZeroMemory(Family, sizeof(NETLINK_GENERIC_FAMILY));
+    Family->ReferenceCount = 1;
+    RtlCopyMemory(&(Family->Properties),
+                  Properties,
+                  sizeof(NETLINK_GENERIC_FAMILY_PROPERTIES));
+
+    //
+    // Acquire the family tree lock and attempt to insert this new family.
+    //
+
+    KeAcquireSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+    LockHeld = TRUE;
+
+    //
+    // Check to make sure the name is not a duplicate.
+    //
+
+    FoundNode = RtlRedBlackTreeGetLowestNode(&NetNetlinkGenericFamilyTree);
+    while (FoundNode != NULL) {
+        FoundFamily = RED_BLACK_TREE_VALUE(FoundNode,
+                                           NETLINK_GENERIC_FAMILY,
+                                           TreeNode);
+
+        Match = RtlAreStringsEqual(FoundFamily->Properties.Name,
+                                   Family->Properties.Name,
+                                   NETLINK_GENERIC_MAX_FAMILY_NAME_LENGTH);
+
+        if (Match != FALSE) {
+            Status = STATUS_DUPLICATE_ENTRY;
+            goto RegisterFamilyEnd;
+        }
+    }
+
+    //
+    // If the message type is zero, then one needs to be dynamically allocated.
+    //
+
+    if (Family->Properties.Id == 0) {
+        Status = NetpNetlinkGenericAllocateFamilyId(&NewId);
+        if (!KSUCCESS(Status)) {
+            goto RegisterFamilyEnd;
+        }
+
+        Family->Properties.Id = NewId;
+
+    //
+    // Otherwise make sure the provided message type is not already in use.
+    //
+
+    } else {
+        FoundNode = RtlRedBlackTreeSearch(&NetNetlinkGenericFamilyTree,
+                                          &(Family->TreeNode));
+
+        if (FoundNode != NULL) {
+            Status = STATUS_DUPLICATE_ENTRY;
+            goto RegisterFamilyEnd;
+        }
+    }
+
+    //
+    // Insert the new family into the tree.
+    //
+
+    RtlRedBlackTreeInsert(&NetNetlinkGenericFamilyTree, &(Family->TreeNode));
+    Status = STATUS_SUCCESS;
+
+RegisterFamilyEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+    }
+
+    if (!KSUCCESS(Status)) {
+        if (Family != NULL) {
+            NetpNetlinkGenericFamilyReleaseReference(Family);
+            Family = NULL;
+        }
+    }
+
+    if (FamilyHandle != NULL) {
+        *FamilyHandle = Family;
+    }
+
+    return Status;
+}
+
+NET_API
+VOID
+NetNetlinkGenericUnregisterFamily (
+    PHANDLE FamilyHandle
+    )
+
+/*++
+
+Routine Description:
+
+    This routine unregisters the given generic netlink family.
+
+Arguments:
+
+    FamilyHandle - Supplies a pointer to the generic netlink family to
+        unregister.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNETLINK_GENERIC_FAMILY Family;
+    PNETLINK_GENERIC_FAMILY FoundFamily;
+    PRED_BLACK_TREE_NODE FoundNode;
+    BOOL LockHeld;
+
+    Family = (PNETLINK_GENERIC_FAMILY)FamilyHandle;
+    KeAcquireSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+    LockHeld = TRUE;
+    FoundNode = RtlRedBlackTreeSearch(&NetNetlinkGenericFamilyTree,
+                                      &(Family->TreeNode));
+
+    if (FoundNode == NULL) {
+        goto UnregisterFamilyEnd;
+    }
+
+    FoundFamily = RED_BLACK_TREE_VALUE(FoundNode,
+                                       NETLINK_GENERIC_FAMILY,
+                                       TreeNode);
+
+    if (FoundFamily != Family) {
+        goto UnregisterFamilyEnd;
+    }
+
+    RtlRedBlackTreeRemove(&NetNetlinkGenericFamilyTree, &(Family->TreeNode));
+    KeReleaseSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+    LockHeld = FALSE;
+
+    //
+    // Before releasing the last reference, make sure the family is not in the
+    // middle of receiving packet. If it is, netcore could be able to call into
+    // the driver that is unregistering the family. It would be bad for that
+    // driver to disappear.
+    //
+
+    while (Family->ReferenceCount > 1) {
+        KeYield();
+    }
+
+    NetpNetlinkGenericFamilyReleaseReference(Family);
+
+UnregisterFamilyEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+    }
+
+    return;
+}
+
 VOID
 NetpNetlinkGenericInitialize (
-    VOID
+    ULONG Phase
     )
 
 /*++
@@ -314,7 +597,10 @@ Routine Description:
 
 Arguments:
 
-    None.
+    Phase - Supplies the phase of the initialization. Phase 0 happens before
+        the networking core registers with the kernel, meaning sockets cannot
+        be created. Phase 1 happens after the networking core has registered
+        with the kernel allowing socket creation.
 
 Return Value:
 
@@ -324,19 +610,82 @@ Return Value:
 
 {
 
+    NETLINK_ADDRESS Address;
     KSTATUS Status;
 
     //
-    // Register the generic netlink socket handlers with the core networking
-    // library.
+    // In phase 0, register the generic netlink socket handlers with the core
+    // networking library so that it is ready to go when netcore registers with
+    // the kernel.
     //
 
-    Status = NetRegisterProtocol(&NetNetlinkGenericProtocol, NULL);
-    if (!KSUCCESS(Status)) {
+    if (Phase == 0) {
+        NetNetlinkGenericFamilyLock = KeCreateSharedExclusiveLock();
+        if (NetNetlinkGenericFamilyLock == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto InitializeEnd;
+        }
 
-        ASSERT(FALSE);
+        RtlRedBlackTreeInitialize(&NetNetlinkGenericFamilyTree,
+                                  0,
+                                  NetpNetlinkGenericCompareFamilies);
 
+        Status = NetRegisterProtocol(&NetNetlinkGenericProtocol, NULL);
+        if (!KSUCCESS(Status)) {
+            goto InitializeEnd;
+        }
+
+    //
+    // In phase 1, create netcore's kernel-side generic netlink socket.
+    //
+
+    } else {
+
+        ASSERT(Phase == 1);
+
+        Status = IoSocketCreate(SocketNetworkNetlink,
+                                SocketTypeDatagram,
+                                SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
+                                0,
+                                &NetNetlinkGenericSocketHandle);
+
+        if (!KSUCCESS(Status)) {
+            goto InitializeEnd;
+        }
+
+        Status = IoGetSocketFromHandle(NetNetlinkGenericSocketHandle,
+                                       (PVOID)&NetNetlinkGenericSocket);
+
+        if (!KSUCCESS(Status)) {
+            goto InitializeEnd;
+        }
+
+        //
+        // Add the kernel flag and bind it to port 0.
+        //
+
+        RtlAtomicOr32(&(NetNetlinkGenericSocket->Flags),
+                      NET_SOCKET_FLAG_KERNEL);
+
+        RtlZeroMemory(&Address, sizeof(NETLINK_ADDRESS));
+        Address.Network = SocketNetworkNetlink;
+        Status = IoSocketBindToAddress(TRUE,
+                                       NetNetlinkGenericSocketHandle,
+                                       NULL,
+                                       &(Address.NetworkAddress),
+                                       NULL,
+                                       0);
+
+        if (!KSUCCESS(Status)) {
+            goto InitializeEnd;
+        }
+
+        NetpNetlinkGenericControlInitialize();
     }
+
+InitializeEnd:
+
+    ASSERT(KSUCCESS(Status));
 
     return;
 }
@@ -381,13 +730,13 @@ Return Value:
 
 {
 
+    PNETLINK_GENERIC_SOCKET GenericSocket;
     PNET_NETWORK_INITIALIZE_SOCKET InitializeSocket;
     ULONG MaxPacketSize;
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     KSTATUS Status;
-    PNETLINK_GENERIC_SOCKET GenericSocket;
 
-    ASSERT(ProtocolEntry->Type == SocketTypeRaw);
+    ASSERT(ProtocolEntry->Type == SocketTypeDatagram);
     ASSERT(NetworkProtocol == ProtocolEntry->ParentProtocolNumber);
     ASSERT(NetworkProtocol == SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC);
 
@@ -497,8 +846,8 @@ Return Value:
 
 {
 
-    PNETLINK_GENERIC_RECEIVED_PACKET Packet;
     PNETLINK_GENERIC_SOCKET GenericSocket;
+    PNETLINK_GENERIC_RECEIVED_PACKET Packet;
 
     GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
 
@@ -805,12 +1154,12 @@ Return Value:
     UINTN BytesComplete;
     PNETWORK_ADDRESS Destination;
     NETWORK_ADDRESS DestinationLocal;
+    PNETLINK_GENERIC_SOCKET GenericSocket;
     NETWORK_ADDRESS LocalAddress;
     PNET_PACKET_BUFFER Packet;
     NET_PACKET_LIST PacketList;
     UINTN Size;
     KSTATUS Status;
-    PNETLINK_GENERIC_SOCKET GenericSocket;
 
     ASSERT(Socket->PacketSizeInformation.MaxPacketSize >
            sizeof(NETLINK_HEADER));
@@ -953,9 +1302,8 @@ Arguments:
     Link - Supplies a pointer to the link that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
+        This routine takes ownership of this structure and will either pass it
+        along for later reading by the destination socket or release it.
 
     SourceAddress - Supplies a pointer to the source (remote) address that the
         packet originated from. This memory will not be referenced once the
@@ -969,14 +1317,14 @@ Arguments:
 
 Return Value:
 
-    None. When the function returns, the memory associated with the packet may
-    be reclaimed and reused.
+    None.
 
 --*/
 
 {
 
     ULONG AllocationSize;
+    BOOL FreePacket;
     PNETLINK_GENERIC_SOCKET GenericSocket;
     PNETLINK_HEADER Header;
     PNETLINK_GENERIC_RECEIVED_PACKET ReceivePacket;
@@ -984,6 +1332,13 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    //
+    // This routine is an exception to the rule handling the supplied network
+    // packet buffer. As the buffer is not backed by a physical device, it can
+    // be directly passed to the received socket, avoiding a copy.
+    //
+
+    FreePacket = TRUE;
     Header = (PNETLINK_HEADER)(Packet->Buffer + Packet->DataOffset);
     if (Header->Length > (Packet->FooterOffset - Packet->DataOffset)) {
         RtlDebugPrint("Invalid generic netlink length %d is bigger than packet "
@@ -991,7 +1346,16 @@ Return Value:
                       Header->Length,
                       (Packet->FooterOffset - Packet->DataOffset));
 
-        return;
+        goto ProcessReceivedDataEnd;
+    }
+
+    if (Header->Length < sizeof(NETLINK_HEADER)) {
+        RtlDebugPrint("Invalid generic netlink length %d is smaller than the "
+                      "netlink header size %d\n",
+                      Header->Length,
+                      sizeof(NETLINK_HEADER));
+
+        goto ProcessReceivedDataEnd;
     }
 
     //
@@ -1006,8 +1370,7 @@ Return Value:
                                         SourceAddress,
                                         DestinationAddress);
 
-        NetFreeBuffer(Packet);
-        return;
+        goto ProcessReceivedDataEnd;
     }
 
     //
@@ -1016,7 +1379,7 @@ Return Value:
 
     Socket = NetFindSocket(ProtocolEntry, DestinationAddress, SourceAddress);
     if (Socket == NULL) {
-        return;
+        goto ProcessReceivedDataEnd;
     }
 
     GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
@@ -1027,12 +1390,13 @@ Return Value:
     //
 
     if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
+        NetpNetlinkGenericProcessReceivedKernelData(Link,
+                                                    Socket,
+                                                    Packet,
+                                                    SourceAddress,
+                                                    DestinationAddress);
 
-        //
-        // TODO: Route the packet to the netlink generic kernel component.
-        //
-
-        return;
+        goto ProcessReceivedDataEnd;
     }
 
     //
@@ -1044,7 +1408,7 @@ Return Value:
                                         NETLINK_GENERIC_ALLOCATION_TAG);
 
     if (ReceivePacket == NULL) {
-        return;
+        goto ProcessReceivedDataEnd;
     }
 
     RtlCopyMemory(&(ReceivePacket->Address),
@@ -1058,6 +1422,7 @@ Return Value:
     //
 
     ReceivePacket->NetPacket = Packet;
+    FreePacket = FALSE;
 
     //
     // Work to insert the packet on the list of received packets.
@@ -1070,6 +1435,12 @@ Return Value:
     //
 
     IoSocketReleaseReference(&(Socket->KernelSocket));
+
+ProcessReceivedDataEnd:
+    if (FreePacket != FALSE) {
+        NetFreeBuffer(Packet);
+    }
+
     return;
 }
 
@@ -1133,10 +1504,11 @@ Return Value:
     //
 
     if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
-
-        //
-        // TODO: Route the packet to the netlink generic kernel component.
-        //
+        NetpNetlinkGenericProcessReceivedKernelData(Link,
+                                                    Socket,
+                                                    Packet,
+                                                    SourceAddress,
+                                                    DestinationAddress);
 
         return;
     }
@@ -1551,11 +1923,11 @@ Return Value:
 
     SOCKET_BASIC_OPTION BasicOption;
     PBOOL BooleanOption;
+    PNETLINK_GENERIC_SOCKET GenericSocket;
     PNET_PACKET_SIZE_INFORMATION SizeInformation;
     PULONG SizeOption;
     KSTATUS Status;
     PULONG TimeoutOption;
-    PNETLINK_GENERIC_SOCKET GenericSocket;
 
     GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
     if ((InformationType != SocketInformationTypeBasic) &&
@@ -1819,6 +2191,173 @@ Return Value:
     return STATUS_NOT_SUPPORTED;
 }
 
+PNETLINK_GENERIC_FAMILY
+NetpNetlinkGenericLookupFamilyById (
+    ULONG FamilyId
+    )
+
+/*++
+
+Routine Description:
+
+    This routine searches the database of registered generic netlink families
+    for one with the given ID. If successful, the family is returned with an
+    added reference which the caller must release.
+
+Arguments:
+
+    FamilyId - Supplies the ID of the desired family.
+
+Return Value:
+
+    Returns a pointer to the generic netlink family on success or NULL on
+    failure.
+
+--*/
+
+{
+
+    PNETLINK_GENERIC_FAMILY FoundFamily;
+    PRED_BLACK_TREE_NODE FoundNode;
+    NETLINK_GENERIC_FAMILY SearchFamily;
+
+    FoundFamily = NULL;
+    SearchFamily.Properties.Id = FamilyId;
+    KeAcquireSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+    FoundNode = RtlRedBlackTreeSearch(&NetNetlinkGenericFamilyTree,
+                                      &(SearchFamily.TreeNode));
+
+    if (FoundNode != NULL) {
+        FoundFamily = RED_BLACK_TREE_VALUE(FoundNode,
+                                           NETLINK_GENERIC_FAMILY,
+                                           TreeNode);
+
+        NetpNetlinkGenericFamilyAddReference(FoundFamily);
+    }
+
+    KeReleaseSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+    return FoundFamily;
+}
+
+PNETLINK_GENERIC_FAMILY
+NetpNetlinkGenericLookupFamilyByName (
+    PSTR FamilyName
+    )
+
+/*++
+
+Routine Description:
+
+    This routine searches the database of registered generic netlink families
+    for one with the given name. If successful, the family is returned with an
+    added reference which the caller must release.
+
+Arguments:
+
+    FamilyName - Supplies the name of the desired family.
+
+Return Value:
+
+    Returns a pointer to the generic netlink family on success or NULL on
+    failure.
+
+--*/
+
+{
+
+    PNETLINK_GENERIC_FAMILY Family;
+    PNETLINK_GENERIC_FAMILY FoundFamily;
+    BOOL Match;
+    PRED_BLACK_TREE_NODE Node;
+
+    FoundFamily = NULL;
+    KeAcquireSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+    Node = RtlRedBlackTreeGetLowestNode(&NetNetlinkGenericFamilyTree);
+    while (Node != NULL) {
+        Family = RED_BLACK_TREE_VALUE(Node, NETLINK_GENERIC_FAMILY, TreeNode);
+        Match = RtlAreStringsEqual(Family->Properties.Name,
+                                   FamilyName,
+                                   NETLINK_GENERIC_MAX_FAMILY_NAME_LENGTH);
+
+        if (Match != FALSE) {
+            FoundFamily = Family;
+            break;
+        }
+    }
+
+    KeReleaseSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+    return FoundFamily;
+}
+
+VOID
+NetpNetlinkGenericFamilyAddReference (
+    PNETLINK_GENERIC_FAMILY Family
+    )
+
+/*++
+
+Routine Description:
+
+    This routine increments the reference count of a generic netlink family.
+
+Arguments:
+
+    Family - Supplies a pointer to a generic netlink family.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(Family->ReferenceCount), 1);
+
+    ASSERT((OldReferenceCount != 0) && (OldReferenceCount < 0x10000000));
+
+    return;
+}
+
+VOID
+NetpNetlinkGenericFamilyReleaseReference (
+    PNETLINK_GENERIC_FAMILY Family
+    )
+
+/*++
+
+Routine Description:
+
+    This routine decrements the reference count of a generic netlink family,
+    releasing all of its resources if the reference count drops to zero.
+
+Arguments:
+
+    Family - Supplies a pointer to a generic netlink family.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG OldReferenceCount;
+
+    OldReferenceCount = RtlAtomicAdd32(&(Family->ReferenceCount), -1);
+
+    ASSERT((OldReferenceCount != 0) && (OldReferenceCount < 0x10000000));
+
+    if (OldReferenceCount == 1) {
+        NetpNetlinkGenericDestroyFamily(Family);
+    }
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -1899,5 +2438,249 @@ Return Value:
     }
 
     return;
+}
+
+VOID
+NetpNetlinkGenericProcessReceivedKernelData (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to process a packet received by a kernel socket.
+
+Arguments:
+
+    Link - Supplies a pointer to the link that received the packet.
+
+    Socket - Supplies a pointer to the network socket that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may be used as a scratch space while this routine
+        executes and the packet travels up the stack, but will not be accessed
+        after this routine returns.
+
+    SourceAddress - Supplies a pointer to the source (remote) address that the
+        packet originated from. This memory will not be referenced once the
+        function returns, it can be stack allocated.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        that the packet is heading to. This memory will not be referenced once
+        the function returns, it can be stack allocated.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNETLINK_GENERIC_FAMILY Family;
+    PNETLINK_HEADER Header;
+
+    //
+    // There should only be one generic netlink kernel socket.
+    //
+
+    ASSERT(Socket == NetNetlinkGenericSocket);
+
+    //
+    // Validate the standard netlink header for a kernel socket. The length
+    // should have already been evaluated.
+    //
+
+    Header = (PNETLINK_HEADER)(Packet->Buffer + Packet->DataOffset);
+
+    ASSERT(Header->Length >= sizeof(NETLINK_HEADER));
+    ASSERT(Header->Length <= (Packet->FooterOffset - Packet->DataOffset));
+
+    //
+    // The kernel only handles requests.
+    //
+
+    if ((Header->Flags & NETLINK_HEADER_FLAG_REQUEST) == 0) {
+        goto ProcessReceivedKernelDataEnd;
+    }
+
+    //
+    // The protocol layer does not handle control messages.
+    //
+
+    if (Header->Type < NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM) {
+        goto ProcessReceivedKernelDataEnd;
+    }
+
+    //
+    // Find the generic netlink type interface and call the reception routine.
+    //
+
+    Family = NetpNetlinkGenericLookupFamilyById(Header->Type);
+    if (Family == NULL) {
+        goto ProcessReceivedKernelDataEnd;
+    }
+
+    Family->Properties.Interface.ProcessReceivedData(
+                                                 NetNetlinkGenericSocketHandle,
+                                                 Packet,
+                                                 SourceAddress,
+                                                 DestinationAddress);
+
+    NetpNetlinkGenericFamilyReleaseReference(Family);
+
+ProcessReceivedKernelDataEnd:
+    return;
+}
+
+COMPARISON_RESULT
+NetpNetlinkGenericCompareFamilies (
+    PRED_BLACK_TREE Tree,
+    PRED_BLACK_TREE_NODE FirstNode,
+    PRED_BLACK_TREE_NODE SecondNode
+    )
+
+/*++
+
+Routine Description:
+
+    This routine compares two netlink generic family Red-Black tree nodes.
+
+Arguments:
+
+    Tree - Supplies a pointer to the Red-Black tree that owns both nodes.
+
+    FirstNode - Supplies a pointer to the left side of the comparison.
+
+    SecondNode - Supplies a pointer to the second side of the comparison.
+
+Return Value:
+
+    Same if the two nodes have the same value.
+
+    Ascending if the first node is less than the second node.
+
+    Descending if the second node is less than the first node.
+
+--*/
+
+{
+
+    PNETLINK_GENERIC_FAMILY FirstFamily;
+    PNETLINK_GENERIC_FAMILY SecondFamily;
+
+    FirstFamily = RED_BLACK_TREE_VALUE(FirstNode,
+                                       NETLINK_GENERIC_FAMILY,
+                                       TreeNode);
+
+    SecondFamily = RED_BLACK_TREE_VALUE(SecondNode,
+                                        NETLINK_GENERIC_FAMILY,
+                                        TreeNode);
+
+    if (FirstFamily->Properties.Id < SecondFamily->Properties.Id) {
+        return ComparisonResultAscending;
+    }
+
+    if (FirstFamily->Properties.Id > SecondFamily->Properties.Id) {
+        return ComparisonResultDescending;
+    }
+
+    return ComparisonResultSame;
+}
+
+VOID
+NetpNetlinkGenericDestroyFamily (
+    PNETLINK_GENERIC_FAMILY Family
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a generic netlink family and all of its resources. It
+    should already be unregistered and removed from the global tree.
+
+Arguments:
+
+    Family - Supplies a pointer to a generic netlink family.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    MmFreePagedPool(Family);
+    return;
+}
+
+KSTATUS
+NetpNetlinkGenericAllocateFamilyId (
+    PULONG FamilyId
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to allocate a free generic netlink family ID.
+
+Arguments:
+
+    FamilyId - Supplies a pointer that receives the newly allocated ID.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PRED_BLACK_TREE_NODE FoundNode;
+    ULONG NextId;
+    NETLINK_GENERIC_FAMILY SearchFamily;
+    KSTATUS Status;
+
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetNetlinkGenericFamilyLock));
+
+    Status = STATUS_INSUFFICIENT_RESOURCES;
+    NextId = NetNetlinkGenericFamilyNextId;
+
+    //
+    // Iterate until all the possible message types have been tried.
+    //
+
+    do {
+        SearchFamily.Properties.Id = NextId;
+        NextId += 1;
+        if (NextId < NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM) {
+            NextId = NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM;
+        }
+
+        FoundNode = RtlRedBlackTreeSearch(&NetNetlinkGenericFamilyTree,
+                                          &(SearchFamily.TreeNode));
+
+        if (FoundNode == NULL) {
+            *FamilyId = SearchFamily.Properties.Id;
+            Status = STATUS_SUCCESS;
+            break;
+        }
+
+    } while (NextId != NetNetlinkGenericFamilyNextId);
+
+    //
+    // Update the global to make the next search start where this left off.
+    //
+
+    NetNetlinkGenericFamilyNextId = NextId;
+    return Status;
 }
 

@@ -339,7 +339,7 @@ Return Value:
 
 VOID
 NetpNetlinkGenericInitialize (
-    VOID
+    ULONG Phase
     );
 
 /*++
@@ -350,7 +350,10 @@ Routine Description:
 
 Arguments:
 
-    None.
+    Phase - Supplies the phase of the initialization. Phase 0 happens before
+        the networking core registers with the kernel, meaning sockets cannot
+        be created. Phase 1 happens after the networking core has registered
+        with the kernel allowing socket creation.
 
 Return Value:
 
