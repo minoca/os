@@ -35,6 +35,7 @@ Environment:
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
+#include <netlink/netlink.h>
 #include "net.h"
 
 //
@@ -283,19 +284,10 @@ Return Value:
     // Handle internet sockets.
     //
 
-    if ((Domain == AF_INET) || (Domain == AF_INET6) || (Domain == AF_UNIX)) {
-        if (Domain == AF_INET) {
-            Network = SocketNetworkIp4;
-
-        } else if (Domain == AF_INET6) {
-            Network = SocketNetworkIp6;
-
-        } else {
-
-            ASSERT(Domain == AF_UNIX);
-
-            Network = SocketNetworkLocal;
-        }
+    if ((Domain == AF_INET) ||
+        (Domain == AF_INET6) ||
+        (Domain == AF_UNIX) ||
+        (Domain == AF_NETLINK)) {
 
         //
         // The socket types line up.
@@ -313,6 +305,40 @@ Return Value:
         }
 
         Type &= ~(SOCK_CLOEXEC | SOCK_NONBLOCK);
+
+        //
+        // Convert the domain.
+        //
+
+        if (Domain == AF_INET) {
+            Network = SocketNetworkIp4;
+
+        } else if (Domain == AF_INET6) {
+            Network = SocketNetworkIp6;
+
+        } else if (Domain == AF_UNIX) {
+            Network = SocketNetworkLocal;
+
+        } else {
+
+            ASSERT(Domain == AF_NETLINK);
+
+            Network = SocketNetworkNetlink;
+
+            //
+            // The C library allows netlink sockets to be raw and datagram
+            // types, the system treats raw sockets specially and expects
+            // netlink sockets to always be of the datagram type.
+            //
+
+            if (Type == SOCK_RAW) {
+                Type = SOCK_DGRAM;
+
+            } else if (Type != SOCK_DGRAM) {
+                errno = EPROTONOSUPPORT;
+                return -1;
+            }
+        }
 
         //
         // Create the socket.
@@ -2086,6 +2112,7 @@ Return Value:
 
     struct sockaddr_in *Ip4SocketAddress;
     struct sockaddr_in6 *Ip6SocketAddress;
+    struct sockaddr_nl *NetlinkAddress;
     UINTN StringSize;
     struct sockaddr_un *UnixAddress;
 
@@ -2161,6 +2188,16 @@ Return Value:
             *PathSize = StringSize;
         }
 
+    } else if (Address->sa_family == AF_NETLINK) {
+        if (AddressLength < sizeof(struct sockaddr_nl)) {
+            return STATUS_INVALID_ADDRESS;
+        }
+
+        NetlinkAddress = (struct sockaddr_nl *)Address;
+        NetworkAddress->Network = SocketNetworkNetlink;
+        NetworkAddress->Port = NetlinkAddress->nl_pid;
+        *((PULONG)NetworkAddress->Address) = NetlinkAddress->nl_groups;
+
     } else {
         return STATUS_INVALID_ADDRESS;
     }
@@ -2211,6 +2248,7 @@ Return Value:
     INTN CopySize;
     struct sockaddr_in Ip4Address;
     struct sockaddr_in6 Ip6Address;
+    struct sockaddr_nl NetlinkAddress;
     PVOID Source;
     INTN TotalSize;
     struct sockaddr_un UnixAddress;
@@ -2243,6 +2281,14 @@ Return Value:
         UnixAddress.sun_family = AF_UNIX;
         TotalSize = FIELD_OFFSET(struct sockaddr_un, sun_path) + PathSize;
         Source = &UnixAddress;
+
+    } else if (NetworkAddress->Network == SocketNetworkNetlink) {
+        NetlinkAddress.nl_family = AF_NETLINK;
+        NetlinkAddress.nl_pad = 0;
+        NetlinkAddress.nl_pid = NetworkAddress->Port;
+        NetlinkAddress.nl_groups = *((PULONG)NetworkAddress->Address);
+        TotalSize = sizeof(NetlinkAddress);
+        Source = &NetlinkAddress;
 
     } else {
         return STATUS_INVALID_ADDRESS;

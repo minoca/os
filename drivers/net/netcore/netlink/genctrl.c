@@ -338,7 +338,7 @@ Return Value:
     FamilyNameLength = RtlStringLength(Family->Properties.Name) + 1;
     ReplyLength += sizeof(NETLINK_ATTRIBUTE) + FamilyNameLength;
     IoBuffer = MmAllocatePagedIoBuffer(ReplyLength, 0);
-    if (IoBuffer != NULL) {
+    if (IoBuffer == NULL) {
         goto GetFamilyEnd;
     }
 
@@ -360,12 +360,12 @@ Return Value:
     Attribute = (PNETLINK_ATTRIBUTE)(GenericHeader + 1);
     Attribute->Length = sizeof(NETLINK_ATTRIBUTE) + sizeof(USHORT);
     Attribute->Type = NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID;
-    *((PUSHORT)Attribute + sizeof(NETLINK_ATTRIBUTE)) = Family->Properties.Id;
+    *((PUSHORT)(Attribute + 1)) = Family->Properties.Id;
     Attribute = (PVOID)Attribute + Attribute->Length;
     Attribute = ALIGN_POINTER_UP(Attribute, NETLINK_ATTRIBUTE_ALIGNMENT);
     Attribute->Length = sizeof(NETLINK_ATTRIBUTE) + FamilyNameLength;
     Attribute->Type = NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_NAME;
-    RtlStringCopy((PVOID)Attribute + sizeof(NETLINK_ATTRIBUTE),
+    RtlStringCopy((PVOID)(Attribute + 1),
                   Family->Properties.Name,
                   FamilyNameLength);
 
@@ -377,7 +377,7 @@ Return Value:
     Parameters.TimeoutInMilliseconds = WAIT_TIME_INDEFINITE;
     Parameters.NetworkAddress = SourceAddress;
     Parameters.Size = ReplyLength;
-    IoSocketSendData(FALSE, Socket, &Parameters, IoBuffer);
+    IoSocketSendData(TRUE, Socket, &Parameters, IoBuffer);
 
 GetFamilyEnd:
     if (Family != NULL) {

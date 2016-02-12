@@ -423,9 +423,26 @@ Return Value:
 
 {
 
-    ASSERT(FALSE);
+    NETWORK_ADDRESS LocalAddress;
+    KSTATUS Status;
 
-    return STATUS_NOT_SUPPORTED;
+    RtlZeroMemory(&(Socket->RemoteAddress), sizeof(NETWORK_ADDRESS));
+    if (Socket->BindingType == SocketBindingInvalid) {
+        RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
+        LocalAddress.Network = SocketNetworkNetlink;
+        Status = NetpNetlinkBindToAddress(Socket, NULL, &LocalAddress);
+        if (!KSUCCESS(Status)) {
+            goto NetlinkListenEnd;
+        }
+    }
+
+    Status = NetActivateSocket(Socket);
+    if (!KSUCCESS(Status)) {
+        goto NetlinkListenEnd;
+    }
+
+NetlinkListenEnd:
+    return Status;
 }
 
 KSTATUS
@@ -562,7 +579,6 @@ Return Value:
     ASSERT(Socket->KernelSocket.ReferenceCount > 1);
 
     NetDeactivateSocket(Socket);
-
     return STATUS_SUCCESS;
 }
 
@@ -703,8 +719,8 @@ Return Value:
 
 {
 
-    PNETLINK_ADDRESS NetlinkAddress;
     ULONG Length;
+    PNETLINK_ADDRESS NetlinkAddress;
 
     if (Address == NULL) {
         return NETLINK_MAX_ADDRESS_STRING;

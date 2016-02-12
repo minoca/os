@@ -331,7 +331,7 @@ typedef struct _KSPIN_LOCK {
 //
 
 #define ALIGN_POINTER_DOWN(_Pointer, _Size) \
-    (PVOID)(UINTN)((UINTN)(_Pointer) & ~((_Size) - 1L))
+    (PVOID)(UINTN)((UINTN)(_Pointer) & ~((_Size) - 1LL))
 
 //
 // The ALIGN_POINTER_UP macro aligns the given Pointer to the granularity of
@@ -340,7 +340,7 @@ typedef struct _KSPIN_LOCK {
 //
 
 #define ALIGN_POINTER_UP(_Pointer, _Size) \
-    ALIGN_POINTER_DOWN((_Pointer) + (_Size) - 1L, (_Size))
+    ALIGN_POINTER_DOWN((PVOID)(_Pointer) + (_Size) - 1LL, (_Size))
 
 //
 // The IS_POINTER_ALIGNED macro returns a non-zero value if the given pointer

@@ -116,6 +116,7 @@ extern "C" {
 #define AF_UNIX   3
 #define AF_LOCAL  AF_UNIX
 #define AF_UNSPEC 4
+#define AF_NETLINK 5
 
 //
 // Define valid protocol families as the same as the address families.
@@ -551,6 +552,8 @@ Members:
     msg_controllen - Stores the length of the ancillary data in bytes on input.
         On output, this value is adjusted to indicate the actual amount of
         data.
+
+    msg_flags - Stores a bitmask of message flags. See MSG_* for definitions.
 
 --*/
 

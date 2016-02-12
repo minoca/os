@@ -932,6 +932,16 @@ Return Value:
         goto NetlinkGenericBindToAddressEnd;
     }
 
+    //
+    // Begin listening immediately, as there is no explicit listen step for
+    // generic netlink sockets.
+    //
+
+    Status = Socket->Network->Interface.Listen(Socket);
+    if (!KSUCCESS(Status)) {
+        goto NetlinkGenericBindToAddressEnd;
+    }
+
     IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
 
 NetlinkGenericBindToAddressEnd:
@@ -2281,6 +2291,7 @@ Return Value:
 
         if (Match != FALSE) {
             FoundFamily = Family;
+            NetpNetlinkGenericFamilyAddReference(FoundFamily);
             break;
         }
     }
