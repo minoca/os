@@ -1531,6 +1531,30 @@ Return Value:
 --*/
 
 KERNEL_API
+BOOL
+KeIsSharedExclusiveLockContended (
+    PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock
+    );
+
+/*++
+
+Routine Description:
+
+    This routine determines whether a shared-exclusive lock is being waited on
+    for shared or exclusive access.
+
+Arguments:
+
+    SharedExclusiveLock - Supplies a pointer to a shared-exclusive lock.
+
+Return Value:
+
+    Returns TRUE if other threads are waiting to acquire the lock, or FALSE
+    if the lock is uncontented.
+
+--*/
+
+KERNEL_API
 RUNLEVEL
 KeGetRunLevel (
     VOID

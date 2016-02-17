@@ -620,10 +620,7 @@ Return Value:
 
         ASSERT(IS_ALIGNED(CurrentOffset, PageSize) != FALSE);
 
-        PageCacheEntry = IopLookupPageCacheEntry(FileObject,
-                                                 CurrentOffset,
-                                                 FALSE);
-
+        PageCacheEntry = IopLookupPageCacheEntry(FileObject, CurrentOffset);
         if (PageCacheEntry != NULL) {
 
             //
@@ -981,8 +978,7 @@ Return Value:
         ASSERT(IS_ALIGNED(WriteContext.FileOffset, PageSize) != FALSE);
 
         PageCacheEntry = IopLookupPageCacheEntry(FileObject,
-                                                 WriteContext.FileOffset,
-                                                 TRUE);
+                                                 WriteContext.FileOffset);
 
         if (PageCacheEntry != NULL) {
             Status = IopHandleCacheWriteHit(PageCacheEntry, &WriteContext);
@@ -1325,8 +1321,7 @@ Return Value:
                                                           VirtualAddress,
                                                           PhysicalAddress,
                                                           FileOffset,
-                                                          SourceEntry,
-                                                          TRUE);
+                                                          SourceEntry);
 
         if (PageCacheEntry == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1345,7 +1340,7 @@ Return Value:
         WriteContext->BytesCompleted += WriteContext->BytesThisRound;
     }
 
-    IoMarkPageCacheEntryDirty(PageCacheEntry);
+    IopMarkPageCacheEntryDirty(PageCacheEntry);
 
     //
     // This page cache entry was created or read, so if it's a cacheable file
@@ -1476,7 +1471,7 @@ Return Value:
         }
 
     } else {
-        IoMarkPageCacheEntryDirty(PageCacheEntry);
+        IopMarkPageCacheEntryDirty(PageCacheEntry);
     }
 
     WriteContext->BytesCompleted += WriteContext->BytesThisRound;
@@ -1658,7 +1653,6 @@ Return Value:
                                      ReadIoBuffer,
                                      BlockAlignedSize,
                                      BlockByteOffset,
-                                     IoContext->Write,
                                      &BytesCopied);
 
     if (!KSUCCESS(Status)) {
@@ -1757,7 +1751,7 @@ Return Value:
             IopMarkPageCacheEntryClean(PageCacheEntry, TRUE);
 
         } else {
-            IoMarkPageCacheEntryDirty(PageCacheEntry);
+            IopMarkPageCacheEntryDirty(PageCacheEntry);
         }
 
         BufferOffset += BytesThisRound;

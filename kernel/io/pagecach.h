@@ -98,8 +98,7 @@ Return Value:
 PPAGE_CACHE_ENTRY
 IopLookupPageCacheEntry (
     PFILE_OBJECT FileObject,
-    ULONGLONG Offset,
-    BOOL Write
+    ULONGLONG Offset
     );
 
 /*++
@@ -115,9 +114,6 @@ Arguments:
 
     Offset - Supplies an offset into the file or device.
 
-    Write - Supplies a boolean indicating if the lookup is for a write
-        operation (TRUE) or a read operation (FALSE).
-
 Return Value:
 
     Returns a pointer to the found page cache entry on success, or NULL on
@@ -132,7 +128,6 @@ IopCreateOrLookupPageCacheEntry (
     PHYSICAL_ADDRESS PhysicalAddress,
     ULONGLONG Offset,
     PPAGE_CACHE_ENTRY LinkEntry,
-    BOOL Write,
     PBOOL EntryCreated
     );
 
@@ -161,10 +156,6 @@ Arguments:
         to share the physical address with this new page cache entry if it gets
         inserted.
 
-    Write - Supplies a boolean indicating if the page cache entry is being
-        queried/created for a write operation (TRUE) or a read operation
-        (FALSE).
-
     EntryCreated - Supplies an optional pointer that receives a boolean
         indicating whether or not a new page cache entry was created.
 
@@ -180,8 +171,7 @@ IopCreateAndInsertPageCacheEntry (
     PVOID VirtualAddress,
     PHYSICAL_ADDRESS PhysicalAddress,
     ULONGLONG Offset,
-    PPAGE_CACHE_ENTRY LinkEntry,
-    BOOL Write
+    PPAGE_CACHE_ENTRY LinkEntry
     );
 
 /*++
@@ -208,9 +198,6 @@ Arguments:
     LinkEntry - Supplies an optional pointer to a page cache entry that is to
         share the physical address with the new page cache entry.
 
-    Write - Supplies a boolean indicating if the page cache entry is being
-        created for a write operation (TRUE) or a read operation (FALSE).
-
 Return Value:
 
     Returns a pointer to a page cache entry on success, or NULL on failure.
@@ -226,7 +213,6 @@ IopCopyAndCacheIoBuffer (
     PIO_BUFFER Source,
     UINTN SourceSize,
     UINTN SourceCopyOffset,
-    BOOL Write,
     PUINTN BytesCopied
     );
 
@@ -259,9 +245,6 @@ Arguments:
 
     SourceCopyOffset - Supplies the offset into the source buffer where the
         copy to the destination should start.
-
-    Write - Supplies a boolean indicating if the I/O buffer is being cached for
-        a write operation (TRUE) or a read operation (FALSE).
 
     BytesCopied - Supplies a pointer that receives the number of bytes copied
         to the destination buffer.
@@ -444,6 +427,29 @@ Return Value:
 
     Returns TRUE if it marked the entry clean or FALSE if the entry was already
     clean.
+
+--*/
+
+BOOL
+IopMarkPageCacheEntryDirty (
+    PPAGE_CACHE_ENTRY PageCacheEntry
+    );
+
+/*++
+
+Routine Description:
+
+    This routine marks the given page cache entry as dirty. The file object
+    lock must already be held.
+
+Arguments:
+
+    PageCacheEntry - Supplies a pointer to a page cache entry.
+
+Return Value:
+
+    Returns TRUE if it marked the entry dirty or FALSE if the entry was already
+    dirty.
 
 --*/
 

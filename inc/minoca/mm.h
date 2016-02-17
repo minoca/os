@@ -1589,7 +1589,7 @@ MmGetTotalVirtualMemory (
 
 Routine Description:
 
-    This routine returns the total number of system virtual memory, in bytes.
+    This routine returns the size of the kernel virtual address space, in bytes.
 
 Arguments:
 
@@ -1597,12 +1597,12 @@ Arguments:
 
 Return Value:
 
-    Returns the total number of system virtual memory, in bytes.
+    Returns the total number of bytes in the kernel virtual address space.
 
 --*/
 
 UINTN
-MmGetTotalFreeVirtualMemory (
+MmGetFreeVirtualMemory (
     VOID
     );
 
@@ -1610,8 +1610,8 @@ MmGetTotalFreeVirtualMemory (
 
 Routine Description:
 
-    This routine returns the total number of free system virtual memory in
-    bytes.
+    This routine returns the number of unallocated bytes in the kernel virtual
+    address space.
 
 Arguments:
 
@@ -1619,7 +1619,7 @@ Arguments:
 
 Return Value:
 
-    Returns the total number of free system virtual memory, in bytes.
+    Returns the total amount of free kernel virtual memory, in bytes.
 
 --*/
 

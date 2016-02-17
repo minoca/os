@@ -313,8 +313,12 @@ Members:
 
     ListEntry - Stores an entry into the list of file objects.
 
-    PageCacheEntryTree - Stores a tree root for the page cache entries that
+    PageCacheTree - Stores a tree root for the page cache entries that
         belong to this file object.
+
+    DirtyPageList - Stores the head of the list of dirty page cache entries
+        in this file object. This list is synchronized by the global page
+        cache list lock.
 
     ReferenceCount - Stores the memory reference count on this structure, used
         internally. Never manipulate this member directly.
@@ -368,7 +372,8 @@ typedef struct _FILE_OBJECT FILE_OBJECT, *PFILE_OBJECT;
 struct _FILE_OBJECT {
     RED_BLACK_TREE_NODE TreeEntry;
     LIST_ENTRY ListEntry;
-    RED_BLACK_TREE PageCacheEntryTree;
+    RED_BLACK_TREE PageCacheTree;
+    LIST_ENTRY DirtyPageList;
     volatile ULONG ReferenceCount;
     volatile ULONG PathEntryCount;
     PDEVICE Device;

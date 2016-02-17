@@ -161,18 +161,25 @@ UINTN MmVirtualMemoryWarningLevel1Trigger;
 
 //
 // Store the mask that determines how often virtual memory warning levels are
-// checked.
+// checked, in terms of bytes turned over.
 //
 
-UINTN MmVirtualMemoryCountMask;
+UINTN MmVirtualWarningCheckMask;
 
 //
-// Store counters that track how many virtual system memory bytes have been
-// allocated and freed. It is OK for these values to wrap.
+// Store the accumulation of how many bytes of VA space have been allocated or
+// freed. This counter can roll over.
 //
 
-UINTN MmVirtualMemoryAllocationByteCount;
-UINTN MmVirtualMemoryFreeByteCount;
+UINTN MmVirtualTurnover;
+
+//
+// Store the number of free virtual pages. This is defined as a global rather
+// than simply using the MDL's free space indicator so as not to produce
+// strange transient results while the MDL is being operated on.
+//
+
+UINTN MmFreeVirtualByteCount;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -245,7 +252,7 @@ MmGetTotalVirtualMemory (
 
 Routine Description:
 
-    This routine returns the total number of system virtual memory, in bytes.
+    This routine returns the size of the kernel virtual address space, in bytes.
 
 Arguments:
 
@@ -253,7 +260,7 @@ Arguments:
 
 Return Value:
 
-    Returns the total number of system virtual memory, in bytes.
+    Returns the total number of bytes in the kernel virtual address space.
 
 --*/
 
@@ -263,7 +270,7 @@ Return Value:
 }
 
 UINTN
-MmGetTotalFreeVirtualMemory (
+MmGetFreeVirtualMemory (
     VOID
     )
 
@@ -271,8 +278,8 @@ MmGetTotalFreeVirtualMemory (
 
 Routine Description:
 
-    This routine returns the total number of free system virtual memory, in
-    bytes.
+    This routine returns the number of unallocated bytes in the kernel virtual
+    address space.
 
 Arguments:
 
@@ -280,13 +287,13 @@ Arguments:
 
 Return Value:
 
-    Returns the total number of free system virtual memory, in bytes.
+    Returns the total amount of free kernel virtual memory, in bytes.
 
 --*/
 
 {
 
-    return (UINTN)MmKernelVirtualSpace.Mdl.FreeSpace;
+    return MmFreeVirtualByteCount;
 }
 
 KERNEL_API
@@ -1619,10 +1626,11 @@ FreeAccountingRangeEnd:
     if (KSUCCESS(Status) &&
         ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0)) {
 
-        Mask = MmVirtualMemoryCountMask;
-        PreviousCount = MmVirtualMemoryFreeByteCount & Mask;
-        MmVirtualMemoryFreeByteCount += SizeInBytes;
-        CurrentCount = MmVirtualMemoryFreeByteCount & Mask;
+        MmFreeVirtualByteCount = Accountant->Mdl.FreeSpace;
+        Mask = MmVirtualWarningCheckMask;
+        PreviousCount = MmVirtualTurnover & Mask;
+        MmVirtualTurnover += SizeInBytes;
+        CurrentCount = MmVirtualTurnover & Mask;
         if ((CurrentCount != PreviousCount) &&
             (MmVirtualMemoryWarningLevel == MemoryWarningLevel1) &&
             (Accountant->Mdl.FreeSpace >=
@@ -1853,10 +1861,11 @@ AllocateAddressRangeEnd:
     if (KSUCCESS(Status) &&
         ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0)) {
 
-        Mask = MmVirtualMemoryCountMask;
-        PreviousCount = MmVirtualMemoryAllocationByteCount & Mask;
-        MmVirtualMemoryAllocationByteCount += Size;
-        CurrentCount = MmVirtualMemoryAllocationByteCount & Mask;
+        MmFreeVirtualByteCount = Accountant->Mdl.FreeSpace;
+        Mask = MmVirtualWarningCheckMask;
+        PreviousCount = MmVirtualTurnover & Mask;
+        MmVirtualTurnover += Size;
+        CurrentCount = MmVirtualTurnover & Mask;
         if ((CurrentCount != PreviousCount) &&
             (MmVirtualMemoryWarningLevel != MemoryWarningLevel1) &&
             (Accountant->Mdl.FreeSpace < MmVirtualMemoryWarningLevel1Trigger)) {
@@ -2184,7 +2193,7 @@ Return Value:
         MmVirtualMemoryWarningLevel1Retreat =
                                MM_SMALL_VIRTUAL_MEMORY_WARNING_LEVEL_1_RETREAT;
 
-        MmVirtualMemoryCountMask = MM_SMALL_VIRTUAL_MEMORY_WARNING_COUNT_MASK;
+        MmVirtualWarningCheckMask = MM_SMALL_VIRTUAL_MEMORY_WARNING_COUNT_MASK;
 
     } else {
         MmVirtualMemoryWarningLevel1Trigger =
@@ -2193,7 +2202,7 @@ Return Value:
         MmVirtualMemoryWarningLevel1Retreat =
                                MM_LARGE_VIRTUAL_MEMORY_WARNING_LEVEL_1_RETREAT;
 
-        MmVirtualMemoryCountMask = MM_LARGE_VIRTUAL_MEMORY_WARNING_COUNT_MASK;
+        MmVirtualWarningCheckMask = MM_LARGE_VIRTUAL_MEMORY_WARNING_COUNT_MASK;
     }
 
     Status = STATUS_SUCCESS;

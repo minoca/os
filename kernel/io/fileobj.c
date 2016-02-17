@@ -630,7 +630,8 @@ Return Value:
                 RtlZeroMemory(NewObject, sizeof(FILE_OBJECT));
                 KeInitializeSpinLock(&(NewObject->PropertiesLock));
                 INITIALIZE_LIST_HEAD(&(NewObject->FileLockList));
-                RtlRedBlackTreeInitialize(&(NewObject->PageCacheEntryTree),
+                INITIALIZE_LIST_HEAD(&(NewObject->DirtyPageList));
+                RtlRedBlackTreeInitialize(&(NewObject->PageCacheTree),
                                           0,
                                           IopComparePageCacheEntries);
 
@@ -1058,6 +1059,9 @@ Return Value:
         if (Object->ImageSectionList != NULL) {
             MmDestroyImageSectionList(Object->ImageSectionList);
         }
+
+        ASSERT(RED_BLACK_TREE_EMPTY(&(Object->PageCacheTree)));
+        ASSERT(LIST_EMPTY(&(Object->DirtyPageList)));
 
         if (Object->Lock != NULL) {
             KeDestroySharedExclusiveLock(Object->Lock);
