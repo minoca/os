@@ -1809,6 +1809,8 @@ Return Value:
     }
 
     Requirement.Flags = RESOURCE_FLAG_NOT_SHAREABLE;
+    Requirement.Data = &DmaData;
+    Requirement.DataSize = sizeof(RESOURCE_DMA_DATA);
 
     //
     // Register the requirement.

@@ -575,6 +575,7 @@ Author:
 #define SD_CONTROLLER_FLAG_DMA_ENABLED            0x00000004
 #define SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED 0x00000008
 #define SD_CONTROLLER_FLAG_CRITICAL_MODE          0x00000010
+#define SD_CONTROLLER_FLAG_DMA_COMMAND_ENABLED    0x00000020
 
 //
 // ------------------------------------------------------ Data Type Definitions

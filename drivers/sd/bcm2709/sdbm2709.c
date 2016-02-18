@@ -27,6 +27,8 @@ Environment:
 #include <minoca/driver.h>
 #include <minoca/intrface/disk.h>
 #include <minoca/sd.h>
+#include <minoca/dma/dma.h>
+#include <minoca/dma/dmab2709.h>
 #include "emmc.h"
 
 //
@@ -39,6 +41,20 @@ Environment:
 
 #define SD_BCM2709_SLOT_FLAG_INSERTION_PENDING 0x00000001
 #define SD_BCM2709_SLOT_FLAG_REMOVAL_PENDING   0x00000002
+
+//
+// Define the set of flags for the SD disk.
+//
+
+#define SD_BCM2709_DISK_FLAG_DMA_SUPPORTED 0x00000001
+
+//
+// Define the mask and value for the upper byte of the physical addresses that
+// must be supplied to the DMA controller.
+//
+
+#define SD_BCM2709_DEVICE_ADDRESS_MASK  0xFF000000
+#define SD_BCM2709_DEVICE_ADDRESS_VALUE 0x7E000000
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -76,6 +92,11 @@ Members:
     ControllerLock - Stores a pointer to a lock used to serialize access to the
         controller.
 
+    Irp - Stores a pointer to the current IRP being processed.
+
+    Flags - Stores a bitmask of flags. See SD_BCM2709_DISK_FLAG_* for
+        definitions.
+
     MediaPresent - Stores a boolean indicating if the disk is still present.
 
     BlockShift - Stores the block size shift of the disk.
@@ -83,6 +104,9 @@ Members:
     BlockCount - Stores the number of blocks on the disk.
 
     DiskInterface - Stores the disk interface presented to the system.
+
+    RemainingInterrupts - Stores the count of remaining interrupts expected to
+        come in before the transfer is complete.
 
 --*/
 
@@ -93,10 +117,13 @@ typedef struct _SD_BCM2709_DISK {
     PSD_BCM2709_SLOT Parent;
     PSD_CONTROLLER Controller;
     PQUEUED_LOCK ControllerLock;
+    PIRP Irp;
+    ULONG Flags;
     BOOL MediaPresent;
     ULONG BlockShift;
     ULONGLONG BlockCount;
     DISK_INTERFACE DiskInterface;
+    volatile ULONG RemainingInterrupts;
 } SD_BCM2709_DISK, *PSD_BCM2709_DISK;
 
 /*++
@@ -130,6 +157,12 @@ Members:
     Flags - Stores a bitmask of slot flags. See SD_BCM2709_SLOT_FLAG_* for
         definitions.
 
+    DmaResource - Stores a pointer to the DMA resource.
+
+    Dma - Stores a pointer to the DMA interface.
+
+    DmaTransfer - Stores a pointer to the DMA transfer used on I/O.
+
 --*/
 
 struct _SD_BCM2709_SLOT {
@@ -142,6 +175,9 @@ struct _SD_BCM2709_SLOT {
     PSD_BCM2709_DISK Disk;
     PQUEUED_LOCK Lock;
     volatile ULONG Flags;
+    PRESOURCE_ALLOCATION DmaResource;
+    PDMA_INTERFACE Dma;
+    PDMA_TRANSFER DmaTransfer;
 };
 
 /*++
@@ -159,7 +195,7 @@ Members:
 
     Handle - Stores the connected interrupt handle.
 
-    InterruptLine - Stores ths interrupt line of the controller.
+    InterruptLine - Stores the interrupt line of the controller.
 
     InterruptVector - Stores the interrupt vector of the controller.
 
@@ -334,12 +370,60 @@ SdBcm2709pPerformIoPolled (
     BOOL LockRequired
     );
 
+KSTATUS
+SdBcm2709pInitializeDma (
+    PSD_BCM2709_SLOT Slot
+    );
+
+VOID
+SdBcm2709pDmaInterfaceCallback (
+    PVOID Context,
+    PDEVICE Device,
+    PVOID InterfaceBuffer,
+    ULONG InterfaceBufferSize,
+    BOOL Arrival
+    );
+
+VOID
+SdBcm2709pPerformDmaIo (
+    PSD_BCM2709_DISK Disk,
+    PIRP Irp
+    );
+
+VOID
+SdBcm2709pSdDmaCompletion (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    UINTN BytesTransferred,
+    KSTATUS Status
+    );
+
+KSTATUS
+SdBcm2709pSetupSystemDma (
+    PSD_BCM2709_DISK Child
+    );
+
+VOID
+SdBcm2709pSystemDmaCompletion (
+    PDMA_TRANSFER Transfer
+    );
+
+VOID
+SdBcm2709pDmaCompletion (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    UINTN BytesTransferred,
+    KSTATUS Status
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
 
 PDRIVER SdBcm2709Driver = NULL;
 UUID SdBcm2709DiskInterfaceUuid = UUID_DISK_INTERFACE;
+UUID SdBcm2709DmaUuid = UUID_DMA_INTERFACE;
+UUID SdBcm2709DmaBcm2709Uuid = UUID_DMA_BCM2709_CONTROLLER;
 
 DISK_INTERFACE SdBcm2709DiskInterfaceTemplate = {
     DISK_INTERFACE_VERSION,
@@ -643,12 +727,13 @@ Return Value:
 
 {
 
+    BOOL CompleteIrp;
     PSD_BCM2709_DISK Disk;
+    ULONG IrpReadWriteFlags;
     KSTATUS Status;
     BOOL Write;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
-    ASSERT(Irp->Direction == IrpDown);
 
     Disk = DeviceContext;
     if (Disk->Type != SdBcm2709DeviceDisk) {
@@ -658,6 +743,7 @@ Return Value:
         return;
     }
 
+    CompleteIrp = TRUE;
     if (Disk->MediaPresent == FALSE) {
         Status = STATUS_NO_MEDIA;
         goto DispatchIoEnd;
@@ -668,13 +754,106 @@ Return Value:
         Write = TRUE;
     }
 
-    Status = SdBcm2709pPerformIoPolled(&(Irp->U.ReadWrite), Disk, Write, TRUE);
-    if (!KSUCCESS(Status)) {
+    //
+    // Polled I/O is shared by a few code paths and prepares the IRP for I/O
+    // further down the stack. It should also only be hit in the down direction
+    // path as it always completes the IRP.
+    //
+
+    if ((Disk->Flags & SD_BCM2709_DISK_FLAG_DMA_SUPPORTED) == 0) {
+
+        ASSERT(Irp->Direction == IrpDown);
+
+        Status = SdBcm2709pPerformIoPolled(&(Irp->U.ReadWrite),
+                                           Disk,
+                                           Write,
+                                           TRUE);
+
         goto DispatchIoEnd;
     }
 
+    //
+    // Set the IRP read/write flags for the preparation and completion steps.
+    //
+
+    IrpReadWriteFlags = IRP_READ_WRITE_FLAG_DMA;
+    if (Write != FALSE) {
+        IrpReadWriteFlags |= IRP_READ_WRITE_FLAG_WRITE;
+    }
+
+    //
+    // If the IRP is on the way up, then clean up after the DMA as this IRP is
+    // still sitting in the channel. An IRP going up is already complete.
+    //
+
+    if (Irp->Direction == IrpUp) {
+        CompleteIrp = FALSE;
+
+        ASSERT(Irp == Disk->Irp);
+
+        Disk->Irp = NULL;
+        KeReleaseQueuedLock(Disk->ControllerLock);
+        Status = IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
+        if (!KSUCCESS(Status)) {
+            IoUpdateIrpStatus(Irp, Status);
+        }
+
+    //
+    // Start the DMA on the way down.
+    //
+
+    } else {
+        Irp->U.ReadWrite.IoBytesCompleted = 0;
+        Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
+
+        ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
+        ASSERT((Disk->BlockCount != 0) && (Disk->BlockShift != 0));
+        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset,
+                          1 << Disk->BlockShift) != FALSE);
+
+        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoSizeInBytes,
+                          1 << Disk->BlockShift) != FALSE);
+
+        //
+        // Before acquiring the controller's lock and starting the DMA, prepare
+        // the I/O context for SD (i.e. it must use physical addresses that
+        // are less than 4GB and be sector size aligned).
+        //
+
+        Status = IoPrepareReadWriteIrp(&(Irp->U.ReadWrite),
+                                       1 << Disk->BlockShift,
+                                       0,
+                                       MAX_ULONG,
+                                       IrpReadWriteFlags);
+
+        if (!KSUCCESS(Status)) {
+            goto DispatchIoEnd;
+        }
+
+        //
+        // Lock the controller to serialize access to the hardware.
+        //
+
+        KeAcquireQueuedLock(Disk->ControllerLock);
+        Disk->Irp = Irp;
+        CompleteIrp = FALSE;
+        IoPendIrp(SdBcm2709Driver, Irp);
+        SdBcm2709pPerformDmaIo(Disk, Irp);
+
+        //
+        // DMA transfers are self perpetuating, so after kicking off this
+        // first transfer, return. This returns with the lock held because
+        // I/O is still in progress.
+        //
+
+        ASSERT(KeIsQueuedLockHeld(Disk->ControllerLock) != FALSE);
+    }
+
 DispatchIoEnd:
-    IoCompleteIrp(SdBcm2709Driver, Irp, Status);
+    if (CompleteIrp != FALSE) {
+        IoCompleteIrp(SdBcm2709Driver, Irp, Status);
+    }
+
     return;
 }
 
@@ -1227,6 +1406,7 @@ Return Value:
 
     ASSERT(Bus->Slot.Controller == NULL);
     ASSERT(Bus->Slot.Resource == NULL);
+    ASSERT(Bus->Slot.DmaResource == NULL);
 
     //
     // Loop through the allocated resources to get the controller base and the
@@ -1263,6 +1443,11 @@ Return Value:
         } else if (Allocation->Type == ResourceTypePhysicalAddressSpace) {
             if ((Bus->Slot.Resource == NULL) && (Allocation->Length > 0)) {
                 Bus->Slot.Resource = Allocation;
+            }
+
+        } else if (Allocation->Type == ResourceTypeDmaChannel) {
+            if (Bus->Slot.DmaResource == NULL) {
+                Bus->Slot.DmaResource = Allocation;
             }
         }
 
@@ -1427,6 +1612,17 @@ Return Value:
     }
 
     //
+    // Try to fire up system DMA.
+    //
+
+    if ((Slot->DmaResource != NULL) && (Slot->Dma == NULL)) {
+        Status = SdBcm2709pInitializeDma(Slot);
+        if (!KSUCCESS(Status)) {
+            Slot->DmaResource = NULL;
+        }
+    }
+
+    //
     // Initialize the standard SD controller.
     //
 
@@ -1458,6 +1654,10 @@ Return Value:
                                       SD_MODE_RESPONSE136_SHIFTED |
                                       SD_MODE_HIGH_SPEED |
                                       SD_MODE_HIGH_SPEED_52MHZ;
+
+        if (Slot->Dma != NULL) {
+            Parameters.HostCapabilities |= SD_MODE_SYSTEM_DMA;
+        }
 
         Parameters.FundamentalClock = Frequency;
         Slot->Controller = SdCreateController(&Parameters);
@@ -1595,6 +1795,21 @@ Return Value:
 
         NewDisk->BlockShift = RtlCountTrailingZeros32(BlockSize);
         NewDisk->MediaPresent = TRUE;
+
+        //
+        // Initialize DMA is there is system DMA available.
+        //
+
+        if (Slot->Dma != NULL) {
+            Status = SdStandardInitializeDma(NewDisk->Controller);
+            if (KSUCCESS(Status)) {
+                NewDisk->Flags |= SD_BCM2709_DISK_FLAG_DMA_SUPPORTED;
+
+            } else if (Status == STATUS_NO_MEDIA) {
+                Status = STATUS_SUCCESS;
+                goto SlotQueryChildrenEnd;
+            }
+        }
 
         //
         // Create the child device.
@@ -2159,5 +2374,474 @@ PerformBlockIoPolledEnd:
                                 IrpReadWrite->IoBytesCompleted;
 
     return Status;
+}
+
+KSTATUS
+SdBcm2709pInitializeDma (
+    PSD_BCM2709_SLOT Slot
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to wire up the BCM2709 DMA controller to the SD
+    controller.
+
+Arguments:
+
+    Slot - Supplies a pointer to this SD BCM2709 slot context.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    BOOL Equal;
+    DMA_INFORMATION Information;
+    PRESOURCE_ALLOCATION Resource;
+    KSTATUS Status;
+    PDMA_TRANSFER Transfer;
+
+    Resource = Slot->DmaResource;
+
+    ASSERT(Resource != NULL);
+
+    Status = IoRegisterForInterfaceNotifications(&SdBcm2709DmaUuid,
+                                                 SdBcm2709pDmaInterfaceCallback,
+                                                 Resource->Provider,
+                                                 Slot,
+                                                 TRUE);
+
+    if (!KSUCCESS(Status)) {
+        goto InitializeDmaEnd;
+    }
+
+    if (Slot->Dma == NULL) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto InitializeDmaEnd;
+    }
+
+    RtlZeroMemory(&Information, sizeof(DMA_INFORMATION));
+    Information.Version = DMA_INFORMATION_VERSION;
+    Status = Slot->Dma->GetInformation(Slot->Dma, &Information);
+    if (!KSUCCESS(Status)) {
+        goto InitializeDmaEnd;
+    }
+
+    Equal = RtlAreUuidsEqual(&(Information.ControllerUuid),
+                             &SdBcm2709DmaBcm2709Uuid);
+
+    if (Equal == FALSE) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto InitializeDmaEnd;
+    }
+
+    if (Slot->DmaTransfer == NULL) {
+        Status = Slot->Dma->AllocateTransfer(Slot->Dma, &Transfer);
+        if (!KSUCCESS(Status)) {
+            goto InitializeDmaEnd;
+        }
+
+        Slot->DmaTransfer = Transfer;
+
+        //
+        // Fill in some of the fields that will never change transfer to
+        // transfer.
+        //
+
+        Transfer->Configuration = NULL;
+        Transfer->ConfigurationSize = 0;
+        Transfer->CompletionCallback = SdBcm2709pSystemDmaCompletion;
+        Transfer->Width = 32;
+        Transfer->Device.Address = Slot->Resource->Allocation +
+                                   SdRegisterBufferDataPort;
+
+        Transfer->Device.Address &= ~SD_BCM2709_DEVICE_ADDRESS_MASK;
+        Transfer->Device.Address |= SD_BCM2709_DEVICE_ADDRESS_VALUE;
+    }
+
+InitializeDmaEnd:
+    if (!KSUCCESS(Status)) {
+        if (Slot->DmaTransfer != NULL) {
+            Slot->Dma->FreeTransfer(Slot->Dma, Slot->DmaTransfer);
+            Slot->DmaTransfer = NULL;
+        }
+
+        IoUnregisterForInterfaceNotifications(&SdBcm2709DmaUuid,
+                                              SdBcm2709pDmaInterfaceCallback,
+                                              Resource->Provider,
+                                              Slot);
+    }
+
+    return Status;
+}
+
+VOID
+SdBcm2709pDmaInterfaceCallback (
+    PVOID Context,
+    PDEVICE Device,
+    PVOID InterfaceBuffer,
+    ULONG InterfaceBufferSize,
+    BOOL Arrival
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to notify listeners that an interface has arrived
+    or departed.
+
+Arguments:
+
+    Context - Supplies the caller's context pointer, supplied when the caller
+        requested interface notifications.
+
+    Device - Supplies a pointer to the device exposing or deleting the
+        interface.
+
+    InterfaceBuffer - Supplies a pointer to the interface buffer of the
+        interface.
+
+    InterfaceBufferSize - Supplies the buffer size.
+
+    Arrival - Supplies TRUE if a new interface is arriving, or FALSE if an
+        interface is departing.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSD_BCM2709_SLOT Slot;
+
+    Slot = Context;
+
+    ASSERT(InterfaceBufferSize >= sizeof(DMA_INTERFACE));
+    ASSERT((Slot->Dma == NULL) || (Slot->Dma == InterfaceBuffer));
+
+    if (Arrival != FALSE) {
+        Slot->Dma = InterfaceBuffer;
+
+    } else {
+        Slot->Dma = NULL;
+    }
+
+    return;
+}
+
+VOID
+SdBcm2709pPerformDmaIo (
+    PSD_BCM2709_DISK Disk,
+    PIRP Irp
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs DMA-based I/O for the OMAP SD controller.
+
+Arguments:
+
+    Disk - Supplies a pointer to the slot's disk.
+
+    Irp - Supplies a pointer to the partially completed IRP.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINTN BlockCount;
+    ULONGLONG BlockOffset;
+    ULONGLONG IoOffset;
+    ULONGLONG IoSize;
+    KSTATUS Status;
+    BOOL Write;
+
+    IoOffset = Irp->U.ReadWrite.IoOffset + Irp->U.ReadWrite.IoBytesCompleted;
+    BlockOffset = IoOffset >> Disk->BlockShift;
+    IoSize = Irp->U.ReadWrite.IoSizeInBytes - Irp->U.ReadWrite.IoBytesCompleted;
+    BlockCount = IoSize >> Disk->BlockShift;
+    Write = FALSE;
+    if (Irp->MinorCode == IrpMinorIoWrite) {
+        Write = TRUE;
+    }
+
+    ASSERT(BlockOffset < Disk->BlockCount);
+    ASSERT(BlockCount >= 1);
+
+    SdStandardBlockIoDma(Disk->Controller,
+                         BlockOffset,
+                         BlockCount,
+                         Irp->U.ReadWrite.IoBuffer,
+                         Irp->U.ReadWrite.IoBytesCompleted,
+                         Write,
+                         SdBcm2709pSdDmaCompletion,
+                         Disk);
+
+    //
+    // Fire off the system DMA transfer if necessary.
+    //
+
+    if (Disk->Parent->Dma != NULL) {
+        Status = SdBcm2709pSetupSystemDma(Disk);
+        if (!KSUCCESS(Status)) {
+            IoCompleteIrp(SdBcm2709Driver, Irp, Status);
+            return;
+        }
+    }
+
+    return;
+}
+
+VOID
+SdBcm2709pSdDmaCompletion (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    UINTN BytesTransferred,
+    KSTATUS Status
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called by the SD library when a DMA transfer completes.
+    This routine is called from a DPC and, as a result, can get called back
+    at dispatch level.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the library when the DMA
+        request was issued.
+
+    BytesTransferred - Supplies the number of bytes transferred in the request.
+
+    Status - Supplies the status code representing the completion of the I/O.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSD_BCM2709_DISK Disk;
+
+    Disk = Context;
+    if (!KSUCCESS(Status) || (Disk->Parent->Dma == NULL)) {
+        if (Disk->Parent->Dma != NULL) {
+            Disk->Parent->Dma->Cancel(Disk->Parent->Dma,
+                                      Disk->Parent->DmaTransfer);
+        }
+
+        SdBcm2709pDmaCompletion(Controller, Context, BytesTransferred, Status);
+
+    //
+    // If this is an SD interrupt coming in and system DMA is enabled, only
+    // complete the transfer if SD came in last.
+    //
+
+    } else if (RtlAtomicAdd32(&(Disk->RemainingInterrupts), -1) == 1) {
+        SdBcm2709pDmaCompletion(Controller, Context, 0, Status);
+    }
+
+    return;
+}
+
+KSTATUS
+SdBcm2709pSetupSystemDma (
+    PSD_BCM2709_DISK Disk
+    )
+
+/*++
+
+Routine Description:
+
+    This routine submits a system DMA request on behalf of the SD controller.
+
+Arguments:
+
+    Disk - Supplies a pointer to the slot's disk.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PDMA_INTERFACE Dma;
+    PDMA_TRANSFER DmaTransfer;
+    PIRP Irp;
+    KSTATUS Status;
+
+    Dma = Disk->Parent->Dma;
+    DmaTransfer = Disk->Parent->DmaTransfer;
+    Irp = Disk->Irp;
+    DmaTransfer->Memory = Irp->U.ReadWrite.IoBuffer;
+    DmaTransfer->Completed = Irp->U.ReadWrite.IoBytesCompleted;
+    DmaTransfer->Size = Irp->U.ReadWrite.IoSizeInBytes;
+    DmaTransfer->UserContext = Disk;
+    DmaTransfer->Allocation = Disk->Parent->DmaResource;
+    if (Irp->MinorCode == IrpMinorIoWrite) {
+        DmaTransfer->Direction = DmaTransferToDevice;
+
+    } else {
+        DmaTransfer->Direction = DmaTransferFromDevice;
+    }
+
+    ASSERT(Disk->RemainingInterrupts == 0);
+
+    Disk->RemainingInterrupts = 2;
+    Status = Dma->Submit(Dma, DmaTransfer);
+    return Status;
+}
+
+VOID
+SdBcm2709pSystemDmaCompletion (
+    PDMA_TRANSFER Transfer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when a transfer set has completed or errored out.
+
+Arguments:
+
+    Transfer - Supplies a pointer to the transfer that completed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSD_BCM2709_DISK Disk;
+    KSTATUS Status;
+
+    Disk = Transfer->UserContext;
+    Status = Transfer->Status;
+    if (!KSUCCESS(Status)) {
+
+        //
+        // Cancel the SD transfer here.
+        //
+
+        SdErrorRecovery(Disk->Controller);
+    }
+
+    SdBcm2709pDmaCompletion(Disk->Controller,
+                            Disk,
+                            Transfer->Completed,
+                            Status);
+
+    return;
+}
+
+VOID
+SdBcm2709pDmaCompletion (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    UINTN BytesTransferred,
+    KSTATUS Status
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called indirectly by either the system DMA code or the SD
+    library code once the transfer has actually completed. It either completes
+    the IRP or fires up a new transfer.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the library when the DMA
+        request was issued.
+
+    BytesTransferred - Supplies the number of bytes transferred in the request.
+
+    Status - Supplies the status code representing the completion of the I/O.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSD_BCM2709_DISK Disk;
+    PIRP Irp;
+
+    Disk = Context;
+    Irp = Disk->Irp;
+
+    ASSERT(Irp != NULL);
+
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("SD BCM2709 Failed: %x\n", Status);
+        IoCompleteIrp(SdBcm2709Driver, Irp, Status);
+        return;
+    }
+
+    if (BytesTransferred != 0) {
+        Irp->U.ReadWrite.IoBytesCompleted += BytesTransferred;
+        Irp->U.ReadWrite.NewIoOffset += BytesTransferred;
+
+        //
+        // If more interrupts are expected, don't complete just yet.
+        //
+
+        if (RtlAtomicAdd32(&(Disk->RemainingInterrupts), -1) != 1) {
+            return;
+        }
+
+    //
+    // Otherwise if this is SD and it was the last remaining interrupt, the
+    // DMA portion better be complete already.
+    //
+
+    } else {
+
+        ASSERT(Disk->RemainingInterrupts == 0);
+    }
+
+    //
+    // If this transfer's over, complete the IRP.
+    //
+
+    if (Irp->U.ReadWrite.IoBytesCompleted ==
+        Irp->U.ReadWrite.IoSizeInBytes) {
+
+        IoCompleteIrp(SdBcm2709Driver, Irp, Status);
+        return;
+    }
+
+    SdBcm2709pPerformDmaIo(Disk, Irp);
+    return;
 }
 

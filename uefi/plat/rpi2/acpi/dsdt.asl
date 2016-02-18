@@ -103,6 +103,44 @@ DefinitionBlock (
             })
         }
 
+        Device(BDMA) {
+            Name(_HID, "BCM0000")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x3F007000,
+                            0x3F007FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {16}
+                Interrupt(, Level, ActiveHigh,) {17}
+                Interrupt(, Level, ActiveHigh,) {18}
+                Interrupt(, Level, ActiveHigh,) {19}
+                Interrupt(, Level, ActiveHigh,) {20}
+                Interrupt(, Level, ActiveHigh,) {21}
+                Interrupt(, Level, ActiveHigh,) {22}
+                Interrupt(, Level, ActiveHigh,) {23}
+                Interrupt(, Level, ActiveHigh,) {24}
+                Interrupt(, Level, ActiveHigh,) {25}
+                Interrupt(, Level, ActiveHigh,) {26}
+                Interrupt(, Level, ActiveHigh,) {27}
+                Interrupt(, Level, ActiveHigh,) {28}
+            })
+        }
+    }
+
+    //
+    // Stick things that use system DMA underneath the DMA controller.
+    //
+
+    Scope(\_SB.BDMA) {
         Device(SDMC) {
             Name(_HID, EISAID("BCM0D40"))
             Name(_UID, 0)
@@ -120,6 +158,7 @@ DefinitionBlock (
                             0x00001000)
 
                 Interrupt(, Level, ActiveHigh,) {62}
+                FixedDMA(11, 4, Width32Bit, )
             })
         }
     }

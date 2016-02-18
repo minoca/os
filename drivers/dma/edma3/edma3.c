@@ -1504,7 +1504,6 @@ Return Value:
     UINTN ParamSize;
     PHYSICAL_ADDRESS PreviousAddress;
     UINTN Remaining;
-    UINTN Size;
     KSTATUS Status;
 
     DmaTransfer = Transfer->Transfer;
@@ -1615,7 +1614,6 @@ Return Value:
             FragmentOffset = 0;
         }
 
-        Size += BytesThisRound;
         ParamSize += BytesThisRound;
         Remaining -= BytesThisRound;
         PreviousAddress += BytesThisRound;

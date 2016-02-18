@@ -2670,9 +2670,9 @@ Return Value:
     // skip the CMD12 if the controller is doing it natively.
     //
 
-    if (((Controller->HostCapabilities &
-          (SD_MODE_SPI | SD_MODE_AUTO_CMD12)) == 0) &&
-        (BlockCount > 1)) {
+    if ((BlockCount > 1) &&
+        ((Controller->HostCapabilities &
+          (SD_MODE_SPI | SD_MODE_AUTO_CMD12)) == 0)) {
 
         Command.Command = SdCommandStopTransmission;
         Command.CommandArgument = 0;

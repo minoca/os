@@ -1847,7 +1847,7 @@ Return Value:
 
     Child = Context;
     if ((!KSUCCESS(Status)) || (Child->Parent->Dma == NULL)) {
-        if (!KSUCCESS(Status)) {
+        if (Child->Parent->Dma != NULL) {
             Child->Parent->Dma->Cancel(Child->Parent->Dma,
                                        Child->Parent->DmaTransfer);
         }

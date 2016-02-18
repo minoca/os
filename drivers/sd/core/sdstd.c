@@ -335,10 +335,11 @@ Return Value:
         }
 
         //
-        // Record that DMA is enabled in the host controller.
+        // ADMA requires the DMA bit to be set in the command register.
         //
 
-        RtlAtomicOr32(&(Controller->Flags), SD_CONTROLLER_FLAG_DMA_ENABLED);
+        RtlAtomicOr32(&(Controller->Flags),
+                      SD_CONTROLLER_FLAG_DMA_COMMAND_ENABLED);
 
     //
     // Enable SDMA mode if ADMA2 mode is not around.
@@ -348,12 +349,29 @@ Return Value:
         Value = SD_READ_REGISTER(Controller, SdRegisterHostControl);
         Value &= ~SD_HOST_CONTROL_DMA_MODE_MASK;
         SD_WRITE_REGISTER(Controller, SdRegisterHostControl, Value);
-        RtlAtomicOr32(&(Controller->Flags), SD_CONTROLLER_FLAG_DMA_ENABLED);
 
-    } else {
+        //
+        // SDMA requires the DMA bit to be set in the command register.
+        //
+
+        RtlAtomicOr32(&(Controller->Flags),
+                      SD_CONTROLLER_FLAG_DMA_COMMAND_ENABLED);
+
+    //
+    // Pure system DMA is the simplest form where the DMA engine reads/writes
+    // the data port register. No settings need to be updated in the
+    // controller's register. Fail if system DMA is not available.
+    //
+
+    } else if ((Controller->HostCapabilities & SD_MODE_SYSTEM_DMA) == 0) {
         return STATUS_NOT_SUPPORTED;
     }
 
+    //
+    // Record that DMA is enabled in the host controller.
+    //
+
+    RtlAtomicOr32(&(Controller->Flags), SD_CONTROLLER_FLAG_DMA_ENABLED);
     return STATUS_SUCCESS;
 }
 
@@ -1028,14 +1046,7 @@ Return Value:
             Flags |= SD_COMMAND_TRANSFER_READ;
         }
 
-        if (Command->Dma != FALSE) {
-
-            ASSERT((Controller->Flags &
-                    SD_CONTROLLER_FLAG_DMA_ENABLED) != 0);
-
-            ASSERT((Controller->Flags &
-                    SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) != 0);
-
+        if ((Controller->Flags & SD_CONTROLLER_FLAG_DMA_COMMAND_ENABLED) != 0) {
             Flags |= SD_COMMAND_DMA_ENABLE;
         }
     }
@@ -1051,7 +1062,13 @@ Return Value:
     // If this was a DMA command, just let it sail away.
     //
 
-    if ((Flags & SD_COMMAND_DMA_ENABLE) != 0) {
+    if (Command->Dma != FALSE) {
+
+        ASSERT((Controller->Flags & SD_CONTROLLER_FLAG_DMA_ENABLED) != 0);
+
+        ASSERT((Controller->Flags &
+                SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) != 0);
+
         Status = STATUS_SUCCESS;
         goto SendCommandEnd;
     }

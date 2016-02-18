@@ -40,6 +40,7 @@ Files = [
     "devmap.set",
     "devrem.drv",
     "dma.drv",
+    "dmab2709.drv",
     "dwceth.drv",
     "dwhci.drv",
     "edma3.drv",
