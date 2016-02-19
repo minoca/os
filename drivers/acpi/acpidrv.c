@@ -184,21 +184,21 @@ Return Value:
     }
 
     //
-    // Fire up the AML interpreter.
-    //
-
-    Status = AcpipInitializeAmlInterpreter();
-    if (!KSUCCESS(Status)) {
-        goto DriverEntryEnd;
-    }
-
-    //
     // Take control of the system from the BIOS by enabling ACPI mode.
     //
 
     Status = AcpipEnableAcpiMode();
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("ACPI: Failed to enable ACPI mode: %x.\n", Status);
+        goto DriverEntryEnd;
+    }
+
+    //
+    // Fire up the AML interpreter.
+    //
+
+    Status = AcpipInitializeAmlInterpreter();
+    if (!KSUCCESS(Status)) {
         goto DriverEntryEnd;
     }
 

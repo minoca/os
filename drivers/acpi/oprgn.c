@@ -949,83 +949,96 @@ Return Value:
 
     //
     // Fill up the buffer with an initial value depending on the update rule.
+    // If the field is already aligned, then there's no need for the read
+    // (and it can in fact be harmful if it has side effects).
     //
 
-    CurrentBuffer = ResultBuffer;
-    if (FieldUnit->UpdateRule == AcpiFieldUpdatePreserve) {
-        for (CurrentOffset = StartByteOffset;
-             CurrentOffset < EndByteOffset;
-             CurrentOffset += (AccessSize / BITS_PER_BYTE)) {
+    if ((StartBitOffset != FieldUnit->BitOffset) ||
+        (EndBitOffset != FieldUnit->BitOffset + FieldUnit->BitLength)) {
 
-            //
-            // For indexed fields, write the index value, then read from the
-            // data register.
-            //
-
-            if (IndexRegister != NULL) {
-                IndexValue->U.Integer.Value = CurrentOffset;
-                Status = AcpipWriteToField(Context, IndexRegister, IndexValue);
-                if (!KSUCCESS(Status)) {
-                    goto WriteToFieldEnd;
-                }
-
-                Status = AcpipReadFromField(Context, DataRegister, &DataResult);
-                if (!KSUCCESS(Status)) {
-                    goto WriteToFieldEnd;
-                }
+        CurrentBuffer = ResultBuffer;
+        if (FieldUnit->UpdateRule == AcpiFieldUpdatePreserve) {
+            for (CurrentOffset = StartByteOffset;
+                 CurrentOffset < EndByteOffset;
+                 CurrentOffset += (AccessSize / BITS_PER_BYTE)) {
 
                 //
-                // Copy the result from the read into the destination buffer.
+                // For indexed fields, write the index value, then read from
+                // the data register.
                 //
 
-                if (DataResult->Type == AcpiObjectInteger) {
-                    RtlCopyMemory(CurrentBuffer,
-                                  &(DataResult->U.Integer.Value),
-                                  AccessSize);
+                if (IndexRegister != NULL) {
+                    IndexValue->U.Integer.Value = CurrentOffset;
+                    Status = AcpipWriteToField(Context,
+                                               IndexRegister,
+                                               IndexValue);
 
-                } else if (DataResult->Type == AcpiObjectBuffer) {
-                    RtlCopyMemory(CurrentBuffer,
-                                  DataResult->U.Buffer.Buffer,
-                                  AccessSize);
+                    if (!KSUCCESS(Status)) {
+                        goto WriteToFieldEnd;
+                    }
+
+                    Status = AcpipReadFromField(Context,
+                                                DataRegister,
+                                                &DataResult);
+
+                    if (!KSUCCESS(Status)) {
+                        goto WriteToFieldEnd;
+                    }
+
+                    //
+                    // Copy the result from the read into the destination
+                    // buffer.
+                    //
+
+                    if (DataResult->Type == AcpiObjectInteger) {
+                        RtlCopyMemory(CurrentBuffer,
+                                      &(DataResult->U.Integer.Value),
+                                      AccessSize);
+
+                    } else if (DataResult->Type == AcpiObjectBuffer) {
+                        RtlCopyMemory(CurrentBuffer,
+                                      DataResult->U.Buffer.Buffer,
+                                      AccessSize);
+
+                    } else {
+                        Status = STATUS_INVALID_PARAMETER;
+                        goto WriteToFieldEnd;
+                    }
+
+                    AcpipObjectReleaseReference(DataResult);
+                    DataResult = NULL;
+
+                //
+                // Perform a normal region read.
+                //
 
                 } else {
-                    Status = STATUS_INVALID_PARAMETER;
-                    goto WriteToFieldEnd;
-                }
-
-                AcpipObjectReleaseReference(DataResult);
-                DataResult = NULL;
-
-            //
-            // Perform a normal region read.
-            //
-
-            } else {
-                Status = OperationRegion->FunctionTable->Read(
+                    Status = OperationRegion->FunctionTable->Read(
                                                     OperationRegion->OsContext,
                                                     CurrentOffset,
                                                     AccessSize,
                                                     CurrentBuffer);
 
-                if (!KSUCCESS(Status)) {
-                    break;
+                    if (!KSUCCESS(Status)) {
+                        break;
+                    }
                 }
+
+                CurrentBuffer += AccessSize / BITS_PER_BYTE;
             }
 
-            CurrentBuffer += AccessSize / BITS_PER_BYTE;
+        } else if (FieldUnit->UpdateRule == AcpiFieldUpdateWriteAsOnes) {
+            for (CurrentOffset = StartByteOffset;
+                 CurrentOffset < EndByteOffset;
+                 CurrentOffset += (AccessSize / BITS_PER_BYTE)) {
+
+                *CurrentBuffer = 0xFF;
+                CurrentBuffer += 1;
+            }
+
+        } else {
+            RtlZeroMemory(CurrentBuffer, EndByteOffset - StartByteOffset);
         }
-
-    } else if (FieldUnit->UpdateRule == AcpiFieldUpdateWriteAsOnes) {
-        for (CurrentOffset = StartByteOffset;
-             CurrentOffset < EndByteOffset;
-             CurrentOffset += (AccessSize / BITS_PER_BYTE)) {
-
-            *CurrentBuffer = 0xFF;
-            CurrentBuffer += 1;
-        }
-
-    } else {
-        RtlZeroMemory(CurrentBuffer, EndByteOffset - StartByteOffset);
     }
 
     //
