@@ -2000,6 +2000,7 @@ Return Value:
     UINTN BytesToWrite;
     PDEVICE Device;
     ULONGLONG FileSize;
+    UINTN IoBufferSize;
     ULONGLONG Offset;
     IRP_READ_WRITE Parameters;
     IO_CONTEXT PartialContext;
@@ -2061,9 +2062,11 @@ Return Value:
 
     if (BytesToWrite > AlignedIoBufferSize) {
         READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+        IoBufferSize = MmGetIoBufferSize(IoContext->IoBuffer) -
+                       IoContext->BytesCompleted;
+
         if ((IoContext->Offset + BytesToWrite >= FileSize) &&
-            (MmGetIoBufferSize(IoContext->IoBuffer) >=
-             ALIGN_RANGE_UP(BytesToWrite, BlockSize))) {
+            (IoBufferSize >= ALIGN_RANGE_UP(BytesToWrite, BlockSize))) {
 
              AlignedIoBufferSize += BlockSize;
         }

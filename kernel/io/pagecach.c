@@ -3681,6 +3681,7 @@ Return Value:
     BOOL Clean;
     PFILE_OBJECT FileObject;
     ULONGLONG FileOffset;
+    ULONGLONG FileSize;
     IO_CONTEXT IoContext;
     BOOL MarkedClean;
     ULONG PageSize;
@@ -3690,6 +3691,7 @@ Return Value:
     FileObject = CacheEntry->FileObject;
     FileOffset = CacheEntry->Offset;
     PageSize = MmPageSize();
+    READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
 
     ASSERT(FlushSize <= PAGE_CACHE_FLUSH_MAX);
     ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
@@ -3711,6 +3713,12 @@ Return Value:
             break;
         }
 
+        //
+        // Evicted entries should never be flushed.
+        //
+
+        ASSERT(CacheEntry->Node.Parent != NULL);
+
         MarkedClean = IopMarkPageCacheEntryClean(CacheEntry, TRUE);
         if (MarkedClean != FALSE) {
             Clean = FALSE;
@@ -3718,6 +3726,17 @@ Return Value:
 
         BytesToWrite += PageSize;
         BufferOffset += PageSize;
+    }
+
+    //
+    // Avoid writing beyond the end of the file.
+    //
+
+    if (FileOffset + BytesToWrite > FileSize) {
+
+        ASSERT(FileOffset <= FileSize);
+
+        BytesToWrite = FileSize - FileOffset;
     }
 
     //
