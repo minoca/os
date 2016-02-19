@@ -702,7 +702,7 @@ Return Value:
 
     Controller = Interface->Context;
     if ((Transfer->Allocation == NULL) ||
-        (Transfer->Allocation->Allocation < Controller->ChannelCount)) {
+        (Transfer->Allocation->Allocation >= Controller->ChannelCount)) {
 
         return STATUS_INVALID_PARAMETER;
     }

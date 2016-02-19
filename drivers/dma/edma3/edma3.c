@@ -2105,8 +2105,14 @@ Return Value:
 
     BOOL CompleteTransfer;
     PDMA_TRANSFER DmaTransfer;
+    EDMA_PARAM Param;
     KSTATUS Status;
     PEDMA_TRANSFER Transfer;
+
+    //
+    // If the channel does not have a transfer allocated, then there is nothing
+    // that can be done for this interrupt.
+    //
 
     if (Controller->Transfers[Channel] == NULL) {
         return;
@@ -2119,6 +2125,22 @@ Return Value:
 
     Transfer = Controller->Transfers[Channel];
     if (Transfer->Transfer == NULL) {
+        return;
+    }
+
+    //
+    // Read the channel's current PaRAM to make sure the transfer is actually
+    // complete. When a NULL link is encountered, the NULL PaRAM set is written
+    // to the current PaRAM set. A NULL PaRAM set has all three count fields
+    // set to 0 and the NULL link set.
+    //
+
+    EdmapGetParam(Controller, Transfer->Params[0], &Param);
+    if ((Param.Link != EDMA_LINK_TERMINATE) ||
+        (Param.ACount != 0) ||
+        (Param.BCount != 0) ||
+        (Param.CCount != 0)) {
+
         return;
     }
 

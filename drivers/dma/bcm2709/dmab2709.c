@@ -70,6 +70,12 @@ Environment:
     (DMA_BCM2709_CONTROL_BLOCK_COUNT * sizeof(DMA_BCM2709_CONTROL_BLOCK))
 
 //
+// Define the number of times to poll the channel pause state before giving up.
+//
+
+#define DMA_BCM2709_CHANNEL_PAUSE_RETRY_COUNT 100000
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -1680,12 +1686,21 @@ Return Value:
     Status = STATUS_SUCCESS;
 
     //
-    // Before checking for a transfer, read and clear the error state.
+    // Before checking the transfer, take a peak at the channel's state. If
+    // it's active, then this interrupt may be from an old cancel. Ignore it.
     //
 
     ChannelStatus = DMA_BCM2709_CHANNEL_READ(Controller,
                                              Channel,
                                              DmaBcm2709ChannelStatus);
+
+    if ((ChannelStatus & DMA_BCM2709_CHANNEL_STATUS_ACTIVE) != 0) {
+        return;
+    }
+
+    //
+    // Clear the error state in the debug register.
+    //
 
     if ((ChannelStatus & DMA_BCM2709_CHANNEL_STATUS_ERROR) != 0) {
         Status = STATUS_DEVICE_IO_ERROR;
@@ -1696,12 +1711,10 @@ Return Value:
     }
 
     //
-    // Clear the interrupt and end state for this channel.
+    // Clear the end state for this channel.
     //
 
-    ChannelStatus |= DMA_BCM2709_CHANNEL_STATUS_ERROR |
-                     DMA_BCM2709_CHANNEL_STATUS_END;
-
+    ChannelStatus |= DMA_BCM2709_CHANNEL_STATUS_END;
     DMA_BCM2709_CHANNEL_WRITE(Controller,
                               Channel,
                               DmaBcm2709ChannelStatus,
@@ -1802,7 +1815,7 @@ Return Value:
 {
 
     ULONG ChannelStatus;
-    ULONG TransferInformation;
+    ULONG Retries;
 
     //
     // There is nothing to do if the active bit is not set. Otherwise pause the
@@ -1823,7 +1836,8 @@ Return Value:
                               DmaBcm2709ChannelStatus,
                               ChannelStatus);
 
-    while (TRUE) {
+    Retries = DMA_BCM2709_CHANNEL_PAUSE_RETRY_COUNT;
+    while (Retries != 0) {
         ChannelStatus = DMA_BCM2709_CHANNEL_READ(Controller,
                                                  Channel,
                                                  DmaBcm2709ChannelStatus);
@@ -1831,6 +1845,13 @@ Return Value:
         if ((ChannelStatus & DMA_BCM2709_CHANNEL_STATUS_PAUSED) != 0) {
             break;
         }
+
+        Retries -= 1;
+    }
+
+    if (Retries == 0) {
+        RtlDebugPrint("DMA BCM2709: Failed to pause channel %d.\n", Channel);
+        return;
     }
 
     //
@@ -1843,19 +1864,12 @@ Return Value:
                               0);
 
     //
-    // Also make sure that the current control block will interrupt on
-    // completion.
-    //
-
-    TransferInformation = DMA_BCM2709_CHANNEL_READ(
-                                         Controller,
-                                         Channel,
-                                         DmaBcm2709ChannelTransferInformation);
-
-    TransferInformation |= DMA_BCM2709_TRANSFER_INFORMATION_INTERRUPT_ENABLE;
-
-    //
-    // Unpause the channel and abort the transfer. The channel should be reset.
+    // Unpause the channel and abort the transfer. The channel will still fire
+    // an interrupt, so channel interrupt processing must be careful to not
+    // process a channel that has been torn down. Unfortunately, unsetting
+    // the interrupt enable bit in the transform information register does not
+    // appear to prevent this, but even that would not be good enough as an ISR
+    // or DPC may be in flight on another core.
     //
 
     ChannelStatus |= DMA_BCM2709_CHANNEL_STATUS_ACTIVE |
