@@ -77,6 +77,26 @@ Environment:
 
 Structure Description:
 
+    This structure defines the context for an BCM2709 DMA transfer.
+
+Members:
+
+    Transfer - Stores a pointer to the active DMA transfer. This is NULL if the
+        channel is not currently active.
+
+    BytesPending - Stores the size of the currently outstanding request.
+
+--*/
+
+typedef struct _DMA_BCM2709_TRANSFER {
+    PDMA_TRANSFER Transfer;
+    UINTN BytesPending;
+} DMA_BCM2709_TRANSFER, *PDMA_BCM2709_TRANSFER;
+
+/*++
+
+Structure Description:
+
     This structure defines the context for a BCM2709 DMA channel.
 
 Members:
@@ -93,13 +113,16 @@ Members:
     ControlBlockTable - Store a pointers to an I/O buffer that contains the
         control block table for this channel.
 
+    Transfer - Stores the BCM2709 transfer used by this channel.
+
 --*/
 
 typedef struct _DMA_BCM2709_CHANNEL {
     ULONGLONG InterruptVector;
     ULONGLONG InterruptLine;
     HANDLE InterruptHandle;
-    volatile PIO_BUFFER ControlBlockTable;
+    PIO_BUFFER ControlBlockTable;
+    DMA_BCM2709_TRANSFER Transfer;
 } DMA_BCM2709_CHANNEL, *PDMA_BCM2709_CHANNEL;
 
 /*++
@@ -123,53 +146,21 @@ Members:
     Lock - Stores the lock serializing access to the sensitive parts of the
         structure.
 
-    TransferList - Stores the head of the list of transfers.
-
-    FreeList - Stores the head of the list of transfer structures that are
-        allocated but not currently used.
-
     PendingInterrupts - Stores the pending interrupt flags.
+
+    Channels - Stores an array of information for each DMA channel.
 
 --*/
 
 typedef struct _DMA_BCM2709_CONTROLLER {
     PDEVICE OsDevice;
     BOOL InterruptsConnected;
-    DMA_BCM2709_CHANNEL Channel[DMA_BCM2709_CHANNEL_COUNT];
     PVOID ControllerBase;
     PDMA_CONTROLLER DmaController;
     KSPIN_LOCK Lock;
-    LIST_ENTRY TransferList;
-    LIST_ENTRY FreeList;
     volatile ULONG PendingInterrupts;
+    DMA_BCM2709_CHANNEL Channels[DMA_BCM2709_CHANNEL_COUNT];
 } DMA_BCM2709_CONTROLLER, *PDMA_BCM2709_CONTROLLER;
-
-/*++
-
-Structure Description:
-
-    This structure defines the context for an BCM2709 DMA transfer.
-
-Members:
-
-    ListEntry - Stores pointers to the next and previous transfers on the
-        transfer list or free list.
-
-    Transfer - Stores a pointer to the DMA transfer.
-
-    ControlBlockAddress - Stores the physical address of the first control
-        block.
-
-    BytesPending - Stores the size of the currently outstanding request.
-
---*/
-
-typedef struct _DMA_BCM2709_TRANSFER {
-    LIST_ENTRY ListEntry;
-    PDMA_TRANSFER Transfer;
-    PHYSICAL_ADDRESS ControlBlockAddress;
-    UINTN BytesPending;
-} DMA_BCM2709_TRANSFER, *PDMA_BCM2709_TRANSFER;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -258,13 +249,13 @@ DmaBcm2709pControllerReset (
     );
 
 KSTATUS
-DmaBcm2709pPrepareTransfer (
+DmaBcm2709pPrepareAndSubmitTransfer (
     PDMA_BCM2709_CONTROLLER Controller,
     PDMA_BCM2709_TRANSFER Transfer
     );
 
 KSTATUS
-DmaBcm2709pSubmitTransfer (
+DmaBcm2709pPrepareTransfer (
     PDMA_BCM2709_CONTROLLER Controller,
     PDMA_BCM2709_TRANSFER Transfer
     );
@@ -292,16 +283,10 @@ DmaBcm2709pTearDownChannel (
     ULONG Channel
     );
 
-PDMA_BCM2709_TRANSFER
-DmaBcm2709pAllocateTransfer (
+KSTATUS
+DmaBcm2709pAllocateControlBlockTable (
     PDMA_BCM2709_CONTROLLER Controller,
-    PDMA_TRANSFER DmaTransfer
-    );
-
-VOID
-DmaBcm2709pFreeTransfer (
-    PDMA_BCM2709_CONTROLLER Controller,
-    PDMA_BCM2709_TRANSFER Transfer
+    PDMA_BCM2709_CHANNEL Channel
     );
 
 RUNLEVEL
@@ -438,11 +423,9 @@ Return Value:
 
     RtlZeroMemory(Controller, sizeof(DMA_BCM2709_CONTROLLER));
     Controller->OsDevice = DeviceToken;
-    INITIALIZE_LIST_HEAD(&(Controller->TransferList));
-    INITIALIZE_LIST_HEAD(&(Controller->FreeList));
     KeInitializeSpinLock(&(Controller->Lock));
     for (Channel = 0; Channel < DMA_BCM2709_CHANNEL_COUNT; Channel += 1) {
-        Controller->Channel[Channel].InterruptHandle = INVALID_HANDLE;
+        Controller->Channels[Channel].InterruptHandle = INVALID_HANDLE;
     }
 
     Status = IoAttachDriverToDevice(Driver, DeviceToken, Controller);
@@ -1018,11 +1001,11 @@ Return Value:
         for (Index = 0; Index < DMA_BCM2709_CHANNEL_COUNT; Index += 1) {
             Vector = Interrupts[Index]->Allocation;
             LineNumber = Interrupts[Index]->OwningAllocation->Allocation;
-            Device->Channel[Index].InterruptVector = Vector;
-            Device->Channel[Index].InterruptLine = LineNumber;
+            Device->Channels[Index].InterruptVector = Vector;
+            Device->Channels[Index].InterruptLine = LineNumber;
             Connect.Vector = Vector;
             Connect.LineNumber = LineNumber;
-            Connect.Interrupt = &(Device->Channel[Index].InterruptHandle);
+            Connect.Interrupt = &(Device->Channels[Index].InterruptHandle);
             Status = IoConnectInterrupt(&Connect);
             if (!KSUCCESS(Status)) {
                 return Status;
@@ -1033,9 +1016,9 @@ Return Value:
 StartDeviceEnd:
     if (!KSUCCESS(Status)) {
         for (Index = 0; Index < DMA_BCM2709_CHANNEL_COUNT; Index += 1) {
-            if (Device->Channel[Index].InterruptHandle != INVALID_HANDLE) {
-                IoDisconnectInterrupt(Device->Channel[Index].InterruptHandle);
-                Device->Channel[Index].InterruptHandle = INVALID_HANDLE;
+            if (Device->Channels[Index].InterruptHandle != INVALID_HANDLE) {
+                IoDisconnectInterrupt(Device->Channels[Index].InterruptHandle);
+                Device->Channels[Index].InterruptHandle = INVALID_HANDLE;
             }
         }
 
@@ -1083,13 +1066,10 @@ Return Value:
 {
 
     PDMA_BCM2709_CHANNEL Channel;
-    PIO_BUFFER ControlBlockTable;
     PDMA_BCM2709_CONTROLLER Controller;
     PDMA_BCM2709_TRANSFER DmaBcm2709Transfer;
-    ULONG IoBufferFlags;
     BOOL LockHeld;
     RUNLEVEL OldRunLevel;
-    PIO_BUFFER OriginalTable;
     KSTATUS Status;
 
     Controller = Context;
@@ -1101,47 +1081,28 @@ Return Value:
     // it now.
     //
 
-    Channel = &(Controller->Channel[Transfer->Allocation->Allocation]);
+    Channel = &(Controller->Channels[Transfer->Allocation->Allocation]);
     if (Channel->ControlBlockTable == NULL) {
-        IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS |
-                        IO_BUFFER_FLAG_MAP_NON_CACHED;
-
-        ControlBlockTable = MmAllocateNonPagedIoBuffer(
-                                          0,
-                                          MAX_ULONG,
-                                          DMA_BCM2709_CONTROL_BLOCK_ALIGNMENT,
-                                          DMA_BCM2709_CONTROL_BLOCK_TABLE_SIZE,
-                                          IoBufferFlags);
-
-        if (ControlBlockTable == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
+        Status = DmaBcm2709pAllocateControlBlockTable(Controller, Channel);
+        if (!KSUCCESS(Status)) {
             goto SubmitEnd;
         }
-
-        OriginalTable = (PVOID)RtlAtomicCompareExchange(
-                               (volatile UINTN *)&(Channel->ControlBlockTable),
-                               (UINTN)ControlBlockTable,
-                               (UINTN)NULL);
-
-        if (OriginalTable != NULL) {
-            MmFreeIoBuffer(ControlBlockTable);
-        }
     }
+
+    //
+    // Prepare and submit the DMA transfer.
+    //
 
     OldRunLevel = DmaBcm2709pAcquireLock(Controller);
     LockHeld = TRUE;
-    DmaBcm2709Transfer = DmaBcm2709pAllocateTransfer(Controller, Transfer);
-    if (DmaBcm2709Transfer == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto SubmitEnd;
-    }
+    DmaBcm2709Transfer = &(Channel->Transfer);
 
-    Status = DmaBcm2709pPrepareTransfer(Controller, DmaBcm2709Transfer);
-    if (!KSUCCESS(Status)) {
-        goto SubmitEnd;
-    }
+    ASSERT(DmaBcm2709Transfer->Transfer == NULL);
 
-    Status = DmaBcm2709pSubmitTransfer(Controller, DmaBcm2709Transfer);
+    DmaBcm2709Transfer->Transfer = Transfer;
+    Status = DmaBcm2709pPrepareAndSubmitTransfer(Controller,
+                                                 DmaBcm2709Transfer);
+
     if (!KSUCCESS(Status)) {
         goto SubmitEnd;
     }
@@ -1151,7 +1112,7 @@ Return Value:
 SubmitEnd:
     if (!KSUCCESS(Status)) {
         if (DmaBcm2709Transfer != NULL) {
-            DmaBcm2709pFreeTransfer(Controller, DmaBcm2709Transfer);
+            DmaBcm2709Transfer->Transfer = NULL;
         }
     }
 
@@ -1195,38 +1156,29 @@ Return Value:
 
 {
 
+    ULONG Channel;
     PDMA_BCM2709_CONTROLLER Controller;
-    PLIST_ENTRY CurrentEntry;
-    PDMA_BCM2709_TRANSFER DmaBcm2709Transfer;
     RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     Controller = Context;
+    Channel = Transfer->Allocation->Allocation;
 
     //
-    // Grab the lock to synchronize with completion, and then look for the
-    // transfer in the transfer list.
+    // Do a quick check to see if the transfer is still in the channel. If it
+    // is not then it's too late.
     //
 
-    OldRunLevel = DmaBcm2709pAcquireLock(Controller);
-    CurrentEntry = Controller->TransferList.Next;
-    while (CurrentEntry != &(Controller->TransferList)) {
-        DmaBcm2709Transfer = LIST_VALUE(CurrentEntry,
-                                        DMA_BCM2709_TRANSFER,
-                                        ListEntry);
-
-        if (DmaBcm2709Transfer->Transfer == Transfer) {
-            break;
-        }
-
-        CurrentEntry = CurrentEntry->Next;
+    if (Controller->Channels[Channel].Transfer.Transfer != Transfer) {
+        return STATUS_TOO_LATE;
     }
 
     //
-    // If the transfer was not found, it must already have been completed.
+    // Grab the lock to synchronize with completion, and then look again.
     //
 
-    if (CurrentEntry == &(Controller->TransferList)) {
+    OldRunLevel = DmaBcm2709pAcquireLock(Controller);
+    if (Controller->Channels[Channel].Transfer.Transfer != Transfer) {
         Status = STATUS_TOO_LATE;
         goto CancelEnd;
     }
@@ -1235,7 +1187,13 @@ Return Value:
     // Tear down the channel to stop any transfer that might be in progress.
     //
 
-    DmaBcm2709pTearDownChannel(Controller, Transfer->Allocation->Allocation);
+    DmaBcm2709pTearDownChannel(Controller, Channel);
+
+    //
+    // Set the channel's DMA transfer to NULL.
+    //
+
+    Controller->Channels[Channel].Transfer.Transfer = NULL;
     Status = STATUS_SUCCESS;
 
 CancelEnd:
@@ -1292,6 +1250,77 @@ Return Value:
 }
 
 KSTATUS
+DmaBcm2709pPrepareAndSubmitTransfer (
+    PDMA_BCM2709_CONTROLLER Controller,
+    PDMA_BCM2709_TRANSFER Transfer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prepares and then submits a transfer to the BCM2709 DMA
+    controller.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Transfer - Supplies a pointer to the DMA_BCM2709 transfer.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG Channel;
+    PHYSICAL_ADDRESS ControlBlockAddress;
+    PIO_BUFFER ControlBlockTable;
+    PDMA_TRANSFER DmaTransfer;
+    KSTATUS Status;
+
+    //
+    // Prepare all of the control blocks for this transfer.
+    //
+
+    Status = DmaBcm2709pPrepareTransfer(Controller, Transfer);
+    if (!KSUCCESS(Status)) {
+        goto PrepareAndSubmitTransferEnd;
+    }
+
+    DmaTransfer = Transfer->Transfer;
+    Channel = DmaTransfer->Allocation->Allocation;
+    ControlBlockTable = Controller->Channels[Channel].ControlBlockTable;
+    ControlBlockAddress = ControlBlockTable->Fragment[0].PhysicalAddress;
+
+    ASSERT((ULONG)ControlBlockAddress == ControlBlockAddress);
+
+    //
+    // Program the channel to point at the first control block.
+    //
+
+    DMA_BCM2709_CHANNEL_WRITE(Controller,
+                              Channel,
+                              DmaBcm2709ChannelControlBlockAddress,
+                              ControlBlockAddress);
+
+    //
+    // Fire off the transfer.
+    //
+
+    DMA_BCM2709_CHANNEL_WRITE(Controller,
+                              Channel,
+                              DmaBcm2709ChannelStatus,
+                              DMA_BCM2709_CHANNEL_STATUS_ACTIVE);
+
+PrepareAndSubmitTransferEnd:
+    return Status;
+}
+
+KSTATUS
 DmaBcm2709pPrepareTransfer (
     PDMA_BCM2709_CONTROLLER Controller,
     PDMA_BCM2709_TRANSFER Transfer
@@ -1301,8 +1330,8 @@ DmaBcm2709pPrepareTransfer (
 
 Routine Description:
 
-    This routine prepares for a DMA transfer, filling out as many PaRAM
-    entries as possible.
+    This routine prepares for a DMA transfer, fill out as many control blocks
+    as possible.
 
 Arguments:
 
@@ -1400,10 +1429,9 @@ Return Value:
                       FragmentOffset;
 
     MemoryAddress = PreviousAddress;
-    ControlBlockTable = Controller->Channel[Channel].ControlBlockTable;
+    ControlBlockTable = Controller->Channels[Channel].ControlBlockTable;
     ControlBlock = ControlBlockTable->Fragment[0].VirtualAddress;
     ControlBlockPhysical = ControlBlockTable->Fragment[0].PhysicalAddress;
-    Transfer->ControlBlockAddress = ControlBlockPhysical;
     PreviousControlBlock = NULL;
     ControlBlockCount = 0;
     TransferSize = 0;
@@ -1502,59 +1530,6 @@ Return Value:
 
 PrepareTransferEnd:
     return Status;
-}
-
-KSTATUS
-DmaBcm2709pSubmitTransfer (
-    PDMA_BCM2709_CONTROLLER Controller,
-    PDMA_BCM2709_TRANSFER Transfer
-    )
-
-/*++
-
-Routine Description:
-
-    This routine submits a transfer to the BCM2709 DMA controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    Transfer - Supplies a pointer to the DMA_BCM2709 transfer.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ULONG Channel;
-    PDMA_TRANSFER DmaTransfer;
-
-    DmaTransfer = Transfer->Transfer;
-    Channel = DmaTransfer->Allocation->Allocation;
-
-    //
-    // Program the channel to point at the first control block.
-    //
-
-    DMA_BCM2709_CHANNEL_WRITE(Controller,
-                              Channel,
-                              DmaBcm2709ChannelControlBlockAddress,
-                              Transfer->ControlBlockAddress);
-
-    //
-    // Fire off the transfer.
-    //
-
-    DMA_BCM2709_CHANNEL_WRITE(Controller,
-                              Channel,
-                              DmaBcm2709ChannelStatus,
-                              DMA_BCM2709_CHANNEL_STATUS_ACTIVE);
-
-    return STATUS_SUCCESS;
 }
 
 KSTATUS
@@ -1698,7 +1673,6 @@ Return Value:
 
     ULONG ChannelStatus;
     BOOL CompleteTransfer;
-    PLIST_ENTRY CurrentEntry;
     PDMA_TRANSFER DmaTransfer;
     KSTATUS Status;
     PDMA_BCM2709_TRANSFER Transfer;
@@ -1735,25 +1709,11 @@ Return Value:
 
     //
     // Ok. Carry on processing this channel interrupt to see if a transfer just
-    // completed.
+    // completed. If there is no transfer, then ignore it. It's been cancelled.
     //
 
-    CurrentEntry = Controller->TransferList.Next;
-    while (CurrentEntry != &(Controller->TransferList)) {
-        Transfer = LIST_VALUE(CurrentEntry, DMA_BCM2709_TRANSFER, ListEntry);
-        if (Transfer->Transfer->Allocation->Allocation == Channel) {
-            break;
-        }
-
-        CurrentEntry = CurrentEntry->Next;
-    }
-
-    //
-    // If the transfer is gone, ignore it. It may have come in while a transfer
-    // was being canceled.
-    //
-
-    if (CurrentEntry == &(Controller->TransferList)) {
+    Transfer = &(Controller->Channels[Channel].Transfer);
+    if (Transfer->Transfer == NULL) {
         return;
     }
 
@@ -1784,12 +1744,7 @@ Return Value:
     //
 
     if (DmaTransfer->Completed < DmaTransfer->Size) {
-        Status = DmaBcm2709pPrepareTransfer(Controller, Transfer);
-        if (!KSUCCESS(Status)) {
-            goto ProcessCompletedTransferEnd;
-        }
-
-        Status = DmaBcm2709pSubmitTransfer(Controller, Transfer);
+        Status = DmaBcm2709pPrepareAndSubmitTransfer(Controller, Transfer);
         if (!KSUCCESS(Status)) {
             goto ProcessCompletedTransferEnd;
         }
@@ -1803,10 +1758,16 @@ Return Value:
 ProcessCompletedTransferEnd:
     if (CompleteTransfer != FALSE) {
         DmaTransfer->Status = Status;
-        LIST_REMOVE(&(Transfer->ListEntry));
-        Transfer->ListEntry.Next = NULL;
-        DmaBcm2709pFreeTransfer(Controller, Transfer);
-        DmaTransferCompletion(Controller->DmaController, DmaTransfer);
+        DmaTransfer = DmaTransferCompletion(Controller->DmaController,
+                                            DmaTransfer);
+
+        if (DmaTransfer != NULL) {
+            Transfer->Transfer = DmaTransfer;
+            DmaBcm2709pPrepareAndSubmitTransfer(Controller, Transfer);
+
+        } else {
+            Transfer->Transfer = NULL;
+        }
     }
 
     return;
@@ -1894,7 +1855,7 @@ Return Value:
     TransferInformation |= DMA_BCM2709_TRANSFER_INFORMATION_INTERRUPT_ENABLE;
 
     //
-    // Unpause the channel and abort the transfer. It should "complete".
+    // Unpause the channel and abort the transfer. The channel should be reset.
     //
 
     ChannelStatus |= DMA_BCM2709_CHANNEL_STATUS_ACTIVE |
@@ -1908,88 +1869,64 @@ Return Value:
     return;
 }
 
-PDMA_BCM2709_TRANSFER
-DmaBcm2709pAllocateTransfer (
+KSTATUS
+DmaBcm2709pAllocateControlBlockTable (
     PDMA_BCM2709_CONTROLLER Controller,
-    PDMA_TRANSFER DmaTransfer
+    PDMA_BCM2709_CHANNEL Channel
     )
 
 /*++
 
 Routine Description:
 
-    This routine allocates an BCM2709 DMA transfer structure.
+    This routine allocates a control block table for the given channel.
 
 Arguments:
 
-    Controller - Supplies a pointer to the controller.
+    Controller - Supplies a pointer to the BCM2709 DMA controller context.
 
-    DmaTransfer - Supplies a pointer to the DMA transfer.
+    Channel - Supplies a pointer to the DMA channel for which the control block
+        table needs to be allocated.
 
 Return Value:
 
-    Returns a pointer to the allocated DMA_BCM2709 transfer on success.
-
-    NULL on allocation failure.
+    Status code.
 
 --*/
 
 {
 
-    PDMA_BCM2709_TRANSFER Transfer;
+    ULONG IoBufferFlags;
+    PIO_BUFFER NewTable;
+    KSTATUS Status;
 
-    if (!LIST_EMPTY(&(Controller->FreeList))) {
-        Transfer = LIST_VALUE(Controller->FreeList.Next,
-                              DMA_BCM2709_TRANSFER,
-                              ListEntry);
+    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS |
+                    IO_BUFFER_FLAG_MAP_NON_CACHED;
 
-        LIST_REMOVE(&(Transfer->ListEntry));
+    NewTable = MmAllocateNonPagedIoBuffer(0,
+                                          MAX_ULONG,
+                                          DMA_BCM2709_CONTROL_BLOCK_ALIGNMENT,
+                                          DMA_BCM2709_CONTROL_BLOCK_TABLE_SIZE,
+                                          IoBufferFlags);
 
-    } else {
-        Transfer = MmAllocateNonPagedPool(sizeof(DMA_BCM2709_TRANSFER),
-                                          DMA_BCM2709_ALLOCATION_TAG);
-
-        if (Transfer == NULL) {
-            return NULL;
-        }
+    if (NewTable == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto AllocateControlBlockTableEnd;
     }
 
-    Transfer->ListEntry.Next = NULL;
-    Transfer->Transfer = DmaTransfer;
-    INSERT_AFTER(&(Transfer->ListEntry), &(Controller->TransferList));
-    return Transfer;
-}
+    //
+    // This write is synchronized by the DMA core. A control block table gets
+    // allocated the first time a channel is used and the DMA core serializes
+    // access to a channel.
+    //
 
-VOID
-DmaBcm2709pFreeTransfer (
-    PDMA_BCM2709_CONTROLLER Controller,
-    PDMA_BCM2709_TRANSFER Transfer
-    )
+    ASSERT(Channel->ControlBlockTable == NULL);
 
-/*++
+    Channel->ControlBlockTable = NewTable;
+    Status = STATUS_SUCCESS;
 
-Routine Description:
-
-    This routine frees an DMA_BCM2709 transfer.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    Transfer - Supplies a pointer to the DMA_BCM2709 transfer.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ASSERT(Transfer->ListEntry.Next == NULL);
-
-    INSERT_AFTER(&(Transfer->ListEntry), &(Controller->FreeList));
-    return;
+AllocateControlBlockTableEnd:
+    return Status;
 }
 
 RUNLEVEL

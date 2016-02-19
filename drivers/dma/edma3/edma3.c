@@ -88,6 +88,31 @@ Environment:
 
 Structure Description:
 
+    This structure defines the context for an EDMA3 transfer.
+
+Members:
+
+    Transfer - Stores a pointer to the DMA transfer.
+
+    Params - Stores the array of PaRAM slots allocated for this transfer.
+
+    ParamCount - Stores the number of valid entries in the PaRAMs array.
+
+    BytesPending - Stores the size of the currently outstanding request.
+
+--*/
+
+typedef struct _EDMA_TRANSFER {
+    PDMA_TRANSFER Transfer;
+    UCHAR Params[EDMA_TRANSFER_PARAMS];
+    ULONG ParamCount;
+    UINTN BytesPending;
+} EDMA_TRANSFER, *PEDMA_TRANSFER;
+
+/*++
+
+Structure Description:
+
     This structure defines the set of pending interrupts in the controller.
 
 Members:
@@ -167,6 +192,9 @@ Members:
     Region - Stores the shadow region identifier that the processor is
         connected to.
 
+    Transfers - Stores an array of points to EDMA transfers. One for each
+        channel.
+
 --*/
 
 typedef struct _EDMA_CONTROLLER {
@@ -180,41 +208,11 @@ typedef struct _EDMA_CONTROLLER {
     PVOID ControllerBase;
     PDMA_CONTROLLER DmaController;
     KSPIN_LOCK Lock;
-    LIST_ENTRY TransferList;
-    LIST_ENTRY FreeList;
     UINTN Params[EDMA_PARAM_WORDS];
     EDMA_PENDING_INTERRUPTS Pending;
     UCHAR Region;
+    PEDMA_TRANSFER Transfers[EDMA_CHANNEL_COUNT];
 } EDMA_CONTROLLER, *PEDMA_CONTROLLER;
-
-/*++
-
-Structure Description:
-
-    This structure defines the context for an EDMA3 transfer.
-
-Members:
-
-    ListEntry - Stores pointers to the next and previous transfers on the
-        transfer list or free list.
-
-    Transfer - Stores a pointer to the DMA transfer.
-
-    Params - Stores the array of PaRAM slots allocated for this transfer.
-
-    ParamCount - Stores the number of valid entries in the PaRAMs array.
-
-    BytesPending - Stores the size of the currently outstanding request.
-
---*/
-
-typedef struct _EDMA_TRANSFER {
-    LIST_ENTRY ListEntry;
-    PDMA_TRANSFER Transfer;
-    UCHAR Params[EDMA_TRANSFER_PARAMS];
-    ULONG ParamCount;
-    UINTN BytesPending;
-} EDMA_TRANSFER, *PEDMA_TRANSFER;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -308,6 +306,12 @@ EdmapControllerReset (
     );
 
 KSTATUS
+EdmapPrepareAndSubmitTransfer (
+    PEDMA_CONTROLLER Controller,
+    PEDMA_TRANSFER Transfer
+    );
+
+KSTATUS
 EdmapPrepareTransfer (
     PEDMA_CONTROLLER Controller,
     PEDMA_TRANSFER Transfer
@@ -343,14 +347,8 @@ EdmapTearDownChannel (
     ULONG Channel
     );
 
-PEDMA_TRANSFER
-EdmapAllocateTransfer (
-    PEDMA_CONTROLLER Controller,
-    PDMA_TRANSFER DmaTransfer
-    );
-
 VOID
-EdmapFreeTransfer (
+EdmapResetTransfer (
     PEDMA_CONTROLLER Controller,
     PEDMA_TRANSFER Transfer
     );
@@ -521,8 +519,6 @@ Return Value:
     Controller->OsDevice = DeviceToken;
     Controller->CompletionInterruptHandle = INVALID_HANDLE;
     Controller->ErrorInterruptHandle = INVALID_HANDLE;
-    INITIALIZE_LIST_HEAD(&(Controller->TransferList));
-    INITIALIZE_LIST_HEAD(&(Controller->FreeList));
     KeInitializeSpinLock(&(Controller->Lock));
 
     //
@@ -1284,25 +1280,44 @@ Return Value:
 
 {
 
+    ULONG Channel;
     PEDMA_CONTROLLER Controller;
     PEDMA_TRANSFER EdmaTransfer;
+    BOOL LockHeld;
     RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     Controller = Context;
-    OldRunLevel = EdmapAcquireLock(Controller);
-    EdmaTransfer = EdmapAllocateTransfer(Controller, Transfer);
+    LockHeld = FALSE;
+
+    //
+    // Allocate a transfer for this channel if necessary. This is serialized by
+    // the DMA core that only submits one transfer to a channel at a time.
+    //
+
+    Channel = Transfer->Allocation->Allocation;
+    EdmaTransfer = Controller->Transfers[Channel];
     if (EdmaTransfer == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto SubmitEnd;
+        EdmaTransfer = MmAllocateNonPagedPool(sizeof(EDMA_TRANSFER),
+                                              EDMA_ALLOCATION_TAG);
+
+        if (EdmaTransfer == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto SubmitEnd;
+        }
+
+        EdmaTransfer->Transfer = NULL;
+        EdmaTransfer->ParamCount = 0;
+        Controller->Transfers[Channel] = EdmaTransfer;
     }
 
-    Status = EdmapPrepareTransfer(Controller, EdmaTransfer);
-    if (!KSUCCESS(Status)) {
-        goto SubmitEnd;
-    }
+    OldRunLevel = EdmapAcquireLock(Controller);
+    LockHeld = TRUE;
 
-    Status = EdmapSubmitTransfer(Controller, EdmaTransfer);
+    ASSERT(EdmaTransfer->Transfer == NULL);
+
+    EdmaTransfer->Transfer = Transfer;
+    Status = EdmapPrepareAndSubmitTransfer(Controller, EdmaTransfer);
     if (!KSUCCESS(Status)) {
         goto SubmitEnd;
     }
@@ -1312,11 +1327,14 @@ Return Value:
 SubmitEnd:
     if (!KSUCCESS(Status)) {
         if (EdmaTransfer != NULL) {
-            EdmapFreeTransfer(Controller, EdmaTransfer);
+            EdmapResetTransfer(Controller, EdmaTransfer);
         }
     }
 
-    EdmapReleaseLock(Controller, OldRunLevel);
+    if (LockHeld != FALSE) {
+        EdmapReleaseLock(Controller, OldRunLevel);
+    }
+
     return Status;
 }
 
@@ -1353,35 +1371,37 @@ Return Value:
 
 {
 
+    ULONG Channel;
     PEDMA_CONTROLLER Controller;
-    PLIST_ENTRY CurrentEntry;
-    PEDMA_TRANSFER EdmaTransfer;
     RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     Controller = Context;
+    Channel = Transfer->Allocation->Allocation;
 
     //
-    // Grab the lock to synchronize with completion, and then look for the
-    // transfer in the transfer list.
+    // If there is no transfer for this channel, then something is wrong.
     //
 
-    OldRunLevel = EdmapAcquireLock(Controller);
-    CurrentEntry = Controller->TransferList.Next;
-    while (CurrentEntry != &(Controller->TransferList)) {
-        EdmaTransfer = LIST_VALUE(CurrentEntry, EDMA_TRANSFER, ListEntry);
-        if (EdmaTransfer->Transfer == Transfer) {
-            break;
-        }
-
-        CurrentEntry = CurrentEntry->Next;
+    if (Controller->Transfers[Channel] == NULL) {
+        return STATUS_INVALID_PARAMETER;
     }
 
     //
-    // If the transfer was not found, it must already have been completed.
+    // Do a quick check to see if the transfer is still in the channel. If it
+    // is not, then it's too late.
     //
 
-    if (CurrentEntry == &(Controller->TransferList)) {
+    if (Controller->Transfers[Channel]->Transfer != Transfer) {
+        return STATUS_TOO_LATE;
+    }
+
+    //
+    // Grab the lock to synchronize with completion, and then look again.
+    //
+
+    OldRunLevel = EdmapAcquireLock(Controller);
+    if (Controller->Transfers[Channel]->Transfer != Transfer) {
         Status = STATUS_TOO_LATE;
         goto CancelEnd;
     }
@@ -1390,7 +1410,8 @@ Return Value:
     // Tear down the channel to stop any transfer that might be in progress.
     //
 
-    EdmapTearDownChannel(Controller, Transfer->Allocation->Allocation);
+    EdmapTearDownChannel(Controller, Channel);
+    EdmapResetTransfer(Controller, Controller->Transfers[Channel]);
     Status = STATUS_SUCCESS;
 
 CancelEnd:
@@ -1462,6 +1483,48 @@ Return Value:
 
     EDMA_REGION_WRITE64(Controller, EdmaInterruptEnableClearLow, -1ULL);
     return;
+}
+
+KSTATUS
+EdmapPrepareAndSubmitTransfer (
+    PEDMA_CONTROLLER Controller,
+    PEDMA_TRANSFER Transfer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prepares and submits an EDMA transfer.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Transfer - Supplies a pointer to the transfer to prepare and submit.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    Status = EdmapPrepareTransfer(Controller, Transfer);
+    if (!KSUCCESS(Status)) {
+        goto PrepareAndSubmitTransfer;
+    }
+
+    Status = EdmapSubmitTransfer(Controller, Transfer);
+    if (!KSUCCESS(Status)) {
+        goto PrepareAndSubmitTransfer;
+    }
+
+PrepareAndSubmitTransfer:
+    return Status;
 }
 
 KSTATUS
@@ -2041,19 +2104,12 @@ Return Value:
 {
 
     BOOL CompleteTransfer;
-    PLIST_ENTRY CurrentEntry;
     PDMA_TRANSFER DmaTransfer;
     KSTATUS Status;
     PEDMA_TRANSFER Transfer;
 
-    CurrentEntry = Controller->TransferList.Next;
-    while (CurrentEntry != &(Controller->TransferList)) {
-        Transfer = LIST_VALUE(CurrentEntry, EDMA_TRANSFER, ListEntry);
-        if (Transfer->Transfer->Allocation->Allocation == Channel) {
-            break;
-        }
-
-        CurrentEntry = CurrentEntry->Next;
+    if (Controller->Transfers[Channel] == NULL) {
+        return;
     }
 
     //
@@ -2061,7 +2117,8 @@ Return Value:
     // was being canceled.
     //
 
-    if (CurrentEntry == &(Controller->TransferList)) {
+    Transfer = Controller->Transfers[Channel];
+    if (Transfer->Transfer == NULL) {
         return;
     }
 
@@ -2088,12 +2145,7 @@ Return Value:
     //
 
     if (DmaTransfer->Completed < DmaTransfer->Size) {
-        Status = EdmapPrepareTransfer(Controller, Transfer);
-        if (!KSUCCESS(Status)) {
-            goto ProcessCompletedTransferEnd;
-        }
-
-        Status = EdmapSubmitTransfer(Controller, Transfer);
+        Status = EdmapPrepareAndSubmitTransfer(Controller, Transfer);
         if (!KSUCCESS(Status)) {
             goto ProcessCompletedTransferEnd;
         }
@@ -2107,10 +2159,14 @@ Return Value:
 ProcessCompletedTransferEnd:
     if (CompleteTransfer != FALSE) {
         DmaTransfer->Status = Status;
-        LIST_REMOVE(&(Transfer->ListEntry));
-        Transfer->ListEntry.Next = NULL;
-        EdmapFreeTransfer(Controller, Transfer);
-        DmaTransferCompletion(Controller->DmaController, DmaTransfer);
+        EdmapResetTransfer(Controller, Transfer);
+        DmaTransfer = DmaTransferCompletion(Controller->DmaController,
+                                            DmaTransfer);
+
+        if (DmaTransfer != NULL) {
+            Transfer->Transfer = DmaTransfer;
+            EdmapPrepareAndSubmitTransfer(Controller, Transfer);
+        }
     }
 
     return;
@@ -2177,62 +2233,8 @@ Return Value:
     return;
 }
 
-PEDMA_TRANSFER
-EdmapAllocateTransfer (
-    PEDMA_CONTROLLER Controller,
-    PDMA_TRANSFER DmaTransfer
-    )
-
-/*++
-
-Routine Description:
-
-    This routine allocates an EDMA transfer structure, and allocates PaRAM
-    resources for a transfer.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    DmaTransfer - Supplies a pointer to the DMA transfer.
-
-Return Value:
-
-    Returns a pointer to the allocated EDMA transfer on success.
-
-    NULL on allocation failure.
-
---*/
-
-{
-
-    PEDMA_TRANSFER Transfer;
-
-    if (!LIST_EMPTY(&(Controller->FreeList))) {
-        Transfer = LIST_VALUE(Controller->FreeList.Next,
-                              EDMA_TRANSFER,
-                              ListEntry);
-
-        LIST_REMOVE(&(Transfer->ListEntry));
-
-    } else {
-        Transfer = MmAllocateNonPagedPool(sizeof(EDMA_TRANSFER),
-                                          EDMA_ALLOCATION_TAG);
-
-        if (Transfer == NULL) {
-            return NULL;
-        }
-    }
-
-    Transfer->ListEntry.Next = NULL;
-    Transfer->Transfer = DmaTransfer;
-    Transfer->ParamCount = 0;
-    INSERT_AFTER(&(Transfer->ListEntry), &(Controller->TransferList));
-    return Transfer;
-}
-
 VOID
-EdmapFreeTransfer (
+EdmapResetTransfer (
     PEDMA_CONTROLLER Controller,
     PEDMA_TRANSFER Transfer
     )
@@ -2241,7 +2243,7 @@ EdmapFreeTransfer (
 
 Routine Description:
 
-    This routine frees an EDMA transfer.
+    This routine resets an EDMA transfer.
 
 Arguments:
 
@@ -2263,9 +2265,8 @@ Return Value:
         EdmapFreeParam(Controller, Transfer->Params[ParamIndex]);
     }
 
-    ASSERT(Transfer->ListEntry.Next == NULL);
-
-    INSERT_AFTER(&(Transfer->ListEntry), &(Controller->FreeList));
+    Transfer->ParamCount = 0;
+    Transfer->Transfer = NULL;
     return;
 }
 
