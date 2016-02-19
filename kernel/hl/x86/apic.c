@@ -1036,6 +1036,12 @@ Return Value:
     }
 
     //
+    // Stall to let things settle.
+    //
+
+    HlApicServices->Stall(10000);
+
+    //
     // Send the INIT Deassert IPI to take the processor out of reset.
     //
 
@@ -1057,6 +1063,15 @@ Return Value:
 
     StartupIpi |= APIC_DELIVER_STARTUP | APIC_LEVEL_ASSERT |
                   APIC_EDGE_TRIGGERED | APIC_PHYSICAL_DELIVERY;
+
+    WRITE_LOCAL_APIC(ApicCommandLow, StartupIpi);
+    while ((READ_LOCAL_APIC(ApicCommandLow) & APIC_DELIVERY_PENDING) != 0) {
+        NOTHING;
+    }
+
+    //
+    // Send the second SIPI.
+    //
 
     WRITE_LOCAL_APIC(ApicCommandLow, StartupIpi);
     return STATUS_SUCCESS;
