@@ -1437,6 +1437,9 @@ Return Value:
     //
 
     AllocationList = Irp->U.StartDevice.ProcessorLocalResources;
+
+    ASSERT(AllocationList != NULL);
+
     Allocation = IoGetNextResourceAllocation(AllocationList, NULL);
     while (Allocation != NULL) {
 

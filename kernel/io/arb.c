@@ -455,6 +455,10 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
+    if (FreeSpaceLength == 0) {
+        return STATUS_SUCCESS;
+    }
+
     Status = IopArbiterAddFreeSpace(Arbiter,
                                     FreeSpaceBegin,
                                     FreeSpaceLength,

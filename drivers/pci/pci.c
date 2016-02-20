@@ -1543,7 +1543,6 @@ Return Value:
     PRESOURCE_ALLOCATION_LIST BootAllocations;
     UCHAR Bus;
     PRESOURCE_CONFIGURATION_LIST ConfigurationList;
-    USHORT ControlRegister;
     UCHAR DeviceNumber;
     UCHAR Function;
     UCHAR InterruptPin;
@@ -1613,129 +1612,123 @@ Return Value:
         SecondaryBusNumber = (UCHAR)(Value >> PCI_BRIDGE_SECONDARY_BUS_SHIFT);
 
         //
-        // If decoding is enabled, read the I/O and memory BARs.
+        // Read the value set by the BIOS for the I/O decode region.
         //
 
-        ControlRegister = (USHORT)ReadConfig(Bus,
-                                             DeviceNumber,
-                                             Function,
-                                             PCI_CONTROL_OFFSET,
-                                             sizeof(USHORT));
+        IoDecodeUpperBaseValid = FALSE;
+        IoDecodeUpperLimitValid = FALSE;
+        Value = (USHORT)ReadConfig(Bus,
+                                   DeviceNumber,
+                                   Function,
+                                   PCI_BRIDGE_IO_BAR_OFFSET,
+                                   sizeof(USHORT));
 
-        if ((ControlRegister & PCI_CONTROL_IO_DECODE_ENABLED) != 0) {
-            IoDecodeUpperBaseValid = FALSE;
-            IoDecodeUpperLimitValid = FALSE;
-            Value = (USHORT)ReadConfig(Bus,
-                                       DeviceNumber,
-                                       Function,
-                                       PCI_BRIDGE_IO_BAR_OFFSET,
-                                       sizeof(USHORT));
+        if ((Value & PCI_BRIDGE_IO_BASE_DECODE_MASK) ==
+            PCI_BRIDGE_IO_BASE_DECODE_32_BIT) {
 
-            if ((Value & PCI_BRIDGE_IO_BASE_DECODE_MASK) ==
-                PCI_BRIDGE_IO_BASE_DECODE_32_BIT) {
+            IoDecodeUpperBaseValid = TRUE;
+        }
 
-                IoDecodeUpperBaseValid = TRUE;
+        if ((Value & PCI_BRIDGE_IO_LIMIT_DECODE_MASK) ==
+            PCI_BRIDGE_IO_LIMIT_DECODE_32_BIT) {
+
+            IoDecodeUpperLimitValid = TRUE;
+        }
+
+        IoDecodeBase = (Value & PCI_BRIDGE_IO_BASE_MASK) <<
+                       PCI_BRIDGE_IO_BASE_ADDRESS_SHIFT;
+
+        IoDecodeLimit = Value & PCI_BRIDGE_IO_LIMIT_MASK;
+        if ((IoDecodeUpperBaseValid != FALSE) ||
+            (IoDecodeUpperLimitValid != FALSE)) {
+
+            ValueHigh = (USHORT)ReadConfig(Bus,
+                                           DeviceNumber,
+                                           Function,
+                                           PCI_BRIDGE_IO_HIGH_BAR_OFFSET,
+                                           sizeof(ULONG));
+
+            if (IoDecodeUpperBaseValid != FALSE) {
+                IoDecodeBase |= (ValueHigh &
+                                 PCI_BRIDGE_IO_BASE_HIGH_MASK) <<
+                                PCI_BRIDGE_IO_BASE_HIGH_ADDRESS_SHIFT;
             }
 
-            if ((Value & PCI_BRIDGE_IO_LIMIT_DECODE_MASK) ==
-                PCI_BRIDGE_IO_LIMIT_DECODE_32_BIT) {
-
-                IoDecodeUpperLimitValid = TRUE;
-            }
-
-            IoDecodeBase = (Value & PCI_BRIDGE_IO_BASE_MASK) <<
-                           PCI_BRIDGE_IO_BASE_ADDRESS_SHIFT;
-
-            IoDecodeLimit = Value & PCI_BRIDGE_IO_LIMIT_MASK;
-            if ((IoDecodeUpperBaseValid != FALSE) ||
-                (IoDecodeUpperLimitValid != FALSE)) {
-
-                ValueHigh = (USHORT)ReadConfig(Bus,
-                                               DeviceNumber,
-                                               Function,
-                                               PCI_BRIDGE_IO_HIGH_BAR_OFFSET,
-                                               sizeof(ULONG));
-
-                if (IoDecodeUpperBaseValid != FALSE) {
-                    IoDecodeBase |= (ValueHigh &
-                                     PCI_BRIDGE_IO_BASE_HIGH_MASK) <<
-                                    PCI_BRIDGE_IO_BASE_HIGH_ADDRESS_SHIFT;
-                }
-
-                if (IoDecodeUpperLimitValid != FALSE) {
-                    IoDecodeLimit |= ValueHigh & PCI_BRIDGE_IO_LIMIT_HIGH_MASK;
-                }
+            if (IoDecodeUpperLimitValid != FALSE) {
+                IoDecodeLimit |= ValueHigh & PCI_BRIDGE_IO_LIMIT_HIGH_MASK;
             }
         }
 
-        if ((ControlRegister & PCI_CONTROL_MEMORY_DECODE_ENABLED) != 0) {
-            Value = (ULONG)ReadConfig(Bus,
-                                      DeviceNumber,
-                                      Function,
-                                      PCI_BRIDGE_MEMORY_BAR_OFFSET,
-                                      sizeof(ULONG));
+        //
+        // Read the value set by the BIOS for the memory decode region.
+        //
 
-            MemoryDecodeBase = (Value & PCI_BRIDGE_MEMORY_BASE_MASK) <<
-                               PCI_BRIDGE_MEMORY_BASE_ADDRESS_SHIFT;
+        Value = (ULONG)ReadConfig(Bus,
+                                  DeviceNumber,
+                                  Function,
+                                  PCI_BRIDGE_MEMORY_BAR_OFFSET,
+                                  sizeof(ULONG));
 
-            MemoryDecodeLimit = Value & PCI_BRIDGE_MEMORY_LIMIT_MASK;
+        MemoryDecodeBase = (Value & PCI_BRIDGE_MEMORY_BASE_MASK) <<
+                           PCI_BRIDGE_MEMORY_BASE_ADDRESS_SHIFT;
 
-            //
-            // Read the prefetchable memory range as well.
-            //
+        MemoryDecodeLimit = Value & PCI_BRIDGE_MEMORY_LIMIT_MASK;
 
-            PrefetchableMemoryUpperBaseValid = FALSE;
-            PrefetchableMemoryUpperLimitValid = FALSE;
-            Value = (ULONG)ReadConfig(Bus,
-                                      DeviceNumber,
-                                      Function,
-                                      PCI_BRIDGE_PREFETCHABLE_MEMORY_BAR_OFFSET,
-                                      sizeof(ULONG));
+        //
+        // Read the prefetchable memory range as well.
+        //
 
-            if ((Value & PCI_BRIDGE_PREFETCHABLE_MEMORY_BASE_DECODE_MASK) ==
-                PCI_BRIDGE_PREFETCHABLE_MEMORY_BASE_DECODE_64_BIT) {
+        PrefetchableMemoryUpperBaseValid = FALSE;
+        PrefetchableMemoryUpperLimitValid = FALSE;
+        Value = (ULONG)ReadConfig(Bus,
+                                  DeviceNumber,
+                                  Function,
+                                  PCI_BRIDGE_PREFETCHABLE_MEMORY_BAR_OFFSET,
+                                  sizeof(ULONG));
 
-                PrefetchableMemoryUpperBaseValid = TRUE;
-            }
+        if ((Value & PCI_BRIDGE_PREFETCHABLE_MEMORY_BASE_DECODE_MASK) ==
+            PCI_BRIDGE_PREFETCHABLE_MEMORY_BASE_DECODE_64_BIT) {
 
-            if ((Value & PCI_BRIDGE_PREFETCHABLE_MEMORY_LIMIT_DECODE_MASK) ==
-                PCI_BRIDGE_PREFETCHABLE_MEMORY_LIMIT_DECODE_64_BIT) {
+            PrefetchableMemoryUpperBaseValid = TRUE;
+        }
 
-                PrefetchableMemoryUpperLimitValid = TRUE;
-            }
+        if ((Value & PCI_BRIDGE_PREFETCHABLE_MEMORY_LIMIT_DECODE_MASK) ==
+            PCI_BRIDGE_PREFETCHABLE_MEMORY_LIMIT_DECODE_64_BIT) {
 
-            PrefetchableMemoryDecodeBase =
-                          (Value & PCI_BRIDGE_PREFETCHABLE_MEMORY_BASE_MASK) <<
-                          PCI_BRIDGE_PREFETCHABLE_MEMORY_BASE_ADDRESS_SHIFT;
+            PrefetchableMemoryUpperLimitValid = TRUE;
+        }
 
-            PrefetchableMemoryDecodeLimit =
-                             Value & PCI_BRIDGE_PREFETCHABLE_MEMORY_LIMIT_MASK;
+        PrefetchableMemoryDecodeBase =
+                      (Value & PCI_BRIDGE_PREFETCHABLE_MEMORY_BASE_MASK) <<
+                      PCI_BRIDGE_PREFETCHABLE_MEMORY_BASE_ADDRESS_SHIFT;
 
-            if (PrefetchableMemoryUpperBaseValid != FALSE) {
-                ValueHigh = (ULONG)ReadConfig(
-                               Bus,
-                               DeviceNumber,
-                               Function,
-                               PCI_BRIDGE_PREFETCHABLE_MEMORY_BASE_HIGH_OFFSET,
-                               sizeof(ULONG));
+        PrefetchableMemoryDecodeLimit =
+                         Value & PCI_BRIDGE_PREFETCHABLE_MEMORY_LIMIT_MASK;
 
-                PrefetchableMemoryDecodeBase |=
-                             (ULONGLONG)ValueHigh <<
-                             PCI_BRIDGE_PREFETCHABLE_MEMORY_HIGH_ADDRESS_SHIFT;
-            }
+        if (PrefetchableMemoryUpperBaseValid != FALSE) {
+            ValueHigh = (ULONG)ReadConfig(
+                           Bus,
+                           DeviceNumber,
+                           Function,
+                           PCI_BRIDGE_PREFETCHABLE_MEMORY_BASE_HIGH_OFFSET,
+                           sizeof(ULONG));
 
-            if (PrefetchableMemoryUpperLimitValid != FALSE) {
-                ValueHigh = (ULONG)ReadConfig(
-                              Bus,
-                              DeviceNumber,
-                              Function,
-                              PCI_BRIDGE_PREFETCHABLE_MEMORY_LIMIT_HIGH_OFFSET,
-                              sizeof(ULONG));
+            PrefetchableMemoryDecodeBase |=
+                         (ULONGLONG)ValueHigh <<
+                         PCI_BRIDGE_PREFETCHABLE_MEMORY_HIGH_ADDRESS_SHIFT;
+        }
 
-                PrefetchableMemoryDecodeLimit |=
-                             (ULONGLONG)ValueHigh <<
-                             PCI_BRIDGE_PREFETCHABLE_MEMORY_HIGH_ADDRESS_SHIFT;
-            }
+        if (PrefetchableMemoryUpperLimitValid != FALSE) {
+            ValueHigh = (ULONG)ReadConfig(
+                          Bus,
+                          DeviceNumber,
+                          Function,
+                          PCI_BRIDGE_PREFETCHABLE_MEMORY_LIMIT_HIGH_OFFSET,
+                          sizeof(ULONG));
+
+            PrefetchableMemoryDecodeLimit |=
+                         (ULONGLONG)ValueHigh <<
+                         PCI_BRIDGE_PREFETCHABLE_MEMORY_HIGH_ADDRESS_SHIFT;
         }
 
         InterruptPin = (USHORT)ReadConfig(Bus,

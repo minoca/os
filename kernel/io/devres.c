@@ -1118,6 +1118,10 @@ Return Value:
 
     PLIST_ENTRY NextEntry;
 
+    if (ResourceAllocationList == NULL) {
+        return NULL;
+    }
+
     if (CurrentEntry != NULL) {
         NextEntry = CurrentEntry->ListEntry.Next;
 
