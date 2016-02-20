@@ -316,6 +316,13 @@ typedef struct _VESA_MODE_INFORMATION {
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+VOID
+FwpPcatSetTextCursor (
+    UCHAR DisplayPage,
+    UCHAR Row,
+    UCHAR Column
+    );
+
 KSTATUS
 FwpPcatGetVesaInformation (
     PVESA_INFORMATION Information
@@ -369,6 +376,12 @@ FwpPcatSetVesaMode (
 BOOL FwVesaUseHighestResolution = FALSE;
 
 //
+// Store a boolean that if set will simply leave the BIOS alone in text mode.
+//
+
+BOOL FwVideoTextMode = FALSE;
+
+//
 // Store a copy of the mode list coming from the VESA information
 //
 
@@ -378,6 +391,7 @@ USHORT FwVesaModeList[VESA_MAX_MODES];
 // Store the frame buffer attributes.
 //
 
+ULONG FwFrameBufferMode = BaseVideoInvalidMode;
 PHYSICAL_ADDRESS FwFrameBufferPhysical;
 ULONG FwFrameBufferWidth;
 ULONG FwFrameBufferHeight;
@@ -415,42 +429,72 @@ Return Value:
     PUSHORT ModeList;
     KSTATUS Status;
 
-    //
-    // Attempt to get the VESA information structure.
-    //
+    if (FwVideoTextMode != FALSE) {
+        ModeCount = 0;
 
-    Information.VesaVersion = 0;
-    Information.Signature = VESA_2_SIGNATURE;
-    Status = FwpPcatGetVesaInformation(&Information);
-    if (!KSUCCESS(Status)) {
-        goto InitializeVideoEnd;
+    } else {
+
+        //
+        // Attempt to get the VESA information structure.
+        //
+
+        Information.VesaVersion = 0;
+        Information.Signature = VESA_2_SIGNATURE;
+        Status = FwpPcatGetVesaInformation(&Information);
+        if (!KSUCCESS(Status)) {
+            goto InitializeVideoEnd;
+        }
+
+        if ((Information.Signature != VESA_1_SIGNATURE) ||
+            (Information.VesaVersion < 0x0200)) {
+
+            Status = STATUS_NOT_SUPPORTED;
+            goto InitializeVideoEnd;
+        }
+
+        ModeList =
+                VESA_SEGMENTED_TO_LINEAR_ADDRESS(Information.VideoModePointer);
+
+        //
+        // Copy the mode list to the global.
+        //
+
+        ModeCount = 0;
+        while ((ModeList[ModeCount] != 0xFFFF) &&
+               (ModeCount < VESA_MAX_MODES - 1)) {
+
+            FwVesaModeList[ModeCount] = ModeList[ModeCount];
+            ModeCount += 1;
+        }
+
+        FwVesaModeList[ModeCount] = 0xFFFF;
+        if (ModeCount != 0) {
+            Status = FwpPcatSetBestVesaMode(FwVesaModeList);
+            if (!KSUCCESS(Status)) {
+                goto InitializeVideoEnd;
+            }
+        }
     }
 
-    if ((Information.Signature != VESA_1_SIGNATURE) ||
-        (Information.VesaVersion < 0x0200)) {
-
-        Status = STATUS_NOT_SUPPORTED;
-        goto InitializeVideoEnd;
-    }
-
-    ModeList = VESA_SEGMENTED_TO_LINEAR_ADDRESS(Information.VideoModePointer);
-
     //
-    // Copy the mode list to the global.
+    // Just use old text mode if no graphical video modes could be found.
     //
 
-    ModeCount = 0;
-    while ((ModeList[ModeCount] != 0xFFFF) &&
-           (ModeCount < VESA_MAX_MODES - 1)) {
+    if (ModeCount == 0) {
 
-        FwVesaModeList[ModeCount] = ModeList[ModeCount];
-        ModeCount += 1;
-    }
+        //
+        // Set the cursor off the screen to hide it since the kernel is not
+        // going to be manipulating it. It's also a nice very early indication
+        // that this code is running.
+        //
 
-    FwVesaModeList[ModeCount] = 0xFFFF;
-    Status = FwpPcatSetBestVesaMode(FwVesaModeList);
-    if (!KSUCCESS(Status)) {
-        goto InitializeVideoEnd;
+        FwpPcatSetTextCursor(0, BIOS_TEXT_VIDEO_ROWS, 0);
+        ModeCount = 0;
+        FwFrameBufferMode = BaseVideoModeBiosText;
+        FwFrameBufferPhysical = BIOS_TEXT_VIDEO_BASE;
+        FwFrameBufferWidth = BIOS_TEXT_VIDEO_COLUMNS;
+        FwFrameBufferHeight = BIOS_TEXT_VIDEO_ROWS;
+        FwFrameBufferBitsPerPixel = BIOS_TEXT_VIDEO_CELL_WIDTH * BITS_PER_BYTE;
     }
 
     //
@@ -460,6 +504,7 @@ Return Value:
     RtlZeroMemory(&FrameBuffer, sizeof(SYSTEM_RESOURCE_FRAME_BUFFER));
     FrameBuffer.Header.PhysicalAddress = FwFrameBufferPhysical;
     FrameBuffer.Header.VirtualAddress = (PVOID)(UINTN)FwFrameBufferPhysical;
+    FrameBuffer.Mode = FwFrameBufferMode;
     FrameBuffer.Width = FwFrameBufferWidth;
     FrameBuffer.Height = FwFrameBufferHeight;
     FrameBuffer.BitsPerPixel = FwFrameBufferBitsPerPixel;
@@ -468,9 +513,12 @@ Return Value:
                               FrameBuffer.PixelsPerScanLine *
                               (FrameBuffer.BitsPerPixel / BITS_PER_BYTE);
 
-    FrameBuffer.RedMask = 0x00FF0000;
-    FrameBuffer.GreenMask = 0x0000FF00;
-    FrameBuffer.BlueMask = 0x000000FF;
+    if (FrameBuffer.Mode == BaseVideoModeFrameBuffer) {
+        FrameBuffer.RedMask = 0x00FF0000;
+        FrameBuffer.GreenMask = 0x0000FF00;
+        FrameBuffer.BlueMask = 0x000000FF;
+    }
+
     Status = VidInitialize(&FrameBuffer);
     if (!KSUCCESS(Status)) {
         goto InitializeVideoEnd;
@@ -483,6 +531,67 @@ InitializeVideoEnd:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+FwpPcatSetTextCursor (
+    UCHAR DisplayPage,
+    UCHAR Row,
+    UCHAR Column
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the text cursor position in the text mode BIOS.
+
+Arguments:
+
+    DisplayPage - Supplies the display page to set for. Supply 0 by default.
+
+    Row - Supplies the row to set the cursor position to. Set to off the screen
+        to hide the cursor.
+
+    Column - Supplies the column to set the cursor position to.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    REAL_MODE_CONTEXT RealModeContext;
+    KSTATUS Status;
+
+    //
+    // Create a standard BIOS call context.
+    //
+
+    Status = FwpRealModeCreateBiosCallContext(&RealModeContext, 0x10);
+    if (!KSUCCESS(Status)) {
+        goto SetTextCursorEnd;
+    }
+
+    //
+    // Set up the call to int 10, function 2, Set Cursor Position.
+    //
+
+    RealModeContext.Eax = INT10_SET_CURSOR_POSITION << BITS_PER_BYTE;
+    RealModeContext.Ebx = DisplayPage << BITS_PER_BYTE;
+    RealModeContext.Edx = (Row << BITS_PER_BYTE) | Column;
+
+    //
+    // Execute the firmware call.
+    //
+
+    FwpRealModeExecute(&RealModeContext);
+
+SetTextCursorEnd:
+    FwpRealModeDestroyBiosCallContext(&RealModeContext);
+    return;
+}
 
 KSTATUS
 FwpPcatGetVesaInformation (
@@ -838,6 +947,7 @@ Return Value:
 
 SetBestVideoModeEnd:
     if (KSUCCESS(Status)) {
+        FwFrameBufferMode = BaseVideoModeFrameBuffer;
         FwFrameBufferPhysical = PhysicalAddress;
         FwFrameBufferWidth = Width;
         FwFrameBufferHeight = Height;

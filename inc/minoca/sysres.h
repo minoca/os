@@ -88,6 +88,8 @@ Members:
 
     Header - Stores the common system resource header.
 
+    Mode - Stores the base video mode. This is of type BASE_VIDEO_MODE.
+
     Width - Stores the width of the frame buffer, in pixels.
 
     Height - Stores the height of the frame buffer, in pixels.
@@ -109,6 +111,7 @@ Members:
 
 typedef struct _SYSTEM_RESOURCE_FRAME_BUFFER {
     SYSTEM_RESOURCE_HEADER Header;
+    ULONG Mode;
     ULONG Width;
     ULONG Height;
     ULONG BitsPerPixel;

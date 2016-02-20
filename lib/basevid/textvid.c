@@ -63,6 +63,14 @@ Environment:
      ((_Value) & 0x0000FF00))
 
 //
+// This macro converts a foreground and background color into attributes
+// (upper 8 of 16 bits) for BIOS text mode.
+//
+
+#define BIOS_TEXT_ATTRIBUTES(_Foreground, _Background) \
+    ((((_Foreground) & 0xF) << 8) | (((_Background) & 0x7) << 12))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -111,6 +119,12 @@ typedef struct _COLOR_TRANSLATION {
 //
 // -------------------------------------------------------------------- Globals
 //
+
+//
+// Store the current text video mode.
+//
+
+BASE_VIDEO_MODE VidMode;
 
 //
 // Store a pointer to the frame buffer base address.
@@ -183,6 +197,12 @@ BASE_VIDEO_PALETTE VidPalette = {
 BASE_VIDEO_PALETTE VidPhysicalPalette;
 
 //
+// Store the conversion between ANSI colors and BIOS text attribute numbers.
+//
+
+UCHAR VidTextModeColors[AnsiColorCount] = {7, 0, 4, 2, 6, 1, 5, 3, 7};
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -211,6 +231,7 @@ Return Value:
 
     KSTATUS Status;
 
+    VidMode = FrameBuffer->Mode;
     VidFrameBuffer = FrameBuffer->Header.VirtualAddress;
     VidFrameBufferWidth = FrameBuffer->Width;
     VidFrameBufferHeight = FrameBuffer->Height;
@@ -220,14 +241,17 @@ Return Value:
     VidGreenMask = FrameBuffer->GreenMask;
     VidBlueMask = FrameBuffer->BlueMask;
 
-    ASSERT((VidFrameBuffer != NULL) &&
+    ASSERT((VidMode != BaseVideoInvalidMode) &&
+           (VidFrameBuffer != NULL) &&
            (VidFrameBufferWidth != 0) &&
            (VidFrameBufferHeight != 0) &&
            (VidFrameBufferPixelsPerScanLine >= VidFrameBufferWidth) &&
-           (VidFrameBufferBitsPerPixel != 0) &&
-           (VidRedMask != 0) &&
-           (VidGreenMask != 0) &&
-           (VidBlueMask != 0));
+           (VidFrameBufferBitsPerPixel != 0));
+
+    ASSERT((VidMode != BaseVideoModeFrameBuffer) ||
+           ((VidRedMask != 0) &&
+            (VidGreenMask != 0) &&
+            (VidBlueMask != 0)));
 
     VidpConvertPalette(&VidPalette, &VidPhysicalPalette);
     Status = STATUS_SUCCESS;
@@ -271,6 +295,7 @@ Return Value:
 
 {
 
+    BASE_VIDEO_CHARACTER Character;
     ULONG Color;
     ULONG HorizontalIndex;
     PULONG Pixel;
@@ -304,6 +329,28 @@ Return Value:
 
     if (MaximumY > VidFrameBufferHeight) {
         MaximumY = VidFrameBufferHeight;
+    }
+
+    //
+    // Handle text mode by running around printing spaces.
+    //
+
+    if (VidMode == BaseVideoModeBiosText) {
+        Character.Data.Character = ' ';
+        Character.Data.Attributes = 0;
+        for (VerticalIndex = MinimumY;
+             VerticalIndex < MaximumY;
+             VerticalIndex += 1) {
+
+            for (HorizontalIndex = MinimumX;
+                 HorizontalIndex < MaximumX;
+                 HorizontalIndex += 1) {
+
+                VidpPrintCharacter(HorizontalIndex, VerticalIndex, &Character);
+            }
+        }
+
+        return;
     }
 
     Color = VidPhysicalPalette.DefaultBackground;
@@ -450,9 +497,20 @@ Return Value:
 {
 
     BASE_VIDEO_CHARACTER Character;
+    ULONG Columns;
+    ULONG Rows;
 
     if (VidFrameBuffer == NULL) {
         return;
+    }
+
+    if (VidMode == BaseVideoModeBiosText) {
+        Columns = VidFrameBufferWidth;
+        Rows = VidFrameBufferHeight;
+
+    } else {
+        Columns = VidFrameBufferWidth / BASE_VIDEO_CHARACTER_WIDTH;
+        Rows = VidFrameBufferHeight / BASE_VIDEO_CHARACTER_HEIGHT;
     }
 
     Character.AsUint32 = 0;
@@ -460,14 +518,12 @@ Return Value:
         Character.Data.Character = *String;
         VidpPrintCharacter(XCoordinate, YCoordinate, &Character);
         XCoordinate += 1;
-        if (XCoordinate >= (VidFrameBufferWidth / BASE_VIDEO_CHARACTER_WIDTH)) {
+        if (XCoordinate >= Columns) {
             XCoordinate = 0;
             YCoordinate += 1;
         }
 
-        if (YCoordinate >=
-            (VidFrameBufferHeight / BASE_VIDEO_CHARACTER_HEIGHT)) {
-
+        if (YCoordinate >= Rows) {
             YCoordinate = 0;
         }
 
@@ -597,19 +653,28 @@ Return Value:
 
 {
 
+    ULONG Columns;
     ULONG Index;
+    ULONG Rows;
+
+    if (VidMode == BaseVideoModeBiosText) {
+        Columns = VidFrameBufferWidth;
+        Rows = VidFrameBufferHeight;
+
+    } else {
+        Columns = VidFrameBufferWidth / BASE_VIDEO_CHARACTER_WIDTH;
+        Rows = VidFrameBufferHeight / BASE_VIDEO_CHARACTER_HEIGHT;
+    }
 
     for (Index = 0; Index < Count; Index += 1) {
         VidpPrintCharacter(XCoordinate, YCoordinate, Characters + Index);
         XCoordinate += 1;
-        if (XCoordinate >= (VidFrameBufferWidth / BASE_VIDEO_CHARACTER_WIDTH)) {
+        if (XCoordinate >= Columns) {
             XCoordinate = 0;
             YCoordinate += 1;
         }
 
-        if (YCoordinate >=
-            (VidFrameBufferHeight / BASE_VIDEO_CHARACTER_HEIGHT)) {
-
+        if (YCoordinate >= Rows) {
             YCoordinate = 0;
         }
     }
@@ -763,6 +828,27 @@ Return Value:
     ULONG RedBit;
     COLOR_TRANSLATION Translation;
 
+    if (VidMode == BaseVideoModeBiosText) {
+        for (ColorIndex = 0; ColorIndex < AnsiColorCount; ColorIndex += 1) {
+            PhysicalPalette->AnsiColor[ColorIndex] =
+                                                 VidTextModeColors[ColorIndex];
+
+            PhysicalPalette->BoldAnsiColor[ColorIndex] =
+                                             VidTextModeColors[ColorIndex] + 8;
+        }
+
+        PhysicalPalette->DefaultBackground = VidTextModeColors[AnsiColorBlack];
+        PhysicalPalette->DefaultBoldBackground =
+                                            VidTextModeColors[AnsiColorWhite];
+
+        PhysicalPalette->CursorText = PhysicalPalette->DefaultBackground;
+        PhysicalPalette->CursorBackground =
+                                  PhysicalPalette->AnsiColor[AnsiColorDefault];
+
+        goto ConvertPaletteEnd;
+    }
+
+    ASSERT(VidMode == BaseVideoModeFrameBuffer);
     ASSERT((VidRedMask != 0) && (VidGreenMask != 0) && (VidBlueMask != 0));
 
     //
@@ -837,6 +923,7 @@ Return Value:
     PhysicalPalette->CursorBackground =
                        TRANSLATE_COLOR(Palette->CursorBackground, Translation);
 
+ConvertPaletteEnd:
     return;
 }
 
@@ -855,11 +942,9 @@ Routine Description:
 
 Arguments:
 
-    XCoordinate - Supplies the X coordinate of the location on the screen
-        to write to.
+    XCoordinate - Supplies the column to write to.
 
-    YCoordinate - Supplies the Y cooordinate of the location on the screen
-        to write to.
+    YCoordinate - Supplies the row to write to.
 
     Character - Supplies a pointer to the character to print.
 
@@ -927,6 +1012,19 @@ Return Value:
                 ColorOff = SwapColor;
             }
         }
+    }
+
+    //
+    // Handle text mode differently.
+    //
+
+    if (VidMode == BaseVideoModeBiosText) {
+        Destination16 = VidFrameBuffer;
+        Destination16 += (YCoordinate * VidFrameBufferWidth) + XCoordinate;
+        *Destination16 = BIOS_TEXT_ATTRIBUTES(ColorOn, ColorOff) |
+                         (UCHAR)(Character->Data.Character);
+
+        return;
     }
 
     //

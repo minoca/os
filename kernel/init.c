@@ -34,6 +34,36 @@ Environment:
 //
 
 //
+// The first row has at max 11 * 4 = 44 characters of value.
+// The second row has at max 13 + (4 * 4) + 11 + 11 = 51 characters of value.
+//
+
+#define KE_BANNER_FULL_WIDTH 116
+#define KE_BANNER_FULL_MEMORY_FORMAT \
+    "Memory Used/Total: %s   Paged Pool: %s   Non-Paged Pool: %s   Cache: %s"
+
+#define KE_BANNER_FULL_TIME_FORMAT \
+    "Uptime: %s  CPU User: %s  Kernel: %s  Interrupt: %s  Idle: %s   IO: %s%s"
+
+#define KE_BANNER_FULL_PAGING_FORMAT "   Pg: %s"
+
+#define KE_BANNER_SHORT_WIDTH 80
+#define KE_BANNER_SHORT_MEMORY_FORMAT \
+    "Memory: %s Paged: %s Non-paged: %s Cache: %s"
+
+#define KE_BANNER_SHORT_TIME_FORMAT \
+    "%s U: %s K: %s In: %s Id: %s IO: %s%s"
+
+#define KE_BANNER_SHORT_PAGING_FORMAT " Pg: %s"
+
+#define KE_BANNER_TINY_WIDTH 40
+#define KE_BANNER_TINY_MEMORY_FORMAT "Memory: %s Cache: %s"
+#define KE_BANNER_TINY_TIME_FORMAT \
+    "%s U%s K%s IO:%s"
+
+#define KE_BANNER_TINY_PAGING_FORMAT ""
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -104,24 +134,21 @@ KepPrintFormattedMemoryUsage (
     PCHAR String,
     ULONG StringSize,
     ULONGLONG UsedValue,
-    ULONGLONG TotalValue,
-    PULONG Offset
+    ULONGLONG TotalValue
     );
 
-VOID
+ULONG
 KepPrintFormattedSize (
     PCHAR String,
     ULONG StringSize,
-    ULONGLONG Value,
-    PULONG Offset
+    ULONGLONG Value
     );
 
-VOID
+ULONG
 KepPrintFormattedPercent (
     PCHAR String,
     ULONG StringSize,
-    ULONG PercentTimesTen,
-    PULONG Offset
+    ULONG PercentTimesTen
     );
 
 VOID
@@ -151,6 +178,15 @@ volatile ULONG KeProcessorStartLock = 0;
 volatile ULONG KeProcessorsReady = 0;
 volatile BOOL KeAllProcessorsInitialize = FALSE;
 volatile BOOL KeAllProcessorsGo = FALSE;
+
+//
+// TODO: The base video information should be in a context structure.
+// The banner thread can then be handed a pointer to that structure or use
+// official Ke video calls to get the width.
+//
+
+extern ULONG VidMode;
+extern ULONG VidFrameBufferWidth;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -759,24 +795,39 @@ Return Value:
 
     CHAR BannerString[120];
     IO_CACHE_STATISTICS Cache;
+    CHAR CacheString[16];
+    CHAR CpuIdleString[16];
+    CHAR CpuInterruptString[16];
+    CHAR CpuKernelString[16];
+    CHAR CpuUserString[16];
     ULONGLONG Days;
     ULONGLONG Frequency;
     ULONGLONG Hours;
     IO_GLOBAL_STATISTICS IoStatistics;
+    CHAR IoString[16];
     MM_STATISTICS Memory;
+    PSTR MemoryFormat;
     ULONGLONG Minutes;
-    ULONG Offset;
+    CHAR NonPagedPoolString[16];
+    CHAR PagedPoolString[16];
     ULONG PageSize;
+    PSTR PagingFormat;
+    CHAR PagingString[24];
+    CHAR PagingValueString[16];
     IO_GLOBAL_STATISTICS PreviousIoStatistics;
     ULONGLONG ReadDifference;
     ULONGLONG Seconds;
     ULONG Size;
     KSTATUS Status;
     ULONGLONG TimeCounter;
+    PSTR TimeFormat;
     PKTIMER Timer;
     TIMER_QUEUE_TYPE TimerQueueType;
+    CHAR TotalMemoryString[16];
+    CHAR UptimeString[16];
     SYSTEM_USAGE_CONTEXT UsageContext;
     UINTN UsedSize;
+    ULONG Width;
     ULONGLONG WriteDifference;
 
     Frequency = HlQueryTimeCounterFrequency();
@@ -788,6 +839,41 @@ Return Value:
     IoStatistics.Version = IO_GLOBAL_STATISTICS_VERSION;
     Memory.Version = MM_STATISTICS_VERSION;
     Cache.Version = IO_CACHE_STATISTICS_VERSION;
+    Width = VidFrameBufferWidth;
+    if (VidMode == BaseVideoInvalidMode) {
+        return;
+
+    } else if (VidMode == BaseVideoModeFrameBuffer) {
+        Width /= BASE_VIDEO_CHARACTER_WIDTH;
+    }
+
+    if (Width > sizeof(BannerString) - 1) {
+        Width = sizeof(BannerString) - 1;
+    }
+
+    //
+    // Determine the right format given the width of the console.
+    //
+
+    if (Width >= KE_BANNER_FULL_WIDTH) {
+        MemoryFormat = KE_BANNER_FULL_MEMORY_FORMAT;
+        TimeFormat = KE_BANNER_FULL_TIME_FORMAT;
+        PagingFormat = KE_BANNER_FULL_PAGING_FORMAT;
+
+    } else if (Width >= KE_BANNER_SHORT_WIDTH) {
+        MemoryFormat = KE_BANNER_SHORT_MEMORY_FORMAT;
+        TimeFormat = KE_BANNER_SHORT_TIME_FORMAT;
+        PagingFormat = KE_BANNER_SHORT_PAGING_FORMAT;
+
+    } else if (Width >= KE_BANNER_TINY_WIDTH) {
+        MemoryFormat = KE_BANNER_TINY_MEMORY_FORMAT;
+        TimeFormat = KE_BANNER_TINY_TIME_FORMAT;
+        PagingFormat = KE_BANNER_TINY_PAGING_FORMAT;
+
+    } else {
+        return;
+    }
+
     Timer = KeCreateTimer(KE_ALLOCATION_TAG);
     if (Timer == NULL) {
         return;
@@ -814,75 +900,58 @@ Return Value:
         Minutes %= 60;
         Days = Hours / 24;
         Hours %= 24;
-        Offset = 0;
-        Size = RtlStringCopy(BannerString + Offset,
-                             "Memory Used/Total: ",
-                             sizeof(BannerString) - Offset);
-
-        if (Size != 0) {
-            Offset += Size - 1;
-        }
-
-        KepPrintFormattedMemoryUsage(BannerString,
-                                     sizeof(BannerString),
+        KepPrintFormattedMemoryUsage(TotalMemoryString,
+                                     sizeof(TotalMemoryString),
                                      Memory.AllocatedPhysicalPages * PageSize,
-                                     Memory.PhysicalPages * PageSize,
-                                     &Offset);
-
-        Size = RtlStringCopy(BannerString + Offset,
-                             "   Paged Pool: ",
-                             sizeof(BannerString) - Offset);
-
-        if (Size != 0) {
-            Offset += Size - 1;
-        }
+                                     Memory.PhysicalPages * PageSize);
 
         UsedSize = Memory.PagedPool.TotalHeapSize -
                    Memory.PagedPool.FreeListSize;
 
-        KepPrintFormattedMemoryUsage(BannerString,
-                                     sizeof(BannerString),
+        KepPrintFormattedMemoryUsage(PagedPoolString,
+                                     sizeof(PagedPoolString),
                                      UsedSize,
-                                     Memory.PagedPool.TotalHeapSize,
-                                     &Offset);
-
-        Size = RtlStringCopy(BannerString + Offset,
-                             "   Non-Paged Pool: ",
-                             sizeof(BannerString) - Offset);
-
-        if (Size != 0) {
-            Offset += Size - 1;
-        }
+                                     Memory.PagedPool.TotalHeapSize);
 
         UsedSize = Memory.NonPagedPool.TotalHeapSize -
                    Memory.NonPagedPool.FreeListSize;
 
-        KepPrintFormattedMemoryUsage(BannerString,
-                                     sizeof(BannerString),
+        KepPrintFormattedMemoryUsage(NonPagedPoolString,
+                                     sizeof(NonPagedPoolString),
                                      UsedSize,
-                                     Memory.NonPagedPool.TotalHeapSize,
-                                     &Offset);
+                                     Memory.NonPagedPool.TotalHeapSize);
 
-        Size = RtlStringCopy(BannerString + Offset,
-                             "   Cache: ",
-                             sizeof(BannerString) - Offset);
-
-        if (Size != 0) {
-            Offset += Size - 1;
-        }
-
-        KepPrintFormattedMemoryUsage(BannerString,
-                                     sizeof(BannerString),
+        KepPrintFormattedMemoryUsage(CacheString,
+                                     sizeof(CacheString),
                                      Cache.DirtyPageCount * PageSize,
-                                     Cache.PhysicalPageCount * PageSize,
-                                     &Offset);
+                                     Cache.PhysicalPageCount * PageSize);
 
-        while (Offset < sizeof(BannerString) - 1) {
-            BannerString[Offset] = ' ';
-            Offset += 1;
+        if (Width >= KE_BANNER_SHORT_WIDTH) {
+            Size = RtlPrintToString(BannerString,
+                                    Width + 1,
+                                    CharacterEncodingDefault,
+                                    MemoryFormat,
+                                    TotalMemoryString,
+                                    PagedPoolString,
+                                    NonPagedPoolString,
+                                    CacheString);
+
+        } else {
+            Size = RtlPrintToString(BannerString,
+                                    Width + 1,
+                                    CharacterEncodingDefault,
+                                    MemoryFormat,
+                                    TotalMemoryString,
+                                    CacheString);
         }
 
-        BannerString[sizeof(BannerString) - 1] = '\0';
+        Size -= 1;
+        while (Size < Width) {
+            BannerString[Size] = ' ';
+            Size += 1;
+        }
+
+        BannerString[Size] = '\0';
         VidPrintString(0, 0, BannerString);
 
         //
@@ -890,87 +959,41 @@ Return Value:
         //
 
         KepUpdateSystemUsage(&UsageContext);
-        Offset = 0;
-        Size = RtlStringCopy(BannerString,
-                             "Uptime: ",
-                             sizeof(BannerString) - Offset);
-
-        Offset += Size - 1;
         if (Days == 0) {
-            Size = RtlPrintToString(BannerString + Offset,
-                                    sizeof(BannerString) - Offset,
-                                    CharacterEncodingAscii,
-                                    "%02I64d:%02I64d:%02I64d",
-                                    Hours,
-                                    Minutes,
-                                    Seconds);
+            RtlPrintToString(UptimeString,
+                             sizeof(UptimeString),
+                             CharacterEncodingAscii,
+                             "%02I64d:%02I64d:%02I64d",
+                             Hours,
+                             Minutes,
+                             Seconds);
 
         } else {
-            Size = RtlPrintToString(BannerString + Offset,
-                                    sizeof(BannerString) - Offset,
-                                    CharacterEncodingAscii,
-                                    "%02I64d:%02I64d:%02I64d:%02I64d",
-                                    Days,
-                                    Hours,
-                                    Minutes,
-                                    Seconds);
+            RtlPrintToString(UptimeString,
+                             sizeof(UptimeString),
+                             CharacterEncodingAscii,
+                             "%02I64d:%02I64d:%02I64d:%02I64d",
+                             Days,
+                             Hours,
+                             Minutes,
+                             Seconds);
         }
 
-        if (Size != 0) {
-            Offset += Size - 1;
-        }
+        KepPrintFormattedPercent(CpuUserString,
+                                 sizeof(CpuUserString),
+                                 UsageContext.UserPercent);
 
-        Size = RtlStringCopy(BannerString + Offset,
-                             "  CPU User: ",
-                             sizeof(BannerString) - Offset);
+        KepPrintFormattedPercent(CpuKernelString,
+                                 sizeof(CpuKernelString),
+                                 UsageContext.KernelPercent);
 
-        if (Size != 0) {
-            Offset += Size - 1;
-        }
+        KepPrintFormattedPercent(CpuInterruptString,
+                                 sizeof(CpuInterruptString),
+                                 UsageContext.InterruptPercent);
 
-        KepPrintFormattedPercent(BannerString,
-                                 sizeof(BannerString),
-                                 UsageContext.UserPercent,
-                                 &Offset);
-
-        Size = RtlStringCopy(BannerString + Offset,
-                             "  Kernel: ",
-                             sizeof(BannerString) - Offset);
-
-        if (Size != 0) {
-            Offset += Size - 1;
-        }
-
-        KepPrintFormattedPercent(BannerString,
-                                 sizeof(BannerString),
-                                 UsageContext.KernelPercent,
-                                 &Offset);
-
-        Size = RtlStringCopy(BannerString + Offset,
-                             "  Interrupt: ",
-                             sizeof(BannerString) - Offset);
-
-        if (Size != 0) {
-            Offset += Size - 1;
-        }
-
-        KepPrintFormattedPercent(BannerString,
-                                 sizeof(BannerString),
-                                 UsageContext.InterruptPercent,
-                                 &Offset);
-
-        Size = RtlStringCopy(BannerString + Offset,
-                             "  Idle: ",
-                             sizeof(BannerString) - Offset);
-
-        if (Size != 0) {
-            Offset += Size - 1;
-        }
-
-        KepPrintFormattedPercent(BannerString,
-                                 sizeof(BannerString),
-                                 UsageContext.IdlePercent,
-                                 &Offset);
+        KepPrintFormattedPercent(CpuIdleString,
+                                 sizeof(CpuIdleString),
+                                 UsageContext.IdlePercent);
 
         ReadDifference = IoStatistics.BytesRead -
                          PreviousIoStatistics.BytesRead;
@@ -978,19 +1001,10 @@ Return Value:
         WriteDifference = IoStatistics.BytesWritten -
                           PreviousIoStatistics.BytesWritten;
 
-        Size = RtlStringCopy(BannerString + Offset,
-                             "   IO: ",
-                             sizeof(BannerString) - Offset);
-
-        if (Size != 0) {
-            Offset += Size - 1;
-        }
-
-        KepPrintFormattedMemoryUsage(BannerString,
-                                     sizeof(BannerString),
+        KepPrintFormattedMemoryUsage(IoString,
+                                     sizeof(IoString),
                                      ReadDifference,
-                                     WriteDifference,
-                                     &Offset);
+                                     WriteDifference);
 
         ReadDifference = IoStatistics.PagingBytesRead -
                          PreviousIoStatistics.PagingBytesRead;
@@ -998,32 +1012,55 @@ Return Value:
         WriteDifference = IoStatistics.PagingBytesWritten -
                           PreviousIoStatistics.PagingBytesWritten;
 
+        PagingString[0] = '\0';
         if ((ReadDifference != 0) || (WriteDifference != 0)) {
-            Size = RtlStringCopy(BannerString + Offset,
-                                 "   Pg: ",
-                                 sizeof(BannerString) - Offset);
-
-            if (Size != 0) {
-                Offset += Size - 1;
-            }
-
-            KepPrintFormattedMemoryUsage(BannerString,
-                                         sizeof(BannerString),
+            KepPrintFormattedMemoryUsage(PagingValueString,
+                                         sizeof(PagingValueString),
                                          ReadDifference,
-                                         WriteDifference,
-                                         &Offset);
+                                         WriteDifference);
+
+            RtlPrintToString(PagingString,
+                             sizeof(PagingString),
+                             CharacterEncodingAscii,
+                             PagingFormat,
+                             PagingValueString);
         }
 
         RtlCopyMemory(&PreviousIoStatistics,
                       &IoStatistics,
                       sizeof(IO_GLOBAL_STATISTICS));
 
-        while (Offset < sizeof(BannerString) - 1) {
-            BannerString[Offset] = ' ';
-            Offset += 1;
+        if (Width >= KE_BANNER_SHORT_WIDTH) {
+            Size = RtlPrintToString(BannerString,
+                                    Width + 1,
+                                    CharacterEncodingDefault,
+                                    TimeFormat,
+                                    UptimeString,
+                                    CpuUserString,
+                                    CpuKernelString,
+                                    CpuInterruptString,
+                                    CpuIdleString,
+                                    IoString,
+                                    PagingString);
+
+        } else {
+            Size = RtlPrintToString(BannerString,
+                                    Width + 1,
+                                    CharacterEncodingDefault,
+                                    TimeFormat,
+                                    UptimeString,
+                                    CpuUserString,
+                                    CpuKernelString,
+                                    IoString);
         }
 
-        BannerString[sizeof(BannerString) - 1] = '\0';
+        Size -= 1;
+        while (Size < Width) {
+            BannerString[Size] = ' ';
+            Size += 1;
+        }
+
+        BannerString[Size] = '\0';
         VidPrintString(0, 1, BannerString);
         TimerQueueType = TimerQueueSoftWake;
         if ((Seconds % 5) == 0) {
@@ -1162,8 +1199,7 @@ KepPrintFormattedMemoryUsage (
     PCHAR String,
     ULONG StringSize,
     ULONGLONG UsedValue,
-    ULONGLONG TotalValue,
-    PULONG Offset
+    ULONGLONG TotalValue
     )
 
 /*++
@@ -1182,10 +1218,6 @@ Arguments:
 
     TotalValue - Supplies the second value to print.
 
-    Offset - Supplies a pointer that on input supplies the offset within the
-        string to print. This value will be updated to the new end of the
-        string.
-
 Return Value:
 
     None.
@@ -1196,22 +1228,31 @@ Return Value:
 
     ULONG Size;
 
-    KepPrintFormattedSize(String, StringSize, UsedValue, Offset);
-    Size = RtlStringCopy(String + *Offset, "/", StringSize - *Offset);
+    Size = KepPrintFormattedSize(String, StringSize, UsedValue);
     if (Size != 0) {
-        *Offset += Size - 1;
+        Size -= 1;
     }
 
-    KepPrintFormattedSize(String, StringSize, TotalValue, Offset);
+    String += Size;
+    StringSize -= Size;
+    if (StringSize > 1) {
+        *String = '/';
+        String += 1;
+        StringSize -= 1;
+    }
+
+    if (StringSize > 1) {
+        KepPrintFormattedSize(String, StringSize, TotalValue);
+    }
+
     return;
 }
 
-VOID
+ULONG
 KepPrintFormattedSize (
     PCHAR String,
     ULONG StringSize,
-    ULONGLONG Value,
-    PULONG Offset
+    ULONGLONG Value
     )
 
 /*++
@@ -1228,13 +1269,10 @@ Arguments:
 
     Value - Supplies the value in bytes to print.
 
-    Offset - Supplies a pointer that on input supplies the offset within the
-        string to print. This value will be updated to the new end of the
-        string.
-
 Return Value:
 
-    None.
+    Returns the length of the final string after all formatting has been
+    completed.
 
 --*/
 
@@ -1260,16 +1298,16 @@ Return Value:
     ASSERT(Value < 1024 * 10);
 
     if (Suffix == 'B') {
-        Size = RtlPrintToString(String + *Offset,
-                                StringSize - *Offset,
+        Size = RtlPrintToString(String,
+                                StringSize,
                                 CharacterEncodingAscii,
                                 "%d",
                                 (ULONG)Value);
 
     } else {
         if (Value < 100) {
-            Size = RtlPrintToString(String + *Offset,
-                                    StringSize - *Offset,
+            Size = RtlPrintToString(String,
+                                    StringSize,
                                     CharacterEncodingAscii,
                                     "%d.%d%c",
                                     (ULONG)Value / 10,
@@ -1277,8 +1315,8 @@ Return Value:
                                     Suffix);
 
         } else {
-            Size = RtlPrintToString(String + *Offset,
-                                    StringSize - *Offset,
+            Size = RtlPrintToString(String,
+                                    StringSize,
                                     CharacterEncodingAscii,
                                     "%d%c",
                                     (ULONG)Value / 10,
@@ -1286,19 +1324,14 @@ Return Value:
         }
     }
 
-    if (Size != 0) {
-        *Offset += Size - 1;
-    }
-
-    return;
+    return Size;
 }
 
-VOID
+ULONG
 KepPrintFormattedPercent (
     PCHAR String,
     ULONG StringSize,
-    ULONG PercentTimesTen,
-    PULONG Offset
+    ULONG PercentTimesTen
     )
 
 /*++
@@ -1324,7 +1357,8 @@ Arguments:
 
 Return Value:
 
-    None.
+    Returns the length of the final string after all formatting has been
+    completed.
 
 --*/
 
@@ -1338,8 +1372,8 @@ Return Value:
     //
 
     if (PercentTimesTen < 100) {
-        Size = RtlPrintToString(String + *Offset,
-                                StringSize - *Offset,
+        Size = RtlPrintToString(String,
+                                StringSize,
                                 CharacterEncodingAscii,
                                 "%d.%d%%",
                                 PercentTimesTen / 10,
@@ -1347,18 +1381,14 @@ Return Value:
 
     } else {
         PercentTimesTen += 5;
-        Size = RtlPrintToString(String + *Offset,
-                                StringSize - *Offset,
+        Size = RtlPrintToString(String,
+                                StringSize,
                                 CharacterEncodingAscii,
                                 "%3d%%",
                                 PercentTimesTen / 10);
     }
 
-    if (Size != 0) {
-        *Offset += Size - 1;
-    }
-
-    return;
+    return Size;
 }
 
 VOID

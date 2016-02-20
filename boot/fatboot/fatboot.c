@@ -55,13 +55,7 @@ Environment:
 #define FAT_DIRECTORY_ENTRIES_PER_BLOCK \
     (SECTOR_SIZE / sizeof(FAT_DIRECTORY_ENTRY))
 
-//
-// Define just enough video stuff to get a dying message out.
-//
-
-#define TEXT_VIDEO_ADDRESS 0xB8000
 #define TEXT_VIDEO_ATTRIBUTE (0x1F << 8)
-#define TEXT_VIDEO_COLUMN_COUNT 80
 
 //
 // Define the address of a scratch buffer to hold a sector.
@@ -644,8 +638,8 @@ Return Value:
     ULONG Index;
     PUSHORT Screen;
 
-    Screen = (PUSHORT)TEXT_VIDEO_ADDRESS +
-             (TEXT_VIDEO_COLUMN_COUNT * Line) + Column;
+    Screen = (PUSHORT)BIOS_TEXT_VIDEO_BASE +
+             (BIOS_TEXT_VIDEO_COLUMNS * Line) + Column;
 
     for (Index = 0; Index < 8; Index += 1) {
         Digit = (Integer >> 28) & 0x0F;
@@ -694,8 +688,8 @@ Return Value:
 
     PUSHORT Screen;
 
-    Screen = (PUSHORT)TEXT_VIDEO_ADDRESS +
-             (TEXT_VIDEO_COLUMN_COUNT * Line) + Column;
+    Screen = (PUSHORT)BIOS_TEXT_VIDEO_BASE +
+             (BIOS_TEXT_VIDEO_COLUMNS * Line) + Column;
 
     while (*String != '\0') {
         *Screen = TEXT_VIDEO_ATTRIBUTE | *String;

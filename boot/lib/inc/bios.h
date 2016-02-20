@@ -39,6 +39,12 @@ Author:
 #define RSDP_SEARCH_LENGTH 0x20000
 
 //
+// Define INT 10 functions.
+//
+
+#define INT10_SET_CURSOR_POSITION 0x02
+
+//
 // Define INT 13 functions.
 //
 
@@ -48,6 +54,15 @@ Author:
 #define INT13_EXTENDED_READ                 0x42
 #define INT13_EXTENDED_WRITE                0x43
 #define INT13_EXTENDED_GET_DRIVE_PARAMETERS 0x48
+
+//
+// Define BIOS text mode information.
+//
+
+#define BIOS_TEXT_VIDEO_BASE 0xB8000
+#define BIOS_TEXT_VIDEO_COLUMNS 80
+#define BIOS_TEXT_VIDEO_ROWS 25
+#define BIOS_TEXT_VIDEO_CELL_WIDTH 2
 
 //
 // --------------------------------------------------------------------- Macros
@@ -158,6 +173,7 @@ typedef struct _INT13_EXTENDED_DRIVE_PARAMETERS {
 // Store the frame buffer attributes.
 //
 
+extern ULONG FwFrameBufferMode;
 extern PHYSICAL_ADDRESS FwFrameBufferPhysical;
 extern ULONG FwFrameBufferWidth;
 extern ULONG FwFrameBufferHeight;

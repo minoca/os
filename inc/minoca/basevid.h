@@ -79,6 +79,12 @@ typedef enum _ANSI_COLOR {
     AnsiColorCount
 } ANSI_COLOR, *PANSI_COLOR;
 
+typedef enum _BASE_VIDEO_MODE {
+    BaseVideoInvalidMode,
+    BaseVideoModeFrameBuffer,
+    BaseVideoModeBiosText,
+} BASE_VIDEO_MODE, *PBASE_VIDEO_MODE;
+
 /*++
 
 Structure Description:

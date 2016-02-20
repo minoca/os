@@ -28,6 +28,7 @@ Environment:
 #include <minoca/kernel.h>
 #include <minoca/x86.h>
 #include "firmware.h"
+#include <minoca/basevid.h>
 #include "bios.h"
 #include "bootlib.h"
 #include "paging.h"
@@ -89,41 +90,56 @@ Return Value:
 
     ASSERT(Phase == 1);
 
-    FrameBufferResource =
+    FrameBufferResource = NULL;
+
+    //
+    // Create and map the frame buffer if there is one.
+    //
+
+    if (FwFrameBufferMode != BaseVideoInvalidMode) {
+        FrameBufferResource =
                         BoAllocateMemory(sizeof(SYSTEM_RESOURCE_FRAME_BUFFER));
 
-    if (FrameBufferResource == NULL) {
-        Status = STATUS_NO_MEMORY;
-        goto MapKnownRegionsEnd;
-    }
+        if (FrameBufferResource == NULL) {
+            Status = STATUS_NO_MEMORY;
+            goto MapKnownRegionsEnd;
+        }
 
-    RtlZeroMemory(FrameBufferResource,
-                  sizeof(SYSTEM_RESOURCE_FRAME_BUFFER));
+        RtlZeroMemory(FrameBufferResource,
+                      sizeof(SYSTEM_RESOURCE_FRAME_BUFFER));
 
-    FrameBufferResource->Header.Type = SystemResourceFrameBuffer;
-    FrameBufferResource->Header.PhysicalAddress = FwFrameBufferPhysical;
-    FrameBufferResource->Header.Size = FwFrameBufferWidth *
-                                       FwFrameBufferHeight *
-                                       FwFrameBufferBitsPerPixel /
-                                       BITS_PER_BYTE;
+        FrameBufferResource->Header.Type = SystemResourceFrameBuffer;
+        FrameBufferResource->Header.PhysicalAddress = FwFrameBufferPhysical;
+        FrameBufferResource->Header.Size = FwFrameBufferWidth *
+                                           FwFrameBufferHeight *
+                                           FwFrameBufferBitsPerPixel /
+                                           BITS_PER_BYTE;
 
-    FrameBufferResource->Header.VirtualAddress = (PVOID)-1;
-    FrameBufferResource->Width = FwFrameBufferWidth;
-    FrameBufferResource->Height = FwFrameBufferHeight;
-    FrameBufferResource->BitsPerPixel = FwFrameBufferBitsPerPixel;
-    FrameBufferResource->PixelsPerScanLine = FrameBufferResource->Width;
-    FrameBufferResource->RedMask = 0x00FF0000;
-    FrameBufferResource->GreenMask = 0x0000FF00;
-    FrameBufferResource->BlueMask = 0x000000FF;
-    Status = BoMapPhysicalAddress(&(FrameBufferResource->Header.VirtualAddress),
+        FrameBufferResource->Header.VirtualAddress = (PVOID)-1;
+        FrameBufferResource->Mode = FwFrameBufferMode;
+        FrameBufferResource->Width = FwFrameBufferWidth;
+        FrameBufferResource->Height = FwFrameBufferHeight;
+        FrameBufferResource->BitsPerPixel = FwFrameBufferBitsPerPixel;
+        FrameBufferResource->PixelsPerScanLine = FrameBufferResource->Width;
+        if (FwFrameBufferMode == BaseVideoModeFrameBuffer) {
+            FrameBufferResource->RedMask = 0x00FF0000;
+            FrameBufferResource->GreenMask = 0x0000FF00;
+            FrameBufferResource->BlueMask = 0x000000FF;
+        }
+
+        Status = BoMapPhysicalAddress(
+                                  &(FrameBufferResource->Header.VirtualAddress),
                                   FrameBufferResource->Header.PhysicalAddress,
                                   FrameBufferResource->Header.Size,
                                   MAP_FLAG_WRITE_THROUGH | MAP_FLAG_GLOBAL,
                                   MemoryTypeLoaderPermanent);
 
-    if (!KSUCCESS(Status)) {
-        goto MapKnownRegionsEnd;
+        if (!KSUCCESS(Status)) {
+            goto MapKnownRegionsEnd;
+        }
     }
+
+    Status = STATUS_SUCCESS;
 
 MapKnownRegionsEnd:
     if (!KSUCCESS(Status)) {

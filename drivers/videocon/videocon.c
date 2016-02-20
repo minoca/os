@@ -601,19 +601,42 @@ Return Value:
 
         Height = FrameBufferResource->Height;
         Width = FrameBufferResource->Width;
-        if ((Height <=
-             VIDEO_CONSOLE_TOP_BANNER_ROWS * BASE_VIDEO_CHARACTER_HEIGHT) ||
-            (Width < BASE_VIDEO_CHARACTER_WIDTH)) {
+        if (FrameBufferResource->Mode == BaseVideoModeBiosText) {
+            if ((Height <= VIDEO_CONSOLE_TOP_BANNER_ROWS) || (Width < 1)) {
+                continue;
+            }
 
-            continue;
+            Height -= VIDEO_CONSOLE_TOP_BANNER_ROWS;
+            RowSize = FrameBufferResource->Width *
+                      FrameBufferResource->BitsPerPixel / BITS_PER_BYTE;
+
+            TopOffset = RowSize * VIDEO_CONSOLE_TOP_BANNER_ROWS;
+            Columns = Width;
+            Rows = Height;
+
+        } else {
+
+            ASSERT(FrameBufferResource->Mode == BaseVideoModeFrameBuffer);
+
+            if ((Height <=
+                 VIDEO_CONSOLE_TOP_BANNER_ROWS * BASE_VIDEO_CHARACTER_HEIGHT) ||
+                (Width < BASE_VIDEO_CHARACTER_WIDTH)) {
+
+                continue;
+            }
+
+            Height -= VIDEO_CONSOLE_TOP_BANNER_ROWS *
+                      BASE_VIDEO_CHARACTER_HEIGHT;
+
+            RowSize = FrameBufferResource->Width *
+                      FrameBufferResource->BitsPerPixel / BITS_PER_BYTE;
+
+            TopOffset = RowSize * (VIDEO_CONSOLE_TOP_BANNER_ROWS *
+                                   BASE_VIDEO_CHARACTER_HEIGHT);
+
+            Columns = Width / BASE_VIDEO_CHARACTER_WIDTH;
+            Rows = Height / BASE_VIDEO_CHARACTER_HEIGHT;
         }
-
-        Height -= VIDEO_CONSOLE_TOP_BANNER_ROWS * BASE_VIDEO_CHARACTER_HEIGHT;
-        RowSize = FrameBufferResource->Width *
-                  FrameBufferResource->BitsPerPixel / BITS_PER_BYTE;
-
-        TopOffset = RowSize * (VIDEO_CONSOLE_TOP_BANNER_ROWS *
-                               BASE_VIDEO_CHARACTER_HEIGHT);
 
         VirtualAddress = FrameBufferResource->Header.VirtualAddress + TopOffset;
         PhysicalAddress = FrameBufferResource->Header.PhysicalAddress +
@@ -632,8 +655,6 @@ Return Value:
         // Determine the size of the allocation needed for the lines.
         //
 
-        Columns = Width / BASE_VIDEO_CHARACTER_WIDTH;
-        Rows = Height / BASE_VIDEO_CHARACTER_HEIGHT;
         LineSize = sizeof(VIDEO_CONSOLE_LINE) +
                    ((Columns + 1 - ANYSIZE_ARRAY) *
                     sizeof(BASE_VIDEO_CHARACTER));
