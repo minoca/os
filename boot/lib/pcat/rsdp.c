@@ -123,6 +123,11 @@ Return Value:
         return RsdpPointer;
     }
 
+    RsdpPointer = FwpPcatSearchForRsdp((PVOID)((UINTN)EbdaPointer << 4), 1024);
+    if (RsdpPointer != NULL) {
+        return RsdpPointer;
+    }
+
     return NULL;
 }
 

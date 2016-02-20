@@ -1501,6 +1501,7 @@ Return Value:
     AcpiContext = Context;
     TableDirectory = AcpiContext->TableDirectory;
     if ((Descriptor->Type == MemoryTypeAcpiTables) ||
+        (Descriptor->Type == MemoryTypeAcpiNvStorage) ||
         (Descriptor->Type == MemoryTypeFirmwarePermanent)) {
 
         VirtualAddress = (PVOID)-1;
