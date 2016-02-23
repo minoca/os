@@ -20,7 +20,7 @@
 #
 ################################################################################
 
-INCLUDES += $(SRCROOT)/os/uefi/inc;
+INCLUDES += $(SRCROOT)/os/uefi/include;
 
 RTBASE = $(OBJROOT)/os/uefi/core/runtime/rtbase.ffs
 

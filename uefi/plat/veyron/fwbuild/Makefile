@@ -27,7 +27,7 @@ BUILD = yes
 
 BINARYTYPE = build
 
-INCLUDES += $(SRCROOT)/os/uefi/inc;
+INCLUDES += $(SRCROOT)/os/uefi/include;
 
 TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a          \
              $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a             \

@@ -25,7 +25,7 @@ BINARY = rtlib.a
 
 BINARYTYPE = library
 
-INCLUDES += $(SRCROOT)/os/uefi/inc;$(SRCDIR)/..;
+INCLUDES += $(SRCROOT)/os/uefi/include;$(SRCDIR)/..;
 
 OBJS = crc32.o      \
        div.o        \

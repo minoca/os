@@ -26,7 +26,7 @@ BINARY = ueficore.a
 
 BINARYTYPE = library
 
-INCLUDES += $(SRCROOT)/os/uefi/inc;
+INCLUDES += $(SRCROOT)/os/uefi/include;
 
 OBJS = acpi.o     \
        basepe.o   \

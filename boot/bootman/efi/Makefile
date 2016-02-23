@@ -30,7 +30,7 @@ VPATH += $(SRCDIR)/..:
 OBJS += bootxfr.o   \
         main.o      \
 
-INCLUDES += $(SRCROOT)/os/boot/lib/inc;$(SRCDIR)/..;
+INCLUDES += $(SRCROOT)/os/boot/lib/include;$(SRCDIR)/..;
 
 TARGETLIBS += $(OBJROOT)/os/boot/lib/efi/bootefi.a \
 
@@ -39,17 +39,17 @@ ENTRY = BmEfiApplicationMain
 EXTRA_LDFLAGS += -pie -nodefaultlibs -nostartfiles -Wl,--whole-archive
 
 ifeq ($(ARCH), x86)
-LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_x86.x
+LINKER_SCRIPT = $(SRCROOT)/os/uefi/include/link_x86.x
 endif
 
 ifeq ($(ARCH), armv7)
-LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
+LINKER_SCRIPT = $(SRCROOT)/os/uefi/include/link_arm.x
 TARGETLIBS += $(OBJROOT)/os/kernel/$(ARCH)/boot/armboot.a
 LDFLAGS += -Wl,--no-wchar-size-warning
 endif
 
 ifeq ($(ARCH), armv6)
-LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
+LINKER_SCRIPT = $(SRCROOT)/os/uefi/include/link_arm.x
 TARGETLIBS += $(OBJROOT)/os/kernel/$(ARCH)/boot/armboot.a
 LDFLAGS += -Wl,--no-wchar-size-warning
 endif

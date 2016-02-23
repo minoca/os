@@ -24,7 +24,7 @@ BINARY = uefiarch.a
 
 BINARYTYPE = library
 
-INCLUDES += $(SRCROOT)/os/uefi/inc;$(SRCROOT)/os/uefi/core;
+INCLUDES += $(SRCROOT)/os/uefi/include;$(SRCROOT)/os/uefi/core;
 
 X86_OBJS = x86/archlib.o    \
            x86/archsup.o    \

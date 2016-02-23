@@ -26,7 +26,7 @@ BINARYTYPE = library
 
 include $(SRCDIR)/../sources
 
-INCLUDES += $(SRCDIR)/../inc;$(SRCDIR)/..;
+INCLUDES += $(SRCDIR)/../include;$(SRCDIR)/..;
 
 OBJS += fwapi.o      \
         int10.o      \

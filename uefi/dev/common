@@ -20,5 +20,5 @@
 #
 ################################################################################
 
-INCLUDES += $(SRCROOT)/os/uefi/inc;
+INCLUDES += $(SRCROOT)/os/uefi/include;
 

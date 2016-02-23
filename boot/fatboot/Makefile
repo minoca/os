@@ -29,7 +29,9 @@ BINARYTYPE = staticapp
 
 BINPLACE = bin
 
-INCLUDES += $(SRCDIR)/../lib/inc;$(SRCDIR)/../lib/pcat;$(SRCROOT)/os/lib/fatlib;
+INCLUDES += $(SRCDIR)/../lib/include; \
+            $(SRCDIR)/../lib/pcat;    \
+            $(SRCROOT)/os/lib/fatlib;
 
 X86_OBJS = vbr.o                    \
            fatboot.o                \

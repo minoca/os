@@ -28,7 +28,7 @@ BINPLACE = bin
 
 VPATH += $(BINROOT):
 
-INCLUDES += $(SRCROOT)/os/uefi/inc;$(SRCROOT)/os/lib/fatlib;
+INCLUDES += $(SRCROOT)/os/uefi/include;$(SRCROOT)/os/lib/fatlib;
 INCLUDES += $(SRCDIR)/../../panda/init;
 
 LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib

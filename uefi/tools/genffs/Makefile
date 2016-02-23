@@ -29,7 +29,7 @@ BINPLACE = bin
 
 BINARYTYPE = build
 
-INCLUDES += $(SRCROOT)/os/uefi/inc;
+INCLUDES += $(SRCROOT)/os/uefi/include;
 
 OBJS = genffs.o
 

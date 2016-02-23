@@ -27,7 +27,7 @@ BINARYTYPE = staticapp
 
 BINPLACE = bin
 
-INCLUDES += $(SRCROOT)/os/uefi/inc;$(SRCDIR)/..;
+INCLUDES += $(SRCROOT)/os/uefi/include;$(SRCDIR)/..;
 
 BINPLACE = bin
 
@@ -39,7 +39,7 @@ ENTRY = EfiRuntimeCoreEntry
 LDFLAGS += -pie -nodefaultlibs -nostartfiles -nostdlib
 
 ifeq ($(ARCH), armv7)
-LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
+LINKER_SCRIPT = $(SRCROOT)/os/uefi/include/link_arm.x
 endif
 
 TARGETLIBS = $(OBJROOT)/os/uefi/core/rtlib/rtlib.a       \

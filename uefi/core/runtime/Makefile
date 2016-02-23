@@ -29,7 +29,7 @@ BINARYTYPE = staticapp
 
 BINPLACE = bin
 
-INCLUDES += $(SRCROOT)/os/uefi/inc;..;
+INCLUDES += $(SRCROOT)/os/uefi/include;..;
 
 OBJS = ../crc32.o \
        runtime.o  \
@@ -41,11 +41,11 @@ ENTRY = EfiRuntimeDriverEntry
 LDFLAGS += -pie -nodefaultlibs -nostartfiles -nostdlib
 
 ifeq ($(ARCH), armv7)
-LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
+LINKER_SCRIPT = $(SRCROOT)/os/uefi/include/link_arm.x
 endif
 
 ifeq ($(ARCH), armv6)
-LINKER_SCRIPT = $(SRCROOT)/os/uefi/inc/link_arm.x
+LINKER_SCRIPT = $(SRCROOT)/os/uefi/include/link_arm.x
 endif
 
 TARGETLIBS = $(OBJROOT)/os/uefi/archlib/uefiarch.a       \

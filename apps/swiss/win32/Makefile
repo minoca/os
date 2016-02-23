@@ -29,7 +29,7 @@ BUILD = yes
 
 BINARYTYPE = ntconsole
 
-INCLUDES += $(SRCROOT)/os/apps/libc/dynamic/wincsup/inc;$(SRCDIR)/..;
+INCLUDES += $(SRCROOT)/os/apps/libc/dynamic/wincsup/include;$(SRCDIR)/..;
 
 VPATH += $(SRCDIR)/..:
 

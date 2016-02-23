@@ -31,7 +31,7 @@ BINPLACE = bin
 
 BINARYTYPE = build
 
-INCLUDES += $(SRCROOT)/os/uefi/inc;
+INCLUDES += $(SRCROOT)/os/uefi/include;
 
 OBJS = elfc32.o     \
        elfconv.o    \

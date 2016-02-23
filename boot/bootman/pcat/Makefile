@@ -34,7 +34,7 @@ TEXT_ADDRESS = 0x100000
 
 LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib
 
-INCLUDES += $(SRCROOT)/os/boot/lib/inc;$(SRCDIR)/..;
+INCLUDES += $(SRCROOT)/os/boot/lib/include;$(SRCDIR)/..;
 
 TARGETLIBS += $(OBJROOT)/os/boot/lib/pcat/bootpcat.a \
               $(OBJROOT)/os/lib/partlib/partlib.a    \

@@ -29,7 +29,7 @@ VPATH += $(SRCDIR)/..:
 
 OBJS += memory.o    \
 
-INCLUDES += $(SRCROOT)/os/boot/lib/inc;$(SRCDIR)/..;
+INCLUDES += $(SRCROOT)/os/boot/lib/include;$(SRCDIR)/..;
 
 TARGETLIBS += $(OBJROOT)/os/boot/lib/efi/bootefi.a \
 
