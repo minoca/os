@@ -27,7 +27,9 @@ BINPLACE = bin
 
 BINARYTYPE = app
 
-INCLUDES += $(SRCDIR)/;$(SRCROOT)/os/apps/inc/libc;$(SRCROOT)/os/apps/inc;
+INCLUDES += $(SRCDIR)/;                      \
+            $(SRCROOT)/os/apps/include/libc; \
+            $(SRCROOT)/os/apps/include;
 
 include $(SRCDIR)/sources
 

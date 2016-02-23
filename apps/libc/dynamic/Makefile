@@ -46,7 +46,7 @@ EXTRA_CFLAGS += -ftls-model=initial-exec
 
 ENTRY = ClInitialize
 
-INCLUDES += $(SRCROOT)/os/apps/inc;$(SRCROOT)/os/apps/inc/libc;
+INCLUDES += $(SRCROOT)/os/apps/include;$(SRCROOT)/os/apps/include/libc;
 
 OBJS = assert.o             \
        brk.o                \

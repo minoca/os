@@ -26,7 +26,7 @@ BINPLACE = bin
 
 BINARYTYPE = app
 
-INCLUDES += $(SRCROOT)/os/apps/inc/libc;$(SRCROOT)/os/apps/inc;
+INCLUDES += $(SRCROOT)/os/apps/include/libc;$(SRCROOT)/os/apps/include;
 
 OBJS = copy.o     \
        create.o   \

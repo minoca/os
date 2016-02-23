@@ -36,7 +36,7 @@ BINPLACE = bin
 
 ENTRY = OsDynamicLoaderMain
 
-INCLUDES += $(SRCROOT)/os/apps/inc;
+INCLUDES += $(SRCROOT)/os/apps/include;
 
 OBJS = env.o       \
        heap.o      \

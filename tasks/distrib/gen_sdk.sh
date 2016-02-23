@@ -79,9 +79,9 @@ cp -Rv "$SRCROOT/tools/win32/MinGW" "$WORKING/tools/win32"
 ##
 
 mkdir -p "$WORKING/os"
-cp -Rpv "$SRCROOT/os/inc" "$WORKING/os"
+cp -Rpv "$SRCROOT/os/include" "$WORKING/os"
 mkdir -p "$WORKING/os/apps"
-cp -Rpv "$SRCROOT/os/apps/inc" "$WORKING/os/apps"
+cp -Rpv "$SRCROOT/os/apps/include" "$WORKING/os/apps"
 mkdir -p "$WORKING/os/debug"
 cp -pv "$SRCROOT/os/debug/dbgext.h" "$WORKING/os/debug"
 mkdir -pv "$WORKING/os/drivers/usb/usbcore"

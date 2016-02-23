@@ -222,7 +222,7 @@ UPDATE_LAST_UPDATE := date > $(LAST_UPDATE_FILE)
 ## Includes directory.
 ##
 
-INCLUDES += $(SRCROOT)/os/inc
+INCLUDES += $(SRCROOT)/os/include
 
 ##
 ## Define default CFLAGS if none were specified elsewhere.

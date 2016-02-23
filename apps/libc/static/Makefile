@@ -28,7 +28,7 @@ BINARYTYPE = library
 
 BINPLACE = bin
 
-INCLUDES += $(SRCROOT)/os/apps/inc;$(SRCROOT)/os/apps/inc/libc;
+INCLUDES += $(SRCROOT)/os/apps/include;$(SRCROOT)/os/apps/include/libc;
 
 OBJS = init.o   \
        atexit.o \

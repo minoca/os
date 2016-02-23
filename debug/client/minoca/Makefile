@@ -27,8 +27,10 @@ BINPLACE = bin
 
 BINARYTYPE = app
 
-INCLUDES += $(SRCROOT)/os/apps/inc;$(SRCDIR)/..;$(SRCDIR)/../..;
-INCLUDES += $(SRCROOT)/os/lib/im;$(SRCROOT)/os/apps/inc/libc;
+INCLUDES += $(SRCROOT)/os/apps/include;          \
+            $(SRCDIR)/..;$(SRCDIR)/../..;        \
+            $(SRCROOT)/os/lib/im;                \
+            $(SRCROOT)/os/apps/include/libc;
 
 TARGETLIBS = $(OBJROOT)/os/lib/im/im.a                  \
 
