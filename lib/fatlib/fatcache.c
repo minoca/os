@@ -24,8 +24,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "fatlib.h"
-#include <minoca/fat.h>
+#include <minoca/lib/fat/fatlib.h>
+#include <minoca/lib/fat/fat.h>
 #include "fatlibp.h"
 
 //

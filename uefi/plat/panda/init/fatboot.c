@@ -26,7 +26,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "fatlib.h"
+#include <minoca/lib/fat/fatlib.h>
 #include <uefifw.h>
 #include "tirom.h"
 #include "util.h"

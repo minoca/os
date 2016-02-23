@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/kernel.h>
-#include <minoca/fat.h>
+#include <minoca/lib/fat/fat.h>
 
 #include <assert.h>
 #include <errno.h>

@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <minoca/kernel.h>
-#include <minoca/fat.h>
+#include <minoca/lib/fat/fat.h>
 #include "firmware.h"
 #include "bootlib.h"
 #include "bootman.h"

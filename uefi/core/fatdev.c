@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <minoca/kernel.h>
-#include <minoca/fat.h>
+#include <minoca/lib/fat/fat.h>
 #include <uefifw.h>
 #include <minoca/uefi/protocol/diskio.h>
 #include <minoca/uefi/protocol/blockio.h>

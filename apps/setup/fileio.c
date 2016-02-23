@@ -35,7 +35,7 @@ Environment:
 #include <time.h>
 
 #include "setup.h"
-#include <minoca/fat.h>
+#include <minoca/lib/fat/fat.h>
 
 //
 // ---------------------------------------------------------------- Definitions

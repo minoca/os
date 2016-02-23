@@ -26,7 +26,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "fatlib.h"
+#include <minoca/lib/fat/fatlib.h>
 #include "firmware.h"
 #include "bios.h"
 #include <minoca/x86.h>

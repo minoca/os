@@ -31,7 +31,6 @@ BINPLACE = bin
 
 INCLUDES += $(SRCDIR)/../lib/include; \
             $(SRCDIR)/../lib/pcat;    \
-            $(SRCROOT)/os/lib/fatlib;
 
 X86_OBJS = vbr.o                    \
            fatboot.o                \

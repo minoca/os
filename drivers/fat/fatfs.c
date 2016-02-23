@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/driver.h>
-#include <minoca/fat.h>
+#include <minoca/lib/fat/fat.h>
 
 //
 // ---------------------------------------------------------------- Definitions
