@@ -65,6 +65,13 @@ Environment:
 #define SECTOR_SIZE 512
 
 //
+// Limit the maximum number of sectors that can be read at a time to a page,
+// since the real mode context data area is only a page.
+//
+
+#define MAX_READ_SECTORS (0x1000 / SECTOR_SIZE)
+
+//
 // Define a region that can hold all 8k of the FAT12 FAT.
 //
 
@@ -267,6 +274,7 @@ Return Value:
 {
 
     ULONG BlockIndex;
+    ULONG BlocksThisRound;
     PFAT_BOOT_SECTOR BootSector;
     ULONG ClusterBlock;
     ULONG ClusterCount;
@@ -554,13 +562,24 @@ Return Value:
                        ((LoaderCluster - FAT_CLUSTER_BEGIN) *
                         BoFatSectorsPerCluster);
 
-        Status = BopReadSectors(Loader, ClusterBlock, BoFatSectorsPerCluster);
-        if (!KSUCCESS(Status)) {
-            goto MainEnd;
+        BlockIndex = 0;
+        while (BlockIndex < BoFatSectorsPerCluster) {
+            BlocksThisRound = BoFatSectorsPerCluster - BlockIndex;
+            if (BlocksThisRound > MAX_READ_SECTORS) {
+                BlocksThisRound = MAX_READ_SECTORS;
+            }
+
+            Status = BopReadSectors(Loader, ClusterBlock, BlocksThisRound);
+            if (!KSUCCESS(Status)) {
+                goto MainEnd;
+            }
+
+            Loader += BlocksThisRound * SECTOR_SIZE;
+            BlockIndex += BlocksThisRound;
+            ClusterBlock += BlocksThisRound;
         }
 
         BoLoaderClustersRead += 1;
-        Loader += BoFatSectorsPerCluster * SECTOR_SIZE;
         LoaderClusterCount -= 1;
         if (LoaderClusterCount == 0) {
             break;

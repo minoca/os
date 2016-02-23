@@ -48,6 +48,26 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+/*++
+
+Structure Description:
+
+    This structure stores a choice for FAT cluster size given the disk size.
+
+Members:
+
+    MaximumSize - Stores the maximum disk size in bytes for which this entry
+        applies.
+
+    ClusterSize - Stores the default cluster size for disks of this size.
+
+--*/
+
+typedef struct _FAT_CLUSTER_SIZE_ENTRY {
+    ULONGLONG MaximumSize;
+    ULONG ClusterSize;
+} FAT_CLUSTER_SIZE_ENTRY, *PFAT_CLUSTER_SIZE_ENTRY;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -84,6 +104,19 @@ BOOL FatDisableEncodedProperties = FALSE;
 BOOL FatPrintTruncatedUserIds = FALSE;
 
 //
+// Define default cluster sizes for disks up to each size. 4kB is used for all
+// small disks except floppy disks to enable direct mapping of pages from disk.
+//
+
+FAT_CLUSTER_SIZE_ENTRY FatClusterSizeDefaults[] = {
+    {2 * _1MB, 512},
+    {8ULL * _1GB, 4 * _1KB},
+    {16ULL * _1GB, 8 * _1KB},
+    {32ULL * _1GB, 16 * _1KB},
+    {-1ULL, 32 * _1KB}
+};
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -107,7 +140,7 @@ Arguments:
         underlying device.
 
     ClusterSize - Supplies the size of each cluster. Supply 0 to use a
-        default cluster size of 4096 bytes.
+        default cluster size chosen based on the disk size.
 
     Alignment - Supplies the byte alignment for volume. This is used to byte
         align the clusters and the FATs. If knowledge of the target system's
@@ -127,10 +160,12 @@ Return Value:
     ULONG BlocksPerByteAlignment;
     ULONG BlocksPerFat;
     PFAT_BOOT_SECTOR BootSector;
+    PFAT_CLUSTER_SIZE_ENTRY ClusterSizeEntry;
     ULONGLONG CurrentBlock;
     ULONG CurrentCluster;
     PFAT_DIRECTORY_ENTRY DirectoryEntry;
     ULONGLONG DiskClusters;
+    ULONGLONG DiskSize;
     ULONG EndCluster;
     PVOID Fat;
     ULONGLONG FatBlock;
@@ -159,8 +194,23 @@ Return Value:
     Scratch = NULL;
     ScratchIoBuffer = NULL;
     Media = FAT_MEDIA_DISK;
+
+    //
+    // Pick a default cluster size based on the disk size if none was specified.
+    //
+
     if (ClusterSize == 0) {
-        ClusterSize = FAT_DEFAULT_CLUSTER_SIZE;
+        ClusterSizeEntry = &(FatClusterSizeDefaults[0]);
+        DiskSize = BlockDeviceParameters->BlockSize *
+                   BlockDeviceParameters->BlockCount;
+
+        while ((DiskSize >= ClusterSizeEntry->MaximumSize) &&
+               (ClusterSizeEntry->MaximumSize != -1ULL)) {
+
+            ClusterSizeEntry += 1;
+        }
+
+        ClusterSize = ClusterSizeEntry->ClusterSize;
     }
 
     if (Alignment == 0) {

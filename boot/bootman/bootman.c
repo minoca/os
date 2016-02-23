@@ -183,8 +183,6 @@ Return Value:
         }
     }
 
-    Step += 1;
-
     //
     // Initialize the firmware layer.
     //
@@ -194,8 +192,6 @@ Return Value:
     if (!KSUCCESS(Status)) {
         goto MainEnd;
     }
-
-    Step += 1;
 
     //
     // Mount the boot device.

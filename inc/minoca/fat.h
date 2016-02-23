@@ -101,7 +101,7 @@ Arguments:
         underlying device.
 
     ClusterSize - Supplies the size of each cluster. Supply 0 to use a
-        default cluster size of 4096 bytes.
+        default cluster size chosen based on the disk size.
 
     Alignment - Supplies the byte alignment for volume. This is used to byte
         align the clusters and the FATs. If knowledge of the target system's

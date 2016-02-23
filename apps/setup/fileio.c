@@ -42,7 +42,6 @@ Environment:
 //
 
 #define SETUP_DIRECTORY_ENTRY_SIZE 300
-#define SETUP_DEFAULT_CLUSTER_SIZE 0x1000
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -246,7 +245,7 @@ Return Value:
             ((Format == SetupVolumeFormatIfIncompatible) &&
              (!KSUCCESS(Status)))) {
 
-            Status = FatFormat(&BlockParameters, SETUP_DEFAULT_CLUSTER_SIZE, 0);
+            Status = FatFormat(&BlockParameters, 0, 0);
             if (!KSUCCESS(Status)) {
                 printf("Error: Failed to format ");
                 SetupPrintDestination(Destination);

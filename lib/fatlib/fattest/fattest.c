@@ -547,7 +547,7 @@ Return Value:
     // Format the drive using the FAT32 file system.
     //
 
-    Status = FatFormat(&BlockParameters, 4096, 0);
+    Status = FatFormat(&BlockParameters, 0, 0);
     if (!KSUCCESS(Status)) {
         printf("Error: Unable to format image. Status = 0x%08x.\n", Status);
         return Status;

@@ -80,7 +80,6 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define FAT_DEFAULT_CLUSTER_SIZE 4096
 #define FAT_DEFAULT_ALIGNMENT 4096
 #define FAT_MINIMUM_BLOCK_COUNT 36
 
