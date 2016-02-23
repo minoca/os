@@ -29,8 +29,6 @@ BINPLACE = bin
 OBJS = ehci.o     \
        ehcihc.o   \
 
-INCLUDES += ..;$(SRCROOT)/os/drivers/usb/usbcore/inc;
-
 DYNLIBS = $(BINROOT)/kernel                 \
           $(BINROOT)/usbcore.drv            \
 

@@ -31,8 +31,6 @@ OBJS = am3usb.o       \
        cppi.o         \
        musb.o         \
 
-INCLUDES += ..;$(SRCROOT)/os/drivers/usb/usbcore/inc;
-
 DYNLIBS = $(BINROOT)/kernel                 \
           $(BINROOT)/usbcore.drv            \
 

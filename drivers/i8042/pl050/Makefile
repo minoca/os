@@ -27,7 +27,7 @@ BINARYTYPE = so
 
 BINPLACE = bin
 
-INCLUDES += $(SRCROOT)/os/drivers/usrinput/inc;$(SRCDIR)/..;
+INCLUDES += $(SRCDIR)/..;
 
 VPATH += $(SRCDIR)/..:
 

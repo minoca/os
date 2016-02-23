@@ -29,8 +29,6 @@ BINPLACE = bin
 OBJS = sm91c1.o    \
        sm91c1hw.o  \
 
-INCLUDES += $(SRCROOT)/os/drivers/usb/usbcore/inc;
-
 DYNLIBS = $(BINROOT)/kernel                 \
           $(BINROOT)/netcore.drv            \
           $(BINROOT)/usbcore.drv            \

@@ -29,9 +29,6 @@ BINPLACE = bin
 OBJS = keycode.o  \
        usbkbd.o   \
 
-INCLUDES += $(SRCROOT)/os/drivers/usb/usbcore/inc; \
-            $(SRCROOT)/os/drivers/usrinput/inc;
-
 DYNLIBS = $(BINROOT)/kernel                 \
           $(BINROOT)/usbcore.drv            \
           $(BINROOT)/usrinput.drv           \

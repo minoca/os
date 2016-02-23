@@ -27,7 +27,7 @@ Environment:
 
 #include <minoca/driver.h>
 #include <minoca/net/netdrv.h>
-#include <usb.h>
+#include <minoca/usb/usb.h>
 #include "smsc95.h"
 
 //

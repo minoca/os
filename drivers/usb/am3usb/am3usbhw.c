@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <minoca/driver.h>
-#include <usbhost.h>
+#include <minoca/usb/usbhost.h>
 #include "am3usb.h"
 
 //

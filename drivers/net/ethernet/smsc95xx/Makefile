@@ -30,8 +30,6 @@ BINPLACE = bin
 OBJS = smsc95.o    \
        smsc95hw.o  \
 
-INCLUDES += $(SRCROOT)/os/drivers/usb/usbcore/inc;
-
 DYNLIBS = $(BINROOT)/kernel                 \
           $(BINROOT)/netcore.drv            \
           $(BINROOT)/usbcore.drv            \

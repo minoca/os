@@ -21,8 +21,8 @@ Author:
 //
 
 #include <minoca/driver.h>
-#include <usb.h>
-#include <usrinput.h>
+#include <minoca/usb/usb.h>
+#include <minoca/usrinput/usrinput.h>
 
 //
 // ---------------------------------------------------------------- Definitions

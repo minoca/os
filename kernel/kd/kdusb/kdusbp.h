@@ -23,7 +23,7 @@ Author:
 
 #include <minoca/kdebug.h>
 #include <minoca/kdusb.h>
-#include "usb.h"
+#include <minoca/usb/usb.h>
 
 //
 // ---------------------------------------------------------------- Definitions

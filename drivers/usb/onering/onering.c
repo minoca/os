@@ -32,7 +32,7 @@ Environment:
 
 #include <minoca/driver.h>
 #include <minoca/devinfo/onering.h>
-#include <usb.h>
+#include <minoca/usb/usb.h>
 
 //
 // --------------------------------------------------------------------- Macros

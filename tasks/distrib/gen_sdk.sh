@@ -84,15 +84,12 @@ mkdir -p "$WORKING/os/apps"
 cp -Rpv "$SRCROOT/os/apps/include" "$WORKING/os/apps"
 mkdir -p "$WORKING/os/debug"
 cp -pv "$SRCROOT/os/debug/dbgext.h" "$WORKING/os/debug"
-mkdir -pv "$WORKING/os/drivers/usb/usbcore"
-cp -Rpv "$SRCROOT/os/drivers/usb/usbcore/inc" "$WORKING/os/drivers/usb/usbcore"
-mkdir -pv "$WORKING/os/drivers/usrinput"
-cp -Rpv "$SRCROOT/os/drivers/usrinput/inc" "$WORKING/os/drivers/usrinput"
 
 ##
 ## Copy the samples.
 ##
 
+mkdir -pv "$WORKING/os/drivers/usb/"
 cp -Rpv "$SRCROOT/os/drivers/null/" "$WORKING/os/drivers/"
 cp -Rpv "$SRCROOT/os/drivers/ramdisk/" "$WORKING/os/drivers/"
 cp -Rpv "$SRCROOT/os/drivers/usb/onering/" "$WORKING/os/drivers/usb/"

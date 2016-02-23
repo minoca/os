@@ -33,8 +33,6 @@ OBJS = enum.o     \
        usbcore.o  \
        usbhost.o  \
 
-INCLUDES += $(SRCROOT)/os/drivers/usb/usbcore/inc;
-
 DYNLIBS = $(BINROOT)/kernel             \
 
 include $(SRCROOT)/os/minoca.mk

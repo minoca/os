@@ -24,7 +24,6 @@ BINARY = kdusb.a
 
 BINARYTYPE = library
 
-INCLUDES += $(SRCROOT)/os/drivers/usb/usbcore/inc;
 INCLUDES += $(SRCROOT)/os/drivers/usb/ehci;
 
 OBJS = ftdi.o   \

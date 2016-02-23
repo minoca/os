@@ -26,8 +26,6 @@ BINARYTYPE = so
 
 BINPLACE = bin
 
-INCLUDES += $(SRCROOT)/os/drivers/usrinput/inc;
-
 OBJS = goec.o   \
        keymap.o \
 

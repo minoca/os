@@ -30,8 +30,6 @@ BINPLACE = bin
 OBJS = rtlw81.o   \
        rtlw81hw.o \
 
-INCLUDES += $(SRCROOT)/os/drivers/usb/usbcore/inc;
-
 DYNLIBS = $(BINROOT)/kernel                 \
           $(BINROOT)/netcore.drv            \
           $(BINROOT)/net80211.drv           \

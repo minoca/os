@@ -27,8 +27,6 @@ BINARYTYPE = so
 
 BINPLACE = bin
 
-INCLUDES += $(SRCROOT)/os/drivers/usrinput/inc;
-
 OBJS = i8042.o    \
        scancode.o \
 

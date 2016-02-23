@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/driver.h>
-#include <usbhost.h>
+#include <minoca/usb/usbhost.h>
 #include "usbhub.h"
 
 //

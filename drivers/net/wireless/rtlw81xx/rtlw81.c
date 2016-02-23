@@ -28,7 +28,7 @@ Environment:
 #include <minoca/driver.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/net/net80211.h>
-#include <usb.h>
+#include <minoca/usb/usb.h>
 #include "rtlw81.h"
 
 //

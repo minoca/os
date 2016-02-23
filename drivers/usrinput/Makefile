@@ -33,8 +33,6 @@ BINPLACE = bin
 OBJS = uskeys.o   \
        usrinput.o \
 
-INCLUDES += $(SRCROOT)/os/drivers/usrinput/inc;
-
 TARGETLIBS = $(OBJROOT)/os/lib/termlib/termlib.a     \
 
 DYNLIBS = $(BINROOT)/kernel                \
