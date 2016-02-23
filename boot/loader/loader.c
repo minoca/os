@@ -31,7 +31,7 @@ Environment:
 #include "firmware.h"
 #include "bootlib.h"
 #include "dbgport.h"
-#include <minoca/basevid.h>
+#include <minoca/lib/basevid.h>
 #include "paging.h"
 #include "loader.h"
 

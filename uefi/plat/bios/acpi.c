@@ -25,7 +25,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/types.h>
+#include <minoca/lib/types.h>
 #include <minoca/acpitabs.h>
 #include <minoca/smbios.h>
 #include <uefifw.h>

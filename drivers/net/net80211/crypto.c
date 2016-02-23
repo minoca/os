@@ -27,7 +27,7 @@ Environment:
 
 #include "net80211.h"
 #include "eapol.h"
-#include <minoca/crypto.h>
+#include <minoca/lib/crypto.h>
 
 //
 // ---------------------------------------------------------------- Definitions

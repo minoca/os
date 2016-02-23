@@ -25,8 +25,8 @@ Environment:
 //
 
 #include <minoca/kernel.h>
-#include <minoca/bconflib.h>
-#include "bconf.h"
+#include <minoca/lib/bconf.h>
+#include "bconfp.h"
 
 //
 // --------------------------------------------------------------------- Macros

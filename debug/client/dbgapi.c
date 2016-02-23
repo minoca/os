@@ -26,7 +26,7 @@ Environment:
 
 #include "dbgrtl.h"
 #include <minoca/spproto.h>
-#include <minoca/im.h>
+#include <minoca/lib/im.h>
 #include "dbgext.h"
 #include "dbgapi.h"
 #include "dbgrprof.h"

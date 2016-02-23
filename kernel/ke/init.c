@@ -26,8 +26,8 @@ Environment:
 
 #include <minoca/kernel.h>
 #include "keinit.h"
-#include <minoca/basevid.h>
-#include <minoca/bconflib.h>
+#include <minoca/lib/basevid.h>
+#include <minoca/lib/bconf.h>
 #include "kep.h"
 
 //

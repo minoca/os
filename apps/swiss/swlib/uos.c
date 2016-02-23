@@ -27,8 +27,8 @@ Environment:
 
 #define _GNU_SOURCE 1
 
-#include <minoca/types.h>
-#include <minoca/termlib.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/termlib.h>
 
 #include <assert.h>
 #include <errno.h>

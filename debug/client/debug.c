@@ -24,10 +24,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/types.h>
-#include <minoca/status.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
 #include <minoca/spproto.h>
-#include <minoca/im.h>
+#include <minoca/lib/im.h>
 #include "dbgext.h"
 #include "symbols.h"
 #include "dbgapi.h"

@@ -27,7 +27,7 @@ Environment:
 #include "cryptp.h"
 
 #include <osbase.h>
-#include <minoca/crypto.h>
+#include <minoca/lib/crypto.h>
 
 #include <alloca.h>
 #include <errno.h>

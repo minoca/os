@@ -26,8 +26,8 @@ Environment:
 //
 
 #include <stdio.h>
-#include <minoca/types.h>
-#include <minoca/status.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
 #include "dbgext.h"
 
 //

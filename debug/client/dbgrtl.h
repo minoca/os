@@ -28,9 +28,9 @@ Author:
 
 #define RTL_API DLLEXPORT
 
-#include <minoca/types.h>
-#include <minoca/status.h>
-#include <minoca/rtl.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
+#include <minoca/lib/rtl.h>
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -31,8 +31,8 @@ Environment:
 // the kernel sevices table).
 //
 
-#include <minoca/types.h>
-#include <minoca/status.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
 #include <minoca/acpitabs.h>
 #include <minoca/hmod.h>
 #include <minoca/dev/am335x.h>

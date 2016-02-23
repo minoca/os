@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/kernel.h>
-#include <minoca/partlib.h>
+#include <minoca/lib/partlib.h>
 #include <minoca/x86.h>
 #include "firmware.h"
 #include "bootlib.h"

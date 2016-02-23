@@ -23,10 +23,10 @@ Author:
 #define CRYPTO_API DLLEXPORT
 #define RTL_API DLLEXPORT_PROTECTED
 
-#include <minoca/types.h>
-#include <minoca/status.h>
-#include <minoca/rtl.h>
-#include <minoca/crypto.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
+#include <minoca/lib/rtl.h>
+#include <minoca/lib/crypto.h>
 
 //
 // ---------------------------------------------------------------- Definitions

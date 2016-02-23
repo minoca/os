@@ -29,7 +29,7 @@ Environment:
 #include "realmode.h"
 #include "firmware.h"
 #include "bootlibp.h"
-#include <minoca/basevid.h>
+#include <minoca/lib/basevid.h>
 #include "bios.h"
 
 //

@@ -28,7 +28,7 @@ Environment:
 #include <minoca/kernel.h>
 #include <minoca/x86.h>
 #include "firmware.h"
-#include <minoca/basevid.h>
+#include <minoca/lib/basevid.h>
 #include "bios.h"
 #include "bootlib.h"
 #include "paging.h"

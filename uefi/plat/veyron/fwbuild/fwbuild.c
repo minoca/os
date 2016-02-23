@@ -35,9 +35,9 @@ Environment:
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <minoca/types.h>
-#include <minoca/status.h>
-#include <minoca/crypto.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
+#include <minoca/lib/crypto.h>
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -25,9 +25,9 @@ Environment:
 //
 
 #include <minoca/kernel.h>
-#include <minoca/bconflib.h>
+#include <minoca/lib/bconf.h>
 #include <minoca/bootload.h>
-#include <minoca/basevid.h>
+#include <minoca/lib/basevid.h>
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -25,7 +25,7 @@ Environment:
 //
 
 #include "inputp.h"
-#include <minoca/termlib.h>
+#include <minoca/lib/termlib.h>
 
 //
 // --------------------------------------------------------------------- Macros

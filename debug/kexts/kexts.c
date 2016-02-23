@@ -24,9 +24,9 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/types.h>
-#include <minoca/status.h>
-#include <minoca/rtl.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
+#include <minoca/lib/rtl.h>
 #include "dbgext.h"
 #include "memory.h"
 #include "objects.h"

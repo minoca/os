@@ -22,14 +22,14 @@ Author:
 
 #define KERNEL_API DLLIMPORT
 
-#include <minoca/types.h>
-#include <minoca/status.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
 #include <minoca/arch.h>
-#include <minoca/rtl.h>
+#include <minoca/lib/rtl.h>
 #include <minoca/mm.h>
 #include <minoca/ob.h>
 #include <minoca/ksignals.h>
-#include <minoca/im.h>
+#include <minoca/lib/im.h>
 #include <minoca/process.h>
 #include <minoca/ke.h>
 #include <minoca/hl.h>

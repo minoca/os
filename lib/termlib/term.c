@@ -27,10 +27,10 @@ Environment:
 
 #define RTL_API
 
-#include <minoca/types.h>
-#include <minoca/status.h>
-#include <minoca/rtl.h>
-#include <minoca/termlib.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
+#include <minoca/lib/rtl.h>
+#include <minoca/lib/termlib.h>
 
 //
 // ---------------------------------------------------------------- Definitions

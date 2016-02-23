@@ -26,7 +26,7 @@ Environment:
 
 #include <minoca/kernel.h>
 #include <minoca/bootload.h>
-#include <minoca/bconflib.h>
+#include <minoca/lib/bconf.h>
 #include "iop.h"
 #include "pagecach.h"
 

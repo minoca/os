@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/driver.h>
-#include <minoca/partlib.h>
+#include <minoca/lib/partlib.h>
 
 //
 // ---------------------------------------------------------------- Definitions

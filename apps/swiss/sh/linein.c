@@ -35,7 +35,7 @@ Environment:
 #include "sh.h"
 #include "swlib.h"
 
-#include <minoca/termlib.h>
+#include <minoca/lib/termlib.h>
 
 //
 // ---------------------------------------------------------------- Definitions

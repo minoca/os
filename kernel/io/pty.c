@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/kernel.h>
-#include <minoca/termlib.h>
+#include <minoca/lib/termlib.h>
 #include "iop.h"
 
 //

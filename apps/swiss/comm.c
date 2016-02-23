@@ -26,7 +26,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/types.h>
+#include <minoca/lib/types.h>
 
 #include <assert.h>
 #include <errno.h>

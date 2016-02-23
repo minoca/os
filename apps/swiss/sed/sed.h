@@ -21,7 +21,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/types.h>
+#include <minoca/lib/types.h>
 #include <regex.h>
 #include <stdio.h>
 

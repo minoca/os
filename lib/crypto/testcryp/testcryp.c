@@ -27,10 +27,10 @@ Environment:
 #define RTL_API
 #define CRYPTO_API
 
-#include <minoca/types.h>
-#include <minoca/status.h>
-#include <minoca/rtl.h>
-#include <minoca/crypto.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
+#include <minoca/lib/rtl.h>
+#include <minoca/lib/crypto.h>
 
 #include <stdio.h>
 #include <stdlib.h>

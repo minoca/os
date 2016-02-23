@@ -29,7 +29,7 @@ Environment:
 #include <minoca/lib/fat/fat.h>
 #include "firmware.h"
 #include "bootlib.h"
-#include <minoca/basevid.h>
+#include <minoca/lib/basevid.h>
 #include "bootman.h"
 
 //

@@ -31,7 +31,7 @@ Environment:
 
 #define TELCMDS 1
 
-#include <minoca/types.h>
+#include <minoca/lib/types.h>
 
 #include <arpa/telnet.h>
 #include <assert.h>

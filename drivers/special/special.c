@@ -26,7 +26,7 @@ Environment:
 
 #include <minoca/driver.h>
 #include <minoca/intrface/random.h>
-#include <minoca/crypto.h>
+#include <minoca/lib/crypto.h>
 
 //
 // ---------------------------------------------------------------- Definitions

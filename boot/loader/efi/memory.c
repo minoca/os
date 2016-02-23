@@ -27,7 +27,7 @@ Environment:
 #include <minoca/kernel.h>
 #include <minoca/uefi/uefi.h>
 #include "firmware.h"
-#include <minoca/basevid.h>
+#include <minoca/lib/basevid.h>
 #include "bootlib.h"
 #include "efisup.h"
 #include "paging.h"

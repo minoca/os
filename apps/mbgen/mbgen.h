@@ -20,8 +20,8 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/types.h>
-#include <minoca/status.h>
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
 #include "chalk.h"
 
 //

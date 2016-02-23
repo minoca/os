@@ -27,8 +27,8 @@ Environment:
 
 #include <minoca/driver.h>
 #include <minoca/sysres.h>
-#include <minoca/basevid.h>
-#include <minoca/termlib.h>
+#include <minoca/lib/basevid.h>
+#include <minoca/lib/termlib.h>
 
 //
 // --------------------------------------------------------------------- Macros

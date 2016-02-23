@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/types.h>
+#include <minoca/lib/types.h>
 
 #define TELOPTS 1
 

@@ -29,7 +29,7 @@ Environment:
 
 #include <minoca/driver.h>
 #include <minoca/bootload.h>
-#include <minoca/basevid.h>
+#include <minoca/lib/basevid.h>
 
 //
 // --------------------------------------------------------------------- Macros

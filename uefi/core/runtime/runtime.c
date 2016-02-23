@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/types.h>
+#include <minoca/lib/types.h>
 #include "uefifw.h"
 #include "runtime.h"
 #include "peimage.h"

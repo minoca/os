@@ -29,7 +29,7 @@ Environment:
 #include <minoca/mm.h>
 #include <minoca/ob.h>
 #include <minoca/ksignals.h>
-#include <minoca/im.h>
+#include <minoca/lib/im.h>
 #include <minoca/process.h>
 #include <minoca/ke.h>
 

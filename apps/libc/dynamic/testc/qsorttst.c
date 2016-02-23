@@ -30,7 +30,7 @@ Environment:
 
 #define LIBC_API
 
-#include <minoca/types.h>
+#include <minoca/lib/types.h>
 
 #include <stdio.h>
 #include <stdlib.h>

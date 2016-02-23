@@ -32,7 +32,7 @@ Environment:
 
 #include "ueficore.h"
 #include <minoca/sysres.h>
-#include <minoca/basevid.h>
+#include <minoca/lib/basevid.h>
 #include <minoca/uefi/protocol/graphout.h>
 
 //

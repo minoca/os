@@ -4,7 +4,7 @@ Copyright (c) 2014 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    bconflib.h
+    bconf.h
 
 Abstract:
 
