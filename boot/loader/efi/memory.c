@@ -27,6 +27,7 @@ Environment:
 #include <minoca/kernel.h>
 #include <minoca/uefi/uefi.h>
 #include "firmware.h"
+#include <minoca/basevid.h>
 #include "bootlib.h"
 #include "efisup.h"
 #include "paging.h"
@@ -147,6 +148,7 @@ Return Value:
                                 &(FrameBufferResource->Header.Size));
 
         if (KSUCCESS(Status)) {
+            FrameBufferResource->Mode = BaseVideoModeFrameBuffer;
             FrameBufferResource->Header.VirtualAddress = (PVOID)-1;
             Status = BoMapPhysicalAddress(
                                  &(FrameBufferResource->Header.VirtualAddress),

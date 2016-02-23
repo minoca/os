@@ -448,6 +448,7 @@ Return Value:
         Device->Mode.CursorVisible = TRUE;
         Device->Mode.Attribute = EFI_BACKGROUND_BLACK | EFI_LIGHTGRAY;
         EfiSetMem(&FrameBuffer, sizeof(SYSTEM_RESOURCE_FRAME_BUFFER), 0);
+        FrameBuffer.Mode = BaseVideoModeFrameBuffer;
         FrameBuffer.Width = GraphicsMode->HorizontalResolution;
         FrameBuffer.Height = GraphicsMode->VerticalResolution;
         FrameBuffer.PixelsPerScanLine = GraphicsMode->PixelsPerScanLine;

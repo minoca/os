@@ -156,6 +156,7 @@ Return Value:
                                          &(FrameBuffer.Header.Size));
 
         if (KSUCCESS(Status)) {
+            FrameBuffer.Mode = BaseVideoModeFrameBuffer;
 
             ASSERT((UINTN)FrameBuffer.Header.PhysicalAddress ==
                    FrameBuffer.Header.PhysicalAddress);
