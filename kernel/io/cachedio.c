@@ -633,16 +633,6 @@ Return Value:
                 ASSERT(CurrentOffset < FileSize);
                 ASSERT((CurrentOffset - CacheMissOffset) <= MAX_UINTN);
 
-                //
-                // Cache misses are going to modify the page cache tree, so
-                // the lock needs to be held exclusive.
-                //
-
-                if (*LockHeldExclusive == FALSE) {
-                    KeSharedExclusiveLockConvertToExclusive(FileObject->Lock);
-                    *LockHeldExclusive = TRUE;
-                }
-
                 MissContext.IoBuffer = PageAlignedIoBuffer;
                 MissContext.Offset = CacheMissOffset;
                 MissSize = (UINTN)(CurrentOffset - CacheMissOffset);
@@ -698,6 +688,17 @@ Return Value:
 
         } else if (CacheMiss == FALSE) {
             CacheMiss = TRUE;
+
+            //
+            // Cache misses are going to modify the page cache tree, so
+            // the lock needs to be held exclusive.
+            //
+
+            if (*LockHeldExclusive == FALSE) {
+                KeSharedExclusiveLockConvertToExclusive(FileObject->Lock);
+                *LockHeldExclusive = TRUE;
+            }
+
             CacheMissOffset = CurrentOffset;
         }
 
@@ -713,11 +714,6 @@ Return Value:
 
         ASSERT(CurrentOffset <= FileSize);
         ASSERT(CurrentOffset == (IoContext->Offset + SizeInBytes));
-
-        if (*LockHeldExclusive == FALSE) {
-            KeSharedExclusiveLockConvertToExclusive(FileObject->Lock);
-            *LockHeldExclusive = TRUE;
-        }
 
         MissContext.IoBuffer = PageAlignedIoBuffer;
         MissContext.Offset = CacheMissOffset;

@@ -1629,6 +1629,7 @@ Return Value:
     PIO_BUFFER FlushBuffer;
     ULONGLONG FlushNextOffset;
     UINTN FlushSize;
+    LIST_ENTRY LocalList;
     PRED_BLACK_TREE_NODE Node;
     BOOL PageCacheThread;
     UINTN PagesFlushed;
@@ -1709,10 +1710,25 @@ Return Value:
     // a specific region, iterate using only the tree.
     //
 
+    INITIALIZE_LIST_HEAD(&LocalList);
     if ((Size != -1ULL) || (Offset != 0)) {
         Node = RtlRedBlackTreeSearchClosest(&(FileObject->PageCacheTree),
                                             &(SearchEntry.Node),
                                             TRUE);
+
+    //
+    // Move all dirty entries over to a local list to avoid processing them
+    // many times over.
+    //
+
+    } else {
+        KeAcquireQueuedLock(IoPageCacheListLock);
+        if (!LIST_EMPTY(&(FileObject->DirtyPageList))) {
+            MOVE_LIST(&(FileObject->DirtyPageList), &LocalList);
+            INITIALIZE_LIST_HEAD(&(FileObject->DirtyPageList));
+        }
+
+        KeReleaseQueuedLock(IoPageCacheListLock);
     }
 
     while (TRUE) {
@@ -1729,8 +1745,8 @@ Return Value:
 
         if ((Node == NULL) && (Size == -1ULL) && (Offset == 0)) {
             KeAcquireQueuedLock(IoPageCacheListLock);
-            if (!LIST_EMPTY(&(FileObject->DirtyPageList))) {
-                CacheEntry = LIST_VALUE(FileObject->DirtyPageList.Next,
+            if (!LIST_EMPTY(&LocalList)) {
+                CacheEntry = LIST_VALUE(LocalList.Next,
                                         PAGE_CACHE_ENTRY,
                                         ListEntry);
 
@@ -1965,6 +1981,17 @@ Return Value:
         } else {
             BytesFlushed = TRUE;
         }
+    }
+
+    //
+    // If there are still entries on the local list, put those back on the
+    // dirty list.
+    //
+
+    if (!LIST_EMPTY(&LocalList)) {
+        KeAcquireQueuedLock(IoPageCacheListLock);
+        APPEND_LIST(&LocalList, &(FileObject->DirtyPageList));
+        KeReleaseQueuedLock(IoPageCacheListLock);
     }
 
     Status = STATUS_SUCCESS;
@@ -3908,16 +3935,26 @@ Return Value:
 
     PFILE_OBJECT FileObject;
     ULONG Flags;
+    LIST_ENTRY LocalList;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     BOOL PageTakenDown;
     BOOL PageWasDirty;
     KSTATUS Status;
 
     KeAcquireQueuedLock(IoPageCacheListLock);
-    while ((!LIST_EMPTY(PageCacheListHead)) &&
+
+    //
+    // Move the contents of the list over to a local list to avoid infinitely
+    // working on the same entries. The local list is also protected by the
+    // list lock, and cannot be manipulated without it.
+    //
+
+    MOVE_LIST(PageCacheListHead, &LocalList);
+    INITIALIZE_LIST_HEAD(PageCacheListHead);
+    while ((!LIST_EMPTY(&LocalList)) &&
            ((TargetRemoveCount == NULL) || (*TargetRemoveCount != 0))) {
 
-        PageCacheEntry = LIST_VALUE(PageCacheListHead->Next,
+        PageCacheEntry = LIST_VALUE(LocalList.Next,
                                     PAGE_CACHE_ENTRY,
                                     ListEntry);
 
@@ -4039,21 +4076,21 @@ Return Value:
 
         } else {
             if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
-                if (PageCacheEntry->ListEntry.Next == NULL) {
-                    INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                                  &IoPageCacheCleanList);
-
-                    //
-                    // Avoid infinite loops!
-                    //
-
-                    ASSERT((PageCacheListHead != &IoPageCacheCleanList) ||
-                           (TargetRemoveCount != NULL));
-                }
+                LIST_REMOVE(&(PageCacheEntry->ListEntry));
+                INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                              &IoPageCacheCleanList);
             }
         }
 
         IoPageCacheEntryReleaseReference(PageCacheEntry);
+    }
+
+    //
+    // Stick any remainder back on list.
+    //
+
+    if (!LIST_EMPTY(&LocalList)) {
+        APPEND_LIST(&LocalList, PageCacheListHead);
     }
 
     KeReleaseQueuedLock(IoPageCacheListLock);
