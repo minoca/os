@@ -145,7 +145,7 @@ Return Value:
     BOOL Result;
     INT Status;
 
-    AllocationSize = sizeof(DEBUG_SYMBOLS) + sizeof(PSTAB_CONTEXT);
+    AllocationSize = sizeof(DEBUG_SYMBOLS) + sizeof(STAB_CONTEXT);
     ElfSymbols = MALLOC(AllocationSize);
     if (ElfSymbols == NULL) {
         Status = ENOMEM;
