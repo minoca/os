@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include <minoca/gpio/gpiohost.h>
 #include <minoca/acpitabs.h>
 #include <minoca/dev/rk32xx.h>

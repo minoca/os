@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 
 //
 // ---------------------------------------------------------------- Definitions

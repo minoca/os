@@ -25,7 +25,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/kernel/kernel.h>
 #include "../mmp.h"
 #include "testmm.h"
 

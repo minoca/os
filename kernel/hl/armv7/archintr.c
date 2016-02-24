@@ -24,9 +24,9 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include <minoca/arm.h>
-#include <minoca/kdebug.h>
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/arm.h>
+#include <minoca/kernel/kdebug.h>
 #include "../hlp.h"
 #include "../intrupt.h"
 #include "../profiler.h"

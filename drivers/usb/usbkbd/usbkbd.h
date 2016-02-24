@@ -20,7 +20,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include <minoca/usb/usb.h>
 #include <minoca/usrinput/usrinput.h>
 

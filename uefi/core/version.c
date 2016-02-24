@@ -26,12 +26,12 @@ Environment:
 //
 
 #include "ueficore.h"
-#include <minoca/mm.h>
-#include <minoca/ob.h>
-#include <minoca/ksignals.h>
+#include <minoca/kernel/mm.h>
+#include <minoca/kernel/ob.h>
+#include <minoca/kernel/ksignals.h>
 #include <minoca/lib/im.h>
-#include <minoca/process.h>
-#include <minoca/ke.h>
+#include <minoca/kernel/ps.h>
+#include <minoca/kernel/ke.h>
 
 //
 // --------------------------------------------------------------------- Macros

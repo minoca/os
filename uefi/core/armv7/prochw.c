@@ -26,10 +26,10 @@ Environment:
 //
 
 #include "../ueficore.h"
-#include <minoca/mm.h>
-#include <minoca/hmod.h>
-#include <minoca/kdebug.h>
-#include <minoca/arm.h>
+#include <minoca/kernel/mm.h>
+#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kdebug.h>
+#include <minoca/kernel/arm.h>
 
 //
 // ---------------------------------------------------------------- Definitions

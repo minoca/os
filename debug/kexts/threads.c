@@ -24,8 +24,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
-#include <minoca/arm.h>
+#include <minoca/kernel/driver.h>
+#include <minoca/kernel/arm.h>
 #include "dbgext.h"
 
 #include <errno.h>

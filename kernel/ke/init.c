@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/kernel/kernel.h>
 #include "keinit.h"
 #include <minoca/lib/basevid.h>
 #include <minoca/lib/bconf.h>

@@ -25,8 +25,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include "processp.h"
+#include <minoca/kernel/kernel.h>
+#include "psp.h"
 
 //
 // This macro evaluates to non-zero if the given user ID matches any of

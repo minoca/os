@@ -4,7 +4,7 @@ Copyright (c) 2012 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    processp.h
+    psp.h
 
 Abstract:
 

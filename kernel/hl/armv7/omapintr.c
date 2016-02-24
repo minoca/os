@@ -28,7 +28,7 @@ Environment:
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>
 #include <minoca/acpitabs.h>
-#include <minoca/hmod.h>
+#include <minoca/kernel/hmod.h>
 #include "omap3.h"
 
 //

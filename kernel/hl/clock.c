@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/kernel/kernel.h>
 #include "clock.h"
 #include "timer.h"
 #include "intrupt.h"

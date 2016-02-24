@@ -29,8 +29,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
-#include <minoca/sysres.h>
+#include <minoca/kernel/driver.h>
+#include <minoca/kernel/sysres.h>
 
 //
 // ---------------------------------------------------------------- Definitions

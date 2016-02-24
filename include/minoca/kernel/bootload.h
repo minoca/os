@@ -21,8 +21,8 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kdebug.h>
-#include <minoca/sysres.h>
+#include <minoca/kernel/kdebug.h>
+#include <minoca/kernel/sysres.h>
 
 //
 // ---------------------------------------------------------------- Definitions

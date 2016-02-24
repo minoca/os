@@ -24,9 +24,9 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include <minoca/acpitabs.h>
-#include <minoca/kdebug.h>
+#include <minoca/kernel/kdebug.h>
 
 //
 // --------------------------------------------------------------------- Macros

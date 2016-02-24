@@ -24,8 +24,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include <minoca/bootload.h>
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/bootload.h>
 #include <minoca/dbgproto.h>
 #include "kdp.h"
 

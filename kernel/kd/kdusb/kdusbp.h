@@ -21,8 +21,8 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kdebug.h>
-#include <minoca/kdusb.h>
+#include <minoca/kernel/kdebug.h>
+#include <minoca/kernel/kdusb.h>
 #include <minoca/usb/usb.h>
 
 //

@@ -25,8 +25,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
-#include <minoca/x86.h>
+#include <minoca/kernel/driver.h>
+#include <minoca/kernel/x86.h>
 #include "../acpip.h"
 #include "../proc.h"
 #include "../namespce.h"

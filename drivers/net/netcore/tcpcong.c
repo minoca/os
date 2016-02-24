@@ -36,7 +36,7 @@ Environment:
 
 #define NET_API DLLEXPORT
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
 #include "tcp.h"
 

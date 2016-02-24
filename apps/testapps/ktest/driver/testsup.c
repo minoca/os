@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include "ktestdrv.h"
 #include "testsup.h"
 #include "ktests.h"

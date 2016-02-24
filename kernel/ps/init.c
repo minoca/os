@@ -24,10 +24,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/kernel/kernel.h>
 #include <minoca/lib/bconf.h>
-#include <minoca/bootload.h>
-#include "processp.h"
+#include <minoca/kernel/bootload.h>
+#include "psp.h"
 
 //
 // ---------------------------------------------------------------- Definitions

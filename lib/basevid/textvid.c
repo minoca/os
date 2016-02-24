@@ -27,8 +27,8 @@ Environment:
 
 #define RTL_API DLLEXPORT
 
-#include <minoca/driver.h>
-#include <minoca/bootload.h>
+#include <minoca/kernel/driver.h>
+#include <minoca/kernel/bootload.h>
 #include <minoca/lib/basevid.h>
 
 //

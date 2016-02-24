@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <osbase.h>
-#include <minoca/sp.h>
+#include <minoca/kernel/sp.h>
 #include <mlibc.h>
 
 #include <assert.h>

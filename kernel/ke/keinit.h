@@ -21,7 +21,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/bootload.h>
+#include <minoca/kernel/bootload.h>
 
 //
 // ---------------------------------------------------------------- Definitions

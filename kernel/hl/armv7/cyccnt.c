@@ -29,8 +29,8 @@ Environment:
 // is always builtin and will not be separated out into a dynamic module.
 //
 
-#include <minoca/kernel.h>
-#include <minoca/arm.h>
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/arm.h>
 
 //
 // ---------------------------------------------------------------- Definitions

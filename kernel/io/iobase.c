@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/kernel/kernel.h>
 #include <minoca/intrface/disk.h>
 #include "iop.h"
 #include "pagecach.h"

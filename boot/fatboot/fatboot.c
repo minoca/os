@@ -29,7 +29,7 @@ Environment:
 #include <minoca/lib/fat/fatlib.h>
 #include "firmware.h"
 #include "bios.h"
-#include <minoca/x86.h>
+#include <minoca/kernel/x86.h>
 #include "realmode.h"
 
 //

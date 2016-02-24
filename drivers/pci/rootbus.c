@@ -26,7 +26,7 @@ Environment:
 //
 
 #include "pci.h"
-#include <minoca/ioport.h>
+#include <minoca/kernel/ioport.h>
 
 //
 // ---------------------------------------------------------------- Definitions

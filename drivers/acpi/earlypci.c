@@ -25,8 +25,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
-#include <minoca/ioport.h>
+#include <minoca/kernel/driver.h>
+#include <minoca/kernel/ioport.h>
 #include "acpiobj.h"
 #include "amlos.h"
 #include "earlypci.h"

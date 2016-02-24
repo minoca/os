@@ -27,8 +27,8 @@ Author:
 #define USB_API DLLEXPORT
 
 #include <minoca/usb/usbhost.h>
-#include <minoca/kdebug.h>
-#include <minoca/kdusb.h>
+#include <minoca/kernel/kdebug.h>
+#include <minoca/kernel/kdusb.h>
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -30,8 +30,8 @@ Environment:
 // is always builtin and will not be separated out into a dynamic module.
 //
 
-#include <minoca/kernel.h>
-#include <minoca/x86.h>
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/x86.h>
 
 //
 // ---------------------------------------------------------------- Definitions

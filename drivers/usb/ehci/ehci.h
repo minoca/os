@@ -23,8 +23,8 @@ Author:
 
 #include "ehcihw.h"
 #include "ehcidbg.h"
-#include <minoca/kdebug.h>
-#include <minoca/kdusb.h>
+#include <minoca/kernel/kdebug.h>
+#include <minoca/kernel/kdusb.h>
 
 //
 // ---------------------------------------------------------------- Definitions

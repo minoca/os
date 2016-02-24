@@ -24,8 +24,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include <minoca/ioport.h>
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/ioport.h>
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -26,7 +26,7 @@ Author:
 
 #endif
 
-#include <minoca/kernel.h>
+#include <minoca/kernel/kernel.h>
 
 //
 // ---------------------------------------------------------------- Definitions

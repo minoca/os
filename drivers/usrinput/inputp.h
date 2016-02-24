@@ -26,7 +26,7 @@ Author:
 
 #define USER_INPUT_API DLLEXPORT
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include <minoca/usrinput/usrinput.h>
 
 //

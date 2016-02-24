@@ -34,7 +34,7 @@ Environment:
 
 #define NET80211_API DLLEXPORT
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/net/net80211.h>
 #include <minoca/lib/crypto.h>

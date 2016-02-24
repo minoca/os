@@ -25,8 +25,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include <minoca/crashdmp.h>
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/crashdmp.h>
 #include <minoca/intrface/disk.h>
 #include "kep.h"
 

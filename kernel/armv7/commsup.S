@@ -25,7 +25,7 @@ Environment:
 ## ------------------------------------------------------------------ Includes
 ##
 
-#include <minoca/arm.inc>
+#include <minoca/kernel/arm.inc>
 
 ##
 ## --------------------------------------------------------------- Definitions

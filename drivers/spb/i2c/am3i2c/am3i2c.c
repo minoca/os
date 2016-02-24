@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include <minoca/spb/spbhost.h>
 #include <minoca/acpitabs.h>
 #include <minoca/dev/am335x.h>

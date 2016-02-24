@@ -30,7 +30,7 @@ Environment:
 
 #define SD_API
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include <minoca/intrface/disk.h>
 #include <minoca/sd.h>
 

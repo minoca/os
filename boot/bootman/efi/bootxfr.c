@@ -25,7 +25,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/kernel/kernel.h>
 #include <minoca/uefi/uefi.h>
 #include "firmware.h"
 #include "bootlib.h"

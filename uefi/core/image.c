@@ -33,8 +33,8 @@ Environment:
 #include <minoca/uefi/protocol/loadfil.h>
 #include <minoca/uefi/protocol/loadfil2.h>
 #include <minoca/uefi/protocol/sfilesys.h>
-#include <minoca/hmod.h>
-#include <minoca/kdebug.h>
+#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kdebug.h>
 
 //
 // ---------------------------------------------------------------- Definitions

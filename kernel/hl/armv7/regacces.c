@@ -24,8 +24,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include <minoca/crash.h>
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/crash.h>
 
 //
 // ---------------------------------------------------------------- Definitions

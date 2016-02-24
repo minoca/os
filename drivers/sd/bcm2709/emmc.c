@@ -24,8 +24,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
-#include <minoca/acpi.h>
+#include <minoca/kernel/driver.h>
+#include <minoca/kernel/acpi.h>
 #include <minoca/dev/bcm2709.h>
 
 //

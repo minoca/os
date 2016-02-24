@@ -24,8 +24,8 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include <minoca/x86.h>
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/x86.h>
 #include "../kep.h"
 
 //

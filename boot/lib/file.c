@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/kernel/kernel.h>
 #include <minoca/lib/fat/fat.h>
 #include "firmware.h"
 #include "bootlibp.h"

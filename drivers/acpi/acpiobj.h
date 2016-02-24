@@ -22,7 +22,7 @@ Author:
 //
 
 #include "oprgnos.h"
-#include <minoca/acpi.h>
+#include <minoca/kernel/acpi.h>
 
 //
 // --------------------------------------------------------------------- Macros

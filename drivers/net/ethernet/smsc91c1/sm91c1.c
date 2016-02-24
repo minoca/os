@@ -25,7 +25,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
 #include "sm91c1.h"
 

@@ -31,7 +31,7 @@ Environment:
 #define KERNEL_API
 
 #include "ueficore.h"
-#include <minoca/sysres.h>
+#include <minoca/kernel/sysres.h>
 #include <minoca/lib/basevid.h>
 #include <minoca/uefi/protocol/graphout.h>
 

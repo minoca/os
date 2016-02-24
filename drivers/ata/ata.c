@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include <minoca/intrface/disk.h>
 #include <minoca/intrface/pci.h>
 #include "ata.h"

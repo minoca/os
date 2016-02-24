@@ -21,7 +21,7 @@ Author:
 //
 
 #include <minoca/lib/bconf.h>
-#include <minoca/bootload.h>
+#include <minoca/kernel/bootload.h>
 
 //
 // ---------------------------------------------------------------- Definitions

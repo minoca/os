@@ -24,10 +24,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include <minoca/bootload.h>
-#include <minoca/x86.h>
-#include <minoca/ioport.h>
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/bootload.h>
+#include <minoca/kernel/x86.h>
+#include <minoca/kernel/ioport.h>
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -25,10 +25,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include <minoca/x86.h>
-#include <minoca/ioport.h>
-#include <minoca/kdebug.h>
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/x86.h>
+#include <minoca/kernel/ioport.h>
+#include <minoca/kernel/kdebug.h>
 
 //
 // ---------------------------------------------------------------- Definitions

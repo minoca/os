@@ -25,7 +25,7 @@ Environment:
 //
 
 #include "rtlp.h"
-#include <minoca/kdebug.h>
+#include <minoca/kernel/kdebug.h>
 
 //
 // ---------------------------------------------------------------- Definitions

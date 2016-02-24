@@ -25,7 +25,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/kernel/kernel.h>
 #include <minoca/uefi/uefi.h>
 #include <minoca/uefi/protocol/graphout.h>
 #include "firmware.h"

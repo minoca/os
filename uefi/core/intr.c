@@ -25,8 +25,8 @@ Environment:
 //
 
 #include "ueficore.h"
-#include <minoca/hmod.h>
-#include <minoca/kdebug.h>
+#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kdebug.h>
 
 //
 // ---------------------------------------------------------------- Definitions

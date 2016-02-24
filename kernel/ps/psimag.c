@@ -25,9 +25,9 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
-#include <minoca/kdebug.h>
-#include "processp.h"
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/kdebug.h>
+#include "psp.h"
 
 //
 // ---------------------------------------------------------------- Definitions

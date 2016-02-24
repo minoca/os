@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/driver.h>
+#include <minoca/kernel/driver.h>
 #include <minoca/spb/spb.h>
 #include <minoca/intrface/tps65217.h>
 #include "tps65217.h"

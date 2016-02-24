@@ -25,7 +25,7 @@ Environment:
 //
 
 #include "ueficore.h"
-#include <minoca/hmod.h>
+#include <minoca/kernel/hmod.h>
 
 //
 // ---------------------------------------------------------------- Definitions

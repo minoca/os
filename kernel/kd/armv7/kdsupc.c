@@ -25,10 +25,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/kernel.h>
+#include <minoca/kernel/kernel.h>
 #include <minoca/dbgproto.h>
-#include <minoca/kdebug.h>
-#include <minoca/arm.h>
+#include <minoca/kernel/kdebug.h>
+#include <minoca/kernel/arm.h>
 #include "../kdp.h"
 
 //

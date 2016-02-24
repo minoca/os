@@ -20,8 +20,8 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/regacces.h>
-#include <minoca/hmod.h>
+#include <minoca/kernel/regacces.h>
+#include <minoca/kernel/hmod.h>
 
 //
 // --------------------------------------------------------------------- Macros
