@@ -1252,7 +1252,10 @@ Return Value:
         goto GetNextClusterEnd;
     }
 
-    ASSERT(*NextCluster != FAT_CLUSTER_FREE);
+    if (*NextCluster == FAT_CLUSTER_FREE) {
+        RtlDebugPrint("FAT: Next cluster of 0 for 0x%x.\n", CurrentCluster);
+        *NextCluster = Volume->ClusterEnd;
+    }
 
 GetNextClusterEnd:
     return Status;
@@ -1594,11 +1597,14 @@ Return Value:
             // invalid cluster. Try to recover by declaring success.
             //
 
-            RtlDebugPrint("Freeing invalid cluster %x. TotalClusters %x\n",
-                          Cluster,
-                          TotalClusters);
+            if (Cluster == FAT_CLUSTER_FREE) {
+                RtlDebugPrint("FAT: Freeing cluster 0.\n");
 
-            ASSERT(FALSE);
+            } else {
+                RtlDebugPrint("FAT: Freeing invalid cluster %x, total %x\n",
+                              Cluster,
+                              TotalClusters);
+            }
 
             Status = STATUS_SUCCESS;
             goto FreeClusterChainEnd;
@@ -2222,8 +2228,7 @@ Return Value:
 
     if (Entry->FileSizeInBytes != 0) {
         RtlDebugPrint("FAT: File size was non-zero but had no cluster.\n");
-
-        ASSERT(FALSE);
+        Entry->FileSizeInBytes = 0;
     }
 
     Status = FatpAllocateCluster(Volume,
@@ -2628,6 +2633,14 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 ReadDirectoryEnd:
+    if (!KSUCCESS(Status)) {
+
+        ASSERT((Directory->FatFlags & FAT_DIRECTORY_FLAG_DIRTY) == 0);
+
+        FatFreeIoBuffer(Directory->ClusterBuffer);
+        Directory->ClusterBuffer = NULL;
+    }
+
     *EntriesRead = TotalBytesRead / sizeof(FAT_DIRECTORY_ENTRY);
     return Status;
 }
@@ -2784,6 +2797,11 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 WriteDirectoryEnd:
+    if (!KSUCCESS(Status)) {
+        FatFreeIoBuffer(Directory->ClusterBuffer);
+        Directory->ClusterBuffer = NULL;
+    }
+
     *EntriesWritten = TotalBytesWritten / sizeof(FAT_DIRECTORY_ENTRY);
     return Status;
 }
@@ -2945,6 +2963,14 @@ Return Value:
     }
 
 DirectorySeekEnd:
+    if (!KSUCCESS(Status)) {
+
+        ASSERT((Directory->FatFlags & FAT_DIRECTORY_FLAG_DIRTY) == 0);
+
+        FatFreeIoBuffer(Directory->ClusterBuffer);
+        Directory->ClusterBuffer = NULL;
+    }
+
     return Status;
 }
 

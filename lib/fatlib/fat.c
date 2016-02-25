@@ -1262,15 +1262,19 @@ Return Value:
     FirstCluster = (ULONG)FileId;
     ScratchIoBuffer = NULL;
     ScratchIoBufferLock = NULL;
-    if (FirstCluster < FAT_CLUSTER_BEGIN) {
+    if ((FirstCluster < FAT_CLUSTER_BEGIN) ||
+        (FirstCluster >= FatVolume->ClusterCount)) {
+
         if (FirstCluster != FatVolume->RootDirectoryCluster) {
+            RtlDebugPrint("FAT: Tried to open invalid cluster 0x%I64x "
+                          "(total %x)\n",
+                          FileId,
+                          FatVolume->ClusterCount);
+
             Status = STATUS_INVALID_PARAMETER;
             goto OpenFileIdEnd;
         }
     }
-
-    ASSERT((FirstCluster == FileId) &&
-           (FirstCluster < FatVolume->ClusterCount));
 
     //
     // Allocate the FAT file bookkeeping structure, doing some special things

@@ -223,9 +223,6 @@ Return Value:
                           DirectoryOffset,
                           ExistingMapping->DirectoryCluster,
                           ExistingMapping->DirectoryOffset);
-
-            ASSERT(FALSE);
-
         }
     }
 

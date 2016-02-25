@@ -458,7 +458,7 @@ Arguments:
 
     Cluster - Supplies the cluster whose FAT entry is being written.
 
-    NewValue - Supplies the new value to be writtien to the given cluster's
+    NewValue - Supplies the new value to be written to the given cluster's
         FAT entry.
 
     OldValue - Supplies an optional pointer that receives the old value of the
@@ -537,7 +537,9 @@ Return Value:
     // and not marked free already.
     //
 
-    ASSERT((NewValue != FAT_CLUSTER_FREE) || (Original != FAT_CLUSTER_FREE));
+    if ((NewValue == FAT_CLUSTER_FREE) && (Original == FAT_CLUSTER_FREE)) {
+        RtlDebugPrint("FAT: Cluster 0x%x was already free!\n", Cluster);
+    }
 
     //
     // Skip the write below if the new value is the same as the old value.

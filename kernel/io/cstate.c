@@ -303,8 +303,11 @@ Return Value:
     }
 
     EndTime = HlQueryTimeCounter();
-
-    ASSERT(EndTime >= StartTime);
+    if (EndTime < StartTime) {
+        RtlDebugPrint("CSTATE: Time went backwards from %I64x to %I64x\n",
+                      StartTime,
+                      EndTime);
+    }
 
     //
     // Compute this last idle duration and add it as a historical datapoint.

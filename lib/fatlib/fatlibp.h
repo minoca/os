@@ -1465,7 +1465,7 @@ Arguments:
 
     Cluster - Supplies the cluster whose FAT entry is being written.
 
-    NewValue - Supplies the new value to be writtien to the given cluster's
+    NewValue - Supplies the new value to be written to the given cluster's
         FAT entry.
 
     OldValue - Supplies an optional pointer that receives the old value of the
