@@ -20,8 +20,8 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/sd.h>
-#include <minoca/sddwc.h>
+#include <minoca/sd/sd.h>
+#include <minoca/sd/sddwc.h>
 #include <minoca/intrface/disk.h>
 
 //

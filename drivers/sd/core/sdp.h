@@ -24,7 +24,7 @@ Author:
 
 #define SD_API DLLEXPORT
 
-#include <minoca/sd.h>
+#include <minoca/sd/sd.h>
 
 //
 // --------------------------------------------------------------------- Macros

@@ -32,7 +32,7 @@ Environment:
 
 #include <minoca/kernel/driver.h>
 #include <minoca/intrface/disk.h>
-#include <minoca/sd.h>
+#include <minoca/sd/sd.h>
 
 //
 // ---------------------------------------------------------------- Definitions

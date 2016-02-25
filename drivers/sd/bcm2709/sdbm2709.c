@@ -26,7 +26,7 @@ Environment:
 
 #include <minoca/kernel/driver.h>
 #include <minoca/intrface/disk.h>
-#include <minoca/sd.h>
+#include <minoca/sd/sd.h>
 #include <minoca/dma/dma.h>
 #include <minoca/dma/dmab2709.h>
 #include "emmc.h"
