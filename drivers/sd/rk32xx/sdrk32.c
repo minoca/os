@@ -1935,6 +1935,10 @@ Return Value:
     if ((PendingBits & SD_DWC_INTERRUPT_ERROR_MASK) != 0) {
         RtlDebugPrint("SD RK32xx: Error status 0x%x\n", PendingBits);
         SdErrorRecovery(Controller);
+        if ((Device->Child->Flags & SD_RK32_CHILD_FLAG_DMA_SUPPORTED) != 0) {
+            SdRk32InitializeDma(Device);
+        }
+
         Status = STATUS_DEVICE_IO_ERROR;
 
     } else if ((PendingBits &
@@ -2964,6 +2968,10 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         SdErrorRecovery(Controller);
+        if ((Device->Child->Flags & SD_RK32_CHILD_FLAG_DMA_SUPPORTED) != 0) {
+            SdRk32InitializeDma(Device);
+        }
+
         Controller->IoCompletionRoutine = NULL;
         Controller->IoCompletionContext = NULL;
         Controller->IoRequestSize = 0;
