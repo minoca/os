@@ -36,7 +36,7 @@ Environment:
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
 #include <minoca/kernel/acpi.h>
-#include <minoca/smbios.h>
+#include <minoca/fw/smbios.h>
 #include "ethernet.h"
 
 //

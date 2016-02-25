@@ -26,7 +26,7 @@ Environment:
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>
-#include <minoca/acpitabs.h>
+#include <minoca/fw/acpitabs.h>
 #include <minoca/kernel/hmod.h>
 #include "apic.h"
 

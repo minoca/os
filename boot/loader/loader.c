@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
-#include <minoca/smbios.h>
+#include <minoca/fw/smbios.h>
 #include <minoca/lib/fat/fat.h>
 #include "firmware.h"
 #include "bootlib.h"

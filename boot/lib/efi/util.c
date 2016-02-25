@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
-#include <minoca/smbios.h>
+#include <minoca/fw/smbios.h>
 #include <minoca/uefi/uefi.h>
 #include <minoca/uefi/guid/acpi.h>
 #include <minoca/uefi/protocol/blockio.h>

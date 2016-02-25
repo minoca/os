@@ -32,7 +32,7 @@ Environment:
 
 #include "../setup.h"
 #include <mlibc.h>
-#include <minoca/smbios.h>
+#include <minoca/fw/smbios.h>
 
 //
 // ---------------------------------------------------------------- Definitions

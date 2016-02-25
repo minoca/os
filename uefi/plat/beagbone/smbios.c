@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/lib/types.h>
-#include <minoca/smbios.h>
+#include <minoca/fw/smbios.h>
 #include "uefifw.h"
 #include "bbonefw.h"
 

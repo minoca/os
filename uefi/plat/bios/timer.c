@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/lib/types.h>
-#include <minoca/acpitabs.h>
+#include <minoca/fw/acpitabs.h>
 #include <uefifw.h>
 #include "biosfw.h"
 

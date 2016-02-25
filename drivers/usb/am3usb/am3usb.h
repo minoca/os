@@ -21,7 +21,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/acpitabs.h>
+#include <minoca/fw/acpitabs.h>
 #include <minoca/dev/am335x.h>
 #include "musb.h"
 

@@ -25,7 +25,7 @@ Environment:
 //
 
 #include "ueficore.h"
-#include <minoca/smbios.h>
+#include <minoca/fw/smbios.h>
 
 //
 // ---------------------------------------------------------------- Definitions

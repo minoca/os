@@ -26,8 +26,8 @@ Environment:
 //
 
 #include <minoca/lib/types.h>
-#include <minoca/acpitabs.h>
-#include <minoca/smbios.h>
+#include <minoca/fw/acpitabs.h>
+#include <minoca/fw/smbios.h>
 #include <uefifw.h>
 #include "biosfw.h"
 

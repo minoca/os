@@ -29,7 +29,7 @@ Environment:
 #include "efiimg.h"
 #include "fwvol.h"
 #include "fv2.h"
-#include <minoca/acpitabs.h>
+#include <minoca/fw/acpitabs.h>
 #include <minoca/uefi/guid/acpi.h>
 
 //

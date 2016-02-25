@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/kernel/driver.h>
-#include <minoca/acpitabs.h>
+#include <minoca/fw/acpitabs.h>
 #include <minoca/usb/usbhost.h>
 #include "ehci.h"
 
