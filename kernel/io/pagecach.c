@@ -4110,7 +4110,7 @@ IopTrimPageCacheVirtual (
 
 Routine Description:
 
-    This routine unmounts as many clean page cache entries as is necessary to
+    This routine unmaps as many clean page cache entries as is necessary to
     bring the number of mapped page cache entries back down to a reasonable
     level. It unmaps page cache entires in LRU order.
 
@@ -4170,7 +4170,18 @@ Return Value:
     }
 
     if (TargetUnmapCount == 0) {
-        return;
+        if (MmGetVirtualMemoryWarningLevel() == MemoryWarningLevelNone) {
+            return;
+        }
+
+        //
+        // Unmap some minimum number of pages before relying on the virtual
+        // warning to indicate when the coast is clear. This should hopefully
+        // build some headroom in fragmented cases.
+        //
+
+        TargetUnmapCount = IoPageCacheHeadroomVirtualPagesRetreat -
+                           IoPageCacheHeadroomVirtualPagesTrigger;
     }
 
     if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_MAPPED_MANAGEMENT) != 0) {
@@ -4189,7 +4200,8 @@ Return Value:
     PageSize = MmPageSize();
     KeAcquireQueuedLock(IoPageCacheListLock);
     while ((!LIST_EMPTY(&IoPageCacheCleanList)) &&
-           (TargetUnmapCount != UnmapCount)) {
+           ((TargetUnmapCount != UnmapCount) ||
+            (MmGetVirtualMemoryWarningLevel() != MemoryWarningLevelNone))) {
 
         CurrentEntry = IoPageCacheCleanList.Next;
         PageCacheEntry = LIST_VALUE(CurrentEntry, PAGE_CACHE_ENTRY, ListEntry);
@@ -4797,7 +4809,9 @@ Return Value:
     //
 
     FreePages = MmGetFreeVirtualMemory() >> MmPageShift();
-    if (FreePages > IoPageCacheHeadroomVirtualPagesTrigger) {
+    if ((FreePages > IoPageCacheHeadroomVirtualPagesTrigger) &&
+        (MmGetVirtualMemoryWarningLevel() == MemoryWarningLevelNone)) {
+
         return FALSE;
     }
 

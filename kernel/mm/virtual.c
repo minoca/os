@@ -41,7 +41,6 @@ Environment:
 
 #define MM_SMALL_VIRTUAL_MEMORY_WARNING_LEVEL_1_TRIGGER (512 * _1MB)
 #define MM_SMALL_VIRTUAL_MEMORY_WARNING_LEVEL_1_RETREAT (768 * _1MB)
-#define MM_SMALL_VIRTUAL_MEMORY_WARNING_COUNT_MASK ~((16 * _1MB) - 1)
 
 //
 // Define the system virtual memory warning levels, in bytes, for systems with
@@ -50,7 +49,6 @@ Environment:
 
 #define MM_LARGE_VIRTUAL_MEMORY_WARNING_LEVEL_1_TRIGGER (1 * (UINTN)_1GB)
 #define MM_LARGE_VIRTUAL_MEMORY_WARNING_LEVEL_1_RETREAT (2 * (UINTN)_1GB)
-#define MM_LARGE_VIRTUAL_MEMORY_WARNING_COUNT_MASK ~((256 * _1MB) - 1)
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -158,20 +156,6 @@ MEMORY_WARNING_LEVEL MmVirtualMemoryWarningLevel;
 
 UINTN MmVirtualMemoryWarningLevel1Retreat;
 UINTN MmVirtualMemoryWarningLevel1Trigger;
-
-//
-// Store the mask that determines how often virtual memory warning levels are
-// checked, in terms of bytes turned over.
-//
-
-UINTN MmVirtualWarningCheckMask;
-
-//
-// Store the accumulation of how many bytes of VA space have been allocated or
-// freed. This counter can roll over.
-//
-
-UINTN MmVirtualTurnover;
 
 //
 // Store the number of free virtual pages. This is defined as a global rather
@@ -1520,16 +1504,14 @@ Return Value:
 {
 
     PMEMORY_ACCOUNTING Accountant;
-    UINTN CurrentCount;
     PKTHREAD CurrentThread;
     ULONGLONG EndAddress;
+    PLIST_ENTRY ListHead;
     BOOL LockAcquired;
-    UINTN Mask;
     MEMORY_DESCRIPTOR NewDescriptor;
     UINTN PageCount;
     UINTN PageIndex;
     ULONG PageShift;
-    UINTN PreviousCount;
     BOOL SignalEvent;
     KSTATUS Status;
 
@@ -1627,17 +1609,22 @@ FreeAccountingRangeEnd:
         ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0)) {
 
         MmFreeVirtualByteCount = Accountant->Mdl.FreeSpace;
-        Mask = MmVirtualWarningCheckMask;
-        PreviousCount = MmVirtualTurnover & Mask;
-        MmVirtualTurnover += SizeInBytes;
-        CurrentCount = MmVirtualTurnover & Mask;
-        if ((CurrentCount != PreviousCount) &&
-            (MmVirtualMemoryWarningLevel == MemoryWarningLevel1) &&
-            (Accountant->Mdl.FreeSpace >=
-             MmVirtualMemoryWarningLevel1Retreat)) {
 
-            MmVirtualMemoryWarningLevel = MemoryWarningLevelNone;
-            SignalEvent = TRUE;
+        //
+        // If in memory warning country, try to get out ASAP. The virtual
+        // memory warning calms down when there is a certain amount of total
+        // free space and at least one large fragment.
+        //
+
+        if (MmVirtualMemoryWarningLevel != MemoryWarningLevelNone) {
+            ListHead = &(Accountant->Mdl.FreeLists[MDL_BIN_COUNT - 1]);
+            if ((Accountant->Mdl.FreeSpace >=
+                 MmVirtualMemoryWarningLevel1Retreat) &&
+                (!LIST_EMPTY(ListHead))) {
+
+                MmVirtualMemoryWarningLevel = MemoryWarningLevelNone;
+                SignalEvent = TRUE;
+            }
         }
     }
 
@@ -1760,11 +1747,8 @@ Return Value:
 
 {
 
-    UINTN CurrentCount;
     BOOL LockAcquired;
-    UINT Mask;
     MEMORY_DESCRIPTOR NewDescriptor;
-    UINTN PreviousCount;
     BOOL RangeFree;
     BOOL SignalEvent;
     KSTATUS Status;
@@ -1862,16 +1846,20 @@ AllocateAddressRangeEnd:
         ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0)) {
 
         MmFreeVirtualByteCount = Accountant->Mdl.FreeSpace;
-        Mask = MmVirtualWarningCheckMask;
-        PreviousCount = MmVirtualTurnover & Mask;
-        MmVirtualTurnover += Size;
-        CurrentCount = MmVirtualTurnover & Mask;
-        if ((CurrentCount != PreviousCount) &&
-            (MmVirtualMemoryWarningLevel != MemoryWarningLevel1) &&
-            (Accountant->Mdl.FreeSpace < MmVirtualMemoryWarningLevel1Trigger)) {
 
-            MmVirtualMemoryWarningLevel = MemoryWarningLevel1;
-            SignalEvent = TRUE;
+        //
+        // If free space is running low or the largest free bin is empty
+        // (indicating serious fragmentation), then throw a warning up.
+        //
+
+        if ((Accountant->Mdl.FreeSpace <
+             MmVirtualMemoryWarningLevel1Trigger) ||
+            (LIST_EMPTY(&(Accountant->Mdl.FreeLists[MDL_BIN_COUNT - 1])))) {
+
+            if (MmVirtualMemoryWarningLevel == MemoryWarningLevelNone) {
+                MmVirtualMemoryWarningLevel = MemoryWarningLevel1;
+                SignalEvent = TRUE;
+            }
         }
     }
 
@@ -2193,16 +2181,12 @@ Return Value:
         MmVirtualMemoryWarningLevel1Retreat =
                                MM_SMALL_VIRTUAL_MEMORY_WARNING_LEVEL_1_RETREAT;
 
-        MmVirtualWarningCheckMask = MM_SMALL_VIRTUAL_MEMORY_WARNING_COUNT_MASK;
-
     } else {
         MmVirtualMemoryWarningLevel1Trigger =
                                MM_LARGE_VIRTUAL_MEMORY_WARNING_LEVEL_1_TRIGGER;
 
         MmVirtualMemoryWarningLevel1Retreat =
                                MM_LARGE_VIRTUAL_MEMORY_WARNING_LEVEL_1_RETREAT;
-
-        MmVirtualWarningCheckMask = MM_LARGE_VIRTUAL_MEMORY_WARNING_COUNT_MASK;
     }
 
     Status = STATUS_SUCCESS;
