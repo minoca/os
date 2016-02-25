@@ -34,8 +34,8 @@ Environment:
 #include <minoca/lib/status.h>
 #include <minoca/lib/rtl.h>
 #include <minoca/lib/im.h>
+#include <minoca/debug/dbgext.h>
 #include "../../drivers/acpi/acpiobj.h"
-#include "dbgext.h"
 
 #include <errno.h>
 #include <stdio.h>

@@ -26,7 +26,7 @@ Environment:
 //
 
 #include "dbgrtl.h"
-#include "dbgext.h"
+#include <minoca/debug/dbgext.h>
 
 //
 // ---------------------------------------------------------------- Definitions

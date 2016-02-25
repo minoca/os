@@ -91,7 +91,7 @@ for file in debugui.exe debug.exe kexts.dll dbgext.a; do
     cp -pv ./$file "$WORKING/Minoca/Debug/"
 done
 
-cp -pv "$SRCROOT/os/debug/dbgext.h" "$WORKING/Minoca/Debug"
+cp -pv "$SRCROOT/os/include/minoca/debug/dbgext.h" "$WORKING/Minoca/Debug"
 cd "$OLDPWD"
 
 ##

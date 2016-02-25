@@ -30,10 +30,10 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <minoca/spproto.h>
+#include <minoca/debug/spproto.h>
+#include <minoca/debug/dbgext.h>
 #include "dbgrprof.h"
 #include "console.h"
-#include "dbgext.h"
 
 //
 // ---------------------------------------------------------------- Definitions

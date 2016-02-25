@@ -22,7 +22,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "dbgext.h"
+#include <minoca/debug/dbgext.h>
 #include "symbols.h"
 #include "dwarf.h"
 

@@ -26,9 +26,9 @@ Environment:
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>
-#include <minoca/spproto.h>
+#include <minoca/debug/spproto.h>
 #include <minoca/lib/im.h>
-#include "dbgext.h"
+#include <minoca/debug/dbgext.h>
 #include "symbols.h"
 #include "dbgapi.h"
 #include "dbgrprof.h"

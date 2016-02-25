@@ -29,7 +29,7 @@ BUILD = yes
 
 BINPLACE = bin
 
-INCLUDES += $(SRCDIR)/../../..;$(SRCDIR)/../..;
+INCLUDES += $(SRCDIR)/../..;
 INCLUDES += $(SRCROOT)/os/lib/im;
 
 TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a      \

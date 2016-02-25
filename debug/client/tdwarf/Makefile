@@ -33,7 +33,6 @@ TARGETLIBS = $(OBJROOT)/os/lib/rtl/base/build/basertl.a   \
              $(OBJROOT)/os/lib/im/build/im.a              \
 
 VPATH += $(SRCDIR)/..:
-INCLUDES += $(SRCDIR)/../..;
 INCLUDES += $(SRCROOT)/os/lib/im;
 
 OBJS = coff.o        \

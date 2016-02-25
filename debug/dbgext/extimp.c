@@ -29,7 +29,7 @@ Environment:
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>
 #include <minoca/lib/rtl.h>
-#include "dbgext.h"
+#include <minoca/debug/dbgext.h>
 #include "extimp.h"
 
 //

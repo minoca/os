@@ -28,7 +28,7 @@ BINPLACE = bin
 BINARYTYPE = app
 
 INCLUDES += $(SRCROOT)/os/apps/include;          \
-            $(SRCDIR)/..;$(SRCDIR)/../..;        \
+            $(SRCDIR)/..;                        \
             $(SRCROOT)/os/lib/im;                \
             $(SRCROOT)/os/apps/include/libc;
 

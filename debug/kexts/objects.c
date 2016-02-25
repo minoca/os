@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/kernel/driver.h>
-#include "dbgext.h"
+#include <minoca/debug/dbgext.h>
 
 #include <assert.h>
 #include <errno.h>

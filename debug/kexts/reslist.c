@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
-#include "dbgext.h"
+#include <minoca/debug/dbgext.h>
 #include "../../kernel/io/arb.h"
 
 #include <assert.h>

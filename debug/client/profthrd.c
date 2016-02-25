@@ -27,9 +27,9 @@ Environment:
 #define KERNEL_API
 
 #include "dbgrtl.h"
-#include <minoca/spproto.h>
+#include <minoca/debug/spproto.h>
 #include <minoca/lib/im.h>
-#include "dbgext.h"
+#include <minoca/debug/dbgext.h>
 #include "symbols.h"
 #include "dbgapi.h"
 #include "dbgsym.h"

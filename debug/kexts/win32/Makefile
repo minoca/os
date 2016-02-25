@@ -27,8 +27,6 @@ BINARYTYPE = dll
 
 BINPLACE = bin
 
-INCLUDES += $(SRCDIR)/../..;
-
 VPATH += $(SRCDIR)/..:
 
 BUILD = yes

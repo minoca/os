@@ -26,7 +26,7 @@ Environment:
 
 #include <minoca/kernel/kernel.h>
 #include <minoca/kernel/bootload.h>
-#include <minoca/dbgproto.h>
+#include <minoca/debug/dbgproto.h>
 #include "kdp.h"
 
 //

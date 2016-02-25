@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <osbase.h>
-#include <minoca/dbgproto.h>
+#include <minoca/debug/dbgproto.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

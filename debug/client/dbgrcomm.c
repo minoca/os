@@ -26,10 +26,10 @@ Environment:
 //
 
 #include "dbgrtl.h"
-#include <minoca/spproto.h>
+#include <minoca/debug/spproto.h>
 #include <minoca/lib/im.h>
+#include <minoca/debug/dbgext.h>
 #include "disasm.h"
-#include "dbgext.h"
 #include "dbgapi.h"
 #include "dbgrprof.h"
 #include "console.h"

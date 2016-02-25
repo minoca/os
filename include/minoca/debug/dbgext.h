@@ -22,7 +22,7 @@ Author:
 //
 
 #include <stdarg.h>
-#include <minoca/dbgproto.h>
+#include <minoca/debug/dbgproto.h>
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -27,8 +27,6 @@ BINARYTYPE = library
 
 BINPLACE = bin
 
-INCLUDES += $(SRCDIR)/..;
-
 OBJS = extimp.o   \
 
 ifeq ($(OS),Windows_NT)

@@ -42,8 +42,8 @@ Environment:
 #include <termios.h>
 #include <unistd.h>
 
-#include <minoca/spproto.h>
-#include "dbgext.h"
+#include <minoca/debug/spproto.h>
+#include <minoca/debug/dbgext.h>
 #include "dbgapi.h"
 #include "dbgrprof.h"
 #include "console.h"

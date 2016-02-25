@@ -82,8 +82,6 @@ mkdir -p "$WORKING/os"
 cp -Rpv "$SRCROOT/os/include" "$WORKING/os"
 mkdir -p "$WORKING/os/apps"
 cp -Rpv "$SRCROOT/os/apps/include" "$WORKING/os/apps"
-mkdir -p "$WORKING/os/debug"
-cp -pv "$SRCROOT/os/debug/dbgext.h" "$WORKING/os/debug"
 
 ##
 ## Copy the samples.

@@ -30,9 +30,9 @@ Environment:
 #include <string.h>
 #include <assert.h>
 #include "dbgrtl.h"
-#include "dbgext.h"
+#include <minoca/debug/spproto.h>
+#include <minoca/debug/dbgext.h>
 #include "ntusrsup.h"
-#include <minoca/spproto.h>
 #include "dbgapi.h"
 #include "userdbg.h"
 

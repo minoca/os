@@ -27,7 +27,7 @@ Environment:
 
 #include <minoca/kernel/kernel.h>
 #include <minoca/kernel/x86.h>
-#include <minoca/dbgproto.h>
+#include <minoca/debug/dbgproto.h>
 #include "../psp.h"
 
 //

@@ -26,8 +26,6 @@ BINARYTYPE = dll
 
 BINPLACE = bin
 
-INCLUDES += $(SRCDIR)/..;
-
 TARGETLIBS = $(BINROOT)/dbgext.a
 
 X86_OBJS = acpiext.o  \

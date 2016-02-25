@@ -33,10 +33,10 @@ Environment:
 #include <stdio.h>
 #include <windows.h>
 
-#include <minoca/spproto.h>
+#include <minoca/debug/spproto.h>
+#include <minoca/debug/dbgext.h>
 #include "dbgrprof.h"
 #include "console.h"
-#include "dbgext.h"
 
 //
 // ---------------------------------------------------------------- Definitions

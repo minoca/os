@@ -26,7 +26,7 @@ Environment:
 
 #include "dbgrtl.h"
 #include <minoca/lib/im.h>
-#include "dbgext.h"
+#include <minoca/debug/dbgext.h>
 #include "pe.h"
 #include "symbols.h"
 #include "stabs.h"

@@ -42,12 +42,12 @@ Environment:
 #include <limits.h>
 #include <assert.h>
 #include <stdio.h>
-#include <minoca/spproto.h>
+#include <minoca/debug/spproto.h>
+#include <minoca/debug/dbgext.h>
 #include "dbgrprof.h"
 #include "console.h"
 #include "resource.h"
 #include "missing.h"
-#include "dbgext.h"
 
 //
 // ---------------------------------------------------------------- Definitions
