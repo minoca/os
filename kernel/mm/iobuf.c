@@ -1166,6 +1166,7 @@ Return Value:
     } else {
         MapRequired = FALSE;
         MapFragmentStart = 0;
+        Status = STATUS_SUCCESS;
         for (FragmentIndex = 0;
              FragmentIndex < IoBuffer->FragmentCount;
              FragmentIndex += 1) {
@@ -1189,7 +1190,8 @@ Return Value:
                                                  MapFlags);
 
                 if (!KSUCCESS(Status)) {
-                    goto MapIoBufferEnd;
+                    MapRequired = FALSE;
+                    break;
                 }
 
                 //
@@ -1224,6 +1226,32 @@ Return Value:
 
             if (!KSUCCESS(Status)) {
                 goto MapIoBufferEnd;
+            }
+        }
+
+        //
+        // If the mapping didn't succeed in chunks, try to map each page
+        // individually.
+        //
+
+        if (Status == STATUS_INSUFFICIENT_RESOURCES) {
+            for (FragmentIndex = 0;
+                 FragmentIndex < IoBuffer->FragmentCount;
+                 FragmentIndex += 1) {
+
+                Fragment = &(IoBuffer->Fragment[FragmentIndex]);
+                if (Fragment->VirtualAddress != NULL) {
+                    continue;
+                }
+
+                Status = MmpMapIoBufferFragments(IoBuffer,
+                                                 FragmentIndex,
+                                                 FragmentIndex + 1,
+                                                 MapFlags);
+
+                if (!KSUCCESS(Status)) {
+                    goto MapIoBufferEnd;
+                }
             }
         }
     }

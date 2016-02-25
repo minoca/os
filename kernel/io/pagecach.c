@@ -1648,6 +1648,7 @@ Return Value:
     PageShift = MmPageShift();
     Status = STATUS_SUCCESS;
     TotalStatus = STATUS_SUCCESS;
+    INITIALIZE_LIST_HEAD(&LocalList);
     if (KeGetCurrentThread() == IoPageCacheThread) {
         PageCacheThread = TRUE;
 
@@ -1710,7 +1711,6 @@ Return Value:
     // a specific region, iterate using only the tree.
     //
 
-    INITIALIZE_LIST_HEAD(&LocalList);
     if ((Size != -1ULL) || (Offset != 0)) {
         Node = RtlRedBlackTreeSearchClosest(&(FileObject->PageCacheTree),
                                             &(SearchEntry.Node),
@@ -1983,6 +1983,10 @@ Return Value:
         }
     }
 
+    Status = STATUS_SUCCESS;
+
+FlushPageCacheEntriesEnd:
+
     //
     // If there are still entries on the local list, put those back on the
     // dirty list.
@@ -1994,9 +1998,6 @@ Return Value:
         KeReleaseQueuedLock(IoPageCacheListLock);
     }
 
-    Status = STATUS_SUCCESS;
-
-FlushPageCacheEntriesEnd:
     if ((!KSUCCESS(Status)) && (KSUCCESS(TotalStatus))) {
         TotalStatus = Status;
     }
@@ -2514,6 +2515,9 @@ Return Value:
     //
 
     if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) == 0) {
+
+        ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
+
         DirtyEntry = PageCacheEntry->BackingEntry;
 
     } else {
