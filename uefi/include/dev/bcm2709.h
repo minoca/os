@@ -20,7 +20,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <cpu/bcm2709.h>
+#include <minoca/soc/bcm2709.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -51,6 +51,443 @@ Author:
 //
 // ------------------------------------------------------ Data Type Definitions
 //
+
+/*++
+
+Structure Description:
+
+    This structure defines the header used when sending property messages to
+    the BCM2709 mailbox.
+
+Members:
+
+    Size - Stores the size of the data being sent.
+
+    Code - Stores the status code on return from the mailbox.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_HEADER {
+    UINT32 Size;
+    UINT32 Code;
+} BCM2709_MAILBOX_HEADER, *PBCM2709_MAILBOX_HEADER;
+
+/*++
+
+Structure Description:
+
+    This structure defines the header for a mailbox tag, that is, an individual
+    property's message.
+
+Members:
+
+    Tag - Stores the tag that devices the nature of the mailbox message.
+
+    Size - Stores the number of bytes in the message's buffer.
+
+    Length - Stores the number of bytes sent to the mailbox in the message's
+        buffer. On receive, this will contain the number of bytes read from the
+        mailbox.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_TAG {
+    UINT32 Tag;
+    UINT32 Size;
+    UINT32 Length;
+} BCM2709_MAILBOX_TAG, *PBCM2709_MAILBOX_TAG;
+
+/*++
+
+Structure Description:
+
+    This structure defines a memory region message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    BaseAddress - Stores the base physical address of the memory region.
+
+    Size - Stores the size of the memory region, in bytes.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_MEMORY_REGION {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 BaseAddress;
+    UINT32 Size;
+} BCM2709_MAILBOX_MEMORY_REGION, *PBCM2709_MAILBOX_MEMORY_REGION;
+
+/*++
+
+Structure Description:
+
+    This structure defines a device state message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    DeviceId - Stores the identification number for the targeted device.
+
+    State - Stores the desired state of the device.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_DEVICE_STATE {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 DeviceId;
+    UINT32 State;
+} BCM2709_MAILBOX_DEVICE_STATE, *PBCM2709_MAILBOX_DEVICE_STATE;
+
+/*++
+
+Structure Description:
+
+    This structure defines the get clock rate message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    ClockId - Stores the identification number for the clock.
+
+    Rate - Stores the frequency of the clock in Hz.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_GET_CLOCK_RATE {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 ClockId;
+    UINT32 Rate;
+} BCM2709_MAILBOX_GET_CLOCK_RATE, *PBCM2709_MAILBOX_GET_CLOCK_RATE;
+
+/*++
+
+Structure Description:
+
+    This structure defines the set clock rate message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    ClockId - Stores the identification number for the clock.
+
+    Rate - Stores the frequency of the clock in Hz.
+
+    SkipSettingTurbo - Stores a boolean indicating whether or not to skip
+        setting other high performance ("turbo") settings when the ARM
+        frequency is set above the default.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_SET_CLOCK_RATE {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 ClockId;
+    UINT32 Rate;
+    UINT32 SkipSettingTurbo;
+} BCM2709_MAILBOX_SET_CLOCK_RATE, *PBCM2709_MAILBOX_SET_CLOCK_RATE;
+
+/*++
+
+Structure Description:
+
+    This structure defines a video resolution used by the BCM2709 mailbox.
+
+Members:
+
+    Width - Stores the width of the resolution, in pixels.
+
+    Height - Stores the height of the resolution, in pixels.
+
+--*/
+
+typedef struct _BCM2709_RESOLUTION {
+    UINT32 Width;
+    UINT32 Height;
+} BCM2709_RESOLUTION, *PBCM2709_RESOLUTION;
+
+/*++
+
+Structure Description:
+
+    This structure defines a video offset used by the BCM2709 mailbox.
+
+Members:
+
+    X - Stores the horizontal offset.
+
+    Y - Stores the vertical offset.
+
+--*/
+
+typedef struct _BCM2709_OFFSET {
+    UINT32 X;
+    UINT32 Y;
+} BCM2709_OFFSET, *PBCM2709_OFFSET;
+
+/*++
+
+Structure Description:
+
+    This structure defines a video overscan used by the BCM2709 mailbox.
+
+Members:
+
+    Top - Stores the overcan value for the top edge of the screen.
+
+    Bottom - Stores the overcan value for the bottom edge of the screen.
+
+    Left - Stores the overcan value for the left side of the screen.
+
+    Right - Stores the overcan value for the right side of the screen.
+
+--*/
+
+typedef struct _BCM2709_OVERSCAN {
+    UINT32 Top;
+    UINT32 Bottom;
+    UINT32 Left;
+    UINT32 Right;
+} BCM2709_OVERSCAN, *PBCM2709_OVERSCAN;
+
+/*++
+
+Structure Description:
+
+    This structure defines a frame buffer used by the BCM2709 mailbox.
+
+Members:
+
+    Base - Stores the base address of the frame buffer.
+
+    Size - Stores the size of the frame buffer, in bytes.
+
+--*/
+
+typedef struct _BCM2709_FRAME_BUFFER {
+    UINT32 Base;
+    UINT32 Size;
+} BCM2709_FRAME_BUFFER, *PBCM2709_FRAME_BUFFER;
+
+/*++
+
+Structure Description:
+
+    This structure defines a video resolution message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    Resolution - Stores the resolution to set or receives the current
+        resolution.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_RESOLUTION {
+    BCM2709_MAILBOX_TAG TagHeader;
+    BCM2709_RESOLUTION Resolution;
+} BCM2709_MAILBOX_RESOLUTION, *PBCM2709_MAILBOX_RESOLUTION;
+
+/*++
+
+Structure Description:
+
+    This structure defines a bits per pixel message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    BitsPerPixel - Stores the bits per pixel to set or receives the current
+        bits per pixel.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_BITS_PER_PIXEL {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 BitsPerPixel;
+} BCM2709_MAILBOX_BITS_PER_PIXEL, *PBCM2709_MAILBOX_BITS_PER_PIXEL;
+
+/*++
+
+Structure Description:
+
+    This structure defines a pixel order message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    PixelOrder - Stores the pixel order to set or receives the current pixel
+        order.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_PIXEL_ORDER {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 PixelOrder;
+} BCM2709_MAILBOX_PIXEL_ORDER, *PBCM2709_MAILBOX_PIXEL_ORDER;
+
+/*++
+
+Structure Description:
+
+    This structure defines a video alpha mode message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    AlphaMode - Stores the alpha mode to set or receives the current alpha mode.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_ALPHA_MODE {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 AlphaMode;
+} BCM2709_MAILBOX_ALPHA_MODE, *PBCM2709_MAILBOX_ALPHA_MODE;
+
+/*++
+
+Structure Description:
+
+    This structure defines a video virtual offset message for the BCM2709
+    mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    Offset - Stores the virtual offset to set or receives the current virtual
+        offset.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_VIRTUAL_OFFSET {
+    BCM2709_MAILBOX_TAG TagHeader;
+    BCM2709_OFFSET Offset;
+} BCM2709_MAILBOX_VIRTUAL_OFFSET, *PBCM2709_MAILBOX_VIRTUAL_OFFSET;
+
+/*++
+
+Structure Description:
+
+    This structure defines a video overscan message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    Overcan - Stores the overscan values to set or receives the current
+        overscan values.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_OVERSCAN {
+    BCM2709_MAILBOX_TAG TagHeader;
+    BCM2709_OVERSCAN Overscan;
+} BCM2709_MAILBOX_OVERSCAN, *PBCM2709_MAILBOX_OVERSCAN;
+
+/*++
+
+Structure Description:
+
+    This structure defines a video pitch message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    BytesPerLine - Stores the bytes per scan line of the frame buffer.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_PITCH {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 BytesPerScanLine;
+} BCM2709_MAILBOX_PITCH, *PBCM2709_MAILBOX_PITCH;
+
+/*++
+
+Structure Description:
+
+    This structure defines a video frame buffer message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    FrameBuffer - Stores the frame buffer to release or receives a frame buffer
+        base and size.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_FRAME_BUFFER {
+    BCM2709_MAILBOX_TAG TagHeader;
+    BCM2709_FRAME_BUFFER FrameBuffer;
+} BCM2709_MAILBOX_FRAME_BUFFER, *PBCM2709_MAILBOX_FRAME_BUFFER;
+
+/*++
+
+Structure Description:
+
+    This structure defines a board model message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    ModelNumber - Stores the board model number.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_BOARD_MODEL {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 ModelNumber;
+} BCM2709_MAILBOX_BOARD_MODEL, *PBCM2709_MAILBOX_BOARD_MODEL;
+
+/*++
+
+Structure Description:
+
+    This structure defines a board revision message for the BCM2709 mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    ModelNumber - Stores the board revision number.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_BOARD_REVISION {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 Revision;
+} BCM2709_MAILBOX_BOARD_REVISION, *PBCM2709_MAILBOX_BOARD_REVISION;
+
+/*++
+
+Structure Description:
+
+    This structure defines a board serial number message for the BCM2709
+    mailbox.
+
+Members:
+
+    TagHeader - Stores the identification tag header for the message.
+
+    SerialNumber - Stores the board serial number.
+
+--*/
+
+typedef struct _BCM2709_MAILBOX_BOARD_SERIAL_NUMBER {
+    BCM2709_MAILBOX_TAG TagHeader;
+    UINT32 SerialNumber[2];
+} BCM2709_MAILBOX_BOARD_SERIAL_NUMBER, *PBCM2709_MAILBOX_BOARD_SERIAL_NUMBER;
 
 /*++
 

@@ -4,11 +4,11 @@ Copyright (c) 2015 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    bcm2709.h
+    b2709os.h
 
 Abstract:
 
-    This header contains definitions for the BCM 2709 SoC.
+    This header contains OS definitions for the BCM 2709 SoC.
 
 Author:
 

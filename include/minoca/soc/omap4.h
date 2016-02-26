@@ -4,11 +4,11 @@ Copyright (c) 2014 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    omap4430.h
+    omap4.h
 
 Abstract:
 
-    This header contains definitions for Texas Instruments OMAP4430 System on
+    This header contains definitions for Texas Instruments OMAP44xx System on
     Chip.
 
 Author:
@@ -24,22 +24,6 @@ Author:
 //
 // --------------------------------------------------------------------- Macros
 //
-
-//
-// These macros read from and write to a GPIO block.
-//
-
-#define READ_GPIO1_REGISTER(_Register) \
-    EfiReadRegister32((UINT8 *)EfiOmap4Gpio1Address + (_Register))
-
-#define WRITE_GPIO1_REGISTER(_Register, _Value) \
-    EfiWriteRegister32((UINT8 *)EfiOmap4Gpio1Address + (_Register), (_Value))
-
-#define READ_GPIO2_REGISTER(_Register) \
-    EfiReadRegister32((UINT8 *)EfiOmap4Gpio2Address + (_Register))
-
-#define WRITE_GPIO2_REGISTER(_Register, _Value) \
-    EfiWriteRegister32((UINT8 *)EfiOmap4Gpio2Address + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -409,19 +393,6 @@ typedef enum _OMAP4_REVISION {
 //
 // -------------------------------------------------------------------- Globals
 //
-
-//
-// Store a pointer to the GPIO register blocks.
-//
-
-extern VOID *EfiOmap4Gpio1Address;
-extern VOID *EfiOmap4Gpio2Address;
-
-//
-// Store a boolean used for debugging that disables the watchdog timer.
-//
-
-extern BOOLEAN EfiDisableWatchdog;
 
 //
 // -------------------------------------------------------- Function Prototypes

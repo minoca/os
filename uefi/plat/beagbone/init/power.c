@@ -149,7 +149,7 @@ Return Value:
     // Set the address of the PMIC to talk to.
     //
 
-    AM335_I2C_WRITE(AM335_I2C_SLAVE_ADDRESS, AM335_TPS65217_I2C_ADDRESS);
+    AM335_I2C_WRITE(Am3I2cSlaveAddress, AM335_TPS65217_I2C_ADDRESS);
     EfipTps65217Read(TPS65217_STATUS, &Status);
 
     //
@@ -467,25 +467,25 @@ Return Value:
     // Disable the I2C controller.
     //
 
-    Value = AM335_I2C_READ(AM335_I2C_CONTROL);
-    Value &= ~AM335_I2C_CONTROL_ENABLED;
-    AM335_I2C_WRITE(AM335_I2C_CONTROL, Value);
+    Value = AM335_I2C_READ(Am3I2cControl);
+    Value &= ~AM335_I2C_CONTROL_ENABLE;
+    AM335_I2C_WRITE(Am3I2cControl, Value);
 
     //
     // Reset the controller.
     //
 
-    Value = AM335_I2C_READ(AM335_I2C_SYSTEM_CONTROL);
+    Value = AM335_I2C_READ(Am3I2cSysControl);
     Value |= AM335_I2C_SYSTEM_CONTROL_SOFT_RESET;
-    AM335_I2C_WRITE(AM335_I2C_SYSTEM_CONTROL, Value);
+    AM335_I2C_WRITE(Am3I2cSysControl, Value);
 
     //
     // Disable auto idle.
     //
 
-    Value = AM335_I2C_READ(AM335_I2C_SYSTEM_CONTROL);
+    Value = AM335_I2C_READ(Am3I2cSysControl);
     Value &= ~AM335_I2C_SYSTEM_CONTROL_AUTO_IDLE;
-    AM335_I2C_WRITE(AM335_I2C_SYSTEM_CONTROL, Value);
+    AM335_I2C_WRITE(Am3I2cSysControl, Value);
 
     //
     // Configure the bus speed to be 100kHz.
@@ -497,16 +497,16 @@ Return Value:
     // Enable the I2C controller.
     //
 
-    Value = AM335_I2C_READ(AM335_I2C_CONTROL);
-    Value |= AM335_I2C_CONTROL_ENABLED;
-    AM335_I2C_WRITE(AM335_I2C_CONTROL, Value);
+    Value = AM335_I2C_READ(Am3I2cControl);
+    Value |= AM335_I2C_CONTROL_ENABLE;
+    AM335_I2C_WRITE(Am3I2cControl, Value);
 
     //
     // Wait for the system status to indicate the controller is ready.
     //
 
     do {
-        Value = AM335_I2C_READ(AM335_I2C_SYSTEM_STATUS);
+        Value = AM335_I2C_READ(Am3I2cSysStatus);
 
     } while ((Value & AM335_I2C_SYSTEM_STATUS_RESET_DONE) == 0);
 
@@ -542,12 +542,12 @@ Return Value:
     Prescaler = (AM335_I2C_SYSTEM_CLOCK_SPEED /
                  AM335_I2C_INTERNAL_CLOCK_SPEED) - 1;
 
-    AM335_I2C_WRITE(AM335_I2C_PRESCALER, Prescaler);
+    AM335_I2C_WRITE(Am3I2cPrescale, Prescaler);
     Divider = (AM335_I2C_INTERNAL_CLOCK_SPEED /
                AM335_I2C_OUTPUT_CLOCK_SPEED) / 2;
 
-    AM335_I2C_WRITE(AM335_I2C_DIVISOR_LOW, Divider - 7);
-    AM335_I2C_WRITE(AM335_I2C_DIVISOR_HIGH, Divider - 5);
+    AM335_I2C_WRITE(Am3I2cSclLowTime, Divider - 7);
+    AM335_I2C_WRITE(Am3I2cSclHighTime, Divider - 5);
     return;
 }
 
@@ -589,42 +589,40 @@ Return Value:
     // and wait for the ready bit.
     //
 
-    AM335_I2C_WRITE(AM335_I2C_COUNT, 1);
-    AM335_I2C_WRITE(AM335_I2C_INTERRUPT_STATUS, AM335_INTERRUPT_STATUS_MASK);
+    AM335_I2C_WRITE(Am3I2cCount, 1);
+    AM335_I2C_WRITE(Am3I2cInterruptStatus, AM335_I2C_INTERRUPT_STATUS_MASK);
     Value = AM335_I2C_CONTROL_MASTER | AM335_I2C_CONTROL_TRANSMIT |
-            AM335_I2C_CONTROL_ENABLED;
+            AM335_I2C_CONTROL_ENABLE;
 
-    AM335_I2C_WRITE(AM335_I2C_CONTROL, Value);
+    AM335_I2C_WRITE(Am3I2cControl, Value);
     Value |= AM335_I2C_CONTROL_START;
-    AM335_I2C_WRITE(AM335_I2C_CONTROL, Value);
+    AM335_I2C_WRITE(Am3I2cControl, Value);
     do {
-        Value = AM335_I2C_READ(AM335_I2C_RAW_INTERRUPT_STATUS);
+        Value = AM335_I2C_READ(Am3I2cInterruptStatusRaw);
 
-    } while ((Value & AM335_I2C_RAW_INTERRUPT_STATUS_BUSY) == 0);
+    } while ((Value & AM335_I2C_INTERRUPT_BUS_BUSY) == 0);
 
-    AM335_I2C_WRITE(AM335_I2C_DATA, Register);
-    AM335_I2C_WRITE(AM335_I2C_INTERRUPT_STATUS,
-                    AM335_I2C_INTERRUPT_STATUS_TRANSMIT_READY);
-
+    AM335_I2C_WRITE(Am3I2cData, Register);
+    AM335_I2C_WRITE(Am3I2cInterruptStatus, AM335_I2C_INTERRUPT_TX_READY);
     do {
-        Value = AM335_I2C_READ(AM335_I2C_RAW_INTERRUPT_STATUS);
+        Value = AM335_I2C_READ(Am3I2cInterruptStatusRaw);
 
-    } while ((Value & AM335_I2C_RAW_INTERRUPT_STATUS_AREADY) == 0);
+    } while ((Value & AM335_I2C_INTERRUPT_ACCESS_READY) == 0);
 
     //
     // Now set the data count to the number of bytes, and set up the receive.
     //
 
-    AM335_I2C_WRITE(AM335_I2C_COUNT, Size);
-    AM335_I2C_WRITE(AM335_I2C_INTERRUPT_STATUS, AM335_INTERRUPT_STATUS_MASK);
-    Value = AM335_I2C_CONTROL_MASTER | AM335_I2C_CONTROL_ENABLED;
-    AM335_I2C_WRITE(AM335_I2C_CONTROL, Value);
+    AM335_I2C_WRITE(Am3I2cCount, Size);
+    AM335_I2C_WRITE(Am3I2cInterruptStatus, AM335_I2C_INTERRUPT_STATUS_MASK);
+    Value = AM335_I2C_CONTROL_MASTER | AM335_I2C_CONTROL_ENABLE;
+    AM335_I2C_WRITE(Am3I2cControl, Value);
     Value |= AM335_I2C_CONTROL_START;
-    AM335_I2C_WRITE(AM335_I2C_CONTROL, Value);
+    AM335_I2C_WRITE(Am3I2cControl, Value);
     do {
-        Value = AM335_I2C_READ(AM335_I2C_RAW_INTERRUPT_STATUS);
+        Value = AM335_I2C_READ(Am3I2cInterruptStatusRaw);
 
-    } while ((Value & AM335_I2C_RAW_INTERRUPT_STATUS_BUSY) == 0);
+    } while ((Value & AM335_I2C_INTERRUPT_BUS_BUSY) == 0);
 
     //
     // Loop reading the data bytes.
@@ -632,13 +630,13 @@ Return Value:
 
     while (Size != 0) {
         do {
-            Value = AM335_I2C_READ(AM335_I2C_BUFFER_STATUS);
-            Value = (Value >> AM335_I2C_BUFFER_STATUS_RX_SHIFT) &
-                    AM335_I2C_BUFFER_STATUS_RX_MASK;
+            Value = AM335_I2C_READ(Am3I2cBufferStatus);
+            Value = (Value & AM335_I2C_BUFFER_STATUS_RX_MASK) >>
+                    AM335_I2C_BUFFER_STATUS_RX_SHIFT;
 
         } while (Value == 0);
 
-        *Data = AM335_I2C_READ(AM335_I2C_DATA);
+        *Data = AM335_I2C_READ(Am3I2cData);
         Data += 1;
         Size -= 1;
     }
@@ -647,17 +645,15 @@ Return Value:
     // Make it stop.
     //
 
-    Value = AM335_I2C_READ(AM335_I2C_CONTROL);
+    Value = AM335_I2C_READ(Am3I2cControl);
     Value |= AM335_I2C_CONTROL_STOP;
-    AM335_I2C_WRITE(AM335_I2C_CONTROL, Value);
+    AM335_I2C_WRITE(Am3I2cControl, Value);
     do {
-        Value = AM335_I2C_READ(AM335_I2C_RAW_INTERRUPT_STATUS);
+        Value = AM335_I2C_READ(Am3I2cInterruptStatusRaw);
 
-    } while ((Value & AM335_I2C_RAW_INTERRUPT_STATUS_STOP_CONDITION) == 0);
+    } while ((Value & AM335_I2C_INTERRUPT_BUS_FREE) == 0);
 
-    AM335_I2C_WRITE(AM335_I2C_INTERRUPT_STATUS,
-                    AM335_I2C_INTERRUPT_STATUS_STOP_CONDITION);
-
+    AM335_I2C_WRITE(Am3I2cInterruptStatus, AM335_I2C_INTERRUPT_BUS_FREE);
     return;
 }
 
@@ -701,23 +697,23 @@ Return Value:
     // the transmit ready interrupt, and wait for the ready bit.
     //
 
-    AM335_I2C_WRITE(AM335_I2C_COUNT, Size + 1);
-    AM335_I2C_WRITE(AM335_I2C_INTERRUPT_STATUS, AM335_INTERRUPT_STATUS_MASK);
+    AM335_I2C_WRITE(Am3I2cCount, Size + 1);
+    AM335_I2C_WRITE(Am3I2cInterruptStatus, AM335_I2C_INTERRUPT_STATUS_MASK);
     Value = AM335_I2C_CONTROL_MASTER | AM335_I2C_CONTROL_TRANSMIT |
-            AM335_I2C_CONTROL_ENABLED;
+            AM335_I2C_CONTROL_ENABLE;
 
-    AM335_I2C_WRITE(AM335_I2C_CONTROL, Value);
+    AM335_I2C_WRITE(Am3I2cControl, Value);
     Value |= AM335_I2C_CONTROL_START;
-    AM335_I2C_WRITE(AM335_I2C_CONTROL, Value);
+    AM335_I2C_WRITE(Am3I2cControl, Value);
     do {
-        Value = AM335_I2C_READ(AM335_I2C_RAW_INTERRUPT_STATUS);
+        Value = AM335_I2C_READ(Am3I2cInterruptStatusRaw);
 
-    } while ((Value & AM335_I2C_RAW_INTERRUPT_STATUS_BUSY) == 0);
+    } while ((Value & AM335_I2C_INTERRUPT_BUS_BUSY) == 0);
 
     Index = 0;
     while (Index < Size + 1) {
-        Value = AM335_I2C_READ(AM335_I2C_RAW_INTERRUPT_STATUS);
-        if ((Value & AM335_I2C_RAW_INTERRUPT_STATUS_TRANSMIT_READY) == 0) {
+        Value = AM335_I2C_READ(Am3I2cInterruptStatusRaw);
+        if ((Value & AM335_I2C_INTERRUPT_TX_READY) == 0) {
             break;
         }
 
@@ -733,10 +729,8 @@ Return Value:
             Value = Data[Index - 1];
         }
 
-        AM335_I2C_WRITE(AM335_I2C_DATA, Value);
-        AM335_I2C_WRITE(AM335_I2C_INTERRUPT_STATUS,
-                        AM335_I2C_INTERRUPT_STATUS_TRANSMIT_READY);
-
+        AM335_I2C_WRITE(Am3I2cData, Value);
+        AM335_I2C_WRITE(Am3I2cInterruptStatus, AM335_I2C_INTERRUPT_TX_READY);
         Index += 1;
     }
 
@@ -744,17 +738,15 @@ Return Value:
     // Make it stop.
     //
 
-    Value = AM335_I2C_READ(AM335_I2C_CONTROL);
+    Value = AM335_I2C_READ(Am3I2cControl);
     Value |= AM335_I2C_CONTROL_STOP;
-    AM335_I2C_WRITE(AM335_I2C_CONTROL, Value);
+    AM335_I2C_WRITE(Am3I2cControl, Value);
     do {
-        Value = AM335_I2C_READ(AM335_I2C_RAW_INTERRUPT_STATUS);
+        Value = AM335_I2C_READ(Am3I2cInterruptStatusRaw);
 
-    } while ((Value & AM335_I2C_RAW_INTERRUPT_STATUS_STOP_CONDITION) == 0);
+    } while ((Value & AM335_I2C_INTERRUPT_BUS_FREE) == 0);
 
-    AM335_I2C_WRITE(AM335_I2C_INTERRUPT_STATUS,
-                    AM335_I2C_INTERRUPT_STATUS_STOP_CONDITION);
-
+    AM335_I2C_WRITE(Am3I2cInterruptStatus, AM335_I2C_INTERRUPT_BUS_FREE);
     return;
 }
 

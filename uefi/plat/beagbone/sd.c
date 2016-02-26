@@ -29,7 +29,7 @@ Environment:
 #include <dev/sdstd.h>
 #include <minoca/uefi/protocol/blockio.h>
 #include "bbonefw.h"
-#include "cpu/am335x.h"
+#include <minoca/soc/am335x.h>
 
 //
 // --------------------------------------------------------------------- Macros

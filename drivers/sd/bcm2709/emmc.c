@@ -26,7 +26,7 @@ Environment:
 
 #include <minoca/kernel/driver.h>
 #include <minoca/kernel/acpi.h>
-#include <minoca/dev/bcm2709.h>
+#include <minoca/soc/b2709os.h>
 
 //
 // --------------------------------------------------------------------- Macros

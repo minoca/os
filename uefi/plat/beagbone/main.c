@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <uefifw.h>
-#include "cpu/am335x.h"
+#include <minoca/soc/am335x.h>
 #include "bbonefw.h"
 
 //

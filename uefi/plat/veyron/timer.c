@@ -69,44 +69,9 @@ Environment:
 
 #define VEYRON_TIMER_TICK_COUNT (RK32_TIMER_FREQUENCY / 64)
 
-#define RK32_TIMER_CONTROL_ENABLE           0x00000001
-#define RK32_TIMER_CONTROL_ONE_SHOT         0x00000002
-#define RK32_TIMER_CONTROL_INTERRUPT_ENABLE 0x00000004
-
-#define RK32_WATCHDOG_CONTROL_ENABLE     0x00000001
-#define RK32_WATCHDOG_CONTROL_BARK_FIRST 0x00000002
-
-#define RK32_WATCHDOG_RESTART_VALUE 0x00000076
-
 //
 // ------------------------------------------------------ Data Type Definitions
 //
-
-//
-// Define the RK32xx timer register offsets, in bytes.
-//
-
-typedef enum _RK32_TIMER_REGISTER {
-    Rk32TimerLoadCountLow     = 0x00,
-    Rk32TimerLoadCountHigh    = 0x04,
-    Rk32TimerCurrentValueLow  = 0x08,
-    Rk32TimerCurrentValueHigh = 0x0C,
-    Rk32TimerControl          = 0x10,
-    Rk32TimerInterruptStatus  = 0x18
-} RK32_TIMER_REGISTER, *PRK32_TIMER_REGISTER;
-
-//
-// Define the RK32xx watchdog timer register offsets, in bytes.
-//
-
-typedef enum _RK32_WATCHDOG_REGISTER {
-    Rk32WatchdogControl         = 0x00,
-    Rk32WatchdogTimeoutRange    = 0x04,
-    Rk32WatchdogCurrentCount    = 0x08,
-    Rk32WatchdogCounterRestart  = 0x0C,
-    Rk32WatchdogInterruptStatus = 0x10,
-    Rk32WatchdogInterruptClear  = 0x14
-} RK32_WATCHDOG_REGISTER, *PRK32_WATCHDOG_REGISTER;
 
 /*++
 

@@ -34,7 +34,8 @@ Environment:
 #include <minoca/lib/status.h>
 #include <minoca/fw/acpitabs.h>
 #include <minoca/kernel/hmod.h>
-#include <minoca/dev/am335x.h>
+#include <minoca/soc/am335x.h>
+#include "am335.h"
 
 //
 // --------------------------------------------------------------------- Macros

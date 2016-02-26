@@ -27,7 +27,7 @@ Environment:
 #include <minoca/kernel/driver.h>
 #include <minoca/gpio/gpiohost.h>
 #include <minoca/fw/acpitabs.h>
-#include <minoca/dev/rk32xx.h>
+#include <minoca/soc/rk32xx.h>
 
 //
 // --------------------------------------------------------------------- Macros

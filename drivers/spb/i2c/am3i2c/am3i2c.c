@@ -27,7 +27,7 @@ Environment:
 #include <minoca/kernel/driver.h>
 #include <minoca/spb/spbhost.h>
 #include <minoca/fw/acpitabs.h>
-#include <minoca/dev/am335x.h>
+#include <minoca/soc/am335x.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -46,118 +46,8 @@ Environment:
 #define AM335_I2C_ALLOCATION_TAG 0x32493341
 
 //
-// Define I2C control register bits.
-//
-
-#define AM335_I2C_CONTROL_START (1 << 0)
-#define AM335_I2C_CONTROL_STOP (1 << 1)
-#define AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_3 (1 << 4)
-#define AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_2 (1 << 5)
-#define AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_1 (1 << 6)
-#define AM335_I2C_CONTROL_EXPAND_OWN_ADDRESS_0 (1 << 7)
-#define AM335_I2C_CONTROL_EXPAND_SLAVE_ADDRESS (1 << 8)
-#define AM335_I2C_CONTROL_TRANSMIT (1 << 9)
-#define AM335_I2C_CONTROL_MASTER (1 << 10)
-#define AM335_I2C_CONTROL_START_BYTE_MODE (1 << 11)
-#define AM335_I2C_CONTROL_ENABLE (1 << 15)
-
-//
-// I2C system control register bits.
-//
-
-#define AM335_I2C_SYSTEM_CONTROL_AUTO_IDLE 0x00000001
-#define AM335_I2C_SYSTEM_CONTROL_SOFT_RESET 0x00000002
-
-//
-// Define I2C buffer (FIFO) control bits.
-//
-
-#define AM335_I2C_BUFFER_TX_THRESHOLD_SHIFT 0
-#define AM335_I2C_BUFFER_TX_FIFO_CLEAR (1 << 6)
-#define AM335_I2C_BUFFER_TX_DMA_ENABLE (1 << 7)
-#define AM335_I2C_BUFFER_RX_THRESHOLD_SHIFT 8
-#define AM335_I2C_BUFFER_RX_FIFO_CLEAR (1 << 14)
-#define AM335_I2C_BUFFER_RX_DMA_ENABLE (1 << 15)
-
-//
-// Define buffer status register bits.
-//
-
-#define AM335_I2C_BUFFER_STATUS_TX_MASK (0x3F << 0)
-#define AM335_I2C_BUFFER_STATUS_TX_SHIFT 0
-#define AM335_I2C_BUFFER_STATUS_RX_MASK (0x3F << 8)
-#define AM335_I2C_BUFFER_STATUS_RX_SHIFT 8
-#define AM335_I2C_BUFFER_STATUS_DEPTH_8 (0x0 << 14)
-#define AM335_I2C_BUFFER_STATUS_DEPTH_16 (0x1 << 14)
-#define AM335_I2C_BUFFER_STATUS_DEPTH_32 (0x2 << 14)
-#define AM335_I2C_BUFFER_STATUS_DEPTH_64 (0x3 << 14)
-#define AM335_I2C_BUFFER_STATUS_DEPTH_MASK (0x3 << 14)
-
-#define AM335_I2C_MAX_FIFO_DEPTH 64
-
-//
-// Define I2C interrupt status/enable register bits.
-//
-
-#define AM335_I2C_INTERRUPT_ARBITRATION_LOST 0x00000001
-#define AM335_I2C_INTERRUPT_NACK 0x00000002
-#define AM335_I2C_INTERRUPT_ACCESS_READY 0x00000004
-#define AM335_I2C_INTERRUPT_RX_READY 0x00000008
-#define AM335_I2C_INTERRUPT_TX_READY 0x00000010
-#define AM335_I2C_INTERRUPT_GENERAL_CALL 0x00000020
-#define AM335_I2C_INTERRUPT_START 0x00000040
-#define AM335_I2C_INTERRUPT_ACCESS_ERROR 0x00000080
-#define AM335_I2C_INTERRUPT_BUS_FREE 0x00000100
-#define AM335_I2C_INTERRUPT_ADDRESS_RECOGNIZED 0x00000200
-#define AM335_I2C_INTERRUPT_TX_UNDERFLOW 0x00000400
-#define AM335_I2C_INTERRUPT_RX_OVERFLOW 0x00000800
-#define AM335_I2C_INTERRUPT_BUS_BUSY 0x00001000
-#define AM335_I2C_INTERRUPT_RX_DRAIN 0x00002000
-#define AM335_I2C_INTERRUPT_TX_DRAIN 0x00004000
-
-#define AM335_I2C_INTERRUPT_ERROR_MASK \
-    (AM335_I2C_INTERRUPT_ACCESS_ERROR | AM335_I2C_INTERRUPT_RX_OVERFLOW)
-
-#define AM335_I2C_INTERRUPT_DEFAULT_MASK \
-    (AM335_I2C_INTERRUPT_NACK | AM335_I2C_INTERRUPT_ACCESS_ERROR)
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
-
-typedef enum _AM335_I2C_REGISTER {
-    Am3I2cRevisionLow = 0x00,
-    Am3I2cRevisionHigh = 0x04,
-    Am3I2cSysControl = 0x10,
-    Am3I2cInterruptStatusRaw = 0x24,
-    Am3I2cInterruptStatus = 0x28,
-    Am3I2cInterruptEnableSet = 0x2C,
-    Am3I2cInterruptEnableClear = 0x30,
-    Am3I2cWakeEnable = 0x34,
-    Am3I2cDmaRxEnableSet = 0x38,
-    Am3I2cDmaTxEnableSet = 0x3C,
-    Am3I2cDmaRxEnableClear = 0x40,
-    Am3I2cDmaTxEnableClear = 0x44,
-    Am3I2cDmaRxWakeEnable = 0x48,
-    Am3I2cDmaTxWakeEnable = 0x4C,
-    Am3I2cSysStatus = 0x90,
-    Am3I2cBuffer = 0x94,
-    Am3I2cCount = 0x98,
-    Am3I2cData = 0x9C,
-    Am3I2cControl = 0xA4,
-    Am3I2cOwnAddress = 0xA8,
-    Am3I2cSlaveAddress = 0xAC,
-    Am3I2cPrescale = 0xB0,
-    Am3I2cSclLowTime = 0xB4,
-    Am3I2cSclHighTime = 0xB8,
-    Am3I2cSysTest = 0xBC,
-    Am3I2cBufferStatus = 0xC0,
-    Am3I2cOwnAddress1 = 0xC4,
-    Am3I2cOwnAddress2 = 0xC8,
-    Am3I2cOwnAddress3 = 0xCC,
-    Am3I2cActiveOwnAddress = 0xD0,
-    Am3I2cClockBlock = 0xD4,
-} AM335_I2C_REGISTER, *PAM335_I2C_REGISTER;
 
 /*++
 

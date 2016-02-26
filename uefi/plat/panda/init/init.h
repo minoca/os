@@ -20,7 +20,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "cpu/omap4430.h"
+#include <minoca/soc/omap4.h>
 #include "tirom.h"
 #include "util.h"
 

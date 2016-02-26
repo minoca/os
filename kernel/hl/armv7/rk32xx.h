@@ -21,7 +21,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/dev/rk32xx.h>
+#include <minoca/soc/rk32xx.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -31,44 +31,50 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
+//
+// Define the signature of the RK32xx ACPI table: Rk32
+//
+
+#define RK32XX_SIGNATURE 0x32336B52 // '23kR'
+
 #define RK32_ALLOCATION_TAG 0x32336B52 // '23kR'
-
-//
-// Define attributes of the timers.
-//
-
-#define RK32_TIMER_BIT_WIDTH 64
-#define RK32_TIMER_FREQUENCY 24000000
-#define RK32_TIMER_BLOCK_SIZE 0x1000
-
-//
-// Define RK32 timer register bits.
-//
-
-//
-// Control bits
-//
-
-#define RK32_TIMER_CONTROL_ENABLE           0x00000001
-#define RK32_TIMER_CONTROL_ONE_SHOT         0x00000002
-#define RK32_TIMER_CONTROL_INTERRUPT_ENABLE 0x00000004
 
 //
 // ------------------------------------------------------ Data Type Definitions
 //
 
-//
-// Define the RK32xx timer register offsets, in bytes.
-//
+/*++
 
-typedef enum _RK32_TIMER_REGISTER {
-    Rk32TimerLoadCountLow     = 0x00,
-    Rk32TimerLoadCountHigh    = 0x04,
-    Rk32TimerCurrentValueLow  = 0x08,
-    Rk32TimerCurrentValueHigh = 0x0C,
-    Rk32TimerControl          = 0x10,
-    Rk32TimerInterruptStatus  = 0x18
-} RK32_TIMER_REGISTER, *PRK32_TIMER_REGISTER;
+Structure Description:
+
+    This structure describes the Rockchip RK32xx ACPI table.
+
+Members:
+
+    Header - Stores the standard ACPI table header. The signature here is
+        'Rk32'.
+
+    TimerBase - Stores the array of physical addresses of all the timers.
+
+    TimerGsi - Stores the array of Global System Interrupt numbers for each of
+        the timers.
+
+    TimerCountDownMask - Stores a mask of bits, one for each timer, where if a
+        bit is set that timer counts down. If the bit for a timer is clear, the
+        timer counts up.
+
+    TimerEnabledMask - Stores a bitfield of which timers are available for use
+        by the kernel.
+
+--*/
+
+typedef struct _RK32XX_TABLE {
+    DESCRIPTION_HEADER Header;
+    ULONGLONG TimerBase[RK32_TIMER_COUNT];
+    ULONG TimerGsi[RK32_TIMER_COUNT];
+    ULONG TimerCountDownMask;
+    ULONG TimerEnabledMask;
+} PACKED RK32XX_TABLE, *PRK32XX_TABLE;
 
 //
 // -------------------------------------------------------------------- Globals

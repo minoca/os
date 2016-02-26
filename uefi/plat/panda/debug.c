@@ -26,7 +26,7 @@ Environment:
 
 #include "uefifw.h"
 #include "dev/omapuart.h"
-#include "cpu/omap4430.h"
+#include <minoca/soc/omap4.h>
 
 //
 // --------------------------------------------------------------------- Macros

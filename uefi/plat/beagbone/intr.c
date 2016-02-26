@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <uefifw.h>
-#include "cpu/am335x.h"
+#include <minoca/soc/am335x.h>
 #include "bbonefw.h"
 
 //
@@ -260,7 +260,7 @@ Return Value:
 
     UINT32 Value;
 
-    Value = AM335_INTC_READ(AM335_INTC_SORTED_IRQ);
+    Value = AM335_INTC_READ(Am335IntcSortedIrq);
     *InterruptContext = (VOID *)(Value);
     if ((Value & AM335_INTC_SORTED_SPURIOUS) != 0) {
         *InterruptNumber = -1;
@@ -304,7 +304,7 @@ Return Value:
 
     Value = (UINTN)InterruptContext;
     if ((Value & AM335_INTC_SORTED_SPURIOUS) == 0) {
-        AM335_INTC_WRITE(AM335_INTC_CONTROL,
+        AM335_INTC_WRITE(Am335IntcControl,
                          AM335_INTC_CONTROL_NEW_IRQ_AGREEMENT);
     }
 
@@ -341,9 +341,9 @@ Return Value:
     //
 
     Value = AM335_INTC_SYSTEM_CONFIG_SOFT_RESET;
-    AM335_INTC_WRITE(AM335_INTC_SYSTEM_CONFIG, Value);
+    AM335_INTC_WRITE(Am335IntcSystemConfig, Value);
     do {
-        Value = AM335_INTC_READ(AM335_INTC_SYSTEM_STATUS);
+        Value = AM335_INTC_READ(Am335IntcSystemStatus);
 
     } while ((Value & AM335_INTC_SYSTEM_STATUS_RESET_DONE) == 0);
 

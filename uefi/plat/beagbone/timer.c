@@ -27,7 +27,7 @@ Environment:
 
 #include <uefifw.h>
 #include "bbonefw.h"
-#include "cpu/am335x.h"
+#include <minoca/soc/am335x.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -73,101 +73,9 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define AM335_WATCHDOG_FREQUENCY 32768
-
-//
-// Define the number of 32kHz clock ticks per interrupt. A value of 512 creates
-// a timer rate of 15.625ms, or about 64 interrupts per second.
-//
-
-#define BEAGLEBONE_TIMER_TICK_COUNT 512
-
-//
-// Idle bits.
-//
-
-#define AM335_TIMER_IDLEMODE_NOIDLE 0x00000004
-#define AM335_TIMER_IDLEMODE_SMART 0x00000008
-
-//
-// Mode bits.
-//
-
-#define AM335_TIMER_STARTED 0x00000001
-#define AM335_TIMER_OVERFLOW_TRIGGER 0x00000400
-#define AM335_TIMER_OVERFLOW_AND_MATCH_TRIGGER 0x00000800
-#define AM335_TIMER_COMPARE_ENABLED 0x00000040
-#define AM335_TIMER_AUTORELOAD 0x00000002
-
-//
-// Interrupt enable bits.
-//
-
-#define AM335_TIMER_MATCH_INTERRUPT 0x00000001
-#define AM335_TIMER_OVERFLOW_INTERRUPT 0x00000002
-
-#define AM335_TIMER_INTERRUPT_MASK 0x7
-
-//
-// Define the two step sequence needed for disabling or enabling the watchdog
-// timer.
-//
-
-#define AM335_WATCHDOG_DISABLE1 0x0000AAAA
-#define AM335_WATCHDOG_DISABLE2 0x00005555
-#define AM335_WATCHDOG_ENABLE1  0x0000BBBB
-#define AM335_WATCHDOG_ENABLE2  0x00004444
-
 //
 // ------------------------------------------------------ Data Type Definitions
 //
-
-//
-// Define the DM timer register offsets.
-//
-
-typedef enum _AM335_DM_TIMER_REGISTER {
-    Am335TimerId                            = 0x00,
-    Am335TimerOcpConfig                     = 0x10,
-    Am335TimerEndOfInterrupt                = 0x14,
-    Am335TimerRawInterruptStatus            = 0x24,
-    Am335TimerInterruptStatus               = 0x28,
-    Am335TimerInterruptEnableSet            = 0x2C,
-    Am335TimerInterruptEnableClear          = 0x30,
-    Am335TimerInterruptWakeEnable           = 0x34,
-    Am335TimerControl                       = 0x38,
-    Am335TimerCount                         = 0x3C,
-    Am335TimerLoad                          = 0x40,
-    Am335TimerTrigger                       = 0x44,
-    Am335TimerWritePosting                  = 0x48,
-    Am335TimerMatch                         = 0x4C,
-    Am335TimerCapture1                      = 0x50,
-    Am335TimerSynchronousInterfaceControl   = 0x54,
-    Am335TimerCapture2                      = 0x58
-} AM335_DM_TIMER_REGISTER, *PAM335_DM_TIMER_REGISTER;
-
-//
-// Define the watchdog timer registers, offsets in bytes.
-//
-
-typedef enum _AM335_WATCHDOG_REGISTER {
-    Am335WatchdogRevision               = 0x00,
-    Am335WatchdogInterfaceConfiguration = 0x10,
-    Am335WatchdogInterfaceStatus        = 0x14,
-    Am335WatchdogInterruptStatus        = 0x18,
-    Am335WatchdogInterruptEnable        = 0x1C,
-    Am335WatchdogWakeEventEnable        = 0x20,
-    Am335WatchdogPrescaler              = 0x24,
-    Am335WatchdogCurrentCount           = 0x28,
-    Am335WatchdogLoadCount              = 0x2C,
-    Am335WatchdogWritePostControl       = 0x34,
-    Am335WatchdogDelay                  = 0x44,
-    Am335WatchdogStartStop              = 0x48,
-    Am335WatchdogRawInterruptStatus     = 0x54,
-    Am335WatchdogInterruptEnableSet     = 0x5C,
-    Am335WatchdogInterruptEnableClear   = 0x60,
-    Am335WatchdogWakeEnable             = 0x64
-} AM335_WATCHDOG_REGISTER, *PAM335_WATCHDOG_REGISTER;
 
 /*++
 

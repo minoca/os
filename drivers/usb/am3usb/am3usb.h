@@ -22,7 +22,7 @@ Author:
 //
 
 #include <minoca/fw/acpitabs.h>
-#include <minoca/dev/am335x.h>
+#include <minoca/soc/am335x.h>
 #include "musb.h"
 
 //

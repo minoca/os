@@ -26,7 +26,7 @@ Environment:
 
 #include <minoca/kernel/driver.h>
 #include <minoca/fw/acpitabs.h>
-#include <minoca/dev/am335x.h>
+#include <minoca/soc/am335x.h>
 #include "mailbox.h"
 
 //

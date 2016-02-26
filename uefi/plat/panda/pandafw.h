@@ -20,11 +20,27 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "cpu/omap4430.h"
+#include <minoca/soc/omap4.h>
 
 //
 // --------------------------------------------------------------------- Macros
 //
+
+//
+// These macros read from and write to a GPIO block.
+//
+
+#define READ_GPIO1_REGISTER(_Register) \
+    EfiReadRegister32((UINT8 *)EfiOmap4Gpio1Address + (_Register))
+
+#define WRITE_GPIO1_REGISTER(_Register, _Value) \
+    EfiWriteRegister32((UINT8 *)EfiOmap4Gpio1Address + (_Register), (_Value))
+
+#define READ_GPIO2_REGISTER(_Register) \
+    EfiReadRegister32((UINT8 *)EfiOmap4Gpio2Address + (_Register))
+
+#define WRITE_GPIO2_REGISTER(_Register, _Value) \
+    EfiWriteRegister32((UINT8 *)EfiOmap4Gpio2Address + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -51,6 +67,19 @@ Author:
 
 extern VOID *EfiOmap4I2cBase;
 extern VOID *EfiOmap4PrmDeviceBase;
+
+//
+// Store a pointer to the GPIO register blocks.
+//
+
+extern VOID *EfiOmap4Gpio1Address;
+extern VOID *EfiOmap4Gpio2Address;
+
+//
+// Store a boolean used for debugging that disables the watchdog timer.
+//
+
+extern BOOLEAN EfiDisableWatchdog;
 
 //
 // -------------------------------------------------------- Function Prototypes

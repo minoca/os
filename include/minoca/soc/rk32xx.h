@@ -8,11 +8,11 @@ Module Name:
 
 Abstract:
 
-    This header contains definitions for the Rockchip 32xx ARMv7 SoC.
+    This header contains definitions for the Rockchip 32xx SoC.
 
 Author:
 
-    Evan Green 9-Jul-2015
+    Chris Stevens 30-Jul-2015
 
 --*/
 
@@ -35,6 +35,12 @@ Author:
 //
 // ---------------------------------------------------------------- Definitions
 //
+
+//
+// Define the number of timers in the SoC.
+//
+
+#define RK32_TIMER_COUNT 8
 
 //
 // Define the RK3288 register base map.
@@ -109,6 +115,42 @@ Author:
 #define RK32_PLL_CONFIGURATION2_BWADJ_SHIFT 0
 
 #define RK32_PLL_CONFIGURATION3_RESET (1 << 5)
+
+//
+// Define the CRU codec PLL control 0 register bits.
+//
+
+#define RK32_CRU_CODEC_PLL_CONTROL0_PROTECT_SHIFT 16
+#define RK32_CRU_CODEC_PLL_CONTROL0_CLKR_MASK     (0x3F << 8)
+#define RK32_CRU_CODEC_PLL_CONTROL0_CLKR_SHIFT    8
+#define RK32_CRU_CODEC_PLL_CONTROL0_CLKOD_MASK    (0xF << 0)
+#define RK32_CRU_CODEC_PLL_CONTROL0_CLKOD_SHIFT   0
+
+//
+// Define the CRU codec PLL control 1 register bits.
+//
+
+#define RK32_CRU_CODEC_PLL_CONTROL1_LOCK       (1 << 31)
+#define RK32_CRU_CODEC_PLL_CONTROL1_CLKF_MASK  (0x1FFF << 0)
+#define RK32_CRU_CODEC_PLL_CONTROL1_CLKF_SHIFT 0
+
+//
+// Define the CRU general PLL control 0 register bits.
+//
+
+#define RK32_CRU_GENERAL_PLL_CONTROL0_PROTECT_SHIFT 16
+#define RK32_CRU_GENERAL_PLL_CONTROL0_CLKR_MASK     (0x3F << 8)
+#define RK32_CRU_GENERAL_PLL_CONTROL0_CLKR_SHIFT    8
+#define RK32_CRU_GENERAL_PLL_CONTROL0_CLKOD_MASK    (0xF << 0)
+#define RK32_CRU_GENERAL_PLL_CONTROL0_CLKOD_SHIFT   0
+
+//
+// Define the CRU general PLL control 1 register bits.
+//
+
+#define RK32_CRU_GENERAL_PLL_CONTROL1_LOCK       (1 << 31)
+#define RK32_CRU_GENERAL_PLL_CONTROL1_CLKF_MASK  (0x1FFF << 0)
+#define RK32_CRU_GENERAL_PLL_CONTROL1_CLKF_SHIFT 0
 
 //
 // Define the PLL clock mode frequencies.
@@ -320,20 +362,6 @@ Author:
 #define RK32_LCD_DSP_INFORMATION_WIDTH_SHIFT  0
 
 //
-// Define the UART parameters.
-//
-
-#define RK32_UART_BASE_BAUD 1497600
-#define RK32_UART_REGISTER_OFFSET 0
-#define RK32_UART_REGISTER_SHIFT 2
-
-//
-// Define the default frequency for the SD/MMC.
-//
-
-#define RK32_SDMMC_FREQUENCY_24MHZ 24000000
-
-//
 // Define the bits for the GPIO 7 data register.
 //
 
@@ -427,6 +455,44 @@ Author:
 
 #define RK32_I2C_FINISHED_COUNT_MASK  (0x3F << 0)
 #define RK32_I2C_FINISHED_COUNT_SHIFT 0
+
+//
+// Define the UART parameters.
+//
+
+#define RK32_UART_BASE_BAUD 1497600
+#define RK32_UART_REGISTER_OFFSET 0
+#define RK32_UART_REGISTER_SHIFT 2
+
+//
+// Define the default frequency for the SD/MMC.
+//
+
+#define RK32_SDMMC_FREQUENCY_24MHZ 24000000
+
+//
+// Define attributes of the timers.
+//
+
+#define RK32_TIMER_BIT_WIDTH 64
+#define RK32_TIMER_BLOCK_SIZE 0x1000
+
+//
+// Define RK32 timer register bits.
+//
+
+//
+// Control bits
+//
+
+#define RK32_TIMER_CONTROL_ENABLE           0x00000001
+#define RK32_TIMER_CONTROL_ONE_SHOT         0x00000002
+#define RK32_TIMER_CONTROL_INTERRUPT_ENABLE 0x00000004
+
+#define RK32_WATCHDOG_CONTROL_ENABLE     0x00000001
+#define RK32_WATCHDOG_CONTROL_BARK_FIRST 0x00000002
+
+#define RK32_WATCHDOG_RESTART_VALUE 0x00000076
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -555,6 +621,24 @@ typedef enum _RK32_I2C_REGISTER {
     Rk32I2cReceiveData6 = 0x218,
     Rk32I2cReceiveData7 = 0x21C
 } RK32_I2C_REGISTER, *PRK32_I2C_REGISTER;
+
+typedef enum _RK32_TIMER_REGISTER {
+    Rk32TimerLoadCountLow     = 0x00,
+    Rk32TimerLoadCountHigh    = 0x04,
+    Rk32TimerCurrentValueLow  = 0x08,
+    Rk32TimerCurrentValueHigh = 0x0C,
+    Rk32TimerControl          = 0x10,
+    Rk32TimerInterruptStatus  = 0x18
+} RK32_TIMER_REGISTER, *PRK32_TIMER_REGISTER;
+
+typedef enum _RK32_WATCHDOG_REGISTER {
+    Rk32WatchdogControl         = 0x00,
+    Rk32WatchdogTimeoutRange    = 0x04,
+    Rk32WatchdogCurrentCount    = 0x08,
+    Rk32WatchdogCounterRestart  = 0x0C,
+    Rk32WatchdogInterruptStatus = 0x10,
+    Rk32WatchdogInterruptClear  = 0x14
+} RK32_WATCHDOG_REGISTER, *PRK32_WATCHDOG_REGISTER;
 
 //
 // -------------------------------------------------------------------- Globals
