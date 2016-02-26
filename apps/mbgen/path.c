@@ -36,16 +36,6 @@ Environment:
 #include "mbgen.h"
 
 //
-// --------------------------------------------------------------------- Macros
-//
-
-#define MBGEN_IS_SOURCE_ROOT_RELATIVE(_String) \
-    (((_String)[0] == '/') && ((_String)[1] == '/'))
-
-#define MBGEN_IS_BUILD_ROOT_RELATIVE(_String) \
-    (((_String)[0] == '^') && ((_String)[1] == '/'))
-
-//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -124,6 +114,24 @@ Return Value:
         Name += 1;
 
     } else {
+
+        //
+        // A circumflex identifies the path as the opposite of its default.
+        //
+
+        while (*Name == '^') {
+            Name += 1;
+            if (RelativeTree == MbgenSourceTree) {
+                RelativeTree = MbgenBuildTree;
+
+            } else {
+
+                assert(RelativeTree == MbgenBuildTree);
+
+                RelativeTree = MbgenSourceTree;
+            }
+        }
+
         Target->Root = RelativeTree;
         Target->Path = MbgenAppendPaths(RelativePath, Name);
         if (Target->Path == NULL) {

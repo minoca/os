@@ -509,6 +509,8 @@ Return Value:
         printf("\n");
     }
 
+    Status = MbgenCreateMakefile(&Context);
+
 mainEnd:
     MbgenDestroyContext(&Context);
     if (Status != 0) {
@@ -654,6 +656,8 @@ Return Value:
 
 {
 
+    UINTN Index;
+
     if (Target->Label != NULL) {
         free(Target->Label);
     }
@@ -672,6 +676,14 @@ Return Value:
 
     if (Target->PublicDeps.List != NULL) {
         free(Target->PublicDeps.List);
+    }
+
+    for (Index = 0; Index < Target->Sources.Count; Index += 1) {
+        free(Target->Sources.Strings[Index]);
+    }
+
+    if (Target->Sources.Strings != NULL) {
+        free(Target->Sources.Strings);
     }
 
     free(Target);
@@ -1162,8 +1174,14 @@ Return Value:
 
 {
 
+    UINTN Index;
     PCHALK_OBJECT List;
+    PSTR Source;
+    PCHALK_OBJECT SourceObject;
+    PCHALK_OBJECT SourcesList;
     INT Status;
+    MBGEN_TARGET_SPECIFIER TargetSpecifier;
+    PSTR TreeString;
 
     //
     // Convert the deps to their pointers, loading them if needed.
@@ -1196,6 +1214,61 @@ Return Value:
 
         if (Status != 0) {
             goto ProcessTargetEnd;
+        }
+    }
+
+    //
+    // Process the set of sources.
+    //
+
+    SourcesList = Target->SourcesList;
+    if (SourcesList != NULL) {
+        Target->Sources.Strings = malloc(
+                                      SourcesList->List.Count * sizeof(PVOID));
+
+        if (Target->Sources.Strings == NULL) {
+            Status = ENOMEM;
+            goto ProcessTargetEnd;
+        }
+
+        Target->Sources.Capacity = SourcesList->List.Count;
+        for (Index = 0; Index < SourcesList->List.Count; Index += 1) {
+            SourceObject = SourcesList->List.Array[Index];
+            if (SourceObject->Header.Type != ChalkObjectString) {
+                fprintf(stderr,
+                        "Error: Sources for target %s must be strings.\n",
+                        Target->Label);
+
+                Status = EINVAL;
+                goto ProcessTargetEnd;
+            }
+
+            Source = SourceObject->String.String;
+            memset(&TargetSpecifier, 0, sizeof(TargetSpecifier));
+            Status = MbgenParseTargetSpecifier(Context,
+                                               Source,
+                                               MbgenSourceTree,
+                                               Script->Path,
+                                               &TargetSpecifier);
+
+            if (Status != 0) {
+                fprintf(stderr,
+                        "Error: Unable to parse specifier: %s.\n",
+                        Source);
+
+                goto ProcessTargetEnd;
+            }
+
+            TreeString = MbgenPathForTree(Context, TargetSpecifier.Root);
+            Source = MbgenAppendPaths(TreeString, TargetSpecifier.Path);
+            free(TargetSpecifier.Path);
+            if (Source == NULL) {
+                Status = ENOMEM;
+                goto ProcessTargetEnd;
+            }
+
+            Target->Sources.Strings[Index] = Source;
+            Target->Sources.Count = Index + 1;
         }
     }
 
@@ -1587,14 +1660,20 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
         printf("Tool: %s\n"
                "\tCommand: %s\n"
-               "\tDescription: %s\n"
-               "\tDepFile: %s\n"
-               "\tDepsFormat: %s\n\n",
+               "\tDescription: %s\n",
                Tool->Name,
                Tool->Command,
-               Tool->Description,
-               Tool->Depfile,
-               Tool->DepsFormat);
+               Tool->Description);
+
+        if (Tool->Depfile != NULL) {
+            printf("\tDepfile: %s\n", Tool->Depfile);
+        }
+
+        if (Tool->DepsFormat != NULL) {
+            printf("\tDepsFormat: %s\n", Tool->DepsFormat);
+        }
+
+        printf("\n");
     }
 
     ScriptEntry = Context->ScriptList.Next;
@@ -1637,15 +1716,22 @@ Return Value:
         while (CurrentEntry != &(Script->TargetList)) {
             Target = LIST_VALUE(CurrentEntry, MBGEN_TARGET, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            printf("\tTarget: %s\n"
-                   "\t\tOutput: %s\n"
-                   "\t\tTool: %s\n"
-                   "\t\tDeps: %d\n",
+            printf("\tTarget: %s\n\t\tOutput: %s\n",
                    Target->Label,
-                   Target->Output,
-                   Target->Tool,
-                   Target->Deps.Count);
+                   Target->Output);
 
+            if (Target->Tool != NULL) {
+                printf("\t\tTool %s\n", Target->Tool);
+            }
+
+            if (Target->Sources.Count != 0) {
+                printf("\t\tSources: %d\n", Target->Sources.Count);
+                for (Index = 0; Index < Target->Sources.Count; Index += 1) {
+                    printf("\t\t\t%s\n", Target->Sources.Strings[Index]);
+                }
+            }
+
+            printf("\t\tDeps: %d\n", Target->Deps.Count);
             for (Index = 0; Index < Target->Deps.Count; Index += 1) {
                 printf("\t\t\t%s:%s\n",
                        Target->Deps.List[Index]->Script->CompletePath,

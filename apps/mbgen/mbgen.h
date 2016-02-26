@@ -25,6 +25,16 @@ Author:
 #include "chalk.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+#define MBGEN_IS_SOURCE_ROOT_RELATIVE(_String) \
+    (((_String)[0] == '/') && ((_String)[1] == '/'))
+
+#define MBGEN_IS_BUILD_ROOT_RELATIVE(_String) \
+    (((_String)[0] == '^') && ((_String)[1] == '/'))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -691,6 +701,33 @@ Return Value:
     0 on success.
 
     Non-zero on failure.
+
+--*/
+
+//
+// Output generator functions
+//
+
+INT
+MbgenCreateMakefile (
+    PMBGEN_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a Makefile out of the build graph.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
 
 --*/
 
