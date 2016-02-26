@@ -89,42 +89,6 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef enum _SD_VERSION {
-    SdVersionInvalid,
-    SdVersion1p0,
-    SdVersion1p10,
-    SdVersion2,
-    SdVersion3,
-    SdVersionMaximum,
-    SdMmcVersionMinimum,
-    SdMmcVersion1p2,
-    SdMmcVersion1p4,
-    SdMmcVersion2p2,
-    SdMmcVersion3,
-    SdMmcVersion4,
-    SdMmcVersion4p1,
-    SdMmcVersion4p2,
-    SdMmcVersion4p3,
-    SdMmcVersion4p41,
-    SdMmcVersion4p5,
-    SdMmcVersionMaximum
-} SD_VERSION, *PSD_VERSION;
-
-typedef enum _SD_HOST_VERSION {
-    SdHostVersion1 = 0x0,
-    SdHostVersion2 = 0x1,
-    SdHostVersion3 = 0x2,
-} SD_HOST_VERSION, *PSD_HOST_VERSION;
-
-typedef enum _SD_CLOCK_SPEED {
-    SdClockInvalid,
-    SdClock400kHz = 400000,
-    SdClock25MHz = 25000000,
-    SdClock26MHz = 26000000,
-    SdClock50MHz = 50000000,
-    SdClock52MHz = 52000000,
-} SD_CLOCK_SPEED, *PSD_CLOCK_SPEED;
-
 /*++
 
 Structure Description:

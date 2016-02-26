@@ -26,7 +26,6 @@ Environment:
 
 #include <uefifw.h>
 #include <dev/sd.h>
-#include <dev/sdstd.h>
 #include <minoca/uefi/protocol/blockio.h>
 #include "bbonefw.h"
 #include <minoca/soc/am335x.h>

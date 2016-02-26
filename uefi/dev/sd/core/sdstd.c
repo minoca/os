@@ -26,7 +26,6 @@ Environment:
 //
 
 #include <uefifw.h>
-#include <dev/sdstd.h>
 #include "sdp.h"
 
 //

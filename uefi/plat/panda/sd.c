@@ -26,7 +26,6 @@ Environment:
 
 #include <uefifw.h>
 #include <dev/sd.h>
-#include <dev/sdstd.h>
 #include <minoca/uefi/protocol/blockio.h>
 #include "pandafw.h"
 
