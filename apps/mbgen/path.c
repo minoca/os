@@ -36,6 +36,10 @@ Environment:
 #include "mbgen.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -56,19 +60,19 @@ Environment:
 //
 
 INT
-MbgenParseTargetSpecifier (
+MbgenParsePath (
     PMBGEN_CONTEXT Context,
     PSTR Name,
     MBGEN_DIRECTORY_TREE RelativeTree,
     PSTR RelativePath,
-    PMBGEN_TARGET_SPECIFIER Target
+    PMBGEN_PATH Target
     )
 
 /*++
 
 Routine Description:
 
-    This routine breaks a target specifier string down into its components.
+    This routine breaks an mbgen path string into its components.
 
 Arguments:
 
@@ -97,10 +101,7 @@ Return Value:
     PSTR Colon;
     INT Status;
 
-    assert(Target->Path == NULL);
-    assert(Target->Target == NULL);
-
-    Target->Path = NULL;
+    memset(Target, 0, sizeof(MBGEN_PATH));
     if (MBGEN_IS_SOURCE_ROOT_RELATIVE(Name)) {
         Name += 2;
         Target->Root = MbgenSourceTree;
@@ -136,7 +137,7 @@ Return Value:
         Target->Path = MbgenAppendPaths(RelativePath, Name);
         if (Target->Path == NULL) {
             Status = ENOMEM;
-            goto ParseTargetSpecifierEnd;
+            goto ParsePathEnd;
         }
     }
 
@@ -144,7 +145,7 @@ Return Value:
         Target->Path = strdup(Name);
         if (Target->Path == NULL) {
             Status = ENOMEM;
-            goto ParseTargetSpecifierEnd;
+            goto ParsePathEnd;
         }
     }
 
@@ -152,14 +153,23 @@ Return Value:
     Colon = strrchr(Target->Path, ':');
     if (Colon != NULL) {
         *Colon = '\0';
-        if (Colon[1] != '\0') {
-            Target->Target = Colon + 1;
+        Target->Target = Colon + 1;
+
+        //
+        // Remove trailing slashes.
+        //
+
+        while ((Colon != Target->Path) &&
+               ((*(Colon - 1) == '/') || (*(Colon - 1) == '\\'))) {
+
+            Colon -= 1;
+            *Colon = '\0';
         }
     }
 
     Status = 0;
 
-ParseTargetSpecifierEnd:
+ParsePathEnd:
     return Status;
 }
 

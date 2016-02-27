@@ -28,6 +28,9 @@ Author:
 // --------------------------------------------------------------------- Macros
 //
 
+#define MBGEN_IS_SPECIAL_PATH_CHARACTER(_Character) \
+    (((_Character) == '/') || ((_Character) == '\\') || ((_Character) == '^'))
+
 #define MBGEN_IS_SOURCE_ROOT_RELATIVE(_String) \
     (((_String)[0] == '/') && ((_String)[1] == '/'))
 
@@ -58,6 +61,12 @@ typedef enum _MBGEN_DIRECTORY_TREE {
     MbgenBuildTree,
     MbgenAbsolutePath,
 } MBGEN_DIRECTORY_TREE, *PMBGEN_DIRECTORY_TREE;
+
+typedef enum _MBGEN_INPUT_TYPE {
+    MbgenInputInvalid,
+    MbgenInputSource,
+    MbgenInputTarget,
+} MBGEN_INPUT_TYPE, *PMBGEN_INPUT_TYPE;
 
 typedef enum _MBGEN_SCRIPT_ORDER {
     MbgenScriptOrderInvalid,
@@ -135,21 +144,24 @@ Members:
 
 --*/
 
-typedef struct _MBGEN_TARGET_SPECIFIER {
+typedef struct _MBGEN_PATH {
     MBGEN_DIRECTORY_TREE Root;
     PSTR Path;
     PSTR Target;
-} MBGEN_TARGET_SPECIFIER, *PMBGEN_TARGET_SPECIFIER;
+} MBGEN_PATH, *PMBGEN_PATH;
 
 /*++
 
 Structure Description:
 
-    This structure stores an array of strings.
+    This structure stores an array of inputs, which are either of type source
+    or target.
 
 Members:
 
-    Strings - Stores an array of strings.
+    Array - Stores a pointer to the array of pointers to elements. Each element
+        is of type MBGEN_SOURCE or MBGEN_TARGET depending on their first field
+        value.
 
     Count - Stores the number of elements in the array.
 
@@ -158,34 +170,11 @@ Members:
 
 --*/
 
-typedef struct _MBGEN_STRINGS {
-    PSTR *Strings;
+typedef struct _MBGEN_INPUTS {
+    PVOID *Array;
     ULONG Count;
     ULONG Capacity;
-} MBGEN_STRINGS, *PMBGEN_STRINGS;
-
-/*++
-
-Structure Description:
-
-    This structure stores an array of targets.
-
-Members:
-
-    List - Stores the array of targets.
-
-    Count - Stores the number of valid elements in the array.
-
-    Capacity - Stores the maximum number of elements in the array before the
-        array will need to be reallocated.
-
---*/
-
-typedef struct _MBGEN_TARGET_LIST {
-    PMBGEN_TARGET *List;
-    ULONG Count;
-    ULONG Capacity;
-} MBGEN_TARGET_LIST, *PMBGEN_TARGET_LIST;
+} MBGEN_INPUTS, *PMBGEN_INPUTS;
 
 /*++
 
@@ -266,9 +255,48 @@ typedef struct _MBGEN_SCRIPT {
 
 Structure Description:
 
+    This structure stores information about a loaded script.
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous scripts in the build.
+
+    Root - Stores the directory tree root for the target.
+
+    Path - Stores the directory path relative to the root, not including the
+        actual file name.
+
+    CompletePath - Stores the complete file path to the script.
+
+    Script - Stores a pointer to the script contents.
+
+    Size - Stores the size of the script file in bytes, not including the
+        artificially appended null terminator.
+
+    Result - Stores the result returned from executing the script.
+
+    TargetList - Stores the head of the list of targets in this script.
+
+    TargetCount - Stores the number of targets on the target list.
+
+--*/
+
+typedef struct _MBGEN_SOURCE {
+    MBGEN_INPUT_TYPE Type;
+    MBGEN_DIRECTORY_TREE Tree;
+    PSTR Path;
+} MBGEN_SOURCE, *PMBGEN_SOURCE;
+
+/*++
+
+Structure Description:
+
     This structure stores a target definition.
 
 Members:
+
+    Type - Stores the type, which is always set to "target" since this is a
+        target.
 
     ListEntry - Stores pointers to the next and previous tools in the build.
 
@@ -278,48 +306,44 @@ Members:
 
     Output - Stores a pointer to the output name.
 
+    Tree - Stores the tree the output path is rooted to.
+
     Tool - Stores the name of the tool used to build this target.
 
     Flags - Stores a bitfield of flags regarding the target. See MBGEN_TARGET_*
         definitions.
 
-    Sources - Stores the required sources.
+    Inputs - Stores the inputs to the target.
 
-    Deps - Stores the array of dependencies for this target.
+    OrderOnlyInputs - Stores the order-only inputs to the target.
 
-    PublicDeps - Stores the array of public dependencies for this target.
+    InputsObject - Stores a pointer to the list object of input strings.
 
-    SourcesList - Stores a pointer to the list of sources, straight from the
-        dictionary.
+    OrderOnlyInputsObject - Stores a pointer to the list of order-only input
+        strings.
 
-    DepsList - Stores a pointer to the list of dependencies, straight from the
-        dictionary.
-
-    PublicDepsList - Stores a pointer to the dependencies added to any target
-        that lists this one as a dependency.
+    Callback - Stores a pointer to the function to call back when this target
+        is added as an input (but not an order-only input).
 
     Config - Stores a pointer to the configuration information for this target.
-
-    PublicConfig - Stores a pointer to the configuration information that is
-        added to any target that lists this target as a dependency.
 
 --*/
 
 struct _MBGEN_TARGET {
+    MBGEN_INPUT_TYPE Type;
     LIST_ENTRY ListEntry;
     PMBGEN_SCRIPT Script;
     PSTR Label;
     PSTR Output;
+    MBGEN_DIRECTORY_TREE Tree;
     PSTR Tool;
     ULONG Flags;
-    MBGEN_STRINGS Sources;
-    MBGEN_TARGET_LIST Deps;
-    MBGEN_TARGET_LIST PublicDeps;
-    PCHALK_OBJECT SourcesList;
-    PCHALK_OBJECT DepsList;
-    PCHALK_OBJECT PublicDepsList;
+    MBGEN_INPUTS Inputs;
+    MBGEN_INPUTS OrderOnlyInputs;
+    PCHALK_OBJECT InputsObject;
+    PCHALK_OBJECT OrderOnlyInputsObject;
+    PCHALK_OBJECT Callback;
     PCHALK_OBJECT Config;
-    PCHALK_OBJECT PublicConfig;
 };
 
 //
@@ -388,7 +412,7 @@ Return Value:
 INT
 MbgenLoadTargetScript (
     PMBGEN_CONTEXT Context,
-    PSTR TargetSpecifier,
+    PMBGEN_PATH Target,
     MBGEN_SCRIPT_ORDER Order,
     PMBGEN_SCRIPT *Script
     );
@@ -404,7 +428,7 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
-    TargetSpecifier - Supplies a pointer to the target specifier string.
+    Target - Supplies a pointer to the target specifier to load.
 
     Order - Supplies the order to apply to the script.
 
@@ -446,7 +470,7 @@ INT
 MbgenLoadScript (
     PMBGEN_CONTEXT Context,
     MBGEN_SCRIPT_ORDER Order,
-    PMBGEN_TARGET_SPECIFIER TargetPath,
+    PMBGEN_PATH TargetPath,
     PMBGEN_SCRIPT *FinalScript
     );
 
@@ -505,19 +529,19 @@ Return Value:
 //
 
 INT
-MbgenParseTargetSpecifier (
+MbgenParsePath (
     PMBGEN_CONTEXT Context,
     PSTR Name,
     MBGEN_DIRECTORY_TREE RelativeTree,
     PSTR RelativePath,
-    PMBGEN_TARGET_SPECIFIER Target
+    PMBGEN_PATH Target
     );
 
 /*++
 
 Routine Description:
 
-    This routine breaks a target specifier string down into its components.
+    This routine breaks an mbgen path string into its components.
 
 Arguments:
 

@@ -119,18 +119,18 @@ MbgenProcessTarget (
     );
 
 INT
-MbgenAddTargetsToList (
+MbgenAddInputsToList (
     PMBGEN_CONTEXT Context,
     PMBGEN_SCRIPT Script,
-    PMBGEN_TARGET_LIST TargetList,
+    PMBGEN_INPUTS Inputs,
     PCHALK_OBJECT List
     );
 
 INT
-MbgenAddTargetToList (
+MbgenAddInputToList (
     PMBGEN_CONTEXT Context,
     PMBGEN_SCRIPT Script,
-    PMBGEN_TARGET_LIST TargetList,
+    PMBGEN_INPUTS Inputs,
     PSTR Name
     );
 
@@ -155,6 +155,22 @@ MbgenDestroyTool (
 VOID
 MbgenPrintAllEntries (
     PMBGEN_CONTEXT Context
+    );
+
+INT
+MbgenAddInput (
+    PMBGEN_INPUTS Inputs,
+    PVOID Input
+    );
+
+VOID
+MbgenDestroyInputs (
+    PMBGEN_INPUTS Inputs
+    );
+
+VOID
+MbgenDestroySource (
+    PMBGEN_SOURCE Source
     );
 
 //
@@ -237,8 +253,24 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
 
     {
         ChalkCObjectPointer,
-        "sources",
-        offsetof(MBGEN_TARGET, SourcesList),
+        "inputs",
+        offsetof(MBGEN_TARGET, InputsObject),
+        FALSE,
+        {0}
+    },
+
+    {
+        ChalkCObjectPointer,
+        "order-only-inputs",
+        offsetof(MBGEN_TARGET, OrderOnlyInputsObject),
+        FALSE,
+        {0}
+    },
+
+    {
+        ChalkCObjectPointer,
+        "callback",
+        offsetof(MBGEN_TARGET, Callback),
         FALSE,
         {0}
     },
@@ -257,38 +289,6 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
         offsetof(MBGEN_TARGET, Flags),
         FALSE,
         {MBGEN_TARGET_PHONY}
-    },
-
-    {
-        ChalkCObjectPointer,
-        "deps",
-        offsetof(MBGEN_TARGET, DepsList),
-        FALSE,
-        {0}
-    },
-
-    {
-        ChalkCObjectPointer,
-        "public_deps",
-        offsetof(MBGEN_TARGET, PublicDepsList),
-        FALSE,
-        {0}
-    },
-
-    {
-        ChalkCObjectPointer,
-        "config",
-        offsetof(MBGEN_TARGET, Config),
-        FALSE,
-        {0}
-    },
-
-    {
-        ChalkCObjectPointer,
-        "public_config",
-        offsetof(MBGEN_TARGET, PublicConfig),
-        FALSE,
-        {0}
     },
 
     {0}
@@ -656,8 +656,6 @@ Return Value:
 
 {
 
-    UINTN Index;
-
     if (Target->Label != NULL) {
         free(Target->Label);
     }
@@ -670,22 +668,8 @@ Return Value:
         free(Target->Tool);
     }
 
-    if (Target->Deps.List != NULL) {
-        free(Target->Deps.List);
-    }
-
-    if (Target->PublicDeps.List != NULL) {
-        free(Target->PublicDeps.List);
-    }
-
-    for (Index = 0; Index < Target->Sources.Count; Index += 1) {
-        free(Target->Sources.Strings[Index]);
-    }
-
-    if (Target->Sources.Strings != NULL) {
-        free(Target->Sources.Strings);
-    }
-
+    MbgenDestroyInputs(&(Target->Inputs));
+    MbgenDestroyInputs(&(Target->OrderOnlyInputs));
     free(Target);
     return;
 }
@@ -883,6 +867,7 @@ Return Value:
 
 {
 
+    ULONG Advance;
     INT Status;
     PMBGEN_TARGET Target;
 
@@ -892,14 +877,16 @@ Return Value:
     }
 
     memset(Target, 0, sizeof(MBGEN_TARGET));
+    Target->Type = MbgenInputTarget;
     Target->Script = Script;
+    Target->Tree = MbgenBuildTree;
     Status = ChalkConvertDictToStructure(&(Context->Interpreter),
                                          Entry,
                                          MbgenTargetMembers,
                                          Target);
 
     if (Status != 0) {
-        goto ParseToolEntryEnd;
+        goto ParseTargetEntryEnd;
     }
 
     //
@@ -909,7 +896,7 @@ Return Value:
     if ((Target->Label == NULL) && (Target->Output == NULL)) {
         fprintf(stderr, "Error: label or output must be defined.\n");
         Status = EINVAL;
-        goto ParseToolEntryEnd;
+        goto ParseTargetEntryEnd;
     }
 
     if (Target->Label == NULL) {
@@ -921,7 +908,48 @@ Return Value:
 
     if ((Target->Label == NULL) || (Target->Output == NULL)) {
         Status = ENOMEM;
-        goto ParseToolEntryEnd;
+        goto ParseTargetEntryEnd;
+    }
+
+    //
+    // Handle output tree specification.
+    //
+
+    Advance = 0;
+    if (MBGEN_IS_SOURCE_ROOT_RELATIVE(Target->Output)) {
+        Advance = 2;
+        Target->Tree = MbgenSourceTree;
+
+    } else if (MBGEN_IS_BUILD_ROOT_RELATIVE(Target->Output)) {
+        Advance = 2;
+        Target->Tree = MbgenBuildTree;
+
+    } else if (*(Target->Output) == '/') {
+        Advance = 1;
+        Target->Tree = MbgenAbsolutePath;
+
+    //
+    // The default is the build tree, so the circumflex switches to the source
+    // tree.
+    //
+
+    } else if (*(Target->Output) == '^') {
+        Advance = 1;
+        Target->Tree = MbgenSourceTree;
+    }
+
+    if (Advance != 0) {
+        memmove(Target->Output,
+                Target->Output + Advance,
+                strlen(Target->Output) + 1 - Advance);
+    }
+
+    if (*(Target->Output) == '\0') {
+        fprintf(stderr,
+                "Error: Output must be non-empty.\n");
+
+        Status = EINVAL;
+        goto ParseTargetEntryEnd;
     }
 
     //
@@ -935,47 +963,51 @@ Return Value:
                 Target->Label);
 
         Status = EINVAL;
-        goto ParseToolEntryEnd;
+        goto ParseTargetEntryEnd;
     }
 
     //
-    // The sources, deps, and public_deps if present must be lists.
+    // The inputs must be lists.
     //
 
-    if ((Target->SourcesList != NULL) &&
-        (Target->SourcesList->Header.Type != ChalkObjectList)) {
+    if ((Target->InputsObject != NULL) &&
+        (Target->InputsObject->Header.Type != ChalkObjectList)) {
 
         fprintf(stderr,
-                "Error: sources for %s:%s must be a list.\n",
+                "Error: inputs for %s:%s must be a list.\n",
                 Script->CompletePath,
                 Target->Label);
 
         Status = EINVAL;
-        goto ParseToolEntryEnd;
+        goto ParseTargetEntryEnd;
     }
 
-    if ((Target->DepsList != NULL) &&
-        (Target->DepsList->Header.Type != ChalkObjectList)) {
+    if ((Target->OrderOnlyInputsObject != NULL) &&
+        (Target->OrderOnlyInputsObject->Header.Type != ChalkObjectList)) {
 
         fprintf(stderr,
-                "Error: deps for %s:%s must be a list.\n",
+                "Error: order-only-inputs for %s:%s must be a list.\n",
                 Script->CompletePath,
                 Target->Label);
 
         Status = EINVAL;
-        goto ParseToolEntryEnd;
+        goto ParseTargetEntryEnd;
     }
 
-    if ((Target->PublicDepsList != NULL) &&
-        (Target->PublicDepsList->Header.Type != ChalkObjectList)) {
+    //
+    // The callback must be a function.
+    //
+
+    if ((Target->Callback != NULL) &&
+        (Target->Callback->Header.Type != ChalkObjectFunction)) {
 
         fprintf(stderr,
-                "Error: public_deps for %s:%s must be a list.\n",
+                "Error: callback for %s:%s must be a function.\n",
                 Script->CompletePath,
                 Target->Label);
 
         Status = EINVAL;
-        goto ParseToolEntryEnd;
+        goto ParseTargetEntryEnd;
     }
 
     //
@@ -991,26 +1023,14 @@ Return Value:
                 Target->Label);
 
         Status = EINVAL;
-        goto ParseToolEntryEnd;
-    }
-
-    if ((Target->PublicConfig != NULL) &&
-        (Target->PublicConfig->Header.Type != ChalkObjectDict)) {
-
-        fprintf(stderr,
-                "Error: public_config for %s:%s must be a dict.\n",
-                Script->CompletePath,
-                Target->Label);
-
-        Status = EINVAL;
-        goto ParseToolEntryEnd;
+        goto ParseTargetEntryEnd;
     }
 
     INSERT_BEFORE(&(Target->ListEntry), &(Script->TargetList));
     Script->TargetCount += 1;
     Status = 0;
 
-ParseToolEntryEnd:
+ParseTargetEntryEnd:
     if (Status != 0) {
         if (Target != NULL) {
             MbgenDestroyTarget(Target);
@@ -1174,101 +1194,41 @@ Return Value:
 
 {
 
-    UINTN Index;
     PCHALK_OBJECT List;
-    PSTR Source;
-    PCHALK_OBJECT SourceObject;
-    PCHALK_OBJECT SourcesList;
     INT Status;
-    MBGEN_TARGET_SPECIFIER TargetSpecifier;
-    PSTR TreeString;
 
     //
-    // Convert the deps to their pointers, loading them if needed.
+    // Convert the inputs to an array of input pointers to either sources or
+    // other targets.
     //
 
-    List = Target->DepsList;
+    List = Target->InputsObject;
     if (List != NULL) {
 
-        assert(Target->Deps.List == NULL);
+        assert(Target->Inputs.Count == 0);
 
-        Status = MbgenAddTargetsToList(Context, Script, &(Target->Deps), List);
+        Status = MbgenAddInputsToList(Context, Script, &(Target->Inputs), List);
         if (Status != 0) {
             goto ProcessTargetEnd;
         }
     }
 
     //
-    // Load and find all the public dependencies as well.
+    // Load and find all the order-only inputs as well.
     //
 
-    List = Target->PublicDepsList;
+    List = Target->OrderOnlyInputsObject;
     if (List != NULL) {
 
-        assert(Target->PublicDeps.List == NULL);
+        assert(Target->OrderOnlyInputs.Count == 0);
 
-        Status = MbgenAddTargetsToList(Context,
-                                       Script,
-                                       &(Target->PublicDeps),
-                                       List);
+        Status = MbgenAddInputsToList(Context,
+                                      Script,
+                                      &(Target->OrderOnlyInputs),
+                                      List);
 
         if (Status != 0) {
             goto ProcessTargetEnd;
-        }
-    }
-
-    //
-    // Process the set of sources.
-    //
-
-    SourcesList = Target->SourcesList;
-    if (SourcesList != NULL) {
-        Target->Sources.Strings = malloc(
-                                      SourcesList->List.Count * sizeof(PVOID));
-
-        if (Target->Sources.Strings == NULL) {
-            Status = ENOMEM;
-            goto ProcessTargetEnd;
-        }
-
-        Target->Sources.Capacity = SourcesList->List.Count;
-        for (Index = 0; Index < SourcesList->List.Count; Index += 1) {
-            SourceObject = SourcesList->List.Array[Index];
-            if (SourceObject->Header.Type != ChalkObjectString) {
-                fprintf(stderr,
-                        "Error: Sources for target %s must be strings.\n",
-                        Target->Label);
-
-                Status = EINVAL;
-                goto ProcessTargetEnd;
-            }
-
-            Source = SourceObject->String.String;
-            memset(&TargetSpecifier, 0, sizeof(TargetSpecifier));
-            Status = MbgenParseTargetSpecifier(Context,
-                                               Source,
-                                               MbgenSourceTree,
-                                               Script->Path,
-                                               &TargetSpecifier);
-
-            if (Status != 0) {
-                fprintf(stderr,
-                        "Error: Unable to parse specifier: %s.\n",
-                        Source);
-
-                goto ProcessTargetEnd;
-            }
-
-            TreeString = MbgenPathForTree(Context, TargetSpecifier.Root);
-            Source = MbgenAppendPaths(TreeString, TargetSpecifier.Path);
-            free(TargetSpecifier.Path);
-            if (Source == NULL) {
-                Status = ENOMEM;
-                goto ProcessTargetEnd;
-            }
-
-            Target->Sources.Strings[Index] = Source;
-            Target->Sources.Count = Index + 1;
         }
     }
 
@@ -1279,10 +1239,10 @@ ProcessTargetEnd:
 }
 
 INT
-MbgenAddTargetsToList (
+MbgenAddInputsToList (
     PMBGEN_CONTEXT Context,
     PMBGEN_SCRIPT Script,
-    PMBGEN_TARGET_LIST TargetList,
+    PMBGEN_INPUTS Inputs,
     PCHALK_OBJECT List
     )
 
@@ -1290,8 +1250,8 @@ MbgenAddTargetsToList (
 
 Routine Description:
 
-    This routine adds the targets described by the given list to the target
-    list.
+    This routine adds the sources and targets described by the given list to
+    the input list.
 
 Arguments:
 
@@ -1299,7 +1259,7 @@ Arguments:
 
     Script - Supplies a pointer to the current script.
 
-    TargetList - Supplies a pointer to the target list to add to.
+    Inputs - Supplies a pointer to the inputs array to add to.
 
     List - Supplies a pointer to the target list.
 
@@ -1331,13 +1291,13 @@ Return Value:
                     Script->CompletePath);
 
             Status = EINVAL;
-            goto AddTargetsToListEnd;
+            goto AddInputsToListEnd;
         }
 
-        Status = MbgenAddTargetToList(Context,
-                                      Script,
-                                      TargetList,
-                                      String->String.String);
+        Status = MbgenAddInputToList(Context,
+                                     Script,
+                                     Inputs,
+                                     String->String.String);
 
         if (Status != 0) {
             fprintf(stderr,
@@ -1346,21 +1306,21 @@ Return Value:
                     String->String.String,
                     strerror(Status));
 
-            goto AddTargetsToListEnd;
+            goto AddInputsToListEnd;
         }
     }
 
     Status = 0;
 
-AddTargetsToListEnd:
+AddInputsToListEnd:
     return Status;
 }
 
 INT
-MbgenAddTargetToList (
+MbgenAddInputToList (
     PMBGEN_CONTEXT Context,
     PMBGEN_SCRIPT Script,
-    PMBGEN_TARGET_LIST TargetList,
+    PMBGEN_INPUTS Inputs,
     PSTR Name
     )
 
@@ -1368,8 +1328,8 @@ MbgenAddTargetToList (
 
 Routine Description:
 
-    This routine adds the targets described by the given name to the target
-    list.
+    This routine adds the source or target described by the given name to the
+    input list.
 
 Arguments:
 
@@ -1377,9 +1337,9 @@ Arguments:
 
     Script - Supplies a pointer to the current script.
 
-    TargetList - Supplies a pointer to the target list to add to.
+    Inputs - Supplies a pointer to the inputs array to add to.
 
-    Name - Supplies a pointer to the tool name of the target to add to the list.
+    Name - Supplies a pointer to the name of the target to add to the list.
 
 Return Value:
 
@@ -1392,94 +1352,115 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PVOID NewBuffer;
-    ULONG NewCapacity;
+    MBGEN_PATH Path;
+    PMBGEN_SOURCE Source;
     INT Status;
     PMBGEN_TARGET Target;
-    PSTR TargetName;
     PMBGEN_SCRIPT TargetScript;
 
-    if (*Name == ':') {
-        TargetScript = Script;
+    Status = MbgenParsePath(Context,
+                            Name,
+                            MbgenSourceTree,
+                            Script->Path,
+                            &Path);
 
-    } else {
-        Status = MbgenLoadTargetScript(Context,
-                                       Name,
-                                       MbgenScriptOrderTarget,
-                                       &TargetScript);
-
-        if (Status != 0) {
-            goto AddTargetToListEnd;
-        }
+    if (Status != 0) {
+        goto AddInputToListEnd;
     }
 
-    TargetName = strrchr(Name, ':');
+    if (Path.Target != NULL) {
+        if (*Name == ':') {
+            TargetScript = Script;
+
+        } else {
+            Status = MbgenLoadTargetScript(Context,
+                                           &Path,
+                                           MbgenScriptOrderTarget,
+                                           &TargetScript);
+
+            if (Status != 0) {
+                goto AddInputToListEnd;
+            }
+        }
+    }
 
     //
-    // Make sure the array is big enough.
+    // If there is no target name, it's a source.
     //
 
-    NewCapacity = TargetList->Capacity;
-    if (NewCapacity == 0) {
-        NewCapacity = 16;
-    }
-
-    if ((TargetName == NULL) || (TargetName[1] == '\0')) {
-        while (NewCapacity < TargetList->Count + TargetScript->TargetCount) {
-            NewCapacity *= 2;
-        }
-
-    } else {
-        while (NewCapacity < TargetList->Count) {
-            NewCapacity *= 2;
-        }
-    }
-
-    if (NewCapacity > TargetList->Capacity) {
-        NewBuffer = realloc(TargetList->List, NewCapacity * sizeof(PVOID));
-        if (NewBuffer == NULL) {
+    if (Path.Target == NULL) {
+        Source = malloc(sizeof(MBGEN_SOURCE));
+        if (Source == NULL) {
             Status = ENOMEM;
-            goto AddTargetToListEnd;
+            goto AddInputToListEnd;
         }
 
-        TargetList->List = NewBuffer;
-        TargetList->Capacity = NewCapacity;
-    }
-
-    //
-    // Add all targets from the given script.
-    //
-
-    if ((TargetName == NULL) || (TargetName[1] == '\0')) {
-        CurrentEntry = TargetScript->TargetList.Next;
-        while (CurrentEntry != &(TargetScript->TargetList)) {
-            Target = LIST_VALUE(CurrentEntry, MBGEN_TARGET, ListEntry);
-            TargetList->List[TargetList->Count] = Target;
-            TargetList->Count += 1;
-            CurrentEntry = CurrentEntry->Next;
+        memset(Source, 0, sizeof(MBGEN_SOURCE));
+        Source->Type = MbgenInputSource;
+        Source->Tree = Path.Root;
+        Source->Path = Path.Path;
+        Path.Path = NULL;
+        Status = MbgenAddInput(Inputs, Source);
+        if (Status != 0) {
+            free(Source);
+            goto AddInputToListEnd;
         }
 
     //
-    // Add the specified target.
+    // Add a target pointer as an input.
     //
 
     } else {
-        TargetName += 1;
-        Target = MbgenFindTargetInScript(Context, TargetScript, TargetName);
-        if (Target == NULL) {
-            fprintf(stderr,
-                    "Error: Failed to find target %s:%s.\n",
-                    TargetScript->CompletePath,
-                    TargetName);
 
-            Status = ENOENT;
-            goto AddTargetToListEnd;
+        //
+        // Add all targets from the given script.
+        //
+
+        if (Path.Target[0] == '\0') {
+            CurrentEntry = TargetScript->TargetList.Next;
+            while (CurrentEntry != &(TargetScript->TargetList)) {
+                Target = LIST_VALUE(CurrentEntry, MBGEN_TARGET, ListEntry);
+                Status = MbgenAddInput(Inputs, Target);
+                if (Status != 0) {
+                    goto AddInputToListEnd;
+                }
+
+                CurrentEntry = CurrentEntry->Next;
+            }
+
+        //
+        // Add the specified target.
+        //
+
+        } else {
+            Target = MbgenFindTargetInScript(Context,
+                                             TargetScript,
+                                             Path.Target);
+
+            if (Target == NULL) {
+                fprintf(stderr,
+                        "Error: Failed to find target %s:%s.\n",
+                        TargetScript->CompletePath,
+                        Path.Target);
+
+                Status = ENOENT;
+                goto AddInputToListEnd;
+            }
+
+            Status = MbgenAddInput(Inputs, Target);
+            if (Status != 0) {
+                goto AddInputToListEnd;
+            }
         }
     }
 
     Status = 0;
 
-AddTargetToListEnd:
+AddInputToListEnd:
+    if (Path.Path != NULL) {
+        free(Path.Path);
+    }
+
     return Status;
 }
 
@@ -1562,8 +1543,8 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PMBGEN_TARGET Target;
 
-    CurrentEntry = Context->ToolList.Next;
-    while (CurrentEntry != &(Context->ToolList)) {
+    CurrentEntry = Script->TargetList.Next;
+    while (CurrentEntry != &(Script->TargetList)) {
         Target = LIST_VALUE(CurrentEntry, MBGEN_TARGET, ListEntry);
         if (strcmp(Target->Label, Name) == 0) {
             return Target;
@@ -1647,12 +1628,15 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     UINTN Index;
+    PMBGEN_TARGET InputTarget;
     PMBGEN_SCRIPT Script;
     PLIST_ENTRY ScriptEntry;
     PSTR ScriptPath;
     PSTR ScriptRoot;
+    PMBGEN_SOURCE Source;
     PMBGEN_TARGET Target;
     PMBGEN_TOOL Tool;
+    PSTR TreePath;
 
     CurrentEntry = Context->ToolList.Next;
     while (CurrentEntry != &(Context->ToolList)) {
@@ -1716,33 +1700,46 @@ Return Value:
         while (CurrentEntry != &(Script->TargetList)) {
             Target = LIST_VALUE(CurrentEntry, MBGEN_TARGET, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            printf("\tTarget: %s\n\t\tOutput: %s\n",
+            TreePath = MbgenPathForTree(Context, Target->Tree);
+            printf("\tTarget: %s\n\t\tOutput: %s/%s/%s\n",
                    Target->Label,
+                   TreePath,
+                   Target->Script->Path,
                    Target->Output);
 
             if (Target->Tool != NULL) {
                 printf("\t\tTool %s\n", Target->Tool);
             }
 
-            if (Target->Sources.Count != 0) {
-                printf("\t\tSources: %d\n", Target->Sources.Count);
-                for (Index = 0; Index < Target->Sources.Count; Index += 1) {
-                    printf("\t\t\t%s\n", Target->Sources.Strings[Index]);
+            if (Target->Inputs.Count != 0) {
+                printf("\t\tInputs: %d\n", Target->Inputs.Count);
+                for (Index = 0; Index < Target->Inputs.Count; Index += 1) {
+                    InputTarget = Target->Inputs.Array[Index];
+                    switch (InputTarget->Type) {
+                    case MbgenInputSource:
+                        Source = (PMBGEN_SOURCE)InputTarget;
+                        TreePath = MbgenPathForTree(Context, Source->Tree);
+                        printf("\t\t\t%s%s\n", TreePath, Source->Path);
+                        break;
+
+                    case MbgenInputTarget:
+                        TreePath = MbgenPathForTree(Context,
+                                                    InputTarget->Script->Root);
+
+                        printf("\t\t\t%s%s:%s\n",
+                               TreePath,
+                               InputTarget->Script->Path,
+                               InputTarget->Label);
+
+                        break;
+
+                    default:
+
+                        assert(FALSE);
+
+                        break;
+                    }
                 }
-            }
-
-            printf("\t\tDeps: %d\n", Target->Deps.Count);
-            for (Index = 0; Index < Target->Deps.Count; Index += 1) {
-                printf("\t\t\t%s:%s\n",
-                       Target->Deps.List[Index]->Script->CompletePath,
-                       Target->Deps.List[Index]->Label);
-            }
-
-            printf("\t\tPublicDeps: %d\n", Target->PublicDeps.Count);
-            for (Index = 0; Index < Target->PublicDeps.Count; Index += 1) {
-                printf("\t\t\t%s:%s\n",
-                       Target->PublicDeps.List[Index]->Script->CompletePath,
-                       Target->PublicDeps.List[Index]->Label);
             }
 
             if (Target->Config != NULL) {
@@ -1751,16 +1748,136 @@ Return Value:
                 printf("\n");
             }
 
-            if (Target->PublicConfig != NULL) {
-                printf("\t\tPublicConfig: ");
-                ChalkPrintObject(stdout, Target->PublicConfig, 24);
-                printf("\n");
-            }
-
             printf("\n");
         }
     }
 
+    return;
+}
+
+INT
+MbgenAddInput (
+    PMBGEN_INPUTS Inputs,
+    PVOID Input
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adds an input to the inputs list.
+
+Arguments:
+
+    Inputs - Supplies a pointer to the inputs array.
+
+    Input - Supplies a pointer to the input to add.
+
+Return Value:
+
+    0 on success.
+
+    ENOMEM on allocation failure.
+
+--*/
+
+{
+
+    PVOID NewBuffer;
+    ULONG NewCapacity;
+
+    if (Inputs->Count >= Inputs->Capacity) {
+        NewCapacity = Inputs->Capacity * 2;
+        if (NewCapacity == 0) {
+            NewCapacity = 16;
+        }
+
+        NewBuffer = realloc(Inputs->Array, NewCapacity * sizeof(PVOID));
+        if (NewBuffer == NULL) {
+            return ENOMEM;
+        }
+
+        Inputs->Capacity = NewCapacity;
+        Inputs->Array = NewBuffer;
+    }
+
+    assert(Inputs->Count < Inputs->Capacity);
+
+    Inputs->Array[Inputs->Count] = Input;
+    Inputs->Count += 1;
+    return 0;
+}
+
+VOID
+MbgenDestroyInputs (
+    PMBGEN_INPUTS Inputs
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys an inputs array, freeing all sources.
+
+Arguments:
+
+    Inputs - Supplies a pointer to the inputs array.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Index;
+    PMBGEN_SOURCE Source;
+
+    for (Index = 0; Index < Inputs->Count; Index += 1) {
+        Source = Inputs->Array[Index];
+        if (Source->Type == MbgenInputSource) {
+            MbgenDestroySource(Source);
+        }
+    }
+
+    if (Inputs->Array != NULL) {
+        free(Inputs->Array);
+    }
+
+    Inputs->Count = 0;
+    Inputs->Capacity = 0;
+    return;
+}
+
+VOID
+MbgenDestroySource (
+    PMBGEN_SOURCE Source
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a source entry.
+
+Arguments:
+
+    Source - Supplies a pointer to the source entry.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (Source->Path != NULL) {
+        free(Source->Path);
+    }
+
+    free(Source);
     return;
 }
 

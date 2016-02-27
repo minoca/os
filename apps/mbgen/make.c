@@ -39,7 +39,7 @@ Environment:
 //
 
 #define MBGEN_MAKE_VARIABLE "$(%s)"
-#define MBGEN_MAKE_NEWLINE " \\\n        "
+#define MBGEN_MAKE_LINE_CONTINUATION " \\\n        "
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -59,8 +59,13 @@ VOID
 MbgenMakePrintSource (
     FILE *File,
     PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET Target,
-    PSTR Source
+    PMBGEN_SOURCE Source
+    );
+
+VOID
+MbgenMakePrintTreeRoot (
+    FILE *File,
+    MBGEN_DIRECTORY_TREE Tree
     );
 
 VOID
@@ -68,6 +73,12 @@ MbgenMakePrintConfig (
     FILE *File,
     PMBGEN_CONTEXT Context,
     PCHALK_OBJECT Config
+    );
+
+INT
+MbgenMakePrintConfigValue (
+    FILE *File,
+    PCHALK_OBJECT Value
     );
 
 //
@@ -106,9 +117,11 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     FILE *File;
     UINTN Index;
+    PMBGEN_TARGET Input;
     PSTR MakefilePath;
     PMBGEN_SCRIPT Script;
     PLIST_ENTRY ScriptEntry;
+    PMBGEN_SOURCE Source;
     INT Status;
     PMBGEN_TARGET Target;
     time_t Time;
@@ -162,7 +175,7 @@ Return Value:
     // Loop over every script (file) in the build.
     //
 
-    fprintf(File, "\n# Define targets\n\n");
+    fprintf(File, "\n# Define targets\n");
     ScriptEntry = Context->ScriptList.Next;
     while (ScriptEntry != &(Context->ScriptList)) {
         Script = LIST_VALUE(ScriptEntry, MBGEN_SCRIPT, ListEntry);
@@ -175,7 +188,13 @@ Return Value:
         // Loop over every target defined in the script.
         //
 
-        fprintf(File, "# Define targets for %s\n", Script->Path);
+        if (Script->Path[0] == '\0') {
+            fprintf(File, "# Define root targets\n");
+
+        } else {
+            fprintf(File, "# Define targets for %s\n", Script->Path);
+        }
+
         CurrentEntry = Script->TargetList.Next;
         while (CurrentEntry != &(Script->TargetList)) {
             Target = LIST_VALUE(CurrentEntry, MBGEN_TARGET, ListEntry);
@@ -190,26 +209,65 @@ Return Value:
             fprintf(File, ": ");
 
             //
-            // Add the sources.
+            // Add the inputs.
             //
 
-            for (Index = 0; Index < Target->Sources.Count; Index += 1) {
-                fprintf(File, MBGEN_MAKE_NEWLINE);
-                MbgenMakePrintSource(File,
-                                     Context,
-                                     Target,
-                                     Target->Sources.Strings[Index]);
+            for (Index = 0; Index < Target->Inputs.Count; Index += 1) {
+                Input = Target->Inputs.Array[Index];
+                switch (Input->Type) {
+                case MbgenInputTarget:
+                    MbgenMakePrintTargetFile(File, Context, Input);
+                    break;
+
+                case MbgenInputSource:
+                    Source = (PMBGEN_SOURCE)Input;
+                    MbgenMakePrintSource(File, Context, Source);
+                    break;
+
+                default:
+
+                    assert(FALSE);
+
+                    break;
+                }
+
+                if (Index + 1 != Target->Inputs.Count) {
+                    fprintf(File, MBGEN_MAKE_LINE_CONTINUATION);
+                }
             }
 
             //
-            // Add the dependencies.
+            // Add the order-only inputs if there are any.
             //
 
-            for (Index = 0; Index < Target->Deps.Count; Index += 1) {
-                fprintf(File, MBGEN_MAKE_NEWLINE);
-                MbgenMakePrintTargetFile(File,
-                                         Context,
-                                         Target->Deps.List[Index]);
+            if (Target->OrderOnlyInputs.Count != 0) {
+                fprintf(File, " | " MBGEN_MAKE_LINE_CONTINUATION);
+                for (Index = 0;
+                     Index < Target->OrderOnlyInputs.Count;
+                     Index += 1) {
+
+                    Input = Target->OrderOnlyInputs.Array[Index];
+                    switch (Input->Type) {
+                    case MbgenInputTarget:
+                        MbgenMakePrintTargetFile(File, Context, Input);
+                        break;
+
+                    case MbgenInputSource:
+                        Source = (PMBGEN_SOURCE)Input;
+                        MbgenMakePrintSource(File, Context, Source);
+                        break;
+
+                    default:
+
+                        assert(FALSE);
+
+                        break;
+                    }
+
+                    if (Index + 1 != Target->Inputs.Count) {
+                        fprintf(File, MBGEN_MAKE_LINE_CONTINUATION);
+                    }
+                }
             }
 
             //
@@ -225,9 +283,7 @@ Return Value:
             //
 
             if (Target->Tool != NULL) {
-                fprintf(File,
-                        "\n\t$(TOOL_%s)\n\n",
-                        Target->Tool);
+                fprintf(File, "\n\t$(TOOL_%s)\n\n", Target->Tool);
 
             } else {
                 fprintf(File, "\n\n");
@@ -290,7 +346,72 @@ Return Value:
         return;
     }
 
-    switch (Script->Root) {
+    MbgenMakePrintTreeRoot(File, Target->Tree);
+    fprintf(File, "/%s/%s", Script->Path, Target->Output);
+    return;
+}
+
+VOID
+MbgenMakePrintSource (
+    FILE *File,
+    PMBGEN_CONTEXT Context,
+    PMBGEN_SOURCE Source
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a source's file name.
+
+Arguments:
+
+    File - Supplies a pointer to the file to print to.
+
+    Context - Supplies a pointer to the application context.
+
+    Source - Supplies a pointer to the source file information.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    MbgenMakePrintTreeRoot(File, Source->Tree);
+    fprintf(File, "/%s", Source->Path);
+    return;
+}
+
+VOID
+MbgenMakePrintTreeRoot (
+    FILE *File,
+    MBGEN_DIRECTORY_TREE Tree
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints the tree root shorthand for the given tree.
+
+Arguments:
+
+    File - Supplies a pointer to the file to print to.
+
+    Tree - Supplies the directory tree root to print.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    switch (Tree) {
     case MbgenSourceTree:
         fprintf(File, MBGEN_MAKE_VARIABLE, "SOURCE_ROOT");
         break;
@@ -309,69 +430,6 @@ Return Value:
         break;
     }
 
-    fprintf(File, "/%s/%s", Script->Path, Target->Output);
-    return;
-}
-
-VOID
-MbgenMakePrintSource (
-    FILE *File,
-    PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET Target,
-    PSTR Source
-    )
-
-/*++
-
-Routine Description:
-
-    This routine prints a target's output file name.
-
-Arguments:
-
-    File - Supplies a pointer to the file to print to.
-
-    Context - Supplies a pointer to the application context.
-
-    Target - Supplies a pointer to the current target.
-
-    Source - Supplies a pointer to the source file.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    if (MBGEN_IS_SOURCE_ROOT_RELATIVE(Source)) {
-        fprintf(File, MBGEN_MAKE_VARIABLE, "SOURCE_ROOT");
-        Source += 2;
-
-    } else if (MBGEN_IS_BUILD_ROOT_RELATIVE(Source)) {
-        fprintf(File, MBGEN_MAKE_VARIABLE, "BUILD_ROOT");
-        Source += 2;
-
-    } else if (*Source == '^') {
-        fprintf(File,
-                MBGEN_MAKE_VARIABLE "/%s",
-                "BUILD_ROOT",
-                Target->Script->Path);
-
-        Source += 1;
-
-    } else if (*Source == '/') {
-        Source += 1;
-
-    } else {
-        fprintf(File,
-                MBGEN_MAKE_VARIABLE "/%s",
-                "SOURCE_ROOT",
-                Target->Script->Path);
-    }
-
-    fprintf(File, "/%s", Source);
     return;
 }
 
@@ -406,6 +464,7 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     PCHALK_DICT_ENTRY Entry;
+    INT Status;
     PCHALK_OBJECT Value;
 
     assert(Config->Header.Type == ChalkObjectDict);
@@ -423,7 +482,8 @@ Return Value:
         }
 
         if ((Value->Header.Type != ChalkObjectString) &&
-            (Value->Header.Type != ChalkObjectInteger)) {
+            (Value->Header.Type != ChalkObjectInteger) &&
+            (Value->Header.Type != ChalkObjectList)) {
 
             fprintf(stderr,
                     "Error: Skipping config key %s: unsupported type.\n",
@@ -432,16 +492,79 @@ Return Value:
             continue;
         }
 
-        fprintf(File, MBGEN_MAKE_NEWLINE);
+        fprintf(File, MBGEN_MAKE_LINE_CONTINUATION);
         fprintf(File, "%s=", Entry->Key->String.String);
-        if (Value->Header.Type == ChalkObjectInteger) {
-            fprintf(File, "%lld", Value->Integer.Value);
-
-        } else if (Value->Header.Type == ChalkObjectString) {
-            fprintf(File, "%s", Value->String.String);
+        Status = MbgenMakePrintConfigValue(File, Value);
+        if (Status != 0) {
+            fprintf(stderr,
+                    "Error: Skipping some values for key %s.\n",
+                    Entry->Key->String.String);
         }
     }
 
     return;
+}
+
+INT
+MbgenMakePrintConfigValue (
+    FILE *File,
+    PCHALK_OBJECT Value
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a configuration value.
+
+Arguments:
+
+    File - Supplies a pointer to the file to print to.
+
+    Value - Supplies a pointer to the object to print.
+
+Return Value:
+
+    0 on success.
+
+    -1 if some entries were skipped.
+
+--*/
+
+{
+
+    UINTN Index;
+    INT Status;
+    INT TotalStatus;
+
+    TotalStatus = 0;
+    if (Value->Header.Type == ChalkObjectList) {
+
+        //
+        // Recurse to print every object on the list, separated by a space.
+        //
+
+        for (Index = 0; Index < Value->List.Count; Index += 1) {
+            Status = MbgenMakePrintConfigValue(File, Value->List.Array[Index]);
+            if (Status != 0) {
+                TotalStatus = Status;
+            }
+
+            if (Index != Value->List.Count - 1) {
+                fprintf(File, " ");
+            }
+        }
+
+    } else if (Value->Header.Type == ChalkObjectInteger) {
+        fprintf(File, "%lld", Value->Integer.Value);
+
+    } else if (Value->Header.Type == ChalkObjectString) {
+        fprintf(File, "%s", Value->String.String);
+
+    } else {
+        TotalStatus = -1;
+    }
+
+    return TotalStatus;
 }
 

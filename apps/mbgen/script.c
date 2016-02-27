@@ -50,7 +50,7 @@ Environment:
 PMBGEN_SCRIPT
 MbgenFindScript (
     PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET_SPECIFIER TargetPath
+    PMBGEN_PATH TargetPath
     );
 
 VOID
@@ -89,7 +89,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
 INT
 MbgenLoadTargetScript (
     PMBGEN_CONTEXT Context,
-    PSTR TargetSpecifier,
+    PMBGEN_PATH Target,
     MBGEN_SCRIPT_ORDER Order,
     PMBGEN_SCRIPT *Script
     )
@@ -105,7 +105,7 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
-    TargetSpecifier - Supplies a pointer to the target specifier string.
+    Target - Supplies a pointer to the target specifier to load.
 
     Order - Supplies the order to apply to the script.
 
@@ -123,18 +123,6 @@ Return Value:
 {
 
     INT Status;
-    MBGEN_TARGET_SPECIFIER Target;
-
-    memset(&Target, 0, sizeof(MBGEN_TARGET_SPECIFIER));
-    Status = MbgenParseTargetSpecifier(Context,
-                                       TargetSpecifier,
-                                       MbgenSourceTree,
-                                       NULL,
-                                       &Target);
-
-    if (Status != 0) {
-        goto LoadTargetScriptEnd;
-    }
 
     //
     // Reset the context to give each run a fresh slate.
@@ -170,16 +158,12 @@ Return Value:
         }
     }
 
-    Status = MbgenLoadScript(Context, Order, &Target, Script);
+    Status = MbgenLoadScript(Context, Order, Target, Script);
     if (Status != 0) {
         goto LoadTargetScriptEnd;
     }
 
 LoadTargetScriptEnd:
-    if (Target.Path != NULL) {
-        free(Target.Path);
-    }
-
     return Status;
 }
 
@@ -209,9 +193,9 @@ Return Value:
 {
 
     INT Status;
-    MBGEN_TARGET_SPECIFIER TargetPath;
+    MBGEN_PATH TargetPath;
 
-    memset(&TargetPath, 0, sizeof(MBGEN_TARGET_SPECIFIER));
+    memset(&TargetPath, 0, sizeof(MBGEN_PATH));
     TargetPath.Root = MbgenSourceTree;
     Status = MbgenLoadScript(Context,
                              MbgenScriptOrderProjectRoot,
@@ -254,10 +238,25 @@ Return Value:
     //
 
     if (Context->GlobalName != NULL) {
+        Status = MbgenParsePath(Context,
+                                Context->GlobalName,
+                                MbgenSourceTree,
+                                NULL,
+                                &TargetPath);
+
+        if (Status != 0) {
+            return Status;
+        }
+
         Status = MbgenLoadTargetScript(Context,
-                                       Context->GlobalName,
+                                       &TargetPath,
                                        MbgenScriptOrderGlobal,
                                        NULL);
+
+        if (TargetPath.Path != NULL) {
+            free(TargetPath.Path);
+            TargetPath.Path = NULL;
+        }
 
         if (Status != 0) {
             fprintf(stderr,
@@ -272,10 +271,25 @@ Return Value:
     //
 
     if (Context->DefaultName != NULL) {
+        Status = MbgenParsePath(Context,
+                                Context->DefaultName,
+                                MbgenSourceTree,
+                                NULL,
+                                &TargetPath);
+
+        if (Status != 0) {
+            return Status;
+        }
+
         Status = MbgenLoadTargetScript(Context,
-                                       Context->DefaultName,
+                                       &TargetPath,
                                        MbgenScriptOrderTarget,
                                        NULL);
+
+        if (TargetPath.Path != NULL) {
+            free(TargetPath.Path);
+            TargetPath.Path = NULL;
+        }
 
         if (Status != 0) {
             fprintf(stderr, "Error: Failed to load default target.\n");
@@ -290,7 +304,7 @@ INT
 MbgenLoadScript (
     PMBGEN_CONTEXT Context,
     MBGEN_SCRIPT_ORDER Order,
-    PMBGEN_TARGET_SPECIFIER TargetPath,
+    PMBGEN_PATH TargetPath,
     PMBGEN_SCRIPT *FinalScript
     )
 
@@ -536,7 +550,7 @@ Return Value:
 PMBGEN_SCRIPT
 MbgenFindScript (
     PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET_SPECIFIER TargetPath
+    PMBGEN_PATH TargetPath
     )
 
 /*++
