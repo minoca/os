@@ -201,6 +201,7 @@ Return Value:
     ULONGLONG StartOffset;
     KSTATUS Status;
     FILE_OBJECT_TIME_TYPE TimeType;
+    BOOL TimidTrim;
 
     FileObject = Handle->PathPoint.PathEntry->FileObject;
 
@@ -213,12 +214,18 @@ Return Value:
 
     //
     // Assuming this call is going to generate more pages, ask this thread to
-    // do some trimming if things are too big.
+    // do some trimming if things are too big. If this is the file system
+    // doing writes, then file-level file object locks might already be held,
+    // so give up easily when trying to acquire file object locks during
+    // trimming.
     //
 
-    if ((IoContext->Flags & IO_FLAG_FS_DATA) == 0) {
-        IopTrimPageCache();
+    TimidTrim = FALSE;
+    if ((IoContext->Flags & IO_FLAG_FS_DATA) != 0) {
+        TimidTrim = TRUE;
     }
+
+    IopTrimPageCache(TimidTrim);
 
     //
     // If this is a write operation, then acquire the file object's lock

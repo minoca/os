@@ -2155,7 +2155,7 @@ Return Value:
 
 {
 
-    if (FileObject->ListEntry.Next == NULL) {
+    if ((FileObject->Flags & FILE_OBJECT_FLAG_DIRTY_DATA) == 0) {
         KeAcquireQueuedLock(IoFileObjectsDirtyListLock);
         RtlAtomicOr32(&(FileObject->Flags), FILE_OBJECT_FLAG_DIRTY_DATA);
         if (FileObject->ListEntry.Next == NULL) {
@@ -2209,22 +2209,79 @@ Return Value:
 
     ULONG OldFlags;
 
-    OldFlags = RtlAtomicOr32(&(FileObject->Flags),
-                             FILE_OBJECT_FLAG_DIRTY_PROPERTIES);
+    if ((FileObject->Flags & FILE_OBJECT_FLAG_DIRTY_PROPERTIES) == 0) {
+        OldFlags = RtlAtomicOr32(&(FileObject->Flags),
+                                 FILE_OBJECT_FLAG_DIRTY_PROPERTIES);
 
-    //
-    // If this operation just transitioned the file properties from clean to
-    // dirty and the file object has a hard link, add the file object to the
-    // dirty list and let the page cache know so it can flush out this file
-    // object data.
-    //
+        //
+        // If this operation just transitioned the file properties from clean to
+        // dirty and the file object has a hard link, add the file object to the
+        // dirty list and let the page cache know so it can flush out this file
+        // object data.
+        //
 
-    if (((OldFlags & FILE_OBJECT_FLAG_DIRTY_PROPERTIES) == 0) &&
-        (FileObject->Properties.HardLinkCount != 0)) {
+        if (((OldFlags & FILE_OBJECT_FLAG_DIRTY_PROPERTIES) == 0) &&
+            (FileObject->Properties.HardLinkCount != 0)) {
 
-        IopMarkFileObjectDirty(FileObject);
+            IopMarkFileObjectDirty(FileObject);
+        }
     }
 
+    return;
+}
+
+VOID
+IopCheckDirtyFileObjectsList (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine iterates over all file objects, checking to make sure they're
+    properly marked dirty and in the dirty list if they have dirty entries.
+    This routine is slow and should only be used while actively debugging
+    dirty data that won't flush.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PFILE_OBJECT FileObject;
+    PRED_BLACK_TREE_NODE Node;
+
+    KeAcquireQueuedLock(IoFileObjectsLock);
+    KeAcquireQueuedLock(IoFileObjectsDirtyListLock);
+    Node = RtlRedBlackTreeGetLowestNode(&IoFileObjectsTree);
+    while (Node != NULL) {
+        FileObject = RED_BLACK_TREE_VALUE(Node, FILE_OBJECT, TreeEntry);
+        if (!LIST_EMPTY(&(FileObject->DirtyPageList))) {
+            if (IS_FILE_OBJECT_CLEAN(FileObject)) {
+                RtlDebugPrint("FILE_OBJECT 0x%x marked as clean with "
+                              "non-empty dirty list.\n",
+                              FileObject);
+            }
+
+            if (FileObject->ListEntry.Next == NULL) {
+                RtlDebugPrint("FILE_OBJECT 0x%x dirty but not in dirty list.\n",
+                              FileObject);
+            }
+        }
+
+        Node = RtlRedBlackTreeGetNextNode(&IoFileObjectsTree, FALSE, Node);
+    }
+
+    KeReleaseQueuedLock(IoFileObjectsDirtyListLock);
+    KeReleaseQueuedLock(IoFileObjectsLock);
     return;
 }
 

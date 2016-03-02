@@ -550,7 +550,7 @@ Return Value:
 
 VOID
 IopTrimPageCache (
-    VOID
+    BOOL TimidEffort
     );
 
 /*++
@@ -563,7 +563,10 @@ Routine Description:
 
 Arguments:
 
-    None.
+    TimidEffort - Supplies a boolean indicating whether or not this function
+        should only try once to acquire a file object lock before moving on.
+        Set this to TRUE if this thread might already be holding file object
+        locks.
 
 Return Value:
 

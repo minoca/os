@@ -2939,6 +2939,30 @@ Return Value:
 
 --*/
 
+VOID
+IopCheckDirtyFileObjectsList (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine iterates over all file objects, checking to make sure they're
+    properly marked dirty and in the dirty list if they have dirty entries.
+    This routine is slow and should only be used while actively debugging
+    dirty data that won't flush.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
 POBJECT_HEADER
 IopGetPipeDirectory (
     VOID
