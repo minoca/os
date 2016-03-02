@@ -741,6 +741,66 @@ Return Value:
 }
 
 KERNEL_API
+BOOL
+KeTryToAcquireSharedExclusiveLockShared (
+    PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock
+    )
+
+/*++
+
+Routine Description:
+
+    This routine makes a single attempt to acquire the given shared-exclusive
+    lock in shared mode.
+
+Arguments:
+
+    SharedExclusiveLock - Supplies a pointer to the shared-exclusive lock.
+
+Return Value:
+
+    TRUE if the lock was successfully acquired shared.
+
+    FALSE if the lock was not successfully acquired shared.
+
+--*/
+
+{
+
+    ULONG ExclusiveWaiters;
+    ULONG PreviousState;
+    ULONG State;
+
+    State = SharedExclusiveLock->State;
+    ExclusiveWaiters = SharedExclusiveLock->ExclusiveWaiters;
+    if ((ExclusiveWaiters == 0) &&
+        (State < SHARED_EXCLUSIVE_LOCK_EXCLUSIVE - 1)) {
+
+        PreviousState = State;
+        State = RtlAtomicCompareExchange32(&(SharedExclusiveLock->State),
+                                           PreviousState + 1,
+                                           PreviousState);
+
+        if (State == PreviousState) {
+
+            //
+            // Let all the blocked reader brethren go if this thread was
+            // also blocked.
+            //
+
+            if (SharedExclusiveLock->SharedWaiters != 0) {
+                KeSignalEvent(SharedExclusiveLock->Event,
+                              SignalOptionPulse);
+            }
+
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
+KERNEL_API
 VOID
 KeReleaseSharedExclusiveLockShared (
     PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock
@@ -875,6 +935,46 @@ Return Value:
     }
 
     return;
+}
+
+KERNEL_API
+BOOL
+KeTryToAcquireSharedExclusiveLockExclusive (
+    PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock
+    )
+
+/*++
+
+Routine Description:
+
+    This routine makes a single attempt to acquire the given shared-exclusive
+    lock exclusively.
+
+Arguments:
+
+    SharedExclusiveLock - Supplies a pointer to the shared-exclusive lock.
+
+Return Value:
+
+    TRUE if the lock was successfully acquired exclusively.
+
+    FALSE if the lock was not successfully acquired.
+
+--*/
+
+{
+
+    ULONG State;
+
+    State = RtlAtomicCompareExchange32(&(SharedExclusiveLock->State),
+                                       SHARED_EXCLUSIVE_LOCK_EXCLUSIVE,
+                                       SHARED_EXCLUSIVE_LOCK_FREE);
+
+    if (State == SHARED_EXCLUSIVE_LOCK_FREE) {
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 KERNEL_API

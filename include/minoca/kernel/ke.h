@@ -1371,6 +1371,31 @@ Return Value:
 --*/
 
 KERNEL_API
+BOOL
+KeTryToAcquireSharedExclusiveLockShared (
+    PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock
+    );
+
+/*++
+
+Routine Description:
+
+    This routine makes a single attempt to acquire the given shared-exclusive
+    lock in shared mode.
+
+Arguments:
+
+    SharedExclusiveLock - Supplies a pointer to the shared-exclusive lock.
+
+Return Value:
+
+    TRUE if the lock was successfully acquired shared.
+
+    FALSE if the lock was not successfully acquired shared.
+
+--*/
+
+KERNEL_API
 VOID
 KeReleaseSharedExclusiveLockShared (
     PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock
@@ -1411,6 +1436,31 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+KERNEL_API
+BOOL
+KeTryToAcquireSharedExclusiveLockExclusive (
+    PSHARED_EXCLUSIVE_LOCK SharedExclusiveLock
+    );
+
+/*++
+
+Routine Description:
+
+    This routine makes a single attempt to acquire the given shared-exclusive
+    lock exclusively.
+
+Arguments:
+
+    SharedExclusiveLock - Supplies a pointer to the shared-exclusive lock.
+
+Return Value:
+
+    TRUE if the lock was successfully acquired exclusively.
+
+    FALSE if the lock was not successfully acquired.
 
 --*/
 
