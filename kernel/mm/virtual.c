@@ -1520,7 +1520,7 @@ Return Value:
     LockAcquired = FALSE;
     PageShift = MmPageShift();
     PageCount = ALIGN_RANGE_UP(SizeInBytes, MmPageSize()) >> PageShift;
-    EndAddress = (UINTN)Allocation + (PageCount << PageShift);
+    EndAddress = (ULONGLONG)(UINTN)Allocation + (PageCount << PageShift);
     if (EndAddress <= (UINTN)Allocation) {
         Status = STATUS_INVALID_PARAMETER;
         goto FreeAccountingRangeEnd;
@@ -1796,7 +1796,7 @@ Return Value:
 
             MmMdInitDescriptor(&NewDescriptor,
                                (UINTN)VirtualAddress,
-                               (UINTN)VirtualAddress + Size,
+                               (ULONGLONG)(UINTN)VirtualAddress + Size,
                                MemoryType);
 
             Status = MmpAddAccountingDescriptor(Accountant, &NewDescriptor);
@@ -2365,7 +2365,7 @@ Return Value:
 
     PageShift = MmPageShift();
     PageCount = ALIGN_RANGE_UP(SizeInBytes, MmPageSize()) >> PageShift;
-    EndAddress = (UINTN)Address + (PageCount << PageShift);
+    EndAddress = (ULONGLONG)(UINTN)Address + (PageCount << PageShift);
 
     //
     // Look up the descriptor containing this allocation.
@@ -2373,7 +2373,7 @@ Return Value:
 
     ExistingAllocation = MmMdLookupDescriptor(&(Accountant->Mdl),
                                               (UINTN)Address,
-                                              (UINTN)Address + SizeInBytes);
+                                              EndAddress);
 
     if ((ExistingAllocation == NULL) ||
         (ExistingAllocation->Type == MemoryTypeFree)) {
