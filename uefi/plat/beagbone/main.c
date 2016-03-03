@@ -67,13 +67,20 @@ extern INT8 __executable_start;
 BOOLEAN EfiDisableWatchdog = FALSE;
 
 //
+// Store the boot device type.
+//
+
+UINT32 EfiBootDeviceCode;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
 VOID
 EfiBeagleBoneMain (
     VOID *TopOfStack,
-    UINTN StackSize
+    UINTN StackSize,
+    UINT32 BootDevice
     )
 
 /*++
@@ -84,19 +91,14 @@ Routine Description:
 
 Arguments:
 
-    StartOfLoader - Supplies the address where the loader begins in memory.
-
     TopOfStack - Supplies the top of the stack that has been set up for the
         loader.
 
     StackSize - Supplies the total size of the stack set up for the loader, in
         bytes.
 
-    PartitionOffset - Supplies the offset, in sectors, from the start of the
-        disk where this boot partition resides.
-
-    BootDriveNumber - Supplies the drive number for the device that booted
-        the system.
+    BootDevice - Supplies the boot device code. See AM335_ROM_DEVICE_*
+        definitions.
 
 Return Value:
 
@@ -114,6 +116,7 @@ Return Value:
 
     EfipBeagleBoneBlackSetLeds(4);
     FirmwareSize = (UINTN)&_end - (UINTN)&__executable_start;
+    EfiBootDeviceCode = BootDevice;
     EfiCoreMain((VOID *)-1,
                 &__executable_start,
                 FirmwareSize,
@@ -197,7 +200,7 @@ Return Value:
     EFI_STATUS Status;
 
     EfipBeagleBoneBlackSetMacAddresses();
-    Status = EfipBeagleBoneEnumerateSd();
+    Status = EfipBeagleBoneEnumerateStorage();
     if (EFI_ERROR(Status)) {
         return Status;
     }

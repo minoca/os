@@ -1089,6 +1089,12 @@ Return Value:
     UINT32 Retry;
     EFI_STATUS Status;
 
+    //
+    // The BeagleBoneBlack (rev B) eMMC at least seems to need a stall,
+    // otherwise the next command times out.
+    //
+
+    EfiStall(SD_CARD_DELAY);
     EfiSetMem(&Command, sizeof(SD_COMMAND), 0);
     Retry = 0;
     Ocr = 0;

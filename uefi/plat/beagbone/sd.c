@@ -27,8 +27,9 @@ Environment:
 #include <uefifw.h>
 #include <dev/sd.h>
 #include <minoca/uefi/protocol/blockio.h>
-#include "bbonefw.h"
 #include <minoca/soc/am335x.h>
+#include <dev/tirom.h>
+#include "bbonefw.h"
 
 //
 // --------------------------------------------------------------------- Macros
@@ -202,6 +203,12 @@ typedef struct _EFI_SD_AM335_DEVICE_PATH {
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+EFI_STATUS
+EfipBeagleBoneEnumerateSdController (
+    UINT32 ControllerBase,
+    BOOLEAN RemovableMedia
+    );
+
 EFIAPI
 EFI_STATUS
 EfipSdAm335Reset (
@@ -298,7 +305,7 @@ EFI_SD_AM335_DEVICE_PATH EfiSdAm335DevicePathTemplate = {
 //
 
 EFI_STATUS
-EfipBeagleBoneEnumerateSd (
+EfipBeagleBoneEnumerateStorage (
     VOID
     )
 
@@ -306,7 +313,7 @@ EfipBeagleBoneEnumerateSd (
 
 Routine Description:
 
-    This routine enumerates the SD card on the BeagleBone.
+    This routine enumerates the SD card and eMMC on the BeagleBone.
 
 Arguments:
 
@@ -320,15 +327,74 @@ Return Value:
 
 {
 
+    BOOLEAN PeripheralBoot;
+    EFI_STATUS Status;
+
+    Status = EfipBeagleBoneEnumerateSdController(AM335_HSMMC_0_BASE, TRUE);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    PeripheralBoot = FALSE;
+    if (EfiBootDeviceCode != AM335_ROM_DEVICE_MMCSD1) {
+        PeripheralBoot = TRUE;
+    }
+
+    //
+    // Only enumerate eMMC if the firmware was not loaded from SD. Enumerating
+    // eMMC will cause NV variables to be loaded from there, which will specify
+    // a BootOrder of eMMC first. The user likely didn't go to all the trouble
+    // of booting via SD only to have this firmware launch the eMMC boot option.
+    //
+
+    if (PeripheralBoot == FALSE) {
+        Status = EfipBeagleBoneEnumerateSdController(AM335_HSMMC_1_BASE, FALSE);
+        if (EFI_ERROR(Status)) {
+            return Status;
+        }
+    }
+
+    return Status;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+
+EFI_STATUS
+EfipBeagleBoneEnumerateSdController (
+    UINT32 ControllerBase,
+    BOOLEAN RemovableMedia
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enumerates the an SD or eMMC controller on the BeagleBone.
+
+Arguments:
+
+    ControllerBase - Supplies the physical address of the controller to
+        enumerate.
+
+    RemovableMedia - Supplies a boolean whether or not the controller is
+        connected to removable media.
+
+Return Value:
+
+    EFI status code.
+
+--*/
+
+{
+
     UINT64 BlockCount;
     UINT32 BlockSize;
-    UINT32 ControllerBase;
     PEFI_SD_AM335_DEVICE_PATH DevicePath;
     PEFI_SD_AM335_CONTEXT Disk;
     EFI_SD_INITIALIZATION_BLOCK SdParameters;
     EFI_STATUS Status;
-
-    ControllerBase = AM335_HSMMC_0_BASE;
 
     //
     // Allocate and initialize the context structure.
@@ -346,7 +412,7 @@ Return Value:
     Disk->Handle = NULL;
     Disk->ControllerBase = (VOID *)(UINTN)ControllerBase;
     Disk->BlockIo.Media = &(Disk->Media);
-    Disk->Media.RemovableMedia = TRUE;
+    Disk->Media.RemovableMedia = RemovableMedia;
 
     //
     // Create the device path.
@@ -437,10 +503,6 @@ BeagleBoneEnumerateSdEnd:
 
     return Status;
 }
-
-//
-// --------------------------------------------------------- Internal Functions
-//
 
 EFIAPI
 EFI_STATUS

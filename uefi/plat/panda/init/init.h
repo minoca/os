@@ -21,7 +21,7 @@ Author:
 //
 
 #include <minoca/soc/omap4.h>
-#include "tirom.h"
+#include <dev/tirom.h>
 #include "util.h"
 
 //

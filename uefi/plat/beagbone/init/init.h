@@ -21,7 +21,7 @@ Author:
 //
 
 #include <minoca/soc/am335x.h>
-#include "tirom.h"
+#include <dev/tirom.h>
 
 //
 // --------------------------------------------------------------------- Macros

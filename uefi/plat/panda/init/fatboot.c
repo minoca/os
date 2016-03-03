@@ -28,7 +28,7 @@ Environment:
 
 #include <minoca/lib/fat/fatlib.h>
 #include <uefifw.h>
-#include "tirom.h"
+#include <dev/tirom.h>
 #include "util.h"
 
 //

@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <uefifw.h>
-#include "tirom.h"
+#include <dev/tirom.h>
 #include "util.h"
 
 //

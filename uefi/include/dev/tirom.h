@@ -92,6 +92,37 @@ Author:
 typedef struct _TI_ROM_PER_HANDLE
     TI_ROM_PER_HANDLE, *PTI_ROM_PER_HANDLE;
 
+/*++
+
+Structure Description:
+
+    This structure defines the format of information passed from the TI ROM
+    code to the first stage loader.
+
+Members:
+
+    Reserved - Stores a reserved value, contents unknown.
+
+    MemoryDeviceDescriptor - Stores a pointer to the memory device descriptor
+        that has been used during the memory booting process.
+
+    BootDevice - Stores the code of the device that was booted from. See
+        AM335_ROM_DEVICE_* definitions.
+
+    ResetReason - Stores the current reset reason bit mask.
+
+    Reserved2 - Stores another reserved field.
+
+--*/
+
+typedef struct _AM335_BOOT_DATA {
+    UINT32 Reserved;
+    UINT32 MemoryDeviceDescriptor;
+    UINT8 BootDevice;
+    UINT8 ResetReason;
+    UINT8 Reserved2;
+} PACKED AM335_BOOT_DATA, *PAM335_BOOT_DATA;
+
 typedef
 INT32
 (*PTI_ROM_PER_CALLBACK) (

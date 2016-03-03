@@ -1322,6 +1322,12 @@ Return Value:
     KSTATUS Status;
     ULONGLONG Timeout;
 
+    //
+    // The BeagleBoneBlack (rev B) eMMC at least seems to need a stall,
+    // otherwise the next command times out.
+    //
+
+    HlBusySpin(SD_CARD_DELAY);
     RtlZeroMemory(&Command, sizeof(SD_COMMAND));
     Timeout = HlQueryTimeCounterFrequency() * SD_CMD1_TIMEOUT;
     OldTimeout = Controller->Timeout;

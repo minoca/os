@@ -61,6 +61,12 @@ Environment:
 _start:
 
     ##
+    ## Save the boot device type argument.
+    ##
+
+    mov     %r4, %r0
+
+    ##
     ## Disable interrupts and switch to SVC mode.
     ##
 
@@ -99,11 +105,12 @@ BssZeroLoop:
 
     adr     %r0, _start             @ Get the current address for the stack top.
     ldr     %r1, =STACK_SIZE        @ Get the stack size.
+    mov     %r2, %r4                @ Get the boot device type.
     mov     %sp, %r0                @ Set the stack.
     mov     %r11, #0                @ Zero the ARM frame pointer.
     mov     %r7, #0                 @ Zero out the Thumb frame pointer.
-    mov     %r2, %r7                @ Zero out another temporary register.
-    push    {%r2, %r7}              @ Create an empty stack frame for debugging.
+    mov     %r3, %r7                @ Zero out another temporary register.
+    push    {%r3, %r7}              @ Create an empty stack frame for debugging.
     blx     EfiBeagleBoneMain
 
 LoopForever:

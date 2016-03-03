@@ -33,6 +33,12 @@ Author:
 #define BEAGLE_BONE_BLACK_RAM_SIZE (1024 * 1024 * 512)
 
 //
+// Define the SYSBOOT pin connected to the boot button on the BeagleBone.
+//
+
+#define BEAGLE_BONE_PERIPHERAL_SYSBOOT 0x04
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -45,6 +51,12 @@ Author:
 //
 
 extern BOOLEAN EfiDisableWatchdog;
+
+//
+// Store the boot device type.
+//
+
+UINT32 EfiBootDeviceCode;
 
 //
 // Define the base of the AM335 PRM Device registers.
@@ -137,7 +149,7 @@ Return Value:
 --*/
 
 EFI_STATUS
-EfipBeagleBoneEnumerateSd (
+EfipBeagleBoneEnumerateStorage (
     VOID
     );
 
@@ -145,7 +157,7 @@ EfipBeagleBoneEnumerateSd (
 
 Routine Description:
 
-    This routine enumerates the SD card on the BeagleBone.
+    This routine enumerates the SD card and eMMC on the BeagleBone.
 
 Arguments:
 

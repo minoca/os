@@ -681,6 +681,7 @@ Author:
 // Define SoC control registers.
 //
 
+#define AM335_SOC_CONTROL_STATUS 0x0040
 #define AM335_SOC_CONTROL_SECURE_EMIF_SDRAM_CONFIG 0x0110
 #define AM335_SOC_CONTROL_DEVICE_ID 0x0600
 #define AM335_SOC_CONTROL_USB_CONTROL1 0x628
@@ -735,6 +736,12 @@ Author:
 #define AM335_SOC_CONTROL_VTP_CONTROL 0x0E0C
 #define AM335_SOC_CONTROL_DDR_IO_CONTROL 0x0E04
 #define AM335_SOC_CONTROL_DDR_CKE_CONTROL 0x131C
+
+//
+// Define SoC control status register bits.
+//
+
+#define AM335_SOC_STATUS_SYSBOOT0_MASK 0x000000FF
 
 //
 // Define USB0/1 control register bits.

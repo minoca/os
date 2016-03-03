@@ -36,8 +36,6 @@ Environment:
 #define AM335_MEMORY_DEVICE_DATA_BUFFER 0x80000000
 #define AM335_MEMORY_DEVICE_DATA_SIZE 2500
 
-#define AM335_BOOT_DEVICE_OFFSET 0x08
-
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -111,7 +109,7 @@ BOOLEAN EfiSkipCrc;
 
 VOID
 EfiFirstStageLoader (
-    UINT8 *Information
+    PAM335_BOOT_DATA BootData
     )
 
 /*++
@@ -123,8 +121,8 @@ Routine Description:
 
 Arguments:
 
-    Information - Supplies an optional pointer to information handed off by the
-        ROM code in the SoC.
+    BootData - Supplies a pointer to the boot data structure created by the
+        SoC ROM code.
 
 Return Value:
 
@@ -157,13 +155,15 @@ Return Value:
     EfipAm335InitializePlls(OppIndex, AM335_DDR_PLL_M_DDR3);
     EfipAm335InitializeEmif();
     EfipBeagleBoneBlackInitializeDdr3();
-    EfipSerialPrintString("\r\nMinoca Firmware Loader\r\n");
-    Result = EfipAm335LoadFromSd(AM335_ROM_DEVICE_MMCSD0, &Length);
+    EfipSerialPrintString("\r\nMinoca Firmware Loader\r\nBoot Device: ");
+    EfipSerialPrintHexInteger(BootData->BootDevice);
+    EfipSerialPrintString("\r\n");
+    Result = EfipAm335LoadFromSd(BootData->BootDevice, &Length);
     if (Result != 0) {
         EfipSerialPrintString("Load Error\r\n");
 
     } else {
-        EfipAm335BootImage(Information[AM335_BOOT_DEVICE_OFFSET],
+        EfipAm335BootImage(BootData->BootDevice,
                            AM335_SD_BOOT_ADDRESS,
                            Length);
     }
