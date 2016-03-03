@@ -1767,6 +1767,8 @@ Return Value:
                                         ListEntry);
 
                 Node = &(CacheEntry->Node);
+
+                ASSERT(Node->Parent != NULL);
             }
 
             KeReleaseQueuedLock(IoPageCacheListLock);
@@ -1975,11 +1977,17 @@ Return Value:
             }
 
             //
-            // If others are trying to get in, be polite.
+            // If others are trying to get in, be polite. Don't drop the lock
+            // if traversing the tree because someone might rip that node out
+            // of the tree. The node will be NULL if a maximum sized write just
+            // occurred.
             //
 
-            if (KeIsSharedExclusiveLockContended(FileObject->Lock) != FALSE) {
+            if ((Node == NULL) &&
+                (KeIsSharedExclusiveLockContended(FileObject->Lock) != FALSE)) {
+
                 KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+                KeYield();
                 KeAcquireSharedExclusiveLockShared(FileObject->Lock);
             }
         }
