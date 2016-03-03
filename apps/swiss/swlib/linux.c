@@ -32,7 +32,7 @@ Environment:
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include "swlib.h"
+#include "../swlib.h"
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -24,7 +24,10 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "../libcp.h"
+#define LIBC_API
+
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
 
 #include <assert.h>
 #include <stdio.h>

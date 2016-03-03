@@ -33,7 +33,7 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 
-#include "swlib.h"
+#include "../swlib.h"
 
 //
 // ---------------------------------------------------------------- Definitions

@@ -31,7 +31,7 @@ Environment:
 
 #include <osbase.h>
 #include <mlibc.h>
-#include "swlib.h"
+#include "../swlib.h"
 
 //
 // ---------------------------------------------------------------- Definitions

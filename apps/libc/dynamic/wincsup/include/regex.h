@@ -28,7 +28,11 @@ Author:
 // Define this to prevent it from getting defined as an import.
 //
 
+#ifndef LIBC_API
+
 #define LIBC_API
+
+#endif
 
 #include <stddef.h>
 

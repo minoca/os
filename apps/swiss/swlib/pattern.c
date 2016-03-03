@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <minoca/lib/types.h>
-#include "swlib.h"
+#include "../swlib.h"
 
 #include <assert.h>
 #include <ctype.h>

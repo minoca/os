@@ -39,7 +39,7 @@ Environment:
 #include <termios.h>
 #include <unistd.h>
 
-#include "swlib.h"
+#include "../swlib.h"
 #include "lutil.h"
 
 //

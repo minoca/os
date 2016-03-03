@@ -25,7 +25,9 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "libcp.h"
+#define LIBC_API DLLEXPORT
+
+#include <minoca/lib/types.h>
 
 #include <assert.h>
 #include <ctype.h>

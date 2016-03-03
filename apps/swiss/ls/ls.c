@@ -37,7 +37,7 @@ Environment:
 #include <sys/types.h>
 #include <unistd.h>
 #include "ls.h"
-#include "swlib.h"
+#include "../swlib.h"
 
 //
 // ---------------------------------------------------------------- Definitions

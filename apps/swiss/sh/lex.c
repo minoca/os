@@ -34,7 +34,7 @@ Environment:
 
 #include "sh.h"
 #include "shparse.h"
-#include "swlib.h"
+#include "../swlib.h"
 
 //
 // --------------------------------------------------------------------- Macros

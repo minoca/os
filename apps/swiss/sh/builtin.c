@@ -26,7 +26,7 @@ Environment:
 
 #include "sh.h"
 #include "shparse.h"
-#include "swiss.h"
+#include "../swiss.h"
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -35,7 +35,7 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "swlib.h"
+#include "../swlib.h"
 
 //
 // --------------------------------------------------------------------- Macros

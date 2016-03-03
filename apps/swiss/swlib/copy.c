@@ -34,7 +34,7 @@ Environment:
 #include <string.h>
 #include <unistd.h>
 #include <utime.h>
-#include "swlib.h"
+#include "../swlib.h"
 
 //
 // ---------------------------------------------------------------- Definitions

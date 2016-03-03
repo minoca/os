@@ -33,7 +33,7 @@ Environment:
 #include <unistd.h>
 
 #include "sh.h"
-#include "swlib.h"
+#include "../swlib.h"
 
 #include <minoca/lib/termlib.h>
 

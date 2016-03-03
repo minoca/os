@@ -24,7 +24,9 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "libcp.h"
+#define LIBC_API DLLEXPORT
+
+#include <minoca/lib/types.h>
 
 #include <assert.h>
 #include <ctype.h>
@@ -1908,7 +1910,7 @@ Return Value:
                                                                    Expression,
                                                                    Entry);
 
-                if (!KSUCCESS(Status)) {
+                if (Status != RegexStatusSuccess) {
                     goto ParseRegularExpressionDuplicationSymbolEnd;
                 }
 
@@ -1936,7 +1938,7 @@ Return Value:
                                                                Expression,
                                                                Entry);
 
-            if (!KSUCCESS(Status)) {
+            if (Status != RegexStatusSuccess) {
                 goto ParseRegularExpressionDuplicationSymbolEnd;
             }
         }

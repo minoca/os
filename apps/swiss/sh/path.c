@@ -34,7 +34,7 @@ Environment:
 #include <errno.h>
 #include <assert.h>
 #include "sh.h"
-#include "swlib.h"
+#include "../swlib.h"
 
 //
 // --------------------------------------------------------------------- Macros

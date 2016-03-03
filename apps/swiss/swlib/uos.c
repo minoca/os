@@ -48,7 +48,7 @@ Environment:
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
-#include "swlib.h"
+#include "../swlib.h"
 
 //
 // ---------------------------------------------------------------- Definitions

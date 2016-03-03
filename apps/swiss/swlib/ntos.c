@@ -42,7 +42,7 @@ Environment:
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
-#include "swlibos.h"
+#include "../swlibos.h"
 
 //
 // ---------------------------------------------------------------- Definitions

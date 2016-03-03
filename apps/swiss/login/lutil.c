@@ -41,7 +41,7 @@ Environment:
 #include <utmp.h>
 #include <utmpx.h>
 
-#include "swlib.h"
+#include "../swlib.h"
 #include "lutil.h"
 
 //

@@ -26,7 +26,7 @@ Environment:
 
 #include "sh.h"
 #include "shparse.h"
-#include "swlib.h"
+#include "../swlib.h"
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
