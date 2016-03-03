@@ -1830,6 +1830,9 @@ Return Value:
             // If a reference is taken on the clean page then it could become
             // dirty at any time, but non-referenced clean pages should be on
             // a list.
+            // TODO: This is not a valid assert, as release reference could be
+            // in progress. Remove this if it fires and release reference seems
+            // to be in progress on another core.
             //
 
             ASSERT((CacheEntry->ReferenceCount != 0) ||
@@ -4066,6 +4069,20 @@ Return Value:
         if (PageCacheEntry->ReferenceCount != 0) {
             LIST_REMOVE(&(PageCacheEntry->ListEntry));
             PageCacheEntry->ListEntry.Next = NULL;
+
+            //
+            // Double check the reference count. If it dropped to zero while
+            // the entry was being removed, it may not have observed the list
+            // entry being nulled out, and may not be waiting to put the entry
+            // back.
+            //
+
+            RtlMemoryBarrier();
+            if (PageCacheEntry->ReferenceCount == 0) {
+                INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                              &IoPageCacheCleanList);
+            }
+
             continue;
         }
 
@@ -4341,16 +4358,36 @@ Return Value:
         PageCacheEntry = LIST_VALUE(CurrentEntry, PAGE_CACHE_ENTRY, ListEntry);
 
         //
-        // Skip over all page cache entries with references or that are dirty,
-        // removing them from this list. They cannot be unmapped at the
-        // moment. Dirty entries should really only be observed for a brief
-        // moment when another thread has marked it dirty and is now blocked on
-        // the list lock trying to remove it.
+        // Skip over all page cache entries with references, removing them from
+        // this list. They cannot be unmapped at the moment.
         //
 
-        if ((PageCacheEntry->ReferenceCount != 0) ||
-            ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0)) {
+        if (PageCacheEntry->ReferenceCount != 0) {
+            LIST_REMOVE(&(PageCacheEntry->ListEntry));
+            PageCacheEntry->ListEntry.Next = NULL;
 
+            //
+            // Double check the reference count. If it dropped to zero while
+            // the entry was being removed, it may not have observed the list
+            // entry being nulled out, and may not be waiting to put the entry
+            // back.
+            //
+
+            RtlMemoryBarrier();
+            if (PageCacheEntry->ReferenceCount == 0) {
+                INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                              &IoPageCacheCleanList);
+            }
+
+            continue;
+        }
+
+        //
+        // If it's dirty, then there must be another thread that just marked it
+        // dirty but has yet to remove it from the list. Remove it and move on.
+        //
+
+        if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
             LIST_REMOVE(&(PageCacheEntry->ListEntry));
             PageCacheEntry->ListEntry.Next = NULL;
             continue;
