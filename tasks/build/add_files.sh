@@ -115,7 +115,7 @@ fi
 ##
 
 DEST="$SRCROOT/$ARCH$DEBUG/bin/apps"
-sed 's/www\.minocacorp\.com/10.0.0.202/' $DEST/etc/opkg/opkg.conf > opkg.tmp
+sed 's/www\.minocacorp\.com/10.0.1.202/' $DEST/etc/opkg/opkg.conf > opkg.tmp
 mv opkg.tmp $DEST/etc/opkg/opkg.conf
 
 ##
