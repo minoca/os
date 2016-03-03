@@ -352,6 +352,17 @@ Author:
 #define UUID_STRING_LENGTH 37
 
 //
+// Define time unit constants.
+//
+
+#define NANOSECONDS_PER_SECOND 1000000000ULL
+#define MICROSECONDS_PER_SECOND 1000000ULL
+#define MILLISECONDS_PER_SECOND 1000ULL
+#define MICROSECONDS_PER_MILLISECOND 1000ULL
+#define NANOSECONDS_PER_MICROSECOND 1000ULL
+#define NANOSECONDS_PER_MILLISECOND 1000000ULL
+
+//
 // Define some constants used for manipulating float types.
 //
 

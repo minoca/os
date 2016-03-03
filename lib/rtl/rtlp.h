@@ -26,7 +26,16 @@ Author:
 
 #endif
 
-#include <minoca/kernel/kernel.h>
+//
+// Define away the kernel API decorator since Rtl is always linked statically
+// with the kernel.
+//
+
+#define KERNEL_API
+
+#include <minoca/lib/types.h>
+#include <minoca/lib/status.h>
+#include <minoca/lib/rtl.h>
 
 //
 // ---------------------------------------------------------------- Definitions

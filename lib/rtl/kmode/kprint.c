@@ -24,7 +24,9 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include "../rtlp.h"
+#include "rtlp.h"
+#include <minoca/kernel/arch.h>
+#include <minoca/kernel/hmod.h>
 #include <minoca/kernel/kdebug.h>
 
 //

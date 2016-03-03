@@ -23,6 +23,7 @@
 
 OBJS = crc32.o    \
        heap.o     \
+       heapprof.o \
        math.o     \
        print.o    \
        rbtree.o   \
