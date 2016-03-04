@@ -173,7 +173,7 @@ Return Value:
 
     EfipTps65217Write(TPS65217_PROTECTION_LEVEL_2,
                       TPS65217_DEFLS1,
-                      TPS65217_LDO_VOLTAGE_OUT_3_3,
+                      TPS65217_LDO_VOLTAGE_OUT_1_8,
                       TPS65217_LDO_MASK);
 
     EfipTps65217Write(TPS65217_PROTECTION_LEVEL_2,
