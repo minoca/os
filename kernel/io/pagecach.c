@@ -866,6 +866,7 @@ Return Value:
 
 {
 
+    PPAGE_CACHE_ENTRY BackingEntry;
     PPAGE_CACHE_ENTRY DirtyEntry;
     PFILE_OBJECT FileObject;
     BOOL MarkedDirty;
@@ -874,15 +875,10 @@ Return Value:
     // Try to get the backing entry if possible.
     //
 
-    if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) == 0) {
-        DirtyEntry = PageCacheEntry->BackingEntry;
-
-    } else {
-
-        ASSERT((PageCacheEntry->Flags &
-                PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0);
-
-        DirtyEntry = PageCacheEntry;
+    DirtyEntry = PageCacheEntry;
+    BackingEntry = PageCacheEntry->BackingEntry;
+    if (BackingEntry != NULL) {
+        DirtyEntry = BackingEntry;
     }
 
     //
@@ -895,17 +891,18 @@ Return Value:
 
     FileObject = DirtyEntry->FileObject;
     KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
+    BackingEntry = DirtyEntry->BackingEntry;
 
     //
     // Double check the backing entry to make sure the right lock was acquired.
     //
 
-    if (DirtyEntry->BackingEntry != NULL) {
+    if (BackingEntry != NULL) {
 
         ASSERT(DirtyEntry == PageCacheEntry);
 
         KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
-        DirtyEntry = PageCacheEntry->BackingEntry;
+        DirtyEntry = BackingEntry;
         FileObject = DirtyEntry->FileObject;
         KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
     }
