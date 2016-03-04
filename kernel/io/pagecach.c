@@ -1974,18 +1974,23 @@ Return Value:
             }
 
             //
-            // If others are trying to get in, be polite. Don't drop the lock
-            // if traversing the tree because someone might rip that node out
-            // of the tree. The node will be NULL if a maximum sized write just
-            // occurred.
+            // If others are trying to get in, be polite.
             //
 
-            if ((Node == NULL) &&
+            if ((Offset == 0) && (Size == -1ULL) &&
                 (KeIsSharedExclusiveLockContended(FileObject->Lock) != FALSE)) {
 
                 KeReleaseSharedExclusiveLockShared(FileObject->Lock);
                 KeYield();
                 KeAcquireSharedExclusiveLockShared(FileObject->Lock);
+
+                //
+                // If the node got ripped out of the tree, forget it.
+                //
+
+                if ((Node != NULL) && (Node->Parent == NULL)) {
+                    Node = NULL;
+                }
             }
         }
     }
