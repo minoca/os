@@ -1908,6 +1908,12 @@ Return Value:
         ASSERT(FlushSize > (CleanStreak << PageShift));
 
         FlushSize -= CleanStreak << PageShift;
+
+        //
+        // Flush the buffer. Note that for block devices this does drop and
+        // reacquire the file object lock.
+        //
+
         Status = IopFlushPageCacheBuffer(FlushBuffer, FlushSize, Flags);
         if (!KSUCCESS(Status)) {
             TotalStatus = Status;
@@ -1957,6 +1963,24 @@ Return Value:
         }
 
         //
+        // The lock may have been dropped during the flush, so the node might
+        // be ripped out of the list. Handle that if it was.
+        //
+
+        if ((Node != NULL) && (Node->Parent == NULL)) {
+            if ((Offset == 0) && (Size == -1ULL)) {
+                Node = NULL;
+
+            } else {
+                CacheEntry = RED_BLACK_TREE_VALUE(Node, PAGE_CACHE_ENTRY, Node);
+                Node = RtlRedBlackTreeSearchClosest(
+                                            &(FileObject->PageCacheTree),
+                                            &(CacheEntry->Node),
+                                            TRUE);
+            }
+        }
+
+        //
         // If this is an attempt to flush the entire cache, check on the memory
         // warning level, it may be necessary to stop the flush and evict some
         // entries. Only do this if the minimum number of pages have been
@@ -1971,26 +1995,6 @@ Return Value:
 
                 Status = STATUS_TRY_AGAIN;
                 goto FlushPageCacheEntriesEnd;
-            }
-
-            //
-            // If others are trying to get in, be polite.
-            //
-
-            if ((Offset == 0) && (Size == -1ULL) &&
-                (KeIsSharedExclusiveLockContended(FileObject->Lock) != FALSE)) {
-
-                KeReleaseSharedExclusiveLockShared(FileObject->Lock);
-                KeYield();
-                KeAcquireSharedExclusiveLockShared(FileObject->Lock);
-
-                //
-                // If the node got ripped out of the tree, forget it.
-                //
-
-                if ((Node != NULL) && (Node->Parent == NULL)) {
-                    Node = NULL;
-                }
             }
         }
     }
@@ -3884,6 +3888,15 @@ Return Value:
         goto FlushPageCacheBufferEnd;
     }
 
+    //
+    // For block devices, drop the lock. They're responsible for their own
+    // synchronization.
+    //
+
+    if (FileObject->Properties.Type == IoObjectBlockDevice) {
+        KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+    }
+
     IoContext.IoBuffer = FlushBuffer;
     IoContext.Offset = FileOffset;
     IoContext.SizeInBytes = BytesToWrite;
@@ -3891,6 +3904,10 @@ Return Value:
     IoContext.TimeoutInMilliseconds = WAIT_TIME_INDEFINITE;
     IoContext.Write = TRUE;
     Status = IopPerformNonCachedWrite(FileObject, &IoContext, NULL);
+    if (FileObject->Properties.Type == IoObjectBlockDevice) {
+        KeAcquireSharedExclusiveLockShared(FileObject->Lock);
+    }
+
     if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_FLUSH) != 0) {
         if ((!KSUCCESS(Status)) || (Flags != 0) ||
             (IoContext.BytesCompleted != BytesToWrite)) {

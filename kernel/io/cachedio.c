@@ -1763,10 +1763,18 @@ Return Value:
 
     //
     // If this is a synchronized I/O call, just flush the buffer immediately.
+    // Don't hold the lock for block devices.
     //
 
     if (WriteOutNow != FALSE) {
+        if (FileObject->Properties.Type == IoObjectBlockDevice) {
+            KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+        }
+
         Status = IopPerformNonCachedWrite(FileObject, IoContext, NULL);
+        if (FileObject->Properties.Type == IoObjectBlockDevice) {
+            KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
+        }
 
         //
         // If this did not write out all the bytes then some pages may be
@@ -2012,7 +2020,8 @@ Return Value:
     ASSERT(IoContext->IoBuffer != NULL);
     ASSERT(IO_IS_CACHEABLE_TYPE(FileObject->Properties.Type));
     ASSERT(MmGetIoBufferSize(IoContext->IoBuffer) >= IoContext->SizeInBytes);
-    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
+    ASSERT((FileObject->Properties.Type == IoObjectBlockDevice) ||
+           (KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE));
 
     BlockSize = FileObject->Properties.BlockSize;
     IoContext->BytesCompleted = 0;

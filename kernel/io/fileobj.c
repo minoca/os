@@ -1703,12 +1703,11 @@ Return Value:
     ULONGLONG FileSize;
     BOOL Updated;
 
-    ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
-
     Updated = FALSE;
     READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
     if (FileSize < NewSize) {
 
+        ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
         ASSERT(KeGetRunLevel() == RunLevelLow);
 
         KeAcquireSpinLock(&(FileObject->PropertiesLock));
