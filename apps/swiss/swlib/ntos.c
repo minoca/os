@@ -3670,6 +3670,40 @@ Return Value:
 }
 
 int
+SwGetProcessorCount (
+    int Online
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of processors in the system.
+
+Arguments:
+
+    Online - Supplies a boolean indicating whether to return only the number
+        of processors currently online (TRUE), or the total number (FALSE).
+
+Return Value:
+
+    Returns the number of processors on success.
+
+    -1 on failure.
+
+--*/
+
+{
+
+    ULONG Count;
+    SYSTEM_INFO SystemInfo;
+
+    GetSystemInfo(&SystemInfo);
+    Count = SystemInfo.dwNumberOfProcessors;
+    return Count;
+}
+
+int
 sigaction (
     int SignalNumber,
     struct sigaction *NewAction,

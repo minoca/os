@@ -54,6 +54,7 @@ COMMON_OBJS = basename.o       \
               mktemp.o         \
               mv.o             \
               nl.o             \
+              nproc.o          \
               od.o             \
               printf.o         \
               ps.o             \

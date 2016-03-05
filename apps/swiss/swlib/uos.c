@@ -3185,6 +3185,44 @@ Return Value:
     return;
 }
 
+int
+SwGetProcessorCount (
+    int Online
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the number of processors in the system.
+
+Arguments:
+
+    Online - Supplies a boolean indicating whether to return only the number
+        of processors currently online (TRUE), or the total number (FALSE).
+
+Return Value:
+
+    Returns the number of processors on success.
+
+    -1 on failure.
+
+--*/
+
+{
+
+    long Result;
+
+    if (Online != 0) {
+        Result = sysconf(_SC_NPROCESSORS_ONLN);
+
+    } else {
+        Result = sysconf(_SC_NPROCESSORS_CONF);
+    }
+
+    return Result;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

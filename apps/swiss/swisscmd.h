@@ -282,6 +282,8 @@ extern SWISS_COMMAND_ENTRY SwissCommands[];
 #define TELNETD_COMMAND_DESCRIPTION "Simple telnet server"
 #define TELNET_COMMAND_NAME "telnet"
 #define TELNET_COMMAND_DESCRIPTION "Telnet client"
+#define NPROC_COMMAND_NAME "nproc"
+#define NPROC_COMMAND_DESCRIPTION "Returns the number of processors"
 
 //
 // Command entry point prototypes.
@@ -2160,6 +2162,31 @@ TelnetMain (
 Routine Description:
 
     This routine is the main entry point for the telnet utility.
+
+Arguments:
+
+    ArgumentCount - Supplies the number of command line arguments the program
+        was invoked with.
+
+    Arguments - Supplies a tokenized array of command line arguments.
+
+Return Value:
+
+    Returns an integer exit code. 0 for success, nonzero otherwise.
+
+--*/
+
+INT
+NprocMain (
+    INT ArgumentCount,
+    CHAR **Arguments
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the main entry point for the nproc utility.
 
 Arguments:
 

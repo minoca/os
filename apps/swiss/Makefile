@@ -43,7 +43,7 @@ TARGETLIBS = $(OBJROOT)/os/lib/termlib/termlib.a     \
 
 DYNLIBS = -lminocaos
 
-include $(SRCROOT)/os/minoca.mk
+OS ?= $(shell uname -s)
 
 ifeq ($(OS),Windows_NT)
 
@@ -57,6 +57,8 @@ endif
 
 EXTRA_LDFLAGS += -L$(BINROOT)
 EXTRA_CFLAGS += -ftls-model=initial-exec
+
+include $(SRCROOT)/os/minoca.mk
 
 postbuild:
 	@mkdir -p $(BINROOT)/skel/bin
