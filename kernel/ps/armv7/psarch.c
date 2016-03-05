@@ -411,6 +411,7 @@ Return Value:
 
     PFPU_CONTEXT NewContext;
     PFPU_CONTEXT OldContext;
+    RUNLEVEL OldRunLevel;
     KSTATUS Status;
 
     //
@@ -432,9 +433,11 @@ Return Value:
         }
 
         //
-        // If it's also the owner, save the latest context into the new.
+        // If it's also the owner, save the latest context into the new. Avoid
+        // being pre-empted and losing the FPU context while saving it.
         //
 
+        OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
         if ((OldThread->FpuFlags & THREAD_FPU_FLAG_OWNER) != 0) {
 
             ASSERT(KeGetCurrentThread() == OldThread);
@@ -458,6 +461,7 @@ Return Value:
             RtlCopyMemory(NewContext, OldContext, sizeof(FPU_CONTEXT));
         }
 
+        KeLowerRunLevel(OldRunLevel);
         NewThread->FpuFlags |= THREAD_FPU_FLAG_IN_USE;
     }
 
