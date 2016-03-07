@@ -143,6 +143,7 @@ mkdir.c
 mktemp.c
 mv.c
 nl.c
+nproc.c
 od.c
 printf.c
 ps.c
