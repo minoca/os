@@ -154,6 +154,12 @@ BASE_VIDEO_PALETTE VidDefaultPalette = {
 };
 
 //
+// Store a pointer to the default font to use.
+//
+
+PBASE_VIDEO_FONT VidDefaultFont = &VidFontPs2Thin48x16;
+
+//
 // Store the conversion between ANSI colors and BIOS text attribute numbers.
 //
 
@@ -214,7 +220,10 @@ Return Value:
             (Context->BlueMask != 0)));
 
     VidpConvertPalette(Context, &VidDefaultPalette, &Context->PhysicalPalette);
-    Context->Font = &VidFontPs2Thin48x16;
+    Context->Font = VidDefaultFont;
+
+    ASSERT(Context->Font != NULL);
+
     if (Context->Mode == BaseVideoModeBiosText) {
         Context->Columns = Context->Width;
         Context->Rows = Context->Height;

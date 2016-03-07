@@ -43,13 +43,6 @@ Author:
 //
 
 //
-// Define the height and width of a character with the base video font.
-//
-
-#define BASE_VIDEO_CHARACTER_WIDTH 8
-#define BASE_VIDEO_CHARACTER_HEIGHT 16
-
-//
 // Define the attributes.
 //
 
@@ -324,6 +317,13 @@ extern BASE_VIDEO_FONT VidFontPs2Thin48x16;
 extern BASE_VIDEO_FONT VidFontIso8x16;
 extern BASE_VIDEO_FONT VidFont6x8;
 extern BASE_VIDEO_FONT VidFont4x6;
+
+//
+// Store a pointer to the default font to use when initializing new video
+// contexts.
+//
+
+extern PBASE_VIDEO_FONT VidDefaultFont;
 
 //
 // -------------------------------------------------------- Function Prototypes

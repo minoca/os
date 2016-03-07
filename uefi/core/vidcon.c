@@ -386,10 +386,7 @@ Return Value:
         }
 
         GraphicsMode = Graphics->Mode->Info;
-        if ((GraphicsMode->HorizontalResolution < BASE_VIDEO_CHARACTER_WIDTH) ||
-            (GraphicsMode->VerticalResolution < BASE_VIDEO_CHARACTER_HEIGHT) ||
-            (GraphicsMode->PixelFormat >= PixelBltOnly)) {
-
+        if (GraphicsMode->PixelFormat >= PixelBltOnly) {
             continue;
         }
 
@@ -617,6 +614,8 @@ Return Value:
 {
 
     CHAR8 Ascii[2];
+    UINT32 CellHeight;
+    UINT32 CellWidth;
     UINTN ColumnCount;
     PEFI_GRAPHICS_CONSOLE Console;
     UINTN CopySize;
@@ -656,12 +655,14 @@ Return Value:
     // number of console lines minus one.
     //
 
+    CellWidth = EfiVideoContext.Font->CellWidth;
+    CellHeight = EfiVideoContext.Font->CellHeight;
     CopySize = Console->PixelsPerScanLine * (Console->BitsPerPixel / 8) *
-               ((RowCount - 1) * BASE_VIDEO_CHARACTER_HEIGHT);
+               ((RowCount - 1) * CellHeight);
 
     LineOne = FrameBuffer + (Console->PixelsPerScanLine *
                              (Console->BitsPerPixel / 8) *
-                             BASE_VIDEO_CHARACTER_HEIGHT);
+                             CellHeight);
 
     //
     // Loop printing each character.
@@ -692,12 +693,12 @@ Return Value:
 
             } else {
                 EfiCopyMem(FrameBuffer, LineOne, CopySize);
-                LastLineY = (RowCount - 1) * BASE_VIDEO_CHARACTER_HEIGHT;
+                LastLineY = (RowCount - 1) * CellHeight;
                 VidClearScreen(&EfiVideoContext,
                                0,
                                LastLineY,
-                               ColumnCount * BASE_VIDEO_CHARACTER_WIDTH,
-                               LastLineY + BASE_VIDEO_CHARACTER_HEIGHT);
+                               ColumnCount * CellWidth,
+                               LastLineY + CellHeight);
             }
 
         } else if (*String == CHAR_CARRIAGE_RETURN) {
@@ -714,12 +715,12 @@ Return Value:
                 Mode->CursorColumn = 0;
                 if (Mode->CursorRow == RowCount - 1) {
                     EfiCopyMem(FrameBuffer, LineOne, CopySize);
-                    LastLineY = (RowCount - 1) * BASE_VIDEO_CHARACTER_HEIGHT;
+                    LastLineY = (RowCount - 1) * CellHeight;
                     VidClearScreen(&EfiVideoContext,
                                    0,
                                    LastLineY,
-                                   ColumnCount * BASE_VIDEO_CHARACTER_WIDTH,
-                                   LastLineY + BASE_VIDEO_CHARACTER_HEIGHT);
+                                   ColumnCount * CellWidth,
+                                   LastLineY + CellHeight);
 
                 } else {
                     Mode->CursorRow += 1;
@@ -846,8 +847,14 @@ Return Value:
     ASSERT(Console->Magic == EFI_GRAPHICS_CONSOLE_MAGIC);
 
     if (ModeNumber == 0) {
-        *Columns = Console->HorizontalResolution / BASE_VIDEO_CHARACTER_WIDTH;
-        *Rows = Console->VerticalResolution / BASE_VIDEO_CHARACTER_HEIGHT;
+        if (EfiVideoContext.Font == NULL) {
+            return EFI_NOT_READY;
+        }
+
+        *Columns = Console->HorizontalResolution /
+                   EfiVideoContext.Font->CellWidth;
+
+        *Rows = Console->VerticalResolution / EfiVideoContext.Font->CellHeight;
         return EFI_SUCCESS;
     }
 

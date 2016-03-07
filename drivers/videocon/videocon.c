@@ -623,23 +623,23 @@ Return Value:
             ASSERT(FrameBufferResource->Mode == BaseVideoModeFrameBuffer);
 
             if ((Height <=
-                 VIDEO_CONSOLE_TOP_BANNER_ROWS * BASE_VIDEO_CHARACTER_HEIGHT) ||
-                (Width < BASE_VIDEO_CHARACTER_WIDTH)) {
+                 VIDEO_CONSOLE_TOP_BANNER_ROWS * VidDefaultFont->CellHeight) ||
+                (Width < VidDefaultFont->CellWidth)) {
 
                 continue;
             }
 
             Height -= VIDEO_CONSOLE_TOP_BANNER_ROWS *
-                      BASE_VIDEO_CHARACTER_HEIGHT;
+                      VidDefaultFont->CellHeight;
 
             RowSize = FrameBufferResource->Width *
                       FrameBufferResource->BitsPerPixel / BITS_PER_BYTE;
 
             TopOffset = RowSize * (VIDEO_CONSOLE_TOP_BANNER_ROWS *
-                                   BASE_VIDEO_CHARACTER_HEIGHT);
+                                   VidDefaultFont->CellHeight);
 
-            Columns = Width / BASE_VIDEO_CHARACTER_WIDTH;
-            Rows = Height / BASE_VIDEO_CHARACTER_HEIGHT;
+            Columns = Width / VidDefaultFont->CellWidth;
+            Rows = Height / VidDefaultFont->CellHeight;
         }
 
         VirtualAddress = FrameBufferResource->Header.VirtualAddress + TopOffset;
