@@ -346,7 +346,7 @@ Return Value:
         PartitionConfiguration->Offset = PartitionInformation.FirstBlock *
                                          PartitionInformation.BlockSize;
 
-        PartitionConfiguration->Size = Context->CurrentPartitionSize /
+        PartitionConfiguration->Size = Context->CurrentPartitionSize *
                                        SETUP_BLOCK_SIZE;
 
         memcpy(&(PartitionConfiguration->PartitionId),
@@ -532,6 +532,11 @@ Return Value:
     }
 
     if ((Partition->Flags & SETUP_PARTITION_FLAG_SYSTEM) != 0) {
+        Result = SetupWriteBootDriversFile(Context, DestinationVolume);
+        if (Result != 0) {
+            fprintf(stderr, "Failed to write boot drivers file.\n");
+            goto InstallFilesEnd;
+        }
 
         //
         // Compute the page file size if it has not already been specified.
@@ -578,12 +583,11 @@ Return Value:
             if ((Context->Flags & SETUP_FLAG_VERBOSE) != 0) {
                 printf("Done\n", Context->PageFileSize);
             }
-        }
 
-        Result = SetupWriteBootDriversFile(Context, DestinationVolume);
-        if (Result != 0) {
-            fprintf(stderr, "Failed to write boot drivers file.\n");
-            goto InstallFilesEnd;
+            if (Result != 0) {
+                fprintf(stderr, "Warning: Failed to set page file size.\n");
+                Result = 0;
+            }
         }
     }
 

@@ -262,7 +262,7 @@ Members:
 
     Interpreter - Stores the interpreter context.
 
-    Configuration - Stores the installation configuration;
+    Configuration - Stores the installation configuration.
 
 --*/
 
