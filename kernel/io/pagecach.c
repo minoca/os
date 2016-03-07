@@ -1996,6 +1996,15 @@ Return Value:
                 Status = STATUS_TRY_AGAIN;
                 goto FlushPageCacheEntriesEnd;
             }
+
+            if ((IopIsPageCacheTooMapped(NULL) != FALSE) &&
+                ((IoPageCacheMappedPageCount -
+                  IoPageCacheMappedDirtyPageCount) >
+                 IoPageCacheLowMemoryCleanPageMinimum)) {
+
+                Status = STATUS_TRY_AGAIN;
+                goto FlushPageCacheEntriesEnd;
+            }
         }
     }
 

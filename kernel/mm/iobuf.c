@@ -1246,7 +1246,7 @@ Return Value:
 
                 Status = MmpMapIoBufferFragments(IoBuffer,
                                                  FragmentIndex,
-                                                 FragmentIndex + 1,
+                                                 1,
                                                  MapFlags);
 
                 if (!KSUCCESS(Status)) {
