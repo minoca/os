@@ -153,6 +153,7 @@ Return Value:
     }
 
     memset(ElfSymbols, 0, AllocationSize);
+    INITIALIZE_LIST_HEAD(&(ElfSymbols->SourcesHead));
     ElfSymbols->Interface = &DbgElfSymbolInterface;
     ElfSymbols->SymbolContext = ElfSymbols + 1;
     ElfSymbols->HostContext = HostContext;

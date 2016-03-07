@@ -168,6 +168,7 @@ Return Value:
     }
 
     memset(CoffSymbols, 0, AllocationSize);
+    INITIALIZE_LIST_HEAD(&(CoffSymbols->SourcesHead));
     CoffSymbols->Interface = &DbgCoffSymbolInterface;
     CoffSymbols->SymbolContext = CoffSymbols + 1;
     CoffSymbols->HostContext = HostContext;
