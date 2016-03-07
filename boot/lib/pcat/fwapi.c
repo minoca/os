@@ -54,6 +54,8 @@ Environment:
 
 PDEBUG_DEVICE_DESCRIPTION BoFirmwareDebugDevice = NULL;
 
+extern BASE_VIDEO_CONTEXT FwVideoContext;
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -181,7 +183,7 @@ Return Value:
 
 {
 
-    VidClearScreen(MinimumX, MinimumY, MaximumX, MaximumY);
+    VidClearScreen(&FwVideoContext, MinimumX, MinimumY, MaximumX, MaximumY);
     return;
 }
 
@@ -259,7 +261,7 @@ Return Value:
 
 {
 
-    VidPrintString(XCoordinate, YCoordinate, String);
+    VidPrintString(&FwVideoContext, XCoordinate, YCoordinate, String);
     return;
 }
 
@@ -294,7 +296,7 @@ Return Value:
 
 {
 
-    VidPrintHexInteger(XCoordinate, YCoordinate, Number);
+    VidPrintHexInteger(&FwVideoContext, XCoordinate, YCoordinate, Number);
     return;
 }
 
@@ -329,7 +331,7 @@ Return Value:
 
 {
 
-    VidPrintInteger(XCoordinate, YCoordinate, Number);
+    VidPrintInteger(&FwVideoContext, XCoordinate, YCoordinate, Number);
     return;
 }
 

@@ -61,6 +61,19 @@ Author:
 #define BASE_VIDEO_CURSOR           0x0800
 
 //
+// Define base video font flags.
+//
+
+//
+// Set this flag if the data is rotated by 90 degrees. That is, the first byte
+// contains the first column of data, rather than the first rows. This is done
+// to save space (as a 5x7 character can be listed as 5 bytes rather than 7).
+// The maximum sized font allowing rotation is 8x8.
+//
+
+#define BASE_VIDEO_FONT_ROTATED 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -191,20 +204,126 @@ typedef union _BASE_VIDEO_CHARACTER {
     BASE_VIDEO_CHARACTER_DATA Data;
 } BASE_VIDEO_CHARACTER, *PBASE_VIDEO_CHARACTER;
 
+/*++
+
+Structure Description:
+
+    This structure defines a base video font.
+
+Members:
+
+    GlyphCount - Stores the number of glyphs in the data.
+
+    FirstAsciiCode - Stores the ASCII code of the first glyph. Usually this is
+        a space (0x20).
+
+    GlyphBytesWidth - Stores the number of bytes of data in a character row.
+        For rotated fonts, this is the number of bytes in a character column.
+
+    GlyphWidth - Stores the width of the glyph data, in pixels.
+
+    CellWidth - Stores the width of a character cell in pixels.
+
+    GlyphHeight - Stores the height of a glyph, in pixels.
+
+    CellHeight - Stores the height of a character cell, in pixels.
+
+    Flags - Stores a bitfield of flags. See BASE_VIDEO_FONT_* definitions.
+
+    Data - Stores a pointer to the font data itself.
+
+--*/
+
+typedef struct _BASE_VIDEO_FONT {
+    UCHAR GlyphCount;
+    UCHAR FirstAsciiCode;
+    UCHAR GlyphBytesWidth;
+    UCHAR GlyphWidth;
+    UCHAR CellWidth;
+    UCHAR GlyphHeight;
+    UCHAR CellHeight;
+    ULONG Flags;
+    const UCHAR *Data;
+} BASE_VIDEO_FONT, *PBASE_VIDEO_FONT;
+
+/*++
+
+Structure Description:
+
+    This structure stores the context for a base video frame buffer.
+
+Members:
+
+    Mode - Stores the mode of the frame buffer.
+
+    FrameBuffer - Stores the pointer to the linear frame buffer itself.
+
+    Width - Stores the width of the visible area of the frame buffer in pixels.
+        For text mode frame buffers, this is the screen width in character
+        columns.
+
+    Height - Stores the height of the frame buffer in pixels. For text mode
+        frame buffers, this is the screen height in character rows.
+
+    BitsPerPixel - Stores the number of bits in a pixel.
+
+    PixelsPerScanLine - Stores the number of pixels in a line, both visible
+        and invisible.
+
+    RedMask - Stores the set of bits that represent the red channel in each
+        pixel.
+
+    GreenMask - Stores the set of bits that represent the green channel in
+        each pixel.
+
+    BlueMask - Stores the set of bits that represent the blue channel in each
+        pixel.
+
+    Palette - Stores the current palette, with colors in "idealized" form.
+
+    PhysicalPalette - Stores the current palette, with colors in actual device
+        pixel form.
+
+    Font - Stores a pointer to the font information.
+
+    Columns - Stores the number of text columns in the frame buffer.
+
+    Rows - Stores the number of rows in the frame buffer.
+
+--*/
+
+typedef struct _BASE_VIDEO_CONTEXT {
+    BASE_VIDEO_MODE Mode;
+    PVOID FrameBuffer;
+    ULONG Width;
+    ULONG Height;
+    ULONG BitsPerPixel;
+    ULONG PixelsPerScanLine;
+    ULONG RedMask;
+    ULONG GreenMask;
+    ULONG BlueMask;
+    BASE_VIDEO_PALETTE Palette;
+    BASE_VIDEO_PALETTE PhysicalPalette;
+    PBASE_VIDEO_FONT Font;
+    ULONG Columns;
+    ULONG Rows;
+} BASE_VIDEO_CONTEXT, *PBASE_VIDEO_CONTEXT;
+
 //
 // -------------------------------------------------------------------- Globals
 //
 
 //
-// The font data is stored as one very wide and fat 1 bit-per-pixel bitmap,
-// starting at the upper left corner and scanning right. At a width of 8
-// pixels per character (this is an 8x16 font), this means that these first few
-// bytes are each the top line of a character. The last few bytes are the
-// bottom lines of the last few characters. There are 256 characters.
-//
+// Define the different fonts that can be used.
 //
 
-extern BYTE VidFontData[];
+extern BASE_VIDEO_FONT VidFontVga8x16;
+extern BASE_VIDEO_FONT VidFontVga9x16;
+extern BASE_VIDEO_FONT VidFontVerite8x16;
+extern BASE_VIDEO_FONT VidFontPs2Thin48x16;
+extern BASE_VIDEO_FONT VidFontIso8x16;
+extern BASE_VIDEO_FONT VidFont6x8;
+extern BASE_VIDEO_FONT VidFont4x6;
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -212,6 +331,7 @@ extern BYTE VidFontData[];
 
 KSTATUS
 VidInitialize (
+    PBASE_VIDEO_CONTEXT Context,
     PSYSTEM_RESOURCE_FRAME_BUFFER FrameBuffer
     );
 
@@ -223,16 +343,19 @@ Routine Description:
 
 Arguments:
 
+    Context - Supplies a pointer to the video context to initialize.
+
     FrameBuffer - Supplies a pointer to the frame buffer parameters.
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
 VOID
 VidClearScreen (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG MinimumX,
     ULONG MinimumY,
     ULONG MaximumX,
@@ -247,6 +370,8 @@ Routine Description:
     fill character. If no frame buffer is present, this is a no-op.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     MinimumX - Supplies the minimum X coordinate of the rectangle to clear,
         inclusive.
@@ -268,6 +393,7 @@ Return Value:
 
 VOID
 VidPrintString (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG XCoordinate,
     ULONG YCoordinate,
     PSTR String
@@ -278,10 +404,11 @@ VidPrintString (
 Routine Description:
 
     This routine prints a null-terminated string to the screen at the
-    specified location. If no frame buffer is available, this output is
-    redirected to the debugger.
+    specified location.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     XCoordinate - Supplies the X coordinate of the location on the screen
         to write to.
@@ -299,6 +426,7 @@ Return Value:
 
 VOID
 VidPrintHexInteger (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG XCoordinate,
     ULONG YCoordinate,
     ULONG Number
@@ -309,9 +437,10 @@ VidPrintHexInteger (
 Routine Description:
 
     This routine prints an integer to the screen in the specified location.
-    If no frame buffer is available, this output is redirected to the debugger.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     XCoordinate - Supplies the X coordinate of the location on the screen
         to write to.
@@ -329,6 +458,7 @@ Return Value:
 
 VOID
 VidPrintInteger (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG XCoordinate,
     ULONG YCoordinate,
     LONG Number
@@ -338,10 +468,11 @@ VidPrintInteger (
 
 Routine Description:
 
-    This routine prints an integer to the screen in the specified location. If
-    no frame buffer is available, this output is redirected to the debugger.
+    This routine prints an integer to the screen in the specified location.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     XCoordinate - Supplies the X coordinate of the location on the screen
         to write to.
@@ -359,6 +490,7 @@ Return Value:
 
 VOID
 VidPrintCharacters (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG XCoordinate,
     ULONG YCoordinate,
     PBASE_VIDEO_CHARACTER Characters,
@@ -372,6 +504,8 @@ Routine Description:
     This routine prints a set of characters.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     XCoordinate - Supplies the X coordinate of the location on the screen
         to write to.
@@ -391,6 +525,7 @@ Return Value:
 
 VOID
 VidSetPalette (
+    PBASE_VIDEO_CONTEXT Context,
     PBASE_VIDEO_PALETTE Palette,
     PBASE_VIDEO_PALETTE OldPalette
     );
@@ -403,6 +538,8 @@ Routine Description:
     responsibility to synchronize both with printing and clearing the screen.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     Palette - Supplies a pointer to the palette to set. This memory will be
         copied.
@@ -418,6 +555,7 @@ Return Value:
 
 VOID
 VidSetPartialPalette (
+    PBASE_VIDEO_CONTEXT Context,
     PBASE_VIDEO_PARTIAL_PALETTE PartialPalette
     );
 
@@ -429,6 +567,8 @@ Routine Description:
     responsibility to synchronize both with printing and clearing the screen.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     PartialPalette - Supplies a pointer to the palette to set. This memory will
         be copied. Values in the palette not specified here will be left
@@ -442,6 +582,7 @@ Return Value:
 
 VOID
 VidGetPalette (
+    PBASE_VIDEO_CONTEXT Context,
     PBASE_VIDEO_PALETTE Palette
     );
 
@@ -454,6 +595,8 @@ Routine Description:
     palette.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     Palette - Supplies a pointer where the palette will be returned.
 

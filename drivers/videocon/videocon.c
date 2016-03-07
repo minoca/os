@@ -255,6 +255,9 @@ Members:
 
     PhysicalAddress - Stores the physical address of the frame buffer.
 
+    VideoContext - Stores the base video library context used for low level
+        print routines.
+
     FrameBuffer - Stores the virtual address of the frame buffer.
 
     Width - Stores the width of the frame buffer, in pixels.
@@ -320,6 +323,7 @@ Members:
 
 typedef struct _VIDEO_CONSOLE_DEVICE {
     PHYSICAL_ADDRESS PhysicalAddress;
+    BASE_VIDEO_CONTEXT VideoContext;
     PVOID FrameBuffer;
     LONG Width;
     LONG Height;
@@ -710,7 +714,7 @@ Return Value:
         VideoResource.Header.PhysicalAddress = PhysicalAddress;
         VideoResource.Width = Width;
         VideoResource.Height = Height;
-        Status = VidInitialize(&VideoResource);
+        Status = VidInitialize(&(ConsoleDevice->VideoContext), &VideoResource);
         if (!KSUCCESS(Status)) {
             goto DriverEntryEnd;
         }
@@ -2625,7 +2629,8 @@ Return Value:
                     CurrentColumn += 1;
                 }
 
-                VidPrintCharacters(StartDrawColumn,
+                VidPrintCharacters(&(Console->VideoContext),
+                                   StartDrawColumn,
                                    CurrentRow,
                                    &(ScreenCharacters[StartDrawColumn]),
                                    CurrentColumn - StartDrawColumn);
@@ -2658,7 +2663,8 @@ Return Value:
                     CurrentColumn += 1;
                 }
 
-                VidPrintCharacters(StartDrawColumn,
+                VidPrintCharacters(&(Console->VideoContext),
+                                   StartDrawColumn,
                                    CurrentRow,
                                    &(ScreenCharacters[StartDrawColumn]),
                                    CurrentColumn - StartDrawColumn);

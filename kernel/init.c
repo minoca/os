@@ -27,7 +27,6 @@ Environment:
 #include <minoca/kernel/kernel.h>
 #include <minoca/lib/bconf.h>
 #include <minoca/kernel/bootload.h>
-#include <minoca/lib/basevid.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -178,15 +177,6 @@ volatile ULONG KeProcessorStartLock = 0;
 volatile ULONG KeProcessorsReady = 0;
 volatile BOOL KeAllProcessorsInitialize = FALSE;
 volatile BOOL KeAllProcessorsGo = FALSE;
-
-//
-// TODO: The base video information should be in a context structure.
-// The banner thread can then be handed a pointer to that structure or use
-// official Ke video calls to get the width.
-//
-
-extern ULONG VidMode;
-extern ULONG VidFrameBufferWidth;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -428,10 +418,10 @@ Return Value:
 
 StartSystemEnd:
     if (!KSUCCESS(Status)) {
-        VidPrintString(0, 14, "Kernel Failure: 0x");
-        VidPrintHexInteger(18, 14, Status);
-        VidPrintString(0, 15, "Subsystem: ");
-        VidPrintInteger(11, 15, FailingSubsystem);
+        KeVideoPrintString(0, 14, "Kernel Failure: 0x");
+        KeVideoPrintHexInteger(18, 14, Status);
+        KeVideoPrintString(0, 15, "Subsystem: ");
+        KeVideoPrintInteger(11, 15, FailingSubsystem);
         KeCrashSystem(CRASH_SYSTEM_INITIALIZATION_FAILURE,
                       FailingSubsystem,
                       Status,
@@ -685,8 +675,8 @@ Return Value:
 
 CompleteSystemInitializationEnd:
     if (!KSUCCESS(Status)) {
-        VidPrintString(0, 24, "Failure: 0x");
-        VidPrintHexInteger(11, 24, Status);
+        KeVideoPrintString(0, 24, "Failure: 0x");
+        KeVideoPrintHexInteger(11, 24, Status);
         KeCrashSystem(CRASH_SYSTEM_INITIALIZATION_FAILURE,
                       FailingSubsystem,
                       Status,
@@ -839,12 +829,8 @@ Return Value:
     IoStatistics.Version = IO_GLOBAL_STATISTICS_VERSION;
     Memory.Version = MM_STATISTICS_VERSION;
     Cache.Version = IO_CACHE_STATISTICS_VERSION;
-    Width = VidFrameBufferWidth;
-    if (VidMode == BaseVideoInvalidMode) {
+    if (!KSUCCESS(KeVideoGetDimensions(&Width, NULL))) {
         return;
-
-    } else if (VidMode == BaseVideoModeFrameBuffer) {
-        Width /= BASE_VIDEO_CHARACTER_WIDTH;
     }
 
     if (Width > sizeof(BannerString) - 1) {
@@ -952,7 +938,7 @@ Return Value:
         }
 
         BannerString[Size] = '\0';
-        VidPrintString(0, 0, BannerString);
+        KeVideoPrintString(0, 0, BannerString);
 
         //
         // Also update the second line, which contains the system usage.
@@ -1061,7 +1047,7 @@ Return Value:
         }
 
         BannerString[Size] = '\0';
-        VidPrintString(0, 1, BannerString);
+        KeVideoPrintString(0, 1, BannerString);
         TimerQueueType = TimerQueueSoftWake;
         if ((Seconds % 5) == 0) {
             TimerQueueType = TimerQueueSoft;

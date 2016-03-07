@@ -25,11 +25,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#define RTL_API DLLEXPORT
-
-#include <minoca/kernel/driver.h>
-#include <minoca/kernel/bootload.h>
-#include <minoca/lib/basevid.h>
+#include "basevidp.h"
 
 //
 // --------------------------------------------------------------------- Macros
@@ -80,12 +76,14 @@ Environment:
 
 VOID
 VidpConvertPalette (
+    PBASE_VIDEO_CONTEXT Context,
     PBASE_VIDEO_PALETTE Palette,
     PBASE_VIDEO_PALETTE PhysicalPalette
     );
 
 VOID
 VidpPrintCharacter (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG XCoordinate,
     ULONG YCoordinate,
     PBASE_VIDEO_CHARACTER Character
@@ -121,44 +119,10 @@ typedef struct _COLOR_TRANSLATION {
 //
 
 //
-// Store the current text video mode.
+// Store the default palette to use.
 //
 
-BASE_VIDEO_MODE VidMode;
-
-//
-// Store a pointer to the frame buffer base address.
-//
-
-PVOID VidFrameBuffer = NULL;
-
-//
-// Store the width and height of the frame buffer, in pixels.
-//
-
-ULONG VidFrameBufferWidth = 0;
-ULONG VidFrameBufferHeight = 0;
-ULONG VidFrameBufferPixelsPerScanLine = 0;
-
-//
-// Store the number of bits in a pixel.
-//
-
-ULONG VidFrameBufferBitsPerPixel = 0;
-
-//
-// Store the pixel format in color masks.
-//
-
-ULONG VidRedMask = 0;
-ULONG VidGreenMask = 0;
-ULONG VidBlueMask = 0;
-
-//
-// Store the current palette, initialized with some default values.
-//
-
-BASE_VIDEO_PALETTE VidPalette = {
+BASE_VIDEO_PALETTE VidDefaultPalette = {
     {
         BASE_VIDEO_COLOR_RGB(255, 240, 165),
         BASE_VIDEO_COLOR_RGB(0, 0, 0),
@@ -190,17 +154,10 @@ BASE_VIDEO_PALETTE VidPalette = {
 };
 
 //
-// Store the translated palette, which conforms to the device's actual pixel
-// format.
-//
-
-BASE_VIDEO_PALETTE VidPhysicalPalette;
-
-//
 // Store the conversion between ANSI colors and BIOS text attribute numbers.
 //
 
-UCHAR VidTextModeColors[AnsiColorCount] = {7, 0, 4, 2, 6, 1, 5, 3, 7};
+const UCHAR VidTextModeColors[AnsiColorCount] = {7, 0, 4, 2, 6, 1, 5, 3, 7};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -208,6 +165,7 @@ UCHAR VidTextModeColors[AnsiColorCount] = {7, 0, 4, 2, 6, 1, 5, 3, 7};
 
 KSTATUS
 VidInitialize (
+    PBASE_VIDEO_CONTEXT Context,
     PSYSTEM_RESOURCE_FRAME_BUFFER FrameBuffer
     )
 
@@ -219,11 +177,13 @@ Routine Description:
 
 Arguments:
 
+    Context - Supplies a pointer to the video context to initialize.
+
     FrameBuffer - Supplies a pointer to the frame buffer parameters.
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -231,35 +191,46 @@ Return Value:
 
     KSTATUS Status;
 
-    VidMode = FrameBuffer->Mode;
-    VidFrameBuffer = FrameBuffer->Header.VirtualAddress;
-    VidFrameBufferWidth = FrameBuffer->Width;
-    VidFrameBufferHeight = FrameBuffer->Height;
-    VidFrameBufferPixelsPerScanLine = FrameBuffer->PixelsPerScanLine;
-    VidFrameBufferBitsPerPixel = FrameBuffer->BitsPerPixel;
-    VidRedMask = FrameBuffer->RedMask;
-    VidGreenMask = FrameBuffer->GreenMask;
-    VidBlueMask = FrameBuffer->BlueMask;
+    Context->Mode = FrameBuffer->Mode;
+    Context->FrameBuffer = FrameBuffer->Header.VirtualAddress;
+    Context->Width = FrameBuffer->Width;
+    Context->Height = FrameBuffer->Height;
+    Context->PixelsPerScanLine = FrameBuffer->PixelsPerScanLine;
+    Context->BitsPerPixel = FrameBuffer->BitsPerPixel;
+    Context->RedMask = FrameBuffer->RedMask;
+    Context->GreenMask = FrameBuffer->GreenMask;
+    Context->BlueMask = FrameBuffer->BlueMask;
 
-    ASSERT((VidMode != BaseVideoInvalidMode) &&
-           (VidFrameBuffer != NULL) &&
-           (VidFrameBufferWidth != 0) &&
-           (VidFrameBufferHeight != 0) &&
-           (VidFrameBufferPixelsPerScanLine >= VidFrameBufferWidth) &&
-           (VidFrameBufferBitsPerPixel != 0));
+    ASSERT((Context->Mode != BaseVideoInvalidMode) &&
+           (Context->FrameBuffer != NULL) &&
+           (Context->Width != 0) &&
+           (Context->Height != 0) &&
+           (Context->PixelsPerScanLine >= Context->Width) &&
+           (Context->BitsPerPixel != 0));
 
-    ASSERT((VidMode != BaseVideoModeFrameBuffer) ||
-           ((VidRedMask != 0) &&
-            (VidGreenMask != 0) &&
-            (VidBlueMask != 0)));
+    ASSERT((Context->Mode != BaseVideoModeFrameBuffer) ||
+           ((Context->RedMask != 0) &&
+            (Context->GreenMask != 0) &&
+            (Context->BlueMask != 0)));
 
-    VidpConvertPalette(&VidPalette, &VidPhysicalPalette);
+    VidpConvertPalette(Context, &VidDefaultPalette, &Context->PhysicalPalette);
+    Context->Font = &VidFontPs2Thin48x16;
+    if (Context->Mode == BaseVideoModeBiosText) {
+        Context->Columns = Context->Width;
+        Context->Rows = Context->Height;
+
+    } else {
+        Context->Columns = Context->Width / Context->Font->CellWidth;
+        Context->Rows = Context->Height / Context->Font->CellHeight;
+    }
+
     Status = STATUS_SUCCESS;
     return Status;
 }
 
 VOID
 VidClearScreen (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG MinimumX,
     ULONG MinimumY,
     ULONG MaximumX,
@@ -274,6 +245,8 @@ Routine Description:
     fill character. If no frame buffer is present, this is a no-op.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     MinimumX - Supplies the minimum X coordinate of the rectangle to clear,
         inclusive.
@@ -303,7 +276,7 @@ Return Value:
     PUCHAR Pixel8;
     ULONG VerticalIndex;
 
-    if (VidFrameBuffer == NULL) {
+    if (Context->FrameBuffer == NULL) {
         return;
     }
 
@@ -311,11 +284,11 @@ Return Value:
     // If either minimum value is off the screen, exit.
     //
 
-    if (MinimumX >= VidFrameBufferWidth) {
+    if (MinimumX >= Context->Width) {
         return;
     }
 
-    if (MinimumY >= VidFrameBufferHeight) {
+    if (MinimumY >= Context->Height) {
         return;
     }
 
@@ -323,19 +296,19 @@ Return Value:
     // Truncate the maximum values.
     //
 
-    if (MaximumX > VidFrameBufferWidth) {
-        MaximumX = VidFrameBufferWidth;
+    if (MaximumX > Context->Width) {
+        MaximumX = Context->Width;
     }
 
-    if (MaximumY > VidFrameBufferHeight) {
-        MaximumY = VidFrameBufferHeight;
+    if (MaximumY > Context->Height) {
+        MaximumY = Context->Height;
     }
 
     //
     // Handle text mode by running around printing spaces.
     //
 
-    if (VidMode == BaseVideoModeBiosText) {
+    if (Context->Mode == BaseVideoModeBiosText) {
         Character.Data.Character = ' ';
         Character.Data.Attributes = 0;
         for (VerticalIndex = MinimumY;
@@ -346,30 +319,33 @@ Return Value:
                  HorizontalIndex < MaximumX;
                  HorizontalIndex += 1) {
 
-                VidpPrintCharacter(HorizontalIndex, VerticalIndex, &Character);
+                VidpPrintCharacter(Context,
+                                   HorizontalIndex,
+                                   VerticalIndex,
+                                   &Character);
             }
         }
 
         return;
     }
 
-    Color = VidPhysicalPalette.DefaultBackground;
+    Color = Context->PhysicalPalette.DefaultBackground;
 
     //
     // Switch on the bits per pixel outside the hot inner loop.
     //
 
-    switch (VidFrameBufferBitsPerPixel) {
+    switch (Context->BitsPerPixel) {
     case 8:
         for (VerticalIndex = MinimumY;
              VerticalIndex < MaximumY;
              VerticalIndex += 1) {
 
-            Pixel = (PULONG)(VidFrameBuffer +
+            Pixel = (PULONG)(Context->FrameBuffer +
                              (((VerticalIndex *
-                                VidFrameBufferPixelsPerScanLine) +
+                                Context->PixelsPerScanLine) +
                                 MinimumX) *
-                              (VidFrameBufferBitsPerPixel / BITS_PER_BYTE)));
+                              (Context->BitsPerPixel / BITS_PER_BYTE)));
 
             Pixel8 = (PUCHAR)Pixel;
             for (HorizontalIndex = MinimumX;
@@ -388,11 +364,11 @@ Return Value:
              VerticalIndex < MaximumY;
              VerticalIndex += 1) {
 
-            Pixel = (PULONG)(VidFrameBuffer +
+            Pixel = (PULONG)(Context->FrameBuffer +
                              (((VerticalIndex *
-                                VidFrameBufferPixelsPerScanLine) +
+                                Context->PixelsPerScanLine) +
                                MinimumX) *
-                              (VidFrameBufferBitsPerPixel / BITS_PER_BYTE)));
+                              (Context->BitsPerPixel / BITS_PER_BYTE)));
 
             Pixel16 = (PUSHORT)Pixel;
             for (HorizontalIndex = MinimumX;
@@ -411,11 +387,11 @@ Return Value:
              VerticalIndex < MaximumY;
              VerticalIndex += 1) {
 
-            Pixel = (PULONG)(VidFrameBuffer +
+            Pixel = (PULONG)(Context->FrameBuffer +
                              (((VerticalIndex *
-                                VidFrameBufferPixelsPerScanLine) +
+                                Context->PixelsPerScanLine) +
                                MinimumX) *
-                              (VidFrameBufferBitsPerPixel / BITS_PER_BYTE)));
+                              (Context->BitsPerPixel / BITS_PER_BYTE)));
 
             Pixel8 = (PUCHAR)Pixel;
             for (HorizontalIndex = MinimumX;
@@ -436,11 +412,11 @@ Return Value:
              VerticalIndex < MaximumY;
              VerticalIndex += 1) {
 
-            Pixel = (PULONG)(VidFrameBuffer +
+            Pixel = (PULONG)(Context->FrameBuffer +
                              (((VerticalIndex *
-                                VidFrameBufferPixelsPerScanLine) +
+                                Context->PixelsPerScanLine) +
                                MinimumX) *
-                              (VidFrameBufferBitsPerPixel / BITS_PER_BYTE)));
+                              (Context->BitsPerPixel / BITS_PER_BYTE)));
 
             for (HorizontalIndex = MinimumX;
                  HorizontalIndex < MaximumX;
@@ -465,6 +441,7 @@ Return Value:
 
 VOID
 VidPrintString (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG XCoordinate,
     ULONG YCoordinate,
     PSTR String
@@ -475,10 +452,11 @@ VidPrintString (
 Routine Description:
 
     This routine prints a null-terminated string to the screen at the
-    specified location. If no frame buffer is available, this output is
-    redirected to the debugger.
+    specified location.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     XCoordinate - Supplies the X coordinate of the location on the screen
         to write to.
@@ -500,23 +478,16 @@ Return Value:
     ULONG Columns;
     ULONG Rows;
 
-    if (VidFrameBuffer == NULL) {
+    if (Context->FrameBuffer == NULL) {
         return;
     }
 
-    if (VidMode == BaseVideoModeBiosText) {
-        Columns = VidFrameBufferWidth;
-        Rows = VidFrameBufferHeight;
-
-    } else {
-        Columns = VidFrameBufferWidth / BASE_VIDEO_CHARACTER_WIDTH;
-        Rows = VidFrameBufferHeight / BASE_VIDEO_CHARACTER_HEIGHT;
-    }
-
+    Columns = Context->Columns;
+    Rows = Context->Rows;
     Character.AsUint32 = 0;
     while (*String != '\0') {
         Character.Data.Character = *String;
-        VidpPrintCharacter(XCoordinate, YCoordinate, &Character);
+        VidpPrintCharacter(Context, XCoordinate, YCoordinate, &Character);
         XCoordinate += 1;
         if (XCoordinate >= Columns) {
             XCoordinate = 0;
@@ -535,6 +506,7 @@ Return Value:
 
 VOID
 VidPrintHexInteger (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG XCoordinate,
     ULONG YCoordinate,
     ULONG Number
@@ -545,9 +517,10 @@ VidPrintHexInteger (
 Routine Description:
 
     This routine prints an integer to the screen in the specified location.
-    If no frame buffer is available, this output is redirected to the debugger.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     XCoordinate - Supplies the X coordinate of the location on the screen
         to write to.
@@ -567,17 +540,14 @@ Return Value:
 
     CHAR StringBuffer[30];
 
-    if (VidFrameBuffer == NULL) {
-        return;
-    }
-
     VidpConvertIntegerToString(Number, StringBuffer, 16);
-    VidPrintString(XCoordinate, YCoordinate, StringBuffer);
+    VidPrintString(Context, XCoordinate, YCoordinate, StringBuffer);
     return;
 }
 
 VOID
 VidPrintInteger (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG XCoordinate,
     ULONG YCoordinate,
     LONG Number
@@ -587,10 +557,11 @@ VidPrintInteger (
 
 Routine Description:
 
-    This routine prints an integer to the screen in the specified location. If
-    no frame buffer is available, this output is redirected to the debugger.
+    This routine prints an integer to the screen in the specified location.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     XCoordinate - Supplies the X coordinate of the location on the screen
         to write to.
@@ -610,17 +581,14 @@ Return Value:
 
     CHAR StringBuffer[30];
 
-    if (VidFrameBuffer == NULL) {
-        return;
-    }
-
     VidpConvertIntegerToString(Number, StringBuffer, 10);
-    VidPrintString(XCoordinate, YCoordinate, StringBuffer);
+    VidPrintString(Context, XCoordinate, YCoordinate, StringBuffer);
     return;
 }
 
 VOID
 VidPrintCharacters (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG XCoordinate,
     ULONG YCoordinate,
     PBASE_VIDEO_CHARACTER Characters,
@@ -634,6 +602,8 @@ Routine Description:
     This routine prints a set of characters.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     XCoordinate - Supplies the X coordinate of the location on the screen
         to write to.
@@ -657,17 +627,14 @@ Return Value:
     ULONG Index;
     ULONG Rows;
 
-    if (VidMode == BaseVideoModeBiosText) {
-        Columns = VidFrameBufferWidth;
-        Rows = VidFrameBufferHeight;
-
-    } else {
-        Columns = VidFrameBufferWidth / BASE_VIDEO_CHARACTER_WIDTH;
-        Rows = VidFrameBufferHeight / BASE_VIDEO_CHARACTER_HEIGHT;
-    }
-
+    Columns = Context->Columns;
+    Rows = Context->Rows;
     for (Index = 0; Index < Count; Index += 1) {
-        VidpPrintCharacter(XCoordinate, YCoordinate, Characters + Index);
+        VidpPrintCharacter(Context,
+                           XCoordinate,
+                           YCoordinate,
+                           Characters + Index);
+
         XCoordinate += 1;
         if (XCoordinate >= Columns) {
             XCoordinate = 0;
@@ -684,6 +651,7 @@ Return Value:
 
 VOID
 VidSetPalette (
+    PBASE_VIDEO_CONTEXT Context,
     PBASE_VIDEO_PALETTE Palette,
     PBASE_VIDEO_PALETTE OldPalette
     )
@@ -696,6 +664,8 @@ Routine Description:
     responsibility to synchronize both with printing and clearing the screen.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     Palette - Supplies a pointer to the palette to set. This memory will be
         copied.
@@ -712,16 +682,22 @@ Return Value:
 {
 
     if (OldPalette != NULL) {
-        RtlCopyMemory(OldPalette, &VidPalette, sizeof(BASE_VIDEO_PALETTE));
+        RtlCopyMemory(OldPalette,
+                      &(Context->Palette),
+                      sizeof(BASE_VIDEO_PALETTE));
     }
 
-    RtlCopyMemory(&VidPalette, Palette, sizeof(BASE_VIDEO_PALETTE));
-    VidpConvertPalette(&VidPalette, &VidPhysicalPalette);
+    RtlCopyMemory(&(Context->Palette), Palette, sizeof(BASE_VIDEO_PALETTE));
+    VidpConvertPalette(Context,
+                       &(Context->Palette),
+                       &(Context->PhysicalPalette));
+
     return;
 }
 
 VOID
 VidSetPartialPalette (
+    PBASE_VIDEO_CONTEXT Context,
     PBASE_VIDEO_PARTIAL_PALETTE PartialPalette
     )
 
@@ -733,6 +709,8 @@ Routine Description:
     responsibility to synchronize both with printing and clearing the screen.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     PartialPalette - Supplies a pointer to the palette to set. This memory will
         be copied. Values in the palette not specified here will be left
@@ -748,7 +726,7 @@ Return Value:
 
     BASE_VIDEO_PALETTE Palette;
 
-    VidGetPalette(&Palette);
+    VidGetPalette(Context, &Palette);
     Palette.AnsiColor[AnsiColorDefault] = PartialPalette->DefaultForeground;
     Palette.BoldAnsiColor[AnsiColorDefault] =
                                          PartialPalette->DefaultBoldForeground;
@@ -757,12 +735,13 @@ Return Value:
     Palette.DefaultBoldBackground = PartialPalette->DefaultBoldBackground;
     Palette.CursorText = PartialPalette->CursorText;
     Palette.CursorBackground = PartialPalette->CursorBackground;
-    VidSetPalette(&Palette, NULL);
+    VidSetPalette(Context, &Palette, NULL);
     return;
 }
 
 VOID
 VidGetPalette (
+    PBASE_VIDEO_CONTEXT Context,
     PBASE_VIDEO_PALETTE Palette
     )
 
@@ -776,6 +755,8 @@ Routine Description:
 
 Arguments:
 
+    Context - Supplies a pointer to the initialized base video context.
+
     Palette - Supplies a pointer where the palette will be returned.
 
 Return Value:
@@ -786,7 +767,7 @@ Return Value:
 
 {
 
-    RtlCopyMemory(Palette, &VidPalette, sizeof(BASE_VIDEO_PALETTE));
+    RtlCopyMemory(Palette, &(Context->Palette), sizeof(BASE_VIDEO_PALETTE));
     return;
 }
 
@@ -796,6 +777,7 @@ Return Value:
 
 VOID
 VidpConvertPalette (
+    PBASE_VIDEO_CONTEXT Context,
     PBASE_VIDEO_PALETTE Palette,
     PBASE_VIDEO_PALETTE PhysicalPalette
     )
@@ -808,6 +790,8 @@ Routine Description:
     the native pixel format.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     Palette - Supplies the natural palette to convert.
 
@@ -823,12 +807,15 @@ Return Value:
 {
 
     ULONG BlueBit;
+    ULONG BlueMask;
     ULONG ColorIndex;
     ULONG GreenBit;
+    ULONG GreenMask;
     ULONG RedBit;
+    ULONG RedMask;
     COLOR_TRANSLATION Translation;
 
-    if (VidMode == BaseVideoModeBiosText) {
+    if (Context->Mode == BaseVideoModeBiosText) {
         for (ColorIndex = 0; ColorIndex < AnsiColorCount; ColorIndex += 1) {
             PhysicalPalette->AnsiColor[ColorIndex] =
                                                  VidTextModeColors[ColorIndex];
@@ -848,21 +835,26 @@ Return Value:
         goto ConvertPaletteEnd;
     }
 
-    ASSERT(VidMode == BaseVideoModeFrameBuffer);
-    ASSERT((VidRedMask != 0) && (VidGreenMask != 0) && (VidBlueMask != 0));
+    ASSERT(Context->Mode == BaseVideoModeFrameBuffer);
+
+    RedMask = Context->RedMask;
+    GreenMask = Context->GreenMask;
+    BlueMask = Context->BlueMask;
+
+    ASSERT((RedMask != 0) && (GreenMask != 0) && (BlueMask != 0));
 
     //
     // Handle some common cases.
     //
 
-    if ((VidRedMask == 0x00FF0000) && (VidGreenMask == 0x0000FF00) &&
-        (VidBlueMask == 0x000000FF)) {
+    if ((RedMask == 0x00FF0000) && (GreenMask == 0x0000FF00) &&
+        (BlueMask == 0x000000FF)) {
 
         RtlCopyMemory(PhysicalPalette, Palette, sizeof(BASE_VIDEO_PALETTE));
         return;
 
-    } else if ((VidRedMask == 0x000000FF) && (VidGreenMask == 0x0000FF00) &&
-               (VidBlueMask == 0x00FF0000)) {
+    } else if ((RedMask == 0x000000FF) && (GreenMask == 0x0000FF00) &&
+               (BlueMask == 0x00FF0000)) {
 
         for (ColorIndex = 0; ColorIndex < AnsiColorCount; ColorIndex += 1) {
             PhysicalPalette->AnsiColor[ColorIndex] =
@@ -889,9 +881,9 @@ Return Value:
     // Create the translation shift and mask.
     //
 
-    Translation.RedMask = VidRedMask;
-    Translation.GreenMask = VidGreenMask;
-    Translation.BlueMask = VidBlueMask;
+    Translation.RedMask = RedMask;
+    Translation.GreenMask = GreenMask;
+    Translation.BlueMask = BlueMask;
     RedBit = VidpFindHighestBitSet(Translation.RedMask) + 1;
     GreenBit = VidpFindHighestBitSet(Translation.GreenMask) + 1;
     BlueBit = VidpFindHighestBitSet(Translation.BlueMask) + 1;
@@ -929,6 +921,7 @@ ConvertPaletteEnd:
 
 VOID
 VidpPrintCharacter (
+    PBASE_VIDEO_CONTEXT Context,
     ULONG XCoordinate,
     ULONG YCoordinate,
     PBASE_VIDEO_CHARACTER Character
@@ -941,6 +934,8 @@ Routine Description:
     This routine prints a character to the screen in the specified location.
 
 Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
 
     XCoordinate - Supplies the column to write to.
 
@@ -958,13 +953,22 @@ Return Value:
 
     USHORT Attributes;
     ANSI_COLOR BackgroundAnsiColor;
+    ULONG BitIndex;
+    ULONG ByteIndex;
     ULONG ColorOff;
     ULONG ColorOn;
+    ULONG ColumnIndex;
+    PUCHAR Data;
     PUSHORT Destination16;
     PULONG Destination32;
     PBYTE Destination8;
+    PBASE_VIDEO_FONT Font;
     ANSI_COLOR ForegroundAnsiColor;
     ULONG HorizontalIndex;
+    ULONG LineSize;
+    PVOID LineStart;
+    UCHAR RotateBuffer[8];
+    ULONG RowIndex;
     BYTE Source;
     ULONG SourceIndex;
     ULONG SwapColor;
@@ -975,34 +979,36 @@ Return Value:
     // Get the colors to use.
     //
 
-    ColorOn = VidPhysicalPalette.AnsiColor[AnsiColorDefault];
-    ColorOff = VidPhysicalPalette.DefaultBackground;
+    ColorOn = Context->PhysicalPalette.AnsiColor[AnsiColorDefault];
+    ColorOff = Context->PhysicalPalette.DefaultBackground;
     if (Character->Data.Attributes != 0) {
         Attributes = Character->Data.Attributes;
         if ((Attributes & BASE_VIDEO_CURSOR) != 0) {
-            ColorOn = VidPhysicalPalette.CursorText;
-            ColorOff = VidPhysicalPalette.CursorBackground;
+            ColorOn = Context->PhysicalPalette.CursorText;
+            ColorOff = Context->PhysicalPalette.CursorBackground;
 
         } else {
             BackgroundAnsiColor = (Attributes >> BASE_VIDEO_BACKGROUND_SHIFT) &
                                   BASE_VIDEO_COLOR_MASK;
 
             ForegroundAnsiColor = Attributes & BASE_VIDEO_COLOR_MASK;
-            ColorOn = VidPhysicalPalette.AnsiColor[ForegroundAnsiColor];
+            ColorOn = Context->PhysicalPalette.AnsiColor[ForegroundAnsiColor];
             if ((Attributes & BASE_VIDEO_FOREGROUND_BOLD) != 0) {
-                ColorOn = VidPhysicalPalette.BoldAnsiColor[ForegroundAnsiColor];
+                ColorOn =
+                    Context->PhysicalPalette.BoldAnsiColor[ForegroundAnsiColor];
             }
 
             if (BackgroundAnsiColor != AnsiColorDefault) {
-                ColorOff = VidPhysicalPalette.AnsiColor[BackgroundAnsiColor];
+                ColorOff =
+                       Context->PhysicalPalette.AnsiColor[BackgroundAnsiColor];
             }
 
             if ((Attributes & BASE_VIDEO_BACKGROUND_BOLD) != 0) {
                 ColorOff =
-                         VidPhysicalPalette.BoldAnsiColor[BackgroundAnsiColor];
+                    Context->PhysicalPalette.BoldAnsiColor[BackgroundAnsiColor];
 
                 if (BackgroundAnsiColor == AnsiColorDefault) {
-                    ColorOff = VidPhysicalPalette.DefaultBoldBackground;
+                    ColorOff = Context->PhysicalPalette.DefaultBoldBackground;
                 }
             }
 
@@ -1018,9 +1024,9 @@ Return Value:
     // Handle text mode differently.
     //
 
-    if (VidMode == BaseVideoModeBiosText) {
-        Destination16 = VidFrameBuffer;
-        Destination16 += (YCoordinate * VidFrameBufferWidth) + XCoordinate;
+    if (Context->Mode == BaseVideoModeBiosText) {
+        Destination16 = Context->FrameBuffer;
+        Destination16 += (YCoordinate * Context->Width) + XCoordinate;
         *Destination16 = BIOS_TEXT_ATTRIBUTES(ColorOn, ColorOff) |
                          (UCHAR)(Character->Data.Character);
 
@@ -1028,147 +1034,319 @@ Return Value:
     }
 
     //
+    // Get the glyph data for that character.
+    //
+
+    Font = Context->Font;
+    if ((Character->Data.Character < Font->FirstAsciiCode) ||
+        (Character->Data.Character >=
+         Font->FirstAsciiCode + Font->GlyphCount)) {
+
+        ASSERT(Font->FirstAsciiCode <= ' ');
+
+        SourceIndex = ' ' - Font->FirstAsciiCode;
+
+    } else {
+        SourceIndex = Character->Data.Character - Font->FirstAsciiCode;
+    }
+
+    //
+    // Rotate the character if needed. For those wondering, this code takes
+    // about 185 bytes on x86, and the rotated data storage saves about 192
+    // bytes for the 5x7 and 4x6 fonts each.
+    //
+
+    if ((Font->Flags & BASE_VIDEO_FONT_ROTATED) != 0) {
+        SourceIndex *= Font->GlyphBytesWidth * Font->GlyphWidth;
+        Data = (PUCHAR)&(Font->Data[SourceIndex]);
+
+        ASSERT((Font->GlyphWidth < sizeof(RotateBuffer)) &&
+               (Font->GlyphHeight < sizeof(RotateBuffer)) &&
+               (sizeof(RotateBuffer) <= BITS_PER_BYTE));
+
+        //
+        // The normal data format runs horizontally. Build it a horizontal
+        // row at a time (assuming there will be left than 8).
+        //
+
+        for (RowIndex = 0; RowIndex < Font->GlyphHeight; RowIndex += 1) {
+            Source = 0;
+
+            //
+            // The row's data is spread out since the data is stored a column
+            // at a time. It's always the same bit (row) for each column.
+            //
+
+            for (ColumnIndex = 0;
+                 ColumnIndex < Font->GlyphWidth;
+                 ColumnIndex += 1) {
+
+                BitIndex = RowIndex;
+                if ((Data[ColumnIndex] & (1 << BitIndex)) != 0) {
+                    Source |= 1 << (BITS_PER_BYTE - 1 - ColumnIndex);
+                }
+            }
+
+            RotateBuffer[RowIndex] = Source;
+        }
+
+        Data = RotateBuffer;
+
+    } else {
+        SourceIndex *= Font->GlyphBytesWidth * Font->GlyphHeight;
+        Data = (PUCHAR)&(Font->Data[SourceIndex]);
+    }
+
+    //
+    // Compute the starting address on the frame buffer.
+    //
+
+    YPixel = (YCoordinate * Font->CellHeight) * Context->PixelsPerScanLine;
+    LineStart = Context->FrameBuffer +
+                ((YPixel + (XCoordinate * Font->CellWidth)) *
+                 (Context->BitsPerPixel / BITS_PER_BYTE));
+
+    LineSize = Context->PixelsPerScanLine *
+               (Context->BitsPerPixel / BITS_PER_BYTE);
+
+    //
     // Separate write loops for different pixel widths does mean more code,
     // but it skips conditionals in the inner loops, which are very hot.
     //
 
-    switch (VidFrameBufferBitsPerPixel) {
+    switch (Context->BitsPerPixel) {
     case 8:
         for (VerticalIndex = 0;
-             VerticalIndex < BASE_VIDEO_CHARACTER_HEIGHT;
+             VerticalIndex < Font->GlyphHeight;
              VerticalIndex += 1) {
 
-            SourceIndex = (VerticalIndex * 256) +
-                          (Character->Data.Character & 0xFF);
+            Destination8 = LineStart;
+            HorizontalIndex = 0;
+            for (ByteIndex = 0;
+                 ByteIndex < Font->GlyphBytesWidth;
+                 ByteIndex += 1) {
 
-            Source = VidFontData[SourceIndex];
-            YPixel = ((YCoordinate * BASE_VIDEO_CHARACTER_HEIGHT) +
-                      VerticalIndex) * VidFrameBufferPixelsPerScanLine;
+                Source = *Data;
+                BitIndex = 0;
+                while ((BitIndex < BITS_PER_BYTE) &&
+                       (HorizontalIndex < Font->GlyphWidth)) {
 
-            Destination8 = VidFrameBuffer +
-                           ((YPixel +
-                             (XCoordinate * BASE_VIDEO_CHARACTER_WIDTH)) *
-                            (VidFrameBufferBitsPerPixel / BITS_PER_BYTE));
+                    if ((Source & 0x80) != 0) {
+                        *Destination8 = (UCHAR)ColorOn;
 
-            for (HorizontalIndex = 0;
-                 HorizontalIndex < BASE_VIDEO_CHARACTER_WIDTH;
-                 HorizontalIndex += 1) {
+                    } else {
+                        *Destination8 = (UCHAR)ColorOff;
+                    }
 
-                if ((Source & (1 << HorizontalIndex)) != 0) {
-                    *Destination8 = (UCHAR)ColorOn;
-
-                } else {
-                    *Destination8 = (UCHAR)ColorOff;
+                    Destination8 += 1;
+                    HorizontalIndex += 1;
+                    Source <<= 1;
+                    BitIndex += 1;
                 }
 
+                Data += 1;
+            }
+
+            while (HorizontalIndex < Font->CellWidth) {
+                *Destination8 = (UCHAR)ColorOff;
+                Destination8 += 1;
+                HorizontalIndex += 1;
+            }
+
+            LineStart += LineSize;
+        }
+
+        while (VerticalIndex < Font->CellHeight) {
+            Destination8 = LineStart;
+            for (HorizontalIndex = 0;
+                 HorizontalIndex < Font->CellWidth;
+                 HorizontalIndex += 1) {
+
+                *Destination8 = (UCHAR)ColorOff;
                 Destination8 += 1;
             }
+
+            LineStart += LineSize;
+            VerticalIndex += 1;
         }
 
         break;
 
     case 16:
         for (VerticalIndex = 0;
-             VerticalIndex < BASE_VIDEO_CHARACTER_HEIGHT;
+             VerticalIndex < Font->GlyphHeight;
              VerticalIndex += 1) {
 
-            SourceIndex = (VerticalIndex * 256) +
-                          (Character->Data.Character & 0xFF);
+            Destination16 = LineStart;
+            HorizontalIndex = 0;
+            for (ByteIndex = 0;
+                 ByteIndex < Font->GlyphBytesWidth;
+                 ByteIndex += 1) {
 
-            Source = VidFontData[SourceIndex];
-            YPixel = ((YCoordinate * BASE_VIDEO_CHARACTER_HEIGHT) +
-                      VerticalIndex) * VidFrameBufferPixelsPerScanLine;
+                Source = *Data;
+                BitIndex = 0;
+                while ((BitIndex < BITS_PER_BYTE) &&
+                       (HorizontalIndex < Font->GlyphWidth)) {
 
-            Destination16 = VidFrameBuffer +
-                            ((YPixel +
-                              (XCoordinate * BASE_VIDEO_CHARACTER_WIDTH)) *
-                             (VidFrameBufferBitsPerPixel / BITS_PER_BYTE));
+                    if ((Source & 0x80) != 0) {
+                        *Destination16 = (USHORT)ColorOn;
 
-            for (HorizontalIndex = 0;
-                 HorizontalIndex < BASE_VIDEO_CHARACTER_WIDTH;
-                 HorizontalIndex += 1) {
+                    } else {
+                        *Destination16 = (USHORT)ColorOff;
+                    }
 
-                if ((Source & (1 << HorizontalIndex)) != 0) {
-                    *Destination16 = (USHORT)ColorOn;
-
-                } else {
-                    *Destination16 = (USHORT)ColorOff;
+                    Destination16 += 1;
+                    HorizontalIndex += 1;
+                    Source <<= 1;
+                    BitIndex += 1;
                 }
 
+                Data += 1;
+            }
+
+            while (HorizontalIndex < Font->CellWidth) {
+                *Destination16 = (USHORT)ColorOff;
+                Destination16 += 1;
+                HorizontalIndex += 1;
+            }
+
+            LineStart += LineSize;
+        }
+
+        while (VerticalIndex < Font->CellHeight) {
+            Destination16 = LineStart;
+            for (HorizontalIndex = 0;
+                 HorizontalIndex < Font->CellWidth;
+                 HorizontalIndex += 1) {
+
+                *Destination16 = (USHORT)ColorOff;
                 Destination16 += 1;
             }
+
+            LineStart += LineSize;
+            VerticalIndex += 1;
         }
 
         break;
 
     case 24:
         for (VerticalIndex = 0;
-             VerticalIndex < BASE_VIDEO_CHARACTER_HEIGHT;
+             VerticalIndex < Font->GlyphHeight;
              VerticalIndex += 1) {
 
-            SourceIndex = (VerticalIndex * 256) +
-                          (Character->Data.Character & 0xFF);
+            Destination8 = LineStart;
+            HorizontalIndex = 0;
+            for (ByteIndex = 0;
+                 ByteIndex < Font->GlyphBytesWidth;
+                 ByteIndex += 1) {
 
-            Source = VidFontData[SourceIndex];
-            YPixel = ((YCoordinate * BASE_VIDEO_CHARACTER_HEIGHT) +
-                      VerticalIndex) * VidFrameBufferPixelsPerScanLine;
+                Source = *Data;
+                BitIndex = 0;
+                while ((BitIndex < BITS_PER_BYTE) &&
+                       (HorizontalIndex < Font->GlyphWidth)) {
 
-            Destination8 = VidFrameBuffer +
-                           ((YPixel +
-                             (XCoordinate * BASE_VIDEO_CHARACTER_WIDTH)) *
-                            (VidFrameBufferBitsPerPixel / BITS_PER_BYTE));
+                    if ((Source & 0x80) != 0) {
+                        *Destination8 = (UCHAR)ColorOn;
+                        *(Destination8 + 1) = (UCHAR)(ColorOn >> 8);
+                        *(Destination8 + 2) = (UCHAR)(ColorOn >> 16);
 
-            for (HorizontalIndex = 0;
-                 HorizontalIndex < BASE_VIDEO_CHARACTER_WIDTH;
-                 HorizontalIndex += 1) {
+                    } else {
+                        *Destination8 = (UCHAR)ColorOff;
+                        *(Destination8 + 1) = (UCHAR)(ColorOff >> 8);
+                        *(Destination8 + 2) = (UCHAR)(ColorOff >> 16);
+                    }
 
-                if ((Source & (1 << HorizontalIndex)) != 0) {
-                    *Destination8 = (UCHAR)ColorOn;
-                    *(Destination8 + 1) = (UCHAR)(ColorOn >> 8);
-                    *(Destination8 + 2) = (UCHAR)(ColorOn >> 16);
-
-                } else {
-                    *Destination8 = (UCHAR)ColorOff;
-                    *(Destination8 + 1) = (UCHAR)(ColorOff >> 8);
-                    *(Destination8 + 2) = (UCHAR)(ColorOff >> 16);
+                    Destination8 += 3;
+                    HorizontalIndex += 1;
+                    Source <<= 1;
+                    BitIndex += 1;
                 }
 
+                Data += 1;
+            }
+
+            while (HorizontalIndex < Font->CellWidth) {
+                *Destination8 = (UCHAR)ColorOff;
+                *(Destination8 + 1) = (UCHAR)(ColorOff >> 8);
+                *(Destination8 + 2) = (UCHAR)(ColorOff >> 16);
+                Destination8 += 3;
+                HorizontalIndex += 1;
+            }
+
+            LineStart += LineSize;
+        }
+
+        while (VerticalIndex < Font->CellHeight) {
+            Destination8 = LineStart;
+            for (HorizontalIndex = 0;
+                 HorizontalIndex < Font->CellWidth;
+                 HorizontalIndex += 1) {
+
+                *Destination8 = (UCHAR)ColorOff;
+                *(Destination8 + 1) = (UCHAR)(ColorOff >> 8);
+                *(Destination8 + 2) = (UCHAR)(ColorOff >> 16);
                 Destination8 += 3;
             }
+
+            LineStart += LineSize;
+            VerticalIndex += 1;
         }
 
         break;
 
     case 32:
         for (VerticalIndex = 0;
-             VerticalIndex < BASE_VIDEO_CHARACTER_HEIGHT;
+             VerticalIndex < Font->GlyphHeight;
              VerticalIndex += 1) {
 
-            SourceIndex = (VerticalIndex * 256) +
-                          (Character->Data.Character & 0xFF);
+            Destination32 = LineStart;
+            HorizontalIndex = 0;
+            for (ByteIndex = 0;
+                 ByteIndex < Font->GlyphBytesWidth;
+                 ByteIndex += 1) {
 
-            Source = VidFontData[SourceIndex];
-            YPixel = ((YCoordinate * BASE_VIDEO_CHARACTER_HEIGHT) +
-                      VerticalIndex) * VidFrameBufferPixelsPerScanLine;
+                Source = *Data;
+                BitIndex = 0;
+                while ((BitIndex < BITS_PER_BYTE) &&
+                       (HorizontalIndex < Font->GlyphWidth)) {
 
-            Destination32 = VidFrameBuffer +
-                            ((YPixel +
-                              (XCoordinate * BASE_VIDEO_CHARACTER_WIDTH)) *
-                             (VidFrameBufferBitsPerPixel / BITS_PER_BYTE));
+                    if ((Source & 0x80) != 0) {
+                        *Destination32 = ColorOn;
 
-            for (HorizontalIndex = 0;
-                 HorizontalIndex < BASE_VIDEO_CHARACTER_WIDTH;
-                 HorizontalIndex += 1) {
+                    } else {
+                        *Destination32 = ColorOff;
+                    }
 
-                if ((Source & (1 << HorizontalIndex)) != 0) {
-                    *Destination32 = ColorOn;
-
-                } else {
-                    *Destination32 = ColorOff;
+                    Destination32 += 1;
+                    HorizontalIndex += 1;
+                    Source <<= 1;
+                    BitIndex += 1;
                 }
 
+                Data += 1;
+            }
+
+            while (HorizontalIndex < Font->CellWidth) {
+                *Destination32 = ColorOff;
+                Destination32 += 1;
+                HorizontalIndex += 1;
+            }
+
+            LineStart += LineSize;
+        }
+
+        while (VerticalIndex < Font->CellHeight) {
+            Destination32 = LineStart;
+            for (HorizontalIndex = 0;
+                 HorizontalIndex < Font->CellWidth;
+                 HorizontalIndex += 1) {
+
+                *Destination32 = ColorOff;
                 Destination32 += 1;
             }
+
+            LineStart += LineSize;
+            VerticalIndex += 1;
         }
 
         break;

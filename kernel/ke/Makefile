@@ -44,6 +44,7 @@ OBJS = crash.o    \
        timer.o    \
        timezone.o \
        version.o  \
+       video.o    \
        workitem.o \
 
 X86_OBJS = x86/archinit.o \

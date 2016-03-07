@@ -397,6 +397,8 @@ ULONG FwFrameBufferWidth;
 ULONG FwFrameBufferHeight;
 ULONG FwFrameBufferBitsPerPixel;
 
+BASE_VIDEO_CONTEXT FwVideoContext;
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -519,7 +521,7 @@ Return Value:
         FrameBuffer.BlueMask = 0x000000FF;
     }
 
-    Status = VidInitialize(&FrameBuffer);
+    Status = VidInitialize(&FwVideoContext, &FrameBuffer);
     if (!KSUCCESS(Status)) {
         goto InitializeVideoEnd;
     }

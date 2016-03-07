@@ -56,6 +56,8 @@ EFI_SYSTEM_TABLE *BoEfiSystemTable;
 EFI_BOOT_SERVICES *BoEfiBootServices;
 EFI_RUNTIME_SERVICES *BoEfiRuntimeServices;
 
+BASE_VIDEO_CONTEXT BoVideoContext;
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -164,7 +166,7 @@ Return Value:
             FrameBuffer.Header.VirtualAddress =
                               (PVOID)(UINTN)FrameBuffer.Header.PhysicalAddress;
 
-            Status = VidInitialize(&FrameBuffer);
+            Status = VidInitialize(&BoVideoContext, &FrameBuffer);
             if (!KSUCCESS(Status)) {
                 goto InitializeEnd;
             }
@@ -172,7 +174,7 @@ Return Value:
             if ((Parameters->Flags &
                  BOOT_INITIALIZATION_FLAG_SCREEN_CLEAR) == 0) {
 
-                VidClearScreen(0, 0, -1, -1);
+                VidClearScreen(&BoVideoContext, 0, 0, -1, -1);
             }
         }
     }
@@ -250,7 +252,7 @@ Return Value:
 
 {
 
-    VidClearScreen(MinimumX, MinimumY, MaximumX, MaximumY);
+    VidClearScreen(&BoVideoContext, MinimumX, MinimumY, MaximumX, MaximumY);
     return;
 }
 
@@ -382,7 +384,7 @@ Return Value:
 
 {
 
-    VidPrintString(XCoordinate, YCoordinate, String);
+    VidPrintString(&BoVideoContext, XCoordinate, YCoordinate, String);
     return;
 }
 
@@ -417,7 +419,7 @@ Return Value:
 
 {
 
-    VidPrintHexInteger(XCoordinate, YCoordinate, Number);
+    VidPrintHexInteger(&BoVideoContext, XCoordinate, YCoordinate, Number);
     return;
 }
 
@@ -452,7 +454,7 @@ Return Value:
 
 {
 
-    VidPrintInteger(XCoordinate, YCoordinate, Number);
+    VidPrintInteger(&BoVideoContext, XCoordinate, YCoordinate, Number);
     return;
 }
 

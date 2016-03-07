@@ -3473,3 +3473,127 @@ Return Value:
 
 --*/
 
+//
+// Video printing routines
+//
+
+VOID
+KeVideoPrintString (
+    ULONG XCoordinate,
+    ULONG YCoordinate,
+    PSTR String
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints a null-terminated string to the screen at the
+    specified location.
+
+Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
+
+    XCoordinate - Supplies the X coordinate of the location on the screen
+        to write to.
+
+    YCoordinate - Supplies the Y cooordinate of the location on the screen
+        to write to.
+
+    String - Supplies the string to print.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+KeVideoPrintHexInteger (
+    ULONG XCoordinate,
+    ULONG YCoordinate,
+    ULONG Number
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints an integer to the screen in the specified location.
+
+Arguments:
+
+    XCoordinate - Supplies the X coordinate of the location on the screen
+        to write to.
+
+    YCoordinate - Supplies the Y cooordinate of the location on the screen
+        to write to.
+
+    Number - Supplies the signed integer to print.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+KeVideoPrintInteger (
+    ULONG XCoordinate,
+    ULONG YCoordinate,
+    LONG Number
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints an integer to the screen in the specified location.
+
+Arguments:
+
+    Context - Supplies a pointer to the initialized base video context.
+
+    XCoordinate - Supplies the X coordinate of the location on the screen
+        to write to.
+
+    YCoordinate - Supplies the Y cooordinate of the location on the screen
+        to write to.
+
+    Number - Supplies the signed integer to print.
+
+Return Value:
+
+    None.
+
+--*/
+
+KSTATUS
+KeVideoGetDimensions (
+    PULONG Columns,
+    PULONG Rows
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the text dimensions of the kernel's video frame buffer.
+
+Arguments:
+
+    Columns - Supplies an optional pointer where the number of text columns
+        will be returned.
+
+    Rows - Supplies an optional pointer where the number of text rows will be
+        returned.
+
+Return Value:
+
+    STATUS_SUCCESS on success.
+
+    STATUS_NOT_INITIALIZED if there is no frame buffer.
+
+--*/
+

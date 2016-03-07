@@ -214,6 +214,8 @@ EFI_GRAPHICS_CONSOLE EfiGraphicsConsoleTemplate = {
     }
 };
 
+BASE_VIDEO_CONTEXT EfiVideoContext;
+
 BASE_VIDEO_PALETTE EfiVideoPalette = {
     {
         BASE_VIDEO_COLOR_RGB(250, 250, 250),
@@ -503,10 +505,10 @@ Return Value:
                                   FrameBuffer.Height;
 
         FrameBuffer.Header.Type = SystemResourceFrameBuffer;
-        VideoStatus = VidInitialize(&FrameBuffer);
+        VideoStatus = VidInitialize(&EfiVideoContext, &FrameBuffer);
         if (KSUCCESS(VideoStatus)) {
-            VidSetPalette(&EfiVideoPalette, NULL);
-            VidClearScreen(0, 0, -1, -1);
+            VidSetPalette(&EfiVideoContext, &EfiVideoPalette, NULL);
+            VidClearScreen(&EfiVideoContext, 0, 0, -1, -1);
             Status = EFI_SUCCESS;
 
         } else {
@@ -691,7 +693,8 @@ Return Value:
             } else {
                 EfiCopyMem(FrameBuffer, LineOne, CopySize);
                 LastLineY = (RowCount - 1) * BASE_VIDEO_CHARACTER_HEIGHT;
-                VidClearScreen(0,
+                VidClearScreen(&EfiVideoContext,
+                               0,
                                LastLineY,
                                ColumnCount * BASE_VIDEO_CHARACTER_WIDTH,
                                LastLineY + BASE_VIDEO_CHARACTER_HEIGHT);
@@ -712,7 +715,8 @@ Return Value:
                 if (Mode->CursorRow == RowCount - 1) {
                     EfiCopyMem(FrameBuffer, LineOne, CopySize);
                     LastLineY = (RowCount - 1) * BASE_VIDEO_CHARACTER_HEIGHT;
-                    VidClearScreen(0,
+                    VidClearScreen(&EfiVideoContext,
+                                   0,
                                    LastLineY,
                                    ColumnCount * BASE_VIDEO_CHARACTER_WIDTH,
                                    LastLineY + BASE_VIDEO_CHARACTER_HEIGHT);
@@ -722,7 +726,11 @@ Return Value:
                 }
             }
 
-            VidPrintString(Mode->CursorColumn, Mode->CursorRow, Ascii);
+            VidPrintString(&EfiVideoContext,
+                           Mode->CursorColumn,
+                           Mode->CursorRow,
+                           Ascii);
+
             Mode->CursorColumn += 1;
 
         //
@@ -962,7 +970,7 @@ Return Value:
 
     ASSERT(Console->Magic == EFI_GRAPHICS_CONSOLE_MAGIC);
 
-    VidClearScreen(0, 0, -1, -1);
+    VidClearScreen(&EfiVideoContext, 0, 0, -1, -1);
     return This->SetCursorPosition(This, 0, 0);
 }
 

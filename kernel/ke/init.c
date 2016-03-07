@@ -26,7 +26,6 @@ Environment:
 
 #include <minoca/kernel/kernel.h>
 #include "keinit.h"
-#include <minoca/lib/basevid.h>
 #include <minoca/lib/bconf.h>
 #include "kep.h"
 
@@ -37,11 +36,6 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-KSTATUS
-KepInitializeBaseVideo (
-    PKERNEL_INITIALIZATION_BLOCK Parameters
-    );
 
 KSTATUS
 KepInitializeUserSharedData (
@@ -500,52 +494,6 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
-
-KSTATUS
-KepInitializeBaseVideo (
-    PKERNEL_INITIALIZATION_BLOCK Parameters
-    )
-
-/*++
-
-Routine Description:
-
-    This routine initializes the built in base video library, which is used in
-    case of emergencies to display to the screen.
-
-Arguments:
-
-    Parameters - Supplies a pointer to the kernel initialization block.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PSYSTEM_RESOURCE_FRAME_BUFFER FrameBuffer;
-    PSYSTEM_RESOURCE_HEADER GenericHeader;
-    KSTATUS Status;
-
-    GenericHeader = KepGetSystemResource(SystemResourceFrameBuffer, FALSE);
-    if (GenericHeader == NULL) {
-        Status = STATUS_SUCCESS;
-        goto InitializeBaseVideoEnd;
-    }
-
-    FrameBuffer = (PSYSTEM_RESOURCE_FRAME_BUFFER)GenericHeader;
-    Status = VidInitialize(FrameBuffer);
-    if (!KSUCCESS(Status)) {
-        goto InitializeBaseVideoEnd;
-    }
-
-    Status = STATUS_SUCCESS;
-
-InitializeBaseVideoEnd:
-    return Status;
-}
 
 KSTATUS
 KepInitializeUserSharedData (

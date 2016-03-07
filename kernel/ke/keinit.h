@@ -138,3 +138,24 @@ Return Value:
 
 --*/
 
+KSTATUS
+KepInitializeBaseVideo (
+    PKERNEL_INITIALIZATION_BLOCK Parameters
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the built in base video library, which is used in
+    case of emergencies to display to the screen.
+
+Arguments:
+
+    Parameters - Supplies a pointer to the kernel initialization block.
+
+Return Value:
+
+    Status code.
+
+--*/
