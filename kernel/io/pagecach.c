@@ -3528,7 +3528,8 @@ Return Value:
         ASSERT(IS_IO_OBJECT_TYPE_LINKABLE(NewType) != FALSE);
         ASSERT((LinkEntry->Flags & PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) != 0);
         ASSERT(LinkEntry->PhysicalAddress == NewEntry->PhysicalAddress);
-        ASSERT(LinkEntry->VirtualAddress == NewEntry->VirtualAddress);
+        ASSERT((LinkEntry->VirtualAddress == NewEntry->VirtualAddress) ||
+               (NewEntry->VirtualAddress == NULL));
 
         if ((LinkType == IoObjectBlockDevice) &&
             (IO_IS_CACHEABLE_FILE(NewType))) {
