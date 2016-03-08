@@ -2075,7 +2075,7 @@ FlushPageCacheEntriesEnd:
     //
 
     if (!KSUCCESS(TotalStatus)) {
-        RtlAtomicOr32(&(FileObject->Flags), FILE_OBJECT_FLAG_DIRTY_DATA);
+        IopMarkFileObjectDirty(FileObject);
     }
 
     return TotalStatus;
