@@ -1825,18 +1825,6 @@ Return Value:
                 SkipEntry = FALSE;
             }
 
-            //
-            // If a reference is taken on the clean page then it could become
-            // dirty at any time, but non-referenced clean pages should be on
-            // a list.
-            // TODO: This is not a valid assert, as release reference could be
-            // in progress. Remove this if it fires and release reference seems
-            // to be in progress on another core.
-            //
-
-            ASSERT((CacheEntry->ReferenceCount != 0) ||
-                   (CacheEntry->ListEntry.Next != NULL));
-
         //
         // If the entry is not within the bounds of the provided offset and
         // size then it can be skipped.
