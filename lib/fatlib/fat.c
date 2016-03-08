@@ -3367,7 +3367,10 @@ Return Value:
         // This cluster should not be free. It is currently allocated!
         //
 
-        ASSERT(NextCluster != FAT_CLUSTER_FREE);
+        if (NextCluster == FAT_CLUSTER_FREE) {
+            RtlDebugPrint("FAT: DeleteFileBlocks: Free cluster after %x\n",
+                          StartingCluster);
+        }
 
         //
         // If there is no next cluster, there's nothing that needs to be
