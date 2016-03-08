@@ -473,7 +473,7 @@ volatile ULONG IoPageCacheState = PageCacheStateClean;
 // This stores the last time the page cache was cleaned.
 //
 
-INT64_SYNC IoLastPageCacheCleanTime;
+INT64_SYNC IoPageCacheLastCleanTime;
 
 //
 // Store a bitfield of enabled page cache debug flags. See PAGE_CACHE_DEBUG_*
@@ -565,7 +565,7 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    READ_INT64_SYNC(&IoLastPageCacheCleanTime, &LastCleanTime);
+    READ_INT64_SYNC(&IoPageCacheLastCleanTime, &LastCleanTime);
     Statistics->EntryCount = IoPageCacheEntryCount;
     Statistics->HeadroomPagesTrigger = IoPageCacheHeadroomPagesTrigger;
     Statistics->HeadroomPagesRetreat = IoPageCacheHeadroomPagesRetreat;
@@ -1073,7 +1073,7 @@ Return Value:
                   KeConvertMicrosecondsToTimeTicks(PAGE_CACHE_CLEAN_DELAY_MIN);
 
     CurrentTime = HlQueryTimeCounter();
-    WRITE_INT64_SYNC(&IoLastPageCacheCleanTime, CurrentTime);
+    WRITE_INT64_SYNC(&IoPageCacheLastCleanTime, CurrentTime);
 
     //
     // With success on the horizon, create a thread to handle the background
@@ -3705,7 +3705,7 @@ Return Value:
         //
 
         CurrentTime = KeGetRecentTimeCounter();
-        WRITE_INT64_SYNC(&IoLastPageCacheCleanTime, CurrentTime);
+        WRITE_INT64_SYNC(&IoPageCacheLastCleanTime, CurrentTime);
 
         //
         // Loop over the process of removing excess entries and flushing
