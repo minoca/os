@@ -451,6 +451,13 @@ UINTN IoPageCacheHeadroomVirtualPagesRetreat = 0;
 UINTN IoPageCacheHeadroomVirtualPagesTrigger = 0;
 
 //
+// Store the maximum number of dirty pages permitted as an absolute page count.
+// This is used to avoid creating too much virtual pressure on 32-bit systems.
+//
+
+UINTN IoPageCacheMaxDirtyPages = -1;
+
+//
 // Store the page cache timer interval.
 //
 
@@ -1060,6 +1067,9 @@ Return Value:
 
         IoPageCacheHeadroomVirtualPagesRetreat =
                   PAGE_CACHE_SMALL_VIRTUAL_HEADROOM_RETREAT_BYTES >> PageShift;
+
+        IoPageCacheMaxDirtyPages = ((MAX_UINTN - (UINTN)KERNEL_VA_START + 1) /
+                                    2) >> PageShift;
 
     } else {
         IoPageCacheHeadroomVirtualPagesTrigger =
@@ -3119,19 +3129,14 @@ Return Value:
 
 {
 
+    UINTN DirtyPages;
     UINTN FreePages;
     UINTN IdealSize;
     UINTN MaxDirty;
-    BOOL TooDirty;
 
-    //
-    // The page cache thread is allowed to make all the pages dirty.
-    //
-
-    TooDirty = FALSE;
-    if (KeGetCurrentThread() == IoPageCacheThread) {
-        TooDirty = IopIsPageCacheTooBig(NULL);
-        goto IsPageCacheTooDirtyEnd;
+    DirtyPages = IoPageCacheDirtyPageCount;
+    if (DirtyPages >= IoPageCacheMaxDirtyPages) {
+        return TRUE;
     }
 
     //
@@ -3153,13 +3158,11 @@ Return Value:
     //
 
     MaxDirty = IdealSize >> PAGE_CACHE_MAX_DIRTY_SHIFT;
-    if (IoPageCacheDirtyPageCount >= MaxDirty) {
-        TooDirty = TRUE;
-        goto IsPageCacheTooDirtyEnd;
+    if (DirtyPages >= MaxDirty) {
+        return TRUE;
     }
 
-IsPageCacheTooDirtyEnd:
-    return TooDirty;
+    return FALSE;
 }
 
 COMPARISON_RESULT
@@ -4243,7 +4246,10 @@ Return Value:
 
         } else {
             if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
-                LIST_REMOVE(&(PageCacheEntry->ListEntry));
+                if (PageCacheEntry->ListEntry.Next != NULL) {
+                    LIST_REMOVE(&(PageCacheEntry->ListEntry));
+                }
+
                 INSERT_BEFORE(&(PageCacheEntry->ListEntry),
                               &IoPageCacheCleanList);
             }

@@ -874,6 +874,9 @@ Return Value:
         if (EndOffset > FileSize) {
             SizeInBytes = FileSize - IoContext->Offset;
             if (SizeInBytes == 0) {
+
+                ASSERT(FALSE);
+
                 return STATUS_OUT_OF_BOUNDS;
             }
         }
@@ -1070,6 +1073,18 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 PerformCachedWriteEnd:
+
+    //
+    // On failure, evict any page cache entries that may have been inserted
+    // above the file size.
+    //
+
+    if (!KSUCCESS(Status)) {
+        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+        IopEvictPageCacheEntries(FileObject,
+                                 FileSize,
+                                 PAGE_CACHE_EVICTION_FLAG_TRUNCATE);
+    }
 
     //
     // If this is not synchronized I/O and something was written, update the
