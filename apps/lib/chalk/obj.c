@@ -84,12 +84,6 @@ ChalkDestroyDictEntry (
     PCHALK_DICT_ENTRY Entry
     );
 
-LONG
-ChalkCompareObjects (
-    PCHALK_OBJECT Left,
-    PCHALK_OBJECT Right
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -1530,6 +1524,129 @@ Return Value:
     return 0;
 }
 
+INT
+ChalkCompareObjects (
+    PCHALK_OBJECT Left,
+    PCHALK_OBJECT Right
+    )
+
+/*++
+
+Routine Description:
+
+    This routine compares two objects.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Left - Supplies a pointer to the left side of the operation.
+
+    Right - Supplies a pointer to the right side of the operation. This is
+        ignored for unary operators.
+
+    Operator - Supplies the operation to perform.
+
+    Result - Supplies a pointer where the result will be returned on success.
+
+Return Value:
+
+    -1 if Left < Right.
+
+    0 if Left == Right.
+
+    1 if Left > Right.
+
+--*/
+
+{
+
+    INT Index;
+    INT Result;
+
+    //
+    // If the types are not equal, then compare based on the types.
+    //
+
+    if (Left->Header.Type != Right->Header.Type) {
+        if (Left->Header.Type < Right->Header.Type) {
+            return -1;
+        }
+
+        return 1;
+    }
+
+    switch (Left->Header.Type) {
+    case ChalkObjectNull:
+        Result = 0;
+        break;
+
+    case ChalkObjectInteger:
+        if (Left->Integer.Value < Right->Integer.Value) {
+            Result = -1;
+
+        } else if (Left->Integer.Value > Right->Integer.Value) {
+            Result = 1;
+
+        } else {
+            Result = 0;
+        }
+
+        break;
+
+    case ChalkObjectString:
+        Result = strcmp(Left->String.String, Right->String.String);
+        if (Result < 0) {
+            Result = -1;
+
+        } else if (Result > 0) {
+            Result = 1;
+        }
+
+        break;
+
+    case ChalkObjectList:
+        if (Left->List.Count < Right->List.Count) {
+            Result = -1;
+
+        } else if (Left->List.Count > Right->List.Count) {
+            Result = 1;
+
+        } else {
+            Result = 0;
+            for (Index = 0; Index < Left->List.Count; Index += 1) {
+                Result = ChalkCompareObjects(Left->List.Array[Index],
+                                             Right->List.Array[Index]);
+
+                if (Result != 0) {
+                    break;
+                }
+            }
+        }
+
+        break;
+
+    //
+    // For any other objects, just compare pointer values.
+    //
+
+    default:
+        if ((UINTN)Left < (UINTN)Right) {
+            Result = -1;
+
+        } else if ((UINTN)Left > (UINTN)Right) {
+            Result = 1;
+
+        } else {
+            Result = 0;
+        }
+
+        break;
+    }
+
+    return Result;
+}
+
 VOID
 ChalkPrintObject (
     FILE *File,
@@ -1918,154 +2035,5 @@ Return Value:
 
     ChalkFree(Entry);
     return;
-}
-
-LONG
-ChalkCompareObjects (
-    PCHALK_OBJECT Left,
-    PCHALK_OBJECT Right
-    )
-
-/*++
-
-Routine Description:
-
-    This routine compares two objects to each other.
-
-Arguments:
-
-    Left - Supplies a pointer to the left object to compare.
-
-    Right - Supplies a pointer to the right object to compare.
-
-Return Value:
-
-    < 0 if the objects are in ascending order.
-
-    0 if the objects are equal.
-
-    > 0 if the objects are in descending order.
-
---*/
-
-{
-
-    ULONG LeftSize;
-    PUCHAR LeftString;
-    LONG Result;
-    ULONG RightSize;
-    PUCHAR RightString;
-
-    if (Left->Header.Type < Right->Header.Type) {
-        return -1;
-
-    } else if (Left->Header.Type > Right->Header.Type) {
-        return 1;
-    }
-
-    Result = 0;
-    switch (Left->Header.Type) {
-
-    //
-    // Two nulls are always equal.
-    //
-
-    case ChalkObjectNull:
-        Result = 0;
-        break;
-
-    case ChalkObjectInteger:
-        if (Left->Integer.Value < Right->Integer.Value) {
-            Result = -1;
-
-        } else if (Left->Integer.Value > Right->Integer.Value) {
-            Result = 1;
-        }
-
-        break;
-
-    case ChalkObjectString:
-
-        //
-        // The strings always have a null byte afterwards, so that byte can be
-        // used in the comparison.
-        //
-
-        LeftString = (PUCHAR)(Left->String.String);
-        LeftSize = Left->String.Size;
-        RightString = (PUCHAR)(Right->String.String);
-        RightSize = Right->String.Size;
-        Result = 0;
-        while ((LeftSize != 0) && (RightSize != 0)) {
-            if (*LeftString < *RightString) {
-                Result = -1;
-                break;
-
-            } else if (*LeftString > *RightString) {
-                Result = 1;
-                break;
-            }
-
-            LeftString += 1;
-            RightString += 1;
-            LeftSize -= 1;
-            RightSize -= 1;
-        }
-
-        if (Result == 0) {
-            if (RightSize != 0) {
-                Result = -1;
-
-            } else if (LeftSize != 0) {
-                Result = 1;
-            }
-        }
-
-        break;
-
-    //
-    // List comparison is possible but currently not needed.
-    //
-
-    case ChalkObjectList:
-
-        assert(FALSE);
-
-        break;
-
-    //
-    // Dictionaries compare poorly.
-    //
-
-    case ChalkObjectDict:
-
-        assert(FALSE);
-
-        break;
-
-    //
-    // Functions really only compare for equality, as they're comparing pointer
-    // values directly.
-    //
-
-    case ChalkObjectFunction:
-        Result = 0;
-        if (Left->Function.Body < Right->Function.Body) {
-            Result = -1;
-
-        } else if (Left->Function.Body > Right->Function.Body) {
-            Result = 1;
-        }
-
-        break;
-
-    default:
-
-        assert(FALSE);
-
-        break;
-    }
-
-    return Result;
 }
 

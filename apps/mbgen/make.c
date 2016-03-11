@@ -40,6 +40,9 @@ Environment:
 
 #define MBGEN_MAKE_VARIABLE "$(%s)"
 #define MBGEN_MAKE_LINE_CONTINUATION " \\\n        "
+#define MBGEN_MAKE_INPUTS "$^"
+#define MBGEN_MAKE_OUTPUT "$@"
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -47,6 +50,12 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+VOID
+MbgenMakePrintToolCommand (
+    FILE *File,
+    PSTR Command
+    );
 
 VOID
 MbgenMakePrintTargetFile (
@@ -72,7 +81,7 @@ VOID
 MbgenMakePrintConfig (
     FILE *File,
     PMBGEN_CONTEXT Context,
-    PCHALK_OBJECT Config
+    PMBGEN_TARGET Target
     );
 
 INT
@@ -161,13 +170,11 @@ Return Value:
     CurrentEntry = Context->ToolList.Next;
     while (CurrentEntry != &(Context->ToolList)) {
         Tool = LIST_VALUE(CurrentEntry, MBGEN_TOOL, ListEntry);
-        fprintf(File,
-                "TOOL_%s := @echo \"%s\" ; \\\n"
-                "    %s\n\n",
-                Tool->Name,
-                Tool->Description,
-                Tool->Command);
-
+        fprintf(File, "TOOL_%s = @echo ", Tool->Name);
+        MbgenMakePrintToolCommand(File, Tool->Description);
+        fprintf(File, " ; \\\n    ");
+        MbgenMakePrintToolCommand(File, Tool->Command);
+        fprintf(File, "\n\n");
         CurrentEntry = CurrentEntry->Next;
     }
 
@@ -205,6 +212,11 @@ Return Value:
                 fprintf(File, "\n");
             }
 
+            //
+            // Add the configs for this target.
+            //
+
+            MbgenMakePrintConfig(File, Context, Target);
             MbgenMakePrintTargetFile(File, Context, Target);
             fprintf(File, ": ");
 
@@ -271,14 +283,6 @@ Return Value:
             }
 
             //
-            // Add the configs.
-            //
-
-            if (Target->Config != NULL) {
-                MbgenMakePrintConfig(File, Context, Target->Config);
-            }
-
-            //
             // Use the tool to make the target.
             //
 
@@ -308,6 +312,111 @@ CreateMakefileEnd:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+MbgenMakePrintToolCommand (
+    FILE *File,
+    PSTR Command
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a tool command or description, converting variable
+    expressions into proper make format.
+
+Arguments:
+
+    File - Supplies a pointer to the file to print to.
+
+    Command - Supplies a pointer to the command to convert.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSTR Copy;
+    CHAR Original;
+    PSTR Variable;
+
+    Copy = strdup(Command);
+    if (Copy == NULL) {
+        return;
+    }
+
+    Command = Copy;
+    while (*Command != '\0') {
+        if (*Command != '$') {
+            fputc(*Command, File);
+            Command += 1;
+            continue;
+        }
+
+        Command += 1;
+
+        //
+        // A double dollar is just a literal dollar sign.
+        //
+
+        if (*Command == '$') {
+            fputc(*Command, File);
+            Command += 1;
+            continue;
+        }
+
+        //
+        // A dollar sign plus some non-variable-name character is also just
+        // passed over literally.
+        //
+
+        if (!MBGEN_IS_NAME0(*Command)) {
+            fputc('$', File);
+            fputc(*Command, File);
+            Command += 1;
+            continue;
+        }
+
+        //
+        // Get to the end of the variable name.
+        //
+
+        Variable = Command;
+        while (MBGEN_IS_NAME(*Command)) {
+            Command += 1;
+        }
+
+        //
+        // Temporarily terminate the name, and compare it against the special
+        // IN and OUT variables, which substitute differently.
+        //
+
+        Original = *Command;
+        *Command = '\0';
+        if (strcasecmp(Variable, "IN") == 0) {
+            fprintf(File, "%s", MBGEN_MAKE_INPUTS);
+
+        } else if (strcasecmp(Variable, "OUT") == 0) {
+            fprintf(File, "%s", MBGEN_MAKE_OUTPUT);
+
+        //
+        // Print the variable reference in the normal make way.
+        //
+
+        } else {
+            fprintf(File, MBGEN_MAKE_VARIABLE, Variable);
+        }
+
+        *Command = Original;
+    }
+
+    free(Copy);
+    return;
+}
 
 VOID
 MbgenMakePrintTargetFile (
@@ -437,7 +546,7 @@ VOID
 MbgenMakePrintConfig (
     FILE *File,
     PMBGEN_CONTEXT Context,
-    PCHALK_OBJECT Config
+    PMBGEN_TARGET Target
     )
 
 /*++
@@ -452,7 +561,8 @@ Arguments:
 
     Context - Supplies a pointer to the application context.
 
-    Config - Supplies a pointer to the configuration to print.
+    Target - Supplies a pointer to the target whose configuration should be
+        printed.
 
 Return Value:
 
@@ -462,10 +572,16 @@ Return Value:
 
 {
 
+    PCHALK_OBJECT Config;
     PLIST_ENTRY CurrentEntry;
     PCHALK_DICT_ENTRY Entry;
     INT Status;
     PCHALK_OBJECT Value;
+
+    Config = Target->Config;
+    if (Config == NULL) {
+        return;
+    }
 
     assert(Config->Header.Type == ChalkObjectDict);
 
@@ -492,14 +608,17 @@ Return Value:
             continue;
         }
 
-        fprintf(File, MBGEN_MAKE_LINE_CONTINUATION);
-        fprintf(File, "%s=", Entry->Key->String.String);
+        MbgenMakePrintTargetFile(File, Context, Target);
+        fprintf(File, ": ");
+        fprintf(File, "%s := ", Entry->Key->String.String);
         Status = MbgenMakePrintConfigValue(File, Value);
         if (Status != 0) {
             fprintf(stderr,
                     "Error: Skipping some values for key %s.\n",
                     Entry->Key->String.String);
         }
+
+        fprintf(File, "\n");
     }
 
     return;

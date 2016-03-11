@@ -37,6 +37,15 @@ Author:
 #define MBGEN_IS_BUILD_ROOT_RELATIVE(_String) \
     (((_String)[0] == '^') && ((_String)[1] == '/'))
 
+#define MBGEN_IS_NAME(_Character) \
+    ((MBGEN_IS_NAME0(_Character)) || \
+     (((_Character) >= '0') && ((_Character) <= '9')))
+
+#define MBGEN_IS_NAME0(_Character) \
+    ((((_Character) >= 'A') && ((_Character) <= 'Z')) || \
+     (((_Character) >= 'a') && ((_Character) <= 'z')) || \
+     ((_Character) == '_'))
+
 //
 // ---------------------------------------------------------------- Definitions
 //
@@ -327,6 +336,10 @@ Members:
 
     Config - Stores a pointer to the configuration information for this target.
 
+    OriginalEntry - Stores a pointer to the original entry dictionary, which is
+        passed into the callback function. The reference to this object is
+        being held by the script.
+
 --*/
 
 struct _MBGEN_TARGET {
@@ -344,6 +357,7 @@ struct _MBGEN_TARGET {
     PCHALK_OBJECT OrderOnlyInputsObject;
     PCHALK_OBJECT Callback;
     PCHALK_OBJECT Config;
+    PCHALK_OBJECT OriginalEntry;
 };
 
 //

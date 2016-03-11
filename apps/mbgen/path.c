@@ -51,6 +51,11 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+PSTR
+MbgenGetAbsoluteDirectory (
+    PSTR Path
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -317,7 +322,10 @@ Return Value:
     // Get the absolute path of the build directory.
     //
 
-    if (chdir(Context->BuildRoot) != 0) {
+    assert(Context->BuildRoot != NULL);
+
+    CurrentDirectory = MbgenGetAbsoluteDirectory(Context->BuildRoot);
+    if (CurrentDirectory == NULL) {
         Status = errno;
         fprintf(stderr,
                 "Error: Invalid build root directory %s: %s.\n",
@@ -326,14 +334,6 @@ Return Value:
 
         goto SetupRootDirectoriesEnd;
     }
-
-    CurrentDirectory = getcwd(NULL, 0);
-    if (CurrentDirectory == NULL) {
-        Status = errno;
-        goto SetupRootDirectoriesEnd;
-    }
-
-    assert(Context->BuildRoot != NULL);
 
     free(Context->BuildRoot);
     Context->BuildRoot = CurrentDirectory;
@@ -344,23 +344,14 @@ Return Value:
 
     chdir(Start);
     if (Context->SourceRoot != NULL) {
-        if (chdir(Context->SourceRoot) != 0) {
+        SourceRoot = MbgenGetAbsoluteDirectory(Context->SourceRoot);
+        if (SourceRoot == NULL) {
             Status = errno;
             fprintf(stderr,
                     "Error: Invalid source root directory %s: %s.\n",
                     Context->SourceRoot,
                     strerror(Status));
 
-            goto SetupRootDirectoriesEnd;
-        }
-
-        //
-        // Convert it to an absolute path.
-        //
-
-        SourceRoot = getcwd(NULL, 0);
-        if (SourceRoot == NULL) {
-            Status = errno;
             goto SetupRootDirectoriesEnd;
         }
 
@@ -375,7 +366,7 @@ Return Value:
 
         PreviousDirectory = NULL;
         while (TRUE) {
-            CurrentDirectory = getcwd(NULL, 0);
+            CurrentDirectory = MbgenGetAbsoluteDirectory(".");
             if (CurrentDirectory == NULL) {
                 break;
             }
@@ -536,4 +527,70 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+PSTR
+MbgenGetAbsoluteDirectory (
+    PSTR Path
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts the given path into an absolute path by changing to
+    that directory.
+
+Arguments:
+
+    Path - Supplies a pointer to the directory path.
+
+Return Value:
+
+    Returns the absolute path of the given directory. It is the caller's
+    responsibility to free this memory.
+
+    NULL on allocation failure, or if the directory does not exist.
+
+--*/
+
+{
+
+    PSTR Current;
+    PSTR Directory;
+
+    Directory = NULL;
+    if (chdir(Path) != 0) {
+        fprintf(stderr,
+                "Error: Invalid directory %s: %s.\n",
+                Path,
+                strerror(errno));
+
+        goto GetAbsoluteDirectoryEnd;
+    }
+
+    Directory = getcwd(NULL, 0);
+    if (Directory == NULL) {
+        goto GetAbsoluteDirectoryEnd;
+    }
+
+    //
+    // Convert backslashes to forward slashes, unless told not to.
+    //
+
+    if (getenv("MBGEN_NO_SLASH_CONVERSION") != NULL) {
+        goto GetAbsoluteDirectoryEnd;
+    }
+
+    Current = Directory;
+    while (*Current != '\0') {
+        if (*Current == '\\') {
+            *Current = '/';
+        }
+
+        Current += 1;
+    }
+
+GetAbsoluteDirectoryEnd:
+    return Directory;
+}
 

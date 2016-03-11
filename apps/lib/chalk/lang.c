@@ -249,6 +249,9 @@ ULONG ChalkGrammarPostfixExpression[] = {
     ChalkNodePostfixExpression, ChalkTokenOpenParentheses,
         ChalkNodeArgumentExpressionList, ChalkTokenCloseParentheses, 0,
 
+    ChalkNodePostfixExpression, ChalkTokenOpenParentheses,
+        ChalkTokenCloseParentheses, 0,
+
     ChalkNodePostfixExpression, ChalkTokenIncrement, 0,
     ChalkNodePostfixExpression, ChalkTokenDecrement, 0,
     0

@@ -114,14 +114,13 @@ MbgenProcessTool (
 INT
 MbgenProcessTarget (
     PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
     PMBGEN_TARGET Target
     );
 
 INT
 MbgenAddInputsToList (
     PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+    PMBGEN_TARGET Target,
     PMBGEN_INPUTS Inputs,
     PCHALK_OBJECT List
     );
@@ -129,7 +128,7 @@ MbgenAddInputsToList (
 INT
 MbgenAddInputToList (
     PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+    PMBGEN_TARGET Target,
     PMBGEN_INPUTS Inputs,
     PSTR Name
     );
@@ -159,6 +158,8 @@ MbgenPrintAllEntries (
 
 INT
 MbgenAddInput (
+    PMBGEN_CONTEXT Context,
+    PMBGEN_TARGET Target,
     PMBGEN_INPUTS Inputs,
     PVOID Input
     );
@@ -289,6 +290,14 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
         offsetof(MBGEN_TARGET, Flags),
         FALSE,
         {MBGEN_TARGET_PHONY}
+    },
+
+    {
+        ChalkCObjectPointer,
+        "config",
+        offsetof(MBGEN_TARGET, Config),
+        FALSE,
+        {0}
     },
 
     {0}
@@ -587,6 +596,7 @@ Return Value:
             goto ParseScriptResultsEnd;
         }
 
+        Status = 0;
         Type = ChalkDictLookupCStringKey(Entry, "type");
         if ((Type != NULL) && (Type->Header.Type != ChalkObjectString)) {
             fprintf(stderr,
@@ -606,7 +616,7 @@ Return Value:
         } else if (strcasecmp(Type->String.String, "tool") == 0) {
             Status = MbgenParseToolEntry(Context, Script, Entry);
 
-        } else {
+        } else if (strcasecmp(Type->String.String, "ignore") != 0) {
             fprintf(stderr,
                     "Error: Script %s, element %d type %s not valid.\n",
                     Script->CompletePath,
@@ -877,6 +887,7 @@ Return Value:
     }
 
     memset(Target, 0, sizeof(MBGEN_TARGET));
+    Target->OriginalEntry = Entry;
     Target->Type = MbgenInputTarget;
     Target->Script = Script;
     Target->Tree = MbgenBuildTree;
@@ -1011,7 +1022,7 @@ Return Value:
     }
 
     //
-    // The config and public_config members if present must be dictionaries.
+    // The config member must be a dictionary.
     //
 
     if ((Target->Config != NULL) &&
@@ -1089,7 +1100,7 @@ Return Value:
         TargetEntry = Script->TargetList.Next;
         while (TargetEntry != &(Script->TargetList)) {
             Target = LIST_VALUE(TargetEntry, MBGEN_TARGET, ListEntry);
-            Status = MbgenProcessTarget(Context, Script, Target);
+            Status = MbgenProcessTarget(Context, Target);
             if (Status != 0) {
                 fprintf(stderr,
                         "Failed to process %s:%s.\n",
@@ -1166,7 +1177,6 @@ Return Value:
 INT
 MbgenProcessTarget (
     PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
     PMBGEN_TARGET Target
     )
 
@@ -1179,8 +1189,6 @@ Routine Description:
 Arguments:
 
     Context - Supplies a pointer to the context.
-
-    Script - Supplies a pointer to the script being parsed.
 
     Target - Supplies a pointer to the target to process.
 
@@ -1207,7 +1215,7 @@ Return Value:
 
         assert(Target->Inputs.Count == 0);
 
-        Status = MbgenAddInputsToList(Context, Script, &(Target->Inputs), List);
+        Status = MbgenAddInputsToList(Context, Target, &(Target->Inputs), List);
         if (Status != 0) {
             goto ProcessTargetEnd;
         }
@@ -1223,7 +1231,7 @@ Return Value:
         assert(Target->OrderOnlyInputs.Count == 0);
 
         Status = MbgenAddInputsToList(Context,
-                                      Script,
+                                      Target,
                                       &(Target->OrderOnlyInputs),
                                       List);
 
@@ -1241,7 +1249,7 @@ ProcessTargetEnd:
 INT
 MbgenAddInputsToList (
     PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+    PMBGEN_TARGET Target,
     PMBGEN_INPUTS Inputs,
     PCHALK_OBJECT List
     )
@@ -1257,7 +1265,7 @@ Arguments:
 
     Context - Supplies a pointer to the context.
 
-    Script - Supplies a pointer to the current script.
+    Target - Supplies a pointer to the target the inputs are being added to.
 
     Inputs - Supplies a pointer to the inputs array to add to.
 
@@ -1288,21 +1296,21 @@ Return Value:
         if (String->Header.Type != ChalkObjectString) {
             fprintf(stderr,
                     "Error: %s: dependency must be a string.\n",
-                    Script->CompletePath);
+                    Target->Script->CompletePath);
 
             Status = EINVAL;
             goto AddInputsToListEnd;
         }
 
         Status = MbgenAddInputToList(Context,
-                                     Script,
+                                     Target,
                                      Inputs,
                                      String->String.String);
 
         if (Status != 0) {
             fprintf(stderr,
                     "Error: %s: failed to add dependency %s: %s.\n",
-                    Script->CompletePath,
+                    Target->Script->CompletePath,
                     String->String.String,
                     strerror(Status));
 
@@ -1319,7 +1327,7 @@ AddInputsToListEnd:
 INT
 MbgenAddInputToList (
     PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+    PMBGEN_TARGET Target,
     PMBGEN_INPUTS Inputs,
     PSTR Name
     )
@@ -1335,7 +1343,7 @@ Arguments:
 
     Context - Supplies a pointer to the context.
 
-    Script - Supplies a pointer to the current script.
+    Target - Supplies a pointer to the target the inputs are being added to.
 
     Inputs - Supplies a pointer to the inputs array to add to.
 
@@ -1352,16 +1360,16 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
+    PMBGEN_TARGET Dependency;
+    PMBGEN_SCRIPT DependencyScript;
     MBGEN_PATH Path;
     PMBGEN_SOURCE Source;
     INT Status;
-    PMBGEN_TARGET Target;
-    PMBGEN_SCRIPT TargetScript;
 
     Status = MbgenParsePath(Context,
                             Name,
                             MbgenSourceTree,
-                            Script->Path,
+                            Target->Script->Path,
                             &Path);
 
     if (Status != 0) {
@@ -1370,13 +1378,13 @@ Return Value:
 
     if (Path.Target != NULL) {
         if (*Name == ':') {
-            TargetScript = Script;
+            DependencyScript = Target->Script;
 
         } else {
             Status = MbgenLoadTargetScript(Context,
                                            &Path,
                                            MbgenScriptOrderTarget,
-                                           &TargetScript);
+                                           &DependencyScript);
 
             if (Status != 0) {
                 goto AddInputToListEnd;
@@ -1400,7 +1408,7 @@ Return Value:
         Source->Tree = Path.Root;
         Source->Path = Path.Path;
         Path.Path = NULL;
-        Status = MbgenAddInput(Inputs, Source);
+        Status = MbgenAddInput(Context, Target, Inputs, Source);
         if (Status != 0) {
             free(Source);
             goto AddInputToListEnd;
@@ -1417,10 +1425,10 @@ Return Value:
         //
 
         if (Path.Target[0] == '\0') {
-            CurrentEntry = TargetScript->TargetList.Next;
-            while (CurrentEntry != &(TargetScript->TargetList)) {
-                Target = LIST_VALUE(CurrentEntry, MBGEN_TARGET, ListEntry);
-                Status = MbgenAddInput(Inputs, Target);
+            CurrentEntry = DependencyScript->TargetList.Next;
+            while (CurrentEntry != &(DependencyScript->TargetList)) {
+                Dependency = LIST_VALUE(CurrentEntry, MBGEN_TARGET, ListEntry);
+                Status = MbgenAddInput(Context, Target, Inputs, Dependency);
                 if (Status != 0) {
                     goto AddInputToListEnd;
                 }
@@ -1433,21 +1441,21 @@ Return Value:
         //
 
         } else {
-            Target = MbgenFindTargetInScript(Context,
-                                             TargetScript,
-                                             Path.Target);
+            Dependency = MbgenFindTargetInScript(Context,
+                                                 DependencyScript,
+                                                 Path.Target);
 
-            if (Target == NULL) {
+            if (Dependency == NULL) {
                 fprintf(stderr,
                         "Error: Failed to find target %s:%s.\n",
-                        TargetScript->CompletePath,
+                        DependencyScript->CompletePath,
                         Path.Target);
 
                 Status = ENOENT;
                 goto AddInputToListEnd;
             }
 
-            Status = MbgenAddInput(Inputs, Target);
+            Status = MbgenAddInput(Context, Target, Inputs, Dependency);
             if (Status != 0) {
                 goto AddInputToListEnd;
             }
@@ -1726,7 +1734,7 @@ Return Value:
                         TreePath = MbgenPathForTree(Context,
                                                     InputTarget->Script->Root);
 
-                        printf("\t\t\t%s%s:%s\n",
+                        printf("\t\t\t%s/%s:%s\n",
                                TreePath,
                                InputTarget->Script->Path,
                                InputTarget->Label);
@@ -1742,7 +1750,9 @@ Return Value:
                 }
             }
 
-            if (Target->Config != NULL) {
+            if ((Target->Config != NULL) &&
+                (!LIST_EMPTY(&(Target->Config->Dict.EntryList)))) {
+
                 printf("\t\tConfig: ");
                 ChalkPrintObject(stdout, Target->Config, 24);
                 printf("\n");
@@ -1757,6 +1767,8 @@ Return Value:
 
 INT
 MbgenAddInput (
+    PMBGEN_CONTEXT Context,
+    PMBGEN_TARGET Target,
     PMBGEN_INPUTS Inputs,
     PVOID Input
     )
@@ -1769,6 +1781,10 @@ Routine Description:
 
 Arguments:
 
+    Context - Supplies a pointer to the application context.
+
+    Target - Supplies the target the input is being added to.
+
     Inputs - Supplies a pointer to the inputs array.
 
     Input - Supplies a pointer to the input to add.
@@ -1777,14 +1793,16 @@ Return Value:
 
     0 on success.
 
-    ENOMEM on allocation failure.
+    Returns an error number on failure.
 
 --*/
 
 {
 
+    PMBGEN_TARGET Dependency;
     PVOID NewBuffer;
     ULONG NewCapacity;
+    INT Status;
 
     if (Inputs->Count >= Inputs->Capacity) {
         NewCapacity = Inputs->Capacity * 2;
@@ -1794,7 +1812,8 @@ Return Value:
 
         NewBuffer = realloc(Inputs->Array, NewCapacity * sizeof(PVOID));
         if (NewBuffer == NULL) {
-            return ENOMEM;
+            Status = ENOMEM;
+            goto AddInputEnd;
         }
 
         Inputs->Capacity = NewCapacity;
@@ -1805,7 +1824,43 @@ Return Value:
 
     Inputs->Array[Inputs->Count] = Input;
     Inputs->Count += 1;
-    return 0;
+
+    //
+    // If this is the inputs list (not the order-only inputs list), the input
+    // is a target, and there's a callback, call the callback.
+    //
+
+    Dependency = Input;
+    if ((Inputs == &(Target->Inputs)) &&
+        (Dependency->Type == MbgenInputTarget) &&
+        (Dependency->Callback != NULL) &&
+        (Dependency->Callback->Header.Type != ChalkObjectNull)) {
+
+        if ((Context->Options & MBGEN_OPTION_DEBUG) != 0) {
+            printf("Calling callback of '%s' for '%s'...",
+                   Dependency->Label,
+                   Target->Label);
+        }
+
+        Status = ChalkCExecuteFunction(&(Context->Interpreter),
+                                       Dependency->Callback,
+                                       NULL,
+                                       Target->OriginalEntry,
+                                       NULL);
+
+        if ((Context->Options & MBGEN_OPTION_DEBUG) != 0) {
+            printf("Done, %s\n", strerror(Status));
+        }
+
+        if (Status != 0) {
+            goto AddInputEnd;
+        }
+    }
+
+    Status = 0;
+
+AddInputEnd:
+    return Status;
 }
 
 VOID

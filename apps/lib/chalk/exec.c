@@ -604,6 +604,80 @@ UnloadScriptsByOrderEnd:
     return Status;
 }
 
+INT
+ChalkExecuteFunction (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Function,
+    PCHALK_OBJECT ArgumentList,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine executes a Chalk function and returns the result.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Function - Supplies a pointer to the function object to execute.
+
+    ArgumentList - Supplies a pointer to the argument values.
+
+    ReturnValue - Supplies an optional pointer where a pointer to the
+        evaluation will be returned. It is the caller's responsibility to
+        release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PCHALK_OBJECT Return;
+    INT Status;
+
+    Return = NULL;
+    if ((Function == NULL) || (Function->Header.Type != ChalkObjectFunction)) {
+        Status = EINVAL;
+        goto ExecuteFunctionEnd;
+    }
+
+    Status = ChalkInvokeFunction(Interpreter, Function, ArgumentList, &Return);
+    if (Status != 0) {
+        goto ExecuteFunctionEnd;
+    }
+
+    //
+    // It could have been that the Chalk function was actually a C function,
+    // and it's already done.
+    //
+
+    if (Interpreter->Node == NULL) {
+        goto ExecuteFunctionEnd;
+    }
+
+    Status = ChalkExecute(Interpreter, &Return);
+
+ExecuteFunctionEnd:
+    if (ReturnValue != NULL) {
+        *ReturnValue = Return;
+        Return = NULL;
+    }
+
+    if (Return != NULL) {
+        ChalkObjectReleaseReference(Return);
+    }
+
+    return Status;
+}
+
 PCHALK_OBJECT
 ChalkGetVariable (
     PCHALK_INTERPRETER Interpreter,

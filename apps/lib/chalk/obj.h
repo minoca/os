@@ -1154,6 +1154,41 @@ Return Value:
 
 --*/
 
+INT
+ChalkCompareObjects (
+    PCHALK_OBJECT Left,
+    PCHALK_OBJECT Right
+    );
+
+/*++
+
+Routine Description:
+
+    This routine compares two objects.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Left - Supplies a pointer to the left side of the operation.
+
+    Right - Supplies a pointer to the right side of the operation. This is
+        ignored for unary operators.
+
+    Operator - Supplies the operation to perform.
+
+    Result - Supplies a pointer where the result will be returned on success.
+
+Return Value:
+
+    -1 if Left < Right.
+
+    0 if Left == Right.
+
+    1 if Left > Right.
+
+--*/
+
 VOID
 ChalkPrintObject (
     FILE *File,

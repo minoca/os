@@ -31,6 +31,7 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <stdarg.h>
 
 #include "chalkp.h"
 
@@ -910,6 +911,101 @@ RegisterFunctionEnd:
 
     if (ArgumentList != NULL) {
         ChalkObjectReleaseReference(ArgumentList);
+    }
+
+    return Status;
+}
+
+INT
+ChalkCExecuteFunction (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Function,
+    PCHALK_OBJECT *ReturnValue,
+    ...
+    )
+
+/*++
+
+Routine Description:
+
+    This routine executes a Chalk function and returns the result.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Function - Supplies a pointer to the function object to execute.
+
+    ReturnValue - Supplies an optional pointer where a pointer to the
+        evaluation will be returned. It is the caller's responsibility to
+        release this reference.
+
+    ... - Supplies the arguments to pass to the function, terminated by a NULL.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PCHALK_OBJECT Argument;
+    va_list ArgumentList;
+    INT Count;
+    PCHALK_OBJECT List;
+    INT Status;
+
+    //
+    // Count the arguments first to see how big of a list to make.
+    //
+
+    Count = 0;
+    va_start(ArgumentList, ReturnValue);
+    while (TRUE) {
+        Argument = va_arg(ArgumentList, PCHALK_OBJECT);
+        if (Argument == NULL) {
+            break;
+        }
+
+        Count += 1;
+    }
+
+    va_end(ArgumentList);
+
+    //
+    // Create a list of the given size, then loop through the arguments again
+    // and set them.
+    //
+
+    List = ChalkCreateList(NULL, Count);
+    if (List == NULL) {
+        Status = EINVAL;
+        goto CExecuteFunctionEnd;
+    }
+
+    Count = 0;
+    va_start(ArgumentList, ReturnValue);
+    while (TRUE) {
+        Argument = va_arg(ArgumentList, PCHALK_OBJECT);
+        if (Argument == NULL) {
+            break;
+        }
+
+        Status = ChalkListSetElement(List, Count, Argument);
+
+        assert(Status == 0);
+
+        Count += 1;
+    }
+
+    Status = ChalkExecuteFunction(Interpreter, Function, List, ReturnValue);
+
+CExecuteFunctionEnd:
+    if (List != NULL) {
+        ChalkObjectReleaseReference(List);
     }
 
     return Status;

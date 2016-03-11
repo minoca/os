@@ -195,21 +195,29 @@ Return Value:
 
     case ChalkTokenOpenParentheses:
 
-        assert((ParseNode->NodeCount == 2) && (ParseNode->TokenCount == 2));
+        assert((ParseNode->NodeCount <= 2) && (ParseNode->TokenCount == 2));
 
         //
         // Pop the current node and push the function invocation.
         //
 
-        ArgumentList = Node->Results[1];
-        Node->Results[1] = NULL;
+        ArgumentList = NULL;
+        if (ParseNode->NodeCount == 2) {
+            ArgumentList = Node->Results[1];
+            Node->Results[1] = NULL;
+        }
+
         ChalkPopNode(Interpreter);
         Status = ChalkInvokeFunction(Interpreter,
                                      Expression,
                                      ArgumentList,
                                      Result);
 
-        ChalkObjectReleaseReference(ArgumentList);
+        if (ArgumentList != NULL) {
+            ChalkObjectReleaseReference(ArgumentList);
+        }
+
+        Interpreter->LValue = NULL;
         goto VisitPostfixExpressionEnd;
 
     case ChalkTokenIncrement:
@@ -1704,53 +1712,45 @@ Return Value:
         }
 
     } else if (CHALK_COMPARE_OPERATOR(Operator)) {
-        Type = Left->Header.Type;
+        CompareValue = ChalkCompareObjects(Left, Right);
+        switch (Operator) {
+        case ChalkTokenIsEqual:
+            CompareValue = CompareValue == 0;
+            break;
 
-        //
-        // Strings can be compared.
-        //
+        case ChalkTokenIsNotEqual:
+            CompareValue = CompareValue != 0;
+            break;
 
-        if ((Type == ChalkObjectString) && (Type == Right->Header.Type)) {
-            CompareValue = strcmp(Left->String.String, Right->String.String);
-            switch (Operator) {
-            case ChalkTokenIsEqual:
-                CompareValue = CompareValue == 0;
-                break;
+        case ChalkTokenLessThan:
+            CompareValue = CompareValue < 0;
+            break;
 
-            case ChalkTokenIsNotEqual:
-                CompareValue = CompareValue != 0;
-                break;
+        case ChalkTokenLessOrEqual:
+            CompareValue = CompareValue <= 0;
+            break;
 
-            case ChalkTokenLessThan:
-                CompareValue = CompareValue < 0;
-                break;
+        case ChalkTokenGreaterThan:
+            CompareValue = CompareValue > 0;
+            break;
 
-            case ChalkTokenLessOrEqual:
-                CompareValue = CompareValue <= 0;
-                break;
+        case ChalkTokenGreaterOrEqual:
+            CompareValue = CompareValue >= 0;
+            break;
 
-            case ChalkTokenGreaterThan:
-                CompareValue = CompareValue > 0;
-                break;
+        default:
 
-            case ChalkTokenGreaterOrEqual:
-                CompareValue = CompareValue >= 0;
-                break;
+            assert(FALSE);
 
-            default:
-
-                assert(FALSE);
-
-                break;
-            }
-
-            *Result = ChalkCreateInteger(CompareValue);
-            if (*Result == NULL) {
-                return ENOMEM;
-            }
-
-            return 0;
+            break;
         }
+
+        *Result = ChalkCreateInteger(CompareValue);
+        if (*Result == NULL) {
+            return ENOMEM;
+        }
+
+        return 0;
     }
 
     Status = ChalkIntegerMath(Interpreter,
@@ -1922,30 +1922,6 @@ Return Value:
 
     case ChalkTokenLogicalOr:
         ResultValue = (LeftValue || RightValue);
-        break;
-
-    case ChalkTokenLessThan:
-        ResultValue = (LeftValue < RightValue);
-        break;
-
-    case ChalkTokenGreaterThan:
-        ResultValue = (LeftValue > RightValue);
-        break;
-
-    case ChalkTokenLessOrEqual:
-        ResultValue = (LeftValue <= RightValue);
-        break;
-
-    case ChalkTokenGreaterOrEqual:
-        ResultValue = (LeftValue >= RightValue);
-        break;
-
-    case ChalkTokenIsEqual:
-        ResultValue = (LeftValue == RightValue);
-        break;
-
-    case ChalkTokenIsNotEqual:
-        ResultValue = (LeftValue != RightValue);
         break;
 
     default:

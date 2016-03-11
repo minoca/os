@@ -53,6 +53,7 @@ postfix_expression
     : primary_expression
     | postfix_expression '[' expression ']'
     | postfix_expression '(' argument_expression_list ')'
+    | postfix_expression '(' ')'
     | postfix_expression INC_OP
     | postfix_expression DEC_OP
     ;

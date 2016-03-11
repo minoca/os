@@ -87,6 +87,7 @@ Return Value:
 
 {
 
+    ULONG ArgumentListCount;
     PCHALK_OBJECT ArgumentNames;
     ULONG Count;
     PVOID FunctionContext;
@@ -105,7 +106,6 @@ Return Value:
         goto InvokeFunctionEnd;
     }
 
-    assert(ArgumentList->Header.Type == ChalkObjectList);
     assert(*Result == NULL);
 
     //
@@ -118,11 +118,19 @@ Return Value:
         Count = ArgumentNames->List.Count;
     }
 
-    if (Count != ArgumentList->List.Count) {
+    ArgumentListCount = 0;
+    if (ArgumentList != NULL) {
+
+        assert(ArgumentList->Header.Type == ChalkObjectList);
+
+        ArgumentListCount = ArgumentList->List.Count;
+    }
+
+    if (Count != ArgumentListCount) {
         fprintf(stderr,
                 "Function takes %d arguments, got %d.\n",
                 Count,
-                ArgumentList->List.Count);
+                ArgumentListCount);
 
         Status = EINVAL;
         goto InvokeFunctionEnd;

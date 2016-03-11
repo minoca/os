@@ -435,6 +435,40 @@ Return Value:
 
 --*/
 
+INT
+ChalkExecuteFunction (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Function,
+    PCHALK_OBJECT ArgumentList,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+/*++
+
+Routine Description:
+
+    This routine executes a Chalk function and returns the result.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Function - Supplies a pointer to the function object to execute.
+
+    ArgumentList - Supplies a pointer to the argument values.
+
+    ReturnValue - Supplies an optional pointer where a pointer to the
+        evaluation will be returned. It is the caller's responsibility to
+        release this reference.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
 PCHALK_OBJECT
 ChalkGetVariable (
     PCHALK_INTERPRETER Interpreter,
@@ -754,6 +788,40 @@ Arguments:
         when it is called.
 
     Prototype - Supplies a pointer to the prototype information.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+ChalkCExecuteFunction (
+    PCHALK_INTERPRETER Interpreter,
+    PCHALK_OBJECT Function,
+    PCHALK_OBJECT *ReturnValue,
+    ...
+    );
+
+/*++
+
+Routine Description:
+
+    This routine executes a Chalk function and returns the result.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter.
+
+    Function - Supplies a pointer to the function object to execute.
+
+    ReturnValue - Supplies an optional pointer where a pointer to the
+        evaluation will be returned. It is the caller's responsibility to
+        release this reference.
+
+    ... - Supplies the arguments to pass to the function, terminated by a NULL.
 
 Return Value:
 
