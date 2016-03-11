@@ -24,6 +24,7 @@
 OBJS = chkfuncs.o       \
        make.o           \
        mbgen.o          \
+       ninja.o          \
        path.o           \
        script.o         \
 

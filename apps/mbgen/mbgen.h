@@ -58,8 +58,6 @@ Author:
 #define MBGEN_OPTION_DEBUG 0x00000002
 #define MBGEN_OPTION_DRY_RUN 0x00000004
 
-#define MBGEN_TARGET_PHONY 0x00000001
-
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -85,6 +83,13 @@ typedef enum _MBGEN_SCRIPT_ORDER {
     MbgenScriptOrderTarget,
 } MBGEN_SCRIPT_ORDER, *PMBGEN_SCRIPT_ORDER;
 
+typedef enum _MBGEN_OUTPUT_FORMAT {
+    MbgenOutputInvalid,
+    MbgenOutputNone,
+    MbgenOutputMake,
+    MbgenOutputNinja
+} MBGEN_OUTPUT_FORMAT, *PMBGEN_OUTPUT_FORMAT;
+
 typedef struct _MBGEN_TARGET MBGEN_TARGET, *PMBGEN_TARGET;
 
 /*++
@@ -100,6 +105,11 @@ Members:
         definitions.
 
     Interpreter - Stores the Chalk interpreter context.
+
+    Format - Stores the final output build file format.
+
+    FormatString - Stores the default format string specified in the project
+        root.
 
     ProjectFileName - Stores a pointer to the project file name (just the name,
         not the directory).
@@ -119,14 +129,21 @@ Members:
     DefaultName - Stores a pointer to the name of the default target. If not
         specified, defaults to //:.
 
-    ToolList - Stores a pointer to a list of tools defined. Tools are global
-        across the build.
+    ToolList - Stores a list of tools defined. Tools are global across the
+        build.
+
+    GlobalConfig - Stores an optional pointer to the dictionary of global
+        configuration variables.
+
+    PoolList - Stores the list of pools defined.
 
 --*/
 
 typedef struct _MBGEN_CONTEXT {
     ULONG Options;
     CHALK_INTERPRETER Interpreter;
+    MBGEN_OUTPUT_FORMAT Format;
+    PSTR FormatString;
     PSTR ProjectFileName;
     PSTR BuildFileName;
     PSTR SourceRoot;
@@ -135,6 +152,8 @@ typedef struct _MBGEN_CONTEXT {
     PSTR GlobalName;
     PSTR DefaultName;
     LIST_ENTRY ToolList;
+    PCHALK_OBJECT GlobalConfig;
+    LIST_ENTRY PoolList;
 } MBGEN_CONTEXT, *PMBGEN_CONTEXT;
 
 /*++
@@ -207,6 +226,9 @@ Members:
 
     DepsFormat - Stores a pointer to the dependency file format: MSVC or GCC.
 
+    Pool - Stores an optional pointer to the pool this tool belongs in. This is
+        only supported by Ninja builds.
+
 --*/
 
 typedef struct _MBGEN_TOOL {
@@ -216,6 +238,7 @@ typedef struct _MBGEN_TOOL {
     PSTR Description;
     PSTR Depfile;
     PSTR DepsFormat;
+    PSTR Pool;
 } MBGEN_TOOL, *PMBGEN_TOOL;
 
 /*++
@@ -319,17 +342,25 @@ Members:
 
     Tool - Stores the name of the tool used to build this target.
 
+    Pool - Stores an optional name of the pool this target belongs in. This
+        is only applicable to Ninja builds.
+
     Flags - Stores a bitfield of flags regarding the target. See MBGEN_TARGET_*
         definitions.
 
     Inputs - Stores the inputs to the target.
 
-    OrderOnlyInputs - Stores the order-only inputs to the target.
+    Implicit - Stores the implicit inputs to the target. Implicit inputs work
+        just like normal inputs except they don't show up in the inputs
+        variable.
+
+    OrderOnly - Stores the order-only inputs to the target. Order-only inputs
+        are built before the target, but they alone do not cause the target
+        to be rebuilt, and they do not show up on the input line.
 
     InputsObject - Stores a pointer to the list object of input strings.
 
-    OrderOnlyInputsObject - Stores a pointer to the list of order-only input
-        strings.
+    OrderOnlyObject - Stores a pointer to the list of order-only input strings.
 
     Callback - Stores a pointer to the function to call back when this target
         is added as an input (but not an order-only input).
@@ -350,15 +381,41 @@ struct _MBGEN_TARGET {
     PSTR Output;
     MBGEN_DIRECTORY_TREE Tree;
     PSTR Tool;
+    PSTR Pool;
     ULONG Flags;
     MBGEN_INPUTS Inputs;
-    MBGEN_INPUTS OrderOnlyInputs;
+    MBGEN_INPUTS Implicit;
+    MBGEN_INPUTS OrderOnly;
     PCHALK_OBJECT InputsObject;
-    PCHALK_OBJECT OrderOnlyInputsObject;
+    PCHALK_OBJECT ImplicitObject;
+    PCHALK_OBJECT OrderOnlyObject;
     PCHALK_OBJECT Callback;
     PCHALK_OBJECT Config;
     PCHALK_OBJECT OriginalEntry;
 };
+
+/*++
+
+Structure Description:
+
+    This structure stores information about a build pool (only applies to
+    Ninja).
+
+Members:
+
+    ListEntry - Stores pointers to the next and previous pools.
+
+    Name - Stores the name of the pool.
+
+    Depth - Stores the depth of the pool.
+
+--*/
+
+typedef struct _MBGEN_POOL {
+    LIST_ENTRY ListEntry;
+    PSTR Name;
+    LONG Depth;
+} MBGEN_POOL, *PMBGEN_POOL;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -427,7 +484,6 @@ INT
 MbgenLoadTargetScript (
     PMBGEN_CONTEXT Context,
     PMBGEN_PATH Target,
-    MBGEN_SCRIPT_ORDER Order,
     PMBGEN_SCRIPT *Script
     );
 
@@ -443,8 +499,6 @@ Arguments:
     Context - Supplies a pointer to the application context.
 
     Target - Supplies a pointer to the target specifier to load.
-
-    Order - Supplies the order to apply to the script.
 
     Script - Supplies a pointer where a pointer to the loaded or found script
         will be returned on success.
@@ -756,6 +810,29 @@ MbgenCreateMakefile (
 Routine Description:
 
     This routine creates a Makefile out of the build graph.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+MbgenCreateNinja (
+    PMBGEN_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a Ninja build file out of the build graph.
 
 Arguments:
 

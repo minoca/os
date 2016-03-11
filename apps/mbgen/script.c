@@ -79,6 +79,14 @@ CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
         {0}
     },
 
+    {
+        ChalkCString,
+        "output_format",
+        offsetof(MBGEN_CONTEXT, FormatString),
+        FALSE,
+        {0}
+    },
+
     {0}
 };
 
@@ -90,7 +98,6 @@ INT
 MbgenLoadTargetScript (
     PMBGEN_CONTEXT Context,
     PMBGEN_PATH Target,
-    MBGEN_SCRIPT_ORDER Order,
     PMBGEN_SCRIPT *Script
     )
 
@@ -107,8 +114,6 @@ Arguments:
 
     Target - Supplies a pointer to the target specifier to load.
 
-    Order - Supplies the order to apply to the script.
-
     Script - Supplies a pointer where a pointer to the loaded or found script
         will be returned on success.
 
@@ -124,41 +129,7 @@ Return Value:
 
     INT Status;
 
-    //
-    // Reset the context to give each run a fresh slate.
-    //
-
-    Status = ChalkClearInterpreter(&(Context->Interpreter));
-    if (Status != 0) {
-        goto LoadTargetScriptEnd;
-    }
-
-    Status = MbgenAddChalkBuiltins(Context);
-    if (Status != 0) {
-        goto LoadTargetScriptEnd;
-    }
-
-    //
-    // Execute the command line arguments and global contents.
-    //
-
-    Status = ChalkExecuteDeferredScripts(&(Context->Interpreter),
-                                         MbgenScriptOrderCommandLine);
-
-    if (Status != 0) {
-        goto LoadTargetScriptEnd;
-    }
-
-    if (Order > MbgenScriptOrderGlobal) {
-        Status = ChalkExecuteDeferredScripts(&(Context->Interpreter),
-                                             MbgenScriptOrderGlobal);
-
-        if (Status != 0) {
-            goto LoadTargetScriptEnd;
-        }
-    }
-
-    Status = MbgenLoadScript(Context, Order, Target, Script);
+    Status = MbgenLoadScript(Context, MbgenScriptOrderTarget, Target, Script);
     if (Status != 0) {
         goto LoadTargetScriptEnd;
     }
@@ -203,7 +174,7 @@ Return Value:
                              NULL);
 
     if (Status != 0) {
-        return Status;
+        goto LoadProjectRootEnd;
     }
 
     if ((Context->Options & MBGEN_OPTION_DEBUG) != 0) {
@@ -222,14 +193,36 @@ Return Value:
                                          Context);
 
     if (Status != 0) {
-        return Status;
+        goto LoadProjectRootEnd;
     }
 
     if (Context->DefaultName == NULL) {
         Context->DefaultName = strdup(MBGEN_DEFAULT_NAME);
         if (Context->DefaultName == NULL) {
-            return ENOMEM;
+            Status = ENOMEM;
+            goto LoadProjectRootEnd;
         }
+    }
+
+    //
+    // Re-initialize the interpreter for the target environment.
+    //
+
+    ChalkClearInterpreter(&(Context->Interpreter));
+    Status = MbgenAddChalkBuiltins(Context);
+    if (Status != 0) {
+        goto LoadProjectRootEnd;
+    }
+
+    //
+    // Execute the command line arguments and global contents.
+    //
+
+    Status = ChalkExecuteDeferredScripts(&(Context->Interpreter),
+                                         MbgenScriptOrderCommandLine);
+
+    if (Status != 0) {
+        goto LoadProjectRootEnd;
     }
 
     //
@@ -245,13 +238,13 @@ Return Value:
                                 &TargetPath);
 
         if (Status != 0) {
-            return Status;
+            goto LoadProjectRootEnd;
         }
 
-        Status = MbgenLoadTargetScript(Context,
-                                       &TargetPath,
-                                       MbgenScriptOrderGlobal,
-                                       NULL);
+        Status = MbgenLoadScript(Context,
+                                 MbgenScriptOrderGlobal,
+                                 &TargetPath,
+                                 NULL);
 
         if (TargetPath.Path != NULL) {
             free(TargetPath.Path);
@@ -262,7 +255,7 @@ Return Value:
             fprintf(stderr,
                     "Error: Failed to load global environment script.\n");
 
-            return Status;
+            goto LoadProjectRootEnd;
         }
     }
 
@@ -278,12 +271,11 @@ Return Value:
                                 &TargetPath);
 
         if (Status != 0) {
-            return Status;
+            goto LoadProjectRootEnd;
         }
 
         Status = MbgenLoadTargetScript(Context,
                                        &TargetPath,
-                                       MbgenScriptOrderTarget,
                                        NULL);
 
         if (TargetPath.Path != NULL) {
@@ -293,11 +285,38 @@ Return Value:
 
         if (Status != 0) {
             fprintf(stderr, "Error: Failed to load default target.\n");
-            return Status;
+            goto LoadProjectRootEnd;
         }
     }
 
-    return 0;
+    //
+    // Get the default format.
+    //
+
+    if (Context->Format == MbgenOutputInvalid) {
+        if (Context->FormatString != NULL) {
+            if (strcasecmp(Context->FormatString, "make") == 0) {
+                Context->Format = MbgenOutputMake;
+
+            } else if (strcasecmp(Context->FormatString, "ninja") == 0) {
+                Context->Format = MbgenOutputNinja;
+
+            } else if (strcasecmp(Context->FormatString, "none") == 0) {
+                Context->Format = MbgenOutputNone;
+
+            } else {
+                fprintf(stderr,
+                        "Error: Unknown output format %s.\n",
+                        Context->FormatString);
+
+                Status = EINVAL;
+                goto LoadProjectRootEnd;
+            }
+        }
+    }
+
+LoadProjectRootEnd:
+    return Status;
 }
 
 INT

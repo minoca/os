@@ -55,6 +55,8 @@ Environment:
     "  -D, --debug -- Print lots of information during execution.\n" \
     "  -B, --build-file=file_name -- Use the given file as the name of the \n" \
     "      build files, rather than the default, build.mb.\n" \
+    "  -f, --format=fmt -- Specify the output format as make or ninja. The \n"\
+    "      default is make.\n" \
     "  -n, --dry-run -- Do all the processing, but do not actually create \n" \
     "      any output files.\n" \
     "  -p, --project=file_name -- Search for the given file name when \n" \
@@ -66,7 +68,7 @@ Environment:
     "  --help -- Show this help text and exit.\n"                              \
     "  --version -- Print the application version information and exit.\n\n"   \
 
-#define MBGEN_OPTIONS_STRING "B:Dhnp:r:vV"
+#define MBGEN_OPTIONS_STRING "B:Df:hnp:r:vV"
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -88,6 +90,13 @@ MbgenDestroyContext (
 
 INT
 MbgenParseToolEntry (
+    PMBGEN_CONTEXT Context,
+    PMBGEN_SCRIPT Script,
+    PCHALK_OBJECT Entry
+    );
+
+INT
+MbgenParsePoolEntry (
     PMBGEN_CONTEXT Context,
     PMBGEN_SCRIPT Script,
     PCHALK_OBJECT Entry
@@ -139,6 +148,12 @@ MbgenFindTool (
     PSTR Name
     );
 
+PMBGEN_POOL
+MbgenFindPool (
+    PMBGEN_CONTEXT Context,
+    PSTR Name
+    );
+
 PMBGEN_TARGET
 MbgenFindTargetInScript (
     PMBGEN_CONTEXT Context,
@@ -149,6 +164,11 @@ MbgenFindTargetInScript (
 VOID
 MbgenDestroyTool (
     PMBGEN_TOOL Tool
+    );
+
+VOID
+MbgenDestroyPool (
+    PMBGEN_POOL Pool
     );
 
 VOID
@@ -182,6 +202,7 @@ struct option MbgenLongOptions[] = {
     {"args", required_argument, 0, 'a'},
     {"build-file", required_argument, 0, 'B'},
     {"debug", no_argument, 0, 'D'},
+    {"format", required_argument, 0, 'f'},
     {"dry-run", no_argument, 0, 'n'},
     {"project", required_argument, 0, 'p'},
     {"root", required_argument, 0, 'r'},
@@ -232,6 +253,34 @@ CHALK_C_STRUCTURE_MEMBER MbgenToolMembers[] = {
         {0}
     },
 
+    {
+        ChalkCString,
+        "pool",
+        offsetof(MBGEN_TOOL, Pool),
+        FALSE,
+        {0}
+    },
+
+    {0}
+};
+
+CHALK_C_STRUCTURE_MEMBER MbgenPoolMembers[] = {
+    {
+        ChalkCString,
+        "name",
+        offsetof(MBGEN_POOL, Name),
+        TRUE,
+        {0}
+    },
+
+    {
+        ChalkCInt32,
+        "depth",
+        offsetof(MBGEN_POOL, Depth),
+        TRUE,
+        {0}
+    },
+
     {0}
 };
 
@@ -262,8 +311,16 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
 
     {
         ChalkCObjectPointer,
-        "order-only-inputs",
-        offsetof(MBGEN_TARGET, OrderOnlyInputsObject),
+        "implicit",
+        offsetof(MBGEN_TARGET, ImplicitObject),
+        FALSE,
+        {0}
+    },
+
+    {
+        ChalkCObjectPointer,
+        "orderonly",
+        offsetof(MBGEN_TARGET, OrderOnlyObject),
         FALSE,
         {0}
     },
@@ -285,11 +342,11 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
     },
 
     {
-        ChalkCFlag32,
-        "phony",
-        offsetof(MBGEN_TARGET, Flags),
+        ChalkCString,
+        "pool",
+        offsetof(MBGEN_TARGET, Pool),
         FALSE,
-        {MBGEN_TARGET_PHONY}
+        {0}
     },
 
     {
@@ -409,6 +466,28 @@ Return Value:
             Context.Options |= MBGEN_OPTION_DEBUG;
             break;
 
+        case 'f':
+            if (strcasecmp(optarg, "make") == 0) {
+                Context.Format = MbgenOutputMake;
+
+            } else if (strcasecmp(optarg, "ninja") == 0) {
+                Context.Format = MbgenOutputNinja;
+
+            } else if (strcasecmp(optarg, "none") == 0) {
+                Context.Format = MbgenOutputNone;
+
+            } else {
+                fprintf(stderr,
+                        "Error: Unknown output format %s. Valid values are "
+                        "'make' and 'ninja'.\n",
+                        optarg);
+
+                Status = EINVAL;
+                goto mainEnd;
+            }
+
+            break;
+
         case 'n':
             Context.Options |= MBGEN_OPTION_DRY_RUN;
             break;
@@ -518,7 +597,20 @@ Return Value:
         printf("\n");
     }
 
-    Status = MbgenCreateMakefile(&Context);
+    switch (Context.Format) {
+    case MbgenOutputMake:
+        Status = MbgenCreateMakefile(&Context);
+        break;
+
+    case MbgenOutputNinja:
+        Status = MbgenCreateNinja(&Context);
+        break;
+
+    case MbgenOutputNone:
+    default:
+        Status = 0;
+        break;
+    }
 
 mainEnd:
     MbgenDestroyContext(&Context);
@@ -616,6 +708,22 @@ Return Value:
         } else if (strcasecmp(Type->String.String, "tool") == 0) {
             Status = MbgenParseToolEntry(Context, Script, Entry);
 
+        } else if (strcasecmp(Type->String.String, "pool") == 0) {
+            Status = MbgenParsePoolEntry(Context, Script, Entry);
+
+        } else if (strcasecmp(Type->String.String, "global_config") == 0) {
+            Context->GlobalConfig = ChalkDictLookupCStringKey(Entry, "config");
+            if ((Context->GlobalConfig != NULL) &&
+                (Context->GlobalConfig->Header.Type != ChalkObjectDict)) {
+
+                fprintf(stderr,
+                        "Error: %s: global_config must be a dict.\n",
+                        Script->CompletePath);
+
+                Status = EINVAL;
+                goto ParseScriptResultsEnd;
+            }
+
         } else if (strcasecmp(Type->String.String, "ignore") != 0) {
             fprintf(stderr,
                     "Error: Script %s, element %d type %s not valid.\n",
@@ -679,7 +787,8 @@ Return Value:
     }
 
     MbgenDestroyInputs(&(Target->Inputs));
-    MbgenDestroyInputs(&(Target->OrderOnlyInputs));
+    MbgenDestroyInputs(&(Target->Implicit));
+    MbgenDestroyInputs(&(Target->OrderOnly));
     free(Target);
     return;
 }
@@ -714,8 +823,10 @@ Return Value:
 {
 
     memset(Context, 0, sizeof(MBGEN_CONTEXT));
+    Context->Format = MbgenOutputInvalid;
     INITIALIZE_LIST_HEAD(&(Context->ScriptList));
     INITIALIZE_LIST_HEAD(&(Context->ToolList));
+    INITIALIZE_LIST_HEAD(&(Context->PoolList));
     ChalkInitializeInterpreter(&(Context->Interpreter));
     Context->ProjectFileName = MBGEN_PROJECT_FILE;
     Context->BuildFileName = MBGEN_BUILD_FILE;
@@ -745,6 +856,7 @@ Return Value:
 
 {
 
+    PMBGEN_POOL Pool;
     PMBGEN_TOOL Tool;
 
     MbgenDestroyAllScripts(Context);
@@ -752,6 +864,12 @@ Return Value:
         Tool = LIST_VALUE(Context->ToolList.Next, MBGEN_TOOL, ListEntry);
         LIST_REMOVE(&(Tool->ListEntry));
         MbgenDestroyTool(Tool);
+    }
+
+    while (!LIST_EMPTY(&(Context->PoolList))) {
+        Pool = LIST_VALUE(Context->PoolList.Next, MBGEN_POOL, ListEntry);
+        LIST_REMOVE(&(Pool->ListEntry));
+        MbgenDestroyPool(Pool);
     }
 
     if (Context->SourceRoot != NULL) {
@@ -772,6 +890,11 @@ Return Value:
     if (Context->DefaultName != NULL) {
         free(Context->DefaultName);
         Context->DefaultName = NULL;
+    }
+
+    if (Context->FormatString != NULL) {
+        free(Context->FormatString);
+        Context->FormatString = NULL;
     }
 
     ChalkDestroyInterpreter(&(Context->Interpreter));
@@ -840,6 +963,74 @@ ParseToolEntryEnd:
     if (Status != 0) {
         if (Tool != NULL) {
             MbgenDestroyTool(Tool);
+        }
+    }
+
+    return Status;
+}
+
+INT
+MbgenParsePoolEntry (
+    PMBGEN_CONTEXT Context,
+    PMBGEN_SCRIPT Script,
+    PCHALK_OBJECT Entry
+    )
+
+/*++
+
+Routine Description:
+
+    This routine parses a new pool entry.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    Script - Supplies a pointer to the script being parsed.
+
+    Entry - Supplies a pointer to the pool entry.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PMBGEN_POOL Pool;
+    INT Status;
+
+    Pool = malloc(sizeof(MBGEN_POOL));
+    if (Pool == NULL) {
+        return ENOMEM;
+    }
+
+    memset(Pool, 0, sizeof(MBGEN_POOL));
+    Status = ChalkConvertDictToStructure(&(Context->Interpreter),
+                                         Entry,
+                                         MbgenPoolMembers,
+                                         Pool);
+
+    if (Status != 0) {
+        goto ParsePoolEntryEnd;
+    }
+
+    if (MbgenFindPool(Context, Pool->Name) != NULL) {
+        fprintf(stderr, "Error: Duplicate pool %s.\n", Pool->Name);
+        Status = EINVAL;
+        goto ParsePoolEntryEnd;
+    }
+
+    INSERT_BEFORE(&(Pool->ListEntry), &(Context->PoolList));
+    Status = 0;
+
+ParsePoolEntryEnd:
+    if (Status != 0) {
+        if (Pool != NULL) {
+            MbgenDestroyPool(Pool);
         }
     }
 
@@ -993,11 +1184,23 @@ Return Value:
         goto ParseTargetEntryEnd;
     }
 
-    if ((Target->OrderOnlyInputsObject != NULL) &&
-        (Target->OrderOnlyInputsObject->Header.Type != ChalkObjectList)) {
+    if ((Target->ImplicitObject != NULL) &&
+        (Target->ImplicitObject->Header.Type != ChalkObjectList)) {
 
         fprintf(stderr,
-                "Error: order-only-inputs for %s:%s must be a list.\n",
+                "Error: implicit inputs for %s:%s must be a list.\n",
+                Script->CompletePath,
+                Target->Label);
+
+        Status = EINVAL;
+        goto ParseTargetEntryEnd;
+    }
+
+    if ((Target->OrderOnlyObject != NULL) &&
+        (Target->OrderOnlyObject->Header.Type != ChalkObjectList)) {
+
+        fprintf(stderr,
+                "Error: order-only inputs for %s:%s must be a list.\n",
                 Script->CompletePath,
                 Target->Label);
 
@@ -1222,17 +1425,36 @@ Return Value:
     }
 
     //
-    // Load and find all the order-only inputs as well.
+    // Load and find all the implicit inputs as well.
     //
 
-    List = Target->OrderOnlyInputsObject;
+    List = Target->ImplicitObject;
     if (List != NULL) {
 
-        assert(Target->OrderOnlyInputs.Count == 0);
+        assert(Target->Implicit.Count == 0);
 
         Status = MbgenAddInputsToList(Context,
                                       Target,
-                                      &(Target->OrderOnlyInputs),
+                                      &(Target->Implicit),
+                                      List);
+
+        if (Status != 0) {
+            goto ProcessTargetEnd;
+        }
+    }
+
+    //
+    // Load and find all the order-only inputs.
+    //
+
+    List = Target->OrderOnlyObject;
+    if (List != NULL) {
+
+        assert(Target->OrderOnly.Count == 0);
+
+        Status = MbgenAddInputsToList(Context,
+                                      Target,
+                                      &(Target->OrderOnly),
                                       List);
 
         if (Status != 0) {
@@ -1383,7 +1605,6 @@ Return Value:
         } else {
             Status = MbgenLoadTargetScript(Context,
                                            &Path,
-                                           MbgenScriptOrderTarget,
                                            &DependencyScript);
 
             if (Status != 0) {
@@ -1516,6 +1737,50 @@ Return Value:
     return NULL;
 }
 
+PMBGEN_POOL
+MbgenFindPool (
+    PMBGEN_CONTEXT Context,
+    PSTR Name
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find a pool with the given name.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    Name - Supplies a pointer to the pool name to find.
+
+Return Value:
+
+    Returns a pointer to the pool on success.
+
+    NULL if no pool with the given name could be found.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PMBGEN_POOL Pool;
+
+    CurrentEntry = Context->PoolList.Next;
+    while (CurrentEntry != &(Context->PoolList)) {
+        Pool = LIST_VALUE(CurrentEntry, MBGEN_POOL, ListEntry);
+        if (strcmp(Pool->Name, Name) == 0) {
+            return Pool;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    return NULL;
+}
+
 PMBGEN_TARGET
 MbgenFindTargetInScript (
     PMBGEN_CONTEXT Context,
@@ -1612,6 +1877,37 @@ Return Value:
 }
 
 VOID
+MbgenDestroyPool (
+    PMBGEN_POOL Pool
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a pool entry.
+
+Arguments:
+
+    Pool - Supplies a pointer to the pool to destroy.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    if (Pool->Name != NULL) {
+        free(Pool->Name);
+    }
+
+    free(Pool);
+    return;
+}
+
+VOID
 MbgenPrintAllEntries (
     PMBGEN_CONTEXT Context
     )
@@ -1637,6 +1933,7 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     UINTN Index;
     PMBGEN_TARGET InputTarget;
+    PMBGEN_POOL Pool;
     PMBGEN_SCRIPT Script;
     PLIST_ENTRY ScriptEntry;
     PSTR ScriptPath;
@@ -1666,6 +1963,13 @@ Return Value:
         }
 
         printf("\n");
+    }
+
+    CurrentEntry = Context->PoolList.Next;
+    while (CurrentEntry != &(Context->PoolList)) {
+        Pool = LIST_VALUE(CurrentEntry, MBGEN_POOL, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        printf("Pool: %s, Depth: %d\n", Pool->Name, Pool->Depth);
     }
 
     ScriptEntry = Context->ScriptList.Next;
@@ -1826,12 +2130,12 @@ Return Value:
     Inputs->Count += 1;
 
     //
-    // If this is the inputs list (not the order-only inputs list), the input
-    // is a target, and there's a callback, call the callback.
+    // If this is the inputs list or implicit list, the
+    // input is a target, and there's a callback, call the callback.
     //
 
     Dependency = Input;
-    if ((Inputs == &(Target->Inputs)) &&
+    if ((Inputs != &(Target->OrderOnly)) &&
         (Dependency->Type == MbgenInputTarget) &&
         (Dependency->Callback != NULL) &&
         (Dependency->Callback->Header.Type != ChalkObjectNull)) {
