@@ -27,6 +27,7 @@
 APPS = efiboot  \
        mbgen    \
        mount    \
+       netcon   \
        profile  \
        setup    \
        swiss    \
