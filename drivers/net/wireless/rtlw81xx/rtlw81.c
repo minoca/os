@@ -152,7 +152,6 @@ Rtlw81pStopDevice (
 //
 
 PDRIVER Rtlw81Driver = NULL;
-UUID Rtlw81NetworkDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
 
 //
 // Store the default rate information for the RTL81xx wireless devices.
@@ -648,25 +647,9 @@ Return Value:
 
     Rtlw81pDeviceAddReference(Device);
 
-    //
-    // Register for network device information requests.
-    //
-
-    Status = IoRegisterDeviceInformation(Device->OsDevice,
-                                         &Rtlw81NetworkDeviceInformationUuid,
-                                         TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto AddNetworkDeviceEnd;
-    }
-
 AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->Net80211Link != NULL) {
-            IoRegisterDeviceInformation(Device->OsDevice,
-                                        &Rtlw81NetworkDeviceInformationUuid,
-                                        FALSE);
-
             Net80211RemoveLink(Device->Net80211Link);
             Device->Net80211Link = NULL;
         }
@@ -1277,10 +1260,6 @@ Return Value:
     //
     // Remove the link from 802.11 core. It is no longer in service.
     //
-
-    IoRegisterDeviceInformation(Device->OsDevice,
-                                &Rtlw81NetworkDeviceInformationUuid,
-                                FALSE);
 
     if (Device->Net80211Link != NULL) {
         Net80211RemoveLink(Device->Net80211Link);

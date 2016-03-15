@@ -105,7 +105,6 @@ DwepStartDevice (
 //
 
 PDRIVER DweDriver = NULL;
-UUID DweNetworkDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -519,21 +518,9 @@ Return Value:
         goto AddNetworkDeviceEnd;
     }
 
-    Status = IoRegisterDeviceInformation(Device->OsDevice,
-                                         &DweNetworkDeviceInformationUuid,
-                                         TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto AddNetworkDeviceEnd;
-    }
-
 AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->NetworkLink != NULL) {
-            IoRegisterDeviceInformation(Device->OsDevice,
-                                        &DweNetworkDeviceInformationUuid,
-                                        FALSE);
-
             NetRemoveLink(Device->NetworkLink);
             Device->NetworkLink = NULL;
         }

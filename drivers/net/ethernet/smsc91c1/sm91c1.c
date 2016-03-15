@@ -106,7 +106,6 @@ Sm91c1pStartDevice (
 //
 
 PDRIVER Sm91c1Driver = NULL;
-UUID Sm91c1NetworkDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -512,21 +511,9 @@ Return Value:
         goto AddNetworkDeviceEnd;
     }
 
-    Status = IoRegisterDeviceInformation(Device->OsDevice,
-                                         &Sm91c1NetworkDeviceInformationUuid,
-                                         TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto AddNetworkDeviceEnd;
-    }
-
 AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->NetworkLink != NULL) {
-            IoRegisterDeviceInformation(Device->OsDevice,
-                                        &Sm91c1NetworkDeviceInformationUuid,
-                                        FALSE);
-
             NetRemoveLink(Device->NetworkLink);
             Device->NetworkLink = NULL;
         }

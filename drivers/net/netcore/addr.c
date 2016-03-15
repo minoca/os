@@ -403,6 +403,18 @@ Return Value:
     LockHeld = FALSE;
 
     //
+    // All network devices respond to the network device information requests.
+    //
+
+    Status = IoRegisterDeviceInformation(Link->Properties.Device,
+                                         &NetNetworkDeviceInformationUuid,
+                                         TRUE);
+
+    if (!KSUCCESS(Status)) {
+        goto AddLinkEnd;
+    }
+
+    //
     // With success a sure thing, take a reference on the OS device that
     // registered the link with netcore. Its device context and driver need to
     // remain available as long as netcore can access the device link interface.
@@ -426,6 +438,9 @@ Return Value:
 AddLinkEnd:
     if (!KSUCCESS(Status)) {
         if (Link != NULL) {
+            IoRegisterDeviceInformation(Link->Properties.Device,
+                                        &NetNetworkDeviceInformationUuid,
+                                        FALSE);
 
             //
             // If some network layer entries have initialized already, call
@@ -893,6 +908,15 @@ Return Value:
 --*/
 
 {
+
+    //
+    // The device has been removed, the link should no longer respond to
+    // information requests.
+    //
+
+    IoRegisterDeviceInformation(Link->Properties.Device,
+                                &NetNetworkDeviceInformationUuid,
+                                FALSE);
 
     //
     // If the link is still up, then send out the notice that is is actually

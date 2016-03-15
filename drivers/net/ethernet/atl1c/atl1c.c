@@ -106,7 +106,6 @@ AtlpStartDevice (
 //
 
 PDRIVER AtlDriver = NULL;
-UUID AtlNetworkDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -509,21 +508,9 @@ Return Value:
         goto AddNetworkDeviceEnd;
     }
 
-    Status = IoRegisterDeviceInformation(Device->OsDevice,
-                                         &AtlNetworkDeviceInformationUuid,
-                                         TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto AddNetworkDeviceEnd;
-    }
-
 AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->NetworkLink != NULL) {
-            IoRegisterDeviceInformation(Device->OsDevice,
-                                        &AtlNetworkDeviceInformationUuid,
-                                        FALSE);
-
             NetRemoveLink(Device->NetworkLink);
             Device->NetworkLink = NULL;
         }

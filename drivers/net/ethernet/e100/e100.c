@@ -105,7 +105,6 @@ E100pStartDevice (
 //
 
 PDRIVER E100Driver = NULL;
-UUID E100NetworkDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -506,21 +505,9 @@ Return Value:
         goto AddNetworkDeviceEnd;
     }
 
-    Status = IoRegisterDeviceInformation(Device->OsDevice,
-                                         &E100NetworkDeviceInformationUuid,
-                                         TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto AddNetworkDeviceEnd;
-    }
-
 AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->NetworkLink != NULL) {
-            IoRegisterDeviceInformation(Device->OsDevice,
-                                        &E100NetworkDeviceInformationUuid,
-                                        FALSE);
-
             NetRemoveLink(Device->NetworkLink);
             Device->NetworkLink = NULL;
         }

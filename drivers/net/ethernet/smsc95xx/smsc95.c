@@ -134,7 +134,6 @@ Sm95pStopDevice (
 //
 
 PDRIVER Sm95Driver = NULL;
-UUID Sm95NetworkDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -545,25 +544,9 @@ Return Value:
 
     Sm95pDeviceAddReference(Device);
 
-    //
-    // Register for network device information requests.
-    //
-
-    Status = IoRegisterDeviceInformation(Device->OsDevice,
-                                         &Sm95NetworkDeviceInformationUuid,
-                                         TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto AddNetworkDeviceEnd;
-    }
-
 AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->NetworkLink != NULL) {
-            IoRegisterDeviceInformation(Device->OsDevice,
-                                        &Sm95NetworkDeviceInformationUuid,
-                                        FALSE);
-
             NetRemoveLink(Device->NetworkLink);
             Device->NetworkLink = NULL;
         }
@@ -1185,10 +1168,6 @@ Return Value:
     // The device is gone, notify the networking core that the link has bene
     // removed.
     //
-
-    IoRegisterDeviceInformation(Device->OsDevice,
-                                &Sm95NetworkDeviceInformationUuid,
-                                FALSE);
 
     if (Device->NetworkLink != NULL) {
         NetRemoveLink(Device->NetworkLink);

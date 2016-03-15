@@ -105,7 +105,6 @@ A3epStartDevice (
 //
 
 PDRIVER A3eDriver = NULL;
-UUID A3eNetworkDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -513,21 +512,9 @@ Return Value:
         goto AddNetworkDeviceEnd;
     }
 
-    Status = IoRegisterDeviceInformation(Device->OsDevice,
-                                         &A3eNetworkDeviceInformationUuid,
-                                         TRUE);
-
-    if (!KSUCCESS(Status)) {
-        goto AddNetworkDeviceEnd;
-    }
-
 AddNetworkDeviceEnd:
     if (!KSUCCESS(Status)) {
         if (Device->NetworkLink != NULL) {
-            IoRegisterDeviceInformation(Device->OsDevice,
-                                        &A3eNetworkDeviceInformationUuid,
-                                        FALSE);
-
             NetRemoveLink(Device->NetworkLink);
             Device->NetworkLink = NULL;
         }

@@ -116,7 +116,6 @@ Rtl81pProcessPciMsiInterfaceChangeNotification (
 //
 
 PDRIVER Rtl81Driver = NULL;
-UUID Rtl81NetworkDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
 UUID Rtl81PciMsiInterfaceUuid = UUID_PCI_MESSAGE_SIGNALED_INTERRUPTS;
 
 //
@@ -522,18 +521,6 @@ Return Value:
     Properties.Interface.GetSetInformation = Rtl81GetSetInformation;
     Properties.Interface.DestroyLink = Rtl81DestroyLink;
     Status = NetAddLink(&Properties, &(Device->NetworkLink));
-    if (!KSUCCESS(Status)) {
-        goto AddNetworkDeviceEnd;
-    }
-
-    //
-    // Register for network device information requests.
-    //
-
-    Status = IoRegisterDeviceInformation(Device->OsDevice,
-                                         &Rtl81NetworkDeviceInformationUuid,
-                                         TRUE);
-
     if (!KSUCCESS(Status)) {
         goto AddNetworkDeviceEnd;
     }
