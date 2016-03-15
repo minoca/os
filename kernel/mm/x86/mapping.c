@@ -517,6 +517,7 @@ Return Value:
 
 VOID
 MmSwitchAddressSpace (
+    PVOID Processor,
     PVOID CurrentStack,
     PADDRESS_SPACE AddressSpace
     )
@@ -528,6 +529,8 @@ Routine Description:
     This routine switches to the given address space.
 
 Arguments:
+
+    Processor - Supplies a pointer to the current processor block.
 
     CurrentStack - Supplies the address of the current thread's kernel stack.
         This routine will ensure this address is visible in the address space
@@ -544,7 +547,9 @@ Return Value:
 {
 
     ULONG DirectoryIndex;
+    PPROCESSOR_BLOCK ProcessorBlock;
     PADDRESS_SPACE_X86 Space;
+    PTSS Tss;
 
     Space = (PADDRESS_SPACE_X86)AddressSpace;
 
@@ -558,6 +563,15 @@ Return Value:
     Space->PageDirectory[DirectoryIndex] =
                                          MmKernelPageDirectory[DirectoryIndex];
 
+    ProcessorBlock = Processor;
+    Tss = ProcessorBlock->Tss;
+
+    //
+    // Set the CR3 first because an NMI can come in any time and change CR3 to
+    // whatever is in the TSS.
+    //
+
+    Tss->Cr3 = Space->PageDirectoryPhysical;
     ArSetCurrentPageDirectory(Space->PageDirectoryPhysical);
     return;
 }
@@ -2625,6 +2639,7 @@ Return Value:
     //
 
     if (Directory[DirectoryIndex].Present != 0) {
+        RtlMemoryBarrier();
         return;
     }
 
@@ -2693,7 +2708,6 @@ Return Value:
 
         RtlZeroMemory(ProcessorBlock->SwapPage, PAGE_SIZE);
         MmpUnmapPages(ProcessorBlock->SwapPage, 1, 0, NULL);
-        KeLowerRunLevel(OldRunLevel);
         Directory[DirectoryIndex].Entry = (ULONG)NewPageTable >> PAGE_SHIFT;
         Directory[DirectoryIndex].Writable = 1;
         if (VirtualAddress >= KERNEL_VA_START) {
@@ -2709,6 +2723,8 @@ Return Value:
         }
 
         Directory[DirectoryIndex].Present = 1;
+        RtlMemoryBarrier();
+        KeLowerRunLevel(OldRunLevel);
 
         //
         // As this is a present bit transition from 0 to 1, for both the

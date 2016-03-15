@@ -229,12 +229,9 @@ Return Value:
 
 {
 
-    PADDRESS_SPACE_X86 AddressSpace;
     CYCLE_ACCOUNT PreviousPeriod;
-    PKPROCESS Process;
     PPROCESSOR_BLOCK Processor;
     TRAP_FRAME TrapFrame;
-    PTSS Tss;
 
     ASSERT(ArAreInterruptsEnabled() == FALSE);
 
@@ -260,14 +257,6 @@ Return Value:
         KeBeginCycleAccounting(PreviousPeriod);
     }
 
-    //
-    // The processor doesn't save the old CR3, so put the correct one back.
-    //
-
-    Tss = Processor->Tss;
-    Process = Processor->RunningThread->OwningProcess;
-    AddressSpace = (PADDRESS_SPACE_X86)(Process->AddressSpace);
-    Tss->Cr3 = AddressSpace->PageDirectoryPhysical;
     Processor->NmiCount -= 1;
     return;
 }

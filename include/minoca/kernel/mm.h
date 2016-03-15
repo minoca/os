@@ -2966,6 +2966,7 @@ Return Value:
 
 VOID
 MmSwitchAddressSpace (
+    PVOID Processor,
     PVOID CurrentStack,
     PADDRESS_SPACE AddressSpace
     );
@@ -2977,6 +2978,8 @@ Routine Description:
     This routine switches to the given address space.
 
 Arguments:
+
+    Processor - Supplies a pointer to the current processor block.
 
     CurrentStack - Supplies the address of the current thread's kernel stack.
         This routine will ensure this address is visible in the address space

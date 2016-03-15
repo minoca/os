@@ -310,7 +310,8 @@ Return Value:
     //
 
     Enabled = ArDisableInterrupts();
-    MmSwitchAddressSpace(OldThread->KernelStack,
+    MmSwitchAddressSpace(Processor,
+                         OldThread->KernelStack,
                          NextThread->OwningProcess->AddressSpace);
 
     Processor->RunningThread = NextThread;
