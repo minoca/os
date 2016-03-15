@@ -869,6 +869,8 @@ Return Value:
 
     //
     // Try doubling the previous expansion. Don't go below the minimum size.
+    // Keep dividing by two until either the something is found or the minimum
+    // is hit.
     //
 
     ExpansionSize = Allocator->PreviousExpansionBlockCount << 1;
@@ -876,26 +878,17 @@ Return Value:
         ExpansionSize = Allocator->ExpansionBlockCount;
     }
 
-    Status = MmpExpandBlockAllocatorBySize(Allocator,
-                                           AllocatorLockHeld,
-                                           ExpansionSize);
+    Status = STATUS_INVALID_PARAMETER;
+    while (ExpansionSize >= Allocator->ExpansionBlockCount) {
+        Status = MmpExpandBlockAllocatorBySize(Allocator,
+                                               AllocatorLockHeld,
+                                               ExpansionSize);
 
-    if (!KSUCCESS(Status)) {
-
-        //
-        // If that didn't work, try allocating the minimum.
-        //
-
-        if (ExpansionSize > Allocator->ExpansionBlockCount) {
-            ExpansionSize = Allocator->ExpansionBlockCount;
-            Status = MmpExpandBlockAllocatorBySize(Allocator,
-                                                   AllocatorLockHeld,
-                                                   ExpansionSize);
-
-            if (!KSUCCESS(Status)) {
-                ExpansionSize = 0;
-            }
+        if (KSUCCESS(Status)) {
+            break;
         }
+
+        ExpansionSize >>= 1;
     }
 
     Allocator->PreviousExpansionBlockCount = ExpansionSize;

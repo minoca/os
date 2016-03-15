@@ -38,8 +38,7 @@ Environment:
 // Define the minimum heap expansion size.
 //
 
-#define SYSTEM_HEAP_MINIMUM_EXPANSION_SIZE (SYSTEM_HEAP_GRANULARITY * 10)
-#define SYSTEM_HEAP_GRANULARITY 4096
+#define SYSTEM_HEAP_MINIMUM_EXPANSION_PAGES 0x10
 #define SYSTEM_HEAP_MAGIC 0x6C6F6F50 // 'looP'
 
 //
@@ -81,6 +80,13 @@ OspHeapCorruption (
 
 MEMORY_HEAP OsHeap;
 OS_LOCK OsHeapLock;
+
+//
+// Store the native page shift and mask.
+//
+
+UINTN OsPageShift;
+UINTN OsPageSize;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -255,13 +261,15 @@ Return Value:
     ULONG Flags;
 
     OsInitializeLockDefault(&OsHeapLock);
+    OsPageSize = OsEnvironment->StartData->PageSize;
+    OsPageShift = RtlCountTrailingZeros(OsPageSize);
     Flags = MEMORY_HEAP_FLAG_NO_PARTIAL_FREES;
     RtlHeapInitialize(&OsHeap,
                       OspHeapExpand,
                       OspHeapContract,
                       OspHeapCorruption,
-                      SYSTEM_HEAP_MINIMUM_EXPANSION_SIZE,
-                      SYSTEM_HEAP_GRANULARITY,
+                      SYSTEM_HEAP_MINIMUM_EXPANSION_PAGES << OsPageShift,
+                      OsPageSize,
                       SYSTEM_HEAP_MAGIC,
                       Flags);
 

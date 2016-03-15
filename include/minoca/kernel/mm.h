@@ -78,7 +78,7 @@ Author:
 // Define the number of bins MDLs keep for free descriptors.
 //
 
-#define MDL_BIN_COUNT 12
+#define MDL_BIN_COUNT 8
 
 //
 // Define the minimum amount of free system descriptors that need to be

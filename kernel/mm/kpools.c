@@ -31,7 +31,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define MINIMUM_POOL_EXPANSION_COUNT 0x80
+#define MINIMUM_POOL_EXPANSION_PAGES 0x10
 
 //
 // Define the initial non-paged pool size needed to successfully bootstrap the
@@ -820,7 +820,7 @@ Return Value:
     //
 
     PageSize = MmPageSize();
-    MinimumExpansionSize = MINIMUM_POOL_EXPANSION_COUNT * PageSize;
+    MinimumExpansionSize = MINIMUM_POOL_EXPANSION_PAGES * PageSize;
     Flags = DEFAULT_NON_PAGED_POOL_MEMORY_HEAP_FLAGS;
     RtlHeapInitialize(&MmNonPagedPool,
                       MmpExpandNonPagedPool,
@@ -880,7 +880,7 @@ Return Value:
     ULONG PageSize;
 
     PageSize = MmPageSize();
-    MinimumExpansionSize = MINIMUM_POOL_EXPANSION_COUNT * PageSize;
+    MinimumExpansionSize = MINIMUM_POOL_EXPANSION_PAGES * PageSize;
 
     //
     // The paged pool does not support partial frees because image sections

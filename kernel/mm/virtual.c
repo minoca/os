@@ -1747,8 +1747,10 @@ Return Value:
 
 {
 
+    PLIST_ENTRY BinList;
     BOOL LockAcquired;
     MEMORY_DESCRIPTOR NewDescriptor;
+    MEMORY_WARNING_LEVEL NewWarning;
     BOOL RangeFree;
     BOOL SignalEvent;
     KSTATUS Status;
@@ -1852,13 +1854,24 @@ AllocateAddressRangeEnd:
         // (indicating serious fragmentation), then throw a warning up.
         //
 
+        BinList = &(Accountant->Mdl.FreeLists[MDL_BIN_COUNT - 1]);
         if ((Accountant->Mdl.FreeSpace <
              MmVirtualMemoryWarningLevel1Trigger) ||
-            (LIST_EMPTY(&(Accountant->Mdl.FreeLists[MDL_BIN_COUNT - 1])))) {
+            (LIST_EMPTY(BinList))) {
 
-            if (MmVirtualMemoryWarningLevel == MemoryWarningLevelNone) {
-                MmVirtualMemoryWarningLevel = MemoryWarningLevel1;
-                SignalEvent = TRUE;
+            if (MmVirtualMemoryWarningLevel < MemoryWarningLevel2) {
+                BinList = &(Accountant->Mdl.FreeLists[MDL_BIN_COUNT - 2]);
+                if (LIST_EMPTY(BinList)) {
+                    NewWarning = MemoryWarningLevel2;
+
+                } else {
+                    NewWarning = MemoryWarningLevel1;
+                }
+
+                if (MmVirtualMemoryWarningLevel != NewWarning) {
+                    MmVirtualMemoryWarningLevel = NewWarning;
+                    SignalEvent = TRUE;
+                }
             }
         }
     }

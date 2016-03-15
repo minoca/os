@@ -1423,10 +1423,13 @@ Return Value:
 
     IoIrp->MinorCode = MinorCodeNumber;
     RtlCopyMemory(&(IoIrp->U.ReadWrite), Request, sizeof(IRP_READ_WRITE));
+    IoIrp->U.ReadWrite.IoBufferState.IoBuffer = NULL;
     Status = IoSendSynchronousIrp(IoIrp);
     if (!KSUCCESS(Status)) {
         goto SendIoIrpEnd;
     }
+
+    ASSERT(IoIrp->U.ReadWrite.IoBufferState.IoBuffer == NULL);
 
     RtlCopyMemory(Request, &(IoIrp->U.ReadWrite), sizeof(IRP_READ_WRITE));
     if (Device->Header.Type == ObjectDevice) {

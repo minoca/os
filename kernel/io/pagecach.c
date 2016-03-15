@@ -821,6 +821,15 @@ Return Value:
         RtlAtomicAdd(&IoPageCacheMappedPageCount, 1);
         if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
             RtlAtomicAdd(&IoPageCacheMappedDirtyPageCount, 1);
+
+        } else {
+
+            //
+            // If it wasn't dirty, it may need to be moved from the
+            // clean-unmapped list to the clean list.
+            //
+
+            IopUpdatePageCacheEntryList(UnmappedEntry, FALSE);
         }
     }
 
@@ -1994,15 +2003,6 @@ Return Value:
                 Status = STATUS_TRY_AGAIN;
                 goto FlushPageCacheEntriesEnd;
             }
-
-            if ((IopIsPageCacheTooMapped(NULL) != FALSE) &&
-                ((IoPageCacheMappedPageCount -
-                  IoPageCacheMappedDirtyPageCount) >
-                 IoPageCacheLowMemoryCleanPageMinimum)) {
-
-                Status = STATUS_TRY_AGAIN;
-                goto FlushPageCacheEntriesEnd;
-            }
         }
     }
 
@@ -2933,9 +2933,18 @@ Return Value:
                 if ((OldFlags & PAGE_CACHE_ENTRY_FLAG_DIRTY) != 0) {
                     RtlAtomicAdd(&IoPageCacheMappedDirtyPageCount, 1);
                 }
+
+                //
+                // The entry was just used, and may need to come off the clean
+                // unmapped list.
+                //
+
+                IopUpdatePageCacheEntryList(LowerEntry, FALSE);
             }
         }
     }
+
+    IopUpdatePageCacheEntryList(UpperEntry, FALSE);
 
     //
     // Now link the two entries based on their types. Note that nothing should
@@ -3392,6 +3401,8 @@ Return Value:
     ASSERT((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0);
     ASSERT((PageCacheEntry->ReferenceCount == 0) ||
            (PageCacheEntry->Node.Parent == NULL));
+
+    ASSERT(PageCacheEntry->ListEntry.Next == NULL);
 
     //
     // If this is the page owner, then free the physical page.
@@ -4298,14 +4309,20 @@ Return Value:
 
 {
 
+    PPAGE_CACHE_ENTRY BackingEntry;
     PLIST_ENTRY CurrentEntry;
+    UINTN DestroyCount;
+    BOOL DestroyEntry;
+    LIST_ENTRY DestroyList;
     PFILE_OBJECT FileObject;
     UINTN FreeVirtualPages;
     PSHARED_EXCLUSIVE_LOCK Lock;
     UINTN MappedCleanPageCount;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
+    BOOL PageWasDirty;
     LIST_ENTRY ReturnList;
+    KSTATUS Status;
     UINTN TargetUnmapCount;
     UINTN UnmapCount;
     UINTN UnmapSize;
@@ -4322,6 +4339,7 @@ Return Value:
 
     ASSERT(FreeVirtualPages != -1);
 
+    INITIALIZE_LIST_HEAD(&DestroyList);
     INITIALIZE_LIST_HEAD(&ReturnList);
 
     //
@@ -4379,6 +4397,7 @@ Return Value:
     UnmapStart = NULL;
     UnmapSize = 0;
     UnmapCount = 0;
+    DestroyCount = 0;
     PageSize = MmPageSize();
     KeAcquireQueuedLock(IoPageCacheListLock);
     while ((!LIST_EMPTY(&IoPageCacheCleanList)) &&
@@ -4425,12 +4444,16 @@ Return Value:
         }
 
         //
-        // If the page was not mapped, move it over to the clean unmapped list
-        // to prevent iterating over it again during subsequent invocations of
-        // this function.
+        // If the page was not mapped, and is the page owner, move it over to
+        // the clean unmapped list to prevent iterating over it again during
+        // subsequent invocations of this function.
         //
 
-        if (PageCacheEntry->VirtualAddress == NULL) {
+        if ((PageCacheEntry->Flags &
+             (PAGE_CACHE_ENTRY_FLAG_MAPPED |
+              PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER)) ==
+            PAGE_CACHE_ENTRY_FLAG_PAGE_OWNER) {
+
             LIST_REMOVE(&(PageCacheEntry->ListEntry));
             INSERT_BEFORE(&(PageCacheEntry->ListEntry),
                           &IoPageCacheCleanUnmappedList);
@@ -4497,21 +4520,79 @@ Return Value:
         }
 
         //
+        // If there's a backing entry and no references besides this one, try
+        // to destroy this entry, as it pins the backing entry VA. Note that
+        // new references can still come in via the list. It can't be removed
+        // from the list because new references could come in from the tree and
+        // put it back on the list.
+        //
+
+        DestroyEntry = FALSE;
+        BackingEntry = PageCacheEntry->BackingEntry;
+        if ((BackingEntry != NULL) && (PageCacheEntry->ReferenceCount == 1)) {
+            Status = IopUnmapPageCacheEntrySections(PageCacheEntry,
+                                                    &PageWasDirty);
+
+            if (KSUCCESS(Status)) {
+                if (PageWasDirty != FALSE) {
+                    IopMarkPageCacheEntryDirty(PageCacheEntry);
+                }
+
+                if (PageCacheEntry->Node.Parent != NULL) {
+                    IopRemovePageCacheEntryFromTree(PageCacheEntry);
+                }
+
+                DestroyEntry = TRUE;
+            }
+        }
+
+        //
         // Drop the file object lock and reacquire the list lock.
         //
 
         KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
         KeAcquireQueuedLock(IoPageCacheListLock);
-        if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+        if (DestroyEntry != FALSE) {
             if (PageCacheEntry->ListEntry.Next != NULL) {
                 LIST_REMOVE(&(PageCacheEntry->ListEntry));
+                PageCacheEntry->ListEntry.Next = NULL;
             }
 
-            INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                          &IoPageCacheCleanUnmappedList);
-        }
+            //
+            // If another list cruiser got to it first, stick it on the removal
+            // list (since it's no longer in the tree), and don't destroy it.
+            //
 
-        IoPageCacheEntryReleaseReference(PageCacheEntry);
+            if (PageCacheEntry->ReferenceCount != 1) {
+                INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                              &IoPageCacheRemovalList);
+
+            } else {
+                PageCacheEntry->ReferenceCount = 0;
+                INSERT_BEFORE(&(PageCacheEntry->ListEntry), &DestroyList);
+                DestroyCount += 1;
+            }
+
+        } else {
+            if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
+                if (PageCacheEntry->ListEntry.Next != NULL) {
+                    LIST_REMOVE(&(PageCacheEntry->ListEntry));
+                }
+
+                if (((PageCacheEntry->Flags &
+                      PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) &&
+                    (PageCacheEntry->BackingEntry == NULL)) {
+
+                    INSERT_BEFORE(&(PageCacheEntry->ListEntry),
+                                  &IoPageCacheCleanUnmappedList);
+
+                } else {
+                    INSERT_BEFORE(&(PageCacheEntry->ListEntry), &ReturnList);
+                }
+            }
+
+            IoPageCacheEntryReleaseReference(PageCacheEntry);
+        }
     }
 
     //
@@ -4539,8 +4620,14 @@ Return Value:
         RtlAtomicAdd(&IoPageCacheMappedPageCount, -UnmapCount);
     }
 
+    if (!LIST_EMPTY(&DestroyList)) {
+        IopDestroyPageCacheEntries(&DestroyList);
+    }
+
     if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_MAPPED_MANAGEMENT) != 0) {
-        RtlDebugPrint("PAGE CACHE: Unmapped %lu entries.\n", UnmapCount);
+        RtlDebugPrint("PAGE CACHE: Unmapped %lu entries, destroyed %lu.\n",
+                      UnmapCount,
+                      DestroyCount);
     }
 
     return;

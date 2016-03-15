@@ -364,6 +364,7 @@ Return Value:
 
 AllocateIoBufferEnd:
     if (!KSUCCESS(Status)) {
+        RtlDebugPrint("MmAllocateNonPagedIoBuffer(%x): %x\n", Size, Status);
         if (VirtualAddress != NULL) {
             UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
@@ -1223,10 +1224,6 @@ Return Value:
                                              MapFragmentStart,
                                              FragmentCount,
                                              MapFlags);
-
-            if (!KSUCCESS(Status)) {
-                goto MapIoBufferEnd;
-            }
         }
 
         //

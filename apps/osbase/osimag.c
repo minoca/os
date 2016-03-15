@@ -221,13 +221,6 @@ OspImReleaseModuleNumber (
 OS_API PIM_GET_ENVIRONMENT_VARIABLE OsImGetEnvironmentVariable;
 
 //
-// Store the page shift and mask for easy use during image section mappings.
-//
-
-UINTN OsPageShift;
-UINTN OsPageSize;
-
-//
 // Store a pointer to the list head of all loaded images.
 //
 
@@ -782,8 +775,6 @@ Return Value:
 {
 
     OsInitializeLockDefault(&OsLoadedImagesLock);
-    OsPageSize = OsEnvironment->StartData->PageSize;
-    OsPageShift = RtlCountTrailingZeros(OsPageSize);
     ImInitialize(&OsImageFunctionTable);
     return;
 }

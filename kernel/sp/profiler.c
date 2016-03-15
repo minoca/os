@@ -258,7 +258,7 @@ SppCollectThreadStatistic (
 
 //
 // Stores a value indicating whether or not profiling is enabled for system
-// initialization. Can be set with PROFILER_TYPE_FLAGS_* values.
+// initialization. Can be set with PROFILER_TYPE_FLAG_* values.
 //
 
 ULONG SpEarlyEnabledFlags = 0x0;

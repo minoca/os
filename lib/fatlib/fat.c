@@ -2717,6 +2717,9 @@ Return Value:
     }
 
     if (DestinationOffset > MAX_ULONG) {
+
+        ASSERT(FALSE);
+
         Status = STATUS_OUT_OF_BOUNDS;
         goto FatFileSeekEnd;
     }

@@ -46,6 +46,12 @@ Environment:
 #define MDL_BIN_SHIFT 12
 
 //
+// Define the number of bits per bin.
+//
+
+#define MDL_BITS_PER_BIN 2
+
+//
 // ----------------------------------------------- Internal Function Prototypes
 //
 
@@ -1979,6 +1985,7 @@ Return Value:
     BinIndex = ((UINTN)sizeof(ULONGLONG) * BITS_PER_BYTE) - 1 -
                RtlCountLeadingZeros64(BinSize);
 
+    BinIndex >>= MDL_BITS_PER_BIN - 1;
     if (BinIndex >= MDL_BIN_COUNT) {
         BinIndex = MDL_BIN_COUNT - 1;
     }

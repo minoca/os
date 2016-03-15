@@ -1811,15 +1811,16 @@ Return Value:
     UINTN ReplacementSize;
     PHEAP_SEGMENT Segment;
 
+    if (Heap->AllocateFunction == NULL) {
+        return NULL;
+    }
+
     //
     // Directly allocate large chunks, but only if the heap is already
     // initialized.
     //
 
-    if ((Heap->AllocateFunction != NULL) &&
-        (Size >= Heap->DirectAllocationThreshold) &&
-        (Heap->TopSize != 0)) {
-
+    if ((Size >= Heap->DirectAllocationThreshold) && (Heap->TopSize != 0)) {
         Memory = RtlpHeapAllocateDirect(Heap, Size, Tag);
         if (Memory != NULL) {
             return Memory;
@@ -1869,19 +1870,18 @@ Return Value:
     }
 
     //
-    // Ask the system for more memory. If the doubling effort failed, fall
-    // back to the original aligned size.
+    // Ask the system for more memory. If the doubling effort failed, divide by
+    // 2 until something is found or the minimum fails as well.
     //
 
     Memory = NULL;
-    if (Heap->AllocateFunction != NULL) {
+    while (AlignedSize >= ConservativeAlignedSize) {
         Memory = Heap->AllocateFunction(Heap, AlignedSize, Heap->AllocationTag);
-        if (Memory == NULL) {
-            AlignedSize = ConservativeAlignedSize;
-            Memory = Heap->AllocateFunction(Heap,
-                                            AlignedSize,
-                                            Heap->AllocationTag);
+        if (Memory != NULL) {
+            break;
         }
+
+        AlignedSize >>= 1;
     }
 
     if (Memory != NULL) {
