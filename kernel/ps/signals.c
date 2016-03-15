@@ -829,15 +829,13 @@ Return Value:
         }
 
         //
-        // Dispatch any pending signals and interrupt this wait if a signal
-        // needs to be handled.
+        // Check for pending signals before looking for an eligible child
+        // signal entry. This needs to be done first because it will clobber
+        // the signal pending state from child signal pending to no signal
+        // pending, resulting in indefinite suspension.
         //
 
         SignalNumber = PsDispatchPendingSignals(Thread, TrapFrame);
-        if (SignalNumber != -1) {
-            Status = STATUS_INTERRUPTED;
-            break;
-        }
 
         //
         // Attempt to pull a child signal off one of the queues.
@@ -892,6 +890,18 @@ Return Value:
              SYSTEM_CALL_WAIT_FLAG_RETURN_IMMEDIATELY) != 0) {
 
             Status = STATUS_NO_DATA_AVAILABLE;
+            break;
+        }
+
+        //
+        // Check for interruptions from the signal dispatch now that it's
+        // known nothing was found. This needs to happen after the "return
+        // immediately" breakout because many apps (such as make) expect that
+        // if WNOHANG is set then EINTR will never be returned.
+        //
+
+        if (SignalNumber != -1) {
+            Status = STATUS_INTERRUPTED;
             break;
         }
 
@@ -976,8 +986,8 @@ Return Value:
         REMOVE_SIGNAL(Parameters->SignalMask, SIGNAL_STOP);
         REMOVE_SIGNAL(Parameters->SignalMask, SIGNAL_CONTINUE);
         REMOVE_SIGNAL(Parameters->SignalMask, SIGNAL_KILL);
-        OriginalMask = Thread->BlockedSignals;
         KeAcquireQueuedLock(Process->QueuedLock);
+        OriginalMask = Thread->BlockedSignals;
         Thread->BlockedSignals = Parameters->SignalMask;
         PspRequeueBlockedSignals(Process);
         KeReleaseQueuedLock(Process->QueuedLock);
@@ -1005,7 +1015,10 @@ Return Value:
     //
 
     if (Parameters->SetMask != FALSE) {
+        KeAcquireQueuedLock(Process->QueuedLock);
         Thread->BlockedSignals = OriginalMask;
+        PspRequeueBlockedSignals(Process);
+        KeReleaseQueuedLock(Process->QueuedLock);
     }
 
     return;
