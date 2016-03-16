@@ -218,6 +218,7 @@ Return Value:
 
 {
 
+    ULONG ReturnEvents;
     KSTATUS Status;
     ULONG WaitFlags;
     PVOID WaitObjectArray[5];
@@ -236,9 +237,8 @@ Return Value:
     // Always wait on the error state.
     //
 
-    WaitObjectCount = 0;
-    WaitObjectArray[WaitObjectCount] = IoState->ErrorEvent;
-    WaitObjectCount += 1;
+    WaitObjectArray[0] = IoState->ErrorEvent;
+    WaitObjectCount = 1;
 
     //
     // Determine which I/O state events to wait on.
@@ -274,25 +274,42 @@ Return Value:
         WaitObjectCount += 1;
     }
 
-    Status = ObWaitOnObjects(WaitObjectArray,
-                             WaitObjectCount,
-                             WaitFlags,
-                             TimeoutInMilliseconds,
-                             NULL,
-                             NULL);
-
-    if (!KSUCCESS(Status)) {
-        goto WaitForIoObjectStateEnd;
-    }
-
     //
-    // The I/O object state maintains a bitmask of all the currently signaled
-    // poll events. AND this with the requested events to get the returned
-    // events for this descriptor.
+    // Loop until the event flags agree with the wait.
     //
 
-    if (ReturnedEvents != NULL) {
-        *ReturnedEvents = IoState->Events & (Events | POLL_NONMASKABLE_EVENTS);
+    while (TRUE) {
+        Status = ObWaitOnObjects(WaitObjectArray,
+                                 WaitObjectCount,
+                                 WaitFlags,
+                                 TimeoutInMilliseconds,
+                                 NULL,
+                                 NULL);
+
+        if (!KSUCCESS(Status)) {
+            goto WaitForIoObjectStateEnd;
+        }
+
+        ReturnEvents = IoState->Events & (Events | POLL_NONMASKABLE_EVENTS);
+
+        //
+        // The I/O object state maintains a bitmask of all the currently
+        // signaled poll events. AND this with the requested events to get the
+        // returned events for this descriptor.
+        //
+
+        if (ReturnedEvents != NULL) {
+            *ReturnedEvents = ReturnEvents;
+        }
+
+        //
+        // If there were no returned events, then the event fired but the flags
+        // seem to be out of date. Go back and try again.
+        //
+
+        if (ReturnEvents != 0) {
+            break;
+        }
     }
 
 WaitForIoObjectStateEnd:
