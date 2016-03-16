@@ -74,7 +74,7 @@ typedef struct _DEVICE_INFORMATION_ENTRY {
 UINTN IoNextDeviceId;
 
 LIST_ENTRY IoDeviceInformationList;
-KSPIN_LOCK IoDeviceInformationLock;
+PSHARED_EXCLUSIVE_LOCK IoDeviceInformationLock;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -150,7 +150,7 @@ Return Value:
     // Loop through and look for elements that match.
     //
 
-    KeAcquireSpinLock(&IoDeviceInformationLock);
+    KeAcquireSharedExclusiveLockShared(IoDeviceInformationLock);
     CurrentEntry = IoDeviceInformationList.Next;
     while (CurrentEntry != &IoDeviceInformationList) {
         Entry = LIST_VALUE(CurrentEntry, DEVICE_INFORMATION_ENTRY, ListEntry);
@@ -191,7 +191,7 @@ Return Value:
         MatchCount += 1;
     }
 
-    KeReleaseSpinLock(&IoDeviceInformationLock);
+    KeReleaseSharedExclusiveLockShared(IoDeviceInformationLock);
     Status = STATUS_SUCCESS;
     if (MatchCount > BufferSize) {
         Status = STATUS_BUFFER_TOO_SMALL;
@@ -256,7 +256,7 @@ Return Value:
     //
 
     Device = NULL;
-    KeAcquireSpinLock(&IoDeviceInformationLock);
+    KeAcquireSharedExclusiveLockShared(IoDeviceInformationLock);
     CurrentEntry = IoDeviceInformationList.Next;
     while (CurrentEntry != &IoDeviceInformationList) {
         Entry = LIST_VALUE(CurrentEntry, DEVICE_INFORMATION_ENTRY, ListEntry);
@@ -267,7 +267,7 @@ Return Value:
         }
     }
 
-    KeReleaseSpinLock(&IoDeviceInformationLock);
+    KeReleaseSharedExclusiveLockShared(IoDeviceInformationLock);
     if (Device == NULL) {
         *DataSize = 0;
         return STATUS_NO_INTERFACE;
@@ -356,7 +356,7 @@ Return Value:
     // Look for an existing entry matching the device and UUID.
     //
 
-    KeAcquireSpinLock(&IoDeviceInformationLock);
+    KeAcquireSharedExclusiveLockExclusive(IoDeviceInformationLock);
     CurrentEntry = IoDeviceInformationList.Next;
     while (CurrentEntry != &IoDeviceInformationList) {
         Entry = LIST_VALUE(CurrentEntry, DEVICE_INFORMATION_ENTRY, ListEntry);
@@ -399,7 +399,7 @@ Return Value:
     }
 
 RegisterDeviceInformationEnd:
-    KeReleaseSpinLock(&IoDeviceInformationLock);
+    KeReleaseSharedExclusiveLockExclusive(IoDeviceInformationLock);
     if (ExistingEntry != NULL) {
 
         ASSERT(ExistingEntry->ListEntry.Next == NULL);
@@ -671,7 +671,7 @@ Return Value:
     return DeviceId;
 }
 
-VOID
+KSTATUS
 IopInitializeDeviceInformationSupport (
     VOID
     )
@@ -688,16 +688,26 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
 {
 
+    KSTATUS Status;
+
     IoNextDeviceId = OBJECT_MANAGER_DEVICE_ID + 1;
     INITIALIZE_LIST_HEAD(&IoDeviceInformationList);
-    KeInitializeSpinLock(&IoDeviceInformationLock);
-    return;
+    IoDeviceInformationLock = KeCreateSharedExclusiveLock();
+    if (IoDeviceInformationLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeDeviceInformationSupportEnd;
+    }
+
+    Status = STATUS_SUCCESS;
+
+InitializeDeviceInformationSupportEnd:
+    return Status;
 }
 
 //

@@ -298,7 +298,10 @@ Return Value:
     // Initialize support for device information requests.
     //
 
-    IopInitializeDeviceInformationSupport();
+    Status = IopInitializeDeviceInformationSupport();
+    if (!KSUCCESS(Status)) {
+        goto InitializeEnd;
+    }
 
     //
     // Initialize support for file objects.

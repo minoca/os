@@ -1531,7 +1531,7 @@ Return Value:
 
 --*/
 
-VOID
+KSTATUS
 IopInitializeDeviceInformationSupport (
     VOID
     );
@@ -1548,7 +1548,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
