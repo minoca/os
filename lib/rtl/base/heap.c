@@ -1802,10 +1802,10 @@ Return Value:
 
     UINTN AlignedSize;
     PHEAP_CHUNK Chunk;
-    UINTN ConservativeAlignedSize;
     UINTN DoublePrevious;
     UINTN Footprint;
     PCHAR Memory;
+    UINTN Minimum;
     PCHAR OldBase;
     PHEAP_CHUNK Replacement;
     UINTN ReplacementSize;
@@ -1847,7 +1847,7 @@ Return Value:
     // expansions. Don't go over the footprint limit that way though.
     //
 
-    ConservativeAlignedSize = AlignedSize;
+    Minimum = AlignedSize;
     DoublePrevious = Heap->PreviousExpansionSize << 1;
     if ((AlignedSize < DoublePrevious) &&
         ((Heap->FootprintLimit == 0) ||
@@ -1875,13 +1875,22 @@ Return Value:
     //
 
     Memory = NULL;
-    while (AlignedSize >= ConservativeAlignedSize) {
+    while (TRUE) {
+
+        ASSERT(AlignedSize >= Minimum);
+
         Memory = Heap->AllocateFunction(Heap, AlignedSize, Heap->AllocationTag);
         if (Memory != NULL) {
             break;
         }
 
+        if (AlignedSize <= Minimum) {
+            break;
+        }
+
         AlignedSize >>= 1;
+        AlignedSize = ALIGN_RANGE_UP(AlignedSize,
+                                     Heap->ExpansionGranularity);
     }
 
     if (Memory != NULL) {
