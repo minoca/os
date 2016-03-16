@@ -1876,7 +1876,12 @@ Return Value:
 
     ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
 
-    BlockSize = FileObject->Properties.BlockSize;
+    if (FileObject->Properties.Type == IoObjectBlockDevice) {
+        BlockSize = FileObject->Properties.BlockSize;
+
+    } else {
+        BlockSize = MmPageSize();
+    }
 
     //
     // Block-align the offset and size.
@@ -2038,7 +2043,13 @@ Return Value:
     ASSERT((FileObject->Properties.Type == IoObjectBlockDevice) ||
            (KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE));
 
-    BlockSize = FileObject->Properties.BlockSize;
+    if (FileObject->Properties.Type == IoObjectBlockDevice) {
+        BlockSize = FileObject->Properties.BlockSize;
+
+    } else {
+        BlockSize = MmPageSize();
+    }
+
     IoContext->BytesCompleted = 0;
     Offset = IoContext->Offset;
     Status = STATUS_SUCCESS;
