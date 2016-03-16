@@ -12,3 +12,6 @@
 
 [diff "cpp"]
 	xfuncname = "!^[ \t]*[A-Za-z_][A-Za-z_0-9]*:[[:space:]]*($|/[/*])\n!:$\n^((::[[:space:]]*)?[A-Za-z_].*)$"
+
+[grep]
+	linenumber = true
