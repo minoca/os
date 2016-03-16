@@ -577,7 +577,38 @@ Return Value:
 
 {
 
+    PNET80211_BSS_ENTRY Bss;
+    PNET80211_FRAME_HEADER Header;
+
     NetProcessReceivedPacket(Link->NetworkLink, Packet->NetPacket);
+
+    //
+    // Update the RSSI for the BSS that sent the packet. If this station is
+    // associated (i.e. has an active BSS) and is not scanning, then assume the
+    // packet came from the associated BSS.
+    //
+
+    KeAcquireQueuedLock(Link->Lock);
+    if ((Link->ActiveBss != NULL) &&
+        ((Link->Flags & NET80211_LINK_FLAG_SCANNING) == 0)) {
+
+        Bss = Link->ActiveBss;
+
+    //
+    // Otherwise search the list of BSS's and update the one with the matching
+    // ID.
+    //
+
+    } else {
+        Header = Packet->NetPacket->Buffer + Packet->NetPacket->DataOffset;
+        Bss = Net80211pLookupBssEntry(Link, Header->Address2);
+    }
+
+    if (Bss != NULL) {
+        Bss->State.Rssi = Packet->Rssi;
+    }
+
+    KeReleaseQueuedLock(Link->Lock);
     return;
 }
 
@@ -628,7 +659,7 @@ Return Value:
     KSTATUS Status;
 
     Status = STATUS_NOT_HANDLED;
-    if (RtlAreUuidsEqual(Uuid, &Net80211NetworkDeviceInformationUuid) != FALSE) {
+    if (RtlAreUuidsEqual(Uuid, &Net80211NetworkDeviceInformationUuid)) {
         if (*DataSize < sizeof(NETWORK_80211_DEVICE_INFORMATION)) {
             *DataSize = sizeof(NETWORK_80211_DEVICE_INFORMATION);
             goto GetSetLinkDeviceInformationEnd;

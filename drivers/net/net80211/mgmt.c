@@ -735,6 +735,60 @@ Return Value:
     return;
 }
 
+PNET80211_BSS_ENTRY
+Net80211pLookupBssEntry (
+    PNET80211_LINK Link,
+    PUCHAR Bssid
+    )
+
+/*++
+
+Routine Description:
+
+    This routine searches the link for a known BSS entry with the given BSSID.
+    It does not take a reference on the BSS entry and assumes that the link's
+    lock is already held.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link on which to search.
+
+    Bssid - Supplies a pointer to the BSSID for the desired BSS entry.
+
+Return Value:
+
+    Returns a pointer to the matching BSS entry on success, or NULL on failure.
+
+--*/
+
+{
+
+    PNET80211_BSS_ENTRY Bss;
+    PLIST_ENTRY CurrentEntry;
+    BOOL Match;
+    PNET80211_BSS_ENTRY MatchedBss;
+
+    ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
+
+    MatchedBss = NULL;
+    CurrentEntry = Link->BssList.Next;
+    while (CurrentEntry != &(Link->BssList)) {
+        Bss = LIST_VALUE(CurrentEntry, NET80211_BSS_ENTRY, ListEntry);
+        Match = RtlCompareMemory(Bssid,
+                                 Bss->State.Bssid,
+                                 NET80211_ADDRESS_SIZE);
+
+        if (Match != FALSE) {
+            MatchedBss = Bss;
+            break;
+        }
+
+        CurrentEntry = CurrentEntry->Next;
+    }
+
+    return MatchedBss;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -1090,24 +1144,7 @@ Return Value:
 
                 KeAcquireQueuedLock(Link->Lock);
                 LockHeld = TRUE;
-                CurrentEntry = Link->BssList.Next;
-                while (CurrentEntry != &(Link->BssList)) {
-                    BssEntry = LIST_VALUE(CurrentEntry,
-                                          NET80211_BSS_ENTRY,
-                                          ListEntry);
-
-                    Match = RtlCompareMemory(Scan->Bssid,
-                                             BssEntry->State.Bssid,
-                                             NET80211_ADDRESS_SIZE);
-
-                    if (Match != FALSE) {
-                        FoundEntry = BssEntry;
-                        break;
-                    }
-
-                    CurrentEntry = CurrentEntry->Next;
-                }
-
+                FoundEntry = Net80211pLookupBssEntry(Link, Scan->Bssid);
                 if (FoundEntry != NULL) {
                     Status = Net80211pValidateRates(Link, FoundEntry);
                     if (!KSUCCESS(Status)) {
@@ -1135,7 +1172,7 @@ Return Value:
             ASSERT(Scan->SsidLength != 0);
             ASSERT(FoundEntry == NULL);
 
-            MaxRssi = 0;
+            MaxRssi = MIN_LONG;
             KeAcquireQueuedLock(Link->Lock);
             LockHeld = TRUE;
             CurrentEntry = Link->BssList.Next;
@@ -2969,7 +3006,7 @@ Return Value:
 
     PNET80211_BSS_ENTRY Bss;
     ULONG Channel;
-    PLIST_ENTRY CurrentEntry;
+    BOOL DestroyBss;
     BOOL LinkDown;
     BOOL Match;
     PUCHAR NewRsn;
@@ -2987,29 +3024,13 @@ Return Value:
     }
 
     //
-    // First look for an existing BSS entry based on the BSSID.
+    // First look for an existing BSS entry based on the BSSID. But if no
+    // matching BSS entry is found, then create a new one and insert it into
+    // the list.
     //
 
     KeAcquireQueuedLock(Link->Lock);
-    CurrentEntry = Link->BssList.Next;
-    while (CurrentEntry != &(Link->BssList)) {
-        Bss = LIST_VALUE(CurrentEntry, NET80211_BSS_ENTRY, ListEntry);
-        Match = RtlCompareMemory(Response->Bssid,
-                                 Bss->State.Bssid,
-                                 NET80211_ADDRESS_SIZE);
-
-        if (Match != FALSE) {
-            break;
-        }
-
-        Bss = NULL;
-    }
-
-    //
-    // If no matching BSS entry was found, then create a new one and insert it
-    // into the list.
-    //
-
+    Bss = Net80211pLookupBssEntry(Link, Response->Bssid);
     if (Bss == NULL) {
         Bss = Net80211pCreateBssEntry(Response->Bssid);
         if (Bss == NULL) {
@@ -3077,7 +3098,7 @@ Return Value:
         }
 
         if (LinkDown != FALSE) {
-            NetSetLinkState(Link->NetworkLink, FALSE, 0);
+            Net80211pSetStateUnlocked(Link, Net80211StateInitialized);
         }
     }
 
@@ -3181,14 +3202,19 @@ Return Value:
     Bss->Encryption.StationRsn = (PUCHAR)&Net80211DefaultRsnInformation;
 
 UpdateBssCacheEnd:
+    DestroyBss = FALSE;
     if (!KSUCCESS(Status)) {
         if (Bss != NULL) {
             LIST_REMOVE(&(Bss->ListEntry));
-            Net80211pBssEntryReleaseReference(Bss);
+            DestroyBss = TRUE;
         }
     }
 
     KeReleaseQueuedLock(Link->Lock);
+    if (DestroyBss != FALSE) {
+        Net80211pBssEntryReleaseReference(Bss);
+    }
+
     return;
 }
 

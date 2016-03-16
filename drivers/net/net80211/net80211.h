@@ -72,6 +72,7 @@ Author:
 
 #define NET80211_LINK_FLAG_DATA_PAUSED  0x00000001
 #define NET80211_LINK_FLAG_TIMER_QUEUED 0x00000002
+#define NET80211_LINK_FLAG_SCANNING     0x00000004
 
 //
 // Define the set of BSS entry flags.
@@ -488,6 +489,32 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+PNET80211_BSS_ENTRY
+Net80211pLookupBssEntry (
+    PNET80211_LINK Link,
+    PUCHAR Bssid
+    );
+
+/*++
+
+Routine Description:
+
+    This routine searches the link for a known BSS entry with the given BSSID.
+    It does not take a reference on the BSS entry and assumes that the link's
+    lock is already held.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link on which to search.
+
+    Bssid - Supplies a pointer to the BSSID for the desired BSS entry.
+
+Return Value:
+
+    Returns a pointer to the matching BSS entry on success, or NULL on failure.
 
 --*/
 
