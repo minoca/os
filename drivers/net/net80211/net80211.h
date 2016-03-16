@@ -83,13 +83,6 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef enum _NET80211_ENCRYPTION_TYPE {
-    Net80211EncryptionNone,
-    Net80211EncryptionWep,
-    Net80211EncryptionWpaPsk,
-    Net80211EncryptionWpa2Psk
-} NET80211_ENCRYPTION_TYPE, *PNET80211_ENCRYPTION_TYPE;
-
 /*++
 
 Structure Description:
@@ -189,8 +182,8 @@ Members:
 --*/
 
 typedef struct _NET80211_ENCRYPTION {
-    NET80211_ENCRYPTION_TYPE Pairwise;
-    NET80211_ENCRYPTION_TYPE Group;
+    NETWORK_ENCRYPTION_TYPE Pairwise;
+    NETWORK_ENCRYPTION_TYPE Group;
     PNET80211_KEY Keys[NET80211_MAX_KEY_COUNT];
     PUCHAR ApRsn;
     PUCHAR StationRsn;

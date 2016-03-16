@@ -109,11 +109,20 @@ Net80211pDestroy80211Link (
     PNET80211_LINK Net80211Link
     );
 
+KSTATUS
+Net80211pGetSetNetworkDeviceInformation (
+    PNET80211_LINK Link,
+    PNETWORK_80211_DEVICE_INFORMATION Information,
+    BOOL Set
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
 
 HANDLE Net80211DataLinkLayerHandle = INVALID_HANDLE;
+UUID Net80211NetworkDeviceInformationUuid =
+    NETWORK_80211_DEVICE_INFORMATION_UUID;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -284,6 +293,7 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
+    Link = NULL;
     if (Properties->Version < NET80211_LINK_PROPERTIES_VERSION) {
         Status = STATUS_VERSION_MISMATCH;
         goto AddLinkEnd;
@@ -297,7 +307,6 @@ Return Value:
     // private context.
     //
 
-    NetworkLink = NULL;
     RtlZeroMemory(&NetProperties, sizeof(NET_LINK_PROPERTIES));
     NetProperties.Version = NET_LINK_PROPERTIES_VERSION;
     NetProperties.TransmitAlignment = Properties->TransmitAlignment;
@@ -361,6 +370,19 @@ Return Value:
     Link->Properties.SupportedRates = Rates;
 
     //
+    // All 802.11 network devices respond to 802.11 network device information
+    // requests.
+    //
+
+    Status = IoRegisterDeviceInformation(Link->Properties.Device,
+                                         &Net80211NetworkDeviceInformationUuid,
+                                         TRUE);
+
+    if (!KSUCCESS(Status)) {
+        goto AddLinkEnd;
+    }
+
+    //
     // Set the link as initialized and start an active scan to join the default
     // BSS.
     //
@@ -388,8 +410,8 @@ Return Value:
 
 AddLinkEnd:
     if (!KSUCCESS(Status)) {
-        if (NetworkLink != NULL) {
-            NetRemoveLink(NetworkLink);
+        if (Link != NULL) {
+            Net80211RemoveLink(Link);
         }
     }
 
@@ -422,6 +444,15 @@ Return Value:
 --*/
 
 {
+
+    //
+    // The device has been removed, the link should no longer respond to
+    // information requests.
+    //
+
+    IoRegisterDeviceInformation(Link->Properties.Device,
+                                &Net80211NetworkDeviceInformationUuid,
+                                FALSE);
 
     //
     // Remove the network link. When the last reference is released on the
@@ -596,12 +627,28 @@ Return Value:
 
     KSTATUS Status;
 
-    Status = NetGetSetLinkDeviceInformation(Link->NetworkLink,
-                                            Uuid,
-                                            Data,
-                                            DataSize,
-                                            Set);
+    Status = STATUS_NOT_HANDLED;
+    if (RtlAreUuidsEqual(Uuid, &Net80211NetworkDeviceInformationUuid) != FALSE) {
+        if (*DataSize < sizeof(NETWORK_80211_DEVICE_INFORMATION)) {
+            *DataSize = sizeof(NETWORK_80211_DEVICE_INFORMATION);
+            goto GetSetLinkDeviceInformationEnd;
+        }
 
+        *DataSize = sizeof(NETWORK_80211_DEVICE_INFORMATION);
+        Status = Net80211pGetSetNetworkDeviceInformation(Link, Data, Set);
+        goto GetSetLinkDeviceInformationEnd;
+
+    } else {
+        Status = NetGetSetLinkDeviceInformation(Link->NetworkLink,
+                                                Uuid,
+                                                Data,
+                                                DataSize,
+                                                Set);
+
+        goto GetSetLinkDeviceInformationEnd;
+    }
+
+GetSetLinkDeviceInformationEnd:
     return Status;
 }
 
@@ -1001,7 +1048,7 @@ Return Value:
     if ((Flags & NET_PACKET_SIZE_FLAG_UNENCRYPTED) == 0) {
         Bss = Net80211pGetBss(Link);
         if (Bss != NULL) {
-            if (Bss->Encryption.Pairwise != Net80211EncryptionNone) {
+            if (Bss->Encryption.Pairwise != NetworkEncryptionNone) {
                 PacketSizeInformation->FooterSize += NET80211_CCMP_MIC_SIZE;
                 PacketSizeInformation->HeaderSize +=
                                                   sizeof(NET80211_CCMP_HEADER);
@@ -1127,5 +1174,84 @@ Return Value:
 
     MmFreePagedPool(Net80211Link);
     return;
+}
+
+KSTATUS
+Net80211pGetSetNetworkDeviceInformation (
+    PNET80211_LINK Link,
+    PNETWORK_80211_DEVICE_INFORMATION Information,
+    BOOL Set
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the 802.11 network device information for a
+    particular link.
+
+Arguments:
+
+    Link - Supplies a pointer to the link to work with.
+
+    Information - Supplies a pointer that either receives the device
+        information, or contains the new information to set. For set operations,
+        the information buffer will contain the current settings on return.
+
+    Set - Supplies a boolean indicating if the information should be set or
+        returned.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+
+    if (Information->Version < NETWORK_80211_DEVICE_INFORMATION_VERSION) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    if (Set != FALSE) {
+        return STATUS_NOT_SUPPORTED;
+    }
+
+    Information->Flags = 0;
+    RtlCopyMemory(&(Information->PhysicalAddress),
+                  &(Link->Properties.PhysicalAddress),
+                  sizeof(NETWORK_ADDRESS));
+
+    KeAcquireQueuedLock(Link->Lock);
+    if ((Link->State == Net80211StateAssociated) ||
+        (Link->State == Net80211StateEncrypted)) {
+
+        ASSERT(Link->ActiveBss != NULL);
+
+        Information->Flags |= NETWORK_80211_DEVICE_FLAG_ASSOCIATED;
+        Information->Bssid.Network = SocketNetworkPhysical80211;
+        Information->Bssid.Port = 0;
+        RtlCopyMemory(Information->Bssid.Address,
+                      Link->ActiveBss->State.Bssid,
+                      NET80211_ADDRESS_SIZE);
+
+        RtlCopyMemory(Information->Ssid,
+                      Link->ActiveBss->Ssid,
+                      Link->ActiveBss->SsidLength);
+
+        Information->Ssid[Link->ActiveBss->SsidLength] = STRING_TERMINATOR;
+        Information->Channel = Link->ActiveBss->State.Channel;
+        Information->MaxRate = Link->ActiveBss->State.MaxRate *
+                               NET80211_RATE_UNIT;
+
+        Information->Rssi = Link->ActiveBss->State.Rssi;
+        Information->PairwiseEncryption = Link->ActiveBss->Encryption.Pairwise;
+        Information->GroupEncryption = Link->ActiveBss->Encryption.Group;
+    }
+
+    KeReleaseQueuedLock(Link->Lock);
+    return STATUS_SUCCESS;
 }
 

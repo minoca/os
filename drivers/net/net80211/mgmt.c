@@ -908,8 +908,8 @@ Return Value:
 
         ASSERT(Bss != NULL);
 
-        if ((Bss->Encryption.Pairwise == Net80211EncryptionNone) ||
-            (Bss->Encryption.Pairwise == Net80211EncryptionWep)) {
+        if ((Bss->Encryption.Pairwise == NetworkEncryptionNone) ||
+            (Bss->Encryption.Pairwise == NetworkEncryptionWep)) {
 
             SetLinkUp = TRUE;
 
@@ -943,8 +943,8 @@ Return Value:
 
     case Net80211StateEncrypted:
 
-        ASSERT((Bss->Encryption.Pairwise == Net80211EncryptionWpaPsk) ||
-               (Bss->Encryption.Pairwise == Net80211EncryptionWpa2Psk));
+        ASSERT((Bss->Encryption.Pairwise == NetworkEncryptionWpaPsk) ||
+               (Bss->Encryption.Pairwise == NetworkEncryptionWpa2Psk));
 
         Net80211pDestroyEncryption(Bss);
         SetLinkUp = TRUE;
@@ -1028,7 +1028,7 @@ Return Value:
     PNET80211_LINK Link;
     BOOL LockHeld;
     BOOL Match;
-    ULONG MaxRssi;
+    LONG MaxRssi;
     ULONG Retries;
     PNET80211_SCAN_STATE Scan;
     KSTATUS Status;
@@ -1188,7 +1188,7 @@ Return Value:
 
             ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
 
-            if (FoundEntry->Encryption.Pairwise != Net80211EncryptionNone) {
+            if (FoundEntry->Encryption.Pairwise != NetworkEncryptionNone) {
                 if (Scan->PassphraseLength == 0) {
                     Status = STATUS_ACCESS_DENIED;
                     break;
@@ -2012,8 +2012,8 @@ Return Value:
     // Only include the RSN information if advanced encryption is required.
     //
 
-    if ((Bss->Encryption.Pairwise != Net80211EncryptionNone) &&
-        (Bss->Encryption.Pairwise != Net80211EncryptionWep)) {
+    if ((Bss->Encryption.Pairwise != NetworkEncryptionNone) &&
+        (Bss->Encryption.Pairwise != NetworkEncryptionWep)) {
 
         FrameBodySize += sizeof(NET80211_DEFAULT_RSN_INFORMATION);
     }
@@ -2082,8 +2082,8 @@ Return Value:
     // Set the RSN information if advanced encryption is required.
     //
 
-    if ((Bss->Encryption.Pairwise != Net80211EncryptionNone) &&
-        (Bss->Encryption.Pairwise != Net80211EncryptionWep)) {
+    if ((Bss->Encryption.Pairwise != NetworkEncryptionNone) &&
+        (Bss->Encryption.Pairwise != NetworkEncryptionWep)) {
 
         RtlCopyMemory(InformationByte,
                       &Net80211DefaultRsnInformation,
@@ -2737,10 +2737,10 @@ Return Value:
 
 {
 
-    NET80211_ENCRYPTION_TYPE GroupEncryption;
+    NETWORK_ENCRYPTION_TYPE GroupEncryption;
     ULONG Index;
     ULONG Offset;
-    NET80211_ENCRYPTION_TYPE PairwiseEncryption;
+    NETWORK_ENCRYPTION_TYPE PairwiseEncryption;
     USHORT PmkidCount;
     BOOL PskSupported;
     ULONG RsnLength;
@@ -2753,8 +2753,8 @@ Return Value:
 
     Status = STATUS_SUCCESS;
     Offset = NET80211_ELEMENT_HEADER_SIZE;
-    PairwiseEncryption = Net80211EncryptionNone;
-    GroupEncryption = Net80211EncryptionNone;
+    PairwiseEncryption = NetworkEncryptionNone;
+    GroupEncryption = NetworkEncryptionNone;
     RsnLength = NET80211_GET_ELEMENT_LENGTH(Rsn);
 
     //
@@ -2787,7 +2787,7 @@ Return Value:
     Offset += sizeof(ULONG);
     switch (Suite) {
     case NET80211_CIPHER_SUITE_CCMP:
-        GroupEncryption = Net80211EncryptionWpa2Psk;
+        GroupEncryption = NetworkEncryptionWpa2Psk;
         break;
 
     default:
@@ -2797,7 +2797,7 @@ Return Value:
         break;
     }
 
-    if (GroupEncryption == Net80211EncryptionNone) {
+    if (GroupEncryption == NetworkEncryptionNone) {
         Status = STATUS_NOT_SUPPORTED;
         goto ParseRsnElementEnd;
     }
@@ -2807,7 +2807,7 @@ Return Value:
     // WPA2-PSK), but may support others.
     //
 
-    PairwiseEncryption = Net80211EncryptionNone;
+    PairwiseEncryption = NetworkEncryptionNone;
     if ((Offset + sizeof(USHORT)) > RsnLength) {
         goto ParseRsnElementEnd;
     }
@@ -2824,7 +2824,7 @@ Return Value:
         Offset += sizeof(ULONG);
         switch (Suite) {
         case NET80211_CIPHER_SUITE_CCMP:
-            PairwiseEncryption = Net80211EncryptionWpa2Psk;
+            PairwiseEncryption = NetworkEncryptionWpa2Psk;
             break;
 
         default:
@@ -2836,7 +2836,7 @@ Return Value:
         }
     }
 
-    if (PairwiseEncryption == Net80211EncryptionNone) {
+    if (PairwiseEncryption == NetworkEncryptionNone) {
         Status = STATUS_NOT_SUPPORTED;
         goto ParseRsnElementEnd;
     }
@@ -3169,7 +3169,7 @@ Return Value:
         Bss->Encryption.ApRsn = NULL;
     }
 
-    if (Bss->Encryption.Pairwise != Net80211EncryptionNone) {
+    if (Bss->Encryption.Pairwise != NetworkEncryptionNone) {
         Bss->Flags |= NET80211_BSS_FLAG_ENCRYPT_DATA;
     }
 

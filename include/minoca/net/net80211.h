@@ -910,7 +910,7 @@ typedef struct _NET80211_BSS {
     USHORT AssociationId;
     ULONGLONG Timestamp;
     ULONG Channel;
-    ULONG Rssi;
+    LONG Rssi;
     NET80211_MODE Mode;
     UCHAR MaxRate;
     NET80211_RATE_INFORMATION Rates;

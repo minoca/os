@@ -53,6 +53,27 @@ Author:
 #define NETWORK_DEVICE_MAX_DNS_SERVERS 4
 
 //
+// Define the UUID and version for the 802.11 networking device information.
+//
+
+#define NETWORK_80211_DEVICE_INFORMATION_UUID \
+    {{0xc927b054, 0xead311e5, 0x8ea20401, 0x0fdd7401}}
+
+#define NETWORK_80211_DEVICE_INFORMATION_VERSION 0x00010000
+
+//
+// Define the 802.11 network device information flags.
+//
+
+#define NETWORK_80211_DEVICE_FLAG_ASSOCIATED 0x00000001
+
+//
+// Define the maximum length of an SSID, including the null terminator.
+//
+
+#define NETWORK_80211_MAX_SSID_LENGTH 33
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -125,6 +146,63 @@ typedef struct _NETWORK_DEVICE_INFORMATION {
     SYSTEM_TIME LeaseEndTime;
 } NETWORK_DEVICE_INFORMATION, *PNETWORK_DEVICE_INFORMATION;
 
+typedef enum _NETWORK_ENCRYPTION_TYPE {
+    NetworkEncryptionNone,
+    NetworkEncryptionWep,
+    NetworkEncryptionWpaPsk,
+    NetworkEncryptionWpa2Psk
+} NETWORK_ENCRYPTION_TYPE, *PNETWORK_ENCRYPTION_TYPE;
+
+/*++
+
+Structure Description:
+
+    This structure defines the information published by 802.11 networking
+    devices.
+
+Members:
+
+    Version - Stores the table version. Future revisions will be backwards
+        compatible. Set to NETWORK_80211_DEVICE_INFORMATION_VERSION.
+
+    Flags - Stores a bitfield of flags describing the 802.11 network device.
+        See NETWORK_80211_DEVICE_FLAG_* for definitions.
+
+    PhysicalAddress - Stores the physical address of the link.
+
+    Bssid - Stores the BSSID of access point to which the device is associated,
+        if applicable.
+
+    Ssid - Stores the null-terminated SSID of the associated network.
+
+    Channel - Stores the channel on which the network operates.
+
+    MaxRate - Stores the maximum rate supported by the wireless network, in
+        megabits per second.
+
+    Rssi - Stores the received signal strength indication value for the BSS.
+
+    PairwiseEncryption - Stores the pairwise encryption method used for the
+        network connection.
+
+    GroupEncryption - Stores the group encryption method used for the network
+        connection.
+
+--*/
+
+typedef struct _NETWORK_80211_DEVICE_INFORMATION {
+    ULONG Version;
+    ULONG Flags;
+    NETWORK_ADDRESS PhysicalAddress;
+    NETWORK_ADDRESS Bssid;
+    UCHAR Ssid[NETWORK_80211_MAX_SSID_LENGTH];
+    ULONG Channel;
+    ULONGLONG MaxRate;
+    LONG Rssi;
+    NETWORK_ENCRYPTION_TYPE PairwiseEncryption;
+    NETWORK_ENCRYPTION_TYPE GroupEncryption;
+} NETWORK_80211_DEVICE_INFORMATION, *PNETWORK_80211_DEVICE_INFORMATION;
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -132,3 +210,4 @@ typedef struct _NETWORK_DEVICE_INFORMATION {
 //
 // -------------------------------------------------------- Function Prototypes
 //
+

@@ -73,7 +73,9 @@ Environment:
 // Define the set of network device description flags.
 //
 
-#define NETCON_DEVICE_FLAG_IP4 0x00000001
+#define NETCON_DEVICE_FLAG_IP4   0x00000001
+#define NETCON_DEVICE_FLAG_IP6   0x00000002
+#define NETCON_DEVICE_FLAG_80211 0x00000004
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -122,6 +124,7 @@ typedef struct _NETCON_DEVICE_DESCRIPTION {
     ULONG Flags;
     DEVICE_ID DeviceId;
     NETWORK_DEVICE_INFORMATION Network;
+    NETWORK_80211_DEVICE_INFORMATION Net80211;
 } NETCON_DEVICE_DESCRIPTION, *PNETCON_DEVICE_DESCRIPTION;
 
 //
@@ -155,6 +158,11 @@ NetconPrintAddress (
     PNETWORK_ADDRESS Address
     );
 
+VOID
+NetconPrintEncryption (
+    NETWORK_ENCRYPTION_TYPE EncryptionType
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -171,6 +179,7 @@ struct option NetconLongOptions[] = {
 };
 
 UUID NetconDeviceInformationUuid = NETWORK_DEVICE_INFORMATION_UUID;
+UUID Netcon80211DeviceInformationUuid = NETWORK_80211_DEVICE_INFORMATION_UUID;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -364,9 +373,9 @@ Return Value:
     printf("Minoca Network Configuration:\n\n");
     for (Index = 0; Index < DeviceCount; Index += 1) {
         NetconPrintDeviceInformation(&(DeviceArray[Index]));
+        printf("\n");
     }
 
-    printf("\n");
     free(DeviceArray);
     return;
 }
@@ -536,9 +545,11 @@ Return Value:
 {
 
     UINTN DataSize;
+    PNETWORK_80211_DEVICE_INFORMATION Net80211;
     PNETWORK_DEVICE_INFORMATION Network;
     KSTATUS Status;
 
+    Device->Flags = 0;
     Device->DeviceId = DeviceId;
 
     //
@@ -560,6 +571,28 @@ Return Value:
     }
 
     Device->Flags |= NETCON_DEVICE_FLAG_IP4;
+
+    //
+    // If the physical address is an 802.11 address, then attempt to get the
+    // 802.11 information.
+    //
+
+    if (Network->PhysicalAddress.Network == SocketNetworkPhysical80211) {
+        DataSize = sizeof(NETWORK_80211_DEVICE_INFORMATION);
+        Net80211 = &(Device->Net80211);
+        Net80211->Version = NETWORK_80211_DEVICE_INFORMATION_VERSION;
+        Status = OsGetSetDeviceInformation(Device->DeviceId,
+                                           &Netcon80211DeviceInformationUuid,
+                                           Net80211,
+                                           &DataSize,
+                                           FALSE);
+
+        if (!KSUCCESS(Status)) {
+            goto GetDeviceInformationEnd;
+        }
+
+        Device->Flags |= NETCON_DEVICE_FLAG_80211;
+    }
 
 GetDeviceInformationEnd:
     return ClConvertKstatusToErrorNumber(Status);
@@ -589,19 +622,67 @@ Return Value:
 
 {
 
+    PNETWORK_80211_DEVICE_INFORMATION Net80211;
+    PNETWORK_DEVICE_INFORMATION Network;
+
     printf("Network Device 0x%I64x:\n", Device->DeviceId);
     if ((Device->Flags & NETCON_DEVICE_FLAG_IP4) == 0) {
         return;
     }
 
+    Network = &(Device->Network);
+
+    //
+    // The physical address should always be present.
+    //
+
     printf("\tPhysical Address: ");
-    NetconPrintAddress(&(Device->Network.PhysicalAddress));
-    printf("\n\tIpv4 Address: ");
-    NetconPrintAddress(&(Device->Network.Address));
-    printf("\n\tSubnet Mask: ");
-    NetconPrintAddress(&(Device->Network.Subnet));
-    printf("\n\tGateway: ");
-    NetconPrintAddress(&(Device->Network.Gateway));
+    NetconPrintAddress(&(Network->PhysicalAddress));
+
+    //
+    // Print the IPv4 address line to show that the device is IPv4 capable, but
+    // only print the actual address if it is configured.
+    //
+
+    printf("\n\tIPv4 Address: ");
+    if ((Network->ConfigurationMethod != NetworkAddressConfigurationInvalid) &&
+        (Network->ConfigurationMethod != NetworkAddressConfigurationNone)) {
+
+        NetconPrintAddress(&(Network->Address));
+        printf("\n\tSubnet Mask: ");
+        NetconPrintAddress(&(Network->Subnet));
+        printf("\n\tGateway: ");
+        NetconPrintAddress(&(Network->Gateway));
+
+    } else {
+        printf("(not configured)");
+    }
+
+    //
+    // If the device supports 802.11, at least print the SSID or
+    // "Not Associated".
+    //
+
+    if ((Device->Flags & NETCON_DEVICE_FLAG_80211) != 0) {
+        Net80211 = &(Device->Net80211);
+        printf("\n\tSSID: ");
+        if ((Net80211->Flags & NETWORK_80211_DEVICE_FLAG_ASSOCIATED) != 0) {
+            printf("\"%s\"", Net80211->Ssid);
+            printf("\n\tBSSID: ");
+            NetconPrintAddress(&(Net80211->Bssid));
+            printf("\n\tChannel: %d", Net80211->Channel);
+            printf("\n\tMax Rate: %I64d mbps", Net80211->MaxRate / 1000000ULL);
+            printf("\n\tRSSI: %d dBm", Net80211->Rssi);
+            printf("\n\tPairwise Encryption: ");
+            NetconPrintEncryption(Net80211->PairwiseEncryption);
+            printf("\n\tGroup Encryption: ");
+            NetconPrintEncryption(Net80211->GroupEncryption);
+
+        } else {
+            printf("(not associated)");
+        }
+    }
+
     printf("\n");
 }
 
@@ -655,6 +736,54 @@ Return Value:
         break;
 
     default:
+        break;
+    }
+
+    return;
+}
+
+VOID
+NetconPrintEncryption (
+    NETWORK_ENCRYPTION_TYPE EncryptionType
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints the name of the given encryption type.
+
+Arguments:
+
+    EncryptionType - Supplies the encryption type to print.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    switch (EncryptionType) {
+    case NetworkEncryptionNone:
+        printf("none");
+        break;
+
+    case NetworkEncryptionWep:
+        printf("WEP");
+        break;
+
+    case NetworkEncryptionWpaPsk:
+        printf("WPA-PSK");
+        break;
+
+    case NetworkEncryptionWpa2Psk:
+        printf("WPA2-PSK");
+        break;
+
+    default:
+        printf("unknown");
         break;
     }
 

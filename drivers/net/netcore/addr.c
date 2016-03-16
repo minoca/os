@@ -2810,6 +2810,10 @@ Return Value:
     }
 
     Information->Flags = 0;
+    RtlCopyMemory(&(Information->PhysicalAddress),
+                  &(LinkAddressEntry->PhysicalAddress),
+                  sizeof(NETWORK_ADDRESS));
+
     if (Link->LinkUp != FALSE) {
         Information->Flags |= NETWORK_DEVICE_FLAG_MEDIA_CONNECTED;
     }
@@ -2847,10 +2851,6 @@ Return Value:
                       &(LinkAddressEntry->DnsServer[DnsServerIndex]),
                       sizeof(NETWORK_ADDRESS));
     }
-
-    RtlCopyMemory(&(Information->PhysicalAddress),
-                  &(LinkAddressEntry->PhysicalAddress),
-                  sizeof(NETWORK_ADDRESS));
 
     if (LinkAddressEntry->StaticAddress == FALSE) {
         RtlCopyMemory(&(Information->LeaseServerAddress),

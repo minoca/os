@@ -250,8 +250,8 @@ Return Value:
     // authentication built into 802.11, there is no work to be done.
     //
 
-    if ((Bss->Encryption.Pairwise == Net80211EncryptionNone) ||
-        (Bss->Encryption.Pairwise == Net80211EncryptionWep)) {
+    if ((Bss->Encryption.Pairwise == NetworkEncryptionNone) ||
+        (Bss->Encryption.Pairwise == NetworkEncryptionWep)) {
 
         return STATUS_SUCCESS;
     }
@@ -260,7 +260,7 @@ Return Value:
     // Otherwise, EAPOL must be invoked in order to derive the PTK.
     //
 
-    ASSERT(Bss->Encryption.Pairwise != Net80211EncryptionNone);
+    ASSERT(Bss->Encryption.Pairwise != NetworkEncryptionNone);
 
     RtlZeroMemory(&AuthenticatorAddress, sizeof(NETWORK_ADDRESS));
     AuthenticatorAddress.Network = SocketNetworkPhysical80211;
