@@ -4230,7 +4230,7 @@ Return Value:
         // Drop the file object lock and reacquire the list lock.
         //
 
-        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+        KeReleaseSharedExclusiveLockExclusive(Lock);
         KeAcquireQueuedLock(IoPageCacheListLock);
 
         //
@@ -4309,20 +4309,14 @@ Return Value:
 
 {
 
-    PPAGE_CACHE_ENTRY BackingEntry;
     PLIST_ENTRY CurrentEntry;
-    UINTN DestroyCount;
-    BOOL DestroyEntry;
-    LIST_ENTRY DestroyList;
     PFILE_OBJECT FileObject;
     UINTN FreeVirtualPages;
     PSHARED_EXCLUSIVE_LOCK Lock;
     UINTN MappedCleanPageCount;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
-    BOOL PageWasDirty;
     LIST_ENTRY ReturnList;
-    KSTATUS Status;
     UINTN TargetUnmapCount;
     UINTN UnmapCount;
     UINTN UnmapSize;
@@ -4339,7 +4333,6 @@ Return Value:
 
     ASSERT(FreeVirtualPages != -1);
 
-    INITIALIZE_LIST_HEAD(&DestroyList);
     INITIALIZE_LIST_HEAD(&ReturnList);
 
     //
@@ -4397,7 +4390,6 @@ Return Value:
     UnmapStart = NULL;
     UnmapSize = 0;
     UnmapCount = 0;
-    DestroyCount = 0;
     PageSize = MmPageSize();
     KeAcquireQueuedLock(IoPageCacheListLock);
     while ((!LIST_EMPTY(&IoPageCacheCleanList)) &&
@@ -4520,79 +4512,29 @@ Return Value:
         }
 
         //
-        // If there's a backing entry and no references besides this one, try
-        // to destroy this entry, as it pins the backing entry VA. Note that
-        // new references can still come in via the list. It can't be removed
-        // from the list because new references could come in from the tree and
-        // put it back on the list.
-        //
-
-        DestroyEntry = FALSE;
-        BackingEntry = PageCacheEntry->BackingEntry;
-        if ((BackingEntry != NULL) && (PageCacheEntry->ReferenceCount == 1)) {
-            Status = IopUnmapPageCacheEntrySections(PageCacheEntry,
-                                                    &PageWasDirty);
-
-            if (KSUCCESS(Status)) {
-                if (PageWasDirty != FALSE) {
-                    IopMarkPageCacheEntryDirty(PageCacheEntry);
-                }
-
-                if (PageCacheEntry->Node.Parent != NULL) {
-                    IopRemovePageCacheEntryFromTree(PageCacheEntry);
-                }
-
-                DestroyEntry = TRUE;
-            }
-        }
-
-        //
         // Drop the file object lock and reacquire the list lock.
         //
 
-        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+        KeReleaseSharedExclusiveLockExclusive(Lock);
         KeAcquireQueuedLock(IoPageCacheListLock);
-        if (DestroyEntry != FALSE) {
+        if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
             if (PageCacheEntry->ListEntry.Next != NULL) {
                 LIST_REMOVE(&(PageCacheEntry->ListEntry));
-                PageCacheEntry->ListEntry.Next = NULL;
             }
 
-            //
-            // If another list cruiser got to it first, stick it on the removal
-            // list (since it's no longer in the tree), and don't destroy it.
-            //
+            if (((PageCacheEntry->Flags &
+                  PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) &&
+                (PageCacheEntry->BackingEntry == NULL)) {
 
-            if (PageCacheEntry->ReferenceCount != 1) {
                 INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                              &IoPageCacheRemovalList);
+                              &IoPageCacheCleanUnmappedList);
 
             } else {
-                PageCacheEntry->ReferenceCount = 0;
-                INSERT_BEFORE(&(PageCacheEntry->ListEntry), &DestroyList);
-                DestroyCount += 1;
+                INSERT_BEFORE(&(PageCacheEntry->ListEntry), &ReturnList);
             }
-
-        } else {
-            if ((PageCacheEntry->Flags & PAGE_CACHE_ENTRY_FLAG_DIRTY) == 0) {
-                if (PageCacheEntry->ListEntry.Next != NULL) {
-                    LIST_REMOVE(&(PageCacheEntry->ListEntry));
-                }
-
-                if (((PageCacheEntry->Flags &
-                      PAGE_CACHE_ENTRY_FLAG_MAPPED) == 0) &&
-                    (PageCacheEntry->BackingEntry == NULL)) {
-
-                    INSERT_BEFORE(&(PageCacheEntry->ListEntry),
-                                  &IoPageCacheCleanUnmappedList);
-
-                } else {
-                    INSERT_BEFORE(&(PageCacheEntry->ListEntry), &ReturnList);
-                }
-            }
-
-            IoPageCacheEntryReleaseReference(PageCacheEntry);
         }
+
+        IoPageCacheEntryReleaseReference(PageCacheEntry);
     }
 
     //
@@ -4620,14 +4562,9 @@ Return Value:
         RtlAtomicAdd(&IoPageCacheMappedPageCount, -UnmapCount);
     }
 
-    if (!LIST_EMPTY(&DestroyList)) {
-        IopDestroyPageCacheEntries(&DestroyList);
-    }
-
     if ((IoPageCacheDebugFlags & PAGE_CACHE_DEBUG_MAPPED_MANAGEMENT) != 0) {
-        RtlDebugPrint("PAGE CACHE: Unmapped %lu entries, destroyed %lu.\n",
-                      UnmapCount,
-                      DestroyCount);
+        RtlDebugPrint("PAGE CACHE: Unmapped %lu entries.\n",
+                      UnmapCount);
     }
 
     return;
