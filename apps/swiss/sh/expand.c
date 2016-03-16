@@ -3543,6 +3543,11 @@ Return Value:
 
     Source = *Value;
     SourceSize = *ValueSize;
+    if (SourceSize == 0) {
+        return TRUE;
+    }
+
+    SourceSize -= 1;
     NewString = NULL;
     NewStringSize = 0;
     for (SourceIndex = 0; SourceIndex < SourceSize; SourceIndex += 1) {
@@ -3587,7 +3592,7 @@ Return Value:
             // string and copy all the standard characters so far.
             //
 
-            NewString = malloc(SourceSize * 2);
+            NewString = malloc((SourceSize * 2) + 1);
             if (NewString == NULL) {
                 return FALSE;
             }
@@ -3613,6 +3618,9 @@ Return Value:
     if (NewStringSize == 0) {
         return TRUE;
     }
+
+    NewString[NewStringSize] = '\0';
+    NewStringSize += 1;
 
     //
     // Return the new string.

@@ -1123,7 +1123,7 @@ Arguments:
         standard output. The caller is responsible for freeing this memory.
 
     OutputSize - Supplies a pointer where the size of the output in bytes
-        will be returned.
+        will be returned, with no null terminator.
 
     ReturnValue - Supplies a pointer where the return value of the subshell
         will be returned.

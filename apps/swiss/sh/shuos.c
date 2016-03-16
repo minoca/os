@@ -256,7 +256,7 @@ Arguments:
         caller's responsibility to free this memory.
 
     OutputSize - Supplies a pointer where the size of the output will be
-        returned on success.
+        returned on success, with no null terminator.
 
 Return Value:
 
