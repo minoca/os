@@ -914,7 +914,13 @@ Return Value:
             goto FlushEnd;
         }
 
-        Status = IopFlushFileObject(FileObject, Offset, Size, IoFlags, NULL);
+        Status = IopFlushFileObject(FileObject,
+                                    Offset,
+                                    Size,
+                                    IoFlags,
+                                    TRUE,
+                                    NULL);
+
         if (!KSUCCESS(Status)) {
             goto FlushEnd;
         }

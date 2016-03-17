@@ -96,6 +96,12 @@ LIST_ENTRY IoFileObjectsOrphanedList;
 PQUEUED_LOCK IoFileObjectsLock;
 
 //
+// Store a lock that can serialize flush operations.
+//
+
+PSHARED_EXCLUSIVE_LOCK IoFlushLock;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -554,6 +560,11 @@ Return Value:
 
     IoFileObjectsDirtyListLock = KeCreateQueuedLock();
     if (IoFileObjectsDirtyListLock == NULL) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    IoFlushLock = KeCreateSharedExclusiveLock();
+    if (IoFlushLock == NULL) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
@@ -1223,6 +1234,7 @@ IopFlushFileObject (
     ULONGLONG Offset,
     ULONGLONG Size,
     ULONG Flags,
+    BOOL FlushExclusive,
     PUINTN PageCount
     )
 
@@ -1246,6 +1258,10 @@ Arguments:
 
     Flags - Supplies a bitmask of I/O flags. See IO_FLAG_* for definitions.
 
+    FlushExclusive - Supplies a boolean indicating if this was an explicit
+        flush. If so, then the flush lock is acquired exclusively to prevent
+        partial flushes due to dirty page cache entries being on a local list.
+
     PageCount - Supplies an optional pointer describing how many pages to flush.
         On output this value will be decreased by the number of pages actually
         flushed. Supply NULL to flush all pages in the size range.
@@ -1261,6 +1277,13 @@ Return Value:
     ULONG ClearFlags;
     BOOL Exclusive;
     KSTATUS Status;
+
+    if (FlushExclusive != FALSE) {
+        KeAcquireSharedExclusiveLockExclusive(IoFlushLock);
+
+    } else {
+        KeAcquireSharedExclusiveLockShared(IoFlushLock);
+    }
 
     Exclusive = FALSE;
     KeAcquireSharedExclusiveLockShared(FileObject->Lock);
@@ -1303,6 +1326,13 @@ FlushFileObjectEnd:
 
     } else {
         KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+    }
+
+    if (FlushExclusive != FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(IoFlushLock);
+
+    } else {
+        KeReleaseSharedExclusiveLockShared(IoFlushLock);
     }
 
     return Status;
@@ -1350,6 +1380,7 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PFILE_OBJECT CurrentObject;
     ULONG FlushCount;
+    BOOL FlushExclusive;
     ULONG FlushIndex;
     PFILE_OBJECT NextObject;
     KSTATUS Status;
@@ -1364,7 +1395,9 @@ Return Value:
     //
 
     FlushCount = 1;
+    FlushExclusive = FALSE;
     if ((Flags & IO_FLAG_DATA_SYNCHRONIZED) != 0) {
+        FlushExclusive = TRUE;
 
         //
         // If the goal is to flush the entire cache, then don't actually
@@ -1442,7 +1475,13 @@ Return Value:
         //
 
         while (CurrentObject != NULL) {
-            Status = IopFlushFileObject(CurrentObject, 0, -1, Flags, PageCount);
+            Status = IopFlushFileObject(CurrentObject,
+                                        0,
+                                        -1,
+                                        Flags,
+                                        FlushExclusive,
+                                        PageCount);
+
             if (!KSUCCESS(Status)) {
                 if (KSUCCESS(TotalStatus)) {
                     TotalStatus = Status;

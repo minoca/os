@@ -2539,6 +2539,7 @@ IopFlushFileObject (
     ULONGLONG Offset,
     ULONGLONG Size,
     ULONG Flags,
+    BOOL FlushExclusive,
     PUINTN PageCount
     );
 
@@ -2561,6 +2562,10 @@ Arguments:
         of -1 to flush from the given offset to the end of the file.
 
     Flags - Supplies a bitmask of I/O flags. See IO_FLAG_* for definitions.
+
+    FlushExclusive - Supplies a boolean indicating if this was an explicit
+        flush. If so, then the flush lock is acquired exclusively to prevent
+        partial flushes due to dirty page cache entries being on a local list.
 
     PageCount - Supplies an optional pointer describing how many pages to flush.
         On output this value will be decreased by the number of pages actually
