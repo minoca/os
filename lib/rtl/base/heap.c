@@ -1827,9 +1827,7 @@ Return Value:
         }
     }
 
-    AlignedSize = ALIGN_RANGE_UP(Size + HEAP_EXPANSION_PADDING,
-                                 Heap->ExpansionGranularity);
-
+    AlignedSize = Size + HEAP_EXPANSION_PADDING;
     if (AlignedSize < Heap->MinimumExpansionSize) {
         AlignedSize = Heap->MinimumExpansionSize;
     }
@@ -1847,7 +1845,7 @@ Return Value:
     // expansions. Don't go over the footprint limit that way though.
     //
 
-    Minimum = AlignedSize;
+    Minimum = ALIGN_RANGE_UP(AlignedSize, Heap->ExpansionGranularity);
     DoublePrevious = Heap->PreviousExpansionSize << 1;
     if ((AlignedSize < DoublePrevious) &&
         ((Heap->FootprintLimit == 0) ||
@@ -1855,6 +1853,8 @@ Return Value:
 
         AlignedSize = DoublePrevious;
     }
+
+    AlignedSize = ALIGN_RANGE_UP(AlignedSize, Heap->ExpansionGranularity);
 
     //
     // Avoid exceeding the footprint limit.
