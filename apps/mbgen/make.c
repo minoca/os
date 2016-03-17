@@ -52,6 +52,12 @@ Environment:
 //
 
 VOID
+MbgenMakePrintBuildDirectoriesTarget (
+    PMBGEN_CONTEXT Context,
+    FILE *File
+    );
+
+VOID
 MbgenMakePrintToolCommand (
     FILE *File,
     PSTR Command
@@ -69,6 +75,12 @@ MbgenMakePrintSource (
     FILE *File,
     PMBGEN_CONTEXT Context,
     PMBGEN_SOURCE Source
+    );
+
+VOID
+MbgenMakePrintPath (
+    FILE *File,
+    PMBGEN_PATH Path
     );
 
 VOID
@@ -344,6 +356,7 @@ Return Value:
         }
     }
 
+    MbgenMakePrintBuildDirectoriesTarget(Context, File);
     Status = 0;
 
 CreateMakefileEnd:
@@ -361,6 +374,61 @@ CreateMakefileEnd:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+MbgenMakePrintBuildDirectoriesTarget (
+    PMBGEN_CONTEXT Context,
+    FILE *File
+    )
+
+/*++
+
+Routine Description:
+
+    This routine emits the built in target that ensures the directories for
+    all build files exist.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    File - Supplies a pointer to the file to print the build directories to.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINTN Index;
+    PMBGEN_PATH Path;
+
+    fprintf(File,
+            "# Built-in build directories target.\n"
+            "%s:\n",
+            MBGEN_BUILD_DIRECTORIES_FILE);
+
+    for (Index = 0; Index < Context->BuildDirectories.Count; Index += 1) {
+        Path = &(Context->BuildDirectories.Array[Index]);
+        fprintf(File, "\t@echo \"");
+        MbgenMakePrintPath(File, Path);
+        if (Index == 0) {
+            fprintf(File, "\" > %s\n", MBGEN_BUILD_DIRECTORIES_FILE);
+
+        } else {
+            fprintf(File, "\" >> %s\n", MBGEN_BUILD_DIRECTORIES_FILE);
+        }
+
+        fprintf(File, "\tmkdir -p \"");
+        MbgenMakePrintPath(File, Path);
+        fprintf(File, "\"\n");
+    }
+
+    fprintf(File, "\nMakefile: %s\n", MBGEN_BUILD_DIRECTORIES_FILE);
+    return;
+}
 
 VOID
 MbgenMakePrintToolCommand (
@@ -542,6 +610,37 @@ Return Value:
 
     MbgenMakePrintTreeRoot(File, Source->Tree);
     fprintf(File, "/%s", Source->Path);
+    return;
+}
+
+VOID
+MbgenMakePrintPath (
+    FILE *File,
+    PMBGEN_PATH Path
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a path.
+
+Arguments:
+
+    File - Supplies a pointer to the file to print to.
+
+    Path - Supplies a pointer to the path to print.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    MbgenMakePrintTreeRoot(File, Path->Root);
+    fprintf(File, "/%s", Path->Path);
     return;
 }
 

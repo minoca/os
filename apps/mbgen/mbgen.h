@@ -54,6 +54,8 @@ Author:
 #define MBGEN_BUILD_FILE "build.mb"
 #define MBGEN_DEFAULT_NAME "//:"
 
+#define MBGEN_BUILD_DIRECTORIES_FILE ".builddirs"
+
 #define MBGEN_OPTION_VERBOSE 0x00000001
 #define MBGEN_OPTION_DEBUG 0x00000002
 #define MBGEN_OPTION_DRY_RUN 0x00000004
@@ -91,6 +93,51 @@ typedef enum _MBGEN_OUTPUT_FORMAT {
 } MBGEN_OUTPUT_FORMAT, *PMBGEN_OUTPUT_FORMAT;
 
 typedef struct _MBGEN_TARGET MBGEN_TARGET, *PMBGEN_TARGET;
+
+/*++
+
+Structure Description:
+
+    This structure stores the components of a fully specified build target path.
+
+Members:
+
+    Root - Stores the directory tree root for the target.
+
+    Path - Stores the directory path relative to the root of the target.
+
+    Target - Stores the target name.
+
+--*/
+
+typedef struct _MBGEN_PATH {
+    MBGEN_DIRECTORY_TREE Root;
+    PSTR Path;
+    PSTR Target;
+} MBGEN_PATH, *PMBGEN_PATH;
+
+/*++
+
+Structure Description:
+
+    This structure stores an array of paths.
+
+Members:
+
+    Array - Stores a pointer to the array of pointers to elements.
+
+    Count - Stores the number of elements in the array.
+
+    Capacity - Stores the maximum number of elements in the array before the
+        array must be resized.
+
+--*/
+
+typedef struct _MBGEN_PATH_LIST {
+    PMBGEN_PATH Array;
+    ULONG Count;
+    ULONG Capacity;
+} MBGEN_PATH_LIST, *PMBGEN_PATH_LIST;
 
 /*++
 
@@ -137,6 +184,8 @@ Members:
 
     PoolList - Stores the list of pools defined.
 
+    BuildDirectories - Stores the array of build directories.
+
 --*/
 
 typedef struct _MBGEN_CONTEXT {
@@ -154,29 +203,8 @@ typedef struct _MBGEN_CONTEXT {
     LIST_ENTRY ToolList;
     PCHALK_OBJECT GlobalConfig;
     LIST_ENTRY PoolList;
+    MBGEN_PATH_LIST BuildDirectories;
 } MBGEN_CONTEXT, *PMBGEN_CONTEXT;
-
-/*++
-
-Structure Description:
-
-    This structure stores the components of a fully specified build target path.
-
-Members:
-
-    Root - Stores the directory tree root for the target.
-
-    Path - Stores the directory path relative to the root of the target.
-
-    Target - Stores the target name.
-
---*/
-
-typedef struct _MBGEN_PATH {
-    MBGEN_DIRECTORY_TREE Root;
-    PSTR Path;
-    PSTR Target;
-} MBGEN_PATH, *PMBGEN_PATH;
 
 /*++
 
@@ -765,6 +793,104 @@ Return Value:
     caller's responsibility to free this memory.
 
     NULL on allocation failure.
+
+--*/
+
+VOID
+MbgenSplitPath (
+    PSTR Path,
+    PSTR *DirectoryName,
+    PSTR *FileName
+    );
+
+/*++
+
+Routine Description:
+
+    This routine splits the directory and the file portion of a path.
+
+Arguments:
+
+    Path - Supplies a pointer to the path to split in line.
+
+    DirectoryName - Supplies an optional pointer where the directory portion
+        will be returned. This may be a pointer within the path or a static
+        string.
+
+    FileName - Supplies an optional pointer where the file name portion will be
+        returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+INT
+MbgenAddPathToList (
+    PMBGEN_PATH_LIST PathList,
+    PMBGEN_PATH Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds a path to the path list.
+
+Arguments:
+
+    PathList - Supplies a pointer to the path list to add to.
+
+    Path - Supplies a pointer to the path to add.
+
+Return Value:
+
+    0 on success.
+
+    ENOMEM on allocation failure.
+
+--*/
+
+VOID
+MbgenDestroyPathList (
+    PMBGEN_PATH_LIST PathList
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys a path list, freeing all entries.
+
+Arguments:
+
+    PathList - Supplies a pointer to the path list.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+MbgenDeduplicatePathList (
+    PMBGEN_PATH_LIST PathList
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sorts and deduplicates a path list.
+
+Arguments:
+
+    PathList - Supplies a pointer to the path list.
+
+Return Value:
+
+    None.
 
 --*/
 

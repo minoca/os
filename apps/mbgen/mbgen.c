@@ -872,6 +872,7 @@ Return Value:
         MbgenDestroyPool(Pool);
     }
 
+    MbgenDestroyPathList(&(Context->BuildDirectories));
     if (Context->SourceRoot != NULL) {
         free(Context->SourceRoot);
         Context->SourceRoot = NULL;
@@ -1340,6 +1341,11 @@ Return Value:
         ToolEntry = ToolEntry->Next;
     }
 
+    //
+    // Deduplicate the build directory list.
+    //
+
+    MbgenDeduplicatePathList(&(Context->BuildDirectories));
     Status = 0;
 
 ProcessEntriesEnd:
@@ -1405,8 +1411,43 @@ Return Value:
 
 {
 
+    PSTR FileName;
     PCHALK_OBJECT List;
+    MBGEN_PATH OutputPath;
+    PMBGEN_PATH_LIST PathList;
+    PSTR PathString;
     INT Status;
+
+    //
+    // Add the target file as a build directory, then split the path to make
+    // it a directory.
+    //
+
+    if ((Target->Tool == NULL) || (strcmp(Target->Tool, "phony") != 0)) {
+        OutputPath.Root = Target->Tree;
+        OutputPath.Path = MbgenAppendPaths(Target->Script->Path,
+                                           Target->Output);
+
+        if (OutputPath.Path == NULL) {
+            Status = ENOMEM;
+            goto ProcessTargetEnd;
+        }
+
+        OutputPath.Target = NULL;
+        Status = MbgenAddPathToList(&(Context->BuildDirectories), &OutputPath);
+        free(OutputPath.Path);
+        if (Status != 0) {
+            goto ProcessTargetEnd;
+        }
+
+        PathList = &(Context->BuildDirectories);
+        PathString = PathList->Array[PathList->Count - 1].Path;
+        MbgenSplitPath(PathString, NULL, &FileName);
+        if (FileName == PathString) {
+            free(PathString);
+            PathList->Count -= 1;
+        }
+    }
 
     //
     // Convert the inputs to an array of input pointers to either sources or

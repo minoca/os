@@ -56,6 +56,12 @@ MbgenGetAbsoluteDirectory (
     PSTR Path
     );
 
+int
+MbgenComparePaths (
+    const void *LeftPointer,
+    const void *RightPointer
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -524,6 +530,290 @@ Return Value:
     return Copy;
 }
 
+VOID
+MbgenSplitPath (
+    PSTR Path,
+    PSTR *DirectoryName,
+    PSTR *FileName
+    )
+
+/*++
+
+Routine Description:
+
+    This routine splits the directory and the file portion of a path.
+
+Arguments:
+
+    Path - Supplies a pointer to the path to split in line.
+
+    DirectoryName - Supplies an optional pointer where the directory portion
+        will be returned. This may be a pointer within the path or a static
+        string.
+
+    FileName - Supplies an optional pointer where the file name portion will be
+        returned.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSTR Current;
+    PSTR Directory;
+    PSTR File;
+
+    Current = Path + strlen(Path);
+    if (Current == Path) {
+        File = Path;
+        Directory = ".";
+        goto SplitPathEnd;
+    }
+
+    //
+    // Back up to the first slash. If there wasn't one, the whole thing is a
+    // file.
+    //
+
+    Current -= 1;
+    while ((Current != Path) && (*Current != '/') && (*Current != '\\')) {
+        Current -= 1;
+    }
+
+    if ((*Current != '/') && (*Current != '\\')) {
+        File = Path;
+        Directory = ".";
+        goto SplitPathEnd;
+    }
+
+    File = Current + 1;
+
+    //
+    // Get to the first slash.
+    //
+
+    while ((Current != Path) && ((*Current == '/') || (*Current == '\\'))) {
+        Current -= 1;
+    }
+
+    //
+    // Either it's not at the beginnin, it's at the beginning and there's a
+    // slash, or it's at the beginning and there's no slash. So if there's no
+    // slash, then there must be some valid portion of the path from the
+    // beginning, so return the path.
+    //
+
+    if ((*Current != '/') && (*Current != '\\')) {
+        *(Current + 1) = '\0';
+        Directory = Path;
+
+    //
+    // Otherwise, it was slashes all the way to the beginning, so start from
+    // slash. Truncate the path in case the caller needs the directory that way.
+    //
+
+    } else {
+        *Current = '\0';
+        Directory = "/";
+    }
+
+SplitPathEnd:
+    if (FileName != NULL) {
+        *FileName = File;
+    }
+
+    if (DirectoryName != NULL) {
+        *DirectoryName = Directory;
+    }
+
+    return;
+}
+
+INT
+MbgenAddPathToList (
+    PMBGEN_PATH_LIST PathList,
+    PMBGEN_PATH Path
+    )
+
+/*++
+
+Routine Description:
+
+    This routine adds a path to the path list.
+
+Arguments:
+
+    PathList - Supplies a pointer to the path list to add to.
+
+    Path - Supplies a pointer to the path to add.
+
+Return Value:
+
+    0 on success.
+
+    ENOMEM on allocation failure.
+
+--*/
+
+{
+
+    PMBGEN_PATH Destination;
+    PVOID NewBuffer;
+    UINTN NewCapacity;
+
+    if (PathList->Count >= PathList->Capacity) {
+
+        assert(PathList->Count == PathList->Capacity);
+
+        NewCapacity = PathList->Capacity * 2;
+        if (NewCapacity == 0) {
+            NewCapacity = 16;
+        }
+
+        NewBuffer = realloc(PathList->Array, NewCapacity * sizeof(MBGEN_PATH));
+        if (NewBuffer == NULL) {
+            return ENOMEM;
+        }
+
+        PathList->Array = NewBuffer;
+        PathList->Capacity = NewCapacity;
+    }
+
+    Destination = &(PathList->Array[PathList->Count]);
+    memset(Destination, 0, sizeof(MBGEN_PATH));
+    Destination->Root = Path->Root;
+    if (Path->Path != NULL) {
+        Destination->Path = strdup(Path->Path);
+        if (Destination->Path == NULL) {
+            return ENOMEM;
+        }
+    }
+
+    Destination->Target = NULL;
+    PathList->Count += 1;
+    return 0;
+}
+
+VOID
+MbgenDestroyPathList (
+    PMBGEN_PATH_LIST PathList
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys a path list, freeing all entries.
+
+Arguments:
+
+    PathList - Supplies a pointer to the path list.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Index;
+    PMBGEN_PATH Path;
+
+    for (Index = 0; Index < PathList->Count; Index += 1) {
+        Path = &(PathList->Array[Index]);
+
+        assert(Path->Target == NULL);
+
+        if (Path->Path != NULL) {
+            free(Path->Path);
+            Path->Path = NULL;
+        }
+    }
+
+    if (PathList->Array != NULL) {
+        free(PathList->Array);
+    }
+
+    PathList->Count = 0;
+    PathList->Capacity = 0;
+    return;
+}
+
+VOID
+MbgenDeduplicatePathList (
+    PMBGEN_PATH_LIST PathList
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sorts and deduplicates a path list.
+
+Arguments:
+
+    PathList - Supplies a pointer to the path list.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    int Compare;
+    PMBGEN_PATH Entry;
+    UINTN Index;
+
+    //
+    // Sort the paths.
+    //
+
+    qsort(PathList->Array,
+          PathList->Count,
+          sizeof(MBGEN_PATH),
+          MbgenComparePaths);
+
+    Index = 0;
+    while (Index + 1 < PathList->Count) {
+        Entry = &(PathList->Array[Index]);
+
+        //
+        // Compare this entry with the next one. If they're the same, copy
+        // the remainder down on top of the next one, and keep checking at this
+        // index for even more duplicates.
+        //
+
+        Compare = MbgenComparePaths(Entry, Entry + 1);
+        if (Compare == 0) {
+            Entry += 1;
+            free(Entry->Path);
+
+            assert(Entry->Target == NULL);
+
+            memmove(Entry,
+                    Entry + 1,
+                    (PathList->Count - (Index + 2)) * sizeof(MBGEN_PATH));
+
+            PathList->Count -= 1;
+
+        //
+        // They are not equal, move to the next one.
+        //
+
+        } else {
+            Index += 1;
+        }
+    }
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -592,5 +882,53 @@ Return Value:
 
 GetAbsoluteDirectoryEnd:
     return Directory;
+}
+
+int
+MbgenComparePaths (
+    const void *LeftPointer,
+    const void *RightPointer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine compares two MBGEN_PATH structures and orders them.
+
+Arguments:
+
+    LeftPointer - Supplies a pointer to the left path.
+
+    RightPointer - Supplies a pointer to the right path.
+
+Return Value:
+
+    < 0 if Left < Right.
+
+    0 if they are equal.
+
+    > 0 if Left > Right.
+
+--*/
+
+{
+
+    PMBGEN_PATH Left;
+    PMBGEN_PATH Right;
+
+    Left = (PMBGEN_PATH)LeftPointer;
+    Right = (PMBGEN_PATH)RightPointer;
+    if (Left->Root < Right->Root) {
+        return -1;
+    }
+
+    if (Left->Root > Right->Root) {
+        return 1;
+    }
+
+    assert((Left->Target == NULL) && (Right->Target == NULL));
+
+    return strcmp(Left->Path, Right->Path);
 }
 
