@@ -185,7 +185,7 @@ Return Value:
                       BOOT_HEAP_EXPANSION_SIZE,
                       BOOT_HEAP_GRANULARITY,
                       0,
-                      0);
+                      MEMORY_HEAP_FLAG_NO_PARTIAL_FREES);
 
     Status = STATUS_SUCCESS;
 
