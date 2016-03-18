@@ -659,6 +659,12 @@ Return Value:
     NetpTcpCongestionInitializeSocket(TcpSocket);
 
     //
+    // Start by assuming the remote supports the desired options.
+    //
+
+    TcpSocket->Flags |= TCP_SOCKET_FLAG_WINDOW_SCALING;
+
+    //
     // Initialize the socket on the lower layers.
     //
 
@@ -2933,6 +2939,9 @@ Return Value:
 
                     ASSERT(TcpSocket->ReceiveWindowTotalSize ==
                            TcpSocket->ReceiveWindowFreeSize);
+
+                    ASSERT((TcpSocket->Flags &
+                           TCP_SOCKET_FLAG_WINDOW_SCALING) != 0);
 
                     //
                     // If the upper word is not zero, count the leading zeros
@@ -5465,6 +5474,9 @@ Return Value:
     ULONG OptionsLength;
     UCHAR OptionType;
     PNET_PACKET_SIZE_INFORMATION SizeInformation;
+    BOOL WindowScaleSupported;
+
+    WindowScaleSupported = FALSE;
 
     //
     // Parse the options in the packet.
@@ -5531,6 +5543,7 @@ Return Value:
                 (OptionLength == 1)) {
 
                 Socket->SendWindowScale = Options[OptionIndex];
+                WindowScaleSupported = TRUE;
             }
         }
 
@@ -5539,6 +5552,31 @@ Return Value:
         //
 
         OptionIndex += OptionLength;
+    }
+
+    if ((Header->Flags & TCP_HEADER_FLAG_SYN) != 0) {
+
+        //
+        // Disable window scaling locally if the remote doesn't understand it.
+        //
+
+        if (WindowScaleSupported == FALSE) {
+            Socket->Flags &= ~TCP_SOCKET_FLAG_WINDOW_SCALING;
+
+            //
+            // No data should have been sent yet.
+            //
+
+            ASSERT(Socket->ReceiveWindowFreeSize ==
+                   Socket->ReceiveWindowTotalSize);
+
+            if (Socket->ReceiveWindowTotalSize > MAX_USHORT) {
+                Socket->ReceiveWindowTotalSize = MAX_USHORT;
+                Socket->ReceiveWindowFreeSize = MAX_USHORT;
+            }
+
+            Socket->ReceiveWindowScale = 0;
+        }
     }
 
     return;
@@ -5696,6 +5734,7 @@ Return Value:
     PIO_OBJECT_STATE IoState;
     ULONG NextSequence;
     PTCP_RECEIVED_SEGMENT PreviousSegment;
+    ULONG RemainingLength;
     KSTATUS Status;
     BOOL UpdateReceiveNextSequence;
 
@@ -5723,6 +5762,7 @@ Return Value:
     // and the loop continues until the entire segment has been processed.
     //
 
+    RemainingLength = Length;
     UpdateReceiveNextSequence = FALSE;
     PreviousSegment = NULL;
     CurrentEntry = Socket->ReceivedSegmentList.Next;
@@ -5755,7 +5795,7 @@ Return Value:
                                                   Header,
                                                   &Buffer,
                                                   &SequenceNumber,
-                                                  &Length,
+                                                  &RemainingLength,
                                                   &InsertedSegment);
 
         if (!KSUCCESS(Status)) {
@@ -5776,7 +5816,7 @@ Return Value:
         // exit.
         //
 
-        if ((Length == 0) || (Socket->ReceiveWindowFreeSize == 0)) {
+        if ((RemainingLength == 0) || (Socket->ReceiveWindowFreeSize == 0)) {
             goto TcpProcessReceivedDataSegmentEnd;
         }
 
@@ -5793,7 +5833,7 @@ Return Value:
     // either not exist or be the last segment in the list.
     //
 
-    ASSERT(Length != 0);
+    ASSERT(RemainingLength != 0);
     ASSERT((PreviousSegment == NULL) ||
            (&(PreviousSegment->Header.ListEntry) ==
             Socket->ReceivedSegmentList.Previous));
@@ -5804,7 +5844,7 @@ Return Value:
                                               Header,
                                               &Buffer,
                                               &SequenceNumber,
-                                              &Length,
+                                              &RemainingLength,
                                               &InsertedSegment);
 
     if (!KSUCCESS(Status)) {
@@ -5909,10 +5949,11 @@ TcpProcessReceivedDataSegmentEnd:
 
     if ((DataMissing != FALSE) ||
         ((Header->Flags & TCP_HEADER_FLAG_FIN) == 0) ||
-        (Socket->ReceiveNextSequence != (SequenceNumber + Length))) {
+        (Socket->ReceiveNextSequence != (SequenceNumber + RemainingLength))) {
 
         if ((DataMissing == FALSE) &&
             ((Header->Flags & TCP_HEADER_FLAG_PUSH) == 0) &&
+            (Length >= Socket->ReceiveMaxSegmentSize) &&
             ((Socket->Flags & TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE) == 0)) {
 
             Socket->Flags |= TCP_SOCKET_FLAG_SEND_ACKNOWLEDGE;
@@ -8009,6 +8050,7 @@ Return Value:
 {
 
     ULONG ControlFlags;
+    ULONG DataSize;
     ULONG MaximumSegmentSize;
     PNET_SOCKET NetSocket;
     PNET_PACKET_BUFFER Packet;
@@ -8018,6 +8060,10 @@ Return Value:
 
     NetSocket = &(Socket->NetSocket);
     NET_INITIALIZE_PACKET_LIST(&PacketList);
+    DataSize = TCP_OPTION_MSS_SIZE;
+    if ((Socket->Flags & TCP_SOCKET_FLAG_WINDOW_SCALING) != 0) {
+        DataSize += TCP_OPTION_WINDOW_SCALE_SIZE + TCP_OPTION_NOP_SIZE;
+    }
 
     //
     // Allocate the SYN packet that will kick things off with the remote host.
@@ -8025,7 +8071,7 @@ Return Value:
 
     Packet = NULL;
     Status = NetAllocateBuffer(NetSocket->PacketSizeInformation.HeaderSize,
-                               TCP_SYN_OPTIONS_LENGTH,
+                               DataSize,
                                NetSocket->PacketSizeInformation.FooterSize,
                                NetSocket->Link,
                                0,
@@ -8045,7 +8091,7 @@ Return Value:
     PacketBuffer = (PUCHAR)(Packet->Buffer + Packet->DataOffset);
     *PacketBuffer = TCP_OPTION_MAXIMUM_SEGMENT_SIZE;
     PacketBuffer += 1;
-    *PacketBuffer = 4;
+    *PacketBuffer = TCP_OPTION_MSS_SIZE;
     PacketBuffer += 1;
     MaximumSegmentSize = NetSocket->PacketSizeInformation.MaxPacketSize -
                          NetSocket->PacketSizeInformation.HeaderSize -
@@ -8064,23 +8110,25 @@ Return Value:
     PacketBuffer += sizeof(USHORT);
 
     //
-    // Add the Window Scale option.
+    // Add the Window Scale option if the remote supports it.
     //
 
-    *PacketBuffer = TCP_OPTION_WINDOW_SCALE;
-    PacketBuffer += 1;
-    *PacketBuffer = 3;
-    PacketBuffer += 1;
-    *PacketBuffer = (UCHAR)(Socket->ReceiveWindowScale);
-    PacketBuffer += 1;
+    if ((Socket->Flags & TCP_SOCKET_FLAG_WINDOW_SCALING) != 0) {
+        *PacketBuffer = TCP_OPTION_WINDOW_SCALE;
+        PacketBuffer += 1;
+        *PacketBuffer = TCP_OPTION_WINDOW_SCALE_SIZE;
+        PacketBuffer += 1;
+        *PacketBuffer = (UCHAR)(Socket->ReceiveWindowScale);
+        PacketBuffer += 1;
 
-    //
-    // Add a padding option to get the header length to a multiple of 32-bits
-    // (as the header length field can only express such granules).
-    //
+        //
+        // Add a padding option to get the header length to a multiple of
+        // 32-bits (as the header length field can only express such granules).
+        //
 
-    *PacketBuffer = TCP_OPTION_NOP;
-    PacketBuffer += 1;
+        *PacketBuffer = TCP_OPTION_NOP;
+        PacketBuffer += 1;
+    }
 
     //
     // Add the TCP header and send this packet down the wire. Remember that the
@@ -8101,7 +8149,7 @@ Return Value:
                          Packet,
                          Socket->SendInitialSequence,
                          ControlFlags,
-                         TCP_SYN_OPTIONS_LENGTH,
+                         DataSize,
                          0,
                          0);
 

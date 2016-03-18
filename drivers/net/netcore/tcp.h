@@ -156,13 +156,6 @@ Author:
 #define TCP_DUPLICATE_ACK_THRESHOLD 3
 
 //
-// Define the length of options in the SYN packet. to include the Maximum
-// Segment Size and the Window Scale.
-//
-
-#define TCP_SYN_OPTIONS_LENGTH 8
-
-//
 // Define the default receive minimum size, in bytes.
 //
 
@@ -281,6 +274,14 @@ Author:
 #define TCP_OPTION_WINDOW_SCALE         3
 
 //
+// Define TCP option sizes.
+//
+
+#define TCP_OPTION_NOP_SIZE 1
+#define TCP_OPTION_MSS_SIZE 4
+#define TCP_OPTION_WINDOW_SCALE_SIZE 3
+
+//
 // Define the TCP receive segment flags. The first six bits matche up with the
 // TCP header flags.
 //
@@ -334,6 +335,7 @@ Author:
 #define TCP_SOCKET_FLAG_URGENT_INLINE                0x00000100
 #define TCP_SOCKET_FLAG_RECEIVE_MISSING_SEGMENTS     0x00000200
 #define TCP_SOCKET_FLAG_NO_DELAY                     0x00000400
+#define TCP_SOCKET_FLAG_WINDOW_SCALING               0x00000800
 
 //
 // ------------------------------------------------------ Data Type Definitions
