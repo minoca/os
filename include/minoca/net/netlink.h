@@ -124,7 +124,7 @@ Structure Description:
 
 Members:
 
-    Network - Stores the network type of this address.
+    Domain - Stores the network domain of this address.
 
     Port - Stores the 32 bit port ID.
 
@@ -138,7 +138,7 @@ Members:
 typedef struct _NETLINK_ADDRESS {
     union {
         struct {
-            SOCKET_NETWORK Network;
+            NET_DOMAIN_TYPE Domain;
             ULONG Port;
             ULONG GroupMask;
         };

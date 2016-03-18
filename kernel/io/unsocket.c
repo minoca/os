@@ -278,7 +278,7 @@ IopUnixSocketInitializeCredentials (
 
 KSTATUS
 IopCreateUnixSocketPair (
-    SOCKET_TYPE Type,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     ULONG OpenFlags,
     PIO_HANDLE NewSockets[2]
@@ -318,7 +318,7 @@ Return Value:
 
     IoHandles[0] = NULL;
     IoHandles[1] = NULL;
-    Status = IoSocketCreate(SocketNetworkLocal,
+    Status = IoSocketCreate(NetDomainLocal,
                             Type,
                             Protocol,
                             OpenFlags,
@@ -328,7 +328,7 @@ Return Value:
         goto CreateUnixSocketPairEnd;
     }
 
-    Status = IoSocketCreate(SocketNetworkLocal,
+    Status = IoSocketCreate(NetDomainLocal,
                             Type,
                             Protocol,
                             OpenFlags,
@@ -383,8 +383,8 @@ CreateUnixSocketPairEnd:
 
 KSTATUS
 IopCreateUnixSocket (
-    SOCKET_NETWORK Network,
-    SOCKET_TYPE Type,
+    NET_DOMAIN_TYPE Domain,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     PSOCKET *NewSocket
     )
@@ -397,7 +397,7 @@ Routine Description:
 
 Arguments:
 
-    Network - Supplies the network to use on the socket.
+    Domain - Supplies the network domain to use on the socket.
 
     Type - Supplies the socket connection type.
 
@@ -421,7 +421,7 @@ Return Value:
     PUNIX_SOCKET Socket;
     KSTATUS Status;
 
-    ASSERT(Network == SocketNetworkLocal);
+    ASSERT(Domain == NetDomainLocal);
 
     Socket = MmAllocatePagedPool(sizeof(UNIX_SOCKET),
                                  UNIX_SOCKET_ALLOCATION_TAG);
@@ -506,7 +506,7 @@ Return Value:
 
     UnixSocket = (PUNIX_SOCKET)Socket;
 
-    ASSERT(Socket->Network == SocketNetworkLocal);
+    ASSERT(Socket->Domain == NetDomainLocal);
     ASSERT(UnixSocket->CurrentBacklog == 0);
     ASSERT(UnixSocket->SendListSize == 0);
     ASSERT(LIST_EMPTY(&(UnixSocket->ReceiveList)) != FALSE);
@@ -589,7 +589,7 @@ Return Value:
         return Status;
     }
 
-    ASSERT(Socket->Network == SocketNetworkLocal);
+    ASSERT(Socket->Domain == NetDomainLocal);
 
     UnixSocket = (PUNIX_SOCKET)Socket;
     KeAcquireQueuedLock(UnixSocket->Lock);
@@ -741,7 +741,7 @@ Return Value:
     KSTATUS Status;
     PUNIX_SOCKET UnixSocket;
 
-    ASSERT(Socket->Network == SocketNetworkLocal);
+    ASSERT(Socket->Domain == NetDomainLocal);
 
     UnixSocket = (PUNIX_SOCKET)Socket;
     KeAcquireQueuedLock(UnixSocket->Lock);
@@ -750,8 +750,8 @@ Return Value:
     // Only connection-oriented sockets can listen.
     //
 
-    if ((Socket->Type != SocketTypeStream) &&
-        (Socket->Type != SocketTypeSequencedPacket)) {
+    if ((Socket->Type != NetSocketStream) &&
+        (Socket->Type != NetSocketSequencedPacket)) {
 
         Status = STATUS_NOT_SUPPORTED;
         goto UnixSocketListenEnd;
@@ -834,7 +834,7 @@ Return Value:
     KSTATUS Status;
     PUNIX_SOCKET UnixSocket;
 
-    ASSERT(Socket->Network == SocketNetworkLocal);
+    ASSERT(Socket->Domain == NetDomainLocal);
 
     LockHeld = FALSE;
     NewSocketHandle = NULL;
@@ -844,8 +844,8 @@ Return Value:
     // Only connection-oriented sockets can accept.
     //
 
-    if ((Socket->Type != SocketTypeStream) &&
-        (Socket->Type != SocketTypeSequencedPacket)) {
+    if ((Socket->Type != NetSocketStream) &&
+        (Socket->Type != NetSocketSequencedPacket)) {
 
         Status = STATUS_NOT_SUPPORTED;
         goto UnixSocketAcceptEnd;
@@ -945,7 +945,7 @@ Return Value:
     }
 
     RtlZeroMemory(RemoteAddress, sizeof(NETWORK_ADDRESS));
-    RemoteAddress->Network = SocketNetworkLocal;
+    RemoteAddress->Domain = NetDomainLocal;
     *RemotePath = NewUnixSocket->Remote->Name;
     *RemotePathSize = NewUnixSocket->Remote->NameSize;
     NewSocketHandle = NewUnixSocket->KernelSocket.IoHandle;
@@ -1022,14 +1022,14 @@ Return Value:
     ServerUnixSocket = NULL;
     UnixSocket = (PUNIX_SOCKET)Socket;
     KeAcquireQueuedLock(UnixSocket->Lock);
-    if (Address->Network != SocketNetworkLocal) {
+    if (Address->Domain != NetDomainLocal) {
         Status = STATUS_UNEXPECTED_TYPE;
         goto UnixSocketConnectEnd;
     }
 
-    if ((Socket->Type != SocketTypeStream) &&
-        (Socket->Type != SocketTypeSequencedPacket) &&
-        (Socket->Type != SocketTypeDatagram)) {
+    if ((Socket->Type != NetSocketStream) &&
+        (Socket->Type != NetSocketSequencedPacket) &&
+        (Socket->Type != NetSocketDatagram)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto UnixSocketConnectEnd;
@@ -1092,7 +1092,7 @@ Return Value:
 
     ServerSocket = FileObject->SpecialIo;
 
-    ASSERT(ServerSocket->Network == SocketNetworkLocal);
+    ASSERT(ServerSocket->Domain == NetDomainLocal);
 
     ServerUnixSocket = (PUNIX_SOCKET)ServerSocket;
 
@@ -1109,7 +1109,7 @@ Return Value:
     // For datagram sockets, just set it as the remote and go on.
     //
 
-    if (Socket->Type == SocketTypeDatagram) {
+    if (Socket->Type == NetSocketDatagram) {
         UnixSocket->Remote = ServerUnixSocket;
 
     //
@@ -1175,7 +1175,7 @@ Return Value:
         // line with behavior of other systems.
         //
 
-        Status = IoSocketCreate(Socket->Network,
+        Status = IoSocketCreate(Socket->Domain,
                                 Socket->Type,
                                 Socket->Protocol,
                                 0,
@@ -1190,7 +1190,7 @@ Return Value:
             goto UnixSocketConnectEnd;
         }
 
-        ASSERT(NewSocket->Network == SocketNetworkLocal);
+        ASSERT(NewSocket->Domain == NetDomainLocal);
 
         NewUnixSocket = (PUNIX_SOCKET)NewSocket;
 
@@ -1357,14 +1357,14 @@ Return Value:
     }
 
     if ((Destination != NULL) &&
-        (Destination->Network != SocketNetworkInvalid)) {
+        (Destination->Domain != NetDomainInvalid)) {
 
-        if (UnixSocket->KernelSocket.Type != SocketTypeDatagram) {
+        if (UnixSocket->KernelSocket.Type != NetSocketDatagram) {
             Status = STATUS_NOT_SUPPORTED;
             goto UnixSocketSendDataEnd;
         }
 
-        if (Destination->Network != SocketNetworkLocal) {
+        if (Destination->Domain != NetDomainLocal) {
             Status = STATUS_UNEXPECTED_TYPE;
             goto UnixSocketSendDataEnd;
         }
@@ -1427,7 +1427,7 @@ Return Value:
 
         RemoteSocket = (PSOCKET)(UINTN)(FileObject->Properties.FileId);
 
-        ASSERT(RemoteSocket->Network == SocketNetworkLocal);
+        ASSERT(RemoteSocket->Domain == NetDomainLocal);
 
         RemoteUnixSocket = (PUNIX_SOCKET)RemoteSocket;
     }
@@ -1464,8 +1464,8 @@ Return Value:
         // a single packet.
         //
 
-        if ((Socket->Type == SocketTypeDatagram) ||
-            (Socket->Type == SocketTypeSequencedPacket)) {
+        if ((Socket->Type == NetSocketDatagram) ||
+            (Socket->Type == NetSocketSequencedPacket)) {
 
             if (Size > UnixSocket->SendListMax) {
                 Status = STATUS_MESSAGE_TOO_LONG;
@@ -1489,8 +1489,8 @@ Return Value:
         // more space to free up, and try again.
         //
 
-        if ((Socket->Type == SocketTypeDatagram) ||
-            (Socket->Type == SocketTypeSequencedPacket)) {
+        if ((Socket->Type == NetSocketDatagram) ||
+            (Socket->Type == NetSocketSequencedPacket)) {
 
             if (Size > PacketSize) {
                 PacketSize = 0;
@@ -1502,7 +1502,7 @@ Return Value:
 
         } else {
 
-            ASSERT(Socket->Type == SocketTypeStream);
+            ASSERT(Socket->Type == NetSocketStream);
         }
 
         //
@@ -1737,7 +1737,7 @@ Return Value:
     UnixSocket = (PUNIX_SOCKET)Socket;
     UnixSocketLockHeld = FALSE;
 
-    ASSERT(Socket->Network == SocketNetworkLocal);
+    ASSERT(Socket->Domain == NetDomainLocal);
 
     //
     // Loop reading stuff.
@@ -1775,8 +1775,8 @@ Return Value:
             // down for writing, end now.
             //
 
-            if ((Socket->Type == SocketTypeStream) ||
-                (Socket->Type == SocketTypeSequencedPacket)) {
+            if ((Socket->Type == NetSocketStream) ||
+                (Socket->Type == NetSocketSequencedPacket)) {
 
                 Remote = UnixSocket->Remote;
                 if ((Remote != NULL) &&
@@ -1900,11 +1900,11 @@ Return Value:
 
             if (Parameters->NetworkAddress != NULL) {
                 if (FromKernelMode != FALSE) {
-                    Parameters->NetworkAddress->Network = SocketNetworkLocal;
+                    Parameters->NetworkAddress->Domain = NetDomainLocal;
 
                 } else {
                     RtlZeroMemory(&RemoteAddressLocal, sizeof(NETWORK_ADDRESS));
-                    RemoteAddressLocal.Network = SocketNetworkLocal;
+                    RemoteAddressLocal.Domain = NetDomainLocal;
                     Status = MmCopyToUserMode(Parameters->NetworkAddress,
                                               &RemoteAddressLocal,
                                               sizeof(NETWORK_ADDRESS));
@@ -1921,7 +1921,7 @@ Return Value:
             //
 
             if ((Packet->Offset >= Packet->Length) ||
-                (Socket->Type == SocketTypeDatagram)) {
+                (Socket->Type == NetSocketDatagram)) {
 
                 LIST_REMOVE(&(Packet->ListEntry));
                 if (LIST_EMPTY(&(UnixSocket->ReceiveList)) != FALSE) {
@@ -1959,8 +1959,8 @@ Return Value:
             // at a time.
             //
 
-            if ((Socket->Type == SocketTypeDatagram) ||
-                (Socket->Type == SocketTypeSequencedPacket)) {
+            if ((Socket->Type == NetSocketDatagram) ||
+                (Socket->Type == NetSocketSequencedPacket)) {
 
                 break;
             }
@@ -2037,17 +2037,17 @@ Return Value:
     PNETWORK_ADDRESS AddressOption;
     SOCKET_BASIC_OPTION BasicOption;
     PBOOL BooleanOption;
-    PSOCKET_NETWORK Network;
+    PNET_DOMAIN_TYPE Domain;
     PUNIX_SOCKET RemoteUnixSocket;
     PULONG SizeOption;
     KSTATUS Status;
     UINTN TotalSize;
-    PSOCKET_TYPE Type;
+    PNET_SOCKET_TYPE Type;
     PUNIX_SOCKET UnixSocket;
 
     UnixSocket = (PUNIX_SOCKET)Socket;
 
-    ASSERT(Socket->Network == SocketNetworkLocal);
+    ASSERT(Socket->Domain == NetDomainLocal);
 
     Status = STATUS_SUCCESS;
     switch (InformationType) {
@@ -2060,32 +2060,32 @@ Return Value:
                 break;
             }
 
-            if (*DataSize < sizeof(SOCKET_TYPE)) {
-                *DataSize = sizeof(SOCKET_TYPE);
+            if (*DataSize < sizeof(NET_SOCKET_TYPE)) {
+                *DataSize = sizeof(NET_SOCKET_TYPE);
                 Status = STATUS_BUFFER_TOO_SMALL;
                 break;
             }
 
-            Type = (PSOCKET_TYPE)Data;
+            Type = (PNET_SOCKET_TYPE)Data;
             *Type = Socket->Type;
-            *DataSize = sizeof(SOCKET_TYPE);
+            *DataSize = sizeof(NET_SOCKET_TYPE);
             break;
 
-        case SocketBasicOptionNetwork:
+        case SocketBasicOptionDomain:
             if (Set != FALSE) {
                 Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
                 break;
             }
 
-            if (*DataSize < sizeof(SOCKET_NETWORK)) {
-                *DataSize = sizeof(SOCKET_NETWORK);
+            if (*DataSize < sizeof(NET_DOMAIN_TYPE)) {
+                *DataSize = sizeof(NET_DOMAIN_TYPE);
                 Status = STATUS_BUFFER_TOO_SMALL;
                 break;
             }
 
-            Network = (PSOCKET_NETWORK)Data;
-            *Network = Socket->Network;
-            *DataSize = sizeof(SOCKET_NETWORK);
+            Domain = (PNET_DOMAIN_TYPE)Data;
+            *Domain = Socket->Domain;
+            *DataSize = sizeof(NET_DOMAIN_TYPE);
             break;
 
         case SocketBasicOptionLocalAddress:
@@ -2106,7 +2106,7 @@ Return Value:
                 }
 
                 RtlZeroMemory(AddressOption, sizeof(NETWORK_ADDRESS));
-                AddressOption->Network = SocketNetworkLocal;
+                AddressOption->Domain = NetDomainLocal;
                 if (UnixSocket->NameSize != 0) {
                     RtlCopyMemory(AddressOption + 1,
                                   UnixSocket->Name,
@@ -2133,7 +2133,7 @@ Return Value:
                 }
 
                 RtlZeroMemory(AddressOption, sizeof(NETWORK_ADDRESS));
-                AddressOption->Network = SocketNetworkLocal;
+                AddressOption->Domain = NetDomainLocal;
                 if (RemoteUnixSocket->NameSize != 0) {
                     RtlCopyMemory(AddressOption + 1,
                                   RemoteUnixSocket->Name,
@@ -2251,7 +2251,7 @@ Return Value:
     RemoteToSignal = NULL;
     UnixSocket = (PUNIX_SOCKET)Socket;
 
-    ASSERT(Socket->Network == SocketNetworkLocal);
+    ASSERT(Socket->Domain == NetDomainLocal);
 
     KeAcquireQueuedLock(UnixSocket->Lock);
     if (UnixSocket->State == UnixSocketStateInitialized) {
@@ -2305,8 +2305,8 @@ Return Value:
             // signal it as no more data will be sent.
             //
 
-            if ((Socket->Type == SocketTypeStream) ||
-                (Socket->Type == SocketTypeSequencedPacket)) {
+            if ((Socket->Type == NetSocketStream) ||
+                (Socket->Type == NetSocketSequencedPacket)) {
 
                 RemoteToSignal = UnixSocket->Remote;
             }
@@ -2377,7 +2377,7 @@ Return Value:
 
     UnixSocket = (PUNIX_SOCKET)Socket;
 
-    ASSERT(Socket->Network == SocketNetworkLocal);
+    ASSERT(Socket->Domain == NetDomainLocal);
 
     //
     // Shut the socket down.
@@ -2486,7 +2486,7 @@ Return Value:
     }
 
     if (Socket->State != UnixSocketStateConnected) {
-        if (Socket->KernelSocket.Type == SocketTypeDatagram) {
+        if (Socket->KernelSocket.Type == NetSocketDatagram) {
             if ((Socket->State != UnixSocketStateInitialized) &&
                 (Socket->State != UnixSocketStateBound)) {
 

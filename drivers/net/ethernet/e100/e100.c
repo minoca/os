@@ -490,9 +490,9 @@ Return Value:
     Properties.Device = Device->OsDevice;
     Properties.DeviceContext = Device;
     Properties.PacketSizeInformation.MaxPacketSize = RECEIVE_FRAME_DATA_SIZE;
-    Properties.DataLinkType = NetDataLinkEthernet;
+    Properties.DataLinkType = NetDomainEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
-    Properties.PhysicalAddress.Network = SocketNetworkPhysicalEthernet;
+    Properties.PhysicalAddress.Domain = NetDomainEthernet;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->EepromMacAddress),
                   sizeof(Device->EepromMacAddress));

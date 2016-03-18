@@ -302,7 +302,7 @@ NetpUdpUserControl (
 
 NET_PROTOCOL_ENTRY NetUdpProtocol = {
     {NULL, NULL},
-    SocketTypeDatagram,
+    NetSocketDatagram,
     SOCKET_INTERNET_PROTOCOL_UDP,
     NULL,
     NULL,
@@ -413,7 +413,7 @@ Return Value:
     KSTATUS Status;
     PUDP_SOCKET UdpSocket;
 
-    ASSERT(ProtocolEntry->Type == SocketTypeDatagram);
+    ASSERT(ProtocolEntry->Type == NetSocketDatagram);
     ASSERT((ProtocolEntry->ParentProtocolNumber ==
             SOCKET_INTERNET_PROTOCOL_UDP) &&
            (NetworkProtocol == ProtocolEntry->ParentProtocolNumber));
@@ -593,7 +593,7 @@ Return Value:
     PUDP_SOCKET UdpSocket;
 
     UdpSocket = (PUDP_SOCKET)Socket;
-    if (Socket->LocalAddress.Network != SocketNetworkInvalid) {
+    if (Socket->LocalAddress.Domain != NetDomainInvalid) {
         Status = STATUS_INVALID_PARAMETER;
         goto UdpBindToAddressEnd;
     }
@@ -602,7 +602,7 @@ Return Value:
     // Currently only IPv4 addresses are supported.
     //
 
-    if (Address->Network != SocketNetworkIp4) {
+    if (Address->Domain != NetDomainIp4) {
         Status = STATUS_NOT_SUPPORTED;
         goto UdpBindToAddressEnd;
     }
@@ -922,7 +922,7 @@ Return Value:
     }
 
     if ((Destination == NULL) ||
-        (Destination->Network == SocketNetworkInvalid)) {
+        (Destination->Domain == NetDomainInvalid)) {
 
         if (Socket->RemoteAddress.Port == 0) {
             Status = STATUS_NOT_CONFIGURED;
@@ -983,7 +983,7 @@ Return Value:
 
     if (Socket->BindingType == SocketBindingInvalid) {
         RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
-        LocalAddress.Network = Socket->Network->Type;
+        LocalAddress.Domain = Socket->Network->Domain;
         Status = NetpUdpBindToAddress(Socket, NULL, &LocalAddress);
         if (!KSUCCESS(Status)) {
             goto UdpSendEnd;

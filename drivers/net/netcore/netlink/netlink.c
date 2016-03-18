@@ -172,7 +172,7 @@ Return Value:
     // Register the netlink handlers with the core networking library.
     //
 
-    NetworkEntry.Type = SocketNetworkNetlink;
+    NetworkEntry.Domain = NetDomainNetlink;
     NetworkEntry.ParentProtocolNumber = 0;
     NetworkEntry.Interface.InitializeLink = NetpNetlinkInitializeLink;
     NetworkEntry.Interface.DestroyLink = NetpNetlinkDestroyLink;
@@ -347,7 +347,7 @@ Return Value:
 
     LocalInformation.Link = NULL;
     LocalInformation.LinkAddress = NULL;
-    if (Address->Network != SocketNetworkNetlink) {
+    if (Address->Domain != NetDomainNetlink) {
         Status = STATUS_NOT_SUPPORTED;
         goto NetlinkBindToAddressEnd;
     }
@@ -429,7 +429,7 @@ Return Value:
     RtlZeroMemory(&(Socket->RemoteAddress), sizeof(NETWORK_ADDRESS));
     if (Socket->BindingType == SocketBindingInvalid) {
         RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
-        LocalAddress.Network = SocketNetworkNetlink;
+        LocalAddress.Domain = NetDomainNetlink;
         Status = NetpNetlinkBindToAddress(Socket, NULL, &LocalAddress);
         if (!KSUCCESS(Status)) {
             goto NetlinkListenEnd;
@@ -476,7 +476,7 @@ Return Value:
     NET_LINK_LOCAL_ADDRESS LocalInformation;
     KSTATUS Status;
 
-    if (Address->Network != SocketNetworkNetlink) {
+    if (Address->Domain != NetDomainNetlink) {
         Status = STATUS_NOT_SUPPORTED;
         goto NetlinkConnectEnd;
     }
@@ -726,7 +726,7 @@ Return Value:
         return NETLINK_MAX_ADDRESS_STRING;
     }
 
-    ASSERT(Address->Network == SocketNetworkNetlink);
+    ASSERT(Address->Domain == NetDomainNetlink);
 
     NetlinkAddress = (PNETLINK_ADDRESS)Address;
 

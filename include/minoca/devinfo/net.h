@@ -98,10 +98,10 @@ Members:
     Flags - Stores a bitfield of flags describing the network device. See
         NETWORK_DEVICE_FLAG_* definitions.
 
-    Network - Stores the socket network for which this information is valid.
-        Network devices may be active on more than network protocol
+    Domain - Stores the socket network domain for which this information is
+        valid. Network devices may be active on more than network domain
         simultaneously (IPv4 and IPv6 for example). The caller sets this to
-        request information about a given network address configuration.
+        request information about a given network domain's configuration.
 
     ConfigurationMethod - Stores the method used to configure the address of
         this device.
@@ -133,7 +133,7 @@ Members:
 typedef struct _NETWORK_DEVICE_INFORMATION {
     ULONG Version;
     ULONG Flags;
-    SOCKET_NETWORK Network;
+    NET_DOMAIN_TYPE Domain;
     NETWORK_ADDRESS_CONFIGURATION_METHOD ConfigurationMethod;
     NETWORK_ADDRESS Address;
     NETWORK_ADDRESS Subnet;

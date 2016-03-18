@@ -559,7 +559,7 @@ Return Value:
     DataSize = sizeof(NETWORK_DEVICE_INFORMATION);
     Network = &(Device->Network);
     Network->Version = NETWORK_DEVICE_INFORMATION_VERSION;
-    Network->Network = SocketNetworkIp4;
+    Network->Domain = NetDomainIp4;
     Status = OsGetSetDeviceInformation(Device->DeviceId,
                                        &NetconDeviceInformationUuid,
                                        Network,
@@ -577,7 +577,7 @@ Return Value:
     // 802.11 information.
     //
 
-    if (Network->PhysicalAddress.Network == SocketNetworkPhysical80211) {
+    if (Network->PhysicalAddress.Domain == NetDomain80211) {
         DataSize = sizeof(NETWORK_80211_DEVICE_INFORMATION);
         Net80211 = &(Device->Net80211);
         Net80211->Version = NETWORK_80211_DEVICE_INFORMATION_VERSION;
@@ -711,8 +711,8 @@ Return Value:
 
     PUCHAR BytePointer;
 
-    switch (Address->Network) {
-    case SocketNetworkIp4:
+    switch (Address->Domain) {
+    case NetDomainIp4:
         BytePointer = (PUCHAR)(Address->Address);
         printf("%d.%d.%d.%d",
                BytePointer[0],
@@ -722,8 +722,8 @@ Return Value:
 
         break;
 
-    case SocketNetworkPhysical80211:
-    case SocketNetworkPhysicalEthernet:
+    case NetDomain80211:
+    case NetDomainEthernet:
         BytePointer = (PUCHAR)(Address->Address);
         printf("%02X:%02X:%02X:%02X:%02X:%02X",
                BytePointer[0],

@@ -814,7 +814,7 @@ Return Value:
     //
 
     RtlZeroMemory(&NetworkEntry, sizeof(NET_NETWORK_ENTRY));
-    NetworkEntry.Type = SocketNetworkEapol;
+    NetworkEntry.Domain = NetDomainEapol;
     NetworkEntry.ParentProtocolNumber = EAPOL_PROTOCOL_NUMBER;
     NetworkEntry.Interface.InitializeLink = Net80211pEapolInitializeLink;
     NetworkEntry.Interface.DestroyLink = Net80211pEapolDestroyLink;
@@ -1010,8 +1010,7 @@ Return Value:
 
     if (Context->Mode == EapolModeSupplicant) {
 
-        ASSERT(Context->Supplicant.Address.Network ==
-               SocketNetworkPhysical80211);
+        ASSERT(Context->Supplicant.Address.Domain == NetDomain80211);
 
         RtlCopyMemory(Data,
                       Context->Supplicant.Address.Address,
@@ -1022,8 +1021,7 @@ Return Value:
     } else {
 
         ASSERT(Context->Mode == EapolModeAuthenticator);
-        ASSERT(Context->Authenticator.Address.Network ==
-               SocketNetworkPhysical80211);
+        ASSERT(Context->Authenticator.Address.Domain == NetDomain80211);
 
         RtlCopyMemory(Data,
                       Context->Authenticator.Address.Address,

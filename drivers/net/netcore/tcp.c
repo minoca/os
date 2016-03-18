@@ -408,7 +408,7 @@ BOOL NetTcpDebugPrintLocalAddress = FALSE;
 
 NET_PROTOCOL_ENTRY NetTcpProtocol = {
     {NULL, NULL},
-    SocketTypeStream,
+    NetSocketStream,
     SOCKET_INTERNET_PROTOCOL_TCP,
     NULL,
     NULL,
@@ -605,7 +605,7 @@ Return Value:
     KSTATUS Status;
     PTCP_SOCKET TcpSocket;
 
-    ASSERT(ProtocolEntry->Type == SocketTypeStream);
+    ASSERT(ProtocolEntry->Type == NetSocketStream);
     ASSERT((ProtocolEntry->ParentProtocolNumber ==
             SOCKET_INTERNET_PROTOCOL_TCP) &&
            (NetworkProtocol == ProtocolEntry->ParentProtocolNumber));
@@ -811,7 +811,7 @@ Return Value:
     // Currently only IPv4 addresses are supported.
     //
 
-    if (Address->Network != SocketNetworkIp4) {
+    if (Address->Domain != NetDomainIp4) {
         Status = STATUS_NOT_SUPPORTED;
         goto TcpBindToAddressEnd;
     }
@@ -4559,10 +4559,10 @@ Return Value:
     // Create a socket that will be used to send this transmission.
     //
 
-    ASSERT(SourceAddress->Network == DestinationAddress->Network);
+    ASSERT(SourceAddress->Domain == DestinationAddress->Domain);
 
-    Status = IoSocketCreate(DestinationAddress->Network,
-                            SocketTypeStream,
+    Status = IoSocketCreate(DestinationAddress->Domain,
+                            NetSocketStream,
                             SOCKET_INTERNET_PROTOCOL_TCP,
                             0,
                             &NewIoHandle);
@@ -4854,8 +4854,8 @@ Return Value:
 
     Sum = 0;
 
-    ASSERT(SourceAddress->Network == SocketNetworkIp4);
-    ASSERT(DestinationAddress->Network == SourceAddress->Network);
+    ASSERT(SourceAddress->Domain == NetDomainIp4);
+    ASSERT(DestinationAddress->Domain == SourceAddress->Domain);
 
     Ip4Address = (PIP4_ADDRESS)SourceAddress;
     Sum = Ip4Address->Address;
@@ -7587,13 +7587,13 @@ Return Value:
     // Create a new socket for this connection.
     //
 
-    ASSERT(LocalAddress->Network == RemoteAddress->Network);
+    ASSERT(LocalAddress->Domain == RemoteAddress->Domain);
     ASSERT(ListeningSocket->NetSocket.KernelSocket.Protocol ==
            SOCKET_INTERNET_PROTOCOL_TCP);
 
     NetworkProtocol = ListeningSocket->NetSocket.KernelSocket.Protocol;
-    Status = IoSocketCreate(LocalAddress->Network,
-                            SocketTypeStream,
+    Status = IoSocketCreate(LocalAddress->Domain,
+                            NetSocketStream,
                             NetworkProtocol,
                             0,
                             &NewIoHandle);

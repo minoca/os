@@ -54,10 +54,10 @@ Environment:
            (MSG_WAITALL == SOCKET_IO_WAIT_ALL))
 
 #define ASSERT_SOCKET_TYPES_EQUIVALENT()                        \
-    ASSERT((SOCK_DGRAM == SocketTypeDatagram) &&                \
-           (SOCK_RAW == SocketTypeRaw) &&                       \
-           (SOCK_SEQPACKET == SocketTypeSequencedPacket) &&     \
-           (SOCK_STREAM == SocketTypeStream));
+    ASSERT((SOCK_DGRAM == NetSocketDatagram) &&                \
+           (SOCK_RAW == NetSocketRaw) &&                       \
+           (SOCK_SEQPACKET == NetSocketSequencedPacket) &&     \
+           (SOCK_STREAM == NetSocketStream));
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -196,18 +196,18 @@ Return Value:
 {
 
     HANDLE Handles[2];
-    SOCKET_NETWORK Network;
+    NET_DOMAIN_TYPE NetDomain;
     ULONG OpenFlags;
     KSTATUS Status;
 
     if (Domain == AF_INET) {
-        Network = SocketNetworkIp4;
+        NetDomain = NetDomainIp4;
 
     } else if (Domain == AF_INET6) {
-        Network = SocketNetworkIp6;
+        NetDomain = NetDomainIp6;
 
     } else if (Domain == AF_UNIX) {
-        Network = SocketNetworkLocal;
+        NetDomain = NetDomainLocal;
 
     } else {
         errno = EAFNOSUPPORT;
@@ -226,7 +226,7 @@ Return Value:
     }
 
     Type &= ~(SOCK_CLOEXEC | SOCK_NONBLOCK);
-    Status = OsSocketCreatePair(Network, Type, Protocol, OpenFlags, Handles);
+    Status = OsSocketCreatePair(NetDomain, Type, Protocol, OpenFlags, Handles);
     Sockets[0] = (int)(UINTN)(Handles[0]);
     Sockets[1] = (int)(UINTN)(Handles[1]);
     if (!KSUCCESS(Status)) {
@@ -275,7 +275,7 @@ Return Value:
 
 {
 
-    SOCKET_NETWORK Network;
+    NET_DOMAIN_TYPE NetDomain;
     ULONG OpenFlags;
     HANDLE Socket;
     KSTATUS Status;
@@ -311,19 +311,19 @@ Return Value:
         //
 
         if (Domain == AF_INET) {
-            Network = SocketNetworkIp4;
+            NetDomain = NetDomainIp4;
 
         } else if (Domain == AF_INET6) {
-            Network = SocketNetworkIp6;
+            NetDomain = NetDomainIp6;
 
         } else if (Domain == AF_UNIX) {
-            Network = SocketNetworkLocal;
+            NetDomain = NetDomainLocal;
 
         } else {
 
             ASSERT(Domain == AF_NETLINK);
 
-            Network = SocketNetworkNetlink;
+            NetDomain = NetDomainNetlink;
 
             //
             // The C library allows netlink sockets to be raw and datagram
@@ -344,7 +344,7 @@ Return Value:
         // Create the socket.
         //
 
-        Status = OsSocketCreate(Network, Type, Protocol, OpenFlags, &Socket);
+        Status = OsSocketCreate(NetDomain, Type, Protocol, OpenFlags, &Socket);
         if (!KSUCCESS(Status)) {
             if (Status == STATUS_NOT_SUPPORTED) {
                 errno = EAFNOSUPPORT;
@@ -1068,7 +1068,7 @@ Return Value:
     ASSERT_SOCKET_IO_FLAGS_ARE_EQUIVALENT();
 
     if (SourceAddress != NULL) {
-        NetworkAddress.Network = SocketNetworkInvalid;
+        NetworkAddress.Domain = NetDomainInvalid;
         ClpGetPathFromSocketAddress(SourceAddress,
                                     SourceAddressLength,
                                     &(Parameters.RemotePath),
@@ -1172,7 +1172,7 @@ Return Value:
     Parameters.RemotePath = NULL;
     Parameters.RemotePathSize = 0;
     if ((Message->msg_name != NULL) && (Message->msg_namelen != 0)) {
-        Address.Network = SocketNetworkInvalid;
+        Address.Domain = NetDomainInvalid;
         ClpGetPathFromSocketAddress(Message->msg_name,
                                     &(Message->msg_namelen),
                                     &(Parameters.RemotePath),
@@ -1655,7 +1655,7 @@ Return Value:
     KSTATUS Status;
     ULONG TimeoutOption;
     struct timeval TimevalOptionValue;
-    SOCKET_TYPE TypeOption;
+    NET_SOCKET_TYPE TypeOption;
 
     //
     // Convert from the POSIX style option value to the OS value.
@@ -1700,7 +1700,7 @@ Return Value:
 
         case SO_TYPE:
             Data = &TypeOption;
-            DataSize = sizeof(SOCKET_TYPE);
+            DataSize = sizeof(NET_SOCKET_TYPE);
             break;
 
         case SO_PEERCRED:
@@ -2127,7 +2127,7 @@ Return Value:
         }
 
         Ip4SocketAddress = (struct sockaddr_in *)Address;
-        NetworkAddress->Network = SocketNetworkIp4;
+        NetworkAddress->Domain = NetDomainIp4;
 
         //
         // The network address port is in host order, but the address is in
@@ -2145,7 +2145,7 @@ Return Value:
         }
 
         Ip6SocketAddress = (struct sockaddr_in6 *)Address;
-        NetworkAddress->Network = SocketNetworkIp6;
+        NetworkAddress->Domain = NetDomainIp6;
 
         //
         // The network address port is in host order, but the address is in
@@ -2163,7 +2163,7 @@ Return Value:
 
     } else if (Address->sa_family == AF_UNIX) {
         UnixAddress = (struct sockaddr_un *)Address;
-        NetworkAddress->Network = SocketNetworkLocal;
+        NetworkAddress->Domain = NetDomainLocal;
         if (Path != NULL) {
             *Path = UnixAddress->sun_path;
         }
@@ -2194,7 +2194,7 @@ Return Value:
         }
 
         NetlinkAddress = (struct sockaddr_nl *)Address;
-        NetworkAddress->Network = SocketNetworkNetlink;
+        NetworkAddress->Domain = NetDomainNetlink;
         NetworkAddress->Port = NetlinkAddress->nl_pid;
         *((PULONG)NetworkAddress->Address) = NetlinkAddress->nl_groups;
 
@@ -2253,14 +2253,14 @@ Return Value:
     INTN TotalSize;
     struct sockaddr_un UnixAddress;
 
-    if (NetworkAddress->Network == SocketNetworkIp4) {
+    if (NetworkAddress->Domain == NetDomainIp4) {
         Ip4Address.sin_family = AF_INET;
         Ip4Address.sin_port = htons((USHORT)(NetworkAddress->Port));
         Ip4Address.sin_addr.s_addr = *((PULONG)(NetworkAddress->Address));
         TotalSize = sizeof(Ip4Address);
         Source = &Ip4Address;
 
-    } else if (NetworkAddress->Network == SocketNetworkIp6) {
+    } else if (NetworkAddress->Domain == NetDomainIp6) {
         Ip6Address.sin6_family = AF_INET6;
         Ip6Address.sin6_port = htons((USHORT)(NetworkAddress->Port));
 
@@ -2277,12 +2277,12 @@ Return Value:
         TotalSize = sizeof(Ip6Address);
         Source = &Ip6Address;
 
-    } else if (NetworkAddress->Network == SocketNetworkLocal) {
+    } else if (NetworkAddress->Domain == NetDomainLocal) {
         UnixAddress.sun_family = AF_UNIX;
         TotalSize = FIELD_OFFSET(struct sockaddr_un, sun_path) + PathSize;
         Source = &UnixAddress;
 
-    } else if (NetworkAddress->Network == SocketNetworkNetlink) {
+    } else if (NetworkAddress->Domain == NetDomainNetlink) {
         NetlinkAddress.nl_family = AF_NETLINK;
         NetlinkAddress.nl_pad = 0;
         NetlinkAddress.nl_pid = NetworkAddress->Port;
@@ -2359,7 +2359,7 @@ Return Value:
            (Option == SocketBasicOptionRemoteAddress));
 
     LocalAddress = (PNETWORK_ADDRESS)Buffer;
-    LocalAddress->Network = SocketNetworkInvalid;
+    LocalAddress->Domain = NetDomainInvalid;
     BufferSize = sizeof(Buffer);
     Status = OsSocketGetSetInformation((HANDLE)(UINTN)Socket,
                                        SocketInformationTypeBasic,
@@ -2378,7 +2378,7 @@ Return Value:
     // address and any port.
     //
 
-    assert(LocalAddress->Network != SocketNetworkInvalid);
+    assert(LocalAddress->Domain != NetDomainInvalid);
 
     Status = ClpConvertFromNetworkAddress(LocalAddress,
                                           SocketAddress,
@@ -2390,7 +2390,7 @@ Return Value:
         return -1;
     }
 
-    if (LocalAddress->Network == SocketNetworkLocal) {
+    if (LocalAddress->Domain == NetDomainLocal) {
 
         ASSERT(BufferSize >= sizeof(NETWORK_ADDRESS));
 

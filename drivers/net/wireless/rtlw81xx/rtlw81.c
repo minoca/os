@@ -624,7 +624,7 @@ Return Value:
     Properties.PacketSizeInformation.MaxPacketSize = RTLW81_MAX_PACKET_SIZE;
     Properties.PacketSizeInformation.HeaderSize = RTLW81_TRANSMIT_HEADER_SIZE;
     Properties.MaxPhysicalAddress = MAX_ULONG;
-    Properties.PhysicalAddress.Network = SocketNetworkPhysical80211;
+    Properties.PhysicalAddress.Domain = NetDomain80211;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->MacAddress),
                   sizeof(Device->MacAddress));

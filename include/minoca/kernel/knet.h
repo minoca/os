@@ -96,12 +96,11 @@ Author:
     (SOCKET_CONTROL_ALIGN(sizeof(SOCKET_CONTROL_MESSAGE)) + (_Length))
 
 //
-// This macro returns TRUE if the socket network is a physical network or FALSE
+// This macro returns TRUE if the network domain is a physical network or FALSE
 // otherwise.
 //
 
-#define SOCKET_IS_NETWORK_PHYSICAL(_SocketNetwork) \
-    ((_SocketNetwork) >= SocketNetworkPhysicalEthernet)
+#define NET_IS_DOMAIN_PHYSICAL(_Domain) ((_Domain) >= NetDomainEthernet)
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -227,34 +226,39 @@ Author:
 #define SOCKET_CONTROL_CREDENTIALS 2
 
 //
+// Define the ranges for the different regions of the net domain type namespace.
+//
+
+#define NET_DOMAIN_TYPE_SOCKET_NETWORK_BASE    0x0000
+#define NET_DOMAIN_TYPE_SOCKET_NETWORK_MAX     0x3FFF
+#define NET_DOMAIN_TYPE_LOW_LEVEL_NETWORK_BASE 0x4000
+#define NET_DOMAIN_TYPE_LOW_LEVE_NETWORK_MAX   0x7FFF
+#define NET_DOMAIN_TYPE_PHYSICAL_BASE          0x8000
+#define NET_DOMAIN_TYPE_PHYSICAL_MAX           0xBFFF
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef enum _SOCKET_TYPE {
-    SocketTypeInvalid,
-    SocketTypeDatagram,
-    SocketTypeRaw,
-    SocketTypeSequencedPacket,
-    SocketTypeStream
-} SOCKET_TYPE, *PSOCKET_TYPE;
+typedef enum _NET_DOMAIN_TYPE {
+    NetDomainInvalid = NET_DOMAIN_TYPE_SOCKET_NETWORK_BASE,
+    NetDomainLocal,
+    NetDomainIp4,
+    NetDomainIp6,
+    NetDomainNetlink,
+    NetDomainArp = NET_DOMAIN_TYPE_LOW_LEVEL_NETWORK_BASE,
+    NetDomainEapol,
+    NetDomainEthernet = NET_DOMAIN_TYPE_PHYSICAL_BASE,
+    NetDomain80211
+} NET_DOMAIN_TYPE, *PNET_DOMAIN_TYPE;
 
-typedef enum _NET_DATA_LINK_TYPE {
-    NetDataLinkInvalid,
-    NetDataLinkEthernet = 0x8000,
-    NetDataLink80211,
-} NET_DATA_LINK_TYPE, *PNET_DATA_LINK_TYPE;
-
-typedef enum _SOCKET_NETWORK {
-    SocketNetworkInvalid,
-    SocketNetworkLocal,
-    SocketNetworkArp,
-    SocketNetworkIp4,
-    SocketNetworkIp6,
-    SocketNetworkEapol,
-    SocketNetworkNetlink,
-    SocketNetworkPhysicalEthernet = NetDataLinkEthernet,
-    SocketNetworkPhysical80211 = NetDataLink80211,
-} SOCKET_NETWORK, *PSOCKET_NETWORK;
+typedef enum _NET_SOCKET_TYPE {
+    NetSocketInvalid,
+    NetSocketDatagram,
+    NetSocketRaw,
+    NetSocketSequencedPacket,
+    NetSocketStream
+} NET_SOCKET_TYPE, *PNET_SOCKET_TYPE;
 
 /*++
 
@@ -264,7 +268,7 @@ Structure Description:
 
 Members:
 
-    Network - Stores the network type of this address.
+    Domain - Stores the network domain of this address.
 
     Port - Stores the port number, which may or may not be relevant depending
         on the protocol and network layers. This number is in host order.
@@ -275,7 +279,7 @@ Members:
 --*/
 
 typedef struct _NETWORK_ADDRESS {
-    SOCKET_NETWORK Network;
+    NET_DOMAIN_TYPE Domain;
     ULONG Port;
     UINTN Address[MAX_NETWORK_ADDRESS_SIZE / sizeof(UINTN)];
 } NETWORK_ADDRESS, *PNETWORK_ADDRESS;
@@ -426,8 +430,8 @@ Values:
         retrieved. This option is read only and takes a SOCKET_PROTOCOL
         structure.
 
-    SocketBasicOptionNetwork - Indicates that the socket's network should be
-        retrieved. This option is read only and takes a SOCKET_NETWORK
+    SocketBasicOptionDomain - Indicates that the socket's domain should be
+        retrieved. This option is read only and takes a NET_DOMAIN_TYPE
         structure.
 
     SocketBasicOptionLocalAddress - Indicates that the socket's local address
@@ -470,7 +474,7 @@ typedef enum _SOCKET_BASIC_OPTION {
     SocketBasicOptionReceiveTimeout,
     SocketBasicOptionErrorStatus,
     SocketBasicOptionType,
-    SocketBasicOptionNetwork,
+    SocketBasicOptionDomain,
     SocketBasicOptionLocalAddress,
     SocketBasicOptionRemoteAddress,
     SocketBasicOptionPassCredentials,
@@ -633,7 +637,7 @@ Structure Description:
 
 Members:
 
-    Network - Stores the network type of this socket.
+    Domain - Stores the network domain of this socket.
 
     Type - Stores the socket type.
 
@@ -653,8 +657,8 @@ Members:
 --*/
 
 typedef struct _SOCKET {
-    SOCKET_NETWORK Network;
-    SOCKET_TYPE Type;
+    NET_DOMAIN_TYPE Domain;
+    NET_SOCKET_TYPE Type;
     ULONG Protocol;
     UINTN ReferenceCount;
     PIO_OBJECT_STATE IoState;
@@ -738,8 +742,8 @@ typedef struct SOCKET_CONTROL_MESSAGE {
 typedef
 KSTATUS
 (*PNET_CREATE_SOCKET) (
-    SOCKET_NETWORK Network,
-    SOCKET_TYPE Type,
+    NET_DOMAIN_TYPE Domain,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     PSOCKET *NewSocket
     );
@@ -755,7 +759,7 @@ Routine Description:
 
 Arguments:
 
-    Network - Supplies the network to use on the socket.
+    Domain - Supplies the network domain to use on the socket.
 
     Type - Supplies the socket connection type.
 
@@ -1264,8 +1268,8 @@ Return Value:
 KERNEL_API
 KSTATUS
 IoSocketCreatePair (
-    SOCKET_NETWORK Network,
-    SOCKET_TYPE Type,
+    NET_DOMAIN_TYPE Domain,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     ULONG OpenFlags,
     PIO_HANDLE IoHandles[2]
@@ -1279,7 +1283,7 @@ Routine Description:
 
 Arguments:
 
-    Network - Supplies the network to use on the socket.
+    Domain - Supplies the network domain to use on the socket.
 
     Type - Supplies the socket connection type.
 
@@ -1300,8 +1304,8 @@ Return Value:
 KERNEL_API
 KSTATUS
 IoSocketCreate (
-    SOCKET_NETWORK Network,
-    SOCKET_TYPE Type,
+    NET_DOMAIN_TYPE Domain,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     ULONG OpenFlags,
     PIO_HANDLE *IoHandle
@@ -1315,7 +1319,7 @@ Routine Description:
 
 Arguments:
 
-    Network - Supplies the network to use on the socket.
+    Domain - Supplies the network domain to use on the socket.
 
     Type - Supplies the socket connection type.
 

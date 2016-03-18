@@ -42,8 +42,8 @@ Environment:
 
 KSTATUS
 NetCreateSocket (
-    SOCKET_NETWORK Network,
-    SOCKET_TYPE Type,
+    NET_DOMAIN_TYPE Domain,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     PSOCKET *NewSocket
     );
@@ -336,7 +336,7 @@ Return Value:
     LockHeld = FALSE;
     Handle = INVALID_HANDLE;
     NewProtocolCopy = NULL;
-    if ((NewProtocol->Type == SocketTypeInvalid) ||
+    if ((NewProtocol->Type == NetSocketInvalid) ||
         (NewProtocol->Interface.CreateSocket == NULL) ||
         (NewProtocol->Interface.DestroySocket == NULL) ||
         (NewProtocol->Interface.BindToAddress == NULL) ||
@@ -420,19 +420,19 @@ Return Value:
     // Save the common ones for quick access.
     //
 
-    if ((NewProtocolCopy->Type == SocketTypeStream) &&
+    if ((NewProtocolCopy->Type == NetSocketStream) &&
         (NewProtocolCopy->ParentProtocolNumber ==
          SOCKET_INTERNET_PROTOCOL_TCP)) {
 
         NetTcpProtocolEntry = NewProtocolCopy;
 
-    } else if ((NewProtocolCopy->Type == SocketTypeDatagram) &&
+    } else if ((NewProtocolCopy->Type == NetSocketDatagram) &&
                (NewProtocolCopy->ParentProtocolNumber ==
                 SOCKET_INTERNET_PROTOCOL_UDP)) {
 
         NetUdpProtocolEntry = NewProtocolCopy;
 
-    } else if (NewProtocolCopy->Type == SocketTypeRaw) {
+    } else if (NewProtocolCopy->Type == NetSocketRaw) {
         NetRawProtocolEntry = NewProtocolCopy;
     }
 
@@ -563,7 +563,7 @@ Return Value:
     LockHeld = FALSE;
     Handle = INVALID_HANDLE;
     NewNetworkCopy = NULL;
-    if ((NewNetworkEntry->Type == SocketNetworkInvalid) ||
+    if ((NewNetworkEntry->Domain == NetDomainInvalid) ||
         (NewNetworkEntry->Interface.InitializeLink == NULL) ||
         (NewNetworkEntry->Interface.DestroyLink == NULL) ||
         (NewNetworkEntry->Interface.InitializeSocket == NULL) ||
@@ -605,7 +605,7 @@ Return Value:
     CurrentEntry = NetNetworkList.Next;
     while (CurrentEntry != &NetNetworkList) {
         Network = LIST_VALUE(CurrentEntry, NET_NETWORK_ENTRY, ListEntry);
-        if (Network->Type == NewNetworkEntry->Type) {
+        if (Network->Domain == NewNetworkEntry->Domain) {
             Status = STATUS_DUPLICATE_ENTRY;
             goto RegisterNetworkLayerEnd;
         }
@@ -623,13 +623,13 @@ Return Value:
     // Save quick-access pointers for the common ones.
     //
 
-    if (NewNetworkCopy->Type == SocketNetworkIp4) {
+    if (NewNetworkCopy->Domain == NetDomainIp4) {
         NetIp4NetworkEntry = NewNetworkCopy;
 
-    } else if (NewNetworkCopy->Type == SocketNetworkIp6) {
+    } else if (NewNetworkCopy->Domain == NetDomainIp6) {
         NetIp6NetworkEntry = NewNetworkCopy;
 
-    } else if (NewNetworkCopy->Type == SocketNetworkArp) {
+    } else if (NewNetworkCopy->Domain == NetDomainArp) {
         NetArpNetworkEntry = NewNetworkCopy;
     }
 
@@ -761,7 +761,7 @@ Return Value:
     LockHeld = FALSE;
     Handle = INVALID_HANDLE;
     NewDataLinkCopy = NULL;
-    if ((NewDataLinkEntry->Type == NetDataLinkInvalid) ||
+    if ((NewDataLinkEntry->Domain == NetDomainInvalid) ||
         (NewDataLinkEntry->Interface.InitializeLink == NULL) ||
         (NewDataLinkEntry->Interface.DestroyLink == NULL) ||
         (NewDataLinkEntry->Interface.Send == NULL) ||
@@ -801,7 +801,7 @@ Return Value:
     CurrentEntry = NetDataLinkList.Next;
     while (CurrentEntry != &NetDataLinkList) {
         DataLink = LIST_VALUE(CurrentEntry, NET_DATA_LINK_ENTRY, ListEntry);
-        if (DataLink->Type == NewDataLinkEntry->Type) {
+        if (DataLink->Domain == NewDataLinkEntry->Domain) {
             Status = STATUS_DUPLICATE_ENTRY;
             goto RegisterDataLinkLayerEnd;
         }
@@ -1158,14 +1158,14 @@ Return Value:
     //
 
     KeAcquireSharedExclusiveLockShared(NetPluginListLock);
-    if (SOCKET_IS_NETWORK_PHYSICAL(Address->Network) != FALSE) {
+    if (NET_IS_DOMAIN_PHYSICAL(Address->Domain) != FALSE) {
         CurrentEntry = NetDataLinkList.Next;
         while (CurrentEntry != &NetDataLinkList) {
             DataLinkEntry = LIST_VALUE(CurrentEntry,
                                        NET_DATA_LINK_ENTRY,
                                        ListEntry);
 
-            if (DataLinkEntry->Type == (NET_DATA_LINK_TYPE)Address->Network) {
+            if (DataLinkEntry->Domain == Address->Domain) {
                 Length = DataLinkEntry->Interface.PrintAddress(
                                               Address,
                                               StringBuffer,
@@ -1190,7 +1190,7 @@ Return Value:
                                       NET_NETWORK_ENTRY,
                                       ListEntry);
 
-            if (NetworkEntry->Type == Address->Network) {
+            if (NetworkEntry->Domain == Address->Domain) {
                 Length = NetworkEntry->Interface.PrintAddress(
                                               Address,
                                               StringBuffer,
@@ -1213,8 +1213,8 @@ Return Value:
 
 KSTATUS
 NetCreateSocket (
-    SOCKET_NETWORK Network,
-    SOCKET_TYPE Type,
+    NET_DOMAIN_TYPE Domain,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     PSOCKET *NewSocket
     )
@@ -1230,7 +1230,7 @@ Routine Description:
 
 Arguments:
 
-    Network - Supplies the network to use on the socket.
+    Domain - Supplies the network domain to use on the socket.
 
     Type - Supplies the socket connection type.
 
@@ -1280,7 +1280,7 @@ Return Value:
             continue;
         }
 
-        if ((Type != SocketTypeRaw) &&
+        if ((Type != NetSocketRaw) &&
             (Protocol != 0) &&
             (ProtocolEntry->ParentProtocolNumber != Protocol)) {
 
@@ -1294,7 +1294,7 @@ Return Value:
     CurrentEntry = NetNetworkList.Next;
     while (CurrentEntry != &NetNetworkList) {
         NetworkEntry = LIST_VALUE(CurrentEntry, NET_NETWORK_ENTRY, ListEntry);
-        if (NetworkEntry->Type == Network) {
+        if (NetworkEntry->Domain == Domain) {
             NetworkFound = TRUE;
             break;
         }
@@ -1347,7 +1347,7 @@ CreateSocketEnd:
 
     if (NetGlobalDebug != FALSE) {
         RtlDebugPrint("Net: Create socket (%d, %d, %d): %x: %x\n",
-                      Network,
+                      Domain,
                       Type,
                       Protocol,
                       Socket,
@@ -1503,7 +1503,7 @@ Return Value:
 
     if (NetSocket->BindingType == SocketBindingInvalid) {
         RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
-        LocalAddress.Network = NetSocket->Network->Type;
+        LocalAddress.Domain = NetSocket->Network->Domain;
         Status = NetBindToAddress(Socket, NULL, &LocalAddress);
         if (!KSUCCESS(Status)) {
             if (NetGlobalDebug != FALSE) {
@@ -1844,13 +1844,13 @@ Return Value:
     PNETWORK_ADDRESS AddressOption;
     SOCKET_BASIC_OPTION BasicOption;
     PBOOL BooleanOption;
+    PNET_DOMAIN_TYPE Domain;
     PULONG ErrorOption;
     ULONG Flags;
     PNET_SOCKET NetSocket;
-    PSOCKET_NETWORK Network;
     PNET_PROTOCOL_ENTRY Protocol;
     KSTATUS Status;
-    PSOCKET_TYPE Type;
+    PNET_SOCKET_TYPE Type;
 
     NetSocket = (PNET_SOCKET)Socket;
     Protocol = NetSocket->Protocol;
@@ -1871,32 +1871,32 @@ Return Value:
                 break;
             }
 
-            if (*DataSize < sizeof(SOCKET_TYPE)) {
-                *DataSize = sizeof(SOCKET_TYPE);
+            if (*DataSize < sizeof(NET_SOCKET_TYPE)) {
+                *DataSize = sizeof(NET_SOCKET_TYPE);
                 Status = STATUS_BUFFER_TOO_SMALL;
                 break;
             }
 
-            Type = (PSOCKET_TYPE)Data;
+            Type = (PNET_SOCKET_TYPE)Data;
             *Type = NetSocket->KernelSocket.Type;
-            *DataSize = sizeof(SOCKET_TYPE);
+            *DataSize = sizeof(NET_SOCKET_TYPE);
             break;
 
-        case SocketBasicOptionNetwork:
+        case SocketBasicOptionDomain:
             if (Set != FALSE) {
                 Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
                 break;
             }
 
-            if (*DataSize < sizeof(SOCKET_NETWORK)) {
-                *DataSize = sizeof(SOCKET_NETWORK);
+            if (*DataSize < sizeof(NET_DOMAIN_TYPE)) {
+                *DataSize = sizeof(NET_DOMAIN_TYPE);
                 Status = STATUS_BUFFER_TOO_SMALL;
                 break;
             }
 
-            Network = (PSOCKET_NETWORK)Data;
-            *Network = NetSocket->KernelSocket.Network;
-            *DataSize = sizeof(SOCKET_NETWORK);
+            Domain = (PNET_DOMAIN_TYPE)Data;
+            *Domain = NetSocket->KernelSocket.Domain;
+            *DataSize = sizeof(NET_DOMAIN_TYPE);
             break;
 
         case SocketBasicOptionLocalAddress:
@@ -1917,7 +1917,7 @@ Return Value:
             // Acquire the lock to not return a torn address.
             //
 
-            if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
+            if (NetSocket->KernelSocket.Type == NetSocketRaw) {
                 KeAcquireSharedExclusiveLockShared(NetRawSocketsLock);
 
             } else {
@@ -1935,11 +1935,11 @@ Return Value:
                 // any address and any port on the correct network.
                 //
 
-                if (AddressOption->Network == SocketNetworkInvalid) {
-                    AddressOption->Network = NetSocket->KernelSocket.Network;
+                if (AddressOption->Domain == NetDomainInvalid) {
+                    AddressOption->Domain = NetSocket->KernelSocket.Domain;
                 }
 
-                if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
+                if (NetSocket->KernelSocket.Type == NetSocketRaw) {
                     AddressOption->Port = NetSocket->KernelSocket.Protocol;
                 }
 
@@ -1952,7 +1952,7 @@ Return Value:
                               sizeof(NETWORK_ADDRESS));
             }
 
-            if (NetSocket->KernelSocket.Type == SocketTypeRaw) {
+            if (NetSocket->KernelSocket.Type == NetSocketRaw) {
                 KeReleaseSharedExclusiveLockShared(NetRawSocketsLock);
 
             } else {

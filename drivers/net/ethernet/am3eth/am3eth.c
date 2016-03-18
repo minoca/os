@@ -494,9 +494,9 @@ Return Value:
     PacketSizeInformation = &(Properties.PacketSizeInformation);
     PacketSizeInformation->MaxPacketSize = Device->ReceiveFrameDataSize;
     PacketSizeInformation->MinPacketSize = A3E_TRANSMIT_MINIMUM_PACKET_SIZE;
-    Properties.DataLinkType = NetDataLinkEthernet;
+    Properties.DataLinkType = NetDomainEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
-    Properties.PhysicalAddress.Network = SocketNetworkPhysicalEthernet;
+    Properties.PhysicalAddress.Domain = NetDomainEthernet;
 
     ASSERT(Device->MacAddressAssigned != FALSE);
 

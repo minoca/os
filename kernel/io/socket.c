@@ -186,8 +186,8 @@ Return Value:
 KERNEL_API
 KSTATUS
 IoSocketCreatePair (
-    SOCKET_NETWORK Network,
-    SOCKET_TYPE Type,
+    NET_DOMAIN_TYPE Domain,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     ULONG OpenFlags,
     PIO_HANDLE IoHandles[2]
@@ -201,7 +201,7 @@ Routine Description:
 
 Arguments:
 
-    Network - Supplies the network to use on the socket.
+    Domain - Supplies the network domain to use on the socket.
 
     Type - Supplies the socket connection type.
 
@@ -223,7 +223,7 @@ Return Value:
 
     KSTATUS Status;
 
-    if (Network == SocketNetworkLocal) {
+    if (Domain == NetDomainLocal) {
         Status = IopCreateUnixSocketPair(Type, Protocol, OpenFlags, IoHandles);
 
     } else {
@@ -236,8 +236,8 @@ Return Value:
 KERNEL_API
 KSTATUS
 IoSocketCreate (
-    SOCKET_NETWORK Network,
-    SOCKET_TYPE Type,
+    NET_DOMAIN_TYPE Domain,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     ULONG OpenFlags,
     PIO_HANDLE *IoHandle
@@ -251,7 +251,7 @@ Routine Description:
 
 Arguments:
 
-    Network - Supplies the network to use on the socket.
+    Domain - Supplies the network domain to use on the socket.
 
     Type - Supplies the socket connection type.
 
@@ -278,7 +278,7 @@ Return Value:
     KSTATUS Status;
 
     Process = PsGetCurrentProcess();
-    Parameters.Network = Network;
+    Parameters.Domain = Domain;
     Parameters.Type = Type;
     Parameters.Protocol = Protocol;
     Parameters.ExistingSocket = NULL;
@@ -364,7 +364,7 @@ Return Value:
     // file system.
     //
 
-    if (Socket->Network == SocketNetworkLocal) {
+    if (Socket->Domain == NetDomainLocal) {
         Status = IopUnixSocketBindToAddress(FromKernelMode,
                                             Handle,
                                             Address,
@@ -425,7 +425,7 @@ Return Value:
         goto SocketListenEnd;
     }
 
-    if (Socket->Network == SocketNetworkLocal) {
+    if (Socket->Domain == NetDomainLocal) {
         Status = IopUnixSocketListen(Socket, BacklogCount);
 
     } else {
@@ -495,7 +495,7 @@ Return Value:
         goto SocketAcceptEnd;
     }
 
-    if (Socket->Network == SocketNetworkLocal) {
+    if (Socket->Domain == NetDomainLocal) {
         Status = IopUnixSocketAccept(Socket,
                                      NewConnectionSocket,
                                      RemoteAddress,
@@ -564,7 +564,7 @@ Return Value:
         goto SocketConnectEnd;
     }
 
-    if (Socket->Network == SocketNetworkLocal) {
+    if (Socket->Domain == NetDomainLocal) {
         Status = IopUnixSocketConnect(FromKernelMode,
                                       Socket,
                                       Address,
@@ -638,7 +638,7 @@ Return Value:
         Parameters->TimeoutInMilliseconds = 0;
     }
 
-    if (Socket->Network == SocketNetworkLocal) {
+    if (Socket->Domain == NetDomainLocal) {
         Status = IopUnixSocketSendData(FromKernelMode,
                                        Socket,
                                        Parameters,
@@ -716,7 +716,7 @@ Return Value:
         Parameters->TimeoutInMilliseconds = 0;
     }
 
-    if (Socket->Network == SocketNetworkLocal) {
+    if (Socket->Domain == NetDomainLocal) {
         Status = IopUnixSocketReceiveData(FromKernelMode,
                                           Socket,
                                           Parameters,
@@ -804,7 +804,7 @@ Return Value:
         goto SocketGetSetInformationEnd;
     }
 
-    if (Socket->Network == SocketNetworkLocal) {
+    if (Socket->Domain == NetDomainLocal) {
         Status = IopUnixSocketGetSetSocketInformation(Socket,
                                                       InformationType,
                                                       SocketOption,
@@ -870,7 +870,7 @@ Return Value:
         goto SocketShutdownEnd;
     }
 
-    if (Socket->Network == SocketNetworkLocal) {
+    if (Socket->Domain == NetDomainLocal) {
         Status = IopUnixSocketShutdown(Socket, ShutdownType);
 
     } else {
@@ -933,7 +933,7 @@ Return Value:
         goto SocketUserControlEnd;
     }
 
-    if (Socket->Network == SocketNetworkLocal) {
+    if (Socket->Domain == NetDomainLocal) {
         Status = STATUS_NOT_SUPPORTED;
 
     } else {
@@ -1057,7 +1057,7 @@ Return Value:
     }
 
     OpenFlags = Parameters->OpenFlags & OPEN_FLAG_NON_BLOCKING;
-    Status = IoSocketCreatePair(Parameters->Network,
+    Status = IoSocketCreatePair(Parameters->Domain,
                                 Parameters->Type,
                                 Parameters->Protocol,
                                 OpenFlags,
@@ -1179,7 +1179,7 @@ Return Value:
 
     OpenFlags = Parameters->OpenFlags & SYS_OPEN_FLAG_NON_BLOCKING;
     IoHandle = NULL;
-    Status = IoSocketCreate(Parameters->Network,
+    Status = IoSocketCreate(Parameters->Domain,
                             Parameters->Type,
                             Parameters->Protocol,
                             OpenFlags,
@@ -2131,8 +2131,8 @@ Return Value:
     //
 
     } else {
-        if (Parameters->Network == SocketNetworkLocal) {
-            Status = IopCreateUnixSocket(Parameters->Network,
+        if (Parameters->Domain == NetDomainLocal) {
+            Status = IopCreateUnixSocket(Parameters->Domain,
                                          Parameters->Type,
                                          Parameters->Protocol,
                                          &Socket);
@@ -2143,7 +2143,7 @@ Return Value:
                 goto CreateSocketEnd;
             }
 
-            Status = IoNetInterface.CreateSocket(Parameters->Network,
+            Status = IoNetInterface.CreateSocket(Parameters->Domain,
                                                  Parameters->Type,
                                                  Parameters->Protocol,
                                                  &Socket);
@@ -2159,7 +2159,7 @@ Return Value:
         // Fill in the standard parts of the socket structure.
         //
 
-        Socket->Network = Parameters->Network;
+        Socket->Domain = Parameters->Domain;
         Socket->Type = Parameters->Type;
         if (Socket->IoState == NULL) {
             Socket->IoState = IoCreateIoObjectState(FALSE);
@@ -2220,13 +2220,13 @@ Return Value:
     // bound to the any address.
     //
 
-    if ((Socket->Type == SocketTypeRaw) &&
-        (Socket->Network != SocketNetworkLocal)) {
+    if ((Socket->Type == NetSocketRaw) &&
+        (Socket->Domain != NetDomainLocal)) {
 
         ASSERT(Parameters->ExistingSocket == NULL);
 
         RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
-        LocalAddress.Network = Socket->Network;
+        LocalAddress.Domain = Socket->Domain;
         Status = IoNetInterface.BindToAddress(Socket, NULL, &LocalAddress);
         if (!KSUCCESS(Status)) {
             goto CreateSocketEnd;
@@ -2398,7 +2398,7 @@ Return Value:
     }
 
     Socket = FileObject->SpecialIo;
-    if (Socket->Network == SocketNetworkLocal) {
+    if (Socket->Domain == NetDomainLocal) {
         Status = IopUnixSocketClose(Socket);
 
     } else {
@@ -2450,7 +2450,7 @@ Return Value:
 
     IoDestroyIoObjectState(Socket->IoState);
     Socket->IoState = NULL;
-    if (Socket->Network == SocketNetworkLocal) {
+    if (Socket->Domain == NetDomainLocal) {
         IopDestroyUnixSocket(Socket);
 
     } else {

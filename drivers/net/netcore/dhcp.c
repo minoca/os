@@ -839,8 +839,8 @@ Return Value:
         goto DhcpAssignmentThreadEnd;
     }
 
-    Status = IoSocketCreate(SocketNetworkIp4,
-                            SocketTypeDatagram,
+    Status = IoSocketCreate(NetDomainIp4,
+                            NetSocketDatagram,
                             SOCKET_INTERNET_PROTOCOL_UDP,
                             0,
                             &(DhcpContext->Socket));
@@ -856,7 +856,7 @@ Return Value:
     //
 
     RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
-    LocalAddress.Network = SocketNetworkIp4;
+    LocalAddress.Domain = NetDomainIp4;
     LocalAddress.Port = DHCP_CLIENT_PORT;
     Status = IoSocketBindToAddress(TRUE,
                                    DhcpContext->Socket,
@@ -961,7 +961,7 @@ Return Value:
     RtlZeroMemory(&Information, sizeof(NETWORK_DEVICE_INFORMATION));
     Information.Version = NETWORK_DEVICE_INFORMATION_VERSION;
     Information.Flags = NETWORK_DEVICE_FLAG_CONFIGURED;
-    Information.Network = SocketNetworkIp4;
+    Information.Domain = NetDomainIp4;
     Information.ConfigurationMethod = NetworkAddressConfigurationDhcp;
     RtlCopyMemory(&(Information.Address),
                   &(DhcpContext->OfferClientAddress),
@@ -1044,7 +1044,7 @@ DhcpAssignmentThreadEnd:
         if (LeaseAcquired != FALSE) {
             RtlZeroMemory(&Information, sizeof(NETWORK_DEVICE_INFORMATION));
             Information.Version = NETWORK_DEVICE_INFORMATION_VERSION;
-            Information.Network = SocketNetworkIp4;
+            Information.Domain = NetDomainIp4;
             Information.ConfigurationMethod = NetworkAddressConfigurationNone;
             NetGetSetNetworkDeviceInformation(DhcpContext->Link,
                                               DhcpContext->LinkAddress,
@@ -1193,8 +1193,8 @@ Return Value:
         goto DhcpLeaseExtensionThreadEnd;
     }
 
-    Status = IoSocketCreate(SocketNetworkIp4,
-                            SocketTypeDatagram,
+    Status = IoSocketCreate(NetDomainIp4,
+                            NetSocketDatagram,
                             SOCKET_INTERNET_PROTOCOL_UDP,
                             0,
                             &(DhcpContext->Socket));
@@ -1272,7 +1272,7 @@ Return Value:
     RtlZeroMemory(&Information, sizeof(NETWORK_DEVICE_INFORMATION));
     Information.Version = NETWORK_DEVICE_INFORMATION_VERSION;
     Information.Flags = NETWORK_DEVICE_FLAG_CONFIGURED;
-    Information.Network = SocketNetworkIp4;
+    Information.Domain = NetDomainIp4;
     Information.ConfigurationMethod = NetworkAddressConfigurationDhcp;
     RtlCopyMemory(&(Information.Address),
                   &(DhcpContext->OfferClientAddress),
@@ -1470,8 +1470,8 @@ Return Value:
         goto DhcpLeaseReleaseThreadEnd;
     }
 
-    Status = IoSocketCreate(SocketNetworkIp4,
-                            SocketTypeDatagram,
+    Status = IoSocketCreate(NetDomainIp4,
+                            NetSocketDatagram,
                             SOCKET_INTERNET_PROTOCOL_UDP,
                             0,
                             &(DhcpContext->Socket));
@@ -1640,7 +1640,7 @@ Return Value:
     //
 
     RtlZeroMemory(&RemoteAddress, sizeof(NETWORK_ADDRESS));
-    RemoteAddress.Network = SocketNetworkIp4;
+    RemoteAddress.Domain = NetDomainIp4;
     RemoteAddress.Address = IP4_BROADCAST_ADDRESS;
     RemoteAddress.Port = DHCP_SERVER_PORT;
     RtlZeroMemory(&Parameters, sizeof(SOCKET_IO_PARAMETERS));
@@ -1836,7 +1836,7 @@ Return Value:
 
         Ip4Address = (PIP4_ADDRESS)&(Context->LinkAddress->Address);
 
-        ASSERT(Ip4Address->Network == SocketNetworkIp4);
+        ASSERT(Ip4Address->Domain == NetDomainIp4);
         ASSERT(Ip4Address->Address != 0);
 
         Request->ClientIpAddress = Ip4Address->Address;
@@ -1951,7 +1951,7 @@ Return Value:
     //
 
     RtlZeroMemory(&RemoteAddress, sizeof(NETWORK_ADDRESS));
-    RemoteAddress.Network = SocketNetworkIp4;
+    RemoteAddress.Domain = NetDomainIp4;
     if (Lease->State == DhcpLeaseStateRenewing) {
 
         //
@@ -1968,7 +1968,7 @@ Return Value:
 
         Ip4Address = (PIP4_ADDRESS)&(Context->LinkAddress->LeaseServerAddress);
 
-        ASSERT(Ip4Address->Network == SocketNetworkIp4);
+        ASSERT(Ip4Address->Domain == NetDomainIp4);
         ASSERT(Ip4Address->Address != 0);
 
         RemoteAddress.Address = Ip4Address->Address;
@@ -2187,7 +2187,7 @@ Return Value:
     Request->Flags = 0;
     Ip4Address = (PIP4_ADDRESS)&(Context->OfferClientAddress);
 
-    ASSERT(Ip4Address->Network == SocketNetworkIp4);
+    ASSERT(Ip4Address->Domain == NetDomainIp4);
     ASSERT(Ip4Address->Address != 0);
 
     Request->ClientIpAddress = Ip4Address->Address;
@@ -2217,7 +2217,7 @@ Return Value:
 
     ServerIp4Address = (PIP4_ADDRESS)(&(Context->OfferServerAddress));
 
-    ASSERT(ServerIp4Address->Network == SocketNetworkIp4);
+    ASSERT(ServerIp4Address->Domain == NetDomainIp4);
     ASSERT(ServerIp4Address->Address != 0);
 
     *OptionByte = DHCP_OPTION_DHCP_SERVER;
@@ -2244,10 +2244,10 @@ Return Value:
     //
 
     RtlZeroMemory(&RemoteAddress, sizeof(NETWORK_ADDRESS));
-    RemoteAddress.Network = SocketNetworkIp4;
+    RemoteAddress.Domain = NetDomainIp4;
     Ip4Address = (PIP4_ADDRESS)&(Context->OfferServerAddress);
 
-    ASSERT(Ip4Address->Network == SocketNetworkIp4);
+    ASSERT(Ip4Address->Domain == NetDomainIp4);
     ASSERT(Ip4Address->Address != 0);
 
     RemoteAddress.Address = Ip4Address->Address;
@@ -3139,16 +3139,16 @@ Return Value:
     //
 
     Ip4Address = (PIP4_ADDRESS)(&(Context->OfferClientAddress));
-    Ip4Address->Network = SocketNetworkIp4;
+    Ip4Address->Domain = NetDomainIp4;
     Ip4Address->Address = Reply->OfferedIpAddress;
     Ip4Address = (PIP4_ADDRESS)(&(Context->OfferSubnetMask));
-    Ip4Address->Network = SocketNetworkIp4;
+    Ip4Address->Domain = NetDomainIp4;
     Ip4Address->Address = Reply->SubnetMask;
     Ip4Address = (PIP4_ADDRESS)(&(Context->OfferServerAddress));
-    Ip4Address->Network = SocketNetworkIp4;
+    Ip4Address->Domain = NetDomainIp4;
     Ip4Address->Address = Reply->ServerIpAddress;
     Ip4Address = (PIP4_ADDRESS)(&(Context->OfferRouter));
-    Ip4Address->Network = SocketNetworkIp4;
+    Ip4Address->Domain = NetDomainIp4;
     Ip4Address->Address = Reply->RouterIpAddress;
     Context->OfferDnsAddressCount = Reply->DomainNameServerCount;
     for (AddressIndex = 0;
@@ -3158,7 +3158,7 @@ Return Value:
         Ip4Address =
                  (PIP4_ADDRESS)(&(Context->OfferDnsAddress[AddressIndex]));
 
-        Ip4Address->Network = SocketNetworkIp4;
+        Ip4Address->Domain = NetDomainIp4;
         Ip4Address->Address = Reply->DomainNameServer[AddressIndex];
     }
 

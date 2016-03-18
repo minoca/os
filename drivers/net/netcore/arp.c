@@ -236,7 +236,7 @@ Return Value:
     //
 
     RtlZeroMemory(&NetworkEntry, sizeof(NET_NETWORK_ENTRY));
-    NetworkEntry.Type = SocketNetworkArp;
+    NetworkEntry.Domain = NetDomainArp;
     NetworkEntry.ParentProtocolNumber = ARP_PROTOCOL_NUMBER;
     NetworkEntry.Interface.InitializeLink = NetpArpInitializeLink;
     NetworkEntry.Interface.DestroyLink = NetpArpDestroyLink;
@@ -335,7 +335,7 @@ Return Value:
     ArpPacket = NetPacket->Buffer + NetPacket->DataOffset;
     ArpPacket->HardwareType = CPU_TO_NETWORK16(ARP_HARDWARE_TYPE_ETHERNET);
 
-    ASSERT(QueryAddress->Network == SocketNetworkIp4);
+    ASSERT(QueryAddress->Domain == NetDomainIp4);
 
     ArpPacket->ProtocolType = CPU_TO_NETWORK16(IP4_PROTOCOL_NUMBER);
     ArpPacket->ProtocolAddressLength = IP4_ADDRESS_SIZE;
@@ -370,7 +370,7 @@ Return Value:
     // Copy the sender's network address.
     //
 
-    ASSERT(LinkAddress->Address.Network == SocketNetworkIp4);
+    ASSERT(LinkAddress->Address.Domain == NetDomainIp4);
 
     RtlCopyMemory(CurrentPointer,
                   &(LinkAddress->Address.Address),
@@ -807,26 +807,26 @@ Return Value:
     RtlZeroMemory(&SenderPhysicalAddress, sizeof(NETWORK_ADDRESS));
     RtlZeroMemory(&TargetNetworkAddress, sizeof(NETWORK_ADDRESS));
     RtlZeroMemory(&TargetPhysicalAddress, sizeof(NETWORK_ADDRESS));
-    SenderPhysicalAddress.Network = (SOCKET_NETWORK)Link->DataLinkEntry->Type;
+    SenderPhysicalAddress.Domain = Link->DataLinkEntry->Domain;
     CurrentPointer = (PUCHAR)(ArpPacket + 1);
     RtlCopyMemory(&(SenderPhysicalAddress.Address),
                   CurrentPointer,
                   ETHERNET_ADDRESS_SIZE);
 
     CurrentPointer += ETHERNET_ADDRESS_SIZE;
-    SenderNetworkAddress.Network = SocketNetworkIp4;
+    SenderNetworkAddress.Domain = NetDomainIp4;
     RtlCopyMemory(&(SenderNetworkAddress.Address),
                   CurrentPointer,
                   IP4_ADDRESS_SIZE);
 
     CurrentPointer += IP4_ADDRESS_SIZE;
-    TargetPhysicalAddress.Network = (SOCKET_NETWORK)Link->DataLinkEntry->Type;
+    TargetPhysicalAddress.Domain = Link->DataLinkEntry->Domain;
     RtlCopyMemory(&(TargetPhysicalAddress.Address),
                   CurrentPointer,
                   ETHERNET_ADDRESS_SIZE);
 
     CurrentPointer += ETHERNET_ADDRESS_SIZE;
-    TargetNetworkAddress.Network = SocketNetworkIp4;
+    TargetNetworkAddress.Domain = NetDomainIp4;
     RtlCopyMemory(&(TargetNetworkAddress.Address),
                   CurrentPointer,
                   IP4_ADDRESS_SIZE);
@@ -1082,9 +1082,8 @@ Return Value:
     ArpPacket = NetPacket->Buffer + NetPacket->DataOffset;
     ArpPacket->HardwareType = CPU_TO_NETWORK16(ARP_HARDWARE_TYPE_ETHERNET);
 
-    ASSERT(DestinationNetworkAddress->Network == SocketNetworkIp4);
-    ASSERT(DestinationPhysicalAddress->Network ==
-           (SOCKET_NETWORK)Link->DataLinkEntry->Type);
+    ASSERT(DestinationNetworkAddress->Domain == NetDomainIp4);
+    ASSERT(DestinationPhysicalAddress->Domain == Link->DataLinkEntry->Domain);
 
     ArpPacket->ProtocolType = CPU_TO_NETWORK16(IP4_PROTOCOL_NUMBER);
     ArpPacket->ProtocolAddressLength = 4;
@@ -1129,7 +1128,7 @@ Return Value:
     // Copy the sender's network address.
     //
 
-    ASSERT(LinkAddress->Address.Network == SocketNetworkIp4);
+    ASSERT(LinkAddress->Address.Domain == NetDomainIp4);
 
     RtlCopyMemory(CurrentPointer,
                   &(LinkAddress->Address.Address),

@@ -313,7 +313,7 @@ Return Value:
     }
 
     if ((!POWER_OF_2(Properties->TransmitAlignment)) ||
-        (Properties->PhysicalAddress.Network == SocketNetworkInvalid) ||
+        (Properties->PhysicalAddress.Domain == NetDomainInvalid) ||
         (Properties->MaxPhysicalAddress == 0) ||
         (Properties->Interface.Send == NULL) ||
         (Properties->Interface.GetSetInformation == NULL)) {
@@ -362,7 +362,7 @@ Return Value:
                                      NET_DATA_LINK_ENTRY,
                                      ListEntry);
 
-        if (CurrentDataLink->Type == Properties->DataLinkType) {
+        if (CurrentDataLink->Domain == Properties->DataLinkType) {
             FoundDataLink = CurrentDataLink;
             break;
         }
@@ -599,8 +599,8 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
+    NET_DOMAIN_TYPE Domain;
     PNET_LINK_ADDRESS_ENTRY LinkAddress;
-    SOCKET_NETWORK Network;
     BOOL OriginalLinkUp;
     KSTATUS Status;
     PADDRESS_TRANSLATION_ENTRY Translation;
@@ -752,9 +752,9 @@ Return Value:
                 // be left stale.
                 //
 
-                Network = LinkAddress->Address.Network;
+                Domain = LinkAddress->Address.Domain;
                 RtlZeroMemory(&(LinkAddress->Address), sizeof(NETWORK_ADDRESS));
-                LinkAddress->Address.Network = Network;
+                LinkAddress->Address.Domain = Domain;
 
                 //
                 // Notify DHCP that the link and link address combination is
@@ -1650,7 +1650,7 @@ Return Value:
             }
 
         } else if ((CurrentAddress->Address.Port == Address->Port) &&
-                   (CurrentAddress->Address.Network == Address->Network)) {
+                   (CurrentAddress->Address.Domain == Address->Domain)) {
 
             *AddressEntry = CurrentAddress;
             Status = STATUS_SUCCESS;
@@ -1731,7 +1731,7 @@ Return Value:
         return;
     }
 
-    if (Socket->KernelSocket.Type == SocketTypeRaw) {
+    if (Socket->KernelSocket.Type == NetSocketRaw) {
         KeAcquireSharedExclusiveLockExclusive(NetRawSocketsLock);
         NetpDeactivateRawSocketUnlocked(Socket);
         KeReleaseSharedExclusiveLockExclusive(NetRawSocketsLock);
@@ -1839,7 +1839,7 @@ Return Value:
     // Raw sockets are treated a bit differently. Handle that separately.
     //
 
-    if (Socket->KernelSocket.Type == SocketTypeRaw) {
+    if (Socket->KernelSocket.Type == NetSocketRaw) {
         Status = NetpBindRawSocket(Socket,
                                    BindingType,
                                    LocalInformation,
@@ -2269,7 +2269,7 @@ Return Value:
     //
 
     Protocol = Socket->Protocol;
-    if (Socket->KernelSocket.Type == SocketTypeRaw) {
+    if (Socket->KernelSocket.Type == NetSocketRaw) {
         KeAcquireSharedExclusiveLockExclusive(NetRawSocketsLock);
         if (Socket->BindingType != SocketFullyBound) {
             Status = STATUS_INVALID_PARAMETER;
@@ -2339,7 +2339,7 @@ Return Value:
     }
 
 DisconnectSocketEnd:
-    if (Socket->KernelSocket.Type == SocketTypeRaw) {
+    if (Socket->KernelSocket.Type == NetSocketRaw) {
         KeReleaseSharedExclusiveLockExclusive(NetRawSocketsLock);
 
     } else {
@@ -2589,8 +2589,8 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     ULONG DnsServerIndex;
+    NET_DOMAIN_TYPE Domain;
     BOOL LockHeld;
-    SOCKET_NETWORK Network;
     BOOL OriginalConfiguredState;
     BOOL SameAddress;
     BOOL StaticAddress;
@@ -2606,8 +2606,8 @@ Return Value:
     // Currently only IPv4 is supported.
     //
 
-    Network = Information->Network;
-    if (Network != SocketNetworkIp4) {
+    Domain = Information->Domain;
+    if (Domain != NetDomainIp4) {
         return STATUS_INVALID_CONFIGURATION;
     }
 
@@ -2620,7 +2620,7 @@ Return Value:
     //
 
     if (LinkAddressEntry != NULL) {
-        if (Information->Network != LinkAddressEntry->Address.Network) {
+        if (Information->Domain != LinkAddressEntry->Address.Domain) {
             Status = STATUS_INVALID_CONFIGURATION;
             goto GetSetNetworkDeviceInformationEnd;
         }
@@ -2636,7 +2636,7 @@ Return Value:
                                           NET_LINK_ADDRESS_ENTRY,
                                           ListEntry);
 
-            if (LinkAddressEntry->Address.Network == Information->Network) {
+            if (LinkAddressEntry->Address.Domain == Information->Domain) {
                 break;
             }
 
@@ -2658,9 +2658,9 @@ Return Value:
         //
 
         if ((Information->Flags & NETWORK_DEVICE_FLAG_CONFIGURED) != 0) {
-            if ((Information->Address.Network != Network) ||
-                (Information->Subnet.Network != Network) ||
-                (Information->Gateway.Network != Network) ||
+            if ((Information->Address.Domain != Domain) ||
+                (Information->Subnet.Domain != Domain) ||
+                (Information->Gateway.Domain != Domain) ||
                 ((Information->ConfigurationMethod !=
                   NetworkAddressConfigurationStatic) &&
                  (Information->ConfigurationMethod !=
@@ -2678,9 +2678,7 @@ Return Value:
                  DnsServerIndex < Information->DnsServerCount;
                  DnsServerIndex += 1) {
 
-                if (Information->DnsServers[DnsServerIndex].Network !=
-                    Network) {
-
+                if (Information->DnsServers[DnsServerIndex].Domain != Domain) {
                     Status = STATUS_INVALID_CONFIGURATION;
                     goto GetSetNetworkDeviceInformationEnd;
                 }
@@ -2750,11 +2748,11 @@ Return Value:
 
             StaticAddress = TRUE;
             if (LinkAddressEntry->StaticAddress == FALSE) {
-                Network = LinkAddressEntry->Address.Network;
+                Domain = LinkAddressEntry->Address.Domain;
                 RtlZeroMemory(&(LinkAddressEntry->Address),
                               sizeof(NETWORK_ADDRESS));
 
-                LinkAddressEntry->Address.Network = Network;
+                LinkAddressEntry->Address.Domain = Domain;
                 StaticAddress = FALSE;
             }
 
@@ -2925,7 +2923,7 @@ Return Value:
 
     ASSERT(SourceAddress->Port == 0);
     ASSERT(DestinationAddress->Port == 0);
-    ASSERT(SourceAddress->Network == DestinationAddress->Network);
+    ASSERT(SourceAddress->Domain == DestinationAddress->Domain);
 
     //
     // Exit immediately if the raw socket list is empty.
@@ -2962,7 +2960,7 @@ Return Value:
         // might not make sense.
         //
 
-        if (Socket->KernelSocket.Network != DestinationAddress->Network) {
+        if (Socket->KernelSocket.Domain != DestinationAddress->Domain) {
             continue;
         }
 
@@ -3285,10 +3283,10 @@ Return Value:
     // easier.
     //
 
-    if (FirstAddress->Network < SecondAddress->Network) {
+    if (FirstAddress->Domain < SecondAddress->Domain) {
         return ComparisonResultAscending;
 
-    } else if (FirstAddress->Network > SecondAddress->Network) {
+    } else if (FirstAddress->Domain > SecondAddress->Domain) {
         return ComparisonResultDescending;
     }
 
@@ -3476,10 +3474,10 @@ Return Value:
     // Compare the networks.
     //
 
-    if (FirstLocalAddress->Network < SecondLocalAddress->Network) {
+    if (FirstLocalAddress->Domain < SecondLocalAddress->Domain) {
         return ComparisonResultAscending;
 
-    } else if (FirstLocalAddress->Network > SecondLocalAddress->Network) {
+    } else if (FirstLocalAddress->Domain > SecondLocalAddress->Domain) {
         return ComparisonResultDescending;
     }
 
@@ -3656,7 +3654,7 @@ Return Value:
 {
 
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetRawSocketsLock) != FALSE);
-    ASSERT(Socket->KernelSocket.Type == SocketTypeRaw);
+    ASSERT(Socket->KernelSocket.Type == NetSocketRaw);
 
     if (((Socket->Flags & NET_SOCKET_FLAG_ACTIVE) == 0) &&
         (Socket->BindingType == SocketBindingInvalid)) {
@@ -3919,7 +3917,7 @@ Return Value:
     ULONG OldFlags;
     KSTATUS Status;
 
-    ASSERT(Socket->KernelSocket.Type == SocketTypeRaw);
+    ASSERT(Socket->KernelSocket.Type == NetSocketRaw);
     ASSERT(LocalInformation != NULL);
 
     //
@@ -4220,10 +4218,10 @@ Return Value:
         return ComparisonResultDescending;
     }
 
-    if (Socket->LocalAddress.Network < LocalAddress->Network) {
+    if (Socket->LocalAddress.Domain < LocalAddress->Domain) {
         return ComparisonResultAscending;
 
-    } else if (Socket->LocalAddress.Network > LocalAddress->Network) {
+    } else if (Socket->LocalAddress.Domain > LocalAddress->Domain) {
         return ComparisonResultDescending;
     }
 
@@ -4421,7 +4419,7 @@ Return Value:
             break;
         }
 
-        if (FoundSocket->LocalAddress.Network != LocalAddress->Network) {
+        if (FoundSocket->LocalAddress.Domain != LocalAddress->Domain) {
             break;
         }
 
@@ -4537,7 +4535,7 @@ Return Value:
                 break;
             }
 
-            if (FoundSocket->LocalAddress.Network != LocalAddress->Network) {
+            if (FoundSocket->LocalAddress.Domain != LocalAddress->Domain) {
                 break;
             }
 
@@ -4671,7 +4669,7 @@ Return Value:
                 break;
             }
 
-            if (FoundSocket->LocalAddress.Network != LocalAddress->Network) {
+            if (FoundSocket->LocalAddress.Domain != LocalAddress->Domain) {
                 break;
             }
 
@@ -4919,7 +4917,7 @@ Return Value:
     ULONG Length;
     CHAR StringBuffer[NET_PRINT_ADDRESS_STRING_LENGTH];
 
-    ASSERT(Network->Type == Address->Network);
+    ASSERT(Network->Domain == Address->Domain);
 
     StringBuffer[0] = '\0';
     Length = Network->Interface.PrintAddress(Address,

@@ -263,7 +263,7 @@ Return Value:
     ASSERT(Bss->Encryption.Pairwise != NetworkEncryptionNone);
 
     RtlZeroMemory(&AuthenticatorAddress, sizeof(NETWORK_ADDRESS));
-    AuthenticatorAddress.Network = SocketNetworkPhysical80211;
+    AuthenticatorAddress.Domain = NetDomain80211;
     RtlCopyMemory(AuthenticatorAddress.Address,
                   Bss->State.Bssid,
                   NET80211_ADDRESS_SIZE);

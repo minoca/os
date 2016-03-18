@@ -172,7 +172,7 @@ Return Value:
     // Register the 802.11 data link layer with the networking core.
     //
 
-    DataLinkEntry.Type = NetDataLink80211;
+    DataLinkEntry.Domain = NetDomain80211;
     Interface = &(DataLinkEntry.Interface);
     Interface->InitializeLink = Net80211pInitializeLink;
     Interface->DestroyLink = Net80211pDestroyLink;
@@ -314,7 +314,7 @@ Return Value:
     NetProperties.DeviceContext = Properties->DeviceContext;
     NetProperties.PacketSizeInformation = Properties->PacketSizeInformation;
     NetProperties.ChecksumFlags = Properties->ChecksumFlags;
-    NetProperties.DataLinkType = NetDataLink80211;
+    NetProperties.DataLinkType = NetDomain80211;
     NetProperties.MaxPhysicalAddress = Properties->MaxPhysicalAddress;
     NetProperties.PhysicalAddress = Properties->PhysicalAddress;
     NetProperties.Interface.Send = Properties->Interface.Send;
@@ -949,7 +949,7 @@ Return Value:
 
     BytePointer = (PUCHAR)(PhysicalNetworkAddress->Address);
     RtlZeroMemory(BytePointer, sizeof(PhysicalNetworkAddress->Address));
-    PhysicalNetworkAddress->Network = SocketNetworkPhysical80211;
+    PhysicalNetworkAddress->Domain = NetDomain80211;
     PhysicalNetworkAddress->Port = 0;
     for (ByteIndex = 0; ByteIndex < NET80211_ADDRESS_SIZE; ByteIndex += 1) {
         BytePointer[ByteIndex] = 0xFF;
@@ -1002,7 +1002,7 @@ Return Value:
         return NET80211_ADDRESS_STRING_LENGTH;
     }
 
-    ASSERT(Address->Network == SocketNetworkPhysical80211);
+    ASSERT(Address->Domain == NetDomain80211);
 
     BytePointer = (PUCHAR)(Address->Address);
     Length = RtlPrintToString(Buffer,
@@ -1262,7 +1262,7 @@ Return Value:
         ASSERT(Link->ActiveBss != NULL);
 
         Information->Flags |= NETWORK_80211_DEVICE_FLAG_ASSOCIATED;
-        Information->Bssid.Network = SocketNetworkPhysical80211;
+        Information->Bssid.Domain = NetDomain80211;
         Information->Bssid.Port = 0;
         RtlCopyMemory(Information->Bssid.Address,
                       Link->ActiveBss->State.Bssid,

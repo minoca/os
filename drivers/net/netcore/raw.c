@@ -273,7 +273,7 @@ NetpRawUserControl (
 
 NET_PROTOCOL_ENTRY NetRawProtocol = {
     {NULL, NULL},
-    SocketTypeRaw,
+    NetSocketRaw,
     SOCKET_INTERNET_PROTOCOL_RAW,
     NULL,
     NULL,
@@ -385,7 +385,7 @@ Return Value:
     PRAW_SOCKET RawSocket;
     KSTATUS Status;
 
-    ASSERT(ProtocolEntry->Type == SocketTypeRaw);
+    ASSERT(ProtocolEntry->Type == NetSocketRaw);
     ASSERT(ProtocolEntry->ParentProtocolNumber == SOCKET_INTERNET_PROTOCOL_RAW);
 
     RawSocket = MmAllocatePagedPool(sizeof(RAW_SOCKET),
@@ -544,7 +544,7 @@ Return Value:
     // creation.
     //
 
-    if (Socket->RemoteAddress.Network != SocketNetworkInvalid) {
+    if (Socket->RemoteAddress.Domain != NetDomainInvalid) {
         Status = STATUS_INVALID_PARAMETER;
         goto RawBindToAddressEnd;
     }
@@ -553,7 +553,7 @@ Return Value:
     // Currently only IPv4 addresses are supported.
     //
 
-    if (Address->Network != SocketNetworkIp4) {
+    if (Address->Domain != NetDomainIp4) {
         Status = STATUS_NOT_SUPPORTED;
         goto RawBindToAddressEnd;
     }
@@ -884,7 +884,7 @@ Return Value:
     }
 
     if ((Destination == NULL) ||
-        (Destination->Network == SocketNetworkInvalid)) {
+        (Destination->Domain == NetDomainInvalid)) {
 
         if (Socket->RemoteAddress.Port == 0) {
             Status = STATUS_NOT_CONFIGURED;

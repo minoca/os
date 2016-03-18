@@ -337,7 +337,7 @@ Return Value:
     // Register the IPv4 handlers with the core networking library.
     //
 
-    NetworkEntry.Type = SocketNetworkIp4;
+    NetworkEntry.Domain = NetDomainIp4;
     NetworkEntry.ParentProtocolNumber = IP4_PROTOCOL_NUMBER;
     NetworkEntry.Interface.InitializeLink = NetpIp4InitializeLink;
     NetworkEntry.Interface.DestroyLink = NetpIp4DestroyLink;
@@ -397,7 +397,7 @@ Return Value:
     //
 
     RtlZeroMemory((PNETWORK_ADDRESS)&InitialAddress, sizeof(NETWORK_ADDRESS));
-    InitialAddress.Network = SocketNetworkIp4;
+    InitialAddress.Domain = NetDomainIp4;
     InitialAddress.Address = 0;
     Status = NetCreateLinkAddressEntry(Link,
                                        (PNETWORK_ADDRESS)&InitialAddress,
@@ -491,7 +491,7 @@ Return Value:
     // included flag.
     //
 
-    if ((ProtocolEntry->Type == SocketTypeRaw) &&
+    if ((ProtocolEntry->Type == NetSocketRaw) &&
         (NetworkProtocol == SOCKET_INTERNET_PROTOCOL_RAW)) {
 
         RtlAtomicOr32(&(NewSocket->Flags),
@@ -520,7 +520,7 @@ Return Value:
     // it to the header size. It comes in the data packet.
     //
 
-    if ((ProtocolEntry->Type != SocketTypeRaw) ||
+    if ((ProtocolEntry->Type != NetSocketRaw) ||
         (NetworkProtocol != SOCKET_INTERNET_PROTOCOL_RAW)) {
 
         NewSocket->PacketSizeInformation.HeaderSize += sizeof(IP4_HEADER);
@@ -688,7 +688,7 @@ Return Value:
     RtlZeroMemory(&(Socket->RemoteAddress), sizeof(NETWORK_ADDRESS));
     if (Socket->BindingType == SocketBindingInvalid) {
         RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
-        LocalAddress.Network = SocketNetworkIp4;
+        LocalAddress.Domain = NetDomainIp4;
         Status = NetpIp4BindToAddress(Socket, NULL, &LocalAddress);
         if (!KSUCCESS(Status)) {
             goto Ip4ListenEnd;
@@ -826,7 +826,7 @@ Return Value:
     // Now that the socket is deactiviated, destroy any pending fragments.
     //
 
-    if (Socket->LocalAddress.Network == SocketNetworkIp4) {
+    if (Socket->LocalAddress.Domain == NetDomainIp4) {
         KeAcquireQueuedLock(NetIp4FragmentedPacketLock);
         NetpIp4RemoveFragmentedPackets(Socket);
         KeReleaseQueuedLock(NetIp4FragmentedPacketLock);
@@ -898,7 +898,7 @@ Return Value:
     KSTATUS Status;
     ULONG TotalLength;
 
-    ASSERT((Socket->KernelSocket.Type == SocketTypeRaw) ||
+    ASSERT((Socket->KernelSocket.Type == NetSocketRaw) ||
            (Socket->KernelSocket.Protocol ==
             Socket->Protocol->ParentProtocolNumber));
 
@@ -953,7 +953,7 @@ Return Value:
 
     PhysicalNetworkAddress = &(Socket->RemotePhysicalAddress);
     if ((Destination != &(Socket->RemoteAddress)) ||
-        (!SOCKET_IS_NETWORK_PHYSICAL(PhysicalNetworkAddress->Network))) {
+        (PhysicalNetworkAddress->Domain == NetDomainInvalid)) {
 
         if (Destination != &(Socket->RemoteAddress)) {
             PhysicalNetworkAddress = &PhysicalNetworkAddressBuffer;
@@ -968,7 +968,7 @@ Return Value:
             goto Ip4SendEnd;
         }
 
-        ASSERT(SOCKET_IS_NETWORK_PHYSICAL(PhysicalNetworkAddress->Network));
+        ASSERT(PhysicalNetworkAddress->Domain != NetDomainInvalid);
     }
 
     //
@@ -1187,7 +1187,7 @@ Return Value:
 
         } else {
 
-            ASSERT(Socket->KernelSocket.Type == SocketTypeRaw);
+            ASSERT(Socket->KernelSocket.Type == NetSocketRaw);
 
             //
             // This can be skipped if the socket is signed up to use the "raw"
@@ -1347,9 +1347,9 @@ Return Value:
 
     RtlZeroMemory(&SourceAddress, sizeof(NETWORK_ADDRESS));
     RtlZeroMemory(&DestinationAddress, sizeof(NETWORK_ADDRESS));
-    SourceAddress.Network = SocketNetworkIp4;
+    SourceAddress.Domain = NetDomainIp4;
     SourceAddress.Address = Header->SourceAddress;
-    DestinationAddress.Network = SocketNetworkIp4;
+    DestinationAddress.Domain = NetDomainIp4;
     DestinationAddress.Address = Header->DestinationAddress;
 
     //
@@ -1521,7 +1521,7 @@ Return Value:
         return IP4_MAX_ADDRESS_STRING;
     }
 
-    ASSERT(Address->Network == SocketNetworkIp4);
+    ASSERT(Address->Domain == NetDomainIp4);
 
     Ip4Address = (PIP4_ADDRESS)Address;
     Components[0] = (UCHAR)(Ip4Address->Address);
@@ -1630,7 +1630,7 @@ Return Value:
             // sockets that are not operating on the "raw" network protocol.
             //
 
-            if ((Socket->KernelSocket.Type != SocketTypeRaw) ||
+            if ((Socket->KernelSocket.Type != NetSocketRaw) ||
                 (Socket->KernelSocket.Protocol ==
                  SOCKET_INTERNET_PROTOCOL_RAW)) {
 
@@ -2401,9 +2401,9 @@ Return Value:
 
     if (Socket != NULL) {
 
-        ASSERT(Socket->LocalAddress.Network == SocketNetworkIp4);
-        ASSERT((Socket->RemoteAddress.Network == SocketNetworkIp4) ||
-               (Socket->RemoteAddress.Network == SocketNetworkInvalid));
+        ASSERT(Socket->LocalAddress.Domain == NetDomainIp4);
+        ASSERT((Socket->RemoteAddress.Domain == NetDomainIp4) ||
+               (Socket->RemoteAddress.Domain == NetDomainInvalid));
 
         LocalAddress = (PIP4_ADDRESS)&(Socket->LocalAddress);
         RemoteAddress = (PIP4_ADDRESS)&(Socket->RemoteAddress);

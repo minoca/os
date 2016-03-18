@@ -1001,7 +1001,7 @@ Structure Description:
 
 Members:
 
-    Network - Stores the network to use on the socket.
+    Domain - Stores the network domain to use on the socket.
 
     Type - Stores the socket connection type.
 
@@ -1021,8 +1021,8 @@ Members:
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_CREATE {
-    SOCKET_NETWORK Network;
-    SOCKET_TYPE Type;
+    NET_DOMAIN_TYPE Domain;
+    NET_SOCKET_TYPE Type;
     ULONG Protocol;
     ULONG OpenFlags;
     HANDLE Socket;
@@ -2456,7 +2456,7 @@ Structure Description:
 
 Members:
 
-    Network - Stores the network to use on the sockets.
+    Domain - Stores the network domain to use on the sockets.
 
     Type - Stores the socket connection type.
 
@@ -2478,8 +2478,8 @@ Members:
 --*/
 
 typedef struct _SYSTEM_CALL_SOCKET_CREATE_PAIR {
-    SOCKET_NETWORK Network;
-    SOCKET_TYPE Type;
+    NET_DOMAIN_TYPE Domain;
+    NET_SOCKET_TYPE Type;
     ULONG Protocol;
     ULONG OpenFlags;
     HANDLE Socket1;

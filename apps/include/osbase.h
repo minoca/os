@@ -2504,8 +2504,8 @@ Return Value:
 OS_API
 KSTATUS
 OsSocketCreatePair (
-    SOCKET_NETWORK Network,
-    SOCKET_TYPE Type,
+    NET_DOMAIN_TYPE Domain,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     ULONG OpenFlags,
     HANDLE Sockets[2]
@@ -2519,7 +2519,7 @@ Routine Description:
 
 Arguments:
 
-    Network - Supplies the network to use on the socket.
+    Domain - Supplies the network domain to use on the socket.
 
     Type - Supplies the socket connection type.
 
@@ -2541,8 +2541,8 @@ Return Value:
 OS_API
 KSTATUS
 OsSocketCreate (
-    SOCKET_NETWORK Network,
-    SOCKET_TYPE Type,
+    NET_DOMAIN_TYPE Domain,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     ULONG OpenFlags,
     PHANDLE Socket
@@ -2556,7 +2556,7 @@ Routine Description:
 
 Arguments:
 
-    Network - Supplies the network addressing scheme to use for the socket.
+    Domain - Supplies the network addressing domain to use for the socket.
 
     Type - Supplies the socket type.
 

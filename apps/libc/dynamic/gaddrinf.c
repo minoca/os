@@ -148,7 +148,7 @@ INT
 ClpPerformDnsTranslation (
     PSTR Name,
     UCHAR RecordType,
-    SOCKET_NETWORK Network,
+    NET_DOMAIN_TYPE Domain,
     PLIST_ENTRY ListHead
     );
 
@@ -279,7 +279,7 @@ ClpFillInLoopbackAddress (
 
 INT
 ClpGetDnsServers (
-    SOCKET_NETWORK Network,
+    NET_DOMAIN_TYPE Domain,
     struct sockaddr *PrimaryServer,
     PLIST_ENTRY AlternateList
     );
@@ -743,7 +743,7 @@ Return Value:
         if ((Family == 0) || (Family == AF_INET6)) {
             Status = ClpPerformDnsTranslation((char *)NodeName,
                                               DNS_RECORD_TYPE_AAAA,
-                                              SocketNetworkIp6,
+                                              NetDomainIp6,
                                               &ResultList);
 
             if (Status != 0) {
@@ -770,7 +770,7 @@ Return Value:
 
             Status = ClpPerformDnsTranslation((char *)NodeName,
                                               DNS_RECORD_TYPE_A,
-                                              SocketNetworkIp4,
+                                              NetDomainIp4,
                                               &ResultList);
 
             if (Status != 0) {
@@ -1159,7 +1159,7 @@ INT
 ClpPerformDnsTranslation (
     PSTR Name,
     UCHAR RecordType,
-    SOCKET_NETWORK Network,
+    NET_DOMAIN_TYPE Domain,
     PLIST_ENTRY ListHead
     )
 
@@ -1176,7 +1176,7 @@ Arguments:
     RecordType - Supplies the type of record to query for. See
         DNS_RECORD_TYPE_* definitions.
 
-    Network - Supplies the default network to use for DNS queries.
+    Domain - Supplies the default network domain to use for DNS queries.
 
     ListHead - Supplies a pointer to the initialized list head where the
         desired DNS results will be returned.
@@ -1211,14 +1211,14 @@ Return Value:
            (RecordType == DNS_RECORD_TYPE_AAAA) ||
            (RecordType == DNS_RECORD_TYPE_PTR));
 
-    assert((Network == SocketNetworkIp4) ||
-           (Network == SocketNetworkIp6));
+    assert((Domain == NetDomainIp4) ||
+           (Domain == NetDomainIp6));
 
     assert((RecordType != DNS_RECORD_TYPE_A) ||
-           (Network == SocketNetworkIp4));
+           (Domain == NetDomainIp4));
 
     assert((RecordType != DNS_RECORD_TYPE_AAAA) ||
-           (Network == SocketNetworkIp6));
+           (Domain == NetDomainIp6));
 
     QueryCount = 0;
     INITIALIZE_LIST_HEAD(&NameServerList);
@@ -1232,17 +1232,17 @@ Return Value:
     // to perform the lookup on another network.
     //
 
-    Status = ClpGetDnsServers(Network, &NameServerAddress, &NameServerList);
+    Status = ClpGetDnsServers(Domain, &NameServerAddress, &NameServerList);
     if (Status != 0) {
         if (Status == ENOENT) {
-            if (Network == SocketNetworkIp4) {
-                Network = SocketNetworkIp6;
+            if (Domain == NetDomainIp4) {
+                Domain = NetDomainIp6;
 
             } else {
-                Network = SocketNetworkIp4;
+                Domain = NetDomainIp4;
             }
 
-            Status = ClpGetDnsServers(Network,
+            Status = ClpGetDnsServers(Domain,
                                       &NameServerAddress,
                                       &NameServerList);
         }
@@ -1557,12 +1557,12 @@ Return Value:
 {
 
     unsigned char *Address;
+    NET_DOMAIN_TYPE Domain;
     ULONG Index;
     struct sockaddr_in *Ip4Address;
     struct sockaddr_in6 *Ip6Address;
     uint8_t *Ip6AddressArray;
     char Name[DNS_IP6_REVERSE_TRANSLATION_NAME_SIZE];
-    SOCKET_NETWORK Network;
     INT Status;
     char *String;
 
@@ -1578,7 +1578,7 @@ Return Value:
     case AF_INET6:
         Ip6Address = (struct sockaddr_in6 *)SocketAddress;
         Ip6AddressArray = Ip6Address->sin6_addr.s6_addr;
-        Network = SocketNetworkIp6;
+        Domain = NetDomainIp6;
         String = Name;
         for (Index = 16; Index > 0; Index -= 1) {
             String += snprintf(String,
@@ -1595,7 +1595,7 @@ Return Value:
         break;
 
     case AF_INET:
-        Network = SocketNetworkIp4;
+        Domain = NetDomainIp4;
         Ip4Address = (struct sockaddr_in *)SocketAddress;
         Address = (unsigned char *)&(Ip4Address->sin_addr.s_addr);
         snprintf(Name,
@@ -1615,7 +1615,7 @@ Return Value:
 
     Status = ClpPerformDnsTranslation(Name,
                                       DNS_RECORD_TYPE_PTR,
-                                      Network,
+                                      Domain,
                                       ListHead);
 
     if (Status != 0) {
@@ -3511,7 +3511,7 @@ Return Value:
 
 INT
 ClpGetDnsServers (
-    SOCKET_NETWORK Network,
+    NET_DOMAIN_TYPE Domain,
     struct sockaddr *PrimaryServer,
     PLIST_ENTRY AlternateList
     )
@@ -3524,7 +3524,7 @@ Routine Description:
 
 Arguments:
 
-    Network - Supplies the network to get DNS servers for.
+    Domain - Supplies the network domain to get DNS servers for.
 
     PrimaryServer - Supplies a pointer where the primary DNS server address
         will be returned on success.
@@ -3611,7 +3611,7 @@ Return Value:
     AddedOne = FALSE;
     memset(&Information, 0, sizeof(NETWORK_DEVICE_INFORMATION));
     Information.Version = NETWORK_DEVICE_INFORMATION_VERSION;
-    Information.Network = Network;
+    Information.Domain = Domain;
     for (DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex += 1) {
         Size = sizeof(NETWORK_DEVICE_INFORMATION);
         Status = OsGetSetDeviceInformation(Devices[DeviceIndex].DeviceId,
@@ -3813,7 +3813,7 @@ Return Value:
     Information.Version = NETWORK_DEVICE_INFORMATION_VERSION;
     Size = sizeof(NETWORK_DEVICE_INFORMATION);
     for (DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex += 1) {
-        Information.Network = SocketNetworkIp4;
+        Information.Domain = NetDomainIp4;
         Status = OsGetSetDeviceInformation(Devices[DeviceIndex].DeviceId,
                                            &ClNetworkDeviceInformationUuid,
                                            &Information,
@@ -3827,7 +3827,7 @@ Return Value:
             *Ip4Configured = TRUE;
         }
 
-        Information.Network = SocketNetworkIp6;
+        Information.Domain = NetDomainIp6;
         Status = OsGetSetDeviceInformation(Devices[DeviceIndex].DeviceId,
                                            &ClNetworkDeviceInformationUuid,
                                            &Information,
@@ -3971,7 +3971,7 @@ Return Value:
     Size = sizeof(NETWORK_DEVICE_INFORMATION);
     for (DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex += 1) {
         if ((AddressFamily == 0) || (AddressFamily == AF_INET)) {
-            Information.Network = SocketNetworkIp4;
+            Information.Domain = NetDomainIp4;
             Status = OsGetSetDeviceInformation(Devices[DeviceIndex].DeviceId,
                                                &ClNetworkDeviceInformationUuid,
                                                &Information,
@@ -4010,7 +4010,7 @@ Return Value:
         }
 
         if ((AddressFamily == 0) || (AddressFamily == AF_INET6)) {
-            Information.Network = SocketNetworkIp6;
+            Information.Domain = NetDomainIp6;
             Status = OsGetSetDeviceInformation(Devices[DeviceIndex].DeviceId,
                                                &ClNetworkDeviceInformationUuid,
                                                &Information,

@@ -509,9 +509,9 @@ Return Value:
         PacketSizeInformation->MinPacketSize = RTL81_MINIMUM_PACKET_LENGTH;
     }
 
-    Properties.DataLinkType = NetDataLinkEthernet;
+    Properties.DataLinkType = NetDomainEthernet;
     Properties.MaxPhysicalAddress = MAX_ULONG;
-    Properties.PhysicalAddress.Network = SocketNetworkPhysicalEthernet;
+    Properties.PhysicalAddress.Domain = NetDomainEthernet;
     Properties.ChecksumFlags = Device->ChecksumFlags;
     RtlCopyMemory(&(Properties.PhysicalAddress.Address),
                   &(Device->MacAddress),

@@ -570,7 +570,7 @@ typedef struct _NET_LINK_PROPERTIES {
     PVOID DeviceContext;
     NET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     ULONG ChecksumFlags;
-    NET_DATA_LINK_TYPE DataLinkType;
+    NET_DOMAIN_TYPE DataLinkType;
     PHYSICAL_ADDRESS MaxPhysicalAddress;
     NETWORK_ADDRESS PhysicalAddress;
     NET_DEVICE_LINK_INTERFACE Interface;
@@ -894,7 +894,7 @@ Members:
     ListEntry - Stores pointers to the next and previous data link entries,
         used internally by the core network library.
 
-    Type - Stores the type this data link implements.
+    Domain - Stores the network domain type this data link implements.
 
     Interface - Stores the interface presented to the core networking library
         for this data link.
@@ -903,7 +903,7 @@ Members:
 
 struct _NET_DATA_LINK_ENTRY {
     LIST_ENTRY ListEntry;
-    NET_DATA_LINK_TYPE Type;
+    NET_DOMAIN_TYPE Domain;
     NET_DATA_LINK_INTERFACE Interface;
 };
 
@@ -1608,7 +1608,7 @@ Members:
 
 struct _NET_PROTOCOL_ENTRY {
     LIST_ENTRY ListEntry;
-    SOCKET_TYPE Type;
+    NET_SOCKET_TYPE Type;
     ULONG ParentProtocolNumber;
     volatile PNET_SOCKET LastSocket;
     PSHARED_EXCLUSIVE_LOCK SocketLock;
@@ -2039,7 +2039,7 @@ Members:
     ListEntry - Stores pointers to the next and previous network entries, used
         internally by the core networking library.
 
-    Type - Stores the type this network implements.
+    Domain - Stores the domain this network implements.
 
     ParentProtocolNumber - Stores the protocol number in the parent layer's
         protocol.
@@ -2051,7 +2051,7 @@ Members:
 
 struct _NET_NETWORK_ENTRY {
     LIST_ENTRY ListEntry;
-    SOCKET_NETWORK Type;
+    NET_DOMAIN_TYPE Domain;
     ULONG ParentProtocolNumber;
     NET_NETWORK_INTERFACE Interface;
 };

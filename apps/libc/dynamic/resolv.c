@@ -121,7 +121,7 @@ ClpDnsParseSocketAddress (
 INT
 ClpDnsAddConfiguredServers (
     res_state State,
-    SOCKET_NETWORK Network
+    NET_DOMAIN_TYPE Domain
     );
 
 INT
@@ -2066,7 +2066,7 @@ DnsReadStartFilesEnd:
     // Add DNS servers from the network link configuration itself.
     //
 
-    Result = ClpDnsAddConfiguredServers(State, SocketNetworkIp4);
+    Result = ClpDnsAddConfiguredServers(State, NetDomainIp4);
     if (Result != 0) {
         errno = Result;
         return -1;
@@ -2132,7 +2132,7 @@ Return Value:
 INT
 ClpDnsAddConfiguredServers (
     res_state State,
-    SOCKET_NETWORK Network
+    NET_DOMAIN_TYPE Domain
     )
 
 /*++
@@ -2145,7 +2145,7 @@ Arguments:
 
     State - Supplies the state pointer to add the servers to.
 
-    Network - Supplies the network to get DNS servers for.
+    Domain - Supplies the network domain to get DNS servers for.
 
 Return Value:
 
@@ -2165,8 +2165,8 @@ Return Value:
     NETWORK_DEVICE_INFORMATION Information;
     PVOID NewBuffer;
     INT Result;
+    NET_DOMAIN_TYPE ServerDomain;
     ULONG ServerIndex;
-    SOCKET_NETWORK ServerNetwork;
     UINTN Size;
     KSTATUS Status;
 
@@ -2231,7 +2231,7 @@ Return Value:
     AddedOne = FALSE;
     memset(&Information, 0, sizeof(NETWORK_DEVICE_INFORMATION));
     Information.Version = NETWORK_DEVICE_INFORMATION_VERSION;
-    Information.Network = Network;
+    Information.Domain = Domain;
     for (DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex += 1) {
         Size = sizeof(NETWORK_DEVICE_INFORMATION);
         Status = OsGetSetDeviceInformation(Devices[DeviceIndex].DeviceId,
@@ -2259,14 +2259,14 @@ Return Value:
              ServerIndex += 1) {
 
             Information.DnsServers[ServerIndex].Port = DNS_PORT_NUMBER;
-            ServerNetwork = Information.DnsServers[ServerIndex].Network;
+            ServerDomain = Information.DnsServers[ServerIndex].Domain;
 
             //
             // TODO: Support IPv6 address in __res_state._u._ext.nsaddrs.
             //
 
             if ((State->nscount < MAXNS) &&
-                (ServerNetwork == SocketNetworkIp4)) {
+                (ServerDomain == NetDomainIp4)) {
 
                 AddressLength = sizeof(struct sockaddr_in);
                 Status = ClpConvertFromNetworkAddress(

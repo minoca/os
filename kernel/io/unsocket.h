@@ -37,7 +37,7 @@ Structure Description:
 
 Members:
 
-    Network - Stores the socket network (domain).
+    Domain - Stores the socket domain.
 
     Type - Stores the socket connection type.
 
@@ -49,8 +49,8 @@ Members:
 --*/
 
 typedef struct _SOCKET_CREATION_PARAMETERS {
-    SOCKET_NETWORK Network;
-    SOCKET_TYPE Type;
+    NET_DOMAIN_TYPE Domain;
+    NET_SOCKET_TYPE Type;
     ULONG Protocol;
     PSOCKET ExistingSocket;
 } SOCKET_CREATION_PARAMETERS, *PSOCKET_CREATION_PARAMETERS;
@@ -65,7 +65,7 @@ typedef struct _SOCKET_CREATION_PARAMETERS {
 
 KSTATUS
 IopCreateUnixSocketPair (
-    SOCKET_TYPE Type,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     ULONG OpenFlags,
     PIO_HANDLE NewSockets[2]
@@ -98,8 +98,8 @@ Return Value:
 
 KSTATUS
 IopCreateUnixSocket (
-    SOCKET_NETWORK Network,
-    SOCKET_TYPE Type,
+    NET_DOMAIN_TYPE Domain,
+    NET_SOCKET_TYPE Type,
     ULONG Protocol,
     PSOCKET *NewSocket
     );
@@ -112,7 +112,7 @@ Routine Description:
 
 Arguments:
 
-    Network - Supplies the network to use on the socket.
+    Domain - Supplies the network domain to use on the socket.
 
     Type - Supplies the socket connection type.
 

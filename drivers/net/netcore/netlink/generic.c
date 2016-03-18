@@ -303,7 +303,7 @@ NetpNetlinkGenericAllocateFamilyId (
 
 NET_PROTOCOL_ENTRY NetNetlinkGenericProtocol = {
     {NULL, NULL},
-    SocketTypeDatagram,
+    NetSocketDatagram,
     SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
     NULL,
     NULL,
@@ -643,8 +643,8 @@ Return Value:
 
         ASSERT(Phase == 1);
 
-        Status = IoSocketCreate(SocketNetworkNetlink,
-                                SocketTypeDatagram,
+        Status = IoSocketCreate(NetDomainNetlink,
+                                NetSocketDatagram,
                                 SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
                                 0,
                                 &NetNetlinkGenericSocketHandle);
@@ -668,7 +668,7 @@ Return Value:
                       NET_SOCKET_FLAG_KERNEL);
 
         RtlZeroMemory(&Address, sizeof(NETLINK_ADDRESS));
-        Address.Network = SocketNetworkNetlink;
+        Address.Domain = NetDomainNetlink;
         Status = IoSocketBindToAddress(TRUE,
                                        NetNetlinkGenericSocketHandle,
                                        NULL,
@@ -736,7 +736,7 @@ Return Value:
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     KSTATUS Status;
 
-    ASSERT(ProtocolEntry->Type == SocketTypeDatagram);
+    ASSERT(ProtocolEntry->Type == NetSocketDatagram);
     ASSERT(NetworkProtocol == ProtocolEntry->ParentProtocolNumber);
     ASSERT(NetworkProtocol == SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC);
 
@@ -909,7 +909,7 @@ Return Value:
 
     KSTATUS Status;
 
-    if (Socket->LocalAddress.Network != SocketNetworkInvalid) {
+    if (Socket->LocalAddress.Domain != NetDomainInvalid) {
         Status = STATUS_INVALID_PARAMETER;
         goto NetlinkGenericBindToAddressEnd;
     }
@@ -918,7 +918,7 @@ Return Value:
     // Only netlink addresses are supported.
     //
 
-    if (Address->Network != SocketNetworkNetlink) {
+    if (Address->Domain != NetDomainNetlink) {
         Status = STATUS_NOT_SUPPORTED;
         goto NetlinkGenericBindToAddressEnd;
     }
@@ -1192,7 +1192,7 @@ Return Value:
     }
 
     if ((Destination == NULL) ||
-        (Destination->Network == SocketNetworkInvalid)) {
+        (Destination->Domain == NetDomainInvalid)) {
 
         if (Socket->BindingType != SocketFullyBound) {
             Status = STATUS_NOT_CONFIGURED;
@@ -1229,7 +1229,7 @@ Return Value:
 
     if (Socket->BindingType == SocketBindingInvalid) {
         RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
-        LocalAddress.Network = Socket->Network->Type;
+        LocalAddress.Domain = Socket->Network->Domain;
         Status = NetpNetlinkGenericBindToAddress(Socket, NULL, &LocalAddress);
         if (!KSUCCESS(Status)) {
             goto NetlinkGenericSendEnd;

@@ -165,7 +165,7 @@ Return Value:
     PNET_DATA_LINK_INTERFACE Interface;
     KSTATUS Status;
 
-    DataLinkEntry.Type = NetDataLinkEthernet;
+    DataLinkEntry.Domain = NetDomainEthernet;
     Interface = &(DataLinkEntry.Interface);
     Interface->InitializeLink = NetpEthernetInitializeLink;
     Interface->DestroyLink = NetpEthernetDestroyLink;
@@ -590,7 +590,7 @@ Return Value:
 
     BytePointer = (PUCHAR)(PhysicalNetworkAddress->Address);
     RtlZeroMemory(BytePointer, sizeof(PhysicalNetworkAddress->Address));
-    PhysicalNetworkAddress->Network = SocketNetworkPhysicalEthernet;
+    PhysicalNetworkAddress->Domain = NetDomainEthernet;
     PhysicalNetworkAddress->Port = 0;
     for (ByteIndex = 0; ByteIndex < ETHERNET_ADDRESS_SIZE; ByteIndex += 1) {
         BytePointer[ByteIndex] = 0xFF;
@@ -643,7 +643,7 @@ Return Value:
         return ETHERNET_STRING_LENGTH;
     }
 
-    ASSERT(Address->Network == SocketNetworkPhysicalEthernet);
+    ASSERT(Address->Domain == NetDomainEthernet);
 
     BytePointer = (PUCHAR)(Address->Address);
     Length = RtlPrintToString(Buffer,
