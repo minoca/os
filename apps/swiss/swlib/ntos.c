@@ -48,16 +48,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-//
-// Define the hardcoded system name parameters to return.
-//
-
-#define UNAME_NT_SYSTEM_NAME "MINGW32_NT-6.0"
-#define UNAME_NT_NODE_NAME ""
-#define UNAME_NT_RELEASE "1"
-#define UNAME_NT_VERSION "1"
-#define UNAME_NT_MACHINE "i686"
-#define UNAME_NT_DOMAIN_NAME ""
+#define UNAME_NT_SYSTEM_NAME "MINGW32_NT-%d.%d"
 
 #define NTOS_TERMINAL_CHARACTER_SIZE 5
 
@@ -1135,12 +1126,56 @@ Return Value:
 
 {
 
-    strcpy(Name->SystemName, UNAME_NT_SYSTEM_NAME);
-    strcpy(Name->NodeName, UNAME_NT_NODE_NAME);
-    strcpy(Name->Release, UNAME_NT_RELEASE);
-    strcpy(Name->Version, UNAME_NT_VERSION);
-    strcpy(Name->Machine, UNAME_NT_MACHINE);
-    strcpy(Name->DomainName, UNAME_NT_DOMAIN_NAME);
+    DWORD NodeNameSize;
+    SYSTEM_INFO SystemInfo;
+    OSVERSIONINFOEX VersionInfo;
+
+    memset(&VersionInfo, 0, sizeof(VersionInfo));
+    VersionInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+    memset(&SystemInfo, 0, sizeof(SystemInfo));
+    GetSystemInfo(&SystemInfo);
+    GetVersionEx((LPOSVERSIONINFO)&VersionInfo);
+    NodeNameSize = sizeof(Name->NodeName);
+    GetComputerName(Name->NodeName, &NodeNameSize);
+    snprintf(Name->SystemName,
+             sizeof(Name->SystemName),
+             UNAME_NT_SYSTEM_NAME,
+             VersionInfo.dwMajorVersion,
+             VersionInfo.dwMinorVersion);
+
+    snprintf(Name->Release,
+             sizeof(Name->Release),
+             "%d.%d",
+             VersionInfo.dwMajorVersion,
+             VersionInfo.dwMinorVersion);
+
+    snprintf(Name->Version,
+             sizeof(Name->Version),
+             "%d %s",
+             VersionInfo.dwBuildNumber,
+             VersionInfo.szCSDVersion);
+
+    switch (SystemInfo.wProcessorArchitecture) {
+    case PROCESSOR_ARCHITECTURE_AMD64:
+        strcpy(Name->Machine, "x86-64");
+        break;
+
+    case PROCESSOR_ARCHITECTURE_ARM:
+        strcpy(Name->Machine, "armv7");
+        break;
+
+    case PROCESSOR_ARCHITECTURE_IA64:
+        strcpy(Name->Machine, "ia64");
+        break;
+
+    case PROCESSOR_ARCHITECTURE_INTEL:
+    default:
+        strcpy(Name->Machine, "i686");
+        break;
+    }
+
+    NodeNameSize = sizeof(Name->DomainName);
+    GetComputerNameEx(ComputerNameDnsDomain, Name->DomainName, &NodeNameSize);
     return 0;
 }
 

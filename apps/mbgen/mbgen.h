@@ -923,6 +923,40 @@ Return Value:
 --*/
 
 //
+// OS-specific functions
+//
+
+INT
+MbgenOsUname (
+    CHAR Flavor,
+    PSTR Buffer,
+    ULONG Size
+    );
+
+/*++
+
+Routine Description:
+
+    This routine implements the OS-specific uname function.
+
+Arguments:
+
+    Flavor - Supplies the flavor of uname to get. Valid values are s, n, r, v,
+        and m.
+
+    Buffer - Supplies a buffer where the string will be returned on success.
+
+    Size - Supplies the size of the buffer in bytes.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+//
 // Output generator functions
 //
 

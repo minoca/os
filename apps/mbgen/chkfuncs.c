@@ -59,6 +59,49 @@ MbgenChalkSplitExtension (
     PCHALK_OBJECT *ReturnValue
     );
 
+INT
+MbgenChalkUnameS (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+INT
+MbgenChalkUnameN (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+INT
+MbgenChalkUnameR (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+INT
+MbgenChalkUnameV (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+INT
+MbgenChalkUnameM (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+INT
+MbgenChalkUname (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue,
+    CHAR Flavor
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -74,6 +117,10 @@ PSTR MbgenChalkSplitExtensionArguments[] = {
     NULL
 };
 
+PSTR MbgenChalkUnameArguments[] = {
+    NULL
+};
+
 CHALK_FUNCTION_PROTOTYPE MbgenChalkFunctions[] = {
     {
         "assert",
@@ -85,6 +132,36 @@ CHALK_FUNCTION_PROTOTYPE MbgenChalkFunctions[] = {
         "split_extension",
         MbgenChalkSplitExtensionArguments,
         MbgenChalkSplitExtension
+    },
+
+    {
+        "uname_s",
+        MbgenChalkUnameArguments,
+        MbgenChalkUnameS
+    },
+
+    {
+        "uname_n",
+        MbgenChalkUnameArguments,
+        MbgenChalkUnameN
+    },
+
+    {
+        "uname_r",
+        MbgenChalkUnameArguments,
+        MbgenChalkUnameR
+    },
+
+    {
+        "uname_v",
+        MbgenChalkUnameArguments,
+        MbgenChalkUnameV
+    },
+
+    {
+        "uname_m",
+        MbgenChalkUnameArguments,
+        MbgenChalkUnameM
     },
 
     {NULL}
@@ -287,6 +364,245 @@ ChalkSplitExtensionEnd:
         ChalkObjectReleaseReference(ExtensionString);
     }
 
+    return Status;
+}
+
+INT
+MbgenChalkUnameS (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the uname_s Chalk function.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    return MbgenChalkUname(Interpreter, Context, ReturnValue, 's');
+}
+
+INT
+MbgenChalkUnameN (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the uname_n Chalk function.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    return MbgenChalkUname(Interpreter, Context, ReturnValue, 'n');
+}
+
+INT
+MbgenChalkUnameR (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the uname_r Chalk function.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    return MbgenChalkUname(Interpreter, Context, ReturnValue, 'r');
+}
+
+INT
+MbgenChalkUnameV (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the uname_v Chalk function.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    return MbgenChalkUname(Interpreter, Context, ReturnValue, 'v');
+}
+
+INT
+MbgenChalkUnameM (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the uname_m Chalk function.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    return MbgenChalkUname(Interpreter, Context, ReturnValue, 'm');
+}
+
+INT
+MbgenChalkUname (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue,
+    CHAR Flavor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the uname_s Chalk function.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+    Flavor - Supplies the flavor of uname to get. Valid values are s, n, r, v,
+        and m.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    CHAR Buffer[256];
+    INT Status;
+    PCHALK_OBJECT String;
+
+    Status = MbgenOsUname(Flavor, Buffer, sizeof(Buffer));
+    if (Status != 0) {
+        Buffer[0] = '\0';
+    }
+
+    String = ChalkCreateString(Buffer, strlen(Buffer));
+    if (String == NULL) {
+        Status = ENOMEM;
+        goto ChalkUnameEnd;
+    }
+
+    *ReturnValue = String;
+    Status = 0;
+
+ChalkUnameEnd:
     return Status;
 }
 

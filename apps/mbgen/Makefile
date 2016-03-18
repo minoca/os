@@ -32,6 +32,8 @@ INCLUDES += $(SRCROOT)/os/apps/include;             \
 
 include $(SRCDIR)/sources
 
+OBJS += uos.o
+
 TARGETLIBS = $(OBJROOT)/os/apps/lib/chalk/chalk.a           \
              $(OBJROOT)/os/lib/yy/yy.a                      \
              $(OBJROOT)/os/lib/rtl/rtlc/rtlc.a              \

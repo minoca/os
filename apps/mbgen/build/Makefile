@@ -36,6 +36,16 @@ VPATH += $(SRCDIR)/..:
 
 include $(SRCDIR)/../sources
 
+ifeq ($(OS),Windows_NT)
+
+OBJS += ntos.o
+
+else
+
+OBJS += uos.o
+
+endif
+
 TARGETLIBS = $(OBJROOT)/os/lib/yy/build/yy.a                   \
              $(OBJROOT)/os/lib/rtl/base/build/basertl.a        \
              $(OBJROOT)/os/lib/rtl/rtlc/build/rtlc.a           \
