@@ -35,7 +35,6 @@ Environment:
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
-#include <netlink/netlink.h>
 #include "net.h"
 
 //
@@ -2043,7 +2042,6 @@ Return Value:
 
     struct sockaddr_in *Ip4SocketAddress;
     struct sockaddr_in6 *Ip6SocketAddress;
-    struct sockaddr_nl *NetlinkAddress;
     UINTN StringSize;
     struct sockaddr_un *UnixAddress;
 
@@ -2119,16 +2117,6 @@ Return Value:
             *PathSize = StringSize;
         }
 
-    } else if (Address->sa_family == AF_NETLINK) {
-        if (AddressLength < sizeof(struct sockaddr_nl)) {
-            return STATUS_INVALID_ADDRESS;
-        }
-
-        NetlinkAddress = (struct sockaddr_nl *)Address;
-        NetworkAddress->Domain = NetDomainNetlink;
-        NetworkAddress->Port = NetlinkAddress->nl_pid;
-        *((PULONG)NetworkAddress->Address) = NetlinkAddress->nl_groups;
-
     } else {
         return STATUS_INVALID_ADDRESS;
     }
@@ -2179,7 +2167,6 @@ Return Value:
     INTN CopySize;
     struct sockaddr_in Ip4Address;
     struct sockaddr_in6 Ip6Address;
-    struct sockaddr_nl NetlinkAddress;
     PVOID Source;
     INTN TotalSize;
     struct sockaddr_un UnixAddress;
@@ -2212,14 +2199,6 @@ Return Value:
         UnixAddress.sun_family = AF_UNIX;
         TotalSize = FIELD_OFFSET(struct sockaddr_un, sun_path) + PathSize;
         Source = &UnixAddress;
-
-    } else if (NetworkAddress->Domain == NetDomainNetlink) {
-        NetlinkAddress.nl_family = AF_NETLINK;
-        NetlinkAddress.nl_pad = 0;
-        NetlinkAddress.nl_pid = NetworkAddress->Port;
-        NetlinkAddress.nl_groups = *((PULONG)NetworkAddress->Address);
-        TotalSize = sizeof(NetlinkAddress);
-        Source = &NetlinkAddress;
 
     } else {
         return STATUS_INVALID_ADDRESS;

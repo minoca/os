@@ -116,7 +116,6 @@ extern "C" {
 #define AF_LOCAL  AF_UNIX
 #define AF_INET   2
 #define AF_INET6  3
-#define AF_NETLINK 4
 
 //
 // Define valid protocol families as the same as the address families.
