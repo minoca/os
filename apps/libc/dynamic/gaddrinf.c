@@ -551,8 +551,7 @@ Return Value:
             goto getaddrinfoEnd;
         }
 
-        if ((Hints->ai_family != 0) &&
-            (Hints->ai_family != AF_UNSPEC) &&
+        if ((Hints->ai_family != AF_UNSPEC) &&
             (Hints->ai_family != AF_INET) &&
             (Hints->ai_family != AF_INET6)) {
 
@@ -570,9 +569,6 @@ Return Value:
         }
 
         Family = Hints->ai_family;
-        if (Family == AF_UNSPEC) {
-            Family = 0;
-        }
 
         //
         // If the address configuration flag is supplied, limit the family to
@@ -585,7 +581,7 @@ Return Value:
                 goto getaddrinfoEnd;
             }
 
-            if (Family == 0) {
+            if (Family == AF_UNSPEC) {
                 if ((Ip4Configured == FALSE) && (Ip6Configured == FALSE)) {
                     Status = EAI_AGAIN;
                     goto getaddrinfoEnd;
@@ -667,14 +663,14 @@ Return Value:
 
         Status = 0;
         LocalResult[0].Name = (PSTR)NodeName;
-        if ((Family == 0) || (Family == AF_INET6)) {
+        if ((Family == AF_UNSPEC) || (Family == AF_INET6)) {
             LocalResult[0].Type = DNS_RECORD_TYPE_AAAA;
             LocalResult[0].Address.sa_family = AF_INET6;
             Ip6Address = (struct sockaddr_in6 *)&(LocalResult[0].Address);
             Status = inet_pton(AF_INET6, NodeName, &(Ip6Address->sin6_addr));
         }
 
-        if ((Status == 0) && ((Family == 0) || (Family == AF_INET))) {
+        if ((Status == 0) && ((Family == AF_UNSPEC) || (Family == AF_INET))) {
             LocalResult[0].Type = DNS_RECORD_TYPE_A;
             LocalResult[0].Address.sa_family = AF_INET;
             Ip4Address = (struct sockaddr_in *)&(LocalResult[0].Address);
@@ -740,7 +736,7 @@ Return Value:
         // If IPv6 or any family is requested, get IPv6 translations.
         //
 
-        if ((Family == 0) || (Family == AF_INET6)) {
+        if ((Family == AF_UNSPEC) || (Family == AF_INET6)) {
             Status = ClpPerformDnsTranslation((char *)NodeName,
                                               DNS_RECORD_TYPE_AAAA,
                                               NetDomainIp6,
@@ -758,7 +754,7 @@ Return Value:
         // get IPv4 translations.
         //
 
-        if ((Family == 0) || (Family == AF_INET) ||
+        if ((Family == AF_UNSPEC) || (Family == AF_INET) ||
             ((Family == AF_INET6) && (Hints != NULL) &&
              ((Hints->ai_flags & AI_V4MAPPED) != 0) &&
              (((Hints->ai_flags & AI_ALL) != 0) ||
@@ -3075,9 +3071,7 @@ Return Value:
 
     Ip4Ok = TRUE;
     Ip6Ok = TRUE;
-    if ((Hints != NULL) && (Hints->ai_family != 0) &&
-        (Hints->ai_family != AF_UNSPEC)) {
-
+    if ((Hints != NULL) && (Hints->ai_family != AF_UNSPEC)) {
         if (Hints->ai_family == AF_INET) {
             Ip6Ok = FALSE;
 
@@ -3970,7 +3964,7 @@ Return Value:
     Information.Version = NETWORK_DEVICE_INFORMATION_VERSION;
     Size = sizeof(NETWORK_DEVICE_INFORMATION);
     for (DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex += 1) {
-        if ((AddressFamily == 0) || (AddressFamily == AF_INET)) {
+        if ((AddressFamily == AF_UNSPEC) || (AddressFamily == AF_INET)) {
             Information.Domain = NetDomainIp4;
             Status = OsGetSetDeviceInformation(Devices[DeviceIndex].DeviceId,
                                                &ClNetworkDeviceInformationUuid,
@@ -4009,7 +4003,7 @@ Return Value:
             }
         }
 
-        if ((AddressFamily == 0) || (AddressFamily == AF_INET6)) {
+        if ((AddressFamily == AF_UNSPEC) || (AddressFamily == AF_INET6)) {
             Information.Domain = NetDomainIp6;
             Status = OsGetSetDeviceInformation(Devices[DeviceIndex].DeviceId,
                                                &ClNetworkDeviceInformationUuid,

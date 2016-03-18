@@ -227,7 +227,7 @@ Return Value:
         Status = IopCreateUnixSocketPair(Type, Protocol, OpenFlags, IoHandles);
 
     } else {
-        Status = STATUS_NOT_SUPPORTED;
+        Status = STATUS_DOMAIN_NOT_SUPPORTED;
     }
 
     return Status;

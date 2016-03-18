@@ -48,16 +48,22 @@ Environment:
 // compiled away.
 //
 
-#define ASSERT_SOCKET_IO_FLAGS_ARE_EQUIVALENT()     \
-    ASSERT((MSG_PEEK == SOCKET_IO_PEEK) &&          \
-           (MSG_OOB == SOCKET_IO_OUT_OF_BAND) &&    \
+#define ASSERT_SOCKET_IO_FLAGS_ARE_EQUIVALENT()  \
+    ASSERT((MSG_PEEK == SOCKET_IO_PEEK) &&       \
+           (MSG_OOB == SOCKET_IO_OUT_OF_BAND) && \
            (MSG_WAITALL == SOCKET_IO_WAIT_ALL))
 
-#define ASSERT_SOCKET_TYPES_EQUIVALENT()                        \
-    ASSERT((SOCK_DGRAM == NetSocketDatagram) &&                \
-           (SOCK_RAW == NetSocketRaw) &&                       \
-           (SOCK_SEQPACKET == NetSocketSequencedPacket) &&     \
+#define ASSERT_SOCKET_TYPES_EQUIVALENT()                   \
+    ASSERT((SOCK_DGRAM == NetSocketDatagram) &&            \
+           (SOCK_RAW == NetSocketRaw) &&                   \
+           (SOCK_SEQPACKET == NetSocketSequencedPacket) && \
            (SOCK_STREAM == NetSocketStream));
+
+#define ASSERT_DOMAIN_TYPES_EQUIVALENT()   \
+    ASSERT((AF_UNIX == NetDomainLocal) &&  \
+           (AF_LOCAL == NetDomainLocal) && \
+           (AF_INET == NetDomainIp4) &&    \
+           (AF_INET6 == NetDomainIp6));
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -196,25 +202,11 @@ Return Value:
 {
 
     HANDLE Handles[2];
-    NET_DOMAIN_TYPE NetDomain;
     ULONG OpenFlags;
     KSTATUS Status;
 
-    if (Domain == AF_INET) {
-        NetDomain = NetDomainIp4;
-
-    } else if (Domain == AF_INET6) {
-        NetDomain = NetDomainIp6;
-
-    } else if (Domain == AF_UNIX) {
-        NetDomain = NetDomainLocal;
-
-    } else {
-        errno = EAFNOSUPPORT;
-        return -1;
-    }
-
     ASSERT_SOCKET_TYPES_EQUIVALENT();
+    ASSERT_DOMAIN_TYPES_EQUIVALENT();
 
     OpenFlags = 0;
     if ((Type & SOCK_CLOEXEC) != 0) {
@@ -226,7 +218,7 @@ Return Value:
     }
 
     Type &= ~(SOCK_CLOEXEC | SOCK_NONBLOCK);
-    Status = OsSocketCreatePair(NetDomain, Type, Protocol, OpenFlags, Handles);
+    Status = OsSocketCreatePair(Domain, Type, Protocol, OpenFlags, Handles);
     Sockets[0] = (int)(UINTN)(Handles[0]);
     Sockets[1] = (int)(UINTN)(Handles[1]);
     if (!KSUCCESS(Status)) {
@@ -275,100 +267,39 @@ Return Value:
 
 {
 
-    NET_DOMAIN_TYPE NetDomain;
     ULONG OpenFlags;
     HANDLE Socket;
     KSTATUS Status;
 
     //
-    // Handle internet sockets.
+    // The network domains and socket types line up.
     //
 
-    if ((Domain == AF_INET) ||
-        (Domain == AF_INET6) ||
-        (Domain == AF_UNIX) ||
-        (Domain == AF_NETLINK)) {
+    ASSERT_DOMAIN_TYPES_EQUIVALENT();
+    ASSERT_SOCKET_TYPES_EQUIVALENT();
 
-        //
-        // The socket types line up.
-        //
+    OpenFlags = 0;
+    if ((Type & SOCK_CLOEXEC) != 0) {
+        OpenFlags |= SYS_OPEN_FLAG_CLOSE_ON_EXECUTE;
+    }
 
-        ASSERT_SOCKET_TYPES_EQUIVALENT();
+    if ((Type & SOCK_NONBLOCK) != 0) {
+        OpenFlags |= SYS_OPEN_FLAG_NON_BLOCKING;
+    }
 
-        OpenFlags = 0;
-        if ((Type & SOCK_CLOEXEC) != 0) {
-            OpenFlags |= SYS_OPEN_FLAG_CLOSE_ON_EXECUTE;
-        }
-
-        if ((Type & SOCK_NONBLOCK) != 0) {
-            OpenFlags |= SYS_OPEN_FLAG_NON_BLOCKING;
-        }
-
-        Type &= ~(SOCK_CLOEXEC | SOCK_NONBLOCK);
-
-        //
-        // Convert the domain.
-        //
-
-        if (Domain == AF_INET) {
-            NetDomain = NetDomainIp4;
-
-        } else if (Domain == AF_INET6) {
-            NetDomain = NetDomainIp6;
-
-        } else if (Domain == AF_UNIX) {
-            NetDomain = NetDomainLocal;
-
-        } else {
-
-            ASSERT(Domain == AF_NETLINK);
-
-            NetDomain = NetDomainNetlink;
-
-            //
-            // The C library allows netlink sockets to be raw and datagram
-            // types, the system treats raw sockets specially and expects
-            // netlink sockets to always be of the datagram type.
-            //
-
-            if (Type == SOCK_RAW) {
-                Type = SOCK_DGRAM;
-
-            } else if (Type != SOCK_DGRAM) {
-                errno = EPROTONOSUPPORT;
-                return -1;
-            }
-        }
-
-        //
-        // Create the socket.
-        //
-
-        Status = OsSocketCreate(NetDomain, Type, Protocol, OpenFlags, &Socket);
-        if (!KSUCCESS(Status)) {
-            if (Status == STATUS_NOT_SUPPORTED) {
-                errno = EAFNOSUPPORT;
-
-            } else {
-                errno = ClConvertKstatusToErrorNumber(Status);
-            }
-
-            return -1;
-        }
-
-        return (int)(UINTN)Socket;
+    Type &= ~(SOCK_CLOEXEC | SOCK_NONBLOCK);
 
     //
-    // The address family is not currently supported.
+    // Create the socket.
     //
 
-    } else {
-        errno = EAFNOSUPPORT;
+    Status = OsSocketCreate(Domain, Type, Protocol, OpenFlags, &Socket);
+    if (!KSUCCESS(Status)) {
+        errno = ClConvertKstatusToErrorNumber(Status);
         return -1;
     }
 
-    errno = EINVAL;
-    return -1;
+    return (int)(UINTN)Socket;
 }
 
 LIBC_API

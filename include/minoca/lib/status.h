@@ -128,6 +128,8 @@ Author:
 #define STATUS_SYMBOLIC_LINK_LOOP         0x80000068
 #define STATUS_BROKEN_PIPE_SILENT         0x80000069
 #define STATUS_NO_SUCH_DEVICE_OR_ADDRESS  0x8000006A
+#define STATUS_DOMAIN_NOT_SUPPORTED       0x8000006B
+#define STATUS_PROTOCOL_NOT_SUPPORTED     0x8000006C
 
 //
 // ------------------------------------------------------ Data Type Definitions

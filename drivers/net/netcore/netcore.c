@@ -1303,8 +1303,13 @@ Return Value:
     }
 
     KeReleaseSharedExclusiveLockShared(NetPluginListLock);
-    if ((ProtocolFound == FALSE) || (NetworkFound == FALSE)) {
-        Status = STATUS_NOT_SUPPORTED;
+    if (NetworkFound == FALSE) {
+        Status = STATUS_DOMAIN_NOT_SUPPORTED;
+        goto CreateSocketEnd;
+    }
+
+    if (ProtocolFound == FALSE) {
+        Status = STATUS_PROTOCOL_NOT_SUPPORTED;
         goto CreateSocketEnd;
     }
 
