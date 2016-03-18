@@ -566,16 +566,27 @@ Return Value:
     if ((NewNetworkEntry->Domain == NetDomainInvalid) ||
         (NewNetworkEntry->Interface.InitializeLink == NULL) ||
         (NewNetworkEntry->Interface.DestroyLink == NULL) ||
-        (NewNetworkEntry->Interface.InitializeSocket == NULL) ||
-        (NewNetworkEntry->Interface.BindToAddress == NULL) ||
-        (NewNetworkEntry->Interface.Listen == NULL) ||
-        (NewNetworkEntry->Interface.Connect == NULL) ||
-        (NewNetworkEntry->Interface.Disconnect == NULL) ||
-        (NewNetworkEntry->Interface.Close == NULL) ||
-        (NewNetworkEntry->Interface.Send == NULL) ||
         (NewNetworkEntry->Interface.ProcessReceivedData == NULL) ||
-        (NewNetworkEntry->Interface.PrintAddress == NULL) ||
-        (NewNetworkEntry->Interface.GetSetInformation == NULL)) {
+        (NewNetworkEntry->Interface.PrintAddress == NULL)) {
+
+        Status = STATUS_INVALID_PARAMETER;
+        goto RegisterNetworkLayerEnd;
+    }
+
+    //
+    // Networks on which sockets will be created must register with the socket
+    // API functions.
+    //
+
+    if ((NET_IS_SOCKET_NETWORK_DOMAIN(NewNetworkEntry->Domain) != FALSE) &&
+        ((NewNetworkEntry->Interface.InitializeSocket == NULL) ||
+         (NewNetworkEntry->Interface.BindToAddress == NULL) ||
+         (NewNetworkEntry->Interface.Listen == NULL) ||
+         (NewNetworkEntry->Interface.Connect == NULL) ||
+         (NewNetworkEntry->Interface.Disconnect == NULL) ||
+         (NewNetworkEntry->Interface.Close == NULL) ||
+         (NewNetworkEntry->Interface.Send == NULL) ||
+         (NewNetworkEntry->Interface.GetSetInformation == NULL))) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto RegisterNetworkLayerEnd;
@@ -1158,7 +1169,7 @@ Return Value:
     //
 
     KeAcquireSharedExclusiveLockShared(NetPluginListLock);
-    if (NET_IS_DOMAIN_PHYSICAL(Address->Domain) != FALSE) {
+    if (NET_IS_PHYSICAL_DOMAIN(Address->Domain) != FALSE) {
         CurrentEntry = NetDataLinkList.Next;
         while (CurrentEntry != &NetDataLinkList) {
             DataLinkEntry = LIST_VALUE(CurrentEntry,
@@ -1260,6 +1271,18 @@ Return Value:
     KSTATUS Status;
 
     Socket = NULL;
+    NetworkEntry = NULL;
+    ProtocolEntry = NULL;
+
+    //
+    // If the domain is not within the bounds of the socket portion of the
+    // net domain namespace, error out immediately.
+    //
+
+    if (NET_IS_SOCKET_NETWORK_DOMAIN(Domain) == FALSE) {
+        Status = STATUS_DOMAIN_NOT_SUPPORTED;
+        goto CreateSocketEnd;
+    }
 
     //
     // Attempt to find a handler for this protocol and network. Make sure that
@@ -1267,9 +1290,7 @@ Return Value:
     // protocol. If not, then it's a protocol for a different network.
     //
 
-    ProtocolEntry = NULL;
     ProtocolFound = FALSE;
-    NetworkEntry = NULL;
     NetworkFound = FALSE;
     KeAcquireSharedExclusiveLockShared(NetPluginListLock);
     CurrentEntry = NetProtocolList.Next;

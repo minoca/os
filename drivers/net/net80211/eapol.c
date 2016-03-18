@@ -545,50 +545,6 @@ Net80211pEapolDestroyLink (
     PNET_LINK Link
     );
 
-KSTATUS
-Net80211pEapolInitializeSocket (
-    PNET_PROTOCOL_ENTRY ProtocolEntry,
-    PNET_NETWORK_ENTRY NetworkEntry,
-    ULONG NetworkProtocol,
-    PNET_SOCKET NewSocket
-    );
-
-KSTATUS
-Net80211pEapolBindToAddress (
-    PNET_SOCKET Socket,
-    PNET_LINK Link,
-    PNETWORK_ADDRESS Address
-    );
-
-KSTATUS
-Net80211pEapolListen (
-    PNET_SOCKET Socket
-    );
-
-KSTATUS
-Net80211pEapolConnect (
-    PNET_SOCKET Socket,
-    PNETWORK_ADDRESS Address
-    );
-
-KSTATUS
-Net80211pEapolDisconnect (
-    PNET_SOCKET Socket
-    );
-
-KSTATUS
-Net80211pEapolClose (
-    PNET_SOCKET Socket
-    );
-
-KSTATUS
-Net80211pEapolSend (
-    PNET_SOCKET Socket,
-    PNETWORK_ADDRESS Destination,
-    PNET_SOCKET_LINK_OVERRIDE LinkOverride,
-    PNET_PACKET_LIST PacketList
-    );
-
 VOID
 Net80211pEapolProcessReceivedData (
     PNET_LINK Link,
@@ -600,16 +556,6 @@ Net80211pEapolPrintAddress (
     PNETWORK_ADDRESS Address,
     PSTR Buffer,
     ULONG BufferLength
-    );
-
-KSTATUS
-Net80211pEapolGetSetInformation (
-    PNET_SOCKET Socket,
-    SOCKET_INFORMATION_TYPE InformationType,
-    UINTN SocketOption,
-    PVOID Data,
-    PUINTN DataSize,
-    BOOL Set
     );
 
 VOID
@@ -818,18 +764,10 @@ Return Value:
     NetworkEntry.ParentProtocolNumber = EAPOL_PROTOCOL_NUMBER;
     NetworkEntry.Interface.InitializeLink = Net80211pEapolInitializeLink;
     NetworkEntry.Interface.DestroyLink = Net80211pEapolDestroyLink;
-    NetworkEntry.Interface.InitializeSocket = Net80211pEapolInitializeSocket;
-    NetworkEntry.Interface.BindToAddress = Net80211pEapolBindToAddress;
-    NetworkEntry.Interface.Listen = Net80211pEapolListen;
-    NetworkEntry.Interface.Connect = Net80211pEapolConnect;
-    NetworkEntry.Interface.Disconnect = Net80211pEapolDisconnect;
-    NetworkEntry.Interface.Close = Net80211pEapolClose;
-    NetworkEntry.Interface.Send = Net80211pEapolSend;
     NetworkEntry.Interface.ProcessReceivedData =
                                              Net80211pEapolProcessReceivedData;
 
     NetworkEntry.Interface.PrintAddress = Net80211pEapolPrintAddress;
-    NetworkEntry.Interface.GetSetInformation = Net80211pEapolGetSetInformation;
     Status = NetRegisterNetworkLayer(&NetworkEntry,
                                      &Net80211EapolNetworkHandle);
 
@@ -1219,240 +1157,6 @@ Return Value:
     return;
 }
 
-KSTATUS
-Net80211pEapolInitializeSocket (
-    PNET_PROTOCOL_ENTRY ProtocolEntry,
-    PNET_NETWORK_ENTRY NetworkEntry,
-    ULONG NetworkProtocol,
-    PNET_SOCKET NewSocket
-    )
-
-/*++
-
-Routine Description:
-
-    This routine initializes any pieces of information needed by the network
-    layer for the socket. The core networking library will fill in the common
-    header when this routine returns.
-
-Arguments:
-
-    ProtocolEntry - Supplies a pointer to the protocol information.
-
-    NetworkEntry - Supplies a pointer to the network information.
-
-    NetworkProtocol - Supplies the raw protocol value for this socket used on
-        the network. This value is network specific.
-
-    NewSocket - Supplies a pointer to the new socket. The network layer should
-        at the very least add any needed header size.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ASSERT(FALSE);
-
-    return STATUS_NOT_SUPPORTED;
-}
-
-KSTATUS
-Net80211pEapolBindToAddress (
-    PNET_SOCKET Socket,
-    PNET_LINK Link,
-    PNETWORK_ADDRESS Address
-    )
-
-/*++
-
-Routine Description:
-
-    This routine binds the given socket to the specified network address.
-
-Arguments:
-
-    Socket - Supplies a pointer to the socket to bind.
-
-    Link - Supplies an optional pointer to a link to bind to.
-
-    Address - Supplies a pointer to the address to bind the socket to.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ASSERT(FALSE);
-
-    return STATUS_NOT_SUPPORTED;
-}
-
-KSTATUS
-Net80211pEapolListen (
-    PNET_SOCKET Socket
-    )
-
-/*++
-
-Routine Description:
-
-    This routine adds a bound socket to the list of listening sockets,
-    officially allowing clients to attempt to connect to it.
-
-Arguments:
-
-    Socket - Supplies a pointer to the socket to mark as listning.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ASSERT(FALSE);
-
-    return STATUS_NOT_SUPPORTED;
-}
-
-KSTATUS
-Net80211pEapolConnect (
-    PNET_SOCKET Socket,
-    PNETWORK_ADDRESS Address
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to make an outgoing connection to a server.
-
-Arguments:
-
-    Socket - Supplies a pointer to the socket to use for the connection.
-
-    Address - Supplies a pointer to the address to connect to.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ASSERT(FALSE);
-
-    return STATUS_NOT_SUPPORTED;
-}
-
-KSTATUS
-Net80211pEapolDisconnect (
-    PNET_SOCKET Socket
-    )
-
-/*++
-
-Routine Description:
-
-    This routine will disconnect the given socket from its remote address.
-
-Arguments:
-
-    Socket - Supplies a pointer to the socket to disconnect.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ASSERT(FALSE);
-
-    return STATUS_NOT_SUPPORTED;
-}
-
-KSTATUS
-Net80211pEapolClose (
-    PNET_SOCKET Socket
-    )
-
-/*++
-
-Routine Description:
-
-    This routine closes a socket connection.
-
-Arguments:
-
-    Socket - Supplies a pointer to the socket to shut down.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    ASSERT(FALSE);
-
-    return STATUS_NOT_SUPPORTED;
-}
-
-KSTATUS
-Net80211pEapolSend (
-    PNET_SOCKET Socket,
-    PNETWORK_ADDRESS Destination,
-    PNET_SOCKET_LINK_OVERRIDE LinkOverride,
-    PNET_PACKET_LIST PacketList
-    )
-
-/*++
-
-Routine Description:
-
-    This routine sends data through the network.
-
-Arguments:
-
-    Socket - Supplies a pointer to the socket to send the data to.
-
-    Destination - Supplies a pointer to the network address to send to.
-
-    LinkOverride - Supplies an optional pointer to a structure that contains
-        all the necessary information to send data out a link on behalf
-        of the given socket.
-
-    PacketList - Supplies a pointer to a list of network packets to send. Data
-        in these packets may be modified by this routine, but must not be used
-        once this routine returns.
-
-Return Value:
-
-    Status code. It is assumed that either all packets are submitted (if
-    success is returned) or none of the packets were submitted (if a failing
-    status is returned).
-
---*/
-
-{
-
-    ASSERT(FALSE);
-
-    return STATUS_NOT_SUPPORTED;
-}
-
 VOID
 Net80211pEapolProcessReceivedData (
     PNET_LINK Link,
@@ -1643,66 +1347,7 @@ Return Value:
     // determined by the data link layer.
     //
 
-    ASSERT(FALSE);
-
     return 0;
-}
-
-KSTATUS
-Net80211pEapolGetSetInformation (
-    PNET_SOCKET Socket,
-    SOCKET_INFORMATION_TYPE InformationType,
-    UINTN Option,
-    PVOID Data,
-    PUINTN DataSize,
-    BOOL Set
-    )
-
-/*++
-
-Routine Description:
-
-    This routine gets or sets properties of the given socket.
-
-Arguments:
-
-    Socket - Supplies a pointer to the socket to get or set information for.
-
-    InformationType - Supplies the socket information type category to which
-        specified option belongs.
-
-    Option - Supplies the option to get or set, which is specific to the
-        information type. The type of this value is generally
-        SOCKET_<information_type>_OPTION.
-
-    Data - Supplies a pointer to the data buffer where the data is either
-        returned for a get operation or given for a set operation.
-
-    DataSize - Supplies a pointer that on input constains the size of the data
-        buffer. On output, this contains the required size of the data buffer.
-
-    Set - Supplies a boolean indicating if this is a get operation (FALSE) or
-        a set operation (TRUE).
-
-Return Value:
-
-    STATUS_SUCCESS on success.
-
-    STATUS_INVALID_PARAMETER if the information type is incorrect.
-
-    STATUS_BUFFER_TOO_SMALL if the data buffer is too small to receive the
-        requested option.
-
-    STATUS_NOT_SUPPORTED_BY_PROTOCOL if the socket option is not supported by
-        the socket.
-
---*/
-
-{
-
-    ASSERT(FALSE);
-
-    return STATUS_NOT_SUPPORTED;
 }
 
 VOID

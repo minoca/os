@@ -100,7 +100,18 @@ Author:
 // otherwise.
 //
 
-#define NET_IS_DOMAIN_PHYSICAL(_Domain) ((_Domain) >= NetDomainEthernet)
+#define NET_IS_PHYSICAL_DOMAIN(_Domain)         \
+    (((_Domain) >= NET_DOMAIN_PHYSICAL_BASE) && \
+     ((_Domain) < NET_DOMAIN_PHYSICAL_LIMIT))
+
+//
+// This macro returns TRUE if the network domain is a socket network or FALSE
+// otherwise.
+//
+
+#define NET_IS_SOCKET_NETWORK_DOMAIN(_Domain)         \
+    (((_Domain) >= NET_DOMAIN_SOCKET_NETWORK_BASE) && \
+     ((_Domain) < NET_DOMAIN_SOCKET_NETWORK_LIMIT))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -229,26 +240,26 @@ Author:
 // Define the ranges for the different regions of the net domain type namespace.
 //
 
-#define NET_DOMAIN_TYPE_SOCKET_NETWORK_BASE    0x0000
-#define NET_DOMAIN_TYPE_SOCKET_NETWORK_MAX     0x3FFF
-#define NET_DOMAIN_TYPE_LOW_LEVEL_NETWORK_BASE 0x4000
-#define NET_DOMAIN_TYPE_LOW_LEVE_NETWORK_MAX   0x7FFF
-#define NET_DOMAIN_TYPE_PHYSICAL_BASE          0x8000
-#define NET_DOMAIN_TYPE_PHYSICAL_MAX           0xBFFF
+#define NET_DOMAIN_SOCKET_NETWORK_BASE     0x0000
+#define NET_DOMAIN_SOCKET_NETWORK_LIMIT    0x4000
+#define NET_DOMAIN_LOW_LEVEL_NETWORK_BASE  0x4000
+#define NET_DOMAIN_LOW_LEVEL_NETWORK_LIMIT 0x8000
+#define NET_DOMAIN_PHYSICAL_BASE           0x8000
+#define NET_DOMAIN_PHYSICAL_LIMIT          0xC000
 
 //
 // ------------------------------------------------------ Data Type Definitions
 //
 
 typedef enum _NET_DOMAIN_TYPE {
-    NetDomainInvalid = NET_DOMAIN_TYPE_SOCKET_NETWORK_BASE,
+    NetDomainInvalid = NET_DOMAIN_SOCKET_NETWORK_BASE,
     NetDomainLocal,
     NetDomainIp4,
     NetDomainIp6,
     NetDomainNetlink,
-    NetDomainArp = NET_DOMAIN_TYPE_LOW_LEVEL_NETWORK_BASE,
+    NetDomainArp = NET_DOMAIN_LOW_LEVEL_NETWORK_BASE,
     NetDomainEapol,
-    NetDomainEthernet = NET_DOMAIN_TYPE_PHYSICAL_BASE,
+    NetDomainEthernet = NET_DOMAIN_PHYSICAL_BASE,
     NetDomain80211
 } NET_DOMAIN_TYPE, *PNET_DOMAIN_TYPE;
 
