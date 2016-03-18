@@ -130,6 +130,11 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/libiconv-1.14"
         },
         {
+            "name": "Make expat",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/expat-2.1.0"
+        },
+        {
             "name": "Make binutils",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/binutils-2.23"

@@ -154,6 +154,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/libiconv-1.14"
         },
         {
+            "name": "Make expat",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/expat-2.1.0"
+        },
+        {
             "name": "Make binutils",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/binutils-2.23"
