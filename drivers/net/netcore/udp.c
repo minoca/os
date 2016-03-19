@@ -1741,23 +1741,23 @@ Return Value:
 {
 
     SOCKET_BASIC_OPTION BasicOption;
-    PBOOL BooleanOption;
+    ULONG BufferSize;
+    LONGLONG Milliseconds;
     PNET_PACKET_SIZE_INFORMATION SizeInformation;
-    PULONG SizeOption;
+    PSOCKET_TIME SocketTime;
     KSTATUS Status;
-    PULONG TimeoutOption;
     PUDP_SOCKET UdpSocket;
 
     UdpSocket = (PUDP_SOCKET)Socket;
-    if ((InformationType != SocketInformationTypeBasic) &&
-        (InformationType != SocketInformationTypeUdp)) {
+    if ((InformationType != SocketInformationBasic) &&
+        (InformationType != SocketInformationUdp)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto UdpGetSetInformationEnd;
     }
 
     Status = STATUS_SUCCESS;
-    if (InformationType == SocketInformationTypeBasic) {
+    if (InformationType == SocketInformationBasic) {
         BasicOption = (SOCKET_BASIC_OPTION)Option;
         switch (BasicOption) {
         case SocketBasicOptionSendBufferSize:
@@ -1767,16 +1767,16 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
+                BufferSize = *((PULONG)Data);
                 SizeInformation = &(Socket->PacketSizeInformation);
-                if (*SizeOption > UDP_MAX_PACKET_SIZE) {
+                if (BufferSize > UDP_MAX_PACKET_SIZE) {
                     UdpSocket->MaxPacketSize = UDP_MAX_PACKET_SIZE;
 
-                } else if (*SizeOption < SizeInformation->MaxPacketSize) {
+                } else if (BufferSize < SizeInformation->MaxPacketSize) {
                     UdpSocket->MaxPacketSize = SizeInformation->MaxPacketSize;
 
                 } else {
-                    UdpSocket->MaxPacketSize = *SizeOption;
+                    UdpSocket->MaxPacketSize = BufferSize;
                 }
 
             } else {
@@ -1786,8 +1786,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = UdpSocket->MaxPacketSize;
+                *((PULONG)Data) = UdpSocket->MaxPacketSize;
             }
 
             break;
@@ -1803,8 +1802,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = UDP_SEND_MINIMUM;
+                *((PULONG)Data) = UDP_SEND_MINIMUM;
             }
 
             break;
@@ -1820,8 +1818,13 @@ Return Value:
                     break;
                 }
 
-                TimeoutOption = (PULONG)Data;
-                *TimeoutOption = WAIT_TIME_INDEFINITE;
+                //
+                // The indefinite wait time for sockets is 0.
+                //
+
+                SocketTime = (PSOCKET_TIME)Data;
+                SocketTime->Seconds = 0;
+                SocketTime->Microseconds = 0;
             }
 
             break;
@@ -1833,14 +1836,14 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
+                BufferSize = *((PULONG)Data);
                 KeAcquireQueuedLock(UdpSocket->ReceiveLock);
-                if (*SizeOption < UDP_MIN_RECEIVE_BUFFER_SIZE) {
+                if (BufferSize < UDP_MIN_RECEIVE_BUFFER_SIZE) {
                     UdpSocket->ReceiveBufferTotalSize =
                                                    UDP_MIN_RECEIVE_BUFFER_SIZE;
 
                 } else {
-                    UdpSocket->ReceiveBufferTotalSize = *SizeOption;
+                    UdpSocket->ReceiveBufferTotalSize = BufferSize;
                 }
 
                 //
@@ -1865,8 +1868,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = UdpSocket->ReceiveBufferTotalSize;
+                *((PULONG)Data) = UdpSocket->ReceiveBufferTotalSize;
             }
 
             break;
@@ -1878,8 +1880,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                UdpSocket->ReceiveMinimum = *SizeOption;
+                UdpSocket->ReceiveMinimum = *((PULONG)Data);
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -1888,8 +1889,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = UdpSocket->ReceiveMinimum;
+                *((PULONG)Data) = UdpSocket->ReceiveMinimum;
             }
 
             break;
@@ -1901,8 +1901,27 @@ Return Value:
                     break;
                 }
 
-                TimeoutOption = (PULONG)Data;
-                UdpSocket->ReceiveTimeout = *TimeoutOption;
+                SocketTime = (PSOCKET_TIME)Data;
+                if (SocketTime->Seconds < 0) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
+                if (Milliseconds < SocketTime->Seconds) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                Milliseconds += SocketTime->Microseconds /
+                                MICROSECONDS_PER_MILLISECOND;
+
+                if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                UdpSocket->ReceiveTimeout = (ULONG)(LONG)Milliseconds;
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -1911,8 +1930,13 @@ Return Value:
                     break;
                 }
 
-                TimeoutOption = (PULONG)Data;
-                *TimeoutOption = UdpSocket->ReceiveTimeout;
+                SocketTime = (PSOCKET_TIME)Data;
+                SocketTime->Seconds = UdpSocket->ReceiveTimeout /
+                                      MILLISECONDS_PER_SECOND;
+
+                SocketTime->Microseconds = (UdpSocket->ReceiveTimeout %
+                                            MILLISECONDS_PER_SECOND) *
+                                           MICROSECONDS_PER_MILLISECOND;
             }
 
             break;
@@ -1922,27 +1946,25 @@ Return Value:
                 Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
 
             } else {
-                if (*DataSize < sizeof(BOOL)) {
-                    *DataSize = sizeof(BOOL);
+                if (*DataSize < sizeof(ULONG)) {
+                    *DataSize = sizeof(ULONG);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
-                *BooleanOption = FALSE;
+                *((PULONG)Data) = FALSE;
             }
 
             break;
 
         case SocketBasicOptionBroadcastEnabled:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(BOOL)) {
+                if (*DataSize != sizeof(ULONG)) {
                     Status = STATUS_INVALID_PARAMETER;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
-                if (*BooleanOption != FALSE) {
+                if (*((PULONG)Data) != FALSE) {
                     RtlAtomicAnd32(&(Socket->Flags),
                                    ~NET_SOCKET_FLAG_BROADCAST_DISABLED);
 
@@ -1952,18 +1974,17 @@ Return Value:
                 }
 
             } else {
-                if (*DataSize < sizeof(BOOL)) {
-                    *DataSize = sizeof(BOOL);
+                if (*DataSize < sizeof(ULONG)) {
+                    *DataSize = sizeof(ULONG);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
                 if ((Socket->Flags & NET_SOCKET_FLAG_BROADCAST_DISABLED) == 0) {
-                    *BooleanOption = TRUE;
+                    *((PULONG)Data) = TRUE;
 
                 } else {
-                    *BooleanOption = FALSE;
+                    *((PULONG)Data) = FALSE;
                 }
             }
 
@@ -1976,7 +1997,7 @@ Return Value:
 
     } else {
 
-        ASSERT(InformationType == SocketInformationTypeUdp);
+        ASSERT(InformationType == SocketInformationUdp);
 
         Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
     }

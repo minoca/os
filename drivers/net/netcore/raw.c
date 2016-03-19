@@ -1540,23 +1540,22 @@ Return Value:
 {
 
     SOCKET_BASIC_OPTION BasicOption;
-    PBOOL BooleanOption;
+    LONGLONG Milliseconds;
     PRAW_SOCKET RawSocket;
     PNET_PACKET_SIZE_INFORMATION SizeInformation;
-    PULONG SizeOption;
+    PSOCKET_TIME SocketTime;
     KSTATUS Status;
-    PULONG TimeoutOption;
 
     RawSocket = (PRAW_SOCKET)Socket;
-    if ((InformationType != SocketInformationTypeBasic) &&
-        (InformationType != SocketInformationTypeUdp)) {
+    if ((InformationType != SocketInformationBasic) &&
+        (InformationType != SocketInformationUdp)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto RawGetSetInformationEnd;
     }
 
     Status = STATUS_SUCCESS;
-    if (InformationType == SocketInformationTypeBasic) {
+    if (InformationType == SocketInformationBasic) {
         BasicOption = (SOCKET_BASIC_OPTION)Option;
         switch (BasicOption) {
         case SocketBasicOptionSendBufferSize:
@@ -1566,16 +1565,15 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
                 SizeInformation = &(Socket->PacketSizeInformation);
-                if (*SizeOption > RAW_MAX_PACKET_SIZE) {
+                if (*((PULONG)Data) > RAW_MAX_PACKET_SIZE) {
                     RawSocket->MaxPacketSize = RAW_MAX_PACKET_SIZE;
 
-                } else if (*SizeOption < SizeInformation->MaxPacketSize) {
+                } else if (*((PULONG)Data) < SizeInformation->MaxPacketSize) {
                     RawSocket->MaxPacketSize = SizeInformation->MaxPacketSize;
 
                 } else {
-                    RawSocket->MaxPacketSize = *SizeOption;
+                    RawSocket->MaxPacketSize = *((PULONG)Data);
                 }
 
             } else {
@@ -1585,8 +1583,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = RawSocket->MaxPacketSize;
+                *((PULONG)Data) = RawSocket->MaxPacketSize;
             }
 
             break;
@@ -1602,8 +1599,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = RAW_SEND_MINIMUM;
+                *((PULONG)Data) = RAW_SEND_MINIMUM;
             }
 
             break;
@@ -1613,14 +1609,20 @@ Return Value:
                 Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
 
             } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
+                if (*DataSize < sizeof(SOCKET_TIME)) {
+                    *DataSize = sizeof(SOCKET_TIME);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                TimeoutOption = (PULONG)Data;
-                *TimeoutOption = WAIT_TIME_INDEFINITE;
+                //
+                // The indefinite wait time is represented as 0 time for the
+                // SOCKET_TIME structure.
+                //
+
+                SocketTime = (PSOCKET_TIME)Data;
+                SocketTime->Seconds = 0;
+                SocketTime->Microseconds = 0;
             }
 
             break;
@@ -1632,14 +1634,13 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
                 KeAcquireSpinLock(&(RawSocket->ReceiveLock));
-                if (*SizeOption < RAW_MIN_RECEIVE_BUFFER_SIZE) {
+                if (*((PULONG)Data) < RAW_MIN_RECEIVE_BUFFER_SIZE) {
                     RawSocket->ReceiveBufferTotalSize =
                                                    RAW_MIN_RECEIVE_BUFFER_SIZE;
 
                 } else {
-                    RawSocket->ReceiveBufferTotalSize = *SizeOption;
+                    RawSocket->ReceiveBufferTotalSize = *((PULONG)Data);
                 }
 
                 //
@@ -1664,8 +1665,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = RawSocket->ReceiveBufferTotalSize;
+                *((PULONG)Data) = RawSocket->ReceiveBufferTotalSize;
             }
 
             break;
@@ -1677,8 +1677,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                RawSocket->ReceiveMinimum = *SizeOption;
+                RawSocket->ReceiveMinimum = *((PULONG)Data);
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -1687,21 +1686,39 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = RawSocket->ReceiveMinimum;
+                *((PULONG)Data) = RawSocket->ReceiveMinimum;
             }
 
             break;
 
         case SocketBasicOptionReceiveTimeout:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
+                if (*DataSize != sizeof(SOCKET_TIME)) {
                     Status = STATUS_INVALID_PARAMETER;
                     break;
                 }
 
-                TimeoutOption = (PULONG)Data;
-                RawSocket->ReceiveTimeout = *TimeoutOption;
+                SocketTime = (PSOCKET_TIME)Data;
+                if (SocketTime->Seconds < 0) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
+                if (Milliseconds < SocketTime->Seconds) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                Milliseconds += SocketTime->Microseconds /
+                                MICROSECONDS_PER_MILLISECOND;
+
+                if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                RawSocket->ReceiveTimeout = (ULONG)(LONG)Milliseconds;
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -1710,8 +1727,13 @@ Return Value:
                     break;
                 }
 
-                TimeoutOption = (PULONG)Data;
-                *TimeoutOption = RawSocket->ReceiveTimeout;
+                SocketTime = (PSOCKET_TIME)Data;
+                SocketTime->Seconds = RawSocket->ReceiveTimeout /
+                                      MILLISECONDS_PER_SECOND;
+
+                SocketTime->Microseconds = (RawSocket->ReceiveTimeout %
+                                            MILLISECONDS_PER_SECOND) *
+                                           MICROSECONDS_PER_MILLISECOND;
             }
 
             break;
@@ -1721,27 +1743,25 @@ Return Value:
                 Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
 
             } else {
-                if (*DataSize < sizeof(BOOL)) {
-                    *DataSize = sizeof(BOOL);
+                if (*DataSize < sizeof(ULONG)) {
+                    *DataSize = sizeof(ULONG);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
-                *BooleanOption = FALSE;
+                *((PULONG)Data) = FALSE;
             }
 
             break;
 
         case SocketBasicOptionBroadcastEnabled:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(BOOL)) {
+                if (*DataSize != sizeof(ULONG)) {
                     Status = STATUS_INVALID_PARAMETER;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
-                if (*BooleanOption != FALSE) {
+                if (*((PULONG)Data) != FALSE) {
                     RtlAtomicAnd32(&(Socket->Flags),
                                    ~NET_SOCKET_FLAG_BROADCAST_DISABLED);
 
@@ -1751,18 +1771,17 @@ Return Value:
                 }
 
             } else {
-                if (*DataSize < sizeof(BOOL)) {
-                    *DataSize = sizeof(BOOL);
+                if (*DataSize < sizeof(ULONG)) {
+                    *DataSize = sizeof(ULONG);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
                 if ((Socket->Flags & NET_SOCKET_FLAG_BROADCAST_DISABLED) == 0) {
-                    *BooleanOption = TRUE;
+                    *((PULONG)Data) = TRUE;
 
                 } else {
-                    *BooleanOption = FALSE;
+                    *((PULONG)Data) = FALSE;
                 }
             }
 
@@ -1775,7 +1794,7 @@ Return Value:
 
     } else {
 
-        ASSERT(InformationType == SocketInformationTypeRaw);
+        ASSERT(InformationType == SocketInformationRaw);
 
         Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
     }

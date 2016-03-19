@@ -274,35 +274,42 @@ extern "C" {
 //
 
 //
-// This option turns on recording of debugging information in the protocol. The
-// option value is an int boolean.
-//
-
-#define SO_DEBUG 1
-
-//
 // This options reports whether or not socket listening is enabled. The option
 // value is an int boolean and is read only.
 //
 
-#define SO_ACCEPTCONN 2
+#define SO_ACCEPTCONN 1
 
 //
 // This option permits the sending of broadcast messages, if supported by the
 // protocol. The option value is an int boolean.
 //
 
-#define SO_BROADCAST 3
+#define SO_BROADCAST 2
 
 //
-// This option specifies that rules used in validating addresses supplied to
-// bind should allow reuse of local addresses, if supported by the protocol.
-// This option takes an int boolean. In particular, this allows reuse of the
-// exact same local address and port if the existing socket is in the time-wait
-// state, or if either the existing or new socket are using the any address.
+// This option turns on recording of debugging information in the protocol. The
+// option value is an int boolean.
 //
 
-#define SO_REUSEADDR 4
+#define SO_DEBUG 3
+
+//
+// This option requests that outgoing messages bypass the standard routing
+// facilities. The destination shall assumed to be directly connected, and
+// messages are directed to the appropriate network interface based on the
+// destination address. The affect, if any, depends on what protocl is in use.
+// This option takes an int boolean value.
+//
+
+#define SO_DONTROUTE 4
+
+//
+// This option reports information about the error status and clears it. The
+// option value is an int.
+//
+
+#define SO_ERROR 5
 
 //
 // This option keeps connections active by enabling the periodic transmission
@@ -312,7 +319,7 @@ extern "C" {
 // signal.
 //
 
-#define SO_KEEPALIVE 5
+#define SO_KEEPALIVE 6
 
 //
 // This option lingers on a close function if data is present. This option
@@ -325,36 +332,20 @@ extern "C" {
 // linger interval.
 //
 
-#define SO_LINGER 6
+#define SO_LINGER 7
 
 //
 // This option leaves out-of-band data (data marked urgent) inline. The option
 // value is an integer boolean.
 //
 
-#define SO_OOBINLINE 7
-
-//
-// This option sets the send buffer size. It takes an int value.
-//
-
-#define SO_SNDBUF 8
+#define SO_OOBINLINE 8
 
 //
 // This option sets the receive buffer size. It taks an int value.
 //
 
 #define SO_RCVBUF 9
-
-//
-// This option requests that outgoing messages bypass the standard routing
-// facilities. The destination shall assumed to be directly connected, and
-// messages are directed to the appropriate network interface based on the
-// destination address. The affect, if any, depends on what protocl is in use.
-// This option takes an int boolean value.
-//
-
-#define SO_DONTROUTE 10
 
 //
 // This option sets the minimum number of bytes to process for socket input
@@ -364,7 +355,7 @@ extern "C" {
 // low water mark if an error or signal occurs. This option takes an int value.
 //
 
-#define SO_RCVLOWAT 11
+#define SO_RCVLOWAT 10
 
 //
 // This option sets the maximum amount of time an input function waits until it
@@ -373,7 +364,13 @@ extern "C" {
 // is zero, meaning the receive operation does not time out.
 //
 
-#define SO_RCVTIMEO 12
+#define SO_RCVTIMEO 11
+
+//
+// This option sets the send buffer size. It takes an int value.
+//
+
+#define SO_SNDBUF 12
 
 //
 // This option sets the minimum number of bytes to process for socket output
@@ -395,22 +392,28 @@ extern "C" {
 #define SO_SNDTIMEO 14
 
 //
-// This option reports information about the error status and clears it. The
-// option value is an int.
-//
-
-#define SO_ERROR 15
-
-//
 // This option reports the socket type. The value is an int.
 //
 
-#define SO_TYPE 16
+#define SO_TYPE 15
 
 //
-// This option specifies that rules used in validating addresses supplied to
-// bind should allow reuse of an exact local address and port, if supported by
-// the protocol. This option takes an int boolean.
+// Despite its name, when enabled, this option allows the socket to bind to
+// the same local port as an existing socket as long as one of them is bound to
+// the any address and the other is bound to a different local address (i.e.
+// they cannot both be bound to the any address). Additionally, this option
+// allows the socket to bind to the exact same local address and port as an
+// existing socket if the existing socket is in the time-wait state. Both
+// sockets must have this option set for it to take effect. This option takes
+// an int boolean.
+//
+
+#define SO_REUSEADDR 16
+
+//
+// This option allows a socket to bind to the exact same local address and
+// port as an existing socket. Both sockets must have the option set for it to
+// take effect. This option takes an int boolean.
 //
 
 #define SO_REUSEPORT 17

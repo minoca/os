@@ -876,7 +876,7 @@ Return Value:
     BroadcastEnabled = TRUE;
     DataSize = sizeof(BOOL);
     Status = IoSocketGetSetInformation(DhcpContext->Socket,
-                                       SocketInformationTypeBasic,
+                                       SocketInformationBasic,
                                        SocketBasicOptionBroadcastEnabled,
                                        &BroadcastEnabled,
                                        &DataSize,

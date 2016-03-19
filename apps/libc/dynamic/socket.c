@@ -56,19 +56,53 @@ Environment:
     ASSERT((SOCK_DGRAM == NetSocketDatagram) &&            \
            (SOCK_RAW == NetSocketRaw) &&                   \
            (SOCK_SEQPACKET == NetSocketSequencedPacket) && \
-           (SOCK_STREAM == NetSocketStream));
+           (SOCK_STREAM == NetSocketStream))
 
 #define ASSERT_DOMAIN_TYPES_EQUIVALENT()   \
     ASSERT((AF_UNIX == NetDomainLocal) &&  \
            (AF_LOCAL == NetDomainLocal) && \
            (AF_INET == NetDomainIp4) &&    \
-           (AF_INET6 == NetDomainIp6));
+           (AF_INET6 == NetDomainIp6))
+
+#define ASSERT_SOCKET_LEVELS_EQUIVALENT()            \
+    ASSERT((SOL_SOCKET == SocketInformationBasic) && \
+           (IPPROTO_IP == SocketInformationIp4) &&   \
+           (IPPROTO_IPV6 == SocketInformationIp6) && \
+           (IPPROTO_TCP == SocketInformationTcp) &&  \
+           (IPPROTO_UDP == SocketInformationUdp) &&  \
+           (IPPROTO_RAW == SocketInformationRaw))
+
+#define ASSERT_SOCKET_BASIC_OPTIONS_EQUIVALENT() \
+    ASSERT((SO_ACCEPTCONN == SocketBasicOptionAcceptConnections) && \
+           (SO_BROADCAST == SocketBasicOptionBroadcastEnabled) &&   \
+           (SO_DEBUG == SocketBasicOptionDebug) &&                  \
+           (SO_DONTROUTE == SocketBasicOptionRoutingDisabled) &&    \
+           (SO_ERROR == SocketBasicOptionErrorStatus) &&            \
+           (SO_KEEPALIVE == SocketBasicOptionKeepAlive) &&          \
+           (SO_LINGER == SocketBasicOptionLinger) &&                \
+           (SO_OOBINLINE == SocketBasicOptionInlineOutOfBand) &&    \
+           (SO_RCVBUF == SocketBasicOptionReceiveBufferSize) &&     \
+           (SO_RCVLOWAT == SocketBasicOptionReceiveMinimum) &&      \
+           (SO_RCVTIMEO == SocketBasicOptionReceiveTimeout) &&      \
+           (SO_SNDBUF == SocketBasicOptionSendBufferSize) &&        \
+           (SO_SNDLOWAT == SocketBasicOptionSendMinimum) &&         \
+           (SO_SNDTIMEO == SocketBasicOptionSendTimeout) &&         \
+           (SO_TYPE == SocketBasicOptionType) &&                    \
+           (SO_PASSCRED == SocketBasicOptionPassCredentials) &&     \
+           (SO_PEERCRED == SocketBasicOptionPeerCredentials))
+
+#define ASSERT_SOCKET_IPV4_OPTIONS_EQUIVALENT() \
+    ASSERT(IP_HDRINCL == SocketIp4OptionHeaderIncluded)
+
+#define ASSERT_SOCKET_TCP_OPTIONS_EQUIVALENT()                  \
+    ASSERT((TCP_NODELAY == SocketTcpOptionNoDelay) &&           \
+           (TCP_KEEPIDLE == SocketTcpOptionKeepAliveTimeout) && \
+           (TCP_KEEPINTVL == SocketTcpOptionKeepAlivePeriod) && \
+           (TCP_KEEPCNT == SocketTcpOptionKeepAliveProbeLimit))
 
 //
 // ---------------------------------------------------------------- Definitions
 //
-
-#define INVALID_SOCKET_OPTION 0
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -86,15 +120,6 @@ ClpGetSocketAddress (
     socklen_t *AddressLength
     );
 
-KSTATUS
-ClpConvertSocketLevelAndOptionName (
-    INT Level,
-    INT OptionName,
-    PSOCKET_INFORMATION_TYPE InformationType,
-    PUINTN SocketOption,
-    PUINTN SecondOption
-    );
-
 VOID
 ClpGetPathFromSocketAddress (
     struct sockaddr *Address,
@@ -106,54 +131,6 @@ ClpGetPathFromSocketAddress (
 //
 // -------------------------------------------------------------------- Globals
 //
-
-//
-// Define an array to help convert POSIX basic option names.
-//
-
-SOCKET_BASIC_OPTION ClpSocketOptionNameToBasicOption[] = {
-    SocketBasicOptionInvalid,
-    SocketBasicOptionDebug,
-    SocketBasicOptionAcceptConnections,
-    SocketBasicOptionBroadcastEnabled,
-    SocketBasicOptionInvalid,
-    SocketBasicOptionKeepAlive,
-    SocketBasicOptionLinger,
-    SocketBasicOptionInlineOutOfBand,
-    SocketBasicOptionSendBufferSize,
-    SocketBasicOptionReceiveBufferSize,
-    SocketBasicOptionRoutingDisabled,
-    SocketBasicOptionReceiveMinimum,
-    SocketBasicOptionReceiveTimeout,
-    SocketBasicOptionSendMinimum,
-    SocketBasicOptionSendTimeout,
-    SocketBasicOptionErrorStatus,
-    SocketBasicOptionType,
-    SocketBasicOptionReuseExactAddress,
-    SocketBasicOptionPassCredentials,
-    SocketBasicOptionPeerCredentials,
-};
-
-//
-// Define an array to help convert POSIX TCP option names.
-//
-
-SOCKET_BASIC_OPTION ClpSocketOptionNameToTcpOption[] = {
-    SocketTcpOptionInvalid,
-    SocketTcpOptionNoDelay,
-    SocketTcpOptionKeepAliveTimeout,
-    SocketTcpOptionKeepAlivePeriod,
-    SocketTcpOptionKeepAliveProbeLimit
-};
-
-//
-// Define an array to help convert POSIX IPv4 option names.
-//
-
-SOCKET_BASIC_OPTION ClpSocketOptionNameToIp4Option[] = {
-    SocketIp4OptionInvalid,
-    SocketIp4OptionHeaderIncluded
-};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -1255,273 +1232,27 @@ Return Value:
 
 {
 
-    BOOL BooleanOption;
-    PVOID Data;
-    UINTN DataSize;
-    SOCKET_INFORMATION_TYPE InformationType;
-    UINTN IntegerOption;
-    PINT IntegerOptionValue;
-    struct linger *LingerOptionValue;
-    INT Result;
-    UINTN SecondOption;
-    SOCKET_LINGER SocketLingerOption;
-    UINTN SocketOption;
     KSTATUS Status;
-    ULONG TimeoutOption;
-    struct timeval *TimevalOptionValue;
 
-    //
-    // Convert from the POSIX style option value to the OS value.
-    //
-
-    Result = 0;
-    switch (Level) {
-    case SOL_SOCKET:
-        switch (OptionName) {
-        case SO_DEBUG:
-        case SO_ACCEPTCONN:
-        case SO_BROADCAST:
-        case SO_REUSEADDR:
-        case SO_KEEPALIVE:
-        case SO_OOBINLINE:
-        case SO_DONTROUTE:
-        case SO_REUSEPORT:
-        case SO_PASSCRED:
-            if (OptionLength != sizeof(INT)) {
-                errno = EINVAL;
-                Result = -1;
-                break;
-            }
-
-            IntegerOptionValue = (PINT)OptionValue;
-            if (*IntegerOptionValue != 0) {
-                BooleanOption = TRUE;
-
-            } else {
-                BooleanOption = FALSE;
-            }
-
-            Data = &BooleanOption;
-            DataSize = sizeof(BOOL);
-            break;
-
-        case SO_LINGER:
-            if (OptionLength != sizeof(struct linger)) {
-                errno = EINVAL;
-                Result = -1;
-                break;
-            }
-
-            LingerOptionValue = (struct linger *)OptionValue;
-            if (LingerOptionValue->l_onoff != 0) {
-                SocketLingerOption.LingerEnabled = TRUE;
-
-            } else {
-                SocketLingerOption.LingerEnabled = FALSE;
-            }
-
-            SocketLingerOption.LingerTimeout = LingerOptionValue->l_linger *
-                                               MILLISECONDS_PER_SECOND;
-
-            Data = &SocketLingerOption;
-            DataSize = sizeof(SOCKET_LINGER);
-            break;
-
-        case SO_SNDBUF:
-        case SO_RCVBUF:
-        case SO_RCVLOWAT:
-        case SO_SNDLOWAT:
-            if (OptionLength != sizeof(INT)) {
-                errno = EINVAL;
-                Result = -1;
-                break;
-            }
-
-            IntegerOptionValue = (PINT)OptionValue;
-            IntegerOption = *IntegerOptionValue;
-            Data = &IntegerOption;
-            DataSize = sizeof(UINTN);
-            break;
-
-        case SO_RCVTIMEO:
-        case SO_SNDTIMEO:
-            if (OptionLength != sizeof(struct timeval)) {
-                errno = EINVAL;
-                Result = -1;
-                break;
-            }
-
-            TimevalOptionValue = (struct timeval *)OptionValue;
-
-            //
-            // Infinite wait time is represented by the 0 value in POSIX.
-            //
-
-            if ((TimevalOptionValue->tv_sec == 0) &&
-                (TimevalOptionValue->tv_usec == 0)) {
-
-                TimeoutOption = SYS_WAIT_TIME_INDEFINITE;
-
-            } else {
-                TimeoutOption = (TimevalOptionValue->tv_sec *
-                                 MILLISECONDS_PER_SECOND) +
-                                (TimevalOptionValue->tv_usec /
-                                 MICROSECONDS_PER_MILLISECOND);
-            }
-
-            Data = &TimeoutOption;
-            DataSize = sizeof(ULONG);
-            break;
-
-        //
-        // Pass the buffer directly in, since the ucred structure is the same
-        // as the unix socket credentials structure.
-        //
-
-        case SO_PEERCRED:
-            Data = (PVOID)OptionValue;
-            DataSize = OptionLength;
-            break;
-
-        default:
-            errno = EINVAL;
-            Result = -1;
-            break;
-        }
-
-        break;
-
-    case IPPROTO_TCP:
-        switch (OptionName) {
-        case TCP_NODELAY:
-        case TCP_KEEPIDLE:
-        case TCP_KEEPINTVL:
-        case TCP_KEEPCNT:
-            if (OptionLength != sizeof(INT)) {
-                errno = EINVAL;
-                Result = -1;
-                break;
-            }
-
-            IntegerOptionValue = (PINT)OptionValue;
-            IntegerOption = *IntegerOptionValue;
-            Data = &IntegerOption;
-            DataSize = sizeof(ULONG);
-            break;
-
-        default:
-            errno = ENOTSUP;
-            Result = -1;
-            break;
-        }
-
-        break;
-
-    case IPPROTO_IP:
-        switch (OptionName) {
-        case IP_HDRINCL:
-            if (OptionLength != sizeof(INT)) {
-                errno = EINVAL;
-                Result = -1;
-                break;
-            }
-
-            IntegerOptionValue = (PINT)OptionValue;
-            if (*IntegerOptionValue != 0) {
-                BooleanOption = TRUE;
-
-            } else {
-                BooleanOption = FALSE;
-            }
-
-            Data = &BooleanOption;
-            DataSize = sizeof(BOOL);
-            break;
-
-        default:
-            errno = ENOTSUP;
-            Result = -1;
-            break;
-        }
-
-        break;
-
-    case IPPROTO_UDP:
-    case IPPROTO_RAW:
-    case IPPROTO_ICMP:
-    case IPPROTO_IPV6:
-    default:
-        errno = ENOTSUP;
-        Result = -1;
-        break;
-    }
-
-    if (Result != 0) {
-        goto setsockoptEnd;
-    }
-
-    //
-    // Convert the POSIX style level and option name.
-    //
-
-    Status = ClpConvertSocketLevelAndOptionName(Level,
-                                                OptionName,
-                                                &InformationType,
-                                                &SocketOption,
-                                                &SecondOption);
-
-    if (!KSUCCESS(Status)) {
-        errno = ClConvertKstatusToErrorNumber(Status);
-        Result = -1;
-        goto setsockoptEnd;
-    }
-
-    //
-    // Set the converted socket option.
-    //
+    ASSERT_SOCKET_TYPES_EQUIVALENT();
+    ASSERT_SOCKET_LEVELS_EQUIVALENT();
+    ASSERT_SOCKET_BASIC_OPTIONS_EQUIVALENT();
+    ASSERT_SOCKET_IPV4_OPTIONS_EQUIVALENT();
+    ASSERT_SOCKET_TCP_OPTIONS_EQUIVALENT();
 
     Status = OsSocketGetSetInformation((HANDLE)(UINTN)Socket,
-                                       InformationType,
-                                       SocketOption,
-                                       Data,
-                                       &DataSize,
+                                       Level,
+                                       OptionName,
+                                       (PVOID)OptionValue,
+                                       (PUINTN)&OptionLength,
                                        TRUE);
 
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
-        Result = -1;
-        goto setsockoptEnd;
+        return -1;
     }
 
-    //
-    // If the POSIX option maps to a second socket option, then set that one
-    // as well. It will always be of the same type and take the same data.
-    //
-
-    if (SecondOption != INVALID_SOCKET_OPTION) {
-
-        //
-        // This is only enabled for boolean values.
-        //
-
-        assert(Data == &BooleanOption);
-
-        Status = OsSocketGetSetInformation((HANDLE)(UINTN)Socket,
-                                           InformationType,
-                                           SecondOption,
-                                           Data,
-                                           &DataSize,
-                                           TRUE);
-
-        if (!KSUCCESS(Status)) {
-            errno = ClConvertKstatusToErrorNumber(Status);
-            Result = -1;
-            goto setsockoptEnd;
-        }
-    }
-
-setsockoptEnd:
-    return Result;
+    return 0;
 }
 
 LIBC_API
@@ -1571,340 +1302,31 @@ Return Value:
 
 {
 
-    BOOL BooleanOption;
-    PVOID Data;
-    UINTN DataSize;
-    SOCKET_INFORMATION_TYPE InformationType;
-    UINTN IntegerOption;
-    INT IntegerOptionValue;
-    struct linger LingerOptionValue;
-    INT Result;
-    UINTN SecondOption;
-    SOCKET_LINGER SocketLingerOption;
-    UINTN SocketOption;
     KSTATUS Status;
-    ULONG TimeoutOption;
-    struct timeval TimevalOptionValue;
-    NET_SOCKET_TYPE TypeOption;
 
-    //
-    // Convert from the POSIX style option value to the OS value.
-    //
-
-    Result = 0;
-    switch (Level) {
-    case SOL_SOCKET:
-        switch (OptionName) {
-        case SO_DEBUG:
-        case SO_ACCEPTCONN:
-        case SO_BROADCAST:
-        case SO_REUSEADDR:
-        case SO_KEEPALIVE:
-        case SO_OOBINLINE:
-        case SO_DONTROUTE:
-        case SO_REUSEPORT:
-        case SO_PASSCRED:
-            Data = &BooleanOption;
-            DataSize = sizeof(BOOL);
-            break;
-
-        case SO_LINGER:
-            Data = &SocketLingerOption;
-            DataSize = sizeof(SOCKET_LINGER);
-            break;
-
-        case SO_SNDBUF:
-        case SO_RCVBUF:
-        case SO_RCVLOWAT:
-        case SO_SNDLOWAT:
-        case SO_ERROR:
-            Data = &IntegerOption;
-            DataSize = sizeof(UINTN);
-            break;
-
-        case SO_RCVTIMEO:
-        case SO_SNDTIMEO:
-            Data = &TimeoutOption;
-            DataSize = sizeof(ULONG);
-            break;
-
-        case SO_TYPE:
-            Data = &TypeOption;
-            DataSize = sizeof(NET_SOCKET_TYPE);
-            break;
-
-        case SO_PEERCRED:
-            Data = OptionValue;
-            DataSize = *OptionLength;
-            break;
-
-        default:
-            errno = EINVAL;
-            Result = -1;
-            break;
-        }
-
-        break;
-
-    case IPPROTO_TCP:
-        switch (OptionName) {
-        case TCP_NODELAY:
-        case TCP_KEEPIDLE:
-        case TCP_KEEPINTVL:
-        case TCP_KEEPCNT:
-            Data = &IntegerOption;
-            DataSize = sizeof(ULONG);
-            break;
-
-        default:
-            errno = ENOTSUP;
-            Result = -1;
-            break;
-        }
-
-        break;
-
-    case IPPROTO_IP:
-        switch (OptionName) {
-        case IP_HDRINCL:
-            Data = &BooleanOption;
-            DataSize = sizeof(BOOL);
-            break;
-
-        default:
-            errno = ENOTSUP;
-            Result = -1;
-            break;
-        }
-
-        break;
-
-    case IPPROTO_UDP:
-    case IPPROTO_RAW:
-    case IPPROTO_ICMP:
-    case IPPROTO_IPV6:
-    default:
-        errno = ENOTSUP;
-        Result = -1;
-        break;
-    }
-
-    if (Result != 0) {
-        goto getsockoptEnd;
-    }
-
-    //
-    // Convert the POSIX style level and option name.
-    //
-
-    Status = ClpConvertSocketLevelAndOptionName(Level,
-                                                OptionName,
-                                                &InformationType,
-                                                &SocketOption,
-                                                &SecondOption);
-
-    if (!KSUCCESS(Status)) {
-        errno = ClConvertKstatusToErrorNumber(Status);
-        Result = -1;
-        goto getsockoptEnd;
-    }
+    ASSERT_SOCKET_TYPES_EQUIVALENT();
+    ASSERT_SOCKET_LEVELS_EQUIVALENT();
+    ASSERT_SOCKET_BASIC_OPTIONS_EQUIVALENT();
+    ASSERT_SOCKET_IPV4_OPTIONS_EQUIVALENT();
+    ASSERT_SOCKET_TCP_OPTIONS_EQUIVALENT();
 
     //
     // Get the converted socket option from the system.
     //
 
     Status = OsSocketGetSetInformation((HANDLE)(UINTN)Socket,
-                                       InformationType,
-                                       SocketOption,
-                                       Data,
-                                       &DataSize,
+                                       Level,
+                                       OptionName,
+                                       OptionValue,
+                                       (PUINTN)OptionLength,
                                        FALSE);
 
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
-        Result = -1;
-        goto getsockoptEnd;
+        return -1;
     }
 
-    //
-    // Return the requested property back to the caller, truncating the data if
-    // the supplied option length is not big enough.
-    //
-
-    Result = 0;
-    switch (Level) {
-    case SOL_SOCKET:
-        switch (OptionName) {
-        case SO_DEBUG:
-        case SO_ACCEPTCONN:
-        case SO_BROADCAST:
-        case SO_REUSEADDR:
-        case SO_KEEPALIVE:
-        case SO_OOBINLINE:
-        case SO_DONTROUTE:
-        case SO_REUSEPORT:
-        case SO_PASSCRED:
-
-            //
-            // If there is a second option and the first option was enabled,
-            // then get the second option. If the second is also enabled then
-            // the routine will report the combo as enabled, otherwise the
-            // combo should be considered disabled.
-            //
-
-            if ((SecondOption != INVALID_SOCKET_OPTION) &&
-                (BooleanOption != FALSE)) {
-
-                Data = &BooleanOption;
-                DataSize = sizeof(BOOL);
-                Status = OsSocketGetSetInformation((HANDLE)(UINTN)Socket,
-                                                   InformationType,
-                                                   SecondOption,
-                                                   Data,
-                                                   &DataSize,
-                                                   FALSE);
-
-                if (!KSUCCESS(Status)) {
-                    errno = ClConvertKstatusToErrorNumber(Status);
-                    Result = -1;
-                    goto getsockoptEnd;
-                }
-            }
-
-            IntegerOptionValue = BooleanOption;
-            Data = &IntegerOptionValue;
-            DataSize = sizeof(INT);
-            break;
-
-        case SO_LINGER:
-            LingerOptionValue.l_onoff = SocketLingerOption.LingerEnabled;
-            LingerOptionValue.l_linger = SocketLingerOption.LingerTimeout /
-                                         MILLISECONDS_PER_SECOND;
-
-            Data = &LingerOptionValue;
-            DataSize = sizeof(struct linger);
-            break;
-
-        case SO_SNDBUF:
-        case SO_RCVBUF:
-        case SO_RCVLOWAT:
-        case SO_SNDLOWAT:
-        case SO_ERROR:
-            IntegerOptionValue = IntegerOption;
-            Data = &IntegerOptionValue;
-            DataSize = sizeof(INT);
-            break;
-
-        case SO_RCVTIMEO:
-        case SO_SNDTIMEO:
-
-            //
-            // Infinite wait time is represented by the 0 value in POSIX.
-            //
-
-            if (TimeoutOption == SYS_WAIT_TIME_INDEFINITE) {
-                TimeoutOption = 0;
-            }
-
-            TimevalOptionValue.tv_sec = TimeoutOption / MILLISECONDS_PER_SECOND;
-            TimevalOptionValue.tv_usec = (TimeoutOption %
-                                          MILLISECONDS_PER_SECOND) *
-                                         MICROSECONDS_PER_MILLISECOND;
-
-            Data = &TimevalOptionValue;
-            DataSize = sizeof(struct timeval);
-            break;
-
-        case SO_TYPE:
-
-            ASSERT_SOCKET_TYPES_EQUIVALENT();
-
-            IntegerOptionValue = TypeOption;
-            Data = &IntegerOptionValue;
-            DataSize = sizeof(INT);
-            break;
-
-        //
-        // For this option, the data was written directly in the caller's
-        // buffer.
-        //
-
-        case SO_PEERCRED:
-            break;
-
-        default:
-            errno = EINVAL;
-            Result = -1;
-            break;
-        }
-
-        break;
-
-    case IPPROTO_TCP:
-        switch (OptionName) {
-        case TCP_NODELAY:
-        case TCP_KEEPIDLE:
-        case TCP_KEEPINTVL:
-        case TCP_KEEPCNT:
-            IntegerOptionValue = IntegerOption;
-            Data = &IntegerOptionValue;
-            DataSize = sizeof(INT);
-            break;
-
-        default:
-            errno = ENOTSUP;
-            Result = -1;
-            break;
-        }
-
-        break;
-
-    case IPPROTO_IP:
-        switch (OptionName) {
-        case IP_HDRINCL:
-            IntegerOptionValue = BooleanOption;
-            Data = &IntegerOptionValue;
-            DataSize = sizeof(INT);
-            break;
-
-        default:
-            errno = ENOTSUP;
-            Result = -1;
-            break;
-        }
-
-        break;
-
-    case IPPROTO_UDP:
-    case IPPROTO_RAW:
-    case IPPROTO_ICMP:
-    case IPPROTO_IPV6:
-    default:
-        errno = ENOTSUP;
-        Result = -1;
-        break;
-    }
-
-    if (Result != 0) {
-        goto getsockoptEnd;
-    }
-
-    //
-    // The data has been converted back to the expected type. Copy it from the
-    // data pointer up to the data option length.
-    //
-
-    if ((UINTN)*OptionLength < DataSize) {
-        DataSize = *OptionLength;
-
-    } else {
-        *OptionLength = DataSize;
-    }
-
-    RtlCopyMemory(OptionValue, Data, DataSize);
-
-getsockoptEnd:
-    return Result;
+    return 0;
 }
 
 LIBC_API
@@ -2272,7 +1694,7 @@ Return Value:
     LocalAddress->Domain = NetDomainInvalid;
     BufferSize = sizeof(Buffer);
     Status = OsSocketGetSetInformation((HANDLE)(UINTN)Socket,
-                                       SocketInformationTypeBasic,
+                                       SocketInformationBasic,
                                        Option,
                                        Buffer,
                                        &BufferSize,
@@ -2319,146 +1741,6 @@ Return Value:
     }
 
     return 0;
-}
-
-KSTATUS
-ClpConvertSocketLevelAndOptionName (
-    INT Level,
-    INT OptionName,
-    PSOCKET_INFORMATION_TYPE InformationType,
-    PUINTN SocketOption,
-    PUINTN SecondOption
-    )
-
-/*++
-
-Routine Description:
-
-    This routine converts a POSIX socket level and option name into the
-    system's socket information type and socket option.
-
-Arguments:
-
-    Level - Supplies the protocol level at which a socket option resides. This
-        is the same type as the Level argument to getsocketopt and setsockopt.
-
-    OptionName - Supplies the level-specific option name. This is the same type
-        as the OptionName argument to getsockopt and setsockopt.
-
-    InformationType - Supplies a pointer that receives the converted socket
-        information type based on the given Level.
-
-    SocketOption - Supplies a pointer that receives the converted socket option
-        based on the given OptionName.
-
-    SecondOption - Supplies a pointer that receives a possible second socket
-        option that maps to the supplied POSIX option name.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    UINTN ElementCount;
-    KSTATUS Status;
-
-    *SocketOption = INVALID_SOCKET_OPTION;
-    *SecondOption = INVALID_SOCKET_OPTION;
-
-    //
-    // Convert from the POSIX style level and option name to the OS types.
-    //
-
-    Status = STATUS_SUCCESS;
-    switch (Level) {
-    case SOL_SOCKET:
-        *InformationType = SocketInformationTypeBasic;
-        switch (OptionName) {
-        case SO_REUSEADDR:
-            *SocketOption = SocketBasicOptionReuseAnyAddress;
-            *SecondOption = SocketBasicOptionReuseTimeWait;
-            break;
-
-        default:
-            ElementCount = sizeof(ClpSocketOptionNameToBasicOption) /
-                           sizeof(ClpSocketOptionNameToBasicOption[0]);
-
-            if ((UINTN)OptionName >= ElementCount) {
-                Status = STATUS_INVALID_PARAMETER;
-
-            } else {
-                *SocketOption = ClpSocketOptionNameToBasicOption[OptionName];
-                if (*SocketOption == SocketBasicOptionInvalid) {
-                    Status = STATUS_NOT_SUPPORTED;
-                }
-            }
-
-            break;
-        }
-
-        break;
-
-    case IPPROTO_TCP:
-        *InformationType = SocketInformationTypeTcp;
-        ElementCount = sizeof(ClpSocketOptionNameToTcpOption) /
-                       sizeof(ClpSocketOptionNameToTcpOption[0]);
-
-        if ((UINTN)OptionName >= ElementCount) {
-            Status = STATUS_INVALID_PARAMETER;
-
-        } else {
-            *SocketOption = ClpSocketOptionNameToTcpOption[OptionName];
-            if (*SocketOption == SocketTcpOptionInvalid) {
-                Status = STATUS_NOT_SUPPORTED;
-            }
-        }
-
-        break;
-
-    case IPPROTO_UDP:
-        *InformationType = SocketInformationTypeUdp;
-        Status = STATUS_NOT_SUPPORTED;
-        break;
-
-    case IPPROTO_RAW:
-        Status = STATUS_NOT_SUPPORTED;
-        break;
-
-    case IPPROTO_ICMP:
-        Status = STATUS_NOT_SUPPORTED;
-        break;
-
-    case IPPROTO_IP:
-        *InformationType = SocketInformationTypeIp4;
-        ElementCount = sizeof(ClpSocketOptionNameToIp4Option) /
-                       sizeof(ClpSocketOptionNameToIp4Option[0]);
-
-        if ((UINTN)OptionName >= ElementCount) {
-            Status = STATUS_INVALID_PARAMETER;
-
-        } else {
-            *SocketOption = ClpSocketOptionNameToIp4Option[OptionName];
-            if (*SocketOption == SocketIp4OptionInvalid) {
-                Status = STATUS_NOT_SUPPORTED;
-            }
-        }
-
-        break;
-
-    case IPPROTO_IPV6:
-        *InformationType = SocketInformationTypeIp6;
-        Status = STATUS_NOT_SUPPORTED;
-        break;
-
-    default:
-        Status = STATUS_NOT_SUPPORTED;
-        break;
-    }
-
-    return Status;
 }
 
 VOID

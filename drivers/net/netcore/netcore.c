@@ -1869,7 +1869,6 @@ Return Value:
 
     PNETWORK_ADDRESS AddressOption;
     SOCKET_BASIC_OPTION BasicOption;
-    PBOOL BooleanOption;
     PNET_DOMAIN_TYPE Domain;
     PULONG ErrorOption;
     ULONG Flags;
@@ -1888,7 +1887,7 @@ Return Value:
     //
 
     switch (InformationType) {
-    case SocketInformationTypeBasic:
+    case SocketInformationBasic:
         BasicOption = (SOCKET_BASIC_OPTION)Option;
         switch (BasicOption) {
         case SocketBasicOptionType:
@@ -1990,35 +1989,35 @@ Return Value:
 
         case SocketBasicOptionReuseAnyAddress:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(BOOL)) {
+                if (*DataSize != sizeof(ULONG)) {
                     Status = STATUS_INVALID_PARAMETER;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
-                if (*BooleanOption != FALSE) {
+                if (*((PULONG)Data) != FALSE) {
                     RtlAtomicOr32(&(NetSocket->Flags),
-                                  NET_SOCKET_FLAG_REUSE_ANY_ADDRESS);
+                                  (NET_SOCKET_FLAG_REUSE_ANY_ADDRESS |
+                                   NET_SOCKET_FLAG_REUSE_TIME_WAIT));
 
                 } else {
                     RtlAtomicAnd32(&(NetSocket->Flags),
-                                   ~NET_SOCKET_FLAG_REUSE_ANY_ADDRESS);
+                                   ~(NET_SOCKET_FLAG_REUSE_ANY_ADDRESS |
+                                     NET_SOCKET_FLAG_REUSE_TIME_WAIT));
                 }
 
             } else {
-                if (*DataSize < sizeof(BOOL)) {
-                    *DataSize = sizeof(BOOL);
+                if (*DataSize < sizeof(ULONG)) {
+                    *DataSize = sizeof(ULONG);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
                 Flags = NetSocket->Flags;
                 if ((Flags & NET_SOCKET_FLAG_REUSE_ANY_ADDRESS) != 0) {
-                    *BooleanOption = TRUE;
+                    *((PULONG)Data) = TRUE;
 
                 } else {
-                    *BooleanOption = FALSE;
+                    *((PULONG)Data) = FALSE;
                 }
             }
 
@@ -2026,13 +2025,12 @@ Return Value:
 
         case SocketBasicOptionReuseTimeWait:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(BOOL)) {
+                if (*DataSize != sizeof(ULONG)) {
                     Status = STATUS_INVALID_PARAMETER;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
-                if (*BooleanOption != FALSE) {
+                if (*((PULONG)Data) != FALSE) {
                     RtlAtomicOr32(&(NetSocket->Flags),
                                   NET_SOCKET_FLAG_REUSE_TIME_WAIT);
 
@@ -2042,18 +2040,17 @@ Return Value:
                 }
 
             } else {
-                if (*DataSize < sizeof(BOOL)) {
-                    *DataSize = sizeof(BOOL);
+                if (*DataSize < sizeof(ULONG)) {
+                    *DataSize = sizeof(ULONG);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
                 if ((NetSocket->Flags & NET_SOCKET_FLAG_REUSE_TIME_WAIT) != 0) {
-                    *BooleanOption = TRUE;
+                    *((PULONG)Data) = TRUE;
 
                 } else {
-                    *BooleanOption = FALSE;
+                    *((PULONG)Data) = FALSE;
                 }
             }
 
@@ -2061,13 +2058,12 @@ Return Value:
 
         case SocketBasicOptionReuseExactAddress:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(BOOL)) {
+                if (*DataSize != sizeof(ULONG)) {
                     Status = STATUS_INVALID_PARAMETER;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
-                if (*BooleanOption != FALSE) {
+                if (*((PULONG)Data) != FALSE) {
                     RtlAtomicOr32(&(NetSocket->Flags),
                                   NET_SOCKET_FLAG_REUSE_EXACT_ADDRESS);
 
@@ -2077,19 +2073,18 @@ Return Value:
                 }
 
             } else {
-                if (*DataSize < sizeof(BOOL)) {
-                    *DataSize = sizeof(BOOL);
+                if (*DataSize < sizeof(ULONG)) {
+                    *DataSize = sizeof(ULONG);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
                 Flags = NetSocket->Flags;
                 if ((Flags & NET_SOCKET_FLAG_REUSE_EXACT_ADDRESS) != 0) {
-                    *BooleanOption = TRUE;
+                    *((PULONG)Data) = TRUE;
 
                 } else {
-                    *BooleanOption = FALSE;
+                    *((PULONG)Data) = FALSE;
                 }
             }
 
@@ -2153,9 +2148,9 @@ Return Value:
     // IPv4 and IPv6 socket information is handled at the network layer.
     //
 
-    case SocketInformationTypeIp4:
-    case SocketInformationTypeIp6:
-    case SocketInformationTypeNetlink:
+    case SocketInformationIp4:
+    case SocketInformationIp6:
+    case SocketInformationNetlink:
         Status = NetSocket->Network->Interface.GetSetInformation(
                                                                NetSocket,
                                                                InformationType,
@@ -2174,9 +2169,9 @@ Return Value:
     // TCP and UDP socket information is handled at the protocol layer.
     //
 
-    case SocketInformationTypeTcp:
-    case SocketInformationTypeUdp:
-    case SocketInformationTypeNetlinkGeneric:
+    case SocketInformationTcp:
+    case SocketInformationUdp:
+    case SocketInformationNetlinkGeneric:
         Status = NetSocket->Protocol->Interface.GetSetInformation(
                                                                NetSocket,
                                                                InformationType,

@@ -1932,23 +1932,23 @@ Return Value:
 {
 
     SOCKET_BASIC_OPTION BasicOption;
-    PBOOL BooleanOption;
+    ULONG BufferSize;
     PNETLINK_GENERIC_SOCKET GenericSocket;
+    LONGLONG Milliseconds;
     PNET_PACKET_SIZE_INFORMATION SizeInformation;
-    PULONG SizeOption;
+    PSOCKET_TIME SocketTime;
     KSTATUS Status;
-    PULONG TimeoutOption;
 
     GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
-    if ((InformationType != SocketInformationTypeBasic) &&
-        (InformationType != SocketInformationTypeNetlinkGeneric)) {
+    if ((InformationType != SocketInformationBasic) &&
+        (InformationType != SocketInformationNetlinkGeneric)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto UdpGetSetInformationEnd;
     }
 
     Status = STATUS_SUCCESS;
-    if (InformationType == SocketInformationTypeBasic) {
+    if (InformationType == SocketInformationBasic) {
         BasicOption = (SOCKET_BASIC_OPTION)Option;
         switch (BasicOption) {
         case SocketBasicOptionSendBufferSize:
@@ -1958,18 +1958,18 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
+                BufferSize = *((PULONG)Data);
                 SizeInformation = &(Socket->PacketSizeInformation);
-                if (*SizeOption > NETLINK_GENERIC_MAX_PACKET_SIZE) {
+                if (BufferSize > NETLINK_GENERIC_MAX_PACKET_SIZE) {
                     GenericSocket->MaxPacketSize =
                                                NETLINK_GENERIC_MAX_PACKET_SIZE;
 
-                } else if (*SizeOption < SizeInformation->MaxPacketSize) {
+                } else if (BufferSize < SizeInformation->MaxPacketSize) {
                     GenericSocket->MaxPacketSize =
                                                 SizeInformation->MaxPacketSize;
 
                 } else {
-                    GenericSocket->MaxPacketSize = *SizeOption;
+                    GenericSocket->MaxPacketSize = BufferSize;
                 }
 
             } else {
@@ -1979,8 +1979,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = GenericSocket->MaxPacketSize;
+                *((PULONG)Data) = GenericSocket->MaxPacketSize;
             }
 
             break;
@@ -1996,8 +1995,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = NETLINK_GENERIC_SEND_MINIMUM;
+                *((PULONG)Data) = NETLINK_GENERIC_SEND_MINIMUM;
             }
 
             break;
@@ -2013,8 +2011,14 @@ Return Value:
                     break;
                 }
 
-                TimeoutOption = (PULONG)Data;
-                *TimeoutOption = WAIT_TIME_INDEFINITE;
+                //
+                // The indefinite wait time is represented as 0 time for the
+                // SOCKET_TIME structure.
+                //
+
+                SocketTime = (PSOCKET_TIME)Data;
+                SocketTime->Seconds = 0;
+                SocketTime->Microseconds = 0;
             }
 
             break;
@@ -2026,14 +2030,14 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
+                BufferSize = *((PULONG)Data);
                 KeAcquireQueuedLock(GenericSocket->ReceiveLock);
-                if (*SizeOption < NETLINK_GENERIC_MIN_RECEIVE_BUFFER_SIZE) {
+                if (BufferSize < NETLINK_GENERIC_MIN_RECEIVE_BUFFER_SIZE) {
                     GenericSocket->ReceiveBufferTotalSize =
                                        NETLINK_GENERIC_MIN_RECEIVE_BUFFER_SIZE;
 
                 } else {
-                    GenericSocket->ReceiveBufferTotalSize = *SizeOption;
+                    GenericSocket->ReceiveBufferTotalSize = BufferSize;
                 }
 
                 //
@@ -2058,8 +2062,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = GenericSocket->ReceiveBufferTotalSize;
+                *((PULONG)Data) = GenericSocket->ReceiveBufferTotalSize;
             }
 
             break;
@@ -2071,8 +2074,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                GenericSocket->ReceiveMinimum = *SizeOption;
+                GenericSocket->ReceiveMinimum = *((PULONG)Data);
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -2081,8 +2083,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = GenericSocket->ReceiveMinimum;
+                *((PULONG)Data) = GenericSocket->ReceiveMinimum;
             }
 
             break;
@@ -2094,8 +2095,27 @@ Return Value:
                     break;
                 }
 
-                TimeoutOption = (PULONG)Data;
-                GenericSocket->ReceiveTimeout = *TimeoutOption;
+                SocketTime = (PSOCKET_TIME)Data;
+                if (SocketTime->Seconds < 0) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
+                if (Milliseconds < SocketTime->Seconds) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                Milliseconds += SocketTime->Microseconds /
+                                MICROSECONDS_PER_MILLISECOND;
+
+                if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                GenericSocket->ReceiveTimeout = (ULONG)(LONG)Milliseconds;
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -2104,8 +2124,13 @@ Return Value:
                     break;
                 }
 
-                TimeoutOption = (PULONG)Data;
-                *TimeoutOption = GenericSocket->ReceiveTimeout;
+                SocketTime = (PSOCKET_TIME)Data;
+                SocketTime->Seconds = GenericSocket->ReceiveTimeout /
+                                      MILLISECONDS_PER_SECOND;
+
+                SocketTime->Microseconds = (GenericSocket->ReceiveTimeout %
+                                            MILLISECONDS_PER_SECOND) *
+                                           MICROSECONDS_PER_MILLISECOND;
             }
 
             break;
@@ -2115,14 +2140,13 @@ Return Value:
                 Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
 
             } else {
-                if (*DataSize < sizeof(BOOL)) {
-                    *DataSize = sizeof(BOOL);
+                if (*DataSize < sizeof(ULONG)) {
+                    *DataSize = sizeof(ULONG);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
-                *BooleanOption = FALSE;
+                *((PULONG)Data) = FALSE;
             }
 
             break;
@@ -2132,14 +2156,13 @@ Return Value:
                 Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
 
             } else {
-                if (*DataSize < sizeof(BOOL)) {
-                    *DataSize = sizeof(BOOL);
+                if (*DataSize < sizeof(ULONG)) {
+                    *DataSize = sizeof(ULONG);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
-                *BooleanOption = FALSE;
+                *((PULONG)Data) = FALSE;
             }
 
             break;
@@ -2151,7 +2174,7 @@ Return Value:
 
     } else {
 
-        ASSERT(InformationType == SocketInformationTypeNetlinkGeneric);
+        ASSERT(InformationType == SocketInformationNetlinkGeneric);
 
         Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
     }

@@ -211,7 +211,8 @@ Author:
 //
 
 #define SOCKET_INTERNET_PROTOCOL_RAW 255
-#define SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC 256
+#define SOCKET_INTERNET_PROTOCOL_NETLINK 256
+#define SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC 257
 
 //
 // Define the socket level of control messages.
@@ -295,55 +296,15 @@ typedef struct _NETWORK_ADDRESS {
     UINTN Address[MAX_NETWORK_ADDRESS_SIZE / sizeof(UINTN)];
 } NETWORK_ADDRESS, *PNETWORK_ADDRESS;
 
-/*++
-
-Enumeration Description:
-
-    This enumeration describes the various types of socket information that
-    can be requested or modified. It dictates the meaning of the socket option
-    parameter supplied when getting or setting socket information.
-
-Values:
-
-    SocketInformationTypeInvalid - Indicates an invalid socket information type.
-
-    SocketInformationTypeBasic - Indicates that the socket option should be
-        interpreted as a basic socket option.
-
-    SocketInformationTypeIp4 - Indicates that the socket option should be
-        interpreted as an IPv4 socket option.
-
-    SocketInformationTypeIp6 - Indicates that the socket option should be
-        interpreted as an IPv6 socket option.
-
-    SocketInformationTypeTcp - Indicates that the socket option should be
-        interpreted as a TCP socket option.
-
-    SocketInformationTypeUdp - Indicates that the socket option should be
-        interpreted as an UDP socket option.
-
-    SocketInformationTypeNetlink - Indicates that the socket option should be
-        interpreted as a netlink socket option.
-
-    SocketInformationTypeNetlinkGeneric - Indicates that the socket option
-        should be interpreted as a generic netlink socket option.
-
-    SocketInformationTypeCount - Indicates the number of socket information
-        types.
-
---*/
-
 typedef enum _SOCKET_INFORMATION_TYPE {
-    SocketInformationTypeInvalid,
-    SocketInformationTypeBasic,
-    SocketInformationTypeIp4,
-    SocketInformationTypeIp6,
-    SocketInformationTypeTcp,
-    SocketInformationTypeUdp,
-    SocketInformationTypeRaw,
-    SocketInformationTypeNetlink,
-    SocketInformationTypeNetlinkGeneric,
-    SocketInformationTypeCount
+    SocketInformationBasic = 0xFFFF,
+    SocketInformationIp4 = SOCKET_INTERNET_PROTOCOL_IPV4,
+    SocketInformationIp6 = SOCKET_INTERNET_PROTOCOL_IPV6,
+    SocketInformationTcp = SOCKET_INTERNET_PROTOCOL_TCP,
+    SocketInformationUdp = SOCKET_INTERNET_PROTOCOL_UDP,
+    SocketInformationRaw = SOCKET_INTERNET_PROTOCOL_RAW,
+    SocketInformationNetlink = SOCKET_INTERNET_PROTOCOL_NETLINK,
+    SocketInformationNetlinkGeneric = SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC
 } SOCKET_INFORMATION_TYPE, *PSOCKET_INFORMATION_TYPE;
 
 /*++
@@ -357,37 +318,31 @@ Values:
 
     SocketBasicOptionInvalid - Indicates an invalid basic socket option.
 
-    SocketBasicOptionDebug - Indicates that debugging should be enabled or
-        disabled for the socket, or that the current debug state should be
-        retrieved. This option takes a boolean.
-
     SocketBasicOptionAcceptConnections - Indicates that the listening state of
         the socket should be retrieved. This option is read only and takes a
-        boolean.
+        ULONG boolean.
 
     SocketBasicOptionBroadcastEnabled - Indicates that the sending of broadcast
         packets should be enabled or disabled, or that the current state of the
         ability to send broadcast packets should be retrieved. This option
-        takes a boolean.
+        takes a ULONG boolean.
 
-    SocketBasicOptionReuseAnyAddress - Indicates that the reuse of the any
-        address should be allowed on the same port as previously bound
-        address (or vice versa) should be enabled or disabled, or that the
-        state of reusing the any address should be retrieved. Both sockets
-        must have this option set for any address reuse to be allowed on a bind
-        operation. This option takes a boolean.
+    SocketBasicOptionDebug - Indicates that debugging should be enabled or
+        disabled for the socket, or that the current debug state should be
+        retrieved. This option takes a ULONG boolean.
 
-    SocketBasicOptionReuseTimeWait - Indicates that the reuse of an exact local
-        address is allowed on a bind operation as long as the existing socket
-        is in the time wait state. This option takes a boolean.
+    SocketBasicOptionRoutingDisabled - Indicates that the default routing
+        process for packets should be enabled or disabled, or retrieves whether
+        or not default routing is disabled. This option takes a ULONG boolean.
 
-    SocketBasicOptionReuseExactAddress - Indicates that the reuse of an exact
-        local address is allowed on a bind operation. Both sockets must have
-        this option enabled. This option takes a boolean.
+    SocketBasicOptionErrorStatus - Indicates that the socket's error status
+        should be retrieved and cleared. This option is read only and takes a
+        KSTATUS.
 
     SocketBasicOptionKeepAlive - Indicates that the performance of periodic
         connection checks should be enabled or disabled, or that the state of
-        the use of such checks should be retrieved. This option takes a boolean.
+        the use of such checks should be retrieved. This option takes a ULONG
+        boolean.
 
     SocketBasicOptionLinger - Indicates that the socket's linger state should
         be modified or retrieved. This option takes a SOCKET_LINGER structure.
@@ -402,44 +357,55 @@ Values:
     SocketBasicOptionInlineOutOfBand - Indicates that the inclusion of urgent
         data in the mainline packet processing should be enabled or disabled,
         or retrieves the current state of urgent packet processing. This option
-        takes a boolean.
-
-    SocketBasicOptionRoutingDisabled - Indicates that the default routing
-        process for packets should be enabled or disabled, or retrieves whether
-        or not default routing is disabled. This option takes a boolean.
-
-    SocketBasicOptionSendBufferSize - Indicates the size of the socket's send
-        buffer to set, in bytes, or retrieves the current size of the socket's
-        send buffer, in bytes. This option takes a UINTN.
-
-    SocketBasicOptionSendMinimum - Indicates the minimum amount of data, in
-        bytes, that needs to be sent before the socket will actually transmit
-        packets. This option takes a UINTN.
-
-    SocketBasicOptionSendTimeout - Indicates the maximum amount of time, in
-        milliseconds, that a send operation should wait to send data if it is
-        blocked by flow control. This option takes a ULONG.
+        takes a ULONG boolean.
 
     SocketBasicOptionReceiveBufferSize - Indicates the size of the socket's
         receive bufffer to set, in bytes, or retrieves the current size of the
-        socket's receive buffer. This option takes a UINTN.
+        socket's receive buffer. This option takes a ULONG.
 
     SocketBasicOptionReceiveMinimum - Indicates the minimum amount of data, in
         bytes, that needs to be received before the system will alert any
         readers that may be waiting on poll or receive operations. This option
-        takes a UINTN.
+        takes a ULONG.
 
     SocketBasicOptionReceiveTimeout - Indicates the maximum amount of time, in
         milliseconds, that a receive operation should wait for more data before
-        completing. This option takes a ULONG.
+        completing. This option takes a SOCKET_TIME structure.
 
-    SocketBasicOptionErrorStatus - Indicates that the socket's error status
-        should be retrieved and cleared. This option is read only and takes a
-        UINTN.
+    SocketBasicOptionSendBufferSize - Indicates the size of the socket's send
+        buffer to set, in bytes, or retrieves the current size of the socket's
+        send buffer, in bytes. This option takes a ULONG.
 
-    SocketBasicOptionProtocol - Indicates that the socket's protocol should be
-        retrieved. This option is read only and takes a SOCKET_PROTOCOL
-        structure.
+    SocketBasicOptionSendMinimum - Indicates the minimum amount of data, in
+        bytes, that needs to be sent before the socket will actually transmit
+        packets. This option takes a ULONG.
+
+    SocketBasicOptionSendTimeout - Indicates the maximum amount of time, in
+        milliseconds, that a send operation should wait to send data if it is
+        blocked by flow control. This option takes a SOCKET_TIME structure.
+
+    SocketBasicOptionType - Indicates that the socket's protocol should be
+        retrieved. This option is read only and takes a ULONG.
+
+    SocketBasicOptionReuseAnyAddress - Indicates that the socket may be bound
+        to the same local port as an existing socket as long as one of them is
+        bound to the any address and the other is bound to a different local
+        address (i.e. not the any address). Both sockets must have this option
+        set for it to take effect. This option takes a ULONG Boolean. As a
+        hold-over from the BSD sockets implementation, this will also set the
+        SocketBasicOptionReuseTimeWait option.
+
+    SocketBasicOptionReuseExactAddress - Indicates that the sockets may bind to
+        the exact same address and port as an existing socket. Both sockets
+        must have this option enabled. This option takes a ULONG boolean.
+
+    SocketBasicOptionPassCredentials - Indicates that credentials should be
+        sent and received automatically with messages on the socket. This is
+        only applicable for local sockets.
+
+    SocketBasicOptionPeerCredentials - Indicates the credentials of the
+        foreign socket at the time of connect. This is only applicable for
+        local sockets.
 
     SocketBasicOptionDomain - Indicates that the socket's domain should be
         retrieved. This option is read only and takes a NET_DOMAIN_TYPE
@@ -453,66 +419,82 @@ Values:
         should be retrieved. This option is read only and takes a
         NETWORK_ADDRESS structure.
 
-    SocketBasicOptionPassCredentials - Indicates that credentials should be
-        sent and received automatically with messages on the socket. This is
-        only applicable for local sockets.
-
-    SocketBasicOptionPeerCredentials - Indicates the credentials of the
-        foreign socket at the time of connect. This is only applicable for
-        local sockets.
-
-    SocketBasicOptionCount - Indicates the number of basic socket options.
+    SocketBasicOptionReuseTimeWait - Indicates that the socket may be bound to
+        the exact same local address and port as an existing socket as long as
+        the existing socket is in the time-wait state. Both sockets must have
+        this option set for it to take effect. This option takes a ULONG
+        boolean.
 
 --*/
 
 typedef enum _SOCKET_BASIC_OPTION {
     SocketBasicOptionInvalid,
-    SocketBasicOptionDebug,
     SocketBasicOptionAcceptConnections,
     SocketBasicOptionBroadcastEnabled,
-    SocketBasicOptionReuseAnyAddress,
-    SocketBasicOptionReuseTimeWait,
-    SocketBasicOptionReuseExactAddress,
+    SocketBasicOptionDebug,
+    SocketBasicOptionRoutingDisabled,
+    SocketBasicOptionErrorStatus,
     SocketBasicOptionKeepAlive,
     SocketBasicOptionLinger,
     SocketBasicOptionInlineOutOfBand,
-    SocketBasicOptionRoutingDisabled,
-    SocketBasicOptionSendBufferSize,
-    SocketBasicOptionSendMinimum,
-    SocketBasicOptionSendTimeout,
     SocketBasicOptionReceiveBufferSize,
     SocketBasicOptionReceiveMinimum,
     SocketBasicOptionReceiveTimeout,
-    SocketBasicOptionErrorStatus,
+    SocketBasicOptionSendBufferSize,
+    SocketBasicOptionSendMinimum,
+    SocketBasicOptionSendTimeout,
     SocketBasicOptionType,
+    SocketBasicOptionReuseAnyAddress,
+    SocketBasicOptionReuseExactAddress,
+    SocketBasicOptionPassCredentials,
+    SocketBasicOptionPeerCredentials,
     SocketBasicOptionDomain,
     SocketBasicOptionLocalAddress,
     SocketBasicOptionRemoteAddress,
-    SocketBasicOptionPassCredentials,
-    SocketBasicOptionPeerCredentials,
-    SocketBasicOptionCount
+    SocketBasicOptionReuseTimeWait,
 } SOCKET_BASIC_OPTION, *PSOCKET_BASIC_OPTION;
 
 /*++
 
 Structure Description:
 
-    This structure defines the set of socket linger information.
+    This structure defines the set of socket linger information. This structure
+    lines up exactly with the C library linger structure.
 
 Members:
 
-    LingerEnabled - Stores a boolean indicating whether or not lingering is
-        enabled on the socket.
+    LingerEnabled - Stores a 32-bit boolean indicating whether or not lingering
+        is enabled on the socket.
 
-    LingerTimeout - Stores the amount of time, in milliseconds, the socket will
-        wait for data to be sent before forcefully closing.
+    LingerTimeout - Stores the amount of time, in seconds, the socket will wait
+        for data to be sent before forcefully closing.
 
 --*/
 
 typedef struct _SOCKET_LINGER {
-    BOOL LingerEnabled;
+    ULONG LingerEnabled;
     ULONG LingerTimeout;
 } SOCKET_LINGER, *PSOCKET_LINGER;
+
+/*++
+
+Structure Description:
+
+    This structure describes socket option time information. This structure
+    lines up exactly with the C library timeval struction.
+
+Members:
+
+    Seconds - Stores the number of seconds.
+
+    Microseconds - Stores the microseconds.
+
+--*/
+
+typedef struct _SOCKET_TIME {
+    LONGLONG Seconds;
+    LONG Microseconds;
+} SOCKET_TIME, *PSOCKET_TIME;
 
 /*++
 
@@ -529,35 +511,12 @@ Values:
         call for this socket include an IPv4 header. This options takes a
         boolean.
 
-    SocketIp4OptionCount - Indicates the number of IPv4 socket options.
-
 --*/
 
 typedef enum _SOCKET_IP4_OPTION {
     SocketIp4OptionInvalid,
-    SocketIp4OptionHeaderIncluded,
-    SocketIp4OptionCount
+    SocketIp4OptionHeaderIncluded
 } SOCKET_IP4_OPTION, *PSOCKET_IP4_OPTION;
-
-/*++
-
-Enumeration Description:
-
-    This enumeration describes the various IPv6 options for the IPv6 socket
-    information class.
-
-Values:
-
-    SocketIp6OptionInvalid - Indicates an invalid IPv6 socket option.
-
-    SocketIp6OptionCount - Indicates the number of IPv6 socket options.
-
---*/
-
-typedef enum _SOCKET_IP6_OPTION {
-    SocketIp6OptionInvalid,
-    SocketIp6OptionCount
-} SOCKET_IP6_OPTION, *PSOCKET_IP6_OPTION;
 
 /*++
 
@@ -593,49 +552,8 @@ typedef enum _SOCKET_TCP_OPTION {
     SocketTcpOptionNoDelay,
     SocketTcpOptionKeepAliveTimeout,
     SocketTcpOptionKeepAlivePeriod,
-    SocketTcpOptionKeepAliveProbeLimit,
-    SocketTcpOptionCount
+    SocketTcpOptionKeepAliveProbeLimit
 } SOCKET_TCP_OPTION, *PSOCKET_TCP_OPTION;
-
-/*++
-
-Enumeration Description:
-
-    This enumeration describes the various UDP options for the UDP socket
-    information class.
-
-Values:
-
-    SocketUdpOptionInvalid - Indicates an invalid UDP socket option.
-
-    SocketUdpOptionCount - Indicates the number of UDP socket options.
-
---*/
-
-typedef enum _SOCKET_UDP_OPTION {
-    SocketUdpOptionInvalid,
-    SocketUdpOptionCount
-} SOCKET_UDP_OPTION, *PSOCKET_UDP_OPTION;
-
-/*++
-
-Enumeration Description:
-
-    This enumeration describes the various socket options for the raw socket
-    information class.
-
-Values:
-
-    SocketRawOptionInvalid - Indicates an invalid raw socket option.
-
-    SocketRawOptionCount - Indicates the number of raw socket options.
-
---*/
-
-typedef enum _SOCKET_RAW_OPTION {
-    SocketRawOptionInvalid,
-    SocketRawOptionCount
-} SOCKET_RAW_OPTION, *PSOCKET_RAW_OPTION;
 
 /*++
 

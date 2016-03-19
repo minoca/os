@@ -4427,19 +4427,13 @@ Return Value:
         // If the supplied socket contains the unspecified address, do not
         // compare it with the found address. It should never match. But if
         // both sockets do not allow address reuse with the any address, then
-        // do not allow the any address to use the port. Allow reuse in the
-        // time wait state, deactivating any socket found to be in said state.
+        // do not allow the any address to use the port.
         //
 
         if (UnspecifiedAddress != FALSE) {
-            if ((CAN_REUSE_ANY_ADDRESS(Socket, FoundSocket) == FALSE) &&
-                (CAN_REUSE_TIME_WAIT(Socket, FoundSocket) == FALSE)) {
-
+            if (CAN_REUSE_ANY_ADDRESS(Socket, FoundSocket) == FALSE) {
                 AvailableAddress = FALSE;
                 break;
-
-            } else if (CAN_REUSE_TIME_WAIT(Socket, FoundSocket) != FALSE) {
-                DeactivateSocket = TRUE;
             }
 
         //
@@ -4475,8 +4469,9 @@ Return Value:
 
                     AvailableAddress = FALSE;
                     break;
+                }
 
-                } else if (CAN_REUSE_TIME_WAIT(Socket, FoundSocket) != FALSE) {
+                if ((FoundSocket->Flags & NET_SOCKET_FLAG_TIME_WAIT) != 0) {
                     DeactivateSocket = TRUE;
                 }
             }
@@ -4701,8 +4696,8 @@ Return Value:
                 }
 
             //
-            // Otherwise, the addresses are different. Reuse of the port is only
-            // allowed if address reusing the any address allowed on both
+            // Otherwise, the addresses are different. Reuse of the port is
+            // only allowed if reusing the any address is allowed on both
             // sockets.
             //
 

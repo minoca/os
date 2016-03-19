@@ -2051,7 +2051,7 @@ Return Value:
 
     Status = STATUS_SUCCESS;
     switch (InformationType) {
-    case SocketInformationTypeBasic:
+    case SocketInformationBasic:
         BasicOption = (SOCKET_BASIC_OPTION)Option;
         switch (BasicOption) {
         case SocketBasicOptionType:

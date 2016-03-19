@@ -213,8 +213,8 @@ extern "C" {
 // protocols can be used on raw sockets.
 //
 
-#define IPPROTO_IP 0
 #define IPPROTO_ICMP 1
+#define IPPROTO_IP 4
 #define IPPROTO_TCP 6
 #define IPPROTO_UDP 17
 #define IPPROTO_IPV6 41

@@ -1610,12 +1610,11 @@ Return Value:
 
 {
 
-    PBOOL BooleanOption;
     ULONG Flags;
     SOCKET_IP4_OPTION Ip4Option;
     KSTATUS Status;
 
-    if (InformationType != SocketInformationTypeIp4) {
+    if (InformationType != SocketInformationIp4) {
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -1638,13 +1637,12 @@ Return Value:
                 break;
             }
 
-            if (*DataSize != sizeof(BOOL)) {
+            if (*DataSize != sizeof(ULONG)) {
                 Status = STATUS_INVALID_PARAMETER;
                 break;
             }
 
-            BooleanOption = (PBOOL)Data;
-            if (*BooleanOption != FALSE) {
+            if (*((PULONG)Data) != FALSE) {
                 RtlAtomicOr32(&(Socket->Flags),
                               NET_SOCKET_FLAG_NETWORK_HEADER_INCLUDED);
 
@@ -1654,19 +1652,18 @@ Return Value:
             }
 
         } else {
-            if (*DataSize < sizeof(BOOL)) {
-                *DataSize = sizeof(BOOL);
+            if (*DataSize < sizeof(ULONG)) {
+                *DataSize = sizeof(ULONG);
                 Status = STATUS_BUFFER_TOO_SMALL;
                 break;
             }
 
-            BooleanOption = (PBOOL)Data;
             Flags = Socket->Flags;
             if ((Flags & NET_SOCKET_FLAG_NETWORK_HEADER_INCLUDED) != 0) {
-                *BooleanOption = TRUE;
+                *((PULONG)Data) = TRUE;
 
             } else {
-                *BooleanOption = FALSE;
+                *((PULONG)Data) = FALSE;
             }
         }
 

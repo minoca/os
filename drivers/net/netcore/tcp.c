@@ -2746,15 +2746,13 @@ Return Value:
 {
 
     SOCKET_BASIC_OPTION BasicOption;
-    PBOOL BooleanOption;
+    ULONG BufferSize;
     ULONGLONG DueTime;
-    PULONG KeepAliveOption;
     ULONG LeadingZeros;
     PSOCKET_LINGER LingerOption;
-    PULONG NoDelayOption;
-    ULONG SendBufferSize;
+    LONGLONG Milliseconds;
     ULONG SizeDelta;
-    PULONG SizeOption;
+    PSOCKET_TIME SocketTime;
     KSTATUS Status;
     SOCKET_TCP_OPTION TcpOption;
     PTCP_SOCKET TcpSocket;
@@ -2762,15 +2760,15 @@ Return Value:
     ULONG WindowSize;
 
     TcpSocket = (PTCP_SOCKET)Socket;
-    if ((InformationType != SocketInformationTypeBasic) &&
-        (InformationType != SocketInformationTypeTcp)) {
+    if ((InformationType != SocketInformationBasic) &&
+        (InformationType != SocketInformationTcp)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto TcpGetSetInformationEnd;
     }
 
     Status = STATUS_SUCCESS;
-    if (InformationType == SocketInformationTypeBasic) {
+    if (InformationType == SocketInformationBasic) {
         BasicOption = (SOCKET_BASIC_OPTION)Option;
         switch (BasicOption) {
         case SocketBasicOptionLinger:
@@ -2782,7 +2780,9 @@ Return Value:
 
                 LingerOption = (PSOCKET_LINGER)Data;
                 KeAcquireQueuedLock(TcpSocket->Lock);
-                TcpSocket->LingerTimeout = LingerOption->LingerTimeout;
+                TcpSocket->LingerTimeout = LingerOption->LingerTimeout *
+                                           MILLISECONDS_PER_SECOND;
+
                 if (LingerOption->LingerEnabled != FALSE) {
                     TcpSocket->Flags |= TCP_SOCKET_FLAG_LINGER_ENABLED;
 
@@ -2808,7 +2808,9 @@ Return Value:
                     LingerOption->LingerEnabled = FALSE;
                 }
 
-                LingerOption->LingerTimeout = TcpSocket->LingerTimeout;
+                LingerOption->LingerTimeout = TcpSocket->LingerTimeout /
+                                              MILLISECONDS_PER_SECOND;
+
                 KeReleaseQueuedLock(TcpSocket->Lock);
             }
 
@@ -2821,17 +2823,16 @@ Return Value:
                     break;
                 }
 
+                BufferSize = *((PULONG)Data);
                 KeAcquireQueuedLock(TcpSocket->Lock);
-                SizeOption = (PULONG)Data;
-                SendBufferSize = *SizeOption;
 
                 //
                 // Don't let the send buffer size get smaller than the max
                 // packet size.
                 //
 
-                if (SendBufferSize < TcpSocket->SendMaxSegmentSize) {
-                    SendBufferSize = TcpSocket->SendMaxSegmentSize;
+                if (BufferSize < TcpSocket->SendMaxSegmentSize) {
+                    BufferSize = TcpSocket->SendMaxSegmentSize;
                 }
 
                 //
@@ -2839,9 +2840,9 @@ Return Value:
                 // to be added as free space.
                 //
 
-                if (TcpSocket->SendBufferTotalSize < SendBufferSize) {
-                    SizeDelta = SendBufferSize - TcpSocket->SendBufferTotalSize;
-                    TcpSocket->SendBufferTotalSize = SendBufferSize;
+                if (TcpSocket->SendBufferTotalSize < BufferSize) {
+                    SizeDelta = BufferSize - TcpSocket->SendBufferTotalSize;
+                    TcpSocket->SendBufferTotalSize = BufferSize;
                     TcpSocket->SendBufferFreeSize += SizeDelta;
 
                 //
@@ -2851,9 +2852,9 @@ Return Value:
                 //
 
                 } else {
-                    TcpSocket->SendBufferTotalSize = SendBufferSize;
-                    if (TcpSocket->SendBufferFreeSize > SendBufferSize) {
-                        TcpSocket->SendBufferFreeSize = SendBufferSize;
+                    TcpSocket->SendBufferTotalSize = BufferSize;
+                    if (TcpSocket->SendBufferFreeSize > BufferSize) {
+                        TcpSocket->SendBufferFreeSize = BufferSize;
                     }
                 }
 
@@ -2866,8 +2867,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = TcpSocket->SendBufferTotalSize;
+                *((PULONG)Data) = TcpSocket->SendBufferTotalSize;
             }
 
             break;
@@ -2883,8 +2883,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = TCP_DEFAULT_SEND_MINIMUM;
+                *((PULONG)Data) = TCP_DEFAULT_SEND_MINIMUM;
             }
 
             break;
@@ -2896,8 +2895,27 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                TcpSocket->SendTimeout = *SizeOption;
+                SocketTime = (PSOCKET_TIME)Data;
+                if (SocketTime->Seconds < 0) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
+                if (Milliseconds < SocketTime->Seconds) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                Milliseconds += SocketTime->Microseconds /
+                                MICROSECONDS_PER_MILLISECOND;
+
+                if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                TcpSocket->SendTimeout = (ULONG)(LONG)Milliseconds;
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -2906,8 +2924,13 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = TcpSocket->SendTimeout;
+                SocketTime = (PSOCKET_TIME)Data;
+                SocketTime->Seconds = TcpSocket->SendTimeout /
+                                      MILLISECONDS_PER_SECOND;
+
+                SocketTime->Microseconds = (TcpSocket->SendTimeout %
+                                            MILLISECONDS_PER_SECOND) *
+                                           MICROSECONDS_PER_MILLISECOND;
             }
 
             break;
@@ -2919,9 +2942,9 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                if ((*SizeOption > TCP_MAXIMUM_WINDOW_SIZE) ||
-                    (*SizeOption < TCP_MINIMUM_WINDOW_SIZE)) {
+                BufferSize = *((PULONG)Data);
+                if ((BufferSize > TCP_MAXIMUM_WINDOW_SIZE) ||
+                    (BufferSize < TCP_MINIMUM_WINDOW_SIZE)) {
 
                     Status = STATUS_INVALID_PARAMETER;
                     break;
@@ -2949,13 +2972,13 @@ Return Value:
                     // to the requested window.
                     //
 
-                    if ((*SizeOption & ~TCP_WINDOW_MASK) != 0) {
-                        LeadingZeros = RtlCountLeadingZeros32(*SizeOption);
+                    if ((BufferSize & ~TCP_WINDOW_MASK) != 0) {
+                        LeadingZeros = RtlCountLeadingZeros32(BufferSize);
                         WindowScale = (sizeof(USHORT) * BITS_PER_BYTE) -
                                       LeadingZeros;
 
                         TcpSocket->ReceiveWindowScale = WindowScale;
-                        WindowSize = (*SizeOption >> WindowScale);
+                        WindowSize = (BufferSize >> WindowScale);
 
                         ASSERT(WindowSize != 0);
 
@@ -2971,8 +2994,8 @@ Return Value:
 
                     } else {
                         TcpSocket->ReceiveWindowScale = 0;
-                        TcpSocket->ReceiveWindowTotalSize = *SizeOption;
-                        TcpSocket->ReceiveWindowFreeSize = *SizeOption;
+                        TcpSocket->ReceiveWindowTotalSize = BufferSize;
+                        TcpSocket->ReceiveWindowFreeSize = BufferSize;
                     }
 
                 //
@@ -2983,7 +3006,7 @@ Return Value:
                 //
 
                 } else {
-                    WindowSize = *SizeOption >> TcpSocket->ReceiveWindowScale;
+                    WindowSize = BufferSize >> TcpSocket->ReceiveWindowScale;
                     if ((WindowSize == 0) ||
                         ((WindowSize & ~TCP_WINDOW_MASK) != 0)) {
 
@@ -2996,11 +3019,11 @@ Return Value:
                         // difference needs to be added as free space.
                         //
 
-                        if (TcpSocket->ReceiveWindowTotalSize < *SizeOption) {
-                            SizeDelta = *SizeOption -
+                        if (TcpSocket->ReceiveWindowTotalSize < BufferSize) {
+                            SizeDelta = BufferSize -
                                         TcpSocket->ReceiveWindowTotalSize;
 
-                            TcpSocket->ReceiveWindowTotalSize = *SizeOption;
+                            TcpSocket->ReceiveWindowTotalSize = BufferSize;
                             TcpSocket->ReceiveWindowFreeSize += SizeDelta;
 
                         //
@@ -3011,11 +3034,9 @@ Return Value:
                         //
 
                         } else {
-                            TcpSocket->ReceiveWindowTotalSize = *SizeOption;
-                            if (TcpSocket->ReceiveWindowFreeSize >
-                                *SizeOption) {
-
-                                TcpSocket->ReceiveWindowFreeSize = *SizeOption;
+                            TcpSocket->ReceiveWindowTotalSize = BufferSize;
+                            if (TcpSocket->ReceiveWindowFreeSize > BufferSize) {
+                                TcpSocket->ReceiveWindowFreeSize = BufferSize;
                             }
                         }
                     }
@@ -3041,8 +3062,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = TcpSocket->ReceiveWindowTotalSize;
+                *((PULONG)Data) = TcpSocket->ReceiveWindowTotalSize;
             }
 
             break;
@@ -3054,14 +3074,13 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
                 KeAcquireQueuedLock(TcpSocket->Lock);
-                if (*SizeOption > TcpSocket->ReceiveWindowTotalSize) {
+                if (*((PULONG)Data) > TcpSocket->ReceiveWindowTotalSize) {
                     TcpSocket->ReceiveMinimum =
                                              TcpSocket->ReceiveWindowTotalSize;
 
                 } else {
-                    TcpSocket->ReceiveMinimum = *SizeOption;
+                    TcpSocket->ReceiveMinimum = *((PULONG)Data);
                 }
 
                 KeReleaseQueuedLock(TcpSocket->Lock);
@@ -3073,8 +3092,7 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = TcpSocket->ReceiveMinimum;
+                *((PULONG)Data) = TcpSocket->ReceiveMinimum;
             }
 
             break;
@@ -3086,8 +3104,27 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                TcpSocket->ReceiveTimeout = *SizeOption;
+                SocketTime = (PSOCKET_TIME)Data;
+                if (SocketTime->Seconds < 0) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
+                if (Milliseconds < SocketTime->Seconds) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                Milliseconds += SocketTime->Microseconds /
+                                MICROSECONDS_PER_MILLISECOND;
+
+                if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
+                    Status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                TcpSocket->ReceiveTimeout = (ULONG)(LONG)Milliseconds;
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -3096,8 +3133,13 @@ Return Value:
                     break;
                 }
 
-                SizeOption = (PULONG)Data;
-                *SizeOption = TcpSocket->ReceiveTimeout;
+                SocketTime = (PSOCKET_TIME)Data;
+                SocketTime->Seconds = TcpSocket->ReceiveTimeout /
+                                      MILLISECONDS_PER_SECOND;
+
+                SocketTime->Microseconds = (TcpSocket->ReceiveTimeout %
+                                            MILLISECONDS_PER_SECOND) *
+                                           MICROSECONDS_PER_MILLISECOND;
             }
 
             break;
@@ -3107,18 +3149,17 @@ Return Value:
                 Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
 
             } else {
-                if (*DataSize < sizeof(BOOL)) {
-                    *DataSize = sizeof(BOOL);
+                if (*DataSize < sizeof(ULONG)) {
+                    *DataSize = sizeof(ULONG);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
                 if (TcpSocket->State == TcpStateListening) {
-                    *BooleanOption = TRUE;
+                    *((PULONG)Data) = TRUE;
 
                 } else {
-                    *BooleanOption = FALSE;
+                    *((PULONG)Data) = FALSE;
                 }
             }
 
@@ -3126,14 +3167,13 @@ Return Value:
 
         case SocketBasicOptionKeepAlive:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(BOOL)) {
+                if (*DataSize != sizeof(ULONG)) {
                     Status = STATUS_INVALID_PARAMETER;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
                 KeAcquireQueuedLock(TcpSocket->Lock);
-                if (*BooleanOption != FALSE) {
+                if (*((PULONG)Data) != FALSE) {
 
                     //
                     // If keep alive is being enabled and the socket is in a
@@ -3164,34 +3204,32 @@ Return Value:
                 KeReleaseQueuedLock(TcpSocket->Lock);
 
             } else {
-                if (*DataSize < sizeof(BOOL)) {
-                    *DataSize = sizeof(BOOL);
+                if (*DataSize < sizeof(ULONG)) {
+                    *DataSize = sizeof(ULONG);
                     Status = STATUS_BUFFER_TOO_SMALL;
                     break;
                 }
 
-                BooleanOption = (PBOOL)Data;
                 if ((TcpSocket->Flags & TCP_SOCKET_FLAG_KEEP_ALIVE) != 0) {
-                    *BooleanOption = TRUE;
+                    *((PULONG)Data) = TRUE;
 
                 } else {
-                    *BooleanOption = FALSE;
+                    *((PULONG)Data) = FALSE;
                 }
             }
 
             break;
 
         case SocketBasicOptionInlineOutOfBand:
-            if (*DataSize < sizeof(BOOL)) {
-                *DataSize = sizeof(BOOL);
+            if (*DataSize < sizeof(ULONG)) {
+                *DataSize = sizeof(ULONG);
                 Status = STATUS_BUFFER_TOO_SMALL;
                 break;
             }
 
-            BooleanOption = (PBOOL)Data;
             KeAcquireQueuedLock(TcpSocket->Lock);
             if (Set != FALSE) {
-                if (*BooleanOption != FALSE) {
+                if (*((PULONG)Data) != FALSE) {
                     TcpSocket->Flags |= TCP_SOCKET_FLAG_URGENT_INLINE;
 
                 } else {
@@ -3199,10 +3237,10 @@ Return Value:
                 }
 
             } else {
-                *DataSize = sizeof(BOOL);
-                *BooleanOption = FALSE;
+                *DataSize = sizeof(ULONG);
+                *((PULONG)Data) = FALSE;
                 if ((TcpSocket->Flags & TCP_SOCKET_FLAG_URGENT_INLINE) != 0) {
-                    *BooleanOption = TRUE;
+                    *((PULONG)Data) = TRUE;
                 }
             }
 
@@ -3216,7 +3254,7 @@ Return Value:
 
     } else {
 
-        ASSERT(InformationType == SocketInformationTypeTcp);
+        ASSERT(InformationType == SocketInformationTcp);
 
         TcpOption = (SOCKET_TCP_OPTION)Option;
         switch (TcpOption) {
@@ -3228,18 +3266,17 @@ Return Value:
             }
 
             *DataSize = sizeof(ULONG);
-            NoDelayOption = (PULONG)Data;
             KeAcquireQueuedLock(TcpSocket->Lock);
             if (Set != FALSE) {
                 TcpSocket->Flags &= ~TCP_SOCKET_FLAG_NO_DELAY;
-                if (*NoDelayOption != FALSE) {
+                if (*((PULONG)Data) != FALSE) {
                     TcpSocket->Flags |= TCP_SOCKET_FLAG_NO_DELAY;
                 }
 
             } else {
-                *NoDelayOption = FALSE;
+                *((PULONG)Data) = FALSE;
                 if ((TcpSocket->Flags & TCP_SOCKET_FLAG_NO_DELAY) != 0) {
-                    *NoDelayOption = TRUE;
+                    *((PULONG)Data) = TRUE;
                 }
             }
 
@@ -3253,8 +3290,7 @@ Return Value:
                     break;
                 }
 
-                KeepAliveOption = (PULONG)Data;
-                TcpSocket->KeepAliveTimeout = *KeepAliveOption;
+                TcpSocket->KeepAliveTimeout = *((PULONG)Data);
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -3263,8 +3299,7 @@ Return Value:
                     break;
                 }
 
-                KeepAliveOption = (PULONG)Data;
-                *KeepAliveOption = TcpSocket->KeepAliveTimeout;
+                *((PULONG)Data) = TcpSocket->KeepAliveTimeout;
             }
 
             break;
@@ -3276,8 +3311,7 @@ Return Value:
                     break;
                 }
 
-                KeepAliveOption = (PULONG)Data;
-                TcpSocket->KeepAlivePeriod = *KeepAliveOption;
+                TcpSocket->KeepAlivePeriod = *((PULONG)Data);
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -3286,8 +3320,7 @@ Return Value:
                     break;
                 }
 
-                KeepAliveOption = (PULONG)Data;
-                *KeepAliveOption = TcpSocket->KeepAlivePeriod;
+                *((PULONG)Data) = TcpSocket->KeepAlivePeriod;
             }
 
             break;
@@ -3299,8 +3332,7 @@ Return Value:
                     break;
                 }
 
-                KeepAliveOption = (PULONG)Data;
-                TcpSocket->KeepAliveProbeLimit = *KeepAliveOption;
+                TcpSocket->KeepAliveProbeLimit = *((PULONG)Data);
 
             } else {
                 if (*DataSize < sizeof(ULONG)) {
@@ -3309,8 +3341,7 @@ Return Value:
                     break;
                 }
 
-                KeepAliveOption = (PULONG)Data;
-                *KeepAliveOption = TcpSocket->KeepAliveProbeLimit;
+                *((PULONG)Data) = TcpSocket->KeepAliveProbeLimit;
             }
 
             break;
