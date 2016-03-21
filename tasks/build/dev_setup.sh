@@ -63,6 +63,7 @@ nano
 openssh
 patch
 perl
+expat
 python2
 tar
 wget

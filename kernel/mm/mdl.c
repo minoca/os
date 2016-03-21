@@ -1348,6 +1348,191 @@ AllocateFromMdlEnd:
     return Status;
 }
 
+KSTATUS
+MmMdAllocateMultiple (
+    PMEMORY_DESCRIPTOR_LIST Mdl,
+    ULONGLONG Size,
+    ULONGLONG Count,
+    MEMORY_TYPE MemoryType,
+    PUINTN Addresses
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates multiple native sized addresses from an MDL in a
+    single pass.
+
+Arguments:
+
+    Mdl - Supplies a pointer to the descriptor list to allocate memory from.
+
+    Size - Supplies the required size of each individual allocation. This must
+        be a power of two. This is also assumed to be the alignment requirement.
+
+    Count - Supplies the number of allocations required.
+
+    MemoryType - Supplies the type of memory to mark the allocation as.
+
+    Addresses - Supplies a pointer where the addresses will be returned on
+        success.
+
+Return Value:
+
+    STATUS_SUCCESS if the allocation was successful.
+
+    STATUS_NO_MEMORY if the allocation request could not be filled.
+
+--*/
+
+{
+
+    UINTN AddressIndex;
+    UINTN BinIndex;
+    ULONGLONG CountThisRound;
+    ULONGLONG End;
+    UINTN Found;
+    PMEMORY_DESCRIPTOR Free;
+    MEMORY_TYPE FreeType;
+    MEMORY_DESCRIPTOR NewDescriptor;
+    ULONGLONG OriginalEnd;
+    ULONGLONG OriginalStart;
+    UINTN Shift;
+    ULONGLONG SizeThisRound;
+    ULONGLONG Start;
+    KSTATUS Status;
+
+    ASSERT(POWER_OF_2(Size));
+
+    Shift = RtlCountTrailingZeros(Size);
+    Found = 0;
+    BinIndex = MmpMdGetFreeBinIndex(Size);
+    while ((Found < Count) && (BinIndex < MDL_BIN_COUNT)) {
+
+        //
+        // Grab the smallest free descriptor available that fits.
+        //
+
+        if (LIST_EMPTY(&(Mdl->FreeLists[BinIndex]))) {
+            BinIndex += 1;
+            continue;
+        }
+
+        Free = LIST_VALUE(Mdl->FreeLists[BinIndex].Next,
+                          MEMORY_DESCRIPTOR,
+                          FreeListEntry);
+
+        ASSERT(IS_MEMORY_FREE_TYPE(Free->Type));
+
+        OriginalStart = Free->BaseAddress;
+        OriginalEnd = OriginalStart + Free->Size;
+        Start = ALIGN_RANGE_UP(OriginalStart, Size);
+        End = ALIGN_RANGE_DOWN(OriginalEnd, Size);
+        SizeThisRound = End - Start;
+        CountThisRound = SizeThisRound >> Shift;
+        if (CountThisRound > (Count - Found)) {
+            CountThisRound = Count - Found;
+            SizeThisRound = CountThisRound << Shift;
+            End = Start + SizeThisRound;
+        }
+
+        FreeType = Free->Type;
+        MmMdRemoveDescriptorFromList(Mdl, Free);
+        Free = NULL;
+
+        //
+        // Fix up the descriptor to describe the allocation, which may have
+        // a start (unaligned) portion that's free, the used bit, and then an
+        // end portion that's free (either because it wasn't aligned or the
+        // caller doesn't need it).
+        //
+
+        if (Start != OriginalStart) {
+            MmMdInitDescriptor(&NewDescriptor, OriginalStart, Start, FreeType);
+            Status = MmMdAddDescriptorToList(Mdl, &NewDescriptor);
+            if (!KSUCCESS(Status)) {
+
+                //
+                // This shouldn't fail because a free descriptor was just
+                // placed on the list above.
+                //
+
+                ASSERT(FALSE);
+
+                goto AllocateMultipleEnd;
+            }
+        }
+
+        MmMdInitDescriptor(&NewDescriptor, Start, End, MemoryType);
+        Status = MmMdAddDescriptorToList(Mdl, &NewDescriptor);
+        if (!KSUCCESS(Status)) {
+
+            //
+            // Descriptor allocations shouldn't really fail since the
+            // caller usually ensures there are enough descriptors present.
+            // If this code is being used in new ways, then consider
+            // working harder to roll back the partial changes that have
+            // occured up to this point (ie the free descriptor being gone).
+            //
+
+            ASSERT(FALSE);
+
+            goto AllocateMultipleEnd;
+        }
+
+        if (End != OriginalEnd) {
+            MmMdInitDescriptor(&NewDescriptor, End, OriginalEnd, FreeType);
+            Status = MmMdAddDescriptorToList(Mdl, &NewDescriptor);
+            if (!KSUCCESS(Status)) {
+
+                //
+                // See above comment about this assert.
+                //
+
+                ASSERT(FALSE);
+
+                goto AllocateMultipleEnd;
+            }
+        }
+
+        for (AddressIndex = 0;
+             AddressIndex < CountThisRound;
+             AddressIndex += 1) {
+
+            Addresses[Found] = Start;
+            Start += Size;
+            Found += 1;
+        }
+    }
+
+    if (Found != Count) {
+        Status = STATUS_NO_MEMORY;
+        goto AllocateMultipleEnd;
+    }
+
+    Status = STATUS_SUCCESS;
+
+AllocateMultipleEnd:
+    if (!KSUCCESS(Status)) {
+
+        //
+        // Attempt to release the addresses that were acquired.
+        //
+
+        for (AddressIndex = 0; AddressIndex < Found; AddressIndex += 1) {
+            MmMdInitDescriptor(&NewDescriptor,
+                               Addresses[AddressIndex],
+                               Addresses[AddressIndex] + Size,
+                               MemoryTypeFree);
+
+            MmMdAddDescriptorToList(Mdl, &NewDescriptor);
+        }
+    }
+
+    return Status;
+}
+
 VOID
 MmMdIterate (
     PMEMORY_DESCRIPTOR_LIST DescriptorList,
@@ -1593,6 +1778,9 @@ Return Value:
 
     case MemoryTypeHardware:
         return "Hardware";
+
+    case MemoryTypeIoBuffer:
+        return "IO Buffer";
 
     default:
         break;

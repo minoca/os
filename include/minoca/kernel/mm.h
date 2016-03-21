@@ -285,6 +285,7 @@ typedef enum _MEMORY_TYPE {
     MemoryTypeNonPagedPool,
     MemoryTypePagedPool,
     MemoryTypeHardware,
+    MemoryTypeIoBuffer,
     MaxMemoryTypes
 } MEMORY_TYPE, *PMEMORY_TYPE;
 
@@ -2240,6 +2241,44 @@ Return Value:
 
     STATUS_INVALID_PARAMETER if a page count of 0 was passed or the address
         parameter was not filled out.
+
+    STATUS_NO_MEMORY if the allocation request could not be filled.
+
+--*/
+
+KSTATUS
+MmMdAllocateMultiple (
+    PMEMORY_DESCRIPTOR_LIST Mdl,
+    ULONGLONG Size,
+    ULONGLONG Count,
+    MEMORY_TYPE MemoryType,
+    PUINTN Addresses
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates multiple native sized addresses from an MDL in a
+    single pass.
+
+Arguments:
+
+    Mdl - Supplies a pointer to the descriptor list to allocate memory from.
+
+    Size - Supplies the required size of each individual allocation. This must
+        be a power of two. This is also assumed to be the alignment requirement.
+
+    Count - Supplies the number of allocations required.
+
+    MemoryType - Supplies the type of memory to mark the allocation as.
+
+    Addresses - Supplies a pointer where the addresses will be returned on
+        success.
+
+Return Value:
+
+    STATUS_SUCCESS if the allocation was successful.
 
     STATUS_NO_MEMORY if the allocation request could not be filled.
 

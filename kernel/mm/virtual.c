@@ -96,15 +96,14 @@ typedef struct _CLONE_ADDRESS_SPACE_CONTEXT {
 //
 
 KSTATUS
-MmpLockOrUnlockUserModeAddressRange (
-    PVOID UserModePointer,
-    ULONG Size,
-    BOOL Lock
+MmpPrepareToAddAccountingDescriptor (
+    PMEMORY_ACCOUNTING Accountant,
+    UINTN NewAllocations
     );
 
-KSTATUS
-MmpPrepareToAddAccountingDescriptor (
-    PMEMORY_ACCOUNTING Accountant
+VOID
+MmpUpdateVirtualMemoryWarningLevel (
+    VOID
     );
 
 VOID
@@ -1363,7 +1362,7 @@ Return Value:
     // descriptors. Make sure the accountant's MDL is prepared for this.
     //
 
-    Status = MmpPrepareToAddAccountingDescriptor(Accountant);
+    Status = MmpPrepareToAddAccountingDescriptor(Accountant, 1);
     if (!KSUCCESS(Status)) {
         goto AddAccountingDescriptorEnd;
     }
@@ -1433,7 +1432,7 @@ Return Value:
     // Make sure the accountant's MDL is prepared for this.
     //
 
-    Status = MmpPrepareToAddAccountingDescriptor(Accountant);
+    Status = MmpPrepareToAddAccountingDescriptor(Accountant, 1);
     if (!KSUCCESS(Status)) {
         goto AllocateFromAccountantEnd;
     }
@@ -1506,13 +1505,11 @@ Return Value:
     PMEMORY_ACCOUNTING Accountant;
     PKTHREAD CurrentThread;
     ULONGLONG EndAddress;
-    PLIST_ENTRY ListHead;
     BOOL LockAcquired;
     MEMORY_DESCRIPTOR NewDescriptor;
     UINTN PageCount;
     UINTN PageIndex;
     ULONG PageShift;
-    BOOL SignalEvent;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -1598,45 +1595,14 @@ Return Value:
     }
 
 FreeAccountingRangeEnd:
-
-    //
-    // If the system accountant successfully released resources, check to see
-    // if the memory warning event needs to be signaled.
-    //
-
-    SignalEvent = FALSE;
     if (KSUCCESS(Status) &&
         ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0)) {
 
-        MmFreeVirtualByteCount = Accountant->Mdl.FreeSpace;
-
-        //
-        // If in memory warning country, try to get out ASAP. The virtual
-        // memory warning calms down when there is a certain amount of total
-        // free space and at least one large fragment.
-        //
-
-        if (MmVirtualMemoryWarningLevel != MemoryWarningLevelNone) {
-            ListHead = &(Accountant->Mdl.FreeLists[MDL_BIN_COUNT - 1]);
-            if ((Accountant->Mdl.FreeSpace >=
-                 MmVirtualMemoryWarningLevel1Retreat) &&
-                (!LIST_EMPTY(ListHead))) {
-
-                MmVirtualMemoryWarningLevel = MemoryWarningLevelNone;
-                SignalEvent = TRUE;
-            }
-        }
+        MmpUpdateVirtualMemoryWarningLevel();
     }
 
     if (LockAcquired != FALSE) {
         MmpUnlockAccountant(Accountant, TRUE);
-    }
-
-    if (SignalEvent != FALSE) {
-
-        ASSERT(MmVirtualMemoryWarningEvent != NULL);
-
-        KeSignalEvent(MmVirtualMemoryWarningEvent, SignalOptionPulse);
     }
 
     return Status;
@@ -1684,7 +1650,7 @@ Return Value:
     // accountant's MDL is prepared for this.
     //
 
-    Status = MmpPrepareToAddAccountingDescriptor(Accountant);
+    Status = MmpPrepareToAddAccountingDescriptor(Accountant, 1);
     if (!KSUCCESS(Status)) {
         goto RemoveAccountingRangeEnd;
     }
@@ -1747,12 +1713,9 @@ Return Value:
 
 {
 
-    PLIST_ENTRY BinList;
     BOOL LockAcquired;
     MEMORY_DESCRIPTOR NewDescriptor;
-    MEMORY_WARNING_LEVEL NewWarning;
     BOOL RangeFree;
-    BOOL SignalEvent;
     KSTATUS Status;
     PVOID VirtualAddress;
 
@@ -1839,54 +1802,90 @@ Return Value:
 AllocateAddressRangeEnd:
 
     //
-    // If the system accountant successfully allocate a range, check to see if
-    // the memory warning level needs to be updated.
+    // If the system accountant successfully allocate a range, update the
+    // memory warning level.
     //
 
-    SignalEvent = FALSE;
     if (KSUCCESS(Status) &&
         ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0)) {
 
-        MmFreeVirtualByteCount = Accountant->Mdl.FreeSpace;
-
-        //
-        // If free space is running low or the largest free bin is empty
-        // (indicating serious fragmentation), then throw a warning up.
-        //
-
-        BinList = &(Accountant->Mdl.FreeLists[MDL_BIN_COUNT - 1]);
-        if ((Accountant->Mdl.FreeSpace <
-             MmVirtualMemoryWarningLevel1Trigger) ||
-            (LIST_EMPTY(BinList))) {
-
-            if (MmVirtualMemoryWarningLevel < MemoryWarningLevel2) {
-                BinList = &(Accountant->Mdl.FreeLists[MDL_BIN_COUNT - 2]);
-                if (LIST_EMPTY(BinList)) {
-                    NewWarning = MemoryWarningLevel2;
-
-                } else {
-                    NewWarning = MemoryWarningLevel1;
-                }
-
-                if (MmVirtualMemoryWarningLevel != NewWarning) {
-                    MmVirtualMemoryWarningLevel = NewWarning;
-                    SignalEvent = TRUE;
-                }
-            }
-        }
+        MmpUpdateVirtualMemoryWarningLevel();
     }
 
     if (LockAcquired != FALSE) {
         MmpUnlockAccountant(Accountant, TRUE);
     }
 
-    if (SignalEvent != FALSE) {
+    return Status;
+}
 
-        ASSERT(MmVirtualMemoryWarningEvent != NULL);
+KSTATUS
+MmpAllocateAddressRanges (
+    PMEMORY_ACCOUNTING Accountant,
+    UINTN Size,
+    UINTN Count,
+    MEMORY_TYPE MemoryType,
+    PVOID *Allocations
+    )
 
-        KeSignalEvent(MmVirtualMemoryWarningEvent, SignalOptionPulse);
+/*++
+
+Routine Description:
+
+    This routine allocates multiple potentially discontiguous address ranges
+    of a given size.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure.
+
+    Size - Supplies the size of each allocation, in bytes. This will also be
+        the alignment of each allocation.
+
+    Count - Supplies the number of allocations to make. This is the number of
+        elements assumed to be in the return array.
+
+    MemoryType - Supplies a the type of memory this allocation should be marked
+        as. Do not specify MemoryTypeFree for this parameter.
+
+    Allocations - Supplies a pointer where the addresses are returned on
+        success. The caller is responsible for freeing each of these.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    ASSERT(KeGetRunLevel() == RunLevelLow);
+    ASSERT(MemoryType != MemoryTypeFree);
+
+    MmpLockAccountant(Accountant, TRUE);
+    Status = MmpPrepareToAddAccountingDescriptor(Accountant, Count);
+    if (!KSUCCESS(Status)) {
+        goto AllocateAddressRangesEnd;
     }
 
+    Status = MmMdAllocateMultiple(&(Accountant->Mdl),
+                                  Size,
+                                  Count,
+                                  MemoryType,
+                                  (PUINTN)Allocations);
+
+    if (!KSUCCESS(Status)) {
+        goto AllocateAddressRangesEnd;
+    }
+
+AllocateAddressRangesEnd:
+    if ((Accountant->Flags & MEMORY_ACCOUNTING_FLAG_SYSTEM) != 0) {
+        MmpUpdateVirtualMemoryWarningLevel();
+    }
+
+    MmpUnlockAccountant(Accountant, TRUE);
     return Status;
 }
 
@@ -2903,7 +2902,8 @@ Return Value:
 
 KSTATUS
 MmpPrepareToAddAccountingDescriptor (
-    PMEMORY_ACCOUNTING Accountant
+    PMEMORY_ACCOUNTING Accountant,
+    UINTN NewAllocations
     )
 
 /*++
@@ -2918,6 +2918,9 @@ Arguments:
 
     Accountant - Supplies a pointer to the memory accounting structure.
 
+    NewAllocations - Supplies the number of new allocations that are going to
+        be added to the MDL.
+
 Return Value:
 
     Status code.
@@ -2930,6 +2933,7 @@ Return Value:
     ULONG AllocationSize;
     PVOID CurrentAddress;
     ULONG Index;
+    UINTN Needed;
     ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddress[DESCRIPTOR_REFILL_PAGE_COUNT];
     KSTATUS Status;
@@ -2948,13 +2952,18 @@ Return Value:
            (KeIsSharedExclusiveLockHeldExclusive(Accountant->Lock) != FALSE));
 
     //
+    // If each descriptor splits an existing one, then two new descriptors are
+    // needed per allocation. Add an extra for the descriptor refill.
+    //
+
+    Needed = (NewAllocations + 1) * 2;
+
+    //
     // If there are enough free descriptors left to proceed and to still allow
     // the descriptors to be replenished in the future, then exit successfully.
     //
 
-    if (Accountant->Mdl.UnusedDescriptorCount >
-        FREE_SYSTEM_DESCRIPTORS_REQUIRED_FOR_REFILL) {
-
+    if (Accountant->Mdl.UnusedDescriptorCount >= Needed) {
         return STATUS_SUCCESS;
     }
 
@@ -3043,6 +3052,8 @@ Return Value:
                                 VirtualAddress,
                                 AllocationSize);
 
+    ASSERT(Accountant->Mdl.UnusedDescriptorCount >= Needed);
+
     Status = STATUS_SUCCESS;
 
 PrepareToAddAccountingDescriptorEnd:
@@ -3055,6 +3066,84 @@ PrepareToAddAccountingDescriptorEnd:
     }
 
     return Status;
+}
+
+VOID
+MmpUpdateVirtualMemoryWarningLevel (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates the current virtual memory warning level. It is
+    called after the system virtual memory map has changed.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PMEMORY_ACCOUNTING Accountant;
+    PLIST_ENTRY BinList;
+    MEMORY_WARNING_LEVEL CurrentLevel;
+    MEMORY_WARNING_LEVEL NewLevel;
+    UINTN RequiredFree;
+
+    Accountant = &MmKernelVirtualSpace;
+    MmFreeVirtualByteCount = Accountant->Mdl.FreeSpace;
+    CurrentLevel = MmVirtualMemoryWarningLevel;
+    NewLevel = CurrentLevel;
+    BinList = &(Accountant->Mdl.FreeLists[MDL_BIN_COUNT - 1]);
+    if (CurrentLevel != MemoryWarningLevelNone) {
+        RequiredFree = MmVirtualMemoryWarningLevel1Retreat;
+        if ((!LIST_EMPTY(BinList)) &&
+            (Accountant->Mdl.FreeSpace >= RequiredFree)) {
+
+            NewLevel = MemoryWarningLevelNone;
+
+        //
+        // Potentially upgrade from level 1 to level 2.
+        //
+
+        } else if (CurrentLevel == MemoryWarningLevel1) {
+            BinList = &(Accountant->Mdl.FreeLists[MDL_BIN_COUNT - 2]);
+            if (LIST_EMPTY(BinList)) {
+                NewLevel = MemoryWarningLevel2;
+            }
+        }
+
+    //
+    // There is currently no warning, see if there should be.
+    //
+
+    } else {
+        RequiredFree = MmVirtualMemoryWarningLevel1Trigger;
+        if ((Accountant->Mdl.FreeSpace < RequiredFree) ||
+            (LIST_EMPTY(BinList))) {
+
+            NewLevel = MemoryWarningLevel1;
+            BinList = &(Accountant->Mdl.FreeLists[MDL_BIN_COUNT - 2]);
+            if (LIST_EMPTY(BinList)) {
+                NewLevel = MemoryWarningLevel2;
+            }
+        }
+    }
+
+    if (NewLevel != CurrentLevel) {
+        MmVirtualMemoryWarningLevel = NewLevel;
+        KeSignalEvent(MmVirtualMemoryWarningEvent, SignalOptionPulse);
+    }
+
+    return;
 }
 
 VOID

@@ -39,6 +39,13 @@ Environment:
 #define LOCAL_IO_VECTOR_COUNT 8
 
 //
+// Store the array size of virtual addresses for mapping IO buffer fragments.
+// This should be at least big enough to cover normal read-aheads.
+//
+
+#define MM_MAP_IO_BUFFER_LOCAL_VIRTUAL_PAGES 0x20
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -56,7 +63,8 @@ MmpMapIoBufferFragments (
     PIO_BUFFER IoBuffer,
     UINTN FragmentStart,
     UINTN FragmentCount,
-    ULONG MapFlags
+    ULONG MapFlags,
+    BOOL VirtuallyContiguous
     );
 
 VOID
@@ -83,6 +91,13 @@ MmpExtendIoBuffer (
 KSTATUS
 MmpLockIoBuffer (
     PIO_BUFFER *IoBuffer
+    );
+
+VOID
+MmpSplitIoBufferFragment (
+    PIO_BUFFER IoBuffer,
+    UINTN FragmentIndex,
+    UINTN NewSize
     );
 
 //
@@ -251,7 +266,7 @@ Return Value:
     Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
                                      AlignedSize,
                                      PageSize,
-                                     MemoryTypeReserved,
+                                     MemoryTypeIoBuffer,
                                      AllocationStrategyAnyAddress,
                                      FALSE,
                                      &VirtualAddress);
@@ -1151,7 +1166,8 @@ Return Value:
         Status = MmpMapIoBufferFragments(IoBuffer,
                                          0,
                                          IoBuffer->FragmentCount,
-                                         MapFlags);
+                                         MapFlags,
+                                         TRUE);
 
         if (!KSUCCESS(Status)) {
             goto MapIoBufferEnd;
@@ -1188,7 +1204,8 @@ Return Value:
                 Status = MmpMapIoBufferFragments(IoBuffer,
                                                  MapFragmentStart,
                                                  FragmentCount,
-                                                 MapFlags);
+                                                 MapFlags,
+                                                 FALSE);
 
                 if (!KSUCCESS(Status)) {
                     MapRequired = FALSE;
@@ -1223,33 +1240,8 @@ Return Value:
             Status = MmpMapIoBufferFragments(IoBuffer,
                                              MapFragmentStart,
                                              FragmentCount,
-                                             MapFlags);
-        }
-
-        //
-        // If the mapping didn't succeed in chunks, try to map each page
-        // individually.
-        //
-
-        if (Status == STATUS_INSUFFICIENT_RESOURCES) {
-            for (FragmentIndex = 0;
-                 FragmentIndex < IoBuffer->FragmentCount;
-                 FragmentIndex += 1) {
-
-                Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-                if (Fragment->VirtualAddress != NULL) {
-                    continue;
-                }
-
-                Status = MmpMapIoBufferFragments(IoBuffer,
-                                                 FragmentIndex,
-                                                 1,
-                                                 MapFlags);
-
-                if (!KSUCCESS(Status)) {
-                    goto MapIoBufferEnd;
-                }
-            }
+                                             MapFlags,
+                                             FALSE);
         }
     }
 
@@ -2870,7 +2862,8 @@ MmpMapIoBufferFragments (
     PIO_BUFFER IoBuffer,
     UINTN FragmentStart,
     UINTN FragmentCount,
-    ULONG MapFlags
+    ULONG MapFlags,
+    BOOL VirtuallyContiguous
     )
 
 /*++
@@ -2890,6 +2883,9 @@ Arguments:
     MapFlags - Supplies the map flags to use when mapping the I/O buffer. See
         MAP_FLAG_* for definitions.
 
+    VirtuallyContiguous - Supplies a boolean indicating whether or not the
+        VA needs to be virtually contiguous.
+
 Return Value:
 
     Status code.
@@ -2898,12 +2894,15 @@ Return Value:
 
 {
 
-    ULONG ByteOffset;
+    UINTN AddressCount;
+    UINTN AddressIndex;
+    UINTN ByteOffset;
     PIO_BUFFER_FRAGMENT Fragment;
+    UINTN FragmentEnd;
     UINTN FragmentIndex;
+    UINTN FragmentPages;
     UINTN FragmentSize;
-    PVOID FragmentVirtualAddress;
-    ULONG InternalFlags;
+    UINTN NewSize;
     PVOID *PageCacheEntries;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     UINTN PageIndex;
@@ -2911,53 +2910,15 @@ Return Value:
     ULONG PageShift;
     ULONG PageSize;
     PHYSICAL_ADDRESS PhysicalAddress;
+    UINTN SearchIndex;
     UINTN Size;
     KSTATUS Status;
     PVOID VirtualAddress;
+    PVOID Virtuals[MM_MAP_IO_BUFFER_LOCAL_VIRTUAL_PAGES];
 
-    ASSERT(FragmentCount != 0);
-    ASSERT((FragmentStart + FragmentCount) <= IoBuffer->FragmentCount);
-
+    FragmentEnd = FragmentStart + FragmentCount;
     PageShift = MmPageShift();
     PageSize = MmPageSize();
-
-    //
-    // Determine the size of the fragments to be mapped. Align all fragments up
-    // to a page size so that the first and last fragments, which might not be
-    // full pages, get their own VA space.
-    //
-
-    Size = 0;
-    for (FragmentIndex = FragmentStart;
-         FragmentIndex < (FragmentStart + FragmentCount);
-         FragmentIndex += 1) {
-
-        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
-        ByteOffset = REMAINDER(Fragment->PhysicalAddress, PageSize);
-        FragmentSize = Fragment->Size + ByteOffset;
-        Size += ALIGN_RANGE_UP(FragmentSize, PageSize);
-    }
-
-    ASSERT(Size != 0);
-    ASSERT(IS_ALIGNED(Size, PageSize) != FALSE);
-
-    //
-    // Allocate a range of virtual address space.
-    //
-
-    Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                     Size,
-                                     PageSize,
-                                     MemoryTypeReserved,
-                                     AllocationStrategyAnyAddress,
-                                     FALSE,
-                                     &VirtualAddress);
-
-    if (!KSUCCESS(Status)) {
-        goto MapIoBufferFragmentsEnd;
-    }
-
-    ASSERT(VirtualAddress >= KERNEL_VA_START);
 
     //
     // Get the current page offset if this is page cache backed.
@@ -2965,8 +2926,8 @@ Return Value:
 
     PageIndex = 0;
     PageCacheEntries = NULL;
-    InternalFlags = IoBuffer->Internal.Flags;
-    if ((InternalFlags & IO_BUFFER_INTERNAL_FLAG_CACHE_BACKED) != 0) {
+    if ((IoBuffer->Internal.Flags &
+         IO_BUFFER_INTERNAL_FLAG_CACHE_BACKED) != 0) {
 
         ASSERT(IoBuffer->Internal.PageCacheEntries != NULL);
 
@@ -2985,72 +2946,185 @@ Return Value:
         PageIndex = PageOffset >> PageShift;
     }
 
+    Virtuals[0] = NULL;
+
     //
-    // Map each fragment page by page.
+    // Loop until all fragments are mapped.
     //
 
-    for (FragmentIndex = FragmentStart;
-         FragmentIndex < (FragmentStart + FragmentCount);
-         FragmentIndex += 1) {
-
-        Fragment = &(IoBuffer->Fragment[FragmentIndex]);
+    FragmentIndex = FragmentStart;
+    while (FragmentIndex < FragmentEnd) {
 
         //
-        // If the physical address is not page aligned, then the stored virtual
-        // address should account for the page byte offset. This should only
-        // happen on the first fragment.
+        // Determine the size of the fragments to be mapped. Align all
+        // fragments up to a page size so that the first and last fragments,
+        // which might not be full pages, get their own VA space.
         //
 
-        FragmentVirtualAddress = VirtualAddress;
-        PhysicalAddress = Fragment->PhysicalAddress;
-        FragmentSize = Fragment->Size;
-        ByteOffset = REMAINDER(PhysicalAddress, PageSize);
+        Size = 0;
+        for (SearchIndex = FragmentIndex;
+             SearchIndex < FragmentEnd;
+             SearchIndex += 1) {
 
-        ASSERT((ByteOffset == 0) || (FragmentIndex == 0));
+            Fragment = &(IoBuffer->Fragment[SearchIndex]);
+            ByteOffset = REMAINDER(Fragment->PhysicalAddress, PageSize);
+            FragmentSize = Fragment->Size + ByteOffset;
+            Size += ALIGN_RANGE_UP(FragmentSize, PageSize);
+        }
 
-        FragmentVirtualAddress += ByteOffset;
-        FragmentSize += ByteOffset;
-        PhysicalAddress -= ByteOffset;
+        ASSERT(Size != 0);
+        ASSERT(IS_ALIGNED(Size, PageSize) != FALSE);
 
-        //
-        // If the size is not aligned, align it up. This can only happen on the
-        // first and last fragments.
-        //
+        if (VirtuallyContiguous != FALSE) {
+            AddressCount = 1;
+            if (Virtuals[0] == NULL) {
+                Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
+                                                 Size,
+                                                 PageSize,
+                                                 MemoryTypeIoBuffer,
+                                                 AllocationStrategyAnyAddress,
+                                                 FALSE,
+                                                 &(Virtuals[0]));
 
-        ASSERT((IS_ALIGNED(FragmentSize, PageSize) != FALSE) ||
-               (FragmentIndex == 0) ||
-               (FragmentIndex == (IoBuffer->FragmentCount - 1)));
-
-        FragmentSize = ALIGN_RANGE_UP(FragmentSize, PageSize);
-        Fragment->VirtualAddress = FragmentVirtualAddress;
-        while (FragmentSize != 0) {
-            MmpMapPage(PhysicalAddress, VirtualAddress, MapFlags);
-
-            //
-            // If this page is backed by the page cache, then attempt to set
-            // this VA in the page cache entry. When a page cache entry is
-            // appended to an I/O buffer, the I/O buffer gets the page cache
-            // entry's VA if it is mapped. Thus, if an I/O buffer fragment is
-            // backed by a page cache entry and needs mapping, the page cache
-            // entry is likely unmapped. So attempt to win the race to mark it
-            // mapped.
-            //
-
-            if (PageCacheEntries != NULL) {
-                PageCacheEntry = PageCacheEntries[PageIndex];
-                if (PageCacheEntry != NULL) {
-                    IoSetPageCacheEntryVirtualAddress(PageCacheEntry,
-                                                      VirtualAddress);
+                if (!KSUCCESS(Status)) {
+                    goto MapIoBufferFragmentsEnd;
                 }
-
-                PageIndex += 1;
             }
 
-            PhysicalAddress += PageSize;
-            VirtualAddress += PageSize;
-            FragmentSize -= PageSize;
+            ASSERT(Virtuals[0] >= KERNEL_VA_START);
+
+        } else {
+            AddressCount = Size >> PageShift;
+            if (AddressCount > (sizeof(Virtuals) / sizeof(Virtuals[0]))) {
+                AddressCount = sizeof(Virtuals) / sizeof(Virtuals[0]);
+            }
+
+            Status = MmpAllocateAddressRanges(&MmKernelVirtualSpace,
+                                              PageSize,
+                                              AddressCount,
+                                              MemoryTypeIoBuffer,
+                                              Virtuals);
+
+            if (!KSUCCESS(Status)) {
+                goto MapIoBufferFragmentsEnd;
+            }
         }
+
+        //
+        // Loop assigning virtual addresses into fragments.
+        //
+
+        AddressIndex = 0;
+        while ((FragmentIndex < FragmentEnd) && (AddressIndex < AddressCount)) {
+            Fragment = &(IoBuffer->Fragment[FragmentIndex]);
+
+            //
+            // If the physical address is not page aligned, then the stored
+            // virtual address should account for the page byte offset. This
+            // should only happen on the first fragment.
+            //
+
+            PhysicalAddress = Fragment->PhysicalAddress;
+            ByteOffset = REMAINDER(PhysicalAddress, PageSize);
+
+            ASSERT((ByteOffset == 0) || (FragmentIndex == 0));
+
+            FragmentSize = Fragment->Size + ByteOffset;
+            PhysicalAddress -= ByteOffset;
+
+            //
+            // If the size is not aligned, align it up. This can only happen on
+            // the first and last fragments.
+            //
+
+            ASSERT((IS_ALIGNED(FragmentSize, PageSize) != FALSE) ||
+                   (FragmentIndex == 0) ||
+                   (FragmentIndex == (IoBuffer->FragmentCount - 1)));
+
+            FragmentSize = ALIGN_RANGE_UP(FragmentSize, PageSize);
+            FragmentPages = FragmentSize >> PageShift;
+
+            //
+            // See if the fragment needs to be split due to discontiguous VAs.
+            //
+
+            if (VirtuallyContiguous == FALSE) {
+                SearchIndex = AddressIndex + 1;
+
+                //
+                // Find out how many contiguous pages were returned.
+                //
+
+                while ((SearchIndex < FragmentPages) &&
+                       (SearchIndex < AddressCount)) {
+
+                    if (Virtuals[SearchIndex - 1] + PageSize !=
+                        Virtuals[SearchIndex]) {
+
+                        break;
+                    }
+
+                    SearchIndex += 1;
+                }
+
+                if (SearchIndex - AddressIndex < FragmentPages) {
+                    FragmentSize = (SearchIndex - AddressIndex) << PageShift;
+                    NewSize = FragmentSize - ByteOffset;
+
+                    ASSERT(IS_ALIGNED(Fragment->PhysicalAddress + NewSize,
+                                      PageSize));
+
+                    MmpSplitIoBufferFragment(IoBuffer, FragmentIndex, NewSize);
+                    FragmentEnd += 1;
+                }
+            }
+
+            //
+            // Map the whole fragment now that there's a virtually contiguous
+            // range for it.
+            //
+
+            VirtualAddress = Virtuals[AddressIndex];
+            AddressIndex += FragmentSize >> PageShift;
+            FragmentIndex += 1;
+            Fragment->VirtualAddress = VirtualAddress + ByteOffset;
+            while (FragmentSize != 0) {
+                MmpMapPage(PhysicalAddress, VirtualAddress, MapFlags);
+
+                //
+                // Let the page cache entry keep this mapping when the I/O
+                // buffer is done with it.
+                //
+
+                if (PageCacheEntries != NULL) {
+                    PageCacheEntry = PageCacheEntries[PageIndex];
+                    if (PageCacheEntry != NULL) {
+                        IoSetPageCacheEntryVirtualAddress(PageCacheEntry,
+                                                          VirtualAddress);
+                    }
+
+                    PageIndex += 1;
+                }
+
+                PhysicalAddress += PageSize;
+                VirtualAddress += PageSize;
+                FragmentSize -= PageSize;
+            }
+
+            if (VirtuallyContiguous != FALSE) {
+                Virtuals[0] = VirtualAddress;
+            }
+        }
+
+        //
+        // Ensure all virtual addresses were used up and none are leaked.
+        //
+
+        ASSERT((AddressIndex == AddressCount) ||
+               (VirtuallyContiguous != FALSE));
     }
+
+    Status = STATUS_SUCCESS;
 
 MapIoBufferFragmentsEnd:
     return Status;
@@ -3902,5 +3976,63 @@ LockIoBufferEnd:
     }
 
     return Status;
+}
+
+VOID
+MmpSplitIoBufferFragment (
+    PIO_BUFFER IoBuffer,
+    UINTN FragmentIndex,
+    UINTN NewSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine splits a fragment of the given I/O buffer.
+
+Arguments:
+
+    IoBuffer - Supplies a pointer to an I/O buffer.
+
+    FragmentIndex - Supplies the fragment to split.
+
+    NewSize - Supplies the new size of the given fragment index.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PIO_BUFFER_FRAGMENT Fragment;
+    UINTN Index;
+
+    ASSERT(IoBuffer->Internal.MaxFragmentCount >= IoBuffer->FragmentCount + 1);
+
+    for (Index = IoBuffer->FragmentCount;
+         Index > FragmentIndex;
+         Index -= 1) {
+
+        RtlCopyMemory(&(IoBuffer->Fragment[Index]),
+                      &(IoBuffer->Fragment[Index - 1]),
+                      sizeof(IO_BUFFER_FRAGMENT));
+    }
+
+    Fragment = &(IoBuffer->Fragment[Index + 1]);
+    Fragment->PhysicalAddress += NewSize;
+    if (Fragment->VirtualAddress != NULL) {
+        Fragment->VirtualAddress += NewSize;
+    }
+
+    ASSERT(Fragment->Size > NewSize);
+
+    Fragment->Size -= NewSize;
+    Fragment = &(IoBuffer->Fragment[Index]);
+    Fragment->Size = NewSize;
+    IoBuffer->FragmentCount += 1;
+    return;
 }
 

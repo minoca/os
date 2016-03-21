@@ -215,6 +215,12 @@ Author:
 #define IoResourceAllocationWorkQueue NULL
 
 //
+// Define the size of read-aheads.
+//
+
+#define IO_READ_AHEAD_SIZE _128KB
+
+//
 // --------------------------------------------------------------------- Macros
 //
 

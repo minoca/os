@@ -740,6 +740,9 @@ Return Value:
     case MemoryTypeHardware:
         return "Hardware";
 
+    case MemoryTypeIoBuffer:
+        return "IO Buffer";
+
     default:
         break;
     }

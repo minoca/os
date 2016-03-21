@@ -1277,6 +1277,44 @@ Return Value:
 --*/
 
 KSTATUS
+MmpAllocateAddressRanges (
+    PMEMORY_ACCOUNTING Accountant,
+    UINTN Size,
+    UINTN Count,
+    MEMORY_TYPE MemoryType,
+    PVOID *Allocations
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates multiple potentially discontiguous address ranges
+    of a given size.
+
+Arguments:
+
+    Accountant - Supplies a pointer to the memory accounting structure.
+
+    Size - Supplies the size of each allocation, in bytes. This will also be
+        the alignment of each allocation.
+
+    Count - Supplies the number of allocations to make. This is the number of
+        elements assumed to be in the return array.
+
+    MemoryType - Supplies a the type of memory this allocation should be marked
+        as. Do not specify MemoryTypeFree for this parameter.
+
+    Allocations - Supplies a pointer where the addresses are returned on
+        success. The caller is responsible for freeing each of these.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
 MmpMapRange (
     PVOID RangeAddress,
     UINTN RangeSize,

@@ -1590,7 +1590,10 @@ Return Value:
     if (FileObject->Properties.Type == IoObjectBlockDevice) {
         READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
         if (MmGetPhysicalMemoryWarningLevel() == MemoryWarningLevelNone) {
-            BlockAlignedSize = ALIGN_RANGE_UP(BlockAlignedSize, _128KB);
+            BlockAlignedSize = ALIGN_RANGE_UP(BlockAlignedSize,
+                                              IO_READ_AHEAD_SIZE);
+
+            ASSERT(IS_ALIGNED(IO_READ_AHEAD_SIZE, PageSize));
         }
 
         if (((BlockAlignedOffset + BlockAlignedSize) < BlockAlignedOffset) ||
@@ -1599,8 +1602,6 @@ Return Value:
             BlockAlignedSize = FileSize - BlockAlignedOffset;
             BlockAlignedSize = ALIGN_RANGE_UP(BlockAlignedSize, PageSize);
         }
-
-        ASSERT(IS_ALIGNED(_128KB, PageSize) != FALSE);
     }
 
     //
