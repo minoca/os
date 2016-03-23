@@ -545,6 +545,7 @@ Return Value:
         Status = ClpConvertFromNetworkAddress(&NetworkAddress,
                                               Address,
                                               AddressLength,
+                                              RemotePath,
                                               RemotePathSize);
 
         if (!KSUCCESS(Status)) {
@@ -1005,6 +1006,7 @@ Return Value:
         Status = ClpConvertFromNetworkAddress(&NetworkAddress,
                                               SourceAddress,
                                               SourceAddressLength,
+                                              Parameters.RemotePath,
                                               Parameters.RemotePathSize);
 
         if (!KSUCCESS(Status)) {
@@ -1116,6 +1118,7 @@ Return Value:
         Status = ClpConvertFromNetworkAddress(&Address,
                                               Message->msg_name,
                                               &(Message->msg_namelen),
+                                              Parameters.RemotePath,
                                               Parameters.RemotePathSize);
 
         if (!KSUCCESS(Status)) {
@@ -1565,6 +1568,7 @@ ClpConvertFromNetworkAddress (
     PNETWORK_ADDRESS NetworkAddress,
     struct sockaddr *Address,
     socklen_t *AddressLength,
+    PSTR Path,
     UINTN PathSize
     )
 
@@ -1586,6 +1590,8 @@ Arguments:
         address, the address is truncated, and the larger needed buffer size
         will be returned here.
 
+    Path - Supplies the path, if this is a local Unix address.
+
     PathSize - Supplies the size of the path, if this is a local Unix address.
 
 Return Value:
@@ -1600,11 +1606,11 @@ Return Value:
 
 {
 
-    INTN CopySize;
+    UINTN CopySize;
     struct sockaddr_in Ip4Address;
     struct sockaddr_in6 Ip6Address;
     PVOID Source;
-    INTN TotalSize;
+    UINTN TotalSize;
     struct sockaddr_un UnixAddress;
 
     if (NetworkAddress->Domain == NetDomainIp4) {
@@ -1633,6 +1639,18 @@ Return Value:
 
     } else if (NetworkAddress->Domain == NetDomainLocal) {
         UnixAddress.sun_family = AF_UNIX;
+        if (PathSize > UNIX_PATH_MAX) {
+            PathSize = UNIX_PATH_MAX;
+        }
+
+        if ((Path == NULL) || (PathSize == 0)) {
+            PathSize = 1;
+
+        } else if (Path != NULL) {
+            memcpy(UnixAddress.sun_path, Path, PathSize);
+        }
+
+        UnixAddress.sun_path[PathSize - 1] = '\0';
         TotalSize = FIELD_OFFSET(struct sockaddr_un, sun_path) + PathSize;
         Source = &UnixAddress;
 
@@ -1641,7 +1659,7 @@ Return Value:
     }
 
     CopySize = TotalSize;
-    if (CopySize < *AddressLength) {
+    if (CopySize > *AddressLength) {
         CopySize = *AddressLength;
     }
 
@@ -1697,9 +1715,7 @@ Return Value:
     UCHAR Buffer[sizeof(NETWORK_ADDRESS) + UNIX_PATH_MAX];
     UINTN BufferSize;
     PNETWORK_ADDRESS LocalAddress;
-    UINTN SizeMinusHeader;
     KSTATUS Status;
-    struct sockaddr_un *UnixAddress;
 
     ASSERT((Option == SocketBasicOptionLocalAddress) ||
            (Option == SocketBasicOptionRemoteAddress));
@@ -1724,34 +1740,19 @@ Return Value:
     // address and any port.
     //
 
-    assert(LocalAddress->Domain != NetDomainInvalid);
+    ASSERT(LocalAddress->Domain != NetDomainInvalid);
+    ASSERT(BufferSize >= sizeof(NETWORK_ADDRESS));
 
+    BufferSize -= sizeof(NETWORK_ADDRESS);
     Status = ClpConvertFromNetworkAddress(LocalAddress,
                                           SocketAddress,
                                           AddressLength,
-                                          BufferSize - sizeof(NETWORK_ADDRESS));
+                                          (PSTR)(LocalAddress + 1),
+                                          BufferSize);
 
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
         return -1;
-    }
-
-    if (LocalAddress->Domain == NetDomainLocal) {
-
-        ASSERT(BufferSize >= sizeof(NETWORK_ADDRESS));
-
-        BufferSize -= sizeof(NETWORK_ADDRESS);
-        SizeMinusHeader = *AddressLength -
-                          FIELD_OFFSET(struct sockaddr_un, sun_path);
-
-        if (BufferSize > SizeMinusHeader) {
-            BufferSize = SizeMinusHeader;
-        }
-
-        if (BufferSize != 0) {
-            UnixAddress = (struct sockaddr_un *)SocketAddress;
-            memcpy(UnixAddress->sun_path, LocalAddress + 1, BufferSize);
-        }
     }
 
     return 0;

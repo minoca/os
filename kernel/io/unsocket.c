@@ -1049,6 +1049,7 @@ Return Value:
         (UnixSocket->State != UnixSocketStateBound)) {
 
         Status = STATUS_INVALID_PARAMETER;
+        goto UnixSocketConnectEnd;
     }
 
     //
@@ -1087,7 +1088,8 @@ Return Value:
 
     FileObject = PathPoint.PathEntry->FileObject;
     if (FileObject->Properties.Type != IoObjectSocket) {
-        return STATUS_NOT_A_SOCKET;
+        Status = STATUS_NOT_A_SOCKET;
+        goto UnixSocketConnectEnd;
     }
 
     ServerSocket = FileObject->SpecialIo;
@@ -1117,6 +1119,21 @@ Return Value:
     //
 
     } else {
+
+        //
+        // Stream sockets are not allowed to be both the server and the client.
+        // Fail if it's the same socket. The socket's state should not be
+        // listening, but special case it here by comparing the sockets to
+        // prevent the attempt to reacquire the lock.
+        //
+
+        if (ServerSocket == Socket) {
+
+            ASSERT(ServerUnixSocket->State != UnixSocketStateListening);
+
+            Status = STATUS_CONNECTION_CLOSED;
+            goto UnixSocketConnectEnd;
+        }
 
         //
         // Loop until the lock is held and there's space for a new connection.

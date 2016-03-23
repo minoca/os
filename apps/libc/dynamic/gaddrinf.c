@@ -3639,6 +3639,7 @@ Return Value:
                                         &(Information.DnsServers[ServerIndex]),
                                         PrimaryServer,
                                         &AddressLength,
+                                        NULL,
                                         0);
 
                 if (KSUCCESS(Status)) {
@@ -3664,6 +3665,7 @@ Return Value:
                                         &(Information.DnsServers[ServerIndex]),
                                         &(Alternate->Address),
                                         &AddressLength,
+                                        NULL,
                                         0);
 
             if (!KSUCCESS(Status)) {
@@ -3988,6 +3990,7 @@ Return Value:
                 Status = ClpConvertFromNetworkAddress(&(Information.Address),
                                                       &(DnsResult->Address),
                                                       &AddressLength,
+                                                      NULL,
                                                       0);
 
                 if (!KSUCCESS(Status)) {
@@ -4027,6 +4030,7 @@ Return Value:
                 Status = ClpConvertFromNetworkAddress(&(Information.Address),
                                                       &(DnsResult->Address),
                                                       &AddressLength,
+                                                      NULL,
                                                       0);
 
                 if (!KSUCCESS(Status)) {

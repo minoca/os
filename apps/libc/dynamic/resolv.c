@@ -2273,6 +2273,7 @@ Return Value:
                       &(Information.DnsServers[ServerIndex]),
                       (struct sockaddr *)&(State->nsaddr_list[State->nscount]),
                       &AddressLength,
+                      NULL,
                       0);
 
                 if (KSUCCESS(Status)) {

@@ -159,6 +159,7 @@ ClpConvertFromNetworkAddress (
     PNETWORK_ADDRESS NetworkAddress,
     struct sockaddr *Address,
     socklen_t *AddressLength,
+    PSTR Path,
     UINTN PathSize
     );
 
@@ -179,6 +180,8 @@ Arguments:
         returned address. If the supplied buffer is not big enough to hold the
         address, the address is truncated, and the larger needed buffer size
         will be returned here.
+
+    Path - Supplies the path, if this is a local Unix address.
 
     PathSize - Supplies the size of the path, if this is a local Unix address.
 
