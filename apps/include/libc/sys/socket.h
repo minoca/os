@@ -1208,9 +1208,10 @@ Arguments:
         returned on success.
 
     OptionLength - Supplies a pointer that on input contains the size of the
-        option value buffer in bytes. On output, this will contain the actual
-        size of the value. If the value returned was greater than the value
-        passed in, then the option value was silently truncated.
+        option value buffer in bytes. If the supplied length is less than the
+        actual size of the option value, then the option value will be silently
+        truncated. On output, if the supplied length is greater than the actual
+        size of the value, this will contain the actual size of the value.
 
 Return Value:
 

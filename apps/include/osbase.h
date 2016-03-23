@@ -2806,9 +2806,11 @@ Arguments:
         SOCKET_<information_type>_OPTION.
 
     Data - Supplies a pointer to the data buffer where the data is either
-        returned for a get operation or given for a set operation.
+        returned for a get operation or given for a set operation. If the
+        buffer is too small for a get request, the truncated data will be
+        returned and the routine will fail with STATUS_BUFFER_TOO_SMALL.
 
-    DataSize - Supplies a pointer that on input constains the size of the data
+    DataSize - Supplies a pointer that on input contains the size of the data
         buffer. On output, this contains the required size of the data buffer.
 
     Set - Supplies a boolean indicating if this is a get operation (FALSE) or
@@ -2816,12 +2818,7 @@ Arguments:
 
 Return Value:
 
-    STATUS_SUCCESS on success.
-
-    STATUS_INVALID_PARAMETER if the version of the information structure
-        passed in was not valid.
-
-    STATUS_NOT_A_SOCKET if the given handle wasn't a socket.
+    Status code.
 
 --*/
 

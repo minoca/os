@@ -130,6 +130,7 @@ Author:
 #define STATUS_NO_SUCH_DEVICE_OR_ADDRESS  0x8000006A
 #define STATUS_DOMAIN_NOT_SUPPORTED       0x8000006B
 #define STATUS_PROTOCOL_NOT_SUPPORTED     0x8000006C
+#define STATUS_DOMAIN_ERROR               0x8000006D
 
 //
 // ------------------------------------------------------ Data Type Definitions

@@ -36,6 +36,32 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+/*++
+
+Structure Description:
+
+    This structure defines a basic network socket option.
+
+Members:
+
+    InformationType - Stores the information type for the socket option.
+
+    Option - Stores the type-specific option identifier.
+
+    Size - Stores the size of the option value, in bytes.
+
+    SetAllowed - Stores a boolean indicating whether or not the option is
+        allowed to be set.
+
+--*/
+
+typedef struct _NET_SOCKET_OPTION {
+    SOCKET_INFORMATION_TYPE InformationType;
+    UINTN Option;
+    UINTN Size;
+    BOOL SetAllowed;
+} NET_SOCKET_OPTION, *PNET_SOCKET_OPTION;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -178,6 +204,85 @@ NET_INTERFACE NetInterface = {
     NetGetSetSocketInformation,
     NetShutdown,
     NetUserControl
+};
+
+NET_SOCKET_OPTION NetBasicSocketOptions[] = {
+    {
+        SocketInformationBasic,
+        SocketBasicOptionType,
+        sizeof(NET_SOCKET_TYPE),
+        FALSE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionDomain,
+        sizeof(NET_DOMAIN_TYPE),
+        FALSE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionLocalAddress,
+        sizeof(NETWORK_ADDRESS),
+        FALSE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionRemoteAddress,
+        sizeof(NETWORK_ADDRESS),
+        FALSE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReuseAnyAddress,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReuseTimeWait,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReuseExactAddress,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionBroadcastEnabled,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionErrorStatus,
+        sizeof(KSTATUS),
+        FALSE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionAcceptConnections,
+        sizeof(ULONG),
+        FALSE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionSendTimeout,
+        sizeof(SOCKET_TIME),
+        FALSE
+    },
 };
 
 //
@@ -1867,15 +1972,19 @@ Return Value:
 
 {
 
-    PNETWORK_ADDRESS AddressOption;
+    NETWORK_ADDRESS Address;
     SOCKET_BASIC_OPTION BasicOption;
-    PNET_DOMAIN_TYPE Domain;
-    PULONG ErrorOption;
+    ULONG BooleanOption;
+    ULONG Count;
+    KSTATUS ErrorOption;
     ULONG Flags;
+    ULONG Index;
     PNET_SOCKET NetSocket;
     PNET_PROTOCOL_ENTRY Protocol;
+    PNET_SOCKET_OPTION SocketOption;
+    SOCKET_TIME SocketTime;
+    PVOID Source;
     KSTATUS Status;
-    PNET_SOCKET_TYPE Type;
 
     NetSocket = (PNET_SOCKET)Socket;
     Protocol = NetSocket->Protocol;
@@ -1888,54 +1997,94 @@ Return Value:
 
     switch (InformationType) {
     case SocketInformationBasic:
+
+        //
+        // Send the call down to the protocol layer, which can override a basic
+        // option's default behavior. If the not handled status is returned,
+        // then the protocol did not override the default behavior.
+        //
+
+        Status = NetSocket->Protocol->Interface.GetSetInformation(
+                                                           NetSocket,
+                                                           InformationType,
+                                                           Option,
+                                                           Data,
+                                                           DataSize,
+                                                           Set);
+
+        if (Status != STATUS_NOT_HANDLED) {
+            goto GetSetSocketInformationEnd;
+        }
+
+        //
+        // Search to see if there is a default behavior for the socket option.
+        //
+
+        Count = sizeof(NetBasicSocketOptions) /
+                sizeof(NetBasicSocketOptions[0]);
+
+        for (Index = 0; Index < Count; Index += 1) {
+            SocketOption = &(NetBasicSocketOptions[Index]);
+            if ((SocketOption->InformationType == InformationType) &&
+                (SocketOption->Option == Option)) {
+
+                break;
+            }
+        }
+
+        if (Index == Count) {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            goto GetSetSocketInformationEnd;
+        }
+
+        //
+        // Handle failure cases common to all options.
+        //
+
+        if (Set != FALSE) {
+            if (SocketOption->SetAllowed == FALSE) {
+                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+                goto GetSetSocketInformationEnd;
+            }
+
+            if (*DataSize < SocketOption->Size) {
+                *DataSize = SocketOption->Size;
+                Status = STATUS_BUFFER_TOO_SMALL;
+                goto GetSetSocketInformationEnd;
+            }
+        }
+
+        //
+        // Truncate all copies for get requests down to the required size and
+        // only return the required size on set requests.
+        //
+
+        if (*DataSize > SocketOption->Size) {
+            *DataSize = SocketOption->Size;
+        }
+
+        Source = NULL;
+        Status = STATUS_SUCCESS;
         BasicOption = (SOCKET_BASIC_OPTION)Option;
         switch (BasicOption) {
         case SocketBasicOptionType:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-                break;
-            }
 
-            if (*DataSize < sizeof(NET_SOCKET_TYPE)) {
-                *DataSize = sizeof(NET_SOCKET_TYPE);
-                Status = STATUS_BUFFER_TOO_SMALL;
-                break;
-            }
+            ASSERT(Set == FALSE);
 
-            Type = (PNET_SOCKET_TYPE)Data;
-            *Type = NetSocket->KernelSocket.Type;
-            *DataSize = sizeof(NET_SOCKET_TYPE);
+            Source = &(Socket->Type);
             break;
 
         case SocketBasicOptionDomain:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-                break;
-            }
 
-            if (*DataSize < sizeof(NET_DOMAIN_TYPE)) {
-                *DataSize = sizeof(NET_DOMAIN_TYPE);
-                Status = STATUS_BUFFER_TOO_SMALL;
-                break;
-            }
+            ASSERT(Set == FALSE);
 
-            Domain = (PNET_DOMAIN_TYPE)Data;
-            *Domain = NetSocket->KernelSocket.Domain;
-            *DataSize = sizeof(NET_DOMAIN_TYPE);
+            Source = &(Socket->Domain);
             break;
 
         case SocketBasicOptionLocalAddress:
         case SocketBasicOptionRemoteAddress:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-                break;
-            }
 
-            if (*DataSize < sizeof(NETWORK_ADDRESS)) {
-                *DataSize = sizeof(NETWORK_ADDRESS);
-                Status = STATUS_BUFFER_TOO_SMALL;
-                break;
-            }
+            ASSERT(Set == FALSE);
 
             //
             // Socket addresses are synchronized on the protocol's socket tree.
@@ -1949,9 +2098,8 @@ Return Value:
                 KeAcquireSharedExclusiveLockShared(Protocol->SocketLock);
             }
 
-            AddressOption = Data;
             if (BasicOption == SocketBasicOptionLocalAddress) {
-                RtlCopyMemory(AddressOption,
+                RtlCopyMemory(&Address,
                               &(NetSocket->LocalAddress),
                               sizeof(NETWORK_ADDRESS));
 
@@ -1960,21 +2108,26 @@ Return Value:
                 // any address and any port on the correct network.
                 //
 
-                if (AddressOption->Domain == NetDomainInvalid) {
-                    AddressOption->Domain = NetSocket->KernelSocket.Domain;
+                if (Address.Domain == NetDomainInvalid) {
+                    Address.Domain = NetSocket->KernelSocket.Domain;
                 }
 
+                //
+                // The port should be zero for all raw sockets. The address
+                // request returns the protocol as the port value.
+                //
+
                 if (NetSocket->KernelSocket.Type == NetSocketRaw) {
-                    AddressOption->Port = NetSocket->KernelSocket.Protocol;
+                    Address.Port = NetSocket->KernelSocket.Protocol;
                 }
+
+                RtlCopyMemory(Data, &Address, *DataSize);
 
             } else {
 
                 ASSERT(BasicOption == SocketBasicOptionRemoteAddress);
 
-                RtlCopyMemory(AddressOption,
-                              &(NetSocket->RemoteAddress),
-                              sizeof(NETWORK_ADDRESS));
+                RtlCopyMemory(Data, &(NetSocket->RemoteAddress), *DataSize);
             }
 
             if (NetSocket->KernelSocket.Type == NetSocketRaw) {
@@ -1984,129 +2137,76 @@ Return Value:
                 KeReleaseSharedExclusiveLockShared(Protocol->SocketLock);
             }
 
-            *DataSize = sizeof(NETWORK_ADDRESS);
             break;
 
         case SocketBasicOptionReuseAnyAddress:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                if (*((PULONG)Data) != FALSE) {
-                    RtlAtomicOr32(&(NetSocket->Flags),
-                                  (NET_SOCKET_FLAG_REUSE_ANY_ADDRESS |
-                                   NET_SOCKET_FLAG_REUSE_TIME_WAIT));
-
-                } else {
-                    RtlAtomicAnd32(&(NetSocket->Flags),
-                                   ~(NET_SOCKET_FLAG_REUSE_ANY_ADDRESS |
-                                     NET_SOCKET_FLAG_REUSE_TIME_WAIT));
-                }
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                Flags = NetSocket->Flags;
-                if ((Flags & NET_SOCKET_FLAG_REUSE_ANY_ADDRESS) != 0) {
-                    *((PULONG)Data) = TRUE;
-
-                } else {
-                    *((PULONG)Data) = FALSE;
-                }
-            }
-
-            break;
-
         case SocketBasicOptionReuseTimeWait:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
+        case SocketBasicOptionReuseExactAddress:
+        case SocketBasicOptionBroadcastEnabled:
+            if (BasicOption == SocketBasicOptionReuseAnyAddress) {
+                Flags = NET_SOCKET_FLAG_REUSE_ANY_ADDRESS |
+                        NET_SOCKET_FLAG_REUSE_TIME_WAIT;
 
-                if (*((PULONG)Data) != FALSE) {
-                    RtlAtomicOr32(&(NetSocket->Flags),
-                                  NET_SOCKET_FLAG_REUSE_TIME_WAIT);
+            } else if (BasicOption == SocketBasicOptionReuseTimeWait) {
+                Flags = NET_SOCKET_FLAG_REUSE_TIME_WAIT;
 
-                } else {
-                    RtlAtomicAnd32(&(NetSocket->Flags),
-                                   ~NET_SOCKET_FLAG_REUSE_TIME_WAIT);
-                }
+            } else if (BasicOption == SocketBasicOptionReuseExactAddress) {
+                Flags = NET_SOCKET_FLAG_REUSE_EXACT_ADDRESS;
 
             } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
 
-                if ((NetSocket->Flags & NET_SOCKET_FLAG_REUSE_TIME_WAIT) != 0) {
-                    *((PULONG)Data) = TRUE;
+                ASSERT(BasicOption == SocketBasicOptionBroadcastEnabled);
 
-                } else {
-                    *((PULONG)Data) = FALSE;
-                }
+                Flags = NET_SOCKET_FLAG_BROADCAST_ENABLED;
             }
 
-            break;
-
-        case SocketBasicOptionReuseExactAddress:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
                 if (*((PULONG)Data) != FALSE) {
-                    RtlAtomicOr32(&(NetSocket->Flags),
-                                  NET_SOCKET_FLAG_REUSE_EXACT_ADDRESS);
+                    RtlAtomicOr32(&(NetSocket->Flags), Flags);
 
                 } else {
-                    RtlAtomicAnd32(&(NetSocket->Flags),
-                                   ~NET_SOCKET_FLAG_REUSE_EXACT_ADDRESS);
+                    RtlAtomicAnd32(&(NetSocket->Flags), ~Flags);
                 }
 
             } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                Flags = NetSocket->Flags;
-                if ((Flags & NET_SOCKET_FLAG_REUSE_EXACT_ADDRESS) != 0) {
-                    *((PULONG)Data) = TRUE;
-
-                } else {
-                    *((PULONG)Data) = FALSE;
+                Source = &BooleanOption;
+                BooleanOption = FALSE;
+                if ((NetSocket->Flags & Flags) == Flags) {
+                    BooleanOption = TRUE;
                 }
             }
 
             break;
 
         case SocketBasicOptionErrorStatus:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
 
-            } else {
-                if (*DataSize < sizeof(KSTATUS)) {
-                    *DataSize = sizeof(KSTATUS);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
+            ASSERT(Set == FALSE);
+            ASSERT(sizeof(KSTATUS) == sizeof(ULONG));
 
-                ASSERT(sizeof(KSTATUS) == sizeof(ULONG));
+            ErrorOption = NET_SOCKET_GET_AND_CLEAR_LAST_ERROR(NetSocket);
+            Source = &ErrorOption;
+            break;
 
-                ErrorOption = (PULONG)Data;
-                *ErrorOption = NET_SOCKET_GET_AND_CLEAR_LAST_ERROR(NetSocket);
-            }
+        case SocketBasicOptionAcceptConnections:
 
+            ASSERT(Set == FALSE);
+
+            Source = &BooleanOption;
+            BooleanOption = FALSE;
+            break;
+
+        case SocketBasicOptionSendTimeout:
+
+            ASSERT(Set == FALSE);
+
+            //
+            // The indefinite wait time is represented as 0 time for the
+            // SOCKET_TIME structure.
+            //
+
+            SocketTime.Seconds = 0;
+            SocketTime.Microseconds = 0;
+            Source = &SocketTime;
             break;
 
         case SocketBasicOptionDebug:
@@ -2117,29 +2217,38 @@ Return Value:
             // TODO: Implement network routing and urgent messages.
             //
 
-            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-            break;
-
         default:
 
-            //
-            // Send the call down to the protocol layer, which can handle some
-            // of the basic options as well.
-            //
+            ASSERT(FALSE);
 
-            Status = NetSocket->Protocol->Interface.GetSetInformation(
-                                                               NetSocket,
-                                                               InformationType,
-                                                               Option,
-                                                               Data,
-                                                               DataSize,
-                                                               Set);
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            break;
+        }
 
-            if (!KSUCCESS(Status)) {
-                goto GetSetSocketInformationEnd;
+        if (!KSUCCESS(Status)) {
+            break;
+        }
+
+        //
+        // For get requests, copy the gathered information to the supplied data
+        // buffer.
+        //
+
+        if (Set == FALSE) {
+            if (Source != NULL) {
+                RtlCopyMemory(Data, Source, *DataSize);
             }
 
-            break;
+            //
+            // If the copy truncated the data, report that the given buffer was
+            // too small. The caller can choose to ignore this if the truncated
+            // data is enough.
+            //
+
+            if (*DataSize < SocketOption->Size) {
+                *DataSize = SocketOption->Size;
+                Status = STATUS_BUFFER_TOO_SMALL;
+            }
         }
 
         break;
@@ -2189,10 +2298,6 @@ Return Value:
     default:
         Status = STATUS_INVALID_PARAMETER;
         break;
-    }
-
-    if (!KSUCCESS(Status)) {
-        goto GetSetSocketInformationEnd;
     }
 
 GetSetSocketInformationEnd:

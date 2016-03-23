@@ -161,7 +161,7 @@ Author:
 #define NET_SOCKET_FLAG_REUSE_ANY_ADDRESS       0x00000001
 #define NET_SOCKET_FLAG_REUSE_TIME_WAIT         0x00000002
 #define NET_SOCKET_FLAG_REUSE_EXACT_ADDRESS     0x00000004
-#define NET_SOCKET_FLAG_BROADCAST_DISABLED      0x00000008
+#define NET_SOCKET_FLAG_BROADCAST_ENABLED       0x00000008
 #define NET_SOCKET_FLAG_ACTIVE                  0x00000010
 #define NET_SOCKET_FLAG_PREVIOUSLY_ACTIVE       0x00000020
 #define NET_SOCKET_FLAG_TIME_WAIT               0x00000030
@@ -1469,6 +1469,9 @@ Return Value:
 
     STATUS_NOT_SUPPORTED_BY_PROTOCOL if the socket option is not supported by
         the socket.
+
+    STATUS_NOT_HANDLED if the protocol does not override the default behavior
+        for a basic socket option.
 
 --*/
 

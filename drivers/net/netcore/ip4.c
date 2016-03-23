@@ -937,8 +937,8 @@ Return Value:
     // socket options.
     //
 
-    if (((Socket->Flags & NET_SOCKET_FLAG_BROADCAST_DISABLED) != 0) &&
-        (RemoteAddress->Address == IP4_BROADCAST_ADDRESS)) {
+    if ((RemoteAddress->Address == IP4_BROADCAST_ADDRESS) &&
+        ((Socket->Flags & NET_SOCKET_FLAG_BROADCAST_ENABLED) == 0)) {
 
         Status = STATUS_ACCESS_DENIED;
         goto Ip4SendEnd;
@@ -1610,18 +1610,25 @@ Return Value:
 
 {
 
+    ULONG BooleanOption;
     ULONG Flags;
     SOCKET_IP4_OPTION Ip4Option;
+    UINTN RequiredSize;
+    PVOID Source;
     KSTATUS Status;
 
     if (InformationType != SocketInformationIp4) {
-        return STATUS_INVALID_PARAMETER;
+        Status = STATUS_INVALID_PARAMETER;
+        goto Ip4GetSetInformationEnd;
     }
 
+    RequiredSize = 0;
+    Source = NULL;
     Status = STATUS_SUCCESS;
     Ip4Option = (SOCKET_IP4_OPTION)Option;
     switch (Ip4Option) {
     case SocketIp4OptionHeaderIncluded:
+        RequiredSize = sizeof(ULONG);
         if (Set != FALSE) {
 
             //
@@ -1637,12 +1644,14 @@ Return Value:
                 break;
             }
 
-            if (*DataSize != sizeof(ULONG)) {
-                Status = STATUS_INVALID_PARAMETER;
+            if (*DataSize < RequiredSize) {
+                *DataSize = RequiredSize;
+                Status = STATUS_BUFFER_TOO_SMALL;
                 break;
             }
 
-            if (*((PULONG)Data) != FALSE) {
+            BooleanOption = *((PULONG)Data);
+            if (BooleanOption != FALSE) {
                 RtlAtomicOr32(&(Socket->Flags),
                               NET_SOCKET_FLAG_NETWORK_HEADER_INCLUDED);
 
@@ -1652,18 +1661,11 @@ Return Value:
             }
 
         } else {
-            if (*DataSize < sizeof(ULONG)) {
-                *DataSize = sizeof(ULONG);
-                Status = STATUS_BUFFER_TOO_SMALL;
-                break;
-            }
-
+            Source = &BooleanOption;
+            BooleanOption = FALSE;
             Flags = Socket->Flags;
             if ((Flags & NET_SOCKET_FLAG_NETWORK_HEADER_INCLUDED) != 0) {
-                *((PULONG)Data) = TRUE;
-
-            } else {
-                *((PULONG)Data) = FALSE;
+                BooleanOption = TRUE;
             }
         }
 
@@ -1674,6 +1676,44 @@ Return Value:
         break;
     }
 
+    if (!KSUCCESS(Status)) {
+        goto Ip4GetSetInformationEnd;
+    }
+
+    //
+    // Truncate all copies for get requests down to the required size and
+    // always return the required size on set requests.
+    //
+
+    if (*DataSize > RequiredSize) {
+        *DataSize = RequiredSize;
+    }
+
+    //
+    // For get requests, copy the gathered information to the supplied data
+    // buffer.
+    //
+
+    if (Set == FALSE) {
+
+        ASSERT(Source != NULL);
+
+        RtlCopyMemory(Data, Source, *DataSize);
+
+        //
+        // If the copy truncated the data, report that the given buffer was too
+        // small. The caller can choose to ignore this if the truncated data is
+        // enough.
+        //
+
+        if (*DataSize < RequiredSize) {
+            *DataSize = RequiredSize;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto Ip4GetSetInformationEnd;
+        }
+    }
+
+Ip4GetSetInformationEnd:
     return Status;
 }
 

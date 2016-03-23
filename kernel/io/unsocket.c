@@ -2034,21 +2034,23 @@ Return Value:
 
 {
 
-    PNETWORK_ADDRESS AddressOption;
+    NETWORK_ADDRESS Address;
     SOCKET_BASIC_OPTION BasicOption;
-    PBOOL BooleanOption;
-    PNET_DOMAIN_TYPE Domain;
-    PUNIX_SOCKET RemoteUnixSocket;
-    PULONG SizeOption;
+    UINTN CopySize;
+    ULONG PassCredentials;
+    UINTN RemainingSize;
+    UINTN RequiredSize;
+    UINTN SendListMax;
+    PVOID Source;
     KSTATUS Status;
-    UINTN TotalSize;
-    PNET_SOCKET_TYPE Type;
     PUNIX_SOCKET UnixSocket;
 
     UnixSocket = (PUNIX_SOCKET)Socket;
 
     ASSERT(Socket->Domain == NetDomainLocal);
 
+    Source = NULL;
+    RequiredSize = 0;
     Status = STATUS_SUCCESS;
     switch (InformationType) {
     case SocketInformationBasic:
@@ -2060,15 +2062,8 @@ Return Value:
                 break;
             }
 
-            if (*DataSize < sizeof(NET_SOCKET_TYPE)) {
-                *DataSize = sizeof(NET_SOCKET_TYPE);
-                Status = STATUS_BUFFER_TOO_SMALL;
-                break;
-            }
-
-            Type = (PNET_SOCKET_TYPE)Data;
-            *Type = Socket->Type;
-            *DataSize = sizeof(NET_SOCKET_TYPE);
+            Source = &(Socket->Type);
+            RequiredSize = sizeof(NET_SOCKET_TYPE);
             break;
 
         case SocketBasicOptionDomain:
@@ -2077,124 +2072,114 @@ Return Value:
                 break;
             }
 
-            if (*DataSize < sizeof(NET_DOMAIN_TYPE)) {
-                *DataSize = sizeof(NET_DOMAIN_TYPE);
-                Status = STATUS_BUFFER_TOO_SMALL;
-                break;
-            }
-
-            Domain = (PNET_DOMAIN_TYPE)Data;
-            *Domain = Socket->Domain;
-            *DataSize = sizeof(NET_DOMAIN_TYPE);
+            Source = &(Socket->Domain);
+            RequiredSize = sizeof(NET_DOMAIN_TYPE);
             break;
 
-        case SocketBasicOptionLocalAddress:
+        //
+        // Switch to the remote socket and fall through.
+        //
+
         case SocketBasicOptionRemoteAddress:
+            UnixSocket = UnixSocket->Remote;
+
+        case SocketBasicOptionLocalAddress:
             if (Set != FALSE) {
                 Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
                 break;
             }
 
-            AddressOption = Data;
-            if (BasicOption == SocketBasicOptionLocalAddress) {
-                KeAcquireQueuedLock(UnixSocket->Lock);
-                TotalSize = sizeof(NETWORK_ADDRESS) + UnixSocket->NameSize;
-                if (*DataSize < TotalSize) {
-                    *DataSize = TotalSize;
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                RtlZeroMemory(AddressOption, sizeof(NETWORK_ADDRESS));
-                AddressOption->Domain = NetDomainLocal;
-                if (UnixSocket->NameSize != 0) {
-                    RtlCopyMemory(AddressOption + 1,
-                                  UnixSocket->Name,
-                                  UnixSocket->NameSize);
-                }
-
-                KeReleaseQueuedLock(UnixSocket->Lock);
-
-            } else {
-                RemoteUnixSocket = UnixSocket->Remote;
-                if (RemoteUnixSocket == NULL) {
-                    Status = STATUS_NOT_CONNECTED;
-                    break;
-                }
-
-                KeAcquireQueuedLock(RemoteUnixSocket->Lock);
-                TotalSize = sizeof(NETWORK_ADDRESS) +
-                            RemoteUnixSocket->NameSize;
-
-                if (*DataSize < TotalSize) {
-                    *DataSize = TotalSize;
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                RtlZeroMemory(AddressOption, sizeof(NETWORK_ADDRESS));
-                AddressOption->Domain = NetDomainLocal;
-                if (RemoteUnixSocket->NameSize != 0) {
-                    RtlCopyMemory(AddressOption + 1,
-                                  RemoteUnixSocket->Name,
-                                  RemoteUnixSocket->NameSize);
-                }
-
-                KeReleaseQueuedLock(RemoteUnixSocket->Lock);
+            if (UnixSocket == NULL) {
+                Status = STATUS_NOT_CONNECTED;
+                break;
             }
 
+            RtlZeroMemory(&Address, sizeof(NETWORK_ADDRESS));
+            Address.Domain = NetDomainLocal;
+            KeAcquireQueuedLock(UnixSocket->Lock);
+            RequiredSize = sizeof(NETWORK_ADDRESS) + UnixSocket->NameSize;
+            if (*DataSize > RequiredSize) {
+                *DataSize = RequiredSize;
+            }
+
+            RemainingSize = *DataSize;
+            CopySize = RemainingSize;
+            if (CopySize > sizeof(NETWORK_ADDRESS)) {
+                CopySize = sizeof(NETWORK_ADDRESS);
+            }
+
+            //
+            // The lock must be held while the name is copied, so this cannot
+            // be done below.
+            //
+
+            RtlCopyMemory(Data, &Address, CopySize);
+            RemainingSize -= CopySize;
+            if ((RemainingSize != 0) && (UnixSocket->NameSize != 0)) {
+
+                ASSERT(RemainingSize <= UnixSocket->NameSize);
+
+                RtlCopyMemory(Data + CopySize, UnixSocket->Name, RemainingSize);
+            }
+
+            KeReleaseQueuedLock(UnixSocket->Lock);
             break;
 
         case SocketBasicOptionSendBufferSize:
-            SizeOption = (PULONG)Data;
-            if (*DataSize < sizeof(ULONG)) {
+            if ((Set != FALSE) && (*DataSize < sizeof(ULONG))) {
                 *DataSize = sizeof(ULONG);
                 Status = STATUS_BUFFER_TOO_SMALL;
                 break;
             }
 
-            KeAcquireQueuedLock(UnixSocket->Lock);
+            RequiredSize = sizeof(ULONG);
             if (Set != FALSE) {
+                SendListMax = *((PULONG)Data);
+                if (SendListMax > SOCKET_OPTION_MAX_ULONG) {
+                    SendListMax = SOCKET_OPTION_MAX_ULONG;
+                }
 
                 //
                 // TODO: Are there limits to Unix socket buffer sizes?
                 //
 
-                UnixSocket->SendListMax = *SizeOption;
+                KeAcquireQueuedLock(UnixSocket->Lock);
+                UnixSocket->SendListMax = SendListMax;
+                KeReleaseQueuedLock(UnixSocket->Lock);
 
             } else {
-                *SizeOption = UnixSocket->SendListMax;
+                Source = &SendListMax;
+                SendListMax = UnixSocket->SendListMax;
             }
 
-            KeReleaseQueuedLock(UnixSocket->Lock);
             break;
 
         case SocketBasicOptionPassCredentials:
-            if (*DataSize < sizeof(BOOL)) {
-                *DataSize = sizeof(BOOL);
+            if ((Set != FALSE) && (*DataSize < sizeof(ULONG))) {
+                *DataSize = sizeof(ULONG);
                 Status = STATUS_BUFFER_TOO_SMALL;
                 break;
             }
 
-            BooleanOption = (PBOOL)Data;
+            RequiredSize = sizeof(ULONG);
             KeAcquireQueuedLock(UnixSocket->Lock);
             if (Set != FALSE) {
                 UnixSocket->Flags &= ~UNIX_SOCKET_FLAG_SEND_CREDENTIALS;
-                if (*BooleanOption != FALSE) {
+                if (*((PULONG)Data) != FALSE) {
                     UnixSocket->Flags |= UNIX_SOCKET_FLAG_SEND_CREDENTIALS;
                 }
 
             } else {
-                *BooleanOption = FALSE;
+                Source = &PassCredentials;
+                PassCredentials = FALSE;
                 if ((UnixSocket->Flags &
                      UNIX_SOCKET_FLAG_SEND_CREDENTIALS) != 0) {
 
-                    *BooleanOption = TRUE;
+                    PassCredentials = TRUE;
                 }
             }
 
             KeReleaseQueuedLock(UnixSocket->Lock);
-            *DataSize = sizeof(BOOL);
             break;
 
         case SocketBasicOptionPeerCredentials:
@@ -2210,6 +2195,44 @@ Return Value:
     default:
         Status = STATUS_INVALID_PARAMETER;
         break;
+    }
+
+    //
+    // Complete the common information processing if this call succeeded.
+    //
+
+    if (KSUCCESS(Status)) {
+
+        //
+        // Truncate all copies for get requests down to the required size and
+        // only return the required size on set requests.
+        //
+
+        if (*DataSize > RequiredSize) {
+            *DataSize = RequiredSize;
+        }
+
+        //
+        // For get requests, copy the gathered information to the supplied data
+        // buffer.
+        //
+
+        if (Set == FALSE) {
+            if (Source != NULL) {
+                RtlCopyMemory(Data, Source, *DataSize);
+            }
+
+            //
+            // If the copy truncated the data, report that the given buffer was
+            // too small. The caller can choose to ignore this if the truncated
+            // data is enough.
+            //
+
+            if (*DataSize < RequiredSize) {
+                *DataSize = RequiredSize;
+                Status = STATUS_BUFFER_TOO_SMALL;
+            }
+        }
     }
 
     return Status;

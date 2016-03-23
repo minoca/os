@@ -52,6 +52,32 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+/*++
+
+Structure Description:
+
+    This structure defines a TCP socket option.
+
+Members:
+
+    InformationType - Stores the information type for the socket option.
+
+    Option - Stores the type-specific option identifier.
+
+    Size - Stores the size of the option value, in bytes.
+
+    SetAllowed - Stores a boolean indicating whether or not the option is
+        allowed to be set.
+
+--*/
+
+typedef struct _TCP_SOCKET_OPTION {
+    SOCKET_INFORMATION_TYPE InformationType;
+    UINTN Option;
+    UINTN Size;
+    BOOL SetAllowed;
+} TCP_SOCKET_OPTION, *PTCP_SOCKET_OPTION;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -429,6 +455,106 @@ NET_PROTOCOL_ENTRY NetTcpProtocol = {
         NetpTcpGetSetInformation,
         NetpTcpUserControl
     }
+};
+
+TCP_SOCKET_OPTION NetTcpSocketOptions[] = {
+    {
+        SocketInformationBasic,
+        SocketBasicOptionLinger,
+        sizeof(SOCKET_LINGER),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionSendBufferSize,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionSendMinimum,
+        sizeof(ULONG),
+        FALSE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionSendTimeout,
+        sizeof(SOCKET_TIME),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveBufferSize,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveMinimum,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveTimeout,
+        sizeof(SOCKET_TIME),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionAcceptConnections,
+        sizeof(ULONG),
+        FALSE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionKeepAlive,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionInlineOutOfBand,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationTcp,
+        SocketTcpOptionNoDelay,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationTcp,
+        SocketTcpOptionKeepAliveTimeout,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationTcp,
+        SocketTcpOptionKeepAlivePeriod,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationTcp,
+        SocketTcpOptionKeepAliveProbeLimit,
+        sizeof(ULONG),
+        TRUE
+    },
 };
 
 //
@@ -2741,21 +2867,35 @@ Return Value:
     STATUS_NOT_SUPPORTED_BY_PROTOCOL if the socket option is not supported by
         the socket.
 
+    STATUS_NOT_HANDLED if the protocol does not override the default behavior
+        for a basic socket option.
+
 --*/
 
 {
 
     SOCKET_BASIC_OPTION BasicOption;
-    ULONG BufferSize;
+    ULONG BooleanOption;
+    ULONG Count;
     ULONGLONG DueTime;
+    ULONG Index;
+    ULONG KeepAliveOption;
     ULONG LeadingZeros;
+    ULONG LingerMilliseconds;
     PSOCKET_LINGER LingerOption;
+    SOCKET_LINGER LingerOptionBuffer;
+    ULONG LingerSeconds;
     LONGLONG Milliseconds;
     ULONG SizeDelta;
+    ULONG SizeOption;
     PSOCKET_TIME SocketTime;
+    SOCKET_TIME SocketTimeBuffer;
+    PVOID Source;
     KSTATUS Status;
     SOCKET_TCP_OPTION TcpOption;
     PTCP_SOCKET TcpSocket;
+    PTCP_SOCKET_OPTION TcpSocketOption;
+    PULONG TcpTimeout;
     ULONG WindowScale;
     ULONG WindowSize;
 
@@ -2763,26 +2903,78 @@ Return Value:
     if ((InformationType != SocketInformationBasic) &&
         (InformationType != SocketInformationTcp)) {
 
-        Status = STATUS_INVALID_PARAMETER;
+        Status = STATUS_NOT_SUPPORTED;
         goto TcpGetSetInformationEnd;
     }
 
+    //
+    // Search to see if the socket option is supported by the TCP protocol.
+    //
+
+    Count = sizeof(NetTcpSocketOptions) / sizeof(NetTcpSocketOptions[0]);
+    for (Index = 0; Index < Count; Index += 1) {
+        TcpSocketOption = &(NetTcpSocketOptions[Index]);
+        if ((TcpSocketOption->InformationType == InformationType) &&
+            (TcpSocketOption->Option == Option)) {
+
+            break;
+        }
+    }
+
+    if (Index == Count) {
+        if (InformationType == SocketInformationBasic) {
+            Status = STATUS_NOT_HANDLED;
+
+        } else {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+        }
+
+        goto TcpGetSetInformationEnd;
+    }
+
+    //
+    // Handle failure cases common to all options.
+    //
+
+    if (Set != FALSE) {
+        if (TcpSocketOption->SetAllowed == FALSE) {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            goto TcpGetSetInformationEnd;
+        }
+
+        if (*DataSize < TcpSocketOption->Size) {
+            *DataSize = TcpSocketOption->Size;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto TcpGetSetInformationEnd;
+        }
+    }
+
+    //
+    // Parse the socket option to actually get or set the TCP socket
+    // information.
+    //
+
+    Source = NULL;
     Status = STATUS_SUCCESS;
     if (InformationType == SocketInformationBasic) {
         BasicOption = (SOCKET_BASIC_OPTION)Option;
         switch (BasicOption) {
         case SocketBasicOptionLinger:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(SOCKET_LINGER)) {
+                LingerOption = (PSOCKET_LINGER)Data;
+                LingerSeconds = LingerOption->LingerTimeout;
+                if (LingerSeconds > SOCKET_OPTION_MAX_ULONG) {
+                    LingerSeconds = SOCKET_OPTION_MAX_ULONG;
+                }
+
+                LingerMilliseconds = LingerSeconds * MILLISECONDS_PER_SECOND;
+                if (LingerMilliseconds < LingerSeconds) {
                     Status = STATUS_INVALID_PARAMETER;
                     break;
                 }
 
-                LingerOption = (PSOCKET_LINGER)Data;
                 KeAcquireQueuedLock(TcpSocket->Lock);
-                TcpSocket->LingerTimeout = LingerOption->LingerTimeout *
-                                           MILLISECONDS_PER_SECOND;
-
+                TcpSocket->LingerTimeout = LingerMilliseconds;
                 if (LingerOption->LingerEnabled != FALSE) {
                     TcpSocket->Flags |= TCP_SOCKET_FLAG_LINGER_ENABLED;
 
@@ -2793,37 +2985,28 @@ Return Value:
                 KeReleaseQueuedLock(TcpSocket->Lock);
 
             } else {
-                if (*DataSize < sizeof(SOCKET_LINGER)) {
-                    *DataSize = sizeof(SOCKET_LINGER);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                LingerOption = (PSOCKET_LINGER)Data;
+                LingerOptionBuffer.LingerEnabled = FALSE;
                 KeAcquireQueuedLock(TcpSocket->Lock);
                 if ((TcpSocket->Flags & TCP_SOCKET_FLAG_LINGER_ENABLED) != 0) {
-                    LingerOption->LingerEnabled = TRUE;
-
-                } else {
-                    LingerOption->LingerEnabled = FALSE;
+                    LingerOptionBuffer.LingerEnabled = TRUE;
                 }
 
-                LingerOption->LingerTimeout = TcpSocket->LingerTimeout /
-                                              MILLISECONDS_PER_SECOND;
+                LingerOptionBuffer.LingerTimeout = TcpSocket->LingerTimeout /
+                                                   MILLISECONDS_PER_SECOND;
 
                 KeReleaseQueuedLock(TcpSocket->Lock);
+                Source = &LingerOptionBuffer;
             }
 
             break;
 
         case SocketBasicOptionSendBufferSize:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
+                SizeOption = *((PULONG)Data);
+                if (SizeOption > SOCKET_OPTION_MAX_ULONG) {
+                    SizeOption = SOCKET_OPTION_MAX_ULONG;
                 }
 
-                BufferSize = *((PULONG)Data);
                 KeAcquireQueuedLock(TcpSocket->Lock);
 
                 //
@@ -2831,8 +3014,8 @@ Return Value:
                 // packet size.
                 //
 
-                if (BufferSize < TcpSocket->SendMaxSegmentSize) {
-                    BufferSize = TcpSocket->SendMaxSegmentSize;
+                if (SizeOption < TcpSocket->SendMaxSegmentSize) {
+                    SizeOption = TcpSocket->SendMaxSegmentSize;
                 }
 
                 //
@@ -2840,9 +3023,9 @@ Return Value:
                 // to be added as free space.
                 //
 
-                if (TcpSocket->SendBufferTotalSize < BufferSize) {
-                    SizeDelta = BufferSize - TcpSocket->SendBufferTotalSize;
-                    TcpSocket->SendBufferTotalSize = BufferSize;
+                if (TcpSocket->SendBufferTotalSize < SizeOption) {
+                    SizeDelta = SizeOption - TcpSocket->SendBufferTotalSize;
+                    TcpSocket->SendBufferTotalSize = SizeOption;
                     TcpSocket->SendBufferFreeSize += SizeDelta;
 
                 //
@@ -2852,58 +3035,48 @@ Return Value:
                 //
 
                 } else {
-                    TcpSocket->SendBufferTotalSize = BufferSize;
-                    if (TcpSocket->SendBufferFreeSize > BufferSize) {
-                        TcpSocket->SendBufferFreeSize = BufferSize;
+                    TcpSocket->SendBufferTotalSize = SizeOption;
+                    if (TcpSocket->SendBufferFreeSize > SizeOption) {
+                        TcpSocket->SendBufferFreeSize = SizeOption;
                     }
                 }
 
                 KeReleaseQueuedLock(TcpSocket->Lock);
 
             } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = TcpSocket->SendBufferTotalSize;
+                SizeOption = TcpSocket->SendBufferTotalSize;
+                Source = &SizeOption;
             }
 
             break;
 
         case SocketBasicOptionSendMinimum:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
 
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
+            ASSERT(Set == FALSE);
 
-                *((PULONG)Data) = TCP_DEFAULT_SEND_MINIMUM;
-            }
-
+            SizeOption = TCP_DEFAULT_SEND_MINIMUM;
+            Source = &SizeOption;
             break;
 
         case SocketBasicOptionSendTimeout:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
+        case SocketBasicOptionReceiveTimeout:
+            if (BasicOption == SocketBasicOptionSendTimeout) {
+                TcpTimeout = &(TcpSocket->SendTimeout);
 
+            } else {
+                TcpTimeout = &(TcpSocket->ReceiveTimeout);
+            }
+
+            if (Set != FALSE) {
                 SocketTime = (PSOCKET_TIME)Data;
                 if (SocketTime->Seconds < 0) {
-                    Status = STATUS_INVALID_PARAMETER;
+                    Status = STATUS_DOMAIN_ERROR;
                     break;
                 }
 
                 Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
                 if (Milliseconds < SocketTime->Seconds) {
-                    Status = STATUS_INVALID_PARAMETER;
+                    Status = STATUS_DOMAIN_ERROR;
                     break;
                 }
 
@@ -2911,44 +3084,41 @@ Return Value:
                                 MICROSECONDS_PER_MILLISECOND;
 
                 if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
+                    Status = STATUS_DOMAIN_ERROR;
                     break;
                 }
 
-                TcpSocket->SendTimeout = (ULONG)(LONG)Milliseconds;
+                *TcpTimeout = (ULONG)(LONG)Milliseconds;
 
             } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
+                Source = &SocketTimeBuffer;
+                if (*TcpTimeout == WAIT_TIME_INDEFINITE) {
+                    SocketTimeBuffer.Seconds = 0;
+                    SocketTimeBuffer.Microseconds = 0;
+
+                } else {
+                    SocketTimeBuffer.Seconds =
+                                         *TcpTimeout / MILLISECONDS_PER_SECOND;
+
+                    SocketTimeBuffer.Microseconds =
+                                      (*TcpTimeout % MILLISECONDS_PER_SECOND) *
+                                      MICROSECONDS_PER_MILLISECOND;
                 }
-
-                SocketTime = (PSOCKET_TIME)Data;
-                SocketTime->Seconds = TcpSocket->SendTimeout /
-                                      MILLISECONDS_PER_SECOND;
-
-                SocketTime->Microseconds = (TcpSocket->SendTimeout %
-                                            MILLISECONDS_PER_SECOND) *
-                                           MICROSECONDS_PER_MILLISECOND;
             }
 
             break;
 
         case SocketBasicOptionReceiveBufferSize:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                BufferSize = *((PULONG)Data);
-                if ((BufferSize > TCP_MAXIMUM_WINDOW_SIZE) ||
-                    (BufferSize < TCP_MINIMUM_WINDOW_SIZE)) {
+                SizeOption = *((PULONG)Data);
+                if ((SizeOption > TCP_MAXIMUM_WINDOW_SIZE) ||
+                    (SizeOption < TCP_MINIMUM_WINDOW_SIZE)) {
 
                     Status = STATUS_INVALID_PARAMETER;
                     break;
                 }
+
+                ASSERT(SizeOption <= SOCKET_OPTION_MAX_ULONG);
 
                 KeAcquireQueuedLock(TcpSocket->Lock);
 
@@ -2972,13 +3142,13 @@ Return Value:
                     // to the requested window.
                     //
 
-                    if ((BufferSize & ~TCP_WINDOW_MASK) != 0) {
-                        LeadingZeros = RtlCountLeadingZeros32(BufferSize);
+                    if ((SizeOption & ~TCP_WINDOW_MASK) != 0) {
+                        LeadingZeros = RtlCountLeadingZeros32(SizeOption);
                         WindowScale = (sizeof(USHORT) * BITS_PER_BYTE) -
                                       LeadingZeros;
 
                         TcpSocket->ReceiveWindowScale = WindowScale;
-                        WindowSize = (BufferSize >> WindowScale);
+                        WindowSize = (SizeOption >> WindowScale);
 
                         ASSERT(WindowSize != 0);
 
@@ -2994,8 +3164,8 @@ Return Value:
 
                     } else {
                         TcpSocket->ReceiveWindowScale = 0;
-                        TcpSocket->ReceiveWindowTotalSize = BufferSize;
-                        TcpSocket->ReceiveWindowFreeSize = BufferSize;
+                        TcpSocket->ReceiveWindowTotalSize = SizeOption;
+                        TcpSocket->ReceiveWindowFreeSize = SizeOption;
                     }
 
                 //
@@ -3006,7 +3176,7 @@ Return Value:
                 //
 
                 } else {
-                    WindowSize = BufferSize >> TcpSocket->ReceiveWindowScale;
+                    WindowSize = SizeOption >> TcpSocket->ReceiveWindowScale;
                     if ((WindowSize == 0) ||
                         ((WindowSize & ~TCP_WINDOW_MASK) != 0)) {
 
@@ -3019,11 +3189,11 @@ Return Value:
                         // difference needs to be added as free space.
                         //
 
-                        if (TcpSocket->ReceiveWindowTotalSize < BufferSize) {
-                            SizeDelta = BufferSize -
+                        if (TcpSocket->ReceiveWindowTotalSize < SizeOption) {
+                            SizeDelta = SizeOption -
                                         TcpSocket->ReceiveWindowTotalSize;
 
-                            TcpSocket->ReceiveWindowTotalSize = BufferSize;
+                            TcpSocket->ReceiveWindowTotalSize = SizeOption;
                             TcpSocket->ReceiveWindowFreeSize += SizeDelta;
 
                         //
@@ -3034,9 +3204,9 @@ Return Value:
                         //
 
                         } else {
-                            TcpSocket->ReceiveWindowTotalSize = BufferSize;
-                            if (TcpSocket->ReceiveWindowFreeSize > BufferSize) {
-                                TcpSocket->ReceiveWindowFreeSize = BufferSize;
+                            TcpSocket->ReceiveWindowTotalSize = SizeOption;
+                            if (TcpSocket->ReceiveWindowFreeSize > SizeOption) {
+                                TcpSocket->ReceiveWindowFreeSize = SizeOption;
                             }
                         }
                     }
@@ -3056,124 +3226,51 @@ Return Value:
                 KeReleaseQueuedLock(TcpSocket->Lock);
 
             } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = TcpSocket->ReceiveWindowTotalSize;
+                SizeOption = TcpSocket->ReceiveWindowTotalSize;
+                Source = &SizeOption;
             }
 
             break;
 
         case SocketBasicOptionReceiveMinimum:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
+                SizeOption = *((PULONG)Data);
+                if (SizeOption > SOCKET_OPTION_MAX_ULONG) {
+                    SizeOption = SOCKET_OPTION_MAX_ULONG;
                 }
 
                 KeAcquireQueuedLock(TcpSocket->Lock);
-                if (*((PULONG)Data) > TcpSocket->ReceiveWindowTotalSize) {
-                    TcpSocket->ReceiveMinimum =
-                                             TcpSocket->ReceiveWindowTotalSize;
-
-                } else {
-                    TcpSocket->ReceiveMinimum = *((PULONG)Data);
+                if (SizeOption > TcpSocket->ReceiveWindowTotalSize) {
+                    SizeOption = TcpSocket->ReceiveWindowTotalSize;
                 }
 
+                TcpSocket->ReceiveMinimum = SizeOption;
                 KeReleaseQueuedLock(TcpSocket->Lock);
 
             } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = TcpSocket->ReceiveMinimum;
-            }
-
-            break;
-
-        case SocketBasicOptionReceiveTimeout:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                SocketTime = (PSOCKET_TIME)Data;
-                if (SocketTime->Seconds < 0) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
-                if (Milliseconds < SocketTime->Seconds) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                Milliseconds += SocketTime->Microseconds /
-                                MICROSECONDS_PER_MILLISECOND;
-
-                if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                TcpSocket->ReceiveTimeout = (ULONG)(LONG)Milliseconds;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                SocketTime = (PSOCKET_TIME)Data;
-                SocketTime->Seconds = TcpSocket->ReceiveTimeout /
-                                      MILLISECONDS_PER_SECOND;
-
-                SocketTime->Microseconds = (TcpSocket->ReceiveTimeout %
-                                            MILLISECONDS_PER_SECOND) *
-                                           MICROSECONDS_PER_MILLISECOND;
+                SizeOption = TcpSocket->ReceiveMinimum;
+                Source = &SizeOption;
             }
 
             break;
 
         case SocketBasicOptionAcceptConnections:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
 
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
+            ASSERT(Set == FALSE);
 
-                if (TcpSocket->State == TcpStateListening) {
-                    *((PULONG)Data) = TRUE;
-
-                } else {
-                    *((PULONG)Data) = FALSE;
-                }
+            Source = &BooleanOption;
+            BooleanOption = FALSE;
+            if (TcpSocket->State == TcpStateListening) {
+                BooleanOption = TRUE;
             }
 
             break;
 
         case SocketBasicOptionKeepAlive:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
+                BooleanOption = *((PULONG)Data);
                 KeAcquireQueuedLock(TcpSocket->Lock);
-                if (*((PULONG)Data) != FALSE) {
+                if (BooleanOption != FALSE) {
 
                     //
                     // If keep alive is being enabled and the socket is in a
@@ -3204,51 +3301,43 @@ Return Value:
                 KeReleaseQueuedLock(TcpSocket->Lock);
 
             } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
+                Source = &BooleanOption;
+                BooleanOption = FALSE;
                 if ((TcpSocket->Flags & TCP_SOCKET_FLAG_KEEP_ALIVE) != 0) {
-                    *((PULONG)Data) = TRUE;
-
-                } else {
-                    *((PULONG)Data) = FALSE;
+                    BooleanOption = TRUE;
                 }
             }
 
             break;
 
         case SocketBasicOptionInlineOutOfBand:
-            if (*DataSize < sizeof(ULONG)) {
-                *DataSize = sizeof(ULONG);
-                Status = STATUS_BUFFER_TOO_SMALL;
-                break;
-            }
-
-            KeAcquireQueuedLock(TcpSocket->Lock);
             if (Set != FALSE) {
-                if (*((PULONG)Data) != FALSE) {
+                BooleanOption = *((PULONG)Data);
+                KeAcquireQueuedLock(TcpSocket->Lock);
+                if (BooleanOption != FALSE) {
                     TcpSocket->Flags |= TCP_SOCKET_FLAG_URGENT_INLINE;
 
                 } else {
                     TcpSocket->Flags &= ~TCP_SOCKET_FLAG_URGENT_INLINE;
                 }
 
+                KeReleaseQueuedLock(TcpSocket->Lock);
+
             } else {
-                *DataSize = sizeof(ULONG);
-                *((PULONG)Data) = FALSE;
+                Source = &BooleanOption;
+                BooleanOption = FALSE;
                 if ((TcpSocket->Flags & TCP_SOCKET_FLAG_URGENT_INLINE) != 0) {
-                    *((PULONG)Data) = TRUE;
+                    BooleanOption = TRUE;
                 }
             }
 
-            KeReleaseQueuedLock(TcpSocket->Lock);
             break;
 
         default:
-            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+
+            ASSERT(FALSE);
+
+            Status = STATUS_NOT_HANDLED;
             break;
         }
 
@@ -3259,96 +3348,117 @@ Return Value:
         TcpOption = (SOCKET_TCP_OPTION)Option;
         switch (TcpOption) {
         case SocketTcpOptionNoDelay:
-            if (*DataSize < sizeof(ULONG)) {
-                *DataSize = sizeof(ULONG);
-                Status = STATUS_BUFFER_TOO_SMALL;
-                break;
-            }
-
-            *DataSize = sizeof(ULONG);
-            KeAcquireQueuedLock(TcpSocket->Lock);
             if (Set != FALSE) {
+                BooleanOption = *((PULONG)Data);
+                KeAcquireQueuedLock(TcpSocket->Lock);
                 TcpSocket->Flags &= ~TCP_SOCKET_FLAG_NO_DELAY;
-                if (*((PULONG)Data) != FALSE) {
+                if (BooleanOption != FALSE) {
                     TcpSocket->Flags |= TCP_SOCKET_FLAG_NO_DELAY;
                 }
 
+                KeReleaseQueuedLock(TcpSocket->Lock);
+
             } else {
-                *((PULONG)Data) = FALSE;
+                Source = &BooleanOption;
+                BooleanOption = FALSE;
                 if ((TcpSocket->Flags & TCP_SOCKET_FLAG_NO_DELAY) != 0) {
-                    *((PULONG)Data) = TRUE;
+                    BooleanOption = TRUE;
                 }
             }
 
-            KeReleaseQueuedLock(TcpSocket->Lock);
             break;
 
         case SocketTcpOptionKeepAliveTimeout:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
+                KeepAliveOption = *((PULONG)Data);
+                if (KeepAliveOption > SOCKET_OPTION_MAX_ULONG) {
+                    KeepAliveOption = SOCKET_OPTION_MAX_ULONG;
                 }
 
-                TcpSocket->KeepAliveTimeout = *((PULONG)Data);
+                TcpSocket->KeepAliveTimeout = KeepAliveOption;
 
             } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = TcpSocket->KeepAliveTimeout;
+                Source = &KeepAliveOption;
+                KeepAliveOption = TcpSocket->KeepAliveTimeout;
             }
 
             break;
 
         case SocketTcpOptionKeepAlivePeriod:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
+                KeepAliveOption = *((PULONG)Data);
+                if (KeepAliveOption > SOCKET_OPTION_MAX_ULONG) {
+                    KeepAliveOption = SOCKET_OPTION_MAX_ULONG;
                 }
 
-                TcpSocket->KeepAlivePeriod = *((PULONG)Data);
+                TcpSocket->KeepAlivePeriod = KeepAliveOption;
 
             } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = TcpSocket->KeepAlivePeriod;
+                Source = &KeepAliveOption;
+                KeepAliveOption = TcpSocket->KeepAlivePeriod;
             }
 
             break;
 
         case SocketTcpOptionKeepAliveProbeLimit:
             if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
+                KeepAliveOption = *((PULONG)Data);
+                if (KeepAliveOption > SOCKET_OPTION_MAX_ULONG) {
+                    KeepAliveOption = SOCKET_OPTION_MAX_ULONG;
                 }
 
-                TcpSocket->KeepAliveProbeLimit = *((PULONG)Data);
+                TcpSocket->KeepAliveProbeLimit = KeepAliveOption;
 
             } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = TcpSocket->KeepAliveProbeLimit;
+                Source = &KeepAliveOption;
+                KeepAliveOption = TcpSocket->KeepAliveProbeLimit;
             }
 
             break;
 
         default:
+
+            ASSERT(FALSE);
+
             Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
             break;
+        }
+    }
+
+    if (!KSUCCESS(Status)) {
+        goto TcpGetSetInformationEnd;
+    }
+
+    //
+    // Truncate all copies for get requests down to the required size and only
+    // return the required size on set requests.
+    //
+
+    if (*DataSize > TcpSocketOption->Size) {
+        *DataSize = TcpSocketOption->Size;
+    }
+
+    //
+    // For get requests, copy the gathered information to the supplied data
+    // buffer.
+    //
+
+    if (Set == FALSE) {
+
+        ASSERT(Source != NULL);
+
+        RtlCopyMemory(Data, Source, *DataSize);
+
+        //
+        // If the copy truncated the data, report that the given buffer was too
+        // small. The caller can choose to ignore this if the truncated data is
+        // enough.
+        //
+
+        if (*DataSize < TcpSocketOption->Size) {
+            *DataSize = TcpSocketOption->Size;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto TcpGetSetInformationEnd;
         }
     }
 

@@ -238,6 +238,14 @@ Author:
 #define SOCKET_CONTROL_CREDENTIALS 2
 
 //
+// As the C library socket options are passed straight through to the kernel,
+// this causes conversions from int options to ULONG options. Guard against
+// negative values by defining a new maximum ULONG value.
+//
+
+#define SOCKET_OPTION_MAX_ULONG ((ULONG)0x7FFFFFFF)
+
+//
 // Define the ranges for the different regions of the net domain type namespace.
 //
 
@@ -401,7 +409,7 @@ Values:
 
     SocketBasicOptionPassCredentials - Indicates that credentials should be
         sent and received automatically with messages on the socket. This is
-        only applicable for local sockets.
+        only applicable for local sockets. This option takes a ULONG boolean.
 
     SocketBasicOptionPeerCredentials - Indicates the credentials of the
         foreign socket at the time of connect. This is only applicable for

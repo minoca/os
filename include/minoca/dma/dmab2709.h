@@ -55,7 +55,7 @@ Author:
 // nearest page boundary to prevent awkward remainders.
 //
 
-#define DMA_BCM2709_MAX_TRANSFER_SIZE 0x3FFFFF00
+#define DMA_BCM2709_MAX_TRANSFER_SIZE 0x3FFFF000
 
 //
 // Define the maximum transfer size for one lite control block, rounded down to

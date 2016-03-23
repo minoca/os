@@ -767,7 +767,10 @@ Arguments:
         SOCKET_<information_type>_OPTION.
 
     Data - Supplies a pointer to the data buffer where the data is either
-        returned for a get operation or given for a set operation.
+        returned for a get operation or given for a set operation. If the
+        data buffer is too small on a get operation, the truncated information
+        will be copied to the data buffer and the routine will return
+        STATUS_BUFFER_TOO_SMALL.
 
     DataSize - Supplies a pointer that on input constains the size of the data
         buffer. On output, this contains the required size of the data buffer.
@@ -783,7 +786,8 @@ Return Value:
         option.
 
     STATUS_BUFFER_TOO_SMALL if the socket option information does not fit in
-        the supplied buffer.
+        the supplied buffer. On a get request, the data buffer will be filled
+        with the truncated socket information.
 
     STATUS_NOT_SUPPORTED_BY_PROTOCOL if the socket option or information type
         is not supported by the socket.

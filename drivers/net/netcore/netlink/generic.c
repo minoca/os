@@ -154,6 +154,32 @@ typedef struct _NETLINK_GENERIC_RECEIVED_PACKET {
     PNET_PACKET_BUFFER NetPacket;
 } NETLINK_GENERIC_RECEIVED_PACKET, *PNETLINK_GENERIC_RECEIVED_PACKET;
 
+/*++
+
+Structure Description:
+
+    This structure defines a netlink generic socket option.
+
+Members:
+
+    InformationType - Stores the information type for the socket option.
+
+    Option - Stores the type-specific option identifier.
+
+    Size - Stores the size of the option value, in bytes.
+
+    SetAllowed - Stores a boolean indicating whether or not the option is
+        allowed to be set.
+
+--*/
+
+typedef struct _NETLINK_GENERIC_SOCKET_OPTION {
+    SOCKET_INFORMATION_TYPE InformationType;
+    UINTN Option;
+    UINTN Size;
+    BOOL SetAllowed;
+} NETLINK_GENERIC_SOCKET_OPTION, *PNETLINK_GENERIC_SOCKET_OPTION;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -324,6 +350,43 @@ NET_PROTOCOL_ENTRY NetNetlinkGenericProtocol = {
         NetpNetlinkGenericGetSetInformation,
         NetpNetlinkGenericUserControl
     }
+};
+
+NETLINK_GENERIC_SOCKET_OPTION NetNetlinkGenericSocketOptions[] = {
+    {
+        SocketInformationBasic,
+        SocketBasicOptionSendBufferSize,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionSendMinimum,
+        sizeof(ULONG),
+        FALSE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveBufferSize,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveMinimum,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveTimeout,
+        sizeof(SOCKET_TIME),
+        TRUE
+    },
 };
 
 PIO_HANDLE NetNetlinkGenericSocketHandle;
@@ -1927,259 +1990,259 @@ Return Value:
     STATUS_NOT_SUPPORTED_BY_PROTOCOL if the socket option is not supported by
         the socket.
 
+    STATUS_NOT_HANDLED if the protocol does not override the default behavior
+        for a basic socket option.
+
 --*/
 
 {
 
-    SOCKET_BASIC_OPTION BasicOption;
-    ULONG BufferSize;
+    ULONG Count;
+    PNETLINK_GENERIC_SOCKET_OPTION GenericOption;
     PNETLINK_GENERIC_SOCKET GenericSocket;
+    ULONG Index;
     LONGLONG Milliseconds;
     PNET_PACKET_SIZE_INFORMATION SizeInformation;
+    ULONG SizeOption;
     PSOCKET_TIME SocketTime;
+    SOCKET_TIME SocketTimeBuffer;
+    PVOID Source;
     KSTATUS Status;
 
     GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
     if ((InformationType != SocketInformationBasic) &&
         (InformationType != SocketInformationNetlinkGeneric)) {
 
-        Status = STATUS_INVALID_PARAMETER;
-        goto UdpGetSetInformationEnd;
+        Status = STATUS_NOT_SUPPORTED;
+        goto NetlinkGenericGetSetInformationEnd;
     }
 
-    Status = STATUS_SUCCESS;
-    if (InformationType == SocketInformationBasic) {
-        BasicOption = (SOCKET_BASIC_OPTION)Option;
-        switch (BasicOption) {
-        case SocketBasicOptionSendBufferSize:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
+    //
+    // Search to see if the socket option is supported by the netlink generic
+    // protocol.
+    //
 
-                BufferSize = *((PULONG)Data);
-                SizeInformation = &(Socket->PacketSizeInformation);
-                if (BufferSize > NETLINK_GENERIC_MAX_PACKET_SIZE) {
-                    GenericSocket->MaxPacketSize =
-                                               NETLINK_GENERIC_MAX_PACKET_SIZE;
+    Count = sizeof(NetNetlinkGenericSocketOptions) /
+            sizeof(NetNetlinkGenericSocketOptions[0]);
 
-                } else if (BufferSize < SizeInformation->MaxPacketSize) {
-                    GenericSocket->MaxPacketSize =
-                                                SizeInformation->MaxPacketSize;
+    for (Index = 0; Index < Count; Index += 1) {
+        GenericOption = &(NetNetlinkGenericSocketOptions[Index]);
+        if ((GenericOption->InformationType == InformationType) &&
+            (GenericOption->Option == Option)) {
 
-                } else {
-                    GenericSocket->MaxPacketSize = BufferSize;
-                }
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = GenericSocket->MaxPacketSize;
-            }
-
-            break;
-
-        case SocketBasicOptionSendMinimum:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = NETLINK_GENERIC_SEND_MINIMUM;
-            }
-
-            break;
-
-        case SocketBasicOptionSendTimeout:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                //
-                // The indefinite wait time is represented as 0 time for the
-                // SOCKET_TIME structure.
-                //
-
-                SocketTime = (PSOCKET_TIME)Data;
-                SocketTime->Seconds = 0;
-                SocketTime->Microseconds = 0;
-            }
-
-            break;
-
-        case SocketBasicOptionReceiveBufferSize:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                BufferSize = *((PULONG)Data);
-                KeAcquireQueuedLock(GenericSocket->ReceiveLock);
-                if (BufferSize < NETLINK_GENERIC_MIN_RECEIVE_BUFFER_SIZE) {
-                    GenericSocket->ReceiveBufferTotalSize =
-                                       NETLINK_GENERIC_MIN_RECEIVE_BUFFER_SIZE;
-
-                } else {
-                    GenericSocket->ReceiveBufferTotalSize = BufferSize;
-                }
-
-                //
-                // Truncate the available free space if necessary. Do not
-                // remove any packets that have already been received. This is
-                // not meant to be a truncate call.
-                //
-
-                if (GenericSocket->ReceiveBufferFreeSize >
-                    GenericSocket->ReceiveBufferTotalSize) {
-
-                    GenericSocket->ReceiveBufferFreeSize =
-                                         GenericSocket->ReceiveBufferTotalSize;
-                }
-
-                KeReleaseQueuedLock(GenericSocket->ReceiveLock);
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = GenericSocket->ReceiveBufferTotalSize;
-            }
-
-            break;
-
-        case SocketBasicOptionReceiveMinimum:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                GenericSocket->ReceiveMinimum = *((PULONG)Data);
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = GenericSocket->ReceiveMinimum;
-            }
-
-            break;
-
-        case SocketBasicOptionReceiveTimeout:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                SocketTime = (PSOCKET_TIME)Data;
-                if (SocketTime->Seconds < 0) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
-                if (Milliseconds < SocketTime->Seconds) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                Milliseconds += SocketTime->Microseconds /
-                                MICROSECONDS_PER_MILLISECOND;
-
-                if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                GenericSocket->ReceiveTimeout = (ULONG)(LONG)Milliseconds;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                SocketTime = (PSOCKET_TIME)Data;
-                SocketTime->Seconds = GenericSocket->ReceiveTimeout /
-                                      MILLISECONDS_PER_SECOND;
-
-                SocketTime->Microseconds = (GenericSocket->ReceiveTimeout %
-                                            MILLISECONDS_PER_SECOND) *
-                                           MICROSECONDS_PER_MILLISECOND;
-            }
-
-            break;
-
-        case SocketBasicOptionAcceptConnections:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = FALSE;
-            }
-
-            break;
-
-        case SocketBasicOptionBroadcastEnabled:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = FALSE;
-            }
-
-            break;
-
-        default:
-            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
             break;
         }
-
-    } else {
-
-        ASSERT(InformationType == SocketInformationNetlinkGeneric);
-
-        Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
     }
 
-UdpGetSetInformationEnd:
+    if (Index == Count) {
+        if (InformationType == SocketInformationBasic) {
+            Status = STATUS_NOT_HANDLED;
+
+        } else {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+        }
+
+        goto NetlinkGenericGetSetInformationEnd;
+    }
+
+    //
+    // Handle failure cases common to all options.
+    //
+
+    if (Set != FALSE) {
+        if (GenericOption->SetAllowed == FALSE) {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            goto NetlinkGenericGetSetInformationEnd;
+        }
+
+        if (*DataSize < GenericOption->Size) {
+            *DataSize = GenericOption->Size;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto NetlinkGenericGetSetInformationEnd;
+        }
+    }
+
+    //
+    // There are currently no netlink generic protocol options.
+    //
+
+    ASSERT(InformationType != SocketInformationNetlinkGeneric);
+
+    //
+    // Parse the basic socket option, getting the information from the generic
+    // socket or setting the new state in the generic socket.
+    //
+
+    Source = NULL;
+    Status = STATUS_SUCCESS;
+    switch ((SOCKET_BASIC_OPTION)Option) {
+    case SocketBasicOptionSendBufferSize:
+        if (Set != FALSE) {
+            SizeOption = *((PULONG)Data);
+            if (SizeOption > SOCKET_OPTION_MAX_ULONG) {
+                SizeOption = SOCKET_OPTION_MAX_ULONG;
+            }
+
+            SizeInformation = &(Socket->PacketSizeInformation);
+            if (SizeOption > NETLINK_GENERIC_MAX_PACKET_SIZE) {
+                SizeOption = NETLINK_GENERIC_MAX_PACKET_SIZE;
+
+            } else if (SizeOption < SizeInformation->MaxPacketSize) {
+                SizeOption = SizeInformation->MaxPacketSize;
+            }
+
+            GenericSocket->MaxPacketSize = SizeOption;
+
+        } else {
+            Source = &SizeOption;
+            SizeOption = GenericSocket->MaxPacketSize;
+        }
+
+        break;
+
+    case SocketBasicOptionSendMinimum:
+
+        ASSERT(Set == FALSE);
+
+        SizeOption = NETLINK_GENERIC_SEND_MINIMUM;
+        Source = &SizeOption;
+        break;
+
+    case SocketBasicOptionReceiveBufferSize:
+        if (Set != FALSE) {
+            SizeOption = *((PULONG)Data);
+            if (SizeOption < NETLINK_GENERIC_MIN_RECEIVE_BUFFER_SIZE) {
+                SizeOption = NETLINK_GENERIC_MIN_RECEIVE_BUFFER_SIZE;
+
+            } else if (SizeOption > SOCKET_OPTION_MAX_ULONG) {
+                SizeOption = SOCKET_OPTION_MAX_ULONG;
+            }
+
+            //
+            // Set the receive buffer size and truncate the available free
+            // space if necessary. Do not remove any packets that have already
+            // been received. This is not meant to be a truncate call.
+            //
+
+            KeAcquireQueuedLock(GenericSocket->ReceiveLock);
+            GenericSocket->ReceiveBufferTotalSize = SizeOption;
+            if (GenericSocket->ReceiveBufferFreeSize > SizeOption) {
+                GenericSocket->ReceiveBufferFreeSize = SizeOption;
+            }
+
+            KeReleaseQueuedLock(GenericSocket->ReceiveLock);
+
+        } else {
+            SizeOption = GenericSocket->ReceiveBufferTotalSize;
+            Source = &SizeOption;
+        }
+
+        break;
+
+    case SocketBasicOptionReceiveMinimum:
+        if (Set != FALSE) {
+            SizeOption = *((PULONG)Data);
+            if (SizeOption > SOCKET_OPTION_MAX_ULONG) {
+                SizeOption = SOCKET_OPTION_MAX_ULONG;
+            }
+
+            GenericSocket->ReceiveMinimum = SizeOption;
+
+        } else {
+            SizeOption = GenericSocket->ReceiveMinimum;
+            Source = &SizeOption;
+        }
+
+        break;
+
+    case SocketBasicOptionReceiveTimeout:
+        if (Set != FALSE) {
+            SocketTime = (PSOCKET_TIME)Data;
+            if (SocketTime->Seconds < 0) {
+                Status = STATUS_DOMAIN_ERROR;
+                break;
+            }
+
+            Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
+            if (Milliseconds < SocketTime->Seconds) {
+                Status = STATUS_DOMAIN_ERROR;
+                break;
+            }
+
+            Milliseconds += SocketTime->Microseconds /
+                            MICROSECONDS_PER_MILLISECOND;
+
+            if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
+                Status = STATUS_DOMAIN_ERROR;
+                break;
+            }
+
+            GenericSocket->ReceiveTimeout = (ULONG)(LONG)Milliseconds;
+
+        } else {
+            Source = &SocketTimeBuffer;
+            if (GenericSocket->ReceiveTimeout == WAIT_TIME_INDEFINITE) {
+                SocketTimeBuffer.Seconds = 0;
+                SocketTimeBuffer.Microseconds = 0;
+
+            } else {
+                SocketTimeBuffer.Seconds = GenericSocket->ReceiveTimeout /
+                                           MILLISECONDS_PER_SECOND;
+
+                SocketTimeBuffer.Microseconds = (GenericSocket->ReceiveTimeout %
+                                                 MILLISECONDS_PER_SECOND) *
+                                                MICROSECONDS_PER_MILLISECOND;
+            }
+        }
+
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        Status = STATUS_NOT_HANDLED;
+        break;
+    }
+
+    if (!KSUCCESS(Status)) {
+        goto NetlinkGenericGetSetInformationEnd;
+    }
+
+    //
+    // Truncate all copies for get requests down to the required size and only
+    // return the required size on set requests.
+    //
+
+    if (*DataSize > GenericOption->Size) {
+        *DataSize = GenericOption->Size;
+    }
+
+    //
+    // For get requests, copy the gathered information to the supplied data
+    // buffer.
+    //
+
+    if (Set == FALSE) {
+
+        ASSERT(Source != NULL);
+
+        RtlCopyMemory(Data, Source, *DataSize);
+
+        //
+        // If the copy truncated the data, report that the given buffer was too
+        // small. The caller can choose to ignore this if the truncated data is
+        // enough.
+        //
+
+        if (*DataSize < GenericOption->Size) {
+            *DataSize = GenericOption->Size;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto NetlinkGenericGetSetInformationEnd;
+        }
+    }
+
+NetlinkGenericGetSetInformationEnd:
     return Status;
 }
 

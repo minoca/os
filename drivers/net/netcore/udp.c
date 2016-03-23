@@ -190,6 +190,32 @@ typedef struct _UDP_RECEIVED_PACKET {
     ULONG Size;
 } UDP_RECEIVED_PACKET, *PUDP_RECEIVED_PACKET;
 
+/*++
+
+Structure Description:
+
+    This structure defines a UDP socket option.
+
+Members:
+
+    InformationType - Stores the information type for the socket option.
+
+    Option - Stores the type-specific option identifier.
+
+    Size - Stores the size of the option value, in bytes.
+
+    SetAllowed - Stores a boolean indicating whether or not the option is
+        allowed to be set.
+
+--*/
+
+typedef struct _UDP_SOCKET_OPTION {
+    SOCKET_INFORMATION_TYPE InformationType;
+    UINTN Option;
+    UINTN Size;
+    BOOL SetAllowed;
+} UDP_SOCKET_OPTION, *PUDP_SOCKET_OPTION;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -325,6 +351,43 @@ NET_PROTOCOL_ENTRY NetUdpProtocol = {
     }
 };
 
+UDP_SOCKET_OPTION NetUdpSocketOptions[] = {
+    {
+        SocketInformationBasic,
+        SocketBasicOptionSendBufferSize,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionSendMinimum,
+        sizeof(ULONG),
+        FALSE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveBufferSize,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveMinimum,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveTimeout,
+        sizeof(SOCKET_TIME),
+        TRUE
+    },
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -456,12 +519,6 @@ Return Value:
     if (!KSUCCESS(Status)) {
         goto UdpCreateSocketEnd;
     }
-
-    //
-    // Broadcast is disabled by default on UDP sockets.
-    //
-
-    UdpSocket->NetSocket.Flags |= NET_SOCKET_FLAG_BROADCAST_DISABLED;
 
     //
     // If the max packet size is greater than what is allowed for a UDP packet
@@ -1736,270 +1793,253 @@ Return Value:
     STATUS_NOT_SUPPORTED_BY_PROTOCOL if the socket option is not supported by
         the socket.
 
+    STATUS_NOT_HANDLED if the protocol does not override the default behavior
+        for a basic socket option.
+
 --*/
 
 {
 
-    SOCKET_BASIC_OPTION BasicOption;
-    ULONG BufferSize;
+    ULONG Count;
+    ULONG Index;
     LONGLONG Milliseconds;
     PNET_PACKET_SIZE_INFORMATION SizeInformation;
+    ULONG SizeOption;
     PSOCKET_TIME SocketTime;
+    SOCKET_TIME SocketTimeBuffer;
+    PVOID Source;
     KSTATUS Status;
+    PUDP_SOCKET_OPTION UdpOption;
     PUDP_SOCKET UdpSocket;
 
     UdpSocket = (PUDP_SOCKET)Socket;
     if ((InformationType != SocketInformationBasic) &&
         (InformationType != SocketInformationUdp)) {
 
-        Status = STATUS_INVALID_PARAMETER;
+        Status = STATUS_NOT_SUPPORTED;
         goto UdpGetSetInformationEnd;
     }
 
-    Status = STATUS_SUCCESS;
-    if (InformationType == SocketInformationBasic) {
-        BasicOption = (SOCKET_BASIC_OPTION)Option;
-        switch (BasicOption) {
-        case SocketBasicOptionSendBufferSize:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
+    //
+    // Search to see if the socket option is supported by UDP.
+    //
 
-                BufferSize = *((PULONG)Data);
-                SizeInformation = &(Socket->PacketSizeInformation);
-                if (BufferSize > UDP_MAX_PACKET_SIZE) {
-                    UdpSocket->MaxPacketSize = UDP_MAX_PACKET_SIZE;
+    Count = sizeof(NetUdpSocketOptions) / sizeof(NetUdpSocketOptions[0]);
+    for (Index = 0; Index < Count; Index += 1) {
+        UdpOption = &(NetUdpSocketOptions[Index]);
+        if ((UdpOption->InformationType == InformationType) &&
+            (UdpOption->Option == Option)) {
 
-                } else if (BufferSize < SizeInformation->MaxPacketSize) {
-                    UdpSocket->MaxPacketSize = SizeInformation->MaxPacketSize;
-
-                } else {
-                    UdpSocket->MaxPacketSize = BufferSize;
-                }
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = UdpSocket->MaxPacketSize;
-            }
-
-            break;
-
-        case SocketBasicOptionSendMinimum:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = UDP_SEND_MINIMUM;
-            }
-
-            break;
-
-        case SocketBasicOptionSendTimeout:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                //
-                // The indefinite wait time for sockets is 0.
-                //
-
-                SocketTime = (PSOCKET_TIME)Data;
-                SocketTime->Seconds = 0;
-                SocketTime->Microseconds = 0;
-            }
-
-            break;
-
-        case SocketBasicOptionReceiveBufferSize:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                BufferSize = *((PULONG)Data);
-                KeAcquireQueuedLock(UdpSocket->ReceiveLock);
-                if (BufferSize < UDP_MIN_RECEIVE_BUFFER_SIZE) {
-                    UdpSocket->ReceiveBufferTotalSize =
-                                                   UDP_MIN_RECEIVE_BUFFER_SIZE;
-
-                } else {
-                    UdpSocket->ReceiveBufferTotalSize = BufferSize;
-                }
-
-                //
-                // Truncate the available free space if necessary. Do not
-                // remove any packets that have already been received. This is
-                // not meant to be a truncate call.
-                //
-
-                if (UdpSocket->ReceiveBufferFreeSize >
-                    UdpSocket->ReceiveBufferTotalSize) {
-
-                    UdpSocket->ReceiveBufferFreeSize =
-                                             UdpSocket->ReceiveBufferTotalSize;
-                }
-
-                KeReleaseQueuedLock(UdpSocket->ReceiveLock);
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = UdpSocket->ReceiveBufferTotalSize;
-            }
-
-            break;
-
-        case SocketBasicOptionReceiveMinimum:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                UdpSocket->ReceiveMinimum = *((PULONG)Data);
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = UdpSocket->ReceiveMinimum;
-            }
-
-            break;
-
-        case SocketBasicOptionReceiveTimeout:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                SocketTime = (PSOCKET_TIME)Data;
-                if (SocketTime->Seconds < 0) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
-                if (Milliseconds < SocketTime->Seconds) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                Milliseconds += SocketTime->Microseconds /
-                                MICROSECONDS_PER_MILLISECOND;
-
-                if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                UdpSocket->ReceiveTimeout = (ULONG)(LONG)Milliseconds;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                SocketTime = (PSOCKET_TIME)Data;
-                SocketTime->Seconds = UdpSocket->ReceiveTimeout /
-                                      MILLISECONDS_PER_SECOND;
-
-                SocketTime->Microseconds = (UdpSocket->ReceiveTimeout %
-                                            MILLISECONDS_PER_SECOND) *
-                                           MICROSECONDS_PER_MILLISECOND;
-            }
-
-            break;
-
-        case SocketBasicOptionAcceptConnections:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = FALSE;
-            }
-
-            break;
-
-        case SocketBasicOptionBroadcastEnabled:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                if (*((PULONG)Data) != FALSE) {
-                    RtlAtomicAnd32(&(Socket->Flags),
-                                   ~NET_SOCKET_FLAG_BROADCAST_DISABLED);
-
-                } else {
-                    RtlAtomicOr32(&(Socket->Flags),
-                                  NET_SOCKET_FLAG_BROADCAST_DISABLED);
-                }
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                if ((Socket->Flags & NET_SOCKET_FLAG_BROADCAST_DISABLED) == 0) {
-                    *((PULONG)Data) = TRUE;
-
-                } else {
-                    *((PULONG)Data) = FALSE;
-                }
-            }
-
-            break;
-
-        default:
-            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
             break;
         }
+    }
 
-    } else {
+    if (Index == Count) {
+        if (InformationType == SocketInformationBasic) {
+            Status = STATUS_NOT_HANDLED;
 
-        ASSERT(InformationType == SocketInformationUdp);
+        } else {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+        }
 
-        Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+        goto UdpGetSetInformationEnd;
+    }
+
+    //
+    // Handle failure cases common to all options.
+    //
+
+    if (Set != FALSE) {
+        if (UdpOption->SetAllowed == FALSE) {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            goto UdpGetSetInformationEnd;
+        }
+
+        if (*DataSize < UdpOption->Size) {
+            *DataSize = UdpOption->Size;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto UdpGetSetInformationEnd;
+        }
+    }
+
+    //
+    // There are currently no UDP options.
+    //
+
+    ASSERT(InformationType != SocketInformationUdp);
+
+    //
+    // Parse the basic socket option, getting the information from the UDP
+    // socket or setting the new state in the UDP socket.
+    //
+
+    Source = NULL;
+    Status = STATUS_SUCCESS;
+    switch ((SOCKET_BASIC_OPTION)Option) {
+    case SocketBasicOptionSendBufferSize:
+        if (Set != FALSE) {
+            SizeOption = *((PULONG)Data);
+
+            ASSERT(UDP_MAX_PACKET_SIZE <= SOCKET_OPTION_MAX_ULONG);
+
+            SizeInformation = &(Socket->PacketSizeInformation);
+            if (SizeOption > UDP_MAX_PACKET_SIZE) {
+                SizeOption = UDP_MAX_PACKET_SIZE;
+
+            } else if (SizeOption < SizeInformation->MaxPacketSize) {
+                SizeOption = SizeInformation->MaxPacketSize;
+            }
+
+            UdpSocket->MaxPacketSize = SizeOption;
+
+        } else {
+            SizeOption = UdpSocket->MaxPacketSize;
+            Source = &SizeOption;
+        }
+
+        break;
+
+    case SocketBasicOptionSendMinimum:
+
+        ASSERT(Set == FALSE);
+
+        SizeOption = UDP_SEND_MINIMUM;
+        Source = &SizeOption;
+        break;
+
+    case SocketBasicOptionReceiveBufferSize:
+        if (Set != FALSE) {
+            SizeOption = *((PULONG)Data);
+            if (SizeOption > SOCKET_OPTION_MAX_ULONG) {
+                SizeOption = SOCKET_OPTION_MAX_ULONG;
+            }
+
+            if (SizeOption < UDP_MIN_RECEIVE_BUFFER_SIZE) {
+                SizeOption = UDP_MIN_RECEIVE_BUFFER_SIZE;
+            }
+
+            //
+            // Set the receive buffer size and truncate the available free
+            // space if necessary. Do not remove any packets that have already
+            // been received. This is not meant to be a truncate call.
+            //
+
+            KeAcquireQueuedLock(UdpSocket->ReceiveLock);
+            UdpSocket->ReceiveBufferTotalSize = SizeOption;
+            if (UdpSocket->ReceiveBufferFreeSize > SizeOption) {
+                UdpSocket->ReceiveBufferFreeSize = SizeOption;
+            }
+
+            KeReleaseQueuedLock(UdpSocket->ReceiveLock);
+
+        } else {
+            SizeOption = UdpSocket->ReceiveBufferTotalSize;
+            Source = &SizeOption;
+        }
+
+        break;
+
+    case SocketBasicOptionReceiveMinimum:
+        if (Set != FALSE) {
+            SizeOption = *((PULONG)Data);
+            if (SizeOption > SOCKET_OPTION_MAX_ULONG) {
+                SizeOption = SOCKET_OPTION_MAX_ULONG;
+            }
+
+            UdpSocket->ReceiveMinimum = SizeOption;
+
+        } else {
+            Source = &SizeOption;
+            SizeOption = UdpSocket->ReceiveMinimum;
+        }
+
+        break;
+
+    case SocketBasicOptionReceiveTimeout:
+        if (Set != FALSE) {
+            SocketTime = (PSOCKET_TIME)Data;
+            if (SocketTime->Seconds < 0) {
+                Status = STATUS_DOMAIN_ERROR;
+                break;
+            }
+
+            Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
+            if (Milliseconds < SocketTime->Seconds) {
+                Status = STATUS_DOMAIN_ERROR;
+                break;
+            }
+
+            Milliseconds += SocketTime->Microseconds /
+                            MICROSECONDS_PER_MILLISECOND;
+
+            if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
+                Status = STATUS_DOMAIN_ERROR;
+                break;
+            }
+
+            UdpSocket->ReceiveTimeout = (ULONG)(LONG)Milliseconds;
+
+        } else {
+            Source = &SocketTimeBuffer;
+            if (UdpSocket->ReceiveTimeout == WAIT_TIME_INDEFINITE) {
+                SocketTimeBuffer.Seconds = 0;
+                SocketTimeBuffer.Microseconds = 0;
+
+            } else {
+                SocketTimeBuffer.Seconds = UdpSocket->ReceiveTimeout /
+                                           MILLISECONDS_PER_SECOND;
+
+                SocketTimeBuffer.Microseconds = (UdpSocket->ReceiveTimeout %
+                                                 MILLISECONDS_PER_SECOND) *
+                                                MICROSECONDS_PER_MILLISECOND;
+            }
+        }
+
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        Status = STATUS_NOT_HANDLED;
+        break;
+    }
+
+    if (!KSUCCESS(Status)) {
+        goto UdpGetSetInformationEnd;
+    }
+
+    //
+    // Truncate all copies for get requests down to the required size and only
+    // return the required size on set requests.
+    //
+
+    if (*DataSize > UdpOption->Size) {
+        *DataSize = UdpOption->Size;
+    }
+
+    //
+    // For get requests, copy the gathered information to the supplied data
+    // buffer.
+    //
+
+    if (Set == FALSE) {
+
+        ASSERT(Source != NULL);
+
+        RtlCopyMemory(Data, Source, *DataSize);
+
+        //
+        // If the copy truncated the data, report that the given buffer was too
+        // small. The caller can choose to ignore this if the truncated data is
+        // enough.
+        //
+
+        if (*DataSize < UdpOption->Size) {
+            *DataSize = UdpOption->Size;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto UdpGetSetInformationEnd;
+        }
     }
 
 UdpGetSetInformationEnd:

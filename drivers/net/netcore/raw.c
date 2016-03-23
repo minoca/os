@@ -161,6 +161,32 @@ typedef struct _RAW_RECEIVED_PACKET {
     ULONG Size;
 } RAW_RECEIVED_PACKET, *PRAW_RECEIVED_PACKET;
 
+/*++
+
+Structure Description:
+
+    This structure defines a raw socket option.
+
+Members:
+
+    InformationType - Stores the information type for the socket option.
+
+    Option - Stores the type-specific option identifier.
+
+    Size - Stores the size of the option value, in bytes.
+
+    SetAllowed - Stores a boolean indicating whether or not the option is
+        allowed to be set.
+
+--*/
+
+typedef struct _RAW_SOCKET_OPTION {
+    SOCKET_INFORMATION_TYPE InformationType;
+    UINTN Option;
+    UINTN Size;
+    BOOL SetAllowed;
+} RAW_SOCKET_OPTION, *PRAW_SOCKET_OPTION;
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -296,6 +322,43 @@ NET_PROTOCOL_ENTRY NetRawProtocol = {
     }
 };
 
+RAW_SOCKET_OPTION NetRawSocketOptions[] = {
+    {
+        SocketInformationBasic,
+        SocketBasicOptionSendBufferSize,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionSendMinimum,
+        sizeof(ULONG),
+        FALSE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveBufferSize,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveMinimum,
+        sizeof(ULONG),
+        TRUE
+    },
+
+    {
+        SocketInformationBasic,
+        SocketBasicOptionReceiveTimeout,
+        sizeof(SOCKET_TIME),
+        TRUE
+    },
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -425,11 +488,6 @@ Return Value:
         goto RawCreateSocketEnd;
     }
 
-    //
-    // Broadcast is disabled by default on RAW sockets.
-    //
-
-    RawSocket->NetSocket.Flags |= NET_SOCKET_FLAG_BROADCAST_DISABLED;
     Status = STATUS_SUCCESS;
 
 RawCreateSocketEnd:
@@ -1535,268 +1593,253 @@ Return Value:
     STATUS_NOT_SUPPORTED_BY_PROTOCOL if the socket option is not supported by
         the socket.
 
+    STATUS_NOT_HANDLED if the protocol does not override the default behavior
+        for a basic socket option.
+
 --*/
 
 {
 
-    SOCKET_BASIC_OPTION BasicOption;
+    ULONG Count;
+    ULONG Index;
     LONGLONG Milliseconds;
+    PRAW_SOCKET_OPTION RawOption;
     PRAW_SOCKET RawSocket;
     PNET_PACKET_SIZE_INFORMATION SizeInformation;
+    ULONG SizeOption;
     PSOCKET_TIME SocketTime;
+    SOCKET_TIME SocketTimeBuffer;
+    PVOID Source;
     KSTATUS Status;
 
     RawSocket = (PRAW_SOCKET)Socket;
     if ((InformationType != SocketInformationBasic) &&
         (InformationType != SocketInformationUdp)) {
 
-        Status = STATUS_INVALID_PARAMETER;
+        Status = STATUS_NOT_SUPPORTED;
         goto RawGetSetInformationEnd;
     }
 
-    Status = STATUS_SUCCESS;
-    if (InformationType == SocketInformationBasic) {
-        BasicOption = (SOCKET_BASIC_OPTION)Option;
-        switch (BasicOption) {
-        case SocketBasicOptionSendBufferSize:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
+    //
+    // Search to see if the socket option is supported by the raw protocol.
+    //
 
-                SizeInformation = &(Socket->PacketSizeInformation);
-                if (*((PULONG)Data) > RAW_MAX_PACKET_SIZE) {
-                    RawSocket->MaxPacketSize = RAW_MAX_PACKET_SIZE;
+    Count = sizeof(NetRawSocketOptions) / sizeof(NetRawSocketOptions[0]);
+    for (Index = 0; Index < Count; Index += 1) {
+        RawOption = &(NetRawSocketOptions[Index]);
+        if ((RawOption->InformationType == InformationType) &&
+            (RawOption->Option == Option)) {
 
-                } else if (*((PULONG)Data) < SizeInformation->MaxPacketSize) {
-                    RawSocket->MaxPacketSize = SizeInformation->MaxPacketSize;
-
-                } else {
-                    RawSocket->MaxPacketSize = *((PULONG)Data);
-                }
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = RawSocket->MaxPacketSize;
-            }
-
-            break;
-
-        case SocketBasicOptionSendMinimum:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = RAW_SEND_MINIMUM;
-            }
-
-            break;
-
-        case SocketBasicOptionSendTimeout:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-
-            } else {
-                if (*DataSize < sizeof(SOCKET_TIME)) {
-                    *DataSize = sizeof(SOCKET_TIME);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                //
-                // The indefinite wait time is represented as 0 time for the
-                // SOCKET_TIME structure.
-                //
-
-                SocketTime = (PSOCKET_TIME)Data;
-                SocketTime->Seconds = 0;
-                SocketTime->Microseconds = 0;
-            }
-
-            break;
-
-        case SocketBasicOptionReceiveBufferSize:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                KeAcquireSpinLock(&(RawSocket->ReceiveLock));
-                if (*((PULONG)Data) < RAW_MIN_RECEIVE_BUFFER_SIZE) {
-                    RawSocket->ReceiveBufferTotalSize =
-                                                   RAW_MIN_RECEIVE_BUFFER_SIZE;
-
-                } else {
-                    RawSocket->ReceiveBufferTotalSize = *((PULONG)Data);
-                }
-
-                //
-                // Truncate the available free space if necessary. Do not
-                // remove any packets that have already been received. This is
-                // not meant to be a truncate call.
-                //
-
-                if (RawSocket->ReceiveBufferFreeSize >
-                    RawSocket->ReceiveBufferTotalSize) {
-
-                    RawSocket->ReceiveBufferFreeSize =
-                                             RawSocket->ReceiveBufferTotalSize;
-                }
-
-                KeReleaseSpinLock(&(RawSocket->ReceiveLock));
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = RawSocket->ReceiveBufferTotalSize;
-            }
-
-            break;
-
-        case SocketBasicOptionReceiveMinimum:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                RawSocket->ReceiveMinimum = *((PULONG)Data);
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = RawSocket->ReceiveMinimum;
-            }
-
-            break;
-
-        case SocketBasicOptionReceiveTimeout:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(SOCKET_TIME)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                SocketTime = (PSOCKET_TIME)Data;
-                if (SocketTime->Seconds < 0) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
-                if (Milliseconds < SocketTime->Seconds) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                Milliseconds += SocketTime->Microseconds /
-                                MICROSECONDS_PER_MILLISECOND;
-
-                if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                RawSocket->ReceiveTimeout = (ULONG)(LONG)Milliseconds;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                SocketTime = (PSOCKET_TIME)Data;
-                SocketTime->Seconds = RawSocket->ReceiveTimeout /
-                                      MILLISECONDS_PER_SECOND;
-
-                SocketTime->Microseconds = (RawSocket->ReceiveTimeout %
-                                            MILLISECONDS_PER_SECOND) *
-                                           MICROSECONDS_PER_MILLISECOND;
-            }
-
-            break;
-
-        case SocketBasicOptionAcceptConnections:
-            if (Set != FALSE) {
-                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                *((PULONG)Data) = FALSE;
-            }
-
-            break;
-
-        case SocketBasicOptionBroadcastEnabled:
-            if (Set != FALSE) {
-                if (*DataSize != sizeof(ULONG)) {
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                if (*((PULONG)Data) != FALSE) {
-                    RtlAtomicAnd32(&(Socket->Flags),
-                                   ~NET_SOCKET_FLAG_BROADCAST_DISABLED);
-
-                } else {
-                    RtlAtomicOr32(&(Socket->Flags),
-                                  NET_SOCKET_FLAG_BROADCAST_DISABLED);
-                }
-
-            } else {
-                if (*DataSize < sizeof(ULONG)) {
-                    *DataSize = sizeof(ULONG);
-                    Status = STATUS_BUFFER_TOO_SMALL;
-                    break;
-                }
-
-                if ((Socket->Flags & NET_SOCKET_FLAG_BROADCAST_DISABLED) == 0) {
-                    *((PULONG)Data) = TRUE;
-
-                } else {
-                    *((PULONG)Data) = FALSE;
-                }
-            }
-
-            break;
-
-        default:
-            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
             break;
         }
+    }
 
-    } else {
+    if (Index == Count) {
+        if (InformationType == SocketInformationBasic) {
+            Status = STATUS_NOT_HANDLED;
 
-        ASSERT(InformationType == SocketInformationRaw);
+        } else {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+        }
 
-        Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+        goto RawGetSetInformationEnd;
+    }
+
+    //
+    // Handle failure cases common to all options.
+    //
+
+    if (Set != FALSE) {
+        if (RawOption->SetAllowed == FALSE) {
+            Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+            goto RawGetSetInformationEnd;
+        }
+
+        if (*DataSize < RawOption->Size) {
+            *DataSize = RawOption->Size;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto RawGetSetInformationEnd;
+        }
+    }
+
+    //
+    // There are currently no raw protocol options.
+    //
+
+    ASSERT(InformationType != SocketInformationRaw);
+
+    //
+    // Parse the basic socket option, getting the information from the raw
+    // socket or setting the new state in the raw socket.
+    //
+
+    Source = NULL;
+    Status = STATUS_SUCCESS;
+    switch ((SOCKET_BASIC_OPTION)Option) {
+    case SocketBasicOptionSendBufferSize:
+        if (Set != FALSE) {
+            SizeOption = *((PULONG)Data);
+            if (SizeOption > SOCKET_OPTION_MAX_ULONG) {
+                SizeOption = SOCKET_OPTION_MAX_ULONG;
+            }
+
+            SizeInformation = &(Socket->PacketSizeInformation);
+            if (SizeOption > RAW_MAX_PACKET_SIZE) {
+                SizeOption = RAW_MAX_PACKET_SIZE;
+
+            } else if (SizeOption < SizeInformation->MaxPacketSize) {
+                SizeOption = SizeInformation->MaxPacketSize;
+            }
+
+            RawSocket->MaxPacketSize = SizeOption;
+
+        } else {
+            Source = &SizeOption;
+            SizeOption = RawSocket->MaxPacketSize;
+        }
+
+        break;
+
+    case SocketBasicOptionSendMinimum:
+
+        ASSERT(Set == FALSE);
+
+        Source = &SizeOption;
+        SizeOption = RAW_SEND_MINIMUM;
+        break;
+
+    case SocketBasicOptionReceiveBufferSize:
+        if (Set != FALSE) {
+            SizeOption = *((PULONG)Data);
+            if (SizeOption < RAW_MIN_RECEIVE_BUFFER_SIZE) {
+                SizeOption = RAW_MIN_RECEIVE_BUFFER_SIZE;
+
+            } else if (SizeOption > SOCKET_OPTION_MAX_ULONG) {
+                SizeOption = SOCKET_OPTION_MAX_ULONG;
+            }
+
+            //
+            // Set the receive buffer size and truncate the available free
+            // space if necessary. Do not remove any packets that have already
+            // been received. This is not meant to be a truncate call.
+            //
+
+            KeAcquireSpinLock(&(RawSocket->ReceiveLock));
+            RawSocket->ReceiveBufferTotalSize = SizeOption;
+            if (RawSocket->ReceiveBufferFreeSize > SizeOption) {
+                RawSocket->ReceiveBufferFreeSize = SizeOption;
+            }
+
+            KeReleaseSpinLock(&(RawSocket->ReceiveLock));
+
+        } else {
+            Source = &SizeOption;
+            SizeOption = RawSocket->ReceiveBufferTotalSize;
+        }
+
+        break;
+
+    case SocketBasicOptionReceiveMinimum:
+        if (Set != FALSE) {
+            SizeOption = *((PULONG)Data);
+            if (SizeOption > SOCKET_OPTION_MAX_ULONG) {
+                SizeOption = SOCKET_OPTION_MAX_ULONG;
+            }
+
+            RawSocket->ReceiveMinimum = SizeOption;
+
+        } else {
+            Source = &SizeOption;
+            SizeOption = RawSocket->ReceiveMinimum;
+        }
+
+        break;
+
+    case SocketBasicOptionReceiveTimeout:
+        if (Set != FALSE) {
+            SocketTime = (PSOCKET_TIME)Data;
+            if (SocketTime->Seconds < 0) {
+                Status = STATUS_DOMAIN_ERROR;
+                break;
+            }
+
+            Milliseconds = SocketTime->Seconds * MILLISECONDS_PER_SECOND;
+            if (Milliseconds < SocketTime->Seconds) {
+                Status = STATUS_DOMAIN_ERROR;
+                break;
+            }
+
+            Milliseconds += SocketTime->Microseconds /
+                            MICROSECONDS_PER_MILLISECOND;
+
+            if ((Milliseconds < 0) || (Milliseconds > MAX_LONG)) {
+                Status = STATUS_DOMAIN_ERROR;
+                break;
+            }
+
+            RawSocket->ReceiveTimeout = (ULONG)(LONG)Milliseconds;
+
+        } else {
+            Source = &SocketTimeBuffer;
+            if (RawSocket->ReceiveTimeout == WAIT_TIME_INDEFINITE) {
+                SocketTimeBuffer.Seconds = 0;
+                SocketTimeBuffer.Microseconds = 0;
+
+            } else {
+                SocketTimeBuffer.Seconds = RawSocket->ReceiveTimeout /
+                                           MILLISECONDS_PER_SECOND;
+
+                SocketTimeBuffer.Microseconds = (RawSocket->ReceiveTimeout %
+                                                 MILLISECONDS_PER_SECOND) *
+                                                MICROSECONDS_PER_MILLISECOND;
+            }
+        }
+
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        Status = STATUS_NOT_SUPPORTED;
+        break;
+    }
+
+    if (!KSUCCESS(Status)) {
+        goto RawGetSetInformationEnd;
+    }
+
+    //
+    // Truncate all copies for get requests down to the required size and only
+    // return the required size on set requests.
+    //
+
+    if (*DataSize > RawOption->Size) {
+        *DataSize = RawOption->Size;
+    }
+
+    //
+    // For get requests, copy the gathered information to the supplied data
+    // buffer.
+    //
+
+    if (Set == FALSE) {
+
+        ASSERT(Source != NULL);
+
+        RtlCopyMemory(Data, Source, *DataSize);
+
+        //
+        // If the copy truncated the data, report that the given buffer was too
+        // small. The caller can choose to ignore this if the truncated data is
+        // enough.
+        //
+
+        if (*DataSize < RawOption->Size) {
+            *DataSize = RawOption->Size;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            goto RawGetSetInformationEnd;
+        }
     }
 
 RawGetSetInformationEnd:

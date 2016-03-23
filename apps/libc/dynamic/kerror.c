@@ -161,7 +161,8 @@ int ClpStatusToErrorNumber[] = {
     EPIPE,
     ENXIO,
     EAFNOSUPPORT,
-    EPROTONOSUPPORT
+    EPROTONOSUPPORT,
+    EDOM
 };
 
 //
