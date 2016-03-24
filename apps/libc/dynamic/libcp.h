@@ -168,9 +168,46 @@ typedef struct _FILE {
     mbstate_t ShiftState;
 } *PFILE;
 
+/*++
+
+Structure Description:
+
+    This structure defines a C library type conversion interface.
+
+Members:
+
+    ListEntry - Stores the interfaces list entry into the global list of type
+        conversion interfaces.
+
+    Type - Stores the conversion type of the interface.
+
+    Buffer - Stores an opaque pointer to the interface buffer.
+
+    Network - Stores a pointer to the network type conversion interface.
+
+--*/
+
+typedef struct _CL_TYPE_CONVERSION_INTERFACE {
+    LIST_ENTRY ListEntry;
+    CL_CONVERSION_TYPE Type;
+    union {
+      PVOID Buffer;
+      PCL_NETWORK_CONVERSION_INTERFACE Network;
+    } Interface;
+
+} CL_TYPE_CONVERSION_INTERFACE, *PCL_TYPE_CONVERSION_INTERFACE;
+
 //
 // -------------------------------------------------------------------- Globals
 //
+
+//
+// Store the global list of type conversion interfaces, protected by a global
+// lock.
+//
+
+LIST_ENTRY ClTypeConversionInterfaceList;
+pthread_mutex_t ClTypeConversionInterfaceLock;
 
 //
 // -------------------------------------------------------- Function Prototypes
@@ -207,6 +244,29 @@ ClpInitializeFileIo (
 Routine Description:
 
     This routine initializes the file I/O subsystem of the C library.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    TRUE on success.
+
+    FALSE on failure.
+
+--*/
+
+BOOL
+ClpInitializeTypeConversions (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the type conversion subsystem of the C library.
 
 Arguments:
 

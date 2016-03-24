@@ -78,6 +78,7 @@ Return Value:
     ClpInitializeTimeZoneSupport();
     ClpInitializeFileIo();
     ClpInitializeSignals();
+    ClpInitializeTypeConversions();
     return;
 }
 

@@ -1441,7 +1441,7 @@ LIBC_API
 KSTATUS
 ClConvertToNetworkAddress (
     const struct sockaddr *Address,
-    UINTN AddressLength,
+    socklen_t AddressLength,
     PNETWORK_ADDRESS NetworkAddress,
     PSTR *Path,
     PUINTN PathSize
@@ -1479,8 +1479,11 @@ Return Value:
 
 {
 
+    PLIST_ENTRY CurrentEntry;
+    PCL_TYPE_CONVERSION_INTERFACE Entry;
     struct sockaddr_in *Ip4SocketAddress;
     struct sockaddr_in6 *Ip6SocketAddress;
+    KSTATUS Status;
     UINTN StringSize;
     struct sockaddr_un *UnixAddress;
 
@@ -1557,7 +1560,33 @@ Return Value:
         }
 
     } else {
-        return STATUS_INVALID_ADDRESS;
+        Status = STATUS_INVALID_ADDRESS;
+        pthread_mutex_lock(&ClTypeConversionInterfaceLock);
+        CurrentEntry = ClTypeConversionInterfaceList.Next;
+        while (CurrentEntry != &ClTypeConversionInterfaceList) {
+            Entry = LIST_VALUE(CurrentEntry,
+                                   CL_TYPE_CONVERSION_INTERFACE,
+                                   ListEntry);
+
+            CurrentEntry = CurrentEntry->Next;
+            if ((Entry->Type != ClConversionNetworkAddress) ||
+                (Entry->Interface.Network->Version !=
+                 CL_NETWORK_CONVERSION_INTERFACE_VERSION) ||
+                (Entry->Interface.Network->AddressFamily !=
+                 Address->sa_family)) {
+
+                continue;
+            }
+
+            Status = Entry->Interface.Network->ToNetworkAddress(Address,
+                                                                AddressLength,
+                                                                NetworkAddress);
+
+            break;
+        }
+
+        pthread_mutex_unlock(&ClTypeConversionInterfaceLock);
+        return Status;
     }
 
     return STATUS_SUCCESS;
@@ -1608,6 +1637,8 @@ Return Value:
 {
 
     UINTN CopySize;
+    PLIST_ENTRY CurrentEntry;
+    PCL_TYPE_CONVERSION_INTERFACE Entry;
     struct sockaddr_in Ip4Address;
     struct sockaddr_in6 Ip6Address;
     PVOID Source;
@@ -1657,7 +1688,34 @@ Return Value:
         Source = &UnixAddress;
 
     } else {
-        return STATUS_INVALID_ADDRESS;
+        Status = STATUS_INVALID_ADDRESS;
+        pthread_mutex_lock(&ClTypeConversionInterfaceLock);
+        CurrentEntry = ClTypeConversionInterfaceList.Next;
+        while (CurrentEntry != &ClTypeConversionInterfaceList) {
+            Entry = LIST_VALUE(CurrentEntry,
+                                   CL_TYPE_CONVERSION_INTERFACE,
+                                   ListEntry);
+
+            CurrentEntry = CurrentEntry->Next;
+            if ((Entry->Type != ClConversionNetworkAddress) ||
+                (Entry->Interface.Network->Version !=
+                 CL_NETWORK_CONVERSION_INTERFACE_VERSION) ||
+                (Entry->Interface.Network->AddressDomain !=
+                 NetworkAddress->Domain)) {
+
+                continue;
+            }
+
+            Status = Entry->Interface.Network->FromNetworkAddress(
+                                                                NetworkAddress,
+                                                                Address,
+                                                                AddressLength);
+
+            break;
+        }
+
+        pthread_mutex_unlock(&ClTypeConversionInterfaceLock);
+        return Status;
     }
 
     Status = STATUS_SUCCESS;

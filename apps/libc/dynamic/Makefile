@@ -51,6 +51,7 @@ INCLUDES += $(SRCROOT)/os/apps/include;$(SRCROOT)/os/apps/include/libc;
 OBJS = assert.o             \
        brk.o                \
        bsearch.o            \
+       convert.o            \
        ctype.o              \
        dirio.o              \
        dynlib.o             \
