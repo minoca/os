@@ -3635,7 +3635,7 @@ Return Value:
             Information.DnsServers[ServerIndex].Port = DNS_PORT_NUMBER;
             if (PrimaryServer != NULL) {
                 AddressLength = sizeof(struct sockaddr);
-                Status = ClpConvertFromNetworkAddress(
+                Status = ClConvertFromNetworkAddress(
                                         &(Information.DnsServers[ServerIndex]),
                                         PrimaryServer,
                                         &AddressLength,
@@ -3661,7 +3661,7 @@ Return Value:
 
             memset(Alternate, 0, sizeof(DNS_RESULT));
             AddressLength = sizeof(Alternate->Address);
-            Status = ClpConvertFromNetworkAddress(
+            Status = ClConvertFromNetworkAddress(
                                         &(Information.DnsServers[ServerIndex]),
                                         &(Alternate->Address),
                                         &AddressLength,
@@ -3987,11 +3987,11 @@ Return Value:
 
                 memset(DnsResult, 0, sizeof(DNS_RESULT));
                 AddressLength = sizeof(DnsResult->Address);
-                Status = ClpConvertFromNetworkAddress(&(Information.Address),
-                                                      &(DnsResult->Address),
-                                                      &AddressLength,
-                                                      NULL,
-                                                      0);
+                Status = ClConvertFromNetworkAddress(&(Information.Address),
+                                                     &(DnsResult->Address),
+                                                     &AddressLength,
+                                                     NULL,
+                                                     0);
 
                 if (!KSUCCESS(Status)) {
                     free(DnsResult);
@@ -4027,11 +4027,11 @@ Return Value:
 
                 memset(DnsResult, 0, sizeof(DNS_RESULT));
                 AddressLength = sizeof(DnsResult->Address);
-                Status = ClpConvertFromNetworkAddress(&(Information.Address),
-                                                      &(DnsResult->Address),
-                                                      &AddressLength,
-                                                      NULL,
-                                                      0);
+                Status = ClConvertFromNetworkAddress(&(Information.Address),
+                                                     &(DnsResult->Address),
+                                                     &AddressLength,
+                                                     NULL,
+                                                     0);
 
                 if (!KSUCCESS(Status)) {
                     free(DnsResult);

@@ -35,6 +35,8 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -709,17 +711,52 @@ Return Value:
 
 {
 
+    socklen_t AddressLength;
     PUCHAR BytePointer;
+    struct sockaddr_in Ip4Address;
+    struct sockaddr_in6 Ip6Address;
+    CHAR PrintBuffer[60];
+    KSTATUS Status;
 
     switch (Address->Domain) {
     case NetDomainIp4:
-        BytePointer = (PUCHAR)(Address->Address);
-        printf("%d.%d.%d.%d",
-               BytePointer[0],
-               BytePointer[1],
-               BytePointer[2],
-               BytePointer[3]);
+        AddressLength = sizeof(struct sockaddr_in);
+        Status = ClConvertFromNetworkAddress(Address,
+                                             (struct sockaddr *)&Ip4Address,
+                                             &AddressLength,
+                                             NULL,
+                                             0);
 
+        if (!KSUCCESS(Status)) {
+            break;
+        }
+
+        inet_ntop(Ip4Address.sin_family,
+                 &(Ip4Address.sin_addr.s_addr),
+                 PrintBuffer,
+                 sizeof(PrintBuffer));
+
+        printf("%s", PrintBuffer);
+        break;
+
+    case NetDomainIp6:
+        AddressLength = sizeof(struct sockaddr_in6);
+        Status = ClConvertFromNetworkAddress(Address,
+                                             (struct sockaddr *)&Ip6Address,
+                                             &AddressLength,
+                                             NULL,
+                                             0);
+
+        if (!KSUCCESS(Status)) {
+            break;
+        }
+
+        inet_ntop(Ip6Address.sin6_family,
+                  &(Ip6Address.sin6_addr.s6_addr),
+                  PrintBuffer,
+                  sizeof(PrintBuffer));
+
+        printf("%s", PrintBuffer);
         break;
 
     case NetDomain80211:

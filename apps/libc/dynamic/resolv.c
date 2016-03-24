@@ -2269,7 +2269,7 @@ Return Value:
                 (ServerDomain == NetDomainIp4)) {
 
                 AddressLength = sizeof(struct sockaddr_in);
-                Status = ClpConvertFromNetworkAddress(
+                Status = ClConvertFromNetworkAddress(
                       &(Information.DnsServers[ServerIndex]),
                       (struct sockaddr *)&(State->nsaddr_list[State->nscount]),
                       &AddressLength,

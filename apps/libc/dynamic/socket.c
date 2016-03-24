@@ -35,7 +35,6 @@ Environment:
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
-#include "net.h"
 
 //
 // --------------------------------------------------------------------- Macros
@@ -324,11 +323,11 @@ Return Value:
 
     Path = NULL;
     PathSize = 0;
-    Status = ClpConvertToNetworkAddress(Address,
-                                        AddressLength,
-                                        &NetworkAddress,
-                                        &Path,
-                                        &PathSize);
+    Status = ClConvertToNetworkAddress(Address,
+                                       AddressLength,
+                                       &NetworkAddress,
+                                       &Path,
+                                       &PathSize);
 
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
@@ -542,11 +541,11 @@ Return Value:
     //
 
     if ((Address != NULL) && (AddressLength != NULL)) {
-        Status = ClpConvertFromNetworkAddress(&NetworkAddress,
-                                              Address,
-                                              AddressLength,
-                                              RemotePath,
-                                              RemotePathSize);
+        Status = ClConvertFromNetworkAddress(&NetworkAddress,
+                                             Address,
+                                             AddressLength,
+                                             RemotePath,
+                                             RemotePathSize);
 
         if (!KSUCCESS(Status)) {
             errno = EINVAL;
@@ -604,11 +603,11 @@ Return Value:
 
     RemotePath = NULL;
     RemotePathSize = 0;
-    Status = ClpConvertToNetworkAddress(Address,
-                                        AddressLength,
-                                        &NetworkAddress,
-                                        &RemotePath,
-                                        &RemotePathSize);
+    Status = ClConvertToNetworkAddress(Address,
+                                       AddressLength,
+                                       &NetworkAddress,
+                                       &RemotePath,
+                                       &RemotePathSize);
 
     if (!KSUCCESS(Status)) {
         errno = EINVAL;
@@ -751,11 +750,11 @@ Return Value:
     //
 
     if (DestinationAddress != NULL) {
-        Status = ClpConvertToNetworkAddress(DestinationAddress,
-                                            DestinationAddressLength,
-                                            &NetworkAddress,
-                                            &(Parameters.RemotePath),
-                                            &(Parameters.RemotePathSize));
+        Status = ClConvertToNetworkAddress(DestinationAddress,
+                                           DestinationAddressLength,
+                                           &NetworkAddress,
+                                           &(Parameters.RemotePath),
+                                           &(Parameters.RemotePathSize));
 
         if (!KSUCCESS(Status)) {
             errno = EINVAL;
@@ -839,11 +838,11 @@ Return Value:
     Parameters.RemotePath = NULL;
     Parameters.RemotePathSize = 0;
     if ((Message->msg_name != NULL) && (Message->msg_namelen != 0)) {
-        Status = ClpConvertToNetworkAddress(Message->msg_name,
-                                            Message->msg_namelen,
-                                            &Address,
-                                            &(Parameters.RemotePath),
-                                            &(Parameters.RemotePathSize));
+        Status = ClConvertToNetworkAddress(Message->msg_name,
+                                           Message->msg_namelen,
+                                           &Address,
+                                           &(Parameters.RemotePath),
+                                           &(Parameters.RemotePathSize));
 
         if (!KSUCCESS(Status)) {
             errno = EINVAL;
@@ -1003,11 +1002,11 @@ Return Value:
     //
 
     if (SourceAddress != NULL) {
-        Status = ClpConvertFromNetworkAddress(&NetworkAddress,
-                                              SourceAddress,
-                                              SourceAddressLength,
-                                              Parameters.RemotePath,
-                                              Parameters.RemotePathSize);
+        Status = ClConvertFromNetworkAddress(&NetworkAddress,
+                                             SourceAddress,
+                                             SourceAddressLength,
+                                             Parameters.RemotePath,
+                                             Parameters.RemotePathSize);
 
         if (!KSUCCESS(Status)) {
             errno = EINVAL;
@@ -1115,11 +1114,11 @@ Return Value:
     //
 
     if ((Message->msg_name != NULL) && (Message->msg_namelen != 0)) {
-        Status = ClpConvertFromNetworkAddress(&Address,
-                                              Message->msg_name,
-                                              &(Message->msg_namelen),
-                                              Parameters.RemotePath,
-                                              Parameters.RemotePathSize);
+        Status = ClConvertFromNetworkAddress(&Address,
+                                             Message->msg_name,
+                                             &(Message->msg_namelen),
+                                             Parameters.RemotePath,
+                                             Parameters.RemotePathSize);
 
         if (!KSUCCESS(Status)) {
             errno = EINVAL;
@@ -1438,8 +1437,9 @@ Return Value:
     return Result;
 }
 
+LIBC_API
 KSTATUS
-ClpConvertToNetworkAddress (
+ClConvertToNetworkAddress (
     const struct sockaddr *Address,
     UINTN AddressLength,
     PNETWORK_ADDRESS NetworkAddress,
@@ -1563,8 +1563,9 @@ Return Value:
     return STATUS_SUCCESS;
 }
 
+LIBC_API
 KSTATUS
-ClpConvertFromNetworkAddress (
+ClConvertFromNetworkAddress (
     PNETWORK_ADDRESS NetworkAddress,
     struct sockaddr *Address,
     socklen_t *AddressLength,
@@ -1610,6 +1611,7 @@ Return Value:
     struct sockaddr_in Ip4Address;
     struct sockaddr_in6 Ip6Address;
     PVOID Source;
+    KSTATUS Status;
     UINTN TotalSize;
     struct sockaddr_un UnixAddress;
 
@@ -1658,14 +1660,16 @@ Return Value:
         return STATUS_INVALID_ADDRESS;
     }
 
+    Status = STATUS_SUCCESS;
     CopySize = TotalSize;
     if (CopySize > *AddressLength) {
         CopySize = *AddressLength;
+        Status = STATUS_BUFFER_TOO_SMALL;
     }
 
     RtlCopyMemory(Address, Source, CopySize);
     *AddressLength = TotalSize;
-    return STATUS_SUCCESS;
+    return Status;
 }
 
 //
@@ -1744,11 +1748,11 @@ Return Value:
     ASSERT(BufferSize >= sizeof(NETWORK_ADDRESS));
 
     BufferSize -= sizeof(NETWORK_ADDRESS);
-    Status = ClpConvertFromNetworkAddress(LocalAddress,
-                                          SocketAddress,
-                                          AddressLength,
-                                          (PSTR)(LocalAddress + 1),
-                                          BufferSize);
+    Status = ClConvertFromNetworkAddress(LocalAddress,
+                                         SocketAddress,
+                                         AddressLength,
+                                         (PSTR)(LocalAddress + 1),
+                                         BufferSize);
 
     if (!KSUCCESS(Status)) {
         errno = ClConvertKstatusToErrorNumber(Status);
