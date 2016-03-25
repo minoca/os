@@ -38,12 +38,14 @@ APPS = efiboot  \
 DIRS = $(APPS)  \
        lib      \
        libc     \
+       netlink  \
        osbase   \
        posix    \
 
 include $(SRCROOT)/os/minoca.mk
 
 libc: osbase
-$(APPS): libc lib
+$(APPS): libc lib netlink
 lib: libc
+netlink: libc
 
