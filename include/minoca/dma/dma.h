@@ -175,7 +175,9 @@ Members:
         context here.
 
     Size - Stores the size of the transfer in bytes. It is an error if this
-        size does not translate evenly to bus sized transactions.
+        size does not translate evenly to bus sized transactions. This size may
+        be truncated after submission if there weren't enough internal DMA
+        descriptors to accommodate the full size.
 
     Width - Stores the width of the transfer, in bytes. Supply 0 to use the
         width from the resource allocation.

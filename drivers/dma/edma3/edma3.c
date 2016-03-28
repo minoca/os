@@ -861,6 +861,16 @@ Return Value:
         Status = InterruptStatusClaimed;
     }
 
+    if (Status == InterruptStatusClaimed) {
+        RtlDebugPrint("EDMA: Error %x %x %x %x\n",
+                      Controller->Pending.MissedLow,
+                      Controller->Pending.MissedHigh,
+                      Controller->Pending.MissedQuick,
+                      Controller->Pending.Error);
+
+        EDMA_WRITE(Controller, EdmaErrorEvaluate, 1);
+    }
+
     return Status;
 }
 
@@ -1555,6 +1565,7 @@ Return Value:
 {
 
     UINTN BytesThisRound;
+    PEDMA_CONFIGURATION Configuration;
     PHYSICAL_ADDRESS DeviceAddress;
     PDMA_TRANSFER DmaTransfer;
     PIO_BUFFER_FRAGMENT Fragment;
@@ -1697,6 +1708,22 @@ Return Value:
 
         Transfer->BytesPending += ParamSize;
         ParamIndex += 1;
+    }
+
+    //
+    // If this is an event based transaction, limit the DMA transfer to what
+    // could be achieved this round. Otherwise, the caller may set up a larger
+    // transfer, resulting in missed events.
+    //
+
+    Configuration = DmaTransfer->Configuration;
+    if ((Configuration != NULL) &&
+        (DmaTransfer->ConfigurationSize >= sizeof(EDMA_CONFIGURATION))) {
+
+        if (Configuration->Mode == EdmaTriggerModeEvent) {
+            Transfer->Transfer->Size = Transfer->BytesPending +
+                                       Transfer->Transfer->Completed;
+        }
     }
 
     Status = STATUS_SUCCESS;
@@ -2182,9 +2209,11 @@ ProcessCompletedTransferEnd:
     if (CompleteTransfer != FALSE) {
         DmaTransfer->Status = Status;
         EdmapResetTransfer(Controller, Transfer);
+        KeReleaseSpinLock(&(Controller->Lock));
         DmaTransfer = DmaTransferCompletion(Controller->DmaController,
                                             DmaTransfer);
 
+        KeAcquireSpinLock(&(Controller->Lock));
         if (DmaTransfer != NULL) {
             Transfer->Transfer = DmaTransfer;
             EdmapPrepareAndSubmitTransfer(Controller, Transfer);
@@ -2214,9 +2243,7 @@ Arguments:
 
 Return Value:
 
-    Returns a pointer to the allocated EDMA transfer on success.
-
-    NULL on allocation failure.
+    None.
 
 --*/
 
@@ -2327,7 +2354,7 @@ Return Value:
             continue;
         }
 
-        BitIndex = RtlCountTrailingZeros(~(Controller->Params[BlockIndex]));
+        BitIndex = RtlCountTrailingZeros(Block);
         Controller->Params[BlockIndex] |= 1 << BitIndex;
         return (BlockIndex * (sizeof(UINTN) * BITS_PER_BYTE)) + BitIndex;
     }

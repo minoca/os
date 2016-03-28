@@ -219,6 +219,10 @@ Return Value:
             (Context->GreenMask != 0) &&
             (Context->BlueMask != 0)));
 
+    RtlCopyMemory(&(Context->Palette),
+                  &VidDefaultPalette,
+                  sizeof(BASE_VIDEO_PALETTE));
+
     VidpConvertPalette(Context, &VidDefaultPalette, &Context->PhysicalPalette);
     Context->Font = VidDefaultFont;
 

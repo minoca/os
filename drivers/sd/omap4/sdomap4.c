@@ -232,7 +232,8 @@ SdOmap4PerformDmaIo (
 
 KSTATUS
 SdOmap4SetupEdma (
-    PSD_OMAP4_CHILD Child
+    PSD_OMAP4_CHILD Child,
+    PULONGLONG Size
     );
 
 VOID
@@ -2659,14 +2660,12 @@ Return Value:
     IoOffset = Irp->U.ReadWrite.IoOffset + Irp->U.ReadWrite.IoBytesCompleted;
     BlockOffset = IoOffset >> Child->BlockShift;
     IoSize = Irp->U.ReadWrite.IoSizeInBytes - Irp->U.ReadWrite.IoBytesCompleted;
-    BlockCount = IoSize >> Child->BlockShift;
     Write = FALSE;
     if (Irp->MinorCode == IrpMinorIoWrite) {
         Write = TRUE;
     }
 
     ASSERT(BlockOffset < Child->BlockCount);
-    ASSERT(BlockCount >= 1);
 
     //
     // Set up the DMA transfer if the controller uses system DMA.
@@ -2676,12 +2675,19 @@ Return Value:
 
         ASSERT(Child->Parent->Soc == SdTiSocAm335);
 
-        Status = SdOmap4SetupEdma(Child);
+        Status = SdOmap4SetupEdma(Child, &IoSize);
         if (!KSUCCESS(Status)) {
             IoCompleteIrp(SdOmap4Driver, Irp, Status);
             return;
         }
+
+    } else {
+        Child->RemainingInterrupts = 1;
     }
+
+    BlockCount = IoSize >> Child->BlockShift;
+
+    ASSERT((BlockCount >= 1) && ((BlockCount << Child->BlockShift) == IoSize));
 
     SdStandardBlockIoDma(Child->Controller,
                          BlockOffset,
@@ -2697,7 +2703,8 @@ Return Value:
 
 KSTATUS
 SdOmap4SetupEdma (
-    PSD_OMAP4_CHILD Child
+    PSD_OMAP4_CHILD Child,
+    PULONGLONG Size
     )
 
 /*++
@@ -2709,6 +2716,9 @@ Routine Description:
 Arguments:
 
     Child - Supplies a pointer to the child device.
+
+    Size - Supplies a pointer where the actual size of the DMA transfer will
+        be returned on success.
 
 Return Value:
 
@@ -2772,6 +2782,7 @@ Return Value:
 
     Child->RemainingInterrupts = 2;
     Status = Dma->Submit(Dma, DmaTransfer);
+    *Size = DmaTransfer->Size - DmaTransfer->Completed;
     return Status;
 }
 
@@ -2799,6 +2810,7 @@ Return Value:
 {
 
     PSD_OMAP4_CHILD Child;
+    UINTN CompletedThisRound;
     KSTATUS Status;
 
     Child = Transfer->UserContext;
@@ -2812,11 +2824,10 @@ Return Value:
         SdErrorRecovery(Child->Controller);
     }
 
-    SdOmap4DmaCompletion(Child->Controller,
-                         Child,
-                         Transfer->Completed,
-                         Status);
+    CompletedThisRound = Transfer->Completed -
+                         Child->Irp->U.ReadWrite.IoBytesCompleted;
 
+    SdOmap4DmaCompletion(Child->Controller, Child, CompletedThisRound, Status);
     return;
 }
 
@@ -2843,7 +2854,8 @@ Arguments:
     Context - Supplies a context pointer passed to the library when the DMA
         request was issued.
 
-    BytesTransferred - Supplies the number of bytes transferred in the request.
+    BytesTransferred - Supplies the number of bytes transferred in the request
+        this round.
 
     Status - Supplies the status code representing the completion of the I/O.
 
