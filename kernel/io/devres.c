@@ -29,6 +29,18 @@ Environment:
 #include "iop.h"
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// Some resources need to be non-paged because they may be used by the paging
+// device during I/O transfers.
+//
+
+#define RESOURCE_TYPE_NON_PAGED(_ResourceType) \
+    ((_ResourceType) == ResourceTypeDmaChannel)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -1012,8 +1024,14 @@ Return Value:
     //
 
     AllocationSize = sizeof(RESOURCE_ALLOCATION) + DataSize;
-    NewAllocation = MmAllocatePagedPool(AllocationSize,
-                                        RESOURCE_ALLOCATION_TAG);
+    if (RESOURCE_TYPE_NON_PAGED(Allocation->Type)) {
+        NewAllocation = MmAllocateNonPagedPool(AllocationSize,
+                                               RESOURCE_ALLOCATION_TAG);
+
+    } else {
+        NewAllocation = MmAllocatePagedPool(AllocationSize,
+                                            RESOURCE_ALLOCATION_TAG);
+    }
 
     if (NewAllocation == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1078,7 +1096,13 @@ Return Value:
     ASSERT(ResourceAllocationList != NULL);
 
     LIST_REMOVE(&(Allocation->ListEntry));
-    MmFreePagedPool(Allocation);
+    if (RESOURCE_TYPE_NON_PAGED(Allocation->Type)) {
+        MmFreeNonPagedPool(Allocation);
+
+    } else {
+        MmFreePagedPool(Allocation);
+    }
+
     return;
 }
 
