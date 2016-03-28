@@ -147,7 +147,8 @@ sqlite
 libiconv
 libncurses
 libreadline
-libopenssl"
+libopenssl
+ca-certificates"
 
 mkdir -p "$DEST/usr/lib/opkg/"
 

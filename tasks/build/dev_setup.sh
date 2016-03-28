@@ -74,7 +74,8 @@ sqlite
 libiconv
 libncurses
 libreadline
-libopenssl"
+libopenssl
+ca-certificates"
 
 if ! [ -d $PKGROOT ]; then
     echo "*** Package directory $PKGROOT is missing. Please populate it. ***"

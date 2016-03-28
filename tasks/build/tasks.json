@@ -349,6 +349,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/git-2.3.5"
         },
         {
+            "name": "Make ca-certificates",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/ca-certificates"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
