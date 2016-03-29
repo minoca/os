@@ -22,11 +22,18 @@ Author:
 
 #define NETLINK_API DLLEXPORT
 
+#include <osbase.h>
+#include <minoca/net/netdrv.h>
+#include <minoca/net/netlink.h>
+#include <mlibc.h>
+
 #include <netlink.h>
 
 //
 // ---------------------------------------------------------------- Definitions
 //
+
+#define NETLINK_SCRATCH_BUFFER_SIZE (4096 - NETLINK_HEADER_LENGTH)
 
 //
 // ------------------------------------------------------ Data Type Definitions

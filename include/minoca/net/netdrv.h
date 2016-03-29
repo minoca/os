@@ -361,7 +361,7 @@ Members:
         footers.
 
     DataOffset - Stores the offset from the beginning of the buffer to the
-        beginning of the valid data. The next lower layer should puts its own
+        beginning of the valid data. The next lower layer should put its own
         headers right before this offset.
 
     FooterOffset - Stores the offset from the beginning of the buffer to the

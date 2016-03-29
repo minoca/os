@@ -32,7 +32,8 @@ ENTRY = NetlinkInitialize
 
 INCLUDES += $(SRCROOT)/os/apps/include;$(SRCROOT)/os/apps/include/libc;
 
-OBJS = netlink.o          \
+OBJS = generic.o  \
+       netlink.o  \
 
 DYNLIBS = $(BINROOT)/libc.so.1           \
 

@@ -27,6 +27,7 @@ Environment:
 #include <osbase.h>
 #include <minoca/devinfo/net.h>
 #include <mlibc.h>
+#include <netlink.h>
 
 #include <assert.h>
 #include <errno.h>
@@ -224,6 +225,7 @@ Return Value:
 
     memset(&Context, 0, sizeof(NETCON_CONTEXT));
     ReturnValue = 0;
+    NetlinkInitialize(NULL);
 
     //
     // Process the control arguments.

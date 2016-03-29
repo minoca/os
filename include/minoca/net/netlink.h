@@ -21,6 +21,45 @@ Author:
 //
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This macro returns the required alignment for a given length. All headers,
+// attributes, and messages must be aligned.
+//
+
+#define NETLINK_ALIGN(_Length) \
+    (((_Length) + NETLINK_ALIGNMENT - 1) & ~(NETLINK_ALIGNMENT - 1))
+
+//
+// This macro returns the aligned size of a netlink message header.
+//
+
+#define NETLINK_HEADER_LENGTH NETLINK_ALIGN(sizeof(NETLINK_HEADER))
+
+//
+// This macro evaluates to a pointer to the ancillary data following a netlink
+// header structure.
+//
+
+#define NETLINK_DATA(_Header) ((PVOID)(_Header) + NETLINK_HEADER_LENGTH)
+
+//
+// This macro returns the aligned aize of a netlink message header.
+//
+
+#define NETLINK_ATTRIBUTE_HEADER_LENGTH NETLINK_ALIGN(sizeof(NETLINK_ATTRIBUTE))
+
+//
+// This macro evaluates to a pointer to the ancillary data following a netlink
+// attribute header structure.
+//
+
+#define NETLINK_ATTRIBUTE_DATA(_Header) \
+    ((PVOID)(_Header) + NETLINK_ATTRIBUTE_HEADER_LENGTH)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -29,6 +68,13 @@ Author:
 //
 
 #define NETLINK_PROPERTIES_VERSION 1
+
+//
+// Define the alignment for all netlink messages, message headers, and message
+// attributes.
+//
+
+#define NETLINK_ALIGNMENT 4
 
 //
 // Define the standard netlink message types common to all netlink families.
@@ -48,6 +94,12 @@ Author:
 #define NETLINK_HEADER_FLAG_MORE_MESSAGES 0x0002
 #define NETLINK_HEADER_FLAG_ACK           0x0004
 #define NETLINK_HEADER_FLAG_ECHO          0x0008
+
+//
+// Define the port ID of the kernel.
+//
+
+#define NETLINK_KERNEL_PORT_ID 0
 
 //
 // Define the alignment for netlink attribute headers.

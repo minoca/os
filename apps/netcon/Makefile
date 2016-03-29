@@ -31,7 +31,9 @@ INCLUDES += $(SRCROOT)/os/apps/include;      \
 
 OBJS = netcon.o \
 
-DYNLIBS = -lminocaos
+DYNLIBS = -lminocaos -lnetlink
+
+LDFLAGS += -L$(BINROOT)
 
 include $(SRCROOT)/os/minoca.mk
 
