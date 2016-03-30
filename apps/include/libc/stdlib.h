@@ -644,6 +644,29 @@ Return Value:
 --*/
 
 LIBC_API
+const char *
+getexecname (
+    void
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the path name of the executable.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns a pointer to the pathname of the executable on success. The caller
+    must not alter this memory.
+
+--*/
+
+LIBC_API
 void *
 bsearch (
     const void *Key,
