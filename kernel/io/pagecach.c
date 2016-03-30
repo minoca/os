@@ -1784,7 +1784,18 @@ Return Value:
 
                 Node = &(CacheEntry->Node);
 
-                ASSERT(Node->Parent != NULL);
+                //
+                // The node might have been pulled from the tree while the file
+                // object lock was dropped, but that routine didn't yet get
+                // far enough to pull it off the list. Do it for them.
+                //
+
+                if (Node->Parent == NULL) {
+                    LIST_REMOVE(&(CacheEntry->ListEntry));
+                    CacheEntry->ListEntry.Next = NULL;
+                    Node = NULL;
+                    continue;
+                }
             }
 
             KeReleaseQueuedLock(IoPageCacheListLock);
@@ -3949,6 +3960,9 @@ Return Value:
     }
 
     if (IoContext.BytesCompleted != BytesToWrite) {
+
+        ASSERT(FALSE);
+
         Status = STATUS_DATA_LENGTH_MISMATCH;
         goto FlushPageCacheBufferEnd;
     }

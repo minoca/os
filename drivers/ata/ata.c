@@ -1096,6 +1096,14 @@ Return Value:
             }
 
             //
+            // If successful, the I/O should be completed fully.
+            //
+
+            ASSERT((!KSUCCESS(Status)) ||
+                   (Irp->U.ReadWrite.IoBytesCompleted ==
+                    Irp->U.ReadWrite.IoSizeInBytes));
+
+            //
             // Complete the IRP but do not release the lock as the channel is
             // cleaned up by this driver after the IRP is reversed to the up
             // direction. This allows it to perform said clean up at low level.

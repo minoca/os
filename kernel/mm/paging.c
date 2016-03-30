@@ -300,7 +300,7 @@ BOOL MmPagingForceDisable = FALSE;
 // the system volume is eligible to have a page file.
 //
 
-BOOL MmPagingAllVolumes = TRUE;
+BOOL MmPagingAllVolumes = FALSE;
 
 //
 // Store a list of the available paging devices.
@@ -813,6 +813,9 @@ Return Value:
     while (CurrentEntry != &MmPageFileListHead) {
         CurrentPageFile = LIST_VALUE(CurrentEntry, PAGE_FILE, ListEntry);
         CurrentEntry = CurrentEntry->Next;
+        if (CurrentPageFile->FreePages == 0) {
+            continue;
+        }
 
         //
         // Attempt to allocate the space from this page file.
@@ -2201,6 +2204,10 @@ Return Value:
     }
 
     KeAcquireQueuedLock(PageFile->Lock);
+    if (PageFile->FreePages == 0) {
+        goto AllocateFromPageFileEnd;
+    }
+
     TotalPages = PageFile->PageCount;
     TotalPagesSearched = 0;
 

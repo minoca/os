@@ -5337,6 +5337,9 @@ Return Value:
     }
 
     if (Irp->U.ReadWrite.IoBytesCompleted != Irp->U.ReadWrite.IoSizeInBytes) {
+
+        ASSERT(FALSE);
+
         Status = STATUS_DATA_LENGTH_MISMATCH;
         goto PerformPageFileIoOperationEnd;
     }

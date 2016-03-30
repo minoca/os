@@ -2177,6 +2177,7 @@ Return Value:
 
             if (FileSize > Offset + BytesToWrite) {
                 FileSize = Offset + BytesToWrite;
+                Parameters.IoBytesCompleted = BytesToWrite;
             }
 
             IopUpdateFileObjectFileSize(FileObject, FileSize);
