@@ -2859,6 +2859,7 @@ Return Value:
     PIMAGE_SECTION RemainderSection;
     UINTN RemainderSize;
     PVOID SectionEnd;
+    UINTN SourceBitmapCount;
     ULONG SourceBlock;
     UINTN SourceIndex;
     KSTATUS Status;
@@ -2953,6 +2954,8 @@ Return Value:
 
     RemainderPages = RemainderSize >> PageShift;
 
+    ASSERT(RemainderPages << PageShift == RemainderSize);
+
     //
     // Acquire the section lock to prevent further changes to the bitmap.
     //
@@ -2975,6 +2978,13 @@ Return Value:
 
         BitmapSize /= BITS_PER_BYTE;
         BitmapCount = BitmapSize / sizeof(ULONG);
+
+        ASSERT(((Section->Size >> PageShift) << PageShift) == Section->Size);
+
+        SourceBitmapCount = ALIGN_RANGE_UP((Section->Size >> PageShift),
+                                           (sizeof(ULONG) * BITS_PER_BYTE));
+
+        SourceBitmapCount /= sizeof(ULONG) * BITS_PER_BYTE;
         if (Section->InheritPageBitmap != NULL) {
             for (BitmapIndex = 0; BitmapIndex < BitmapCount; BitmapIndex += 1) {
                 SourceIndex = BitmapIndex + BitmapOffset;
@@ -2982,7 +2992,7 @@ Return Value:
                 RemainderSection->InheritPageBitmap[BitmapIndex] =
                                                     SourceBlock >> BitmapShift;
 
-                if (BitmapIndex != BitmapCount - 1) {
+                if (SourceIndex != SourceBitmapCount - 1) {
                     SourceIndex += 1;
                     SourceBlock = Section->InheritPageBitmap[SourceIndex];
                     RemainderSection->InheritPageBitmap[BitmapIndex] |=
@@ -2999,7 +3009,7 @@ Return Value:
                 RemainderSection->DirtyPageBitmap[BitmapIndex] =
                                                     SourceBlock >> BitmapShift;
 
-                if (BitmapIndex != BitmapCount - 1) {
+                if (SourceIndex != SourceBitmapCount - 1) {
                     SourceIndex += 1;
                     SourceBlock = Section->DirtyPageBitmap[SourceIndex];
                     RemainderSection->DirtyPageBitmap[BitmapIndex] |=
