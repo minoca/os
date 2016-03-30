@@ -34,9 +34,6 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define NETLINK_GENERIC_HEADER_LENGTH \
-    NETLINK_ALIGN(sizeof(NETLINK_GENERIC_HEADER))
-
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -160,7 +157,6 @@ Return Value:
 
 {
 
-    socklen_t AddressLength;
     PVOID Attributes;
     ssize_t BytesReceived;
     ssize_t BytesSent;
@@ -171,7 +167,7 @@ Return Value:
     USHORT IdLength;
     PNETLINK_MESSAGE_BUFFER Message;
     ULONG MessageLength;
-    struct sockaddr_nl RemoteAddress;
+    ULONG PortId;
     INT Status;
 
     Message = NULL;
@@ -240,17 +236,7 @@ Return Value:
     // Send off the family ID request message.
     //
 
-    AddressLength = sizeof(struct sockaddr_nl);
-    memset(&RemoteAddress, 0, AddressLength);
-    RemoteAddress.nl_family = AF_NETLINK;
-    RemoteAddress.nl_pid = NETLINK_KERNEL_PORT_ID;
-    BytesSent = sendto(Socket->Socket,
-                       Message->Buffer + Message->DataOffset,
-                       Message->FooterOffset - Message->DataOffset,
-                       0,
-                       (const struct sockaddr *)&RemoteAddress,
-                       AddressLength);
-
+    BytesSent = NetlinkSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0);
     if (BytesSent == -1) {
         Status = -1;
         goto GetFamilyIdEnd;
@@ -261,22 +247,17 @@ Return Value:
     //
 
     while (TRUE) {
-        AddressLength = sizeof(struct sockaddr_nl);
-        BytesReceived = recvfrom(Socket->Socket,
-                                 Socket->ReceiveBuffer->Buffer,
-                                 Socket->ReceiveBuffer->BufferSize,
-                                 0,
-                                 (struct sockaddr *)&RemoteAddress,
-                                 &AddressLength);
+        BytesReceived = NetlinkReceiveMessage(Socket,
+                                              Socket->ReceiveBuffer,
+                                              &PortId,
+                                              NULL);
 
         if (BytesReceived == -1) {
             Status = -1;
             goto GetFamilyIdEnd;
         }
 
-        if ((AddressLength != sizeof(struct sockaddr_nl)) ||
-            (RemoteAddress.nl_pid != NETLINK_KERNEL_PORT_ID)) {
-
+        if (PortId != NETLINK_KERNEL_PORT_ID) {
             continue;
         }
 
@@ -295,7 +276,6 @@ Return Value:
             continue;
         }
 
-
         GenericHeader = NETLINK_DATA(Header);
         if ((BytesReceived < NETLINK_GENERIC_HEADER_LENGTH) ||
             (GenericHeader->Command != NETLINK_GENERIC_CONTROL_NEW_FAMILY)) {
@@ -304,7 +284,7 @@ Return Value:
         }
 
         BytesReceived -= NETLINK_GENERIC_HEADER_LENGTH;
-        Attributes = (PVOID)GenericHeader + NETLINK_GENERIC_HEADER_LENGTH;
+        Attributes = NETLINK_GENERIC_DATA(GenericHeader);
         Status = NetlinkpGenericGetAttribute(
                                    Attributes,
                                    BytesReceived,
@@ -378,13 +358,13 @@ Return Value:
 
 {
 
+    ULONG AlignedLength;
     PNETLINK_ATTRIBUTE Attribute;
     USHORT AttributeLength;
-    ULONG AlignedLength;
     ULONG MessageLength;
 
-    AttributeLength = DataLength + NETLINK_ATTRIBUTE_HEADER_LENGTH;
-    AlignedLength = NETLINK_ALIGN(AttributeLength);
+    AttributeLength = NETLINK_ATTRIBUTE_LENGTH(DataLength);
+    AlignedLength = NETLINK_ATTRIBUTE_SIZE(DataLength);
     MessageLength = Message->FooterOffset - Message->DataOffset;
     if ((MessageOffset > MessageLength) ||
         (AlignedLength < DataLength) ||
@@ -444,21 +424,25 @@ Return Value:
 {
 
     PNETLINK_ATTRIBUTE Attribute;
+    ULONG AttributeSize;
 
+    Attribute = (PNETLINK_ATTRIBUTE)Attributes;
     while (AttributesLength != 0) {
-        if (AttributesLength < NETLINK_ATTRIBUTE_HEADER_LENGTH) {
+        if ((AttributesLength < NETLINK_ATTRIBUTE_HEADER_LENGTH) ||
+            (AttributesLength < Attribute->Length)) {
+
             break;
         }
 
-        Attribute = (PNETLINK_ATTRIBUTE)Attributes;
         if (Attribute->Type == Type) {
             *DataLength = Attribute->Length - NETLINK_ATTRIBUTE_HEADER_LENGTH;
             *Data = NETLINK_ATTRIBUTE_DATA(Attribute);
             return 0;
         }
 
-        Attributes += NETLINK_ALIGN(Attribute->Length);
-        AttributesLength -= NETLINK_ALIGN(Attribute->Length);
+        AttributeSize = NETLINK_ATTRIBUTE_SIZE(Attribute->Length);
+        Attribute = (PVOID)Attribute + AttributeSize;
+        AttributesLength -= AttributeSize;
     }
 
     errno = ENOENT;

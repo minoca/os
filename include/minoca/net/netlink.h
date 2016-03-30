@@ -29,8 +29,7 @@ Author:
 // attributes, and messages must be aligned.
 //
 
-#define NETLINK_ALIGN(_Length) \
-    (((_Length) + NETLINK_ALIGNMENT - 1) & ~(NETLINK_ALIGNMENT - 1))
+#define NETLINK_ALIGN(_Length) ALIGN_RANGE_UP(_Length, NETLINK_ALIGNMENT)
 
 //
 // This macro returns the aligned size of a netlink message header.

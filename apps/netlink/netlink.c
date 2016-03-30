@@ -493,6 +493,136 @@ Return Value:
     return 0;
 }
 
+NETLINK_API
+INTN
+NetlinkSendMessage (
+    PNETLINK_SOCKET Socket,
+    PNETLINK_MESSAGE_BUFFER Message,
+    ULONG PortId,
+    ULONG GroupMask
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends a netlink message for the given socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket over which to send the
+        message.
+
+    Message - Supplies a pointer to the message to be sent.
+
+    PortId - Supplies the port ID of the recipient of the message.
+
+    GroupMask - Supplies the group mask of the message recipients.
+
+Return Value:
+
+    Returns the number of bytes sent on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
+{
+
+    struct sockaddr_nl Address;
+    INTN BytesSent;
+
+    memset(&Address, 0, sizeof(struct sockaddr_nl));
+    Address.nl_family = AF_NETLINK;
+    Address.nl_pid = PortId;
+    Address.nl_groups = GroupMask;
+    BytesSent = sendto(Socket->Socket,
+                       Message->Buffer + Message->DataOffset,
+                       Message->FooterOffset - Message->DataOffset,
+                       0,
+                       (struct sockaddr *)&Address,
+                       sizeof(struct sockaddr_nl));
+
+    return BytesSent;
+}
+
+NETLINK_API
+INTN
+NetlinkReceiveMessage (
+    PNETLINK_SOCKET Socket,
+    PNETLINK_MESSAGE_BUFFER Message,
+    PULONG PortId,
+    PULONG GroupMask
+    )
+
+/*++
+
+Routine Description:
+
+    This routine receives a netlink message for the given socket.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket over which to receive the
+        message.
+
+    Message - Supplies a pointer to a netlink message that received the read
+        data.
+
+    PortId - Supplies an optional pointer that receives the port ID of the
+        message sender.
+
+    GroupMask - Supplies an optional pointer that receives the group mask of
+        the received packet.
+
+Return Value:
+
+    Returns the number of bytes received on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
+{
+
+    struct sockaddr_nl Address;
+    socklen_t AddressLength;
+    INTN BytesReceived;
+
+    AddressLength = sizeof(struct sockaddr_nl);
+    BytesReceived = recvfrom(Socket->Socket,
+                             Message->Buffer,
+                             Message->BufferSize,
+                             0,
+                             (struct sockaddr *)&Address,
+                             &AddressLength);
+
+    if ((AddressLength != sizeof(struct sockaddr_nl)) ||
+        (Address.nl_family != AF_NETLINK)) {
+
+        errno = EAFNOSUPPORT;
+        return -1;
+    }
+
+    Message->DataOffset = 0;
+    if (BytesReceived > 0) {
+        Message->FooterOffset = BytesReceived;
+
+    } else {
+        Message->FooterOffset = 0;
+    }
+
+    if (PortId != NULL) {
+        *PortId = Address.nl_pid;
+    }
+
+    if (GroupMask != NULL) {
+        *PortId = Address.nl_groups;
+    }
+
+    return BytesReceived;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
