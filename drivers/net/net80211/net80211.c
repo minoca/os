@@ -38,16 +38,6 @@ Environment:
 #define NET80211_ADDRESS_STRING_LENGTH 18
 
 //
-// Define the test SSID and its passphrase.
-//
-
-#define NET80211_TEST_SSID "mtest"
-#define NET80211_TEST_SSID_LENGTH RtlStringLength(NET80211_TEST_SSID)
-#define NET80211_TEST_PASSPHRASE "minocatest"
-#define NET80211_TEST_PASSPHRASE_LENGTH \
-    RtlStringLength(NET80211_TEST_PASSPHRASE)
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -288,7 +278,6 @@ Return Value:
     NET_LINK_PROPERTIES NetProperties;
     PNET_LINK NetworkLink;
     PNET80211_RATE_INFORMATION Rates;
-    NET80211_SCAN_STATE Scan;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -378,29 +367,6 @@ Return Value:
                                          &Net80211NetworkDeviceInformationUuid,
                                          TRUE);
 
-    if (!KSUCCESS(Status)) {
-        goto AddLinkEnd;
-    }
-
-    //
-    // Set the link as initialized and start an active scan to join the default
-    // BSS.
-    //
-    // TODO: Remove this in favor of a user-mode initiated connection.
-    //
-
-    Net80211pSetState(Link, Net80211StateInitialized);
-    RtlZeroMemory(&Scan, sizeof(NET80211_SCAN_STATE));
-    Scan.Link = Link;
-    Scan.Flags = NET80211_SCAN_FLAG_JOIN | NET80211_SCAN_FLAG_BROADCAST;
-    Scan.SsidLength = NET80211_TEST_SSID_LENGTH;
-    RtlCopyMemory(Scan.Ssid, NET80211_TEST_SSID, NET80211_TEST_SSID_LENGTH);
-    Scan.PassphraseLength = NET80211_TEST_PASSPHRASE_LENGTH;
-    RtlCopyMemory(Scan.Passphrase,
-                  NET80211_TEST_PASSPHRASE,
-                  NET80211_TEST_PASSPHRASE_LENGTH);
-
-    Status = Net80211pStartScan(Link, &Scan);
     if (!KSUCCESS(Status)) {
         goto AddLinkEnd;
     }
