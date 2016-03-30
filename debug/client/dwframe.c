@@ -1763,8 +1763,6 @@ Return Value:
         return 0;
     }
 
-    assert((Encoding & DwarfPeIndirect) == 0);
-
     Value = 0;
     switch (Encoding & DwarfPeModifierMask) {
     case DwarfPeAbsolute:
@@ -1859,6 +1857,14 @@ Return Value:
 
         Value = 0;
         break;
+    }
+
+    //
+    // This would be where a dereference occurs.
+    //
+
+    if ((Encoding & DwarfPeIndirect) != 0) {
+        Value = 0;
     }
 
     return Value;

@@ -913,6 +913,7 @@ Return Value:
     // Disable commands from being sent.
     //
 
+    SetFocus(GetDlgItem(DialogWindow, IDE_COMMAND));
     UiEnableCommands(FALSE);
 
     //
