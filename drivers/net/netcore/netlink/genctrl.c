@@ -51,33 +51,31 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-VOID
-NetpNetlinkGenericControlProcessReceivedData (
-    PIO_HANDLE Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
-    );
-
-VOID
+KSTATUS
 NetpNetlinkGenericControlGetFamily (
-    PIO_HANDLE Socket,
+    PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
     );
 
 //
 // -------------------------------------------------------------------- Globals
 //
 
+NETLINK_GENERIC_COMMAND NetNetlinkGenericControlCommands[] = {
+    {
+        NETLINK_GENERIC_CONTROL_GET_FAMILY,
+        NetpNetlinkGenericControlGetFamily
+    },
+};
+
 NETLINK_GENERIC_FAMILY_PROPERTIES NetNetlinkGenericControlFamily = {
     NETLINK_GENERIC_FAMILY_PROPERTIES_VERSION,
     NETLINK_GENERIC_ID_CONTROL,
     NETLINK_GENERIC_CONTROL_NAME,
-    {
-        NetpNetlinkGenericControlProcessReceivedData
-    }
+    NetNetlinkGenericControlCommands,
+    sizeof(NetNetlinkGenericControlCommands) /
+    sizeof(NetNetlinkGenericControlCommands[0]),
 };
 
 //
@@ -121,92 +119,15 @@ Return Value:
     return;
 }
 
-VOID
-NetpNetlinkGenericControlProcessReceivedData (
-    PIO_HANDLE Socket,
-    PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
-    )
-
-/*++
-
-Routine Description:
-
-    This routine is called to process a received generic netlink control packet.
-
-Arguments:
-
-    Socket - Supplies a handle to the socket that received the packet.
-
-    Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
-
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
-
-Return Value:
-
-    None. When the function returns, the memory associated with the packet may
-    be reclaimed and reused.
-
---*/
-
-{
-
-    PNETLINK_GENERIC_HEADER GenericHeader;
-    PNETLINK_HEADER NetlinkHeader;
-    ULONG PacketLength;
-
-    NetlinkHeader = (PNETLINK_HEADER)(Packet->Buffer + Packet->DataOffset);
-    PacketLength = NetlinkHeader->Length;
-
-    ASSERT(PacketLength <= (Packet->FooterOffset - Packet->DataOffset));
-    ASSERT(PacketLength > sizeof(NETLINK_HEADER));
-
-    PacketLength -= sizeof(NETLINK_HEADER);
-    if (PacketLength < sizeof(NETLINK_GENERIC_HEADER)) {
-        RtlDebugPrint("NETLINK: Invalid control packet did not contain a "
-                      "generic netlink header.\n");
-
-        return;
-    }
-
-    GenericHeader = (PNETLINK_GENERIC_HEADER)(NetlinkHeader + 1);
-
-    //
-    // Ignore all the unsupported commands for now.
-    //
-
-    if (GenericHeader->Command != NETLINK_GENERIC_CONTROL_GET_FAMILY) {
-        return;
-    }
-
-    NetpNetlinkGenericControlGetFamily(Socket,
-                                       Packet,
-                                       SourceAddress,
-                                       DestinationAddress);
-
-    return;
-}
-
 //
 // --------------------------------------------------------- Internal Functions
 //
 
-VOID
+KSTATUS
 NetpNetlinkGenericControlGetFamily (
-    PIO_HANDLE Socket,
+    PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
     )
 
 /*++
@@ -217,20 +138,14 @@ Routine Description:
 
 Arguments:
 
-    Socket - Supplies a handle to the socket that received the packet.
+    Socket - Supplies a pointer to the network socket that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
         This structure may be used as a scratch space while this routine
         executes and the packet travels up the stack, but will not be accessed
         after this routine returns.
 
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
+    Parameters - Supplies a pointer to the command parameters.
 
 Return Value:
 
@@ -249,49 +164,34 @@ Return Value:
     USHORT FamilyId;
     PSTR FamilyName;
     ULONG FamilyNameLength;
-    PNETLINK_GENERIC_HEADER GenericHeader;
-    PIO_BUFFER IoBuffer;
-    PNETLINK_ADDRESS NetlinkAddress;
-    PNETLINK_HEADER NetlinkHeader;
-    PNET_SOCKET NetSocket;
-    PVOID NextAttribute;
+    ULONG HeaderLength;
     ULONG PacketLength;
-    SOCKET_IO_PARAMETERS Parameters;
     UINTN ReplyLength;
-    ULONG SequenceNumber;
+    PNET_PACKET_BUFFER ReplyPacket;
+    NETLINK_GENERIC_COMMAND_PARAMETERS SendParameters;
+    KSTATUS Status;
 
-    IoBuffer = NULL;
-    NetlinkHeader = (PNETLINK_HEADER)(Packet->Buffer + Packet->DataOffset);
-    PacketLength = NetlinkHeader->Length;
-
-    ASSERT(PacketLength <= (Packet->FooterOffset - Packet->DataOffset));
-    ASSERT(PacketLength > sizeof(NETLINK_HEADER));
-
-    PacketLength -= sizeof(NETLINK_HEADER);
-
-    ASSERT(PacketLength >= sizeof(NETLINK_GENERIC_HEADER));
-
-    GenericHeader = (PNETLINK_GENERIC_HEADER)(NetlinkHeader + 1);
-    PacketLength -= sizeof(NETLINK_GENERIC_HEADER);
+    ReplyPacket = NULL;
 
     //
     // Search the packet for an attribute that identifies the family.
     //
 
-    Attribute = (PNETLINK_ATTRIBUTE)(GenericHeader + 1);
+    PacketLength = Packet->FooterOffset - Packet->DataOffset;
+    Attribute = (PNETLINK_ATTRIBUTE)(Packet->Buffer + Packet->DataOffset);
 
     ASSERT(IS_POINTER_ALIGNED(Attribute, NETLINK_ATTRIBUTE_ALIGNMENT) != FALSE);
 
     Family = NULL;
     while ((PacketLength != 0) && (Family == NULL)) {
-        if ((PacketLength < sizeof(NETLINK_ATTRIBUTE)) ||
+        if ((PacketLength < NETLINK_ATTRIBUTE_HEADER_LENGTH) ||
             (PacketLength < Attribute->Length)) {
 
             break;
         }
 
-        Data = (PVOID)Attribute + sizeof(NETLINK_ATTRIBUTE);
-        DataLength = Attribute->Length - sizeof(NETLINK_ATTRIBUTE);
+        Data = NETLINK_ATTRIBUTE_DATA(Attribute);
+        DataLength = Attribute->Length - NETLINK_ATTRIBUTE_HEADER_LENGTH;
         switch (Attribute->Type) {
         case NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID:
             if (DataLength != sizeof(USHORT)) {
@@ -311,19 +211,17 @@ Return Value:
             break;
         }
 
-        NextAttribute = (PVOID)Attribute + Attribute->Length;
-        NextAttribute = ALIGN_POINTER_UP(NextAttribute,
-                                         NETLINK_ATTRIBUTE_ALIGNMENT);
-
-        AttributeLength = (ULONG)(NextAttribute - (PVOID)Attribute);
+        AttributeLength = NETLINK_ALIGN(Attribute->Length);
         if (AttributeLength > PacketLength) {
             break;
         }
 
+        Attribute = (PVOID)Attribute + AttributeLength;
         PacketLength -= AttributeLength;
     }
 
     if (Family == NULL) {
+        Status = STATUS_NOT_FOUND;
         goto GetFamilyEnd;
     }
 
@@ -332,62 +230,65 @@ Return Value:
     // the socket that requested the family information.
     //
 
-    ReplyLength = sizeof(NETLINK_HEADER) + sizeof(NETLINK_GENERIC_HEADER);
-    ReplyLength += sizeof(NETLINK_ATTRIBUTE) + sizeof(USHORT);
-    ReplyLength = ALIGN_RANGE_UP(ReplyLength, NETLINK_ATTRIBUTE_ALIGNMENT);
     FamilyNameLength = RtlStringLength(Family->Properties.Name) + 1;
-    ReplyLength += sizeof(NETLINK_ATTRIBUTE) + FamilyNameLength;
-    IoBuffer = MmAllocatePagedIoBuffer(ReplyLength, 0);
-    if (IoBuffer == NULL) {
+    HeaderLength = NETLINK_HEADER_LENGTH + NETLINK_GENERIC_HEADER_LENGTH;
+    ReplyLength = NETLINK_ATTRIBUTE_SIZE(sizeof(USHORT)) +
+                  NETLINK_ATTRIBUTE_SIZE(FamilyNameLength);
+
+    Status = NetAllocateBuffer(HeaderLength,
+                               ReplyLength,
+                               0,
+                               NULL,
+                               0,
+                               &ReplyPacket);
+
+    if (!KSUCCESS(Status)) {
         goto GetFamilyEnd;
     }
 
-    ASSERT(IoBuffer->FragmentCount == 1);
+    //
+    // Add the family ID and family name attributes to the data portion of the
+    // packet.
+    //
 
-    SequenceNumber = NetlinkHeader->SequenceNumber;
-    NetlinkHeader = (PNETLINK_HEADER)IoBuffer->Fragment[0].VirtualAddress;
-    NetlinkHeader->Length = ReplyLength;
-    NetlinkHeader->Type = NETLINK_GENERIC_ID_CONTROL;
-    NetlinkHeader->Flags = 0;
-    NetlinkHeader->SequenceNumber = SequenceNumber;
-    IoGetSocketFromHandle(Socket, (PVOID)&NetSocket);
-    NetlinkAddress = (PNETLINK_ADDRESS)&(NetSocket->LocalAddress);
-    NetlinkHeader->PortId = NetlinkAddress->Port;
-    GenericHeader = (PNETLINK_GENERIC_HEADER)(NetlinkHeader + 1);
-    GenericHeader->Command = NETLINK_GENERIC_CONTROL_NEW_FAMILY;
-    GenericHeader->Version = 0;
-    GenericHeader->Reserved = 0;
-    Attribute = (PNETLINK_ATTRIBUTE)(GenericHeader + 1);
-    Attribute->Length = sizeof(NETLINK_ATTRIBUTE) + sizeof(USHORT);
+    Attribute = ReplyPacket->Buffer + ReplyPacket->DataOffset;
+    Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(sizeof(USHORT));
     Attribute->Type = NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID;
-    *((PUSHORT)(Attribute + 1)) = Family->Properties.Id;
-    Attribute = (PVOID)Attribute + Attribute->Length;
-    Attribute = ALIGN_POINTER_UP(Attribute, NETLINK_ATTRIBUTE_ALIGNMENT);
-    Attribute->Length = sizeof(NETLINK_ATTRIBUTE) + FamilyNameLength;
+    Data = NETLINK_ATTRIBUTE_DATA(Attribute);
+    *((PUSHORT)Data) = Family->Properties.Id;
+    Attribute = (PVOID)Attribute + NETLINK_ATTRIBUTE_SIZE(sizeof(USHORT));
+    Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(FamilyNameLength);
     Attribute->Type = NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_NAME;
-    RtlStringCopy((PVOID)(Attribute + 1),
+    RtlStringCopy(NETLINK_ATTRIBUTE_DATA(Attribute),
                   Family->Properties.Name,
                   FamilyNameLength);
 
     //
-    // Send the reply back to the source address.
+    // Send the packet off to the generic netlink protocol to be sent.
     //
 
-    RtlZeroMemory(&Parameters, sizeof(SOCKET_IO_PARAMETERS));
-    Parameters.TimeoutInMilliseconds = WAIT_TIME_INDEFINITE;
-    Parameters.NetworkAddress = SourceAddress;
-    Parameters.Size = ReplyLength;
-    IoSocketSendData(TRUE, Socket, &Parameters, IoBuffer);
+    SendParameters.Message.SourceAddress = &(Socket->LocalAddress);
+    SendParameters.Message.DestinationAddress =
+                                             Parameters->Message.SourceAddress;
+
+    SendParameters.Message.SequenceNumber = Parameters->Message.SequenceNumber;
+    SendParameters.Message.Type = NETLINK_GENERIC_ID_CONTROL;
+    SendParameters.Command = NETLINK_GENERIC_CONTROL_NEW_FAMILY;
+    SendParameters.Version = 0;
+    Status = NetNetlinkGenericSendCommand(Socket, ReplyPacket, &SendParameters);
+    if (!KSUCCESS(Status)) {
+        goto GetFamilyEnd;
+    }
 
 GetFamilyEnd:
     if (Family != NULL) {
         NetpNetlinkGenericFamilyReleaseReference(Family);
     }
 
-    if (IoBuffer != NULL) {
-        MmFreeIoBuffer(IoBuffer);
+    if (ReplyPacket != NULL) {
+        NetFreeBuffer(ReplyPacket);
     }
 
-    return;
+    return Status;
 }
 

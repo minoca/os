@@ -60,6 +60,37 @@ Author:
     ((PVOID)(_Header) + NETLINK_ATTRIBUTE_HEADER_LENGTH)
 
 //
+// This macro returns the length of the netlink attribute, based on the data
+// length, that should be set in the attribute header.
+//
+
+#define NETLINK_ATTRIBUTE_LENGTH(_DataLength) \
+    (NETLINK_ATTRIBUTE_HEADER_LENGTH + (_DataLength))
+
+//
+// This macro returns the total size, in bytes, consumed by the netlink
+// attribute, accounting for alignment.
+//
+
+#define NETLINK_ATTRIBUTE_SIZE(_DataLength) \
+    NETLINK_ALIGN(NETLINK_ATTRIBUTE_LENGTH(_DataLength))
+
+//
+// This macro returns the aligned size of the generic netlink message header.
+//
+
+#define NETLINK_GENERIC_HEADER_LENGTH \
+    NETLINK_ALIGN(sizeof(NETLINK_GENERIC_HEADER))
+
+//
+// This macro evaluates to a pointer to the ancillary data following a netlink
+// generic header structure.
+//
+
+#define NETLINK_GENERIC_DATA(_Header) \
+    ((PVOID)(_Header) + NETLINK_GENERIC_HEADER_LENGTH)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -133,11 +164,11 @@ Author:
 #define NETLINK_GENERIC_ID_CONTROL NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM
 
 //
-// Define the name on the generic control family expected by user mode
-// application.
+// Define the names of the netlink generic families.
 //
 
 #define NETLINK_GENERIC_CONTROL_NAME "nlctrl"
+#define NETLINK_GENERIC_80211_NAME   "nl80211"
 
 //
 // Define the generic control command values.
@@ -290,42 +321,88 @@ typedef struct _NETLINK_GENERIC_HEADER {
     USHORT Reserved;
 } PACKED NETLINK_GENERIC_HEADER, *PNETLINK_GENERIC_HEADER;
 
+/*++
+
+Structure Description:
+
+    This structure defines the parameters to use when sending a netlink message
+    or parsing a received message.
+
+Members:
+
+    SourceAddress - Stores a pointer to the source address for the command.
+        This memory will not be referenced once the function returns; it can be
+        stack allocated.
+
+    DestinationAddress - Stores a pointer to the destination address for the
+        command. This memory will not be referenced once the function returns;
+        it can be stack allocated.
+
+    SequenceNumber - Stores the sequence number of the command.
+
+    Type - Stores the netlink message type.
+
+--*/
+
+typedef struct _NETLINK_MESSAGE_PARAMETERS {
+    PNETWORK_ADDRESS SourceAddress;
+    PNETWORK_ADDRESS DestinationAddress;
+    ULONG SequenceNumber;
+    USHORT Type;
+} NETLINK_MESSAGE_PARAMETERS, *PNETLINK_MESSAGE_PARAMETERS;
+
+/*++
+
+Structure Description:
+
+    This structure defines the parameters to use when sending a generic command
+    or parsing a received command.
+
+Members:
+
+    Message - Stores the base message parameters.
+
+    Command - Stores the generic command value.
+
+    Version - Stores the generic command version.
+
+--*/
+
+typedef struct _NETLINK_GENERIC_COMMAND_PARAMETERS {
+    NETLINK_MESSAGE_PARAMETERS Message;
+    UCHAR Command;
+    UCHAR Version;
+} NETLINK_GENERIC_COMMAND_PARAMETERS, *PNETLINK_GENERIC_COMMAND_PARAMETERS;
+
 typedef
-VOID
-(*PNETLINK_GENERIC_FAMILY_PROCESS_RECEIVED_DATA) (
-    PIO_HANDLE Socket,
+KSTATUS
+(*PNETLINK_GENERIC_PROCESS_COMMAND) (
+    PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
+    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
     );
 
 /*++
 
 Routine Description:
 
-    This routine is called to process a received generic netlink packet.
+    This routine is called to process a received generic netlink packet for
+    a given command type.
 
 Arguments:
 
-    Socket - Supplies a handle to the socket that received the packet.
+    Socket - Supplies a pointer to the socket that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
         This structure may be used as a scratch space while this routine
         executes and the packet travels up the stack, but will not be accessed
         after this routine returns.
 
-    SourceAddress - Supplies a pointer to the source (remote) address that the
-        packet originated from. This memory will not be referenced once the
-        function returns, it can be stack allocated.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        that the packet is heading to. This memory will not be referenced once
-        the function returns, it can be stack allocated.
+    Parameters - Supplies a pointer to the command parameters.
 
 Return Value:
 
-    None. When the function returns, the memory associated with the packet may
-    be reclaimed and reused.
+    Status code.
 
 --*/
 
@@ -333,18 +410,22 @@ Return Value:
 
 Structure Description:
 
-    This structure defines the generic netlink family interface.
+    This structure defines a netlink generic command.
 
 Members:
 
-    ProcessReceivedData - Stores a pointer to a function called when a packet
-        is received by the netlink network.
+    CommandId - Stores the command ID value. This should match the generic
+        netlink header values for the command's family.
+
+    ProcessCommand - Stores a pointer to a function called when a packet of
+        this command type is received by a generic netlink socket.
 
 --*/
 
-typedef struct _NETLINK_GENERIC_FAMILY_INTERFACE {
-    PNETLINK_GENERIC_FAMILY_PROCESS_RECEIVED_DATA ProcessReceivedData;
-} NETLINK_GENERIC_FAMILY_INTERFACE, *PNETLINK_GENERIC_FAMILY_INTERFACE;
+typedef struct _NETLINK_GENERIC_COMMAND {
+    UCHAR CommandId;
+    PNETLINK_GENERIC_PROCESS_COMMAND ProcessCommand;
+} NETLINK_GENERIC_COMMAND, *PNETLINK_GENERIC_COMMAND;
 
 /*++
 
@@ -362,8 +443,9 @@ Members:
 
     Name - Stores the name of the generic family.
 
-    Interface - Stores the interface presented to the networking core for this
-        generic netlink family.
+    Commands - Stores a pointer to an array of netlink generic commands.
+
+    CommandCount - Stores the number of commands in the array.
 
 --*/
 
@@ -371,7 +453,8 @@ typedef struct _NETLINK_GENERIC_FAMILY_PROPERTIES {
     ULONG Version;
     ULONG Id;
     CHAR Name[NETLINK_GENERIC_MAX_FAMILY_NAME_LENGTH];
-    NETLINK_GENERIC_FAMILY_INTERFACE Interface;
+    PNETLINK_GENERIC_COMMAND Commands;
+    ULONG CommandCount;
 } NETLINK_GENERIC_FAMILY_PROPERTIES, *PNETLINK_GENERIC_FAMILY_PROPERTIES;
 
 //
@@ -381,6 +464,36 @@ typedef struct _NETLINK_GENERIC_FAMILY_PROPERTIES {
 //
 // -------------------------------------------------------- Function Prototypes
 //
+
+NET_API
+KSTATUS
+NetNetlinkSendMessage (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETLINK_MESSAGE_PARAMETERS Parameters
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends a netlink message, filling out the header based on the
+    parameters.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket over which to send the
+        command.
+
+    Packet - Supplies a pointer to the network packet to be sent.
+
+    Parameters - Supplies a pointer to the message parameters.
+
+Return Value:
+
+    Status code.
+
+--*/
 
 NET_API
 KSTATUS
@@ -432,6 +545,36 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+NET_API
+KSTATUS
+NetNetlinkGenericSendCommand (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends a generic netlink command, filling out the generic
+    header and netlink header.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket over which to send the
+        command.
+
+    Packet - Supplies a pointer to the network packet to be sent.
+
+    Parameters - Supplies a pointer to the generic command parameters.
+
+Return Value:
+
+    Status code.
 
 --*/
 

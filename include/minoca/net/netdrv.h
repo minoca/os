@@ -3167,7 +3167,10 @@ Arguments:
 
     FooterSize - Supplies the number of footer bytes needed.
 
-    Link - Supplies a pointer to the link the buffer will be sent through.
+    Link - Supplies a pointer to the link the buffer will be sent through. If
+        a link is provided, then the buffer will be backed by physically
+        contiguous pages for the link's hardware. If no link is provided, then
+        the buffer will not be backed by physically contiguous pages.
 
     Flags - Supplies a bitmask of allocation flags. See
         NET_ALLOCATE_BUFFER_FLAG_* for definitions.

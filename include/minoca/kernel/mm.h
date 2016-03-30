@@ -1459,6 +1459,32 @@ Return Value:
 
 KERNEL_API
 VOID
+MmSetIoBufferCurrentOffset (
+    PIO_BUFFER IoBuffer,
+    UINTN Offset
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the given I/O buffer's current offset. The offset is
+    the point at which all I/O should begin.
+
+Arguments:
+
+    IoBuffer - Supplies a pointer to an I/O buffer.
+
+    Offset - Supplies the new offset for the I/O buffer.
+
+Return Value:
+
+    None.
+
+--*/
+
+KERNEL_API
+VOID
 MmIoBufferIncrementOffset (
     PIO_BUFFER IoBuffer,
     UINTN OffsetIncrement

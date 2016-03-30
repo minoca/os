@@ -305,7 +305,7 @@ Return Value:
         NewSocket->PacketSizeInformation.MaxPacketSize = MaxPacketSize;
     }
 
-    NewSocket->PacketSizeInformation.HeaderSize += sizeof(NETLINK_HEADER);
+    NewSocket->PacketSizeInformation.HeaderSize += NETLINK_HEADER_LENGTH;
     return STATUS_SUCCESS;
 }
 
@@ -806,6 +806,83 @@ Return Value:
 {
 
     return STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+}
+
+NET_API
+KSTATUS
+NetNetlinkSendMessage (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETLINK_MESSAGE_PARAMETERS Parameters
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends a netlink message, filling out the header based on the
+    parameters.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket over which to send the
+        command.
+
+    Packet - Supplies a pointer to the network packet to be sent.
+
+    Parameters - Supplies a pointer to the message parameters.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PNETLINK_HEADER Header;
+    SOCKET_IO_PARAMETERS IoParameters;
+    PNETLINK_ADDRESS SourceAddress;
+    KSTATUS Status;
+
+    if (Packet->DataOffset < NETLINK_HEADER_LENGTH) {
+        Status = STATUS_BUFFER_TOO_SMALL;
+        goto SendMessageEnd;
+    }
+
+    //
+    // Fill out the message header.
+    //
+
+    Packet->DataOffset -= NETLINK_HEADER_LENGTH;
+    Header = Packet->Buffer + Packet->DataOffset;
+    Header->Length = Packet->FooterOffset - Packet->DataOffset;
+    Header->Type = Parameters->Type;
+    Header->Flags = 0;
+    Header->SequenceNumber = Parameters->SequenceNumber;
+    SourceAddress = (PNETLINK_ADDRESS)Parameters->SourceAddress;
+    Header->PortId = SourceAddress->Port;
+
+    //
+    // Send the message to the destination address.
+    //
+
+    RtlZeroMemory(&IoParameters, sizeof(SOCKET_IO_PARAMETERS));
+    IoParameters.TimeoutInMilliseconds = WAIT_TIME_INDEFINITE;
+    IoParameters.NetworkAddress = Parameters->DestinationAddress;
+    IoParameters.Size = Header->Length;
+    MmSetIoBufferCurrentOffset(Packet->IoBuffer, Packet->DataOffset);
+    Status = IoSocketSendData(TRUE,
+                              Socket->KernelSocket.IoHandle,
+                              &IoParameters,
+                              Packet->IoBuffer);
+
+    if (!KSUCCESS(Status)) {
+        goto SendMessageEnd;
+    }
+
+SendMessageEnd:
+    return Status;
 }
 
 //

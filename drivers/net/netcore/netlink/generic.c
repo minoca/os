@@ -390,7 +390,6 @@ NETLINK_GENERIC_SOCKET_OPTION NetNetlinkGenericSocketOptions[] = {
 };
 
 PIO_HANDLE NetNetlinkGenericSocketHandle;
-PNET_SOCKET NetNetlinkGenericSocket;
 
 //
 // Store the lock and tree for storing the generic netlink families.
@@ -451,13 +450,15 @@ Return Value:
     KSTATUS Status;
 
     LockHeld = FALSE;
-    Family = NULL;
+    Family = INVALID_HANDLE;
     if (Properties->Version < NETLINK_GENERIC_FAMILY_PROPERTIES_VERSION) {
         Status = STATUS_VERSION_MISMATCH;
         goto RegisterFamilyEnd;
     }
 
-    if (Properties->Interface.ProcessReceivedData == NULL) {
+    if ((Properties->CommandCount == 0) ||
+        (Properties->Commands == NULL)) {
+
         Status = STATUS_INVALID_PARAMETER;
         goto RegisterFamilyEnd;
     }
@@ -485,6 +486,7 @@ Return Value:
                                  NETLINK_GENERIC_ALLOCATION_TAG);
 
     if (Family == NULL) {
+        Family = INVALID_HANDLE;
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto RegisterFamilyEnd;
     }
@@ -520,6 +522,10 @@ Return Value:
             Status = STATUS_DUPLICATE_ENTRY;
             goto RegisterFamilyEnd;
         }
+
+        FoundNode = RtlRedBlackTreeGetNextNode(&NetNetlinkGenericFamilyTree,
+                                               FALSE,
+                                               FoundNode);
     }
 
     //
@@ -561,9 +567,9 @@ RegisterFamilyEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        if (Family != NULL) {
+        if (Family != INVALID_HANDLE) {
             NetpNetlinkGenericFamilyReleaseReference(Family);
-            Family = NULL;
+            Family = INVALID_HANDLE;
         }
     }
 
@@ -628,9 +634,9 @@ Return Value:
 
     //
     // Before releasing the last reference, make sure the family is not in the
-    // middle of receiving packet. If it is, netcore could be able to call into
-    // the driver that is unregistering the family. It would be bad for that
-    // driver to disappear.
+    // middle of receiving a packet. If it is, netcore could be able to call
+    // into the driver that is unregistering the family. It would be bad for
+    // that driver to disappear.
     //
 
     while (Family->ReferenceCount > 1) {
@@ -645,6 +651,60 @@ UnregisterFamilyEnd:
     }
 
     return;
+}
+
+NET_API
+KSTATUS
+NetNetlinkGenericSendCommand (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends a generic netlink command, filling out the generic
+    header and netlink header.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket over which to send the
+        command.
+
+    Packet - Supplies a pointer to the network packet to be sent.
+
+    Parameters - Supplies a pointer to the generic command parameters.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PNETLINK_GENERIC_HEADER Header;
+    KSTATUS Status;
+
+    if (Packet->DataOffset < NETLINK_GENERIC_HEADER_LENGTH) {
+        Status = STATUS_BUFFER_TOO_SMALL;
+        goto SendCommandEnd;
+    }
+
+    Packet->DataOffset -= NETLINK_GENERIC_HEADER_LENGTH;
+    Header = Packet->Buffer + Packet->DataOffset;
+    Header->Command = Parameters->Command;
+    Header->Version = Parameters->Version;
+    Header->Reserved = 0;
+    Status = NetNetlinkSendMessage(Socket, Packet, &(Parameters->Message));
+    if (!KSUCCESS(Status)) {
+        goto SendCommandEnd;
+    }
+
+SendCommandEnd:
+    return Status;
 }
 
 VOID
@@ -675,6 +735,7 @@ Return Value:
 
     NETLINK_ADDRESS Address;
     KSTATUS Status;
+    PNET_SOCKET Socket;
 
     //
     // In phase 0, register the generic netlink socket handlers with the core
@@ -717,7 +778,7 @@ Return Value:
         }
 
         Status = IoGetSocketFromHandle(NetNetlinkGenericSocketHandle,
-                                       (PVOID)&NetNetlinkGenericSocket);
+                                       (PVOID)&Socket);
 
         if (!KSUCCESS(Status)) {
             goto InitializeEnd;
@@ -727,9 +788,7 @@ Return Value:
         // Add the kernel flag and bind it to port 0.
         //
 
-        RtlAtomicOr32(&(NetNetlinkGenericSocket->Flags),
-                      NET_SOCKET_FLAG_KERNEL);
-
+        RtlAtomicOr32(&(Socket->Flags), NET_SOCKET_FLAG_KERNEL);
         RtlZeroMemory(&Address, sizeof(NETLINK_ADDRESS));
         Address.Domain = NetDomainNetlink;
         Status = IoSocketBindToAddress(TRUE,
@@ -862,6 +921,7 @@ Return Value:
         PacketSizeInformation->MaxPacketSize = MaxPacketSize;
     }
 
+    PacketSizeInformation->HeaderSize += NETLINK_GENERIC_HEADER_LENGTH;
     Status = STATUS_SUCCESS;
 
 NetlinkGenericCreateSocketEnd:
@@ -1399,7 +1459,6 @@ Return Value:
     ULONG AllocationSize;
     BOOL FreePacket;
     PNETLINK_GENERIC_SOCKET GenericSocket;
-    PNETLINK_HEADER Header;
     PNETLINK_GENERIC_RECEIVED_PACKET ReceivePacket;
     PNET_SOCKET Socket;
 
@@ -1412,24 +1471,6 @@ Return Value:
     //
 
     FreePacket = TRUE;
-    Header = (PNETLINK_HEADER)(Packet->Buffer + Packet->DataOffset);
-    if (Header->Length > (Packet->FooterOffset - Packet->DataOffset)) {
-        RtlDebugPrint("Invalid generic netlink length %d is bigger than packet "
-                      "data, which is only %d bytes large.\n",
-                      Header->Length,
-                      (Packet->FooterOffset - Packet->DataOffset));
-
-        goto ProcessReceivedDataEnd;
-    }
-
-    if (Header->Length < sizeof(NETLINK_HEADER)) {
-        RtlDebugPrint("Invalid generic netlink length %d is smaller than the "
-                      "netlink header size %d\n",
-                      Header->Length,
-                      sizeof(NETLINK_HEADER));
-
-        goto ProcessReceivedDataEnd;
-    }
 
     //
     // If this is a multicast packet, then send it to all appropriate sockets
@@ -2380,6 +2421,10 @@ Return Value:
             NetpNetlinkGenericFamilyAddReference(FoundFamily);
             break;
         }
+
+        Node = RtlRedBlackTreeGetNextNode(&NetNetlinkGenericFamilyTree,
+                                          FALSE,
+                                          Node);
     }
 
     KeReleaseSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
@@ -2559,9 +2604,8 @@ Arguments:
     Socket - Supplies a pointer to the network socket that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may be used as a scratch space while this routine
-        executes and the packet travels up the stack, but will not be accessed
-        after this routine returns.
+        This structure may not be used as a scratch space and must not be
+        modified by this routine.
 
     SourceAddress - Supplies a pointer to the source (remote) address that the
         packet originated from. This memory will not be referenced once the
@@ -2579,35 +2623,43 @@ Return Value:
 
 {
 
+    PNETLINK_GENERIC_COMMAND Command;
     PNETLINK_GENERIC_FAMILY Family;
+    PNETLINK_GENERIC_COMMAND FoundCommand;
+    PNETLINK_GENERIC_HEADER GenericHeader;
     PNETLINK_HEADER Header;
+    ULONG Index;
+    NET_PACKET_BUFFER LocalPacket;
+    ULONG PacketLength;
+    NETLINK_GENERIC_COMMAND_PARAMETERS Parameters;
 
     //
-    // There should only be one generic netlink kernel socket.
+    // Make a local copy of the network packet buffer so that the offsets can
+    // be modified. The original is not allowed to be modified.
     //
 
-    ASSERT(Socket == NetNetlinkGenericSocket);
+    RtlCopyMemory(&LocalPacket, Packet, sizeof(NET_PACKET_BUFFER));
+    PacketLength = LocalPacket.FooterOffset - LocalPacket.DataOffset;
+    if (PacketLength < NETLINK_HEADER_LENGTH) {
+        RtlDebugPrint("NETLINK: packet length %d is less than the header size "
+                      "%d.\n",
+                      PacketLength,
+                      NETLINK_HEADER_LENGTH);
 
-    //
-    // Validate the standard netlink header for a kernel socket. The length
-    // should have already been evaluated.
-    //
-
-    Header = (PNETLINK_HEADER)(Packet->Buffer + Packet->DataOffset);
-
-    ASSERT(Header->Length >= sizeof(NETLINK_HEADER));
-    ASSERT(Header->Length <= (Packet->FooterOffset - Packet->DataOffset));
+        goto ProcessReceivedKernelDataEnd;
+    }
 
     //
     // The kernel only handles requests.
     //
 
+    Header = (PNETLINK_HEADER)(LocalPacket.Buffer + LocalPacket.DataOffset);
     if ((Header->Flags & NETLINK_HEADER_FLAG_REQUEST) == 0) {
         goto ProcessReceivedKernelDataEnd;
     }
 
     //
-    // The protocol layer does not handle control messages.
+    // The protocol layer does not handle standard messages.
     //
 
     if (Header->Type < NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM) {
@@ -2615,7 +2667,41 @@ Return Value:
     }
 
     //
-    // Find the generic netlink type interface and call the reception routine.
+    // Toss any malformed packets. They should be the size specified in the
+    // header.
+    //
+
+    if (Header->Length != PacketLength) {
+        RtlDebugPrint("NETLINK: header length (%d) and packet length (%d) do "
+                      "not match.\n",
+                      Header->Length,
+                      PacketLength);
+
+        goto ProcessReceivedKernelDataEnd;
+    }
+
+    LocalPacket.DataOffset += NETLINK_HEADER_LENGTH;
+    PacketLength -= NETLINK_HEADER_LENGTH;
+
+    //
+    // The generic header must be present.
+    //
+
+    GenericHeader = NETLINK_DATA(Header);
+    if (PacketLength < NETLINK_GENERIC_HEADER_LENGTH) {
+        RtlDebugPrint("NETLINK: packet does not have space for generic "
+                      "header. %d expected, has %d.\n",
+                      NETLINK_GENERIC_HEADER_LENGTH,
+                      PacketLength);
+
+        goto ProcessReceivedKernelDataEnd;
+    }
+
+    LocalPacket.DataOffset += NETLINK_GENERIC_HEADER_LENGTH;
+    PacketLength -= NETLINK_GENERIC_HEADER_LENGTH;
+
+    //
+    // Find the generic netlink family and call the command's callback.
     //
 
     Family = NetpNetlinkGenericLookupFamilyById(Header->Type);
@@ -2623,11 +2709,24 @@ Return Value:
         goto ProcessReceivedKernelDataEnd;
     }
 
-    Family->Properties.Interface.ProcessReceivedData(
-                                                 NetNetlinkGenericSocketHandle,
-                                                 Packet,
-                                                 SourceAddress,
-                                                 DestinationAddress);
+    FoundCommand = NULL;
+    for (Index = 0; Index < Family->Properties.CommandCount; Index += 1) {
+        Command = &(Family->Properties.Commands[Index]);
+        if (Command->CommandId == GenericHeader->Command) {
+            FoundCommand = Command;
+            break;
+        }
+    }
+
+    if (FoundCommand != NULL) {
+        Parameters.Message.SourceAddress = SourceAddress;
+        Parameters.Message.DestinationAddress = DestinationAddress;
+        Parameters.Message.SequenceNumber = Header->SequenceNumber;
+        Parameters.Message.Type = Header->Type;
+        Parameters.Command = GenericHeader->Command;
+        Parameters.Version = GenericHeader->Version;
+        FoundCommand->ProcessCommand(Socket, &LocalPacket, &Parameters);
+    }
 
     NetpNetlinkGenericFamilyReleaseReference(Family);
 

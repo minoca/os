@@ -80,7 +80,10 @@ Arguments:
 
     FooterSize - Supplies the number of footer bytes needed.
 
-    Link - Supplies a pointer to the link the buffer will be sent through.
+    Link - Supplies a pointer to the link the buffer will be sent through. If
+        a link is provided, then the buffer will be backed by physically
+        contiguous pages for the link's hardware. If no link is provided, then
+        the buffer will not be backed by physically contiguous pages.
 
     Flags - Supplies a bitmask of allocation flags. See
         NET_ALLOCATE_BUFFER_FLAG_* for definitions.
@@ -199,27 +202,27 @@ Return Value:
     CurrentEntry = NetFreeBufferList.Next;
     while (CurrentEntry != &NetFreeBufferList) {
         Buffer = LIST_VALUE(CurrentEntry, NET_PACKET_BUFFER, ListEntry);
-        BufferPhysical = Buffer->IoBuffer->Fragment[0].PhysicalAddress;
+        CurrentEntry = CurrentEntry->Next;
         BufferSize = Buffer->IoBuffer->Fragment[0].Size;
-
-        //
-        // This buffer works if it's big enough, doesn't go beyond the maximum
-        // physical address, and meets the alignment requirement.
-        //
-
-        if ((BufferSize >= TotalSize) &&
-            (BufferPhysical + BufferSize <= MaximumPhysicalAddress) &&
-            (ALIGN_RANGE_DOWN(BufferPhysical, Alignment) == BufferPhysical)) {
-
-            LIST_REMOVE(&(Buffer->ListEntry));
-
-            ASSERT(Buffer->BufferPhysicalAddress == BufferPhysical);
-
-            Status = STATUS_SUCCESS;
-            goto AllocateBufferEnd;
+        if (BufferSize < TotalSize) {
+            continue;
         }
 
-        CurrentEntry = CurrentEntry->Next;
+        BufferPhysical = Buffer->IoBuffer->Fragment[0].PhysicalAddress;
+        if ((Link == NULL) && (BufferPhysical != INVALID_PHYSICAL_ADDRESS)) {
+            continue;
+        }
+
+        if ((Link != NULL) &&
+            (((BufferPhysical + BufferSize) > MaximumPhysicalAddress) ||
+             (ALIGN_RANGE_DOWN(BufferPhysical, Alignment) != BufferPhysical))) {
+
+            continue;
+        }
+
+        LIST_REMOVE(&(Buffer->ListEntry));
+        Status = STATUS_SUCCESS;
+        goto AllocateBufferEnd;
     }
 
     KeReleaseQueuedLock(NetBufferListLock);
@@ -243,12 +246,17 @@ Return Value:
     // A buffer will need to be allocated.
     //
 
-    IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
-    Buffer->IoBuffer = MmAllocateNonPagedIoBuffer(0,
-                                                  MaximumPhysicalAddress,
-                                                  Alignment,
-                                                  TotalSize,
-                                                  IoBufferFlags);
+    if (Link != NULL) {
+        IoBufferFlags = IO_BUFFER_FLAG_PHYSICALLY_CONTIGUOUS;
+        Buffer->IoBuffer = MmAllocateNonPagedIoBuffer(0,
+                                                      MaximumPhysicalAddress,
+                                                      Alignment,
+                                                      TotalSize,
+                                                      IoBufferFlags);
+
+    } else {
+        Buffer->IoBuffer = MmAllocatePagedIoBuffer(TotalSize, 0);
+    }
 
     if (Buffer->IoBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
