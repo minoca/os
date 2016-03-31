@@ -478,6 +478,87 @@ Return Value:
 
 --*/
 
+NETLINK_API
+INT
+NetlinkGenericAddAttribute (
+    PNETLINK_MESSAGE_BUFFER Message,
+    PULONG MessageOffset,
+    USHORT Type,
+    PVOID Data,
+    USHORT DataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine adds a netlink generic attribute to the given netlink message
+    buffer, starting at the message buffer's current data offset plus the given
+    message offset.
+
+Arguments:
+
+    Message - Supplies a pointer to the netlink message buffer on which to add
+        the attribute.
+
+    MessageOffset - Supplies a pointer to the offset within the message's data
+        region where the attribute should be stored. On output, it receives the
+        updated offset after the added attribute.
+
+    Type - Supplies the netlink generic attribute type.
+
+    Data - Supplies a pointer to the attribute data.
+
+    DataLength - Supplies the length of the data, in bytes.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
+NETLINK_API
+INT
+NetlinkGenericGetAttribute (
+    PVOID Attributes,
+    ULONG AttributesLength,
+    USHORT Type,
+    PVOID *Data,
+    PUSHORT DataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine parses the given attributes buffer and returns a pointer to
+    the desired attribute.
+
+Arguments:
+
+    Attributes - Supplies a pointer to the start of the generic command
+        attributes.
+
+    AttributesLength - Supplies the length of the attributes buffer, in bytes.
+
+    Type - Supplies the netlink generic attribute type.
+
+    Data - Supplies a pointer that receives a pointer to the data for the
+        requested attribute type.
+
+    DataLength - Supplies a pointer that receives the length of the requested
+        attribute data.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
 #ifdef __cplusplus
 
 }

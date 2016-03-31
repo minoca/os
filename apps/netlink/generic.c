@@ -42,24 +42,6 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-INT
-NetlinkpGenericAddAttribute (
-    PNETLINK_MESSAGE_BUFFER Message,
-    ULONG MessageOffset,
-    USHORT Type,
-    PVOID Data,
-    USHORT DataLength
-    );
-
-INT
-NetlinkpGenericGetAttribute (
-    PVOID Attributes,
-    ULONG AttributesLength,
-    USHORT Type,
-    PVOID *Data,
-    PUSHORT DataLength
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -167,6 +149,7 @@ Return Value:
     USHORT IdLength;
     PNETLINK_MESSAGE_BUFFER Message;
     ULONG MessageLength;
+    ULONG MessageOffset;
     ULONG PortId;
     INT Status;
 
@@ -197,9 +180,10 @@ Return Value:
     // Add the family name attribute.
     //
 
-    Status = NetlinkpGenericAddAttribute(
+    MessageOffset = 0;
+    Status = NetlinkGenericAddAttribute(
                                  Message,
-                                 0,
+                                 &MessageOffset,
                                  NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_NAME,
                                  FamilyName,
                                  FamilyNameLength);
@@ -285,7 +269,7 @@ Return Value:
 
         BytesReceived -= NETLINK_GENERIC_HEADER_LENGTH;
         Attributes = NETLINK_GENERIC_DATA(GenericHeader);
-        Status = NetlinkpGenericGetAttribute(
+        Status = NetlinkGenericGetAttribute(
                                    Attributes,
                                    BytesReceived,
                                    NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID,
@@ -313,14 +297,11 @@ GetFamilyIdEnd:
     return Status;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
+NETLINK_API
 INT
-NetlinkpGenericAddAttribute (
+NetlinkGenericAddAttribute (
     PNETLINK_MESSAGE_BUFFER Message,
-    ULONG MessageOffset,
+    PULONG MessageOffset,
     USHORT Type,
     PVOID Data,
     USHORT DataLength
@@ -339,8 +320,9 @@ Arguments:
     Message - Supplies a pointer to the netlink message buffer on which to add
         the attribute.
 
-    MessageOffset - Supplies the offset within the messages data region where
-        the attribute should be stored.
+    MessageOffset - Supplies a pointer to the offset within the message's data
+        region where the attribute should be stored. On output, it receives the
+        updated offset after the added attribute.
 
     Type - Supplies the netlink generic attribute type.
 
@@ -366,24 +348,26 @@ Return Value:
     AttributeLength = NETLINK_ATTRIBUTE_LENGTH(DataLength);
     AlignedLength = NETLINK_ATTRIBUTE_SIZE(DataLength);
     MessageLength = Message->FooterOffset - Message->DataOffset;
-    if ((MessageOffset > MessageLength) ||
+    if ((*MessageOffset > MessageLength) ||
         (AlignedLength < DataLength) ||
-        ((MessageOffset + AlignedLength) < MessageOffset) ||
-        ((MessageOffset + AlignedLength) > MessageLength)) {
+        ((*MessageOffset + AlignedLength) < *MessageOffset) ||
+        ((*MessageOffset + AlignedLength) > MessageLength)) {
 
         errno = EINVAL;
         return -1;
     }
 
-    Attribute = Message->Buffer + Message->DataOffset + MessageOffset;
+    Attribute = Message->Buffer + Message->DataOffset + *MessageOffset;
     Attribute->Length = AttributeLength;
     Attribute->Type = Type;
     RtlCopyMemory(NETLINK_ATTRIBUTE_DATA(Attribute), Data, DataLength);
+    *MessageOffset += AlignedLength;
     return 0;
 }
 
+NETLINK_API
 INT
-NetlinkpGenericGetAttribute (
+NetlinkGenericGetAttribute (
     PVOID Attributes,
     ULONG AttributesLength,
     USHORT Type,
@@ -440,7 +424,7 @@ Return Value:
             return 0;
         }
 
-        AttributeSize = NETLINK_ATTRIBUTE_SIZE(Attribute->Length);
+        AttributeSize = NETLINK_ALIGN(Attribute->Length);
         Attribute = (PVOID)Attribute + AttributeSize;
         AttributesLength -= AttributeSize;
     }
@@ -448,4 +432,8 @@ Return Value:
     errno = ENOENT;
     return -1;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 

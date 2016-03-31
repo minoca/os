@@ -25,7 +25,9 @@ Environment:
 //
 
 #include <osbase.h>
-#include <minoca/devinfo/net.h>
+#include <minoca/net/netdrv.h>
+#include <minoca/net/net80211.h>
+#include <minoca/net/netlink.h>
 #include <mlibc.h>
 #include <netlink.h>
 
@@ -51,26 +53,26 @@ Environment:
     "The netcon utility configures network devices.\n\n"                       \
     "Options:\n"                                                               \
     "  -d --device=device -- Specifies the network device to configure.\n"     \
-    "  -j --join=ssid -- Attempts to join the given wireless network.\n"      \
+    "  -j --join=ssid -- Attempts to join the given wireless network.\n"       \
     "  -l --leave -- Attempts to leave the current wireless network.\n"        \
-    "  -n --networks -- Displays the list of wireless networks available to\n" \
-    "      the network device specified by -d.\n"                              \
     "  -p --password -- Indicates that the user wants to be prompted for a\n"  \
     "      password during a join operation.\n"                                \
+    "  -s --scan -- Displays the list of wireless networks available to\n"     \
+    "      the network device specified by -d.\n"                              \
     "  --help -- Display this help text.\n"                                    \
     "  --version -- Display the application version and exit.\n\n"
 
-#define NETCON_OPTIONS_STRING "d:j:lnph"
+#define NETCON_OPTIONS_STRING "d:j:lsph"
 
 //
 // Define the set of network configuration flags.
 //
 
-#define NETCON_FLAG_DEVICE_ID     0x00000001
-#define NETCON_FLAG_JOIN          0x00000002
-#define NETCON_FLAG_LEAVE         0x00000004
-#define NETCON_FLAG_PASSWORD      0x00000008
-#define NETCON_FLAG_LIST_NETWORKS 0x00000010
+#define NETCON_FLAG_DEVICE_ID 0x00000001
+#define NETCON_FLAG_JOIN      0x00000002
+#define NETCON_FLAG_LEAVE     0x00000004
+#define NETCON_FLAG_PASSWORD  0x00000008
+#define NETCON_FLAG_SCAN      0x00000010
 
 //
 // Define the set of network device description flags.
@@ -119,14 +121,19 @@ Members:
 
     DeviceId - Stores the network device's ID.
 
-    Network - Stores the network information.
+    NetworkIp4 - Stores the IPv4 network information.
+
+    NetworkIp6 - Stores the IPv6 network information.
+
+    Net80211 - Stores the 802.11 device information.
 
 --*/
 
 typedef struct _NETCON_DEVICE_DESCRIPTION {
     ULONG Flags;
     DEVICE_ID DeviceId;
-    NETWORK_DEVICE_INFORMATION Network;
+    NETWORK_DEVICE_INFORMATION NetworkIp4;
+    NETWORK_DEVICE_INFORMATION NetworkIp6;
     NETWORK_80211_DEVICE_INFORMATION Net80211;
 } NETCON_DEVICE_DESCRIPTION, *PNETCON_DEVICE_DESCRIPTION;
 
@@ -152,6 +159,21 @@ NetconGetDeviceInformation (
     );
 
 VOID
+NetconJoinNetwork (
+    PNETCON_CONTEXT Context
+    );
+
+VOID
+NetconLeaveNetwork (
+    PNETCON_CONTEXT Context
+    );
+
+VOID
+NetconScanForNetworks (
+    PNETCON_CONTEXT Context
+    );
+
+VOID
 NetconPrintDeviceInformation (
     PNETCON_DEVICE_DESCRIPTION Device
     );
@@ -174,8 +196,8 @@ struct option NetconLongOptions[] = {
     {"device", required_argument, 0, 'd'},
     {"join", required_argument, 0, 'j'},
     {"leave", no_argument, 0, 'l'},
-    {"networks", no_argument, 0, 'n'},
     {"password", no_argument, 0, 'p'},
+    {"scan", no_argument, 0, 's'},
     {"help", no_argument, 0, 'h'},
     {"version", no_argument, 0, 'V'},
     {NULL, 0, 0, 0}
@@ -269,7 +291,7 @@ Return Value:
             break;
 
         case 'n':
-            Context.Flags |= NETCON_FLAG_LIST_NETWORKS;
+            Context.Flags |= NETCON_FLAG_SCAN;
             break;
 
         case 'p':
@@ -312,13 +334,13 @@ Return Value:
         NetconListDevices();
 
     } else if ((Context.Flags & NETCON_FLAG_JOIN) != 0) {
-        printf("netcon: not implemented.\n");
+        NetconJoinNetwork(&Context);
 
     } else if ((Context.Flags & NETCON_FLAG_LEAVE) != 0) {
-        printf("netcon: not implemented.\n");
+        NetconLeaveNetwork(&Context);
 
-    } else if ((Context.Flags & NETCON_FLAG_LIST_NETWORKS) != 0) {
-        printf("netcon: not implemented.\n");
+    } else if ((Context.Flags & NETCON_FLAG_SCAN) != 0) {
+        NetconScanForNetworks(&Context);
 
     } else {
         ReturnValue = NetconGetDeviceInformation(Context.DeviceId, &Device);
@@ -551,17 +573,19 @@ Return Value:
     UINTN DataSize;
     PNETWORK_80211_DEVICE_INFORMATION Net80211;
     PNETWORK_DEVICE_INFORMATION Network;
+    PNETWORK_ADDRESS PhysicalAddress;
     KSTATUS Status;
 
     Device->Flags = 0;
     Device->DeviceId = DeviceId;
+    PhysicalAddress = NULL;
 
     //
     // Get the IPv4 network information.
     //
 
     DataSize = sizeof(NETWORK_DEVICE_INFORMATION);
-    Network = &(Device->Network);
+    Network = &(Device->NetworkIp4);
     Network->Version = NETWORK_DEVICE_INFORMATION_VERSION;
     Network->Domain = NetDomainIp4;
     Status = OsGetSetDeviceInformation(Device->DeviceId,
@@ -570,18 +594,38 @@ Return Value:
                                        &DataSize,
                                        FALSE);
 
-    if (!KSUCCESS(Status)) {
-        goto GetDeviceInformationEnd;
+    if (KSUCCESS(Status)) {
+        Device->Flags |= NETCON_DEVICE_FLAG_IP4;
+        PhysicalAddress = &(Network->PhysicalAddress);
     }
 
-    Device->Flags |= NETCON_DEVICE_FLAG_IP4;
+    //
+    // Get the IPv6 network information.
+    //
+
+    DataSize = sizeof(NETWORK_DEVICE_INFORMATION);
+    Network = &(Device->NetworkIp6);
+    Network->Version = NETWORK_DEVICE_INFORMATION_VERSION;
+    Network->Domain = NetDomainIp6;
+    Status = OsGetSetDeviceInformation(Device->DeviceId,
+                                       &NetconDeviceInformationUuid,
+                                       Network,
+                                       &DataSize,
+                                       FALSE);
+
+    if (KSUCCESS(Status)) {
+        Device->Flags |= NETCON_DEVICE_FLAG_IP6;
+        PhysicalAddress = &(Network->PhysicalAddress);
+    }
 
     //
     // If the physical address is an 802.11 address, then attempt to get the
     // 802.11 information.
     //
 
-    if (Network->PhysicalAddress.Domain == NetDomain80211) {
+    if ((PhysicalAddress != NULL) &&
+        (PhysicalAddress->Domain == NetDomain80211)) {
+
         DataSize = sizeof(NETWORK_80211_DEVICE_INFORMATION);
         Net80211 = &(Device->Net80211);
         Net80211->Version = NETWORK_80211_DEVICE_INFORMATION_VERSION;
@@ -598,8 +642,308 @@ Return Value:
         Device->Flags |= NETCON_DEVICE_FLAG_80211;
     }
 
+    Status = STATUS_SUCCESS;
+
 GetDeviceInformationEnd:
     return ClConvertKstatusToErrorNumber(Status);
+}
+
+VOID
+NetconJoinNetwork (
+    PNETCON_CONTEXT Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to join the network specified by the SSID in the
+    given netcon context.
+
+Arguments:
+
+    Context - Supplies a pointer to the network connection context.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ssize_t BytesSent;
+    USHORT FamilyId;
+    PNETLINK_MESSAGE_BUFFER Message;
+    ULONG MessageLength;
+    ULONG MessageOffset;
+    PSTR Password;
+    UINTN PasswordLength;
+    PNETLINK_SOCKET Socket;
+    UINTN SsidLength;
+    INT Status;
+
+    Password = NULL;
+    SsidLength = strlen(Context->Ssid) + 1;
+    if (SsidLength > (NET80211_MAX_SSID_LENGTH + 1)) {
+        printf("netcon: SSID \"%s\" is too long. Max SSID length is %d.\n",
+               Context->Ssid,
+               NET80211_MAX_SSID_LENGTH);
+
+        errno = EINVAL;
+        Status = -1;
+        goto JoinNetworkEnd;
+    }
+
+    //
+    // If a password is required, get it now.
+    //
+
+    if ((Context->Flags & NETCON_FLAG_PASSWORD) != 0) {
+        Password = getpass("Password: ");
+        if (Password == NULL) {
+            Status = -1;
+            goto JoinNetworkEnd;
+        }
+
+        PasswordLength = strlen(Password) + 1;
+    }
+
+    Status = NetlinkCreateSocket(NETLINK_GENERIC, NETLINK_ANY_PORT_ID, &Socket);
+    if (Status == -1) {
+        goto JoinNetworkEnd;
+    }
+
+    Status = NetlinkGenericGetFamilyId(Socket,
+                                       NETLINK_GENERIC_80211_NAME,
+                                       &FamilyId);
+
+    if (Status == -1) {
+        goto JoinNetworkEnd;
+    }
+
+    MessageLength = NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID)) +
+                    NETLINK_ATTRIBUTE_SIZE(SsidLength);
+
+    if (Password != NULL) {
+        MessageLength += NETLINK_ATTRIBUTE_SIZE(PasswordLength);
+    }
+
+    Status = NetlinkAllocateBuffer(NETLINK_GENERIC_HEADER_LENGTH,
+                                   MessageLength,
+                                   0,
+                                   &Message);
+
+    if (Status == -1) {
+        goto JoinNetworkEnd;
+    }
+
+    MessageOffset = 0;
+    Status = NetlinkGenericAddAttribute(
+                                     Message,
+                                     &MessageOffset,
+                                     NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
+                                     &(Context->DeviceId),
+                                     sizeof(DEVICE_ID));
+
+    if (Status == -1) {
+        goto JoinNetworkEnd;
+    }
+
+    Status = NetlinkGenericAddAttribute(Message,
+                                        &MessageOffset,
+                                        NETLINK_GENERIC_80211_ATTRIBUTE_SSID,
+                                        Context->Ssid,
+                                        SsidLength);
+
+    if (Status == -1) {
+        goto JoinNetworkEnd;
+    }
+
+    if (Password != NULL) {
+        Status = NetlinkGenericAddAttribute(
+                                    Message,
+                                    &MessageOffset,
+                                    NETLINK_GENERIC_80211_ATTRIBUTE_PASSPHRASE,
+                                    Password,
+                                    PasswordLength);
+
+        if (Status == -1) {
+            goto JoinNetworkEnd;
+        }
+    }
+
+    Status = NetlinkGenericFillOutHeader(Socket,
+                                         Message,
+                                         NETLINK_GENERIC_80211_JOIN,
+                                         0);
+
+    if (Status == -1) {
+        goto JoinNetworkEnd;
+    }
+
+    MessageLength += NETLINK_GENERIC_HEADER_LENGTH;
+    Status = NetlinkFillOutHeader(Socket,
+                                  Message,
+                                  MessageLength,
+                                  FamilyId,
+                                  NETLINK_HEADER_FLAG_REQUEST);
+
+    if (Status == -1) {
+        goto JoinNetworkEnd;
+    }
+
+    //
+    // Send off the request to join the given network.
+    //
+
+    BytesSent = NetlinkSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0);
+    if (BytesSent == -1) {
+        goto JoinNetworkEnd;
+    }
+
+JoinNetworkEnd:
+    if (Password != NULL) {
+        memset(Password, 0, strlen(Password));
+    }
+
+    if (Status == -1) {
+        perror("netcon: failed to join network");
+    }
+
+    return;
+}
+
+VOID
+NetconLeaveNetwork (
+    PNETCON_CONTEXT Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to leave the network to which the specified device
+    is connected. The device is stored in the context structure.
+
+Arguments:
+
+    Context - Supplies a pointer to the network connection context.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ssize_t BytesSent;
+    USHORT FamilyId;
+    PNETLINK_MESSAGE_BUFFER Message;
+    ULONG MessageLength;
+    ULONG MessageOffset;
+    PNETLINK_SOCKET Socket;
+    INT Status;
+
+    Status = NetlinkCreateSocket(NETLINK_GENERIC, NETLINK_ANY_PORT_ID, &Socket);
+    if (Status == -1) {
+        goto LeaveNetworkEnd;
+    }
+
+    Status = NetlinkGenericGetFamilyId(Socket,
+                                       NETLINK_GENERIC_80211_NAME,
+                                       &FamilyId);
+
+    if (Status == -1) {
+        goto LeaveNetworkEnd;
+    }
+
+    MessageLength = NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID));
+    Status = NetlinkAllocateBuffer(NETLINK_GENERIC_HEADER_LENGTH,
+                                   MessageLength,
+                                   0,
+                                   &Message);
+
+    if (Status == -1) {
+        goto LeaveNetworkEnd;
+    }
+
+    MessageOffset = 0;
+    Status = NetlinkGenericAddAttribute(
+                                     Message,
+                                     &MessageOffset,
+                                     NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
+                                     &(Context->DeviceId),
+                                     sizeof(DEVICE_ID));
+
+    if (Status == -1) {
+        goto LeaveNetworkEnd;
+    }
+
+    Status = NetlinkGenericFillOutHeader(Socket,
+                                         Message,
+                                         NETLINK_GENERIC_80211_LEAVE,
+                                         0);
+
+    if (Status == -1) {
+        goto LeaveNetworkEnd;
+    }
+
+    MessageLength += NETLINK_GENERIC_HEADER_LENGTH;
+    Status = NetlinkFillOutHeader(Socket,
+                                  Message,
+                                  MessageLength,
+                                  FamilyId,
+                                  NETLINK_HEADER_FLAG_REQUEST);
+
+    if (Status == -1) {
+        goto LeaveNetworkEnd;
+    }
+
+    //
+    // Send off the request to leave the current network.
+    //
+
+    BytesSent = NetlinkSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0);
+    if (BytesSent == -1) {
+        goto LeaveNetworkEnd;
+    }
+
+LeaveNetworkEnd:
+    if (Status == -1) {
+        perror("netcon: failed to leave network");
+    }
+
+    return;
+}
+
+VOID
+NetconScanForNetworks (
+    PNETCON_CONTEXT Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine scans for all the wireless networks that are within range of
+    the device stored in the given context. It then prints them to standard out.
+
+Arguments:
+
+    Context - Supplies a pointer to the network connection context.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    printf("Not implemented.\n");
+    return;
 }
 
 VOID
@@ -626,40 +970,75 @@ Return Value:
 
 {
 
+    NETWORK_ADDRESS_CONFIGURATION_METHOD Configuration;
     PNETWORK_80211_DEVICE_INFORMATION Net80211;
     PNETWORK_DEVICE_INFORMATION Network;
+    PNETWORK_ADDRESS PhysicalAddress;
 
     printf("Network Device 0x%I64x:\n", Device->DeviceId);
-    if ((Device->Flags & NETCON_DEVICE_FLAG_IP4) == 0) {
-        return;
+    PhysicalAddress = NULL;
+    if ((Device->Flags & NETCON_DEVICE_FLAG_IP4) != 0) {
+        PhysicalAddress = &(Device->NetworkIp4.PhysicalAddress);
+
+    } else if ((Device->Flags & NETCON_DEVICE_FLAG_IP6) == 0) {
+        PhysicalAddress = &(Device->NetworkIp6.PhysicalAddress);
     }
 
-    Network = &(Device->Network);
+    if (PhysicalAddress == NULL) {
+        return;
+    }
 
     //
     // The physical address should always be present.
     //
 
     printf("\tPhysical Address: ");
-    NetconPrintAddress(&(Network->PhysicalAddress));
+    NetconPrintAddress(PhysicalAddress);
 
     //
     // Print the IPv4 address line to show that the device is IPv4 capable, but
     // only print the actual address if it is configured.
     //
 
-    printf("\n\tIPv4 Address: ");
-    if ((Network->ConfigurationMethod != NetworkAddressConfigurationInvalid) &&
-        (Network->ConfigurationMethod != NetworkAddressConfigurationNone)) {
+    if ((Device->Flags & NETCON_DEVICE_FLAG_IP4) != 0) {
+        printf("\n\tIPv4 Address: ");
+        Network = &(Device->NetworkIp4);
+        Configuration = Network->ConfigurationMethod;
+        if ((Configuration != NetworkAddressConfigurationInvalid) &&
+            (Configuration != NetworkAddressConfigurationNone)) {
 
-        NetconPrintAddress(&(Network->Address));
-        printf("\n\tSubnet Mask: ");
-        NetconPrintAddress(&(Network->Subnet));
-        printf("\n\tGateway: ");
-        NetconPrintAddress(&(Network->Gateway));
+            NetconPrintAddress(&(Network->Address));
+            printf("\n\tSubnet Mask: ");
+            NetconPrintAddress(&(Network->Subnet));
+            printf("\n\tGateway: ");
+            NetconPrintAddress(&(Network->Gateway));
 
-    } else {
-        printf("(not configured)");
+        } else {
+            printf("(not configured)");
+        }
+    }
+
+    //
+    // Print the IPv6 address line to show that the device is IPv4 capable, but
+    // only print the actual address if it is configured.
+    //
+
+    if ((Device->Flags & NETCON_DEVICE_FLAG_IP6) != 0) {
+        printf("\n\tIPv6 Address: ");
+        Network = &(Device->NetworkIp6);
+        Configuration = Network->ConfigurationMethod;
+        if ((Configuration != NetworkAddressConfigurationInvalid) &&
+            (Configuration != NetworkAddressConfigurationNone)) {
+
+            NetconPrintAddress(&(Network->Address));
+            printf("\n\tSubnet Mask: ");
+            NetconPrintAddress(&(Network->Subnet));
+            printf("\n\tGateway: ");
+            NetconPrintAddress(&(Network->Gateway));
+
+        } else {
+            printf("(not configured)");
+        }
     }
 
     //
