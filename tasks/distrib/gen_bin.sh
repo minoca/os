@@ -31,7 +31,7 @@ if test -z "$ARCH"; then
     exit 1
 fi
 
-BINROOT=$SRCROOT/${ARCH}chk/bin
+BINROOT=$SRCROOT/${ARCH}${QUARK}chk/bin
 if ! test -d $BINROOT; then
     echo "Error: BINROOT '$BINROOT' does not exist."
     exit 1
@@ -49,14 +49,14 @@ if test -z "$REVISION"; then
 fi
 
 cd $BINROOT
-ARCHIVE_DIRECTORY="MinocaOS-$ARCH-$REVISION"
+ARCHIVE_DIRECTORY="MinocaOS-$ARCH$QUARK-$REVISION"
 WORKING="$BINROOT/$ARCHIVE_DIRECTORY"
 if test -d "$WORKING"; then
     echo "Error: $WORKING already exists. Clean it up first."
     exit 1
 fi
 
-ARCHIVE="MinocaOS-$ARCH-$REVISION.zip"
+ARCHIVE="MinocaOS-$ARCH$QUARK-$REVISION.zip"
 if test -f "$ARCHIVE"; then
     echo "Error: '$ARCHIVE' already exists. Delete it first."
     exit 1
@@ -69,7 +69,7 @@ mkdir -p $WORKING
 ## Copy Qemu.
 ##
 
-if test "x$ARCH" = "xx86"; then
+if test "x$ARCH$QUARK" = "xx86"; then
     cp -Rv $SRCROOT/tools/win32/qemu-0.13.0-windows $WORKING
     mv $WORKING/qemu-0.13.0-windows $WORKING/Qemu
     rm -rf "$WORKING/Qemu/bin"
@@ -103,8 +103,7 @@ if test "x$ARCH" = "xx86"; then
     cp -pv ./distribute/pc.img "$WORKING/Minoca/Image"
 
 elif test "x$ARCH" = "xarmv7"; then
-    cp -pv ./distribute/integ.img ./distribute/panda.img \
-        ./distribute/bbone.img "$WORKING/Minoca/Image"
+    cp -pv ./distribute/integ.img "$WORKING/Minoca/Image"
 
 elif test "x$ARCH" = "xarmv6"; then
     cp -pv ./distribute/rpi.img "$WORKING/Minoca/Image"
@@ -121,8 +120,8 @@ Python*
 *.img
 *.vmdk
 pagefile.sys
-Minoca*.zip
-wintools
+*.zip
+tools
 distribute
 packages'
 

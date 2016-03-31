@@ -467,6 +467,7 @@ Return Value:
 
     pthread_mutex_lock(&ClThreadListMutex);
     LIST_REMOVE(&(Thread->ListEntry));
+    Thread->ListEntry.Next = NULL;
     pthread_mutex_unlock(&ClThreadListMutex);
     if (Thread->KeyData != NULL) {
         ClpDestroyThreadKeyData(Thread);
@@ -1386,6 +1387,7 @@ Return Value:
     pthread_mutex_destroy(&(Thread->StartMutex));
     if (Thread->OsData != NULL) {
         OsDestroyThreadData(Thread->OsData);
+        Thread->OsData = NULL;
     }
 
     munmap(Thread->ThreadAllocation, Thread->ThreadAllocationSize);

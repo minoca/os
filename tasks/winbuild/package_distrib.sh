@@ -48,6 +48,10 @@ export TMPDIR=$PWD
 export TEMP=$TMPDIR
 export PATH="$SRCROOT/tools/win32/mingw/bin;$SRCROOT/tools;$SRCROOT/x86$DEBUG/bin;$SRCROOT/x86$DEBUG/testbin;$SRCROOT/x86$DEBUG/bin/tools/bin;$SRCROOT/$ARCH$DEBUG/bin;$SRCROOT/$ARCH$DEBUG/testbin;$SRCROOT/$ARCH$DEBUG/bin/tools/bin;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;$PATH"
 
+if test -n "$QUARK"; then
+    export QUARK=q
+fi
+
 ##
 ## Download the latest build.
 ##
@@ -82,8 +86,8 @@ fi
 ## Copy the original bin directory.
 ##
 
-BINROOT="$SRCROOT/$ARCH$DEBUG/bin"
-SAVED_BINROOT="$SRCROOT/$ARCH$DEBUG/bin.orig"
+BINROOT="$SRCROOT/$ARCH$QUARK$DEBUG/bin"
+SAVED_BINROOT="$SRCROOT/$ARCH$QUARK$DEBUG/bin.orig"
 if test -d "$BINROOT"; then
     if test -d "$SAVED_BINROOT"; then
        echo "Removing previous $SAVED_BINROOT."
@@ -105,7 +109,7 @@ mv ./bin "$BINROOT"
 ##
 
 DEBUGROOT="$SRCROOT/x86$DEBUG/bin"
-if test "x$ARCH" = "xx86"; then
+if test "x$ARCH$QUARK" = "xx86"; then
     DEBUGROOT="$SAVED_BINROOT"
 fi
 
@@ -119,14 +123,21 @@ done
 
 ORIGINAL_DIRECTORY=`pwd`
 cd "$BINROOT"
-echo "Running gen_bin.sh"
-sh "$SRCROOT/os/tasks/distrib/gen_bin.sh"
-if test "$ARCH" = "x86"; then
+if test "$ARCH$QUARK" = "x86"; then
+    echo "Running gen_bin.sh"
+    sh "$SRCROOT/os/tasks/distrib/gen_bin.sh"
     echo "Running gen_sdk.sh"
     sh "$SRCROOT/os/tasks/distrib/gen_sdk.sh"
     echo "Running gen_tp.sh"
     sh "$SRCROOT/os/tasks/distrib/gen_tp.sh"
 fi
+
+echo "Running gen_plats.sh"
+sh "$SRCROOT/os/tasks/distrib/gen_plats.sh"
+echo "Running gen_syms.sh"
+sh "$SRCROOT/os/tasks/distrib/gen_syms.sh"
+echo "Running gen_inst.sh"
+sh "$SRCROOT/os/tasks/distrib/gen_inst.sh"
 
 ##
 ## Upload the files.
@@ -143,7 +154,7 @@ if test -n "$MBUILD_STEP_ID"; then
     echo Uploaded file $file, size $file_size
 fi
 
-if test "$ARCH" = "x86"; then
+if test "$ARCH$QUARK" = "x86"; then
 
     ##
     ## The SDK includes all architectures.
@@ -176,14 +187,13 @@ if test "$ARCH" = "x86"; then
 fi
 
 ##
-## Restore the original binroot.
+## Remove the original binroot.
 ##
 
 cd "$ORIGINAL_DIRECTORY"
-rm -rf "$BINROOT"
 if test -d "$SAVED_BINROOT"; then
-    echo "Restoring original BINROOT."
-    mv "$SAVED_BINROOT" "$BINROOT"
+    echo "Removing original BINROOT."
+    rm -rf "$SAVED_BINROOT"
 fi
 
 echo "Completed generating distributables."
