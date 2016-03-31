@@ -157,67 +157,54 @@ Return Value:
 {
 
     PNETLINK_ATTRIBUTE Attribute;
-    ULONG AttributeLength;
+    PVOID Attributes;
+    ULONG AttributesLength;
     PVOID Data;
-    ULONG DataLength;
+    USHORT DataLength;
     PNETLINK_GENERIC_FAMILY Family;
-    USHORT FamilyId;
-    PSTR FamilyName;
     ULONG FamilyNameLength;
     ULONG HeaderLength;
-    ULONG PacketLength;
     UINTN ReplyLength;
     PNET_PACKET_BUFFER ReplyPacket;
     NETLINK_GENERIC_COMMAND_PARAMETERS SendParameters;
     KSTATUS Status;
 
+    Family = NULL;
     ReplyPacket = NULL;
 
     //
     // Search the packet for an attribute that identifies the family.
     //
 
-    PacketLength = Packet->FooterOffset - Packet->DataOffset;
-    Attribute = (PNETLINK_ATTRIBUTE)(Packet->Buffer + Packet->DataOffset);
+    AttributesLength = Packet->FooterOffset - Packet->DataOffset;
+    Attributes = Packet->Buffer + Packet->DataOffset;
+    Status = NetNetlinkGenericGetAttribute(
+                                 Attributes,
+                                 AttributesLength,
+                                 NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_NAME,
+                                 &Data,
+                                 &DataLength);
 
-    ASSERT(IS_POINTER_ALIGNED(Attribute, NETLINK_ATTRIBUTE_ALIGNMENT) != FALSE);
+    if (KSUCCESS(Status)) {
+        Family = NetpNetlinkGenericLookupFamilyByName((PSTR)Data);
+    }
 
-    Family = NULL;
-    while ((PacketLength != 0) && (Family == NULL)) {
-        if ((PacketLength < NETLINK_ATTRIBUTE_HEADER_LENGTH) ||
-            (PacketLength < Attribute->Length)) {
+    if (Family == NULL) {
+        Status = NetNetlinkGenericGetAttribute(
+                                   Attributes,
+                                   AttributesLength,
+                                   NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID,
+                                   &Data,
+                                   &DataLength);
 
-            break;
-        }
-
-        Data = NETLINK_ATTRIBUTE_DATA(Attribute);
-        DataLength = Attribute->Length - NETLINK_ATTRIBUTE_HEADER_LENGTH;
-        switch (Attribute->Type) {
-        case NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID:
+        if (KSUCCESS(Status)) {
             if (DataLength != sizeof(USHORT)) {
-                break;
+                Status = STATUS_DATA_LENGTH_MISMATCH;
+                goto GetFamilyEnd;
             }
 
-            FamilyId = *(PUSHORT)Data;
-            Family = NetpNetlinkGenericLookupFamilyById(FamilyId);
-            break;
-
-        case NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_NAME:
-            FamilyName = (PSTR)Data;
-            Family = NetpNetlinkGenericLookupFamilyByName(FamilyName);
-            break;
-
-        default:
-            break;
+            Family = NetpNetlinkGenericLookupFamilyById(*((PUSHORT)Data));
         }
-
-        AttributeLength = NETLINK_ALIGN(Attribute->Length);
-        if (AttributeLength > PacketLength) {
-            break;
-        }
-
-        Attribute = (PVOID)Attribute + AttributeLength;
-        PacketLength -= AttributeLength;
     }
 
     if (Family == NULL) {

@@ -2648,6 +2648,34 @@ Return Value:
 
 NET_API
 KSTATUS
+NetLookupLinkByDevice (
+    PDEVICE Device,
+    PNET_LINK *Link
+    );
+
+/*++
+
+Routine Description:
+
+    This routine looks for a link that belongs to the given device. If a link
+    is found, a reference will be added. It is the callers responsibility to
+    release this reference.
+
+Arguments:
+
+    Device - Supplies a pointer to the device for which the link is being
+        searched.
+
+    Link - Supplies a pointer that receives a pointer to the link, if found.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+KSTATUS
 NetCreateLinkAddressEntry (
     PNET_LINK Link,
     PNETWORK_ADDRESS Address,

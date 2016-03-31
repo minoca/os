@@ -67,8 +67,8 @@ Author:
     (NETLINK_ATTRIBUTE_HEADER_LENGTH + (_DataLength))
 
 //
-// This macro returns the total size, in bytes, consumed by the netlink
-// attribute, accounting for alignment.
+// This macro returns the total size, in bytes, consumed by a netlink
+// attribute with the given data length, accounting for alignment.
 //
 
 #define NETLINK_ATTRIBUTE_SIZE(_DataLength) \
@@ -175,6 +175,7 @@ Author:
 
 #define NETLINK_GENERIC_CONTROL_NEW_FAMILY 1
 #define NETLINK_GENERIC_CONTROL_GET_FAMILY 3
+#define NETLINK_GENERIC_CONTROL_MAX 255
 
 //
 // Define the generic control attributes.
@@ -187,6 +188,23 @@ Author:
 #define NETLINK_GENERIC_CONTROL_ATTRIBUTE_MAX_ATTRIBUTE 5
 #define NETLINK_GENERIC_CONTROL_ATTRIBUTE_OPERATIONS 6
 #define NETLINK_GENERIC_CONTROL_ATTRIBUTE_MULTICAST_GROUPS 7
+
+//
+// Define the generic 802.11 command values.
+//
+
+#define NETLINK_GENERIC_80211_JOIN 1
+#define NETLINK_GENERIC_80211_LEAVE 2
+#define NETLINK_GENERIC_80211_MAX 255
+
+//
+// Define the generic 802.11 attributes.
+//
+
+#define NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID 1
+#define NETLINK_GENERIC_80211_ATTRIBUTE_SSID 2
+#define NETLINK_GENERIC_80211_ATTRIBUTE_BSSID 3
+#define NETLINK_GENERIC_80211_ATTRIBUTE_PASSPHRASE 4
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -570,6 +588,44 @@ Arguments:
     Packet - Supplies a pointer to the network packet to be sent.
 
     Parameters - Supplies a pointer to the generic command parameters.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NET_API
+KSTATUS
+NetNetlinkGenericGetAttribute (
+    PVOID Attributes,
+    ULONG AttributesLength,
+    USHORT Type,
+    PVOID *Data,
+    PUSHORT DataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine parses the given attributes buffer and returns a pointer to
+    the desired attribute.
+
+Arguments:
+
+    Attributes - Supplies a pointer to the start of the generic command
+        attributes.
+
+    AttributesLength - Supplies the length of the attributes buffer, in bytes.
+
+    Type - Supplies the netlink generic attribute type.
+
+    Data - Supplies a pointer that receives a pointer to the data for the
+        requested attribute type.
+
+    DataLength - Supplies a pointer that receives the length of the requested
+        attribute data.
 
 Return Value:
 

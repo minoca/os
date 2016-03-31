@@ -707,6 +707,73 @@ SendCommandEnd:
     return Status;
 }
 
+NET_API
+KSTATUS
+NetNetlinkGenericGetAttribute (
+    PVOID Attributes,
+    ULONG AttributesLength,
+    USHORT Type,
+    PVOID *Data,
+    PUSHORT DataLength
+    )
+
+/*++
+
+Routine Description:
+
+    This routine parses the given attributes buffer and returns a pointer to
+    the desired attribute.
+
+Arguments:
+
+    Attributes - Supplies a pointer to the start of the generic command
+        attributes.
+
+    AttributesLength - Supplies the length of the attributes buffer, in bytes.
+
+    Type - Supplies the netlink generic attribute type.
+
+    Data - Supplies a pointer that receives a pointer to the data for the
+        requested attribute type.
+
+    DataLength - Supplies a pointer that receives the length of the requested
+        attribute data.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PNETLINK_ATTRIBUTE Attribute;
+    ULONG AttributeSize;
+
+    Attribute = (PNETLINK_ATTRIBUTE)Attributes;
+    while (AttributesLength != 0) {
+        if ((AttributesLength < NETLINK_ATTRIBUTE_HEADER_LENGTH) ||
+            (AttributesLength < Attribute->Length)) {
+
+            break;
+        }
+
+        if (Attribute->Type == Type) {
+            *DataLength = Attribute->Length - NETLINK_ATTRIBUTE_HEADER_LENGTH;
+            *Data = NETLINK_ATTRIBUTE_DATA(Attribute);
+            return STATUS_SUCCESS;
+        }
+
+        AttributeSize = NETLINK_ALIGN(Attribute->Length);
+        Attribute = (PVOID)Attribute + AttributeSize;
+        AttributesLength -= AttributeSize;
+    }
+
+    *Data = NULL;
+    *DataLength = 0;
+    return STATUS_NOT_FOUND;
+}
+
 VOID
 NetpNetlinkGenericInitialize (
     ULONG Phase
@@ -734,8 +801,8 @@ Return Value:
 {
 
     NETLINK_ADDRESS Address;
-    KSTATUS Status;
     PNET_SOCKET Socket;
+    KSTATUS Status;
 
     //
     // In phase 0, register the generic netlink socket handlers with the core

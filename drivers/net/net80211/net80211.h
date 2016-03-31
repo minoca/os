@@ -850,3 +850,45 @@ Return Value:
 
 --*/
 
+KSTATUS
+Net80211pNetlinkInitialize (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine initializes the generic netlink 802.11 family.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+VOID
+Net80211pNetlinkDestroy (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine tears down support for the generic netlink 802.11 family.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+

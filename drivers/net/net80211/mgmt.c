@@ -1324,19 +1324,7 @@ Return Value:
 
     Net80211pLeaveBss(Link, BssOriginal, FALSE, 0, 0);
     Net80211pJoinBss(Link, BssCopy);
-
-    //
-    // Remove the original from the BSS list and replace it with the copy.
-    //
-
-    LIST_REMOVE(&(BssOriginal->ListEntry));
     INSERT_BEFORE(&(BssCopy->ListEntry), &(Link->BssList));
-
-    //
-    // Release the list's reference on the original.
-    //
-
-    Net80211pBssEntryReleaseReference(BssOriginal);
     *Bss = BssCopy;
     Status = STATUS_SUCCESS;
 
@@ -1391,7 +1379,11 @@ Net80211pLeaveBss (
 
 Routine Description:
 
-    This routine disconnects the network link from the given BSS.
+    This routine disconnects the network link from the given BSS. With this
+    disconnection, any encryption keys are now invalid. To safely move said
+    keys out of the system, this routine removes the BSS from the global list
+    and releases the reference taken by the list. The BSS entry should be
+    destroyed shortly.
 
 Arguments:
 
@@ -1429,6 +1421,16 @@ Return Value:
     }
 
     Link->ActiveBss = NULL;
+
+    //
+    // Remove the BSS from the global list, destroy the reference taken on join
+    // and the list's reference. This really just needs to destroy the keys,
+    // but while the BSS is on the list and reference are outstanding, the keys
+    // may be in use. The best thing to do is destroy the BSS entry.
+    //
+
+    LIST_REMOVE(&(Bss->ListEntry));
+    Net80211pBssEntryReleaseReference(Bss);
     Net80211pBssEntryReleaseReference(Bss);
     return;
 }
@@ -3404,6 +3406,9 @@ Return Value:
 
     for (Index = 0; Index < NET80211_MAX_KEY_COUNT; Index += 1) {
         if (BssEntry->Encryption.Keys[Index] != NULL) {
+            RtlZeroMemory(BssEntry->Encryption.Keys[Index]->Value,
+                          BssEntry->Encryption.Keys[Index]->Length);
+
             MmFreePagedPool(BssEntry->Encryption.Keys[Index]);
         }
     }

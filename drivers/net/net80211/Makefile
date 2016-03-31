@@ -33,6 +33,7 @@ OBJS = control.o  \
        eapol.o    \
        mgmt.o     \
        net80211.o \
+       netlink.o  \
 
 DYNLIBS = $(BINROOT)/kernel      \
           $(BINROOT)/netcore.drv \

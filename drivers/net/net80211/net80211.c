@@ -187,6 +187,11 @@ Return Value:
         goto DriverEntryEnd;
     }
 
+    Status = Net80211pNetlinkInitialize();
+    if (!KSUCCESS(Status)) {
+        goto DriverEntryEnd;
+    }
+
 DriverEntryEnd:
     if (!KSUCCESS(Status)) {
         if (Net80211DataLinkLayerHandle != INVALID_HANDLE) {
@@ -227,6 +232,7 @@ Return Value:
     // Tear down built-in networks.
     //
 
+    Net80211pNetlinkDestroy();
     Net80211pEapolDestroy();
 
     //
@@ -371,6 +377,7 @@ Return Value:
         goto AddLinkEnd;
     }
 
+    NetSetLinkState(Link->NetworkLink, FALSE, 0);
     *NewLink = Link;
     Status = STATUS_SUCCESS;
 

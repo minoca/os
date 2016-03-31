@@ -1183,6 +1183,61 @@ FindLinkForDestinationAddressEnd:
 
 NET_API
 KSTATUS
+NetLookupLinkByDevice (
+    PDEVICE Device,
+    PNET_LINK *Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine looks for a link that belongs to the given device. If a link
+    is found, a reference will be added. It is the callers responsibility to
+    release this reference.
+
+Arguments:
+
+    Device - Supplies a pointer to the device for which the link is being
+        searched.
+
+    Link - Supplies a pointer that receives a pointer to the link, if found.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PNET_LINK CurrentLink;
+    KSTATUS Status;
+
+    if (LIST_EMPTY(&NetLinkList) != FALSE) {
+        return STATUS_NOT_FOUND;
+    }
+
+    Status = STATUS_NOT_FOUND;
+    KeAcquireSharedExclusiveLockShared(NetLinkListLock);
+    CurrentEntry = NetLinkList.Next;
+    while (CurrentEntry != &NetLinkList) {
+        CurrentLink = LIST_VALUE(CurrentEntry, NET_LINK, ListEntry);
+        if (CurrentLink->Properties.Device == Device) {
+            NetLinkAddReference(CurrentLink);
+            *Link = CurrentLink;
+            Status = STATUS_SUCCESS;
+            break;
+        }
+    }
+
+    KeReleaseSharedExclusiveLockShared(NetLinkListLock);
+    return Status;
+}
+
+NET_API
+KSTATUS
 NetCreateLinkAddressEntry (
     PNET_LINK Link,
     PNETWORK_ADDRESS Address,
