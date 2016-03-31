@@ -439,7 +439,7 @@ done
 ##
 
 echo "Creating archive..."
-7za a -tzip -mmt -mtc "$ARCHIVE" "$ARCHIVE_DIRECTORY"
+7za a -tzip -mmt -mx9 -mtc "$ARCHIVE" "$ARCHIVE_DIRECTORY"
 echo "Successfully created $ARCHIVE"
 rm -rf "$ARCHIVE_DIRECTORY"
 

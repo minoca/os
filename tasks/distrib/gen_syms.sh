@@ -61,7 +61,7 @@ pagefile.sys
     done
 
     mkdir -p "$WORKING/$arch/"
-    cp -pv -- $FILES "$working/$arch/"
+    cp -pv -- $FILES "$WORKING/$arch/"
 done
 
 ##
@@ -73,11 +73,11 @@ for file in debugui.exe debug.exe kexts.dll ; do
     cp -pv ./$file "$WORKING/"
 done
 
-cp -pv "$SRCROOT/os/include/minoca/debug/dbgext.h" "$WORKING/Minoca/Debug"
+cp -pv "$SRCROOT/os/include/minoca/debug/dbgext.h" "$WORKING/"
 
 cd "$OLDPWD"
-ARCHIVE="Symbols-$REVISION.zip"
-7za a -tzip -mmt -mtc "$ARCHIVE" "$WORKING"
+ARCHIVE="Minoca-Symbols-$REVISION.zip"
+7za a -tzip -mx9 -mmt -mtc "$ARCHIVE" $WORKING/*
 FILE_SIZE=`ls -l $ARCHIVE | \
     sed -n 's/[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([0123456789]*\).*/\1/p'`
 

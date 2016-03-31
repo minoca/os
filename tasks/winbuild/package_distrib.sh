@@ -96,6 +96,14 @@ if test -d "$BINROOT"; then
 
     echo "Moving original binroot to $SAVED_BINROOT"
     mv -f "$BINROOT" "$SAVED_BINROOT"
+
+    ##
+    ## Copy the tools back in.
+    ##
+
+    if [ -d "$SAVED_BINROOT/tools" ] ; then
+        cp -rp "$SAVED_BINROOT/tools" "$BINROOT/"
+    fi
 fi
 
 ##

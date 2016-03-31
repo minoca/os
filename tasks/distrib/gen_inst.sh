@@ -47,7 +47,7 @@ for arch in x86 x86q armv7 armv6; do
     fi
 
     mkdir -p "$WORKING/$arch"
-    cp -pv "$BINROOT/install.img" "$BINROOT/msetup" "$WORKING/arch/"
+    cp -pv "$BINROOT/install.img" "$BINROOT/msetup" "$WORKING/$arch/"
     if [ -r "$BINROOT/msetup_build.exe" ]; then
         cp -pv "$BINROOT/msetup_build.exe" "$WORKING/msetup.exe"
     fi
@@ -127,8 +127,8 @@ _EOF
 ## Create the archive.
 ##
 
-ARCHIVE="MinocaInstaller-$REVISION.zip"
-7za a -tzip -mmt -mtc "$ARCHIVE" "$WORKING"
+ARCHIVE="Minoca-Installer-$REVISION.zip"
+7za a -tzip -mmt -mx9 -mtc "$ARCHIVE" $WORKING/*
 FILE_SIZE=`ls -l $ARCHIVE | \
     sed -n 's/[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([0123456789]*\).*/\1/p'`
 

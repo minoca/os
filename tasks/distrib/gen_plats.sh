@@ -62,10 +62,10 @@ if [ "$ARCH" = "x86" ] ; then
 
     IMAGES="pc pcefi"
 
-else if [ "$ARCH" = "armv7" ] ; then
+elif [ "$ARCH" = "armv7" ] ; then
     IMAGES="bbone panda rpi2 veyron"
 
-else if [ "$ARCH" = "armv6" ] ; then
+elif [ "$ARCH" = "armv6" ] ; then
     IMAGES="rpi"
 
 else
@@ -74,8 +74,8 @@ else
 fi
 
 for image in $IMAGES; do
-    ARCHIVE="$image-$REVISION.zip"
-    7za a -tzip -mmt -mtc "$ARCHIVE" "${image}.img"
+    ARCHIVE="Minoca-$image-$REVISION.zip"
+    7za a -tzip -mmt -mx9 -mtc "$ARCHIVE" "${image}.img"
     FILE_SIZE=`ls -l $ARCHIVE | \
         sed -n 's/[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([0123456789]*\).*/\1/p'`
 
@@ -85,4 +85,6 @@ for image in $IMAGES; do
         echo Uploaded file $ARCHIVE, size $FILE_SIZE
     fi
 done
+
+echo "Done generating platform archives."
 
