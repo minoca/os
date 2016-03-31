@@ -32,20 +32,17 @@ fi
 
 export TMPDIR=$PWD
 export TEMP=$TMPDIR
-SCHEDULE_ARCH="$ARCH"
-if [ -n "$QUARK" ]; then
-    SCHEDULE_ARCH="${ARCH}quark"
-fi
-
+SCHEDULE_ARCH="$ARCH$VARIANT"
 last_native_build=`python ../../client.py --query "Native Pilot $SCHEDULE_ARCH"`
 if test -z $last_native_build; then
   echo "Error: Failed to get last Native Pilot $SCHEDULE_ARCH build."
   exit 1
 fi
 
-file=minoca-bin-$ARCH$DEBUG.tar.gz
+file=minoca-bin-$ARCH$VARIANT$DEBUG.tar.gz
 echo "Downloading $file from schedule instance ID $last_native_build"
 python ../../client.py --pull $file $file $last_native_build
 echo "Extracting $file"
 tar -xzf $file
 rm $file
+

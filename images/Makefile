@@ -40,7 +40,7 @@ MSETUP_TINY_IMAGE_SIZE := -G30M
 ## Build x86 images.
 ##
 
-ifeq (x86, $(ARCH))
+ifeq (x86, $(ARCH)$(VARIANT))
 
 IMAGES += $(BINROOT)/pc.img \
           $(BINROOT)/pcefi.img \
@@ -66,15 +66,24 @@ $(BINROOT)/pctiny.img: $(INSTALL_IMAGE)
 	@cd $(BINROOT) && $(MSETUP) -ql pc-tiny -i $< $(MSETUP_DEBUG) -d $@ \
 	    $(MSETUP_TINY_IMAGE_SIZE)
 
-ifneq ($(QUARK),)
+endif
+
+##
+## Build x86 Quark images.
+##
+
+ifeq (x86q, $(ARCH)$(VARIANT))
 
 IMAGES += $(BINROOT)/galileo.img
 
+$(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
+	@echo Building - $(notdir $@)
+	@mkdir -p $(BINROOT)/apps
+	@cd $(BINROOT) && $(MSETUP) -ql install-x86 -i.. -d $@ $(MSETUP_IMAGE_SIZE)
+
 $(BINROOT)/galileo.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && ./msetup -ql galileo -i $< -D -d $@ -G512M
-
-endif
+	@cd $(BINROOT) && $(MSETUP) -ql galileo -i $< -D -d $@ -G512M
 
 endif
 

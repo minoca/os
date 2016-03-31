@@ -62,7 +62,7 @@ endif
 ##
 
 SRCROOT := $(subst \,/,$(SRCROOT))
-OUTROOT := $(SRCROOT)/$(ARCH)$(DEBUG)
+OUTROOT := $(SRCROOT)/$(ARCH)$(VARIANT)$(DEBUG)
 BINROOT := $(OUTROOT)/bin
 TESTBIN := $(OUTROOT)/testbin
 OBJROOT := $(OUTROOT)/obj
@@ -127,7 +127,7 @@ else
 CECHO_CYAN ?= echo
 endif
 
-ifeq (x86, $(ARCH))
+ifeq (x86, $(ARCH)$(VARIANT))
 CC := i686-pc-minoca-gcc
 RCC := windres
 AR := i686-pc-minoca-ar
@@ -136,13 +136,16 @@ STRIP := i686-pc-minoca-strip
 BFD_ARCH := i386
 OBJ_FORMAT := elf32-i386
 
-ifneq ($(QUARK),)
+endif
+
+ifeq (x86q, $(ARCH)$(VARIANT))
 CC := i586-pc-minoca-gcc
 AR := i586-pc-minoca-ar
 OBJCOPY := i586-pc-minoca-objcopy
 STRIP := i586-pc-minoca-strip
-endif
-
+RCC := windres
+BFD_ARCH := i386
+OBJ_FORMAT := elf32-i386
 endif
 
 ifeq (x64, $(ARCH))
@@ -306,7 +309,7 @@ EXTRA_CFLAGS += -mno-ms-bitfields
 ## Quark has an errata that requires no LOCK prefixes on instructions.
 ##
 
-ifneq ($(QUARK),)
+ifeq ($(VARIANT),q)
 ifneq ($(BINARYTYPE), $(filter ntconsole win32 dll,$(BINARYTYPE)))
 EXTRA_CPPFLAGS += -Wa,-momit-lock-prefix=yes -march=i586
 endif

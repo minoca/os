@@ -38,7 +38,7 @@ export TMPDIR=$PWD
 export TEMP=$TMPDIR
 ARCHIVE_LOCATION=$PWD/..
 
-cd $SRCROOT/$ARCH$DEBUG
+cd $SRCROOT/$ARCH$VARIANT$DEBUG
 
 ##
 ## Move all the packages over, so they get saved beyond this task and aren't in
@@ -63,8 +63,8 @@ rm -rf ./bin/dep
 
 date > ./bin/build-date
 cp $SRCROOT/os/revision ./bin/build-revision
-echo $ARCH$DEBUG > ./bin/build-flavor
-file=$ARCHIVE_LOCATION/minoca-bin-$ARCH$DEBUG.tar.gz
+echo $ARCH$VARIANT$DEBUG > ./bin/build-flavor
+file=$ARCHIVE_LOCATION/minoca-bin-$ARCH$VARIANT$DEBUG.tar.gz
 tar -cz -f $file ./bin
 echo "Completed packaging $file"
 

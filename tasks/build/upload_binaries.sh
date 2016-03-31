@@ -33,7 +33,7 @@ fi
 export TMPDIR=$PWD
 export TEMP=$TMPDIR
 ARCHIVE_LOCATION=$PWD/..
-file=minoca-bin-$ARCH$DEBUG.tar.gz
+file=minoca-bin-$ARCH$VARIANT$DEBUG.tar.gz
 file_path=$ARCHIVE_LOCATION/$file
 file_size=`ls -l $file_path | \
     sed -n 's/[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([0123456789]*\).*/\1/p'`
@@ -50,7 +50,12 @@ package_dir="$ARCHIVE_LOCATION/packages"
 VERSION=`cat $package_dir/kernel-version | sed 's/\([0-9]*\)\.\([0-9]*\)\..*/\1.\2/'`
 case "$ARCH" in
   x86)
-    if test -n "$QUARK"; then
+
+    ##
+    ## Quark uses i586, everything else is i686.
+    ##
+
+    if test "x$VARIANT" = "xq"; then
       parch=i586
 
     else

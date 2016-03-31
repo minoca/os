@@ -37,7 +37,7 @@ fi
 
 export TMPDIR=$PWD
 export TEMP=$TMPDIR
-BINROOT="$SRCROOT/$ARCH$DEBUG/bin"
+BINROOT="$SRCROOT/$ARCH$VARIANT$DEBUG/bin"
 AUTOROOT=$BINROOT/apps/auto
 
 ##
@@ -100,12 +100,16 @@ done
 ## Create a local opkg configuration that prefers the local package repository.
 ##
 
-package_dir="$SRCROOT/$ARCH$DEBUG/bin/packages"
+package_dir="$BINROOT/packages"
 cp /etc/opkg/opkg.conf ./myopkg.conf.orig
 sed "s|src/gz main.*|src/gz local file:///$package_dir|" ./myopkg.conf.orig > \
     ./myopkg.conf
 
-if test -n "$QUARK"; then
+##
+## Change Quark to i586.
+##
+
+if [ "$ARCH$VARIANT" = "x86q" ]; then
     sed "s|i686|i586|g" ./myopkg.conf > ./myopkg.conf2
     mv ./myopkg.conf2 ./myopkg.conf
 fi
@@ -114,7 +118,7 @@ fi
 ## Point the package repository at the build server.
 ##
 
-DEST="$SRCROOT/$ARCH$DEBUG/bin/apps"
+DEST="$BINROOT/apps"
 sed 's/www\.minocacorp\.com/10.0.1.202/' $DEST/etc/opkg/opkg.conf > opkg.tmp
 mv opkg.tmp $DEST/etc/opkg/opkg.conf
 

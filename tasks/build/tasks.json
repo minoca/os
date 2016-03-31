@@ -27,7 +27,7 @@
 },
 {
     "type": "task",
-    "name": "Native Pilot x86quark",
+    "name": "Native Pilot x86q",
     "steps": [
         {
             "name": "Run Native Compile",
@@ -42,7 +42,7 @@
         {
             "name": "Start Native Tests",
             "type": "runschedule",
-            "parameter": "Native Test x86quark"
+            "parameter": "Native Test x86q"
         },
         {
             "name": "Run Package Distributables",

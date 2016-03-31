@@ -397,20 +397,20 @@ it:
   * os -- Contains the SDK source.
   * third-party (optional) -- Contains the third party source packages not
     authored by Minoca.
-  * x86chk, armv7chk, armv6chk -- These are actually $ARCH$DEBUG, and contain
-    the build output. Each directory is created automatically when a build for
-    its particular architecture is initiated. Notable directories inside of
-    these include obj, the directory where object files, libraries, and
-    executables are built, and bin, the directory where "final product" binaries
-    are placed.
+  * x86chk, x86qchk, armv7chk, armv6chk -- These are actually
+    $ARCH$VARIANT$DEBUG, and contain the build output. Each directory is
+    created automatically when a build for its particular architecture is
+    initiated. Notable directories inside of these include obj, the directory
+    where object files, libraries, and executables are built, and bin, the
+    directory where "final product" binaries are placed.
 
 Building
 ========
 When you double click one of the run_<arch>.bat, you're dropped into the source
 root (SRCROOT). To build the samples, "cd" into the os directory, and run
 "make". The application and driver samples should build. The final output
-binaries will be located in "$SRCROOT/$ARCH$DEBUG/bin". There's a handy alias
-installed, you can simply type "bin" to change to this directory.
+binaries will be located in "$SRCROOT/$ARCH$VARIANT$DEBUG/bin". There's a handy
+alias installed, you can simply type "bin" to change to this directory.
 
 You can build inside a specific directory by "cd"ing into it and running make
 there (ie os/drivers/usb/onering). You can also run "make clean" from somewhere

@@ -46,29 +46,22 @@ fi
 
 export TMPDIR=$PWD
 export TEMP=$TMPDIR
-export PATH="$SRCROOT/tools/win32/mingw/bin;$SRCROOT/tools;$SRCROOT/x86$DEBUG/bin;$SRCROOT/x86$DEBUG/testbin;$SRCROOT/x86$DEBUG/bin/tools/bin;$SRCROOT/$ARCH$DEBUG/bin;$SRCROOT/$ARCH$DEBUG/testbin;$SRCROOT/$ARCH$DEBUG/bin/tools/bin;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;$PATH"
-
-if test -n "$QUARK"; then
-    export QUARK=q
-fi
+OUTROOT="$SRCROOT/$ARCH$VARIANT$DEBUG"
+export PATH="$SRCROOT/tools/win32/mingw/bin;$SRCROOT/tools;$OUTROOT/bin;$OUTROOT/testbin;$OUTROOT/bin/tools/bin;$SRCROOT/tools/win32/scripts;$SRCROOT/tools/win32/swiss;$SRCROOT/tools/win32/bin;$SRCROOT/tools/win32/ppython/app;$SRCROOT/tools/win32/ppython/App/Scripts;$PATH"
 
 ##
 ## Download the latest build.
 ##
 
 if ! test -d ./bin; then
-    barch=$ARCH
-    if test -n "$QUARK"; then
-        barch=x86quark
-    fi
-
+    barch=$ARCH$VARIANT
     last_native_build=`python ../../client.py --query "Native Pilot $barch"`
     if test -z $last_native_build; then
       echo "Error: Failed to get last Native Pilot $barch build."
       exit 1
     fi
 
-    file=minoca-bin-$ARCH$DEBUG.tar.gz
+    file=minoca-bin-$ARCH$VARIANT$DEBUG.tar.gz
     echo "Downloading $file from schedule instance ID $last_native_build"
     python ../../client.py --pull $file $file $last_native_build
     echo "Extracting $file"
@@ -86,8 +79,8 @@ fi
 ## Copy the original bin directory.
 ##
 
-BINROOT="$SRCROOT/$ARCH$QUARK$DEBUG/bin"
-SAVED_BINROOT="$SRCROOT/$ARCH$QUARK$DEBUG/bin.orig"
+BINROOT="$SRCROOT/$ARCH$VARIANT$DEBUG/bin"
+SAVED_BINROOT="$SRCROOT/$ARCH$VARIANT$DEBUG/bin.orig"
 if test -d "$BINROOT"; then
     if test -d "$SAVED_BINROOT"; then
        echo "Removing previous $SAVED_BINROOT."
@@ -117,7 +110,7 @@ mv ./bin "$BINROOT"
 ##
 
 DEBUGROOT="$SRCROOT/x86$DEBUG/bin"
-if test "x$ARCH$QUARK" = "xx86"; then
+if test "x$ARCH$VARIANT" = "xx86"; then
     DEBUGROOT="$SAVED_BINROOT"
 fi
 
@@ -131,7 +124,7 @@ done
 
 ORIGINAL_DIRECTORY=`pwd`
 cd "$BINROOT"
-if test "$ARCH$QUARK" = "x86"; then
+if test "$ARCH$VARIANT" = "x86"; then
     echo "Running gen_bin.sh"
     sh "$SRCROOT/os/tasks/distrib/gen_bin.sh"
     echo "Running gen_sdk.sh"
@@ -162,7 +155,7 @@ if test -n "$MBUILD_STEP_ID"; then
     echo Uploaded file $file, size $file_size
 fi
 
-if test "$ARCH$QUARK" = "x86"; then
+if test "$ARCH$VARIANT" = "x86"; then
 
     ##
     ## The SDK includes all architectures.

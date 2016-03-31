@@ -82,7 +82,7 @@ IFS="$SAVED_IFS"
 
 if test $ARCH = x86; then
     TRIO=i686-pc-minoca
-    if test -n "$QUARK"; then
+    if test "x$VARIANT" = "xq"; then
         TRIO=i586-pc-minoca
     fi
 

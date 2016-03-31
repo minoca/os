@@ -89,7 +89,7 @@ def main(argv):
         image = "panda.img"
 
     elif platform == 'Intel Galileo':
-        arch='x86quark'
+        arch='x86q'
         image_script = os.path.join(imagescriptdir, "build_pcefi.sh")
         image = "pcefi.img"
 
@@ -222,9 +222,9 @@ def main(argv):
     ##
 
     print("Creating final image.")
-    if arch == 'x86quark':
+    if arch == 'x86q':
         os.environ['ARCH'] = 'x86'
-        os.environ['QUARK'] = 'yes'
+        os.environ['VARIANT'] = 'q'
 
     else:
         os.environ['ARCH'] = arch

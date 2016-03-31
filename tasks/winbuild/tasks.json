@@ -34,9 +34,9 @@
             "parameter": "Native Pilot x86"
         },
         {
-            "name": "Start Native Pilot x86quark",
+            "name": "Start Native Pilot x86q",
             "type": "runschedule",
-            "parameter": "Native Pilot x86quark"
+            "parameter": "Native Pilot x86q"
         },
         {
             "name": "Start Native Pilot armv7",

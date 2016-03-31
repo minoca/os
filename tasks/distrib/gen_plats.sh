@@ -30,7 +30,7 @@ if test -z "$ARCH"; then
     exit 1
 fi
 
-BINROOT=$SRCROOT/${ARCH}${QUARK}chk/bin
+BINROOT=$SRCROOT/${ARCH}${VARIANT}chk/bin
 if ! test -d $BINROOT; then
     echo "Error: BINROOT '$BINROOT' does not exist."
     exit 1
@@ -56,7 +56,7 @@ fi
 
 cd $BINROOT
 if [ "$ARCH" = "x86" ] ; then
-    if [ -n "$QUARK" ] ; then
+    if [ "x$VARIANT" = "xq" ] ; then
         IMAGES="galileo"
     fi
 

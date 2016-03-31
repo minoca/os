@@ -37,7 +37,7 @@ fi
 
 export TMPDIR=$PWD
 export TEMP=$TMPDIR
-APPSROOT=$SRCROOT/$ARCH$DEBUG/bin/apps/
+APPSROOT=$SRCROOT/$ARCH$VARIANT$DEBUG/bin/apps/
 
 ##
 ## Extract a few packages directly into the distribution image.
@@ -50,7 +50,7 @@ mkdir -p "$APPSROOT"
 ##
 
 make_index="$SRCROOT/third-party/build/opkg-utils/opkg-make-index"
-package_dir="$SRCROOT/$ARCH$DEBUG/bin/packages"
+package_dir="$SRCROOT/$ARCH$VARIANT$DEBUG/bin/packages"
 index_file="$package_dir/Packages"
 python "$make_index" "$package_dir" > "$index_file"
 cat "$index_file" | tr -d '\r' | gzip > "${index_file}.gz"
@@ -62,7 +62,11 @@ cat "$index_file" | tr -d '\r' | gzip > "${index_file}.gz"
 sed "s|src/gz main.*|src/gz local file:///$package_dir|" /etc/opkg/opkg.conf > \
     ./myopkg.conf
 
-if test -n "$QUARK"; then
+##
+## Quark is i586 rather than i686.
+##
+
+if [ "$ARCH$VARIANT" = "x86q" ]; then
     sed "s|i686|i586|g" ./myopkg.conf > ./myopkg.conf2
     mv ./myopkg.conf2 ./myopkg.conf
 fi

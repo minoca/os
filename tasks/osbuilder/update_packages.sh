@@ -33,13 +33,14 @@ fi
 ## TODO: Add armv6 once an armv6 build is created.
 ##
 
-for arch in x86 x86quark armv7; do
+for arch in x86 x86q armv7; do
     ARCH=$arch
     case $arch in
         x86) package_arch=minoca-i686 ;;
-        x86quark)
+        x86q)
             package_arch=minoca-i586
             ARCH=x86
+            VARIANT=q
             ;;
 
         armv6) package_arch=minoca-armv6 ;;
