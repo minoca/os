@@ -111,7 +111,7 @@ Members:
         the  socket will wait when receiving data.
 
     ReceiveMinimum - Stores the minimum amount of bytes that must be available
-        before the socket is made readable.
+        before the socket is made readable. This is ignored.
 
     DroppedPacketCount - Stores the number of packets that have been dropped
         because the receive queue was full.
@@ -1713,22 +1713,20 @@ Return Value:
 
 {
 
-    ULONG AvailableBytes;
     PVOID Buffer;
     UINTN BytesComplete;
-    COMPARISON_RESULT Compare;
-    PLIST_ENTRY CurrentEntry;
+    ULONG CopySize;
     ULONGLONG CurrentTime;
     ULONGLONG EndTime;
     ULONG Flags;
     PNETLINK_GENERIC_SOCKET GenericSocket;
     PIO_OBJECT_STATE IoState;
-    ULONG OriginallyAvailable;
+    BOOL LockHeld;
     PNETLINK_GENERIC_RECEIVED_PACKET Packet;
+    PLIST_ENTRY PacketEntry;
     ULONG PacketSize;
     ULONG ReturnedEvents;
     UINTN Size;
-    NETWORK_ADDRESS SourceAddressLocal;
     KSTATUS Status;
     ULONGLONG TimeCounterFrequency;
     ULONG Timeout;
@@ -1738,6 +1736,7 @@ Return Value:
 
     BytesComplete = 0;
     EndTime = 0;
+    LockHeld = FALSE;
     Flags = Parameters->SocketIoFlags;
     Parameters->SocketIoFlags = 0;
     if ((Flags & SOCKET_IO_OUT_OF_BAND) != 0) {
@@ -1777,11 +1776,10 @@ Return Value:
     }
 
     //
-    // Loop trying to get some data.
+    // Loop trying to get some data. This loop exits once one packet is read.
     //
 
-    Status = STATUS_SUCCESS;
-    while (BytesComplete < Size) {
+    while (TRUE) {
 
         //
         // Wait for a packet to become available. Start by computing the wait
@@ -1803,8 +1801,8 @@ Return Value:
         //
         // Wait for something to maybe become available. If the wait fails due
         // to a timeout, interruption, or something else, then fail out.
-        // Otherwise when the read event is signalled, there are at least the
-        // receive minimum bytes available.
+        // Otherwise when the read event is signalled, there is at least one
+        // packet to receive.
         //
 
         IoState = GenericSocket->NetSocket.KernelSocket.IoState;
@@ -1815,7 +1813,7 @@ Return Value:
                                         &ReturnedEvents);
 
         if (!KSUCCESS(Status)) {
-            break;
+            goto NetlinkGenericReceiveEnd;
         }
 
         if ((ReturnedEvents & POLL_ERROR_EVENTS) != 0) {
@@ -1829,148 +1827,123 @@ Return Value:
                 }
             }
 
-            break;
+            goto NetlinkGenericReceiveEnd;
         }
 
         KeAcquireQueuedLock(GenericSocket->ReceiveLock);
-        OriginallyAvailable = GenericSocket->ReceiveBufferTotalSize -
-                              GenericSocket->ReceiveBufferFreeSize;
+        LockHeld = TRUE;
 
-        CurrentEntry = GenericSocket->ReceivedPacketList.Next;
-        while (CurrentEntry != &(GenericSocket->ReceivedPacketList)) {
-            Packet = LIST_VALUE(CurrentEntry,
-                                NETLINK_GENERIC_RECEIVED_PACKET,
-                                ListEntry);
+        //
+        // If another thread beat this one to the punch, try again.
+        //
 
-            CurrentEntry = CurrentEntry->Next;
-
-            //
-            // Don't cross boundaries between different remotes.
-            //
-
-            if (BytesComplete != 0) {
-                Compare = NetCompareNetworkAddresses(&SourceAddressLocal,
-                                                     &(Packet->Address));
-
-                if (Compare != ComparisonResultSame) {
-                    break;
-                }
-            }
-
-            PacketSize = Packet->NetPacket->FooterOffset -
-                         Packet->NetPacket->DataOffset;
-
-            if (PacketSize > (Size - BytesComplete)) {
-                if (BytesComplete != 0) {
-                    break;
-                }
-
-                Parameters->SocketIoFlags |= SOCKET_IO_DATA_TRUNCATED;
-                PacketSize = Size - BytesComplete;
-                Status = STATUS_BUFFER_TOO_SMALL;
-            }
-
-            Buffer = Packet->NetPacket->Buffer + Packet->NetPacket->DataOffset;
-            Status = MmCopyIoBufferData(IoBuffer,
-                                        Buffer,
-                                        BytesComplete,
-                                        PacketSize,
-                                        TRUE);
-
-            if (!KSUCCESS(Status)) {
-                break;
-            }
-
-            BytesComplete += PacketSize;
-
-            //
-            // Copy the packet address over to the local variable to avoid
-            // crossing remote host boundaries.
-            //
-
-            RtlCopyMemory(&SourceAddressLocal,
-                          &(Packet->Address),
-                          sizeof(NETWORK_ADDRESS));
-
-            //
-            // Copy the packet address out to the caller if requested.
-            //
-
-            if (Parameters->NetworkAddress != NULL) {
-                if (FromKernelMode != FALSE) {
-                    RtlCopyMemory(Parameters->NetworkAddress,
-                                  &(Packet->Address),
-                                  sizeof(NETWORK_ADDRESS));
-
-                } else {
-                    Status = MmCopyToUserMode(Parameters->NetworkAddress,
-                                              &(Packet->Address),
-                                              sizeof(NETWORK_ADDRESS));
-
-                    if (!KSUCCESS(Status)) {
-                        break;
-                    }
-                }
-            }
-
-            //
-            // Remove the packet if not peeking.
-            //
-
-            if ((Flags & SOCKET_IO_PEEK) == 0) {
-                LIST_REMOVE(&(Packet->ListEntry));
-                GenericSocket->ReceiveBufferFreeSize += PacketSize;
-
-                //
-                // The total receive buffer size may have been decreased. Don't
-                // increment the free size above the total.
-                //
-
-                if (GenericSocket->ReceiveBufferFreeSize >
-                    GenericSocket->ReceiveBufferTotalSize) {
-
-                    GenericSocket->ReceiveBufferFreeSize =
-                                         GenericSocket->ReceiveBufferTotalSize;
-                }
-
-                MmFreePagedPool(Packet);
-            }
+        if (LIST_EMPTY(&(GenericSocket->ReceivedPacketList)) != FALSE) {
+            KeReleaseQueuedLock(GenericSocket->ReceiveLock);
+            LockHeld = FALSE;
+            continue;
         }
 
         //
-        // Unsignal the IN event if this read caused the avaiable data to drop
-        // below the minimum.
+        // This should be the first packet being read.
         //
 
-        AvailableBytes = GenericSocket->ReceiveBufferTotalSize -
-                         GenericSocket->ReceiveBufferFreeSize;
+        ASSERT(BytesComplete == 0);
 
-        if ((OriginallyAvailable >= GenericSocket->ReceiveMinimum) &&
-            (AvailableBytes < GenericSocket->ReceiveMinimum)) {
+        PacketEntry = GenericSocket->ReceivedPacketList.Next;
+        Packet = LIST_VALUE(PacketEntry,
+                            NETLINK_GENERIC_RECEIVED_PACKET,
+                            ListEntry);
 
-            IoSetIoObjectState(GenericSocket->NetSocket.KernelSocket.IoState,
-                               POLL_EVENT_IN,
-                               FALSE);
+        PacketSize = Packet->NetPacket->FooterOffset -
+                     Packet->NetPacket->DataOffset;
+
+        CopySize = PacketSize;
+        if (CopySize > Size) {
+            Parameters->SocketIoFlags |= SOCKET_IO_DATA_TRUNCATED;
+            CopySize = Size;
         }
 
-        KeReleaseQueuedLock(GenericSocket->ReceiveLock);
+        Buffer = Packet->NetPacket->Buffer + Packet->NetPacket->DataOffset;
+        Status = MmCopyIoBufferData(IoBuffer,
+                                    Buffer,
+                                    0,
+                                    CopySize,
+                                    TRUE);
+
         if (!KSUCCESS(Status)) {
-            break;
+            goto NetlinkGenericReceiveEnd;
         }
 
         //
-        // Unless being forced to receive everything, break out if something
-        // was read.
+        // Copy the packet address out to the caller if requested.
         //
 
-        if ((Flags & SOCKET_IO_WAIT_ALL) == 0) {
-            if (BytesComplete != 0) {
-                break;
+        if (Parameters->NetworkAddress != NULL) {
+            if (FromKernelMode != FALSE) {
+                RtlCopyMemory(Parameters->NetworkAddress,
+                              &(Packet->Address),
+                              sizeof(NETWORK_ADDRESS));
+
+            } else {
+                Status = MmCopyToUserMode(Parameters->NetworkAddress,
+                                          &(Packet->Address),
+                                          sizeof(NETWORK_ADDRESS));
+
+                if (!KSUCCESS(Status)) {
+                    goto NetlinkGenericReceiveEnd;
+                }
             }
         }
+
+        BytesComplete = CopySize;
+
+        //
+        // Remove the packet if not peeking.
+        //
+
+        if ((Flags & SOCKET_IO_PEEK) == 0) {
+            LIST_REMOVE(&(Packet->ListEntry));
+            GenericSocket->ReceiveBufferFreeSize += PacketSize;
+
+            //
+            // The total receive buffer size may have been decreased. Don't
+            // increment the free size above the total.
+            //
+
+            if (GenericSocket->ReceiveBufferFreeSize >
+                GenericSocket->ReceiveBufferTotalSize) {
+
+                GenericSocket->ReceiveBufferFreeSize =
+                                         GenericSocket->ReceiveBufferTotalSize;
+            }
+
+            MmFreePagedPool(Packet);
+
+            //
+            // Unsignal the IN event if there are no more packets.
+            //
+
+            if (LIST_EMPTY(&(GenericSocket->ReceivedPacketList)) != FALSE) {
+                IoSetIoObjectState(
+                                 GenericSocket->NetSocket.KernelSocket.IoState,
+                                 POLL_EVENT_IN,
+                                 FALSE);
+            }
+        }
+
+        //
+        // Wait-all does not apply to netlink sockets. Break out.
+        //
+
+        Status = STATUS_SUCCESS;
+        break;
     }
 
 NetlinkGenericReceiveEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseQueuedLock(GenericSocket->ReceiveLock);
+    }
+
     Parameters->Size = BytesComplete;
     return Status;
 }
@@ -2524,7 +2497,6 @@ Return Value:
 
 {
 
-    ULONG AvailableBytes;
     ULONG PacketLength;
 
     PacketLength = Packet->NetPacket->FooterOffset -
@@ -2541,17 +2513,12 @@ Return Value:
                Socket->ReceiveBufferTotalSize);
 
         //
-        // Signal the event if enough bytes have been received.
+        // One packet is always enough to notify a waiting receiver.
         //
 
-        AvailableBytes = Socket->ReceiveBufferTotalSize -
-                         Socket->ReceiveBufferFreeSize;
-
-        if (AvailableBytes >= Socket->ReceiveMinimum) {
-            IoSetIoObjectState(Socket->NetSocket.KernelSocket.IoState,
-                               POLL_EVENT_IN,
-                               TRUE);
-        }
+        IoSetIoObjectState(Socket->NetSocket.KernelSocket.IoState,
+                           POLL_EVENT_IN,
+                           TRUE);
 
         Packet = NULL;
 

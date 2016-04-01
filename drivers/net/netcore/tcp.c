@@ -1565,6 +1565,14 @@ Return Value:
 
     PTCP_SOCKET TcpSocket;
 
+    //
+    // Shutdown is not supported unless the socket is connected.
+    //
+
+    if (Socket->RemoteAddress.Domain == NetDomainInvalid) {
+        return STATUS_NOT_CONNECTED;
+    }
+
     TcpSocket = (PTCP_SOCKET)Socket;
     RtlAtomicOr32(&(TcpSocket->ShutdownTypes), ShutdownType);
 

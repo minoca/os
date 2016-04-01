@@ -95,7 +95,7 @@ Members:
     ReceivedPacketList - Stores the list of packets ready to be read by the
         user.
 
-    ReceiveLock - Stores the spin lock that protects the received packets list,
+    ReceiveLock - Stores the lock that protects the received packets list,
         dropped packet count, and various receive buffer parameters. This lock
         must always be acquired at low level.
 
@@ -111,7 +111,7 @@ Members:
         the  socket will wait when receiving data.
 
     ReceiveMinimum - Stores the minimum amount of bytes that must be available
-        before the socket is made readable.
+        before the socket is made readable. This is ignored.
 
     DroppedPacketCount - Stores the number of packets that have been dropped
         because the receive queue was full.
@@ -126,7 +126,7 @@ Members:
 typedef struct _RAW_SOCKET {
     NET_SOCKET NetSocket;
     LIST_ENTRY ReceivedPacketList;
-    KSPIN_LOCK ReceiveLock;
+    PQUEUED_LOCK ReceiveLock;
     ULONG ReceiveBufferTotalSize;
     ULONG ReceiveBufferFreeSize;
     ULONG ReceiveTimeout;
@@ -463,12 +463,16 @@ Return Value:
     RawSocket->NetSocket.KernelSocket.Protocol = NetworkProtocol;
     RawSocket->NetSocket.KernelSocket.ReferenceCount = 1;
     INITIALIZE_LIST_HEAD(&(RawSocket->ReceivedPacketList));
-    KeInitializeSpinLock(&(RawSocket->ReceiveLock));
     RawSocket->ReceiveTimeout = WAIT_TIME_INDEFINITE;
     RawSocket->ReceiveBufferTotalSize = RAW_DEFAULT_RECEIVE_BUFFER_SIZE;
     RawSocket->ReceiveBufferFreeSize = RawSocket->ReceiveBufferTotalSize;
     RawSocket->ReceiveMinimum = RAW_DEFAULT_RECEIVE_MINIMUM;
     RawSocket->MaxPacketSize = RAW_MAX_PACKET_SIZE;
+    RawSocket->ReceiveLock = KeCreateQueuedLock();
+    if (RawSocket->ReceiveLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto RawCreateSocketEnd;
+    }
 
     //
     // Give the lower layers a chance to initialize. Start the maximum packet
@@ -493,6 +497,10 @@ Return Value:
 RawCreateSocketEnd:
     if (!KSUCCESS(Status)) {
         if (RawSocket != NULL) {
+            if (RawSocket->ReceiveLock != NULL) {
+                KeDestroyQueuedLock(RawSocket->ReceiveLock);
+            }
+
             MmFreePagedPool(RawSocket);
             RawSocket = NULL;
         }
@@ -540,7 +548,7 @@ Return Value:
     // Loop through and free any leftover packets.
     //
 
-    KeAcquireSpinLock(&(RawSocket->ReceiveLock));
+    KeAcquireQueuedLock(RawSocket->ReceiveLock);
     while (!LIST_EMPTY(&(RawSocket->ReceivedPacketList))) {
         Packet = LIST_VALUE(RawSocket->ReceivedPacketList.Next,
                             RAW_RECEIVED_PACKET,
@@ -554,7 +562,8 @@ Return Value:
     ASSERT(RawSocket->ReceiveBufferFreeSize ==
            RawSocket->ReceiveBufferTotalSize);
 
-    KeReleaseSpinLock(&(RawSocket->ReceiveLock));
+    KeReleaseQueuedLock(RawSocket->ReceiveLock);
+    KeDestroyQueuedLock(RawSocket->ReceiveLock);
     MmFreePagedPool(RawSocket);
     return;
 }
@@ -843,6 +852,14 @@ Return Value:
 
     PRAW_SOCKET RawSocket;
 
+    //
+    // Shutdown is not supported unless the socket is connected.
+    //
+
+    if (Socket->RemoteAddress.Domain == NetDomainInvalid) {
+        return STATUS_NOT_CONNECTED;
+    }
+
     RawSocket = (PRAW_SOCKET)Socket;
     RtlAtomicOr32(&(RawSocket->ShutdownTypes), ShutdownType);
 
@@ -851,12 +868,12 @@ Return Value:
     //
 
     if ((ShutdownType & SOCKET_SHUTDOWN_READ) != 0) {
-        KeAcquireSpinLock(&(RawSocket->ReceiveLock));
+        KeAcquireQueuedLock(RawSocket->ReceiveLock);
         IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
                            POLL_EVENT_IN,
                            TRUE);
 
-        KeReleaseSpinLock(&(RawSocket->ReceiveLock));
+        KeReleaseQueuedLock(RawSocket->ReceiveLock);
     }
 
     if ((ShutdownType & SOCKET_SHUTDOWN_WRITE) != 0) {
@@ -1200,7 +1217,6 @@ Return Value:
 {
 
     ULONG AllocationSize;
-    ULONG AvailableBytes;
     ULONG Length;
     PRAW_RECEIVED_PACKET RawPacket;
     PRAW_SOCKET RawSocket;
@@ -1244,7 +1260,7 @@ Return Value:
     // Work to insert the packet on the list of received packets.
     //
 
-    KeAcquireSpinLock(&(RawSocket->ReceiveLock));
+    KeAcquireQueuedLock(RawSocket->ReceiveLock);
     if (RawPacket->Size <= RawSocket->ReceiveBufferFreeSize) {
         INSERT_BEFORE(&(RawPacket->ListEntry),
                       &(RawSocket->ReceivedPacketList));
@@ -1255,17 +1271,12 @@ Return Value:
                RawSocket->ReceiveBufferTotalSize);
 
         //
-        // Signal the event if enough bytes have been received.
+        // One packet is always enough to notify a waiting receiver.
         //
 
-        AvailableBytes = RawSocket->ReceiveBufferTotalSize -
-                         RawSocket->ReceiveBufferFreeSize;
-
-        if (AvailableBytes >= RawSocket->ReceiveMinimum) {
-            IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                               POLL_EVENT_IN,
-                               TRUE);
-        }
+        IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
+                           POLL_EVENT_IN,
+                           TRUE);
 
         RawPacket = NULL;
 
@@ -1273,7 +1284,7 @@ Return Value:
         RawSocket->DroppedPacketCount += 1;
     }
 
-    KeReleaseSpinLock(&(RawSocket->ReceiveLock));
+    KeReleaseQueuedLock(RawSocket->ReceiveLock);
 
     //
     // If the packet wasn't nulled out, that's an indication it wasn't added to
@@ -1336,11 +1347,12 @@ Return Value:
     ULONG CopySize;
     ULONGLONG CurrentTime;
     ULONGLONG EndTime;
+    ULONG Flags;
     PIO_OBJECT_STATE IoState;
+    BOOL LockHeld;
     PRAW_RECEIVED_PACKET Packet;
     PLIST_ENTRY PacketEntry;
     PRAW_SOCKET RawSocket;
-    KSTATUS RemoteCopyStatus;
     ULONG ReturnedEvents;
     UINTN Size;
     KSTATUS Status;
@@ -1352,12 +1364,17 @@ Return Value:
 
     BytesComplete = 0;
     EndTime = 0;
+    LockHeld = FALSE;
+    Flags = Parameters->SocketIoFlags;
     Parameters->SocketIoFlags = 0;
-    Packet = NULL;
     Size = Parameters->Size;
     TimeCounterFrequency = 0;
     Timeout = Parameters->TimeoutInMilliseconds;
     RawSocket = (PRAW_SOCKET)Socket;
+    if ((Flags & SOCKET_IO_OUT_OF_BAND) != 0) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto RawReceiveEnd;
+    }
 
     //
     // Fail if there's ancillary data.
@@ -1385,7 +1402,7 @@ Return Value:
     }
 
     //
-    // Loop trying to get some data.
+    // Loop trying to get some data. This loop exits once one packet is read.
     //
 
     while (TRUE) {
@@ -1410,8 +1427,8 @@ Return Value:
         //
         // Wait for something to maybe become available. If the wait fails due
         // to a timeout, interruption, or something else, then fail out.
-        // Otherwise when the read event is signalled, there are at least the
-        // receive minimum bytes available.
+        // Otherwise when the read event is signalled, there are at least one
+        // packet available.
         //
 
         IoState = RawSocket->NetSocket.KernelSocket.IoState;
@@ -1422,7 +1439,7 @@ Return Value:
                                         &ReturnedEvents);
 
         if (!KSUCCESS(Status)) {
-            break;
+            goto RawReceiveEnd;
         }
 
         if ((ReturnedEvents & POLL_ERROR_EVENTS) != 0) {
@@ -1436,31 +1453,84 @@ Return Value:
                 }
             }
 
-            break;
+            goto RawReceiveEnd;
         }
 
-        KeAcquireSpinLock(&(RawSocket->ReceiveLock));
+        KeAcquireQueuedLock(RawSocket->ReceiveLock);
+        LockHeld = TRUE;
 
         //
         // Fail with EOF if the socket has already been closed for reading.
         //
 
         if ((RawSocket->ShutdownTypes & SOCKET_SHUTDOWN_READ) != 0) {
-            KeReleaseSpinLock(&(RawSocket->ReceiveLock));
             Status = STATUS_END_OF_FILE;
             goto RawReceiveEnd;
         }
 
         //
-        // If there is data to read, then read it. This routine can only get
-        // here if the receive minimum bytes have become available, which means
-        // it is open season to read until all the packets are gone.
+        // If another thread beat this one to the punch, try again.
         //
 
-        if (LIST_EMPTY(&(RawSocket->ReceivedPacketList)) == FALSE) {
-            PacketEntry = RawSocket->ReceivedPacketList.Next;
-            LIST_REMOVE(PacketEntry);
-            Packet = LIST_VALUE(PacketEntry, RAW_RECEIVED_PACKET, ListEntry);
+        if (LIST_EMPTY(&(RawSocket->ReceivedPacketList)) != FALSE) {
+            KeReleaseQueuedLock(RawSocket->ReceiveLock);
+            LockHeld = FALSE;
+            continue;
+        }
+
+        //
+        // This should be the first packet being read.
+        //
+
+        ASSERT(BytesComplete == 0);
+
+        PacketEntry = RawSocket->ReceivedPacketList.Next;
+        Packet = LIST_VALUE(PacketEntry, RAW_RECEIVED_PACKET, ListEntry);
+        CopySize = Packet->Size;
+        if (CopySize > Size) {
+            Parameters->SocketIoFlags |= SOCKET_IO_DATA_TRUNCATED;
+            CopySize = Size;
+        }
+
+        Status = MmCopyIoBufferData(IoBuffer,
+                                    Packet->DataBuffer,
+                                    0,
+                                    CopySize,
+                                    TRUE);
+
+        if (!KSUCCESS(Status)) {
+            goto RawReceiveEnd;
+        }
+
+        //
+        // Copy the packet address out to the caller if requested.
+        //
+
+        if (Parameters->NetworkAddress != NULL) {
+            if (FromKernelMode != FALSE) {
+                RtlCopyMemory(Parameters->NetworkAddress,
+                              &(Packet->Address),
+                              sizeof(NETWORK_ADDRESS));
+
+            } else {
+                Status = MmCopyToUserMode(Parameters->NetworkAddress,
+                                          &(Packet->Address),
+                                          sizeof(NETWORK_ADDRESS));
+
+                if (!KSUCCESS(Status)) {
+                    goto RawReceiveEnd;
+                }
+            }
+        }
+
+        BytesComplete = CopySize;
+
+        //
+        // Remove the packet if not peeking.
+        //
+
+        if ((Flags & SOCKET_IO_PEEK) == 0) {
+            LIST_REMOVE(&(Packet->ListEntry));
             RawSocket->ReceiveBufferFreeSize += Packet->Size;
 
             //
@@ -1475,8 +1545,10 @@ Return Value:
                                              RawSocket->ReceiveBufferTotalSize;
             }
 
+            MmFreePagedPool(Packet);
+
             //
-            // If the list is now empty, unsignal the event.
+            // Unsignal the IN event if there are no more packets.
             //
 
             if (LIST_EMPTY(&(RawSocket->ReceivedPacketList)) != FALSE) {
@@ -1486,67 +1558,19 @@ Return Value:
             }
         }
 
-        KeReleaseSpinLock(&(RawSocket->ReceiveLock));
-
         //
-        // If a packet was grabbed, return it.
+        // Wait-all does not apply to raw sockets. Break out.
         //
 
-        if (Packet != NULL) {
-            Status = STATUS_SUCCESS;
-            Packet = LIST_VALUE(PacketEntry, RAW_RECEIVED_PACKET, ListEntry);
-            CopySize = Packet->Size;
-            if (Size < CopySize) {
-                CopySize = Size;
-                Status = STATUS_BUFFER_TOO_SMALL;
-                Parameters->SocketIoFlags |= SOCKET_IO_DATA_TRUNCATED;
-            }
-
-            Status = MmCopyIoBufferData(IoBuffer,
-                                        Packet->DataBuffer,
-                                        BytesComplete,
-                                        CopySize,
-                                        TRUE);
-
-            if (KSUCCESS(Status)) {
-                BytesComplete += CopySize;
-            }
-
-            //
-            // If the caller wants the remote address, copy it over, regardless
-            // of whether the main copy succeeded or not.
-            //
-
-            if (Parameters->NetworkAddress != NULL) {
-                if (FromKernelMode != FALSE) {
-                    RtlCopyMemory(Parameters->NetworkAddress,
-                                  &(Packet->Address),
-                                  sizeof(NETWORK_ADDRESS));
-
-                } else {
-                    RemoteCopyStatus = MmCopyToUserMode(
-                                                    Parameters->NetworkAddress,
-                                                    &(Packet->Address),
-                                                    sizeof(NETWORK_ADDRESS));
-
-                    if (!KSUCCESS(RemoteCopyStatus)) {
-                        Status = RemoteCopyStatus;
-                    }
-                }
-            }
-
-            //
-            // Release the packet and break out of this loop. If this loop
-            // were made not to break, the failing status would need to be
-            // dealt with here.
-            //
-
-            MmFreePagedPool(Packet);
-            break;
-        }
+        Status = STATUS_SUCCESS;
+        break;
     }
 
 RawReceiveEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseQueuedLock(RawSocket->ReceiveLock);
+    }
+
     Parameters->Size = BytesComplete;
     return Status;
 }
@@ -1730,13 +1754,13 @@ Return Value:
             // been received. This is not meant to be a truncate call.
             //
 
-            KeAcquireSpinLock(&(RawSocket->ReceiveLock));
+            KeAcquireQueuedLock(RawSocket->ReceiveLock);
             RawSocket->ReceiveBufferTotalSize = SizeOption;
             if (RawSocket->ReceiveBufferFreeSize > SizeOption) {
                 RawSocket->ReceiveBufferFreeSize = SizeOption;
             }
 
-            KeReleaseSpinLock(&(RawSocket->ReceiveLock));
+            KeReleaseQueuedLock(RawSocket->ReceiveLock);
 
         } else {
             Source = &SizeOption;

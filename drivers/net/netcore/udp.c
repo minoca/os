@@ -112,7 +112,7 @@ Members:
         the  socket will wait when receiving data.
 
     ReceiveMinimum - Stores the minimum amount of bytes that must be available
-        before the socket is made readable.
+        before the socket is made readable. This is ignored.
 
     DroppedPacketCount - Stores the number of packets that have been dropped
         because the receive queue was full.
@@ -873,6 +873,14 @@ Return Value:
 
     PUDP_SOCKET UdpSocket;
 
+    //
+    // Shutdown is not supported unless the socket is connected.
+    //
+
+    if (Socket->RemoteAddress.Domain == NetDomainInvalid) {
+        return STATUS_NOT_CONNECTED;
+    }
+
     UdpSocket = (PUDP_SOCKET)Socket;
     RtlAtomicOr32(&(UdpSocket->ShutdownTypes), ShutdownType);
 
@@ -1335,7 +1343,6 @@ Return Value:
 {
 
     ULONG AllocationSize;
-    ULONG AvailableBytes;
     PUDP_HEADER Header;
     USHORT Length;
     USHORT PayloadLength;
@@ -1409,17 +1416,12 @@ Return Value:
                UdpSocket->ReceiveBufferTotalSize);
 
         //
-        // Signal the event if enough bytes have been received.
+        // One packet is always enough to notify a waiting receiver.
         //
 
-        AvailableBytes = UdpSocket->ReceiveBufferTotalSize -
-                         UdpSocket->ReceiveBufferFreeSize;
-
-        if (AvailableBytes >= UdpSocket->ReceiveMinimum) {
-            IoSetIoObjectState(UdpSocket->NetSocket.KernelSocket.IoState,
-                               POLL_EVENT_IN,
-                               TRUE);
-        }
+        IoSetIoObjectState(UdpSocket->NetSocket.KernelSocket.IoState,
+                           POLL_EVENT_IN,
+                           TRUE);
 
         UdpPacket = NULL;
 
@@ -1486,20 +1488,17 @@ Return Value:
 
 {
 
-    ULONG AvailableBytes;
     UINTN BytesComplete;
-    COMPARISON_RESULT Compare;
     ULONG CopySize;
-    PLIST_ENTRY CurrentEntry;
     ULONGLONG CurrentTime;
     ULONGLONG EndTime;
     ULONG Flags;
     PIO_OBJECT_STATE IoState;
-    ULONG OriginallyAvailable;
+    BOOL LockHeld;
     PUDP_RECEIVED_PACKET Packet;
+    PLIST_ENTRY PacketEntry;
     ULONG ReturnedEvents;
     UINTN Size;
-    NETWORK_ADDRESS SourceAddressLocal;
     KSTATUS Status;
     ULONGLONG TimeCounterFrequency;
     ULONG Timeout;
@@ -1510,6 +1509,7 @@ Return Value:
 
     BytesComplete = 0;
     EndTime = 0;
+    LockHeld = FALSE;
     Flags = Parameters->SocketIoFlags;
     Parameters->SocketIoFlags = 0;
     if ((Flags & SOCKET_IO_OUT_OF_BAND) != 0) {
@@ -1549,11 +1549,10 @@ Return Value:
     }
 
     //
-    // Loop trying to get some data.
+    // Loop trying to get some data. This loop exits once one packet is read.
     //
 
-    Status = STATUS_SUCCESS;
-    while (BytesComplete < Size) {
+    while (TRUE) {
 
         //
         // Wait for a packet to become available. Start by computing the wait
@@ -1575,8 +1574,8 @@ Return Value:
         //
         // Wait for something to maybe become available. If the wait fails due
         // to a timeout, interruption, or something else, then fail out.
-        // Otherwise when the read event is signalled, there are at least the
-        // receive minimum bytes available.
+        // Otherwise when the read event is signalled, there is at least one
+        // packet to receive.
         //
 
         IoState = UdpSocket->NetSocket.KernelSocket.IoState;
@@ -1587,7 +1586,7 @@ Return Value:
                                         &ReturnedEvents);
 
         if (!KSUCCESS(Status)) {
-            break;
+            goto UdpReceiveEnd;
         }
 
         if ((ReturnedEvents & POLL_ERROR_EVENTS) != 0) {
@@ -1601,153 +1600,124 @@ Return Value:
                 }
             }
 
-            break;
+            goto UdpReceiveEnd;
         }
 
         KeAcquireQueuedLock(UdpSocket->ReceiveLock);
+        LockHeld = TRUE;
 
         //
         // Fail with EOF if the socket has already been closed for reading.
         //
 
         if ((UdpSocket->ShutdownTypes & SOCKET_SHUTDOWN_READ) != 0) {
-            KeReleaseQueuedLock(UdpSocket->ReceiveLock);
             Status = STATUS_END_OF_FILE;
             goto UdpReceiveEnd;
         }
 
-        OriginallyAvailable = UdpSocket->ReceiveBufferTotalSize -
-                              UdpSocket->ReceiveBufferFreeSize;
+        //
+        // If another thread beat this one to the punch, try again.
+        //
 
-        CurrentEntry = UdpSocket->ReceivedPacketList.Next;
-        while (CurrentEntry != &(UdpSocket->ReceivedPacketList)) {
-            Packet = LIST_VALUE(CurrentEntry, UDP_RECEIVED_PACKET, ListEntry);
-
-            //
-            // Don't cross boundaries between different remotes.
-            //
-
-            if (BytesComplete != 0) {
-                Compare = NetCompareNetworkAddresses(&SourceAddressLocal,
-                                                     &(Packet->Address));
-
-                if (Compare != ComparisonResultSame) {
-                    break;
-                }
-            }
-
-            CurrentEntry = CurrentEntry->Next;
-            CopySize = Packet->Size;
-            if (CopySize > Size - BytesComplete) {
-                if (BytesComplete != 0) {
-                    break;
-                }
-
-                Parameters->SocketIoFlags |= SOCKET_IO_DATA_TRUNCATED;
-                CopySize = Size - BytesComplete;
-                Status = STATUS_BUFFER_TOO_SMALL;
-            }
-
-            Status = MmCopyIoBufferData(IoBuffer,
-                                        Packet->DataBuffer,
-                                        BytesComplete,
-                                        CopySize,
-                                        TRUE);
-
-            if (!KSUCCESS(Status)) {
-                break;
-            }
-
-            BytesComplete += CopySize;
-
-            //
-            // Copy the packet address over to the local variable to avoid
-            // crossing remote host boundaries.
-            //
-
-            RtlCopyMemory(&SourceAddressLocal,
-                          &(Packet->Address),
-                          sizeof(NETWORK_ADDRESS));
-
-            //
-            // Copy the packet address out to the caller if requested.
-            //
-
-            if (Parameters->NetworkAddress != NULL) {
-                if (FromKernelMode != FALSE) {
-                    RtlCopyMemory(Parameters->NetworkAddress,
-                                  &(Packet->Address),
-                                  sizeof(NETWORK_ADDRESS));
-
-                } else {
-                    Status = MmCopyToUserMode(Parameters->NetworkAddress,
-                                              &(Packet->Address),
-                                              sizeof(NETWORK_ADDRESS));
-
-                    if (!KSUCCESS(Status)) {
-                        break;
-                    }
-                }
-            }
-
-            //
-            // Remove the packet if not peeking.
-            //
-
-            if ((Flags & SOCKET_IO_PEEK) == 0) {
-                LIST_REMOVE(&(Packet->ListEntry));
-                UdpSocket->ReceiveBufferFreeSize += Packet->Size;
-
-                //
-                // The total receive buffer size may have been decreased. Don't
-                // increment the free size above the total.
-                //
-
-                if (UdpSocket->ReceiveBufferFreeSize >
-                    UdpSocket->ReceiveBufferTotalSize) {
-
-                    UdpSocket->ReceiveBufferFreeSize =
-                                             UdpSocket->ReceiveBufferTotalSize;
-                }
-
-                MmFreePagedPool(Packet);
-            }
+        if (LIST_EMPTY(&(UdpSocket->ReceivedPacketList)) != FALSE) {
+            KeReleaseQueuedLock(UdpSocket->ReceiveLock);
+            LockHeld = FALSE;
+            continue;
         }
 
         //
-        // Unsignal the IN event if this read caused the avaiable data to drop
-        // below the minimum.
+        // This should be the first packet being read.
         //
 
-        AvailableBytes = UdpSocket->ReceiveBufferTotalSize -
-                         UdpSocket->ReceiveBufferFreeSize;
+        ASSERT(BytesComplete == 0);
 
-        if ((OriginallyAvailable >= UdpSocket->ReceiveMinimum) &&
-            (AvailableBytes < UdpSocket->ReceiveMinimum)) {
-
-            IoSetIoObjectState(UdpSocket->NetSocket.KernelSocket.IoState,
-                               POLL_EVENT_IN,
-                               FALSE);
+        PacketEntry = UdpSocket->ReceivedPacketList.Next;
+        Packet = LIST_VALUE(PacketEntry, UDP_RECEIVED_PACKET, ListEntry);
+        CopySize = Packet->Size;
+        if (CopySize > Size) {
+            Parameters->SocketIoFlags |= SOCKET_IO_DATA_TRUNCATED;
+            CopySize = Size;
         }
 
-        KeReleaseQueuedLock(UdpSocket->ReceiveLock);
+        Status = MmCopyIoBufferData(IoBuffer,
+                                    Packet->DataBuffer,
+                                    0,
+                                    CopySize,
+                                    TRUE);
+
         if (!KSUCCESS(Status)) {
-            break;
+            goto UdpReceiveEnd;
         }
 
         //
-        // Unless being forced to receive everything, break out if something
-        // was read.
+        // Copy the packet address out to the caller if requested.
         //
 
-        if ((Flags & SOCKET_IO_WAIT_ALL) == 0) {
-            if (BytesComplete != 0) {
-                break;
+        if (Parameters->NetworkAddress != NULL) {
+            if (FromKernelMode != FALSE) {
+                RtlCopyMemory(Parameters->NetworkAddress,
+                              &(Packet->Address),
+                              sizeof(NETWORK_ADDRESS));
+
+            } else {
+                Status = MmCopyToUserMode(Parameters->NetworkAddress,
+                                          &(Packet->Address),
+                                          sizeof(NETWORK_ADDRESS));
+
+                if (!KSUCCESS(Status)) {
+                    goto UdpReceiveEnd;
+                }
             }
         }
+
+        BytesComplete = CopySize;
+
+        //
+        // Remove the packet if not peeking.
+        //
+
+        if ((Flags & SOCKET_IO_PEEK) == 0) {
+            LIST_REMOVE(&(Packet->ListEntry));
+            UdpSocket->ReceiveBufferFreeSize += Packet->Size;
+
+            //
+            // The total receive buffer size may have been decreased. Don't
+            // increment the free size above the total.
+            //
+
+            if (UdpSocket->ReceiveBufferFreeSize >
+                UdpSocket->ReceiveBufferTotalSize) {
+
+                UdpSocket->ReceiveBufferFreeSize =
+                                             UdpSocket->ReceiveBufferTotalSize;
+            }
+
+            MmFreePagedPool(Packet);
+
+            //
+            // Unsignal the IN event if there are no more packets.
+            //
+
+            if (LIST_EMPTY(&(UdpSocket->ReceivedPacketList)) != FALSE) {
+                IoSetIoObjectState(UdpSocket->NetSocket.KernelSocket.IoState,
+                                   POLL_EVENT_IN,
+                                   FALSE);
+            }
+        }
+
+        //
+        // Wait-all does not apply to UDP sockets. Break out.
+        //
+
+        Status = STATUS_SUCCESS;
+        break;
     }
 
 UdpReceiveEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseQueuedLock(UdpSocket->ReceiveLock);
+    }
+
     Parameters->Size = BytesComplete;
     return Status;
 }
