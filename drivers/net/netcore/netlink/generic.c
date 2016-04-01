@@ -250,7 +250,7 @@ NetpNetlinkGenericProcessReceivedData (
     PNET_PROTOCOL_ENTRY ProtocolEntry
     );
 
-VOID
+KSTATUS
 NetpNetlinkGenericProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -292,7 +292,7 @@ NetpNetlinkGenericInsertReceivedPacket (
     PNETLINK_GENERIC_RECEIVED_PACKET Packet
     );
 
-VOID
+KSTATUS
 NetpNetlinkGenericProcessReceivedKernelData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -1502,8 +1502,9 @@ Arguments:
     Link - Supplies a pointer to the link that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
-        This routine takes ownership of this structure and will either pass it
-        along for later reading by the destination socket or release it.
+        This structure may be used as a scratch space while this routine
+        executes and the packet travels up the stack, but will not be accessed
+        after this routine returns.
 
     SourceAddress - Supplies a pointer to the source (remote) address that the
         packet originated from. This memory will not be referenced once the
@@ -1523,109 +1524,12 @@ Return Value:
 
 {
 
-    ULONG AllocationSize;
-    BOOL FreePacket;
-    PNETLINK_GENERIC_SOCKET GenericSocket;
-    PNETLINK_GENERIC_RECEIVED_PACKET ReceivePacket;
-    PNET_SOCKET Socket;
-
-    ASSERT(KeGetRunLevel() == RunLevelLow);
-
-    //
-    // This routine is an exception to the rule handling the supplied network
-    // packet buffer. As the buffer is not backed by a physical device, it can
-    // be directly passed to the received socket, avoiding a copy.
-    //
-
-    FreePacket = TRUE;
-
-    //
-    // If this is a multicast packet, then send it to all appropriate sockets
-    // with the help of netcore. Once complete, release the packet.
-    //
-
-    if ((Packet->Flags & NET_PACKET_FLAG_MULTICAST) != 0) {
-        NetProcessReceivedMulticastData(Link,
-                                        Packet,
-                                        ProtocolEntry,
-                                        SourceAddress,
-                                        DestinationAddress);
-
-        goto ProcessReceivedDataEnd;
-    }
-
-    //
-    // Find a socket willing to take this packet.
-    //
-
-    Socket = NetFindSocket(ProtocolEntry, DestinationAddress, SourceAddress);
-    if (Socket == NULL) {
-        goto ProcessReceivedDataEnd;
-    }
-
-    GenericSocket = (PNETLINK_GENERIC_SOCKET)Socket;
-
-    //
-    // If this is a kernel socket is on the receiving end, then route the
-    // packet directly to the kernel component.
-    //
-
-    if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
-        NetpNetlinkGenericProcessReceivedKernelData(Link,
-                                                    Socket,
-                                                    Packet,
-                                                    SourceAddress,
-                                                    DestinationAddress);
-
-        goto ProcessReceivedDataEnd;
-    }
-
-    //
-    // Create a received packet entry for this data.
-    //
-
-    AllocationSize = sizeof(NETLINK_GENERIC_RECEIVED_PACKET);
-    ReceivePacket = MmAllocatePagedPool(AllocationSize,
-                                        NETLINK_GENERIC_ALLOCATION_TAG);
-
-    if (ReceivePacket == NULL) {
-        goto ProcessReceivedDataEnd;
-    }
-
-    RtlCopyMemory(&(ReceivePacket->Address),
-                  SourceAddress,
-                  sizeof(NETWORK_ADDRESS));
-
-    //
-    // Netlink sockets are an exception to the rule of the packet not being
-    // touched after this routine returns. The packet is not owned by a link
-    // and thus is not backed by device memory. So it is safe to borrow it.
-    //
-
-    ReceivePacket->NetPacket = Packet;
-    FreePacket = FALSE;
-
-    //
-    // Work to insert the packet on the list of received packets.
-    //
-
-    NetpNetlinkGenericInsertReceivedPacket(GenericSocket, ReceivePacket);
-
-    //
-    // Release the reference on the socket added by the find socket call.
-    //
-
-    IoSocketReleaseReference(&(Socket->KernelSocket));
-
-ProcessReceivedDataEnd:
-    if (FreePacket != FALSE) {
-        NetFreeBuffer(Packet);
-    }
+    ASSERT(FALSE);
 
     return;
 }
 
-VOID
+KSTATUS
 NetpNetlinkGenericProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -1648,8 +1552,10 @@ Arguments:
     Socket - Supplies a pointer to the socket that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may not be used as a scratch space and must not be
-        modified by this routine.
+        Use of this structure depends on its packet flags and the socket type.
+        If it is a multicast packet or it was sent to a kernel socket, then it
+        must not be modified. Otherwise this routine is responsible for the
+        destruction of the packet.
 
     SourceAddress - Supplies a pointer to the source (remote) address that the
         packet originated from. This memory will not be referenced once the
@@ -1661,7 +1567,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -1685,13 +1591,14 @@ Return Value:
     //
 
     if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
-        NetpNetlinkGenericProcessReceivedKernelData(Link,
-                                                    Socket,
-                                                    Packet,
-                                                    SourceAddress,
-                                                    DestinationAddress);
+        Status = NetpNetlinkGenericProcessReceivedKernelData(
+                                                           Link,
+                                                           Socket,
+                                                           Packet,
+                                                           SourceAddress,
+                                                           DestinationAddress);
 
-        return;
+        return Status;
     }
 
     //
@@ -1714,17 +1621,31 @@ Return Value:
                   SourceAddress,
                   sizeof(NETWORK_ADDRESS));
 
-    PacketLength = Packet->FooterOffset - Packet->DataOffset;
-    Status = NetAllocateBuffer(0, PacketLength, 0, NULL, 0, &PacketCopy);
-    if (!KSUCCESS(Status)) {
-        goto ProcessReceivedSocketDataEnd;
+    //
+    // If the original packet is a multicast packet, then its services are
+    // needed again by another socket. Make a copy and save that.
+    //
+
+    if ((Packet->Flags & NET_PACKET_FLAG_MULTICAST) != 0) {
+        PacketLength = Packet->FooterOffset - Packet->DataOffset;
+        Status = NetAllocateBuffer(0, PacketLength, 0, NULL, 0, &PacketCopy);
+        if (!KSUCCESS(Status)) {
+            goto ProcessReceivedSocketDataEnd;
+        }
+
+        RtlCopyMemory(PacketCopy->Buffer + PacketCopy->DataOffset,
+                      Packet->Buffer + Packet->DataOffset,
+                      PacketLength);
+
+        ReceivePacket->NetPacket = PacketCopy;
+
+    //
+    // Otherwise set the packet directly in the generic receive packet.
+    //
+
+    } else {
+        ReceivePacket->NetPacket = Packet;
     }
-
-    RtlCopyMemory(PacketCopy->Buffer + PacketCopy->DataOffset,
-                  Packet->Buffer + Packet->DataOffset,
-                  PacketLength);
-
-    ReceivePacket->NetPacket = PacketCopy;
 
     //
     // Work to insert the packet on the list of received packets.
@@ -1741,9 +1662,13 @@ ProcessReceivedSocketDataEnd:
         if (PacketCopy != NULL) {
             NetFreeBuffer(PacketCopy);
         }
+
+        if ((Packet->Flags & NET_PACKET_FLAG_MULTICAST) == 0) {
+            NetFreeBuffer(Packet);
+        }
     }
 
-    return;
+    return Status;
 }
 
 KSTATUS
@@ -2649,7 +2574,7 @@ Return Value:
     return;
 }
 
-VOID
+KSTATUS
 NetpNetlinkGenericProcessReceivedKernelData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -2684,7 +2609,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -2699,6 +2624,9 @@ Return Value:
     NET_PACKET_BUFFER LocalPacket;
     ULONG PacketLength;
     NETLINK_GENERIC_COMMAND_PARAMETERS Parameters;
+    KSTATUS Status;
+
+    Family = NULL;
 
     //
     // Make a local copy of the network packet buffer so that the offsets can
@@ -2707,45 +2635,12 @@ Return Value:
 
     RtlCopyMemory(&LocalPacket, Packet, sizeof(NET_PACKET_BUFFER));
     PacketLength = LocalPacket.FooterOffset - LocalPacket.DataOffset;
-    if (PacketLength < NETLINK_HEADER_LENGTH) {
-        RtlDebugPrint("NETLINK: packet length %d is less than the header size "
-                      "%d.\n",
-                      PacketLength,
-                      NETLINK_HEADER_LENGTH);
+    Header = LocalPacket.Buffer + LocalPacket.DataOffset;
 
-        goto ProcessReceivedKernelDataEnd;
-    }
-
-    //
-    // The kernel only handles requests.
-    //
-
-    Header = (PNETLINK_HEADER)(LocalPacket.Buffer + LocalPacket.DataOffset);
-    if ((Header->Flags & NETLINK_HEADER_FLAG_REQUEST) == 0) {
-        goto ProcessReceivedKernelDataEnd;
-    }
-
-    //
-    // The protocol layer does not handle standard messages.
-    //
-
-    if (Header->Type < NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM) {
-        goto ProcessReceivedKernelDataEnd;
-    }
-
-    //
-    // Toss any malformed packets. They should be the size specified in the
-    // header.
-    //
-
-    if (Header->Length != PacketLength) {
-        RtlDebugPrint("NETLINK: header length (%d) and packet length (%d) do "
-                      "not match.\n",
-                      Header->Length,
-                      PacketLength);
-
-        goto ProcessReceivedKernelDataEnd;
-    }
+    ASSERT(PacketLength >= NETLINK_HEADER_LENGTH);
+    ASSERT((Header->Flags & NETLINK_HEADER_FLAG_REQUEST) != 0);
+    ASSERT(Header->Type >= NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM);
+    ASSERT(Header->Length <= PacketLength);
 
     LocalPacket.DataOffset += NETLINK_HEADER_LENGTH;
     PacketLength -= NETLINK_HEADER_LENGTH;
@@ -2761,6 +2656,7 @@ Return Value:
                       NETLINK_GENERIC_HEADER_LENGTH,
                       PacketLength);
 
+        Status = STATUS_BUFFER_TOO_SMALL;
         goto ProcessReceivedKernelDataEnd;
     }
 
@@ -2773,6 +2669,7 @@ Return Value:
 
     Family = NetpNetlinkGenericLookupFamilyById(Header->Type);
     if (Family == NULL) {
+        Status = STATUS_NOT_SUPPORTED;
         goto ProcessReceivedKernelDataEnd;
     }
 
@@ -2785,20 +2682,28 @@ Return Value:
         }
     }
 
-    if (FoundCommand != NULL) {
-        Parameters.Message.SourceAddress = SourceAddress;
-        Parameters.Message.DestinationAddress = DestinationAddress;
-        Parameters.Message.SequenceNumber = Header->SequenceNumber;
-        Parameters.Message.Type = Header->Type;
-        Parameters.Command = GenericHeader->Command;
-        Parameters.Version = GenericHeader->Version;
-        FoundCommand->ProcessCommand(Socket, &LocalPacket, &Parameters);
+    if (FoundCommand == NULL) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto ProcessReceivedKernelDataEnd;
     }
 
-    NetpNetlinkGenericFamilyReleaseReference(Family);
+    Parameters.Message.SourceAddress = SourceAddress;
+    Parameters.Message.DestinationAddress = DestinationAddress;
+    Parameters.Message.SequenceNumber = Header->SequenceNumber;
+    Parameters.Message.Type = Header->Type;
+    Parameters.Command = GenericHeader->Command;
+    Parameters.Version = GenericHeader->Version;
+    Status = FoundCommand->ProcessCommand(Socket, &LocalPacket, &Parameters);
+    if (!KSUCCESS(Status)) {
+        goto ProcessReceivedKernelDataEnd;
+    }
 
 ProcessReceivedKernelDataEnd:
-    return;
+    if (Family != NULL) {
+        NetpNetlinkGenericFamilyReleaseReference(Family);
+    }
+
+    return Status;
 }
 
 COMPARISON_RESULT

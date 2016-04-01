@@ -286,7 +286,7 @@ NetpUdpProcessReceivedData (
     PNET_PROTOCOL_ENTRY ProtocolEntry
     );
 
-VOID
+KSTATUS
 NetpUdpProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -1291,7 +1291,7 @@ Return Value:
     return;
 }
 
-VOID
+KSTATUS
 NetpUdpProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -1314,8 +1314,9 @@ Arguments:
     Socket - Supplies a pointer to the socket that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may not be used as a scratch space and must not be
-        modified by this routine.
+        Use of this structure depends on its flags. If it is a multicast
+        packet, then it cannot be modified by this routine. Otherwise it can
+        be used as scratch space and modified.
 
     SourceAddress - Supplies a pointer to the source (remote) address that the
         packet originated from. This memory will not be referenced once the
@@ -1327,7 +1328,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -1338,6 +1339,7 @@ Return Value:
     PUDP_HEADER Header;
     USHORT Length;
     USHORT PayloadLength;
+    KSTATUS Status;
     PUDP_RECEIVED_PACKET UdpPacket;
     PUDP_SOCKET UdpSocket;
 
@@ -1352,7 +1354,8 @@ Return Value:
                       Length,
                       (Packet->FooterOffset - Packet->DataOffset));
 
-        return;
+        Status = STATUS_BUFFER_TOO_SMALL;
+        goto ProcessReceivedSocketDataEnd;
     }
 
     //
@@ -1374,7 +1377,8 @@ Return Value:
                                     UDP_PROTOCOL_ALLOCATION_TAG);
 
     if (UdpPacket == NULL) {
-        return;
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto ProcessReceivedSocketDataEnd;
     }
 
     RtlCopyMemory(&(UdpPacket->Address),
@@ -1434,7 +1438,10 @@ Return Value:
         MmFreePagedPool(UdpPacket);
     }
 
-    return;
+    Status = STATUS_SUCCESS;
+
+ProcessReceivedSocketDataEnd:
+    return Status;
 }
 
 KSTATUS

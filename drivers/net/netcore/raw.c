@@ -257,7 +257,7 @@ NetpRawProcessReceivedData (
     PNET_PROTOCOL_ENTRY ProtocolEntry
     );
 
-VOID
+KSTATUS
 NetpRawProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -1156,7 +1156,7 @@ Return Value:
     return;
 }
 
-VOID
+KSTATUS
 NetpRawProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -1179,8 +1179,9 @@ Arguments:
     Socket - Supplies a pointer to the socket that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may not be used as a scratch space and must not be
-        modified by this routine.
+        Use of this structure depends on its flags. If it is a multicast
+        packet, then it cannot be modified by this routine. Otherwise it can
+        be used as scratch space and modified.
 
     SourceAddress - Supplies a pointer to the source (remote) address that the
         packet originated from. This memory will not be referenced once the
@@ -1192,7 +1193,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -1203,6 +1204,7 @@ Return Value:
     ULONG Length;
     PRAW_RECEIVED_PACKET RawPacket;
     PRAW_SOCKET RawSocket;
+    KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
     ASSERT(Socket != NULL);
@@ -1219,7 +1221,8 @@ Return Value:
                                     RAW_PROTOCOL_ALLOCATION_TAG);
 
     if (RawPacket == NULL) {
-        return;
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto ProcessReceivedKernelDataEnd;
     }
 
     RtlCopyMemory(&(RawPacket->Address),
@@ -1281,7 +1284,10 @@ Return Value:
         MmFreePagedPool(RawPacket);
     }
 
-    return;
+    Status = STATUS_SUCCESS;
+
+ProcessReceivedKernelDataEnd:
+    return Status;
 }
 
 KSTATUS

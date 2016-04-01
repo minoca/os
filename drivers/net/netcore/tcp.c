@@ -148,7 +148,7 @@ NetpTcpProcessReceivedData (
     PNET_PROTOCOL_ENTRY ProtocolEntry
     );
 
-VOID
+KSTATUS
 NetpTcpProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -2322,7 +2322,7 @@ Return Value:
     return;
 }
 
-VOID
+KSTATUS
 NetpTcpProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -2345,8 +2345,9 @@ Arguments:
     Socket - Supplies a pointer to the socket that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may not be used as a scratch space and must not be
-        modified by this routine.
+        Use of this structure depends on its flags. If it is a multicast
+        packet, then it cannot be modified by this routine. Otherwise it can
+        be used as scratch space and modified.
 
     SourceAddress - Supplies a pointer to the source (remote) address that the
         packet originated from. This memory will not be referenced once the
@@ -2358,7 +2359,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 
@@ -2372,7 +2373,7 @@ Return Value:
 
     ASSERT(FALSE);
 
-    return;
+    return STATUS_NOT_SUPPORTED;
 }
 
 KSTATUS

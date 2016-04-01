@@ -1340,7 +1340,7 @@ Return Value:
 --*/
 
 typedef
-VOID
+KSTATUS
 (*PNET_PROTOCOL_PROCESS_RECEIVED_SOCKET_DATA) (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -1363,8 +1363,9 @@ Arguments:
     Socket - Supplies a pointer to the socket that received the packet.
 
     Packet - Supplies a pointer to a structure describing the incoming packet.
-        This structure may not be used as a scratch space and must not be
-        modified by this routine.
+        Use of this structure depends on its flags. If it is a multicast
+        packet, then it cannot be modified by this routine. Otherwise it can
+        be used as scratch space and modified.
 
     SourceAddress - Supplies a pointer to the source (remote) address that the
         packet originated from. This memory will not be referenced once the
@@ -1376,7 +1377,7 @@ Arguments:
 
 Return Value:
 
-    None.
+    Status code.
 
 --*/
 

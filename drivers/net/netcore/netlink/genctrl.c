@@ -208,7 +208,7 @@ Return Value:
     }
 
     if (Family == NULL) {
-        Status = STATUS_NOT_FOUND;
+        Status = STATUS_NOT_SUPPORTED;
         goto GetFamilyEnd;
     }
 

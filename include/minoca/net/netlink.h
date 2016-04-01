@@ -289,6 +289,7 @@ Members:
     Error - Stores the error caused by the bad message.
 
     Header - Stores the header of the bad netlink message that caused the error.
+        The rest of the message payload follows the header.
 
 --*/
 
@@ -500,7 +501,7 @@ Routine Description:
 Arguments:
 
     Socket - Supplies a pointer to the netlink socket over which to send the
-        command.
+        message.
 
     Packet - Supplies a pointer to the network packet to be sent.
 

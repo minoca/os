@@ -134,6 +134,32 @@ NetpNetlinkGetSetInformation (
     BOOL Set
     );
 
+VOID
+NetpNetlinkProcessReceivedPackets (
+    PNET_LINK Link,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress,
+    PNET_PACKET_LIST PacketList,
+    PNET_PROTOCOL_ENTRY Protocol
+    );
+
+VOID
+NetpNetlinkProcessReceivedKernelData (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    );
+
+VOID
+NetpNetlinkSendAck (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS DestinationAddress,
+    KSTATUS PacketStatus
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -620,24 +646,11 @@ Return Value:
 
 {
 
-    PNET_PACKET_BUFFER Packet;
-
-    //
-    // Use the socket's protocol and turn it around to process data.
-    //
-
-    while (NET_PACKET_LIST_EMPTY(PacketList) == FALSE) {
-        Packet = LIST_VALUE(PacketList->Head.Next,
-                            NET_PACKET_BUFFER,
-                            ListEntry);
-
-        NET_REMOVE_PACKET_FROM_LIST(Packet, PacketList);
-        Socket->Protocol->Interface.ProcessReceivedData(Socket->Link,
-                                                        Packet,
-                                                        &Socket->LocalAddress,
-                                                        Destination,
-                                                        Socket->Protocol);
-    }
+    NetpNetlinkProcessReceivedPackets(Socket->Link,
+                                      &Socket->LocalAddress,
+                                      Destination,
+                                      PacketList,
+                                      Socket->Protocol);
 
     return STATUS_SUCCESS;
 }
@@ -826,7 +839,7 @@ Routine Description:
 Arguments:
 
     Socket - Supplies a pointer to the netlink socket over which to send the
-        command.
+        message.
 
     Packet - Supplies a pointer to the network packet to be sent.
 
@@ -888,4 +901,317 @@ SendMessageEnd:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+NetpNetlinkProcessReceivedPackets (
+    PNET_LINK Link,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress,
+    PNET_PACKET_LIST PacketList,
+    PNET_PROTOCOL_ENTRY Protocol
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes a list of packets, handling netlink message parsing
+    and error handling that is common to all protocols.
+
+Arguments:
+
+    Link - Supplies a pointer to the link that received the packets.
+
+    SourceAddress - Supplies a pointer to the source (remote) address that the
+        packet originated from. This memory will not be referenced once the
+        function returns, it can be stack allocated.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        that the packet is heading to. This memory will not be referenced once
+        the function returns, it can be stack allocated.
+
+    PacketList - Supplies a list of packets to process.
+
+    Protocol - Supplies a pointer to this protocol's protocol entry.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET_PACKET_BUFFER Packet;
+    PNET_PROTOCOL_PROCESS_RECEIVED_SOCKET_DATA ProcessReceivedSocketData;
+    PNET_SOCKET Socket;
+
+    //
+    // TODO: Handle multicast netlink messages.
+    //
+
+    //
+    // Find the socket targeted by the destination address.
+    //
+
+    Socket = NetFindSocket(Protocol, DestinationAddress, SourceAddress);
+    if (Socket == NULL) {
+        goto ProcessReceivedPacketsEnd;
+    }
+
+    ASSERT(Socket->Protocol == Protocol);
+
+    //
+    // Send each packet on to the protocol layer for processing. The packet
+    // handling routines take ownership of a non-multicast packets and free
+    // them.
+    //
+
+    ProcessReceivedSocketData = Protocol->Interface.ProcessReceivedSocketData;
+    while (NET_PACKET_LIST_EMPTY(PacketList) == FALSE) {
+        Packet = LIST_VALUE(PacketList->Head.Next,
+                            NET_PACKET_BUFFER,
+                            ListEntry);
+
+        NET_REMOVE_PACKET_FROM_LIST(Packet, PacketList);
+
+        ASSERT((Packet->Flags & NET_PACKET_FLAG_MULTICAST) == 0);
+
+        //
+        // Netlink handles kernel sockets differently in order to reduce code
+        // duplication for error handling and message acknowledgement.
+        //
+
+        if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
+            NetpNetlinkProcessReceivedKernelData(Link,
+                                                 Socket,
+                                                 Packet,
+                                                 SourceAddress,
+                                                 DestinationAddress);
+
+        } else {
+            ProcessReceivedSocketData(Link,
+                                      Socket,
+                                      Packet,
+                                      SourceAddress,
+                                      DestinationAddress);
+        }
+    }
+
+ProcessReceivedPacketsEnd:
+    if (Socket != NULL) {
+        IoSocketReleaseReference(&(Socket->KernelSocket));
+    }
+
+    return;
+}
+
+VOID
+NetpNetlinkProcessReceivedKernelData (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called for a kernel socket to process a received packet
+    that was sent to it.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link that received the packet.
+
+    Socket - Supplies a pointer to the socket that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may be used as a scratch space and this routine will
+        release it when it is done.
+
+    SourceAddress - Supplies a pointer to the source (remote) address that the
+        packet originated from. This memory will not be referenced once the
+        function returns, it can be stack allocated.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        that the packet is heading to. This memory will not be referenced once
+        the function returns, it can be stack allocated.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNETLINK_HEADER Header;
+    ULONG MessageSize;
+    ULONG PacketLength;
+    PNET_PROTOCOL_PROCESS_RECEIVED_SOCKET_DATA ProcessReceivedSocketData;
+    PNET_PROTOCOL_ENTRY Protocol;
+    KSTATUS Status;
+
+    Protocol = Socket->Protocol;
+    ProcessReceivedSocketData = Protocol->Interface.ProcessReceivedSocketData;
+
+    //
+    // Parse the packet for as many netlink messages as can be found, sending
+    // each one up to the protocol.
+    //
+
+    PacketLength = Packet->FooterOffset - Packet->DataOffset;
+    while (PacketLength >= NETLINK_HEADER_LENGTH) {
+        Header = Packet->Buffer + Packet->DataOffset;
+        Status = STATUS_SUCCESS;
+
+        //
+        // Toss any malformed messages that claim to go beyond the end of the
+        // packet.
+        //
+
+        MessageSize = NETLINK_ALIGN(Header->Length);
+        if (MessageSize > PacketLength) {
+            MessageSize = PacketLength;
+            Status = STATUS_DATA_LENGTH_MISMATCH;
+            goto ProcessReceivedKernelDataNextMessage;
+        }
+
+        //
+        // The kernel only handles requests.
+        //
+
+        if ((Header->Flags & NETLINK_HEADER_FLAG_REQUEST) == 0) {
+            goto ProcessReceivedKernelDataNextMessage;
+        }
+
+        //
+        // There is no work to do for standard messages other than replying
+        // with an ACK.
+        //
+
+        if (Header->Type < NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM) {
+            goto ProcessReceivedKernelDataNextMessage;
+        }
+
+        Packet->FooterOffset = Packet->DataOffset + MessageSize;
+        Status = ProcessReceivedSocketData(Link,
+                                           Socket,
+                                           Packet,
+                                           SourceAddress,
+                                           DestinationAddress);
+
+        if (!KSUCCESS(Status)) {
+            goto ProcessReceivedKernelDataNextMessage;
+        }
+
+ProcessReceivedKernelDataNextMessage:
+
+        //
+        // If this message was not successfully parsed or an ACK was requested,
+        // then send back an ACK or a NACK.
+        //
+
+        if (!KSUCCESS(Status) ||
+            ((Header->Flags & NETLINK_HEADER_FLAG_ACK) != 0)) {
+
+            Packet->FooterOffset = Packet->DataOffset + MessageSize;
+            NetpNetlinkSendAck(Socket, Packet, SourceAddress, Status);
+        }
+
+        Packet->DataOffset += MessageSize;
+        PacketLength -= MessageSize;
+    }
+
+    NetFreeBuffer(Packet);
+    return;
+}
+
+VOID
+NetpNetlinkSendAck (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS DestinationAddress,
+    KSTATUS PacketStatus
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates, packages and sends an acknowledgement message.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket over which to send the
+        ACK.
+
+    Packet - Supplies a pointer to the network packet that is being
+        acknowledged.
+
+    DestinationAddress - Supplies a pointer to the address of the socket that
+        is to receive the ACK message.
+
+    PacketStatus - Supplies the error status to send with the ACK.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG AckLength;
+    PNET_PACKET_BUFFER AckPacket;
+    ULONG CopyLength;
+    PNETLINK_ERROR_MESSAGE ErrorMessage;
+    NETLINK_MESSAGE_PARAMETERS Parameters;
+    KSTATUS Status;
+
+    //
+    // Create the ACK packet with the appropriate error message based on the
+    // given status.
+    //
+
+    AckPacket = NULL;
+    CopyLength = NETLINK_HEADER_LENGTH;
+    AckLength = sizeof(NETLINK_ERROR_MESSAGE);
+    if (!KSUCCESS(PacketStatus)) {
+        CopyLength = Packet->FooterOffset - Packet->DataOffset;
+        AckLength += CopyLength - NETLINK_HEADER_LENGTH;
+    }
+
+    Status = NetAllocateBuffer(NETLINK_HEADER_LENGTH,
+                               AckLength,
+                               0,
+                               NULL,
+                               0,
+                               &AckPacket);
+
+    if (!KSUCCESS(Status)) {
+        return;
+    }
+
+    ErrorMessage = AckPacket->Buffer + AckPacket->DataOffset;
+    ErrorMessage->Error = (INT)PacketStatus;
+    RtlCopyMemory(&(ErrorMessage->Header),
+                  Packet->Buffer + Packet->DataOffset,
+                  CopyLength);
+
+    //
+    // Send the ACK packet back to where the original packet came from.
+    //
+
+    Parameters.SourceAddress = &(Socket->LocalAddress);
+    Parameters.DestinationAddress = DestinationAddress;
+    Parameters.SequenceNumber = ErrorMessage->Header.SequenceNumber;
+    Parameters.Type = NETLINK_MESSAGE_TYPE_ERROR;
+    NetNetlinkSendMessage(Socket, AckPacket, &Parameters);
+    NetFreeBuffer(AckPacket);
+    return;
+}
 
