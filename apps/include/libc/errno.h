@@ -138,7 +138,7 @@ extern "C" {
 #define ENOTBLK 15
 
 //
-// Resource in use
+// Device or resource busy
 //
 
 #define EBUSY 16
@@ -216,7 +216,7 @@ extern "C" {
 #define ENOSPC 28
 
 //
-// Invalid seek (on a pipe)
+// Illegal seek (on a pipe)
 //
 
 #define ESPIPE 29
@@ -240,26 +240,26 @@ extern "C" {
 #define EPIPE 32
 
 //
-// Math domain error
+// Numerical argument out of domain
 //
 
 #define EDOM 33
 
 //
-// Range error
+// Numerical result out of range
 //
 
 #define ERANGE 34
 
 //
-// Deadlock detected
+// Resource deadlock would occur
 //
 
 #define EDEADLOCK 35
 #define EDEADLK 35
 
 //
-// Filename too long
+// File name too long
 //
 
 #define ENAMETOOLONG 36
@@ -325,7 +325,7 @@ extern "C" {
 #define ENOTRECOVERABLE 46
 
 //
-// Not a stream
+// Device not a stream
 //
 
 #define ENOSTR 47
@@ -379,7 +379,7 @@ extern "C" {
 #define EOVERFLOW 55
 
 //
-// Illegal sequence
+// Illegal byte sequence
 //
 
 #define EILSEQ 56
@@ -457,13 +457,13 @@ extern "C" {
 #define ENETUNREACH 68
 
 //
-// Connection reset
+// Network dropped connection on reset
 //
 
 #define ENETRESET 69
 
 //
-// Connection aborted
+// Software caused connection abort
 //
 
 #define ECONNABORTED 70
@@ -505,7 +505,7 @@ extern "C" {
 #define ECONNREFUSED 76
 
 //
-// Host unreachable
+// No route to host
 //
 
 #define EHOSTUNREACH 77
