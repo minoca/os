@@ -1230,6 +1230,8 @@ Return Value:
             Status = STATUS_SUCCESS;
             break;
         }
+
+        CurrentEntry = CurrentEntry->Next;
     }
 
     KeReleaseSharedExclusiveLockShared(NetLinkListLock);

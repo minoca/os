@@ -54,7 +54,7 @@ Environment:
 //
 
 KSTATUS
-NetlinkConvertToNetworkAddress (
+NetlinkpConvertToNetworkAddress (
     const struct sockaddr *Address,
     socklen_t AddressLength,
     PNETWORK_ADDRESS NetworkAddress
@@ -85,7 +85,7 @@ Return Value:
 --*/
 
 KSTATUS
-NetlinkConvertFromNetworkAddress (
+NetlinkpConvertFromNetworkAddress (
     PNETWORK_ADDRESS NetworkAddress,
     struct sockaddr *Address,
     socklen_t *AddressLength
@@ -127,8 +127,8 @@ CL_NETWORK_CONVERSION_INTERFACE NetlinkAddressConversionInterface = {
     CL_NETWORK_CONVERSION_INTERFACE_VERSION,
     AF_NETLINK,
     NetDomainNetlink,
-    NetlinkConvertToNetworkAddress,
-    NetlinkConvertFromNetworkAddress
+    NetlinkpConvertToNetworkAddress,
+    NetlinkpConvertFromNetworkAddress
 };
 
 //
@@ -174,6 +174,7 @@ INT
 NetlinkCreateSocket (
     ULONG Protocol,
     ULONG PortId,
+    ULONG Flags,
     PNETLINK_SOCKET *NewSocket
     )
 
@@ -190,6 +191,9 @@ Arguments:
     PortId - Supplies a specific port ID to use for the socket, if available.
         Supply NETLINK_ANY_PORT_ID to have the socket dynamically bind to an
         available port ID.
+
+    Flags - Supplies a bitmask of netlink socket flags. See
+        NETLINK_SOCKET_FLAG_* for definitions.
 
     NewSocket - Supplies a pointer that receives a pointer to the newly created
         socket.
@@ -225,6 +229,7 @@ Return Value:
     }
 
     Socket->Protocol = Protocol;
+    Socket->Flags = Flags;
     Socket->Socket = socket(AF_NETLINK, SOCK_DGRAM, Protocol);
     if (Socket->Socket == -1) {
         Status = -1;
@@ -442,7 +447,8 @@ Routine Description:
 
     This routine fills out the netlink message header that's going to be sent.
     It will make sure there is enough room left in the supplied message buffer
-    and add the header before the current data offset.
+    and add the header before the current data offset. It always adds the ACK
+    and REQUEST flags.
 
 Arguments:
 
@@ -483,6 +489,7 @@ Return Value:
         return -1;
     }
 
+    Flags |= NETLINK_HEADER_FLAG_ACK | NETLINK_HEADER_FLAG_REQUEST;
     Message->DataOffset -= NETLINK_HEADER_LENGTH;
     Header = Message->Buffer + Message->DataOffset;
     Header->Length = DataLength + NETLINK_HEADER_LENGTH;
@@ -494,12 +501,13 @@ Return Value:
 }
 
 NETLINK_API
-INTN
+INT
 NetlinkSendMessage (
     PNETLINK_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG PortId,
-    ULONG GroupMask
+    ULONG GroupMask,
+    PULONG BytesSent
     )
 
 /*++
@@ -513,15 +521,20 @@ Arguments:
     Socket - Supplies a pointer to the netlink socket over which to send the
         message.
 
-    Message - Supplies a pointer to the message to be sent.
+    Message - Supplies a pointer to the message to be sent. The routine will
+        attempt to send the entire message between the data offset and footer
+        offset.
 
     PortId - Supplies the port ID of the recipient of the message.
 
     GroupMask - Supplies the group mask of the message recipients.
 
+    BytesSent - Supplies an optional pointer the receives the number of bytes
+        sent on success.
+
 Return Value:
 
-    Returns the number of bytes sent on success.
+    0 on success.
 
     -1 on error, and the errno variable will be set to contain more information.
 
@@ -530,24 +543,36 @@ Return Value:
 {
 
     struct sockaddr_nl Address;
-    INTN BytesSent;
+    ssize_t LocalBytesSent;
+    INT Status;
 
     memset(&Address, 0, sizeof(struct sockaddr_nl));
     Address.nl_family = AF_NETLINK;
     Address.nl_pid = PortId;
     Address.nl_groups = GroupMask;
-    BytesSent = sendto(Socket->Socket,
-                       Message->Buffer + Message->DataOffset,
-                       Message->FooterOffset - Message->DataOffset,
-                       0,
-                       (struct sockaddr *)&Address,
-                       sizeof(struct sockaddr_nl));
+    LocalBytesSent = sendto(Socket->Socket,
+                            Message->Buffer + Message->DataOffset,
+                            Message->FooterOffset - Message->DataOffset,
+                            0,
+                            (struct sockaddr *)&Address,
+                            sizeof(struct sockaddr_nl));
 
-    return BytesSent;
+    if (LocalBytesSent < 0) {
+        Status = -1;
+
+    } else {
+        if (BytesSent != NULL) {
+            *BytesSent = LocalBytesSent;
+        }
+
+        Status = 0;
+    }
+
+    return Status;
 }
 
 NETLINK_API
-INTN
+INT
 NetlinkReceiveMessage (
     PNETLINK_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
@@ -559,14 +584,17 @@ NetlinkReceiveMessage (
 
 Routine Description:
 
-    This routine receives a netlink message for the given socket.
+    This routine receives a netlink message for the given socket. It validates
+    the received message to make sure the netlink header properly describes the
+    number of byte received. The number of bytes received, in both error and
+    success cases, can be retrieved from the message buffer.
 
 Arguments:
 
     Socket - Supplies a pointer to the netlink socket over which to receive the
         message.
 
-    Message - Supplies a pointer to a netlink message that received the read
+    Message - Supplies a pointer to a netlink message that receives the read
         data.
 
     PortId - Supplies an optional pointer that receives the port ID of the
@@ -577,7 +605,7 @@ Arguments:
 
 Return Value:
 
-    Returns the number of bytes received on success.
+    0 on success.
 
     -1 on error, and the errno variable will be set to contain more information.
 
@@ -588,7 +616,14 @@ Return Value:
     struct sockaddr_nl Address;
     socklen_t AddressLength;
     INTN BytesReceived;
+    PINT Error;
+    KSTATUS ErrorStatus;
+    INT ErrorValue;
+    PNETLINK_HEADER Header;
+    INT Status;
 
+    Message->DataOffset = 0;
+    Message->FooterOffset = 0;
     AddressLength = sizeof(struct sockaddr_nl);
     BytesReceived = recvfrom(Socket->Socket,
                              Message->Buffer,
@@ -597,21 +632,76 @@ Return Value:
                              (struct sockaddr *)&Address,
                              &AddressLength);
 
+    if (BytesReceived < 0) {
+        return -1;
+    }
+
+    Status = 0;
+    Message->FooterOffset = BytesReceived;
     if ((AddressLength != sizeof(struct sockaddr_nl)) ||
         (Address.nl_family != AF_NETLINK)) {
 
         errno = EAFNOSUPPORT;
-        return -1;
+        Status = -1;
+        goto ReceiveMessageEnd;
     }
 
-    Message->DataOffset = 0;
-    if (BytesReceived > 0) {
-        Message->FooterOffset = BytesReceived;
+    Header = Message->Buffer + Message->DataOffset;
+    if ((BytesReceived < NETLINK_HEADER_LENGTH) ||
+        (BytesReceived < Header->Length)) {
 
-    } else {
-        Message->FooterOffset = 0;
+        errno = ENOMSG;
+        Status = -1;
+        goto ReceiveMessageEnd;
     }
 
+    //
+    // Validate the sequence number and update it if an error/ACK message
+    // arrived.
+    //
+
+    if (Header->SequenceNumber != Socket->ReceiveNextSequence) {
+        errno = EILSEQ;
+        Status = -1;
+        goto ReceiveMessageEnd;
+    }
+
+    if (Header->Type == NETLINK_MESSAGE_TYPE_ERROR) {
+        RtlAtomicAdd32(&(Socket->ReceiveNextSequence), 1);
+        if (Header->Length <
+            (NETLINK_HEADER_LENGTH + sizeof(NETLINK_ERROR_MESSAGE))) {
+
+            errno = ENOMSG;
+            Status = -1;
+            goto ReceiveMessageEnd;
+        }
+
+        //
+        // Convert from KSTATUS to the C library value for errno.
+        //
+
+        Error = NETLINK_DATA(Header);
+        ErrorStatus = (KSTATUS)*Error;
+        ErrorValue = ClConvertKstatusToErrorNumber(ErrorStatus);
+
+        //
+        // If the library consumer did not specifically ask for KSTATUS
+        // errors, then all error messages need to be converted.
+        //
+
+        if ((Socket->Flags & NETLINK_SOCKET_FLAG_REPORT_KSTATUS) == 0) {
+            *Error = ErrorValue;
+        }
+
+        if (!KSUCCESS(ErrorStatus)) {
+            errno = ErrorValue;
+            Status = -1;
+        }
+
+        goto ReceiveMessageEnd;
+    }
+
+ReceiveMessageEnd:
     if (PortId != NULL) {
         *PortId = Address.nl_pid;
     }
@@ -620,7 +710,68 @@ Return Value:
         *PortId = Address.nl_groups;
     }
 
-    return BytesReceived;
+    return Status;
+}
+
+NETLINK_API
+INT
+NetlinkReceiveAcknowledgement (
+    PNETLINK_SOCKET Socket,
+    PNETLINK_MESSAGE_BUFFER Message,
+    ULONG ExpectedPortId
+    )
+
+/*++
+
+Routine Description:
+
+    This routine receives a netlink acknowledgement message for the given
+    socket. It validates the received message to make sure the netlink header
+    properly describes the number of byte received. The number of bytes
+    received, in both error and success cases, can be retrieved from the
+    message buffer.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket over which to receive the
+        acknowledgement message.
+
+    Message - Supplies a pointer to a netlink message that receives the read
+        data.
+
+    ExpectedPortId - Supplies the expected port ID of the socket acknowledging
+        the message.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
+{
+
+    PNETLINK_HEADER Header;
+    ULONG PortId;
+    INT Status;
+
+    Status = NetlinkReceiveMessage(Socket, Message, &PortId, NULL);
+    if (Status == -1) {
+        goto ReceiveAcknowledgementEnd;
+    }
+
+    Header = Message->Buffer + Message->DataOffset;
+    if ((PortId != ExpectedPortId) ||
+        (Header->Type != NETLINK_MESSAGE_TYPE_ERROR)) {
+
+        errno = ENOMSG;
+        Status = -1;
+        goto ReceiveAcknowledgementEnd;
+    }
+
+ReceiveAcknowledgementEnd:
+    return Status;
 }
 
 //
@@ -628,7 +779,7 @@ Return Value:
 //
 
 KSTATUS
-NetlinkConvertToNetworkAddress (
+NetlinkpConvertToNetworkAddress (
     const struct sockaddr *Address,
     socklen_t AddressLength,
     PNETWORK_ADDRESS NetworkAddress
@@ -676,7 +827,7 @@ Return Value:
 }
 
 KSTATUS
-NetlinkConvertFromNetworkAddress (
+NetlinkpConvertFromNetworkAddress (
     PNETWORK_ADDRESS NetworkAddress,
     struct sockaddr *Address,
     socklen_t *AddressLength

@@ -140,8 +140,7 @@ Return Value:
 {
 
     PVOID Attributes;
-    ssize_t BytesReceived;
-    ssize_t BytesSent;
+    ULONG BytesReceived;
     size_t FamilyNameLength;
     PNETLINK_GENERIC_HEADER GenericHeader;
     PNETLINK_HEADER Header;
@@ -210,7 +209,7 @@ Return Value:
                                   Message,
                                   MessageLength,
                                   NETLINK_GENERIC_ID_CONTROL,
-                                  NETLINK_HEADER_FLAG_REQUEST);
+                                  0);
 
     if (Status == -1) {
         goto GetFamilyIdEnd;
@@ -220,73 +219,80 @@ Return Value:
     // Send off the family ID request message.
     //
 
-    BytesSent = NetlinkSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0);
-    if (BytesSent == -1) {
-        Status = -1;
+    Status = NetlinkSendMessage(Socket,
+                                Message,
+                                NETLINK_KERNEL_PORT_ID,
+                                0,
+                                NULL);
+
+    if (Status == -1) {
         goto GetFamilyIdEnd;
     }
 
     //
-    // Look for a new family message.
+    // Attempt to receive a new family message.
     //
 
-    while (TRUE) {
-        BytesReceived = NetlinkReceiveMessage(Socket,
-                                              Socket->ReceiveBuffer,
-                                              &PortId,
-                                              NULL);
+    Status = NetlinkReceiveMessage(Socket,
+                                   Socket->ReceiveBuffer,
+                                   &PortId,
+                                   NULL);
 
-        if (BytesReceived == -1) {
-            Status = -1;
-            goto GetFamilyIdEnd;
-        }
+    if (Status == -1) {
+        goto GetFamilyIdEnd;
+    }
 
-        if (PortId != NETLINK_KERNEL_PORT_ID) {
-            continue;
-        }
+    Header = Socket->ReceiveBuffer->Buffer + Socket->ReceiveBuffer->DataOffset;
+    BytesReceived = Socket->ReceiveBuffer->FooterOffset -
+                    Socket->ReceiveBuffer->DataOffset;
 
-        Header = (PNETLINK_HEADER)Socket->ReceiveBuffer->Buffer;
-        if ((BytesReceived < NETLINK_HEADER_LENGTH) ||
-            (BytesReceived < Header->Length)) {
+    if ((PortId != NETLINK_KERNEL_PORT_ID) ||
+        (Header->Type != NETLINK_GENERIC_ID_CONTROL)) {
 
-            continue;
-        }
+        errno = ENOMSG;
+        Status = -1;
+        goto GetFamilyIdEnd;
+    }
 
-        BytesReceived -= NETLINK_HEADER_LENGTH;
-        if ((Header->Type != NETLINK_GENERIC_ID_CONTROL) ||
-            (Header->SequenceNumber != Socket->ReceiveNextSequence) ||
-            (Header->PortId != NETLINK_KERNEL_PORT_ID)) {
+    BytesReceived -= NETLINK_HEADER_LENGTH;
+    GenericHeader = NETLINK_DATA(Header);
+    if ((BytesReceived < NETLINK_GENERIC_HEADER_LENGTH) ||
+        (GenericHeader->Command != NETLINK_GENERIC_CONTROL_NEW_FAMILY)) {
 
-            continue;
-        }
+        errno = ENOMSG;
+        Status = -1;
+        goto GetFamilyIdEnd;
+    }
 
-        GenericHeader = NETLINK_DATA(Header);
-        if ((BytesReceived < NETLINK_GENERIC_HEADER_LENGTH) ||
-            (GenericHeader->Command != NETLINK_GENERIC_CONTROL_NEW_FAMILY)) {
-
-            continue;
-        }
-
-        BytesReceived -= NETLINK_GENERIC_HEADER_LENGTH;
-        Attributes = NETLINK_GENERIC_DATA(GenericHeader);
-        Status = NetlinkGenericGetAttribute(
+    BytesReceived -= NETLINK_GENERIC_HEADER_LENGTH;
+    Attributes = NETLINK_GENERIC_DATA(GenericHeader);
+    Status = NetlinkGenericGetAttribute(
                                    Attributes,
                                    BytesReceived,
                                    NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID,
                                    (PVOID *)&Id,
                                    &IdLength);
 
-        if (Status == -1) {
-            continue;
-        }
+    if (Status == -1) {
+        goto GetFamilyIdEnd;
+    }
 
-        if (IdLength != sizeof(USHORT)) {
-            continue;
-        }
+    if (IdLength != sizeof(USHORT)) {
+        goto GetFamilyIdEnd;
+    }
 
-        *FamilyId = *Id;
-        RtlAtomicAdd32(&(Socket->ReceiveNextSequence), 1);
-        break;
+    *FamilyId = *Id;
+
+    //
+    // Receive the ACK message.
+    //
+
+    Status = NetlinkReceiveAcknowledgement(Socket,
+                                           Socket->ReceiveBuffer,
+                                           NETLINK_KERNEL_PORT_ID);
+
+    if (Status == -1) {
+        goto GetFamilyIdEnd;
     }
 
 GetFamilyIdEnd:

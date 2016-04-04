@@ -672,7 +672,6 @@ Return Value:
 
 {
 
-    ssize_t BytesSent;
     USHORT FamilyId;
     PNETLINK_MESSAGE_BUFFER Message;
     ULONG MessageLength;
@@ -709,7 +708,11 @@ Return Value:
         PasswordLength = strlen(Password) + 1;
     }
 
-    Status = NetlinkCreateSocket(NETLINK_GENERIC, NETLINK_ANY_PORT_ID, &Socket);
+    Status = NetlinkCreateSocket(NETLINK_GENERIC,
+                                 NETLINK_ANY_PORT_ID,
+                                 0,
+                                 &Socket);
+
     if (Status == -1) {
         goto JoinNetworkEnd;
     }
@@ -721,6 +724,12 @@ Return Value:
     if (Status == -1) {
         goto JoinNetworkEnd;
     }
+
+    //
+    // Build out a message to join a network. This requires specifying the
+    // device ID of the wireless networking device that is to join the network,
+    // the SSID of the network and an optional passphrase.
+    //
 
     MessageLength = NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID)) +
                     NETLINK_ATTRIBUTE_SIZE(SsidLength);
@@ -787,7 +796,7 @@ Return Value:
                                   Message,
                                   MessageLength,
                                   FamilyId,
-                                  NETLINK_HEADER_FLAG_REQUEST);
+                                  0);
 
     if (Status == -1) {
         goto JoinNetworkEnd;
@@ -797,8 +806,25 @@ Return Value:
     // Send off the request to join the given network.
     //
 
-    BytesSent = NetlinkSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0);
-    if (BytesSent == -1) {
+    Status = NetlinkSendMessage(Socket,
+                                Message,
+                                NETLINK_KERNEL_PORT_ID,
+                                0,
+                                NULL);
+
+    if (Status == -1) {
+        goto JoinNetworkEnd;
+    }
+
+    //
+    // Receive for an acknowledgement message.
+    //
+
+    Status = NetlinkReceiveAcknowledgement(Socket,
+                                           Socket->ReceiveBuffer,
+                                           NETLINK_KERNEL_PORT_ID);
+
+    if (Status == -1) {
         goto JoinNetworkEnd;
     }
 
@@ -838,7 +864,6 @@ Return Value:
 
 {
 
-    ssize_t BytesSent;
     USHORT FamilyId;
     PNETLINK_MESSAGE_BUFFER Message;
     ULONG MessageLength;
@@ -846,7 +871,11 @@ Return Value:
     PNETLINK_SOCKET Socket;
     INT Status;
 
-    Status = NetlinkCreateSocket(NETLINK_GENERIC, NETLINK_ANY_PORT_ID, &Socket);
+    Status = NetlinkCreateSocket(NETLINK_GENERIC,
+                                 NETLINK_ANY_PORT_ID,
+                                 0,
+                                 &Socket);
+
     if (Status == -1) {
         goto LeaveNetworkEnd;
     }
@@ -858,6 +887,11 @@ Return Value:
     if (Status == -1) {
         goto LeaveNetworkEnd;
     }
+
+    //
+    // Build out a request to leave the current network on the given device.
+    // This only requires supplying the device ID as an attribute.
+    //
 
     MessageLength = NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID));
     Status = NetlinkAllocateBuffer(NETLINK_GENERIC_HEADER_LENGTH,
@@ -895,7 +929,7 @@ Return Value:
                                   Message,
                                   MessageLength,
                                   FamilyId,
-                                  NETLINK_HEADER_FLAG_REQUEST);
+                                  0);
 
     if (Status == -1) {
         goto LeaveNetworkEnd;
@@ -905,8 +939,25 @@ Return Value:
     // Send off the request to leave the current network.
     //
 
-    BytesSent = NetlinkSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0);
-    if (BytesSent == -1) {
+    Status = NetlinkSendMessage(Socket,
+                                Message,
+                                NETLINK_KERNEL_PORT_ID,
+                                0,
+                                NULL);
+
+    if (Status == -1) {
+        goto LeaveNetworkEnd;
+    }
+
+    //
+    // Receive for an acknowledgement message.
+    //
+
+    Status = NetlinkReceiveAcknowledgement(Socket,
+                                           Socket->ReceiveBuffer,
+                                           NETLINK_KERNEL_PORT_ID);
+
+    if (Status == -1) {
         goto LeaveNetworkEnd;
     }
 

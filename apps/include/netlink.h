@@ -58,6 +58,13 @@ extern "C" {
 #define NETLINK_ANY_PORT_ID 0
 
 //
+// Set this flag in the netlink socket to receive KSTATUS error codes in
+// netlink error messages. The default is to receive errno values.
+//
+
+#define NETLINK_SOCKET_FLAG_REPORT_KSTATUS 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -128,6 +135,9 @@ Members:
 
     Protocol - Stores the netlink protocol over which the socket communicates.
 
+    Flags - Stores a bitmask of netlink socket flags. See
+        NETLINK_SOCKET_FLAG_* for definitions.
+
     SendNextSequence - Stores the next sequence number to use in a netlink
         message header being sent.
 
@@ -144,6 +154,7 @@ Members:
 typedef struct _NETLINK_SOCKET {
     INT Socket;
     ULONG Protocol;
+    ULONG Flags;
     volatile ULONG SendNextSequence;
     volatile ULONG ReceiveNextSequence;
     struct sockaddr_nl LocalAddress;
@@ -188,6 +199,7 @@ INT
 NetlinkCreateSocket (
     ULONG Protocol,
     ULONG PortId,
+    ULONG Flags,
     PNETLINK_SOCKET *NewSocket
     );
 
@@ -204,6 +216,9 @@ Arguments:
     PortId - Supplies a specific port ID to use for the socket, if available.
         Supply NETLINK_ANY_PORT_ID to have the socket dynamically bind to an
         available port ID.
+
+    Flags - Supplies a bitmask of netlink socket flags. See
+        NETLINK_SOCKET_FLAG_* for definitions.
 
     NewSocket - Supplies a pointer that receives a pointer to the newly created
         socket.
@@ -312,7 +327,8 @@ Routine Description:
 
     This routine fills out the netlink message header that's going to be sent.
     It will make sure there is enough room left in the supplied message buffer
-    and add the header before the current data offset.
+    and add the header before the current data offset. It always adds the ACK
+    and REQUEST flags.
 
 Arguments:
 
@@ -338,12 +354,13 @@ Return Value:
 --*/
 
 NETLINK_API
-INTN
+INT
 NetlinkSendMessage (
     PNETLINK_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG PortId,
-    ULONG GroupMask
+    ULONG GroupMask,
+    PULONG BytesSent
     );
 
 /*++
@@ -357,22 +374,27 @@ Arguments:
     Socket - Supplies a pointer to the netlink socket over which to send the
         message.
 
-    Message - Supplies a pointer to the message to be sent.
+    Message - Supplies a pointer to the message to be sent. The routine will
+        attempt to send the entire message between the data offset and footer
+        offset.
 
     PortId - Supplies the port ID of the recipient of the message.
 
     GroupMask - Supplies the group mask of the message recipients.
 
+    BytesSent - Supplies an optional pointer the receives the number of bytes
+        sent on success.
+
 Return Value:
 
-    Returns the number of bytes sent on success.
+    0 on success.
 
     -1 on error, and the errno variable will be set to contain more information.
 
 --*/
 
 NETLINK_API
-INTN
+INT
 NetlinkReceiveMessage (
     PNETLINK_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
@@ -384,14 +406,17 @@ NetlinkReceiveMessage (
 
 Routine Description:
 
-    This routine receives a netlink message for the given socket.
+    This routine receives a netlink message for the given socket. It validates
+    the received message to make sure the netlink header properly describes the
+    number of byte received. The number of bytes received, in both error and
+    success cases, can be retrieved from the message buffer.
 
 Arguments:
 
     Socket - Supplies a pointer to the netlink socket over which to receive the
         message.
 
-    Message - Supplies a pointer to a netlink message that received the read
+    Message - Supplies a pointer to a netlink message that receives the read
         data.
 
     PortId - Supplies an optional pointer that receives the port ID of the
@@ -402,7 +427,44 @@ Arguments:
 
 Return Value:
 
-    Returns the number of bytes received on success.
+    0 on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
+NETLINK_API
+INT
+NetlinkReceiveAcknowledgement (
+    PNETLINK_SOCKET Socket,
+    PNETLINK_MESSAGE_BUFFER Message,
+    ULONG ExpectedPortId
+    );
+
+/*++
+
+Routine Description:
+
+    This routine receives a netlink acknowledgement message for the given
+    socket. It validates the received message to make sure the netlink header
+    properly describes the number of byte received. The number of bytes
+    received, in both error and success cases, can be retrieved from the
+    message buffer.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket over which to receive the
+        acknowledgement message.
+
+    Message - Supplies a pointer to a netlink message that receives the read
+        data.
+
+    ExpectedPortId - Supplies the expected port ID of the socket acknowledging
+        the message.
+
+Return Value:
+
+    0 on success.
 
     -1 on error, and the errno variable will be set to contain more information.
 
