@@ -339,6 +339,7 @@ Return Value:
     PARTITION_DEVICE_INFORMATION PartitionInformation;
     PSETUP_PARTITION_DESCRIPTION Partitions;
     INT Result;
+    PSETUP_PARTITION_DESCRIPTION SystemDisk;
 
     BootVolume = NULL;
     Partitions = NULL;
@@ -346,6 +347,21 @@ Return Value:
     if (Result != 0) {
         fprintf(stderr, "Failed to enumerate partitions.\n");
         goto OsOpenBootVolumeEnd;
+    }
+
+    //
+    // First find the system disk, or at least try to.
+    //
+
+    SystemDisk = NULL;
+    for (Index = 0; Index < PartitionCount; Index += 1) {
+        Partition = &(Partitions[Index]);
+        if ((Partition->Destination->Type == SetupDestinationDisk) &&
+            ((Partition->Flags & SETUP_DEVICE_FLAG_SYSTEM) != 0)) {
+
+            SystemDisk = Partition;
+            break;
+        }
     }
 
     //
@@ -361,8 +377,47 @@ Return Value:
              (Partition->Partition.PartitionType == PartitionTypeEfiSystem))) {
 
             if (BootPartition != NULL) {
-                fprintf(stderr, "Found more than one boot partition!\n");
-                goto OsOpenBootVolumeEnd;
+
+                //
+                // If another boot partition was found, check to see if this
+                // one belongs to the system disk.
+                //
+
+                if (SystemDisk == NULL) {
+                    fprintf(stderr,
+                            "Error: Found more than one boot partition, "
+                            "and no system disk!\n");
+
+                    Result = EINVAL;
+                    goto OsOpenBootVolumeEnd;
+                }
+
+                Result = memcmp(Partition->Partition.DiskId,
+                                SystemDisk->Partition.DiskId,
+                                DISK_IDENTIFIER_SIZE);
+
+                if (Result == 0) {
+
+                    //
+                    // See if the existing one is also on the system disk, and
+                    // fail if it is, since there are now ambiguities.
+                    //
+
+                    Result = memcmp(BootPartition->Partition.DiskId,
+                                    SystemDisk->Partition.DiskId,
+                                    DISK_IDENTIFIER_SIZE);
+
+                    if (Result == 0) {
+                        fprintf(stderr,
+                                "Error: Found more than one boot partition "
+                                "on the system disk.\n");
+
+                        Result = EINVAL;
+                        goto OsOpenBootVolumeEnd;
+                    }
+
+                    BootPartition = Partition;
+                }
 
             } else {
                 BootPartition = Partition;
