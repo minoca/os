@@ -22,3 +22,10 @@
 
 [pull]
 	rebase = true
+
+##
+## Show the nice stat graph when doing git pull, which now defaults to rebase.
+##
+
+[rebase]
+	stat = true
