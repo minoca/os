@@ -68,6 +68,12 @@ Environment:
 #define SD_DISK_FLAG_DMA_SUPPORTED     0x00000002
 
 //
+// Define the maximum number of times to retry IO.
+//
+
+#define SD_MAX_IO_RETRIES 5
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -114,6 +120,8 @@ Members:
 
     DiskInterface - Stores the disk interface presented to the system.
 
+    Retries - Stores the number of retries on the current IRP.
+
 --*/
 
 typedef struct _SD_DISK {
@@ -128,6 +136,7 @@ typedef struct _SD_DISK {
     ULONG BlockShift;
     ULONGLONG BlockCount;
     DISK_INTERFACE DiskInterface;
+    ULONG Retries;
 } SD_DISK, *PSD_DISK;
 
 /*++
@@ -817,6 +826,7 @@ Return Value:
 
         Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
         Disk->Irp = Irp;
+        Disk->Retries = 0;
         BlockOffset = IoOffset >> Disk->BlockShift;
         BlockCount = BytesToComplete >> Disk->BlockShift;
         CompleteIrp = FALSE;
@@ -2061,9 +2071,19 @@ Return Value:
     ASSERT(Irp != NULL);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SD Failed: %x\n", Status);
-        IoCompleteIrp(SdDriver, Irp, Status);
-        return;
+        RtlDebugPrint("SD Failed: %x %I64x %x %x\n",
+                      Status,
+                      Irp->U.ReadWrite.IoOffset,
+                      Irp->U.ReadWrite.IoSizeInBytes,
+                      Irp->MinorCode);
+
+        BytesTransferred = 0;
+        if (Disk->Retries >= SD_MAX_IO_RETRIES) {
+            IoCompleteIrp(SdDriver, Irp, Status);
+            return;
+        }
+
+        Disk->Retries += 1;
     }
 
     Irp->U.ReadWrite.IoBytesCompleted += BytesTransferred;

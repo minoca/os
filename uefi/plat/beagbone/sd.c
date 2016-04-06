@@ -441,10 +441,7 @@ Return Value:
     SdParameters.StandardControllerBase =
                  Disk->ControllerBase + SD_AM335_CONTROLLER_SD_REGISTER_OFFSET;
 
-    SdParameters.Voltages = SD_VOLTAGE_29_30 |
-                            SD_VOLTAGE_30_31 |
-                            SD_VOLTAGE_165_195;
-
+    SdParameters.Voltages = SD_VOLTAGE_29_30 | SD_VOLTAGE_30_31;
     SdParameters.HostCapabilities = SD_MODE_4BIT |
                                     SD_MODE_HIGH_SPEED |
                                     SD_MODE_AUTO_CMD12;

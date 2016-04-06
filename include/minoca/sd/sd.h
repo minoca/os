@@ -90,6 +90,13 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef enum _SD_VOLTAGE {
+    SdVoltage0V = 0,
+    SdVoltage1V8 = 1800,
+    SdVoltage3V0 = 3000,
+    SdVoltage3V3 = 3300,
+} SD_VOLTAGE, *PSD_VOLTAGE;
+
 typedef struct _SD_CONTROLLER SD_CONTROLLER, *PSD_CONTROLLER;
 
 /*++
@@ -276,8 +283,39 @@ Arguments:
     Context - Supplies a context pointer passed to the SD/MMC library upon
         creation of the controller.
 
-    Set - Supplies a boolean indicating whether the bus width should be queried
-        or set.
+    Set - Supplies a boolean indicating whether the clock speed should be
+        queried (FALSE) or set (TRUE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+typedef
+KSTATUS
+(*PSD_GET_SET_VOLTAGE) (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the current bus voltage. The current voltage is
+    stored in the controller structure.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Set - Supplies a boolean indicating whether the bus voltage should be
+        queried (FALSE) or set (TRUE).
 
 Return Value:
 
@@ -433,6 +471,9 @@ Members:
     GetSetClockSpeed - Stores a pointer to a function used to get or set the
         controller's clock speed.
 
+    GetSetVoltage - Stores a pointer to a function used to get or set the
+        bus voltage.
+
     StopDataTransfer - Stores a pointer to a function that stops any active
         data transfers before returning.
 
@@ -453,6 +494,7 @@ typedef struct _SD_FUNCTION_TABLE {
     PSD_SEND_COMMAND SendCommand;
     PSD_GET_SET_BUS_WIDTH GetSetBusWidth;
     PSD_GET_SET_CLOCK_SPEED GetSetClockSpeed;
+    PSD_GET_SET_VOLTAGE GetSetVoltage;
     PSD_STOP_DATA_TRANSFER StopDataTransfer;
     PSD_GET_CARD_DETECT_STATUS GetCardDetectStatus;
     PSD_GET_WRITE_PROTECT_STATUS GetWriteProtectStatus;
@@ -552,6 +594,8 @@ Members:
 
     Voltages - Stores a bitmask of supported voltages.
 
+    CurrentVoltage - Stores the current voltage, in millivolts.
+
     Version - Stores the specification revision of the card.
 
     HostVersion - Stores the version of the host controller interface.
@@ -624,6 +668,7 @@ struct _SD_CONTROLLER {
     PVOID ConsumerContext;
     SD_FUNCTION_TABLE FunctionTable;
     ULONG Voltages;
+    SD_VOLTAGE CurrentVoltage;
     SD_VERSION Version;
     SD_HOST_VERSION HostVersion;
     volatile ULONG Flags;
@@ -1235,8 +1280,39 @@ Arguments:
     Context - Supplies a context pointer passed to the SD/MMC library upon
         creation of the controller.
 
-    Set - Supplies a boolean indicating whether the bus width should be queried
-        or set.
+    Set - Supplies a boolean indicating whether the clock speed should be
+        queried (FALSE) or set (TRUE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+SD_API
+KSTATUS
+SdStandardGetSetVoltage (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    BOOL Set
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the bus voltage. The bus voltage is
+    stored in the controller structure.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Set - Supplies a boolean indicating whether the bus voltage should be
+        queried (FALSE) or set (TRUE).
 
 Return Value:
 

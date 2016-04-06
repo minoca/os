@@ -23,6 +23,7 @@ Author:
 #include <minoca/sd/sd.h>
 #include <minoca/sd/sddwc.h>
 #include <minoca/intrface/disk.h>
+#include <minoca/intrface/rk808.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -182,6 +183,13 @@ Members:
 
     Device - Stores a pointer to the OS device.
 
+    InVoltageSwitch - Stores a boolean indicating whether or not the controller
+        is currently undergoing a voltage switch transition.
+
+    Ldo - Stores the number of the LDO to configure when switching voltages.
+
+    Rk808 - Stores a pointer to the RK808 interface used to switch voltages.
+
 --*/
 
 struct _SD_RK32_CONTEXT {
@@ -200,6 +208,9 @@ struct _SD_RK32_CONTEXT {
     PSD_RK32_CHILD Child;
     PQUEUED_LOCK Lock;
     PDEVICE OsDevice;
+    BOOL InVoltageSwitch;
+    UCHAR Ldo;
+    PINTERFACE_RK808 Rk808;
 };
 
 /*++
@@ -218,12 +229,16 @@ Members:
 
     FundamentalClock - Stores the fundamental clock frequency of the controller.
 
+    Ldo - Stores the LDO number of the LDO on an RK808 PMIC that controls the
+        SD bus voltage lines. If 0, then no LDO control is needed.
+
 --*/
 
 typedef struct _SD_RK32_VENDOR_RESOURCE {
     UCHAR SubType;
     UUID Uuid;
     ULONG FundamentalClock;
+    ULONG Ldo;
 } PACKED SD_RK32_VENDOR_RESOURCE, *PSD_RK32_VENDOR_RESOURCE;
 
 //

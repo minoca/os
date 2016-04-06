@@ -137,7 +137,7 @@ SdRk32HardResetController (
     );
 
 KSTATUS
-SdRk32InitializeFundamentalClock (
+SdRk32InitializeVendorResource (
     PSD_RK32_CONTEXT Device,
     PRESOURCE_ALLOCATION Resource
     );
@@ -269,6 +269,13 @@ SdRk32GetSetClockSpeed (
     );
 
 KSTATUS
+SdRk32GetSetVoltage (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    BOOL Set
+    );
+
+KSTATUS
 SdRk32StopDataTransfer (
     PSD_CONTROLLER Controller,
     PVOID Context
@@ -303,6 +310,26 @@ SdRk32SetDmaInterrupts (
     BOOL Enable
     );
 
+KSTATUS
+SdRk32UpdateClock (
+    PSD_RK32_CONTEXT Device
+    );
+
+VOID
+SdRk32Rk808InterfaceNotificationCallback (
+    PVOID Context,
+    PDEVICE Device,
+    PVOID InterfaceBuffer,
+    ULONG InterfaceBufferSize,
+    BOOL Arrival
+    );
+
+KSTATUS
+SdRk32SetRegulatorVoltage (
+    PSD_RK32_CONTEXT Device,
+    BOOL LowVoltage
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -310,6 +337,7 @@ SdRk32SetDmaInterrupts (
 PDRIVER SdRk32Driver = NULL;
 UUID SdRk32DiskInterfaceUuid = UUID_DISK_INTERFACE;
 UUID SdRk32VendorResourceUuid = SD_RK32_VENDOR_RESOURCE_UUID;
+UUID SdRk32Rk808InterfaceUuid = UUID_RK808_INTERFACE;
 
 DISK_INTERFACE SdRk32DiskInterfaceTemplate = {
     DISK_INTERFACE_VERSION,
@@ -328,6 +356,7 @@ SD_FUNCTION_TABLE SdRk32FunctionTable = {
     SdRk32SendCommand,
     SdRk32GetSetBusWidth,
     SdRk32GetSetClockSpeed,
+    SdRk32GetSetVoltage,
     SdRk32StopDataTransfer,
     NULL,
     NULL,
@@ -1341,9 +1370,9 @@ Return Value:
         }
     }
 
-    Status = SdRk32InitializeFundamentalClock(Device, VendorResource);
+    Status = SdRk32InitializeVendorResource(Device, VendorResource);
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SdRk32InitializeFundamentalClock Failed: %x\n", Status);
+        RtlDebugPrint("SdRk32InitializeVendorResource Failed: %x\n", Status);
         goto StartDeviceEnd;
     }
 
@@ -1363,10 +1392,7 @@ Return Value:
 
     if (Device->Controller == NULL) {
         RtlZeroMemory(&Parameters, sizeof(SD_INITIALIZATION_BLOCK));
-        Parameters.Voltages = SD_VOLTAGE_32_33 |
-                              SD_VOLTAGE_33_34 |
-                              SD_VOLTAGE_165_195;
-
+        Parameters.Voltages = SD_VOLTAGE_32_33 | SD_VOLTAGE_33_34;
         Parameters.HostCapabilities = SD_MODE_4BIT |
                                       SD_MODE_HIGH_SPEED |
                                       SD_MODE_AUTO_CMD12;
@@ -1701,6 +1727,11 @@ Return Value:
         return Status;
     }
 
+    Status = SdRk32SetRegulatorVoltage(Device, FALSE);
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
     //
     // Clear interrupts.
     //
@@ -1787,7 +1818,7 @@ HardResetControllerEnd:
 }
 
 KSTATUS
-SdRk32InitializeFundamentalClock (
+SdRk32InitializeVendorResource (
     PSD_RK32_CONTEXT Device,
     PRESOURCE_ALLOCATION Resource
     )
@@ -1814,6 +1845,7 @@ Return Value:
 {
 
     PSD_RK32_VENDOR_RESOURCE Data;
+    KSTATUS Status;
 
     Data = Resource->Data;
     if (Resource->DataSize < sizeof(SD_RK32_VENDOR_RESOURCE)) {
@@ -1825,7 +1857,24 @@ Return Value:
     }
 
     Device->FundamentalClock = Data->FundamentalClock;
-    return STATUS_SUCCESS;
+    Device->Ldo = Data->Ldo;
+    if (Device->Ldo != 0) {
+        Status = IoRegisterForInterfaceNotifications(
+                                      &SdRk32Rk808InterfaceUuid,
+                                      SdRk32Rk808InterfaceNotificationCallback,
+                                      NULL,
+                                      Device,
+                                      TRUE);
+
+        if (!KSUCCESS(Status)) {
+            goto InitializeVendorResourceEnd;
+        }
+    }
+
+    Status = STATUS_SUCCESS;
+
+InitializeVendorResourceEnd:
+    return Status;
 }
 
 INTERRUPT_STATUS
@@ -3083,8 +3132,8 @@ Return Value:
 
             Voltage |= SD_DWC_UHS_VOLTAGE_3V3;
 
-        } else if ((Controller->Voltages & SD_VOLTAGE_165_195) ==
-                   SD_VOLTAGE_165_195) {
+        } else if ((Controller->Voltages &
+                    (SD_VOLTAGE_165_195 | SD_VOLTAGE_18)) != 0) {
 
             Voltage |= SD_DWC_UHS_VOLTAGE_1V8;
 
@@ -3173,12 +3222,23 @@ Return Value:
     ULONG Value;
 
     Device = (PSD_RK32_CONTEXT)Context;
+    Device->InVoltageSwitch = FALSE;
     Frequency = HlQueryTimeCounterFrequency();
     ResetMask = SD_DWC_CONTROL_FIFO_RESET |
                 SD_DWC_CONTROL_DMA_RESET;
 
     if ((Flags & SD_RESET_FLAG_ALL) != 0) {
         ResetMask |= SD_DWC_CONTROL_CONTROLLER_RESET;
+
+        //
+        // Power cycle the card.
+        //
+
+        SD_DWC_WRITE_REGISTER(Device, SdDwcPower, 0);
+        HlBusySpin(10000);
+        SdRk32SetRegulatorVoltage(Device, FALSE);
+        SD_DWC_WRITE_REGISTER(Device, SdDwcPower, SD_DWC_POWER_ENABLE);
+        HlBusySpin(10000);
     }
 
     Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
@@ -3320,6 +3380,23 @@ Return Value:
         Flags = SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
         if (Command->Command == SdCommandReset) {
             Flags |= SD_DWC_COMMAND_SEND_INITIALIZATION;
+
+        //
+        // For the voltage switch command, disable low power clock mode and set
+        // the required flag in the CMD register.
+        //
+
+        } else if (Command->Command == SdCommandVoltageSwitch) {
+            Value = SD_DWC_READ_REGISTER(Device, SdDwcClockEnable);
+            Value &= ~SD_DWC_CLOCK_ENABLE_LOW_POWER;
+            SD_DWC_WRITE_REGISTER(Device, SdDwcClockEnable, Value);
+            Status = SdRk32UpdateClock(Device);
+            if (!KSUCCESS(Status)) {
+                goto SendCommandEnd;
+            }
+
+            Device->InVoltageSwitch = TRUE;
+            Flags |= SD_DWC_COMMAND_VOLT_SWITCH;
         }
 
         //
@@ -3505,17 +3582,25 @@ Return Value:
     }
 
     //
-    // Check the interrupt status.
+    // Check the interrupt status. Voltage switch commands set a specific
+    // status bit, all other commands set command done.
     //
 
     Status = STATUS_TIMEOUT;
     do {
         Value = SD_DWC_READ_REGISTER(Device, SdDwcInterruptStatus);
-        if ((Value & SD_DWC_INTERRUPT_STATUS_COMMAND_DONE) != 0) {
+        if (Command->Command == SdCommandVoltageSwitch) {
+            if ((Value & SD_DWC_INTERRUPT_STATUS_VOLT_SWITCH) != 0) {
+                Status = STATUS_SUCCESS;
+                break;
+            }
+
+        } else if ((Value & SD_DWC_INTERRUPT_STATUS_COMMAND_DONE) != 0) {
             Status = STATUS_SUCCESS;
             break;
+        }
 
-        } else if (Timeout == 0) {
+        if (Timeout == 0) {
             Timeout = SdQueryTimeCounter(Controller) + Controller->Timeout;
         }
 
@@ -3550,9 +3635,7 @@ Return Value:
     // Acknowledge the completed command.
     //
 
-    SD_DWC_WRITE_REGISTER(Device,
-                          SdDwcInterruptStatus,
-                          SD_DWC_INTERRUPT_STATUS_COMMAND_DONE);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcInterruptStatus, Value);
 
     //
     // Get the response if there is one.
@@ -3711,8 +3794,8 @@ Arguments:
     Context - Supplies a context pointer passed to the SD/MMC library upon
         creation of the controller.
 
-    Set - Supplies a boolean indicating whether the bus width should be queried
-        or set.
+    Set - Supplies a boolean indicating whether the clock speed should be
+        queried (FALSE) or set (TRUE).
 
 Return Value:
 
@@ -3739,6 +3822,156 @@ Return Value:
     }
 
     return SdRk32SetClockSpeed(Device, Controller->ClockSpeed);
+}
+
+KSTATUS
+SdRk32GetSetVoltage (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    BOOL Set
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the bus voltage. The bus voltage is
+    stored in the controller structure.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Set - Supplies a boolean indicating whether the bus voltage should be
+        queried (FALSE) or set (TRUE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PSD_RK32_CONTEXT Device;
+    ULONG Mask;
+    KSTATUS Status;
+    ULONGLONG Timeout;
+    ULONG Value;
+
+    Device = Context;
+    if (Set == FALSE) {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcUhs);
+        if ((Value & SD_DWC_UHS_VOLTAGE_1V8) != 0) {
+            Controller->CurrentVoltage = SdVoltage1V8;
+
+        } else {
+            Controller->CurrentVoltage = SdVoltage3V3;
+        }
+
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // When the standard SD library sent CMD11, the following happened inside
+    // send command:
+    // * Low power clocking was disabled.
+    // * The volt switch interrupt was waited on and cleared.
+    // Now stop the SD clock.
+    //
+
+    SD_DWC_WRITE_REGISTER(Device, SdDwcClockEnable, 0);
+    Status = SdRk32UpdateClock(Device);
+    if (!KSUCCESS(Status)) {
+        goto GetSetVoltageEnd;
+    }
+
+    if (Controller->CurrentVoltage != SdVoltage1V8) {
+        Status = SdRk32SetRegulatorVoltage(Device, FALSE);
+        if (!KSUCCESS(Status)) {
+            goto GetSetVoltageEnd;
+        }
+
+        HlBusySpin(10000);
+        Value = SD_DWC_CLOCK_ENABLE_ON | SD_DWC_CLOCK_ENABLE_LOW_POWER;
+        SD_DWC_WRITE_REGISTER(Device, SdDwcClockEnable, Value);
+        Status = SdRk32UpdateClock(Device);
+        if (!KSUCCESS(Status)) {
+            goto GetSetVoltageEnd;
+        }
+
+        return STATUS_SUCCESS;
+    }
+
+    ASSERT(Device->InVoltageSwitch != FALSE);
+
+    //
+    // Switch the voltage.
+    //
+
+    Status = SdRk32SetRegulatorVoltage(Device, TRUE);
+    if (!KSUCCESS(Status)) {
+        goto GetSetVoltageEnd;
+    }
+
+    //
+    // Wait at least 5ms as per spec.
+    //
+
+    HlBusySpin(10000);
+
+    //
+    // Re-enable the clock.
+    //
+
+    SD_DWC_WRITE_REGISTER(Device, SdDwcClockEnable, SD_DWC_CLOCK_ENABLE_ON);
+    Status = SdRk32UpdateClock(Device);
+    if (!KSUCCESS(Status)) {
+        goto GetSetVoltageEnd;
+    }
+
+    //
+    // Wait another millisecond as per spec.
+    //
+
+    HlBusySpin(2000);
+
+    //
+    // The controller should have generated a volt switch and command done
+    // interrupt if DAT[3:0] went high for a millisecond.
+    //
+
+    Timeout = 0;
+    Mask = SD_DWC_INTERRUPT_STATUS_VOLT_SWITCH |
+           SD_DWC_INTERRUPT_STATUS_COMMAND_DONE;
+
+    Status = STATUS_TIMEOUT;
+    do {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcInterruptStatus);
+        if ((Value & Mask) == Mask) {
+            Status = STATUS_SUCCESS;
+            break;
+
+        } else if (Timeout == 0) {
+            Timeout = SdQueryTimeCounter(Controller) +
+                      HlQueryTimeCounterFrequency();
+        }
+
+    } while (SdQueryTimeCounter(Controller) <= Timeout);
+
+    SD_DWC_WRITE_REGISTER(Device, SdDwcInterruptStatus, Value);
+    if (!KSUCCESS(Status)) {
+        goto GetSetVoltageEnd;
+    }
+
+    Status = STATUS_SUCCESS;
+
+GetSetVoltageEnd:
+    Device->InVoltageSwitch = FALSE;
+    return Status;
 }
 
 KSTATUS
@@ -4217,28 +4450,7 @@ Return Value:
     //
 
     SD_DWC_WRITE_REGISTER(Device, SdDwcClockEnable, 0);
-
-    //
-    // Send the command to indicate that the clock enable register is being
-    // updated.
-    //
-
-    Value = SD_DWC_COMMAND_START |
-            SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS |
-            SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
-
-    SD_DWC_WRITE_REGISTER(Device, SdDwcCommand, Value);
-    Status = STATUS_TIMEOUT;
-    Timeout = KeGetRecentTimeCounter() + (Frequency * SD_RK32_TIMEOUT);
-    do {
-        Value = SD_DWC_READ_REGISTER(Device, SdDwcCommand);
-        if ((Value & SD_DWC_COMMAND_START) == 0) {
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-    } while (KeGetRecentTimeCounter() <= Timeout);
-
+    Status = SdRk32UpdateClock(Device);
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -4268,27 +4480,7 @@ Return Value:
                           SdDwcClockSource,
                           SD_DWC_CLOCK_SOURCE_DIVIDER_0);
 
-    //
-    // Send the command to indicate that the clock source and divider are is
-    // being updated.
-    //
-
-    Value = SD_DWC_COMMAND_START |
-            SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS |
-            SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
-
-    SD_DWC_WRITE_REGISTER(Device, SdDwcCommand, Value);
-    Status = STATUS_TIMEOUT;
-    Timeout = KeGetRecentTimeCounter() + (Frequency * SD_RK32_TIMEOUT);
-    do {
-        Value = SD_DWC_READ_REGISTER(Device, SdDwcCommand);
-        if ((Value & SD_DWC_COMMAND_START) == 0) {
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-    } while (KeGetRecentTimeCounter() <= Timeout);
-
+    Status = SdRk32UpdateClock(Device);
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -4302,27 +4494,7 @@ Return Value:
                           (SD_DWC_CLOCK_ENABLE_LOW_POWER |
                            SD_DWC_CLOCK_ENABLE_ON));
 
-    //
-    // Send the command to indicate that the clock is enable register being
-    // updated.
-    //
-
-    Value = SD_DWC_COMMAND_START |
-            SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS |
-            SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
-
-    SD_DWC_WRITE_REGISTER(Device, SdDwcCommand, Value);
-    Status = STATUS_TIMEOUT;
-    Timeout = KeGetRecentTimeCounter() + (Frequency * SD_RK32_TIMEOUT);
-    do {
-        Value = SD_DWC_READ_REGISTER(Device, SdDwcCommand);
-        if ((Value & SD_DWC_COMMAND_START) == 0) {
-            Status = STATUS_SUCCESS;
-            break;
-        }
-
-    } while (KeGetRecentTimeCounter() <= Timeout);
-
+    Status = SdRk32UpdateClock(Device);
     if (!KSUCCESS(Status)) {
         return Status;
     }
@@ -4412,5 +4584,180 @@ Return Value:
     }
 
     return;
+}
+
+KSTATUS
+SdRk32UpdateClock (
+    PSD_RK32_CONTEXT Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a clock update, activating the configuration when
+    the clock divisor, enable, or source registers are changed.
+
+Arguments:
+
+    Device - Supplies a pointer to this SD RK32xx device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+    ULONGLONG Timeout;
+    ULONG Value;
+
+    Value = SD_DWC_COMMAND_START |
+            SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS |
+            SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
+
+    if (Device->InVoltageSwitch != FALSE) {
+        Value |= SD_DWC_COMMAND_VOLT_SWITCH;
+    }
+
+    SD_DWC_WRITE_REGISTER(Device, SdDwcCommand, Value);
+    Status = STATUS_TIMEOUT;
+    Timeout = KeGetRecentTimeCounter() +
+              (HlQueryTimeCounterFrequency() * SD_RK32_TIMEOUT);
+
+    do {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcCommand);
+        if ((Value & SD_DWC_COMMAND_START) == 0) {
+            Status = STATUS_SUCCESS;
+            break;
+        }
+
+    } while (KeGetRecentTimeCounter() <= Timeout);
+
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
+
+    return Status;
+}
+
+VOID
+SdRk32Rk808InterfaceNotificationCallback (
+    PVOID Context,
+    PDEVICE Device,
+    PVOID InterfaceBuffer,
+    ULONG InterfaceBufferSize,
+    BOOL Arrival
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to notify listeners that an RK808 interface has
+    arrived or departed.
+
+Arguments:
+
+    Context - Supplies the caller's context pointer, supplied when the caller
+        requested interface notifications.
+
+    Device - Supplies a pointer to the device exposing or deleting the
+        interface.
+
+    InterfaceBuffer - Supplies a pointer to the interface buffer of the
+        interface.
+
+    InterfaceBufferSize - Supplies the buffer size.
+
+    Arrival - Supplies TRUE if a new interface is arriving, or FALSE if an
+        interface is departing.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSD_RK32_CONTEXT SdDevice;
+
+    SdDevice = Context;
+    if (InterfaceBufferSize == sizeof(INTERFACE_RK808)) {
+        if (Arrival != FALSE) {
+
+            ASSERT(SdDevice->Rk808 == NULL);
+
+            SdDevice->Rk808 = InterfaceBuffer;
+
+        } else {
+            SdDevice->Rk808 = NULL;
+        }
+    }
+
+    return;
+}
+
+KSTATUS
+SdRk32SetRegulatorVoltage (
+    PSD_RK32_CONTEXT Device,
+    BOOL LowVoltage
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the regulator voltage of the SD bus pins.
+
+Arguments:
+
+    Device - Supplies a pointer to the device context.
+
+    LowVoltage - Supplies a boolean indicating whether to set the bus voltage
+        to 1.8V (TRUE) or 3.3V (FALSE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    RK808_LDO_CONFIGURATION Configuration;
+    KSTATUS Status;
+    ULONG Value;
+
+    if ((Device->Ldo != 0) && (Device->Rk808 != NULL)) {
+        RtlZeroMemory(&Configuration, sizeof(RK808_LDO_CONFIGURATION));
+        Configuration.Flags = RK808_LDO_ENABLED | RK808_LDO_OFF_IN_SLEEP;
+        Configuration.ActiveVoltage = 3300;
+        if (LowVoltage != FALSE) {
+            Configuration.ActiveVoltage = 1800;
+        }
+
+        Status = Device->Rk808->SetLdo(Device->Rk808,
+                                       Device->Ldo,
+                                       &Configuration);
+
+        if (!KSUCCESS(Status)) {
+            return Status;
+        }
+    }
+
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcUhs);
+    if (LowVoltage != FALSE) {
+        Value |= SD_DWC_UHS_VOLTAGE_1V8;
+
+    } else {
+        Value = 0;
+    }
+
+    SD_DWC_WRITE_REGISTER(Device, SdDwcUhs, Value);
+    return Status;
 }
 

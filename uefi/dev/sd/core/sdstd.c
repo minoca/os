@@ -182,7 +182,7 @@ Return Value:
 
         if (Controller->Voltages == 0) {
             if ((Capabilities & SD_CAPABILITY_VOLTAGE_1V8) != 0) {
-                Controller->Voltages |= SD_VOLTAGE_165_195;
+                Controller->Voltages |= SD_VOLTAGE_165_195 | SD_VOLTAGE_18;
             }
 
             if ((Capabilities & SD_CAPABILITY_VOLTAGE_3V0) != 0) {
@@ -215,8 +215,8 @@ Return Value:
 
             HostControl = SD_HOST_CONTROL_POWER_3V0;
 
-        } else if ((Controller->Voltages & SD_VOLTAGE_165_195) ==
-                   SD_VOLTAGE_165_195) {
+        } else if ((Controller->Voltages &
+                    (SD_VOLTAGE_165_195 | SD_VOLTAGE_18)) != 0) {
 
             HostControl = SD_HOST_CONTROL_POWER_1V8;
 

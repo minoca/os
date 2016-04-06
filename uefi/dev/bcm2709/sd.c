@@ -468,10 +468,7 @@ Return Value:
     SdParameters.StandardControllerBase =
                                        (VOID *)DevicePath->Disk.ControllerBase;
 
-    SdParameters.Voltages = SD_VOLTAGE_32_33 |
-                            SD_VOLTAGE_33_34 |
-                            SD_VOLTAGE_165_195;
-
+    SdParameters.Voltages = SD_VOLTAGE_32_33 | SD_VOLTAGE_33_34;
     SdParameters.HostCapabilities = SD_MODE_4BIT |
                                     SD_MODE_RESPONSE136_SHIFTED |
                                     SD_MODE_HIGH_SPEED |

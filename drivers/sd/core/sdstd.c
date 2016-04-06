@@ -84,6 +84,7 @@ SD_FUNCTION_TABLE SdStdFunctionTable = {
     SdStandardSendCommand,
     SdStandardGetSetBusWidth,
     SdStandardGetSetClockSpeed,
+    SdStandardGetSetVoltage,
     SdStandardStopDataTransfer,
     NULL,
     NULL,
@@ -731,7 +732,7 @@ Return Value:
 
         if (Controller->Voltages == 0) {
             if ((Capabilities & SD_CAPABILITY_VOLTAGE_1V8) != 0) {
-                Controller->Voltages |= SD_VOLTAGE_165_195;
+                Controller->Voltages |= SD_VOLTAGE_165_195 | SD_VOLTAGE_18;
             }
 
             if ((Capabilities & SD_CAPABILITY_VOLTAGE_3V0) != 0) {
@@ -764,8 +765,8 @@ Return Value:
 
             HostControl = SD_HOST_CONTROL_POWER_3V0;
 
-        } else if ((Controller->Voltages & SD_VOLTAGE_165_195) ==
-                   SD_VOLTAGE_165_195) {
+        } else if ((Controller->Voltages &
+                    (SD_VOLTAGE_165_195 | SD_VOLTAGE_18)) != 0) {
 
             HostControl = SD_HOST_CONTROL_POWER_1V8;
 
@@ -1285,8 +1286,8 @@ Arguments:
     Context - Supplies a context pointer passed to the SD/MMC library upon
         creation of the controller.
 
-    Set - Supplies a boolean indicating whether the bus width should be queried
-        or set.
+    Set - Supplies a boolean indicating whether the clock speed should be
+        queried (FALSE) or set (TRUE).
 
 Return Value:
 
@@ -1387,6 +1388,146 @@ Return Value:
 
     ClockControl |= SD_CLOCK_CONTROL_SD_CLOCK_ENABLE;
     SD_WRITE_REGISTER(Controller, SdRegisterClockControl, ClockControl);
+    return STATUS_SUCCESS;
+}
+
+SD_API
+KSTATUS
+SdStandardGetSetVoltage (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    BOOL Set
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the bus voltage. The bus voltage is
+    stored in the controller structure.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Set - Supplies a boolean indicating whether the bus voltage should be
+        queried (FALSE) or set (TRUE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG Clock;
+    ULONG Host1;
+    ULONG Host2;
+    ULONG PresentState;
+
+    if (Set == FALSE) {
+        Host2 = SD_READ_REGISTER(Controller, SdRegisterControlStatus2);
+        if ((Host2 & SD_CONTROL_STATUS2_1_8V_ENABLE) != 0) {
+            Controller->CurrentVoltage = SdVoltage1V8;
+
+        } else {
+            Controller->CurrentVoltage = SdVoltage3V3;
+        }
+
+        return STATUS_SUCCESS;
+    }
+
+    //
+    // Stop the clock.
+    //
+
+    Clock = SD_READ_REGISTER(Controller, SdRegisterClockControl);
+    Clock &= ~SD_CLOCK_CONTROL_SD_CLOCK_ENABLE;
+    SD_WRITE_REGISTER(Controller, SdRegisterClockControl, Clock);
+
+    //
+    // If it's trying to go back to 3V, then flip it, wait and go.
+    //
+
+    if (Controller->CurrentVoltage != SdVoltage1V8) {
+        Host2 = SD_READ_REGISTER(Controller, SdRegisterControlStatus2);
+        Host2 &= ~SD_CONTROL_STATUS2_1_8V_ENABLE;
+        SD_WRITE_REGISTER(Controller, SdRegisterControlStatus2, Host2);
+        HlBusySpin(10000);
+        Clock |= SD_CLOCK_CONTROL_SD_CLOCK_ENABLE;
+        SD_WRITE_REGISTER(Controller, SdRegisterClockControl, Clock);
+        return STATUS_SUCCESS;
+    }
+
+    ASSERT((Controller->Voltages & (SD_VOLTAGE_165_195 | SD_VOLTAGE_18)) != 0);
+
+    //
+    // Check that DAT[3:0] are clear.
+    //
+
+    PresentState = SD_READ_REGISTER(Controller, SdRegisterPresentState);
+    if ((PresentState & SD_STATE_DATA_LINE_LEVEL_MASK) != 0) {
+        return STATUS_NOT_READY;
+    }
+
+    //
+    // Set 1.8V signalling enable.
+    //
+
+    if (Controller->HostVersion > SdHostVersion2) {
+        Host2 = SD_READ_REGISTER(Controller, SdRegisterControlStatus2);
+        Host2 |= SD_CONTROL_STATUS2_1_8V_ENABLE;
+        SD_WRITE_REGISTER(Controller, SdRegisterControlStatus2, Host2);
+    }
+
+    Host1 = SD_READ_REGISTER(Controller, SdRegisterHostControl);
+    Host1 &= ~SD_HOST_CONTROL_POWER_MASK;
+    Host1 |= SD_HOST_CONTROL_POWER_1V8;
+    SD_WRITE_REGISTER(Controller, SdRegisterHostControl, Host1);
+
+    //
+    // Wait at least 5 milliseconds as per spec.
+    //
+
+    HlBusySpin(10000);
+
+    //
+    // Re-enable the SD clock.
+    //
+
+    Clock |= SD_CLOCK_CONTROL_SD_CLOCK_ENABLE;
+    SD_WRITE_REGISTER(Controller, SdRegisterClockControl, Clock);
+
+    //
+    // Wait at least 1ms as per spec.
+    //
+
+    HlBusySpin(2000);
+
+    //
+    // Ensure that the DAT lines are all set.
+    //
+
+    PresentState = SD_READ_REGISTER(Controller, SdRegisterPresentState);
+    if ((PresentState & SD_STATE_DATA_LINE_LEVEL_MASK) !=
+        SD_STATE_DATA_LINE_LEVEL_MASK) {
+
+        RtlDebugPrint("SD: DAT[3:0] didn't confirm 1.8V switch.\n");
+        Host1 = SD_READ_REGISTER(Controller, SdRegisterHostControl);
+        Host1 &= ~(SD_HOST_CONTROL_POWER_ENABLE | SD_HOST_CONTROL_POWER_MASK);
+        Host1 |= SD_HOST_CONTROL_POWER_3V3;
+        SD_WRITE_REGISTER(Controller, SdRegisterHostControl, Host1);
+        return STATUS_NOT_INITIALIZED;
+    }
+
+    //
+    // The voltage switch is complete and the card accepted it.
+    //
+
     return STATUS_SUCCESS;
 }
 

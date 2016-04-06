@@ -413,10 +413,7 @@ Return Value:
 
     EfiSetMem(&SdDwcParameters, sizeof(EFI_SD_DWC_INITIALIZATION_BLOCK), 0);
     SdDwcParameters.ControllerBase = Disk->ControllerBase;
-    SdDwcParameters.Voltages = SD_VOLTAGE_165_195 |
-                               SD_VOLTAGE_32_33 |
-                               SD_VOLTAGE_33_34;
-
+    SdDwcParameters.Voltages = SD_VOLTAGE_32_33 | SD_VOLTAGE_33_34;
     SdDwcParameters.HostCapabilities = SD_MODE_4BIT |
                                        SD_MODE_HIGH_SPEED |
                                        SD_MODE_AUTO_CMD12;

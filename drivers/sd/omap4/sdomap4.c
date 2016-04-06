@@ -1293,10 +1293,7 @@ Return Value:
         Parameters.StandardControllerBase =
                Device->ControllerBase + SD_OMAP4_CONTROLLER_SD_REGISTER_OFFSET;
 
-        Parameters.Voltages = SD_VOLTAGE_29_30 |
-                              SD_VOLTAGE_30_31 |
-                              SD_VOLTAGE_165_195;
-
+        Parameters.Voltages = SD_VOLTAGE_29_30 | SD_VOLTAGE_30_31;
         Parameters.HostCapabilities = SD_MODE_4BIT |
                                       SD_MODE_8BIT |
                                       SD_MODE_HIGH_SPEED |

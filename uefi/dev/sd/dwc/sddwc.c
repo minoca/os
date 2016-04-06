@@ -646,8 +646,8 @@ Return Value:
 
             Voltage |= SD_DWC_UHS_VOLTAGE_3V3;
 
-        } else if ((DwcController->Voltages & SD_VOLTAGE_165_195) ==
-                   SD_VOLTAGE_165_195) {
+        } else if ((DwcController->Voltages &
+                    (SD_VOLTAGE_165_195 | SD_VOLTAGE_18)) != 0) {
 
             Voltage |= SD_DWC_UHS_VOLTAGE_1V8;
 

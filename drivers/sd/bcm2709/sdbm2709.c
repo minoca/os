@@ -1645,10 +1645,7 @@ Return Value:
         RtlZeroMemory(&Parameters, sizeof(SD_INITIALIZATION_BLOCK));
         Parameters.ConsumerContext = Slot;
         Parameters.StandardControllerBase = Slot->ControllerBase;
-        Parameters.Voltages = SD_VOLTAGE_32_33 |
-                              SD_VOLTAGE_33_34 |
-                              SD_VOLTAGE_165_195;
-
+        Parameters.Voltages = SD_VOLTAGE_32_33 | SD_VOLTAGE_33_34;
         Parameters.HostCapabilities = SD_MODE_AUTO_CMD12 |
                                       SD_MODE_4BIT |
                                       SD_MODE_RESPONSE136_SHIFTED |

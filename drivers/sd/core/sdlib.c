@@ -286,6 +286,11 @@ Return Value:
                                            SdStdFunctionTable.GetSetClockSpeed;
         }
 
+        if (Controller->FunctionTable.GetSetVoltage == NULL) {
+            Controller->FunctionTable.GetSetVoltage =
+                                              SdStdFunctionTable.GetSetVoltage;
+        }
+
         if (Controller->FunctionTable.StopDataTransfer == NULL) {
             Controller->FunctionTable.StopDataTransfer =
                                            SdStdFunctionTable.StopDataTransfer;
@@ -447,6 +452,7 @@ Return Value:
     Controller->MaxBlocksPerTransfer = SD_MAX_BLOCK_COUNT;
     Controller->BusWidth = 1;
     Controller->ClockSpeed = SdClock400kHz;
+    Controller->CurrentVoltage = SdVoltage3V3;
     Status = SdpSetBusParameters(Controller);
     if (!KSUCCESS(Status)) {
         goto InitializeControllerEnd;
@@ -904,6 +910,15 @@ Return Value:
         goto ErrorRecoveryEnd;
     }
 
+    if (Controller->ClockSpeed > SdClock25MHz) {
+        RtlDebugPrint("SD: Clocking down to 25MHz.\n");
+        Controller->ClockSpeed = SdClock25MHz;
+        Status = SdpSetBusParameters(Controller);
+        if (!KSUCCESS(Status)) {
+            goto ErrorRecoveryEnd;
+        }
+    }
+
 ErrorRecoveryEnd:
     return Status;
 }
@@ -1222,6 +1237,17 @@ Return Value:
                                   (Controller->Voltages &
                                    SD_OPERATING_CONDITION_VOLTAGE_MASK) |
                                   SD_OPERATING_CONDITION_ACCESS_MODE;
+
+                    //
+                    // Attempt to switch to 1.8V if both the card and the
+                    // controller support it. In SD there is no 1.65 - 1.95
+                    // bits, and the 1.8V bit is a request bit, not a bit the
+                    // card advertises.
+                    //
+
+                    if ((Controller->Voltages & SD_VOLTAGE_18) != 0) {
+                        Command.CommandArgument |= SD_OPERATING_CONDITION_1_8V;
+                    }
                 }
 
                 if (Controller->Version == SdVersion2) {
@@ -1284,6 +1310,51 @@ Return Value:
 
     if ((Command.Response[0] & SD_OPERATING_CONDITION_HIGH_CAPACITY) != 0) {
         RtlAtomicOr32(&(Controller->Flags), SD_CONTROLLER_FLAG_HIGH_CAPACITY);
+    }
+
+    //
+    // If the card agrees to switch to 1.8V, perform a CMD11 and switch.
+    //
+
+    if ((Command.Response[0] & SD_OPERATING_CONDITION_1_8V) != 0) {
+        Command.Command = SdCommandVoltageSwitch;
+        Command.ResponseType = SD_RESPONSE_R1;
+        Command.CommandArgument = 0;
+        Status = Controller->FunctionTable.SendCommand(
+                                               Controller,
+                                               Controller->ConsumerContext,
+                                               &Command);
+
+        //
+        // On failure to send CMD11, reset (power cycle) the controller and
+        // don't try for 1.8V again.
+        //
+
+        if (!KSUCCESS(Status)) {
+            RtlDebugPrint("SD: Failed to set 1.8V CMD11: %x.\n", Status);
+            Controller->FunctionTable.ResetController(
+                                               Controller,
+                                               Controller->ConsumerContext,
+                                               SD_RESET_FLAG_ALL);
+
+            goto WaitForCardToInitializeEnd;
+        }
+
+        //
+        // The card seems to need a break in here.
+        //
+
+        HlBusySpin(2000);
+        Controller->CurrentVoltage = SdVoltage1V8;
+        Status = Controller->FunctionTable.GetSetVoltage(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   TRUE);
+
+        if (!KSUCCESS(Status)) {
+            RtlDebugPrint("SD: Failed to set 1.8V: %x\n", Status);
+            goto WaitForCardToInitializeEnd;
+        }
     }
 
     Status = STATUS_SUCCESS;
@@ -2864,6 +2935,10 @@ Return Value:
     }
 
 AsynchronousAbortEnd:
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("SD: Error Recovery failed: %x\n", Status);
+    }
+
     return Status;
 }
 

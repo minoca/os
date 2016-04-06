@@ -45,6 +45,7 @@ Author:
 #define SD_VOLTAGE_33_34    0x00200000
 #define SD_VOLTAGE_34_35    0x00400000
 #define SD_VOLTAGE_35_36    0x00800000
+#define SD_VOLTAGE_18       0x01000000
 
 //
 // SD block size/count registeer definitions.
@@ -281,7 +282,7 @@ Author:
 
 #define SD_CAPABILITY2_SDR50                         (1 << 0)
 #define SD_CAPABILITY2_SDR104                        (1 << 1)
-#define SD_CAPABILITY2_SDDR50                        (1 << 2)
+#define SD_CAPABILITY2_DDR50                         (1 << 2)
 #define SD_CAPABILITY2_DRIVER_TYPE_A                 (1 << 4)
 #define SD_CAPABILITY2_DRIVER_TYPE_C                 (1 << 5)
 #define SD_CAPABILITY2_DRIVER_TYPE_D                 (1 << 6)
@@ -289,6 +290,32 @@ Author:
 #define SD_CAPABILITY2_USE_TUNING_SDR50              (1 << 13)
 #define SD_CAPABILITY2_RETUNING_MODE_MASK            (0x3 << 14)
 #define SD_CAPABILITY2_CLOCK_MULTIPLIER_SHIFT        16
+
+//
+// Auto CMD Error Status Register and Host Control 2 Register bits.
+//
+
+#define SD_CONTROL_STATUS2_AUTO_CMD12_NOT_EXECUTED  (1 << 0)
+#define SD_CONTROL_STATUS2_AUTO_CMD_TIMEOUT         (1 << 1)
+#define SD_CONTROL_STATUS2_AUTO_CMD_CRC_ERROR       (1 << 2)
+#define SD_CONTROL_STATUS2_AUTO_CMD_END_BIT_ERROR   (1 << 3)
+#define SD_CONTROL_STATUS2_AUTO_CMD_INDEX_ERROR     (1 << 4)
+#define SD_CONTROL_STATUS2_AUTO_CMD_NOT_ISSUED      (1 << 7)
+
+#define SD_CONTROL_STATUS2_MODE_SDR12               (0x0 << 16)
+#define SD_CONTROL_STATUS2_MODE_SDR25               (0x1 << 16)
+#define SD_CONTROL_STATUS2_MODE_SDR50               (0x2 << 16)
+#define SD_CONTROL_STATUS2_MODE_SDR104              (0x3 << 16)
+#define SD_CONTROL_STATUS2_MODE_DDR50               (0x4 << 16)
+#define SD_CONTROL_STATUS2_1_8V_ENABLE              (1 << 19)
+#define SD_CONTROL_STATUS2_DRIVER_B                 (0x0 << 20)
+#define SD_CONTROL_STATUS2_DRIVER_A                 (0x1 << 20)
+#define SD_CONTROL_STATUS2_DRIVER_C                 (0x2 << 20)
+#define SD_CONTROL_STATUS2_DRIVER_D                 (0x3 << 20)
+#define SD_CONTROL_STATUS2_EXECUTE_TUNING           (1 << 22)
+#define SD_CONTROL_STATUS2_SAMPLING_CLOCK_SELECT    (1 << 23)
+#define SD_CONTROL_STATUS2_ASYNC_INTERRUPTS         (1 << 30)
+#define SD_CONTROL_STATUS2_PRESET_VALUE_ENABLE      (1 << 31)
 
 //
 // SD Host controller version register definitions.
@@ -304,6 +331,7 @@ Author:
 #define SD_OPERATING_CONDITION_HIGH_CAPACITY    0x40000000
 #define SD_OPERATING_CONDITION_VOLTAGE_MASK     0x007FFF80
 #define SD_OPERATING_CONDITION_ACCESS_MODE      0x60000000
+#define SD_OPERATING_CONDITION_1_8V             0x01000000
 
 //
 // SD configuration register values.
@@ -566,6 +594,7 @@ typedef enum _SD_COMMAND_VALUE {
     SdCommandMmcSendExtendedCardSpecificData = 8,
     SdCommandSendCardSpecificData            = 9,
     SdCommandSendCardIdentification          = 10,
+    SdCommandVoltageSwitch                   = 11,
     SdCommandStopTransmission                = 12,
     SdCommandSendStatus                      = 13,
     SdCommandSetBlockLength                  = 16,

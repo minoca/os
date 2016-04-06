@@ -369,24 +369,171 @@ DefinitionBlock (
 
                 Interrupt(, Level, ActiveHigh,) {76}
             })
-
-            Device(GOEC) {
-                Name(_HID, "GOO0001")
-                Name(_UID, 0)
-                Method(_STA, 0, NotSerialized) {
-                    Return(0x0F)
-                }
-
-                Name(_CRS, ResourceTemplate() {
-                    SPISerialBus(0x1, , , 8, , 3000000, ClockPolarityLow,
-                                 ClockPhaseFirst, "\\_SB_SPI0", , ,)
-
-                    GpioInt(Level, ActiveLow, Shared, PullUp, ,
-                            "\\_SB_GPI7") {7}
-                })
-            }
         }
 
+        Device(I2C0) {
+            Name(_HID, "RKC0003")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0xFF650000,
+                            0xFF650FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {92}
+            })
+        }
+
+        Device(I2C1) {
+            Name(_HID, "RKC0003")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0xFF140000,
+                            0xFF140FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {94}
+            })
+        }
+
+        Device(I2C2) {
+            Name(_HID, "RKC0003")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0xFF660000,
+                            0xFF660FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {93}
+            })
+        }
+
+        Device(I2C3) {
+            Name(_HID, "RKC0003")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0xFF150000,
+                            0xFF150FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {95}
+            })
+        }
+
+        Device(I2C4) {
+            Name(_HID, "RKC0003")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0xFF160000,
+                            0xFF160FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {96}
+            })
+        }
+
+        Device(I2C5) {
+            Name(_HID, "RKC0003")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0xFF170000,
+                            0xFF170FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {97}
+            })
+        }
+    }
+
+    Scope(\_SB.SPI0) {
+        Device(GOEC) {
+            Name(_HID, "GOO0001")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                SPISerialBus(0x1, , , 8, , 3000000, ClockPolarityLow,
+                             ClockPhaseFirst, "\\_SB_SPI0", , ,)
+
+                GpioInt(Level, ActiveLow, Shared, PullUp, ,
+                        "\\_SB_GPI7") {7}
+            })
+        }
+    }
+
+    Scope(\_SB.I2C0) {
+        Device(PMIC) {
+            Name(_HID, "RKC0808")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                I2CSerialBus(0x1B, ControllerInitiated, 400000,
+                             AddressingMode7Bit, "\\_SB_I2C0", , , , )
+
+                GpioInt(Level, ActiveLow, Shared, PullUp, ,
+                        "\\_SB_GPI0") {4}
+            })
+        }
+    }
+
+    //
+    // Define SD and eMMC under the PMIC since it's needed to provide 1.8V
+    // switching.
+    //
+
+    Scope(\_SB.I2C0.PMIC) {
         Device(SDMC) {
             Name(_HID, "RKC0D40")
             Name(_UID, 0)
@@ -412,6 +559,7 @@ DefinitionBlock (
                     0x0C, 0x32, 0x39, 0x94, 0xE5, 0x11, 0xFA, 0xC6, // UUID
                     0x0B, 0xBA, 0x12, 0x99, 0x8E, 0xC1, 0x83, 0x04, // UUID
                     0xC0, 0x9E, 0xE6, 0x05, // FundamentalClock (99MHz)
+                    0x05, 0x00, 0x00, 0x00, // LDO
                 }
             })
         }
@@ -438,6 +586,7 @@ DefinitionBlock (
                     0x0C, 0x32, 0x39, 0x94, 0xE5, 0x11, 0xFA, 0xC6, // UUID
                     0x0B, 0xBA, 0x12, 0x99, 0x8E, 0xC1, 0x83, 0x04, // UUID
                     0xC0, 0x9E, 0xE6, 0x05, // FundamentalClock (99MHz)
+                    0x00, 0x00, 0x00, 0x00, // LDO
                 }
             })
         }
