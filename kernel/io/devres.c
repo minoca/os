@@ -1045,6 +1045,7 @@ Return Value:
     NewAllocation->Characteristics = Allocation->Characteristics;
     NewAllocation->Flags = Allocation->Flags;
     NewAllocation->OwningAllocation = Allocation->OwningAllocation;
+    NewAllocation->Provider = Allocation->Provider;
     if (DataSize != 0) {
         NewAllocation->Data = NewAllocation + 1;
         NewAllocation->DataSize = DataSize;
@@ -1758,6 +1759,7 @@ Return Value:
     CreatedRequirement->OwningRequirement =
                                         RequirementTemplate->OwningRequirement;
 
+    CreatedRequirement->Provider = RequirementTemplate->Provider;
     if (DataSize != 0) {
         CreatedRequirement->Data = CreatedRequirement + 1;
         RtlCopyMemory(CreatedRequirement->Data,

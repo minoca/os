@@ -882,6 +882,9 @@ Return Value:
         Allocation.Length = Requirement->Length;
         Allocation.Characteristics = Requirement->Characteristics;
         Allocation.Flags = Requirement->Flags;
+        Allocation.Data = Requirement->Data;
+        Allocation.DataSize = Requirement->DataSize;
+        Allocation.Provider = Requirement->Provider;
 
         ASSERT(Requirement->Minimum + Requirement->Length <=
                Requirement->Maximum);
