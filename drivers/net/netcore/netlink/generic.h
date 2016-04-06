@@ -42,6 +42,10 @@ Members:
 
     ReferenceCount - Stores the number of references take on the family.
 
+    MulticastGroupOffset - Stores the offset into the entire generic netlink
+        multicast group ID namespace where this family's multicast group IDs
+        begin.
+
     Properties - Stores the generic netlink family properties, including its ID
         name, and interface.
 
@@ -50,6 +54,7 @@ Members:
 typedef struct _NETLINK_GENERIC_FAMILY {
     RED_BLACK_TREE_NODE TreeNode;
     volatile ULONG ReferenceCount;
+    ULONG MulticastGroupOffset;
     NETLINK_GENERIC_FAMILY_PROPERTIES Properties;
 } NETLINK_GENERIC_FAMILY, *PNETLINK_GENERIC_FAMILY;
 

@@ -444,6 +444,7 @@ Return Value:
 
 {
 
+    PNET_SOCKET NetSocket;
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     PRAW_SOCKET RawSocket;
     KSTATUS Status;
@@ -451,6 +452,7 @@ Return Value:
     ASSERT(ProtocolEntry->Type == NetSocketRaw);
     ASSERT(ProtocolEntry->ParentProtocolNumber == SOCKET_INTERNET_PROTOCOL_RAW);
 
+    NetSocket = NULL;
     RawSocket = MmAllocatePagedPool(sizeof(RAW_SOCKET),
                                     RAW_PROTOCOL_ALLOCATION_TAG);
 
@@ -460,8 +462,9 @@ Return Value:
     }
 
     RtlZeroMemory(RawSocket, sizeof(RAW_SOCKET));
-    RawSocket->NetSocket.KernelSocket.Protocol = NetworkProtocol;
-    RawSocket->NetSocket.KernelSocket.ReferenceCount = 1;
+    NetSocket = &(RawSocket->NetSocket);
+    NetSocket->KernelSocket.Protocol = NetworkProtocol;
+    NetSocket->KernelSocket.ReferenceCount = 1;
     INITIALIZE_LIST_HEAD(&(RawSocket->ReceivedPacketList));
     RawSocket->ReceiveTimeout = WAIT_TIME_INDEFINITE;
     RawSocket->ReceiveBufferTotalSize = RAW_DEFAULT_RECEIVE_BUFFER_SIZE;
@@ -481,12 +484,12 @@ Return Value:
 
     ASSERT(RAW_MAX_PACKET_SIZE == MAX_ULONG);
 
-    PacketSizeInformation = &(RawSocket->NetSocket.PacketSizeInformation);
+    PacketSizeInformation = &(NetSocket->PacketSizeInformation);
     PacketSizeInformation->MaxPacketSize = RAW_MAX_PACKET_SIZE;
     Status = NetworkEntry->Interface.InitializeSocket(ProtocolEntry,
                                                       NetworkEntry,
                                                       NetworkProtocol,
-                                                      &(RawSocket->NetSocket));
+                                                      NetSocket);
 
     if (!KSUCCESS(Status)) {
         goto RawCreateSocketEnd;
@@ -503,10 +506,11 @@ RawCreateSocketEnd:
 
             MmFreePagedPool(RawSocket);
             RawSocket = NULL;
+            NetSocket = NULL;
         }
     }
 
-    *NewSocket = &(RawSocket->NetSocket);
+    *NewSocket = NetSocket;
     return Status;
 }
 
@@ -600,10 +604,7 @@ Return Value:
 {
 
     ULONG OriginalPort;
-    PRAW_SOCKET RawSocket;
     KSTATUS Status;
-
-    RawSocket = (PRAW_SOCKET)Socket;
 
     //
     // Allow raw sockets to get bound multiple times, unless they are already
@@ -652,9 +653,7 @@ Return Value:
         goto RawBindToAddressEnd;
     }
 
-    IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                       POLL_EVENT_OUT,
-                       TRUE);
+    IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
 
 RawBindToAddressEnd:
     return Status;
@@ -750,10 +749,7 @@ Return Value:
 {
 
     ULONG OriginalPort;
-    PRAW_SOCKET RawSocket;
     KSTATUS Status;
-
-    RawSocket = (PRAW_SOCKET)Socket;
 
     //
     // The port doesn't make a different on raw sockets, so zero it out.
@@ -772,11 +768,7 @@ Return Value:
         goto RawConnectEnd;
     }
 
-    IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                       POLL_EVENT_OUT,
-                       TRUE);
-
-    Status = STATUS_SUCCESS;
+    IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
 
 RawConnectEnd:
     return Status;
@@ -869,17 +861,12 @@ Return Value:
 
     if ((ShutdownType & SOCKET_SHUTDOWN_READ) != 0) {
         KeAcquireQueuedLock(RawSocket->ReceiveLock);
-        IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                           POLL_EVENT_IN,
-                           TRUE);
-
+        IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_IN, TRUE);
         KeReleaseQueuedLock(RawSocket->ReceiveLock);
     }
 
     if ((ShutdownType & SOCKET_SHUTDOWN_WRITE) != 0) {
-        IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                           POLL_EVENT_OUT,
-                           TRUE);
+        IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
     }
 
     return STATUS_SUCCESS;
@@ -1274,10 +1261,7 @@ Return Value:
         // One packet is always enough to notify a waiting receiver.
         //
 
-        IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
-                           POLL_EVENT_IN,
-                           TRUE);
-
+        IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_IN, TRUE);
         RawPacket = NULL;
 
     } else {
@@ -1348,7 +1332,6 @@ Return Value:
     ULONGLONG CurrentTime;
     ULONGLONG EndTime;
     ULONG Flags;
-    PIO_OBJECT_STATE IoState;
     BOOL LockHeld;
     PRAW_RECEIVED_PACKET Packet;
     PLIST_ENTRY PacketEntry;
@@ -1431,8 +1414,7 @@ Return Value:
         // packet available.
         //
 
-        IoState = RawSocket->NetSocket.KernelSocket.IoState;
-        Status = IoWaitForIoObjectState(IoState,
+        Status = IoWaitForIoObjectState(Socket->KernelSocket.IoState,
                                         POLL_EVENT_IN,
                                         TRUE,
                                         WaitTime,
@@ -1447,7 +1429,7 @@ Return Value:
                 Status = STATUS_NO_NETWORK_CONNECTION;
 
             } else {
-                Status = NET_SOCKET_GET_LAST_ERROR(&(RawSocket->NetSocket));
+                Status = NET_SOCKET_GET_LAST_ERROR(Socket);
                 if (KSUCCESS(Status)) {
                     Status = STATUS_DEVICE_IO_ERROR;
                 }
@@ -1552,7 +1534,7 @@ Return Value:
             //
 
             if (LIST_EMPTY(&(RawSocket->ReceivedPacketList)) != FALSE) {
-                IoSetIoObjectState(RawSocket->NetSocket.KernelSocket.IoState,
+                IoSetIoObjectState(Socket->KernelSocket.IoState,
                                    POLL_EVENT_IN,
                                    FALSE);
             }

@@ -678,7 +678,7 @@ Return Value:
     ULONG MessageOffset;
     PSTR Password;
     UINTN PasswordLength;
-    PNETLINK_SOCKET Socket;
+    PNETLINK_LIBRARY_SOCKET Socket;
     UINTN SsidLength;
     INT Status;
 
@@ -868,7 +868,7 @@ Return Value:
     PNETLINK_MESSAGE_BUFFER Message;
     ULONG MessageLength;
     ULONG MessageOffset;
-    PNETLINK_SOCKET Socket;
+    PNETLINK_LIBRARY_SOCKET Socket;
     INT Status;
 
     Status = NetlinkCreateSocket(NETLINK_GENERIC,

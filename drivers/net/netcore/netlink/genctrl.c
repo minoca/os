@@ -76,6 +76,8 @@ NETLINK_GENERIC_FAMILY_PROPERTIES NetNetlinkGenericControlFamily = {
     NetNetlinkGenericControlCommands,
     sizeof(NetNetlinkGenericControlCommands) /
     sizeof(NetNetlinkGenericControlCommands[0]),
+    NULL,
+    0
 };
 
 //

@@ -53,7 +53,7 @@ Environment:
 NETLINK_API
 INT
 NetlinkGenericFillOutHeader (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     UCHAR Command,
     UCHAR Version
@@ -107,7 +107,7 @@ Return Value:
 NETLINK_API
 INT
 NetlinkGenericGetFamilyId (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PSTR FamilyName,
     PUSHORT FamilyId
     )

@@ -41,6 +41,8 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
+#define NETLINK_ALLOCATION_TAG 0x694C654E // 'iLeN'
+
 //
 // Define the maximum size of an netlink address string, including the null
 // terminator. The longest string would look something like
@@ -144,6 +146,15 @@ NetpNetlinkProcessReceivedPackets (
     );
 
 VOID
+NetpNetlinkProcessReceivedSocketData (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    );
+
+VOID
 NetpNetlinkProcessReceivedKernelData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
@@ -160,9 +171,25 @@ NetpNetlinkSendAck (
     KSTATUS PacketStatus
     );
 
+KSTATUS
+NetpNetlinkJoinMulticastGroup (
+    PNET_SOCKET Socket,
+    ULONG GroupId
+    );
+
+VOID
+NetpNetlinkLeaveMulticastGroup (
+    PNET_SOCKET Socket,
+    ULONG GroupId,
+    BOOL LockHeld
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
+
+LIST_ENTRY NetNetlinkMulticastSocketList;
+PSHARED_EXCLUSIVE_LOCK NetNetlinkMulticastLock;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -193,6 +220,14 @@ Return Value:
 
     NET_NETWORK_ENTRY NetworkEntry;
     KSTATUS Status;
+
+    INITIALIZE_LIST_HEAD(&NetNetlinkMulticastSocketList);
+    NetNetlinkMulticastLock = KeCreateSharedExclusiveLock();
+    if (NetNetlinkMulticastLock == NULL) {
+
+        ASSERT(FALSE);
+
+    }
 
     //
     // Register the netlink handlers with the core networking library.
@@ -366,6 +401,7 @@ Return Value:
 
     ULONG BindingFlags;
     NET_LINK_LOCAL_ADDRESS LocalInformation;
+    PNETLINK_ADDRESS LocalNetlinkAddress;
     PNETLINK_ADDRESS NetlinkAddress;
     KSTATUS Status;
 
@@ -384,8 +420,8 @@ Return Value:
     //
 
     BindingFlags = 0;
+    NetlinkAddress = (PNETLINK_ADDRESS)Address;
     if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
-        NetlinkAddress = (PNETLINK_ADDRESS)Address;
         if (NetlinkAddress->Port != 0) {
             Status = STATUS_INVALID_PARAMETER;
             goto NetlinkBindToAddressEnd;
@@ -401,6 +437,15 @@ Return Value:
     RtlCopyMemory(&(LocalInformation.LocalAddress),
                   Address,
                   sizeof(NETWORK_ADDRESS));
+
+    //
+    // Do not allow netcore to bind to a group. This would prevent
+    // non-multicast packets from ever reaching this socket. Group bindings
+    // are handled separately below.
+    //
+
+    LocalNetlinkAddress = (PNETLINK_ADDRESS)&(LocalInformation.LocalAddress);
+    LocalNetlinkAddress->Group = 0;
 
     //
     // There are no "unbound" netlink sockets. The Port ID is either filled in
@@ -419,7 +464,17 @@ Return Value:
         goto NetlinkBindToAddressEnd;
     }
 
-    Status = STATUS_SUCCESS;
+    //
+    // If the request includes being bound to a group, then add this socket to
+    // the multicast group.
+    //
+
+    if (NetlinkAddress->Group != 0) {
+        Status = NetpNetlinkJoinMulticastGroup(Socket, NetlinkAddress->Group);
+        if (!KSUCCESS(Status)) {
+            goto NetlinkBindToAddressEnd;
+        }
+    }
 
 NetlinkBindToAddressEnd:
     return Status;
@@ -744,16 +799,16 @@ Return Value:
     NetlinkAddress = (PNETLINK_ADDRESS)Address;
 
     //
-    // If the buffer is present, print that bad boy out.
+    // If the group is present, print that bad boy out.
     //
 
-    if (NetlinkAddress->GroupMask != 0) {
+    if (NetlinkAddress->Group != 0) {
         Length = RtlPrintToString(Buffer,
                                   BufferLength,
                                   CharacterEncodingDefault,
                                   "%08x:%08x",
                                   NetlinkAddress->Port,
-                                  NetlinkAddress->GroupMask);
+                                  NetlinkAddress->Group);
 
     } else {
         Length = RtlPrintToString(Buffer,
@@ -898,6 +953,71 @@ SendMessageEnd:
     return Status;
 }
 
+NET_API
+VOID
+NetNetlinkRemoveSocketsFromMulticastGroups (
+    ULONG ParentProtocolNumber,
+    ULONG GroupOffset,
+    ULONG GroupCount
+    )
+
+/*++
+
+Routine Description:
+
+    This routine removes any socket listening for multicast message from the
+    groups specified by the offset and count. It will only match sockets for
+    the given protocol.
+
+Arguments:
+
+    ParentProtocolNumber - Supplies the protocol number of the protocol that
+        owns the given range of multicast groups.
+
+    GroupOffset - Supplies the offset into the multicast namespace for the
+        range of multicast groups from which the sockets should be removed.
+
+    GroupCount - Supplies the number of multicast groups from which the sockets
+        should be removed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    ULONG Index;
+    PNETLINK_SOCKET Socket;
+
+    if (LIST_EMPTY(&NetNetlinkMulticastSocketList) != FALSE) {
+        return;
+    }
+
+    KeAcquireSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
+    CurrentEntry = NetNetlinkMulticastSocketList.Next;
+    while (CurrentEntry != &NetNetlinkMulticastSocketList) {
+        Socket = LIST_VALUE(CurrentEntry, NETLINK_SOCKET, MulticastListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        if (Socket->NetSocket.Protocol->ParentProtocolNumber !=
+            ParentProtocolNumber) {
+
+            continue;
+        }
+
+        for (Index = 0; Index < GroupCount; Index += 1) {
+            NetpNetlinkLeaveMulticastGroup(&(Socket->NetSocket),
+                                           GroupOffset + Index,
+                                           TRUE);
+        }
+    }
+
+    KeReleaseSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -942,13 +1062,90 @@ Return Value:
 
 {
 
+    ULONG Count;
+    PNETLINK_ADDRESS Destination;
+    ULONG GroupIndex;
+    ULONG GroupMask;
+    PULONG MulticastBitmap;
+    PNETLINK_SOCKET NetlinkSocket;
     PNET_PACKET_BUFFER Packet;
-    PNET_PROTOCOL_PROCESS_RECEIVED_SOCKET_DATA ProcessReceivedSocketData;
+    PLIST_ENTRY PacketEntry;
     PNET_SOCKET Socket;
+    PLIST_ENTRY SocketEntry;
 
     //
-    // TODO: Handle multicast netlink messages.
+    // If a group ID is supplied in the address, then send the packet to all
+    // sockets listening to that multicast group. A socket must match on the
+    // protocol and have its bitmap set for the group. If a port is also
+    // specified in the address, do not send it to the socket with the port
+    // during multicast processing; fall through and do that at the end.
     //
+
+    Destination = (PNETLINK_ADDRESS)DestinationAddress;
+    if (Destination->Group != 0) {
+        PacketEntry = PacketList->Head.Next;
+        while (PacketEntry != &(PacketList->Head)) {
+            Packet = LIST_VALUE(PacketEntry, NET_PACKET_BUFFER, ListEntry);
+            Packet->Flags |= NET_PACKET_FLAG_MULTICAST;
+            GroupIndex = NETLINK_SOCKET_BITMAP_INDEX(Destination->Group);
+            GroupMask = NETLINK_SOCKET_BITMAP_MASK(Destination->Group);
+            KeAcquireSharedExclusiveLockShared(NetNetlinkMulticastLock);
+            SocketEntry = NetNetlinkMulticastSocketList.Next;
+            while (SocketEntry != &NetNetlinkMulticastSocketList) {
+                NetlinkSocket = LIST_VALUE(SocketEntry,
+                                             NETLINK_SOCKET,
+                                             MulticastListEntry);
+
+                Socket = &(NetlinkSocket->NetSocket);
+                SocketEntry = SocketEntry->Next;
+                if (Socket->Protocol != Protocol) {
+                    continue;
+                }
+
+                if (Socket->LocalAddress.Port == Destination->Port) {
+                    continue;
+                }
+
+                Count = NETLINK_SOCKET_BITMAP_GROUP_ID_COUNT(NetlinkSocket);
+                if (Destination->Group >= Count) {
+                    continue;
+                }
+
+                MulticastBitmap = NetlinkSocket->MulticastBitmap;
+                if ((MulticastBitmap[GroupIndex] & GroupMask) == 0) {
+                    continue;
+                }
+
+                //
+                // This needs to be reconsidered if kernel sockets are signed
+                // up for multicast groups. Kernel sockets are known to respond
+                // to requests with multicast messages as an event notification
+                // mechanism. This could potentially deadlock as the lock is
+                // held during packet processing.
+                //
+
+                ASSERT((Socket->Flags & NET_SOCKET_FLAG_KERNEL) == 0);
+
+                NetpNetlinkProcessReceivedSocketData(Link,
+                                                     Socket,
+                                                     Packet,
+                                                     SourceAddress,
+                                                     DestinationAddress);
+            }
+
+            KeReleaseSharedExclusiveLockShared(NetNetlinkMulticastLock);
+
+            //
+            // Clear out the multicast group and send it on to the socket
+            // specified by the port.
+            //
+
+            Packet->Flags &= ~NET_PACKET_FLAG_MULTICAST;
+            PacketEntry = PacketEntry->Next;
+        }
+
+        Destination->Group = 0;
+    }
 
     //
     // Find the socket targeted by the destination address.
@@ -967,7 +1164,6 @@ Return Value:
     // them.
     //
 
-    ProcessReceivedSocketData = Protocol->Interface.ProcessReceivedSocketData;
     while (NET_PACKET_LIST_EMPTY(PacketList) == FALSE) {
         Packet = LIST_VALUE(PacketList->Head.Next,
                             NET_PACKET_BUFFER,
@@ -977,30 +1173,84 @@ Return Value:
 
         ASSERT((Packet->Flags & NET_PACKET_FLAG_MULTICAST) == 0);
 
-        //
-        // Netlink handles kernel sockets differently in order to reduce code
-        // duplication for error handling and message acknowledgement.
-        //
-
-        if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
-            NetpNetlinkProcessReceivedKernelData(Link,
-                                                 Socket,
-                                                 Packet,
-                                                 SourceAddress,
-                                                 DestinationAddress);
-
-        } else {
-            ProcessReceivedSocketData(Link,
-                                      Socket,
-                                      Packet,
-                                      SourceAddress,
-                                      DestinationAddress);
-        }
+        NetpNetlinkProcessReceivedSocketData(Link,
+                                             Socket,
+                                             Packet,
+                                             SourceAddress,
+                                             DestinationAddress);
     }
 
 ProcessReceivedPacketsEnd:
     if (Socket != NULL) {
         IoSocketReleaseReference(&(Socket->KernelSocket));
+    }
+
+    return;
+}
+
+VOID
+NetpNetlinkProcessReceivedSocketData (
+    PNET_LINK Link,
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS SourceAddress,
+    PNETWORK_ADDRESS DestinationAddress
+    )
+
+/*++
+
+Routine Description:
+
+    This routine handles received packet processing for a netlink socket.
+
+Arguments:
+
+    Link - Supplies a pointer to the network link that received the packet.
+
+    Socket - Supplies a pointer to the socket that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        Use of this structure depends on its flags. If it is a multicast
+        packet, then it cannot be modified by this routine. Otherwise it can
+        be used as scratch space and modified.
+
+    SourceAddress - Supplies a pointer to the source (remote) address that the
+        packet originated from. This memory will not be referenced once the
+        function returns, it can be stack allocated.
+
+    DestinationAddress - Supplies a pointer to the destination (local) address
+        that the packet is heading to. This memory will not be referenced once
+        the function returns, it can be stack allocated.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET_PROTOCOL_ENTRY Protocol;
+
+    //
+    // Netlink handles kernel sockets differently in order to reduce code
+    // duplication for error handling and message acknowledgement.
+    //
+
+    if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
+        NetpNetlinkProcessReceivedKernelData(Link,
+                                             Socket,
+                                             Packet,
+                                             SourceAddress,
+                                             DestinationAddress);
+
+    } else {
+        Protocol = Socket->Protocol;
+        Protocol->Interface.ProcessReceivedSocketData(Link,
+                                                      Socket,
+                                                      Packet,
+                                                      SourceAddress,
+                                                      DestinationAddress);
     }
 
     return;
@@ -1019,8 +1269,7 @@ NetpNetlinkProcessReceivedKernelData (
 
 Routine Description:
 
-    This routine is called for a kernel socket to process a received packet
-    that was sent to it.
+    This routine is handles received packet processing for a kernel socket.
 
 Arguments:
 
@@ -1212,6 +1461,172 @@ Return Value:
     Parameters.Type = NETLINK_MESSAGE_TYPE_ERROR;
     NetNetlinkSendMessage(Socket, AckPacket, &Parameters);
     NetFreeBuffer(AckPacket);
+    return;
+}
+
+KSTATUS
+NetpNetlinkJoinMulticastGroup (
+    PNET_SOCKET Socket,
+    ULONG GroupId
+    )
+
+/*++
+
+Routine Description:
+
+    This routine joins a socket to a multicast group by updating the socket's
+    multicast group bitmap and adding the socket to the global list of socket's
+    joined to multicast groups.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket that is requesting to join a
+        multicast group.
+
+    GroupId - Supplies the ID of the multicast group to join.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG AlignedGroupId;
+    ULONG GroupCount;
+    ULONG GroupIndex;
+    ULONG GroupMask;
+    PNETLINK_SOCKET NetlinkSocket;
+    PULONG NewBitmap;
+    ULONG NewBitmapSize;
+    ULONG NewGroups;
+    PULONG ReleaseBitmap;
+
+    NetlinkSocket = (PNETLINK_SOCKET)Socket;
+    NewBitmap = NULL;
+    NewBitmapSize = 0;
+    NewGroups = 0;
+
+    //
+    // Expand the bitmap if necessary. The group ID should have been validated
+    // by the protocol layer before reaching this point in the stack.
+    //
+
+    GroupCount = NETLINK_SOCKET_BITMAP_GROUP_ID_COUNT(NetlinkSocket);
+    if (GroupId >= GroupCount) {
+        AlignedGroupId = ALIGN_RANGE_UP(GroupId + 1,
+                                        (sizeof(ULONG) * BITS_PER_BYTE));
+
+        NewGroups = AlignedGroupId - GroupCount;
+        NewBitmapSize = NetlinkSocket->MulticastBitmapSize +
+                        (NewGroups / BITS_PER_BYTE);
+
+        NewBitmap = MmAllocatePagedPool(NewBitmapSize, NETLINK_ALLOCATION_TAG);
+        if (NewBitmap == NULL) {
+            return STATUS_INSUFFICIENT_RESOURCES;
+        }
+    }
+
+    GroupIndex = NETLINK_SOCKET_BITMAP_INDEX(GroupId);
+    GroupMask = NETLINK_SOCKET_BITMAP_MASK(GroupId);
+    KeAcquireSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
+    if (GroupId >= NETLINK_SOCKET_BITMAP_GROUP_ID_COUNT(NetlinkSocket)) {
+
+        ASSERT(NewBitmapSize > NetlinkSocket->MulticastBitmapSize);
+
+        RtlCopyMemory(NewBitmap,
+                      NetlinkSocket->MulticastBitmap,
+                      NetlinkSocket->MulticastBitmapSize);
+
+        RtlZeroMemory((PVOID)NewBitmap + NetlinkSocket->MulticastBitmapSize,
+                      (NewGroups / BITS_PER_BYTE));
+
+        ReleaseBitmap = NetlinkSocket->MulticastBitmap;
+        NetlinkSocket->MulticastBitmap = NewBitmap;
+        NetlinkSocket->MulticastBitmapSize = NewBitmapSize;
+
+    } else {
+        ReleaseBitmap = NewBitmap;
+    }
+
+    if ((NetlinkSocket->MulticastBitmap[GroupIndex] & GroupMask) == 0) {
+        NetlinkSocket->MulticastBitmap[GroupIndex] |= GroupMask;
+        NetlinkSocket->MulticastGroupCount += 1;
+        if (NetlinkSocket->MulticastListEntry.Next == NULL) {
+            INSERT_AFTER(&(NetlinkSocket->MulticastListEntry),
+                         &NetNetlinkMulticastSocketList);
+        }
+    }
+
+    ASSERT(NetlinkSocket->MulticastListEntry.Next != NULL);
+
+    KeReleaseSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
+    if (ReleaseBitmap != NULL) {
+        MmFreePagedPool(ReleaseBitmap);
+    }
+
+    return STATUS_SUCCESS;
+}
+
+VOID
+NetpNetlinkLeaveMulticastGroup (
+    PNET_SOCKET Socket,
+    ULONG GroupId,
+    BOOL LockHeld
+    )
+
+/*++
+
+Routine Description:
+
+    This routine removes a socket from a multicast group.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket to remove from the group.
+
+    GroupId - Supplies the ID of the multicast group to leave.
+
+    LockHeld - Supplies a boolean indicating whether or not the global
+        multicast lock is already held.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG GroupIndex;
+    ULONG GroupMask;
+    PNETLINK_SOCKET NetlinkSocket;
+
+    NetlinkSocket = (PNETLINK_SOCKET)Socket;
+    if (GroupId >= NETLINK_SOCKET_BITMAP_GROUP_ID_COUNT(NetlinkSocket)) {
+        return;
+    }
+
+    GroupIndex = NETLINK_SOCKET_BITMAP_INDEX(GroupId);
+    GroupMask = NETLINK_SOCKET_BITMAP_MASK(GroupId);
+    if (LockHeld == FALSE) {
+        KeAcquireSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
+    }
+
+    if ((NetlinkSocket->MulticastBitmap[GroupIndex] & GroupMask) != 0) {
+        NetlinkSocket->MulticastBitmap[GroupIndex] &= ~GroupMask;
+        NetlinkSocket->MulticastGroupCount -= 1;
+        if (NetlinkSocket->MulticastGroupCount == 0) {
+            LIST_REMOVE(&(NetlinkSocket->MulticastListEntry));
+            NetlinkSocket->MulticastListEntry.Next = NULL;
+        }
+    }
+
+    if (LockHeld == FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
+    }
+
     return;
 }
 

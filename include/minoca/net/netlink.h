@@ -90,6 +90,30 @@ Author:
     ((PVOID)(_Header) + NETLINK_GENERIC_HEADER_LENGTH)
 
 //
+// This macro determines the index into an socket's multicast bitmap array for
+// a given multicast group ID.
+//
+
+#define NETLINK_SOCKET_BITMAP_INDEX(_GroupId) \
+    ((_GroupId) / (sizeof(ULONG) * BITS_PER_BYTE))
+
+//
+// This macro determines in the mask for a particular group ID within an
+// netlink socket's multicast bitmap.
+//
+
+#define NETLINK_SOCKET_BITMAP_MASK(_GroupId) \
+    (1 << ((_GroupId) % (sizeof(ULONG) * BITS_PER_BYTE)))
+
+//
+// This macro determines the number of group IDs that the socket multicast
+// bitmap currently supports.
+//
+
+#define NETLINK_SOCKET_BITMAP_GROUP_ID_COUNT(_Socket) \
+    ((_Socket)->MulticastBitmapSize * BITS_PER_BYTE)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -155,6 +179,12 @@ Author:
 //
 
 #define NETLINK_GENERIC_MAX_FAMILY_NAME_LENGTH 16
+
+//
+// Define the maximum length of a multicast group name.
+//
+
+#define NETLINK_GENERIC_MAX_MULTICAST_GROUP_NAME 16
 
 //
 // Define the standard generic netlink message types.
@@ -228,7 +258,7 @@ Members:
 
     Port - Stores the 32 bit port ID.
 
-    GroupMask - Stores the 32 bit group mask.
+    Group - Stores the 32 bit group ID.
 
     NetworkAddress - Stores the unioned opaque version, used to ensure the
         structure is the proper size.
@@ -240,7 +270,7 @@ typedef struct _NETLINK_ADDRESS {
         struct {
             NET_DOMAIN_TYPE Domain;
             ULONG Port;
-            ULONG GroupMask;
+            ULONG Group;
         };
 
         NETWORK_ADDRESS NetworkAddress;
@@ -449,6 +479,23 @@ typedef struct _NETLINK_GENERIC_COMMAND {
 
 Structure Description:
 
+    This structure defines a generic netlink multicast group. The group's ID is
+    dynamic and is based off the family's assigned group ID offset.
+
+Members:
+
+    Name - Stores the name of the multicast group.
+
+--*/
+
+typedef struct _NETLINK_GENERIC_MULTICAST_GROUP {
+    CHAR Name[NETLINK_GENERIC_MAX_MULTICAST_GROUP_NAME];
+} NETLINK_GENERIC_MULTICAST_GROUP, *PNETLINK_GENERIC_MULTICAST_GROUP;
+
+/*++
+
+Structure Description:
+
     This structure defines a generic netlink family properties.
 
 Members:
@@ -465,6 +512,10 @@ Members:
 
     CommandCount - Stores the number of commands in the array.
 
+    MulticastGroups - Stores a pointer to an array of multicast groups.
+
+    MulticastGroupCount - Stores the number of multicast groups in the array.
+
 --*/
 
 typedef struct _NETLINK_GENERIC_FAMILY_PROPERTIES {
@@ -473,7 +524,40 @@ typedef struct _NETLINK_GENERIC_FAMILY_PROPERTIES {
     CHAR Name[NETLINK_GENERIC_MAX_FAMILY_NAME_LENGTH];
     PNETLINK_GENERIC_COMMAND Commands;
     ULONG CommandCount;
+    PNETLINK_GENERIC_MULTICAST_GROUP MulticastGroups;
+    ULONG MulticastGroupCount;
 } NETLINK_GENERIC_FAMILY_PROPERTIES, *PNETLINK_GENERIC_FAMILY_PROPERTIES;
+
+/*++
+
+Structure Description:
+
+    This structure defines a netlink socket.
+
+Members:
+
+    NetSocket - Stores the common core networking parameters.
+
+    MulticastListEntry - Stores the socket's entry into the list of sockets
+        signed up for at least one multicast group.
+
+    MulticastBitmap - Stores a pointer to bitmap describing the multicast
+        groups to which the socket belongs.
+
+    MulticastBitmapSize - Stores the size of the multicast bitmap, in bytes.
+
+    MulticastGroupCount - Stores the number of multicast groups to which the
+        socket is joined.
+
+--*/
+
+typedef struct _NETLINK_SOCKET {
+    NET_SOCKET NetSocket;
+    LIST_ENTRY MulticastListEntry;
+    PULONG MulticastBitmap;
+    ULONG MulticastBitmapSize;
+    ULONG MulticastGroupCount;
+} NETLINK_SOCKET, *PNETLINK_SOCKET;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -510,6 +594,39 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+NET_API
+VOID
+NetNetlinkRemoveSocketsFromMulticastGroups (
+    ULONG ParentProtocolNumber,
+    ULONG GroupOffset,
+    ULONG GroupCount
+    );
+
+/*++
+
+Routine Description:
+
+    This routine removes any socket listening for multicast message from the
+    groups specified by the offset and count. It will only match sockets for
+    the given protocol.
+
+Arguments:
+
+    ParentProtocolNumber - Supplies the protocol number of the protocol that
+        owns the given range of multicast groups.
+
+    GroupOffset - Supplies the offset into the multicast namespace for the
+        range of multicast groups from which the sockets should be removed.
+
+    GroupCount - Supplies the number of multicast groups from which the sockets
+        should be removed.
+
+Return Value:
+
+    None.
 
 --*/
 

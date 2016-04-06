@@ -175,7 +175,7 @@ NetlinkCreateSocket (
     ULONG Protocol,
     ULONG PortId,
     ULONG Flags,
-    PNETLINK_SOCKET *NewSocket
+    PNETLINK_LIBRARY_SOCKET *NewSocket
     )
 
 /*++
@@ -209,16 +209,16 @@ Return Value:
 {
 
     socklen_t AddressLength;
-    PNETLINK_SOCKET Socket;
+    PNETLINK_LIBRARY_SOCKET Socket;
     INT Status;
 
-    Socket = malloc(sizeof(NETLINK_SOCKET));
+    Socket = malloc(sizeof(NETLINK_LIBRARY_SOCKET));
     if (Socket == NULL) {
         errno = ENOMEM;
         return -1;
     }
 
-    memset(Socket, 0, sizeof(NETLINK_SOCKET));
+    memset(Socket, 0, sizeof(NETLINK_LIBRARY_SOCKET));
     Status = NetlinkAllocateBuffer(0,
                                    NETLINK_SCRATCH_BUFFER_SIZE,
                                    0,
@@ -279,7 +279,7 @@ CreateSocketEnd:
 NETLINK_API
 VOID
 NetlinkDestroySocket (
-    PNETLINK_SOCKET Socket
+    PNETLINK_LIBRARY_SOCKET Socket
     )
 
 /*++
@@ -434,7 +434,7 @@ Return Value:
 NETLINK_API
 INT
 NetlinkFillOutHeader (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG DataLength,
     USHORT Type,
@@ -503,7 +503,7 @@ Return Value:
 NETLINK_API
 INT
 NetlinkSendMessage (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG PortId,
     ULONG GroupMask,
@@ -574,7 +574,7 @@ Return Value:
 NETLINK_API
 INT
 NetlinkReceiveMessage (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     PULONG PortId,
     PULONG GroupMask
@@ -716,7 +716,7 @@ ReceiveMessageEnd:
 NETLINK_API
 INT
 NetlinkReceiveAcknowledgement (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG ExpectedPortId
     )

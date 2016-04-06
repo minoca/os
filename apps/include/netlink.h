@@ -151,7 +151,7 @@ Members:
 
 --*/
 
-typedef struct _NETLINK_SOCKET {
+typedef struct _NETLINK_LIBRARY_SOCKET {
     INT Socket;
     ULONG Protocol;
     ULONG Flags;
@@ -159,7 +159,7 @@ typedef struct _NETLINK_SOCKET {
     volatile ULONG ReceiveNextSequence;
     struct sockaddr_nl LocalAddress;
     PNETLINK_MESSAGE_BUFFER ReceiveBuffer;
-} NETLINK_SOCKET, *PNETLINK_SOCKET;
+} NETLINK_LIBRARY_SOCKET, *PNETLINK_LIBRARY_SOCKET;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -200,7 +200,7 @@ NetlinkCreateSocket (
     ULONG Protocol,
     ULONG PortId,
     ULONG Flags,
-    PNETLINK_SOCKET *NewSocket
+    PNETLINK_LIBRARY_SOCKET *NewSocket
     );
 
 /*++
@@ -234,7 +234,7 @@ Return Value:
 NETLINK_API
 VOID
 NetlinkDestroySocket (
-    PNETLINK_SOCKET Socket
+    PNETLINK_LIBRARY_SOCKET Socket
     );
 
 /*++
@@ -314,7 +314,7 @@ Return Value:
 NETLINK_API
 INT
 NetlinkFillOutHeader (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG DataLength,
     USHORT Type,
@@ -356,7 +356,7 @@ Return Value:
 NETLINK_API
 INT
 NetlinkSendMessage (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG PortId,
     ULONG GroupMask,
@@ -396,7 +396,7 @@ Return Value:
 NETLINK_API
 INT
 NetlinkReceiveMessage (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     PULONG PortId,
     PULONG GroupMask
@@ -436,7 +436,7 @@ Return Value:
 NETLINK_API
 INT
 NetlinkReceiveAcknowledgement (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG ExpectedPortId
     );
@@ -473,7 +473,7 @@ Return Value:
 NETLINK_API
 INT
 NetlinkGenericFillOutHeader (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     UCHAR Command,
     UCHAR Version
@@ -510,7 +510,7 @@ Return Value:
 NETLINK_API
 INT
 NetlinkGenericGetFamilyId (
-    PNETLINK_SOCKET Socket,
+    PNETLINK_LIBRARY_SOCKET Socket,
     PSTR FamilyName,
     PUSHORT FamilyId
     );

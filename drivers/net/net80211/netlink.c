@@ -75,6 +75,8 @@ NETLINK_GENERIC_FAMILY_PROPERTIES Net80211NetlinkFamily = {
     NETLINK_GENERIC_80211_NAME,
     Net80211NetlinkCommands,
     sizeof(Net80211NetlinkCommands) / sizeof(Net80211NetlinkCommands[0]),
+    NULL,
+    0
 };
 
 HANDLE Net80211NetlinkHandle = INVALID_HANDLE;

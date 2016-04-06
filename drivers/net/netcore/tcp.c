@@ -1255,7 +1255,6 @@ Return Value:
 {
 
     BOOL Connected;
-    PIO_OBJECT_STATE IoState;
     BOOL LockHeld;
     ULONG ReturnedEvents;
     KSTATUS Status;
@@ -1303,8 +1302,7 @@ Return Value:
     // side isn't there.
     //
 
-    IoState = TcpSocket->NetSocket.KernelSocket.IoState;
-    Status = IoWaitForIoObjectState(IoState,
+    Status = IoWaitForIoObjectState(Socket->KernelSocket.IoState,
                                     POLL_EVENT_OUT,
                                     TRUE,
                                     WAIT_TIME_INDEFINITE,

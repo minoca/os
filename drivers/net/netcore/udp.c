@@ -472,6 +472,7 @@ Return Value:
 {
 
     ULONG MaxPacketSize;
+    PNET_SOCKET NetSocket;
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     KSTATUS Status;
     PUDP_SOCKET UdpSocket;
@@ -481,6 +482,7 @@ Return Value:
             SOCKET_INTERNET_PROTOCOL_UDP) &&
            (NetworkProtocol == ProtocolEntry->ParentProtocolNumber));
 
+    NetSocket = NULL;
     UdpSocket = MmAllocatePagedPool(sizeof(UDP_SOCKET),
                                     UDP_PROTOCOL_ALLOCATION_TAG);
 
@@ -490,8 +492,9 @@ Return Value:
     }
 
     RtlZeroMemory(UdpSocket, sizeof(UDP_SOCKET));
-    UdpSocket->NetSocket.KernelSocket.Protocol = NetworkProtocol;
-    UdpSocket->NetSocket.KernelSocket.ReferenceCount = 1;
+    NetSocket = &(UdpSocket->NetSocket);
+    NetSocket->KernelSocket.Protocol = NetworkProtocol;
+    NetSocket->KernelSocket.ReferenceCount = 1;
     INITIALIZE_LIST_HEAD(&(UdpSocket->ReceivedPacketList));
     UdpSocket->ReceiveTimeout = WAIT_TIME_INDEFINITE;
     UdpSocket->ReceiveBufferTotalSize = UDP_DEFAULT_RECEIVE_BUFFER_SIZE;
@@ -509,12 +512,12 @@ Return Value:
     // size at the largest possible value.
     //
 
-    PacketSizeInformation = &(UdpSocket->NetSocket.PacketSizeInformation);
+    PacketSizeInformation = &(NetSocket->PacketSizeInformation);
     PacketSizeInformation->MaxPacketSize = MAX_ULONG;
     Status = NetworkEntry->Interface.InitializeSocket(ProtocolEntry,
                                                       NetworkEntry,
                                                       NetworkProtocol,
-                                                      &(UdpSocket->NetSocket));
+                                                      NetSocket);
 
     if (!KSUCCESS(Status)) {
         goto UdpCreateSocketEnd;
@@ -550,10 +553,11 @@ UdpCreateSocketEnd:
 
             MmFreePagedPool(UdpSocket);
             UdpSocket = NULL;
+            NetSocket = NULL;
         }
     }
 
-    *NewSocket = &(UdpSocket->NetSocket);
+    *NewSocket = NetSocket;
     return Status;
 }
 
@@ -647,9 +651,7 @@ Return Value:
 {
 
     KSTATUS Status;
-    PUDP_SOCKET UdpSocket;
 
-    UdpSocket = (PUDP_SOCKET)Socket;
     if (Socket->LocalAddress.Domain != NetDomainInvalid) {
         Status = STATUS_INVALID_PARAMETER;
         goto UdpBindToAddressEnd;
@@ -682,9 +684,7 @@ Return Value:
         goto UdpBindToAddressEnd;
     }
 
-    IoSetIoObjectState(UdpSocket->NetSocket.KernelSocket.IoState,
-                       POLL_EVENT_OUT,
-                       TRUE);
+    IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
 
 UdpBindToAddressEnd:
     return Status;
@@ -780,9 +780,6 @@ Return Value:
 {
 
     KSTATUS Status;
-    PUDP_SOCKET UdpSocket;
-
-    UdpSocket = (PUDP_SOCKET)Socket;
 
     //
     // Pass the request down to the network layer.
@@ -793,11 +790,7 @@ Return Value:
         goto UdpConnectEnd;
     }
 
-    IoSetIoObjectState(UdpSocket->NetSocket.KernelSocket.IoState,
-                       POLL_EVENT_OUT,
-                       TRUE);
-
-    Status = STATUS_SUCCESS;
+    IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
 
 UdpConnectEnd:
     return Status;
@@ -890,17 +883,12 @@ Return Value:
 
     if ((ShutdownType & SOCKET_SHUTDOWN_READ) != 0) {
         KeAcquireQueuedLock(UdpSocket->ReceiveLock);
-        IoSetIoObjectState(UdpSocket->NetSocket.KernelSocket.IoState,
-                           POLL_EVENT_IN,
-                           TRUE);
-
+        IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_IN, TRUE);
         KeReleaseQueuedLock(UdpSocket->ReceiveLock);
     }
 
     if ((ShutdownType & SOCKET_SHUTDOWN_WRITE) != 0) {
-        IoSetIoObjectState(UdpSocket->NetSocket.KernelSocket.IoState,
-                           POLL_EVENT_OUT,
-                           TRUE);
+        IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
     }
 
     return STATUS_SUCCESS;
@@ -1419,10 +1407,7 @@ Return Value:
         // One packet is always enough to notify a waiting receiver.
         //
 
-        IoSetIoObjectState(UdpSocket->NetSocket.KernelSocket.IoState,
-                           POLL_EVENT_IN,
-                           TRUE);
-
+        IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_IN, TRUE);
         UdpPacket = NULL;
 
     } else {
@@ -1493,7 +1478,6 @@ Return Value:
     ULONGLONG CurrentTime;
     ULONGLONG EndTime;
     ULONG Flags;
-    PIO_OBJECT_STATE IoState;
     BOOL LockHeld;
     PUDP_RECEIVED_PACKET Packet;
     PLIST_ENTRY PacketEntry;
@@ -1578,8 +1562,7 @@ Return Value:
         // packet to receive.
         //
 
-        IoState = UdpSocket->NetSocket.KernelSocket.IoState;
-        Status = IoWaitForIoObjectState(IoState,
+        Status = IoWaitForIoObjectState(Socket->KernelSocket.IoState,
                                         POLL_EVENT_IN,
                                         TRUE,
                                         WaitTime,
@@ -1594,7 +1577,7 @@ Return Value:
                 Status = STATUS_NO_NETWORK_CONNECTION;
 
             } else {
-                Status = NET_SOCKET_GET_LAST_ERROR(&(UdpSocket->NetSocket));
+                Status = NET_SOCKET_GET_LAST_ERROR(Socket);
                 if (KSUCCESS(Status)) {
                     Status = STATUS_DEVICE_IO_ERROR;
                 }
@@ -1699,7 +1682,7 @@ Return Value:
             //
 
             if (LIST_EMPTY(&(UdpSocket->ReceivedPacketList)) != FALSE) {
-                IoSetIoObjectState(UdpSocket->NetSocket.KernelSocket.IoState,
+                IoSetIoObjectState(Socket->KernelSocket.IoState,
                                    POLL_EVENT_IN,
                                    FALSE);
             }

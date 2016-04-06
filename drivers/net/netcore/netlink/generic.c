@@ -90,7 +90,7 @@ Structure Description:
 
 Members:
 
-    NetSocket - Stores the common core networking parameters.
+    NetlinkSocket - Stores the common netlink socket information.
 
     ReceivedPacketList - Stores the list of packets ready to be read by the
         user.
@@ -121,7 +121,7 @@ Members:
 --*/
 
 typedef struct _NETLINK_GENERIC_SOCKET {
-    NET_SOCKET NetSocket;
+    NETLINK_SOCKET NetlinkSocket;
     LIST_ENTRY ReceivedPacketList;
     PQUEUED_LOCK ReceiveLock;
     ULONG ReceiveBufferTotalSize;
@@ -323,6 +323,21 @@ NetpNetlinkGenericAllocateFamilyId (
     PULONG FamilyId
     );
 
+KSTATUS
+NetpNetlinkGenericAllocateMulticastGroups (
+    PNETLINK_GENERIC_FAMILY Family
+    );
+
+VOID
+NetpNetlinkGenericFreeMulticastGroups (
+    PNETLINK_GENERIC_FAMILY Family
+    );
+
+KSTATUS
+NetpNetlinkGenericValidateMulticastGroup (
+    ULONG GroupId
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -405,6 +420,13 @@ RED_BLACK_TREE NetNetlinkGenericFamilyTree;
 ULONG NetNetlinkGenericFamilyNextId = NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM;
 
 //
+// Store a pointer to the multicast group bitmap and its size, in bytes.
+//
+
+PULONG NetNetlinkGenericMulticastBitmap = NULL;
+ULONG NetNetlinkGenericMulticastBitmapSize = 0;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -426,7 +448,7 @@ Routine Description:
 Arguments:
 
     Properties - Supplies a pointer to the family properties. The netlink
-        library  will not reference this memory after the function returns, a
+        library will not reference this memory after the function returns, a
         copy will be made.
 
     FamilyHandle - Supplies an optional pointer that receives a handle to the
@@ -440,11 +462,14 @@ Return Value:
 
 {
 
+    ULONG AllocationSize;
+    ULONG CommandSize;
     PNETLINK_GENERIC_FAMILY Family;
     PNETLINK_GENERIC_FAMILY FoundFamily;
     PRED_BLACK_TREE_NODE FoundNode;
     BOOL LockHeld;
     BOOL Match;
+    ULONG MulticastSize;
     ULONG NameLength;
     ULONG NewId;
     KSTATUS Status;
@@ -456,9 +481,7 @@ Return Value:
         goto RegisterFamilyEnd;
     }
 
-    if ((Properties->CommandCount == 0) ||
-        (Properties->Commands == NULL)) {
-
+    if ((Properties->CommandCount == 0) || (Properties->Commands == NULL)) {
         Status = STATUS_INVALID_PARAMETER;
         goto RegisterFamilyEnd;
     }
@@ -482,7 +505,15 @@ Return Value:
     // Allocate and initialize the new generic netlink family.
     //
 
-    Family = MmAllocatePagedPool(sizeof(NETLINK_GENERIC_FAMILY),
+    CommandSize = Properties->CommandCount * sizeof(NETLINK_GENERIC_COMMAND);
+    MulticastSize = Properties->MulticastGroupCount *
+                    sizeof(NETLINK_GENERIC_MULTICAST_GROUP);
+
+    AllocationSize = sizeof(NETLINK_GENERIC_FAMILY) +
+                     CommandSize +
+                     MulticastSize;
+
+    Family = MmAllocatePagedPool(AllocationSize,
                                  NETLINK_GENERIC_ALLOCATION_TAG);
 
     if (Family == NULL) {
@@ -496,6 +527,16 @@ Return Value:
     RtlCopyMemory(&(Family->Properties),
                   Properties,
                   sizeof(NETLINK_GENERIC_FAMILY_PROPERTIES));
+
+    Family->Properties.Commands = (PNETLINK_GENERIC_COMMAND)(Family + 1);
+    RtlCopyMemory(Family->Properties.Commands,
+                  Properties->Commands,
+                  CommandSize);
+
+    Family->Properties.MulticastGroups = (PVOID)(Family + 1) + CommandSize;
+    RtlCopyMemory(Family->Properties.MulticastGroups,
+                  Properties->MulticastGroups,
+                  MulticastSize);
 
     //
     // Acquire the family tree lock and attempt to insert this new family.
@@ -550,6 +591,17 @@ Return Value:
 
         if (FoundNode != NULL) {
             Status = STATUS_DUPLICATE_ENTRY;
+            goto RegisterFamilyEnd;
+        }
+    }
+
+    //
+    // If the family has multicast groups, allocate a region.
+    //
+
+    if (Family->Properties.MulticastGroupCount != 0) {
+        Status = NetpNetlinkGenericAllocateMulticastGroups(Family);
+        if (!KSUCCESS(Status)) {
             goto RegisterFamilyEnd;
         }
     }
@@ -629,6 +681,17 @@ Return Value:
     }
 
     RtlRedBlackTreeRemove(&NetNetlinkGenericFamilyTree, &(Family->TreeNode));
+
+    //
+    // If the family had allocated multicast groups, then release them now.
+    //
+
+    if ((Family->Properties.MulticastGroupCount != 0) &&
+        (Family->MulticastGroupOffset != 0)) {
+
+        NetpNetlinkGenericFreeMulticastGroups(Family);
+    }
+
     KeReleaseSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
     LockHeld = FALSE;
 
@@ -922,6 +985,7 @@ Return Value:
     PNETLINK_GENERIC_SOCKET GenericSocket;
     PNET_NETWORK_INITIALIZE_SOCKET InitializeSocket;
     ULONG MaxPacketSize;
+    PNET_SOCKET NetSocket;
     PNET_PACKET_SIZE_INFORMATION PacketSizeInformation;
     KSTATUS Status;
 
@@ -929,6 +993,7 @@ Return Value:
     ASSERT(NetworkProtocol == ProtocolEntry->ParentProtocolNumber);
     ASSERT(NetworkProtocol == SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC);
 
+    NetSocket = NULL;
     GenericSocket = MmAllocatePagedPool(sizeof(NETLINK_GENERIC_SOCKET),
                                         NETLINK_GENERIC_ALLOCATION_TAG);
 
@@ -938,8 +1003,9 @@ Return Value:
     }
 
     RtlZeroMemory(GenericSocket, sizeof(NETLINK_GENERIC_SOCKET));
-    GenericSocket->NetSocket.KernelSocket.Protocol = NetworkProtocol;
-    GenericSocket->NetSocket.KernelSocket.ReferenceCount = 1;
+    NetSocket = &(GenericSocket->NetlinkSocket.NetSocket);
+    NetSocket->KernelSocket.Protocol = NetworkProtocol;
+    NetSocket->KernelSocket.ReferenceCount = 1;
     INITIALIZE_LIST_HEAD(&(GenericSocket->ReceivedPacketList));
     GenericSocket->ReceiveTimeout = WAIT_TIME_INDEFINITE;
     GenericSocket->ReceiveBufferTotalSize =
@@ -961,13 +1027,13 @@ Return Value:
     // size at the largest possible value.
     //
 
-    PacketSizeInformation = &(GenericSocket->NetSocket.PacketSizeInformation);
+    PacketSizeInformation = &(NetSocket->PacketSizeInformation);
     PacketSizeInformation->MaxPacketSize = MAX_ULONG;
     InitializeSocket = NetworkEntry->Interface.InitializeSocket;
     Status = InitializeSocket(ProtocolEntry,
                               NetworkEntry,
                               NetworkProtocol,
-                              &(GenericSocket->NetSocket));
+                              NetSocket);
 
     if (!KSUCCESS(Status)) {
         goto NetlinkGenericCreateSocketEnd;
@@ -1000,10 +1066,11 @@ NetlinkGenericCreateSocketEnd:
 
             MmFreePagedPool(GenericSocket);
             GenericSocket = NULL;
+            NetSocket = NULL;
         }
     }
 
-    *NewSocket = &(GenericSocket->NetSocket);
+    *NewSocket = NetSocket;
     return Status;
 }
 
@@ -1097,8 +1164,12 @@ Return Value:
 
 {
 
+    ULONG GroupId;
+    BOOL LockHeld;
+    PNETLINK_ADDRESS NetlinkAddress;
     KSTATUS Status;
 
+    LockHeld = FALSE;
     if (Socket->LocalAddress.Domain != NetDomainInvalid) {
         Status = STATUS_INVALID_PARAMETER;
         goto NetlinkGenericBindToAddressEnd;
@@ -1114,12 +1185,35 @@ Return Value:
     }
 
     //
+    // If there is a request to bind to a multicast group, then validate it.
+    // Acquire the family lock shared and do not release it until the bind is
+    // complete. This makes sure that the group ID is still valid when the
+    // socket gets bound to it by the netlink network layer.
+    //
+
+    NetlinkAddress = (PNETLINK_ADDRESS)Address;
+    if (NetlinkAddress->Group != 0) {
+        KeAcquireSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+        LockHeld = TRUE;
+        GroupId = NetlinkAddress->Group;
+        Status = NetpNetlinkGenericValidateMulticastGroup(GroupId);
+        if (!KSUCCESS(Status)) {
+            goto NetlinkGenericBindToAddressEnd;
+        }
+    }
+
+    //
     // Pass the request down to the network layer.
     //
 
     Status = Socket->Network->Interface.BindToAddress(Socket, Link, Address);
     if (!KSUCCESS(Status)) {
         goto NetlinkGenericBindToAddressEnd;
+    }
+
+    if (LockHeld != FALSE) {
+        KeReleaseSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+        LockHeld = FALSE;
     }
 
     //
@@ -1135,6 +1229,10 @@ Return Value:
     IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
 
 NetlinkGenericBindToAddressEnd:
+    if (LockHeld != FALSE) {
+        KeReleaseSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+    }
+
     return Status;
 }
 
@@ -1227,7 +1325,22 @@ Return Value:
 
 {
 
+    ULONG GroupId;
+    PNETLINK_ADDRESS NetlinkAddress;
     KSTATUS Status;
+
+    //
+    // If there is a request to connect to a multicast group, then validate it.
+    //
+
+    NetlinkAddress = (PNETLINK_ADDRESS)Address;
+    if (NetlinkAddress->Group != 0) {
+        GroupId = NetlinkAddress->Group;
+        Status = NetpNetlinkGenericValidateMulticastGroup(GroupId);
+        if (!KSUCCESS(Status)) {
+            goto NetlinkGenericConnectEnd;
+        }
+    }
 
     //
     // Pass the request down to the network layer.
@@ -1720,7 +1833,6 @@ Return Value:
     ULONGLONG EndTime;
     ULONG Flags;
     PNETLINK_GENERIC_SOCKET GenericSocket;
-    PIO_OBJECT_STATE IoState;
     BOOL LockHeld;
     PNETLINK_GENERIC_RECEIVED_PACKET Packet;
     PLIST_ENTRY PacketEntry;
@@ -1805,8 +1917,7 @@ Return Value:
         // packet to receive.
         //
 
-        IoState = GenericSocket->NetSocket.KernelSocket.IoState;
-        Status = IoWaitForIoObjectState(IoState,
+        Status = IoWaitForIoObjectState(Socket->KernelSocket.IoState,
                                         POLL_EVENT_IN,
                                         TRUE,
                                         WaitTime,
@@ -1821,7 +1932,7 @@ Return Value:
                 Status = STATUS_NO_NETWORK_CONNECTION;
 
             } else {
-                Status = NET_SOCKET_GET_LAST_ERROR(&(GenericSocket->NetSocket));
+                Status = NET_SOCKET_GET_LAST_ERROR(Socket);
                 if (KSUCCESS(Status)) {
                     Status = STATUS_DEVICE_IO_ERROR;
                 }
@@ -1924,10 +2035,9 @@ Return Value:
             //
 
             if (LIST_EMPTY(&(GenericSocket->ReceivedPacketList)) != FALSE) {
-                IoSetIoObjectState(
-                                 GenericSocket->NetSocket.KernelSocket.IoState,
-                                 POLL_EVENT_IN,
-                                 FALSE);
+                IoSetIoObjectState(Socket->KernelSocket.IoState,
+                                   POLL_EVENT_IN,
+                                   FALSE);
             }
         }
 
@@ -2516,7 +2626,7 @@ Return Value:
         // One packet is always enough to notify a waiting receiver.
         //
 
-        IoSetIoObjectState(Socket->NetSocket.KernelSocket.IoState,
+        IoSetIoObjectState(Socket->NetlinkSocket.NetSocket.KernelSocket.IoState,
                            POLL_EVENT_IN,
                            TRUE);
 
@@ -2765,7 +2875,8 @@ NetpNetlinkGenericAllocateFamilyId (
 
 Routine Description:
 
-    This routine attempts to allocate a free generic netlink family ID.
+    This routine attempts to allocate a free generic netlink family ID. It
+    assumes the netlink generic family lock is held exclusively.
 
 Arguments:
 
@@ -2817,5 +2928,265 @@ Return Value:
 
     NetNetlinkGenericFamilyNextId = NextId;
     return Status;
+}
+
+KSTATUS
+NetpNetlinkGenericAllocateMulticastGroups (
+    PNETLINK_GENERIC_FAMILY Family
+    )
+
+/*++
+
+Routine Description:
+
+    This routine allocates a region of the multicast group ID namespace for the
+    given family. It assumes the netlink generic family lock is held
+    exclusively.
+
+Arguments:
+
+    Family - Supplies a pointer to the netlink generic family in need of
+        multicast group allocation.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG BitmapIndex;
+    ULONG Group;
+    ULONG Index;
+    ULONG Mask;
+    PULONG NewBitmap;
+    ULONG NewBitmapSize;
+    ULONG NewGroups;
+    ULONG Offset;
+    ULONG Run;
+    KSTATUS Status;
+    ULONG Value;
+
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetNetlinkGenericFamilyLock));
+
+    //
+    // Search through the existing bitmap for a run that can accomodate the
+    // new multicast groups.
+    //
+
+    Offset = 0;
+    Run = 0;
+    for (BitmapIndex = 0;
+         BitmapIndex < (NetNetlinkGenericMulticastBitmapSize / sizeof(ULONG));
+         BitmapIndex += 1) {
+
+        Value = NetNetlinkGenericMulticastBitmap[BitmapIndex];
+        for (Index = 0; Index < (sizeof(ULONG) * BITS_PER_BYTE); Index += 1) {
+            if ((Value & 0x1) != 0) {
+                Offset += Run + 1;
+                Run = 0;
+
+            } else {
+                Run += 1;
+                if (Run == Family->Properties.MulticastGroupCount) {
+                    break;
+                }
+            }
+
+            Value >>= 1;
+        }
+
+        if (Run == Family->Properties.MulticastGroupCount) {
+            break;
+        }
+
+        //
+        // A multicast group ID of 0 should never be assigned.
+        //
+
+        ASSERT(Offset != 0);
+    }
+
+    //
+    // If there is not enough space, allocate a bigger array. If the run
+    // is not zero, that means that there was some space at the end of the
+    // last ULONG of the bitmap. Account for that when added more ULONGs.
+    //
+
+    if (Run != Family->Properties.MulticastGroupCount) {
+        NewGroups = Family->Properties.MulticastGroupCount - Run;
+
+        //
+        // Avoid allocating group ID 0. It is invalid.
+        //
+
+        if (Offset == 0) {
+            NewGroups += 1;
+            Offset = 1;
+        }
+
+        NewGroups = ALIGN_RANGE_UP(NewGroups, sizeof(ULONG) * BITS_PER_BYTE);
+        NewBitmapSize = NetNetlinkGenericMulticastBitmapSize +
+                        (NewGroups / BITS_PER_BYTE);
+
+        NewBitmap = MmAllocatePagedPool(NewBitmapSize,
+                                        NETLINK_GENERIC_ALLOCATION_TAG);
+
+        if (NewBitmap == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto AllocateMulticastGroupOffsetEnd;
+        }
+
+        RtlZeroMemory((PVOID)NewBitmap + NetNetlinkGenericMulticastBitmapSize,
+                      (NewGroups / BITS_PER_BYTE));
+
+        //
+        // If there is an existing bitmap, copy it to the new bitmap and
+        // then release it.
+        //
+
+        if (NetNetlinkGenericMulticastBitmap != NULL) {
+            RtlCopyMemory(NewBitmap,
+                          NetNetlinkGenericMulticastBitmap,
+                          NetNetlinkGenericMulticastBitmapSize);
+
+            MmFreePagedPool(NetNetlinkGenericMulticastBitmap);
+
+        //
+        // Otherwise, this is the first allocation. Reserve group ID 0.
+        //
+
+        } else {
+            Index = NETLINK_SOCKET_BITMAP_INDEX(0);
+            Mask = NETLINK_SOCKET_BITMAP_MASK(0);
+            NewBitmap[Index] |= Mask;
+        }
+
+        NetNetlinkGenericMulticastBitmap = NewBitmap;
+        NetNetlinkGenericMulticastBitmapSize = NewBitmapSize;
+    }
+
+    //
+    // Set the newly allocated groups as reserved in the bitmap.
+    //
+
+    for (Group = Offset; Group < (Offset + Run); Group += 1) {
+        Index = NETLINK_SOCKET_BITMAP_INDEX(Group);
+        Mask = NETLINK_SOCKET_BITMAP_MASK(Group);
+        NetNetlinkGenericMulticastBitmap[Index] |= Mask;
+    }
+
+    Family->MulticastGroupOffset = Offset;
+    Status = STATUS_SUCCESS;
+
+AllocateMulticastGroupOffsetEnd:
+    return Status;
+}
+
+VOID
+NetpNetlinkGenericFreeMulticastGroups (
+    PNETLINK_GENERIC_FAMILY Family
+    )
+
+/*++
+
+Routine Description:
+
+    This routine releases the region of multicast group IDs allocated for the
+    given netlink generic family. It assumes the netlink generic family lock is
+    held exclusively.
+
+Arguments:
+
+    Family - Supplies a pointer to the netlink generic family whose multicast
+        groups should be released.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Count;
+    ULONG Group;
+    ULONG Index;
+    ULONG Mask;
+    ULONG Offset;
+
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetNetlinkGenericFamilyLock));
+
+    Count = Family->Properties.MulticastGroupCount;
+    Offset = Family->MulticastGroupOffset;
+
+    //
+    // Remove all sockets from these multicast groups.
+    //
+
+    NetNetlinkRemoveSocketsFromMulticastGroups(
+                                      SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
+                                      Offset,
+                                      Count);
+
+    //
+    // Free the groups from the generic netlink bitmap.
+    //
+
+    for (Group = Offset; Group < Offset + Count; Group += 1) {
+        Index = NETLINK_SOCKET_BITMAP_INDEX(Group);
+        Mask = NETLINK_SOCKET_BITMAP_MASK(Group);
+        NetNetlinkGenericMulticastBitmap[Index] &= ~Mask;
+
+        //
+        // TODO: Announce the deletion of the multicast group.
+        //
+
+    }
+
+    Family->MulticastGroupOffset = 0;
+    return;
+}
+
+KSTATUS
+NetpNetlinkGenericValidateMulticastGroup (
+    ULONG GroupId
+    )
+
+/*++
+
+Routine Description:
+
+    This routine validates that the group ID is valid for the netlink generic
+    families.
+
+Arguments:
+
+    GroupId - Supplies the group ID that is to be validated.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG Index;
+    ULONG Mask;
+
+    ASSERT(KeIsSharedExclusiveLockHeldShared(NetNetlinkGenericFamilyLock));
+    ASSERT(GroupId != 0);
+
+    Index = NETLINK_SOCKET_BITMAP_INDEX(GroupId);
+    Mask = NETLINK_SOCKET_BITMAP_MASK(GroupId);
+    if ((Index >= (NetNetlinkGenericMulticastBitmapSize / sizeof(ULONG))) ||
+        ((NetNetlinkGenericMulticastBitmap[Index] & Mask) == 0)) {
+
+        return STATUS_INVALID_ADDRESS;
+    }
+
+    return STATUS_SUCCESS;
 }
 
