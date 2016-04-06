@@ -322,7 +322,7 @@ Return Value:
 
     CalendarTimer.TableVersion = CALENDAR_TIMER_DESCRIPTION_VERSION;
     CalendarTimer.Context = Context;
-    CalendarTimer.WantCalendarTime = TRUE;
+    CalendarTimer.Features = CALENDAR_TIMER_FEATURE_WANT_CALENDAR_FORMAT;
     CalendarTimer.FunctionTable.Read = HlpRtcReadCalendarTime;
     CalendarTimer.FunctionTable.Write = HlpRtcWriteCalendarTime;
     Status = HlRtcSystemServices->Register(HardwareModuleCalendarTimer,

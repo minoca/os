@@ -65,12 +65,6 @@ HlpModUnmapAddress (
     ULONG SizeInBytes
     );
 
-KSTATUS
-HlpModRegisterHardware (
-    HARDWARE_MODULE_TYPE Type,
-    PVOID Description
-    );
-
 VOID
 HlpModReportPhysicalAddressUsage (
     PHYSICAL_ADDRESS PhysicalAddress,
@@ -115,7 +109,7 @@ HARDWARE_MODULE_KERNEL_SERVICES HlHardwareModuleServices = {
     HlpModAllocateMemory,
     HlpModMapPhysicalAddress,
     HlpModUnmapAddress,
-    HlpModRegisterHardware,
+    HlRegisterHardware,
     HlpModReportPhysicalAddressUsage,
     HlpModInitializeLock,
     HlpModAcquireLock,
@@ -156,6 +150,78 @@ LIST_ENTRY HlModPhysicalMemoryUsageListHead;
 //
 // ------------------------------------------------------------------ Functions
 //
+
+KERNEL_API
+KSTATUS
+HlRegisterHardware (
+    HARDWARE_MODULE_TYPE Type,
+    PVOID Description
+    )
+
+/*++
+
+Routine Description:
+
+    This routine registers a hardware module with the system.
+
+Arguments:
+
+    Type - Supplies the type of resource being registered.
+
+    Description - Supplies a description of the resource being registered.
+
+Return Value:
+
+    Returns a pointer to the allocation of the requested size on success.
+
+    NULL on failure.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    switch (Type) {
+    case HardwareModuleInterruptController:
+        Status = HlpInterruptRegisterHardware(Description, RunLevelCount, NULL);
+        break;
+
+    case HardwareModuleInterruptLines:
+        Status = HlpInterruptRegisterLines(Description);
+        break;
+
+    case HardwareModuleTimer:
+        Status = HlpTimerRegisterHardware(Description);
+        break;
+
+    case HardwareModuleDebugDevice:
+        Status = HlpDebugDeviceRegisterHardware(Description);
+        break;
+
+    case HardwareModuleCalendarTimer:
+        Status = HlpCalendarTimerRegisterHardware(Description);
+        break;
+
+    case HardwareModuleCacheController:
+        Status = HlpCacheControllerRegisterHardware(Description);
+        break;
+
+    case HardwareModuleDebugUsbHostController:
+        Status = HlpDebugUsbHostRegisterHardware(Description);
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        Status = STATUS_INVALID_PARAMETER;
+        goto RegisterHardwareEnd;
+    }
+
+RegisterHardwareEnd:
+    return Status;
+}
 
 VOID
 HlpModInitializePreDebugger (
@@ -532,77 +598,6 @@ Return Value:
 {
 
     return MmUnmapAddress(VirtualAddress, SizeInBytes);
-}
-
-KSTATUS
-HlpModRegisterHardware (
-    HARDWARE_MODULE_TYPE Type,
-    PVOID Description
-    )
-
-/*++
-
-Routine Description:
-
-    This routine registers a hardware module with the system.
-
-Arguments:
-
-    Type - Supplies the type of resource being registered.
-
-    Description - Supplies a description of the resource being registered.
-
-Return Value:
-
-    Returns a pointer to the allocation of the requested size on success.
-
-    NULL on failure.
-
---*/
-
-{
-
-    KSTATUS Status;
-
-    switch (Type) {
-    case HardwareModuleInterruptController:
-        Status = HlpInterruptRegisterHardware(Description, RunLevelCount, NULL);
-        break;
-
-    case HardwareModuleInterruptLines:
-        Status = HlpInterruptRegisterLines(Description);
-        break;
-
-    case HardwareModuleTimer:
-        Status = HlpTimerRegisterHardware(Description);
-        break;
-
-    case HardwareModuleDebugDevice:
-        Status = HlpDebugDeviceRegisterHardware(Description);
-        break;
-
-    case HardwareModuleCalendarTimer:
-        Status = HlpCalendarTimerRegisterHardware(Description);
-        break;
-
-    case HardwareModuleCacheController:
-        Status = HlpCacheControllerRegisterHardware(Description);
-        break;
-
-    case HardwareModuleDebugUsbHostController:
-        Status = HlpDebugUsbHostRegisterHardware(Description);
-        break;
-
-    default:
-
-        ASSERT(FALSE);
-
-        Status = STATUS_INVALID_PARAMETER;
-        goto RegisterHardwareEnd;
-    }
-
-RegisterHardwareEnd:
-    return Status;
 }
 
 VOID

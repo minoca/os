@@ -383,6 +383,8 @@ Author:
 #define RK32_I2C_CONTROL_MODE_SHIFT            1
 #define RK32_I2C_CONTROL_ENABLE                (1 << 0)
 
+#define RK32_I2C_BUFFER_SIZE 32
+
 //
 // Define the bits for the I2C clock divisor register.
 //

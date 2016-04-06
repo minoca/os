@@ -54,6 +54,8 @@ DPNP0D20=ehci.drv
 
 DRKC0001=rk32spi.drv
 DRKC0002=rk32gpio.drv
+DRKC0003=rk3i2c.drv
+DRKC0808=rk808.drv
 DRKC0D40=sdrk32xx.drv
 DSdSlot=null.drv
 DSMC91C1=smsc91c1.drv

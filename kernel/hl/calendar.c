@@ -53,13 +53,13 @@ Members:
     FunctionTable - Stores pointers to functions implemented by the hardware
         module abstracting this timer.
 
-    Flags - Stores pointers to a bitfield of flags defining state of the
-        controller. See CALENDAR_TIMER_FLAG_* definitions.
-
     Identifier - Stores the unique hardware identifier of the timer.
 
-    WantCalendarTime - Stores a boolean indicating if the hardware module would
-        like to be passed calendar times or system times.
+    Features - Stores a bitfield of timer features. See
+        CALENDAR_TIMER_FEATURE_* definitions.
+
+    Flags - Stores pointers to a bitfield of flags defining state of the
+        controller. See CALENDAR_TIMER_FLAG_* definitions.
 
     PrivateContext - Stores a pointer to the hardware module's private
         context.
@@ -70,7 +70,7 @@ typedef struct _CALENDAR_TIMER {
     LIST_ENTRY ListEntry;
     CALENDAR_TIMER_FUNCTION_TABLE FunctionTable;
     ULONG Identifier;
-    BOOL WantCalendarTime;
+    ULONG Features;
     ULONG Flags;
     PVOID PrivateContext;
 } CALENDAR_TIMER, *PCALENDAR_TIMER;
@@ -148,8 +148,10 @@ Return Value:
     CALENDAR_TIME CalendarTime;
     PCALENDAR_TIMER CalendarTimer;
     PLIST_ENTRY CurrentEntry;
+    BOOL Enabled;
     ULONGLONG EndTime;
     HARDWARE_MODULE_TIME HardwareTime;
+    RUNLEVEL OldRunLevel;
     PCALENDAR_TIMER_READ Read;
     KSTATUS Status;
     LONG TimeZoneOffset;
@@ -177,9 +179,25 @@ Return Value:
 
         Read = CalendarTimer->FunctionTable.Read;
         RtlZeroMemory(&HardwareTime, sizeof(HARDWARE_MODULE_TIME));
+        if ((CalendarTimer->Features &
+             CALENDAR_TIMER_FEATURE_LOW_RUNLEVEL) == 0) {
+
+            OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+            Enabled = ArDisableInterrupts();
+
+        } else {
+            OldRunLevel = KeGetRunLevel();
+            Enabled = FALSE;
+        }
+
         BeginTime = HlQueryTimeCounter();
         Status = Read(CalendarTimer->PrivateContext, &HardwareTime);
         EndTime = HlQueryTimeCounter();
+        if (Enabled != FALSE) {
+            ArEnableInterrupts();
+        }
+
+        KeLowerRunLevel(OldRunLevel);
         if (KSUCCESS(Status)) {
             break;
         }
@@ -269,7 +287,6 @@ Return Value:
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
-    Enabled = FALSE;
     Status = STATUS_NO_SUCH_DEVICE;
     KeAcquireSpinLock(&HlCalendarTimerLock);
 
@@ -291,17 +308,20 @@ Return Value:
         RtlZeroMemory(&HardwareTime, sizeof(HARDWARE_MODULE_TIME));
 
         //
-        // Perform the calendar time set operation at dispatch in order to
-        // reduce the amount of slippage between snapping the system time and
-        // setting the calendar time. Go even further if the calendar time is
-        // not in local time or just wants system time and disable interrupts.
+        // Perform the calendar time set operation at higher runlevel or with
+        // interrupts diabled in order to reduce the amount of slippage between
+        // snapping the system time and setting the calendar time.
         //
 
-        OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
-        if ((HlHardwareTimeIsLocal == FALSE) ||
-            (CalendarTimer->WantCalendarTime == FALSE)) {
+        if ((CalendarTimer->Features &
+             CALENDAR_TIMER_FEATURE_LOW_RUNLEVEL) == 0) {
 
+            OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
             Enabled = ArDisableInterrupts();
+
+        } else {
+            OldRunLevel = KeGetRunLevel();
+            Enabled = FALSE;
         }
 
         //
@@ -315,7 +335,9 @@ Return Value:
         // hardware.
         //
 
-        if (CalendarTimer->WantCalendarTime != FALSE) {
+        if ((CalendarTimer->Features &
+             CALENDAR_TIMER_FEATURE_WANT_CALENDAR_FORMAT) != 0) {
+
             if (HlHardwareTimeIsLocal != FALSE) {
 
                 //
@@ -348,12 +370,6 @@ Return Value:
             HardwareTime.U.SystemTime.Seconds = SystemTime.Seconds;
             HardwareTime.U.SystemTime.Nanoseconds = SystemTime.Nanoseconds;
         }
-
-        //
-        // By now, interrupts should be disabled.
-        //
-
-        ASSERT(ArAreInterruptsEnabled() == FALSE);
 
         Status = Write(CalendarTimer->PrivateContext, &HardwareTime);
         if (Enabled != FALSE) {
@@ -555,7 +571,7 @@ Return Value:
     CalendarTimer->Identifier = TimerDescription->Identifier;
     CalendarTimer->PrivateContext = TimerDescription->Context;
     CalendarTimer->Flags = 0;
-    CalendarTimer->WantCalendarTime = TimerDescription->WantCalendarTime;
+    CalendarTimer->Features = TimerDescription->Features;
 
     //
     // Insert the timer on the list.

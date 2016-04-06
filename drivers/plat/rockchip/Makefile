@@ -1,18 +1,19 @@
 ################################################################################
 #
-#   Copyright (c) 2014 Minoca Corp. All Rights Reserved
+#   Copyright (c) 2016 Minoca Corp. All Rights Reserved
 #
 #   Module Name:
 #
-#       Platform
+#       RockChip
 #
 #   Abstract:
 #
-#       This directory platform support drivers.
+#       This directory contains platform and SoC support drivers for RockChip
+#       devices.
 #
 #   Author:
 #
-#       Evan Green 4-Dec-2014
+#       Evan Green 4-Apr-2016
 #
 #   Environment:
 #
@@ -20,10 +21,11 @@
 #
 ################################################################################
 
-DIRS = goec      \
-       quark     \
-       rockchip  \
-       ti        \
+ifeq ($(ARCH), $(filter armv7 armv6,$(ARCH)))
+
+DIRS = rk808     \
+
+endif
 
 include $(SRCROOT)/os/minoca.mk
 

@@ -27,12 +27,21 @@ DriverFiles += [
     "sdrk32xx.drv",
     "rk32spi.drv",
     "goec.drv",
-    "rk32gpio.drv"
+    "rk32gpio.drv",
+    "rk3i2c.drv",
+    "rk808.drv"
 ];
+
+//
+// I2c and the RK808 PMIC are needed to bring up SD, since SD makes voltage
+// changes via the PMIC.
+//
 
 BootDrivers += [
     "sdrk32xx.drv",
-    "rk32gpio.drv"
+    "rk32gpio.drv",
+    "rk3i2c.drv",
+    "rk808.drv"
 ];
 
 VeyronFirmwareCopy = {
@@ -88,3 +97,4 @@ TotalCopy += [VeyronFirmwareSystemCopy];
 //
 
 BootmefiCopy["Destination"] += EFI_DEFAULT_APP_ARM;
+

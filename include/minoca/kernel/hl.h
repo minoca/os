@@ -854,6 +854,33 @@ Return Value:
 
 --*/
 
+KERNEL_API
+KSTATUS
+HlRegisterHardware (
+    HARDWARE_MODULE_TYPE Type,
+    PVOID Description
+    );
+
+/*++
+
+Routine Description:
+
+    This routine registers a hardware module with the system.
+
+Arguments:
+
+    Type - Supplies the type of resource being registered.
+
+    Description - Supplies a description of the resource being registered.
+
+Return Value:
+
+    Returns a pointer to the allocation of the requested size on success.
+
+    NULL on failure.
+
+--*/
+
 KSTATUS
 HlStartAllProcessors (
     PPROCESSOR_START_ROUTINE StartRoutine,

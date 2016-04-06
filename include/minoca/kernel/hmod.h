@@ -175,6 +175,24 @@ Author:
 #define TIMER_FEATURE_PROCESSOR_COUNTER 0x00000080
 
 //
+// Define calendar timer features.
+//
+
+//
+// Set this flag if calls to write the calendar timer should pass a calendar
+// time representation rather than a system time representation.
+//
+
+#define CALENDAR_TIMER_FEATURE_WANT_CALENDAR_FORMAT 0x00000001
+
+//
+// Set this flag if the calendar timer must be written to at low runlevel. This
+// is true for timers that exist over busses like I2C.
+//
+
+#define CALENDAR_TIMER_FEATURE_LOW_RUNLEVEL 0x00000002
+
+//
 // Interrupt controller feature flags.
 //
 
@@ -218,7 +236,7 @@ Author:
 #define INTERRUPT_CONTROLLER_DESCRIPTION_VERSION 2
 #define TIMER_DESCRIPTION_VERSION 1
 #define DEBUG_DEVICE_DESCRIPTION_VERSION 1
-#define CALENDAR_TIMER_DESCRIPTION_VERSION 1
+#define CALENDAR_TIMER_DESCRIPTION_VERSION 2
 #define CACHE_CONTROLLER_DESCRIPTION_VERSION 1
 
 //
@@ -2081,9 +2099,9 @@ Members:
 
     Identifier - Stores the unique identifier of the calendar timer.
 
-    WantCalendarTime - Stores a boolean indicating if calls to write the
-        calendar timer should pass a calendar time (TRUE) representation or
-        a system time representation (FALSE).
+    Features - Stores a bitfield of features about the timer. See
+        CALENDAR_TIMER_FEATURE_* definitions.
+
 --*/
 
 typedef struct _CALENDAR_TIMER_DESCRIPTION {
@@ -2091,7 +2109,7 @@ typedef struct _CALENDAR_TIMER_DESCRIPTION {
     CALENDAR_TIMER_FUNCTION_TABLE FunctionTable;
     PVOID Context;
     ULONG Identifier;
-    BOOL WantCalendarTime;
+    ULONG Features;
 } CALENDAR_TIMER_DESCRIPTION, *PCALENDAR_TIMER_DESCRIPTION;
 
 /*++
@@ -2811,3 +2829,4 @@ Return Value:
 //
 // -------------------------------------------------------- Function Prototypes
 //
+
