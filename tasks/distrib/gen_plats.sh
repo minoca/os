@@ -58,9 +58,9 @@ cd $BINROOT
 if [ "$ARCH" = "x86" ] ; then
     if [ "x$VARIANT" = "xq" ] ; then
         IMAGES="galileo"
+    else
+        IMAGES="pc pcefi"
     fi
-
-    IMAGES="pc pcefi"
 
 elif [ "$ARCH" = "armv7" ] ; then
     IMAGES="bbone panda rpi2 veyron"

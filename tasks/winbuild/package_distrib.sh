@@ -79,8 +79,12 @@ fi
 ## Copy the original bin directory.
 ##
 
-BINROOT="$SRCROOT/$ARCH$VARIANT$DEBUG/bin"
-SAVED_BINROOT="$SRCROOT/$ARCH$VARIANT$DEBUG/bin.orig"
+if ! test -d "$OUTROOT"; then
+    mkdir -p "$OUTROOT"
+fi
+
+BINROOT="$OUTROOT/bin"
+SAVED_BINROOT="$OUTROOT/bin.orig"
 if test -d "$BINROOT"; then
     if test -d "$SAVED_BINROOT"; then
        echo "Removing previous $SAVED_BINROOT."
@@ -89,14 +93,6 @@ if test -d "$BINROOT"; then
 
     echo "Moving original binroot to $SAVED_BINROOT"
     mv -f "$BINROOT" "$SAVED_BINROOT"
-
-    ##
-    ## Copy the tools back in.
-    ##
-
-    if [ -d "$SAVED_BINROOT/tools" ] ; then
-        cp -rp "$SAVED_BINROOT/tools" "$BINROOT/"
-    fi
 fi
 
 ##
@@ -104,6 +100,14 @@ fi
 ##
 
 mv ./bin "$BINROOT"
+
+##
+## Copy the tools back in.
+##
+
+if [ -d "$SAVED_BINROOT/tools" ] ; then
+    cp -rp "$SAVED_BINROOT/tools" "$BINROOT/"
+fi
 
 ##
 ## Copy the debugger files from x86.
@@ -144,18 +148,17 @@ sh "$SRCROOT/os/tasks/distrib/gen_inst.sh"
 ## Upload the files.
 ##
 
-REVISION=`cat $BINROOT/build-revision`
-file=MinocaOS-$ARCH-$REVISION.zip
-file_size=`ls -l $file | \
-    sed -n 's/[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([0123456789]*\).*/\1/p'`
-
-if test -n "$MBUILD_STEP_ID"; then
-    python $SRCROOT/client.py --result "MinocaOS Size" integer "$file_size"
-    python $SRCROOT/client.py --upload schedule $file $file
-    echo Uploaded file $file, size $file_size
-fi
-
 if test "$ARCH$VARIANT" = "x86"; then
+    REVISION=`cat $BINROOT/build-revision`
+    file=MinocaOS-$ARCH$VARIANT-$REVISION.zip
+    file_size=`ls -l $file | \
+        sed -n 's/[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([0123456789]*\).*/\1/p'`
+
+    if test -n "$MBUILD_STEP_ID"; then
+        python $SRCROOT/client.py --result "MinocaOS Size" integer "$file_size"
+        python $SRCROOT/client.py --upload schedule $file $file
+        echo Uploaded file $file, size $file_size
+    fi
 
     ##
     ## The SDK includes all architectures.
