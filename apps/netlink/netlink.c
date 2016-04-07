@@ -135,9 +135,9 @@ CL_NETWORK_CONVERSION_INTERFACE NetlinkAddressConversionInterface = {
 // ------------------------------------------------------------------ Functions
 //
 
-NETLINK_API
+LIBNETLINK_API
 VOID
-NetlinkInitialize (
+NlInitialize (
     PVOID Environment
     )
 
@@ -169,9 +169,9 @@ Return Value:
     return;
 }
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkCreateSocket (
+NlCreateSocket (
     ULONG Protocol,
     ULONG PortId,
     ULONG Flags,
@@ -219,10 +219,10 @@ Return Value:
     }
 
     memset(Socket, 0, sizeof(NETLINK_LIBRARY_SOCKET));
-    Status = NetlinkAllocateBuffer(0,
-                                   NETLINK_SCRATCH_BUFFER_SIZE,
-                                   0,
-                                   &(Socket->ReceiveBuffer));
+    Status = NlAllocateBuffer(0,
+                              NETLINK_SCRATCH_BUFFER_SIZE,
+                              0,
+                              &(Socket->ReceiveBuffer));
 
     if (Status == -1) {
         goto CreateSocketEnd;
@@ -267,7 +267,7 @@ Return Value:
 CreateSocketEnd:
     if (Status == -1) {
         if (Socket != NULL) {
-            NetlinkDestroySocket(Socket);
+            NlDestroySocket(Socket);
             Socket = NULL;
         }
     }
@@ -276,9 +276,9 @@ CreateSocketEnd:
     return Status;
 }
 
-NETLINK_API
+LIBNETLINK_API
 VOID
-NetlinkDestroySocket (
+NlDestroySocket (
     PNETLINK_LIBRARY_SOCKET Socket
     )
 
@@ -305,16 +305,16 @@ Return Value:
     }
 
     if (Socket->ReceiveBuffer != NULL) {
-        NetlinkFreeBuffer(Socket->ReceiveBuffer);
+        NlFreeBuffer(Socket->ReceiveBuffer);
     }
 
     free(Socket);
     return;
 }
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkAllocateBuffer (
+NlAllocateBuffer (
     ULONG HeaderSize,
     ULONG Size,
     ULONG FooterSize,
@@ -403,9 +403,9 @@ AllocateBufferEnd:
     return Status;
 }
 
-NETLINK_API
+LIBNETLINK_API
 VOID
-NetlinkFreeBuffer (
+NlFreeBuffer (
     PNETLINK_MESSAGE_BUFFER Buffer
     )
 
@@ -431,9 +431,9 @@ Return Value:
     return;
 }
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkFillOutHeader (
+NlFillOutHeader (
     PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG DataLength,
@@ -500,9 +500,9 @@ Return Value:
     return 0;
 }
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkSendMessage (
+NlSendMessage (
     PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG PortId,
@@ -571,9 +571,9 @@ Return Value:
     return Status;
 }
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkReceiveMessage (
+NlReceiveMessage (
     PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     PULONG PortId,
@@ -713,9 +713,9 @@ ReceiveMessageEnd:
     return Status;
 }
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkReceiveAcknowledgement (
+NlReceiveAcknowledgement (
     PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG ExpectedPortId
@@ -756,7 +756,7 @@ Return Value:
     ULONG PortId;
     INT Status;
 
-    Status = NetlinkReceiveMessage(Socket, Message, &PortId, NULL);
+    Status = NlReceiveMessage(Socket, Message, &PortId, NULL);
     if (Status == -1) {
         goto ReceiveAcknowledgementEnd;
     }

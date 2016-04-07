@@ -52,14 +52,14 @@ Environment:
 //
 
 KSTATUS
-NetpNetlinkGenericControlGetFamily (
+NetlinkpGenericControlGetFamily (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
     PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
     );
 
 KSTATUS
-NetpNetlinkGenericControlSendCommand (
+NetlinkpGenericControlSendCommand (
     PNET_SOCKET Socket,
     PNETLINK_GENERIC_FAMILY Family,
     PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters,
@@ -71,32 +71,32 @@ NetpNetlinkGenericControlSendCommand (
 // -------------------------------------------------------------------- Globals
 //
 
-NETLINK_GENERIC_COMMAND NetNetlinkGenericControlCommands[] = {
+NETLINK_GENERIC_COMMAND NetlinkGenericControlCommands[] = {
     {
         NETLINK_GENERIC_CONTROL_GET_FAMILY,
-        NetpNetlinkGenericControlGetFamily
+        NetlinkpGenericControlGetFamily
     },
 };
 
-NETLINK_GENERIC_MULTICAST_GROUP NetNetlinkGenericControlMulticastGroups[] = {
+NETLINK_GENERIC_MULTICAST_GROUP NetlinkGenericControlMulticastGroups[] = {
     {
         sizeof(NETLINK_GENERIC_CONTROL_MULTICAST_NOTIFY_NAME),
         NETLINK_GENERIC_CONTROL_MULTICAST_NOTIFY_NAME
     },
 };
 
-NETLINK_GENERIC_FAMILY_PROPERTIES NetNetlinkGenericControlFamilyProperties = {
+NETLINK_GENERIC_FAMILY_PROPERTIES NetlinkGenericControlFamilyProperties = {
     NETLINK_GENERIC_FAMILY_PROPERTIES_VERSION,
     NETLINK_GENERIC_ID_CONTROL,
     sizeof(NETLINK_GENERIC_CONTROL_NAME),
     NETLINK_GENERIC_CONTROL_NAME,
-    NetNetlinkGenericControlCommands,
-    sizeof(NetNetlinkGenericControlCommands) /
-        sizeof(NetNetlinkGenericControlCommands[0]),
+    NetlinkGenericControlCommands,
+    sizeof(NetlinkGenericControlCommands) /
+        sizeof(NetlinkGenericControlCommands[0]),
 
-    NetNetlinkGenericControlMulticastGroups,
-    sizeof(NetNetlinkGenericControlMulticastGroups) /
-        sizeof(NetNetlinkGenericControlMulticastGroups[0]),
+    NetlinkGenericControlMulticastGroups,
+    sizeof(NetlinkGenericControlMulticastGroups) /
+        sizeof(NetlinkGenericControlMulticastGroups[0]),
 };
 
 //
@@ -104,14 +104,14 @@ NETLINK_GENERIC_FAMILY_PROPERTIES NetNetlinkGenericControlFamilyProperties = {
 // its multicast groups.
 //
 
-PNETLINK_GENERIC_FAMILY NetNetlinkGenericControlFamily = NULL;
+PNETLINK_GENERIC_FAMILY NetlinkGenericControlFamily = NULL;
 
 //
 // ------------------------------------------------------------------ Functions
 //
 
 VOID
-NetpNetlinkGenericControlInitialize (
+NetlinkpGenericControlInitialize (
     VOID
     )
 
@@ -135,9 +135,9 @@ Return Value:
 
     KSTATUS Status;
 
-    Status = NetNetlinkGenericRegisterFamily(
-                                     &NetNetlinkGenericControlFamilyProperties,
-                                     &NetNetlinkGenericControlFamily);
+    Status = NetlinkGenericRegisterFamily(
+                                        &NetlinkGenericControlFamilyProperties,
+                                        &NetlinkGenericControlFamily);
 
     if (!KSUCCESS(Status)) {
 
@@ -149,7 +149,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkGenericControlSendNotification (
+NetlinkpGenericControlSendNotification (
     PNET_SOCKET Socket,
     UCHAR Command,
     PNETLINK_GENERIC_FAMILY Family,
@@ -189,11 +189,12 @@ Return Value:
 {
 
     NETLINK_ADDRESS DestinationAddress;
+    ULONG Offset;
     NETLINK_GENERIC_COMMAND_PARAMETERS Parameters;
     NETLINK_ADDRESS SourceAddress;
     KSTATUS Status;
 
-    if (NetNetlinkGenericControlFamily == NULL) {
+    if (NetlinkGenericControlFamily == NULL) {
         return STATUS_TOO_EARLY;
     }
 
@@ -213,8 +214,8 @@ Return Value:
 
     DestinationAddress.Domain = NetDomainNetlink;
     DestinationAddress.Port = 0;
-    DestinationAddress.Group =
-                          NetNetlinkGenericControlFamily->MulticastGroupOffset;
+    Offset = NetlinkGenericControlFamily->MulticastGroupOffset;
+    DestinationAddress.Group = Offset;
 
     //
     // Fill out the command parameters and send out the notification.
@@ -228,11 +229,11 @@ Return Value:
     Parameters.Message.Type = NETLINK_GENERIC_ID_CONTROL;
     Parameters.Command = Command;
     Parameters.Version = 0;
-    Status = NetpNetlinkGenericControlSendCommand(Socket,
-                                                  Family,
-                                                  &Parameters,
-                                                  Group,
-                                                  GroupId);
+    Status = NetlinkpGenericControlSendCommand(Socket,
+                                               Family,
+                                               &Parameters,
+                                               Group,
+                                               GroupId);
 
     if (!KSUCCESS(Status)) {
         goto SendNotificationEnd;
@@ -247,7 +248,7 @@ SendNotificationEnd:
 //
 
 KSTATUS
-NetpNetlinkGenericControlGetFamily (
+NetlinkpGenericControlGetFamily (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
     PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
@@ -295,7 +296,7 @@ Return Value:
 
     AttributesLength = Packet->FooterOffset - Packet->DataOffset;
     Attributes = Packet->Buffer + Packet->DataOffset;
-    Status = NetNetlinkGenericGetAttribute(
+    Status = NetlinkGenericGetAttribute(
                                  Attributes,
                                  AttributesLength,
                                  NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_NAME,
@@ -303,11 +304,11 @@ Return Value:
                                  &DataLength);
 
     if (KSUCCESS(Status)) {
-        Family = NetpNetlinkGenericLookupFamilyByName((PSTR)Data);
+        Family = NetlinkpGenericLookupFamilyByName((PSTR)Data);
     }
 
     if (Family == NULL) {
-        Status = NetNetlinkGenericGetAttribute(
+        Status = NetlinkGenericGetAttribute(
                                    Attributes,
                                    AttributesLength,
                                    NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID,
@@ -320,7 +321,7 @@ Return Value:
                 goto GetFamilyEnd;
             }
 
-            Family = NetpNetlinkGenericLookupFamilyById(*((PUSHORT)Data));
+            Family = NetlinkpGenericLookupFamilyById(*((PUSHORT)Data));
         }
     }
 
@@ -342,7 +343,7 @@ Return Value:
     SendParameters.Message.Type = NETLINK_GENERIC_ID_CONTROL;
     SendParameters.Command = NETLINK_GENERIC_CONTROL_NEW_FAMILY;
     SendParameters.Version = 0;
-    Status = NetpNetlinkGenericControlSendCommand(Socket,
+    Status = NetlinkpGenericControlSendCommand(Socket,
                                                   Family,
                                                   &SendParameters,
                                                   NULL,
@@ -354,14 +355,14 @@ Return Value:
 
 GetFamilyEnd:
     if (Family != NULL) {
-        NetpNetlinkGenericFamilyReleaseReference(Family);
+        NetlinkpGenericFamilyReleaseReference(Family);
     }
 
     return Status;
 }
 
 KSTATUS
-NetpNetlinkGenericControlSendCommand (
+NetlinkpGenericControlSendCommand (
     PNET_SOCKET Socket,
     PNETLINK_GENERIC_FAMILY Family,
     PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters,
@@ -536,7 +537,7 @@ Return Value:
     //
 
     Parameters->Message.Type = NETLINK_GENERIC_ID_CONTROL;
-    Status = NetNetlinkGenericSendCommand(Socket, Packet, Parameters);
+    Status = NetlinkGenericSendCommand(Socket, Packet, Parameters);
     if (!KSUCCESS(Status)) {
         goto SendCommandEnd;
     }

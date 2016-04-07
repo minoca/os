@@ -66,15 +66,15 @@ struct _NETLINK_GENERIC_FAMILY {
 // Store the lock and tree for storing the generic netlink families.
 //
 
-extern PSHARED_EXCLUSIVE_LOCK NetNetlinkGenericFamilyLock;
-extern RED_BLACK_TREE NetNetlinkGenericFamilyTree;
+extern PSHARED_EXCLUSIVE_LOCK NetlinkGenericFamilyLock;
+extern RED_BLACK_TREE NetlinkGenericFamilyTree;
 
 //
 // -------------------------------------------------------- Function Prototypes
 //
 
 VOID
-NetpNetlinkGenericControlInitialize (
+NetlinkpGenericControlInitialize (
     VOID
     );
 
@@ -95,7 +95,7 @@ Return Value:
 --*/
 
 KSTATUS
-NetpNetlinkGenericControlSendNotification (
+NetlinkpGenericControlSendNotification (
     PNET_SOCKET Socket,
     UCHAR Command,
     PNETLINK_GENERIC_FAMILY Family,
@@ -133,7 +133,7 @@ Return Value:
 --*/
 
 PNETLINK_GENERIC_FAMILY
-NetpNetlinkGenericLookupFamilyById (
+NetlinkpGenericLookupFamilyById (
     ULONG FamilyId
     );
 
@@ -157,7 +157,7 @@ Return Value:
 --*/
 
 PNETLINK_GENERIC_FAMILY
-NetpNetlinkGenericLookupFamilyByName (
+NetlinkpGenericLookupFamilyByName (
     PSTR FamilyName
     );
 
@@ -181,7 +181,7 @@ Return Value:
 --*/
 
 VOID
-NetpNetlinkGenericFamilyAddReference (
+NetlinkpGenericFamilyAddReference (
     PNETLINK_GENERIC_FAMILY Family
     );
 
@@ -202,7 +202,7 @@ Return Value:
 --*/
 
 VOID
-NetpNetlinkGenericFamilyReleaseReference (
+NetlinkpGenericFamilyReleaseReference (
     PNETLINK_GENERIC_FAMILY Family
     );
 

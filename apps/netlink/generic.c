@@ -50,9 +50,9 @@ Environment:
 // ------------------------------------------------------------------ Functions
 //
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkGenericFillOutHeader (
+NlGenericFillOutHeader (
     PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     UCHAR Command,
@@ -104,9 +104,9 @@ Return Value:
     return 0;
 }
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkGenericGetFamilyId (
+NlGenericGetFamilyId (
     PNETLINK_LIBRARY_SOCKET Socket,
     PSTR FamilyName,
     PUSHORT FamilyId
@@ -166,10 +166,10 @@ Return Value:
     FamilyNameLength = strlen(FamilyName) + 1;
     MessageLength = NETLINK_ATTRIBUTE_HEADER_LENGTH + FamilyNameLength;
     MessageLength = NETLINK_ALIGN(MessageLength);
-    Status = NetlinkAllocateBuffer(NETLINK_GENERIC_HEADER_LENGTH,
-                                   MessageLength,
-                                   0,
-                                   &Message);
+    Status = NlAllocateBuffer(NETLINK_GENERIC_HEADER_LENGTH,
+                              MessageLength,
+                              0,
+                              &Message);
 
     if (Status == -1) {
         goto GetFamilyIdEnd;
@@ -180,7 +180,7 @@ Return Value:
     //
 
     MessageOffset = 0;
-    Status = NetlinkGenericAddAttribute(
+    Status = NlGenericAddAttribute(
                                  Message,
                                  &MessageOffset,
                                  NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_NAME,
@@ -195,21 +195,21 @@ Return Value:
     // Fill out both the generic and base netlink headers.
     //
 
-    Status = NetlinkGenericFillOutHeader(Socket,
-                                         Message,
-                                         NETLINK_GENERIC_CONTROL_GET_FAMILY,
-                                         0);
+    Status = NlGenericFillOutHeader(Socket,
+                                    Message,
+                                    NETLINK_GENERIC_CONTROL_GET_FAMILY,
+                                    0);
 
     if (Status == -1) {
         goto GetFamilyIdEnd;
     }
 
     MessageLength += NETLINK_GENERIC_HEADER_LENGTH;
-    Status = NetlinkFillOutHeader(Socket,
-                                  Message,
-                                  MessageLength,
-                                  NETLINK_GENERIC_ID_CONTROL,
-                                  0);
+    Status = NlFillOutHeader(Socket,
+                             Message,
+                             MessageLength,
+                             NETLINK_GENERIC_ID_CONTROL,
+                             0);
 
     if (Status == -1) {
         goto GetFamilyIdEnd;
@@ -219,12 +219,7 @@ Return Value:
     // Send off the family ID request message.
     //
 
-    Status = NetlinkSendMessage(Socket,
-                                Message,
-                                NETLINK_KERNEL_PORT_ID,
-                                0,
-                                NULL);
-
+    Status = NlSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0, NULL);
     if (Status == -1) {
         goto GetFamilyIdEnd;
     }
@@ -233,11 +228,7 @@ Return Value:
     // Attempt to receive a new family message.
     //
 
-    Status = NetlinkReceiveMessage(Socket,
-                                   Socket->ReceiveBuffer,
-                                   &PortId,
-                                   NULL);
-
+    Status = NlReceiveMessage(Socket, Socket->ReceiveBuffer, &PortId, NULL);
     if (Status == -1) {
         goto GetFamilyIdEnd;
     }
@@ -266,8 +257,7 @@ Return Value:
 
     BytesReceived -= NETLINK_GENERIC_HEADER_LENGTH;
     Attributes = NETLINK_GENERIC_DATA(GenericHeader);
-    Status = NetlinkGenericGetAttribute(
-                                   Attributes,
+    Status = NlGenericGetAttribute(Attributes,
                                    BytesReceived,
                                    NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID,
                                    (PVOID *)&Id,
@@ -287,9 +277,9 @@ Return Value:
     // Receive the ACK message.
     //
 
-    Status = NetlinkReceiveAcknowledgement(Socket,
-                                           Socket->ReceiveBuffer,
-                                           NETLINK_KERNEL_PORT_ID);
+    Status = NlReceiveAcknowledgement(Socket,
+                                      Socket->ReceiveBuffer,
+                                      NETLINK_KERNEL_PORT_ID);
 
     if (Status == -1) {
         goto GetFamilyIdEnd;
@@ -297,15 +287,15 @@ Return Value:
 
 GetFamilyIdEnd:
     if (Message != NULL) {
-        NetlinkFreeBuffer(Message);
+        NlFreeBuffer(Message);
     }
 
     return Status;
 }
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkGenericAddAttribute (
+NlGenericAddAttribute (
     PNETLINK_MESSAGE_BUFFER Message,
     PULONG MessageOffset,
     USHORT Type,
@@ -371,9 +361,9 @@ Return Value:
     return 0;
 }
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkGenericGetAttribute (
+NlGenericGetAttribute (
     PVOID Attributes,
     ULONG AttributesLength,
     USHORT Type,

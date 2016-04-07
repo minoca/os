@@ -60,17 +60,17 @@ Environment:
 //
 
 KSTATUS
-NetpNetlinkInitializeLink (
+NetlinkpInitializeLink (
     PNET_LINK Link
     );
 
 VOID
-NetpNetlinkDestroyLink (
+NetlinkpDestroyLink (
     PNET_LINK Link
     );
 
 KSTATUS
-NetpNetlinkInitializeSocket (
+NetlinkpInitializeSocket (
     PNET_PROTOCOL_ENTRY ProtocolEntry,
     PNET_NETWORK_ENTRY NetworkEntry,
     ULONG NetworkProtocol,
@@ -78,35 +78,35 @@ NetpNetlinkInitializeSocket (
     );
 
 KSTATUS
-NetpNetlinkBindToAddress (
+NetlinkpBindToAddress (
     PNET_SOCKET Socket,
     PNET_LINK Link,
     PNETWORK_ADDRESS Address
     );
 
 KSTATUS
-NetpNetlinkListen (
+NetlinkpListen (
     PNET_SOCKET Socket
     );
 
 KSTATUS
-NetpNetlinkConnect (
+NetlinkpConnect (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Address
     );
 
 KSTATUS
-NetpNetlinkDisconnect (
+NetlinkpDisconnect (
     PNET_SOCKET Socket
     );
 
 KSTATUS
-NetpNetlinkClose (
+NetlinkpClose (
     PNET_SOCKET Socket
     );
 
 KSTATUS
-NetpNetlinkSend (
+NetlinkpSend (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Destination,
     PNET_SOCKET_LINK_OVERRIDE LinkOverride,
@@ -114,20 +114,20 @@ NetpNetlinkSend (
     );
 
 VOID
-NetpNetlinkProcessReceivedData (
+NetlinkpProcessReceivedData (
     PNET_LINK Link,
     PNET_PACKET_BUFFER Packet
     );
 
 ULONG
-NetpNetlinkPrintAddress (
+NetlinkpPrintAddress (
     PNETWORK_ADDRESS Address,
     PSTR Buffer,
     ULONG BufferLength
     );
 
 KSTATUS
-NetpNetlinkGetSetInformation (
+NetlinkpGetSetInformation (
     PNET_SOCKET Socket,
     SOCKET_INFORMATION_TYPE InformationType,
     UINTN SocketOption,
@@ -137,7 +137,7 @@ NetpNetlinkGetSetInformation (
     );
 
 VOID
-NetpNetlinkProcessReceivedPackets (
+NetlinkpProcessReceivedPackets (
     PNET_LINK Link,
     PNETWORK_ADDRESS SourceAddress,
     PNETWORK_ADDRESS DestinationAddress,
@@ -146,7 +146,7 @@ NetpNetlinkProcessReceivedPackets (
     );
 
 VOID
-NetpNetlinkProcessReceivedSocketData (
+NetlinkpProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
@@ -155,7 +155,7 @@ NetpNetlinkProcessReceivedSocketData (
     );
 
 VOID
-NetpNetlinkProcessReceivedKernelData (
+NetlinkpProcessReceivedKernelData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
@@ -164,7 +164,7 @@ NetpNetlinkProcessReceivedKernelData (
     );
 
 VOID
-NetpNetlinkSendAck (
+NetlinkpSendAck (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
     PNETWORK_ADDRESS DestinationAddress,
@@ -172,13 +172,13 @@ NetpNetlinkSendAck (
     );
 
 KSTATUS
-NetpNetlinkJoinMulticastGroup (
+NetlinkpJoinMulticastGroup (
     PNET_SOCKET Socket,
     ULONG GroupId
     );
 
 VOID
-NetpNetlinkLeaveMulticastGroup (
+NetlinkpLeaveMulticastGroup (
     PNET_SOCKET Socket,
     ULONG GroupId,
     BOOL LockHeld
@@ -188,8 +188,8 @@ NetpNetlinkLeaveMulticastGroup (
 // -------------------------------------------------------------------- Globals
 //
 
-LIST_ENTRY NetNetlinkMulticastSocketList;
-PSHARED_EXCLUSIVE_LOCK NetNetlinkMulticastLock;
+LIST_ENTRY NetlinkMulticastSocketList;
+PSHARED_EXCLUSIVE_LOCK NetlinkMulticastLock;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -221,9 +221,9 @@ Return Value:
     NET_NETWORK_ENTRY NetworkEntry;
     KSTATUS Status;
 
-    INITIALIZE_LIST_HEAD(&NetNetlinkMulticastSocketList);
-    NetNetlinkMulticastLock = KeCreateSharedExclusiveLock();
-    if (NetNetlinkMulticastLock == NULL) {
+    INITIALIZE_LIST_HEAD(&NetlinkMulticastSocketList);
+    NetlinkMulticastLock = KeCreateSharedExclusiveLock();
+    if (NetlinkMulticastLock == NULL) {
 
         ASSERT(FALSE);
 
@@ -235,18 +235,18 @@ Return Value:
 
     NetworkEntry.Domain = NetDomainNetlink;
     NetworkEntry.ParentProtocolNumber = 0;
-    NetworkEntry.Interface.InitializeLink = NetpNetlinkInitializeLink;
-    NetworkEntry.Interface.DestroyLink = NetpNetlinkDestroyLink;
-    NetworkEntry.Interface.InitializeSocket = NetpNetlinkInitializeSocket;
-    NetworkEntry.Interface.BindToAddress = NetpNetlinkBindToAddress;
-    NetworkEntry.Interface.Listen = NetpNetlinkListen;
-    NetworkEntry.Interface.Connect = NetpNetlinkConnect;
-    NetworkEntry.Interface.Disconnect = NetpNetlinkDisconnect;
-    NetworkEntry.Interface.Close = NetpNetlinkClose;
-    NetworkEntry.Interface.Send = NetpNetlinkSend;
-    NetworkEntry.Interface.ProcessReceivedData = NetpNetlinkProcessReceivedData;
-    NetworkEntry.Interface.PrintAddress = NetpNetlinkPrintAddress;
-    NetworkEntry.Interface.GetSetInformation = NetpNetlinkGetSetInformation;
+    NetworkEntry.Interface.InitializeLink = NetlinkpInitializeLink;
+    NetworkEntry.Interface.DestroyLink = NetlinkpDestroyLink;
+    NetworkEntry.Interface.InitializeSocket = NetlinkpInitializeSocket;
+    NetworkEntry.Interface.BindToAddress = NetlinkpBindToAddress;
+    NetworkEntry.Interface.Listen = NetlinkpListen;
+    NetworkEntry.Interface.Connect = NetlinkpConnect;
+    NetworkEntry.Interface.Disconnect = NetlinkpDisconnect;
+    NetworkEntry.Interface.Close = NetlinkpClose;
+    NetworkEntry.Interface.Send = NetlinkpSend;
+    NetworkEntry.Interface.ProcessReceivedData = NetlinkpProcessReceivedData;
+    NetworkEntry.Interface.PrintAddress = NetlinkpPrintAddress;
+    NetworkEntry.Interface.GetSetInformation = NetlinkpGetSetInformation;
     Status = NetRegisterNetworkLayer(&NetworkEntry, NULL);
     if (!KSUCCESS(Status)) {
 
@@ -258,7 +258,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkInitializeLink (
+NetlinkpInitializeLink (
     PNET_LINK Link
     )
 
@@ -285,7 +285,7 @@ Return Value:
 }
 
 VOID
-NetpNetlinkDestroyLink (
+NetlinkpDestroyLink (
     PNET_LINK Link
     )
 
@@ -312,7 +312,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkInitializeSocket (
+NetlinkpInitializeSocket (
     PNET_PROTOCOL_ENTRY ProtocolEntry,
     PNET_NETWORK_ENTRY NetworkEntry,
     ULONG NetworkProtocol,
@@ -371,7 +371,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkBindToAddress (
+NetlinkpBindToAddress (
     PNET_SOCKET Socket,
     PNET_LINK Link,
     PNETWORK_ADDRESS Address
@@ -411,7 +411,7 @@ Return Value:
     LocalInformation.LinkAddress = NULL;
     if (Address->Domain != NetDomainNetlink) {
         Status = STATUS_NOT_SUPPORTED;
-        goto NetlinkBindToAddressEnd;
+        goto BindToAddressEnd;
     }
 
     //
@@ -424,7 +424,7 @@ Return Value:
     if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
         if (NetlinkAddress->Port != 0) {
             Status = STATUS_INVALID_PARAMETER;
-            goto NetlinkBindToAddressEnd;
+            goto BindToAddressEnd;
         }
 
         //
@@ -461,7 +461,7 @@ Return Value:
                            BindingFlags);
 
     if (!KSUCCESS(Status)) {
-        goto NetlinkBindToAddressEnd;
+        goto BindToAddressEnd;
     }
 
     //
@@ -470,18 +470,18 @@ Return Value:
     //
 
     if (NetlinkAddress->Group != 0) {
-        Status = NetpNetlinkJoinMulticastGroup(Socket, NetlinkAddress->Group);
+        Status = NetlinkpJoinMulticastGroup(Socket, NetlinkAddress->Group);
         if (!KSUCCESS(Status)) {
-            goto NetlinkBindToAddressEnd;
+            goto BindToAddressEnd;
         }
     }
 
-NetlinkBindToAddressEnd:
+BindToAddressEnd:
     return Status;
 }
 
 KSTATUS
-NetpNetlinkListen (
+NetlinkpListen (
     PNET_SOCKET Socket
     )
 
@@ -511,23 +511,23 @@ Return Value:
     if (Socket->BindingType == SocketBindingInvalid) {
         RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
         LocalAddress.Domain = NetDomainNetlink;
-        Status = NetpNetlinkBindToAddress(Socket, NULL, &LocalAddress);
+        Status = NetlinkpBindToAddress(Socket, NULL, &LocalAddress);
         if (!KSUCCESS(Status)) {
-            goto NetlinkListenEnd;
+            goto ListenEnd;
         }
     }
 
     Status = NetActivateSocket(Socket);
     if (!KSUCCESS(Status)) {
-        goto NetlinkListenEnd;
+        goto ListenEnd;
     }
 
-NetlinkListenEnd:
+ListenEnd:
     return Status;
 }
 
 KSTATUS
-NetpNetlinkConnect (
+NetlinkpConnect (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Address
     )
@@ -559,7 +559,7 @@ Return Value:
 
     if (Address->Domain != NetDomainNetlink) {
         Status = STATUS_NOT_SUPPORTED;
-        goto NetlinkConnectEnd;
+        goto ConnectEnd;
     }
 
     //
@@ -592,17 +592,17 @@ Return Value:
                            Flags);
 
     if (!KSUCCESS(Status)) {
-        goto NetlinkConnectEnd;
+        goto ConnectEnd;
     }
 
     Status = STATUS_SUCCESS;
 
-NetlinkConnectEnd:
+ConnectEnd:
     return Status;
 }
 
 KSTATUS
-NetpNetlinkDisconnect (
+NetlinkpDisconnect (
     PNET_SOCKET Socket
     )
 
@@ -630,7 +630,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkClose (
+NetlinkpClose (
     PNET_SOCKET Socket
     )
 
@@ -664,7 +664,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkSend (
+NetlinkpSend (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Destination,
     PNET_SOCKET_LINK_OVERRIDE LinkOverride,
@@ -701,17 +701,17 @@ Return Value:
 
 {
 
-    NetpNetlinkProcessReceivedPackets(Socket->Link,
-                                      &Socket->LocalAddress,
-                                      Destination,
-                                      PacketList,
-                                      Socket->Protocol);
+    NetlinkpProcessReceivedPackets(Socket->Link,
+                                   &Socket->LocalAddress,
+                                   Destination,
+                                   PacketList,
+                                   Socket->Protocol);
 
     return STATUS_SUCCESS;
 }
 
 VOID
-NetpNetlinkProcessReceivedData (
+NetlinkpProcessReceivedData (
     PNET_LINK Link,
     PNET_PACKET_BUFFER Packet
     )
@@ -751,7 +751,7 @@ Return Value:
 }
 
 ULONG
-NetpNetlinkPrintAddress (
+NetlinkpPrintAddress (
     PNETWORK_ADDRESS Address,
     PSTR Buffer,
     ULONG BufferLength
@@ -822,7 +822,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkGetSetInformation (
+NetlinkpGetSetInformation (
     PNET_SOCKET Socket,
     SOCKET_INFORMATION_TYPE InformationType,
     UINTN Option,
@@ -876,9 +876,9 @@ Return Value:
     return STATUS_NOT_SUPPORTED_BY_PROTOCOL;
 }
 
-NET_API
+NETLINK_API
 KSTATUS
-NetNetlinkSendMessage (
+NetlinkSendMessage (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
     PNETLINK_MESSAGE_PARAMETERS Parameters
@@ -953,9 +953,9 @@ SendMessageEnd:
     return Status;
 }
 
-NET_API
+NETLINK_API
 VOID
-NetNetlinkRemoveSocketsFromMulticastGroups (
+NetlinkRemoveSocketsFromMulticastGroups (
     ULONG ParentProtocolNumber,
     ULONG GroupOffset,
     ULONG GroupCount
@@ -992,13 +992,13 @@ Return Value:
     ULONG Index;
     PNETLINK_SOCKET Socket;
 
-    if (LIST_EMPTY(&NetNetlinkMulticastSocketList) != FALSE) {
+    if (LIST_EMPTY(&NetlinkMulticastSocketList) != FALSE) {
         return;
     }
 
-    KeAcquireSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
-    CurrentEntry = NetNetlinkMulticastSocketList.Next;
-    while (CurrentEntry != &NetNetlinkMulticastSocketList) {
+    KeAcquireSharedExclusiveLockExclusive(NetlinkMulticastLock);
+    CurrentEntry = NetlinkMulticastSocketList.Next;
+    while (CurrentEntry != &NetlinkMulticastSocketList) {
         Socket = LIST_VALUE(CurrentEntry, NETLINK_SOCKET, MulticastListEntry);
         CurrentEntry = CurrentEntry->Next;
         if (Socket->NetSocket.Protocol->ParentProtocolNumber !=
@@ -1008,13 +1008,13 @@ Return Value:
         }
 
         for (Index = 0; Index < GroupCount; Index += 1) {
-            NetpNetlinkLeaveMulticastGroup(&(Socket->NetSocket),
-                                           GroupOffset + Index,
-                                           TRUE);
+            NetlinkpLeaveMulticastGroup(&(Socket->NetSocket),
+                                        GroupOffset + Index,
+                                        TRUE);
         }
     }
 
-    KeReleaseSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
+    KeReleaseSharedExclusiveLockExclusive(NetlinkMulticastLock);
     return;
 }
 
@@ -1023,7 +1023,7 @@ Return Value:
 //
 
 VOID
-NetpNetlinkProcessReceivedPackets (
+NetlinkpProcessReceivedPackets (
     PNET_LINK Link,
     PNETWORK_ADDRESS SourceAddress,
     PNETWORK_ADDRESS DestinationAddress,
@@ -1089,9 +1089,9 @@ Return Value:
             Packet->Flags |= NET_PACKET_FLAG_MULTICAST;
             GroupIndex = NETLINK_SOCKET_BITMAP_INDEX(Destination->Group);
             GroupMask = NETLINK_SOCKET_BITMAP_MASK(Destination->Group);
-            KeAcquireSharedExclusiveLockShared(NetNetlinkMulticastLock);
-            SocketEntry = NetNetlinkMulticastSocketList.Next;
-            while (SocketEntry != &NetNetlinkMulticastSocketList) {
+            KeAcquireSharedExclusiveLockShared(NetlinkMulticastLock);
+            SocketEntry = NetlinkMulticastSocketList.Next;
+            while (SocketEntry != &NetlinkMulticastSocketList) {
                 NetlinkSocket = LIST_VALUE(SocketEntry,
                                              NETLINK_SOCKET,
                                              MulticastListEntry);
@@ -1126,14 +1126,14 @@ Return Value:
 
                 ASSERT((Socket->Flags & NET_SOCKET_FLAG_KERNEL) == 0);
 
-                NetpNetlinkProcessReceivedSocketData(Link,
-                                                     Socket,
-                                                     Packet,
-                                                     SourceAddress,
-                                                     DestinationAddress);
+                NetlinkpProcessReceivedSocketData(Link,
+                                                  Socket,
+                                                  Packet,
+                                                  SourceAddress,
+                                                  DestinationAddress);
             }
 
-            KeReleaseSharedExclusiveLockShared(NetNetlinkMulticastLock);
+            KeReleaseSharedExclusiveLockShared(NetlinkMulticastLock);
 
             //
             // Clear out the multicast group and send it on to the socket
@@ -1184,11 +1184,11 @@ Return Value:
 
         ASSERT((Packet->Flags & NET_PACKET_FLAG_MULTICAST) == 0);
 
-        NetpNetlinkProcessReceivedSocketData(Link,
-                                             Socket,
-                                             Packet,
-                                             SourceAddress,
-                                             DestinationAddress);
+        NetlinkpProcessReceivedSocketData(Link,
+                                          Socket,
+                                          Packet,
+                                          SourceAddress,
+                                          DestinationAddress);
     }
 
 ProcessReceivedPacketsEnd:
@@ -1200,7 +1200,7 @@ ProcessReceivedPacketsEnd:
 }
 
 VOID
-NetpNetlinkProcessReceivedSocketData (
+NetlinkpProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
@@ -1249,11 +1249,11 @@ Return Value:
     //
 
     if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
-        NetpNetlinkProcessReceivedKernelData(Link,
-                                             Socket,
-                                             Packet,
-                                             SourceAddress,
-                                             DestinationAddress);
+        NetlinkpProcessReceivedKernelData(Link,
+                                          Socket,
+                                          Packet,
+                                          SourceAddress,
+                                          DestinationAddress);
 
     } else {
         Protocol = Socket->Protocol;
@@ -1268,7 +1268,7 @@ Return Value:
 }
 
 VOID
-NetpNetlinkProcessReceivedKernelData (
+NetlinkpProcessReceivedKernelData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
@@ -1379,7 +1379,7 @@ ProcessReceivedKernelDataNextMessage:
             ((Header->Flags & NETLINK_HEADER_FLAG_ACK) != 0)) {
 
             Packet->FooterOffset = Packet->DataOffset + MessageSize;
-            NetpNetlinkSendAck(Socket, Packet, SourceAddress, Status);
+            NetlinkpSendAck(Socket, Packet, SourceAddress, Status);
         }
 
         Packet->DataOffset += MessageSize;
@@ -1391,7 +1391,7 @@ ProcessReceivedKernelDataNextMessage:
 }
 
 VOID
-NetpNetlinkSendAck (
+NetlinkpSendAck (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
     PNETWORK_ADDRESS DestinationAddress,
@@ -1470,13 +1470,13 @@ Return Value:
     Parameters.DestinationAddress = DestinationAddress;
     Parameters.SequenceNumber = ErrorMessage->Header.SequenceNumber;
     Parameters.Type = NETLINK_MESSAGE_TYPE_ERROR;
-    NetNetlinkSendMessage(Socket, AckPacket, &Parameters);
+    NetlinkSendMessage(Socket, AckPacket, &Parameters);
     NetFreeBuffer(AckPacket);
     return;
 }
 
 KSTATUS
-NetpNetlinkJoinMulticastGroup (
+NetlinkpJoinMulticastGroup (
     PNET_SOCKET Socket,
     ULONG GroupId
     )
@@ -1541,7 +1541,7 @@ Return Value:
 
     GroupIndex = NETLINK_SOCKET_BITMAP_INDEX(GroupId);
     GroupMask = NETLINK_SOCKET_BITMAP_MASK(GroupId);
-    KeAcquireSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
+    KeAcquireSharedExclusiveLockExclusive(NetlinkMulticastLock);
     if (GroupId >= NETLINK_SOCKET_BITMAP_GROUP_ID_COUNT(NetlinkSocket)) {
 
         ASSERT(NewBitmapSize > NetlinkSocket->MulticastBitmapSize);
@@ -1566,13 +1566,13 @@ Return Value:
         NetlinkSocket->MulticastGroupCount += 1;
         if (NetlinkSocket->MulticastListEntry.Next == NULL) {
             INSERT_AFTER(&(NetlinkSocket->MulticastListEntry),
-                         &NetNetlinkMulticastSocketList);
+                         &NetlinkMulticastSocketList);
         }
     }
 
     ASSERT(NetlinkSocket->MulticastListEntry.Next != NULL);
 
-    KeReleaseSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
+    KeReleaseSharedExclusiveLockExclusive(NetlinkMulticastLock);
     if (ReleaseBitmap != NULL) {
         MmFreePagedPool(ReleaseBitmap);
     }
@@ -1581,7 +1581,7 @@ Return Value:
 }
 
 VOID
-NetpNetlinkLeaveMulticastGroup (
+NetlinkpLeaveMulticastGroup (
     PNET_SOCKET Socket,
     ULONG GroupId,
     BOOL LockHeld
@@ -1622,7 +1622,7 @@ Return Value:
     GroupIndex = NETLINK_SOCKET_BITMAP_INDEX(GroupId);
     GroupMask = NETLINK_SOCKET_BITMAP_MASK(GroupId);
     if (LockHeld == FALSE) {
-        KeAcquireSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
+        KeAcquireSharedExclusiveLockExclusive(NetlinkMulticastLock);
     }
 
     if ((NetlinkSocket->MulticastBitmap[GroupIndex] & GroupMask) != 0) {
@@ -1635,7 +1635,7 @@ Return Value:
     }
 
     if (LockHeld == FALSE) {
-        KeReleaseSharedExclusiveLockExclusive(NetNetlinkMulticastLock);
+        KeReleaseSharedExclusiveLockExclusive(NetlinkMulticastLock);
     }
 
     return;

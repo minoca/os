@@ -119,8 +119,8 @@ Return Value:
 
     KSTATUS Status;
 
-    Status = NetNetlinkGenericRegisterFamily(&Net80211NetlinkFamilyProperties,
-                                             &Net80211NetlinkFamily);
+    Status = NetlinkGenericRegisterFamily(&Net80211NetlinkFamilyProperties,
+                                          &Net80211NetlinkFamily);
 
     return Status;
 }
@@ -149,7 +149,7 @@ Return Value:
 {
 
     if (Net80211NetlinkFamily != NULL) {
-        NetNetlinkGenericUnregisterFamily(Net80211NetlinkFamily);
+        NetlinkGenericUnregisterFamily(Net80211NetlinkFamily);
         Net80211NetlinkFamily = NULL;
     }
 
@@ -218,7 +218,7 @@ Return Value:
 
     Attributes = Packet->Buffer + Packet->DataOffset;
     AttributesLength = Packet->FooterOffset - Packet->DataOffset;
-    Status = NetNetlinkGenericGetAttribute(
+    Status = NetlinkGenericGetAttribute(
                                      Attributes,
                                      AttributesLength,
                                      NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
@@ -239,11 +239,11 @@ Return Value:
     // join an BSSID that switched SSID's on it.
     //
 
-    Status = NetNetlinkGenericGetAttribute(Attributes,
-                                           AttributesLength,
-                                           NETLINK_GENERIC_80211_ATTRIBUTE_SSID,
-                                           (PVOID *)&Ssid,
-                                           &SsidLength);
+    Status = NetlinkGenericGetAttribute(Attributes,
+                                        AttributesLength,
+                                        NETLINK_GENERIC_80211_ATTRIBUTE_SSID,
+                                        (PVOID *)&Ssid,
+                                        &SsidLength);
 
     if (!KSUCCESS(Status)) {
         goto NetlinkJoinEnd;
@@ -271,7 +271,7 @@ Return Value:
     // sure it is null-terminated and strip the null character if it is.
     //
 
-    Status = NetNetlinkGenericGetAttribute(
+    Status = NetlinkGenericGetAttribute(
                                     Attributes,
                                     AttributesLength,
                                     NETLINK_GENERIC_80211_ATTRIBUTE_PASSPHRASE,
@@ -296,12 +296,11 @@ Return Value:
     // always known.
     //
 
-    Status = NetNetlinkGenericGetAttribute(
-                                         Attributes,
-                                         AttributesLength,
-                                         NETLINK_GENERIC_80211_ATTRIBUTE_BSSID,
-                                         &Bssid,
-                                         &BssidLength);
+    Status = NetlinkGenericGetAttribute(Attributes,
+                                        AttributesLength,
+                                        NETLINK_GENERIC_80211_ATTRIBUTE_BSSID,
+                                        &Bssid,
+                                        &BssidLength);
 
     if (KSUCCESS(Status)) {
         if (BssidLength != NET80211_ADDRESS_SIZE) {
@@ -407,7 +406,7 @@ Return Value:
 
     Attributes = Packet->Buffer + Packet->DataOffset;
     AttributesLength = Packet->FooterOffset - Packet->DataOffset;
-    Status = NetNetlinkGenericGetAttribute(
+    Status = NetlinkGenericGetAttribute(
                                      Attributes,
                                      AttributesLength,
                                      NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,

@@ -185,7 +185,7 @@ typedef struct _NETLINK_GENERIC_SOCKET_OPTION {
 //
 
 KSTATUS
-NetpNetlinkGenericCreateSocket (
+NetlinkpGenericCreateSocket (
     PNET_PROTOCOL_ENTRY ProtocolEntry,
     PNET_NETWORK_ENTRY NetworkEntry,
     ULONG NetworkProtocol,
@@ -193,48 +193,48 @@ NetpNetlinkGenericCreateSocket (
     );
 
 VOID
-NetpNetlinkGenericDestroySocket (
+NetlinkpGenericDestroySocket (
     PNET_SOCKET Socket
     );
 
 KSTATUS
-NetpNetlinkGenericBindToAddress (
+NetlinkpGenericBindToAddress (
     PNET_SOCKET Socket,
     PNET_LINK Link,
     PNETWORK_ADDRESS Address
     );
 
 KSTATUS
-NetpNetlinkGenericListen (
+NetlinkpGenericListen (
     PNET_SOCKET Socket
     );
 
 KSTATUS
-NetpNetlinkGenericAccept (
+NetlinkpGenericAccept (
     PNET_SOCKET Socket,
     PIO_HANDLE *NewConnectionSocket,
     PNETWORK_ADDRESS RemoteAddress
     );
 
 KSTATUS
-NetpNetlinkGenericConnect (
+NetlinkpGenericConnect (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Address
     );
 
 KSTATUS
-NetpNetlinkGenericClose (
+NetlinkpGenericClose (
     PNET_SOCKET Socket
     );
 
 KSTATUS
-NetpNetlinkGenericShutdown (
+NetlinkpGenericShutdown (
     PNET_SOCKET Socket,
     ULONG ShutdownType
     );
 
 KSTATUS
-NetpNetlinkGenericSend (
+NetlinkpGenericSend (
     BOOL FromKernelMode,
     PNET_SOCKET Socket,
     PSOCKET_IO_PARAMETERS Parameters,
@@ -242,7 +242,7 @@ NetpNetlinkGenericSend (
     );
 
 VOID
-NetpNetlinkGenericProcessReceivedData (
+NetlinkpGenericProcessReceivedData (
     PNET_LINK Link,
     PNET_PACKET_BUFFER Packet,
     PNETWORK_ADDRESS SourceAddress,
@@ -251,7 +251,7 @@ NetpNetlinkGenericProcessReceivedData (
     );
 
 KSTATUS
-NetpNetlinkGenericProcessReceivedSocketData (
+NetlinkpGenericProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
@@ -260,7 +260,7 @@ NetpNetlinkGenericProcessReceivedSocketData (
     );
 
 KSTATUS
-NetpNetlinkGenericReceive (
+NetlinkpGenericReceive (
     BOOL FromKernelMode,
     PNET_SOCKET Socket,
     PSOCKET_IO_PARAMETERS Parameters,
@@ -268,7 +268,7 @@ NetpNetlinkGenericReceive (
     );
 
 KSTATUS
-NetpNetlinkGenericGetSetInformation (
+NetlinkpGenericGetSetInformation (
     PNET_SOCKET Socket,
     SOCKET_INFORMATION_TYPE InformationType,
     UINTN SocketOption,
@@ -278,7 +278,7 @@ NetpNetlinkGenericGetSetInformation (
     );
 
 KSTATUS
-NetpNetlinkGenericUserControl (
+NetlinkpGenericUserControl (
     PNET_SOCKET Socket,
     ULONG CodeNumber,
     BOOL FromKernelMode,
@@ -287,13 +287,13 @@ NetpNetlinkGenericUserControl (
     );
 
 VOID
-NetpNetlinkGenericInsertReceivedPacket (
+NetlinkpGenericInsertReceivedPacket (
     PNETLINK_GENERIC_SOCKET Socket,
     PNETLINK_GENERIC_RECEIVED_PACKET Packet
     );
 
 KSTATUS
-NetpNetlinkGenericProcessReceivedKernelData (
+NetlinkpGenericProcessReceivedKernelData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
@@ -302,39 +302,39 @@ NetpNetlinkGenericProcessReceivedKernelData (
     );
 
 PNETLINK_GENERIC_FAMILY
-NetpNetlinkGenericLookupFamilyById (
+NetlinkpGenericLookupFamilyById (
     ULONG MessageType
     );
 
 COMPARISON_RESULT
-NetpNetlinkGenericCompareFamilies (
+NetlinkpGenericCompareFamilies (
     PRED_BLACK_TREE Tree,
     PRED_BLACK_TREE_NODE FirstNode,
     PRED_BLACK_TREE_NODE SecondNode
     );
 
 VOID
-NetpNetlinkGenericDestroyFamily (
+NetlinkpGenericDestroyFamily (
     PNETLINK_GENERIC_FAMILY Family
     );
 
 KSTATUS
-NetpNetlinkGenericAllocateFamilyId (
+NetlinkpGenericAllocateFamilyId (
     PULONG FamilyId
     );
 
 KSTATUS
-NetpNetlinkGenericAllocateMulticastGroups (
+NetlinkpGenericAllocateMulticastGroups (
     PNETLINK_GENERIC_FAMILY Family
     );
 
 VOID
-NetpNetlinkGenericFreeMulticastGroups (
+NetlinkpGenericFreeMulticastGroups (
     PNETLINK_GENERIC_FAMILY Family
     );
 
 KSTATUS
-NetpNetlinkGenericValidateMulticastGroup (
+NetlinkpGenericValidateMulticastGroup (
     ULONG GroupId
     );
 
@@ -342,7 +342,7 @@ NetpNetlinkGenericValidateMulticastGroup (
 // -------------------------------------------------------------------- Globals
 //
 
-NET_PROTOCOL_ENTRY NetNetlinkGenericProtocol = {
+NET_PROTOCOL_ENTRY NetlinkGenericProtocol = {
     {NULL, NULL},
     NetSocketDatagram,
     SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
@@ -350,24 +350,24 @@ NET_PROTOCOL_ENTRY NetNetlinkGenericProtocol = {
     NULL,
     {{0}, {0}, {0}},
     {
-        NetpNetlinkGenericCreateSocket,
-        NetpNetlinkGenericDestroySocket,
-        NetpNetlinkGenericBindToAddress,
-        NetpNetlinkGenericListen,
-        NetpNetlinkGenericAccept,
-        NetpNetlinkGenericConnect,
-        NetpNetlinkGenericClose,
-        NetpNetlinkGenericShutdown,
-        NetpNetlinkGenericSend,
-        NetpNetlinkGenericProcessReceivedData,
-        NetpNetlinkGenericProcessReceivedSocketData,
-        NetpNetlinkGenericReceive,
-        NetpNetlinkGenericGetSetInformation,
-        NetpNetlinkGenericUserControl
+        NetlinkpGenericCreateSocket,
+        NetlinkpGenericDestroySocket,
+        NetlinkpGenericBindToAddress,
+        NetlinkpGenericListen,
+        NetlinkpGenericAccept,
+        NetlinkpGenericConnect,
+        NetlinkpGenericClose,
+        NetlinkpGenericShutdown,
+        NetlinkpGenericSend,
+        NetlinkpGenericProcessReceivedData,
+        NetlinkpGenericProcessReceivedSocketData,
+        NetlinkpGenericReceive,
+        NetlinkpGenericGetSetInformation,
+        NetlinkpGenericUserControl
     }
 };
 
-NETLINK_GENERIC_SOCKET_OPTION NetNetlinkGenericSocketOptions[] = {
+NETLINK_GENERIC_SOCKET_OPTION NetlinkGenericSocketOptions[] = {
     {
         SocketInformationBasic,
         SocketBasicOptionSendBufferSize,
@@ -404,36 +404,36 @@ NETLINK_GENERIC_SOCKET_OPTION NetNetlinkGenericSocketOptions[] = {
     },
 };
 
-PIO_HANDLE NetNetlinkGenericSocketHandle;
-PNET_SOCKET NetNetlinkGenericSocket;
+PIO_HANDLE NetlinkGenericSocketHandle;
+PNET_SOCKET NetlinkGenericSocket;
 
 //
 // Store the lock and tree for storing the generic netlink families.
 //
 
-PSHARED_EXCLUSIVE_LOCK NetNetlinkGenericFamilyLock;
-RED_BLACK_TREE NetNetlinkGenericFamilyTree;
+PSHARED_EXCLUSIVE_LOCK NetlinkGenericFamilyLock;
+RED_BLACK_TREE NetlinkGenericFamilyTree;
 
 //
 // Store the next generic family message type to allocate.
 //
 
-ULONG NetNetlinkGenericFamilyNextId = NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM;
+ULONG NetlinkGenericFamilyNextId = NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM;
 
 //
 // Store a pointer to the multicast group bitmap and its size, in bytes.
 //
 
-PULONG NetNetlinkGenericMulticastBitmap = NULL;
-ULONG NetNetlinkGenericMulticastBitmapSize = 0;
+PULONG NetlinkGenericMulticastBitmap = NULL;
+ULONG NetlinkGenericMulticastBitmapSize = 0;
 
 //
 // ------------------------------------------------------------------ Functions
 //
 
-NET_API
+NETLINK_API
 KSTATUS
-NetNetlinkGenericRegisterFamily (
+NetlinkGenericRegisterFamily (
     PNETLINK_GENERIC_FAMILY_PROPERTIES Properties,
     PNETLINK_GENERIC_FAMILY *Family
     )
@@ -543,14 +543,14 @@ Return Value:
     // Acquire the family tree lock and attempt to insert this new family.
     //
 
-    KeAcquireSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+    KeAcquireSharedExclusiveLockExclusive(NetlinkGenericFamilyLock);
     LockHeld = TRUE;
 
     //
     // Check to make sure the name is not a duplicate.
     //
 
-    FoundNode = RtlRedBlackTreeGetLowestNode(&NetNetlinkGenericFamilyTree);
+    FoundNode = RtlRedBlackTreeGetLowestNode(&NetlinkGenericFamilyTree);
     while (FoundNode != NULL) {
         FoundFamily = RED_BLACK_TREE_VALUE(FoundNode,
                                            NETLINK_GENERIC_FAMILY,
@@ -565,7 +565,7 @@ Return Value:
             goto RegisterFamilyEnd;
         }
 
-        FoundNode = RtlRedBlackTreeGetNextNode(&NetNetlinkGenericFamilyTree,
+        FoundNode = RtlRedBlackTreeGetNextNode(&NetlinkGenericFamilyTree,
                                                FALSE,
                                                FoundNode);
     }
@@ -575,7 +575,7 @@ Return Value:
     //
 
     if (NewFamily->Properties.Id == 0) {
-        Status = NetpNetlinkGenericAllocateFamilyId(&NewId);
+        Status = NetlinkpGenericAllocateFamilyId(&NewId);
         if (!KSUCCESS(Status)) {
             goto RegisterFamilyEnd;
         }
@@ -587,7 +587,7 @@ Return Value:
     //
 
     } else {
-        FoundNode = RtlRedBlackTreeSearch(&NetNetlinkGenericFamilyTree,
+        FoundNode = RtlRedBlackTreeSearch(&NetlinkGenericFamilyTree,
                                           &(NewFamily->TreeNode));
 
         if (FoundNode != NULL) {
@@ -601,7 +601,7 @@ Return Value:
     //
 
     if (NewFamily->Properties.MulticastGroupCount != 0) {
-        Status = NetpNetlinkGenericAllocateMulticastGroups(NewFamily);
+        Status = NetlinkpGenericAllocateMulticastGroups(NewFamily);
         if (!KSUCCESS(Status)) {
             goto RegisterFamilyEnd;
         }
@@ -611,8 +611,8 @@ Return Value:
     // Insert the new family into the tree.
     //
 
-    RtlRedBlackTreeInsert(&NetNetlinkGenericFamilyTree, &(NewFamily->TreeNode));
-    KeReleaseSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+    RtlRedBlackTreeInsert(&NetlinkGenericFamilyTree, &(NewFamily->TreeNode));
+    KeReleaseSharedExclusiveLockExclusive(NetlinkGenericFamilyLock);
     LockHeld = FALSE;
     Status = STATUS_SUCCESS;
 
@@ -620,19 +620,18 @@ Return Value:
     // Blast out some notifications.
     //
 
-    NetpNetlinkGenericControlSendNotification(
-                                            NetNetlinkGenericSocket,
-                                            NETLINK_GENERIC_CONTROL_NEW_FAMILY,
-                                            NewFamily,
-                                            NULL,
-                                            0);
+    NetlinkpGenericControlSendNotification(NetlinkGenericSocket,
+                                           NETLINK_GENERIC_CONTROL_NEW_FAMILY,
+                                           NewFamily,
+                                           NULL,
+                                           0);
 
     for (Index = 0;
          Index < NewFamily->Properties.MulticastGroupCount;
          Index += 1) {
 
-        NetpNetlinkGenericControlSendNotification(
-                               NetNetlinkGenericSocket,
+        NetlinkpGenericControlSendNotification(
+                               NetlinkGenericSocket,
                                NETLINK_GENERIC_CONTROL_NEW_MULTICAST_GROUP,
                                NewFamily,
                                &(NewFamily->Properties.MulticastGroups[Index]),
@@ -641,12 +640,12 @@ Return Value:
 
 RegisterFamilyEnd:
     if (LockHeld != FALSE) {
-        KeReleaseSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+        KeReleaseSharedExclusiveLockExclusive(NetlinkGenericFamilyLock);
     }
 
     if (!KSUCCESS(Status)) {
         if (NewFamily != INVALID_HANDLE) {
-            NetpNetlinkGenericFamilyReleaseReference(NewFamily);
+            NetlinkpGenericFamilyReleaseReference(NewFamily);
             NewFamily = INVALID_HANDLE;
         }
     }
@@ -658,9 +657,9 @@ RegisterFamilyEnd:
     return Status;
 }
 
-NET_API
+NETLINK_API
 VOID
-NetNetlinkGenericUnregisterFamily (
+NetlinkGenericUnregisterFamily (
     PNETLINK_GENERIC_FAMILY Family
     )
 
@@ -686,9 +685,9 @@ Return Value:
     PRED_BLACK_TREE_NODE FoundNode;
     BOOL LockHeld;
 
-    KeAcquireSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+    KeAcquireSharedExclusiveLockExclusive(NetlinkGenericFamilyLock);
     LockHeld = TRUE;
-    FoundNode = RtlRedBlackTreeSearch(&NetNetlinkGenericFamilyTree,
+    FoundNode = RtlRedBlackTreeSearch(&NetlinkGenericFamilyTree,
                                       &(Family->TreeNode));
 
     if (FoundNode == NULL) {
@@ -703,7 +702,7 @@ Return Value:
         goto UnregisterFamilyEnd;
     }
 
-    RtlRedBlackTreeRemove(&NetNetlinkGenericFamilyTree, &(Family->TreeNode));
+    RtlRedBlackTreeRemove(&NetlinkGenericFamilyTree, &(Family->TreeNode));
 
     //
     // If the family had allocated multicast groups, then release them now.
@@ -712,10 +711,10 @@ Return Value:
     if ((Family->Properties.MulticastGroupCount != 0) &&
         (Family->MulticastGroupOffset != 0)) {
 
-        NetpNetlinkGenericFreeMulticastGroups(Family);
+        NetlinkpGenericFreeMulticastGroups(Family);
     }
 
-    KeReleaseSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+    KeReleaseSharedExclusiveLockExclusive(NetlinkGenericFamilyLock);
     LockHeld = FALSE;
 
     //
@@ -729,26 +728,26 @@ Return Value:
         KeYield();
     }
 
-    NetpNetlinkGenericControlSendNotification(
-                                         NetNetlinkGenericSocket,
+    NetlinkpGenericControlSendNotification(
+                                         NetlinkGenericSocket,
                                          NETLINK_GENERIC_CONTROL_DELETE_FAMILY,
                                          Family,
                                          NULL,
                                          0);
 
-    NetpNetlinkGenericFamilyReleaseReference(Family);
+    NetlinkpGenericFamilyReleaseReference(Family);
 
 UnregisterFamilyEnd:
     if (LockHeld != FALSE) {
-        KeReleaseSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+        KeReleaseSharedExclusiveLockExclusive(NetlinkGenericFamilyLock);
     }
 
     return;
 }
 
-NET_API
+NETLINK_API
 KSTATUS
-NetNetlinkGenericSendCommand (
+NetlinkGenericSendCommand (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
     PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
@@ -791,7 +790,7 @@ Return Value:
     Header->Command = Parameters->Command;
     Header->Version = Parameters->Version;
     Header->Reserved = 0;
-    Status = NetNetlinkSendMessage(Socket, Packet, &(Parameters->Message));
+    Status = NetlinkSendMessage(Socket, Packet, &(Parameters->Message));
     if (!KSUCCESS(Status)) {
         goto SendCommandEnd;
     }
@@ -800,9 +799,9 @@ SendCommandEnd:
     return Status;
 }
 
-NET_API
+NETLINK_API
 KSTATUS
-NetNetlinkGenericGetAttribute (
+NetlinkGenericGetAttribute (
     PVOID Attributes,
     ULONG AttributesLength,
     USHORT Type,
@@ -876,7 +875,7 @@ NetpNetlinkGenericInitialize (
 
 Routine Description:
 
-    This routine initializes support for UDP sockets.
+    This routine initializes support for generic netlink sockets.
 
 Arguments:
 
@@ -903,17 +902,17 @@ Return Value:
     //
 
     if (Phase == 0) {
-        NetNetlinkGenericFamilyLock = KeCreateSharedExclusiveLock();
-        if (NetNetlinkGenericFamilyLock == NULL) {
+        NetlinkGenericFamilyLock = KeCreateSharedExclusiveLock();
+        if (NetlinkGenericFamilyLock == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto InitializeEnd;
         }
 
-        RtlRedBlackTreeInitialize(&NetNetlinkGenericFamilyTree,
+        RtlRedBlackTreeInitialize(&NetlinkGenericFamilyTree,
                                   0,
-                                  NetpNetlinkGenericCompareFamilies);
+                                  NetlinkpGenericCompareFamilies);
 
-        Status = NetRegisterProtocol(&NetNetlinkGenericProtocol, NULL);
+        Status = NetRegisterProtocol(&NetlinkGenericProtocol, NULL);
         if (!KSUCCESS(Status)) {
             goto InitializeEnd;
         }
@@ -930,14 +929,14 @@ Return Value:
                                 NetSocketDatagram,
                                 SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
                                 0,
-                                &NetNetlinkGenericSocketHandle);
+                                &NetlinkGenericSocketHandle);
 
         if (!KSUCCESS(Status)) {
             goto InitializeEnd;
         }
 
-        Status = IoGetSocketFromHandle(NetNetlinkGenericSocketHandle,
-                                       (PVOID)&NetNetlinkGenericSocket);
+        Status = IoGetSocketFromHandle(NetlinkGenericSocketHandle,
+                                       (PVOID)&NetlinkGenericSocket);
 
         if (!KSUCCESS(Status)) {
             goto InitializeEnd;
@@ -947,13 +946,11 @@ Return Value:
         // Add the kernel flag and bind it to port 0.
         //
 
-        RtlAtomicOr32(&(NetNetlinkGenericSocket->Flags),
-                      NET_SOCKET_FLAG_KERNEL);
-
+        RtlAtomicOr32(&(NetlinkGenericSocket->Flags), NET_SOCKET_FLAG_KERNEL);
         RtlZeroMemory(&Address, sizeof(NETLINK_ADDRESS));
         Address.Domain = NetDomainNetlink;
         Status = IoSocketBindToAddress(TRUE,
-                                       NetNetlinkGenericSocketHandle,
+                                       NetlinkGenericSocketHandle,
                                        NULL,
                                        &(Address.NetworkAddress),
                                        NULL,
@@ -963,7 +960,7 @@ Return Value:
             goto InitializeEnd;
         }
 
-        NetpNetlinkGenericControlInitialize();
+        NetlinkpGenericControlInitialize();
     }
 
 InitializeEnd:
@@ -974,7 +971,7 @@ InitializeEnd:
 }
 
 KSTATUS
-NetpNetlinkGenericCreateSocket (
+NetlinkpGenericCreateSocket (
     PNET_PROTOCOL_ENTRY ProtocolEntry,
     PNET_NETWORK_ENTRY NetworkEntry,
     ULONG NetworkProtocol,
@@ -1030,7 +1027,7 @@ Return Value:
 
     if (GenericSocket == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto NetlinkGenericCreateSocketEnd;
+        goto GenericCreateSocketEnd;
     }
 
     RtlZeroMemory(GenericSocket, sizeof(NETLINK_GENERIC_SOCKET));
@@ -1050,7 +1047,7 @@ Return Value:
     GenericSocket->ReceiveLock = KeCreateQueuedLock();
     if (GenericSocket->ReceiveLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto NetlinkGenericCreateSocketEnd;
+        goto GenericCreateSocketEnd;
     }
 
     //
@@ -1067,7 +1064,7 @@ Return Value:
                               NetSocket);
 
     if (!KSUCCESS(Status)) {
-        goto NetlinkGenericCreateSocketEnd;
+        goto GenericCreateSocketEnd;
     }
 
     //
@@ -1088,7 +1085,7 @@ Return Value:
     PacketSizeInformation->HeaderSize += NETLINK_GENERIC_HEADER_LENGTH;
     Status = STATUS_SUCCESS;
 
-NetlinkGenericCreateSocketEnd:
+GenericCreateSocketEnd:
     if (!KSUCCESS(Status)) {
         if (GenericSocket != NULL) {
             if (GenericSocket->ReceiveLock != NULL) {
@@ -1106,7 +1103,7 @@ NetlinkGenericCreateSocketEnd:
 }
 
 VOID
-NetpNetlinkGenericDestroySocket (
+NetlinkpGenericDestroySocket (
     PNET_SOCKET Socket
     )
 
@@ -1165,7 +1162,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkGenericBindToAddress (
+NetlinkpGenericBindToAddress (
     PNET_SOCKET Socket,
     PNET_LINK Link,
     PNETWORK_ADDRESS Address
@@ -1203,7 +1200,7 @@ Return Value:
     LockHeld = FALSE;
     if (Socket->LocalAddress.Domain != NetDomainInvalid) {
         Status = STATUS_INVALID_PARAMETER;
-        goto NetlinkGenericBindToAddressEnd;
+        goto GenericBindToAddressEnd;
     }
 
     //
@@ -1212,7 +1209,7 @@ Return Value:
 
     if (Address->Domain != NetDomainNetlink) {
         Status = STATUS_NOT_SUPPORTED;
-        goto NetlinkGenericBindToAddressEnd;
+        goto GenericBindToAddressEnd;
     }
 
     //
@@ -1224,12 +1221,12 @@ Return Value:
 
     NetlinkAddress = (PNETLINK_ADDRESS)Address;
     if (NetlinkAddress->Group != 0) {
-        KeAcquireSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+        KeAcquireSharedExclusiveLockShared(NetlinkGenericFamilyLock);
         LockHeld = TRUE;
         GroupId = NetlinkAddress->Group;
-        Status = NetpNetlinkGenericValidateMulticastGroup(GroupId);
+        Status = NetlinkpGenericValidateMulticastGroup(GroupId);
         if (!KSUCCESS(Status)) {
-            goto NetlinkGenericBindToAddressEnd;
+            goto GenericBindToAddressEnd;
         }
     }
 
@@ -1239,11 +1236,11 @@ Return Value:
 
     Status = Socket->Network->Interface.BindToAddress(Socket, Link, Address);
     if (!KSUCCESS(Status)) {
-        goto NetlinkGenericBindToAddressEnd;
+        goto GenericBindToAddressEnd;
     }
 
     if (LockHeld != FALSE) {
-        KeReleaseSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+        KeReleaseSharedExclusiveLockShared(NetlinkGenericFamilyLock);
         LockHeld = FALSE;
     }
 
@@ -1254,21 +1251,21 @@ Return Value:
 
     Status = Socket->Network->Interface.Listen(Socket);
     if (!KSUCCESS(Status)) {
-        goto NetlinkGenericBindToAddressEnd;
+        goto GenericBindToAddressEnd;
     }
 
     IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
 
-NetlinkGenericBindToAddressEnd:
+GenericBindToAddressEnd:
     if (LockHeld != FALSE) {
-        KeReleaseSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+        KeReleaseSharedExclusiveLockShared(NetlinkGenericFamilyLock);
     }
 
     return Status;
 }
 
 KSTATUS
-NetpNetlinkGenericListen (
+NetlinkpGenericListen (
     PNET_SOCKET Socket
     )
 
@@ -1295,7 +1292,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkGenericAccept (
+NetlinkpGenericAccept (
     PNET_SOCKET Socket,
     PIO_HANDLE *NewConnectionSocket,
     PNETWORK_ADDRESS RemoteAddress
@@ -1331,7 +1328,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkGenericConnect (
+NetlinkpGenericConnect (
     PNET_SOCKET Socket,
     PNETWORK_ADDRESS Address
     )
@@ -1367,9 +1364,9 @@ Return Value:
     NetlinkAddress = (PNETLINK_ADDRESS)Address;
     if (NetlinkAddress->Group != 0) {
         GroupId = NetlinkAddress->Group;
-        Status = NetpNetlinkGenericValidateMulticastGroup(GroupId);
+        Status = NetlinkpGenericValidateMulticastGroup(GroupId);
         if (!KSUCCESS(Status)) {
-            goto NetlinkGenericConnectEnd;
+            goto GenericConnectEnd;
         }
     }
 
@@ -1379,17 +1376,17 @@ Return Value:
 
     Status = Socket->Network->Interface.Connect(Socket, Address);
     if (!KSUCCESS(Status)) {
-        goto NetlinkGenericConnectEnd;
+        goto GenericConnectEnd;
     }
 
     IoSetIoObjectState(Socket->KernelSocket.IoState, POLL_EVENT_OUT, TRUE);
 
-NetlinkGenericConnectEnd:
+GenericConnectEnd:
     return Status;
 }
 
 KSTATUS
-NetpNetlinkGenericClose (
+NetlinkpGenericClose (
     PNET_SOCKET Socket
     )
 
@@ -1420,17 +1417,17 @@ Return Value:
 
     Status = Socket->Network->Interface.Close(Socket);
     if (!KSUCCESS(Status)) {
-        goto NetlinkGenericCloseEnd;
+        goto GenericCloseEnd;
     }
 
     IoSocketReleaseReference(&(Socket->KernelSocket));
 
-NetlinkGenericCloseEnd:
+GenericCloseEnd:
     return Status;
 }
 
 KSTATUS
-NetpNetlinkGenericShutdown (
+NetlinkpGenericShutdown (
     PNET_SOCKET Socket,
     ULONG ShutdownType
     )
@@ -1460,7 +1457,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkGenericSend (
+NetlinkpGenericSend (
     BOOL FromKernelMode,
     PNET_SOCKET Socket,
     PSOCKET_IO_PARAMETERS Parameters,
@@ -1521,7 +1518,7 @@ Return Value:
 
         Destination = &DestinationLocal;
         if (!KSUCCESS(Status)) {
-            goto NetlinkGenericSendEnd;
+            goto GenericSendEnd;
         }
     }
 
@@ -1530,7 +1527,7 @@ Return Value:
 
         if (Socket->BindingType != SocketFullyBound) {
             Status = STATUS_NOT_CONFIGURED;
-            goto NetlinkGenericSendEnd;
+            goto GenericSendEnd;
         }
 
         Destination = &(Socket->RemoteAddress);
@@ -1542,7 +1539,7 @@ Return Value:
 
     if (Parameters->ControlDataSize != 0) {
         Status = STATUS_NOT_SUPPORTED;
-        goto NetlinkGenericSendEnd;
+        goto GenericSendEnd;
     }
 
     //
@@ -1552,7 +1549,7 @@ Return Value:
 
     if (Size > GenericSocket->MaxPacketSize) {
         Status = STATUS_MESSAGE_TOO_LONG;
-        goto NetlinkGenericSendEnd;
+        goto GenericSendEnd;
     }
 
     //
@@ -1564,9 +1561,9 @@ Return Value:
     if (Socket->BindingType == SocketBindingInvalid) {
         RtlZeroMemory(&LocalAddress, sizeof(NETWORK_ADDRESS));
         LocalAddress.Domain = Socket->Network->Domain;
-        Status = NetpNetlinkGenericBindToAddress(Socket, NULL, &LocalAddress);
+        Status = NetlinkpGenericBindToAddress(Socket, NULL, &LocalAddress);
         if (!KSUCCESS(Status)) {
-            goto NetlinkGenericSendEnd;
+            goto GenericSendEnd;
         }
     }
 
@@ -1582,7 +1579,7 @@ Return Value:
                                &Packet);
 
     if (!KSUCCESS(Status)) {
-        goto NetlinkGenericSendEnd;
+        goto GenericSendEnd;
     }
 
     NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
@@ -1598,7 +1595,7 @@ Return Value:
                                 FALSE);
 
     if (!KSUCCESS(Status)) {
-        goto NetlinkGenericSendEnd;
+        goto GenericSendEnd;
     }
 
     //
@@ -1611,13 +1608,13 @@ Return Value:
                                              &PacketList);
 
     if (!KSUCCESS(Status)) {
-        goto NetlinkGenericSendEnd;
+        goto GenericSendEnd;
     }
 
     Packet = NULL;
     BytesComplete = Size;
 
-NetlinkGenericSendEnd:
+GenericSendEnd:
     Parameters->Size = BytesComplete;
     if (!KSUCCESS(Status)) {
         NetDestroyBufferList(&PacketList);
@@ -1627,7 +1624,7 @@ NetlinkGenericSendEnd:
 }
 
 VOID
-NetpNetlinkGenericProcessReceivedData (
+NetlinkpGenericProcessReceivedData (
     PNET_LINK Link,
     PNET_PACKET_BUFFER Packet,
     PNETWORK_ADDRESS SourceAddress,
@@ -1674,7 +1671,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkGenericProcessReceivedSocketData (
+NetlinkpGenericProcessReceivedSocketData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
@@ -1735,12 +1732,11 @@ Return Value:
     //
 
     if ((Socket->Flags & NET_SOCKET_FLAG_KERNEL) != 0) {
-        Status = NetpNetlinkGenericProcessReceivedKernelData(
-                                                           Link,
-                                                           Socket,
-                                                           Packet,
-                                                           SourceAddress,
-                                                           DestinationAddress);
+        Status = NetlinkpGenericProcessReceivedKernelData(Link,
+                                                          Socket,
+                                                          Packet,
+                                                          SourceAddress,
+                                                          DestinationAddress);
 
         return Status;
     }
@@ -1795,7 +1791,7 @@ Return Value:
     // Work to insert the packet on the list of received packets.
     //
 
-    NetpNetlinkGenericInsertReceivedPacket(GenericSocket, ReceivePacket);
+    NetlinkpGenericInsertReceivedPacket(GenericSocket, ReceivePacket);
 
 ProcessReceivedSocketDataEnd:
     if (!KSUCCESS(Status)) {
@@ -1816,7 +1812,7 @@ ProcessReceivedSocketDataEnd:
 }
 
 KSTATUS
-NetpNetlinkGenericReceive (
+NetlinkpGenericReceive (
     BOOL FromKernelMode,
     PNET_SOCKET Socket,
     PSOCKET_IO_PARAMETERS Parameters,
@@ -1884,7 +1880,7 @@ Return Value:
     Parameters->SocketIoFlags = 0;
     if ((Flags & SOCKET_IO_OUT_OF_BAND) != 0) {
         Status = STATUS_NOT_SUPPORTED;
-        goto NetlinkGenericReceiveEnd;
+        goto GenericReceiveEnd;
     }
 
     //
@@ -1893,7 +1889,7 @@ Return Value:
 
     if (Parameters->ControlDataSize != 0) {
         Status = STATUS_NOT_SUPPORTED;
-        goto NetlinkGenericReceiveEnd;
+        goto GenericReceiveEnd;
     }
 
     Packet = NULL;
@@ -1955,7 +1951,7 @@ Return Value:
                                         &ReturnedEvents);
 
         if (!KSUCCESS(Status)) {
-            goto NetlinkGenericReceiveEnd;
+            goto GenericReceiveEnd;
         }
 
         if ((ReturnedEvents & POLL_ERROR_EVENTS) != 0) {
@@ -1969,7 +1965,7 @@ Return Value:
                 }
             }
 
-            goto NetlinkGenericReceiveEnd;
+            goto GenericReceiveEnd;
         }
 
         KeAcquireQueuedLock(GenericSocket->ReceiveLock);
@@ -2013,7 +2009,7 @@ Return Value:
                                     TRUE);
 
         if (!KSUCCESS(Status)) {
-            goto NetlinkGenericReceiveEnd;
+            goto GenericReceiveEnd;
         }
 
         //
@@ -2032,7 +2028,7 @@ Return Value:
                                           sizeof(NETWORK_ADDRESS));
 
                 if (!KSUCCESS(Status)) {
-                    goto NetlinkGenericReceiveEnd;
+                    goto GenericReceiveEnd;
                 }
             }
         }
@@ -2080,7 +2076,7 @@ Return Value:
         break;
     }
 
-NetlinkGenericReceiveEnd:
+GenericReceiveEnd:
     if (LockHeld != FALSE) {
         KeReleaseQueuedLock(GenericSocket->ReceiveLock);
     }
@@ -2090,7 +2086,7 @@ NetlinkGenericReceiveEnd:
 }
 
 KSTATUS
-NetpNetlinkGenericGetSetInformation (
+NetlinkpGenericGetSetInformation (
     PNET_SOCKET Socket,
     SOCKET_INFORMATION_TYPE InformationType,
     UINTN Option,
@@ -2161,7 +2157,7 @@ Return Value:
         (InformationType != SocketInformationNetlinkGeneric)) {
 
         Status = STATUS_NOT_SUPPORTED;
-        goto NetlinkGenericGetSetInformationEnd;
+        goto GenericGetSetInformationEnd;
     }
 
     //
@@ -2169,11 +2165,11 @@ Return Value:
     // protocol.
     //
 
-    Count = sizeof(NetNetlinkGenericSocketOptions) /
-            sizeof(NetNetlinkGenericSocketOptions[0]);
+    Count = sizeof(NetlinkGenericSocketOptions) /
+            sizeof(NetlinkGenericSocketOptions[0]);
 
     for (Index = 0; Index < Count; Index += 1) {
-        GenericOption = &(NetNetlinkGenericSocketOptions[Index]);
+        GenericOption = &(NetlinkGenericSocketOptions[Index]);
         if ((GenericOption->InformationType == InformationType) &&
             (GenericOption->Option == Option)) {
 
@@ -2189,7 +2185,7 @@ Return Value:
             Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
         }
 
-        goto NetlinkGenericGetSetInformationEnd;
+        goto GenericGetSetInformationEnd;
     }
 
     //
@@ -2199,13 +2195,13 @@ Return Value:
     if (Set != FALSE) {
         if (GenericOption->SetAllowed == FALSE) {
             Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
-            goto NetlinkGenericGetSetInformationEnd;
+            goto GenericGetSetInformationEnd;
         }
 
         if (*DataSize < GenericOption->Size) {
             *DataSize = GenericOption->Size;
             Status = STATUS_BUFFER_TOO_SMALL;
-            goto NetlinkGenericGetSetInformationEnd;
+            goto GenericGetSetInformationEnd;
         }
     }
 
@@ -2353,7 +2349,7 @@ Return Value:
     }
 
     if (!KSUCCESS(Status)) {
-        goto NetlinkGenericGetSetInformationEnd;
+        goto GenericGetSetInformationEnd;
     }
 
     //
@@ -2385,16 +2381,16 @@ Return Value:
         if (*DataSize < GenericOption->Size) {
             *DataSize = GenericOption->Size;
             Status = STATUS_BUFFER_TOO_SMALL;
-            goto NetlinkGenericGetSetInformationEnd;
+            goto GenericGetSetInformationEnd;
         }
     }
 
-NetlinkGenericGetSetInformationEnd:
+GenericGetSetInformationEnd:
     return Status;
 }
 
 KSTATUS
-NetpNetlinkGenericUserControl (
+NetlinkpGenericUserControl (
     PNET_SOCKET Socket,
     ULONG CodeNumber,
     BOOL FromKernelMode,
@@ -2435,7 +2431,7 @@ Return Value:
 }
 
 PNETLINK_GENERIC_FAMILY
-NetpNetlinkGenericLookupFamilyById (
+NetlinkpGenericLookupFamilyById (
     ULONG FamilyId
     )
 
@@ -2466,8 +2462,8 @@ Return Value:
 
     FoundFamily = NULL;
     SearchFamily.Properties.Id = FamilyId;
-    KeAcquireSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
-    FoundNode = RtlRedBlackTreeSearch(&NetNetlinkGenericFamilyTree,
+    KeAcquireSharedExclusiveLockShared(NetlinkGenericFamilyLock);
+    FoundNode = RtlRedBlackTreeSearch(&NetlinkGenericFamilyTree,
                                       &(SearchFamily.TreeNode));
 
     if (FoundNode != NULL) {
@@ -2475,15 +2471,15 @@ Return Value:
                                            NETLINK_GENERIC_FAMILY,
                                            TreeNode);
 
-        NetpNetlinkGenericFamilyAddReference(FoundFamily);
+        NetlinkpGenericFamilyAddReference(FoundFamily);
     }
 
-    KeReleaseSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+    KeReleaseSharedExclusiveLockShared(NetlinkGenericFamilyLock);
     return FoundFamily;
 }
 
 PNETLINK_GENERIC_FAMILY
-NetpNetlinkGenericLookupFamilyByName (
+NetlinkpGenericLookupFamilyByName (
     PSTR FamilyName
     )
 
@@ -2514,8 +2510,8 @@ Return Value:
     PRED_BLACK_TREE_NODE Node;
 
     FoundFamily = NULL;
-    KeAcquireSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
-    Node = RtlRedBlackTreeGetLowestNode(&NetNetlinkGenericFamilyTree);
+    KeAcquireSharedExclusiveLockShared(NetlinkGenericFamilyLock);
+    Node = RtlRedBlackTreeGetLowestNode(&NetlinkGenericFamilyTree);
     while (Node != NULL) {
         Family = RED_BLACK_TREE_VALUE(Node, NETLINK_GENERIC_FAMILY, TreeNode);
         Match = RtlAreStringsEqual(Family->Properties.Name,
@@ -2524,21 +2520,21 @@ Return Value:
 
         if (Match != FALSE) {
             FoundFamily = Family;
-            NetpNetlinkGenericFamilyAddReference(FoundFamily);
+            NetlinkpGenericFamilyAddReference(FoundFamily);
             break;
         }
 
-        Node = RtlRedBlackTreeGetNextNode(&NetNetlinkGenericFamilyTree,
+        Node = RtlRedBlackTreeGetNextNode(&NetlinkGenericFamilyTree,
                                           FALSE,
                                           Node);
     }
 
-    KeReleaseSharedExclusiveLockShared(NetNetlinkGenericFamilyLock);
+    KeReleaseSharedExclusiveLockShared(NetlinkGenericFamilyLock);
     return FoundFamily;
 }
 
 VOID
-NetpNetlinkGenericFamilyAddReference (
+NetlinkpGenericFamilyAddReference (
     PNETLINK_GENERIC_FAMILY Family
     )
 
@@ -2570,7 +2566,7 @@ Return Value:
 }
 
 VOID
-NetpNetlinkGenericFamilyReleaseReference (
+NetlinkpGenericFamilyReleaseReference (
     PNETLINK_GENERIC_FAMILY Family
     )
 
@@ -2600,7 +2596,7 @@ Return Value:
     ASSERT((OldReferenceCount != 0) && (OldReferenceCount < 0x10000000));
 
     if (OldReferenceCount == 1) {
-        NetpNetlinkGenericDestroyFamily(Family);
+        NetlinkpGenericDestroyFamily(Family);
     }
 
     return;
@@ -2611,7 +2607,7 @@ Return Value:
 //
 
 VOID
-NetpNetlinkGenericInsertReceivedPacket (
+NetlinkpGenericInsertReceivedPacket (
     PNETLINK_GENERIC_SOCKET Socket,
     PNETLINK_GENERIC_RECEIVED_PACKET Packet
     )
@@ -2683,7 +2679,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkGenericProcessReceivedKernelData (
+NetlinkpGenericProcessReceivedKernelData (
     PNET_LINK Link,
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
@@ -2775,7 +2771,7 @@ Return Value:
     // Find the generic netlink family and call the command's callback.
     //
 
-    Family = NetpNetlinkGenericLookupFamilyById(Header->Type);
+    Family = NetlinkpGenericLookupFamilyById(Header->Type);
     if (Family == NULL) {
         Status = STATUS_NOT_SUPPORTED;
         goto ProcessReceivedKernelDataEnd;
@@ -2808,14 +2804,14 @@ Return Value:
 
 ProcessReceivedKernelDataEnd:
     if (Family != NULL) {
-        NetpNetlinkGenericFamilyReleaseReference(Family);
+        NetlinkpGenericFamilyReleaseReference(Family);
     }
 
     return Status;
 }
 
 COMPARISON_RESULT
-NetpNetlinkGenericCompareFamilies (
+NetlinkpGenericCompareFamilies (
     PRED_BLACK_TREE Tree,
     PRED_BLACK_TREE_NODE FirstNode,
     PRED_BLACK_TREE_NODE SecondNode
@@ -2870,7 +2866,7 @@ Return Value:
 }
 
 VOID
-NetpNetlinkGenericDestroyFamily (
+NetlinkpGenericDestroyFamily (
     PNETLINK_GENERIC_FAMILY Family
     )
 
@@ -2898,7 +2894,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkGenericAllocateFamilyId (
+NetlinkpGenericAllocateFamilyId (
     PULONG FamilyId
     )
 
@@ -2926,10 +2922,10 @@ Return Value:
     NETLINK_GENERIC_FAMILY SearchFamily;
     KSTATUS Status;
 
-    ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetNetlinkGenericFamilyLock));
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetlinkGenericFamilyLock));
 
     Status = STATUS_INSUFFICIENT_RESOURCES;
-    NextId = NetNetlinkGenericFamilyNextId;
+    NextId = NetlinkGenericFamilyNextId;
 
     //
     // Iterate until all the possible message types have been tried.
@@ -2942,7 +2938,7 @@ Return Value:
             NextId = NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM;
         }
 
-        FoundNode = RtlRedBlackTreeSearch(&NetNetlinkGenericFamilyTree,
+        FoundNode = RtlRedBlackTreeSearch(&NetlinkGenericFamilyTree,
                                           &(SearchFamily.TreeNode));
 
         if (FoundNode == NULL) {
@@ -2951,18 +2947,18 @@ Return Value:
             break;
         }
 
-    } while (NextId != NetNetlinkGenericFamilyNextId);
+    } while (NextId != NetlinkGenericFamilyNextId);
 
     //
     // Update the global to make the next search start where this left off.
     //
 
-    NetNetlinkGenericFamilyNextId = NextId;
+    NetlinkGenericFamilyNextId = NextId;
     return Status;
 }
 
 KSTATUS
-NetpNetlinkGenericAllocateMulticastGroups (
+NetlinkpGenericAllocateMulticastGroups (
     PNETLINK_GENERIC_FAMILY Family
     )
 
@@ -2999,7 +2995,7 @@ Return Value:
     KSTATUS Status;
     ULONG Value;
 
-    ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetNetlinkGenericFamilyLock));
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetlinkGenericFamilyLock));
 
     //
     // Search through the existing bitmap for a run that can accomodate the
@@ -3009,10 +3005,10 @@ Return Value:
     Offset = 0;
     Run = 0;
     for (BitmapIndex = 0;
-         BitmapIndex < (NetNetlinkGenericMulticastBitmapSize / sizeof(ULONG));
+         BitmapIndex < (NetlinkGenericMulticastBitmapSize / sizeof(ULONG));
          BitmapIndex += 1) {
 
-        Value = NetNetlinkGenericMulticastBitmap[BitmapIndex];
+        Value = NetlinkGenericMulticastBitmap[BitmapIndex];
         for (Index = 0; Index < (sizeof(ULONG) * BITS_PER_BYTE); Index += 1) {
             if ((Value & 0x1) != 0) {
                 Offset += Run + 1;
@@ -3058,7 +3054,7 @@ Return Value:
         }
 
         NewGroups = ALIGN_RANGE_UP(NewGroups, sizeof(ULONG) * BITS_PER_BYTE);
-        NewBitmapSize = NetNetlinkGenericMulticastBitmapSize +
+        NewBitmapSize = NetlinkGenericMulticastBitmapSize +
                         (NewGroups / BITS_PER_BYTE);
 
         NewBitmap = MmAllocatePagedPool(NewBitmapSize,
@@ -3069,7 +3065,7 @@ Return Value:
             goto AllocateMulticastGroupOffsetEnd;
         }
 
-        RtlZeroMemory((PVOID)NewBitmap + NetNetlinkGenericMulticastBitmapSize,
+        RtlZeroMemory((PVOID)NewBitmap + NetlinkGenericMulticastBitmapSize,
                       (NewGroups / BITS_PER_BYTE));
 
         //
@@ -3077,12 +3073,12 @@ Return Value:
         // then release it.
         //
 
-        if (NetNetlinkGenericMulticastBitmap != NULL) {
+        if (NetlinkGenericMulticastBitmap != NULL) {
             RtlCopyMemory(NewBitmap,
-                          NetNetlinkGenericMulticastBitmap,
-                          NetNetlinkGenericMulticastBitmapSize);
+                          NetlinkGenericMulticastBitmap,
+                          NetlinkGenericMulticastBitmapSize);
 
-            MmFreePagedPool(NetNetlinkGenericMulticastBitmap);
+            MmFreePagedPool(NetlinkGenericMulticastBitmap);
 
         //
         // Otherwise, this is the first allocation. Reserve group ID 0.
@@ -3094,8 +3090,8 @@ Return Value:
             NewBitmap[Index] |= Mask;
         }
 
-        NetNetlinkGenericMulticastBitmap = NewBitmap;
-        NetNetlinkGenericMulticastBitmapSize = NewBitmapSize;
+        NetlinkGenericMulticastBitmap = NewBitmap;
+        NetlinkGenericMulticastBitmapSize = NewBitmapSize;
         Run = Family->Properties.MulticastGroupCount;
     }
 
@@ -3106,7 +3102,7 @@ Return Value:
     for (Group = Offset; Group < (Offset + Run); Group += 1) {
         Index = NETLINK_SOCKET_BITMAP_INDEX(Group);
         Mask = NETLINK_SOCKET_BITMAP_MASK(Group);
-        NetNetlinkGenericMulticastBitmap[Index] |= Mask;
+        NetlinkGenericMulticastBitmap[Index] |= Mask;
     }
 
     Family->MulticastGroupOffset = Offset;
@@ -3117,7 +3113,7 @@ AllocateMulticastGroupOffsetEnd:
 }
 
 VOID
-NetpNetlinkGenericFreeMulticastGroups (
+NetlinkpGenericFreeMulticastGroups (
     PNETLINK_GENERIC_FAMILY Family
     )
 
@@ -3149,7 +3145,7 @@ Return Value:
     ULONG Mask;
     ULONG Offset;
 
-    ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetNetlinkGenericFamilyLock));
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetlinkGenericFamilyLock));
 
     Count = Family->Properties.MulticastGroupCount;
     Offset = Family->MulticastGroupOffset;
@@ -3158,7 +3154,7 @@ Return Value:
     // Remove all sockets from these multicast groups.
     //
 
-    NetNetlinkRemoveSocketsFromMulticastGroups(
+    NetlinkRemoveSocketsFromMulticastGroups(
                                       SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
                                       Offset,
                                       Count);
@@ -3171,14 +3167,14 @@ Return Value:
         Group = Offset + Index;
         BitmapIndex = NETLINK_SOCKET_BITMAP_INDEX(Group);
         Mask = NETLINK_SOCKET_BITMAP_MASK(Group);
-        NetNetlinkGenericMulticastBitmap[BitmapIndex] &= ~Mask;
+        NetlinkGenericMulticastBitmap[BitmapIndex] &= ~Mask;
 
         //
         // Announce the deletion of the multicast group.
         //
 
-        NetpNetlinkGenericControlSendNotification(
-                                  NetNetlinkGenericSocket,
+        NetlinkpGenericControlSendNotification(
+                                  NetlinkGenericSocket,
                                   NETLINK_GENERIC_CONTROL_NEW_MULTICAST_GROUP,
                                   Family,
                                   &(Family->Properties.MulticastGroups[Index]),
@@ -3190,7 +3186,7 @@ Return Value:
 }
 
 KSTATUS
-NetpNetlinkGenericValidateMulticastGroup (
+NetlinkpGenericValidateMulticastGroup (
     ULONG GroupId
     )
 
@@ -3216,13 +3212,13 @@ Return Value:
     ULONG Index;
     ULONG Mask;
 
-    ASSERT(KeIsSharedExclusiveLockHeldShared(NetNetlinkGenericFamilyLock));
+    ASSERT(KeIsSharedExclusiveLockHeldShared(NetlinkGenericFamilyLock));
     ASSERT(GroupId != 0);
 
     Index = NETLINK_SOCKET_BITMAP_INDEX(GroupId);
     Mask = NETLINK_SOCKET_BITMAP_MASK(GroupId);
-    if ((Index >= (NetNetlinkGenericMulticastBitmapSize / sizeof(ULONG))) ||
-        ((NetNetlinkGenericMulticastBitmap[Index] & Mask) == 0)) {
+    if ((Index >= (NetlinkGenericMulticastBitmapSize / sizeof(ULONG))) ||
+        ((NetlinkGenericMulticastBitmap[Index] & Mask) == 0)) {
 
         return STATUS_INVALID_ADDRESS;
     }

@@ -247,7 +247,7 @@ Return Value:
 
     memset(&Context, 0, sizeof(NETCON_CONTEXT));
     ReturnValue = 0;
-    NetlinkInitialize(NULL);
+    NlInitialize(NULL);
 
     //
     // Process the control arguments.
@@ -708,18 +708,14 @@ Return Value:
         PasswordLength = strlen(Password) + 1;
     }
 
-    Status = NetlinkCreateSocket(NETLINK_GENERIC,
-                                 NETLINK_ANY_PORT_ID,
-                                 0,
-                                 &Socket);
-
+    Status = NlCreateSocket(NETLINK_GENERIC, NETLINK_ANY_PORT_ID, 0, &Socket);
     if (Status == -1) {
         goto JoinNetworkEnd;
     }
 
-    Status = NetlinkGenericGetFamilyId(Socket,
-                                       NETLINK_GENERIC_80211_NAME,
-                                       &FamilyId);
+    Status = NlGenericGetFamilyId(Socket,
+                                  NETLINK_GENERIC_80211_NAME,
+                                  &FamilyId);
 
     if (Status == -1) {
         goto JoinNetworkEnd;
@@ -738,39 +734,38 @@ Return Value:
         MessageLength += NETLINK_ATTRIBUTE_SIZE(PasswordLength);
     }
 
-    Status = NetlinkAllocateBuffer(NETLINK_GENERIC_HEADER_LENGTH,
-                                   MessageLength,
-                                   0,
-                                   &Message);
+    Status = NlAllocateBuffer(NETLINK_GENERIC_HEADER_LENGTH,
+                              MessageLength,
+                              0,
+                              &Message);
 
     if (Status == -1) {
         goto JoinNetworkEnd;
     }
 
     MessageOffset = 0;
-    Status = NetlinkGenericAddAttribute(
-                                     Message,
-                                     &MessageOffset,
-                                     NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
-                                     &(Context->DeviceId),
-                                     sizeof(DEVICE_ID));
+    Status = NlGenericAddAttribute(Message,
+                                   &MessageOffset,
+                                   NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
+                                   &(Context->DeviceId),
+                                   sizeof(DEVICE_ID));
 
     if (Status == -1) {
         goto JoinNetworkEnd;
     }
 
-    Status = NetlinkGenericAddAttribute(Message,
-                                        &MessageOffset,
-                                        NETLINK_GENERIC_80211_ATTRIBUTE_SSID,
-                                        Context->Ssid,
-                                        SsidLength);
+    Status = NlGenericAddAttribute(Message,
+                                   &MessageOffset,
+                                   NETLINK_GENERIC_80211_ATTRIBUTE_SSID,
+                                   Context->Ssid,
+                                   SsidLength);
 
     if (Status == -1) {
         goto JoinNetworkEnd;
     }
 
     if (Password != NULL) {
-        Status = NetlinkGenericAddAttribute(
+        Status = NlGenericAddAttribute(
                                     Message,
                                     &MessageOffset,
                                     NETLINK_GENERIC_80211_ATTRIBUTE_PASSPHRASE,
@@ -782,22 +777,17 @@ Return Value:
         }
     }
 
-    Status = NetlinkGenericFillOutHeader(Socket,
-                                         Message,
-                                         NETLINK_GENERIC_80211_JOIN,
-                                         0);
+    Status = NlGenericFillOutHeader(Socket,
+                                    Message,
+                                    NETLINK_GENERIC_80211_JOIN,
+                                    0);
 
     if (Status == -1) {
         goto JoinNetworkEnd;
     }
 
     MessageLength += NETLINK_GENERIC_HEADER_LENGTH;
-    Status = NetlinkFillOutHeader(Socket,
-                                  Message,
-                                  MessageLength,
-                                  FamilyId,
-                                  0);
-
+    Status = NlFillOutHeader(Socket, Message, MessageLength, FamilyId, 0);
     if (Status == -1) {
         goto JoinNetworkEnd;
     }
@@ -806,12 +796,7 @@ Return Value:
     // Send off the request to join the given network.
     //
 
-    Status = NetlinkSendMessage(Socket,
-                                Message,
-                                NETLINK_KERNEL_PORT_ID,
-                                0,
-                                NULL);
-
+    Status = NlSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0, NULL);
     if (Status == -1) {
         goto JoinNetworkEnd;
     }
@@ -820,9 +805,9 @@ Return Value:
     // Receive for an acknowledgement message.
     //
 
-    Status = NetlinkReceiveAcknowledgement(Socket,
-                                           Socket->ReceiveBuffer,
-                                           NETLINK_KERNEL_PORT_ID);
+    Status = NlReceiveAcknowledgement(Socket,
+                                      Socket->ReceiveBuffer,
+                                      NETLINK_KERNEL_PORT_ID);
 
     if (Status == -1) {
         goto JoinNetworkEnd;
@@ -871,18 +856,14 @@ Return Value:
     PNETLINK_LIBRARY_SOCKET Socket;
     INT Status;
 
-    Status = NetlinkCreateSocket(NETLINK_GENERIC,
-                                 NETLINK_ANY_PORT_ID,
-                                 0,
-                                 &Socket);
-
+    Status = NlCreateSocket(NETLINK_GENERIC, NETLINK_ANY_PORT_ID, 0, &Socket);
     if (Status == -1) {
         goto LeaveNetworkEnd;
     }
 
-    Status = NetlinkGenericGetFamilyId(Socket,
-                                       NETLINK_GENERIC_80211_NAME,
-                                       &FamilyId);
+    Status = NlGenericGetFamilyId(Socket,
+                                  NETLINK_GENERIC_80211_NAME,
+                                  &FamilyId);
 
     if (Status == -1) {
         goto LeaveNetworkEnd;
@@ -894,43 +875,37 @@ Return Value:
     //
 
     MessageLength = NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID));
-    Status = NetlinkAllocateBuffer(NETLINK_GENERIC_HEADER_LENGTH,
-                                   MessageLength,
-                                   0,
-                                   &Message);
+    Status = NlAllocateBuffer(NETLINK_GENERIC_HEADER_LENGTH,
+                              MessageLength,
+                              0,
+                              &Message);
 
     if (Status == -1) {
         goto LeaveNetworkEnd;
     }
 
     MessageOffset = 0;
-    Status = NetlinkGenericAddAttribute(
-                                     Message,
-                                     &MessageOffset,
-                                     NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
-                                     &(Context->DeviceId),
-                                     sizeof(DEVICE_ID));
+    Status = NlGenericAddAttribute(Message,
+                                   &MessageOffset,
+                                   NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
+                                   &(Context->DeviceId),
+                                   sizeof(DEVICE_ID));
 
     if (Status == -1) {
         goto LeaveNetworkEnd;
     }
 
-    Status = NetlinkGenericFillOutHeader(Socket,
-                                         Message,
-                                         NETLINK_GENERIC_80211_LEAVE,
-                                         0);
+    Status = NlGenericFillOutHeader(Socket,
+                                    Message,
+                                    NETLINK_GENERIC_80211_LEAVE,
+                                    0);
 
     if (Status == -1) {
         goto LeaveNetworkEnd;
     }
 
     MessageLength += NETLINK_GENERIC_HEADER_LENGTH;
-    Status = NetlinkFillOutHeader(Socket,
-                                  Message,
-                                  MessageLength,
-                                  FamilyId,
-                                  0);
-
+    Status = NlFillOutHeader(Socket, Message, MessageLength, FamilyId, 0);
     if (Status == -1) {
         goto LeaveNetworkEnd;
     }
@@ -939,12 +914,7 @@ Return Value:
     // Send off the request to leave the current network.
     //
 
-    Status = NetlinkSendMessage(Socket,
-                                Message,
-                                NETLINK_KERNEL_PORT_ID,
-                                0,
-                                NULL);
-
+    Status = NlSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0, NULL);
     if (Status == -1) {
         goto LeaveNetworkEnd;
     }
@@ -953,9 +923,9 @@ Return Value:
     // Receive for an acknowledgement message.
     //
 
-    Status = NetlinkReceiveAcknowledgement(Socket,
-                                           Socket->ReceiveBuffer,
-                                           NETLINK_KERNEL_PORT_ID);
+    Status = NlReceiveAcknowledgement(Socket,
+                                      Socket->ReceiveBuffer,
+                                      NETLINK_KERNEL_PORT_ID);
 
     if (Status == -1) {
         goto LeaveNetworkEnd;

@@ -32,9 +32,9 @@ extern "C" {
 
 #endif
 
-#ifndef NETLINK_API
+#ifndef LIBNETLINK_API
 
-#define NETLINK_API DLLIMPORT
+#define LIBNETLINK_API DLLIMPORT
 
 #endif
 
@@ -169,9 +169,9 @@ typedef struct _NETLINK_LIBRARY_SOCKET {
 // -------------------------------------------------------- Function Prototypes
 //
 
-NETLINK_API
+LIBNETLINK_API
 VOID
-NetlinkInitialize (
+NlInitialize (
     PVOID Environment
     );
 
@@ -194,9 +194,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkCreateSocket (
+NlCreateSocket (
     ULONG Protocol,
     ULONG PortId,
     ULONG Flags,
@@ -231,9 +231,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 VOID
-NetlinkDestroySocket (
+NlDestroySocket (
     PNETLINK_LIBRARY_SOCKET Socket
     );
 
@@ -253,9 +253,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkAllocateBuffer (
+NlAllocateBuffer (
     ULONG HeaderSize,
     ULONG Size,
     ULONG FooterSize,
@@ -289,9 +289,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 VOID
-NetlinkFreeBuffer (
+NlFreeBuffer (
     PNETLINK_MESSAGE_BUFFER Buffer
     );
 
@@ -311,9 +311,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkFillOutHeader (
+NlFillOutHeader (
     PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG DataLength,
@@ -353,9 +353,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkSendMessage (
+NlSendMessage (
     PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG PortId,
@@ -393,9 +393,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkReceiveMessage (
+NlReceiveMessage (
     PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     PULONG PortId,
@@ -433,9 +433,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkReceiveAcknowledgement (
+NlReceiveAcknowledgement (
     PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     ULONG ExpectedPortId
@@ -470,9 +470,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkGenericFillOutHeader (
+NlGenericFillOutHeader (
     PNETLINK_LIBRARY_SOCKET Socket,
     PNETLINK_MESSAGE_BUFFER Message,
     UCHAR Command,
@@ -507,9 +507,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkGenericGetFamilyId (
+NlGenericGetFamilyId (
     PNETLINK_LIBRARY_SOCKET Socket,
     PSTR FamilyName,
     PUSHORT FamilyId
@@ -540,9 +540,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkGenericAddAttribute (
+NlGenericAddAttribute (
     PNETLINK_MESSAGE_BUFFER Message,
     PULONG MessageOffset,
     USHORT Type,
@@ -581,9 +581,9 @@ Return Value:
 
 --*/
 
-NETLINK_API
+LIBNETLINK_API
 INT
-NetlinkGenericGetAttribute (
+NlGenericGetAttribute (
     PVOID Attributes,
     ULONG AttributesLength,
     USHORT Type,

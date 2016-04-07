@@ -262,11 +262,7 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-#ifndef NET_API
-
-#define NET_API DLLIMPORT
-
-#endif
+#define NETLINK_API NET_API
 
 typedef struct _NETLINK_GENERIC_FAMILY
     NETLINK_GENERIC_FAMILY, *PNETLINK_GENERIC_FAMILY;
@@ -598,9 +594,9 @@ typedef struct _NETLINK_SOCKET {
 // -------------------------------------------------------- Function Prototypes
 //
 
-NET_API
+NETLINK_API
 KSTATUS
-NetNetlinkSendMessage (
+NetlinkSendMessage (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
     PNETLINK_MESSAGE_PARAMETERS Parameters
@@ -628,9 +624,9 @@ Return Value:
 
 --*/
 
-NET_API
+NETLINK_API
 VOID
-NetNetlinkRemoveSocketsFromMulticastGroups (
+NetlinkRemoveSocketsFromMulticastGroups (
     ULONG ParentProtocolNumber,
     ULONG GroupOffset,
     ULONG GroupCount
@@ -661,9 +657,9 @@ Return Value:
 
 --*/
 
-NET_API
+NETLINK_API
 KSTATUS
-NetNetlinkGenericRegisterFamily (
+NetlinkGenericRegisterFamily (
     PNETLINK_GENERIC_FAMILY_PROPERTIES Properties,
     PNETLINK_GENERIC_FAMILY *Family
     );
@@ -691,9 +687,9 @@ Return Value:
 
 --*/
 
-NET_API
+NETLINK_API
 VOID
-NetNetlinkGenericUnregisterFamily (
+NetlinkGenericUnregisterFamily (
     PNETLINK_GENERIC_FAMILY Family
     );
 
@@ -713,9 +709,9 @@ Return Value:
 
 --*/
 
-NET_API
+NETLINK_API
 KSTATUS
-NetNetlinkGenericSendCommand (
+NetlinkGenericSendCommand (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
     PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
@@ -743,9 +739,9 @@ Return Value:
 
 --*/
 
-NET_API
+NETLINK_API
 KSTATUS
-NetNetlinkGenericGetAttribute (
+NetlinkGenericGetAttribute (
     PVOID Attributes,
     ULONG AttributesLength,
     USHORT Type,
