@@ -60,6 +60,13 @@ MbgenChalkSplitExtension (
     );
 
 INT
+MbgenChalkGetenv (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+INT
 MbgenChalkUnameS (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
@@ -121,11 +128,22 @@ PSTR MbgenChalkNoArguments[] = {
     NULL
 };
 
+PSTR MbgenChalkGetenvArguments[] = {
+    "variable",
+    NULL
+};
+
 CHALK_FUNCTION_PROTOTYPE MbgenChalkFunctions[] = {
     {
         "assert",
         MbgenChalkAssertArguments,
         MbgenChalkAssert
+    },
+
+    {
+        "getenv",
+        MbgenChalkGetenvArguments,
+        MbgenChalkGetenv
     },
 
     {
@@ -365,6 +383,66 @@ ChalkSplitExtensionEnd:
     }
 
     return Status;
+}
+
+INT
+MbgenChalkGetenv (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the getenv Chalk function, which returns a value
+    from the environment.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    PCHALK_OBJECT Name;
+    PSTR ValueString;
+    UINTN ValueStringSize;
+
+    Name = ChalkCGetVariable(Interpreter, "variable");
+    if (Name->Header.Type != ChalkObjectString) {
+        fprintf(stderr, "split_extension: String expected\n");
+        return EINVAL;
+    }
+
+    ValueStringSize = 0;
+    ValueString = getenv(Name->String.String);
+    if (ValueString == NULL) {
+        *ReturnValue = ChalkCreateNull();
+
+    } else {
+        ValueStringSize = strlen(ValueString);
+        *ReturnValue = ChalkCreateString(ValueString, ValueStringSize);
+        if (*ReturnValue == NULL) {
+            return ENOMEM;
+        }
+    }
+
+    return 0;
 }
 
 INT
