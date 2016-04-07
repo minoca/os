@@ -42,6 +42,7 @@ L?\"(\\.|[^\\"])*\" { count(); return(STRING_LITERAL); }
 "&="            { count(); return(AND_ASSIGN); }
 "^="            { count(); return(XOR_ASSIGN); }
 "|="            { count(); return(OR_ASSIGN); }
+"?="            { count(); return(NULL_ASSIGN); }
 ">>"            { count(); return(RIGHT_OP); }
 "<<"            { count(); return(LEFT_OP); }
 "++"            { count(); return(INC_OP); }

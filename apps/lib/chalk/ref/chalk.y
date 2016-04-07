@@ -3,7 +3,7 @@
 %token INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
 %token AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
-%token XOR_ASSIGN OR_ASSIGN
+%token XOR_ASSIGN OR_ASSIGN NULL_ASSIGN
 
 %token BREAK CONTINUE DO FOR ELSE IF RETURN WHILE
 
@@ -53,7 +53,6 @@ postfix_expression
     : primary_expression
     | postfix_expression '[' expression ']'
     | postfix_expression '(' argument_expression_list ')'
-    | postfix_expression '(' ')'
     | postfix_expression INC_OP
     | postfix_expression DEC_OP
     ;
@@ -158,6 +157,7 @@ assignment_operator
     | AND_ASSIGN
     | XOR_ASSIGN
     | OR_ASSIGN
+    | NULL_ASSIGN
     ;
 
 expression

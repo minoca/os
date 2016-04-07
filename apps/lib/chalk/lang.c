@@ -83,6 +83,7 @@ PSTR ChalkLexerExpressions[] = {
     "&=",
     "^=",
     "\\|=",
+    "?=",
     ">>",
     "<<",
     "\\+\\+",
@@ -148,6 +149,7 @@ PSTR ChalkLexerTokenNames[] = {
     "&=",
     "^=",
     "|=",
+    "?=",
     ">>",
     "<<",
     "++",
@@ -409,6 +411,7 @@ ULONG ChalkGrammarAssignmentOperator[] = {
     ChalkTokenAndAssign, 0,
     ChalkTokenXorAssign, 0,
     ChalkTokenOrAssign, 0,
+    ChalkTokenNullAssign, 0,
     0
 };
 

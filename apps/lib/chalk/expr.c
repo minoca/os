@@ -1191,6 +1191,19 @@ Return Value:
             Operator = ChalkTokenXor;
             break;
 
+        case ChalkTokenNullAssign:
+            Operator = 0;
+            if (Node->Results[0]->Header.Type == ChalkObjectNull) {
+                Value = Node->Results[2];
+                Node->Results[2] = NULL;
+
+            } else {
+                Value = Node->Results[0];
+                Node->Results[0] = NULL;
+            }
+
+            break;
+
         default:
 
             assert(FALSE);

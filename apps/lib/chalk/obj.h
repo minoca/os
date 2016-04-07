@@ -60,6 +60,7 @@ typedef enum _CHALK_TOKEN_TYPE {
     ChalkTokenAndAssign,
     ChalkTokenXorAssign,
     ChalkTokenOrAssign,
+    ChalkTokenNullAssign,
     ChalkTokenRightShift,
     ChalkTokenLeftShift,
     ChalkTokenIncrement,
