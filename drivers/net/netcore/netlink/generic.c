@@ -405,6 +405,7 @@ NETLINK_GENERIC_SOCKET_OPTION NetNetlinkGenericSocketOptions[] = {
 };
 
 PIO_HANDLE NetNetlinkGenericSocketHandle;
+PNET_SOCKET NetNetlinkGenericSocket;
 
 //
 // Store the lock and tree for storing the generic netlink families.
@@ -434,7 +435,7 @@ NET_API
 KSTATUS
 NetNetlinkGenericRegisterFamily (
     PNETLINK_GENERIC_FAMILY_PROPERTIES Properties,
-    PHANDLE FamilyHandle
+    PNETLINK_GENERIC_FAMILY *Family
     )
 
 /*++
@@ -451,7 +452,7 @@ Arguments:
         library will not reference this memory after the function returns, a
         copy will be made.
 
-    FamilyHandle - Supplies an optional pointer that receives a handle to the
+    Family - Supplies an optional pointer that receives a pointer to the
         registered family.
 
 Return Value:
@@ -464,18 +465,18 @@ Return Value:
 
     ULONG AllocationSize;
     ULONG CommandSize;
-    PNETLINK_GENERIC_FAMILY Family;
     PNETLINK_GENERIC_FAMILY FoundFamily;
     PRED_BLACK_TREE_NODE FoundNode;
+    ULONG Index;
     BOOL LockHeld;
     BOOL Match;
     ULONG MulticastSize;
-    ULONG NameLength;
+    PNETLINK_GENERIC_FAMILY NewFamily;
     ULONG NewId;
     KSTATUS Status;
 
     LockHeld = FALSE;
-    Family = INVALID_HANDLE;
+    NewFamily = NULL;
     if (Properties->Version < NETLINK_GENERIC_FAMILY_PROPERTIES_VERSION) {
         Status = STATUS_VERSION_MISMATCH;
         goto RegisterFamilyEnd;
@@ -486,9 +487,8 @@ Return Value:
         goto RegisterFamilyEnd;
     }
 
-    NameLength = RtlStringLength(Properties->Name) + 1;
-    if ((NameLength == 1) ||
-        (NameLength > NETLINK_GENERIC_MAX_FAMILY_NAME_LENGTH)) {
+    if ((Properties->NameLength == 1) ||
+        (Properties->NameLength > NETLINK_GENERIC_MAX_FAMILY_NAME_LENGTH)) {
 
         Status = STATUS_INVALID_PARAMETER;
         goto RegisterFamilyEnd;
@@ -513,28 +513,29 @@ Return Value:
                      CommandSize +
                      MulticastSize;
 
-    Family = MmAllocatePagedPool(AllocationSize,
-                                 NETLINK_GENERIC_ALLOCATION_TAG);
+    NewFamily = MmAllocatePagedPool(AllocationSize,
+                                    NETLINK_GENERIC_ALLOCATION_TAG);
 
-    if (Family == NULL) {
-        Family = INVALID_HANDLE;
+    if (NewFamily == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto RegisterFamilyEnd;
     }
 
-    RtlZeroMemory(Family, sizeof(NETLINK_GENERIC_FAMILY));
-    Family->ReferenceCount = 1;
-    RtlCopyMemory(&(Family->Properties),
+    RtlZeroMemory(NewFamily, sizeof(NETLINK_GENERIC_FAMILY));
+    NewFamily->ReferenceCount = 1;
+    RtlCopyMemory(&(NewFamily->Properties),
                   Properties,
                   sizeof(NETLINK_GENERIC_FAMILY_PROPERTIES));
 
-    Family->Properties.Commands = (PNETLINK_GENERIC_COMMAND)(Family + 1);
-    RtlCopyMemory(Family->Properties.Commands,
+    NewFamily->Properties.Commands = (PNETLINK_GENERIC_COMMAND)(NewFamily + 1);
+    RtlCopyMemory(NewFamily->Properties.Commands,
                   Properties->Commands,
                   CommandSize);
 
-    Family->Properties.MulticastGroups = (PVOID)(Family + 1) + CommandSize;
-    RtlCopyMemory(Family->Properties.MulticastGroups,
+    NewFamily->Properties.MulticastGroups = (PVOID)(NewFamily + 1) +
+                                            CommandSize;
+
+    RtlCopyMemory(NewFamily->Properties.MulticastGroups,
                   Properties->MulticastGroups,
                   MulticastSize);
 
@@ -556,7 +557,7 @@ Return Value:
                                            TreeNode);
 
         Match = RtlAreStringsEqual(FoundFamily->Properties.Name,
-                                   Family->Properties.Name,
+                                   NewFamily->Properties.Name,
                                    NETLINK_GENERIC_MAX_FAMILY_NAME_LENGTH);
 
         if (Match != FALSE) {
@@ -573,13 +574,13 @@ Return Value:
     // If the message type is zero, then one needs to be dynamically allocated.
     //
 
-    if (Family->Properties.Id == 0) {
+    if (NewFamily->Properties.Id == 0) {
         Status = NetpNetlinkGenericAllocateFamilyId(&NewId);
         if (!KSUCCESS(Status)) {
             goto RegisterFamilyEnd;
         }
 
-        Family->Properties.Id = NewId;
+        NewFamily->Properties.Id = NewId;
 
     //
     // Otherwise make sure the provided message type is not already in use.
@@ -587,7 +588,7 @@ Return Value:
 
     } else {
         FoundNode = RtlRedBlackTreeSearch(&NetNetlinkGenericFamilyTree,
-                                          &(Family->TreeNode));
+                                          &(NewFamily->TreeNode));
 
         if (FoundNode != NULL) {
             Status = STATUS_DUPLICATE_ENTRY;
@@ -599,8 +600,8 @@ Return Value:
     // If the family has multicast groups, allocate a region.
     //
 
-    if (Family->Properties.MulticastGroupCount != 0) {
-        Status = NetpNetlinkGenericAllocateMulticastGroups(Family);
+    if (NewFamily->Properties.MulticastGroupCount != 0) {
+        Status = NetpNetlinkGenericAllocateMulticastGroups(NewFamily);
         if (!KSUCCESS(Status)) {
             goto RegisterFamilyEnd;
         }
@@ -610,8 +611,33 @@ Return Value:
     // Insert the new family into the tree.
     //
 
-    RtlRedBlackTreeInsert(&NetNetlinkGenericFamilyTree, &(Family->TreeNode));
+    RtlRedBlackTreeInsert(&NetNetlinkGenericFamilyTree, &(NewFamily->TreeNode));
+    KeReleaseSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
+    LockHeld = FALSE;
     Status = STATUS_SUCCESS;
+
+    //
+    // Blast out some notifications.
+    //
+
+    NetpNetlinkGenericControlSendNotification(
+                                            NetNetlinkGenericSocket,
+                                            NETLINK_GENERIC_CONTROL_NEW_FAMILY,
+                                            NewFamily,
+                                            NULL,
+                                            0);
+
+    for (Index = 0;
+         Index < NewFamily->Properties.MulticastGroupCount;
+         Index += 1) {
+
+        NetpNetlinkGenericControlSendNotification(
+                               NetNetlinkGenericSocket,
+                               NETLINK_GENERIC_CONTROL_NEW_MULTICAST_GROUP,
+                               NewFamily,
+                               &(NewFamily->Properties.MulticastGroups[Index]),
+                               NewFamily->MulticastGroupOffset + Index);
+    }
 
 RegisterFamilyEnd:
     if (LockHeld != FALSE) {
@@ -619,14 +645,14 @@ RegisterFamilyEnd:
     }
 
     if (!KSUCCESS(Status)) {
-        if (Family != INVALID_HANDLE) {
-            NetpNetlinkGenericFamilyReleaseReference(Family);
-            Family = INVALID_HANDLE;
+        if (NewFamily != INVALID_HANDLE) {
+            NetpNetlinkGenericFamilyReleaseReference(NewFamily);
+            NewFamily = INVALID_HANDLE;
         }
     }
 
-    if (FamilyHandle != NULL) {
-        *FamilyHandle = Family;
+    if (Family != NULL) {
+        *Family = NewFamily;
     }
 
     return Status;
@@ -635,7 +661,7 @@ RegisterFamilyEnd:
 NET_API
 VOID
 NetNetlinkGenericUnregisterFamily (
-    PHANDLE FamilyHandle
+    PNETLINK_GENERIC_FAMILY Family
     )
 
 /*++
@@ -646,8 +672,7 @@ Routine Description:
 
 Arguments:
 
-    FamilyHandle - Supplies a pointer to the generic netlink family to
-        unregister.
+    Family - Supplies a pointer to the generic netlink family to unregister.
 
 Return Value:
 
@@ -657,12 +682,10 @@ Return Value:
 
 {
 
-    PNETLINK_GENERIC_FAMILY Family;
     PNETLINK_GENERIC_FAMILY FoundFamily;
     PRED_BLACK_TREE_NODE FoundNode;
     BOOL LockHeld;
 
-    Family = (PNETLINK_GENERIC_FAMILY)FamilyHandle;
     KeAcquireSharedExclusiveLockExclusive(NetNetlinkGenericFamilyLock);
     LockHeld = TRUE;
     FoundNode = RtlRedBlackTreeSearch(&NetNetlinkGenericFamilyTree,
@@ -705,6 +728,13 @@ Return Value:
     while (Family->ReferenceCount > 1) {
         KeYield();
     }
+
+    NetpNetlinkGenericControlSendNotification(
+                                         NetNetlinkGenericSocket,
+                                         NETLINK_GENERIC_CONTROL_DELETE_FAMILY,
+                                         Family,
+                                         NULL,
+                                         0);
 
     NetpNetlinkGenericFamilyReleaseReference(Family);
 
@@ -864,7 +894,6 @@ Return Value:
 {
 
     NETLINK_ADDRESS Address;
-    PNET_SOCKET Socket;
     KSTATUS Status;
 
     //
@@ -908,7 +937,7 @@ Return Value:
         }
 
         Status = IoGetSocketFromHandle(NetNetlinkGenericSocketHandle,
-                                       (PVOID)&Socket);
+                                       (PVOID)&NetNetlinkGenericSocket);
 
         if (!KSUCCESS(Status)) {
             goto InitializeEnd;
@@ -918,7 +947,9 @@ Return Value:
         // Add the kernel flag and bind it to port 0.
         //
 
-        RtlAtomicOr32(&(Socket->Flags), NET_SOCKET_FLAG_KERNEL);
+        RtlAtomicOr32(&(NetNetlinkGenericSocket->Flags),
+                      NET_SOCKET_FLAG_KERNEL);
+
         RtlZeroMemory(&Address, sizeof(NETLINK_ADDRESS));
         Address.Domain = NetDomainNetlink;
         Status = IoSocketBindToAddress(TRUE,
@@ -3065,6 +3096,7 @@ Return Value:
 
         NetNetlinkGenericMulticastBitmap = NewBitmap;
         NetNetlinkGenericMulticastBitmapSize = NewBitmapSize;
+        Run = Family->Properties.MulticastGroupCount;
     }
 
     //
@@ -3110,6 +3142,7 @@ Return Value:
 
 {
 
+    ULONG BitmapIndex;
     ULONG Count;
     ULONG Group;
     ULONG Index;
@@ -3134,15 +3167,22 @@ Return Value:
     // Free the groups from the generic netlink bitmap.
     //
 
-    for (Group = Offset; Group < Offset + Count; Group += 1) {
-        Index = NETLINK_SOCKET_BITMAP_INDEX(Group);
+    for (Index = 0; Index < Count; Index += 1) {
+        Group = Offset + Index;
+        BitmapIndex = NETLINK_SOCKET_BITMAP_INDEX(Group);
         Mask = NETLINK_SOCKET_BITMAP_MASK(Group);
-        NetNetlinkGenericMulticastBitmap[Index] &= ~Mask;
+        NetNetlinkGenericMulticastBitmap[BitmapIndex] &= ~Mask;
 
         //
-        // TODO: Announce the deletion of the multicast group.
+        // Announce the deletion of the multicast group.
         //
 
+        NetpNetlinkGenericControlSendNotification(
+                                  NetNetlinkGenericSocket,
+                                  NETLINK_GENERIC_CONTROL_NEW_MULTICAST_GROUP,
+                                  Family,
+                                  &(Family->Properties.MulticastGroups[Index]),
+                                  Group);
     }
 
     Family->MulticastGroupOffset = 0;

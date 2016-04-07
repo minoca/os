@@ -204,7 +204,10 @@ Author:
 //
 
 #define NETLINK_GENERIC_CONTROL_NEW_FAMILY 1
+#define NETLINK_GENERIC_CONTROL_DELETE_FAMILY 2
 #define NETLINK_GENERIC_CONTROL_GET_FAMILY 3
+#define NETLINK_GENERIC_CONTROL_NEW_MULTICAST_GROUP 7
+#define NETLINK_GENERIC_CONTROL_DELETE_MULTICAST_GROUP 8
 #define NETLINK_GENERIC_CONTROL_MAX 255
 
 //
@@ -218,6 +221,19 @@ Author:
 #define NETLINK_GENERIC_CONTROL_ATTRIBUTE_MAX_ATTRIBUTE 5
 #define NETLINK_GENERIC_CONTROL_ATTRIBUTE_OPERATIONS 6
 #define NETLINK_GENERIC_CONTROL_ATTRIBUTE_MULTICAST_GROUPS 7
+
+//
+// Define the generic control multicast group names.
+//
+
+#define NETLINK_GENERIC_CONTROL_MULTICAST_NOTIFY_NAME "notify"
+
+//
+// Define the generic multicast group attributes.
+//
+
+#define NETLINK_GENERIC_MULTICAST_GROUP_ATTRIBUTE_NAME 1
+#define NETLINK_GENERIC_MULTICAST_GROUP_ATTRIBUTE_ID 2
 
 //
 // Define the generic 802.11 command values.
@@ -237,6 +253,12 @@ Author:
 #define NETLINK_GENERIC_80211_ATTRIBUTE_PASSPHRASE 4
 
 //
+// Define the generic 802.11 multicast group names.
+//
+
+#define NETLINK_GENERIC_80211_MULTICAST_SCAN_NAME "scan"
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -245,6 +267,9 @@ Author:
 #define NET_API DLLIMPORT
 
 #endif
+
+typedef struct _NETLINK_GENERIC_FAMILY
+    NETLINK_GENERIC_FAMILY, *PNETLINK_GENERIC_FAMILY;
 
 /*++
 
@@ -484,11 +509,14 @@ Structure Description:
 
 Members:
 
+    NameLength - Stores the length of the multicast group name, in bytes.
+
     Name - Stores the name of the multicast group.
 
 --*/
 
 typedef struct _NETLINK_GENERIC_MULTICAST_GROUP {
+    ULONG NameLength;
     CHAR Name[NETLINK_GENERIC_MAX_MULTICAST_GROUP_NAME];
 } NETLINK_GENERIC_MULTICAST_GROUP, *PNETLINK_GENERIC_MULTICAST_GROUP;
 
@@ -506,6 +534,8 @@ Members:
     Id - Stores the generic netlink family's ID. Set to zero upon registration
         to have the netlink core allocate an ID.
 
+    NameLength - Stores the length of the family name, in bytes.
+
     Name - Stores the name of the generic family.
 
     Commands - Stores a pointer to an array of netlink generic commands.
@@ -521,6 +551,7 @@ Members:
 typedef struct _NETLINK_GENERIC_FAMILY_PROPERTIES {
     ULONG Version;
     ULONG Id;
+    ULONG NameLength;
     CHAR Name[NETLINK_GENERIC_MAX_FAMILY_NAME_LENGTH];
     PNETLINK_GENERIC_COMMAND Commands;
     ULONG CommandCount;
@@ -634,7 +665,7 @@ NET_API
 KSTATUS
 NetNetlinkGenericRegisterFamily (
     PNETLINK_GENERIC_FAMILY_PROPERTIES Properties,
-    PHANDLE FamilyHandle
+    PNETLINK_GENERIC_FAMILY *Family
     );
 
 /*++
@@ -651,7 +682,7 @@ Arguments:
         library  will not reference this memory after the function returns, a
         copy will be made.
 
-    FamilyHandle - Supplies an optional pointer that receives a handle to the
+    Family - Supplies an optional pointer that receives a handle to the
         registered family.
 
 Return Value:
@@ -663,7 +694,7 @@ Return Value:
 NET_API
 VOID
 NetNetlinkGenericUnregisterFamily (
-    PHANDLE FamilyHandle
+    PNETLINK_GENERIC_FAMILY Family
     );
 
 /*++
@@ -674,8 +705,7 @@ Routine Description:
 
 Arguments:
 
-    FamilyHandle - Supplies a pointer to the generic netlink family to
-        unregister.
+    Family - Supplies a pointer to the generic netlink family to unregister.
 
 Return Value:
 

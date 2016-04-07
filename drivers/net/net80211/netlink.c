@@ -69,17 +69,26 @@ NETLINK_GENERIC_COMMAND Net80211NetlinkCommands[] = {
     },
 };
 
-NETLINK_GENERIC_FAMILY_PROPERTIES Net80211NetlinkFamily = {
+NETLINK_GENERIC_MULTICAST_GROUP Net80211NetlinkMulticastGroups[] = {
+    {
+        sizeof(NETLINK_GENERIC_80211_MULTICAST_SCAN_NAME),
+        NETLINK_GENERIC_80211_MULTICAST_SCAN_NAME
+    },
+};
+
+NETLINK_GENERIC_FAMILY_PROPERTIES Net80211NetlinkFamilyProperties = {
     NETLINK_GENERIC_FAMILY_PROPERTIES_VERSION,
     0,
+    sizeof(NETLINK_GENERIC_80211_NAME),
     NETLINK_GENERIC_80211_NAME,
     Net80211NetlinkCommands,
     sizeof(Net80211NetlinkCommands) / sizeof(Net80211NetlinkCommands[0]),
-    NULL,
-    0
+    Net80211NetlinkMulticastGroups,
+    sizeof(Net80211NetlinkMulticastGroups) /
+        sizeof(Net80211NetlinkMulticastGroups[0]),
 };
 
-HANDLE Net80211NetlinkHandle = INVALID_HANDLE;
+PNETLINK_GENERIC_FAMILY Net80211NetlinkFamily = NULL;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -110,8 +119,8 @@ Return Value:
 
     KSTATUS Status;
 
-    Status = NetNetlinkGenericRegisterFamily(&Net80211NetlinkFamily,
-                                             &Net80211NetlinkHandle);
+    Status = NetNetlinkGenericRegisterFamily(&Net80211NetlinkFamilyProperties,
+                                             &Net80211NetlinkFamily);
 
     return Status;
 }
@@ -139,9 +148,9 @@ Return Value:
 
 {
 
-    if (Net80211NetlinkHandle != INVALID_HANDLE) {
-        NetNetlinkGenericUnregisterFamily(Net80211NetlinkHandle);
-        Net80211NetlinkHandle = INVALID_HANDLE;
+    if (Net80211NetlinkFamily != NULL) {
+        NetNetlinkGenericUnregisterFamily(Net80211NetlinkFamily);
+        Net80211NetlinkFamily = NULL;
     }
 
     return;

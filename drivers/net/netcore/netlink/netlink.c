@@ -1145,6 +1145,17 @@ Return Value:
         }
 
         Destination->Group = 0;
+        Socket = NULL;
+
+        //
+        // The kernel should never get any multicast packets, so just drop it
+        // now before getting to the kernel.
+        //
+
+        if (Destination->Port == NETLINK_KERNEL_PORT_ID) {
+            NetDestroyBufferList(PacketList);
+            goto ProcessReceivedPacketsEnd;
+        }
     }
 
     //

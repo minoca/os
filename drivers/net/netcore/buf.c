@@ -209,15 +209,19 @@ Return Value:
         }
 
         BufferPhysical = Buffer->IoBuffer->Fragment[0].PhysicalAddress;
-        if ((Link == NULL) && (BufferPhysical != INVALID_PHYSICAL_ADDRESS)) {
-            continue;
-        }
+        if (Link == NULL) {
+            if (BufferPhysical != INVALID_PHYSICAL_ADDRESS) {
+                continue;
+            }
 
-        if ((Link != NULL) &&
-            (((BufferPhysical + BufferSize) > MaximumPhysicalAddress) ||
-             (ALIGN_RANGE_DOWN(BufferPhysical, Alignment) != BufferPhysical))) {
+        } else {
+            if ((BufferPhysical == INVALID_PHYSICAL_ADDRESS) ||
+                ((BufferPhysical + BufferSize) > MaximumPhysicalAddress) ||
+                (ALIGN_RANGE_DOWN(BufferPhysical, Alignment) !=
+                 BufferPhysical)) {
 
-            continue;
+                continue;
+            }
         }
 
         LIST_REMOVE(&(Buffer->ListEntry));
