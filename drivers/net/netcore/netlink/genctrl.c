@@ -44,6 +44,13 @@ Environment:
 //
 
 //
+// Define the multicast group indices. These must match the order of the
+// multicast group array below.
+//
+
+#define NETLINK_GENERIC_CONTROL_MULTICAST_NOTIFY 0
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -60,11 +67,9 @@ NetlinkpGenericControlGetFamily (
 
 KSTATUS
 NetlinkpGenericControlSendCommand (
-    PNET_SOCKET Socket,
     PNETLINK_GENERIC_FAMILY Family,
     PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters,
-    PNETLINK_GENERIC_MULTICAST_GROUP Group,
-    ULONG GroupId
+    PNETLINK_GENERIC_MULTICAST_GROUP Group
     );
 
 //
@@ -80,6 +85,7 @@ NETLINK_GENERIC_COMMAND NetlinkGenericControlCommands[] = {
 
 NETLINK_GENERIC_MULTICAST_GROUP NetlinkGenericControlMulticastGroups[] = {
     {
+        NETLINK_GENERIC_CONTROL_MULTICAST_NOTIFY,
         sizeof(NETLINK_GENERIC_CONTROL_MULTICAST_NOTIFY_NAME),
         NETLINK_GENERIC_CONTROL_MULTICAST_NOTIFY_NAME
     },
@@ -150,11 +156,9 @@ Return Value:
 
 KSTATUS
 NetlinkpGenericControlSendNotification (
-    PNET_SOCKET Socket,
-    UCHAR Command,
     PNETLINK_GENERIC_FAMILY Family,
-    PNETLINK_GENERIC_MULTICAST_GROUP Group,
-    ULONG GroupId
+    UCHAR Command,
+    PNETLINK_GENERIC_MULTICAST_GROUP Group
     )
 
 /*++
@@ -166,19 +170,13 @@ Routine Description:
 
 Arguments:
 
-    Socket - Supplies a pointer to the network socket on which to send the
-        command.
-
-    Command - Supplies the generic netlink control command to be sent.
-
     Family - Supplies a pointer to the generic netlink family for which the
         command is being sent.
 
+    Command - Supplies the generic netlink control command to be sent.
+
     Group - Supplies an optional pointers to the multicast group that has
         just arrived or is being deleted.
-
-    GroupId - Supplies an optional ID of the multicast group that has just
-        arrived or is being deleted.
 
 Return Value:
 
@@ -188,10 +186,9 @@ Return Value:
 
 {
 
-    NETLINK_ADDRESS DestinationAddress;
-    ULONG Offset;
+    NETLINK_ADDRESS Destination;
     NETLINK_GENERIC_COMMAND_PARAMETERS Parameters;
-    NETLINK_ADDRESS SourceAddress;
+    NETLINK_ADDRESS Source;
     KSTATUS Status;
 
     if (NetlinkGenericControlFamily == NULL) {
@@ -202,39 +199,34 @@ Return Value:
     // The notifications always come from the kernel.
     //
 
-    SourceAddress.Domain = NetDomainNetlink;
-    SourceAddress.Port = 0;
-    SourceAddress.Group = 0;
+    Source.Domain = NetDomainNetlink;
+    Source.Port = 0;
+    Source.Group = 0;
 
     //
-    // They are always sent to the generic netlink control notification
-    // multicast group. Which is the first multicast group for the control
-    // family.
+    // Notifications are always sent to the generic netlink control
+    // notification multicast group. This is the first multicast group for the
+    // control family. As the generic control family has access to the family
+    // structure, just do the multicast group offset conversion here so that
+    // the same helper routine can send notifications and reply to family
+    // information requests.
     //
 
-    DestinationAddress.Domain = NetDomainNetlink;
-    DestinationAddress.Port = 0;
-    Offset = NetlinkGenericControlFamily->MulticastGroupOffset;
-    DestinationAddress.Group = Offset;
+    Destination.Domain = NetDomainNetlink;
+    Destination.Port = 0;
+    Destination.Group = NetlinkGenericControlFamily->MulticastGroupOffset +
+                        NETLINK_GENERIC_CONTROL_MULTICAST_NOTIFY;
 
     //
     // Fill out the command parameters and send out the notification.
     //
 
-    Parameters.Message.SourceAddress = (PNETWORK_ADDRESS)&SourceAddress;
-    Parameters.Message.DestinationAddress =
-                                         (PNETWORK_ADDRESS)&DestinationAddress;
-
+    Parameters.Message.SourceAddress = (PNETWORK_ADDRESS)&Source;
+    Parameters.Message.DestinationAddress = (PNETWORK_ADDRESS)&Destination;
     Parameters.Message.SequenceNumber = 0;
-    Parameters.Message.Type = NETLINK_GENERIC_ID_CONTROL;
     Parameters.Command = Command;
     Parameters.Version = 0;
-    Status = NetlinkpGenericControlSendCommand(Socket,
-                                               Family,
-                                               &Parameters,
-                                               Group,
-                                               GroupId);
-
+    Status = NetlinkpGenericControlSendCommand(Family, &Parameters, Group);
     if (!KSUCCESS(Status)) {
         goto SendNotificationEnd;
     }
@@ -340,15 +332,9 @@ Return Value:
                                              Parameters->Message.SourceAddress;
 
     SendParameters.Message.SequenceNumber = Parameters->Message.SequenceNumber;
-    SendParameters.Message.Type = NETLINK_GENERIC_ID_CONTROL;
     SendParameters.Command = NETLINK_GENERIC_CONTROL_NEW_FAMILY;
     SendParameters.Version = 0;
-    Status = NetlinkpGenericControlSendCommand(Socket,
-                                                  Family,
-                                                  &SendParameters,
-                                                  NULL,
-                                                  0);
-
+    Status = NetlinkpGenericControlSendCommand(Family, &SendParameters, NULL);
     if (!KSUCCESS(Status)) {
         goto GetFamilyEnd;
     }
@@ -363,11 +349,9 @@ GetFamilyEnd:
 
 KSTATUS
 NetlinkpGenericControlSendCommand (
-    PNET_SOCKET Socket,
     PNETLINK_GENERIC_FAMILY Family,
     PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters,
-    PNETLINK_GENERIC_MULTICAST_GROUP Group,
-    ULONG GroupId
+    PNETLINK_GENERIC_MULTICAST_GROUP Group
     )
 
 /*++
@@ -379,9 +363,6 @@ Routine Description:
 
 Arguments:
 
-    Socket - Supplies a pointer to the network socket on which to send the
-        command.
-
     Family - Supplies a pointer to the generic netlink family for which the
         command is being sent.
 
@@ -389,9 +370,6 @@ Arguments:
 
     Group - Supplies an optional pointers to the multicast group that has
         just arrived or is being deleted.
-
-    GroupId - Supplies an optional ID of the multicast group that has just
-        arrived or is being deleted.
 
 Return Value:
 
@@ -404,7 +382,6 @@ Return Value:
     PNETLINK_ATTRIBUTE Attribute;
     PVOID Data;
     ULONG GroupCount;
-    ULONG GroupOffset;
     PNETLINK_GENERIC_MULTICAST_GROUP Groups;
     ULONG GroupsLength;
     ULONG HeaderLength;
@@ -425,19 +402,17 @@ Return Value:
     case NETLINK_GENERIC_CONTROL_DELETE_FAMILY:
         GroupCount = Family->Properties.MulticastGroupCount;
         Groups = Family->Properties.MulticastGroups;
-        GroupOffset = Family->MulticastGroupOffset;
         break;
 
     case NETLINK_GENERIC_CONTROL_NEW_MULTICAST_GROUP:
     case NETLINK_GENERIC_CONTROL_DELETE_MULTICAST_GROUP:
-        if ((Group == NULL) || (GroupId == 0)) {
+        if ((Group == NULL) || (Group->Id == 0)) {
             Status = STATUS_INVALID_PARAMETER;
             goto SendCommandEnd;
         }
 
         GroupCount = 1;
         Groups = Group;
-        GroupOffset = GroupId;
         break;
 
     default:
@@ -512,6 +487,9 @@ Return Value:
         IdSize = NETLINK_ATTRIBUTE_SIZE(sizeof(ULONG));
         for (Index = 0; Index < GroupCount; Index += 1) {
             Group = &(Groups[Index]);
+
+            ASSERT((Group->Id != 0) && (Group->NameLength != 0));
+
             NameSize = NETLINK_ATTRIBUTE_SIZE(Group->NameLength);
             Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(IdSize + NameSize);
             Attribute->Type = Index + 1;
@@ -519,7 +497,7 @@ Return Value:
             Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(sizeof(ULONG));
             Attribute->Type = NETLINK_GENERIC_MULTICAST_GROUP_ATTRIBUTE_ID;
             Data = NETLINK_ATTRIBUTE_DATA(Attribute);
-            *((PUSHORT)Data) = GroupOffset + Index;
+            *((PUSHORT)Data) = Group->Id;
             Attribute = (PVOID)Attribute + IdSize;
             Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(Group->NameLength);
             Attribute->Type = NETLINK_GENERIC_MULTICAST_GROUP_ATTRIBUTE_NAME;
@@ -536,8 +514,10 @@ Return Value:
     // parameters.
     //
 
-    Parameters->Message.Type = NETLINK_GENERIC_ID_CONTROL;
-    Status = NetlinkGenericSendCommand(Socket, Packet, Parameters);
+    Status = NetlinkGenericSendCommand(NetlinkGenericControlFamily,
+                                       Packet,
+                                       Parameters);
+
     if (!KSUCCESS(Status)) {
         goto SendCommandEnd;
     }

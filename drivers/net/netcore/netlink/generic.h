@@ -96,11 +96,9 @@ Return Value:
 
 KSTATUS
 NetlinkpGenericControlSendNotification (
-    PNET_SOCKET Socket,
-    UCHAR Command,
     PNETLINK_GENERIC_FAMILY Family,
-    PNETLINK_GENERIC_MULTICAST_GROUP Group,
-    ULONG GroupId
+    UCHAR Command,
+    PNETLINK_GENERIC_MULTICAST_GROUP Group
     );
 
 /*++
@@ -112,19 +110,13 @@ Routine Description:
 
 Arguments:
 
-    Socket - Supplies a pointer to the network socket on which to send the
-        command.
-
     Family - Supplies a pointer to the generic netlink family for which the
         command is being sent.
 
-    Parameters - Supplies a pointer to the command parameters.
+    Command - Supplies the generic netlink control command to be sent.
 
     Group - Supplies an optional pointers to the multicast group that has
         just arrived or is being deleted.
-
-    GroupId - Supplies an optional ID of the multicast group that has just
-        arrived or is being deleted.
 
 Return Value:
 

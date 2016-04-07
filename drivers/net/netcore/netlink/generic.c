@@ -464,9 +464,11 @@ Return Value:
 {
 
     ULONG AllocationSize;
+    UCHAR Command;
     ULONG CommandSize;
     PNETLINK_GENERIC_FAMILY FoundFamily;
     PRED_BLACK_TREE_NODE FoundNode;
+    PNETLINK_GENERIC_MULTICAST_GROUP Group;
     ULONG Index;
     BOOL LockHeld;
     BOOL Match;
@@ -620,22 +622,15 @@ Return Value:
     // Blast out some notifications.
     //
 
-    NetlinkpGenericControlSendNotification(NetlinkGenericSocket,
-                                           NETLINK_GENERIC_CONTROL_NEW_FAMILY,
-                                           NewFamily,
-                                           NULL,
-                                           0);
-
+    Command = NETLINK_GENERIC_CONTROL_NEW_FAMILY;
+    NetlinkpGenericControlSendNotification(NewFamily, Command, NULL);
     for (Index = 0;
          Index < NewFamily->Properties.MulticastGroupCount;
          Index += 1) {
 
-        NetlinkpGenericControlSendNotification(
-                               NetlinkGenericSocket,
-                               NETLINK_GENERIC_CONTROL_NEW_MULTICAST_GROUP,
-                               NewFamily,
-                               &(NewFamily->Properties.MulticastGroups[Index]),
-                               NewFamily->MulticastGroupOffset + Index);
+        Command = NETLINK_GENERIC_CONTROL_NEW_MULTICAST_GROUP;
+        Group = &(NewFamily->Properties.MulticastGroups[Index]);
+        NetlinkpGenericControlSendNotification(NewFamily, Command, Group);
     }
 
 RegisterFamilyEnd:
@@ -681,6 +676,7 @@ Return Value:
 
 {
 
+    UCHAR Command;
     PNETLINK_GENERIC_FAMILY FoundFamily;
     PRED_BLACK_TREE_NODE FoundNode;
     BOOL LockHeld;
@@ -728,13 +724,8 @@ Return Value:
         KeYield();
     }
 
-    NetlinkpGenericControlSendNotification(
-                                         NetlinkGenericSocket,
-                                         NETLINK_GENERIC_CONTROL_DELETE_FAMILY,
-                                         Family,
-                                         NULL,
-                                         0);
-
+    Command = NETLINK_GENERIC_CONTROL_DELETE_FAMILY;
+    NetlinkpGenericControlSendNotification(Family, Command, NULL);
     NetlinkpGenericFamilyReleaseReference(Family);
 
 UnregisterFamilyEnd:
@@ -748,7 +739,7 @@ UnregisterFamilyEnd:
 NETLINK_API
 KSTATUS
 NetlinkGenericSendCommand (
-    PNET_SOCKET Socket,
+    PNETLINK_GENERIC_FAMILY Family,
     PNET_PACKET_BUFFER Packet,
     PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
     )
@@ -762,7 +753,7 @@ Routine Description:
 
 Arguments:
 
-    Socket - Supplies a pointer to the netlink socket over which to send the
+    Family - Supplies a pointer to the generic netlink family sending the
         command.
 
     Packet - Supplies a pointer to the network packet to be sent.
@@ -780,23 +771,112 @@ Return Value:
     PNETLINK_GENERIC_HEADER Header;
     KSTATUS Status;
 
+    ASSERT(Family != NULL);
+
     if (Packet->DataOffset < NETLINK_GENERIC_HEADER_LENGTH) {
         Status = STATUS_BUFFER_TOO_SMALL;
         goto SendCommandEnd;
     }
+
+    //
+    // Force the message type to be that of the given family. The families do
+    // not know their assigned type value if they requested an auto-generated
+    // value.
+    //
+
+    Parameters->Message.Type = Family->Properties.Id;
+
+    //
+    // Fill out the generic netlink header.
+    //
 
     Packet->DataOffset -= NETLINK_GENERIC_HEADER_LENGTH;
     Header = Packet->Buffer + Packet->DataOffset;
     Header->Command = Parameters->Command;
     Header->Version = Parameters->Version;
     Header->Reserved = 0;
-    Status = NetlinkSendMessage(Socket, Packet, &(Parameters->Message));
+    Status = NetlinkSendMessage(NetlinkGenericSocket,
+                                Packet,
+                                &(Parameters->Message));
+
     if (!KSUCCESS(Status)) {
         goto SendCommandEnd;
     }
 
 SendCommandEnd:
     return Status;
+}
+
+NETLINK_API
+KSTATUS
+NetlinkGenericSendMulticastCommand (
+    PNETLINK_GENERIC_FAMILY Family,
+    PNET_PACKET_BUFFER Packet,
+    ULONG GroupId,
+    UCHAR Command
+    )
+
+/*++
+
+Routine Description:
+
+    This routine multicasts the given packet to the specified group after
+    filling its generic header and base netlink header in with the given
+    command and information stored in the family structure.
+
+Arguments:
+
+    Family - Supplies a pointer to the generic netlink family sending the
+        multicast command.
+
+    Packet - Supplies a pointer to the network packet to be sent.
+
+    GroupId - Supplies the family's multicast group ID over which to send the
+        command.
+
+    Command - Supplies the generic family's command to send.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    NETLINK_ADDRESS Destination;
+    NETLINK_GENERIC_COMMAND_PARAMETERS Parameters;
+    NETLINK_ADDRESS Source;
+
+    //
+    // The source is always the kernel.
+    //
+
+    Source.Domain = NetDomainNetlink;
+    Source.Port = NETLINK_KERNEL_PORT_ID;
+    Source.Group = 0;
+
+    //
+    // The destination is based on the group ID, which must be adjusted by the
+    // offset allocated when the family as registered. The caller does not know
+    // about this offset.
+    //
+
+    Destination.Domain = NetDomainNetlink;
+    Destination.Port = 0;
+    Destination.Group = Family->MulticastGroupOffset + GroupId;
+
+    //
+    // Fill out the rest of the parameters and send it off as a normal command.
+    //
+
+    Parameters.Message.SourceAddress = (PNETWORK_ADDRESS)&Source;
+    Parameters.Message.DestinationAddress = (PNETWORK_ADDRESS)&Destination;
+    Parameters.Message.Type = Family->Properties.Id;
+    Parameters.Message.SequenceNumber = 0;
+    Parameters.Command = Command;
+    Parameters.Version = 0;
+    return NetlinkGenericSendCommand(Family, Packet, &Parameters);
 }
 
 NETLINK_API
@@ -2984,7 +3064,8 @@ Return Value:
 {
 
     ULONG BitmapIndex;
-    ULONG Group;
+    ULONG Count;
+    PNETLINK_GENERIC_MULTICAST_GROUP Group;
     ULONG Index;
     ULONG Mask;
     PULONG NewBitmap;
@@ -2996,6 +3077,8 @@ Return Value:
     ULONG Value;
 
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetlinkGenericFamilyLock));
+
+    Count = Family->Properties.MulticastGroupCount;
 
     //
     // Search through the existing bitmap for a run that can accomodate the
@@ -3016,7 +3099,7 @@ Return Value:
 
             } else {
                 Run += 1;
-                if (Run == Family->Properties.MulticastGroupCount) {
+                if (Run == Count) {
                     break;
                 }
             }
@@ -3024,7 +3107,7 @@ Return Value:
             Value >>= 1;
         }
 
-        if (Run == Family->Properties.MulticastGroupCount) {
+        if (Run == Count) {
             break;
         }
 
@@ -3041,8 +3124,8 @@ Return Value:
     // last ULONG of the bitmap. Account for that when added more ULONGs.
     //
 
-    if (Run != Family->Properties.MulticastGroupCount) {
-        NewGroups = Family->Properties.MulticastGroupCount - Run;
+    if (Run != Count) {
+        NewGroups = Count - Run;
 
         //
         // Avoid allocating group ID 0. It is invalid.
@@ -3092,17 +3175,18 @@ Return Value:
 
         NetlinkGenericMulticastBitmap = NewBitmap;
         NetlinkGenericMulticastBitmapSize = NewBitmapSize;
-        Run = Family->Properties.MulticastGroupCount;
     }
 
     //
     // Set the newly allocated groups as reserved in the bitmap.
     //
 
-    for (Group = Offset; Group < (Offset + Run); Group += 1) {
-        Index = NETLINK_SOCKET_BITMAP_INDEX(Group);
-        Mask = NETLINK_SOCKET_BITMAP_MASK(Group);
-        NetlinkGenericMulticastBitmap[Index] |= Mask;
+    for (Index = 0; Index < Count; Index += 1) {
+        Group = &(Family->Properties.MulticastGroups[Index]);
+        Group->Id += Offset;
+        BitmapIndex = NETLINK_SOCKET_BITMAP_INDEX(Group->Id);
+        Mask = NETLINK_SOCKET_BITMAP_MASK(Group->Id);
+        NetlinkGenericMulticastBitmap[BitmapIndex] |= Mask;
     }
 
     Family->MulticastGroupOffset = Offset;
@@ -3139,11 +3223,13 @@ Return Value:
 {
 
     ULONG BitmapIndex;
+    UCHAR Command;
     ULONG Count;
-    ULONG Group;
+    PNETLINK_GENERIC_MULTICAST_GROUP Group;
     ULONG Index;
     ULONG Mask;
     ULONG Offset;
+    ULONG Protocol;
 
     ASSERT(KeIsSharedExclusiveLockHeldExclusive(NetlinkGenericFamilyLock));
 
@@ -3154,34 +3240,27 @@ Return Value:
     // Remove all sockets from these multicast groups.
     //
 
-    NetlinkRemoveSocketsFromMulticastGroups(
-                                      SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC,
-                                      Offset,
-                                      Count);
+    Protocol = SOCKET_INTERNET_PROTOCOL_NETLINK_GENERIC;
+    NetlinkRemoveSocketsFromMulticastGroups(Protocol, Offset, Count);
 
     //
     // Free the groups from the generic netlink bitmap.
     //
 
     for (Index = 0; Index < Count; Index += 1) {
-        Group = Offset + Index;
-        BitmapIndex = NETLINK_SOCKET_BITMAP_INDEX(Group);
-        Mask = NETLINK_SOCKET_BITMAP_MASK(Group);
+        Group = &(Family->Properties.MulticastGroups[Index]);
+        BitmapIndex = NETLINK_SOCKET_BITMAP_INDEX(Group->Id);
+        Mask = NETLINK_SOCKET_BITMAP_MASK(Group->Id);
         NetlinkGenericMulticastBitmap[BitmapIndex] &= ~Mask;
 
         //
         // Announce the deletion of the multicast group.
         //
 
-        NetlinkpGenericControlSendNotification(
-                                  NetlinkGenericSocket,
-                                  NETLINK_GENERIC_CONTROL_NEW_MULTICAST_GROUP,
-                                  Family,
-                                  &(Family->Properties.MulticastGroups[Index]),
-                                  Group);
+        Command = NETLINK_GENERIC_CONTROL_DELETE_MULTICAST_GROUP;
+        NetlinkpGenericControlSendNotification(Family, Command, Group);
     }
 
-    Family->MulticastGroupOffset = 0;
     return;
 }
 

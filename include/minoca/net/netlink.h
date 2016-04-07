@@ -241,6 +241,10 @@ Author:
 
 #define NETLINK_GENERIC_80211_JOIN 1
 #define NETLINK_GENERIC_80211_LEAVE 2
+#define NETLINK_GENERIC_80211_SCAN_START 3
+#define NETLINK_GENERIC_80211_SCAN_RESULT 4
+#define NETLINK_GENERIC_80211_SCAN_GET_RESULTS 5
+#define NETLINK_GENERIC_80211_SCAN_ABORTED 6
 #define NETLINK_GENERIC_80211_MAX 255
 
 //
@@ -505,6 +509,8 @@ Structure Description:
 
 Members:
 
+    Id - Stores the ID of the multicast group.
+
     NameLength - Stores the length of the multicast group name, in bytes.
 
     Name - Stores the name of the multicast group.
@@ -512,6 +518,7 @@ Members:
 --*/
 
 typedef struct _NETLINK_GENERIC_MULTICAST_GROUP {
+    ULONG Id;
     ULONG NameLength;
     CHAR Name[NETLINK_GENERIC_MAX_MULTICAST_GROUP_NAME];
 } NETLINK_GENERIC_MULTICAST_GROUP, *PNETLINK_GENERIC_MULTICAST_GROUP;
@@ -712,7 +719,7 @@ Return Value:
 NETLINK_API
 KSTATUS
 NetlinkGenericSendCommand (
-    PNET_SOCKET Socket,
+    PNETLINK_GENERIC_FAMILY Family,
     PNET_PACKET_BUFFER Packet,
     PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
     );
@@ -726,12 +733,47 @@ Routine Description:
 
 Arguments:
 
-    Socket - Supplies a pointer to the netlink socket over which to send the
-        command.
+    Family - Supplies a pointer to the generic netlink family sending the
+        message.
 
     Packet - Supplies a pointer to the network packet to be sent.
 
     Parameters - Supplies a pointer to the generic command parameters.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NETLINK_API
+KSTATUS
+NetlinkGenericSendMulticastCommand (
+    PNETLINK_GENERIC_FAMILY Family,
+    PNET_PACKET_BUFFER Packet,
+    ULONG GroupId,
+    UCHAR Command
+    );
+
+/*++
+
+Routine Description:
+
+    This routine multicasts the given packet to the specified group after
+    filling its generic header and base netlink header in with the given
+    command and information stored in the family structure.
+
+Arguments:
+
+    Family - Supplies a pointer to the generic netlink family sending the
+        multicast command.
+
+    Packet - Supplies a pointer to the network packet to be sent.
+
+    GroupId - Supplies the family's multicast group ID over which to send the
+        command.
+
+    Command - Supplies the generic family's command to send.
 
 Return Value:
 

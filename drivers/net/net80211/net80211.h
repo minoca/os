@@ -84,6 +84,32 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef
+VOID
+(*PNET80211_SCAN_COMPLETION_ROUTINE) (
+    PNET80211_LINK Link,
+    KSTATUS ScanStatus
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called when a scan for nearby BSS access points has
+    completed.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link that performed the scan.
+
+    ScanStatus - Supplies the status result of the scan.
+
+Return Value:
+
+    None.
+
+--*/
+
 /*++
 
 Structure Description:
@@ -114,6 +140,9 @@ Members:
     Passphrase - Stores the passphrase of the ESS for which the scan is
         searching.
 
+    CompletionRoutine - Stores a pointer to the routine to call once the scan
+        has completed.
+
 --*/
 
 typedef struct _NET80211_SCAN_STATE {
@@ -125,6 +154,7 @@ typedef struct _NET80211_SCAN_STATE {
     UCHAR Ssid[NET80211_MAX_SSID_LENGTH];
     ULONG PassphraseLength;
     UCHAR Passphrase[NET80211_MAX_PASSPHRASE_LENGTH];
+    PNET80211_SCAN_COMPLETION_ROUTINE CompletionRoutine;
 } NET80211_SCAN_STATE, *PNET80211_SCAN_STATE;
 
 /*++

@@ -64,12 +64,6 @@ Environment:
 #define NET80211_DEFAULT_RSN_AKM_SUITE 0x02AC0F00
 
 //
-// Define the number of times to retry a scan before giving up.
-//
-
-#define NET80211_SCAN_RETRY_COUNT 5
-
-//
 // Define the time to wait for a state management frame.
 //
 
@@ -1083,169 +1077,167 @@ Return Value:
     BOOL LockHeld;
     BOOL Match;
     LONG MaxRssi;
-    ULONG Retries;
     PNET80211_SCAN_STATE Scan;
     KSTATUS Status;
 
     LockHeld = FALSE;
     Scan = (PNET80211_SCAN_STATE)Parameter;
     Link = Scan->Link;
-    Retries = 0;
-    while (Retries < NET80211_SCAN_RETRY_COUNT) {
+
+    //
+    // Always start scanning on channel 1.
+    //
+
+    Scan->Channel = 1;
+
+    //
+    // Search for BSS entries on all channels.
+    //
+
+    FoundEntry = NULL;
+    while (Scan->Channel < Link->Properties.MaxChannel) {
 
         //
-        // Always start scanning on channel 1.
+        // Set the channel to send the packet over.
         //
 
-        Scan->Channel = 1;
-
-        //
-        // Search for BSS entries on all channels.
-        //
-
-        Status = STATUS_UNSUCCESSFUL;
-        FoundEntry = NULL;
-        while (Scan->Channel < Link->Properties.MaxChannel) {
-
-            //
-            // Set the channel to send the packet over.
-            //
-
-            Status = Net80211pSetChannel(Link, Scan->Channel);
-            if (!KSUCCESS(Status)) {
-                goto ScanThreadEnd;
-            }
-
-            //
-            // Send a probe request over the link, this will look in the
-            // current scan state and set the correct channel and BSSID
-            // (broadcast or a specific ID).
-            //
-
-            Status = Net80211pSendProbeRequest(Link, Scan);
-            if (!KSUCCESS(Status)) {
-                goto ScanThreadEnd;
-            }
-
-            //
-            // Wait the default dwell time before moving to the next channel.
-            //
-
-            KeDelayExecution(FALSE, FALSE, NET80211_DEFAULT_SCAN_DWELL_TIME);
-
-            //
-            // Now that the channel has been probed, search to see if the
-            // targeted BSS is in range. This should only be done if a specific
-            // BSSID is being probed.
-            //
-
-            if (((Scan->Flags & NET80211_SCAN_FLAG_BROADCAST) == 0) &&
-                ((Scan->Flags & NET80211_SCAN_FLAG_JOIN) != 0)) {
-
-                KeAcquireQueuedLock(Link->Lock);
-                LockHeld = TRUE;
-                FoundEntry = Net80211pLookupBssEntry(Link, Scan->Bssid);
-                if (FoundEntry != NULL) {
-                    Status = Net80211pValidateRates(Link, FoundEntry);
-                    if (!KSUCCESS(Status)) {
-                       goto ScanThreadEnd;
-                    }
-
-                    break;
-                }
-
-                KeReleaseQueuedLock(Link->Lock);
-                LockHeld = FALSE;
-            }
-
-            Scan->Channel += 1;
+        Status = Net80211pSetChannel(Link, Scan->Channel);
+        if (!KSUCCESS(Status)) {
+            goto ScanThreadEnd;
         }
 
         //
-        // If the scan completed and a join is required, then search for the
-        // BSS with the most signal strength.
+        // Send a probe request over the link, this will look in the
+        // current scan state and set the correct channel and BSSID
+        // (broadcast or a specific ID).
         //
 
-        if (((Scan->Flags & NET80211_SCAN_FLAG_BROADCAST) != 0) &&
+        Status = Net80211pSendProbeRequest(Link, Scan);
+        if (!KSUCCESS(Status)) {
+            goto ScanThreadEnd;
+        }
+
+        //
+        // Wait the default dwell time before moving to the next channel.
+        //
+
+        KeDelayExecution(FALSE, FALSE, NET80211_DEFAULT_SCAN_DWELL_TIME);
+
+        //
+        // Now that the channel has been probed, search to see if the
+        // targeted BSS is in range. This should only be done if a specific
+        // BSSID is being probed.
+        //
+
+        if (((Scan->Flags & NET80211_SCAN_FLAG_BROADCAST) == 0) &&
             ((Scan->Flags & NET80211_SCAN_FLAG_JOIN) != 0)) {
 
-            ASSERT(Scan->SsidLength != 0);
-            ASSERT(FoundEntry == NULL);
-
-            MaxRssi = MIN_LONG;
             KeAcquireQueuedLock(Link->Lock);
             LockHeld = TRUE;
-            CurrentEntry = Link->BssList.Next;
-            while (CurrentEntry != &(Link->BssList)) {
-                BssEntry = LIST_VALUE(CurrentEntry,
-                                      NET80211_BSS_ENTRY,
-                                      ListEntry);
-
-                CurrentEntry = CurrentEntry->Next;
-                if (BssEntry->SsidLength != Scan->SsidLength) {
-                    continue;
-                }
-
-                Match = RtlCompareMemory(BssEntry->Ssid,
-                                         Scan->Ssid,
-                                         Scan->SsidLength);
-
-                if (Match == FALSE) {
-                    continue;
-                }
-
-                //
-                // Validate that the BSS and station agree on a basic rate set.
-                // Also determine the mode at which it would connect.
-                //
-
-                Status = Net80211pValidateRates(Link, BssEntry);
+            FoundEntry = Net80211pLookupBssEntry(Link, Scan->Bssid);
+            if (FoundEntry != NULL) {
+                Status = Net80211pValidateRates(Link, FoundEntry);
                 if (!KSUCCESS(Status)) {
-                    continue;
+                   goto ScanThreadEnd;
                 }
 
-                if (BssEntry->State.Rssi >= MaxRssi) {
-                    MaxRssi = BssEntry->State.Rssi;
-                    FoundEntry = BssEntry;
-                }
+                break;
             }
 
-            if (FoundEntry == NULL) {
-                KeReleaseQueuedLock(Link->Lock);
-                LockHeld = FALSE;
+            KeReleaseQueuedLock(Link->Lock);
+            LockHeld = FALSE;
+        }
+
+        Scan->Channel += 1;
+    }
+
+    //
+    // If the scan completed and a join is required, then search for the
+    // BSS with the most signal strength.
+    //
+
+    if (((Scan->Flags & NET80211_SCAN_FLAG_BROADCAST) != 0) &&
+        ((Scan->Flags & NET80211_SCAN_FLAG_JOIN) != 0)) {
+
+        ASSERT(Scan->SsidLength != 0);
+        ASSERT(FoundEntry == NULL);
+
+        MaxRssi = MIN_LONG;
+        KeAcquireQueuedLock(Link->Lock);
+        LockHeld = TRUE;
+        CurrentEntry = Link->BssList.Next;
+        while (CurrentEntry != &(Link->BssList)) {
+            BssEntry = LIST_VALUE(CurrentEntry,
+                                  NET80211_BSS_ENTRY,
+                                  ListEntry);
+
+            CurrentEntry = CurrentEntry->Next;
+            if (BssEntry->SsidLength != Scan->SsidLength) {
+                continue;
+            }
+
+            Match = RtlCompareMemory(BssEntry->Ssid,
+                                     Scan->Ssid,
+                                     Scan->SsidLength);
+
+            if (Match == FALSE) {
+                continue;
+            }
+
+            //
+            // Validate that the BSS and station agree on a basic rate set.
+            // Also determine the mode at which it would connect.
+            //
+
+            Status = Net80211pValidateRates(Link, BssEntry);
+            if (!KSUCCESS(Status)) {
+                continue;
+            }
+
+            if (BssEntry->State.Rssi >= MaxRssi) {
+                MaxRssi = BssEntry->State.Rssi;
+                FoundEntry = BssEntry;
             }
         }
 
-        //
-        // If an entry was found, join that BSS and start the authentication
-        // process.
-        //
+        if (FoundEntry == NULL) {
+            KeReleaseQueuedLock(Link->Lock);
+            LockHeld = FALSE;
+        }
+    }
 
-        if (FoundEntry != NULL) {
+    //
+    // If an entry was found, join that BSS and start the authentication
+    // process.
+    //
 
-            ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
+    if (FoundEntry != NULL) {
 
-            if (FoundEntry->Encryption.Pairwise != NetworkEncryptionNone) {
-                if (Scan->PassphraseLength == 0) {
-                    Status = STATUS_ACCESS_DENIED;
-                    break;
-                }
+        ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
 
-                RtlCopyMemory(FoundEntry->Passphrase,
-                              Scan->Passphrase,
-                              Scan->PassphraseLength);
-
-                FoundEntry->PassphraseLength = Scan->PassphraseLength;
+        if (FoundEntry->Encryption.Pairwise != NetworkEncryptionNone) {
+            if (Scan->PassphraseLength == 0) {
+                Status = STATUS_ACCESS_DENIED;
+                goto ScanThreadEnd;
             }
 
-            Net80211pJoinBss(Link, FoundEntry);
-            Net80211pSetChannel(Link, FoundEntry->State.Channel);
-            Net80211pSetStateUnlocked(Link, Net80211StateAuthenticating);
-            Status = STATUS_SUCCESS;
-            break;
+            RtlCopyMemory(FoundEntry->Passphrase,
+                          Scan->Passphrase,
+                          Scan->PassphraseLength);
+
+            FoundEntry->PassphraseLength = Scan->PassphraseLength;
         }
 
-        Retries += 1;
+        Net80211pJoinBss(Link, FoundEntry);
+        Net80211pSetChannel(Link, FoundEntry->State.Channel);
+        Net80211pSetStateUnlocked(Link, Net80211StateAuthenticating);
+        Status = STATUS_SUCCESS;
+
+    } else if ((Scan->Flags & NET80211_SCAN_FLAG_JOIN) != 0) {
+        Status = STATUS_UNSUCCESSFUL;
+
+    } else {
+        Status = STATUS_SUCCESS;
     }
 
 ScanThreadEnd:
@@ -1255,6 +1247,10 @@ ScanThreadEnd:
 
     if (!KSUCCESS(Status)) {
         Net80211pSetState(Link, Net80211StateInitialized);
+    }
+
+    if (Scan->CompletionRoutine != NULL) {
+        Scan->CompletionRoutine(Link, Status);
     }
 
     Net80211LinkReleaseReference(Link);
@@ -3202,6 +3198,7 @@ Return Value:
     //
 
     Bss->Encryption.StationRsn = (PUCHAR)&Net80211DefaultRsnInformation;
+    Status = STATUS_SUCCESS;
 
 UpdateBssCacheEnd:
     DestroyBss = FALSE;
@@ -3392,8 +3389,9 @@ Return Value:
 
     ULONG Index;
 
-    ASSERT(BssEntry->Encryption.StationRsn ==
-           (PUCHAR)&Net80211DefaultRsnInformation);
+    ASSERT((BssEntry->Encryption.StationRsn == NULL) ||
+           (BssEntry->Encryption.StationRsn ==
+            (PUCHAR)&Net80211DefaultRsnInformation));
 
     Net80211pDestroyEncryption(BssEntry);
     if (BssEntry->State.Rates.Rate != NULL) {
