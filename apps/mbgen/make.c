@@ -58,7 +58,7 @@ MbgenMakePrintBuildDirectoriesTarget (
     );
 
 VOID
-MbgenMakePrintToolCommand (
+MbgenMakePrintWithVariableConversion (
     FILE *File,
     PSTR Command
     );
@@ -186,11 +186,11 @@ Return Value:
         fprintf(File, "TOOL_%s = ", Tool->Name);
         if (Tool->Description != NULL) {
             fprintf(File, "@echo ");
-            MbgenMakePrintToolCommand(File, Tool->Description);
+            MbgenMakePrintWithVariableConversion(File, Tool->Description);
             fprintf(File, " ; \\\n    ");
         }
 
-        MbgenMakePrintToolCommand(File, Tool->Command);
+        MbgenMakePrintWithVariableConversion(File, Tool->Command);
         fprintf(File, "\n\n");
         CurrentEntry = CurrentEntry->Next;
     }
@@ -431,23 +431,23 @@ Return Value:
 }
 
 VOID
-MbgenMakePrintToolCommand (
+MbgenMakePrintWithVariableConversion (
     FILE *File,
-    PSTR Command
+    PSTR String
     )
 
 /*++
 
 Routine Description:
 
-    This routine prints a tool command or description, converting variable
+    This routine prints a string to the output file, converting variable
     expressions into proper make format.
 
 Arguments:
 
     File - Supplies a pointer to the file to print to.
 
-    Command - Supplies a pointer to the command to convert.
+    String - Supplies a pointer to the string to print.
 
 Return Value:
 
@@ -461,28 +461,45 @@ Return Value:
     CHAR Original;
     PSTR Variable;
 
-    Copy = strdup(Command);
+    Copy = strdup(String);
     if (Copy == NULL) {
         return;
     }
 
-    Command = Copy;
-    while (*Command != '\0') {
-        if (*Command != '$') {
-            fputc(*Command, File);
-            Command += 1;
+    String = Copy;
+    while (*String != '\0') {
+        if (*String != '$') {
+            fputc(*String, File);
+            String += 1;
             continue;
         }
 
-        Command += 1;
+        String += 1;
 
         //
         // A double dollar is just a literal dollar sign.
         //
 
-        if (*Command == '$') {
-            fputc(*Command, File);
-            Command += 1;
+        if (*String == '$') {
+            fputc(*String, File);
+            String += 1;
+            continue;
+        }
+
+        //
+        // A dollar sign followed by // prints the source root, and ^/ prints
+        // the build root.
+        //
+
+        if ((*String == '/') && (*(String + 1) == '/')) {
+            MbgenMakePrintTreeRoot(File, MbgenSourceTree);
+            String += 2;
+            continue;
+        }
+
+        if ((*String == '^') && (*(String + 1) == '/')) {
+            MbgenMakePrintTreeRoot(File, MbgenBuildTree);
+            String += 2;
             continue;
         }
 
@@ -491,10 +508,10 @@ Return Value:
         // passed over literally.
         //
 
-        if (!MBGEN_IS_NAME0(*Command)) {
+        if (!MBGEN_IS_NAME0(*String)) {
             fputc('$', File);
-            fputc(*Command, File);
-            Command += 1;
+            fputc(*String, File);
+            String += 1;
             continue;
         }
 
@@ -502,9 +519,9 @@ Return Value:
         // Get to the end of the variable name.
         //
 
-        Variable = Command;
-        while (MBGEN_IS_NAME(*Command)) {
-            Command += 1;
+        Variable = String;
+        while (MBGEN_IS_NAME(*String)) {
+            String += 1;
         }
 
         //
@@ -512,8 +529,8 @@ Return Value:
         // IN and OUT variables, which substitute differently.
         //
 
-        Original = *Command;
-        *Command = '\0';
+        Original = *String;
+        *String = '\0';
         if (strcasecmp(Variable, "in") == 0) {
             fprintf(File, "%s", MBGEN_MAKE_INPUTS);
 
@@ -528,7 +545,7 @@ Return Value:
             fprintf(File, MBGEN_MAKE_VARIABLE, Variable);
         }
 
-        *Command = Original;
+        *String = Original;
     }
 
     free(Copy);
@@ -838,7 +855,7 @@ Return Value:
         fprintf(File, "%lld", Value->Integer.Value);
 
     } else if (Value->Header.Type == ChalkObjectString) {
-        fprintf(File, "%s", Value->String.String);
+        MbgenMakePrintWithVariableConversion(File, Value->String.String);
 
     } else {
         TotalStatus = -1;

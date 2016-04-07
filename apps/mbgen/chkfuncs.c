@@ -117,7 +117,7 @@ PSTR MbgenChalkSplitExtensionArguments[] = {
     NULL
 };
 
-PSTR MbgenChalkUnameArguments[] = {
+PSTR MbgenChalkNoArguments[] = {
     NULL
 };
 
@@ -136,31 +136,31 @@ CHALK_FUNCTION_PROTOTYPE MbgenChalkFunctions[] = {
 
     {
         "uname_s",
-        MbgenChalkUnameArguments,
+        MbgenChalkNoArguments,
         MbgenChalkUnameS
     },
 
     {
         "uname_n",
-        MbgenChalkUnameArguments,
+        MbgenChalkNoArguments,
         MbgenChalkUnameN
     },
 
     {
         "uname_r",
-        MbgenChalkUnameArguments,
+        MbgenChalkNoArguments,
         MbgenChalkUnameR
     },
 
     {
         "uname_v",
-        MbgenChalkUnameArguments,
+        MbgenChalkNoArguments,
         MbgenChalkUnameV
     },
 
     {
         "uname_m",
-        MbgenChalkUnameArguments,
+        MbgenChalkNoArguments,
         MbgenChalkUnameM
     },
 

@@ -600,6 +600,28 @@ Return Value:
     switch (Context.Format) {
     case MbgenOutputMake:
         Status = MbgenCreateMakefile(&Context);
+        if (Status != 0) {
+            goto mainEnd;
+        }
+
+        if ((Context.Options & MBGEN_OPTION_VERBOSE) != 0) {
+            printf("Creating build directories...\n");
+        }
+
+        //
+        // Make won't automatically create the build directories needed like
+        // Ninja, so go ahead and do that now.
+        //
+
+        Status = MbgenCreateDirectories(&Context, &(Context.BuildDirectories));
+        if (Status != 0) {
+            fprintf(stderr,
+                    "Failed to create build directories: %s.\n",
+                    strerror(Status));
+
+            goto mainEnd;
+        }
+
         break;
 
     case MbgenOutputNinja:

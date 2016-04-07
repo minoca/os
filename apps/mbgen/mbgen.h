@@ -894,6 +894,57 @@ Return Value:
 
 --*/
 
+INT
+MbgenCreateDirectories (
+    PMBGEN_CONTEXT Context,
+    PMBGEN_PATH_LIST PathList
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates directories, including intermediate directories,
+    in the given path list. If creating one directory fails, the routine still
+    tries to create the others.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    PathList - Supplies a pointer to the path list.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+INT
+MbgenCreateDirectory (
+    PSTR Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine creates a directory, including intermediate directories.
+
+Arguments:
+
+    Path - Supplies a pointer to the directory to create.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
 //
 // Chalk support functions
 //

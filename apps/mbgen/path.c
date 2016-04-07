@@ -26,6 +26,7 @@ Environment:
 //
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -38,6 +39,12 @@ Environment:
 //
 // --------------------------------------------------------------------- Macros
 //
+
+#ifdef _WIN32
+
+#define mkdir(_Path, _Permissions) mkdir(_Path)
+
+#endif
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -812,6 +819,190 @@ Return Value:
     }
 
     return;
+}
+
+INT
+MbgenCreateDirectories (
+    PMBGEN_CONTEXT Context,
+    PMBGEN_PATH_LIST PathList
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates directories, including intermediate directories,
+    in the given path list. If creating one directory fails, the routine still
+    tries to create the others.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    PathList - Supplies a pointer to the path list.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    UINTN Index;
+    PMBGEN_PATH Path;
+    INT Status;
+    INT TotalStatus;
+    PSTR TreeRoot;
+
+    TotalStatus = 0;
+    for (Index = 0; Index < PathList->Count; Index += 1) {
+        Path = &(PathList->Array[Index]);
+        TreeRoot = MbgenPathForTree(Context, Path->Root);
+        Status = chdir(TreeRoot);
+        if (Status != 0) {
+            fprintf(stderr,
+                    "Error: Failed to cd to %s: %s.\n",
+                    TreeRoot,
+                    strerror(errno));
+
+        } else {
+            Status = MbgenCreateDirectory(Path->Path);
+        }
+
+        if ((Status != 0) && (TotalStatus == 0)) {
+            TotalStatus = Status;
+        }
+    }
+
+    return TotalStatus;
+}
+
+INT
+MbgenCreateDirectory (
+    PSTR Path
+    )
+
+/*++
+
+Routine Description:
+
+    This routine creates a directory, including intermediate directories.
+
+Arguments:
+
+    Path - Supplies a pointer to the directory to create.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PSTR CurrentSeparator;
+    PSTR PathCopy;
+    int Result;
+
+    //
+    // Create a copy of the path so it can be modified.
+    //
+
+    PathCopy = strdup(Path);
+    if (PathCopy == NULL) {
+        Result = ENOMEM;
+        goto CreateDirectoryEnd;
+    }
+
+    CurrentSeparator = PathCopy;
+
+    //
+    // Skip the drive letter if it exists.
+    //
+
+    if ((isalpha(PathCopy[0]) != 0) &&
+        (PathCopy[1] == ':') &&
+        ((PathCopy[2] == '/') || (PathCopy[2] == '\\'))) {
+
+        CurrentSeparator += 3;
+    }
+
+    //
+    // Skip the pointless system call to try to create the root directory.
+    //
+
+    while ((*CurrentSeparator == '/') || (*CurrentSeparator == '\\')) {
+        CurrentSeparator += 1;
+    }
+
+    //
+    // Loop creating each component of the directory.
+    //
+
+    while (TRUE) {
+        errno = 0;
+        if (*CurrentSeparator == '\0') {
+            break;
+        }
+
+        while ((*CurrentSeparator != '/') && (*CurrentSeparator != '\\') &&
+               (*CurrentSeparator != '\0')) {
+
+            CurrentSeparator += 1;
+        }
+
+        if (*CurrentSeparator == '\0') {
+            CurrentSeparator = NULL;
+        }
+
+        //
+        // If there's a separator, create the intermediate directory.
+        //
+
+        if (CurrentSeparator != NULL) {
+            *CurrentSeparator = '\0';
+            Result = mkdir(PathCopy, 0777);
+            if ((Result == -1) && (errno != EEXIST)) {
+                perror("Error: Failed to create directory");
+                break;
+            }
+
+            *CurrentSeparator = '/';
+            while (*CurrentSeparator == '/') {
+                CurrentSeparator += 1;
+            }
+
+        //
+        // This is the final component. If creating intermediate directories,
+        // don't fail if it already exists.
+        //
+
+        } else {
+            Result = mkdir(PathCopy, 0777);
+            if ((Result != 0) && (errno == EEXIST)) {
+                errno = 0;
+
+            } else {
+                perror("Error: Failed to create directory");
+            }
+
+            break;
+        }
+    }
+
+    Result = errno;
+
+CreateDirectoryEnd:
+    if (PathCopy != NULL) {
+        free(PathCopy);
+    }
+
+    return Result;
 }
 
 //
