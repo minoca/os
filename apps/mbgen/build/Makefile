@@ -4,7 +4,7 @@
 #
 #   Binary Name:
 #
-#       mbgen (Build)
+#       mingen (Build)
 #
 #   Abstract:
 #
@@ -21,7 +21,7 @@
 #
 ################################################################################
 
-BINARY = mbgen
+BINARY = mingen
 
 BINPLACE = bin
 

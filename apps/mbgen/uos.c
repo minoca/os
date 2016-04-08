@@ -8,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This module implements POSIX OS functions for mbgen.
+    This module implements POSIX OS functions for mingen.
 
 Author:
 
@@ -52,7 +52,7 @@ Environment:
 //
 
 INT
-MbgenOsUname (
+MingenOsUname (
     CHAR Flavor,
     PSTR Buffer,
     ULONG Size

@@ -28,25 +28,25 @@ Author:
 // --------------------------------------------------------------------- Macros
 //
 
-#define MBGEN_IS_SPECIAL_PATH_CHARACTER(_Character) \
+#define MINGEN_IS_SPECIAL_PATH_CHARACTER(_Character) \
     (((_Character) == '/') || ((_Character) == '\\') || ((_Character) == '^'))
 
-#define MBGEN_IS_SOURCE_ROOT_RELATIVE(_String) \
+#define MINGEN_IS_SOURCE_ROOT_RELATIVE(_String) \
     (((_String)[0] == '/') && ((_String)[1] == '/'))
 
-#define MBGEN_IS_BUILD_ROOT_RELATIVE(_String) \
+#define MINGEN_IS_BUILD_ROOT_RELATIVE(_String) \
     (((_String)[0] == '^') && ((_String)[1] == '/'))
 
-#define MBGEN_IS_ABSOLUTE_PATH(_String) \
+#define MINGEN_IS_ABSOLUTE_PATH(_String) \
     (((_String)[0] == '/') || ((_String)[0] == '\\') || \
      ((isalpha((_String)[0]) != 0) && ((_String)[1] == ':') && \
       (((_String)[2] == '/') || ((_String)[2] == '\\'))))
 
-#define MBGEN_IS_NAME(_Character) \
-    ((MBGEN_IS_NAME0(_Character)) || \
+#define MINGEN_IS_NAME(_Character) \
+    ((MINGEN_IS_NAME0(_Character)) || \
      (((_Character) >= '0') && ((_Character) <= '9')))
 
-#define MBGEN_IS_NAME0(_Character) \
+#define MINGEN_IS_NAME0(_Character) \
     ((((_Character) >= 'A') && ((_Character) <= 'Z')) || \
      (((_Character) >= 'a') && ((_Character) <= 'z')) || \
      ((_Character) == '_'))
@@ -55,52 +55,52 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define MBGEN_PROJECT_FILE ".mgproj"
-#define MBGEN_BUILD_FILE "build.ck"
-#define MBGEN_DEFAULT_NAME "//:"
+#define MINGEN_PROJECT_FILE ".mgproj"
+#define MINGEN_BUILD_FILE "build.ck"
+#define MINGEN_DEFAULT_NAME "//:"
 
-#define MBGEN_BUILD_DIRECTORIES_FILE ".builddirs"
-#define MBGEN_VARIABLE_SOURCE_ROOT "SOURCE_ROOT"
-#define MBGEN_VARIABLE_BUILD_ROOT "BUILD_ROOT"
-#define MBGEN_VARIABLE_PROJECT_PATH "MG_PROJECT_PATH"
+#define MINGEN_BUILD_DIRECTORIES_FILE ".builddirs"
+#define MINGEN_VARIABLE_SOURCE_ROOT "SOURCE_ROOT"
+#define MINGEN_VARIABLE_BUILD_ROOT "BUILD_ROOT"
+#define MINGEN_VARIABLE_PROJECT_PATH "MG_PROJECT_PATH"
 
-#define MBGEN_OPTION_VERBOSE 0x00000001
-#define MBGEN_OPTION_DEBUG 0x00000002
-#define MBGEN_OPTION_DRY_RUN 0x00000004
+#define MINGEN_OPTION_VERBOSE 0x00000001
+#define MINGEN_OPTION_DEBUG 0x00000002
+#define MINGEN_OPTION_DRY_RUN 0x00000004
 
 //
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef enum _MBGEN_DIRECTORY_TREE {
-    MbgenDirectoryTreeInvalid,
-    MbgenSourceTree,
-    MbgenBuildTree,
-    MbgenAbsolutePath,
-} MBGEN_DIRECTORY_TREE, *PMBGEN_DIRECTORY_TREE;
+typedef enum _MINGEN_DIRECTORY_TREE {
+    MingenDirectoryTreeInvalid,
+    MingenSourceTree,
+    MingenBuildTree,
+    MingenAbsolutePath,
+} MINGEN_DIRECTORY_TREE, *PMINGEN_DIRECTORY_TREE;
 
-typedef enum _MBGEN_INPUT_TYPE {
-    MbgenInputInvalid,
-    MbgenInputSource,
-    MbgenInputTarget,
-} MBGEN_INPUT_TYPE, *PMBGEN_INPUT_TYPE;
+typedef enum _MINGEN_INPUT_TYPE {
+    MingenInputInvalid,
+    MingenInputSource,
+    MingenInputTarget,
+} MINGEN_INPUT_TYPE, *PMINGEN_INPUT_TYPE;
 
-typedef enum _MBGEN_SCRIPT_ORDER {
-    MbgenScriptOrderInvalid,
-    MbgenScriptOrderCommandLine,
-    MbgenScriptOrderProjectRoot,
-    MbgenScriptOrderGlobal,
-    MbgenScriptOrderTarget,
-} MBGEN_SCRIPT_ORDER, *PMBGEN_SCRIPT_ORDER;
+typedef enum _MINGEN_SCRIPT_ORDER {
+    MingenScriptOrderInvalid,
+    MingenScriptOrderCommandLine,
+    MingenScriptOrderProjectRoot,
+    MingenScriptOrderGlobal,
+    MingenScriptOrderTarget,
+} MINGEN_SCRIPT_ORDER, *PMINGEN_SCRIPT_ORDER;
 
-typedef enum _MBGEN_OUTPUT_FORMAT {
-    MbgenOutputInvalid,
-    MbgenOutputNone,
-    MbgenOutputMake,
-    MbgenOutputNinja
-} MBGEN_OUTPUT_FORMAT, *PMBGEN_OUTPUT_FORMAT;
+typedef enum _MINGEN_OUTPUT_FORMAT {
+    MingenOutputInvalid,
+    MingenOutputNone,
+    MingenOutputMake,
+    MingenOutputNinja
+} MINGEN_OUTPUT_FORMAT, *PMINGEN_OUTPUT_FORMAT;
 
-typedef struct _MBGEN_TARGET MBGEN_TARGET, *PMBGEN_TARGET;
+typedef struct _MINGEN_TARGET MINGEN_TARGET, *PMINGEN_TARGET;
 
 /*++
 
@@ -118,11 +118,11 @@ Members:
 
 --*/
 
-typedef struct _MBGEN_PATH {
-    MBGEN_DIRECTORY_TREE Root;
+typedef struct _MINGEN_PATH {
+    MINGEN_DIRECTORY_TREE Root;
     PSTR Path;
     PSTR Target;
-} MBGEN_PATH, *PMBGEN_PATH;
+} MINGEN_PATH, *PMINGEN_PATH;
 
 /*++
 
@@ -141,11 +141,11 @@ Members:
 
 --*/
 
-typedef struct _MBGEN_PATH_LIST {
-    PMBGEN_PATH Array;
+typedef struct _MINGEN_PATH_LIST {
+    PMINGEN_PATH Array;
     ULONG Count;
     ULONG Capacity;
-} MBGEN_PATH_LIST, *PMBGEN_PATH_LIST;
+} MINGEN_PATH_LIST, *PMINGEN_PATH_LIST;
 
 /*++
 
@@ -158,7 +158,7 @@ Members:
 
     Executable - Stores the value of argv[0].
 
-    Options - Stores the bitfield of application options. see MBGEN_OPTION_*
+    Options - Stores the bitfield of application options. see MINGEN_OPTION_*
         definitions.
 
     Interpreter - Stores the Chalk interpreter context.
@@ -204,11 +204,11 @@ Members:
 
 --*/
 
-typedef struct _MBGEN_CONTEXT {
+typedef struct _MINGEN_CONTEXT {
     PSTR Executable;
     ULONG Options;
     CHALK_INTERPRETER Interpreter;
-    MBGEN_OUTPUT_FORMAT Format;
+    MINGEN_OUTPUT_FORMAT Format;
     PSTR FormatString;
     PSTR ProjectFilePath;
     PSTR BuildFileName;
@@ -220,10 +220,10 @@ typedef struct _MBGEN_CONTEXT {
     LIST_ENTRY ToolList;
     PCHALK_OBJECT GlobalConfig;
     LIST_ENTRY PoolList;
-    MBGEN_PATH_LIST BuildDirectories;
+    MINGEN_PATH_LIST BuildDirectories;
     PSTR *CommandScripts;
     ULONG CommandScriptCount;
-} MBGEN_CONTEXT, *PMBGEN_CONTEXT;
+} MINGEN_CONTEXT, *PMINGEN_CONTEXT;
 
 /*++
 
@@ -235,7 +235,7 @@ Structure Description:
 Members:
 
     Array - Stores a pointer to the array of pointers to elements. Each element
-        is of type MBGEN_SOURCE or MBGEN_TARGET depending on their first field
+        is of type MINGEN_SOURCE or MINGEN_TARGET depending on their first field
         value.
 
     Count - Stores the number of elements in the array.
@@ -245,11 +245,11 @@ Members:
 
 --*/
 
-typedef struct _MBGEN_INPUTS {
+typedef struct _MINGEN_INPUTS {
     PVOID *Array;
     ULONG Count;
     ULONG Capacity;
-} MBGEN_INPUTS, *PMBGEN_INPUTS;
+} MINGEN_INPUTS, *PMINGEN_INPUTS;
 
 /*++
 
@@ -278,7 +278,7 @@ Members:
 
 --*/
 
-typedef struct _MBGEN_TOOL {
+typedef struct _MINGEN_TOOL {
     LIST_ENTRY ListEntry;
     PSTR Name;
     PSTR Command;
@@ -286,7 +286,7 @@ typedef struct _MBGEN_TOOL {
     PSTR Depfile;
     PSTR DepsFormat;
     PSTR Pool;
-} MBGEN_TOOL, *PMBGEN_TOOL;
+} MINGEN_TOOL, *PMINGEN_TOOL;
 
 /*++
 
@@ -320,18 +320,18 @@ Members:
 
 --*/
 
-typedef struct _MBGEN_SCRIPT {
+typedef struct _MINGEN_SCRIPT {
     LIST_ENTRY ListEntry;
-    MBGEN_DIRECTORY_TREE Root;
+    MINGEN_DIRECTORY_TREE Root;
     PSTR Path;
     PSTR CompletePath;
-    MBGEN_SCRIPT_ORDER Order;
+    MINGEN_SCRIPT_ORDER Order;
     PSTR Script;
     UINTN Size;
     PCHALK_OBJECT Result;
     LIST_ENTRY TargetList;
     ULONG TargetCount;
-} MBGEN_SCRIPT, *PMBGEN_SCRIPT;
+} MINGEN_SCRIPT, *PMINGEN_SCRIPT;
 
 /*++
 
@@ -363,11 +363,11 @@ Members:
 
 --*/
 
-typedef struct _MBGEN_SOURCE {
-    MBGEN_INPUT_TYPE Type;
-    MBGEN_DIRECTORY_TREE Tree;
+typedef struct _MINGEN_SOURCE {
+    MINGEN_INPUT_TYPE Type;
+    MINGEN_DIRECTORY_TREE Tree;
     PSTR Path;
-} MBGEN_SOURCE, *PMBGEN_SOURCE;
+} MINGEN_SOURCE, *PMINGEN_SOURCE;
 
 /*++
 
@@ -395,7 +395,7 @@ Members:
     Pool - Stores an optional name of the pool this target belongs in. This
         is only applicable to Ninja builds.
 
-    Flags - Stores a bitfield of flags regarding the target. See MBGEN_TARGET_*
+    Flags - Stores a bitfield of flags regarding the target. See MINGEN_TARGET_*
         definitions.
 
     Inputs - Stores the inputs to the target.
@@ -423,19 +423,19 @@ Members:
 
 --*/
 
-struct _MBGEN_TARGET {
-    MBGEN_INPUT_TYPE Type;
+struct _MINGEN_TARGET {
+    MINGEN_INPUT_TYPE Type;
     LIST_ENTRY ListEntry;
-    PMBGEN_SCRIPT Script;
+    PMINGEN_SCRIPT Script;
     PSTR Label;
     PSTR Output;
-    MBGEN_DIRECTORY_TREE Tree;
+    MINGEN_DIRECTORY_TREE Tree;
     PSTR Tool;
     PSTR Pool;
     ULONG Flags;
-    MBGEN_INPUTS Inputs;
-    MBGEN_INPUTS Implicit;
-    MBGEN_INPUTS OrderOnly;
+    MINGEN_INPUTS Inputs;
+    MINGEN_INPUTS Implicit;
+    MINGEN_INPUTS OrderOnly;
     PCHALK_OBJECT InputsObject;
     PCHALK_OBJECT ImplicitObject;
     PCHALK_OBJECT OrderOnlyObject;
@@ -461,11 +461,11 @@ Members:
 
 --*/
 
-typedef struct _MBGEN_POOL {
+typedef struct _MINGEN_POOL {
     LIST_ENTRY ListEntry;
     PSTR Name;
     LONG Depth;
-} MBGEN_POOL, *PMBGEN_POOL;
+} MINGEN_POOL, *PMINGEN_POOL;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -480,8 +480,8 @@ typedef struct _MBGEN_POOL {
 //
 
 VOID
-MbgenPrintRebuildCommand (
-    PMBGEN_CONTEXT Context,
+MingenPrintRebuildCommand (
+    PMINGEN_CONTEXT Context,
     FILE *File
     );
 
@@ -505,9 +505,9 @@ Return Value:
 --*/
 
 INT
-MbgenParseScriptResults (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script
+MingenParseScriptResults (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_SCRIPT Script
     );
 
 /*++
@@ -531,8 +531,8 @@ Return Value:
 --*/
 
 VOID
-MbgenDestroyTarget (
-    PMBGEN_TARGET Target
+MingenDestroyTarget (
+    PMINGEN_TARGET Target
     );
 
 /*++
@@ -556,10 +556,10 @@ Return Value:
 //
 
 INT
-MbgenLoadTargetScript (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_PATH Target,
-    PMBGEN_SCRIPT *Script
+MingenLoadTargetScript (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_PATH Target,
+    PMINGEN_SCRIPT *Script
     );
 
 /*++
@@ -587,8 +587,8 @@ Return Value:
 --*/
 
 INT
-MbgenLoadProjectRoot (
-    PMBGEN_CONTEXT Context
+MingenLoadProjectRoot (
+    PMINGEN_CONTEXT Context
     );
 
 /*++
@@ -610,11 +610,11 @@ Return Value:
 --*/
 
 INT
-MbgenLoadScript (
-    PMBGEN_CONTEXT Context,
-    MBGEN_SCRIPT_ORDER Order,
-    PMBGEN_PATH TargetPath,
-    PMBGEN_SCRIPT *FinalScript
+MingenLoadScript (
+    PMINGEN_CONTEXT Context,
+    MINGEN_SCRIPT_ORDER Order,
+    PMINGEN_PATH TargetPath,
+    PMINGEN_SCRIPT *FinalScript
     );
 
 /*++
@@ -645,8 +645,8 @@ Return Value:
 --*/
 
 VOID
-MbgenDestroyAllScripts (
-    PMBGEN_CONTEXT Context
+MingenDestroyAllScripts (
+    PMINGEN_CONTEXT Context
     );
 
 /*++
@@ -672,19 +672,19 @@ Return Value:
 //
 
 INT
-MbgenParsePath (
-    PMBGEN_CONTEXT Context,
+MingenParsePath (
+    PMINGEN_CONTEXT Context,
     PSTR Name,
-    MBGEN_DIRECTORY_TREE RelativeTree,
+    MINGEN_DIRECTORY_TREE RelativeTree,
     PSTR RelativePath,
-    PMBGEN_PATH Target
+    PMINGEN_PATH Target
     );
 
 /*++
 
 Routine Description:
 
-    This routine breaks an mbgen path string into its components.
+    This routine breaks a mingen path string into its components.
 
 Arguments:
 
@@ -709,7 +709,7 @@ Return Value:
 --*/
 
 PSTR
-MbgenAppendPaths3 (
+MingenAppendPaths3 (
     PSTR Path1,
     PSTR Path2,
     PSTR Path3
@@ -739,7 +739,7 @@ Return Value:
 --*/
 
 PSTR
-MbgenAppendPaths (
+MingenAppendPaths (
     PSTR Path1,
     PSTR Path2
     );
@@ -766,8 +766,8 @@ Return Value:
 --*/
 
 INT
-MbgenFindProjectFile (
-    PMBGEN_CONTEXT Context
+MingenFindProjectFile (
+    PMINGEN_CONTEXT Context
     );
 
 /*++
@@ -789,8 +789,8 @@ Return Value:
 --*/
 
 INT
-MbgenFindSourceRoot (
-    PMBGEN_CONTEXT Context
+MingenFindSourceRoot (
+    PMINGEN_CONTEXT Context
     );
 
 /*++
@@ -812,9 +812,9 @@ Return Value:
 --*/
 
 PSTR
-MbgenPathForTree (
-    PMBGEN_CONTEXT Context,
-    MBGEN_DIRECTORY_TREE Tree
+MingenPathForTree (
+    PMINGEN_CONTEXT Context,
+    MINGEN_DIRECTORY_TREE Tree
     );
 
 /*++
@@ -836,7 +836,7 @@ Return Value:
 --*/
 
 PSTR
-MbgenSplitExtension (
+MingenSplitExtension (
     PSTR Path,
     PSTR *Extension
     );
@@ -866,7 +866,7 @@ Return Value:
 --*/
 
 VOID
-MbgenSplitPath (
+MingenSplitPath (
     PSTR Path,
     PSTR *DirectoryName,
     PSTR *FileName
@@ -896,9 +896,9 @@ Return Value:
 --*/
 
 INT
-MbgenAddPathToList (
-    PMBGEN_PATH_LIST PathList,
-    PMBGEN_PATH Path
+MingenAddPathToList (
+    PMINGEN_PATH_LIST PathList,
+    PMINGEN_PATH Path
     );
 
 /*++
@@ -922,8 +922,8 @@ Return Value:
 --*/
 
 VOID
-MbgenDestroyPathList (
-    PMBGEN_PATH_LIST PathList
+MingenDestroyPathList (
+    PMINGEN_PATH_LIST PathList
     );
 
 /*++
@@ -943,8 +943,8 @@ Return Value:
 --*/
 
 VOID
-MbgenDeduplicatePathList (
-    PMBGEN_PATH_LIST PathList
+MingenDeduplicatePathList (
+    PMINGEN_PATH_LIST PathList
     );
 
 /*++
@@ -964,9 +964,9 @@ Return Value:
 --*/
 
 INT
-MbgenCreateDirectories (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_PATH_LIST PathList
+MingenCreateDirectories (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_PATH_LIST PathList
     );
 
 /*++
@@ -992,7 +992,7 @@ Return Value:
 --*/
 
 INT
-MbgenCreateDirectory (
+MingenCreateDirectory (
     PSTR Path
     );
 
@@ -1015,7 +1015,7 @@ Return Value:
 --*/
 
 PSTR
-MbgenGetAbsoluteDirectory (
+MingenGetAbsoluteDirectory (
     PSTR Path
     );
 
@@ -1044,8 +1044,8 @@ Return Value:
 //
 
 INT
-MbgenAddChalkBuiltins (
-    PMBGEN_CONTEXT Context
+MingenAddChalkBuiltins (
+    PMINGEN_CONTEXT Context
     );
 
 /*++
@@ -1053,7 +1053,7 @@ MbgenAddChalkBuiltins (
 Routine Description:
 
     This routine adds the functions in the global scope of the Chalk
-    interpreter for the mbgen program.
+    interpreter for the mingen program.
 
 Arguments:
 
@@ -1072,7 +1072,7 @@ Return Value:
 //
 
 INT
-MbgenOsUname (
+MingenOsUname (
     CHAR Flavor,
     PSTR Buffer,
     ULONG Size
@@ -1106,8 +1106,8 @@ Return Value:
 //
 
 INT
-MbgenCreateMakefile (
-    PMBGEN_CONTEXT Context
+MingenCreateMakefile (
+    PMINGEN_CONTEXT Context
     );
 
 /*++
@@ -1129,8 +1129,8 @@ Return Value:
 --*/
 
 INT
-MbgenCreateNinja (
-    PMBGEN_CONTEXT Context
+MingenCreateNinja (
+    PMINGEN_CONTEXT Context
     );
 
 /*++

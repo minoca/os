@@ -8,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This module implements OS-specific support for mbgen on Windows.
+    This module implements OS-specific support for mingen on Windows.
 
 Author:
 
@@ -51,7 +51,7 @@ Environment:
 //
 
 INT
-MbgenOsUname (
+MingenOsUname (
     CHAR Flavor,
     PSTR Buffer,
     ULONG Size

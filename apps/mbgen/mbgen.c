@@ -42,11 +42,11 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define MBGEN_VERSION_MAJOR 1
-#define MBGEN_VERSION_MINOR 0
+#define MINGEN_VERSION_MAJOR 1
+#define MINGEN_VERSION_MINOR 0
 
-#define MBGEN_USAGE                                                            \
-    "usage: mbgen [options]\n"                                                 \
+#define MINGEN_USAGE                                                           \
+    "usage: mingen [options]\n"                                                \
     "The Minoca Build Generator creates Ninja files describing the build at \n"\
     "the current directory. Options are:\n"                                    \
     "  -a, --args=expr -- Evaluate the given text in the script interpreter \n"\
@@ -67,7 +67,7 @@ Environment:
     "  --help -- Show this help text and exit.\n"                              \
     "  --version -- Print the application version information and exit.\n\n"   \
 
-#define MBGEN_OPTIONS_STRING "Df:hi:no:vV"
+#define MINGEN_OPTIONS_STRING "Df:hi:no:vV"
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -78,128 +78,128 @@ Environment:
 //
 
 INT
-MbgenInitializeContext (
-    PMBGEN_CONTEXT Context,
+MingenInitializeContext (
+    PMINGEN_CONTEXT Context,
     INT ArgumentCount,
     PSTR *Arguments
     );
 
 VOID
-MbgenDestroyContext (
-    PMBGEN_CONTEXT Context
+MingenDestroyContext (
+    PMINGEN_CONTEXT Context
     );
 
 INT
-MbgenParseToolEntry (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+MingenParseToolEntry (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_SCRIPT Script,
     PCHALK_OBJECT Entry
     );
 
 INT
-MbgenParsePoolEntry (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+MingenParsePoolEntry (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_SCRIPT Script,
     PCHALK_OBJECT Entry
     );
 
 INT
-MbgenParseTargetEntry (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+MingenParseTargetEntry (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_SCRIPT Script,
     PCHALK_OBJECT Entry
     );
 
 INT
-MbgenProcessEntries (
-    PMBGEN_CONTEXT Context
+MingenProcessEntries (
+    PMINGEN_CONTEXT Context
     );
 
 INT
-MbgenProcessTool (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_TOOL Tool
+MingenProcessTool (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TOOL Tool
     );
 
 INT
-MbgenProcessTarget (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET Target
+MingenProcessTarget (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TARGET Target
     );
 
 INT
-MbgenAddInputsToList (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET Target,
-    PMBGEN_INPUTS Inputs,
+MingenAddInputsToList (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TARGET Target,
+    PMINGEN_INPUTS Inputs,
     PCHALK_OBJECT List
     );
 
 INT
-MbgenAddInputToList (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET Target,
-    PMBGEN_INPUTS Inputs,
+MingenAddInputToList (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TARGET Target,
+    PMINGEN_INPUTS Inputs,
     PSTR Name
     );
 
-PMBGEN_TOOL
-MbgenFindTool (
-    PMBGEN_CONTEXT Context,
+PMINGEN_TOOL
+MingenFindTool (
+    PMINGEN_CONTEXT Context,
     PSTR Name
     );
 
-PMBGEN_POOL
-MbgenFindPool (
-    PMBGEN_CONTEXT Context,
+PMINGEN_POOL
+MingenFindPool (
+    PMINGEN_CONTEXT Context,
     PSTR Name
     );
 
-PMBGEN_TARGET
-MbgenFindTargetInScript (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+PMINGEN_TARGET
+MingenFindTargetInScript (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_SCRIPT Script,
     PSTR Name
     );
 
 VOID
-MbgenDestroyTool (
-    PMBGEN_TOOL Tool
+MingenDestroyTool (
+    PMINGEN_TOOL Tool
     );
 
 VOID
-MbgenDestroyPool (
-    PMBGEN_POOL Pool
+MingenDestroyPool (
+    PMINGEN_POOL Pool
     );
 
 VOID
-MbgenPrintAllEntries (
-    PMBGEN_CONTEXT Context
+MingenPrintAllEntries (
+    PMINGEN_CONTEXT Context
     );
 
 INT
-MbgenAddInput (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET Target,
-    PMBGEN_INPUTS Inputs,
+MingenAddInput (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TARGET Target,
+    PMINGEN_INPUTS Inputs,
     PVOID Input
     );
 
 VOID
-MbgenDestroyInputs (
-    PMBGEN_INPUTS Inputs
+MingenDestroyInputs (
+    PMINGEN_INPUTS Inputs
     );
 
 VOID
-MbgenDestroySource (
-    PMBGEN_SOURCE Source
+MingenDestroySource (
+    PMINGEN_SOURCE Source
     );
 
 //
 // -------------------------------------------------------------------- Globals
 //
 
-struct option MbgenLongOptions[] = {
+struct option MingenLongOptions[] = {
     {"args", required_argument, 0, 'a'},
     {"debug", no_argument, 0, 'D'},
     {"format", required_argument, 0, 'f'},
@@ -212,11 +212,11 @@ struct option MbgenLongOptions[] = {
     {NULL, 0, 0, 0},
 };
 
-CHALK_C_STRUCTURE_MEMBER MbgenToolMembers[] = {
+CHALK_C_STRUCTURE_MEMBER MingenToolMembers[] = {
     {
         ChalkCString,
         "name",
-        offsetof(MBGEN_TOOL, Name),
+        offsetof(MINGEN_TOOL, Name),
         TRUE,
         {0}
     },
@@ -224,7 +224,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenToolMembers[] = {
     {
         ChalkCString,
         "command",
-        offsetof(MBGEN_TOOL, Command),
+        offsetof(MINGEN_TOOL, Command),
         TRUE,
         {0}
     },
@@ -232,7 +232,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenToolMembers[] = {
     {
         ChalkCString,
         "description",
-        offsetof(MBGEN_TOOL, Description),
+        offsetof(MINGEN_TOOL, Description),
         FALSE,
         {0}
     },
@@ -240,7 +240,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenToolMembers[] = {
     {
         ChalkCString,
         "depfile",
-        offsetof(MBGEN_TOOL, Depfile),
+        offsetof(MINGEN_TOOL, Depfile),
         FALSE,
         {0}
     },
@@ -248,7 +248,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenToolMembers[] = {
     {
         ChalkCString,
         "depsformat",
-        offsetof(MBGEN_TOOL, DepsFormat),
+        offsetof(MINGEN_TOOL, DepsFormat),
         FALSE,
         {0}
     },
@@ -256,7 +256,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenToolMembers[] = {
     {
         ChalkCString,
         "pool",
-        offsetof(MBGEN_TOOL, Pool),
+        offsetof(MINGEN_TOOL, Pool),
         FALSE,
         {0}
     },
@@ -264,11 +264,11 @@ CHALK_C_STRUCTURE_MEMBER MbgenToolMembers[] = {
     {0}
 };
 
-CHALK_C_STRUCTURE_MEMBER MbgenPoolMembers[] = {
+CHALK_C_STRUCTURE_MEMBER MingenPoolMembers[] = {
     {
         ChalkCString,
         "name",
-        offsetof(MBGEN_POOL, Name),
+        offsetof(MINGEN_POOL, Name),
         TRUE,
         {0}
     },
@@ -276,7 +276,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenPoolMembers[] = {
     {
         ChalkCInt32,
         "depth",
-        offsetof(MBGEN_POOL, Depth),
+        offsetof(MINGEN_POOL, Depth),
         TRUE,
         {0}
     },
@@ -284,11 +284,11 @@ CHALK_C_STRUCTURE_MEMBER MbgenPoolMembers[] = {
     {0}
 };
 
-CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
+CHALK_C_STRUCTURE_MEMBER MingenTargetMembers[] = {
     {
         ChalkCString,
         "label",
-        offsetof(MBGEN_TARGET, Label),
+        offsetof(MINGEN_TARGET, Label),
         FALSE,
         {0}
     },
@@ -296,7 +296,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
     {
         ChalkCString,
         "output",
-        offsetof(MBGEN_TARGET, Output),
+        offsetof(MINGEN_TARGET, Output),
         FALSE,
         {0}
     },
@@ -304,7 +304,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
     {
         ChalkCObjectPointer,
         "inputs",
-        offsetof(MBGEN_TARGET, InputsObject),
+        offsetof(MINGEN_TARGET, InputsObject),
         FALSE,
         {0}
     },
@@ -312,7 +312,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
     {
         ChalkCObjectPointer,
         "implicit",
-        offsetof(MBGEN_TARGET, ImplicitObject),
+        offsetof(MINGEN_TARGET, ImplicitObject),
         FALSE,
         {0}
     },
@@ -320,7 +320,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
     {
         ChalkCObjectPointer,
         "orderonly",
-        offsetof(MBGEN_TARGET, OrderOnlyObject),
+        offsetof(MINGEN_TARGET, OrderOnlyObject),
         FALSE,
         {0}
     },
@@ -328,7 +328,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
     {
         ChalkCObjectPointer,
         "callback",
-        offsetof(MBGEN_TARGET, Callback),
+        offsetof(MINGEN_TARGET, Callback),
         FALSE,
         {0}
     },
@@ -336,7 +336,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
     {
         ChalkCString,
         "tool",
-        offsetof(MBGEN_TARGET, Tool),
+        offsetof(MINGEN_TARGET, Tool),
         FALSE,
         {0}
     },
@@ -344,7 +344,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
     {
         ChalkCString,
         "pool",
-        offsetof(MBGEN_TARGET, Pool),
+        offsetof(MINGEN_TARGET, Pool),
         FALSE,
         {0}
     },
@@ -352,7 +352,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenTargetMembers[] = {
     {
         ChalkCObjectPointer,
         "config",
-        offsetof(MBGEN_TARGET, Config),
+        offsetof(MINGEN_TARGET, Config),
         FALSE,
         {0}
     },
@@ -394,12 +394,12 @@ Return Value:
 {
 
     INT ArgumentIndex;
-    MBGEN_CONTEXT Context;
+    MINGEN_CONTEXT Context;
     INT Option;
     INT Status;
 
     srand(time(NULL) ^ getpid());
-    Status = MbgenInitializeContext(&Context, ArgumentCount, Arguments);
+    Status = MingenInitializeContext(&Context, ArgumentCount, Arguments);
     if (Status != 0) {
         goto mainEnd;
     }
@@ -411,8 +411,8 @@ Return Value:
     while (TRUE) {
         Option = getopt_long(ArgumentCount,
                              Arguments,
-                             MBGEN_OPTIONS_STRING,
-                             MbgenLongOptions,
+                             MINGEN_OPTIONS_STRING,
+                             MingenLongOptions,
                              NULL);
 
         if (Option == -1) {
@@ -430,13 +430,13 @@ Return Value:
                                            "<cmdline>",
                                            optarg,
                                            strlen(optarg) + 1,
-                                           MbgenScriptOrderCommandLine,
+                                           MingenScriptOrderCommandLine,
                                            NULL);
 
             if (Status == 0) {
                 Status = ChalkExecuteDeferredScripts(
                                                   &(Context.Interpreter),
-                                                  MbgenScriptOrderCommandLine);
+                                                  MingenScriptOrderCommandLine);
             }
 
             if (Status != 0) {
@@ -456,18 +456,18 @@ Return Value:
             break;
 
         case 'D':
-            Context.Options |= MBGEN_OPTION_DEBUG;
+            Context.Options |= MINGEN_OPTION_DEBUG;
             break;
 
         case 'f':
             if (strcasecmp(optarg, "make") == 0) {
-                Context.Format = MbgenOutputMake;
+                Context.Format = MingenOutputMake;
 
             } else if (strcasecmp(optarg, "ninja") == 0) {
-                Context.Format = MbgenOutputNinja;
+                Context.Format = MingenOutputNinja;
 
             } else if (strcasecmp(optarg, "none") == 0) {
-                Context.Format = MbgenOutputNone;
+                Context.Format = MingenOutputNone;
 
             } else {
                 fprintf(stderr,
@@ -491,11 +491,11 @@ Return Value:
             break;
 
         case 'n':
-            Context.Options |= MBGEN_OPTION_DRY_RUN;
+            Context.Options |= MINGEN_OPTION_DRY_RUN;
             break;
 
         case 'o':
-            Context.BuildRoot = MbgenGetAbsoluteDirectory(optarg);
+            Context.BuildRoot = MingenGetAbsoluteDirectory(optarg);
             if (Context.BuildRoot == NULL) {
                 Status = errno;
                 if (Status == 0) {
@@ -513,22 +513,22 @@ Return Value:
             break;
 
         case 'v':
-            Context.Options |= MBGEN_OPTION_VERBOSE;
+            Context.Options |= MINGEN_OPTION_VERBOSE;
             break;
 
         case 'V':
             printf("Minoca build generator version %d.%d.%d\n"
                    "Built on %s\n"
                    "Copyright (c) 2015 Minoca Corp. All Rights Reserved.\n\n",
-                   MBGEN_VERSION_MAJOR,
-                   MBGEN_VERSION_MINOR,
+                   MINGEN_VERSION_MAJOR,
+                   MINGEN_VERSION_MINOR,
                    REVISION,
                    BUILD_TIME_STRING);
 
             return 1;
 
         case 'h':
-            printf(MBGEN_USAGE);
+            printf(MINGEN_USAGE);
             return 1;
 
         default:
@@ -552,7 +552,7 @@ Return Value:
     }
 
     if (Context.ProjectFilePath == NULL) {
-        Status = MbgenFindProjectFile(&Context);
+        Status = MingenFindProjectFile(&Context);
         if (Status != 0) {
             goto mainEnd;
         }
@@ -562,7 +562,7 @@ Return Value:
     // Load the project root file. This also loads the default target file.
     //
 
-    Status = MbgenLoadProjectRoot(&Context);
+    Status = MingenLoadProjectRoot(&Context);
     if (Status != 0) {
         fprintf(stderr, "Failed to load project root: %s.\n", strerror(Status));
         goto mainEnd;
@@ -572,25 +572,25 @@ Return Value:
     // Process the targets, which may cause more targets to get loaded.
     //
 
-    Status = MbgenProcessEntries(&Context);
+    Status = MingenProcessEntries(&Context);
     if (Status != 0) {
         goto mainEnd;
     }
 
-    if ((Context.Options & MBGEN_OPTION_VERBOSE) != 0) {
+    if ((Context.Options & MINGEN_OPTION_VERBOSE) != 0) {
         printf("Entries:\n");
-        MbgenPrintAllEntries(&Context);
+        MingenPrintAllEntries(&Context);
         printf("\n");
     }
 
     switch (Context.Format) {
-    case MbgenOutputMake:
-        Status = MbgenCreateMakefile(&Context);
+    case MingenOutputMake:
+        Status = MingenCreateMakefile(&Context);
         if (Status != 0) {
             goto mainEnd;
         }
 
-        if ((Context.Options & MBGEN_OPTION_VERBOSE) != 0) {
+        if ((Context.Options & MINGEN_OPTION_VERBOSE) != 0) {
             printf("Creating build directories...");
         }
 
@@ -599,7 +599,7 @@ Return Value:
         // Ninja, so go ahead and do that now.
         //
 
-        Status = MbgenCreateDirectories(&Context, &(Context.BuildDirectories));
+        Status = MingenCreateDirectories(&Context, &(Context.BuildDirectories));
         if (Status != 0) {
             fprintf(stderr,
                     "\nFailed to create build directories: %s.\n",
@@ -608,27 +608,27 @@ Return Value:
             goto mainEnd;
         }
 
-        if ((Context.Options & MBGEN_OPTION_VERBOSE) != 0) {
+        if ((Context.Options & MINGEN_OPTION_VERBOSE) != 0) {
             printf("done\n");
         }
 
         break;
 
-    case MbgenOutputNinja:
-        Status = MbgenCreateNinja(&Context);
+    case MingenOutputNinja:
+        Status = MingenCreateNinja(&Context);
         break;
 
-    case MbgenOutputNone:
+    case MingenOutputNone:
     default:
         Status = 0;
         break;
     }
 
 mainEnd:
-    MbgenDestroyContext(&Context);
+    MingenDestroyContext(&Context);
     if (Status != 0) {
         fprintf(stderr,
-                "mbgen exiting with status %d: %s\n",
+                "mingen exiting with status %d: %s\n",
                 Status,
                 strerror(Status));
     }
@@ -637,8 +637,8 @@ mainEnd:
 }
 
 VOID
-MbgenPrintRebuildCommand (
-    PMBGEN_CONTEXT Context,
+MingenPrintRebuildCommand (
+    PMINGEN_CONTEXT Context,
     FILE *File
     )
 
@@ -667,15 +667,15 @@ Return Value:
     UINTN Index;
 
     switch (Context->Format) {
-    case MbgenOutputMake:
+    case MingenOutputMake:
         Format = "make";
         break;
 
-    case MbgenOutputNinja:
+    case MingenOutputNinja:
         Format = "ninja";
         break;
 
-    case MbgenOutputNone:
+    case MingenOutputNone:
         Format = "none";
         break;
 
@@ -702,9 +702,9 @@ Return Value:
 }
 
 INT
-MbgenParseScriptResults (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script
+MingenParseScriptResults (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_SCRIPT Script
     )
 
 /*++
@@ -736,7 +736,7 @@ Return Value:
     PCHALK_OBJECT Type;
 
     List = Script->Result;
-    if ((Context->Options & MBGEN_OPTION_DEBUG) != 0) {
+    if ((Context->Options & MINGEN_OPTION_DEBUG) != 0) {
         ChalkPrintObject(stdout, List, 0);
         printf("\n");
     }
@@ -780,13 +780,13 @@ Return Value:
         if ((Type == NULL) ||
             (strcasecmp(Type->String.String, "target") == 0)) {
 
-            Status = MbgenParseTargetEntry(Context, Script, Entry);
+            Status = MingenParseTargetEntry(Context, Script, Entry);
 
         } else if (strcasecmp(Type->String.String, "tool") == 0) {
-            Status = MbgenParseToolEntry(Context, Script, Entry);
+            Status = MingenParseToolEntry(Context, Script, Entry);
 
         } else if (strcasecmp(Type->String.String, "pool") == 0) {
-            Status = MbgenParsePoolEntry(Context, Script, Entry);
+            Status = MingenParsePoolEntry(Context, Script, Entry);
 
         } else if (strcasecmp(Type->String.String, "global_config") == 0) {
             Context->GlobalConfig = ChalkDictLookupCStringKey(Entry, "config");
@@ -829,8 +829,8 @@ ParseScriptResultsEnd:
 }
 
 VOID
-MbgenDestroyTarget (
-    PMBGEN_TARGET Target
+MingenDestroyTarget (
+    PMINGEN_TARGET Target
     )
 
 /*++
@@ -863,9 +863,9 @@ Return Value:
         free(Target->Tool);
     }
 
-    MbgenDestroyInputs(&(Target->Inputs));
-    MbgenDestroyInputs(&(Target->Implicit));
-    MbgenDestroyInputs(&(Target->OrderOnly));
+    MingenDestroyInputs(&(Target->Inputs));
+    MingenDestroyInputs(&(Target->Implicit));
+    MingenDestroyInputs(&(Target->OrderOnly));
     free(Target);
     return;
 }
@@ -875,8 +875,8 @@ Return Value:
 //
 
 INT
-MbgenInitializeContext (
-    PMBGEN_CONTEXT Context,
+MingenInitializeContext (
+    PMINGEN_CONTEXT Context,
     INT ArgumentCount,
     PSTR *Arguments
     )
@@ -885,7 +885,7 @@ MbgenInitializeContext (
 
 Routine Description:
 
-    This routine initializes the mbgen context.
+    This routine initializes the mingen context.
 
 Arguments:
 
@@ -912,9 +912,9 @@ Return Value:
         return EINVAL;
     }
 
-    memset(Context, 0, sizeof(MBGEN_CONTEXT));
+    memset(Context, 0, sizeof(MINGEN_CONTEXT));
     Context->Executable = Arguments[0];
-    Context->Format = MbgenOutputInvalid;
+    Context->Format = MingenOutputInvalid;
     INITIALIZE_LIST_HEAD(&(Context->ScriptList));
     INITIALIZE_LIST_HEAD(&(Context->ToolList));
     INITIALIZE_LIST_HEAD(&(Context->PoolList));
@@ -935,15 +935,15 @@ Return Value:
 }
 
 VOID
-MbgenDestroyContext (
-    PMBGEN_CONTEXT Context
+MingenDestroyContext (
+    PMINGEN_CONTEXT Context
     )
 
 /*++
 
 Routine Description:
 
-    This routine destroys an mbgen context.
+    This routine destroys a mingen context.
 
 Arguments:
 
@@ -957,23 +957,23 @@ Return Value:
 
 {
 
-    PMBGEN_POOL Pool;
-    PMBGEN_TOOL Tool;
+    PMINGEN_POOL Pool;
+    PMINGEN_TOOL Tool;
 
-    MbgenDestroyAllScripts(Context);
+    MingenDestroyAllScripts(Context);
     while (!LIST_EMPTY(&(Context->ToolList))) {
-        Tool = LIST_VALUE(Context->ToolList.Next, MBGEN_TOOL, ListEntry);
+        Tool = LIST_VALUE(Context->ToolList.Next, MINGEN_TOOL, ListEntry);
         LIST_REMOVE(&(Tool->ListEntry));
-        MbgenDestroyTool(Tool);
+        MingenDestroyTool(Tool);
     }
 
     while (!LIST_EMPTY(&(Context->PoolList))) {
-        Pool = LIST_VALUE(Context->PoolList.Next, MBGEN_POOL, ListEntry);
+        Pool = LIST_VALUE(Context->PoolList.Next, MINGEN_POOL, ListEntry);
         LIST_REMOVE(&(Pool->ListEntry));
-        MbgenDestroyPool(Pool);
+        MingenDestroyPool(Pool);
     }
 
-    MbgenDestroyPathList(&(Context->BuildDirectories));
+    MingenDestroyPathList(&(Context->BuildDirectories));
     if (Context->SourceRoot != NULL) {
         free(Context->SourceRoot);
         Context->SourceRoot = NULL;
@@ -1016,9 +1016,9 @@ Return Value:
 }
 
 INT
-MbgenParseToolEntry (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+MingenParseToolEntry (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_SCRIPT Script,
     PCHALK_OBJECT Entry
     )
 
@@ -1047,24 +1047,24 @@ Return Value:
 {
 
     INT Status;
-    PMBGEN_TOOL Tool;
+    PMINGEN_TOOL Tool;
 
-    Tool = malloc(sizeof(MBGEN_TOOL));
+    Tool = malloc(sizeof(MINGEN_TOOL));
     if (Tool == NULL) {
         return ENOMEM;
     }
 
-    memset(Tool, 0, sizeof(MBGEN_TOOL));
+    memset(Tool, 0, sizeof(MINGEN_TOOL));
     Status = ChalkConvertDictToStructure(&(Context->Interpreter),
                                          Entry,
-                                         MbgenToolMembers,
+                                         MingenToolMembers,
                                          Tool);
 
     if (Status != 0) {
         goto ParseToolEntryEnd;
     }
 
-    if (MbgenFindTool(Context, Tool->Name) != NULL) {
+    if (MingenFindTool(Context, Tool->Name) != NULL) {
         fprintf(stderr, "Error: Duplicate tool %s.\n", Tool->Name);
         Status = EINVAL;
         goto ParseToolEntryEnd;
@@ -1076,7 +1076,7 @@ Return Value:
 ParseToolEntryEnd:
     if (Status != 0) {
         if (Tool != NULL) {
-            MbgenDestroyTool(Tool);
+            MingenDestroyTool(Tool);
         }
     }
 
@@ -1084,9 +1084,9 @@ ParseToolEntryEnd:
 }
 
 INT
-MbgenParsePoolEntry (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+MingenParsePoolEntry (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_SCRIPT Script,
     PCHALK_OBJECT Entry
     )
 
@@ -1114,25 +1114,25 @@ Return Value:
 
 {
 
-    PMBGEN_POOL Pool;
+    PMINGEN_POOL Pool;
     INT Status;
 
-    Pool = malloc(sizeof(MBGEN_POOL));
+    Pool = malloc(sizeof(MINGEN_POOL));
     if (Pool == NULL) {
         return ENOMEM;
     }
 
-    memset(Pool, 0, sizeof(MBGEN_POOL));
+    memset(Pool, 0, sizeof(MINGEN_POOL));
     Status = ChalkConvertDictToStructure(&(Context->Interpreter),
                                          Entry,
-                                         MbgenPoolMembers,
+                                         MingenPoolMembers,
                                          Pool);
 
     if (Status != 0) {
         goto ParsePoolEntryEnd;
     }
 
-    if (MbgenFindPool(Context, Pool->Name) != NULL) {
+    if (MingenFindPool(Context, Pool->Name) != NULL) {
         fprintf(stderr, "Error: Duplicate pool %s.\n", Pool->Name);
         Status = EINVAL;
         goto ParsePoolEntryEnd;
@@ -1144,7 +1144,7 @@ Return Value:
 ParsePoolEntryEnd:
     if (Status != 0) {
         if (Pool != NULL) {
-            MbgenDestroyPool(Pool);
+            MingenDestroyPool(Pool);
         }
     }
 
@@ -1152,9 +1152,9 @@ ParsePoolEntryEnd:
 }
 
 INT
-MbgenParseTargetEntry (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+MingenParseTargetEntry (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_SCRIPT Script,
     PCHALK_OBJECT Entry
     )
 
@@ -1184,21 +1184,21 @@ Return Value:
 
     ULONG Advance;
     INT Status;
-    PMBGEN_TARGET Target;
+    PMINGEN_TARGET Target;
 
-    Target = malloc(sizeof(MBGEN_TARGET));
+    Target = malloc(sizeof(MINGEN_TARGET));
     if (Target == NULL) {
         return ENOMEM;
     }
 
-    memset(Target, 0, sizeof(MBGEN_TARGET));
+    memset(Target, 0, sizeof(MINGEN_TARGET));
     Target->OriginalEntry = Entry;
-    Target->Type = MbgenInputTarget;
+    Target->Type = MingenInputTarget;
     Target->Script = Script;
-    Target->Tree = MbgenBuildTree;
+    Target->Tree = MingenBuildTree;
     Status = ChalkConvertDictToStructure(&(Context->Interpreter),
                                          Entry,
-                                         MbgenTargetMembers,
+                                         MingenTargetMembers,
                                          Target);
 
     if (Status != 0) {
@@ -1232,17 +1232,17 @@ Return Value:
     //
 
     Advance = 0;
-    if (MBGEN_IS_SOURCE_ROOT_RELATIVE(Target->Output)) {
+    if (MINGEN_IS_SOURCE_ROOT_RELATIVE(Target->Output)) {
         Advance = 2;
-        Target->Tree = MbgenSourceTree;
+        Target->Tree = MingenSourceTree;
 
-    } else if (MBGEN_IS_BUILD_ROOT_RELATIVE(Target->Output)) {
+    } else if (MINGEN_IS_BUILD_ROOT_RELATIVE(Target->Output)) {
         Advance = 2;
-        Target->Tree = MbgenBuildTree;
+        Target->Tree = MingenBuildTree;
 
-    } else if (MBGEN_IS_ABSOLUTE_PATH(Target->Output)) {
+    } else if (MINGEN_IS_ABSOLUTE_PATH(Target->Output)) {
         Advance = 0;
-        Target->Tree = MbgenAbsolutePath;
+        Target->Tree = MingenAbsolutePath;
 
     //
     // The default is the build tree, so the circumflex switches to the source
@@ -1251,7 +1251,7 @@ Return Value:
 
     } else if (*(Target->Output) == '^') {
         Advance = 1;
-        Target->Tree = MbgenSourceTree;
+        Target->Tree = MingenSourceTree;
     }
 
     if (Advance != 0) {
@@ -1272,7 +1272,7 @@ Return Value:
     // The label must be unique within the script.
     //
 
-    if (MbgenFindTargetInScript(Context, Script, Target->Label) != NULL) {
+    if (MingenFindTargetInScript(Context, Script, Target->Label) != NULL) {
         fprintf(stderr,
                 "Error: Duplicate target %s:%s.\n",
                 Script->CompletePath,
@@ -1361,7 +1361,7 @@ Return Value:
 ParseTargetEntryEnd:
     if (Status != 0) {
         if (Target != NULL) {
-            MbgenDestroyTarget(Target);
+            MingenDestroyTarget(Target);
         }
     }
 
@@ -1369,8 +1369,8 @@ ParseTargetEntryEnd:
 }
 
 INT
-MbgenProcessEntries (
-    PMBGEN_CONTEXT Context
+MingenProcessEntries (
+    PMINGEN_CONTEXT Context
     )
 
 /*++
@@ -1395,12 +1395,12 @@ Return Value:
 
 {
 
-    PMBGEN_SCRIPT Script;
+    PMINGEN_SCRIPT Script;
     PLIST_ENTRY ScriptEntry;
     INT Status;
-    PMBGEN_TARGET Target;
+    PMINGEN_TARGET Target;
     PLIST_ENTRY TargetEntry;
-    PMBGEN_TOOL Tool;
+    PMINGEN_TOOL Tool;
     PLIST_ENTRY ToolEntry;
 
     Status = ENOENT;
@@ -1413,11 +1413,11 @@ Return Value:
 
     ScriptEntry = Context->ScriptList.Next;
     while (ScriptEntry != &(Context->ScriptList)) {
-        Script = LIST_VALUE(ScriptEntry, MBGEN_SCRIPT, ListEntry);
+        Script = LIST_VALUE(ScriptEntry, MINGEN_SCRIPT, ListEntry);
         TargetEntry = Script->TargetList.Next;
         while (TargetEntry != &(Script->TargetList)) {
-            Target = LIST_VALUE(TargetEntry, MBGEN_TARGET, ListEntry);
-            Status = MbgenProcessTarget(Context, Target);
+            Target = LIST_VALUE(TargetEntry, MINGEN_TARGET, ListEntry);
+            Status = MingenProcessTarget(Context, Target);
             if (Status != 0) {
                 fprintf(stderr,
                         "Failed to process %s:%s.\n",
@@ -1444,8 +1444,8 @@ Return Value:
 
     ToolEntry = Context->ToolList.Next;
     while (ToolEntry != &(Context->ToolList)) {
-        Tool = LIST_VALUE(ToolEntry, MBGEN_TOOL, ListEntry);
-        Status = MbgenProcessTool(Context, Tool);
+        Tool = LIST_VALUE(ToolEntry, MINGEN_TOOL, ListEntry);
+        Status = MingenProcessTool(Context, Tool);
         if (Status != 0) {
             fprintf(stderr, "Failed to process tool %s.\n", Tool->Name);
             goto ProcessEntriesEnd;
@@ -1458,7 +1458,7 @@ Return Value:
     // Deduplicate the build directory list.
     //
 
-    MbgenDeduplicatePathList(&(Context->BuildDirectories));
+    MingenDeduplicatePathList(&(Context->BuildDirectories));
     Status = 0;
 
 ProcessEntriesEnd:
@@ -1466,9 +1466,9 @@ ProcessEntriesEnd:
 }
 
 INT
-MbgenProcessTool (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_TOOL Tool
+MingenProcessTool (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TOOL Tool
     )
 
 /*++
@@ -1497,9 +1497,9 @@ Return Value:
 }
 
 INT
-MbgenProcessTarget (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET Target
+MingenProcessTarget (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TARGET Target
     )
 
 /*++
@@ -1526,8 +1526,8 @@ Return Value:
 
     PSTR FileName;
     PCHALK_OBJECT List;
-    MBGEN_PATH OutputPath;
-    PMBGEN_PATH_LIST PathList;
+    MINGEN_PATH OutputPath;
+    PMINGEN_PATH_LIST PathList;
     PSTR PathString;
     INT Status;
 
@@ -1538,8 +1538,8 @@ Return Value:
 
     if ((Target->Tool == NULL) || (strcmp(Target->Tool, "phony") != 0)) {
         OutputPath.Root = Target->Tree;
-        OutputPath.Path = MbgenAppendPaths(Target->Script->Path,
-                                           Target->Output);
+        OutputPath.Path = MingenAppendPaths(Target->Script->Path,
+                                            Target->Output);
 
         if (OutputPath.Path == NULL) {
             Status = ENOMEM;
@@ -1547,7 +1547,7 @@ Return Value:
         }
 
         OutputPath.Target = NULL;
-        Status = MbgenAddPathToList(&(Context->BuildDirectories), &OutputPath);
+        Status = MingenAddPathToList(&(Context->BuildDirectories), &OutputPath);
         free(OutputPath.Path);
         if (Status != 0) {
             goto ProcessTargetEnd;
@@ -1555,7 +1555,7 @@ Return Value:
 
         PathList = &(Context->BuildDirectories);
         PathString = PathList->Array[PathList->Count - 1].Path;
-        MbgenSplitPath(PathString, NULL, &FileName);
+        MingenSplitPath(PathString, NULL, &FileName);
         if (FileName == PathString) {
             free(PathString);
             PathList->Count -= 1;
@@ -1572,7 +1572,11 @@ Return Value:
 
         assert(Target->Inputs.Count == 0);
 
-        Status = MbgenAddInputsToList(Context, Target, &(Target->Inputs), List);
+        Status = MingenAddInputsToList(Context,
+                                       Target,
+                                       &(Target->Inputs),
+                                       List);
+
         if (Status != 0) {
             goto ProcessTargetEnd;
         }
@@ -1587,10 +1591,10 @@ Return Value:
 
         assert(Target->Implicit.Count == 0);
 
-        Status = MbgenAddInputsToList(Context,
-                                      Target,
-                                      &(Target->Implicit),
-                                      List);
+        Status = MingenAddInputsToList(Context,
+                                       Target,
+                                       &(Target->Implicit),
+                                       List);
 
         if (Status != 0) {
             goto ProcessTargetEnd;
@@ -1606,10 +1610,10 @@ Return Value:
 
         assert(Target->OrderOnly.Count == 0);
 
-        Status = MbgenAddInputsToList(Context,
-                                      Target,
-                                      &(Target->OrderOnly),
-                                      List);
+        Status = MingenAddInputsToList(Context,
+                                       Target,
+                                       &(Target->OrderOnly),
+                                       List);
 
         if (Status != 0) {
             goto ProcessTargetEnd;
@@ -1623,10 +1627,10 @@ ProcessTargetEnd:
 }
 
 INT
-MbgenAddInputsToList (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET Target,
-    PMBGEN_INPUTS Inputs,
+MingenAddInputsToList (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TARGET Target,
+    PMINGEN_INPUTS Inputs,
     PCHALK_OBJECT List
     )
 
@@ -1678,10 +1682,10 @@ Return Value:
             goto AddInputsToListEnd;
         }
 
-        Status = MbgenAddInputToList(Context,
-                                     Target,
-                                     Inputs,
-                                     String->String.String);
+        Status = MingenAddInputToList(Context,
+                                      Target,
+                                      Inputs,
+                                      String->String.String);
 
         if (Status != 0) {
             fprintf(stderr,
@@ -1701,10 +1705,10 @@ AddInputsToListEnd:
 }
 
 INT
-MbgenAddInputToList (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET Target,
-    PMBGEN_INPUTS Inputs,
+MingenAddInputToList (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TARGET Target,
+    PMINGEN_INPUTS Inputs,
     PSTR Name
     )
 
@@ -1736,16 +1740,16 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PMBGEN_TARGET Dependency;
-    PMBGEN_SCRIPT DependencyScript;
-    MBGEN_PATH Path;
-    PMBGEN_SOURCE Source;
+    PMINGEN_TARGET Dependency;
+    PMINGEN_SCRIPT DependencyScript;
+    MINGEN_PATH Path;
+    PMINGEN_SOURCE Source;
     INT Status;
 
     DependencyScript = NULL;
-    Status = MbgenParsePath(Context,
+    Status = MingenParsePath(Context,
                             Name,
-                            MbgenSourceTree,
+                            MingenSourceTree,
                             Target->Script->Path,
                             &Path);
 
@@ -1758,9 +1762,9 @@ Return Value:
             DependencyScript = Target->Script;
 
         } else {
-            Status = MbgenLoadTargetScript(Context,
-                                           &Path,
-                                           &DependencyScript);
+            Status = MingenLoadTargetScript(Context,
+                                            &Path,
+                                            &DependencyScript);
 
             if (Status != 0) {
                 goto AddInputToListEnd;
@@ -1775,18 +1779,18 @@ Return Value:
     //
 
     if (Path.Target == NULL) {
-        Source = malloc(sizeof(MBGEN_SOURCE));
+        Source = malloc(sizeof(MINGEN_SOURCE));
         if (Source == NULL) {
             Status = ENOMEM;
             goto AddInputToListEnd;
         }
 
-        memset(Source, 0, sizeof(MBGEN_SOURCE));
-        Source->Type = MbgenInputSource;
+        memset(Source, 0, sizeof(MINGEN_SOURCE));
+        Source->Type = MingenInputSource;
         Source->Tree = Path.Root;
         Source->Path = Path.Path;
         Path.Path = NULL;
-        Status = MbgenAddInput(Context, Target, Inputs, Source);
+        Status = MingenAddInput(Context, Target, Inputs, Source);
         if (Status != 0) {
             free(Source);
             goto AddInputToListEnd;
@@ -1805,8 +1809,8 @@ Return Value:
         if (Path.Target[0] == '\0') {
             CurrentEntry = DependencyScript->TargetList.Next;
             while (CurrentEntry != &(DependencyScript->TargetList)) {
-                Dependency = LIST_VALUE(CurrentEntry, MBGEN_TARGET, ListEntry);
-                Status = MbgenAddInput(Context, Target, Inputs, Dependency);
+                Dependency = LIST_VALUE(CurrentEntry, MINGEN_TARGET, ListEntry);
+                Status = MingenAddInput(Context, Target, Inputs, Dependency);
                 if (Status != 0) {
                     goto AddInputToListEnd;
                 }
@@ -1819,9 +1823,9 @@ Return Value:
         //
 
         } else {
-            Dependency = MbgenFindTargetInScript(Context,
-                                                 DependencyScript,
-                                                 Path.Target);
+            Dependency = MingenFindTargetInScript(Context,
+                                                  DependencyScript,
+                                                  Path.Target);
 
             if (Dependency == NULL) {
                 fprintf(stderr,
@@ -1833,7 +1837,7 @@ Return Value:
                 goto AddInputToListEnd;
             }
 
-            Status = MbgenAddInput(Context, Target, Inputs, Dependency);
+            Status = MingenAddInput(Context, Target, Inputs, Dependency);
             if (Status != 0) {
                 goto AddInputToListEnd;
             }
@@ -1850,9 +1854,9 @@ AddInputToListEnd:
     return Status;
 }
 
-PMBGEN_TOOL
-MbgenFindTool (
-    PMBGEN_CONTEXT Context,
+PMINGEN_TOOL
+MingenFindTool (
+    PMINGEN_CONTEXT Context,
     PSTR Name
     )
 
@@ -1879,11 +1883,11 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PMBGEN_TOOL Tool;
+    PMINGEN_TOOL Tool;
 
     CurrentEntry = Context->ToolList.Next;
     while (CurrentEntry != &(Context->ToolList)) {
-        Tool = LIST_VALUE(CurrentEntry, MBGEN_TOOL, ListEntry);
+        Tool = LIST_VALUE(CurrentEntry, MINGEN_TOOL, ListEntry);
         if (strcmp(Tool->Name, Name) == 0) {
             return Tool;
         }
@@ -1894,9 +1898,9 @@ Return Value:
     return NULL;
 }
 
-PMBGEN_POOL
-MbgenFindPool (
-    PMBGEN_CONTEXT Context,
+PMINGEN_POOL
+MingenFindPool (
+    PMINGEN_CONTEXT Context,
     PSTR Name
     )
 
@@ -1923,11 +1927,11 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PMBGEN_POOL Pool;
+    PMINGEN_POOL Pool;
 
     CurrentEntry = Context->PoolList.Next;
     while (CurrentEntry != &(Context->PoolList)) {
-        Pool = LIST_VALUE(CurrentEntry, MBGEN_POOL, ListEntry);
+        Pool = LIST_VALUE(CurrentEntry, MINGEN_POOL, ListEntry);
         if (strcmp(Pool->Name, Name) == 0) {
             return Pool;
         }
@@ -1938,10 +1942,10 @@ Return Value:
     return NULL;
 }
 
-PMBGEN_TARGET
-MbgenFindTargetInScript (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_SCRIPT Script,
+PMINGEN_TARGET
+MingenFindTargetInScript (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_SCRIPT Script,
     PSTR Name
     )
 
@@ -1971,11 +1975,11 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PMBGEN_TARGET Target;
+    PMINGEN_TARGET Target;
 
     CurrentEntry = Script->TargetList.Next;
     while (CurrentEntry != &(Script->TargetList)) {
-        Target = LIST_VALUE(CurrentEntry, MBGEN_TARGET, ListEntry);
+        Target = LIST_VALUE(CurrentEntry, MINGEN_TARGET, ListEntry);
         if (strcmp(Target->Label, Name) == 0) {
             return Target;
         }
@@ -1987,8 +1991,8 @@ Return Value:
 }
 
 VOID
-MbgenDestroyTool (
-    PMBGEN_TOOL Tool
+MingenDestroyTool (
+    PMINGEN_TOOL Tool
     )
 
 /*++
@@ -2034,8 +2038,8 @@ Return Value:
 }
 
 VOID
-MbgenDestroyPool (
-    PMBGEN_POOL Pool
+MingenDestroyPool (
+    PMINGEN_POOL Pool
     )
 
 /*++
@@ -2065,8 +2069,8 @@ Return Value:
 }
 
 VOID
-MbgenPrintAllEntries (
-    PMBGEN_CONTEXT Context
+MingenPrintAllEntries (
+    PMINGEN_CONTEXT Context
     )
 
 /*++
@@ -2089,20 +2093,20 @@ Return Value:
 
     PLIST_ENTRY CurrentEntry;
     UINTN Index;
-    PMBGEN_TARGET InputTarget;
-    PMBGEN_POOL Pool;
-    PMBGEN_SCRIPT Script;
+    PMINGEN_TARGET InputTarget;
+    PMINGEN_POOL Pool;
+    PMINGEN_SCRIPT Script;
     PLIST_ENTRY ScriptEntry;
     PSTR ScriptPath;
     PSTR ScriptRoot;
-    PMBGEN_SOURCE Source;
-    PMBGEN_TARGET Target;
-    PMBGEN_TOOL Tool;
+    PMINGEN_SOURCE Source;
+    PMINGEN_TARGET Target;
+    PMINGEN_TOOL Tool;
     PSTR TreePath;
 
     CurrentEntry = Context->ToolList.Next;
     while (CurrentEntry != &(Context->ToolList)) {
-        Tool = LIST_VALUE(CurrentEntry, MBGEN_TOOL, ListEntry);
+        Tool = LIST_VALUE(CurrentEntry, MINGEN_TOOL, ListEntry);
         CurrentEntry = CurrentEntry->Next;
         printf("Tool: %s\n"
                "\tCommand: %s\n"
@@ -2124,25 +2128,25 @@ Return Value:
 
     CurrentEntry = Context->PoolList.Next;
     while (CurrentEntry != &(Context->PoolList)) {
-        Pool = LIST_VALUE(CurrentEntry, MBGEN_POOL, ListEntry);
+        Pool = LIST_VALUE(CurrentEntry, MINGEN_POOL, ListEntry);
         CurrentEntry = CurrentEntry->Next;
         printf("Pool: %s, Depth: %d\n", Pool->Name, Pool->Depth);
     }
 
     ScriptEntry = Context->ScriptList.Next;
     while (ScriptEntry != &(Context->ScriptList)) {
-        Script = LIST_VALUE(ScriptEntry, MBGEN_SCRIPT, ListEntry);
+        Script = LIST_VALUE(ScriptEntry, MINGEN_SCRIPT, ListEntry);
         ScriptEntry = ScriptEntry->Next;
         switch (Script->Root) {
-        case MbgenSourceTree:
+        case MingenSourceTree:
             ScriptRoot = "//";
             break;
 
-        case MbgenBuildTree:
+        case MingenBuildTree:
             ScriptRoot = "^/";
             break;
 
-        case MbgenAbsolutePath:
+        case MingenAbsolutePath:
             ScriptRoot = "";
             break;
 
@@ -2168,9 +2172,9 @@ Return Value:
 
         CurrentEntry = Script->TargetList.Next;
         while (CurrentEntry != &(Script->TargetList)) {
-            Target = LIST_VALUE(CurrentEntry, MBGEN_TARGET, ListEntry);
+            Target = LIST_VALUE(CurrentEntry, MINGEN_TARGET, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            TreePath = MbgenPathForTree(Context, Target->Tree);
+            TreePath = MingenPathForTree(Context, Target->Tree);
             printf("\tTarget: %s\n\t\tOutput: %s/%s/%s\n",
                    Target->Label,
                    TreePath,
@@ -2186,14 +2190,14 @@ Return Value:
                 for (Index = 0; Index < Target->Inputs.Count; Index += 1) {
                     InputTarget = Target->Inputs.Array[Index];
                     switch (InputTarget->Type) {
-                    case MbgenInputSource:
-                        Source = (PMBGEN_SOURCE)InputTarget;
-                        TreePath = MbgenPathForTree(Context, Source->Tree);
+                    case MingenInputSource:
+                        Source = (PMINGEN_SOURCE)InputTarget;
+                        TreePath = MingenPathForTree(Context, Source->Tree);
                         printf("\t\t\t%s%s\n", TreePath, Source->Path);
                         break;
 
-                    case MbgenInputTarget:
-                        TreePath = MbgenPathForTree(Context,
+                    case MingenInputTarget:
+                        TreePath = MingenPathForTree(Context,
                                                     InputTarget->Script->Root);
 
                         printf("\t\t\t%s/%s:%s\n",
@@ -2228,10 +2232,10 @@ Return Value:
 }
 
 INT
-MbgenAddInput (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_TARGET Target,
-    PMBGEN_INPUTS Inputs,
+MingenAddInput (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TARGET Target,
+    PMINGEN_INPUTS Inputs,
     PVOID Input
     )
 
@@ -2261,7 +2265,7 @@ Return Value:
 
 {
 
-    PMBGEN_TARGET Dependency;
+    PMINGEN_TARGET Dependency;
     PVOID NewBuffer;
     ULONG NewCapacity;
     INT Status;
@@ -2294,11 +2298,11 @@ Return Value:
 
     Dependency = Input;
     if ((Inputs != &(Target->OrderOnly)) &&
-        (Dependency->Type == MbgenInputTarget) &&
+        (Dependency->Type == MingenInputTarget) &&
         (Dependency->Callback != NULL) &&
         (Dependency->Callback->Header.Type != ChalkObjectNull)) {
 
-        if ((Context->Options & MBGEN_OPTION_DEBUG) != 0) {
+        if ((Context->Options & MINGEN_OPTION_DEBUG) != 0) {
             printf("Calling callback of '%s' for '%s'...",
                    Dependency->Label,
                    Target->Label);
@@ -2310,7 +2314,7 @@ Return Value:
                                        Target->OriginalEntry,
                                        NULL);
 
-        if ((Context->Options & MBGEN_OPTION_DEBUG) != 0) {
+        if ((Context->Options & MINGEN_OPTION_DEBUG) != 0) {
             printf("Done, %s\n", strerror(Status));
         }
 
@@ -2326,8 +2330,8 @@ AddInputEnd:
 }
 
 VOID
-MbgenDestroyInputs (
-    PMBGEN_INPUTS Inputs
+MingenDestroyInputs (
+    PMINGEN_INPUTS Inputs
     )
 
 /*++
@@ -2349,12 +2353,12 @@ Return Value:
 {
 
     ULONG Index;
-    PMBGEN_SOURCE Source;
+    PMINGEN_SOURCE Source;
 
     for (Index = 0; Index < Inputs->Count; Index += 1) {
         Source = Inputs->Array[Index];
-        if (Source->Type == MbgenInputSource) {
-            MbgenDestroySource(Source);
+        if (Source->Type == MingenInputSource) {
+            MingenDestroySource(Source);
         }
     }
 
@@ -2368,8 +2372,8 @@ Return Value:
 }
 
 VOID
-MbgenDestroySource (
-    PMBGEN_SOURCE Source
+MingenDestroySource (
+    PMINGEN_SOURCE Source
     )
 
 /*++

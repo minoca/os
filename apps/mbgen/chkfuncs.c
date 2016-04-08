@@ -8,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This module implements the functions built-in to Chalk for the mbgen
+    This module implements the functions built-in to Chalk for the mingen
     program.
 
 Author:
@@ -46,63 +46,63 @@ Environment:
 //
 
 INT
-MbgenChalkAssert (
+MingenChalkAssert (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
     );
 
 INT
-MbgenChalkSplitExtension (
+MingenChalkSplitExtension (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
     );
 
 INT
-MbgenChalkGetenv (
+MingenChalkGetenv (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
     );
 
 INT
-MbgenChalkUnameS (
+MingenChalkUnameS (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
     );
 
 INT
-MbgenChalkUnameN (
+MingenChalkUnameN (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
     );
 
 INT
-MbgenChalkUnameR (
+MingenChalkUnameR (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
     );
 
 INT
-MbgenChalkUnameV (
+MingenChalkUnameV (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
     );
 
 INT
-MbgenChalkUnameM (
+MingenChalkUnameM (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
     );
 
 INT
-MbgenChalkUname (
+MingenChalkUname (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue,
@@ -113,73 +113,73 @@ MbgenChalkUname (
 // -------------------------------------------------------------------- Globals
 //
 
-PSTR MbgenChalkAssertArguments[] = {
+PSTR MingenChalkAssertArguments[] = {
     "condition",
     "complaint",
     NULL
 };
 
-PSTR MbgenChalkSplitExtensionArguments[] = {
+PSTR MingenChalkSplitExtensionArguments[] = {
     "path",
     NULL
 };
 
-PSTR MbgenChalkNoArguments[] = {
+PSTR MingenChalkNoArguments[] = {
     NULL
 };
 
-PSTR MbgenChalkGetenvArguments[] = {
+PSTR MingenChalkGetenvArguments[] = {
     "variable",
     NULL
 };
 
-CHALK_FUNCTION_PROTOTYPE MbgenChalkFunctions[] = {
+CHALK_FUNCTION_PROTOTYPE MingenChalkFunctions[] = {
     {
         "assert",
-        MbgenChalkAssertArguments,
-        MbgenChalkAssert
+        MingenChalkAssertArguments,
+        MingenChalkAssert
     },
 
     {
         "getenv",
-        MbgenChalkGetenvArguments,
-        MbgenChalkGetenv
+        MingenChalkGetenvArguments,
+        MingenChalkGetenv
     },
 
     {
         "split_extension",
-        MbgenChalkSplitExtensionArguments,
-        MbgenChalkSplitExtension
+        MingenChalkSplitExtensionArguments,
+        MingenChalkSplitExtension
     },
 
     {
         "uname_s",
-        MbgenChalkNoArguments,
-        MbgenChalkUnameS
+        MingenChalkNoArguments,
+        MingenChalkUnameS
     },
 
     {
         "uname_n",
-        MbgenChalkNoArguments,
-        MbgenChalkUnameN
+        MingenChalkNoArguments,
+        MingenChalkUnameN
     },
 
     {
         "uname_r",
-        MbgenChalkNoArguments,
-        MbgenChalkUnameR
+        MingenChalkNoArguments,
+        MingenChalkUnameR
     },
 
     {
         "uname_v",
-        MbgenChalkNoArguments,
-        MbgenChalkUnameV
+        MingenChalkNoArguments,
+        MingenChalkUnameV
     },
 
     {
         "uname_m",
-        MbgenChalkNoArguments,
-        MbgenChalkUnameM
+        MingenChalkNoArguments,
+        MingenChalkUnameM
     },
 
     {NULL}
@@ -190,8 +190,8 @@ CHALK_FUNCTION_PROTOTYPE MbgenChalkFunctions[] = {
 //
 
 INT
-MbgenAddChalkBuiltins (
-    PMBGEN_CONTEXT Context
+MingenAddChalkBuiltins (
+    PMINGEN_CONTEXT Context
     )
 
 /*++
@@ -199,7 +199,7 @@ MbgenAddChalkBuiltins (
 Routine Description:
 
     This routine adds the functions in the global scope of the Chalk
-    interpreter for the mbgen program.
+    interpreter for the mingen program.
 
 Arguments:
 
@@ -219,7 +219,7 @@ Return Value:
 
     Status = ChalkRegisterFunctions(&(Context->Interpreter),
                                     Context,
-                                    MbgenChalkFunctions);
+                                    MingenChalkFunctions);
 
     return Status;
 }
@@ -229,7 +229,7 @@ Return Value:
 //
 
 INT
-MbgenChalkAssert (
+MingenChalkAssert (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
@@ -239,7 +239,7 @@ MbgenChalkAssert (
 
 Routine Description:
 
-    This routine implements the assert function for Chalk in the mbgen context.
+    This routine implements the assert function for Chalk in the mingen context.
 
 Arguments:
 
@@ -278,7 +278,7 @@ Return Value:
 }
 
 INT
-MbgenChalkSplitExtension (
+MingenChalkSplitExtension (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
@@ -333,7 +333,7 @@ Return Value:
     }
 
     Extension = NULL;
-    Base = MbgenSplitExtension(Path->String.String, &Extension);
+    Base = MingenSplitExtension(Path->String.String, &Extension);
     if (Base == NULL) {
         BaseString = ChalkCreateString("", 0);
 
@@ -386,7 +386,7 @@ ChalkSplitExtensionEnd:
 }
 
 INT
-MbgenChalkGetenv (
+MingenChalkGetenv (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
@@ -446,7 +446,7 @@ Return Value:
 }
 
 INT
-MbgenChalkUnameS (
+MingenChalkUnameS (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
@@ -478,11 +478,11 @@ Return Value:
 
 {
 
-    return MbgenChalkUname(Interpreter, Context, ReturnValue, 's');
+    return MingenChalkUname(Interpreter, Context, ReturnValue, 's');
 }
 
 INT
-MbgenChalkUnameN (
+MingenChalkUnameN (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
@@ -514,11 +514,11 @@ Return Value:
 
 {
 
-    return MbgenChalkUname(Interpreter, Context, ReturnValue, 'n');
+    return MingenChalkUname(Interpreter, Context, ReturnValue, 'n');
 }
 
 INT
-MbgenChalkUnameR (
+MingenChalkUnameR (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
@@ -550,11 +550,11 @@ Return Value:
 
 {
 
-    return MbgenChalkUname(Interpreter, Context, ReturnValue, 'r');
+    return MingenChalkUname(Interpreter, Context, ReturnValue, 'r');
 }
 
 INT
-MbgenChalkUnameV (
+MingenChalkUnameV (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
@@ -586,11 +586,11 @@ Return Value:
 
 {
 
-    return MbgenChalkUname(Interpreter, Context, ReturnValue, 'v');
+    return MingenChalkUname(Interpreter, Context, ReturnValue, 'v');
 }
 
 INT
-MbgenChalkUnameM (
+MingenChalkUnameM (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue
@@ -622,11 +622,11 @@ Return Value:
 
 {
 
-    return MbgenChalkUname(Interpreter, Context, ReturnValue, 'm');
+    return MingenChalkUname(Interpreter, Context, ReturnValue, 'm');
 }
 
 INT
-MbgenChalkUname (
+MingenChalkUname (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
     PCHALK_OBJECT *ReturnValue,
@@ -666,7 +666,7 @@ Return Value:
     INT Status;
     PCHALK_OBJECT String;
 
-    Status = MbgenOsUname(Flavor, Buffer, sizeof(Buffer));
+    Status = MingenOsUname(Flavor, Buffer, sizeof(Buffer));
     if (Status != 0) {
         Buffer[0] = '\0';
     }

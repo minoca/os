@@ -59,7 +59,7 @@ Environment:
 //
 
 int
-MbgenComparePaths (
+MingenComparePaths (
     const void *LeftPointer,
     const void *RightPointer
     );
@@ -73,19 +73,19 @@ MbgenComparePaths (
 //
 
 INT
-MbgenParsePath (
-    PMBGEN_CONTEXT Context,
+MingenParsePath (
+    PMINGEN_CONTEXT Context,
     PSTR Name,
-    MBGEN_DIRECTORY_TREE RelativeTree,
+    MINGEN_DIRECTORY_TREE RelativeTree,
     PSTR RelativePath,
-    PMBGEN_PATH Target
+    PMINGEN_PATH Target
     )
 
 /*++
 
 Routine Description:
 
-    This routine breaks an mbgen path string into its components.
+    This routine breaks a mingen path string into its components.
 
 Arguments:
 
@@ -114,17 +114,17 @@ Return Value:
     PSTR Colon;
     INT Status;
 
-    memset(Target, 0, sizeof(MBGEN_PATH));
-    if (MBGEN_IS_SOURCE_ROOT_RELATIVE(Name)) {
+    memset(Target, 0, sizeof(MINGEN_PATH));
+    if (MINGEN_IS_SOURCE_ROOT_RELATIVE(Name)) {
         Name += 2;
-        Target->Root = MbgenSourceTree;
+        Target->Root = MingenSourceTree;
 
-    } else if (MBGEN_IS_BUILD_ROOT_RELATIVE(Name)) {
+    } else if (MINGEN_IS_BUILD_ROOT_RELATIVE(Name)) {
         Name += 2;
-        Target->Root = MbgenBuildTree;
+        Target->Root = MingenBuildTree;
 
-    } else if (MBGEN_IS_ABSOLUTE_PATH(Name)) {
-        Target->Root = MbgenAbsolutePath;
+    } else if (MINGEN_IS_ABSOLUTE_PATH(Name)) {
+        Target->Root = MingenAbsolutePath;
 
     } else {
 
@@ -134,19 +134,19 @@ Return Value:
 
         while (*Name == '^') {
             Name += 1;
-            if (RelativeTree == MbgenSourceTree) {
-                RelativeTree = MbgenBuildTree;
+            if (RelativeTree == MingenSourceTree) {
+                RelativeTree = MingenBuildTree;
 
             } else {
 
-                assert(RelativeTree == MbgenBuildTree);
+                assert(RelativeTree == MingenBuildTree);
 
-                RelativeTree = MbgenSourceTree;
+                RelativeTree = MingenSourceTree;
             }
         }
 
         Target->Root = RelativeTree;
-        Target->Path = MbgenAppendPaths(RelativePath, Name);
+        Target->Path = MingenAppendPaths(RelativePath, Name);
         if (Target->Path == NULL) {
             Status = ENOMEM;
             goto ParsePathEnd;
@@ -186,7 +186,7 @@ ParsePathEnd:
 }
 
 PSTR
-MbgenAppendPaths3 (
+MingenAppendPaths3 (
     PSTR Path1,
     PSTR Path2,
     PSTR Path3
@@ -220,18 +220,18 @@ Return Value:
     PSTR Intermediate;
     PSTR Result;
 
-    Intermediate = MbgenAppendPaths(Path1, Path2);
+    Intermediate = MingenAppendPaths(Path1, Path2);
     if (Intermediate == NULL) {
         return NULL;
     }
 
-    Result = MbgenAppendPaths(Intermediate, Path3);
+    Result = MingenAppendPaths(Intermediate, Path3);
     free(Intermediate);
     return Result;
 }
 
 PSTR
-MbgenAppendPaths (
+MingenAppendPaths (
     PSTR Path1,
     PSTR Path2
     )
@@ -288,8 +288,8 @@ Return Value:
 }
 
 INT
-MbgenFindProjectFile (
-    PMBGEN_CONTEXT Context
+MingenFindProjectFile (
+    PMINGEN_CONTEXT Context
     )
 
 /*++
@@ -319,7 +319,7 @@ Return Value:
     PSTR Start;
     int Status;
 
-    FileName = MBGEN_PROJECT_FILE;
+    FileName = MINGEN_PROJECT_FILE;
     Start = getcwd(NULL, 0);
     if (Start == NULL) {
         return errno;
@@ -331,7 +331,7 @@ Return Value:
 
     PreviousDirectory = NULL;
     while (TRUE) {
-        CurrentDirectory = MbgenGetAbsoluteDirectory(".");
+        CurrentDirectory = MingenGetAbsoluteDirectory(".");
         if (CurrentDirectory == NULL) {
             break;
         }
@@ -339,7 +339,7 @@ Return Value:
         Descriptor = open(FileName, O_RDONLY);
         if (Descriptor >= 0) {
             close(Descriptor);
-            Context->ProjectFilePath = MbgenAppendPaths(CurrentDirectory,
+            Context->ProjectFilePath = MingenAppendPaths(CurrentDirectory,
                                                         FileName);
 
             break;
@@ -402,8 +402,8 @@ SetupRootDirectoriesEnd:
 }
 
 INT
-MbgenFindSourceRoot (
-    PMBGEN_CONTEXT Context
+MingenFindSourceRoot (
+    PMINGEN_CONTEXT Context
     )
 
 /*++
@@ -439,8 +439,8 @@ Return Value:
         goto FindSourceRootEnd;
     }
 
-    MbgenSplitPath(ProjectFile, &ProjectDirectory, &ProjectFileName);
-    ProjectDirectory = MbgenGetAbsoluteDirectory(ProjectDirectory);
+    MingenSplitPath(ProjectFile, &ProjectDirectory, &ProjectFileName);
+    ProjectDirectory = MingenGetAbsoluteDirectory(ProjectDirectory);
     if (ProjectDirectory == NULL) {
         Status = errno;
         if (Status == 0) {
@@ -467,19 +467,19 @@ Return Value:
     // recommended), then leave it alone.
     //
 
-    if (MBGEN_IS_ABSOLUTE_PATH(Context->SourceRoot)) {
+    if (MINGEN_IS_ABSOLUTE_PATH(Context->SourceRoot)) {
         Status = 0;
         goto FindSourceRootEnd;
     }
 
-    AppendedPath = MbgenAppendPaths(ProjectDirectory, Context->SourceRoot);
+    AppendedPath = MingenAppendPaths(ProjectDirectory, Context->SourceRoot);
     if (AppendedPath == NULL) {
         Status = ENOMEM;
         goto FindSourceRootEnd;
     }
 
     free(ProjectDirectory);
-    ProjectDirectory = MbgenGetAbsoluteDirectory(AppendedPath);
+    ProjectDirectory = MingenGetAbsoluteDirectory(AppendedPath);
     free(AppendedPath);
     if (ProjectDirectory == NULL) {
         Status = errno;
@@ -508,9 +508,9 @@ FindSourceRootEnd:
 }
 
 PSTR
-MbgenPathForTree (
-    PMBGEN_CONTEXT Context,
-    MBGEN_DIRECTORY_TREE Tree
+MingenPathForTree (
+    PMINGEN_CONTEXT Context,
+    MINGEN_DIRECTORY_TREE Tree
     )
 
 /*++
@@ -533,20 +533,20 @@ Return Value:
 
 {
 
-    if (Tree == MbgenSourceTree) {
+    if (Tree == MingenSourceTree) {
         return Context->SourceRoot;
 
-    } else if (Tree == MbgenBuildTree) {
+    } else if (Tree == MingenBuildTree) {
         return Context->BuildRoot;
     }
 
-    assert(Tree == MbgenAbsolutePath);
+    assert(Tree == MingenAbsolutePath);
 
     return "";
 }
 
 PSTR
-MbgenSplitExtension (
+MingenSplitExtension (
     PSTR Path,
     PSTR *Extension
     )
@@ -603,7 +603,7 @@ Return Value:
 }
 
 VOID
-MbgenSplitPath (
+MingenSplitPath (
     PSTR Path,
     PSTR *DirectoryName,
     PSTR *FileName
@@ -705,9 +705,9 @@ SplitPathEnd:
 }
 
 INT
-MbgenAddPathToList (
-    PMBGEN_PATH_LIST PathList,
-    PMBGEN_PATH Path
+MingenAddPathToList (
+    PMINGEN_PATH_LIST PathList,
+    PMINGEN_PATH Path
     )
 
 /*++
@@ -732,7 +732,7 @@ Return Value:
 
 {
 
-    PMBGEN_PATH Destination;
+    PMINGEN_PATH Destination;
     PVOID NewBuffer;
     UINTN NewCapacity;
 
@@ -745,7 +745,7 @@ Return Value:
             NewCapacity = 16;
         }
 
-        NewBuffer = realloc(PathList->Array, NewCapacity * sizeof(MBGEN_PATH));
+        NewBuffer = realloc(PathList->Array, NewCapacity * sizeof(MINGEN_PATH));
         if (NewBuffer == NULL) {
             return ENOMEM;
         }
@@ -755,7 +755,7 @@ Return Value:
     }
 
     Destination = &(PathList->Array[PathList->Count]);
-    memset(Destination, 0, sizeof(MBGEN_PATH));
+    memset(Destination, 0, sizeof(MINGEN_PATH));
     Destination->Root = Path->Root;
     if (Path->Path != NULL) {
         Destination->Path = strdup(Path->Path);
@@ -770,8 +770,8 @@ Return Value:
 }
 
 VOID
-MbgenDestroyPathList (
-    PMBGEN_PATH_LIST PathList
+MingenDestroyPathList (
+    PMINGEN_PATH_LIST PathList
     )
 
 /*++
@@ -793,7 +793,7 @@ Return Value:
 {
 
     ULONG Index;
-    PMBGEN_PATH Path;
+    PMINGEN_PATH Path;
 
     for (Index = 0; Index < PathList->Count; Index += 1) {
         Path = &(PathList->Array[Index]);
@@ -816,8 +816,8 @@ Return Value:
 }
 
 VOID
-MbgenDeduplicatePathList (
-    PMBGEN_PATH_LIST PathList
+MingenDeduplicatePathList (
+    PMINGEN_PATH_LIST PathList
     )
 
 /*++
@@ -839,7 +839,7 @@ Return Value:
 {
 
     int Compare;
-    PMBGEN_PATH Entry;
+    PMINGEN_PATH Entry;
     UINTN Index;
 
     //
@@ -848,8 +848,8 @@ Return Value:
 
     qsort(PathList->Array,
           PathList->Count,
-          sizeof(MBGEN_PATH),
-          MbgenComparePaths);
+          sizeof(MINGEN_PATH),
+          MingenComparePaths);
 
     Index = 0;
     while (Index + 1 < PathList->Count) {
@@ -861,7 +861,7 @@ Return Value:
         // index for even more duplicates.
         //
 
-        Compare = MbgenComparePaths(Entry, Entry + 1);
+        Compare = MingenComparePaths(Entry, Entry + 1);
         if (Compare == 0) {
             Entry += 1;
             free(Entry->Path);
@@ -870,7 +870,7 @@ Return Value:
 
             memmove(Entry,
                     Entry + 1,
-                    (PathList->Count - (Index + 2)) * sizeof(MBGEN_PATH));
+                    (PathList->Count - (Index + 2)) * sizeof(MINGEN_PATH));
 
             PathList->Count -= 1;
 
@@ -887,9 +887,9 @@ Return Value:
 }
 
 INT
-MbgenCreateDirectories (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_PATH_LIST PathList
+MingenCreateDirectories (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_PATH_LIST PathList
     )
 
 /*++
@@ -917,7 +917,7 @@ Return Value:
 {
 
     UINTN Index;
-    PMBGEN_PATH Path;
+    PMINGEN_PATH Path;
     INT Status;
     INT TotalStatus;
     PSTR TreeRoot;
@@ -925,7 +925,7 @@ Return Value:
     TotalStatus = 0;
     for (Index = 0; Index < PathList->Count; Index += 1) {
         Path = &(PathList->Array[Index]);
-        TreeRoot = MbgenPathForTree(Context, Path->Root);
+        TreeRoot = MingenPathForTree(Context, Path->Root);
         Status = chdir(TreeRoot);
         if (Status != 0) {
             fprintf(stderr,
@@ -934,7 +934,7 @@ Return Value:
                     strerror(errno));
 
         } else {
-            Status = MbgenCreateDirectory(Path->Path);
+            Status = MingenCreateDirectory(Path->Path);
         }
 
         if ((Status != 0) && (TotalStatus == 0)) {
@@ -946,7 +946,7 @@ Return Value:
 }
 
 INT
-MbgenCreateDirectory (
+MingenCreateDirectory (
     PSTR Path
     )
 
@@ -1069,7 +1069,7 @@ CreateDirectoryEnd:
 }
 
 PSTR
-MbgenGetAbsoluteDirectory (
+MingenGetAbsoluteDirectory (
     PSTR Path
     )
 
@@ -1123,7 +1123,7 @@ Return Value:
     // Convert backslashes to forward slashes, unless told not to.
     //
 
-    if (getenv("MBGEN_NO_SLASH_CONVERSION") != NULL) {
+    if (getenv("MINGEN_NO_SLASH_CONVERSION") != NULL) {
         goto GetAbsoluteDirectoryEnd;
     }
 
@@ -1146,7 +1146,7 @@ GetAbsoluteDirectoryEnd:
 //
 
 int
-MbgenComparePaths (
+MingenComparePaths (
     const void *LeftPointer,
     const void *RightPointer
     )
@@ -1155,7 +1155,7 @@ MbgenComparePaths (
 
 Routine Description:
 
-    This routine compares two MBGEN_PATH structures and orders them.
+    This routine compares two MINGEN_PATH structures and orders them.
 
 Arguments:
 
@@ -1175,11 +1175,11 @@ Return Value:
 
 {
 
-    PMBGEN_PATH Left;
-    PMBGEN_PATH Right;
+    PMINGEN_PATH Left;
+    PMINGEN_PATH Right;
 
-    Left = (PMBGEN_PATH)LeftPointer;
-    Right = (PMBGEN_PATH)RightPointer;
+    Left = (PMINGEN_PATH)LeftPointer;
+    Right = (PMINGEN_PATH)RightPointer;
     if (Left->Root < Right->Root) {
         return -1;
     }

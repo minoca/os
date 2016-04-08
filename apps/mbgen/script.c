@@ -47,26 +47,26 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-PMBGEN_SCRIPT
-MbgenFindScript (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_PATH TargetPath
+PMINGEN_SCRIPT
+MingenFindScript (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_PATH TargetPath
     );
 
 VOID
-MbgenDestroyScript (
-    PMBGEN_SCRIPT Script
+MingenDestroyScript (
+    PMINGEN_SCRIPT Script
     );
 
 //
 // -------------------------------------------------------------------- Globals
 //
 
-CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
+CHALK_C_STRUCTURE_MEMBER MingenProjectRootMembers[] = {
     {
         ChalkCString,
         "globalenv",
-        offsetof(MBGEN_CONTEXT, GlobalName),
+        offsetof(MINGEN_CONTEXT, GlobalName),
         FALSE,
         {0}
     },
@@ -74,7 +74,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
     {
         ChalkCString,
         "default_target",
-        offsetof(MBGEN_CONTEXT, DefaultName),
+        offsetof(MINGEN_CONTEXT, DefaultName),
         FALSE,
         {0}
     },
@@ -82,7 +82,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
     {
         ChalkCString,
         "output_format",
-        offsetof(MBGEN_CONTEXT, FormatString),
+        offsetof(MINGEN_CONTEXT, FormatString),
         FALSE,
         {0}
     },
@@ -90,7 +90,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
     {
         ChalkCString,
         "default_build_dir",
-        offsetof(MBGEN_CONTEXT, BuildRoot),
+        offsetof(MINGEN_CONTEXT, BuildRoot),
         FALSE,
         {0}
     },
@@ -98,7 +98,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
     {
         ChalkCString,
         "build_file_name",
-        offsetof(MBGEN_CONTEXT, BuildFileName),
+        offsetof(MINGEN_CONTEXT, BuildFileName),
         FALSE,
         {0}
     },
@@ -106,7 +106,7 @@ CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
     {
         ChalkCString,
         "source_root",
-        offsetof(MBGEN_CONTEXT, SourceRoot),
+        offsetof(MINGEN_CONTEXT, SourceRoot),
         FALSE,
         {0}
     },
@@ -119,10 +119,10 @@ CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
 //
 
 INT
-MbgenLoadTargetScript (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_PATH Target,
-    PMBGEN_SCRIPT *Script
+MingenLoadTargetScript (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_PATH Target,
+    PMINGEN_SCRIPT *Script
     )
 
 /*++
@@ -153,7 +153,7 @@ Return Value:
 
     INT Status;
 
-    Status = MbgenLoadScript(Context, MbgenScriptOrderTarget, Target, Script);
+    Status = MingenLoadScript(Context, MingenScriptOrderTarget, Target, Script);
     if (Status != 0) {
         goto LoadTargetScriptEnd;
     }
@@ -163,8 +163,8 @@ LoadTargetScriptEnd:
 }
 
 INT
-MbgenLoadProjectRoot (
-    PMBGEN_CONTEXT Context
+MingenLoadProjectRoot (
+    PMINGEN_CONTEXT Context
     )
 
 /*++
@@ -189,26 +189,26 @@ Return Value:
 
     PSTR BuildRoot;
     INT Status;
-    MBGEN_PATH TargetPath;
+    MINGEN_PATH TargetPath;
 
-    Status = MbgenAddChalkBuiltins(Context);
+    Status = MingenAddChalkBuiltins(Context);
     if (Status != 0) {
         goto LoadProjectRootEnd;
     }
 
-    memset(&TargetPath, 0, sizeof(MBGEN_PATH));
-    TargetPath.Root = MbgenAbsolutePath;
+    memset(&TargetPath, 0, sizeof(MINGEN_PATH));
+    TargetPath.Root = MingenAbsolutePath;
     TargetPath.Path = Context->ProjectFilePath;
-    Status = MbgenLoadScript(Context,
-                             MbgenScriptOrderProjectRoot,
-                             &TargetPath,
-                             NULL);
+    Status = MingenLoadScript(Context,
+                              MingenScriptOrderProjectRoot,
+                              &TargetPath,
+                              NULL);
 
     if (Status != 0) {
         goto LoadProjectRootEnd;
     }
 
-    if ((Context->Options & MBGEN_OPTION_DEBUG) != 0) {
+    if ((Context->Options & MINGEN_OPTION_DEBUG) != 0) {
         printf("Global context after project root:\n");
         ChalkPrintObject(stdout, Context->Interpreter.Global.Dict, 0);
         printf("\n");
@@ -221,7 +221,7 @@ Return Value:
     BuildRoot = Context->BuildRoot;
     Status = ChalkConvertDictToStructure(&(Context->Interpreter),
                                          Context->Interpreter.Global.Dict,
-                                         MbgenProjectRootMembers,
+                                         MingenProjectRootMembers,
                                          Context);
 
     if (Status != 0) {
@@ -232,7 +232,7 @@ Return Value:
         free(BuildRoot);
     }
 
-    Status = MbgenFindSourceRoot(Context);
+    Status = MingenFindSourceRoot(Context);
     if (Status != 0) {
         fprintf(stderr,
                 "Error: Unable to determine source root directory: %s.\n",
@@ -246,9 +246,9 @@ Return Value:
     // root path if so.
     //
 
-    if (MBGEN_IS_SOURCE_ROOT_RELATIVE(Context->BuildRoot)) {
-        BuildRoot = MbgenAppendPaths(Context->SourceRoot,
-                                     Context->BuildRoot + 2);
+    if (MINGEN_IS_SOURCE_ROOT_RELATIVE(Context->BuildRoot)) {
+        BuildRoot = MingenAppendPaths(Context->SourceRoot,
+                                      Context->BuildRoot + 2);
 
         if (BuildRoot == NULL) {
             Status = ENOMEM;
@@ -259,12 +259,12 @@ Return Value:
         Context->BuildRoot = BuildRoot;
     }
 
-    Status = MbgenCreateDirectory(Context->BuildRoot);
+    Status = MingenCreateDirectory(Context->BuildRoot);
     if (Status != 0) {
         goto LoadProjectRootEnd;
     }
 
-    BuildRoot = MbgenGetAbsoluteDirectory(Context->BuildRoot);
+    BuildRoot = MingenGetAbsoluteDirectory(Context->BuildRoot);
     if (BuildRoot == NULL) {
         Status = errno;
         fprintf(stderr,
@@ -281,14 +281,14 @@ Return Value:
 
     free(Context->BuildRoot);
     Context->BuildRoot = BuildRoot;
-    if ((Context->Options & MBGEN_OPTION_VERBOSE) != 0) {
+    if ((Context->Options & MINGEN_OPTION_VERBOSE) != 0) {
         printf("Source Root: '%s'\nBuild Root: '%s'\n",
                Context->SourceRoot,
                Context->BuildRoot);
     }
 
     if (Context->DefaultName == NULL) {
-        Context->DefaultName = strdup(MBGEN_DEFAULT_NAME);
+        Context->DefaultName = strdup(MINGEN_DEFAULT_NAME);
         if (Context->DefaultName == NULL) {
             Status = ENOMEM;
             goto LoadProjectRootEnd;
@@ -300,7 +300,7 @@ Return Value:
     //
 
     ChalkClearInterpreter(&(Context->Interpreter));
-    Status = MbgenAddChalkBuiltins(Context);
+    Status = MingenAddChalkBuiltins(Context);
     if (Status != 0) {
         goto LoadProjectRootEnd;
     }
@@ -310,7 +310,7 @@ Return Value:
     //
 
     Status = ChalkExecuteDeferredScripts(&(Context->Interpreter),
-                                         MbgenScriptOrderCommandLine);
+                                         MingenScriptOrderCommandLine);
 
     if (Status != 0) {
         goto LoadProjectRootEnd;
@@ -322,20 +322,20 @@ Return Value:
     //
 
     if (Context->GlobalName != NULL) {
-        Status = MbgenParsePath(Context,
-                                Context->GlobalName,
-                                MbgenSourceTree,
-                                NULL,
-                                &TargetPath);
+        Status = MingenParsePath(Context,
+                                 Context->GlobalName,
+                                 MingenSourceTree,
+                                 NULL,
+                                 &TargetPath);
 
         if (Status != 0) {
             goto LoadProjectRootEnd;
         }
 
-        Status = MbgenLoadScript(Context,
-                                 MbgenScriptOrderGlobal,
-                                 &TargetPath,
-                                 NULL);
+        Status = MingenLoadScript(Context,
+                                  MingenScriptOrderGlobal,
+                                  &TargetPath,
+                                  NULL);
 
         if (TargetPath.Path != NULL) {
             free(TargetPath.Path);
@@ -355,19 +355,19 @@ Return Value:
     //
 
     if (Context->DefaultName != NULL) {
-        Status = MbgenParsePath(Context,
-                                Context->DefaultName,
-                                MbgenSourceTree,
-                                NULL,
-                                &TargetPath);
+        Status = MingenParsePath(Context,
+                                 Context->DefaultName,
+                                 MingenSourceTree,
+                                 NULL,
+                                 &TargetPath);
 
         if (Status != 0) {
             goto LoadProjectRootEnd;
         }
 
-        Status = MbgenLoadTargetScript(Context,
-                                       &TargetPath,
-                                       NULL);
+        Status = MingenLoadTargetScript(Context,
+                                        &TargetPath,
+                                        NULL);
 
         if (TargetPath.Path != NULL) {
             free(TargetPath.Path);
@@ -384,16 +384,16 @@ Return Value:
     // Get the default format.
     //
 
-    if (Context->Format == MbgenOutputInvalid) {
+    if (Context->Format == MingenOutputInvalid) {
         if (Context->FormatString != NULL) {
             if (strcasecmp(Context->FormatString, "make") == 0) {
-                Context->Format = MbgenOutputMake;
+                Context->Format = MingenOutputMake;
 
             } else if (strcasecmp(Context->FormatString, "ninja") == 0) {
-                Context->Format = MbgenOutputNinja;
+                Context->Format = MingenOutputNinja;
 
             } else if (strcasecmp(Context->FormatString, "none") == 0) {
-                Context->Format = MbgenOutputNone;
+                Context->Format = MingenOutputNone;
 
             } else {
                 fprintf(stderr,
@@ -411,11 +411,11 @@ LoadProjectRootEnd:
 }
 
 INT
-MbgenLoadScript (
-    PMBGEN_CONTEXT Context,
-    MBGEN_SCRIPT_ORDER Order,
-    PMBGEN_PATH TargetPath,
-    PMBGEN_SCRIPT *FinalScript
+MingenLoadScript (
+    PMINGEN_CONTEXT Context,
+    MINGEN_SCRIPT_ORDER Order,
+    PMINGEN_PATH TargetPath,
+    PMINGEN_SCRIPT *FinalScript
     )
 
 /*++
@@ -451,7 +451,7 @@ Return Value:
     ULONG ExecuteOrder;
     FILE *File;
     PSTR FinalPath;
-    PMBGEN_SCRIPT Script;
+    PMINGEN_SCRIPT Script;
     struct stat Stat;
     INT Status;
     PSTR Tree;
@@ -459,34 +459,34 @@ Return Value:
     File = NULL;
     FinalPath = NULL;
     Script = NULL;
-    Script = MbgenFindScript(Context, TargetPath);
+    Script = MingenFindScript(Context, TargetPath);
     if (Script != NULL) {
         Status = 0;
         goto LoadScriptEnd;
     }
 
-    Tree = MbgenPathForTree(Context, TargetPath->Root);
-    if ((Order == MbgenScriptOrderGlobal) ||
-        (Order == MbgenScriptOrderProjectRoot)) {
+    Tree = MingenPathForTree(Context, TargetPath->Root);
+    if ((Order == MingenScriptOrderGlobal) ||
+        (Order == MingenScriptOrderProjectRoot)) {
 
-        FinalPath = MbgenAppendPaths(Tree, TargetPath->Path);
+        FinalPath = MingenAppendPaths(Tree, TargetPath->Path);
 
     } else {
         BuildFileName = Context->BuildFileName;
         if (BuildFileName == NULL) {
-            BuildFileName = MBGEN_BUILD_FILE;
+            BuildFileName = MINGEN_BUILD_FILE;
         }
 
-        FinalPath = MbgenAppendPaths3(Tree,
-                                      TargetPath->Path,
-                                      BuildFileName);
+        FinalPath = MingenAppendPaths3(Tree,
+                                       TargetPath->Path,
+                                       BuildFileName);
     }
 
     if (FinalPath == NULL) {
         return ENOMEM;
     }
 
-    if ((Context->Options & MBGEN_OPTION_VERBOSE) != 0) {
+    if ((Context->Options & MINGEN_OPTION_VERBOSE) != 0) {
         printf("Loading Script %s\n", FinalPath);
     }
 
@@ -510,13 +510,13 @@ Return Value:
         goto LoadScriptEnd;
     }
 
-    Script = malloc(sizeof(MBGEN_SCRIPT));
+    Script = malloc(sizeof(MINGEN_SCRIPT));
     if (Script == NULL) {
         Status = errno;
         goto LoadScriptEnd;
     }
 
-    memset(Script, 0, sizeof(MBGEN_SCRIPT));
+    memset(Script, 0, sizeof(MINGEN_SCRIPT));
     INITIALIZE_LIST_HEAD(&(Script->TargetList));
     Script->Order = Order;
     Script->Root = TargetPath->Root;
@@ -550,7 +550,7 @@ Return Value:
     //
 
     ExecuteOrder = Order;
-    if (Order == MbgenScriptOrderTarget) {
+    if (Order == MingenScriptOrderTarget) {
         ExecuteOrder = 0;
     }
 
@@ -580,7 +580,7 @@ Return Value:
 
     } else {
         INSERT_BEFORE(&(Script->ListEntry), &(Context->ScriptList));
-        Status = MbgenParseScriptResults(Context, Script);
+        Status = MingenParseScriptResults(Context, Script);
         if (Status != 0) {
             goto LoadScriptEnd;
         }
@@ -603,7 +603,7 @@ LoadScriptEnd:
                 LIST_REMOVE(&(Script->ListEntry));
             }
 
-            MbgenDestroyScript(Script);
+            MingenDestroyScript(Script);
             Script = NULL;
         }
     }
@@ -616,8 +616,8 @@ LoadScriptEnd:
 }
 
 VOID
-MbgenDestroyAllScripts (
-    PMBGEN_CONTEXT Context
+MingenDestroyAllScripts (
+    PMINGEN_CONTEXT Context
     )
 
 /*++
@@ -640,15 +640,15 @@ Return Value:
 
 {
 
-    PMBGEN_SCRIPT Script;
+    PMINGEN_SCRIPT Script;
 
     while (!LIST_EMPTY(&(Context->ScriptList))) {
         Script = LIST_VALUE(Context->ScriptList.Next,
-                            MBGEN_SCRIPT,
+                            MINGEN_SCRIPT,
                             ListEntry);
 
         LIST_REMOVE(&(Script->ListEntry));
-        MbgenDestroyScript(Script);
+        MingenDestroyScript(Script);
     }
 
     return;
@@ -658,10 +658,10 @@ Return Value:
 // --------------------------------------------------------- Internal Functions
 //
 
-PMBGEN_SCRIPT
-MbgenFindScript (
-    PMBGEN_CONTEXT Context,
-    PMBGEN_PATH TargetPath
+PMINGEN_SCRIPT
+MingenFindScript (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_PATH TargetPath
     )
 
 /*++
@@ -689,11 +689,11 @@ Return Value:
 {
 
     PLIST_ENTRY CurrentEntry;
-    PMBGEN_SCRIPT Script;
+    PMINGEN_SCRIPT Script;
 
     CurrentEntry = Context->ScriptList.Next;
     while (CurrentEntry != &(Context->ScriptList)) {
-        Script = LIST_VALUE(CurrentEntry, MBGEN_SCRIPT, ListEntry);
+        Script = LIST_VALUE(CurrentEntry, MINGEN_SCRIPT, ListEntry);
         CurrentEntry = CurrentEntry->Next;
         if ((Script->Root == TargetPath->Root) &&
             (Script->Path != NULL) &&
@@ -707,8 +707,8 @@ Return Value:
 }
 
 VOID
-MbgenDestroyScript (
-    PMBGEN_SCRIPT Script
+MingenDestroyScript (
+    PMINGEN_SCRIPT Script
     )
 
 /*++
@@ -729,7 +729,7 @@ Return Value:
 
 {
 
-    PMBGEN_TARGET Target;
+    PMINGEN_TARGET Target;
 
     if (Script->Script != NULL) {
         free(Script->Script);
@@ -748,10 +748,10 @@ Return Value:
     }
 
     while (!LIST_EMPTY(&(Script->TargetList))) {
-        Target = LIST_VALUE(Script->TargetList.Next, MBGEN_TARGET, ListEntry);
+        Target = LIST_VALUE(Script->TargetList.Next, MINGEN_TARGET, ListEntry);
         LIST_REMOVE(&(Target->ListEntry));
         Script->TargetCount -= 1;
-        MbgenDestroyTarget(Target);
+        MingenDestroyTarget(Target);
     }
 
     assert(Script->TargetCount == 0);
