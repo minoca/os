@@ -58,6 +58,12 @@ MbgenMakePrintBuildDirectoriesTarget (
     );
 
 VOID
+MbgenMakePrintMakefileTarget (
+    PMBGEN_CONTEXT Context,
+    FILE *File
+    );
+
+VOID
 MbgenMakePrintWithVariableConversion (
     FILE *File,
     PSTR Command
@@ -176,8 +182,21 @@ Return Value:
             ctime(&Time));
 
     fprintf(File, "# Define high level variables\n");
-    fprintf(File, "SOURCE_ROOT := %s\n", Context->SourceRoot);
-    fprintf(File, "BUILD_ROOT := %s\n", Context->BuildRoot);
+    fprintf(File,
+            "%s := %s\n",
+            MBGEN_VARIABLE_SOURCE_ROOT,
+            Context->SourceRoot);
+
+    fprintf(File,
+            "%s := %s\n",
+            MBGEN_VARIABLE_BUILD_ROOT,
+            Context->BuildRoot);
+
+    fprintf(File,
+            "%s := %s\n",
+            MBGEN_VARIABLE_PROJECT_PATH,
+            Context->ProjectFilePath);
+
     MbgenMakePrintConfig(File, Context, NULL);
     fprintf(File, "\n# Define tools\n");
     CurrentEntry = Context->ToolList.Next;
@@ -199,7 +218,6 @@ Return Value:
     // Loop over every script (file) in the build.
     //
 
-    fprintf(File, "\n# Define targets\n");
     ScriptEntry = Context->ScriptList.Next;
     while (ScriptEntry != &(Context->ScriptList)) {
         Script = LIST_VALUE(ScriptEntry, MBGEN_SCRIPT, ListEntry);
@@ -357,6 +375,7 @@ Return Value:
     }
 
     MbgenMakePrintBuildDirectoriesTarget(Context, File);
+    MbgenMakePrintMakefileTarget(Context, File);
     Status = 0;
 
 CreateMakefileEnd:
@@ -426,7 +445,78 @@ Return Value:
         fprintf(File, "\"\n");
     }
 
-    fprintf(File, "\nMakefile: %s\n", MBGEN_BUILD_DIRECTORIES_FILE);
+    fprintf(File, "\n");
+    return;
+}
+
+VOID
+MbgenMakePrintMakefileTarget (
+    PMBGEN_CONTEXT Context,
+    FILE *File
+    )
+
+/*++
+
+Routine Description:
+
+    This routine emits the built in target that rebuilds the Makefile itself
+    based on the source scripts.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    File - Supplies a pointer to the file to print the build directories to.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSTR BuildFileName;
+    PLIST_ENTRY CurrentEntry;
+    MBGEN_PATH Path;
+    PMBGEN_SCRIPT Script;
+
+    BuildFileName = Context->BuildFileName;
+    if (BuildFileName == NULL) {
+        BuildFileName = MBGEN_BUILD_FILE;
+    }
+
+    memset(&Path, 0, sizeof(MBGEN_PATH));
+    fprintf(File, "# Built-in Makefile target.\nMakefile: ");
+    CurrentEntry = Context->ScriptList.Next;
+    while (CurrentEntry != &(Context->ScriptList)) {
+        Script = LIST_VALUE(CurrentEntry, MBGEN_SCRIPT, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        if (strcmp(Script->CompletePath, Context->ProjectFilePath) == 0) {
+            fprintf(File, MBGEN_MAKE_VARIABLE, MBGEN_VARIABLE_PROJECT_PATH);
+
+        } else if (Script->Order == MbgenScriptOrderTarget) {
+            Path.Root = Script->Root;
+            Path.Path = MbgenAppendPaths(Script->Path, BuildFileName);
+            if (Path.Path != NULL) {
+                MbgenMakePrintPath(File, &Path);
+                free(Path.Path);
+            }
+
+        } else {
+            Path.Root = Script->Root;
+            Path.Path = Script->Path;
+            MbgenMakePrintPath(File, &Path);
+        }
+
+        if (CurrentEntry != &(Context->ScriptList)) {
+            fprintf(File, MBGEN_MAKE_LINE_CONTINUATION);
+        }
+    }
+
+    fprintf(File, "\n\t");
+    MbgenPrintRebuildCommand(Context, File);
+    fprintf(File, "\n");
     return;
 }
 
@@ -689,11 +779,11 @@ Return Value:
 
     switch (Tree) {
     case MbgenSourceTree:
-        fprintf(File, MBGEN_MAKE_VARIABLE, "SOURCE_ROOT");
+        fprintf(File, MBGEN_MAKE_VARIABLE, MBGEN_VARIABLE_SOURCE_ROOT);
         break;
 
     case MbgenBuildTree:
-        fprintf(File, MBGEN_MAKE_VARIABLE, "BUILD_ROOT");
+        fprintf(File, MBGEN_MAKE_VARIABLE, MBGEN_VARIABLE_BUILD_ROOT);
         break;
 
     case MbgenAbsolutePath:

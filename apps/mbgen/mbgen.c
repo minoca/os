@@ -26,6 +26,7 @@ Environment:
 //
 
 #include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <getopt.h>
 #include <stddef.h>
@@ -45,30 +46,28 @@ Environment:
 #define MBGEN_VERSION_MINOR 0
 
 #define MBGEN_USAGE                                                            \
-    "usage: mbgen [options] build_dir\n"                               \
+    "usage: mbgen [options]\n"                                                 \
     "The Minoca Build Generator creates Ninja files describing the build at \n"\
-    "the current directory. Options are:\n" \
+    "the current directory. Options are:\n"                                    \
     "  -a, --args=expr -- Evaluate the given text in the script interpreter \n"\
-    "      context before loading the project root file. This can be used \n" \
-    "      to pass configuration arguments and overrides to the build.\n" \
-    "      This can be specified multiple times.\n" \
-    "  -D, --debug -- Print lots of information during execution.\n" \
-    "  -B, --build-file=file_name -- Use the given file as the name of the \n" \
-    "      build files, rather than the default, build.mb.\n" \
-    "  -f, --format=fmt -- Specify the output format as make or ninja. The \n"\
-    "      default is make.\n" \
-    "  -n, --dry-run -- Do all the processing, but do not actually create \n" \
-    "      any output files.\n" \
-    "  -p, --project=file_name -- Search for the given file name when \n" \
-    "      looking for the project root file. The default is \".mbproj\".\n" \
-    "  -r, --root=directory -- Explictly set the project source root. If \n" \
-    "      not specified, then the project file will be searched up the \n" \
-    "      current directory hierarchy.\n" \
-    "  -v, --verbose -- Print more information during processing.\n" \
+    "      context before loading the project root file. This can be used \n"  \
+    "      to pass configuration arguments and overrides to the build.\n"      \
+    "      This can be specified multiple times.\n"                            \
+    "  -D, --debug -- Print lots of information during execution.\n"           \
+    "  -f, --format=fmt -- Specify the output format as make or ninja. The \n" \
+    "      default is make.\n"                                                 \
+    "  -n, --dry-run -- Do all the processing, but do not actually create \n"  \
+    "      any output files.\n"                                                \
+    "  -i, --input=project_file -- Use the given file as the top level \n"     \
+    "      project file. The default is to search the current directory and \n"\
+    "      parent directories for '.mgproj'.\n"                                \
+    "  -o, --output=build_dir -- Set the given directory as the build \n"      \
+    "      output directory.\n"                                                \
+    "  -v, --verbose -- Print more information during processing.\n"           \
     "  --help -- Show this help text and exit.\n"                              \
     "  --version -- Print the application version information and exit.\n\n"   \
 
-#define MBGEN_OPTIONS_STRING "B:Df:hnp:r:vV"
+#define MBGEN_OPTIONS_STRING "Df:hi:no:vV"
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -80,7 +79,9 @@ Environment:
 
 INT
 MbgenInitializeContext (
-    PMBGEN_CONTEXT Context
+    PMBGEN_CONTEXT Context,
+    INT ArgumentCount,
+    PSTR *Arguments
     );
 
 VOID
@@ -200,12 +201,11 @@ MbgenDestroySource (
 
 struct option MbgenLongOptions[] = {
     {"args", required_argument, 0, 'a'},
-    {"build-file", required_argument, 0, 'B'},
     {"debug", no_argument, 0, 'D'},
     {"format", required_argument, 0, 'f'},
+    {"input", required_argument, 0, 'i'},
     {"dry-run", no_argument, 0, 'n'},
-    {"project", required_argument, 0, 'p'},
-    {"root", required_argument, 0, 'r'},
+    {"output", required_argument, 0, 'o'},
     {"help", no_argument, 0, 'h'},
     {"verbose", no_argument, 0, 'v'},
     {"version", no_argument, 0, 'V'},
@@ -399,7 +399,7 @@ Return Value:
     INT Status;
 
     srand(time(NULL) ^ getpid());
-    Status = MbgenInitializeContext(&Context);
+    Status = MbgenInitializeContext(&Context, ArgumentCount, Arguments);
     if (Status != 0) {
         goto mainEnd;
     }
@@ -447,19 +447,12 @@ Return Value:
                 goto mainEnd;
             }
 
-            break;
+            //
+            // Save it so the command line can be recreated later.
+            //
 
-        case 'B':
-            Context.BuildFileName = optarg;
-            if (strchr(optarg, '/') != NULL) {
-                fprintf(stderr,
-                        "Error: Build file should just be a file name, not a "
-                        "path.\n");
-
-                Status = EINVAL;
-                goto mainEnd;
-            }
-
+            Context.CommandScripts[Context.CommandScriptCount] = optarg;
+            Context.CommandScriptCount += 1;
             break;
 
         case 'D':
@@ -488,25 +481,35 @@ Return Value:
 
             break;
 
-        case 'n':
-            Context.Options |= MBGEN_OPTION_DRY_RUN;
-            break;
-
-        case 'P':
-            Context.ProjectFileName = optarg;
-            if (strchr(optarg, '/') != NULL) {
-                fprintf(stderr,
-                        "Error: Project file should just be a file name, not a "
-                        "path.\n");
-
-                Status = EINVAL;
+        case 'i':
+            Context.ProjectFilePath = strdup(optarg);
+            if (Context.ProjectFilePath == NULL) {
+                Status = ENOMEM;
                 goto mainEnd;
             }
 
             break;
 
-        case 'r':
-            Context.SourceRoot = strdup(optarg);
+        case 'n':
+            Context.Options |= MBGEN_OPTION_DRY_RUN;
+            break;
+
+        case 'o':
+            Context.BuildRoot = MbgenGetAbsoluteDirectory(optarg);
+            if (Context.BuildRoot == NULL) {
+                Status = errno;
+                if (Status == 0) {
+                    Status = -1;
+                }
+
+                fprintf(stderr,
+                        "Error: Invalid build directory %s: %s\n",
+                        optarg,
+                        strerror(errno));
+
+                goto mainEnd;
+            }
+
             break;
 
         case 'v':
@@ -542,25 +545,17 @@ Return Value:
     //
 
     ArgumentIndex = optind;
-    if (ArgumentIndex == ArgumentCount - 1) {
-        Context.BuildRoot = strdup(Arguments[ArgumentIndex]);
-
-    } else if (ArgumentIndex < ArgumentCount) {
+    if (ArgumentIndex != ArgumentCount) {
         fprintf(stderr, "Too many arguments. Try --help for usage.\n");
         Status = EINVAL;
         goto mainEnd;
-
-    } else {
-        Context.BuildRoot = getcwd(NULL, 0);
-        if (Context.BuildRoot == NULL) {
-            Status = errno;
-            goto mainEnd;
-        }
     }
 
-    Status = MbgenFindSourceRoot(&Context);
-    if (Status != 0) {
-        goto mainEnd;
+    if (Context.ProjectFilePath == NULL) {
+        Status = MbgenFindProjectFile(&Context);
+        if (Status != 0) {
+            goto mainEnd;
+        }
     }
 
     //
@@ -596,7 +591,7 @@ Return Value:
         }
 
         if ((Context.Options & MBGEN_OPTION_VERBOSE) != 0) {
-            printf("Creating build directories...\n");
+            printf("Creating build directories...");
         }
 
         //
@@ -607,10 +602,14 @@ Return Value:
         Status = MbgenCreateDirectories(&Context, &(Context.BuildDirectories));
         if (Status != 0) {
             fprintf(stderr,
-                    "Failed to create build directories: %s.\n",
+                    "\nFailed to create build directories: %s.\n",
                     strerror(Status));
 
             goto mainEnd;
+        }
+
+        if ((Context.Options & MBGEN_OPTION_VERBOSE) != 0) {
+            printf("done\n");
         }
 
         break;
@@ -635,6 +634,71 @@ mainEnd:
     }
 
     return Status;
+}
+
+VOID
+MbgenPrintRebuildCommand (
+    PMBGEN_CONTEXT Context,
+    FILE *File
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints the command needed to re-execute this invocation of
+    the program.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    File - Supplies a pointer to the file to print to.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSTR Format;
+    UINTN Index;
+
+    switch (Context->Format) {
+    case MbgenOutputMake:
+        Format = "make";
+        break;
+
+    case MbgenOutputNinja:
+        Format = "ninja";
+        break;
+
+    case MbgenOutputNone:
+        Format = "none";
+        break;
+
+    default:
+
+        assert(FALSE);
+
+        Format = "unknown";
+        break;
+    }
+
+    fprintf(File,
+            "%s --input=\"%s\" --output=\"%s\" --format=%s",
+            Context->Executable,
+            Context->ProjectFilePath,
+            Context->BuildRoot,
+            Format);
+
+    for (Index = 0; Index < Context->CommandScriptCount; Index += 1) {
+        fprintf(File, " --args='%s'", Context->CommandScripts[Index]);
+    }
+
+    return;
 }
 
 INT
@@ -812,7 +876,9 @@ Return Value:
 
 INT
 MbgenInitializeContext (
-    PMBGEN_CONTEXT Context
+    PMBGEN_CONTEXT Context,
+    INT ArgumentCount,
+    PSTR *Arguments
     )
 
 /*++
@@ -825,6 +891,10 @@ Arguments:
 
     Context - Supplies a pointer to the context to initialize.
 
+    ArgumentCount - Supplies the number of arguments on the command line.
+
+    Arguments - Supplies the arguments from the command line.
+
 Return Value:
 
     0 on success.
@@ -835,15 +905,33 @@ Return Value:
 
 {
 
+    UINTN AllocationSize;
+    INT Status;
+
+    if (ArgumentCount < 1) {
+        return EINVAL;
+    }
+
     memset(Context, 0, sizeof(MBGEN_CONTEXT));
+    Context->Executable = Arguments[0];
     Context->Format = MbgenOutputInvalid;
     INITIALIZE_LIST_HEAD(&(Context->ScriptList));
     INITIALIZE_LIST_HEAD(&(Context->ToolList));
     INITIALIZE_LIST_HEAD(&(Context->PoolList));
-    ChalkInitializeInterpreter(&(Context->Interpreter));
-    Context->ProjectFileName = MBGEN_PROJECT_FILE;
-    Context->BuildFileName = MBGEN_BUILD_FILE;
-    return 0;
+    Status = ChalkInitializeInterpreter(&(Context->Interpreter));
+    if (Status != 0) {
+        return Status;
+    }
+
+    AllocationSize = (ArgumentCount - 1) * sizeof(PSTR);
+    Context->CommandScripts = malloc(AllocationSize);
+    if (Context->CommandScripts == NULL) {
+        return ENOMEM;
+    }
+
+    memset(Context->CommandScripts, 0, AllocationSize);
+    Status = 0;
+    return Status;
 }
 
 VOID
@@ -909,6 +997,18 @@ Return Value:
     if (Context->FormatString != NULL) {
         free(Context->FormatString);
         Context->FormatString = NULL;
+    }
+
+    if (Context->BuildFileName != NULL) {
+        free(Context->BuildFileName);
+    }
+
+    if (Context->ProjectFilePath != NULL) {
+        free(Context->ProjectFilePath);
+    }
+
+    if (Context->CommandScripts != NULL) {
+        free(Context->CommandScripts);
     }
 
     ChalkDestroyInterpreter(&(Context->Interpreter));
@@ -1140,8 +1240,8 @@ Return Value:
         Advance = 2;
         Target->Tree = MbgenBuildTree;
 
-    } else if (*(Target->Output) == '/') {
-        Advance = 1;
+    } else if (MBGEN_IS_ABSOLUTE_PATH(Target->Output)) {
+        Advance = 0;
         Target->Tree = MbgenAbsolutePath;
 
     //
@@ -2043,7 +2143,7 @@ Return Value:
             break;
 
         case MbgenAbsolutePath:
-            ScriptRoot = "/";
+            ScriptRoot = "";
             break;
 
         default:
@@ -2056,7 +2156,8 @@ Return Value:
 
         ScriptPath = Script->Path;
         if (Script->Path == NULL) {
-            ScriptPath = Context->ProjectFileName;
+            ScriptPath = Context->ProjectFilePath;
+            ScriptRoot = "";
         }
 
         printf("Script: %s%s (%d bytes, %d targets)\n",

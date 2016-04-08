@@ -38,6 +38,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
+#define MBGEN_NINJA_FILE "build.ninja"
 #define MBGEN_NINJA_VARIABLE "${%s}"
 #define MBGEN_NINJA_LINE_CONTINUATION " $\n"
 #define MBGEN_NINJA_INPUTS "$in"
@@ -50,6 +51,12 @@ Environment:
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
+
+VOID
+MbgenNinjaPrintRebuildRule (
+    PMBGEN_CONTEXT Context,
+    FILE *File
+    );
 
 VOID
 MbgenNinjaPrintWithVariableConversion (
@@ -145,7 +152,7 @@ Return Value:
     PMBGEN_TOOL Tool;
 
     File = NULL;
-    NinjaPath = MbgenAppendPaths(Context->BuildRoot, "build.ninja");
+    NinjaPath = MbgenAppendPaths(Context->BuildRoot, MBGEN_NINJA_FILE);
     if (NinjaPath == NULL) {
         Status = ENOMEM;
         goto CreateNinjaEnd;
@@ -172,8 +179,21 @@ Return Value:
             ctime(&Time));
 
     fprintf(File, "# Define high level variables\n");
-    fprintf(File, "SOURCE_ROOT = %s\n", Context->SourceRoot);
-    fprintf(File, "BUILD_ROOT = %s\n", Context->BuildRoot);
+    fprintf(File,
+            "%s = %s\n",
+            MBGEN_VARIABLE_SOURCE_ROOT,
+            Context->SourceRoot);
+
+    fprintf(File,
+            "%s = %s\n",
+            MBGEN_VARIABLE_BUILD_ROOT,
+            Context->BuildRoot);
+
+    fprintf(File,
+            "%s = %s\n",
+            MBGEN_VARIABLE_PROJECT_PATH,
+            Context->ProjectFilePath);
+
     MbgenNinjaPrintConfig(File, Context, NULL);
     fprintf(File, "\n# Define tools\n");
     CurrentEntry = Context->ToolList.Next;
@@ -208,7 +228,7 @@ Return Value:
     }
 
     if (!LIST_EMPTY(&(Context->PoolList))) {
-        fprintf(File, "\n# Define pools");
+        fprintf(File, "# Define pools");
     }
 
     PoolEntry = Context->PoolList.Next;
@@ -218,11 +238,12 @@ Return Value:
         PoolEntry = PoolEntry->Next;
     }
 
+    fprintf(File, "\n");
+
     //
     // Loop over every script (file) in the build.
     //
 
-    fprintf(File, "\n# Define targets\n");
     ScriptEntry = Context->ScriptList.Next;
     while (ScriptEntry != &(Context->ScriptList)) {
         Script = LIST_VALUE(ScriptEntry, MBGEN_SCRIPT, ListEntry);
@@ -367,13 +388,15 @@ Return Value:
                 (Target->OrderOnly.Count != 0) ||
                 ((Target->Config != NULL) &&
                  (!LIST_EMPTY(&(Target->Config->Dict.EntryList)))) ||
-                (Target->Pool != NULL)) {
+                (Target->Pool != NULL) ||
+                (CurrentEntry == &(Script->TargetList))) {
 
                 fprintf(File, "\n");
             }
         }
     }
 
+    MbgenNinjaPrintRebuildRule(Context, File);
     Status = 0;
 
 CreateNinjaEnd:
@@ -391,6 +414,78 @@ CreateNinjaEnd:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+MbgenNinjaPrintRebuildRule (
+    PMBGEN_CONTEXT Context,
+    FILE *File
+    )
+
+/*++
+
+Routine Description:
+
+    This routine emits the built in target that rebuilds the Makefile itself
+    based on the source scripts.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    File - Supplies a pointer to the file to print the build directories to.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSTR BuildFileName;
+    PLIST_ENTRY CurrentEntry;
+    PMBGEN_SCRIPT Script;
+
+    BuildFileName = Context->BuildFileName;
+    if (BuildFileName == NULL) {
+        BuildFileName = MBGEN_BUILD_FILE;
+    }
+
+    fprintf(File,
+            "# Built-in tool and rule for rebuilding the ninja file itself.\n");
+
+    fprintf(File,
+            "rule rebuild_ninja\n"
+            "    description = Rebuilding Ninja file\n"
+            "    command = ");
+
+    MbgenPrintRebuildCommand(Context, File);
+    fprintf(File, "\n\n");
+    fprintf(File, "build %s: rebuild_ninja ", MBGEN_NINJA_FILE);
+    CurrentEntry = Context->ScriptList.Next;
+    while (CurrentEntry != &(Context->ScriptList)) {
+        Script = LIST_VALUE(CurrentEntry, MBGEN_SCRIPT, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        if (strcmp(Script->CompletePath, Context->ProjectFilePath) == 0) {
+            fprintf(File, MBGEN_NINJA_VARIABLE, MBGEN_VARIABLE_PROJECT_PATH);
+
+        } else if (Script->Order == MbgenScriptOrderTarget) {
+            MbgenNinjaPrintTreeRoot(File, Script->Root);
+            fprintf(File, "/%s/%s", Script->Path, BuildFileName);
+
+        } else {
+            MbgenNinjaPrintTreeRoot(File, Script->Root);
+            fprintf(File, "/%s", Script->Path);
+        }
+
+        if (CurrentEntry != &(Context->ScriptList)) {
+            fprintf(File, MBGEN_NINJA_LINE_CONTINUATION "        ");
+        }
+    }
+
+    fprintf(File, "\n");
+    return;
+}
 
 VOID
 MbgenNinjaPrintWithVariableConversion (
@@ -624,11 +719,11 @@ Return Value:
 
     switch (Tree) {
     case MbgenSourceTree:
-        fprintf(File, MBGEN_NINJA_VARIABLE, "SOURCE_ROOT");
+        fprintf(File, MBGEN_NINJA_VARIABLE, MBGEN_VARIABLE_SOURCE_ROOT);
         break;
 
     case MbgenBuildTree:
-        fprintf(File, MBGEN_NINJA_VARIABLE, "BUILD_ROOT");
+        fprintf(File, MBGEN_NINJA_VARIABLE, MBGEN_VARIABLE_BUILD_ROOT);
         break;
 
     case MbgenAbsolutePath:

@@ -37,6 +37,11 @@ Author:
 #define MBGEN_IS_BUILD_ROOT_RELATIVE(_String) \
     (((_String)[0] == '^') && ((_String)[1] == '/'))
 
+#define MBGEN_IS_ABSOLUTE_PATH(_String) \
+    (((_String)[0] == '/') || ((_String)[0] == '\\') || \
+     ((isalpha((_String)[0]) != 0) && ((_String)[1] == ':') && \
+      (((_String)[2] == '/') || ((_String)[2] == '\\'))))
+
 #define MBGEN_IS_NAME(_Character) \
     ((MBGEN_IS_NAME0(_Character)) || \
      (((_Character) >= '0') && ((_Character) <= '9')))
@@ -50,11 +55,14 @@ Author:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define MBGEN_PROJECT_FILE ".mbproj"
-#define MBGEN_BUILD_FILE "build.mb"
+#define MBGEN_PROJECT_FILE ".mgproj"
+#define MBGEN_BUILD_FILE "build.ck"
 #define MBGEN_DEFAULT_NAME "//:"
 
 #define MBGEN_BUILD_DIRECTORIES_FILE ".builddirs"
+#define MBGEN_VARIABLE_SOURCE_ROOT "SOURCE_ROOT"
+#define MBGEN_VARIABLE_BUILD_ROOT "BUILD_ROOT"
+#define MBGEN_VARIABLE_PROJECT_PATH "MG_PROJECT_PATH"
 
 #define MBGEN_OPTION_VERBOSE 0x00000001
 #define MBGEN_OPTION_DEBUG 0x00000002
@@ -148,6 +156,8 @@ Structure Description:
 
 Members:
 
+    Executable - Stores the value of argv[0].
+
     Options - Stores the bitfield of application options. see MBGEN_OPTION_*
         definitions.
 
@@ -158,8 +168,8 @@ Members:
     FormatString - Stores the default format string specified in the project
         root.
 
-    ProjectFileName - Stores a pointer to the project file name (just the name,
-        not the directory).
+    ProjectFilePath - Stores a pointer to the complete path to the project
+        file.
 
     BuildFileName - Stores a pointer ot the build file name to look for in each
         directory.
@@ -186,14 +196,21 @@ Members:
 
     BuildDirectories - Stores the array of build directories.
 
+    CommandScripts - Stores a pointer to an array of command line scripts that
+        were specified.
+
+    CommandScriptCount - Stores the number of command line scripts in the
+        array.
+
 --*/
 
 typedef struct _MBGEN_CONTEXT {
+    PSTR Executable;
     ULONG Options;
     CHALK_INTERPRETER Interpreter;
     MBGEN_OUTPUT_FORMAT Format;
     PSTR FormatString;
-    PSTR ProjectFileName;
+    PSTR ProjectFilePath;
     PSTR BuildFileName;
     PSTR SourceRoot;
     PSTR BuildRoot;
@@ -204,6 +221,8 @@ typedef struct _MBGEN_CONTEXT {
     PCHALK_OBJECT GlobalConfig;
     LIST_ENTRY PoolList;
     MBGEN_PATH_LIST BuildDirectories;
+    PSTR *CommandScripts;
+    ULONG CommandScriptCount;
 } MBGEN_CONTEXT, *PMBGEN_CONTEXT;
 
 /*++
@@ -286,6 +305,8 @@ Members:
 
     CompletePath - Stores the complete file path to the script.
 
+    Order - Stores the script order.
+
     Script - Stores a pointer to the script contents.
 
     Size - Stores the size of the script file in bytes, not including the
@@ -304,6 +325,7 @@ typedef struct _MBGEN_SCRIPT {
     MBGEN_DIRECTORY_TREE Root;
     PSTR Path;
     PSTR CompletePath;
+    MBGEN_SCRIPT_ORDER Order;
     PSTR Script;
     UINTN Size;
     PCHALK_OBJECT Result;
@@ -456,6 +478,31 @@ typedef struct _MBGEN_POOL {
 //
 // Main application functions
 //
+
+VOID
+MbgenPrintRebuildCommand (
+    PMBGEN_CONTEXT Context,
+    FILE *File
+    );
+
+/*++
+
+Routine Description:
+
+    This routine prints the command needed to re-execute this invocation of
+    the program.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    File - Supplies a pointer to the file to print to.
+
+Return Value:
+
+    None.
+
+--*/
 
 INT
 MbgenParseScriptResults (
@@ -719,6 +766,29 @@ Return Value:
 --*/
 
 INT
+MbgenFindProjectFile (
+    PMBGEN_CONTEXT Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine finds the top level project file.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+INT
 MbgenFindSourceRoot (
     PMBGEN_CONTEXT Context
     );
@@ -727,7 +797,7 @@ MbgenFindSourceRoot (
 
 Routine Description:
 
-    This routine finds or validates the source root directory.
+    This routine nails down the source root directory.
 
 Arguments:
 

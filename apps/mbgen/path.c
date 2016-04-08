@@ -123,9 +123,8 @@ Return Value:
         Name += 2;
         Target->Root = MbgenBuildTree;
 
-    } else if (*Name == '/') {
+    } else if (MBGEN_IS_ABSOLUTE_PATH(Name)) {
         Target->Root = MbgenAbsolutePath;
-        Name += 1;
 
     } else {
 
@@ -289,7 +288,7 @@ Return Value:
 }
 
 INT
-MbgenFindSourceRoot (
+MbgenFindProjectFile (
     PMBGEN_CONTEXT Context
     )
 
@@ -297,7 +296,7 @@ MbgenFindSourceRoot (
 
 Routine Description:
 
-    This routine finds or validates the source root directory.
+    This routine finds the top level project file.
 
 Arguments:
 
@@ -315,91 +314,77 @@ Return Value:
 
     PSTR CurrentDirectory;
     int Descriptor;
+    PSTR FileName;
     PSTR PreviousDirectory;
-    PSTR SourceRoot;
     PSTR Start;
     int Status;
 
+    FileName = MBGEN_PROJECT_FILE;
     Start = getcwd(NULL, 0);
     if (Start == NULL) {
         return errno;
     }
 
     //
-    // Make sure it exists if it was specified by the user.
+    // Attempt to open a project root file in each directory.
     //
 
-    if (Context->SourceRoot != NULL) {
-        SourceRoot = MbgenGetAbsoluteDirectory(Context->SourceRoot);
-        if (SourceRoot == NULL) {
-            Status = errno;
-            fprintf(stderr,
-                    "Error: Invalid source root directory %s: %s.\n",
-                    Context->SourceRoot,
-                    strerror(Status));
-
-            goto SetupRootDirectoriesEnd;
+    PreviousDirectory = NULL;
+    while (TRUE) {
+        CurrentDirectory = MbgenGetAbsoluteDirectory(".");
+        if (CurrentDirectory == NULL) {
+            break;
         }
 
-        free(Context->SourceRoot);
-        Context->SourceRoot = SourceRoot;
+        Descriptor = open(FileName, O_RDONLY);
+        if (Descriptor >= 0) {
+            close(Descriptor);
+            Context->ProjectFilePath = MbgenAppendPaths(CurrentDirectory,
+                                                        FileName);
 
-    } else {
-
-        //
-        // Attempt to open a project root file in each directory.
-        //
-
-        PreviousDirectory = NULL;
-        while (TRUE) {
-            CurrentDirectory = MbgenGetAbsoluteDirectory(".");
-            if (CurrentDirectory == NULL) {
-                break;
-            }
-
-            Descriptor = open(Context->ProjectFileName, O_RDONLY);
-            if (Descriptor >= 0) {
-                close(Descriptor);
-                Context->SourceRoot = CurrentDirectory;
-                break;
-            }
-
-            //
-            // Check to see if this directory is the same as the previous
-            // directory, indicating that the file system root has been hit.
-            //
-
-            if (PreviousDirectory != NULL) {
-                if (strcmp(CurrentDirectory, PreviousDirectory) == 0) {
-                    errno = ENOENT;
-                    break;
-                }
-
-                free(PreviousDirectory);
-            }
-
-            PreviousDirectory = CurrentDirectory;
-            if (chdir("..") != 0) {
-                break;
-            }
+            break;
         }
+
+        //
+        // Check to see if this directory is the same as the previous
+        // directory, indicating that the file system root has been hit.
+        //
 
         if (PreviousDirectory != NULL) {
+            if (strcmp(CurrentDirectory, PreviousDirectory) == 0) {
+                errno = ENOENT;
+                break;
+            }
+
             free(PreviousDirectory);
+        }
+
+        PreviousDirectory = CurrentDirectory;
+        if (chdir("..") != 0) {
+            break;
         }
     }
 
-    if (Context->SourceRoot != NULL) {
+    if (PreviousDirectory != NULL) {
+        free(PreviousDirectory);
+    }
+
+    if (CurrentDirectory != NULL) {
+        free(CurrentDirectory);
+    }
+
+    if (Context->ProjectFilePath != NULL) {
         errno = 0;
 
     } else {
         fprintf(stderr,
-                "Error: Failed to find project root file %s.\n",
-                Context->ProjectFileName);
+                "Error: Failed to find project root file %s in the current "
+                "directory or any parent directory.\n",
+                FileName);
 
         Status = errno;
         if (Status == 0) {
-            Status = EINVAL;
+            Status = ENOENT;
         }
 
         goto SetupRootDirectoriesEnd;
@@ -411,6 +396,112 @@ SetupRootDirectoriesEnd:
     if (Start != NULL) {
         chdir(Start);
         free(Start);
+    }
+
+    return Status;
+}
+
+INT
+MbgenFindSourceRoot (
+    PMBGEN_CONTEXT Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine nails down the source root directory.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+{
+
+    PSTR AppendedPath;
+    PSTR ProjectDirectory;
+    PSTR ProjectFile;
+    PSTR ProjectFileName;
+    INT Status;
+
+    ProjectDirectory = NULL;
+    ProjectFile = strdup(Context->ProjectFilePath);
+    if (ProjectFile == NULL) {
+        Status = ENOMEM;
+        goto FindSourceRootEnd;
+    }
+
+    MbgenSplitPath(ProjectFile, &ProjectDirectory, &ProjectFileName);
+    ProjectDirectory = MbgenGetAbsoluteDirectory(ProjectDirectory);
+    if (ProjectDirectory == NULL) {
+        Status = errno;
+        if (Status == 0) {
+            Status = -1;
+        }
+
+        goto FindSourceRootEnd;
+    }
+
+    //
+    // If no source directory was specified in the project file, then the
+    // default is that the directory the project file was in is the source root.
+    //
+
+    if (Context->SourceRoot == NULL) {
+        Context->SourceRoot = ProjectDirectory;
+        ProjectDirectory = NULL;
+        Status = 0;
+        goto FindSourceRootEnd;
+    }
+
+    //
+    // If the source path specified in the project file is absolute (not
+    // recommended), then leave it alone.
+    //
+
+    if (MBGEN_IS_ABSOLUTE_PATH(Context->SourceRoot)) {
+        Status = 0;
+        goto FindSourceRootEnd;
+    }
+
+    AppendedPath = MbgenAppendPaths(ProjectDirectory, Context->SourceRoot);
+    if (AppendedPath == NULL) {
+        Status = ENOMEM;
+        goto FindSourceRootEnd;
+    }
+
+    free(ProjectDirectory);
+    ProjectDirectory = MbgenGetAbsoluteDirectory(AppendedPath);
+    free(AppendedPath);
+    if (ProjectDirectory == NULL) {
+        Status = errno;
+        if (Status == 0) {
+            Status = -1;
+        }
+
+        goto FindSourceRootEnd;
+    }
+
+    free(Context->SourceRoot);
+    Context->SourceRoot = ProjectDirectory;
+    ProjectDirectory = NULL;
+    Status = 0;
+
+FindSourceRootEnd:
+    if (ProjectFile != NULL) {
+        free(ProjectFile);
+    }
+
+    if (ProjectDirectory != NULL) {
+        free(ProjectDirectory);
     }
 
     return Status;
@@ -451,7 +542,7 @@ Return Value:
 
     assert(Tree == MbgenAbsolutePath);
 
-    return "/";
+    return "";
 }
 
 PSTR
@@ -1006,6 +1097,12 @@ Return Value:
 
     PSTR Current;
     PSTR Directory;
+    PSTR Original;
+
+    Original = getcwd(NULL, 0);
+    if (Original == NULL) {
+        return NULL;
+    }
 
     Directory = NULL;
     if (chdir(Path) != 0) {
@@ -1040,6 +1137,7 @@ Return Value:
     }
 
 GetAbsoluteDirectoryEnd:
+    chdir(Original);
     return Directory;
 }
 

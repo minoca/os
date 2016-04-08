@@ -91,6 +91,24 @@ CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
         ChalkCString,
         "default_build_dir",
         offsetof(MBGEN_CONTEXT, BuildRoot),
+        FALSE,
+        {0}
+    },
+
+    {
+        ChalkCString,
+        "build_file_name",
+        offsetof(MBGEN_CONTEXT, BuildFileName),
+        FALSE,
+        {0}
+    },
+
+    {
+        ChalkCString,
+        "source_root",
+        offsetof(MBGEN_CONTEXT, SourceRoot),
+        FALSE,
+        {0}
     },
 
     {0}
@@ -179,7 +197,8 @@ Return Value:
     }
 
     memset(&TargetPath, 0, sizeof(MBGEN_PATH));
-    TargetPath.Root = MbgenSourceTree;
+    TargetPath.Root = MbgenAbsolutePath;
+    TargetPath.Path = Context->ProjectFilePath;
     Status = MbgenLoadScript(Context,
                              MbgenScriptOrderProjectRoot,
                              &TargetPath,
@@ -211,6 +230,15 @@ Return Value:
 
     if (Context->BuildRoot != BuildRoot) {
         free(BuildRoot);
+    }
+
+    Status = MbgenFindSourceRoot(Context);
+    if (Status != 0) {
+        fprintf(stderr,
+                "Error: Unable to determine source root directory: %s.\n",
+                strerror(Status));
+
+        goto LoadProjectRootEnd;
     }
 
     //
@@ -419,6 +447,7 @@ Return Value:
 
 {
 
+    PSTR BuildFileName;
     ULONG ExecuteOrder;
     FILE *File;
     PSTR FinalPath;
@@ -430,30 +459,27 @@ Return Value:
     File = NULL;
     FinalPath = NULL;
     Script = NULL;
-    if (Order == MbgenScriptOrderProjectRoot) {
+    Script = MbgenFindScript(Context, TargetPath);
+    if (Script != NULL) {
+        Status = 0;
+        goto LoadScriptEnd;
+    }
 
-        assert((TargetPath->Root == MbgenSourceTree) &&
-               (LIST_EMPTY(&(Context->ScriptList))));
+    Tree = MbgenPathForTree(Context, TargetPath->Root);
+    if ((Order == MbgenScriptOrderGlobal) ||
+        (Order == MbgenScriptOrderProjectRoot)) {
 
-        FinalPath = MbgenAppendPaths(Context->SourceRoot,
-                                     Context->ProjectFileName);
+        FinalPath = MbgenAppendPaths(Tree, TargetPath->Path);
 
     } else {
-        Script = MbgenFindScript(Context, TargetPath);
-        if (Script != NULL) {
-            Status = 0;
-            goto LoadScriptEnd;
+        BuildFileName = Context->BuildFileName;
+        if (BuildFileName == NULL) {
+            BuildFileName = MBGEN_BUILD_FILE;
         }
 
-        Tree = MbgenPathForTree(Context, TargetPath->Root);
-        if (Order == MbgenScriptOrderGlobal) {
-            FinalPath = MbgenAppendPaths(Tree, TargetPath->Path);
-
-        } else {
-            FinalPath = MbgenAppendPaths3(Tree,
-                                          TargetPath->Path,
-                                          Context->BuildFileName);
-        }
+        FinalPath = MbgenAppendPaths3(Tree,
+                                      TargetPath->Path,
+                                      BuildFileName);
     }
 
     if (FinalPath == NULL) {
@@ -492,6 +518,7 @@ Return Value:
 
     memset(Script, 0, sizeof(MBGEN_SCRIPT));
     INITIALIZE_LIST_HEAD(&(Script->TargetList));
+    Script->Order = Order;
     Script->Root = TargetPath->Root;
     Script->CompletePath = FinalPath;
     if (TargetPath->Path != NULL) {
