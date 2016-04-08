@@ -25,7 +25,7 @@
 ##
 
 APPS = efiboot  \
-       mbgen    \
+       mingen   \
        mount    \
        netcon   \
        profile  \

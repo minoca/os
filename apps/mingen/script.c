@@ -33,7 +33,7 @@ Environment:
 #include <string.h>
 #include <sys/stat.h>
 
-#include "mbgen.h"
+#include "mingen.h"
 
 //
 // ---------------------------------------------------------------- Definitions

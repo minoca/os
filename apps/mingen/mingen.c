@@ -4,7 +4,7 @@ Copyright (c) 2015 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    mbgen.c
+    mingen.c
 
 Abstract:
 
@@ -36,7 +36,7 @@ Environment:
 #include <time.h>
 #include <unistd.h>
 
-#include "mbgen.h"
+#include "mingen.h"
 
 //
 // ---------------------------------------------------------------- Definitions

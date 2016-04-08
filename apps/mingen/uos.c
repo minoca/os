@@ -29,7 +29,7 @@ Environment:
 #include <string.h>
 #include <sys/utsname.h>
 
-#include "mbgen.h"
+#include "mingen.h"
 
 //
 // ---------------------------------------------------------------- Definitions

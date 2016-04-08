@@ -4,7 +4,7 @@ Copyright (c) 2015 Minoca Corp. All Rights Reserved
 
 Module Name:
 
-    mbgen.h
+    mingen.h
 
 Abstract:
 

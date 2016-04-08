@@ -34,7 +34,7 @@ Environment:
 #include <string.h>
 #include <unistd.h>
 
-#include "mbgen.h"
+#include "mingen.h"
 
 //
 // --------------------------------------------------------------------- Macros

@@ -31,7 +31,7 @@ Environment:
 #include <stdlib.h>
 #include <string.h>
 
-#include "mbgen.h"
+#include "mingen.h"
 
 //
 // ---------------------------------------------------------------- Definitions
