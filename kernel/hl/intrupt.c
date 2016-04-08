@@ -646,6 +646,7 @@ Return Value:
 
     ULONG ArrayIndex;
     PKINTERRUPT *InterruptTable;
+    RUNLEVEL OldRunLevel;
     PPROCESSOR_BLOCK ProcessorBlock;
 
     //
@@ -655,9 +656,11 @@ Return Value:
 
     ArrayIndex = Interrupt->Vector - HlFirstConfigurableVector;
     HlpInterruptAcquireLock();
+    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     ProcessorBlock = KeGetCurrentProcessorBlock();
     InterruptTable = (PKINTERRUPT *)ProcessorBlock->InterruptTable;
     Interrupt->NextInterrupt = InterruptTable[ArrayIndex];
+    KeLowerRunLevel(OldRunLevel);
 
     //
     // Make sure the new interrupt's pointer is visible everywhere before
@@ -702,6 +705,7 @@ Return Value:
 
     ULONG ArrayIndex;
     PKINTERRUPT *InterruptTable;
+    RUNLEVEL OldRunLevel;
     PKINTERRUPT Previous;
     ULONG Processor;
     PPROCESSOR_BLOCK ProcessorBlock;
@@ -717,6 +721,7 @@ Return Value:
 
     ArrayIndex = Interrupt->Vector - HlFirstConfigurableVector;
     HlpInterruptAcquireLock();
+    OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
     ProcessorBlock = KeGetCurrentProcessorBlock();
     InterruptTable = (PKINTERRUPT *)ProcessorBlock->InterruptTable;
 
@@ -751,6 +756,7 @@ Return Value:
         InterruptTable[ArrayIndex] = Interrupt->NextInterrupt;
     }
 
+    KeLowerRunLevel(OldRunLevel);
     HlpInterruptReleaseLock();
 
     //

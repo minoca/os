@@ -203,6 +203,8 @@ Return Value:
             RunLevel = KeRaiseRunLevel(Controller->RunLevel);
         }
 
+        ASSERT(KeGetRunLevel() >= RunLevelDispatch);
+
         Processor = KeGetCurrentProcessorBlock();
         HlpRunIsr(NULL, Processor, Vector, Controller);
         if (Processor->RunLevel != RunLevel) {
