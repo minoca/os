@@ -899,6 +899,15 @@ Return Value:
 
     KSTATUS Status;
 
+    if (Controller->ClockSpeed > SdClock25MHz) {
+        RtlDebugPrint("SD: Clocking down to 25MHz.\n");
+        Controller->ClockSpeed = SdClock25MHz;
+        Status = SdpSetBusParameters(Controller);
+        if (!KSUCCESS(Status)) {
+            goto ErrorRecoveryEnd;
+        }
+    }
+
     //
     // Perform an asychronous abort, which will clear any interrupts, abort the
     // command and reset the command and data lines. This will also wait until
@@ -908,15 +917,6 @@ Return Value:
     Status = SdpAsynchronousAbort(Controller);
     if (!KSUCCESS(Status)) {
         goto ErrorRecoveryEnd;
-    }
-
-    if (Controller->ClockSpeed > SdClock25MHz) {
-        RtlDebugPrint("SD: Clocking down to 25MHz.\n");
-        Controller->ClockSpeed = SdClock25MHz;
-        Status = SdpSetBusParameters(Controller);
-        if (!KSUCCESS(Status)) {
-            goto ErrorRecoveryEnd;
-        }
     }
 
 ErrorRecoveryEnd:
@@ -2860,14 +2860,6 @@ Return Value:
               (Frequency * SD_CONTROLLER_STATUS_TIMEOUT);
 
     while (TRUE) {
-        Status = Controller->FunctionTable.SendCommand(
-                                                   Controller,
-                                                   Controller->ConsumerContext,
-                                                   &Command);
-
-        if (!KSUCCESS(Status)) {
-            goto AsynchronousAbortEnd;
-        }
 
         //
         // Reset the command and data lines.
@@ -2878,6 +2870,15 @@ Return Value:
                                                    Controller,
                                                    Controller->ConsumerContext,
                                                    ResetFlags);
+
+        if (!KSUCCESS(Status)) {
+            goto AsynchronousAbortEnd;
+        }
+
+        Status = Controller->FunctionTable.SendCommand(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
 
         if (!KSUCCESS(Status)) {
             goto AsynchronousAbortEnd;

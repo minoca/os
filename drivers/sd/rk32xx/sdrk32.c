@@ -2114,7 +2114,12 @@ Return Value:
     ASSERT(Irp != NULL);
 
     if (!KSUCCESS(Status)) {
-        RtlDebugPrint("SD RK32xx Failed: %x\n", Status);
+        RtlDebugPrint("SD RK32xx Failed %x %I64x %x: %x\n",
+                      Irp->MinorCode,
+                      Irp->U.ReadWrite.IoOffset,
+                      Irp->U.ReadWrite.IoSizeInBytes,
+                      Status);
+
         IoCompleteIrp(SdRk32Driver, Irp, Status);
         return;
     }
@@ -3214,6 +3219,7 @@ Return Value:
 
 {
 
+    ULONG Control;
     PSD_RK32_CONTEXT Device;
     ULONGLONG Frequency;
     ULONG ResetMask;
@@ -3241,8 +3247,11 @@ Return Value:
         HlBusySpin(10000);
     }
 
-    Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
-    Value |= ResetMask;
+    Control = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+    Value = (Control | ResetMask) &
+            ~(SD_DWC_CONTROL_DMA_ENABLE |
+              SD_DWC_CONTROL_USE_INTERNAL_DMAC);
+
     SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Value);
     Status = STATUS_TIMEOUT;
     Timeout = SdQueryTimeCounter(Controller) + (Frequency * SD_RK32_TIMEOUT);
@@ -3284,8 +3293,10 @@ Return Value:
 
     ResetMask = SD_DWC_CONTROL_FIFO_RESET;
     Device = (PSD_RK32_CONTEXT)Context;
-    Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
-    Value |= ResetMask;
+    Value = (Control | ResetMask) &
+            ~(SD_DWC_CONTROL_DMA_ENABLE |
+              SD_DWC_CONTROL_USE_INTERNAL_DMAC);
+
     SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Value);
     Status = STATUS_TIMEOUT;
     Timeout = SdQueryTimeCounter(Controller) + (Frequency * SD_RK32_TIMEOUT);
@@ -3323,6 +3334,15 @@ Return Value:
     if (!KSUCCESS(Status)) {
         return Status;
     }
+
+    //
+    // Restore the original control, and update the clock.
+    //
+
+    SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Control);
+    SD_DWC_WRITE_REGISTER(Device,
+                          SdDwcCommand,
+                          SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS);
 
     return STATUS_SUCCESS;
 }
@@ -3963,6 +3983,12 @@ Return Value:
     } while (SdQueryTimeCounter(Controller) <= Timeout);
 
     SD_DWC_WRITE_REGISTER(Device, SdDwcInterruptStatus, Value);
+    if (!KSUCCESS(Status)) {
+        goto GetSetVoltageEnd;
+    }
+
+    Mask = SD_RESET_FLAG_COMMAND_LINE | SD_RESET_FLAG_DATA_LINE;
+    Status = SdRk32ResetController(Controller, Device, Mask);
     if (!KSUCCESS(Status)) {
         goto GetSetVoltageEnd;
     }
