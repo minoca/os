@@ -38,7 +38,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define MBGEN_NINJA_VARIABLE "$%s"
+#define MBGEN_NINJA_VARIABLE "${%s}"
 #define MBGEN_NINJA_LINE_CONTINUATION " $\n"
 #define MBGEN_NINJA_INPUTS "$in"
 #define MBGEN_NINJA_OUTPUT "$out"
@@ -705,6 +705,18 @@ Return Value:
 
             continue;
         }
+
+        //
+        // Quietly ignore nulls.
+        //
+
+        if (Value->Header.Type == ChalkObjectNull) {
+            continue;
+        }
+
+        //
+        // Noisily ignore other types.
+        //
 
         if ((Value->Header.Type != ChalkObjectString) &&
             (Value->Header.Type != ChalkObjectInteger) &&

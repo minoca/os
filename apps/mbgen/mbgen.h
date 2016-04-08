@@ -719,7 +719,7 @@ Return Value:
 --*/
 
 INT
-MbgenSetupRootDirectories (
+MbgenFindSourceRoot (
     PMBGEN_CONTEXT Context
     );
 
@@ -727,8 +727,7 @@ MbgenSetupRootDirectories (
 
 Routine Description:
 
-    This routine finds or validates the source root directory, and validates
-    the build directory.
+    This routine finds or validates the source root directory.
 
 Arguments:
 
@@ -942,6 +941,31 @@ Return Value:
     0 on success.
 
     Returns an error number on failure.
+
+--*/
+
+PSTR
+MbgenGetAbsoluteDirectory (
+    PSTR Path
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts the given path into an absolute path by changing to
+    that directory.
+
+Arguments:
+
+    Path - Supplies a pointer to the directory path.
+
+Return Value:
+
+    Returns the absolute path of the given directory. It is the caller's
+    responsibility to free this memory.
+
+    NULL on allocation failure, or if the directory does not exist.
 
 --*/
 

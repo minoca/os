@@ -58,11 +58,6 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-PSTR
-MbgenGetAbsoluteDirectory (
-    PSTR Path
-    );
-
 int
 MbgenComparePaths (
     const void *LeftPointer,
@@ -294,7 +289,7 @@ Return Value:
 }
 
 INT
-MbgenSetupRootDirectories (
+MbgenFindSourceRoot (
     PMBGEN_CONTEXT Context
     )
 
@@ -302,8 +297,7 @@ MbgenSetupRootDirectories (
 
 Routine Description:
 
-    This routine finds or validates the source root directory, and validates
-    the build directory.
+    This routine finds or validates the source root directory.
 
 Arguments:
 
@@ -332,30 +326,9 @@ Return Value:
     }
 
     //
-    // Get the absolute path of the build directory.
-    //
-
-    assert(Context->BuildRoot != NULL);
-
-    CurrentDirectory = MbgenGetAbsoluteDirectory(Context->BuildRoot);
-    if (CurrentDirectory == NULL) {
-        Status = errno;
-        fprintf(stderr,
-                "Error: Invalid build root directory %s: %s.\n",
-                Context->BuildRoot,
-                strerror(Status));
-
-        goto SetupRootDirectoriesEnd;
-    }
-
-    free(Context->BuildRoot);
-    Context->BuildRoot = CurrentDirectory;
-
-    //
     // Make sure it exists if it was specified by the user.
     //
 
-    chdir(Start);
     if (Context->SourceRoot != NULL) {
         SourceRoot = MbgenGetAbsoluteDirectory(Context->SourceRoot);
         if (SourceRoot == NULL) {
@@ -436,6 +409,7 @@ Return Value:
 
 SetupRootDirectoriesEnd:
     if (Start != NULL) {
+        chdir(Start);
         free(Start);
     }
 
@@ -984,13 +958,11 @@ Return Value:
 
         } else {
             Result = mkdir(PathCopy, 0777);
-            if ((Result != 0) && (errno == EEXIST)) {
-                errno = 0;
-
-            } else {
+            if ((Result != 0) && (errno != EEXIST)) {
                 perror("Error: Failed to create directory");
             }
 
+            errno = 0;
             break;
         }
     }
@@ -1004,10 +976,6 @@ CreateDirectoryEnd:
 
     return Result;
 }
-
-//
-// --------------------------------------------------------- Internal Functions
-//
 
 PSTR
 MbgenGetAbsoluteDirectory (
@@ -1074,6 +1042,10 @@ Return Value:
 GetAbsoluteDirectoryEnd:
     return Directory;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 int
 MbgenComparePaths (

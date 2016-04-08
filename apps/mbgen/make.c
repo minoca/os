@@ -771,6 +771,18 @@ Return Value:
             continue;
         }
 
+        //
+        // Quietly ignore nulls.
+        //
+
+        if (Value->Header.Type == ChalkObjectNull) {
+            continue;
+        }
+
+        //
+        // Noisily ignore other types.
+        //
+
         if ((Value->Header.Type != ChalkObjectString) &&
             (Value->Header.Type != ChalkObjectInteger) &&
             (Value->Header.Type != ChalkObjectList)) {

@@ -551,25 +551,16 @@ Return Value:
         goto mainEnd;
 
     } else {
-        if ((Context.Options & MBGEN_OPTION_DRY_RUN) == 0) {
-            fprintf(stderr, "Argument expected. Try --help for usage.\n");
-            Status = EINVAL;
+        Context.BuildRoot = getcwd(NULL, 0);
+        if (Context.BuildRoot == NULL) {
+            Status = errno;
             goto mainEnd;
-
-        } else {
-            Context.BuildRoot = strdup("/");
         }
     }
 
-    Status = MbgenSetupRootDirectories(&Context);
+    Status = MbgenFindSourceRoot(&Context);
     if (Status != 0) {
         goto mainEnd;
-    }
-
-    if ((Context.Options & MBGEN_OPTION_VERBOSE) != 0) {
-        printf("Source Root: '%s'\nBuild Root: '%s'\n",
-               Context.SourceRoot,
-               Context.BuildRoot);
     }
 
     //
@@ -1651,6 +1642,7 @@ Return Value:
     PMBGEN_SOURCE Source;
     INT Status;
 
+    DependencyScript = NULL;
     Status = MbgenParsePath(Context,
                             Name,
                             MbgenSourceTree,
@@ -1673,6 +1665,8 @@ Return Value:
             if (Status != 0) {
                 goto AddInputToListEnd;
             }
+
+            assert(DependencyScript != NULL);
         }
     }
 

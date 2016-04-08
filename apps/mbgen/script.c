@@ -87,6 +87,12 @@ CHALK_C_STRUCTURE_MEMBER MbgenProjectRootMembers[] = {
         {0}
     },
 
+    {
+        ChalkCString,
+        "default_build_dir",
+        offsetof(MBGEN_CONTEXT, BuildRoot),
+    },
+
     {0}
 };
 
@@ -163,8 +169,14 @@ Return Value:
 
 {
 
+    PSTR BuildRoot;
     INT Status;
     MBGEN_PATH TargetPath;
+
+    Status = MbgenAddChalkBuiltins(Context);
+    if (Status != 0) {
+        goto LoadProjectRootEnd;
+    }
 
     memset(&TargetPath, 0, sizeof(MBGEN_PATH));
     TargetPath.Root = MbgenSourceTree;
@@ -187,6 +199,7 @@ Return Value:
     // Read the important variables into the context structure.
     //
 
+    BuildRoot = Context->BuildRoot;
     Status = ChalkConvertDictToStructure(&(Context->Interpreter),
                                          Context->Interpreter.Global.Dict,
                                          MbgenProjectRootMembers,
@@ -194,6 +207,56 @@ Return Value:
 
     if (Status != 0) {
         goto LoadProjectRootEnd;
+    }
+
+    if (Context->BuildRoot != BuildRoot) {
+        free(BuildRoot);
+    }
+
+    //
+    // The build root can be relative to the source root. Append the source
+    // root path if so.
+    //
+
+    if (MBGEN_IS_SOURCE_ROOT_RELATIVE(Context->BuildRoot)) {
+        BuildRoot = MbgenAppendPaths(Context->SourceRoot,
+                                     Context->BuildRoot + 2);
+
+        if (BuildRoot == NULL) {
+            Status = ENOMEM;
+            goto LoadProjectRootEnd;
+        }
+
+        free(Context->BuildRoot);
+        Context->BuildRoot = BuildRoot;
+    }
+
+    Status = MbgenCreateDirectory(Context->BuildRoot);
+    if (Status != 0) {
+        goto LoadProjectRootEnd;
+    }
+
+    BuildRoot = MbgenGetAbsoluteDirectory(Context->BuildRoot);
+    if (BuildRoot == NULL) {
+        Status = errno;
+        fprintf(stderr,
+                "Error: unable to get absolute directory of %s: %s.\n",
+                Context->BuildRoot,
+                strerror(Status));
+
+        if (Status == 0) {
+            Status = -1;
+        }
+
+        goto LoadProjectRootEnd;
+    }
+
+    free(Context->BuildRoot);
+    Context->BuildRoot = BuildRoot;
+    if ((Context->Options & MBGEN_OPTION_VERBOSE) != 0) {
+        printf("Source Root: '%s'\nBuild Root: '%s'\n",
+               Context->SourceRoot,
+               Context->BuildRoot);
     }
 
     if (Context->DefaultName == NULL) {
@@ -376,8 +439,10 @@ Return Value:
                                      Context->ProjectFileName);
 
     } else {
-        if (MbgenFindScript(Context, TargetPath) != NULL) {
-            return 0;
+        Script = MbgenFindScript(Context, TargetPath);
+        if (Script != NULL) {
+            Status = 0;
+            goto LoadScriptEnd;
         }
 
         Tree = MbgenPathForTree(Context, TargetPath->Root);
