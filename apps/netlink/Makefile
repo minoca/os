@@ -28,7 +28,7 @@ BINARYTYPE = so
 
 BINPLACE = bin
 
-ENTRY = NetlinkInitialize
+ENTRY = NlInitialize
 
 INCLUDES += $(SRCROOT)/os/apps/include;$(SRCROOT)/os/apps/include/libc;
 

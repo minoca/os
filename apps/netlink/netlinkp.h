@@ -20,7 +20,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define NETLINK_API DLLEXPORT
+#define LIBNETLINK_API DLLEXPORT
 
 #include <osbase.h>
 #include <minoca/net/netdrv.h>
