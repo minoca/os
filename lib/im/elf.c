@@ -16,7 +16,7 @@ Author:
 
 Environment:
 
-    Kernel/Boot/Build
+    Any
 
 --*/
 
@@ -26,10 +26,73 @@ Environment:
 
 #include "imp.h"
 #include "elf.h"
+#include "elfn.h"
+#include "elfcomm.h"
 
 //
 // ---------------------------------------------------------------- Definitions
 //
+
+//
+// Define the function names here to 32 and 64 bit specific function names,
+// since this file may be compiled twice in the same executable.
+//
+
+#if defined(WANT_ELF64)
+
+//
+// Define structure aliases.
+//
+
+#define ELF_LOADING_IMAGE ELF64_LOADING_IMAGE
+#define _ELF_LOADING_IMAGE _ELF64_LOADING_IMAGE
+
+#define PELF_LOADING_IMAGE PELF64_LOADING_IMAGE
+
+//
+// Define function aliases.
+//
+
+#define ImpElfLoadImportsForImage ImpElf64LoadImportsForImage
+#define ImpElfLoadImport ImpElf64LoadImport
+#define ImpElfGatherExportInformation ImpElf64GatherExportInformation
+#define ImpElfGetDynamicEntry ImpElf64GetDynamicEntry
+#define ImpElfRelocateImage ImpElf64RelocateImage
+#define ImpElfProcessRelocateSection ImpElf64ProcessRelocateSection
+#define ImpElfAdjustJumpSlots ImpElf64AdjustJumpSlots
+#define ImpElfGetSymbolValue ImpElf64GetSymbolValue
+#define ImpElfGetSymbol ImpElf64GetSymbol
+#define ImpElfApplyRelocation ImpElf64ApplyRelocation
+#define ImpElfFreeContext ImpElf64FreeContext
+
+#else
+
+//
+// Define structure aliases.
+//
+
+#define ELF_LOADING_IMAGE ELF32_LOADING_IMAGE
+#define _ELF_LOADING_IMAGE _ELF32_LOADING_IMAGE
+
+#define PELF_LOADING_IMAGE PELF32_LOADING_IMAGE
+
+//
+// Define function aliases.
+//
+
+#define ImpElfLoadImportsForImage ImpElf32LoadImportsForImage
+#define ImpElfLoadImport ImpElf32LoadImport
+#define ImpElfGatherExportInformation ImpElf32GatherExportInformation
+#define ImpElfGetDynamicEntry ImpElf32GetDynamicEntry
+#define ImpElfRelocateImage ImpElf32RelocateImage
+#define ImpElfProcessRelocateSection ImpElf32ProcessRelocateSection
+#define ImpElfAdjustJumpSlots ImpElf32AdjustJumpSlots
+#define ImpElfGetSymbolValue ImpElf32GetSymbolValue
+#define ImpElfGetSymbol ImpElf32GetSymbol
+#define ImpElfApplyRelocation ImpElf32ApplyRelocation
+#define ImpElfFreeContext ImpElf32FreeContext
+
+#endif
 
 //
 // Try some magically built-in library paths.
@@ -42,6 +105,7 @@ Environment:
 //
 
 #define ELF_INVALID_RELOCATION (PVOID)-1
+#define ELF_INVALID_ADDRESS (ELF_ADDR)-1ULL
 
 //
 // Define the maximum number of program headers before it's just silly.
@@ -52,32 +116,6 @@ Environment:
 //
 // ------------------------------------------------------ Data Type Definitions
 //
-
-typedef enum _ELF_LIBRARY_PATH_VARIABLE {
-    ElfLibraryPathOrigin,
-    ElfLibraryPathLib,
-    ElfLibraryPathPlatform
-} ELF_LIBRARY_PATH_VARIABLE, *PELF_LIBRARY_PATH_VARIABLE;
-
-/*++
-
-Structure Description:
-
-    This structure stores an entry in the table of variables that can be
-    substituted in ELF library paths.
-
-Members:
-
-    Variable - Stores the variable code.
-
-    Name - Stores the variable name.
-
---*/
-
-typedef struct _ELF_LIBRARY_PATH_VARIABLE_ENTRY {
-    ELF_LIBRARY_PATH_VARIABLE Variable;
-    PSTR Name;
-} ELF_LIBRARY_PATH_VARIABLE_ENTRY, *PELF_LIBRARY_PATH_VARIABLE_ENTRY;
 
 /*++
 
@@ -107,9 +145,9 @@ Members:
 
 typedef struct _ELF_LOADING_IMAGE {
     IMAGE_BUFFER Buffer;
-    PELF32_HEADER ElfHeader;
-    PELF32_DYNAMIC_ENTRY DynamicSection;
-    ULONG DynamicEntryCount;
+    PELF_HEADER ElfHeader;
+    PELF_DYNAMIC_ENTRY DynamicSection;
+    ELF_WORD DynamicEntryCount;
     PVOID RelocationStart;
     PVOID RelocationEnd;
 } ELF_LOADING_IMAGE, *PELF_LOADING_IMAGE;
@@ -133,15 +171,6 @@ ImpElfLoadImport (
     );
 
 KSTATUS
-ImpElfLoadImportWithPath (
-    PLOADED_IMAGE Image,
-    PLIST_ENTRY ListHead,
-    PSTR LibraryName,
-    PSTR Path,
-    PLOADED_IMAGE *Import
-    );
-
-KSTATUS
 ImpElfGatherExportInformation (
     PLOADED_IMAGE Image,
     BOOL UseLoadedAddress
@@ -150,8 +179,8 @@ ImpElfGatherExportInformation (
 KSTATUS
 ImpElfGetDynamicEntry (
     PELF_LOADING_IMAGE LoadingImage,
-    ULONG Tag,
-    PELF32_DYNAMIC_ENTRY *FoundEntry
+    ELF_SXWORD Tag,
+    PELF_DYNAMIC_ENTRY *FoundEntry
     );
 
 KSTATUS
@@ -165,7 +194,7 @@ ImpElfProcessRelocateSection (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     PVOID Relocations,
-    UINTN RelocationsSize,
+    ELF_XWORD RelocationsSize,
     BOOL Addends
     );
 
@@ -173,20 +202,20 @@ VOID
 ImpElfAdjustJumpSlots (
     PLOADED_IMAGE Image,
     PVOID Relocations,
-    UINTN RelocationsSize,
+    ELF_XWORD RelocationsSize,
     BOOL Addends
     );
 
-ULONG
+ELF_ADDR
 ImpElfGetSymbolValue (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PELF32_SYMBOL Symbol,
+    PELF_SYMBOL Symbol,
     PLOADED_IMAGE *FoundImage,
     PLOADED_IMAGE SkipImage
     );
 
-PELF32_SYMBOL
+PELF_SYMBOL
 ImpElfGetSymbol (
     PLOADED_IMAGE Image,
     ULONG Hash,
@@ -197,31 +226,9 @@ BOOL
 ImpElfApplyRelocation (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PELF32_RELOCATION_ADDEND_ENTRY RelocationEntry,
+    PELF_RELOCATION_ADDEND_ENTRY RelocationEntry,
     BOOL AddendEntry,
     PVOID *FinalSymbolValue
-    );
-
-ULONG
-ImpElfOriginalHash (
-    PSTR SymbolName
-    );
-
-ULONG
-ImpElfGnuHash (
-    PSTR SymbolName
-    );
-
-PSTR
-ImpElfGetEnvironmentVariable (
-    PSTR Variable
-    );
-
-KSTATUS
-ImpElfPerformLibraryPathSubstitutions (
-    PLOADED_IMAGE Image,
-    PSTR *Path,
-    PUINTN PathCapacity
     );
 
 VOID
@@ -232,12 +239,6 @@ ImpElfFreeContext (
 //
 // -------------------------------------------------------------------- Globals
 //
-
-ELF_LIBRARY_PATH_VARIABLE_ENTRY ElfLibraryPathVariables[] = {
-    {ElfLibraryPathOrigin, "ORIGIN"},
-    {ElfLibraryPathLib, "LIB"},
-    {ElfLibraryPathPlatform, "PLATFORM"}
-};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -279,19 +280,19 @@ Return Value:
 
 {
 
-    PELF32_HEADER ElfHeader;
-    PELF32_PROGRAM_HEADER FirstProgramHeader;
-    ULONG HeaderSize;
-    UINTN HighestVirtualAddress;
-    UINTN ImageSize;
+    PELF_HEADER ElfHeader;
+    PELF_PROGRAM_HEADER FirstProgramHeader;
+    ELF_WORD HeaderSize;
+    ELF_ADDR HighestVirtualAddress;
+    ELF_ADDR ImageSize;
     PSTR InterpreterName;
-    UINTN LowestVirtualAddress;
-    PELF32_PROGRAM_HEADER ProgramHeader;
+    ELF_ADDR LowestVirtualAddress;
+    PELF_PROGRAM_HEADER ProgramHeader;
     BOOL Result;
-    UINTN SegmentBase;
-    ULONG SegmentCount;
-    UINTN SegmentEnd;
-    ULONG SegmentIndex;
+    ELF_ADDR SegmentBase;
+    ELF_OFF SegmentCount;
+    ELF_ADDR SegmentEnd;
+    UINTN SegmentIndex;
     KSTATUS Status;
 
     ImageSize = 0;
@@ -338,11 +339,11 @@ Return Value:
     // address.
     //
 
-    LowestVirtualAddress = (UINTN)-1;
+    LowestVirtualAddress = (ELF_ADDR)-1ULL;
     HighestVirtualAddress = 0;
     for (SegmentIndex = 0; SegmentIndex < SegmentCount; SegmentIndex += 1) {
         ProgramHeader =
-            (PELF32_PROGRAM_HEADER)(((PUCHAR)FirstProgramHeader) +
+            (PELF_PROGRAM_HEADER)(((PUCHAR)FirstProgramHeader) +
                                 (SegmentIndex * ElfHeader->ProgramHeaderSize));
 
         //
@@ -407,7 +408,7 @@ Return Value:
     }
 
     ImageSize = HighestVirtualAddress - LowestVirtualAddress;
-    Image->PreferredLowestAddress = (PVOID)LowestVirtualAddress;
+    Image->PreferredLowestAddress = (PVOID)(UINTN)LowestVirtualAddress;
     Status = STATUS_SUCCESS;
 
 GetImageSizeEnd:
@@ -454,20 +455,20 @@ Return Value:
 
 {
 
-    UINTN BaseDifference;
-    PELF32_HEADER ElfHeader;
-    PELF32_PROGRAM_HEADER FirstProgramHeader;
+    ELF_ADDR BaseDifference;
+    PELF_HEADER ElfHeader;
+    PELF_PROGRAM_HEADER FirstProgramHeader;
     BOOL ImageInserted;
     ULONG ImportIndex;
     PELF_LOADING_IMAGE LoadingImage;
     BOOL NotifyLoadCalled;
     PIMAGE_SEGMENT PreviousSegment;
-    PELF32_PROGRAM_HEADER ProgramHeader;
+    PELF_PROGRAM_HEADER ProgramHeader;
     BOOL Result;
     PIMAGE_SEGMENT Segment;
-    UINTN SegmentBase;
-    ULONG SegmentCount;
-    ULONG SegmentIndex;
+    ELF_ADDR SegmentBase;
+    ELF_HALF SegmentCount;
+    ELF_HALF SegmentIndex;
     KSTATUS Status;
 
     ImageInserted = FALSE;
@@ -503,6 +504,14 @@ Return Value:
 
     case ELF_MACHINE_I386:
         Image->Machine = ImageMachineTypeX86;
+        break;
+
+    case ELF_MACHINE_X86_64:
+        Image->Machine = ImageMachineTypeX64;
+        break;
+
+    case ELF_MACHINE_AARCH64:
+        Image->Machine = ImageMachineTypeArm64;
         break;
 
     default:
@@ -624,7 +633,7 @@ Return Value:
         // Set up and map the segment.
         //
 
-        Segment->VirtualAddress = (PVOID)SegmentBase + BaseDifference;
+        Segment->VirtualAddress = (PVOID)(UINTN)SegmentBase + BaseDifference;
         Segment->FileSize = ProgramHeader->FileSize;
         Segment->MemorySize = ProgramHeader->MemorySize;
 
@@ -667,12 +676,12 @@ Return Value:
 
         Segment->Type = ImageSegmentFileSection;
         PreviousSegment = Segment;
-        ProgramHeader = (PELF32_PROGRAM_HEADER)((PUCHAR)ProgramHeader +
-                                                ElfHeader->ProgramHeaderSize);
+        ProgramHeader = (PELF_PROGRAM_HEADER)((PUCHAR)ProgramHeader +
+                                              ElfHeader->ProgramHeaderSize);
     }
 
     Image->EntryPoint =
-                 (PVOID)(LoadingImage->ElfHeader->EntryPoint + BaseDifference);
+          (PVOID)(UINTN)(LoadingImage->ElfHeader->EntryPoint + BaseDifference);
 
     INSERT_BEFORE(&(Image->ListEntry), ListHead);
     ImageInserted = TRUE;
@@ -825,14 +834,14 @@ Return Value:
 
 {
 
-    UINTN BaseDifference;
-    PELF32_HEADER ElfHeader;
-    PELF32_PROGRAM_HEADER FirstProgramHeader;
+    ELF_ADDR BaseDifference;
+    PELF_HEADER ElfHeader;
+    PELF_PROGRAM_HEADER FirstProgramHeader;
     UINTN Index;
     PELF_LOADING_IMAGE LoadingImage;
-    UINTN LowestVirtualAddress;
-    PELF32_PROGRAM_HEADER ProgramHeader;
-    ULONG SegmentCount;
+    ELF_ADDR LowestVirtualAddress;
+    PELF_PROGRAM_HEADER ProgramHeader;
+    ELF_HALF SegmentCount;
     KSTATUS Status;
 
     ElfHeader = Image->LoadedLowestAddress;
@@ -871,6 +880,14 @@ Return Value:
         Image->Machine = ImageMachineTypeX86;
         break;
 
+    case ELF_MACHINE_X86_64:
+        Image->Machine = ImageMachineTypeX64;
+        break;
+
+    case ELF_MACHINE_AARCH64:
+        Image->Machine = ImageMachineTypeArm64;
+        break;
+
     default:
         Image->Machine = ImageMachineTypeUnknown;
         break;
@@ -892,7 +909,7 @@ Return Value:
     // Loop through the program headers.
     //
 
-    LowestVirtualAddress = (UINTN)-1;
+    LowestVirtualAddress = (ELF_ADDR)-1ULL;
     ProgramHeader = FirstProgramHeader;
     for (Index = 0; Index < SegmentCount; Index += 1) {
 
@@ -912,17 +929,17 @@ Return Value:
             }
         }
 
-        ProgramHeader = (PELF32_PROGRAM_HEADER)((PUCHAR)ProgramHeader +
-                                                ElfHeader->ProgramHeaderSize);
+        ProgramHeader = (PELF_PROGRAM_HEADER)((PUCHAR)ProgramHeader +
+                                              ElfHeader->ProgramHeaderSize);
     }
 
-    Image->PreferredLowestAddress = (PVOID)LowestVirtualAddress;
+    Image->PreferredLowestAddress = (PVOID)(UINTN)LowestVirtualAddress;
     BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
     if (Image->TlsImage != NULL) {
         Image->TlsImage += BaseDifference;
     }
 
-    Image->EntryPoint = (PVOID)(ElfHeader->EntryPoint + BaseDifference);
+    Image->EntryPoint = (PVOID)(UINTN)(ElfHeader->EntryPoint + BaseDifference);
     Status = ImpElfGatherExportInformation(Image, TRUE);
     if (!KSUCCESS(Status)) {
         goto AddImageEnd;
@@ -968,8 +985,8 @@ Return Value:
 
 {
 
-    ULONG ImportIndex;
-    ULONG SegmentIndex;
+    UINTN ImportIndex;
+    UINTN SegmentIndex;
 
     ASSERT((Image->ImportCount == 0) || (Image->Imports != NULL));
 
@@ -1018,7 +1035,7 @@ Return Value:
 BOOL
 ImpElfGetHeader (
     PIMAGE_BUFFER Buffer,
-    PELF32_HEADER *ElfHeader
+    PELF_HEADER *ElfHeader
     )
 
 /*++
@@ -1045,10 +1062,11 @@ Return Value:
 
 {
 
-    PELF32_HEADER Header;
+    UCHAR Class;
+    PELF_HEADER Header;
 
     *ElfHeader = NULL;
-    Header = ImpReadBuffer(NULL, Buffer, 0, sizeof(ELF32_HEADER));
+    Header = ImpReadBuffer(NULL, Buffer, 0, sizeof(ELF_HEADER));
     if (Header == NULL) {
         return FALSE;
     }
@@ -1062,33 +1080,26 @@ Return Value:
     }
 
     //
-    // Only relocatable, executable and shared object files are supported.
+    // Check that the 32/64 bitness agrees.
     //
 
-    if ((Header->ImageType != ELF_IMAGE_RELOCATABLE) &&
-        (Header->ImageType != ELF_IMAGE_EXECUTABLE) &&
-        (Header->ImageType != ELF_IMAGE_SHARED_OBJECT)) {
+    Class = Header->Identification[ELF_CLASS_OFFSET];
+    if (sizeof(ELF_HEADER) == sizeof(ELF64_HEADER)) {
+        if (Class != ELF_64BIT) {
+            return FALSE;
+        }
 
-        return FALSE;
+    } else {
+        if (Class != ELF_32BIT) {
+            return FALSE;
+        }
     }
 
     //
-    // Only i386 and ARM images are supported.
+    // Only little endian images are supported.
     //
 
-    if ((Header->Machine != ELF_MACHINE_I386) &&
-        (Header->Machine != ELF_MACHINE_ARM)) {
-
-        return FALSE;
-    }
-
-    //
-    // Only 32-bit little endian images are supported.
-    //
-
-    if ((Header->Identification[ELF_CLASS_OFFSET] != ELF_32BIT) ||
-        (Header->Identification[ELF_ENDIANNESS_OFFSET] != ELF_LITTLE_ENDIAN)) {
-
+    if (Header->Identification[ELF_ENDIANNESS_OFFSET] != ELF_LITTLE_ENDIAN) {
         return FALSE;
     }
 
@@ -1096,8 +1107,8 @@ Return Value:
     // Ensure that the program header and section header sizes are consistent.
     //
 
-    if ((Header->ProgramHeaderSize != sizeof(ELF32_PROGRAM_HEADER)) ||
-        (Header->SectionHeaderSize != sizeof(ELF32_SECTION_HEADER))) {
+    if ((Header->ProgramHeaderSize != sizeof(ELF_PROGRAM_HEADER)) ||
+        (Header->SectionHeaderSize != sizeof(ELF_SECTION_HEADER))) {
 
         return FALSE;
     }
@@ -1152,17 +1163,17 @@ Return Value:
 {
 
     PSTR CurrentSectionName;
-    PELF32_HEADER ElfHeader;
+    PELF_HEADER ElfHeader;
     BOOL Match;
     BOOL Result;
     PVOID ReturnSection;
-    ULONG ReturnSectionFileSize;
-    ULONG ReturnSectionMemorySize;
-    ULONG ReturnSectionVirtualAddress;
-    PELF32_SECTION_HEADER SectionHeader;
-    ULONG SectionIndex;
+    ELF_WORD ReturnSectionFileSize;
+    ELF_WORD ReturnSectionMemorySize;
+    ELF_ADDR ReturnSectionVirtualAddress;
+    PELF_SECTION_HEADER SectionHeader;
+    ELF_HALF SectionIndex;
     PSTR StringTable;
-    PELF32_SECTION_HEADER StringTableHeader;
+    PELF_SECTION_HEADER StringTableHeader;
 
     ReturnSection = NULL;
     ReturnSectionFileSize = 0;
@@ -1186,7 +1197,7 @@ Return Value:
                  NULL,
                  Buffer,
                  ElfHeader->SectionHeaderOffset,
-                 sizeof(ELF32_SECTION_HEADER) * ElfHeader->SectionHeaderCount);
+                 sizeof(ELF_SECTION_HEADER) * ElfHeader->SectionHeaderCount);
 
     if (SectionHeader == NULL) {
         Result = FALSE;
@@ -1434,8 +1445,8 @@ Return Value:
 {
 
     ULONG Hash;
-    PELF32_SYMBOL Symbol;
-    UINTN Value;
+    PELF_SYMBOL Symbol;
+    ELF_ADDR Value;
 
     if ((Image->Flags & IMAGE_FLAG_GNU_HASH) != 0) {
         Hash = ImpElfGnuHash(SymbolName);
@@ -1450,11 +1461,11 @@ Return Value:
     }
 
     Value = ImpElfGetSymbolValue(ListHead, Image, Symbol, NULL, NULL);
-    if (Value == MAX_ULONG) {
+    if (Value == ELF_INVALID_ADDRESS) {
         return STATUS_NOT_FOUND;
     }
 
-    *Address = (PVOID)Value;
+    *Address = (PVOID)(UINTN)Value;
     return STATUS_SUCCESS;
 }
 
@@ -1462,7 +1473,7 @@ PVOID
 ImpElfResolvePltEntry (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    ULONG RelocationOffset
+    UINTN RelocationOffset
     )
 
 /*++
@@ -1560,15 +1571,15 @@ Return Value:
 
 {
 
-    PELF32_DYNAMIC_ENTRY DynamicEntry;
-    UINTN DynamicIndex;
+    PELF_DYNAMIC_ENTRY DynamicEntry;
+    ELF_WORD DynamicIndex;
     PLOADED_IMAGE Import;
     ULONG ImportCount;
     ULONG ImportIndex;
     PSTR ImportName;
     PELF_LOADING_IMAGE LoadingImage;
     KSTATUS Status;
-    ULONG StringTableOffset;
+    ELF_OFF StringTableOffset;
 
     LoadingImage = Image->ImageContext;
 
@@ -1722,9 +1733,9 @@ Return Value:
 
 {
 
-    PELF32_DYNAMIC_ENTRY Entry;
+    PELF_DYNAMIC_ENTRY Entry;
     PSTR Path;
-    PELF32_DYNAMIC_ENTRY RunPath;
+    PELF_DYNAMIC_ENTRY RunPath;
     PSTR Slash;
     KSTATUS Status;
 
@@ -1841,137 +1852,6 @@ ElfLoadImportEnd:
 }
 
 KSTATUS
-ImpElfLoadImportWithPath (
-    PLOADED_IMAGE Image,
-    PLIST_ENTRY ListHead,
-    PSTR LibraryName,
-    PSTR Path,
-    PLOADED_IMAGE *Import
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to load a needed library for an ELF image.
-
-Arguments:
-
-    Image - Supplies a pointer to the image that needs the library.
-
-    ListHead - Supplies a pointer to the head of the list of loaded images.
-
-    LibraryName - Supplies the name of the library to load.
-
-    Path - Supplies a colon-separated list of paths to try.
-
-    Import - Supplies a pointer where a pointer to the loaded image will be
-        returned.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    PSTR CompletePath;
-    UINTN CompletePathCapacity;
-    UINTN CompletePathSize;
-    PSTR CurrentPath;
-    UINTN LibraryLength;
-    ULONG LoadFlags;
-    PSTR NextSeparator;
-    UINTN PrefixLength;
-    KSTATUS Status;
-
-    LibraryLength = RtlStringLength(LibraryName);
-    LoadFlags = Image->LoadFlags | IMAGE_LOAD_FLAG_IGNORE_INTERPRETER;
-    LoadFlags &= ~IMAGE_LOAD_FLAG_PRIMARY_EXECUTABLE;
-    CompletePath = NULL;
-    CompletePathCapacity = 0;
-    CurrentPath = Path;
-    while (TRUE) {
-        NextSeparator = RtlStringFindCharacter(CurrentPath, ':', -1);
-        if (NextSeparator == NULL) {
-            PrefixLength = RtlStringLength(CurrentPath);
-
-        } else {
-            PrefixLength = (UINTN)NextSeparator - (UINTN)CurrentPath;
-        }
-
-        //
-        // The complete path is "prefix/library". Reallocate the buffer if
-        // needed.
-        //
-
-        CompletePathSize = PrefixLength + LibraryLength + 2;
-        if (CompletePathSize > CompletePathCapacity) {
-            if (CompletePath != NULL) {
-                ImFreeMemory(CompletePath);
-            }
-
-            CompletePath = ImAllocateMemory(CompletePathSize,
-                                            IM_ALLOCATION_TAG);
-
-            if (CompletePath == NULL) {
-                Status = STATUS_INSUFFICIENT_RESOURCES;
-                break;
-            }
-        }
-
-        if (PrefixLength != 0) {
-            RtlCopyMemory(CompletePath, CurrentPath, PrefixLength);
-            if (CompletePath[PrefixLength - 1] != '/') {
-                CompletePath[PrefixLength] = '/';
-                PrefixLength += 1;
-            }
-        }
-
-        RtlCopyMemory(CompletePath + PrefixLength,
-                      LibraryName,
-                      LibraryLength);
-
-        CompletePath[PrefixLength + LibraryLength] = '\0';
-        Status = ImpElfPerformLibraryPathSubstitutions(Image,
-                                                       &CompletePath,
-                                                       &CompletePathCapacity);
-
-        if (!KSUCCESS(Status)) {
-            break;
-        }
-
-        Status = ImLoadExecutable(ListHead,
-                                  CompletePath,
-                                  NULL,
-                                  NULL,
-                                  Image->SystemContext,
-                                  LoadFlags,
-                                  Image->ImportDepth + 1,
-                                  Import,
-                                  NULL);
-
-        if (KSUCCESS(Status)) {
-            break;
-        }
-
-        if (NextSeparator == NULL) {
-            Status = STATUS_MISSING_IMPORT;
-            break;
-        }
-
-        CurrentPath = NextSeparator + 1;
-    }
-
-    if (CompletePath != NULL) {
-        ImFreeMemory(CompletePath);
-    }
-
-    return Status;
-}
-
-KSTATUS
 ImpElfGatherExportInformation (
     PLOADED_IMAGE Image,
     BOOL UseLoadedAddress
@@ -2000,27 +1880,27 @@ Return Value:
 {
 
     PVOID Address;
-    UINTN BaseDifference;
-    PELF32_DYNAMIC_ENTRY DynamicEntry;
-    ULONG DynamicIndex;
+    ELF_ADDR BaseDifference;
+    PELF_DYNAMIC_ENTRY DynamicEntry;
+    ELF_WORD DynamicIndex;
     PVOID DynamicSymbols;
     PVOID DynamicSymbolStrings;
-    UINTN DynamicSymbolStringsSize;
-    PUINTN Got;
-    PULONG HashTable;
-    ULONG HashTag;
-    ULONG HeaderCount;
-    UINTN Index;
-    UINTN LibraryNameOffset;
+    ELF_XWORD DynamicSymbolStringsSize;
+    PELF_ADDR Got;
+    PELF_WORD HashTable;
+    ELF_XWORD HashTag;
+    ELF_HALF HeaderCount;
+    ELF_HALF Index;
+    ELF_XWORD LibraryNameOffset;
     PELF_LOADING_IMAGE LoadingImage;
-    UINTN MaxDynamic;
+    ELF_XWORD MaxDynamic;
     PVOID PltRelocations;
     BOOL PltRelocationsAddends;
-    PELF32_PROGRAM_HEADER ProgramHeader;
+    PELF_PROGRAM_HEADER ProgramHeader;
     PIMAGE_STATIC_FUNCTIONS StaticFunctions;
     KSTATUS Status;
-    ULONG Tag;
-    UINTN Value;
+    ELF_SXWORD Tag;
+    ELF_XWORD Value;
 
     DynamicSymbols = NULL;
     DynamicSymbolStrings = NULL;
@@ -2096,7 +1976,7 @@ Return Value:
         DynamicEntry = LoadingImage->Buffer.Data + ProgramHeader->Offset;
     }
 
-    MaxDynamic = ProgramHeader->FileSize / sizeof(ELF32_DYNAMIC_ENTRY);
+    MaxDynamic = ProgramHeader->FileSize / sizeof(ELF_DYNAMIC_ENTRY);
 
     //
     // Save the pointer to the dynamic section header and dynamic symbol count.
@@ -2112,7 +1992,7 @@ Return Value:
 
         Tag = DynamicEntry[DynamicIndex].Tag;
         Value = DynamicEntry[DynamicIndex].Value;
-        Address = (PVOID)(Value + BaseDifference);
+        Address = (PVOID)(UINTN)(Value + BaseDifference);
         switch (Tag) {
         case ELF_DYNAMIC_LIBRARY_NAME:
             LibraryNameOffset = Value;
@@ -2301,8 +2181,8 @@ GatherExportInformationEnd:
 KSTATUS
 ImpElfGetDynamicEntry (
     PELF_LOADING_IMAGE LoadingImage,
-    ULONG Tag,
-    PELF32_DYNAMIC_ENTRY *FoundEntry
+    ELF_SXWORD Tag,
+    PELF_DYNAMIC_ENTRY *FoundEntry
     )
 
 /*++
@@ -2330,7 +2210,7 @@ Return Value:
 
 {
 
-    PELF32_DYNAMIC_ENTRY Entry;
+    PELF_DYNAMIC_ENTRY Entry;
     UINTN Index;
 
     Entry = LoadingImage->DynamicSection;
@@ -2375,17 +2255,17 @@ Return Value:
 {
 
     PVOID Address;
-    UINTN BaseDifference;
-    PELF32_DYNAMIC_ENTRY DynamicEntry;
-    UINTN DynamicIndex;
+    ELF_ADDR BaseDifference;
+    PELF_DYNAMIC_ENTRY DynamicEntry;
+    ELF_XWORD DynamicIndex;
     PELF_LOADING_IMAGE LoadingImage;
-    UINTN PltRelocationAddends;
+    BOOL PltRelocationAddends;
     PVOID PltRelocations;
-    UINTN PltRelocationsSize;
+    ELF_XWORD PltRelocationsSize;
     PVOID Relocations;
     PVOID RelocationsAddends;
-    UINTN RelocationsAddendsSize;
-    UINTN RelocationsSize;
+    ELF_XWORD RelocationsAddendsSize;
+    ELF_XWORD RelocationsSize;
     UINTN Size;
     KSTATUS Status;
 
@@ -2416,7 +2296,7 @@ Return Value:
          DynamicIndex < LoadingImage->DynamicEntryCount;
          DynamicIndex += 1) {
 
-        Address = (PVOID)(DynamicEntry->Value + BaseDifference);
+        Address = (PVOID)(UINTN)(DynamicEntry->Value + BaseDifference);
         switch (DynamicEntry->Tag) {
         case ELF_DYNAMIC_REL_TABLE:
             Relocations = Address;
@@ -2528,7 +2408,7 @@ ImpElfProcessRelocateSection (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
     PVOID Relocations,
-    UINTN RelocationsSize,
+    ELF_XWORD RelocationsSize,
     BOOL Addends
     )
 
@@ -2559,20 +2439,19 @@ Return Value:
 
 {
 
-    PELF32_RELOCATION_ENTRY Relocation;
-    PELF32_RELOCATION_ADDEND_ENTRY RelocationAddend;
-    ULONG RelocationCount;
-    ULONG RelocationIndex;
+    PELF_RELOCATION_ENTRY Relocation;
+    PELF_RELOCATION_ADDEND_ENTRY RelocationAddend;
+    ELF_XWORD RelocationCount;
+    UINTN RelocationIndex;
     BOOL Result;
 
     RelocationAddend = Relocations;
     Relocation = Relocations;
     if (Addends != FALSE) {
-        RelocationCount = RelocationsSize /
-                          sizeof(ELF32_RELOCATION_ADDEND_ENTRY);
+        RelocationCount = RelocationsSize / sizeof(ELF_RELOCATION_ADDEND_ENTRY);
 
     } else {
-        RelocationCount = RelocationsSize / sizeof(ELF32_RELOCATION_ENTRY);
+        RelocationCount = RelocationsSize / sizeof(ELF_RELOCATION_ENTRY);
     }
 
     //
@@ -2622,7 +2501,7 @@ VOID
 ImpElfAdjustJumpSlots (
     PLOADED_IMAGE Image,
     PVOID Relocations,
-    UINTN RelocationsSize,
+    ELF_XWORD RelocationsSize,
     BOOL Addends
     )
 
@@ -2652,15 +2531,15 @@ Return Value:
 
 {
 
-    UINTN BaseDifference;
-    ULONG Information;
-    UINTN Offset;
-    PELF32_RELOCATION_ENTRY Relocation;
-    PELF32_RELOCATION_ADDEND_ENTRY RelocationAddend;
-    ULONG RelocationCount;
-    ULONG RelocationIndex;
-    PUINTN RelocationPlace;
-    ELF32_RELOCATION_TYPE RelocationType;
+    ELF_ADDR BaseDifference;
+    ELF_XWORD Information;
+    ELF_ADDR Offset;
+    PELF_RELOCATION_ENTRY Relocation;
+    PELF_RELOCATION_ADDEND_ENTRY RelocationAddend;
+    ELF_XWORD RelocationCount;
+    UINTN RelocationIndex;
+    PELF_ADDR RelocationPlace;
+    ELF_WORD RelocationType;
 
     BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
     if (BaseDifference == 0) {
@@ -2671,10 +2550,10 @@ Return Value:
     Relocation = Relocations;
     if (Addends != FALSE) {
         RelocationCount = RelocationsSize /
-                          sizeof(ELF32_RELOCATION_ADDEND_ENTRY);
+                          sizeof(ELF_RELOCATION_ADDEND_ENTRY);
 
     } else {
-        RelocationCount = RelocationsSize / sizeof(ELF32_RELOCATION_ENTRY);
+        RelocationCount = RelocationsSize / sizeof(ELF_RELOCATION_ENTRY);
     }
 
     //
@@ -2696,7 +2575,7 @@ Return Value:
             Relocation += 1;
         }
 
-        RelocationType = Information & 0xFF;
+        RelocationType = ELF_GET_RELOCATION_TYPE(Information);
 
         //
         // If this is a jump slot relocation, bump it up by the base difference.
@@ -2707,7 +2586,7 @@ Return Value:
             ((Image->Machine == ImageMachineTypeX86) &&
              (RelocationType == Elf386RelocationJumpSlot))) {
 
-            RelocationPlace = (PUINTN)((PUCHAR)Image->LoadedImageBuffer +
+            RelocationPlace = (PELF_ADDR)((PUCHAR)Image->LoadedImageBuffer +
                                (Offset - (UINTN)Image->PreferredLowestAddress));
 
             *RelocationPlace += BaseDifference;
@@ -2717,11 +2596,11 @@ Return Value:
     return;
 }
 
-ULONG
+ELF_ADDR
 ImpElfGetSymbolValue (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PELF32_SYMBOL Symbol,
+    PELF_SYMBOL Symbol,
     PLOADED_IMAGE *FoundImage,
     PLOADED_IMAGE SkipImage
     )
@@ -2752,27 +2631,27 @@ Return Value:
 
     Returns the symbol's value on success.
 
-    MAX_ULONG on failure.
+    ELF_INVALID_ADDRESS on failure.
 
 --*/
 
 {
 
-    UINTN BaseDifference;
-    ELF32_SYMBOL_BIND BindType;
+    ELF_ADDR BaseDifference;
+    ELF_SYMBOL_BIND_TYPE BindType;
     PLIST_ENTRY CurrentEntry;
     PLOADED_IMAGE CurrentImage;
     ULONG Hash;
     ULONG OriginalHash;
-    PELF32_SYMBOL Potential;
+    PELF_SYMBOL Potential;
     CHAR PrintSymbolName[50];
     PSTR SymbolName;
-    ELF32_SYMBOL_TYPE SymbolType;
-    ULONG Value;
+    ELF_SYMBOL_TYPE SymbolType;
+    ELF_ADDR Value;
 
     CurrentImage = NULL;
     BaseDifference = Image->LoadedLowestAddress - Image->PreferredLowestAddress;
-    BindType = ELF32_EXTRACT_SYMBOL_BIND(Symbol->Information);
+    BindType = ELF_GET_SYMBOL_BIND(Symbol->Information);
     if (Symbol->NameOffset != 0) {
         SymbolName = Image->ExportStringTable + Symbol->NameOffset;
         if ((Image->Flags & IMAGE_FLAG_GNU_HASH) != 0) {
@@ -2828,7 +2707,7 @@ Return Value:
                 // not adjusted.
                 //
 
-                SymbolType = ELF32_EXTRACT_SYMBOL_TYPE(Symbol->Information);
+                SymbolType = ELF_GET_SYMBOL_TYPE(Symbol->Information);
                 if (SymbolType == ElfSymbolTls) {
                     Value = Potential->Value;
                     goto ElfGetSymbolValueEnd;
@@ -2836,7 +2715,7 @@ Return Value:
                 } else if (Potential->SectionIndex >=
                            ELF_SECTION_RESERVED_LOW) {
 
-                    Value = MAX_ULONG;
+                    Value = ELF_INVALID_ADDRESS;
                     if (Potential->SectionIndex == ELF_SECTION_ABSOLUTE) {
                         Value = Potential->Value;
                     }
@@ -2882,7 +2761,7 @@ Return Value:
             RtlDebugPrint("Warning: Unresolved reference to symbol %s.\n",
                           PrintSymbolName);
 
-            Value = MAX_ULONG;
+            Value = ELF_INVALID_ADDRESS;
 
         } else {
             Value = 0;
@@ -2900,7 +2779,7 @@ Return Value:
     if ((Symbol->SectionIndex == 0) ||
         (Symbol->SectionIndex >= ELF_SECTION_RESERVED_LOW)) {
 
-        Value = MAX_ULONG;
+        Value = ELF_INVALID_ADDRESS;
         if (Symbol->SectionIndex == ELF_SECTION_ABSOLUTE) {
             Value = Symbol->Value;
         }
@@ -2918,7 +2797,7 @@ ElfGetSymbolValueEnd:
     return Value;
 }
 
-PELF32_SYMBOL
+PELF_SYMBOL
 ImpElfGetSymbol (
     PLOADED_IMAGE Image,
     ULONG Hash,
@@ -2951,24 +2830,24 @@ Return Value:
 
 {
 
-    ULONG BucketCount;
-    ULONG BucketIndex;
+    ELF_WORD BucketCount;
+    ELF_WORD BucketIndex;
     BOOL Equal;
-    PUINTN Filter;
-    UINTN FilterMask;
-    UINTN FilterWord;
-    ULONG FilterWords;
-    PULONG HashBuckets;
-    PULONG HashChains;
-    PULONG HashTable;
-    PELF32_SYMBOL Potential;
+    PELF_WORD Filter;
+    ELF_WORD FilterMask;
+    ELF_WORD FilterWord;
+    ELF_WORD FilterWords;
+    PELF_WORD HashBuckets;
+    PELF_WORD HashChains;
+    PELF_WORD HashTable;
+    PELF_SYMBOL Potential;
     ULONG PotentialHash;
     PSTR PotentialName;
     ULONG RemainingSize;
-    ULONG Shift;
-    ULONG SymbolBase;
-    ULONG SymbolIndex;
-    ULONG WordIndex;
+    ELF_WORD Shift;
+    ELF_WORD SymbolBase;
+    ELF_WORD SymbolIndex;
+    ELF_WORD WordIndex;
 
     if (Image->ExportSymbolTable == NULL) {
         return NULL;
@@ -2994,11 +2873,10 @@ Return Value:
         // Check the Bloom filter first. The Bloom filter indicates that a
         // symbol is definitely not there, or is maybe there. It basically
         // represents a quick "no".
-        // TODO: 64-bit: the word size is 32 or 64 bits.
         //
 
-        Filter = (PUINTN)HashTable;
-        HashTable = (PULONG)(Filter + FilterWords);
+        Filter = (PELF_WORD)HashTable;
+        HashTable = (PELF_WORD)(Filter + FilterWords);
         WordIndex = (Hash >> ELF_WORD_SIZE_SHIFT) & (FilterWords - 1);
 
         ASSERT(POWER_OF_2(FilterWords));
@@ -3043,7 +2921,7 @@ Return Value:
             //
 
             if (((PotentialHash ^ Hash) & ~0x1) == 0) {
-                Potential = (PELF32_SYMBOL)Image->ExportSymbolTable +
+                Potential = (PELF_SYMBOL)Image->ExportSymbolTable +
                             SymbolIndex;
 
                 PotentialName = Image->ExportStringTable +
@@ -3070,13 +2948,13 @@ Return Value:
     //
 
     } else {
-        BucketCount = *((PULONG)Image->ExportHashTable);
-        HashBuckets = (PULONG)Image->ExportHashTable + 2;
-        HashChains = (PULONG)Image->ExportHashTable + 2 + BucketCount;
+        BucketCount = *((PELF_WORD)Image->ExportHashTable);
+        HashBuckets = (PELF_WORD)Image->ExportHashTable + 2;
+        HashChains = (PELF_WORD)Image->ExportHashTable + 2 + BucketCount;
         BucketIndex = Hash % BucketCount;
         SymbolIndex = *(HashBuckets + BucketIndex);
         while (SymbolIndex != 0) {
-            Potential = (PELF32_SYMBOL)Image->ExportSymbolTable + SymbolIndex;
+            Potential = (PELF_SYMBOL)Image->ExportSymbolTable + SymbolIndex;
             PotentialName = Image->ExportStringTable + Potential->NameOffset;
             RemainingSize = Image->ExportStringTableSize -
                             Potential->NameOffset;
@@ -3104,7 +2982,7 @@ BOOL
 ImpElfApplyRelocation (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    PELF32_RELOCATION_ADDEND_ENTRY RelocationEntry,
+    PELF_RELOCATION_ADDEND_ENTRY RelocationEntry,
     BOOL AddendEntry,
     PVOID *FinalSymbolValue
     )
@@ -3122,11 +3000,11 @@ Arguments:
     Image - Supplies a pointer to the loaded image structure.
 
     RelocationEntry - Supplies a pointer to the relocation entry. This should
-        either be of type PELF32_RELOCATION_ENTRY or
-        PELF32_RELOCATION_ADDEND_ENTRY depending on the Addends parameter.
+        either be of type PELF_RELOCATION_ENTRY or
+        PELF_RELOCATION_ADDEND_ENTRY depending on the Addends parameter.
 
     AddendEntry - Supplies a flag indicating that the entry if of type
-        ELF32_RELOCATION_ADDEND_ENTRY, not ELF32_RELOCATION_ENTRY.
+        ELF_RELOCATION_ADDEND_ENTRY, not ELF_RELOCATION_ENTRY.
 
     FinalSymbolValue - Supplies an optional pointer where the symbol value will
         be returned on success. This is used by PLT relocations that are being
@@ -3143,23 +3021,23 @@ Return Value:
 
 {
 
-    ULONG Addend;
+    ELF_SXWORD Addend;
     BOOL AddendNeeded;
-    UINTN Address;
-    UINTN BaseDifference;
+    ELF_ADDR Address;
+    ELF_ADDR BaseDifference;
     BOOL Copy;
-    ULONG Information;
+    ELF_XWORD Information;
     PELF_LOADING_IMAGE LoadingImage;
-    ULONG Offset;
-    ULONG Place;
+    ELF_ADDR Offset;
+    ELF_ADDR Place;
     PVOID RelocationEnd;
     BOOL RelocationNeeded;
-    PULONG RelocationPlace;
-    ELF32_RELOCATION_TYPE RelocationType;
+    PELF_ADDR RelocationPlace;
+    ELF_XWORD RelocationType;
     PLOADED_IMAGE SymbolImage;
-    ULONG SymbolIndex;
-    PELF32_SYMBOL Symbols;
-    ULONG SymbolValue;
+    ELF_XWORD SymbolIndex;
+    PELF_SYMBOL Symbols;
+    ELF_ADDR SymbolValue;
 
     Address = 0;
     LoadingImage = Image->ImageContext;
@@ -3183,8 +3061,8 @@ Return Value:
     //
 
     Symbols = Image->ExportSymbolTable;
-    SymbolIndex = Information >> 8;
-    RelocationType = Information & 0xFF;
+    SymbolIndex = ELF_GET_RELOCATION_SYMBOL(Information);
+    RelocationType = ELF_GET_RELOCATION_TYPE(Information);
 
     //
     // Compute the symbol value.
@@ -3196,7 +3074,7 @@ Return Value:
                                        &SymbolImage,
                                        NULL);
 
-    if (SymbolValue == MAX_ULONG) {
+    if (SymbolValue == ELF_INVALID_ADDRESS) {
         SymbolValue = 0;
     }
 
@@ -3218,7 +3096,7 @@ Return Value:
         // None is a no-op.
         //
 
-        case ElfRelocationNone:
+        case ElfArmRelocationNone:
             RelocationNeeded = FALSE;
             break;
 
@@ -3246,7 +3124,7 @@ Return Value:
                                                NULL,
                                                Image);
 
-            if (SymbolValue == MAX_ULONG) {
+            if (SymbolValue == ELF_INVALID_ADDRESS) {
                 SymbolValue = 0;
             }
 
@@ -3356,7 +3234,7 @@ Return Value:
         // None is a no-op.
         //
 
-        case ElfRelocationNone:
+        case Elf386RelocationNone:
             RelocationNeeded = FALSE;
             break;
 
@@ -3400,7 +3278,7 @@ Return Value:
                                                NULL,
                                                Image);
 
-            if (SymbolValue == MAX_ULONG) {
+            if (SymbolValue == ELF_INVALID_ADDRESS) {
                 SymbolValue = 0;
             }
 
@@ -3514,7 +3392,7 @@ Return Value:
     //
 
     if (RelocationNeeded != FALSE) {
-        RelocationPlace = (PULONG)((PUCHAR)Image->LoadedImageBuffer +
+        RelocationPlace = (PELF_ADDR)((PUCHAR)Image->LoadedImageBuffer +
                            (Offset - (UINTN)Image->PreferredLowestAddress));
 
         if (AddendNeeded != FALSE) {
@@ -3523,7 +3401,7 @@ Return Value:
 
         if (Copy != FALSE) {
             RtlCopyMemory(RelocationPlace,
-                          (PVOID)Address,
+                          (PVOID)(UINTN)Address,
                           Symbols[SymbolIndex].Size);
 
             RelocationEnd = (PVOID)RelocationPlace +
@@ -3552,328 +3430,6 @@ Return Value:
     }
 
     return TRUE;
-}
-
-ULONG
-ImpElfOriginalHash (
-    PSTR SymbolName
-    )
-
-/*++
-
-Routine Description:
-
-    This routine hashes a symbol name to get the index into the ELF hash table.
-
-Arguments:
-
-    SymbolName - Supplies a pointer to the name to hash.
-
-Return Value:
-
-    Returns the hash of the name.
-
---*/
-
-{
-
-    ULONG Hash;
-    ULONG Temporary;
-
-    Hash = 0;
-    while (*SymbolName != '\0') {
-        Hash = (Hash << 4) + *SymbolName;
-        Temporary = Hash & 0xF0000000;
-        if (Temporary != 0) {
-            Hash ^= Temporary >> 24;
-        }
-
-        Hash &= ~Temporary;
-        SymbolName += 1;
-    }
-
-    return Hash;
-}
-
-ULONG
-ImpElfGnuHash (
-    PSTR SymbolName
-    )
-
-/*++
-
-Routine Description:
-
-    This routine hashes a symbol name to get the index into the ELF hash table
-    using the GNU style hash function.
-
-Arguments:
-
-    SymbolName - Supplies a pointer to the name to hash.
-
-Return Value:
-
-    Returns the hash of the name.
-
---*/
-
-{
-
-    ULONG Hash;
-
-    Hash = 5381;
-    while (*SymbolName != '\0') {
-
-        //
-        // It's really hash * 33 + Character, but multiply by 33 is expanded
-        // into multiply by 32 plus one.
-        //
-
-        Hash = ((Hash << 5) + Hash) + (UCHAR)*SymbolName;
-        SymbolName += 1;
-    }
-
-    return Hash;
-}
-
-PSTR
-ImpElfGetEnvironmentVariable (
-    PSTR Variable
-    )
-
-/*++
-
-Routine Description:
-
-    This routine gets an environment variable value for the image library.
-
-Arguments:
-
-    Variable - Supplies a pointer to a null terminated string containing the
-        name of the variable to get.
-
-Return Value:
-
-    Returns a pointer to the value of the environment variable. The image
-    library will not free or modify this value.
-
-    NULL if the given environment variable is not set.
-
---*/
-
-{
-
-    if (ImGetEnvironmentVariable != NULL) {
-        return ImGetEnvironmentVariable(Variable);
-    }
-
-    return NULL;
-}
-
-KSTATUS
-ImpElfPerformLibraryPathSubstitutions (
-    PLOADED_IMAGE Image,
-    PSTR *Path,
-    PUINTN PathCapacity
-    )
-
-/*++
-
-Routine Description:
-
-    This routine performs any variable substitutions in a library path.
-
-Arguments:
-
-    Image - Supplies a pointer to the image loading the library (not the
-        library itself obviously, that hasn't been loaded yet).
-
-    Path - Supplies a pointer that on input contains the complete path. On
-        output this will contain the complete path with variables expanded.
-
-    PathCapacity - Supplies a pointer that on input contains the size of the
-        path allocation. This will be updated on output if the string is
-        reallocated.
-
-Return Value:
-
-    STATUS_SUCCESS on success.
-
-    STATUS_INSUFFICIENT_RESOURCES if memory could not be allocated.
-
---*/
-
-{
-
-    PSTR CurrentPath;
-    PSTR CurrentVariable;
-    UINTN Delta;
-    PELF_LIBRARY_PATH_VARIABLE_ENTRY Entry;
-    UINTN EntryCount;
-    UINTN EntryIndex;
-    UINTN Index;
-    PSTR Name;
-    UINTN NameLength;
-    PSTR NewBuffer;
-    PSTR Replacement;
-    UINTN ReplacementLength;
-    UINTN ReplaceSize;
-    UINTN ReplaceStart;
-    KSTATUS Status;
-
-    EntryCount = sizeof(ElfLibraryPathVariables) /
-                 sizeof(ElfLibraryPathVariables[0]);
-
-    CurrentVariable = RtlStringFindCharacter(*Path, '$', -1);
-    while (CurrentVariable != NULL) {
-
-        //
-        // Find the name of the variable and the size of the region to replace.
-        //
-
-        ReplaceStart = (UINTN)CurrentVariable - (UINTN)(*Path);
-        CurrentVariable += 1;
-        if (*CurrentVariable == '{') {
-            CurrentVariable += 1;
-            Name = CurrentVariable;
-            while ((*CurrentVariable != '\0') && (*CurrentVariable != '}')) {
-                CurrentVariable += 1;
-            }
-
-            if (*CurrentVariable != '}') {
-                RtlDebugPrint("ELF: Missing closing brace on %s.\n", *Path);
-                Status = STATUS_INVALID_SEQUENCE;
-                goto ElfPerformLibraryPathSubstitutionsEnd;
-            }
-
-            NameLength = (UINTN)CurrentVariable - (UINTN)Name;
-            CurrentVariable += 1;
-
-        } else {
-            Name = CurrentVariable;
-            while (RtlIsCharacterAlphabetic(*CurrentVariable) != FALSE) {
-                CurrentVariable += 1;
-            }
-
-            NameLength = (UINTN)CurrentVariable - (UINTN)Name;
-        }
-
-        ReplaceSize = (UINTN)CurrentVariable - (UINTN)ReplaceStart;
-
-        //
-        // Decode the variable.
-        //
-
-        for (EntryIndex = 0; EntryIndex < EntryCount; EntryIndex += 1) {
-            Entry = &(ElfLibraryPathVariables[EntryIndex]);
-            if ((RtlAreStringsEqual(Name, Entry->Name, NameLength) != FALSE) &&
-                (Entry->Name[NameLength] == '\0')) {
-
-                break;
-            }
-        }
-
-        if (EntryIndex == EntryCount) {
-            RtlDebugPrint("ELF: Warning: Unknown variable starting at %s.\n",
-                          Name);
-
-        } else {
-
-            //
-            // TODO: Get the correct variable values.
-            //
-
-            ASSERT(FALSE);
-
-            switch (Entry->Variable) {
-            case ElfLibraryPathOrigin:
-                Replacement = ".";
-                break;
-
-            case ElfLibraryPathLib:
-                Replacement = "lib";
-                break;
-
-            case ElfLibraryPathPlatform:
-                Replacement = "i386";
-                break;
-
-            default:
-
-                ASSERT(FALSE);
-
-                Replacement = ".";
-                break;
-            }
-
-            ReplacementLength = RtlStringLength(Replacement);
-
-            //
-            // If the replacement is shorter than the original, then just
-            // copy the replacement over followed by the rest.
-            //
-
-            if (ReplacementLength <= ReplaceSize) {
-                CurrentPath = *Path;
-                RtlCopyMemory(CurrentPath + ReplaceStart,
-                              Replacement,
-                              ReplacementLength);
-
-                Delta = ReplaceSize - ReplacementLength;
-                if (Delta != 0) {
-                    for (Index = ReplaceStart + ReplaceSize;
-                         Index < *PathCapacity - Delta;
-                         Index += 1) {
-
-                        CurrentPath[Index] = CurrentPath[Index + Delta];
-                    }
-
-                    CurrentVariable -= Delta;
-                }
-
-            //
-            // The replacement is bigger than the region it's replacing.
-            //
-
-            } else {
-                Delta = ReplacementLength - ReplaceSize;
-                NewBuffer = ImAllocateMemory(*PathCapacity + Delta,
-                                             IM_ALLOCATION_TAG);
-
-                if (NewBuffer == NULL) {
-                    Status = STATUS_INSUFFICIENT_RESOURCES;
-                    goto ElfPerformLibraryPathSubstitutionsEnd;
-                }
-
-                RtlCopyMemory(NewBuffer, *Path, ReplaceStart);
-                RtlCopyMemory(NewBuffer + ReplaceStart,
-                              Replacement,
-                              ReplacementLength);
-
-                RtlCopyMemory(NewBuffer + ReplaceStart + ReplacementLength,
-                              *Path + ReplaceSize,
-                              *PathCapacity - (ReplaceStart + ReplaceSize));
-
-                CurrentVariable = (PSTR)((UINTN)CurrentVariable -
-                                         (UINTN)(*Path) +
-                                         (UINTN)NewBuffer);
-
-                ImFreeMemory(*Path);
-                *PathCapacity += Delta;
-            }
-        }
-
-        //
-        // Find the next variable.
-        //
-
-        CurrentVariable = RtlStringFindCharacter(CurrentVariable, '$', -1);
-    }
-
-    Status = STATUS_SUCCESS;
-
-ElfPerformLibraryPathSubstitutionsEnd:
-    return Status;
 }
 
 VOID

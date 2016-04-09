@@ -123,6 +123,7 @@ typedef enum _IMAGE_FORMAT {
     ImageUnknownFormat,
     ImagePe32,
     ImageElf32,
+    ImageElf64,
     MaxImageFormats
 } IMAGE_FORMAT, *PIMAGE_FORMAT;
 
@@ -130,7 +131,9 @@ typedef enum _IMAGE_MACHINE_TYPE {
     ImageMachineTypeInvalid,
     ImageMachineTypeUnknown,
     ImageMachineTypeX86,
-    ImageMachineTypeArm32
+    ImageMachineTypeArm32,
+    ImageMachineTypeX64,
+    ImageMachineTypeArm64,
 } IMAGE_MACHINE_TYPE, *PIMAGE_MACHINE_TYPE;
 
 typedef enum _IMAGE_SEGMENT_TYPE {
@@ -1430,7 +1433,7 @@ PVOID
 ImResolvePltEntry (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    ULONG RelocationOffset
+    UINTN RelocationOffset
     );
 
 /*++

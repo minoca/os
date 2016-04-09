@@ -22,5 +22,7 @@
 
 OBJS = image.o    \
        pe.o       \
-       elf.o
+       elf.o      \
+       elfcomm.o  \
+       elf64.o
 

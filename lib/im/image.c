@@ -712,7 +712,7 @@ Return Value:
         break;
 
     case ImageElf32:
-        Status = ImpElfLoadAllImports(ListHead);
+        Status = ImpElf32LoadAllImports(ListHead);
         break;
 
     default:
@@ -765,7 +765,7 @@ Return Value:
         break;
 
     case ImageElf32:
-        Status = ImpElfRelocateImages(ListHead);
+        Status = ImpElf32RelocateImages(ListHead);
         break;
 
     default:
@@ -924,7 +924,7 @@ Return Value:
     // Attempt to get the image information for an ELF image.
     //
 
-    IsElfImage = ImpElfGetHeader(Buffer, &ElfHeader);
+    IsElfImage = ImpElf32GetHeader(Buffer, &ElfHeader);
     if (IsElfImage != FALSE) {
         Information->Format = ImageElf32;
         Information->ImageBase = 0;
@@ -935,6 +935,14 @@ Return Value:
 
         case ELF_MACHINE_I386:
             Information->Machine = ImageMachineTypeX86;
+            break;
+
+        case ELF_MACHINE_X86_64:
+            Information->Machine = ImageMachineTypeX64;
+            break;
+
+        case ELF_MACHINE_AARCH64:
+            Information->Machine = ImageMachineTypeArm64;
             break;
 
         default:
@@ -1009,12 +1017,12 @@ Return Value:
                                SectionSizeInMemory);
 
     case ImageElf32:
-        return ImpElfGetSection(Buffer,
-                                SectionName,
-                                Section,
-                                VirtualAddress,
-                                SectionSizeInFile,
-                                SectionSizeInMemory);
+        return ImpElf32GetSection(Buffer,
+                                  SectionName,
+                                  Section,
+                                  VirtualAddress,
+                                  SectionSizeInFile,
+                                  SectionSizeInMemory);
 
     default:
         break;
@@ -1059,7 +1067,7 @@ Return Value:
     // Attempt to get the ELF image header.
     //
 
-    IsElfImage = ImpElfGetHeader(Buffer, &ElfHeader);
+    IsElfImage = ImpElf32GetHeader(Buffer, &ElfHeader);
     if (IsElfImage != FALSE) {
         return ImageElf32;
     }
@@ -1154,7 +1162,7 @@ PVOID
 ImResolvePltEntry (
     PLIST_ENTRY ListHead,
     PLOADED_IMAGE Image,
-    ULONG RelocationOffset
+    UINTN RelocationOffset
     )
 
 /*++
@@ -1192,9 +1200,9 @@ Return Value:
 
     switch (Image->Format) {
     case ImageElf32:
-        FunctionAddress = ImpElfResolvePltEntry(ListHead,
-                                                Image,
-                                                RelocationOffset);
+        FunctionAddress = ImpElf32ResolvePltEntry(ListHead,
+                                                  Image,
+                                                  RelocationOffset);
 
         break;
 
@@ -1341,7 +1349,7 @@ Return Value:
         break;
 
     case ImageElf32:
-        Status = ImpElfGetImageSize(ListHead, Image, Buffer, InterpreterPath);
+        Status = ImpElf32GetImageSize(ListHead, Image, Buffer, InterpreterPath);
         break;
 
     default:
@@ -1402,7 +1410,7 @@ Return Value:
         break;
 
     case ImageElf32:
-        Status = ImpElfLoadImage(ListHead, Image, Buffer, ImportDepth);
+        Status = ImpElf32LoadImage(ListHead, Image, Buffer, ImportDepth);
         break;
 
     default:
@@ -1444,7 +1452,7 @@ Return Value:
 
     switch (Image->Format) {
     case ImageElf32:
-        Status = ImpElfAddImage(ImageBuffer, Image);
+        Status = ImpElf32AddImage(ImageBuffer, Image);
         break;
 
     default:
@@ -1480,7 +1488,7 @@ Return Value:
 
     switch (Image->Format) {
     case ImageElf32:
-        ImpElfUnloadImage(Image);
+        ImpElf32UnloadImage(Image);
         break;
 
     default:
@@ -1547,10 +1555,10 @@ Return Value:
 
     switch (Image->Format) {
     case ImageElf32:
-        Status = ImpElfGetSymbolAddress(ListHead,
-                                        Image,
-                                        SymbolName,
-                                        Address);
+        Status = ImpElf32GetSymbolAddress(ListHead,
+                                          Image,
+                                          SymbolName,
+                                          Address);
 
         break;
 

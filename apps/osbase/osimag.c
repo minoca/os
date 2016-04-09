@@ -192,7 +192,7 @@ OspImInitializeImage (
 PVOID
 OspImResolvePltEntry (
     PLOADED_IMAGE Image,
-    ULONG RelocationOffset
+    UINTN RelocationOffset
     );
 
 KSTATUS
@@ -2126,7 +2126,7 @@ Return Value:
 PVOID
 OspImResolvePltEntry (
     PLOADED_IMAGE Image,
-    ULONG RelocationOffset
+    UINTN RelocationOffset
     )
 
 /*++

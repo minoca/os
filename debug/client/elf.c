@@ -445,7 +445,7 @@ Return Value:
     // Get the ELF headers to determine the location of the sections.
     //
 
-    Result = ImpElfGetHeader(&ImageBuffer, &ElfHeader);
+    Result = ImpElf32GetHeader(&ImageBuffer, &ElfHeader);
     if (Result == FALSE) {
         goto LoadElfSymbolTableEnd;
     }
@@ -635,7 +635,7 @@ Return Value:
     PELF32_SYMBOL SymbolEnd;
     PSTR SymbolName;
     PSTR SymbolNameCopy;
-    ELF32_SYMBOL_TYPE SymbolType;
+    ELF_SYMBOL_TYPE SymbolType;
 
     StabContext = Symbols->SymbolContext;
     Status = TRUE;
@@ -648,7 +648,7 @@ Return Value:
     while (CurrentSymbol + 1 <= SymbolEnd) {
         Result.Variety = SymbolResultInvalid;
         SymbolAddress = 0;
-        SymbolType = ELF32_EXTRACT_SYMBOL_TYPE(CurrentSymbol->Information);
+        SymbolType = ELF_GET_SYMBOL_TYPE(CurrentSymbol->Information);
         SymbolName = (PSTR)StabContext->RawSymbolTableStrings +
                      CurrentSymbol->NameOffset;
 
