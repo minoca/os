@@ -286,6 +286,12 @@ NetlinkpGenericUserControl (
     UINTN ContextBufferSize
     );
 
+KSTATUS
+NetlinkpGenericJoinMulticastGroup (
+    PNET_SOCKET Socket,
+    ULONG GroupId
+    );
+
 VOID
 NetlinkpGenericInsertReceivedPacket (
     PNETLINK_GENERIC_SOCKET Socket,
@@ -335,7 +341,8 @@ NetlinkpGenericFreeMulticastGroups (
 
 KSTATUS
 NetlinkpGenericValidateMulticastGroup (
-    ULONG GroupId
+    ULONG GroupId,
+    BOOL LockHeld
     );
 
 //
@@ -402,6 +409,10 @@ NETLINK_GENERIC_SOCKET_OPTION NetlinkGenericSocketOptions[] = {
         sizeof(SOCKET_TIME),
         TRUE
     },
+};
+
+NETLINK_PROTOCOL_INTERFACE NetlinkGenericProtocolInterface = {
+    NetlinkpGenericJoinMulticastGroup
 };
 
 PIO_HANDLE NetlinkGenericSocketHandle;
@@ -1114,6 +1125,10 @@ Return Value:
     NetSocket = &(GenericSocket->NetlinkSocket.NetSocket);
     NetSocket->KernelSocket.Protocol = NetworkProtocol;
     NetSocket->KernelSocket.ReferenceCount = 1;
+    RtlCopyMemory(&(GenericSocket->NetlinkSocket.ProtocolInterface),
+                  &NetlinkGenericProtocolInterface,
+                  sizeof(NETLINK_PROTOCOL_INTERFACE));
+
     INITIALIZE_LIST_HEAD(&(GenericSocket->ReceivedPacketList));
     GenericSocket->ReceiveTimeout = WAIT_TIME_INDEFINITE;
     GenericSocket->ReceiveBufferTotalSize =
@@ -1272,13 +1287,18 @@ Return Value:
 
 {
 
-    ULONG GroupId;
     BOOL LockHeld;
-    PNETLINK_ADDRESS NetlinkAddress;
     KSTATUS Status;
 
     LockHeld = FALSE;
-    if (Socket->LocalAddress.Domain != NetDomainInvalid) {
+
+    //
+    // Netlink sockets are allowed to be rebound to different multicast groups.
+    //
+
+    if ((Socket->LocalAddress.Domain != NetDomainInvalid) &&
+        (Socket->LocalAddress.Port != Address->Port)) {
+
         Status = STATUS_INVALID_PARAMETER;
         goto GenericBindToAddressEnd;
     }
@@ -1293,35 +1313,12 @@ Return Value:
     }
 
     //
-    // If there is a request to bind to a multicast group, then validate it.
-    // Acquire the family lock shared and do not release it until the bind is
-    // complete. This makes sure that the group ID is still valid when the
-    // socket gets bound to it by the netlink network layer.
-    //
-
-    NetlinkAddress = (PNETLINK_ADDRESS)Address;
-    if (NetlinkAddress->Group != 0) {
-        KeAcquireSharedExclusiveLockShared(NetlinkGenericFamilyLock);
-        LockHeld = TRUE;
-        GroupId = NetlinkAddress->Group;
-        Status = NetlinkpGenericValidateMulticastGroup(GroupId);
-        if (!KSUCCESS(Status)) {
-            goto GenericBindToAddressEnd;
-        }
-    }
-
-    //
     // Pass the request down to the network layer.
     //
 
     Status = Socket->Network->Interface.BindToAddress(Socket, Link, Address);
     if (!KSUCCESS(Status)) {
         goto GenericBindToAddressEnd;
-    }
-
-    if (LockHeld != FALSE) {
-        KeReleaseSharedExclusiveLockShared(NetlinkGenericFamilyLock);
-        LockHeld = FALSE;
     }
 
     //
@@ -1444,7 +1441,7 @@ Return Value:
     NetlinkAddress = (PNETLINK_ADDRESS)Address;
     if (NetlinkAddress->Group != 0) {
         GroupId = NetlinkAddress->Group;
-        Status = NetlinkpGenericValidateMulticastGroup(GroupId);
+        Status = NetlinkpGenericValidateMulticastGroup(GroupId, FALSE);
         if (!KSUCCESS(Status)) {
             goto GenericConnectEnd;
         }
@@ -2510,6 +2507,60 @@ Return Value:
     return STATUS_NOT_SUPPORTED;
 }
 
+KSTATUS
+NetlinkpGenericJoinMulticastGroup (
+    PNET_SOCKET Socket,
+    ULONG GroupId
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to join the given multicast group by validating the
+    group ID for the protocol and then joining the multicast group.
+
+Arguments:
+
+    Socket - Supplies a pointer to the network socket requesting to join a
+        multicast group.
+
+    GroupId - Supplies the ID of the multicast group to join.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    //
+    // With the family lock held to prevent family's from unregistering,
+    // validate the multicast group and then attempt to join it. This must be
+    // done with the lock held or else a family could leave after validation
+    // and then the socket would miss being removed from the multicast group it
+    // is about to join.
+    //
+
+    KeAcquireSharedExclusiveLockShared(NetlinkGenericFamilyLock);
+    Status = NetlinkpGenericValidateMulticastGroup(GroupId, TRUE);
+    if (!KSUCCESS(Status)) {
+        goto JoinMulticastGroupEnd;
+    }
+
+    Status = NetlinkJoinMulticastGroup(Socket, GroupId);
+    if (!KSUCCESS(Status)) {
+        goto JoinMulticastGroupEnd;
+    }
+
+JoinMulticastGroupEnd:
+    KeReleaseSharedExclusiveLockShared(NetlinkGenericFamilyLock);
+    return Status;
+}
+
 PNETLINK_GENERIC_FAMILY
 NetlinkpGenericLookupFamilyById (
     ULONG FamilyId
@@ -3266,7 +3317,8 @@ Return Value:
 
 KSTATUS
 NetlinkpGenericValidateMulticastGroup (
-    ULONG GroupId
+    ULONG GroupId,
+    BOOL LockHeld
     )
 
 /*++
@@ -3280,6 +3332,9 @@ Arguments:
 
     GroupId - Supplies the group ID that is to be validated.
 
+    LockHeld - Supplies a boolean indicating whether or not the global generic
+        family lock is held.
+
 Return Value:
 
     Status code.
@@ -3290,18 +3345,29 @@ Return Value:
 
     ULONG Index;
     ULONG Mask;
+    KSTATUS Status;
 
-    ASSERT(KeIsSharedExclusiveLockHeldShared(NetlinkGenericFamilyLock));
     ASSERT(GroupId != 0);
+
+    if (LockHeld == FALSE) {
+        KeAcquireSharedExclusiveLockShared(NetlinkGenericFamilyLock);
+    }
 
     Index = NETLINK_SOCKET_BITMAP_INDEX(GroupId);
     Mask = NETLINK_SOCKET_BITMAP_MASK(GroupId);
     if ((Index >= (NetlinkGenericMulticastBitmapSize / sizeof(ULONG))) ||
         ((NetlinkGenericMulticastBitmap[Index] & Mask) == 0)) {
 
-        return STATUS_INVALID_ADDRESS;
+        Status = STATUS_INVALID_PARAMETER;
+
+    } else {
+        Status = STATUS_SUCCESS;
     }
 
-    return STATUS_SUCCESS;
+    if (LockHeld == FALSE) {
+        KeReleaseSharedExclusiveLockShared(NetlinkGenericFamilyLock);
+    }
+
+    return Status;
 }
 

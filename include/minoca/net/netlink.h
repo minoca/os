@@ -562,6 +562,51 @@ typedef struct _NETLINK_GENERIC_FAMILY_PROPERTIES {
     ULONG MulticastGroupCount;
 } NETLINK_GENERIC_FAMILY_PROPERTIES, *PNETLINK_GENERIC_FAMILY_PROPERTIES;
 
+typedef
+KSTATUS
+(*PNETLINK_PROTOCOL_JOIN_MULTICAST_GROUP) (
+    PNET_SOCKET Socket,
+    ULONG GroupId
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to join the given multicast group by validating the
+    group ID for the protocol and then joining the multicast group.
+
+Arguments:
+
+    Socket - Supplies a pointer to the network socket requesting to join a
+        multicast group.
+
+    GroupId - Supplies the ID of the multicast group to join.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines the protocol layer interface specific to netlink
+    sockets.
+
+Members:
+
+    JoinMulticastGroup - Supplies a pointer to a function used to join a
+        multicast group.
+
+--*/
+
+typedef struct _NETLINK_PROTOCOL_INTERFACE {
+    PNETLINK_PROTOCOL_JOIN_MULTICAST_GROUP JoinMulticastGroup;
+} NETLINK_PROTOCOL_INTERFACE, *PNETLINK_PROTOCOL_INTERFACE;
+
 /*++
 
 Structure Description:
@@ -583,6 +628,9 @@ Members:
     MulticastGroupCount - Stores the number of multicast groups to which the
         socket is joined.
 
+    ProtocolInterface - Stores the interface presented to the netlink network
+        layer for this type of netlink socket.
+
 --*/
 
 typedef struct _NETLINK_SOCKET {
@@ -591,7 +639,33 @@ typedef struct _NETLINK_SOCKET {
     PULONG MulticastBitmap;
     ULONG MulticastBitmapSize;
     ULONG MulticastGroupCount;
+    NETLINK_PROTOCOL_INTERFACE ProtocolInterface;
 } NETLINK_SOCKET, *PNETLINK_SOCKET;
+
+/*++
+
+Enumeration Description:
+
+    This enumeration describes the various socket options for the basic socket
+    information class.
+
+Values:
+
+    NetlinkSocketOptionInvalid - Indicates an invalid option.
+
+    NetlinkSocketOptionJoinMulticastGroup - Indicates that the socket intends
+        to join a multicast group.
+
+    NetlinkSocketOptionLeaveMulticastGroup - Indicates that the socket intends
+        to leave a multicast group.
+
+--*/
+
+typedef enum _NETLINK_SOCKET_OPTION {
+    NetlinkSocketOptionInvalid,
+    NetlinkSocketOptionJoinMulticastGroup,
+    NetlinkSocketOptionLeaveMulticastGroup
+} NETLINK_SOCKET_OPTION, *PNETLINK_SOCKET_OPTION;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -624,6 +698,34 @@ Arguments:
     Packet - Supplies a pointer to the network packet to be sent.
 
     Parameters - Supplies a pointer to the message parameters.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NETLINK_API
+KSTATUS
+NetlinkJoinMulticastGroup (
+    PNET_SOCKET Socket,
+    ULONG GroupId
+    );
+
+/*++
+
+Routine Description:
+
+    This routine joins a socket to a multicast group by updating the socket's
+    multicast group bitmap and adding the socket to the global list of socket's
+    joined to multicast groups.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket that is requesting to join a
+        multicast group.
+
+    GroupId - Supplies the ID of the multicast group to join.
 
 Return Value:
 

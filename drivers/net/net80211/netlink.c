@@ -617,6 +617,15 @@ Return Value:
     }
 
     //
+    // If the link is not an 802.11 type then nothing can be done.
+    //
+
+    if (NetLink->Properties.DataLinkType != NetDomain80211) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto NetlinkGetLinkEnd;
+    }
+
+    //
     // Setting the link state to initialized will deactivate the current
     // connection and send the appropriate deactivation messages to the access
     // point.

@@ -45,6 +45,20 @@ extern "C" {
 #define AF_NETLINK 4
 
 //
+// Define the level number for the get/setsockopt that applies to all netlink
+// sockets.
+//
+
+#define SOL_NETLINK 256
+
+//
+// Define the netlink socket options.
+//
+
+#define NETLINK_ADD_MEMBERSHIP 1
+#define NETLINK_DROP_MEMBERSHIP 2
+
+//
 // Define the netlink socket protocols.
 //
 
