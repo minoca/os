@@ -27,7 +27,7 @@ Environment:
 #include <minoca/kernel/kernel.h>
 #include <minoca/kernel/bootload.h>
 #include <minoca/kernel/ioport.h>
-#include "dbgdev.h"
+#include "../dbgdev.h"
 
 //
 // ---------------------------------------------------------------- Definitions
