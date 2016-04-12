@@ -940,9 +940,7 @@ Return Value:
     //
 
     InhibitMask = SD_STATE_DATA_INHIBIT | SD_STATE_COMMAND_INHIBIT;
-    if ((Command->Command == SdCommandStopTransmission) &&
-        (Command->ResponseType == SD_RESPONSE_NONE)) {
-
+    if (Command->Command == SdCommandStopTransmission) {
         InhibitMask = SD_STATE_COMMAND_INHIBIT;
     }
 

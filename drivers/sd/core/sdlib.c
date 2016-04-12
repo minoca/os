@@ -2848,7 +2848,7 @@ Return Value:
 
     RtlZeroMemory(&Command, sizeof(SD_COMMAND));
     Command.Command = SdCommandStopTransmission;
-    Command.ResponseType = SD_RESPONSE_NONE;
+    Command.ResponseType = SD_RESPONSE_R1B;
 
     //
     // Attempt to send the abort command until the card enters the transfer
