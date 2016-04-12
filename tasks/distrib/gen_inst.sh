@@ -47,7 +47,14 @@ for arch in x86 x86q armv7 armv6; do
     fi
 
     mkdir -p "$WORKING/$arch"
-    cp -pv "$BINROOT/install.img" "$BINROOT/msetup" "$WORKING/$arch/"
+    if [ -r "$BINROOT/install.img" ]; then
+        cp -pv "$BINROOT/install.img" "$WORKING/$arch/"
+    fi
+
+    if [ -r "$BINROOT/msetup" ]; then
+        cp -pv "$BINROOT/msetup" "$WORKING/$arch/"
+    fi
+
     if [ -r "$BINROOT/msetup_build.exe" ]; then
         cp -pv "$BINROOT/msetup_build.exe" "$WORKING/msetup.exe"
     fi
