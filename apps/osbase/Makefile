@@ -72,7 +72,7 @@ EXTRA_LDFLAGS += -Wl,-Ttext-segment=0x200000
 endif
 
 EXTRA_LDFLAGS += -Wl,-Bsymbolic
-EXTRA_LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib -Wl,-whole-archive
+EXTRA_LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib -Wl,--whole-archive
 
 EXTRA_SRC_DIRS = x86 x64 armv7
 
