@@ -334,11 +334,13 @@ Return Value:
     PVOID BootVolume;
     INT Compare;
     ULONG Index;
+    BOOL MultipleNonSystem;
     PSETUP_PARTITION_DESCRIPTION Partition;
     ULONG PartitionCount;
     PARTITION_DEVICE_INFORMATION PartitionInformation;
     PSETUP_PARTITION_DESCRIPTION Partitions;
     INT Result;
+    PSETUP_PARTITION_DESCRIPTION SecondBest;
     PSETUP_PARTITION_DESCRIPTION SystemDisk;
 
     BootVolume = NULL;
@@ -369,60 +371,66 @@ Return Value:
     // partition.
     //
 
+    MultipleNonSystem = FALSE;
     BootPartition = NULL;
+    SecondBest = NULL;
     for (Index = 0; Index < PartitionCount; Index += 1) {
         Partition = &(Partitions[Index]);
         if ((Partition->Destination->Type == SetupDestinationPartition) &&
             (((Partition->Partition.Flags & PARTITION_FLAG_BOOT) != 0) ||
              (Partition->Partition.PartitionType == PartitionTypeEfiSystem))) {
 
-            if (BootPartition != NULL) {
+            Compare = -1;
+            if (SystemDisk != NULL) {
+                Compare = memcmp(Partition->Partition.DiskId,
+                                 SystemDisk->Partition.DiskId,
+                                 DISK_IDENTIFIER_SIZE);
+            }
 
-                //
-                // If another boot partition was found, check to see if this
-                // one belongs to the system disk.
-                //
+            //
+            // If it is on the system disk, try to assign it directly to
+            // the winner, and fail if it's already set.
+            //
 
-                if (SystemDisk == NULL) {
-                    fprintf(stderr,
-                            "Error: Found more than one boot partition, "
-                            "and no system disk!\n");
+            if (Compare == 0) {
+                if (BootPartition == NULL) {
+                    BootPartition = Partition;
 
-                    Result = EINVAL;
+                } else {
+                    Result = ENODEV;
+                    printf("Error: Setup found multiple boot "
+                           "partitions.\n");
+
                     goto OsOpenBootVolumeEnd;
                 }
 
-                Result = memcmp(Partition->Partition.DiskId,
-                                SystemDisk->Partition.DiskId,
-                                DISK_IDENTIFIER_SIZE);
-
-                if (Result == 0) {
-
-                    //
-                    // See if the existing one is also on the system disk, and
-                    // fail if it is, since there are now ambiguities.
-                    //
-
-                    Result = memcmp(BootPartition->Partition.DiskId,
-                                    SystemDisk->Partition.DiskId,
-                                    DISK_IDENTIFIER_SIZE);
-
-                    if (Result == 0) {
-                        fprintf(stderr,
-                                "Error: Found more than one boot partition "
-                                "on the system disk.\n");
-
-                        Result = EINVAL;
-                        goto OsOpenBootVolumeEnd;
-                    }
-
-                    BootPartition = Partition;
-                }
+            //
+            // If it's not on the boot device, track it as the second best
+            // and remember if there are multiple of these.
+            //
 
             } else {
-                BootPartition = Partition;
+                if (SecondBest == NULL) {
+                    SecondBest = Partition;
+
+                } else {
+                    MultipleNonSystem = TRUE;
+                }
             }
         }
+    }
+
+    if ((BootPartition == NULL) && (SecondBest != NULL)) {
+        if (MultipleNonSystem != FALSE) {
+            fprintf(stderr,
+                    "Error: Found more than one boot partition on the system "
+                    "disk.\n");
+
+            Result = ENODEV;
+            goto OsOpenBootVolumeEnd;
+        }
+
+        BootPartition = SecondBest;
     }
 
     if (BootPartition == NULL) {

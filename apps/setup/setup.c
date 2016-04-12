@@ -875,11 +875,16 @@ Return Value:
 
 {
 
+    INT Compare;
     PSETUP_PARTITION_DESCRIPTION Device;
     ULONG DeviceCount;
     ULONG DeviceIndex;
     PSETUP_PARTITION_DESCRIPTION Devices;
+    BOOL MultipleNonSystem;
+    PSETUP_PARTITION_DESCRIPTION SecondBest;
+    PSETUP_PARTITION_DESCRIPTION SelectedPartition;
     INT Status;
+    PSETUP_PARTITION_DESCRIPTION SystemDisk;
 
     if ((Context->DiskPath != NULL) || (Context->PartitionPath != NULL) ||
         (Context->DirectoryPath != NULL)) {
@@ -912,6 +917,24 @@ Return Value:
         goto DetermineAutodeployDestinationEnd;
     }
 
+    //
+    // First find the system disk, or at least try to.
+    //
+
+    SystemDisk = NULL;
+    for (DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex += 1) {
+        Device = &(Devices[DeviceIndex]);
+        if ((Device->Destination->Type == SetupDestinationDisk) &&
+            ((Device->Flags & SETUP_DEVICE_FLAG_SYSTEM) != 0)) {
+
+            SystemDisk = Device;
+            break;
+        }
+    }
+
+    MultipleNonSystem = FALSE;
+    SecondBest = NULL;
+    SelectedPartition = NULL;
     for (DeviceIndex = 0; DeviceIndex < DeviceCount; DeviceIndex += 1) {
         Device = &(Devices[DeviceIndex]);
 
@@ -934,35 +957,71 @@ Return Value:
         }
 
         //
-        // If a viable partition was already found, stop, as there seem to be
-        // multiple choices.
+        // See if this partition is on the system disk. If it is, definitely
+        // pick it or fail if there are more than one. If it isn't, mark it
+        // as a possibility, remember if there are more than one, and keep
+        // looking.
         //
 
-        if (Context->PartitionPath != NULL) {
-            printf("Setup found multiple viable partitions. Stop.\n");
-            SetupPrintDestination(Context->PartitionPath);
-            printf("\n");
-            SetupPrintDestination(Device->Destination);
+        Compare = -1;
+        if (SystemDisk != NULL) {
+            Compare = memcmp(Device->Partition.DiskId,
+                             SystemDisk->Partition.DiskId,
+                             DISK_IDENTIFIER_SIZE);
+        }
+
+        if (Compare == 0) {
+            if (SelectedPartition == NULL) {
+                SelectedPartition = Device;
+
+            } else {
+                Status = ENODEV;
+                printf("Error: Setup found multiple viable partitions.\n");
+                goto DetermineAutodeployDestinationEnd;
+            }
+
+        } else {
+            if (SecondBest == NULL) {
+                SecondBest = Device;
+
+            } else {
+                MultipleNonSystem = TRUE;
+            }
+        }
+    }
+
+    //
+    // If there was nothing on the system disk but something elsewhere, use it.
+    // Fail if there were multiple viable non-system partitions.
+    //
+
+    if ((SelectedPartition == NULL) && (SecondBest != NULL)) {
+        if (MultipleNonSystem != FALSE) {
+            printf("Error: Setup found multiple viable partitions.\n");
             Status = ENODEV;
             goto DetermineAutodeployDestinationEnd;
         }
 
-        Context->PartitionPath = SetupCreateDestination(
-                                                Device->Destination->Type,
-                                                Device->Destination->Path,
-                                                Device->Destination->DeviceId);
+        SelectedPartition = SecondBest;
+    }
 
-        if (Context->PartitionPath == NULL) {
-            Status = ENOMEM;
-            goto DetermineAutodeployDestinationEnd;
-        }
+    if (SelectedPartition == NULL) {
+        printf("Setup found no viable partitions to install to.\n");
+        Status = ENODEV;
+        goto DetermineAutodeployDestinationEnd;
+    }
+
+    Context->PartitionPath = SetupCreateDestination(
+                                     SelectedPartition->Destination->Type,
+                                     SelectedPartition->Destination->Path,
+                                     SelectedPartition->Destination->DeviceId);
+
+    if (Context->PartitionPath == NULL) {
+        Status = ENOMEM;
+        goto DetermineAutodeployDestinationEnd;
     }
 
     Status = 0;
-    if (Context->PartitionPath == NULL) {
-        printf("Setup found no viable partitions to install to.\n");
-        Status = ENODEV;
-    }
 
 DetermineAutodeployDestinationEnd:
     if (Devices != NULL) {
