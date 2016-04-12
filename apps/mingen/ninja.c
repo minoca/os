@@ -459,6 +459,7 @@ Return Value:
     fprintf(File,
             "rule rebuild_ninja\n"
             "    description = Rebuilding Ninja file\n"
+            "    generator = 1\n"
             "    command = ");
 
     MingenPrintRebuildCommand(Context, File);
