@@ -229,7 +229,11 @@ Return Value:
     }
 
     if (Context->BuildRoot != BuildRoot) {
-        free(BuildRoot);
+        if (Context->BuildRoot != NULL) {
+            free(Context->BuildRoot);
+        }
+
+        Context->BuildRoot = BuildRoot;
     }
 
     Status = MingenFindSourceRoot(Context);

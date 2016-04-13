@@ -374,7 +374,6 @@ Return Value:
         }
     }
 
-PrintConfigurationEnd:
     if (BootOrder != NULL) {
         free(BootOrder);
     }

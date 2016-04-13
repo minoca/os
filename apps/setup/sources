@@ -31,5 +31,5 @@ COMMON_OBJS = cache.o          \
               steps.o          \
               util.o           \
 
-EXTRA_SRC_DIRS = interp minoca
+EXTRA_SRC_DIRS = minoca
 
