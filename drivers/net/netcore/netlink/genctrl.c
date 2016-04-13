@@ -79,6 +79,7 @@ NetlinkpGenericControlSendCommand (
 NETLINK_GENERIC_COMMAND NetlinkGenericControlCommands[] = {
     {
         NETLINK_GENERIC_CONTROL_GET_FAMILY,
+        0,
         NetlinkpGenericControlGetFamily
     },
 };
@@ -288,8 +289,7 @@ Return Value:
 
     AttributesLength = Packet->FooterOffset - Packet->DataOffset;
     Attributes = Packet->Buffer + Packet->DataOffset;
-    Status = NetlinkGenericGetAttribute(
-                                 Attributes,
+    Status = NetlinkGetAttribute(Attributes,
                                  AttributesLength,
                                  NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_NAME,
                                  &Data,
@@ -300,7 +300,7 @@ Return Value:
     }
 
     if (Family == NULL) {
-        Status = NetlinkGenericGetAttribute(
+        Status = NetlinkGetAttribute(
                                    Attributes,
                                    AttributesLength,
                                    NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID,
@@ -379,8 +379,6 @@ Return Value:
 
 {
 
-    PNETLINK_ATTRIBUTE Attribute;
-    PVOID Data;
     ULONG GroupCount;
     PNETLINK_GENERIC_MULTICAST_GROUP Groups;
     ULONG GroupsLength;
@@ -389,14 +387,15 @@ Return Value:
     ULONG Index;
     ULONG NameSize;
     PNET_PACKET_BUFFER Packet;
-    UINTN PacketLength;
+    ULONG PacketLength;
+    UINTN PayloadLength;
     KSTATUS Status;
 
     //
     // Determine the size of the command payload.
     //
 
-    PacketLength = 0;
+    PayloadLength = 0;
     switch (Parameters->Command) {
     case NETLINK_GENERIC_CONTROL_NEW_FAMILY:
     case NETLINK_GENERIC_CONTROL_DELETE_FAMILY:
@@ -424,8 +423,8 @@ Return Value:
     // All commands get the family ID and name attributes.
     //
 
-    PacketLength += NETLINK_ATTRIBUTE_SIZE(sizeof(USHORT)) +
-                    NETLINK_ATTRIBUTE_SIZE(Family->Properties.NameLength);
+    PayloadLength += NETLINK_ATTRIBUTE_SIZE(sizeof(USHORT)) +
+                     NETLINK_ATTRIBUTE_SIZE(Family->Properties.NameLength);
 
     //
     // Add the size for the multicast groups based on the information
@@ -433,7 +432,7 @@ Return Value:
     //
 
     if (GroupCount != 0) {
-        PacketLength += NETLINK_ATTRIBUTE_SIZE(0);
+        PayloadLength += NETLINK_ATTRIBUTE_SIZE(0);
         GroupsLength = NETLINK_ATTRIBUTE_SIZE(0) * GroupCount;
         GroupsLength += NETLINK_ATTRIBUTE_SIZE(sizeof(ULONG)) * GroupCount;
         for (Index = 0; Index < GroupCount; Index += 1) {
@@ -441,11 +440,12 @@ Return Value:
             GroupsLength += NETLINK_ATTRIBUTE_SIZE(Group->NameLength);
         }
 
-        PacketLength += GroupsLength;
+        PayloadLength += GroupsLength;
     }
 
     HeaderLength = NETLINK_HEADER_LENGTH + NETLINK_GENERIC_HEADER_LENGTH;
-    Status = NetAllocateBuffer(HeaderLength,
+    PacketLength = HeaderLength + PayloadLength;
+    Status = NetAllocateBuffer(0,
                                PacketLength,
                                0,
                                NULL,
@@ -456,34 +456,56 @@ Return Value:
         goto SendCommandEnd;
     }
 
-    //
-    // Add the family ID and family name attributes to the data portion of the
-    // packet.
-    //
+    Status = NetlinkGenericAppendHeaders(NetlinkGenericControlFamily,
+                                         Packet,
+                                         PayloadLength,
+                                         Parameters->Message.SequenceNumber,
+                                         0,
+                                         Parameters->Command,
+                                         Parameters->Version);
 
-    Attribute = Packet->Buffer + Packet->DataOffset;
-    Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(sizeof(USHORT));
-    Attribute->Type = NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID;
-    Data = NETLINK_ATTRIBUTE_DATA(Attribute);
-    *((PUSHORT)Data) = Family->Properties.Id;
-    Attribute = (PVOID)Attribute + NETLINK_ATTRIBUTE_SIZE(sizeof(USHORT));
-    Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(Family->Properties.NameLength);
-    Attribute->Type = NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_NAME;
-    RtlStringCopy(NETLINK_ATTRIBUTE_DATA(Attribute),
-                  Family->Properties.Name,
-                  Family->Properties.NameLength);
-
-    Attribute = (PVOID)Attribute +
-                NETLINK_ATTRIBUTE_SIZE(Family->Properties.NameLength);
+    if (!KSUCCESS(Status)) {
+        goto SendCommandEnd;
+    }
 
     //
-    // Add the multicast groups.
+    // Append the family ID and family name attributes to the packet.
+    //
+
+    Status = NetlinkAppendAttribute(Packet,
+                                    NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID,
+                                    &(Family->Properties.Id),
+                                    sizeof(USHORT));
+
+    if (!KSUCCESS(Status)) {
+        goto SendCommandEnd;
+    }
+
+    Status = NetlinkAppendAttribute(
+                                 Packet,
+                                 NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_NAME,
+                                 Family->Properties.Name,
+                                 Family->Properties.NameLength);
+
+    if (!KSUCCESS(Status)) {
+        goto SendCommandEnd;
+    }
+
+    //
+    // Append the multicast groups if present.
     //
 
     if (GroupCount != 0) {
-        Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(GroupsLength);
-        Attribute->Type = NETLINK_GENERIC_CONTROL_ATTRIBUTE_MULTICAST_GROUPS;
-        Attribute = (PVOID)Attribute + NETLINK_ATTRIBUTE_SIZE(0);
+        Status = NetlinkAppendAttribute(
+                            Packet,
+                            NETLINK_GENERIC_CONTROL_ATTRIBUTE_MULTICAST_GROUPS,
+                            NULL,
+                            GroupsLength);
+
+        if (!KSUCCESS(Status)) {
+            goto SendCommandEnd;
+        }
+
         IdSize = NETLINK_ATTRIBUTE_SIZE(sizeof(ULONG));
         for (Index = 0; Index < GroupCount; Index += 1) {
             Group = &(Groups[Index]);
@@ -491,21 +513,34 @@ Return Value:
             ASSERT((Group->Id != 0) && (Group->NameLength != 0));
 
             NameSize = NETLINK_ATTRIBUTE_SIZE(Group->NameLength);
-            Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(IdSize + NameSize);
-            Attribute->Type = Index + 1;
-            Attribute = (PVOID)Attribute + NETLINK_ATTRIBUTE_SIZE(0);
-            Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(sizeof(ULONG));
-            Attribute->Type = NETLINK_GENERIC_MULTICAST_GROUP_ATTRIBUTE_ID;
-            Data = NETLINK_ATTRIBUTE_DATA(Attribute);
-            *((PUSHORT)Data) = Group->Id;
-            Attribute = (PVOID)Attribute + IdSize;
-            Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(Group->NameLength);
-            Attribute->Type = NETLINK_GENERIC_MULTICAST_GROUP_ATTRIBUTE_NAME;
-            RtlStringCopy(NETLINK_ATTRIBUTE_DATA(Attribute),
-                          Group->Name,
-                          Group->NameLength);
+            Status = NetlinkAppendAttribute(Packet,
+                                            Index + 1,
+                                            NULL,
+                                            IdSize + NameSize);
 
-            Attribute = (PVOID)Attribute + NameSize;
+            if (!KSUCCESS(Status)) {
+                goto SendCommandEnd;
+            }
+
+            Status = NetlinkAppendAttribute(
+                                  Packet,
+                                  NETLINK_GENERIC_MULTICAST_GROUP_ATTRIBUTE_ID,
+                                  &(Group->Id),
+                                  sizeof(ULONG));
+
+            if (!KSUCCESS(Status)) {
+                goto SendCommandEnd;
+            }
+
+            Status = NetlinkAppendAttribute(
+                                Packet,
+                                NETLINK_GENERIC_MULTICAST_GROUP_ATTRIBUTE_NAME,
+                                Group->Name,
+                                Group->NameLength);
+
+            if (!KSUCCESS(Status)) {
+                goto SendCommandEnd;
+            }
         }
     }
 
@@ -516,7 +551,7 @@ Return Value:
 
     Status = NetlinkGenericSendCommand(NetlinkGenericControlFamily,
                                        Packet,
-                                       Parameters);
+                                       Parameters->Message.DestinationAddress);
 
     if (!KSUCCESS(Status)) {
         goto SendCommandEnd;

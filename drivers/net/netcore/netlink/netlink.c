@@ -1036,15 +1036,15 @@ KSTATUS
 NetlinkSendMessage (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_MESSAGE_PARAMETERS Parameters
+    PNETWORK_ADDRESS DestinationAddress
     )
 
 /*++
 
 Routine Description:
 
-    This routine sends a netlink message, filling out the header based on the
-    parameters.
+    This routine sends a netlink message to the given destination address. The
+    caller should have already filled the buffer with the netlink header.
 
 Arguments:
 
@@ -1053,7 +1053,153 @@ Arguments:
 
     Packet - Supplies a pointer to the network packet to be sent.
 
-    Parameters - Supplies a pointer to the message parameters.
+    DestinationAddress - Supplies a pointer to the destination address to which
+        the message will be sent.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    SOCKET_IO_PARAMETERS IoParameters;
+    KSTATUS Status;
+
+    //
+    // The packet should be filled up. Set the data offset back to zero to send
+    // all the data in the packet.
+    //
+
+    ASSERT(Packet->DataOffset == Packet->FooterOffset);
+
+    Packet->DataOffset = 0;
+
+    //
+    // Send the packet using the I/O API.
+    //
+
+    RtlZeroMemory(&IoParameters, sizeof(SOCKET_IO_PARAMETERS));
+    IoParameters.TimeoutInMilliseconds = WAIT_TIME_INDEFINITE;
+    IoParameters.NetworkAddress = DestinationAddress;
+    IoParameters.Size = Packet->FooterOffset - Packet->DataOffset;
+    MmSetIoBufferCurrentOffset(Packet->IoBuffer, Packet->DataOffset);
+    Status = IoSocketSendData(TRUE,
+                              Socket->KernelSocket.IoHandle,
+                              &IoParameters,
+                              Packet->IoBuffer);
+
+    return Status;
+}
+
+NETLINK_API
+KSTATUS
+NetlinkSendMultipartMessage (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS DestinationAddress,
+    ULONG SequenceNumber
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends a multipart message packet. It will append the final
+    DONE message, which the packet must have space for, reset the packet's data
+    offset to the beginning and then send the entire packet off to the
+    destination address.
+
+Arguments:
+
+    Socket - Supplies a pointer to the network socket from which the packet
+        will be sent.
+
+    Packet - Supplies a pointer to the network packet to send.
+
+    DestinationAddress - Supplies a pointer to the network address to which the
+        packet will be sent.
+
+    SequenceNumber - Supplies the sequence number to set in the header of the
+        DONE message that is appended to the packet.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    //
+    // Add the done message. It is simply just a netlink header with the type
+    // set to DONE and the multi-part message flag set.
+    //
+
+    Status = NetlinkAppendHeader(Socket,
+                                 Packet,
+                                 0,
+                                 SequenceNumber,
+                                 NETLINK_MESSAGE_TYPE_DONE,
+                                 NETLINK_HEADER_FLAG_MULTIPART);
+
+    if (!KSUCCESS(Status)) {
+        goto SendMultipartMessageEnd;
+    }
+
+    //
+    // Send the entire multipart packet to the destination as one "message".
+    //
+
+    Status = NetlinkSendMessage(Socket, Packet, DestinationAddress);
+    if (!KSUCCESS(Status)) {
+        goto SendMultipartMessageEnd;
+    }
+
+SendMultipartMessageEnd:
+    return Status;
+}
+
+NETLINK_API
+KSTATUS
+NetlinkAppendHeader (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    ULONG Length,
+    ULONG SequenceNumber,
+    USHORT Type,
+    USHORT Flags
+    )
+
+/*++
+
+Routine Description:
+
+    This routine appends a base netlink header to the given network packet. It
+    validates if there is enough space remaining in the packet and moves the
+    data offset forwards to the first byte after the header on success.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket that will send the packet. The
+        header's port ID is taken from the socket's local address.
+
+    Packet - Supplies a pointer to the network packet to which a base netlink
+        header will be added.
+
+    Length - Supplies the length of the netlink message, not including the
+        header.
+
+    SequenceNumber - Supplies the desired sequence number for the netlink
+        message.
+
+    Type - Supplies the message type to be set in the header.
+
+    Flags - Supplies a bitmask of netlink message flags to be set. See
+        NETLINK_HEADER_FLAG_* for definitions.
 
 Return Value:
 
@@ -1064,48 +1210,164 @@ Return Value:
 {
 
     PNETLINK_HEADER Header;
-    SOCKET_IO_PARAMETERS IoParameters;
+    ULONG PacketLength;
     PNETLINK_ADDRESS SourceAddress;
     KSTATUS Status;
 
-    if (Packet->DataOffset < NETLINK_HEADER_LENGTH) {
+    Length += NETLINK_HEADER_LENGTH;
+    PacketLength = Packet->FooterOffset - Packet->DataOffset;
+    if (PacketLength < Length) {
         Status = STATUS_BUFFER_TOO_SMALL;
-        goto SendMessageEnd;
+        goto AppendHeaderEnd;
     }
 
-    //
-    // Fill out the message header.
-    //
-
-    Packet->DataOffset -= NETLINK_HEADER_LENGTH;
+    SourceAddress = (PNETLINK_ADDRESS)&(Socket->LocalAddress);
     Header = Packet->Buffer + Packet->DataOffset;
-    Header->Length = Packet->FooterOffset - Packet->DataOffset;
-    Header->Type = Parameters->Type;
-    Header->Flags = 0;
-    Header->SequenceNumber = Parameters->SequenceNumber;
-    SourceAddress = (PNETLINK_ADDRESS)Parameters->SourceAddress;
+    Header->Length = Length;
+    Header->Type = Type;
+    Header->Flags = Flags;
+    Header->SequenceNumber = SequenceNumber;
     Header->PortId = SourceAddress->Port;
+    Packet->DataOffset += NETLINK_HEADER_LENGTH;
+    Status = STATUS_SUCCESS;
 
-    //
-    // Send the message to the destination address.
-    //
+AppendHeaderEnd:
+    return Status;
+}
 
-    RtlZeroMemory(&IoParameters, sizeof(SOCKET_IO_PARAMETERS));
-    IoParameters.TimeoutInMilliseconds = WAIT_TIME_INDEFINITE;
-    IoParameters.NetworkAddress = Parameters->DestinationAddress;
-    IoParameters.Size = Header->Length;
-    MmSetIoBufferCurrentOffset(Packet->IoBuffer, Packet->DataOffset);
-    Status = IoSocketSendData(TRUE,
-                              Socket->KernelSocket.IoHandle,
-                              &IoParameters,
-                              Packet->IoBuffer);
+NETLINK_API
+KSTATUS
+NetlinkAppendAttribute (
+    PNET_PACKET_BUFFER Packet,
+    USHORT Type,
+    PVOID Data,
+    USHORT DataLength
+    )
 
-    if (!KSUCCESS(Status)) {
-        goto SendMessageEnd;
+/*++
+
+Routine Description:
+
+    This routine appends a netlink attribute to the given network packet. It
+    validates that there is enough space for the attribute and moves the
+    packet's data offset to the first byte after the attribute. The exception
+    to this rule is if a NULL data buffer is supplied; the packet's data offset
+    is only moved to the first byte after the attribute header.
+
+Arguments:
+
+    Packet - Supplies a pointer to the network packet to which the attribute
+        will be added.
+
+    Type - Supplies the netlink attribute type.
+
+    Data - Supplies an optional pointer to the attribute data to be stored in
+        the network packet. Even if no data buffer is supplied, a data length
+        may be applied for the case of child attributes that are yet to be
+        appended.
+
+    DataLength - Supplies the length of the data, in bytes.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PNETLINK_ATTRIBUTE Attribute;
+    ULONG AttributeLength;
+    ULONG PacketLength;
+
+    AttributeLength = NETLINK_ATTRIBUTE_SIZE(DataLength);
+    PacketLength = Packet->FooterOffset - Packet->DataOffset;
+    if (PacketLength < AttributeLength) {
+        return STATUS_BUFFER_TOO_SMALL;
     }
 
-SendMessageEnd:
-    return Status;
+    Attribute = Packet->Buffer + Packet->DataOffset;
+    Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(DataLength);
+    Attribute->Type = Type;
+    if (Data != NULL) {
+        RtlCopyMemory(NETLINK_ATTRIBUTE_DATA(Attribute),
+                      Data,
+                      DataLength);
+
+        Packet->DataOffset += AttributeLength;
+
+    } else {
+        Packet->DataOffset += NETLINK_ATTRIBUTE_SIZE(0);
+    }
+
+    return STATUS_SUCCESS;
+}
+
+NETLINK_API
+KSTATUS
+NetlinkGetAttribute (
+    PVOID Attributes,
+    ULONG AttributesLength,
+    USHORT Type,
+    PVOID *Data,
+    PUSHORT DataLength
+    )
+
+/*++
+
+Routine Description:
+
+    This routine parses the given attributes buffer and returns a pointer to
+    the desired attribute.
+
+Arguments:
+
+    Attributes - Supplies a pointer to the start of the generic command
+        attributes.
+
+    AttributesLength - Supplies the length of the attributes buffer, in bytes.
+
+    Type - Supplies the netlink generic attribute type.
+
+    Data - Supplies a pointer that receives a pointer to the data for the
+        requested attribute type.
+
+    DataLength - Supplies a pointer that receives the length of the requested
+        attribute data.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PNETLINK_ATTRIBUTE Attribute;
+    ULONG AttributeSize;
+
+    Attribute = (PNETLINK_ATTRIBUTE)Attributes;
+    while (AttributesLength != 0) {
+        if ((AttributesLength < NETLINK_ATTRIBUTE_HEADER_LENGTH) ||
+            (AttributesLength < Attribute->Length)) {
+
+            break;
+        }
+
+        if (Attribute->Type == Type) {
+            *DataLength = Attribute->Length - NETLINK_ATTRIBUTE_HEADER_LENGTH;
+            *Data = NETLINK_ATTRIBUTE_DATA(Attribute);
+            return STATUS_SUCCESS;
+        }
+
+        AttributeSize = NETLINK_ALIGN(Attribute->Length);
+        Attribute = (PVOID)Attribute + AttributeSize;
+        AttributesLength -= AttributeSize;
+    }
+
+    *Data = NULL;
+    *DataLength = 0;
+    return STATUS_NOT_FOUND;
 }
 
 NETLINK_API
@@ -1690,7 +1952,9 @@ Return Value:
     PNET_PACKET_BUFFER AckPacket;
     ULONG CopyLength;
     PNETLINK_ERROR_MESSAGE ErrorMessage;
-    NETLINK_MESSAGE_PARAMETERS Parameters;
+    ULONG HeaderLength;
+    PNETLINK_HEADER OriginalHeader;
+    ULONG PayloadLength;
     KSTATUS Status;
 
     //
@@ -1700,13 +1964,15 @@ Return Value:
 
     AckPacket = NULL;
     CopyLength = NETLINK_HEADER_LENGTH;
-    AckLength = sizeof(NETLINK_ERROR_MESSAGE);
+    PayloadLength = sizeof(NETLINK_ERROR_MESSAGE);
+    HeaderLength = NETLINK_HEADER_LENGTH;
     if (!KSUCCESS(PacketStatus)) {
         CopyLength = Packet->FooterOffset - Packet->DataOffset;
-        AckLength += CopyLength - NETLINK_HEADER_LENGTH;
+        PayloadLength += CopyLength - NETLINK_HEADER_LENGTH;
     }
 
-    Status = NetAllocateBuffer(NETLINK_HEADER_LENGTH,
+    AckLength = HeaderLength + PayloadLength;
+    Status = NetAllocateBuffer(0,
                                AckLength,
                                0,
                                NULL,
@@ -1717,22 +1983,37 @@ Return Value:
         return;
     }
 
+    OriginalHeader = Packet->Buffer + Packet->DataOffset;
+    Status = NetlinkAppendHeader(Socket,
+                                 AckPacket,
+                                 PayloadLength,
+                                 OriginalHeader->SequenceNumber,
+                                 NETLINK_MESSAGE_TYPE_ERROR,
+                                 0);
+
+    if (!KSUCCESS(Status)) {
+        goto SendAckEnd;
+    }
+
     ErrorMessage = AckPacket->Buffer + AckPacket->DataOffset;
     ErrorMessage->Error = (INT)PacketStatus;
-    RtlCopyMemory(&(ErrorMessage->Header),
-                  Packet->Buffer + Packet->DataOffset,
-                  CopyLength);
+    RtlCopyMemory(&(ErrorMessage->Header), OriginalHeader, CopyLength);
+    AckPacket->DataOffset += PayloadLength;
 
     //
     // Send the ACK packet back to where the original packet came from.
     //
 
-    Parameters.SourceAddress = &(Socket->LocalAddress);
-    Parameters.DestinationAddress = DestinationAddress;
-    Parameters.SequenceNumber = ErrorMessage->Header.SequenceNumber;
-    Parameters.Type = NETLINK_MESSAGE_TYPE_ERROR;
-    NetlinkSendMessage(Socket, AckPacket, &Parameters);
-    NetFreeBuffer(AckPacket);
+    Status = NetlinkSendMessage(Socket, AckPacket, DestinationAddress);
+    if (!KSUCCESS(Status)) {
+        goto SendAckEnd;
+    }
+
+SendAckEnd:
+    if (AckPacket != NULL) {
+        NetFreeBuffer(AckPacket);
+    }
+
     return;
 }
 

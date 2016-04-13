@@ -144,10 +144,16 @@ Author:
 // Define the netlink message header flags.
 //
 
-#define NETLINK_HEADER_FLAG_REQUEST       0x0001
-#define NETLINK_HEADER_FLAG_MORE_MESSAGES 0x0002
-#define NETLINK_HEADER_FLAG_ACK           0x0004
-#define NETLINK_HEADER_FLAG_ECHO          0x0008
+#define NETLINK_HEADER_FLAG_REQUEST   0x0001
+#define NETLINK_HEADER_FLAG_MULTIPART 0x0002
+#define NETLINK_HEADER_FLAG_ACK       0x0004
+#define NETLINK_HEADER_FLAG_ECHO      0x0008
+#define NETLINK_HEADER_FLAG_ROOT      0x0010
+#define NETLINK_HEADER_FLAG_MATCH     0x0020
+#define NETLINK_HEADER_FLAG_ATOMIC    0x0040
+
+#define NETLINK_HEADER_FLAG_DUMP \
+    (NETLINK_HEADER_FLAG_ROOT | NETLINK_HEADER_FLAG_MATCH)
 
 //
 // Define the port ID of the kernel.
@@ -255,6 +261,13 @@ Author:
 #define NETLINK_GENERIC_80211_ATTRIBUTE_SSID 2
 #define NETLINK_GENERIC_80211_ATTRIBUTE_BSSID 3
 #define NETLINK_GENERIC_80211_ATTRIBUTE_PASSPHRASE 4
+#define NETLINK_GENERIC_80211_ATTRIBUTE_BSS 5
+
+//
+// Define the 802.11 BSS attributes.
+//
+
+#define NETLINK_GENERIC_80211_BSS_ATTRIBUTE_BSSID 1
 
 //
 // Define the generic 802.11 multicast group names.
@@ -490,6 +503,9 @@ Members:
     CommandId - Stores the command ID value. This should match the generic
         netlink header values for the command's family.
 
+    RequiredFlags - Stores a bitmask of flags that must be set in the
+        requesting netlink message for this command to be processed.
+
     ProcessCommand - Stores a pointer to a function called when a packet of
         this command type is received by a generic netlink socket.
 
@@ -497,6 +513,7 @@ Members:
 
 typedef struct _NETLINK_GENERIC_COMMAND {
     UCHAR CommandId;
+    USHORT RequiredFlags;
     PNETLINK_GENERIC_PROCESS_COMMAND ProcessCommand;
 } NETLINK_GENERIC_COMMAND, *PNETLINK_GENERIC_COMMAND;
 
@@ -680,15 +697,15 @@ KSTATUS
 NetlinkSendMessage (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_MESSAGE_PARAMETERS Parameters
+    PNETWORK_ADDRESS DestinationAddress
     );
 
 /*++
 
 Routine Description:
 
-    This routine sends a netlink message, filling out the header based on the
-    parameters.
+    This routine sends a netlink message to the given destination address. The
+    caller should have already filled the buffer with the netlink header.
 
 Arguments:
 
@@ -697,7 +714,166 @@ Arguments:
 
     Packet - Supplies a pointer to the network packet to be sent.
 
-    Parameters - Supplies a pointer to the message parameters.
+    DestinationAddress - Supplies a pointer to the destination address to which
+        the message will be sent.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NETLINK_API
+KSTATUS
+NetlinkSendMultipartMessage (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETWORK_ADDRESS DestinationAddress,
+    ULONG SequenceNumber
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends a multipart message packet. It will append the final
+    DONE message, which the packet must have space for, reset the packet's data
+    offset to the beginning and then send the entire packet off to the
+    destination address.
+
+Arguments:
+
+    Socket - Supplies a pointer to the network socket from which the packet
+        will be sent.
+
+    Packet - Supplies a pointer to the network packet to send.
+
+    DestinationAddress - Supplies a pointer to the network address to which the
+        packet will be sent.
+
+    SequenceNumber - Supplies the sequence number to set in the header of the
+        DONE message that is appended to the packet.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NETLINK_API
+KSTATUS
+NetlinkAppendHeader (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    ULONG Length,
+    ULONG SequenceNumber,
+    USHORT Type,
+    USHORT Flags
+    );
+
+/*++
+
+Routine Description:
+
+    This routine appends a base netlink header to the given network packet. It
+    validates if there is enough space remaining in the packet and moves the
+    data offset forwards to the first byte after the header on success.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket that will send the packet. The
+        header's port ID is taken from the socket's local address.
+
+    Packet - Supplies a pointer to the network packet to which a base netlink
+        header will be added.
+
+    Length - Supplies the length of the netlink message, not including the
+        header.
+
+    SequenceNumber - Supplies the desired sequence number for the netlink
+        message.
+
+    Type - Supplies the message type to be set in the header.
+
+    Flags - Supplies a bitmask of netlink message flags to be set. See
+        NETLINK_HEADER_FLAG_* for definitions.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NETLINK_API
+KSTATUS
+NetlinkAppendAttribute (
+    PNET_PACKET_BUFFER Packet,
+    USHORT Type,
+    PVOID Data,
+    USHORT DataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine appends a netlink attribute to the given network packet. It
+    validates that there is enough space for the attribute and moves the
+    packet's data offset to the first byte after the attribute. The exception
+    to this rule is if a NULL data buffer is supplied; the packet's data offset
+    is only moved to the first byte after the attribute header.
+
+Arguments:
+
+    Packet - Supplies a pointer to the network packet to which the attribute
+        will be added.
+
+    Type - Supplies the netlink attribute type.
+
+    Data - Supplies an optional pointer to the attribute data to be stored in
+        the network packet. Even if no data buffer is supplied, a data length
+        may be applied for the case of child attributes that are yet to be
+        appended.
+
+    DataLength - Supplies the length of the data, in bytes.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+NETLINK_API
+KSTATUS
+NetlinkGetAttribute (
+    PVOID Attributes,
+    ULONG AttributesLength,
+    USHORT Type,
+    PVOID *Data,
+    PUSHORT DataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine parses the given attributes buffer and returns a pointer to
+    the desired attribute.
+
+Arguments:
+
+    Attributes - Supplies a pointer to the start of the generic command
+        attributes.
+
+    AttributesLength - Supplies the length of the attributes buffer, in bytes.
+
+    Type - Supplies the netlink generic attribute type.
+
+    Data - Supplies a pointer that receives a pointer to the data for the
+        requested attribute type.
+
+    DataLength - Supplies a pointer that receives the length of the requested
+        attribute data.
 
 Return Value:
 
@@ -823,24 +999,25 @@ KSTATUS
 NetlinkGenericSendCommand (
     PNETLINK_GENERIC_FAMILY Family,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETWORK_ADDRESS DestinationAddress
     );
 
 /*++
 
 Routine Description:
 
-    This routine sends a generic netlink command, filling out the generic
-    header and netlink header.
+    This routine sends a generic netlink command. The generic header should
+    already be filled out.
 
 Arguments:
 
     Family - Supplies a pointer to the generic netlink family sending the
-        message.
+        command.
 
     Packet - Supplies a pointer to the network packet to be sent.
 
-    Parameters - Supplies a pointer to the generic command parameters.
+    DestinationAddress - Supplies a pointer to the destination address to which
+        the command will be sent.
 
 Return Value:
 
@@ -853,8 +1030,7 @@ KSTATUS
 NetlinkGenericSendMulticastCommand (
     PNETLINK_GENERIC_FAMILY Family,
     PNET_PACKET_BUFFER Packet,
-    ULONG GroupId,
-    UCHAR Command
+    ULONG GroupId
     );
 
 /*++
@@ -875,8 +1051,6 @@ Arguments:
     GroupId - Supplies the family's multicast group ID over which to send the
         command.
 
-    Command - Supplies the generic family's command to send.
-
 Return Value:
 
     Status code.
@@ -885,35 +1059,45 @@ Return Value:
 
 NETLINK_API
 KSTATUS
-NetlinkGenericGetAttribute (
-    PVOID Attributes,
-    ULONG AttributesLength,
-    USHORT Type,
-    PVOID *Data,
-    PUSHORT DataLength
+NetlinkGenericAppendHeaders (
+    PNETLINK_GENERIC_FAMILY Family,
+    PNET_PACKET_BUFFER Packet,
+    ULONG Length,
+    ULONG SequenceNumber,
+    USHORT Flags,
+    UCHAR Command,
+    UCHAR Version
     );
 
 /*++
 
 Routine Description:
 
-    This routine parses the given attributes buffer and returns a pointer to
-    the desired attribute.
+    This routine appends the base and generic netlink headers to the given
+    packet, validating that there is enough space remaining in the buffer and
+    moving the data offset forward to the first byte after the headers once
+    they have been added.
 
 Arguments:
 
-    Attributes - Supplies a pointer to the start of the generic command
-        attributes.
+    Family - Supplies a pointer to the netlink generic family to which the
+        packet belongs.
 
-    AttributesLength - Supplies the length of the attributes buffer, in bytes.
+    Packet - Supplies a pointer to the network packet to which the headers will
+        be appended.
 
-    Type - Supplies the netlink generic attribute type.
+    Length - Supplies the length of the generic command payload, not including
+        any headers.
 
-    Data - Supplies a pointer that receives a pointer to the data for the
-        requested attribute type.
+    SequenceNumber - Supplies the desired sequence number for the netlink
+        message.
 
-    DataLength - Supplies a pointer that receives the length of the requested
-        attribute data.
+    Flags - Supplies a bitmask of netlink message flags to be set. See
+        NETLINK_HEADER_FLAG_* for definitions.
+
+    Command - Supplies the generic netlink command to bet set in the header.
+
+    Version - Supplies the version number of the command.
 
 Return Value:
 

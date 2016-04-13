@@ -74,6 +74,13 @@ Net80211pNetlinkScanCompletionRoutine (
     );
 
 KSTATUS
+Net80211pNetlinkScanGetResults (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    );
+
+KSTATUS
 Net80211pNetlinkGetLink (
     PNET_PACKET_BUFFER Packet,
     PNET80211_LINK *Link
@@ -92,19 +99,27 @@ Net80211pNetlinkSendScanNotification (
 NETLINK_GENERIC_COMMAND Net80211NetlinkCommands[] = {
     {
         NETLINK_GENERIC_80211_JOIN,
+        0,
         Net80211pNetlinkJoin
     },
 
     {
         NETLINK_GENERIC_80211_LEAVE,
+        0,
         Net80211pNetlinkLeave
     },
 
     {
         NETLINK_GENERIC_80211_SCAN_START,
+        0,
         Net80211pNetlinkScanStart
     },
 
+    {
+        NETLINK_GENERIC_80211_SCAN_GET_RESULTS,
+        NETLINK_HEADER_FLAG_DUMP,
+        Net80211pNetlinkScanGetResults
+    },
 };
 
 NETLINK_GENERIC_MULTICAST_GROUP Net80211NetlinkMulticastGroups[] = {
@@ -261,11 +276,11 @@ Return Value:
 
     Attributes = Packet->Buffer + Packet->DataOffset;
     AttributesLength = Packet->FooterOffset - Packet->DataOffset;
-    Status = NetlinkGenericGetAttribute(Attributes,
-                                        AttributesLength,
-                                        NETLINK_GENERIC_80211_ATTRIBUTE_SSID,
-                                        (PVOID *)&Ssid,
-                                        &SsidLength);
+    Status = NetlinkGetAttribute(Attributes,
+                                 AttributesLength,
+                                 NETLINK_GENERIC_80211_ATTRIBUTE_SSID,
+                                 (PVOID *)&Ssid,
+                                 &SsidLength);
 
     if (!KSUCCESS(Status)) {
         goto NetlinkJoinEnd;
@@ -293,12 +308,11 @@ Return Value:
     // sure it is null-terminated and strip the null character if it is.
     //
 
-    Status = NetlinkGenericGetAttribute(
-                                    Attributes,
-                                    AttributesLength,
-                                    NETLINK_GENERIC_80211_ATTRIBUTE_PASSPHRASE,
-                                    (PVOID *)&Passphrase,
-                                    &PassphraseLength);
+    Status = NetlinkGetAttribute(Attributes,
+                                 AttributesLength,
+                                 NETLINK_GENERIC_80211_ATTRIBUTE_PASSPHRASE,
+                                 (PVOID *)&Passphrase,
+                                 &PassphraseLength);
 
     if (KSUCCESS(Status)) {
         if (Passphrase[PassphraseLength - 1] != STRING_TERMINATOR) {
@@ -318,11 +332,11 @@ Return Value:
     // always known.
     //
 
-    Status = NetlinkGenericGetAttribute(Attributes,
-                                        AttributesLength,
-                                        NETLINK_GENERIC_80211_ATTRIBUTE_BSSID,
-                                        &Bssid,
-                                        &BssidLength);
+    Status = NetlinkGetAttribute(Attributes,
+                                 AttributesLength,
+                                 NETLINK_GENERIC_80211_ATTRIBUTE_BSSID,
+                                 &Bssid,
+                                 &BssidLength);
 
     if (KSUCCESS(Status)) {
         if (BssidLength != NET80211_ADDRESS_SIZE) {
@@ -541,6 +555,194 @@ Return Value:
 }
 
 KSTATUS
+Net80211pNetlinkScanGetResults (
+    PNET_SOCKET Socket,
+    PNET_PACKET_BUFFER Packet,
+    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the results from the latest scan, packages them up as
+    a netlink message and sends them back to the caller.
+
+Arguments:
+
+    Socket - Supplies a pointer to the socket that received the packet.
+
+    Packet - Supplies a pointer to a structure describing the incoming packet.
+        This structure may be used as a scratch space while this routine
+        executes and the packet travels up the stack, but will not be accessed
+        after this routine returns.
+
+    Parameters - Supplies a pointer to the command parameters.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PNET80211_BSS_ENTRY Bss;
+    ULONG BssCount;
+    ULONG BssLength;
+    PLIST_ENTRY CurrentEntry;
+    DEVICE_ID DeviceId;
+    PNET80211_LINK Link;
+    ULONG ResultLength;
+    PNET_PACKET_BUFFER Results;
+    ULONG ResultsLength;
+    KSTATUS Status;
+
+    //
+    // Parse the packet to find the 802.11 link whose scan results are to be
+    // queried.
+    //
+
+    Status = Net80211pNetlinkGetLink(Packet, &Link);
+    if (!KSUCCESS(Status)) {
+        goto NetlinkScanGetResultsEnd;
+    }
+
+    //
+    // Determine the required size of the BSS replies.
+    //
+
+    BssCount = 0;
+    ResultsLength = 0;
+    KeAcquireQueuedLock(Link->Lock);
+    CurrentEntry = Link->BssList.Next;
+    while (CurrentEntry != &(Link->BssList)) {
+        Bss = LIST_VALUE(CurrentEntry, NET80211_BSS_ENTRY, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        ResultsLength += NETLINK_HEADER_LENGTH + NETLINK_GENERIC_HEADER_LENGTH;
+        ResultsLength += NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID));
+        BssLength = NETLINK_ATTRIBUTE_SIZE(NET80211_ADDRESS_SIZE);
+        ResultsLength += NETLINK_ATTRIBUTE_SIZE(BssLength);
+        BssCount += 1;
+    }
+
+    KeReleaseQueuedLock(Link->Lock);
+
+    //
+    // At least always send a done message.
+    //
+
+    ResultsLength += NETLINK_HEADER_LENGTH;
+
+    //
+    // Allocate the network packet buffer to hold all of the results.
+    //
+
+    Status = NetAllocateBuffer(0, ResultsLength, 0, NULL, 0, &Results);
+    if (!KSUCCESS(Status)) {
+        goto NetlinkScanGetResultsEnd;
+    }
+
+    //
+    // Package up the BSS entry list into multiple netlink scan result messages.
+    // If new entries arrived since the lock was held before, they came in due
+    // to an additional scan. A future scan results request will package them
+    // up.
+    //
+
+    DeviceId = IoGetDeviceNumericId(Link->Properties.Device);
+    KeAcquireQueuedLock(Link->Lock);
+    CurrentEntry = Link->BssList.Next;
+    while ((CurrentEntry != &(Link->BssList)) && (BssCount != 0)) {
+        Bss = LIST_VALUE(CurrentEntry, NET80211_BSS_ENTRY, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+
+        //
+        // Determine the length of the entire message.
+        //
+
+        ResultLength = NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID));
+        BssLength = NETLINK_ATTRIBUTE_SIZE(NET80211_ADDRESS_SIZE);
+        ResultLength += NETLINK_ATTRIBUTE_SIZE(BssLength);
+
+        //
+        // Add a generic and base header for this entry.
+        //
+
+        Status = NetlinkGenericAppendHeaders(Net80211NetlinkFamily,
+                                             Results,
+                                             ResultLength,
+                                             Parameters->Message.SequenceNumber,
+                                             NETLINK_HEADER_FLAG_MULTIPART,
+                                             NETLINK_GENERIC_80211_SCAN_RESULT,
+                                             0);
+
+        if (!KSUCCESS(Status)) {
+            goto NetlinkScanGetResultsEnd;
+        }
+
+        //
+        // Add the attributes.
+        //
+
+        Status = NetlinkAppendAttribute(
+                                     Results,
+                                     NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
+                                     &DeviceId,
+                                     sizeof(DEVICE_ID));
+
+        if (!KSUCCESS(Status)) {
+            goto NetlinkScanGetResultsEnd;
+        }
+
+        Status = NetlinkAppendAttribute(Results,
+                                        NETLINK_GENERIC_80211_ATTRIBUTE_BSS,
+                                        NULL,
+                                        BssLength);
+
+        if (!KSUCCESS(Status)) {
+            goto NetlinkScanGetResultsEnd;
+        }
+
+        Status = NetlinkAppendAttribute(
+                                     Results,
+                                     NETLINK_GENERIC_80211_BSS_ATTRIBUTE_BSSID,
+                                     Bss->State.Bssid,
+                                     NET80211_ADDRESS_SIZE);
+
+        if (!KSUCCESS(Status)) {
+            goto NetlinkScanGetResultsEnd;
+        }
+
+        BssCount -= 1;
+    }
+
+    KeReleaseQueuedLock(Link->Lock);
+
+    //
+    // Send this multipart message back to the source of the request. This
+    // routine will add the terminating DONE message and then send the entire
+    // set of messages in the results packet.
+    //
+
+    Status = NetlinkSendMultipartMessage(Socket,
+                                         Results,
+                                         Parameters->Message.SourceAddress,
+                                         Parameters->Message.SequenceNumber);
+
+    if (!KSUCCESS(Status)) {
+        goto NetlinkScanGetResultsEnd;
+    }
+
+NetlinkScanGetResultsEnd:
+    if (Link != NULL) {
+        Net80211LinkReleaseReference(Link);
+    }
+
+    return Status;
+}
+
+KSTATUS
 Net80211pNetlinkGetLink (
     PNET_PACKET_BUFFER Packet,
     PNET80211_LINK *Link
@@ -589,12 +791,11 @@ Return Value:
 
     Attributes = Packet->Buffer + Packet->DataOffset;
     AttributesLength = Packet->FooterOffset - Packet->DataOffset;
-    Status = NetlinkGenericGetAttribute(
-                                     Attributes,
-                                     AttributesLength,
-                                     NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
-                                     &DeviceId,
-                                     &DeviceIdLength);
+    Status = NetlinkGetAttribute(Attributes,
+                                 AttributesLength,
+                                 NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
+                                 &DeviceId,
+                                 &DeviceIdLength);
 
     if (!KSUCCESS(Status)) {
         goto NetlinkGetLinkEnd;
@@ -674,10 +875,10 @@ Return Value:
 
 {
 
-    PNETLINK_ATTRIBUTE Attribute;
-    PVOID Data;
+    DEVICE_ID DeviceId;
     ULONG HeaderSize;
     PNET_PACKET_BUFFER Packet;
+    ULONG PayloadSize;
     ULONG Size;
     KSTATUS Status;
 
@@ -686,9 +887,10 @@ Return Value:
     //
 
     Packet = NULL;
-    Size = NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID));
     HeaderSize = NETLINK_HEADER_LENGTH + NETLINK_GENERIC_HEADER_LENGTH;
-    Status = NetAllocateBuffer(HeaderSize,
+    PayloadSize = NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID));
+    Size = HeaderSize + PayloadSize;
+    Status = NetAllocateBuffer(0,
                                Size,
                                0,
                                NULL,
@@ -699,21 +901,36 @@ Return Value:
         goto NetlinkSendScanNotification;
     }
 
-    Attribute = Packet->Buffer + Packet->DataOffset;
-    Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(sizeof(DEVICE_ID));
-    Attribute->Type = NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID;
-    Data = NETLINK_ATTRIBUTE_DATA(Attribute);
-    *((PDEVICE_ID)Data) = IoGetDeviceNumericId(Link->Properties.Device);
+    Status = NetlinkGenericAppendHeaders(Net80211NetlinkFamily,
+                                         Packet,
+                                         PayloadSize,
+                                         0,
+                                         0,
+                                         Command,
+                                         0);
+
+    if (!KSUCCESS(Status)) {
+        goto NetlinkSendScanNotification;
+    }
+
+    DeviceId = IoGetDeviceNumericId(Link->Properties.Device);
+    Status = NetlinkAppendAttribute(Packet,
+                                    NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
+                                    &DeviceId,
+                                    sizeof(DEVICE_ID));
+
+    if (!KSUCCESS(Status)) {
+        goto NetlinkSendScanNotification;
+    }
 
     //
     // Send the packet out to the 802.11 scan multicast group.
     //
 
     Status = NetlinkGenericSendMulticastCommand(
-                                          Net80211NetlinkFamily,
-                                          Packet,
-                                          NETLINK_GENERIC_80211_MULTICAST_SCAN,
-                                          Command);
+                                         Net80211NetlinkFamily,
+                                         Packet,
+                                         NETLINK_GENERIC_80211_MULTICAST_SCAN);
 
     if (!KSUCCESS(Status)) {
         goto NetlinkSendScanNotification;

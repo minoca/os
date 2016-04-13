@@ -752,15 +752,15 @@ KSTATUS
 NetlinkGenericSendCommand (
     PNETLINK_GENERIC_FAMILY Family,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETWORK_ADDRESS DestinationAddress
     )
 
 /*++
 
 Routine Description:
 
-    This routine sends a generic netlink command, filling out the generic
-    header and netlink header.
+    This routine sends a generic netlink command. The generic header should
+    already be filled out.
 
 Arguments:
 
@@ -769,7 +769,8 @@ Arguments:
 
     Packet - Supplies a pointer to the network packet to be sent.
 
-    Parameters - Supplies a pointer to the generic command parameters.
+    DestinationAddress - Supplies a pointer to the destination address to which
+        the command will be sent.
 
 Return Value:
 
@@ -779,42 +780,12 @@ Return Value:
 
 {
 
-    PNETLINK_GENERIC_HEADER Header;
     KSTATUS Status;
 
-    ASSERT(Family != NULL);
-
-    if (Packet->DataOffset < NETLINK_GENERIC_HEADER_LENGTH) {
-        Status = STATUS_BUFFER_TOO_SMALL;
-        goto SendCommandEnd;
-    }
-
-    //
-    // Force the message type to be that of the given family. The families do
-    // not know their assigned type value if they requested an auto-generated
-    // value.
-    //
-
-    Parameters->Message.Type = Family->Properties.Id;
-
-    //
-    // Fill out the generic netlink header.
-    //
-
-    Packet->DataOffset -= NETLINK_GENERIC_HEADER_LENGTH;
-    Header = Packet->Buffer + Packet->DataOffset;
-    Header->Command = Parameters->Command;
-    Header->Version = Parameters->Version;
-    Header->Reserved = 0;
     Status = NetlinkSendMessage(NetlinkGenericSocket,
                                 Packet,
-                                &(Parameters->Message));
+                                DestinationAddress);
 
-    if (!KSUCCESS(Status)) {
-        goto SendCommandEnd;
-    }
-
-SendCommandEnd:
     return Status;
 }
 
@@ -823,17 +794,15 @@ KSTATUS
 NetlinkGenericSendMulticastCommand (
     PNETLINK_GENERIC_FAMILY Family,
     PNET_PACKET_BUFFER Packet,
-    ULONG GroupId,
-    UCHAR Command
+    ULONG GroupId
     )
 
 /*++
 
 Routine Description:
 
-    This routine multicasts the given packet to the specified group after
-    filling its generic header and base netlink header in with the given
-    command and information stored in the family structure.
+    This routine multicasts the given command packet to the specified group.
+    The packet should already store the completed command, ready to send.
 
 Arguments:
 
@@ -845,8 +814,6 @@ Arguments:
     GroupId - Supplies the family's multicast group ID over which to send the
         command.
 
-    Command - Supplies the generic family's command to send.
-
 Return Value:
 
     Status code.
@@ -855,17 +822,8 @@ Return Value:
 
 {
 
-    NETLINK_ADDRESS Destination;
-    NETLINK_GENERIC_COMMAND_PARAMETERS Parameters;
-    NETLINK_ADDRESS Source;
-
-    //
-    // The source is always the kernel.
-    //
-
-    Source.Domain = NetDomainNetlink;
-    Source.Port = NETLINK_KERNEL_PORT_ID;
-    Source.Group = 0;
+    PNETWORK_ADDRESS Destination;
+    NETLINK_ADDRESS NetlinkDestination;
 
     //
     // The destination is based on the group ID, which must be adjusted by the
@@ -873,54 +831,54 @@ Return Value:
     // about this offset.
     //
 
-    Destination.Domain = NetDomainNetlink;
-    Destination.Port = 0;
-    Destination.Group = Family->MulticastGroupOffset + GroupId;
-
-    //
-    // Fill out the rest of the parameters and send it off as a normal command.
-    //
-
-    Parameters.Message.SourceAddress = (PNETWORK_ADDRESS)&Source;
-    Parameters.Message.DestinationAddress = (PNETWORK_ADDRESS)&Destination;
-    Parameters.Message.Type = Family->Properties.Id;
-    Parameters.Message.SequenceNumber = 0;
-    Parameters.Command = Command;
-    Parameters.Version = 0;
-    return NetlinkGenericSendCommand(Family, Packet, &Parameters);
+    NetlinkDestination.Domain = NetDomainNetlink;
+    NetlinkDestination.Port = 0;
+    NetlinkDestination.Group = Family->MulticastGroupOffset + GroupId;
+    Destination = (PNETWORK_ADDRESS)&NetlinkDestination;
+    return NetlinkGenericSendCommand(Family, Packet, Destination);
 }
 
 NETLINK_API
 KSTATUS
-NetlinkGenericGetAttribute (
-    PVOID Attributes,
-    ULONG AttributesLength,
-    USHORT Type,
-    PVOID *Data,
-    PUSHORT DataLength
+NetlinkGenericAppendHeaders (
+    PNETLINK_GENERIC_FAMILY Family,
+    PNET_PACKET_BUFFER Packet,
+    ULONG Length,
+    ULONG SequenceNumber,
+    USHORT Flags,
+    UCHAR Command,
+    UCHAR Version
     )
 
 /*++
 
 Routine Description:
 
-    This routine parses the given attributes buffer and returns a pointer to
-    the desired attribute.
+    This routine appends the base and generic netlink headers to the given
+    packet, validating that there is enough space remaining in the buffer and
+    moving the data offset forward to the first byte after the headers once
+    they have been added.
 
 Arguments:
 
-    Attributes - Supplies a pointer to the start of the generic command
-        attributes.
+    Family - Supplies a pointer to the netlink generic family to which the
+        packet belongs.
 
-    AttributesLength - Supplies the length of the attributes buffer, in bytes.
+    Packet - Supplies a pointer to the network packet to which the headers will
+        be appended.
 
-    Type - Supplies the netlink generic attribute type.
+    Length - Supplies the length of the generic command payload, not including
+        any headers.
 
-    Data - Supplies a pointer that receives a pointer to the data for the
-        requested attribute type.
+    SequenceNumber - Supplies the desired sequence number for the netlink
+        message.
 
-    DataLength - Supplies a pointer that receives the length of the requested
-        attribute data.
+    Flags - Supplies a bitmask of netlink message flags to be set. See
+        NETLINK_HEADER_FLAG_* for definitions.
+
+    Command - Supplies the generic netlink command to bet set in the header.
+
+    Version - Supplies the version number of the command.
 
 Return Value:
 
@@ -930,31 +888,37 @@ Return Value:
 
 {
 
-    PNETLINK_ATTRIBUTE Attribute;
-    ULONG AttributeSize;
+    PNETLINK_GENERIC_HEADER Header;
+    ULONG PacketLength;
+    KSTATUS Status;
 
-    Attribute = (PNETLINK_ATTRIBUTE)Attributes;
-    while (AttributesLength != 0) {
-        if ((AttributesLength < NETLINK_ATTRIBUTE_HEADER_LENGTH) ||
-            (AttributesLength < Attribute->Length)) {
+    Length += NETLINK_GENERIC_HEADER_LENGTH;
+    Status = NetlinkAppendHeader(NetlinkGenericSocket,
+                                 Packet,
+                                 Length,
+                                 SequenceNumber,
+                                 Family->Properties.Id,
+                                 Flags);
 
-            break;
-        }
-
-        if (Attribute->Type == Type) {
-            *DataLength = Attribute->Length - NETLINK_ATTRIBUTE_HEADER_LENGTH;
-            *Data = NETLINK_ATTRIBUTE_DATA(Attribute);
-            return STATUS_SUCCESS;
-        }
-
-        AttributeSize = NETLINK_ALIGN(Attribute->Length);
-        Attribute = (PVOID)Attribute + AttributeSize;
-        AttributesLength -= AttributeSize;
+    if (!KSUCCESS(Status)) {
+        goto AppendHeadersEnd;
     }
 
-    *Data = NULL;
-    *DataLength = 0;
-    return STATUS_NOT_FOUND;
+    PacketLength = Packet->FooterOffset - Packet->DataOffset;
+    if (PacketLength < Length) {
+        Status = STATUS_BUFFER_TOO_SMALL;
+        goto AppendHeadersEnd;
+    }
+
+    Header = Packet->Buffer + Packet->DataOffset;
+    Header->Command = Command;
+    Header->Version = Version;
+    Packet->DataOffset += NETLINK_GENERIC_HEADER_LENGTH;
+    Header->Reserved = 0;
+    Status = STATUS_SUCCESS;
+
+AppendHeadersEnd:
+    return Status;
 }
 
 VOID
@@ -2859,6 +2823,7 @@ Return Value:
     NET_PACKET_BUFFER LocalPacket;
     ULONG PacketLength;
     NETLINK_GENERIC_COMMAND_PARAMETERS Parameters;
+    USHORT RequiredFlags;
     KSTATUS Status;
 
     Family = NULL;
@@ -2918,6 +2883,12 @@ Return Value:
     }
 
     if (FoundCommand == NULL) {
+        Status = STATUS_NOT_SUPPORTED;
+        goto ProcessReceivedKernelDataEnd;
+    }
+
+    RequiredFlags = FoundCommand->RequiredFlags;
+    if ((Header->Flags & RequiredFlags) != RequiredFlags) {
         Status = STATUS_NOT_SUPPORTED;
         goto ProcessReceivedKernelDataEnd;
     }
