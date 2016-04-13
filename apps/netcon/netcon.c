@@ -746,7 +746,7 @@ Return Value:
     MessageOffset = 0;
     Status = NlGenericAddAttribute(Message,
                                    &MessageOffset,
-                                   NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
+                                   NETLINK_80211_ATTRIBUTE_DEVICE_ID,
                                    &(Context->DeviceId),
                                    sizeof(DEVICE_ID));
 
@@ -756,7 +756,7 @@ Return Value:
 
     Status = NlGenericAddAttribute(Message,
                                    &MessageOffset,
-                                   NETLINK_GENERIC_80211_ATTRIBUTE_SSID,
+                                   NETLINK_80211_ATTRIBUTE_SSID,
                                    Context->Ssid,
                                    SsidLength);
 
@@ -768,7 +768,7 @@ Return Value:
         Status = NlGenericAddAttribute(
                                     Message,
                                     &MessageOffset,
-                                    NETLINK_GENERIC_80211_ATTRIBUTE_PASSPHRASE,
+                                    NETLINK_80211_ATTRIBUTE_PASSPHRASE,
                                     Password,
                                     PasswordLength);
 
@@ -779,7 +779,7 @@ Return Value:
 
     Status = NlGenericFillOutHeader(Socket,
                                     Message,
-                                    NETLINK_GENERIC_80211_JOIN,
+                                    NETLINK_80211_COMMAND_JOIN,
                                     0);
 
     if (Status == -1) {
@@ -887,7 +887,7 @@ Return Value:
     MessageOffset = 0;
     Status = NlGenericAddAttribute(Message,
                                    &MessageOffset,
-                                   NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
+                                   NETLINK_80211_ATTRIBUTE_DEVICE_ID,
                                    &(Context->DeviceId),
                                    sizeof(DEVICE_ID));
 
@@ -897,7 +897,7 @@ Return Value:
 
     Status = NlGenericFillOutHeader(Socket,
                                     Message,
-                                    NETLINK_GENERIC_80211_LEAVE,
+                                    NETLINK_80211_COMMAND_LEAVE,
                                     0);
 
     if (Status == -1) {

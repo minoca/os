@@ -633,13 +633,13 @@ Return Value:
     // Blast out some notifications.
     //
 
-    Command = NETLINK_GENERIC_CONTROL_NEW_FAMILY;
+    Command = NETLINK_CONTROL_COMMAND_NEW_FAMILY;
     NetlinkpGenericControlSendNotification(NewFamily, Command, NULL);
     for (Index = 0;
          Index < NewFamily->Properties.MulticastGroupCount;
          Index += 1) {
 
-        Command = NETLINK_GENERIC_CONTROL_NEW_MULTICAST_GROUP;
+        Command = NETLINK_CONTROL_COMMAND_NEW_MULTICAST_GROUP;
         Group = &(NewFamily->Properties.MulticastGroups[Index]);
         NetlinkpGenericControlSendNotification(NewFamily, Command, Group);
     }
@@ -735,7 +735,7 @@ Return Value:
         KeYield();
     }
 
-    Command = NETLINK_GENERIC_CONTROL_DELETE_FAMILY;
+    Command = NETLINK_CONTROL_COMMAND_DELETE_FAMILY;
     NetlinkpGenericControlSendNotification(Family, Command, NULL);
     NetlinkpGenericFamilyReleaseReference(Family);
 
@@ -3279,7 +3279,7 @@ Return Value:
         // Announce the deletion of the multicast group.
         //
 
-        Command = NETLINK_GENERIC_CONTROL_DELETE_MULTICAST_GROUP;
+        Command = NETLINK_CONTROL_COMMAND_DELETE_MULTICAST_GROUP;
         NetlinkpGenericControlSendNotification(Family, Command, Group);
     }
 

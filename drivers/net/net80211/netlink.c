@@ -98,25 +98,25 @@ Net80211pNetlinkSendScanNotification (
 
 NETLINK_GENERIC_COMMAND Net80211NetlinkCommands[] = {
     {
-        NETLINK_GENERIC_80211_JOIN,
+        NETLINK_80211_COMMAND_JOIN,
         0,
         Net80211pNetlinkJoin
     },
 
     {
-        NETLINK_GENERIC_80211_LEAVE,
+        NETLINK_80211_COMMAND_LEAVE,
         0,
         Net80211pNetlinkLeave
     },
 
     {
-        NETLINK_GENERIC_80211_SCAN_START,
+        NETLINK_80211_COMMAND_SCAN_START,
         0,
         Net80211pNetlinkScanStart
     },
 
     {
-        NETLINK_GENERIC_80211_SCAN_GET_RESULTS,
+        NETLINK_80211_COMMAND_SCAN_GET_RESULTS,
         NETLINK_HEADER_FLAG_DUMP,
         Net80211pNetlinkScanGetResults
     },
@@ -125,8 +125,8 @@ NETLINK_GENERIC_COMMAND Net80211NetlinkCommands[] = {
 NETLINK_GENERIC_MULTICAST_GROUP Net80211NetlinkMulticastGroups[] = {
     {
         NETLINK_GENERIC_80211_MULTICAST_SCAN,
-        sizeof(NETLINK_GENERIC_80211_MULTICAST_SCAN_NAME),
-        NETLINK_GENERIC_80211_MULTICAST_SCAN_NAME
+        sizeof(NETLINK_80211_MULTICAST_SCAN_NAME),
+        NETLINK_80211_MULTICAST_SCAN_NAME
     },
 };
 
@@ -278,7 +278,7 @@ Return Value:
     AttributesLength = Packet->FooterOffset - Packet->DataOffset;
     Status = NetlinkGetAttribute(Attributes,
                                  AttributesLength,
-                                 NETLINK_GENERIC_80211_ATTRIBUTE_SSID,
+                                 NETLINK_80211_ATTRIBUTE_SSID,
                                  (PVOID *)&Ssid,
                                  &SsidLength);
 
@@ -310,7 +310,7 @@ Return Value:
 
     Status = NetlinkGetAttribute(Attributes,
                                  AttributesLength,
-                                 NETLINK_GENERIC_80211_ATTRIBUTE_PASSPHRASE,
+                                 NETLINK_80211_ATTRIBUTE_PASSPHRASE,
                                  (PVOID *)&Passphrase,
                                  &PassphraseLength);
 
@@ -334,7 +334,7 @@ Return Value:
 
     Status = NetlinkGetAttribute(Attributes,
                                  AttributesLength,
-                                 NETLINK_GENERIC_80211_ATTRIBUTE_BSSID,
+                                 NETLINK_80211_ATTRIBUTE_BSSID,
                                  &Bssid,
                                  &BssidLength);
 
@@ -502,7 +502,7 @@ Return Value:
     //
 
     Net80211pNetlinkSendScanNotification(Link,
-                                         NETLINK_GENERIC_80211_SCAN_START);
+                                         NETLINK_80211_COMMAND_SCAN_START);
 
 NetlinkScanStartEnd:
     if (Link != NULL) {
@@ -545,9 +545,9 @@ Return Value:
     // Report success or failure without any further details on an error.
     //
 
-    Command = NETLINK_GENERIC_80211_SCAN_RESULT;
+    Command = NETLINK_80211_COMMAND_SCAN_RESULT;
     if (!KSUCCESS(ScanStatus)) {
-        Command = NETLINK_GENERIC_80211_SCAN_ABORTED;
+        Command = NETLINK_80211_COMMAND_SCAN_ABORTED;
     }
 
     Net80211pNetlinkSendScanNotification(Link, Command);
@@ -674,7 +674,7 @@ Return Value:
                                              ResultLength,
                                              Parameters->Message.SequenceNumber,
                                              NETLINK_HEADER_FLAG_MULTIPART,
-                                             NETLINK_GENERIC_80211_SCAN_RESULT,
+                                             NETLINK_80211_COMMAND_SCAN_RESULT,
                                              0);
 
         if (!KSUCCESS(Status)) {
@@ -685,18 +685,17 @@ Return Value:
         // Add the attributes.
         //
 
-        Status = NetlinkAppendAttribute(
-                                     Results,
-                                     NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
-                                     &DeviceId,
-                                     sizeof(DEVICE_ID));
+        Status = NetlinkAppendAttribute(Results,
+                                        NETLINK_80211_ATTRIBUTE_DEVICE_ID,
+                                        &DeviceId,
+                                        sizeof(DEVICE_ID));
 
         if (!KSUCCESS(Status)) {
             goto NetlinkScanGetResultsEnd;
         }
 
         Status = NetlinkAppendAttribute(Results,
-                                        NETLINK_GENERIC_80211_ATTRIBUTE_BSS,
+                                        NETLINK_80211_ATTRIBUTE_BSS,
                                         NULL,
                                         BssLength);
 
@@ -704,11 +703,10 @@ Return Value:
             goto NetlinkScanGetResultsEnd;
         }
 
-        Status = NetlinkAppendAttribute(
-                                     Results,
-                                     NETLINK_GENERIC_80211_BSS_ATTRIBUTE_BSSID,
-                                     Bss->State.Bssid,
-                                     NET80211_ADDRESS_SIZE);
+        Status = NetlinkAppendAttribute(Results,
+                                        NETLINK_80211_BSS_ATTRIBUTE_BSSID,
+                                        Bss->State.Bssid,
+                                        NET80211_ADDRESS_SIZE);
 
         if (!KSUCCESS(Status)) {
             goto NetlinkScanGetResultsEnd;
@@ -793,7 +791,7 @@ Return Value:
     AttributesLength = Packet->FooterOffset - Packet->DataOffset;
     Status = NetlinkGetAttribute(Attributes,
                                  AttributesLength,
-                                 NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
+                                 NETLINK_80211_ATTRIBUTE_DEVICE_ID,
                                  &DeviceId,
                                  &DeviceIdLength);
 
@@ -915,7 +913,7 @@ Return Value:
 
     DeviceId = IoGetDeviceNumericId(Link->Properties.Device);
     Status = NetlinkAppendAttribute(Packet,
-                                    NETLINK_GENERIC_80211_ATTRIBUTE_DEVICE_ID,
+                                    NETLINK_80211_ATTRIBUTE_DEVICE_ID,
                                     &DeviceId,
                                     sizeof(DEVICE_ID));
 

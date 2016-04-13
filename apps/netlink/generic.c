@@ -180,12 +180,11 @@ Return Value:
     //
 
     MessageOffset = 0;
-    Status = NlGenericAddAttribute(
-                                 Message,
-                                 &MessageOffset,
-                                 NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_NAME,
-                                 FamilyName,
-                                 FamilyNameLength);
+    Status = NlGenericAddAttribute(Message,
+                                   &MessageOffset,
+                                   NETLINK_CONTROL_ATTRIBUTE_FAMILY_NAME,
+                                   FamilyName,
+                                   FamilyNameLength);
 
     if (Status == -1) {
         goto GetFamilyIdEnd;
@@ -197,7 +196,7 @@ Return Value:
 
     Status = NlGenericFillOutHeader(Socket,
                                     Message,
-                                    NETLINK_GENERIC_CONTROL_GET_FAMILY,
+                                    NETLINK_CONTROL_COMMAND_GET_FAMILY,
                                     0);
 
     if (Status == -1) {
@@ -248,7 +247,7 @@ Return Value:
     BytesReceived -= NETLINK_HEADER_LENGTH;
     GenericHeader = NETLINK_DATA(Header);
     if ((BytesReceived < NETLINK_GENERIC_HEADER_LENGTH) ||
-        (GenericHeader->Command != NETLINK_GENERIC_CONTROL_NEW_FAMILY)) {
+        (GenericHeader->Command != NETLINK_CONTROL_COMMAND_NEW_FAMILY)) {
 
         errno = ENOMSG;
         Status = -1;
@@ -259,7 +258,7 @@ Return Value:
     Attributes = NETLINK_GENERIC_DATA(GenericHeader);
     Status = NlGenericGetAttribute(Attributes,
                                    BytesReceived,
-                                   NETLINK_GENERIC_CONTROL_ATTRIBUTE_FAMILY_ID,
+                                   NETLINK_CONTROL_ATTRIBUTE_FAMILY_ID,
                                    (PVOID *)&Id,
                                    &IdLength);
 
