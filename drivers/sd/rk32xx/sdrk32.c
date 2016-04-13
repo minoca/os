@@ -807,6 +807,7 @@ Return Value:
 
         Irp->U.ReadWrite.NewIoOffset = IoOffset;
         Child->Irp = Irp;
+        Child->Retries = 0;
         BlockOffset = IoOffset >> Child->BlockShift;
         BlockCount = BytesToComplete >> Child->BlockShift;
         CompleteIrp = FALSE;
@@ -2120,8 +2121,13 @@ Return Value:
                       Irp->U.ReadWrite.IoSizeInBytes,
                       Status);
 
-        IoCompleteIrp(SdRk32Driver, Irp, Status);
-        return;
+        BytesTransferred = 0;
+        if (Child->Retries >= SD_RK32_MAX_IO_RETRIES) {
+            IoCompleteIrp(SdRk32Driver, Irp, Status);
+            return;
+        }
+
+        Child->Retries += 1;
     }
 
     Irp->U.ReadWrite.IoBytesCompleted += BytesTransferred;
@@ -3219,6 +3225,7 @@ Return Value:
 
 {
 
+    ULONG BusMode;
     ULONG Control;
     PSD_RK32_CONTEXT Device;
     ULONGLONG Frequency;
@@ -3317,7 +3324,10 @@ Return Value:
     // Reset the internal DMA.
     //
 
-    Value = SD_DWC_READ_REGISTER(Device, SdDwcBusMode);
+    BusMode = SD_DWC_READ_REGISTER(Device, SdDwcBusMode);
+    Value = BusMode &
+            ~(SD_DWC_BUS_MODE_FIXED_BURST | SD_DWC_BUS_MODE_IDMAC_ENABLE);
+
     Value |= SD_DWC_BUS_MODE_INTERNAL_DMA_RESET;
     SD_DWC_WRITE_REGISTER(Device, SdDwcBusMode, Value);
     Status = STATUS_TIMEOUT;
@@ -3334,6 +3344,8 @@ Return Value:
     if (!KSUCCESS(Status)) {
         return Status;
     }
+
+    SD_DWC_WRITE_REGISTER(Device, SdDwcBusMode, BusMode);
 
     //
     // Restore the original control, and update the clock.

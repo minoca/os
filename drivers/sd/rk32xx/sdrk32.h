@@ -56,6 +56,13 @@ Author:
 #define SD_RK32_TIMEOUT 1
 
 //
+// Define the maximum number of retries the controller will attempt on an I/O
+// transfer.
+//
+
+#define SD_RK32_MAX_IO_RETRIES 5
+
+//
 // Define the block size used by the RK32 SD.
 //
 
@@ -117,6 +124,8 @@ Members:
 
     Irp - Stores a pointer to the current IRP being processed.
 
+    Retries - Stores the retry count for the current I/O operation.
+
     Flags - Stores a bitmask of flags for the disk. See SD_RK32_CHILD_FLAG_*
         for definitions.
 
@@ -136,6 +145,7 @@ typedef struct _SD_RK32_CHILD {
     PSD_CONTROLLER Controller;
     PQUEUED_LOCK ControllerLock;
     PIRP Irp;
+    ULONG Retries;
     ULONG Flags;
     ULONG BlockShift;
     ULONGLONG BlockCount;
