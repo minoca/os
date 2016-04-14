@@ -38,8 +38,7 @@ Environment:
 // This macro returns the aligned size of the netlink message buffer structure.
 //
 
-#define NETLINK_MESSAGE_BUFFER_SIZE \
-    NETLINK_ALIGN(sizeof(NETLINK_BUFFER))
+#define NL_MESSAGE_BUFFER_SIZE NETLINK_ALIGN(sizeof(NL_MESSAGE_BUFFER))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -175,7 +174,7 @@ NlCreateSocket (
     ULONG Protocol,
     ULONG PortId,
     ULONG Flags,
-    PNETLINK_LIBRARY_SOCKET *NewSocket
+    PNL_SOCKET *NewSocket
     )
 
 /*++
@@ -189,11 +188,11 @@ Arguments:
     Protocol - Supplies the netlink protocol to use for the socket.
 
     PortId - Supplies a specific port ID to use for the socket, if available.
-        Supply NETLINK_ANY_PORT_ID to have the socket dynamically bind to an
+        Supply NL_ANY_PORT_ID to have the socket dynamically bind to an
         available port ID.
 
-    Flags - Supplies a bitmask of netlink socket flags. See
-        NETLINK_SOCKET_FLAG_* for definitions.
+    Flags - Supplies a bitmask of netlink socket flags. See NL_SOCKET_FLAG_*
+        for definitions.
 
     NewSocket - Supplies a pointer that receives a pointer to the newly created
         socket.
@@ -209,16 +208,16 @@ Return Value:
 {
 
     socklen_t AddressLength;
-    PNETLINK_LIBRARY_SOCKET Socket;
+    PNL_SOCKET Socket;
     INT Status;
 
-    Socket = malloc(sizeof(NETLINK_LIBRARY_SOCKET));
+    Socket = malloc(sizeof(NL_SOCKET));
     if (Socket == NULL) {
         errno = ENOMEM;
         return -1;
     }
 
-    memset(Socket, 0, sizeof(NETLINK_LIBRARY_SOCKET));
+    memset(Socket, 0, sizeof(NL_SOCKET));
     Status = NlAllocateBuffer(NETLINK_SCRATCH_BUFFER_SIZE,
                               &(Socket->ReceiveBuffer));
 
@@ -235,9 +234,9 @@ Return Value:
     }
 
     //
-    // Bind the socket. If the supplied port ID is NETLINK_ANY_PORT_ID, then
-    // an ephemeral port will be assign. Otherwise the socket will be bound to
-    // the given port if it's available.
+    // Bind the socket. If the supplied port ID is NL_ANY_PORT_ID, then an
+    // ephemeral port will be assign. Otherwise the socket will be bound to the
+    // given port if it's available.
     //
 
     AddressLength = sizeof(struct sockaddr_nl);
@@ -259,7 +258,7 @@ Return Value:
         goto CreateSocketEnd;
     }
 
-    ASSERT((Socket->LocalAddress.nl_pid != NETLINK_ANY_PORT_ID) &&
+    ASSERT((Socket->LocalAddress.nl_pid != NL_ANY_PORT_ID) &&
            (Socket->LocalAddress.nl_pid != NETLINK_KERNEL_PORT_ID));
 
 CreateSocketEnd:
@@ -277,7 +276,7 @@ CreateSocketEnd:
 LIBNETLINK_API
 VOID
 NlDestroySocket (
-    PNETLINK_LIBRARY_SOCKET Socket
+    PNL_SOCKET Socket
     )
 
 /*++
@@ -314,7 +313,7 @@ LIBNETLINK_API
 INT
 NlAllocateBuffer (
     ULONG Size,
-    PNETLINK_BUFFER *NewBuffer
+    PNL_MESSAGE_BUFFER *NewBuffer
     )
 
 /*++
@@ -341,7 +340,7 @@ Return Value:
 
 {
 
-    PNETLINK_BUFFER Buffer;
+    PNL_MESSAGE_BUFFER Buffer;
     INT Status;
     ULONG TotalSize;
 
@@ -359,13 +358,13 @@ Return Value:
         goto AllocateBufferEnd;
     }
 
-    Buffer = malloc(TotalSize + NETLINK_MESSAGE_BUFFER_SIZE);
+    Buffer = malloc(TotalSize + NL_MESSAGE_BUFFER_SIZE);
     if (Buffer == NULL) {
         errno = ENOMEM;
         goto AllocateBufferEnd;
     }
 
-    Buffer->Buffer = (PVOID)Buffer + NETLINK_MESSAGE_BUFFER_SIZE;
+    Buffer->Buffer = (PVOID)Buffer + NL_MESSAGE_BUFFER_SIZE;
     Buffer->BufferSize = TotalSize;
     Buffer->DataSize = 0;
     Buffer->CurrentOffset = 0;
@@ -386,7 +385,7 @@ AllocateBufferEnd:
 LIBNETLINK_API
 VOID
 NlFreeBuffer (
-    PNETLINK_BUFFER Buffer
+    PNL_MESSAGE_BUFFER Buffer
     )
 
 /*++
@@ -414,8 +413,8 @@ Return Value:
 LIBNETLINK_API
 INT
 NlAppendHeader (
-    PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_BUFFER Message,
+    PNL_SOCKET Socket,
+    PNL_MESSAGE_BUFFER Message,
     ULONG PayloadLength,
     ULONG SequenceNumber,
     USHORT Type,
@@ -443,8 +442,7 @@ Arguments:
         This does not include the base netlink header length.
 
     SequenceNumber - Supplies the sequence number for the message. This value
-        is ignored unless NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the
-        socket.
+        is ignored unless NL_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the socket.
 
     Type - Supplies the netlink message type.
 
@@ -476,7 +474,7 @@ Return Value:
     Header->Length = PayloadLength;
     Header->Type = Type;
     Header->Flags = Flags;
-    if ((Socket->Flags & NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE) != 0) {
+    if ((Socket->Flags & NL_SOCKET_FLAG_NO_AUTO_SEQUENCE) != 0) {
         Header->SequenceNumber = SequenceNumber;
 
     } else {
@@ -497,8 +495,8 @@ Return Value:
 LIBNETLINK_API
 INT
 NlSendMessage (
-    PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_BUFFER Message,
+    PNL_SOCKET Socket,
+    PNL_MESSAGE_BUFFER Message,
     ULONG PortId,
     ULONG GroupMask,
     PULONG BytesSent
@@ -568,8 +566,8 @@ Return Value:
 LIBNETLINK_API
 INT
 NlReceiveMessage (
-    PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_BUFFER Message,
+    PNL_SOCKET Socket,
+    PNL_MESSAGE_BUFFER Message,
     PULONG PortId,
     PULONG GroupMask
     )
@@ -655,7 +653,7 @@ Return Value:
     // arrived.
     //
 
-    if (((Socket->Flags & NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE) == 0) &&
+    if (((Socket->Flags & NL_SOCKET_FLAG_NO_AUTO_SEQUENCE) == 0) &&
         (Header->SequenceNumber != Socket->ReceiveNextSequence)) {
 
         errno = EILSEQ;
@@ -664,7 +662,7 @@ Return Value:
     }
 
     if (Header->Type == NETLINK_MESSAGE_TYPE_ERROR) {
-        if ((Socket->Flags & NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE) == 0) {
+        if ((Socket->Flags & NL_SOCKET_FLAG_NO_AUTO_SEQUENCE) == 0) {
             RtlAtomicAdd32(&(Socket->ReceiveNextSequence), 1);
         }
 
@@ -688,7 +686,7 @@ Return Value:
         // errors, then all error messages need to be converted.
         //
 
-        if ((Socket->Flags & NETLINK_SOCKET_FLAG_REPORT_KSTATUS) == 0) {
+        if ((Socket->Flags & NL_SOCKET_FLAG_REPORT_KSTATUS) == 0) {
             *Error = ErrorValue;
         }
 
@@ -715,8 +713,8 @@ ReceiveMessageEnd:
 LIBNETLINK_API
 INT
 NlReceiveAcknowledgement (
-    PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_BUFFER Message,
+    PNL_SOCKET Socket,
+    PNL_MESSAGE_BUFFER Message,
     ULONG ExpectedPortId
     )
 
@@ -776,7 +774,7 @@ ReceiveAcknowledgementEnd:
 LIBNETLINK_API
 INT
 NlAppendAttribute (
-    PNETLINK_BUFFER Message,
+    PNL_MESSAGE_BUFFER Message,
     USHORT Type,
     PVOID Data,
     USHORT DataLength

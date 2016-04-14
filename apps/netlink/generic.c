@@ -53,8 +53,8 @@ Environment:
 LIBNETLINK_API
 INT
 NlGenericAppendHeaders (
-    PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_BUFFER Message,
+    PNL_SOCKET Socket,
+    PNL_MESSAGE_BUFFER Message,
     ULONG PayloadLength,
     ULONG SequenceNumber,
     USHORT Type,
@@ -84,8 +84,7 @@ Arguments:
         This does not include the header lengths.
 
     SequenceNumber - Supplies the sequence number for the message. This value
-        is ignored unless NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the
-        socket.
+        is ignored unless NL_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the socket.
 
     Type - Supplies the netlink message type.
 
@@ -145,7 +144,7 @@ Return Value:
 LIBNETLINK_API
 INT
 NlGenericGetFamilyId (
-    PNETLINK_LIBRARY_SOCKET Socket,
+    PNL_SOCKET Socket,
     PSTR FamilyName,
     PUSHORT FamilyId
     )
@@ -184,7 +183,7 @@ Return Value:
     PNETLINK_HEADER Header;
     PUSHORT Id;
     USHORT IdLength;
-    PNETLINK_BUFFER Message;
+    PNL_MESSAGE_BUFFER Message;
     ULONG MessageLength;
     ULONG PayloadLength;
     ULONG PortId;

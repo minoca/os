@@ -69,15 +69,15 @@ extern "C" {
 // matter.
 //
 
-#define NETLINK_ANY_PORT_ID 0
+#define NL_ANY_PORT_ID 0
 
 //
 // Set this flag in the netlink socket to receive KSTATUS error codes in
 // netlink error messages. The default is to receive errno values.
 //
 
-#define NETLINK_SOCKET_FLAG_REPORT_KSTATUS   0x00000001
-#define NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE 0x00000002
+#define NL_SOCKET_FLAG_REPORT_KSTATUS   0x00000001
+#define NL_SOCKET_FLAG_NO_AUTO_SEQUENCE 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -128,12 +128,12 @@ Members:
 
 --*/
 
-typedef struct NETLINK_BUFFER {
+typedef struct _NL_MESSAGE_BUFFER {
     PVOID Buffer;
     ULONG BufferSize;
     ULONG DataSize;
     ULONG CurrentOffset;
-} NETLINK_BUFFER, *PNETLINK_BUFFER;
+} NL_MESSAGE_BUFFER, *PNL_MESSAGE_BUFFER;
 
 /*++
 
@@ -147,8 +147,8 @@ Members:
 
     Protocol - Stores the netlink protocol over which the socket communicates.
 
-    Flags - Stores a bitmask of netlink socket flags. See
-        NETLINK_SOCKET_FLAG_* for definitions.
+    Flags - Stores a bitmask of netlink socket flags. See NL_SOCKET_FLAG_* for
+        definitions.
 
     SendNextSequence - Stores the next sequence number to use in a netlink
         message header being sent.
@@ -163,15 +163,15 @@ Members:
 
 --*/
 
-typedef struct _NETLINK_LIBRARY_SOCKET {
+typedef struct _NL_SOCKET {
     INT Socket;
     ULONG Protocol;
     ULONG Flags;
     volatile ULONG SendNextSequence;
     volatile ULONG ReceiveNextSequence;
     struct sockaddr_nl LocalAddress;
-    PNETLINK_BUFFER ReceiveBuffer;
-} NETLINK_LIBRARY_SOCKET, *PNETLINK_LIBRARY_SOCKET;
+    PNL_MESSAGE_BUFFER ReceiveBuffer;
+} NL_SOCKET, *PNL_SOCKET;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -212,7 +212,7 @@ NlCreateSocket (
     ULONG Protocol,
     ULONG PortId,
     ULONG Flags,
-    PNETLINK_LIBRARY_SOCKET *NewSocket
+    PNL_SOCKET *NewSocket
     );
 
 /*++
@@ -226,11 +226,11 @@ Arguments:
     Protocol - Supplies the netlink protocol to use for the socket.
 
     PortId - Supplies a specific port ID to use for the socket, if available.
-        Supply NETLINK_ANY_PORT_ID to have the socket dynamically bind to an
+        Supply NL_ANY_PORT_ID to have the socket dynamically bind to an
         available port ID.
 
-    Flags - Supplies a bitmask of netlink socket flags. See
-        NETLINK_SOCKET_FLAG_* for definitions.
+    Flags - Supplies a bitmask of netlink socket flags. See NL_SOCKET_FLAG_*
+        for definitions.
 
     NewSocket - Supplies a pointer that receives a pointer to the newly created
         socket.
@@ -246,7 +246,7 @@ Return Value:
 LIBNETLINK_API
 VOID
 NlDestroySocket (
-    PNETLINK_LIBRARY_SOCKET Socket
+    PNL_SOCKET Socket
     );
 
 /*++
@@ -269,7 +269,7 @@ LIBNETLINK_API
 INT
 NlAllocateBuffer (
     ULONG Size,
-    PNETLINK_BUFFER *NewBuffer
+    PNL_MESSAGE_BUFFER *NewBuffer
     );
 
 /*++
@@ -297,7 +297,7 @@ Return Value:
 LIBNETLINK_API
 VOID
 NlFreeBuffer (
-    PNETLINK_BUFFER Buffer
+    PNL_MESSAGE_BUFFER Buffer
     );
 
 /*++
@@ -319,8 +319,8 @@ Return Value:
 LIBNETLINK_API
 INT
 NlAppendHeader (
-    PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_BUFFER Message,
+    PNL_SOCKET Socket,
+    PNL_MESSAGE_BUFFER Message,
     ULONG PayloadLength,
     ULONG SequenceNumber,
     USHORT Type,
@@ -348,8 +348,7 @@ Arguments:
         This does not include the base netlink header length.
 
     SequenceNumber - Supplies the sequence number for the message. This value
-        is ignored unless NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the
-        socket.
+        is ignored unless NL_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the socket.
 
     Type - Supplies the netlink message type.
 
@@ -367,8 +366,8 @@ Return Value:
 LIBNETLINK_API
 INT
 NlSendMessage (
-    PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_BUFFER Message,
+    PNL_SOCKET Socket,
+    PNL_MESSAGE_BUFFER Message,
     ULONG PortId,
     ULONG GroupMask,
     PULONG BytesSent
@@ -407,8 +406,8 @@ Return Value:
 LIBNETLINK_API
 INT
 NlReceiveMessage (
-    PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_BUFFER Message,
+    PNL_SOCKET Socket,
+    PNL_MESSAGE_BUFFER Message,
     PULONG PortId,
     PULONG GroupMask
     );
@@ -447,8 +446,8 @@ Return Value:
 LIBNETLINK_API
 INT
 NlReceiveAcknowledgement (
-    PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_BUFFER Message,
+    PNL_SOCKET Socket,
+    PNL_MESSAGE_BUFFER Message,
     ULONG ExpectedPortId
     );
 
@@ -484,7 +483,7 @@ Return Value:
 LIBNETLINK_API
 INT
 NlAppendAttribute (
-    PNETLINK_BUFFER Message,
+    PNL_MESSAGE_BUFFER Message,
     USHORT Type,
     PVOID Data,
     USHORT DataLength
@@ -565,8 +564,8 @@ Return Value:
 LIBNETLINK_API
 INT
 NlGenericAppendHeaders (
-    PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_BUFFER Message,
+    PNL_SOCKET Socket,
+    PNL_MESSAGE_BUFFER Message,
     ULONG PayloadLength,
     ULONG SequenceNumber,
     USHORT Type,
@@ -596,8 +595,7 @@ Arguments:
         This does not include the header lengths.
 
     SequenceNumber - Supplies the sequence number for the message. This value
-        is ignored unless NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the
-        socket.
+        is ignored unless NL_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the socket.
 
     Type - Supplies the netlink message type.
 
@@ -619,7 +617,7 @@ Return Value:
 LIBNETLINK_API
 INT
 NlGenericGetFamilyId (
-    PNETLINK_LIBRARY_SOCKET Socket,
+    PNL_SOCKET Socket,
     PSTR FamilyName,
     PUSHORT FamilyId
     );

@@ -673,12 +673,12 @@ Return Value:
 {
 
     USHORT FamilyId;
-    PNETLINK_BUFFER Message;
+    PNL_MESSAGE_BUFFER Message;
     ULONG MessageLength;
     PSTR Password;
     UINTN PasswordLength;
     ULONG PayloadLength;
-    PNETLINK_LIBRARY_SOCKET Socket;
+    PNL_SOCKET Socket;
     UINTN SsidLength;
     INT Status;
 
@@ -709,7 +709,7 @@ Return Value:
         PasswordLength = strlen(Password) + 1;
     }
 
-    Status = NlCreateSocket(NETLINK_GENERIC, NETLINK_ANY_PORT_ID, 0, &Socket);
+    Status = NlCreateSocket(NETLINK_GENERIC, NL_ANY_PORT_ID, 0, &Socket);
     if (Status != 0) {
         goto JoinNetworkEnd;
     }
@@ -845,13 +845,13 @@ Return Value:
 {
 
     USHORT FamilyId;
-    PNETLINK_BUFFER Message;
+    PNL_MESSAGE_BUFFER Message;
     ULONG MessageLength;
     ULONG PayloadLength;
-    PNETLINK_LIBRARY_SOCKET Socket;
+    PNL_SOCKET Socket;
     INT Status;
 
-    Status = NlCreateSocket(NETLINK_GENERIC, NETLINK_ANY_PORT_ID, 0, &Socket);
+    Status = NlCreateSocket(NETLINK_GENERIC, NL_ANY_PORT_ID, 0, &Socket);
     if (Status != 0) {
         goto LeaveNetworkEnd;
     }
