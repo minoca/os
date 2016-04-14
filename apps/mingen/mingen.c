@@ -851,6 +851,9 @@ Return Value:
 
 {
 
+    MingenDestroyInputs(&(Target->Inputs));
+    MingenDestroyInputs(&(Target->Implicit));
+    MingenDestroyInputs(&(Target->OrderOnly));
     if (Target->Label != NULL) {
         free(Target->Label);
     }
@@ -863,9 +866,6 @@ Return Value:
         free(Target->Tool);
     }
 
-    MingenDestroyInputs(&(Target->Inputs));
-    MingenDestroyInputs(&(Target->Implicit));
-    MingenDestroyInputs(&(Target->OrderOnly));
     free(Target);
     return;
 }
@@ -918,6 +918,7 @@ Return Value:
     INITIALIZE_LIST_HEAD(&(Context->ScriptList));
     INITIALIZE_LIST_HEAD(&(Context->ToolList));
     INITIALIZE_LIST_HEAD(&(Context->PoolList));
+    INITIALIZE_LIST_HEAD(&(Context->SourceList));
     Status = ChalkInitializeInterpreter(&(Context->Interpreter));
     if (Status != 0) {
         return Status;
@@ -958,6 +959,7 @@ Return Value:
 {
 
     PMINGEN_POOL Pool;
+    PMINGEN_SOURCE Source;
     PMINGEN_TOOL Tool;
 
     MingenDestroyAllScripts(Context);
@@ -971,6 +973,15 @@ Return Value:
         Pool = LIST_VALUE(Context->PoolList.Next, MINGEN_POOL, ListEntry);
         LIST_REMOVE(&(Pool->ListEntry));
         MingenDestroyPool(Pool);
+    }
+
+    while (!LIST_EMPTY(&(Context->SourceList))) {
+        Source = LIST_VALUE(Context->SourceList.Next, MINGEN_SOURCE, ListEntry);
+
+        assert(Source->Type == MingenInputSource);
+
+        LIST_REMOVE(&(Source->ListEntry));
+        MingenDestroySource(Source);
     }
 
     MingenDestroyPathList(&(Context->BuildDirectories));
@@ -1789,12 +1800,14 @@ Return Value:
         Source->Type = MingenInputSource;
         Source->Tree = Path.Root;
         Source->Path = Path.Path;
-        Path.Path = NULL;
         Status = MingenAddInput(Context, Target, Inputs, Source);
         if (Status != 0) {
             free(Source);
             goto AddInputToListEnd;
         }
+
+        Path.Path = NULL;
+        INSERT_BEFORE(&(Source->ListEntry), &(Context->SourceList));
 
     //
     // Add a target pointer as an input.
@@ -2351,16 +2364,6 @@ Return Value:
 --*/
 
 {
-
-    ULONG Index;
-    PMINGEN_SOURCE Source;
-
-    for (Index = 0; Index < Inputs->Count; Index += 1) {
-        Source = Inputs->Array[Index];
-        if (Source->Type == MingenInputSource) {
-            MingenDestroySource(Source);
-        }
-    }
 
     if (Inputs->Array != NULL) {
         free(Inputs->Array);

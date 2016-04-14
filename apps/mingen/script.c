@@ -228,7 +228,7 @@ Return Value:
         goto LoadProjectRootEnd;
     }
 
-    if (Context->BuildRoot != BuildRoot) {
+    if ((BuildRoot != NULL) && (Context->BuildRoot != BuildRoot)) {
         if (Context->BuildRoot != NULL) {
             free(Context->BuildRoot);
         }
@@ -243,6 +243,18 @@ Return Value:
                 strerror(Status));
 
         goto LoadProjectRootEnd;
+    }
+
+    //
+    // Make the build root the source root if no one asked for anything else.
+    //
+
+    if (Context->BuildRoot == NULL) {
+        Context->BuildRoot = strdup(Context->SourceRoot);
+        if (Context->BuildRoot == NULL) {
+            Status = ENOMEM;
+            goto LoadProjectRootEnd;
+        }
     }
 
     //

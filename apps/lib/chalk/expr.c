@@ -1508,6 +1508,8 @@ Return Value:
     PCHALK_OBJECT Element;
     LONGLONG ListIndex;
     INT Status;
+    LONGLONG StringIndex;
+    LONGLONG StringSize;
 
     assert(*Result == NULL);
 
@@ -1618,6 +1620,37 @@ Return Value:
                 ChalkObjectReleaseReference(Element);
                 goto DereferenceEnd;
             }
+        }
+
+        *Result = Element;
+
+    //
+    // Slice a string.
+    //
+
+    } else if (Object->Header.Type == ChalkObjectString) {
+        if (Index->Header.Type != ChalkObjectInteger) {
+            fprintf(stderr, "String index must be an integer.\n");
+            Status = EINVAL;
+            goto DereferenceEnd;
+        }
+
+        StringIndex = Index->Integer.Value;
+        StringSize = Object->String.Size;
+        if ((StringIndex >= StringSize) || (StringIndex < -StringSize)) {
+            fprintf(stderr, "String index outside range.\n");
+            Status = ERANGE;
+            goto DereferenceEnd;
+        }
+
+        if (StringIndex < 0) {
+            StringIndex += StringSize;
+        }
+
+        Element = ChalkCreateString(Object->String.String + StringIndex, 1);
+        if (Element == NULL) {
+            Status = ENOMEM;
+            goto DereferenceEnd;
         }
 
         *Result = Element;

@@ -194,6 +194,8 @@ Members:
 
     PoolList - Stores the list of pools defined.
 
+    SourceList - Stores the list of global source files.
+
     BuildDirectories - Stores the array of build directories.
 
     CommandScripts - Stores a pointer to an array of command line scripts that
@@ -220,6 +222,7 @@ typedef struct _MINGEN_CONTEXT {
     LIST_ENTRY ToolList;
     PCHALK_OBJECT GlobalConfig;
     LIST_ENTRY PoolList;
+    LIST_ENTRY SourceList;
     MINGEN_PATH_LIST BuildDirectories;
     PSTR *CommandScripts;
     ULONG CommandScriptCount;
@@ -365,6 +368,7 @@ Members:
 
 typedef struct _MINGEN_SOURCE {
     MINGEN_INPUT_TYPE Type;
+    LIST_ENTRY ListEntry;
     MINGEN_DIRECTORY_TREE Tree;
     PSTR Path;
 } MINGEN_SOURCE, *PMINGEN_SOURCE;
@@ -380,7 +384,7 @@ Members:
     Type - Stores the type, which is always set to "target" since this is a
         target.
 
-    ListEntry - Stores pointers to the next and previous tools in the build.
+    ListEntry - Stores pointers to the next and previous targets in the build.
 
     Script - Stores a pointer back to the script that owns this target.
 

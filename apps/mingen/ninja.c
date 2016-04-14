@@ -309,7 +309,7 @@ Return Value:
             //
 
             if (Target->Implicit.Count != 0) {
-                fprintf(File, " | " MINGEN_NINJA_LINE_CONTINUATION);
+                fprintf(File, " | " MINGEN_NINJA_LINE_CONTINUATION "        ");
                 for (Index = 0;
                      Index < Target->Implicit.Count;
                      Index += 1) {
@@ -344,7 +344,7 @@ Return Value:
             //
 
             if (Target->OrderOnly.Count != 0) {
-                fprintf(File, " || " MINGEN_NINJA_LINE_CONTINUATION);
+                fprintf(File, " || " MINGEN_NINJA_LINE_CONTINUATION "        ");
                 for (Index = 0;
                      Index < Target->OrderOnly.Count;
                      Index += 1) {
