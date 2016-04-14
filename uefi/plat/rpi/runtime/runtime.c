@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <uefifw.h>
-#include "rpifw.h"
+#include "../rpifw.h"
 
 //
 // ---------------------------------------------------------------- Definitions

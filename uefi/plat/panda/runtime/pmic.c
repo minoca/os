@@ -26,8 +26,8 @@ Environment:
 //
 
 #include <uefifw.h>
-#include "twl6030.h"
-#include "pandafw.h"
+#include "../twl6030.h"
+#include "../pandafw.h"
 
 //
 // ---------------------------------------------------------------- Definitions

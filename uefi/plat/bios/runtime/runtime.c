@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <uefifw.h>
-#include "biosfw.h"
+#include "../biosfw.h"
 
 //
 // ---------------------------------------------------------------- Definitions

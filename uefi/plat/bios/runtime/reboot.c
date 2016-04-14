@@ -28,7 +28,7 @@ Environment:
 #include <minoca/fw/acpitabs.h>
 #include <uefifw.h>
 #include <minoca/uefi/guid/acpi.h>
-#include "biosfw.h"
+#include "../biosfw.h"
 
 //
 // ---------------------------------------------------------------- Definitions

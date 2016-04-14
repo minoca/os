@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <uefifw.h>
-#include "integfw.h"
+#include "../integfw.h"
 
 //
 // ---------------------------------------------------------------- Definitions

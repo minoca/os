@@ -51,7 +51,7 @@ OBJS += debug.o                 \
         smp.o                   \
         timer.o                 \
         usb.o                   \
-        veyrnfwv.o              \
+        veyronfwv.o             \
         video.o                 \
 
 ARMV7_OBJS = armv7/entry.o  \
@@ -110,11 +110,11 @@ PRIVATE_KEY = $(SRCROOT)/os/uefi/plat/veyron/veyron.pem
 
 FWVOL_IMAGES = $(RTBASE) runtime/veyronrt.ffs acpi/acpi.ffs
 
-veyrnfwv.o: veyrnfwv
+veyronfwv.o: veyronfwv
 	@echo Objectifying - $(notdir $<)
 	@$(OBJCOPY) -B $(BFD_ARCH) -I binary -O $(OBJ_FORMAT) $< $@
 
-veyrnfwv: $(FWVOL_IMAGES)
+veyronfwv: $(FWVOL_IMAGES)
 	@echo Generating - $@
 	@genfv -o $@ $^
 

@@ -25,7 +25,7 @@ Environment:
 //
 
 #include <uefifw.h>
-#include "pandafw.h"
+#include "../pandafw.h"
 
 //
 // ---------------------------------------------------------------- Definitions

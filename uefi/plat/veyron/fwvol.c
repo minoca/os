@@ -47,8 +47,8 @@ Environment:
 // Objcopy adds these symbols surrounding the added file.
 //
 
-extern UINT8 _binary_veyrnfwv_start;
-extern UINT8 _binary_veyrnfwv_end;
+extern UINT8 _binary_veyronfwv_start;
+extern UINT8 _binary_veyronfwv_end;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -83,8 +83,8 @@ Return Value:
     UINTN Size;
     EFI_STATUS Status;
 
-    Base = (EFI_PHYSICAL_ADDRESS)(UINTN)&_binary_veyrnfwv_start;
-    Size = (UINTN)&_binary_veyrnfwv_end - (UINTN)&_binary_veyrnfwv_start;
+    Base = (EFI_PHYSICAL_ADDRESS)(UINTN)&_binary_veyronfwv_start;
+    Size = (UINTN)&_binary_veyronfwv_end - (UINTN)&_binary_veyronfwv_start;
     Status = EfiCreateFirmwareVolume(Base, Size, NULL, 0, NULL);
     return Status;
 }
