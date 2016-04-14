@@ -39,7 +39,7 @@ Environment:
 //
 
 #define NETLINK_MESSAGE_BUFFER_SIZE \
-    NETLINK_ALIGN(sizeof(NETLINK_MESSAGE_BUFFER))
+    NETLINK_ALIGN(sizeof(NETLINK_BUFFER))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -219,12 +219,10 @@ Return Value:
     }
 
     memset(Socket, 0, sizeof(NETLINK_LIBRARY_SOCKET));
-    Status = NlAllocateBuffer(0,
-                              NETLINK_SCRATCH_BUFFER_SIZE,
-                              0,
+    Status = NlAllocateBuffer(NETLINK_SCRATCH_BUFFER_SIZE,
                               &(Socket->ReceiveBuffer));
 
-    if (Status == -1) {
+    if (Status != 0) {
         goto CreateSocketEnd;
     }
 
@@ -249,7 +247,7 @@ Return Value:
                   (struct sockaddr *)&(Socket->LocalAddress),
                   AddressLength);
 
-    if (Status == -1) {
+    if (Status != 0) {
         goto CreateSocketEnd;
     }
 
@@ -257,7 +255,7 @@ Return Value:
                          (struct sockaddr *)&(Socket->LocalAddress),
                          &AddressLength);
 
-    if (Status == -1) {
+    if (Status != 0) {
         goto CreateSocketEnd;
     }
 
@@ -265,7 +263,7 @@ Return Value:
            (Socket->LocalAddress.nl_pid != NETLINK_KERNEL_PORT_ID));
 
 CreateSocketEnd:
-    if (Status == -1) {
+    if (Status != 0) {
         if (Socket != NULL) {
             NlDestroySocket(Socket);
             Socket = NULL;
@@ -315,10 +313,8 @@ Return Value:
 LIBNETLINK_API
 INT
 NlAllocateBuffer (
-    ULONG HeaderSize,
     ULONG Size,
-    ULONG FooterSize,
-    PNETLINK_MESSAGE_BUFFER *NewBuffer
+    PNETLINK_BUFFER *NewBuffer
     )
 
 /*++
@@ -330,12 +326,7 @@ Routine Description:
 
 Arguments:
 
-    HeaderSize - Supplies the number of header bytes needed, not including the
-        base netlink message header.
-
     Size - Supplies the number of data bytes needed.
-
-    FooterSize - Supplies the number of footer bytes needed.
 
     NewBuffer - Supplies a pointer where a pointer to the new allocation will
         be returned on success.
@@ -350,45 +341,34 @@ Return Value:
 
 {
 
-    ULONG AllocationSize;
-    PNETLINK_MESSAGE_BUFFER Buffer;
+    PNETLINK_BUFFER Buffer;
     INT Status;
     ULONG TotalSize;
 
     Buffer = NULL;
     Status = -1;
-    if ((HeaderSize > (HeaderSize + NETLINK_HEADER_LENGTH)) ||
-        (Size > NETLINK_ALIGN(Size))) {
-
+    if (Size != NETLINK_ALIGN(Size)) {
         errno = EINVAL;
         goto AllocateBufferEnd;
     }
 
-    HeaderSize += NETLINK_HEADER_LENGTH;
     Size = NETLINK_ALIGN(Size);
-    TotalSize = HeaderSize + Size;
+    TotalSize = NETLINK_HEADER_LENGTH + Size;
     if (TotalSize < Size) {
         errno = EINVAL;
         goto AllocateBufferEnd;
     }
 
-    TotalSize += FooterSize;
-    if (TotalSize < FooterSize) {
-        errno = EINVAL;
-        goto AllocateBufferEnd;
-    }
-
-    AllocationSize = TotalSize + NETLINK_MESSAGE_BUFFER_SIZE;
-    Buffer = malloc(AllocationSize);
+    Buffer = malloc(TotalSize + NETLINK_MESSAGE_BUFFER_SIZE);
     if (Buffer == NULL) {
         errno = ENOMEM;
         goto AllocateBufferEnd;
     }
 
-    Buffer->Buffer = Buffer + NETLINK_MESSAGE_BUFFER_SIZE;
+    Buffer->Buffer = (PVOID)Buffer + NETLINK_MESSAGE_BUFFER_SIZE;
     Buffer->BufferSize = TotalSize;
-    Buffer->DataOffset = HeaderSize;
-    Buffer->FooterOffset = HeaderSize + Size;
+    Buffer->DataSize = 0;
+    Buffer->CurrentOffset = 0;
     Status = 0;
 
 AllocateBufferEnd:
@@ -406,7 +386,7 @@ AllocateBufferEnd:
 LIBNETLINK_API
 VOID
 NlFreeBuffer (
-    PNETLINK_MESSAGE_BUFFER Buffer
+    PNETLINK_BUFFER Buffer
     )
 
 /*++
@@ -433,10 +413,11 @@ Return Value:
 
 LIBNETLINK_API
 INT
-NlFillOutHeader (
+NlAppendHeader (
     PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_MESSAGE_BUFFER Message,
-    ULONG DataLength,
+    PNETLINK_BUFFER Message,
+    ULONG PayloadLength,
+    ULONG SequenceNumber,
     USHORT Type,
     USHORT Flags
     )
@@ -445,20 +426,25 @@ NlFillOutHeader (
 
 Routine Description:
 
-    This routine fills out the netlink message header that's going to be sent.
-    It will make sure there is enough room left in the supplied message buffer
-    and add the header before the current data offset. It always adds the ACK
-    and REQUEST flags.
+    This routine appends a base netlink header to the message. It will make
+    sure there is enough room left in the supplied message buffer, add the
+    header before at the current offset and update the offset and valid data
+    size when complete. It always adds the ACK and REQUEST flags.
 
 Arguments:
 
     Socket - Supplies a pointer to the netlink socket that is sending the
         message.
 
-    Message - Supplies a pointer to the netlink message buffer for which the
-        header should be filled out.
+    Message - Supplies a pointer to the netlink message buffer to which the
+        header should be appended.
 
-    DataLength - Supplies the length of the message data payload, in bytes.
+    PayloadLength - Supplies the length of the message data payload, in bytes.
+        This does not include the base netlink header length.
+
+    SequenceNumber - Supplies the sequence number for the message. This value
+        is ignored unless NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the
+        socket.
 
     Type - Supplies the netlink message type.
 
@@ -476,27 +462,35 @@ Return Value:
 {
 
     PNETLINK_HEADER Header;
+    ULONG MessageLength;
 
-    if (Message->DataOffset < NETLINK_HEADER_LENGTH) {
+    PayloadLength += NETLINK_HEADER_LENGTH;
+    MessageLength = Message->BufferSize - Message->CurrentOffset;
+    if (MessageLength < PayloadLength) {
         errno = ENOBUFS;
         return -1;
     }
 
-    if (((Message->FooterOffset - Message->DataOffset) < DataLength) ||
-        ((DataLength + NETLINK_HEADER_LENGTH) < DataLength)) {
-
-        errno = EMSGSIZE;
-        return -1;
-    }
-
     Flags |= NETLINK_HEADER_FLAG_ACK | NETLINK_HEADER_FLAG_REQUEST;
-    Message->DataOffset -= NETLINK_HEADER_LENGTH;
-    Header = Message->Buffer + Message->DataOffset;
-    Header->Length = DataLength + NETLINK_HEADER_LENGTH;
+    Header = Message->Buffer + Message->CurrentOffset;
+    Header->Length = PayloadLength;
     Header->Type = Type;
     Header->Flags = Flags;
-    Header->SequenceNumber = RtlAtomicAdd32(&(Socket->SendNextSequence), 1);
+    if ((Socket->Flags & NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE) != 0) {
+        Header->SequenceNumber = SequenceNumber;
+
+    } else {
+        Header->SequenceNumber = RtlAtomicAdd32(&(Socket->SendNextSequence), 1);
+    }
+
     Header->PortId = Socket->LocalAddress.nl_pid;
+
+    //
+    // Move the offset and data size to the first byte after the header.
+    //
+
+    Message->CurrentOffset += NETLINK_HEADER_LENGTH;
+    Message->DataSize += NETLINK_HEADER_LENGTH;
     return 0;
 }
 
@@ -504,7 +498,7 @@ LIBNETLINK_API
 INT
 NlSendMessage (
     PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_MESSAGE_BUFFER Message,
+    PNETLINK_BUFFER Message,
     ULONG PortId,
     ULONG GroupMask,
     PULONG BytesSent
@@ -551,8 +545,8 @@ Return Value:
     Address.nl_pid = PortId;
     Address.nl_groups = GroupMask;
     LocalBytesSent = sendto(Socket->Socket,
-                            Message->Buffer + Message->DataOffset,
-                            Message->FooterOffset - Message->DataOffset,
+                            Message->Buffer,
+                            Message->DataSize,
                             0,
                             (struct sockaddr *)&Address,
                             sizeof(struct sockaddr_nl));
@@ -575,7 +569,7 @@ LIBNETLINK_API
 INT
 NlReceiveMessage (
     PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_MESSAGE_BUFFER Message,
+    PNETLINK_BUFFER Message,
     PULONG PortId,
     PULONG GroupMask
     )
@@ -617,13 +611,14 @@ Return Value:
     socklen_t AddressLength;
     INTN BytesReceived;
     PINT Error;
+    ULONG ErrorLength;
     KSTATUS ErrorStatus;
     INT ErrorValue;
     PNETLINK_HEADER Header;
     INT Status;
 
-    Message->DataOffset = 0;
-    Message->FooterOffset = 0;
+    Message->CurrentOffset = 0;
+    Message->DataSize = 0;
     AddressLength = sizeof(struct sockaddr_nl);
     BytesReceived = recvfrom(Socket->Socket,
                              Message->Buffer,
@@ -637,7 +632,7 @@ Return Value:
     }
 
     Status = 0;
-    Message->FooterOffset = BytesReceived;
+    Message->DataSize = BytesReceived;
     if ((AddressLength != sizeof(struct sockaddr_nl)) ||
         (Address.nl_family != AF_NETLINK)) {
 
@@ -646,7 +641,7 @@ Return Value:
         goto ReceiveMessageEnd;
     }
 
-    Header = Message->Buffer + Message->DataOffset;
+    Header = Message->Buffer + Message->CurrentOffset;
     if ((BytesReceived < NETLINK_HEADER_LENGTH) ||
         (BytesReceived < Header->Length)) {
 
@@ -660,17 +655,21 @@ Return Value:
     // arrived.
     //
 
-    if (Header->SequenceNumber != Socket->ReceiveNextSequence) {
+    if (((Socket->Flags & NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE) == 0) &&
+        (Header->SequenceNumber != Socket->ReceiveNextSequence)) {
+
         errno = EILSEQ;
         Status = -1;
         goto ReceiveMessageEnd;
     }
 
     if (Header->Type == NETLINK_MESSAGE_TYPE_ERROR) {
-        RtlAtomicAdd32(&(Socket->ReceiveNextSequence), 1);
-        if (Header->Length <
-            (NETLINK_HEADER_LENGTH + sizeof(NETLINK_ERROR_MESSAGE))) {
+        if ((Socket->Flags & NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE) == 0) {
+            RtlAtomicAdd32(&(Socket->ReceiveNextSequence), 1);
+        }
 
+        ErrorLength = NETLINK_HEADER_LENGTH + sizeof(NETLINK_ERROR_MESSAGE);
+        if (Header->Length < ErrorLength) {
             errno = ENOMSG;
             Status = -1;
             goto ReceiveMessageEnd;
@@ -717,7 +716,7 @@ LIBNETLINK_API
 INT
 NlReceiveAcknowledgement (
     PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_MESSAGE_BUFFER Message,
+    PNETLINK_BUFFER Message,
     ULONG ExpectedPortId
     )
 
@@ -757,11 +756,11 @@ Return Value:
     INT Status;
 
     Status = NlReceiveMessage(Socket, Message, &PortId, NULL);
-    if (Status == -1) {
+    if (Status != 0) {
         goto ReceiveAcknowledgementEnd;
     }
 
-    Header = Message->Buffer + Message->DataOffset;
+    Header = Message->Buffer + Message->CurrentOffset;
     if ((PortId != ExpectedPortId) ||
         (Header->Type != NETLINK_MESSAGE_TYPE_ERROR)) {
 
@@ -772,6 +771,143 @@ Return Value:
 
 ReceiveAcknowledgementEnd:
     return Status;
+}
+
+LIBNETLINK_API
+INT
+NlAppendAttribute (
+    PNETLINK_BUFFER Message,
+    USHORT Type,
+    PVOID Data,
+    USHORT DataLength
+    )
+
+/*++
+
+Routine Description:
+
+    This routine appends a netlink attribute to the given message. It validates
+    that there is enough space for the attribute and moves the message buffer's
+    offset to the first byte after the attribute. It also updates the buffer's
+    valid data size. The exception to this rule is if a NULL data buffer is
+    supplied; the buffer's data offset and size will only be updated for the
+    attribute's header.
+
+Arguments:
+
+    Message - Supplies a pointer to the netlink message buffer to which the
+        attribute will be added.
+
+    Type - Supplies the netlink attribute type.
+
+    Data - Supplies an optional pointer to the attribute data to be stored in
+        the buffer. Even if no data buffer is supplied, a data length may be
+        supplied for the case of child attributes that are yet to be appended.
+
+    DataLength - Supplies the length of the data, in bytes.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
+{
+
+    PNETLINK_ATTRIBUTE Attribute;
+    ULONG AttributeLength;
+    ULONG MessageLength;
+
+    AttributeLength = NETLINK_ATTRIBUTE_SIZE(DataLength);
+    MessageLength = Message->BufferSize - Message->CurrentOffset;
+    if (MessageLength < AttributeLength) {
+        return ENOBUFS;
+    }
+
+    Attribute = Message->Buffer + Message->CurrentOffset;
+    Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(DataLength);
+    Attribute->Type = Type;
+    if (Data != NULL) {
+        RtlCopyMemory(NETLINK_ATTRIBUTE_DATA(Attribute), Data, DataLength);
+        Message->CurrentOffset += AttributeLength;
+        Message->DataSize += AttributeLength;
+
+    } else {
+        Message->CurrentOffset += NETLINK_ATTRIBUTE_HEADER_LENGTH;
+        Message->DataSize += NETLINK_ATTRIBUTE_HEADER_LENGTH;
+    }
+
+    return 0;
+}
+
+LIBNETLINK_API
+INT
+NlGetAttribute (
+    PVOID Attributes,
+    ULONG AttributesLength,
+    USHORT Type,
+    PVOID *Data,
+    PUSHORT DataLength
+    )
+
+/*++
+
+Routine Description:
+
+    This routine parses the given attributes buffer and returns a pointer to
+    the desired attribute.
+
+Arguments:
+
+    Attributes - Supplies a pointer to the start of the generic command
+        attributes.
+
+    AttributesLength - Supplies the length of the attributes buffer, in bytes.
+
+    Type - Supplies the netlink generic attribute type.
+
+    Data - Supplies a pointer that receives a pointer to the data for the
+        requested attribute type.
+
+    DataLength - Supplies a pointer that receives the length of the requested
+        attribute data.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
+{
+
+    PNETLINK_ATTRIBUTE Attribute;
+    ULONG AttributeSize;
+
+    Attribute = (PNETLINK_ATTRIBUTE)Attributes;
+    while (AttributesLength != 0) {
+        if ((AttributesLength < NETLINK_ATTRIBUTE_HEADER_LENGTH) ||
+            (AttributesLength < Attribute->Length)) {
+
+            break;
+        }
+
+        if (Attribute->Type == Type) {
+            *DataLength = Attribute->Length - NETLINK_ATTRIBUTE_HEADER_LENGTH;
+            *Data = NETLINK_ATTRIBUTE_DATA(Attribute);
+            return 0;
+        }
+
+        AttributeSize = NETLINK_ALIGN(Attribute->Length);
+        Attribute = (PVOID)Attribute + AttributeSize;
+        AttributesLength -= AttributeSize;
+    }
+
+    errno = ENOENT;
+    return -1;
 }
 
 //

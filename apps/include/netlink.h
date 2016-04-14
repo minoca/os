@@ -76,7 +76,8 @@ extern "C" {
 // netlink error messages. The default is to receive errno values.
 //
 
-#define NETLINK_SOCKET_FLAG_REPORT_KSTATUS 0x00000001
+#define NETLINK_SOCKET_FLAG_REPORT_KSTATUS   0x00000001
+#define NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -112,7 +113,7 @@ struct sockaddr_nl {
 
 Structure Description:
 
-    This structure defines information about a netlink message.
+    This structure defines information about a netlink message buffer.
 
 Members:
 
@@ -120,22 +121,19 @@ Members:
 
     BufferSize - Stores the size of the buffer, in bytes.
 
-    DataOffset - Stores the offset from the beginning of the buffer to the
-        beginning of the valid data. The next lower netlink layer should put
-        its own headers right before this offset.
+    DataSize - Stores the size of the valid data in the buffer, in bytes.
 
-    FooterOffset - Stores the offset from the beginning of the buffer to the
-        beginning of the footer data (i.e. the location to store the first byte
-        of the next netlink layer's footer).
+    CurrentOffset - Stores the byte offset into the buffer indicating where the
+        next set of data will be appended.
 
 --*/
 
-typedef struct NETLINK_MESSAGE_BUFFER {
+typedef struct NETLINK_BUFFER {
     PVOID Buffer;
     ULONG BufferSize;
-    ULONG DataOffset;
-    ULONG FooterOffset;
-} NETLINK_MESSAGE_BUFFER, *PNETLINK_MESSAGE_BUFFER;
+    ULONG DataSize;
+    ULONG CurrentOffset;
+} NETLINK_BUFFER, *PNETLINK_BUFFER;
 
 /*++
 
@@ -172,7 +170,7 @@ typedef struct _NETLINK_LIBRARY_SOCKET {
     volatile ULONG SendNextSequence;
     volatile ULONG ReceiveNextSequence;
     struct sockaddr_nl LocalAddress;
-    PNETLINK_MESSAGE_BUFFER ReceiveBuffer;
+    PNETLINK_BUFFER ReceiveBuffer;
 } NETLINK_LIBRARY_SOCKET, *PNETLINK_LIBRARY_SOCKET;
 
 //
@@ -270,10 +268,8 @@ Return Value:
 LIBNETLINK_API
 INT
 NlAllocateBuffer (
-    ULONG HeaderSize,
     ULONG Size,
-    ULONG FooterSize,
-    PNETLINK_MESSAGE_BUFFER *NewBuffer
+    PNETLINK_BUFFER *NewBuffer
     );
 
 /*++
@@ -285,12 +281,7 @@ Routine Description:
 
 Arguments:
 
-    HeaderSize - Supplies the number of header bytes needed, not including the
-        base netlink message header.
-
     Size - Supplies the number of data bytes needed.
-
-    FooterSize - Supplies the number of footer bytes needed.
 
     NewBuffer - Supplies a pointer where a pointer to the new allocation will
         be returned on success.
@@ -306,7 +297,7 @@ Return Value:
 LIBNETLINK_API
 VOID
 NlFreeBuffer (
-    PNETLINK_MESSAGE_BUFFER Buffer
+    PNETLINK_BUFFER Buffer
     );
 
 /*++
@@ -327,10 +318,11 @@ Return Value:
 
 LIBNETLINK_API
 INT
-NlFillOutHeader (
+NlAppendHeader (
     PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_MESSAGE_BUFFER Message,
-    ULONG DataLength,
+    PNETLINK_BUFFER Message,
+    ULONG PayloadLength,
+    ULONG SequenceNumber,
     USHORT Type,
     USHORT Flags
     );
@@ -339,20 +331,25 @@ NlFillOutHeader (
 
 Routine Description:
 
-    This routine fills out the netlink message header that's going to be sent.
-    It will make sure there is enough room left in the supplied message buffer
-    and add the header before the current data offset. It always adds the ACK
-    and REQUEST flags.
+    This routine appends a base netlink header to the message. It will make
+    sure there is enough room left in the supplied message buffer, add the
+    header before at the current offset and update the offset and valid data
+    size when complete. It always adds the ACK and REQUEST flags.
 
 Arguments:
 
     Socket - Supplies a pointer to the netlink socket that is sending the
         message.
 
-    Message - Supplies a pointer to the netlink message buffer for which the
-        header should be filled out.
+    Message - Supplies a pointer to the netlink message buffer to which the
+        header should be appended.
 
-    DataLength - Supplies the length of the message data payload, in bytes.
+    PayloadLength - Supplies the length of the message data payload, in bytes.
+        This does not include the base netlink header length.
+
+    SequenceNumber - Supplies the sequence number for the message. This value
+        is ignored unless NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the
+        socket.
 
     Type - Supplies the netlink message type.
 
@@ -371,7 +368,7 @@ LIBNETLINK_API
 INT
 NlSendMessage (
     PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_MESSAGE_BUFFER Message,
+    PNETLINK_BUFFER Message,
     ULONG PortId,
     ULONG GroupMask,
     PULONG BytesSent
@@ -411,7 +408,7 @@ LIBNETLINK_API
 INT
 NlReceiveMessage (
     PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_MESSAGE_BUFFER Message,
+    PNETLINK_BUFFER Message,
     PULONG PortId,
     PULONG GroupMask
     );
@@ -451,7 +448,7 @@ LIBNETLINK_API
 INT
 NlReceiveAcknowledgement (
     PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_MESSAGE_BUFFER Message,
+    PNETLINK_BUFFER Message,
     ULONG ExpectedPortId
     );
 
@@ -486,9 +483,94 @@ Return Value:
 
 LIBNETLINK_API
 INT
-NlGenericFillOutHeader (
+NlAppendAttribute (
+    PNETLINK_BUFFER Message,
+    USHORT Type,
+    PVOID Data,
+    USHORT DataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine appends a netlink attribute to the given message. It validates
+    that there is enough space for the attribute and moves the message buffer's
+    offset to the first byte after the attribute. It also updates the buffer's
+    valid data size. The exception to this rule is if a NULL data buffer is
+    supplied; the buffer's data offset and size will only be updated for the
+    attribute's header.
+
+Arguments:
+
+    Message - Supplies a pointer to the netlink message buffer to which the
+        attribute will be added.
+
+    Type - Supplies the netlink attribute type.
+
+    Data - Supplies an optional pointer to the attribute data to be stored in
+        the buffer. Even if no data buffer is supplied, a data length may be
+        supplied for the case of child attributes that are yet to be appended.
+
+    DataLength - Supplies the length of the data, in bytes.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
+LIBNETLINK_API
+INT
+NlGetAttribute (
+    PVOID Attributes,
+    ULONG AttributesLength,
+    USHORT Type,
+    PVOID *Data,
+    PUSHORT DataLength
+    );
+
+/*++
+
+Routine Description:
+
+    This routine parses the given attributes buffer and returns a pointer to
+    the desired attribute.
+
+Arguments:
+
+    Attributes - Supplies a pointer to the start of the generic command
+        attributes.
+
+    AttributesLength - Supplies the length of the attributes buffer, in bytes.
+
+    Type - Supplies the netlink generic attribute type.
+
+    Data - Supplies a pointer that receives a pointer to the data for the
+        requested attribute type.
+
+    DataLength - Supplies a pointer that receives the length of the requested
+        attribute data.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
+LIBNETLINK_API
+INT
+NlGenericAppendHeaders (
     PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_MESSAGE_BUFFER Message,
+    PNETLINK_BUFFER Message,
+    ULONG PayloadLength,
+    ULONG SequenceNumber,
+    USHORT Type,
+    USHORT Flags,
     UCHAR Command,
     UCHAR Version
     );
@@ -497,17 +579,30 @@ NlGenericFillOutHeader (
 
 Routine Description:
 
-    This routine fills out the generic netlink message header that's going to
-    be sent. It will make sure there is enough room left in the supplied
-    message buffer and add the header before the current data offset.
+    This routine appends the base and generic netlink headers to the given
+    message, validating that there is enough space remaining in the buffer.
+    Once the headers are appended, it moves the buffer's offset to the first
+    byte after the headers and updates the valid data size.
 
 Arguments:
 
     Socket - Supplies a pointer to the netlink socket over which the message
         will be sent.
 
-    Message - Supplies a pointer to the netlink message buffer for which the
-        header should be filled out.
+    Message - Supplies a pointer to the netlink message buffer to which the
+        headers will be appended.
+
+    PayloadLength - Supplies the length of the message data payload, in bytes.
+        This does not include the header lengths.
+
+    SequenceNumber - Supplies the sequence number for the message. This value
+        is ignored unless NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the
+        socket.
+
+    Type - Supplies the netlink message type.
+
+    Flags - Supplies a bitmask of netlink message flags. See
+        NETLINK_HEADER_FLAG_* for definitions.
 
     Command - Supplies the generic message command.
 
@@ -545,87 +640,6 @@ Arguments:
 
     FamilyId - Supplies a pointer that receives the message family ID to use as
         the netlink message header type.
-
-Return Value:
-
-    0 on success.
-
-    -1 on error, and the errno variable will be set to contain more information.
-
---*/
-
-LIBNETLINK_API
-INT
-NlGenericAddAttribute (
-    PNETLINK_MESSAGE_BUFFER Message,
-    PULONG MessageOffset,
-    USHORT Type,
-    PVOID Data,
-    USHORT DataLength
-    );
-
-/*++
-
-Routine Description:
-
-    This routine adds a netlink generic attribute to the given netlink message
-    buffer, starting at the message buffer's current data offset plus the given
-    message offset.
-
-Arguments:
-
-    Message - Supplies a pointer to the netlink message buffer on which to add
-        the attribute.
-
-    MessageOffset - Supplies a pointer to the offset within the message's data
-        region where the attribute should be stored. On output, it receives the
-        updated offset after the added attribute.
-
-    Type - Supplies the netlink generic attribute type.
-
-    Data - Supplies a pointer to the attribute data.
-
-    DataLength - Supplies the length of the data, in bytes.
-
-Return Value:
-
-    0 on success.
-
-    -1 on error, and the errno variable will be set to contain more information.
-
---*/
-
-LIBNETLINK_API
-INT
-NlGenericGetAttribute (
-    PVOID Attributes,
-    ULONG AttributesLength,
-    USHORT Type,
-    PVOID *Data,
-    PUSHORT DataLength
-    );
-
-/*++
-
-Routine Description:
-
-    This routine parses the given attributes buffer and returns a pointer to
-    the desired attribute.
-
-Arguments:
-
-    Attributes - Supplies a pointer to the start of the generic command
-        attributes.
-
-    AttributesLength - Supplies the length of the attributes buffer, in bytes.
-
-    Type - Supplies the netlink generic attribute type.
-
-    Data - Supplies a pointer that receives a pointer to the data for the
-        requested attribute type.
-
-    DataLength - Supplies a pointer that receives the length of the requested
-        attribute data.
 
 Return Value:
 

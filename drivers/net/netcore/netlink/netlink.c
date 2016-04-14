@@ -1263,7 +1263,7 @@ Arguments:
 
     Data - Supplies an optional pointer to the attribute data to be stored in
         the network packet. Even if no data buffer is supplied, a data length
-        may be applied for the case of child attributes that are yet to be
+        may be supplied for the case of child attributes that are yet to be
         appended.
 
     DataLength - Supplies the length of the data, in bytes.
@@ -1290,14 +1290,11 @@ Return Value:
     Attribute->Length = NETLINK_ATTRIBUTE_LENGTH(DataLength);
     Attribute->Type = Type;
     if (Data != NULL) {
-        RtlCopyMemory(NETLINK_ATTRIBUTE_DATA(Attribute),
-                      Data,
-                      DataLength);
-
+        RtlCopyMemory(NETLINK_ATTRIBUTE_DATA(Attribute), Data, DataLength);
         Packet->DataOffset += AttributeLength;
 
     } else {
-        Packet->DataOffset += NETLINK_ATTRIBUTE_SIZE(0);
+        Packet->DataOffset += NETLINK_ATTRIBUTE_HEADER_LENGTH;
     }
 
     return STATUS_SUCCESS;

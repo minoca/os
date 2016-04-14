@@ -832,7 +832,7 @@ Arguments:
 
     Data - Supplies an optional pointer to the attribute data to be stored in
         the network packet. Even if no data buffer is supplied, a data length
-        may be applied for the case of child attributes that are yet to be
+        may be supplied for the case of child attributes that are yet to be
         appended.
 
     DataLength - Supplies the length of the data, in bytes.

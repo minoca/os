@@ -52,9 +52,13 @@ Environment:
 
 LIBNETLINK_API
 INT
-NlGenericFillOutHeader (
+NlGenericAppendHeaders (
     PNETLINK_LIBRARY_SOCKET Socket,
-    PNETLINK_MESSAGE_BUFFER Message,
+    PNETLINK_BUFFER Message,
+    ULONG PayloadLength,
+    ULONG SequenceNumber,
+    USHORT Type,
+    USHORT Flags,
     UCHAR Command,
     UCHAR Version
     )
@@ -63,17 +67,30 @@ NlGenericFillOutHeader (
 
 Routine Description:
 
-    This routine fills out the generic netlink message header that's going to
-    be sent. It will make sure there is enough room left in the supplied
-    message buffer and add the header before the current data offset.
+    This routine appends the base and generic netlink headers to the given
+    message, validating that there is enough space remaining in the buffer.
+    Once the headers are appended, it moves the buffer's offset to the first
+    byte after the headers and updates the valid data size.
 
 Arguments:
 
     Socket - Supplies a pointer to the netlink socket over which the message
         will be sent.
 
-    Message - Supplies a pointer to the netlink message buffer for which the
-        header should be filled out.
+    Message - Supplies a pointer to the netlink message buffer to which the
+        headers will be appended.
+
+    PayloadLength - Supplies the length of the message data payload, in bytes.
+        This does not include the header lengths.
+
+    SequenceNumber - Supplies the sequence number for the message. This value
+        is ignored unless NETLINK_SOCKET_FLAG_NO_AUTO_SEQUENCE is set in the
+        socket.
+
+    Type - Supplies the netlink message type.
+
+    Flags - Supplies a bitmask of netlink message flags. See
+        NETLINK_HEADER_FLAG_* for definitions.
 
     Command - Supplies the generic message command.
 
@@ -90,17 +107,38 @@ Return Value:
 {
 
     PNETLINK_GENERIC_HEADER Header;
+    ULONG MessageLength;
+    INT Status;
 
-    if (Message->DataOffset < NETLINK_GENERIC_HEADER_LENGTH) {
+    PayloadLength += NETLINK_GENERIC_HEADER_LENGTH;
+    Status = NlAppendHeader(Socket,
+                            Message,
+                            PayloadLength,
+                            SequenceNumber,
+                            Type,
+                            Flags);
+
+    if (Status != 0) {
+        return Status;
+    }
+
+    MessageLength = Message->BufferSize - Message->CurrentOffset;
+    if (MessageLength < PayloadLength) {
         errno = ENOBUFS;
         return -1;
     }
 
-    Message->DataOffset -= NETLINK_GENERIC_HEADER_LENGTH;
-    Header = Message->Buffer + Message->DataOffset;
+    Header = Message->Buffer + Message->CurrentOffset;
     Header->Command = Command;
     Header->Version = Version;
     Header->Reserved = 0;
+
+    //
+    // Move the offset and data size to the first byte after the header.
+    //
+
+    Message->CurrentOffset += NETLINK_GENERIC_HEADER_LENGTH;
+    Message->DataSize += NETLINK_GENERIC_HEADER_LENGTH;
     return 0;
 }
 
@@ -146,9 +184,9 @@ Return Value:
     PNETLINK_HEADER Header;
     PUSHORT Id;
     USHORT IdLength;
-    PNETLINK_MESSAGE_BUFFER Message;
+    PNETLINK_BUFFER Message;
     ULONG MessageLength;
-    ULONG MessageOffset;
+    ULONG PayloadLength;
     ULONG PortId;
     INT Status;
 
@@ -164,29 +202,10 @@ Return Value:
     //
 
     FamilyNameLength = strlen(FamilyName) + 1;
-    MessageLength = NETLINK_ATTRIBUTE_HEADER_LENGTH + FamilyNameLength;
-    MessageLength = NETLINK_ALIGN(MessageLength);
-    Status = NlAllocateBuffer(NETLINK_GENERIC_HEADER_LENGTH,
-                              MessageLength,
-                              0,
-                              &Message);
-
-    if (Status == -1) {
-        goto GetFamilyIdEnd;
-    }
-
-    //
-    // Add the family name attribute.
-    //
-
-    MessageOffset = 0;
-    Status = NlGenericAddAttribute(Message,
-                                   &MessageOffset,
-                                   NETLINK_CONTROL_ATTRIBUTE_FAMILY_NAME,
-                                   FamilyName,
-                                   FamilyNameLength);
-
-    if (Status == -1) {
+    PayloadLength = NETLINK_ATTRIBUTE_SIZE(FamilyNameLength);
+    MessageLength = NETLINK_GENERIC_HEADER_LENGTH + PayloadLength;
+    Status = NlAllocateBuffer(MessageLength, &Message);
+    if (Status != 0) {
         goto GetFamilyIdEnd;
     }
 
@@ -194,23 +213,29 @@ Return Value:
     // Fill out both the generic and base netlink headers.
     //
 
-    Status = NlGenericFillOutHeader(Socket,
+    Status = NlGenericAppendHeaders(Socket,
                                     Message,
+                                    PayloadLength,
+                                    0,
+                                    NETLINK_GENERIC_ID_CONTROL,
+                                    0,
                                     NETLINK_CONTROL_COMMAND_GET_FAMILY,
                                     0);
 
-    if (Status == -1) {
+    if (Status != 0) {
         goto GetFamilyIdEnd;
     }
 
-    MessageLength += NETLINK_GENERIC_HEADER_LENGTH;
-    Status = NlFillOutHeader(Socket,
-                             Message,
-                             MessageLength,
-                             NETLINK_GENERIC_ID_CONTROL,
-                             0);
+    //
+    // Add the family name attribute.
+    //
 
-    if (Status == -1) {
+    Status = NlAppendAttribute(Message,
+                               NETLINK_CONTROL_ATTRIBUTE_FAMILY_NAME,
+                               FamilyName,
+                               FamilyNameLength);
+
+    if (Status != 0) {
         goto GetFamilyIdEnd;
     }
 
@@ -219,7 +244,7 @@ Return Value:
     //
 
     Status = NlSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0, NULL);
-    if (Status == -1) {
+    if (Status != 0) {
         goto GetFamilyIdEnd;
     }
 
@@ -228,14 +253,14 @@ Return Value:
     //
 
     Status = NlReceiveMessage(Socket, Socket->ReceiveBuffer, &PortId, NULL);
-    if (Status == -1) {
+    if (Status != 0) {
         goto GetFamilyIdEnd;
     }
 
-    Header = Socket->ReceiveBuffer->Buffer + Socket->ReceiveBuffer->DataOffset;
-    BytesReceived = Socket->ReceiveBuffer->FooterOffset -
-                    Socket->ReceiveBuffer->DataOffset;
+    Header = Socket->ReceiveBuffer->Buffer +
+             Socket->ReceiveBuffer->CurrentOffset;
 
+    BytesReceived = Socket->ReceiveBuffer->DataSize;
     if ((PortId != NETLINK_KERNEL_PORT_ID) ||
         (Header->Type != NETLINK_GENERIC_ID_CONTROL)) {
 
@@ -256,13 +281,13 @@ Return Value:
 
     BytesReceived -= NETLINK_GENERIC_HEADER_LENGTH;
     Attributes = NETLINK_GENERIC_DATA(GenericHeader);
-    Status = NlGenericGetAttribute(Attributes,
-                                   BytesReceived,
-                                   NETLINK_CONTROL_ATTRIBUTE_FAMILY_ID,
-                                   (PVOID *)&Id,
-                                   &IdLength);
+    Status = NlGetAttribute(Attributes,
+                            BytesReceived,
+                            NETLINK_CONTROL_ATTRIBUTE_FAMILY_ID,
+                            (PVOID *)&Id,
+                            &IdLength);
 
-    if (Status == -1) {
+    if (Status != 0) {
         goto GetFamilyIdEnd;
     }
 
@@ -280,7 +305,7 @@ Return Value:
                                       Socket->ReceiveBuffer,
                                       NETLINK_KERNEL_PORT_ID);
 
-    if (Status == -1) {
+    if (Status != 0) {
         goto GetFamilyIdEnd;
     }
 
@@ -290,142 +315,6 @@ GetFamilyIdEnd:
     }
 
     return Status;
-}
-
-LIBNETLINK_API
-INT
-NlGenericAddAttribute (
-    PNETLINK_MESSAGE_BUFFER Message,
-    PULONG MessageOffset,
-    USHORT Type,
-    PVOID Data,
-    USHORT DataLength
-    )
-
-/*++
-
-Routine Description:
-
-    This routine adds a netlink generic attribute to the given netlink message
-    buffer, starting at the message buffer's current data offset plus the given
-    message offset.
-
-Arguments:
-
-    Message - Supplies a pointer to the netlink message buffer on which to add
-        the attribute.
-
-    MessageOffset - Supplies a pointer to the offset within the message's data
-        region where the attribute should be stored. On output, it receives the
-        updated offset after the added attribute.
-
-    Type - Supplies the netlink generic attribute type.
-
-    Data - Supplies a pointer to the attribute data.
-
-    DataLength - Supplies the length of the data, in bytes.
-
-Return Value:
-
-    0 on success.
-
-    -1 on error, and the errno variable will be set to contain more information.
-
---*/
-
-{
-
-    ULONG AlignedLength;
-    PNETLINK_ATTRIBUTE Attribute;
-    USHORT AttributeLength;
-    ULONG MessageLength;
-
-    AttributeLength = NETLINK_ATTRIBUTE_LENGTH(DataLength);
-    AlignedLength = NETLINK_ATTRIBUTE_SIZE(DataLength);
-    MessageLength = Message->FooterOffset - Message->DataOffset;
-    if ((*MessageOffset > MessageLength) ||
-        (AlignedLength < DataLength) ||
-        ((*MessageOffset + AlignedLength) < *MessageOffset) ||
-        ((*MessageOffset + AlignedLength) > MessageLength)) {
-
-        errno = EINVAL;
-        return -1;
-    }
-
-    Attribute = Message->Buffer + Message->DataOffset + *MessageOffset;
-    Attribute->Length = AttributeLength;
-    Attribute->Type = Type;
-    RtlCopyMemory(NETLINK_ATTRIBUTE_DATA(Attribute), Data, DataLength);
-    *MessageOffset += AlignedLength;
-    return 0;
-}
-
-LIBNETLINK_API
-INT
-NlGenericGetAttribute (
-    PVOID Attributes,
-    ULONG AttributesLength,
-    USHORT Type,
-    PVOID *Data,
-    PUSHORT DataLength
-    )
-
-/*++
-
-Routine Description:
-
-    This routine parses the given attributes buffer and returns a pointer to
-    the desired attribute.
-
-Arguments:
-
-    Attributes - Supplies a pointer to the start of the generic command
-        attributes.
-
-    AttributesLength - Supplies the length of the attributes buffer, in bytes.
-
-    Type - Supplies the netlink generic attribute type.
-
-    Data - Supplies a pointer that receives a pointer to the data for the
-        requested attribute type.
-
-    DataLength - Supplies a pointer that receives the length of the requested
-        attribute data.
-
-Return Value:
-
-    0 on success.
-
-    -1 on error, and the errno variable will be set to contain more information.
-
---*/
-
-{
-
-    PNETLINK_ATTRIBUTE Attribute;
-    ULONG AttributeSize;
-
-    Attribute = (PNETLINK_ATTRIBUTE)Attributes;
-    while (AttributesLength != 0) {
-        if ((AttributesLength < NETLINK_ATTRIBUTE_HEADER_LENGTH) ||
-            (AttributesLength < Attribute->Length)) {
-
-            break;
-        }
-
-        if (Attribute->Type == Type) {
-            *DataLength = Attribute->Length - NETLINK_ATTRIBUTE_HEADER_LENGTH;
-            *Data = NETLINK_ATTRIBUTE_DATA(Attribute);
-            return 0;
-        }
-
-        AttributeSize = NETLINK_ALIGN(Attribute->Length);
-        Attribute = (PVOID)Attribute + AttributeSize;
-        AttributesLength -= AttributeSize;
-    }
-
-    errno = ENOENT;
-    return -1;
 }
 
 //
