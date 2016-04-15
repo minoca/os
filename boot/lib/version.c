@@ -67,6 +67,31 @@ Environment:
 
 #endif
 
+#ifndef SYSTEM_VERSION_MAJOR
+
+#define SYSTEM_VERSION_MAJOR 0
+#define SYSTEM_VERSION_MINOR 0
+
+#endif
+
+#ifndef SYSTEM_VERSION_REVISION
+
+#define SYSTEM_VERSION_REVISION 0
+
+#endif
+
+#ifndef BUILD_TIME
+
+#define BUILD_TIME 0
+
+#endif
+
+#ifndef BUILD_STRING
+
+#define BUILD_STRING ""
+
+#endif
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //

@@ -26,7 +26,7 @@ Environment:
 //
 
 #include <minoca/kernel/driver.h>
-#include "i8042.h"
+#include "../i8042.h"
 
 //
 // --------------------------------------------------------------------- Macros

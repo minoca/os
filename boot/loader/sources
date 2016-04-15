@@ -67,5 +67,5 @@ endif
 
 LDFLAGS += -pie -nodefaultlibs -nostartfiles -nostdlib
 
-EXTRA_SRC_DIRS = x86 armv7 armv6 kdusb
+EXTRA_SRC_DIRS = x86 armv7 armv6
 

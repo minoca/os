@@ -32,5 +32,3 @@ endif
 
 include $(SRCROOT)/os/minoca.mk
 
-armv6 armv7: fw
-
