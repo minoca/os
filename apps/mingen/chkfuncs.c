@@ -60,6 +60,20 @@ MingenChalkSplitExtension (
     );
 
 INT
+MingenChalkBasename (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+INT
+MingenChalkDirname (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    );
+
+INT
 MingenChalkGetenv (
     PCHALK_INTERPRETER Interpreter,
     PVOID Context,
@@ -119,7 +133,7 @@ PSTR MingenChalkAssertArguments[] = {
     NULL
 };
 
-PSTR MingenChalkSplitExtensionArguments[] = {
+PSTR MingenChalkSinglePathArgument[] = {
     "path",
     NULL
 };
@@ -141,6 +155,18 @@ CHALK_FUNCTION_PROTOTYPE MingenChalkFunctions[] = {
     },
 
     {
+        "basename",
+        MingenChalkSinglePathArgument,
+        MingenChalkBasename
+    },
+
+    {
+        "dirname",
+        MingenChalkSinglePathArgument,
+        MingenChalkDirname
+    },
+
+    {
         "getenv",
         MingenChalkGetenvArguments,
         MingenChalkGetenv
@@ -148,7 +174,7 @@ CHALK_FUNCTION_PROTOTYPE MingenChalkFunctions[] = {
 
     {
         "split_extension",
-        MingenChalkSplitExtensionArguments,
+        MingenChalkSinglePathArgument,
         MingenChalkSplitExtension
     },
 
@@ -380,6 +406,148 @@ ChalkSplitExtensionEnd:
 
     if (ExtensionString != NULL) {
         ChalkObjectReleaseReference(ExtensionString);
+    }
+
+    return Status;
+}
+
+INT
+MingenChalkBasename (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the basename Chalk function, which pulls the file
+    portion off of a path.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    PSTR Basename;
+    PCHALK_OBJECT Path;
+    PSTR PathCopy;
+    INT Status;
+
+    Path = ChalkCGetVariable(Interpreter, "path");
+
+    assert(Path != NULL);
+
+    if (Path->Header.Type != ChalkObjectString) {
+        fprintf(stderr, "basename: String expected\n");
+        return EINVAL;
+    }
+
+    PathCopy = strdup(Path->String.String);
+    if (PathCopy == NULL) {
+        Status = ENOMEM;
+        goto ChalkBasenameEnd;
+    }
+
+    MingenSplitPath(PathCopy, NULL, &Basename);
+    *ReturnValue = ChalkCreateString(Basename, strlen(Basename));
+    if (*ReturnValue == NULL) {
+        Status = ENOMEM;
+        goto ChalkBasenameEnd;
+    }
+
+    Status = 0;
+
+ChalkBasenameEnd:
+    if (PathCopy != NULL) {
+        free(PathCopy);
+    }
+
+    return Status;
+}
+
+INT
+MingenChalkDirname (
+    PCHALK_INTERPRETER Interpreter,
+    PVOID Context,
+    PCHALK_OBJECT *ReturnValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the dirname Chalk function, which pulls the
+    directory portion (everything but the file name) from the given path.
+
+Arguments:
+
+    Interpreter - Supplies a pointer to the interpreter context.
+
+    Context - Supplies a pointer's worth of context given when the function
+        was registered.
+
+    ReturnValue - Supplies a pointer where a pointer to the return value will
+        be returned.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on execution failure.
+
+--*/
+
+{
+
+    PSTR Dirname;
+    PCHALK_OBJECT Path;
+    PSTR PathCopy;
+    INT Status;
+
+    Path = ChalkCGetVariable(Interpreter, "path");
+
+    assert(Path != NULL);
+
+    if (Path->Header.Type != ChalkObjectString) {
+        fprintf(stderr, "dirname: String expected\n");
+        return EINVAL;
+    }
+
+    PathCopy = strdup(Path->String.String);
+    if (PathCopy == NULL) {
+        Status = ENOMEM;
+        goto ChalkDirnameEnd;
+    }
+
+    MingenSplitPath(PathCopy, &Dirname, NULL);
+    *ReturnValue = ChalkCreateString(Dirname, strlen(Dirname));
+    if (*ReturnValue == NULL) {
+        Status = ENOMEM;
+        goto ChalkDirnameEnd;
+    }
+
+    Status = 0;
+
+ChalkDirnameEnd:
+    if (PathCopy != NULL) {
+        free(PathCopy);
     }
 
     return Status;
