@@ -132,7 +132,8 @@ function build() {
         "inputs": common_sources + efi_sources + efi_app_libs,
         "sources_config": sources_config,
         "config": efi_link_config,
-        "entry": "BoMain"
+        "entry": "BoMain",
+        "binplace": TRUE
     };
 
     entries = application(efi_app);
@@ -149,7 +150,8 @@ function build() {
             "sources_config": sources_config,
             "config": pcat_link_config,
             "entry": "BoMain",
-            "prefix": "pcat"
+            "prefix": "pcat",
+            "binplace": TRUE
         };
 
         entries += application(pcat_app);

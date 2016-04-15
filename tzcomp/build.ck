@@ -92,6 +92,13 @@ function build() {
     };
 
     entries += [almanac, tz_default_data];
+
+    //
+    // Create a group for the data files.
+    //
+
+    tz_data_files = [":tzdata", ":tzdflt"];
+    entries += group("tz_files", tz_data_files);
     return entries;
 }
 

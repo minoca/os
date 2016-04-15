@@ -32,6 +32,10 @@ arch ?= "x86";
 debug ?= "dbg";
 variant ?= "";
 
+outroot = "^/../..";
+binroot = outroot + "/bin";
+stripped_dir = binroot + "/stripped";
+
 cflags ?= getenv("CFLAGS") ? [getenv("CFLAGS")] : ["-Wall", "-Werror"];
 cppflags ?= getenv("CPPFLAGS") ? [getenv("CPPFLAGS")] : [];
 ldflags ?= getenv("LDFLAGS") ? [getenv("LDFLAGS")] : [];
@@ -51,7 +55,7 @@ global_config = {
     "STRIP": getenv("STRIP"),
     "RCC": getenv("RCC"),
     "IASL", getenv("IASL"),
-    "SHELL": getenv("SHELL")
+    "SHELL": getenv("SHELL"),
 };
 
 build_os = uname_s();
@@ -270,23 +274,103 @@ function group(name, entries) {
 // Create a copy target.
 //
 
-function copy(source, destination, destination_label, flags) {
+function copy(source, destination, destination_label, flags, mode) {
+    config = {};
+    if (flags) {
+        config["CPFLAGS"] = flags;
+    }
+
+    if (mode) {
+        config["config"] = mode;
+    }
+
     entry = {
         "type": "target",
         "tool": "copy",
-        "inputs": source,
-        "output": destination
+        "label": destination_label,
+        "inputs": [source],
+        "output": destination,
+        "config": config
     };
 
-    if (destination_label) {
+    if (!destination_label) {
         entry["label"] = destination;
     }
 
-    if (flags) {
-        entry["config"] = {"CPFLAGS": flags};
+    return [entry];
+}
+
+//
+// Add a stripped version of the target.
+//
+
+function strip(params) {
+    tool_name = "strip";
+    if (get(params, "build")) {
+        tool_name = "build_strip";
     }
 
-    return [entry];
+    params["type"] = "target";
+    params["tool"] = tool_name;
+    return [params];
+}
+
+//
+// Replace the current target with a copied version in the bin directory. Also
+// strip unless told not to.
+//
+
+function binplace(params) {
+    label = get(params, "label");
+    label ?= get(params, "output");
+    source = get(params, "output");
+    source ?= label;
+
+    assert(label && source, "Label or source must be defined");
+
+    //
+    // Set the output since the label is going to be renamed and create the
+    // copy target.
+    //
+
+    params["output"] = source;
+    file_name = basename(source);
+    destination = binroot + "/" + file_name;
+    cpflags = get(params, "cpflags");
+    mode = get(params, "chmod");
+    new_original_label = label + "_orig";
+    original_target = ":" + new_original_label;
+    copied_entry = copy(original_target, destination, label, cpflags, mode)[0];
+
+    //
+    // The original label was given to the copied destination, so tack a _orig
+    // on the source label.
+    //
+
+    params["label"] = new_original_label;
+    entries = [copied_entry, params];
+
+    //
+    // Unless asked not to, create a stripped entry as well.
+    //
+
+    if (!get(params, "nostrip")) {
+        stripped_entry = {
+            "label": label + "_stripped",
+            "inputs": [original_target],
+            "output": stripped_dir + "/" + file_name,
+            "build": get(params, "build"),
+        };
+
+        //
+        // Make the binplaced copy depend on the stripped version.
+        //
+
+        copied_entry["implicit"] = [":" + stripped_entry["label"]];
+        entries += strip(stripped_entry);
+    }
+
+    return entries;
 }
 
 //
@@ -399,7 +483,13 @@ function executable(params) {
         add_config(params, "LDFLAGS", entry_option);
     }
 
-    entries += [params];
+    if (get(params, "binplace")) {
+        entries += binplace(params);
+
+    } else {
+        entries += [params];
+    }
+
     return entries;
 }
 
@@ -416,17 +506,6 @@ function application(params) {
     }
 
     add_config(params, "LDFLAGS", "-pie");
-    return executable(params);
-}
-
-//
-// Creates a statically linked executable.
-//
-
-function static_application(params) {
-    params["config"] ?= {};
-    params["config"]["LDFLAGS"] ?= [];
-    params["config"]["LDFLAGS"] += ["-static"];
     return executable(params);
 }
 
@@ -480,7 +559,13 @@ function static_library(params) {
         params["tool"] = "build_ar";
     }
 
-    entries += [params];
+    if (get(params, "binplace")) {
+        entries += binplace(params);
+
+    } else {
+        entries += [params];
+    }
+
     return entries;
 }
 
@@ -613,7 +698,14 @@ function flattened_binary(params) {
     }
 
     add_config(params, flags, "-O binary");
-    return [params];
+    if (get(params, "binplace")) {
+        entries = binplace(params);
+
+    } else {
+        entries = [params];
+    }
+
+    return entries;
 }
 
 //
@@ -634,26 +726,6 @@ function driver(params) {
     add_config(params, "LDFLAGS", "-Wl,-soname=" + soname);
     add_config(params, "LDFLAGS", "-nostdlib");
     return executable(params);
-}
-
-//
-// Create a file based on running a command unique to that file. This creates
-// a new tool.
-//
-
-function script(params) {
-    tool_name = params["tool"];
-    tool_description = get(params, "script_description");
-    tool_description ?= "Running " + tool_name + " - " + "$OUT";
-    tool = {
-        "type": "tool",
-        "name": tool_name,
-        "command": params["script"],
-        "description": tool_description
-    };
-
-    params["type"] = "target";
-    return [tool, params];
 }
 
 //

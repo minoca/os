@@ -209,7 +209,7 @@ function build() {
     };
 
     build_app = {
-        "label": "swiss_build",
+        "label": "build_swiss",
         "output": "swiss",
         "inputs": build_sources + build_libs,
         "sources_config": build_sources_config,

@@ -111,7 +111,7 @@ function build() {
     // TODO: Change inputs to //images/integrd.img
     //
 
-    ramdisk = copy(["//uefi/plat/beagbone:bbonefw"], "ramdisk", null, null);
+    ramdisk = copy("//uefi/plat/beagbone:bbonefw", "ramdisk", null, null, null);
     entries += ramdisk;
     ramdisk_o = {
         "type": "target",

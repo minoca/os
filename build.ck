@@ -69,6 +69,13 @@ function build() {
         "description": "Objectifying - $IN"
     };
 
+    strip_tool = {
+        "type": "tool",
+        "name": "strip",
+        "command": "$STRIP $STRIP_FLAGS -o $OUT $IN",
+        "description": "Stripping - $OUT",
+    };
+
     build_cc = {
         "type": "tool",
         "name": "build_cc",
@@ -117,6 +124,13 @@ function build() {
         "description": "Objectifying - $IN"
     };
 
+    build_strip = {
+        "type": "tool",
+        "name": "build_strip",
+        "command": "$BUILD_STRIP $STRIP_FLAGS -o $OUT $IN",
+        "description": "Stripping - $OUT",
+    };
+
     build_rcc = {
         "type": "tool",
         "name": "build_rcc",
@@ -134,7 +148,7 @@ function build() {
     cp = {
         "type": "tool",
         "name": "copy",
-        "command": "cp $CPFLAGS $IN $OUT",
+        "command": "$SHELL -c \"cp $CPFLAGS $IN $OUT && [ -z $CHMOD_FLAGS ] || chmod $CHMOD_FLAGS $OUT\"",
         "description": "Copying - $IN -> $OUT"
     };
 
@@ -162,115 +176,21 @@ function build() {
         "depth": 1
     };
 
-    entries = [cc, cxx, ld, ar, as, objcopy,
+    entries = [cc, cxx, ld, ar, as, objcopy, strip_tool,
                build_cc, build_cxx, build_ld, build_ar, build_as, build_rcc,
-               build_objcopy, iasl, cp, stamp,
+               build_objcopy, build_strip, iasl, cp, stamp,
                config_entry, pool1, pool2];
 
     all = [
-        "//lib/crypto/testcryp:",
-        "//apps/mingen:",
-        "//lib/fatlib/fattest:",
-        "//lib/rtl/testrtl:",
-        "//lib/yy/yytest:",
-        "//kernel/mm/testmm:",
-        "//kernel:",
-        "//apps/libc/crypt:",
-        "//apps/libc/static:",
-        "//apps/libc/dynamic:",
-        "//apps/libc/dynamic/testc:",
-        "//apps/libc/dynamic/pthread/static:",
-        "//apps/efiboot:",
-        "//apps/netcon:",
-        "//apps/profile:",
-        "//apps/setup:",
-        "//apps/swiss:",
-        "//apps/unmount:",
-        "//apps/vmstat:",
-        "//apps/testapps:testapps",
-        "//boot/bootman:",
-        "//boot/loader:",
-        "//debug/client:",
-        "//debug/client/testdisa:build_testdisa",
-        "//debug/client/teststab:build_teststab",
-        "//debug/client/tdwarf:build_tdwarf",
-        "//debug/kexts:",
-        "//drivers/acpi:acpi",
-        "//drivers/ata:ata",
-        "//drivers/devrem:devrem",
-        "//drivers/fat:fat",
-        "//drivers/i8042:i8042",
-        "//drivers/net/ethernet/atl1c:atl1c",
-        "//drivers/net/ethernet/dwceth:dwceth",
-        "//drivers/net/ethernet/e100:e100",
-        "//drivers/net/ethernet/rtl81xx:rtl81xx",
-        "//drivers/net/ethernet/smsc91c1:smsc91c1",
-        "//drivers/net/ethernet/smsc95xx:smsc95xx",
-        "//drivers/net/wireless/rtlw81xx:rtlw81xx",
-        "//drivers/null:null",
-        "//drivers/part:part",
-        "//drivers/pci:pci",
-        "//drivers/plat/quark/qrkhostb:qrkhostb",
-        "//drivers/ramdisk",
-        "//drivers/sd/core:sd",
-        "//drivers/special:special",
-        "//drivers/term/ser16550:ser16550",
-        "//drivers/videocon:videocon",
-        "//drivers/usb/ehci:ehci",
-        "//drivers/usb/onering:onering",
-        "//drivers/usb/onering/usbrelay:usbrelay",
-        "//drivers/usb/uhci:uhci",
-        "//drivers/usb/usbcomp:usbcomp",
-        "//drivers/usb/usbcore:usbcore",
-        "//drivers/usb/usbhub:usbhub",
-        "//drivers/usb/usbkbd:usbkbd",
-        "//drivers/usb/usbmass:usbmass",
-        "//tzcomp:tzdata",
-        "//tzcomp:tzdflt"
+        "//lib:test_apps",
+        "//apps:all_apps",
+        "//kernel:kernel",
+        "//boot:boot_apps",
+        "//debug:debug",
+        "//drivers:drivers",
+        "//uefi:platfw",
+        "//tzcomp:tz_files",
     ];
-
-    if (arch == "armv7") {
-        all += [
-            "//uefi/plat/beagbone:bbonefw",
-            "//uefi/plat/beagbone/init:bbonemlo",
-            "//uefi/plat/panda/init:omap4mlo",
-            "//uefi/plat/integcp:integfw",
-            "//uefi/plat/panda:pandafw",
-            "//uefi/plat/panda:pandausb.img",
-            "//uefi/plat/rpi2:rpi2fw",
-            "//uefi/plat/veyron:veyronfw",
-            "//drivers/dma/bcm2709:dmab2709",
-            "//drivers/dma/edma3:edma3",
-            "//drivers/gpio/rockchip/rk32:rk32gpio",
-            "//drivers/gpio/ti/omap4:om4gpio",
-            "//drivers/i8042/pl050:pl050",
-            "//drivers/net/ethernet/am3eth:am3eth",
-            "//drivers/plat/goec:goec",
-            "//drivers/plat/rockchip/rk808:rk808",
-            "//drivers/plat/ti/am3soc:am3soc",
-            "//drivers/plat/ti/tps65217:tps65217",
-            "//drivers/sd/bcm2709:sdbm2709",
-            "//drivers/sd/omap4:sdomap4",
-            "//drivers/sd/rk32xx:sdrk32xx",
-            "//drivers/spb/i2c/am3i2c:am3i2c",
-            "//drivers/spb/i2c/rk3i2c:rk3i2c",
-            "//drivers/spb/spi/rk32spi:rk32spi",
-            "//drivers/usb/am3usb:am3usb",
-            "//drivers/usb/dwhci:dwhci",
-        ];
-
-    } else if (arch == "armv6") {
-        all += [
-            "//uefi/plat/rpi:rpifw"
-        ];
-
-    } else if (arch == "x86") {
-        all += [
-            "//uefi/plat/bios:biosfw",
-            "//boot/fatboot:fatboot.bin",
-            "//boot/mbr:mbr.bin"
-        ];
-    }
 
     entries += group("all", all);
     return entries;
