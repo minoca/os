@@ -113,7 +113,7 @@ typedef struct _NETCON_CONTEXT {
 
 Structure Description:
 
-    This structure describes a network device.
+    This structure defines a network device.
 
 Members:
 
@@ -136,6 +136,44 @@ typedef struct _NETCON_DEVICE_DESCRIPTION {
     NETWORK_DEVICE_INFORMATION NetworkIp6;
     NETWORK_80211_DEVICE_INFORMATION Net80211;
 } NETCON_DEVICE_DESCRIPTION, *PNETCON_DEVICE_DESCRIPTION;
+
+/*++
+
+Structure Description:
+
+    This structure defines a BSS scan result.
+
+Members:
+
+    Bssid - Stores the BSSID.
+
+--*/
+
+typedef struct _NETCON_BSS {
+    NETWORK_ADDRESS Bssid;
+} NETCON_BSS, *PNETCON_BSS;
+
+/*++
+
+Structure Description:
+
+    This structure defines a set of scan results.
+
+Members:
+
+    Valid - Stores a boolean indicating whether or not the results are valid.
+
+    BssCount - Stores the number of BSS element pointers in the array.
+
+    BssArray - Stores an array of pointers to the BSS elements.
+
+--*/
+
+typedef struct _NETCON_SCAN_RESULTS {
+    BOOL Valid;
+    ULONG BssCount;
+    PNETCON_BSS *BssArray;
+} NETCON_SCAN_RESULTS, *PNETCON_SCAN_RESULTS;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -171,6 +209,26 @@ NetconLeaveNetwork (
 VOID
 NetconScanForNetworks (
     PNETCON_CONTEXT Context
+    );
+
+VOID
+NetconParseScanNotification (
+    PNL_SOCKET Socket,
+    PNL_RECEIVE_CONTEXT Context,
+    PVOID Message
+    );
+
+VOID
+NetconParseScanResult (
+    PNL_SOCKET Socket,
+    PNL_RECEIVE_CONTEXT Context,
+    PVOID Message
+    );
+
+VOID
+NetconPrintScanResults (
+    PNETCON_CONTEXT Context,
+    PNETCON_SCAN_RESULTS Results
     );
 
 VOID
@@ -290,7 +348,7 @@ Return Value:
             Context.Flags |= NETCON_FLAG_LEAVE;
             break;
 
-        case 'n':
+        case 's':
             Context.Flags |= NETCON_FLAG_SCAN;
             break;
 
@@ -675,6 +733,7 @@ Return Value:
     USHORT FamilyId;
     PNL_MESSAGE_BUFFER Message;
     ULONG MessageLength;
+    NL_RECEIVE_PARAMETERS Parameters;
     PSTR Password;
     UINTN PasswordLength;
     ULONG PayloadLength;
@@ -732,7 +791,7 @@ Return Value:
                     NETLINK_ATTRIBUTE_SIZE(SsidLength);
 
     if (Password != NULL) {
-        MessageLength += NETLINK_ATTRIBUTE_SIZE(PasswordLength);
+        PayloadLength += NETLINK_ATTRIBUTE_SIZE(PasswordLength);
     }
 
     MessageLength = NETLINK_GENERIC_HEADER_LENGTH + PayloadLength;
@@ -793,13 +852,13 @@ Return Value:
     }
 
     //
-    // Receive for an acknowledgement message.
+    // Wait for an acknowledgement message.
     //
 
-    Status = NlReceiveAcknowledgement(Socket,
-                                      Socket->ReceiveBuffer,
-                                      NETLINK_KERNEL_PORT_ID);
-
+    memset(&Parameters, 0, sizeof(NL_RECEIVE_PARAMETERS));
+    Parameters.Flags |= NL_RECEIVE_FLAG_PORT_ID;
+    Parameters.PortId = NETLINK_KERNEL_PORT_ID;
+    Status = NlReceiveMessage(Socket, &Parameters);
     if (Status != 0) {
         goto JoinNetworkEnd;
     }
@@ -847,6 +906,7 @@ Return Value:
     USHORT FamilyId;
     PNL_MESSAGE_BUFFER Message;
     ULONG MessageLength;
+    NL_RECEIVE_PARAMETERS Parameters;
     ULONG PayloadLength;
     PNL_SOCKET Socket;
     INT Status;
@@ -908,13 +968,13 @@ Return Value:
     }
 
     //
-    // Receive for an acknowledgement message.
+    // Wait for an acknowledgement message.
     //
 
-    Status = NlReceiveAcknowledgement(Socket,
-                                      Socket->ReceiveBuffer,
-                                      NETLINK_KERNEL_PORT_ID);
-
+    memset(&Parameters, 0, sizeof(NL_RECEIVE_PARAMETERS));
+    Parameters.Flags |= NL_RECEIVE_FLAG_PORT_ID;
+    Parameters.PortId = NETLINK_KERNEL_PORT_ID;
+    Status = NlReceiveMessage(Socket, &Parameters);
     if (Status != 0) {
         goto LeaveNetworkEnd;
     }
@@ -955,7 +1015,486 @@ Return Value:
 
 {
 
-    printf("Not implemented.\n");
+    BOOL AckReceived;
+    USHORT FamilyId;
+    ULONG Flags;
+    PNL_MESSAGE_BUFFER Message;
+    ULONG MessageLength;
+    NL_RECEIVE_PARAMETERS Parameters;
+    ULONG PayloadLength;
+    NETCON_SCAN_RESULTS ScanResults;
+    BOOL ScanResultsReady;
+    PNL_SOCKET Socket;
+    INT Status;
+
+    Message = NULL;
+    Status = NlCreateSocket(NETLINK_GENERIC, NL_ANY_PORT_ID, 0, &Socket);
+    if (Status != 0) {
+        goto ScanForNetworksEnd;
+    }
+
+    Status = NlGenericGetFamilyId(Socket,
+                                  NETLINK_GENERIC_80211_NAME,
+                                  &FamilyId);
+
+    if (Status != 0) {
+        goto ScanForNetworksEnd;
+    }
+
+    //
+    // Join the 802.11 scan multicast group in order to get progress updates
+    // from the scan.
+    //
+
+    Status = NlGenericJoinMulticastGroup(Socket,
+                                         FamilyId,
+                                         NETLINK_80211_MULTICAST_SCAN_NAME);
+
+    if (Status != 0) {
+        goto ScanForNetworksEnd;
+    }
+
+    //
+    // Build and send a request to scan for all networks on the given device.
+    // This only requires supplying the device ID as an attribute.
+    //
+
+    PayloadLength = NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID));
+    MessageLength = NETLINK_GENERIC_HEADER_LENGTH + PayloadLength;
+    Status = NlAllocateBuffer(MessageLength, &Message);
+    if (Status != 0) {
+        goto ScanForNetworksEnd;
+    }
+
+    Status = NlGenericAppendHeaders(Socket,
+                                    Message,
+                                    PayloadLength,
+                                    0,
+                                    FamilyId,
+                                    0,
+                                    NETLINK_80211_COMMAND_SCAN_START,
+                                    0);
+
+    if (Status != 0) {
+        goto ScanForNetworksEnd;
+    }
+
+    Status = NlAppendAttribute(Message,
+                               NETLINK_80211_ATTRIBUTE_DEVICE_ID,
+                               &(Context->DeviceId),
+                               sizeof(DEVICE_ID));
+
+    if (Status != 0) {
+        goto ScanForNetworksEnd;
+    }
+
+    Status = NlSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0, NULL);
+    if (Status != 0) {
+        goto ScanForNetworksEnd;
+    }
+
+    NlFreeBuffer(Message);
+    Message = NULL;
+
+    //
+    // Loop waiting for a few possible messages. The scan start request should
+    // be acknowledged by the kernel. If the scan is acknowledged, then either
+    // a scan aborted or scan results message should arrive. That is not to
+    // say that the acknowledge will always come before a scan aborted or
+    // results message.
+    //
+
+    memset(&Parameters, 0, sizeof(NL_RECEIVE_PARAMETERS));
+    Parameters.ReceiveRoutine = NetconParseScanNotification;
+    Parameters.ReceiveContext.Type = FamilyId;
+    Parameters.ReceiveContext.PrivateContext = &ScanResultsReady;
+    Parameters.PortId = NETLINK_KERNEL_PORT_ID;
+    Flags = NL_RECEIVE_FLAG_PORT_ID;
+    ScanResultsReady = FALSE;
+    AckReceived = FALSE;
+    while ((AckReceived == FALSE) || (ScanResultsReady == FALSE)) {
+        Parameters.Flags = Flags;
+        Status = NlReceiveMessage(Socket, &Parameters);
+        if (Status != 0) {
+            goto ScanForNetworksEnd;
+        }
+
+        if (Parameters.ReceiveContext.Status != 0) {
+            Status = Parameters.ReceiveContext.Status;
+            goto ScanForNetworksEnd;
+        }
+
+        //
+        // If an ACK was received, make sure to stop waiting for one.
+        //
+
+        if ((Parameters.Flags & NL_RECEIVE_FLAG_ACK_RECEIVED) != 0) {
+            AckReceived = TRUE;
+            Flags |= NL_RECEIVE_FLAG_NO_ACK_WAIT;
+        }
+    }
+
+    //
+    // The scan has completed. Get the scan results and print them out for
+    // the user. Start by building a scan results get request and sending that
+    // off to the kernel.
+    //
+
+    Message = NULL;
+    PayloadLength = NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID));
+    MessageLength = NETLINK_GENERIC_HEADER_LENGTH + PayloadLength;
+    Status = NlAllocateBuffer(MessageLength, &Message);
+    if (Status != 0) {
+        goto ScanForNetworksEnd;
+    }
+
+    Status = NlGenericAppendHeaders(Socket,
+                                    Message,
+                                    PayloadLength,
+                                    0,
+                                    FamilyId,
+                                    NETLINK_HEADER_FLAG_DUMP,
+                                    NETLINK_80211_COMMAND_SCAN_GET_RESULTS,
+                                    0);
+
+    if (Status != 0) {
+        goto ScanForNetworksEnd;
+    }
+
+    Status = NlAppendAttribute(Message,
+                               NETLINK_80211_ATTRIBUTE_DEVICE_ID,
+                               &(Context->DeviceId),
+                               sizeof(DEVICE_ID));
+
+    if (Status != 0) {
+        goto ScanForNetworksEnd;
+    }
+
+    Status = NlSendMessage(Socket, Message, NETLINK_KERNEL_PORT_ID, 0, NULL);
+    if (Status != 0) {
+        goto ScanForNetworksEnd;
+    }
+
+    //
+    // Now wait for the ACK and the results messages to come in.
+    //
+
+    memset(&Parameters, 0, sizeof(NL_RECEIVE_PARAMETERS));
+    memset(&ScanResults, 0, sizeof(NETCON_SCAN_RESULTS));
+    Parameters.ReceiveRoutine = NetconParseScanResult;
+    Parameters.ReceiveContext.Type = FamilyId;
+    Parameters.ReceiveContext.PrivateContext = &ScanResults;
+    Parameters.PortId = NETLINK_KERNEL_PORT_ID;
+    Flags = NL_RECEIVE_FLAG_PORT_ID;
+    ScanResultsReady = FALSE;
+    AckReceived = FALSE;
+    while ((AckReceived == FALSE) || (ScanResults.Valid == FALSE)) {
+        Parameters.Flags = Flags;
+        Status = NlReceiveMessage(Socket, &Parameters);
+        if (Status != 0) {
+            goto ScanForNetworksEnd;
+        }
+
+        if (Parameters.ReceiveContext.Status != 0) {
+            Status = Parameters.ReceiveContext.Status;
+            goto ScanForNetworksEnd;
+        }
+
+        //
+        // If an ACK was received, make sure to stop waiting for one.
+        //
+
+        if ((Parameters.Flags & NL_RECEIVE_FLAG_ACK_RECEIVED) != 0) {
+            AckReceived = TRUE;
+            Flags |= NL_RECEIVE_FLAG_NO_ACK_WAIT;
+        }
+    }
+
+    //
+    // Print out those scan results!
+    //
+
+    NetconPrintScanResults(Context, &ScanResults);
+
+ScanForNetworksEnd:
+    if (Message != NULL) {
+        NlFreeBuffer(Message);
+    }
+
+    if (Socket != NULL) {
+        NlDestroySocket(Socket);
+    }
+
+    if (Status != 0) {
+        perror("netcon: failed to scan for networks");
+    }
+
+    return;
+}
+
+VOID
+NetconParseScanNotification (
+    PNL_SOCKET Socket,
+    PNL_RECEIVE_CONTEXT Context,
+    PVOID Message
+    )
+
+/*++
+
+Routine Description:
+
+    This routine parses a netlink message looking for a scan notification.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket that received the message.
+
+    Context - Supplies a pointer to the receive context given to the receive
+        message handler.
+
+    Message - Supplies a pointer to the beginning of the netlink message. The
+        length of which can be obtained from the header; it was already
+        validated.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNETLINK_GENERIC_HEADER GenericHeader;
+    PNETLINK_HEADER Header;
+    ULONG MessageLength;
+    PBOOL ScanResultsReady;
+
+    Header = (PNETLINK_HEADER)Message;
+
+    //
+    // Skip any messages that are not of the 802.11 family type.
+    //
+
+    if (Header->Type != Context->Type) {
+        return;
+    }
+
+    //
+    // Parse the generic header to determine the 802.11 command.
+    //
+
+    MessageLength = Header->Length;
+    MessageLength -= NETLINK_HEADER_LENGTH;
+    if (MessageLength < sizeof(NETLINK_GENERIC_HEADER)) {
+        return;
+    }
+
+    //
+    // Fail the scan request if the system aborted the scan.
+    //
+
+    GenericHeader = NETLINK_DATA(Header);
+    if (GenericHeader->Command == NETLINK_80211_COMMAND_SCAN_ABORTED) {
+        errno = ECANCELED;
+        Context->Status = -1;
+
+    //
+    // If it is a scan result notification, mark that it has been seen.
+    //
+
+    } else if (GenericHeader->Command == NETLINK_80211_COMMAND_SCAN_RESULT) {
+        ScanResultsReady = (PBOOL)Context->PrivateContext;
+        *ScanResultsReady = TRUE;
+        Context->Status = 0;
+    }
+
+    return;
+}
+
+VOID
+NetconParseScanResult (
+    PNL_SOCKET Socket,
+    PNL_RECEIVE_CONTEXT Context,
+    PVOID Message
+    )
+
+/*++
+
+Routine Description:
+
+    This routine parses a netlink message looking for a scan result.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket that received the message.
+
+    Context - Supplies a pointer to the receive context given to the receive
+        message handler.
+
+    Message - Supplies a pointer to the beginning of the netlink message. The
+        length of which can be obtained from the header; it was already
+        validated.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PVOID Attributes;
+    PNETCON_BSS Bss;
+    PVOID BssAttribute;
+    USHORT BssAttributeLength;
+    ULONG BssCount;
+    PVOID Bssid;
+    USHORT BssidLength;
+    PNETLINK_GENERIC_HEADER GenericHeader;
+    PNETLINK_HEADER Header;
+    ULONG MessageLength;
+    PNETCON_SCAN_RESULTS ScanResults;
+    KSTATUS Status;
+
+    Bss = NULL;
+    Header = (PNETLINK_HEADER)Message;
+    Status = 0;
+
+    //
+    // Skip any messages that are not of the 802.11 family type.
+    //
+
+    if (Header->Type != Context->Type) {
+        goto ParseScanResultEnd;
+    }
+
+    //
+    // Parse the generic header to determine the 802.11 command and toss
+    // anything that isn't a scan result.
+    //
+
+    MessageLength = Header->Length;
+    MessageLength -= NETLINK_HEADER_LENGTH;
+    if (MessageLength < sizeof(NETLINK_GENERIC_HEADER)) {
+        goto ParseScanResultEnd;
+    }
+
+    GenericHeader = NETLINK_DATA(Header);
+    if (GenericHeader->Command != NETLINK_80211_COMMAND_SCAN_RESULT) {
+        goto ParseScanResultEnd;
+    }
+
+    //
+    // Get the BSS region of the attributes.
+    //
+
+    MessageLength -= NETLINK_GENERIC_HEADER_LENGTH;
+    Attributes = NETLINK_GENERIC_DATA(GenericHeader);
+    Status = NlGetAttribute(Attributes,
+                            MessageLength,
+                            NETLINK_80211_ATTRIBUTE_BSS,
+                            &BssAttribute,
+                            &BssAttributeLength);
+
+    if (Status != 0) {
+        goto ParseScanResultEnd;
+    }
+
+    Status = NlGetAttribute(BssAttribute,
+                            BssAttributeLength,
+                            NETLINK_80211_BSS_ATTRIBUTE_BSSID,
+                            &Bssid,
+                            &BssidLength);
+
+    if ((Status != 0) || (BssidLength != NET80211_ADDRESS_SIZE)) {
+        goto ParseScanResultEnd;
+    }
+
+    //
+    // Allocate a new BSS element and fill it out with the information
+    // collected above.
+    //
+
+    Bss = malloc(sizeof(NETCON_BSS));
+    if (Bss == NULL) {
+        goto ParseScanResultEnd;
+    }
+
+    memset(Bss, 0, sizeof(NETCON_BSS));
+    Bss->Bssid.Domain = NetDomain80211;
+    memcpy(Bss->Bssid.Address, Bssid, NET80211_ADDRESS_SIZE);
+
+    //
+    // Expand the scan results array to incorporate this BSS element.
+    //
+
+    ScanResults = (PNETCON_SCAN_RESULTS)Context->PrivateContext;
+    BssCount = ScanResults->BssCount + 1;
+    ScanResults->BssArray = realloc(ScanResults->BssArray,
+                                    BssCount * sizeof(PNETCON_BSS));
+
+    if (ScanResults->BssArray == NULL) {
+        ScanResults->BssCount = 0;
+        Status = -1;
+        goto ParseScanResultEnd;
+    }
+
+    ScanResults->BssCount = BssCount;
+    ScanResults->BssArray[BssCount - 1] = Bss;
+    ScanResults->Valid = TRUE;
+
+ParseScanResultEnd:
+    if (Status != 0) {
+        if (Bss != NULL) {
+            free(Bss);
+        }
+    }
+
+    return;
+}
+
+VOID
+NetconPrintScanResults (
+    PNETCON_CONTEXT Context,
+    PNETCON_SCAN_RESULTS Results
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints the given scan results list to standard out.
+
+Arguments:
+
+    Context - Supplies a pointer to the network connection context.
+
+    Results - Supplies a pointer to the network scan results.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNETCON_BSS Bss;
+    ULONG Index;
+
+    printf("Network Scan for Device 0x%I64x:\n", Context->DeviceId);
+    if (Results->BssCount == 0) {
+        printf("No networks found.\n");
+        return;
+    }
+
+    for (Index = 0; Index < Results->BssCount; Index += 1) {
+        Bss = Results->BssArray[Index];
+        printf("\tBSSID: ");
+        NetconPrintAddress(&(Bss->Bssid));
+        printf("\n");
+    }
+
     return;
 }
 

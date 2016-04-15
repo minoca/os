@@ -77,7 +77,35 @@ extern "C" {
 //
 
 #define NL_SOCKET_FLAG_REPORT_KSTATUS   0x00000001
+
+//
+// Set this flag in the netlink socket to disable the automatic setting of a
+// sequence number on send and automatic validation of sequence numbers upon
+// message reception.
+//
+
 #define NL_SOCKET_FLAG_NO_AUTO_SEQUENCE 0x00000002
+
+//
+// Supply this flag to the message reception routine to prevent it from waiting
+// for an ACK before returning.
+//
+
+#define NL_RECEIVE_FLAG_NO_ACK_WAIT 0x00000001
+
+//
+// Supply these flags to the message reception routine to make sure the
+// received messages come from either a given port ID or a multicast group.
+//
+
+#define NL_RECEIVE_FLAG_PORT_ID     0x00000002
+#define NL_RECEIVE_FLAG_GROUP_MASK  0x00000004
+
+//
+// This flag is returned by the receive routine if an ACK was processed.
+//
+
+#define NL_RECEIVE_FLAG_ACK_RECEIVED 0x00000008
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -172,6 +200,98 @@ typedef struct _NL_SOCKET {
     struct sockaddr_nl LocalAddress;
     PNL_MESSAGE_BUFFER ReceiveBuffer;
 } NL_SOCKET, *PNL_SOCKET;
+
+/*++
+
+Structure Description:
+
+    This structure defines the context supplied to each invocation of the
+    receive callback routine during receive message processing.
+
+Members:
+
+    Status - Stores the status from the receive callback routine.
+
+    Type - Stores an optional message type that the receive callback routine
+        can use to validate the message.
+
+    PrivateContext - Stores an optional pointer to a private context to be used
+        by the caller of the message receive handler on each invocation of the
+        receive callback routine.
+
+--*/
+
+typedef struct _NL_RECEIVE_CONTEXT {
+    INT Status;
+    USHORT Type;
+    PVOID PrivateContext;
+} NL_RECEIVE_CONTEXT, *PNL_RECEIVE_CONTEXT;
+
+typedef
+VOID
+(*PNL_RECEIVE_ROUTINE) (
+    PNL_SOCKET Socket,
+    PNL_RECEIVE_CONTEXT Context,
+    PVOID Message
+    );
+
+/*++
+
+Routine Description:
+
+    This routine processes a protocol-layer netlink message.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket that received the message.
+
+    Context - Supplies a pointer to the receive context given to the receive
+        message handler.
+
+    Message - Supplies a pointer to the beginning of the netlink message. The
+        length of which can be obtained from the header; it was already
+        validated.
+
+Return Value:
+
+    None.
+
+--*/
+
+/*++
+
+Structure Description:
+
+    This structure defines the parameters passed to receive a netlink message.
+
+Members:
+
+    ReceiveRoutine - Stores an optional pointer to a routine that will be
+        called for each protocol layer message that is received.
+
+    ReceiveContext - Stores a receive context that will be supplied to each
+        invocation of the receive routine.
+
+    Flags - Stores a bitmask of receive flags. See NL_RECEIVE_FLAG_* for
+        definitions.
+
+    PortId - Stores an optional port ID. If valid via the
+        NL_RECEIVE_FLAG_PORT_ID, the receive message handler will skip any
+        messages received from non-matching ports.
+
+    GroupMask - Stores an optional multicast group mask. If valid via the
+        NL_RECEIVE_FLAG_GROUP_MASK flag being set, the receive message handler
+        will skip any messages received from non-matching groups.
+
+--*/
+
+typedef struct _NL_RECEIVE_PARAMETERS {
+    PNL_RECEIVE_ROUTINE ReceiveRoutine;
+    NL_RECEIVE_CONTEXT ReceiveContext;
+    ULONG Flags;
+    ULONG PortId;
+    ULONG GroupMask;
+} NL_RECEIVE_PARAMETERS, *PNL_RECEIVE_PARAMETERS;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -407,70 +527,23 @@ LIBNETLINK_API
 INT
 NlReceiveMessage (
     PNL_SOCKET Socket,
-    PNL_MESSAGE_BUFFER Message,
-    PULONG PortId,
-    PULONG GroupMask
+    PNL_RECEIVE_PARAMETERS Parameters
     );
 
 /*++
 
 Routine Description:
 
-    This routine receives a netlink message for the given socket. It validates
-    the received message to make sure the netlink header properly describes the
-    number of byte received. The number of bytes received, in both error and
-    success cases, can be retrieved from the message buffer.
+    This routine receives one or more netlink messages, does some simple
+    validation, handles the default netlink message types, and calls the given
+    receive routine callback for each protocol layer message.
 
 Arguments:
 
     Socket - Supplies a pointer to the netlink socket over which to receive the
         message.
 
-    Message - Supplies a pointer to a netlink message that receives the read
-        data.
-
-    PortId - Supplies an optional pointer that receives the port ID of the
-        message sender.
-
-    GroupMask - Supplies an optional pointer that receives the group mask of
-        the received packet.
-
-Return Value:
-
-    0 on success.
-
-    -1 on error, and the errno variable will be set to contain more information.
-
---*/
-
-LIBNETLINK_API
-INT
-NlReceiveAcknowledgement (
-    PNL_SOCKET Socket,
-    PNL_MESSAGE_BUFFER Message,
-    ULONG ExpectedPortId
-    );
-
-/*++
-
-Routine Description:
-
-    This routine receives a netlink acknowledgement message for the given
-    socket. It validates the received message to make sure the netlink header
-    properly describes the number of byte received. The number of bytes
-    received, in both error and success cases, can be retrieved from the
-    message buffer.
-
-Arguments:
-
-    Socket - Supplies a pointer to the netlink socket over which to receive the
-        acknowledgement message.
-
-    Message - Supplies a pointer to a netlink message that receives the read
-        data.
-
-    ExpectedPortId - Supplies the expected port ID of the socket acknowledging
-        the message.
+    Parameters - Supplies a pointer to the receive message parameters.
 
 Return Value:
 
@@ -638,6 +711,39 @@ Arguments:
 
     FamilyId - Supplies a pointer that receives the message family ID to use as
         the netlink message header type.
+
+Return Value:
+
+    0 on success.
+
+    -1 on error, and the errno variable will be set to contain more information.
+
+--*/
+
+LIBNETLINK_API
+INT
+NlGenericJoinMulticastGroup (
+    PNL_SOCKET Socket,
+    USHORT FamilyId,
+    PSTR GroupName
+    );
+
+/*++
+
+Routine Description:
+
+    This routine joins the given socket to the multicast group specified by the
+    family ID and group name.
+
+Arguments:
+
+    Socket - Supplies a pointer to the netlink socket requesting to join a
+        multicast group.
+
+    FamilyId - Supplies the ID of the family to which the multicast group
+        belongs.
+
+    GroupName - Supplies the name of the multicast group to join.
 
 Return Value:
 

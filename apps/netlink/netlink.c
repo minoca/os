@@ -567,33 +567,23 @@ LIBNETLINK_API
 INT
 NlReceiveMessage (
     PNL_SOCKET Socket,
-    PNL_MESSAGE_BUFFER Message,
-    PULONG PortId,
-    PULONG GroupMask
+    PNL_RECEIVE_PARAMETERS Parameters
     )
 
 /*++
 
 Routine Description:
 
-    This routine receives a netlink message for the given socket. It validates
-    the received message to make sure the netlink header properly describes the
-    number of byte received. The number of bytes received, in both error and
-    success cases, can be retrieved from the message buffer.
+    This routine receives one or more netlink messages, does some simple
+    validation, handles the default netlink message types, and calls the given
+    receive routine callback for each protocol layer message.
 
 Arguments:
 
     Socket - Supplies a pointer to the netlink socket over which to receive the
         message.
 
-    Message - Supplies a pointer to a netlink message that receives the read
-        data.
-
-    PortId - Supplies an optional pointer that receives the port ID of the
-        message sender.
-
-    GroupMask - Supplies an optional pointer that receives the group mask of
-        the received packet.
+    Parameters - Supplies a pointer to the receive message parameters.
 
 Return Value:
 
@@ -607,167 +597,205 @@ Return Value:
 
     struct sockaddr_nl Address;
     socklen_t AddressLength;
-    INTN BytesReceived;
+    INTN BytesRemaining;
     PINT Error;
     ULONG ErrorLength;
     KSTATUS ErrorStatus;
     INT ErrorValue;
+    ULONG Flags;
+    BOOL GroupMatch;
     PNETLINK_HEADER Header;
+    PNL_MESSAGE_BUFFER Message;
+    BOOL Multipart;
+    BOOL PortMatch;
+    BOOL ReceiveMore;
     INT Status;
 
-    Message->CurrentOffset = 0;
-    Message->DataSize = 0;
-    AddressLength = sizeof(struct sockaddr_nl);
-    BytesReceived = recvfrom(Socket->Socket,
-                             Message->Buffer,
-                             Message->BufferSize,
-                             0,
-                             (struct sockaddr *)&Address,
-                             &AddressLength);
+    Flags = Parameters->Flags;
+    Parameters->Flags = 0;
+    Message = Socket->ReceiveBuffer;
+    Multipart = FALSE;
+    ReceiveMore = TRUE;
+    while ((ReceiveMore != FALSE) || (Multipart != FALSE)) {
+        Message->CurrentOffset = 0;
+        Message->DataSize = 0;
+        AddressLength = sizeof(struct sockaddr_nl);
+        BytesRemaining = recvfrom(Socket->Socket,
+                                  Message->Buffer,
+                                  Message->BufferSize,
+                                  0,
+                                  (struct sockaddr *)&Address,
+                                  &AddressLength);
 
-    if (BytesReceived < 0) {
-        return -1;
-    }
-
-    Status = 0;
-    Message->DataSize = BytesReceived;
-    if ((AddressLength != sizeof(struct sockaddr_nl)) ||
-        (Address.nl_family != AF_NETLINK)) {
-
-        errno = EAFNOSUPPORT;
-        Status = -1;
-        goto ReceiveMessageEnd;
-    }
-
-    Header = Message->Buffer + Message->CurrentOffset;
-    if ((BytesReceived < NETLINK_HEADER_LENGTH) ||
-        (BytesReceived < Header->Length)) {
-
-        errno = ENOMSG;
-        Status = -1;
-        goto ReceiveMessageEnd;
-    }
-
-    //
-    // Validate the sequence number and update it if an error/ACK message
-    // arrived.
-    //
-
-    if (((Socket->Flags & NL_SOCKET_FLAG_NO_AUTO_SEQUENCE) == 0) &&
-        (Header->SequenceNumber != Socket->ReceiveNextSequence)) {
-
-        errno = EILSEQ;
-        Status = -1;
-        goto ReceiveMessageEnd;
-    }
-
-    if (Header->Type == NETLINK_MESSAGE_TYPE_ERROR) {
-        if ((Socket->Flags & NL_SOCKET_FLAG_NO_AUTO_SEQUENCE) == 0) {
-            RtlAtomicAdd32(&(Socket->ReceiveNextSequence), 1);
+        if (BytesRemaining < 0) {
+            Status = -1;
+            goto ReceiveMessageEnd;
         }
 
-        ErrorLength = NETLINK_HEADER_LENGTH + sizeof(NETLINK_ERROR_MESSAGE);
-        if (Header->Length < ErrorLength) {
-            errno = ENOMSG;
+        Message->DataSize = BytesRemaining;
+        if ((AddressLength != sizeof(struct sockaddr_nl)) ||
+            (Address.nl_family != AF_NETLINK)) {
+
+            errno = EAFNOSUPPORT;
             Status = -1;
             goto ReceiveMessageEnd;
         }
 
         //
-        // Convert from KSTATUS to the C library value for errno.
+        // If supplied, validate the port and/or group. Skipping any messages
+        // that do not match at least one of them.
         //
 
-        Error = NETLINK_DATA(Header);
-        ErrorStatus = (KSTATUS)*Error;
-        ErrorValue = ClConvertKstatusToErrorNumber(ErrorStatus);
+        PortMatch = TRUE;
+        GroupMatch = TRUE;
+        if (((Flags & NL_RECEIVE_FLAG_PORT_ID) != 0) &&
+            (Address.nl_pid != Parameters->PortId)) {
 
-        //
-        // If the library consumer did not specifically ask for KSTATUS
-        // errors, then all error messages need to be converted.
-        //
-
-        if ((Socket->Flags & NL_SOCKET_FLAG_REPORT_KSTATUS) == 0) {
-            *Error = ErrorValue;
+            PortMatch = FALSE;
         }
 
-        if (!KSUCCESS(ErrorStatus)) {
-            errno = ErrorValue;
-            Status = -1;
+        if (((Flags & NL_RECEIVE_FLAG_GROUP_MASK) != 0) &&
+            ((Address.nl_groups & Parameters->GroupMask) == 0)) {
+
+            GroupMatch = FALSE;
         }
 
-        goto ReceiveMessageEnd;
+        if ((PortMatch == FALSE) && (GroupMatch == FALSE)) {
+            continue;
+        }
+
+        //
+        // If the caller is not expecting an ACK, then do not wait for one.
+        //
+
+        if ((Flags & NL_RECEIVE_FLAG_NO_ACK_WAIT) != 0) {
+            ReceiveMore = FALSE;
+        }
+
+        //
+        // Process each message in the buffer.
+        //
+
+        while (BytesRemaining > 0) {
+            Header = Message->Buffer + Message->CurrentOffset;
+            if ((BytesRemaining < NETLINK_HEADER_LENGTH) ||
+                (BytesRemaining < Header->Length)) {
+
+                break;
+            }
+
+            //
+            // If there is no multi-part flag, then there shouldn't be a reason
+            // to read another message.
+            //
+
+            if ((Header->Flags & NETLINK_HEADER_FLAG_MULTIPART) != 0) {
+                Multipart = TRUE;
+            }
+
+            //
+            // Validate the sequence number, but skip this on multicast
+            // messages. Sequence numbers don't make much sense for out-of-band
+            // multicast messages.
+            //
+
+            if (((Socket->Flags & NL_SOCKET_FLAG_NO_AUTO_SEQUENCE) == 0) &&
+                (Address.nl_pid == Socket->LocalAddress.nl_pid) &&
+                (Header->SequenceNumber != Socket->ReceiveNextSequence)) {
+
+                errno = EILSEQ;
+                Status = -1;
+                goto ReceiveMessageEnd;
+            }
+
+            //
+            // If an error is received, stop receiving. If an ACK is received,
+            // finish processing this set of messages, but don't read any more.
+            //
+
+            if (Header->Type == NETLINK_MESSAGE_TYPE_ERROR) {
+                if (((Socket->Flags & NL_SOCKET_FLAG_NO_AUTO_SEQUENCE) == 0) &&
+                    (Address.nl_pid == Socket->LocalAddress.nl_pid)) {
+
+                    RtlAtomicAdd32(&(Socket->ReceiveNextSequence), 1);
+                }
+
+                ErrorLength = NETLINK_HEADER_LENGTH +
+                              sizeof(NETLINK_ERROR_MESSAGE);
+
+                if (Header->Length < ErrorLength) {
+                    errno = ENOMSG;
+                    Status = -1;
+                    goto ReceiveMessageEnd;
+                }
+
+                //
+                // Convert from KSTATUS to the C library value for errno.
+                //
+
+                Error = NETLINK_DATA(Header);
+                ErrorStatus = (KSTATUS)*Error;
+                ErrorValue = ClConvertKstatusToErrorNumber(ErrorStatus);
+
+                //
+                // If the library consumer did not specifically ask for KSTATUS
+                // errors, then all error messages need to be converted.
+                //
+
+                if ((Socket->Flags & NL_SOCKET_FLAG_REPORT_KSTATUS) == 0) {
+                    *Error = ErrorValue;
+                }
+
+                if (!KSUCCESS(ErrorStatus)) {
+                    errno = ErrorValue;
+                    Status = -1;
+                    goto ReceiveMessageEnd;
+                }
+
+                //
+                // Receives should not exit until an ACK has been seen, unless
+                // the caller specifically requested to not wait.
+                //
+
+                if ((Flags & NL_RECEIVE_FLAG_NO_ACK_WAIT) == 0) {
+                    ReceiveMore = FALSE;
+                }
+
+                Parameters->Flags |= NL_RECEIVE_FLAG_ACK_RECEIVED;
+
+            //
+            // If this is the last message in a multi-part message, then stop
+            // receiving more data.
+            //
+
+            } else if (Header->Type == NETLINK_MESSAGE_TYPE_DONE) {
+                Multipart = FALSE;
+
+            //
+            // For all protocol layer messages, invoke the given callback.
+            //
+
+            } else if ((Parameters->ReceiveRoutine != NULL) &&
+                       (Header->Type >=
+                        NETLINK_MESSAGE_TYPE_PROTOCOL_MINIMUM)) {
+
+                Parameters->ReceiveRoutine(Socket,
+                                           &(Parameters->ReceiveContext),
+                                           Header);
+            }
+
+            //
+            // Skip along to the next message.
+            //
+
+            Message->CurrentOffset += NETLINK_ALIGN(Header->Length);
+            BytesRemaining -= NETLINK_ALIGN(Header->Length);
+        }
     }
+
+    Status = 0;
 
 ReceiveMessageEnd:
-    if (PortId != NULL) {
-        *PortId = Address.nl_pid;
-    }
-
-    if (GroupMask != NULL) {
-        *PortId = Address.nl_groups;
-    }
-
-    return Status;
-}
-
-LIBNETLINK_API
-INT
-NlReceiveAcknowledgement (
-    PNL_SOCKET Socket,
-    PNL_MESSAGE_BUFFER Message,
-    ULONG ExpectedPortId
-    )
-
-/*++
-
-Routine Description:
-
-    This routine receives a netlink acknowledgement message for the given
-    socket. It validates the received message to make sure the netlink header
-    properly describes the number of byte received. The number of bytes
-    received, in both error and success cases, can be retrieved from the
-    message buffer.
-
-Arguments:
-
-    Socket - Supplies a pointer to the netlink socket over which to receive the
-        acknowledgement message.
-
-    Message - Supplies a pointer to a netlink message that receives the read
-        data.
-
-    ExpectedPortId - Supplies the expected port ID of the socket acknowledging
-        the message.
-
-Return Value:
-
-    0 on success.
-
-    -1 on error, and the errno variable will be set to contain more information.
-
---*/
-
-{
-
-    PNETLINK_HEADER Header;
-    ULONG PortId;
-    INT Status;
-
-    Status = NlReceiveMessage(Socket, Message, &PortId, NULL);
-    if (Status != 0) {
-        goto ReceiveAcknowledgementEnd;
-    }
-
-    Header = Message->Buffer + Message->CurrentOffset;
-    if ((PortId != ExpectedPortId) ||
-        (Header->Type != NETLINK_MESSAGE_TYPE_ERROR)) {
-
-        errno = ENOMSG;
-        Status = -1;
-        goto ReceiveAcknowledgementEnd;
-    }
-
-ReceiveAcknowledgementEnd:
     return Status;
 }
 
