@@ -97,12 +97,6 @@ MingenNinjaPrintConfigValue (
     PCHALK_OBJECT Value
     );
 
-VOID
-MingenNinjaEscapeText (
-    FILE *File,
-    PSTR Text
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -474,11 +468,11 @@ Return Value:
 
         } else if (Script->Order == MingenScriptOrderTarget) {
             MingenNinjaPrintTreeRoot(File, Script->Root);
-            fprintf(File, "/%s/%s", Script->Path, BuildFileName);
+            fprintf(File, "%s/%s", Script->Path, BuildFileName);
 
         } else {
             MingenNinjaPrintTreeRoot(File, Script->Root);
-            fprintf(File, "/%s", Script->Path);
+            fprintf(File, "%s", Script->Path);
         }
 
         if (CurrentEntry != &(Context->ScriptList)) {
@@ -501,7 +495,8 @@ MingenNinjaPrintWithVariableConversion (
 Routine Description:
 
     This routine prints a string to the output file, converting variable
-    expressions into proper Ninja format.
+    expressions into proper Ninja format, and escaping any other characters
+    that would cause issues.
 
 Arguments:
 
@@ -529,6 +524,15 @@ Return Value:
     String = Copy;
     while (*String != '\0') {
         if (*String != '$') {
+
+            //
+            // Some special characters need to be escaped.
+            //
+
+            if ((*String == '\n') || (*String == ' ') || (*String == ':')) {
+                fputc('$', File);
+            }
+
             fputc(*String, File);
             String += 1;
             continue;
@@ -541,6 +545,7 @@ Return Value:
         //
 
         if (*String == '$') {
+            fputc(*String, File);
             fputc(*String, File);
             String += 1;
             continue;
@@ -641,21 +646,15 @@ Return Value:
 
 {
 
-    PMINGEN_SCRIPT Script;
-
-    Script = Target->Script;
     if ((Target->Tool != NULL) &&
         (strcmp(Target->Tool, "phony") == 0)) {
 
-        MingenNinjaEscapeText(File, Target->Output);
+        MingenNinjaPrintWithVariableConversion(File, Target->Output);
         return;
     }
 
     MingenNinjaPrintTreeRoot(File, Target->Tree);
-    fputc('/', File);
-    MingenNinjaEscapeText(File, Script->Path);
-    fputc('/', File);
-    MingenNinjaEscapeText(File, Target->Output);
+    MingenNinjaPrintWithVariableConversion(File, Target->Output);
     return;
 }
 
@@ -689,8 +688,7 @@ Return Value:
 {
 
     MingenNinjaPrintTreeRoot(File, Source->Tree);
-    fputc('/', File);
-    MingenNinjaEscapeText(File, Source->Path);
+    MingenNinjaPrintWithVariableConversion(File, Source->Path);
     return;
 }
 
@@ -722,11 +720,11 @@ Return Value:
 
     switch (Tree) {
     case MingenSourceTree:
-        fprintf(File, MINGEN_NINJA_VARIABLE, MINGEN_VARIABLE_SOURCE_ROOT);
+        fprintf(File, MINGEN_NINJA_VARIABLE "/", MINGEN_VARIABLE_SOURCE_ROOT);
         break;
 
     case MingenBuildTree:
-        fprintf(File, MINGEN_NINJA_VARIABLE, MINGEN_VARIABLE_BUILD_ROOT);
+        fprintf(File, MINGEN_NINJA_VARIABLE "/", MINGEN_VARIABLE_BUILD_ROOT);
         break;
 
     case MingenAbsolutePath:
@@ -908,46 +906,5 @@ Return Value:
     }
 
     return TotalStatus;
-}
-
-VOID
-MingenNinjaEscapeText (
-    FILE *File,
-    PSTR Text
-    )
-
-/*++
-
-Routine Description:
-
-    This routine prints literal text, escaping characters that Ninja would
-    otherwise interpret.
-
-Arguments:
-
-    File - Supplies a pointer to the file to print to.
-
-    Text - Supplies the string to print.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    while (*Text != '\0') {
-        if ((*Text == '\n') || (*Text == '$') || (*Text == '$') ||
-            (*Text == ' ') || (*Text == ':')) {
-
-            fputc('$', File);
-        }
-
-        fputc(*Text, File);
-        Text += 1;
-    }
-
-    return;
 }
 

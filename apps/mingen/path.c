@@ -925,16 +925,21 @@ Return Value:
     TotalStatus = 0;
     for (Index = 0; Index < PathList->Count; Index += 1) {
         Path = &(PathList->Array[Index]);
-        TreeRoot = MingenPathForTree(Context, Path->Root);
-        Status = chdir(TreeRoot);
-        if (Status != 0) {
-            fprintf(stderr,
-                    "Error: Failed to cd to %s: %s.\n",
-                    TreeRoot,
-                    strerror(errno));
+        if (Path->Root == MingenAbsolutePath) {
+            Status = MingenCreateDirectory(Path->Path);
 
         } else {
-            Status = MingenCreateDirectory(Path->Path);
+            TreeRoot = MingenPathForTree(Context, Path->Root);
+            Status = chdir(TreeRoot);
+            if (Status != 0) {
+                fprintf(stderr,
+                        "Error: Failed to cd to %s: %s.\n",
+                        TreeRoot,
+                        strerror(errno));
+
+            } else {
+                Status = MingenCreateDirectory(Path->Path);
+            }
         }
 
         if ((Status != 0) && (TotalStatus == 0)) {

@@ -671,18 +671,15 @@ Return Value:
 
 {
 
-    PMINGEN_SCRIPT Script;
-
-    Script = Target->Script;
     if ((Target->Tool != NULL) &&
         (strcmp(Target->Tool, "phony") == 0)) {
 
-        fprintf(File, "%s", Target->Output);
+        MingenMakePrintWithVariableConversion(File, Target->Output);
         return;
     }
 
     MingenMakePrintTreeRoot(File, Target->Tree);
-    fprintf(File, "/%s/%s", Script->Path, Target->Output);
+    MingenMakePrintWithVariableConversion(File, Target->Output);
     return;
 }
 
@@ -716,7 +713,7 @@ Return Value:
 {
 
     MingenMakePrintTreeRoot(File, Source->Tree);
-    fprintf(File, "/%s", Source->Path);
+    MingenMakePrintWithVariableConversion(File, Source->Path);
     return;
 }
 
@@ -747,7 +744,7 @@ Return Value:
 {
 
     MingenMakePrintTreeRoot(File, Path->Root);
-    fprintf(File, "/%s", Path->Path);
+    fprintf(File, "%s", Path->Path);
     return;
 }
 
@@ -779,11 +776,11 @@ Return Value:
 
     switch (Tree) {
     case MingenSourceTree:
-        fprintf(File, MINGEN_MAKE_VARIABLE, MINGEN_VARIABLE_SOURCE_ROOT);
+        fprintf(File, MINGEN_MAKE_VARIABLE "/", MINGEN_VARIABLE_SOURCE_ROOT);
         break;
 
     case MingenBuildTree:
-        fprintf(File, MINGEN_MAKE_VARIABLE, MINGEN_VARIABLE_BUILD_ROOT);
+        fprintf(File, MINGEN_MAKE_VARIABLE "/", MINGEN_VARIABLE_BUILD_ROOT);
         break;
 
     case MingenAbsolutePath:

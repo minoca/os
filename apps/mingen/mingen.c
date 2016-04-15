@@ -1194,6 +1194,8 @@ Return Value:
 {
 
     ULONG Advance;
+    PSTR Output;
+    BOOL Relative;
     INT Status;
     PMINGEN_TARGET Target;
 
@@ -1238,22 +1240,32 @@ Return Value:
         goto ParseTargetEntryEnd;
     }
 
+    if (Target->Tool == NULL) {
+        fprintf(stderr, "Error: %s missing tool\n", Target->Label);
+        Status = EINVAL;
+        goto ParseTargetEntryEnd;
+    }
+
     //
     // Handle output tree specification.
     //
 
+    Relative = TRUE;
     Advance = 0;
     if (MINGEN_IS_SOURCE_ROOT_RELATIVE(Target->Output)) {
         Advance = 2;
         Target->Tree = MingenSourceTree;
+        Relative = FALSE;
 
     } else if (MINGEN_IS_BUILD_ROOT_RELATIVE(Target->Output)) {
         Advance = 2;
         Target->Tree = MingenBuildTree;
+        Relative = FALSE;
 
     } else if (MINGEN_IS_ABSOLUTE_PATH(Target->Output)) {
         Advance = 0;
         Target->Tree = MingenAbsolutePath;
+        Relative = FALSE;
 
     //
     // The default is the build tree, so the circumflex switches to the source
@@ -1277,6 +1289,21 @@ Return Value:
 
         Status = EINVAL;
         goto ParseTargetEntryEnd;
+    }
+
+    //
+    // Prepend the script path to the output if the output is relative.
+    //
+
+    if (Relative != FALSE) {
+        Output = MingenAppendPaths(Script->Path, Target->Output);
+        if (Output == NULL) {
+            Status = ENOMEM;
+            goto ParseTargetEntryEnd;
+        }
+
+        free(Target->Output);
+        Target->Output = Output;
     }
 
     //
@@ -1549,17 +1576,9 @@ Return Value:
 
     if ((Target->Tool == NULL) || (strcmp(Target->Tool, "phony") != 0)) {
         OutputPath.Root = Target->Tree;
-        OutputPath.Path = MingenAppendPaths(Target->Script->Path,
-                                            Target->Output);
-
-        if (OutputPath.Path == NULL) {
-            Status = ENOMEM;
-            goto ProcessTargetEnd;
-        }
-
+        OutputPath.Path = Target->Output;
         OutputPath.Target = NULL;
         Status = MingenAddPathToList(&(Context->BuildDirectories), &OutputPath);
-        free(OutputPath.Path);
         if (Status != 0) {
             goto ProcessTargetEnd;
         }
@@ -2188,10 +2207,9 @@ Return Value:
             Target = LIST_VALUE(CurrentEntry, MINGEN_TARGET, ListEntry);
             CurrentEntry = CurrentEntry->Next;
             TreePath = MingenPathForTree(Context, Target->Tree);
-            printf("\tTarget: %s\n\t\tOutput: %s/%s/%s\n",
+            printf("\tTarget: %s\n\t\tOutput: %s/%s\n",
                    Target->Label,
                    TreePath,
-                   Target->Script->Path,
                    Target->Output);
 
             if (Target->Tool != NULL) {
