@@ -274,8 +274,8 @@ Return Value:
     Parameters.Net80211Link = Link;
     Parameters.SupplicantAddress = &(Link->Properties.PhysicalAddress);
     Parameters.AuthenticatorAddress = &AuthenticatorAddress;
-    Parameters.Ssid = Bss->Ssid;
-    Parameters.SsidLength = Bss->SsidLength;
+    Parameters.Ssid = NET80211_GET_ELEMENT_DATA(Bss->Ssid);
+    Parameters.SsidLength = NET80211_GET_ELEMENT_LENGTH(Bss->Ssid);
     Parameters.Passphrase = Bss->Passphrase;
     Parameters.PassphraseLength = Bss->PassphraseLength;
     Parameters.SupplicantRsn = Bss->Encryption.StationRsn;

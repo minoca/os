@@ -1213,6 +1213,8 @@ Return Value:
 
 {
 
+    ULONG SsidLength;
+
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     if (Information->Version < NETWORK_80211_DEVICE_INFORMATION_VERSION) {
@@ -1241,11 +1243,12 @@ Return Value:
                       Link->ActiveBss->State.Bssid,
                       NET80211_ADDRESS_SIZE);
 
+        SsidLength = NET80211_GET_ELEMENT_LENGTH(Link->ActiveBss->Ssid);
         RtlCopyMemory(Information->Ssid,
-                      Link->ActiveBss->Ssid,
-                      Link->ActiveBss->SsidLength);
+                      NET80211_GET_ELEMENT_DATA(Link->ActiveBss->Ssid),
+                      SsidLength);
 
-        Information->Ssid[Link->ActiveBss->SsidLength] = STRING_TERMINATOR;
+        Information->Ssid[SsidLength] = STRING_TERMINATOR;
         Information->Channel = Link->ActiveBss->State.Channel;
         Information->MaxRate = Link->ActiveBss->State.MaxRate *
                                NET80211_RATE_UNIT;

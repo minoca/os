@@ -68,10 +68,10 @@ Author:
 #define NETWORK_80211_DEVICE_FLAG_ASSOCIATED 0x00000001
 
 //
-// Define the maximum length of an SSID, including the null terminator.
+// Define the maximum length of an SSID.
 //
 
-#define NETWORK_80211_MAX_SSID_LENGTH 33
+#define NETWORK_80211_MAX_SSID_LENGTH 32
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -150,7 +150,10 @@ typedef enum _NETWORK_ENCRYPTION_TYPE {
     NetworkEncryptionNone,
     NetworkEncryptionWep,
     NetworkEncryptionWpaPsk,
-    NetworkEncryptionWpa2Psk
+    NetworkEncryptionWpaEap,
+    NetworkEncryptionWpa2Psk,
+    NetworkEncryptionWpa2Eap,
+    NetworkEncryptionInvalid
 } NETWORK_ENCRYPTION_TYPE, *PNETWORK_ENCRYPTION_TYPE;
 
 /*++
@@ -195,7 +198,7 @@ typedef struct _NETWORK_80211_DEVICE_INFORMATION {
     ULONG Flags;
     NETWORK_ADDRESS PhysicalAddress;
     NETWORK_ADDRESS Bssid;
-    UCHAR Ssid[NETWORK_80211_MAX_SSID_LENGTH];
+    UCHAR Ssid[NETWORK_80211_MAX_SSID_LENGTH + 1];
     ULONG Channel;
     ULONGLONG MaxRate;
     LONG Rssi;

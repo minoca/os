@@ -98,6 +98,10 @@ Members:
 
     Timestamp - Stores the timestamp from the AP.
 
+    Elements - Stores a pointer to the information elements.
+
+    ElementsSize - Stores the size of the information elements, in bytes.
+
     Channel - Stores a pointer to the channel element, that indicates the
         channel on which the AP is operating.
 
@@ -116,11 +120,13 @@ typedef struct _NET80211_PROBE_RESPONSE {
     USHORT BeaconInterval;
     USHORT Capabilities;
     ULONGLONG Timestamp;
-    PUCHAR Channel;
-    PUCHAR Ssid;
-    PUCHAR Rates;
-    PUCHAR ExtendedRates;
-    PUCHAR Rsn;
+    PVOID Elements;
+    ULONG ElementsSize;
+    PVOID Channel;
+    PVOID Ssid;
+    PVOID Rates;
+    PVOID ExtendedRates;
+    PVOID Rsn;
 } NET80211_PROBE_RESPONSE, *PNET80211_PROBE_RESPONSE;
 
 /*++
@@ -1078,6 +1084,7 @@ Return Value:
     BOOL Match;
     LONG MaxRssi;
     PNET80211_SCAN_STATE Scan;
+    ULONG SsidLength;
     KSTATUS Status;
 
     LockHeld = FALSE;
@@ -1172,11 +1179,12 @@ Return Value:
                                   ListEntry);
 
             CurrentEntry = CurrentEntry->Next;
-            if (BssEntry->SsidLength != Scan->SsidLength) {
+            SsidLength = NET80211_GET_ELEMENT_LENGTH(BssEntry->Ssid);
+            if (SsidLength != Scan->SsidLength) {
                 continue;
             }
 
-            Match = RtlCompareMemory(BssEntry->Ssid,
+            Match = RtlCompareMemory(NET80211_GET_ELEMENT_DATA(BssEntry->Ssid),
                                      Scan->Ssid,
                                      Scan->SsidLength);
 
@@ -1684,6 +1692,8 @@ Return Value:
     // Collect the information elements.
     //
 
+    Response.Elements = FrameBody + Offset;
+    Response.ElementsSize = FrameSize - Offset;
     while (Offset < FrameSize) {
         if ((Offset + NET80211_ELEMENT_HEADER_SIZE) > FrameSize) {
             goto ProcessProbeResponseEnd;
@@ -2014,22 +2024,24 @@ Return Value:
     ULONG FrameSubtype;
     PUCHAR InformationByte;
     PNET80211_RATE_INFORMATION Rates;
+    ULONG SsidLength;
     KSTATUS Status;
 
     ASSERT(Bss != NULL);
-    ASSERT(Bss->SsidLength != 0);
+    ASSERT(Bss->Ssid != NULL);
 
     FrameBody = NULL;
+    SsidLength = NET80211_GET_ELEMENT_LENGTH(Bss->Ssid);
 
     //
     // Determine the size of the probe response packet, which always includes
     // the capabilities, listen interval, SSID, and supported rates.
     //
 
-    ASSERT(Bss->SsidLength <= NET80211_MAX_SSID_LENGTH);
+    ASSERT((SsidLength <= NET80211_MAX_SSID_LENGTH) && (SsidLength != 0));
 
     FrameBodySize = NET80211_CAPABILITY_SIZE + NET80211_LISTEN_INTERVAL_SIZE;
-    FrameBodySize += NET80211_ELEMENT_HEADER_SIZE + Bss->SsidLength;
+    FrameBodySize += NET80211_ELEMENT_HEADER_SIZE + SsidLength;
 
     //
     // Get the supported rates size, including the extended rates if necessary.
@@ -2082,10 +2094,13 @@ Return Value:
     InformationByte += NET80211_LISTEN_INTERVAL_SIZE;
     *InformationByte = NET80211_ELEMENT_SSID;
     InformationByte += 1;
-    *InformationByte = Bss->SsidLength;
+    *InformationByte = SsidLength;
     InformationByte += 1;
-    RtlCopyMemory(InformationByte, Bss->Ssid, Bss->SsidLength);
-    InformationByte += Bss->SsidLength;
+    RtlCopyMemory(InformationByte,
+                  NET80211_GET_ELEMENT_DATA(Bss->Ssid),
+                  SsidLength);
+
+    InformationByte += SsidLength;
     *InformationByte = NET80211_ELEMENT_SUPPORTED_RATES;
     InformationByte += 1;
     if (Rates->Count <= NET80211_MAX_SUPPORTED_RATES) {
@@ -3009,10 +3024,12 @@ Return Value:
     BOOL Match;
     PUCHAR NewRsn;
     ULONG NewRsnLength;
+    ULONG NewSsidLength;
+    ULONG Offset;
     PUCHAR OldRsn;
     ULONG OldRsnLength;
+    ULONG OldSsidLength;
     PUCHAR RatesArray;
-    ULONG SsidLength;
     KSTATUS Status;
     ULONG TotalRateCount;
 
@@ -3044,22 +3061,6 @@ Return Value:
     //
 
     Channel = *NET80211_GET_ELEMENT_DATA(Response->Channel);
-    SsidLength = NET80211_GET_ELEMENT_LENGTH(Response->Ssid);
-    NewRsnLength = 0;
-    NewRsn = Response->Rsn;
-    if (NewRsn != NULL) {
-        NewRsnLength = NET80211_ELEMENT_HEADER_SIZE +
-                       NET80211_GET_ELEMENT_LENGTH(Response->Rsn);
-    }
-
-    OldRsnLength = 0;
-    OldRsn = Bss->Encryption.ApRsn;
-    if (OldRsn != NULL) {
-        OldRsnLength = NET80211_ELEMENT_HEADER_SIZE +
-                       NET80211_GET_ELEMENT_LENGTH(Bss->Encryption.ApRsn);
-    }
-
-    ASSERT(SsidLength <= NET80211_MAX_SSID_LENGTH);
 
     //
     // If this is an update for the active BSS, then any changes will cause
@@ -3068,20 +3069,38 @@ Return Value:
 
     if (Link->ActiveBss == Bss) {
         LinkDown = FALSE;
+        NewSsidLength = NET80211_GET_ELEMENT_LENGTH(Response->Ssid);
+        OldSsidLength = NET80211_GET_ELEMENT_LENGTH(Bss->Ssid);
+        NewRsnLength = 0;
+        NewRsn = Response->Rsn;
+        if (NewRsn != NULL) {
+            NewRsnLength = NET80211_ELEMENT_HEADER_SIZE +
+                           NET80211_GET_ELEMENT_LENGTH(Response->Rsn);
+        }
+
+        OldRsnLength = 0;
+        OldRsn = Bss->Encryption.ApRsn;
+        if (OldRsn != NULL) {
+            OldRsnLength = NET80211_ELEMENT_HEADER_SIZE +
+                           NET80211_GET_ELEMENT_LENGTH(Bss->Encryption.ApRsn);
+        }
+
+        ASSERT(NewSsidLength <= NET80211_MAX_SSID_LENGTH);
+
         if ((Bss->State.BeaconInterval != Response->BeaconInterval) ||
             (Bss->State.Capabilities != Response->Capabilities) ||
             (Bss->State.Channel != Channel) ||
             (Bss->State.Rates.Count != TotalRateCount) ||
-            (Bss->SsidLength != SsidLength) ||
+            (OldSsidLength != NewSsidLength) ||
             (OldRsnLength != NewRsnLength)) {
 
             LinkDown = TRUE;
         }
 
         if (LinkDown == FALSE) {
-            Match = RtlCompareMemory(Bss->Ssid,
+            Match = RtlCompareMemory(NET80211_GET_ELEMENT_DATA(Bss->Ssid),
                                      NET80211_GET_ELEMENT_DATA(Response->Ssid),
-                                     SsidLength);
+                                     NewSsidLength);
 
             if (Match == FALSE) {
                 LinkDown = TRUE;
@@ -3108,10 +3127,49 @@ Return Value:
     Bss->State.Capabilities = Response->Capabilities;
     Bss->State.Channel = Channel;
     Bss->State.Timestamp = Response->Timestamp;
-    Bss->SsidLength = SsidLength;
-    RtlCopyMemory(Bss->Ssid,
-                  NET80211_GET_ELEMENT_DATA(Response->Ssid),
-                  SsidLength);
+
+    //
+    // Allocate a new elements buffer with the newest data. This will include
+    // resetting the SSID and AP's RSN pointers.
+    //
+
+    if (Response->ElementsSize != 0) {
+        if (Bss->Elements != NULL) {
+            MmFreePagedPool(Bss->Elements);
+            Bss->ElementsSize = 0;
+        }
+
+        Bss->Ssid = NULL;
+        Bss->Encryption.ApRsn = NULL;
+        Bss->Elements = MmAllocatePagedPool(Response->ElementsSize,
+                                            NET80211_ALLOCATION_TAG);
+
+        if (Bss->Elements == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto UpdateBssCacheEnd;
+        }
+
+        Bss->ElementsSize = Response->ElementsSize;
+        RtlCopyMemory(Bss->Elements, Response->Elements, Bss->ElementsSize);
+        Offset = Response->Ssid - Response->Elements;
+        Bss->Ssid = Bss->Elements + Offset;
+        if (Response->Rsn != NULL) {
+            Offset = Response->Rsn - Response->Elements;
+            Bss->Encryption.ApRsn = Bss->Elements + Offset;
+
+            //
+            // Parse the RSN information to determine the encryption algorithms
+            // in use by the BSS.
+            //
+
+            Status = Net80211pParseRsnElement(Bss->Encryption.ApRsn,
+                                              &(Bss->Encryption));
+
+            if (!KSUCCESS(Status)) {
+                goto UpdateBssCacheEnd;
+            }
+        }
+    }
 
     //
     // Gather the rates from the response into one array.
@@ -3149,44 +3207,8 @@ Return Value:
     }
 
     //
-    // Copy the RSN information into the BSS entry.
+    // Record that this BSS needs to encrypt/decrypt data.
     //
-
-    if (NewRsnLength != 0) {
-        if (OldRsnLength < NewRsnLength) {
-            if (OldRsn != NULL) {
-                MmFreePagedPool(OldRsn);
-                Bss->Encryption.ApRsn = NULL;
-            }
-
-            OldRsn = MmAllocatePagedPool(NewRsnLength, NET80211_ALLOCATION_TAG);
-            if (OldRsn == NULL) {
-                Status = STATUS_INSUFFICIENT_RESOURCES;
-                goto UpdateBssCacheEnd;
-            }
-
-            Bss->Encryption.ApRsn = OldRsn;
-        }
-
-        RtlCopyMemory(OldRsn, NewRsn, NewRsnLength);
-
-        //
-        // Parse the RSN information to determine the encryption algorithms in
-        // use by the BSS.
-        //
-
-        Status = Net80211pParseRsnElement(NewRsn, &(Bss->Encryption));
-        if (!KSUCCESS(Status)) {
-            goto UpdateBssCacheEnd;
-        }
-
-    } else if (OldRsnLength != 0) {
-
-        ASSERT((OldRsn != NULL) && (OldRsn == Bss->Encryption.ApRsn));
-
-        MmFreePagedPool(OldRsn);
-        Bss->Encryption.ApRsn = NULL;
-    }
 
     if (Bss->Encryption.Pairwise != NetworkEncryptionNone) {
         Bss->Flags |= NET80211_BSS_FLAG_ENCRYPT_DATA;
@@ -3242,10 +3264,9 @@ Return Value:
 
 {
 
-    PUCHAR ApRsn;
     PNET80211_BSS_ENTRY BssCopy;
+    ULONG Offset;
     ULONG RatesSize;
-    ULONG RsnSize;
     KSTATUS Status;
 
     BssCopy = NULL;
@@ -3267,12 +3288,28 @@ Return Value:
                   &(Bss->Encryption),
                   sizeof(NET80211_ENCRYPTION));
 
-    RtlCopyMemory(BssCopy->Ssid, Bss->Ssid, Bss->SsidLength);
-    BssCopy->SsidLength = Bss->SsidLength;
+    if (Bss->ElementsSize != 0) {
+        BssCopy->ElementsSize = Bss->ElementsSize;
+        BssCopy->Elements = MmAllocatePagedPool(BssCopy->ElementsSize,
+                                                NET80211_ALLOCATION_TAG);
+
+        if (BssCopy->Elements == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto CopyBssEntryEnd;
+        }
+
+        RtlCopyMemory(BssCopy->Elements, Bss->Elements, BssCopy->ElementsSize);
+        Offset = Bss->Ssid - Bss->Elements;
+        BssCopy->Ssid = BssCopy->Elements + Offset;
+        if (Bss->Encryption.ApRsn != NULL) {
+            Offset = Bss->Encryption.ApRsn - Bss->Elements;
+            BssCopy->Encryption.ApRsn = BssCopy->Elements + Offset;
+        }
+    }
+
     RtlCopyMemory(BssCopy->Passphrase, Bss->Passphrase, Bss->PassphraseLength);
     BssCopy->PassphraseLength = Bss->PassphraseLength;
     BssCopy->State.Rates.Rate = NULL;
-    BssCopy->Encryption.ApRsn = NULL;
     RtlZeroMemory(BssCopy->Encryption.Keys,
                   sizeof(PNET80211_KEY) * NET80211_MAX_KEY_COUNT);
 
@@ -3289,25 +3326,6 @@ Return Value:
     }
 
     RtlCopyMemory(BssCopy->State.Rates.Rate, Bss->State.Rates.Rate, RatesSize);
-
-    //
-    // For the AP, RSN information is optional.
-    //
-
-    if (Bss->Encryption.ApRsn != NULL) {
-        RsnSize = NET80211_GET_ELEMENT_LENGTH(Bss->Encryption.ApRsn) +
-                  NET80211_ELEMENT_HEADER_SIZE;
-
-        ApRsn = MmAllocatePagedPool(RsnSize, NET80211_ALLOCATION_TAG);
-        if (ApRsn == NULL) {
-            Status = STATUS_INSUFFICIENT_RESOURCES;
-            goto CopyBssEntryEnd;
-        }
-
-        RtlCopyMemory(ApRsn, Bss->Encryption.ApRsn, RsnSize);
-        BssCopy->Encryption.ApRsn = ApRsn;
-    }
-
     Status = STATUS_SUCCESS;
 
 CopyBssEntryEnd:
@@ -3398,8 +3416,8 @@ Return Value:
         MmFreePagedPool(BssEntry->State.Rates.Rate);
     }
 
-    if (BssEntry->Encryption.ApRsn != NULL) {
-        MmFreePagedPool(BssEntry->Encryption.ApRsn);
+    if (BssEntry->Elements != NULL) {
+        MmFreePagedPool(BssEntry->Elements);
     }
 
     for (Index = 0; Index < NET80211_MAX_KEY_COUNT; Index += 1) {

@@ -216,8 +216,8 @@ typedef struct _NET80211_ENCRYPTION {
     NETWORK_ENCRYPTION_TYPE Pairwise;
     NETWORK_ENCRYPTION_TYPE Group;
     PNET80211_KEY Keys[NET80211_MAX_KEY_COUNT];
-    PUCHAR ApRsn;
-    PUCHAR StationRsn;
+    PVOID ApRsn;
+    PVOID StationRsn;
 } NET80211_ENCRYPTION, *PNET80211_ENCRYPTION;
 
 /*++
@@ -240,12 +240,16 @@ Members:
 
     EapolHandle - Stores a pointer to the encryption handshake handle.
 
+    Elements - Stores a pointer to the information elements for the BSS
+        supplied by either a beacon or probe response.
+
+    ElementsSize - Stores the size of the information elements in bytes.
+
     Flags - Stores a bitmask of flags describing the BSS entry. See
         NET80211_BSS_FLAG_* for definitions.
 
-    SsidLength - Stores the number of characters in the SSID.
-
-    Ssid - Stores the SSID for the BSS.
+    Ssid - Stores the SSID element for the BSS. This is a pointer to the SSID
+        element within the information elements buffer.
 
     PassphraseLength - Stores the number of characters in the passphrase.
 
@@ -259,9 +263,10 @@ typedef struct _NET80211_BSS_ENTRY {
     NET80211_BSS State;
     NET80211_ENCRYPTION Encryption;
     HANDLE EapolHandle;
+    PVOID Elements;
+    ULONG ElementsSize;
     ULONG Flags;
-    ULONG SsidLength;
-    UCHAR Ssid[NET80211_MAX_SSID_LENGTH];
+    PVOID Ssid;
     ULONG PassphraseLength;
     UCHAR Passphrase[NET80211_MAX_PASSPHRASE_LENGTH];
 } NET80211_BSS_ENTRY, *PNET80211_BSS_ENTRY;

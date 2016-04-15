@@ -147,10 +147,29 @@ Members:
 
     Bssid - Stores the BSSID.
 
+    SignalStrength - Stores the BSS's signal strength in MBM's.
+
+    Status - Stores the BSS's status.
+
+    Capability - Stores the BSS's capability flags.
+
+    BeaconInterval - Stores the BSS's beacon interval.
+
+    Elements - Stores a pointer to the BSS's information elements. These
+        include the SSID, channel, and security information.
+
+    ElementsSize - Stores the size of the information elements, in bytes.
+
 --*/
 
 typedef struct _NETCON_BSS {
     NETWORK_ADDRESS Bssid;
+    LONG SignalStrength;
+    ULONG Status;
+    USHORT BeaconInterval;
+    USHORT Capabilities;
+    PVOID Elements;
+    ULONG ElementsSize;
 } NETCON_BSS, *PNETCON_BSS;
 
 /*++
@@ -231,6 +250,18 @@ NetconPrintScanResults (
     PNETCON_SCAN_RESULTS Results
     );
 
+PVOID
+NetconGet80211InformationElement (
+    PVOID Elements,
+    ULONG ElementsSize,
+    UCHAR ElementId
+    );
+
+VOID
+NetconPrintRsnInformation (
+    PUCHAR Rsn
+    );
+
 VOID
 NetconPrintDeviceInformation (
     PNETCON_DEVICE_DESCRIPTION Device
@@ -244,6 +275,16 @@ NetconPrintAddress (
 VOID
 NetconPrintEncryption (
     NETWORK_ENCRYPTION_TYPE EncryptionType
+    );
+
+VOID
+NetconPrintCipherSuite (
+    ULONG Suite
+    );
+
+VOID
+NetconPrintRssi (
+    LONG Rssi
     );
 
 //
@@ -1343,17 +1384,23 @@ Return Value:
 
 {
 
+    USHORT AttributeLength;
     PVOID Attributes;
+    PUSHORT BeaconInterval;
     PNETCON_BSS Bss;
     PVOID BssAttribute;
     USHORT BssAttributeLength;
     ULONG BssCount;
     PVOID Bssid;
-    USHORT BssidLength;
+    PULONG BssStatus;
+    PUSHORT Capabilities;
+    PVOID Elements;
+    USHORT ElementsSize;
     PNETLINK_GENERIC_HEADER GenericHeader;
     PNETLINK_HEADER Header;
     ULONG MessageLength;
     PNETCON_SCAN_RESULTS ScanResults;
+    PLONG SignalMbm;
     KSTATUS Status;
 
     Bss = NULL;
@@ -1404,9 +1451,89 @@ Return Value:
                             BssAttributeLength,
                             NETLINK_80211_BSS_ATTRIBUTE_BSSID,
                             &Bssid,
-                            &BssidLength);
+                            &AttributeLength);
 
-    if ((Status != 0) || (BssidLength != NET80211_ADDRESS_SIZE)) {
+    if (Status != 0) {
+        goto ParseScanResultEnd;
+    }
+
+    if (AttributeLength != NET80211_ADDRESS_SIZE) {
+        errno = ERANGE;
+        Status = -1;
+        goto ParseScanResultEnd;
+    }
+
+    Status = NlGetAttribute(BssAttribute,
+                            BssAttributeLength,
+                            NETLINK_80211_BSS_ATTRIBUTE_CAPABILITY,
+                            (PVOID *)&Capabilities,
+                            &AttributeLength);
+
+    if (Status != 0) {
+        goto ParseScanResultEnd;
+    }
+
+    if (AttributeLength != sizeof(USHORT)) {
+        errno = ERANGE;
+        Status = -1;
+        goto ParseScanResultEnd;
+    }
+
+    Status = NlGetAttribute(BssAttribute,
+                            BssAttributeLength,
+                            NETLINK_80211_BSS_ATTRIBUTE_BEACON_INTERVAL,
+                            (PVOID *)&BeaconInterval,
+                            &AttributeLength);
+
+    if (Status != 0) {
+        goto ParseScanResultEnd;
+    }
+
+    if (AttributeLength != sizeof(USHORT)) {
+        errno = ERANGE;
+        Status = -1;
+        goto ParseScanResultEnd;
+    }
+
+    Status = NlGetAttribute(BssAttribute,
+                            BssAttributeLength,
+                            NETLINK_80211_BSS_ATTRIBUTE_SIGNAL_MBM,
+                            (PVOID *)&SignalMbm,
+                            &AttributeLength);
+
+    if (Status != 0) {
+        goto ParseScanResultEnd;
+    }
+
+    if (AttributeLength != sizeof(LONG)) {
+        errno = ERANGE;
+        Status = -1;
+        goto ParseScanResultEnd;
+    }
+
+    Status = NlGetAttribute(BssAttribute,
+                            BssAttributeLength,
+                            NETLINK_80211_BSS_ATTRIBUTE_SIGNAL_MBM,
+                            (PVOID *)&BssStatus,
+                            &AttributeLength);
+
+    if (Status != 0) {
+        goto ParseScanResultEnd;
+    }
+
+    if (AttributeLength != sizeof(ULONG)) {
+        errno = ERANGE;
+        Status = -1;
+        goto ParseScanResultEnd;
+    }
+
+    Status = NlGetAttribute(BssAttribute,
+                            BssAttributeLength,
+                            NETLINK_80211_BSS_ATTRIBUTE_INFORMATION_ELEMENTS,
+                            &Elements,
+                            &ElementsSize);
+
+    if (Status != 0) {
         goto ParseScanResultEnd;
     }
 
@@ -1415,7 +1542,7 @@ Return Value:
     // collected above.
     //
 
-    Bss = malloc(sizeof(NETCON_BSS));
+    Bss = malloc(sizeof(NETCON_BSS) + ElementsSize);
     if (Bss == NULL) {
         goto ParseScanResultEnd;
     }
@@ -1423,6 +1550,13 @@ Return Value:
     memset(Bss, 0, sizeof(NETCON_BSS));
     Bss->Bssid.Domain = NetDomain80211;
     memcpy(Bss->Bssid.Address, Bssid, NET80211_ADDRESS_SIZE);
+    Bss->SignalStrength = *SignalMbm;
+    Bss->Status = *BssStatus;
+    Bss->BeaconInterval = *BeaconInterval;
+    Bss->Capabilities = *Capabilities;
+    Bss->Elements = Bss + 1;
+    Bss->ElementsSize = ElementsSize;
+    memcpy(Bss->Elements, Elements, ElementsSize);
 
     //
     // Expand the scan results array to incorporate this BSS element.
@@ -1480,19 +1614,407 @@ Return Value:
 {
 
     PNETCON_BSS Bss;
+    PVOID Channel;
     ULONG Index;
+    ULONG RateIndex;
+    PUCHAR Rates;
+    PVOID RatesElement;
+    PVOID Rsn;
+    UCHAR Ssid[NET80211_MAX_SSID_LENGTH + 1];
+    PVOID SsidElement;
+    ULONG SsidLength;
 
-    printf("Network Scan for Device 0x%I64x:\n", Context->DeviceId);
-    if (Results->BssCount == 0) {
-        printf("No networks found.\n");
-        return;
-    }
-
+    printf("Device 0x%I64x:\n", Context->DeviceId);
+    printf("Networks Visisble: %d\n\n", Results->BssCount);
     for (Index = 0; Index < Results->BssCount; Index += 1) {
         Bss = Results->BssArray[Index];
+        SsidElement = NetconGet80211InformationElement(Bss->Elements,
+                                                       Bss->ElementsSize,
+                                                       NET80211_ELEMENT_SSID);
+
+        SsidLength = 0;
+        if (SsidElement != NULL) {
+            SsidLength = NET80211_GET_ELEMENT_LENGTH(SsidElement);
+            memcpy(Ssid, NET80211_GET_ELEMENT_DATA(SsidElement), SsidLength);
+        }
+
+        Ssid[SsidLength] = STRING_TERMINATOR;
+        printf("SSID %d: %s\n", Index, Ssid);
+        if (Bss->Status == NETLINK_80211_BSS_STATUS_ASSOCIATED) {
+            printf("\tStatus: Connected\n");
+        }
+
         printf("\tBSSID: ");
         NetconPrintAddress(&(Bss->Bssid));
+        NetconPrintRssi(Bss->SignalStrength / 100);
+        Channel = NetconGet80211InformationElement(Bss->Elements,
+                                                   Bss->ElementsSize,
+                                                   NET80211_ELEMENT_DSSS);
+
+        if (Channel != NULL) {
+            printf("\tChannel: %d\n", *NET80211_GET_ELEMENT_DATA(Channel));
+        }
+
+        printf("\tBeacon Interval: %d ms\n", Bss->BeaconInterval);
+        printf("\tCapabilities: 0x%04x\n", Bss->Capabilities);
+        RatesElement = NetconGet80211InformationElement(
+                                             Bss->Elements,
+                                             Bss->ElementsSize,
+                                             NET80211_ELEMENT_SUPPORTED_RATES);
+
+        if (RatesElement != NULL) {
+            printf("\tSupported Rates (Mbps):");
+            Rates = NET80211_GET_ELEMENT_DATA(RatesElement);
+            for (RateIndex = 0;
+                 RateIndex < NET80211_GET_ELEMENT_LENGTH(RatesElement);
+                 RateIndex += 1) {
+
+                printf(" %d", Rates[RateIndex] & NET80211_RATE_VALUE_MASK);
+            }
+
+            printf("\n");
+        }
+
+        RatesElement = NetconGet80211InformationElement(
+                                    Bss->Elements,
+                                    Bss->ElementsSize,
+                                    NET80211_ELEMENT_EXTENDED_SUPPORTED_RATES);
+
+        if (RatesElement != NULL) {
+            printf("\tExtended Rates (Mbps):");
+            Rates = NET80211_GET_ELEMENT_DATA(RatesElement);
+            for (RateIndex = 0;
+                 RateIndex < NET80211_GET_ELEMENT_LENGTH(RatesElement);
+                 RateIndex += 1) {
+
+                printf(" %d", Rates[RateIndex] & NET80211_RATE_VALUE_MASK);
+            }
+
+            printf("\n");
+        }
+
+        Rsn = NetconGet80211InformationElement(Bss->Elements,
+                                               Bss->ElementsSize,
+                                               NET80211_ELEMENT_RSN);
+
+        if (Rsn != NULL) {
+            NetconPrintRsnInformation(Rsn);
+
+        } else {
+            printf("\tAuthentication: Open\n");
+            printf("\tEncryption: None\n");
+        }
+
         printf("\n");
+    }
+
+    return;
+}
+
+PVOID
+NetconGet80211InformationElement (
+    PVOID Elements,
+    ULONG ElementsSize,
+    UCHAR ElementId
+    )
+
+/*++
+
+Routine Description:
+
+    This routine searches the given information element buffer for the element
+    with the given ID, returning a pointer to the element's header.
+
+Arguments:
+
+    Elements - Supplies a pointer to the set of information elements to search.
+
+    ElementsSize - Supplies the size of the informatin elements, in bytes.
+
+    ElementId - Supplies the ID of the element to lookup.
+
+Return Value:
+
+    Returns a pointer to the information element on success or NULL on failure.
+
+--*/
+
+{
+
+    PVOID Element;
+    ULONG ElementLength;
+    PVOID FoundElement;
+    ULONG RemainingSize;
+
+    FoundElement = NULL;
+
+    //
+    // A valid element must have at least two bytes - the ID and the length.
+    //
+
+    Element = Elements;
+    RemainingSize = ElementsSize;
+    while (RemainingSize >= NET80211_ELEMENT_HEADER_SIZE) {
+        ElementLength = NET80211_GET_ELEMENT_LENGTH(Element) +
+                        NET80211_ELEMENT_HEADER_SIZE;
+
+        if (ElementLength > RemainingSize) {
+            break;
+        }
+
+        if (NET80211_GET_ELEMENT_ID(Element) == ElementId) {
+            FoundElement = Element;
+            break;
+        }
+
+        RemainingSize -= ElementLength;
+        Element += ElementLength;
+    }
+
+    return FoundElement;
+}
+
+VOID
+NetconPrintRsnInformation (
+    PUCHAR Rsn
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints the encryption information encapsulated by the RSN
+    information element.
+
+Arguments:
+
+    Rsn - Supplies a pointer to the RSN element, the first byte of which is the
+        element ID.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG AkmSuite;
+    ULONG AkmSuiteCount;
+    PULONG AkmSuites;
+    NETWORK_ENCRYPTION_TYPE Authentication;
+    ULONG GroupSuite;
+    ULONG Index;
+    ULONG Offset;
+    ULONG PairwiseSuite;
+    ULONG PairwiseSuiteCount;
+    PULONG PairwiseSuites;
+    ULONG RsnLength;
+    INT Status;
+    ULONG Suite;
+    USHORT Version;
+
+    ASSERT(NET80211_GET_ELEMENT_ID(Rsn) == NET80211_ELEMENT_RSN);
+
+    Status = 0;
+    Offset = NET80211_ELEMENT_HEADER_SIZE;
+    RsnLength = NET80211_GET_ELEMENT_LENGTH(Rsn);
+    AkmSuite = 0;
+    GroupSuite = 0;
+    PairwiseSuite = 0;
+    PairwiseSuites = NULL;
+
+    //
+    // The version field is the only non-optional field.
+    //
+
+    if ((Offset + sizeof(USHORT)) > RsnLength) {
+        Status = -1;
+        goto PrintRsnInformationEnd;
+    }
+
+    Version = *((PUSHORT)&(Rsn[Offset]));
+    Offset += sizeof(USHORT);
+    if (Version != NET80211_RSN_VERSION) {
+        Status = -1;
+        goto PrintRsnInformationEnd;
+    }
+
+    //
+    // Save the group suite if it is present.
+    //
+
+    if ((Offset + sizeof(ULONG)) > RsnLength) {
+        goto PrintRsnInformationEnd;
+    }
+
+    GroupSuite = NETWORK_TO_CPU32(*((PULONG)&(Rsn[Offset])));
+    Offset += sizeof(ULONG);
+
+    //
+    // Save a pointer to the pairwise suites, if present.
+    //
+
+    if ((Offset + sizeof(USHORT)) > RsnLength) {
+        goto PrintRsnInformationEnd;
+    }
+
+    PairwiseSuiteCount = *((PUSHORT)&(Rsn[Offset]));
+    Offset += sizeof(USHORT);
+    if ((Offset + (sizeof(ULONG) * PairwiseSuiteCount)) > RsnLength) {
+        goto PrintRsnInformationEnd;
+    }
+
+    PairwiseSuites = (PULONG)&(Rsn[Offset]);
+    Offset += sizeof(ULONG) * PairwiseSuiteCount;
+
+    //
+    // Run through the pairwise suites to determine the most secure option.
+    //
+
+    for (Index = 0; Index < PairwiseSuiteCount; Index += 1) {
+        Suite = NETWORK_TO_CPU32(PairwiseSuites[Index]);
+
+        //
+        // CCMP is always the highest.
+        //
+
+        if (Suite == NET80211_CIPHER_SUITE_CCMP) {
+            PairwiseSuite = Suite;
+            break;
+        }
+
+        //
+        // TKIP beats nothing and WEP.
+        //
+
+        if ((Suite == NET80211_CIPHER_SUITE_TKIP) &&
+            ((PairwiseSuite == 0) ||
+             (PairwiseSuite == NET80211_CIPHER_SUITE_WEP_40) ||
+             (PairwiseSuite == NET80211_CIPHER_SUITE_WEP_104))) {
+
+            PairwiseSuite = Suite;
+        }
+
+        //
+        // WEP only beats nothing.
+        //
+
+        if ((PairwiseSuite == 0) &&
+            ((Suite == NET80211_CIPHER_SUITE_WEP_40) ||
+             (Suite == NET80211_CIPHER_SUITE_WEP_104))) {
+
+            PairwiseSuite = Suite;
+        }
+    }
+
+    //
+    // The PSK authentication and key management (AKM) must be one of the
+    // optional AKM suites.
+    //
+
+    if ((Offset + sizeof(USHORT)) > RsnLength) {
+        goto PrintRsnInformationEnd;
+    }
+
+    AkmSuiteCount = *((PUSHORT)&(Rsn[Offset]));
+    Offset += sizeof(USHORT);
+    if ((Offset + (AkmSuiteCount * sizeof(ULONG))) > RsnLength) {
+        goto PrintRsnInformationEnd;
+    }
+
+    AkmSuites = (PULONG)&(Rsn[Offset]);
+    for (Index = 0; Index < AkmSuiteCount; Index += 1) {
+        Suite = NETWORK_TO_CPU32(AkmSuites[Index]);
+        if ((Suite == NET80211_AKM_SUITE_PSK) ||
+            (Suite == NET80211_AKM_SUITE_PSK_SHA256)) {
+
+            AkmSuite = Suite;
+            break;
+        }
+
+        if ((Suite == NET80211_AKM_SUITE_8021X) ||
+            (Suite == NET80211_AKM_SUITE_8021X_SHA256)) {
+
+            AkmSuite = Suite;
+            break;
+        }
+    }
+
+    Offset += sizeof(ULONG) * AkmSuiteCount;
+
+PrintRsnInformationEnd:
+    if (Status != 0) {
+        printf("\tAuthentication: unknown\n");
+
+    } else {
+        Authentication = NetworkEncryptionInvalid;
+        switch (PairwiseSuite) {
+        case NET80211_CIPHER_SUITE_WEP_40:
+        case NET80211_CIPHER_SUITE_WEP_104:
+            Authentication = NetworkEncryptionWep;
+            break;
+
+        case NET80211_CIPHER_SUITE_TKIP:
+            switch (AkmSuite) {
+            case NET80211_AKM_SUITE_PSK:
+            case NET80211_AKM_SUITE_PSK_SHA256:
+                Authentication = NetworkEncryptionWpaPsk;
+                break;
+
+            case NET80211_AKM_SUITE_8021X:
+            case NET80211_AKM_SUITE_8021X_SHA256:
+                Authentication = NetworkEncryptionWpaEap;
+                break;
+
+            default:
+                break;
+            }
+
+            break;
+
+        case NET80211_CIPHER_SUITE_CCMP:
+            switch (AkmSuite) {
+            case NET80211_AKM_SUITE_PSK:
+            case NET80211_AKM_SUITE_PSK_SHA256:
+                Authentication = NetworkEncryptionWpa2Psk;
+                break;
+
+            case NET80211_AKM_SUITE_8021X:
+            case NET80211_AKM_SUITE_8021X_SHA256:
+                Authentication = NetworkEncryptionWpa2Eap;
+                break;
+
+            default:
+                break;
+            }
+
+            break;
+
+        default:
+            break;
+        }
+
+        printf("\tAuthentication: ");
+        NetconPrintEncryption(Authentication);
+        if (PairwiseSuites != NULL) {
+            printf("\tPairwise Encryption:");
+            for (Index = 0; Index < PairwiseSuiteCount; Index += 1) {
+                Suite = NETWORK_TO_CPU32(PairwiseSuites[Index]);
+                printf(" ");
+                NetconPrintCipherSuite(Suite);
+            }
+
+            printf("\n");
+        }
+
+        if ((GroupSuite != 0) &&
+            (GroupSuite != NET80211_CIPHER_SUITE_GROUP_NOT_ALLOWED)) {
+
+            printf("\tGroup Encryption: ");
+            NetconPrintCipherSuite(GroupSuite);
+            printf("\n");
+        }
     }
 
     return;
@@ -1553,20 +2075,20 @@ Return Value:
     //
 
     if ((Device->Flags & NETCON_DEVICE_FLAG_IP4) != 0) {
-        printf("\n\tIPv4 Address: ");
+        printf("\tIPv4 Address: ");
         Network = &(Device->NetworkIp4);
         Configuration = Network->ConfigurationMethod;
         if ((Configuration != NetworkAddressConfigurationInvalid) &&
             (Configuration != NetworkAddressConfigurationNone)) {
 
             NetconPrintAddress(&(Network->Address));
-            printf("\n\tSubnet Mask: ");
+            printf("\tSubnet Mask: ");
             NetconPrintAddress(&(Network->Subnet));
-            printf("\n\tGateway: ");
+            printf("\tGateway: ");
             NetconPrintAddress(&(Network->Gateway));
 
         } else {
-            printf("(not configured)");
+            printf("(not configured)\n");
         }
     }
 
@@ -1576,20 +2098,20 @@ Return Value:
     //
 
     if ((Device->Flags & NETCON_DEVICE_FLAG_IP6) != 0) {
-        printf("\n\tIPv6 Address: ");
+        printf("\tIPv6 Address: ");
         Network = &(Device->NetworkIp6);
         Configuration = Network->ConfigurationMethod;
         if ((Configuration != NetworkAddressConfigurationInvalid) &&
             (Configuration != NetworkAddressConfigurationNone)) {
 
             NetconPrintAddress(&(Network->Address));
-            printf("\n\tSubnet Mask: ");
+            printf("\tSubnet Mask: ");
             NetconPrintAddress(&(Network->Subnet));
-            printf("\n\tGateway: ");
+            printf("\tGateway: ");
             NetconPrintAddress(&(Network->Gateway));
 
         } else {
-            printf("(not configured)");
+            printf("(not configured)\n");
         }
     }
 
@@ -1600,25 +2122,26 @@ Return Value:
 
     if ((Device->Flags & NETCON_DEVICE_FLAG_80211) != 0) {
         Net80211 = &(Device->Net80211);
-        printf("\n\tSSID: ");
+        printf("\tSSID: ");
         if ((Net80211->Flags & NETWORK_80211_DEVICE_FLAG_ASSOCIATED) != 0) {
-            printf("\"%s\"", Net80211->Ssid);
-            printf("\n\tBSSID: ");
+            printf("\"%s\"\n", Net80211->Ssid);
+            printf("\tBSSID: ");
             NetconPrintAddress(&(Net80211->Bssid));
-            printf("\n\tChannel: %d", Net80211->Channel);
-            printf("\n\tMax Rate: %I64d mbps", Net80211->MaxRate / 1000000ULL);
-            printf("\n\tRSSI: %d dBm", Net80211->Rssi);
-            printf("\n\tPairwise Encryption: ");
+            printf("\tChannel: %d\n", Net80211->Channel);
+            printf("\tMax Rate: %I64d Mbps\n", Net80211->MaxRate / 1000000ULL);
+            NetconPrintRssi(Net80211->Rssi);
+            printf("\tPairwise Encryption: ");
             NetconPrintEncryption(Net80211->PairwiseEncryption);
-            printf("\n\tGroup Encryption: ");
+            printf("\tGroup Encryption: ");
             NetconPrintEncryption(Net80211->GroupEncryption);
 
         } else {
-            printf("(not associated)");
+            printf("(not associated)\n");
         }
     }
 
     printf("\n");
+    return;
 }
 
 VOID
@@ -1709,6 +2232,7 @@ Return Value:
         break;
     }
 
+    printf("\n");
     return;
 }
 
@@ -1748,8 +2272,73 @@ Return Value:
         printf("WPA-PSK");
         break;
 
+    case NetworkEncryptionWpaEap:
+        printf("WPA-EAP");
+        break;
+
     case NetworkEncryptionWpa2Psk:
         printf("WPA2-PSK");
+        break;
+
+    case NetworkEncryptionWpa2Eap:
+        printf("WPA2-EAP");
+        break;
+
+    default:
+        printf("unknown");
+        break;
+    }
+
+    printf("\n");
+    return;
+}
+
+VOID
+NetconPrintCipherSuite (
+    ULONG Suite
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints the name of the given cipher suite.
+
+Arguments:
+
+    Suite - Supplies the cipher suite to print.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    switch (Suite) {
+    case NET80211_CIPHER_SUITE_USE_GROUP_CIPHER:
+        printf("Group Only");
+        break;
+
+    case NET80211_CIPHER_SUITE_WEP_40:
+        printf("WEP-40");
+        break;
+
+    case NET80211_CIPHER_SUITE_TKIP:
+        printf("TKIP");
+        break;
+
+    case NET80211_CIPHER_SUITE_CCMP:
+        printf("CCMP");
+        break;
+
+    case NET80211_CIPHER_SUITE_WEP_104:
+        printf("WEP-104");
+        break;
+
+    case NET80211_CIPHER_SUITE_BIP:
+        printf("BIP");
         break;
 
     default:
@@ -1760,3 +2349,41 @@ Return Value:
     return;
 }
 
+VOID
+NetconPrintRssi (
+    LONG Rssi
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints the signal strength out to standard out.
+
+Arguments:
+
+    Rssi - Supplies the RSSI value for signal strength in dBm.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Percentage;
+
+    if (Rssi < -100) {
+        Percentage = 0;
+
+    } else if (Rssi > -50) {
+        Percentage = 100;
+
+    } else {
+        Percentage = 2 * (Rssi + 100);
+    }
+
+    printf("\tSignal Strength: %d%% (%d dBm)\n", Percentage, Rssi);
+    return;
+}

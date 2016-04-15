@@ -590,12 +590,14 @@ Return Value:
     PNET80211_BSS_ENTRY Bss;
     ULONG BssCount;
     ULONG BssLength;
+    ULONG BssStatus;
     PLIST_ENTRY CurrentEntry;
     DEVICE_ID DeviceId;
     PNET80211_LINK Link;
     ULONG ResultLength;
     PNET_PACKET_BUFFER Results;
     ULONG ResultsLength;
+    LONG SignalMbm;
     KSTATUS Status;
 
     //
@@ -621,7 +623,13 @@ Return Value:
         CurrentEntry = CurrentEntry->Next;
         ResultsLength += NETLINK_HEADER_LENGTH + NETLINK_GENERIC_HEADER_LENGTH;
         ResultsLength += NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID));
-        BssLength = NETLINK_ATTRIBUTE_SIZE(NET80211_ADDRESS_SIZE);
+        BssLength = NETLINK_ATTRIBUTE_SIZE(NET80211_ADDRESS_SIZE) +
+                    NETLINK_ATTRIBUTE_SIZE(sizeof(Bss->State.Capabilities)) +
+                    NETLINK_ATTRIBUTE_SIZE(sizeof(Bss->State.BeaconInterval)) +
+                    NETLINK_ATTRIBUTE_SIZE(sizeof(BssStatus)) +
+                    NETLINK_ATTRIBUTE_SIZE(sizeof(SignalMbm)) +
+                    NETLINK_ATTRIBUTE_SIZE(Bss->ElementsSize);
+
         ResultsLength += NETLINK_ATTRIBUTE_SIZE(BssLength);
         BssCount += 1;
     }
@@ -662,7 +670,13 @@ Return Value:
         //
 
         ResultLength = NETLINK_ATTRIBUTE_SIZE(sizeof(DEVICE_ID));
-        BssLength = NETLINK_ATTRIBUTE_SIZE(NET80211_ADDRESS_SIZE);
+        BssLength = NETLINK_ATTRIBUTE_SIZE(NET80211_ADDRESS_SIZE) +
+                    NETLINK_ATTRIBUTE_SIZE(sizeof(Bss->State.Capabilities)) +
+                    NETLINK_ATTRIBUTE_SIZE(sizeof(Bss->State.BeaconInterval)) +
+                    NETLINK_ATTRIBUTE_SIZE(sizeof(BssStatus)) +
+                    NETLINK_ATTRIBUTE_SIZE(sizeof(SignalMbm)) +
+                    NETLINK_ATTRIBUTE_SIZE(Bss->ElementsSize);
+
         ResultLength += NETLINK_ATTRIBUTE_SIZE(BssLength);
 
         //
@@ -707,6 +721,71 @@ Return Value:
                                         NETLINK_80211_BSS_ATTRIBUTE_BSSID,
                                         Bss->State.Bssid,
                                         NET80211_ADDRESS_SIZE);
+
+        if (!KSUCCESS(Status)) {
+            goto NetlinkScanGetResultsEnd;
+        }
+
+        Status = NetlinkAppendAttribute(Results,
+                                        NETLINK_80211_BSS_ATTRIBUTE_CAPABILITY,
+                                        &(Bss->State.Capabilities),
+                                        sizeof(Bss->State.Capabilities));
+
+        if (!KSUCCESS(Status)) {
+            goto NetlinkScanGetResultsEnd;
+        }
+
+        Status = NetlinkAppendAttribute(
+                                   Results,
+                                   NETLINK_80211_BSS_ATTRIBUTE_BEACON_INTERVAL,
+                                   &(Bss->State.BeaconInterval),
+                                   sizeof(Bss->State.BeaconInterval));
+
+        if (!KSUCCESS(Status)) {
+            goto NetlinkScanGetResultsEnd;
+        }
+
+        SignalMbm = Bss->State.Rssi * 100;
+        Status = NetlinkAppendAttribute(Results,
+                                        NETLINK_80211_BSS_ATTRIBUTE_SIGNAL_MBM,
+                                        &SignalMbm,
+                                        sizeof(SignalMbm));
+
+        if (!KSUCCESS(Status)) {
+            goto NetlinkScanGetResultsEnd;
+        }
+
+        BssStatus = NETLINK_80211_BSS_STATUS_NOT_CONNECTED;
+        if (Bss == Link->ActiveBss) {
+            switch (Link->State) {
+            case Net80211StateAssociated:
+            case Net80211StateEncrypted:
+                Status = NETLINK_80211_BSS_STATUS_ASSOCIATED;
+                break;
+
+            case Net80211StateAssociating:
+                Status = NETLINK_80211_BSS_STATUS_AUTHENTICATED;
+                break;
+
+            default:
+                break;
+            }
+        }
+
+        Status = NetlinkAppendAttribute(Results,
+                                        NETLINK_80211_BSS_ATTRIBUTE_STATUS,
+                                        &BssStatus,
+                                        sizeof(BssStatus));
+
+        if (!KSUCCESS(Status)) {
+            goto NetlinkScanGetResultsEnd;
+        }
+
+        Status = NetlinkAppendAttribute(
+                              Results,
+                              NETLINK_80211_BSS_ATTRIBUTE_INFORMATION_ELEMENTS,
+                              Bss->Elements,
+                              Bss->ElementsSize);
 
         if (!KSUCCESS(Status)) {
             goto NetlinkScanGetResultsEnd;
