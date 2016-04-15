@@ -1,5 +1,6 @@
 *.c diff=cpp text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
 *.h diff=cpp text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
+*.ck diff=cpp text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
 *.S text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
 *.inc text=auto whitespace=trailing-space,space-before-tab,tab-in-indent
 Makefile text=auto whitespace=trailing-space,space-before-tab

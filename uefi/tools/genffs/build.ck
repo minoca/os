@@ -1,0 +1,71 @@
+/*++
+
+Copyright (c) 2014 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    GenFFS
+
+Abstract:
+
+    This module builds the GenFFS build utility, which can create a single
+    FFS file.
+
+Author:
+
+    Evan Green 6-Mar-2014
+
+Environment:
+
+    Build
+
+--*/
+
+function build() {
+    sources = [
+        "genffs.c"
+    ];
+
+    includes = [
+        "-I$///uefi/include"
+    ];
+
+    sources_config = {
+        "BUILD_CPPFLAGS": ["$BUILD_CPPFLAGS"] + includes
+    };
+
+    app = {
+        "label": "genffs",
+        "inputs": sources,
+        "sources_config": sources_config,
+        "build": TRUE
+    };
+
+    entries = application(app);
+    genffs_command = "$^//uefi/tools/genffs/genffs -s -i $IN " +
+                      "-r EFI_SECTION_PE32 -i $IN " +
+                      "-r EFI_SECTION_USER_INTERFACE " +
+                      "-t EFI_FV_FILETYPE_DRIVER -o $OUT";
+
+    runtime_tool = {
+        "type": "tool",
+        "name": "genffs_runtime",
+        "command": genffs_command,
+        "description": "GenFFS - $IN"
+    };
+
+    genffs_command = "genffs -g 7E374E25-8E01-4FEE-87F2-390C23C606CD " +
+                     "-r EFI_SECTION_RAW -t EFI_FV_FILETYPE_FREEFORM " +
+                     "-o $OUT $IN";
+
+    acpi_tool = {
+        "type": "tool",
+        "name": "genffs_acpi",
+        "command": genffs_command,
+        "description": "GenFFS - $OUT"
+    };
+
+    return entries + [runtime_tool, acpi_tool];
+}
+
+return build();

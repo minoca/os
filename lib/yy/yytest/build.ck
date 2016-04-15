@@ -1,0 +1,48 @@
+/*++
+
+Copyright (c) 2015 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    YyTest
+
+Abstract:
+
+    This program compiles the Lexer/Parser Library into an application and
+    tests it.
+
+Author:
+
+    Evan Green 9-Oct-2015
+
+Environment:
+
+    Test
+
+--*/
+
+function build() {
+    sources = [
+        "yytest.c"
+    ];
+
+    build_libs = [
+        "//lib/yy:build_yy",
+        "//lib/rtl/rtlc:build_rtlc",
+        "//lib/rtl/base:build_basertl"
+    ];
+
+    build_app = {
+        "label": "build_yytest",
+        "output": "yytest",
+        "inputs": sources + build_libs,
+        "build": TRUE,
+        "prefix": "build"
+    };
+
+    entries = application(build_app);
+    return entries;
+}
+
+return build();
+

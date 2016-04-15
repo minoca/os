@@ -1,0 +1,38 @@
+/*++
+
+Copyright (c) 2016 Minoca Corp. All Rights Reserved
+
+Module Name:
+
+    .mgproj
+
+Abstract:
+
+    This Mingen project file describes the global attributes of the Minoca OS
+    build.
+
+Author:
+
+    Evan Green 14-Apr-2016
+
+Environment:
+
+    Build
+
+--*/
+
+globalenv = "//env.ck:";
+default_target = "//:";
+output_format = "ninja";
+arch ?= getenv("ARCH");
+//debug ?= getenv("DEBUG");
+//variant ?= getenv("VARIANT");
+
+arch ?= "x86";
+debug ?= "dbg";
+variant ?= "";
+
+if (arch && debug) {
+    default_build_dir = "//../" + arch + debug + variant + "/obj/os";
+}
+
