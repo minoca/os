@@ -424,8 +424,7 @@ typedef struct _NETLINK_GENERIC_HEADER {
 
 Structure Description:
 
-    This structure defines the parameters to use when sending a netlink message
-    or parsing a received message.
+    This structure defines the already parsed information for the message.
 
 Members:
 
@@ -443,19 +442,18 @@ Members:
 
 --*/
 
-typedef struct _NETLINK_MESSAGE_PARAMETERS {
+typedef struct _NETLINK_MESSAGE_INFORMATION {
     PNETWORK_ADDRESS SourceAddress;
     PNETWORK_ADDRESS DestinationAddress;
     ULONG SequenceNumber;
     USHORT Type;
-} NETLINK_MESSAGE_PARAMETERS, *PNETLINK_MESSAGE_PARAMETERS;
+} NETLINK_MESSAGE_INFORMATION, *PNETLINK_MESSAGE_INFORMATION;
 
 /*++
 
 Structure Description:
 
-    This structure defines the parameters to use when sending a generic command
-    or parsing a received command.
+    This structure defines the already parsed information for the command.
 
 Members:
 
@@ -467,18 +465,18 @@ Members:
 
 --*/
 
-typedef struct _NETLINK_GENERIC_COMMAND_PARAMETERS {
-    NETLINK_MESSAGE_PARAMETERS Message;
+typedef struct _NETLINK_GENERIC_COMMAND_INFORMATION {
+    NETLINK_MESSAGE_INFORMATION Message;
     UCHAR Command;
     UCHAR Version;
-} NETLINK_GENERIC_COMMAND_PARAMETERS, *PNETLINK_GENERIC_COMMAND_PARAMETERS;
+} NETLINK_GENERIC_COMMAND_INFORMATION, *PNETLINK_GENERIC_COMMAND_INFORMATION;
 
 typedef
 KSTATUS
 (*PNETLINK_GENERIC_PROCESS_COMMAND) (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command
     );
 
 /*++
@@ -497,7 +495,7 @@ Arguments:
         executes and the packet travels up the stack, but will not be accessed
         after this routine returns.
 
-    Parameters - Supplies a pointer to the command parameters.
+    Command - Supplies a pointer to the command information.
 
 Return Value:
 

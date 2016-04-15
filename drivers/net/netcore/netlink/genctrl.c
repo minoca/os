@@ -62,13 +62,13 @@ KSTATUS
 NetlinkpGenericControlGetFamily (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command
     );
 
 KSTATUS
 NetlinkpGenericControlSendCommand (
     PNETLINK_GENERIC_FAMILY Family,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters,
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command,
     PNETLINK_GENERIC_MULTICAST_GROUP Group
     );
 
@@ -188,7 +188,7 @@ Return Value:
 {
 
     NETLINK_ADDRESS Destination;
-    NETLINK_GENERIC_COMMAND_PARAMETERS Parameters;
+    NETLINK_GENERIC_COMMAND_INFORMATION SendCommand;
     NETLINK_ADDRESS Source;
     KSTATUS Status;
 
@@ -219,15 +219,15 @@ Return Value:
                         NETLINK_GENERIC_CONTROL_MULTICAST_NOTIFY;
 
     //
-    // Fill out the command parameters and send out the notification.
+    // Fill out the command information and send out the notification.
     //
 
-    Parameters.Message.SourceAddress = (PNETWORK_ADDRESS)&Source;
-    Parameters.Message.DestinationAddress = (PNETWORK_ADDRESS)&Destination;
-    Parameters.Message.SequenceNumber = 0;
-    Parameters.Command = Command;
-    Parameters.Version = 0;
-    Status = NetlinkpGenericControlSendCommand(Family, &Parameters, Group);
+    SendCommand.Message.SourceAddress = (PNETWORK_ADDRESS)&Source;
+    SendCommand.Message.DestinationAddress = (PNETWORK_ADDRESS)&Destination;
+    SendCommand.Message.SequenceNumber = 0;
+    SendCommand.Command = Command;
+    SendCommand.Version = 0;
+    Status = NetlinkpGenericControlSendCommand(Family, &SendCommand, Group);
     if (!KSUCCESS(Status)) {
         goto SendNotificationEnd;
     }
@@ -244,7 +244,7 @@ KSTATUS
 NetlinkpGenericControlGetFamily (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command
     )
 
 /*++
@@ -262,7 +262,7 @@ Arguments:
         executes and the packet travels up the stack, but will not be accessed
         after this routine returns.
 
-    Parameters - Supplies a pointer to the command parameters.
+    Command - Supplies a pointer to the command information.
 
 Return Value:
 
@@ -278,7 +278,7 @@ Return Value:
     PVOID Data;
     USHORT DataLength;
     PNETLINK_GENERIC_FAMILY Family;
-    NETLINK_GENERIC_COMMAND_PARAMETERS SendParameters;
+    NETLINK_GENERIC_COMMAND_INFORMATION SendCommand;
     KSTATUS Status;
 
     Family = NULL;
@@ -326,14 +326,12 @@ Return Value:
     // handles all family oriented control commands.
     //
 
-    SendParameters.Message.SourceAddress = &(Socket->LocalAddress);
-    SendParameters.Message.DestinationAddress =
-                                             Parameters->Message.SourceAddress;
-
-    SendParameters.Message.SequenceNumber = Parameters->Message.SequenceNumber;
-    SendParameters.Command = NETLINK_CONTROL_COMMAND_NEW_FAMILY;
-    SendParameters.Version = 0;
-    Status = NetlinkpGenericControlSendCommand(Family, &SendParameters, NULL);
+    SendCommand.Message.SourceAddress = &(Socket->LocalAddress);
+    SendCommand.Message.DestinationAddress = Command->Message.SourceAddress;
+    SendCommand.Message.SequenceNumber = Command->Message.SequenceNumber;
+    SendCommand.Command = NETLINK_CONTROL_COMMAND_NEW_FAMILY;
+    SendCommand.Version = 0;
+    Status = NetlinkpGenericControlSendCommand(Family, &SendCommand, NULL);
     if (!KSUCCESS(Status)) {
         goto GetFamilyEnd;
     }
@@ -349,7 +347,7 @@ GetFamilyEnd:
 KSTATUS
 NetlinkpGenericControlSendCommand (
     PNETLINK_GENERIC_FAMILY Family,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters,
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command,
     PNETLINK_GENERIC_MULTICAST_GROUP Group
     )
 
@@ -365,7 +363,7 @@ Arguments:
     Family - Supplies a pointer to the generic netlink family for which the
         command is being sent.
 
-    Parameters - Supplies a pointer to the command parameters.
+    Command - Supplies a pointer to the command information.
 
     Group - Supplies an optional pointers to the multicast group that has
         just arrived or is being deleted.
@@ -396,7 +394,7 @@ Return Value:
     //
 
     PayloadLength = 0;
-    switch (Parameters->Command) {
+    switch (Command->Command) {
     case NETLINK_CONTROL_COMMAND_NEW_FAMILY:
     case NETLINK_CONTROL_COMMAND_DELETE_FAMILY:
         GroupCount = Family->Properties.MulticastGroupCount;
@@ -459,10 +457,10 @@ Return Value:
     Status = NetlinkGenericAppendHeaders(NetlinkGenericControlFamily,
                                          Packet,
                                          PayloadLength,
-                                         Parameters->Message.SequenceNumber,
+                                         Command->Message.SequenceNumber,
                                          0,
-                                         Parameters->Command,
-                                         Parameters->Version);
+                                         Command->Command,
+                                         Command->Version);
 
     if (!KSUCCESS(Status)) {
         goto SendCommandEnd;
@@ -546,7 +544,7 @@ Return Value:
 
     Status = NetlinkGenericSendCommand(NetlinkGenericControlFamily,
                                        Packet,
-                                       Parameters->Message.DestinationAddress);
+                                       Command->Message.DestinationAddress);
 
     if (!KSUCCESS(Status)) {
         goto SendCommandEnd;

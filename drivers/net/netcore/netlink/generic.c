@@ -2815,14 +2815,14 @@ Return Value:
 {
 
     PNETLINK_GENERIC_COMMAND Command;
+    NETLINK_GENERIC_COMMAND_INFORMATION CommandInformation;
     PNETLINK_GENERIC_FAMILY Family;
-    PNETLINK_GENERIC_COMMAND FoundCommand;
+    BOOL FoundCommand;
     PNETLINK_GENERIC_HEADER GenericHeader;
     PNETLINK_HEADER Header;
     ULONG Index;
     NET_PACKET_BUFFER LocalPacket;
     ULONG PacketLength;
-    NETLINK_GENERIC_COMMAND_PARAMETERS Parameters;
     USHORT RequiredFlags;
     KSTATUS Status;
 
@@ -2873,33 +2873,33 @@ Return Value:
         goto ProcessReceivedKernelDataEnd;
     }
 
-    FoundCommand = NULL;
+    FoundCommand = FALSE;
     for (Index = 0; Index < Family->Properties.CommandCount; Index += 1) {
         Command = &(Family->Properties.Commands[Index]);
         if (Command->CommandId == GenericHeader->Command) {
-            FoundCommand = Command;
+            FoundCommand = TRUE;
             break;
         }
     }
 
-    if (FoundCommand == NULL) {
+    if (FoundCommand == FALSE) {
         Status = STATUS_NOT_SUPPORTED;
         goto ProcessReceivedKernelDataEnd;
     }
 
-    RequiredFlags = FoundCommand->RequiredFlags;
+    RequiredFlags = Command->RequiredFlags;
     if ((Header->Flags & RequiredFlags) != RequiredFlags) {
         Status = STATUS_NOT_SUPPORTED;
         goto ProcessReceivedKernelDataEnd;
     }
 
-    Parameters.Message.SourceAddress = SourceAddress;
-    Parameters.Message.DestinationAddress = DestinationAddress;
-    Parameters.Message.SequenceNumber = Header->SequenceNumber;
-    Parameters.Message.Type = Header->Type;
-    Parameters.Command = GenericHeader->Command;
-    Parameters.Version = GenericHeader->Version;
-    Status = FoundCommand->ProcessCommand(Socket, &LocalPacket, &Parameters);
+    CommandInformation.Message.SourceAddress = SourceAddress;
+    CommandInformation.Message.DestinationAddress = DestinationAddress;
+    CommandInformation.Message.SequenceNumber = Header->SequenceNumber;
+    CommandInformation.Message.Type = Header->Type;
+    CommandInformation.Command = GenericHeader->Command;
+    CommandInformation.Version = GenericHeader->Version;
+    Status = Command->ProcessCommand(Socket, &LocalPacket, &CommandInformation);
     if (!KSUCCESS(Status)) {
         goto ProcessReceivedKernelDataEnd;
     }

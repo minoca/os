@@ -50,21 +50,21 @@ KSTATUS
 Net80211pNetlinkJoin (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command
     );
 
 KSTATUS
 Net80211pNetlinkLeave (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command
     );
 
 KSTATUS
 Net80211pNetlinkScanStart (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command
     );
 
 VOID
@@ -77,7 +77,7 @@ KSTATUS
 Net80211pNetlinkScanGetResults (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command
     );
 
 KSTATUS
@@ -218,7 +218,7 @@ KSTATUS
 Net80211pNetlinkJoin (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command
     )
 
 /*++
@@ -238,7 +238,7 @@ Arguments:
         executes and the packet travels up the stack, but will not be accessed
         after this routine returns.
 
-    Parameters - Supplies a pointer to the command parameters.
+    Command - Supplies a pointer to the command information.
 
 Return Value:
 
@@ -379,7 +379,7 @@ KSTATUS
 Net80211pNetlinkLeave (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command
     )
 
 /*++
@@ -398,7 +398,7 @@ Arguments:
         executes and the packet travels up the stack, but will not be accessed
         after this routine returns.
 
-    Parameters - Supplies a pointer to the command parameters.
+    Command - Supplies a pointer to the command information.
 
 Return Value:
 
@@ -440,7 +440,7 @@ KSTATUS
 Net80211pNetlinkScanStart (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command
     )
 
 /*++
@@ -459,7 +459,7 @@ Arguments:
         executes and the packet travels up the stack, but will not be accessed
         after this routine returns.
 
-    Parameters - Supplies a pointer to the command parameters.
+    Command - Supplies a pointer to the command information.
 
 Return Value:
 
@@ -558,7 +558,7 @@ KSTATUS
 Net80211pNetlinkScanGetResults (
     PNET_SOCKET Socket,
     PNET_PACKET_BUFFER Packet,
-    PNETLINK_GENERIC_COMMAND_PARAMETERS Parameters
+    PNETLINK_GENERIC_COMMAND_INFORMATION Command
     )
 
 /*++
@@ -577,7 +577,7 @@ Arguments:
         executes and the packet travels up the stack, but will not be accessed
         after this routine returns.
 
-    Parameters - Supplies a pointer to the command parameters.
+    Command - Supplies a pointer to the command information.
 
 Return Value:
 
@@ -686,7 +686,7 @@ Return Value:
         Status = NetlinkGenericAppendHeaders(Net80211NetlinkFamily,
                                              Results,
                                              ResultLength,
-                                             Parameters->Message.SequenceNumber,
+                                             Command->Message.SequenceNumber,
                                              NETLINK_HEADER_FLAG_MULTIPART,
                                              NETLINK_80211_COMMAND_SCAN_RESULT,
                                              0);
@@ -804,8 +804,8 @@ Return Value:
 
     Status = NetlinkSendMultipartMessage(Socket,
                                          Results,
-                                         Parameters->Message.SourceAddress,
-                                         Parameters->Message.SequenceNumber);
+                                         Command->Message.SourceAddress,
+                                         Command->Message.SequenceNumber);
 
     if (!KSUCCESS(Status)) {
         goto NetlinkScanGetResultsEnd;
