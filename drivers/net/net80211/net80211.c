@@ -1052,7 +1052,9 @@ Return Value:
     if ((Flags & NET_PACKET_SIZE_FLAG_UNENCRYPTED) == 0) {
         Bss = Net80211pGetBss(Link);
         if (Bss != NULL) {
-            if (Bss->Encryption.Pairwise != NetworkEncryptionNone) {
+            if ((Bss->Encryption.Pairwise == NetworkEncryptionWpa2Eap) ||
+                (Bss->Encryption.Pairwise == NetworkEncryptionWpa2Psk)) {
+
                 PacketSizeInformation->FooterSize += NET80211_CCMP_MIC_SIZE;
                 PacketSizeInformation->HeaderSize +=
                                                   sizeof(NET80211_CCMP_HEADER);

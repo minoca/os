@@ -144,6 +144,7 @@ Return Value:
 {
 
     ULONG AllocationSize;
+    PNET80211_ENCRYPTION Encryption;
     PNET80211_KEY Key;
     KSTATUS Status;
 
@@ -180,10 +181,25 @@ Return Value:
         Status = STATUS_NOT_READY;
 
     } else {
+        Encryption = &(Link->ActiveBss->Encryption);
 
-        ASSERT(Link->ActiveBss->Encryption.Keys[KeyId] == NULL);
+        ASSERT(Encryption->Keys[KeyId] == NULL);
 
-        Link->ActiveBss->Encryption.Keys[KeyId] = Key;
+        Encryption->Keys[KeyId] = Key;
+
+        //
+        // Update the key indices if this is a group key.
+        //
+
+        if ((KeyFlags & NET80211_KEY_FLAG_GLOBAL) != 0) {
+            Encryption->GroupKeyIndex = KeyId;
+            if ((Encryption->Flags &
+                 NET80211_ENCRYPTION_FLAG_USE_GROUP_CIPHER) != 0) {
+
+                 Encryption->PairwiseKeyIndex = KeyId;
+            }
+        }
+
         Status = STATUS_SUCCESS;
     }
 
@@ -257,10 +273,17 @@ Return Value:
     }
 
     //
+    // Set both the pairwise and group key indices to the default.
+    //
+
+    Bss->Encryption.PairwiseKeyIndex = NET80211_DEFAULT_ENCRYPTION_KEY;
+    Bss->Encryption.GroupKeyIndex = NET80211_DEFAULT_ENCRYPTION_KEY;
+
+    //
     // Otherwise, EAPOL must be invoked in order to derive the PTK.
     //
 
-    ASSERT(Bss->Encryption.Pairwise != NetworkEncryptionNone);
+    ASSERT(Bss->Encryption.Pairwise == NetworkEncryptionWpa2Psk);
 
     RtlZeroMemory(&AuthenticatorAddress, sizeof(NETWORK_ADDRESS));
     AuthenticatorAddress.Domain = NetDomain80211;
@@ -382,10 +405,10 @@ Return Value:
     KSTATUS Status;
 
     //
-    // Use the default key.
+    // Use the pairwise key by default.
     //
 
-    KeyId = NET80211_DEFAULT_ENCRYPTION_KEY;
+    KeyId = Bss->Encryption.PairwiseKeyIndex;
     Key = Bss->Encryption.Keys[KeyId];
     if ((Key == NULL) || ((Key->Flags & NET80211_KEY_FLAG_TRANSMIT) == 0)) {
         RtlDebugPrint("802.11: Failed to find valid key for transmit.\n");

@@ -81,6 +81,12 @@ Author:
 #define NET80211_BSS_FLAG_ENCRYPT_DATA 0x00000001
 
 //
+// Define the set of 802.11 encryption flags.
+//
+
+#define NET80211_ENCRYPTION_FLAG_USE_GROUP_CIPHER 0x00000001
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -204,6 +210,13 @@ Members:
 
     Group - Stores the group encryption algorithm.
 
+    PairwiseKeyIndex - Stores the index in the key array of the pairwise key.
+
+    GroupKeyIndex - Stores the index in the key array of the group key.
+
+    Flags - Stores a bitmask of encryption flags. See
+        NET80211_ENCRYPTION_FLAG_* for definitions.
+
     Keys - Stores an array of keys for an authenticated connection.
 
     ApRsn - Stores a pointer to the RSN information gathered from the BSS's AP.
@@ -215,6 +228,9 @@ Members:
 typedef struct _NET80211_ENCRYPTION {
     NETWORK_ENCRYPTION_TYPE Pairwise;
     NETWORK_ENCRYPTION_TYPE Group;
+    ULONG PairwiseKeyIndex;
+    ULONG GroupKeyIndex;
+    ULONG Flags;
     PNET80211_KEY Keys[NET80211_MAX_KEY_COUNT];
     PVOID ApRsn;
     PVOID StationRsn;

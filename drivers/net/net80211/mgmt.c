@@ -1229,6 +1229,11 @@ Return Value:
                 goto ScanThreadEnd;
             }
 
+            if (FoundEntry->Encryption.Pairwise != NetworkEncryptionWpa2Psk) {
+                Status = STATUS_NOT_SUPPORTED;
+                goto ScanThreadEnd;
+            }
+
             RtlCopyMemory(FoundEntry->Passphrase,
                           Scan->Passphrase,
                           Scan->PassphraseLength);
@@ -2797,6 +2802,7 @@ Return Value:
     KSTATUS Status;
     ULONG Suite;
     USHORT SuiteCount;
+    PULONG Suites;
     USHORT Version;
 
     ASSERT(NET80211_GET_ELEMENT_ID(Rsn) == NET80211_ELEMENT_RSN);
@@ -2825,8 +2831,7 @@ Return Value:
     }
 
     //
-    // Get the optional group suite. Do not support anything less secure than
-    // CCMP (i.e. WPA2-PSK) as the older algorithms have proven to be insecure.
+    // Get the optional group suite.
     //
 
     if ((Offset + sizeof(ULONG)) > RsnLength) {
@@ -2836,48 +2841,83 @@ Return Value:
     Suite = NETWORK_TO_CPU32(*((PULONG)&(Rsn[Offset])));
     Offset += sizeof(ULONG);
     switch (Suite) {
+    case NET80211_CIPHER_SUITE_WEP_40:
+    case NET80211_CIPHER_SUITE_WEP_104:
+        GroupEncryption = NetworkEncryptionWep;
+        break;
+
+    case NET80211_CIPHER_SUITE_TKIP:
+        GroupEncryption = NetworkEncryptionWpaEap;
+        break;
+
     case NET80211_CIPHER_SUITE_CCMP:
-        GroupEncryption = NetworkEncryptionWpa2Psk;
+        GroupEncryption = NetworkEncryptionWpa2Eap;
+        break;
+
+    case NET80211_CIPHER_SUITE_GROUP_NOT_ALLOWED:
+        GroupEncryption = NetworkEncryptionNone;
         break;
 
     default:
+        GroupEncryption = NetworkEncryptionInvalid;
         RtlDebugPrint("802.11: Group cipher suite not supported 0x%08x\n",
                       Suite);
 
         break;
     }
 
-    if (GroupEncryption == NetworkEncryptionNone) {
+    if (GroupEncryption == NetworkEncryptionInvalid) {
         Status = STATUS_NOT_SUPPORTED;
         goto ParseRsnElementEnd;
     }
 
     //
-    // Gather the pairwise suites. The BSS must at least support CCMP (i.e.
-    // WPA2-PSK), but may support others.
+    // Gather the pairwise suites.
     //
 
-    PairwiseEncryption = NetworkEncryptionNone;
     if ((Offset + sizeof(USHORT)) > RsnLength) {
         goto ParseRsnElementEnd;
     }
 
     SuiteCount = *((PUSHORT)&(Rsn[Offset]));
     Offset += sizeof(USHORT);
+    if ((Offset + (SuiteCount * sizeof(ULONG))) > RsnLength) {
+        Status = STATUS_DATA_LENGTH_MISMATCH;
+        goto ParseRsnElementEnd;
+    }
+
+    Suites = (PULONG)&(Rsn[Offset]);
+    Offset += SuiteCount * sizeof(ULONG);
     for (Index = 0; Index < SuiteCount; Index += 1) {
-        if ((Offset + sizeof(ULONG)) > RsnLength) {
-            Status = STATUS_DATA_LENGTH_MISMATCH;
-            goto ParseRsnElementEnd;
+        Suite = NETWORK_TO_CPU32(Suites[Index]);
+
+        //
+        // As soon as CCMP is found, prefer that. None of the others are
+        // supported anyway.
+        //
+
+        if (Suite == NET80211_CIPHER_SUITE_CCMP) {
+            PairwiseEncryption = NetworkEncryptionWpa2Eap;
+            break;
         }
 
-        Suite = NETWORK_TO_CPU32(*((PULONG)&(Rsn[Offset])));
-        Offset += sizeof(ULONG);
         switch (Suite) {
-        case NET80211_CIPHER_SUITE_CCMP:
-            PairwiseEncryption = NetworkEncryptionWpa2Psk;
+        case NET80211_CIPHER_SUITE_WEP_40:
+        case NET80211_CIPHER_SUITE_WEP_104:
+            PairwiseEncryption = NetworkEncryptionWep;
+            break;
+
+        case NET80211_CIPHER_SUITE_TKIP:
+            PairwiseEncryption = NetworkEncryptionWpaEap;
+            break;
+
+        case NET80211_CIPHER_SUITE_USE_GROUP_CIPHER:
+            PairwiseEncryption = GroupEncryption;
+            Encryption->Flags |= NET80211_ENCRYPTION_FLAG_USE_GROUP_CIPHER;
             break;
 
         default:
+            PairwiseEncryption = NetworkEncryptionInvalid;
             RtlDebugPrint("802.11: Pairwise cipher suite not supported "
                           "0x%08x\n",
                           Suite);
@@ -2886,14 +2926,14 @@ Return Value:
         }
     }
 
-    if (PairwiseEncryption == NetworkEncryptionNone) {
+    if (PairwiseEncryption == NetworkEncryptionInvalid) {
         Status = STATUS_NOT_SUPPORTED;
         goto ParseRsnElementEnd;
     }
 
     //
-    // The PSK authentication and key management (AKM) must be one of the
-    // optional AKM suites.
+    // Upgrade the group and pairwise encryption methods from EAP to PSK if
+    // PSK is present.
     //
 
     if ((Offset + sizeof(USHORT)) > RsnLength) {
@@ -2902,29 +2942,38 @@ Return Value:
 
     SuiteCount = *((PUSHORT)&(Rsn[Offset]));
     Offset += sizeof(USHORT);
+    if ((Offset + (SuiteCount * sizeof(ULONG))) > RsnLength) {
+        Status = STATUS_DATA_LENGTH_MISMATCH;
+        goto ParseRsnElementEnd;
+    }
+
+    Suites = (PULONG)&(Rsn[Offset]);
+    Offset += SuiteCount * sizeof(ULONG);
     PskSupported = FALSE;
     for (Index = 0; Index < SuiteCount; Index += 1) {
-        if ((Offset + sizeof(ULONG)) > RsnLength) {
-            Status = STATUS_DATA_LENGTH_MISMATCH;
-            goto ParseRsnElementEnd;
-        }
+        Suite = NETWORK_TO_CPU32(Suites[Index]);
+        if ((Suite == NET80211_AKM_SUITE_PSK) ||
+            (Suite == NET80211_AKM_SUITE_PSK_SHA256)) {
 
-        Suite = *((PULONG)&(Rsn[Offset]));
-        Offset += sizeof(ULONG);
-        switch (NETWORK_TO_CPU32(Suite)) {
-        case NET80211_AKM_SUITE_PSK:
             PskSupported = TRUE;
-            break;
-
-        default:
-            RtlDebugPrint("802.11: AKM suite not supported 0x%08x\n", Suite);
             break;
         }
     }
 
-    if (PskSupported == FALSE) {
-        Status = STATUS_NOT_SUPPORTED;
-        goto ParseRsnElementEnd;
+    if (PskSupported != FALSE) {
+        if (GroupEncryption == NetworkEncryptionWpaEap) {
+            GroupEncryption = NetworkEncryptionWpaPsk;
+
+        } else if (GroupEncryption == NetworkEncryptionWpa2Eap) {
+            GroupEncryption = NetworkEncryptionWpa2Psk;
+        }
+
+        if (PairwiseEncryption == NetworkEncryptionWpaEap) {
+            PairwiseEncryption = NetworkEncryptionWpaPsk;
+
+        } else if (PairwiseEncryption == NetworkEncryptionWpa2Eap) {
+            PairwiseEncryption = NetworkEncryptionWpa2Psk;
+        }
     }
 
     //
@@ -2947,18 +2996,15 @@ Return Value:
 
     PmkidCount = *((PUSHORT)&(Rsn[Offset]));
     Offset += sizeof(USHORT);
-    for (Index = 0; Index < PmkidCount; Index += 1) {
-        if ((Offset + NET80211_RSN_PMKID_LENGTH) > RsnLength) {
-            Status = STATUS_DATA_LENGTH_MISMATCH;
-            goto ParseRsnElementEnd;
-        }
-
-        Offset += NET80211_RSN_PMKID_LENGTH;
+    if ((Offset + (PmkidCount * NET80211_RSN_PMKID_LENGTH)) > RsnLength) {
+        Status = STATUS_DATA_LENGTH_MISMATCH;
+        goto ParseRsnElementEnd;
     }
 
+    Offset += PmkidCount * NET80211_RSN_PMKID_LENGTH;
+
     //
-    // Skip the group management suite, but make sure that it is CCMP if it's
-    // present.
+    // Skip the group management suite.
     //
 
     if ((Offset + sizeof(ULONG)) > RsnLength) {
@@ -2967,21 +3013,6 @@ Return Value:
 
     Suite = *((PULONG)&(Rsn[Offset]));
     Offset += sizeof(ULONG);
-    switch (NETWORK_TO_CPU32(Suite)) {
-    case NET80211_CIPHER_SUITE_CCMP:
-        break;
-
-    default:
-        RtlDebugPrint("802.11: Group cipher suite not supported 0x%08x\n",
-                      Suite);
-
-        Status = STATUS_NOT_SUPPORTED;
-        break;
-    }
-
-    if (!KSUCCESS(Status)) {
-        goto ParseRsnElementEnd;
-    }
 
 ParseRsnElementEnd:
     Encryption->Pairwise = PairwiseEncryption;
