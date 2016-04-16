@@ -287,6 +287,11 @@ NetconPrintRssi (
     LONG Rssi
     );
 
+VOID
+NetconPrintRates (
+    PVOID RatesElement
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -1616,8 +1621,6 @@ Return Value:
     PNETCON_BSS Bss;
     PVOID Channel;
     ULONG Index;
-    ULONG RateIndex;
-    PUCHAR Rates;
     PVOID RatesElement;
     PVOID Rsn;
     UCHAR Ssid[NET80211_MAX_SSID_LENGTH + 1];
@@ -1664,15 +1667,7 @@ Return Value:
 
         if (RatesElement != NULL) {
             printf("\tSupported Rates (Mbps):");
-            Rates = NET80211_GET_ELEMENT_DATA(RatesElement);
-            for (RateIndex = 0;
-                 RateIndex < NET80211_GET_ELEMENT_LENGTH(RatesElement);
-                 RateIndex += 1) {
-
-                printf(" %d", Rates[RateIndex] & NET80211_RATE_VALUE_MASK);
-            }
-
-            printf("\n");
+            NetconPrintRates(RatesElement);
         }
 
         RatesElement = NetconGet80211InformationElement(
@@ -1682,15 +1677,7 @@ Return Value:
 
         if (RatesElement != NULL) {
             printf("\tExtended Rates (Mbps):");
-            Rates = NET80211_GET_ELEMENT_DATA(RatesElement);
-            for (RateIndex = 0;
-                 RateIndex < NET80211_GET_ELEMENT_LENGTH(RatesElement);
-                 RateIndex += 1) {
-
-                printf(" %d", Rates[RateIndex] & NET80211_RATE_VALUE_MASK);
-            }
-
-            printf("\n");
+            NetconPrintRates(RatesElement);
         }
 
         Rsn = NetconGet80211InformationElement(Bss->Elements,
@@ -2128,7 +2115,9 @@ Return Value:
             printf("\tBSSID: ");
             NetconPrintAddress(&(Net80211->Bssid));
             printf("\tChannel: %d\n", Net80211->Channel);
-            printf("\tMax Rate: %I64d Mbps\n", Net80211->MaxRate / 1000000ULL);
+            printf("\tMax Rate: %.1f Mbps\n",
+                   (double)Net80211->MaxRate / 1000000ULL);
+
             NetconPrintRssi(Net80211->Rssi);
             printf("\tPairwise Encryption: ");
             NetconPrintEncryption(Net80211->PairwiseEncryption);
@@ -2387,3 +2376,51 @@ Return Value:
     printf("\tSignal Strength: %d%% (%d dBm)\n", Percentage, Rssi);
     return;
 }
+
+VOID
+NetconPrintRates (
+    PVOID RatesElement
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints out each rate stored in the given rate information
+    element. That values are printed out in Mbps.
+
+Arguments:
+
+    RatesElement - Supplies a pointer to the rates element to print.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Index;
+    ULONG Rate;
+    PUCHAR Rates;
+
+    Rates = NET80211_GET_ELEMENT_DATA(RatesElement);
+    for (Index = 0;
+         Index < NET80211_GET_ELEMENT_LENGTH(RatesElement);
+         Index += 1) {
+
+        Rate = Rates[Index] & NET80211_RATE_VALUE_MASK;
+        Rate *= NET80211_RATE_UNIT;
+        if ((Rate % 1000000) == 0) {
+            printf(" %d", Rate / 1000000);
+
+        } else {
+            printf(" %.1f", (double)Rate / 1000000);
+        }
+    }
+
+    printf("\n");
+    return;
+}
+
