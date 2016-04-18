@@ -59,10 +59,11 @@ Environment:
     "      password during a join operation.\n"                                \
     "  -s --scan -- Displays the list of wireless networks available to\n"     \
     "      the network device specified by -d.\n"                              \
+    "  -v --verbose -- Display more detailed information.\n"                   \
     "  --help -- Display this help text.\n"                                    \
     "  --version -- Display the application version and exit.\n\n"
 
-#define NETCON_OPTIONS_STRING "d:j:lsph"
+#define NETCON_OPTIONS_STRING "d:j:lspvh"
 
 //
 // Define the set of network configuration flags.
@@ -73,6 +74,7 @@ Environment:
 #define NETCON_FLAG_LEAVE     0x00000004
 #define NETCON_FLAG_PASSWORD  0x00000008
 #define NETCON_FLAG_SCAN      0x00000010
+#define NETCON_FLAG_VERBOSE   0x00000020
 
 //
 // Define the set of network device description flags.
@@ -302,6 +304,7 @@ struct option NetconLongOptions[] = {
     {"leave", no_argument, 0, 'l'},
     {"password", no_argument, 0, 'p'},
     {"scan", no_argument, 0, 's'},
+    {"verbose", no_argument, 0, 'v'},
     {"help", no_argument, 0, 'h'},
     {"version", no_argument, 0, 'V'},
     {NULL, 0, 0, 0}
@@ -400,6 +403,10 @@ Return Value:
 
         case 'p':
             Context.Flags |= NETCON_FLAG_PASSWORD;
+            break;
+
+        case 'v':
+            Context.Flags |= NETCON_FLAG_VERBOSE;
             break;
 
         case 'V':
@@ -1647,6 +1654,23 @@ Return Value:
             printf("\tStatus: Connected\n");
         }
 
+        Rsn = NetconGet80211InformationElement(Bss->Elements,
+                                               Bss->ElementsSize,
+                                               NET80211_ELEMENT_RSN);
+
+        if (Rsn != NULL) {
+            NetconPrintRsnInformation(Rsn);
+
+        } else {
+            printf("\tAuthentication: Open\n");
+            printf("\tEncryption: None\n");
+        }
+
+        if ((Context->Flags & NETCON_FLAG_VERBOSE) == 0) {
+            printf("\n");
+            continue;
+        }
+
         printf("\tBSSID: ");
         NetconPrintAddress(&(Bss->Bssid));
         NetconPrintRssi(Bss->SignalStrength / 100);
@@ -1678,18 +1702,6 @@ Return Value:
         if (RatesElement != NULL) {
             printf("\tExtended Rates (Mbps):");
             NetconPrintRates(RatesElement);
-        }
-
-        Rsn = NetconGet80211InformationElement(Bss->Elements,
-                                               Bss->ElementsSize,
-                                               NET80211_ELEMENT_RSN);
-
-        if (Rsn != NULL) {
-            NetconPrintRsnInformation(Rsn);
-
-        } else {
-            printf("\tAuthentication: Open\n");
-            printf("\tEncryption: None\n");
         }
 
         printf("\n");
