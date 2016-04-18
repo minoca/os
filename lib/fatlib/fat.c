@@ -1801,6 +1801,13 @@ Return Value:
 
                 Properties->Type = IoObjectSymbolicLink;
             }
+
+            //
+            // Steal the least significant bit of the 10ms creation time to
+            // have second-level granularity on modification time.
+            //
+
+            Properties->ModifiedTime.Seconds |= Entry.CreationTime10ms & 0x1;
         }
     }
 
@@ -3173,6 +3180,15 @@ Return Value:
             if (NewProperties->Type == IoObjectSymbolicLink) {
                 EncodedProperties.Permissions |= FAT_ENCODED_PROPERTY_SYMLINK;
             }
+
+            //
+            // Use the least significant bit of the creation time 10ms as the
+            // ones bit for modification time.
+            //
+
+            DirectoryEntry.CreationTime10ms &= ~0x1;
+            DirectoryEntry.CreationTime10ms |=
+                                     NewProperties->ModifiedTime.Seconds & 0x1;
 
             FatpWriteEncodedProperties(&DirectoryEntry, &EncodedProperties);
             NewChecksum = FatpChecksumDirectoryEntry(&DirectoryEntry);

@@ -416,6 +416,15 @@ Return Value:
             EncodedProperties.Permissions |= FAT_ENCODED_PROPERTY_SYMLINK;
         }
 
+        //
+        // Steal the least significant bit of the 10ms creation time for
+        // one-second granularity of modification time.
+        //
+
+        DirectoryEntry.CreationTime10ms &= ~0x1;
+        DirectoryEntry.CreationTime10ms |=
+                                    FileProperties->ModifiedTime.Seconds & 0x1;
+
         FatpWriteEncodedProperties(&DirectoryEntry, &EncodedProperties);
     }
 
@@ -3209,6 +3218,15 @@ Return Value:
     FatFineTime = ((CalendarTime.Second & 0x1) * FAT_10MS_PER_SECOND) +
                   CalendarTime.Nanosecond / FAT_NANOSECONDS_PER_10MS;
 
+    //
+    // In encoded mode, reserve the least significant bit of the creation time,
+    // making the granularity 20ms instead of 10.
+    //
+
+    if (FatDisableEncodedProperties == FALSE) {
+        FatFineTime &= ~0x1;
+    }
+
 ConvertSystemTimeToFatTimeEnd:
     if (Date != NULL) {
         *Date = FatDate;
@@ -3273,6 +3291,16 @@ Return Value:
                           FAT_TIME_MINUTE_SHIFT;
 
     CalendarTime.Second = (Time & FAT_TIME_SECOND_OVER_TWO_MASK) * 2;
+
+    //
+    // In encoded mode, reserve the least significant bit of the creation time,
+    // making the granularity 20ms instead of 10.
+    //
+
+    if (FatDisableEncodedProperties == FALSE) {
+        Time10ms &= ~0x1;
+    }
+
     CalendarTime.Second += Time10ms / FAT_10MS_PER_SECOND;
     Time10ms %= FAT_10MS_PER_SECOND;
     CalendarTime.Nanosecond = Time10ms * FAT_NANOSECONDS_PER_10MS;
