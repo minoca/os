@@ -3105,44 +3105,6 @@ Return Value:
 --*/
 
 NET_API
-VOID
-NetProcessReceivedMulticastData (
-    PNET_LINK Link,
-    PNET_PACKET_BUFFER Packet,
-    PNET_PROTOCOL_ENTRY ProtocolEntry,
-    PNETWORK_ADDRESS SourceAddress,
-    PNETWORK_ADDRESS DestinationAddress
-    );
-
-/*++
-
-Routine Description:
-
-    This routine processes the received packet and replays it for all of the
-    active sockets that match the given addresses. The protocol's socket data
-    processing routine will be invoked for each socket.
-
-Arguments:
-
-    Link - Supplies a pointer to the network link that received the packet.
-
-    Packet - Supplies a pointer to the multicast packet.
-
-    ProtocolEntry - Supplies the protocol the socket must be on.
-
-    SourceAddress - Supplies a pointer to the source (remote) address of the
-        packet.
-
-    DestinationAddress - Supplies a pointer to the destination (local) address
-        of the packet.
-
-Return Value:
-
-    None.
-
---*/
-
-NET_API
 COMPARISON_RESULT
 NetCompareNetworkAddresses (
     PNETWORK_ADDRESS FirstAddress,
