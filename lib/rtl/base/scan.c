@@ -1713,7 +1713,7 @@ Arguments:
         will be used to retrieve more input.
 
     FieldSize - Supplies the maximum number of characters to scan for the
-        integer.
+        double.
 
     Double - Supplies a pointer where the resulting double is returned on
         success.

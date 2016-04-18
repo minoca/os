@@ -513,6 +513,7 @@ Return Value:
     ULONGLONG IntegerArgument;
     BOOL IsFloat;
     BOOL IsInteger;
+    BOOL LongDoubleSpecified;
     BOOL LongSpecified;
     ULONG Position;
     PRINT_FORMAT_PROPERTIES Properties;
@@ -742,6 +743,7 @@ Return Value:
     //
 
     LongSpecified = FALSE;
+    LongDoubleSpecified = FALSE;
     Properties.IntegerSize = sizeof(INT);
     if (*CurrentFormat == FORMAT_SHORT) {
         CurrentFormat += 1;
@@ -775,7 +777,7 @@ Return Value:
 
     } else if (*CurrentFormat == FORMAT_LONG_DOUBLE) {
         CurrentFormat += 1;
-        LongSpecified = TRUE;
+        LongDoubleSpecified = TRUE;
 
     } else if ((*CurrentFormat == FORMAT_LONGLONG_START) &&
                (*(CurrentFormat + 1) == '6') &&
@@ -1108,7 +1110,7 @@ Return Value:
                                                               Arguments);
 
         } else {
-            if (LongSpecified != FALSE) {
+            if (LongDoubleSpecified != FALSE) {
                 DoubleParts.Double = (double)va_arg(*Arguments, long double);
 
             } else {
