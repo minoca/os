@@ -81,6 +81,7 @@ Author:
 #define AM335_TIMER_BIT_WIDTH 32
 #define AM335_TIMER_FREQUENCY_32KHZ 32768
 #define AM335_TIMER_CONTROLLER_SIZE 0x1000
+#define AM335_WATCHDOG_SIZE 0x1000
 
 //
 // Define the size of the interrupt controller register space.
@@ -1587,6 +1588,9 @@ Author:
 #define AM335_WATCHDOG_ENABLE1  0x0000BBBB
 #define AM335_WATCHDOG_ENABLE2  0x00004444
 
+#define AM335_WATCHDOG_INTERRUPT_OVERFLOW 0x00000001
+#define AM335_WATCHDOG_INTERRUPT_DELAY 0x00000002
+
 //
 // I2C system status register bits.
 //
@@ -1749,7 +1753,8 @@ typedef enum _AM335_WATCHDOG_REGISTER {
     Am335WatchdogPrescaler              = 0x24,
     Am335WatchdogCurrentCount           = 0x28,
     Am335WatchdogLoadCount              = 0x2C,
-    Am335WatchdogWritePostControl       = 0x34,
+    Am335WatchdogTrigger                = 0x30,
+    Am335WatchdogWritePostStatus        = 0x34,
     Am335WatchdogDelay                  = 0x44,
     Am335WatchdogStartStop              = 0x48,
     Am335WatchdogRawInterruptStatus     = 0x54,

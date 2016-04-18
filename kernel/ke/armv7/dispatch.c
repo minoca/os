@@ -212,7 +212,9 @@ Return Value:
     PKTHREAD Thread;
 
     Parameter = NULL;
-    ArEnableInterrupts();
+    if (ArIsTrapFrameFromPrivilegedMode(TrapFrame) == FALSE) {
+        ArEnableInterrupts();
+    }
 
     //
     // Get the instruction. Use the user-mode read routines since they're also
@@ -248,9 +250,7 @@ Return Value:
     //
 
     TrapFrame->SvcSp += sizeof(TRAP_FRAME);
-    if (((PVOID)TrapFrame->Pc < KERNEL_VA_START) &&
-        (ArIsTranslationEnabled() != FALSE)) {
-
+    if (ArIsTrapFrameFromPrivilegedMode(TrapFrame) == FALSE) {
         PreviousPeriod = KeBeginCycleAccounting(CycleAccountKernel);
         Thread = KeGetCurrentThread();
         IsBreak = FALSE;
