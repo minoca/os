@@ -76,6 +76,12 @@ Environment:
 #define NET80211_AUTHENTICATION_TIMEOUT (5 * MICROSECONDS_PER_SECOND)
 
 //
+// Define the timeout until a BSS entry has expired in microseconds.
+//
+
+#define NET80211_BSS_ENTRY_TIMEOUT (10 * MICROSECONDS_PER_SECOND)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -307,6 +313,11 @@ VOID
 Net80211pUpdateBssCache (
     PNET80211_LINK Link,
     PNET80211_PROBE_RESPONSE Response
+    );
+
+VOID
+Net80211pTrimBssCache (
+    PNET80211_LINK Link
     );
 
 PNET80211_BSS_ENTRY
@@ -1090,6 +1101,12 @@ Return Value:
     LockHeld = FALSE;
     Scan = (PNET80211_SCAN_STATE)Parameter;
     Link = Scan->Link;
+
+    //
+    // Before pulling in new BSS entries, clean out the old ones.
+    //
+
+    Net80211pTrimBssCache(Link);
 
     //
     // Always start scanning on channel 1.
@@ -3251,6 +3268,7 @@ Return Value:
     //
 
     Bss->Encryption.StationRsn = (PUCHAR)&Net80211DefaultRsnInformation;
+    Bss->LastUpdated = KeGetRecentTimeCounter();
     Status = STATUS_SUCCESS;
 
 UpdateBssCacheEnd:
@@ -3264,6 +3282,82 @@ UpdateBssCacheEnd:
 
     KeReleaseQueuedLock(Link->Lock);
     if (DestroyBss != FALSE) {
+        Net80211pBssEntryReleaseReference(Bss);
+    }
+
+    return;
+}
+
+VOID
+Net80211pTrimBssCache (
+    PNET80211_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine removes the expired BSS entries from the given link's list.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link whose old BSS entries are to
+        be removed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_BSS_ENTRY Bss;
+    PLIST_ENTRY CurrentEntry;
+    ULONGLONG CurrentTime;
+    ULONGLONG ElapsedTime;
+    LIST_ENTRY LocalList;
+    ULONGLONG Timeout;
+
+    INITIALIZE_LIST_HEAD(&LocalList);
+    CurrentTime = KeGetRecentTimeCounter();
+    Timeout = KeConvertMicrosecondsToTimeTicks(NET80211_BSS_ENTRY_TIMEOUT);
+
+    //
+    // Go through the list once and find all the expired entries, moving them
+    // to a local list.
+    //
+
+    KeAcquireQueuedLock(Link->Lock);
+    CurrentEntry = Link->BssList.Next;
+    while (CurrentEntry != &(Link->BssList)) {
+        Bss = LIST_VALUE(CurrentEntry, NET80211_BSS_ENTRY, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+
+        //
+        // Don't trim the active BSS.
+        //
+
+        if (Bss == Link->ActiveBss) {
+            continue;
+        }
+
+        ElapsedTime = CurrentTime - Bss->LastUpdated;
+        if (ElapsedTime > Timeout) {
+            LIST_REMOVE(&(Bss->ListEntry));
+            INSERT_BEFORE(&(Bss->ListEntry), &LocalList);
+        }
+    }
+
+    KeReleaseQueuedLock(Link->Lock);
+
+    //
+    // Run through the local list and release a reference on each.
+    //
+
+    while (LIST_EMPTY(&LocalList) == FALSE) {
+        Bss = LIST_VALUE(LocalList.Next, NET80211_BSS_ENTRY, ListEntry);
+        LIST_REMOVE(&(Bss->ListEntry));
         Net80211pBssEntryReleaseReference(Bss);
     }
 

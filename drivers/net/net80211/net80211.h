@@ -249,6 +249,9 @@ Members:
 
     ReferenceCount - Stores the reference count on the BSS entry.
 
+    LastUpdated - Stores the time counter value of when the BSS entry was last
+        seen by a scan or beacon.
+
     State - Stores the BSS state.
 
     Encryption - Stores the encryption information for the BSS including the
@@ -276,6 +279,7 @@ Members:
 typedef struct _NET80211_BSS_ENTRY {
     LIST_ENTRY ListEntry;
     volatile ULONG ReferenceCount;
+    ULONGLONG LastUpdated;
     NET80211_BSS State;
     NET80211_ENCRYPTION Encryption;
     HANDLE EapolHandle;
