@@ -1207,7 +1207,7 @@ RTLW81_8188E_TRANSMIT_POWER_DATA Rtlw8188eTransmitPowerData[] = {
 };
 
 BOOL Rtlw81DisablePacketDropping = FALSE;
-CHAR Rtlw81DefaultCckAgcReportOffsets[] = { 16, -12, -26, -46 };
+LONG Rtlw81DefaultCckAgcReportOffsets[] = { 16, -12, -26, -46 };
 
 //
 // ------------------------------------------------------------------ Functions
@@ -5797,7 +5797,7 @@ Return Value:
     PRTLW81_PHY_STATUS_OFDM Ofdm;
     ULONG OfdmStatus;
     UCHAR ReportIndex;
-    CHAR RssiValue;
+    LONG RssiValue;
     KSTATUS Status;
     UCHAR VgaIndex;
 
