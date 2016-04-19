@@ -68,11 +68,6 @@ ArpDummyVfpExceptionHandler (
     PTRAP_FRAME TrapFrame
     );
 
-VOID
-ArpEnableFpu (
-    VOID
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -430,6 +425,7 @@ Return Value:
 
 {
 
+    ULONG Control;
     RUNLEVEL OldRunLevel;
     PKTHREAD Thread;
 
@@ -465,11 +461,23 @@ Return Value:
     OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
 
     //
-    // If the thread already owns the FPU, just enable it. Otherwise, do a full
-    // restore (which also serves as init for a new FPU user).
+    // Enable the FPU. If it is already enabled then this is probably an
+    // unsupported FPU instruction.
     //
 
-    ArpEnableFpu();
+    Control = ArGetVfpExceptionRegister();
+    if ((Control & ARM_FPEXC_ENABLE) != 0) {
+        return FALSE;
+    }
+
+    Control |= ARM_FPEXC_ENABLE;
+    ArSetVfpExceptionRegister(Control);
+
+    //
+    // Unless the thread already owns the FPU, do a full restore. This also
+    // serves as an init for a new FPU user.
+    //
+
     if ((Thread->FpuFlags & THREAD_FPU_FLAG_OWNER) == 0) {
         ArRestoreVfp(Thread->FpuContext, ArVfpRegisters32);
     }
@@ -509,40 +517,5 @@ Return Value:
 
     TrapFrame->R0 = 0;
     return TRUE;
-}
-
-VOID
-ArpEnableFpu (
-    VOID
-    )
-
-/*++
-
-Routine Description:
-
-    This routine enables access to the floating point unit hardware on the
-    current processor.
-
-Arguments:
-
-    None.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    ULONG Control;
-
-    Control = ArGetVfpExceptionRegister();
-
-    ASSERT((Control & ARM_FPEXC_ENABLE) == 0);
-
-    Control |= ARM_FPEXC_ENABLE;
-    ArSetVfpExceptionRegister(Control);
-    return;
 }
 
