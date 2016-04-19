@@ -488,9 +488,7 @@ Return Value:
 
     RtlZeroMemory(&ScanParameters, sizeof(NET80211_SCAN_STATE));
     ScanParameters.Link = Link;
-    ScanParameters.Flags = NET80211_SCAN_FLAG_BACKGROUND |
-                           NET80211_SCAN_FLAG_BROADCAST;
-
+    ScanParameters.Flags = NET80211_SCAN_FLAG_BROADCAST;
     ScanParameters.CompletionRoutine = Net80211pNetlinkScanCompletionRoutine;
     Status = Net80211pStartScan(Link, &ScanParameters);
     if (!KSUCCESS(Status)) {

@@ -827,6 +827,7 @@ typedef struct _NET80211_CCM_NONCE {
 } PACKED NET80211_CCM_NONCE, *PNET80211_CCM_NONCE;
 
 typedef enum _NET80211_STATE {
+    Net80211StateInvalid,
     Net80211StateUninitialized,
     Net80211StateInitialized,
     Net80211StateProbing,

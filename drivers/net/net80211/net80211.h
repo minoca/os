@@ -305,6 +305,12 @@ Members:
 
     State - Stores the current state of the 802.11 link.
 
+    ProbePreviousState - Stores the state before the 802.11 link started
+        probing.
+
+    ProbeNextState - Stores the state that the 802.11 link should transition to
+        after leaving the probe state.
+
     Flags - Stores a bitmask of flags describing the link.
         See NET80211_LINK_FLAG_* for definitions.
 
@@ -312,6 +318,11 @@ Members:
 
     Lock - Stores a pointer to a queued lock that synchronizes access to the
         802.11 link structure.
+
+    ScanLock - Stores a pointer to a queued lock that synchronizes network
+        scans. A scan is triggered before a network is ever joined, so this
+        protects the link from joining a network while it's already in the
+        middle of a scan.
 
     StateTimer - Stores a pointer to a timer used to monitor state transitions.
 
@@ -337,9 +348,12 @@ struct _NET80211_LINK {
     PNET_LINK NetworkLink;
     volatile ULONG ReferenceCount;
     NET80211_STATE State;
+    NET80211_STATE ProbePreviousState;
+    NET80211_STATE ProbeNextState;
     ULONG Flags;
     volatile ULONG SequenceNumber;
     PQUEUED_LOCK Lock;
+    PQUEUED_LOCK ScanLock;
     PKTIMER StateTimer;
     PDPC TimeoutDpc;
     PWORK_ITEM TimeoutWorkItem;
@@ -751,6 +765,27 @@ Arguments:
 Return Value:
 
     Status code.
+
+--*/
+
+VOID
+Net80211pDestroyKey (
+    PNET80211_KEY Key
+    );
+
+/*++
+
+Routine Description:
+
+    This routine destroys the given 802.11 encryption key.
+
+Arguments:
+
+    Key - Supplies a pointer to the key to be destroyed.
+
+Return Value:
+
+    None.
 
 --*/
 

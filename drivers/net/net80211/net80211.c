@@ -700,6 +700,12 @@ Return Value:
         goto InitializeLinkEnd;
     }
 
+    Net80211Link->ScanLock = KeCreateQueuedLock();
+    if (Net80211Link->ScanLock == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeLinkEnd;
+    }
+
     Net80211Link->StateTimer = KeCreateTimer(NET80211_ALLOCATION_TAG);
     if (Net80211Link->StateTimer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1164,6 +1170,10 @@ Return Value:
 
     if (Net80211Link->Lock != NULL) {
         KeDestroyQueuedLock(Net80211Link->Lock);
+    }
+
+    if (Net80211Link->ScanLock != NULL) {
+        KeDestroyQueuedLock(Net80211Link->ScanLock);
     }
 
     if (Net80211Link->StateTimer != NULL) {

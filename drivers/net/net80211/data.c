@@ -39,6 +39,12 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
+KSTATUS
+Net80211pSendNullDataFrame (
+    PNET80211_LINK Link,
+    USHORT FrameControl
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -446,6 +452,16 @@ Return Value:
 
     ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
 
+    //
+    // If associated, send a power save null data frame to the AP in order to
+    // pause all incoming data traffic.
+    //
+
+    if (Link->ActiveBss != NULL) {
+        Net80211pSendNullDataFrame(Link,
+                                   NET80211_FRAME_CONTROL_POWER_MANAGEMENT);
+    }
+
     Link->Flags |= NET80211_LINK_FLAG_DATA_PAUSED;
     return;
 }
@@ -495,7 +511,16 @@ Return Value:
     }
 
     //
-    // Otherwise attempt to flush the packets that were queued up.
+    // If the link is associated, then send the AP a null data frame indicating
+    // that the station is coming out of power save mode.
+    //
+
+    if (Link->ActiveBss != NULL) {
+        Net80211pSendNullDataFrame(Link, 0);
+    }
+
+    //
+    // Attempt to flush the packets that were queued up.
     //
 
     Link->Flags &= ~NET80211_LINK_FLAG_DATA_PAUSED;
@@ -548,4 +573,135 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+KSTATUS
+Net80211pSendNullDataFrame (
+    PNET80211_LINK Link,
+    USHORT FrameControl
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends an 802.11 null data frame with the given frame control
+    bits set. This bypasses the normal data frame submission paths because it
+    never requires encryption and does not require the 802.2 headers.
+
+Arguments:
+
+    Link - Supplies a pointer to the link on which to send the data frame.
+
+    FrameControl - Supplies a bitmask of extra frame control values to stick
+        in the header.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PVOID DeviceContext;
+    ULONG Flags;
+    PNET80211_DATA_FRAME_HEADER Header;
+    PNET_PACKET_BUFFER Packet;
+    NET_PACKET_LIST PacketList;
+    KSTATUS Status;
+
+    NET_INITIALIZE_PACKET_LIST(&PacketList);
+
+    //
+    // Allocate a network packet to send down to the lower layers.
+    //
+
+    Flags = NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_HEADERS |
+            NET_ALLOCATE_BUFFER_FLAG_ADD_DEVICE_LINK_FOOTERS;
+
+    Packet = NULL;
+    Status = NetAllocateBuffer(sizeof(NET80211_DATA_FRAME_HEADER),
+                               0,
+                               0,
+                               Link->NetworkLink,
+                               Flags,
+                               &Packet);
+
+    if (!KSUCCESS(Status)) {
+        goto SendNullDataFrame;
+    }
+
+    //
+    // Move the offset backwards and fill in the 802.11 management frame header.
+    //
+
+    Packet->DataOffset -= sizeof(NET80211_DATA_FRAME_HEADER);
+    Header = Packet->Buffer + Packet->DataOffset;
+    FrameControl &= ~NET80211_FRAME_CONTROL_FROM_DS;
+    FrameControl |= NET80211_FRAME_CONTROL_TO_DS |
+                    (NET80211_FRAME_CONTROL_PROTOCOL_VERSION <<
+                     NET80211_FRAME_CONTROL_PROTOCOL_VERSION_SHIFT) |
+                    (NET80211_FRAME_TYPE_DATA <<
+                     NET80211_FRAME_CONTROL_TYPE_SHIFT) |
+                    (NET80211_DATA_FRAME_SUBTYPE_NO_DATA <<
+                     NET80211_FRAME_CONTROL_SUBTYPE_SHIFT);
+
+    Header->FrameControl = FrameControl;
+
+    //
+    // The hardware handles the duration.
+    //
+
+    Header->DurationId = 0;
+
+    //
+    // Initialize the header's addresses. The receiver and destination address
+    // are always the BSSID as this is being sent to the AP.
+    //
+
+    ASSERT(Link->ActiveBss != NULL);
+
+    RtlCopyMemory(Header->ReceiverAddress,
+                  Link->ActiveBss->State.Bssid,
+                  NET80211_ADDRESS_SIZE);
+
+    //
+    // The source address is always the local link's physical address (i.e. the
+    // MAC address).
+    //
+
+    RtlCopyMemory(Header->TransmitterAddress,
+                  Link->Properties.PhysicalAddress.Address,
+                  NET80211_ADDRESS_SIZE);
+
+    RtlCopyMemory(Header->SourceDestinationAddress,
+                  Link->ActiveBss->State.Bssid,
+                  NET80211_ADDRESS_SIZE);
+
+    //
+    // The header gets the next sequence number for the link. This is only 1
+    // fragment, so that remains 0.
+    //
+
+    Header->SequenceControl = Net80211pGetSequenceNumber(Link);
+    Header->SequenceControl <<= NET80211_SEQUENCE_CONTROL_SEQUENCE_NUMBER_SHIFT;
+
+    //
+    // Send the packet off.
+    //
+
+    NET_ADD_PACKET_TO_LIST(Packet, &PacketList);
+    DeviceContext = Link->Properties.DeviceContext;
+    Status = Link->Properties.Interface.Send(DeviceContext, &PacketList);
+    if (!KSUCCESS(Status)) {
+        goto SendNullDataFrame;
+    }
+
+SendNullDataFrame:
+    if (!KSUCCESS(Status)) {
+        NetDestroyBufferList(&PacketList);
+    }
+
+    return Status;
+}
 

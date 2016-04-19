@@ -82,6 +82,22 @@ Environment:
 #define NET80211_BSS_ENTRY_TIMEOUT (10 * MICROSECONDS_PER_SECOND)
 
 //
+// Define the pad to subtract from the beacon interval during a background
+// scan in order to determine the amount of time to dwell on a channel without
+// missing a beacon from the active BSS.
+//
+
+#define NET80211_BEACON_INTERVAL_PAD (10 * MICROSECONDS_PER_MILLISECOND)
+
+//
+// Define the default amount of time to wait between scanning channels when
+// performing a background scan.
+//
+
+#define NET80211_BACKGROUND_SCAN_CHANNEL_DELAY \
+    (200 * MICROSECONDS_PER_MILLISECOND)
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -217,6 +233,16 @@ Net80211pSetStateUnlocked (
 VOID
 Net80211pScanThread (
     PVOID Parameter
+    );
+
+VOID
+Net80211pStartProbing (
+    PNET80211_LINK Link
+    );
+
+VOID
+Net80211pStopProbing (
+    PNET80211_LINK Link
     );
 
 KSTATUS
@@ -502,7 +528,6 @@ Return Value:
     // Kick off a thread to complete the scan.
     //
 
-    Net80211pSetState(Link, Net80211StateProbing);
     Status = PsCreateKernelThread(Net80211pScanThread,
                                   ScanState,
                                   "Net80211ScanThread");
@@ -846,6 +871,18 @@ Return Value:
     ASSERT(KeIsQueuedLockHeld(Link->Lock) != FALSE);
 
     Bss = Link->ActiveBss;
+    OldState = Link->State;
+
+    //
+    // State transitions are not allowed from the probing state. Save the
+    // transition so it can be replayed later after the link moves out of the
+    // probing state.
+    //
+
+    if (OldState == Net80211StateProbing) {
+        Link->ProbeNextState = State;
+        goto SetStateUnlockedEnd;
+    }
 
     //
     // Notify the driver about the state transition first, allowing it to
@@ -867,14 +904,13 @@ Return Value:
                       State,
                       Status);
 
-        goto SetStateEnd;
+        goto SetStateUnlockedEnd;
     }
 
     //
     // Officially update the state.
     //
 
-    OldState = Link->State;
     Link->State = State;
 
     //
@@ -895,26 +931,26 @@ Return Value:
         case Net80211StateEncrypted:
             Status = Net80211pPrepareForReconnect(Link, &Bss);
             if (!KSUCCESS(Status)) {
-                goto SetStateEnd;
+                goto SetStateUnlockedEnd;
             }
 
             //
             // Fall through to send the authentication request.
             //
 
-        case Net80211StateProbing:
         case Net80211StateAssociating:
         case Net80211StateReassociating:
+        case Net80211StateInitialized:
             Status = Net80211pSendAuthenticationRequest(Link, Bss);
             if (!KSUCCESS(Status)) {
-                goto SetStateEnd;
+                goto SetStateUnlockedEnd;
             }
 
             Status = Net80211pQueueStateTransitionTimer(Link,
                                                         NET80211_STATE_TIMEOUT);
 
             if (!KSUCCESS(Status)) {
-                goto SetStateEnd;
+                goto SetStateUnlockedEnd;
             }
 
             break;
@@ -931,7 +967,7 @@ Return Value:
         case Net80211StateEncrypted:
             Status = Net80211pPrepareForReconnect(Link, &Bss);
             if (!KSUCCESS(Status)) {
-                goto SetStateEnd;
+                goto SetStateUnlockedEnd;
             }
 
             //
@@ -946,14 +982,14 @@ Return Value:
 
             Status = Net80211pSendAssociationRequest(Link, Bss);
             if (!KSUCCESS(Status)) {
-                goto SetStateEnd;
+                goto SetStateUnlockedEnd;
             }
 
             Status = Net80211pQueueStateTransitionTimer(Link,
                                                         NET80211_STATE_TIMEOUT);
 
             if (!KSUCCESS(Status)) {
-                goto SetStateEnd;
+                goto SetStateUnlockedEnd;
             }
 
             break;
@@ -987,7 +1023,7 @@ Return Value:
 
             Status = Net80211pInitializeEncryption(Link, Bss);
             if (!KSUCCESS(Status)) {
-                goto SetStateEnd;
+                goto SetStateUnlockedEnd;
             }
 
             Status = Net80211pQueueStateTransitionTimer(
@@ -995,7 +1031,7 @@ Return Value:
                                               NET80211_AUTHENTICATION_TIMEOUT);
 
             if (!KSUCCESS(Status)) {
-                goto SetStateEnd;
+                goto SetStateUnlockedEnd;
             }
         }
 
@@ -1016,6 +1052,7 @@ Return Value:
         break;
 
     case Net80211StateInitialized:
+    case Net80211StateUninitialized:
         switch (OldState) {
         case Net80211StateAssociated:
         case Net80211StateEncrypted:
@@ -1059,7 +1096,7 @@ Return Value:
         NetSetLinkState(Link->NetworkLink, TRUE, LinkSpeed);
     }
 
-SetStateEnd:
+SetStateUnlockedEnd:
     return;
 }
 
@@ -1087,6 +1124,7 @@ Return Value:
 
 {
 
+    PNET80211_BSS_ENTRY ActiveBss;
     PNET80211_BSS_ENTRY BssEntry;
     PLIST_ENTRY CurrentEntry;
     PNET80211_BSS_ENTRY FoundEntry;
@@ -1095,6 +1133,7 @@ Return Value:
     BOOL Match;
     LONG MaxRssi;
     PNET80211_SCAN_STATE Scan;
+    ULONGLONG ScanDelay;
     ULONG SsidLength;
     KSTATUS Status;
 
@@ -1103,10 +1142,43 @@ Return Value:
     Link = Scan->Link;
 
     //
+    // Acquire the link's scan lock to prevent multiple scans from happening
+    // simultaneously. This protects the hardware from being set to different
+    // channels and protects against a network being joined during a scan.
+    //
+
+    KeAcquireQueuedLock(Link->ScanLock);
+
+    //
     // Before pulling in new BSS entries, clean out the old ones.
     //
 
     Net80211pTrimBssCache(Link);
+
+    //
+    // If there is an active BSS, then this is a background scan.
+    //
+
+    ActiveBss = Net80211pGetBss(Link);
+    if (ActiveBss != NULL) {
+        Scan->Flags |= NET80211_SCAN_FLAG_BACKGROUND;
+    }
+
+    //
+    // If this is a foreground scan, just set the state to probing and start
+    // running through the channels.
+    //
+
+    if ((Scan->Flags & NET80211_SCAN_FLAG_BACKGROUND) == 0) {
+        Net80211pStartProbing(Link);
+        ScanDelay = NET80211_DEFAULT_SCAN_DWELL_TIME;
+
+    } else {
+        ScanDelay = ActiveBss->State.BeaconInterval * NET80211_TIME_UNIT;
+        if (ScanDelay > NET80211_BEACON_INTERVAL_PAD) {
+            ScanDelay -= NET80211_BEACON_INTERVAL_PAD;
+        }
+    }
 
     //
     // Always start scanning on channel 1.
@@ -1120,6 +1192,15 @@ Return Value:
 
     FoundEntry = NULL;
     while (Scan->Channel < Link->Properties.MaxChannel) {
+
+        //
+        // If this a background scan, temporarily set the state to probing to
+        // alert that hardware that it's in scan mode.
+        //
+
+        if ((Scan->Flags & NET80211_SCAN_FLAG_BACKGROUND) != 0) {
+            Net80211pStartProbing(Link);
+        }
 
         //
         // Set the channel to send the packet over.
@@ -1142,10 +1223,26 @@ Return Value:
         }
 
         //
-        // Wait the default dwell time before moving to the next channel.
+        // Give the responses a chance before moving to the next channel.
         //
 
-        KeDelayExecution(FALSE, FALSE, NET80211_DEFAULT_SCAN_DWELL_TIME);
+        KeDelayExecution(FALSE, FALSE, ScanDelay);
+
+        //
+        // If this a background scan, set the state back to what it was and
+        // continue sending packets for a period.
+        //
+
+        if ((Scan->Flags & NET80211_SCAN_FLAG_BACKGROUND) != 0) {
+            if (ActiveBss != NULL) {
+                Status = Net80211pSetChannel(Link, ActiveBss->State.Channel);
+                if (!KSUCCESS(Status)) {
+                    goto ScanThreadEnd;
+                }
+            }
+
+            Net80211pStopProbing(Link);
+        }
 
         //
         // Now that the channel has been probed, search to see if the
@@ -1173,6 +1270,25 @@ Return Value:
         }
 
         Scan->Channel += 1;
+
+        //
+        // When performing background scans, wait a bit before moving to the
+        // next channel to allow normal traffic to progress.
+        //
+
+        if ((Scan->Flags & NET80211_SCAN_FLAG_BACKGROUND) != 0) {
+            KeDelayExecution(FALSE,
+                             FALSE,
+                             NET80211_BACKGROUND_SCAN_CHANNEL_DELAY);
+        }
+    }
+
+    //
+    // Stop probing if this is not a background scan.
+    //
+
+    if ((Scan->Flags & NET80211_SCAN_FLAG_BACKGROUND) == 0) {
+        Net80211pStopProbing(Link);
     }
 
     //
@@ -1258,6 +1374,11 @@ Return Value:
             FoundEntry->PassphraseLength = Scan->PassphraseLength;
         }
 
+        //
+        // Leave the active BSS by setting the state back to initialized.
+        //
+
+        Net80211pSetStateUnlocked(Link, Net80211StateInitialized);
         Net80211pJoinBss(Link, FoundEntry);
         Net80211pSetChannel(Link, FoundEntry->State.Channel);
         Net80211pSetStateUnlocked(Link, Net80211StateAuthenticating);
@@ -1275,6 +1396,7 @@ ScanThreadEnd:
         KeReleaseQueuedLock(Link->Lock);
     }
 
+    KeReleaseQueuedLock(Link->ScanLock);
     if (!KSUCCESS(Status)) {
         Net80211pSetState(Link, Net80211StateInitialized);
     }
@@ -1283,8 +1405,178 @@ ScanThreadEnd:
         Scan->CompletionRoutine(Link, Status);
     }
 
+    if (ActiveBss != NULL) {
+        Net80211pBssEntryReleaseReference(ActiveBss);
+    }
+
     Net80211LinkReleaseReference(Link);
     MmFreePagedPool(Scan);
+    return;
+}
+
+VOID
+Net80211pStartProbing (
+    PNET80211_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prepares the given link for a network probe by pausing data
+    frames and saving the current state.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link that is about to start probing
+        for networks.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_BSS BssState;
+    PVOID DeviceContext;
+    KSTATUS Status;
+
+    KeAcquireQueuedLock(Link->Lock);
+
+    ASSERT(Link->State != Net80211StateProbing);
+    ASSERT(Link->ProbePreviousState == Net80211StateInvalid);
+    ASSERT(Link->ProbeNextState == Net80211StateInvalid);
+
+    //
+    // Set the next state to invalid.
+    //
+
+    Link->ProbeNextState = Net80211StateInvalid;
+
+    //
+    // When entering the probe state, immediately pause data packet
+    // transmission. This must be done before the hardware is notified of the
+    // switch.
+    //
+
+    Net80211pPauseDataFrames(Link);
+
+    //
+    // Notify the hardware about the transition to probing.
+    //
+
+    BssState = NULL;
+    if (Link->ActiveBss != NULL) {
+        BssState = &(Link->ActiveBss->State);
+    }
+
+    DeviceContext = Link->Properties.DeviceContext;
+    Status = Link->Properties.Interface.SetState(DeviceContext,
+                                                 Net80211StateProbing,
+                                                 BssState);
+
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("802.11: Failed to set state %d: 0x%08x\n",
+                      Net80211StateProbing,
+                      Status);
+
+        goto StartProbingEnd;
+    }
+
+    //
+    // Save the current state and transition to the probing state.
+    //
+
+    Link->ProbePreviousState = Link->State;
+    Link->State = Net80211StateProbing;
+
+StartProbingEnd:
+    if (!KSUCCESS(Status)) {
+        Net80211pResumeDataFrames(Link);
+    }
+
+    KeReleaseQueuedLock(Link->Lock);
+    return;
+}
+
+VOID
+Net80211pStopProbing (
+    PNET80211_LINK Link
+    )
+
+/*++
+
+Routine Description:
+
+    This routine takes the given link for out of the probing state, restoring
+    the previous state. Keep in mind that an attempt to transition the state
+    may have occurred while the link was probing. This routine will replay that
+    transition after reverting the previous state.
+
+Arguments:
+
+    Link - Supplies a pointer to the 802.11 link that is exiting the probing
+        state.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PNET80211_BSS BssState;
+    PVOID DeviceContext;
+    KSTATUS Status;
+
+    KeAcquireQueuedLock(Link->Lock);
+
+    ASSERT(Link->State == Net80211StateProbing);
+
+    //
+    // Restore the initial state, notify the hardware of the transition and
+    // resume the data frames.
+    //
+
+    BssState = NULL;
+    if (Link->ActiveBss != NULL) {
+        BssState = &(Link->ActiveBss->State);
+    }
+
+    DeviceContext = Link->Properties.DeviceContext;
+    Status = Link->Properties.Interface.SetState(DeviceContext,
+                                                 Link->ProbePreviousState,
+                                                 BssState);
+
+    if (!KSUCCESS(Status)) {
+        RtlDebugPrint("802.11: Failed to set state %d: 0x%08x\n",
+                      Link->ProbePreviousState,
+                      Status);
+
+        goto StopProbingEnd;
+    }
+
+    Link->State = Link->ProbePreviousState;
+    Net80211pResumeDataFrames(Link);
+
+    //
+    // If the transition state is not invalid, then the link tried to move to
+    // a new state while the probe was active. Replay that transition now that
+    // the original state is restored.
+    //
+
+    if (Link->ProbeNextState != Net80211StateInvalid) {
+        Net80211pSetStateUnlocked(Link, Link->ProbeNextState);
+    }
+
+    Link->ProbePreviousState = Net80211StateInvalid;
+    Link->ProbeNextState = Net80211StateInvalid;
+
+StopProbingEnd:
+    KeReleaseQueuedLock(Link->Lock);
     return;
 }
 
@@ -3547,10 +3839,7 @@ Return Value:
 
     for (Index = 0; Index < NET80211_MAX_KEY_COUNT; Index += 1) {
         if (BssEntry->Encryption.Keys[Index] != NULL) {
-            RtlZeroMemory(BssEntry->Encryption.Keys[Index]->Value,
-                          BssEntry->Encryption.Keys[Index]->Length);
-
-            MmFreePagedPool(BssEntry->Encryption.Keys[Index]);
+            Net80211pDestroyKey(BssEntry->Encryption.Keys[Index]);
         }
     }
 

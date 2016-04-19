@@ -146,7 +146,10 @@ Return Value:
     ULONG AllocationSize;
     PNET80211_ENCRYPTION Encryption;
     PNET80211_KEY Key;
+    PNET80211_KEY OldKey;
     KSTATUS Status;
+
+    OldKey = NULL;
 
     //
     // Make sure the key ID is valid and supported. The CCMP header only has
@@ -182,9 +185,7 @@ Return Value:
 
     } else {
         Encryption = &(Link->ActiveBss->Encryption);
-
-        ASSERT(Encryption->Keys[KeyId] == NULL);
-
+        OldKey = Encryption->Keys[KeyId];
         Encryption->Keys[KeyId] = Key;
 
         //
@@ -208,11 +209,43 @@ Return Value:
 SetKeyEnd:
     if (!KSUCCESS(Status)) {
         if (Key != NULL) {
-            MmFreePagedPool(Key);
+            Net80211pDestroyKey(Key);
         }
     }
 
+    if (OldKey != NULL) {
+        Net80211pDestroyKey(OldKey);
+    }
+
     return Status;
+}
+
+VOID
+Net80211pDestroyKey (
+    PNET80211_KEY Key
+    )
+
+/*++
+
+Routine Description:
+
+    This routine destroys the given 802.11 encryption key.
+
+Arguments:
+
+    Key - Supplies a pointer to the key to be destroyed.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    RtlZeroMemory(Key->Value, Key->Length);
+    MmFreePagedPool(Key);
+    return;
 }
 
 KSTATUS
