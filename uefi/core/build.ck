@@ -91,19 +91,19 @@ function build() {
     }
 
     includes = [
-        "-I$///uefi/include",
-        "-I$///uefi/core"
+        "$//uefi/include",
+        "$//uefi/core"
     ];
 
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-fshort-wchar"],
-        "CPPFLAGS": ["$CPPFLAGS"] + includes
+        "CFLAGS": ["-fshort-wchar"],
     };
 
     lib = {
         "label": "ueficore",
         "inputs": sources,
-        "sources_config": sources_config
+        "sources_config": sources_config,
+        "includes": includes
     };
 
     emptyrd_lib = {

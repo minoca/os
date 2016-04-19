@@ -28,18 +28,18 @@ function build() {
     ];
 
     includes = [
-        "-I$///uefi/include"
+        "$//uefi/include"
     ];
 
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-fshort-wchar"],
-        "CPPFLAGS": ["$CPPFLAGS"] + includes
+        "CFLAGS": ["-fshort-wchar"],
     };
 
     lib = {
         "label": "sd",
         "inputs": sources,
-        "sources_config": sources_config
+        "sources_config": sources_config,
+        "includes": includes
     };
 
     entries = static_library(lib);

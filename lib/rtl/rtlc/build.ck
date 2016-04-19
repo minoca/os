@@ -26,25 +26,21 @@ function build() {
         "stubs.c"
     ];
 
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS", "-I$///lib/rtl"]
-    };
-
-    build_sources_config = {
-        "BUILD_CPPFLAGS": ["$BUILD_CPPFLAGS", "-I$///lib/rtl"]
-    };
+    includes = [
+        "$//lib/rtl"
+    ];
 
     lib = {
         "label": "rtlc",
         "inputs": sources,
-        "sources_config": sources_config
+        "includes": includes,
     };
 
     build_lib = {
         "label": "build_rtlc",
         "output": "rtlc",
         "inputs": sources,
-        "sources_config": build_sources_config,
+        "includes": includes,
         "build": TRUE,
         "prefix": "build"
     };

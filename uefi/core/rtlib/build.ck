@@ -32,19 +32,19 @@ function build() {
     ];
 
     includes = [
-        "-I$///uefi/include",
-        "-I$///uefi/core"
+        "$//uefi/include",
+        "$//uefi/core"
     ];
 
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-fshort-wchar"],
-        "CPPFLAGS": ["$CPPFLAGS"] + includes
+        "CFLAGS": ["-fshort-wchar"],
     };
 
     lib = {
         "label": "rtlib",
         "inputs": sources,
-        "sources_config": sources_config
+        "sources_config": sources_config,
+        "includes": includes
     };
 
     entries = static_library(lib);

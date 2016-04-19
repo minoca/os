@@ -33,14 +33,10 @@ function build() {
         "//boot/lib:pcat/realmexe.o"
     ];
 
-    app_cppflags = [
-        "-I$///boot/lib/include",
-        "-I$///boot/lib/pcat"
+    includes = [
+        "$//boot/lib/include",
+        "$//boot/lib/pcat"
     ];
-
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + app_cppflags
-    };
 
     link_ldflags = [
         "-nostdlib",
@@ -49,13 +45,13 @@ function build() {
     ];
 
     link_config = {
-        "LDFLAGS": ["$LDFLAGS"] + link_ldflags
+        "LDFLAGS": link_ldflags
     };
 
     image = {
         "label": "fatboot.elf",
         "inputs": sources,
-        "sources_config": sources_config,
+        "includes": includes,
         "config": link_config,
         "text_address": "0x7C00",
     };

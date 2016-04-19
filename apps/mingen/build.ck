@@ -58,30 +58,26 @@ function build() {
         "//lib/rtl/base:build_basertl"
     ];
 
-    includes = [
-        "-I$///apps/include",
-        "-I$///apps/lib/chalk"
+    build_includes = [
+        "$//apps/include",
+        "$//apps/lib/chalk"
     ];
 
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS", "-I$///apps/include/libc"] + includes
-    };
-
-    build_sources_config = {
-        "BUILD_CPPFLAGS": ["$BUILD_CPPFLAGS"] + includes
-    };
+    includes = build_includes + [
+        "$//apps/include/libc"
+    ];
 
     app = {
         "label": "mingen",
         "inputs": sources + libs,
-        "sources_config": sources_config
+        "includes": includes
     };
 
     build_app = {
         "label": "mingen_build",
         "output": "mingen",
         "inputs": build_sources + build_libs,
-        "sources_config": build_sources_config,
+        "includes": build_includes,
         "build": TRUE,
         "prefix": "build"
     };

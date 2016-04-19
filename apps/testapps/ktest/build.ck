@@ -40,25 +40,21 @@ function build() {
     ];
 
     includes = [
-        "-I$///apps/include",
-        "-I$///apps/include/libc"
+        "$//apps/include",
+        "$//apps/include/libc"
     ];
-
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + includes,
-    };
 
     app = {
         "label": "ktest",
         "inputs": sources + dynlibs,
         "orderonly": [":ktestdrv"],
-        "sources_config": sources_config
+        "includes": includes
     };
 
     ktest_driver = {
         "label": "ktestdrv",
         "inputs": driver_sources + driver_dynlibs,
-        "sources_config": sources_config
+        "includes": includes
     };
 
     entries = application(app);

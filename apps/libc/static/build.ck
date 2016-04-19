@@ -45,20 +45,15 @@ function build() {
         ];
     }
 
-    sources_cppflags = [
-        "$CPPFLAGS",
-        "-I$///apps/include",
-        "-I$///apps/include/libc"
+    includes = [
+        "$//apps/include",
+        "$//apps/include/libc"
     ];
-
-    sources_config = {
-        "CPPFLAGS": sources_cppflags,
-    };
 
     lib = {
         "label": "libc_nonshared",
         "inputs": arch_sources + sources,
-        "sources_config": sources_config
+        "includes": includes
     };
 
     entries = static_library(lib);

@@ -35,13 +35,9 @@ function build() {
     ];
 
     includes = [
-        "-I$///uefi/include",
-        "-I$///uefi/plat/panda/init"
+        "$//uefi/include",
+        "$//uefi/plat/panda/init"
     ];
-
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + includes
-    };
 
     link_ldflags = [
         "-nostdlib",
@@ -49,14 +45,14 @@ function build() {
     ];
 
     link_config = {
-        "LDFLAGS": ["$LDFLAGS"] + link_ldflags
+        "LDFLAGS": link_ldflags
     };
 
     elf = {
         "label": "bbonemlo.elf",
         "inputs": sources,
-        "sources_config": sources_config,
-        "linker_script": "$///uefi/plat/panda/init/link.x",
+        "includes": includes,
+        "linker_script": "$//uefi/plat/panda/init/link.x",
         "text_address": text_address,
         "config": link_config
     };

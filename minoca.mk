@@ -298,7 +298,7 @@ endif
 
 ifeq (armv6, $(ARCH))
 ifneq ($(BINARYTYPE), $(filter ntconsole win32 dll,$(BINARYTYPE)))
-EXTRA_CPPFLAGS += -march=armv6zk -marm
+EXTRA_CPPFLAGS += -march=armv6zk -marm -mfpu=vfp
 endif
 endif
 

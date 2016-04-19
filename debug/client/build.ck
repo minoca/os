@@ -97,9 +97,9 @@ function build() {
     ];
 
     includes = [
-        "-I$///lib/im",
-        "-I$///debug/client",
-        "-I$///apps/include"
+        "$//lib/im",
+        "$//debug/client",
+        "$//apps/include"
     ];
 
     if (arch == "x86") {
@@ -143,7 +143,7 @@ function build() {
         ];
 
         build_gui_config["DYNLIBS"] = build_config["DYNLIBS"] + ["-lshlwapi"];
-        build_gui_config["LDFLAGS"] = ["$LDFLAGS", "-mwindows"];
+        build_gui_config["LDFLAGS"] = ["-mwindows"];
 
     } else if (build_os == "Minoca") {
         build_sources = common_sources + minoca_sources + target_libs;
@@ -154,18 +154,10 @@ function build() {
         assert(0, "Unsupported OS for building debugger");
     }
 
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + includes
-    };
-
-    build_sources_config = {
-        "BUILD_CPPFLAGS": ["$BUILD_CPPFLAGS"] + includes
-    };
-
     target_app = {
         "label": "debug",
         "inputs": target_sources,
-        "sources_config": sources_config
+        "includes": includes
     };
 
     entries = application(target_app);
@@ -173,7 +165,7 @@ function build() {
         "label": "build_debug",
         "output": "debug",
         "inputs": build_sources + build_libs,
-        "sources_config": build_sources_config,
+        "includes": includes,
         "config": build_config,
         "build": TRUE,
         "prefix": "build"
@@ -190,7 +182,7 @@ function build() {
             "label": "build_debugui",
             "output": "debugui",
             "inputs": build_gui_sources + build_libs,
-            "sources_config": build_sources_config,
+            "includes": includes,
             "config": build_gui_config,
             "build": TRUE,
             "prefix": "buildui"

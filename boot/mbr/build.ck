@@ -33,7 +33,7 @@ function build() {
     ];
 
     link_config = {
-        "LDFLAGS": ["$LDFLAGS"] + link_ldflags
+        "LDFLAGS": link_ldflags
     };
 
     image = {

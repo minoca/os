@@ -32,17 +32,13 @@ function build() {
     ];
 
     includes = [
-        "-I$///uefi/include"
+        "$//uefi/include"
     ];
-
-    sources_config = {
-        "BUILD_CPPFLAGS": ["$BUILD_CPPFLAGS"] + includes
-    };
 
     app = {
         "label": "mkuboot",
         "inputs": sources + libs,
-        "sources_config": sources_config,
+        "includes": includes,
         "build": TRUE
     };
 

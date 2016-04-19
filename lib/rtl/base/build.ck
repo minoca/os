@@ -124,13 +124,9 @@ function build() {
     }
 
     entries = [];
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS", "-I$///lib/rtl"]
-    };
-
-    build_sources_config = {
-        "BUILD_CPPFLAGS": ["$BUILD_CPPFLAGS", "-I$///lib/rtl"]
-    };
+    includes = [
+        "$//lib/rtl"
+    ];
 
     //
     // Compile the intrinsics library, which contains just the compiler math
@@ -144,14 +140,15 @@ function build() {
         // another binary.
         //
 
-        intrinsics_source_config = sources_config + {};
-        intrinsics_source_config["CPPFLAGS"] =
-                          sources_config["CPPFLAGS"] + ["-DRTL_API=DLLIMPORT"];
+        intrinsics_sources_config = {
+            "CPPFLAGS": ["-DRTL_API=DLLIMPORT"]
+        };
 
         intrinsics_lib = {
             "label": "intrins",
             "inputs": intrinsics,
-            "sources_config": intrinsics_source_config,
+            "sources_config": intrinsics_sources_config,
+            "includes": includes,
             "prefix": "intrins"
         };
 
@@ -167,7 +164,7 @@ function build() {
         "label": "basertlb",
         "inputs": boot_sources,
         "prefix": "boot",
-        "sources_config": sources_config
+        "includes": includes,
     };
 
     entries += static_library(boot_lib);
@@ -179,7 +176,7 @@ function build() {
     wide_lib = {
         "label": "basertlw",
         "inputs": wide_sources,
-        "sources_config": sources_config
+        "includes": includes,
     };
 
     entries += static_library(wide_lib);
@@ -191,7 +188,7 @@ function build() {
     basertl_lib = {
         "label": "basertl",
         "inputs": target_sources,
-        "sources_config": sources_config
+        "includes": includes,
     };
 
     entries += static_library(basertl_lib);
@@ -204,7 +201,7 @@ function build() {
         "label": "build_basertl",
         "output": "basertl",
         "inputs": build_sources,
-        "sources_config": build_sources_config,
+        "includes": includes,
         "prefix": "build",
         "build": TRUE
     };

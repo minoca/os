@@ -37,14 +37,13 @@ function build() {
         "efi/memory.c",
     ];
 
-    bo_cppflags = [
-        "-I$///boot/lib/include",
-        "-I$///boot/loader"
+    includes = [
+        "$//boot/lib/include",
+        "$//boot/loader"
     ];
 
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-fshort-wchar"],
-        "CPPFLAGS": ["$CPPFLAGS"] + bo_cppflags
+        "CFLAGS": ["-fshort-wchar"],
     };
 
     link_ldflags = [
@@ -93,11 +92,11 @@ function build() {
     }
 
     efi_link_config = {
-        "LDFLAGS": ["$LDFLAGS"] + efi_link_ldflags
+        "LDFLAGS": efi_link_ldflags
     };
 
     pcat_link_config = {
-        "LDFLAGS": ["$LDFLAGS"] + link_ldflags
+        "LDFLAGS": link_ldflags
     };
 
     //
@@ -131,6 +130,7 @@ function build() {
         "label": "loadefi",
         "inputs": common_sources + efi_sources + efi_app_libs,
         "sources_config": sources_config,
+        "includes": includes,
         "config": efi_link_config,
         "entry": "BoMain",
         "binplace": TRUE
@@ -148,6 +148,7 @@ function build() {
             "label": "loader",
             "inputs": common_sources + pcat_sources + pcat_app_libs,
             "sources_config": sources_config,
+            "includes": includes,
             "config": pcat_link_config,
             "entry": "BoMain",
             "prefix": "pcat",

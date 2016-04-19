@@ -26,14 +26,14 @@ function build() {
         "kprint.c"
     ];
 
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS", "-I$///lib/rtl"]
-    };
+    includes = [
+        "$//lib/rtl"
+    ];
 
     lib = {
         "label": "krtl",
         "inputs": sources,
-        "sources_config": sources_config
+        "includes": includes
     };
 
     entries = static_library(lib);

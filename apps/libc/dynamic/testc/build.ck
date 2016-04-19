@@ -34,21 +34,16 @@ function build() {
         "//apps/libc/dynamic:build_libc",
     ];
 
-    sources_cppflags = [
-        "$BUILD_CPPFLAGS",
-        "-I$///apps/include",
-        "-I$///apps/include/libc"
+    includes = [
+        "$//apps/include",
+        "$//apps/include/libc"
     ];
-
-    sources_config = {
-        "BUILD_CPPFLAGS": sources_cppflags
-    };
 
     build_app = {
         "label": "build_testc",
         "output": "testc",
         "inputs": sources + build_libs,
-        "sources_config": sources_config,
+        "includes": includes,
         "build": TRUE,
         "prefix": "build"
     };

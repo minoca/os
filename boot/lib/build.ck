@@ -88,19 +88,19 @@ function build() {
         ];
     }
 
-    lib_cppflags = [
-        "-I$///boot/lib/include",
-        "-I$///boot/lib"
+    includes = [
+        "$//boot/lib/include",
+        "$//boot/lib"
     ];
 
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-fshort-wchar"],
-        "CPPFLAGS": ["$CPPFLAGS"] + lib_cppflags
+        "CFLAGS": ["-fshort-wchar"],
     };
 
     common_lib = {
         "inputs": common_sources,
-        "sources_config": sources_config
+        "sources_config": sources_config,
+        "includes": includes
     };
 
     common_list = compiled_sources(common_lib);
@@ -121,7 +121,8 @@ function build() {
         pcat_lib = {
             "label": "bootpcat",
             "inputs": common_list[0] + pcat_sources,
-            "sources_config": sources_config
+            "sources_config": sources_config,
+            "includes": includes
         };
 
         entries += static_library(pcat_lib);

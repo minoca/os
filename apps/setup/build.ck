@@ -80,15 +80,13 @@ function build() {
         "//apps/osbase:libminocaos"
     ];
 
-    target_includes = [
-        "-I$///apps/include",
-        "-I$///apps/include/libc",
-        "-I$///apps/lib/chalk"
+    build_includes = [
+        "$//apps/include",
+        "$//apps/lib/chalk"
     ];
 
-    build_includes = [
-        "-I$///apps/include",
-        "-I$///apps/lib/chalk"
+    target_includes = build_includes + [
+        "$//apps/include/libc",
     ];
 
     target_sources = common_sources + minoca_sources + target_libs +
@@ -107,25 +105,17 @@ function build() {
         build_sources = common_sources + uos_sources;
     }
 
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + target_includes
-    };
-
-    build_sources_config = {
-        "BUILD_CPPFLAGS": ["$BUILD_CPPFLAGS"] + build_includes
-    };
-
     app = {
         "label": "msetup",
         "inputs": target_sources,
-        "sources_config": sources_config
+        "includes": target_includes
     };
 
     build_app = {
         "label": "build_msetup",
         "output": "msetup",
         "inputs": build_sources + build_libs,
-        "sources_config": build_sources_config,
+        "includes": build_includes,
         "config": build_config,
         "build": TRUE,
         "prefix": "build"

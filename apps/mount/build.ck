@@ -32,18 +32,14 @@ function build() {
     ];
 
     includes = [
-        "-I$///apps/include",
-        "-I$///apps/include/libc"
+        "$//apps/include",
+        "$//apps/include/libc"
     ];
-
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + includes,
-    };
 
     app = {
         "label": "mount",
         "inputs": sources + dynlibs,
-        "sources_config": sources_config
+        "includes": includes
     };
 
     entries = application(app);

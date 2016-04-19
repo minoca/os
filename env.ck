@@ -58,8 +58,8 @@ global_config = {
     "SHELL": getenv("SHELL"),
 };
 
-build_os = uname_s();
-build_arch = uname_m();
+build_os ?= uname_s();
+build_arch ?= uname_m();
 
 if (build_arch == "i686") {
     build_arch = "x86";
@@ -163,7 +163,7 @@ cflags += ["-fno-builtin",
            "-fdata-sections",
            "-fvisibility=hidden"];
 
-cppflags += ["-I$///include"];
+cppflags += ["-I$//include"];
 
 //
 // TODO: Figure out REVISION, BUILD_TIME, BUILD_TIME_STRING, BUILD_STRING,
@@ -183,7 +183,7 @@ if (build_os == "Windows") {
 }
 
 if (arch == "armv6") {
-    cppflags += ["-march=armv6zk", "-marm"];
+    cppflags += ["-march=armv6zk", "-marm", "-mfpu=vfp"];
 }
 
 if (arch == "x86") {
@@ -231,15 +231,15 @@ if ((build_os == "Minoca") && (build_arch == arch)) {
     global_config["STRIP"] ?= tool_prefix + "strip";
 }
 
-global_config["CFLAGS"] = cflags;
-global_config["CPPFLAGS"] = cppflags;
-global_config["LDFLAGS"] = ldflags;
-global_config["ASFLAGS"] = asflags;
+global_config["BASE_CFLAGS"] = cflags;
+global_config["BASE_CPPFLAGS"] = cppflags;
+global_config["BASE_LDFLAGS"] = ldflags;
+global_config["BASE_ASFLAGS"] = asflags;
 global_config["OBJCOPY_FLAGS"] = objcopy_flags;
-global_config["BUILD_CFLAGS"] = build_cflags;
-global_config["BUILD_CPPFLAGS"] = build_cppflags;
-global_config["BUILD_LDFLAGS"] = ldflags;
-global_config["BUILD_ASFLAGS"] = asflags;
+global_config["BUILD_BASE_CFLAGS"] = build_cflags;
+global_config["BUILD_BASE_CPPFLAGS"] = build_cppflags;
+global_config["BUILD_BASE_LDFLAGS"] = ldflags;
+global_config["BUILD_BASE_ASFLAGS"] = asflags;
 global_config["BUILD_OBJCOPY_FLAGS"] = build_objcopy_flags;
 global_config["IASL_FLAGS"] = ["-we"];
 
@@ -386,6 +386,14 @@ function compiled_sources(params) {
     sources_config = get(params, "sources_config");
     prefix = get(params, "prefix");
     build = get(params, "build");
+    includes = get(params, "includes");
+    if (includes) {
+        sources_config ?= {};
+        sources_config["CPPFLAGS"] ?= [];
+        for (include in includes) {
+            sources_config["CPPFLAGS"] += ["-I" + include];
+        }
+    }
 
     assert(len(inputs) != 0, "Compilation must have inputs");
 
@@ -518,13 +526,7 @@ function shared_library(params) {
     soname = get(params, "output");
     soname ?= params["label"];
     major_version = get(params, "major_version");
-    if (build) {
-        add_config(params, "BUILD_LDFLAGS", "-shared");
-
-    } else {
-        add_config(params, "LDFLAGS", "-shared");
-    }
-
+    add_config(params, "LDFLAGS", "-shared");
     if ((!build) || (build_os != "Windows")) {
         soname += ".so";
         if (major_version != null) {

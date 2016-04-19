@@ -27,14 +27,14 @@ function build() {
         "uprint.c"
     ];
 
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS", "-I$///apps/include"]
-    };
+    includes = [
+        "$//apps/include"
+    ];
 
     lib = {
         "label": "urtl",
         "inputs": sources,
-        "sources_config": sources_config
+        "includes": includes,
     };
 
     entries = static_library(lib);

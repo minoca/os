@@ -79,7 +79,7 @@ function build() {
     ];
 
     kernel_config = {
-        "LDFLAGS": ["$LDFLAGS", "-Wl,--whole-archive"]
+        "LDFLAGS": ["-Wl,--whole-archive"]
     };
 
     kernel = {

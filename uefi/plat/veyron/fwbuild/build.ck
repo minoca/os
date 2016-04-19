@@ -34,17 +34,13 @@ function build() {
     ];
 
     includes = [
-        "-I$///uefi/include"
+        "$//uefi/include"
     ];
-
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + includes
-    };
 
     app = {
         "label": "veyrnfwb",
         "inputs": sources + libs,
-        "sources_config": sources_config,
+        "includes": includes,
         "build": TRUE
     };
 

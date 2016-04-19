@@ -43,12 +43,15 @@ function build() {
         "video.c"
     ];
 
+    includes = [
+        "$//uefi/include"
+    ];
+
     //
     // TODO: Figure out the build date and revision.
     //
 
     fw_cppflags = [
-        "-I$///uefi/include",
         "-DFIRMWARE_BUILD_DATE=\\\"01/01/2016\\\"",
         "-DFIRMWARE_VERSION_MAJOR=1",
         "-DFIRMWARE_VERSION_MINOR=0",
@@ -56,8 +59,8 @@ function build() {
     ];
 
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-fshort-wchar"],
-        "CPPFLAGS": ["$CPPFLAGS"] + fw_cppflags
+        "CFLAGS": ["-fshort-wchar"],
+        "CPPFLAGS": fw_cppflags
     };
 
     //
@@ -73,7 +76,7 @@ function build() {
     ];
 
     link_config = {
-        "LDFLAGS": ["$LDFLAGS"] + link_ldflags
+        "LDFLAGS": link_ldflags
     };
 
     common_libs = [
@@ -103,6 +106,7 @@ function build() {
         "label": platfw + ".elf",
         "inputs": sources + libs,
         "sources_config": sources_config,
+        "includes": includes,
         "config": link_config
     };
 

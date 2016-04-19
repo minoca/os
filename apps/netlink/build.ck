@@ -28,25 +28,20 @@ function build() {
         "netlink.c",
     ];
 
-    sources_cppflags = [
-        "$CPPFLAGS",
-        "-I$///apps/include",
-        "-I$///apps/include/libc"
+    includes = [
+        "$//apps/include",
+        "$//apps/include/libc"
     ];
 
-    sources_config = {
-        "CPPFLAGS": sources_cppflags
-    };
-
     lib_config = {
-        "LDFLAGS": ["$LDFLAGS", "-nostdlib"]
+        "LDFLAGS": ["-nostdlib"]
     };
 
     lib = {
         "label": "libnetlink",
         "inputs": sources,
         "entry": "NlInitialize",
-        "sources_config": sources_config,
+        "includes": includes,
         "config": lib_config,
         "major_version": "1",
     };

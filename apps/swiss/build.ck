@@ -152,30 +152,29 @@ function build() {
 
     build_libs = [
         "//lib/termlib:build_termlib",
-        "//lib/rtl/rtlc:build_rtlc",
-        "//lib/rtl/base:build_basertl"
-    ];
-
-    target_includes = [
-        "-I$///apps/include",
-        "-I$///apps/include/libc"
+        "//lib/rtl/base:build_basertl",
+        "//lib/rtl/rtlc:build_rtlc"
     ];
 
     build_includes = [
-        "-I$///apps/include",
+        "$//apps/include",
+    ];
+
+    target_includes = build_includes + [
+        "$//apps/include/libc"
     ];
 
     target_sources = base_sources + uos_only_commands + minoca_sources;
     build_config = {
-        "LDFLAGS": ["$LDFLAGS"],
+        "LDFLAGS": [],
         "DYNLIBS": []
     };
 
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-ftls-model=initial-exec"],
+        "CFLAGS": ["-ftls-model=initial-exec"],
     };
 
-    build_sources_config = sources_config;
+    build_sources_config = sources_config + {};
     if (build_os == "Minoca") {
         build_sources = target_sources;
         build_config["DYNLIBS"] += ["-lminocaos"];
@@ -183,9 +182,8 @@ function build() {
     } else if (build_os == "Windows") {
         build_sources = base_sources + win32_sources;
         build_libs = ["//apps/libc/dynamic:wincsup"] + build_libs;
-        build_includes += ["-I$///apps/libc/dynamic/wincsup/include"];
+        build_includes += ["$//apps/libc/dynamic/wincsup/include"];
         build_config["DYNLIBS"] += ["-lpsapi", "-lws2_32"];
-        build_sources_config = {};
 
     } else {
         build_sources = base_sources + uos_only_commands + uos_sources;
@@ -194,18 +192,11 @@ function build() {
         }
     }
 
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + target_includes
-    };
-
-    build_sources_config = {
-        "BUILD_CPPFLAGS": ["$BUILD_CPPFLAGS"] + build_includes
-    };
-
     app = {
         "label": "swiss",
         "inputs": target_sources + target_libs,
-        "sources_config": sources_config
+        "sources_config": sources_config,
+        "includes": target_includes
     };
 
     build_app = {
@@ -213,6 +204,7 @@ function build() {
         "output": "swiss",
         "inputs": build_sources + build_libs,
         "sources_config": build_sources_config,
+        "includes": build_includes,
         "config": build_config,
         "build": TRUE,
         "prefix": "build"

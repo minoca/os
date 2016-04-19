@@ -41,14 +41,13 @@ function build() {
         "efi/main.c"
     ];
 
-    bm_cppflags = [
-        "-I$///boot/lib/include",
-        "-I$///boot/bootman"
+    includes = [
+        "$//boot/lib/include",
+        "$//boot/bootman"
     ];
 
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-fshort-wchar"],
-        "CPPFLAGS": ["$CPPFLAGS"] + bm_cppflags
+        "CFLAGS": ["-fshort-wchar"],
     };
 
     efi_link_ldflags = [
@@ -67,7 +66,7 @@ function build() {
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        linker_script = "$///uefi/include/link_arm.x";
+        linker_script = "$//uefi/include/link_arm.x";
         efi_link_ldflags += [
             "-Wl,--no-wchar-size-warning"
         ];
@@ -75,15 +74,15 @@ function build() {
         efi_libs = ["//kernel:archboot"] + efi_libs;
 
     } else if (arch == "x86") {
-        linker_script = "$///uefi/include/link_x86.x";
+        linker_script = "$//uefi/include/link_x86.x";
     }
 
     efi_link_config = {
-        "LDFLAGS": ["$LDFLAGS"] + efi_link_ldflags
+        "LDFLAGS": efi_link_ldflags
     };
 
     pcat_link_config = {
-        "LDFLAGS": ["$LDFLAGS"] + pcat_link_ldflags
+        "LDFLAGS": pcat_link_ldflags
     };
 
     //
@@ -117,6 +116,7 @@ function build() {
         "label": "bootmefi.elf",
         "inputs": common_sources + efi_sources + efi_app_libs,
         "sources_config": sources_config,
+        "includes": includes,
         "config": efi_link_config,
         "entry": "BmEfiApplicationMain",
         "linker_script": linker_script
@@ -153,6 +153,7 @@ function build() {
             "label": "bootman.elf",
             "inputs": pcat_sources + pcat_app_libs,
             "sources_config": sources_config,
+            "includes": includes,
             "config": pcat_link_config,
             "text_address": "0x100000",
         };

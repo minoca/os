@@ -51,25 +51,21 @@ function build() {
     ];
 
     includes = [
-        "-I$///apps/include",
-        "-I$///apps/include/libc"
+        "$//apps/include",
+        "$//apps/include/libc"
     ];
-
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + includes,
-    };
 
     app = {
         "label": "perftest",
         "inputs": sources + dynlibs,
         "orderonly": [":perflib"],
-        "sources_config": sources_config
+        "includes": includes
     };
 
     perf_lib = {
         "label": "perflib",
         "inputs": lib_sources,
-        "sources_config": sources_config
+        "includes": includes
     };
 
     entries = application(app);

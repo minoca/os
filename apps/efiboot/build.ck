@@ -31,24 +31,24 @@ function build() {
     ];
 
     includes = [
-        "-I$///apps/include",
-        "-I$///apps/include/libc"
+        "$//apps/include",
+        "$//apps/include/libc"
     ];
 
     sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + includes,
-        "CFLAGS": ["$CFLAGS", "-fshort-wchar"]
+        "CFLAGS": ["-fshort-wchar"]
     };
 
     link_config = {};
     if ((arch == "armv6") || (arch == "armv7")) {
-        link_config["LDFLAGS"] = ["$LDFLAGS", "-Wl,--no-wchar-size-warning"];
+        link_config["LDFLAGS"] = ["-Wl,--no-wchar-size-warning"];
     }
 
     app = {
         "label": "efiboot",
         "inputs": sources + dynlibs,
         "sources_config": sources_config,
+        "includes": includes,
         "config": link_config
     };
 

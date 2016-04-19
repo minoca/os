@@ -37,12 +37,11 @@ function build() {
     ];
 
     includes = [
-        "-I$///uefi/include"
+        "$//uefi/include"
     ];
 
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-marm"],
-        "CPPFLAGS": ["$CPPFLAGS"] + includes
+        "CFLAGS": ["-marm"]
     };
 
     link_ldflags = [
@@ -51,14 +50,15 @@ function build() {
     ];
 
     link_config = {
-        "LDFLAGS": ["$LDFLAGS"] + link_ldflags
+        "LDFLAGS": link_ldflags
     };
 
     elf = {
         "label": "omap4mlo.elf",
         "inputs": sources,
         "sources_config": sources_config,
-        "linker_script": "$///uefi/plat/panda/init/link.x",
+        "includes": includes,
+        "linker_script": "$//uefi/plat/panda/init/link.x",
         "text_address": text_address,
         "config": link_config
     };

@@ -40,13 +40,12 @@ function build() {
         "x86/realmexe.S"
     ];
 
-    fw_cppflags = [
-        "-I$///uefi/include"
+    includes = [
+        "$//uefi/include"
     ];
 
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-fshort-wchar"],
-        "CPPFLAGS": ["$CPPFLAGS"] + fw_cppflags
+        "CFLAGS": ["-fshort-wchar"]
     };
 
     link_ldflags = [
@@ -55,7 +54,7 @@ function build() {
     ];
 
     link_config = {
-        "LDFLAGS": ["$LDFLAGS"] + link_ldflags
+        "LDFLAGS": link_ldflags
     };
 
     common_libs = [
@@ -81,6 +80,7 @@ function build() {
         "label": platfw + ".elf",
         "inputs": sources + libs,
         "sources_config": sources_config,
+        "includes": includes,
         "config": link_config
     };
 

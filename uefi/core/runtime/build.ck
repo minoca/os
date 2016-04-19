@@ -29,34 +29,34 @@ function build() {
         "runtime.c",
     ];
 
-    includes = [
-        "-I$///uefi/include",
-        "-I$///uefi/core"
-    ];
-
     libs = [
         "//uefi/archlib:uefiarch"
     ];
 
+    includes = [
+        "$//uefi/include",
+        "$//uefi/core"
+    ];
+
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-fshort-wchar"],
-        "CPPFLAGS": ["$CPPFLAGS"] + includes
+        "CFLAGS": ["-fshort-wchar"],
     };
 
     link_config = {
-        "LDFLAGS": ["$LDFLAGS", "-pie", "-nostdlib", "-static"]
+        "LDFLAGS": ["-pie", "-nostdlib", "-static"]
     };
 
     elf = {
         "label": "rtbase.elf",
         "inputs": sources + libs,
         "sources_config": sources_config,
+        "includes": includes,
         "entry": "EfiRuntimeDriverEntry",
         "config": link_config
     };
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        elf["linker_script"] = "$///uefi/include/link_arm.x";
+        elf["linker_script"] = "$//uefi/include/link_arm.x";
     }
 
     entries = executable(elf);

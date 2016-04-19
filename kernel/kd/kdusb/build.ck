@@ -32,14 +32,14 @@ function build() {
         "kdnousb/stubs.c"
     ];
 
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS", "-I$///drivers/usb/ehci"]
-    };
+    includes = [
+        "$//drivers/usb/ehci"
+    ];
 
     lib = {
         "label": "kdusb",
         "inputs": sources,
-        "sources_config": sources_config
+        "includes": includes
     };
 
     stub_lib = {

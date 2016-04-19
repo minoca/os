@@ -43,12 +43,15 @@ function build() {
         "video.c"
     ];
 
+    includes = [
+        "$//uefi/include"
+    ];
+
     //
     // TODO: Figure out the build date and revision.
     //
 
     fw_cppflags = [
-        "-I$///uefi/include",
         "-DFIRMWARE_BUILD_DATE=\\\"08/15/2014\\\"",
         "-DFIRMWARE_VERSION_MAJOR=1",
         "-DFIRMWARE_VERSION_MINOR=0",
@@ -56,8 +59,8 @@ function build() {
     ];
 
     sources_config = {
-        "CFLAGS": ["$CFLAGS", "-fshort-wchar"],
-        "CPPFLAGS": ["$CPPFLAGS"] + fw_cppflags
+        "CFLAGS": ["-fshort-wchar"],
+        "CPPFLAGS": fw_cppflags
     };
 
     link_ldflags = [
@@ -67,7 +70,7 @@ function build() {
     ];
 
     link_config = {
-        "LDFLAGS": ["$LDFLAGS"] + link_ldflags
+        "LDFLAGS": link_ldflags
     };
 
     platfw = plat + "fw";
@@ -107,6 +110,7 @@ function build() {
         "label": platfw + ".elf",
         "inputs": libs + ["//uefi/core:emptyrd"],
         "sources_config": sources_config,
+        "includes": includes,
         "config": link_config
     };
 
@@ -115,6 +119,7 @@ function build() {
         "label": platfw_usb + ".elf",
         "inputs": [":ramdisk.o"] + libs,
         "sources_config": sources_config,
+        "includes": includes,
         "config": link_config
     };
 

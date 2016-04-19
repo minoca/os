@@ -161,22 +161,16 @@ function build() {
         ];
     }
 
-    sources_cppflags = [
-        "-I$///apps/include",
-        "-I$///apps/include/libc"
+    sources_includes = [
+        "$//apps/include",
+        "$//apps/include/libc"
     ];
 
     sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + sources_cppflags,
-        "CFLAGS": ["$CFLAGS", "-ftls-model=initial-exec"]
-    };
-
-    build_sources_config = {
-        "BUILD_CPPFLAGS": ["$BUILD_CPPFLAGS"] + sources_cppflags
+        "CFLAGS": ["-ftls-model=initial-exec"]
     };
 
     link_ldflags = [
-        "$LDFLAGS",
         "-nostdlib",
         "-Wl,--whole-archive"
     ];
@@ -193,20 +187,16 @@ function build() {
         "//apps/osbase:libminocaos"
     ];
 
-    wincsup_cppflags = [
-        "$BUILD_CPPFLAGS",
-        "-I$///apps/include",
-        "-I$///apps/libc/dynamic/wincsup/include"
+    wincsup_includes = [
+        "$//apps/include",
+        "$//apps/libc/dynamic/wincsup/include"
     ];
-
-    wincsup_sources_config = {
-        "BUILD_CPPFLAGS": wincsup_cppflags
-    };
 
     so = {
         "label": "libc",
         "inputs": sources + math_sources + arch_sources + libs + dynlibs,
         "sources_config": sources_config,
+        "includes": sources_includes,
         "entry": "ClInitialize",
         "config": link_config,
         "major_version": "1"
@@ -216,7 +206,8 @@ function build() {
         "label": "build_libc",
         "output": "build_libc",
         "inputs": build_sources + math_sources,
-        "sources_config": build_sources_config,
+        "sources_config": sources_config,
+        "includes": sources_includes,
         "build": TRUE,
         "prefix": "build"
     };
@@ -224,7 +215,7 @@ function build() {
     wincsup = {
         "label": "wincsup",
         "inputs": wincsup_sources,
-        "sources_config": wincsup_sources_config,
+        "includes": wincsup_includes,
         "build": TRUE,
         "prefix": "wincsup"
     };

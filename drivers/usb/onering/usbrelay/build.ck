@@ -29,12 +29,8 @@ function build() {
     ];
 
     includes = [
-        "-I$///apps/include"
+        "$//apps/include"
     ];
-
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS"] + includes
-    };
 
     dynlibs = [
         "//apps/osbase:libminocaos"
@@ -43,7 +39,7 @@ function build() {
     app = {
         "label": name,
         "inputs": sources + dynlibs,
-        "sources_config": sources_config
+        "includes": includes
     };
 
     entries = application(app);

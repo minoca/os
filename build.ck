@@ -21,10 +21,13 @@ Environment:
 --*/
 
 function build() {
+    cflags_line = "$BASE_CPPFLAGS $CPPFLAGS $BASE_CFLAGS $CFLAGS " +
+                  "-MMD -MF $OUT.d ";
+
     cc = {
         "type": "tool",
         "name": "cc",
-        "command": "$CC $CPPFLAGS $CFLAGS -MMD -MF $OUT.d -c -o $OUT $IN",
+        "command": "$CC " + cflags_line + "-c -o $OUT $IN",
         "description": "Compiling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"
@@ -33,16 +36,17 @@ function build() {
     cxx = {
         "type": "tool",
         "name": "cxx",
-        "command": "$CXX $CPPFLAGS $CFLAGS -MMD -MF $OUT.d -c -o $OUT $IN",
+        "command": "$CXX " + cflags_line + "-c -o $OUT $IN",
         "description": "Compiling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"
     };
 
+    ldflags_line = "-Wl,-Map=$OUT.map $BASE_LDFLAGS $LDFLAGS ";
     ld = {
         "type": "tool",
         "name": "ld",
-        "command": "$CC $LDFLAGS -Wl,-Map=$OUT.map -o $OUT $IN -Bdynamic $DYNLIBS",
+        "command": "$CC " + ldflags_line + "-o $OUT $IN -Bdynamic $DYNLIBS",
         "description": "Linking - $OUT",
     };
 
@@ -53,10 +57,11 @@ function build() {
         "description": "Building Library - $OUT",
     };
 
+    asflags_line = cflags_line + "$BASE_ASFLAGS $ASFLAGS ";
     as = {
         "type": "tool",
         "name": "as",
-        "command": "$CC $CPPFLAGS $ASFLAGS -MMD -MF $OUT.d -c -o $OUT $IN",
+        "command": "$CC " + asflags_line + "-c -o $OUT $IN",
         "description": "Assembling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"
@@ -76,10 +81,13 @@ function build() {
         "description": "Stripping - $OUT",
     };
 
+    build_cflags_line = "$BUILD_BASE_CPPFLAGS $CPPFLAGS $BUILD_CFLAGS $CFLAGS" +
+                        " -MMD -MF $OUT.d ";
+
     build_cc = {
         "type": "tool",
         "name": "build_cc",
-        "command": "$BUILD_CC $BUILD_CPPFLAGS $BUILD_CFLAGS -MMD -MF $OUT.d -c -o $OUT $IN",
+        "command": "$BUILD_CC " + build_cflags_line + "-c -o $OUT $IN",
         "description": "Compiling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"
@@ -88,16 +96,17 @@ function build() {
     build_cxx = {
         "type": "tool",
         "name": "build_cxx",
-        "command": "$BUILD_CXX $BUILD_CPPFLAGS $BUILD_CFLAGS -MMD -MF $OUT.d -c -o $OUT $IN",
+        "command": "$BUILD_CXX " + build_cflags_line + "-c -o $OUT $IN",
         "description": "Compiling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"
     };
 
+    build_ldflags_line = "-Wl,-Map=$OUT.map $BUILD_BASE_LDFLAGS $LDFLAGS ";
     build_ld = {
         "type": "tool",
         "name": "build_ld",
-        "command": "$BUILD_CC $BUILD_LDFLAGS -Wl,-Map=$OUT.map -o $OUT $IN -Bdynamic $DYNLIBS",
+        "command": "$BUILD_CC " + build_ldflags_line + "-o $OUT $IN -Bdynamic $DYNLIBS",
         "description": "Linking - $OUT",
     };
 
@@ -108,10 +117,11 @@ function build() {
         "description": "Building Library - $OUT",
     };
 
+    build_asflags_line = build_cflags_line + "$BUILD_BASE_ASFLAGS $ASFLAGS ";
     build_as = {
         "type": "tool",
         "name": "build_as",
-        "command": "$BUILD_CC $BUILD_CPPFLAGS $BUILD_ASFLAGS -MMD -MF $OUT.d -c -o $OUT $IN",
+        "command": "$BUILD_CC " + build_asflags_line + "-c -o $OUT $IN",
         "description": "Assembling - $IN",
         "depsformat": "gcc",
         "depfile": "$OUT.d"

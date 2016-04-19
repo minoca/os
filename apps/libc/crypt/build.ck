@@ -26,9 +26,9 @@ function build() {
         "crypt.c"
     ];
 
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS", "-I$///apps/include"],
-    };
+    includes = [
+        "$//apps/include"
+    ];
 
     dynlibs = [
         "//apps/libc/dynamic:libc"
@@ -37,7 +37,7 @@ function build() {
     so = {
         "label": "libcrypt",
         "inputs": sources + dynlibs,
-        "sources_config": sources_config,
+        "includes": includes,
         "major_version": "1"
     };
 

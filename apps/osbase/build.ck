@@ -64,12 +64,11 @@ function build() {
         ];
     }
 
-    sources_config = {
-        "CPPFLAGS": ["$CPPFLAGS", "-I$///apps/include"],
-    };
+    includes = [
+        "$//apps/include"
+    ];
 
     link_ldflags = [
-        "$LDFLAGS",
         "-Wl,-Bsymbolic",
         "-nostdlib",
         "-Wl,--whole-archive",
@@ -91,7 +90,7 @@ function build() {
     so = {
         "label": "libminocaos",
         "inputs": sources + arch_sources + libs,
-        "sources_config": sources_config,
+        "includes": includes,
         "entry": "OsDynamicLoaderMain",
         "config": link_config,
         "major_version": "1"
