@@ -116,6 +116,23 @@ msetup --help to get a list of command line options and ways to specialize your
 image. You can install directly to a removable disk using its device ID number
 (eg. msetup -vD -d0x10000).
 
+Example
+=======
+C:\Users\Evan\Downloads\Minoca-Installer-1341>msetup
+Unable to detect platform name.
+No destination was specified. Please select one from the following list.
+Setup found 6 devices:
+    DiskId   PartID   DevType   Fmt    Type          Offset Size   Path
+    ----------------------------------------------------------------------------
+    CB2C1753 00000000 Disk      MBR                  0      931G   Device 0x0
+    CB2C1753 00000001 Partition MBR B  NTFS          1.0M   100M   Device 0x1
+    CB2C1753 00000002 Partition MBR    NTFS          101M   931G   Device 0x2
+    444A2245 00000000 Disk      MBR                  0      29G    Device 0x10000
+    444A2245 00000001 Partition MBR B  FAT16         1.0M   10M    Device 0x10001
+    444A2245 00000000 Partition MBR    Minoca        11M    501M   Device 0x10002
+
+
+C:\Users\Evan\Downloads\mbin\Minoca-Installer-1341>msetup -i armv7\install.img -v -l beagleboneblack -D -d0x10000
 
 License
 =======
