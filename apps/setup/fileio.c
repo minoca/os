@@ -1766,11 +1766,11 @@ Return Value:
 
     //
     // If the file is a symbolic link, don't open it if the caller specified
-    // the "no follow" flag, or there is no such flag.
+    // the "no follow" flag.
     //
 
     if ((Properties.Type == IoObjectSymbolicLink) &&
-        ((O_NOFOLLOW == 0) || ((Flags & O_NOFOLLOW) != 0))) {
+        ((Flags & O_NOFOLLOW) != 0)) {
 
         Status = STATUS_UNEXPECTED_TYPE;
         goto FatOpenEnd;
