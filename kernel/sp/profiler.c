@@ -890,10 +890,13 @@ Return Value:
 
 {
 
+    BOOL DelayRequired;
     ULONG DisableFlags;
     ULONG Index;
     ULONG *InterruptCounts;
+    RUNLEVEL OldRunLevel;
     ULONG ProcessorCount;
+    PROCESSOR_SET Processors;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -928,7 +931,6 @@ Return Value:
     // stopped.
     //
 
-    Status = STATUS_UNSUCCESSFUL;
     if ((DisableFlags & PROFILER_TYPE_FLAG_STACK_SAMPLING) != 0) {
         SppDestroyStackSampling(0);
     }
@@ -943,39 +945,63 @@ Return Value:
 
     //
     // Once phase zero destruction is complete, each profiler has stopped
-    // producing data immediately, but they may be in the middle of consuming
-    // data. Wait until each processor has received the notice that profiling
-    // is now disabled and then destroy each profiler's data structures. This
-    // is guaranteed after the clock interrupt has incremented once. If an
-    // array cannot be allocated for the processor counts, then just yield for
-    // a bit.
+    // producing data immediately, but another core may be in the middle of
+    // consuming profiling data during its clock interrupt. Wait until each
+    // processor has received the notice that profiling is now disabled and
+    // then destroy each profiler's data structures. This is guaranteed after
+    // the clock interrupt has incremented once. If an array cannot be
+    // allocated for the processor counts, then just yield for a bit. It is not
+    // good enough to just send an IPI-level interrupt to each core. This may
+    // land on top of a clock interrupt in the middle of checking to see if
+    // there is pending profiling data, which is not done with interrupts
+    // disabled (i.e. the IPI-level interrupt running doesn't indicate the
+    // other core is done with the data). As a result, this routine could run
+    // through and release the buffers being observed by the other core.
     //
 
     ProcessorCount = KeGetActiveProcessorCount();
-    InterruptCounts = MmAllocateNonPagedPool(ProcessorCount * sizeof(ULONG),
-                                             SP_ALLOCATION_TAG);
+    if (ProcessorCount > 1) {
+        DelayRequired = TRUE;
+        InterruptCounts = MmAllocateNonPagedPool(ProcessorCount * sizeof(ULONG),
+                                                 SP_ALLOCATION_TAG);
 
-    if (InterruptCounts != NULL) {
-        for (Index = 0; Index < ProcessorCount; Index += 1) {
-            InterruptCounts[Index] = KeGetClockInterruptCount(Index);
-        }
-
-        for (Index = 0; Index < ProcessorCount; Index += 1) {
-            while (KeGetClockInterruptCount(Index) <= InterruptCounts[Index]) {
-                KeYield();
+        if (InterruptCounts != NULL) {
+            for (Index = 0; Index < ProcessorCount; Index += 1) {
+                InterruptCounts[Index] = KeGetClockInterruptCount(Index);
             }
+
+            //
+            // As some cores may have gone idle, send a clock IPI out to all of
+            // them to make sure the interrupt count gets incremented.
+            //
+
+            Processors.Target = ProcessorTargetAll;
+            OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
+            Status = HlSendIpi(IpiTypeClock, &Processors);
+            KeLowerRunLevel(OldRunLevel);
+            if (KSUCCESS(Status)) {
+                for (Index = 0; Index < ProcessorCount; Index += 1) {
+                    while (KeGetClockInterruptCount(Index) <=
+                           InterruptCounts[Index]) {
+
+                        KeYield();
+                    }
+                }
+
+                DelayRequired = FALSE;
+            }
+
+            MmFreeNonPagedPool(InterruptCounts);
         }
 
-        MmFreeNonPagedPool(InterruptCounts);
-
-    } else {
-
         //
-        // Stall for 20ms to give each processor a chance to finish sending
-        // profiler data.
+        // If the allocation or IPI failed above, wait a conservative second to
+        // make sure all the cores are done consuming the profiler data.
         //
 
-        HlBusySpin(20 * 1000);
+        if (DelayRequired != FALSE) {
+            KeDelayExecution(FALSE, FALSE, MICROSECONDS_PER_SECOND);
+        }
     }
 
     //
