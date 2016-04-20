@@ -758,6 +758,13 @@ LONG ProfilerPaneYPositionDialogHeight;
 LONG ProfilerPaneCurrentYPosition;
 
 //
+// Stores the window rect last captured before a minimize or maximize. This is
+// used to save the UI preferences.
+//
+
+RECT CurrentWindowRect;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -2249,7 +2256,27 @@ Return Value:
     //
 
     case WM_SIZE:
+
+        //
+        // Save the state unless this is a minimize or maximize. Restarting
+        // the debugger in the minimized or maximized state is not good design.
+        //
+
+        if ((WParam != SIZE_MINIMIZED) && (WParam != SIZE_MAXIMIZED)) {
+            GetWindowRect(DialogHandle, &CurrentWindowRect);
+        }
+
         HandleResize(DialogHandle);
+        Result = TRUE;
+        break;
+
+    //
+    // The WM_EXITSIZEMOVE message indicates that the window is done being
+    // moved (dragged or resized).
+    //
+
+    case WM_EXITSIZEMOVE:
+        GetWindowRect(DialogHandle, &CurrentWindowRect);
         Result = TRUE;
         break;
 
@@ -6464,18 +6491,21 @@ Return Value:
         return;
     }
 
-    if ((Preferences.WindowWidth != 0) && (Preferences.WindowHeight != 0)) {
-        MainPaneXPosition = Preferences.MainPaneXPosition;
-        MainPaneXPositionDialogWidth = Preferences.WindowWidth;
-        SetWindowPos(Dialog,
-                     HWND_TOP,
-                     Preferences.WindowX,
-                     Preferences.WindowY,
-                     Preferences.WindowWidth,
-                     Preferences.WindowHeight,
-                     0);
-    }
+    MainPaneXPosition = Preferences.MainPaneXPosition;
+    MainPaneXPositionDialogWidth = Preferences.WindowWidth;
+    SetWindowPos(Dialog,
+                 HWND_TOP,
+                 Preferences.WindowX,
+                 Preferences.WindowY,
+                 Preferences.WindowWidth,
+                 Preferences.WindowHeight,
+                 0);
 
+    //
+    // Save the initial UI preferences. In case the window is never moved.
+    //
+
+    GetWindowRect(Dialog, &CurrentWindowRect);
     return;
 }
 
@@ -6504,20 +6534,13 @@ Return Value:
 {
 
     DEBUGGER_UI_PREFERENCES Preferences;
-    BOOL Result;
-    RECT WindowRect;
 
     memset(&Preferences, 0, sizeof(DEBUGGER_UI_PREFERENCES));
     Preferences.Version = DEBUGGER_UI_PREFERENCES_VERSION;
-    Result = GetWindowRect(Dialog, &WindowRect);
-    if (Result == FALSE) {
-        return;
-    }
-
-    Preferences.WindowX = WindowRect.left;
-    Preferences.WindowY = WindowRect.top;
-    Preferences.WindowWidth = WindowRect.right - WindowRect.left;
-    Preferences.WindowHeight = WindowRect.bottom - WindowRect.top;
+    Preferences.WindowX = CurrentWindowRect.left;
+    Preferences.WindowY = CurrentWindowRect.top;
+    Preferences.WindowWidth = CurrentWindowRect.right - CurrentWindowRect.left;
+    Preferences.WindowHeight = CurrentWindowRect.bottom - CurrentWindowRect.top;
     Preferences.MainPaneXPosition = MainPaneXPosition;
     UiWritePreferences(&Preferences);
     return;
