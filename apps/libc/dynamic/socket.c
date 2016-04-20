@@ -46,10 +46,14 @@ Environment:
 // compiled away.
 //
 
-#define ASSERT_SOCKET_IO_FLAGS_ARE_EQUIVALENT()  \
-    ASSERT((MSG_PEEK == SOCKET_IO_PEEK) &&       \
-           (MSG_OOB == SOCKET_IO_OUT_OF_BAND) && \
-           (MSG_WAITALL == SOCKET_IO_WAIT_ALL))
+#define ASSERT_SOCKET_IO_FLAGS_ARE_EQUIVALENT()           \
+    ASSERT((MSG_PEEK == SOCKET_IO_PEEK) &&                \
+           (MSG_OOB == SOCKET_IO_OUT_OF_BAND) &&          \
+           (MSG_WAITALL == SOCKET_IO_WAIT_ALL) &&         \
+           (MSG_TRUNC == SOCKET_IO_DATA_TRUNCATED) &&     \
+           (MSG_CTRUNC == SOCKET_IO_CONTROL_TRUNCATED) && \
+           (MSG_NOSIGNAL == SOCKET_IO_NO_SIGNAL) &&       \
+           (MSG_DONTWAIT == SOCKET_IO_NON_BLOCKING))
 
 #define ASSERT_SOCKET_TYPES_EQUIVALENT()                   \
     ASSERT((SOCK_DGRAM == NetSocketDatagram) &&            \

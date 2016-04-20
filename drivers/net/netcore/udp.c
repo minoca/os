@@ -1482,6 +1482,7 @@ Return Value:
     PUDP_RECEIVED_PACKET Packet;
     PLIST_ENTRY PacketEntry;
     ULONG ReturnedEvents;
+    ULONG ReturnSize;
     UINTN Size;
     KSTATUS Status;
     ULONGLONG TimeCounterFrequency;
@@ -1616,10 +1617,21 @@ Return Value:
 
         PacketEntry = UdpSocket->ReceivedPacketList.Next;
         Packet = LIST_VALUE(PacketEntry, UDP_RECEIVED_PACKET, ListEntry);
-        CopySize = Packet->Size;
+        ReturnSize = Packet->Size;
+        CopySize = ReturnSize;
         if (CopySize > Size) {
             Parameters->SocketIoFlags |= SOCKET_IO_DATA_TRUNCATED;
             CopySize = Size;
+
+            //
+            // The real packet size is only returned to the user on truncation
+            // if the truncated flag was supplied to this routine. Default to
+            // returning the truncated size.
+            //
+
+            if ((Flags & SOCKET_IO_DATA_TRUNCATED) == 0) {
+                ReturnSize = CopySize;
+            }
         }
 
         Status = MmCopyIoBufferData(IoBuffer,
@@ -1653,7 +1665,7 @@ Return Value:
             }
         }
 
-        BytesComplete = CopySize;
+        BytesComplete = ReturnSize;
 
         //
         // Remove the packet if not peeking.

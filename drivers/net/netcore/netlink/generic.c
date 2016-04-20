@@ -1906,6 +1906,7 @@ Return Value:
     PLIST_ENTRY PacketEntry;
     ULONG PacketSize;
     ULONG ReturnedEvents;
+    ULONG ReturnSize;
     UINTN Size;
     KSTATUS Status;
     ULONGLONG TimeCounterFrequency;
@@ -2036,10 +2037,21 @@ Return Value:
         PacketSize = Packet->NetPacket->FooterOffset -
                      Packet->NetPacket->DataOffset;
 
-        CopySize = PacketSize;
+        ReturnSize = PacketSize;
+        CopySize = ReturnSize;
         if (CopySize > Size) {
             Parameters->SocketIoFlags |= SOCKET_IO_DATA_TRUNCATED;
             CopySize = Size;
+
+            //
+            // The real packet size is only returned to the user on truncation
+            // if the truncated flag was supplied to this routine. Default to
+            // returning the truncated size.
+            //
+
+            if ((Flags & SOCKET_IO_DATA_TRUNCATED) == 0) {
+                ReturnSize = CopySize;
+            }
         }
 
         Buffer = Packet->NetPacket->Buffer + Packet->NetPacket->DataOffset;
@@ -2074,7 +2086,7 @@ Return Value:
             }
         }
 
-        BytesComplete = CopySize;
+        BytesComplete = ReturnSize;
 
         //
         // Remove the packet if not peeking.
