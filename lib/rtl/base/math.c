@@ -30,6 +30,11 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
+#define LONG_BITS (sizeof(LONG) * BITS_PER_BYTE)
+#define ULONG_BITS (sizeof(ULONG) * BITS_PER_BYTE)
+#define LONGLONG_BITS (sizeof(LONGLONG) * BITS_PER_BYTE)
+#define ULONGLONG_BITS (sizeof(ULONGLONG) * BITS_PER_BYTE)
+
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -93,12 +98,11 @@ Return Value:
 }
 
 RTL_API
-BOOL
+ULONGLONG
 RtlDivideUnsigned64 (
     ULONGLONG Dividend,
     ULONGLONG Divisor,
-    PULONGLONG QuotientOut,
-    PULONGLONG RemainderOut
+    PULONGLONG Remainder
     )
 
 /*++
@@ -113,108 +117,322 @@ Arguments:
 
     Divisor - Supplies the number to divide into (the denominator).
 
-    QuotientOut - Supplies a pointer that receives the result of the divide.
-        This parameter may be NULL.
-
-    RemainderOut - Supplies a pointer that receives the remainder of the
+    Remainder - Supplies a pointer that receives the remainder of the
         divide. This parameter may be NULL.
 
 Return Value:
 
-    Returns TRUE if the operation was successful, or FALSE if there was an
-    error (like divide by 0).
+    Returns the quotient.
 
 --*/
 
 {
 
-    ULONG BitCount;
-    ULONG BitIndex;
-    ULONGLONG LastDividend;
-    ULONG MostSignificantBit;
-    ULONGLONG Quotient;
-    ULONGLONG Remainder;
-    INT Shift;
-    ULONGLONG Subtraction;
-    ULONG SubtractionTopBitNot;
+    ULONG Carry;
+    ULONGLONG_PARTS Denominator;
+    LONGLONG Difference;
+    ULONGLONG_PARTS Numerator;
+    ULONGLONG_PARTS QuotientParts;
+    ULONGLONG_PARTS RemainderParts;
+    ULONGLONG ShiftRight;
 
-    BitCount = 64;
-    Quotient = 0;
-    Remainder = 0;
+    Numerator.Ulonglong = Dividend;
+    Denominator.Ulonglong = Divisor;
+
+    ASSERT(Divisor != 0);
 
     //
-    // Check easy cases.
+    // Handle the numerator being zero.
     //
 
-    if (Divisor == 0) {
-        return FALSE;
-    }
+    if (Numerator.Ulong.High == 0) {
 
-    if (Divisor > Dividend) {
-        Remainder = Dividend;
-        goto DivideUnsigned64End;
-    }
+        //
+        // If the denominator is 0 too, this just a 32 bit divide.
+        //
 
-    if (Divisor == Dividend) {
-        Quotient = 1;
-        goto DivideUnsigned64End;
-    }
+        if (Denominator.Ulong.High == 0) {
+            if (Remainder != NULL) {
+                *Remainder = Numerator.Ulong.Low % Denominator.Ulong.Low;
+            }
 
-    if (POWER_OF_2(Divisor) != FALSE) {
-        Remainder = REMAINDER(Dividend, Divisor);
-        Shift = RtlCountTrailingZeros64(Divisor);
-        Quotient = Dividend >> Shift;
-        goto DivideUnsigned64End;
-    }
+            return Numerator.Ulong.Low / Denominator.Ulong.Low;
+        }
 
-    LastDividend = 0;
-    while (Remainder < Divisor) {
-        MostSignificantBit = (Dividend & 0x8000000000000000ULL) >> 63;
-        Remainder = (Remainder << 1) | MostSignificantBit;
-        LastDividend = Dividend;
-        Dividend = Dividend << 1;
-        BitCount -= 1;
+        //
+        // This is a 32-bit value divided by a large 64-bit value. It will
+        // be zero, remainder the value.
+        //
+
+        if (Remainder != NULL) {
+            *Remainder = Numerator.Ulong.Low;
+        }
+
+        return 0;
     }
 
     //
-    // Undo the last iteration of the loop (instead of adding an if into the
-    // loop.
+    // The numerator is fully 64 bits. Check to see if the denominator has a
+    // low part.
     //
 
-    Dividend = LastDividend;
-    Remainder = Remainder >> 1;
-    BitCount += 1;
-    for (BitIndex = 0; BitIndex < BitCount; BitIndex += 1) {
-        MostSignificantBit = (Dividend & 0x8000000000000000ULL) >> 63;
-        Remainder = (Remainder << 1) | MostSignificantBit;
-        Subtraction = Remainder - Divisor;
-        SubtractionTopBitNot = !(Subtraction & 0x8000000000000000ULL);
-        Dividend = Dividend << 1;
-        Quotient = (Quotient << 1) | SubtractionTopBitNot;
-        if (SubtractionTopBitNot != 0) {
-            Remainder = Subtraction;
+    if (Denominator.Ulong.Low == 0) {
+
+        //
+        // Handle divide by zero.
+        //
+
+        if (Denominator.Ulong.High == 0) {
+            if (Remainder != NULL) {
+                *Remainder = Numerator.Ulong.High % Denominator.Ulong.Low;
+            }
+
+            return Numerator.Ulong.High / Denominator.Ulong.Low;
+        }
+
+        //
+        // The denominator has a high part, but no low part. If the numerator
+        // has no low part then this is n00000000 / d00000000.
+        //
+
+        if (Numerator.Ulong.Low == 0) {
+            if (Remainder != NULL) {
+                RemainderParts.Ulong.High = Numerator.Ulong.High %
+                                            Denominator.Ulong.High;
+
+                RemainderParts.Ulong.Low = 0;
+                *Remainder = RemainderParts.Ulonglong;
+            }
+
+            return Numerator.Ulong.High / Denominator.Ulong.High;
+        }
+
+        //
+        // The numerator is a full 64 bit value, but the denominator has 8
+        // zeros at the end. Check to see if the denominator is a power of 2.
+        //
+
+        if ((Denominator.Ulong.High & (Denominator.Ulong.High - 1)) == 0) {
+            if (Remainder != NULL) {
+                RemainderParts.Ulong.Low = Numerator.Ulong.Low;
+                RemainderParts.Ulong.High = Numerator.Ulong.High &
+                                            (Denominator.Ulong.High - 1);
+
+                *Remainder = RemainderParts.Ulonglong;
+            }
+
+            QuotientParts.Ulonglong = Numerator.Ulong.High >>
+                                      __builtin_ctz(Denominator.Ulong.High);
+
+            return QuotientParts.Ulonglong;
+        }
+
+        //
+        // The denominator is not a power of 2 (but does have 8 trailing
+        // zeros). Do the full divide.
+        //
+
+        ShiftRight = __builtin_clz(Denominator.Ulong.High) -
+                     __builtin_clz(Numerator.Ulong.High);
+
+        if (ShiftRight > (ULONG_BITS - 2)) {
+            if (Remainder != NULL) {
+                *Remainder = Numerator.Ulonglong;
+            }
+
+            return 0;
+        }
+
+        ShiftRight += 1;
+        QuotientParts.Ulong.Low = 0;
+        QuotientParts.Ulong.High =
+                              Numerator.Ulong.Low << (ULONG_BITS - ShiftRight);
+
+        RemainderParts.Ulong.High = Numerator.Ulong.High >> ShiftRight;
+        RemainderParts.Ulong.Low =
+            (Numerator.Ulong.High <<
+             (ULONG_BITS - ShiftRight)) |
+            (Numerator.Ulong.Low >> ShiftRight);
+
+    //
+    // The denominator has a non-zero low part.
+    //
+
+    } else {
+
+        //
+        // Handle the high part of the denominator being zero, 64 / 32.
+        //
+
+        if (Denominator.Ulong.High == 0) {
+
+            //
+            // Check for a power of 2.
+            //
+
+            if ((Denominator.Ulong.Low & (Denominator.Ulong.Low - 1)) == 0) {
+                if (Remainder != NULL) {
+                    *Remainder = Numerator.Ulong.Low &
+                                 (Denominator.Ulong.Low - 1);
+                }
+
+                if (Denominator.Ulong.Low == 1) {
+                    return Numerator.Ulonglong;
+                }
+
+                ShiftRight = __builtin_ctz(Denominator.Ulong.Low);
+                QuotientParts.Ulong.High = Numerator.Ulong.High >> ShiftRight;
+                QuotientParts.Ulong.Low =
+                    (Numerator.Ulong.High <<
+                     (ULONG_BITS - ShiftRight)) |
+                    (Numerator.Ulong.Low >> ShiftRight);
+
+                return QuotientParts.Ulonglong;
+            }
+
+            //
+            // This is a full 64 / 32. The remainder is Numerator >> ShiftRight,
+            // and the quotient is the numerator << (64 - ShiftRight).
+            //
+
+            ShiftRight = ULONG_BITS + 1 + __builtin_clz(Denominator.Ulong.Low) -
+                         __builtin_clz(Numerator.Ulong.High);
+
+            if (ShiftRight == ULONG_BITS) {
+                QuotientParts.Ulong.Low = 0;
+                QuotientParts.Ulong.High = Numerator.Ulong.Low;
+                RemainderParts.Ulong.Low = Numerator.Ulong.High;
+                RemainderParts.Ulong.High = 0;
+
+            //
+            // The shift right is at least 2, but less than a full rotation.
+            //
+
+            } else if (ShiftRight < ULONG_BITS) {
+                QuotientParts.Ulong.Low = 0;
+                QuotientParts.Ulong.High =
+                              Numerator.Ulong.Low << (ULONG_BITS - ShiftRight);
+
+                RemainderParts.Ulong.Low =
+                    (Numerator.Ulong.High << (ULONG_BITS - ShiftRight)) |
+                    (Numerator.Ulong.Low >> ShiftRight);
+
+                RemainderParts.Ulong.High = Numerator.Ulong.High >> ShiftRight;
+
+            //
+            // The shift right is somewhere between 32 and 64.
+            //
+
+            } else {
+                QuotientParts.Ulong.Low =
+                          Numerator.Ulong.Low << (ULONGLONG_BITS - ShiftRight);
+
+                QuotientParts.Ulong.High =
+                    (Numerator.Ulong.High << (ULONGLONG_BITS - ShiftRight)) |
+                    (Numerator.Ulong.Low >> (ShiftRight - ULONG_BITS));
+
+                RemainderParts.Ulong.Low =
+                             Numerator.Ulong.High >> (ShiftRight - ULONG_BITS);
+
+                RemainderParts.Ulong.High = 0;
+            }
+
+        //
+        // The denominator is the full 64 bits long, and the numerator has
+        // stuff in the high bits.
+        //
+
+        } else {
+            ShiftRight = __builtin_clz(Denominator.Ulong.High) -
+                         __builtin_clz(Numerator.Ulong.High);
+
+            if (ShiftRight > ULONG_BITS - 1) {
+                if (Remainder != NULL) {
+                    *Remainder = Numerator.Ulonglong;
+                }
+
+                return 0;
+            }
+
+            ShiftRight += 1;
+
+            //
+            // The shift is somewhere between 1 and 32, inclusive. The quotient
+            // is Numerator << (64 - ShiftCount).
+            //
+
+            QuotientParts.Ulong.Low = 0;
+            if (ShiftRight == ULONG_BITS) {
+                QuotientParts.Ulong.High = Numerator.Ulong.Low;
+                RemainderParts.Ulong.Low = Numerator.Ulong.High;
+                RemainderParts.Ulong.High = 0;
+
+            } else {
+                QuotientParts.Ulong.High =
+                              Numerator.Ulong.Low << (ULONG_BITS - ShiftRight);
+
+                RemainderParts.Ulong.Low =
+                    (Numerator.Ulong.High << (ULONG_BITS - ShiftRight)) |
+                    (Numerator.Ulong.Low >> ShiftRight);
+
+                RemainderParts.Ulong.High =
+                    Numerator.Ulong.High >> ShiftRight;
+            }
         }
     }
 
-DivideUnsigned64End:
-    if (QuotientOut != NULL) {
-        *QuotientOut = Quotient;
+    //
+    // Enough weaseling, just do the divide. The quotient is currently
+    // initialized with Numerator << (64 - ShiftRight), and the remainder is
+    // Numerator >> ShiftRight. ShiftRight is somewhere between 1 and 63,
+    // inclusive.
+    //
+
+    Carry = 0;
+    while (ShiftRight > 0) {
+        RemainderParts.Ulong.High =
+            (RemainderParts.Ulong.High << 1) |
+            (RemainderParts.Ulong.Low >> (ULONG_BITS - 1));
+
+        RemainderParts.Ulong.Low =
+            (RemainderParts.Ulong.Low << 1) |
+            (QuotientParts.Ulong.High >> (ULONG_BITS - 1));
+
+        QuotientParts.Ulong.High =
+            (QuotientParts.Ulong.High << 1) |
+            (QuotientParts.Ulong.Low >> (ULONG_BITS - 1));
+
+        QuotientParts.Ulong.Low = (QuotientParts.Ulong.Low << 1) | Carry;
+
+        //
+        // If the remainder is greater than or equal to the denominator, set
+        // the carry and subtract the denominator to get it back in proper
+        // remainder range.
+        //
+
+        Difference =
+                (LONGLONG)(Denominator.Ulonglong -
+                           RemainderParts.Ulonglong - 1) >>
+                (ULONGLONG_BITS - 1);
+
+        Carry = Difference & 0x1;
+        RemainderParts.Ulonglong -= Denominator.Ulonglong & Difference;
+        ShiftRight -= 1;
     }
 
-    if (RemainderOut != NULL) {
-        *RemainderOut = Remainder;
+    QuotientParts.Ulonglong = (QuotientParts.Ulonglong << 1) | Carry;
+    if (Remainder != NULL) {
+        *Remainder = RemainderParts.Ulonglong;
     }
 
-    return TRUE;
+    return QuotientParts.Ulonglong;
 }
 
 RTL_API
-BOOL
+LONGLONG
 RtlDivide64 (
     LONGLONG Dividend,
-    LONGLONG Divisor,
-    PLONGLONG QuotientOut,
-    PLONGLONG RemainderOut
+    LONGLONG Divisor
     )
 
 /*++
@@ -229,75 +447,268 @@ Arguments:
 
     Divisor - Supplies the number to divide into (the denominator).
 
-    QuotientOut - Supplies a pointer that receives the result of the divide.
-        This parameter may be NULL.
-
-    RemainderOut - Supplies a pointer that receives the remainder of the
-        divide. This parameter may be NULL.
-
 Return Value:
 
-    Returns TRUE if the operation was successful, or FALSE if there was an
-    error (like divide by 0).
+    Returns the quotient.
 
 --*/
 
 {
 
-    ULONGLONG AbsoluteDividend;
-    ULONGLONG AbsoluteDivisor;
-    BOOL Result;
-    ULONGLONG UnsignedQuotient;
-    ULONGLONG UnsignedRemainder;
+    LONGLONG DenominatorSign;
+    LONGLONG NumeratorSign;
+    LONGLONG Quotient;
 
     //
-    // Get the unsigned versions and do an unsigned division.
+    // Negate the numerator and denominator if they're less than zero.
     //
 
-    AbsoluteDividend = Dividend;
-    AbsoluteDivisor = Divisor;
-    if (Dividend < 0) {
-        AbsoluteDividend = -AbsoluteDividend;
-    }
-
-    if (Divisor < 0) {
-        AbsoluteDivisor = -AbsoluteDivisor;
-    }
-
-    Result = RtlDivideUnsigned64(AbsoluteDividend,
-                                 AbsoluteDivisor,
-                                 &UnsignedQuotient,
-                                 &UnsignedRemainder);
-
-    if (Result == FALSE) {
-        return FALSE;
-    }
+    NumeratorSign = Dividend >> (LONGLONG_BITS - 1);
+    DenominatorSign = Divisor >> (LONGLONG_BITS - 1);
+    Dividend = (Dividend ^ NumeratorSign) - NumeratorSign;
+    Divisor = (Divisor ^ DenominatorSign) - DenominatorSign;
 
     //
-    // The quotient is negative if the signs of the operands are different.
+    // Get the sign of the quotient.
     //
 
-    if (QuotientOut != NULL) {
-        *QuotientOut = UnsignedQuotient;
-        if (((Divisor > 0) && (Dividend < 0)) ||
-            ((Divisor < 0) && (Dividend >= 0)) ) {
+    NumeratorSign ^= DenominatorSign;
+    Quotient = (RtlDivideUnsigned64(Dividend, Divisor, NULL) ^ NumeratorSign) -
+               NumeratorSign;
 
-            *QuotientOut = -UnsignedQuotient;
+    return Quotient;
+}
+
+RTL_API
+LONGLONG
+RtlDivideModulo64 (
+    LONGLONG Dividend,
+    LONGLONG Divisor,
+    PLONGLONG Remainder
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a 64-bit divide and modulo of two signed numbers.
+
+Arguments:
+
+    Dividend - Supplies the number that is going to be divided (the numerator).
+
+    Divisor - Supplies the number to divide into (the denominator).
+
+    Remainder - Supplies a pointer where the remainder will be returned.
+
+Return Value:
+
+    Returns the quotient.
+
+--*/
+
+{
+
+    LONGLONG Quotient;
+
+    Quotient = RtlDivide64(Dividend, Divisor);
+    *Remainder = Dividend - (Quotient * Divisor);
+    return Quotient;
+}
+
+RTL_API
+ULONG
+RtlDivideUnsigned32 (
+    ULONG Dividend,
+    ULONG Divisor,
+    PULONG Remainder
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a 32-bit divide of two unsigned numbers.
+
+Arguments:
+
+    Dividend - Supplies the number that is going to be divided (the numerator).
+
+    Divisor - Supplies the number to divide into (the denominator).
+
+    Remainder - Supplies an optional pointer where the remainder will be
+        returned.
+
+Return Value:
+
+    Returns the quotient.
+
+--*/
+
+{
+
+    ULONG Carry;
+    LONG Difference;
+    ULONG Quotient;
+    ULONG RemainderValue;
+    ULONG ShiftRight;
+
+    //
+    // Handle divide by zero.
+    //
+
+    if (Divisor == 0) {
+
+        ASSERT(Divisor != 0);
+
+        if (Remainder != NULL) {
+            *Remainder = 0;
         }
+
+        return 0;
     }
 
-    //
-    // The sign of the remainder is the same as the sign of the dividend.
-    //
-
-    if (RemainderOut != NULL) {
-        *RemainderOut = UnsignedRemainder;
-        if (Dividend < 0) {
-            *RemainderOut = -UnsignedRemainder;
+    if (Dividend == 0) {
+        if (Remainder != NULL) {
+            *Remainder = 0;
         }
+
+        return 0;
     }
 
-    return TRUE;
+    ShiftRight = __builtin_clz(Divisor) - __builtin_clz(Dividend);
+    if (ShiftRight > (ULONG_BITS - 1)) {
+        if (Remainder != NULL) {
+            *Remainder = Dividend;
+        }
+
+        return 0;
+    }
+
+    if (ShiftRight == (ULONG_BITS - 1)) {
+        if (Remainder != NULL) {
+            *Remainder = 0;
+        }
+
+        return Dividend;
+    }
+
+    ShiftRight += 1;
+    Quotient = Dividend << (ULONG_BITS - ShiftRight);
+    RemainderValue = Dividend >> ShiftRight;
+    Carry = 0;
+    while (ShiftRight > 0) {
+        RemainderValue = (RemainderValue << 1) | (Quotient >> (ULONG_BITS - 1));
+        Quotient = (Quotient << 1) | Carry;
+
+        //
+        // If the remainder is greater than the divisor, set the carry and
+        // subtract a divisor from the remainder to get it back in range.
+        //
+
+        Difference = (LONG)(Divisor - RemainderValue - 1) >> (ULONG_BITS - 1);
+        Carry = Difference & 0x1;
+        RemainderValue -= Divisor & Difference;
+        ShiftRight -= 1;
+    }
+
+    Quotient = (Quotient << 1) | Carry;
+    if (Remainder != NULL) {
+        *Remainder = RemainderValue;
+    }
+
+    return Quotient;
+}
+
+RTL_API
+LONG
+RtlDivide32 (
+    LONG Dividend,
+    LONG Divisor
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a 32-bit divide of two signed numbers.
+
+Arguments:
+
+    Dividend - Supplies the number that is going to be divided (the numerator).
+
+    Divisor - Supplies the number to divide into (the denominator).
+
+Return Value:
+
+    Returns the quotient.
+
+--*/
+
+{
+
+    LONG DenominatorSign;
+    LONG NumeratorSign;
+
+    //
+    // Negate the numerator and denominator if they are negative.
+    //
+
+    NumeratorSign = Dividend >> (LONG_BITS - 1);
+    DenominatorSign = Divisor >> (LONG_BITS - 1);
+    Dividend = (Dividend ^ NumeratorSign) - NumeratorSign;
+    Divisor = (Divisor ^ DenominatorSign) - DenominatorSign;
+
+    //
+    // Compute the sign of the quotient.
+    //
+
+    NumeratorSign ^= DenominatorSign;
+
+    //
+    // Perform an unsigned divide. The hope is that the architecture has an
+    // unsigned divide instruction. If not, then the soft divide unsigned
+    // gets called.
+    //
+
+    return (((ULONG)Dividend / (ULONG)Divisor) ^ NumeratorSign) - NumeratorSign;
+}
+
+RTL_API
+LONG
+RtlDivideModulo32 (
+    LONG Dividend,
+    LONG Divisor,
+    PLONG Remainder
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs a 32-bit divide and modulo of two signed numbers.
+
+Arguments:
+
+    Dividend - Supplies the number that is going to be divided (the numerator).
+
+    Divisor - Supplies the number to divide into (the denominator).
+
+    Remainder - Supplies a pointer where the remainder will be returned.
+
+Return Value:
+
+    Returns the quotient.
+
+--*/
+
+{
+
+    LONG Quotient;
+
+    Quotient = RtlDivide32(Dividend, Divisor);
+    *Remainder = Dividend - (Quotient * Divisor);
+    return Quotient;
 }
 
 RTL_API

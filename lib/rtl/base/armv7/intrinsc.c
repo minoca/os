@@ -140,21 +140,11 @@ Return Value:
 
 {
 
-    BOOL Correct;
-    LONGLONG Quotient;
-
-    ASSERT(Denominator != 0);
-
     if (Denominator == 0) {
         return __aeabi_idiv0(Numerator);
     }
 
-    Correct = RtlDivide64(Numerator, Denominator, &Quotient, NULL);
-    if (Correct == FALSE) {
-        return __aeabi_idiv0(Numerator);
-    }
-
-    return (int)Quotient;
+    return RtlDivide32(Numerator, Denominator);
 }
 
 RTL_API
@@ -185,21 +175,11 @@ Return Value:
 
 {
 
-    BOOL Correct;
-    ULONGLONG Quotient;
-
-    ASSERT(Denominator != 0);
-
     if (Denominator == 0) {
         return __aeabi_idiv0(Numerator);
     }
 
-    Correct = RtlDivideUnsigned64(Numerator, Denominator, &Quotient, NULL);
-    if (Correct == FALSE) {
-        return __aeabi_idiv0(Numerator);
-    }
-
-    return (unsigned int)Quotient;
+    return RtlDivideUnsigned32(Numerator, Denominator, NULL);
 }
 
 //

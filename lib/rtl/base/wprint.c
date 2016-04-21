@@ -1150,14 +1150,9 @@ Return Value:
         // Get the least significant digit.
         //
 
-        Result = RtlDivideUnsigned64(Integer,
-                                     Properties->Radix,
-                                     &NextInteger,
-                                     &Remainder);
-
-        if (Result == FALSE) {
-            return 0;
-        }
+        NextInteger = RtlDivideUnsigned64(Integer,
+                                          Properties->Radix,
+                                          &Remainder);
 
         Character = (WCHAR)Remainder;
         if (Character > 9) {

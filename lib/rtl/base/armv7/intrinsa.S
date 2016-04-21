@@ -64,17 +64,15 @@ Return Value:
 --*/
 
 PROTECTED_FUNCTION __aeabi_ldivmod
-    push    {%r4, %r5, %fp, %lr}
+    push    {%lr}
     sub     %sp, %sp, #16
-    add     %r4, %sp, #8
-    mov     %r5, %sp
-    push    {%r4}
-    push    {%r5}
-    blx     RtlDivide64
-    add     %sp, %sp, #8
-    pop     {%r0-%r3}
-    pop     {%r4, %r5, %fp, %pc}
-
+    add     %r12, %sp, #8
+    str     %r12, [%sp]
+    blx     RtlDivideModulo64
+    ldr     %r2, [%sp, #8]
+    ldr     %r3, [%sp, #12]
+    add     %sp, %sp, #16
+    pop     {%pc}
 END_FUNCTION __aeabi_ldivmod
 
 ##
@@ -104,17 +102,15 @@ Return Value:
 --*/
 
 PROTECTED_FUNCTION __aeabi_uldivmod
-    push    {%r4, %r5, %fp, %lr}
+    push    {%lr}
     sub     %sp, %sp, #16
-    add     %r4, %sp, #8
-    mov     %r5, %sp
-    push    {%r4}
-    push    {%r5}
+    add     %r12, %sp, #8
+    str     %r12, [%sp]
     blx     RtlDivideUnsigned64
-    add     %sp, %sp, #8
-    pop     {%r0-%r3}
-    pop     {%r4, %r5, %fp, %pc}
-
+    ldr     %r2, [%sp, #8]
+    ldr     %r3, [%sp, #12]
+    add     %sp, %sp, #16
+    pop     {%pc}
 END_FUNCTION __aeabi_uldivmod
 
 ##
@@ -139,37 +135,18 @@ Arguments:
 
 Return Value:
 
-    Returns the result of the division and modulo.
+    Returns the quotient and remainder in R0 and R1.
 
 --*/
 
 PROTECTED_FUNCTION __aeabi_idivmod
-    push    {%r4, %r5, %fp, %lr}
-
-    ##
-    ## Spread the two 32 bit parameters out into 64 bit parameters. Then sign
-    ## extend them.
-    ##
-
-    mov     %r2, %r1
-    mov     %r4, #0x80000000
-    ands    %r1, %r0, %r4
-    IT(ne)
-    movne   %r1, #0xFFFFFFFF
-    ands    %r3, %r2, %r4
-    IT(ne)
-    movne   %r3, #0xFFFFFFFF
-    sub     %sp, %sp, #16
-    add     %r4, %sp, #8
-    mov     %r5, %sp
-    push    {%r4}
-    push    {%r5}
-    blx     RtlDivide64
-    add     %sp, %sp, #8
-    pop     {%r0-%r3}
-    mov     %r1, %r2
-    pop     {%r4, %r5, %fp, %pc}
-
+    push    {%lr}
+    sub     %sp, %sp, #4
+    mov     %r2, %sp
+    blx     RtlDivideModulo32
+    ldr     %r1, [%sp]
+    add     %sp, %sp, #4
+    pop     {%pc}
 END_FUNCTION __aeabi_idivmod
 
 ##
@@ -194,32 +171,18 @@ Arguments:
 
 Return Value:
 
-    Returns the result of the division and modulo.
+    Returns the quotient and the remainder in R0 and R1.
 
 --*/
 
 PROTECTED_FUNCTION __aeabi_uidivmod
-    push    {%r4, %r5, %fp, %lr}
-
-    ##
-    ## Spread the two 32 bit parameters out into 64 bit parameters. Zero out
-    ## the high words.
-    ##
-
-    mov     %r2, %r1
-    mov     %r1, #0
-    mov     %r3, #0
-    sub     %sp, %sp, #16
-    add     %r4, %sp, #8
-    mov     %r5, %sp
-    push    {%r4}
-    push    {%r5}
-    blx     RtlDivide64
-    add     %sp, %sp, #8
-    pop     {%r0-%r3}
-    mov     %r1, %r2
-    pop     {%r4, %r5, %fp, %pc}
-
+    push    {%lr}
+    sub     %sp, %sp, #4
+    mov     %r2, %sp
+    blx     RtlDivideUnsigned32
+    ldr     %r1, [%sp]
+    add     %sp, %sp, #4
+    pop     {%pc}
 END_FUNCTION __aeabi_uidivmod
 
 ##

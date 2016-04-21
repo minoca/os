@@ -570,7 +570,6 @@ Return Value:
     ULONGLONG Divisor;
     ULONGLONG Quotient;
     ULONGLONG Remainder;
-    BOOL Result;
     LONGLONG SignedDividend;
     LONGLONG SignedDivisor;
     LONGLONG SignedQuotient;
@@ -590,15 +589,8 @@ Return Value:
 
     Dividend = 21;
     Divisor = 5;
-    Result = RtlDivideUnsigned64(Dividend, Divisor, &Quotient, &Remainder);
-    if (Result == FALSE) {
-        printf("Error: Unsigned divide %I64d/%I64d failed.\n",
-               Dividend,
-               Divisor);
-
-        TestsFailed += 1;
-
-    } else if ((Quotient != 4) || (Remainder != 1)) {
+    Quotient = RtlDivideUnsigned64(Dividend, Divisor, &Remainder);
+    if ((Quotient != 4) || (Remainder != 1)) {
         printf("Error: Unsigned divide of %I64d/%I64d returned %I64d, "
                "remainder %I64d.\n",
                Dividend,
@@ -613,11 +605,7 @@ Return Value:
     // Test division with NULL arguments.
     //
 
-    Result = RtlDivideUnsigned64(Dividend, Divisor, NULL, NULL);
-    if (Result == FALSE) {
-        printf("Error: Unsigned divide with NULL return arguments failed.\n");
-        TestsFailed += 1;
-    }
+    RtlDivideUnsigned64(Dividend, Divisor, NULL);
 
     //
     // Test division with the high 32-bits set.
@@ -625,15 +613,8 @@ Return Value:
 
     Dividend = 0x1000000000ULL;
     Divisor = 0x100000000ULL;
-    Result = RtlDivideUnsigned64(Dividend, Divisor, &Quotient, &Remainder);
-    if (Result == FALSE) {
-        printf("Error: Unsigned divide %I64d/%I64d failed.\n",
-               Dividend,
-               Divisor);
-
-        TestsFailed += 1;
-
-    } else if ((Quotient != 0x10) || (Remainder != 0)) {
+    Quotient = RtlDivideUnsigned64(Dividend, Divisor, &Remainder);
+    if ((Quotient != 0x10) || (Remainder != 0)) {
         printf("Error: Unsigned divide of %I64d/%I64d returned %I64d, "
                "remainder %I64d.\n",
                Dividend,
@@ -650,15 +631,8 @@ Return Value:
 
     Dividend = 0x1000000000ULL;
     Divisor = 11;
-    Result = RtlDivideUnsigned64(Dividend, Divisor, &Quotient, &Remainder);
-    if (Result == FALSE) {
-        printf("Error: Unsigned divide %I64d/%I64d failed.\n",
-               Dividend,
-               Divisor);
-
-        TestsFailed += 1;
-
-    } else if ((Quotient != 0x1745D1745ULL) || (Remainder != 9)) {
+    Quotient = RtlDivideUnsigned64(Dividend, Divisor, &Remainder);
+    if ((Quotient != 0x1745D1745ULL) || (Remainder != 9)) {
         printf("Error: Unsigned divide of 0x%I64x/0x%I64x returned 0x%I64x, "
                "remainder 0x%I64x.\n",
                Dividend,
@@ -675,18 +649,9 @@ Return Value:
 
     SignedDividend = -21;
     SignedDivisor = 5;
-    Result = RtlDivide64(SignedDividend,
-                         SignedDivisor,
-                         &SignedQuotient,
-                         &SignedRemainder);
-
-    if (Result == FALSE) {
-        printf("Error: Signed divide %I64d/%I64d failed.\n",
-               SignedDividend,
-               SignedDivisor);
-
-        TestsFailed += 1;
-    }
+    SignedQuotient = RtlDivideModulo64(SignedDividend,
+                                       SignedDivisor,
+                                       &SignedRemainder);
 
     if ((SignedQuotient != -4) || (SignedRemainder != -1)) {
         printf("Error: Signed divide of %I64d/%I64d returned %I64d, "
@@ -701,19 +666,11 @@ Return Value:
 
     SignedDividend = 2000;
     SignedDivisor = -3;
-    Result = RtlDivide64(SignedDividend,
-                         SignedDivisor,
-                         &SignedQuotient,
-                         &SignedRemainder);
+    SignedQuotient = RtlDivideModulo64(SignedDividend,
+                                       SignedDivisor,
+                                       &SignedRemainder);
 
-    if (Result == FALSE) {
-        printf("Error: Signed divide %I64d/%I64d failed.\n",
-               SignedDividend,
-               SignedDivisor);
-
-        TestsFailed += 1;
-
-    } else if ((SignedQuotient != -666) || (SignedRemainder != 2)) {
+    if ((SignedQuotient != -666) || (SignedRemainder != 2)) {
         printf("Error: Signed divide of %I64d/%I64d returned %I64d, "
                "remainder %I64d.\n",
                SignedDividend,
@@ -721,26 +678,6 @@ Return Value:
                SignedQuotient,
                SignedRemainder);
 
-        TestsFailed += 1;
-    }
-
-    //
-    // Test signed division with NULL arguments.
-    //
-
-    Result = RtlDivide64(Dividend, Divisor, NULL, NULL);
-    if (Result == FALSE) {
-        printf("Error: Signed divide with NULL return arguments failed.\n");
-        TestsFailed += 1;
-    }
-
-    //
-    // Test divide by 0.
-    //
-
-    Result = RtlDivide64(Dividend, 0, NULL, NULL);
-    if (Result != FALSE) {
-        printf("Error: Signed divide by 0 succeeded.\n");
         TestsFailed += 1;
     }
 

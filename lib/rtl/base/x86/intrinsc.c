@@ -50,10 +50,6 @@ Environment:
 // --------------------------------------------------------- Internal Functions
 //
 
-//
-// TODO: Faster math using native instructions.
-//
-
 RTL_API
 LONGLONG
 __divdi3 (
@@ -82,24 +78,7 @@ Return Value:
 
 {
 
-    BOOL Correct;
-    LONGLONG Quotient;
-
-    ASSERT(Denominator != 0);
-
-    if (Denominator == 0) {
-        return 0;
-    }
-
-    Correct = RtlDivide64(Numerator, Denominator, &Quotient, NULL);
-    if (Correct == FALSE) {
-
-        ASSERT(FALSE);
-
-        return 0;
-    }
-
-    return Quotient;
+    return RtlDivide64(Numerator, Denominator);
 }
 
 RTL_API
@@ -130,24 +109,7 @@ Return Value:
 
 {
 
-    BOOL Correct;
-    ULONGLONG Quotient;
-
-    ASSERT(Denominator != 0);
-
-    if (Denominator == 0) {
-        return 0;
-    }
-
-    Correct = RtlDivideUnsigned64(Numerator, Denominator, &Quotient, NULL);
-    if (Correct == FALSE) {
-
-        ASSERT(FALSE);
-
-        return 0;
-    }
-
-    return Quotient;
+    return RtlDivideUnsigned64(Numerator, Denominator, NULL);
 }
 
 RTL_API
@@ -179,23 +141,9 @@ Return Value:
 
 {
 
-    BOOL Correct;
     LONGLONG Remainder;
 
-    ASSERT(Denominator != 0);
-
-    if (Denominator == 0) {
-        return 0;
-    }
-
-    Correct = RtlDivide64(Numerator, Denominator, NULL, &Remainder);
-    if (Correct == FALSE) {
-
-        ASSERT(FALSE);
-
-        return 0;
-    }
-
+    RtlDivideModulo64(Numerator, Denominator, &Remainder);
     return Remainder;
 }
 
@@ -228,23 +176,9 @@ Return Value:
 
 {
 
-    BOOL Correct;
     ULONGLONG Remainder;
 
-    ASSERT(Denominator != 0);
-
-    if (Denominator == 0) {
-        return 0;
-    }
-
-    Correct = RtlDivideUnsigned64(Numerator, Denominator, NULL, &Remainder);
-    if (Correct == FALSE) {
-
-        ASSERT(FALSE);
-
-        return 0;
-    }
-
+    RtlDivideUnsigned64(Numerator, Denominator, &Remainder);
     return Remainder;
 }
 

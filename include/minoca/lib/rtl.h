@@ -3198,12 +3198,11 @@ Return Value:
 --*/
 
 RTL_API
-BOOL
+ULONGLONG
 RtlDivideUnsigned64 (
     ULONGLONG Dividend,
     ULONGLONG Divisor,
-    PULONGLONG QuotientOut,
-    PULONGLONG RemainderOut
+    PULONGLONG Remainder
     );
 
 /*++
@@ -3218,26 +3217,20 @@ Arguments:
 
     Divisor - Supplies the number to divide into (the denominator).
 
-    QuotientOut - Supplies a pointer that receives the result of the divide.
-        This parameter may be NULL.
-
-    RemainderOut - Supplies a pointer that receives the remainder of the
+    Remainder - Supplies a pointer that receives the remainder of the
         divide. This parameter may be NULL.
 
 Return Value:
 
-    Returns TRUE if the operation was successful, or FALSE if there was an
-    error (like divide by 0).
+    Returns the quotient.
 
 --*/
 
 RTL_API
-BOOL
+LONGLONG
 RtlDivide64 (
     LONGLONG Dividend,
-    LONGLONG Divisor,
-    PLONGLONG QuotientOut,
-    PLONGLONG RemainderOut
+    LONGLONG Divisor
     );
 
 /*++
@@ -3252,19 +3245,121 @@ Arguments:
 
     Divisor - Supplies the number to divide into (the denominator).
 
-    QuotientOut - Supplies a pointer that receives the result of the divide.
-        This parameter may be NULL.
-
-    RemainderOut - Supplies a pointer that receives the remainder of the
-        divide. This parameter may be NULL.
-
 Return Value:
 
-    Returns TRUE if the operation was successful, or FALSE if there was an
-    error (like divide by 0).
+    Returns the quotient.
 
 --*/
 
+RTL_API
+LONGLONG
+RtlDivideModulo64 (
+    LONGLONG Dividend,
+    LONGLONG Divisor,
+    PLONGLONG Remainder
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a 64-bit divide and modulo of two signed numbers.
+
+Arguments:
+
+    Dividend - Supplies the number that is going to be divided (the numerator).
+
+    Divisor - Supplies the number to divide into (the denominator).
+
+    Remainder - Supplies a pointer where the remainder will be returned.
+
+Return Value:
+
+    Returns the quotient.
+
+--*/
+
+RTL_API
+ULONG
+RtlDivideUnsigned32 (
+    ULONG Dividend,
+    ULONG Divisor,
+    PULONG Remainder
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a 32-bit divide of two unsigned numbers.
+
+Arguments:
+
+    Dividend - Supplies the number that is going to be divided (the numerator).
+
+    Divisor - Supplies the number to divide into (the denominator).
+
+    Remainder - Supplies an optional pointer where the remainder will be
+        returned.
+
+Return Value:
+
+    Returns the quotient.
+
+--*/
+
+RTL_API
+LONG
+RtlDivide32 (
+    LONG Dividend,
+    LONG Divisor
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a 32-bit divide of two signed numbers.
+
+Arguments:
+
+    Dividend - Supplies the number that is going to be divided (the numerator).
+
+    Divisor - Supplies the number to divide into (the denominator).
+
+Return Value:
+
+    Returns the quotient.
+
+--*/
+
+RTL_API
+LONG
+RtlDivideModulo32 (
+    LONG Dividend,
+    LONG Divisor,
+    PLONG Remainder
+    );
+
+/*++
+
+Routine Description:
+
+    This routine performs a 32-bit divide and modulo of two signed numbers.
+
+Arguments:
+
+    Dividend - Supplies the number that is going to be divided (the numerator).
+
+    Divisor - Supplies the number to divide into (the denominator).
+
+    Remainder - Supplies a pointer where the remainder will be returned.
+
+Return Value:
+
+    Returns the quotient.
+
+--*/
 RTL_API
 ULONGLONG
 RtlByteSwapUlonglong (
