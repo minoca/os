@@ -304,6 +304,7 @@ Return Value:
     ResetValue = READ_LOCAL_APIC(ApicTimerVector);
     ResetValue &= ~(APIC_LVT_DISABLED | APIC_TIMER_PERIODIC);
     ControlValue = ResetValue | APIC_LVT_ENABLED;
+    ResetValue |= APIC_LVT_DISABLED;
     if (Mode == TimerModePeriodic) {
         ControlValue |= APIC_TIMER_PERIODIC;
     }

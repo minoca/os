@@ -1872,8 +1872,7 @@ Arguments:
         interval will be added. Upon return, this parameter will be store the
         final time.
 
-    TimeCounter - Supplies the time counter value the stores the time to add to
-        the system time.
+    TimeCounter - Supplies the time counter time duration to add.
 
 Return Value:
 
