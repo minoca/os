@@ -1105,7 +1105,9 @@ Return Value:
 
                 KD_TRACE(KdTraceWaitingForFrozenProcessors);
                 while (KdProcessorsFrozen != KeActiveProcessorCount) {
-                    if (KdConnectionTimeout != MAX_ULONG) {
+                    if ((KdConnectionTimeout != MAX_ULONG) &&
+                        (KdAvoidTimeCounter == FALSE)) {
+
                         if (Timeout == 0) {
                             break;
 
@@ -3894,13 +3896,18 @@ Return Value:
         if (Status == STATUS_NO_DATA_AVAILABLE) {
 
             //
+            // Avoid both the time counter and stalls if the boolean is set.
+            //
+
+            if (KdAvoidTimeCounter != FALSE) {
+                continue;
+            }
+
+            //
             // Keep the time counter fresh.
             //
 
-            if (KdAvoidTimeCounter == FALSE) {
-                HlQueryTimeCounter();
-            }
-
+            HlQueryTimeCounter();
             if (*Timeout == MAX_ULONG) {
                 continue;
 
