@@ -69,7 +69,8 @@ $(BINROOT)/pctiny.img: $(INSTALL_IMAGE)
 endif
 
 ##
-## Build x86 Quark images.
+## Build x86 Quark images. Debugging is currently disabled on Galileo since the
+## headphones UART is used for the console.
 ##
 
 ifeq (x86q, $(ARCH)$(VARIANT))
@@ -83,7 +84,7 @@ $(INSTALL_IMAGE): $(LAST_UPDATE_FILE)
 
 $(BINROOT)/galileo.img: $(INSTALL_IMAGE)
 	@echo Building - $(notdir $@)
-	@cd $(BINROOT) && $(MSETUP) -ql galileo -i $< -D -d $@ -G512M
+	@cd $(BINROOT) && $(MSETUP) -ql galileo -i $< -d $@ $(MSETUP_IMAGE_SIZE)
 
 endif
 

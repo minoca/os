@@ -254,7 +254,7 @@ Return Value:
     }
 
     Status = KdGetDeviceInformation(&UsbDebugHandoffData);
-    if ((!KSUCCESS(Status)) ||
+    if ((!KSUCCESS(Status)) || (UsbDebugHandoffData == NULL) ||
         (UsbDebugHandoffData->PortType != DEBUG_PORT_TYPE_USB)) {
 
         UsbDebugHandoffData = NULL;

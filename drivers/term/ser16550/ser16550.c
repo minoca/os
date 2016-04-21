@@ -69,6 +69,8 @@ Environment:
 
 #define SER16550A_FIFO_SIZE 16
 
+#define SER16550_MAX_FIFO 256
+
 #define SERIAL_PORT_DEVICE_ID_FORMAT "Serial%d"
 #define SERIAL_PORT_DEVICE_ID_SIZE 50
 
@@ -125,6 +127,13 @@ Environment:
 #define SER16550_LINE_STATUS_TX_HOLDING_EMPTY 0x20
 #define SER16550_LINE_STATUS_TX_EMPTY 0x40
 #define SER16550_LINE_STATUS_FIFO_ERROR 0x80
+
+#define SER16550_LINE_STATUS_ERROR_MASK \
+    (SER16550_LINE_STATUS_OVERRUN_ERROR | SER16550_LINE_STATUS_PARITY_ERROR | \
+     SER16550_LINE_STATUS_FRAMING_ERROR | SER16550_LINE_STATUS_FIFO_ERROR)
+
+#define SER16550_LINE_STATUS_RX_MASK \
+    (SER16550_LINE_STATUS_RX_READY | SER16550_LINE_STATUS_BREAK)
 
 //
 // Known vendors and devices.
@@ -575,6 +584,11 @@ Ser16550pConfigureDevice (
     PSER16550_CHILD Device,
     ULONG TerminalControlFlags,
     ULONG BaudRate
+    );
+
+ULONG
+Ser16550pGetFifoSize (
+    PSER16550_CHILD Device
     );
 
 VOID
@@ -1081,7 +1095,11 @@ Return Value:
     UINTN Next;
     RUNLEVEL OldRunLevel;
     PSER16550_PARENT Parent;
+    UINTN ReceiveEnd;
+    UINTN ReceiveStart;
     KSTATUS Status;
+    UINTN TransmitEnd;
+    UINTN TransmitStart;
 
     ASSERT(Irp->Direction == IrpDown);
 
@@ -1111,9 +1129,13 @@ Return Value:
                 goto DispatchIoEnd;
             }
 
-            Next = Child->TransmitEnd + 1;
-            if (Next == Child->TransmitSize) {
-                Next = 0;
+            TransmitEnd = Child->TransmitEnd;
+            TransmitStart = Child->TransmitStart;
+            if (TransmitEnd >= TransmitStart) {
+                CopySize = Child->TransmitSize - TransmitEnd;
+
+            } else {
+                CopySize = TransmitStart - TransmitEnd;
             }
 
             //
@@ -1121,7 +1143,6 @@ Return Value:
             // added.
             //
 
-            CopySize = Child->TransmitStart - Next;
             if (CopySize == 0) {
 
                 //
@@ -1146,21 +1167,29 @@ Return Value:
                 continue;
             }
 
-            //
-            // If the copy size is greater than the transmit buffer size then
-            // transmit start was less than the next transmit end. Just write
-            // to the end of the transmit buffer and loop.
-            //
-
-            if (CopySize >= Child->TransmitSize) {
-                CopySize = Child->TransmitSize - Next;
-            }
-
             if (CopySize > BytesRemaining) {
                 CopySize = BytesRemaining;
             }
 
-            CopyStart = Child->TransmitEnd;
+            CopyStart = TransmitEnd;
+            Next = CopyStart + CopySize;
+
+            ASSERT(Next <= Child->TransmitSize);
+
+            if (Next == Child->TransmitSize) {
+                Next = 0;
+            }
+
+            if (Next == TransmitStart) {
+                CopySize -= 1;
+                if (Next == 0) {
+                    Next = Child->TransmitSize - 1;
+
+                } else {
+                    Next -= 1;
+                }
+            }
+
             Status = MmCopyIoBufferData(IoBuffer,
                                         &(Child->TransmitBuffer[CopyStart]),
                                         IoBufferOffset,
@@ -1173,12 +1202,7 @@ Return Value:
 
             IoBufferOffset += CopySize;
             BytesRemaining -= CopySize;
-            CopyStart += CopySize;
-            if (CopyStart == Child->TransmitSize) {
-                CopyStart = 0;
-            }
-
-            Child->TransmitEnd = CopyStart;
+            Child->TransmitEnd = Next;
         }
 
         //
@@ -1201,11 +1225,19 @@ Return Value:
                 goto DispatchIoEnd;
             }
 
+            ReceiveEnd = Child->ReceiveEnd;
+            ReceiveStart = Child->ReceiveStart;
+            if (ReceiveEnd > ReceiveStart) {
+                CopySize = ReceiveEnd - ReceiveStart;
+
+            } else {
+                CopySize = Child->ReceiveSize - ReceiveStart;
+            }
+
             //
             // Handle an empty receive buffer.
             //
 
-            CopySize = Child->ReceiveEnd - Child->ReceiveStart;
             if (CopySize == 0) {
 
                 //
@@ -1230,20 +1262,13 @@ Return Value:
                 continue;
             }
 
-            //
-            // If the size calculated above is greater than the receive buffer
-            // size, then the receive end was lower than the start. Read from
-            // the start to the end of the buffer and loop again.
-            //
-
-            CopyStart = Child->ReceiveStart;
-            if (CopySize >= Child->ReceiveSize) {
-                CopySize = Child->ReceiveSize - CopyStart;
-            }
-
+            CopyStart = ReceiveStart;
             if (CopySize > BytesRemaining) {
                 CopySize = BytesRemaining;
             }
+
+            ASSERT((CopySize < Child->ReceiveSize) &&
+                   (CopyStart + CopySize <= Child->ReceiveSize));
 
             Status = MmCopyIoBufferData(IoBuffer,
                                         &(Child->ReceiveBuffer[CopyStart]),
@@ -1415,11 +1440,11 @@ Return Value:
     UCHAR Byte;
     PSER16550_CHILD Child;
     UINTN ChildIndex;
-    UINTN Count;
+    ULONG Count;
+    BOOL DidSomething;
     UCHAR InterruptRegister;
     INTERRUPT_STATUS InterruptStatus;
     UCHAR LineStatus;
-    UCHAR ModemStatus;
     UINTN Next;
     PSER16550_PARENT Parent;
 
@@ -1451,28 +1476,79 @@ Return Value:
         }
 
         InterruptStatus = InterruptStatusClaimed;
+        do {
+            DidSomething = FALSE;
+            LineStatus = SER16550_READ8(Child, Ser16550LineStatus);
+            if ((LineStatus & SER16550_LINE_STATUS_ERROR_MASK) != 0) {
+                DidSomething = TRUE;
 
-        //
-        // Loop handling every issue the UART has.
-        //
+                //
+                // TODO: Actually handle 16550 line status errors.
+                //
 
-        while ((InterruptRegister &
-                SER16550_INTERRUPT_STATUS_NONE_PENDING) == 0) {
+                if ((LineStatus & SER16550_LINE_STATUS_OVERRUN_ERROR) != 0) {
+                    RtlDebugPrint("16550: Overrun Error.\n");
 
-            switch (InterruptRegister & SER16550_INTERRUPT_STATUS_MASK) {
-            case SER16550_INTERRUPT_STATUS_RX_DATA_ERROR:
-                LineStatus = SER16550_READ8(Child, Ser16550LineStatus);
-                RtlDebugPrint("UART RX Error: %x\n", LineStatus);
-                break;
+                } else if ((LineStatus &
+                            SER16550_LINE_STATUS_PARITY_ERROR) != 0) {
+
+                    RtlDebugPrint("16550: Parity Error.\n");
+
+                } else if ((LineStatus &
+                            SER16550_LINE_STATUS_FRAMING_ERROR) != 0) {
+
+                    RtlDebugPrint("16550: Framing Error.\n");
+
+                } else if ((LineStatus &
+                            SER16550_LINE_STATUS_FIFO_ERROR) != 0) {
+
+                    RtlDebugPrint("16550: Fifo Error.\n");
+                }
+            }
 
             //
-            // Read in all the data in the FIFO.
+            // Transmit more stuff if possible.
             //
 
-            case SER16550_INTERRUPT_STATUS_RX_DATA_READY:
-            case SER16550_INTERRUPT_STATUS_RX_TIMEOUT:
-                LineStatus = SER16550_READ8(Child, Ser16550LineStatus);
-                while ((LineStatus & SER16550_LINE_STATUS_RX_READY) != 0) {
+            if ((LineStatus & SER16550_LINE_STATUS_TX_HOLDING_EMPTY) != 0) {
+                KeAcquireSpinLock(&(Child->Parent->InterruptLock));
+                for (Count = 0; Count < Child->TransmitFifoSize; Count += 1) {
+                    if (Child->TransmitStart == Child->TransmitEnd) {
+                        Ser16550pStopTransmit(Child);
+                        break;
+
+                    } else {
+                        Byte = Child->TransmitBuffer[Child->TransmitStart];
+                        SER16550_WRITE8(Child, Ser16550Data, Byte);
+                        Next = Child->TransmitStart + 1;
+                        if (Next == Child->TransmitSize) {
+                            Next = 0;
+                        }
+
+                        Child->TransmitStart = Next;
+                        DidSomething = TRUE;
+                    }
+                }
+
+                KeReleaseSpinLock(&(Child->Parent->InterruptLock));
+                Child->InterruptWorkPending = TRUE;
+            }
+
+            //
+            // Receive a byte data if possible.
+            //
+
+            if ((LineStatus & SER16550_LINE_STATUS_RX_MASK) != 0) {
+                DidSomething = TRUE;
+
+                //
+                // TODO: Actually handle a 16550 break.
+                //
+
+                if ((LineStatus & SER16550_LINE_STATUS_BREAK) != 0) {
+                    RtlDebugPrint("16550: Break\n");
+
+                } else if ((LineStatus & SER16550_LINE_STATUS_RX_READY) != 0) {
                     Byte = SER16550_READ8(Child, Ser16550Data);
                     Next = Child->ReceiveEnd + 1;
                     if (Next == Child->ReceiveSize) {
@@ -1486,59 +1562,10 @@ Return Value:
                         Child->ReceiveBuffer[Child->ReceiveEnd] = Byte;
                         Child->ReceiveEnd = Next;
                     }
-
-                    LineStatus = SER16550_READ8(Child, Ser16550LineStatus);
                 }
-
-                Child->InterruptWorkPending = TRUE;
-                break;
-
-            //
-            // Refill the TX FIFO. Make sure the start index is always assigned
-            // a clean value as other folks may be reading it simultaneously.
-            //
-
-            case SER16550_INTERRUPT_STATUS_TX_EMPTY:
-                LineStatus = SER16550_READ8(Child, Ser16550LineStatus);
-                KeAcquireSpinLock(&(Child->Parent->InterruptLock));
-                if (Child->TransmitStart == Child->TransmitEnd) {
-                    Ser16550pStopTransmit(Child);
-                }
-
-                Count = 0;
-                while ((Count < Child->TransmitFifoSize) &&
-                       (Child->TransmitStart != Child->TransmitEnd)) {
-
-                    Byte = Child->TransmitBuffer[Child->TransmitStart];
-                    SER16550_WRITE8(Child, Ser16550Data, Byte);
-                    Count += 1;
-                    Next = Child->TransmitStart + 1;
-                    if (Next == Child->TransmitSize) {
-                        Next = 0;
-                    }
-
-                    Child->TransmitStart = Next;
-                    LineStatus = SER16550_READ8(Child, Ser16550LineStatus);
-                }
-
-                KeReleaseSpinLock(&(Child->Parent->InterruptLock));
-                Child->InterruptWorkPending = TRUE;
-                break;
-
-            case SER16550_INTERRUPT_STATUS_MODEM_STATUS:
-                ModemStatus = SER16550_READ8(Child, Ser16550ModemStatus);
-                RtlDebugPrint("UART Modem Status %x\n", ModemStatus);
-                break;
-
-            default:
-
-                ASSERT(FALSE);
-
-                break;
             }
 
-            InterruptRegister = SER16550_READ8(Child, Ser16550InterruptStatus);
-        }
+        } while (DidSomething != FALSE);
     }
 
     return InterruptStatus;
@@ -1576,6 +1603,8 @@ Return Value:
     UINTN Next;
     PSER16550_PARENT Parent;
     UINTN ReceiveEnd;
+    UINTN ReceiveStart;
+    UINTN Size;
     KSTATUS Status;
 
     Parent = Context;
@@ -1620,109 +1649,55 @@ Return Value:
 
         KeAcquireQueuedLock(Child->ReceiveLock);
         ReceiveEnd = Child->ReceiveEnd;
-        if (Child->ReceiveStart != ReceiveEnd) {
-            if (Child->Terminal != NULL) {
-                while (ReceiveEnd < Child->ReceiveStart) {
-                    Status = MmCreateIoBuffer(
-                                    Child->ReceiveBuffer + Child->ReceiveStart,
-                                    Child->ReceiveSize - Child->ReceiveStart,
-                                    IO_BUFFER_FLAG_KERNEL_MODE_DATA,
-                                    &IoBuffer);
-
-                    BytesCompleted = 0;
-                    if (KSUCCESS(Status)) {
-
-                        //
-                        // Perform a non-blocking write to the terminal master.
-                        // If user mode can't get it fast enough, then it's
-                        // lost.
-                        //
-
-                        Status = IoWrite(
-                                      Child->Terminal,
-                                      IoBuffer,
-                                      Child->ReceiveSize - Child->ReceiveStart,
-                                      0,
-                                      0,
-                                      &BytesCompleted);
-
-                        MmFreeIoBuffer(IoBuffer);
-                        if (!KSUCCESS(Status)) {
-                            RtlDebugPrint("Ser16550: Failed terminal write: "
-                                          "%x\n",
-                                          Status);
-                        }
-
-                        ASSERT(Child->ReceiveStart + BytesCompleted <=
-                               Child->ReceiveSize);
-
-                        Child->ReceiveStart += BytesCompleted;
-                        if (Child->ReceiveStart == Child->ReceiveSize) {
-                            Child->ReceiveStart = 0;
-                        }
-                    }
-
-                    if (BytesCompleted == 0) {
-                        break;
-                    }
-                }
-
-                //
-                // Write the portion that's in order.
-                //
-
-                while (Child->ReceiveStart < ReceiveEnd) {
-                    Status = MmCreateIoBuffer(
-                                    Child->ReceiveBuffer + Child->ReceiveStart,
-                                    ReceiveEnd - Child->ReceiveStart,
-                                    IO_BUFFER_FLAG_KERNEL_MODE_DATA,
-                                    &IoBuffer);
-
-                    BytesCompleted = 0;
-                    if (KSUCCESS(Status)) {
-
-                        //
-                        // Perform a non-blocking write to the terminal master.
-                        // If user mode can't get it fast enough, then it's
-                        // lost.
-                        //
-
-                        Status = IoWrite(
-                                      Child->Terminal,
-                                      IoBuffer,
-                                      ReceiveEnd - Child->ReceiveStart,
-                                      0,
-                                      0,
-                                      &BytesCompleted);
-
-                        MmFreeIoBuffer(IoBuffer);
-                        if (!KSUCCESS(Status)) {
-                            RtlDebugPrint("Ser16550: Failed terminal write: "
-                                          "%x\n",
-                                          Status);
-                        }
-
-                        ASSERT(Child->ReceiveStart + BytesCompleted <=
-                               Child->ReceiveSize);
-
-                        Child->ReceiveStart += BytesCompleted;
-                        if (Child->ReceiveStart == Child->ReceiveSize) {
-                            Child->ReceiveStart = 0;
-                        }
-                    }
-
-                    if (BytesCompleted == 0) {
-                        break;
-                    }
-                }
-
-            //
-            // There is no terminal, signal the event.
-            //
+        ReceiveStart = Child->ReceiveStart;
+        while (ReceiveStart != ReceiveEnd) {
+            if (ReceiveEnd >= ReceiveStart) {
+                Size = ReceiveEnd - ReceiveStart;
 
             } else {
-                KeSignalEvent(Child->ReceiveReady, SignalOptionSignalAll);
+                Size = Child->ReceiveSize - ReceiveStart;
             }
+
+            Status = MmCreateIoBuffer(Child->ReceiveBuffer + ReceiveStart,
+                                      Size,
+                                      IO_BUFFER_FLAG_KERNEL_MODE_DATA,
+                                      &IoBuffer);
+
+            BytesCompleted = 0;
+            if (KSUCCESS(Status)) {
+                if (Child->Terminal != NULL) {
+                    Status = IoWrite(Child->Terminal,
+                                     IoBuffer,
+                                     Size,
+                                     0,
+                                     0,
+                                     &BytesCompleted);
+
+                } else {
+                    KeSignalEvent(Child->ReceiveReady, SignalOptionSignalAll);
+                }
+
+                MmFreeIoBuffer(IoBuffer);
+                if (!KSUCCESS(Status)) {
+                    RtlDebugPrint("Ser16550: Failed terminal write: %x\n",
+                                  Status);
+                }
+            }
+
+            ASSERT(ReceiveStart + BytesCompleted <= Child->ReceiveSize);
+
+            ReceiveStart += BytesCompleted;
+            if (ReceiveStart == Child->ReceiveSize) {
+                ReceiveStart = 0;
+            }
+
+            Child->ReceiveStart = ReceiveStart;
+            if (BytesCompleted == 0) {
+                break;
+            }
+
+            ReceiveEnd = Child->ReceiveEnd;
+            ReceiveStart = Child->ReceiveStart;
         }
 
         KeReleaseQueuedLock(Child->ReceiveLock);
@@ -2461,6 +2436,7 @@ Return Value:
 
     Status = KdGetDeviceInformation(&HandoffData);
     if ((KSUCCESS(Status)) &&
+        (HandoffData != NULL) &&
         (HandoffData->PortType == DEBUG_PORT_TYPE_SERIAL) &&
         ((HandoffData->PortSubType == DEBUG_PORT_SERIAL_16550) ||
          (HandoffData->PortSubType == DEBUG_PORT_SERIAL_16550_COMPATIBLE))) {
@@ -3062,7 +3038,8 @@ Return Value:
     // Enable the FIFOs.
     //
 
-    Value = SER16550_FIFO_CONTROL_ENABLE | SER16550_FIFO_CONTROL_64_BYTE_FIFO;
+    SER16550_WRITE8(Device, Ser16550LineControl, 0);
+    Value = SER16550_FIFO_CONTROL_ENABLE;
     SER16550_WRITE8(Device, Ser16550FifoControl, Value);
 
     //
@@ -3123,15 +3100,91 @@ Return Value:
     // Initialize the FIFO size.
     //
 
-    Device->TransmitFifoSize = SER16550A_FIFO_SIZE;
+    Device->TransmitFifoSize = Ser16550pGetFifoSize(Device);
 
     //
     // Enable interrupts.
     //
 
-    Device->InterruptEnable = SER16550_INTERRUPT_ENABLE_RX_DATA;
+    Device->InterruptEnable = SER16550_INTERRUPT_ENABLE_RX_DATA |
+                              SER16550_INTERRUPT_ENABLE_RX_STATUS;
+
     SER16550_WRITE8(Device, Ser16550InterruptEnable, Device->InterruptEnable);
     return STATUS_SUCCESS;
+}
+
+ULONG
+Ser16550pGetFifoSize (
+    PSER16550_CHILD Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines the size of the serial port FIFO.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    Returns the FIFO size.
+
+--*/
+
+{
+
+    UCHAR DivisorHigh;
+    UCHAR DivisorLow;
+    ULONG Index;
+    UCHAR LineControl;
+    UCHAR ModemControl;
+    UCHAR Value;
+
+    LineControl = SER16550_READ8(Device, Ser16550LineControl);
+    SER16550_WRITE8(Device, Ser16550LineControl, 0);
+    ModemControl = SER16550_READ8(Device, Ser16550ModemControl);
+    Value = SER16550_FIFO_CONTROL_ENABLE |
+            SER16550_FIFO_CONTROL_CLEAR_TRANSMIT |
+            SER16550_FIFO_CONTROL_CLEAR_RECEIVE;
+
+    SER16550_WRITE8(Device, Ser16550FifoControl, Value);
+    SER16550_WRITE8(Device,
+                    Ser16550ModemControl,
+                    SER16550_MODEM_CONTROL_LOOPBACK);
+
+    Value = SER16550_LINE_CONTROL_DIVISOR_LATCH;
+    SER16550_WRITE8(Device, Ser16550LineControl, Value);
+    DivisorLow = SER16550_READ8(Device, Ser16550DivisorLow);
+    DivisorHigh = SER16550_READ8(Device, Ser16550DivisorHigh);
+    SER16550_WRITE8(Device, Ser16550DivisorLow, 1);
+    SER16550_WRITE8(Device, Ser16550DivisorHigh, 0);
+    Value = SER16550_LINE_CONTROL_8_DATA_BITS;
+    SER16550_WRITE8(Device, Ser16550LineControl, Value);
+    for (Index = 0; Index < SER16550_MAX_FIFO; Index += 1) {
+        SER16550_WRITE8(Device, Ser16550Data, Index);
+    }
+
+    KeDelayExecution(FALSE, FALSE, 10 * MICROSECONDS_PER_MILLISECOND);
+    for (Index = 0; Index < SER16550_MAX_FIFO; Index += 1) {
+        if ((SER16550_READ8(Device, Ser16550LineStatus) &
+             SER16550_LINE_STATUS_RX_READY) == 0) {
+
+            break;
+        }
+
+        SER16550_READ8(Device, Ser16550Data);
+    }
+
+    SER16550_WRITE8(Device, Ser16550ModemControl, ModemControl);
+    Value = SER16550_LINE_CONTROL_DIVISOR_LATCH;
+    SER16550_WRITE8(Device, Ser16550LineControl, Value);
+    SER16550_WRITE8(Device, Ser16550DivisorLow, DivisorLow);
+    SER16550_WRITE8(Device, Ser16550DivisorHigh, DivisorHigh);
+    SER16550_WRITE8(Device, Ser16550LineControl, LineControl);
+    return Index;
 }
 
 VOID

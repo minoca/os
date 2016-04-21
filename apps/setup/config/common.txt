@@ -280,7 +280,7 @@ BootEntry = {
     "KernelPath": KernelPath,
     "SystemPath": SystemRoot,
     "Flags": {
-        "Debug": TRUE,
+        "Debug": FALSE,
         "BootDebug": FALSE,
     },
 
