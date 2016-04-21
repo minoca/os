@@ -128,29 +128,6 @@ typedef struct _TERMINAL_SLAVE TERMINAL_SLAVE, *PTERMINAL_SLAVE;
 
 Structure Description:
 
-    This structure defines an entry in the terminal history list.
-
-Members:
-
-    ListEntry - Stores pointers to the next and previous history entries.
-
-    CommandLength - Stores the length of the command, in bytes. There is no
-        null terminator on this string.
-
-    Command - Stores the command buffer.
-
---*/
-
-typedef struct _TERMINAL_HISTORY_ENTRY {
-    LIST_ENTRY ListEntry;
-    ULONG CommandLength;
-    CHAR Command[ANYSIZE_ARRAY];
-} TERMINAL_HISTORY_ENTRY, *PTERMINAL_HISTORY_ENTRY;
-
-/*++
-
-Structure Description:
-
     This structure defines terminal structure.
 
 Members:
@@ -194,12 +171,6 @@ Members:
     WorkingInputLock - Stores a pointer to the working input buffer lock.
 
     Settings - Stores the current terminal settings.
-
-    CommandHistory - Stores the list of historical commands.
-
-    CommandHistorySize - Stores the length of the linked list of commands.
-
-    LastCommand - Stores a pointer to the most recent command.
 
     Flags - Stores a bitfield of flags. See TERMINAL_FLAG_* definitions. This
         field is protected by the terminal output lock.
@@ -260,9 +231,6 @@ typedef struct _TERMINAL {
     PQUEUED_LOCK InputLock;
     PQUEUED_LOCK WorkingInputLock;
     TERMINAL_SETTINGS Settings;
-    LIST_ENTRY CommandHistory;
-    ULONG CommandHistorySize;
-    PTERMINAL_HISTORY_ENTRY LastCommand;
     TERMINAL_KEY_DATA KeyData;
     ULONG Flags;
     UINTN SlaveHandles;
@@ -397,11 +365,6 @@ IopTerminalProcessEditingCharacter (
     PULONG DirtyRegionEnd,
     PULONG ScreenCursorPosition,
     PBOOL OutputWritten
-    );
-
-VOID
-IopTerminalAddHistoryEntry (
-    PTERMINAL Terminal
     );
 
 KSTATUS
@@ -2851,7 +2814,6 @@ Return Value:
     }
 
     RtlZeroMemory(Terminal->InputBuffer, TERMINAL_INPUT_BUFFER_SIZE);
-    INITIALIZE_LIST_HEAD(&(Terminal->CommandHistory));
     Terminal->WorkingInputBuffer = MmAllocatePagedPool(
                                                 TERMINAL_CANONICAL_BUFFER_SIZE,
                                                 TERMINAL_ALLOCATION_TAG);
@@ -3009,7 +2971,6 @@ Return Value:
 
 {
 
-    PTERMINAL_HISTORY_ENTRY HistoryEntry;
     PTERMINAL Terminal;
 
     Terminal = (PTERMINAL)TerminalObject;
@@ -3034,15 +2995,6 @@ Return Value:
     if (Terminal->HardwareHandle != NULL) {
         IoClose(Terminal->HardwareHandle);
         Terminal->HardwareHandle = NULL;
-    }
-
-    while (LIST_EMPTY(&(Terminal->CommandHistory)) == FALSE) {
-        HistoryEntry = LIST_VALUE(Terminal->CommandHistory.Next,
-                                  TERMINAL_HISTORY_ENTRY,
-                                  ListEntry);
-
-        LIST_REMOVE(&(HistoryEntry->ListEntry));
-        MmFreePagedPool(HistoryEntry);
     }
 
     if (Terminal->InputBuffer != NULL) {
@@ -3461,7 +3413,6 @@ Return Value:
 
                 KeReleaseQueuedLock(Terminal->InputLock);
                 InputLockHeld = FALSE;
-                IopTerminalAddHistoryEntry(Terminal);
                 InputAdded = TRUE;
                 Terminal->WorkingInputCursor = 0;
                 Terminal->WorkingInputLength = 0;
@@ -4799,11 +4750,9 @@ Return Value:
 
     TERMINAL_COMMAND_DATA CommandData;
     PCHAR ControlCharacters;
-    PTERMINAL_HISTORY_ENTRY HistoryEntry;
     UINTN LastIndex;
     ULONG LocalFlags;
     UINTN MoveIndex;
-    PLIST_ENTRY NextListEntry;
     CHAR OutputString[TERMINAL_MAX_CANONICAL_OUTPUT];
     UINTN OutputStringLength;
     TERMINAL_PARSE_RESULT ParseResult;
@@ -4979,87 +4928,6 @@ Return Value:
 
         break;
 
-    case TerminalKeyUp:
-    case TerminalKeyDown:
-
-        //
-        // If the list is empty, there's nothing to do.
-        //
-
-        if (LIST_EMPTY(&(Terminal->CommandHistory)) != FALSE) {
-            break;
-        }
-
-        if (Terminal->LastCommand != NULL) {
-            NextListEntry = &(Terminal->LastCommand->ListEntry);
-
-        } else {
-            NextListEntry = &(Terminal->CommandHistory);
-        }
-
-        if (Terminal->KeyData.Key == TerminalKeyUp) {
-
-            //
-            // If it's a virgin line, use the one currently
-            // pointed at (the real last command). Otherwise, go
-            // up one.
-            //
-
-            if ((Terminal->Flags & TERMINAL_FLAG_VIRGIN_LINE) == 0) {
-                NextListEntry = NextListEntry->Next;
-            }
-
-            if (NextListEntry == &(Terminal->CommandHistory)) {
-                NextListEntry = NextListEntry->Next;
-            }
-
-        //
-        // Move to the next command.
-        //
-
-        } else {
-            NextListEntry = NextListEntry->Previous;
-            if (NextListEntry == &(Terminal->CommandHistory)) {
-                NextListEntry = NextListEntry->Previous;
-            }
-        }
-
-        ASSERT(NextListEntry != &(Terminal->CommandHistory));
-
-        HistoryEntry = LIST_VALUE(NextListEntry,
-                                  TERMINAL_HISTORY_ENTRY,
-                                  ListEntry);
-
-        //
-        // Mark the whole current command region as dirty.
-        //
-
-        *DirtyRegionBegin = 0;
-        if (Terminal->WorkingInputLength > *DirtyRegionEnd) {
-            *DirtyRegionEnd = Terminal->WorkingInputLength;
-        }
-
-        //
-        // Copy in the new command.
-        //
-
-        ASSERT(HistoryEntry->CommandLength < TERMINAL_CANONICAL_BUFFER_SIZE);
-
-        RtlCopyMemory(Terminal->WorkingInputBuffer,
-                      HistoryEntry->Command,
-                      HistoryEntry->CommandLength);
-
-        Terminal->WorkingInputLength = HistoryEntry->CommandLength;
-        Terminal->WorkingInputCursor = HistoryEntry->CommandLength;
-        if (Terminal->WorkingInputLength > *DirtyRegionEnd) {
-            *DirtyRegionEnd = Terminal->WorkingInputLength;
-        }
-
-        Terminal->LastCommand = HistoryEntry;
-        Terminal->Flags &= ~TERMINAL_FLAG_VIRGIN_LINE;
-        Terminal->Flags |= TERMINAL_FLAG_UNEDITED_LINE;
-        break;
-
     case TerminalKeyRight:
         if (Terminal->WorkingInputCursor != Terminal->WorkingInputLength) {
             Terminal->WorkingInputCursor += 1;
@@ -5085,133 +4953,6 @@ Return Value:
     }
 
     return TRUE;
-}
-
-VOID
-IopTerminalAddHistoryEntry (
-    PTERMINAL Terminal
-    )
-
-/*++
-
-Routine Description:
-
-    This routine processes a new command in canonical mode, adding it to the
-    command history list.
-
-Arguments:
-
-    Terminal - Supplies a pointer to the terminal.
-
-Return Value:
-
-    None. The routine may fail, but it's largely inconsequential.
-
---*/
-
-{
-
-    ULONG AllocationSize;
-    ULONG CommandLength;
-    PCHAR ControlCharacters;
-    PTERMINAL_HISTORY_ENTRY HistoryEntry;
-
-    HistoryEntry = NULL;
-    CommandLength = Terminal->WorkingInputLength;
-    ControlCharacters = Terminal->Settings.ControlCharacters;
-    if ((CommandLength != 0) &&
-        ((Terminal->WorkingInputBuffer[CommandLength - 1] ==
-          ControlCharacters[TerminalCharacterEndOfLine]) ||
-         (Terminal->WorkingInputBuffer[CommandLength - 1] == '\n'))) {
-
-        CommandLength -= 1;
-    }
-
-    if (CommandLength == 0) {
-        return;
-    }
-
-    if (TERMINAL_MAX_COMMAND_HISTORY == 0) {
-        return;
-    }
-
-    //
-    // If it came straight from the command history, don't add enother entry.
-    //
-
-    if ((Terminal->Flags & TERMINAL_FLAG_UNEDITED_LINE) != 0) {
-        return;
-    }
-
-    //
-    // Calculate the size needed for the new entry.
-    //
-
-    AllocationSize = sizeof(TERMINAL_HISTORY_ENTRY) +
-                     (sizeof(CHAR) * (CommandLength - ANYSIZE_ARRAY));
-
-    //
-    // Remove the last history entry if the list is full.
-    //
-
-    if (Terminal->CommandHistorySize >= TERMINAL_MAX_COMMAND_HISTORY) {
-
-        ASSERT(Terminal->CommandHistory.Previous !=
-               &(Terminal->CommandHistory));
-
-        HistoryEntry = LIST_VALUE(Terminal->CommandHistory.Previous,
-                                  TERMINAL_HISTORY_ENTRY,
-                                  ListEntry);
-
-        if (Terminal->LastCommand == HistoryEntry) {
-
-            ASSERT(HistoryEntry->ListEntry.Previous !=
-                   &(Terminal->CommandHistory));
-
-            Terminal->LastCommand = LIST_VALUE(HistoryEntry->ListEntry.Previous,
-                                               TERMINAL_HISTORY_ENTRY,
-                                               ListEntry);
-        }
-
-        LIST_REMOVE(&(HistoryEntry->ListEntry));
-        Terminal->CommandHistorySize -= 1;
-
-        //
-        // If the entry cannot be reused, then free it.
-        //
-
-        if (HistoryEntry->CommandLength < CommandLength) {
-            MmFreePagedPool(HistoryEntry);
-            HistoryEntry = NULL;
-        }
-    }
-
-    //
-    // Allocate a new entry if one is not being reused.
-    //
-
-    if (HistoryEntry == NULL) {
-        HistoryEntry = MmAllocatePagedPool(AllocationSize,
-                                           TERMINAL_ALLOCATION_TAG);
-
-        if (HistoryEntry == NULL) {
-            return;
-        }
-    }
-
-    //
-    // Initialize the entry and add it to the list.
-    //
-
-    RtlCopyMemory(HistoryEntry->Command,
-                  Terminal->WorkingInputBuffer,
-                  CommandLength);
-
-    HistoryEntry->CommandLength = CommandLength;
-    INSERT_AFTER(&(HistoryEntry->ListEntry), &(Terminal->CommandHistory));
-    Terminal->CommandHistorySize += 1;
-    Terminal->LastCommand = HistoryEntry;
-    return;
 }
 
 KSTATUS
