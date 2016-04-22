@@ -9084,7 +9084,7 @@ Return Value:
 
     Separator = "";
     for (CurrentVector = VectorStart;
-         CurrentVector < VectorCount;
+         CurrentVector < VectorStart + VectorCount;
          CurrentVector += VectorIncrement) {
 
         if ((Flags & DBG_ARM_VECTOR_LIST_FLAG_INDEX) != 0) {
