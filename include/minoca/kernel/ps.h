@@ -417,10 +417,6 @@ Author:
 #define THREAD_FPU_FLAG_IN_USE      0x0001
 #define THREAD_FPU_FLAG_OWNER       0x0002
 
-#define THREAD_FLAG_HAS_FPU2 0x00010000
-#define THREAD_FLAG_FPU_DISABLED 0x00020000
-#define THREAD_FLAG_FPU_ENABLED 0x00040000
-
 //
 // Define the set of thread flags that can be specified on creation. This is
 // also the set of flags that will propagate when a thread is copied.

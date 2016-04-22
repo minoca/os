@@ -468,6 +468,7 @@ Author:
 //
 
 #define ARM_FPSCR_FLUSH_TO_ZERO (1 << 24)
+#define ARM_FPSCR_DEFAULT_NAN (1 << 25)
 
 //
 // Define the required alignment for FPU context.
@@ -2502,6 +2503,48 @@ Arguments:
 Return Value:
 
     None.
+
+--*/
+
+ULONG
+ArGetVfpInstructionRegister (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the floating point instruction register (FPINST).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+ULONG
+ArGetFpscr (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the floating point status and control register (FPSCR).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
 
 --*/
 

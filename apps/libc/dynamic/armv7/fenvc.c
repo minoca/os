@@ -141,7 +141,7 @@ Return Value:
 
     Mask &= FE_ALL_EXCEPT;
     fegetenv(&Environment);
-    Environment.Fpscr &= Mask;
+    Environment.Fpscr |= Mask;
     return fesetenv(&Environment);
 }
 

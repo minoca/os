@@ -117,8 +117,8 @@ Return Value:
             }
         }
 
-        ArDisableFpu();
         CurrentThread->FpuFlags &= ~THREAD_FPU_FLAG_OWNER;
+        ArDisableFpu();
     }
 
     return;

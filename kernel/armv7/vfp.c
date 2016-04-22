@@ -63,6 +63,12 @@ ArpHandleVfpException (
     PTRAP_FRAME TrapFrame
     );
 
+VOID
+ArpRestoreFpuState (
+    PFPU_CONTEXT Context,
+    BOOL SimdSupport
+    );
+
 BOOL
 ArpDummyVfpExceptionHandler (
     PTRAP_FRAME TrapFrame
@@ -199,7 +205,12 @@ Return Value:
 
 {
 
-    ArSaveVfp(Buffer, ArVfpRegisters32);
+    PFPU_CONTEXT AlignedContext;
+
+    AlignedContext = (PVOID)(UINTN)ALIGN_RANGE_UP((UINTN)Buffer,
+                                                  FPU_CONTEXT_ALIGNMENT);
+
+    ArSaveVfp(AlignedContext, ArVfpRegisters32);
     return;
 }
 
@@ -305,11 +316,7 @@ Return Value:
 
 {
 
-    ULONG Control;
-
-    Control = ArGetVfpExceptionRegister();
-    Control &= ~ARM_FPEXC_ENABLE;
-    ArSetVfpExceptionRegister(Control);
+    ArSetVfpExceptionRegister(0);
     return;
 }
 
@@ -363,7 +370,8 @@ Return Value:
 
     UserSharedData = MmGetUserSharedData();
     if ((UserSharedData->ProcessorFeatures & ARM_FEATURE_VFP3) == 0) {
-        ContextStructure->Fpscr |= ARM_FPSCR_FLUSH_TO_ZERO;
+        ContextStructure->Fpscr = ARM_FPSCR_FLUSH_TO_ZERO |
+                                  ARM_FPSCR_DEFAULT_NAN;
     }
 
     return Context;
@@ -426,11 +434,13 @@ Return Value:
 {
 
     ULONG Control;
+    BOOL Handled;
     RUNLEVEL OldRunLevel;
     PKTHREAD Thread;
 
     ASSERT(ArAreInterruptsEnabled() != FALSE);
 
+    Handled = FALSE;
     Thread = KeGetCurrentThread();
 
     //
@@ -467,7 +477,21 @@ Return Value:
 
     Control = ArGetVfpExceptionRegister();
     if ((Control & ARM_FPEXC_ENABLE) != 0) {
-        return FALSE;
+        if ((Control & ARM_FPEXC_EXCEPTION) != 0) {
+            RtlDebugPrint("VFP Exception: %x\n", Control);
+
+        } else {
+            RtlDebugPrint("Unsupported VFP instruction.\n");
+        }
+
+        RtlDebugPrint("FPINST %x FPSCR %x\n",
+                      ArGetVfpInstructionRegister(),
+                      ArGetFpscr());
+
+        Control &= ~ARM_FPEXC_EXCEPTION;
+        ArSetVfpExceptionRegister(Control);
+        KeLowerRunLevel(OldRunLevel);
+        goto HandleVfpExceptionEnd;
     }
 
     Control |= ARM_FPEXC_ENABLE;
@@ -479,14 +503,52 @@ Return Value:
     //
 
     if ((Thread->FpuFlags & THREAD_FPU_FLAG_OWNER) == 0) {
-        ArRestoreVfp(Thread->FpuContext, ArVfpRegisters32);
+        ArpRestoreFpuState(Thread->FpuContext, ArVfpRegisters32);
     }
 
     Thread->FpuFlags |= THREAD_FPU_FLAG_OWNER | THREAD_FPU_FLAG_IN_USE;
     KeLowerRunLevel(OldRunLevel);
+    Handled = TRUE;
 
 HandleVfpExceptionEnd:
-    return TRUE;
+    return Handled;
+}
+
+VOID
+ArpRestoreFpuState (
+    PFPU_CONTEXT Context,
+    BOOL SimdSupport
+    )
+
+/*++
+
+Routine Description:
+
+    This routine restores the Vector Floating Point unit state into the
+    hardware.
+
+Arguments:
+
+    Context - Supplies a pointer to the context to restore.
+
+    SimdSupport - Supplies a boolean indicating whether the VFP unit contains
+        32 64-bit registers (TRUE) or 16 64-bit registers (FALSE).
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PFPU_CONTEXT AlignedContext;
+
+    AlignedContext = (PVOID)(UINTN)ALIGN_RANGE_UP((UINTN)Context,
+                                                  FPU_CONTEXT_ALIGNMENT);
+
+    ArRestoreVfp(AlignedContext, SimdSupport);
+    return;
 }
 
 BOOL

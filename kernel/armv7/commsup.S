@@ -2041,6 +2041,64 @@ FUNCTION ArSetVfpExceptionRegister
 END_FUNCTION ArSetVfpExceptionRegister
 
 ##
+## ULONG
+## ArGetVfpInstructionRegister (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine gets the floating point instruction register (FPINST).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+FUNCTION ArGetVfpInstructionRegister
+    mrc     p10, 7, %r0, c9, c0, 0
+    bx      %lr
+
+END_FUNCTION ArGetVfpInstructionRegister
+
+##
+## ULONG
+## ArGetFpscr (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine gets the floating point status and control register (FPSCR).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the contents of the register.
+
+--*/
+
+FUNCTION ArGetFpscr
+    vmrs    %r0, FPSCR                  @ Get FPSCR.
+    bx      %lr
+
+END_FUNCTION ArGetFpscr
+
+##
 ## VOID
 ## ArSaveVfp (
 ##     PFPU_CONTEXT Context,
