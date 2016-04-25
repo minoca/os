@@ -142,8 +142,6 @@ Environment:
 #define EXCEPTION_STACK_R0   0
 #define EXCEPTION_STACK_CPSR 4
 
-#define EXCEPTION_STACK_SIZE 8
-
 ##
 ## Define the size of the PROCESSOR_CONTEXT structure.
 ##

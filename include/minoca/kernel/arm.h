@@ -1129,7 +1129,8 @@ Return Value:
 
 VOID
 ArpInitializeExceptionStacks (
-    PVOID ExceptionStacksBase
+    PVOID ExceptionStacksBase,
+    ULONG ExceptionStackSize
     );
 
 /*++
@@ -1146,6 +1147,8 @@ Arguments:
     ExceptionStacksBase - Supplies a pointer to the lowest address that should
         be used for exception stacks. Each stack takes up 16 bytes and there are
         4 modes, so at least 64 bytes are needed.
+
+    ExceptionStackSize - Supplies the size of each exception stack in bytes.
 
 Return Value:
 

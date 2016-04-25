@@ -40,7 +40,8 @@ ASSEMBLY_FILE_HEADER
 ##
 ## VOID
 ## EfipInitializeExceptionStacks (
-##     PVOID ExceptionStacksBase
+##     PVOID ExceptionStacksBase,
+##     ULONG ExceptionStackSize
 ##     )
 ##
 
@@ -59,6 +60,8 @@ Arguments:
         be used for exception stacks. Each stack takes up 16 bytes and there are
         4 modes, so at least 64 bytes are needed.
 
+    ExceptionStackSize - Supplies the size of each exception stack.
+
 Return Value:
 
     None.
@@ -71,7 +74,6 @@ FUNCTION EfipInitializeExceptionStacks
     ## Load R1 with an individual stack size.
     ##
 
-    ldr     %r1, =EXCEPTION_STACK_SIZE
     add     %r0, %r0, %r1
 
     ##

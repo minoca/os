@@ -47,7 +47,8 @@ Environment:
 
 VOID
 EfipInitializeExceptionStacks (
-    PVOID ExceptionStacksBase
+    PVOID ExceptionStacksBase,
+    ULONG ExceptionStackSize
     );
 
 VOID
@@ -185,7 +186,7 @@ Return Value:
 
 {
 
-    EfipInitializeExceptionStacks(EfiExceptionStacks);
+    EfipInitializeExceptionStacks(EfiExceptionStacks, EXCEPTION_STACK_SIZE);
     EfipInitializeInterrupts();
     return;
 }

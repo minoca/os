@@ -33,8 +33,6 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define DOUBLE_FAULT_STACK_SIZE 1024
-
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
@@ -45,7 +43,8 @@ Environment:
 
 VOID
 BoInitializeExceptionStacks (
-    PVOID ExceptionStacksBase
+    PVOID ExceptionStacksBase,
+    ULONG ExceptionStackSize
     );
 
 VOID
@@ -132,10 +131,6 @@ BopDoubleFaultHandler (
 //
 
 ULONG BoExceptionStacks[EXCEPTION_STACK_COUNT * EXCEPTION_STACK_SIZE];
-
-UCHAR BoDoubleFaultStack[DOUBLE_FAULT_STACK_SIZE];
-PUCHAR BoDoubleFaultStackPointer =
-                  BoDoubleFaultStack + DOUBLE_FAULT_STACK_SIZE - sizeof(ULONG);
 
 //
 // Global containing a partially initialized interrupt table. This table will
@@ -224,7 +219,7 @@ Return Value:
 
 {
 
-    BoInitializeExceptionStacks(BoExceptionStacks);
+    BoInitializeExceptionStacks(BoExceptionStacks, EXCEPTION_STACK_SIZE);
     BopInitializeInterrupts();
     return;
 }

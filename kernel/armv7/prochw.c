@@ -152,7 +152,7 @@ Return Value:
     // Initialize the exception stacks.
     //
 
-    ArpInitializeExceptionStacks(ExceptionStacks);
+    ArpInitializeExceptionStacks(ExceptionStacks, EXCEPTION_STACK_SIZE);
 
     //
     // Initialize the pointer to the processor block.

@@ -54,7 +54,8 @@ Environment:
 
 VOID
 BoInitializeExceptionStacks (
-    PVOID ExceptionStacksBase
+    PVOID ExceptionStacksBase,
+    ULONG ExceptionStackSize
     );
 
 BOOL
@@ -280,7 +281,7 @@ Return Value:
         }
     }
 
-    BoInitializeExceptionStacks(BoExceptionStacks);
+    BoInitializeExceptionStacks(BoExceptionStacks, EXCEPTION_STACK_SIZE);
     return;
 }
 
