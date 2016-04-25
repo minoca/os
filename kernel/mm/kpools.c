@@ -671,8 +671,13 @@ Return Value:
     }
 
     if (Allocation == NULL) {
+
+        //
+        // Allocate space, plus an extra guard page.
+        //
+
         Status = MmpAllocateAddressRange(&MmKernelVirtualSpace,
-                                         Size,
+                                         Size + PageSize,
                                          Alignment,
                                          MemoryTypeReserved,
                                          AllocationStrategyAnyAddress,
@@ -684,7 +689,12 @@ Return Value:
         }
 
         RangeAllocated = TRUE;
-        Stack = Allocation;
+
+        //
+        // Map everything but the guard page.
+        //
+
+        Stack = Allocation + PageSize;
         Status = MmpMapRange(Stack, Size, PageSize, PageSize, FALSE, FALSE);
         if (!KSUCCESS(Status)) {
             goto AllocateKernelStackEnd;
@@ -703,8 +713,8 @@ AllocateKernelStackEnd:
                          UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
             MmpFreeAccountingRange(NULL,
-                                   Stack,
-                                   Size,
+                                   Stack - PageSize,
+                                   Size + PageSize,
                                    FALSE,
                                    UnmapFlags);
 
@@ -744,6 +754,7 @@ Return Value:
 
     PLIST_ENTRY Entry;
     RUNLEVEL OldRunLevel;
+    ULONG PageSize;
     ULONG UnmapFlags;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -773,15 +784,17 @@ Return Value:
     }
 
     //
-    // Actually do the work of freeing the stack, the cache is full.
+    // Actually do the work of freeing the stack, the cache is full. Remember
+    // that there is a guard page there as well to release.
     //
 
+    PageSize = MmPageSize();
     UnmapFlags = UNMAP_FLAG_FREE_PHYSICAL_PAGES |
                  UNMAP_FLAG_SEND_INVALIDATE_IPI;
 
     MmpFreeAccountingRange(NULL,
-                           StackBase,
-                           Size,
+                           StackBase - PageSize,
+                           Size + PageSize,
                            FALSE,
                            UnmapFlags);
 
