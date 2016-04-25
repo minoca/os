@@ -97,6 +97,8 @@ Environment:
 
 #define AM335_M3_IPC_PARAMETER_DEFAULT 0xFFFFFFFF
 
+#define AM335_IPC_MAX_SPIN_COUNT 50000
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -272,7 +274,7 @@ Members:
 typedef struct _AM3_WAKE_M3_IPC_DATA {
     ULONG ResumeAddress;
     ULONG Command;
-    ULONG Data[2];
+    ULONG Data[4];
 } AM3_WAKE_M3_IPC_DATA, *PAM3_WAKE_M3_IPC_DATA;
 
 /*++
@@ -515,6 +517,11 @@ Am3SocSuspendCallback (
 
 KSTATUS
 Am3SocSuspendBegin (
+    PAM3_SOC Device
+    );
+
+KSTATUS
+Am3SocSuspendEnd (
     PAM3_SOC Device
     );
 
@@ -1901,8 +1908,11 @@ Return Value:
 
 {
 
+    PAM3_WAKE_M3_IPC_DATA IpcData;
     UINTN Size;
+    ULONGLONG Timeout;
     ULONG Value;
+    ULONG Version;
 
     ASSERT(Device->CortexM3 != NULL);
 
@@ -1919,6 +1929,33 @@ Return Value:
     Value = AM3_READ_PRM_WAKEUP(Device, Am3RmWakeupResetControl);
     Value &= ~AM335_RM_WAKEUP_RESET_CONTROL_RESET_CORTEX_M3;
     AM3_WRITE_PRM_WAKEUP(Device, Am3RmWakeupResetControl, Value);
+
+    //
+    // Get the firmware version to make sure the M3 is alive.
+    //
+
+    IpcData = &(Device->M3Ipc);
+    IpcData->Command = Am3Cm3CommandVersion;
+    IpcData->Data[0] = AM335_M3_IPC_PARAMETER_DEFAULT;
+    IpcData->Data[1] = AM335_M3_IPC_PARAMETER_DEFAULT;
+    IpcData->Data[2] = AM335_M3_IPC_PARAMETER_DEFAULT;
+    IpcData->Data[3] = AM335_M3_IPC_PARAMETER_DEFAULT;
+    Am3SocSetupIpc(Device);
+    Am3MailboxSend(&(Device->Mailbox), AM335_WAKEM3_MAILBOX, -1);
+    Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
+    Timeout = HlQueryTimeCounter() + (HlQueryTimeCounterFrequency() * 5);
+    do {
+        Version = AM3_READ_CONTROL(Device, Am3ControlIpc2) & 0x0000FFFF;
+
+    } while ((Version == 0xFFFF) && (HlQueryTimeCounter() <= Timeout));
+
+    AM3_WRITE_CONTROL(Device, Am3ControlIpc1, Am3Cm3ResponseFail << 16);
+    if (Version == 0xFFFF) {
+        RtlDebugPrint("Am3: Failed to bring up CM3 firmware.\n");
+        return STATUS_TIMEOUT;
+    }
+
+    RtlDebugPrint("Am3: CM3 Firmware version %x\n", Version);
     return STATUS_SUCCESS;
 }
 
@@ -2226,7 +2263,7 @@ Return Value:
         break;
 
     case HlSuspendPhaseResumeEnd:
-        Status = Am3SocResetM3(Device);
+        Status = Am3SocSuspendEnd(Device);
         break;
 
     default:
@@ -2298,11 +2335,13 @@ Return Value:
         return STATUS_NOT_SUPPORTED;
     }
 
-    IpcData->Data[0] = AM335_M3_IPC_PARAMETER_DEFAULT;
-    IpcData->Data[1] = AM335_M3_IPC_PARAMETER_DEFAULT;
+    //
+    // Send the request IPC to the Cortex M3.
+    //
+
     Device->M3State = Am3M3StatePowerMessage;
     Am3SocSetupIpc(Device);
-    Am3MailboxSend(&(Device->Mailbox), AM335_WAKEM3_MAILBOX, 0);
+    Am3MailboxSend(&(Device->Mailbox), AM335_WAKEM3_MAILBOX, -1);
     Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
     Status = Am3SocWaitForIpcResult(Device);
     if (Status != STATUS_MORE_PROCESSING_REQUIRED) {
@@ -2318,6 +2357,53 @@ Return Value:
         Status = STATUS_SUCCESS;
     }
 
+    return Status;
+}
+
+KSTATUS
+Am3SocSuspendEnd (
+    PAM3_SOC Device
+    )
+
+/*++
+
+Routine Description:
+
+    This routine ends a transition from a deep sleep state.
+
+Arguments:
+
+    Device - Supplies a pointer to the device.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONG Result;
+    KSTATUS Status;
+
+    //
+    // See if a reset is needed.
+    //
+
+    Result = AM3_READ_CONTROL(Device, Am3ControlIpc1) >> 16;
+    if (Result == Am3Cm3ResponsePass) {
+        Status = STATUS_SUCCESS;
+
+    } else {
+        Status = Am3SocResetM3(Device);
+    }
+
+    //
+    // Write a failure result into the register.
+    //
+
+    Result = Am3Cm3ResponseFail << 16;
+    AM3_WRITE_CONTROL(Device, Am3ControlIpc1, Result);
     return Status;
 }
 
@@ -2349,28 +2435,29 @@ Return Value:
 
     IpcData = &(Device->M3Ipc);
     IpcData->Command = Am3Cm3CommandResetStateMachine;
-    IpcData->Data[0] = AM335_M3_IPC_PARAMETER_DEFAULT;
-    IpcData->Data[1] = AM335_M3_IPC_PARAMETER_DEFAULT;
-    Device->M3State = Am3M3StatePowerMessage;
+    Device->M3State = Am3M3StateResetMessage;
 
     //
-    // Send and then immediately revoke the message. If the flush is done
-    // after collecting the response, then confusion results because the M3
-    // continues to get interrupts and process the same message. Even this
-    // send-revoke sequence is not great because the M3 could still loop
-    // many times and get confused. The better solution would be to have the
-    // M3 ignore messages that don't have 0xFFFF0000 in the upper 16 bits (ie
-    // messages it's already replied to).
+    // Normally the message needs to be sent and immediately revoked because
+    // wait for IPC result will change it to an invalid message, and if more
+    // interrupts come in the M3 will suck that into its current message
+    // variable. For a power transition, this would be deadly, since the M3
+    // looks at that message ID again after the A8 WFIs. Here however the A8
+    // might be racing with the M3 if an interrupt came in after the A8 WFI but
+    // before the M3 could take it down. If that's the case the M3's mailbox
+    // interrupt might be disabled, so pulsing the interrupt might cause it
+    // to be missed. Keep it interrupting until the M3 sees it.
     //
 
     Am3SocSetupIpc(Device);
-    Am3MailboxSend(&(Device->Mailbox), AM335_WAKEM3_MAILBOX, 0);
-    Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
+    Am3MailboxSend(&(Device->Mailbox), AM335_WAKEM3_MAILBOX, -1);
     Status = Am3SocWaitForIpcResult(Device);
+    Am3MailboxFlush(&(Device->Mailbox), AM335_WAKEM3_MAILBOX);
     if (!KSUCCESS(Status)) {
         RtlDebugPrint("Cortex M3 reset failure: %x\n", Status);
     }
 
+    Device->M3State = Am3M3StateReset;
     return Status;
 }
 
@@ -2406,6 +2493,8 @@ Return Value:
     AM3_WRITE_CONTROL(Device, Am3ControlIpc1, Command);
     AM3_WRITE_CONTROL(Device, Am3ControlIpc2, Device->M3Ipc.Data[0]);
     AM3_WRITE_CONTROL(Device, Am3ControlIpc3, Device->M3Ipc.Data[1]);
+    AM3_WRITE_CONTROL(Device, Am3ControlIpc4, Device->M3Ipc.Data[2]);
+    AM3_WRITE_CONTROL(Device, Am3ControlIpc5, Device->M3Ipc.Data[3]);
     return;
 }
 
@@ -2438,16 +2527,23 @@ Return Value:
 {
 
     ULONG Result;
+    ULONG SpinCount;
     ULONG Value;
 
     //
-    // Wait for the command to clear.
+    // Wait for the command to clear. Normally spin counts are a terrible way
+    // to timeout, but in this case this is it really shouldn't take long
+    // for the M3 to respond, and this is really just a failsafe to keep the
+    // machine from hanging entirely.
     //
 
+    SpinCount = 0;
     do {
         Value = AM3_READ_CONTROL(Device, Am3ControlIpc1);
+        SpinCount += 1;
 
-    } while ((Value & 0xFFFF0000) == 0xFFFF0000);
+    } while (((Value & 0xFFFF0000) == 0xFFFF0000) &&
+             (SpinCount < AM335_IPC_MAX_SPIN_COUNT));
 
     if ((Value & 0x0000FFFF) != Device->M3Ipc.Command) {
         RtlDebugPrint("Am3: Got response %x for other command %x\n",
@@ -2455,12 +2551,18 @@ Return Value:
                       Device->M3Ipc.Command);
     }
 
+    if (SpinCount >= AM335_IPC_MAX_SPIN_COUNT) {
+        RtlDebugPrint("Am3: CM3 hung.\n");
+
+        ASSERT(FALSE);
+    }
+
     //
-    // Write a bogus value into the command to detect cases where the M3 is
-    // looping re-processing the same command.
+    // Write a bogus value into the command to prevent bugs involving rerunning
+    // a previous or invalid command.
     //
 
-    AM3_WRITE_CONTROL(Device, Am3ControlIpc1, 0x66660000);
+    AM3_WRITE_CONTROL(Device, Am3ControlIpc1, Am3Cm3ResponseFail << 16);
     Result = Value >> 16;
     switch (Result) {
     case Am3Cm3ResponsePass:
