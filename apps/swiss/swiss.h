@@ -8,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This header contains definitions for the Swiss Army Knife utility.
+    This header contains definitions for the Swiss utility.
 
 Author:
 

@@ -8,8 +8,8 @@ Module Name:
 
 Abstract:
 
-    This module implements the command table for the Swiss Army Knife utility.
-    These are the implemented commands for Windows.
+    This module implements the command table for the Swiss utility. These are
+    the implemented commands for Windows.
 
 Author:
 

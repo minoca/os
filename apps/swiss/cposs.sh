@@ -36,18 +36,46 @@ fi
 APPS="$SRCROOT/os/apps"
 LIB="$SRCROOT/os/lib"
 
+SED_ARG='/^Copyright/,/^Module Name:/{
+    # Print the last line normally.
+    /^Module Name:/b
+    # Preserve spacing.
+    /^$/b
+
+    # Normalize the Minoca copyright. Add the OSS license after the Minoca
+    # copyright.
+    s/Copyright[^0-9]*\([-, 0-9]*\).*/Copyright (c) \1Minoca Corp./
+    t addlicense
+
+    # Preserve other non-Minoca copyrights.
+    /^[Cc]opyright.*/ b
+
+    # Delete all other junk.
+    d
+    :addlicense {
+        p # Print the Minoca copyright line.
+        i \
+\
+This project is dual licensed. You are receiving it under the terms of the\
+GNU General Public License version 3 (GPLv3). Alternative licensing terms are\
+available. Contact info@minocacorp.com for details. See the LICENSE file at the\
+root of this project for complete licensing information.
+        d
+    }
+}'
+
 ROOT_FILES=".gitattributes
 .gitconfig"
 
 for file in $ROOT_FILES; do
-    cp -pv "$SRCROOT/os/$file" "$DEST/$file"
+    sed "$SED_ARG" "$SRCROOT/os/$file" > "$DEST/$file"
 done
 
 TERMLIB="$DEST/termlib"
 mkdir -p "$TERMLIB"
 TERMLIB_FILES="term.c"
 for file in $TERMLIB_FILES; do
-    cp -pv "$LIB/termlib/$file" "$TERMLIB/$file"
+    sed "$SED_ARG" "$LIB/termlib/$file" > "$TERMLIB/$file"
 done
 
 RTL_BASE="$DEST/rtl/base"
@@ -80,16 +108,16 @@ x86/rtlmem.S
 x64/rtlarch.S
 x64/rtlmem.S"
 for file in $RTL_BASE_FILES; do
-    cp -pv "$LIB/rtl/base/$file" "$RTL_BASE/$file"
+    sed "$SED_ARG" "$LIB/rtl/base/$file" > "$RTL_BASE/$file"
 done
 
-cp -pv "$SRCROOT/os/lib/rtl/rtlp.h" "$DEST/rtl/rtlp.h"
+sed "$SED_ARG" "$SRCROOT/os/lib/rtl/rtlp.h" > "$DEST/rtl/rtlp.h"
 
 RTLC="$DEST/rtl/rtlc"
 mkdir -p "$RTLC/"
 RTLC_FILES="stubs.c"
 for file in $RTLC_FILES; do
-    cp -pv "$LIB/rtl/rtlc/$file" "$RTLC/$file"
+    sed "$SED_ARG" "$LIB/rtl/rtlc/$file" > "$RTLC/$file"
 done
 
 WINCSUP="$DEST/libc/wincsup"
@@ -100,7 +128,7 @@ WINCSUP_FILES="../regexcmp.c
 strftime.c
 include/regex.h"
 for file in $WINCSUP_FILES; do
-    cp -pv "$APPS/libc/dynamic/wincsup/$file" "$WINCSUP/$file"
+    sed "$SED_ARG" "$APPS/libc/dynamic/wincsup/$file" > "$WINCSUP/$file"
 done
 
 SWISS="$DEST/src"
@@ -229,7 +257,7 @@ sh/shntos.c
 swlib/ntos.c"
 
 for file in $SWISS_FILES; do
-    cp -pv "$APPS/swiss/$file" "$SWISS/$file"
+    sed "$SED_ARG" "$APPS/swiss/$file" > "$SWISS/$file"
 done
 
 SWISS_EDITED_FILES="win32/w32cmds.c
@@ -238,8 +266,7 @@ uos/uoscmds.c
 win32/w32cmds.c"
 
 for file in $SWISS_EDITED_FILES; do
-    echo \'$APPS/swiss/$file\' -\> \'$SWISS/$file\'
-    sed '/.*DwMain.*/d' "$APPS/swiss/$file" > "$SWISS/$file"
+    sed -e '/.*DwMain.*/d' -e "$SED_ARG" "$APPS/swiss/$file" > "$SWISS/$file"
 done
 
 INCLUDE="$DEST/include"
@@ -255,7 +282,7 @@ minoca/kernel/arm.inc
 minoca/kernel/x64.inc"
 
 for file in $INCLUDE_FILES; do
-    cp -pv "$SRCROOT/os/include/$file" "$INCLUDE/$file"
+    sed "$SED_ARG" "$SRCROOT/os/include/$file" > "$INCLUDE/$file"
 done
 
 echo "Done copying swiss files."

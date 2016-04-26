@@ -8,8 +8,8 @@ Module Name:
 
 Abstract:
 
-    This module implements the command table for the Swiss Army Knife utility.
-    These are the implemented commands for POSIX-like operating systems.
+    This module implements the command table for the Swiss utility. These are
+    the implemented commands for POSIX-like operating systems.
 
 Author:
 

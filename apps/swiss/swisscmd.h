@@ -8,7 +8,7 @@ Module Name:
 
 Abstract:
 
-    This header contains definitions for the support Swiss Army Knife commands.
+    This header contains definitions for the support Swiss commands.
 
 Author:
 
@@ -51,7 +51,7 @@ INT
 
 Routine Description:
 
-    This routine implements the entry point for a Swiss Army Knife command.
+    This routine implements the entry point for a Swiss command.
 
 Arguments:
 

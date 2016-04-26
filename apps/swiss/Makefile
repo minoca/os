@@ -8,8 +8,8 @@
 #
 #   Abstract:
 #
-#       This executable implements the Swiss Army Knife utility, which contains
-#       many basic core utilities, including a Bourne-compatible shell.
+#       This executable implements the Swiss utility, which contains many
+#       basic core utilities, including a Bourne-compatible shell.
 #
 #   Author:
 #

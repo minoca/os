@@ -8,8 +8,8 @@
 #
 #   Abstract:
 #
-#       This executable implements the Swiss Army Knife utility targeted for
-#       Win32 platforms.
+#       This executable implements the Swiss utility targeted for Windows
+#       platforms.
 #
 #   Author:
 #
