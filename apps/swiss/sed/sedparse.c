@@ -1764,8 +1764,10 @@ Return Value:
 
             if ((Character == '\n') ||
                 ((EndAtSpace != FALSE) &&
-                 ((Character == ' ') || (Character == ';')))) {
+                 ((Character == ' ') || (Character == ';') ||
+                  (Character == '#')))) {
 
+                Script -= 1;
                 break;
             }
         }

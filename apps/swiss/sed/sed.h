@@ -92,8 +92,8 @@ Author:
     "       n -- Substitute only the nth occurrence.\n"                        \
     "       g -- Substitute every non-overlapping occurrence.\n"               \
     "       p -- Write to standard out if a replacement was made.\n"           \
-    "       w wfile -- Append (write) to the given wfile if a replacement was "\
-    "       made.\n"                                                           \
+    "       w wfile -- Append (write) to the given wfile if a replacement \n"  \
+    "       was made.\n"                                                       \
     "  t[label] -- Branch to the given label if any substitutions have been \n"\
     "       made since reading an input line or executing a t.\n"              \
     "  w wfile -- Append (write) the pattern space to the given wfile.\n"      \
