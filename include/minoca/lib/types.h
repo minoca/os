@@ -69,6 +69,9 @@ Author:
 #define PACKED __attribute__((__packed__))
 #define NO_RETURN __attribute__((__noreturn__))
 #define ALIGNED(_Alignment) __attribute__((aligned(_Alignment)))
+#define ALIGNED16 ALIGNED(16)
+#define ALIGNED32 ALIGNED(32)
+#define ALIGNED64 ALIGNED(64)
 
 //
 // Error out if the architecture is unknown.

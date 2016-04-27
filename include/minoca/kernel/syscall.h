@@ -29,7 +29,7 @@ Author:
 // alignment for fast copies).
 //
 
-#define SYSCALL_STRUCT ALIGNED(64)
+#define SYSCALL_STRUCT ALIGNED64
 
 #define SYS_WAIT_TIME_INDEFINITE MAX_ULONG
 
