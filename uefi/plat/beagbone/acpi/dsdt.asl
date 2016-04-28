@@ -71,7 +71,7 @@ DefinitionBlock (
                             0x00002000)
 
                 //
-                // Cortex M3 Memory
+                // Cortex M3 Code.
                 //
 
                 DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
@@ -81,6 +81,18 @@ DefinitionBlock (
                             0x44D03FFF,
                             0x00000000,
                             0x00004000)
+
+                //
+                // Cortex M3 Data.
+                //
+
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x44D80000,
+                            0x44D81FFF,
+                            0x00000000,
+                            0x00002000)
 
                 //
                 // Mailbox

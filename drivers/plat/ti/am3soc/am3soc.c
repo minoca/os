@@ -293,7 +293,9 @@ Members:
     SocControl - Stores the virtual address of the memory mapping to the SOC
         Control region.
 
-    CortexM3 - Stores the virtual address of the Cortex M3 code region.
+    CortexM3Code - Stores the virtual address of the Cortex M3 code region.
+
+    CortexM3Data - Stores the virtual address of the Cortex M3 data region.
 
     Emif - Stores the virtual address of the EMIF interface.
 
@@ -341,7 +343,8 @@ typedef struct _AM3_SOC {
     PDEVICE OsDevice;
     PVOID Prcm;
     PVOID SocControl;
-    PVOID CortexM3;
+    PVOID CortexM3Code;
+    PVOID CortexM3Data;
     PVOID Emif;
     PVOID Ocmc;
     PHYSICAL_ADDRESS OcmcPhysical;
@@ -1053,7 +1056,8 @@ Return Value:
     ULONG AlignmentOffset;
     PRESOURCE_ALLOCATION Allocation;
     PRESOURCE_ALLOCATION_LIST AllocationList;
-    PRESOURCE_ALLOCATION CortexM3;
+    PRESOURCE_ALLOCATION CortexM3Code;
+    PRESOURCE_ALLOCATION CortexM3Data;
     PRESOURCE_ALLOCATION Emif;
     PHYSICAL_ADDRESS EndAddress;
     PRESOURCE_ALLOCATION LineAllocation;
@@ -1068,7 +1072,8 @@ Return Value:
     PRESOURCE_ALLOCATION SocControl;
     KSTATUS Status;
 
-    CortexM3 = NULL;
+    CortexM3Code = NULL;
+    CortexM3Data = NULL;
     Emif = NULL;
     Mailbox = NULL;
     OcmcRam = NULL;
@@ -1120,8 +1125,11 @@ Return Value:
             } else if (SocControl == NULL) {
                 SocControl = Allocation;
 
-            } else if (CortexM3 == NULL) {
-                CortexM3 = Allocation;
+            } else if (CortexM3Code == NULL) {
+                CortexM3Code = Allocation;
+
+            } else if (CortexM3Data == NULL) {
+                CortexM3Data = Allocation;
 
             } else if (Mailbox == NULL) {
                 Mailbox = Allocation;
@@ -1145,8 +1153,9 @@ Return Value:
         (Prcm->Length < AM335_PRCM_SIZE) ||
         (SocControl == NULL) ||
         (SocControl->Length < AM335_SOC_CONTROL_SIZE) ||
-        (CortexM3 == NULL) ||
-        (CortexM3->Length < AM335_CORTEX_M3_SIZE) ||
+        (CortexM3Code == NULL) ||
+        (CortexM3Code->Length < AM335_CORTEX_M3_CODE_SIZE) ||
+        (CortexM3Data == NULL) ||
         (Mailbox == NULL) ||
         (OcmcRam == NULL)) {
 
@@ -1280,17 +1289,17 @@ Return Value:
     // Map the Cortex M3 region.
     //
 
-    if (Device->CortexM3 == NULL) {
+    if (Device->CortexM3Code == NULL) {
 
         //
         // Page align the mapping request.
         //
 
         PageSize = MmPageSize();
-        PhysicalAddress = CortexM3->Allocation;
-        EndAddress = PhysicalAddress + CortexM3->Length;
+        PhysicalAddress = CortexM3Code->Allocation;
+        EndAddress = PhysicalAddress + CortexM3Code->Length;
         PhysicalAddress = ALIGN_RANGE_DOWN(PhysicalAddress, PageSize);
-        AlignmentOffset = CortexM3->Allocation - PhysicalAddress;
+        AlignmentOffset = CortexM3Code->Allocation - PhysicalAddress;
         EndAddress = ALIGN_RANGE_UP(EndAddress, PageSize);
         Size = (ULONG)(EndAddress - PhysicalAddress);
 
@@ -1299,23 +1308,60 @@ Return Value:
         // bottom needs to be fancier.
         //
 
-        ASSERT(Size == AM335_CORTEX_M3_SIZE);
+        ASSERT(Size == AM335_CORTEX_M3_CODE_SIZE);
 
-        Device->CortexM3 = MmMapPhysicalAddress(PhysicalAddress,
-                                                Size,
-                                                TRUE,
-                                                FALSE,
-                                                TRUE);
+        Device->CortexM3Code = MmMapPhysicalAddress(PhysicalAddress,
+                                                    Size,
+                                                    TRUE,
+                                                    FALSE,
+                                                    TRUE);
 
-        if (Device->CortexM3 == NULL) {
+        if (Device->CortexM3Code == NULL) {
             Status = STATUS_NO_MEMORY;
             goto StartDeviceEnd;
         }
 
-        Device->CortexM3 += AlignmentOffset;
+        Device->CortexM3Code += AlignmentOffset;
     }
 
-    ASSERT(Device->CortexM3 != NULL);
+    ASSERT(Device->CortexM3Code != NULL);
+
+    if (Device->CortexM3Data == NULL) {
+
+        //
+        // Page align the mapping request.
+        //
+
+        PageSize = MmPageSize();
+        PhysicalAddress = CortexM3Data->Allocation;
+        EndAddress = PhysicalAddress + CortexM3Data->Length;
+        PhysicalAddress = ALIGN_RANGE_DOWN(PhysicalAddress, PageSize);
+        AlignmentOffset = CortexM3Data->Allocation - PhysicalAddress;
+        EndAddress = ALIGN_RANGE_UP(EndAddress, PageSize);
+        Size = (ULONG)(EndAddress - PhysicalAddress);
+
+        //
+        // If the size is not a the constant, then the failure code at the
+        // bottom needs to be fancier.
+        //
+
+        ASSERT(Size == AM335_CORTEX_M3_DATA_SIZE);
+
+        Device->CortexM3Data = MmMapPhysicalAddress(PhysicalAddress,
+                                                    Size,
+                                                    TRUE,
+                                                    FALSE,
+                                                    TRUE);
+
+        if (Device->CortexM3Data == NULL) {
+            Status = STATUS_NO_MEMORY;
+            goto StartDeviceEnd;
+        }
+
+        Device->CortexM3Data += AlignmentOffset;
+    }
+
+    ASSERT(Device->CortexM3Data != NULL);
 
     //
     // Map the EMIF region.
@@ -1427,9 +1473,14 @@ StartDeviceEnd:
             Device->SocControl = NULL;
         }
 
-        if (Device->CortexM3 != NULL) {
-            MmUnmapAddress(Device->CortexM3, AM335_CORTEX_M3_SIZE);
-            Device->CortexM3 = NULL;
+        if (Device->CortexM3Code != NULL) {
+            MmUnmapAddress(Device->CortexM3Code, AM335_CORTEX_M3_CODE_SIZE);
+            Device->CortexM3Code = NULL;
+        }
+
+        if (Device->CortexM3Data != NULL) {
+            MmUnmapAddress(Device->CortexM3Data, AM335_CORTEX_M3_DATA_SIZE);
+            Device->CortexM3Data = NULL;
         }
 
         if (Device->Emif != NULL) {
@@ -1914,7 +1965,7 @@ Return Value:
     ULONG Value;
     ULONG Version;
 
-    ASSERT(Device->CortexM3 != NULL);
+    ASSERT(Device->CortexM3Code != NULL);
 
     //
     // Copy the Cortex M3 firmware code into place, and take the Cortex M3 out
@@ -1924,7 +1975,7 @@ Return Value:
     Size = (UINTN)&_binary_am3cm3fw_bin_end -
            (UINTN)&_binary_am3cm3fw_bin_start;
 
-    RtlCopyMemory(Device->CortexM3, &_binary_am3cm3fw_bin_start, Size);
+    RtlCopyMemory(Device->CortexM3Code, &_binary_am3cm3fw_bin_start, Size);
     Device->M3State = Am3M3StateReset;
     Value = AM3_READ_PRM_WAKEUP(Device, Am3RmWakeupResetControl);
     Value &= ~AM335_RM_WAKEUP_RESET_CONTROL_RESET_CORTEX_M3;
