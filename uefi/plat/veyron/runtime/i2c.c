@@ -103,8 +103,7 @@ Return Value:
 
 {
 
-    RK32_I2C_WRITE_REGISTER(Rk32I2cMasterTransmitCount, 0);
-    RK32_I2C_WRITE_REGISTER(Rk32I2cMasterReceiveCount, 0);
+    RK32_I2C_WRITE_REGISTER(Rk32I2cInterruptEnable, 0);
     return EFI_SUCCESS;
 }
 
@@ -227,7 +226,6 @@ Return Value:
         Mask = RK32_I2C_INTERRUPT_MASTER_TRANSMIT_FINISHED;
         Status = EfipRk32I2cWaitForEvent(Mask);
         if (EFI_ERROR(Status)) {
-            RK32_I2C_WRITE_REGISTER(Rk32I2cMasterTransmitCount, 0);
             RK32_I2C_WRITE_REGISTER(Rk32I2cControl, 0);
             goto I2cWriteEnd;
         }
@@ -295,14 +293,7 @@ Return Value:
     EFI_STATUS StopStatus;
     UINT32 Value;
 
-    //
-    // Now start the actual read process.
-    //
-
-    Status = EfipRk32I2cStart(RK32_I2C_CONTROL_MODE_TRANSMIT_RECEIVE);
-    if (EFI_ERROR(Status)) {
-        return Status;
-    }
+    RK32_I2C_WRITE_REGISTER(Rk32I2cControl, 0);
 
     //
     // Set the chip in the master receive address register.
@@ -332,6 +323,15 @@ Return Value:
     }
 
     RK32_I2C_WRITE_REGISTER(Rk32I2cMasterReceiveSlaveRegister, Value);
+
+    //
+    // Begin the read.
+    //
+
+    Status = EfipRk32I2cStart(RK32_I2C_CONTROL_MODE_TRANSMIT_RECEIVE);
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
 
     //
     // Receive the data bytes.
@@ -364,7 +364,6 @@ Return Value:
         Mask = RK32_I2C_INTERRUPT_MASTER_RECEIVE_FINISHED;
         Status = EfipRk32I2cWaitForEvent(Mask);
         if (EFI_ERROR(Status)) {
-            RK32_I2C_WRITE_REGISTER(Rk32I2cMasterReceiveCount, 0);
             RK32_I2C_WRITE_REGISTER(Rk32I2cControl, 0);
             goto I2cReadEnd;
         }

@@ -1025,8 +1025,8 @@ Return Value:
 
 {
 
-    RK3_WRITE_I2C(Controller, Rk32I2cMasterReceiveCount, 0);
-    RK3_WRITE_I2C(Controller, Rk32I2cMasterTransmitCount, 0);
+    RK3_WRITE_I2C(Controller, Rk32I2cInterruptEnable, 0);
+    RK3_WRITE_I2C(Controller, Rk32I2cControl, 0);
     return STATUS_SUCCESS;
 }
 
@@ -1081,7 +1081,9 @@ Return Value:
     }
 
     KeAcquireQueuedLock(Controller->Lock);
-    Address = I2c->SlaveAddress |
+    Address = ((I2c->SlaveAddress <<
+                RK32_I2C_MASTER_RECEIVE_SLAVE_ADDRESS_SHIFT) &
+               RK32_I2C_MASTER_RECEIVE_SLAVE_ADDRESS_MASK) |
               RK32_I2C_MASTER_RECEIVE_SLAVE_ADDRESS_LOW_BYTE_VALID;
 
     if ((I2c->Flags & RESOURCE_SPB_I2C_10_BIT_ADDRESSING) != 0) {
@@ -1191,8 +1193,6 @@ Return Value:
     RK3_WRITE_I2C(Controller, Rk32I2cControl, 0);
     RK3_WRITE_I2C(Controller, Rk32I2cInterruptEnable, 0);
     RK3_WRITE_I2C(Controller, Rk32I2cInterruptPending, 0);
-    RK3_WRITE_I2C(Controller, Rk32I2cMasterTransmitCount, 0);
-    RK3_WRITE_I2C(Controller, Rk32I2cMasterReceiveCount, 0);
     Control = RK32_I2C_CONTROL_START | RK32_I2C_CONTROL_ENABLE |
               RK32_I2C_CONTROL_STOP_ON_NAK | RK32_I2C_CONTROL_MODE_TRANSMIT;
 

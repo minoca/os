@@ -1060,6 +1060,7 @@ Return Value:
 {
 
     CALENDAR_TIMER_DESCRIPTION CalendarTimer;
+    UCHAR Mask;
     KSTATUS Status;
 
     Status = Rk808Write(Controller,
@@ -1084,7 +1085,16 @@ Return Value:
     // Enable interrupts.
     //
 
-    Status = Rk808Write(Controller, Rk808InterruptMask1, 0);
+    Status = Rk808Read(Controller, Rk808InterruptMask1, &Mask);
+    if (!KSUCCESS(Status)) {
+        goto InitializeEnd;
+    }
+
+    Mask &= ~(RK808_INTERRUPT1_VOUT_LOW | RK808_INTERRUPT1_BATTERY_LOW |
+              RK808_INTERRUPT1_POWER_ON | RK808_INTERRUPT1_POWER_ON_LONG_PRESS |
+              RK808_INTERRUPT1_HOT_DIE);
+
+    Status = Rk808Write(Controller, Rk808InterruptMask1, Mask);
     if (!KSUCCESS(Status)) {
         goto InitializeEnd;
     }

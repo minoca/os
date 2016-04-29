@@ -32,7 +32,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define RK808_CHIP 0x1b
+#define RK808_CHIP 0x1B
 
 //
 // Define the RK808 registers.
@@ -57,7 +57,7 @@ Environment:
 #define RK808_RTC_COMPENSATION_LOW    0x13
 #define RK808_RTC_COMPENSATION_HIGH   0x14
 #define RK808_RTC_RESET_STATUS        0x16
-#define RK808_DEVICE_CONTROL          0x4b
+#define RK808_DEVICE_CONTROL          0x4B
 
 //
 // RTC status bits.
@@ -596,6 +596,11 @@ Return Value:
 
     EFI_STATUS Status;
     UINT8 Value;
+
+    Status = EfipRk32I2cInitialize();
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
 
     Status = EfipRk808I2cRead8(RK808_CHIP, RK808_DEVICE_CONTROL, &Value);
     if (EFI_ERROR(Status)) {
