@@ -49,14 +49,14 @@ if test -z "$REVISION"; then
 fi
 
 cd $BINROOT
-ARCHIVE_DIRECTORY="MinocaOS-$ARCH$VARIANT-$REVISION"
+ARCHIVE_DIRECTORY="MinocaOS-Starter-$REVISION"
 WORKING="$BINROOT/$ARCHIVE_DIRECTORY"
 if test -d "$WORKING"; then
     echo "Error: $WORKING already exists. Clean it up first."
     exit 1
 fi
 
-ARCHIVE="MinocaOS-$ARCH$VARIANT-$REVISION.zip"
+ARCHIVE="MinocaOS-Starter-$REVISION.zip"
 if test -f "$ARCHIVE"; then
     echo "Error: '$ARCHIVE' already exists. Delete it first."
     exit 1
