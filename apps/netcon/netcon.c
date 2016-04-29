@@ -49,10 +49,12 @@ Environment:
 #define NETCON_VERSION_MINOR 0
 
 #define NETCON_USAGE                                                           \
-    "usage: netcon [-d device [-j ssid -p] [-l] [-n]]\n\n"                     \
+    "usage: netcon [-d device] [-j ssid -p] [-l] [-s] [-v]\n\n"                \
     "The netcon utility configures network devices.\n\n"                       \
     "Options:\n"                                                               \
     "  -d --device=device -- Specifies the network device to configure.\n"     \
+    "      This is optional for wireless commands if there is only 1\n"        \
+    "      wireless device on the system.\n"                                   \
     "  -j --join=ssid -- Attempts to join the given wireless network.\n"       \
     "  -l --leave -- Attempts to leave the current wireless network.\n"        \
     "  -p --password -- Indicates that the user wants to be prompted for a\n"  \
@@ -75,6 +77,9 @@ Environment:
 #define NETCON_FLAG_PASSWORD  0x00000008
 #define NETCON_FLAG_SCAN      0x00000010
 #define NETCON_FLAG_VERBOSE   0x00000020
+
+#define NETCON_FLAG_WIRELESS_MASK \
+    (NETCON_FLAG_JOIN | NETCON_FLAG_LEAVE | NETCON_FLAG_SCAN)
 
 //
 // Define the set of network device description flags.
@@ -294,6 +299,11 @@ NetconPrintRates (
     PVOID RatesElement
     );
 
+INT
+NetconGet80211DeviceId (
+    PDEVICE_ID DeviceId
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -432,19 +442,27 @@ Return Value:
     }
 
     //
-    // If no device ID was specified, then list all of the local network
-    // interfaces and their statuses.
+    // Wireless commands require a device ID to operate. If no ID is specified,
+    // then attempt to find one. If there is more than one device present on
+    // the system, an error will be printed along with the available devices.
     //
 
-    if ((Context.Flags & NETCON_FLAG_DEVICE_ID) == 0) {
-        if (ArgumentCount != 1) {
-            ReturnValue = EINVAL;
+    if (((Context.Flags & NETCON_FLAG_DEVICE_ID) == 0) &&
+        ((Context.Flags & NETCON_FLAG_WIRELESS_MASK) != 0)) {
+
+        ReturnValue = NetconGet80211DeviceId(&(Context.DeviceId));
+        if (ReturnValue != 0) {
             goto mainEnd;
         }
 
-        NetconListDevices();
+        Context.Flags |= NETCON_FLAG_DEVICE_ID;
+    }
 
-    } else if ((Context.Flags & NETCON_FLAG_JOIN) != 0) {
+    //
+    // Process the command.
+    //
+
+    if ((Context.Flags & NETCON_FLAG_JOIN) != 0) {
         NetconJoinNetwork(&Context);
 
     } else if ((Context.Flags & NETCON_FLAG_LEAVE) != 0) {
@@ -453,13 +471,16 @@ Return Value:
     } else if ((Context.Flags & NETCON_FLAG_SCAN) != 0) {
         NetconScanForNetworks(&Context);
 
-    } else {
+    } else if ((Context.Flags & NETCON_FLAG_DEVICE_ID) != 0) {
         ReturnValue = NetconGetDeviceInformation(Context.DeviceId, &Device);
         if (ReturnValue != 0) {
             goto mainEnd;
         }
 
         NetconPrintDeviceInformation(&Device);
+
+    } else {
+        NetconListDevices();
     }
 
 mainEnd:
@@ -796,6 +817,11 @@ Return Value:
 
     Password = NULL;
     Socket = NULL;
+
+    //
+    // Validate the SSID.
+    //
+
     SsidLength = strlen(Context->Ssid) + 1;
     if (SsidLength > (NET80211_MAX_SSID_LENGTH + 1)) {
         printf("netcon: SSID \"%s\" is too long. Max SSID length is %d.\n",
@@ -2434,5 +2460,80 @@ Return Value:
 
     printf("\n");
     return;
+}
+
+INT
+NetconGet80211DeviceId (
+    PDEVICE_ID DeviceId
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the device ID of the system's 802.11 device. If there
+    are multiple 802.11 devices then it prints an error and the available
+    wireless devices.
+
+Arguments:
+
+    DeviceId - Supplies a pointer that receives the 802.11 device's ID.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error code on failure.
+
+--*/
+
+{
+
+    PNETCON_DEVICE_DESCRIPTION DeviceArray;
+    ULONG DeviceCount;
+    ULONG Index;
+    ULONG Net80211DeviceCount;
+    ULONG Net80211DeviceIndex;
+    INT Result;
+
+    Result = NetconEnumerateDevices(&DeviceArray, &DeviceCount);
+    if (Result != 0) {
+        return Result;
+    }
+
+    Net80211DeviceIndex = 0;
+    Net80211DeviceCount = 0;
+    for (Index = 0; Index < DeviceCount; Index += 1) {
+        if ((DeviceArray[Index].Flags & NETCON_DEVICE_FLAG_80211) != 0) {
+            Net80211DeviceCount += 1;
+            Net80211DeviceIndex = Index;
+        }
+    }
+
+    if (Net80211DeviceCount == 0) {
+        printf("netcon: failed to find a wireless device.\n");
+        Result = ENODEV;
+
+    } else if (Net80211DeviceCount == 1) {
+        *DeviceId = DeviceArray[Net80211DeviceIndex].DeviceId;
+
+    } else {
+        printf("There are %d wireless devices available. Please specify "
+               "a device ID with the -d parameter.\n",
+               Net80211DeviceCount);
+
+        printf("Wireless Devices:\n\n");
+        for (Index = 0; Index < DeviceCount; Index += 1) {
+            if ((DeviceArray[Index].Flags & NETCON_DEVICE_FLAG_80211) != 0) {
+                NetconPrintDeviceInformation(&(DeviceArray[Index]));
+                printf("\n");
+            }
+        }
+
+        Result = ENODEV;
+    }
+
+    free(DeviceArray);
+    return Result;
 }
 
