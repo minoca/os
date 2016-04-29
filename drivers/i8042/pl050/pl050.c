@@ -1051,7 +1051,10 @@ Return Value:
     // the interrupt. There may be leftover state from the last reboot.
     //
 
-    PL050_WRITE(Device, Pl050RegisterControl, 0);
+    Status = Pl050pDisableDevice(Device);
+    if (!KSUCCESS(Status)) {
+        goto StartDeviceEnd;
+    }
 
     //
     // Attempt to connect the interrupt.
@@ -1289,6 +1292,12 @@ Return Value:
         }
     }
 
+    //
+    // The control register is supposed to be cleared to zero on reset, but
+    // just make sure in case of faulty hardware. This will disable interrupts.
+    //
+
+    PL050_WRITE(Device, Pl050RegisterControl, 0);
     return ReturnStatus;
 }
 
