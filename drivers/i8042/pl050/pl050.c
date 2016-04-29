@@ -1047,6 +1047,13 @@ Return Value:
     }
 
     //
+    // Make sure the device and its interrupts are disabled before connecting
+    // the interrupt. There may be leftover state from the last reboot.
+    //
+
+    PL050_WRITE(Device, Pl050RegisterControl, 0);
+
+    //
     // Attempt to connect the interrupt.
     //
 
