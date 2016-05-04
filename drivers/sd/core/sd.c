@@ -1661,7 +1661,8 @@ Return Value:
         Parameters.StandardControllerBase = Slot->ControllerBase;
         Parameters.HostCapabilities = SD_MODE_AUTO_CMD12 |
                                       SD_MODE_4BIT |
-                                      SD_MODE_RESPONSE136_SHIFTED;
+                                      SD_MODE_RESPONSE136_SHIFTED |
+                                      SD_MODE_CMD23;
 
         Parameters.FunctionTable.MediaChangeCallback = SdpMediaChangeEvent;
         Slot->Controller = SdCreateController(&Parameters);

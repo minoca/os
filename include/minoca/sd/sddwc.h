@@ -326,6 +326,13 @@ Author:
 #define SD_DWC_DMA_DESCRIPTOR_MAX_BUFFER_SIZE 0x1000
 
 //
+// Define card read threshold register bits.
+//
+
+#define SD_DWC_CARD_READ_THRESHOLD_ENABLE 0x00000001
+#define SD_DWC_CARD_READ_THRESHOLD_SIZE_SHIFT 16
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -357,7 +364,9 @@ typedef enum _SD_DWC_REGISTER {
     SdDwcUhs = 0x074,
     SdDwcResetN = 0x078,
     SdDwcBusMode = 0x080,
+    SdDwcPollDemand = 0x084,
     SdDwcDescriptorBaseAddress = 0x088,
+    SdDwcCardThresholdControl = 0x100,
     SdDwcFifoBase = 0x200,
 } SD_DWC_REGISTER, *PSD_DWC_REGISTER;
 

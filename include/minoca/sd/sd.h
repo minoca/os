@@ -66,6 +66,7 @@ Author:
 #define SD_MODE_RESPONSE136_SHIFTED 0x0100
 #define SD_MODE_SDMA                0x0200
 #define SD_MODE_SYSTEM_DMA          0x0400
+#define SD_MODE_CMD23               0x0800
 
 //
 // Define the software only reset flags.
@@ -82,9 +83,8 @@ Author:
 #define SD_CONTROLLER_FLAG_HIGH_CAPACITY          0x00000001
 #define SD_CONTROLLER_FLAG_MEDIA_PRESENT          0x00000002
 #define SD_CONTROLLER_FLAG_DMA_ENABLED            0x00000004
-#define SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED 0x00000008
-#define SD_CONTROLLER_FLAG_CRITICAL_MODE          0x00000010
-#define SD_CONTROLLER_FLAG_DMA_COMMAND_ENABLED    0x00000020
+#define SD_CONTROLLER_FLAG_CRITICAL_MODE          0x00000008
+#define SD_CONTROLLER_FLAG_DMA_COMMAND_ENABLED    0x00000010
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -324,7 +324,7 @@ Return Value:
 --*/
 
 typedef
-KSTATUS
+VOID
 (*PSD_STOP_DATA_TRANSFER) (
     PSD_CONTROLLER Controller,
     PVOID Context
@@ -345,7 +345,7 @@ Arguments:
 
 Return Value:
 
-    Status code.
+    None.
 
 --*/
 
@@ -660,6 +660,9 @@ Members:
 
     Timeout - Stores the timeout duration, in time counter ticks.
 
+    SendStop - Stores a boolean indicating whether a stop CMD12 needs to be
+        sent after the data transfer or not.
+
 --*/
 
 struct _SD_CONTROLLER {
@@ -695,6 +698,7 @@ struct _SD_CONTROLLER {
     UINTN IoRequestSize;
     volatile ULONG PendingStatusBits;
     ULONGLONG Timeout;
+    BOOL SendStop;
 };
 
 /*++
@@ -907,7 +911,7 @@ SD_API
 KSTATUS
 SdAbortTransaction (
     PSD_CONTROLLER Controller,
-    BOOL SynchronousAbort
+    BOOL UseR1bResponse
     );
 
 /*++
@@ -920,10 +924,8 @@ Arguments:
 
     Controller - Supplies a pointer to the controller.
 
-    SynchronousAbort - Supplies a boolean indicating if an synchronous abort
-        is requested or not. Note that an asynchronous abort is not actually
-        asynchronous from the drivers perspective. The name is taken from
-        Section 3.8 "Abort Transaction" of the SD Version 3.0 specification.
+    UseR1bResponse - Supplies a boolean indicating whether to use the R1
+        (FALSE) or R1b (TRUE) response for the STOP (CMD12) command.
 
 Return Value:
 
@@ -975,6 +977,73 @@ Routine Description:
 Arguments:
 
     Controller - Supplies a pointer to the controller.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+SD_API
+KSTATUS
+SdSendBlockCount (
+    PSD_CONTROLLER Controller,
+    ULONG BlockCount,
+    BOOL Write,
+    BOOL InterruptCompletion
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends a CMD23 to pre-specify the block count.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    BlockCount - Supplies the block count to set.
+
+    Write - Supplies a boolean indicating if this is a write (TRUE) or read
+        (FALSE).
+
+    InterruptCompletion - Supplies a boolean indicating whether to poll on
+        completion of the command (FALSE) or wait for a transfer done interrupt
+        (TRUE).
+
+Return Value:
+
+    STATUS_SUCCESS if the command has been queued.
+
+    STATUS_NOT_SUPPORTED if the card or controller does not support ACMD23.
+
+--*/
+
+SD_API
+KSTATUS
+SdSendStop (
+    PSD_CONTROLLER Controller,
+    BOOL UseR1bResponse,
+    BOOL InterruptCompletion
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sends a CMD12 to stop the current transfer.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    UseR1bResponse - Supplies a boolean indicating whether to use an R1b
+        response (TRUE) or just R1 (FALSE) for more asynchronous aborts.
+
+    InterruptCompletion - Supplies a boolean indicating whether to poll on
+        completion of the command (FALSE) or wait for a transfer done interrupt
+        (TRUE).
 
 Return Value:
 
@@ -1321,7 +1390,7 @@ Return Value:
 --*/
 
 SD_API
-KSTATUS
+VOID
 SdStandardStopDataTransfer (
     PSD_CONTROLLER Controller,
     PVOID Context
@@ -1342,7 +1411,7 @@ Arguments:
 
 Return Value:
 
-    Status code.
+    None.
 
 --*/
 

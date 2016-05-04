@@ -200,6 +200,9 @@ Members:
 
     Rk808 - Stores a pointer to the RK808 interface used to switch voltages.
 
+    DpcLock - Stores a spin lock acquired in the dispatch level interrupt
+        handler to serialize interrupt processing.
+
 --*/
 
 struct _SD_RK32_CONTEXT {
@@ -221,6 +224,7 @@ struct _SD_RK32_CONTEXT {
     BOOL InVoltageSwitch;
     UCHAR Ldo;
     PINTERFACE_RK808 Rk808;
+    KSPIN_LOCK DpcLock;
 };
 
 /*++

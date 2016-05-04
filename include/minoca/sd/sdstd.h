@@ -337,6 +337,7 @@ Author:
 // SD configuration register values.
 //
 
+#define SD_CONFIGURATION_REGISTER_CMD23 0x00000002
 #define SD_CONFIGURATION_REGISTER_VERSION3_SHIFT 15
 #define SD_CONFIGURATION_REGISTER_DATA_4BIT 0x00040000
 #define SD_CONFIGURATION_REGISTER_VERSION_SHIFT 24
@@ -547,6 +548,8 @@ Author:
 
 #define SD_ADMA2_MAX_TRANSFER_SIZE 0xF000
 
+#define SD_MAX_CMD23_BLOCKS 0x003FFFFF
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -600,6 +603,7 @@ typedef enum _SD_COMMAND_VALUE {
     SdCommandSetBlockLength                  = 16,
     SdCommandReadSingleBlock                 = 17,
     SdCommandReadMultipleBlocks              = 18,
+    SdCommandSetBlockCount                   = 23,
     SdCommandWriteSingleBlock                = 24,
     SdCommandWriteMultipleBlocks             = 25,
     SdCommandEraseGroupStart                 = 35,

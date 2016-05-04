@@ -166,13 +166,9 @@ SdpWriteBlocksPolled (
     );
 
 KSTATUS
-SdpSynchronousAbort (
-    PSD_CONTROLLER Controller
-    );
-
-KSTATUS
-SdpAsynchronousAbort (
-    PSD_CONTROLLER Controller
+SdpAbort (
+    PSD_CONTROLLER Controller,
+    BOOL UseR1bResponse
     );
 
 //
@@ -304,8 +300,7 @@ Return Value:
         if ((Controller->FunctionTable.ResetController == NULL) ||
             (Controller->FunctionTable.SendCommand == NULL) ||
             (Controller->FunctionTable.GetSetBusWidth == NULL) ||
-            (Controller->FunctionTable.GetSetClockSpeed == NULL) ||
-            (Controller->FunctionTable.StopDataTransfer == NULL)) {
+            (Controller->FunctionTable.GetSetClockSpeed == NULL)) {
 
             Status = STATUS_INVALID_PARAMETER;
             goto CreateControllerEnd;
@@ -788,7 +783,7 @@ SD_API
 KSTATUS
 SdAbortTransaction (
     PSD_CONTROLLER Controller,
-    BOOL SynchronousAbort
+    BOOL UseR1bResponse
     )
 
 /*++
@@ -801,10 +796,8 @@ Arguments:
 
     Controller - Supplies a pointer to the controller.
 
-    SynchronousAbort - Supplies a boolean indicating if an synchronous abort
-        is requested or not. Note that an asynchronous abort is not actually
-        asynchronous from the drivers perspective. The name is taken from
-        Section 3.8 "Abort Transaction" of the SD Version 3.0 specification.
+    UseR1bResponse - Supplies a boolean indicating whether to use the R1
+        (FALSE) or R1b (TRUE) response for the STOP (CMD12) command.
 
 Return Value:
 
@@ -814,16 +807,7 @@ Return Value:
 
 {
 
-    KSTATUS Status;
-
-    if (SynchronousAbort == FALSE) {
-        Status = SdpAsynchronousAbort(Controller);
-
-    } else {
-        Status = SdpSynchronousAbort(Controller);
-    }
-
-    return Status;
+    return SdpAbort(Controller, UseR1bResponse);
 }
 
 SD_API
@@ -899,6 +883,11 @@ Return Value:
 
     KSTATUS Status;
 
+    Status = SdpAbort(Controller, FALSE);
+    if (!KSUCCESS(Status)) {
+        goto ErrorRecoveryEnd;
+    }
+
     if (Controller->ClockSpeed > SdClock25MHz) {
         RtlDebugPrint("SD: Clocking down to 25MHz.\n");
         Controller->ClockSpeed = SdClock25MHz;
@@ -908,18 +897,121 @@ Return Value:
         }
     }
 
-    //
-    // Perform an asychronous abort, which will clear any interrupts, abort the
-    // command and reset the command and data lines. This will also wait until
-    // the card has returned to the transfer state.
-    //
+ErrorRecoveryEnd:
+    return Status;
+}
 
-    Status = SdpAsynchronousAbort(Controller);
-    if (!KSUCCESS(Status)) {
-        goto ErrorRecoveryEnd;
+SD_API
+KSTATUS
+SdSendBlockCount (
+    PSD_CONTROLLER Controller,
+    ULONG BlockCount,
+    BOOL Write,
+    BOOL InterruptCompletion
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends a CMD23 to pre-specify the block count.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    BlockCount - Supplies the block count to set.
+
+    Write - Supplies a boolean indicating if this is a write (TRUE) or read
+        (FALSE).
+
+    InterruptCompletion - Supplies a boolean indicating whether to poll on
+        completion of the command (FALSE) or wait for a transfer done interrupt
+        (TRUE).
+
+Return Value:
+
+    STATUS_SUCCESS if the command has been queued.
+
+    STATUS_NOT_SUPPORTED if the card or controller does not support ACMD23.
+
+--*/
+
+{
+
+    SD_COMMAND Command;
+    KSTATUS Status;
+
+    if ((Controller->CardCapabilities & SD_MODE_CMD23) == 0) {
+        return STATUS_NOT_SUPPORTED;
     }
 
-ErrorRecoveryEnd:
+    if (BlockCount > SD_MAX_CMD23_BLOCKS) {
+        BlockCount = SD_MAX_CMD23_BLOCKS;
+    }
+
+    RtlZeroMemory(&Command, sizeof(SD_COMMAND));
+    Command.Command = SdCommandSetBlockCount;
+    Command.ResponseType = SD_RESPONSE_R1;
+    Command.CommandArgument = BlockCount;
+    Command.Dma = InterruptCompletion;
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
+    return Status;
+}
+
+SD_API
+KSTATUS
+SdSendStop (
+    PSD_CONTROLLER Controller,
+    BOOL UseR1bResponse,
+    BOOL InterruptCompletion
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sends a CMD12 to stop the current transfer.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    UseR1bResponse - Supplies a boolean indicating whether to use an R1b
+        response (TRUE) or just R1 (FALSE) for more asynchronous aborts.
+
+    InterruptCompletion - Supplies a boolean indicating whether to poll on
+        completion of the command (FALSE) or wait for a transfer done interrupt
+        (TRUE).
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    SD_COMMAND Command;
+    KSTATUS Status;
+
+    RtlZeroMemory(&Command, sizeof(SD_COMMAND));
+    Command.Command = SdCommandStopTransmission;
+    if (UseR1bResponse != FALSE) {
+        Command.ResponseType = SD_RESPONSE_R1B;
+
+    } else {
+        Command.ResponseType = SD_RESPONSE_R1;
+    }
+
+    Command.Dma = InterruptCompletion;
+    Status = Controller->FunctionTable.SendCommand(Controller,
+                                                   Controller->ConsumerContext,
+                                                   &Command);
+
     return Status;
 }
 
@@ -2366,7 +2458,6 @@ Return Value:
     Command.BufferSize = sizeof(ConfigurationRegister);
     RetryCount = SD_CONFIGURATION_REGISTER_RETRY_COUNT;
     while (TRUE) {
-        KeDelayExecution(FALSE, FALSE, 50000);
         Status = Controller->FunctionTable.SendCommand(
                                                    Controller,
                                                    Controller->ConsumerContext,
@@ -2378,6 +2469,7 @@ Return Value:
             }
 
             RetryCount -= 1;
+            KeDelayExecution(FALSE, FALSE, 50000);
             continue;
         }
 
@@ -2413,6 +2505,16 @@ Return Value:
 
     if ((ConfigurationRegister[0] & SD_CONFIGURATION_REGISTER_DATA_4BIT) != 0) {
         Controller->CardCapabilities |= SD_MODE_4BIT;
+    }
+
+    //
+    // Check for CMD23 support.
+    //
+
+    if ((Controller->Version >= SdVersion3) &&
+        (ConfigurationRegister[0] & SD_CONFIGURATION_REGISTER_CMD23) != 0) {
+
+        Controller->CardCapabilities |= SD_MODE_CMD23;
     }
 
     //
@@ -2660,15 +2762,7 @@ Return Value:
     if ((BlockCount > 1) &&
         ((Controller->HostCapabilities & SD_MODE_AUTO_CMD12) == 0)) {
 
-        Command.Command = SdCommandStopTransmission;
-        Command.CommandArgument = 0;
-        Command.ResponseType = SD_RESPONSE_R1B;
-        Command.BufferSize = 0;
-        Status = Controller->FunctionTable.SendCommand(
-                                                   Controller,
-                                                   Controller->ConsumerContext,
-                                                   &Command);
-
+        Status = SdSendStop(Controller, TRUE, FALSE);
         if (!KSUCCESS(Status)) {
             return Status;
         }
@@ -2751,15 +2845,7 @@ Return Value:
         ((Controller->HostCapabilities &
           (SD_MODE_SPI | SD_MODE_AUTO_CMD12)) == 0)) {
 
-        Command.Command = SdCommandStopTransmission;
-        Command.CommandArgument = 0;
-        Command.ResponseType = SD_RESPONSE_R1B;
-        Command.BufferSize = 0;
-        Status = Controller->FunctionTable.SendCommand(
-                                                   Controller,
-                                                   Controller->ConsumerContext,
-                                                   &Command);
-
+        Status = SdSendStop(Controller, TRUE, FALSE);
         if (!KSUCCESS(Status)) {
             return Status;
         }
@@ -2769,54 +2855,9 @@ Return Value:
 }
 
 KSTATUS
-SdpSynchronousAbort (
-    PSD_CONTROLLER Controller
-    )
-
-/*++
-
-Routine Description:
-
-    This routine executes an synchronous abort for the given SD Controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    KSTATUS Status;
-
-    Status = Controller->FunctionTable.StopDataTransfer(
-                                                  Controller,
-                                                  Controller->ConsumerContext);
-
-    if (!KSUCCESS(Status)) {
-        goto SynchronousAbortEnd;
-    }
-
-    //
-    // Perform an asynchronous abort.
-    //
-
-    Status = SdpAsynchronousAbort(Controller);
-    if (!KSUCCESS(Status)) {
-        goto SynchronousAbortEnd;
-    }
-
-SynchronousAbortEnd:
-    return Status;
-}
-
-KSTATUS
-SdpAsynchronousAbort (
-    PSD_CONTROLLER Controller
+SdpAbort (
+    PSD_CONTROLLER Controller,
+    BOOL UseR1bResponse
     )
 
 /*++
@@ -2831,6 +2872,9 @@ Arguments:
 
     Controller - Supplies a pointer to the controller.
 
+    UseR1bResponse - Supplies a boolean indicating whether to use the R1
+        (FALSE) or R1b (TRUE) response for the STOP (CMD12) command.
+
 Return Value:
 
     Status code.
@@ -2840,15 +2884,15 @@ Return Value:
 {
 
     ULONG CardStatus;
-    SD_COMMAND Command;
     ULONGLONG Frequency;
     ULONG ResetFlags;
     KSTATUS Status;
     ULONGLONG Timeout;
 
-    RtlZeroMemory(&Command, sizeof(SD_COMMAND));
-    Command.Command = SdCommandStopTransmission;
-    Command.ResponseType = SD_RESPONSE_R1B;
+    if (Controller->FunctionTable.StopDataTransfer != NULL) {
+        Controller->FunctionTable.StopDataTransfer(Controller,
+                                                   Controller->ConsumerContext);
+    }
 
     //
     // Attempt to send the abort command until the card enters the transfer
@@ -2875,15 +2919,6 @@ Return Value:
             goto AsynchronousAbortEnd;
         }
 
-        Status = Controller->FunctionTable.SendCommand(
-                                                   Controller,
-                                                   Controller->ConsumerContext,
-                                                   &Command);
-
-        if (!KSUCCESS(Status)) {
-            goto AsynchronousAbortEnd;
-        }
-
         //
         // Check the SD card's status.
         //
@@ -2903,6 +2938,11 @@ Return Value:
 
             Status = STATUS_SUCCESS;
             break;
+        }
+
+        Status = SdSendStop(Controller, UseR1bResponse, FALSE);
+        if (!KSUCCESS(Status)) {
+            goto AsynchronousAbortEnd;
         }
 
         //

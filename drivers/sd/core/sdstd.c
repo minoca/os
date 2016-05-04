@@ -71,7 +71,8 @@ SdpWriteData (
 VOID
 SdpSetDmaInterrupts (
     PSD_CONTROLLER Controller,
-    BOOL Enable
+    BOOL Enable,
+    ULONG BufferSize
     );
 
 //
@@ -160,6 +161,7 @@ Return Value:
 
 {
 
+    UINTN BytesCompleted;
     PVOID CompletionContext;
     PSD_IO_COMPLETION_ROUTINE CompletionRoutine;
     PSD_CONTROLLER Controller;
@@ -209,11 +211,13 @@ Return Value:
     if (Controller->IoCompletionRoutine != NULL) {
         CompletionRoutine = Controller->IoCompletionRoutine;
         CompletionContext = Controller->IoCompletionContext;
+        BytesCompleted = Controller->IoRequestSize;
         Controller->IoCompletionRoutine = NULL;
         Controller->IoCompletionContext = NULL;
+        Controller->IoRequestSize = 0;
         CompletionRoutine(Controller,
                           CompletionContext,
-                          Controller->IoRequestSize,
+                          BytesCompleted,
                           Status);
     }
 
@@ -281,6 +285,7 @@ Return Value:
     }
 
     if ((Controller->HostCapabilities & SD_MODE_AUTO_CMD12) == 0) {
+        RtlDebugPrint("SD: No DMA because Auto CMD12 is missing.\n");
         return STATUS_NOT_SUPPORTED;
     }
 
@@ -886,8 +891,8 @@ Return Value:
 
     } while (SdQueryTimeCounter(Controller) <= Timeout);
 
-    Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
-    SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, Value);
+    SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatusEnable, 0xFFFFFFFF);
+    SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, 0xFFFFFFFF);
     return Status;
 }
 
@@ -933,14 +938,16 @@ Return Value:
     // Set the DMA interrupts appropriately based on the command.
     //
 
-    SdpSetDmaInterrupts(Controller, Command->Dma);
+    SdpSetDmaInterrupts(Controller, Command->Dma, Command->BufferSize);
 
     //
     // Don't wait for the data inhibit flag if this is the abort command.
     //
 
     InhibitMask = SD_STATE_DATA_INHIBIT | SD_STATE_COMMAND_INHIBIT;
-    if (Command->Command == SdCommandStopTransmission) {
+    if ((Command->Command == SdCommandStopTransmission) &&
+        (Command->ResponseType != SD_RESPONSE_R1B)) {
+
         InhibitMask = SD_STATE_COMMAND_INHIBIT;
     }
 
@@ -1015,10 +1022,6 @@ Return Value:
             Flags |= SD_COMMAND_MULTIPLE_BLOCKS |
                      SD_COMMAND_BLOCK_COUNT_ENABLE;
 
-            if ((Controller->HostCapabilities & SD_MODE_AUTO_CMD12) != 0) {
-                Flags |= SD_COMMAND_AUTO_COMMAND12_ENABLE;
-            }
-
             BlockCount = Command->BufferSize / SD_BLOCK_SIZE;
 
             ASSERT(BlockCount <= SD_MAX_BLOCK_COUNT);
@@ -1028,6 +1031,27 @@ Return Value:
                     (BlockCount << 16);
 
             SD_WRITE_REGISTER(Controller, SdRegisterBlockSizeCount, Value);
+
+            //
+            // Prefer CMD23 if the card and the host support it.
+            //
+
+            if (((Controller->CardCapabilities & SD_MODE_CMD23) != 0) &&
+                (Controller->HostVersion == SdHostVersion3)) {
+
+                Flags |= SD_COMMAND_AUTO_COMMAND23_ENABLE;
+                SD_WRITE_REGISTER(Controller, SdRegisterArgument2, BlockCount);
+
+            //
+            // Fall back to auto CMD12 to explicitly stop open ended
+            // reads/writes.
+            //
+
+            } else if ((Controller->HostCapabilities &
+                        SD_MODE_AUTO_CMD12) != 0) {
+
+                Flags |= SD_COMMAND_AUTO_COMMAND12_ENABLE;
+            }
 
         } else {
 
@@ -1065,9 +1089,6 @@ Return Value:
 
         ASSERT((Controller->Flags & SD_CONTROLLER_FLAG_DMA_ENABLED) != 0);
 
-        ASSERT((Controller->Flags &
-                SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) != 0);
-
         Status = STATUS_SUCCESS;
         goto SendCommandEnd;
     }
@@ -1077,8 +1098,6 @@ Return Value:
     //
 
     ASSERT(Controller->EnabledInterrupts == SD_INTERRUPT_ENABLE_DEFAULT_MASK);
-    ASSERT((Controller->Flags &
-            SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) == 0);
 
     Timeout = 0;
     Status = STATUS_TIMEOUT;
@@ -1530,7 +1549,7 @@ Return Value:
 }
 
 SD_API
-KSTATUS
+VOID
 SdStandardStopDataTransfer (
     PSD_CONTROLLER Controller,
     PVOID Context
@@ -1551,7 +1570,7 @@ Arguments:
 
 Return Value:
 
-    Status code.
+    None.
 
 --*/
 
@@ -1561,7 +1580,7 @@ Return Value:
     ULONGLONG Timeout;
     ULONG Value;
 
-    SdpSetDmaInterrupts(Controller, FALSE);
+    SdpSetDmaInterrupts(Controller, FALSE, 0);
     SD_WRITE_REGISTER(Controller,
                       SdRegisterInterruptStatus,
                       SD_INTERRUPT_STATUS_ALL_MASK);
@@ -1603,7 +1622,7 @@ Return Value:
                       SD_INTERRUPT_STATUS_TRANSFER_COMPLETE);
 
 StopDataTransferEnd:
-    return Status;
+    return;
 }
 
 //
@@ -1851,7 +1870,8 @@ Return Value:
 VOID
 SdpSetDmaInterrupts (
     PSD_CONTROLLER Controller,
-    BOOL Enable
+    BOOL Enable,
+    ULONG BufferSize
     )
 
 /*++
@@ -1869,6 +1889,8 @@ Arguments:
     Enable - Supplies a boolean indicating if the DMA interrupts are to be
         enabled (TRUE) or disabled (FALSE).
 
+    BufferSize - Supplies the length of the data buffer.
+
 Return Value:
 
     None.
@@ -1877,10 +1899,7 @@ Return Value:
 
 {
 
-    ULONG Flags;
     ULONG Value;
-
-    Flags = Controller->Flags;
 
     //
     // Enable the interrupts for transfer completion so that DMA operations
@@ -1889,25 +1908,16 @@ Return Value:
     //
 
     if (Enable != FALSE) {
-        if ((Flags & SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) != 0) {
-            return;
+        Value = Controller->EnabledInterrupts | SD_INTERRUPT_ENABLE_ERROR_MASK;
+        Value &= ~(SD_INTERRUPT_ENABLE_TRANSFER_COMPLETE |
+                   SD_INTERRUPT_ENABLE_COMMAND_COMPLETE);
+
+        if (BufferSize != 0) {
+            Value |= SD_INTERRUPT_ENABLE_TRANSFER_COMPLETE;
+
+        } else {
+            Value |= SD_INTERRUPT_ENABLE_COMMAND_COMPLETE;
         }
-
-        Controller->EnabledInterrupts |= SD_INTERRUPT_ENABLE_ERROR_MASK |
-                                         SD_INTERRUPT_ENABLE_TRANSFER_COMPLETE;
-
-        SD_WRITE_REGISTER(Controller,
-                          SdRegisterInterruptSignalEnable,
-                          Controller->EnabledInterrupts);
-
-        Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatusEnable);
-
-        ASSERT((Value & SD_INTERRUPT_ENABLE_TRANSFER_COMPLETE) != 0);
-
-        Value |= SD_INTERRUPT_ENABLE_ERROR_MASK;
-        SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatusEnable, Value);
-        RtlAtomicOr32(&(Controller->Flags),
-                      SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED);
 
     //
     // Disable the DMA interrupts so that they do not interfere with polled I/O
@@ -1916,23 +1926,17 @@ Return Value:
     //
 
     } else {
-        if ((Flags & SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) == 0) {
-            return;
-        }
+        Value = Controller->EnabledInterrupts &
+                ~(SD_INTERRUPT_ENABLE_ERROR_MASK |
+                  SD_INTERRUPT_ENABLE_TRANSFER_COMPLETE |
+                  SD_INTERRUPT_ENABLE_COMMAND_COMPLETE);
+    }
 
-        Controller->EnabledInterrupts &=
-                                      ~(SD_INTERRUPT_ENABLE_ERROR_MASK |
-                                        SD_INTERRUPT_ENABLE_TRANSFER_COMPLETE);
-
+    if (Value != Controller->EnabledInterrupts) {
+        Controller->EnabledInterrupts = Value;
         SD_WRITE_REGISTER(Controller,
                           SdRegisterInterruptSignalEnable,
                           Controller->EnabledInterrupts);
-
-        Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatusEnable);
-        Value &= ~SD_INTERRUPT_ENABLE_ERROR_MASK;
-        SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatusEnable, Value);
-        RtlAtomicAnd32(&(Controller->Flags),
-                       ~SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED);
     }
 
     return;

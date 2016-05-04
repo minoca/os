@@ -1650,7 +1650,8 @@ Return Value:
                                       SD_MODE_4BIT |
                                       SD_MODE_RESPONSE136_SHIFTED |
                                       SD_MODE_HIGH_SPEED |
-                                      SD_MODE_HIGH_SPEED_52MHZ;
+                                      SD_MODE_HIGH_SPEED_52MHZ |
+                                      SD_MODE_CMD23;
 
         if (Slot->Dma != NULL) {
             Parameters.HostCapabilities |= SD_MODE_SYSTEM_DMA;

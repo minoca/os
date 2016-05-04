@@ -844,6 +844,7 @@ Return Value:
     ULONG SystemSectorCount;
     ULONG TotalSectors;
 
+    BootSector = NULL;
     BootSectorIoBuffer = NULL;
     Device = BlockDeviceParameters->DeviceToken;
     FatVolume = NULL;

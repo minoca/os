@@ -276,12 +276,6 @@ SdRk32GetSetVoltage (
     );
 
 KSTATUS
-SdRk32StopDataTransfer (
-    PSD_CONTROLLER Controller,
-    PVOID Context
-    );
-
-KSTATUS
 SdRk32ReadData (
     PSD_CONTROLLER Controller,
     PVOID Context,
@@ -307,7 +301,8 @@ VOID
 SdRk32SetDmaInterrupts (
     PSD_CONTROLLER Controller,
     PSD_RK32_CONTEXT Device,
-    BOOL Enable
+    BOOL Enable,
+    ULONG BufferSize
     );
 
 KSTATUS
@@ -357,7 +352,7 @@ SD_FUNCTION_TABLE SdRk32FunctionTable = {
     SdRk32GetSetBusWidth,
     SdRk32GetSetClockSpeed,
     SdRk32GetSetVoltage,
-    SdRk32StopDataTransfer,
+    NULL,
     NULL,
     NULL,
     NULL
@@ -473,6 +468,7 @@ Return Value:
     Context->InterruptHandle = INVALID_HANDLE;
     Context->CardInterruptHandle = INVALID_HANDLE;
     Context->OsDevice = DeviceToken;
+    KeInitializeSpinLock(&(Context->DpcLock));
     Context->Lock = KeCreateQueuedLock();
     if (Context->Lock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -683,6 +679,7 @@ Return Value:
     UINTN BytesToComplete;
     PSD_RK32_CHILD Child;
     BOOL CompleteIrp;
+    PSD_CONTROLLER Controller;
     ULONGLONG IoOffset;
     ULONG IrpReadWriteFlags;
     KSTATUS Status;
@@ -692,6 +689,7 @@ Return Value:
     ASSERT(KeGetRunLevel() == RunLevelLow);
 
     Child = DeviceContext;
+    Controller = Child->Controller;
     if (Child->Type != SdRk32Child) {
 
         ASSERT(FALSE);
@@ -818,8 +816,10 @@ Return Value:
         //
 
         Value = SD_DWC_READ_REGISTER(Child->Parent, SdDwcControl);
-        Value |= SD_DWC_CONTROL_USE_INTERNAL_DMAC;
-        SD_DWC_WRITE_REGISTER(Child->Parent, SdDwcControl, Value);
+        if ((Value & SD_DWC_CONTROL_USE_INTERNAL_DMAC) == 0) {
+            Value |= SD_DWC_CONTROL_USE_INTERNAL_DMAC;
+            SD_DWC_WRITE_REGISTER(Child->Parent, SdDwcControl, Value);
+        }
 
         //
         // Make sure the system isn't trying to do I/O off the end of the
@@ -828,6 +828,37 @@ Return Value:
 
         ASSERT(BlockOffset < Child->BlockCount);
         ASSERT(BlockCount >= 1);
+
+        //
+        // If it's a multiblock command, send CMD23 first if possible.
+        //
+
+        ASSERT((Controller->IoCompletionRoutine == NULL) &&
+               (Controller->IoCompletionContext == NULL) &&
+               (Controller->IoRequestSize == 0));
+
+        Controller->SendStop = FALSE;
+        if (BlockCount > 1) {
+            Controller->IoCompletionRoutine = SdRk32DmaCompletion;
+            Controller->IoCompletionContext = Child;
+            Status = SdSendBlockCount(Controller, BlockCount, Write, TRUE);
+            if (KSUCCESS(Status)) {
+                goto DispatchIoEnd;
+
+            } else {
+                Controller->SendStop = TRUE;
+                Controller->IoCompletionRoutine = NULL;
+                Controller->IoCompletionContext = NULL;
+                if (Status == STATUS_NOT_SUPPORTED) {
+                    Status = STATUS_SUCCESS;
+
+                } else {
+                    CompleteIrp = TRUE;
+                    KeReleaseQueuedLock(Child->ControllerLock);
+                    goto DispatchIoEnd;
+                }
+            }
+        }
 
         SdRk32BlockIoDma(Child->Parent,
                          BlockOffset,
@@ -1396,7 +1427,8 @@ Return Value:
         Parameters.Voltages = SD_VOLTAGE_32_33 | SD_VOLTAGE_33_34;
         Parameters.HostCapabilities = SD_MODE_4BIT |
                                       SD_MODE_HIGH_SPEED |
-                                      SD_MODE_AUTO_CMD12;
+                                      SD_MODE_AUTO_CMD12 |
+                                      SD_MODE_CMD23;
 
         Parameters.FundamentalClock = Device->FundamentalClock;
         Parameters.ConsumerContext = Device;
@@ -1945,6 +1977,7 @@ Return Value:
 
 {
 
+    UINTN BytesCompleted;
     PVOID CompletionContext;
     PSD_IO_COMPLETION_ROUTINE CompletionRoutine;
     PSD_CONTROLLER Controller;
@@ -1977,13 +2010,14 @@ Return Value:
         ASSERT(FALSE);
     }
 
+    KeAcquireSpinLock(&(Device->DpcLock));
+
     //
     // Process the I/O completion. The only other interrupt bits that are sent
     // to the DPC are the error bits and the transfer complete bit.
     //
 
     if ((PendingBits & SD_DWC_INTERRUPT_ERROR_MASK) != 0) {
-        RtlDebugPrint("SD RK32xx: Error status 0x%x\n", PendingBits);
         SdErrorRecovery(Controller);
         if ((Device->Child->Flags & SD_RK32_CHILD_FLAG_DMA_SUPPORTED) != 0) {
             SdRk32InitializeDma(Device);
@@ -1995,16 +2029,21 @@ Return Value:
                 SD_DWC_INTERRUPT_STATUS_DATA_TRANSFER_OVER) != 0) {
 
         Status = STATUS_SUCCESS;
+
+    } else if ((PendingBits & SD_DWC_INTERRUPT_STATUS_COMMAND_DONE) != 0) {
+        Status = STATUS_SUCCESS;
     }
 
     if (Controller->IoCompletionRoutine != NULL) {
         CompletionRoutine = Controller->IoCompletionRoutine;
         CompletionContext = Controller->IoCompletionContext;
+        BytesCompleted = Controller->IoRequestSize;
         Controller->IoCompletionRoutine = NULL;
         Controller->IoCompletionContext = NULL;
+        Controller->IoRequestSize = 0;
         CompletionRoutine(Controller,
                           CompletionContext,
-                          Controller->IoRequestSize,
+                          BytesCompleted,
                           Status);
     }
 
@@ -2018,6 +2057,7 @@ Return Value:
                                                    Inserted);
     }
 
+    KeReleaseSpinLock(&(Device->DpcLock));
     return InterruptStatusClaimed;
 }
 
@@ -2134,13 +2174,28 @@ Return Value:
     Irp->U.ReadWrite.NewIoOffset += BytesTransferred;
 
     //
-    // If this transfer's over, unlock and complete the IRP.
+    // If this transfer's over, potentially send a stop. If that's done or
+    // not needed, complete the IRP.
     //
 
     if (Irp->U.ReadWrite.IoBytesCompleted ==
         Irp->U.ReadWrite.IoSizeInBytes) {
 
-        IoCompleteIrp(SdRk32Driver, Irp, Status);
+        if ((Controller->SendStop != FALSE) &&
+            ((Controller->HostCapabilities & SD_MODE_AUTO_CMD12) == 0)) {
+
+            Controller->SendStop = FALSE;
+            Child->Controller->IoCompletionRoutine = SdRk32DmaCompletion;
+            Child->Controller->IoCompletionContext = Child;
+            Status = SdSendStop(Controller, TRUE, TRUE);
+            if (!KSUCCESS(Status)) {
+                IoCompleteIrp(SdRk32Driver, Irp, Status);
+            }
+
+        } else {
+            IoCompleteIrp(SdRk32Driver, Irp, Status);
+        }
+
         return;
     }
 
@@ -2867,6 +2922,7 @@ Return Value:
     ULONG TableAddress;
     UINTN TransferSize;
     UINTN TransferSizeRemaining;
+    ULONG Value;
 
     ASSERT(BlockCount != 0);
 
@@ -2924,6 +2980,22 @@ Return Value:
         IoBufferOffset -= Fragment->Size;
         FragmentIndex += 1;
     }
+
+    //
+    // Do a DMA reset.
+    //
+
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+    Value |= SD_DWC_CONTROL_DMA_RESET;
+    SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Value);
+    do {
+        Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+
+    } while ((Value & SD_DWC_CONTROL_DMA_RESET) != 0);
+
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcBusMode);
+    Value |= SD_DWC_BUS_MODE_INTERNAL_DMA_RESET;
+    SD_DWC_WRITE_REGISTER(Device, SdDwcBusMode, Value);
 
     //
     // Fill out the DMA descriptors.
@@ -3020,8 +3092,21 @@ Return Value:
     Controller->IoCompletionRoutine = CompletionRoutine;
     Controller->IoCompletionContext = CompletionContext;
     Controller->IoRequestSize = Command.BufferSize;
+
+    //
+    // Write the table base, enable DMA, and write the poll demand to get it
+    // moving.
+    //
+
     TableAddress = (ULONG)(DmaDescriptorTable->Fragment[0].PhysicalAddress);
     SD_DWC_WRITE_REGISTER(Device, SdDwcDescriptorBaseAddress, TableAddress);
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcControl);
+    Value |= SD_DWC_CONTROL_USE_INTERNAL_DMAC | SD_DWC_CONTROL_DMA_ENABLE;
+    SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Value);
+    Value = SD_DWC_READ_REGISTER(Device, SdDwcBusMode);
+    Value |= SD_DWC_BUS_MODE_IDMAC_ENABLE | SD_DWC_BUS_MODE_FIXED_BURST;
+    SD_DWC_WRITE_REGISTER(Device, SdDwcBusMode, Value);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcPollDemand, 1);
     Status = Controller->FunctionTable.SendCommand(Controller,
                                                    Controller->ConsumerContext,
                                                    &Command);
@@ -3226,6 +3311,7 @@ Return Value:
 {
 
     ULONG BusMode;
+    ULONG CardType;
     ULONG Control;
     PSD_RK32_CONTEXT Device;
     ULONGLONG Frequency;
@@ -3238,10 +3324,10 @@ Return Value:
     Device->InVoltageSwitch = FALSE;
     Frequency = HlQueryTimeCounterFrequency();
     ResetMask = SD_DWC_CONTROL_FIFO_RESET |
-                SD_DWC_CONTROL_DMA_RESET;
+                SD_DWC_CONTROL_DMA_RESET |
+                SD_DWC_CONTROL_CONTROLLER_RESET;
 
     if ((Flags & SD_RESET_FLAG_ALL) != 0) {
-        ResetMask |= SD_DWC_CONTROL_CONTROLLER_RESET;
 
         //
         // Power cycle the card.
@@ -3254,6 +3340,7 @@ Return Value:
         HlBusySpin(10000);
     }
 
+    CardType = SD_DWC_READ_REGISTER(Device, SdDwcCardType);
     Control = SD_DWC_READ_REGISTER(Device, SdDwcControl);
     Value = (Control | ResetMask) &
             ~(SD_DWC_CONTROL_DMA_ENABLE |
@@ -3274,6 +3361,8 @@ Return Value:
     if (!KSUCCESS(Status)) {
         return Status;
     }
+
+    SD_DWC_WRITE_REGISTER(Device, SdDwcInterruptStatus, 0xFFFFFFFF);
 
     //
     // Wait for the DMA status to clear.
@@ -3352,10 +3441,17 @@ Return Value:
     //
 
     SD_DWC_WRITE_REGISTER(Device, SdDwcControl, Control);
-    SD_DWC_WRITE_REGISTER(Device,
-                          SdDwcCommand,
-                          SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS);
+    SD_DWC_WRITE_REGISTER(Device, SdDwcCardType, CardType);
+    Status = SdRk32SetClockSpeed(Device, Controller->ClockSpeed);
+    if (!KSUCCESS(Status)) {
+        return Status;
+    }
 
+    Value = (Controller->ReadBlockLength <<
+             SD_DWC_CARD_READ_THRESHOLD_SIZE_SHIFT) |
+            SD_DWC_CARD_READ_THRESHOLD_ENABLE;
+
+    SD_DWC_WRITE_REGISTER(Device, SdDwcCardThresholdControl, Value);
     return STATUS_SUCCESS;
 }
 
@@ -3397,7 +3493,19 @@ Return Value:
     ULONG Value;
 
     Device = (PSD_RK32_CONTEXT)Context;
-    SdRk32SetDmaInterrupts(Controller, Device, Command->Dma);
+
+    //
+    // Clear any old interrupt status.
+    //
+
+    SD_DWC_WRITE_REGISTER(Device,
+                          SdDwcInterruptStatus,
+                          SD_DWC_INTERRUPT_STATUS_ALL_MASK);
+
+    SdRk32SetDmaInterrupts(Controller,
+                           Device,
+                           Command->Dma,
+                           Command->BufferSize);
 
     //
     // If the stop command is being sent, add the flag to make sure the current
@@ -3405,7 +3513,9 @@ Return Value:
     // data to complete. Otherwise, wait for the previous data to complete.
     //
 
-    if (Command->Command == SdCommandStopTransmission) {
+    if ((Command->Command == SdCommandStopTransmission) &&
+        (Command->ResponseType != SD_RESPONSE_R1B)) {
+
         Flags = SD_DWC_COMMAND_STOP_ABORT;
 
     } else {
@@ -3486,14 +3596,6 @@ Return Value:
     }
 
     //
-    // Clear any old interrupt status.
-    //
-
-    SD_DWC_WRITE_REGISTER(Device,
-                          SdDwcInterruptStatus,
-                          SD_DWC_INTERRUPT_STATUS_ALL_MASK);
-
-    //
     // Set up the response flags.
     //
 
@@ -3535,7 +3637,9 @@ Return Value:
         if ((Command->Command == SdCommandReadMultipleBlocks) ||
             (Command->Command == SdCommandWriteMultipleBlocks)) {
 
-            if ((Controller->HostCapabilities & SD_MODE_AUTO_CMD12) != 0) {
+            if (((Controller->HostCapabilities & SD_MODE_AUTO_CMD12) != 0) &&
+                (Controller->SendStop != FALSE)) {
+
                 Flags |= SD_DWC_COMMAND_SEND_AUTO_STOP;
             }
 
@@ -3558,6 +3662,7 @@ Return Value:
     //
 
     ASSERT((Command->Dma == FALSE) ||
+           (Command->BufferSize == 0) ||
            (((SD_DWC_READ_REGISTER(Device, SdDwcBusMode) &
               SD_DWC_BUS_MODE_IDMAC_ENABLE) != 0) &&
             ((SD_DWC_READ_REGISTER(Device, SdDwcControl) &
@@ -4009,57 +4114,6 @@ Return Value:
 
 GetSetVoltageEnd:
     Device->InVoltageSwitch = FALSE;
-    return Status;
-}
-
-KSTATUS
-SdRk32StopDataTransfer (
-    PSD_CONTROLLER Controller,
-    PVOID Context
-    )
-
-/*++
-
-Routine Description:
-
-    This routine stops any current data transfer on the controller.
-
-Arguments:
-
-    Controller - Supplies a pointer to the controller.
-
-    Context - Supplies a context pointer passed to the SD/MMC library upon
-        creation of the controller.
-
-Return Value:
-
-    Status code.
-
---*/
-
-{
-
-    SD_COMMAND Command;
-    KSTATUS Status;
-
-    //
-    // Just send a stop command. This will stop the data transfer by adding in
-    // the stop/abort bit into the command register.
-    //
-
-    RtlZeroMemory(&Command, sizeof(SD_COMMAND));
-    Command.Command = SdCommandStopTransmission;
-    Command.ResponseType = SD_RESPONSE_NONE;
-
-    //
-    // Attempt to send the abort command until the card enters the transfer
-    // state.
-    //
-
-    Status = Controller->FunctionTable.SendCommand(Controller,
-                                                   Controller->ConsumerContext,
-                                                   &Command);
-
     return Status;
 }
 
@@ -4544,7 +4598,8 @@ VOID
 SdRk32SetDmaInterrupts (
     PSD_CONTROLLER Controller,
     PSD_RK32_CONTEXT Device,
-    BOOL Enable
+    BOOL Enable,
+    ULONG BufferSize
     )
 
 /*++
@@ -4564,6 +4619,8 @@ Arguments:
     Enable - Supplies a boolean indicating if the DMA interrupts are to be
         enabled (TRUE) or disabled (FALSE).
 
+    BufferSize - Supplies the length of the DMA buffer.
+
 Return Value:
 
     None.
@@ -4572,9 +4629,7 @@ Return Value:
 
 {
 
-    ULONG Flags;
-
-    Flags = Controller->Flags;
+    ULONG Value;
 
     //
     // Enable the interrupts for transfer completion so that DMA operations
@@ -4583,20 +4638,16 @@ Return Value:
     //
 
     if (Enable != FALSE) {
-        if ((Flags & SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) != 0) {
-            return;
+        Value = Controller->EnabledInterrupts | SD_DWC_INTERRUPT_ERROR_MASK;
+        Value &= ~(SD_DWC_INTERRUPT_MASK_DATA_TRANSFER_OVER |
+                   SD_DWC_INTERRUPT_MASK_COMMAND_DONE);
+
+        if (BufferSize != 0) {
+            Value |= SD_DWC_INTERRUPT_MASK_DATA_TRANSFER_OVER;
+
+        } else {
+            Value |= SD_DWC_INTERRUPT_MASK_COMMAND_DONE;
         }
-
-        Controller->EnabledInterrupts |=
-                                     SD_DWC_INTERRUPT_MASK_DATA_TRANSFER_OVER |
-                                     SD_DWC_INTERRUPT_ERROR_MASK;
-
-        SD_DWC_WRITE_REGISTER(Device,
-                              SdDwcInterruptMask,
-                              Controller->EnabledInterrupts);
-
-        RtlAtomicOr32(&(Controller->Flags),
-                      SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED);
 
     //
     // Disable the DMA interrupts so that they do not interfere with polled I/O
@@ -4605,20 +4656,17 @@ Return Value:
     //
 
     } else {
-        if ((Flags & SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED) == 0) {
-            return;
-        }
+        Value = Controller->EnabledInterrupts &
+                ~(SD_DWC_INTERRUPT_MASK_DATA_TRANSFER_OVER |
+                  SD_DWC_INTERRUPT_MASK_COMMAND_DONE |
+                  SD_DWC_INTERRUPT_ERROR_MASK);
+    }
 
-        Controller->EnabledInterrupts &=
-                                   ~(SD_DWC_INTERRUPT_MASK_DATA_TRANSFER_OVER |
-                                     SD_DWC_INTERRUPT_ERROR_MASK);
-
+    if (Value != Controller->EnabledInterrupts) {
+        Controller->EnabledInterrupts = Value;
         SD_DWC_WRITE_REGISTER(Device,
                               SdDwcInterruptMask,
                               Controller->EnabledInterrupts);
-
-        RtlAtomicAnd32(&(Controller->Flags),
-                       ~SD_CONTROLLER_FLAG_DMA_INTERRUPTS_ENABLED);
     }
 
     return;

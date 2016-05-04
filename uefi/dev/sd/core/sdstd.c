@@ -339,8 +339,8 @@ Return Value:
 
     } while (Time <= Timeout);
 
-    Value = SD_READ_REGISTER(Controller, SdRegisterInterruptStatus);
-    SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, Value);
+    SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatusEnable, 0xFFFFFFFF);
+    SD_WRITE_REGISTER(Controller, SdRegisterInterruptStatus, 0xFFFFFFFF);
     return Status;
 }
 
@@ -391,7 +391,7 @@ Return Value:
 
     InhibitMask = SD_STATE_DATA_INHIBIT | SD_STATE_COMMAND_INHIBIT;
     if ((Command->Command == SdCommandStopTransmission) &&
-        (Command->ResponseType == SD_RESPONSE_NONE)) {
+        (Command->ResponseType != SD_RESPONSE_R1B)) {
 
         InhibitMask = SD_STATE_COMMAND_INHIBIT;
     }

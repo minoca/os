@@ -1297,7 +1297,8 @@ Return Value:
         Parameters.HostCapabilities = SD_MODE_4BIT |
                                       SD_MODE_8BIT |
                                       SD_MODE_HIGH_SPEED |
-                                      SD_MODE_AUTO_CMD12;
+                                      SD_MODE_AUTO_CMD12 |
+                                      SD_MODE_CMD23;
 
         if (Device->Dma != NULL) {
             Parameters.HostCapabilities |= SD_MODE_SYSTEM_DMA;
