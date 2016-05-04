@@ -36,6 +36,7 @@ Environment:
 ##
 
 ASSEMBLY_FILE_HEADER
+.arch_extension virt
 
 ##
 ## .globl allows these labels to be visible to the linker.
@@ -77,6 +78,101 @@ FUNCTION EfipBcm2836SendEvent
 END_FUNCTION EfipBcm2836SendEvent
 
 ##
+## UINT32
+## EfipBcm2836GetMultiprocessorIdRegister (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine gets the Multiprocessor ID register (MPIDR).
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the value of the MPIDR.
+
+--*/
+
+FUNCTION EfipBcm2836GetMultiprocessorIdRegister
+    mrc     p15, 0, %r0, %c0, %c0, 5            @ Get the MPIDR
+    bx      %lr                                 @
+
+END_FUNCTION EfipBcm2836GetMultiprocessorIdRegister
+
+##
+## VOID
+## EfipBcm2836SwitchToSvcMode (
+##     VOID
+##     )
+##
+
+/*++
+
+Routine Description:
+
+    This routine disabled interrupts and switches to SVC mode. It handles the
+    case where the core is in HYP mode, which requires an execution state
+    transition in order to enter SVC mode.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+FUNCTION EfipBcm2836SwitchToSvcMode
+
+    ##
+    ## Disable interrupts.
+    ##
+
+    cpsid   i
+
+    ##
+    ## Test to see if the core is in HYP mode. Transitioning from HYP mode to
+    ## SVC mode requires an ERET to switch execution states.
+    ##
+
+    mrs     %r0, CPSR
+    and     %r0, %r0, #ARM_MODE_MASK
+    cmp     %r0, #ARM_MODE_HYP
+    bne     EfipBcm2836SwitchToSvcModeEnd
+
+    ##
+    ## Trasition to SVC mode with the ERET.
+    ##
+
+    msr     ELR_hyp, %lr
+    mrs     %r0, CPSR
+    and     %r0, %r0, #~(ARM_MODE_MASK)
+    orr     %r0, %r0, #ARM_MODE_SVC
+    msr     SPSR_hyp, %r0
+    eret
+
+EfipBcm2836SwitchToSvcModeEnd:
+
+    ##
+    ## The core was not in HYP mode. Switch to SVC mode the easy way.
+    ##
+
+    mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_SVC)
+    msr     CPSR_c, %r2
+    bx      %lr
+
+END_FUNCTION EfipBcm2836SwitchToSvcMode
+
+##
 ## VOID
 ## EfipBcm2836ProcessorStartup (
 ##     VOID
@@ -87,9 +183,9 @@ END_FUNCTION EfipBcm2836SendEvent
 
 Routine Description:
 
-    This routine implements the startup routine for the second CPU on the TI
-    OMAP4. Since this is the very first set of instructions executed on this
-    core there is nothing set up, including a stack.
+    This routine implements the startup routine for the alternate CPUs on the
+    Raspberry Pi 2. Since this is the very first set of instructions executed
+    on this core there is nothing set up, including a stack.
 
 Arguments:
 
@@ -104,6 +200,18 @@ Return Value:
 .arm
 .align 4
 EfipBcm2836ProcessorStartup:
+
+    ##
+    ## Disable interrupts and switch to SVC mode.
+    ##
+
+    bl      EfipBcm2836SwitchToSvcMode
+
+    ##
+    ## Park the core again, waiting until the firmware can allocate a page for
+    ## the final parking location.
+    ##
+
     mov     %r3, #0
     ldr     %r1, =EfiBcm2836ProcessorId     @ Get the processor ID address.
     ldr     %r0, [%r1]                      @ Get the value.

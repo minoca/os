@@ -26,7 +26,8 @@ BINARY = bcm2709.a
 
 BINARYTYPE = library
 
-OBJS = init.o     \
+OBJS = gpio.o     \
+       init.o     \
        intr.o     \
        mailbox.o  \
        memmap.o   \

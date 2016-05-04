@@ -108,6 +108,15 @@ config_hdmi_boost=4
 disable_l2cache=0
 
 #
+# Force the UART to 3 MHz. The Raspberry Pi 3 UART runs at 48 MHz for the
+# Bluetooth module, but it is not yet enabled. Minoca OS uses the UART for
+# debugging and that only needs to be 3 MHz to achieve an 115200 baudrate.
+#
+
+init_uart_clock=3000000
+init_uart_baud=115200
+
+#
 # Set the kernel image and the kernel's start address.
 #
 

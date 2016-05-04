@@ -25,6 +25,9 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+#include <minoca/lib/types.h>
+#include <minoca/fw/acpitabs.h>
+#include <minoca/soc/b2709os.h>
 #include <uefifw.h>
 #include "rpi2fw.h"
 
@@ -75,11 +78,10 @@ Environment:
 #define ARM_PARKING_PROTOCOL_FIRMWARE_OFFSET 0x0800
 
 //
-// Define the physical processor ID base. This comes from core 0's MPIDR and
-// must match the values in the BCM2709 ACPI Table.
+// Define which bits of the MPIDR are valid processor ID bits.
 //
 
-#define BCM2836_PROCESSOR_ID_BASE 0xF00
+#define ARM_PROCESSOR_ID_MASK 0x00FFFFFF
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -94,9 +96,19 @@ EfipBcm2836ProcessorStartup (
     VOID
     );
 
+UINT32
+EfipBcm2836GetMultiprocessorIdRegister (
+    VOID
+    );
+
 VOID
 EfipBcm2836SendEvent (
     VOID
+    );
+
+EFI_STATUS
+EfipBcm2836UpdateAcpi (
+    UINT32 ProcessorIdBase
     );
 
 //
@@ -145,11 +157,18 @@ Return Value:
 {
 
     VOID *Cpu[BCM2836_CPU_COUNT];
+    UINT32 IdBase;
     UINT32 Index;
     UINTN Pages;
     EFI_PHYSICAL_ADDRESS ParkedAddress;
     UINTN ParkingLoopSize;
     EFI_STATUS Status;
+
+    //
+    // Get the MPIDR of the current core to determine the base CPU ID.
+    //
+
+    IdBase = EfipBcm2836GetMultiprocessorIdRegister() & ARM_PROCESSOR_ID_MASK;
 
     //
     // Phase 0 initializes all of the cores and then parks the non-boot cores.
@@ -174,7 +193,7 @@ Return Value:
         //
 
         for (Index = 1; Index < BCM2836_CPU_COUNT; Index += 1) {
-            EfiBcm2836ProcessorId = BCM2836_PROCESSOR_ID_BASE + Index;
+            EfiBcm2836ProcessorId = IdBase + Index;
 
             //
             // Poke the CPU to fire it up.
@@ -259,7 +278,7 @@ Return Value:
             EfiBcm2836JumpAddress = Cpu[Index] +
                                     ARM_PARKING_PROTOCOL_FIRMWARE_OFFSET;
 
-            EfiBcm2836ProcessorId = BCM2836_PROCESSOR_ID_BASE + Index;
+            EfiBcm2836ProcessorId = IdBase + Index;
 
             //
             // Send an event to the cores, only the one with the matching ID
@@ -278,6 +297,12 @@ Return Value:
                 NOTHING;
             }
         }
+
+    } else {
+        Status = EfipBcm2836UpdateAcpi(IdBase);
+        if (EFI_ERROR(Status)) {
+            return Status;
+        }
     }
 
     return EFI_SUCCESS;
@@ -286,4 +311,79 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+EFI_STATUS
+EfipBcm2836UpdateAcpi (
+    UINT32 ProcessorIdBase
+    )
+
+/*++
+
+Routine Description:
+
+    This routine updates the BCM2 ACPI table with the current platform's SMP
+    information.
+
+Arguments:
+
+    ProcessorIdBase - Supplies the base ID for the BCM2836's ARM cores.
+
+Return Value:
+
+    EFI status code.
+
+--*/
+
+{
+
+    PBCM2709_CPU_ENTRY CpuEntry;
+    PBCM2709_GENERIC_ENTRY CurrentEntry;
+    UINT32 ProcessorCount;
+    EFI_STATUS Status;
+    PBCM2709_TABLE Table;
+
+    Table = EfiGetAcpiTable(BCM2709_SIGNATURE, NULL);
+    if (Table == NULL) {
+        Status = EFI_NOT_FOUND;
+        goto UpdateAcpiEnd;
+    }
+
+    //
+    // Update the processor ID for each CPU entry in the table. Different
+    // BCM2836 devices have different sets of MPIDR values.
+    //
+
+    ProcessorCount = 0;
+    CurrentEntry = (PBCM2709_GENERIC_ENTRY)(Table + 1);
+    while ((UINTN)CurrentEntry <
+           ((UINTN)Table + Table->Header.Length)) {
+
+        if ((CurrentEntry->Type == Bcm2709EntryTypeCpu) &&
+            (CurrentEntry->Length == sizeof(BCM2709_CPU_ENTRY))) {
+
+            CpuEntry = (PBCM2709_CPU_ENTRY)CurrentEntry;
+            CpuEntry->ProcessorId = ProcessorIdBase + ProcessorCount;
+            ProcessorCount += 1;
+            if (ProcessorCount == BCM2836_CPU_COUNT) {
+                break;
+            }
+        }
+
+        CurrentEntry = (PBCM2709_GENERIC_ENTRY)((PUCHAR)CurrentEntry +
+                                                CurrentEntry->Length);
+    }
+
+    //
+    // Now that the table has been modified, recompute the checksum.
+    //
+
+    EfiAcpiChecksumTable(Table,
+                         Table->Header.Length,
+                         OFFSET_OF(DESCRIPTION_HEADER, Checksum));
+
+    Status = EFI_SUCCESS;
+
+UpdateAcpiEnd:
+    return Status;
+}
 

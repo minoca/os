@@ -25,10 +25,11 @@ include $(SRCROOT)/os/minoca.mk
 
 BINDIR = $(BINROOT)/rpi
 
-BINFILES = $(BINDIR)/bootcode.bin \
-           $(BINDIR)/config.txt   \
-           $(BINDIR)/fixup.dat    \
-           $(BINDIR)/start.elf    \
+BINFILES = $(BINDIR)/bootcode.bin     \
+           $(BINDIR)/config.txt       \
+           $(BINDIR)/fixup.dat        \
+           $(BINDIR)/start.elf        \
+           $(BINDIR)/LICENCE.broadcom \
 
 all: $(BINFILES)
 
@@ -49,3 +50,5 @@ $(BINDIR)/fixup.dat: fixup.dat
 $(BINDIR)/start.elf: start.elf
 	@cp -pv $< $@
 
+$(BINDIR)/LICENCE.broadcom: LICENCE.broadcom
+	@cp -pv $< $@

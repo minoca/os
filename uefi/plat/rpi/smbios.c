@@ -37,10 +37,10 @@ Environment:
 
 #define RPI_SMBIOS_BIOS_VENDOR "Minoca Corp"
 
-#define RPI_SMBIOS_SYSTEM_MANUFACTURER "Raspberry Pi"
+#define RPI_SMBIOS_SYSTEM_MANUFACTURER "Raspberry Pi Foundation"
 #define RPI_SMBIOS_SYSTEM_PRODUCT_NAME "Raspberry Pi"
 
-#define RPI_SMBIOS_MODULE_MANUFACTURER "Raspberry Pi"
+#define RPI_SMBIOS_MODULE_MANUFACTURER "Raspberry Pi Foundation"
 #define RPI_SMBIOS_MODULE_PRODUCT "Raspberry Pi"
 
 #define RPI_SMBIOS_PROCESSOR_MANUFACTURER "Broadcom"
@@ -60,16 +60,13 @@ Environment:
 
 Structure Description:
 
-    This structure stores the data necessary to query the BCM2709 video core
+    This structure defines the data necessary to query the BCM2709 video core
     for SMBIOS related information.
 
 Members:
 
     Header - Stores a header that defines the total size of the messages being
         sent to and received from the mailbox.
-
-    ModelMessage - Stores a message indicating that the board's model number is
-        being queried. Contains the model number on return.
 
     RevisionMessage - Stores a message indicating that the board's revision is
         being queried. Contains the revision on return.
@@ -88,13 +85,31 @@ Members:
 
 typedef struct _EFI_BCM2709_GET_SMBIOS_INFORMATION {
     BCM2709_MAILBOX_HEADER Header;
-    BCM2709_MAILBOX_BOARD_MODEL ModelMessage;
     BCM2709_MAILBOX_BOARD_REVISION RevisionMessage;
     BCM2709_MAILBOX_BOARD_SERIAL_NUMBER SerialMessage;
     BCM2709_MAILBOX_GET_CLOCK_RATE ArmClockRate;
     BCM2709_MAILBOX_GET_CLOCK_RATE ArmMaxClockRate;
     UINT32 EndTag;
 } EFI_BCM2709_GET_SMBIOS_INFORMATION, *PEFI_BCM2709_GET_SMBIOS_INFORMATION;
+
+/*++
+
+Structure Description:
+
+    This structure defines a Raspberry Pi revision.
+
+Members:
+
+    Revision - Stores the Raspberry Pi revision number.
+
+    Name - Stores the friendly name of the revision.
+
+--*/
+
+typedef struct _RPI_REVISION {
+    UINT32 Revision;
+    CHAR8 *Name;
+} RPI_REVISION, *PRPI_REVISION;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -241,16 +256,6 @@ EFI_BCM2709_GET_SMBIOS_INFORMATION EfiRpiBoardInformationTemplate = {
 
     {
         {
-            BCM2709_MAILBOX_TAG_GET_BOARD_MODEL,
-            sizeof(UINT32),
-            0
-        },
-
-        0
-    },
-
-    {
-        {
             BCM2709_MAILBOX_TAG_GET_BOARD_REVISION,
             sizeof(UINT32),
             0
@@ -294,6 +299,26 @@ EFI_BCM2709_GET_SMBIOS_INFORMATION EfiRpiBoardInformationTemplate = {
     0
 };
 
+RPI_REVISION EfiRpiRevisions[] = {
+    {0x00000001, "1 Model B (Beta)"},
+    {0x00000002, "1 Model B Rev 1.0"},
+    {0x00000003, "1 Model B Rev 1.0 (ECN0001)"},
+    {0x00000004, "1 Model B Rev 2.0"},
+    {0x00000005, "1 Model B Rev 2.0"},
+    {0x00000006, "1 Model B Rev 2.0"},
+    {0x00000007, "1 Model A Rev 2.0"},
+    {0x00000008, "1 Model A Rev 2.0"},
+    {0x00000009, "1 Model A Rev 2.0"},
+    {0x0000000D, "1 Model B Rev 2.0"},
+    {0x0000000E, "1 Model B Rev 2.0"},
+    {0x0000000F, "1 Model B Rev 2.0"},
+    {0x00000010, "1 Model B+ Rev 1.0"},
+    {0x00000011, "Compute Module Rev 1.0"},
+    {0x00000012, "1 Model A+ Rev 1.0"},
+    {0x00000013, "1 Model B+ Rev 1.2"},
+    {0x00900092, "Zero Rev 1.2"}
+};
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -323,10 +348,15 @@ Return Value:
 
     EFI_BCM2709_GET_SMBIOS_INFORMATION BoardInformation;
     UINT32 ExpectedLength;
+    UINT32 Index;
     UINT32 Length;
+    CHAR8 ProductBuffer[64];
+    CHAR8 *ProductName;
+    PRPI_REVISION Revision;
+    UINT32 RevisionCount;
     CHAR8 SerialNumber[17];
     EFI_STATUS Status;
-    CHAR8 Version[28];
+    CHAR8 Version[13];
 
     //
     // Query the BMC2835 mailbox to get version information and a serial number.
@@ -344,14 +374,6 @@ Return Value:
 
     if (EFI_ERROR(Status)) {
         return Status;
-    }
-
-    Length = BoardInformation.ModelMessage.TagHeader.Length;
-    ExpectedLength = sizeof(BCM2709_MAILBOX_BOARD_MODEL) -
-                     sizeof(BCM2709_MAILBOX_TAG);
-
-    if (BCM2709_MAILBOX_CHECK_TAG_LENGTH(Length, ExpectedLength) == FALSE) {
-        return EFI_DEVICE_ERROR;
     }
 
     Length = BoardInformation.RevisionMessage.TagHeader.Length;
@@ -412,15 +434,43 @@ Return Value:
                   sizeof(BoardInformation.SerialMessage.SerialNumber));
 
     //
-    // Convert the model and revision to a string.
+    // Convert the revision to a string.
     //
 
     RtlPrintToString(Version,
                      sizeof(Version),
                      CharacterEncodingAscii,
-                     "Model %08X Rev %08X",
-                     BoardInformation.ModelMessage.ModelNumber,
+                     "Rev %08X",
                      BoardInformation.RevisionMessage.Revision);
+
+    //
+    // Generate the product name based on the revision.
+    //
+
+    Revision = NULL;
+    RevisionCount = sizeof(EfiRpiRevisions) / sizeof(EfiRpiRevisions[0]);
+    for (Index = 0; Index < RevisionCount; Index += 1) {
+        if (EfiRpiRevisions[Index].Revision ==
+            BoardInformation.RevisionMessage.Revision) {
+
+            Revision = &(EfiRpiRevisions[Index]);
+            break;
+        }
+    }
+
+    if (Revision == NULL) {
+        ProductName = RPI_SMBIOS_SYSTEM_PRODUCT_NAME;
+
+    } else {
+        RtlPrintToString(ProductBuffer,
+                         sizeof(ProductBuffer),
+                         CharacterEncodingAscii,
+                         "%s %s",
+                         RPI_SMBIOS_SYSTEM_PRODUCT_NAME,
+                         Revision->Name);
+
+        ProductName = ProductBuffer;
+    }
 
     Status = EfiSmbiosAddStructure(&EfiRpiSmbiosBiosInformation,
                                    RPI_SMBIOS_BIOS_VENDOR,
@@ -434,7 +484,7 @@ Return Value:
 
     Status = EfiSmbiosAddStructure(&EfiRpiSmbiosSystemInformation,
                                    RPI_SMBIOS_SYSTEM_MANUFACTURER,
-                                   RPI_SMBIOS_SYSTEM_PRODUCT_NAME,
+                                   ProductName,
                                    Version,
                                    SerialNumber,
                                    NULL);
@@ -445,7 +495,7 @@ Return Value:
 
     Status = EfiSmbiosAddStructure(&EfiRpiSmbiosModuleInformation,
                                    RPI_SMBIOS_MODULE_MANUFACTURER,
-                                   RPI_SMBIOS_MODULE_PRODUCT,
+                                   ProductName,
                                    NULL);
 
     if (EFI_ERROR(Status)) {

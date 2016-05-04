@@ -60,8 +60,7 @@ _start:
     ## Disable interrupts and switch to SVC mode.
     ##
 
-    mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_SVC)
-    msr     CPSR_c, %r2
+    bl      EfipBcm2836SwitchToSvcMode
 
     ##
     ## Flip some essential MMU bits allowing unaligned accesses.
@@ -89,6 +88,7 @@ BssZeroLoop:
     cmp     %r1, %r2
     blt     BssZeroLoop
 
+
     ##
     ## The stack starts at the image base and works downwards.
     ##
@@ -107,3 +107,4 @@ LoopForever:
 
 InitialMmuAndMask: .word ~(MMU_ALIGNMENT_FAULT_ENABLED)
 InitialMmuOrMask: .word MMU_UNALIGNED_ACCESS_ENABLED
+

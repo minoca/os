@@ -45,6 +45,7 @@ Author:
 #define BCM2709_MAILBOX_OFFSET      0x0000B880
 #define BCM2709_PRM_OFFSET          0x00100000
 #define BCM2709_PRM_SIZE            0x1000
+#define BCM2709_GPIO_OFFSET         0x00200000
 #define BCM2709_UART_OFFSET         0x00201000
 #define BCM2709_EMMC_OFFSET         0x00300000
 
@@ -336,6 +337,49 @@ Author:
 #define BCM2709_PRM_WATCHDOG_RESET_TICKS 10
 
 //
+// Define the GPIO function select values.
+//
+
+#define BCM2709_GPIO_FUNCTION_SELECT_INPUT  0x0
+#define BCM2709_GPIO_FUNCTION_SELECT_OUTPUT 0x1
+#define BCM2709_GPIO_FUNCTION_SELECT_ALT_0  0x4
+#define BCM2709_GPIO_FUNCTION_SELECT_ALT_1  0x5
+#define BCM2709_GPIO_FUNCTION_SELECT_ALT_2  0x6
+#define BCM2709_GPIO_FUNCTION_SELECT_ALT_3  0x7
+#define BCM2709_GPIO_FUNCTION_SELECT_ALT_4  0x3
+#define BCM2709_GPIO_FUNCTION_SELECT_ALT_5  0x2
+
+#define BCM2709_GPIO_FUNCTION_SELECT_MASK   0x7
+
+//
+// Define the number of pins accounted for by each function select register,
+// the bit width for each pin, and the byte width of each select register.
+//
+
+#define BCM2709_GPIO_FUNCTION_SELECT_PIN_COUNT 10
+#define BCM2709_GPIO_FUNCTION_SELECT_PIN_BIT_WIDTH 3
+#define BCM2709_GPIO_FUNCTION_SELECT_REGISTER_BYTE_WIDTH 0x4
+
+//
+// Define the default UART transmit and receive pins.
+//
+
+#define BCM2709_GPIO_TRANSMIT_PIN 14
+#define BCM2709_GPIO_RECEIVE_PIN 15
+
+//
+// Define the maximum GPIO pin.
+//
+
+#define BCM2709_GPIO_PIN_MAX 54
+
+//
+// Define the mask used to convert VC bus addresses to ARM core addresses.
+//
+
+#define BCM2709_ARM_PHYSICAL_ADDRESS_MASK ~(0xC0000000)
+
+//
 // BCM2835 specific definitions
 //
 
@@ -510,7 +554,7 @@ typedef enum _BCM2709_SYSTEM_TIMER_REGISTER {
 //
 
 typedef enum _BCM2709_MAILBOX_REGISTER {
-    Bcm2709MailboxRead   = 0x0,
+    Bcm2709MailboxRead   = 0x00,
     Bcm2709MailboxPeak   = 0x10,
     Bcm2709MailboxSender = 0x14,
     Bcm2709MailboxStatus = 0x18,
@@ -527,6 +571,42 @@ typedef enum _BCM2709_PRM_REGISTER {
     Bcm2709PrmResetStatus  = 0x20,
     Bcm2709PrmWatchdog     = 0x24,
 } BCM2709_PRM_REGISTER, *PBCM2709_PRM_REGISTER;
+
+//
+// Define the offsets to the GPIO registers, in bytes.
+//
+
+typedef enum _BCM2709_GPIO_REGISTER {
+    Bcm2709GpioSelect0                     = 0x00,
+    Bcm2709GpioSelect1                     = 0x04,
+    Bcm2709GpioSelect2                     = 0x08,
+    Bcm2709GpioSelect3                     = 0x0C,
+    Bcm2709GpioSelect4                     = 0x10,
+    Bcm2709GpioSelect5                     = 0x14,
+    Bcm2709GpioPinOutputSet0               = 0x1C,
+    Bcm2709GpioPinOutputSet1               = 0x20,
+    Bcm2709GpioPinOutputClear0             = 0x28,
+    Bcm2709GpioPinOutputClear1             = 0x2C,
+    Bcm2709GpioPinLevel0                   = 0x34,
+    Bcm2709GpioPinLevel1                   = 0x38,
+    Bcm2709GpioPinEventDetectStatus0       = 0x40,
+    Bcm2709GpioPinEventDetectStatus1       = 0x44,
+    Bcm2709GpioPinRisingEdgeDetectEnable0  = 0x4C,
+    Bcm2709GpioPinRisingEdgeDetectEnable1  = 0x50,
+    Bcm2709GpioPinFallingEdgeDetectEnable0 = 0x58,
+    Bcm2709GpioPinFallingEdgeDetectEnable1 = 0x5C,
+    Bcm2709GpioPinHighDetectEnable0        = 0x64,
+    Bcm2709GpioPinHighDetectEnable1        = 0x68,
+    Bcm2709GpioPinLowDetectEnable0         = 0x70,
+    Bcm2709GpioPinLowDetectEnable1         = 0x74,
+    Bcm2709GpioPinAsyncRisingEdgeDetect0   = 0x7C,
+    Bcm2709GpioPinAsyncRisingEdgeDetect1   = 0x80,
+    Bcm2709GpioPinAsyncFallingEdgeDetect0  = 0x88,
+    Bcm2709GpioPinAsyncFallingEdgeDetect1  = 0x8C,
+    Bcm2709GpioPinPullUpDownEnable         = 0x94,
+    Bcm2709GpioPinPullUpDownEnableClock0   = 0x98,
+    Bcm2709GpioPinPullUpDownEnableClock1   = 0x9C,
+} BCM2709_GPIO_REGISTER, *PBCM2709_GPIO_REGISTER;
 
 //
 // -------------------------------------------------------------------- Globals

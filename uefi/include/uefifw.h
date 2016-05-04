@@ -402,7 +402,8 @@ Arguments:
     Phase - Supplies the iteration number this routine is being called on.
         Phase zero occurs very early, just after the debugger comes up.
         Phase one occurs a bit later, after timer and interrupt services are
-        initialized.
+        initialized. Phase two happens right before boot, after all platform
+        devices have been enumerated.
 
 Return Value:
 
@@ -979,6 +980,62 @@ Arguments:
 Return Value:
 
     EFI status code.
+
+--*/
+
+EFIAPI
+VOID
+EfiAcpiChecksumTable (
+    VOID *Buffer,
+    UINTN Size,
+    UINTN ChecksumOffset
+    );
+
+/*++
+
+Routine Description:
+
+    This routine checksums an ACPI table.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the table to checksum.
+
+    Size - Supplies the size of the table in bytes.
+
+    ChecksumOffset - Supplies the offset of the 8 bit checksum field.
+
+Return Value:
+
+    None.
+
+--*/
+
+EFIAPI
+VOID *
+EfiGetAcpiTable (
+    UINT32 Signature,
+    VOID *PreviousTable
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find an ACPI description table with the given
+    signature. This routine does not validate the checksum of the table.
+
+Arguments:
+
+    Signature - Supplies the signature of the desired table.
+
+    PreviousTable - Supplies an optional pointer to the table to start the
+        search from.
+
+Return Value:
+
+    Returns a pointer to the beginning of the header to the table if the table
+    was found, or NULL if the table could not be located.
 
 --*/
 

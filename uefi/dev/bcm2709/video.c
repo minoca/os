@@ -833,9 +833,7 @@ Return Value:
         PixelOrder = BCM2709_MAILBOX_PIXEL_ORDER_RGB;
     }
 
-    if (PixelOrder != InitializeVideo.PixelOrderMessage.PixelOrder) {
-        InitializeVideo.PixelOrderMessage.PixelOrder = PixelOrder;
-    }
+    InitializeVideo.PixelOrderMessage.PixelOrder = PixelOrder;
 
     //
     // Send the initialization command to the BCM2709 mailbox. This is also a
@@ -958,7 +956,13 @@ Return Value:
         goto Bcm2709VideoInitializeEnd;
     }
 
+    //
+    // The video core may return an aliased address out of range for the ARM
+    // core. Shift the base address until it is accessible by the ARM core.
+    //
+
     *FrameBufferBase = InitializeVideo.FrameBufferMessage.FrameBuffer.Base;
+    *FrameBufferBase &= BCM2709_ARM_PHYSICAL_ADDRESS_MASK;
     *FrameBufferSize = InitializeVideo.FrameBufferMessage.FrameBuffer.Size;
     Status = EFI_SUCCESS;
 

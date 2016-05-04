@@ -35,20 +35,25 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
+//
+// Define the SMBIOS values common between the RPI 2 and RPI 3.
+//
+
 #define RPI2_SMBIOS_BIOS_VENDOR "Minoca Corp"
-
-#define RPI2_SMBIOS_SYSTEM_MANUFACTURER "Raspberry Pi 2"
-#define RPI2_SMBIOS_SYSTEM_PRODUCT_NAME "Raspberry Pi 2"
-
-#define RPI2_SMBIOS_MODULE_MANUFACTURER "Raspberry Pi 2"
-#define RPI2_SMBIOS_MODULE_PRODUCT "Raspberry Pi 2"
-
+#define RPI2_SMBIOS_SYSTEM_MANUFACTURER "Raspberry Pi Foundation"
+#define RPI2_SMBIOS_SYSTEM_PRODUCT_NAME "Raspberry Pi"
+#define RPI2_SMBIOS_MODULE_MANUFACTURER "Raspberry Pi Foundation"
+#define RPI2_SMBIOS_MODULE_PRODUCT "Raspberry Pi"
 #define RPI2_SMBIOS_PROCESSOR_MANUFACTURER "Broadcom"
-#define RPI2_SMBIOS_PROCESSOR_PART "BCM2836"
-#define RPI2_SMBIOS_PROCESSOR_EXTERNAL_CLOCK 250
 #define RPI2_SMBIOS_PROCESSOR_CORE_COUNT 4
-
 #define RPI2_SMBIOS_CACHE_L1_SIZE 32
+
+//
+// Define the SMBIOS values that differ betweent the RPI 2 and RPI3.
+//
+
+#define RPI2_SMBIOS_PROCESSOR_PART "BCM2836"
+#define RPI3_SMBIOS_PROCESSOR_PART "BCM2837"
 
 #define HERTZ_PER_MEGAHERTZ 1000000ULL
 
@@ -60,16 +65,13 @@ Environment:
 
 Structure Description:
 
-    This structure stores the data necessary to query the BCM2709 video core
+    This structure defines the data necessary to query the BCM2709 video core
     for SMBIOS related information.
 
 Members:
 
     Header - Stores a header that defines the total size of the messages being
         sent to and received from the mailbox.
-
-    ModelMessage - Stores a message indicating that the board's model number is
-        being queried. Contains the model number on return.
 
     RevisionMessage - Stores a message indicating that the board's revision is
         being queried. Contains the revision on return.
@@ -88,13 +90,35 @@ Members:
 
 typedef struct _EFI_BCM2709_GET_SMBIOS_INFORMATION {
     BCM2709_MAILBOX_HEADER Header;
-    BCM2709_MAILBOX_BOARD_MODEL ModelMessage;
     BCM2709_MAILBOX_BOARD_REVISION RevisionMessage;
     BCM2709_MAILBOX_BOARD_SERIAL_NUMBER SerialMessage;
     BCM2709_MAILBOX_GET_CLOCK_RATE ArmClockRate;
     BCM2709_MAILBOX_GET_CLOCK_RATE ArmMaxClockRate;
+    BCM2709_MAILBOX_GET_CLOCK_RATE ApbClockRate;
     UINT32 EndTag;
 } EFI_BCM2709_GET_SMBIOS_INFORMATION, *PEFI_BCM2709_GET_SMBIOS_INFORMATION;
+
+/*++
+
+Structure Description:
+
+    This structure defines a Raspberry Pi revision.
+
+Members:
+
+    Revision - Stores the Raspberry Pi revision number.
+
+    Name - Stores the friendly name of the revision.
+
+    ProcessorPart - Stores the processor part used by the revision.
+
+--*/
+
+typedef struct _RPI2_REVISION {
+    UINT32 Revision;
+    CHAR8 *Name;
+    CHAR8 *ProcessorPart;
+} RPI2_REVISION, *PRPI2_REVISION;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -197,7 +221,7 @@ SMBIOS_PROCESSOR_INFORMATION EfiRpi2SmbiosProcessorInformation = {
     0,
     0,
     0,
-    RPI2_SMBIOS_PROCESSOR_EXTERNAL_CLOCK,
+    0,
     0,
     0,
     SMBIOS_PROCESSOR_STATUS_ENABLED,
@@ -236,16 +260,6 @@ SMBIOS_CACHE_INFORMATION EfiRpi2SmbiosL1Cache = {
 EFI_BCM2709_GET_SMBIOS_INFORMATION EfiRpi2BoardInformationTemplate = {
     {
         sizeof(EFI_BCM2709_GET_SMBIOS_INFORMATION),
-        0
-    },
-
-    {
-        {
-            BCM2709_MAILBOX_TAG_GET_BOARD_MODEL,
-            sizeof(UINT32),
-            0
-        },
-
         0
     },
 
@@ -291,7 +305,25 @@ EFI_BCM2709_GET_SMBIOS_INFORMATION EfiRpi2BoardInformationTemplate = {
         0
     },
 
+    {
+        {
+            BCM2709_MAILBOX_TAG_GET_CLOCK_RATE,
+            sizeof(UINT32) + sizeof(UINT32),
+            sizeof(UINT32)
+        },
+
+        BCM2709_MAILBOX_CLOCK_ID_VIDEO,
+        0
+    },
+
     0
+};
+
+RPI2_REVISION EfiRpi2Revisions[] = {
+    {0x00a01041, "2 Model B Rev 1.1", RPI2_SMBIOS_PROCESSOR_PART},
+    {0x00a21041, "2 Model B Rev 1.1", RPI2_SMBIOS_PROCESSOR_PART},
+    {0x00a02082, "3 Model B Rev 1.2", RPI3_SMBIOS_PROCESSOR_PART},
+    {0x00a22082, "3 Model B Rev 1.2", RPI3_SMBIOS_PROCESSOR_PART},
 };
 
 //
@@ -323,10 +355,16 @@ Return Value:
 
     EFI_BCM2709_GET_SMBIOS_INFORMATION BoardInformation;
     UINT32 ExpectedLength;
+    UINT32 Index;
     UINT32 Length;
+    CHAR8 *ProcessorPart;
+    CHAR8 ProductBuffer[32];
+    CHAR8 *ProductName;
+    PRPI2_REVISION Revision;
+    UINT32 RevisionCount;
     CHAR8 SerialNumber[17];
     EFI_STATUS Status;
-    CHAR8 Version[28];
+    CHAR8 Version[13];
 
     //
     // Query the BMC2836 mailbox to get version information and a serial number.
@@ -344,14 +382,6 @@ Return Value:
 
     if (EFI_ERROR(Status)) {
         return Status;
-    }
-
-    Length = BoardInformation.ModelMessage.TagHeader.Length;
-    ExpectedLength = sizeof(BCM2709_MAILBOX_BOARD_MODEL) -
-                     sizeof(BCM2709_MAILBOX_TAG);
-
-    if (BCM2709_MAILBOX_CHECK_TAG_LENGTH(Length, ExpectedLength) == FALSE) {
-        return EFI_DEVICE_ERROR;
     }
 
     Length = BoardInformation.RevisionMessage.TagHeader.Length;
@@ -386,6 +416,14 @@ Return Value:
         return EFI_DEVICE_ERROR;
     }
 
+    Length = BoardInformation.ApbClockRate.TagHeader.Length;
+    ExpectedLength = sizeof(BCM2709_MAILBOX_GET_CLOCK_RATE) -
+                     sizeof(BCM2709_MAILBOX_TAG);
+
+    if (BCM2709_MAILBOX_CHECK_TAG_LENGTH(Length, ExpectedLength) == FALSE) {
+        return EFI_DEVICE_ERROR;
+    }
+
     //
     // Update the clock information.
     //
@@ -395,6 +433,9 @@ Return Value:
 
     EfiRpi2SmbiosProcessorInformation.CurrentSpeed =
                       BoardInformation.ArmClockRate.Rate / HERTZ_PER_MEGAHERTZ;
+
+    EfiRpi2SmbiosProcessorInformation.ExternalClock =
+                      BoardInformation.ApbClockRate.Rate / HERTZ_PER_MEGAHERTZ;
 
     //
     // Convert the serial number to a string.
@@ -418,9 +459,37 @@ Return Value:
     RtlPrintToString(Version,
                      sizeof(Version),
                      CharacterEncodingAscii,
-                     "Model %08X Rev %08X",
-                     BoardInformation.ModelMessage.ModelNumber,
+                     "Rev %08X",
                      BoardInformation.RevisionMessage.Revision);
+
+    //
+    // Generate the product name based on the revision.
+    //
+
+    Revision = NULL;
+    RevisionCount = sizeof(EfiRpi2Revisions) / sizeof(EfiRpi2Revisions[0]);
+    for (Index = 0; Index < RevisionCount; Index += 1) {
+        if (EfiRpi2Revisions[Index].Revision ==
+            BoardInformation.RevisionMessage.Revision) {
+
+            Revision = &(EfiRpi2Revisions[Index]);
+            break;
+        }
+    }
+
+    if (Revision == NULL) {
+        ProductName = RPI2_SMBIOS_SYSTEM_PRODUCT_NAME;
+
+    } else {
+        RtlPrintToString(ProductBuffer,
+                         sizeof(ProductBuffer),
+                         CharacterEncodingAscii,
+                         "%s %s",
+                         RPI2_SMBIOS_SYSTEM_PRODUCT_NAME,
+                         Revision->Name);
+
+        ProductName = ProductBuffer;
+    }
 
     Status = EfiSmbiosAddStructure(&EfiRpi2SmbiosBiosInformation,
                                    RPI2_SMBIOS_BIOS_VENDOR,
@@ -434,7 +503,7 @@ Return Value:
 
     Status = EfiSmbiosAddStructure(&EfiRpi2SmbiosSystemInformation,
                                    RPI2_SMBIOS_SYSTEM_MANUFACTURER,
-                                   RPI2_SMBIOS_SYSTEM_PRODUCT_NAME,
+                                   ProductName,
                                    Version,
                                    SerialNumber,
                                    NULL);
@@ -445,7 +514,7 @@ Return Value:
 
     Status = EfiSmbiosAddStructure(&EfiRpi2SmbiosModuleInformation,
                                    RPI2_SMBIOS_MODULE_MANUFACTURER,
-                                   RPI2_SMBIOS_MODULE_PRODUCT,
+                                   ProductName,
                                    NULL);
 
     if (EFI_ERROR(Status)) {
@@ -457,10 +526,15 @@ Return Value:
         return Status;
     }
 
+    ProcessorPart = "";
+    if (Revision != NULL) {
+        ProcessorPart = Revision->ProcessorPart;
+    }
+
     Status = EfiSmbiosAddStructure(&EfiRpi2SmbiosProcessorInformation,
                                    RPI2_SMBIOS_PROCESSOR_MANUFACTURER,
                                    SerialNumber,
-                                   RPI2_SMBIOS_PROCESSOR_PART,
+                                   ProcessorPart,
                                    NULL);
 
     if (EFI_ERROR(Status)) {

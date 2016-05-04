@@ -133,7 +133,8 @@ Arguments:
     Phase - Supplies the iteration number this routine is being called on.
         Phase zero occurs very early, just after the debugger comes up.
         Phase one occurs a bit later, after timer and interrupt services are
-        initialized.
+        initialized. Phase two happens right before boot, after all platform
+        devices have been enumerated.
 
 Return Value:
 

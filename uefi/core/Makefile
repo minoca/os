@@ -29,6 +29,7 @@ BINARYTYPE = library
 INCLUDES += $(SRCROOT)/os/uefi/include;
 
 OBJS = acpi.o     \
+       acpitabs.o \
        basepe.o   \
        bdsboot.o  \
        bdscon.o   \

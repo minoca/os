@@ -36,7 +36,8 @@ RpiFirmwareBlobFiles = [
     "config.txt",
     "start.elf",
     "fixup.dat",
-    "bootcode.bin"
+    "bootcode.bin",
+    "LICENCE.broadcom"
 ];
 
 //

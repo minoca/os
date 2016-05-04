@@ -129,7 +129,6 @@ EfipReallocateAcpiTableBuffer (
     VOID
     );
 
-EFIAPI
 EFI_STATUS
 EfipAcpiPublishTables (
     VOID
@@ -138,13 +137,6 @@ EfipAcpiPublishTables (
 VOID
 EfipAcpiChecksumCommonTables (
     VOID
-    );
-
-VOID
-EfipAcpiChecksumTable (
-    VOID *Buffer,
-    UINTN Size,
-    UINTN ChecksumOffset
     );
 
 //
@@ -241,9 +233,9 @@ Return Value:
 
             ASSERT(Size >= TableSize);
 
-            EfipAcpiChecksumTable(CurrentTable,
-                                  TableSize,
-                                  OFFSET_OF(DESCRIPTION_HEADER, Checksum));
+            EfiAcpiChecksumTable(CurrentTable,
+                                 TableSize,
+                                 OFFSET_OF(DESCRIPTION_HEADER, Checksum));
 
             Status = EfiAcpiInstallTable(CurrentTable, TableSize, &TableHandle);
             EfiFreePool(CurrentTable);
@@ -360,6 +352,53 @@ Return Value:
     }
 
     return EFI_SUCCESS;
+}
+
+EFIAPI
+VOID
+EfiAcpiChecksumTable (
+    VOID *Buffer,
+    UINTN Size,
+    UINTN ChecksumOffset
+    )
+
+/*++
+
+Routine Description:
+
+    This routine checksums an ACPI table.
+
+Arguments:
+
+    Buffer - Supplies a pointer to the table to checksum.
+
+    Size - Supplies the size of the table in bytes.
+
+    ChecksumOffset - Supplies the offset of the 8 bit checksum field.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    UINT8 *Pointer;
+    UINT8 Sum;
+
+    Sum = 0;
+    Pointer = Buffer;
+    Pointer[ChecksumOffset] = 0;
+    while (Size != 0) {
+        Sum = (UINT8)(Sum + *Pointer);
+        Pointer += 1;
+        Size -= 1;
+    }
+
+    Pointer = Buffer;
+    Pointer[ChecksumOffset] = (UINT8)(0xFF - Sum + 1);
+    return;
 }
 
 //
@@ -850,9 +889,9 @@ Return Value:
                                        EfiAcpiContext.Fadt->Header.OemRevision;
 
         if (Checksum != FALSE) {
-            EfipAcpiChecksumTable(TableEntry->Table,
-                                  TableEntry->Table->Length,
-                                  OFFSET_OF(DESCRIPTION_HEADER, Checksum));
+            EfiAcpiChecksumTable(TableEntry->Table,
+                                 TableEntry->Table->Length,
+                                 OFFSET_OF(DESCRIPTION_HEADER, Checksum));
         }
 
         break;
@@ -886,9 +925,9 @@ Return Value:
             // Checksum the FADT.
             //
 
-            EfipAcpiChecksumTable(EfiAcpiContext.Fadt,
-                                  EfiAcpiContext.Fadt->Header.Length,
-                                  OFFSET_OF(DESCRIPTION_HEADER, Checksum));
+            EfiAcpiChecksumTable(EfiAcpiContext.Fadt,
+                                 EfiAcpiContext.Fadt->Header.Length,
+                                 OFFSET_OF(DESCRIPTION_HEADER, Checksum));
         }
 
         break;
@@ -919,9 +958,9 @@ Return Value:
             // Checksum the FADT.
             //
 
-            EfipAcpiChecksumTable(EfiAcpiContext.Fadt,
-                                  EfiAcpiContext.Fadt->Header.Length,
-                                  OFFSET_OF(DESCRIPTION_HEADER, Checksum));
+            EfiAcpiChecksumTable(EfiAcpiContext.Fadt,
+                                 EfiAcpiContext.Fadt->Header.Length,
+                                 OFFSET_OF(DESCRIPTION_HEADER, Checksum));
         }
 
         break;
@@ -932,9 +971,9 @@ Return Value:
 
     default:
         if (Checksum != FALSE) {
-            EfipAcpiChecksumTable(TableEntry->Table,
-                                  TableEntry->Table->Length,
-                                  OFFSET_OF(DESCRIPTION_HEADER, Checksum));
+            EfiAcpiChecksumTable(TableEntry->Table,
+                                 TableEntry->Table->Length,
+                                 OFFSET_OF(DESCRIPTION_HEADER, Checksum));
         }
 
         break;
@@ -1086,9 +1125,9 @@ Return Value:
                       sizeof(UINT64),
                       0);
 
-            EfipAcpiChecksumTable(EfiAcpiContext.Fadt,
-                                  EfiAcpiContext.Fadt->Header.Length,
-                                  OFFSET_OF(DESCRIPTION_HEADER, Checksum));
+            EfiAcpiChecksumTable(EfiAcpiContext.Fadt,
+                                 EfiAcpiContext.Fadt->Header.Length,
+                                 OFFSET_OF(DESCRIPTION_HEADER, Checksum));
         }
 
         break;
@@ -1098,9 +1137,9 @@ Return Value:
         if (EfiAcpiContext.Fadt != NULL) {
             EfiAcpiContext.Fadt->DsdtAddress = 0;
             EfiSetMem(&(EfiAcpiContext.Fadt->XDsdt), sizeof(UINT64), 0);
-            EfipAcpiChecksumTable(EfiAcpiContext.Fadt,
-                                  EfiAcpiContext.Fadt->Header.Length,
-                                  OFFSET_OF(DESCRIPTION_HEADER, Checksum));
+            EfiAcpiChecksumTable(EfiAcpiContext.Fadt,
+                                 EfiAcpiContext.Fadt->Header.Length,
+                                 OFFSET_OF(DESCRIPTION_HEADER, Checksum));
         }
 
         break;
@@ -1205,14 +1244,14 @@ Return Value:
         }
     }
 
-    EfipAcpiChecksumTable(Rsdt,
-                          Rsdt->Length,
-                          OFFSET_OF(DESCRIPTION_HEADER, Checksum));
+    EfiAcpiChecksumTable(Rsdt,
+                         Rsdt->Length,
+                         OFFSET_OF(DESCRIPTION_HEADER, Checksum));
 
     if (Xsdt != NULL) {
-        EfipAcpiChecksumTable(Xsdt,
-                              Xsdt->Length,
-                              OFFSET_OF(DESCRIPTION_HEADER, Checksum));
+        EfiAcpiChecksumTable(Xsdt,
+                             Xsdt->Length,
+                             OFFSET_OF(DESCRIPTION_HEADER, Checksum));
     }
 
     *TableCount -= 1;
@@ -1369,7 +1408,6 @@ Return Value:
     return EFI_SUCCESS;
 }
 
-EFIAPI
 EFI_STATUS
 EfipAcpiPublishTables (
     VOID
@@ -1447,68 +1485,22 @@ Return Value:
     UINTN Offset;
 
     Offset = OFFSET_OF(DESCRIPTION_HEADER, Checksum);
-    EfipAcpiChecksumTable(EfiAcpiContext.Rsdp,
-                          OFFSET_OF(RSDP, Length),
-                          OFFSET_OF(RSDP, Checksum));
+    EfiAcpiChecksumTable(EfiAcpiContext.Rsdp,
+                         OFFSET_OF(RSDP, Length),
+                         OFFSET_OF(RSDP, Checksum));
 
-    EfipAcpiChecksumTable(EfiAcpiContext.Rsdp,
-                          sizeof(RSDP),
-                          OFFSET_OF(RSDP, ExtendedChecksum));
+    EfiAcpiChecksumTable(EfiAcpiContext.Rsdp,
+                         sizeof(RSDP),
+                         OFFSET_OF(RSDP, ExtendedChecksum));
 
-    EfipAcpiChecksumTable(EfiAcpiContext.Rsdt,
-                          EfiAcpiContext.Rsdt->Header.Length,
-                          Offset);
+    EfiAcpiChecksumTable(EfiAcpiContext.Rsdt,
+                         EfiAcpiContext.Rsdt->Header.Length,
+                         Offset);
 
-    EfipAcpiChecksumTable(EfiAcpiContext.Xsdt,
-                          EfiAcpiContext.Xsdt->Header.Length,
-                          Offset);
+    EfiAcpiChecksumTable(EfiAcpiContext.Xsdt,
+                         EfiAcpiContext.Xsdt->Header.Length,
+                         Offset);
 
-    return;
-}
-
-VOID
-EfipAcpiChecksumTable (
-    VOID *Buffer,
-    UINTN Size,
-    UINTN ChecksumOffset
-    )
-
-/*++
-
-Routine Description:
-
-    This routine checksums an ACPI table.
-
-Arguments:
-
-    Buffer - Supplies a pointer to the table to checksum.
-
-    Size - Supplies the size of the table in bytes.
-
-    ChecksumOffset - Supplies the offset of the 8 bit checksum field.
-
-Return Value:
-
-    None.
-
---*/
-
-{
-
-    UINT8 *Pointer;
-    UINT8 Sum;
-
-    Sum = 0;
-    Pointer = Buffer;
-    Pointer[ChecksumOffset] = 0;
-    while (Size != 0) {
-        Sum = (UINT8)(Sum + *Pointer);
-        Pointer += 1;
-        Size -= 1;
-    }
-
-    Pointer = Buffer;
-    Pointer[ChecksumOffset] = (UINT8)(0xFF - Sum + 1);
     return;
 }
 

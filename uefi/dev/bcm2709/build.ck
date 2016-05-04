@@ -22,6 +22,7 @@ Environment:
 
 function build() {
     sources = [
+        "gpio.c",
         "init.c",
         "intr.c",
         "mailbox.c",

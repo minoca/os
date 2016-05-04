@@ -25,6 +25,7 @@ Environment:
 function build() {
     base_sources = [
         "acpi.c",
+        "acpitabs.c",
         "basepe.c",
         "bdsboot.c",
         "bdscon.c",

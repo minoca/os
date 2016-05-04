@@ -41,6 +41,7 @@ Author:
 #define BCM2709_ARM_TIMER_BASE BCM2709_GET_BASE(BCM2709_ARM_TIMER_OFFSET)
 #define BCM2709_MAILBOX_BASE BCM2709_GET_BASE(BCM2709_MAILBOX_OFFSET)
 #define BCM2709_PRM_BASE BCM2709_GET_BASE(BCM2709_PRM_OFFSET)
+#define BCM2709_GPIO_BASE BCM2709_GET_BASE(BCM2709_GPIO_OFFSET)
 #define BCM2709_UART_BASE BCM2709_GET_BASE(BCM2709_UART_OFFSET)
 #define BCM2709_EMMC_BASE BCM2709_GET_BASE(BCM2709_EMMC_OFFSET)
 
@@ -493,6 +494,29 @@ typedef struct _BCM2709_MAILBOX_BOARD_SERIAL_NUMBER {
 
 Structure Description:
 
+    This structure defines the data necessary to get a BCM2709's clock rate.
+
+Members:
+
+    Header - Stores a header that defines the total size of the messages being
+        sent to and received from the mailbox.
+
+    ClockRate - Stores a message getting the clock rate.
+
+    EndTag - Stores the tag to denote the end of the mailbox message.
+
+--*/
+
+typedef struct _EFI_BCM2709_GET_CLOCK_RATE {
+    BCM2709_MAILBOX_HEADER Header;
+    BCM2709_MAILBOX_GET_CLOCK_RATE ClockRate;
+    UINT32 EndTag;
+} EFI_BCM2709_GET_CLOCK_RATE, *PEFI_BCM2709_GET_CLOCK_RATE;
+
+/*++
+
+Structure Description:
+
     This structure defines a BCM2709 timer.
 
 Members:
@@ -875,6 +899,30 @@ Arguments:
 
     MapSize - Supplies a pointer where the number of elements in the initial
         memory map will be returned on success.
+
+Return Value:
+
+    EFI status code.
+
+--*/
+
+EFI_STATUS
+EfipBcm2709GpioFunctionSelect (
+    UINT32 Pin,
+    UINT32 Mode
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the given mode for the pin's function select.
+
+Arguments:
+
+    Pin - Supplies the GPIO pin whose function select to modify.
+
+    Mode - Supplies the function select mode to set.
 
 Return Value:
 

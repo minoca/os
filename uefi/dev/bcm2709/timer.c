@@ -39,7 +39,7 @@ Environment:
     EfiReadRegister32(BCM2709_ARM_TIMER_BASE + (_Register))
 
 //
-// This macro writes to an BCM2709 ARM timer.
+// This macro writes to a BCM2709 ARM timer.
 //
 
 #define WRITE_ARM_TIMER_REGISTER(_Register, _Value) \
@@ -53,7 +53,7 @@ Environment:
     EfiReadRegister32(BCM2709_SYSTEM_TIMER_BASE + (_Register))
 
 //
-// This macro writes to an BCM2709 System timer.
+// This macro writes to a BCM2709 System timer.
 //
 
 #define WRITE_SYSTEM_TIMER_REGISTER(_Register, _Value) \

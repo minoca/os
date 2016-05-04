@@ -581,6 +581,12 @@ Return Value:
         goto InitializeEnd;
     }
 
+    Step += 1;
+    EfiStatus = EfiPlatformInitialize(2);
+    if (EFI_ERROR(EfiStatus)) {
+        goto InitializeEnd;
+    }
+
     //
     // Let's get the time, just for kicks.
     //
