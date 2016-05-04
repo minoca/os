@@ -118,7 +118,7 @@ if test "x$ARCH$VARIANT" = "xx86"; then
     DEBUGROOT="$SAVED_BINROOT"
 fi
 
-for file in debugui.exe debug.exe kexts.dll dbgext.a; do
+for file in debugui.exe debug.exe kexts.dll dbgext.a msetup_build.exe; do
     cp -v $DEBUGROOT/$file  "$BINROOT/"
 done
 
