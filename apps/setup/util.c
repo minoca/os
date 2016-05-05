@@ -1259,7 +1259,7 @@ Return Value:
 
         *Next = '\0';
         Status = SetupFileCreateDirectory(Volume, Copy, Mode);
-        if ((Status != 0) && (Status != EEXIST)) {
+        if (Status != 0) {
             fprintf(stderr,
                     "Error: Cannot create directories for path %s: %s.\n",
                     Copy,

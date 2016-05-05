@@ -1356,6 +1356,10 @@ Return Value:
         }
 
         Result = SetupOsCreateDirectory(FinalPath, Permissions);
+        if (Result == EEXIST) {
+            Result = 0;
+        }
+
         free(FinalPath);
         return Result;
     }
@@ -1668,10 +1672,23 @@ Return Value:
 
     //
     // Okay, either the path ended, the file was not found, or the file was
-    // not a directory. If the file was not found, maybe create it.
+    // not a directory. If the file was found, but an exclusive open was
+    // requested, fail.
     //
 
-    if (Status == STATUS_NOT_FOUND) {
+    if (Status == STATUS_SUCCESS) {
+        if ((CurrentPathLength == 0) &&
+            ((Flags & (O_CREAT | O_EXCL)) == (O_CREAT | O_EXCL))) {
+
+            Status = STATUS_FILE_EXISTS;
+            goto FatOpenEnd;
+        }
+
+    //
+    // If the file was not found, maybe create it.
+    //
+
+    } else if (Status == STATUS_NOT_FOUND) {
 
         //
         // If the file doesn't exist and the caller doesn't want to create it,

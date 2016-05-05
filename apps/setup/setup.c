@@ -47,7 +47,7 @@ Environment:
 #define SETUP_VERSION_MINOR 0
 
 #define SETUP_USAGE                                                            \
-    "usage: setup [-v] [-d|-p|-f destination]\n"                               \
+    "usage: msetup [-v] [-d|-p|-f destination]\n"                              \
     "Setup installs Minoca OS to a new destination. Options are:\n"            \
     "  -a, --page-file=size -- Specifies the size in megabytes of the page \n" \
     "      file to create. Specify 0 to skip page file creation. If not \n"    \
@@ -81,7 +81,7 @@ Environment:
     "  --version -- Print the application version information and exit.\n\n"   \
     "The destination parameter can take the form of a device ID starting \n"   \
     "with 0x or a path.\n"                                                     \
-    "Example: 'setup -v -p 0x26' Installs on a partition with device ID "      \
+    "Example: 'msetup -v -p 0x26' Installs on a partition with device ID "     \
     "0x26.\n"
 
 #define SETUP_OPTIONS_STRING "Aa:b:BDd:G:hi:l:p:f:qrs:vx:V"
