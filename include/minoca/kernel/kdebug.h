@@ -29,7 +29,7 @@ Author:
 // moving on.
 //
 
-#define DEBUG_CONNECTION_TIMEOUT (10 * 1000000)
+#define DEBUG_CONNECTION_TIMEOUT (2 * 1000000)
 
 #define DEBUG_DEFAULT_BAUD_RATE 115200
 
