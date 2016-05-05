@@ -33,6 +33,15 @@ Environment:
 //
 
 //
+// Define the Raspberry Pi specific reset status value to indicate that the
+// firmware should not proceed with the next boot. The reset status register
+// stores the partition to boot in every other of the first 12 bits. The value
+// 0x3F (spaced out to 0x555) indicates that the firmware should halt.
+//
+
+#define RPI_BCM2709_PRM_RESET_STATUS_HALT 0x00000555
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -307,6 +316,7 @@ Return Value:
 
 {
 
+    volatile UINT32 *PrmResetStatus;
     volatile UINT32 *ResetControl;
     UINT32 Value;
     volatile UINT32 *Watchdog;
@@ -316,6 +326,22 @@ Return Value:
     //
 
     EfiCoreFlushVariableData();
+
+    //
+    // There is no official way to shutdown the BCM2835. The Raspberry Pi
+    // firmware, however, stores the boot partition information in the PRM
+    // reset status register. A special partition value is reserved to indicate
+    // that the firmware should not proceed with the boot process.
+    //
+
+    if (ResetType == EfiResetShutdown) {
+        PrmResetStatus = EfiBcm2835PrmBase + Bcm2709PrmResetStatus;
+        *PrmResetStatus |= BCM2709_PRM_PASSWORD |
+                           RPI_BCM2709_PRM_RESET_STATUS_HALT;
+    }
+
+    Watchdog = EfiBcm2835PrmBase + Bcm2709PrmWatchdog;
+    *Watchdog = BCM2709_PRM_WATCHDOG_RESET_TICKS | BCM2709_PRM_PASSWORD;
     ResetControl = EfiBcm2835PrmBase + Bcm2709PrmResetControl;
     Value = *ResetControl;
     Value &= ~BCM2709_PRM_RESET_CONTROL_TYPE_MASK;
@@ -323,8 +349,6 @@ Return Value:
              BCM2709_PRM_RESET_CONTROL_TYPE_FULL;
 
     *ResetControl = Value;
-    Watchdog = EfiBcm2835PrmBase + Bcm2709PrmWatchdog;
-    *Watchdog = BCM2709_PRM_WATCHDOG_RESET_TICKS | BCM2709_PRM_PASSWORD;
     return;
 }
 
