@@ -101,7 +101,7 @@ postbuild: $(BINROOT)/init.sh
 $(BINROOT)/dev2drv.set: config/dev2drv.set
 	@cp -pv $^ $@
 
-$(BINROOT)/devmap.set: config/devmap.set.$(ARCH)
+$(BINROOT)/devmap.set: config/devmap.set
 	@cp -pv $^ $@
 
 $(BINROOT)/init.set: config/init.set
