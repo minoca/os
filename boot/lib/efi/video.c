@@ -60,6 +60,7 @@ Environment:
 typedef enum _BOOT_VIDEO_STRATEGY {
     BootVideoStrategyInvalid,
     BootVideoStrategyUseFirmwareMode,
+    BootVideoStrategyUseFirmwareModeMin1024x768,
     BootVideoStrategyUseLowestResolution,
     BootVideoStrategyUseHighestResolution,
     BootVideoStrategyMax1024x768,
@@ -112,6 +113,7 @@ USHORT BoEfiDesiredVideoResolutionY;
 
 BOOT_VIDEO_STRATEGY BoEfiVideoStrategies[] = {
     BootVideoStrategySpecificValues,
+    BootVideoStrategyUseFirmwareModeMin1024x768,
     BootVideoStrategyMax1024x768,
     BootVideoStrategyUseFirmwareMode,
     BootVideoStrategyUseLowestResolution,
@@ -526,6 +528,7 @@ Return Value:
         // Only use the firmware mode if it is supported.
         //
 
+        case BootVideoStrategyUseFirmwareModeMin1024x768:
         case BootVideoStrategyUseFirmwareMode:
             Mode = Graphics->Mode->Info;
             ModeSize = Graphics->Mode->SizeOfInfo;
@@ -547,6 +550,19 @@ Return Value:
             if ((Mode->PixelFormat != PixelRedGreenBlueReserved8BitPerColor) &&
                 (Mode->PixelFormat != PixelBlueGreenRedReserved8BitPerColor) &&
                 (Mode->PixelFormat != PixelBitMask)) {
+
+                Mode = NULL;
+                continue;
+            }
+
+            //
+            // Skip the firmware mode if it must be at least 1024x768 and it is
+            // not up to the challenge.
+            //
+
+            if ((Strategy == BootVideoStrategyUseFirmwareModeMin1024x768) &&
+                ((Mode->HorizontalResolution < 1024) ||
+                 (Mode->VerticalResolution < 768))) {
 
                 Mode = NULL;
                 continue;
