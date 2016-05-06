@@ -150,7 +150,7 @@ sh "$SRCROOT/os/tasks/distrib/gen_inst.sh"
 
 if test "$ARCH$VARIANT" = "x86"; then
     REVISION=`cat $BINROOT/build-revision`
-    file=MinocaOS-$ARCH$VARIANT-$REVISION.zip
+    file=MinocaOS-Starter-$REVISION.zip
     file_size=`ls -l $file | \
         sed -n 's/[^ ]* *[^ ]* *[^ ]* *[^ ]* *\([0123456789]*\).*/\1/p'`
 
