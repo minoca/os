@@ -37,6 +37,7 @@ Author:
 #define SETUP_PARTITION_FLAG_MERGE_VBR 0x00000010
 
 #define SETUP_COPY_FLAG_UPDATE 0x00000001
+#define SETUP_COPY_FLAG_OPTIONAL 0x00000002
 
 //
 // ------------------------------------------------------ Data Type Definitions

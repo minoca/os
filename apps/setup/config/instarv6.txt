@@ -32,14 +32,12 @@ Files = [
     "am3soc.drv",
     "am3usb.drv",
     "ata.drv",
-    "atl1c.drv",
     "bootmefi.efi",
     "dev2drv.set",
     "devmap.set",
     "devrem.drv",
     "dma.drv",
     "dmab2709.drv",
-    "dwceth.drv",
     "dwhci.drv",
     "ehci.drv",
     "fat.drv",
@@ -65,7 +63,6 @@ Files = [
     "rk32gpio.drv",
     "rk32spi.drv",
     "rpifw",
-    "rtl81xx.drv",
     "rtlw81xx.drv",
     "rtlw8188eufw.bin",
     "rtlw8188cufwUMC.bin",
@@ -92,7 +89,6 @@ Files = [
 ];
 
 Files += [
-    "apps/",
     "skel/",
     "rpi/"
 ];
@@ -104,6 +100,14 @@ FilesCopy = {
     "Files": Files
 };
 
+AppsCopy = {
+    "Destination": SourceDir,
+    "Source": SourceDir,
+    "SourceVolume": -1,
+    "Files": ["apps/"],
+    "Optional": TRUE
+};
+
 //
 // Create the storage partition.
 //
@@ -111,7 +115,7 @@ FilesCopy = {
 DataPartition = {
     "Index": 0,
     "Size": -1,
-    "Files": [FilesCopy],
+    "Files": [FilesCopy, AppsCopy],
 };
 
 DiskData["Partitions"] = [DataPartition];

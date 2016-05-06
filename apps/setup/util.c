@@ -717,13 +717,25 @@ Return Value:
 
         if (Result != 0) {
             Result = errno;
-            fprintf(stderr,
-                    "Failed to open source file %s: %s\n",
-                    SourcePath,
-                    strerror(Result));
 
-            if (Result == 0) {
-                Result = -1;
+            //
+            // Forgive optional copies if they don't exist.
+            //
+
+            if ((Result == ENOENT) &&
+                ((Flags & SETUP_COPY_FLAG_OPTIONAL) != 0)) {
+
+                Result = 0;
+
+            } else {
+                fprintf(stderr,
+                        "Failed to open source file %s: %s\n",
+                        SourcePath,
+                        strerror(Result));
+
+                if (Result == 0) {
+                    Result = -1;
+                }
             }
 
             goto CopyFileEnd;

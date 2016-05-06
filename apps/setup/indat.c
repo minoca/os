@@ -113,6 +113,14 @@ CHALK_C_STRUCTURE_MEMBER SetupCopyMembers[] = {
         {SETUP_COPY_FLAG_UPDATE}
     },
 
+    {
+        ChalkCFlag32,
+        "Optional",
+        FIELD_OFFSET(SETUP_COPY, Flags),
+        FALSE,
+        {SETUP_COPY_FLAG_OPTIONAL}
+    },
+
     {0}
 };
 

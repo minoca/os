@@ -39,7 +39,6 @@ Files = [
     "ehci.drv",
     "fat.drv",
     "fatboot.bin",
-    "gpio.drv",
     "i8042.drv",
     "init.set",
     "init.sh",
@@ -58,7 +57,6 @@ Files = [
     "part.drv",
     "pci.drv",
     "qrkhostb.drv",
-    "ramdisk.drv",
     "rtl81xx.drv",
     "rtlw81xx.drv",
     "rtlw8188eufw.bin",
@@ -67,7 +65,6 @@ Files = [
     "sd.drv",
     "ser16550.drv",
     "smsc95xx.drv",
-    "spb.drv",
     "special.drv",
     "tzdata",
     "tzdflt",
@@ -82,7 +79,6 @@ Files = [
 ];
 
 Files += [
-    "apps/",
     "skel/"
 ];
 
@@ -93,6 +89,14 @@ FilesCopy = {
     "Files": Files
 };
 
+AppsCopy = {
+    "Destination": SourceDir,
+    "Source": SourceDir,
+    "SourceVolume": -1,
+    "Files": ["apps/"],
+    "Optional": TRUE
+};
+
 //
 // Create the storage partition.
 //
@@ -100,7 +104,7 @@ FilesCopy = {
 DataPartition = {
     "Index": 0,
     "Size": -1,
-    "Files": [FilesCopy],
+    "Files": [FilesCopy, AppsCopy],
 };
 
 DiskData["Partitions"] = [DataPartition];

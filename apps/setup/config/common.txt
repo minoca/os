@@ -81,7 +81,6 @@ KernelPath = SystemDirName + "kernel";
 
 DriverFiles = [
     "acpi.drv",
-    "dwceth.drv",
     "ehci.drv",
     "fat.drv",
     "net80211.drv",
@@ -110,6 +109,7 @@ DriverFiles = [
 DriverFilesX86 = [
     "ata.drv",
     "atl1c.drv",
+    "dwceth.drv",
     "e100.drv",
     "i8042.drv",
     "rtl81xx.drv",
@@ -206,6 +206,7 @@ UserAppsCopy = {
     "Destination": "/apps/",
     "Source": SourceDir + "apps/",
     "SourceVolume": 0,
+    "Optional": TRUE
 };
 
 UserSkelCopy = {
