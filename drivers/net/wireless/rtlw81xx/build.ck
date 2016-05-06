@@ -34,12 +34,31 @@ function build() {
         "//drivers/usb/usbcore:usbcore"
     ];
 
+    fw_files = [
+        "rtlw8188cufwUMC.bin",
+        "rtlw8188eufw.bin",
+        "rtlw8192cufw.bin"
+    ];
+
+    entries = [];
+    implicits = [];
+    for (fw_file in fw_files) {
+        entries += copy("firmware/" + fw_file,
+                        binroot + "/" + fw_file,
+                        fw_file,
+                        null,
+                        null);
+
+        implicits += [":" + fw_file];
+    }
+
     drv = {
         "label": name,
         "inputs": sources + dynlibs,
+        "implicit": implicits
     };
 
-    entries = driver(drv);
+    entries += driver(drv);
     return entries;
 }
 

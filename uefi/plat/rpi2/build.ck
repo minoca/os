@@ -95,7 +95,8 @@ function build() {
         "inputs": sources + libs,
         "sources_config": sources_config,
         "includes": includes,
-        "config": link_config
+        "config": link_config,
+        "text_address": text_address
     };
 
     entries = executable(elf);
@@ -119,11 +120,12 @@ function build() {
 
     flattened = {
         "label": platfw,
-        "inputs": [":" + platfw + ".elf"]
+        "inputs": [":" + platfw + ".elf"],
+        "implicit": ["//uefi/plat/rpi2/blobs:blobs"],
+        "binplace": TRUE
     };
 
-    flattened = flattened_binary(flattened);
-    entries += flattened;
+    entries += flattened_binary(flattened);
     return entries;
 }
 

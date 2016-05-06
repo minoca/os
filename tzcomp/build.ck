@@ -75,7 +75,8 @@ function build() {
         "label": "tzdata",
         "inputs": tz_files,
         "implicit": [":build_tzcomp"],
-        "tool": "tzcomp"
+        "tool": "tzcomp",
+        "nostrip": TRUE
     };
 
     tz_default_config = {
@@ -88,10 +89,12 @@ function build() {
         "inputs": tz_files,
         "implicit": [":build_tzcomp"],
         "tool": "tzcomp",
-        "config": tz_default_config
+        "config": tz_default_config,
+        "nostrip": TRUE
     };
 
-    entries += [almanac, tz_default_data];
+    entries += binplace(almanac);
+    entries += binplace(tz_default_data);
 
     //
     // Create a group for the data files.

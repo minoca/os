@@ -105,6 +105,20 @@ function build() {
 
     common_list = compiled_sources(common_lib);
     entries = common_list[1];
+
+    //
+    // Add the include and dependency for version.c, which uses the kernel's
+    // version.h
+    //
+
+    for (entry in entries) {
+        if (entry["output"] == "version.o") {
+            add_config(entry, "CPPFLAGS", "-I$^/kernel");
+            entry["implicit"] = ["//kernel:version.h"];
+            break;
+        }
+    }
+
     efi_lib = {
         "label": "bootefi",
         "inputs": common_list[0] + efi_sources,

@@ -77,16 +77,18 @@ function build() {
         "description": "Building BeagleBone Firmware - $OUT"
     };
 
+    entries += [bbonefwb_tool];
     bbonefwb = {
         "type": "target",
         "label": "bbonemlo",
         "tool": "bbonefwb",
         "inputs": [":bbonemlo.bin"],
         "implicit": [":fwbuild"],
-        "config": {"TEXT_ADDRESS": text_address}
+        "config": {"TEXT_ADDRESS": text_address},
+        "nostrip": TRUE
     };
 
-    entries += [bbonefwb_tool, bbonefwb];
+    entries += binplace(bbonefwb);
 
     //
     // Add the firmware builder tool.

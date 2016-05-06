@@ -123,6 +123,21 @@ function build() {
 
     entries = application(app);
     entries += application(build_app);
+    setup_tool = {
+        "type": "tool",
+        "name": "msetup_image",
+        "command": "$^/apps/setup/build/msetup $MSETUP_FLAGS -d $OUT",
+        "description": "Building Image - $OUT",
+        "pool": "image"
+    };
+
+    image_pool = {
+        "type": "pool",
+        "name": "image",
+        "depth": 1
+    };
+
+    entries += [setup_tool, image_pool];
     return entries;
 }
 

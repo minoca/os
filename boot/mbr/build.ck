@@ -52,7 +52,9 @@ function build() {
 
     flattened = {
         "label": "mbr.bin",
-        "inputs": [":mbr.elf"]
+        "inputs": [":mbr.elf"],
+        "binplace": TRUE,
+        "nostrip": TRUE
     };
 
     flattened = flattened_binary(flattened);

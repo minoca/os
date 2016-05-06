@@ -138,10 +138,11 @@ function build() {
         "inputs": [":bootmefi.elf"],
         "implicit": ["//uefi/tools/elfconv:elfconv"],
         "tool": "elfconv",
-        "config": elfconv_config
+        "config": elfconv_config,
+        "nostrip": TRUE
     };
 
-    entries += [bootman_pe];
+    entries += binplace(bootman_pe);
 
     //
     // On PC machines, build the BIOS library as well.
@@ -156,6 +157,7 @@ function build() {
             "includes": includes,
             "config": pcat_link_config,
             "text_address": "0x100000",
+            "binplace": TRUE
         };
 
         entries += executable(pcat_app);
@@ -166,7 +168,9 @@ function build() {
 
         flattened = {
             "label": "bootman.bin",
-            "inputs": [":bootman.elf"]
+            "inputs": [":bootman.elf"],
+            "binplace": TRUE,
+            "nostrip": TRUE
         };
 
         flattened = flattened_binary(flattened);

@@ -166,32 +166,55 @@ function build() {
         "inputs": [":" + platfw + ".bin"],
         "orderonly": ["//uefi/tools/mkuboot:mkuboot"],
         "tool": "mkuboot",
-        "config": uboot_config
+        "config": uboot_config,
+        "nostrip": TRUE
     };
 
+    entries += binplace(uboot);
     uboot_usb = {
         "label": "pandausb.img",
         "inputs": [":" + platfw_usb + ".bin"],
         "orderonly": ["//uefi/tools/mkuboot:mkuboot"],
         "tool": "mkuboot",
-        "config": uboot_config
+        "config": uboot_config,
+        "nostrip": TRUE
     };
 
-    entries += [uboot, uboot_usb];
+    entries += binplace(uboot_usb);
+
+    //
+    // Create the RAM disk image. Debugging is always enabled in these RAM disk
+    // images since they're only used for development.
+    //
+
+    msetup_flags = [
+        "-q",
+        "-G30M",
+        "-lpanda-usb",
+        "-i$" + binroot + "/install.img",
+        "-D"
+    ];
+
+    entry = {
+        "type": "target",
+        "tool": "msetup_image",
+        "label": "ramdisk",
+        "output": "ramdisk",
+        "inputs": ["//images:install.img"],
+        "config": {"MSETUP_FLAGS": msetup_flags}
+    };
+
+    entries += [entry];
 
     //
     // Create the RAM disk for the USB version.
-    // TODO: Change inputs to //images/pandard.img
     //
 
-    ramdisk = copy("//uefi/plat/beagbone:bbonefw", "ramdisk", null, null, null);
-    entries += ramdisk;
     ramdisk_o = {
         "type": "target",
         "label": "ramdisk.o",
         "inputs": [":ramdisk"],
         "tool": "objcopy",
-        "config": {"OBJCOPY_FLAGS": global_config["OBJCOPY_FLAGS"]}
     };
 
     entries += [ramdisk_o];

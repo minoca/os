@@ -83,16 +83,18 @@ function build() {
         "description": "Building PandaBoard Firmware - $OUT"
     };
 
+    entries += [fwb_tool];
     mlo = {
         "type": "target",
         "label": "omap4mlo",
         "tool": "pandafwb",
         "inputs": [":omap4mlo.bin"],
         "implicit": [":pandafwb"],
-        "config": {"TEXT_ADDRESS": "0x40300000"}
+        "config": {"TEXT_ADDRESS": "0x40300000"},
+        "nostrip": TRUE
     };
 
-    entries += [fwb_tool, mlo];
+    entries += binplace(mlo);
 
     //
     // Add the firmware builder tool.

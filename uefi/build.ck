@@ -26,9 +26,7 @@ function build() {
             "//uefi/plat/beagbone:bbonefw",
             "//uefi/plat/beagbone/init:bbonemlo",
             "//uefi/plat/panda/init:omap4mlo",
-            "//uefi/plat/integcp:integfw",
             "//uefi/plat/panda:pandafw",
-            "//uefi/plat/panda:pandausb.img",
             "//uefi/plat/rpi2:rpi2fw",
             "//uefi/plat/veyron:veyronfw",
         ];

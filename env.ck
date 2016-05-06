@@ -26,11 +26,13 @@ FALSE = 0;
 
 arch ?= getenv("ARCH");
 //debug ?= getenv("DEBUG");
-//variant ?= getenv("VARIANT");
+variant ?= getenv("VARIANT");
 
 arch ?= "x86";
 debug ?= "dbg";
 variant ?= "";
+
+release_level ?= "SystemReleaseDevelopment";
 
 outroot = "^/../..";
 binroot = outroot + "/bin";
@@ -166,11 +168,10 @@ cflags += ["-fno-builtin",
 cppflags += ["-I$//include"];
 
 //
-// TODO: Figure out REVISION, BUILD_TIME, BUILD_TIME_STRING, BUILD_STRING,
-// and BUILD_USER.
+// TODO: Figure out REVISION.
 //
 
-cppflags += ["-DREVISION=0 -DBUILD_TIME_STRING=\\\"\\\" -DBUILD_TIME=0 -DBUILD_STRING=\\\"\\\" -DBUILD_USER=\\\"None\\\""];
+cppflags += ["-DREVISION=0"];
 build_cflags = cflags + [];
 build_cppflags = cppflags + [];
 
@@ -213,6 +214,7 @@ build_objcopy_flags ?= [
 if (build_os == "Windows") {
     build_objcopy_flags += ["--prefix-symbols=_"];
 }
+
 //
 // Set a default target compiler if one was not set. On Minoca building its own
 // architecture, use the native compiler.
@@ -281,7 +283,7 @@ function copy(source, destination, destination_label, flags, mode) {
     }
 
     if (mode) {
-        config["config"] = mode;
+        config["CHMOD_FLAGS"] = mode;
     }
 
     entry = {
@@ -326,7 +328,9 @@ function binplace(params) {
     source = get(params, "output");
     source ?= label;
 
-    assert(label && source, "Label or source must be defined");
+    assert(label && source, "Label or output must be defined");
+
+    build = get(params, "build");
 
     //
     // Set the output since the label is going to be renamed and create the
@@ -335,7 +339,13 @@ function binplace(params) {
 
     params["output"] = source;
     file_name = basename(source);
-    destination = binroot + "/" + file_name;
+    if (build) {
+        destination = binroot + "/tools/bin/" + file_name;
+
+    } else {
+        destination = binroot + "/" + file_name;
+    }
+
     cpflags = get(params, "cpflags");
     mode = get(params, "chmod");
     new_original_label = label + "_orig";
@@ -355,10 +365,17 @@ function binplace(params) {
     //
 
     if (!get(params, "nostrip")) {
+        if (build) {
+            stripped_output = stripped_dir + "/build/" + file_name;
+
+        } else {
+            stripped_output = stripped_dir + "/" + file_name;
+        }
+
         stripped_entry = {
             "label": label + "_stripped",
             "inputs": [original_target],
-            "output": stripped_dir + "/" + file_name,
+            "output": stripped_output,
             "build": get(params, "build"),
         };
 
@@ -514,6 +531,7 @@ function application(params) {
     }
 
     add_config(params, "LDFLAGS", "-pie");
+    params["binplace"] ?= TRUE;
     return executable(params);
 }
 
@@ -540,6 +558,7 @@ function shared_library(params) {
     }
 
     params["output"] = soname;
+    params["binplace"] ?= TRUE;
     return executable(params);
 }
 
@@ -701,6 +720,7 @@ function flattened_binary(params) {
 
     add_config(params, flags, "-O binary");
     if (get(params, "binplace")) {
+        params["nostrip"] = TRUE;
         entries = binplace(params);
 
     } else {
@@ -716,6 +736,7 @@ function flattened_binary(params) {
 
 function driver(params) {
     params["entry"] ?= "DriverEntry";
+    params["binplace"] ?= TRUE;
     soname = get(params, "output");
     soname ?= params["label"];
     if (soname != "kernel") {
@@ -783,3 +804,28 @@ function uefi_fwvol_o(name, ffs) {
 
     return [fwv, fwv_o];
 }
+
+//
+// Define a function that creates a version.h file target.
+//
+
+function create_version_header(major, minor, revision) {
+    version_config = {
+        "FORM": "header",
+        "MAJOR": major,
+        "MINOR": minor,
+        "REVISION": revision,
+        "RELEASE": release_level
+    };
+
+    version_h = {
+        "type": "target",
+        "output": "version.h",
+        "inputs": ["//.git/HEAD"],
+        "tool": "gen_version",
+        "config": version_config + {"FORM": "header"}
+    };
+
+    return [version_h];
+}
+

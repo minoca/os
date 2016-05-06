@@ -212,6 +212,27 @@ function build() {
 
     entries = application(app);
     entries += application(build_app);
+
+    //
+    // Create the version header.
+    //
+
+    entries += create_version_header("0", "0", "0");
+
+    //
+    // Add the include and dependency for version.c.
+    //
+
+    for (entry in entries) {
+        if (entry["inputs"][0] == "swlib/userio.c") {
+            entry["config"] = entry["config"] + {};
+            entry["config"]["CPPFLAGS"] = entry["config"]["CPPFLAGS"] +
+                                          ["-I$^/apps/swiss"];
+
+            entry["implicit"] = [":version.h", "//.git/HEAD"];
+        }
+    }
+
     return entries;
 }
 

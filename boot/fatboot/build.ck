@@ -65,7 +65,9 @@ function build() {
 
     flattened = {
         "label": "fatboot.bin",
-        "inputs": [":fatboot.elf"]
+        "inputs": [":fatboot.elf"],
+        "binplace": TRUE,
+        "nostrip": TRUE
     };
 
     flattened = flattened_binary(flattened);

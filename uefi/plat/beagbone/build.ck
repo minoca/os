@@ -135,10 +135,11 @@ function build() {
         "inputs": [":" + platfw + ".bin"],
         "orderonly": ["//uefi/tools/mkuboot:mkuboot"],
         "tool": "mkuboot",
-        "config": uboot_config
+        "config": uboot_config,
+        "nostrip": TRUE
     };
 
-    entries += [uboot];
+    entries += binplace(uboot);
     return entries;
 }
 

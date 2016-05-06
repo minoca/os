@@ -85,6 +85,7 @@ function build() {
     kernel = {
         "label": "kernel",
         "inputs": base_sources + arch_sources + kernel_libs,
+        "implicit": [":kernel-version"],
         "entry": "KepStartSystem",
         "config": kernel_config
     };
@@ -99,6 +100,65 @@ function build() {
         entries += static_library(boot_arch_lib);
     }
 
+    //
+    // Copy the config files.
+    //
+
+    entries += copy("config/dev2drv.set",
+                    binroot + "/dev2drv.set",
+                    "dev2drv.set",
+                    null,
+                    null);
+
+    entries += copy("config/devmap.set",
+                    binroot + "/devmap.set",
+                    "devmap.set",
+                    null,
+                    null);
+
+    entries += copy("config/init.set",
+                    binroot + "/init.set",
+                    "init.set",
+                    null,
+                    null);
+
+    entries += copy("config/init.sh",
+                    binroot + "/init.sh",
+                    "init.sh",
+                    null,
+                    null);
+
+    //
+    // Create the version header.
+    //
+
+    version_major = "0";
+    version_minor = "2";
+    version_revision = "0";
+    entries += create_version_header(version_major,
+                                     version_minor,
+                                     version_revision);
+
+    //
+    // Also create a version file in the binroot.
+    //
+
+    version_config = {
+        "MAJOR": version_major,
+        "MINOR": version_minor,
+        "REVISION": version_revision,
+        "FORM": "simple"
+    };
+
+    version_file = {
+        "type": "target",
+        "label": "kernel-version",
+        "output": binroot + "/kernel-version",
+        "tool": "gen_version",
+        "config": version_config
+    };
+
+    entries += [version_file];
     return entries;
 }
 

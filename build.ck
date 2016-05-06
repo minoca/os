@@ -81,8 +81,8 @@ function build() {
         "description": "Stripping - $OUT",
     };
 
-    build_cflags_line = "$BUILD_BASE_CPPFLAGS $CPPFLAGS $BUILD_CFLAGS $CFLAGS" +
-                        " -MMD -MF $OUT.d ";
+    build_cflags_line = "$BUILD_BASE_CPPFLAGS $CPPFLAGS $BUILD_BASE_CFLAGS " +
+                        "$CFLAGS -MMD -MF $OUT.d ";
 
     build_cc = {
         "type": "tool",
@@ -162,6 +162,20 @@ function build() {
         "description": "Copying - $IN -> $OUT"
     };
 
+    if (build_os == "Windows") {
+        symlink_command = "cp $IN $OUT";
+
+    } else {
+        symlink_command = "ln -sf $SYMLINK_IN $OUT";
+    }
+
+    symlink = {
+        "type": "tool",
+        "name": "symlink",
+        "command": symlink_command,
+        "description": "Symlinking - $OUT"
+    };
+
     stamp = {
         "type": "tool",
         "name": "stamp",
@@ -169,37 +183,33 @@ function build() {
         "description": "Stamp - $OUT"
     };
 
+    touch = {
+        "type": "tool",
+        "name": "touch",
+        "command": "touch $OUT",
+        "description": "Touch - $OUT"
+    };
+
+    gen_version = {
+        "type": "tool",
+        "name": "gen_version",
+        "command": "$SHELL $//tasks/build/print_version.sh $OUT $FORM $MAJOR $MINOR $REVISION $RELEASE $SERIAL $BUILD_STRING",
+        "description": "Versioning - $OUT"
+    };
+
     config_entry = {
         "type": "global_config",
         "config": global_config
     };
 
-    pool1 = {
-        "type": "pool",
-        "name": "mypool1",
-        "depth": 4
-    };
-
-    pool2 = {
-        "type": "pool",
-        "name": "mypool2",
-        "depth": 1
-    };
-
     entries = [cc, cxx, ld, ar, as, objcopy, strip_tool,
                build_cc, build_cxx, build_ld, build_ar, build_as, build_rcc,
-               build_objcopy, build_strip, iasl, cp, stamp,
-               config_entry, pool1, pool2];
+               build_objcopy, build_strip, iasl, cp, symlink, stamp, touch,
+               gen_version, config_entry];
 
     all = [
         "//lib:test_apps",
-        "//apps:all_apps",
-        "//kernel:kernel",
-        "//boot:boot_apps",
-        "//debug:debug",
-        "//drivers:drivers",
-        "//uefi:platfw",
-        "//tzcomp:tz_files",
+        "//images:"
     ];
 
     entries += group("all", all);

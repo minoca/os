@@ -26,13 +26,13 @@ default_target = "//:";
 output_format = "ninja";
 arch ?= getenv("ARCH");
 //debug ?= getenv("DEBUG");
-//variant ?= getenv("VARIANT");
+variant ?= getenv("VARIANT");
 
 arch ?= "x86";
 debug ?= "dbg";
 variant ?= "";
 
 if (arch && debug) {
-    default_build_dir = "//../" + arch + debug + variant + "/obj/os";
+    default_build_dir = "//../" + arch + variant + debug + "/obj/os";
 }
 

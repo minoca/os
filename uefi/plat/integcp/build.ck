@@ -87,13 +87,14 @@ function build() {
         "//uefi/dev/pl110:pl110"
     ];
 
-    platfw = plat + "fw";
     elf = {
-        "label": platfw,
+        "label": plat + ".img",
         "inputs": sources + libs,
         "sources_config": sources_config,
         "includes": includes,
-        "config": link_config
+        "config": link_config,
+        "text_address": text_address,
+        "binplace": TRUE
     };
 
     entries = executable(elf);
@@ -112,17 +113,33 @@ function build() {
     entries += fw_volume;
 
     //
-    // TODO: Change inputs to //images/integrd.img
+    // Create the RAM disk image. Debugging is always enabled in these images
+    // since they're only used for development.
     //
 
-    ramdisk = copy("//uefi/plat/beagbone:bbonefw", "ramdisk", null, null, null);
-    entries += ramdisk;
+    msetup_flags = [
+        "-q",
+        "-D",
+        "-G30M",
+        "-lintegrd",
+        "-i$" + binroot + "/install.img"
+    ];
+
+    ramdisk_image = {
+        "type": "target",
+        "tool": "msetup_image",
+        "label": "ramdisk",
+        "output": "ramdisk",
+        "inputs": ["//images:install.img"],
+        "config": {"MSETUP_FLAGS": msetup_flags}
+    };
+
+    entries += [ramdisk_image];
     ramdisk_o = {
         "type": "target",
         "label": "ramdisk.o",
         "inputs": [":ramdisk"],
-        "tool": "objcopy",
-        "config": {"OBJCOPY_FLAGS": global_config["OBJCOPY_FLAGS"]}
+        "tool": "objcopy"
     };
 
     entries += [ramdisk_o];

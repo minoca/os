@@ -38,7 +38,7 @@ function build() {
     };
 
     entries = application(app);
-    genffs_command = "$^//uefi/tools/genffs/genffs -s -i $IN " +
+    genffs_command = "$^/uefi/tools/genffs/genffs -s -i $IN " +
                       "-r EFI_SECTION_PE32 -i $IN " +
                       "-r EFI_SECTION_USER_INTERFACE " +
                       "-t EFI_FV_FILETYPE_DRIVER -o $OUT";
@@ -50,7 +50,8 @@ function build() {
         "description": "GenFFS - $IN"
     };
 
-    genffs_command = "genffs -g 7E374E25-8E01-4FEE-87F2-390C23C606CD " +
+    genffs_command = "$^/uefi/tools/genffs/genffs " +
+                     "-g 7E374E25-8E01-4FEE-87F2-390C23C606CD " +
                      "-r EFI_SECTION_RAW -t EFI_FV_FILETYPE_FREEFORM " +
                      "-o $OUT $IN";
 

@@ -30,16 +30,17 @@ function build() {
         "//drivers/usb/usbcomp:usbcomp",
         "//drivers/usb/usbhub:usbhub",
         "//drivers/usb/usbkbd:usbkbd",
+        "//drivers/usb/usbmass:usbmass"
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {
-        usb_drivers = [
+        usb_drivers += [
             "//drivers/usb/am3usb:am3usb",
             "//drivers/usb/dwhci:dwhci"
         ];
 
     } else if (arch == "x86") {
-        usb_drivers = [
+        usb_drivers += [
             "//drivers/usb/uhci:uhci"
         ];
     }

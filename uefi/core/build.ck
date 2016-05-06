@@ -100,6 +100,17 @@ function build() {
         "CFLAGS": ["-fshort-wchar"],
     };
 
+    //
+    // Create the version.h header.
+    //
+
+    fw_core_version_major = "1";
+    fw_core_version_minor = "0";
+    fw_core_version_revision = "0";
+    entries = create_version_header(fw_core_version_major,
+                                    fw_core_version_minor,
+                                    fw_core_version_revision);
+
     lib = {
         "label": "ueficore",
         "inputs": sources,
@@ -112,7 +123,20 @@ function build() {
         "inputs": ["emptyrd.c"]
     };
 
-    entries = static_library(lib);
+    entries += static_library(lib);
+
+    //
+    // Add the include and dependency for version.c.
+    //
+
+    for (entry in entries) {
+        if (entry["output"] == "version.o") {
+            add_config(entry, "CPPFLAGS", "-I$^/uefi/core");
+            entry["implicit"] = [":version.h"];
+            break;
+        }
+    }
+
     entries += static_library(emptyrd_lib);
     return entries;
 }

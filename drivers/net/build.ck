@@ -33,6 +33,7 @@ function build() {
     if ((arch == "armv7") || (arch == "armv6")) {
         ethernet_drivers += [
             "//drivers/net/ethernet/smsc91c1:smsc91c1",
+            "//drivers/net/ethernet/am3eth:am3eth"
         ];
 
     } else if (arch == "x86") {

@@ -33,11 +33,12 @@ function build() {
         "//drivers/part:part",
         "//drivers/pci:pci",
         "//drivers/plat:platform_drivers",
-        "//drivers/ramdisk",
+        "//drivers/ramdisk:ramdisk",
         "//drivers/sd:sd_drivers",
         "//drivers/special:special",
         "//drivers/term/ser16550:ser16550",
         "//drivers/usb:usb_drivers",
+        "//drivers/videocon:videocon"
     ];
 
     if ((arch == "armv7") || (arch == "armv6")) {

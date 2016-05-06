@@ -151,6 +151,7 @@ function build() {
         "config": uboot_config
     };
 
+    entries += [uboot];
     fwb_sources = [
         "veyron.kbk",
         "veyron.pem",
@@ -167,10 +168,11 @@ function build() {
         "inputs": fwb_sources,
         "implicit": ["//uefi/plat/veyron/fwbuild:veyrnfwb"],
         "config": fwb_config,
-        "tool": "veyrnfwb"
+        "tool": "veyrnfwb",
+        "nostrip": TRUE
     };
 
-    entries += [uboot, fwb];
+    entries += binplace(fwb);
     return entries;
 }
 

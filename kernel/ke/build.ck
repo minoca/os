@@ -71,6 +71,19 @@ function build() {
     };
 
     entries = static_library(lib);
+
+    //
+    // Add the include and dependency for version.c.
+    //
+
+    for (entry in entries) {
+        if (entry["output"] == "version.o") {
+            add_config(entry, "CPPFLAGS", "-I$^/kernel");
+            entry["implicit"] = ["//kernel:version.h", "//.git/HEAD"];
+            break;
+        }
+    }
+
     return entries;
 }
 

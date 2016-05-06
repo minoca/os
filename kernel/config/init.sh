@@ -72,7 +72,11 @@ fi
 ## Set up the home environment.
 ##
 
-mkdir -p "$WORLD/root"
+mkdir -p "$WORLD/root" \
+    "$WORLD/var/run" \
+    "$WORLD/var/log" \
+    "$WORLD/home"
+
 export HOME="/root"
 export TERM=xterm
 
