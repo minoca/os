@@ -168,10 +168,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(MKFIFO_VERSION_MAJOR,
-                           MKFIFO_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(MKFIFO_VERSION_MAJOR, MKFIFO_VERSION_MINOR);
             return 1;
 
         case 'h':

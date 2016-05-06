@@ -210,7 +210,7 @@ endif
 ## Compiler flags
 ##
 
-EXTRA_CPPFLAGS += -I $(subst ;, -I ,$(INCLUDES)) -DREVISION=0
+EXTRA_CPPFLAGS += -I $(subst ;, -I ,$(INCLUDES))
 
 ifeq ($(DEBUG), chk)
 EXTRA_CPPFLAGS += -DDEBUG=1

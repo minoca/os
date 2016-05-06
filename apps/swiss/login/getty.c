@@ -445,7 +445,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(GETTY_VERSION_MAJOR, GETTY_VERSION_MINOR, REVISION);
+            SwPrintVersion(GETTY_VERSION_MAJOR, GETTY_VERSION_MINOR);
             return 1;
 
         case 'h':

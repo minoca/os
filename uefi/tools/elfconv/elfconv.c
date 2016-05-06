@@ -220,10 +220,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("ElfConv version %d.%d.%d\n",
+            printf("ElfConv version %d.%d\n",
                    ELFCONV_VERSION_MAJOR,
-                   ELFCONV_VERSION_MINOR,
-                   REVISION);
+                   ELFCONV_VERSION_MINOR);
 
             return 1;
 

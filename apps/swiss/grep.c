@@ -588,7 +588,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(GREP_VERSION_MAJOR, GREP_VERSION_MINOR, REVISION);
+            SwPrintVersion(GREP_VERSION_MAJOR, GREP_VERSION_MINOR);
             return 1;
 
         case 'h':

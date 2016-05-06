@@ -28,9 +28,6 @@ BINARYTYPE = staticapp
 
 BINPLACE = bin
 
-FIRMWARE_VERSION_MAJOR = 1
-FIRMWARE_VERSION_MINOR = 0
-
 LDFLAGS += -Wl,--no-wchar-size-warning -nodefaultlibs -nostartfiles -nostdlib
 
 RAMDISK = emptyrd
@@ -79,15 +76,6 @@ endif
 include $(SRCROOT)/os/minoca.mk
 
 CFLAGS += -fshort-wchar
-
-FIRMWARE_BUILD_DATE := "$(shell date "+%m/%d/%Y")"
-FIRMWARE_VERSION_STRING := \
-    "$(FIRMWARE_VERSION_MAJOR).$(FIRMWARE_VERSION_MINOR).$(REVISION)"
-
-EXTRA_CPPFLAGS += -DFIRMWARE_BUILD_DATE=\"$(FIRMWARE_BUILD_DATE)\" \
-                  -DFIRMWARE_VERSION_MAJOR=$(FIRMWARE_VERSION_MAJOR) \
-                  -DFIRMWARE_VERSION_MINOR=$(FIRMWARE_VERSION_MINOR) \
-                  -DFIRMWARE_VERSION_STRING=\"$(FIRMWARE_VERSION_STRING)\"
 
 ##
 ## Define the target that creates the firmware volume object file.

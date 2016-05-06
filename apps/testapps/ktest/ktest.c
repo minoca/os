@@ -332,10 +332,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("Minoca kernel test version %d.%d.%d\n",
+            printf("Minoca kernel test version %d.%d\n",
                    KTEST_VERSION_MAJOR,
-                   KTEST_VERSION_MINOR,
-                   REVISION);
+                   KTEST_VERSION_MINOR);
 
             return 1;
 

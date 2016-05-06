@@ -27,6 +27,7 @@ function build() {
         "bootcode.bin",
         "config.txt",
         "fixup.dat",
+        "LICENCE.broadcom",
         "start.elf"
     ];
 

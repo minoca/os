@@ -302,7 +302,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(KILL_VERSION_MAJOR, KILL_VERSION_MINOR, REVISION);
+            SwPrintVersion(KILL_VERSION_MAJOR, KILL_VERSION_MINOR);
             return 1;
 
         case 'h':

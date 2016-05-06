@@ -918,7 +918,7 @@ Return Value:
                          "%d.%d.%d",
                          SH_VERSION_MAJOR,
                          SH_VERSION_MINOR,
-                         REVISION);
+                         SwGetSerialVersion());
 
                 ExpansionSize = strlen(ExpansionBuffer);
 

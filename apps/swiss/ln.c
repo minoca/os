@@ -190,7 +190,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(LN_VERSION_MAJOR, LN_VERSION_MINOR, REVISION);
+            SwPrintVersion(LN_VERSION_MAJOR, LN_VERSION_MINOR);
             return 1;
 
         case 'h':

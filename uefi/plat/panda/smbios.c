@@ -35,6 +35,18 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
+//
+// Set the build date and version to a hardcoded value to avoid the SMBIOS
+// table changing from build to build. The automated tests checksum the whole
+// table to get a machine ID, so if the dates or versions change then each
+// new firmware iteration looks like an entirely new machine.
+//
+
+#define PANDA_FIRMWARE_VERSION_MAJOR 1
+#define PANDA_FIRMWARE_VERSION_MINOR 0
+#define PANDA_FIRMWARE_VERSION_STRING "1.0"
+#define PANDA_FIRMWARE_BUILD_DATE "08/15/2014"
+
 #define PANDA_SMBIOS_BIOS_VENDOR "Minoca Corp"
 
 #define PANDA_SMBIOS_SYSTEM_MANUFACTURER "Texas Instruments"
@@ -88,8 +100,8 @@ SMBIOS_BIOS_INFORMATION EfiPandaSmbiosBiosInformation = {
     0,
     SMBIOS_BIOS_CHARACTERISTIC_UNSUPPORTED,
     0,
-    FIRMWARE_VERSION_MAJOR,
-    FIRMWARE_VERSION_MINOR,
+    PANDA_FIRMWARE_VERSION_MAJOR,
+    PANDA_FIRMWARE_VERSION_MINOR,
     0,
     0
 };
@@ -258,8 +270,8 @@ Return Value:
 
     Status = EfiSmbiosAddStructure(&EfiPandaSmbiosBiosInformation,
                                    PANDA_SMBIOS_BIOS_VENDOR,
-                                   FIRMWARE_VERSION_STRING,
-                                   FIRMWARE_BUILD_DATE,
+                                   PANDA_FIRMWARE_VERSION_STRING,
+                                   PANDA_FIRMWARE_BUILD_DATE,
                                    NULL);
 
     if (EFI_ERROR(Status)) {

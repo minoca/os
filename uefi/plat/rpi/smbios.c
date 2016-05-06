@@ -35,6 +35,18 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
+//
+// Set the build date and version to a hardcoded value to avoid the SMBIOS
+// table changing from build to build. The automated tests checksum the whole
+// table to get a machine ID, so if the dates or versions change then each
+// new firmware iteration looks like an entirely new machine.
+//
+
+#define RPI_FIRMWARE_VERSION_MAJOR 1
+#define RPI_FIRMWARE_VERSION_MINOR 1
+#define RPI_FIRMWARE_VERSION_STRING "1.1"
+#define RPI_FIRMWARE_VERSION_DATE "05/06/2016"
+
 #define RPI_SMBIOS_BIOS_VENDOR "Minoca Corp"
 
 #define RPI_SMBIOS_SYSTEM_MANUFACTURER "Raspberry Pi Foundation"
@@ -133,8 +145,8 @@ SMBIOS_BIOS_INFORMATION EfiRpiSmbiosBiosInformation = {
     0,
     SMBIOS_BIOS_CHARACTERISTIC_UNSUPPORTED,
     0,
-    FIRMWARE_VERSION_MAJOR,
-    FIRMWARE_VERSION_MINOR,
+    RPI_FIRMWARE_VERSION_MAJOR,
+    RPI_FIRMWARE_VERSION_MINOR,
     0,
     0
 };
@@ -474,8 +486,8 @@ Return Value:
 
     Status = EfiSmbiosAddStructure(&EfiRpiSmbiosBiosInformation,
                                    RPI_SMBIOS_BIOS_VENDOR,
-                                   FIRMWARE_VERSION_STRING,
-                                   FIRMWARE_BUILD_DATE,
+                                   RPI_FIRMWARE_VERSION_STRING,
+                                   RPI_FIRMWARE_VERSION_DATE,
                                    NULL);
 
     if (EFI_ERROR(Status)) {

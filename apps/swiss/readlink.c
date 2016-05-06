@@ -175,10 +175,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(READLINK_VERSION_MAJOR,
-                           READLINK_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(READLINK_VERSION_MAJOR, READLINK_VERSION_MINOR);
             return 1;
 
         case 'h':

@@ -369,10 +369,7 @@ Return Value:
 
         switch (Option) {
         case 'V':
-            SwPrintVersion(TELNET_VERSION_MAJOR,
-                           TELNET_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(TELNET_VERSION_MAJOR, TELNET_VERSION_MINOR);
             return 1;
 
         case 'h':

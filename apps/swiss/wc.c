@@ -245,7 +245,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(WC_VERSION_MAJOR, WC_VERSION_MINOR, REVISION);
+            SwPrintVersion(WC_VERSION_MAJOR, WC_VERSION_MINOR);
             return 1;
 
         case 'h':

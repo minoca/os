@@ -449,10 +449,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("Minoca mmaptest version %d.%d.%d\n",
+            printf("Minoca mmaptest version %d.%d\n",
                    MEMORY_MAP_TEST_VERSION_MAJOR,
-                   MEMORY_MAP_TEST_VERSION_MINOR,
-                   REVISION);
+                   MEMORY_MAP_TEST_VERSION_MINOR);
 
             return 1;
 

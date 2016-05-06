@@ -281,10 +281,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(MKTEMP_VERSION_MAJOR,
-                           MKTEMP_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(MKTEMP_VERSION_MAJOR, MKTEMP_VERSION_MINOR);
             return 1;
 
         case 'h':

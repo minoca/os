@@ -532,10 +532,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(SS_DAEMON_VERSION_MAJOR,
-                           SS_DAEMON_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(SS_DAEMON_VERSION_MAJOR, SS_DAEMON_VERSION_MINOR);
             return 1;
 
         case 'H':

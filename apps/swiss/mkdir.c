@@ -171,7 +171,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(MKDIR_VERSION_MAJOR, MKDIR_VERSION_MINOR, REVISION);
+            SwPrintVersion(MKDIR_VERSION_MAJOR, MKDIR_VERSION_MINOR);
             goto MainEnd;
 
         case 'h':

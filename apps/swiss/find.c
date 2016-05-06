@@ -627,7 +627,7 @@ Return Value:
     INT Result;
 
     if ((ArgumentCount > 1) && (strcmp(Arguments[1], "--version") == 0)) {
-        SwPrintVersion(FIND_VERSION_MAJOR, FIND_VERSION_MINOR, REVISION);
+        SwPrintVersion(FIND_VERSION_MAJOR, FIND_VERSION_MINOR);
         return 1;
     }
 

@@ -240,7 +240,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(CHOWN_VERSION_MAJOR, CHOWN_VERSION_MINOR, REVISION);
+            SwPrintVersion(CHOWN_VERSION_MAJOR, CHOWN_VERSION_MINOR);
             return 1;
 
         case 'e':

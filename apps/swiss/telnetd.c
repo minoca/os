@@ -502,10 +502,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(TELNETD_VERSION_MAJOR,
-                           TELNETD_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(TELNETD_VERSION_MAJOR, TELNETD_VERSION_MINOR);
             return 1;
 
         case 'h':

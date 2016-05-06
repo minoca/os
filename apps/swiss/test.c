@@ -336,7 +336,7 @@ Return Value:
             return TEST_UTILITY_ERROR;
 
         } else if (strcmp(Arguments[1], "--version") == 0) {
-            SwPrintVersion(TEST_VERSION_MAJOR, TEST_VERSION_MINOR, REVISION);
+            SwPrintVersion(TEST_VERSION_MAJOR, TEST_VERSION_MINOR);
             return TEST_UTILITY_ERROR;
         }
     }

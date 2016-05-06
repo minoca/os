@@ -155,7 +155,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(NPROC_VERSION_MAJOR, NPROC_VERSION_MINOR, REVISION);
+            SwPrintVersion(NPROC_VERSION_MAJOR, NPROC_VERSION_MINOR);
             return 1;
 
         case 'h':

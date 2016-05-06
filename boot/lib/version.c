@@ -62,12 +62,13 @@ Environment:
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 0
+#define VERSION_REVISION 0
 
 #endif
 
-#ifndef VERSION_REVISION
+#ifndef VERSION_SERIAL
 
-#define VERSION_REVISION 0
+#define VERSION_SERIAL 0
 
 #endif
 
@@ -105,8 +106,8 @@ ULONG BoEncodedVersion = ENCODE_VERSION_INFORMATION(VERSION_MAJOR,
                                                     VERSION_RELEASE,
                                                     VERSION_DEBUG);
 
-ULONGLONG BoVersionSerial = REVISION;
-ULONGLONG BoBuildTime = VERSION_BUILD_TIME;
+ULONG BoVersionSerial = VERSION_SERIAL;
+ULONG BoBuildTime = VERSION_BUILD_TIME;
 PSTR BoBuildString = VERSION_BUILD_STRING;
 PSTR BoProductName = PRODUCT_NAME;
 

@@ -183,10 +183,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(USERDEL_VERSION_MAJOR,
-                           USERDEL_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(USERDEL_VERSION_MAJOR, USERDEL_VERSION_MINOR);
             return 1;
 
         case 'H':

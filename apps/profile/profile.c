@@ -228,10 +228,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("profile version %d.%02d.%d\n",
+            printf("profile version %d.%02d\n",
                    PROFILE_VERSION_MAJOR,
-                   PROFILE_VERSION_MINOR,
-                   REVISION);
+                   PROFILE_VERSION_MINOR);
 
             ReturnValue = 1;
             goto MainEnd;

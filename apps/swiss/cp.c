@@ -201,7 +201,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(CP_VERSION_MAJOR, CP_VERSION_MINOR, REVISION);
+            SwPrintVersion(CP_VERSION_MAJOR, CP_VERSION_MINOR);
             return 1;
 
         case 'h':

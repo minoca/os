@@ -182,10 +182,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("mount version %d.%02d.%d\n",
+            printf("mount version %d.%02d\n",
                    MOUNT_VERSION_MAJOR,
-                   MOUNT_VERSION_MINOR,
-                   REVISION);
+                   MOUNT_VERSION_MINOR);
 
             ReturnValue = 1;
             goto mainEnd;

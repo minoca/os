@@ -159,10 +159,7 @@ Return Value:
 
         switch (Option) {
         case 'V':
-            SwPrintVersion(VLOCK_VERSION_MAJOR,
-                           VLOCK_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(VLOCK_VERSION_MAJOR, VLOCK_VERSION_MINOR);
             return 1;
 
         case 'H':

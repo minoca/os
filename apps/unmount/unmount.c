@@ -163,10 +163,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("unmount version %d.%02d.%d\n",
+            printf("unmount version %d.%02d\n",
                    UNMOUNT_VERSION_MAJOR,
-                   UNMOUNT_VERSION_MINOR,
-                   REVISION);
+                   UNMOUNT_VERSION_MINOR);
 
             ReturnValue = 1;
             goto mainEnd;

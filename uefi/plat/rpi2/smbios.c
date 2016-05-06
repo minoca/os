@@ -36,6 +36,18 @@ Environment:
 //
 
 //
+// Set the build date and version to a hardcoded value to avoid the SMBIOS
+// table changing from build to build. The automated tests checksum the whole
+// table to get a machine ID, so if the dates or versions change then each
+// new firmware iteration looks like an entirely new machine.
+//
+
+#define RPI2_FIRMWARE_VERSION_MAJOR 1
+#define RPI2_FIRMWARE_VERSION_MINOR 1
+#define RPI2_FIRMWARE_VERSION_STRING "1.1"
+#define RPI2_FIRMWARE_VERSION_DATE "05/06/2016"
+
+//
 // Define the SMBIOS values common between the RPI 2 and RPI 3.
 //
 
@@ -142,8 +154,8 @@ SMBIOS_BIOS_INFORMATION EfiRpi2SmbiosBiosInformation = {
     0,
     SMBIOS_BIOS_CHARACTERISTIC_UNSUPPORTED,
     0,
-    FIRMWARE_VERSION_MAJOR,
-    FIRMWARE_VERSION_MINOR,
+    RPI2_FIRMWARE_VERSION_MAJOR,
+    RPI2_FIRMWARE_VERSION_MINOR,
     0,
     0
 };
@@ -493,8 +505,8 @@ Return Value:
 
     Status = EfiSmbiosAddStructure(&EfiRpi2SmbiosBiosInformation,
                                    RPI2_SMBIOS_BIOS_VENDOR,
-                                   FIRMWARE_VERSION_STRING,
-                                   FIRMWARE_BUILD_DATE,
+                                   RPI2_FIRMWARE_VERSION_STRING,
+                                   RPI2_FIRMWARE_VERSION_DATE,
                                    NULL);
 
     if (EFI_ERROR(Status)) {

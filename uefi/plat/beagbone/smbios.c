@@ -127,8 +127,8 @@ SMBIOS_BIOS_INFORMATION EfiBeagleBoneSmbiosBiosInformation = {
     0,
     SMBIOS_BIOS_CHARACTERISTIC_UNSUPPORTED,
     0,
-    FIRMWARE_VERSION_MAJOR,
-    FIRMWARE_VERSION_MINOR,
+    0,
+    0,
     0,
     0
 };
@@ -298,10 +298,12 @@ Return Value:
         return Status;
     }
 
+    EfiBeagleBoneSmbiosBiosInformation.BiosMajorRelease = EfiVersionMajor;
+    EfiBeagleBoneSmbiosBiosInformation.BiosMinorRelease = EfiVersionMinor;
     Status = EfiSmbiosAddStructure(&EfiBeagleBoneSmbiosBiosInformation,
                                    BBONE_SMBIOS_BIOS_VENDOR,
-                                   FIRMWARE_VERSION_STRING,
-                                   FIRMWARE_BUILD_DATE,
+                                   EfiBuildString,
+                                   EfiBuildTime,
                                    NULL);
 
     if (EFI_ERROR(Status)) {

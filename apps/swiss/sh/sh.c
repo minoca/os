@@ -245,7 +245,7 @@ Return Value:
                 goto MainEnd;
 
             } else if (strcmp(Argument, "--version") == 0) {
-                SwPrintVersion(SH_VERSION_MAJOR, SH_VERSION_MINOR, REVISION);
+                SwPrintVersion(SH_VERSION_MAJOR, SH_VERSION_MINOR);
                 Result = 1;
                 goto MainEnd;
             }

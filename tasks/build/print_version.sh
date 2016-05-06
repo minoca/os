@@ -68,7 +68,7 @@ fi
 ##
 
 build_time=$((`date +%s` - 978307200))
-build_time_string=`date "+%a %b %d %Y %H:%M:%S"`
+build_time_string=`date "+%b %d %Y %H:%M:%S"`
 
 ##
 ## Generate the build string if needed.

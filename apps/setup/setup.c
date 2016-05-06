@@ -394,11 +394,11 @@ Return Value:
             break;
 
         case 'V':
-            printf("Minoca setup version %d.%d.%d\n"
-                   "Copyright (c) 2014 Minoca Corp. All Rights Reserved.\n\n",
+            printf("Minoca setup version %d.%d\n"
+                   "Copyright (c) 2014-2016 Minoca Corp. "
+                   "All Rights Reserved.\n\n",
                    SETUP_VERSION_MAJOR,
-                   SETUP_VERSION_MINOR,
-                   REVISION);
+                   SETUP_VERSION_MINOR);
 
             return 1;
 

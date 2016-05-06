@@ -210,10 +210,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(GROUPADD_VERSION_MAJOR,
-                           GROUPADD_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(GROUPADD_VERSION_MAJOR, GROUPADD_VERSION_MINOR);
             return 1;
 
         case 'H':

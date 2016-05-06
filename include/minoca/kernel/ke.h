@@ -937,8 +937,6 @@ Members:
 
     EncodedSystemVersion - Stores the encoded system version information.
 
-    Reserved - Stores a reserved padding value.
-
     SystemVersionSerial - Stores the serial system revision.
 
     BuildTime - Stores the system build time (the seconds portion of a system
@@ -975,8 +973,7 @@ Members:
 
 typedef struct _USER_SHARED_DATA {
     ULONG EncodedSystemVersion;
-    ULONG Reserved0;
-    ULONGLONG SystemVersionSerial;
+    ULONG SystemVersionSerial;
     ULONGLONG BuildTime;
     ULONGLONG TimeCounterFrequency;
     volatile SYSTEM_TIME TimeOffset;

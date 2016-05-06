@@ -551,7 +551,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(OD_VERSION_MAJOR, OD_VERSION_MINOR, REVISION);
+            SwPrintVersion(OD_VERSION_MAJOR, OD_VERSION_MINOR);
             return 1;
 
         case 'h':

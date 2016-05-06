@@ -423,10 +423,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("mkuboot version %d.%d.%d.\n",
+            printf("mkuboot version %d.%d.\n",
                    MKUBOOT_VERSION_MAJOR,
-                   MKUBOOT_VERSION_MINOR,
-                   REVISION);
+                   MKUBOOT_VERSION_MINOR);
 
             return 1;
 

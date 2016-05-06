@@ -169,7 +169,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(TEE_VERSION_MAJOR, TEE_VERSION_MINOR, REVISION);
+            SwPrintVersion(TEE_VERSION_MAJOR, TEE_VERSION_MINOR);
             return 1;
 
         case 'h':

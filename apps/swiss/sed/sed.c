@@ -225,7 +225,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(SED_VERSION_MAJOR, SED_VERSION_MINOR, REVISION);
+            SwPrintVersion(SED_VERSION_MAJOR, SED_VERSION_MINOR);
             return 1;
 
         case 'h':

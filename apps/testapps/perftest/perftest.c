@@ -60,15 +60,6 @@ Environment:
 #define PT_VERSION_MAJOR 1
 #define PT_VERSION_MINOR 0
 
-//
-// The revision is specific to the Minoca build system. Set it to 0 if it is
-// not defined.
-//
-
-#ifndef REVISION
-#define REVISION 0
-#endif
-
 #define PT_USAGE                                                               \
     "Usage: perf [options] \n"                                                 \
     "This utility runs performance benchmark tests. Options are:\n"            \
@@ -559,10 +550,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("Minoca performance benchmark test version %d.%d.%d\n",
+            printf("Minoca performance benchmark test version %d.%d\n",
                    PT_VERSION_MAJOR,
-                   PT_VERSION_MINOR,
-                   REVISION);
+                   PT_VERSION_MINOR);
 
             return 1;
 

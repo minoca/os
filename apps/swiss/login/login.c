@@ -226,7 +226,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(LOGIN_VERSION_MAJOR, LOGIN_VERSION_MINOR, REVISION);
+            SwPrintVersion(LOGIN_VERSION_MAJOR, LOGIN_VERSION_MINOR);
             return 1;
 
         case 'H':

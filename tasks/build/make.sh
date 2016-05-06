@@ -48,17 +48,6 @@ fi
 export PATH=$PATH:$SRCROOT/$ARCH$VARIANT$DEBUG/bin
 cd $SOURCE_DIRECTORY
 
-##
-## If building OS and there's a revision file, then set the revision number
-## to it.
-##
-
-if test "x$PWD" = "x$SRCROOT/os"; then
-    if test -r "$SRCROOT/os/revision"; then
-        export REVISION=`cat "$SRCROOT/os/revision"`
-    fi
-fi
-
 uname -a
 set
 echo make "$@"

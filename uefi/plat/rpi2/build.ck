@@ -42,20 +42,8 @@ function build() {
         "$//uefi/include"
     ];
 
-    //
-    // TODO: Figure out the build date and revision.
-    //
-
-    fw_cppflags = [
-        "-DFIRMWARE_BUILD_DATE=\\\"01/01/2016\\\"",
-        "-DFIRMWARE_VERSION_MAJOR=1",
-        "-DFIRMWARE_VERSION_MINOR=0",
-        "-DFIRMWARE_VERSION_STRING=\\\"1.0.0\\\""
-    ];
-
     sources_config = {
-        "CFLAGS": ["-fshort-wchar"],
-        "CPPFLAGS": fw_cppflags
+        "CFLAGS": ["-fshort-wchar"]
     };
 
     link_ldflags = [

@@ -499,7 +499,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(XARGS_VERSION_MAJOR, XARGS_VERSION_MINOR, REVISION);
+            SwPrintVersion(XARGS_VERSION_MAJOR, XARGS_VERSION_MINOR);
             return 1;
 
         case 'h':

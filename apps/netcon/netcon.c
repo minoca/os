@@ -420,10 +420,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("netcon version %d.%02d.%d\n",
+            printf("netcon version %d.%02d\n",
                    NETCON_VERSION_MAJOR,
-                   NETCON_VERSION_MINOR,
-                   REVISION);
+                   NETCON_VERSION_MINOR);
 
             ReturnValue = 1;
             goto mainEnd;

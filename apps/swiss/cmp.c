@@ -180,7 +180,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(CMP_VERSION_MAJOR, CMP_VERSION_MINOR, REVISION);
+            SwPrintVersion(CMP_VERSION_MAJOR, CMP_VERSION_MINOR);
             return 2;
 
         case 'h':

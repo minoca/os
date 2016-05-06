@@ -134,10 +134,7 @@ Return Value:
 
         switch (Option) {
         case 'V':
-            SwPrintVersion(BASENAME_VERSION_MAJOR,
-                           BASENAME_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(BASENAME_VERSION_MAJOR, BASENAME_VERSION_MINOR);
             return 1;
 
         case 'h':

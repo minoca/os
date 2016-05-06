@@ -78,8 +78,8 @@ SMBIOS_BIOS_INFORMATION EfiVeyronSmbiosBiosInformation = {
     0,
     SMBIOS_BIOS_CHARACTERISTIC_UNSUPPORTED,
     0,
-    FIRMWARE_VERSION_MAJOR,
-    FIRMWARE_VERSION_MINOR,
+    0,
+    0,
     0,
     0
 };
@@ -241,10 +241,12 @@ Return Value:
 
     EFI_STATUS Status;
 
+    EfiVeyronSmbiosBiosInformation.BiosMajorRelease = EfiVersionMajor;
+    EfiVeyronSmbiosBiosInformation.BiosMinorRelease = EfiVersionMinor;
     Status = EfiSmbiosAddStructure(&EfiVeyronSmbiosBiosInformation,
                                    VEYRON_SMBIOS_BIOS_VENDOR,
-                                   FIRMWARE_VERSION_STRING,
-                                   FIRMWARE_BUILD_DATE,
+                                   EfiBuildString,
+                                   EfiBuildTime,
                                    NULL);
 
     if (EFI_ERROR(Status)) {

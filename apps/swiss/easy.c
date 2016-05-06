@@ -161,7 +161,7 @@ Return Value:
     }
 
     if (strcmp(Arguments[1], "--version") == 0) {
-        SwPrintVersion(SLEEP_VERSION_MAJOR, SLEEP_VERSION_MINOR, REVISION);
+        SwPrintVersion(SLEEP_VERSION_MAJOR, SLEEP_VERSION_MINOR);
         return 1;
     }
 

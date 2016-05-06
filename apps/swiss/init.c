@@ -460,7 +460,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(INIT_VERSION_MAJOR, INIT_VERSION_MINOR, REVISION);
+            SwPrintVersion(INIT_VERSION_MAJOR, INIT_VERSION_MINOR);
             return 1;
 
         case 'h':
@@ -513,7 +513,7 @@ Return Value:
             "Minoca init v%d.%d.%d",
             INIT_VERSION_MAJOR,
             INIT_VERSION_MINOR,
-            REVISION);
+            SwGetSerialVersion());
 
     Status = 0;
 

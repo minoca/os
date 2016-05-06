@@ -317,10 +317,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("Minoca signal test version %d.%d.%d\n",
+            printf("Minoca signal test version %d.%d\n",
                    SIGNAL_TEST_VERSION_MAJOR,
-                   SIGNAL_TEST_VERSION_MINOR,
-                   REVISION);
+                   SIGNAL_TEST_VERSION_MINOR);
 
             return 1;
 

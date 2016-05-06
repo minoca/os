@@ -62,12 +62,13 @@ Environment:
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 0
+#define VERSION_REVISION 0
 
 #endif
 
-#ifndef VERSION_REVISION
+#ifndef VERSION_SERIAL
 
-#define VERSION_REVISION 0
+#define VERSION_SERIAL 0
 
 #endif
 
@@ -95,8 +96,12 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-UINT64 EfiVersionSerial = REVISION;
-UINT64 EfiBuildTime = VERSION_BUILD_TIME;
+UINT16 EfiVersionMajor = VERSION_MAJOR;
+UINT16 EfiVersionMinor = VERSION_MINOR;
+UINT16 EfiVersionRevision = VERSION_REVISION;
+UINT8 EfiVersionRelease = VERSION_RELEASE;
+UINT32 EfiVersionSerial = VERSION_SERIAL;
+UINT32 EfiBuildTime = VERSION_BUILD_TIME;
 CHAR8 *EfiBuildString = VERSION_BUILD_STRING;
 CHAR8 *EfiProductName = PRODUCT_NAME;
 
@@ -146,11 +151,11 @@ Return Value:
     KSTATUS Status;
 
     Status = STATUS_SUCCESS;
-    VersionInformation->MajorVersion = VERSION_MAJOR;
-    VersionInformation->MinorVersion = VERSION_MINOR;
-    VersionInformation->Revision = VERSION_REVISION;
+    VersionInformation->MajorVersion = EfiVersionMajor;
+    VersionInformation->MinorVersion = EfiVersionMinor;
+    VersionInformation->Revision = EfiVersionRevision;
     VersionInformation->SerialVersion = EfiVersionSerial;
-    VersionInformation->ReleaseLevel = VERSION_RELEASE;
+    VersionInformation->ReleaseLevel = EfiVersionRelease;
     VersionInformation->DebugLevel = VERSION_DEBUG;
     VersionInformation->BuildTime.Seconds = EfiBuildTime;
     VersionInformation->BuildTime.Nanoseconds = 0;

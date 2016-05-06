@@ -212,9 +212,13 @@ Return Value:
 // Store the firmware version information.
 //
 
-extern UINT64 EfiEncodedVersion;
-extern UINT64 EfiVersionSerial;
-extern UINT64 EfiBuildTime;
+extern UINT16 EfiVersionMajor;
+extern UINT16 EfiVersionMinor;
+extern UINT16 EfiVersionRevision;
+extern UINT8 EfiVersionRelease;
+extern UINT32 EfiEncodedVersion;
+extern UINT32 EfiVersionSerial;
+extern UINT32 EfiBuildTime;
 extern CHAR8 *EfiBuildString;
 extern CHAR8 *EfiProductName;
 

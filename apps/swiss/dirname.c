@@ -112,10 +112,7 @@ Return Value:
                 return 1;
 
             } else if (strcmp(Argument, "-version") == 0) {
-                SwPrintVersion(DIRNAME_VERSION_MAJOR,
-                               DIRNAME_VERSION_MINOR,
-                               REVISION);
-
+                SwPrintVersion(DIRNAME_VERSION_MAJOR, DIRNAME_VERSION_MINOR);
                 return 1;
 
             } else if (strcmp(Argument, "-") == 0) {

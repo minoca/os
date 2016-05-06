@@ -391,7 +391,7 @@ Return Value:
 
         switch (Option) {
         case 'V':
-            SwPrintVersion(DD_VERSION_MAJOR, DD_VERSION_MINOR, REVISION);
+            SwPrintVersion(DD_VERSION_MAJOR, DD_VERSION_MINOR);
             return 1;
 
         case 'h':

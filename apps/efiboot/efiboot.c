@@ -198,10 +198,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("efiboot version %d.%d.%d.\n",
+            printf("efiboot version %d.%d.\n",
                    EFIBOOT_VERSION_MAJOR,
-                   EFIBOOT_VERSION_MINOR,
-                   REVISION);
+                   EFIBOOT_VERSION_MINOR);
 
             return 1;
 

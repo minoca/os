@@ -54,8 +54,7 @@ Environment:
 //
 
 #define DEBUGGER_VERSION_MAJOR 1
-#define DEBUGGER_VERSION_MINOR 0
-#define DEBUGGER_VERSION_REVISION 0
+#define DEBUGGER_VERSION_MINOR 1
 
 #define DEBUGGER_COMMAND_BUFFER_SIZE 10000
 #define DEBUGGER_COMMAND_HISTORY_SIZE 50
@@ -251,11 +250,9 @@ Return Value:
         goto MainEnd;
     }
 
-    DbgOut("Minoca debugger version %d.%d.%d.%d. Protocol version %d.%d.\n",
+    DbgOut("Minoca debugger version %d.%d. Protocol version %d.%d.\n",
            DEBUGGER_VERSION_MAJOR,
            DEBUGGER_VERSION_MINOR,
-           DEBUGGER_VERSION_REVISION,
-           REVISION,
            DEBUG_PROTOCOL_MAJOR_VERSION,
            DEBUG_PROTOCOL_REVISION);
 

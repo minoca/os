@@ -307,7 +307,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(CAT_VERSION_MAJOR, CAT_VERSION_MINOR, REVISION);
+            SwPrintVersion(CAT_VERSION_MAJOR, CAT_VERSION_MINOR);
             return 1;
 
         case 'h':

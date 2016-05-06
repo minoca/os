@@ -517,11 +517,11 @@ Return Value:
             break;
 
         case 'V':
-            printf("Minoca build generator version %d.%d.%d\n"
-                   "Copyright (c) 2015 Minoca Corp. All Rights Reserved.\n\n",
+            printf("Minoca build generator version %d.%d\n"
+                   "Copyright (c) 2015-2016 Minoca Corp. "
+                   "All Rights Reserved.\n\n",
                    MINGEN_VERSION_MAJOR,
-                   MINGEN_VERSION_MINOR,
-                   REVISION);
+                   MINGEN_VERSION_MINOR);
 
             return 1;
 

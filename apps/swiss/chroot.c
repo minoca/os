@@ -200,10 +200,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(CHROOT_VERSION_MAJOR,
-                           CHROOT_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(CHROOT_VERSION_MAJOR, CHROOT_VERSION_MINOR);
             return 1;
 
         case 'h':

@@ -376,10 +376,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("Minoca filetest version %d.%d.%d\n",
+            printf("Minoca filetest version %d.%d\n",
                    FILE_TEST_VERSION_MAJOR,
-                   FILE_TEST_VERSION_MINOR,
-                   REVISION);
+                   FILE_TEST_VERSION_MINOR);
 
             return 1;
 

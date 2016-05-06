@@ -248,10 +248,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(CHPASSWD_VERSION_MAJOR,
-                           CHPASSWD_VERSION_MINOR,
-                           REVISION);
-
+            SwPrintVersion(CHPASSWD_VERSION_MAJOR, CHPASSWD_VERSION_MINOR);
             return 1;
 
         case 'H':

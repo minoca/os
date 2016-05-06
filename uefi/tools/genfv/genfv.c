@@ -308,10 +308,9 @@ Return Value:
             break;
 
         case 'V':
-            printf("GenFv version %d.%d.%d\n",
+            printf("GenFv version %d.%d\n",
                    GENFV_VERSION_MAJOR,
-                   GENFV_VERSION_MINOR,
-                   REVISION);
+                   GENFV_VERSION_MINOR);
 
             return 1;
 

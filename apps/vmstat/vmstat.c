@@ -144,10 +144,9 @@ Return Value:
 
         switch (Option) {
         case 'V':
-            printf("vmstat version %d.%02d.%d\n",
+            printf("vmstat version %d.%02d\n",
                    VMSTAT_VERSION_MAJOR,
-                   VMSTAT_VERSION_MINOR,
-                   REVISION);
+                   VMSTAT_VERSION_MINOR);
 
             ReturnValue = 1;
             goto mainEnd;

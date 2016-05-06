@@ -166,12 +166,6 @@ cflags += ["-fno-builtin",
            "-fvisibility=hidden"];
 
 cppflags += ["-I$//include"];
-
-//
-// TODO: Figure out REVISION.
-//
-
-cppflags += ["-DREVISION=0"];
 build_cflags = cflags + [];
 build_cppflags = cppflags + [];
 

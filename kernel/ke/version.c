@@ -62,12 +62,13 @@ Environment:
 
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 0
+#define VERSION_REVISION 0
 
 #endif
 
-#ifndef VERSION_REVISION
+#ifndef VERSION_SERIAL
 
-#define VERSION_REVISION 0
+#define VERSION_SERIAL 0
 
 #endif
 
@@ -105,8 +106,8 @@ ULONG KeEncodedVersion = ENCODE_VERSION_INFORMATION(VERSION_MAJOR,
                                                     VERSION_RELEASE,
                                                     VERSION_DEBUG);
 
-ULONGLONG KeVersionSerial = REVISION;
-ULONGLONG KeBuildTime = VERSION_BUILD_TIME;
+ULONG KeVersionSerial = VERSION_SERIAL;
+ULONG KeBuildTime = VERSION_BUILD_TIME;
 PSTR KeBuildString = VERSION_BUILD_STRING;
 PSTR KeProductName = PRODUCT_NAME;
 

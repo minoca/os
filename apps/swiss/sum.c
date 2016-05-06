@@ -173,7 +173,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(SUM_VERSION_MAJOR, SUM_VERSION_MINOR, REVISION);
+            SwPrintVersion(SUM_VERSION_MAJOR, SUM_VERSION_MINOR);
             return 1;
 
         case 'h':

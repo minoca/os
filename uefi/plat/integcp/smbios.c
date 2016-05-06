@@ -78,8 +78,8 @@ SMBIOS_BIOS_INFORMATION EfiIntegratorSmbiosBiosInformation = {
     0,
     SMBIOS_BIOS_CHARACTERISTIC_UNSUPPORTED,
     0,
-    FIRMWARE_VERSION_MAJOR,
-    FIRMWARE_VERSION_MINOR,
+    0,
+    0,
     0,
     0
 };
@@ -203,10 +203,12 @@ Return Value:
 
     EFI_STATUS Status;
 
+    EfiIntegratorSmbiosBiosInformation.BiosMajorRelease = EfiVersionMajor;
+    EfiIntegratorSmbiosBiosInformation.BiosMinorRelease = EfiVersionMinor;
     Status = EfiSmbiosAddStructure(&EfiIntegratorSmbiosBiosInformation,
                                    INTEGRATOR_SMBIOS_BIOS_VENDOR,
-                                   FIRMWARE_VERSION_STRING,
-                                   FIRMWARE_BUILD_DATE,
+                                   EfiBuildString,
+                                   EfiBuildTime,
                                    NULL);
 
     if (EFI_ERROR(Status)) {

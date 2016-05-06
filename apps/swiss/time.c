@@ -158,7 +158,7 @@ Return Value:
             break;
 
         case 'V':
-            SwPrintVersion(TIME_VERSION_MAJOR, TIME_VERSION_MINOR, REVISION);
+            SwPrintVersion(TIME_VERSION_MAJOR, TIME_VERSION_MINOR);
             return 1;
 
         case 'h':
