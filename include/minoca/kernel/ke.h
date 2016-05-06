@@ -27,16 +27,26 @@ Author:
 //
 
 //
-// Define macros for decoding system version information.
+// Define macros for encoding and decoding system version information. These
+// can be revised as needed since this encoded structure is not exposed to
+// consumers. They use the SYSTEM_VERSION_INFORMATION structure.
 //
 
-#define DECODE_MAJOR_VERSION(_EncodedVersion) (USHORT)((_EncodedVersion) >> 48)
-#define DECODE_MINOR_VERSION(_EncodedVersion) (USHORT)((_EncodedVersion) >> 32)
-#define DECODE_VERSION_REVISION(_EncodedVersion) \
-    (USHORT)((_EncodedVersion) >> 16)
+#define ENCODE_VERSION_INFORMATION(_Major, _Minor, _Revision, _Release, _Debug)\
+    (((_Major) << 24) |     \
+     ((_Minor) << 16) |     \
+     ((_Revision) << 8) |   \
+     ((_Release) << 4) |    \
+     (_Debug))
 
-#define DECODE_VERSION_RELEASE(_EncodedVersion) (UCHAR)((_EncodedVersion) >> 8)
-#define DECODE_VERSION_DEBUG(_EncodedVersion) (UCHAR)(_EncodedVersion)
+#define DECODE_MAJOR_VERSION(_EncodedVersion) (UCHAR)((_EncodedVersion) >> 24)
+#define DECODE_MINOR_VERSION(_EncodedVersion) (UCHAR)((_EncodedVersion) >> 16)
+#define DECODE_VERSION_REVISION(_EncodedVersion) (UCHAR)((_EncodedVersion) >> 8)
+#define DECODE_VERSION_RELEASE(_EncodedVersion) \
+    (UCHAR)(((_EncodedVersion) >> 4) & 0x0F)
+
+#define DECODE_VERSION_DEBUG(_EncodedVersion) \
+    (UCHAR)((_EncodedVersion) & 0x0F)
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -927,6 +937,8 @@ Members:
 
     EncodedSystemVersion - Stores the encoded system version information.
 
+    Reserved - Stores a reserved padding value.
+
     SystemVersionSerial - Stores the serial system revision.
 
     BuildTime - Stores the system build time (the seconds portion of a system
@@ -962,7 +974,8 @@ Members:
 --*/
 
 typedef struct _USER_SHARED_DATA {
-    ULONGLONG EncodedSystemVersion;
+    ULONG EncodedSystemVersion;
+    ULONG Reserved0;
     ULONGLONG SystemVersionSerial;
     ULONGLONG BuildTime;
     ULONGLONG TimeCounterFrequency;

@@ -361,7 +361,7 @@
         {
             "name": "Make OS (Distribution)",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh os test BUILD_STRING= BUILD_USER=\"Minoca Corp\" REVISION=`cat src/os/revision`"
+            "parameter": "src/os/tasks/build/make.sh os test REVISION=`cat src/os/revision`"
         },
         {
             "name": "Add Files",
@@ -371,7 +371,7 @@
         {
             "name": "Make OS (Automation)",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh os test BUILD_STRING= BUILD_USER=\"Minoca Corp\" REVISION=`cat src/os/revision`"
+            "parameter": "src/os/tasks/build/make.sh os test REVISION=`cat src/os/revision`"
         },
         {
             "name": "Package Binaries",

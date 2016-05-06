@@ -26,6 +26,15 @@ BINARY = ke.a
 
 BINARYTYPE = library
 
+##
+## Define the kernel version.
+##
+
+VERSION_MAJOR := 0
+VERSION_MINOR := 2
+VERSION_REVISION := 0
+VERSION_RELEASE := SystemReleaseDevelopment
+
 OBJS = crash.o    \
        crashdmp.o \
        dpc.o      \
@@ -67,5 +76,20 @@ ARMV6_OBJS = armv7/archinit.o \
 
 EXTRA_SRC_DIRS = x86 armv7 armv6
 
+INCLUDES += .;
+
 include $(SRCROOT)/os/minoca.mk
 
+##
+## Create the version header.
+##
+
+version.o: $(CURDIR)/version.h
+
+$(CURDIR)/version.h: $(BINROOT)/kernel-version
+	$(GEN_VERSION) $@ header $(VERSION_MAJOR) $(VERSION_MINOR) \
+	    $(VERSION_REVISION) $(VERSION_RELEASE)
+
+$(BINROOT)/kernel-version:
+	$(GEN_VERSION) $@ simple $(VERSION_MAJOR) $(VERSION_MINOR) \
+	    $(VERSION_REVISION) $(VERSION_RELEASE)

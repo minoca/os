@@ -29,7 +29,7 @@ BUILD = yes
 
 BINARYTYPE = ntconsole
 
-INCLUDES += $(SRCROOT)/os/apps/libc/dynamic/wincsup/include;$(SRCDIR)/..;
+INCLUDES += $(SRCROOT)/os/apps/libc/dynamic/wincsup/include;$(SRCDIR)/..;.;
 
 VPATH += $(SRCDIR)/..:
 
@@ -50,6 +50,15 @@ TARGETLIBS = $(OBJROOT)/os/apps/libc/dynamic/wincsup/wincsup.a               \
 DYNLIBS = -lpsapi -lws2_32
 
 include $(SRCROOT)/os/minoca.mk
+
+##
+## Generate the version header for the commit information.
+##
+
+swlib/userio.o: $(CURDIR)/version.h
+
+$(CURDIR)/version.h:
+	$(GEN_VERSION) $@ header 0 0 0 SystemReleaseFinal
 
 ##
 ## Override the compiler since this is a Windows app.

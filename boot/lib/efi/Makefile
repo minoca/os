@@ -26,7 +26,11 @@ BINARYTYPE = library
 
 include $(SRCDIR)/../sources
 
-INCLUDES += $(SRCDIR)/../include;$(SRCDIR)/..;
+##
+## Include the Ke build root to get version.h.
+##
+
+INCLUDES += $(SRCDIR)/../include;$(SRCDIR)/..;$(OBJROOT)/os/kernel/ke;
 
 OBJS += dbgser.o   \
         disk.o     \

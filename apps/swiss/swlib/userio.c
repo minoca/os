@@ -35,6 +35,7 @@ Environment:
 #include <string.h>
 
 #include "../swlib.h"
+#include "version.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -300,8 +301,8 @@ Return Value:
            SwCurrentApplication,
            MajorVersion,
            MinorVersion,
-           Revision,
-           BUILD_TIME_STRING);
+           VERSION_REVISION,
+           VERSION_BUILD_TIME_STRING);
 
     return;
 }

@@ -29,7 +29,8 @@ BINARYTYPE = app
 
 INCLUDES += $(SRCDIR)/;                      \
             $(SRCROOT)/os/apps/include/libc; \
-            $(SRCROOT)/os/apps/include;
+            $(SRCROOT)/os/apps/include;      \
+            .;                               \
 
 include $(SRCDIR)/sources
 
@@ -65,4 +66,13 @@ postbuild:
 	@if test $(BINROOT)/$(BINARY) -nt $(BINROOT)/skel/bin/sh; then \
 	    $(STRIP) -o $(BINROOT)/skel/bin/sh $(BINROOT)/$(BINARY); \
 	fi
+
+##
+## Generate the version header for the commit information.
+##
+
+swlib/userio.o: $(CURDIR)/version.h
+
+$(CURDIR)/version.h:
+	$(GEN_VERSION) $@ header 0 0 0 SystemReleaseFinal
 

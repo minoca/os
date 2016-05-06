@@ -26,7 +26,12 @@ BINARY = ueficore.a
 
 BINARYTYPE = library
 
-INCLUDES += $(SRCROOT)/os/uefi/include;
+INCLUDES += $(SRCROOT)/os/uefi/include;.;
+
+VERSION_MAJOR := 1
+VERSION_MINOR := 0
+VERSION_REVISION := 0
+VERSION_RELEASE := SystemReleaseFinal
 
 OBJS = acpi.o     \
        acpitabs.o \
@@ -91,3 +96,12 @@ include $(SRCROOT)/os/minoca.mk
 
 CFLAGS += -fshort-wchar
 
+##
+## Generate the version header.
+##
+
+version.o: $(CURDIR)/version.h
+
+$(CURDIR)/version.h:
+	$(GEN_VERSION) $@ header $(VERSION_MAJOR) $(VERSION_MINOR) \
+	    $(VERSION_REVISION) $(VERSION_RELEASE)

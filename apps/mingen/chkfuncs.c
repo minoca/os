@@ -300,6 +300,7 @@ Return Value:
 
     fprintf(stderr, "Assertion failure: ");
     ChalkPrintObject(stderr, ChalkCGetVariable(Interpreter, "complaint"), 0);
+    fprintf(stderr, "\n");
     return EINVAL;
 }
 

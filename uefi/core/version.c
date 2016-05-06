@@ -26,26 +26,11 @@ Environment:
 //
 
 #include "ueficore.h"
-#include <minoca/kernel/mm.h>
-#include <minoca/kernel/ob.h>
-#include <minoca/kernel/ksignals.h>
-#include <minoca/lib/im.h>
-#include <minoca/kernel/ps.h>
-#include <minoca/kernel/ke.h>
+#include "version.h"
 
 //
 // --------------------------------------------------------------------- Macros
 //
-
-#define ENCODE_VERSION_INFORMATION(_MajorVersion,                              \
-                                   _MinorVersion,                              \
-                                   _Revision,                                  \
-                                   _ReleaseLevel,                              \
-                                   _DebugLevel)                                \
-                                                                               \
-    (((ULONGLONG)(_MajorVersion) << 48) | ((ULONGLONG)(_MinorVersion) << 32) | \
-     ((ULONGLONG)(_Revision) << 16) | ((ULONGLONG)(_ReleaseLevel) << 8) |      \
-     (ULONGLONG)(_DebugLevel))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -57,44 +42,44 @@ Environment:
 
 #define PRODUCT_NAME "Minoca UEFI Firmware"
 
-#ifndef SYSTEM_VERSION_RELEASE
+#ifndef VERSION_RELEASE
 
-#define SYSTEM_VERSION_RELEASE SystemReleaseDevelopment
+#define VERSION_RELEASE SystemReleaseDevelopment
 
 #endif
 
 #ifdef DEBUG
 
-#define SYSTEM_VERSION_DEBUG SystemBuildChecked
+#define VERSION_DEBUG SystemBuildChecked
 
 #else
 
-#define SYSTEM_VERSION_DEBUG SystemBuildFree
+#define VERSION_DEBUG SystemBuildFree
 
 #endif
 
-#ifndef SYSTEM_VERSION_MAJOR
+#ifndef VERSION_MAJOR
 
-#define SYSTEM_VERSION_MAJOR 0
-#define SYSTEM_VERSION_MINOR 0
-
-#endif
-
-#ifndef SYSTEM_VERSION_REVISION
-
-#define SYSTEM_VERSION_REVISION 0
+#define VERSION_MAJOR 0
+#define VERSION_MINOR 0
 
 #endif
 
-#ifndef BUILD_TIME
+#ifndef VERSION_REVISION
 
-#define BUILD_TIME 0
+#define VERSION_REVISION 0
 
 #endif
 
-#ifndef BUILD_STRING
+#ifndef VERSION_BUILD_TIME
 
-#define BUILD_STRING ""
+#define VERSION_BUILD_TIME 0
+
+#endif
+
+#ifndef VERSION_BUILD_STRING
+
+#define VERSION_BUILD_STRING ""
 
 #endif
 
@@ -110,19 +95,9 @@ Environment:
 // -------------------------------------------------------------------- Globals
 //
 
-//
-// Store the version information jammed into a packed format.
-//
-
-UINT64 EfiEncodedVersion = ENCODE_VERSION_INFORMATION(SYSTEM_VERSION_MAJOR,
-                                                      SYSTEM_VERSION_MINOR,
-                                                      SYSTEM_VERSION_REVISION,
-                                                      SYSTEM_VERSION_RELEASE,
-                                                      SYSTEM_VERSION_DEBUG);
-
 UINT64 EfiVersionSerial = REVISION;
-UINT64 EfiBuildTime = BUILD_TIME;
-CHAR8 *EfiBuildString = BUILD_STRING;
+UINT64 EfiBuildTime = VERSION_BUILD_TIME;
+CHAR8 *EfiBuildString = VERSION_BUILD_STRING;
 CHAR8 *EfiProductName = PRODUCT_NAME;
 
 //
@@ -171,14 +146,12 @@ Return Value:
     KSTATUS Status;
 
     Status = STATUS_SUCCESS;
-    VersionInformation->MajorVersion = DECODE_MAJOR_VERSION(EfiEncodedVersion);
-    VersionInformation->MinorVersion = DECODE_MINOR_VERSION(EfiEncodedVersion);
-    VersionInformation->Revision = DECODE_VERSION_REVISION(EfiEncodedVersion);
+    VersionInformation->MajorVersion = VERSION_MAJOR;
+    VersionInformation->MinorVersion = VERSION_MINOR;
+    VersionInformation->Revision = VERSION_REVISION;
     VersionInformation->SerialVersion = EfiVersionSerial;
-    VersionInformation->ReleaseLevel =
-                                     DECODE_VERSION_RELEASE(EfiEncodedVersion);
-
-    VersionInformation->DebugLevel = DECODE_VERSION_DEBUG(EfiEncodedVersion);
+    VersionInformation->ReleaseLevel = VERSION_RELEASE;
+    VersionInformation->DebugLevel = VERSION_DEBUG;
     VersionInformation->BuildTime.Seconds = EfiBuildTime;
     VersionInformation->BuildTime.Nanoseconds = 0;
     VersionInformation->ProductName = NULL;

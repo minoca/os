@@ -26,20 +26,11 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
+#include "version.h"
 
 //
 // --------------------------------------------------------------------- Macros
 //
-
-#define ENCODE_VERSION_INFORMATION(_MajorVersion,                              \
-                                   _MinorVersion,                              \
-                                   _Revision,                                  \
-                                   _ReleaseLevel,                              \
-                                   _DebugLevel)                                \
-                                                                               \
-    (((ULONGLONG)(_MajorVersion) << 48) | ((ULONGLONG)(_MinorVersion) << 32) | \
-     ((ULONGLONG)(_Revision) << 16) | ((ULONGLONG)(_ReleaseLevel) << 8) |      \
-     (ULONGLONG)(_DebugLevel))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -51,44 +42,44 @@ Environment:
 
 #define PRODUCT_NAME "Minoca Boot App"
 
-#ifndef SYSTEM_VERSION_RELEASE
+#ifndef VERSION_RELEASE
 
-#define SYSTEM_VERSION_RELEASE SystemReleaseDevelopment
+#define VERSION_RELEASE SystemReleaseDevelopment
 
 #endif
 
 #ifdef DEBUG
 
-#define SYSTEM_VERSION_DEBUG SystemBuildChecked
+#define VERSION_DEBUG SystemBuildChecked
 
 #else
 
-#define SYSTEM_VERSION_DEBUG SystemBuildFree
+#define VERSION_DEBUG SystemBuildFree
 
 #endif
 
-#ifndef SYSTEM_VERSION_MAJOR
+#ifndef VERSION_MAJOR
 
-#define SYSTEM_VERSION_MAJOR 0
-#define SYSTEM_VERSION_MINOR 0
-
-#endif
-
-#ifndef SYSTEM_VERSION_REVISION
-
-#define SYSTEM_VERSION_REVISION 0
+#define VERSION_MAJOR 0
+#define VERSION_MINOR 0
 
 #endif
 
-#ifndef BUILD_TIME
+#ifndef VERSION_REVISION
 
-#define BUILD_TIME 0
+#define VERSION_REVISION 0
 
 #endif
 
-#ifndef BUILD_STRING
+#ifndef VERSION_BUILD_TIME
 
-#define BUILD_STRING ""
+#define VERSION_BUILD_TIME 0
+
+#endif
+
+#ifndef VERSION_BUILD_STRING
+
+#define VERSION_BUILD_STRING ""
 
 #endif
 
@@ -108,15 +99,15 @@ Environment:
 // Store the version information jammed into a packed format.
 //
 
-ULONGLONG BoEncodedVersion = ENCODE_VERSION_INFORMATION(SYSTEM_VERSION_MAJOR,
-                                                        SYSTEM_VERSION_MINOR,
-                                                        SYSTEM_VERSION_REVISION,
-                                                        SYSTEM_VERSION_RELEASE,
-                                                        SYSTEM_VERSION_DEBUG);
+ULONG BoEncodedVersion = ENCODE_VERSION_INFORMATION(VERSION_MAJOR,
+                                                    VERSION_MINOR,
+                                                    VERSION_REVISION,
+                                                    VERSION_RELEASE,
+                                                    VERSION_DEBUG);
 
 ULONGLONG BoVersionSerial = REVISION;
-ULONGLONG BoBuildTime = BUILD_TIME;
-PSTR BoBuildString = BUILD_STRING;
+ULONGLONG BoBuildTime = VERSION_BUILD_TIME;
+PSTR BoBuildString = VERSION_BUILD_STRING;
 PSTR BoProductName = PRODUCT_NAME;
 
 //

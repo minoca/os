@@ -179,39 +179,7 @@ endif
 ## These define versioning information for the code.
 ##
 
-SYSTEM_VERSION_MAJOR := 0
-SYSTEM_VERSION_MINOR := 2
-SYSTEM_VERSION_REVISION := 0
-
-INIT_REV := 1598fc5f1734f7d7ee01e014ee64e131601b78a7
-REVISION_EXTRA ?= $(shell \
-    if [ -f $(SRCROOT)/os/.git/refs/replace/$(INIT_REV) ] ; then \
-        echo 1 ; \
-    else echo 1000 ; \
-    fi)
-
-REVISION ?= $(shell \
-    echo $$((`cd $(SRCROOT)/os/ && git rev-list --count HEAD` + \
-             $(REVISION_EXTRA))))
-
-ifeq ($(REVISION),)
-REVISION := 0
-endif
-
-BUILD_TIME ?= $(shell echo $$((`date "+%s"` - 978307200)))
-BUILD_TIME_STRING ?= "$(shell date "+%a %b %d %Y %H:%M:%S")"
-BUILD_STRING ?= "($(USERNAME))"
-
-##
-## Export time and revision variables so they don't get re-evaluated at every
-## recursive make.
-##
-
-export REVISION
-export REVISION_EXTRA
-export BUILD_TIME
-export BUILD_TIME_STRING
-export BUILD_STRING
+GEN_VERSION := @echo "Creating - version.h" && $(SRCROOT)/os/tasks/build/print_version.sh
 
 ##
 ## Define a file that gets touched to indicate that something has changed and
@@ -239,46 +207,15 @@ CFLAGS += -O2 -Wno-unused-but-set-variable
 endif
 
 ##
-## Compiler flags:
-##
-## -fno-builtin              Don't recognize functions that do not begin with
-##                           '__builtin__' as prefix.
-##
-## -fno-omit-frame-pointer   Always create a frame pointer so that things can be
-##                           debugged.
-##
-## -mno-ms-bitfields         Honor the packed attribute.
-##
-## -g                        Build with DWARF debugging symbol information.
-##
-## -I ...                    Specifies a list of include directories.
-##
-## -c                        Compile or assemble, but do not link.
-##
-## -Wall                     Turn on all compiler warnings.
-##
-## -Werror                   Treat all warnings as errors.
-##
-## -D...=...                 Standard defines usable by all C files.
-##
-## -fvisibility=hidden       Don't export every single symbol by default.
-##
-## -save-temps               Save temporary files.
+## Compiler flags
 ##
 
-EXTRA_CPPFLAGS += -I $(subst ;, -I ,$(INCLUDES))                             \
-                  -DSYSTEM_VERSION_MAJOR=$(SYSTEM_VERSION_MAJOR)             \
-                  -DSYSTEM_VERSION_MINOR=$(SYSTEM_VERSION_MINOR)             \
-                  -DSYSTEM_VERSION_REVISION=$(SYSTEM_VERSION_REVISION)       \
-                  -DSYSTEM_VERSION_RELEASE=SystemReleaseDevelopment          \
-                  -DREVISION=$(REVISION)                                     \
-                  -DBUILD_TIME_STRING=\"$(BUILD_TIME_STRING)\"               \
-                  -DBUILD_TIME=$(BUILD_TIME)                                 \
-                  -DBUILD_STRING=\"$(BUILD_STRING)\"                         \
-                  -DBUILD_USER=\"$(USERNAME)\"                               \
+EXTRA_CPPFLAGS += -I $(subst ;, -I ,$(INCLUDES)) -DREVISION=0
 
 ifeq ($(DEBUG), chk)
 EXTRA_CPPFLAGS += -DDEBUG=1
+else
+EXTRA_CPPFLAGS += -DNDEBUG=1
 endif
 
 EXTRA_CPPFLAGS_FOR_BUILD := $(EXTRA_CPPFLAGS)
@@ -341,22 +278,7 @@ endif
 ENTRY ?= _start
 
 ##
-## Linker flags:
-##
-## -T linker_script          Specifies a custom linker script.
-##
-## -Ttext X                  Use X as the starting address for the text section
-##                           of the output file. One of the defined addresses
-##                           above will get placed after the linker options, so
-##                           this option MUST be last.
-##
-## -e <symbol>               Sets the entry point of the binary to the given
-##                           symbol.
-##
-## -u <symbol>               Start with an undefined reference to the entry
-##                           point, in case it is in a static library.
-##
-## -Map                      Create a linker map for reference as well.
+## Linker flags
 ##
 
 ifneq (,$(TEXT_ADDRESS))
@@ -377,11 +299,7 @@ EXTRA_LDFLAGS += -nodefaultlibs -nostartfiles -nostdlib
 endif
 
 ##
-## Assembler flags:
-##
-## -g                        Build with debugging symbol information.
-##
-## -I ...                    Specify include directories to search.
+## Assembler flags
 ##
 
 EXTRA_ASFLAGS += -Wa,-g

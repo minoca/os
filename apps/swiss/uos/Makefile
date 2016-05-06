@@ -30,7 +30,7 @@ BUILD = yes
 
 BINARYTYPE = app
 
-INCLUDES += $(SRCDIR)/..;$(SRCROOT)/os/apps/include;
+INCLUDES += $(SRCDIR)/..;$(SRCROOT)/os/apps/include;.;
 
 VPATH += $(SRCDIR)/..:
 
@@ -51,3 +51,12 @@ DYNLIBS += -ldl -lutil
 include $(SRCROOT)/os/minoca.mk
 
 EXTRA_CFLAGS += -ftls-model=initial-exec
+
+##
+## Generate the version header for the commit information.
+##
+
+swlib/userio.o: $(CURDIR)/version.h
+
+$(CURDIR)/version.h:
+	$(GEN_VERSION) $@ header 0 0 0 SystemReleaseFinal

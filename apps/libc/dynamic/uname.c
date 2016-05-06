@@ -81,10 +81,7 @@ Return Value:
 
 {
 
-    CHAR BuildTime[50];
     KSTATUS Status;
-    time_t Time;
-    struct tm TimeStructure;
     SYSTEM_VERSION_INFORMATION Version;
 
     Status = OsGetSystemVersion(&Version, TRUE);
@@ -109,22 +106,12 @@ Return Value:
              RtlGetReleaseLevelString(Version.ReleaseLevel),
              RtlGetBuildDebugLevelString(Version.DebugLevel));
 
-    Time = ClpConvertSystemTimeToUnixTime(&(Version.BuildTime));
-    localtime_r(&Time, &TimeStructure);
-    strftime(BuildTime,
-             sizeof(BuildTime),
-             "%a %b %d, %Y %I:%M %p",
-             &TimeStructure);
-
     if (Version.BuildString == NULL) {
         Version.BuildString = "";
     }
 
-    snprintf(Name->version,
-             sizeof(Name->version),
-             "%s %s",
-             BuildTime,
-             Version.BuildString);
+    strncpy(Name->version, Version.BuildString, sizeof(Name->version));
+    Name->version[sizeof(Name->version) - 1] = '\0';
 
 #if defined(__i386)
 

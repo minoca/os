@@ -88,20 +88,10 @@ include $(SRCROOT)/os/minoca.mk
 
 $(OBJROOT)/os/apps/osbase/urtl/urtl.a: urtl
 
-postbuild: $(BINROOT)/kernel-version
-
 postbuild:
 	@mkdir -p $(BINROOT)/skel/lib
 	@if test -d $(BINROOT)/skel/lib && \
 	    test $(BINROOT)/$(BINARY) -nt $(BINROOT)/skel/lib/$(BINARY); then \
 	    cp $(BINROOT)/$(BINARY) $(BINROOT)/skel/lib/ ; \
-	fi
-
-$(BINROOT)/kernel-version: $(BINARY)
-	@printf $(SYSTEM_VERSION_MAJOR).$(SYSTEM_VERSION_MINOR). > $@ ; \
-	if [ -r $(SRCROOT)/os/revision ]; then \
-	    cat $(SRCROOT)/os/revision >> $@ ; \
-	else \
-	    printf "$(REVISION)" >> $@ ; \
 	fi
 

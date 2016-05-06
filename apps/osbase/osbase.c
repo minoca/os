@@ -777,7 +777,7 @@ Return Value:
 {
 
     UINTN BufferSize;
-    ULONGLONG EncodedVersion;
+    ULONG EncodedVersion;
     PVOID HeapAllocation;
     PSYSTEM_VERSION_INFORMATION LocalInformation;
     KSTATUS Status;

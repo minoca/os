@@ -395,12 +395,10 @@ Return Value:
 
         case 'V':
             printf("Minoca setup version %d.%d.%d\n"
-                   "Built on %s\n"
                    "Copyright (c) 2014 Minoca Corp. All Rights Reserved.\n\n",
                    SETUP_VERSION_MAJOR,
                    SETUP_VERSION_MINOR,
-                   REVISION,
-                   BUILD_TIME_STRING);
+                   REVISION);
 
             return 1;
 

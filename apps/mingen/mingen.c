@@ -518,12 +518,10 @@ Return Value:
 
         case 'V':
             printf("Minoca build generator version %d.%d.%d\n"
-                   "Built on %s\n"
                    "Copyright (c) 2015 Minoca Corp. All Rights Reserved.\n\n",
                    MINGEN_VERSION_MAJOR,
                    MINGEN_VERSION_MINOR,
-                   REVISION,
-                   BUILD_TIME_STRING);
+                   REVISION);
 
             return 1;
 
