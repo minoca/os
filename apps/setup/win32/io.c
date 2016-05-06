@@ -196,6 +196,7 @@ Return Value:
 {
 
     PSETUP_OS_HANDLE IoHandle;
+    PSTR PathCopy;
     size_t PathLength;
     struct stat Stat;
 
@@ -227,15 +228,34 @@ Return Value:
             } else {
 
                 //
-                // Windows also won't stat a path with a slash on the end. If
-                // that's the case, just assume it was a directory.
+                // Windows doesn't allow opening a path with a slash on the
+                // end. If the non-slash version works, then the error is it's
+                // a directory.
                 //
 
                 PathLength = strlen(Destination->Path);
                 if ((PathLength != 0) &&
                     (Destination->Path[PathLength - 1] == '/')) {
 
-                    errno = EISDIR;
+                    PathCopy = strdup(Destination->Path);
+                    if (PathCopy == NULL) {
+                        return NULL;
+                    }
+
+                    while ((PathLength > 1) &&
+                           (PathCopy[PathLength - 1] == '/')) {
+
+                        PathCopy[PathLength - 1] = '\0';
+                        PathLength -= 1;
+                    }
+
+                    if ((stat(PathCopy, &Stat) == 0) &&
+                        (S_ISDIR(Stat.st_mode))) {
+
+                        errno = EISDIR;
+                    }
+
+                    free(PathCopy);
                 }
             }
 
