@@ -195,7 +195,10 @@ function build() {
     entries += [entry];
 
     //
-    // Create the RAM disk for the USB version.
+    // Create the RAM disk for the USB version. The manual override of
+    // OBJCOPY_FLAGS back to their default is needed because make applies
+    // variable overrides to all prerequisites of a target. So some
+    // OBJCOPY_FLAGS on an upper prerequisite would apply here.
     //
 
     ramdisk_o = {
@@ -203,6 +206,7 @@ function build() {
         "label": "ramdisk.o",
         "inputs": [":ramdisk"],
         "tool": "objcopy",
+        "config": {"OBJCOPY_FLAGS": global_config["OBJCOPY_FLAGS"]}
     };
 
     entries += [ramdisk_o];

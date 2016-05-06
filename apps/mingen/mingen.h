@@ -68,6 +68,8 @@ Author:
 #define MINGEN_OPTION_DEBUG 0x00000002
 #define MINGEN_OPTION_DRY_RUN 0x00000004
 
+#define MINGEN_TARGET_DEFAULT 0x00000001
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //

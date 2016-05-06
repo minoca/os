@@ -52,6 +52,12 @@ Environment:
 //
 
 VOID
+MingenMakePrintDefaultTargets (
+    PMINGEN_CONTEXT Context,
+    FILE *File
+    );
+
+VOID
 MingenMakePrintBuildDirectoriesTarget (
     PMINGEN_CONTEXT Context,
     FILE *File
@@ -213,6 +219,8 @@ Return Value:
         fprintf(File, "\n\n");
         CurrentEntry = CurrentEntry->Next;
     }
+
+    MingenMakePrintDefaultTargets(Context, File);
 
     //
     // Loop over every script (file) in the build.
@@ -393,6 +401,68 @@ CreateMakefileEnd:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+VOID
+MingenMakePrintDefaultTargets (
+    PMINGEN_CONTEXT Context,
+    FILE *File
+    )
+
+/*++
+
+Routine Description:
+
+    This routine emits top target statements to make the default target... the
+    default.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    File - Supplies a pointer to the file to print the build directories to.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    BOOL PrintedBanner;
+    PMINGEN_SCRIPT Script;
+    PLIST_ENTRY ScriptEntry;
+    PMINGEN_TARGET Target;
+
+    PrintedBanner = FALSE;
+    ScriptEntry = Context->ScriptList.Next;
+    while (ScriptEntry != &(Context->ScriptList)) {
+        Script = LIST_VALUE(ScriptEntry, MINGEN_SCRIPT, ListEntry);
+        ScriptEntry = ScriptEntry->Next;
+        CurrentEntry = Script->TargetList.Next;
+        while (CurrentEntry != &(Script->TargetList)) {
+            Target = LIST_VALUE(CurrentEntry, MINGEN_TARGET, ListEntry);
+            if ((Target->Flags & MINGEN_TARGET_DEFAULT) != 0) {
+                if (PrintedBanner == FALSE) {
+                    fprintf(File, "# Default target\n");
+                    PrintedBanner = TRUE;
+                }
+
+                MingenMakePrintTargetFile(File, Context, Target);
+                fprintf(File, ":\n");
+            }
+
+            CurrentEntry = CurrentEntry->Next;
+        }
+    }
+
+    if (PrintedBanner != FALSE) {
+        fprintf(File, "\n");
+    }
+
+    return;
+}
 
 VOID
 MingenMakePrintBuildDirectoriesTarget (

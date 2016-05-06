@@ -357,6 +357,14 @@ CHALK_C_STRUCTURE_MEMBER MingenTargetMembers[] = {
         {0}
     },
 
+    {
+        ChalkCFlag32,
+        "default",
+        offsetof(MINGEN_TARGET, Flags),
+        FALSE,
+        {MINGEN_TARGET_DEFAULT}
+    },
+
     {0}
 };
 

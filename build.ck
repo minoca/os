@@ -212,7 +212,9 @@ function build() {
         "//images:"
     ];
 
-    entries += group("all", all);
+    all_group = group("all", all);
+    all_group[0]["default"] = TRUE;
+    entries += all_group;
     return entries;
 }
 
