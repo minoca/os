@@ -47,12 +47,6 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-PMINGEN_SCRIPT
-MingenFindScript (
-    PMINGEN_CONTEXT Context,
-    PMINGEN_PATH TargetPath
-    );
-
 VOID
 MingenDestroyScript (
     PMINGEN_SCRIPT Script
@@ -561,6 +555,14 @@ Return Value:
     Script->Script[Script->Size] = '\0';
 
     //
+    // If no specific targets were requested, then all scripts are active.
+    //
+
+    if (Context->RequestedTargetCount == 0) {
+        Script->Flags |= MINGEN_SCRIPT_ACTIVE;
+    }
+
+    //
     // Execute the script. If it's a target script, execute now to get the
     // return value.
     //
@@ -670,10 +672,6 @@ Return Value:
     return;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
 PMINGEN_SCRIPT
 MingenFindScript (
     PMINGEN_CONTEXT Context,
@@ -721,6 +719,10 @@ Return Value:
 
     return NULL;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 
 VOID
 MingenDestroyScript (

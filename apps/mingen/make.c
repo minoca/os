@@ -208,6 +208,11 @@ Return Value:
     CurrentEntry = Context->ToolList.Next;
     while (CurrentEntry != &(Context->ToolList)) {
         Tool = LIST_VALUE(CurrentEntry, MINGEN_TOOL, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        if ((Tool->Flags & MINGEN_TOOL_ACTIVE) == 0) {
+            continue;
+        }
+
         fprintf(File, "TOOL_%s = ", Tool->Name);
         if (Tool->Description != NULL) {
             fprintf(File, "@echo ");
@@ -217,7 +222,6 @@ Return Value:
 
         MingenMakePrintWithVariableConversion(File, Tool->Command);
         fprintf(File, "\n\n");
-        CurrentEntry = CurrentEntry->Next;
     }
 
     MingenMakePrintDefaultTargets(Context, File);
@@ -230,7 +234,9 @@ Return Value:
     while (ScriptEntry != &(Context->ScriptList)) {
         Script = LIST_VALUE(ScriptEntry, MINGEN_SCRIPT, ListEntry);
         ScriptEntry = ScriptEntry->Next;
-        if (LIST_EMPTY(&(Script->TargetList))) {
+        if ((LIST_EMPTY(&(Script->TargetList))) ||
+            ((Script->Flags & MINGEN_SCRIPT_ACTIVE) == 0)) {
+
             continue;
         }
 
@@ -249,6 +255,10 @@ Return Value:
         while (CurrentEntry != &(Script->TargetList)) {
             Target = LIST_VALUE(CurrentEntry, MINGEN_TARGET, ListEntry);
             CurrentEntry = CurrentEntry->Next;
+            if ((Target->Flags & MINGEN_TARGET_ACTIVE) == 0) {
+                continue;
+            }
+
             if ((Target->Tool != NULL) &&
                 (strcmp(Target->Tool, "phony") == 0)) {
 
@@ -383,7 +393,10 @@ Return Value:
     }
 
     MingenMakePrintBuildDirectoriesTarget(Context, File);
-    MingenMakePrintMakefileTarget(Context, File);
+    if ((Context->Options & MINGEN_OPTION_NO_REBUILD_RULE) == 0) {
+        MingenMakePrintMakefileTarget(Context, File);
+    }
+
     Status = 0;
 
 CreateMakefileEnd:
@@ -441,9 +454,15 @@ Return Value:
         Script = LIST_VALUE(ScriptEntry, MINGEN_SCRIPT, ListEntry);
         ScriptEntry = ScriptEntry->Next;
         CurrentEntry = Script->TargetList.Next;
+        if ((Script->Flags & MINGEN_SCRIPT_ACTIVE) == 0) {
+            continue;
+        }
+
         while (CurrentEntry != &(Script->TargetList)) {
             Target = LIST_VALUE(CurrentEntry, MINGEN_TARGET, ListEntry);
-            if ((Target->Flags & MINGEN_TARGET_DEFAULT) != 0) {
+            if (((Target->Flags & MINGEN_TARGET_DEFAULT) != 0) &&
+                ((Target->Flags & MINGEN_TARGET_ACTIVE) != 0)) {
+
                 if (PrintedBanner == FALSE) {
                     fprintf(File, "# Default target\n");
                     PrintedBanner = TRUE;
@@ -562,6 +581,10 @@ Return Value:
     while (CurrentEntry != &(Context->ScriptList)) {
         Script = LIST_VALUE(CurrentEntry, MINGEN_SCRIPT, ListEntry);
         CurrentEntry = CurrentEntry->Next;
+        if ((Script->Flags & MINGEN_SCRIPT_ACTIVE) == 0) {
+            continue;
+        }
+
         if (strcmp(Script->CompletePath, Context->ProjectFilePath) == 0) {
             fprintf(File, MINGEN_MAKE_VARIABLE, MINGEN_VARIABLE_PROJECT_PATH);
 

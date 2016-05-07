@@ -199,6 +199,11 @@ Return Value:
     CurrentEntry = Context->ToolList.Next;
     while (CurrentEntry != &(Context->ToolList)) {
         Tool = LIST_VALUE(CurrentEntry, MINGEN_TOOL, ListEntry);
+        CurrentEntry = CurrentEntry->Next;
+        if ((Tool->Flags & MINGEN_TOOL_ACTIVE) == 0) {
+            continue;
+        }
+
         fprintf(File, "rule %s\n", Tool->Name);
         if (Tool->Description != NULL) {
             fprintf(File, "    description = ");
@@ -224,7 +229,6 @@ Return Value:
         }
 
         fprintf(File, "\n");
-        CurrentEntry = CurrentEntry->Next;
     }
 
     if (!LIST_EMPTY(&(Context->PoolList))) {
@@ -234,8 +238,12 @@ Return Value:
     PoolEntry = Context->PoolList.Next;
     while (PoolEntry != &(Context->PoolList)) {
         Pool = LIST_VALUE(PoolEntry, MINGEN_POOL, ListEntry);
-        fprintf(File, "\npool %s\n    depth = %d\n", Pool->Name, Pool->Depth);
         PoolEntry = PoolEntry->Next;
+        if ((Pool->Flags & MINGEN_POOL_ACTIVE) == 0) {
+            continue;
+        }
+
+        fprintf(File, "\npool %s\n    depth = %d\n", Pool->Name, Pool->Depth);
     }
 
     fprintf(File, "\n");
@@ -248,7 +256,9 @@ Return Value:
     while (ScriptEntry != &(Context->ScriptList)) {
         Script = LIST_VALUE(ScriptEntry, MINGEN_SCRIPT, ListEntry);
         ScriptEntry = ScriptEntry->Next;
-        if (LIST_EMPTY(&(Script->TargetList))) {
+        if ((LIST_EMPTY(&(Script->TargetList))) ||
+            ((Script->Flags & MINGEN_SCRIPT_ACTIVE) == 0)) {
+
             continue;
         }
 
@@ -267,6 +277,9 @@ Return Value:
         while (CurrentEntry != &(Script->TargetList)) {
             Target = LIST_VALUE(CurrentEntry, MINGEN_TARGET, ListEntry);
             CurrentEntry = CurrentEntry->Next;
+            if ((Target->Flags & MINGEN_TARGET_ACTIVE) == 0) {
+                continue;
+            }
 
             //
             // Add the configs for this target.
@@ -398,7 +411,10 @@ Return Value:
         }
     }
 
-    MingenNinjaPrintRebuildRule(Context, File);
+    if ((Context->Options & MINGEN_OPTION_NO_REBUILD_RULE) == 0) {
+        MingenNinjaPrintRebuildRule(Context, File);
+    }
+
     MingenNinjaPrintDefaultTargets(Context, File);
     Status = 0;
 
@@ -455,10 +471,16 @@ Return Value:
     while (ScriptEntry != &(Context->ScriptList)) {
         Script = LIST_VALUE(ScriptEntry, MINGEN_SCRIPT, ListEntry);
         ScriptEntry = ScriptEntry->Next;
+        if ((Script->Flags & MINGEN_SCRIPT_ACTIVE) == 0) {
+            continue;
+        }
+
         CurrentEntry = Script->TargetList.Next;
         while (CurrentEntry != &(Script->TargetList)) {
             Target = LIST_VALUE(CurrentEntry, MINGEN_TARGET, ListEntry);
-            if ((Target->Flags & MINGEN_TARGET_DEFAULT) != 0) {
+            if (((Target->Flags & MINGEN_TARGET_DEFAULT) != 0) &&
+                ((Target->Flags & MINGEN_TARGET_ACTIVE) != 0)) {
+
                 if (PrintedBanner == FALSE) {
                     fprintf(File, "\n# Default target\n");
                     PrintedBanner = TRUE;
@@ -528,6 +550,10 @@ Return Value:
     while (CurrentEntry != &(Context->ScriptList)) {
         Script = LIST_VALUE(CurrentEntry, MINGEN_SCRIPT, ListEntry);
         CurrentEntry = CurrentEntry->Next;
+        if ((Script->Flags & MINGEN_SCRIPT_ACTIVE) == 0) {
+            continue;
+        }
+
         if (strcmp(Script->CompletePath, Context->ProjectFilePath) == 0) {
             fprintf(File, MINGEN_NINJA_VARIABLE, MINGEN_VARIABLE_PROJECT_PATH);
 

@@ -33,7 +33,7 @@ function build() {
     ];
 
     mingen_build = [
-        "//apps/mingen:mingen_build"
+        "//apps/mingen:build_mingen"
     ];
 
     apps = [

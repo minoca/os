@@ -46,9 +46,11 @@ Environment:
 #define MINGEN_VERSION_MINOR 0
 
 #define MINGEN_USAGE                                                           \
-    "usage: mingen [options]\n"                                                \
+    "usage: mingen [options] [targets...]\n"                                   \
     "The Minoca Build Generator creates Ninja files describing the build at \n"\
-    "the current directory. Options are:\n"                                    \
+    "the current directory. If specific targets are specified, then a build \n"\
+    "file for only those targets will be built. Otherwise, the build file \n"  \
+    "is created for the whole project. Options are:\n"                         \
     "  -a, --args=expr -- Evaluate the given text in the script interpreter \n"\
     "      context before loading the project root file. This can be used \n"  \
     "      to pass configuration arguments and overrides to the build.\n"      \
@@ -56,6 +58,7 @@ Environment:
     "  -D, --debug -- Print lots of information during execution.\n"           \
     "  -f, --format=fmt -- Specify the output format as make or ninja. The \n" \
     "      default is make.\n"                                                 \
+    "  -g, --no-rebuild -- Don't include a re-generate rule in the output.\n"  \
     "  -n, --dry-run -- Do all the processing, but do not actually create \n"  \
     "      any output files.\n"                                                \
     "  -i, --input=project_file -- Use the given file as the top level \n"     \
@@ -67,7 +70,7 @@ Environment:
     "  --help -- Show this help text and exit.\n"                              \
     "  --version -- Print the application version information and exit.\n\n"   \
 
-#define MINGEN_OPTIONS_STRING "Df:hi:no:vV"
+#define MINGEN_OPTIONS_STRING "Df:ghi:no:vV"
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -143,6 +146,24 @@ MingenAddInputToList (
     PSTR Name
     );
 
+INT
+MingenMarkTargetNameActive (
+    PMINGEN_CONTEXT Context,
+    PSTR TargetName
+    );
+
+VOID
+MingenMarkTargetActive (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TARGET Target
+    );
+
+VOID
+MingenMarkInputsActive (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_INPUTS Inputs
+    );
+
 PMINGEN_TOOL
 MingenFindTool (
     PMINGEN_CONTEXT Context,
@@ -203,6 +224,7 @@ struct option MingenLongOptions[] = {
     {"args", required_argument, 0, 'a'},
     {"debug", no_argument, 0, 'D'},
     {"format", required_argument, 0, 'f'},
+    {"no-rebuild", no_argument, 0, 'g'},
     {"input", required_argument, 0, 'i'},
     {"dry-run", no_argument, 0, 'n'},
     {"output", required_argument, 0, 'o'},
@@ -437,7 +459,7 @@ Return Value:
             Status = ChalkLoadScriptBuffer(&(Context.Interpreter),
                                            "<cmdline>",
                                            optarg,
-                                           strlen(optarg) + 1,
+                                           strlen(optarg),
                                            MingenScriptOrderCommandLine,
                                            NULL);
 
@@ -487,6 +509,10 @@ Return Value:
                 goto mainEnd;
             }
 
+            break;
+
+        case 'g':
+            Context.Options |= MINGEN_OPTION_NO_REBUILD_RULE;
             break;
 
         case 'i':
@@ -551,10 +577,9 @@ Return Value:
     //
 
     ArgumentIndex = optind;
-    if (ArgumentIndex != ArgumentCount) {
-        fprintf(stderr, "Too many arguments. Try --help for usage.\n");
-        Status = EINVAL;
-        goto mainEnd;
+    if (ArgumentIndex < ArgumentCount) {
+        Context.RequestedTargets = Arguments + ArgumentIndex;
+        Context.RequestedTargetCount = ArgumentCount - ArgumentIndex;
     }
 
     if (Context.ProjectFilePath == NULL) {
@@ -702,6 +727,10 @@ Return Value:
 
     for (Index = 0; Index < Context->CommandScriptCount; Index += 1) {
         fprintf(File, " --args='%s'", Context->CommandScripts[Index]);
+    }
+
+    for (Index = 0; Index < Context->RequestedTargetCount; Index += 1) {
+        fprintf(File, " %s", Context->RequestedTargets[Index]);
     }
 
     return;
@@ -1087,6 +1116,15 @@ Return Value:
         goto ParseToolEntryEnd;
     }
 
+    //
+    // If no specific targets are requested, then all tools make it to the
+    // output.
+    //
+
+    if (Context->RequestedTargetCount == 0) {
+        Tool->Flags |= MINGEN_TOOL_ACTIVE;
+    }
+
     INSERT_BEFORE(&(Tool->ListEntry), &(Context->ToolList));
     Status = 0;
 
@@ -1153,6 +1191,15 @@ Return Value:
         fprintf(stderr, "Error: Duplicate pool %s.\n", Pool->Name);
         Status = EINVAL;
         goto ParsePoolEntryEnd;
+    }
+
+    //
+    // If no specific targets are requested, then all pools make it to the
+    // output.
+    //
+
+    if (Context->RequestedTargetCount == 0) {
+        Pool->Flags |= MINGEN_POOL_ACTIVE;
     }
 
     INSERT_BEFORE(&(Pool->ListEntry), &(Context->PoolList));
@@ -1398,6 +1445,15 @@ Return Value:
         goto ParseTargetEntryEnd;
     }
 
+    //
+    // If no specific targets are requested, then all targets make it to the
+    // output.
+    //
+
+    if (Context->RequestedTargetCount == 0) {
+        Target->Flags |= MINGEN_TARGET_ACTIVE;
+    }
+
     INSERT_BEFORE(&(Target->ListEntry), &(Script->TargetList));
     Script->TargetCount += 1;
     Status = 0;
@@ -1439,11 +1495,13 @@ Return Value:
 
 {
 
+    ULONG Index;
     PMINGEN_SCRIPT Script;
     PLIST_ENTRY ScriptEntry;
     INT Status;
     PMINGEN_TARGET Target;
     PLIST_ENTRY TargetEntry;
+    PSTR TargetName;
     PMINGEN_TOOL Tool;
     PLIST_ENTRY ToolEntry;
 
@@ -1503,6 +1561,20 @@ Return Value:
     //
 
     MingenDeduplicatePathList(&(Context->BuildDirectories));
+
+    //
+    // If there are specifically requested targets, then follow the graph to
+    // mark those as active.
+    //
+
+    for (Index = 0; Index < Context->RequestedTargetCount; Index += 1) {
+        TargetName = Context->RequestedTargets[Index];
+        Status = MingenMarkTargetNameActive(Context, TargetName);
+        if (Status != 0) {
+            goto ProcessEntriesEnd;
+        }
+    }
+
     Status = 0;
 
 ProcessEntriesEnd:
@@ -1784,10 +1856,10 @@ Return Value:
 
     DependencyScript = NULL;
     Status = MingenParsePath(Context,
-                            Name,
-                            MingenSourceTree,
-                            Target->Script->Path,
-                            &Path);
+                             Name,
+                             MingenSourceTree,
+                             Target->Script->Path,
+                             &Path);
 
     if (Status != 0) {
         goto AddInputToListEnd;
@@ -1890,6 +1962,203 @@ AddInputToListEnd:
     }
 
     return Status;
+}
+
+INT
+MingenMarkTargetNameActive (
+    PMINGEN_CONTEXT Context,
+    PSTR TargetName
+    )
+
+/*++
+
+Routine Description:
+
+    This routine marks the given target name and all of its dependencies, tools,
+    and pools as active.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    TargetName - Supplies the name of the target.
+
+Return Value:
+
+    0 on success.
+
+    Returns an error number on failure.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    MINGEN_PATH Path;
+    PMINGEN_SCRIPT Script;
+    INT Status;
+    PMINGEN_TARGET Target;
+
+    Path.Path = NULL;
+    Status = MingenParsePath(Context,
+                             TargetName,
+                             MingenSourceTree,
+                             NULL,
+                             &Path);
+
+    if (Status != 0) {
+        goto MarkTargetNameActiveEnd;
+    }
+
+    Script = MingenFindScript(Context, &Path);
+    if (Script == NULL) {
+        Status = ENOENT;
+        goto MarkTargetNameActiveEnd;
+    }
+
+    //
+    // If there's a specific target, mark that one as active and default.
+    //
+
+    if (Path.Target != NULL) {
+        Target = MingenFindTargetInScript(Context, Script, Path.Target);
+        if (Target == NULL) {
+            Status = ENOENT;
+            goto MarkTargetNameActiveEnd;
+        }
+
+        Target->Flags |= MINGEN_TARGET_DEFAULT;
+        MingenMarkTargetActive(Context, Target);
+
+    //
+    // Mark all targets in the script as active.
+    //
+
+    } else {
+        CurrentEntry = Script->TargetList.Next;
+        while (CurrentEntry != &(Script->TargetList)) {
+            Target = LIST_VALUE(CurrentEntry, MINGEN_TARGET, ListEntry);
+            Target->Flags |= MINGEN_TARGET_DEFAULT;
+            MingenMarkTargetActive(Context, Target);;
+            CurrentEntry = CurrentEntry->Next;
+        }
+    }
+
+    Status = 0;
+
+MarkTargetNameActiveEnd:
+    if (Status != 0) {
+        fprintf(stderr,
+                "Error: Failed to select requested target '%s': %s\n",
+                TargetName,
+                strerror(Status));
+    }
+
+    if (Path.Path != NULL) {
+        free(Path.Path);
+    }
+
+    return Status;
+}
+
+VOID
+MingenMarkTargetActive (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_TARGET Target
+    )
+
+/*++
+
+Routine Description:
+
+    This routine marks the given target, as well as all of its dependencies,
+    tools, and pools active. This routine is recursive.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    Target - Supplies a pointer to the target to mark active.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PMINGEN_POOL Pool;
+    PMINGEN_TOOL Tool;
+
+    //
+    // Avoid infinite recursion if there's somehow a loop in the graph.
+    //
+
+    if ((Target->Flags & MINGEN_TARGET_ACTIVE) != 0) {
+        return;
+    }
+
+    Target->Flags |= MINGEN_TARGET_ACTIVE;
+    Target->Script->Flags |= MINGEN_SCRIPT_ACTIVE;
+    if (Target->Tool != NULL) {
+        Tool = MingenFindTool(Context, Target->Tool);
+        if (Tool != NULL) {
+            Tool->Flags |= MINGEN_TOOL_ACTIVE;
+        }
+    }
+
+    if (Target->Pool != NULL) {
+        Pool = MingenFindPool(Context, Target->Pool);
+        if (Pool != NULL) {
+            Pool->Flags |= MINGEN_POOL_ACTIVE;
+        }
+    }
+
+    MingenMarkInputsActive(Context, &(Target->Inputs));
+    MingenMarkInputsActive(Context, &(Target->Implicit));
+    MingenMarkInputsActive(Context, &(Target->OrderOnly));
+    return;
+}
+
+VOID
+MingenMarkInputsActive (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_INPUTS Inputs
+    )
+
+/*++
+
+Routine Description:
+
+    This routine marks the given inputs, as well as all of their dependencies,
+    tools, and pools active. This routine is recursive.
+
+Arguments:
+
+    Context - Supplies a pointer to the context.
+
+    Inputs - Supplies a poitner to the input list to mark active.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Index;
+    PMINGEN_TARGET Input;
+
+    for (Index = 0; Index < Inputs->Count; Index += 1) {
+        Input = Inputs->Array[Index];
+        if (Input->Type == MingenInputTarget) {
+            MingenMarkTargetActive(Context, Input);
+        }
+    }
+
+    return;
 }
 
 PMINGEN_TOOL

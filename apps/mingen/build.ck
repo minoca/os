@@ -74,7 +74,7 @@ function build() {
     };
 
     build_app = {
-        "label": "mingen_build",
+        "label": "build_mingen",
         "output": "mingen",
         "inputs": build_sources + build_libs,
         "includes": build_includes,

@@ -67,8 +67,16 @@ Author:
 #define MINGEN_OPTION_VERBOSE 0x00000001
 #define MINGEN_OPTION_DEBUG 0x00000002
 #define MINGEN_OPTION_DRY_RUN 0x00000004
+#define MINGEN_OPTION_NO_REBUILD_RULE 0x00000008
 
-#define MINGEN_TARGET_DEFAULT 0x00000001
+#define MINGEN_SCRIPT_ACTIVE 0x00000001
+
+#define MINGEN_TARGET_ACTIVE 0x00000001
+#define MINGEN_TARGET_DEFAULT 0x00000002
+
+#define MINGEN_TOOL_ACTIVE 0x00000001
+
+#define MINGEN_POOL_ACTIVE 0x00000001
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -206,6 +214,13 @@ Members:
     CommandScriptCount - Stores the number of command line scripts in the
         array.
 
+    RequestedTargets - Stores an optional pointer to an array of targets
+        requested on the command line. If none are specified, then all
+        targets specified in the build files will be output.
+
+    RequestedTargetCount - Stores the number of targets in the requested
+        targets array.
+
 --*/
 
 typedef struct _MINGEN_CONTEXT {
@@ -228,6 +243,8 @@ typedef struct _MINGEN_CONTEXT {
     MINGEN_PATH_LIST BuildDirectories;
     PSTR *CommandScripts;
     ULONG CommandScriptCount;
+    PSTR *RequestedTargets;
+    ULONG RequestedTargetCount;
 } MINGEN_CONTEXT, *PMINGEN_CONTEXT;
 
 /*++
@@ -281,6 +298,8 @@ Members:
     Pool - Stores an optional pointer to the pool this tool belongs in. This is
         only supported by Ninja builds.
 
+    Flags - Stores an array of flags. See MINGEN_TOOL_* definitions.
+
 --*/
 
 typedef struct _MINGEN_TOOL {
@@ -291,6 +310,7 @@ typedef struct _MINGEN_TOOL {
     PSTR Depfile;
     PSTR DepsFormat;
     PSTR Pool;
+    ULONG Flags;
 } MINGEN_TOOL, *PMINGEN_TOOL;
 
 /*++
@@ -323,6 +343,8 @@ Members:
 
     TargetCount - Stores the number of targets on the target list.
 
+    Flags - Stores a bitfield of flags. See MINGEN_SCRIPT_* definitions.
+
 --*/
 
 typedef struct _MINGEN_SCRIPT {
@@ -336,6 +358,7 @@ typedef struct _MINGEN_SCRIPT {
     PCHALK_OBJECT Result;
     LIST_ENTRY TargetList;
     ULONG TargetCount;
+    ULONG Flags;
 } MINGEN_SCRIPT, *PMINGEN_SCRIPT;
 
 /*++
@@ -465,12 +488,15 @@ Members:
 
     Depth - Stores the depth of the pool.
 
+    Flags - Stores an array of flags. See MINGEN_POOL_* definitions.
+
 --*/
 
 typedef struct _MINGEN_POOL {
     LIST_ENTRY ListEntry;
     PSTR Name;
     LONG Depth;
+    ULONG Flags;
 } MINGEN_POOL, *PMINGEN_POOL;
 
 //
@@ -664,6 +690,34 @@ Routine Description:
 Arguments:
 
     Context - Supplies a pointer to the application context.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+PMINGEN_SCRIPT
+MingenFindScript (
+    PMINGEN_CONTEXT Context,
+    PMINGEN_PATH TargetPath
+    );
+
+/*++
+
+Routine Description:
+
+    This routine searches for an already loaded script matching the given
+    target root and directory path.
+
+Arguments:
+
+    Context - Supplies a pointer to the application context.
+
+    TargetPath - Supplies a pointer to the target path search for. The target
+        name and toolchain are ignored, only the root and path are observed.
 
 Return Value:
 
