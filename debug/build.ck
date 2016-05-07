@@ -23,13 +23,18 @@ Environment:
 function build() {
     debug_binaries = [
         "//debug/client:debug",
-        "//debug/client:build_debug",
-        "//debug/client/tdwarf:build_tdwarf",
-        "//debug/client/testdisa:build_testdisa",
-        "//debug/client/teststab:build_teststab",
         "//debug/kexts:kexts",
         "//debug/kexts:build_kexts"
     ];
+
+    if ((build_os == "Windows") || (build_os == "Minoca")) {
+        debug_binaries += [
+            "//debug/client:build_debug",
+            "//debug/client/tdwarf:build_tdwarf",
+            "//debug/client/testdisa:build_testdisa",
+            "//debug/client/teststab:build_teststab",
+        ];
+    }
 
     if (build_os == "Windows") {
         debug_binaries += [

@@ -150,8 +150,7 @@ function build() {
         build_config["DYNLIBS"] = ["-lminocaos"];
 
     } else {
-
-        assert(0, "Unsupported OS for building debugger");
+        build_sources = null;
     }
 
     target_app = {
@@ -161,17 +160,19 @@ function build() {
     };
 
     entries = application(target_app);
-    build_app = {
-        "label": "build_debug",
-        "output": "debug",
-        "inputs": build_sources + build_libs,
-        "includes": includes,
-        "config": build_config,
-        "build": TRUE,
-        "prefix": "build"
-    };
+    if (build_sources) {
+        build_app = {
+            "label": "build_debug",
+            "output": "debug",
+            "inputs": build_sources + build_libs,
+            "includes": includes,
+            "config": build_config,
+            "build": TRUE,
+            "prefix": "build"
+        };
 
-    entries += application(build_app);
+        entries += application(build_app);
+    }
 
     //
     // Build the Windows GUI application if applicable.
