@@ -219,9 +219,8 @@ Members:
     ClusterByteOffset - Stores the offset, in bytes, from the beginning of
         the volume to cluster 2 (the first valid cluster).
 
-    LastClusterAllocated - Stores the most recent cluster allocated from the
-        free pool. This can provide a useful hint as to where to start looking
-        for free blocks. 0 specifies an uninitialized value.
+    ClusterSearchStart - Stores the cluster to start searching from. 0
+        specifies an uninitialized value.
 
     InformationByteOffset - Stores the offset, in bytes, to the FS information
         block.
@@ -261,7 +260,7 @@ typedef struct _FAT_VOLUME {
     ULONG RootDirectoryCount;
     ULONGLONG RootDirectoryByteOffset;
     ULONGLONG ClusterByteOffset;
-    ULONG LastClusterAllocated;
+    ULONG ClusterSearchStart;
     ULONGLONG InformationByteOffset;
     ULONGLONG FatByteStart;
     ULONGLONG FatSize;

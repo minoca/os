@@ -32,7 +32,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define DESCRIPTOR_REFILL_PAGE_COUNT 3
+#define DESCRIPTOR_REFILL_PAGE_COUNT 16
 
 //
 // Define the system virtual memory warning levels, in bytes, for systems with

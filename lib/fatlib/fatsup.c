@@ -1348,17 +1348,17 @@ Return Value:
     }
 
     FatAcquireLock(Volume->Lock);
-    if ((Volume->LastClusterAllocated < FAT_CLUSTER_BEGIN) ||
-        (Volume->LastClusterAllocated >= ClusterCount)) {
+    if ((Volume->ClusterSearchStart < FAT_CLUSTER_BEGIN) ||
+        (Volume->ClusterSearchStart >= ClusterCount)) {
 
-        Volume->LastClusterAllocated = FAT_CLUSTER_BEGIN;
+        Volume->ClusterSearchStart = FAT_CLUSTER_BEGIN;
     }
 
     //
     // Search for a free block. Start just after the last allocated cluster.
     //
 
-    CurrentCluster = Volume->LastClusterAllocated;
+    CurrentCluster = Volume->ClusterSearchStart;
     ClusterEnd = ClusterCount;
     SearchStart = CurrentCluster;
     CurrentCluster += 1;
@@ -1511,7 +1511,7 @@ Return Value:
         }
     }
 
-    Volume->LastClusterAllocated = AllocatedCluster;
+    Volume->ClusterSearchStart = AllocatedCluster;
 
     //
     // Lookup the previous block and update it.
@@ -1617,6 +1617,14 @@ Return Value:
 
             Status = STATUS_SUCCESS;
             goto FreeClusterChainEnd;
+        }
+
+        //
+        // Always allocate from the lowest cluster known to be free.
+        //
+
+        if (Cluster < Volume->ClusterSearchStart) {
+            Volume->ClusterSearchStart = Cluster;
         }
 
         Status = FatpFatCacheWriteClusterEntry(Volume,

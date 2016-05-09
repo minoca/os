@@ -38,7 +38,7 @@ Environment:
 // are potential problems with a cluster spanning two windows.
 //
 
-#define FAT_CACHE_MINIMUM_WINDOW_SIZE FAT12_MAX_FAT_SIZE
+#define FAT_CACHE_MINIMUM_WINDOW_SIZE _128KB
 
 //
 // ------------------------------------------------------ Data Type Definitions

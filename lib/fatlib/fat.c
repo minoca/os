@@ -1145,7 +1145,7 @@ Return Value:
             Status = STATUS_VOLUME_CORRUPT;
         }
 
-        FatVolume->LastClusterAllocated = Information->LastClusterAllocated;
+        FatVolume->ClusterSearchStart = Information->LastClusterAllocated;
     }
 
     Status = STATUS_SUCCESS;
