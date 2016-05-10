@@ -54,16 +54,23 @@ Environment:
     "occurrences.\n"                                                           \
     "  -d, --repeated -- Suppress the writing of lines that are not \n"        \
     "        repeated in the input.\n"                                         \
+    "  -D, --all-repeated=type -- Print repeated lines. Type can be none, \n"  \
+    "      prepend to print a delimiter before every repeated group, or \n"    \
+    "      separate to print a newline before every repeated group except \n"  \
+    "      the first.\n"                                                       \
     "  -f, --skip-fields N -- Avoid comparing the first N fields. Fields are\n"\
     "        separated by blanks.\n"                                           \
     "  -i, --ignore-case -- Ignore case when comparing.\n"                     \
     "  -s, --skip-chars N -- Avoid comparing the first N characters.\n"        \
     "  -u, --unique -- Suppress the writing of lines that are repeated in \n"  \
     "        the input.\n"                                                     \
+    "  -w, --check-chars=N -- Only check the first N characters.\n"            \
+    "  -z, --zero-terminated -- Separate lines with zero bytes rather than "   \
+    "newlines.\n"                                                              \
     "  --help -- Show this help text and exit.\n"                              \
     "  --version -- Show the application version and exit.\n"                  \
 
-#define UNIQ_OPTIONS_STRING "cdf:is:u"
+#define UNIQ_OPTIONS_STRING "cdDf:is:uw:zhV"
 
 //
 // Define uniq options.
@@ -94,8 +101,20 @@ Environment:
 #define UNIQ_OPTION_SUPPRESS_REPEATED 0x00000008
 
 //
+// Set this flag to print the second and subsequent repeated lines.
+//
+
+#define UNIQ_OPTION_ALL_REPEATED 0x00000010
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
+
+typedef enum _UNIQ_GROUPING {
+    UniqGroupNone,
+    UniqGroupPrepend,
+    UniqGroupSeparate
+} UNIQ_GROUPING, *PUNIQ_GROUPING;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -115,10 +134,13 @@ UniqSkip (
 struct option UniqLongOptions[] = {
     {"count", no_argument, 0, 'c'},
     {"repeated", no_argument, 0, 'd'},
+    {"all-repeated", optional_argument, 0, 'D'},
     {"skip-fields", required_argument, 0, 'f'},
     {"ignore-case", no_argument, 0, 'i'},
     {"skip-chars", required_argument, 0, 's'},
     {"unique", no_argument, 0, 'u'},
+    {"check-chars", required_argument, 0, 'w'},
+    {"zero-terminated", no_argument, 0, 'z'},
     {"help", no_argument, 0, 'h'},
     {"version", no_argument, 0, 'V'},
     {NULL, 0, 0, 0},
@@ -158,7 +180,9 @@ Return Value:
     PSTR AfterScan;
     PSTR Argument;
     ULONG ArgumentIndex;
+    size_t CharacterCount;
     INT Comparison;
+    BOOL FirstGroup;
     FILE *Input;
     PSTR InputName;
     PSTR Line;
@@ -171,15 +195,21 @@ Return Value:
     PSTR PreviousLineStart;
     BOOL PrintLine;
     ULONG RepeatCount;
+    UNIQ_GROUPING RepeatGroup;
+    CHAR Separator;
     LONG SkipCharacters;
     LONG SkipFields;
     int Status;
 
+    CharacterCount = -1;
+    FirstGroup = TRUE;
     Input = NULL;
     Line = NULL;
     PreviousLine = NULL;
     Options = 0;
     Output = NULL;
+    RepeatGroup = UniqGroupNone;
+    Separator = '\n';
     SkipCharacters = 0;
     SkipFields = 0;
 
@@ -210,6 +240,27 @@ Return Value:
 
         case 'd':
             Options |= UNIQ_OPTION_SUPPRESS_UNIQUE;
+            break;
+
+        case 'D':
+            Options |= UNIQ_OPTION_ALL_REPEATED | UNIQ_OPTION_SUPPRESS_UNIQUE;
+            if (optarg != NULL) {
+                if (strcmp(optarg, "none") == 0) {
+                    RepeatGroup = UniqGroupNone;
+
+                } else if (strcmp(optarg, "prepend") == 0) {
+                    RepeatGroup = UniqGroupPrepend;
+
+                } else if (strcmp(optarg, "separate") == 0) {
+                    RepeatGroup = UniqGroupSeparate;
+
+                } else {
+                    SwPrintError(0, optarg, "Unknown grouping type");
+                    Status = 1;
+                    goto MainEnd;
+                }
+            }
+
             break;
 
         case 'i':
@@ -246,6 +297,20 @@ Return Value:
 
             break;
 
+        case 'w':
+            Argument = optarg;
+            CharacterCount = strtoul(Argument, &AfterScan, 10);
+            if (AfterScan == Argument) {
+                SwPrintError(0, Argument, "Invalid character count");
+                return 1;
+            }
+
+            break;
+
+        case 'z':
+            Separator = '\0';
+            break;
+
         case 'V':
             SwPrintVersion(UNIQ_VERSION_MAJOR, UNIQ_VERSION_MINOR);
             return 1;
@@ -261,6 +326,14 @@ Return Value:
             Status = 1;
             goto MainEnd;
         }
+    }
+
+    if (((Options & UNIQ_OPTION_ALL_REPEATED) != 0) &&
+        ((Options & UNIQ_OPTION_PRINT_COUNT) != 0)) {
+
+        SwPrintError(0, NULL, "-D and -c together is invalid");
+        Status = 1;
+        goto MainEnd;
     }
 
     //
@@ -346,47 +419,90 @@ Return Value:
                                              SkipCharacters);
 
                 if ((Options & UNIQ_OPTION_IGNORE_CASE) != 0) {
-                    Comparison = strcasecmp(LineStart, PreviousLineStart);
+                    Comparison = strncasecmp(LineStart,
+                                             PreviousLineStart,
+                                             CharacterCount);
 
                 } else {
-                    Comparison = strcmp(LineStart, PreviousLineStart);
+                    Comparison = strncmp(LineStart,
+                                         PreviousLineStart,
+                                         CharacterCount);
                 }
             }
         }
 
         //
-        // If they're equal, move on to the next line.
+        // Handle the lines being equal (duplicate).
         //
 
         if (Comparison == 0) {
-            free(Line);
-            Line = NULL;
-            RepeatCount += 1;
-            continue;
-        }
 
-        //
-        // They're not equal, so spit this line out.
-        //
+            //
+            // Print if repeated lines are requested.
+            //
 
-        PrintLine = TRUE;
-        if (RepeatCount == 1) {
-            if ((Options & UNIQ_OPTION_SUPPRESS_UNIQUE) != 0) {
-                PrintLine = FALSE;
+            if ((Options & UNIQ_OPTION_ALL_REPEATED) != 0) {
+
+                //
+                // Separate groups of repeated lines if requested. The only
+                // difference bewteen prepend and separate is that separate
+                // doesn't print a delimiter before the first group.
+                //
+
+                if (RepeatCount == 1) {
+                    if ((RepeatGroup == UniqGroupPrepend) ||
+                        ((RepeatGroup == UniqGroupSeparate) &&
+                         (FirstGroup == FALSE))) {
+
+                        putchar(Separator);
+                    }
+
+                    FirstGroup = FALSE;
+                }
+
+                //
+                // Print the line.
+                //
+
+                PrintLine = TRUE;
+                RepeatCount += 1;
+
+            //
+            // Skip the repeated line normally.
+            //
+
+            } else {
+                free(Line);
+                Line = NULL;
+                RepeatCount += 1;
+                continue;
             }
 
         } else {
-            if ((Options & UNIQ_OPTION_SUPPRESS_REPEATED) != 0) {
-                PrintLine = FALSE;
+
+            //
+            // They're not equal, so spit this line out.
+            //
+
+            PrintLine = TRUE;
+            if (RepeatCount == 1) {
+                if ((Options & UNIQ_OPTION_SUPPRESS_UNIQUE) != 0) {
+                    PrintLine = FALSE;
+                }
+
+            } else {
+                if ((Options & UNIQ_OPTION_SUPPRESS_REPEATED) != 0) {
+                    PrintLine = FALSE;
+                }
             }
         }
 
         if (PrintLine != FALSE) {
             if ((Options & UNIQ_OPTION_PRINT_COUNT) != 0) {
-                printf("%d %s\n", RepeatCount, PreviousLine);
+                printf("%7d %s%c", RepeatCount, PreviousLine, Separator);
 
             } else {
-                printf("%s\n", PreviousLine);
+                printf("%s%c", PreviousLine, Separator);
             }
         }
 
@@ -396,7 +512,10 @@ Return Value:
 
         free(PreviousLine);
         PreviousLine = Line;
-        RepeatCount = 1;
+        if (Comparison != 0) {
+            RepeatCount = 1;
+        }
+
         if (Line == NULL) {
             break;
         }

@@ -66,6 +66,7 @@ COMMON_OBJS = basename.o       \
               sed/sedfunc.o    \
               sed/sedparse.o   \
               sed/sedutil.o    \
+              seq.o            \
               sh/alias.o       \
               sh/arith.o       \
               sh/builtin.o     \

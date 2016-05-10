@@ -65,6 +65,7 @@ function build() {
         "sed/sedfunc.c",
         "sed/sedparse.c",
         "sed/sedutil.c",
+        "seq.c",
         "sh/alias.c",
         "sh/arith.c",
         "sh/builtin.c",

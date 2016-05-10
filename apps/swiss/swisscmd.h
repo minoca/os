@@ -284,6 +284,8 @@ extern SWISS_COMMAND_ENTRY SwissCommands[];
 #define TELNET_COMMAND_DESCRIPTION "Telnet client"
 #define NPROC_COMMAND_NAME "nproc"
 #define NPROC_COMMAND_DESCRIPTION "Returns the number of processors"
+#define SEQ_COMMAND_NAME "seq"
+#define SEQ_COMMAND_DESCRIPTION "Print a sequence of numbers"
 
 //
 // Command entry point prototypes.
@@ -2201,3 +2203,27 @@ Return Value:
 
 --*/
 
+INT
+SeqMain (
+    INT ArgumentCount,
+    CHAR **Arguments
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the main entry point for the seq utility.
+
+Arguments:
+
+    ArgumentCount - Supplies the number of command line arguments the program
+        was invoked with.
+
+    Arguments - Supplies a tokenized array of command line arguments.
+
+Return Value:
+
+    Returns an integer exit code. 0 for success, nonzero otherwise.
+
+--*/
