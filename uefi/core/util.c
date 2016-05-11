@@ -25,6 +25,8 @@ Environment:
 //
 
 #include "ueficore.h"
+#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kdebug.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -639,6 +641,66 @@ Return Value:
     Tpl = EfiRaiseTPL(TPL_HIGH_LEVEL);
     EfiRestoreTPL(Tpl);
     return Tpl;
+}
+
+VOID
+EfiDebugPrint (
+    CHAR8 *Format,
+    ...
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints to the debugger and console.
+
+Arguments:
+
+    Format - Supplies a pointer to the format string.
+
+    ... - Supplies the remaining arguments to the format string.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    va_list ArgumentList;
+    CHAR Ascii[128];
+    ULONG Index;
+    USHORT Wide[128];
+
+    //
+    // Simply pass the data on to the debugger's print function.
+    //
+
+    va_start(ArgumentList, Format);
+    KdPrintWithArgumentList(Format, ArgumentList);
+    va_end(ArgumentList);
+    if (EfiSystemTable->StdErr != NULL) {
+        va_start(ArgumentList, Format);
+        RtlFormatString(Ascii,
+                        sizeof(Ascii) - 1,
+                        CharacterEncodingAscii,
+                        Format,
+                        ArgumentList);
+
+        Index = 0;
+        while (Ascii[Index] != '\0') {
+            Wide[Index] = Ascii[Index];
+            Index += 1;
+        }
+
+        Wide[Index] = L'\0';
+        va_end(ArgumentList);
+        EfiSystemTable->StdErr->OutputString(EfiSystemTable->StdErr, Wide);
+    }
+
+    return;
 }
 
 //

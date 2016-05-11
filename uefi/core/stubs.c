@@ -26,6 +26,7 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
+#include <minoca/kernel/kdebug.h>
 #include <minoca/uefi/uefi.h>
 #include "shortcut.h"
 
@@ -50,6 +51,106 @@ ULONG KeActiveProcessorCount = 1;
 //
 // ------------------------------------------------------------------ Functions
 //
+
+VOID
+RtlDebugPrint (
+    PSTR Format,
+    ...
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a printf-style string to the debugger.
+
+Arguments:
+
+    Format - Supplies the printf-style format string to print. The contents of
+        this string determine the rest of the arguments passed.
+
+    ... - Supplies any arguments needed to convert the Format string.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    va_list ArgumentList;
+    CHAR Ascii[128];
+    ULONG Index;
+    USHORT Wide[128];
+
+    //
+    // Simply pass the data on to the debugger's print function.
+    //
+
+    va_start(ArgumentList, Format);
+    KdPrintWithArgumentList(Format, ArgumentList);
+    va_end(ArgumentList);
+    if (EfiSystemTable->StdErr != NULL) {
+        va_start(ArgumentList, Format);
+        RtlFormatString(Ascii,
+                        sizeof(Ascii) - 1,
+                        CharacterEncodingAscii,
+                        Format,
+                        ArgumentList);
+
+        Index = 0;
+        while (Ascii[Index] != '\0') {
+            Wide[Index] = Ascii[Index];
+            Index += 1;
+        }
+
+        Wide[Index] = L'\0';
+        va_end(ArgumentList);
+        EfiSystemTable->StdErr->OutputString(EfiSystemTable->StdErr, Wide);
+    }
+
+    return;
+}
+
+VOID
+RtlRaiseAssertion (
+    PSTR Expression,
+    PSTR SourceFile,
+    ULONG SourceLine
+    )
+
+/*++
+
+Routine Description:
+
+    This routine raises an assertion failure exception. If a debugger is
+    connected, it will attempt to connect to the debugger.
+
+Arguments:
+
+    Expression - Supplies the string containing the expression that failed.
+
+    SourceFile - Supplies the string describing the source file of the failure.
+
+    SourceLine - Supplies the source line number of the failure.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    RtlDebugPrint("\n\n *** Assertion Failure: %s\n *** File: %s, Line %d\n\n",
+                  Expression,
+                  SourceFile,
+                  SourceLine);
+
+    RtlDebugService(EXCEPTION_ASSERTION_FAILURE, NULL);
+    return;
+}
 
 ULONG
 MmValidateMemoryAccessForDebugger (

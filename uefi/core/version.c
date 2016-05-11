@@ -104,6 +104,7 @@ UINT32 EfiVersionSerial = VERSION_SERIAL;
 UINT32 EfiBuildTime = VERSION_BUILD_TIME;
 CHAR8 *EfiBuildString = VERSION_BUILD_STRING;
 CHAR8 *EfiProductName = PRODUCT_NAME;
+CHAR8 *EfiBuildTimeString = VERSION_BUILD_TIME_STRING;
 
 //
 // ------------------------------------------------------------------ Functions

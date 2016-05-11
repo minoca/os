@@ -552,6 +552,12 @@ Return Value:
 
     if (!EFI_ERROR(Status)) {
         EfiCopyMem(Buffer, BounceBuffer + BlockOffsetRemainder, BufferSize);
+
+    } else {
+        EfiDebugPrint("IO Read Error block 0x%I64x Size %x: %x\n",
+                      BlockOffset,
+                      IoSize,
+                      Status);
     }
 
     EfiFreePool(BounceBufferAllocation);
@@ -683,6 +689,11 @@ Return Value:
     //
 
     if (EFI_ERROR(Status)) {
+        EfiDebugPrint("IO Read Error block 0x%I64x Size %x: %x\n",
+                      BlockOffset,
+                      IoSize,
+                      Status);
+
         goto DiskIoWriteEnd;
     }
 
@@ -703,6 +714,11 @@ Return Value:
                                   BounceBuffer);
 
     if (EFI_ERROR(Status)) {
+        EfiDebugPrint("IO Write Error block 0x%I64x Size %x: %x\n",
+                      BlockOffset,
+                      IoSize,
+                      Status);
+
         goto DiskIoWriteEnd;
     }
 

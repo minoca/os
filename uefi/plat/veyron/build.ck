@@ -74,7 +74,6 @@ function build() {
         "//uefi/archlib:uefiarch",
         "//lib/fatlib:fat",
         "//lib/basevid:basevid",
-        "//lib/rtl/kmode:krtl",
         "//lib/rtl/base:basertlb",
         "//kernel/kd/kdusb:kdnousb",
         "//kernel:archboot",

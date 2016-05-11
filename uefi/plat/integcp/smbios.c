@@ -208,7 +208,7 @@ Return Value:
     Status = EfiSmbiosAddStructure(&EfiIntegratorSmbiosBiosInformation,
                                    INTEGRATOR_SMBIOS_BIOS_VENDOR,
                                    EfiBuildString,
-                                   EfiBuildTime,
+                                   EfiBuildTimeString,
                                    NULL);
 
     if (EFI_ERROR(Status)) {

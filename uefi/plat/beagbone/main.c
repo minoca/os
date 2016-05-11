@@ -200,13 +200,13 @@ Return Value:
 
     EFI_STATUS Status;
 
+    EfipBeagleBoneBlackEnumerateVideo();
     EfipBeagleBoneBlackSetMacAddresses();
     Status = EfipBeagleBoneEnumerateStorage();
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
-    EfipBeagleBoneBlackEnumerateVideo();
     EfipBeagleBoneEnumerateSerial();
     Status = EfipEnumerateRamDisks();
     if (EFI_ERROR(Status)) {

@@ -246,7 +246,7 @@ Return Value:
     Status = EfiSmbiosAddStructure(&EfiVeyronSmbiosBiosInformation,
                                    VEYRON_SMBIOS_BIOS_VENDOR,
                                    EfiBuildString,
-                                   EfiBuildTime,
+                                   EfiBuildTimeString,
                                    NULL);
 
     if (EFI_ERROR(Status)) {

@@ -227,12 +227,12 @@ Return Value:
 
     EFI_STATUS Status;
 
-    Status = EfipVeyronEnumerateSd();
+    Status = EfipVeyronEnumerateVideo();
     if (EFI_ERROR(Status)) {
         return Status;
     }
 
-    Status = EfipVeyronEnumerateVideo();
+    Status = EfipVeyronEnumerateSd();
     if (EFI_ERROR(Status)) {
         return Status;
     }

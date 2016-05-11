@@ -303,7 +303,7 @@ Return Value:
     Status = EfiSmbiosAddStructure(&EfiBeagleBoneSmbiosBiosInformation,
                                    BBONE_SMBIOS_BIOS_VENDOR,
                                    EfiBuildString,
-                                   EfiBuildTime,
+                                   EfiBuildTimeString,
                                    NULL);
 
     if (EFI_ERROR(Status)) {

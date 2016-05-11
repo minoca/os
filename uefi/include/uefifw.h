@@ -221,6 +221,7 @@ extern UINT32 EfiVersionSerial;
 extern UINT32 EfiBuildTime;
 extern CHAR8 *EfiBuildString;
 extern CHAR8 *EfiProductName;
+extern CHAR8 *EfiBuildTimeString;
 
 //
 // Define some well known GUIDs.
