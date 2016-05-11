@@ -134,6 +134,26 @@ DefinitionBlock (
                 Interrupt(, Level, ActiveHigh,) {28}
             })
         }
+
+        Device(GPI0) {
+            Name(_HID, "BCM0001")
+            Name(_UID, 0)
+            Method(_STA, 0, NotSerialized) {
+                Return(0x0F)
+            }
+
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                            NonCacheable, ReadWrite,
+                            0x00000000,
+                            0x20200000,
+                            0x20200FFF,
+                            0x00000000,
+                            0x00001000)
+
+                Interrupt(, Level, ActiveHigh,) {52}
+            })
+        }
     }
 
     //

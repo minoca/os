@@ -99,7 +99,7 @@ Return Value:
         return EFI_NOT_READY;
     }
 
-    if ((Pin >= BCM2709_GPIO_PIN_MAX) ||
+    if ((Pin > BCM2709_GPIO_PIN_MAX) ||
         (Mode > BCM2709_GPIO_FUNCTION_SELECT_MASK)) {
 
         return EFI_INVALID_PARAMETER;

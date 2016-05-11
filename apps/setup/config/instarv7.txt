@@ -34,6 +34,7 @@ Files = [
     "ata.drv",
     "bbonefw",
     "bbonemlo",
+    "bc27gpio.drv",
     "bootmefi.efi",
     "dev2drv.set",
     "devmap.set",

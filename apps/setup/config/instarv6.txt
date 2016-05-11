@@ -32,6 +32,7 @@ Files = [
     "am3soc.drv",
     "am3usb.drv",
     "ata.drv",
+    "bc27gpio.drv",
     "bootmefi.efi",
     "dev2drv.set",
     "devmap.set",

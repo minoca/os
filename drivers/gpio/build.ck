@@ -25,6 +25,7 @@ function build() {
     assert(((arch == "armv7") || (arch == "armv6")), "Unexpected architecture");
 
     gpio_drivers = [
+        "//drivers/gpio/broadcom/bc27:bc27gpio",
         "//drivers/gpio/rockchip/rk32:rk32gpio",
         "//drivers/gpio/ti/omap4:om4gpio",
     ];

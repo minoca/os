@@ -368,10 +368,18 @@ Author:
 #define BCM2709_GPIO_RECEIVE_PIN 15
 
 //
+// Define the pull up/down register values.
+//
+
+#define BCM2709_GPIO_PULL_NONE 0x0
+#define BCM2709_GPIO_PULL_DOWN 0x1
+#define BCM2709_GPIO_PULL_UP   0x2
+
+//
 // Define the maximum GPIO pin.
 //
 
-#define BCM2709_GPIO_PIN_MAX 54
+#define BCM2709_GPIO_PIN_MAX 53
 
 //
 // Define the mask used to convert VC bus addresses to ARM core addresses.
@@ -577,35 +585,35 @@ typedef enum _BCM2709_PRM_REGISTER {
 //
 
 typedef enum _BCM2709_GPIO_REGISTER {
-    Bcm2709GpioSelect0                     = 0x00,
-    Bcm2709GpioSelect1                     = 0x04,
-    Bcm2709GpioSelect2                     = 0x08,
-    Bcm2709GpioSelect3                     = 0x0C,
-    Bcm2709GpioSelect4                     = 0x10,
-    Bcm2709GpioSelect5                     = 0x14,
-    Bcm2709GpioPinOutputSet0               = 0x1C,
-    Bcm2709GpioPinOutputSet1               = 0x20,
-    Bcm2709GpioPinOutputClear0             = 0x28,
-    Bcm2709GpioPinOutputClear1             = 0x2C,
-    Bcm2709GpioPinLevel0                   = 0x34,
-    Bcm2709GpioPinLevel1                   = 0x38,
-    Bcm2709GpioPinEventDetectStatus0       = 0x40,
-    Bcm2709GpioPinEventDetectStatus1       = 0x44,
-    Bcm2709GpioPinRisingEdgeDetectEnable0  = 0x4C,
-    Bcm2709GpioPinRisingEdgeDetectEnable1  = 0x50,
-    Bcm2709GpioPinFallingEdgeDetectEnable0 = 0x58,
-    Bcm2709GpioPinFallingEdgeDetectEnable1 = 0x5C,
-    Bcm2709GpioPinHighDetectEnable0        = 0x64,
-    Bcm2709GpioPinHighDetectEnable1        = 0x68,
-    Bcm2709GpioPinLowDetectEnable0         = 0x70,
-    Bcm2709GpioPinLowDetectEnable1         = 0x74,
-    Bcm2709GpioPinAsyncRisingEdgeDetect0   = 0x7C,
-    Bcm2709GpioPinAsyncRisingEdgeDetect1   = 0x80,
-    Bcm2709GpioPinAsyncFallingEdgeDetect0  = 0x88,
-    Bcm2709GpioPinAsyncFallingEdgeDetect1  = 0x8C,
-    Bcm2709GpioPinPullUpDownEnable         = 0x94,
-    Bcm2709GpioPinPullUpDownEnableClock0   = 0x98,
-    Bcm2709GpioPinPullUpDownEnableClock1   = 0x9C,
+    Bcm2709GpioSelect0                    = 0x00,
+    Bcm2709GpioSelect1                    = 0x04,
+    Bcm2709GpioSelect2                    = 0x08,
+    Bcm2709GpioSelect3                    = 0x0C,
+    Bcm2709GpioSelect4                    = 0x10,
+    Bcm2709GpioSelect5                    = 0x14,
+    Bcm2709GpioPinOutputSet0              = 0x1C,
+    Bcm2709GpioPinOutputSet1              = 0x20,
+    Bcm2709GpioPinOutputClear0            = 0x28,
+    Bcm2709GpioPinOutputClear1            = 0x2C,
+    Bcm2709GpioPinLevel0                  = 0x34,
+    Bcm2709GpioPinLevel1                  = 0x38,
+    Bcm2709GpioPinEventDetectStatus0      = 0x40,
+    Bcm2709GpioPinEventDetectStatus1      = 0x44,
+    Bcm2709GpioPinRisingEdgeDetect0       = 0x4C,
+    Bcm2709GpioPinRisingEdgeDetect1       = 0x50,
+    Bcm2709GpioPinFallingEdgeDetect0      = 0x58,
+    Bcm2709GpioPinFallingEdgeDetect1      = 0x5C,
+    Bcm2709GpioPinHighDetect0             = 0x64,
+    Bcm2709GpioPinHighDetect1             = 0x68,
+    Bcm2709GpioPinLowDetect0              = 0x70,
+    Bcm2709GpioPinLowDetect1              = 0x74,
+    Bcm2709GpioPinAsyncRisingEdgeDetect0  = 0x7C,
+    Bcm2709GpioPinAsyncRisingEdgeDetect1  = 0x80,
+    Bcm2709GpioPinAsyncFallingEdgeDetect0 = 0x88,
+    Bcm2709GpioPinAsyncFallingEdgeDetect1 = 0x8C,
+    Bcm2709GpioPinPullUpDownEnable        = 0x94,
+    Bcm2709GpioPinPullUpDownClock0        = 0x98,
+    Bcm2709GpioPinPullUpDownClock1        = 0x9C,
 } BCM2709_GPIO_REGISTER, *PBCM2709_GPIO_REGISTER;
 
 //

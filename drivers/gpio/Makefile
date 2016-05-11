@@ -20,7 +20,8 @@
 #
 ################################################################################
 
-GPIO_DRIVERS = rockchip \
+GPIO_DRIVERS = broadcom \
+               rockchip \
                ti       \
 
 DIRS = core             \

@@ -103,6 +103,13 @@ Author:
 #define GPIO_PULL_DOWN 0x00000080
 
 //
+// This flag is set to disable the interall pull-up and pull-down resistors in
+// the GPIO pin.
+//
+
+#define GPIO_PULL_NONE 0x000000C0
+
+//
 // This flag is set if the GPIO pin should be enabled as a wake source.
 //
 

@@ -25,6 +25,7 @@ DriverFiles += [
     "dwhci.drv",
     "dmab2709.drv",
     "sdbm2709.drv",
+    "bc27gpio.drv",
 ];
 
 BootDrivers += [
