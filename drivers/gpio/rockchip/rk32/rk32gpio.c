@@ -26,7 +26,6 @@ Environment:
 
 #include <minoca/kernel/driver.h>
 #include <minoca/gpio/gpiohost.h>
-#include <minoca/fw/acpitabs.h>
 #include <minoca/soc/rk32xx.h>
 
 //
@@ -43,7 +42,7 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
-#define RK32_GPIO_ALLOCATION_TAG 0x47336B52
+#define RK32_GPIO_ALLOCATION_TAG 0x47336B52 // 'G3kR'
 
 #define RK32_GPIO_LINE_COUNT 32
 
@@ -938,7 +937,7 @@ Return Value:
                 }
             }
 
-            RK32_WRITE_GPIO(Controller, Rk32GpioInterruptPolarity, Value);
+            RK32_WRITE_GPIO(Controller, Rk32GpioInterruptPolarity, Polarity);
             RK32_WRITE_GPIO(Controller, Rk32GpioInterruptLevel, Level);
 
             //
