@@ -120,10 +120,10 @@ extern PVOID _binary_pcefi_txt_start;
 extern PVOID _binary_pcefi_txt_end;
 extern PVOID _binary_pctiny_txt_start;
 extern PVOID _binary_pctiny_txt_end;
-extern PVOID _binary_rpi_txt_start;
-extern PVOID _binary_rpi_txt_end;
 extern PVOID _binary_rpi2_txt_start;
 extern PVOID _binary_rpi2_txt_end;
+extern PVOID _binary_rpi_txt_start;
+extern PVOID _binary_rpi_txt_end;
 extern PVOID _binary_veyron_txt_start;
 extern PVOID _binary_veyron_txt_end;
 
@@ -274,16 +274,6 @@ SETUP_RECIPE SetupRecipes[] = {
     },
 
     {
-        SetupRecipeRaspberryPi,
-        "raspberrypi",
-        "Raspberry Pi",
-        "Raspberry Pi",
-        0,
-        &_binary_rpi_txt_start,
-        &_binary_rpi_txt_end
-    },
-
-    {
         SetupRecipeRaspberryPi2,
         "raspberrypi2",
         "Raspberry Pi 2",
@@ -291,6 +281,16 @@ SETUP_RECIPE SetupRecipes[] = {
         0,
         &_binary_rpi2_txt_start,
         &_binary_rpi2_txt_end
+    },
+
+    {
+        SetupRecipeRaspberryPi,
+        "raspberrypi",
+        "Raspberry Pi",
+        "Raspberry Pi",
+        0,
+        &_binary_rpi_txt_start,
+        &_binary_rpi_txt_end
     },
 
     {
@@ -431,6 +431,8 @@ Return Value:
     ULONG RecipeCount;
     ULONG RecipeIndex;
     INT Result;
+    INT SmbiosLength;
+    PSTR SmbiosName;
 
     PlatformName = NULL;
     Fallback = SetupRecipeNone;
@@ -470,12 +472,18 @@ Return Value:
             FallbackRecipeIndex = RecipeIndex;
         }
 
-        if ((PlatformName != NULL) &&
-            (Recipe->SmbiosProductName != NULL) &&
-            (strcasecmp(Recipe->SmbiosProductName, PlatformName) == 0)) {
+        //
+        // Compare the name, ignoring case and ignoring any extra stuff that
+        // might be on the end like a version.
+        //
 
-            Context->RecipeIndex = RecipeIndex;
-            break;
+        SmbiosName = Recipe->SmbiosProductName;
+        if ((PlatformName != NULL) && (SmbiosName != NULL)) {
+            SmbiosLength = strlen(SmbiosName);
+            if (strncasecmp(SmbiosName, PlatformName, SmbiosLength) == 0) {
+                Context->RecipeIndex = RecipeIndex;
+                break;
+            }
         }
     }
 
