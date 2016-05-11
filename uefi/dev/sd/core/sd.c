@@ -1920,7 +1920,7 @@ Return Value:
             // Complain if the card's having a bad hair day.
             //
 
-            } else if ((Command.Response[0] & SD_STATUS_MASK) != 0) {
+            } else if ((Command.Response[0] & SD_STATUS_ERROR_MASK) != 0) {
                 return EFI_DEVICE_ERROR;
             }
         }
@@ -2568,20 +2568,6 @@ Return Value:
             SD_STATUS_STATE_TRANSFER)) {
 
             Status = EFI_SUCCESS;
-            break;
-        }
-
-        //
-        // Exit out if the card is in an error state. The exception is if the
-        // only error is an "illegal command" error. It may be that the abort
-        // came in on top of the "program" state, which it is not allowed to
-        // do.
-        //
-
-        if (((CardStatus & SD_STATUS_MASK) != 0) &&
-            ((CardStatus & SD_STATUS_MASK) != SD_STATUS_ILLEGAL_COMMAND)) {
-
-            Status = EFI_DEVICE_ERROR;
             break;
         }
 

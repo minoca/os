@@ -2328,7 +2328,7 @@ Return Value:
             // Complain if the card's having a bad hair day.
             //
 
-            } else if ((Command.Response[0] & SD_STATUS_MASK) != 0) {
+            } else if ((Command.Response[0] & SD_STATUS_ERROR_MASK) != 0) {
                 RtlDebugPrint("SD: Status error 0x%x.\n", Command.Response[0]);
                 return STATUS_DEVICE_IO_ERROR;
             }
@@ -2945,19 +2945,8 @@ Return Value:
             goto AsynchronousAbortEnd;
         }
 
-        //
-        // Exit out if the card is in an error state. The exception is if the
-        // only error is an "illegal command" error. It may be that the abort
-        // came in on top of the "program" state, which it is not allowed to
-        // do.
-        //
-
-        if (((CardStatus & SD_STATUS_MASK) != 0) &&
-            ((CardStatus & SD_STATUS_MASK) != SD_STATUS_ILLEGAL_COMMAND)) {
-
-            RtlDebugPrint("SD: Abort status error 0x%08x.\n", CardStatus);
-            Status = STATUS_DEVICE_IO_ERROR;
-            break;
+        if ((CardStatus & SD_STATUS_ERROR_MASK) != 0) {
+            RtlDebugPrint("SD: Card error status 0x%08x\n", CardStatus);
         }
 
         if (SdQueryTimeCounter(Controller) > Timeout) {

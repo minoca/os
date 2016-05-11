@@ -917,6 +917,8 @@ Return Value:
         }
     }
 
+    SD_DWC_WRITE_REGISTER(DwcController, SdDwcTimeout, 0xFFFFFFFF);
+
     //
     // Write the command argument.
     //

@@ -3668,6 +3668,8 @@ Return Value:
             ((SD_DWC_READ_REGISTER(Device, SdDwcControl) &
               SD_DWC_CONTROL_USE_INTERNAL_DMAC) != 0)));
 
+    SD_DWC_WRITE_REGISTER(Device, SdDwcTimeout, 0xFFFFFFFF);
+
     //
     // Write the command argument.
     //
