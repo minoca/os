@@ -5076,7 +5076,7 @@ Return Value:
         if (strcasecmp(Arguments[1], "-s") == 0) {
             RebootType = DebugRebootShutdown;
 
-        } else if (strcasecmp(Arguments[1], "w") == 0) {
+        } else if (strcasecmp(Arguments[1], "-w") == 0) {
             RebootType = DebugRebootWarm;
 
         } else if (strcasecmp(Arguments[1], "-c") == 0) {
