@@ -75,6 +75,11 @@ SdpSetDmaInterrupts (
     ULONG BufferSize
     );
 
+VOID
+SdpMediaChangeWorker (
+    PVOID Parameter
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -89,7 +94,7 @@ SD_FUNCTION_TABLE SdStdFunctionTable = {
     SdStandardStopDataTransfer,
     NULL,
     NULL,
-    NULL
+    SdStandardMediaChangeCallback
 };
 
 //
@@ -201,7 +206,6 @@ Return Value:
 
     if ((PendingBits & SD_INTERRUPT_ENABLE_ERROR_MASK) != 0) {
         RtlDebugPrint("SD: Error status %x\n", PendingBits);
-        SdErrorRecovery(Controller);
         Status = STATUS_DEVICE_IO_ERROR;
 
     } else if ((PendingBits & SD_INTERRUPT_STATUS_TRANSFER_COMPLETE) != 0) {
@@ -453,7 +457,11 @@ Return Value:
     ASSERT(BlockCount != 0);
     ASSERT(Controller->ControllerBase != NULL);
 
-    if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) {
+    if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0) {
+        Status = STATUS_MEDIA_CHANGED;
+        goto BlockIoDmaEnd;
+
+    } else if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) {
         Status = STATUS_NO_MEDIA;
         goto BlockIoDmaEnd;
     }
@@ -636,7 +644,6 @@ Return Value:
                                                    &Command);
 
     if (!KSUCCESS(Status)) {
-        SdErrorRecovery(Controller);
         Controller->IoCompletionRoutine = NULL;
         Controller->IoCompletionContext = NULL;
         Controller->IoRequestSize = 0;
@@ -1625,6 +1632,69 @@ StopDataTransferEnd:
     return;
 }
 
+SD_API
+VOID
+SdStandardMediaChangeCallback (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    BOOL Removal,
+    BOOL Insertion
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called by the SD library to notify the user of the SD
+    library that media has been removed, inserted, or both. This routine is
+    called from a DPC and, as a result, can get called back at dispatch level.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Removal - Supplies a boolean indicating if a removal event has occurred.
+
+    Insertion - Supplies a boolean indicating if an insertion event has
+        occurred.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONG Flags;
+
+    Flags = 0;
+    if (Removal != FALSE) {
+        Flags |= SD_CONTROLLER_FLAG_REMOVAL_PENDING;
+    }
+
+    if (Insertion != FALSE) {
+        Flags |= SD_CONTROLLER_FLAG_INSERTION_PENDING;
+    }
+
+    //
+    // If there is something pending, then create and queue a work item.
+    //
+
+    if (Flags != 0) {
+        RtlAtomicOr32(&(Controller->Flags), Flags);
+        KeCreateAndQueueWorkItem(NULL,
+                                 WorkPriorityNormal,
+                                 SdpMediaChangeWorker,
+                                 Controller);
+    }
+
+    return;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //
@@ -1937,6 +2007,52 @@ Return Value:
         SD_WRITE_REGISTER(Controller,
                           SdRegisterInterruptSignalEnable,
                           Controller->EnabledInterrupts);
+    }
+
+    return;
+}
+
+VOID
+SdpMediaChangeWorker (
+    PVOID Parameter
+    )
+
+/*++
+
+Routine Description:
+
+    This routine processes a change event from the safety of a low level work
+    item.
+
+Arguments:
+
+    Parameter - Supplies an optional parameter passed in by the creator of the
+        work item. This must be an SD controller.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PSD_CONTROLLER Controller;
+    ULONG FlagsMask;
+
+    //
+    // Notify the system of an change if either the pending flags are set.
+    //
+
+    Controller = Parameter;
+    FlagsMask = SD_CONTROLLER_FLAG_INSERTION_PENDING |
+                SD_CONTROLLER_FLAG_REMOVAL_PENDING;
+
+    if ((Controller->Flags & FlagsMask) != 0) {
+
+        ASSERT(Controller->OsDevice != NULL);
+
+        IoNotifyDeviceTopologyChange(Controller->OsDevice);
     }
 
     return;

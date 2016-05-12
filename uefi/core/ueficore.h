@@ -1375,27 +1375,3 @@ Return Value:
     EFI status code.
 
 --*/
-
-VOID
-EfiDebugPrint (
-    CHAR8 *Format,
-    ...
-    );
-
-/*++
-
-Routine Description:
-
-    This routine prints to the debugger and console.
-
-Arguments:
-
-    Format - Supplies a pointer to the format string.
-
-    ... - Supplies the remaining arguments to the format string.
-
-Return Value:
-
-    None.
-
---*/

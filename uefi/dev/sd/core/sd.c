@@ -621,9 +621,11 @@ Return Value:
     UINTN BlocksDone;
     UINTN BlocksThisRound;
     EFI_STATUS Status;
+    UINT32 Try;
 
     Status = EFI_INVALID_PARAMETER;
     BlocksDone = 0;
+    Try = 0;
     while (BlocksDone != BlockCount) {
         BlocksThisRound = BlockCount - BlocksDone;
         if (BlocksThisRound > Controller->MaxBlocksPerTransfer) {
@@ -644,8 +646,17 @@ Return Value:
         }
 
         if (EFI_ERROR(Status)) {
-            EfipSdErrorRecovery(Controller);
-            break;
+            if (Try >= EFI_SD_IO_RETRIES) {
+                break;
+            }
+
+            Status = EfipSdErrorRecovery(Controller);
+            if (EFI_ERROR(Status)) {
+                break;
+            }
+
+            Try += 1;
+            continue;
         }
 
         BlocksDone += BlocksThisRound;
@@ -2477,10 +2488,14 @@ Return Value:
 
     Status = EfipSdAsynchronousAbort(Controller);
     if (EFI_ERROR(Status)) {
-        goto ErrorRecoveryEnd;
+        EfiDebugPrint("SD: Abort failed: %x\n", Status);
     }
 
-ErrorRecoveryEnd:
+    Status = EfiSdInitializeController(Controller, FALSE);
+    if (EFI_ERROR(Status)) {
+        EfiDebugPrint("SD: Reset controller failed: %x\n", Status);
+    }
+
     return Status;
 }
 

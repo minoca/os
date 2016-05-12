@@ -56,13 +56,6 @@ Author:
 #define SD_RK32_TIMEOUT 1
 
 //
-// Define the maximum number of retries the controller will attempt on an I/O
-// transfer.
-//
-
-#define SD_RK32_MAX_IO_RETRIES 5
-
-//
 // Define the block size used by the RK32 SD.
 //
 
@@ -77,18 +70,10 @@ Author:
     (SD_RK32_DMA_DESCRIPTOR_COUNT * sizeof(SD_DWC_DMA_DESCRIPTOR))
 
 //
-// Define the set of flags for the parent SD device.
-//
-
-#define SD_RK32_DEVICE_FLAG_INSERTION_PENDING         0x00000001
-#define SD_RK32_DEVICE_FLAG_REMOVAL_PENDING           0x00000002
-
-//
 // Define the set of flags for the child SD disk.
 //
 
-#define SD_RK32_CHILD_FLAG_MEDIA_PRESENT 0x00000001
-#define SD_RK32_CHILD_FLAG_DMA_SUPPORTED 0x00000002
+#define SD_RK32_CHILD_FLAG_DMA_SUPPORTED 0x00000001
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -124,8 +109,6 @@ Members:
 
     Irp - Stores a pointer to the current IRP being processed.
 
-    Retries - Stores the retry count for the current I/O operation.
-
     Flags - Stores a bitmask of flags for the disk. See SD_RK32_CHILD_FLAG_*
         for definitions.
 
@@ -145,7 +128,6 @@ typedef struct _SD_RK32_CHILD {
     PSD_CONTROLLER Controller;
     PQUEUED_LOCK ControllerLock;
     PIRP Irp;
-    ULONG Retries;
     ULONG Flags;
     ULONG BlockShift;
     ULONGLONG BlockCount;
@@ -177,9 +159,6 @@ Members:
     InterruptVector - Stores the interrupt vector of the controller.
 
     InterruptHandle - Stores the interrupt connection handle.
-
-    Flags - Stores a bitmask of flags for the device. See
-        SD_RK32_DEVICE_FLAG_* for definitions.
 
     CardInterruptLine - Stores ths card detect interrupt line.
 
@@ -217,7 +196,6 @@ struct _SD_RK32_CONTEXT {
     ULONGLONG CardInterruptLine;
     ULONGLONG CardInterruptVector;
     HANDLE CardInterruptHandle;
-    volatile ULONG Flags;
     PSD_RK32_CHILD Child;
     PQUEUED_LOCK Lock;
     PDEVICE OsDevice;

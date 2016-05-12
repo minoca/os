@@ -373,7 +373,6 @@ Return Value:
 
     RtlZeroMemory(Context, sizeof(SD_OMAP4_CONTEXT));
     Context->Type = SdOmap4Parent;
-    Context->Flags = SD_OMAP4_DEVICE_FLAG_INSERTION_PENDING;
     Context->InterruptHandle = INVALID_HANDLE;
     Context->Lock = KeCreateQueuedLock();
     if (Context->Lock == NULL) {
@@ -596,7 +595,9 @@ Return Value:
 
     PSD_OMAP4_CHILD Child;
     BOOL CompleteIrp;
+    PSD_CONTROLLER Controller;
     ULONG IrpReadWriteFlags;
+    KSTATUS IrpStatus;
     KSTATUS Status;
     BOOL Write;
 
@@ -611,6 +612,7 @@ Return Value:
     }
 
     CompleteIrp = TRUE;
+    Controller = Child->Controller;
     Write = FALSE;
     if (Irp->MinorCode == IrpMinorIoWrite) {
         Write = TRUE;
@@ -643,84 +645,134 @@ Return Value:
         IrpReadWriteFlags |= IRP_READ_WRITE_FLAG_WRITE;
     }
 
+    if (Irp->Direction == IrpDown) {
+        Controller->Try = 0;
+    }
+
     //
     // If the IRP is on the way up, then clean up after the DMA as this IRP is
     // still sitting in the channel. An IRP going up is already complete.
     //
 
     if (Irp->Direction == IrpUp) {
-        CompleteIrp = FALSE;
 
         ASSERT(Irp == Child->Irp);
 
         Child->Irp = NULL;
+
+        //
+        // Try to recover on failure.
+        //
+
+        IrpStatus = IoGetIrpStatus(Irp);
+        if (!KSUCCESS(IrpStatus)) {
+            Status = SdErrorRecovery(Controller);
+            if (!KSUCCESS(Status)) {
+                IrpStatus = Status;
+                IoUpdateIrpStatus(Irp, IrpStatus);
+            }
+
+            //
+            // Do not make further attempts if the media is gone or enough
+            // attempts have been made.
+            //
+
+            if (((Controller->Flags &
+                  SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0) ||
+                ((Controller->Flags &
+                  SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) ||
+                (Controller->Try >= SD_MAX_IO_RETRIES)) {
+
+                IrpStatus = STATUS_SUCCESS;
+
+            } else {
+                Controller->Try += 1;
+            }
+        }
+
         KeReleaseQueuedLock(Child->ControllerLock);
-        Status = IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
+        Status = IoCompleteReadWriteIrp(&(Irp->U.ReadWrite),
+                                        IrpReadWriteFlags);
+
         if (!KSUCCESS(Status)) {
             IoUpdateIrpStatus(Irp, Status);
         }
+
+        //
+        // Potentially return the completed IRP.
+        //
+
+        if (KSUCCESS(IrpStatus)) {
+            CompleteIrp = FALSE;
+            goto DispatchIoEnd;
+        }
+    }
 
     //
     // Start the DMA on the way down.
     //
 
-    } else {
-        Irp->U.ReadWrite.IoBytesCompleted = 0;
-        Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
+    Irp->U.ReadWrite.IoBytesCompleted = 0;
+    Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
 
-        ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
-        ASSERT((Child->BlockCount != 0) && (Child->BlockShift != 0));
-        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset,
-                          1 << Child->BlockShift) != FALSE);
+    ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
+    ASSERT((Child->BlockCount != 0) && (Child->BlockShift != 0));
+    ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset,
+                      1 << Child->BlockShift) != FALSE);
 
-        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoSizeInBytes,
-                          1 << Child->BlockShift) != FALSE);
+    ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoSizeInBytes,
+                      1 << Child->BlockShift) != FALSE);
 
-        //
-        // Before acquiring the controller's lock and starting the DMA, prepare
-        // the I/O context for SD (i.e. it must use physical addresses that
-        // are less than 4GB and be sector size aligned).
-        //
+    //
+    // Before acquiring the controller's lock and starting the DMA, prepare
+    // the I/O context for SD (i.e. it must use physical addresses that
+    // are less than 4GB and be sector size aligned).
+    //
 
-        Status = IoPrepareReadWriteIrp(&(Irp->U.ReadWrite),
-                                       1 << Child->BlockShift,
-                                       0,
-                                       MAX_ULONG,
-                                       IrpReadWriteFlags);
+    Status = IoPrepareReadWriteIrp(&(Irp->U.ReadWrite),
+                                   1 << Child->BlockShift,
+                                   0,
+                                   MAX_ULONG,
+                                   IrpReadWriteFlags);
 
-        if (!KSUCCESS(Status)) {
-            goto DispatchIoEnd;
-        }
-
-        //
-        // Lock the controller to serialize access to the hardware.
-        //
-
-        KeAcquireQueuedLock(Child->ControllerLock);
-        if ((Child->Flags & SD_OMAP4_CHILD_FLAG_MEDIA_PRESENT) == 0) {
-            KeReleaseQueuedLock(Child->ControllerLock);
-            IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
-            Status = STATUS_NO_MEDIA;
-            goto DispatchIoEnd;
-        }
-
-        //
-        // If it's DMA, just send it on through.
-        //
-
-        Child->Irp = Irp;
-        CompleteIrp = FALSE;
-        IoPendIrp(SdOmap4Driver, Irp);
-        SdOmap4PerformDmaIo(Child, Irp);
-
-        //
-        // DMA transfers are self perpetuating, so after kicking off this
-        // first transfer, return. This returns with the lock held because
-        // I/O is still in progress.
-        //
-
-        ASSERT(KeIsQueuedLockHeld(Child->ControllerLock) != FALSE);
+    if (!KSUCCESS(Status)) {
+        goto DispatchIoEnd;
     }
+
+    //
+    // Lock the controller to serialize access to the hardware.
+    //
+
+    KeAcquireQueuedLock(Child->ControllerLock);
+    if (((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) ||
+        ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0)) {
+
+        Status = STATUS_NO_MEDIA;
+        if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0) {
+            Status = STATUS_MEDIA_CHANGED;
+        }
+
+        KeReleaseQueuedLock(Child->ControllerLock);
+        IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
+        goto DispatchIoEnd;
+    }
+
+    //
+    // If it's DMA, just send it on through.
+    //
+
+    Child->Irp = Irp;
+    CompleteIrp = FALSE;
+    IoPendIrp(SdOmap4Driver, Irp);
+    SdOmap4PerformDmaIo(Child, Irp);
+
+    //
+    // DMA transfers are self perpetuating, so after kicking off this
+    // first transfer, return. This returns with the lock held because
+    // I/O is still in progress.
+    //
+
+    ASSERT(KeIsQueuedLockHeld(Child->ControllerLock) != FALSE);
 
 DispatchIoEnd:
     if (CompleteIrp != FALSE) {
@@ -1307,6 +1359,7 @@ Return Value:
         Parameters.FundamentalClock = SD_OMAP4_FUNDAMENTAL_CLOCK_SPEED;
         Parameters.FunctionTable.GetSetBusWidth = SdOmap4GetSetBusWidth;
         Parameters.ConsumerContext = Device;
+        Parameters.OsDevice = Irp->Device;
         Device->Controller = SdCreateController(&Parameters);
         if (Device->Controller == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1383,6 +1436,7 @@ Return Value:
 {
 
     ULONG BlockSize;
+    PSTR DeviceId;
     ULONG FlagsMask;
     PSD_OMAP4_CHILD NewChild;
     ULONG OldFlags;
@@ -1394,10 +1448,10 @@ Return Value:
     // Check to see if any changes to the children are pending.
     //
 
-    FlagsMask = ~(SD_OMAP4_DEVICE_FLAG_INSERTION_PENDING |
-                  SD_OMAP4_DEVICE_FLAG_REMOVAL_PENDING);
+    FlagsMask = ~(SD_CONTROLLER_FLAG_INSERTION_PENDING |
+                  SD_CONTROLLER_FLAG_REMOVAL_PENDING);
 
-    OldFlags = RtlAtomicAnd32(&(Device->Flags), FlagsMask);
+    OldFlags = RtlAtomicAnd32(&(Device->Controller->Flags), FlagsMask);
 
     //
     // If either a removal or insertion is pending, clean out the old child.
@@ -1405,13 +1459,15 @@ Return Value:
     // arrive in a row.
     //
 
-    FlagsMask = SD_OMAP4_DEVICE_FLAG_INSERTION_PENDING |
-                SD_OMAP4_DEVICE_FLAG_REMOVAL_PENDING;
+    FlagsMask = SD_CONTROLLER_FLAG_INSERTION_PENDING |
+                SD_CONTROLLER_FLAG_REMOVAL_PENDING;
 
     if ((OldFlags & FlagsMask) != 0) {
         if (Device->Child != NULL) {
             KeAcquireQueuedLock(Device->Lock);
-            Device->Child->Flags &= ~SD_OMAP4_CHILD_FLAG_MEDIA_PRESENT;
+            RtlAtomicAnd32(&(Device->Controller->Flags),
+                           ~SD_CONTROLLER_FLAG_MEDIA_PRESENT);
+
             KeReleaseQueuedLock(Device->Lock);
             Device->Child = NULL;
         }
@@ -1421,9 +1477,12 @@ Return Value:
     // If an insertion is pending, try to enumerate the child.
     //
 
-    if ((OldFlags & SD_OMAP4_DEVICE_FLAG_INSERTION_PENDING) != 0) {
+    if ((OldFlags & SD_CONTROLLER_FLAG_INSERTION_PENDING) != 0) {
 
         ASSERT(Device->Child == NULL);
+
+        RtlAtomicAnd32(&(Device->Controller->Flags),
+                       ~SD_CONTROLLER_FLAG_MEDIA_CHANGED);
 
         Status = SdInitializeController(Device->Controller, FALSE);
         if (!KSUCCESS(Status)) {
@@ -1476,11 +1535,15 @@ Return Value:
             }
         }
 
-        NewChild->Flags |= SD_OMAP4_CHILD_FLAG_MEDIA_PRESENT;
+        DeviceId = SD_MMC_DEVICE_ID;
+        if (SD_IS_CARD_SD(Device->Controller)) {
+            DeviceId = SD_CARD_DEVICE_ID;
+        }
+
         Status = IoCreateDevice(SdOmap4Driver,
                                 NewChild,
                                 Irp->Device,
-                                "SdCard",
+                                DeviceId,
                                 DISK_CLASS_ID,
                                 NULL,
                                 &(NewChild->Device));
@@ -1927,9 +1990,6 @@ Return Value:
 
 {
 
-    ASSERT(((Child->Flags & SD_OMAP4_CHILD_FLAG_MEDIA_PRESENT) == 0) ||
-           (Child->Device == NULL));
-
     ASSERT(Child->DiskInterface.DiskToken == NULL);
     ASSERT(Child->Irp == NULL);
 
@@ -2223,6 +2283,7 @@ Return Value:
     UINTN BytesRemaining;
     UINTN BytesThisRound;
     KSTATUS CompletionStatus;
+    PSD_CONTROLLER Controller;
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentIndex;
     UINTN FragmentOffset;
@@ -2234,6 +2295,7 @@ Return Value:
     KSTATUS Status;
     PVOID VirtualAddress;
 
+    Controller = Child->Controller;
     IrpReadWrite->IoBytesCompleted = 0;
     LockHeld = FALSE;
     ReadWriteIrpPrepared = FALSE;
@@ -2300,7 +2362,11 @@ Return Value:
         LockHeld = TRUE;
     }
 
-    if ((Child->Flags & SD_OMAP4_CHILD_FLAG_MEDIA_PRESENT) == 0) {
+    if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0) {
+        Status = STATUS_MEDIA_CHANGED;
+        goto PerformIoPolledEnd;
+
+    } else if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) {
         Status = STATUS_NO_MEDIA;
         goto PerformIoPolledEnd;
     }
@@ -2337,7 +2403,7 @@ Return Value:
         ASSERT(BlockOffset < Child->BlockCount);
         ASSERT(BlockCount >= 1);
 
-        Status = SdBlockIoPolled(Child->Controller,
+        Status = SdBlockIoPolled(Controller,
                                  BlockOffset,
                                  BlockCount,
                                  VirtualAddress,
@@ -2813,15 +2879,6 @@ Return Value:
 
     Child = Transfer->UserContext;
     Status = Transfer->Status;
-    if (!KSUCCESS(Status)) {
-
-        //
-        // Cancel the SD transfer here.
-        //
-
-        SdErrorRecovery(Child->Controller);
-    }
-
     CompletedThisRound = Transfer->Completed -
                          Child->Irp->U.ReadWrite.IoBytesCompleted;
 
@@ -2874,7 +2931,9 @@ Return Value:
     ASSERT(Irp != NULL);
 
     if (!KSUCCESS(Status)) {
+        RtlAtomicAdd32(&(Child->RemainingInterrupts), -1);
         RtlDebugPrint("SD OMAP4 Failed: %x\n", Status);
+        SdAbortTransaction(Controller, FALSE);
         IoCompleteIrp(SdOmap4Driver, Irp, Status);
         return;
     }

@@ -36,13 +36,6 @@ Environment:
 //
 
 //
-// Define the set of slot flags.
-//
-
-#define SD_BCM2709_SLOT_FLAG_INSERTION_PENDING 0x00000001
-#define SD_BCM2709_SLOT_FLAG_REMOVAL_PENDING   0x00000002
-
-//
 // Define the set of flags for the SD disk.
 //
 
@@ -97,8 +90,6 @@ Members:
     Flags - Stores a bitmask of flags. See SD_BCM2709_DISK_FLAG_* for
         definitions.
 
-    MediaPresent - Stores a boolean indicating if the disk is still present.
-
     BlockShift - Stores the block size shift of the disk.
 
     BlockCount - Stores the number of blocks on the disk.
@@ -119,7 +110,6 @@ typedef struct _SD_BCM2709_DISK {
     PQUEUED_LOCK ControllerLock;
     PIRP Irp;
     ULONG Flags;
-    BOOL MediaPresent;
     ULONG BlockShift;
     ULONGLONG BlockCount;
     DISK_INTERFACE DiskInterface;
@@ -154,9 +144,6 @@ Members:
     Lock - Stores a pointer to a lock used to serialize access to the
         controller.
 
-    Flags - Stores a bitmask of slot flags. See SD_BCM2709_SLOT_FLAG_* for
-        definitions.
-
     DmaResource - Stores a pointer to the DMA resource.
 
     Dma - Stores a pointer to the DMA interface.
@@ -174,7 +161,6 @@ struct _SD_BCM2709_SLOT {
     PSD_BCM2709_BUS Parent;
     PSD_BCM2709_DISK Disk;
     PQUEUED_LOCK Lock;
-    volatile ULONG Flags;
     PRESOURCE_ALLOCATION DmaResource;
     PDMA_INTERFACE Dma;
     PDMA_TRANSFER DmaTransfer;
@@ -538,7 +524,6 @@ Return Value:
     Slot = &(Context->Slot);
     Slot->Type = SdBcm2709DeviceSlot;
     Slot->Parent = Context;
-    Slot->Flags = SD_BCM2709_SLOT_FLAG_INSERTION_PENDING;
     Status = IoAttachDriverToDevice(Driver, DeviceToken, Context);
     if (!KSUCCESS(Status)) {
         MmFreeNonPagedPool(Context);
@@ -728,8 +713,10 @@ Return Value:
 {
 
     BOOL CompleteIrp;
+    PSD_CONTROLLER Controller;
     PSD_BCM2709_DISK Disk;
     ULONG IrpReadWriteFlags;
+    KSTATUS IrpStatus;
     KSTATUS Status;
     BOOL Write;
 
@@ -743,12 +730,8 @@ Return Value:
         return;
     }
 
+    Controller = Disk->Controller;
     CompleteIrp = TRUE;
-    if (Disk->MediaPresent == FALSE) {
-        Status = STATUS_NO_MEDIA;
-        goto DispatchIoEnd;
-    }
-
     Write = FALSE;
     if (Irp->MinorCode == IrpMinorIoWrite) {
         Write = TRUE;
@@ -781,73 +764,130 @@ Return Value:
         IrpReadWriteFlags |= IRP_READ_WRITE_FLAG_WRITE;
     }
 
+    if (Irp->Direction == IrpDown) {
+        Controller->Try = 0;
+    }
+
     //
     // If the IRP is on the way up, then clean up after the DMA as this IRP is
     // still sitting in the channel. An IRP going up is already complete.
     //
 
     if (Irp->Direction == IrpUp) {
-        CompleteIrp = FALSE;
 
         ASSERT(Irp == Disk->Irp);
 
         Disk->Irp = NULL;
+
+        //
+        // Try to recover on failure.
+        //
+
+        IrpStatus = IoGetIrpStatus(Irp);
+        if (!KSUCCESS(IrpStatus)) {
+            Status = SdErrorRecovery(Controller);
+            if (!KSUCCESS(Status)) {
+                IrpStatus = Status;
+                IoUpdateIrpStatus(Irp, IrpStatus);
+            }
+
+            //
+            // Do not make further attempts if the media is gone or enough
+            // attempts have been made.
+            //
+
+            if (((Controller->Flags &
+                  SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0) ||
+                ((Controller->Flags &
+                  SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) ||
+                (Controller->Try >= SD_MAX_IO_RETRIES)) {
+
+                IrpStatus = STATUS_SUCCESS;
+
+            } else {
+                Controller->Try += 1;
+            }
+        }
+
         KeReleaseQueuedLock(Disk->ControllerLock);
-        Status = IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
+        Status = IoCompleteReadWriteIrp(&(Irp->U.ReadWrite),
+                                        IrpReadWriteFlags);
+
         if (!KSUCCESS(Status)) {
             IoUpdateIrpStatus(Irp, Status);
         }
+
+        //
+        // Potentially return the completed IRP.
+        //
+
+        if (KSUCCESS(IrpStatus)) {
+            CompleteIrp = FALSE;
+            goto DispatchIoEnd;
+        }
+    }
 
     //
     // Start the DMA on the way down.
     //
 
-    } else {
-        Irp->U.ReadWrite.IoBytesCompleted = 0;
-        Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
+    Irp->U.ReadWrite.IoBytesCompleted = 0;
+    Irp->U.ReadWrite.NewIoOffset = Irp->U.ReadWrite.IoOffset;
 
-        ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
-        ASSERT((Disk->BlockCount != 0) && (Disk->BlockShift != 0));
-        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset,
-                          1 << Disk->BlockShift) != FALSE);
+    ASSERT(Irp->U.ReadWrite.IoBuffer != NULL);
+    ASSERT((Disk->BlockCount != 0) && (Disk->BlockShift != 0));
+    ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoOffset,
+                      1 << Disk->BlockShift) != FALSE);
 
-        ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoSizeInBytes,
-                          1 << Disk->BlockShift) != FALSE);
+    ASSERT(IS_ALIGNED(Irp->U.ReadWrite.IoSizeInBytes,
+                      1 << Disk->BlockShift) != FALSE);
 
-        //
-        // Before acquiring the controller's lock and starting the DMA, prepare
-        // the I/O context for SD (i.e. it must use physical addresses that
-        // are less than 4GB and be sector size aligned).
-        //
+    //
+    // Before acquiring the controller's lock and starting the DMA, prepare
+    // the I/O context for SD (i.e. it must use physical addresses that
+    // are less than 4GB and be sector size aligned).
+    //
 
-        Status = IoPrepareReadWriteIrp(&(Irp->U.ReadWrite),
-                                       1 << Disk->BlockShift,
-                                       0,
-                                       MAX_ULONG,
-                                       IrpReadWriteFlags);
+    Status = IoPrepareReadWriteIrp(&(Irp->U.ReadWrite),
+                                   1 << Disk->BlockShift,
+                                   0,
+                                   MAX_ULONG,
+                                   IrpReadWriteFlags);
 
-        if (!KSUCCESS(Status)) {
-            goto DispatchIoEnd;
+    if (!KSUCCESS(Status)) {
+        goto DispatchIoEnd;
+    }
+
+    //
+    // Lock the controller to serialize access to the hardware.
+    //
+
+    KeAcquireQueuedLock(Disk->ControllerLock);
+    if (((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) ||
+        ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0)) {
+
+        Status = STATUS_NO_MEDIA;
+        if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0) {
+            Status = STATUS_MEDIA_CHANGED;
         }
 
-        //
-        // Lock the controller to serialize access to the hardware.
-        //
-
-        KeAcquireQueuedLock(Disk->ControllerLock);
-        Disk->Irp = Irp;
-        CompleteIrp = FALSE;
-        IoPendIrp(SdBcm2709Driver, Irp);
-        SdBcm2709pPerformDmaIo(Disk, Irp);
-
-        //
-        // DMA transfers are self perpetuating, so after kicking off this
-        // first transfer, return. This returns with the lock held because
-        // I/O is still in progress.
-        //
-
-        ASSERT(KeIsQueuedLockHeld(Disk->ControllerLock) != FALSE);
+        KeReleaseQueuedLock(Disk->ControllerLock);
+        IoCompleteReadWriteIrp(&(Irp->U.ReadWrite), IrpReadWriteFlags);
+        goto DispatchIoEnd;
     }
+
+    Disk->Irp = Irp;
+    CompleteIrp = FALSE;
+    IoPendIrp(SdBcm2709Driver, Irp);
+    SdBcm2709pPerformDmaIo(Disk, Irp);
+
+    //
+    // DMA transfers are self perpetuating, so after kicking off this
+    // first transfer, return. This returns with the lock held because
+    // I/O is still in progress.
+    //
+
+    ASSERT(KeIsQueuedLockHeld(Disk->ControllerLock) != FALSE);
 
 DispatchIoEnd:
     if (CompleteIrp != FALSE) {
@@ -1658,6 +1698,7 @@ Return Value:
         }
 
         Parameters.FundamentalClock = Frequency;
+        Parameters.OsDevice = Slot->Device;
         Slot->Controller = SdCreateController(&Parameters);
         if (Slot->Controller == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1711,6 +1752,7 @@ Return Value:
 {
 
     ULONG BlockSize;
+    PSTR DeviceId;
     ULONG FlagsMask;
     PSD_BCM2709_DISK NewDisk;
     ULONG OldFlags;
@@ -1723,23 +1765,25 @@ Return Value:
     // removal, but at least handle it here for the initial query.
     //
 
-    FlagsMask = ~(SD_BCM2709_SLOT_FLAG_INSERTION_PENDING |
-                  SD_BCM2709_SLOT_FLAG_REMOVAL_PENDING);
+    FlagsMask = ~(SD_CONTROLLER_FLAG_INSERTION_PENDING |
+                  SD_CONTROLLER_FLAG_REMOVAL_PENDING);
 
-    OldFlags = RtlAtomicAnd32(&(Slot->Flags), FlagsMask);
+    OldFlags = RtlAtomicAnd32(&(Slot->Controller->Flags), FlagsMask);
 
     //
     // If either insertion or removal is pending, remove the existing disk. In
     // practice, an insertion can occur without the previous removal.
     //
 
-    FlagsMask = SD_BCM2709_SLOT_FLAG_INSERTION_PENDING |
-                SD_BCM2709_SLOT_FLAG_REMOVAL_PENDING;
+    FlagsMask = SD_CONTROLLER_FLAG_INSERTION_PENDING |
+                SD_CONTROLLER_FLAG_REMOVAL_PENDING;
 
     if ((OldFlags & FlagsMask) != 0) {
         if (Slot->Disk != NULL) {
             KeAcquireQueuedLock(Slot->Lock);
-            Slot->Disk->MediaPresent = FALSE;
+            RtlAtomicAnd32(&(Slot->Disk->Controller->Flags),
+                           ~SD_CONTROLLER_FLAG_MEDIA_PRESENT);
+
             KeReleaseQueuedLock(Slot->Lock);
             Slot->Disk = NULL;
         }
@@ -1749,13 +1793,16 @@ Return Value:
     // If an insertion is pending, try to enumerate the new disk.
     //
 
-    if ((OldFlags & SD_BCM2709_SLOT_FLAG_INSERTION_PENDING) != 0) {
+    if ((OldFlags & SD_CONTROLLER_FLAG_INSERTION_PENDING) != 0) {
 
         ASSERT(Slot->Disk == NULL);
 
         //
         // Initialize the controller to see if a disk is actually present.
         //
+
+        RtlAtomicAnd32(&(Slot->Controller->Flags),
+                       ~SD_CONTROLLER_FLAG_MEDIA_CHANGED);
 
         Status = SdInitializeController(Slot->Controller, TRUE);
         if (!KSUCCESS(Status)) {
@@ -1792,7 +1839,6 @@ Return Value:
         ASSERT(POWER_OF_2(BlockSize) != FALSE);
 
         NewDisk->BlockShift = RtlCountTrailingZeros32(BlockSize);
-        NewDisk->MediaPresent = TRUE;
 
         //
         // Initialize DMA is there is system DMA available.
@@ -1813,10 +1859,15 @@ Return Value:
         // Create the child device.
         //
 
+        DeviceId = SD_MMC_DEVICE_ID;
+        if (SD_IS_CARD_SD(NewDisk->Controller)) {
+            DeviceId = SD_CARD_DEVICE_ID;
+        }
+
         Status = IoCreateDevice(SdBcm2709Driver,
                                 NewDisk,
                                 Irp->Device,
-                                SD_CARD_DEVICE_ID,
+                                DeviceId,
                                 DISK_CLASS_ID,
                                 NULL,
                                 &(NewDisk->Device));
@@ -1926,7 +1977,6 @@ Return Value:
 
 {
 
-    ASSERT((Disk->MediaPresent == FALSE) || (Disk->Device == NULL));
     ASSERT(Disk->DiskInterface.DiskToken == NULL);
 
     MmFreeNonPagedPool(Disk);
@@ -2219,6 +2269,7 @@ Return Value:
     UINTN BytesRemaining;
     UINTN BytesThisRound;
     KSTATUS CompletionStatus;
+    PSD_CONTROLLER Controller;
     PIO_BUFFER_FRAGMENT Fragment;
     UINTN FragmentIndex;
     UINTN FragmentOffset;
@@ -2230,6 +2281,7 @@ Return Value:
     KSTATUS Status;
     PVOID VirtualAddress;
 
+    Controller = Disk->Controller;
     IrpReadWrite->IoBytesCompleted = 0;
     LockHeld = FALSE;
     ReadWriteIrpPrepared = FALSE;
@@ -2295,7 +2347,11 @@ Return Value:
         LockHeld = TRUE;
     }
 
-    if (Disk->MediaPresent == FALSE) {
+    if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0) {
+        Status = STATUS_MEDIA_CHANGED;
+        goto PerformBlockIoPolledEnd;
+
+    } else if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) {
         Status = STATUS_NO_MEDIA;
         goto PerformBlockIoPolledEnd;
     }
@@ -2563,6 +2619,7 @@ Return Value:
 
     UINTN BlockCount;
     ULONGLONG BlockOffset;
+    PDMA_INTERFACE Dma;
     ULONGLONG IoOffset;
     ULONGLONG IoSize;
     KSTATUS Status;
@@ -2580,6 +2637,19 @@ Return Value:
     ASSERT(BlockOffset < Disk->BlockCount);
     ASSERT(BlockCount >= 1);
 
+    //
+    // The expected intrrupt count has to be set up now because SD might
+    // complete it immediately.
+    //
+
+    Dma = Disk->Parent->Dma;
+    if (Dma != NULL) {
+
+        ASSERT(Disk->RemainingInterrupts == 0);
+
+        Disk->RemainingInterrupts = 2;
+    }
+
     SdStandardBlockIoDma(Disk->Controller,
                          BlockOffset,
                          BlockCount,
@@ -2593,7 +2663,7 @@ Return Value:
     // Fire off the system DMA transfer if necessary.
     //
 
-    if (Disk->Parent->Dma != NULL) {
+    if (Dma != NULL) {
         Status = SdBcm2709pSetupSystemDma(Disk);
         if (!KSUCCESS(Status)) {
             IoCompleteIrp(SdBcm2709Driver, Irp, Status);
@@ -2648,6 +2718,7 @@ Return Value:
                                       Disk->Parent->DmaTransfer);
         }
 
+        RtlAtomicAdd32(&(Disk->RemainingInterrupts), -1);
         SdBcm2709pDmaCompletion(Controller, Context, BytesTransferred, Status);
 
     //
@@ -2705,9 +2776,6 @@ Return Value:
         DmaTransfer->Direction = DmaTransferFromDevice;
     }
 
-    ASSERT(Disk->RemainingInterrupts == 0);
-
-    Disk->RemainingInterrupts = 2;
     Status = Dma->Submit(Dma, DmaTransfer);
     return Status;
 }
@@ -2740,15 +2808,6 @@ Return Value:
 
     Disk = Transfer->UserContext;
     Status = Transfer->Status;
-    if (!KSUCCESS(Status)) {
-
-        //
-        // Cancel the SD transfer here.
-        //
-
-        SdErrorRecovery(Disk->Controller);
-    }
-
     SdBcm2709pDmaCompletion(Disk->Controller,
                             Disk,
                             Transfer->Completed,
@@ -2801,7 +2860,9 @@ Return Value:
     ASSERT(Irp != NULL);
 
     if (!KSUCCESS(Status)) {
+        RtlAtomicAdd32(&(Disk->RemainingInterrupts), -1);
         RtlDebugPrint("SD BCM2709 Failed: %x\n", Status);
+        SdAbortTransaction(Controller, FALSE);
         IoCompleteIrp(SdBcm2709Driver, Irp, Status);
         return;
     }

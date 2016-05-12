@@ -31,14 +31,6 @@ Author:
 //
 
 //
-// This macro determines if the given card is an SD card. It returns non-zero
-// if it is an SD card, or 0 if it is an MMC card.
-//
-
-#define SD_IS_CARD_SD(_Controller) \
-    ((_Controller)->Version < SdVersionMaximum)
-
-//
 // ---------------------------------------------------------------- Definitions
 //
 

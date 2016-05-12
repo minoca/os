@@ -86,6 +86,12 @@ Author:
 #define SD_MAX_BLOCK_COUNT 0xFFFF
 
 //
+// Define the maximum number of times to retry I/O.
+//
+
+#define EFI_SD_IO_RETRIES 5
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

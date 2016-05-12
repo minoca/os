@@ -108,15 +108,12 @@ Author:
 //
 
 #define SD_OMAP4_DEVICE_FLAG_INTERRUPT_RESOURCES_FOUND 0x00000001
-#define SD_OMAP4_DEVICE_FLAG_INSERTION_PENDING         0x00000002
-#define SD_OMAP4_DEVICE_FLAG_REMOVAL_PENDING           0x00000004
 
 //
 // Define the set of flags for the child SD disk.
 //
 
-#define SD_OMAP4_CHILD_FLAG_MEDIA_PRESENT 0x00000001
-#define SD_OMAP4_CHILD_FLAG_DMA_SUPPORTED 0x00000002
+#define SD_OMAP4_CHILD_FLAG_DMA_SUPPORTED 0x00000001
 
 //
 // ------------------------------------------------------ Data Type Definitions

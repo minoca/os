@@ -131,6 +131,7 @@ Author:
 #define STATUS_DOMAIN_NOT_SUPPORTED       0x8000006B
 #define STATUS_PROTOCOL_NOT_SUPPORTED     0x8000006C
 #define STATUS_DOMAIN_ERROR               0x8000006D
+#define STATUS_MEDIA_CHANGED              0x8000006E
 
 //
 // ------------------------------------------------------ Data Type Definitions

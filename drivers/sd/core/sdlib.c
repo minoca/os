@@ -241,6 +241,8 @@ Return Value:
     Controller->Voltages = Parameters->Voltages;
     Controller->FundamentalClock = Parameters->FundamentalClock;
     Controller->HostCapabilities = Parameters->HostCapabilities;
+    Controller->OsDevice = Parameters->OsDevice;
+    Controller->Flags = SD_CONTROLLER_FLAG_INSERTION_PENDING;
     RtlCopyMemory(&(Controller->FunctionTable),
                   &(Parameters->FunctionTable),
                   sizeof(SD_FUNCTION_TABLE));
@@ -290,6 +292,11 @@ Return Value:
         if (Controller->FunctionTable.StopDataTransfer == NULL) {
             Controller->FunctionTable.StopDataTransfer =
                                            SdStdFunctionTable.StopDataTransfer;
+        }
+
+        if (Controller->FunctionTable.MediaChangeCallback == NULL) {
+            Controller->FunctionTable.MediaChangeCallback =
+                                        SdStdFunctionTable.MediaChangeCallback;
         }
 
     //
@@ -383,9 +390,10 @@ Return Value:
     ULONG ExtendedCardDataWidth;
     PSD_INITIALIZE_CONTROLLER InitializeController;
     ULONG LoopIndex;
+    ULONG OldFlags;
     KSTATUS Status;
 
-    RtlAtomicAnd32(&(Controller->Flags), 0);
+    OldFlags = RtlAtomicExchange32(&(Controller->Flags), 0);
 
     //
     // Compute the timeout delay in time counter ticks.
@@ -621,6 +629,18 @@ Return Value:
     }
 
     RtlAtomicOr32(&(Controller->Flags), SD_CONTROLLER_FLAG_MEDIA_PRESENT);
+
+    //
+    // If the old flags say there was DMA enabled, reenable it now.
+    //
+
+    if ((OldFlags & SD_CONTROLLER_FLAG_DMA_ENABLED) != 0) {
+        Status = SdStandardInitializeDma(Controller);
+        if (!KSUCCESS(Status)) {
+            goto InitializeControllerEnd;
+        }
+    }
+
     Status = STATUS_SUCCESS;
 
 InitializeControllerEnd:
@@ -667,9 +687,13 @@ Return Value:
 
     UINTN BlocksDone;
     UINTN BlocksThisRound;
+    KSTATUS RecoveryStatus;
     KSTATUS Status;
 
-    if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) {
+    if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0) {
+        return STATUS_MEDIA_CHANGED;
+
+    } else if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_PRESENT) == 0) {
         return STATUS_NO_MEDIA;
     }
 
@@ -698,7 +722,11 @@ Return Value:
         }
 
         if (!KSUCCESS(Status)) {
-            SdErrorRecovery(Controller);
+            RecoveryStatus = SdErrorRecovery(Controller);
+            if (!KSUCCESS(RecoveryStatus)) {
+                Status = RecoveryStatus;
+            }
+
             break;
         }
 
@@ -881,23 +909,54 @@ Return Value:
 
 {
 
+    BOOL Inserted;
+    BOOL Match;
+    ULONG OldCsd[SD_MMC_CSD_WORDS];
+    BOOL Removed;
     KSTATUS Status;
 
-    Status = SdpAbort(Controller, FALSE);
+    SdpAbort(Controller, FALSE);
+    if ((Controller->Flags & SD_CONTROLLER_FLAG_MEDIA_CHANGED) != 0) {
+        return STATUS_MEDIA_CHANGED;
+    }
+
+    RtlCopyMemory(OldCsd, Controller->CardSpecificData, sizeof(OldCsd));
+    RtlAtomicAnd32(&(Controller->Flags), ~SD_CONTROLLER_FLAG_MEDIA_PRESENT);
+    Inserted = FALSE;
+    Removed = FALSE;
+    Status = SdInitializeController(Controller, FALSE);
     if (!KSUCCESS(Status)) {
-        goto ErrorRecoveryEnd;
+        RtlDebugPrint("SD: Card gone: %x\n", Status);
+        Removed = TRUE;
     }
 
-    if (Controller->ClockSpeed > SdClock25MHz) {
-        RtlDebugPrint("SD: Clocking down to 25MHz.\n");
-        Controller->ClockSpeed = SdClock25MHz;
-        Status = SdpSetBusParameters(Controller);
-        if (!KSUCCESS(Status)) {
-            goto ErrorRecoveryEnd;
-        }
+    Match = RtlCompareMemory(Controller->CardSpecificData,
+                             OldCsd,
+                             sizeof(OldCsd));
+
+    if (Match == FALSE) {
+        Inserted = TRUE;
+        Removed = TRUE;
+        RtlDebugPrint("SD: Media changed.\n");
+        RtlAtomicOr32(&(Controller->Flags), SD_CONTROLLER_FLAG_MEDIA_CHANGED);
+        RtlAtomicAnd32(&(Controller->Flags), ~SD_CONTROLLER_FLAG_MEDIA_PRESENT);
+        Status = STATUS_MEDIA_CHANGED;
     }
 
-ErrorRecoveryEnd:
+    //
+    // Call the media change callback if something happened.
+    //
+
+    if (((Removed != FALSE) || (Inserted != FALSE)) &&
+        (Controller->FunctionTable.MediaChangeCallback != NULL)) {
+
+        Controller->FunctionTable.MediaChangeCallback(
+                                                   Controller,
+                                                   Controller->ConsumerContext,
+                                                   Removed,
+                                                   Inserted);
+    }
+
     return Status;
 }
 

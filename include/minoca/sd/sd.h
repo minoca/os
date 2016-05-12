@@ -23,6 +23,18 @@ Author:
 #include <minoca/sd/sdstd.h>
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// This macro determines if the given card is an SD card. It returns non-zero
+// if it is an SD card, or 0 if it is an MMC card.
+//
+
+#define SD_IS_CARD_SD(_Controller) \
+    ((_Controller)->Version < SdVersionMaximum)
+
+//
 // ---------------------------------------------------------------- Definitions
 //
 
@@ -49,6 +61,7 @@ Author:
 //
 
 #define SD_CARD_DEVICE_ID "SdCard"
+#define SD_MMC_DEVICE_ID "MmcDisk"
 
 //
 // Define software-only capability flags (ie these bits don't show up in the
@@ -85,6 +98,15 @@ Author:
 #define SD_CONTROLLER_FLAG_DMA_ENABLED            0x00000004
 #define SD_CONTROLLER_FLAG_CRITICAL_MODE          0x00000008
 #define SD_CONTROLLER_FLAG_DMA_COMMAND_ENABLED    0x00000010
+#define SD_CONTROLLER_FLAG_MEDIA_CHANGED          0x00000020
+#define SD_CONTROLLER_FLAG_REMOVAL_PENDING        0x00000040
+#define SD_CONTROLLER_FLAG_INSERTION_PENDING      0x00000080
+
+//
+// Define the maximum number of times to retry IO.
+//
+
+#define SD_MAX_IO_RETRIES 5
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -528,6 +550,8 @@ Members:
     HostCapabilities - Stores the host controller capability bits See SD_MODE_*
         definitions.
 
+    OsDevice - Stores a pointer to the OS device.
+
 --*/
 
 typedef struct _SD_INITIALIZATION_BLOCK {
@@ -537,6 +561,7 @@ typedef struct _SD_INITIALIZATION_BLOCK {
     ULONG Voltages;
     ULONG FundamentalClock;
     ULONG HostCapabilities;
+    PDEVICE OsDevice;
 } SD_INITIALIZATION_BLOCK, *PSD_INITIALIZATION_BLOCK;
 
 typedef
@@ -663,6 +688,10 @@ Members:
     SendStop - Stores a boolean indicating whether a stop CMD12 needs to be
         sent after the data transfer or not.
 
+    Try - Stores the number of times the current I/O has been attempted.
+
+    OsDevice - Stores a pointer to the OS device.
+
 --*/
 
 struct _SD_CONTROLLER {
@@ -686,7 +715,7 @@ struct _SD_CONTROLLER {
     ULONGLONG RpmbCapacity;
     ULONGLONG GeneralPartitionCapacity[SD_MMC_GENERAL_PARTITION_COUNT];
     ULONG EraseGroupSize;
-    ULONG CardSpecificData[4];
+    ULONG CardSpecificData[SD_MMC_CSD_WORDS];
     ULONG PartitionConfiguration;
     ULONG HostCapabilities;
     ULONG CardCapabilities;
@@ -699,6 +728,8 @@ struct _SD_CONTROLLER {
     volatile ULONG PendingStatusBits;
     ULONGLONG Timeout;
     BOOL SendStop;
+    LONG Try;
+    PDEVICE OsDevice;
 };
 
 /*++
@@ -1408,6 +1439,41 @@ Arguments:
 
     Context - Supplies a context pointer passed to the SD/MMC library upon
         creation of the controller.
+
+Return Value:
+
+    None.
+
+--*/
+
+SD_API
+VOID
+SdStandardMediaChangeCallback (
+    PSD_CONTROLLER Controller,
+    PVOID Context,
+    BOOL Removal,
+    BOOL Insertion
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is called by the SD library to notify the user of the SD
+    library that media has been removed, inserted, or both. This routine is
+    called from a DPC and, as a result, can get called back at dispatch level.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    Removal - Supplies a boolean indicating if a removal event has occurred.
+
+    Insertion - Supplies a boolean indicating if an insertion event has
+        occurred.
 
 Return Value:
 
