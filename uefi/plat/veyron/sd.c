@@ -72,12 +72,11 @@ Environment:
 #define EFI_SD_RK32_TIMEOUT 1000000
 
 //
-// Define the speed of the SD fundamental clock. This is based on the clock
-// select 11 bits (which are set to general PLL divided by 6), and the
-// configuration of the general PLL.
+// Define the speed of the SD fundamental clock. This is based on the general
+// PLL, which is set up by the previous loader to be 594MHz.
 //
 
-#define EFI_SD_RK32_CLOCK_SPEED 99000000
+#define EFI_SD_RK32_CLOCK_SPEED 594000000
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -224,6 +223,20 @@ EfipSdRk32HardResetController (
     PEFI_SD_RK32_CONTEXT Device
     );
 
+EFI_STATUS
+EfipSdRk32GetSetClockSpeed (
+    PEFI_SD_CONTROLLER Controller,
+    VOID *Context,
+    UINT32 *ClockSpeed,
+    BOOLEAN Set
+    );
+
+EFI_STATUS
+EfipSdRk32SetClockSpeed (
+    PEFI_SD_RK32_CONTEXT Disk,
+    UINT32 ClockSpeed
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -276,6 +289,14 @@ EFI_SD_RK32_DEVICE_PATH EfiSdRk32DevicePathTemplate = {
         END_ENTIRE_DEVICE_PATH_SUBTYPE,
         END_DEVICE_PATH_LENGTH
     }
+};
+
+SD_FUNCTION_TABLE EfiSdRk32FunctionTable = {
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    EfipSdRk32GetSetClockSpeed
 };
 
 //
@@ -419,6 +440,8 @@ Return Value:
                                        SD_MODE_AUTO_CMD12;
 
     SdDwcParameters.FundamentalClock = Disk->FundamentalClock;
+    SdDwcParameters.OverrideFunctionTable = &EfiSdRk32FunctionTable;
+    SdDwcParameters.OverrideContext = Disk;
     Disk->Controller = EfiSdDwcCreateController(&SdDwcParameters);
     if (Disk->Controller == NULL) {
         Status = EFI_OUT_OF_RESOURCES;
@@ -822,7 +845,7 @@ Return Value:
     // initialization bit set.
     //
 
-    Status = EfiSdDwcSetClockSpeed(Device->Controller, 400000);
+    Status = EfipSdRk32SetClockSpeed(Device, 400000);
     if (EFI_ERROR(Status)) {
         return Status;
     }
@@ -880,6 +903,281 @@ Return Value:
             }
 
             SD_RK32_WRITE_REGISTER(Device, SdDwcInterruptStatus, Value);
+            break;
+        }
+
+        EfiStall(50);
+        Time += 50;
+
+    } while (Time <= Timeout);
+
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    return EFI_SUCCESS;
+}
+
+EFI_STATUS
+EfipSdRk32GetSetClockSpeed (
+    PEFI_SD_CONTROLLER Controller,
+    VOID *Context,
+    UINT32 *ClockSpeed,
+    BOOLEAN Set
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the controller's clock speed.
+
+Arguments:
+
+    Controller - Supplies a pointer to the controller.
+
+    Context - Supplies a context pointer passed to the SD/MMC library upon
+        creation of the controller.
+
+    ClockSpeed - Supplies a pointer that receives the current clock speed on
+        get and contains the desired clock speed on set.
+
+    Set - Supplies a boolean indicating whether the bus width should be queried
+        or set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PEFI_SD_RK32_CONTEXT Disk;
+
+    Disk = Context;
+
+    //
+    // Getting the clock speed is not implemented as the divisor math might not
+    // work out precisely in reverse.
+    //
+
+    if (Set == FALSE) {
+        return EFI_UNSUPPORTED;
+    }
+
+    return EfipSdRk32SetClockSpeed(Disk, *ClockSpeed);
+}
+
+EFI_STATUS
+EfipSdRk32SetClockSpeed (
+    PEFI_SD_RK32_CONTEXT Disk,
+    UINT32 ClockSpeed
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the controller's clock speed.
+
+Arguments:
+
+    Disk - Supplies a pointer to the disk context.
+
+    ClockSpeed - Supplies the desired clock speed in Hertz.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    UINT32 Divisor;
+    PEFI_SD_DWC_CONTROLLER DwcController;
+    UINT32 InputClock;
+    EFI_STATUS Status;
+    UINT64 Time;
+    UINT64 Timeout;
+    UINT32 Value;
+
+    DwcController = Disk->Controller;
+    if (DwcController->FundamentalClock == 0) {
+        return EFI_INVALID_PARAMETER;
+    }
+
+    //
+    // Wait for the card to not be busy.
+    //
+
+    Timeout = EFI_SD_DWC_CONTROLLER_TIMEOUT;
+    Time = 0;
+    Status = EFI_TIMEOUT;
+    do {
+        Value = SD_DWC_READ_REGISTER(DwcController, SdDwcStatus);
+        if ((Value & SD_DWC_STATUS_DATA_BUSY) == 0) {
+            Status = EFI_SUCCESS;
+            break;
+        }
+
+        EfiStall(50);
+        Time += 50;
+
+    } while (Time <= Timeout);
+
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    //
+    // Disable all clocks.
+    //
+
+    SD_DWC_WRITE_REGISTER(DwcController, SdDwcClockEnable, 0);
+
+    //
+    // Send the command to indicate that the clock enable register is being
+    // updated.
+    //
+
+    Value = SD_DWC_COMMAND_START |
+            SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS |
+            SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
+
+    SD_DWC_WRITE_REGISTER(DwcController, SdDwcCommand, Value);
+    Timeout = EFI_SD_DWC_CONTROLLER_TIMEOUT;
+    Time = 0;
+    Status = EFI_TIMEOUT;
+    do {
+        Value = SD_DWC_READ_REGISTER(DwcController, SdDwcCommand);
+        if ((Value & SD_DWC_COMMAND_START) == 0) {
+            Status = EFI_SUCCESS;
+            break;
+        }
+
+        EfiStall(50);
+        Time += 50;
+
+    } while (Time <= Timeout);
+
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    //
+    // Use the 24MHz clock if a really slow speed is desired.
+    //
+
+    InputClock = DwcController->FundamentalClock;
+    if (ClockSpeed < (InputClock / (RK32_CRU_MAX_MMC_DIVISOR + 1))) {
+
+        //
+        // Select the raw 24MHz source, and set the DesignWare divider to 1 to
+        // divide by 2.
+        //
+
+        InputClock = RK32_SDMMC_FREQUENCY_24MHZ / 2;
+        SD_DWC_WRITE_REGISTER(DwcController, SdDwcClockDivider, 1);
+        Value = (RK32_CRU_CLOCK_SELECT_24MHZ <<
+                 RK32_CRU_CLOCK_SELECT_CLOCK_SHIFT);
+
+    //
+    // Use the general PLL.
+    //
+
+    } else {
+        SD_DWC_WRITE_REGISTER(DwcController, SdDwcClockDivider, 0);
+        Value = (RK32_CRU_CLOCK_SELECT_GENERAL_PLL <<
+                 RK32_CRU_CLOCK_SELECT_CLOCK_SHIFT);
+    }
+
+    Divisor = InputClock / ClockSpeed;
+    if (InputClock / Divisor > ClockSpeed) {
+        Divisor += 1;
+    }
+
+    //
+    // Bits 16 and up must be set for the write to take effect. This is also
+    // why read-modify-write is not needed.
+    //
+
+    Value |= (RK32_CRU_CLOCK_SELECT_CLOCK_MASK |
+              RK32_CRU_CLOCK_SELECT_DIVIDER_MASK) <<
+             RK32_CRU_CLOCK_SELECT_PROTECT_SHIFT;
+
+    Value |= Divisor;
+    if (Disk->ControllerBase == (VOID *)RK32_SD_BASE) {
+        RK32_WRITE_CRU(Rk32CruClockSelect11, Value);
+
+    } else if (Disk->ControllerBase == (VOID *)RK32_EMMC_BASE) {
+        Value <<= RK32_CRU_CLOCK_SELECT12_EMMC_DIVIDER_SHIFT;
+        RK32_WRITE_CRU(Rk32CruClockSelect12, Value);
+
+    } else {
+        return EFI_UNSUPPORTED;
+    }
+
+    SD_DWC_WRITE_REGISTER(DwcController,
+                          SdDwcClockSource,
+                          SD_DWC_CLOCK_SOURCE_DIVIDER_0);
+
+    //
+    // Send the command to indicate that the clock source and divider are is
+    // being updated.
+    //
+
+    Value = SD_DWC_COMMAND_START |
+            SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS |
+            SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
+
+    SD_DWC_WRITE_REGISTER(DwcController, SdDwcCommand, Value);
+    Timeout = EFI_SD_DWC_CONTROLLER_TIMEOUT;
+    Time = 0;
+    Status = EFI_TIMEOUT;
+    do {
+        Value = SD_DWC_READ_REGISTER(DwcController, SdDwcCommand);
+        if ((Value & SD_DWC_COMMAND_START) == 0) {
+            Status = EFI_SUCCESS;
+            break;
+        }
+
+        EfiStall(50);
+        Time += 50;
+
+    } while (Time <= Timeout);
+
+    if (EFI_ERROR(Status)) {
+        return Status;
+    }
+
+    //
+    // Enable the clocks in lower power mode.
+    //
+
+    SD_DWC_WRITE_REGISTER(DwcController,
+                          SdDwcClockEnable,
+                          (SD_DWC_CLOCK_ENABLE_LOW_POWER |
+                           SD_DWC_CLOCK_ENABLE_ON));
+
+    //
+    // Send the command to indicate that the clock is enable register being
+    // updated.
+    //
+
+    Value = SD_DWC_COMMAND_START |
+            SD_DWC_COMMAND_UPDATE_CLOCK_REGISTERS |
+            SD_DWC_COMMAND_WAIT_PREVIOUS_DATA_COMPLETE;
+
+    SD_DWC_WRITE_REGISTER(DwcController, SdDwcCommand, Value);
+    Timeout = EFI_SD_DWC_CONTROLLER_TIMEOUT;
+    Time = 0;
+    Status = EFI_TIMEOUT;
+    do {
+        Value = SD_DWC_READ_REGISTER(DwcController, SdDwcCommand);
+        if ((Value & SD_DWC_COMMAND_START) == 0) {
+            Status = EFI_SUCCESS;
             break;
         }
 

@@ -24,6 +24,7 @@ Author:
 #include <minoca/sd/sddwc.h>
 #include <minoca/intrface/disk.h>
 #include <minoca/intrface/rk808.h>
+#include <minoca/soc/rk32xx.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -84,6 +85,49 @@ typedef enum _SD_RK32_DEVICE_TYPE {
     SdRk32Parent,
     SdRk32Child
 } SD_RK32_DEVICE_TYPE, *PSD_RK32_DEVICE_TYPE;
+
+/*++
+
+Structure Description:
+
+    This structure describes the SD RK32xx vendor specific resource data passed
+    in through the firmware.
+
+Members:
+
+    SubType - Stores the subtype, currently zero.
+
+    Uuid - Stores the UUID constant identifying this resource type. This will
+        be SD_RK32_VENDOR_RESOURCE_UUID.
+
+    FundamentalClock - Stores the fundamental clock frequency of the controller.
+
+    Ldo - Stores the LDO number of the LDO on an RK808 PMIC that controls the
+        SD bus voltage lines. If 0, then no LDO control is needed.
+
+    Cru - Stores the physical address of the CRU.
+
+    ClockSelectOffset - Stores the byte offset from the start of the CRU where
+        the clock select register for this unit resides.
+
+    ClockSelectShift - Stores the shift in bits into the clock select register
+        where this unit is controlled.
+
+    ControlOffset - Stores the control register offset in bytes from the base
+        of the CRU.
+
+--*/
+
+typedef struct _SD_RK32_VENDOR_RESOURCE {
+    UCHAR SubType;
+    UUID Uuid;
+    ULONG FundamentalClock;
+    ULONG Ldo;
+    ULONG Cru;
+    USHORT ClockSelectOffset;
+    USHORT ClockSelectShift;
+    ULONG ControlOffset;
+} PACKED SD_RK32_VENDOR_RESOURCE, *PSD_RK32_VENDOR_RESOURCE;
 
 typedef struct _SD_RK32_CONTEXT SD_RK32_CONTEXT, *PSD_RK32_CONTEXT;
 
@@ -182,6 +226,10 @@ Members:
     DpcLock - Stores a spin lock acquired in the dispatch level interrupt
         handler to serialize interrupt processing.
 
+    Cru - Stores a pointer to the CRU.
+
+    VendorData - Stores a pointer to the vendor data.
+
 --*/
 
 struct _SD_RK32_CONTEXT {
@@ -203,35 +251,9 @@ struct _SD_RK32_CONTEXT {
     UCHAR Ldo;
     PINTERFACE_RK808 Rk808;
     KSPIN_LOCK DpcLock;
+    PVOID Cru;
+    PSD_RK32_VENDOR_RESOURCE VendorData;
 };
-
-/*++
-
-Structure Description:
-
-    This structure describes the SD RK32xx vendor specific resource data passed
-    in through the firmware.
-
-Members:
-
-    SubType - Stores the subtype, currently zero.
-
-    Uuid - Stores the UUID constant identifying this resource type. This will
-        be SD_RK32_VENDOR_RESOURCE_UUID.
-
-    FundamentalClock - Stores the fundamental clock frequency of the controller.
-
-    Ldo - Stores the LDO number of the LDO on an RK808 PMIC that controls the
-        SD bus voltage lines. If 0, then no LDO control is needed.
-
---*/
-
-typedef struct _SD_RK32_VENDOR_RESOURCE {
-    UCHAR SubType;
-    UUID Uuid;
-    ULONG FundamentalClock;
-    ULONG Ldo;
-} PACKED SD_RK32_VENDOR_RESOURCE, *PSD_RK32_VENDOR_RESOURCE;
 
 //
 // -------------------------------------------------------------------- Globals

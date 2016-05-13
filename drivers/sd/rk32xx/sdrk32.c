@@ -43,6 +43,12 @@ Environment:
 #define SD_DWC_WRITE_REGISTER(_Device, _Register, _Value) \
     HlWriteRegister32((_Device)->ControllerBase + (_Register), (_Value))
 
+#define SD_RK32_READ_CRU(_Device, _Register) \
+    HlReadRegister32((_Device)->Cru + (_Register))
+
+#define SD_RK32_WRITE_CRU(_Device, _Register, _Value) \
+    HlWriteRegister32((_Device)->Cru + (_Register), (_Value))
+
 //
 // ---------------------------------------------------------------- Definitions
 //
@@ -1963,6 +1969,22 @@ Return Value:
         }
     }
 
+    //
+    // Eventually, this should be handled by a more official clock manager.
+    //
+
+    Device->Cru = MmMapPhysicalAddress(Data->Cru,
+                                       MmPageSize(),
+                                       TRUE,
+                                       FALSE,
+                                       TRUE);
+
+    if (Device->Cru == NULL) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto InitializeVendorResourceEnd;
+    }
+
+    Device->VendorData = Data;
     Status = STATUS_SUCCESS;
 
 InitializeVendorResourceEnd:
@@ -4554,7 +4576,8 @@ SdRk32SetClockSpeed (
 
 Routine Description:
 
-    This routine sets the controller's clock speed.
+    This routine sets the controller's clock speed. This function is RockChip
+    specific.
 
 Arguments:
 
@@ -4572,6 +4595,7 @@ Return Value:
 
     ULONG Divisor;
     ULONGLONG Frequency;
+    ULONG InputClock;
     KSTATUS Status;
     ULONGLONG Timeout;
     ULONG Value;
@@ -4612,26 +4636,54 @@ Return Value:
     }
 
     //
-    // Get the appropriate divisor without going over the desired clock speed.
+    // Use the 24MHz clock if a really slow speed is desired.
     //
 
-    if (ClockSpeed >= Device->FundamentalClock) {
-        Divisor = 0;
+    InputClock = Device->FundamentalClock;
+    if (ClockSpeed < (InputClock / (RK32_CRU_MAX_MMC_DIVISOR + 1))) {
+
+        //
+        // Select the raw 24MHz source, and set the DesignWare divider to 1 to
+        // divide by 2.
+        //
+
+        InputClock = RK32_SDMMC_FREQUENCY_24MHZ / 2;
+
+        ASSERT(ClockSpeed <= InputClock);
+
+        SD_DWC_WRITE_REGISTER(Device, SdDwcClockDivider, 1);
+        Value = (RK32_CRU_CLOCK_SELECT_24MHZ <<
+                 RK32_CRU_CLOCK_SELECT_CLOCK_SHIFT);
+
+    //
+    // Use the general PLL.
+    //
 
     } else {
-        Divisor = 2;
-        while (Divisor < SD_DWC_MAX_DIVISOR) {
-            if ((Device->FundamentalClock / Divisor) <= ClockSpeed) {
-                break;
-            }
-
-            Divisor += 2;
-        }
-
-        Divisor >>= 1;
+        SD_DWC_WRITE_REGISTER(Device, SdDwcClockDivider, 0);
+        Value = (RK32_CRU_CLOCK_SELECT_GENERAL_PLL <<
+                 RK32_CRU_CLOCK_SELECT_CLOCK_SHIFT);
     }
 
-    SD_DWC_WRITE_REGISTER(Device, SdDwcClockDivider, Divisor);
+    Divisor = InputClock / ClockSpeed;
+    if (InputClock / Divisor > ClockSpeed) {
+        Divisor += 1;
+    }
+
+    ASSERT(Divisor <= RK32_CRU_MAX_MMC_DIVISOR);
+
+    //
+    // Bits 16 and up must be set for the write to take effect. This is also
+    // why read-modify-write is not needed.
+    //
+
+    Value |= (RK32_CRU_CLOCK_SELECT_CLOCK_MASK |
+              RK32_CRU_CLOCK_SELECT_DIVIDER_MASK) <<
+             RK32_CRU_CLOCK_SELECT_PROTECT_SHIFT;
+
+    Value |= Divisor;
+    Value <<= Device->VendorData->ClockSelectShift;
+    SD_RK32_WRITE_CRU(Device, Device->VendorData->ClockSelectOffset, Value);
     SD_DWC_WRITE_REGISTER(Device,
                           SdDwcClockSource,
                           SD_DWC_CLOCK_SOURCE_DIVIDER_0);

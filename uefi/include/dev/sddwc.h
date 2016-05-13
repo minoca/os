@@ -23,8 +23,35 @@ Author:
 #include <dev/sd.h>
 
 //
+// --------------------------------------------------------------------- Macros
+//
+
+//
+// These macros read and write SD DesignWare controller registers.
+//
+
+#define SD_DWC_READ_REGISTER(_Controller, _Register) \
+    EfiReadRegister32((_Controller)->ControllerBase + (_Register))
+
+#define SD_DWC_WRITE_REGISTER(_Controller, _Register, _Value) \
+    EfiWriteRegister32((_Controller)->ControllerBase + (_Register), (_Value))
+
+//
 // ---------------------------------------------------------------- Definitions
 //
+
+//
+// Define the amount of time to wait in microseconds for the controller to
+// respond.
+//
+
+#define EFI_SD_DWC_CONTROLLER_TIMEOUT 1000000
+
+//
+// Define the block sized used by the SD library.
+//
+
+#define SD_DWC_BLOCK_SIZE 512
 
 //
 // Define the SD control register bits.
@@ -338,8 +365,6 @@ typedef enum _SD_DWC_REGISTER {
     SdDwcFifoBase = 0x200,
 } SD_DWC_REGISTER, *PSD_DWC_REGISTER;
 
-typedef struct _EFI_SD_DWC_CONTROLLER *PEFI_SD_DWC_CONTROLLER;
-
 /*++
 
 Structure Description:
@@ -360,6 +385,13 @@ Members:
     HostCapabilities - Stores the host controller capability bits See SD_MODE_*
         definitions.
 
+    OverrideFunctionTable - Stores an optional pointer to a set of functions
+        for which the instantiator would like to override the default
+        DesignWare behavior. If these are NULL, the default DesignWare SD
+        functions are used.
+
+    OverrideContext - Stores a pointer passed to the override functions.
+
 --*/
 
 typedef struct _EFI_SD_DWC_INITIALIZATION_BLOCK {
@@ -367,7 +399,48 @@ typedef struct _EFI_SD_DWC_INITIALIZATION_BLOCK {
     UINT32 Voltages;
     UINT32 FundamentalClock;
     UINT32 HostCapabilities;
+    PSD_FUNCTION_TABLE OverrideFunctionTable;
+    VOID *OverrideContext;
 } EFI_SD_DWC_INITIALIZATION_BLOCK, *PEFI_SD_DWC_INITIALIZATION_BLOCK;
+
+/*++
+
+Structure Description:
+
+    This structure defines the context for a DesignWare SD/MMC controller
+    instance.
+
+Members:
+
+    ControllerBase - Stores a pointer to the base address of the host
+        controller registers.
+
+    SdController - Stores a pointer to the controller for the SD/MMC library
+        instance.
+
+    Voltages - Stores a bitmask of supported voltages.
+
+    HostCapabilities - Stores the host controller capability bits.
+
+    FundamentalClock - Stores the fundamental clock speed in Hertz.
+
+    OverrideFunctionTable - Stores a set of functions for which the
+        instantiator would like to override the default DesignWare behavior. If
+        these are NULL, the default DesignWare SD functions are used.
+
+    OverrideContext - Stores a pointer passed to the override functions.
+
+--*/
+
+typedef struct _EFI_SD_DWC_CONTROLLER {
+    VOID *ControllerBase;
+    PEFI_SD_CONTROLLER SdController;
+    UINT32 Voltages;
+    UINT32 HostCapabilities;
+    UINT32 FundamentalClock;
+    SD_FUNCTION_TABLE OverrideFunctionTable;
+    VOID *OverrideContext;
+} EFI_SD_DWC_CONTROLLER, *PEFI_SD_DWC_CONTROLLER;
 
 //
 // -------------------------------------------------------------------- Globals

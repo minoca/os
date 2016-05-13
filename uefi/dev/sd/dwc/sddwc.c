@@ -26,21 +26,11 @@ Environment:
 //
 
 #include <uefifw.h>
-#include "sddwcp.h"
+#include <dev/sddwc.h>
 
 //
 // --------------------------------------------------------------------- Macros
 //
-
-//
-// These macros read and write SD DesignWare controller registers.
-//
-
-#define SD_DWC_READ_REGISTER(_Controller, _Register) \
-    EfiReadRegister32((_Controller)->ControllerBase + (_Register))
-
-#define SD_DWC_WRITE_REGISTER(_Controller, _Register, _Value) \
-    EfiWriteRegister32((_Controller)->ControllerBase + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -173,6 +163,13 @@ Return Value:
     Controller->Voltages = Parameters->Voltages;
     Controller->HostCapabilities = Parameters->HostCapabilities;
     Controller->FundamentalClock = Parameters->FundamentalClock;
+    if (Parameters->OverrideFunctionTable != NULL) {
+        EfiCopyMem(&(Controller->OverrideFunctionTable),
+                   Parameters->OverrideFunctionTable,
+                   sizeof(SD_FUNCTION_TABLE));
+    }
+
+    Controller->OverrideContext = Parameters->OverrideContext;
 
     //
     // Forward this call onto the core SD library for creation.
@@ -592,6 +589,14 @@ Return Value:
     UINT32 Voltage;
 
     DwcController = (PEFI_SD_DWC_CONTROLLER)Context;
+    if (DwcController->OverrideFunctionTable.InitializeController != NULL) {
+        Status = DwcController->OverrideFunctionTable.InitializeController(
+                                                Controller,
+                                                DwcController->OverrideContext,
+                                                Phase);
+
+        return Status;
+    }
 
     //
     // Phase 0 is an early initialization phase that happens after the
@@ -731,6 +736,16 @@ Return Value:
     UINT64 Timeout;
     UINT32 Value;
 
+    DwcController = (PEFI_SD_DWC_CONTROLLER)Context;
+    if (DwcController->OverrideFunctionTable.ResetController != NULL) {
+        Status = DwcController->OverrideFunctionTable.ResetController(
+                                                Controller,
+                                                DwcController->OverrideContext,
+                                                Flags);
+
+        return Status;
+    }
+
     //
     // Always reset the FIFO, but only reset the whole controller if the all
     // flag was specified.
@@ -741,7 +756,6 @@ Return Value:
         ResetMask |= SD_DWC_CONTROL_CONTROLLER_RESET;
     }
 
-    DwcController = (PEFI_SD_DWC_CONTROLLER)Context;
     SD_DWC_WRITE_REGISTER(DwcController, SdDwcControl, ResetMask);
     Status = EFI_TIMEOUT;
     Timeout = EFI_SD_DWC_CONTROLLER_TIMEOUT;
@@ -804,6 +818,14 @@ Return Value:
     UINT32 Value;
 
     DwcController = (PEFI_SD_DWC_CONTROLLER)Context;
+    if (DwcController->OverrideFunctionTable.SendCommand != NULL) {
+        Status = DwcController->OverrideFunctionTable.SendCommand(
+                                                Controller,
+                                                DwcController->OverrideContext,
+                                                Command);
+
+        return Status;
+    }
 
     //
     // Wait for the last command to complete.
@@ -1114,9 +1136,20 @@ Return Value:
 {
 
     PEFI_SD_DWC_CONTROLLER DwcController;
+    EFI_STATUS Status;
     UINT32 Value;
 
     DwcController = (PEFI_SD_DWC_CONTROLLER)Context;
+    if (DwcController->OverrideFunctionTable.GetSetBusWidth != NULL) {
+        Status = DwcController->OverrideFunctionTable.GetSetBusWidth(
+                                                Controller,
+                                                DwcController->OverrideContext,
+                                                BusWidth,
+                                                Set);
+
+        return Status;
+    }
+
     if (Set != FALSE) {
         switch (*BusWidth) {
         case 1:
@@ -1189,8 +1222,19 @@ Return Value:
 {
 
     PEFI_SD_DWC_CONTROLLER DwcController;
+    EFI_STATUS Status;
 
     DwcController = (PEFI_SD_DWC_CONTROLLER)Context;
+    if (DwcController->OverrideFunctionTable.GetSetClockSpeed != NULL) {
+        Status = DwcController->OverrideFunctionTable.GetSetClockSpeed(
+                                                Controller,
+                                                DwcController->OverrideContext,
+                                                ClockSpeed,
+                                                Set);
+
+        return Status;
+    }
+
     if (DwcController->FundamentalClock == 0) {
         return EFI_INVALID_PARAMETER;
     }

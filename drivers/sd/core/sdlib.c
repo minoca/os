@@ -294,11 +294,6 @@ Return Value:
                                            SdStdFunctionTable.StopDataTransfer;
         }
 
-        if (Controller->FunctionTable.MediaChangeCallback == NULL) {
-            Controller->FunctionTable.MediaChangeCallback =
-                                        SdStdFunctionTable.MediaChangeCallback;
-        }
-
     //
     // Make sure the required functions are present.
     //
@@ -312,6 +307,11 @@ Return Value:
             Status = STATUS_INVALID_PARAMETER;
             goto CreateControllerEnd;
         }
+    }
+
+    if (Controller->FunctionTable.MediaChangeCallback == NULL) {
+        Controller->FunctionTable.MediaChangeCallback =
+                                        SdStdFunctionTable.MediaChangeCallback;
     }
 
     Status = STATUS_SUCCESS;

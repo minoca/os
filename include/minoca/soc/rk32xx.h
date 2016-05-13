@@ -240,6 +240,21 @@ Author:
 #define RK32_CRU_CLOCK_SELECT33_PMU_PCLK_DIVIDER_SHIFT   0
 
 //
+// Define generic CRU clock select value for SD/eMMC.
+//
+
+#define RK32_CRU_MAX_MMC_DIVISOR 0x3F
+
+#define RK32_CRU_CLOCK_SELECT_PROTECT_SHIFT      16
+#define RK32_CRU_CLOCK_SELECT_CODEC_PLL          0
+#define RK32_CRU_CLOCK_SELECT_GENERAL_PLL        1
+#define RK32_CRU_CLOCK_SELECT_24MHZ              2
+#define RK32_CRU_CLOCK_SELECT_CLOCK_MASK         (0x3 << 6)
+#define RK32_CRU_CLOCK_SELECT_CLOCK_SHIFT        6
+#define RK32_CRU_CLOCK_SELECT_DIVIDER_MASK       (0x3F << 0)
+#define RK32_CRU_CLOCK_SELECT_DIVIDER_SHIFT      0
+
+//
 // Define CRU global reset values.
 //
 
