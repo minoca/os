@@ -196,7 +196,7 @@
         {
             "name": "Make OpenSSL",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/openssl-1.0.1k"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/openssl-1.0.2h"
         },
         {
             "name": "Make M4",
@@ -352,6 +352,11 @@
             "name": "Make ca-certificates",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/ca-certificates"
+        },
+        {
+            "name": "Make dmake",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/dmake-DMAKE_4_12_2_2"
         },
         {
             "name": "Setup Distribution",

@@ -115,6 +115,26 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/acpica-unix-20140424 tools"
         },
         {
+            "name": "Make dmake (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/dmake-DMAKE_4_12_2_2 tools"
+        },
+        {
+            "name": "Make perl (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/perl-5.20.1 tools"
+        },
+        {
+            "name": "Make openssl (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/openssl-1.0.2h tools"
+        },
+        {
+            "name": "Make m4 (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/m4-1.4.17 tools"
+        },
+        {
             "name": "Make awk",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/awk"
@@ -160,9 +180,34 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/expat-2.1.0"
         },
         {
+            "name": "Make dmake",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/dmake-DMAKE_4_12_2_2"
+        },
+        {
+            "name": "Make openssl",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/openssl-1.0.2h"
+        },
+        {
+            "name": "Make openssh",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/openssh-6.7p1"
+        },
+        {
             "name": "Make M4",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/m4-1.4.17"
+        },
+        {
+            "name": "Make ca-certificates",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/ca-certificates"
+        },
+        {
+            "name": "Make bison",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/bison-3.0.2"
         },
         {
             "name": "Make tar",
