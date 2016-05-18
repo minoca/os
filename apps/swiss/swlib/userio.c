@@ -293,12 +293,13 @@ Return Value:
 
     printf("Minoca %s version %d.%d.%d\n"
            "%s\n"
-           "Copyright (c) 2013-2016 Minoca Corp. All Rights Reserved.\n\n",
+           "Copyright (c) 2013-2016 Minoca Corp. %s\n\n",
            SwCurrentApplication,
            MajorVersion,
            MinorVersion,
            VERSION_SERIAL,
-           VERSION_BUILD_STRING);
+           VERSION_BUILD_STRING,
+           VERSION_LICENSE);
 
     return;
 }

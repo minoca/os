@@ -39,6 +39,9 @@ Environment:
 // ---------------------------------------------------------------- Definitions
 //
 
+#define SWISS_VERSION_MAJOR 1
+#define SWISS_VERSION_MINOR 0
+
 //
 // ------------------------------------------------------ Data Type Definitions
 //
@@ -152,6 +155,16 @@ Return Value:
             if (Command != NULL) {
                 Arguments += 1;
                 ArgumentCount -= 1;
+            }
+
+        //
+        // Default to sh if swiss was just run directly with no arguments.
+        //
+
+        } else if (strncasecmp(CommandName, "swiss", 5) == 0) {
+            Command = SwisspFindCommand(SH_COMMAND_NAME);
+            if (Command != NULL) {
+                SwPrintVersion(SWISS_VERSION_MAJOR, SWISS_VERSION_MINOR);
             }
         }
     }

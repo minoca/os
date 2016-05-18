@@ -286,5 +286,18 @@ for file in $INCLUDE_FILES; do
     sed "$SED_ARG" "$SRCROOT/os/include/$file" > "$INCLUDE/$file"
 done
 
+VERSION_H="$SRCROOT/$ARCH$DEBUG/obj/os/apps/swiss/version.h"
+if ! [ -r "$VERSION_H" ]; then
+    echo "Error: $VERSION_H is missing. You must build swiss first!"
+    exit 1
+fi
+
+sed -e "s/#define VERSION_LICENSE .*/#define VERSION_LICENSE \"\\\\nThis \
+software is licensed under the the terms of the GNU General Public \
+License v3.\"/" \
+    -e "s/#define VERSION_BUILD_USER .*/#define VERSION_BUILD_USER \"Minoca\"/"\
+    -e "s/\\(#define VERSION_BUILD_STRING \"\\)[^-]*-\\(.*\\)/\1\2/" \
+    "$VERSION_H" > "$SWISS/version.h"
+
 echo "Done copying swiss files."
 

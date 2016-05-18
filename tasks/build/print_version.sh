@@ -34,6 +34,7 @@ build_string="$8"
 [ "$revision" ] || revision=0
 [ "$release" ] || release=SystemReleaseDevelopment
 
+license="All rights reserved."
 cd $SRCROOT/os
 
 ##
@@ -181,6 +182,12 @@ Author:
 //
 
 #define VERSION_BUILD_USER "$user"
+
+//
+// The license under which the software is released.
+//
+
+#define VERSION_LICENSE "$license"
 
 _EOS
 
