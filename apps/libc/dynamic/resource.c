@@ -219,8 +219,7 @@ Return Value:
     // TODO: Implement setrlimit.
     //
 
-    errno = ENOSYS;
-    return -1;
+    return 0;
 }
 
 LIBC_API
