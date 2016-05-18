@@ -2400,6 +2400,23 @@ Return Value:
                 break;
 
             case DebugCommandInvalid:
+
+                //
+                // This must have come from a kill and continue. Setting this
+                // event is actually bad, as it might race with issuing a
+                // command.
+                //
+
+                KeSignalEvent(Process->StopEvent, SignalOptionUnsignal);
+
+                //
+                // TODO: Rework Ps debug to have the tracer do all the work.
+                //
+
+                ASSERT(Command->Command == DebugCommandInvalid);
+
+                break;
+
             default:
                 break;
             }
@@ -2463,6 +2480,7 @@ Return Value:
                 KeSignalEvent(Process->StopEvent, SignalOptionUnsignal);
             }
 
+            Command->Command = DebugCommandInvalid;
             KeSignalEvent(DebugData->DebugCommandCompleteEvent,
                           SignalOptionSignalAll);
         }
@@ -3758,7 +3776,24 @@ Return Value:
     ProcessCommand = &(TargetProcess->DebugData->DebugCommand);
     KeAcquireSpinLock(&(IssuingProcess->DebugData->TracerLock));
     LockHeld = TRUE;
-    RtlCopyMemory(ProcessCommand, &LocalCommand, sizeof(PROCESS_DEBUG_COMMAND));
+
+    ASSERT(ProcessCommand->Command == DebugCommandInvalid);
+
+    KeSignalEvent(TargetProcess->DebugData->DebugCommandCompleteEvent,
+                  SignalOptionUnsignal);
+
+    //
+    // Copy the command backwards so that the last thing set is the command
+    // itself.
+    //
+
+    ProcessCommand->Status = LocalCommand.Status;
+    ProcessCommand->SignalToDeliver = LocalCommand.SignalToDeliver;
+    ProcessCommand->Size = LocalCommand.Size;
+    ProcessCommand->Data = LocalCommand.Data;
+    ProcessCommand->U = LocalCommand.U;
+    RtlMemoryBarrier();
+    ProcessCommand->Command = LocalCommand.Command;
 
     //
     // Signal the stop event to let all the threads party on.
@@ -3774,9 +3809,6 @@ Return Value:
                    FALSE,
                    WAIT_TIME_INDEFINITE);
 
-    KeSignalEvent(TargetProcess->DebugData->DebugCommandCompleteEvent,
-                  SignalOptionUnsignal);
-
     //
     // For commands that let 'er rip, the process debug command structure is
     // no longer safe to read. Plus there's nothing to read out of there anyway.
@@ -3786,12 +3818,14 @@ Return Value:
         (LocalCommand.Command == DebugCommandSingleStep) ||
         (LocalCommand.Command == DebugCommandRangeStep)) {
 
+        ProcessCommand->Data = NULL;
+        ProcessCommand->Size = 0;
         Command->Status = STATUS_SUCCESS;
         goto DebugIssueCommandEnd;
     }
 
     ASSERT(ProcessCommand->Size <= LocalCommand.Size);
-    ASSERT(ProcessCommand->Command == LocalCommand.Command);
+    ASSERT(ProcessCommand->Command == DebugCommandInvalid);
     ASSERT(ProcessCommand->Data == LocalCommand.Data);
 
     MinSize = ProcessCommand->Size;
@@ -3823,6 +3857,8 @@ Return Value:
     OriginalData = Command->Data;
     RtlCopyMemory(Command, ProcessCommand, sizeof(PROCESS_DEBUG_COMMAND));
     Command->Data = OriginalData;
+    ProcessCommand->Data = NULL;
+    ProcessCommand->Size = 0;
 
 DebugIssueCommandEnd:
     if (LocalCommand.Data != NULL) {
