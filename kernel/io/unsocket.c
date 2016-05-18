@@ -2200,6 +2200,13 @@ Return Value:
             break;
 
         case SocketBasicOptionPeerCredentials:
+            if (Set != FALSE) {
+                Status = STATUS_NOT_SUPPORTED_BY_PROTOCOL;
+                break;
+            }
+
+            Source = &(UnixSocket->Remote->Credentials);
+            RequiredSize = sizeof(UNIX_SOCKET_CREDENTIALS);
             break;
 
         default:
