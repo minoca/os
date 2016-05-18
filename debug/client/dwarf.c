@@ -1500,9 +1500,6 @@ Return Value:
         case DwarfAteDecimalFloat:
         case DwarfAteUtf:
         default:
-            DWARF_ERROR("DWARF: Unknown base type encoding %d.\n",
-                        (ULONG)Encoding);
-
             break;
         }
 
