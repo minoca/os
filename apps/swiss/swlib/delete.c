@@ -383,6 +383,8 @@ Return Value:
             if ((Result != 0) || (Answer == FALSE)) {
                 goto RemoveEnd;
             }
+
+            chmod(Argument, Stat.st_mode | DELETE_WRITABLE_PERMISSIONS);
         }
 
         //
