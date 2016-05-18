@@ -206,6 +206,7 @@ KepCompareTimerTreeNodes (
 
 KTIMER_QUEUE KeSoftTimerQueue;
 KSPIN_LOCK KeSoftTimerLock;
+POBJECT_HEADER KeTimerDirectory;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -244,7 +245,7 @@ Return Value:
     PKTIMER Timer;
 
     Timer = ObCreateObject(ObjectTimer,
-                           PsGetCurrentProcess(),
+                           KeTimerDirectory,
                            NULL,
                            0,
                            sizeof(KTIMER),
@@ -794,6 +795,18 @@ Return Value:
 
         KeSoftTimerQueue.NextDueTime = -1ULL;
         KeInitializeSpinLock(&KeSoftTimerLock);
+        KeTimerDirectory = ObCreateObject(ObjectDirectory,
+                                          NULL,
+                                          "Timer",
+                                          sizeof("Timer"),
+                                          sizeof(OBJECT_HEADER),
+                                          NULL,
+                                          OBJECT_FLAG_USE_NAME_DIRECTLY,
+                                          KE_ALLOCATION_TAG);
+
+        if (KeTimerDirectory == NULL) {
+            return NULL;
+        }
     }
 
     Data = MmAllocateNonPagedPool(sizeof(KTIMER_DATA), KE_ALLOCATION_TAG);
