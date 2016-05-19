@@ -113,10 +113,24 @@ Environment:
 #define BCM2709_INTERRUPT_GPU_LINE_COUNT 64
 
 //
+// Define the bits for the CPU local mailbox interrupt control registers.
+//
+
+#define BCM2709_INTERRUPT_LOCAL_MAILBOX_CONTROL_FIQ_3_ENABLE 0x00000080
+#define BCM2709_INTERRUPT_LOCAL_MAILBOX_CONTROL_FIQ_2_ENABLE 0x00000040
+#define BCM2709_INTERRUPT_LOCAL_MAILBOX_CONTROL_FIQ_1_ENABLE 0x00000020
+#define BCM2709_INTERRUPT_LOCAL_MAILBOX_CONTROL_FIQ_0_ENABLE 0x00000010
+#define BCM2709_INTERRUPT_LOCAL_MAILBOX_CONTROL_IRQ_3_ENABLE 0x00000008
+#define BCM2709_INTERRUPT_LOCAL_MAILBOX_CONTROL_IRQ_2_ENABLE 0x00000004
+#define BCM2709_INTERRUPT_LOCAL_MAILBOX_CONTROL_IRQ_1_ENABLE 0x00000002
+#define BCM2709_INTERRUPT_LOCAL_MAILBOX_CONTROL_IRQ_0_ENABLE 0x00000001
+
+//
 // Define the status bitmask for the pending IRQ local register.
 //
 
 #define BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_IPI 0x00000010
+#define BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_GPU 0x00000100
 
 //
 // Define the number of software lines.
@@ -156,23 +170,53 @@ Environment:
 //
 
 //
+// This macro translates a register and a processor ID into a local register
+// address. The processors' local registers are 4 bytes apart.
+//
+
+#define GET_LOCAL_ADDRESS(_Register, _ProcessorId) \
+    (HlBcm2709LocalBase + ((_Register) + (0x4 * (_ProcessorId))))
+
+//
+// This macro translates a register and a processor ID into an IPI register
+// address. The processors' IPI registers are 16 bytes apart.
+//
+
+#define GET_IPI_ADDRESS(_Register, _ProcessorId) \
+    (HlBcm2709LocalBase + ((_Register) + (0x10 * (_ProcessorId))))
+
+//
+// This macro reads a ULONG value from the given register address.
+//
+
+#define READ_REGISTER(_RegisterAddress) \
+    HlBcm2709KernelServices->ReadRegister32((_RegisterAddress));
+
+//
+// This macro writes a ULONG value to the given register address.
+//
+
+#define WRITE_REGISTER(_RegisterAddress, _Value) \
+    HlBcm2709KernelServices->WriteRegister32((_RegisterAddress), (_Value));
+
+//
 // This macro reads from the BCM2709 interrupt controller. The parameter should
 // be a BCM2709_INTERRUPT_REGISTER value.
 //
 
-#define READ_INTERRUPT_REGISTER(_Register)   \
-    HlBcm2709KernelServices->ReadRegister32( \
-                                    HlBcm2709InterruptController + (_Register))
+#define READ_INTERRUPT_REGISTER(_Register) \
+    READ_REGISTER(HlBcm2709InterruptController + (_Register))
 
 //
 // This macro writes to the BCM2709 interrupt controller. _Register should be a
-// BCM2709_INTERRUPT_REGISTER value and _Value should be a ULONG.
+// BCM2709_INTERRUPT_REGISTER value and _Value should be a ULONG. This Broadcom
+// interrupt controller appears to make posted writes. Perform a read of the
+// same register to make sure the write sticks.
 //
 
-#define WRITE_INTERRUPT_REGISTER(_Register, _Value)                           \
-    HlBcm2709KernelServices->WriteRegister32(                                 \
-                                  HlBcm2709InterruptController + (_Register), \
-                                  (_Value))
+#define WRITE_INTERRUPT_REGISTER(_Register, _Value)                     \
+    WRITE_REGISTER(HlBcm2709InterruptController + (_Register), _Value); \
+    READ_REGISTER(HlBcm2709InterruptController + (_Register));
 
 //
 // This macro reads from the BCM2709 local registers. _Register should be a
@@ -181,19 +225,19 @@ Environment:
 //
 
 #define READ_LOCAL_REGISTER(_Register, _ProcessorId) \
-    HlBcm2709KernelServices->ReadRegister32(         \
-                   HlBcm2709LocalBase + ((_Register) + (0x4 * (_ProcessorId))))
+    READ_REGISTER(GET_LOCAL_ADDRESS(_Register, _ProcessorId))
 
 //
 // This macro writes to the BCM2709 interrupt controller. _Register should be a
 // BCM2709_LOCAL_REGISTER value, _ProcessorId should be the index of the
-// processor whose register is being written and _Value should be a ULONG.
+// processor whose register is being written and _Value should be a ULONG. This
+// Broadcom interrupt controller appears to make posted writes. Perform a read
+// of the same register to make sure the write sticks.
 //
 
-#define WRITE_LOCAL_REGISTER(_Register, _ProcessorId, _Value)                 \
-    HlBcm2709KernelServices->WriteRegister32(                                 \
-                 HlBcm2709LocalBase + ((_Register) + (0x4 * (_ProcessorId))), \
-                 (_Value))
+#define WRITE_LOCAL_REGISTER(_Register, _ProcessorId, _Value)           \
+    WRITE_REGISTER(GET_LOCAL_ADDRESS(_Register, _ProcessorId), _Value); \
+    READ_REGISTER(GET_LOCAL_ADDRESS(_Register, _ProcessorId));
 
 //
 // This macro reads from the BCM2709 local interrupt registers. _Register
@@ -202,20 +246,19 @@ Environment:
 //
 
 #define READ_LOCAL_IPI_REGISTER(_Register, _ProcessorId) \
-    HlBcm2709KernelServices->ReadRegister32(             \
-                  HlBcm2709LocalBase + ((_Register) + (0x10 * (_ProcessorId))))
+    READ_REGISTER(GET_IPI_ADDRESS(_Register, _ProcessorId))
 
 //
 // This macro writes to the BCM2709 local interrupt controller. _Register
 // should be a BCM2709_LOCAL_REGISTER value, _ProcessorId should be the index
 // of the processor whose register is being written, and _Value should be a
-// ULONG.
+// ULONG. This Broadcom interrupt controller appears to make posted writes.
+// Perform a read of the same register to make sure the write sticks.
 //
 
-#define WRITE_LOCAL_IPI_REGISTER(_Register, _ProcessorId, _Value)             \
-    HlBcm2709KernelServices->WriteRegister32(                                 \
-                HlBcm2709LocalBase + ((_Register) + (0x10 * (_ProcessorId))), \
-                (_Value))
+#define WRITE_LOCAL_IPI_REGISTER(_Register, _ProcessorId, _Value)     \
+    WRITE_REGISTER(GET_IPI_ADDRESS(_Register, _ProcessorId), _Value); \
+    READ_REGISTER(GET_IPI_ADDRESS(_Register, _ProcessorId));
 
 //
 // This macro counts the trailing zeros in the given 32-bit value.
@@ -255,6 +298,7 @@ typedef enum _BCM2836_LOCAL_REGISTER {
     Bcm2709LocalTimerInterruptControlCpu1   = 0x44,
     Bcm2709LocalTimerInterruptControlCpu2   = 0x48,
     Bcm2709LocalTimerInterruptControlCpu4   = 0x4C,
+    Bcm2709LocalMailboxInterruptControl     = 0x50,
     Bcm2709LocalMailboxInterruptControlCpu0 = 0x50,
     Bcm2709LocalMailboxInterruptControlCpu1 = 0x54,
     Bcm2709LocalMailboxInterruptControlCpu2 = 0x58,
@@ -840,6 +884,16 @@ Return Value:
         WRITE_LOCAL_IPI_REGISTER(Bcm2709LocalIpiPending,
                                  ProcessorId,
                                  0xFFFFFFFF);
+
+        //
+        // Make sure the mailbox 0 interrupt is enabled for the core. It will
+        // be used by the IPIs.
+        //
+
+        WRITE_LOCAL_REGISTER(
+                         Bcm2709LocalMailboxInterruptControl,
+                         ProcessorId,
+                         BCM2709_INTERRUPT_LOCAL_MAILBOX_CONTROL_IRQ_0_ENABLE);
     }
 
     Status = STATUS_SUCCESS;
@@ -1083,10 +1137,7 @@ Return Value:
                 Mask = &(Controller->Masks[Processor->CurrentPriority]);
                 if ((PendingIpi & Mask->IrqMaskLocal) != 0) {
                     Processor->PendingIpis |= PendingIpi;
-
-                } else {
-                    HandleInterrupt = TRUE;
-                    Line += Bcm2709InterruptHardwareLineCount;
+                    return InterruptCauseSpuriousInterrupt;
                 }
 
                 //
@@ -1095,6 +1146,8 @@ Return Value:
                 //
 
                 CheckGpu = FALSE;
+                HandleInterrupt = TRUE;
+                Line += Bcm2709InterruptHardwareLineCount;
             }
         }
     }

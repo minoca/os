@@ -433,12 +433,6 @@ Return Value:
                                                      &Line,
                                                      MagicCandy);
 
-        if ((Cause == InterruptCauseSpuriousInterrupt) ||
-            (Cause == InterruptCauseNoInterruptHere)) {
-
-            return Cause;
-        }
-
     //
     // There is no controller, so loop through all the controllers seeing if
     // anyone responds.
@@ -460,13 +454,15 @@ Return Value:
                                                      &Line,
                                                      MagicCandy);
 
-            if (Cause == InterruptCauseLineFired) {
+            if ((Cause == InterruptCauseLineFired) ||
+                (Cause == InterruptCauseSpuriousInterrupt)) {
+
                 break;
             }
         }
 
         if (ControllerIndex == ControllerCount) {
-            return InterruptCauseNoInterruptHere;
+            Cause = InterruptCauseNoInterruptHere;
         }
     }
 
@@ -474,21 +470,30 @@ Return Value:
     // Determine the vector corresponding to the interrupt lines that fired.
     //
 
-    ASSERT(Line.Type == InterruptLineControllerSpecified);
+    if (Cause == InterruptCauseLineFired) {
 
-    Status = HlpInterruptFindLines(&Line, ProcessorController, &Lines, &Offset);
+        ASSERT(Line.Type == InterruptLineControllerSpecified);
 
-    ASSERT(KSUCCESS(Status));
+        Status = HlpInterruptFindLines(&Line,
+                                       ProcessorController,
+                                       &Lines,
+                                       &Offset);
 
-    *Vector = Lines->State[Offset].PublicState.Vector;
+        ASSERT(KSUCCESS(Status));
+
+        *Vector = Lines->State[Offset].PublicState.Vector;
+    }
 
     //
     // Ensure all writes to the interrupt controller complete before interrupts
     // are enabled at the processor.
     //
 
-    ArSerializeExecution();
-    return TRUE;
+    if (Cause != InterruptCauseNoInterruptHere) {
+        ArSerializeExecution();
+    }
+
+    return Cause;
 }
 
 PKINTERRUPT

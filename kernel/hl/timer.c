@@ -1391,12 +1391,11 @@ Return Value:
 
 {
 
+    ULONG RequiredFeatures;
     PHARDWARE_TIMER Timer;
 
-    Timer = HlpTimerFind(TIMER_FEATURE_PERIODIC | TIMER_FEATURE_PER_PROCESSOR,
-                         0,
-                         0);
-
+    RequiredFeatures = TIMER_FEATURE_PERIODIC | TIMER_FEATURE_PER_PROCESSOR;
+    Timer = HlpTimerFind(RequiredFeatures, 0, 0);
     if (Timer != NULL) {
         return Timer;
     }
@@ -1443,9 +1442,7 @@ Return Value:
     // per-processor.
     //
 
-    RequiredNonFeatures = TIMER_FEATURE_PER_PROCESSOR |
-                          TIMER_FEATURE_VARIANT;
-
+    RequiredNonFeatures = TIMER_FEATURE_PER_PROCESSOR | TIMER_FEATURE_VARIANT;
     Timer = HlpTimerFind(TIMER_FEATURE_PERIODIC, RequiredNonFeatures, 0);
     return Timer;
 }
@@ -1476,16 +1473,15 @@ Return Value:
 
 {
 
+    ULONG RequiredFeatures;
     PHARDWARE_TIMER Timer;
 
     //
     // Attempt to find a per-processor timer for fastest access.
     //
 
-    Timer = HlpTimerFind(TIMER_FEATURE_PER_PROCESSOR | TIMER_FEATURE_READABLE,
-                         TIMER_FEATURE_VARIANT,
-                         0);
-
+    RequiredFeatures = TIMER_FEATURE_PER_PROCESSOR | TIMER_FEATURE_READABLE;
+    Timer = HlpTimerFind(RequiredFeatures, TIMER_FEATURE_VARIANT, 0);
     if (Timer != NULL) {
         return Timer;
     }

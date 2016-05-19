@@ -336,7 +336,9 @@ Return Value:
 
     //
     // Register the BCM2709 ARM Timer based on the SP804. It is periodic and
-    // readable, but can change dynamically in reduced power states.
+    // readable, but can change dynamically in reduced power states. It also
+    // supports "one-shot" mode in that the maximum next deadline can be
+    // auto-programmed after a one-shot timer fires.
     //
 
     Context = HlBcm2709KernelServices->AllocateMemory(sizeof(BCM2709_TIMER),
@@ -354,6 +356,7 @@ Return Value:
     Timer.Context = Context;
     Timer.Features = TIMER_FEATURE_READABLE |
                      TIMER_FEATURE_PERIODIC |
+                     TIMER_FEATURE_ONE_SHOT |
                      TIMER_FEATURE_P_STATE_VARIANT;
 
     Timer.CounterBitWidth = 32;
@@ -721,10 +724,6 @@ Return Value:
         return STATUS_INVALID_PARAMETER;
     }
 
-    if (Mode == TimerModeOneShot) {
-        return STATUS_INVALID_PARAMETER;
-    }
-
     if (TickCount > MAX_ULONG) {
         TickCount = MAX_ULONG;
     }
@@ -745,13 +744,26 @@ Return Value:
                          BCM2709_ARM_TIMER_CONTROL_INTERRUPT_ENABLE);
 
         //
-        // Set the timer to its maximum value, set the configuration, clear the
-        // interrupt, then set the value.
+        // Set the timer to its maximum value, set the configuration, and then
+        // set the value. If this is a "one-shot" request, then fake it by
+        // setting the background reload counter to the maximum. This
+        // background value will get loaded when the programmed value reaches 0
+        // and will eventually cause an interrupt. The timer, however, is more
+        // likely to be disarmed or reprogrammed before that happens.
+        //
+        // Do not clear the interrupt here. On a multi-core system, this arm
+        // request can race with the interrupt firing. If the interrupt were
+        // cleared, then the other core would get interrupted only to find no
+        // pending interrupts.
         //
 
         WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerLoadValue, 0xFFFFFFFF);
         WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerControl, ControlValue);
-        WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerInterruptClear, 1);
+        if (Mode == TimerModeOneShot) {
+            WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerBackgroundLoadValue,
+                                     0xFFFFFFFF);
+        }
+
         WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerLoadValue, TickCount);
         break;
 
@@ -764,6 +776,10 @@ Return Value:
 
     case Bcm2709TimerSystem1:
     case Bcm2709TimerSystem3:
+        if (Mode == TimerModeOneShot) {
+            return STATUS_INVALID_PARAMETER;
+        }
+
         CompareRegister = Bcm2709SystemTimerCompare1;
         ControlValue = BCM2709_SYSTEM_TIMER_CONTROL_MATCH_1;
         if (Timer->Type == Bcm2709TimerSystem3) {
@@ -905,8 +921,8 @@ Return Value:
     // Acknowledge the interrupt by clearing the match bit in the control
     // register. Also reprogram the compare register, as it does not
     // automatically get set for the next period. That said, if the compare
-    // value has slipped behind the counter (possibly due debugger activity),
-    // make sure to schedule the next period in the future.
+    // value has slipped behind the counter (possibly due to debugger
+    // activity), make sure to schedule the next period in the future.
     //
 
     case Bcm2709TimerSystem1:
