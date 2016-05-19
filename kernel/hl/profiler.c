@@ -163,9 +163,9 @@ Return Value:
 
 {
 
-    INTERRUPT_LINE OutputLine;
     ULONG Processor;
     PKINTERRUPT ProfilerInterrupt;
+    INTERRUPT_LINE_STATE State;
     KSTATUS Status;
     PROCESSOR_SET Target;
 
@@ -182,18 +182,17 @@ Return Value:
 
         RtlZeroMemory(&Target, sizeof(PROCESSOR_SET));
         Target.Target = ProcessorTargetSelf;
-        HlpInterruptGetStandardCpuLine(&OutputLine);
+        State.Mode = HlProfilerTimer->Interrupt.TriggerMode;
+        State.Polarity = HlProfilerTimer->Interrupt.ActiveLevel;
+        State.Flags = INTERRUPT_LINE_STATE_FLAG_ENABLED;
+        HlpInterruptGetStandardCpuLine(&(State.Output));
         ProfilerInterrupt = HlpInterruptGetProfilerKInterrupt();
-        Status = HlpInterruptSetLineState(
-                                        &(HlProfilerTimer->Interrupt.Line),
-                                        HlProfilerTimer->Interrupt.TriggerMode,
-                                        HlProfilerTimer->Interrupt.ActiveLevel,
-                                        ProfilerInterrupt,
-                                        &Target,
-                                        &OutputLine,
-                                        INTERRUPT_LINE_STATE_FLAG_ENABLED,
-                                        NULL,
-                                        0);
+        Status = HlpInterruptSetLineState(&(HlProfilerTimer->Interrupt.Line),
+                                          &State,
+                                          ProfilerInterrupt,
+                                          &Target,
+                                          NULL,
+                                          0);
 
         if (!KSUCCESS(Status)) {
             goto InitializeProfilerEnd;

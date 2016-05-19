@@ -1134,9 +1134,7 @@ Return Value:
 KSTATUS
 HlEnableInterruptLine (
     ULONGLONG GlobalSystemInterruptNumber,
-    INTERRUPT_MODE TriggerMode,
-    INTERRUPT_ACTIVE_LEVEL Polarity,
-    ULONG LineStateFlags,
+    PINTERRUPT_LINE_STATE LineState,
     PKINTERRUPT Interrupt,
     PVOID ResourceData,
     UINTN ResourceDataSize
@@ -1153,12 +1151,8 @@ Arguments:
     GlobalSystemInterruptNumber - Supplies the global system interrupt number
         to enable.
 
-    TriggerMode - Supplies the trigger mode of the interrupt.
-
-    Polarity - Supplies the polarity of the interrupt.
-
-    LineStateFlags - Supplies additional line state flags to set. The flags
-        INTERRUPT_LINE_STATE_FLAG_ENABLED will be ORed in automatically.
+    LineState - Supplies a pointer to the desired line state. Only the mode,
+        polarity and flags are required by this routine.
 
     Interrupt - Supplies a pointer to the interrupt structure this line will
         be connected to.

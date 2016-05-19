@@ -85,11 +85,9 @@ Return Value:
     PRESOURCE_ALLOCATION_LIST AllocationList;
     BOOL Connected;
     BOOL Enabled;
-    INTERRUPT_MODE InterruptMode;
-    INTERRUPT_ACTIVE_LEVEL InterruptPolarity;
     PRESOURCE_ALLOCATION LineAllocation;
     ULONGLONG LineCharacteristics;
-    ULONG LineState;
+    INTERRUPT_LINE_STATE LineState;
     PKINTERRUPT NewInterrupt;
     KSTATUS Status;
     PRESOURCE_ALLOCATION VectorAllocation;
@@ -218,29 +216,29 @@ Return Value:
     //
 
     if (Parameters->LineNumber != INVALID_INTERRUPT_LINE) {
-        LineState = 0;
+        LineState.Flags = 0;
         LineCharacteristics = LineAllocation->Characteristics;
 
         //
         // Set up the interrupt mode and polarity.
         //
 
-        InterruptPolarity = InterruptActiveLevelUnknown;
+        LineState.Polarity = InterruptActiveLevelUnknown;
         if ((LineCharacteristics & INTERRUPT_LINE_ACTIVE_HIGH) != 0) {
             if ((LineCharacteristics & INTERRUPT_LINE_ACTIVE_LOW) != 0) {
-                InterruptPolarity = InterruptActiveBoth;
+                LineState.Polarity = InterruptActiveBoth;
 
             } else {
-                InterruptPolarity = InterruptActiveHigh;
+                LineState.Polarity = InterruptActiveHigh;
             }
 
         } else if ((LineCharacteristics & INTERRUPT_LINE_ACTIVE_LOW) != 0) {
-            InterruptPolarity = InterruptActiveLow;
+            LineState.Polarity = InterruptActiveLow;
         }
 
-        InterruptMode = InterruptModeLevel;
+        LineState.Mode = InterruptModeLevel;
         if ((LineCharacteristics & INTERRUPT_LINE_EDGE_TRIGGERED) != 0) {
-            InterruptMode = InterruptModeEdge;
+            LineState.Mode = InterruptModeEdge;
         }
 
         //
@@ -248,11 +246,11 @@ Return Value:
         //
 
         if ((LineCharacteristics & INTERRUPT_LINE_WAKE) != 0) {
-            LineState |= INTERRUPT_LINE_STATE_FLAG_WAKE;
+            LineState.Flags |= INTERRUPT_LINE_STATE_FLAG_WAKE;
         }
 
         if ((LineCharacteristics & INTERRUPT_LINE_DEBOUNCE) != 0) {
-            LineState |= INTERRUPT_LINE_STATE_FLAG_DEBOUNCE;
+            LineState.Flags |= INTERRUPT_LINE_STATE_FLAG_DEBOUNCE;
         }
 
         //
@@ -260,9 +258,7 @@ Return Value:
         //
 
         Status = HlEnableInterruptLine(Parameters->LineNumber,
-                                       InterruptMode,
-                                       InterruptPolarity,
-                                       LineState,
+                                       &LineState,
                                        NewInterrupt,
                                        LineAllocation->Data,
                                        LineAllocation->DataSize);

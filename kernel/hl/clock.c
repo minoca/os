@@ -382,15 +382,18 @@ Return Value:
     PKINTERRUPT ClockInterrupt;
     ULONGLONG GiveUpTime;
     ULONG Index;
-    INTERRUPT_LINE OutputLine;
     ULONG Processor;
+    INTERRUPT_LINE_STATE State;
     KSTATUS Status;
     PROCESSOR_SET Target;
 
     Processor = KeGetCurrentProcessorNumber();
     RtlZeroMemory(&Target, sizeof(PROCESSOR_SET));
     Target.Target = ProcessorTargetSelf;
-    HlpInterruptGetStandardCpuLine(&OutputLine);
+    State.Mode = HlClockTimer->Interrupt.TriggerMode;
+    State.Polarity = HlClockTimer->Interrupt.ActiveLevel;
+    State.Flags = INTERRUPT_LINE_STATE_FLAG_ENABLED;
+    HlpInterruptGetStandardCpuLine(&(State.Output));
     if (Processor == 0) {
         KeInitializeSpinLock(&HlClockDataLock);
         if (((HlClockTimer->Features & TIMER_FEATURE_PER_PROCESSOR) == 0) &&
@@ -422,12 +425,9 @@ Return Value:
         ClockInterrupt = HlpInterruptGetClockKInterrupt();
         ClockInterrupt->InterruptServiceRoutine = HlpEarlyClockInterruptHandler;
         Status = HlpInterruptSetLineState(&(HlClockTimer->Interrupt.Line),
-                                          HlClockTimer->Interrupt.TriggerMode,
-                                          HlClockTimer->Interrupt.ActiveLevel,
+                                          &State,
                                           ClockInterrupt,
                                           &Target,
-                                          &OutputLine,
-                                          INTERRUPT_LINE_STATE_FLAG_ENABLED,
                                           NULL,
                                           0);
 
@@ -499,16 +499,12 @@ Return Value:
             //
 
             ClockInterrupt = HlpInterruptGetClockKInterrupt();
-            Status = HlpInterruptSetLineState(
-                                           &(HlClockTimer->Interrupt.Line),
-                                           HlClockTimer->Interrupt.TriggerMode,
-                                           HlClockTimer->Interrupt.ActiveLevel,
-                                           ClockInterrupt,
-                                           &Target,
-                                           &OutputLine,
-                                           INTERRUPT_LINE_STATE_FLAG_ENABLED,
-                                           NULL,
-                                           0);
+            Status = HlpInterruptSetLineState(&(HlClockTimer->Interrupt.Line),
+                                              &State,
+                                              ClockInterrupt,
+                                              &Target,
+                                              NULL,
+                                              0);
 
             if (!KSUCCESS(Status)) {
                 goto InitializeClockEnd;

@@ -131,7 +131,8 @@ Members:
     PublicState - Stores the interrupt line state structure that is seen by
         the interrupt controller plugin.
 
-    Flags - Stores a set of internal flags regarding the line.
+    Flags - Stores a set of internal flags regarding the line. See
+        INTERRUPT_LINE_INTERNAL_STATE_FLAG_* for definitions.
 
     ReferenceCount - Stores the number of devices using the interrupt line.
 
@@ -618,12 +619,9 @@ Return Value:
 KSTATUS
 HlpInterruptSetLineState (
     PINTERRUPT_LINE Line,
-    INTERRUPT_MODE Mode,
-    INTERRUPT_ACTIVE_LEVEL Polarity,
+    PINTERRUPT_LINE_STATE State,
     PKINTERRUPT Interrupt,
     PPROCESSOR_SET Target,
-    PINTERRUPT_LINE OutputLine,
-    ULONG Flags,
     PVOID ResourceData,
     UINTN ResourceDataSize
     );
@@ -639,21 +637,15 @@ Arguments:
 
     Line - Supplies a pointer to the interrupt line to configure.
 
-    Mode - Supplies the trigger mode of the interrupt.
-
-    Polarity - Supplies the active level of the interrupt.
+    State - Supplies an optional pointer to the line state to set. Only the
+        mode, polarity, flags, and output line are used by this routine. This
+        is not required when disabling an interrupt line.
 
     Interrupt - Supplies a pointer to the interrupt this line will be conencted
         to.
 
     Target - Supplies a pointer to the set of processors that the interrupt
         should target.
-
-    OutputLine - Supplies the output line this interrupt line should interrupt
-        to.
-
-    Flags - Supplies a bitfield of flags about the operation. See
-        INTERRUPT_LINE_STATE_FLAG_* definitions.
 
     ResourceData - Supplies an optional pointer to the device specific resource
         data for the interrupt line.

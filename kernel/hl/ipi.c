@@ -1231,9 +1231,8 @@ Return Value:
     PINTERRUPT_CONTROLLER Controller;
     PINTERRUPT_LINE IpiLines;
     ULONG LineCount;
-    ULONG LineFlags;
     ULONG LineIndex;
-    INTERRUPT_LINE OutputLine;
+    INTERRUPT_LINE_STATE State;
     KSTATUS Status;
     PROCESSOR_SET Target;
 
@@ -1286,15 +1285,14 @@ Return Value:
         //
 
         Target.Target = ProcessorTargetAll;
-        HlpInterruptGetStandardCpuLine(&OutputLine);
-        LineFlags = INTERRUPT_LINE_STATE_FLAG_ENABLED;
+        State.Mode = InterruptModeUnknown;
+        State.Polarity = InterruptActiveLevelUnknown;
+        State.Flags = INTERRUPT_LINE_STATE_FLAG_ENABLED;
+        HlpInterruptGetStandardCpuLine(&(State.Output));
         Status = HlpInterruptSetLineState(&(IpiLines[LineIndex]),
-                                          InterruptModeUnknown,
-                                          InterruptActiveLevelUnknown,
+                                          &State,
                                           HlIpiKInterrupt[LineIndex],
                                           &Target,
-                                          &OutputLine,
-                                          LineFlags,
                                           NULL,
                                           0);
 

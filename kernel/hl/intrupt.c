@@ -814,9 +814,7 @@ Return Value:
 KSTATUS
 HlEnableInterruptLine (
     ULONGLONG GlobalSystemInterruptNumber,
-    INTERRUPT_MODE TriggerMode,
-    INTERRUPT_ACTIVE_LEVEL Polarity,
-    ULONG LineStateFlags,
+    PINTERRUPT_LINE_STATE LineState,
     PKINTERRUPT Interrupt,
     PVOID ResourceData,
     UINTN ResourceDataSize
@@ -832,6 +830,9 @@ Arguments:
 
     GlobalSystemInterruptNumber - Supplies the global system interrupt number
         to enable.
+
+    LineState - Supplies a pointer to the desired line state. Only the mode,
+        polarity and flags are required by this routine.
 
     TriggerMode - Supplies the trigger mode of the interrupt.
 
@@ -857,7 +858,6 @@ Return Value:
 {
 
     INTERRUPT_LINE Line;
-    INTERRUPT_LINE OutputLine;
     KSTATUS Status;
     PROCESSOR_SET Target;
 
@@ -866,18 +866,15 @@ Return Value:
     Line.Type = InterruptLineGsi;
     Line.U.Gsi = GlobalSystemInterruptNumber;
     Target.Target = ProcessorTargetAny;
-    HlpInterruptGetStandardCpuLine(&OutputLine);
-    LineStateFlags |= INTERRUPT_LINE_STATE_FLAG_ENABLED |
-                      INTERRUPT_LINE_STATE_FLAG_LOWEST_PRIORITY;
+    HlpInterruptGetStandardCpuLine(&(LineState->Output));
+    LineState->Flags |= INTERRUPT_LINE_STATE_FLAG_ENABLED |
+                        INTERRUPT_LINE_STATE_FLAG_LOWEST_PRIORITY;
 
     HlpInterruptAcquireLock();
     Status = HlpInterruptSetLineState(&Line,
-                                      TriggerMode,
-                                      Polarity,
+                                      LineState,
                                       Interrupt,
                                       &Target,
-                                      &OutputLine,
-                                      LineStateFlags,
                                       ResourceData,
                                       ResourceDataSize);
 
@@ -910,18 +907,13 @@ Return Value:
 
 {
 
-    ULONG Flags;
     KSTATUS Status;
 
-    Flags = 0;
     HlpInterruptAcquireLock();
     Status = HlpInterruptSetLineState(&(Interrupt->Line),
-                                      InterruptModeUnknown,
-                                      InterruptActiveLevelUnknown,
+                                      NULL,
                                       Interrupt,
                                       NULL,
-                                      NULL,
-                                      Flags,
                                       NULL,
                                       0);
 
@@ -1561,12 +1553,9 @@ CreateAndConnectInternalInterruptEnd:
 KSTATUS
 HlpInterruptSetLineState (
     PINTERRUPT_LINE Line,
-    INTERRUPT_MODE Mode,
-    INTERRUPT_ACTIVE_LEVEL Polarity,
+    PINTERRUPT_LINE_STATE State,
     PKINTERRUPT Interrupt,
     PPROCESSOR_SET Target,
-    PINTERRUPT_LINE OutputLine,
-    ULONG Flags,
     PVOID ResourceData,
     UINTN ResourceDataSize
     )
@@ -1582,21 +1571,15 @@ Arguments:
 
     Line - Supplies a pointer to the interrupt line to configure.
 
-    Mode - Supplies the trigger mode of the interrupt.
-
-    Polarity - Supplies the active level of the interrupt.
+    State - Supplies an optional pointer to the line state to set. Only the
+        mode, polarity, flags, and output line are used by this routine. This
+        is not required when disabling an interrupt line.
 
     Interrupt - Supplies a pointer to the interrupt this line will be connected
         to.
 
     Target - Supplies a pointer to the set of processors that the interrupt
         should target.
-
-    OutputLine - Supplies the output line this interrupt line should interrupt
-        to.
-
-    Flags - Supplies a bitfield of flags about the operation. See
-        INTERRUPT_LINE_STATE_FLAG_* definitions.
 
     ResourceData - Supplies an optional pointer to the device specific resource
         data for the interrupt line.
@@ -1626,7 +1609,9 @@ Return Value:
     ModifiedState = FALSE;
     SourceLine = *Line;
     InterruptEnabled = FALSE;
-    if ((Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) != 0) {
+    if ((State != NULL) &&
+        ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) != 0)) {
+
         InterruptEnabled = TRUE;
     }
 
@@ -1693,7 +1678,7 @@ Return Value:
         //
 
         Lines->State[LineOffset].PublicState.Flags &=
-                                        ~INTERRUPT_LINE_STATE_FLAG_ENABLED;
+                                            ~INTERRUPT_LINE_STATE_FLAG_ENABLED;
 
         Status = Controller->FunctionTable.SetLineState(
                                   Controller->PrivateContext,
@@ -1727,7 +1712,9 @@ Return Value:
         Interrupt->RunLevel = Controller->RunLevel;
     }
 
-    Interrupt->Mode = Mode;
+    ASSERT(State != NULL);
+
+    Interrupt->Mode = State->Mode;
     Interrupt->LastTimestamp = 0;
     Interrupt->InterruptCount = 0;
     Interrupt->Controller = Controller;
@@ -1763,10 +1750,10 @@ Return Value:
     // Determine the line configuration.
     //
 
-    Lines->State[LineOffset].PublicState.Flags = Flags;
+    Lines->State[LineOffset].PublicState.Flags = State->Flags;
     Lines->State[LineOffset].PublicState.Vector = Interrupt->Vector;
-    Lines->State[LineOffset].PublicState.Mode = Mode;
-    Lines->State[LineOffset].PublicState.Polarity = Polarity;
+    Lines->State[LineOffset].PublicState.Mode = State->Mode;
+    Lines->State[LineOffset].PublicState.Polarity = State->Polarity;
     Lines->State[LineOffset].Flags |=
                                INTERRUPT_LINE_INTERNAL_STATE_FLAG_RESERVED;
 
@@ -1776,7 +1763,7 @@ Return Value:
 
     Status = HlpInterruptDetermineRouting(
                            Controller,
-                           OutputLine,
+                           &(State->Output),
                            &(Lines->State[LineOffset].PublicState.Output));
 
     if (!KSUCCESS(Status)) {
