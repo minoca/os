@@ -427,7 +427,9 @@ Return Value:
                                           ClockInterrupt,
                                           &Target,
                                           &OutputLine,
-                                          INTERRUPT_LINE_STATE_FLAG_ENABLED);
+                                          INTERRUPT_LINE_STATE_FLAG_ENABLED,
+                                          NULL,
+                                          0);
 
         if (!KSUCCESS(Status)) {
             goto InitializeClockEnd;
@@ -504,7 +506,9 @@ Return Value:
                                            ClockInterrupt,
                                            &Target,
                                            &OutputLine,
-                                           INTERRUPT_LINE_STATE_FLAG_ENABLED);
+                                           INTERRUPT_LINE_STATE_FLAG_ENABLED,
+                                           NULL,
+                                           0);
 
             if (!KSUCCESS(Status)) {
                 goto InitializeClockEnd;

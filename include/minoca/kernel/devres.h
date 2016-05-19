@@ -320,7 +320,7 @@ Members:
         allocation dictates the allocation of this resource (e.g. interrupt
         vector allocations can depend on interrupt line allocations).
 
-    Data - Stores a pointer to the additional data for this requirement. This
+    Data - Stores a pointer to the additional data for this allocation. This
         data is only required for some resource types (like GPIO).
 
     DataSize - Stores the size of the additional data in bytes.

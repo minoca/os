@@ -817,7 +817,9 @@ HlEnableInterruptLine (
     INTERRUPT_MODE TriggerMode,
     INTERRUPT_ACTIVE_LEVEL Polarity,
     ULONG LineStateFlags,
-    PKINTERRUPT Interrupt
+    PKINTERRUPT Interrupt,
+    PVOID ResourceData,
+    UINTN ResourceDataSize
     )
 
 /*++
@@ -840,6 +842,11 @@ Arguments:
 
     Interrupt - Supplies a pointer to the interrupt structure this line will
         be connected to.
+
+    ResourceData - Supplies an optional pointer to the device specific resource
+        data for the interrupt line.
+
+    ResourceDataSize - Supplies the size of the resource data, in bytes.
 
 Return Value:
 
@@ -870,7 +877,9 @@ Return Value:
                                       Interrupt,
                                       &Target,
                                       &OutputLine,
-                                      LineStateFlags);
+                                      LineStateFlags,
+                                      ResourceData,
+                                      ResourceDataSize);
 
     HlpInterruptReleaseLock();
     return Status;
@@ -912,7 +921,9 @@ Return Value:
                                       Interrupt,
                                       NULL,
                                       NULL,
-                                      Flags);
+                                      Flags,
+                                      NULL,
+                                      0);
 
     HlpInterruptReleaseLock();
 
@@ -1555,7 +1566,9 @@ HlpInterruptSetLineState (
     PKINTERRUPT Interrupt,
     PPROCESSOR_SET Target,
     PINTERRUPT_LINE OutputLine,
-    ULONG Flags
+    ULONG Flags,
+    PVOID ResourceData,
+    UINTN ResourceDataSize
     )
 
 /*++
@@ -1584,6 +1597,11 @@ Arguments:
 
     Flags - Supplies a bitfield of flags about the operation. See
         INTERRUPT_LINE_STATE_FLAG_* definitions.
+
+    ResourceData - Supplies an optional pointer to the device specific resource
+        data for the interrupt line.
+
+    ResourceDataSize - Supplies the size of the resource data, in bytes.
 
 Return Value:
 
@@ -1680,7 +1698,9 @@ Return Value:
         Status = Controller->FunctionTable.SetLineState(
                                   Controller->PrivateContext,
                                   &SourceLine,
-                                  &(Lines->State[LineOffset].PublicState));
+                                  &(Lines->State[LineOffset].PublicState),
+                                  ResourceData,
+                                  ResourceDataSize);
 
         if (!KSUCCESS(Status)) {
             goto InterruptSetLineStateEnd;
@@ -1793,7 +1813,9 @@ Return Value:
     Status = Controller->FunctionTable.SetLineState(
                                   Controller->PrivateContext,
                                   &SourceLine,
-                                  &(Lines->State[LineOffset].PublicState));
+                                  &(Lines->State[LineOffset].PublicState),
+                                  ResourceData,
+                                  ResourceDataSize);
 
     if (!KSUCCESS(Status)) {
         goto InterruptSetLineStateEnd;

@@ -2420,6 +2420,8 @@ Return Value:
         if ((GpioData->Flags & RESOURCE_GPIO_INTERRUPT) != 0) {
             InterruptRequirement.Length = Requirement.Length;
             InterruptRequirement.Flags = Requirement.Flags;
+            InterruptRequirement.Data = Requirement.Data;
+            InterruptRequirement.DataSize = Requirement.DataSize;
 
             //
             // Translate from the provider device back to an interrupt

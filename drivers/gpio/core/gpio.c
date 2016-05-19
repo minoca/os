@@ -89,7 +89,9 @@ KSTATUS
 GpioSetInterruptLineState (
     PVOID Context,
     PINTERRUPT_LINE Line,
-    PINTERRUPT_LINE_STATE State
+    PINTERRUPT_LINE_STATE State,
+    PVOID ResourceData,
+    UINTN ResourceDataSize
     );
 
 VOID
@@ -1093,7 +1095,9 @@ KSTATUS
 GpioSetInterruptLineState (
     PVOID Context,
     PINTERRUPT_LINE Line,
-    PINTERRUPT_LINE_STATE State
+    PINTERRUPT_LINE_STATE State,
+    PVOID ResourceData,
+    UINTN ResourceDataSize
     )
 
 /*++
@@ -1112,6 +1116,11 @@ Arguments:
 
     State - Supplies a pointer to the new configuration of the line.
 
+    ResourceData - Supplies an optional pointer to the device specific resource
+        data for the interrupt line.
+
+    ResourceDataSize - Supplies the size of the resource data, in bytes.
+
 Return Value:
 
     Status code.
@@ -1121,10 +1130,30 @@ Return Value:
 {
 
     PGPIO_CONTROLLER Controller;
+    PRESOURCE_GPIO_DATA GpioData;
+    RESOURCE_GPIO_DATA GpioDataBuffer;
     PGPIO_CONTROLLER_INFORMATION Host;
     RUNLEVEL OldRunLevel;
     PGPIO_PIN_CONFIGURATION Pin;
     KSTATUS Status;
+
+    //
+    // Before acquiring the controller lock, touch any paged-pool objects. This
+    // includes the resource data. The lock may be acquired at a non-low
+    // runlevel.
+    //
+
+    GpioData = ResourceData;
+    if (GpioData != NULL) {
+        if ((ResourceDataSize < sizeof(RESOURCE_GPIO_DATA)) ||
+            (GpioData->Version < RESOURCE_GPIO_DATA_VERSION)) {
+
+            return STATUS_VERSION_MISMATCH;
+        }
+
+        RtlCopyMemory(&GpioDataBuffer, GpioData, sizeof(RESOURCE_GPIO_DATA));
+        GpioData = &GpioDataBuffer;
+    }
 
     Controller = Context;
     OldRunLevel = GpioLockController(Controller);
@@ -1134,8 +1163,7 @@ Return Value:
         Pin->Flags = GPIO_PIN_CONFIGURED | GPIO_PIN_ACQUIRED;
 
     } else {
-        Pin->Flags &= GPIO_PULL_DOWN | GPIO_PULL_UP;
-        Pin->Flags |= GPIO_INTERRUPT | GPIO_PIN_CONFIGURED | GPIO_PIN_ACQUIRED;
+        Pin->Flags = GPIO_INTERRUPT | GPIO_PIN_CONFIGURED | GPIO_PIN_ACQUIRED;
         if (State->Mode == InterruptModeEdge) {
             Pin->Flags |= GPIO_INTERRUPT_EDGE_TRIGGERED;
         }
@@ -1157,6 +1185,23 @@ Return Value:
 
         if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_WAKE) != 0) {
             Pin->Flags |= GPIO_INTERRUPT_WAKE;
+        }
+
+        if (GpioData != NULL) {
+            if ((GpioData->Flags & RESOURCE_GPIO_PULL_NONE) ==
+                 RESOURCE_GPIO_PULL_NONE) {
+
+                Pin->Flags |= GPIO_PULL_NONE;
+
+            } else if ((GpioData->Flags & RESOURCE_GPIO_PULL_UP) != 0) {
+                Pin->Flags |= GPIO_PULL_UP;
+
+            } else if ((GpioData->Flags & RESOURCE_GPIO_PULL_DOWN) != 0) {
+                Pin->Flags |= GPIO_PULL_DOWN;
+            }
+
+            Pin->OutputDriveStrength = GpioData->OutputDriveStrength;
+            Pin->DebounceTimeout = GpioData->DebounceTimeout;
         }
     }
 

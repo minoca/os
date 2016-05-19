@@ -191,7 +191,9 @@ Return Value:
                                         ProfilerInterrupt,
                                         &Target,
                                         &OutputLine,
-                                        INTERRUPT_LINE_STATE_FLAG_ENABLED);
+                                        INTERRUPT_LINE_STATE_FLAG_ENABLED,
+                                        NULL,
+                                        0);
 
         if (!KSUCCESS(Status)) {
             goto InitializeProfilerEnd;

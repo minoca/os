@@ -623,7 +623,9 @@ HlpInterruptSetLineState (
     PKINTERRUPT Interrupt,
     PPROCESSOR_SET Target,
     PINTERRUPT_LINE OutputLine,
-    ULONG Flags
+    ULONG Flags,
+    PVOID ResourceData,
+    UINTN ResourceDataSize
     );
 
 /*++
@@ -652,6 +654,11 @@ Arguments:
 
     Flags - Supplies a bitfield of flags about the operation. See
         INTERRUPT_LINE_STATE_FLAG_* definitions.
+
+    ResourceData - Supplies an optional pointer to the device specific resource
+        data for the interrupt line.
+
+    ResourceDataSize - Supplies the size of the resource data, in bytes.
 
 Return Value:
 

@@ -263,7 +263,9 @@ Return Value:
                                        InterruptMode,
                                        InterruptPolarity,
                                        LineState,
-                                       NewInterrupt);
+                                       NewInterrupt,
+                                       LineAllocation->Data,
+                                       LineAllocation->DataSize);
 
         if (!KSUCCESS(Status)) {
             goto ConnectInterruptEnd;

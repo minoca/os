@@ -1137,7 +1137,9 @@ HlEnableInterruptLine (
     INTERRUPT_MODE TriggerMode,
     INTERRUPT_ACTIVE_LEVEL Polarity,
     ULONG LineStateFlags,
-    PKINTERRUPT Interrupt
+    PKINTERRUPT Interrupt,
+    PVOID ResourceData,
+    UINTN ResourceDataSize
     );
 
 /*++
@@ -1160,6 +1162,11 @@ Arguments:
 
     Interrupt - Supplies a pointer to the interrupt structure this line will
         be connected to.
+
+    ResourceData - Supplies an optional pointer to the device specific resource
+        data for the interrupt line.
+
+    ResourceDataSize - Supplies the size of the resource data, in bytes.
 
 Return Value:
 

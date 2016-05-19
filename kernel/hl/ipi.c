@@ -1294,7 +1294,9 @@ Return Value:
                                           HlIpiKInterrupt[LineIndex],
                                           &Target,
                                           &OutputLine,
-                                          LineFlags);
+                                          LineFlags,
+                                          NULL,
+                                          0);
 
         if (!KSUCCESS(Status)) {
             goto InterruptFindIpiLinesEnd;

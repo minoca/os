@@ -398,7 +398,9 @@ KSTATUS
 HlpGicSetLineState (
     PVOID Context,
     PINTERRUPT_LINE Line,
-    PINTERRUPT_LINE_STATE State
+    PINTERRUPT_LINE_STATE State,
+    PVOID ResourceData,
+    UINTN ResourceDataSize
     );
 
 VOID
@@ -1218,7 +1220,9 @@ KSTATUS
 HlpGicSetLineState (
     PVOID Context,
     PINTERRUPT_LINE Line,
-    PINTERRUPT_LINE_STATE State
+    PINTERRUPT_LINE_STATE State,
+    PVOID ResourceData,
+    UINTN ResourceDataSize
     )
 
 /*++
@@ -1236,6 +1240,11 @@ Arguments:
         controller specified line.
 
     State - Supplies a pointer to the new configuration of the line.
+
+    ResourceData - Supplies an optional pointer to the device specific resource
+        data for the interrupt line.
+
+    ResourceDataSize - Supplies the size of the resource data, in bytes.
 
 Return Value:
 
