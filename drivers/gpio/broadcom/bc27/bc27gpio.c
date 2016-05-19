@@ -230,6 +230,14 @@ GPIO_FUNCTION_TABLE Bcm27GpioFunctionTableTemplate = {
 };
 
 //
+// Store the default pull up/down settings for each GPIO pin. If the pin's bit
+// is not set in either array, then the pull up/down is disabled by default.
+//
+
+ULONG Bcm27GpioPullUpDefaults[2] = {0x000001FF, 0x003FC01C};
+ULONG Bcm27GpioPullDownDefaults[2] = {0xCFFFFE00, 0x00000FE3};
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -861,6 +869,7 @@ Return Value:
 
     BCM2709_GPIO_REGISTER ClockRegister;
     PBCM27_GPIO_CONTROLLER Controller;
+    ULONG DefaultIndex;
     ULONG Delay;
     ULONG Flags;
     ULONG PinMask;
@@ -898,8 +907,20 @@ Return Value:
     }
 
     //
-    // Set the pull up and pull down state if the default is not being used.
+    // Set the pull up and pull down state. It is either requested to be in a
+    // certain state or the default is set.
     //
+
+    if (Pin < 32) {
+        PinMask = 1 << Pin;
+        ClockRegister = Bcm2709GpioPinPullUpDownClock0;
+        DefaultIndex = 0;
+
+    } else {
+        PinMask = 1 << (Pin - 32);
+        ClockRegister = Bcm2709GpioPinPullUpDownClock1;
+        DefaultIndex = 1;
+    }
 
     if ((Flags & (GPIO_PULL_UP | GPIO_PULL_DOWN | GPIO_PULL_NONE)) != 0) {
         if ((Flags & GPIO_PULL_NONE) == GPIO_PULL_NONE) {
@@ -915,38 +936,44 @@ Return Value:
             Pull = BCM2709_GPIO_PULL_DOWN;
         }
 
-        if (Pin < 32) {
-            PinMask = 1 << Pin;
-            ClockRegister = Bcm2709GpioPinPullUpDownClock0;
+    } else {
+
+        ASSERT((Bcm27GpioPullDownDefaults[DefaultIndex] &
+                Bcm27GpioPullUpDefaults[DefaultIndex]) == 0);
+
+        if ((Bcm27GpioPullDownDefaults[DefaultIndex] & PinMask) != 0) {
+            Pull = BCM2709_GPIO_PULL_DOWN;
+
+        } else if ((Bcm27GpioPullUpDefaults[DefaultIndex] & PinMask) != 0) {
+            Pull = BCM2709_GPIO_PULL_UP;
 
         } else {
-            PinMask = 1 << (Pin - 32);
-            ClockRegister = Bcm2709GpioPinPullUpDownClock1;
+            Pull = BCM2709_GPIO_PULL_NONE;
         }
-
-        //
-        // After setting the pull up/down control, the system must wait 150
-        // cycles before programming the clock.
-        //
-
-        BCM27_WRITE_GPIO(Controller, Bcm2709GpioPinPullUpDownEnable, Pull);
-        for (Delay = 0; Delay < 150; Delay += 1) {
-            NOTHING;
-        }
-
-        //
-        // The hold time for the control signal is 150 cycles. Wait after the
-        // clock is set.
-        //
-
-        BCM27_WRITE_GPIO(Controller, ClockRegister, PinMask);
-        for (Delay = 0; Delay < 150; Delay += 1) {
-            NOTHING;
-        }
-
-        BCM27_WRITE_GPIO(Controller, Bcm2709GpioPinPullUpDownEnable, 0);
-        BCM27_WRITE_GPIO(Controller, ClockRegister, 0);
     }
+
+    //
+    // After setting the pull up/down control, the system must wait 150
+    // cycles before programming the clock.
+    //
+
+    BCM27_WRITE_GPIO(Controller, Bcm2709GpioPinPullUpDownEnable, Pull);
+    for (Delay = 0; Delay < 150; Delay += 1) {
+        NOTHING;
+    }
+
+    //
+    // The hold time for the control signal is 150 cycles. Wait after the
+    // clock is set.
+    //
+
+    BCM27_WRITE_GPIO(Controller, ClockRegister, PinMask);
+    for (Delay = 0; Delay < 150; Delay += 1) {
+        NOTHING;
+    }
+
+    BCM27_WRITE_GPIO(Controller, Bcm2709GpioPinPullUpDownEnable, 0);
+    BCM27_WRITE_GPIO(Controller, ClockRegister, 0);
 
 SetConfigurationEnd:
     return Status;
