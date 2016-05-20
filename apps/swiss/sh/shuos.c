@@ -230,7 +230,7 @@ Return Value:
 
 {
 
-    *Handle = (void *)FileDescriptorToRead;
+    *Handle = (void *)(long)FileDescriptorToRead;
     return 1;
 }
 
@@ -278,7 +278,7 @@ Return Value:
     Buffer = NULL;
     BufferCapacity = 0;
     BufferSize = 0;
-    Descriptor = (int)Handle;
+    Descriptor = (int)(long)Handle;
     Result = 1;
 
     //

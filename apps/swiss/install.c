@@ -814,7 +814,7 @@ Return Value:
 
     PSTR BackupPath;
     UINTN BackupPathSize;
-    UINTN Index;
+    ULONG Index;
     struct stat Stat;
     INT Status;
 
@@ -845,7 +845,7 @@ Return Value:
 
     if (Option == InstallBackupNumbered) {
         for (Index = 1; Index < INSTALL_MAX_NUMERIC_BACKUP; Index += 1) {
-            snprintf(BackupPath, BackupPathSize, "%s~%d~", FilePath, Index);
+            snprintf(BackupPath, BackupPathSize, "%s~%u~", FilePath, Index);
             if (stat(BackupPath, &Stat) != 0) {
                 break;
             }

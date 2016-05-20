@@ -224,7 +224,7 @@ typedef struct _SHELL_NODE_SIMPLE_COMMAND {
     LIST_ENTRY AssignmentList;
     PSTR Arguments;
     UINTN ArgumentsSize;
-    ULONG ArgumentsBufferCapacity;
+    UINTN ArgumentsBufferCapacity;
 } SHELL_NODE_SIMPLE_COMMAND, *PSHELL_NODE_SIMPLE_COMMAND;
 
 /*++
