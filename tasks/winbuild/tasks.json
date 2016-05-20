@@ -135,6 +135,21 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/m4-1.4.17 tools"
         },
         {
+            "name": "Make autoconf (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/autotools/autoconf tools"
+        },
+        {
+            "name": "Make automake (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/autotools/automake tools"
+        },
+        {
+            "name": "Make libtool (tools)",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/autotools/libtool tools"
+        },
+        {
             "name": "Make awk",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/awk"
@@ -343,6 +358,21 @@
             "name": "Make git",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/git-2.3.5"
+        },
+        {
+            "name": "Make autoconf",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/autotools/autoconf"
+        },
+        {
+            "name": "Make automake",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/autotools/automake"
+        },
+        {
+            "name": "Make libtool",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/autotools/libtool"
         },
         {
             "name": "Make OS",

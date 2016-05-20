@@ -359,6 +359,21 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/dmake-DMAKE_4_12_2_2"
         },
         {
+            "name": "Make autoconf",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/autotools/autoconf"
+        },
+        {
+            "name": "Make automake",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/autotools/automake"
+        },
+        {
+            "name": "Make libtool",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/autotools/libtool"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
