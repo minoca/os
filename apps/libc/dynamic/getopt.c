@@ -426,7 +426,9 @@ Return Value:
     FailNonOptions = FALSE;
     ReturnNonOptions = FALSE;
     optarg = NULL;
-    if ((optind <= 0) || (optreset != 0)) {
+    if ((optind <= 0) || (optreset != 0) || (ClOptionEndIndex <= 0) ||
+        (ClOptionEndIndex >= ArgumentCount)) {
+
         ClOptionIndexCopy = optind;
         optind = 1;
         optreset = 0;
@@ -434,9 +436,6 @@ Return Value:
         ClNextOptionCharacter = 0;
         ClFirstNonOption = NULL;
         optarg = NULL;
-    }
-
-    if (ClOptionEndIndex <= 0) {
         ClOptionEndIndex = ArgumentCount - 1;
     }
 
@@ -1069,6 +1068,18 @@ Return Value:
 
             WinnerCount = MatchCount;
             WinnerIndex = OptionIndex;
+
+            //
+            // If the option matches exactly, then use it.
+            //
+
+            if ((Option->name[MatchCount] == '\0') &&
+                ((Argument[MatchCount] == '\0') ||
+                 (Argument[MatchCount] == '='))) {
+
+                RunnerUpCount = -1;
+                break;
+            }
 
         } else if (MatchCount > RunnerUpCount) {
             RunnerUpCount = MatchCount;
