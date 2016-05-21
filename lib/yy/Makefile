@@ -28,7 +28,8 @@ BINARYTYPE = library
 
 include $(SRCDIR)/sources
 
-DIRS = build
+DIRS = build \
+       gen   \
 
 TESTDIRS = yytest
 

@@ -22,4 +22,5 @@
 
 OBJS = lex.o      \
        parse.o    \
+       parser.o   \
 
