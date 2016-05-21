@@ -29,3 +29,10 @@
 
 [rebase]
 	stat = true
+
+##
+## Set up windiff as a guitool. To activate this, set diff.guitool to windiff.
+##
+
+[difftool "windiff"]
+	cmd = windiff $LOCAL $REMOTE
