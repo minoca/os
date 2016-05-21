@@ -1371,6 +1371,10 @@ Return Value:
     if (Memory == NULL) {
         return RtlHeapAllocate(Heap, NewSize, AllocationTag);
 
+    } else if (NewSize == 0) {
+        RtlHeapFree(Heap, Memory);
+        return NULL;
+
     } else if (NewSize >= HEAP_MAX_REQUEST) {
         goto HeapReallocateEnd;
     }

@@ -151,7 +151,7 @@ Return Value:
 
     void *NewBuffer;
 
-    if (AllocationSize == 0) {
+    if ((Allocation == NULL) && (AllocationSize == 0)) {
         AllocationSize = 1;
     }
 
