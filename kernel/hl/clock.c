@@ -93,6 +93,7 @@ ULONGLONG HlClockNextHardDeadline = -1ULL;
 KSPIN_LOCK HlClockDataLock;
 TIMER_MODE HlClockMode;
 ULONGLONG HlClockLastProgrammedValue;
+ULONGLONG HlClockLastDueTime = -1ULL;
 PCLOCK_REQUEST HlClockRequests;
 
 //
@@ -147,6 +148,7 @@ Return Value:
     BOOL AllOff;
     BOOL AnyHard;
     BOOL AnyPeriodic;
+    BOOL ArmTimer;
     ULONGLONG ClockTicks;
     ULONGLONG CurrentTime;
     ULONG Index;
@@ -267,12 +269,12 @@ Return Value:
         if (AllOff != FALSE) {
             if (HlClockMode != TimerModeInvalid) {
                 HlpTimerDisarm(HlClockTimer);
+                HlClockLastDueTime = -1ULL;
             }
 
             TimerMode = TimerModeInvalid;
 
         } else {
-            DueTime = 0;
 
             //
             // If there are no periodic timers, take the minimum of the one-shot
@@ -309,10 +311,12 @@ Return Value:
                 }
             }
 
+            ArmTimer = TRUE;
             if (TimerMode == TimerModePeriodic) {
                 ClockTicks = HlClockRate;
+                DueTime = -1ULL;
 
-            } else {
+            } else if (DueTime != HlClockLastDueTime) {
                 CurrentTime = HlQueryTimeCounter();
                 if (CurrentTime < DueTime) {
                     ClockTicks = ((DueTime - CurrentTime) *
@@ -322,6 +326,9 @@ Return Value:
                 } else {
                     ClockTicks = 0;
                 }
+
+            } else {
+                ArmTimer = FALSE;
             }
 
             //
@@ -329,7 +336,9 @@ Return Value:
             // is already periodic.
             //
 
-            if (TimerMode != TimerModeInvalid) {
+            ASSERT(TimerMode != TimerModeInvalid);
+
+            if (ArmTimer != FALSE) {
                 if ((TimerMode != TimerModePeriodic) ||
                     (TimerMode != HlClockMode)) {
 
@@ -343,6 +352,7 @@ Return Value:
 
                     HlpTimerArm(HlClockTimer, SupportedTimerMode, ClockTicks);
                     HlClockLastProgrammedValue = ClockTicks;
+                    HlClockLastDueTime = DueTime;
                 }
             }
         }
@@ -686,6 +696,7 @@ Return Value:
                     HlpTimerArm(HlClockTimer, SupportedMode, ClockTicks);
                     HlClockMode = TimerModeOneShot;
                     HlClockLastProgrammedValue = ClockTicks;
+                    HlClockLastDueTime = HlClockNextHardDeadline;
                 }
 
                 KeReleaseSpinLock(&HlClockDataLock);
@@ -703,6 +714,7 @@ Return Value:
                 HlpTimerArm(HlClockTimer, TimerModePeriodic, HlClockRate);
                 HlClockMode = TimerModePeriodic;
                 HlClockLastProgrammedValue = HlClockRate;
+                HlClockLastDueTime = -1ULL;
                 KeReleaseSpinLock(&HlClockDataLock);
             }
         }
