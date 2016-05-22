@@ -1,6 +1,6 @@
 set -xe
 
-yacc -d -r -t -v ckmatch2.y
+yacc -d -r -t -v ckmatch.y
 flex ck.l
 gcc -g -o ck_yacc y.tab.c y.code.c lex.yy.c
 OLDPWD=`pwd`

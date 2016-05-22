@@ -444,7 +444,7 @@ Return Value:
         // Handle the accept condition.
         //
 
-        if ((State == 0) && (LeftSide == 0)) {
+        if (State == 0) {
             if (DebugPrefix != NULL) {
                 printf("%s: after reduction, go from state 0 to state "
                        "%d (final)\n",

@@ -15,182 +15,32 @@
 
 %%
 
-list_element_list
-    : conditional_expression
-    | list_element_list COMMA conditional_expression
+translation_unit
+    : external_declaration
+    | translation_unit external_declaration
     ;
 
-list
-    : OPEN_BRACKET CLOSE_BRACKET
-    | OPEN_BRACKET list_element_list CLOSE_BRACKET
-    | OPEN_BRACKET list_element_list COMMA CLOSE_BRACKET
+external_declaration
+    : function_definition
+    | class_definition
+    | import_statement
+    | statement
     ;
 
-dictionary_element
-    : expression COLON conditional_expression
+function_definition
+    : FUNCTION IDENTIFIER OPEN_PAREN identifier_list CLOSE_PAREN compound_statement
+    | STATIC FUNCTION IDENTIFIER OPEN_PAREN identifier_list CLOSE_PAREN compound_statement
     ;
 
-dictionary_element_list
-    : dictionary_element
-    | dictionary_element_list COMMA dictionary_element
+class_definition
+    : CLASS IDENTIFIER class_body
+    | CLASS IDENTIFIER IS IDENTIFIER class_body
     ;
 
-dictionary
-    : OPEN_BRACE CLOSE_BRACE
-    | OPEN_BRACE dictionary_element_list CLOSE_BRACE
-    | OPEN_BRACE dictionary_element_list COMMA CLOSE_BRACE
-    ;
-
-primary_expression
-    : IDENTIFIER
-    | CONSTANT
-    | STRING_LITERAL
-    | NULL_TOKEN
-    | THIS
-    | SUPER
-    | TRUE_TOKEN
-    | FALSE_TOKEN
-    | dictionary
-    | list
-    | OPEN_PAREN expression CLOSE_PAREN
-    ;
-
-postfix_expression
-    : primary_expression
-    | postfix_expression DOT IDENTIFIER
-    | postfix_expression OPEN_BRACKET expression CLOSE_BRACKET
-    | postfix_expression OPEN_PAREN argument_expression_list CLOSE_PAREN
-    | postfix_expression INC_OP
-    | postfix_expression DEC_OP
-    ;
-
-argument_expression_list
-    : assignment_expression
-    | argument_expression_list COMMA assignment_expression
-    |
-    ;
-
-unary_expression
-    : postfix_expression
-    | INC_OP unary_expression
-    | DEC_OP unary_expression
-    | unary_operator unary_expression
-    ;
-
-unary_operator
-    : PLUS
-    | MINUS
-    | BIT_NOT
-    | LOGICAL_NOT
-    ;
-
-multiplicative_expression
-    : unary_expression
-    | multiplicative_expression ASTERISK unary_expression
-    | multiplicative_expression DIVIDE unary_expression
-    | multiplicative_expression MODULO unary_expression
-    ;
-
-additive_expression
-    : multiplicative_expression
-    | additive_expression PLUS multiplicative_expression
-    | additive_expression MINUS multiplicative_expression
-    ;
-
-range_expression
-    : additive_expression
-    | range_expression DOTDOT additive_expression
-    | range_expression DOTDOTDOT additive_expression
-    ;
-
-shift_expression
-    : range_expression
-    | shift_expression LEFT_OP range_expression
-    | shift_expression RIGHT_OP range_expression
-    ;
-
-and_expression
-    : shift_expression
-    | and_expression BIT_AND shift_expression
-    ;
-
-exclusive_or_expression
-    : and_expression
-    | exclusive_or_expression XOR and_expression
-    ;
-
-inclusive_or_expression
-    : exclusive_or_expression
-    | inclusive_or_expression BIT_OR exclusive_or_expression
-    ;
-
-relational_expression
-    : inclusive_or_expression
-    | relational_expression LESS_THAN inclusive_or_expression
-    | relational_expression GREATER_THAN inclusive_or_expression
-    | relational_expression LE_OP inclusive_or_expression
-    | relational_expression GE_OP inclusive_or_expression
-    ;
-
-equality_expression
-    : relational_expression
-    | equality_expression IS relational_expression
-    | equality_expression EQ_OP relational_expression
-    | equality_expression NE_OP relational_expression
-    ;
-
-logical_and_expression
-    : equality_expression
-    | logical_and_expression AND_OP equality_expression
-    ;
-
-logical_or_expression
-    : logical_and_expression
-    | logical_or_expression OR_OP logical_and_expression
-    ;
-
-conditional_expression
-    : logical_or_expression
-    | logical_or_expression QUESTION expression COLON conditional_expression
-    ;
-
-assignment_expression
-    : conditional_expression
-    | unary_expression assignment_operator assignment_expression
-    ;
-
-assignment_operator
-    : ASSIGN
-    | MUL_ASSIGN
-    | DIV_ASSIGN
-    | MOD_ASSIGN
-    | ADD_ASSIGN
-    | SUB_ASSIGN
-    | LEFT_ASSIGN
-    | RIGHT_ASSIGN
-    | AND_ASSIGN
-    | XOR_ASSIGN
-    | OR_ASSIGN
-    | NULL_ASSIGN
-    ;
-
-expression
-    : assignment_expression
-    | expression COMMA assignment_expression
-    ;
-
-variable_specifier
-    : STATIC VAR IDENTIFIER
-    | VAR IDENTIFIER
-    ;
-
-variable_declaration
-    : variable_specifier SEMI
-    ;
-
-variable_definition
-    : variable_declaration
-    | variable_specifier ASSIGN expression SEMI
+import_statement
+    : IMPORT module_name SEMI
+    | FROM module_name IMPORT identifier_list SEMI
+    | FROM module_name IMPORT ASTERISK SEMI
     ;
 
 statement
@@ -201,14 +51,30 @@ statement
     | jump_statement
     ;
 
+identifier_list
+    : IDENTIFIER
+    | identifier_list COMMA IDENTIFIER
+    |
+    ;
+
 compound_statement
     : OPEN_BRACE CLOSE_BRACE
     | OPEN_BRACE statement_list CLOSE_BRACE
     ;
 
-statement_list
-    : statement
-    | statement_list statement
+class_body
+    : OPEN_BRACE CLOSE_BRACE
+    | OPEN_BRACE class_member_list CLOSE_BRACE
+    ;
+
+module_name
+    : IDENTIFIER
+    | module_name DOT IDENTIFIER
+    ;
+
+variable_definition
+    : variable_declaration
+    | variable_specifier ASSIGN expression SEMI
     ;
 
 expression_statement
@@ -237,20 +103,9 @@ jump_statement
     | RETURN expression SEMI
     ;
 
-identifier_list
-    : IDENTIFIER
-    | identifier_list COMMA IDENTIFIER
-    |
-    ;
-
-function_definition
-    : FUNCTION IDENTIFIER OPEN_PAREN identifier_list CLOSE_PAREN compound_statement
-    | STATIC FUNCTION IDENTIFIER OPEN_PAREN identifier_list CLOSE_PAREN compound_statement
-    ;
-
-class_member
-    : function_definition
-    | variable_declaration
+statement_list
+    : statement
+    | statement_list statement
     ;
 
 class_member_list
@@ -258,37 +113,182 @@ class_member_list
     | class_member_list class_member
     ;
 
-class_body
-    : OPEN_BRACE CLOSE_BRACE
-    | OPEN_BRACE class_member_list CLOSE_BRACE
+variable_declaration
+    : variable_specifier SEMI
     ;
 
-class_definition
-    : CLASS IDENTIFIER class_body
-    | CLASS IDENTIFIER IS IDENTIFIER class_body
+variable_specifier
+    : STATIC VAR IDENTIFIER
+    | VAR IDENTIFIER
     ;
 
-module_name
-    : IDENTIFIER
-    | module_name DOT IDENTIFIER
+expression
+    : assignment_expression
+    | expression COMMA assignment_expression
     ;
 
-import_statement
-    : IMPORT module_name SEMI
-    | FROM module_name IMPORT identifier_list SEMI
-    | FROM module_name IMPORT ASTERISK SEMI
-    ;
-
-external_declaration
+class_member
     : function_definition
-    | class_definition
-    | import_statement
-    | statement
+    | variable_declaration
     ;
 
-translation_unit
-    : external_declaration
-    | translation_unit external_declaration
+assignment_expression
+    : conditional_expression
+    | unary_expression assignment_operator assignment_expression
+    ;
+
+conditional_expression
+    : logical_or_expression
+    | logical_or_expression QUESTION expression COLON conditional_expression
+    ;
+
+unary_expression
+    : postfix_expression
+    | INC_OP unary_expression
+    | DEC_OP unary_expression
+    | unary_operator unary_expression
+    ;
+
+assignment_operator
+    : ASSIGN
+    | MUL_ASSIGN
+    | DIV_ASSIGN
+    | MOD_ASSIGN
+    | ADD_ASSIGN
+    | SUB_ASSIGN
+    | LEFT_ASSIGN
+    | RIGHT_ASSIGN
+    | AND_ASSIGN
+    | XOR_ASSIGN
+    | OR_ASSIGN
+    | NULL_ASSIGN
+    ;
+
+logical_or_expression
+    : logical_and_expression
+    | logical_or_expression OR_OP logical_and_expression
+    ;
+
+postfix_expression
+    : primary_expression
+    | postfix_expression DOT IDENTIFIER
+    | postfix_expression OPEN_BRACKET expression CLOSE_BRACKET
+    | postfix_expression OPEN_PAREN argument_expression_list CLOSE_PAREN
+    | postfix_expression INC_OP
+    | postfix_expression DEC_OP
+    ;
+
+unary_operator
+    : PLUS
+    | MINUS
+    | BIT_NOT
+    | LOGICAL_NOT
+    ;
+
+logical_and_expression
+    : equality_expression
+    | logical_and_expression AND_OP equality_expression
+    ;
+
+primary_expression
+    : IDENTIFIER
+    | CONSTANT
+    | STRING_LITERAL
+    | NULL_TOKEN
+    | THIS
+    | SUPER
+    | TRUE_TOKEN
+    | FALSE_TOKEN
+    | dictionary
+    | list
+    | OPEN_PAREN expression CLOSE_PAREN
+    ;
+
+argument_expression_list
+    : assignment_expression
+    | argument_expression_list COMMA assignment_expression
+    |
+    ;
+
+equality_expression
+    : relational_expression
+    | equality_expression IS relational_expression
+    | equality_expression EQ_OP relational_expression
+    | equality_expression NE_OP relational_expression
+    ;
+
+dictionary
+    : OPEN_BRACE CLOSE_BRACE
+    | OPEN_BRACE dictionary_element_list CLOSE_BRACE
+    | OPEN_BRACE dictionary_element_list COMMA CLOSE_BRACE
+    ;
+
+list
+    : OPEN_BRACKET CLOSE_BRACKET
+    | OPEN_BRACKET list_element_list CLOSE_BRACKET
+    | OPEN_BRACKET list_element_list COMMA CLOSE_BRACKET
+    ;
+
+relational_expression
+    : inclusive_or_expression
+    | relational_expression LESS_THAN inclusive_or_expression
+    | relational_expression GREATER_THAN inclusive_or_expression
+    | relational_expression LE_OP inclusive_or_expression
+    | relational_expression GE_OP inclusive_or_expression
+    ;
+
+dictionary_element_list
+    : dictionary_element
+    | dictionary_element_list COMMA dictionary_element
+    ;
+
+list_element_list
+    : conditional_expression
+    | list_element_list COMMA conditional_expression
+    ;
+
+inclusive_or_expression
+    : exclusive_or_expression
+    | inclusive_or_expression BIT_OR exclusive_or_expression
+    ;
+
+dictionary_element
+    : expression COLON conditional_expression
+    ;
+
+exclusive_or_expression
+    : and_expression
+    | exclusive_or_expression XOR and_expression
+    ;
+
+and_expression
+    : shift_expression
+    | and_expression BIT_AND shift_expression
+    ;
+
+shift_expression
+    : range_expression
+    | shift_expression LEFT_OP range_expression
+    | shift_expression RIGHT_OP range_expression
+    ;
+
+range_expression
+    : additive_expression
+    | range_expression DOTDOT additive_expression
+    | range_expression DOTDOTDOT additive_expression
+    ;
+
+additive_expression
+    : multiplicative_expression
+    | additive_expression PLUS multiplicative_expression
+    | additive_expression MINUS multiplicative_expression
+    ;
+
+multiplicative_expression
+    : unary_expression
+    | multiplicative_expression ASTERISK unary_expression
+    | multiplicative_expression DIVIDE unary_expression
+    | multiplicative_expression MODULO unary_expression
     ;
 
 %%
@@ -308,7 +308,6 @@ char *s;
     fflush(stdout);
     printf("\n%*s\n%*s\n", column, "^", column, s);
 }
-int main()
 int main(int argc, char **argv)
 {
 

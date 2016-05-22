@@ -213,7 +213,9 @@ YY_VALUE CkgInclusiveOrExpression[] = {
 
 YY_VALUE CkgRelationalExpression[] = {
     CkNodeInclusiveOrExpression, -1,
-    CkNodeRelationalExpression, CkTokenLessThan, CkNodeInclusiveOrExpression, -1,
+    CkNodeRelationalExpression, CkTokenLessThan,
+        CkNodeInclusiveOrExpression, -1,
+
     CkNodeRelationalExpression, CkTokenGreaterThan,
         CkNodeInclusiveOrExpression, -1,
 
@@ -528,53 +530,6 @@ YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"...", 0, 0, NULL},
     {"Start", 0, 0, NULL},
 
-    {"TranslationUnit", YY_ELEMENT_START, 0, CkgTranslationUnit},
-    {"ExternalDeclaration", 0, 0, CkgExternalDeclaration},
-    {"FunctionDefinition", 0, 0, CkgFunctionDefinition},
-    {"ClassDefinition", 0, 0, CkgClassDefinition},
-    {"ImportStatement", 0, 0, CkgImportStatement},
-    {"Statement", 0, 0, CkgStatement},
-    {"IdentifierList", 0, 0, CkgIdentifierList},
-    {"CompoundStatement", 0, 0, CkgCompoundStatement},
-    {"ClassBody", 0, 0, CkgClassBody},
-    {"ModuleName", 0, 0, CkgModuleName},
-    {"VariableDefinition", 0, 0, CkgVariableDefinition},
-    {"ExpressionStatement", 0, 0, CkgExpressionStatement},
-    {"SelectionStatement", 0, 0, CkgSelectionStatement},
-    {"IterationStatement", 0, 0, CkgIterationStatement},
-    {"JumpStatement", 0, 0, CkgJumpStatement},
-    {"StatementList", 0, 0, CkgStatementList},
-    {"ClassMemberList", 0, 0, CkgClassMemberList},
-    {"VariableDeclaration", 0, 0, CkgVariableDeclaration},
-    {"VariableSpecifier", 0, 0, CkgVariableSpecifier},
-    {"Expression", 0, 0, CkgExpression},
-    {"ClassMember", 0, 0, CkgClassMember},
-    {"AssignmentExpression", 0, 0, CkgAssignmentExpression},
-    {"ConditionalExpression", 0, 0, CkgConditionalExpression},
-    {"UnaryExpression", 0, 0, CkgUnaryExpression},
-    {"AssignmentOperator", 0, 0, CkgAssignmentOperator},
-    {"LogicalOrExpression", 0, 0, CkgLogicalOrExpression},
-    {"PostfixExpression", 0, 0, CkgPostfixExpression},
-    {"UnaryOperator", 0, 0, CkgUnaryOperator},
-    {"LogicalAndExpression", 0, 0, CkgLogicalAndExpression},
-    {"PrimaryExpression", 0, 0, CkgPrimaryExpression},
-    {"ArgumentExpressionList", 0, 0, CkgArgumentExpressionList},
-    {"EqualityExpression", 0, 0, CkgEqualityExpression},
-    {"Dict", 0, 0, CkgDict},
-    {"List", 0, 0, CkgList},
-    {"RelationalExpression", 0, 0, CkgRelationalExpression},
-    {"DictElementList", 0, 0, CkgDictElementList},
-    {"ListElementList", 0, 0, CkgListElementList},
-    {"InclusiveOrExpression", 0, 0, CkgInclusiveOrExpression},
-    {"DictElement", 0, 0, CkgDictElement},
-    {"ExclusiveOrExpression", 0, 0, CkgExclusiveOrExpression},
-    {"AndExpression", 0, 0, CkgAndExpression},
-    {"ShiftExpression", 0, 0, CkgShiftExpression},
-    {"RangeExpression", 0, 0, CkgRangeExpression},
-    {"AdditiveExpression", 0, 0, CkgAdditiveExpression},
-    {"MultiplicativeExpression", 0, 0, CkgMultiplicativeExpression},
-
-/*
     {"ListElementList", 0, 0, CkgListElementList},
     {"List", 0, 0, CkgList},
     {"DictElement", 0, 0, CkgDictElement},
@@ -620,7 +575,6 @@ YY_ELEMENT CkgGrammarElements[CkSymbolCount] = {
     {"ImportStatement", 0, 0, CkgImportStatement},
     {"ExternalDeclaration", 0, 0, CkgExternalDeclaration},
     {"TranslationUnit", YY_ELEMENT_START, 0, CkgTranslationUnit}
-*/
 };
 
 YY_GRAMMAR_DESCRIPTION CkgGrammarDescription = {
