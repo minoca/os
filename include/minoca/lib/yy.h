@@ -269,6 +269,9 @@ Members:
 
     FinalState - Stores the accept state index.
 
+    FinalSymbol - Stores the symbol whose receipt indicates acceptance (ie can
+        be followed by EOF).
+
     MaxToken - Stores the number of terminals in the grammar.
 
     UndefinedToken - Stores the token value in the names array that corresponds
@@ -290,6 +293,7 @@ typedef struct _YY_GRAMMAR {
     const char **Names;
     const char **Rules;
     YY_VALUE FinalState;
+    YY_VALUE FinalSymbol;
     YY_VALUE MaxToken;
     YY_VALUE UndefinedToken;
 } YY_GRAMMAR, *PYY_GRAMMAR;

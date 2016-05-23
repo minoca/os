@@ -50,11 +50,25 @@ Environment:
 #define YY_NAME0 "[a-zA-Z_]"
 #define YY_HEX "[a-fA-F0-9]"
 
-#define YY_TOKEN_OFFSET 257
+#define YY_TOKEN_OFFSET 2
 
 //
 // ------------------------------------------------------ Data Type Definitions
 //
+
+typedef struct _CK_NODE {
+    CK_SYMBOL Symbol;
+    ULONG Children;
+    ULONG Descendants;
+    ULONG Depth;
+    ULONG ChildIndex;
+} CK_NODE, *PCK_NODE;
+
+typedef union _CK_SYMBOL_UNION {
+    CK_SYMBOL Symbol;
+    LEXER_TOKEN Token;
+    CK_NODE Node;
+} CK_SYMBOL_UNION, *PCK_SYMBOL_UNION;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -73,6 +87,12 @@ CkgpProcessSymbol (
     PVOID Elements,
     INT ElementCount,
     PVOID ReducedElement
+    );
+
+VOID
+CkgpPrintToken (
+    PLEXER Lexer,
+    PLEXER_TOKEN Token
     );
 
 //
@@ -235,6 +255,55 @@ PSTR CkLexerIgnoreExpressions[] = {
     NULL
 };
 
+PSTR CkNodeNames[] = {
+    "Start",
+    "ListElementList",
+    "List",
+    "DictElement",
+    "DictElementList",
+    "Dict",
+    "PrimaryExpression",
+    "PostfixExpression",
+    "ArgumentExpressionList",
+    "UnaryExpression",
+    "UnaryOperator",
+    "MultiplicativeExpression",
+    "AdditiveExpression",
+    "RangeExpression",
+    "ShiftExpression",
+    "AndExpression",
+    "ExclusiveOrExpression",
+    "InclusiveOrExpression",
+    "RelationalExpression",
+    "EqualityExpression",
+    "LogicalAndExpression",
+    "LogicalOrExpression",
+    "ConditionalExpression",
+    "AssignmentExpression",
+    "AssignmentOperator",
+    "Expression",
+    "VariableSpecifier",
+    "VariableDeclaration",
+    "VariableDefinition",
+    "Statement",
+    "CompoundStatement",
+    "StatementList",
+    "ExpressionStatement",
+    "SelectionStatement",
+    "IterationStatement",
+    "JumpStatement",
+    "IdentifierList",
+    "FunctionDefinition",
+    "ClassMember",
+    "ClassMemberList",
+    "ClassBody",
+    "ClassDefinition",
+    "ModuleName",
+    "ImportStatement",
+    "ExternalDeclaration",
+    "TranslationUnit",
+};
+
 extern YY_GRAMMAR CkGrammar;
 
 YY_PARSER CkParser = {
@@ -245,10 +314,15 @@ YY_PARSER CkParser = {
     NULL,
     NULL,
     CkgpGetToken,
-    sizeof(LEXER_TOKEN),
+    sizeof(CK_SYMBOL_UNION),
     0,
-    "ck"
+    NULL, //"ck"
 };
+
+PCK_SYMBOL_UNION CkSymbols;
+ULONG CkSymbolsCount;
+ULONG CkSymbolsCapacity;
+ULONG CkMaxDepth;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -284,6 +358,9 @@ Return Value:
 
     UINTN AllocationSize;
     PSTR Buffer;
+    PCK_SYMBOL_UNION Child;
+    ULONG ChildIndex;
+    ULONG ChildNode;
     ULONG Column;
     FILE *File;
     KSTATUS KStatus;
@@ -291,6 +368,7 @@ Return Value:
     ULONG Line;
     ULONG Size;
     INT Status;
+    PCK_SYMBOL_UNION Value;
 
     if (ArgumentCount < 2) {
         printf("Usage: %s <file>\n", Arguments[0]);
@@ -352,8 +430,62 @@ Return Value:
     YyLexInitialize(&Lexer);
     CkParser.Lexer = &Lexer;
     Status = YyParseGrammar(&CkParser);
+    if (Status != 0) {
+        goto ParseScriptEnd;
+    }
+
+    if (CkSymbolsCount == 0) {
+        goto ParseScriptEnd;
+    }
+
+    //
+    // Print the abstract syntax tree.
+    //
+
+    printf("\n");
+    Value = CkSymbols + CkSymbolsCount - 1;
+    while (Value >= CkSymbols) {
+        if (Value->Symbol < CkNodeStart) {
+            Value -= 1;
+            continue;
+        }
+
+        assert(Value->Node.Depth <= CkMaxDepth);
+
+        printf("%*s (%2d/%2d/%2d): ",
+               CkMaxDepth - Value->Node.Depth + 20,
+               CkNodeNames[Value->Symbol - CkNodeStart],
+               Value->Node.Children,
+               Value->Node.Descendants,
+               Value->Node.Depth);
+
+        ChildNode = 1;
+        Child = CkSymbols + Value->Node.ChildIndex;
+        for (ChildIndex = 0;
+             ChildIndex < Value->Node.Children;
+             ChildIndex += 1) {
+
+            if (Child->Symbol < CkNodeStart) {
+                CkgpPrintToken(&Lexer, &(Child->Token));
+                printf(" ");
+
+            } else {
+                printf("$%d ", ChildNode);
+                ChildNode += 1;
+            }
+
+            Child += 1;
+        }
+
+        printf("\n");
+        Value -= 1;
+    }
 
 ParseScriptEnd:
+    if (CkSymbols != NULL) {
+        free(CkSymbols);
+    }
+
     printf("Final Status: %d\n", Status);
     return Status;
 }
@@ -392,9 +524,7 @@ Return Value:
 
 {
 
-    CHAR Buffer[64];
     KSTATUS KStatus;
-    ULONG Size;
     PLEXER_TOKEN Token;
 
     Token = (PLEXER_TOKEN)Value;
@@ -411,13 +541,7 @@ Return Value:
 
     assert(*Value >= YY_TOKEN_OFFSET);
 
-    Size = MIN(Token->Size, sizeof(Buffer) - 1);
-    strncpy(Buffer,
-            ((PLEXER)Lexer)->Input + Token->Position,
-            Size);
-
-    Buffer[Size] = '\0';
-    printf("%s", Buffer);
+    CkgpPrintToken(Lexer, Token);
     return 0;
 }
 
@@ -464,7 +588,120 @@ Return Value:
 
 {
 
-    printf("Got %d, %d elements\n", Symbol, ElementCount);
+    PCK_SYMBOL_UNION Child;
+    ULONG ChildIndex;
+    PVOID NewBuffer;
+    ULONG NewCapacity;
+    PCK_NODE NewNode;
+
+    if (CkSymbolsCount + ElementCount >= CkSymbolsCapacity) {
+        if (CkSymbolsCapacity == 0) {
+            NewCapacity = 16;
+
+        } else {
+            NewCapacity = CkSymbolsCapacity * 2;
+        }
+
+        while (NewCapacity < CkSymbolsCount + ElementCount) {
+            NewCapacity *= 2;
+        }
+
+        NewBuffer = realloc(CkSymbols, NewCapacity * sizeof(CK_SYMBOL_UNION));
+        if (NewBuffer == NULL) {
+            return ENOMEM;
+        }
+
+        CkSymbols = NewBuffer;
+        CkSymbolsCapacity = NewCapacity;
+    }
+
+    //
+    // Set up the new node by counting the total child descendents.
+    //
+
+    NewNode = ReducedElement;
+    NewNode->ChildIndex = CkSymbolsCount;
+    NewNode->Symbol = Symbol;
+    NewNode->Children = ElementCount;
+    NewNode->Descendants = 0;
+    NewNode->Depth = 0;
+
+    //
+    // Copy the new child elements into the stream.
+    //
+
+    memcpy(CkSymbols + CkSymbolsCount,
+           Elements,
+           ElementCount * sizeof(CK_SYMBOL_UNION));
+
+    CkSymbolsCount += ElementCount;
+
+    //
+    // Sum the descendents.
+    //
+
+    Child = Elements;
+    for (ChildIndex = 0; ChildIndex < ElementCount; ChildIndex += 1) {
+        if (Child->Symbol >= CkNodeStart) {
+            NewNode->Descendants += Child->Node.Children +
+                                    Child->Node.Descendants;
+
+            if (Child->Node.Depth + 1 > NewNode->Depth) {
+                NewNode->Depth = Child->Node.Depth + 1;
+            }
+        }
+
+        Child += 1;
+    }
+
+    if (NewNode->Depth > CkMaxDepth) {
+        CkMaxDepth = NewNode->Depth;
+    }
+
+    printf("Got %s, %d elements, %d Descendants, depth %d\n",
+           CkNodeNames[Symbol - CkNodeStart],
+           ElementCount,
+           NewNode->Descendants,
+           NewNode->Depth);
+
     return 0;
+}
+
+VOID
+CkgpPrintToken (
+    PLEXER Lexer,
+    PLEXER_TOKEN Token
+    )
+
+/*++
+
+Routine Description:
+
+    This routine prints a token value.
+
+Arguments:
+
+    Lexer - Supplies a pointer to the lexer context.
+
+    Token - Supplies a pointer to the token.
+
+Return Value:
+
+    0 on success, including EOF.
+
+    Returns a non-zero value if there was an error reading the token.
+
+--*/
+
+{
+
+    CHAR Buffer[64];
+    ULONG Size;
+
+    Size = MIN(Token->Size, sizeof(Buffer) - 1);
+    strncpy(Buffer, ((PLEXER)Lexer)->Input + Token->Position, Size);
+    Buffer[Size] = '\0';
+    printf("%s (%d:%d)", Buffer, Token->Line, Token->Column);
+    return;
 }
 

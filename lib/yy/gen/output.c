@@ -69,8 +69,7 @@ Environment:
 // always 0 and 1. Set this to 255 for compatibility mode, or 0 normally.
 //
 
-#define YYGEN_TOKEN_OUTPUT_BASE 255
-//#define YYGEN_TOKEN_OUTPUT_BASE 0
+#define YYGEN_TOKEN_OUTPUT_BASE 0
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -2192,6 +2191,8 @@ Return Value:
 
 {
 
+    YY_VALUE Start;
+
     fprintf(File, "YY_GRAMMAR %sGrammar = {\n", Context->VariablePrefix);
     fprintf(File, "    %sLeftSide,\n", Context->VariablePrefix);
     fprintf(File, "    %sRuleLength,\n", Context->VariablePrefix);
@@ -2206,6 +2207,10 @@ Return Value:
     fprintf(File, "    %sNames,\n", Context->VariablePrefix);
     fprintf(File, "    %sRules,\n", Context->VariablePrefix);
     fprintf(File, "    %d,\n", Context->FinalState);
+    Start = Context->Items[Context->Rules[2].RightSide] -
+            (Context->StartSymbol + 1);
+
+    fprintf(File, "    %d,\n", Start);
     fprintf(File,
             "    %d,\n",
             Context->TokenCount + YYGEN_TOKEN_OUTPUT_BASE - 1);

@@ -426,7 +426,7 @@ Return Value:
         }
 
         Status = Parser->Callback(Parser->Callback,
-                                  LeftSide,
+                                  LeftSide + Grammar->MaxToken + 2,
                                   FirstElement,
                                   Length,
                                   NewValue);
@@ -444,7 +444,7 @@ Return Value:
         // Handle the accept condition.
         //
 
-        if (State == 0) {
+        if ((State == 0) && (LeftSide == Grammar->FinalSymbol)) {
             if (DebugPrefix != NULL) {
                 printf("%s: after reduction, go from state 0 to state "
                        "%d (final)\n",
@@ -522,7 +522,7 @@ Return Value:
         Stack.StateTop += 1;
         *(Stack.StateTop) = State;
         Stack.ValueTop += Parser->ValueSize;
-        memcpy(LexValue, NewValue, ValueSize);
+        memcpy(Stack.ValueTop, NewValue, ValueSize);
     }
 
     Status = 0;
