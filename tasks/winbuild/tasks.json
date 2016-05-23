@@ -375,6 +375,11 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/autotools/libtool"
         },
         {
+            "name": "Make tcl",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/tcl8.6.5"
+        },
+        {
             "name": "Make OS",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/os test"

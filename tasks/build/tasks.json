@@ -374,6 +374,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/autotools/libtool"
         },
         {
+            "name": "Make tcl",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/tcl8.6.5"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
