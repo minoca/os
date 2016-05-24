@@ -461,7 +461,7 @@ Return Value:
     }
 
     snprintf(AppendedPath, AppendedPathSize, "%s.tmp", FilePath);
-    OldFile = fopen(FilePath, "w+");
+    OldFile = fopen(FilePath, "r+");
     if (OldFile == NULL) {
         Status = errno;
         SwPrintError(Status, FilePath, "Cannot open");
