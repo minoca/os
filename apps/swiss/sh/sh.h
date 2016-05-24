@@ -821,7 +821,8 @@ ShSetOptions (
     PSTR String,
     UINTN StringSize,
     BOOL LongForm,
-    BOOL Set
+    BOOL Set,
+    PBOOL HasC
     );
 
 /*++
@@ -844,6 +845,9 @@ Arguments:
 
     Set - Supplies whether or not the longform argument is a set (-o) or clear
         (+o) operation. For non longform arguments, this parameter is ignored.
+
+    HasC - Supplies an optional boolean indicating if the option string has -c
+        int it somewhere. If NULL, then -c is not allowed.
 
 Return Value:
 

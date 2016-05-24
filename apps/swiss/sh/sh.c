@@ -104,7 +104,7 @@ SHELL_OPTION_STRING ShOptionStrings[] = {
     {"errexit", 'e', SHELL_OPTION_EXIT_ON_FAILURE},
     {"ignoreeof", 0, SHELL_OPTION_IGNORE_EOF},
     {"monitor", 'm', SHELL_OPTION_RUN_JOBS_IN_SEPARATE_PROCESS_GROUP},
-    {"noclobber", 'c', SHELL_OPTION_NO_CLOBBER},
+    {"noclobber", 'C', SHELL_OPTION_NO_CLOBBER},
     {"noglob", 'f', SHELL_OPTION_NO_PATHNAME_EXPANSION},
     {"noexec", 'n', SHELL_OPTION_NO_EXECUTE},
     {"nolog", 0, SHELL_OPTION_NO_COMMAND_HISTORY},
@@ -213,7 +213,8 @@ Return Value:
                                   Argument,
                                   ArgumentSize,
                                   TRUE,
-                                  Set);
+                                  Set,
+                                  NULL);
 
             if (Result == FALSE) {
                 PRINT_ERROR("Error: Unknown option %s.\n",
@@ -251,20 +252,13 @@ Return Value:
             }
         }
 
-        //
-        // If -c is found, then the command comes directly from the command
-        // line.
-        //
-
-        if (strcmp(Argument, "-c") == 0) {
-            ArgumentIsInput = TRUE;
-
-        } else if ((Argument[0] == '-') || (Argument[0] == '+')) {
+        if ((Argument[0] == '-') || (Argument[0] == '+')) {
             Result = ShSetOptions(Shell,
                                   Argument,
                                   strlen(Argument) + 1,
                                   FALSE,
-                                  FALSE);
+                                  FALSE,
+                                  &ArgumentIsInput);
 
             if (Result == FALSE) {
                 ReturnValue = EINVAL;
@@ -496,7 +490,8 @@ ShSetOptions (
     PSTR String,
     UINTN StringSize,
     BOOL LongForm,
-    BOOL Set
+    BOOL Set,
+    PBOOL HasC
     )
 
 /*++
@@ -520,6 +515,9 @@ Arguments:
     Set - Supplies whether or not the longform argument is a set (-o) or clear
         (+o) operation. For non longform arguments, this parameter is ignored.
 
+    HasC - Supplies an optional boolean indicating if the option string has -c
+        int it somewhere. If NULL, then -c is not allowed.
+
 Return Value:
 
     TRUE on success.
@@ -530,6 +528,7 @@ Return Value:
 
 {
 
+    CHAR Character;
     UINTN Index;
     UINTN OptionCount;
     ULONG Options;
@@ -566,13 +565,14 @@ Return Value:
         }
 
         for (StringIndex = 1; StringIndex < StringSize; StringIndex += 1) {
-            if (String[StringIndex] == '\0') {
+            Character = String[StringIndex];
+            if (Character == '\0') {
                 break;
             }
 
             for (Index = 0; Index < OptionCount; Index += 1) {
                 if ((ShOptionStrings[Index].Character != 0) &&
-                    (ShOptionStrings[Index].Character == String[StringIndex])) {
+                    (ShOptionStrings[Index].Character == Character)) {
 
                     Options |= ShOptionStrings[Index].Option;
                     break;
@@ -580,15 +580,24 @@ Return Value:
             }
 
             if (Index == OptionCount) {
-                PRINT_ERROR("Error: Invalid option '%c'.\n",
-                            String[StringIndex]);
 
+                //
+                // Ignore a -c and notify the caller if the caller might be
+                // expecting it.
+                //
+
+                if ((Character == 'c') && (HasC != NULL)) {
+                    *HasC = TRUE;
+                    continue;
+                }
+
+                PRINT_ERROR("Error: Invalid option '%c'.\n", Character);
                 return FALSE;
             }
         }
     }
 
-    if (String[0] == '-') {
+    if (Set != FALSE) {
         Shell->Options |= Options;
 
     } else {

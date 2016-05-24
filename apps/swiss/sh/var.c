@@ -1503,7 +1503,8 @@ Return Value:
                                   Argument,
                                   ArgumentSize,
                                   TRUE,
-                                  Set);
+                                  Set,
+                                  NULL);
 
             if (Result == FALSE) {
                 PRINT_ERROR("Error: Unknown option %s.\n",
@@ -1530,7 +1531,8 @@ Return Value:
                                   Argument,
                                   strlen(Argument) + 1,
                                   FALSE,
-                                  FALSE);
+                                  FALSE,
+                                  NULL);
 
             if (Result == FALSE) {
                 return EINVAL;
