@@ -590,6 +590,26 @@ Return Value:
             }
 
             NextElement.Token = Arguments[ArgumentIndex];
+
+            //
+            // Ensure that if this is a binary operator, there is a token
+            // before it.
+            //
+
+            if ((Operator != TestUtilityInvalid) &&
+                (TestGetOperandCount(Operator) == 2)) {
+
+                if ((StackIndex == 0) ||
+                    (ParseStack[StackIndex - 1].Type !=
+                     TestParseElementToken)) {
+
+                    SwPrintError(0,
+                                 Arguments[ArgumentIndex],
+                                 "Binary operator used without left argument");
+
+                    ReturnValue = TEST_UTILITY_ERROR;
+                }
+            }
         }
 
         while (TRUE) {
@@ -914,8 +934,10 @@ Return Value:
     //
 
     if (Stack[*StackSize - 1].Type == TestParseElementOperator) {
-
-        assert(Stack[*StackSize - 1].Operator == TestUtilityCloseParentheses);
+        if (Stack[*StackSize - 1].Operator != TestUtilityCloseParentheses) {
+            SwPrintError(0, NULL, "Argument expected");
+            return FALSE;
+        }
 
         *StackSize -= 1;
         while (TRUE) {
@@ -1251,12 +1273,11 @@ Return Value:
     }
 
     if ((Operator == TestStringZeroLength) ||
-        (Operator == TestStringNonZeroLength)) {
+        (Operator == TestStringNonZeroLength) ||
+        (Operator == TestUtilityBang)) {
 
         return 1;
     }
-
-    assert(FALSE);
 
     return 0;
 }
