@@ -384,6 +384,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/expect5.45"
         },
         {
+            "name": "Make dejagnu",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/dejagnu-1.6"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
