@@ -2700,7 +2700,7 @@ Return Value:
         }
     }
 
-    if (FullCommandPath != NULL) {
+    if ((FullCommandPath != NULL) && (FullCommandPath != Command)) {
         free(FullCommandPath);
     }
 
