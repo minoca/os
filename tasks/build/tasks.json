@@ -379,6 +379,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/tcl8.6.5"
         },
         {
+            "name": "Make expect",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/expect5.45"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
