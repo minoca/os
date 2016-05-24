@@ -24,7 +24,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#define LIBC_API DLLEXPORT
+#define LIBC_API __DLLEXPORT
 
 #include <minoca/lib/types.h>
 

@@ -20,7 +20,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define KERNEL_API DLLIMPORT
+#define KERNEL_API __DLLIMPORT
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>

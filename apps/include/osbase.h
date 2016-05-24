@@ -45,7 +45,7 @@ extern "C" {
 
 #ifndef OS_API
 
-#define OS_API DLLIMPORT
+#define OS_API __DLLIMPORT
 
 #endif
 

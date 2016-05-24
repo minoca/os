@@ -44,7 +44,7 @@ Author:
 
 #ifndef SD_API
 
-#define SD_API DLLIMPORT
+#define SD_API __DLLIMPORT
 
 #endif
 

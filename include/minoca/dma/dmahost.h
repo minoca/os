@@ -29,7 +29,7 @@ Author:
 
 #ifndef DMA_API
 
-#define DMA_API DLLIMPORT
+#define DMA_API __DLLIMPORT
 
 #endif
 

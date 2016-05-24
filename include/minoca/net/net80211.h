@@ -100,7 +100,7 @@ Author:
 
 #ifndef NET80211_API
 
-#define NET80211_API DLLIMPORT
+#define NET80211_API __DLLIMPORT
 
 #endif
 

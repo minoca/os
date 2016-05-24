@@ -24,7 +24,7 @@ Author:
 // Redefine the API define into an export.
 //
 
-#define USER_INPUT_API DLLEXPORT
+#define USER_INPUT_API __DLLEXPORT
 
 #include <minoca/kernel/driver.h>
 #include <minoca/usrinput/usrinput.h>

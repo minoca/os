@@ -20,7 +20,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define LIBCRYPT_API DLLEXPORT
+#define LIBCRYPT_API __DLLEXPORT
 
 //
 // ---------------------------------------------------------------- Definitions

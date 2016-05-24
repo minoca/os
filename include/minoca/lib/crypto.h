@@ -26,7 +26,7 @@ Author:
 
 #ifndef CRYPTO_API
 
-#define CRYPTO_API DLLIMPORT
+#define CRYPTO_API __DLLIMPORT
 
 #endif
 

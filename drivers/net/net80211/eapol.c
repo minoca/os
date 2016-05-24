@@ -32,7 +32,7 @@ Environment:
 // otherwise generate imports.
 //
 
-#define NET80211_API DLLEXPORT
+#define NET80211_API __DLLEXPORT
 
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>

@@ -20,7 +20,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define DMA_API DLLEXPORT
+#define DMA_API __DLLEXPORT
 
 #include <minoca/dma/dmahost.h>
 

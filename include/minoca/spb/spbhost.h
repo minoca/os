@@ -29,7 +29,7 @@ Author:
 
 #ifndef SPB_API
 
-#define SPB_API DLLIMPORT
+#define SPB_API __DLLIMPORT
 
 #endif
 

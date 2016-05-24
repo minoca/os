@@ -24,7 +24,7 @@ Author:
 // Redefine the API define into an export.
 //
 
-#define NET_API DLLEXPORT
+#define NET_API __DLLEXPORT
 
 #include <minoca/net/netdrv.h>
 

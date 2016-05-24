@@ -20,12 +20,12 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define KERNEL_API DLLEXPORT_PROTECTED
-#define CRYPTO_API DLLEXPORT_PROTECTED
+#define KERNEL_API __DLLPROTECTED
+#define CRYPTO_API __DLLPROTECTED
 
 #ifndef RTL_API
 
-#define RTL_API DLLEXPORT_PROTECTED
+#define RTL_API __DLLPROTECTED
 
 #endif
 

@@ -141,7 +141,7 @@ function build() {
         //
 
         intrinsics_sources_config = {
-            "CPPFLAGS": ["-DRTL_API=DLLIMPORT"]
+            "CPPFLAGS": ["-DRTL_API=__DLLIMPORT"]
         };
 
         intrinsics_lib = {

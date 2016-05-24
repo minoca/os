@@ -58,7 +58,7 @@ PDEBUG_EXTENSION_IMPORT_INTERFACE DbgImportInterface;
 // ------------------------------------------------------------------ Functions
 //
 
-DLLEXPORT
+__DLLEXPORT
 INT
 ExtensionEntry (
     ULONG ExtensionApiVersion,

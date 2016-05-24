@@ -79,15 +79,15 @@ Author:
 
 #ifdef __ELF__
 
-#define DLLIMPORT __attribute__ ((visibility ("default")))
-#define DLLEXPORT __attribute__ ((visibility ("default")))
-#define DLLEXPORT_PROTECTED __attribute__ ((visibility ("protected")))
+#define __DLLIMPORT __attribute__ ((visibility ("default")))
+#define __DLLEXPORT __attribute__ ((visibility ("default")))
+#define __DLLPROTECTED __attribute__ ((visibility ("protected")))
 
 #else
 
-#define DLLIMPORT __declspec(dllimport)
-#define DLLEXPORT __declspec(dllexport)
-#define DLLEXPORT_PROTECTED __declspec(dllexport)
+#define __DLLIMPORT __declspec(dllimport)
+#define __DLLEXPORT __declspec(dllexport)
+#define __DLLPROTECTED __declspec(dllexport)
 
 #endif
 

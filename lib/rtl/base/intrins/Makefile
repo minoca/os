@@ -40,7 +40,7 @@ X86_OBJS = x86/intrinsc.o  \
 ## The library is being compiled such that the rest of Rtl is in another binary.
 ##
 
-EXTRA_CFLAGS += -DRTL_API=DLLIMPORT
+EXTRA_CFLAGS += -DRTL_API=__DLLIMPORT
 
 EXTRA_SRC_DIRS = x86 armv7
 

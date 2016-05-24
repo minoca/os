@@ -20,7 +20,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define LIBC_API DLLEXPORT
+#define LIBC_API __DLLEXPORT
 
 #include <osbase.h>
 #include <libcbase.h>

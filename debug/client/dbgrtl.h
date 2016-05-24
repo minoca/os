@@ -26,7 +26,7 @@ Author:
 // in here.
 //
 
-#define RTL_API DLLEXPORT
+#define RTL_API __DLLEXPORT
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>

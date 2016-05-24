@@ -21,7 +21,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define SPB_API DLLEXPORT
+#define SPB_API __DLLEXPORT
 
 #include <minoca/spb/spbhost.h>
 

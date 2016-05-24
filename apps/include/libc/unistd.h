@@ -50,7 +50,7 @@ extern "C" {
 
 #ifndef LIBCRYPT_API
 
-#define LIBCRYPT_API DLLIMPORT
+#define LIBCRYPT_API __DLLIMPORT
 
 #endif
 

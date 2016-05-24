@@ -20,8 +20,8 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define CRYPTO_API DLLEXPORT
-#define RTL_API DLLEXPORT_PROTECTED
+#define CRYPTO_API __DLLEXPORT
+#define RTL_API __DLLPROTECTED
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>

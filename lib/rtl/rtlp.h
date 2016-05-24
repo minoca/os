@@ -22,7 +22,7 @@ Author:
 
 #ifndef RTL_API
 
-#define RTL_API DLLEXPORT_PROTECTED
+#define RTL_API __DLLPROTECTED
 
 #endif
 

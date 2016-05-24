@@ -29,7 +29,7 @@ Author:
 
 #ifndef GPIO_API
 
-#define GPIO_API DLLIMPORT
+#define GPIO_API __DLLIMPORT
 
 #endif
 

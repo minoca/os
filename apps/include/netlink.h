@@ -34,7 +34,7 @@ extern "C" {
 
 #ifndef LIBNETLINK_API
 
-#define LIBNETLINK_API DLLIMPORT
+#define LIBNETLINK_API __DLLIMPORT
 
 #endif
 

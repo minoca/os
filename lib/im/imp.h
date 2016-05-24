@@ -20,7 +20,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define RTL_API DLLEXPORT
+#define RTL_API __DLLEXPORT
 
 #include <minoca/kernel/driver.h>
 

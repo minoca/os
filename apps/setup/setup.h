@@ -20,7 +20,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define RTL_API DLLEXPORT
+#define RTL_API __DLLEXPORT
 
 #include <osbase.h>
 #include <minoca/lib/partlib.h>

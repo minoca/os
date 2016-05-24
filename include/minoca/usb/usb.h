@@ -26,7 +26,7 @@ Author:
 
 #ifndef USB_API
 
-#define USB_API DLLIMPORT
+#define USB_API __DLLIMPORT
 
 #endif
 

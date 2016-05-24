@@ -26,7 +26,7 @@ Author:
 
 #ifndef USER_INPUT_API
 
-#define USER_INPUT_API DLLIMPORT
+#define USER_INPUT_API __DLLIMPORT
 
 #endif
 

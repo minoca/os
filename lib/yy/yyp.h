@@ -20,8 +20,8 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define RTL_API DLLEXPORT
-#define YY_API DLLEXPORT
+#define RTL_API __DLLEXPORT
+#define YY_API __DLLEXPORT
 
 #include <minoca/lib/types.h>
 #include <minoca/lib/status.h>

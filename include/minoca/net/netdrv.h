@@ -120,7 +120,7 @@ Author:
 
 #ifndef NET_API
 
-#define NET_API DLLIMPORT
+#define NET_API __DLLIMPORT
 
 #endif
 

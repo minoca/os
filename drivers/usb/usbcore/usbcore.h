@@ -24,7 +24,7 @@ Author:
 // Redefine the API define into an export.
 //
 
-#define USB_API DLLEXPORT
+#define USB_API __DLLEXPORT
 
 #include <minoca/usb/usbhost.h>
 #include <minoca/kernel/kdebug.h>

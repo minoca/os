@@ -21,8 +21,8 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define OS_API DLLEXPORT_PROTECTED
-#define RTL_API DLLEXPORT_PROTECTED
+#define OS_API __DLLPROTECTED
+#define RTL_API __DLLPROTECTED
 
 #include <osbase.h>
 

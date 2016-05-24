@@ -324,7 +324,7 @@ Author:
 
 #ifndef RTL_API
 
-#define RTL_API DLLIMPORT
+#define RTL_API __DLLIMPORT
 
 #endif
 

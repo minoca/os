@@ -26,7 +26,7 @@ Author:
 
 #ifndef YY_API
 
-#define YY_API DLLIMPORT
+#define YY_API __DLLIMPORT
 
 #endif
 

@@ -22,7 +22,7 @@ Author:
 // ------------------------------------------------------------------- Includes
 //
 
-#define SD_API DLLEXPORT
+#define SD_API __DLLEXPORT
 
 #include <minoca/sd/sd.h>
 

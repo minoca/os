@@ -25,7 +25,7 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#define CRYPTO_API DLLEXPORT
+#define CRYPTO_API __DLLEXPORT
 
 #include <assert.h>
 #include <errno.h>

@@ -32,7 +32,7 @@ Environment:
 // include generic.h to get access to the tree of families.
 //
 
-#define NET_API DLLEXPORT
+#define NET_API __DLLEXPORT
 
 #include <minoca/kernel/driver.h>
 #include <minoca/net/netdrv.h>
