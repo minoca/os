@@ -3669,38 +3669,31 @@ Return Value:
 {
 
     INT Flags;
-    BOOL SawRead;
 
     Flags = 0;
-    SawRead = FALSE;
     *OpenFlags = 0;
 
     //
     // Get the open flags.
     //
 
-    SawRead = FALSE;
     while (*ModeString != '\0') {
         switch (*ModeString) {
         case 'r':
             Flags |= O_RDONLY;
-            SawRead = TRUE;
             break;
 
         case 'w':
-            Flags |= O_WRONLY | O_CREAT;
-            if (SawRead == FALSE) {
-                Flags |= O_TRUNC;
-            }
-
+            Flags |= O_WRONLY | O_CREAT | O_TRUNC;
             break;
 
         case 'a':
-            Flags |= O_APPEND | O_WRONLY;
+            Flags |= O_WRONLY | O_CREAT | O_APPEND;
             break;
 
         case '+':
-            Flags |= O_RDONLY | O_WRONLY;
+            Flags &= ~(O_RDONLY | O_WRONLY);
+            Flags |= O_RDWR;
             break;
 
         case 'b':

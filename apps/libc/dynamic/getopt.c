@@ -924,7 +924,7 @@ Return Value:
         // equals.
         //
 
-        if (Equals != FALSE) {
+        if (Equals != NULL) {
             optarg = Equals + 1;
 
         //
