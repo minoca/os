@@ -225,6 +225,44 @@ Return Value:
 --*/
 
 LIBC_API
+int
+wctomb (
+    char *MultibyteCharacter,
+    wchar_t WideCharacter
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to convert a single wide character into a multibyte
+    character.
+
+Arguments:
+
+    MultibyteCharacter - Supplies an optional pointer to the buffer where the
+        multibyte character will be returned. This buffer is assumed to be at
+        least MB_CUR_MAX bytes large. If this is NULL, then this function will
+        determine whether or not the given character has state-dependent
+        encodings.
+
+    WideCharacter - Supplies a pointer to the wide character to convert. If this
+        is a null terminator, then the shift state will be reset to its initial
+        shift state.
+
+Return Value:
+
+    0 if the multibyte character is NULL and the character does not have state
+    dependent encodings.
+
+    Returns the number of bytes stored in the multibyte array, or that would
+    be stored in the array were it non-NULL.
+
+    -1 if an encoding error occurred, and errno may be set to EILSEQ.
+
+--*/
+
+LIBC_API
 size_t
 wcrtomb (
     char *MultibyteCharacter,
