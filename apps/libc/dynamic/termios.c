@@ -82,6 +82,7 @@ Environment:
            (FFDLY == TERMINAL_OUTPUT_FORM_FEED_DELAY) &&                \
            (FF0 == 0) &&                                                \
            (FF1 == TERMINAL_OUTPUT_FORM_FEED_DELAY) &&                  \
+           (OFDEL == TERMINAL_OUTPUT_FILL_DEL) &&                       \
            (CSIZE == TERMINAL_CONTROL_CHARACTER_SIZE_MASK) &&           \
            (CS5 == TERMINAL_CONTROL_5_BITS_PER_CHARACTER) &&            \
            (CS6 == TERMINAL_CONTROL_6_BITS_PER_CHARACTER) &&            \

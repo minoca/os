@@ -628,6 +628,13 @@ Author:
 #define TERMINAL_OUTPUT_FORM_FEED_DELAY 0x00002000
 
 //
+// Set this flag to fill with DEL (127) characters. If not set, the fill
+// character is NUL (0).
+//
+
+#define TERMINAL_OUTPUT_FILL_DEL 0x00004000
+
+//
 // Define terminal control mode flags.
 //
 

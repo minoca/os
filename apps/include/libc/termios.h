@@ -214,6 +214,13 @@ extern "C" {
 #define FF1 0x00002000
 
 //
+// Set this flag to set the fill character to ASCII DEL (127). If this flag is
+// not set, the fill character is NUL (0).
+//
+
+#define OFDEL 0x00004000
+
+//
 // Define valid baud rates.
 //
 
