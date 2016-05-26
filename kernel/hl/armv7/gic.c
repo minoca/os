@@ -590,7 +590,7 @@ Return Value:
             //
 
             NewController.TableVersion =
-                                       INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
+                                      INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
 
             HlGicKernelServices->CopyMemory(&(NewController.FunctionTable),
                                             &HlGicFunctionTable,

@@ -353,7 +353,7 @@ Routine Description:
 
 Arguments:
 
-    Address - Supplies the address of the value to atomically add to.
+    Address - Supplies the address of the value to atomically OR with.
 
     Mask - Supplies the bitmask to logically OR in to the value.
 
@@ -388,13 +388,13 @@ Routine Description:
 
 Arguments:
 
-    Address - Supplies the address of the value to atomically add to.
+    Address - Supplies the address of the value to atomically OR with.
 
     Mask - Supplies the bitmask to logically OR in to the value.
 
 Return Value:
 
-    Returns the value before the atomic addition was performed.
+    Returns the value before the atomic operation was performed.
 
 --*/
 
@@ -427,7 +427,7 @@ Routine Description:
 
 Arguments:
 
-    Address - Supplies the address of the value to atomically add to.
+    Address - Supplies the address of the value to atomically AND with.
 
     Mask - Supplies the bitmask to logically AND in to the value.
 
@@ -462,7 +462,7 @@ Routine Description:
 
 Arguments:
 
-    Address - Supplies the address of the value to atomically add to.
+    Address - Supplies the address of the value to atomically XOR with.
 
     Mask - Supplies the bitmask to logically XOR in to the value.
 

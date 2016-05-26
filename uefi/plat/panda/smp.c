@@ -198,8 +198,8 @@ Return Value:
     //
 
     EfipOmap4SmcCommand(OMAP4_AUX_CORE_BOOT_0_START,
-                       ~OMAP4_AUX_CORE_BOOT_0_START,
-                       OMAP4_SMC_COMMAND_MODIFY_AUX_CORE_BOOT_0);
+                        ~OMAP4_AUX_CORE_BOOT_0_START,
+                        OMAP4_SMC_COMMAND_MODIFY_AUX_CORE_BOOT_0);
 
     //
     // Send an event to core 1.

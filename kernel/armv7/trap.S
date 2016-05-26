@@ -125,6 +125,7 @@ END_FUNCTION ArpInitializeExceptionStacks
 ##
 ## VOID
 ## ArpUndefinedInstructionEntry (
+##     VOID
 ##     )
 ##
 
