@@ -877,6 +877,18 @@ Return Value:
                 ExpansionSize = strlen(ExpansionBuffer);
 
             //
+            // L prints the currently executing line number.
+            //
+
+            } else if (Specifier == 'L') {
+                snprintf(ExpansionBuffer,
+                         SHELL_PROMPT_EXPANSION_MAX,
+                         "%d",
+                         Shell->ExecutingLineNumber);
+
+                ExpansionSize = strlen(ExpansionBuffer);
+
+            //
             // j prints the current number of active jobs.
             //
 

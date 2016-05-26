@@ -3141,6 +3141,10 @@ Return Value:
     NewNode->Type = Type;
     NewNode->ReferenceCount = 1;
     NewNode->LineNumber = Shell->Lexer.LineNumber;
+    if (Shell->Lexer.TokenType == '\n') {
+        NewNode->LineNumber -= 1;
+    }
+
     INITIALIZE_LIST_HEAD(&(NewNode->Children));
     INITIALIZE_LIST_HEAD(&(NewNode->RedirectList));
     NewNode->RunInBackground = FALSE;

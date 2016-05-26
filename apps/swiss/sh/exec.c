@@ -161,12 +161,6 @@ ShApplyRedirections (
 BOOL ShUseSwissBuiltins = TRUE;
 
 //
-// Set this variable if trace should print out line numbers.
-//
-
-BOOL ShTraceLineNumbers = TRUE;
-
-//
 // Define the quoted at arguments string.
 //
 
@@ -1089,9 +1083,6 @@ Return Value:
     SimpleCommand = &(Node->U.SimpleCommand);
     if ((Shell->Options & SHELL_OPTION_TRACE_COMMAND) != 0) {
         ShPrintPrompt(Shell, 4);
-        if (ShTraceLineNumbers != FALSE) {
-            ShPrintTrace(Shell, "(%d) ", Node->LineNumber);
-        }
     }
 
     Shell->ReturnValue = 0;

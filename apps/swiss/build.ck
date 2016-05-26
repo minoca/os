@@ -120,6 +120,7 @@ function build() {
         "readlink.c",
         "sh/shuos.c",
         "ssdaemon.c",
+        "stty.c",
         "swlib/chownutl.c",
         "swlib/uos.c",
         "telnet.c",

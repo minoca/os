@@ -286,6 +286,8 @@ extern SWISS_COMMAND_ENTRY SwissCommands[];
 #define NPROC_COMMAND_DESCRIPTION "Returns the number of processors"
 #define SEQ_COMMAND_NAME "seq"
 #define SEQ_COMMAND_DESCRIPTION "Print a sequence of numbers"
+#define STTY_COMMAND_NAME "stty"
+#define STTY_COMMAND_DESCRIPTION "Set terminal attributes"
 
 //
 // Command entry point prototypes.
@@ -2227,3 +2229,29 @@ Return Value:
     Returns an integer exit code. 0 for success, nonzero otherwise.
 
 --*/
+
+INT
+SttyMain (
+    INT ArgumentCount,
+    CHAR **Arguments
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the main entry point for the stty utility.
+
+Arguments:
+
+    ArgumentCount - Supplies the number of command line arguments the program
+        was invoked with.
+
+    Arguments - Supplies a tokenized array of command line arguments.
+
+Return Value:
+
+    Returns an integer exit code. 0 for success, nonzero otherwise.
+
+--*/
+

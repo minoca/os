@@ -203,6 +203,7 @@ sh/util.c
 sh/var.c
 sort.c
 split.c
+stty.c
 sum.c
 swiss.c
 swiss.h

@@ -123,6 +123,7 @@ UOS_OBJS = chown.o          \
            readlink.o       \
            sh/shuos.o       \
            ssdaemon.o       \
+           stty.o           \
            swlib/chownutl.o \
            swlib/uos.o      \
            telnet.o         \
