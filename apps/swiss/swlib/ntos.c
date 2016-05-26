@@ -1157,7 +1157,7 @@ Return Value:
 
     switch (SystemInfo.wProcessorArchitecture) {
     case PROCESSOR_ARCHITECTURE_AMD64:
-        strcpy(Name->Machine, "x86-64");
+        strcpy(Name->Machine, "x86_64");
         break;
 
     case PROCESSOR_ARCHITECTURE_ARM:

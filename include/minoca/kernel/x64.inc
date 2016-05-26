@@ -90,6 +90,8 @@ Environment:
     mov     $GDT_PROCESSOR, %ax ;  \
     mov     %ax, %fs ;             \
 
+#if defined(__ELF__)
+
 ##
 ## This macro defines a function, callable from C code in any module and
 ## capable of being overridden by other functions.
@@ -98,6 +100,7 @@ Environment:
 #define EXPORTED_FUNCTION(_Name) \
     .func _Name ; \
     .type _Name, %function ; \
+    .cfi_startproc ; \
     .global _Name ; \
     _Name:
 
@@ -121,5 +124,20 @@ Environment:
 
 #define END_FUNCTION(_Name) \
     .size _Name, .-_Name ; \
-    .endfunc
+    .endfunc ; \
+    .cfi_endproc
+
+#else
+
+#define FUNCTION(_Name) \
+    .def _Name; .scl 2; .type 32; .endef ; \
+    .global _Name ; \
+    _Name:
+
+#define PROTECTED_FUNCTION(_Name) FUNCTION(_Name)
+#define EXPORTED_FUNCTION(_Name) FUNCTION(_Name)
+
+#define END_FUNCTION(_Name)
+
+#endif
 
