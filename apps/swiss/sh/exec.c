@@ -390,34 +390,87 @@ Return Value:
 
 {
 
+    pid_t Child;
     PSTR FullCommandPath;
     ULONG FullCommandPathSize;
     BOOL Result;
     INT Status;
+    PSWISS_COMMAND_ENTRY SwissCommand;
+    id_t UserId;
 
     FullCommandPath = NULL;
     *ReturnValue = -1;
+    Child = -1;
 
     //
     // If enabled, try the builtin commands.
     //
 
     if (ShUseSwissBuiltins != FALSE) {
-        fflush(NULL);
-        ShSetTerminalMode(Shell, FALSE);
-        Result = SwissRunCommand(Arguments[0],
-                                 Arguments,
-                                 ArgumentCount,
-                                 TRUE,
-                                 !Asynchronous,
-                                 ReturnValue);
+        SwissCommand = SwissFindCommand(Arguments[0]);
 
-        ShSetTerminalMode(Shell, TRUE);
-        ShSetAllSignalDispositions(Shell);
-        if (Result != FALSE) {
-            Status = 0;
-            ShOsConvertExitStatus(ReturnValue);
-            goto RunCommandEnd;
+        //
+        // If the command is setuid and the environment is currently not setuid,
+        // pretend like the command wasn't found.
+        //
+
+        if ((SwissCommand != NULL) &&
+            ((SwissCommand->Flags & SWISS_APP_SETUID_OK) != 0)) {
+
+            UserId = SwGetEffectiveUserId();
+            if ((UserId != 0) && (UserId == SwGetRealUserId())) {
+                SwissCommand = NULL;
+            }
+        }
+
+        if (SwissCommand != NULL) {
+            if (SwForkSupported != 0) {
+                Child = SwFork();
+                if (Child < 0) {
+                    PRINT_ERROR("sh: Failed to fork: %s\n", strerror(errno));
+                    Status = -1;
+                    goto RunCommandEnd;
+
+                } else if (Child == 0) {
+                    ShRestoreOriginalSignalDispositions();
+                    SwissRunCommand(SwissCommand,
+                                    Arguments,
+                                    ArgumentCount,
+                                    FALSE,
+                                    TRUE,
+                                    ReturnValue);
+
+                    exit(*ReturnValue);
+
+                //
+                // In the parent, jump down to wait for the child.
+                //
+
+                } else {
+                    Status = 0;
+                    goto RunCommandEnd;
+                }
+
+            //
+            // If fork is not supported (Windows), just execute the command in
+            // a separate process.
+            //
+
+            } else {
+                fflush(NULL);
+                Result = SwissRunCommand(SwissCommand,
+                                         Arguments,
+                                         ArgumentCount,
+                                         TRUE,
+                                         !Asynchronous,
+                                         ReturnValue);
+
+                if (Result != FALSE) {
+                    Status = 0;
+                    ShOsConvertExitStatus(ReturnValue);
+                    goto RunCommandEnd;
+                }
+            }
         }
     }
 
@@ -447,28 +500,77 @@ Return Value:
         goto RunCommandEnd;
     }
 
-    fflush(NULL);
-    ShSetTerminalMode(Shell, FALSE);
-    Status = SwRunCommand(FullCommandPath,
-                          Arguments,
-                          ArgumentCount,
-                          Asynchronous,
-                          ReturnValue);
+    if (SwForkSupported != 0) {
+        Child = SwFork();
+        if (Child < 0) {
+            PRINT_ERROR("sh: Failed to fork: %s\n", strerror(errno));
+            Status = -1;
+            goto RunCommandEnd;
 
-    ShOsConvertExitStatus(ReturnValue);
-    if (((Shell->Options & SHELL_OPTION_INTERACTIVE) != 0) &&
-        (*ReturnValue > SHELL_EXIT_SIGNALED)) {
+        } else if (Child == 0) {
+            ShRestoreOriginalSignalDispositions();
+            SwExec(FullCommandPath, Arguments, ArgumentCount);
+            exit(errno);
 
-        printf("%s terminated by signal %d: %s\n",
-               Arguments[0],
-               *ReturnValue - SHELL_EXIT_SIGNALED,
-               strsignal(*ReturnValue - SHELL_EXIT_SIGNALED));
+        //
+        // In the parent, jump down to wait for the child.
+        //
+
+        } else {
+            Status = 0;
+            goto RunCommandEnd;
+        }
+
+    } else {
+        fflush(NULL);
+        Status = SwRunCommand(FullCommandPath,
+                              Arguments,
+                              ArgumentCount,
+                              Asynchronous,
+                              ReturnValue);
+
+        ShOsConvertExitStatus(ReturnValue);
     }
 
-    ShSetTerminalMode(Shell, TRUE);
-    ShSetAllSignalDispositions(Shell);
-
 RunCommandEnd:
+
+    //
+    // Wait for the child if there is one.
+    //
+
+    if (Child > 0) {
+        if (Asynchronous != 0) {
+            *ReturnValue = 0;
+
+        } else {
+            Status = SwWaitPid(Child, 0, ReturnValue);
+            if (Status != Child) {
+                PRINT_ERROR("sh: Failed to wait for child %d\n", Child);
+                Status = -1;
+
+            } else {
+                ShOsConvertExitStatus(ReturnValue);
+            }
+        }
+    }
+
+    if (*ReturnValue > SHELL_EXIT_SIGNALED) {
+        if ((Shell->Options & SHELL_OPTION_INTERACTIVE) != 0) {
+            printf("%s terminated by signal %d: %s\n",
+                   Arguments[0],
+                   *ReturnValue - SHELL_EXIT_SIGNALED,
+                   strsignal(*ReturnValue - SHELL_EXIT_SIGNALED));
+        }
+
+    //
+    // If the command exited normally, save any terminal changes it may have
+    // made.
+    //
+
+    } else {
+        SwSaveTerminalMode();
+    }
+
     if ((FullCommandPath != NULL) && (FullCommandPath != Arguments[0])) {
         free(FullCommandPath);
     }

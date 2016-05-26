@@ -50,21 +50,6 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-PSWISS_COMMAND_ENTRY
-SwisspFindCommand (
-    PSTR Command
-    );
-
-BOOL
-SwisspRunCommand (
-    PSWISS_COMMAND_ENTRY Command,
-    CHAR **Arguments,
-    ULONG ArgumentCount,
-    BOOL SeparateProcess,
-    BOOL Wait,
-    PINT ReturnValue
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -148,10 +133,10 @@ Return Value:
     // argv[1].
     //
 
-    Command = SwisspFindCommand(CommandName);
+    Command = SwissFindCommand(CommandName);
     if (Command == NULL) {
         if (ArgumentCount > 1) {
-            Command = SwisspFindCommand(Arguments[1]);
+            Command = SwissFindCommand(Arguments[1]);
             if (Command != NULL) {
                 Arguments += 1;
                 ArgumentCount -= 1;
@@ -162,7 +147,7 @@ Return Value:
         //
 
         } else if (strncasecmp(CommandName, "swiss", 5) == 0) {
-            Command = SwisspFindCommand(SH_COMMAND_NAME);
+            Command = SwissFindCommand(SH_COMMAND_NAME);
             if (Command != NULL) {
                 SwPrintVersion(SWISS_VERSION_MAJOR, SWISS_VERSION_MINOR);
             }
@@ -259,12 +244,12 @@ Return Value:
     // Run the command.
     //
 
-    Result = SwisspRunCommand(Command,
-                              Arguments,
-                              ArgumentCount,
-                              FALSE,
-                              TRUE,
-                              &ReturnValue);
+    Result = SwissRunCommand(Command,
+                             Arguments,
+                             ArgumentCount,
+                             FALSE,
+                             TRUE,
+                             &ReturnValue);
 
     if (Result == FALSE) {
         ReturnValue = 1;
@@ -279,87 +264,8 @@ mainEnd:
     return ReturnValue;
 }
 
-BOOL
-SwissRunCommand (
-    PSTR Command,
-    CHAR **Arguments,
-    ULONG ArgumentCount,
-    BOOL SeparateProcess,
-    BOOL Wait,
-    PINT ReturnValue
-    )
-
-/*++
-
-Routine Description:
-
-    This routine runs a builtin command.
-
-Arguments:
-
-    Command - Supplies the command string to run.
-
-    Arguments - Supplies an array of pointers to strings representing the
-        arguments.
-
-    ArgumentCount - Supplies the number of arguments on the command line.
-
-    SeparateProcess - Supplies a boolean indicating if the command should be
-        executed in a separate process space.
-
-    Wait - Supplies a boolean indicating if this routine should not return
-        until the command has completed.
-
-    ReturnValue - Supplies a pointer where the return value of the command
-        will be returned on success.
-
-Return Value:
-
-    TRUE on success.
-
-    FALSE if the command is not a recognized swiss builtin command.
-
---*/
-
-{
-
-    PSWISS_COMMAND_ENTRY CommandEntry;
-    BOOL Result;
-    id_t UserId;
-
-    CommandEntry = SwisspFindCommand(Command);
-    if (CommandEntry == NULL) {
-        return FALSE;
-    }
-
-    //
-    // If the command is setuid and the environment is currently not setuid,
-    // pretend like the command wasn't found.
-    //
-
-    if ((CommandEntry->Flags & SWISS_APP_SETUID_OK) != 0) {
-        UserId = SwGetEffectiveUserId();
-        if ((UserId != 0) && (UserId == SwGetRealUserId())) {
-            return FALSE;
-        }
-    }
-
-    Result = SwisspRunCommand(CommandEntry,
-                              Arguments,
-                              ArgumentCount,
-                              SeparateProcess,
-                              Wait,
-                              ReturnValue);
-
-    return Result;
-}
-
-//
-// --------------------------------------------------------- Internal Functions
-//
-
 PSWISS_COMMAND_ENTRY
-SwisspFindCommand (
+SwissFindCommand (
     PSTR Command
     )
 
@@ -406,7 +312,7 @@ Return Value:
 }
 
 BOOL
-SwisspRunCommand (
+SwissRunCommand (
     PSWISS_COMMAND_ENTRY Command,
     CHAR **Arguments,
     ULONG ArgumentCount,
@@ -530,4 +436,8 @@ Return Value:
     fflush(NULL);
     return TRUE;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 

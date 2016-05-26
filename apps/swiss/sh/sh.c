@@ -428,7 +428,6 @@ Return Value:
 
     if ((InputDescriptor != -1) && (isatty(InputDescriptor) != 0)) {
         Shell->Options |= SHELL_INTERACTIVE_OPTIONS;
-        ShSetTerminalMode(Shell, TRUE);
     }
 
     InputDescriptor = -1;
@@ -465,7 +464,6 @@ Return Value:
 
     Shell->Exited = TRUE;
     ShRunAtExitSignal(Shell);
-    ShSetTerminalMode(Shell, FALSE);
     ShRestoreOriginalSignalDispositions();
 
 MainEnd:
@@ -800,7 +798,6 @@ Return Value:
 
     ShDestroyLexer(&(Shell->Lexer));
     memcpy(&(Shell->Lexer), &OriginalLexer, sizeof(SHELL_LEXER_STATE));
-    ShSetAllSignalDispositions(Shell);
     Result = TRUE;
 
 RunEnvVariableEnd:

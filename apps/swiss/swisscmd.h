@@ -25,83 +25,12 @@ Author:
 //
 
 //
-// Set this flag to keep setuid privileges.
-//
-
-#define SWISS_APP_SETUID_OK 0x00000001
-
-//
-// Set this flag to avoid showing the app in --list.
-//
-
-#define SWISS_APP_HIDDEN 0x00000002
-
-//
 // ------------------------------------------------------ Data Type Definitions
 //
-
-typedef
-INT
-(*PSWISS_COMMAND_ENTRY_POINT) (
-    INT ArgumentCount,
-    CHAR **Arguments
-    );
-
-/*++
-
-Routine Description:
-
-    This routine implements the entry point for a Swiss command.
-
-Arguments:
-
-    ArgumentCount - Supplies the number of arguments on the command line.
-
-    Arguments - Supplies an array of pointers to strings representing the
-        arguments.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
-/*++
-
-Structure Description:
-
-    This structure defines the structure of a Swiss command entry point.
-
-Members:
-
-    CommandName - Stores a pointer to a string containing the name of the
-        command.
-
-    CommandDescription - Stores a pointer to a null terminated string
-        containing a short one-liner describing the utility.
-
-    MainFunction - Stores a pointer to the function to call to run the
-        command.
-
-    Flags - Stores a bitfield of flags about the command. See SWISS_APP_*
-        definitions.
-
---*/
-
-typedef struct _SWISS_COMMAND_ENTRY {
-    PSTR CommandName;
-    PSTR CommandDescription;
-    PSWISS_COMMAND_ENTRY_POINT MainFunction;
-    ULONG Flags;
-} SWISS_COMMAND_ENTRY, *PSWISS_COMMAND_ENTRY;
 
 //
 // -------------------------------------------------------------------- Globals
 //
-
-extern SWISS_COMMAND_ENTRY SwissCommands[];
 
 //
 // -------------------------------------------------------- Function Prototypes

@@ -1465,7 +1465,6 @@ Return Value:
 {
 
     pid_t Child;
-    char **NewArguments;
     int Result;
     int Status;
 
@@ -1522,26 +1521,6 @@ Return Value:
 
     } else {
         Result = execvp(Command, (char *const *)Arguments);
-
-        //
-        // Try running the command under sh if it came back with an executable
-        // format error.
-        //
-
-        if (errno == ENOEXEC) {
-            NewArguments = malloc((ArgumentCount + 2) * sizeof(char *));
-            if (NewArguments != NULL) {
-                memcpy(&(NewArguments[1]),
-                       Arguments,
-                       (ArgumentCount + 1) * sizeof(char *));
-
-                NewArguments[0] = USER_FALLBACK_SHELL;
-                Command = NewArguments[0];
-                Result = execvp(Command, (char *const *)NewArguments);
-                fprintf(stderr, "Failed to exec under %s.\n", Command);
-            }
-        }
-
         fprintf(stderr, "Unable to exec %s: %s\n", Command, strerror(errno));
         exit(errno);
     }
@@ -3062,6 +3041,42 @@ Return Value:
 }
 
 int
+SwSaveTerminalMode (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine saves the current terminal mode as the mode to restore.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    1 on success.
+
+    0 on failure.
+
+--*/
+
+{
+
+    int Result;
+
+    Result = tcgetattr(STDIN_FILENO, &SwOriginalTerminalSettings);
+    if (Result == 0) {
+        SwOriginalTerminalSettingsValid = 1;
+        return 1;
+    }
+
+    return 0;
+}
+
+int
 SwSetRawInputMode (
     char *BackspaceCharacter,
     char *KillCharacter
@@ -3094,17 +3109,13 @@ Return Value:
     int Result;
     struct termios TerminalSettings;
 
-    Result = tcgetattr(STDIN_FILENO, &TerminalSettings);
-    if (Result != 0) {
-        return 0;
+    if (SwOriginalTerminalSettingsValid == 0) {
+        SwSaveTerminalMode();
     }
 
-    if (SwOriginalTerminalSettingsValid == 0) {
-        SwOriginalTerminalSettingsValid = 1;
-        memcpy(&SwOriginalTerminalSettings,
-               &TerminalSettings,
-               sizeof(struct termios));
-    }
+    memcpy(&TerminalSettings,
+           &SwOriginalTerminalSettings,
+           sizeof(TerminalSettings));
 
     //
     // Disable break, CR to NL, parity check, strip characters, and output

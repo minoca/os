@@ -3612,6 +3612,44 @@ Return Value:
 }
 
 int
+SwSaveTerminalMode (
+    void
+    )
+
+/*++
+
+Routine Description:
+
+    This routine saves the current terminal mode as the mode to restore.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    1 on success.
+
+    0 on failure.
+
+--*/
+
+{
+
+    HANDLE Console;
+    BOOL Result;
+
+    Console = GetStdHandle(STD_INPUT_HANDLE);
+    Result = GetConsoleMode(Console, &SwOriginalConsoleMode);
+    if (Result == FALSE) {
+        return 0;
+    }
+
+    SwConsoleModeSaved = TRUE;
+    return 1;
+}
+
+int
 SwSetRawInputMode (
     char *BackspaceCharacter,
     char *KillCharacter
@@ -3647,16 +3685,11 @@ Return Value:
     BOOL Result;
 
     Console = GetStdHandle(STD_INPUT_HANDLE);
-    Result = GetConsoleMode(Console, &OriginalMode);
-    if (Result == FALSE) {
-        return 0;
-    }
-
     if (SwConsoleModeSaved == FALSE) {
-        SwOriginalConsoleMode = OriginalMode;
-        SwConsoleModeSaved = TRUE;
+        SwSaveTerminalMode();
     }
 
+    OriginalMode = SwOriginalConsoleMode;
     RawMode = OriginalMode;
     RawMode &= ~(ENABLE_ECHO_INPUT | ENABLE_INSERT_MODE | ENABLE_LINE_INPUT);
     RawMode |= ENABLE_EXTENDED_FLAGS | ENABLE_PROCESSED_INPUT |

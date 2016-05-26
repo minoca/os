@@ -36,7 +36,6 @@ Environment:
 #include <string.h>
 #include <unistd.h>
 #include "swlib.h"
-#include "swisscmd.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -324,112 +323,6 @@ struct option GrepLongOptions[] = {
 //
 // ------------------------------------------------------------------ Functions
 //
-
-INT
-EgrepMain (
-    INT ArgumentCount,
-    CHAR **Arguments
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the main entry point for the egrep utility, which
-    searches for a pattern within a file. It is equivalent to grep -E.
-
-Arguments:
-
-    ArgumentCount - Supplies the number of arguments on the command line.
-
-    Arguments - Supplies an array of pointers to strings representing the
-        arguments.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
-{
-
-    INT ArgumentIndex;
-    PSTR *NewArguments;
-    INT Result;
-
-    assert(ArgumentCount >= 1);
-
-    NewArguments = malloc((ArgumentCount + 2) * sizeof(PSTR));
-    if (NewArguments == NULL) {
-        return ENOMEM;
-    }
-
-    NewArguments[0] = Arguments[0];
-    NewArguments[1] = "-E";
-    for (ArgumentIndex = 1; ArgumentIndex < ArgumentCount; ArgumentIndex += 1) {
-        NewArguments[1 + ArgumentIndex] = Arguments[ArgumentIndex];
-    }
-
-    NewArguments[ArgumentCount + 1] = NULL;
-    Result = GrepMain(ArgumentCount + 1, NewArguments);
-    free(NewArguments);
-    return Result;
-}
-
-INT
-FgrepMain (
-    INT ArgumentCount,
-    CHAR **Arguments
-    )
-
-/*++
-
-Routine Description:
-
-    This routine implements the main entry point for the fgrep utility, which
-    searches for a pattern within a file. It is equivalent to grep -f.
-
-Arguments:
-
-    ArgumentCount - Supplies the number of arguments on the command line.
-
-    Arguments - Supplies an array of pointers to strings representing the
-        arguments.
-
-Return Value:
-
-    0 on success.
-
-    Non-zero on failure.
-
---*/
-
-{
-
-    INT ArgumentIndex;
-    PSTR *NewArguments;
-    INT Result;
-
-    assert(ArgumentCount >= 1);
-
-    NewArguments = malloc((ArgumentCount + 2) * sizeof(PSTR));
-    if (NewArguments == NULL) {
-        return ENOMEM;
-    }
-
-    NewArguments[0] = Arguments[0];
-    NewArguments[1] = "-F";
-    for (ArgumentIndex = 1; ArgumentIndex < ArgumentCount; ArgumentIndex += 1) {
-        NewArguments[1 + ArgumentIndex] = Arguments[ArgumentIndex];
-    }
-
-    NewArguments[ArgumentCount + 1] = NULL;
-    Result = GrepMain(ArgumentCount + 1, NewArguments);
-    free(NewArguments);
-    return Result;
-}
 
 INT
 GrepMain (
@@ -725,6 +618,112 @@ MainEnd:
     }
 
     return Status;
+}
+
+INT
+EgrepMain (
+    INT ArgumentCount,
+    CHAR **Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the main entry point for the egrep utility, which
+    searches for a pattern within a file. It is equivalent to grep -E.
+
+Arguments:
+
+    ArgumentCount - Supplies the number of arguments on the command line.
+
+    Arguments - Supplies an array of pointers to strings representing the
+        arguments.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+{
+
+    INT ArgumentIndex;
+    PSTR *NewArguments;
+    INT Result;
+
+    assert(ArgumentCount >= 1);
+
+    NewArguments = malloc((ArgumentCount + 2) * sizeof(PSTR));
+    if (NewArguments == NULL) {
+        return ENOMEM;
+    }
+
+    NewArguments[0] = Arguments[0];
+    NewArguments[1] = "-E";
+    for (ArgumentIndex = 1; ArgumentIndex < ArgumentCount; ArgumentIndex += 1) {
+        NewArguments[1 + ArgumentIndex] = Arguments[ArgumentIndex];
+    }
+
+    NewArguments[ArgumentCount + 1] = NULL;
+    Result = GrepMain(ArgumentCount + 1, NewArguments);
+    free(NewArguments);
+    return Result;
+}
+
+INT
+FgrepMain (
+    INT ArgumentCount,
+    CHAR **Arguments
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the main entry point for the fgrep utility, which
+    searches for a pattern within a file. It is equivalent to grep -f.
+
+Arguments:
+
+    ArgumentCount - Supplies the number of arguments on the command line.
+
+    Arguments - Supplies an array of pointers to strings representing the
+        arguments.
+
+Return Value:
+
+    0 on success.
+
+    Non-zero on failure.
+
+--*/
+
+{
+
+    INT ArgumentIndex;
+    PSTR *NewArguments;
+    INT Result;
+
+    assert(ArgumentCount >= 1);
+
+    NewArguments = malloc((ArgumentCount + 2) * sizeof(PSTR));
+    if (NewArguments == NULL) {
+        return ENOMEM;
+    }
+
+    NewArguments[0] = Arguments[0];
+    NewArguments[1] = "-F";
+    for (ArgumentIndex = 1; ArgumentIndex < ArgumentCount; ArgumentIndex += 1) {
+        NewArguments[1 + ArgumentIndex] = Arguments[ArgumentIndex];
+    }
+
+    NewArguments[ArgumentCount + 1] = NULL;
+    Result = GrepMain(ArgumentCount + 1, NewArguments);
+    free(NewArguments);
+    return Result;
 }
 
 //

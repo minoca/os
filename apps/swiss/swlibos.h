@@ -2493,6 +2493,29 @@ Return Value:
 --*/
 
 int
+SwSaveTerminalMode (
+    void
+    );
+
+/*++
+
+Routine Description:
+
+    This routine saves the current terminal mode as the mode to restore.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    1 on success.
+
+    0 on failure.
+
+--*/
+
+int
 SwSetRawInputMode (
     char *BackspaceCharacter,
     char *KillCharacter

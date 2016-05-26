@@ -286,6 +286,7 @@ Return Value:
     Result = TRUE;
     Position = 0;
     memset(&KeyData, 0, sizeof(TERMINAL_KEY_DATA));
+    ShSetTerminalMode(Shell, TRUE);
 
     //
     // Allocate the initial command buffer.
@@ -655,6 +656,7 @@ Return Value:
 
 ReadLineEnd:
     fflush(Output);
+    ShSetTerminalMode(Shell, FALSE);
     if (Result == FALSE) {
         CommandLength = 0;
         if (Command != NULL) {
@@ -750,6 +752,12 @@ Return Value:
     Replacement = NULL;
     RoundedMatches = NULL;
     UserString = NULL;
+
+    //
+    // Restore the terminal mode since the shell may execute expansions.
+    //
+
+    ShSetTerminalMode(Shell, FALSE);
     Result = ShGetFileCompletionPortion(Shell,
                                         *Command,
                                         CompletionPosition,
@@ -969,6 +977,7 @@ CompleteFilePathEnd:
 
     assert((*Command)[*CommandLength] == '\0');
 
+    ShSetTerminalMode(Shell, TRUE);
     if (UserString != NULL) {
         free(UserString);
     }

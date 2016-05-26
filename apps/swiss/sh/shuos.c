@@ -943,6 +943,12 @@ Return Value:
 
 {
 
+    //
+    // TODO: Handle stopped processes in the shell with job control.
+    //
+
+    assert(!WIFSTOPPED(*Status));
+
     if (WIFEXITED(*Status)) {
         *Status = WEXITSTATUS(*Status);
 

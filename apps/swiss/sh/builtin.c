@@ -1210,7 +1210,6 @@ Return Value:
                        SHELL_OPTION_RAW_INPUT |
                        SHELL_OPTION_INPUT_BUFFER_ONLY);
 
-    ShSetTerminalMode(Shell, FALSE);
     Shell->Options &= ~OriginalOptions;
     Shell->LastReturnValue = 0;
 
@@ -1220,7 +1219,6 @@ Return Value:
 
     Result = ShExecute(Shell, &ReturnValue);
     Shell->Options |= OriginalOptions;
-    ShSetTerminalMode(Shell, TRUE);
 
     //
     // Restore the original lexer.
@@ -1379,12 +1377,11 @@ Return Value:
             // anyway.
             //
 
-            ShSetTerminalMode(Shell, FALSE);
+            ShRestoreOriginalSignalDispositions();
             ReturnValue = SwExec(FullCommandPath, Arguments, ArgumentCount);
+            ShSetAllSignalDispositions(Shell);
             SwPrintError(ReturnValue, FullCommandPath, "Failed to exec");
             Shell->ReturnValue = ReturnValue;
-            ShSetTerminalMode(Shell, TRUE);
-            ShSetAllSignalDispositions(Shell);
 
         //
         // If fork is not supported, then subshells never forked, and this
@@ -1482,13 +1479,6 @@ Return Value:
 
     EndOfFileDetected = FALSE;
     Fields = NULL;
-
-    //
-    // Set cooked mode for this one, even if the shell is not interactive. It
-    // may still have standard in from a terminal.
-    //
-
-    SwRestoreInputMode();
 
     //
     // Skip over the "read" argument.
@@ -1666,12 +1656,6 @@ Return Value:
     }
 
 BuiltinReadEnd:
-
-    //
-    // Put the terminal back to raw mode if it was there before.
-    //
-
-    ShSetTerminalMode(Shell, TRUE);
     if (Fields != NULL) {
         free(Fields);
     }

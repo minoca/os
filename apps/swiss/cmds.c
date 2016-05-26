@@ -28,7 +28,6 @@ Environment:
 #include <minoca/lib/types.h>
 
 #include "swiss.h"
-#include "swisscmd.h"
 
 //
 // ---------------------------------------------------------------- Definitions
