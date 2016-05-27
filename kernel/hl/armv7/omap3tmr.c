@@ -25,15 +25,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include "omap3.h"
 
 //
@@ -46,16 +42,15 @@ Environment:
 //
 
 #define READ_TIMER_REGISTER(_Base, _Register) \
-    HlOmap3KernelServices->ReadRegister32((PULONG)(_Base) + (_Register))
+    HlReadRegister32((PULONG)(_Base) + (_Register))
 
 //
 // This macro writes to an OMAP3 timer. _Base should be a pointer,
 // _Register should be GP_TIMER_REGISTER value, and _Value should be a ULONG.
 //
 
-#define WRITE_TIMER_REGISTER(_Base, _Register, _Value)                     \
-    HlOmap3KernelServices->WriteRegister32((PULONG)(_Base) + (_Register),  \
-                                           (_Value))
+#define WRITE_TIMER_REGISTER(_Base, _Register, _Value) \
+    HlWriteRegister32((PULONG)(_Base) + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -190,7 +185,7 @@ POMAP3_TABLE HlOmap3Table = NULL;
 
 VOID
 HlpOmap3TimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -220,10 +215,10 @@ Return Value:
 
     //
     // Interrupt controllers are always initialized before timers, so the
-    // integrator table and services should already be set up.
+    // OMAP3 ACPI table should already be set up.
     //
 
-    if ((HlOmap3Table == NULL) || (HlOmap3KernelServices == NULL)) {
+    if (HlOmap3Table == NULL) {
         goto GpTimerModuleEntryEnd;
     }
 
@@ -250,7 +245,7 @@ Return Value:
             continue;
         }
 
-        HlOmap3KernelServices->ZeroMemory(&Timer, sizeof(TIMER_DESCRIPTION));
+        RtlZeroMemory(&Timer, sizeof(TIMER_DESCRIPTION));
         Timer.TableVersion = TIMER_DESCRIPTION_VERSION;
         Timer.FunctionTable.Initialize = HlpOmap3TimerInitialize;
         Timer.FunctionTable.ReadCounter = HlpOmap3TimerRead;
@@ -260,18 +255,17 @@ Return Value:
         Timer.FunctionTable.AcknowledgeInterrupt =
                                              HlpOmap3TimerAcknowledgeInterrupt;
 
-        TimerData = HlOmap3KernelServices->AllocateMemory(
-                                                    sizeof(GP_TIMER_DATA),
-                                                    OMAP3_ALLOCATION_TAG,
-                                                    FALSE,
-                                                    NULL);
+        TimerData = HlAllocateMemory(sizeof(GP_TIMER_DATA),
+                                     OMAP3_ALLOCATION_TAG,
+                                     FALSE,
+                                     NULL);
 
         if (TimerData == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto GpTimerModuleEntryEnd;
         }
 
-        HlOmap3KernelServices->ZeroMemory(TimerData, sizeof(GP_TIMER_DATA));
+        RtlZeroMemory(TimerData, sizeof(GP_TIMER_DATA));
         TimerData->PhysicalAddress =
                                 HlOmap3Table->TimerPhysicalAddress[TimerIndex];
 
@@ -306,7 +300,7 @@ Return Value:
         // Register the timer with the system.
         //
 
-        Status = HlOmap3KernelServices->Register(HardwareModuleTimer, &Timer);
+        Status = HlRegisterHardware(HardwareModuleTimer, &Timer);
         if (!KSUCCESS(Status)) {
             goto GpTimerModuleEntryEnd;
         }
@@ -355,10 +349,9 @@ Return Value:
     //
 
     if (Timer->Base == NULL) {
-        Timer->Base = HlOmap3KernelServices->MapPhysicalAddress(
-                            Timer->PhysicalAddress,
-                            OMAP3_TIMER_CONTROLLER_SIZE,
-                            TRUE);
+        Timer->Base = HlMapPhysicalAddress(Timer->PhysicalAddress,
+                                           OMAP3_TIMER_CONTROLLER_SIZE,
+                                           TRUE);
 
         if (Timer->Base == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

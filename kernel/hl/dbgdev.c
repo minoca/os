@@ -167,7 +167,7 @@ Return Value:
     if ((LIST_EMPTY(&HlDebugDeviceList) != FALSE) &&
         (HlSkipUsbDebug == FALSE)) {
 
-        KdEhciModuleEntry(&HlHardwareModuleServices);
+        KdEhciModuleEntry();
         HlUsbHostsEnumerated = TRUE;
     }
 
@@ -226,13 +226,13 @@ Return Value:
     }
 
     if (HlUsbHostsEnumerated == FALSE) {
-        KdEhciModuleEntry(&HlHardwareModuleServices);
+        KdEhciModuleEntry();
     }
 
     CurrentEntry = HlDebugUsbHostList.Next;
     while (CurrentEntry != &HlDebugUsbHostList) {
         Host = LIST_VALUE(CurrentEntry, DEBUG_USB_HOST, ListEntry);
-        KdUsbInitialize(&HlHardwareModuleServices, &(Host->Description), TRUE);
+        KdUsbInitialize(&(Host->Description), TRUE);
         CurrentEntry = CurrentEntry->Next;
     }
 
@@ -295,11 +295,7 @@ Return Value:
     // Allocate the new serial port object.
     //
 
-    Device = HlpModAllocateMemory(sizeof(DEBUG_DEVICE),
-                                  HL_POOL_TAG,
-                                  FALSE,
-                                  NULL);
-
+    Device = HlAllocateMemory(sizeof(DEBUG_DEVICE), HL_POOL_TAG, FALSE, NULL);
     if (Device == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto DebugDeviceRegisterHardwareEnd;
@@ -387,11 +383,7 @@ Return Value:
     // Allocate the new serial port object.
     //
 
-    Device = HlpModAllocateMemory(sizeof(DEBUG_USB_HOST),
-                                  HL_POOL_TAG,
-                                  FALSE,
-                                  NULL);
-
+    Device = HlAllocateMemory(sizeof(DEBUG_USB_HOST), HL_POOL_TAG, FALSE, NULL);
     if (Device == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto DebugDeviceRegisterHardwareEnd;
@@ -418,9 +410,7 @@ Return Value:
     //
 
     if (HlTestUsbHostDevice == FALSE) {
-        KdUsbInitialize(&HlHardwareModuleServices,
-                        &(Device->Description),
-                        FALSE);
+        KdUsbInitialize(&(Device->Description), FALSE);
     }
 
     Status = STATUS_SUCCESS;

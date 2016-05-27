@@ -26,15 +26,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -45,14 +41,14 @@ Environment:
 //
 
 #define READ_SERIAL_REGISTER(_Register) \
-    HlPl11KernelServices->ReadRegister32(HlPl11UartBase + _Register)
+    HlReadRegister32(HlPl11UartBase + (_Register))
 
 //
 // This macro performs a 32-bit write to the serial port.
 //
 
 #define WRITE_SERIAL_REGISTER(_Register, _Value) \
-    HlPl11KernelServices->WriteRegister32(HlPl11UartBase + _Register, _Value)
+    HlWriteRegister32(HlPl11UartBase + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -260,12 +256,6 @@ PHYSICAL_ADDRESS HlPl11UartPhysicalAddress;
 ULONG HlPl11UartClockFrequency;
 
 //
-// Store a pointer to the kernel services provided.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlPl11KernelServices = NULL;
-
-//
 // Store a boolean indicating whether enumeration of this serial port should be
 // forced. Setting this to TRUE causes this module to register a serial port
 // even if one is not found in firmware tables. This is useful to temporarily
@@ -280,7 +270,7 @@ BOOL HlPl11ForceEnumeration = FALSE;
 
 VOID
 HlpPl11SerialModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -292,8 +282,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -315,14 +304,12 @@ Return Value:
     USHORT PortType;
     KSTATUS Status;
 
-    HlPl11KernelServices = Services;
-
     //
     // Look for the debug port table.
     //
 
     FoundIt = FALSE;
-    DebugTable = HlPl11KernelServices->GetAcpiTable(DBG2_SIGNATURE, NULL);
+    DebugTable = HlGetAcpiTable(DBG2_SIGNATURE, NULL);
     if (DebugTable != NULL) {
         DebugDevice =
             (PDEBUG_DEVICE_INFORMATION)(((PVOID)DebugTable) +
@@ -370,12 +357,8 @@ Return Value:
     // Report the physical address space that the UART is occupying.
     //
 
-    HlPl11KernelServices->ReportPhysicalAddressUsage(HlPl11UartPhysicalAddress,
-                                                     PL11_UART_SIZE);
-
-    HlPl11KernelServices->ZeroMemory(&Description,
-                                     sizeof(DEBUG_DEVICE_DESCRIPTION));
-
+    HlReportPhysicalAddressUsage(HlPl11UartPhysicalAddress, PL11_UART_SIZE);
+    RtlZeroMemory(&Description, sizeof(DEBUG_DEVICE_DESCRIPTION));
     Description.TableVersion = DEBUG_DEVICE_DESCRIPTION_VERSION;
     Description.FunctionTable.Reset = HlpPl11Reset;
     Description.FunctionTable.Transmit = HlpPl11Transmit;
@@ -385,9 +368,7 @@ Return Value:
     Description.PortType = DEBUG_PORT_TYPE_SERIAL;
     Description.PortSubType = DEBUG_PORT_SERIAL_ARM_PL011;
     Description.Identifier = HlPl11UartPhysicalAddress;
-    Status = HlPl11KernelServices->Register(HardwareModuleDebugDevice,
-                                            &Description);
-
+    Status = HlRegisterHardware(HardwareModuleDebugDevice, &Description);
     if (!KSUCCESS(Status)) {
         goto Pl11SerialModuleEntryEnd;
     }
@@ -477,10 +458,9 @@ Return Value:
     //
 
     if (HlPl11UartBase == NULL) {
-        HlPl11UartBase = HlPl11KernelServices->MapPhysicalAddress(
-                                                     HlPl11UartPhysicalAddress,
-                                                     PL11_UART_SIZE,
-                                                     TRUE);
+        HlPl11UartBase = HlMapPhysicalAddress(HlPl11UartPhysicalAddress,
+                                              PL11_UART_SIZE,
+                                              TRUE);
 
         if (HlPl11UartBase == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

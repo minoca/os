@@ -2156,254 +2156,8 @@ typedef struct _CACHE_CONTROLLER_DESCRIPTION {
 } CACHE_CONTROLLER_DESCRIPTION, *PCACHE_CONTROLLER_DESCRIPTION;
 
 //
-// System service prototypes.
+// Hardware module prototypes.
 //
-
-typedef
-VOID
-(*PHARDWARE_MODULE_ZERO_MEMORY) (
-    PVOID Buffer,
-    ULONG ByteCount
-    );
-
-/*++
-
-Routine Description:
-
-    This routine zeroes out a section of memory.
-
-Arguments:
-
-    Buffer - Supplies a pointer to the buffer to clear.
-
-    ByteCount - Supplies the number of bytes to zero out.
-
-Return Value:
-
-    None.
-
---*/
-
-typedef
-PVOID
-(*PHARDWARE_MODULE_COPY_MEMORY) (
-    PVOID Destination,
-    PVOID Source,
-    UINTN ByteCount
-    );
-
-/*++
-
-Routine Description:
-
-    This routine copies a section of memory.
-
-Arguments:
-
-    Destination - Supplies a pointer to the buffer where the memory will be
-        copied to.
-
-    Source - Supplies a pointer to the buffer to be copied.
-
-    ByteCount - Supplies the number of bytes to copy.
-
-Return Value:
-
-    Returns the destination pointer.
-
---*/
-
-typedef
-ULONG
-(*PHARDWARE_MODULE_READ_REGISTER32) (
-    PVOID RegisterAddress
-    );
-
-/*++
-
-Routine Description:
-
-    This routine performs a 32-bit memory register read. The given address
-    is assumed to be mapped with an uncached attribute.
-
-Arguments:
-
-    RegisterAddress - Supplies the virtual address of the register to read.
-
-Return Value:
-
-    Returns the value at the given register.
-
---*/
-
-typedef
-VOID
-(*PHARDWARE_MODULE_WRITE_REGISTER32) (
-    PVOID RegisterAddress,
-    ULONG Value
-    );
-
-/*++
-
-Routine Description:
-
-    This routine performs a 32-bit memory register write. The given address
-    is assumed to be mapped with an uncached attribute.
-
-Arguments:
-
-    RegisterAddress - Supplies the virtual address of the register to write to.
-
-    Value - Supplies the value to write.
-
-Return Value:
-
-    None.
-
---*/
-
-typedef
-UCHAR
-(*PHARDWARE_MODULE_READ_REGISTER8) (
-    PVOID RegisterAddress
-    );
-
-/*++
-
-Routine Description:
-
-    This routine performs an 8-bit memory register read. The given address
-    is assumed to be mapped with an uncached attribute.
-
-Arguments:
-
-    RegisterAddress - Supplies the virtual address of the register to read.
-
-Return Value:
-
-    Returns the value at the given register.
-
---*/
-
-typedef
-VOID
-(*PHARDWARE_MODULE_WRITE_REGISTER8) (
-    PVOID RegisterAddress,
-    UCHAR Value
-    );
-
-/*++
-
-Routine Description:
-
-    This routine performs an 8-bit memory register write. The given address
-    is assumed to be mapped with an uncached attribute.
-
-Arguments:
-
-    RegisterAddress - Supplies the virtual address of the register to write to.
-
-    Value - Supplies the value to write.
-
-Return Value:
-
-    None.
-
---*/
-
-typedef
-ULONG
-(*PHARDWARE_MODULE_READ_PORT32) (
-    USHORT InputPort
-    );
-
-/*++
-
-Routine Description:
-
-    This routine gets a 32-bit value from the specified legacy I/O port.
-
-Arguments:
-
-    InputPort - Supplies the port to receive a long from.
-
-Return Value:
-
-    Returns the data at that port.
-
---*/
-
-typedef
-VOID
-(*PHARDWARE_MODULE_WRITE_PORT32) (
-    USHORT OutputPort,
-    ULONG Value
-    );
-
-/*++
-
-Routine Description:
-
-    This routine writes a 32-bit value to the specified legacy I/O port.
-
-Arguments:
-
-    OutputPort - Supplies the port to write to.
-
-    Value - Supplies the value to write.
-
-Return Value:
-
-    None.
-
---*/
-
-typedef
-UCHAR
-(*PHARDWARE_MODULE_READ_PORT8) (
-    USHORT InputPort
-    );
-
-/*++
-
-Routine Description:
-
-    This routine gets an 8-bit value from the specified legacy I/O port.
-
-Arguments:
-
-    InputPort - Supplies the port to receive a byte from.
-
-Return Value:
-
-    Returns the data at that port.
-
---*/
-
-typedef
-VOID
-(*PHARDWARE_MODULE_WRITE_PORT8) (
-    USHORT OutputPort,
-    BYTE Value
-    );
-
-/*++
-
-Routine Description:
-
-    This routine writes an 8-bit value to the specified legacy I/O port.
-
-Arguments:
-
-    OutputPort - Supplies the port to write to.
-
-    Value - Supplies the value to write.
-
-Return Value:
-
-    None.
-
---*/
 
 typedef
 PVOID
@@ -2433,47 +2187,40 @@ Return Value:
 --*/
 
 typedef
-PVOID
-(*PHARDWARE_MODULE_ALLOCATE_MEMORY) (
-    ULONG Size,
-    ULONG Tag,
-    BOOL Device,
-    PPHYSICAL_ADDRESS PhysicalAddress
+VOID
+(*PHARDWARE_MODULE_ENTRY) (
+    VOID
     );
 
 /*++
 
 Routine Description:
 
-    This routine allocates memory for the hardare module. The hardware module
-    should use this function sparingly and only during initialization, as there
-    is no mechanism to free memory. This memory can be accessed at any runlevel,
-    as it will always be paged in.
+    This routine is the entry point for a hardware module. Its role is to
+    detect the prescense of any of the hardware modules it contains
+    implementations for and instantiate them with the kernel.
 
 Arguments:
 
-    Size - Supplies the size of the allocation, in bytes.
-
-    Tag - Supplies a unique ASCII identifier associated with the module, used
-        for debugging memory corruption issues.
-
-    Device - Supplies a boolean indicating if this memory will be accessed by
-        a device directly. If TRUE, the memory will be mapped uncached.
-
-    PhysicalAddress - Supplies an optional pointer where the physical address
-        of the allocation is returned.
+    None.
 
 Return Value:
 
-    Returns a pointer to the allocation of the requested size on success.
-
-    NULL on failure.
+    None.
 
 --*/
 
-typedef
+//
+// -------------------------------------------------------------------- Globals
+//
+
+//
+// -------------------------------------------------------- Function Prototypes
+//
+
+KERNEL_API
 KSTATUS
-(*PHARDWARE_MODULE_REGISTER) (
+HlRegisterHardware (
     HARDWARE_MODULE_TYPE Type,
     PVOID Description
     );
@@ -2498,9 +2245,71 @@ Return Value:
 
 --*/
 
-typedef
+KERNEL_API
 PVOID
-(*PHARDWARE_MODULE_MAP_PHYSICAL_ADDRESS) (
+HlGetAcpiTable (
+    ULONG Signature,
+    PVOID PreviousTable
+    );
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find an ACPI description table with the given
+    signature.
+
+Arguments:
+
+    Signature - Supplies the signature of the desired table.
+
+    PreviousTable - Supplies a pointer to the table to start the search from.
+
+Return Value:
+
+    Returns a pointer to the beginning of the header to the table if the table
+    was found, or NULL if the table could not be located.
+
+--*/
+
+KERNEL_API
+PVOID
+HlAllocateMemory (
+    UINTN Size,
+    ULONG Tag,
+    BOOL Device,
+    PPHYSICAL_ADDRESS PhysicalAddress
+    );
+
+/*++
+
+Routine Description:
+
+    This routine allocates memory from the non-paged pool. This memory will
+    never be paged out and can be accessed at any level.
+
+Arguments:
+
+    Size - Supplies the size of the allocation, in bytes.
+
+    Tag - Supplies an identifier to associate with the allocation, useful for
+        debugging and leak detection.
+
+    Device - Supplies a boolean indicating if this memory will be accessed by
+        a device directly. If TRUE, the memory will be mapped uncached.
+
+    PhysicalAddress - Supplies an optional pointer where the physical address
+        of the allocation is returned.
+
+Return Value:
+
+    Returns the allocated memory if successful, or NULL on failure.
+
+--*/
+
+KERNEL_API
+PVOID
+HlMapPhysicalAddress (
     PHYSICAL_ADDRESS PhysicalAddress,
     ULONG SizeInBytes,
     BOOL CacheDisabled
@@ -2510,7 +2319,8 @@ PVOID
 
 Routine Description:
 
-    This routine maps a physical address into kernel VA space.
+    This routine maps a physical address into kernel VA space. It is meant so
+    that system components can access memory mapped hardware.
 
 Arguments:
 
@@ -2530,9 +2340,9 @@ Return Value:
 
 --*/
 
-typedef
+KERNEL_API
 VOID
-(*PHARDWARE_MODULE_UNMAP_ADDRESS) (
+HlUnmapAddress (
     PVOID VirtualAddress,
     ULONG SizeInBytes
     );
@@ -2541,7 +2351,7 @@ VOID
 
 Routine Description:
 
-    This routine unmaps memory mapped for the hardware module.
+    This routine unmaps memory mapped with MmMapPhysicalMemory.
 
 Arguments:
 
@@ -2555,9 +2365,9 @@ Return Value:
 
 --*/
 
-typedef
+KERNEL_API
 VOID
-(*PHARDWARE_MODULE_REPORT_PHYSICAL_ADDRESS_USAGE) (
+HlReportPhysicalAddressUsage (
     PHYSICAL_ADDRESS PhysicalAddress,
     ULONGLONG Size
     );
@@ -2587,9 +2397,9 @@ Return Value:
 
 --*/
 
-typedef
+KERNEL_API
 VOID
-(*PHARDWARE_MODULE_INITIALIZE_LOCK) (
+HlInitializeLock (
     PHARDWARE_MODULE_LOCK Lock
     );
 
@@ -2610,9 +2420,9 @@ Return Value:
 
 --*/
 
-typedef
+KERNEL_API
 VOID
-(*PHARDWARE_MODULE_ACQUIRE_LOCK) (
+HlAcquireLock (
     PHARDWARE_MODULE_LOCK Lock
     );
 
@@ -2634,9 +2444,9 @@ Return Value:
 
 --*/
 
-typedef
+KERNEL_API
 VOID
-(*PHARDWARE_MODULE_RELEASE_LOCK) (
+HlReleaseLock (
     PHARDWARE_MODULE_LOCK Lock
     );
 
@@ -2656,184 +2466,4 @@ Return Value:
     None.
 
 --*/
-
-typedef
-INT
-(*PHARDWARE_MODULE_COUNT_TRAILING_ZEROS32) (
-    ULONG Value
-    );
-
-/*++
-
-Routine Description:
-
-    This routine determines the number of trailing zero bits in the given
-    32-bit value.
-
-Arguments:
-
-    Value - Supplies the value to get the number of trailing zeros for. This
-        must not be zero.
-
-Return Value:
-
-    Returns the number of trailing zero bits in the given value.
-
---*/
-
-typedef
-VOID
-(*PHARDWARE_MODULE_STALL) (
-    ULONG Microseconds
-    );
-
-/*++
-
-Routine Description:
-
-    This routine performs a busy spin for the specified duration.
-
-Arguments:
-
-    Microseconds - Supplies the number of microseconds to stall for.
-
-Return Value:
-
-    None.
-
---*/
-
-/*++
-
-Structure Description:
-
-    This structure stores pointers to the system services that hardware modules
-    may use during initialization and operation.
-
-Members:
-
-    ZeroMemory - Stores a pointer to a function used to zero memory.
-
-    CopyMemory - Stores a pointer to a function used to copy memory.
-
-    ReadRegister32 - Stores a pointer to a function used to perform a 32-bit
-        hardware register read.
-
-    WriteRegister32 - Stores a pointer to a function used to perform a 32-bit
-        hardware register write.
-
-    ReadRegister8 - Stores a pointer to a function used to perform an 8-bit
-        hardware register read.
-
-    WriteRegister8 - Stores a pointer to a function used to perform an 8-bit
-        hardware register write.
-
-    ReadPort32 - Stores a pointer to a function used to perform a 32-bit
-        legacy I/O port read.
-
-    WritePort32 - Stores a pointer to a function used to perform a 32-bit
-        legacy I/O port write.
-
-    ReadPort8 - Stores a pointer to a function used to perform an 8-bit
-        legacy I/O port read.
-
-    WritePort8 - Stores a pointer to a function used to perform an 8-bit
-        legacy I/O port write.
-
-    GetAcpiTable - Stores a pointer to a function that returns an ACPI table
-        with the given sigature, if one exists.
-
-    AllocateMemory - Stores a pointer to a function used to allocate
-        non-paged memory.
-
-    MapPhysicalAddress - Stores a pointer to a function that can map a view
-        of physical memory.
-
-    UnmapAddress - Stores a pointer to a function that can unmap physical
-        memory mapped by the hardware module.
-
-    Register - Stores a pointer to a function that registers a new hardware
-        module with the system.
-
-    ReportPhysicalAddressUsage - Stores a pointer to a function that informs the
-        system of a region of physical memory that is in use by the hardware
-        module. This routine should be called in the discovery phase, as it is
-        relevant to the system regardless of whether or not that hardware
-        module is initialized and used.
-
-    InitializeLock - Stores a pointer to a function that initializes a
-        hardware lock structure.
-
-    AcquireLock - Stores a pointer to a function used to acquire a high level
-        spinlock.
-
-    ReleaseLock - Stores a pointer to a function used to release a previously
-        acquired high level spinlock.
-
-    CountTrailingZeros32 - Stores a pointer to a function used to count the
-        trailing zeros present in a 32-bit value.
-
-    Stall - Stores a pointer to a function used to delay for a specified
-        time.
-
---*/
-
-typedef struct _HARDWARE_MODULE_KERNEL_SERVICES {
-    PHARDWARE_MODULE_ZERO_MEMORY ZeroMemory;
-    PHARDWARE_MODULE_COPY_MEMORY CopyMemory;
-    PHARDWARE_MODULE_READ_REGISTER32 ReadRegister32;
-    PHARDWARE_MODULE_WRITE_REGISTER32 WriteRegister32;
-    PHARDWARE_MODULE_READ_REGISTER8 ReadRegister8;
-    PHARDWARE_MODULE_WRITE_REGISTER8 WriteRegister8;
-    PHARDWARE_MODULE_READ_PORT32 ReadPort32;
-    PHARDWARE_MODULE_WRITE_PORT32 WritePort32;
-    PHARDWARE_MODULE_READ_PORT8 ReadPort8;
-    PHARDWARE_MODULE_WRITE_PORT8 WritePort8;
-    PHARDWARE_MODULE_GET_ACPI_TABLE GetAcpiTable;
-    PHARDWARE_MODULE_ALLOCATE_MEMORY AllocateMemory;
-    PHARDWARE_MODULE_MAP_PHYSICAL_ADDRESS MapPhysicalAddress;
-    PHARDWARE_MODULE_UNMAP_ADDRESS UnmapAddress;
-    PHARDWARE_MODULE_REGISTER Register;
-    PHARDWARE_MODULE_REPORT_PHYSICAL_ADDRESS_USAGE ReportPhysicalAddressUsage;
-    PHARDWARE_MODULE_INITIALIZE_LOCK InitializeLock;
-    PHARDWARE_MODULE_ACQUIRE_LOCK AcquireLock;
-    PHARDWARE_MODULE_RELEASE_LOCK ReleaseLock;
-    PHARDWARE_MODULE_COUNT_TRAILING_ZEROS32 CountTrailingZeros32;
-    PHARDWARE_MODULE_STALL Stall;
-} HARDWARE_MODULE_KERNEL_SERVICES, *PHARDWARE_MODULE_KERNEL_SERVICES;
-
-typedef
-VOID
-(*PHARDWARE_MODULE_ENTRY) (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
-    );
-
-/*++
-
-Routine Description:
-
-    This routine is the entry point for a hardware module. Its role is to
-    detect the prescense of any of the hardware modules it contains
-    implementations for and instantiate them with the kernel.
-
-Arguments:
-
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module. This set of services is extremely
-        limited due to the core nature of these hardware modules. Many of the
-        normal services rely on these hardware modules to operate properly.
-
-Return Value:
-
-    None.
-
---*/
-
-//
-// -------------------------------------------------------------------- Globals
-//
-
-//
-// -------------------------------------------------------- Function Prototypes
-//
 

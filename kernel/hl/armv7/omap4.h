@@ -144,12 +144,6 @@ typedef struct _OMAP4_TABLE {
 //
 
 //
-// Store a pointer to the provided hardware layer services.
-//
-
-extern PHARDWARE_MODULE_KERNEL_SERVICES HlOmap4KernelServices;
-
-//
 // Store a pointer to the OMAP4 ACPI table.
 //
 

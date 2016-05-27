@@ -26,15 +26,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include <minoca/soc/am335x.h>
 #include "am335.h"
 
@@ -47,14 +43,14 @@ Environment:
 //
 
 #define AM335_INTC_READ(_Base, _Register) \
-    HlAm335KernelServices->ReadRegister32((_Base) + (_Register))
+    HlReadRegister32((_Base) + (_Register))
 
 //
 // This macro writes to an AM335 interrupt controller.
 //
 
-#define AM335_INTC_WRITE(_Base, _Register, _Value)                     \
-    HlAm335KernelServices->WriteRegister32((_Base) + (_Register), (_Value))
+#define AM335_INTC_WRITE(_Base, _Register, _Value) \
+    HlWriteRegister32((_Base) + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -222,7 +218,7 @@ INTERRUPT_FUNCTION_TABLE HlAm335InterruptFunctionTable = {
 
 VOID
 HlpAm335InterruptModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -235,8 +231,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -250,8 +245,7 @@ Return Value:
     INTERRUPT_CONTROLLER_DESCRIPTION NewController;
     KSTATUS Status;
 
-    HlAm335KernelServices = Services;
-    HlAm335Table = HlAm335KernelServices->GetAcpiTable(AM335X_SIGNATURE, NULL);
+    HlAm335Table = HlGetAcpiTable(AM335X_SIGNATURE, NULL);
 
     //
     // Interrupt controllers are always initialized before timers, so the
@@ -262,9 +256,7 @@ Return Value:
         goto Am335InterruptModuleEntryEnd;
     }
 
-    Services->ZeroMemory(&NewController,
-                         sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
-
+    RtlZeroMemory(&NewController, sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
     if (HlAm335Table->InterruptControllerBase != 0) {
 
         //
@@ -272,22 +264,21 @@ Return Value:
         //
 
         NewController.TableVersion = INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
-        HlAm335KernelServices->CopyMemory(&(NewController.FunctionTable),
-                                          &HlAm335InterruptFunctionTable,
-                                          sizeof(INTERRUPT_FUNCTION_TABLE));
+        RtlCopyMemory(&(NewController.FunctionTable),
+                      &HlAm335InterruptFunctionTable,
+                      sizeof(INTERRUPT_FUNCTION_TABLE));
 
-        Context = HlAm335KernelServices->AllocateMemory(
-                                                    sizeof(AM335_INTC_DATA),
-                                                    AM335_ALLOCATION_TAG,
-                                                    FALSE,
-                                                    NULL);
+        Context = HlAllocateMemory(sizeof(AM335_INTC_DATA),
+                                   AM335_ALLOCATION_TAG,
+                                   FALSE,
+                                   NULL);
 
         if (Context == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto Am335InterruptModuleEntryEnd;
         }
 
-        HlAm335KernelServices->ZeroMemory(Context, sizeof(AM335_INTC_DATA));
+        RtlZeroMemory(Context, sizeof(AM335_INTC_DATA));
         Context->PhysicalAddress = HlAm335Table->InterruptControllerBase;
         Context->LineCount = HlAm335Table->InterruptLineCount;
         NewController.Context = Context;
@@ -300,7 +291,7 @@ Return Value:
         // Register the controller with the system.
         //
 
-        Status = Services->Register(HardwareModuleInterruptController,
+        Status = HlRegisterHardware(HardwareModuleInterruptController,
                                     &NewController);
 
         if (!KSUCCESS(Status)) {
@@ -352,10 +343,9 @@ Return Value:
 
     Data = Context;
     if (Data->Base == NULL) {
-        Data->Base = HlAm335KernelServices->MapPhysicalAddress(
-                                                    Data->PhysicalAddress,
-                                                    AM335_INTC_CONTROLLER_SIZE,
-                                                    TRUE);
+        Data->Base = HlMapPhysicalAddress(Data->PhysicalAddress,
+                                          AM335_INTC_CONTROLLER_SIZE,
+                                          TRUE);
 
         if (Data->Base == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -881,9 +871,7 @@ Return Value:
     INTERRUPT_LINES_DESCRIPTION Lines;
     KSTATUS Status;
 
-    HlAm335KernelServices->ZeroMemory(&Lines,
-                                      sizeof(INTERRUPT_LINES_DESCRIPTION));
-
+    RtlZeroMemory(&Lines, sizeof(INTERRUPT_LINES_DESCRIPTION));
     Lines.Version = INTERRUPT_LINES_DESCRIPTION_VERSION;
 
     //
@@ -895,9 +883,7 @@ Return Value:
     Lines.LineStart = 0;
     Lines.LineEnd = Data->LineCount;
     Lines.Gsi = 0;
-    Status = HlAm335KernelServices->Register(HardwareModuleInterruptLines,
-                                             &Lines);
-
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto Am335InterruptDescribeLinesEnd;
     }
@@ -910,9 +896,7 @@ Return Value:
     Lines.OutputControllerIdentifier = INTERRUPT_CPU_IDENTIFIER;
     Lines.LineStart = INTERRUPT_ARM_MIN_CPU_LINE;
     Lines.LineEnd = INTERRUPT_ARM_MAX_CPU_LINE;
-    Status = HlAm335KernelServices->Register(HardwareModuleInterruptLines,
-                                             &Lines);
-
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto Am335InterruptDescribeLinesEnd;
     }

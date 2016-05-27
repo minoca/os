@@ -25,15 +25,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include "integcp.h"
 
 //
@@ -65,16 +61,15 @@ Environment:
 //
 
 #define READ_TIMER_REGISTER(_Base, _Register) \
-    HlCpKernelServices->ReadRegister32((PULONG)(_Base) + (_Register))
+    HlReadRegister32((PULONG)(_Base) + (_Register))
 
 //
 // This macro writes to a Integrator/CP timer. _Base should be a pointer,
 // _Register should be CP_TIMER_REGISTER value, and _Value should be a ULONG.
 //
 
-#define WRITE_TIMER_REGISTER(_Base, _Register, _Value)                 \
-    HlCpKernelServices->WriteRegister32((PULONG)(_Base) + (_Register), \
-                                        (_Value))
+#define WRITE_TIMER_REGISTER(_Base, _Register, _Value) \
+    HlWriteRegister32((PULONG)(_Base) + (_Register), (_Value))
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -163,7 +158,7 @@ PVOID HlCpTimer = NULL;
 
 VOID
 HlpCpTimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -175,8 +170,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -193,10 +187,10 @@ Return Value:
 
     //
     // Interrupt controllers are always initialized before timers, so the
-    // integrator table and services should already be set up.
+    // integrator table should already be set up.
     //
 
-    if ((HlCpIntegratorTable == NULL) || (HlCpKernelServices == NULL) ||
+    if ((HlCpIntegratorTable == NULL) ||
         (HlCpIntegratorTable->TimerBlockPhysicalAddress == 0)) {
 
         goto CpTimerModuleEntryEnd;
@@ -210,7 +204,7 @@ Return Value:
          TimerIndex < INTEGRATORCP_TIMER_COUNT;
          TimerIndex += 1) {
 
-        HlCpKernelServices->ZeroMemory(&CpTimer, sizeof(TIMER_DESCRIPTION));
+        RtlZeroMemory(&CpTimer, sizeof(TIMER_DESCRIPTION));
         CpTimer.TableVersion = TIMER_DESCRIPTION_VERSION;
         CpTimer.FunctionTable.Initialize = HlpCpTimerInitialize;
         CpTimer.FunctionTable.ReadCounter = HlpCpTimerRead;
@@ -220,18 +214,17 @@ Return Value:
         CpTimer.FunctionTable.AcknowledgeInterrupt =
                                                 HlpCpTimerAcknowledgeInterrupt;
 
-        TimerData = HlCpKernelServices->AllocateMemory(
-                                                    sizeof(CP_TIMER_DATA),
-                                                    INTEGRATOR_ALLOCATION_TAG,
-                                                    FALSE,
-                                                    NULL);
+        TimerData = HlAllocateMemory(sizeof(CP_TIMER_DATA),
+                                     INTEGRATOR_ALLOCATION_TAG,
+                                     FALSE,
+                                     NULL);
 
         if (TimerData == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto CpTimerModuleEntryEnd;
         }
 
-        HlCpKernelServices->ZeroMemory(TimerData, sizeof(CP_TIMER_DATA));
+        RtlZeroMemory(TimerData, sizeof(CP_TIMER_DATA));
         TimerData->Index = TimerIndex;
         CpTimer.Context = TimerData;
         CpTimer.Features = TIMER_FEATURE_READABLE |
@@ -264,7 +257,7 @@ Return Value:
         // Register the timer with the system.
         //
 
-        Status = HlCpKernelServices->Register(HardwareModuleTimer, &CpTimer);
+        Status = HlRegisterHardware(HardwareModuleTimer, &CpTimer);
         if (!KSUCCESS(Status)) {
             goto CpTimerModuleEntryEnd;
         }
@@ -314,7 +307,7 @@ Return Value:
 
     if (Timer->BaseAddress == NULL) {
         if (HlCpTimer == NULL) {
-            HlCpTimer = HlCpKernelServices->MapPhysicalAddress(
+            HlCpTimer = HlMapPhysicalAddress(
                                 HlCpIntegratorTable->TimerBlockPhysicalAddress,
                                 CpTimerRegisterSize * sizeof(ULONG),
                                 TRUE);

@@ -25,10 +25,12 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+//
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
+//
+
+#include <minoca/kernel/kernel.h>
 #include "omap3.h"
 
 //
@@ -70,18 +72,15 @@ Environment:
 //
 
 #define READ_INTERRUPT_REGISTER(_Register)    \
-    HlOmap3KernelServices->ReadRegister32(    \
-                              (PULONG)HlOmap3InterruptController + (_Register))
+    HlReadRegister32(HlOmap3InterruptController + (_Register))
 
 //
 // This macro writes to the OMAP3 interrupt controller. _Register
 // should be MPU_REGISTER value, and _Value should be a ULONG.
 //
 
-#define WRITE_INTERRUPT_REGISTER(_Register, _Value)    \
-    HlOmap3KernelServices->WriteRegister32(            \
-                            (PULONG)HlOmap3InterruptController + (_Register), \
-                            (_Value))
+#define WRITE_INTERRUPT_REGISTER(_Register, _Value) \
+    HlWriteRegister32(HlOmap3InterruptController + (_Register), (_Value))
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -191,7 +190,7 @@ INTERRUPT_FUNCTION_TABLE HlOmap3InterruptFunctionTable = {
 
 VOID
 HlpOmap3InterruptModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -204,8 +203,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -222,20 +220,16 @@ Return Value:
     // Attempt to find the OMAP3 ACPI table.
     //
 
-    HlOmap3Table = Services->GetAcpiTable(OMAP3_SIGNATURE, NULL);
+    HlOmap3Table = HlGetAcpiTable(OMAP3_SIGNATURE, NULL);
     if (HlOmap3Table == NULL) {
         goto Omap3InterruptModuleEntryEnd;
     }
-
-    HlOmap3KernelServices = Services;
 
     //
     // Zero out the controller description.
     //
 
-    Services->ZeroMemory(&NewController,
-                         sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
-
+    RtlZeroMemory(&NewController, sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
     if (HlOmap3Table->InterruptControllerPhysicalAddress != 0) {
 
         //
@@ -243,9 +237,9 @@ Return Value:
         //
 
         NewController.TableVersion = INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
-        HlOmap3KernelServices->CopyMemory(&(NewController.FunctionTable),
-                                          &HlOmap3InterruptFunctionTable,
-                                          sizeof(INTERRUPT_FUNCTION_TABLE));
+        RtlCopyMemory(&(NewController.FunctionTable),
+                      &HlOmap3InterruptFunctionTable,
+                      sizeof(INTERRUPT_FUNCTION_TABLE));
 
         NewController.Context = NULL;
         NewController.Identifier = 0;
@@ -256,7 +250,7 @@ Return Value:
         // Register the controller with the system.
         //
 
-        Status = Services->Register(HardwareModuleInterruptController,
+        Status = HlRegisterHardware(HardwareModuleInterruptController,
                                     &NewController);
 
         if (!KSUCCESS(Status)) {
@@ -305,7 +299,7 @@ Return Value:
     KSTATUS Status;
 
     if (HlOmap3InterruptController == NULL) {
-        HlOmap3InterruptController = HlOmap3KernelServices->MapPhysicalAddress(
+        HlOmap3InterruptController = HlMapPhysicalAddress(
                               HlOmap3Table->InterruptControllerPhysicalAddress,
                               OMAP3_INTERRUPT_CONTROLLER_SIZE,
                               TRUE);
@@ -678,9 +672,7 @@ Return Value:
     INTERRUPT_LINES_DESCRIPTION Lines;
     KSTATUS Status;
 
-    HlOmap3KernelServices->ZeroMemory(&Lines,
-                                      sizeof(INTERRUPT_LINES_DESCRIPTION));
-
+    RtlZeroMemory(&Lines, sizeof(INTERRUPT_LINES_DESCRIPTION));
     Lines.Version = INTERRUPT_LINES_DESCRIPTION_VERSION;
 
     //
@@ -692,9 +684,7 @@ Return Value:
     Lines.LineStart = 0;
     Lines.LineEnd = OMAP3_INTERRUPT_LINE_COUNT;
     Lines.Gsi = HlOmap3Table->InterruptControllerGsiBase;
-    Status = HlOmap3KernelServices->Register(HardwareModuleInterruptLines,
-                                             &Lines);
-
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto Omap3InterruptDescribeLinesEnd;
     }
@@ -707,9 +697,7 @@ Return Value:
     Lines.OutputControllerIdentifier = INTERRUPT_CPU_IDENTIFIER;
     Lines.LineStart = INTERRUPT_ARM_MIN_CPU_LINE;
     Lines.LineEnd = INTERRUPT_ARM_MAX_CPU_LINE;
-    Status = HlOmap3KernelServices->Register(HardwareModuleInterruptLines,
-                                             &Lines);
-
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto Omap3InterruptDescribeLinesEnd;
     }

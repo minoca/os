@@ -80,18 +80,12 @@ HlpArmCycleCounterWrite (
 //
 
 //
-// Store a pointer to the system services table.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlArmCycleCounterSystemServices = NULL;
-
-//
 // ------------------------------------------------------------------ Functions
 //
 
 VOID
 HlpArmCycleCounterModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -117,8 +111,6 @@ Return Value:
     TIMER_DESCRIPTION CycleCounter;
     KSTATUS Status;
 
-    HlArmCycleCounterSystemServices = Services;
-
     //
     // Don't even register the timer if it is not supported on the current
     // platform and/or architecture.
@@ -128,9 +120,7 @@ Return Value:
         return;
     }
 
-    HlArmCycleCounterSystemServices->ZeroMemory(&CycleCounter,
-                                                sizeof(TIMER_DESCRIPTION));
-
+    RtlZeroMemory(&CycleCounter, sizeof(TIMER_DESCRIPTION));
     CycleCounter.TableVersion = TIMER_DESCRIPTION_VERSION;
     CycleCounter.FunctionTable.Initialize = HlpArmCycleCounterInitialize;
     CycleCounter.FunctionTable.ReadCounter = HlpArmCycleCounterRead;
@@ -158,9 +148,7 @@ Return Value:
     // Register the cycle counter with the system.
     //
 
-    Status = HlArmCycleCounterSystemServices->Register(HardwareModuleTimer,
-                                                       &CycleCounter);
-
+    Status = HlRegisterHardware(HardwareModuleTimer, &CycleCounter);
     if (!KSUCCESS(Status)) {
         goto ArmCycleCounterModuleEntryEnd;
     }

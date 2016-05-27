@@ -81,12 +81,6 @@ typedef struct _RK32XX_TABLE {
 //
 
 //
-// Store a pointer to the provided hardware layer services.
-//
-
-extern PHARDWARE_MODULE_KERNEL_SERVICES HlRk32KernelServices;
-
-//
 // Store a pointer to the Rk32xx ACPI table.
 //
 

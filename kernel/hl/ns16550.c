@@ -25,10 +25,13 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+//
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
+//
+
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/ioport.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -288,19 +291,12 @@ BOOL HlNs16550ForceEnumeration = FALSE;
 BOOL HlNs16550ForceNoEnumeration = FALSE;
 
 //
-// Store a pointer to the services provided by the kernel to the serial
-// module.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlNs16550KernelServices = NULL;
-
-//
 // ------------------------------------------------------------------ Functions
 //
 
 VOID
 HlpNs16550SerialModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -312,8 +308,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -335,13 +330,12 @@ Return Value:
     PULONG SizePointer;
     KSTATUS Status;
 
-    HlNs16550KernelServices = Services;
     if (HlNs16550ForceNoEnumeration != FALSE) {
         return;
     }
 
     FoundDevice = FALSE;
-    DebugTable = HlNs16550KernelServices->GetAcpiTable(DBG2_SIGNATURE, NULL);
+    DebugTable = HlGetAcpiTable(DBG2_SIGNATURE, NULL);
     if (DebugTable != NULL) {
 
         //
@@ -478,18 +472,17 @@ Return Value:
     // Allocate the context and fill it in.
     //
 
-    DeviceContext = HlNs16550KernelServices->AllocateMemory(
-                                                        sizeof(NS16550),
-                                                        NS16550_ALLOCATION_TAG,
-                                                        FALSE,
-                                                        NULL);
+    DeviceContext = HlAllocateMemory(sizeof(NS16550),
+                                     NS16550_ALLOCATION_TAG,
+                                     FALSE,
+                                     NULL);
 
     if (DeviceContext == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Ns16550RegisterDeviceEnd;
     }
 
-    HlNs16550KernelServices->ZeroMemory(DeviceContext, sizeof(NS16550));
+    RtlZeroMemory(DeviceContext, sizeof(NS16550));
     DeviceContext->PhysicalMemoryBase = PhysicalBase;
     DeviceContext->IoBase = IoPortBase;
     DeviceContext->BaseBaud = NS16550_DEFAULT_BASE_BAUD;
@@ -512,9 +505,7 @@ Return Value:
     // Register the serial port.
     //
 
-    HlNs16550KernelServices->ZeroMemory(&DebugDevice,
-                                        sizeof(DEBUG_DEVICE_DESCRIPTION));
-
+    RtlZeroMemory(&DebugDevice, sizeof(DEBUG_DEVICE_DESCRIPTION));
     DebugDevice.TableVersion = DEBUG_DEVICE_DESCRIPTION_VERSION;
     DebugDevice.Context = DeviceContext;
     DebugDevice.FunctionTable.Reset = HlpNs16550Reset;
@@ -531,9 +522,7 @@ Return Value:
         DebugDevice.Identifier = IoPortBase;
     }
 
-    Status = HlNs16550KernelServices->Register(HardwareModuleDebugDevice,
-                                               &DebugDevice);
-
+    Status = HlRegisterHardware(HardwareModuleDebugDevice, &DebugDevice);
     if (!KSUCCESS(Status)) {
         goto Ns16550RegisterDeviceEnd;
     }
@@ -609,10 +598,9 @@ Return Value:
     if ((Device->PhysicalMemoryBase != 0) &&
         (Device->MemoryBase == NULL)) {
 
-        Device->MemoryBase = HlNs16550KernelServices->MapPhysicalAddress(
-                                                    Device->PhysicalMemoryBase,
-                                                    Device->RegionSize,
-                                                    TRUE);
+        Device->MemoryBase = HlMapPhysicalAddress(Device->PhysicalMemoryBase,
+                                                  Device->RegionSize,
+                                                  TRUE);
 
         if (Device->MemoryBase == NULL) {
             return STATUS_INSUFFICIENT_RESOURCES;
@@ -926,7 +914,7 @@ Return Value:
     USHORT Port;
 
     Port = Device->IoBase + NS16550_REGISTER_OFFSET(Device, Register);
-    return HlNs16550KernelServices->ReadPort8(Port);
+    return HlIoPortInByte(Port);
 }
 
 VOID
@@ -961,7 +949,7 @@ Return Value:
     USHORT Port;
 
     Port = Device->IoBase + NS16550_REGISTER_OFFSET(Device, Register);
-    HlNs16550KernelServices->WritePort8(Port, Value);
+    HlIoPortOutByte(Port, Value);
     return;
 }
 
@@ -997,13 +985,13 @@ Return Value:
     Address = Device->MemoryBase + NS16550_REGISTER_OFFSET(Device, Register);
     switch (Device->RegisterShift) {
     case NS16550_1_BYTE_REGISTER_SHIFT:
-        Value = HlNs16550KernelServices->ReadRegister8(Address);
+        Value = HlReadRegister8(Address);
         break;
 
     case NS16550_2_BYTE_REGISTER_SHIFT:
     case NS16550_4_BYTE_REGISTER_SHIFT:
     default:
-        Value = HlNs16550KernelServices->ReadRegister32(Address);
+        Value = HlReadRegister32(Address);
         break;
     }
 
@@ -1044,13 +1032,13 @@ Return Value:
     Address = Device->MemoryBase + NS16550_REGISTER_OFFSET(Device, Register);
     switch (Device->RegisterShift) {
     case NS16550_1_BYTE_REGISTER_SHIFT:
-        HlNs16550KernelServices->WriteRegister8(Address, Value);
+        HlWriteRegister8(Address, Value);
         break;
 
     case NS16550_2_BYTE_REGISTER_SHIFT:
     case NS16550_4_BYTE_REGISTER_SHIFT:
     default:
-        HlNs16550KernelServices->WriteRegister32(Address, (ULONG)Value);
+        HlWriteRegister32(Address, (ULONG)Value);
         break;
     }
 

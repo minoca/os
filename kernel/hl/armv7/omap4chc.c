@@ -26,15 +26,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include "omap4.h"
 #include "pl310.h"
 
@@ -48,17 +44,15 @@ Environment:
 //
 
 #define READ_CACHE_REGISTER(_Register) \
-    HlOmap4KernelServices->ReadRegister32(HlOmap4Pl310RegistersBase + _Register)
+    HlReadRegister32(HlOmap4Pl310RegistersBase + (_Register))
 
 //
 // This macro performs a 32-bit write to the Omap4's PL-310 register. The
 // _Register should be a PL310_REGISTER.
 //
 
-#define WRITE_CACHE_REGISTER(_Register, _Value)                               \
-    HlOmap4KernelServices->WriteRegister32(                                   \
-                                       HlOmap4Pl310RegistersBase + _Register, \
-                                       _Value)
+#define WRITE_CACHE_REGISTER(_Register, _Value) \
+    HlWriteRegister32(HlOmap4Pl310RegistersBase + (_Register), (_Value))
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -141,7 +135,7 @@ BOOL HlOmap4Pl310ForceDisable = FALSE;
 
 VOID
 HlpOmap4CacheControllerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -153,8 +147,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -172,19 +165,18 @@ Return Value:
         goto Omap4CacheControllerModuleEntryEnd;
     }
 
-    HlOmap4KernelServices = Services;
-    HlOmap4Table = HlOmap4KernelServices->GetAcpiTable(OMAP4_SIGNATURE, NULL);
+    HlOmap4Table = HlGetAcpiTable(OMAP4_SIGNATURE, NULL);
 
     //
     // Interrupt controllers are always initialized before cache controllers,
     // so the integrator table and services should already be set up.
     //
 
-    if ((HlOmap4Table == NULL) || (HlOmap4KernelServices == NULL)) {
+    if (HlOmap4Table == NULL) {
         goto Omap4CacheControllerModuleEntryEnd;
     }
 
-    HlOmap4KernelServices->InitializeLock(&HlOmap4Pl310RegisterLock);
+    HlInitializeLock(&HlOmap4Pl310RegisterLock);
     HlOmap4Pl310RegistersPhysicalBase =
                                HlOmap4Table->Pl310RegistersBasePhysicalAddress;
 
@@ -192,24 +184,21 @@ Return Value:
     // Report the physical address space that the PL-310 is occupying.
     //
 
-    HlOmap4KernelServices->ReportPhysicalAddressUsage(
-                                             HlOmap4Pl310RegistersPhysicalBase,
-                                             PL310_REGISTER_SIZE);
+    HlReportPhysicalAddressUsage(HlOmap4Pl310RegistersPhysicalBase,
+                                 PL310_REGISTER_SIZE);
 
-    Pl310Data = HlOmap4KernelServices->AllocateMemory(sizeof(PL310_CACHE_DATA),
-                                                      OMAP4_ALLOCATION_TAG,
-                                                      FALSE,
-                                                      NULL);
+    Pl310Data = HlAllocateMemory(sizeof(PL310_CACHE_DATA),
+                                 OMAP4_ALLOCATION_TAG,
+                                 FALSE,
+                                 NULL);
 
     if (Pl310Data == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Omap4CacheControllerModuleEntryEnd;
     }
 
-    HlOmap4KernelServices->ZeroMemory(Pl310Data, sizeof(PL310_CACHE_DATA));
-    HlOmap4KernelServices->ZeroMemory(&CacheController,
-                                      sizeof(CACHE_CONTROLLER_DESCRIPTION));
-
+    RtlZeroMemory(Pl310Data, sizeof(PL310_CACHE_DATA));
+    RtlZeroMemory(&CacheController, sizeof(CACHE_CONTROLLER_DESCRIPTION));
     CacheController.TableVersion = CACHE_CONTROLLER_DESCRIPTION_VERSION;
     CacheController.FunctionTable.Initialize = HlpOmap4CacheInitialize;
     CacheController.FunctionTable.Flush = HlpOmap4CacheFlush;
@@ -217,8 +206,8 @@ Return Value:
     CacheController.FunctionTable.GetProperties = HlpOmap4GetCacheProperties;
     CacheController.Context = Pl310Data;
     CacheController.PropertiesVersion = CACHE_CONTROLLER_PROPERTIES_VERSION;
-    Status = HlOmap4KernelServices->Register(HardwareModuleCacheController,
-                                             &CacheController);
+    Status = HlRegisterHardware(HardwareModuleCacheController,
+                                &CacheController);
 
     if (!KSUCCESS(Status)) {
         goto Omap4CacheControllerModuleEntryEnd;
@@ -275,7 +264,7 @@ Return Value:
     //
 
     if (HlOmap4Pl310RegistersBase == NULL) {
-        HlOmap4Pl310RegistersBase = HlOmap4KernelServices->MapPhysicalAddress(
+        HlOmap4Pl310RegistersBase = HlMapPhysicalAddress(
                                              HlOmap4Pl310RegistersPhysicalBase,
                                              PL310_REGISTER_SIZE,
                                              TRUE);
@@ -290,7 +279,7 @@ Return Value:
     // Acquire the lock before modifying the registers.
     //
 
-    HlOmap4KernelServices->AcquireLock(&HlOmap4Pl310RegisterLock);
+    HlAcquireLock(&HlOmap4Pl310RegisterLock);
     LockHeld = TRUE;
 
     //
@@ -399,7 +388,7 @@ Return Value:
 
 Pl310CacheInitializeEnd:
     if (LockHeld != FALSE) {
-        HlOmap4KernelServices->ReleaseLock(&HlOmap4Pl310RegisterLock);
+        HlReleaseLock(&HlOmap4Pl310RegisterLock);
     }
 
     return Status;
@@ -454,7 +443,7 @@ Return Value:
     // Acquire the lock before modifying the registers.
     //
 
-    HlOmap4KernelServices->AcquireLock(&HlOmap4Pl310RegisterLock);
+    HlAcquireLock(&HlOmap4Pl310RegisterLock);
     if (((Flags & HL_CACHE_FLAG_CLEAN) != 0) &&
         ((Flags & HL_CACHE_FLAG_INVALIDATE) != 0)) {
 
@@ -485,7 +474,7 @@ Return Value:
     //
 
     WRITE_CACHE_REGISTER(SyncRegister, PL310_CACHE_SYNC_VALUE);
-    HlOmap4KernelServices->ReleaseLock(&HlOmap4Pl310RegisterLock);
+    HlReleaseLock(&HlOmap4Pl310RegisterLock);
     return;
 }
 
@@ -569,7 +558,7 @@ Return Value:
     // Acquire the lock before modifying the registers.
     //
 
-    HlOmap4KernelServices->AcquireLock(&HlOmap4Pl310RegisterLock);
+    HlAcquireLock(&HlOmap4Pl310RegisterLock);
     Value = 0;
     while (SizeInBytes != 0) {
         Value = Address & PL310_CACHE_MAINTENANCE_PA_MASK;
@@ -583,7 +572,7 @@ Return Value:
     //
 
     WRITE_CACHE_REGISTER(SyncRegister, PL310_CACHE_SYNC_VALUE);
-    HlOmap4KernelServices->ReleaseLock(&HlOmap4Pl310RegisterLock);
+    HlReleaseLock(&HlOmap4Pl310RegisterLock);
     return;
 }
 

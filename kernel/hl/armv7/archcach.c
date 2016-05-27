@@ -48,7 +48,7 @@ Environment:
 
 VOID
 HlpOmap4CacheControllerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 //
@@ -108,7 +108,7 @@ Return Value:
         ModuleIndex = 0;
         while (HlBuiltinCacheModules[ModuleIndex] != NULL) {
             ModuleEntry = HlBuiltinCacheModules[ModuleIndex];
-            ModuleEntry(&HlHardwareModuleServices);
+            ModuleEntry();
             ModuleIndex += 1;
         }
     }

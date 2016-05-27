@@ -25,15 +25,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include "rk32xx.h"
 
 //
@@ -46,7 +42,7 @@ Environment:
 //
 
 #define READ_TIMER_REGISTER(_Base, _Register) \
-    HlRk32KernelServices->ReadRegister32((_Base) + (_Register))
+    HlReadRegister32((PULONG)(_Base) + (_Register))
 
 //
 // This macro writes to an RK32 timer. _Base should be a pointer,
@@ -54,8 +50,8 @@ Environment:
 // 32-bit integer.
 //
 
-#define WRITE_TIMER_REGISTER(_Base, _Register, _Value)                     \
-    HlRk32KernelServices->WriteRegister32((_Base) + (_Register), (_Value))
+#define WRITE_TIMER_REGISTER(_Base, _Register, _Value) \
+    HlWriteRegister32((PULONG)(_Base) + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -128,7 +124,6 @@ HlpRk32TimerAcknowledgeInterrupt (
 //
 
 PRK32XX_TABLE HlRk32Table = NULL;
-PHARDWARE_MODULE_KERNEL_SERVICES HlRk32KernelServices = NULL;
 
 //
 // Store a pointer to the first timer mapping, so the VAs can be reused.
@@ -142,7 +137,7 @@ PVOID HlRk32TimerBase;
 
 VOID
 HlpRk32TimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -170,8 +165,7 @@ Return Value:
     PRK32_TIMER_DATA TimerData;
     ULONG TimerIndex;
 
-    HlRk32KernelServices = Services;
-    HlRk32Table = HlRk32KernelServices->GetAcpiTable(RK32XX_SIGNATURE, NULL);
+    HlRk32Table = HlGetAcpiTable(RK32XX_SIGNATURE, NULL);
     if (HlRk32Table == NULL) {
         goto Rk32TimerModuleEntryEnd;
     }
@@ -192,7 +186,7 @@ Return Value:
             continue;
         }
 
-        HlRk32KernelServices->ZeroMemory(&Timer, sizeof(TIMER_DESCRIPTION));
+        RtlZeroMemory(&Timer, sizeof(TIMER_DESCRIPTION));
         Timer.TableVersion = TIMER_DESCRIPTION_VERSION;
         Timer.FunctionTable.Initialize = HlpRk32TimerInitialize;
         Timer.FunctionTable.ReadCounter = HlpRk32TimerRead;
@@ -201,18 +195,17 @@ Return Value:
         Timer.FunctionTable.AcknowledgeInterrupt =
                                              HlpRk32TimerAcknowledgeInterrupt;
 
-        TimerData = HlRk32KernelServices->AllocateMemory(
-                                                       sizeof(RK32_TIMER_DATA),
-                                                       RK32_ALLOCATION_TAG,
-                                                       FALSE,
-                                                       NULL);
+        TimerData = HlAllocateMemory(sizeof(RK32_TIMER_DATA),
+                                     RK32_ALLOCATION_TAG,
+                                     FALSE,
+                                     NULL);
 
         if (TimerData == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto Rk32TimerModuleEntryEnd;
         }
 
-        HlRk32KernelServices->ZeroMemory(TimerData, sizeof(RK32_TIMER_DATA));
+        RtlZeroMemory(TimerData, sizeof(RK32_TIMER_DATA));
         TimerData->PhysicalAddress = HlRk32Table->TimerBase[TimerIndex];
         TimerData->Index = TimerIndex;
         if (((1 << TimerIndex) & HlRk32Table->TimerCountDownMask) != 0) {
@@ -237,7 +230,7 @@ Return Value:
         // Register the timer with the system.
         //
 
-        Status = HlRk32KernelServices->Register(HardwareModuleTimer, &Timer);
+        Status = HlRegisterHardware(HardwareModuleTimer, &Timer);
         if (!KSUCCESS(Status)) {
             goto Rk32TimerModuleEntryEnd;
         }
@@ -280,10 +273,9 @@ Return Value:
 
     Timer = (PRK32_TIMER_DATA)Context;
     if (Timer->Base == NULL) {
-        Timer->Base = HlRk32KernelServices->MapPhysicalAddress(
-                                                        Timer->PhysicalAddress,
-                                                        RK32_TIMER_BLOCK_SIZE,
-                                                        TRUE);
+        Timer->Base = HlMapPhysicalAddress(Timer->PhysicalAddress,
+                                           RK32_TIMER_BLOCK_SIZE,
+                                           TRUE);
 
         if (Timer->Base == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

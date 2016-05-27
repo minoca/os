@@ -146,7 +146,6 @@ KD_USB_DRIVER_MAPPING KdUsbDriverMappings[] = {
 
 KSTATUS
 KdUsbInitialize (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services,
     PDEBUG_USB_HOST_DESCRIPTION Host,
     BOOL TestInterface
     )
@@ -158,8 +157,6 @@ Routine Description:
     This routine initializes a USB debug based transport.
 
 Arguments:
-
-    Services - Supplies a pointer to the hardware module services.
 
     Host - Supplies a pointer to the host controller.
 
@@ -407,7 +404,7 @@ Return Value:
     //
 
     } else {
-        Status = Services->Register(HardwareModuleDebugDevice,
+        Status = HlRegisterHardware(HardwareModuleDebugDevice,
                                     &KdUsbDeviceInterface);
 
         if (!KSUCCESS(Status)) {

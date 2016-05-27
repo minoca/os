@@ -119,12 +119,6 @@ typedef struct _INTEGRATORCP_TABLE {
 //
 
 //
-// Store a pointer to the provided hardware layer services.
-//
-
-extern PHARDWARE_MODULE_KERNEL_SERVICES HlCpKernelServices;
-
-//
 // Store a pointer to the Integrator/CP ACPI table, if found.
 //
 

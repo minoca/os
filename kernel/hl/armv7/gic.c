@@ -26,15 +26,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -47,8 +43,7 @@ Environment:
 //
 
 #define READ_GIC_DISTRIBUTOR(_Controller, _Register) \
-    HlGicKernelServices->ReadRegister32(             \
-                    (PULONG)((PUCHAR)(_Controller)->Distributor + (_Register)))
+    HlReadRegister32((_Controller)->Distributor + (_Register))
 
 //
 // This macro performs a 32-bit write to a GIC Distributor. _Controller should
@@ -56,10 +51,8 @@ Environment:
 // GIC_DISTRIBUTOR_REGISTER value, and _Value is a 32-bit value.
 //
 
-#define WRITE_GIC_DISTRIBUTOR(_Controller, _Register, _Value)                  \
-    HlGicKernelServices->WriteRegister32(                                      \
-                   (PULONG)((PUCHAR)(_Controller)->Distributor + (_Register)), \
-                   (_Value))
+#define WRITE_GIC_DISTRIBUTOR(_Controller, _Register, _Value) \
+    HlWriteRegister32((_Controller)->Distributor + (_Register), (_Value))
 
 //
 // This macro performs an 8-bit read from a GIC Distributor. _Controller should
@@ -68,8 +61,7 @@ Environment:
 //
 
 #define READ_GIC_DISTRIBUTOR_BYTE(_Controller, _Register) \
-    HlGicKernelServices->ReadRegister8(                   \
-                              (PUCHAR)(_Controller)->Distributor + (_Register))
+    HlReadRegister8((_Controller)->Distributor + (_Register))
 
 //
 // This macro performs an 8-bit write to a GIC Distributor. _Controller should
@@ -77,10 +69,8 @@ Environment:
 // GIC_DISTRIBUTOR_REGISTER value, and _Value is an 8-bit value.
 //
 
-#define WRITE_GIC_DISTRIBUTOR_BYTE(_Controller, _Register, _Value)             \
-    HlGicKernelServices->WriteRegister8(                                       \
-                   (PUCHAR)(_Controller)->Distributor + (_Register),           \
-                   (_Value))
+#define WRITE_GIC_DISTRIBUTOR_BYTE(_Controller, _Register, _Value) \
+    HlWriteRegister8((_Controller)->Distributor + (_Register), (_Value))
 
 //
 // This macro performs a 32-bit read from a GIC CPU Interface register.
@@ -88,8 +78,7 @@ Environment:
 //
 
 #define READ_GIC_CPU_INTERFACE(_Register) \
-    HlGicKernelServices->ReadRegister32(  \
-                                    (PULONG)(HlGicCpuInterface + (_Register)))
+    HlReadRegister32(HlGicCpuInterface + (_Register))
 
 //
 // This macro performs a 32-bit write to a GIC CPU Interface register.
@@ -97,10 +86,8 @@ Environment:
 // 32-bit value to write.
 //
 
-#define WRITE_GIC_CPU_INTERFACE(_Register, _Value)                             \
-    HlGicKernelServices->WriteRegister32(                                      \
-                                    (PULONG)(HlGicCpuInterface + (_Register)), \
-                                    (_Value))
+#define WRITE_GIC_CPU_INTERFACE(_Register, _Value) \
+    HlWriteRegister32(HlGicCpuInterface + (_Register), (_Value))
 
 //
 // This macro performs an 8-bit read from a GIC CPU Interface register.
@@ -108,8 +95,7 @@ Environment:
 //
 
 #define READ_GIC_CPU_INTERFACE_BYTE(_Register) \
-    HlGicKernelServices->ReadRegister8(        \
-                                    (PUCHAR)(HlGicCpuInterface + (_Register)))
+    HlReadRegister8(HlGicCpuInterface + (_Register))
 
 //
 // This macro performs an 8-bit write to a GIC CPU Interface register.
@@ -117,10 +103,8 @@ Environment:
 // 8-bit value to write.
 //
 
-#define WRITE_GIC_CPU_INTERFACE_BYTE(_Register, _Value)                        \
-    HlGicKernelServices->WriteRegister8(                                       \
-                                    (PUCHAR)(HlGicCpuInterface + (_Register)), \
-                                    (_Value))
+#define WRITE_GIC_CPU_INTERFACE_BYTE(_Register, _Value) \
+    HlWriteRegister8(HlGicCpuInterface + (_Register), (_Value))
 
 //
 // This macro converts from a hardware priority value passed by the system to
@@ -443,12 +427,6 @@ PVOID HlGicCpuInterface = NULL;
 PMADT HlGicMadt = NULL;
 
 //
-// Store a pointer to the system services table.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlGicKernelServices = NULL;
-
-//
 // Define the interrupt function table template.
 //
 
@@ -473,7 +451,7 @@ INTERRUPT_FUNCTION_TABLE HlGicFunctionTable = {
 
 VOID
 HlpGicModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -485,8 +463,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -508,20 +485,18 @@ Return Value:
     // Attempt to find an MADT. If one exists, then the GIC is present.
     //
 
-    MadtTable = Services->GetAcpiTable(MADT_SIGNATURE, NULL);
+    MadtTable = HlGetAcpiTable(MADT_SIGNATURE, NULL);
     if (MadtTable == NULL) {
         goto GicModuleEntryEnd;
     }
 
-    HlGicKernelServices = Services;
     HlGicMadt = MadtTable;
 
     //
     // Zero out the controller description.
     //
 
-    Services->ZeroMemory(&NewController,
-                         sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
+    RtlZeroMemory(&NewController, sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
 
     //
     // Loop through every entry in the MADT once to determine the number of
@@ -569,17 +544,16 @@ Return Value:
             // Allocate context needed for this Distributor.
             //
 
-            DistributorData = Services->AllocateMemory(
-                                                  sizeof(GIC_DISTRIBUTOR_DATA),
-                                                  GIC_ALLOCATION_TAG,
-                                                  FALSE,
-                                                  NULL);
+            DistributorData = HlAllocateMemory(sizeof(GIC_DISTRIBUTOR_DATA),
+                                               GIC_ALLOCATION_TAG,
+                                               FALSE,
+                                               NULL);
 
             if (DistributorData == NULL) {
                 goto GicModuleEntryEnd;
             }
 
-            Services->ZeroMemory(DistributorData, sizeof(GIC_DISTRIBUTOR_DATA));
+            RtlZeroMemory(DistributorData, sizeof(GIC_DISTRIBUTOR_DATA));
             DistributorData->PhysicalAddress = Distributor->BaseAddress;
             DistributorData->Distributor = NULL;
             DistributorData->GsiBase = Distributor->GsiBase;
@@ -592,9 +566,9 @@ Return Value:
             NewController.TableVersion =
                                       INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
 
-            HlGicKernelServices->CopyMemory(&(NewController.FunctionTable),
-                                            &HlGicFunctionTable,
-                                            sizeof(INTERRUPT_FUNCTION_TABLE));
+            RtlCopyMemory(&(NewController.FunctionTable),
+                          &HlGicFunctionTable,
+                          sizeof(INTERRUPT_FUNCTION_TABLE));
 
             NewController.Context = DistributorData;
             NewController.Identifier = DistributorData->Identifier;
@@ -606,7 +580,7 @@ Return Value:
             // Register the controller with the system.
             //
 
-            Status = Services->Register(HardwareModuleInterruptController,
+            Status = HlRegisterHardware(HardwareModuleInterruptController,
                                         &NewController);
 
             if (!KSUCCESS(Status)) {
@@ -780,10 +754,9 @@ Return Value:
         }
 
         PhysicalAddress = HlGicMadt->ApicAddress;
-        HlGicCpuInterface = HlGicKernelServices->MapPhysicalAddress(
-                                                      PhysicalAddress,
-                                                      GIC_CPU_INTERFACE_SIZE,
-                                                      TRUE);
+        HlGicCpuInterface = HlMapPhysicalAddress(PhysicalAddress,
+                                                 GIC_CPU_INTERFACE_SIZE,
+                                                 TRUE);
 
         if (HlGicCpuInterface == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1515,9 +1488,7 @@ Return Value:
     INTERRUPT_LINES_DESCRIPTION Lines;
     KSTATUS Status;
 
-    HlGicKernelServices->ZeroMemory(&Lines,
-                                    sizeof(INTERRUPT_LINES_DESCRIPTION));
-
+    RtlZeroMemory(&Lines, sizeof(INTERRUPT_LINES_DESCRIPTION));
     Lines.Version = INTERRUPT_LINES_DESCRIPTION_VERSION;
 
     //
@@ -1529,9 +1500,7 @@ Return Value:
     Lines.LineStart = 0;
     Lines.LineEnd = GIC_SOFTWARE_INTERRUPT_LINE_COUNT;
     Lines.Gsi = Controller->GsiBase;
-    Status = HlGicKernelServices->Register(HardwareModuleInterruptLines,
-                                           &Lines);
-
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto GicDescribeLinesEnd;
     }
@@ -1544,9 +1513,7 @@ Return Value:
     Lines.LineStart = GIC_PROCESSOR_PERIPHERAL_LINE_BASE;
     Lines.LineEnd = Lines.LineStart + GIC_PROCESSOR_PERIPHERAL_LINE_COUNT;
     Lines.Gsi += GIC_SOFTWARE_INTERRUPT_LINE_COUNT;
-    Status = HlGicKernelServices->Register(HardwareModuleInterruptLines,
-                                           &Lines);
-
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto GicDescribeLinesEnd;
     }
@@ -1563,9 +1530,7 @@ Return Value:
                     GIC_PROCESSOR_PERIPHERAL_LINE_COUNT;
 
     Lines.Gsi += GIC_PROCESSOR_PERIPHERAL_LINE_COUNT;
-    Status = HlGicKernelServices->Register(HardwareModuleInterruptLines,
-                                           &Lines);
-
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto GicDescribeLinesEnd;
     }
@@ -1578,9 +1543,7 @@ Return Value:
     Lines.OutputControllerIdentifier = INTERRUPT_CPU_IDENTIFIER;
     Lines.LineStart = INTERRUPT_ARM_MIN_CPU_LINE;
     Lines.LineEnd = INTERRUPT_ARM_MAX_CPU_LINE;
-    Status = HlGicKernelServices->Register(HardwareModuleInterruptLines,
-                                           &Lines);
-
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto GicDescribeLinesEnd;
     }
@@ -1618,10 +1581,9 @@ Return Value:
 
     if (Controller->Distributor == NULL) {
         PhysicalAddress = Controller->PhysicalAddress;
-        Controller->Distributor = HlGicKernelServices->MapPhysicalAddress(
-                                                  PhysicalAddress,
-                                                  GIC_DISTRIBUTOR_SIZE,
-                                                  TRUE);
+        Controller->Distributor = HlMapPhysicalAddress(PhysicalAddress,
+                                                       GIC_DISTRIBUTOR_SIZE,
+                                                       TRUE);
 
         if (Controller->Distributor == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

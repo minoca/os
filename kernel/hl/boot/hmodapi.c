@@ -26,7 +26,6 @@ Environment:
 
 #include <minoca/kernel/kernel.h>
 #include <minoca/kernel/bootload.h>
-#include <minoca/kernel/ioport.h>
 #include "../dbgdev.h"
 
 //
@@ -53,91 +52,9 @@ BoAllocateMemory (
     UINTN Size
     );
 
-PVOID
-HlpModAllocateMemory (
-    UINTN Size,
-    ULONG Tag,
-    BOOL Device,
-    PPHYSICAL_ADDRESS PhysicalAddress
-    );
-
-PVOID
-BopHlGetAcpiTable (
-    ULONG Signature,
-    PVOID PreviousTable
-    );
-
-PVOID
-BopHlMapPhysicalAddress (
-    PHYSICAL_ADDRESS PhysicalAddress,
-    ULONG SizeInBytes,
-    BOOL CacheDisabled
-    );
-
-VOID
-BopHlUnmapAddress (
-    PVOID VirtualAddress,
-    ULONG SizeInBytes
-    );
-
-KSTATUS
-BopHlRegisterHardware (
-    HARDWARE_MODULE_TYPE Type,
-    PVOID Description
-    );
-
-VOID
-BopHlReportPhysicalAddressUsage (
-    PHYSICAL_ADDRESS PhysicalAddress,
-    ULONGLONG Size
-    );
-
-VOID
-BopHlInitializeLock (
-    PHARDWARE_MODULE_LOCK Lock
-    );
-
-VOID
-BopHlAcquireLock (
-    PHARDWARE_MODULE_LOCK Lock
-    );
-
-VOID
-BopHlReleaseLock (
-    PHARDWARE_MODULE_LOCK Lock
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
-
-//
-// Define the kernel services table for hardware modules.
-//
-
-HARDWARE_MODULE_KERNEL_SERVICES HlHardwareModuleServices = {
-    RtlZeroMemory,
-    RtlCopyMemory,
-    HlReadRegister32,
-    HlWriteRegister32,
-    HlReadRegister8,
-    HlWriteRegister8,
-    HlIoPortInLong,
-    HlIoPortOutLong,
-    HlIoPortInByte,
-    HlIoPortOutByte,
-    BopHlGetAcpiTable,
-    HlpModAllocateMemory,
-    BopHlMapPhysicalAddress,
-    BopHlUnmapAddress,
-    BopHlRegisterHardware,
-    BopHlReportPhysicalAddressUsage,
-    BopHlInitializeLock,
-    BopHlAcquireLock,
-    BopHlReleaseLock,
-    RtlCountTrailingZeros32,
-    NULL
-};
 
 //
 // Store a pointer to the kernel initialization block. This pointer can only
@@ -179,6 +96,12 @@ LIST_ENTRY BoHlPhysicalMemoryUsageListHead;
 //
 
 extern BOOL HlUsbHostsEnumerated;
+
+//
+// Store a pointer to the optional get ACPI table override routine.
+//
+
+PHARDWARE_MODULE_GET_ACPI_TABLE BoHlGetAcpiTableFunction;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -246,10 +169,7 @@ Return Value:
     KSTATUS Status;
 
     INITIALIZE_LIST_HEAD(&BoHlPhysicalMemoryUsageListHead);
-    if (GetAcpiTableFunction != NULL) {
-        HlHardwareModuleServices.GetAcpiTable = GetAcpiTableFunction;
-    }
-
+    BoHlGetAcpiTableFunction = GetAcpiTableFunction;
     Status = HlpInitializeDebugDevices(0, DebugDevice);
     return Status;
 }
@@ -283,12 +203,100 @@ Return Value:
     return;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
+KERNEL_API
+KSTATUS
+HlRegisterHardware (
+    HARDWARE_MODULE_TYPE Type,
+    PVOID Description
+    )
 
+/*++
+
+Routine Description:
+
+    This routine registers a hardware module with the system.
+
+Arguments:
+
+    Type - Supplies the type of resource being registered.
+
+    Description - Supplies a description of the resource being registered.
+
+Return Value:
+
+    Returns a pointer to the allocation of the requested size on success.
+
+    NULL on failure.
+
+--*/
+
+{
+
+    KSTATUS Status;
+
+    switch (Type) {
+    case HardwareModuleDebugDevice:
+        Status = HlpDebugDeviceRegisterHardware(Description);
+        break;
+
+    case HardwareModuleDebugUsbHostController:
+        Status = HlpDebugUsbHostRegisterHardware(Description);
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        Status = STATUS_INVALID_PARAMETER;
+        goto RegisterHardwareEnd;
+    }
+
+RegisterHardwareEnd:
+    return Status;
+}
+
+KERNEL_API
 PVOID
-HlpModAllocateMemory (
+HlGetAcpiTable (
+    ULONG Signature,
+    PVOID PreviousTable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to find an ACPI description table with the given
+    signature.
+
+Arguments:
+
+    Signature - Supplies the signature of the desired table.
+
+    PreviousTable - Supplies a pointer to the table to start the search from.
+
+Return Value:
+
+    Returns a pointer to the beginning of the header to the table if the table
+    was found, or NULL if the table could not be located.
+
+--*/
+
+{
+
+    PHARDWARE_MODULE_GET_ACPI_TABLE GetAcpiTable;
+
+    GetAcpiTable = BoHlGetAcpiTableFunction;
+    if (GetAcpiTable != NULL) {
+        return GetAcpiTable(Signature, PreviousTable);
+    }
+
+    return NULL;
+}
+
+KERNEL_API
+PVOID
+HlAllocateMemory (
     UINTN Size,
     ULONG Tag,
     BOOL Device,
@@ -341,39 +349,9 @@ Return Value:
     return Allocation;
 }
 
+KERNEL_API
 PVOID
-BopHlGetAcpiTable (
-    ULONG Signature,
-    PVOID PreviousTable
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to find an ACPI description table with the given
-    signature.
-
-Arguments:
-
-    Signature - Supplies the signature of the desired table.
-
-    PreviousTable - Supplies a pointer to the table to start the search from.
-
-Return Value:
-
-    Returns a pointer to the beginning of the header to the table if the table
-    was found, or NULL if the table could not be located.
-
---*/
-
-{
-
-    return NULL;
-}
-
-PVOID
-BopHlMapPhysicalAddress (
+HlMapPhysicalAddress (
     PHYSICAL_ADDRESS PhysicalAddress,
     ULONG SizeInBytes,
     BOOL CacheDisabled
@@ -409,8 +387,9 @@ Return Value:
     return (PVOID)(UINTN)PhysicalAddress;
 }
 
+KERNEL_API
 VOID
-BopHlUnmapAddress (
+HlUnmapAddress (
     PVOID VirtualAddress,
     ULONG SizeInBytes
     )
@@ -438,59 +417,9 @@ Return Value:
     return;
 }
 
-KSTATUS
-BopHlRegisterHardware (
-    HARDWARE_MODULE_TYPE Type,
-    PVOID Description
-    )
-
-/*++
-
-Routine Description:
-
-    This routine registers a hardware module with the system.
-
-Arguments:
-
-    Type - Supplies the type of resource being registered.
-
-    Description - Supplies a description of the resource being registered.
-
-Return Value:
-
-    Returns a pointer to the allocation of the requested size on success.
-
-    NULL on failure.
-
---*/
-
-{
-
-    KSTATUS Status;
-
-    switch (Type) {
-    case HardwareModuleDebugDevice:
-        Status = HlpDebugDeviceRegisterHardware(Description);
-        break;
-
-    case HardwareModuleDebugUsbHostController:
-        Status = HlpDebugUsbHostRegisterHardware(Description);
-        break;
-
-    default:
-
-        ASSERT(FALSE);
-
-        Status = STATUS_INVALID_PARAMETER;
-        goto RegisterHardwareEnd;
-    }
-
-RegisterHardwareEnd:
-    return Status;
-}
-
+KERNEL_API
 VOID
-BopHlReportPhysicalAddressUsage (
+HlReportPhysicalAddressUsage (
     PHYSICAL_ADDRESS PhysicalAddress,
     ULONGLONG Size
     )
@@ -524,10 +453,10 @@ Return Value:
 
     PHL_PHYSICAL_ADDRESS_USAGE Usage;
 
-    Usage = HlpModAllocateMemory(sizeof(HL_PHYSICAL_ADDRESS_USAGE),
-                                 HL_POOL_TAG,
-                                 FALSE,
-                                 NULL);
+    Usage = HlAllocateMemory(sizeof(HL_PHYSICAL_ADDRESS_USAGE),
+                             HL_POOL_TAG,
+                             FALSE,
+                             NULL);
 
     if (Usage == NULL) {
         return;
@@ -540,8 +469,9 @@ Return Value:
     return;
 }
 
+KERNEL_API
 VOID
-BopHlInitializeLock (
+HlInitializeLock (
     PHARDWARE_MODULE_LOCK Lock
     )
 
@@ -568,8 +498,9 @@ Return Value:
     return;
 }
 
+KERNEL_API
 VOID
-BopHlAcquireLock (
+HlAcquireLock (
     PHARDWARE_MODULE_LOCK Lock
     )
 
@@ -596,8 +527,9 @@ Return Value:
     return;
 }
 
+KERNEL_API
 VOID
-BopHlReleaseLock (
+HlReleaseLock (
     PHARDWARE_MODULE_LOCK Lock
     )
 
@@ -622,3 +554,8 @@ Return Value:
 
     return;
 }
+
+//
+// --------------------------------------------------------- Internal Functions
+//
+

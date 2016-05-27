@@ -46,7 +46,7 @@ Environment:
 
 VOID
 HlpNs16550SerialModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 //
@@ -101,7 +101,7 @@ Return Value:
     ModuleIndex = 0;
     while (HlBuiltinDebugDevices[ModuleIndex] != NULL) {
         ModuleEntry = HlBuiltinDebugDevices[ModuleIndex];
-        ModuleEntry(&HlHardwareModuleServices);
+        ModuleEntry();
         ModuleIndex += 1;
     }
 

@@ -31,7 +31,7 @@ Author:
 //
 
 #define READ_LOCAL_APIC(_Register) \
-    HlApicServices->ReadRegister32((PUCHAR)HlLocalApic + ((_Register) << 4))
+    HlReadRegister32((PUCHAR)HlLocalApic + ((_Register) << 4))
 
 //
 // This macro writes to the local APIC. Register should be an APIC_REGISTER,
@@ -39,8 +39,7 @@ Author:
 //
 
 #define WRITE_LOCAL_APIC(_Register, _Value) \
-    HlApicServices->WriteRegister32((PUCHAR)HlLocalApic + ((_Register) << 4), \
-                                    (_Value))
+    HlWriteRegister32((PUCHAR)HlLocalApic + ((_Register) << 4), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -206,12 +205,6 @@ extern PVOID HlLocalApic;
 //
 
 extern ULONG HlFirstIoApicId;
-
-//
-// Store a pointer to the system services table.
-//
-
-extern PHARDWARE_MODULE_KERNEL_SERVICES HlApicServices;
 
 //
 // -------------------------------------------------------- Function Prototypes

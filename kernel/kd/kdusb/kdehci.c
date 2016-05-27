@@ -39,14 +39,11 @@ Environment:
 // These macros read and write EHCI debug device registers.
 //
 
-#define EHCI_READ_REGISTER(_Controller, _Register)  \
-    KdEhciKernelServices->ReadRegister32(           \
-                                  (_Controller)->OperationalBase + (_Register))
+#define EHCI_READ_REGISTER(_Controller, _Register) \
+    HlReadRegister32((_Controller)->OperationalBase + (_Register))
 
 #define EHCI_WRITE_REGISTER(_Controller, _Register, _Value) \
-    KdEhciKernelServices->WriteRegister32(                                    \
-                                (_Controller)->OperationalBase + (_Register), \
-                                (_Value));
+    HlWriteRegister32((_Controller)->OperationalBase + (_Register), (_Value));
 
 #define EHCI_READ_PORT_REGISTER(_Controller, _PortIndex) \
     EHCI_READ_REGISTER(                                  \
@@ -136,8 +133,6 @@ KdEhciResetController (
 // -------------------------------------------------------------------- Globals
 //
 
-PHARDWARE_MODULE_KERNEL_SERVICES KdEhciKernelServices;
-
 //
 // Store the step and registration status EHCI got to, for debugging.
 //
@@ -173,7 +168,7 @@ DEBUG_USB_HOST_DESCRIPTION KdEhciDescriptionTemplate = {
 
 VOID
 KdEhciModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -186,10 +181,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module. This set of services is extremely
-        limited due to the core nature of these hardware modules. Many of the
-        normal services rely on these hardware modules to operate properly.
+    None.
 
 Return Value:
 
@@ -208,8 +200,7 @@ Return Value:
     PULONG SizePointer;
     KSTATUS Status;
 
-    KdEhciKernelServices = Services;
-    DebugTable = KdEhciKernelServices->GetAcpiTable(DBG2_SIGNATURE, NULL);
+    DebugTable = HlGetAcpiTable(DBG2_SIGNATURE, NULL);
     if (DebugTable == NULL) {
         return;
     }
@@ -259,22 +250,20 @@ Return Value:
         // Allocate and initialize the device context.
         //
 
-        Context = KdEhciKernelServices->AllocateMemory(
-                                                     sizeof(EHCI_DEBUG_DEVICE),
-                                                     EHCI_DEBUG_ALLOCATION_TAG,
-                                                     FALSE,
-                                                     NULL);
+        Context = HlAllocateMemory(sizeof(EHCI_DEBUG_DEVICE),
+                                   EHCI_DEBUG_ALLOCATION_TAG,
+                                   FALSE,
+                                   NULL);
 
         if (Context == NULL) {
             KdEhciRegistrationStatus = STATUS_INSUFFICIENT_RESOURCES;
             continue;
         }
 
-        KdEhciKernelServices->ZeroMemory(Context, sizeof(EHCI_DEBUG_DEVICE));
-        Context->RegisterBase = KdEhciKernelServices->MapPhysicalAddress(
-                                                       GenericAddress->Address,
-                                                       Size,
-                                                       TRUE);
+        RtlZeroMemory(Context, sizeof(EHCI_DEBUG_DEVICE));
+        Context->RegisterBase = HlMapPhysicalAddress(GenericAddress->Address,
+                                                     Size,
+                                                     TRUE);
 
         if (Context->RegisterBase == NULL) {
             continue;
@@ -286,9 +275,8 @@ Return Value:
 
         KdEhciDescriptionTemplate.Context = Context;
         KdEhciDescriptionTemplate.Identifier = GenericAddress->Address;
-        Status = KdEhciKernelServices->Register(
-                                          HardwareModuleDebugUsbHostController,
-                                          &KdEhciDescriptionTemplate);
+        Status = HlRegisterHardware(HardwareModuleDebugUsbHostController,
+                                    &KdEhciDescriptionTemplate);
 
         KdEhciRegistrationStatus = Status;
         Device = (PDEBUG_DEVICE_INFORMATION)((PVOID)Device +
@@ -339,9 +327,8 @@ Return Value:
     //
 
     LengthRegister = Device->RegisterBase + EHCI_CAPABILITY_LENGTH_REGISTER;
-    Device->OperationalBase =
-                          Device->RegisterBase +
-                          KdEhciKernelServices->ReadRegister8(LengthRegister);
+    Device->OperationalBase = Device->RegisterBase +
+                              HlReadRegister8(LengthRegister);
 
     if (Device->OperationalBase == Device->RegisterBase) {
         Status = STATUS_NO_SUCH_DEVICE;
@@ -355,7 +342,7 @@ Return Value:
     ParametersRegister = Device->RegisterBase +
                          EHCI_CAPABILITY_PARAMETERS_REGISTER;
 
-    Parameters = KdEhciKernelServices->ReadRegister32(ParametersRegister);
+    Parameters = HlReadRegister32(ParametersRegister);
     Device->PortCount = Parameters & EHCI_CAPABILITY_PARAMETERS_PORT_COUNT_MASK;
     if (Device->PortCount == 0) {
         Status = STATUS_NO_SUCH_DEVICE;
@@ -367,11 +354,10 @@ Return Value:
     //
 
     if (Device->Data.ReclamationQueue == NULL) {
-        Buffer = KdEhciKernelServices->AllocateMemory(
-                                                   EHCI_MEMORY_ALLOCATION_SIZE,
-                                                   EHCI_DEBUG_ALLOCATION_TAG,
-                                                   TRUE,
-                                                   &BufferPhysical);
+        Buffer = HlAllocateMemory(EHCI_MEMORY_ALLOCATION_SIZE,
+                                  EHCI_DEBUG_ALLOCATION_TAG,
+                                  TRUE,
+                                  &BufferPhysical);
 
         if (Buffer == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -379,7 +365,7 @@ Return Value:
         }
 
         BufferPhysicalEnd = BufferPhysical + EHCI_MEMORY_ALLOCATION_SIZE;
-        KdEhciKernelServices->ZeroMemory(Buffer, EHCI_MEMORY_ALLOCATION_SIZE);
+        RtlZeroMemory(Buffer, EHCI_MEMORY_ALLOCATION_SIZE);
 
         //
         // Chop up the buffer, reserving the first region for the reclamation
@@ -890,9 +876,7 @@ Return Value:
     // address zero).
     //
 
-    KdEhciKernelServices->ZeroMemory(EhciTransfer->Queue,
-                                     sizeof(EHCI_QUEUE_HEAD));
-
+    RtlZeroMemory(EhciTransfer->Queue, sizeof(EHCI_QUEUE_HEAD));
     EhciTransfer->Queue->HorizontalLink =
                                  Device->Data.ReclamationQueue->HorizontalLink;
 
@@ -1281,7 +1265,7 @@ Return Value:
     EhciTransfer->Queue->HorizontalLink =
                                  Device->Data.ReclamationQueue->HorizontalLink;
 
-    KdEhciKernelServices->WriteRegister32(
+    HlWriteRegister32(
              &(Device->Data.ReclamationQueue->HorizontalLink),
              (ULONG)(EhciTransfer->QueuePhysical) | EHCI_LINK_TYPE_QUEUE_HEAD);
 
@@ -1503,7 +1487,6 @@ Return Value:
     ULONG Index;
     ULONG OriginalUsbStatus;
     ULONG UsbStatus;
-    PHARDWARE_MODULE_WRITE_REGISTER32 WriteRegister32;
 
     Device = (PEHCI_DEBUG_DEVICE)Context;
     EhciTransfer = Transfer->HostContext;
@@ -1532,12 +1515,11 @@ Return Value:
     // If the reclamation queue points at this queue, point it away.
     //
 
-    WriteRegister32 = KdEhciKernelServices->WriteRegister32;
     if (Device->Data.ReclamationQueue->HorizontalLink ==
         (EhciTransfer->QueuePhysical | EHCI_LINK_TYPE_QUEUE_HEAD)) {
 
-        WriteRegister32(&(Device->Data.ReclamationQueue->HorizontalLink),
-                        EhciTransfer->Queue->HorizontalLink);
+        HlWriteRegister32(&(Device->Data.ReclamationQueue->HorizontalLink),
+                          EhciTransfer->Queue->HorizontalLink);
     }
 
     //
@@ -1548,8 +1530,8 @@ Return Value:
         if (Device->Transfers[Index].Queue->HorizontalLink ==
             (EhciTransfer->QueuePhysical | EHCI_LINK_TYPE_QUEUE_HEAD)) {
 
-            WriteRegister32(&(Device->Transfers[Index].Queue->HorizontalLink),
-                            EhciTransfer->Queue->HorizontalLink);
+            HlWriteRegister32(&(Device->Transfers[Index].Queue->HorizontalLink),
+                              EhciTransfer->Queue->HorizontalLink);
         }
     }
 

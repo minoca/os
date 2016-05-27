@@ -69,7 +69,7 @@ MmTlbInvalidateIpiServiceRoutine (
 
 VOID
 HlpApicModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 //
@@ -195,7 +195,7 @@ Return Value:
     ModuleIndex = 0;
     while (HlBuiltinModules[ModuleIndex] != NULL) {
         ModuleEntry = HlBuiltinModules[ModuleIndex];
-        ModuleEntry(&HlHardwareModuleServices);
+        ModuleEntry();
         ModuleIndex += 1;
     }
 

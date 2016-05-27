@@ -425,10 +425,10 @@ Return Value:
                 ((Timer->Features & TIMER_FEATURE_PER_PROCESSOR) != 0)) {
 
                 AllocationSize = ProcessorCount * sizeof(ULONGLONG);
-                CountArray = HlpModAllocateMemory(AllocationSize,
-                                                  HL_POOL_TAG,
-                                                  FALSE,
-                                                  NULL);
+                CountArray = HlAllocateMemory(AllocationSize,
+                                              HL_POOL_TAG,
+                                              FALSE,
+                                              NULL);
 
                 if (CountArray == NULL) {
                     Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -712,7 +712,7 @@ Return Value:
         }
     }
 
-    Timer = HlpModAllocateMemory(AllocationSize, HL_POOL_TAG, FALSE, NULL);
+    Timer = HlAllocateMemory(AllocationSize, HL_POOL_TAG, FALSE, NULL);
     if (Timer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto TimerRegisterHardwareEnd;

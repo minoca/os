@@ -24,10 +24,13 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+//
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
+//
+
+#include <minoca/kernel/kernel.h>
+#include <minoca/kernel/ioport.h>
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -56,12 +59,6 @@ HlpPmTimerRead (
 //
 
 //
-// Store a pointer to the system services table.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlPmTimerServices = NULL;
-
-//
 // Store the PM timer port.
 //
 
@@ -73,7 +70,7 @@ USHORT HlPmTimerPort;
 
 VOID
 HlpPmTimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -85,8 +82,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -100,14 +96,12 @@ Return Value:
     TIMER_DESCRIPTION PmTimer;
     KSTATUS Status;
 
-    HlPmTimerServices = Services;
-
     //
     // Find the FADT table. If there is no FADT table, then this not an ACPI
     // compliant machine, so there is probably no PM timer either.
     //
 
-    FadtTable = HlPmTimerServices->GetAcpiTable(FADT_SIGNATURE, NULL);
+    FadtTable = HlGetAcpiTable(FADT_SIGNATURE, NULL);
     if (FadtTable == NULL) {
         goto PmTimerModuleEntryEnd;
     }
@@ -117,7 +111,7 @@ Return Value:
         goto PmTimerModuleEntryEnd;
     }
 
-    HlPmTimerServices->ZeroMemory(&PmTimer, sizeof(TIMER_DESCRIPTION));
+    RtlZeroMemory(&PmTimer, sizeof(TIMER_DESCRIPTION));
     PmTimer.TableVersion = TIMER_DESCRIPTION_VERSION;
     PmTimer.FunctionTable.Initialize = HlpPmTimerInitialize;
     PmTimer.FunctionTable.ReadCounter = HlpPmTimerRead;
@@ -143,7 +137,7 @@ Return Value:
     // Register the PM timer with the system.
     //
 
-    Status = HlPmTimerServices->Register(HardwareModuleTimer, &PmTimer);
+    Status = HlRegisterHardware(HardwareModuleTimer, &PmTimer);
     if (!KSUCCESS(Status)) {
         goto PmTimerModuleEntryEnd;
     }
@@ -210,6 +204,6 @@ Return Value:
 
 {
 
-    return HlPmTimerServices->ReadPort32(HlPmTimerPort);
+    return HlIoPortInLong(HlPmTimerPort);
 }
 

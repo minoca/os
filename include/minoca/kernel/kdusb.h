@@ -549,7 +549,6 @@ typedef struct _HARDWARE_USB_DEBUG_DEVICE {
 
 KSTATUS
 KdUsbInitialize (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services,
     PDEBUG_USB_HOST_DESCRIPTION Host,
     BOOL TestInterface
     );
@@ -561,8 +560,6 @@ Routine Description:
     This routine initializes a USB debug based transport.
 
 Arguments:
-
-    Services - Supplies a pointer to the hardware module services.
 
     Host - Supplies a pointer to the host controller.
 
@@ -582,7 +579,7 @@ Return Value:
 
 VOID
 KdEhciModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 /*++
@@ -595,10 +592,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module. This set of services is extremely
-        limited due to the core nature of these hardware modules. Many of the
-        normal services rely on these hardware modules to operate properly.
+    None.
 
 Return Value:
 

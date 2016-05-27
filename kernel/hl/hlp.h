@@ -40,48 +40,8 @@ Author:
 //
 
 //
-// Define the kernel services table for hardware modules.
-//
-
-extern HARDWARE_MODULE_KERNEL_SERVICES HlHardwareModuleServices;
-
-//
 // -------------------------------------------------------- Function Prototypes
 //
-
-PVOID
-HlpModAllocateMemory (
-    UINTN Size,
-    ULONG Tag,
-    BOOL Device,
-    PPHYSICAL_ADDRESS PhysicalAddress
-    );
-
-/*++
-
-Routine Description:
-
-    This routine allocates memory from the non-paged pool. This memory will
-    never be paged out and can be accessed at any level.
-
-Arguments:
-
-    Size - Supplies the size of the allocation, in bytes.
-
-    Tag - Supplies an identifier to associate with the allocation, useful for
-        debugging and leak detection.
-
-    Device - Supplies a boolean indicating if this memory will be accessed by
-        a device directly. If TRUE, the memory will be mapped uncached.
-
-    PhysicalAddress - Supplies an optional pointer where the physical address
-        of the allocation is returned.
-
-Return Value:
-
-    Returns the allocated memory if successful, or NULL on failure.
-
---*/
 
 KSTATUS
 HlpArchResetSystem (
@@ -108,3 +68,4 @@ Return Value:
     STATUS_UNSUCCESSFUL if the system did not reset.
 
 --*/
+

@@ -25,15 +25,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include "omap4.h"
 
 //
@@ -46,16 +42,15 @@ Environment:
 //
 
 #define READ_PRCM_REGISTER(_Base, _Register) \
-    HlOmap4KernelServices->ReadRegister32((PULONG)(_Base) + (_Register))
+    HlReadRegister32((PULONG)(_Base) + (_Register))
 
 //
 // This macro writes to an OMAP4 PRCM Register. _Base should be a pointer,
 // _Register should be register offset in ULONGs, and _Value should be a ULONG.
 //
 
-#define WRITE_PRCM_REGISTER(_Base, _Register, _Value)                      \
-    HlOmap4KernelServices->WriteRegister32((PULONG)(_Base) + (_Register),  \
-                                           (_Value))
+#define WRITE_PRCM_REGISTER(_Base, _Register, _Value) \
+    HlWriteRegister32((PULONG)(_Base) + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -177,7 +172,7 @@ Return Value:
     //
 
     if (HlOmap4WakeupClockControl == NULL) {
-        HlOmap4WakeupClockControl = HlOmap4KernelServices->MapPhysicalAddress(
+        HlOmap4WakeupClockControl = HlMapPhysicalAddress(
                                       HlOmap4Table->WakeupClockPhysicalAddress,
                                       0x800,
                                       TRUE);
@@ -189,10 +184,10 @@ Return Value:
     }
 
     if (HlOmap4L4ClockControl == NULL) {
-        HlOmap4L4ClockControl = HlOmap4KernelServices->MapPhysicalAddress(
-                                      HlOmap4Table->L4ClockPhysicalAddress,
-                                      0xC00,
-                                      TRUE);
+        HlOmap4L4ClockControl = HlMapPhysicalAddress(
+                                          HlOmap4Table->L4ClockPhysicalAddress,
+                                          0xC00,
+                                          TRUE);
 
         if (HlOmap4L4ClockControl == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -201,10 +196,10 @@ Return Value:
     }
 
     if (HlOmap4AudioClockControl == NULL) {
-        HlOmap4AudioClockControl = HlOmap4KernelServices->MapPhysicalAddress(
-                                      HlOmap4Table->AudioClockPhysicalAddress,
-                                      0xB00,
-                                      TRUE);
+        HlOmap4AudioClockControl = HlMapPhysicalAddress(
+                                       HlOmap4Table->AudioClockPhysicalAddress,
+                                       0xB00,
+                                       TRUE);
 
         if (HlOmap4AudioClockControl == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

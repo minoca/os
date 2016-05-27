@@ -26,15 +26,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -45,14 +41,14 @@ Environment:
 //
 
 #define READ_SERIAL_REGISTER(_Register) \
-    HlOmap4KernelServices->ReadRegister32(HlOmapUartBase + _Register)
+    HlReadRegister32(HlOmapUartBase + (_Register))
 
 //
 // This macro performs a 32-bit write to the serial port.
 //
 
 #define WRITE_SERIAL_REGISTER(_Register, _Value) \
-    HlOmap4KernelServices->WriteRegister32(HlOmapUartBase + _Register, _Value)
+    HlWriteRegister32(HlOmapUartBase + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -225,13 +221,6 @@ PVOID HlOmapUartBase = NULL;
 PHYSICAL_ADDRESS HlOmapUartPhysicalAddress;
 
 //
-// Store a pointer to the provided hardware layer services.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlOmap3KernelServices = NULL;
-PHARDWARE_MODULE_KERNEL_SERVICES HlOmap4KernelServices = NULL;
-
-//
 // Store a boolean indicating whether enumeration of this serial port should be
 // forced. Setting this to TRUE causes this module to register a serial port
 // even if one is not found in firmware tables. This is useful to temporarily
@@ -246,7 +235,7 @@ BOOL HlOmapUartForceEnumeration = FALSE;
 
 VOID
 HlpOmapSerialModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -258,8 +247,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -280,10 +268,8 @@ Return Value:
     USHORT PortType;
     KSTATUS Status;
 
-    HlOmap3KernelServices = Services;
-    HlOmap4KernelServices = Services;
     FoundIt = FALSE;
-    DebugPortTable = HlOmap4KernelServices->GetAcpiTable(DBG2_SIGNATURE, NULL);
+    DebugPortTable = HlGetAcpiTable(DBG2_SIGNATURE, NULL);
     if (DebugPortTable != NULL) {
         DebugDevice =
             (PDEBUG_DEVICE_INFORMATION)(((PVOID)DebugPortTable) +
@@ -328,12 +314,8 @@ Return Value:
     // Report the physical address space occupied by the UART.
     //
 
-    HlOmap4KernelServices->ReportPhysicalAddressUsage(HlOmapUartPhysicalAddress,
-                                                      OMAP_UART_SIZE);
-
-    HlOmap4KernelServices->ZeroMemory(&Description,
-                                      sizeof(DEBUG_DEVICE_DESCRIPTION));
-
+    HlReportPhysicalAddressUsage(HlOmapUartPhysicalAddress, OMAP_UART_SIZE);
+    RtlZeroMemory(&Description, sizeof(DEBUG_DEVICE_DESCRIPTION));
     Description.TableVersion = DEBUG_DEVICE_DESCRIPTION_VERSION;
     Description.FunctionTable.Reset = HlpOmapSerialReset;
     Description.FunctionTable.Transmit = HlpOmapSerialTransmit;
@@ -343,9 +325,7 @@ Return Value:
     Description.PortType = DEBUG_PORT_TYPE_SERIAL;
     Description.PortSubType = DEBUG_PORT_SERIAL_ARM_OMAP4;
     Description.Identifier = HlOmapUartPhysicalAddress;
-    Status = HlOmap4KernelServices->Register(HardwareModuleDebugDevice,
-                                            &Description);
-
+    Status = HlRegisterHardware(HardwareModuleDebugDevice, &Description);
     if (!KSUCCESS(Status)) {
         goto OmapSerialModuleEntryEnd;
     }
@@ -413,10 +393,9 @@ Return Value:
     //
 
     if (HlOmapUartBase == NULL) {
-        HlOmapUartBase = HlOmap4KernelServices->MapPhysicalAddress(
-                                                     HlOmapUartPhysicalAddress,
-                                                     OMAP_UART_SIZE,
-                                                     TRUE);
+        HlOmapUartBase = HlMapPhysicalAddress(HlOmapUartPhysicalAddress,
+                                              OMAP_UART_SIZE,
+                                              TRUE);
 
         if (HlOmapUartBase == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

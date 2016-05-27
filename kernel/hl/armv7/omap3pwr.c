@@ -25,15 +25,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include "omap3.h"
 
 //
@@ -46,16 +42,15 @@ Environment:
 //
 
 #define READ_PRCM_REGISTER(_Base, _Register) \
-    HlOmap3KernelServices->ReadRegister32((PULONG)(_Base) + (_Register))
+    HlReadRegister32((PULONG)(_Base) + (_Register))
 
 //
 // This macro writes to an OMAP3 PRCM Register. _Base should be a pointer,
 // _Register should be PRCM_REGISTER value, and _Value should be a ULONG.
 //
 
-#define WRITE_PRCM_REGISTER(_Base, _Register, _Value)                      \
-    HlOmap3KernelServices->WriteRegister32((PULONG)(_Base) + (_Register),  \
-                                           (_Value))
+#define WRITE_PRCM_REGISTER(_Base, _Register, _Value) \
+    HlWriteRegister32((PULONG)(_Base) + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -141,10 +136,9 @@ Return Value:
     //
 
     if (HlOmap3Prcm == NULL) {
-        HlOmap3Prcm = HlOmap3KernelServices->MapPhysicalAddress(
-                                             HlOmap3Table->PrcmPhysicalAddress,
-                                             OMAP3_PRCM_SIZE,
-                                             TRUE);
+        HlOmap3Prcm = HlMapPhysicalAddress(HlOmap3Table->PrcmPhysicalAddress,
+                                           OMAP3_PRCM_SIZE,
+                                           TRUE);
 
         if (HlOmap3Prcm == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

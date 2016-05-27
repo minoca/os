@@ -26,8 +26,8 @@ Environment:
 //
 
 //
-// This module should not have kernel.h included, except that the cycle counter
-// is always builtin and will not be separated out into a dynamic module.
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
 #include <minoca/kernel/kernel.h>
@@ -66,18 +66,12 @@ HlpTscDetermineCharacteristics (
 //
 
 //
-// Store a pointer to the system services table.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlTscSystemServices = NULL;
-
-//
 // ------------------------------------------------------------------ Functions
 //
 
 VOID
 HlpTscModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -103,8 +97,7 @@ Return Value:
     KSTATUS Status;
     TIMER_DESCRIPTION TscTimer;
 
-    HlTscSystemServices = Services;
-    HlTscSystemServices->ZeroMemory(&TscTimer, sizeof(TIMER_DESCRIPTION));
+    RtlZeroMemory(&TscTimer, sizeof(TIMER_DESCRIPTION));
     TscTimer.TableVersion = TIMER_DESCRIPTION_VERSION;
     TscTimer.FunctionTable.Initialize = HlpTscInitialize;
     TscTimer.FunctionTable.ReadCounter =
@@ -138,7 +131,7 @@ Return Value:
     // Register the TSC with the system.
     //
 
-    Status = HlTscSystemServices->Register(HardwareModuleTimer, &TscTimer);
+    Status = HlRegisterHardware(HardwareModuleTimer, &TscTimer);
     if (!KSUCCESS(Status)) {
         goto TscTimerModuleEntryEnd;
     }

@@ -133,12 +133,6 @@ typedef struct _OMAP3_TABLE {
 //
 
 //
-// Store a pointer to the provided hardware layer services.
-//
-
-extern PHARDWARE_MODULE_KERNEL_SERVICES HlOmap3KernelServices;
-
-//
 // Store a pointer to the OMAP3 ACPI table.
 //
 

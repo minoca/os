@@ -25,15 +25,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include <minoca/soc/am335x.h>
 #include "am335.h"
 
@@ -47,7 +43,7 @@ Environment:
 //
 
 #define READ_TIMER_REGISTER(_Base, _Register) \
-    HlAm335KernelServices->ReadRegister32((_Base) + (_Register))
+    HlReadRegister32((_Base) + (_Register))
 
 //
 // This macro writes to an AM335 timer. _Base should be a pointer,
@@ -55,8 +51,8 @@ Environment:
 // ULONG.
 //
 
-#define WRITE_TIMER_REGISTER(_Base, _Register, _Value)                     \
-    HlAm335KernelServices->WriteRegister32((_Base) + (_Register), (_Value))
+#define WRITE_TIMER_REGISTER(_Base, _Register, _Value) \
+    HlWriteRegister32((_Base) + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -131,7 +127,6 @@ HlpAm335TimerAcknowledgeInterrupt (
 //
 
 PAM335X_TABLE HlAm335Table = NULL;
-PHARDWARE_MODULE_KERNEL_SERVICES HlAm335KernelServices = NULL;
 
 //
 // ------------------------------------------------------------------ Functions
@@ -139,7 +134,7 @@ PHARDWARE_MODULE_KERNEL_SERVICES HlAm335KernelServices = NULL;
 
 VOID
 HlpAm335TimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -151,8 +146,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -167,8 +161,7 @@ Return Value:
     PAM335_TIMER_DATA TimerData;
     ULONG TimerIndex;
 
-    HlAm335KernelServices = Services;
-    HlAm335Table = HlAm335KernelServices->GetAcpiTable(AM335X_SIGNATURE, NULL);
+    HlAm335Table = HlGetAcpiTable(AM335X_SIGNATURE, NULL);
     if (HlAm335Table == NULL) {
         goto Am335TimerModuleEntryEnd;
     }
@@ -206,7 +199,7 @@ Return Value:
             continue;
         }
 
-        HlAm335KernelServices->ZeroMemory(&Timer, sizeof(TIMER_DESCRIPTION));
+        RtlZeroMemory(&Timer, sizeof(TIMER_DESCRIPTION));
         Timer.TableVersion = TIMER_DESCRIPTION_VERSION;
         Timer.FunctionTable.Initialize = HlpAm335TimerInitialize;
         Timer.FunctionTable.ReadCounter = HlpAm335TimerRead;
@@ -216,18 +209,17 @@ Return Value:
         Timer.FunctionTable.AcknowledgeInterrupt =
                                              HlpAm335TimerAcknowledgeInterrupt;
 
-        TimerData = HlAm335KernelServices->AllocateMemory(
-                                                    sizeof(AM335_TIMER_DATA),
-                                                    AM335_ALLOCATION_TAG,
-                                                    FALSE,
-                                                    NULL);
+        TimerData = HlAllocateMemory(sizeof(AM335_TIMER_DATA),
+                                     AM335_ALLOCATION_TAG,
+                                     FALSE,
+                                     NULL);
 
         if (TimerData == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto Am335TimerModuleEntryEnd;
         }
 
-        HlAm335KernelServices->ZeroMemory(TimerData, sizeof(AM335_TIMER_DATA));
+        RtlZeroMemory(TimerData, sizeof(AM335_TIMER_DATA));
         TimerData->PhysicalAddress = HlAm335Table->TimerBase[TimerIndex];
         TimerData->Index = TimerIndex;
         Timer.Context = TimerData;
@@ -261,7 +253,7 @@ Return Value:
         // Register the timer with the system.
         //
 
-        Status = HlAm335KernelServices->Register(HardwareModuleTimer, &Timer);
+        Status = HlRegisterHardware(HardwareModuleTimer, &Timer);
         if (!KSUCCESS(Status)) {
             goto Am335TimerModuleEntryEnd;
         }
@@ -310,10 +302,9 @@ Return Value:
     //
 
     if (Timer->Base == NULL) {
-        Timer->Base = HlAm335KernelServices->MapPhysicalAddress(
-                            Timer->PhysicalAddress,
-                            AM335_TIMER_CONTROLLER_SIZE,
-                            TRUE);
+        Timer->Base = HlMapPhysicalAddress(Timer->PhysicalAddress,
+                                           AM335_TIMER_CONTROLLER_SIZE,
+                                           TRUE);
 
         if (Timer->Base == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

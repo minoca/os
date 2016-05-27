@@ -25,8 +25,14 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
+//
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
+//
+
 #include <minoca/kernel/kernel.h>
 #include <minoca/kernel/x86.h>
+#include <minoca/kernel/ioport.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -207,18 +213,12 @@ HlpRtcWriteRegister (
 //
 
 //
-// Store a pointer to the system services table.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlRtcSystemServices = NULL;
-
-//
 // ------------------------------------------------------------------ Functions
 //
 
 VOID
 HlpRtcModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -230,8 +230,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -247,20 +246,19 @@ Return Value:
     TIMER_DESCRIPTION RtcTimer;
     KSTATUS Status;
 
-    HlRtcSystemServices = Services;
-    HlRtcSystemServices->ZeroMemory(&RtcTimer, sizeof(TIMER_DESCRIPTION));
-    Context = HlRtcSystemServices->AllocateMemory(sizeof(RTC_CONTEXT),
-                                                  RTC_ALLOCATION_TAG,
-                                                  FALSE,
-                                                  NULL);
+    RtlZeroMemory(&RtcTimer, sizeof(TIMER_DESCRIPTION));
+    Context = HlAllocateMemory(sizeof(RTC_CONTEXT),
+                               RTC_ALLOCATION_TAG,
+                               FALSE,
+                               NULL);
 
     if (Context == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto RtcModuleEntryEnd;
     }
 
-    HlRtcSystemServices->ZeroMemory(Context, sizeof(RTC_CONTEXT));
-    HlRtcSystemServices->InitializeLock(&(Context->Lock));
+    RtlZeroMemory(Context, sizeof(RTC_CONTEXT));
+    HlInitializeLock(&(Context->Lock));
     RtcTimer.TableVersion = TIMER_DESCRIPTION_VERSION;
     RtcTimer.FunctionTable.Initialize = HlpRtcInitialize;
     RtcTimer.FunctionTable.ReadCounter = NULL;
@@ -299,7 +297,7 @@ Return Value:
     // Register the RTC timer with the system.
     //
 
-    Status = HlRtcSystemServices->Register(HardwareModuleTimer, &RtcTimer);
+    Status = HlRegisterHardware(HardwareModuleTimer, &RtcTimer);
     if (!KSUCCESS(Status)) {
         goto RtcModuleEntryEnd;
     }
@@ -308,7 +306,7 @@ Return Value:
     // Try to get the FADT to find the century register.
     //
 
-    Fadt = HlRtcSystemServices->GetAcpiTable(FADT_SIGNATURE, NULL);
+    Fadt = HlGetAcpiTable(FADT_SIGNATURE, NULL);
     if (Fadt != NULL) {
         Context->CenturyRegister = Fadt->Century;
     }
@@ -317,17 +315,13 @@ Return Value:
     // Register the calendar timer portion as well.
     //
 
-    HlRtcSystemServices->ZeroMemory(&CalendarTimer,
-                                    sizeof(CALENDAR_TIMER_DESCRIPTION));
-
+    RtlZeroMemory(&CalendarTimer, sizeof(CALENDAR_TIMER_DESCRIPTION));
     CalendarTimer.TableVersion = CALENDAR_TIMER_DESCRIPTION_VERSION;
     CalendarTimer.Context = Context;
     CalendarTimer.Features = CALENDAR_TIMER_FEATURE_WANT_CALENDAR_FORMAT;
     CalendarTimer.FunctionTable.Read = HlpRtcReadCalendarTime;
     CalendarTimer.FunctionTable.Write = HlpRtcWriteCalendarTime;
-    Status = HlRtcSystemServices->Register(HardwareModuleCalendarTimer,
-                                           &CalendarTimer);
-
+    Status = HlRegisterHardware(HardwareModuleCalendarTimer, &CalendarTimer);
     if (!KSUCCESS(Status)) {
         goto RtcModuleEntryEnd;
     }
@@ -420,8 +414,8 @@ Return Value:
         TickCount = 1;
     }
 
-    HlRtcSystemServices->AcquireLock(&(RtcContext->Lock));
-    OriginalSelection = HlRtcSystemServices->ReadPort8(CMOS_SELECT_PORT);
+    HlAcquireLock(&(RtcContext->Lock));
+    OriginalSelection = HlIoPortInByte(CMOS_SELECT_PORT);
 
     //
     // Set the RTC periodic interrupt frequency.
@@ -443,8 +437,8 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 RtcArmEnd:
-    HlRtcSystemServices->WritePort8(CMOS_SELECT_PORT, OriginalSelection);
-    HlRtcSystemServices->ReleaseLock(&(RtcContext->Lock));
+    HlIoPortOutByte(CMOS_SELECT_PORT, OriginalSelection);
+    HlReleaseLock(&(RtcContext->Lock));
     return Status;
 }
 
@@ -484,8 +478,8 @@ Return Value:
     // Disable the RTC periodic interrupt by programming register B.
     //
 
-    HlRtcSystemServices->AcquireLock(&(RtcContext->Lock));
-    OriginalSelection = HlRtcSystemServices->ReadPort8(CMOS_SELECT_PORT);
+    HlAcquireLock(&(RtcContext->Lock));
+    OriginalSelection = HlIoPortInByte(CMOS_SELECT_PORT);
     RegisterB = HlpRtcReadRegister(CMOS_REGISTER_B);
     RegisterB &= ~CMOS_REGISTER_B_RTC_PERIODIC_INTERRUPT;
     HlpRtcWriteRegister(CMOS_REGISTER_B, RegisterB);
@@ -503,8 +497,8 @@ Return Value:
         }
     }
 
-    HlRtcSystemServices->WritePort8(CMOS_SELECT_PORT, OriginalSelection);
-    HlRtcSystemServices->ReleaseLock(&(RtcContext->Lock));
+    HlIoPortOutByte(CMOS_SELECT_PORT, OriginalSelection);
+    HlReleaseLock(&(RtcContext->Lock));
     return;
 }
 
@@ -542,10 +536,10 @@ Return Value:
     // Read register C to acknowledge the interrupt and re-enable it.
     //
 
-    HlRtcSystemServices->AcquireLock(&(RtcContext->Lock));
-    HlRtcSystemServices->WritePort8(CMOS_SELECT_PORT, CMOS_REGISTER_C);
-    HlRtcSystemServices->ReadPort8(CMOS_DATA_PORT);
-    HlRtcSystemServices->ReleaseLock(&(RtcContext->Lock));
+    HlAcquireLock(&(RtcContext->Lock));
+    HlIoPortOutByte(CMOS_SELECT_PORT, CMOS_REGISTER_C);
+    HlIoPortInByte(CMOS_DATA_PORT);
+    HlReleaseLock(&(RtcContext->Lock));
     return;
 }
 
@@ -605,8 +599,8 @@ Return Value:
     Century = 0;
     Century2 = 0;
     RtcContext = (PRTC_CONTEXT)Context;
-    HlRtcSystemServices->AcquireLock(&(RtcContext->Lock));
-    OriginalSelection = HlRtcSystemServices->ReadPort8(CMOS_SELECT_PORT);
+    HlAcquireLock(&(RtcContext->Lock));
+    OriginalSelection = HlIoPortInByte(CMOS_SELECT_PORT);
     RegisterB = HlpRtcReadRegister(CMOS_REGISTER_B);
 
     //
@@ -722,8 +716,8 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 ReadCalendarTimeEnd:
-    HlRtcSystemServices->WritePort8(CMOS_SELECT_PORT, OriginalSelection);
-    HlRtcSystemServices->ReleaseLock(&(RtcContext->Lock));
+    HlIoPortOutByte(CMOS_SELECT_PORT, OriginalSelection);
+    HlReleaseLock(&(RtcContext->Lock));
     return Status;
 }
 
@@ -797,8 +791,8 @@ Return Value:
     Year = BINARY_TO_BCD(CalendarTime->Year % 100);
     Century = BINARY_TO_BCD(CalendarTime->Year / 100);
     Century2 = Century;
-    HlRtcSystemServices->AcquireLock(&(RtcContext->Lock));
-    OriginalSelection = HlRtcSystemServices->ReadPort8(CMOS_SELECT_PORT);
+    HlAcquireLock(&(RtcContext->Lock));
+    OriginalSelection = HlIoPortInByte(CMOS_SELECT_PORT);
     RegisterB = HlpRtcReadRegister(CMOS_REGISTER_B);
 
     //
@@ -886,8 +880,8 @@ Return Value:
     }
 
 ReadCalendarTimeEnd:
-    HlRtcSystemServices->WritePort8(CMOS_SELECT_PORT, OriginalSelection);
-    HlRtcSystemServices->ReleaseLock(&(RtcContext->Lock));
+    HlIoPortOutByte(CMOS_SELECT_PORT, OriginalSelection);
+    HlReleaseLock(&(RtcContext->Lock));
     return Status;
 }
 
@@ -989,10 +983,8 @@ Return Value:
 
 {
 
-    HlRtcSystemServices->WritePort8(CMOS_SELECT_PORT,
-                                    Register | CMOS_NMI_SELECT);
-
-    return HlRtcSystemServices->ReadPort8(CMOS_DATA_PORT);
+    HlIoPortOutByte(CMOS_SELECT_PORT, Register | CMOS_NMI_SELECT);
+    return HlIoPortInByte(CMOS_DATA_PORT);
 }
 
 VOID
@@ -1021,10 +1013,8 @@ Return Value:
 
 {
 
-    HlRtcSystemServices->WritePort8(CMOS_SELECT_PORT,
-                                    Register | CMOS_NMI_SELECT);
-
-    HlRtcSystemServices->WritePort8(CMOS_DATA_PORT, Value);
+    HlIoPortOutByte(CMOS_SELECT_PORT, Register | CMOS_NMI_SELECT);
+    HlIoPortOutByte(CMOS_DATA_PORT, Value);
     return;
 }
 

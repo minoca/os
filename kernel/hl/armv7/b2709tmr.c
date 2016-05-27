@@ -25,15 +25,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include "bcm2709.h"
 
 //
@@ -91,33 +87,28 @@ Environment:
 //
 
 #define READ_ARM_TIMER_REGISTER(_Register) \
-    HlBcm2709KernelServices->ReadRegister32(HlBcm2709ArmTimerBase + (_Register))
+    HlReadRegister32(HlBcm2709ArmTimerBase + (_Register))
 
 //
 // This macro writes to a BCM2709 ARM Timer register.
 //
 
-#define WRITE_ARM_TIMER_REGISTER(_Register, _Value)                   \
-    HlBcm2709KernelServices->WriteRegister32((HlBcm2709ArmTimerBase + \
-                                              (_Register)),           \
-                                             (_Value))
+#define WRITE_ARM_TIMER_REGISTER(_Register, _Value) \
+    HlWriteRegister32((HlBcm2709ArmTimerBase + (_Register)), (_Value))
 
 //
 // This macro reads from a BCM2709 System Timer register.
 //
 
-#define READ_SYSTEM_TIMER_REGISTER(_Register)                          \
-    HlBcm2709KernelServices->ReadRegister32(HlBcm2709SystemTimerBase + \
-                                            (_Register))
+#define READ_SYSTEM_TIMER_REGISTER(_Register) \
+    HlReadRegister32(HlBcm2709SystemTimerBase + (_Register))
 
 //
 // This macro writes to a BCM2709 System Timer register.
 //
 
-#define WRITE_SYSTEM_TIMER_REGISTER(_Register, _Value)                  \
-    HlBcm2709KernelServices->WriteRegister32(HlBcm2709SystemTimerBase + \
-                                             (_Register),               \
-                                             (_Value))
+#define WRITE_SYSTEM_TIMER_REGISTER(_Register, _Value) \
+    HlWriteRegister32(HlBcm2709SystemTimerBase + (_Register), (_Value))
 
 //
 // This macro compares two counter values accounting for roll over.
@@ -241,7 +232,7 @@ PVOID HlBcm2709SystemTimerBase = NULL;
 
 VOID
 HlpBcm2709TimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -273,10 +264,10 @@ Return Value:
 
     //
     // Interrupt controllers are always initialized before timers, so the table
-    // and services should already be set up.
+    // should already be set up.
     //
 
-    if ((HlBcm2709Table == NULL) || (HlBcm2709KernelServices == NULL)) {
+    if (HlBcm2709Table == NULL) {
         goto Bcm2709TimerModuleEntryEnd;
     }
 
@@ -324,7 +315,7 @@ Return Value:
     // Register each of the independent timers in the timer block.
     //
 
-    HlBcm2709KernelServices->ZeroMemory(&Timer, sizeof(TIMER_DESCRIPTION));
+    RtlZeroMemory(&Timer, sizeof(TIMER_DESCRIPTION));
     Timer.TableVersion = TIMER_DESCRIPTION_VERSION;
     Timer.FunctionTable.Initialize = HlpBcm2709TimerInitialize;
     Timer.FunctionTable.ReadCounter = HlpBcm2709TimerRead;
@@ -341,10 +332,10 @@ Return Value:
     // auto-programmed after a one-shot timer fires.
     //
 
-    Context = HlBcm2709KernelServices->AllocateMemory(sizeof(BCM2709_TIMER),
-                                                      BCM2709_ALLOCATION_TAG,
-                                                      FALSE,
-                                                      NULL);
+    Context = HlAllocateMemory(sizeof(BCM2709_TIMER),
+                               BCM2709_ALLOCATION_TAG,
+                               FALSE,
+                               NULL);
 
     if (Context == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -365,7 +356,7 @@ Return Value:
     Timer.Interrupt.Line.U.Gsi = HlBcm2709Table->ArmTimerGsi;
     Timer.Interrupt.TriggerMode = InterruptModeUnknown;
     Timer.Interrupt.ActiveLevel = InterruptActiveLevelUnknown;
-    Status = HlBcm2709KernelServices->Register(HardwareModuleTimer, &Timer);
+    Status = HlRegisterHardware(HardwareModuleTimer, &Timer);
     if (!KSUCCESS(Status)) {
         goto Bcm2709TimerModuleEntryEnd;
     }
@@ -375,10 +366,10 @@ Return Value:
     // speed can change dynamically in reduced power status.
     //
 
-    Context = HlBcm2709KernelServices->AllocateMemory(sizeof(BCM2709_TIMER),
-                                                      BCM2709_ALLOCATION_TAG,
-                                                      FALSE,
-                                                      NULL);
+    Context = HlAllocateMemory(sizeof(BCM2709_TIMER),
+                               BCM2709_ALLOCATION_TAG,
+                               FALSE,
+                               NULL);
 
     if (Context == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -392,7 +383,7 @@ Return Value:
     Timer.Features = TIMER_FEATURE_READABLE | TIMER_FEATURE_P_STATE_VARIANT;
     Timer.CounterFrequency = Frequency;
     Timer.Interrupt.Line.Type = InterruptLineInvalid;
-    Status = HlBcm2709KernelServices->Register(HardwareModuleTimer, &Timer);
+    Status = HlRegisterHardware(HardwareModuleTimer, &Timer);
     if (!KSUCCESS(Status)) {
         goto Bcm2709TimerModuleEntryEnd;
     }
@@ -404,10 +395,10 @@ Return Value:
     // the HL software handle the rollover.
     //
 
-    Context = HlBcm2709KernelServices->AllocateMemory(sizeof(BCM2709_TIMER),
-                                                      BCM2709_ALLOCATION_TAG,
-                                                      FALSE,
-                                                      NULL);
+    Context = HlAllocateMemory(sizeof(BCM2709_TIMER),
+                               BCM2709_ALLOCATION_TAG,
+                               FALSE,
+                               NULL);
 
     if (Context == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -421,7 +412,7 @@ Return Value:
     Timer.Features = TIMER_FEATURE_READABLE;
     Timer.CounterFrequency = HlBcm2709Table->SystemTimerFrequency;
     Timer.Interrupt.Line.Type = InterruptLineInvalid;
-    Status = HlBcm2709KernelServices->Register(HardwareModuleTimer, &Timer);
+    Status = HlRegisterHardware(HardwareModuleTimer, &Timer);
     if (!KSUCCESS(Status)) {
         goto Bcm2709TimerModuleEntryEnd;
     }
@@ -433,10 +424,10 @@ Return Value:
     // timers.
     //
 
-    Context = HlBcm2709KernelServices->AllocateMemory(sizeof(BCM2709_TIMER),
-                                                      BCM2709_ALLOCATION_TAG,
-                                                      FALSE,
-                                                      NULL);
+    Context = HlAllocateMemory(sizeof(BCM2709_TIMER),
+                               BCM2709_ALLOCATION_TAG,
+                               FALSE,
+                               NULL);
 
     if (Context == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -453,15 +444,15 @@ Return Value:
     Timer.Interrupt.Line.U.Gsi = HlBcm2709Table->SystemTimerGsiBase + 1;
     Timer.Interrupt.TriggerMode = InterruptModeUnknown;
     Timer.Interrupt.ActiveLevel = InterruptActiveLevelUnknown;
-    Status = HlBcm2709KernelServices->Register(HardwareModuleTimer, &Timer);
+    Status = HlRegisterHardware(HardwareModuleTimer, &Timer);
     if (!KSUCCESS(Status)) {
         goto Bcm2709TimerModuleEntryEnd;
     }
 
-    Context = HlBcm2709KernelServices->AllocateMemory(sizeof(BCM2709_TIMER),
-                                                      BCM2709_ALLOCATION_TAG,
-                                                      FALSE,
-                                                      NULL);
+    Context = HlAllocateMemory(sizeof(BCM2709_TIMER),
+                               BCM2709_ALLOCATION_TAG,
+                               FALSE,
+                               NULL);
 
     if (Context == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -478,7 +469,7 @@ Return Value:
     Timer.Interrupt.Line.U.Gsi = HlBcm2709Table->SystemTimerGsiBase + 3;
     Timer.Interrupt.TriggerMode = InterruptModeUnknown;
     Timer.Interrupt.ActiveLevel = InterruptActiveLevelUnknown;
-    Status = HlBcm2709KernelServices->Register(HardwareModuleTimer, &Timer);
+    Status = HlRegisterHardware(HardwareModuleTimer, &Timer);
     if (!KSUCCESS(Status)) {
         goto Bcm2709TimerModuleEntryEnd;
     }
@@ -516,7 +507,6 @@ Return Value:
 {
 
     ULONG ControlValue;
-    PHARDWARE_MODULE_MAP_PHYSICAL_ADDRESS MapPhysicalAddress;
     PHYSICAL_ADDRESS PhysicalAddress;
     ULONG Size;
     KSTATUS Status;
@@ -531,12 +521,11 @@ Return Value:
         (Timer->Type == Bcm2709TimerArmCounter)) {
 
         if (HlBcm2709ArmTimerBase == NULL) {
-            MapPhysicalAddress = HlBcm2709KernelServices->MapPhysicalAddress;
             PhysicalAddress = HlBcm2709Table->ArmTimerPhysicalAddress;
             Size = Bcm2709ArmTimerRegisterSize;
-            HlBcm2709ArmTimerBase = MapPhysicalAddress(PhysicalAddress,
-                                                       Size,
-                                                       TRUE);
+            HlBcm2709ArmTimerBase = HlMapPhysicalAddress(PhysicalAddress,
+                                                         Size,
+                                                         TRUE);
 
             if (HlBcm2709ArmTimerBase == NULL) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -546,12 +535,11 @@ Return Value:
 
     } else {
         if (HlBcm2709SystemTimerBase == NULL) {
-            MapPhysicalAddress = HlBcm2709KernelServices->MapPhysicalAddress;
             PhysicalAddress = HlBcm2709Table->SystemTimerPhysicalAddress;
             Size = Bcm2709SystemTimerRegisterSize;
-            HlBcm2709SystemTimerBase = MapPhysicalAddress(PhysicalAddress,
-                                                          Size,
-                                                          TRUE);
+            HlBcm2709SystemTimerBase = HlMapPhysicalAddress(PhysicalAddress,
+                                                            Size,
+                                                            TRUE);
 
             if (HlBcm2709SystemTimerBase == NULL) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;

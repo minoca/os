@@ -37,12 +37,6 @@ Author:
 //
 
 //
-// Store a pointer to the provided hardware layer services.
-//
-
-extern PHARDWARE_MODULE_KERNEL_SERVICES HlBcm2709KernelServices;
-
-//
 // Store a pointer to the BCM2709 ACPI Table.
 //
 

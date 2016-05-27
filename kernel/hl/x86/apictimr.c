@@ -24,10 +24,12 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+//
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
+//
+
+#include <minoca/kernel/kernel.h>
 #include "apic.h"
 
 //
@@ -80,7 +82,7 @@ HlpApicTimerDisarm (
 
 VOID
 HlpApicTimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -92,8 +94,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -106,11 +107,11 @@ Return Value:
     TIMER_DESCRIPTION ApicTimer;
     KSTATUS Status;
 
-    if ((HlApicMadt == NULL) || (HlApicServices == NULL)) {
+    if (HlApicMadt == NULL) {
         goto ApicTimerModuleEntryEnd;
     }
 
-    HlApicServices->ZeroMemory(&ApicTimer, sizeof(TIMER_DESCRIPTION));
+    RtlZeroMemory(&ApicTimer, sizeof(TIMER_DESCRIPTION));
     ApicTimer.TableVersion = TIMER_DESCRIPTION_VERSION;
     ApicTimer.FunctionTable.Initialize = HlpApicTimerInitialize;
     ApicTimer.FunctionTable.ReadCounter = HlpApicTimerRead;
@@ -142,7 +143,7 @@ Return Value:
     // Register the timer with the system.
     //
 
-    Status = HlApicServices->Register(HardwareModuleTimer, &ApicTimer);
+    Status = HlRegisterHardware(HardwareModuleTimer, &ApicTimer);
     if (!KSUCCESS(Status)) {
         goto ApicTimerModuleEntryEnd;
     }

@@ -51,42 +51,42 @@ Environment:
 
 VOID
 HlpArmCycleCounterModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 VOID
 HlpCpTimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 VOID
 HlpSp804TimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 VOID
 HlpOmap3TimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 VOID
 HlpOmap4TimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 VOID
 HlpAm335TimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 VOID
 HlpBcm2709TimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 VOID
 HlpRk32TimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 //
@@ -193,7 +193,7 @@ Return Value:
 
     for (TimerIndex = 0; TimerIndex < TimerCount; TimerIndex += 1) {
         ModuleEntry = HlPreDebuggerTimerModules[TimerIndex];
-        ModuleEntry(&HlHardwareModuleServices);
+        ModuleEntry();
     }
 
     return;
@@ -242,7 +242,7 @@ Return Value:
 
         for (ModuleIndex = 0; ModuleIndex < ModuleCount; ModuleIndex += 1) {
             ModuleEntry = HlBuiltinTimerModules[ModuleIndex];
-            ModuleEntry(&HlHardwareModuleServices);
+            ModuleEntry();
         }
     }
 

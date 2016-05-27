@@ -25,15 +25,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include "bcm2709.h"
 
 //
@@ -186,26 +182,12 @@ Environment:
     (HlBcm2709LocalBase + ((_Register) + (0x10 * (_ProcessorId))))
 
 //
-// This macro reads a ULONG value from the given register address.
-//
-
-#define READ_REGISTER(_RegisterAddress) \
-    HlBcm2709KernelServices->ReadRegister32((_RegisterAddress));
-
-//
-// This macro writes a ULONG value to the given register address.
-//
-
-#define WRITE_REGISTER(_RegisterAddress, _Value) \
-    HlBcm2709KernelServices->WriteRegister32((_RegisterAddress), (_Value));
-
-//
 // This macro reads from the BCM2709 interrupt controller. The parameter should
 // be a BCM2709_INTERRUPT_REGISTER value.
 //
 
 #define READ_INTERRUPT_REGISTER(_Register) \
-    READ_REGISTER(HlBcm2709InterruptController + (_Register))
+    HlReadRegister32(HlBcm2709InterruptController + (_Register))
 
 //
 // This macro writes to the BCM2709 interrupt controller. _Register should be a
@@ -215,8 +197,8 @@ Environment:
 //
 
 #define WRITE_INTERRUPT_REGISTER(_Register, _Value)                     \
-    WRITE_REGISTER(HlBcm2709InterruptController + (_Register), _Value); \
-    READ_REGISTER(HlBcm2709InterruptController + (_Register));
+    HlWriteRegister32(HlBcm2709InterruptController + (_Register), _Value); \
+    HlReadRegister32(HlBcm2709InterruptController + (_Register));
 
 //
 // This macro reads from the BCM2709 local registers. _Register should be a
@@ -225,7 +207,7 @@ Environment:
 //
 
 #define READ_LOCAL_REGISTER(_Register, _ProcessorId) \
-    READ_REGISTER(GET_LOCAL_ADDRESS(_Register, _ProcessorId))
+    HlReadRegister32(GET_LOCAL_ADDRESS(_Register, _ProcessorId))
 
 //
 // This macro writes to the BCM2709 interrupt controller. _Register should be a
@@ -236,8 +218,8 @@ Environment:
 //
 
 #define WRITE_LOCAL_REGISTER(_Register, _ProcessorId, _Value)           \
-    WRITE_REGISTER(GET_LOCAL_ADDRESS(_Register, _ProcessorId), _Value); \
-    READ_REGISTER(GET_LOCAL_ADDRESS(_Register, _ProcessorId));
+    HlWriteRegister32(GET_LOCAL_ADDRESS(_Register, _ProcessorId), _Value); \
+    HlReadRegister32(GET_LOCAL_ADDRESS(_Register, _ProcessorId));
 
 //
 // This macro reads from the BCM2709 local interrupt registers. _Register
@@ -246,7 +228,7 @@ Environment:
 //
 
 #define READ_LOCAL_IPI_REGISTER(_Register, _ProcessorId) \
-    READ_REGISTER(GET_IPI_ADDRESS(_Register, _ProcessorId))
+    HlReadRegister32(GET_IPI_ADDRESS(_Register, _ProcessorId))
 
 //
 // This macro writes to the BCM2709 local interrupt controller. _Register
@@ -257,15 +239,8 @@ Environment:
 //
 
 #define WRITE_LOCAL_IPI_REGISTER(_Register, _ProcessorId, _Value)     \
-    WRITE_REGISTER(GET_IPI_ADDRESS(_Register, _ProcessorId), _Value); \
-    READ_REGISTER(GET_IPI_ADDRESS(_Register, _ProcessorId));
-
-//
-// This macro counts the trailing zeros in the given 32-bit value.
-//
-
-#define COUNT_TRAILING_ZEROS32(_Value) \
-    HlBcm2709KernelServices->CountTrailingZeros32((_Value))
+    HlWriteRegister32(GET_IPI_ADDRESS(_Register, _ProcessorId), _Value); \
+    HlReadRegister32(GET_IPI_ADDRESS(_Register, _ProcessorId));
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -524,12 +499,6 @@ PVOID HlBcm2709InterruptController = NULL;
 PVOID HlBcm2709LocalBase = NULL;
 
 //
-// Store a pointer to the provided hardware layer services.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlBcm2709KernelServices = NULL;
-
-//
 // Store a pointer to the BCM2709 ACPI Table.
 //
 
@@ -582,7 +551,7 @@ INTERRUPT_FUNCTION_TABLE HlBcm2709InterruptFunctionTable = {
 
 VOID
 HlpBcm2709InterruptModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -594,8 +563,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -613,12 +581,10 @@ Return Value:
     ULONG ProcessorCount;
     KSTATUS Status;
 
-    HlBcm2709Table = Services->GetAcpiTable(BCM2709_SIGNATURE, NULL);
+    HlBcm2709Table = HlGetAcpiTable(BCM2709_SIGNATURE, NULL);
     if (HlBcm2709Table == NULL) {
         goto Bcm2709InterruptModuleEntryEnd;
     }
-
-    HlBcm2709KernelServices = Services;
 
     //
     // Loop through every entry in the BCM2709 table once to determine the
@@ -651,17 +617,16 @@ Return Value:
                           (ProcessorCount - 1);
     }
 
-    Context = Services->AllocateMemory(AllocationSize,
-                                       BCM2709_ALLOCATION_TAG,
-                                       FALSE,
-                                       NULL);
+    Context = HlAllocateMemory(AllocationSize,
+                               BCM2709_ALLOCATION_TAG, FALSE,
+                               NULL);
 
     if (Context == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Bcm2709InterruptModuleEntryEnd;
     }
 
-    Services->ZeroMemory(Context, sizeof(BCM2709_INTERRUPT_CONTROLLER));
+    RtlZeroMemory(Context, sizeof(BCM2709_INTERRUPT_CONTROLLER));
     for (Index = 0; Index < BCM2709_INTERRUPT_MAX_LINE_COUNT; Index += 1) {
         Context->LinePriority[Index] = BCM2709_INTERRUPT_PRIORITY_COUNT;
     }
@@ -683,13 +648,11 @@ Return Value:
     // Zero out the controller description.
     //
 
-    Services->ZeroMemory(&NewController,
-                         sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
-
+    RtlZeroMemory(&NewController, sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
     NewController.TableVersion = INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
-    HlBcm2709KernelServices->CopyMemory(&(NewController.FunctionTable),
-                                        &HlBcm2709InterruptFunctionTable,
-                                        sizeof(INTERRUPT_FUNCTION_TABLE));
+    RtlCopyMemory(&(NewController.FunctionTable),
+                  &HlBcm2709InterruptFunctionTable,
+                  sizeof(INTERRUPT_FUNCTION_TABLE));
 
     //
     // If there is only one processor, do not report the multi-processor
@@ -712,7 +675,7 @@ Return Value:
     // Register the controller with the system.
     //
 
-    Status = Services->Register(HardwareModuleInterruptController,
+    Status = HlRegisterHardware(HardwareModuleInterruptController,
                                 &NewController);
 
     if (!KSUCCESS(Status)) {
@@ -1125,7 +1088,7 @@ Return Value:
                                                  ProcessorId);
 
             if (PendingIpi != 0) {
-                Line = COUNT_TRAILING_ZEROS32(PendingIpi);
+                Line = RtlCountTrailingZeros32(PendingIpi);
                 PendingIpi = 1 << Line;
                 WRITE_LOCAL_IPI_REGISTER(Bcm2709LocalIpiPending,
                                          ProcessorId,
@@ -1172,7 +1135,7 @@ Return Value:
 
         if ((PendingIrq & BCM2709_INTERRUPT_IRQ_BASIC_MASK) != 0) {
             PendingIrq &= BCM2709_INTERRUPT_IRQ_BASIC_MASK;
-            Line = COUNT_TRAILING_ZEROS32(PendingIrq);
+            Line = RtlCountTrailingZeros32(PendingIrq);
             Line += Bcm2709InterruptArmTimer;
 
         //
@@ -1183,7 +1146,7 @@ Return Value:
 
         } else if ((PendingIrq & BCM2709_INTERRUPT_IRQ_BASIC_GPU_MASK) != 0) {
             PendingIrq = PendingIrq >> BCM2709_INTERRUPT_IRQ_BASIC_GPU_SHIFT;
-            Line = COUNT_TRAILING_ZEROS32(PendingIrq);
+            Line = RtlCountTrailingZeros32(PendingIrq);
             Line = HlBcm2709InterruptIrqBasicGpuTable[Line];
 
         } else {
@@ -1205,7 +1168,7 @@ Return Value:
 
             PendingIrq = READ_INTERRUPT_REGISTER(Register);
             PendingIrq &= ~BasicMask;
-            Line = COUNT_TRAILING_ZEROS32(PendingIrq);
+            Line = RtlCountTrailingZeros32(PendingIrq);
             Line += Base;
         }
 
@@ -1591,7 +1554,7 @@ Return Value:
         goto Bcm2709SetLineStateEnd;
     }
 
-    HlBcm2709KernelServices->ZeroMemory(&Mask, sizeof(BCM2709_INTERRUPT_MASK));
+    RtlZeroMemory(&Mask, sizeof(BCM2709_INTERRUPT_MASK));
     LocalInterrupt = FALSE;
 
     //
@@ -1864,10 +1827,9 @@ Return Value:
     Status = STATUS_SUCCESS;
     if (HlBcm2709InterruptController == NULL) {
         PhysicalAddress = HlBcm2709Table->InterruptControllerPhysicalAddress;
-        InterruptController = HlBcm2709KernelServices->MapPhysicalAddress(
-                                                          PhysicalAddress,
-                                                          Bcm2709InterruptSize,
-                                                          TRUE);
+        InterruptController = HlMapPhysicalAddress(PhysicalAddress,
+                                                   Bcm2709InterruptSize,
+                                                   TRUE);
 
         if (InterruptController == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1877,10 +1839,9 @@ Return Value:
         HlBcm2709InterruptController = InterruptController;
         PhysicalAddress = HlBcm2709Table->CpuLocalPhysicalAddress;
         if ((HlBcm2709LocalBase == NULL) && (PhysicalAddress != 0)) {
-            LocalBase = HlBcm2709KernelServices->MapPhysicalAddress(
-                                                     PhysicalAddress,
-                                                     Bcm2709LocalInterruptSize,
-                                                     TRUE);
+            LocalBase = HlMapPhysicalAddress(PhysicalAddress,
+                                             Bcm2709LocalInterruptSize,
+                                             TRUE);
 
             if (LocalBase == NULL) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1927,9 +1888,7 @@ Return Value:
     INTERRUPT_LINES_DESCRIPTION Lines;
     KSTATUS Status;
 
-    HlBcm2709KernelServices->ZeroMemory(&Lines,
-                                        sizeof(INTERRUPT_LINES_DESCRIPTION));
-
+    RtlZeroMemory(&Lines, sizeof(INTERRUPT_LINES_DESCRIPTION));
     Lines.Version = INTERRUPT_LINES_DESCRIPTION_VERSION;
 
     //
@@ -1940,9 +1899,7 @@ Return Value:
     Lines.LineStart = 0;
     Lines.LineEnd = Lines.LineStart + Bcm2709InterruptHardwareLineCount;
     Lines.Gsi = HlBcm2709Table->InterruptControllerGsiBase;
-    Status = HlBcm2709KernelServices->Register(HardwareModuleInterruptLines,
-                                               &Lines);
-
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto Bcm2709InterruptDescribeLinesEnd;
     }
@@ -1956,10 +1913,7 @@ Return Value:
     Lines.LineStart = Lines.LineEnd;
     Lines.LineEnd = Lines.LineStart + BCM2709_INTERRUPT_SOFTWARE_LINE_COUNT;
     Lines.Gsi = INTERRUPT_LINES_GSI_NONE;
-    Status = HlBcm2709KernelServices->Register(
-                                              HardwareModuleInterruptLines,
-                                              &Lines);
-
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto Bcm2709InterruptDescribeLinesEnd;
     }
@@ -1972,9 +1926,7 @@ Return Value:
     Lines.OutputControllerIdentifier = INTERRUPT_CPU_IDENTIFIER;
     Lines.LineStart = INTERRUPT_ARM_MIN_CPU_LINE;
     Lines.LineEnd = INTERRUPT_ARM_MAX_CPU_LINE;
-    Status = HlBcm2709KernelServices->Register(HardwareModuleInterruptLines,
-                                               &Lines);
-
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto Bcm2709InterruptDescribeLinesEnd;
     }

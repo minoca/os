@@ -25,15 +25,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include <minoca/soc/am335x.h>
 #include "am335.h"
 
@@ -41,32 +37,26 @@ Environment:
 // --------------------------------------------------------------------- Macros
 //
 
-#define AM335_CM_DPLL_READ(_Register)                                       \
-    HlAm335KernelServices->ReadRegister32(                                  \
-                          HlAm335Prcm + AM335_CM_DPLL_OFFSET + (_Register))
+#define AM335_CM_DPLL_READ(_Register) \
+    HlReadRegister32(HlAm335Prcm + AM335_CM_DPLL_OFFSET + (_Register))
 
-#define AM335_CM_DPLL_WRITE(_Register, _Value)                              \
-    HlAm335KernelServices->WriteRegister32(                                 \
-                          HlAm335Prcm + AM335_CM_DPLL_OFFSET + (_Register), \
-                          (_Value))
+#define AM335_CM_DPLL_WRITE(_Register, _Value)                          \
+    HlWriteRegister32(HlAm335Prcm + AM335_CM_DPLL_OFFSET + (_Register), \
+                      (_Value))
 
-#define AM335_CM_PER_READ(_Register)                                        \
-    HlAm335KernelServices->ReadRegister32(                                  \
-                           HlAm335Prcm + AM335_CM_PER_OFFSET + (_Register))
+#define AM335_CM_PER_READ(_Register) \
+    HlReadRegister32(HlAm335Prcm + AM335_CM_PER_OFFSET + (_Register))
 
-#define AM335_CM_PER_WRITE(_Register, _Value)                               \
-    HlAm335KernelServices->WriteRegister32(                                 \
-                          HlAm335Prcm + AM335_CM_PER_OFFSET + (_Register),  \
-                          (_Value))
+#define AM335_CM_PER_WRITE(_Register, _Value)                          \
+    HlWriteRegister32(HlAm335Prcm + AM335_CM_PER_OFFSET + (_Register), \
+                      (_Value))
 
-#define AM335_CM_WAKEUP_READ(_Register)                                     \
-    HlAm335KernelServices->ReadRegister32(                                  \
-                         HlAm335Prcm + AM335_CM_WAKEUP_OFFSET + (_Register))
+#define AM335_CM_WAKEUP_READ(_Register) \
+    HlReadRegister32(HlAm335Prcm + AM335_CM_WAKEUP_OFFSET + (_Register))
 
-#define AM335_CM_WAKEUP_WRITE(_Register, _Value)                            \
-    HlAm335KernelServices->WriteRegister32(                                 \
-                        HlAm335Prcm + AM335_CM_WAKEUP_OFFSET + (_Register), \
-                        (_Value))
+#define AM335_CM_WAKEUP_WRITE(_Register, _Value)                          \
+    HlWriteRegister32(HlAm335Prcm + AM335_CM_WAKEUP_OFFSET + (_Register), \
+                      (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -122,10 +112,9 @@ Return Value:
     ULONG Value;
 
     if (HlAm335Prcm == NULL) {
-        HlAm335Prcm = HlAm335KernelServices->MapPhysicalAddress(
-                                      HlAm335Table->PrcmBase,
-                                      AM335_PRCM_SIZE,
-                                      TRUE);
+        HlAm335Prcm = HlMapPhysicalAddress(HlAm335Table->PrcmBase,
+                                           AM335_PRCM_SIZE,
+                                           TRUE);
 
         if (HlAm335Prcm == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;

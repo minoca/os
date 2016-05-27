@@ -25,15 +25,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include "realview.h"
 
 //
@@ -67,16 +63,15 @@ Environment:
 //
 
 #define READ_TIMER_REGISTER(_Base, _Register) \
-    HlSp804KernelServices->ReadRegister32((PULONG)(_Base) + (_Register))
+    HlReadRegister32((PULONG)(_Base) + (_Register))
 
 //
 // This macro writes to a SP804 timer. _Base should be a pointer,
 // _Register should be SP804_TIMER_REGISTER value, and _Value should be a ULONG.
 //
 
-#define WRITE_TIMER_REGISTER(_Base, _Register, _Value)                    \
-    HlSp804KernelServices->WriteRegister32((PULONG)(_Base) + (_Register), \
-                                           (_Value))
+#define WRITE_TIMER_REGISTER(_Base, _Register, _Value) \
+    HlWriteRegister32((PULONG)(_Base) + (_Register), (_Value))
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -156,12 +151,6 @@ typedef struct _SP804_TIMER_DATA {
 //
 
 //
-// Store a pointer to the kernel services table.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlSp804KernelServices = NULL;
-
-//
 // Store a pointer to the RealView table.
 //
 
@@ -173,7 +162,7 @@ PREALVIEW_TABLE HlRealViewTable;
 
 VOID
 HlpSp804TimerModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -185,8 +174,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -205,11 +193,8 @@ Return Value:
     PULONG TimerGsi;
     ULONG TimerIndex;
 
-    HlSp804KernelServices = Services;
     if (HlRealViewTable == NULL) {
-        HlRealViewTable = HlSp804KernelServices->GetAcpiTable(
-                                                            REALVIEW_SIGNATURE,
-                                                            NULL);
+        HlRealViewTable = HlGetAcpiTable(REALVIEW_SIGNATURE, NULL);
     }
 
     if (HlRealViewTable != NULL) {
@@ -227,7 +212,7 @@ Return Value:
     //
 
     for (TimerIndex = 0; TimerIndex < TimerCount; TimerIndex += 1) {
-        HlSp804KernelServices->ZeroMemory(&Timer, sizeof(TIMER_DESCRIPTION));
+        RtlZeroMemory(&Timer, sizeof(TIMER_DESCRIPTION));
         Timer.TableVersion = TIMER_DESCRIPTION_VERSION;
         Timer.FunctionTable.Initialize = HlpSp804TimerInitialize;
         Timer.FunctionTable.ReadCounter = HlpSp804TimerRead;
@@ -243,20 +228,17 @@ Return Value:
         // to the main information.
         //
 
-        TimerData = HlSp804KernelServices->AllocateMemory(
-                                                  sizeof(SP804_TIMER_DATA) * 2,
-                                                  SP804_ALLOCATION_TAG,
-                                                  FALSE,
-                                                  NULL);
+        TimerData = HlAllocateMemory(sizeof(SP804_TIMER_DATA) * 2,
+                                     SP804_ALLOCATION_TAG,
+                                     FALSE,
+                                     NULL);
 
         if (TimerData == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto Sp804TimerModuleEntryEnd;
         }
 
-        HlSp804KernelServices->ZeroMemory(TimerData,
-                                          sizeof(SP804_TIMER_DATA) * 2);
-
+        RtlZeroMemory(TimerData, sizeof(SP804_TIMER_DATA) * 2);
         TimerData->PhysicalAddress = PhysicalAddresses[TimerIndex];
         TimerData->Index = 0;
         TimerData[1].Index = 1;
@@ -276,7 +258,7 @@ Return Value:
         // Register the timer with the system.
         //
 
-        Status = HlSp804KernelServices->Register(HardwareModuleTimer, &Timer);
+        Status = HlRegisterHardware(HardwareModuleTimer, &Timer);
         if (!KSUCCESS(Status)) {
             goto Sp804TimerModuleEntryEnd;
         }
@@ -289,7 +271,7 @@ Return Value:
 
         Timer.Context = TimerData + 1;
         Timer.Features = TIMER_FEATURE_READABLE;
-        Status = HlSp804KernelServices->Register(HardwareModuleTimer, &Timer);
+        Status = HlRegisterHardware(HardwareModuleTimer, &Timer);
         if (!KSUCCESS(Status)) {
             goto Sp804TimerModuleEntryEnd;
         }
@@ -349,7 +331,7 @@ Return Value:
     //
 
     if (Timer->BaseAddress == NULL) {
-        Timer->BaseAddress = HlSp804KernelServices->MapPhysicalAddress(
+        Timer->BaseAddress = HlMapPhysicalAddress(
                                          Timer->PhysicalAddress,
                                          2 * Sp804RegisterSize * sizeof(ULONG),
                                          TRUE);

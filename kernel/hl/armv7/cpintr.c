@@ -26,15 +26,11 @@ Environment:
 //
 
 //
-// Avoid including kernel.h as this module may be isolated out into a dynamic
-// library and will be restricted to a very limited API (as presented through
-// the kernel sevices table).
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+#include <minoca/kernel/kernel.h>
 #include "integcp.h"
 
 //
@@ -58,8 +54,7 @@ Environment:
 //
 
 #define READ_INTERRUPT_REGISTER(_Register) \
-    HlCpKernelServices->ReadRegister32(    \
-                                (PULONG)HlCpInterruptController + (_Register))
+    HlReadRegister32((PULONG)HlCpInterruptController + (_Register))
 
 //
 // This macro writes to the Integrator/CP interrupt controller. _Register
@@ -67,9 +62,7 @@ Environment:
 //
 
 #define WRITE_INTERRUPT_REGISTER(_Register, _Value) \
-    HlCpKernelServices->WriteRegister32(            \
-                               (PULONG)HlCpInterruptController + (_Register), \
-                               (_Value))
+    HlWriteRegister32((PULONG)HlCpInterruptController + (_Register), (_Value))
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -184,12 +177,6 @@ typedef struct _INTEGRATORCP_INTERRUPT_DATA {
 PVOID HlCpInterruptController = NULL;
 
 //
-// Store a pointer to the provided hardware layer services.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlCpKernelServices = NULL;
-
-//
 // Store a pointer to the Integrator/CP ACPI table, if found.
 //
 
@@ -220,7 +207,7 @@ INTERRUPT_FUNCTION_TABLE HlCpInterruptFunctionTable = {
 
 VOID
 HlpCpInterruptModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -233,8 +220,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -253,49 +239,44 @@ Return Value:
     // Attempt to find the Integrator/CP ACPI table.
     //
 
-    IntegratorTable = Services->GetAcpiTable(INTEGRATORCP_SIGNATURE, NULL);
+    IntegratorTable = HlGetAcpiTable(INTEGRATORCP_SIGNATURE, NULL);
     if (IntegratorTable == NULL) {
         goto IntegratorCpInterruptModuleEntryEnd;
     }
 
     HlCpIntegratorTable = IntegratorTable;
-    HlCpKernelServices = Services;
 
     //
     // Zero out the controller description.
     //
 
-    Services->ZeroMemory(&NewController,
-                         sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
+    RtlZeroMemory(&NewController, sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
 
     //
     // Allocate context needed for this Interrupt Controller.
     //
 
-    InterruptData =
-               Services->AllocateMemory(sizeof(INTEGRATORCP_INTERRUPT_DATA),
-                                        INTEGRATOR_ALLOCATION_TAG,
-                                        FALSE,
-                                        NULL);
+    InterruptData = HlAllocateMemory(sizeof(INTEGRATORCP_INTERRUPT_DATA),
+                                     INTEGRATOR_ALLOCATION_TAG,
+                                     FALSE,
+                                     NULL);
 
     if (InterruptData == NULL) {
         goto IntegratorCpInterruptModuleEntryEnd;
     }
 
-    Services->ZeroMemory(InterruptData,
-                         sizeof(INTEGRATORCP_INTERRUPT_DATA));
-
+    RtlZeroMemory(InterruptData, sizeof(INTEGRATORCP_INTERRUPT_DATA));
     InterruptData->PhysicalAddress =
-                       IntegratorTable->InterruptControllerPhysicalAddress;
+                           IntegratorTable->InterruptControllerPhysicalAddress;
 
     //
     // Initialize the new controller structure.
     //
 
     NewController.TableVersion = INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
-    HlCpKernelServices->CopyMemory(&(NewController.FunctionTable),
-                                   &HlCpInterruptFunctionTable,
-                                   sizeof(INTERRUPT_FUNCTION_TABLE));
+    RtlCopyMemory(&(NewController.FunctionTable),
+                  &HlCpInterruptFunctionTable,
+                  sizeof(INTERRUPT_FUNCTION_TABLE));
 
     NewController.Context = InterruptData;
     NewController.Identifier = 0;
@@ -306,7 +287,7 @@ Return Value:
     // Register the controller with the system.
     //
 
-    Status = Services->Register(HardwareModuleInterruptController,
+    Status = HlRegisterHardware(HardwareModuleInterruptController,
                                 &NewController);
 
     if (!KSUCCESS(Status)) {
@@ -356,10 +337,10 @@ Return Value:
 
     InterruptData = (PINTEGRATORCP_INTERRUPT_DATA)Context;
     if (HlCpInterruptController == NULL) {
-        HlCpInterruptController = HlCpKernelServices->MapPhysicalAddress(
-                                       InterruptData->PhysicalAddress,
-                                       INTEGRATORCP_INTERRUPT_CONTROLLER_SIZE,
-                                       TRUE);
+        HlCpInterruptController = HlMapPhysicalAddress(
+                                        InterruptData->PhysicalAddress,
+                                        INTEGRATORCP_INTERRUPT_CONTROLLER_SIZE,
+                                        TRUE);
 
         if (HlCpInterruptController == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -752,7 +733,7 @@ Return Value:
     INTERRUPT_LINES_DESCRIPTION Lines;
     KSTATUS Status;
 
-    HlCpKernelServices->ZeroMemory(&Lines, sizeof(INTERRUPT_LINES_DESCRIPTION));
+    RtlZeroMemory(&Lines, sizeof(INTERRUPT_LINES_DESCRIPTION));
     Lines.Version = INTERRUPT_LINES_DESCRIPTION_VERSION;
 
     //
@@ -764,7 +745,7 @@ Return Value:
     Lines.LineStart = 0;
     Lines.LineEnd = INTEGRATORCP_INTERRUPT_LINE_COUNT;
     Lines.Gsi = HlCpIntegratorTable->InterruptControllerGsiBase;
-    Status = HlCpKernelServices->Register(HardwareModuleInterruptLines, &Lines);
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto CpInterruptDescribeLinesEnd;
     }
@@ -777,7 +758,7 @@ Return Value:
     Lines.OutputControllerIdentifier = INTERRUPT_CPU_IDENTIFIER;
     Lines.LineStart = INTERRUPT_ARM_MIN_CPU_LINE;
     Lines.LineEnd = INTERRUPT_ARM_MAX_CPU_LINE;
-    Status = HlCpKernelServices->Register(HardwareModuleInterruptLines, &Lines);
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto CpInterruptDescribeLinesEnd;
     }

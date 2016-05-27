@@ -81,12 +81,6 @@ typedef struct _AM335X_TABLE {
 //
 
 //
-// Store a pointer to the provided hardware layer services.
-//
-
-extern PHARDWARE_MODULE_KERNEL_SERVICES HlAm335KernelServices;
-
-//
 // Store a pointer to the AM335x ACPI table.
 //
 

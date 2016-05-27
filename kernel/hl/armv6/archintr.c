@@ -52,7 +52,7 @@ Environment:
 
 VOID
 HlpBcm2709InterruptModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 //
@@ -150,7 +150,7 @@ Return Value:
     ModuleIndex = 0;
     while (HlBuiltinModules[ModuleIndex] != NULL) {
         ModuleEntry = HlBuiltinModules[ModuleIndex];
-        ModuleEntry(&HlHardwareModuleServices);
+        ModuleEntry();
         ModuleIndex += 1;
     }
 

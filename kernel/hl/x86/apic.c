@@ -25,10 +25,12 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/lib/types.h>
-#include <minoca/lib/status.h>
-#include <minoca/fw/acpitabs.h>
-#include <minoca/kernel/hmod.h>
+//
+// Include kernel.h, but be cautious about which APIs are used. Most of the
+// system depends on the hardware modules. Limit use to HL, RTL and AR routines.
+//
+
+#include <minoca/kernel/kernel.h>
 #include "apic.h"
 
 //
@@ -265,12 +267,6 @@ PVOID HlLocalApic = NULL;
 ULONG HlFirstIoApicId;
 
 //
-// Store a pointer to the system services table.
-//
-
-PHARDWARE_MODULE_KERNEL_SERVICES HlApicServices = NULL;
-
-//
 // Store the interrupt function table template.
 //
 
@@ -295,7 +291,7 @@ INTERRUPT_FUNCTION_TABLE HlApicInterruptFunctionTable = {
 
 VOID
 HlpApicModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     )
 
 /*++
@@ -307,8 +303,7 @@ Routine Description:
 
 Arguments:
 
-    Services - Supplies a pointer to the services/APIs made available by the
-        kernel to the hardware module.
+    None.
 
 Return Value:
 
@@ -330,20 +325,18 @@ Return Value:
     // Attempt to find an MADT. If one exists, then an APIC is present.
     //
 
-    MadtTable = Services->GetAcpiTable(MADT_SIGNATURE, NULL);
+    MadtTable = HlGetAcpiTable(MADT_SIGNATURE, NULL);
     if (MadtTable == NULL) {
         goto ApicModuleEntryEnd;
     }
 
     HlApicMadt = MadtTable;
-    HlApicServices = Services;
 
     //
     // Zero out the controller description.
     //
 
-    Services->ZeroMemory(&NewController,
-                         sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
+    RtlZeroMemory(&NewController, sizeof(INTERRUPT_CONTROLLER_DESCRIPTION));
 
     //
     // Loop through every entry in the MADT once to determine the number of
@@ -394,16 +387,16 @@ Return Value:
             // Allocate context needed for this I/O APIC.
             //
 
-            IoApicData = Services->AllocateMemory(sizeof(IO_APIC_DATA),
-                                                  APIC_ALLOCATION_TAG,
-                                                  FALSE,
-                                                  NULL);
+            IoApicData = HlAllocateMemory(sizeof(IO_APIC_DATA),
+                                          APIC_ALLOCATION_TAG,
+                                          FALSE,
+                                          NULL);
 
             if (IoApicData == NULL) {
                 goto ApicModuleEntryEnd;
             }
 
-            Services->ZeroMemory(IoApicData, sizeof(IO_APIC_DATA));
+            RtlZeroMemory(IoApicData, sizeof(IO_APIC_DATA));
             IoApicData->PhysicalAddress = IoApic->IoApicAddress;
             IoApicData->IoApic = NULL;
             IoApicData->GsiBase = IoApic->GsiBase;
@@ -416,9 +409,9 @@ Return Value:
             NewController.TableVersion =
                                        INTERRUPT_CONTROLLER_DESCRIPTION_VERSION;
 
-            HlApicServices->CopyMemory(&(NewController.FunctionTable),
-                                       &HlApicInterruptFunctionTable,
-                                       sizeof(INTERRUPT_FUNCTION_TABLE));
+            RtlCopyMemory(&(NewController.FunctionTable),
+                          &HlApicInterruptFunctionTable,
+                          sizeof(INTERRUPT_FUNCTION_TABLE));
 
             NewController.Context = IoApicData;
             NewController.Identifier = IoApic->IoApicId;
@@ -430,7 +423,7 @@ Return Value:
             // Register the controller with the system.
             //
 
-            Status = Services->Register(HardwareModuleInterruptController,
+            Status = HlRegisterHardware(HardwareModuleInterruptController,
                                         &NewController);
 
             if (!KSUCCESS(Status)) {
@@ -602,10 +595,9 @@ Return Value:
         }
 
         PhysicalAddress = HlApicMadt->ApicAddress;
-        HlLocalApic = HlApicServices->MapPhysicalAddress(
-                                                      PhysicalAddress,
-                                                      LOCAL_APIC_REGISTER_SIZE,
-                                                      TRUE);
+        HlLocalApic = HlMapPhysicalAddress(PhysicalAddress,
+                                           LOCAL_APIC_REGISTER_SIZE,
+                                           TRUE);
 
         if (HlLocalApic == NULL) {
             Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -670,8 +662,7 @@ Return Value:
 
     if (Controller->IoApic == NULL) {
         PhysicalAddress = Controller->PhysicalAddress;
-        Controller->IoApic = HlApicServices->MapPhysicalAddress(
-                                                  PhysicalAddress,
+        Controller->IoApic = HlMapPhysicalAddress(PhysicalAddress,
                                                   IO_APIC_REGISTER_SIZE,
                                                   TRUE);
 
@@ -1041,7 +1032,7 @@ Return Value:
     // Stall to let things settle.
     //
 
-    HlApicServices->Stall(10000);
+    HlBusySpin(10000);
 
     //
     // Send the INIT Deassert IPI to take the processor out of reset.
@@ -1515,7 +1506,7 @@ Return Value:
     INTERRUPT_LINES_DESCRIPTION Lines;
     KSTATUS Status;
 
-    HlApicServices->ZeroMemory(&Lines, sizeof(INTERRUPT_LINES_DESCRIPTION));
+    RtlZeroMemory(&Lines, sizeof(INTERRUPT_LINES_DESCRIPTION));
     Lines.Version = INTERRUPT_LINES_DESCRIPTION_VERSION;
     Lines.Controller = Controller->Identifier;
 
@@ -1534,7 +1525,7 @@ Return Value:
         Lines.LineStart = 0;
         Lines.LineEnd = ApicLineCount;
         Lines.Gsi = INTERRUPT_LINES_GSI_NONE;
-        Status = HlApicServices->Register(HardwareModuleInterruptLines, &Lines);
+        Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
         if (!KSUCCESS(Status)) {
             goto ApicDescribeLinesEnd;
         }
@@ -1546,7 +1537,7 @@ Return Value:
         Lines.Type = InterruptLinesSoftwareOnly;
         Lines.LineStart = APIC_IPI_LINE;
         Lines.LineEnd = Lines.LineStart + 1;
-        Status = HlApicServices->Register(HardwareModuleInterruptLines, &Lines);
+        Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
         if (!KSUCCESS(Status)) {
             goto ApicDescribeLinesEnd;
         }
@@ -1560,7 +1551,7 @@ Return Value:
     Lines.OutputControllerIdentifier = INTERRUPT_CPU_IDENTIFIER;
     Lines.LineStart = INTERRUPT_PC_MIN_CPU_LINE;
     Lines.LineEnd = INTERRUPT_PC_MAX_CPU_LINE;
-    Status = HlApicServices->Register(HardwareModuleInterruptLines, &Lines);
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto ApicDescribeLinesEnd;
     }
@@ -1573,7 +1564,7 @@ Return Value:
     Lines.LineStart = IO_APIC_LINE_OFFSET;
     Lines.LineEnd = Lines.LineStart + Controller->LineCount;
     Lines.Gsi = Controller->GsiBase;
-    Status = HlApicServices->Register(HardwareModuleInterruptLines, &Lines);
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
     if (!KSUCCESS(Status)) {
         goto ApicDescribeLinesEnd;
     }
@@ -1760,14 +1751,13 @@ Return Value:
     // Write the register number to the window.
     //
 
-    HlApicServices->WriteRegister32(IoApic->IoApic + IO_APIC_SELECT_OFFSET,
-                                    Register);
+    HlWriteRegister32(IoApic->IoApic + IO_APIC_SELECT_OFFSET, Register);
 
     //
     // Return the contents of the window at that register.
     //
 
-    return HlApicServices->ReadRegister32(IoApic->IoApic + IO_APIC_DATA_OFFSET);
+    return HlReadRegister32(IoApic->IoApic + IO_APIC_DATA_OFFSET);
 }
 
 VOID
@@ -1803,16 +1793,13 @@ Return Value:
     // Write the register number to the window.
     //
 
-    HlApicServices->WriteRegister32(IoApic->IoApic + IO_APIC_SELECT_OFFSET,
-                                    Register);
+    HlWriteRegister32(IoApic->IoApic + IO_APIC_SELECT_OFFSET, Register);
 
     //
     // Write the value into the register.
     //
 
-    HlApicServices->WriteRegister32(IoApic->IoApic + IO_APIC_DATA_OFFSET,
-                                    Value);
-
+    HlWriteRegister32(IoApic->IoApic + IO_APIC_DATA_OFFSET, Value);
     return;
 }
 

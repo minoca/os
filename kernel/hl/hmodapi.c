@@ -26,7 +26,6 @@ Environment:
 
 #include <minoca/kernel/kernel.h>
 #include <minoca/kernel/bootload.h>
-#include <minoca/kernel/ioport.h>
 #include "hlp.h"
 #include "cache.h"
 #include "calendar.h"
@@ -46,77 +45,9 @@ Environment:
 // ----------------------------------------------- Internal Function Prototypes
 //
 
-PVOID
-HlpModGetAcpiTable (
-    ULONG Signature,
-    PVOID PreviousTable
-    );
-
-PVOID
-HlpModMapPhysicalAddress (
-    PHYSICAL_ADDRESS PhysicalAddress,
-    ULONG SizeInBytes,
-    BOOL CacheDisabled
-    );
-
-VOID
-HlpModUnmapAddress (
-    PVOID VirtualAddress,
-    ULONG SizeInBytes
-    );
-
-VOID
-HlpModReportPhysicalAddressUsage (
-    PHYSICAL_ADDRESS PhysicalAddress,
-    ULONGLONG Size
-    );
-
-VOID
-HlpModInitializeLock (
-    PHARDWARE_MODULE_LOCK Lock
-    );
-
-VOID
-HlpModAcquireLock (
-    PHARDWARE_MODULE_LOCK Lock
-    );
-
-VOID
-HlpModReleaseLock (
-    PHARDWARE_MODULE_LOCK Lock
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
-
-//
-// Define the kernel services table for hardware modules.
-//
-
-HARDWARE_MODULE_KERNEL_SERVICES HlHardwareModuleServices = {
-    RtlZeroMemory,
-    RtlCopyMemory,
-    HlReadRegister32,
-    HlWriteRegister32,
-    HlReadRegister8,
-    HlWriteRegister8,
-    HlIoPortInLong,
-    HlIoPortOutLong,
-    HlIoPortInByte,
-    HlIoPortOutByte,
-    HlpModGetAcpiTable,
-    HlpModAllocateMemory,
-    HlpModMapPhysicalAddress,
-    HlpModUnmapAddress,
-    HlRegisterHardware,
-    HlpModReportPhysicalAddressUsage,
-    HlpModInitializeLock,
-    HlpModAcquireLock,
-    HlpModReleaseLock,
-    RtlCountTrailingZeros32,
-    HlBusySpin
-};
 
 //
 // Store a pointer to the kernel initialization block. This pointer can only
@@ -223,103 +154,41 @@ RegisterHardwareEnd:
     return Status;
 }
 
-VOID
-HlpModInitializePreDebugger (
-    PKERNEL_INITIALIZATION_BLOCK Parameters,
-    ULONG ProcessorNumber
+KERNEL_API
+PVOID
+HlGetAcpiTable (
+    ULONG Signature,
+    PVOID PreviousTable
     )
 
 /*++
 
 Routine Description:
 
-    This routine implements early initialization for the hardware module API
-    layer. This routine is *undebuggable*, as it is called before the debugger
-    is brought online.
+    This routine attempts to find an ACPI description table with the given
+    signature.
 
 Arguments:
 
-    Parameters - Supplies an optional pointer to the kernel initialization
-        parameters. This parameter may be NULL.
+    Signature - Supplies the signature of the desired table.
 
-    ProcessorNumber - Supplies the processor index of this processor.
+    PreviousTable - Supplies a pointer to the table to start the search from.
 
 Return Value:
 
-    None.
+    Returns a pointer to the beginning of the header to the table if the table
+    was found, or NULL if the table could not be located.
 
 --*/
 
 {
 
-    PLIST_ENTRY CurrentEntry;
-    PSYSTEM_RESOURCE_MEMORY Memory;
-    PSYSTEM_RESOURCE_MEMORY Pool;
-    PSYSTEM_RESOURCE_MEMORY PoolDevice;
-    PSYSTEM_RESOURCE_HEADER Resource;
-
-    if (ProcessorNumber == 0) {
-        INITIALIZE_LIST_HEAD(&HlModPhysicalMemoryUsageListHead);
-
-        //
-        // Go find the resource created by the loader for satisfying
-        // allocations initially.
-        //
-
-        Pool = NULL;
-        PoolDevice = NULL;
-        CurrentEntry = Parameters->SystemResourceListHead.Next;
-        while (CurrentEntry != &(Parameters->SystemResourceListHead)) {
-            Resource = LIST_VALUE(CurrentEntry,
-                                  SYSTEM_RESOURCE_HEADER,
-                                  ListEntry);
-
-            if ((Resource->Type == SystemResourceMemory) &&
-                (Resource->Acquired == FALSE)) {
-
-                Memory = PARENT_STRUCTURE(Resource,
-                                          SYSTEM_RESOURCE_MEMORY,
-                                          Header);
-
-                if (Memory->MemoryType == SystemMemoryResourceHardwareModule) {
-                    Pool = Memory;
-                    Pool->Header.Acquired = TRUE;
-                    LIST_REMOVE(&(Pool->Header.ListEntry));
-
-                } else if (Memory->MemoryType ==
-                           SystemMemoryResourceHardwareModuleDevice) {
-
-                    PoolDevice = Memory;
-                    PoolDevice->Header.Acquired = TRUE;
-                    LIST_REMOVE(&(PoolDevice->Header.ListEntry));
-                }
-            }
-
-            CurrentEntry = CurrentEntry->Next;
-        }
-
-        if (Pool != NULL) {
-            HlModPool = Pool->Header.VirtualAddress;
-            HlModPoolPhysical = Pool->Header.PhysicalAddress;
-            HlModPoolSize = Pool->Header.Size;
-        }
-
-        if (PoolDevice != NULL) {
-            HlModPoolDevice = PoolDevice->Header.VirtualAddress;
-            HlModPoolDevicePhysical = PoolDevice->Header.PhysicalAddress;
-            HlModPoolDeviceSize = PoolDevice->Header.Size;
-        }
-    }
-
-    if (Parameters != NULL) {
-        HlModKernelParameters = Parameters;
-    }
-
-    return;
+    return AcpiFindTable(Signature, PreviousTable);
 }
 
+KERNEL_API
 PVOID
-HlpModAllocateMemory (
+HlAllocateMemory (
     UINTN Size,
     ULONG Tag,
     BOOL Device,
@@ -437,43 +306,9 @@ Return Value:
     return Allocation;
 }
 
-//
-// --------------------------------------------------------- Internal Functions
-//
-
+KERNEL_API
 PVOID
-HlpModGetAcpiTable (
-    ULONG Signature,
-    PVOID PreviousTable
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to find an ACPI description table with the given
-    signature.
-
-Arguments:
-
-    Signature - Supplies the signature of the desired table.
-
-    PreviousTable - Supplies a pointer to the table to start the search from.
-
-Return Value:
-
-    Returns a pointer to the beginning of the header to the table if the table
-    was found, or NULL if the table could not be located.
-
---*/
-
-{
-
-    return AcpiFindTable(Signature, PreviousTable);
-}
-
-PVOID
-HlpModMapPhysicalAddress (
+HlMapPhysicalAddress (
     PHYSICAL_ADDRESS PhysicalAddress,
     ULONG SizeInBytes,
     BOOL CacheDisabled
@@ -571,8 +406,9 @@ Return Value:
     return VirtualAddress + Offset;
 }
 
+KERNEL_API
 VOID
-HlpModUnmapAddress (
+HlUnmapAddress (
     PVOID VirtualAddress,
     ULONG SizeInBytes
     )
@@ -600,8 +436,9 @@ Return Value:
     return MmUnmapAddress(VirtualAddress, SizeInBytes);
 }
 
+KERNEL_API
 VOID
-HlpModReportPhysicalAddressUsage (
+HlReportPhysicalAddressUsage (
     PHYSICAL_ADDRESS PhysicalAddress,
     ULONGLONG Size
     )
@@ -635,10 +472,10 @@ Return Value:
 
     PHL_PHYSICAL_ADDRESS_USAGE Usage;
 
-    Usage = HlpModAllocateMemory(sizeof(HL_PHYSICAL_ADDRESS_USAGE),
-                                 HL_POOL_TAG,
-                                 FALSE,
-                                 NULL);
+    Usage = HlAllocateMemory(sizeof(HL_PHYSICAL_ADDRESS_USAGE),
+                             HL_POOL_TAG,
+                             FALSE,
+                             NULL);
 
     if (Usage == NULL) {
         return;
@@ -651,8 +488,9 @@ Return Value:
     return;
 }
 
+KERNEL_API
 VOID
-HlpModInitializeLock (
+HlInitializeLock (
     PHARDWARE_MODULE_LOCK Lock
     )
 
@@ -679,8 +517,9 @@ Return Value:
     return;
 }
 
+KERNEL_API
 VOID
-HlpModAcquireLock (
+HlAcquireLock (
     PHARDWARE_MODULE_LOCK Lock
     )
 
@@ -712,8 +551,9 @@ Return Value:
     return;
 }
 
+KERNEL_API
 VOID
-HlpModReleaseLock (
+HlReleaseLock (
     PHARDWARE_MODULE_LOCK Lock
     )
 
@@ -748,4 +588,103 @@ Return Value:
 
     return;
 }
+
+VOID
+HlpModInitializePreDebugger (
+    PKERNEL_INITIALIZATION_BLOCK Parameters,
+    ULONG ProcessorNumber
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements early initialization for the hardware module API
+    layer. This routine is *undebuggable*, as it is called before the debugger
+    is brought online.
+
+Arguments:
+
+    Parameters - Supplies an optional pointer to the kernel initialization
+        parameters. This parameter may be NULL.
+
+    ProcessorNumber - Supplies the processor index of this processor.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PLIST_ENTRY CurrentEntry;
+    PSYSTEM_RESOURCE_MEMORY Memory;
+    PSYSTEM_RESOURCE_MEMORY Pool;
+    PSYSTEM_RESOURCE_MEMORY PoolDevice;
+    PSYSTEM_RESOURCE_HEADER Resource;
+
+    if (ProcessorNumber == 0) {
+        INITIALIZE_LIST_HEAD(&HlModPhysicalMemoryUsageListHead);
+
+        //
+        // Go find the resource created by the loader for satisfying
+        // allocations initially.
+        //
+
+        Pool = NULL;
+        PoolDevice = NULL;
+        CurrentEntry = Parameters->SystemResourceListHead.Next;
+        while (CurrentEntry != &(Parameters->SystemResourceListHead)) {
+            Resource = LIST_VALUE(CurrentEntry,
+                                  SYSTEM_RESOURCE_HEADER,
+                                  ListEntry);
+
+            if ((Resource->Type == SystemResourceMemory) &&
+                (Resource->Acquired == FALSE)) {
+
+                Memory = PARENT_STRUCTURE(Resource,
+                                          SYSTEM_RESOURCE_MEMORY,
+                                          Header);
+
+                if (Memory->MemoryType == SystemMemoryResourceHardwareModule) {
+                    Pool = Memory;
+                    Pool->Header.Acquired = TRUE;
+                    LIST_REMOVE(&(Pool->Header.ListEntry));
+
+                } else if (Memory->MemoryType ==
+                           SystemMemoryResourceHardwareModuleDevice) {
+
+                    PoolDevice = Memory;
+                    PoolDevice->Header.Acquired = TRUE;
+                    LIST_REMOVE(&(PoolDevice->Header.ListEntry));
+                }
+            }
+
+            CurrentEntry = CurrentEntry->Next;
+        }
+
+        if (Pool != NULL) {
+            HlModPool = Pool->Header.VirtualAddress;
+            HlModPoolPhysical = Pool->Header.PhysicalAddress;
+            HlModPoolSize = Pool->Header.Size;
+        }
+
+        if (PoolDevice != NULL) {
+            HlModPoolDevice = PoolDevice->Header.VirtualAddress;
+            HlModPoolDevicePhysical = PoolDevice->Header.PhysicalAddress;
+            HlModPoolDeviceSize = PoolDevice->Header.Size;
+        }
+    }
+
+    if (Parameters != NULL) {
+        HlModKernelParameters = Parameters;
+    }
+
+    return;
+}
+
+//
+// --------------------------------------------------------- Internal Functions
+//
 

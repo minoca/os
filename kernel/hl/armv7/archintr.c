@@ -66,27 +66,27 @@ MmTlbInvalidateIpiServiceRoutine (
 
 VOID
 HlpCpInterruptModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 VOID
 HlpOmap3InterruptModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 VOID
 HlpAm335InterruptModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 VOID
 HlpGicModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 VOID
 HlpBcm2709InterruptModuleEntry (
-    PHARDWARE_MODULE_KERNEL_SERVICES Services
+    VOID
     );
 
 INTERRUPT_STATUS
@@ -225,7 +225,7 @@ Return Value:
     ModuleIndex = 0;
     while (HlBuiltinModules[ModuleIndex] != NULL) {
         ModuleEntry = HlBuiltinModules[ModuleIndex];
-        ModuleEntry(&HlHardwareModuleServices);
+        ModuleEntry();
         ModuleIndex += 1;
     }
 
