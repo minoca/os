@@ -351,8 +351,10 @@ Return Value:
     // Program the timer in free running mode with no interrupt generation.
     //
 
-    ControlValue = SP804_CONTROL_ENABLED | SP804_CONTROL_DIVIDE_BY_1 |
-                   SP804_CONTROL_32_BIT | SP804_CONTROL_MODE_FREE_RUNNING;
+    ControlValue = SP804_CONTROL_ENABLED |
+                   SP804_CONTROL_DIVIDE_BY_1 |
+                   SP804_CONTROL_32_BIT |
+                   SP804_CONTROL_MODE_FREE_RUNNING;
 
     WRITE_TIMER_REGISTER(Base, Sp804Control, ControlValue);
     WRITE_TIMER_REGISTER(Base, Sp804InterruptClear, 1);
@@ -461,8 +463,10 @@ Return Value:
     // Set up the control value to program.
     //
 
-    ControlValue = SP804_CONTROL_ENABLED | SP804_CONTROL_DIVIDE_BY_1 |
-                   SP804_CONTROL_32_BIT | SP804_CONTROL_INTERRUPT_ENABLE;
+    ControlValue = SP804_CONTROL_ENABLED |
+                   SP804_CONTROL_DIVIDE_BY_1 |
+                   SP804_CONTROL_32_BIT |
+                   SP804_CONTROL_INTERRUPT_ENABLE;
 
     if (Mode == TimerModePeriodic) {
         ControlValue |= SP804_CONTROL_MODE_PERIODIC;
@@ -517,8 +521,10 @@ Return Value:
     // interrupt generation.
     //
 
-    ControlValue = SP804_CONTROL_ENABLED | SP804_CONTROL_DIVIDE_BY_1 |
-                   SP804_CONTROL_32_BIT | SP804_CONTROL_MODE_FREE_RUNNING;
+    ControlValue = SP804_CONTROL_ENABLED |
+                   SP804_CONTROL_DIVIDE_BY_1 |
+                   SP804_CONTROL_32_BIT |
+                   SP804_CONTROL_MODE_FREE_RUNNING;
 
     WRITE_TIMER_REGISTER(Timer->BaseAddress, Sp804Control, ControlValue);
     WRITE_TIMER_REGISTER(Timer->BaseAddress, Sp804InterruptClear, 1);

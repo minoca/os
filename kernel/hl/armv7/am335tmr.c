@@ -359,7 +359,8 @@ Return Value:
     // Set the mode register to auto-reload, and start the timer.
     //
 
-    Value = AM335_TIMER_OVERFLOW_TRIGGER | AM335_TIMER_STARTED |
+    Value = AM335_TIMER_OVERFLOW_TRIGGER |
+            AM335_TIMER_STARTED |
             AM335_TIMER_AUTORELOAD;
 
     WRITE_TIMER_REGISTER(Timer->Base, Am335TimerControl, Value);

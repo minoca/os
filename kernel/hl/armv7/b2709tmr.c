@@ -389,10 +389,9 @@ Return Value:
     }
 
     //
-    // Initialize the BCM2709 System timer's free running counter. It is
-    // actually 64-bits, but reading both the high and low registers
-    // synchronously on every request when it runs at 1MHz seems wasteful. Let
-    // the HL software handle the rollover.
+    // Initialize the BCM2709 System timer's free running counter. The counter
+    // is writable, but since the Video Core maybe using it, altering the
+    // counter is dangerous.
     //
 
     Context = HlAllocateMemory(sizeof(BCM2709_TIMER),
@@ -408,7 +407,7 @@ Return Value:
     Context->Type = Bcm2709TimerSystemCounter;
     Context->Data = 0;
     Timer.Context = Context;
-    Timer.CounterBitWidth = 32;
+    Timer.CounterBitWidth = 64;
     Timer.Features = TIMER_FEATURE_READABLE;
     Timer.CounterFrequency = HlBcm2709Table->SystemTimerFrequency;
     Timer.Interrupt.Line.Type = InterruptLineInvalid;
@@ -561,6 +560,7 @@ Return Value:
                          BCM2709_ARM_TIMER_CONTROL_DIVIDE_BY_1 |
                          BCM2709_ARM_TIMER_CONTROL_32_BIT);
 
+        WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerLoadValue, 0xFFFFFFFF);
         WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerControl, ControlValue);
         WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerInterruptClear, 1);
         break;
@@ -625,9 +625,9 @@ Return Value:
 
 {
 
-    ULONG Compare;
-    BCM2709_SYSTEM_TIMER_REGISTER CompareRegister;
-    ULONG Counter;
+    ULONG High1;
+    ULONG High2;
+    ULONG Low;
     PBCM2709_TIMER Timer;
     ULONG Value;
 
@@ -644,18 +644,23 @@ Return Value:
 
     case Bcm2709TimerSystem1:
     case Bcm2709TimerSystem3:
-        CompareRegister = Bcm2709SystemTimerCompare1;
-        if (Timer->Type == Bcm2709TimerSystem3) {
-            CompareRegister = Bcm2709SystemTimerCompare3;
-        }
-
-        Compare = READ_SYSTEM_TIMER_REGISTER(CompareRegister);
-        Counter = READ_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerCounterLow);
-        Value = Timer->Data - (Compare - Counter);
+        Value = READ_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerCounterLow);
         break;
 
     case Bcm2709TimerSystemCounter:
-        Value = READ_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerCounterLow);
+
+        //
+        // Do a high-low-high read to make sure sure the words didn't tear.
+        //
+
+        do {
+            High1 = READ_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerCounterHigh);
+            Low = READ_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerCounterLow);
+            High2 = READ_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerCounterHigh);
+
+        } while (High1 != High2);
+
+        Value = (((ULONGLONG)High1) << 32) | Low;
         break;
 
     default:

@@ -326,7 +326,9 @@ Return Value:
     // Program the timer in free running mode with no interrupt generation.
     //
 
-    ControlValue = CP_TIMER_ENABLED | CP_TIMER_DIVIDE_BY_1 | CP_TIMER_32_BIT |
+    ControlValue = CP_TIMER_ENABLED |
+                   CP_TIMER_DIVIDE_BY_1 |
+                   CP_TIMER_32_BIT |
                    CP_TIMER_MODE_FREE_RUNNING;
 
     WRITE_TIMER_REGISTER(Timer->BaseAddress, CpTimerControl, ControlValue);
@@ -416,7 +418,9 @@ Return Value:
     // Set up the control value to program.
     //
 
-    ControlValue = CP_TIMER_ENABLED | CP_TIMER_DIVIDE_BY_1 | CP_TIMER_32_BIT |
+    ControlValue = CP_TIMER_ENABLED |
+                   CP_TIMER_DIVIDE_BY_1 |
+                   CP_TIMER_32_BIT |
                    CP_TIMER_INTERRUPT_ENABLE;
 
     if (Mode == TimerModePeriodic) {
@@ -472,7 +476,9 @@ Return Value:
     // interrupt generation.
     //
 
-    ControlValue = CP_TIMER_ENABLED | CP_TIMER_DIVIDE_BY_1 | CP_TIMER_32_BIT |
+    ControlValue = CP_TIMER_ENABLED |
+                   CP_TIMER_DIVIDE_BY_1 |
+                   CP_TIMER_32_BIT |
                    CP_TIMER_MODE_FREE_RUNNING;
 
     WRITE_TIMER_REGISTER(Timer->BaseAddress, CpTimerControl, ControlValue);

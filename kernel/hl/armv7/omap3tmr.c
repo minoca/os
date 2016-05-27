@@ -272,9 +272,9 @@ Return Value:
         TimerData->Index = TimerIndex;
         Timer.Context = TimerData;
         Timer.Features = TIMER_FEATURE_READABLE |
-                           TIMER_FEATURE_WRITABLE |
-                           TIMER_FEATURE_PERIODIC |
-                           TIMER_FEATURE_ONE_SHOT;
+                         TIMER_FEATURE_WRITABLE |
+                         TIMER_FEATURE_PERIODIC |
+                         TIMER_FEATURE_ONE_SHOT;
 
         Timer.CounterBitWidth = OMAP3_TIMER_BIT_WIDTH;
 
