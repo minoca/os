@@ -61,7 +61,6 @@ HlpOmap4CacheControllerModuleEntry (
 
 PHARDWARE_MODULE_ENTRY HlBuiltinCacheModules[] = {
     HlpOmap4CacheControllerModuleEntry,
-    NULL
 };
 
 //
@@ -92,6 +91,7 @@ Return Value:
 
 {
 
+    ULONG ModuleCount;
     PHARDWARE_MODULE_ENTRY ModuleEntry;
     ULONG ModuleIndex;
 
@@ -105,11 +105,12 @@ Return Value:
         // Loop through and initialize every built in hardware module.
         //
 
-        ModuleIndex = 0;
-        while (HlBuiltinCacheModules[ModuleIndex] != NULL) {
+        ModuleCount = sizeof(HlBuiltinCacheModules) /
+                      sizeof(HlBuiltinCacheModules[0]);
+
+        for (ModuleIndex = 0; ModuleIndex < ModuleCount; ModuleIndex += 1) {
             ModuleEntry = HlBuiltinCacheModules[ModuleIndex];
             ModuleEntry();
-            ModuleIndex += 1;
         }
     }
 

@@ -47,14 +47,6 @@ Environment:
 //
 
 //
-// Built-in hardware modules.
-//
-
-PHARDWARE_MODULE_ENTRY HlBuiltinCacheModules[] = {
-    NULL
-};
-
-//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -81,27 +73,6 @@ Return Value:
 --*/
 
 {
-
-    PHARDWARE_MODULE_ENTRY ModuleEntry;
-    ULONG ModuleIndex;
-
-    //
-    // On the boot processor, perform one-time initialization.
-    //
-
-    if (KeGetCurrentProcessorNumber() == 0) {
-
-        //
-        // Loop through and initialize every built in hardware module.
-        //
-
-        ModuleIndex = 0;
-        while (HlBuiltinCacheModules[ModuleIndex] != NULL) {
-            ModuleEntry = HlBuiltinCacheModules[ModuleIndex];
-            ModuleEntry();
-            ModuleIndex += 1;
-        }
-    }
 
     return STATUS_SUCCESS;
 }

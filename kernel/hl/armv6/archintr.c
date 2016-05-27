@@ -69,7 +69,6 @@ HlpBcm2709InterruptModuleEntry (
 
 PHARDWARE_MODULE_ENTRY HlBuiltinModules[] = {
     HlpBcm2709InterruptModuleEntry,
-    NULL
 };
 
 //
@@ -113,6 +112,7 @@ Return Value:
 
 {
 
+    ULONG ModuleCount;
     PHARDWARE_MODULE_ENTRY ModuleEntry;
     ULONG ModuleIndex;
     KSTATUS Status;
@@ -147,11 +147,10 @@ Return Value:
     // Loop through and initialize every built in hardware module.
     //
 
-    ModuleIndex = 0;
-    while (HlBuiltinModules[ModuleIndex] != NULL) {
+    ModuleCount = sizeof(HlBuiltinModules) / sizeof(HlBuiltinModules[0]);
+    for (ModuleIndex = 0; ModuleIndex < ModuleCount; ModuleIndex += 1) {
         ModuleEntry = HlBuiltinModules[ModuleIndex];
         ModuleEntry();
-        ModuleIndex += 1;
     }
 
     Status = STATUS_SUCCESS;

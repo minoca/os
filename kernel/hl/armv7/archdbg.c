@@ -71,7 +71,6 @@ PHARDWARE_MODULE_ENTRY HlBuiltinDebugDevices[] = {
     HlpPl11SerialModuleEntry,
     HlpOmapSerialModuleEntry,
     HlpNs16550SerialModuleEntry,
-    NULL
 };
 
 //
@@ -102,23 +101,23 @@ Return Value:
 
 {
 
+    ULONG ModuleCount;
     PHARDWARE_MODULE_ENTRY ModuleEntry;
     ULONG ModuleIndex;
-    KSTATUS Status;
 
     //
     // Loop through and initialize every built in hardware module.
     //
 
-    ModuleIndex = 0;
-    while (HlBuiltinDebugDevices[ModuleIndex] != NULL) {
+    ModuleCount = sizeof(HlBuiltinDebugDevices) /
+                  sizeof(HlBuiltinDebugDevices[0]);
+
+    for (ModuleIndex = 0; ModuleIndex < ModuleCount; ModuleIndex += 1) {
         ModuleEntry = HlBuiltinDebugDevices[ModuleIndex];
         ModuleEntry();
-        ModuleIndex += 1;
     }
 
-    Status = STATUS_SUCCESS;
-    return Status;
+    return STATUS_SUCCESS;
 }
 
 //
