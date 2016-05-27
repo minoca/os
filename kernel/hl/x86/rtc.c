@@ -573,7 +573,7 @@ Return Value:
 
 {
 
-    PHARDWARE_MODULE_CALENDAR_TIME CalendarTime;
+    PCALENDAR_TIME CalendarTime;
     UCHAR Century;
     UCHAR Century2;
     UCHAR Day;
@@ -753,7 +753,7 @@ Return Value:
 
 {
 
-    PHARDWARE_MODULE_CALENDAR_TIME CalendarTime;
+    PCALENDAR_TIME CalendarTime;
     UCHAR Century;
     UCHAR Century2;
     UCHAR Day;

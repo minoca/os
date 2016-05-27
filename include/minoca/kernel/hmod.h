@@ -594,76 +594,6 @@ typedef struct _TIMER_INTERRUPT {
 
 Structure Description:
 
-    This structure contains the broken down fields of a calendar date.
-
-Members:
-
-    Year - Stores the year. Valid values are between 1 and 9999.
-
-    Month - Stores the month. Valid values are between 0 and 11.
-
-    Day - Stores the day of the month. Valid values are between 1 and 31.
-
-    Hour - Stores the hour. Valid values are between 0 and 23.
-
-    Minute - Stores the minute. Valid values are between 0 and 59.
-
-    Second - Stores the second. Valid values are between 0 and 59. Arguably
-        with leap seconds 60 is a valid value too, but the time functions will
-        all roll that over into the next minute.
-
-    Nanosecond - Stores the nanosecond. Valid values are between 0 and
-        999,999,999.
-
-    Weekday - Stores the day of the week. Valid values are between 0 and 6,
-        with 0 being Sunday and 6 being Saturday.
-
-    YearDay - Stores the day of the year. Valid values are between 0 and 365.
-
-    IsDaylightSaving - Stores a value indicating if the given time is
-        represented in daylight saving time. Usually 0 indicates standard
-        time, 1 indicates daylight saving time, and -1 indicates "unknown".
-
---*/
-
-typedef struct _HARDWARE_MODULE_CALENDAR_TIME {
-    LONG Year;
-    LONG Month;
-    LONG Day;
-    LONG Hour;
-    LONG Minute;
-    LONG Second;
-    LONG Nanosecond;
-    LONG Weekday;
-    LONG YearDay;
-    LONG IsDaylightSaving;
-} HARDWARE_MODULE_CALENDAR_TIME, *PHARDWARE_MODULE_CALENDAR_TIME;
-
-/*++
-
-Structure Description:
-
-    This structure describes the system's concept of calendar time, which is
-    represented as the number of seconds since midnight January 1, 2001 GMT.
-
-Members:
-
-    Seconds - Stores the number of seconds since midnight January 1, 2001 GMT.
-
-    Nanoseconds - Stores the nanoseconds portion of the time. This is usually
-        a positive number, even for negative seconds values.
-
---*/
-
-typedef struct _HARDWARE_MODULE_SYSTEM_TIME {
-    LONGLONG Seconds;
-    LONG Nanoseconds;
-} HARDWARE_MODULE_SYSTEM_TIME, *PHARDWARE_MODULE_SYSTEM_TIME;
-
-/*++
-
-Structure Description:
-
     This structure describes an absolute wall clock time as provided to or
     from a calendar time hardware module.
 
@@ -681,8 +611,8 @@ Members:
 typedef struct _HARDWARE_MODULE_TIME {
     BOOL IsCalendarTime;
     union {
-        HARDWARE_MODULE_CALENDAR_TIME CalendarTime;
-        HARDWARE_MODULE_SYSTEM_TIME SystemTime;
+        CALENDAR_TIME CalendarTime;
+        SYSTEM_TIME SystemTime;
     } U;
 
 } HARDWARE_MODULE_TIME, *PHARDWARE_MODULE_TIME;

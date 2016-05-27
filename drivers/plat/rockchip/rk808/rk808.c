@@ -1434,7 +1434,7 @@ Return Value:
 
     PRK808_CONTROLLER Controller;
     KSTATUS Status;
-    PHARDWARE_MODULE_CALENDAR_TIME Time;
+    PCALENDAR_TIME Time;
     UCHAR Value;
 
     Controller = Context;
@@ -1563,7 +1563,7 @@ Return Value:
 
     PRK808_CONTROLLER Controller;
     KSTATUS Status;
-    PHARDWARE_MODULE_CALENDAR_TIME Time;
+    PCALENDAR_TIME Time;
     UCHAR Value;
 
     Controller = Context;

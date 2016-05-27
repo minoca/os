@@ -145,7 +145,6 @@ Return Value:
 {
 
     ULONGLONG BeginTime;
-    CALENDAR_TIME CalendarTime;
     PCALENDAR_TIMER CalendarTimer;
     PLIST_ENTRY CurrentEntry;
     BOOL Enabled;
@@ -216,22 +215,16 @@ Return Value:
         SystemTime->Nanoseconds = HardwareTime.U.SystemTime.Nanoseconds;
 
     } else {
-        RtlZeroMemory(&CalendarTime, sizeof(CALENDAR_TIME));
-        CalendarTime.Year = HardwareTime.U.CalendarTime.Year;
-        CalendarTime.Month = HardwareTime.U.CalendarTime.Month;
-        CalendarTime.Day = HardwareTime.U.CalendarTime.Day;
-        CalendarTime.Hour = HardwareTime.U.CalendarTime.Hour;
-        CalendarTime.Minute = HardwareTime.U.CalendarTime.Minute;
-        CalendarTime.Second = HardwareTime.U.CalendarTime.Second;
-        CalendarTime.Nanosecond = HardwareTime.U.CalendarTime.Nanosecond;
         if (HlHardwareTimeIsLocal != FALSE) {
             Status = KeGetCurrentTimeZoneOffset(&TimeZoneOffset);
             if (KSUCCESS(Status)) {
-                CalendarTime.Second += TimeZoneOffset;
+                HardwareTime.U.CalendarTime.Second += TimeZoneOffset;
             }
         }
 
-        Status = RtlCalendarTimeToSystemTime(&CalendarTime, SystemTime);
+        Status = RtlCalendarTimeToSystemTime(&(HardwareTime.U.CalendarTime),
+                                             SystemTime);
+
         if (!KSUCCESS(Status)) {
             goto QueryCalendarTimeEnd;
         }
@@ -275,7 +268,7 @@ Return Value:
 
 {
 
-    CALENDAR_TIME CalendarTime;
+    PCALENDAR_TIME CalendarTime;
     PCALENDAR_TIMER CalendarTimer;
     PLIST_ENTRY CurrentEntry;
     BOOL Enabled;
@@ -338,6 +331,7 @@ Return Value:
         if ((CalendarTimer->Features &
              CALENDAR_TIMER_FEATURE_WANT_CALENDAR_FORMAT) != 0) {
 
+            CalendarTime = &(HardwareTime.U.CalendarTime);
             if (HlHardwareTimeIsLocal != FALSE) {
 
                 //
@@ -345,25 +339,14 @@ Return Value:
                 // so interrupts cannot be disabled until after this call.
                 //
 
-                RtlSystemTimeToLocalCalendarTime(&SystemTime, &CalendarTime);
+                RtlSystemTimeToLocalCalendarTime(&SystemTime, CalendarTime);
                 Enabled = ArDisableInterrupts();
 
             } else {
-                RtlSystemTimeToGmtCalendarTime(&SystemTime, &CalendarTime);
+                RtlSystemTimeToGmtCalendarTime(&SystemTime, CalendarTime);
             }
 
             HardwareTime.IsCalendarTime = TRUE;
-            HardwareTime.U.CalendarTime.Year = CalendarTime.Year;
-            HardwareTime.U.CalendarTime.Month = CalendarTime.Month;
-            HardwareTime.U.CalendarTime.Day = CalendarTime.Day;
-            HardwareTime.U.CalendarTime.Hour = CalendarTime.Hour;
-            HardwareTime.U.CalendarTime.Minute = CalendarTime.Minute;
-            HardwareTime.U.CalendarTime.Second = CalendarTime.Second;
-            HardwareTime.U.CalendarTime.Nanosecond = CalendarTime.Nanosecond;
-            HardwareTime.U.CalendarTime.Weekday = CalendarTime.Weekday;
-            HardwareTime.U.CalendarTime.YearDay = CalendarTime.YearDay;
-            HardwareTime.U.CalendarTime.IsDaylightSaving =
-                                                 CalendarTime.IsDaylightSaving;
 
         } else {
             HardwareTime.IsCalendarTime = FALSE;
