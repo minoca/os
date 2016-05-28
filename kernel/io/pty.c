@@ -1201,14 +1201,6 @@ Return Value:
     //
 
     Process = PsGetCurrentProcess();
-    PsGetProcessGroup(Process, &ProcessGroup, &Session);
-    if ((Terminal->SessionId != Session) &&
-        (Terminal->SessionId != TERMINAL_INVALID_SESSION)) {
-
-        Status = STATUS_RESOURCE_IN_USE;
-        goto TerminalOpenSlaveEnd;
-    }
-
     Terminal->SlaveHandles += 1;
 
     //
@@ -1228,20 +1220,21 @@ Return Value:
     //
 
     if ((IoHandle->OpenFlags & OPEN_FLAG_NO_CONTROLLING_TERMINAL) == 0) {
-        if ((Terminal->SessionId == TERMINAL_INVALID_SESSION) &&
-            (Process->Identifiers.ProcessId == Session)) {
+        if (Terminal->SessionId == TERMINAL_INVALID_SESSION) {
+            PsGetProcessGroup(Process, &ProcessGroup, &Session);
+            if (Process->Identifiers.ProcessId == Session) {
+                if (PsSetControllingTerminal(Process, Terminal) == NULL) {
+                    Terminal->ProcessGroupId = ProcessGroup;
+                    Terminal->SessionId = Session;
+                    Terminal->SessionProcess = Process;
 
-            if (PsSetControllingTerminal(Process, Terminal) == NULL) {
-                Terminal->ProcessGroupId = ProcessGroup;
-                Terminal->SessionId = Session;
-                Terminal->SessionProcess = Process;
+                    //
+                    // Add a reference that is released when the terminal is
+                    // relinquished.
+                    //
 
-                //
-                // Add a reference that is released when the terminal is
-                // relinquished.
-                //
-
-                ObAddReference(Terminal);
+                    ObAddReference(Terminal);
+                }
             }
         }
     }
@@ -3799,7 +3792,6 @@ Return Value:
     ASSERT(LockHeld != FALSE);
 
     if ((AnythingWritten != FALSE) && (Space == 0)) {
-        IoSetIoObjectState(MasterIoState, POLL_EVENT_IN, TRUE);
         IoSetIoObjectState(SlaveIoState, POLL_EVENT_OUT, FALSE);
     }
 
@@ -3975,6 +3967,10 @@ TerminalMasterReadEnd:
         }
 
         IoSetIoObjectState(SlaveIoState, POLL_EVENT_OUT, TRUE);
+        Space = IopTerminalGetOutputBufferSpace(Terminal);
+        if (Space == TERMINAL_OUTPUT_BUFFER_SIZE - 1) {
+            IoSetIoObjectState(MasterIoState, POLL_EVENT_IN, FALSE);
+        }
     }
 
     if (LockHeld != FALSE) {
@@ -4253,16 +4249,6 @@ Return Value:
 
     ASSERT(LockHeld != FALSE);
 
-    //
-    // Unsignal the input event if this routine read the last of the available
-    // data.
-    //
-
-    if ((AnythingRead != FALSE) && (Space == TERMINAL_INPUT_BUFFER_SIZE - 1)) {
-        IoSetIoObjectState(SlaveIoState, POLL_EVENT_IN, FALSE);
-        IoSetIoObjectState(MasterIoState, POLL_EVENT_OUT, TRUE);
-    }
-
 TerminalSlaveReadEnd:
     if (AnythingRead != FALSE) {
         if (LockHeld == FALSE) {
@@ -4271,6 +4257,10 @@ TerminalSlaveReadEnd:
         }
 
         IoSetIoObjectState(MasterIoState, POLL_EVENT_OUT, TRUE);
+        Space = IopTerminalGetInputBufferSpace(Terminal);
+        if (Space == TERMINAL_INPUT_BUFFER_SIZE - 1) {
+            IoSetIoObjectState(SlaveIoState, POLL_EVENT_IN, FALSE);
+        }
     }
 
     if (LockHeld != FALSE) {
