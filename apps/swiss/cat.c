@@ -402,19 +402,6 @@ Return Value:
         }
     }
 
-    //
-    // If there's still stuff in the output buffer, send it out now.
-    //
-
-    if (Context.OutputIndex != 0) {
-        Result = CatWriteOutputBuffer(&Context);
-        if (Result == FALSE) {
-            Failed = TRUE;
-        }
-
-        goto mainEnd;
-    }
-
 mainEnd:
     if (Context.InputBuffer != NULL) {
         free(Context.InputBuffer);
@@ -667,18 +654,11 @@ Return Value:
                 }
             }
 
-            //
-            // If the output buffer is within spitting distance of full,
-            // write this to the output.
-            //
-
             assert(Context->OutputIndex < Context->OutputBufferSize);
 
-            if (CAT_OUTPUT_NEARLY_FULL(Context)) {
-                Result = CatWriteOutputBuffer(Context);
-                if (Result == FALSE) {
-                    goto PrintContentsEnd;
-                }
+            Result = CatWriteOutputBuffer(Context);
+            if (Result == FALSE) {
+                goto PrintContentsEnd;
             }
         }
     }
