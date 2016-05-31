@@ -891,7 +891,8 @@ Return Value:
 
 {
 
-    ULONGLONG Count;
+    ULONGLONG Count1;
+    ULONGLONG Count2;
     volatile ULONGLONG *CurrentCountPointer;
     ULONGLONG HardwareMask;
     ULONGLONG HardwareValue;
@@ -915,16 +916,20 @@ Return Value:
 
     //
     // Get a consistent read between the hardware counter and current count
-    // with respect to the software offset.
+    // with respect to the software offset. The current count needs to be read
+    // twice to avoid a torn read that could result from a race with the
+    // extended read's atomic update from either another core or an interrupt
+    // arriving on top of this loop.
     //
 
     do {
         READ_INT64_SYNC(&(Timer->SoftwareOffset), &SoftwareOffset1);
+        Count1 = *CurrentCountPointer;
         HardwareValue = ReadCounter(Timer->PrivateContext);
-        Count = *CurrentCountPointer;
         READ_INT64_SYNC(&(Timer->SoftwareOffset), &SoftwareOffset2);
+        Count2 = *CurrentCountPointer;
 
-    } while (SoftwareOffset1 != SoftwareOffset2);
+    } while ((SoftwareOffset1 != SoftwareOffset2) || (Count1 != Count2));
 
     //
     // For 64-bit timers, just return the raw timer, no software rollover
@@ -943,14 +948,14 @@ Return Value:
     // the lower bits.
     //
 
-    NewCount = (Count & ~HardwareMask) | HardwareValue;
+    NewCount = (Count1 & ~HardwareMask) | HardwareValue;
 
     //
     // If the most significant bit has flipped, the new count will need to
     // be written back into the global.
     //
 
-    if (((NewCount ^ Count) & MostSignificantHardwareBit) != 0) {
+    if (((NewCount ^ Count1) & MostSignificantHardwareBit) != 0) {
 
         //
         // Add a rollover if the transition was from a 1 to a 0.
@@ -968,7 +973,7 @@ Return Value:
         // rollover independently if necessary).
         //
 
-        RtlAtomicCompareExchange64(CurrentCountPointer, NewCount, Count);
+        RtlAtomicCompareExchange64(CurrentCountPointer, NewCount, Count1);
     }
 
     return NewCount + SoftwareOffset1;
