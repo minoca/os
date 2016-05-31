@@ -94,7 +94,7 @@ Environment:
 //
 
 #define WRITE_ARM_TIMER_REGISTER(_Register, _Value) \
-    HlWriteRegister32((HlBcm2709ArmTimerBase + (_Register)), (_Value))
+    HlWriteRegister32(HlBcm2709ArmTimerBase + (_Register), (_Value))
 
 //
 // This macro reads from a BCM2709 System Timer register.

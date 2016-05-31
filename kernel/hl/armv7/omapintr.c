@@ -72,15 +72,16 @@ Environment:
 //
 
 #define READ_INTERRUPT_REGISTER(_Register)    \
-    HlReadRegister32(HlOmap3InterruptController + (_Register))
+    HlReadRegister32((PULONG)HlOmap3InterruptController + (_Register))
 
 //
 // This macro writes to the OMAP3 interrupt controller. _Register
 // should be MPU_REGISTER value, and _Value should be a ULONG.
 //
 
-#define WRITE_INTERRUPT_REGISTER(_Register, _Value) \
-    HlWriteRegister32(HlOmap3InterruptController + (_Register), (_Value))
+#define WRITE_INTERRUPT_REGISTER(_Register, _Value)                     \
+    HlWriteRegister32((PULONG)HlOmap3InterruptController + (_Register), \
+                      (_Value))
 
 //
 // ----------------------------------------------- Internal Function Prototypes

@@ -165,11 +165,9 @@ Return Value:
         goto Omap4CacheControllerModuleEntryEnd;
     }
 
-    HlOmap4Table = HlGetAcpiTable(OMAP4_SIGNATURE, NULL);
-
     //
-    // Interrupt controllers are always initialized before cache controllers,
-    // so the integrator table and services should already be set up.
+    // Timers are always initialized before cache controllers, so the OMAP4
+    // table should already be set up.
     //
 
     if (HlOmap4Table == NULL) {

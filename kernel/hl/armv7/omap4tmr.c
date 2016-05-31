@@ -238,10 +238,11 @@ Return Value:
     ULONG TimerIndex;
 
     //
-    // Interrupt controllers are always initialized before timers, so the
-    // OMAP4 ACPI table should already be set up.
+    // Attempt to find the OMAP4 ACPI table. There is no OMAP4 interrupt
+    // controller (the GIC is used) so the timer module needs to get the table.
     //
 
+    HlOmap4Table = HlGetAcpiTable(OMAP4_SIGNATURE, NULL);
     if (HlOmap4Table == NULL) {
         goto GpTimerModuleEntryEnd;
     }

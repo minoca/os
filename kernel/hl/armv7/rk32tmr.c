@@ -42,7 +42,7 @@ Environment:
 //
 
 #define READ_TIMER_REGISTER(_Base, _Register) \
-    HlReadRegister32((PULONG)(_Base) + (_Register))
+    HlReadRegister32((_Base) + (_Register))
 
 //
 // This macro writes to an RK32 timer. _Base should be a pointer,
@@ -51,7 +51,7 @@ Environment:
 //
 
 #define WRITE_TIMER_REGISTER(_Base, _Register, _Value) \
-    HlWriteRegister32((PULONG)(_Base) + (_Register), (_Value))
+    HlWriteRegister32((_Base) + (_Register), (_Value))
 
 //
 // ---------------------------------------------------------------- Definitions
