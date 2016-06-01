@@ -662,7 +662,7 @@ Return Value:
     ULONG High2;
     ULONG Low;
     PBCM2709_TIMER Timer;
-    ULONG Value;
+    ULONGLONG Value;
 
     Timer = (PBCM2709_TIMER)Context;
     switch (Timer->Type) {
