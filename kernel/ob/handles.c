@@ -60,24 +60,16 @@ Environment:
 //
 
 //
-// This macro acquires the handle table lock if required. Handle tables that do
-// not belong to a given process always acquire the lock and handle tables that
-// belong to processes with more than 1 thread acquire the lock.
+// These macros acquire and release the handle table locks if they exist.
 //
 
 #define OB_ACQUIRE_HANDLE_TABLE_LOCK(_Table)                                   \
-    if (((_Table)->Process == NULL) || ((_Table)->Process->ThreadCount > 1)) { \
+    if ((_Table)->Lock != NULL) {                                              \
         KeAcquireQueuedLock((_Table)->Lock);                                   \
     }
 
-//
-// This macro releases the handle table lock if required. Handle tables that do
-// not belong to a given process always release the lock and handle tables that
-// belong to processes with more than 1 thread release the lock.
-//
-
 #define OB_RELEASE_HANDLE_TABLE_LOCK(_Table)                                   \
-    if (((_Table)->Process == NULL) || ((_Table)->Process->ThreadCount > 1)) { \
+    if ((_Table)->Lock != NULL) {                                              \
         KeReleaseQueuedLock((_Table)->Lock);                                   \
     }
 
@@ -210,14 +202,9 @@ Return Value:
     }
 
     HandleTable->Process = Process;
+    HandleTable->Lock = NULL;
     HandleTable->NextDescriptor = 0;
     HandleTable->MaxDescriptor = 0;
-    HandleTable->Lock = KeCreateQueuedLock();
-    if (HandleTable->Lock == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateHandleTableEnd;
-    }
-
     HandleTable->LookupCallback = LookupCallbackRoutine;
     AllocationSize = HANDLE_TABLE_INITIAL_SIZE * sizeof(HANDLE_TABLE_ENTRY);
     HandleTable->Entries = MmAllocatePagedPool(AllocationSize,
@@ -235,10 +222,6 @@ Return Value:
 CreateHandleTableEnd:
     if (!KSUCCESS(Status)) {
         if (HandleTable != NULL) {
-            if (HandleTable->Lock != NULL) {
-                KeDestroyQueuedLock(HandleTable->Lock);
-            }
-
             if (HandleTable->Entries != NULL) {
                 MmFreePagedPool(HandleTable->Entries);
             }
@@ -291,6 +274,39 @@ Return Value:
 
     MmFreePagedPool(HandleTable);
     return;
+}
+
+KSTATUS
+ObEnableHandleTableLocking (
+    PHANDLE_TABLE HandleTable
+    )
+
+/*++
+
+Routine Description:
+
+    This routine enables locking on the given handle table.
+
+Arguments:
+
+    HandleTable - Supplies a pointer to the handle table to enable locking for.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    if (HandleTable->Lock == NULL) {
+        HandleTable->Lock = KeCreateQueuedLock();
+        if (HandleTable->Lock == NULL) {
+            return STATUS_INSUFFICIENT_RESOURCES;
+        }
+    }
+
+    return STATUS_SUCCESS;
 }
 
 KSTATUS

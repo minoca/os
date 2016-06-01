@@ -988,6 +988,27 @@ Return Value:
 --*/
 
 KSTATUS
+ObEnableHandleTableLocking (
+    PHANDLE_TABLE HandleTable
+    );
+
+/*++
+
+Routine Description:
+
+    This routine enables locking on the given handle table.
+
+Arguments:
+
+    HandleTable - Supplies a pointer to the handle table to enable locking for.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+KSTATUS
 ObCreateHandle (
     PHANDLE_TABLE Table,
     PVOID HandleValue,

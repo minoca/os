@@ -548,6 +548,16 @@ Return Value:
     }
 
     //
+    // Enable locking on the handle table, which will exist for the remainder
+    // of the process lifetime.
+    //
+
+    Status = ObEnableHandleTableLocking(CurrentProcess->HandleTable);
+    if (!KSUCCESS(Status)) {
+        goto SysCreateThreadEnd;
+    }
+
+    //
     // Create and launch the thread.
     //
 
