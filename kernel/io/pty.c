@@ -168,8 +168,6 @@ Members:
     InputLock - Stores a pointer to a lock serializing access to the
         working input buffer.
 
-    WorkingInputLock - Stores a pointer to the working input buffer lock.
-
     Settings - Stores the current terminal settings.
 
     Flags - Stores a bitfield of flags. See TERMINAL_FLAG_* definitions. This
@@ -229,7 +227,6 @@ typedef struct _TERMINAL {
     ULONG WorkingInputCursor;
     ULONG WorkingInputLength;
     PQUEUED_LOCK InputLock;
-    PQUEUED_LOCK WorkingInputLock;
     TERMINAL_SETTINGS Settings;
     TERMINAL_KEY_DATA KeyData;
     ULONG Flags;
@@ -1128,6 +1125,7 @@ Return Value:
 {
 
     PFILE_OBJECT FileObject;
+    PIO_OBJECT_STATE MasterIoState;
     PKPROCESS Process;
     PROCESS_GROUP_ID ProcessGroup;
     SESSION_ID Session;
@@ -1209,9 +1207,18 @@ Return Value:
     //
 
     if (Terminal->SlaveHandles == 1) {
-        IoSetIoObjectState(Terminal->MasterFileObject->IoState,
-                           POLL_EVENT_DISCONNECTED,
-                           FALSE);
+        MasterIoState = Terminal->MasterFileObject->IoState;
+        IoSetIoObjectState(MasterIoState, POLL_EVENT_DISCONNECTED, FALSE);
+
+        //
+        // Also clear the master in event if there's nothing to actually read.
+        //
+
+        if (IopTerminalGetOutputBufferSpace(Terminal) ==
+            TERMINAL_OUTPUT_BUFFER_SIZE - 1) {
+
+            IoSetIoObjectState(MasterIoState, POLL_EVENT_IN, FALSE);
+        }
     }
 
     //
@@ -2648,11 +2655,9 @@ Return Value:
             Terminal->InputBufferEnd = 0;
             IoSetIoObjectState(MasterIoState, POLL_EVENT_OUT, TRUE);
             IoSetIoObjectState(SlaveIoState, POLL_EVENT_IN, FALSE);
-            KeReleaseQueuedLock(Terminal->InputLock);
-            KeAcquireQueuedLock(Terminal->WorkingInputLock);
             Terminal->WorkingInputCursor = 0;
             Terminal->WorkingInputLength = 0;
-            KeReleaseQueuedLock(Terminal->WorkingInputLock);
+            KeReleaseQueuedLock(Terminal->InputLock);
         }
 
         if ((Flags & FLUSH_FLAG_WRITE) != 0) {
@@ -2812,12 +2817,6 @@ Return Value:
                                                 TERMINAL_ALLOCATION_TAG);
 
     if (Terminal->WorkingInputBuffer == NULL) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CreateTerminalObjectEnd;
-    }
-
-    Terminal->WorkingInputLock = KeCreateQueuedLock();
-    if (Terminal->WorkingInputLock == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto CreateTerminalObjectEnd;
     }
@@ -2998,10 +2997,6 @@ Return Value:
         MmFreePagedPool(Terminal->WorkingInputBuffer);
     }
 
-    if (Terminal->WorkingInputLock != NULL) {
-        KeDestroyQueuedLock(Terminal->WorkingInputLock);
-    }
-
     if (Terminal->InputLock != NULL) {
         KeDestroyQueuedLock(Terminal->InputLock);
     }
@@ -3056,6 +3051,7 @@ Return Value:
     ULONG DirtyRegionBegin;
     ULONG DirtyRegionEnd;
     ULONG EchoFlags;
+    ULONG EchoMask;
     BOOL EchoThisCharacter;
     BOOL InputAdded;
     ULONG InputFlags;
@@ -3092,16 +3088,15 @@ Return Value:
     SlaveIoState = Terminal->SlaveFileObject->IoState;
     InputFlags = Terminal->Settings.InputFlags;
     LocalFlags = Terminal->Settings.LocalFlags;
-    EchoFlags = TERMINAL_LOCAL_ECHO | TERMINAL_LOCAL_ECHO_ERASE |
-                TERMINAL_LOCAL_ECHO_KILL_NEWLINE |
-                TERMINAL_LOCAL_ECHO_KILL_EXTENDED |
-                TERMINAL_LOCAL_ECHO_NEWLINE |
-                TERMINAL_LOCAL_ECHO_CONTROL;
+    EchoMask = TERMINAL_LOCAL_ECHO | TERMINAL_LOCAL_ECHO_ERASE |
+               TERMINAL_LOCAL_ECHO_KILL_NEWLINE |
+               TERMINAL_LOCAL_ECHO_KILL_EXTENDED |
+               TERMINAL_LOCAL_ECHO_NEWLINE |
+               TERMINAL_LOCAL_ECHO_CONTROL;
 
-    EchoFlags = EchoFlags & LocalFlags;
+    EchoFlags = LocalFlags & EchoMask;
     ControlCharacters = Terminal->Settings.ControlCharacters;
     InputAdded = FALSE;
-    InputLockHeld = FALSE;
     DirtyRegionBegin = Terminal->WorkingInputCursor;
     DirtyRegionEnd = Terminal->WorkingInputCursor;
     OutputLockHeld = FALSE;
@@ -3113,23 +3108,8 @@ Return Value:
         OutputLockHeld = TRUE;
     }
 
-    //
-    // In canonical mode, acquire the lock to prevent others from using the
-    // working buffer.
-    //
-
-    if ((LocalFlags & TERMINAL_LOCAL_CANONICAL) != 0) {
-        KeAcquireQueuedLock(Terminal->WorkingInputLock);
-
-    //
-    // In raw mode, acquire the input lock now to avoid locking and unlocking
-    // for every character.
-    //
-
-    } else {
-        KeAcquireQueuedLock(Terminal->InputLock);
-        InputLockHeld = TRUE;
-    }
+    KeAcquireQueuedLock(Terminal->InputLock);
+    InputLockHeld = TRUE;
 
     //
     // Loop through every byte.
@@ -3270,13 +3250,11 @@ Return Value:
                 IsEndOfLine = TRUE;
 
             //
-            // End of file is like pushing enter except there's no enter
-            // character.
+            // End of file also causes output to be flushed.
             //
 
             } else if (Byte == ControlCharacters[TerminalCharacterEndOfFile]) {
                 TransferWorkingBuffer = TRUE;
-                AddCharacter = FALSE;
             }
 
             //
@@ -3351,11 +3329,14 @@ Return Value:
                 //
 
                 while (TRUE) {
+                    if (InputLockHeld == FALSE) {
+                        KeAcquireQueuedLock(Terminal->InputLock);
+                        InputLockHeld = TRUE;
+                    }
 
-                    ASSERT(InputLockHeld == FALSE);
-
-                    KeAcquireQueuedLock(Terminal->InputLock);
-                    InputLockHeld = TRUE;
+                    InputFlags = Terminal->Settings.InputFlags;
+                    LocalFlags = Terminal->Settings.LocalFlags;
+                    EchoFlags = LocalFlags & EchoMask;
                     Space = IopTerminalGetInputBufferSpace(Terminal);
                     if (Space >= Terminal->WorkingInputLength) {
                         break;
@@ -3581,10 +3562,6 @@ TerminalMasterWriteEnd:
     //
     // Release the various locks that are held.
     //
-
-    if ((LocalFlags & TERMINAL_LOCAL_CANONICAL) != 0) {
-        KeReleaseQueuedLock(Terminal->WorkingInputLock);
-    }
 
     if (InputLockHeld != FALSE) {
         KeReleaseQueuedLock(Terminal->InputLock);
@@ -4010,6 +3987,7 @@ Return Value:
 {
 
     BOOL AcceptingSignal;
+    UINTN AdvanceSize;
     BOOL AnythingRead;
     BOOL BreakForNewline;
     UINTN BytesRead;
@@ -4045,7 +4023,6 @@ Return Value:
 
     SlaveIoState = Terminal->SlaveFileObject->IoState;
     MasterIoState = Terminal->MasterFileObject->IoState;
-    LocalFlags = Terminal->Settings.LocalFlags;
     ControlCharacters = Terminal->Settings.ControlCharacters;
     TimeoutInMilliseconds = IoContext->TimeoutInMilliseconds;
     AnythingRead = FALSE;
@@ -4060,6 +4037,7 @@ Return Value:
 
     KeAcquireQueuedLock(Terminal->InputLock);
     LockHeld = TRUE;
+    LocalFlags = Terminal->Settings.LocalFlags;
 
     //
     // If the reading process is not in the same process group, send the
@@ -4174,6 +4152,7 @@ Return Value:
 
             KeAcquireQueuedLock(Terminal->InputLock);
             LockHeld = TRUE;
+            LocalFlags = Terminal->Settings.LocalFlags;
             Space = IopTerminalGetInputBufferSpace(Terminal);
             if (Space == TERMINAL_INPUT_BUFFER_SIZE - 1) {
                 break;
@@ -4199,6 +4178,7 @@ Return Value:
         // If it's canonical, look for a newline and break on that.
         //
 
+        AdvanceSize = CopySize;
         if ((LocalFlags & TERMINAL_LOCAL_CANONICAL) != 0) {
             for (CopyIndex = 0; CopyIndex < CopySize; CopyIndex += 1) {
                 InputIndex = Terminal->InputBufferStart + CopyIndex;
@@ -4208,6 +4188,20 @@ Return Value:
                     (Character == '\n')) {
 
                     CopySize = CopyIndex + 1;
+                    AdvanceSize = CopySize;
+                    BreakForNewline = TRUE;
+                    break;
+
+                //
+                // An EOF character is treated like a "return now" character,
+                // but is not reported to the user.
+                //
+
+                } else if (Character ==
+                           ControlCharacters[TerminalCharacterEndOfFile]) {
+
+                    CopySize = CopyIndex;
+                    AdvanceSize = CopySize + 1;
                     BreakForNewline = TRUE;
                     break;
                 }
@@ -4225,7 +4219,7 @@ Return Value:
             break;
         }
 
-        Terminal->InputBufferStart += CopySize;
+        Terminal->InputBufferStart += AdvanceSize;
 
         ASSERT(Terminal->InputBufferStart <= TERMINAL_INPUT_BUFFER_SIZE);
 
