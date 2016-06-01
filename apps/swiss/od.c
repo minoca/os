@@ -1119,7 +1119,7 @@ Return Value:
 
     FirstLine = TRUE;
     InDuplicate = FALSE;
-    while (Count != 0) {
+    while ((Count != 0) && (Context->CurrentInput != NULL)) {
         LineSize = Context->Width;
         if (LineSize > Count) {
             LineSize = Count;
@@ -1243,6 +1243,7 @@ Return Value:
                 if (Context->CurrentInput->ListEntry.Next ==
                     &(Context->InputList)) {
 
+                    Context->CurrentInput = NULL;
                     break;
                 }
 
