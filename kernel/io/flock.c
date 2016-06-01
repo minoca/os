@@ -84,11 +84,6 @@ IopDoFileLocksOverlap (
     PFILE_LOCK_ENTRY LockEntry
     );
 
-KSTATUS
-IopCreateFileLockEvent (
-    PFILE_OBJECT FileObject
-    );
-
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -140,7 +135,7 @@ Return Value:
 
     FileObject = IoHandle->PathPoint.PathEntry->FileObject;
     FoundEntry = NULL;
-    KeAcquireSpinLock(&(FileObject->PropertiesLock));
+    KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
     CurrentEntry = FileObject->FileLockList.Next;
     while (CurrentEntry != &(FileObject->FileLockList)) {
         LockEntry = LIST_VALUE(CurrentEntry, FILE_LOCK_ENTRY, ListEntry);
@@ -171,7 +166,7 @@ Return Value:
         Lock->Type = FileLockUnlock;
     }
 
-    KeReleaseSpinLock(&(FileObject->PropertiesLock));
+    KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
     return STATUS_SUCCESS;
 }
 
@@ -212,6 +207,8 @@ Return Value:
     LIST_ENTRY FreeList;
     BOOL LockHeld;
     PFILE_LOCK_ENTRY NewEntry;
+    PKEVENT NewEvent;
+    PKEVENT PreviousEvent;
     FILE_LOCK_ENTRY RemoveEntry;
     PFILE_LOCK_ENTRY SplitEntry;
     KSTATUS Status;
@@ -279,16 +276,32 @@ Return Value:
     }
 
     INSERT_BEFORE(&(SplitEntry->ListEntry), &FreeList);
+
+    //
+    // Race to create the event if not created.
+    //
+
+    if (FileObject->FileLockEvent == NULL) {
+        NewEvent = KeCreateEvent(NULL);
+        if (NewEvent == NULL) {
+            Status = STATUS_INSUFFICIENT_RESOURCES;
+            goto SetFileLockEnd;
+        }
+
+        PreviousEvent = (PKEVENT)RtlAtomicCompareExchange(
+                                          (PUINTN)&(FileObject->FileLockEvent),
+                                          (UINTN)NewEvent,
+                                          (UINTN)NULL);
+
+        if (PreviousEvent != NULL) {
+            KeDestroyEvent(NewEvent);
+        }
+    }
+
     while (TRUE) {
         if (LockHeld == FALSE) {
-            KeAcquireSpinLock(&(FileObject->PropertiesLock));
+            KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
             LockHeld = TRUE;
-            if (FileObject->FileLockEvent == NULL) {
-                Status = IopCreateFileLockEvent(FileObject);
-                if (!KSUCCESS(Status)) {
-                    goto SetFileLockEnd;
-                }
-            }
         }
 
         //
@@ -309,7 +322,7 @@ Return Value:
                 //
 
                 if (Blocking != FALSE) {
-                    KeReleaseSpinLock(&(FileObject->PropertiesLock));
+                    KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
                     LockHeld = FALSE;
                     Status = KeWaitForEvent(FileObject->FileLockEvent,
                                             TRUE,
@@ -350,7 +363,7 @@ Return Value:
 
 SetFileLockEnd:
     if (LockHeld != FALSE) {
-        KeReleaseSpinLock(&(FileObject->PropertiesLock));
+        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
     }
 
     if ((NewEntry != NULL) && (NewEntry != &RemoveEntry)) {
@@ -412,7 +425,7 @@ Return Value:
     }
 
     INITIALIZE_LIST_HEAD(&FreeList);
-    KeAcquireSpinLock(&(FileObject->PropertiesLock));
+    KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
 
     //
     // Loop through and remove any active locks belonging to this process.
@@ -436,7 +449,7 @@ Return Value:
         KeSignalEvent(FileObject->FileLockEvent, SignalOptionSignalAll);
     }
 
-    KeReleaseSpinLock(&(FileObject->PropertiesLock));
+    KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
 
     //
     // Free any removed entries now that the lock is released.
@@ -718,63 +731,5 @@ Return Value:
     }
 
     return FALSE;
-}
-
-KSTATUS
-IopCreateFileLockEvent (
-    PFILE_OBJECT FileObject
-    )
-
-/*++
-
-Routine Description:
-
-    This routine attempts to create the file lock event by dropping the already
-    held file properties lock, allocating the event, re-acquiring the lock, and
-    trying to install the event.
-
-Arguments:
-
-    FileObject - Supplies a pointer to the file object. This routine assumes
-        the file properties lock is already held.
-
-Return Value:
-
-    STATUS_SUCCESS on success.
-
-    STATUS_INSUFFICIENT_RESOURCES on allocation failure.
-
---*/
-
-{
-
-    PKEVENT Event;
-
-    if (FileObject->FileLockEvent != NULL) {
-        return STATUS_SUCCESS;
-    }
-
-    KeReleaseSpinLock(&(FileObject->PropertiesLock));
-    Event = KeCreateEvent(NULL);
-    if (Event == NULL) {
-        return STATUS_INSUFFICIENT_RESOURCES;
-    }
-
-    KeAcquireSpinLock(&(FileObject->PropertiesLock));
-    if (FileObject->FileLockEvent == NULL) {
-        FileObject->FileLockEvent = Event;
-
-    //
-    // Someone managed to fill this in before this thread. Free the unneeded
-    // event created.
-    //
-
-    } else {
-        KeReleaseSpinLock(&(FileObject->PropertiesLock));
-        KeDestroyEvent(Event);
-        KeAcquireSpinLock(&(FileObject->PropertiesLock));
-    }
-
-    return STATUS_SUCCESS;
 }
 

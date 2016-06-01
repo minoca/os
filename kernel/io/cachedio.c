@@ -334,6 +334,11 @@ Return Value:
         if ((TimeType == FileObjectModifiedTime) ||
             ((Handle->OpenFlags & OPEN_FLAG_NO_ACCESS_TIME) == 0)) {
 
+            if (LockHeldExclusive == FALSE) {
+                KeSharedExclusiveLockConvertToExclusive(FileObject->Lock);
+                LockHeldExclusive = TRUE;
+            }
+
             IopUpdateFileObjectTime(FileObject, TimeType);
         }
     }

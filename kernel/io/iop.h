@@ -361,9 +361,6 @@ Members:
         FILE_OBJECT_FLAG_* for definitions. This must be modified with atomic
         operations.
 
-    PropertiesLock - Stores a the spin lock that serializes access to this
-        file's properties and file size.
-
     Properties - Stores the characteristics for this file.
 
     FileLockList - Stores the head of the list of file locks held on this
@@ -390,7 +387,6 @@ struct _FILE_OBJECT {
     volatile PIMAGE_SECTION_LIST ImageSectionList;
     volatile PVOID DeviceContext;
     volatile ULONG Flags;
-    KSPIN_LOCK PropertiesLock;
     FILE_PROPERTIES Properties;
     LIST_ENTRY FileLockList;
     PKEVENT FileLockEvent;

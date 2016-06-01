@@ -1151,6 +1151,7 @@ Return Value:
     PFILE_PROPERTIES FileProperties;
     ULONGLONG FileSize;
     BOOL HasChownPermission;
+    BOOL LockHeldExclusive;
     BOOL ModifyFileSize;
     ULONGLONG NewFileSize;
     KSTATUS Status;
@@ -1158,6 +1159,7 @@ Return Value:
     PKTHREAD Thread;
     BOOL Updated;
 
+    LockHeldExclusive = FALSE;
     Thread = KeGetCurrentThread();
     FieldsToSet = Request->FieldsToSet;
     FileProperties = &(Request->FileProperties);
@@ -1244,7 +1246,13 @@ Return Value:
 
     ModifyFileSize = FALSE;
     NewFileSize = 0;
-    KeAcquireSpinLock(&(FileObject->PropertiesLock));
+    if (FieldsToSet != 0) {
+        KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
+        LockHeldExclusive = TRUE;
+
+    } else {
+        KeAcquireSharedExclusiveLockShared(FileObject->Lock);
+    }
 
     //
     // Not all attributes can be set for symbolic links.
@@ -1384,7 +1392,13 @@ Return Value:
         KeGetSystemTime(&(FileObject->Properties.StatusChangeTime));
     }
 
-    KeReleaseSpinLock(&(FileObject->PropertiesLock));
+    if (FieldsToSet != 0) {
+        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+        LockHeldExclusive = FALSE;
+
+    } else {
+        KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+    }
 
     //
     // With the spin lock released, go ahead and modify the file size if
@@ -1408,6 +1422,10 @@ Return Value:
     Status = STATUS_SUCCESS;
 
 SetFileInformationEnd:
+    if (LockHeldExclusive != FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+    }
+
     return Status;
 }
 
@@ -5455,6 +5473,7 @@ Return Value:
 
     PDEVICE Device;
     PFILE_OBJECT FileObject;
+    BOOL LockHeldExclusive;
     IRP_READ_WRITE Parameters;
     KSTATUS Status;
 
@@ -5468,6 +5487,7 @@ Return Value:
     ASSERT(FileObject != NULL);
 
     KeAcquireSharedExclusiveLockShared(FileObject->Lock);
+    LockHeldExclusive = FALSE;
     if (Context->Offset != IO_OFFSET_NONE) {
         Parameters.IoOffset = Context->Offset;
 
@@ -5527,6 +5547,11 @@ Return Value:
     Status = IopSendIoIrp(Device, IrpMinorIoRead, &Parameters);
     if (KSUCCESS(Status) || (Status == STATUS_END_OF_FILE)) {
         if ((Handle->OpenFlags & OPEN_FLAG_NO_ACCESS_TIME) == 0) {
+
+            ASSERT(LockHeldExclusive == FALSE);
+
+            KeSharedExclusiveLockConvertToExclusive(FileObject->Lock);
+            LockHeldExclusive = TRUE;
             IopUpdateFileObjectTime(FileObject, FileObjectAccessTime);
         }
     }
@@ -5542,7 +5567,12 @@ PerformDirectoryIoOperationEnd:
                             Parameters.NewIoOffset);
     }
 
-    KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+    if (LockHeldExclusive != FALSE) {
+        KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+
+    } else {
+        KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+    }
 
     //
     // Modify the file IDs of any directory entries that are mount points.

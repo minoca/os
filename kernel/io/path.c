@@ -2459,6 +2459,7 @@ Return Value:
                 //
 
                 if ((OpenFlags & OPEN_FLAG_UNLINK_ON_CREATE) != 0) {
+                    KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
                     Status = IopSendUnlinkRequest(PathRoot,
                                                   FileObject,
                                                   DirectoryFileObject,
@@ -2466,6 +2467,7 @@ Return Value:
                                                   NameSize,
                                                   &Unlinked);
 
+                    KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
                     if (Unlinked == FALSE) {
 
                         ASSERT(FALSE);

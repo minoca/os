@@ -656,7 +656,6 @@ Return Value:
                 }
 
                 RtlZeroMemory(NewObject, sizeof(FILE_OBJECT));
-                KeInitializeSpinLock(&(NewObject->PropertiesLock));
                 INITIALIZE_LIST_HEAD(&(NewObject->FileLockList));
                 INITIALIZE_LIST_HEAD(&(NewObject->DirtyPageList));
                 RtlRedBlackTreeInitialize(&(NewObject->PageCacheTree),
@@ -1701,9 +1700,8 @@ Return Value:
 
     SYSTEM_TIME CurrentTime;
 
-    ASSERT(KeGetRunLevel() == RunLevelLow);
+    ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock));
 
-    KeAcquireSpinLock(&(FileObject->PropertiesLock));
     KeGetSystemTime(&CurrentTime);
     if (TimeType == FileObjectAccessTime) {
         FileObject->Properties.AccessTime = CurrentTime;
@@ -1721,7 +1719,6 @@ Return Value:
 
     }
 
-    KeReleaseSpinLock(&(FileObject->PropertiesLock));
     IopMarkFileObjectPropertiesDirty(FileObject);
     return;
 }
@@ -1763,10 +1760,8 @@ Return Value:
     READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
     if (FileSize < NewSize) {
 
-        ASSERT(KeIsSharedExclusiveLockHeld(FileObject->Lock) != FALSE);
-        ASSERT(KeGetRunLevel() == RunLevelLow);
+        ASSERT(KeIsSharedExclusiveLockHeldExclusive(FileObject->Lock));
 
-        KeAcquireSpinLock(&(FileObject->PropertiesLock));
         READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
         if (FileSize < NewSize) {
             WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewSize);
@@ -1781,8 +1776,6 @@ Return Value:
 
             Updated = TRUE;
         }
-
-        KeReleaseSpinLock(&(FileObject->PropertiesLock));
     }
 
     if (Updated != FALSE) {
@@ -1854,13 +1847,11 @@ Return Value:
     //
 
     if (NewFileSize < FileSize) {
-        KeAcquireSpinLock(&(FileObject->PropertiesLock));
         WRITE_INT64_SYNC(&(FileObject->Properties.FileSize), NewFileSize);
         BlockSize = FileObject->Properties.BlockSize;
         FileObject->Properties.BlockCount =
                            ALIGN_RANGE_UP(NewFileSize, BlockSize) / BlockSize;
 
-        KeReleaseSpinLock(&(FileObject->PropertiesLock));
         IopMarkFileObjectPropertiesDirty(FileObject);
 
         //
@@ -1965,9 +1956,7 @@ Return Value:
 
 {
 
-    KeAcquireSpinLock(&(FileObject->PropertiesLock));
     FileObject->Properties.HardLinkCount += 1;
-    KeReleaseSpinLock(&(FileObject->PropertiesLock));
     IopUpdateFileObjectTime(FileObject, FileObjectStatusTime);
     return;
 }
@@ -1997,9 +1986,7 @@ Return Value:
 
     ASSERT(FileObject->Properties.HardLinkCount != 0);
 
-    KeAcquireSpinLock(&(FileObject->PropertiesLock));
     FileObject->Properties.HardLinkCount -= 1;
-    KeReleaseSpinLock(&(FileObject->PropertiesLock));
     IopUpdateFileObjectTime(FileObject, FileObjectStatusTime);
     return;
 }
