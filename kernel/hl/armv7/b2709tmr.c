@@ -155,10 +155,10 @@ HlpBcm2709TimerAcknowledgeInterrupt (
 typedef enum _BCM2709_TIMER_TYPE {
     Bcm2709TimerArmPeriodic,
     Bcm2709TimerArmCounter,
-    Bcm2709TimerSystem0,
-    Bcm2709TimerSystem1,
-    Bcm2709TimerSystem2,
-    Bcm2709TimerSystem3,
+    Bcm2709TimerSystemPeriodic0,
+    Bcm2709TimerSystemPeriodic1,
+    Bcm2709TimerSystemPeriodic2,
+    Bcm2709TimerSystemPeriodic3,
     Bcm2709TimerSystemCounter
 } BCM2709_TIMER_TYPE, *PBCM2709_TIMER_TYPE;
 
@@ -198,22 +198,48 @@ typedef enum _BCM2709_SYSTEM_TIMER_REGISTER {
 
 Structure Description:
 
-    This structure defines a BCM2709 timer.
+    This structure defines a default BCM2709 timer.
 
 Members:
 
-    Type - Stores the type of BCM2709 timer that owns the data.
+    Type - Stores the type of BCM2709 timer.
 
-    Date - Stores a data value private to the timer type. This can be a
-        predivider value for the ARM timers or a tick period for the system
-        timers.
+    Predivider - Stores the optional predivider used to program the frequency.
 
 --*/
 
 typedef struct _BCM2709_TIMER {
     BCM2709_TIMER_TYPE Type;
-    ULONG Data;
+    ULONG Predivider;
 } BCM2709_TIMER, *PBCM2709_TIMER;
+
+/*++
+
+Structure Description:
+
+    This structure defines a BCM2709 periodic system timer.
+
+Members:
+
+    Type - Stores the type of BCM2709 timer.
+
+    Mode - Stores the current mode.
+
+    TickCount - Stores the current tick count. This is either a periodic
+        interval or the relative one-shot tick count.
+
+    Generation - Stores the generation counter used to synchronize attempts to
+        arm and disarm the system timers with acknowledge interrupt rearming
+        the timer for periodic mode.
+
+--*/
+
+typedef struct _BCM2709_SYSTEM_TIMER {
+    BCM2709_TIMER_TYPE Type;
+    TIMER_MODE Mode;
+    ULONG TickCount;
+    volatile ULONG Generation;
+} BCM2709_SYSTEM_TIMER, *PBCM2709_SYSTEM_TIMER;
 
 //
 // -------------------------------------------------------------------- Globals
@@ -255,11 +281,12 @@ Return Value:
 
 {
 
-    PBCM2709_TIMER Context;
+    PBCM2709_TIMER DefaultTimer;
     ULONGLONG Frequency;
     ULONGLONG MaxFrequency;
     ULONG Predivider;
     KSTATUS Status;
+    PBCM2709_SYSTEM_TIMER SystemTimer;
     TIMER_DESCRIPTION Timer;
 
     //
@@ -332,19 +359,19 @@ Return Value:
     // auto-programmed after a one-shot timer fires.
     //
 
-    Context = HlAllocateMemory(sizeof(BCM2709_TIMER),
-                               BCM2709_ALLOCATION_TAG,
-                               FALSE,
-                               NULL);
+    DefaultTimer = HlAllocateMemory(sizeof(BCM2709_TIMER),
+                                    BCM2709_ALLOCATION_TAG,
+                                    FALSE,
+                                    NULL);
 
-    if (Context == NULL) {
+    if (DefaultTimer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Bcm2709TimerModuleEntryEnd;
     }
 
-    Context->Type = Bcm2709TimerArmPeriodic;
-    Context->Data = Predivider;
-    Timer.Context = Context;
+    DefaultTimer->Type = Bcm2709TimerArmPeriodic;
+    DefaultTimer->Predivider = Predivider;
+    Timer.Context = DefaultTimer;
     Timer.Features = TIMER_FEATURE_READABLE |
                      TIMER_FEATURE_PERIODIC |
                      TIMER_FEATURE_ONE_SHOT |
@@ -366,19 +393,19 @@ Return Value:
     // speed can change dynamically in reduced power status.
     //
 
-    Context = HlAllocateMemory(sizeof(BCM2709_TIMER),
-                               BCM2709_ALLOCATION_TAG,
-                               FALSE,
-                               NULL);
+    DefaultTimer = HlAllocateMemory(sizeof(BCM2709_TIMER),
+                                    BCM2709_ALLOCATION_TAG,
+                                    FALSE,
+                                    NULL);
 
-    if (Context == NULL) {
+    if (DefaultTimer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Bcm2709TimerModuleEntryEnd;
     }
 
-    Context->Type = Bcm2709TimerArmCounter;
-    Context->Data = Predivider;
-    Timer.Context = Context;
+    DefaultTimer->Type = Bcm2709TimerArmCounter;
+    DefaultTimer->Predivider = Predivider;
+    Timer.Context = DefaultTimer;
     Timer.CounterBitWidth = 32;
     Timer.Features = TIMER_FEATURE_READABLE | TIMER_FEATURE_P_STATE_VARIANT;
     Timer.CounterFrequency = Frequency;
@@ -394,19 +421,19 @@ Return Value:
     // counter is dangerous.
     //
 
-    Context = HlAllocateMemory(sizeof(BCM2709_TIMER),
+    DefaultTimer = HlAllocateMemory(sizeof(BCM2709_TIMER),
                                BCM2709_ALLOCATION_TAG,
                                FALSE,
                                NULL);
 
-    if (Context == NULL) {
+    if (DefaultTimer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Bcm2709TimerModuleEntryEnd;
     }
 
-    Context->Type = Bcm2709TimerSystemCounter;
-    Context->Data = 0;
-    Timer.Context = Context;
+    RtlZeroMemory(DefaultTimer, sizeof(BCM2709_TIMER));
+    DefaultTimer->Type = Bcm2709TimerSystemCounter;
+    Timer.Context = DefaultTimer;
     Timer.CounterBitWidth = 64;
     Timer.Features = TIMER_FEATURE_READABLE;
     Timer.CounterFrequency = HlBcm2709Table->SystemTimerFrequency;
@@ -423,21 +450,24 @@ Return Value:
     // timers.
     //
 
-    Context = HlAllocateMemory(sizeof(BCM2709_TIMER),
-                               BCM2709_ALLOCATION_TAG,
-                               FALSE,
-                               NULL);
+    SystemTimer = HlAllocateMemory(sizeof(BCM2709_SYSTEM_TIMER),
+                                   BCM2709_ALLOCATION_TAG,
+                                   FALSE,
+                                   NULL);
 
-    if (Context == NULL) {
+    if (SystemTimer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Bcm2709TimerModuleEntryEnd;
     }
 
-    Context->Type = Bcm2709TimerSystem1;
-    Context->Data = 0;
-    Timer.Context = Context;
+    RtlZeroMemory(SystemTimer, sizeof(BCM2709_SYSTEM_TIMER));
+    SystemTimer->Type = Bcm2709TimerSystemPeriodic1;
+    Timer.Context = SystemTimer;
     Timer.CounterBitWidth = 32;
-    Timer.Features = TIMER_FEATURE_READABLE | TIMER_FEATURE_PERIODIC;
+    Timer.Features = TIMER_FEATURE_READABLE |
+                     TIMER_FEATURE_PERIODIC |
+                     TIMER_FEATURE_ONE_SHOT;
+
     Timer.CounterFrequency = HlBcm2709Table->SystemTimerFrequency;
     Timer.Interrupt.Line.Type = InterruptLineGsi;
     Timer.Interrupt.Line.U.Gsi = HlBcm2709Table->SystemTimerGsiBase + 1;
@@ -448,21 +478,24 @@ Return Value:
         goto Bcm2709TimerModuleEntryEnd;
     }
 
-    Context = HlAllocateMemory(sizeof(BCM2709_TIMER),
-                               BCM2709_ALLOCATION_TAG,
-                               FALSE,
-                               NULL);
+    SystemTimer = HlAllocateMemory(sizeof(BCM2709_SYSTEM_TIMER),
+                                   BCM2709_ALLOCATION_TAG,
+                                   FALSE,
+                                   NULL);
 
-    if (Context == NULL) {
+    if (SystemTimer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Bcm2709TimerModuleEntryEnd;
     }
 
-    Context->Type = Bcm2709TimerSystem3;
-    Context->Data = 0;
-    Timer.Context = Context;
+    RtlZeroMemory(SystemTimer, sizeof(BCM2709_SYSTEM_TIMER));
+    SystemTimer->Type = Bcm2709TimerSystemPeriodic3;
+    Timer.Context = SystemTimer;
     Timer.CounterBitWidth = 32;
-    Timer.Features = TIMER_FEATURE_READABLE | TIMER_FEATURE_PERIODIC;
+    Timer.Features = TIMER_FEATURE_READABLE |
+                     TIMER_FEATURE_PERIODIC |
+                     TIMER_FEATURE_ONE_SHOT;
+
     Timer.CounterFrequency = HlBcm2709Table->SystemTimerFrequency;
     Timer.Interrupt.Line.Type = InterruptLineGsi;
     Timer.Interrupt.Line.U.Gsi = HlBcm2709Table->SystemTimerGsiBase + 3;
@@ -553,7 +586,7 @@ Return Value:
 
     switch (Timer->Type) {
     case Bcm2709TimerArmPeriodic:
-        WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerPredivider, Timer->Data);
+        WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerPredivider, Timer->Predivider);
         ControlValue = READ_ARM_TIMER_REGISTER(Bcm2709ArmTimerControl);
         ControlValue &= ~BCM2709_ARM_TIMER_CONTROL_INTERRUPT_ENABLE;
         ControlValue |= (BCM2709_ARM_TIMER_CONTROL_ENABLED |
@@ -568,7 +601,7 @@ Return Value:
     case Bcm2709TimerArmCounter:
         ControlValue = READ_ARM_TIMER_REGISTER(Bcm2709ArmTimerControl);
         ControlValue &= ~BCM2709_ARM_TIMER_CONTROL_FREE_RUNNING_DIVIDE_MASK;
-        ControlValue |= (Timer->Data <<
+        ControlValue |= (Timer->Predivider <<
                          BCM2709_ARM_TIMER_CONTROL_FREE_RUNNING_DIVIDE_SHIFT) &
                         BCM2709_ARM_TIMER_CONTROL_FREE_RUNNING_DIVIDE_MASK;
 
@@ -576,13 +609,13 @@ Return Value:
         WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerControl, ControlValue);
         break;
 
-    case Bcm2709TimerSystem1:
+    case Bcm2709TimerSystemPeriodic1:
         WRITE_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerControl,
                                     BCM2709_SYSTEM_TIMER_CONTROL_MATCH_1);
 
         break;
 
-    case Bcm2709TimerSystem3:
+    case Bcm2709TimerSystemPeriodic3:
         WRITE_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerControl,
                                     BCM2709_SYSTEM_TIMER_CONTROL_MATCH_3);
 
@@ -642,8 +675,8 @@ Return Value:
         Value = READ_ARM_TIMER_REGISTER(Bcm2709ArmTimerFreeRunningCounter);
         break;
 
-    case Bcm2709TimerSystem1:
-    case Bcm2709TimerSystem3:
+    case Bcm2709TimerSystemPeriodic1:
+    case Bcm2709TimerSystemPeriodic3:
         Value = READ_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerCounterLow);
         break;
 
@@ -708,9 +741,9 @@ Return Value:
     BCM2709_SYSTEM_TIMER_REGISTER CompareRegister;
     ULONG ControlValue;
     ULONG Counter;
-    PBCM2709_TIMER Timer;
+    PBCM2709_SYSTEM_TIMER Timer;
 
-    Timer = (PBCM2709_TIMER)Context;
+    Timer = (PBCM2709_SYSTEM_TIMER)Context;
     if ((Timer->Type == Bcm2709TimerArmCounter) ||
         (Timer->Type == Bcm2709TimerSystemCounter)) {
 
@@ -767,20 +800,19 @@ Return Value:
     // the compare value.
     //
 
-    case Bcm2709TimerSystem1:
-    case Bcm2709TimerSystem3:
-        if (Mode == TimerModeOneShot) {
-            return STATUS_INVALID_PARAMETER;
-        }
-
+    case Bcm2709TimerSystemPeriodic1:
+    case Bcm2709TimerSystemPeriodic3:
         CompareRegister = Bcm2709SystemTimerCompare1;
         ControlValue = BCM2709_SYSTEM_TIMER_CONTROL_MATCH_1;
-        if (Timer->Type == Bcm2709TimerSystem3) {
+        if (Timer->Type == Bcm2709TimerSystemPeriodic3) {
             CompareRegister = Bcm2709SystemTimerCompare3;
             ControlValue = BCM2709_SYSTEM_TIMER_CONTROL_MATCH_3;
         }
 
-        Timer->Data = (ULONG)TickCount;
+        Timer->Generation += 1;
+        Timer->Mode = Mode;
+        Timer->TickCount = (ULONG)TickCount;
+        Timer->Generation += 1;
         WRITE_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerControl, ControlValue);
         Counter = READ_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerCounterLow);
         Counter += (ULONG)TickCount;
@@ -818,11 +850,10 @@ Return Value:
 
 {
 
-    BCM2709_SYSTEM_TIMER_REGISTER CompareRegister;
     ULONG ControlValue;
-    PBCM2709_TIMER Timer;
+    PBCM2709_SYSTEM_TIMER Timer;
 
-    Timer = (PBCM2709_TIMER)Context;
+    Timer = (PBCM2709_SYSTEM_TIMER)Context;
     switch (Timer->Type) {
 
     //
@@ -842,21 +873,17 @@ Return Value:
 
     //
     // The System's periodic timers do not have an interrupt disable control
-    // bit. Just zero out the compare register. With a frequency of 1MHz, it
-    // may be that this interrupt keeps hitting every 71 minutes. So be it.
+    // bit. Just leave the compare register programmed as is, but make sure it
+    // does not get rearmed after it fires. At a frequency of 1MHz, the timer
+    // will still expire every 71 minutes. So be it.
     //
 
-    case Bcm2709TimerSystem1:
-    case Bcm2709TimerSystem3:
-        CompareRegister = Bcm2709SystemTimerCompare1;
-        ControlValue = BCM2709_SYSTEM_TIMER_CONTROL_MATCH_1;
-        if (Timer->Type == Bcm2709TimerSystem3) {
-            CompareRegister = Bcm2709SystemTimerCompare3;
-            ControlValue = BCM2709_SYSTEM_TIMER_CONTROL_MATCH_3;
-        }
-
-        WRITE_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerControl, ControlValue);
-        WRITE_SYSTEM_TIMER_REGISTER(CompareRegister, 0);
+    case Bcm2709TimerSystemPeriodic1:
+    case Bcm2709TimerSystemPeriodic3:
+        Timer->Generation += 1;
+        Timer->Mode = TimerModeInvalid;
+        Timer->TickCount = 0;
+        Timer->Generation += 1;
         break;
 
     default:
@@ -896,9 +923,13 @@ Return Value:
     BCM2709_SYSTEM_TIMER_REGISTER CompareRegister;
     ULONG ControlValue;
     ULONG Counter;
-    PBCM2709_TIMER Timer;
+    ULONG Generation1;
+    ULONG Generation2;
+    TIMER_MODE Mode;
+    ULONG TickCount;
+    PBCM2709_SYSTEM_TIMER Timer;
 
-    Timer = (PBCM2709_TIMER)Context;
+    Timer = (PBCM2709_SYSTEM_TIMER)Context;
     switch (Timer->Type) {
 
     //
@@ -912,30 +943,70 @@ Return Value:
 
     //
     // Acknowledge the interrupt by clearing the match bit in the control
-    // register. Also reprogram the compare register, as it does not
+    // register. If necessary, reprogram the compare register, as it does not
     // automatically get set for the next period. That said, if the compare
     // value has slipped behind the counter (possibly due to debugger
     // activity), make sure to schedule the next period in the future.
     //
 
-    case Bcm2709TimerSystem1:
-    case Bcm2709TimerSystem3:
+    case Bcm2709TimerSystemPeriodic1:
+    case Bcm2709TimerSystemPeriodic3:
         CompareRegister = Bcm2709SystemTimerCompare1;
         ControlValue = BCM2709_SYSTEM_TIMER_CONTROL_MATCH_1;
-        if (Timer->Type == Bcm2709TimerSystem3) {
+        if (Timer->Type == Bcm2709TimerSystemPeriodic3) {
             CompareRegister = Bcm2709SystemTimerCompare3;
             ControlValue = BCM2709_SYSTEM_TIMER_CONTROL_MATCH_3;
         }
 
         WRITE_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerControl, ControlValue);
-        Compare = READ_SYSTEM_TIMER_REGISTER(CompareRegister);
-        Compare += Timer->Data;
-        Counter = READ_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerCounterLow);
-        if (BCM2709_COUNTER_LESS_THAN(Counter, Compare) == FALSE) {
-            Compare = Counter + Timer->Data;
-        }
 
-        WRITE_SYSTEM_TIMER_REGISTER(CompareRegister, Compare);
+        //
+        // Loop attempting to get a consistent view of the mode and tick count.
+        // If the read generations are not the same or both odd, it means that
+        // the timer is actively being armed. Do not rearm it here. If the
+        // generations read the same, a consistent view is found; arm the
+        // timer. Unfortunately, this consistent view may be out of date by
+        // the time it is armed. So, read the generation once again. If it got
+        // updated, try to get another consistent view.
+        //
+
+        do {
+            Generation1 = Timer->Generation;
+            Mode = Timer->Mode;
+            TickCount = Timer->TickCount;
+            Generation2 = Timer->Generation;
+            if ((Generation1 != Generation2) || ((Generation1 % 2) != 0)) {
+                break;
+            }
+
+            if (Mode == TimerModeInvalid) {
+                break;
+            }
+
+            Counter = READ_SYSTEM_TIMER_REGISTER(Bcm2709SystemTimerCounterLow);
+            if (Mode == TimerModePeriodic) {
+                Compare = READ_SYSTEM_TIMER_REGISTER(CompareRegister);
+                Compare += TickCount;
+                if (BCM2709_COUNTER_LESS_THAN(Counter, Compare) == FALSE) {
+                    Compare = Counter + TickCount;
+                }
+
+            } else {
+                Compare = Counter + TickCount;
+            }
+
+            WRITE_SYSTEM_TIMER_REGISTER(CompareRegister, Compare);
+
+            //
+            // Read the generation again. If it is different, it means another
+            // core ran through and either disabled or armed the timer. The
+            // above arming may have been incorrect.
+            //
+
+            Generation1 = Timer->Generation;
+
+        } while (Generation1 != Generation2);
+
         break;
 
     default:
