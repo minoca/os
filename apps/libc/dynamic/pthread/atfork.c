@@ -127,7 +127,7 @@ Arguments:
     ParentRoutine - Supplies an optional pointer to a routine to be called
         after a fork in the parent process.
 
-    ChildRoutine - Supplies an optional pointer to ao routine to be called
+    ChildRoutine - Supplies an optional pointer to a routine to be called
         after a fork in the child process.
 
     DynamicObjectHandle - Supplies an identifier unique to the dynamic object
@@ -341,8 +341,8 @@ Return Value:
         while (CurrentEntry != &ClAtforkList) {
             Entry = LIST_VALUE(CurrentEntry, PTHREAD_ATFORK_ENTRY, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            if (Entry->ChildRoutine != NULL) {
-                Entry->ChildRoutine();
+            if (Entry->ParentRoutine != NULL) {
+                Entry->ParentRoutine();
             }
         }
     }

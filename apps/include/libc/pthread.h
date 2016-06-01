@@ -2330,7 +2330,7 @@ Arguments:
     ParentRoutine - Supplies an optional pointer to a routine to be called
         after a fork in the parent process.
 
-    ChildRoutine - Supplies an optional pointer to ao routine to be called
+    ChildRoutine - Supplies an optional pointer to a routine to be called
         after a fork in the child process.
 
 Return Value:
