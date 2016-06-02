@@ -763,19 +763,26 @@ Return Value:
     //
 
     case Bcm2709TimerArmPeriodic:
-        ControlValue = READ_ARM_TIMER_REGISTER(Bcm2709ArmTimerControl);
-        ControlValue |= (BCM2709_ARM_TIMER_CONTROL_ENABLED |
-                         BCM2709_ARM_TIMER_CONTROL_DIVIDE_BY_1 |
-                         BCM2709_ARM_TIMER_CONTROL_32_BIT |
-                         BCM2709_ARM_TIMER_CONTROL_INTERRUPT_ENABLE);
 
         //
-        // Set the timer to its maximum value, set the configuration, and then
-        // set the value. If this is a "one-shot" request, then fake it by
-        // setting the background reload counter to the maximum. This
-        // background value will get loaded when the programmed value reaches 0
-        // and will eventually cause an interrupt. The timer, however, is more
-        // likely to be disarmed or reprogrammed before that happens.
+        // This Broadcom version of the SP804 does not appear to follow the
+        // SP804 spec. with regards to the background load register. According
+        // to the spec., when written, the load register is moved to the
+        // current value register on the next rising edge of the clock. And
+        // when the background value register is written, the value is stored
+        // in the load register but not transferred to the current value
+        // register until the current value reaches 0. Now, the spec. details
+        // that if both the load register and background load register are
+        // written before the next rising clock edge, that the current value
+        // will be replaced by the value written to the load register (not the
+        // background register) on the next clock edge. Unfortunately, the
+        // Broadcom chip appears to load the background value into current
+        // count if they are both written between clock edges.
+        //
+        // The workaround is to disable the counter, write the load register,
+        // re-enable the counter to move the loaded value to the current value
+        // register, and then, if necessary, write the background load value
+        // register.
         //
         // Do not clear the interrupt here. On a multi-core system, this arm
         // request can race with the interrupt firing. If the interrupt were
@@ -783,14 +790,22 @@ Return Value:
         // pending interrupts.
         //
 
-        WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerLoadValue, 0xFFFFFFFF);
+        ControlValue = READ_ARM_TIMER_REGISTER(Bcm2709ArmTimerControl);
+        ControlValue &= ~BCM2709_ARM_TIMER_CONTROL_ENABLED;
+        WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerControl, ControlValue);
+        WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerLoadValue, TickCount);
+        ControlValue |= (BCM2709_ARM_TIMER_CONTROL_ENABLED |
+                         BCM2709_ARM_TIMER_CONTROL_DIVIDE_BY_1 |
+                         BCM2709_ARM_TIMER_CONTROL_32_BIT |
+                         BCM2709_ARM_TIMER_CONTROL_INTERRUPT_ENABLE);
+
         WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerControl, ControlValue);
         if (Mode == TimerModeOneShot) {
             WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerBackgroundLoadValue,
                                      0xFFFFFFFF);
+
         }
 
-        WRITE_ARM_TIMER_REGISTER(Bcm2709ArmTimerLoadValue, TickCount);
         break;
 
     //
