@@ -1895,18 +1895,20 @@ Return Value:
                 }
 
                 Parameters->RemotePathSize = Packet->Sender->NameSize;
-                if (FromKernelMode != FALSE) {
-                    RtlCopyMemory(Parameters->RemotePath,
-                                  Packet->Sender->Name,
-                                  SenderCopySize);
+                if (SenderCopySize != 0) {
+                    if (FromKernelMode != FALSE) {
+                        RtlCopyMemory(Parameters->RemotePath,
+                                      Packet->Sender->Name,
+                                      SenderCopySize);
 
-                } else {
-                    Status = MmCopyToUserMode(Parameters->RemotePath,
-                                              Packet->Sender->Name,
-                                              SenderCopySize);
+                    } else {
+                        Status = MmCopyToUserMode(Parameters->RemotePath,
+                                                  Packet->Sender->Name,
+                                                  SenderCopySize);
 
-                    if (!KSUCCESS(Status)) {
-                        goto UnixSocketReceiveDataEnd;
+                        if (!KSUCCESS(Status)) {
+                            goto UnixSocketReceiveDataEnd;
+                        }
                     }
                 }
             }
