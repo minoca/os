@@ -401,6 +401,10 @@ Return Value:
 
     CurrentProcess = PsGetCurrentProcess();
     Request = (PSYSTEM_CALL_SEND_SIGNAL)SystemCallParameter;
+    if (Request->SignalNumber >= SIGNAL_COUNT) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto SendSignalEnd;
+    }
 
     //
     // Only system signal should have positive values.
