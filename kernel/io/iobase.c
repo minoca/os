@@ -1152,6 +1152,7 @@ Return Value:
     ULONGLONG FileSize;
     BOOL HasChownPermission;
     BOOL LockHeldExclusive;
+    BOOL LockHeldShared;
     BOOL ModifyFileSize;
     ULONGLONG NewFileSize;
     KSTATUS Status;
@@ -1160,6 +1161,7 @@ Return Value:
     BOOL Updated;
 
     LockHeldExclusive = FALSE;
+    LockHeldShared = FALSE;
     Thread = KeGetCurrentThread();
     FieldsToSet = Request->FieldsToSet;
     FileProperties = &(Request->FileProperties);
@@ -1252,6 +1254,7 @@ Return Value:
 
     } else {
         KeAcquireSharedExclusiveLockShared(FileObject->Lock);
+        LockHeldShared = TRUE;
     }
 
     //
@@ -1398,6 +1401,7 @@ Return Value:
 
     } else {
         KeReleaseSharedExclusiveLockShared(FileObject->Lock);
+        LockHeldShared = FALSE;
     }
 
     //
@@ -1424,6 +1428,9 @@ Return Value:
 SetFileInformationEnd:
     if (LockHeldExclusive != FALSE) {
         KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
+
+    } else if (LockHeldShared != FALSE) {
+        KeReleaseSharedExclusiveLockShared(FileObject->Lock);
     }
 
     return Status;
