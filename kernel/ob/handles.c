@@ -33,13 +33,6 @@ Environment:
 #define HANDLE_TABLE_ALLOCATION_TAG 0x646E6148 // 'dnaH'
 
 //
-// Define the maximum number of handles. This is fairly arbitrary, and it should
-// be possible to raise this so long as it doesn't collide with INVALID_HANDLE.
-//
-
-#define MAX_HANDLES 0x10000000
-
-//
 // Define the initial size of the handle table, in entries.
 //
 
@@ -853,8 +846,8 @@ Return Value:
     UINTN NewCapacity;
     KSTATUS Status;
 
-    if (Descriptor >= MAX_HANDLES) {
-        Status = STATUS_TOO_MANY_HANDLES;
+    if (Descriptor >= OB_MAX_HANDLES) {
+        Status = STATUS_INVALID_HANDLE;
         goto ExpandHandleTableEnd;
     }
 

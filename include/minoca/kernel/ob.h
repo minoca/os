@@ -95,6 +95,13 @@ Author:
 
 #define HANDLE_FLAG_MASK 0x7FFFFFFF
 
+//
+// Define the maximum number of handles. This is fairly arbitrary, and it should
+// be possible to raise this so long as it doesn't collide with INVALID_HANDLE.
+//
+
+#define OB_MAX_HANDLES 0x100000
+
 typedef enum _OBJECT_TYPE {
     ObjectInvalid,
     ObjectDirectory,

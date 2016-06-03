@@ -1952,6 +1952,11 @@ Return Value:
             goto SysFileControlEnd;
         }
 
+        if (LocalParameters.DuplicateDescriptor > (HANDLE)OB_MAX_HANDLES) {
+            Status = STATUS_INVALID_PARAMETER;
+            goto SysFileControlEnd;
+        }
+
         Flags &= ~FILE_DESCRIPTOR_CLOSE_ON_EXECUTE;
 
         //
@@ -3713,7 +3718,7 @@ Return Value:
 
     HandleValue = ObGetHandleValue(Process->HandleTable, Handle, NULL);
     if (HandleValue == NULL) {
-        return STATUS_SUCCESS;
+        return STATUS_INVALID_HANDLE;
     }
 
     IopRemoveFileLocks(HandleValue, Process);

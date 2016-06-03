@@ -148,7 +148,7 @@ Return Value:
         break;
 
     case _SC_OPEN_MAX:
-        Value = INT_MAX;
+        Value = OB_MAX_HANDLES;
         break;
 
     case _SC_STREAM_MAX:
@@ -435,7 +435,7 @@ Return Value:
 
 {
 
-    return INT_MAX;
+    return OB_MAX_HANDLES;
 }
 
 LIBC_API
