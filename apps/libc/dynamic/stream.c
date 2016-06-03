@@ -260,7 +260,6 @@ Return Value:
         goto fdopenEnd;
     }
 
-    NewFile->FilePosition = lseek(OpenFileDescriptor, 0, SEEK_CUR);
     Error = 0;
 
 fdopenEnd:
@@ -386,7 +385,6 @@ freopenEnd:
 
     Stream->Descriptor = NewDescriptor;
     Stream->OpenFlags = OpenFlags;
-    Stream->FilePosition = 0;
     Stream->BufferNextIndex = 0;
     Stream->BufferValidSize = 0;
     Stream->Flags &= (FILE_FLAG_BUFFER_ALLOCATED | FILE_FLAG_STANDARD_IO);
@@ -412,18 +410,19 @@ Arguments:
 
 Return Value:
 
-    0 always.
+    0 on success.
+
+    Returns EOF if there was an error flushing or closing the stream.
 
 --*/
 
 {
 
-    if ((Stream->Flags & FILE_FLAG_BUFFER_DIRTY) != 0) {
-        fflush(Stream);
-    }
+    int Result;
 
+    Result = fflush(Stream);
     if (Stream->Descriptor != -1) {
-        close(Stream->Descriptor);
+        Result |= close(Stream->Descriptor);
         Stream->Descriptor = -1;
     }
 
@@ -437,7 +436,7 @@ Return Value:
         ClpDestroyFileStructure(Stream);
     }
 
-    return 0;
+    return Result;
 }
 
 LIBC_API
@@ -519,17 +518,15 @@ Return Value:
 
 {
 
-    size_t BytesAvailable;
     size_t BytesToRead;
-    BOOL Flushed;
     ssize_t Result;
     size_t TotalBytesRead;
     size_t TotalBytesToRead;
 
-    Flushed = FALSE;
     TotalBytesRead = 0;
     TotalBytesToRead = Size * ItemCount;
-    if ((Stream->OpenFlags & O_RDONLY) == 0) {
+    if ((Stream->Flags & FILE_FLAG_CAN_READ) == 0) {
+        Stream->Flags |= FILE_FLAG_ERROR;
         errno = EACCES;
         return 0;
     }
@@ -547,7 +544,6 @@ Return Value:
     // Set the last operation to be a read.
     //
 
-    Stream->Flags &= ~FILE_FLAG_WROTE_LAST;
     Stream->Flags |= FILE_FLAG_READ_LAST;
 
     //
@@ -557,9 +553,8 @@ Return Value:
     if ((Stream->Flags & FILE_FLAG_UNGET_VALID) != 0) {
         *((PUCHAR)Buffer) = Stream->UngetCharacter;
         Stream->Flags &= ~FILE_FLAG_UNGET_VALID;
-        TotalBytesToRead -= 1;
         TotalBytesRead += 1;
-        if (TotalBytesToRead == 0) {
+        if (TotalBytesRead == TotalBytesToRead) {
             return TotalBytesRead / Size;
         }
     }
@@ -570,7 +565,10 @@ Return Value:
 
     if (Stream->BufferMode == _IONBF) {
         ClpFlushAllStreams(FALSE, Stream);
-        Result = read(Stream->Descriptor, Buffer, TotalBytesToRead);
+        Result = read(Stream->Descriptor,
+                      Buffer + TotalBytesRead,
+                      TotalBytesToRead - TotalBytesRead);
+
         if (Result == 0) {
             Stream->Flags |= FILE_FLAG_END_OF_FILE;
         }
@@ -580,93 +578,103 @@ Return Value:
             Result = 0;
         }
 
-        Stream->FilePosition += Result;
-        Stream->Flags |= FILE_FLAG_POSITION_AT_END;
         return Result / Size;
     }
 
     assert(Stream->Buffer != NULL);
 
     //
-    // Loop reading stuff out of the buffer and reading more things from the
-    // kernel into the buffer.
+    // Grab as much as needed out of the buffer.
     //
 
-    while (TotalBytesRead != TotalBytesToRead) {
+    BytesToRead = Stream->BufferValidSize - Stream->BufferNextIndex;
+    if (BytesToRead > (TotalBytesToRead - TotalBytesRead)) {
+        BytesToRead = TotalBytesToRead - TotalBytesRead;
+    }
 
-        assert(Stream->BufferValidSize >= Stream->BufferNextIndex);
+    memcpy(Buffer + TotalBytesRead,
+           Stream->Buffer + Stream->BufferNextIndex,
+           BytesToRead);
 
-        BytesAvailable = Stream->BufferValidSize - Stream->BufferNextIndex;
-        if (BytesAvailable > (TotalBytesToRead - TotalBytesRead)) {
+    TotalBytesRead += BytesToRead;
+    Stream->BufferNextIndex += BytesToRead;
+    if (Stream->BufferNextIndex == Stream->BufferValidSize) {
+        Stream->BufferNextIndex = 0;
+        Stream->BufferValidSize = 0;
+    }
+
+    //
+    // Do direct reads to the caller's buffer if they're as large as the
+    // buffer itself to avoid silly copies.
+    //
+
+    if (TotalBytesToRead >= Stream->BufferSize) {
+        while (TotalBytesRead != TotalBytesToRead) {
             BytesToRead = TotalBytesToRead - TotalBytesRead;
+            do {
+                Result = read(Stream->Descriptor,
+                              Buffer + TotalBytesRead,
+                              BytesToRead);
 
-        } else {
-            BytesToRead = BytesAvailable;
-        }
+            } while ((Result == -1) && (errno == EINTR));
 
-        if (BytesAvailable != 0) {
-            memcpy(Buffer + TotalBytesRead,
-                   Stream->Buffer + Stream->BufferNextIndex,
-                   BytesToRead);
+            if (Result <= 0) {
+                if (Result < 0) {
+                    Stream->Flags |= FILE_FLAG_ERROR;
 
-            Stream->BufferNextIndex += BytesToRead;
-            TotalBytesRead += BytesToRead;
-        }
+                } else {
+                    Stream->Flags |= FILE_FLAG_END_OF_FILE;
+                }
 
-        if (TotalBytesRead == TotalBytesToRead) {
-            break;
-        }
-
-        assert(Stream->BufferValidSize == Stream->BufferNextIndex);
-
-        if ((Stream->Flags & FILE_FLAG_BUFFER_DIRTY) != 0) {
-            fflush_unlocked(Stream);
-
-            assert((Stream->BufferNextIndex == 0) &&
-                   (Stream->BufferValidSize == 0));
-
-        } else {
-            Stream->BufferNextIndex = 0;
-            Stream->BufferValidSize = 0;
-        }
-
-        //
-        // This may block, so flush all other streams with pending output. A
-        // common scenario is that the user just wrote to standard out and is
-        // now trying to read from standard in.
-        //
-
-        if (Flushed == FALSE) {
-            ClpFlushAllStreams(FALSE, Stream);
-            Flushed = TRUE;
-        }
-
-        //
-        // Read some more out of the buffer.
-        //
-
-        do {
-            Result = read(Stream->Descriptor,
-                          Stream->Buffer,
-                          Stream->BufferSize);
-
-        } while ((Result == -1) && (errno == EINTR));
-
-        if (Result == 0) {
-            Stream->Flags |= FILE_FLAG_END_OF_FILE;
-        }
-
-        if (Result <= 0) {
-            if (Result < 0) {
-                Stream->Flags |= FILE_FLAG_ERROR;
+                break;
             }
 
-            break;
+            TotalBytesRead += Result;
         }
 
-        Stream->FilePosition += Result;
-        Stream->BufferValidSize = Result;
-        Stream->Flags |= FILE_FLAG_POSITION_AT_END;
+    //
+    // This is a smaller read, use the buffer.
+    //
+
+    } else {
+        while (TotalBytesRead != TotalBytesToRead) {
+
+            //
+            // The buffer should have been cleared out by the first portion of
+            // this function or fully satisfied by it.
+            //
+
+            assert((Stream->BufferValidSize == 0) &&
+                   (Stream->BufferNextIndex == 0));
+
+            do {
+                Result = read(Stream->Descriptor,
+                              Stream->Buffer,
+                              Stream->BufferSize);
+
+            } while ((Result == -1) && (errno == EINTR));
+
+            if (Result <= 0) {
+                if (Result < 0) {
+                    Stream->Flags |= FILE_FLAG_ERROR;
+
+                } else {
+                    Stream->Flags |= FILE_FLAG_END_OF_FILE;
+                }
+
+                break;
+            }
+
+            BytesToRead = Result;
+            if (BytesToRead > (TotalBytesToRead - TotalBytesRead)) {
+                BytesToRead = TotalBytesToRead - TotalBytesRead;
+                Stream->BufferValidSize = Result;
+                Stream->BufferNextIndex = BytesToRead;
+            }
+
+            memcpy(Buffer + TotalBytesRead, Stream->Buffer, BytesToRead);
+            TotalBytesRead += BytesToRead;
+        }
     }
 
     return TotalBytesRead / Size;
@@ -755,7 +763,6 @@ Return Value:
     ULONG CharacterIndex;
     BOOL Flush;
     ssize_t Result;
-    size_t SpaceAvailable;
     PSTR String;
     size_t TotalBytesToWrite;
     size_t TotalBytesWritten;
@@ -776,9 +783,6 @@ Return Value:
         return 0;
     }
 
-    Stream->Flags &= ~FILE_FLAG_READ_LAST;
-    Stream->Flags |= FILE_FLAG_WROTE_LAST;
-
     //
     // The unget character isn't valid after things have been written.
     //
@@ -788,18 +792,51 @@ Return Value:
     }
 
     //
-    // For unbuffered streams, just write the file contents directly.
+    // For unbuffered streams or large writes, just write the file contents
+    // directly.
     //
 
-    if (Stream->BufferMode == _IONBF) {
-        Result = write(Stream->Descriptor, Buffer, TotalBytesToWrite);
-        if (Result == -1) {
-            Stream->Flags |= FILE_FLAG_ERROR;
-            Result = 0;
+    if ((Stream->BufferMode == _IONBF) ||
+        (TotalBytesToWrite > Stream->BufferSize)) {
+
+        if (fflush_unlocked(Stream) != 0) {
+            return -1;
         }
 
-        Stream->FilePosition += Result;
-        return Result / Size;
+        //
+        // Set the last thing that happened to be a write.
+        //
+
+        Stream->Flags &= ~FILE_FLAG_READ_LAST;
+        while (TotalBytesWritten != TotalBytesToWrite) {
+            do {
+                Result = write(Stream->Descriptor,
+                               Buffer + TotalBytesWritten,
+                               TotalBytesToWrite - TotalBytesWritten);
+
+            } while ((Result < 0) && (errno == EINTR));
+
+            if (Result <= 0) {
+                Stream->Flags |= FILE_FLAG_ERROR;
+                break;
+            }
+
+            TotalBytesWritten += Result;
+        }
+
+        return TotalBytesWritten / Size;
+    }
+
+    //
+    // If the last thing that happened was a read, flush the buffer.
+    //
+
+    if ((Stream->Flags & FILE_FLAG_READ_LAST) != 0) {
+        if (fflush_unlocked(Stream) != 0) {
+            return -1;
+        }
+
+        Stream->Flags &= ~FILE_FLAG_READ_LAST;
     }
 
     //
@@ -808,33 +845,9 @@ Return Value:
 
     Flush = FALSE;
     while (TotalBytesWritten != TotalBytesToWrite) {
-        SpaceAvailable = Stream->BufferSize - Stream->BufferNextIndex;
-        if (SpaceAvailable > (TotalBytesToWrite - TotalBytesWritten)) {
+        BytesToWrite = Stream->BufferSize - Stream->BufferNextIndex;
+        if (BytesToWrite > (TotalBytesToWrite - TotalBytesWritten)) {
             BytesToWrite = TotalBytesToWrite - TotalBytesWritten;
-
-        } else {
-            BytesToWrite = SpaceAvailable;
-        }
-
-        //
-        // If the kernel file pointer is at the end of the buffer, then this
-        // buffer was filled by a read. Extending the buffer would confuse the
-        // stream's concept of the file pointer, so flush it to get everything
-        // back to zero.
-        //
-
-        if (((Stream->Flags & FILE_FLAG_POSITION_AT_END) != 0) &&
-            (Stream->BufferNextIndex + BytesToWrite >
-             Stream->BufferValidSize)) {
-
-            Result = fflush_unlocked(Stream);
-            if (Result == -1) {
-                break;
-            }
-
-            assert((Stream->Flags & FILE_FLAG_POSITION_AT_END) == 0);
-
-            continue;
         }
 
         //
@@ -863,19 +876,15 @@ Return Value:
         //
 
         if (BytesToWrite != 0) {
-            Stream->Flags |= FILE_FLAG_BUFFER_DIRTY;
             memcpy(Stream->Buffer + Stream->BufferNextIndex,
                    (PVOID)Buffer + TotalBytesWritten,
                    BytesToWrite);
 
+            assert(Stream->BufferValidSize == Stream->BufferNextIndex);
+
             Stream->BufferNextIndex += BytesToWrite;
-            if (Stream->BufferValidSize < Stream->BufferNextIndex) {
-                Stream->BufferValidSize = Stream->BufferNextIndex;
-            }
-
-            if ((Stream->BufferValidSize == Stream->BufferSize) &&
-                (Stream->BufferNextIndex == Stream->BufferSize)) {
-
+            Stream->BufferValidSize = Stream->BufferNextIndex;
+            if (Stream->BufferNextIndex == Stream->BufferSize) {
                 Flush = TRUE;
             }
 
@@ -896,8 +905,7 @@ Return Value:
         assert((Flush != FALSE) || (TotalBytesWritten == TotalBytesToWrite));
 
         if (Flush != FALSE) {
-            Result = fflush_unlocked(Stream);
-            if (Result == -1) {
+            if (fflush_unlocked(Stream) < 0) {
                 break;
             }
         }
@@ -975,9 +983,8 @@ Return Value:
 
 {
 
-    size_t BytesWritten;
-    off_t Extra;
-    off_t NewOffset;
+    ssize_t BytesWritten;
+    off_t Offset;
     ssize_t Result;
 
     if (Stream == NULL) {
@@ -996,110 +1003,44 @@ Return Value:
     }
 
     //
-    // Discard the unget character if there is one.
+    // If the buffer is full of read data, try and back up the file pointer.
+    // Ignore failures.
     //
 
-    Extra = 0;
-    if ((Stream->Flags & FILE_FLAG_UNGET_VALID) != 0) {
-        Stream->Flags &= ~FILE_FLAG_UNGET_VALID;
-        Extra = 1;
-    }
-
-    //
-    // If the position is at the end of the buffer, then move it back to
-    // the beginning.
-    //
-
-    if ((Stream->Flags & FILE_FLAG_POSITION_AT_END) != 0) {
-
-        ASSERT(Stream->FilePosition >= Stream->BufferValidSize);
-
-        //
-        // Seek to the beginning of the buffer if the buffer is dirty or there
-        // is data that is going to be discarded.
-        //
-
-        if (((Stream->Flags & FILE_FLAG_BUFFER_DIRTY) != 0) ||
-            ((Stream->BufferValidSize - Stream->BufferNextIndex) != 0)) {
-
-            NewOffset = Stream->FilePosition - Stream->BufferValidSize;
-
-            //
-            // If the stream is not dirty, then the final file position needs
-            // to be where the user thinks it is, which is the next index.
-            // For dirty buffers, that seek is done explicitly after the whole
-            // buffer is written out.
-            //
-
-            if ((Stream->Flags & FILE_FLAG_BUFFER_DIRTY) == 0) {
-                NewOffset += Stream->BufferNextIndex;
-            }
-
-            if ((NewOffset != 0) && (Extra != 0)) {
-                NewOffset -= Extra;
-            }
-
-            NewOffset = lseek(Stream->Descriptor, NewOffset, SEEK_SET);
-            if (NewOffset < 0) {
-                return EOF;
-            }
-
-            Stream->FilePosition = NewOffset;
+    if ((Stream->Flags & FILE_FLAG_READ_LAST) != 0) {
+        Offset = Stream->BufferValidSize - Stream->BufferNextIndex;
+        if ((Stream->Flags & FILE_FLAG_UNGET_VALID) != 0) {
+            Offset += 1;
         }
 
-        Stream->Flags &= ~FILE_FLAG_POSITION_AT_END;
-    }
+        lseek(Stream->Descriptor, -Offset, SEEK_CUR);
 
-    if ((Stream->Flags & FILE_FLAG_BUFFER_DIRTY) != 0) {
+    //
+    // The buffer is full of dirty data. Write it out.
+    //
+
+    } else {
         BytesWritten = 0;
-        while (BytesWritten != Stream->BufferValidSize) {
+        while (BytesWritten < Stream->BufferNextIndex) {
             do {
                 Result = write(Stream->Descriptor,
                                Stream->Buffer + BytesWritten,
-                               Stream->BufferValidSize - BytesWritten);
+                               Stream->BufferNextIndex - BytesWritten);
 
-            } while ((Result == -1) && (errno == EINTR));
+            } while ((Result < 0) && (errno == EINTR));
 
             if (Result <= 0) {
-                if (Result < 0) {
-                    Stream->Flags |= FILE_FLAG_ERROR;
-                }
-
-                break;
+                Stream->Flags |= FILE_FLAG_ERROR;
+                return EOF;
             }
 
             BytesWritten += Result;
-            Stream->FilePosition += Result;
-        }
-
-        Stream->Flags &= ~FILE_FLAG_BUFFER_DIRTY;
-
-        //
-        // If the user was originally in the middle in the buffer when the flush
-        // started, move the file position back to that middle part (as it's now
-        // at the end).
-        //
-
-        if (Stream->BufferNextIndex != Stream->BufferValidSize) {
-
-            assert(Stream->FilePosition >=
-                   Stream->BufferValidSize - Stream->BufferNextIndex);
-
-            Stream->FilePosition -= Stream->BufferValidSize -
-                                    Stream->BufferNextIndex;
-
-            Stream->FilePosition = lseek(Stream->Descriptor,
-                                         Stream->FilePosition,
-                                         SEEK_SET);
         }
     }
 
-    Stream->BufferValidSize = 0;
     Stream->BufferNextIndex = 0;
-    if (Result == -1) {
-        return EOF;
-    }
-
+    Stream->BufferValidSize = 0;
+    Stream->Flags &= ~FILE_FLAG_UNGET_VALID;
     return 0;
 }
 
@@ -1237,22 +1178,24 @@ Return Value:
 
 {
 
-    ULONGLONG Position;
+    off_t NewOffset;
 
-    Position = Stream->FilePosition;
-    if ((Stream->Flags & FILE_FLAG_POSITION_AT_END) != 0) {
-
-        assert(Stream->BufferValidSize - Stream->BufferNextIndex <= Position);
-
-        Position -= Stream->BufferValidSize;
+    NewOffset = lseek(Stream->Descriptor, 0, SEEK_CUR);
+    if (NewOffset == -1) {
+        return -1;
     }
 
-    Position += Stream->BufferNextIndex;
-    if ((Stream->Flags & FILE_FLAG_UNGET_VALID) != 0) {
-        Position -= 1;
+    if ((Stream->Flags & FILE_FLAG_READ_LAST) != 0) {
+        NewOffset -= Stream->BufferValidSize - Stream->BufferNextIndex;
+        if ((Stream->Flags & FILE_FLAG_UNGET_VALID) != 0) {
+            NewOffset -= 1;
+        }
+
+    } else {
+        NewOffset += Stream->BufferValidSize;
     }
 
-    return Position;
+    return NewOffset;
 }
 
 LIBC_API
@@ -1445,82 +1388,22 @@ Return Value:
 
 {
 
-    off_t CurrentPosition;
-    off_t Destination;
-    off_t NewOffset;
-    off_t RangeBegin;
-    off_t RangeEnd;
-    int Result;
-
     //
-    // Discard the unget character if there is one.
+    // It would be great to save the system call (or several) if the seek is
+    // currently within the buffer, however apps (like m4 for example) rely on
+    // using fseek to determine whether a descriptor is seekable, so ultimately
+    // this function has to hit lseek somewhere.
     //
 
-    if ((Stream->Flags & FILE_FLAG_UNGET_VALID) != 0) {
-        Stream->Flags &= ~FILE_FLAG_UNGET_VALID;
-        Stream->FilePosition += 1;
+    fflush_unlocked(Stream);
+    Stream->BufferNextIndex = 0;
+    Stream->BufferValidSize = 0;
+    Stream->Flags &= ~(FILE_FLAG_END_OF_FILE | FILE_FLAG_ERROR);
+    if (lseek(Stream->Descriptor, Offset, Whence) != -1) {
+        return 0;
     }
 
-    if (Stream->Descriptor == -1) {
-        errno = EBADF;
-        return -1;
-    }
-
-    //
-    // It's possible the file position can be moved without bothering the
-    // system. Take a look.
-    //
-
-    if ((Stream->BufferMode != _IONBF) &&
-        ((Whence == SEEK_CUR) || (Whence == SEEK_SET))) {
-
-        CurrentPosition = ftello_unlocked(Stream);
-        if (Whence == SEEK_CUR) {
-            Destination = CurrentPosition + Offset;
-
-        } else {
-            Destination = Offset;
-        }
-
-        RangeBegin = CurrentPosition - Stream->BufferNextIndex;
-        RangeEnd = RangeBegin + Stream->BufferValidSize;
-        if ((Destination >= RangeBegin) && (Destination <= RangeEnd)) {
-            Stream->BufferNextIndex = Destination - RangeBegin;
-            Stream->Flags &= ~FILE_FLAG_END_OF_FILE;
-            return 0;
-
-        //
-        // Adjust for the difference between the internal file position stored
-        // in the stream and the file position stored by the kernel.
-        //
-
-        } else if (Whence == SEEK_CUR) {
-            Whence = SEEK_SET;
-            Offset += CurrentPosition;
-        }
-    }
-
-    //
-    // If it's an output buffer, flush before seeking.
-    //
-
-    Result = fflush_unlocked(Stream);
-    if (Result != 0) {
-        return -1;
-    }
-
-    //
-    // Reset the buffer position and perform the low level seek.
-    //
-
-    NewOffset = lseek(Stream->Descriptor, Offset, Whence);
-    if (NewOffset == -1) {
-        return -1;
-    }
-
-    Stream->FilePosition = NewOffset;
-    Stream->Flags &= ~FILE_FLAG_END_OF_FILE;
-    return 0;
+    return -1;
 }
 
 LIBC_API
@@ -3451,7 +3334,7 @@ Return Value:
         // Flush any dirty streams.
         //
 
-        if ((Stream->Flags & FILE_FLAG_BUFFER_DIRTY) != 0) {
+        if ((Stream->Flags & FILE_FLAG_READ_LAST) == 0) {
             if ((AllUnlocked != FALSE) || (Stream == UnlockedStream)) {
                 fflush_unlocked(Stream);
 
@@ -3519,6 +3402,12 @@ Return Value:
     pthread_mutex_init(&(File->Lock), &Attribute);
     pthread_mutexattr_destroy(&Attribute);
     File->BufferMode = BufferMode;
+    if ((OpenFlags & O_ACCMODE) != O_WRONLY) {
+        File->Flags |= FILE_FLAG_CAN_READ;
+        if ((OpenFlags & O_ACCMODE) == O_RDONLY) {
+            File->Flags |= FILE_FLAG_READ_LAST;
+        }
+    }
 
     //
     // If the stream is anything other than non-buffered, create a buffer for
@@ -3692,7 +3581,7 @@ Return Value:
             break;
 
         case '+':
-            Flags &= ~(O_RDONLY | O_WRONLY);
+            Flags &= ~O_ACCMODE;
             Flags |= O_RDWR;
             break;
 

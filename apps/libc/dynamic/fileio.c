@@ -1739,8 +1739,9 @@ remove (
 Routine Description:
 
     This routine attempts to delete the object at the given path. If the
-    object pointed to by the given path, the behavior of remove is identical to
-    rmdir. Otherwise, the behavior of remove is identical to unlink.
+    object pointed to by the given path is a directory, the behavior of remove
+    is identical to rmdir. Otherwise, the behavior of remove is identical to
+    unlink.
 
 Arguments:
 
@@ -1761,7 +1762,7 @@ Return Value:
     int Result;
     struct stat Stat;
 
-    Result = stat(Path, &Stat);
+    Result = lstat(Path, &Stat);
     if (Result < 0) {
         return Result;
     }
@@ -3220,12 +3221,21 @@ Return Value:
     // Set the access mask.
     //
 
-    if ((OpenFlags & O_RDONLY) != 0) {
+    switch (OpenFlags & O_ACCMODE) {
+    case O_RDONLY:
         OsOpenFlags |= SYS_OPEN_FLAG_READ;
-    }
+        break;
 
-    if ((OpenFlags & O_WRONLY) != 0) {
+    case O_WRONLY:
         OsOpenFlags |= SYS_OPEN_FLAG_WRITE;
+        break;
+
+    case O_RDWR:
+        OsOpenFlags |= SYS_OPEN_FLAG_READ | SYS_OPEN_FLAG_WRITE;
+        break;
+
+    default:
+        break;
     }
 
     assert(O_EXEC == O_SEARCH);

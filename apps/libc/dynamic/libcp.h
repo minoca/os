@@ -73,13 +73,11 @@ Author:
 #define FILE_FLAG_ERROR             0x00000004
 #define FILE_FLAG_BYTE_ORIENTED     0x00000008
 #define FILE_FLAG_WIDE_ORIENTED     0x00000010
-#define FILE_FLAG_BUFFER_DIRTY      0x00000020
-#define FILE_FLAG_READ_LAST         0x00000040
-#define FILE_FLAG_WROTE_LAST        0x00000080
-#define FILE_FLAG_DISABLE_LOCKING   0x00000100
-#define FILE_FLAG_POSITION_AT_END   0x00000200
-#define FILE_FLAG_BUFFER_ALLOCATED  0x00000400
-#define FILE_FLAG_STANDARD_IO       0x00000800
+#define FILE_FLAG_READ_LAST         0x00000020
+#define FILE_FLAG_DISABLE_LOCKING   0x00000040
+#define FILE_FLAG_BUFFER_ALLOCATED  0x00000080
+#define FILE_FLAG_STANDARD_IO       0x00000100
+#define FILE_FLAG_CAN_READ          0x00000200
 
 #define FILE_FLAG_ORIENTATION_MASK \
     (FILE_FLAG_BYTE_ORIENTED | FILE_FLAG_WIDE_ORIENTED)
@@ -139,9 +137,6 @@ Members:
     BufferNextIndex - Stores the index into the buffer where the next read or
         write will occur.
 
-    FilePosition - Stores the current position within the file, either where
-        the buffer begins or where the buffer ends.
-
     UngetCharacter - Stores the unget character.
 
     Pid - Stores the process ID of the process if the stream was opened with
@@ -162,7 +157,6 @@ typedef struct _FILE {
     ULONG BufferSize;
     ULONG BufferValidSize;
     ULONG BufferNextIndex;
-    ULONGLONG FilePosition;
     WCHAR UngetCharacter;
     pid_t Pid;
     mbstate_t ShiftState;

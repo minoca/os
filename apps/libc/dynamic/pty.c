@@ -425,12 +425,21 @@ Return Value:
 
     Handle = INVALID_HANDLE;
     OpenFlags = 0;
-    if ((Flags & O_RDONLY) != 0) {
+    switch (Flags & O_ACCMODE) {
+    case O_RDONLY:
         OpenFlags |= SYS_OPEN_FLAG_READ;
-    }
+        break;
 
-    if ((Flags & O_WRONLY) != 0) {
+    case O_WRONLY:
         OpenFlags |= SYS_OPEN_FLAG_WRITE;
+        break;
+
+    case O_RDWR:
+        OpenFlags |= SYS_OPEN_FLAG_READ | SYS_OPEN_FLAG_WRITE;
+        break;
+
+    default:
+        break;
     }
 
     if ((Flags & O_NOCTTY) != 0) {

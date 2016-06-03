@@ -360,8 +360,9 @@ remove (
 Routine Description:
 
     This routine attempts to delete the object at the given path. If the
-    object pointed to by the given path, the behavior of remove is identical to
-    rmdir. Otherwise, the behavior of remove is identical to unlink.
+    object pointed to by the given path is a directory, the behavior of remove
+    is identical to rmdir. Otherwise, the behavior of remove is identical to
+    unlink.
 
 Arguments:
 
@@ -505,7 +506,9 @@ Arguments:
 
 Return Value:
 
-    0 always.
+    0 on success.
+
+    Returns EOF if there was an error flushing or closing the stream.
 
 --*/
 

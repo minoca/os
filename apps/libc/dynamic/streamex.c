@@ -110,7 +110,7 @@ Return Value:
 
 {
 
-    return Stream->BufferValidSize - Stream->BufferNextIndex;
+    return Stream->BufferValidSize;
 }
 
 LIBC_API
@@ -172,7 +172,7 @@ Return Value:
 
 {
 
-    if ((Stream->OpenFlags & O_RDONLY) != 0) {
+    if ((Stream->Flags & FILE_FLAG_CAN_READ) != 0) {
         return 1;
     }
 
@@ -241,10 +241,6 @@ Return Value:
 
 {
 
-    if ((Stream->OpenFlags & (O_WRONLY | O_APPEND | O_RDONLY)) == O_RDONLY) {
-        return 1;
-    }
-
     if ((Stream->Flags & FILE_FLAG_READ_LAST) != 0) {
         return 1;
     }
@@ -281,13 +277,7 @@ Return Value:
 
 {
 
-    if (((Stream->OpenFlags & (O_WRONLY | O_APPEND)) != 0) &&
-        ((Stream->OpenFlags & O_RDONLY) == 0)) {
-
-        return 1;
-    }
-
-    if ((Stream->Flags & FILE_FLAG_WROTE_LAST) != 0) {
+    if ((Stream->Flags & FILE_FLAG_READ_LAST) == 0) {
         return 1;
     }
 
@@ -434,7 +424,7 @@ Return Value:
 
     Stream->BufferNextIndex = 0;
     Stream->BufferValidSize = 0;
-    Stream->Flags &= ~(FILE_FLAG_UNGET_VALID | FILE_FLAG_POSITION_AT_END);
+    Stream->Flags &= ~FILE_FLAG_UNGET_VALID;
     return;
 }
 
@@ -506,7 +496,7 @@ Return Value:
     ULONG ReadAheadSize;
 
     ReadAheadSize = Stream->BufferValidSize - Stream->BufferNextIndex;
-    if ((Stream->Flags & FILE_FLAG_UNGET_VALID) != 0) {
+    if ((Stream->Flags & FILE_FLAG_WIDE_ORIENTED) != 0) {
         ReadAheadSize /= sizeof(WCHAR);
     }
 
