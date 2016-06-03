@@ -1438,7 +1438,7 @@ Return Value:
 
     if (IopArePathsEqual(".", Name, NameSize) != FALSE) {
         if (TypeOverride != IoObjectInvalid) {
-            return STATUS_FILE_EXISTS;
+            return STATUS_FILE_IS_DIRECTORY;
         }
 
         //
