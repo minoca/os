@@ -2812,8 +2812,15 @@ Return Value:
     OldData = NULL;
     ZoneData = NULL;
     Variable = getenv("TZ");
-    if ((Variable != NULL) && (Variable != ClPreviousTzVariable)) {
-        ClPreviousTzVariable = Variable;
+    if ((Variable != NULL) &&
+        ((ClPreviousTzVariable == NULL) ||
+         (strcmp(ClPreviousTzVariable, Variable) != 0))) {
+
+        if (ClPreviousTzVariable != NULL) {
+            free(ClPreviousTzVariable);
+        }
+
+        ClPreviousTzVariable = strdup(Variable);
         ClpCreateCustomTimeZone(Variable, &ZoneData, &ZoneDataSize);
     }
 
