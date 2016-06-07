@@ -34,11 +34,11 @@ Environment:
 
 //
 // The regular debug break poll interval is once per second, and profiling
-// events are sent every quarter of a second.
+// events are sent twice per second.
 //
 
 #define CLOCK_DEBUG_POLL_EVENT_RATE_SHIFT 0
-#define CLOCK_PROFILING_EVENT_RATE_SHIFT 2
+#define CLOCK_PROFILING_EVENT_RATE_SHIFT 1
 
 //
 // ----------------------------------------------- Internal Function Prototypes

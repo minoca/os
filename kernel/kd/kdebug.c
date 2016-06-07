@@ -366,6 +366,11 @@ KdpDeviceDisconnect (
     VOID
     );
 
+VOID
+KdpFreezeProcessors (
+    VOID
+    );
+
 //
 // ------------------------------------------------------------------ Functions
 //
@@ -1010,11 +1015,9 @@ Return Value:
     BOOL OutsideHole;
     PVOID PreviousSingleStepAddress;
     PPROCESSOR_BLOCK ProcessorBlock;
-    PROCESSOR_SET ProcessorSet;
     BOOL ReceiveDataAvailable;
     BOOL SingleStepHandled;
     KSTATUS Status;
-    ULONG Timeout;
 
     PreviousSingleStepAddress = NULL;
     ProcessorBlock = NULL;
@@ -1091,39 +1094,12 @@ Return Value:
 
             //
             // Send an NMI to freeze all other processors, and wait until all
-            // processors are frozen.
+            // processors are frozen. Skip this when sending profiling data to
+            // allow higher throughput.
             //
 
-            ProcessorSet.Target = ProcessorTargetAllExcludingSelf;
-            Status = HlSendIpi(IpiTypeNmi, &ProcessorSet);
-            if (KSUCCESS(Status)) {
-                Timeout = DEBUG_PROCESSOR_WAIT_TIME;
-
-                //
-                // Wait until all processors are frozen, or it's time to give
-                // up. Keep the time counter fresh too during this period.
-                //
-
-                KD_TRACE(KdTraceWaitingForFrozenProcessors);
-                while (KdProcessorsFrozen != KeActiveProcessorCount) {
-                    if ((KdConnectionTimeout != MAX_ULONG) &&
-                        (KdAvoidTimeCounter == FALSE)) {
-
-                        if (Timeout == 0) {
-                            break;
-
-                        } else if (Timeout < DEBUG_STALL_INCREMENT) {
-                            Timeout = DEBUG_STALL_INCREMENT;
-                        }
-
-                        HlBusySpin(DEBUG_STALL_INCREMENT);
-                        Timeout -= DEBUG_STALL_INCREMENT;
-                    }
-
-                    if (KdAvoidTimeCounter == FALSE) {
-                        HlQueryTimeCounter();
-                    }
-                }
+            if (Exception != EXCEPTION_PROFILER) {
+                KdpFreezeProcessors();
             }
 
         //
@@ -1233,6 +1209,12 @@ Return Value:
             goto DebugExceptionHandlerEnd;
         }
 
+        //
+        // The other cores were not frozen above. Attempt to freeze them now
+        // that the debugger needs break in.
+        //
+
+        KdpFreezeProcessors();
         Exception = EXCEPTION_BREAK;
 
     //
@@ -4179,6 +4161,73 @@ Return Value:
 
 DeviceDisconnectEnd:
     KD_DEVICE_TRACE(KdDeviceTraceDisconnected);
+    return;
+}
+
+VOID
+KdpFreezeProcessors (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to freeze all of the processors, assuming that the
+    current processor is the freeze owner. It sends an NMI IPI to all of the
+    other processors and waits for them to be marked frozen.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PROCESSOR_SET ProcessorSet;
+    KSTATUS Status;
+    ULONG Timeout;
+
+    ProcessorSet.Target = ProcessorTargetAllExcludingSelf;
+    Status = HlSendIpi(IpiTypeNmi, &ProcessorSet);
+    if (!KSUCCESS(Status)) {
+        goto FreezeProcessorsEnd;
+    }
+
+    Timeout = DEBUG_PROCESSOR_WAIT_TIME;
+
+    //
+    // Wait until all processors are frozen, or it's time to give
+    // up. Keep the time counter fresh too during this period.
+    //
+
+    KD_TRACE(KdTraceWaitingForFrozenProcessors);
+    while (KdProcessorsFrozen != KeActiveProcessorCount) {
+        if ((KdConnectionTimeout != MAX_ULONG) &&
+            (KdAvoidTimeCounter == FALSE)) {
+
+            if (Timeout == 0) {
+                break;
+
+            } else if (Timeout < DEBUG_STALL_INCREMENT) {
+                Timeout = DEBUG_STALL_INCREMENT;
+            }
+
+            HlBusySpin(DEBUG_STALL_INCREMENT);
+            Timeout -= DEBUG_STALL_INCREMENT;
+        }
+
+        if (KdAvoidTimeCounter == FALSE) {
+            HlQueryTimeCounter();
+        }
+    }
+
+FreezeProcessorsEnd:
     return;
 }
 
