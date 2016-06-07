@@ -1438,6 +1438,12 @@ Return Value:
 
     if (IopArePathsEqual(".", Name, NameSize) != FALSE) {
         if (TypeOverride != IoObjectInvalid) {
+            if ((TypeOverride == IoObjectRegularDirectory) ||
+                (TypeOverride == IoObjectSymbolicLink)) {
+
+                return STATUS_FILE_EXISTS;
+            }
+
             return STATUS_FILE_IS_DIRECTORY;
         }
 
