@@ -249,7 +249,6 @@ KdpPrint (
 
 KSTATUS
 KdpSendProfilingData (
-    PULONG Flags,
     PBOOL BreakInRequested
     );
 
@@ -924,14 +923,16 @@ Return Value:
     // request.
     //
 
-    if (KdDebuggerConnected == FALSE) {
+    Flags = 0;
+    if (KdDebuggerConnected != FALSE) {
+        Flags = SpGetProfilerDataStatus();
+    }
+
+    if (Flags == 0) {
         KdPollForBreakRequest();
 
     } else {
-        Flags = SpGetProfilerDataStatus();
-        if (Flags != 0) {
-            RtlDebugService(EXCEPTION_PROFILER, &Flags);
-        }
+        RtlDebugService(EXCEPTION_PROFILER, NULL);
     }
 
     return;
@@ -1225,7 +1226,7 @@ Return Value:
 
     } else if (Exception == EXCEPTION_PROFILER) {
         KD_TRACE(KdTraceSendingProfilingData);
-        Status = KdpSendProfilingData((PULONG)Parameter, &BreakInRequested);
+        Status = KdpSendProfilingData(&BreakInRequested);
         if ((KSUCCESS(Status) && (BreakInRequested == FALSE)) ||
             (!KSUCCESS(Status))) {
 
@@ -2312,7 +2313,6 @@ Return Value:
 
 KSTATUS
 KdpSendProfilingData (
-    PULONG Flags,
     PBOOL BreakInRequested
     )
 
@@ -2321,13 +2321,9 @@ KdpSendProfilingData (
 Routine Description:
 
     This routine calls the system profiler for data and sends it to the
-    debugger. It will repeatedly call the profiler with the given flags until
-    the profiler indicates that there is no more data to send.
+    debugger.
 
 Arguments:
-
-    Flags - Supplies a pointer to flags specifying what types of profiling
-        data are ready to be sent.
 
     BreakInRequested - Supplies a pointer where a boolean will be returned
         indicating if the debugger would like to break in.
@@ -2341,22 +2337,36 @@ Return Value:
 {
 
     ULONG DataSize;
+    ULONG Flags;
     BOOL LocalBreakInRequested;
     PPROCESSOR_BLOCK ProcessorBlock;
     PPROFILER_NOTIFICATION ProfilerNotification;
     KSTATUS Status;
 
+    *BreakInRequested = FALSE;
+
+    //
+    // Check to see if there is any data to send. Another core may have
+    // collected and sent the data since the flags were checked before the
+    // debug exception.
+    //
+
+    Flags = SpGetProfilerDataStatus();
+    if (Flags == 0) {
+        Status = STATUS_SUCCESS;
+        goto SendProfilingDataEnd;
+    }
+
     ProcessorBlock = KeGetCurrentProcessorBlockForDebugger();
     DataSize = DEBUG_PAYLOAD_SIZE - sizeof(PROFILER_NOTIFICATION_HEADER);
     ProfilerNotification = (PPROFILER_NOTIFICATION)KdTxPacket.Payload;
     KdTxPacket.Header.Command = DbgProfilerNotification;
-    *BreakInRequested = FALSE;
 
     //
     // Loop as long as there is more profiling data to send.
     //
 
-    while (*Flags != 0) {
+    while (Flags != 0) {
 
         //
         // Initialize the debugger packet for a profiler notification message.
@@ -2371,7 +2381,7 @@ Return Value:
         //
 
         ProfilerNotification->Header.DataSize = DataSize;
-        Status = SpGetProfilerData(ProfilerNotification, Flags);
+        Status = SpGetProfilerData(ProfilerNotification, &Flags);
         if (!KSUCCESS(Status)) {
             goto SendProfilingDataEnd;
         }

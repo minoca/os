@@ -416,11 +416,6 @@ Return Value:
 
     ASSERT(KeGetRunLevel() >= RunLevelClock);
 
-    if (SpEnabledFlags == 0) {
-        KdPollForBreakRequest();
-        return;
-    }
-
     //
     // Call out to the current profiling consumer to have that component ask
     // for the data.
@@ -668,7 +663,6 @@ Return Value:
 
             Flags &= ~PROFILER_TYPE_FLAG_MEMORY_STATISTICS;
         }
-
     }
 
     if ((Flags & PROFILER_TYPE_FLAG_THREAD_STATISTICS) != 0) {
@@ -1638,9 +1632,10 @@ Return Value:
     RtlZeroMemory(SpMemory, sizeof(MEMORY_PROFILER));
 
     ASSERT(SpMemory->ConsumerActive == FALSE);
-    ASSERT(SpMemory->ConsumerIndex == 0);
     ASSERT(SpMemory->ReadyIndex == 0);
     ASSERT(SpMemory->ProducerIndex == 0);
+
+    SpMemory->ConsumerIndex = MEMORY_BUFFER_COUNT - 1;
 
     //
     // Create the timer that will periodically trigger memory statistics.
