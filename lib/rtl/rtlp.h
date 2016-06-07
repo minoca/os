@@ -153,6 +153,7 @@ typedef struct _PRINT_FORMAT_PROPERTIES {
 // Store some numeric constants used for string scanning.
 //
 
+extern double RtlFirst16NegativePowersOf10[16];
 extern double RtlFirst16PowersOf10[16];
 extern double RtlPositivePowersOf2[5];
 extern double RtlNegativePowersOf2[5];

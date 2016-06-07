@@ -103,6 +103,11 @@ double RtlFirst16PowersOf10[16] = {
     1E14, 1E15
 };
 
+double RtlFirst16NegativePowersOf10[16] = {
+    1E0, 1E-1, 1E-2, 1E-3, 1E-4, 1E-5, 1E-6, 1E-7, 1E-8, 1E-9, 1E-10, 1E-11,
+    1E-12, 1E-13, 1E-14, 1E-15
+};
+
 double RtlPositivePowersOf2[5] = {
     1E16, 1E32, 1E64, 1E128, 1E256
 };
@@ -389,7 +394,9 @@ Return Value:
 
     STATUS_SUCCESS if an integer was successfully scanned.
 
-    STATUS_INVALID_SEQUENCE if a valid integer could not be scanned.
+    STATUS_INVALID_SEQUENCE if a valid double could not be scanned.
+
+    STATUS_OUT_OF_BOUNDS if the exponent was out of range.
 
     STATUS_END_OF_FILE if the input ended before the value was converted
     or a matching failure occurred.
@@ -1725,7 +1732,9 @@ Return Value:
 
     STATUS_SUCCESS if an integer was successfully scanned.
 
-    STATUS_INVALID_SEQUENCE if a valid integer could not be scanned.
+    STATUS_INVALID_SEQUENCE if a valid double could not be scanned.
+
+    STATUS_OUT_OF_BOUNDS if the exponent was out of range.
 
     STATUS_END_OF_FILE if the end of the file was reached before any
     non-whitespace could be retrieved.
@@ -1740,10 +1749,10 @@ Return Value:
     CHAR DecasedCharacter;
     double Digit;
     LONG Exponent;
-    BOOL ExponentIsNegative;
+    CHAR ExponentCharacter;
     double ExponentMultiplier;
+    CHAR ExponentSign;
     double ExponentValue;
-    BOOL FoundExponent;
     BOOL Negative;
     double NegativeExponent;
     double OneOverBase;
@@ -1758,7 +1767,6 @@ Return Value:
 
     Base = 10.0;
     OneOverBase = 1.0E-1;
-    ExponentIsNegative = FALSE;
     *CharactersConsumed = 0;
     CharacterCount = 0;
     *Double = 0.0;
@@ -1801,8 +1809,7 @@ Return Value:
         FieldSize -= 1;
         Result = RtlpScannerGetInput(Input, &Character);
         if ((Result == FALSE) || (Character == '\0') || (FieldSize == 0)) {
-            Status = STATUS_INVALID_SEQUENCE;
-            goto ScanDoubleEnd;
+            return STATUS_INVALID_SEQUENCE;
         }
     }
 
@@ -1908,13 +1915,30 @@ Return Value:
     if (StringCharacterCount == sizeof(NAN_STRING) - 1) {
 
         //
-        // Also check for a () on the end.
+        // Also check for a () or (0) on the end.
         //
 
         if (Character == '(') {
             Result = RtlpScannerGetInput(Input, &Character);
             if (Result != FALSE) {
-                if (Character == ')') {
+                if (Character == '0') {
+                    Result = RtlpScannerGetInput(Input, &Character);
+                    if (Result != FALSE) {
+                        if (Character == ')') {
+                            CharacterCount += 3;
+
+                        } else {
+                            RtlpScannerUnput(Input, Character);
+                            RtlpScannerUnput(Input, '0');
+                            RtlpScannerUnput(Input, '(');
+                        }
+
+                    } else {
+                        RtlpScannerUnput(Input, Character);
+                        RtlpScannerUnput(Input, '(');
+                    }
+
+                } else if (Character == ')') {
                     CharacterCount += 2;
 
                 } else {
@@ -1955,7 +1979,9 @@ Return Value:
     // Get past an optional 0x or 0X for base 16 mode.
     //
 
+    ValidCharacterFound = FALSE;
     if (Character == '0') {
+        ValidCharacterFound = TRUE;
         if (FieldSize == 0) {
             Status = STATUS_INVALID_SEQUENCE;
             goto ScanDoubleEnd;
@@ -1964,7 +1990,7 @@ Return Value:
         CharacterCount += 1;
         FieldSize -= 1;
         Result = RtlpScannerGetInput(Input, &Character);
-        if ((Result != FALSE) && (Character != '\0')) {
+        if (Result != FALSE) {
 
             //
             // If it was only a lonely zero, then handle that case specifically.
@@ -2012,7 +2038,6 @@ Return Value:
     //
 
     SeenDecimal = FALSE;
-    ValidCharacterFound = FALSE;
     while (TRUE) {
 
         //
@@ -2078,9 +2103,10 @@ Return Value:
                 Value += Digit * NegativeExponent;
                 NegativeExponent *= OneOverBase;
             }
+
+            ValidCharacterFound = TRUE;
         }
 
-        ValidCharacterFound = TRUE;
         CharacterCount += 1;
         FieldSize -= 1;
         if (FieldSize == 0) {
@@ -2098,6 +2124,7 @@ Return Value:
     //
 
     if (ValidCharacterFound == FALSE) {
+        CharacterCount = 0;
         Status = STATUS_INVALID_SEQUENCE;
         goto ScanDoubleEnd;
     }
@@ -2110,14 +2137,14 @@ Return Value:
     // Look for an exponent character, and if none is found, finish.
     //
 
-    FoundExponent = FALSE;
+    ExponentCharacter = 0;
     if (((Base == 10.0) && ((Character == 'e') || (Character == 'E'))) ||
         ((Base == 16.0) && ((Character == 'p') || (Character == 'P')))) {
 
-        FoundExponent = TRUE;
+        ExponentCharacter = Character;
     }
 
-    if (FoundExponent == FALSE) {
+    if (ExponentCharacter == 0) {
         RtlpScannerUnput(Input, Character);
         goto ScanDoubleEnd;
     }
@@ -2130,6 +2157,8 @@ Return Value:
 
     Result = RtlpScannerGetInput(Input, &Character);
     if ((Result == FALSE) || (Character == '\0')) {
+        RtlpScannerUnput(Input, ExponentCharacter);
+        CharacterCount -= 1;
         goto ScanDoubleEnd;
     }
 
@@ -2137,19 +2166,9 @@ Return Value:
     // Look for an optional plus or minus.
     //
 
-    if ((Character != '+') &&
-        (Character != '-') &&
-        ((Character < '0') || (Character > '9'))) {
-
-        RtlpScannerUnput(Input, Character);
-        goto ScanDoubleEnd;
-    }
-
+    ExponentSign = 0;
     if ((Character == '+') || (Character == '-')) {
-        if (Character == '-') {
-            ExponentIsNegative = TRUE;
-        }
-
+        ExponentSign = Character;
         CharacterCount += 1;
         FieldSize -= 1;
         if (FieldSize == 0) {
@@ -2158,8 +2177,27 @@ Return Value:
 
         Result = RtlpScannerGetInput(Input, &Character);
         if ((Result == FALSE) || (Character == '\0')) {
+            RtlpScannerUnput(Input, ExponentSign);
+            RtlpScannerUnput(Input, ExponentCharacter);
+            CharacterCount -= 2;
             goto ScanDoubleEnd;
         }
+    }
+
+    //
+    // If there are not exponent digits, the exponent and sign were a fakeout.
+    //
+
+    if (!((Character >= '0') && (Character <= '9'))) {
+        RtlpScannerUnput(Input, Character);
+        if (ExponentSign != 0) {
+            RtlpScannerUnput(Input, ExponentSign);
+            CharacterCount -= 1;
+        }
+
+        RtlpScannerUnput(Input, ExponentCharacter);
+        CharacterCount -= 1;
+        goto ScanDoubleEnd;
     }
 
     //
@@ -2192,7 +2230,13 @@ Return Value:
     }
 
     if (Exponent > 300) {
-        if (ExponentIsNegative != FALSE) {
+        if (Value == 0.0) {
+            goto ScanDoubleEnd;
+        }
+
+        Status = STATUS_OUT_OF_BOUNDS;
+        Result = FALSE;
+        if (ExponentSign == '-') {
             Value = 0.0;
 
         } else {
@@ -2212,7 +2256,13 @@ Return Value:
         // Put together the approximation using powers of 2.
         //
 
-        ExponentValue = RtlFirst16PowersOf10[Exponent & 0x0F];
+        if (ExponentSign == '-') {
+            ExponentValue = RtlFirst16NegativePowersOf10[Exponent & 0x0F];
+
+        } else {
+            ExponentValue = RtlFirst16PowersOf10[Exponent & 0x0F];
+        }
+
         Exponent = Exponent >> 4;
         for (PowerIndex = 0; PowerIndex < 5; PowerIndex += 1) {
             if (Exponent == 0) {
@@ -2220,7 +2270,7 @@ Return Value:
             }
 
             if ((Exponent & 0x1) != 0) {
-                if (ExponentIsNegative != FALSE) {
+                if (ExponentSign == '-') {
                     ExponentValue *= RtlNegativePowersOf2[PowerIndex];
 
                 } else {
@@ -2237,7 +2287,7 @@ Return Value:
 
     } else {
         ExponentValue = 1.0;
-        if (ExponentIsNegative != FALSE) {
+        if (ExponentSign == '-') {
             ExponentMultiplier = 0.5;
 
         } else {

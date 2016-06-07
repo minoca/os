@@ -625,8 +625,12 @@ Return Value:
     }
 
     if (!KSUCCESS(Status)) {
+        if (Status == STATUS_INVALID_SEQUENCE) {
+            Status = STATUS_INVALID_PARAMETER;
+        }
+
         errno = ClConvertKstatusToErrorNumber(Status);
-        return 0;
+        return Double;
     }
 
     return Double;

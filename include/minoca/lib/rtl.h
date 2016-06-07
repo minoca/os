@@ -2740,7 +2740,9 @@ Return Value:
 
     STATUS_SUCCESS if an integer was successfully scanned.
 
-    STATUS_INVALID_SEQUENCE if a valid integer could not be scanned.
+    STATUS_INVALID_SEQUENCE if a valid double could not be scanned.
+
+    STATUS_OUT_OF_BOUNDS if the exponent was out of range.
 
     STATUS_END_OF_FILE if the input ended before the value was converted
     or a matching failure occurred.
