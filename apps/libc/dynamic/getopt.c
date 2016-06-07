@@ -51,12 +51,38 @@ Environment:
 // ------------------------------------------------------ Data Type Definitions
 //
 
-typedef enum _GET_OPTION_ERROR {
-    GetOptionErrorInvalid,
+typedef enum _GET_OPTION_ERROR_TYPE {
+    GetOptionErrorNone,
     GetOptionErrorMissingArgument,
     GetOptionErrorUnknownOption,
     GetOptionErrorAmbiguousOption,
     GetOptionErrorNoArgumentExpected,
+} GET_OPTION_ERROR_TYPE, *PGET_OPTION_ERROR_TYPE;
+
+/*++
+
+Structure Description:
+
+    This structure stores the context needed to report a getopt error.
+
+Members:
+
+    Type - Stores the error type that occurred.
+
+    Option - Stores the short option character that caused the error.
+
+    LongOption - Stores a pointer to the long option string that caused the
+        error.
+
+    CommandName - Stores the first command line argument: the command name.
+
+--*/
+
+typedef struct _GET_OPTION_ERROR {
+    GET_OPTION_ERROR_TYPE Type;
+    CHAR Option;
+    const char *LongOption;
+    PSTR CommandName;
 } GET_OPTION_ERROR, *PGET_OPTION_ERROR;
 
 //
@@ -77,22 +103,26 @@ int
 ClpGetShortOption (
     int ArgumentCount,
     char *const Arguments[],
-    const char *Options
+    const char *Options,
+    const struct option *LongOptions,
+    int *LongIndex,
+    PGET_OPTION_ERROR Error
     );
 
 int
 ClpGetLongOption (
     int ArgumentCount,
     char *const Arguments[],
+    const char *Argument,
     const char *Options,
     const struct option *LongOptions,
     int *LongIndex,
-    BOOL PrintUnknownOption
+    PGET_OPTION_ERROR Error
     );
 
 int
 ClpMatchLongOption (
-    PSTR Argument,
+    const char *Argument,
     const struct option *Options,
     PGET_OPTION_ERROR Error
     );
@@ -105,10 +135,7 @@ ClpMatchLongOptionString (
 
 void
 ClpPrintGetOptionError (
-    const char *CommandName,
-    CHAR Option,
-    const char *LongOption,
-    GET_OPTION_ERROR Error
+    PGET_OPTION_ERROR Error
     );
 
 //
@@ -157,7 +184,7 @@ LIBC_API int optreset;
 // current argument in the getopt function.
 //
 
-int ClNextOptionCharacter;
+int ClNextOptionCharacter = 1;
 
 //
 // Define a copy of the optind variable that is used to detect if the user
@@ -418,6 +445,7 @@ Return Value:
 {
 
     PSTR Argument;
+    GET_OPTION_ERROR Error;
     BOOL FailNonOptions;
     ULONG Index;
     int Result;
@@ -426,14 +454,20 @@ Return Value:
     FailNonOptions = FALSE;
     ReturnNonOptions = FALSE;
     optarg = NULL;
+    memset(&Error, 0, sizeof(Error));
+    if (ArgumentCount == 0) {
+        return -1;
+    }
+
+    Error.CommandName = Arguments[0];
     if ((optind <= 0) || (optreset != 0) || (ClOptionEndIndex <= 0) ||
         (ClOptionEndIndex >= ArgumentCount)) {
 
         ClOptionIndexCopy = optind;
         optind = 1;
         optreset = 0;
-        ClOptionIndexCopy = 0;
-        ClNextOptionCharacter = 0;
+        ClOptionIndexCopy = 1;
+        ClNextOptionCharacter = 1;
         ClFirstNonOption = NULL;
         optarg = NULL;
         ClOptionEndIndex = ArgumentCount - 1;
@@ -445,7 +479,9 @@ Return Value:
 
     if (ClOptionIndexCopy != optind) {
         ClOptionIndexCopy = optind;
-        ClNextOptionCharacter = 0;
+        ClNextOptionCharacter = 1;
+        ClOptionEndIndex = ArgumentCount - 1;
+        ClFirstNonOption = NULL;
     }
 
     //
@@ -486,7 +522,6 @@ Return Value:
     Argument = Arguments[optind];
 
     assert(Argument != NULL);
-    assert(ClNextOptionCharacter <= strlen(Argument));
 
     //
     // Loop while the argument doesn't start with a '-', or is just a single
@@ -494,7 +529,7 @@ Return Value:
     //
 
     while ((*Argument != '-') || (*(Argument + 1) == '\0')) {
-        ClNextOptionCharacter = 0;
+        ClNextOptionCharacter = 1;
         if (ReturnNonOptions != FALSE) {
             optarg = Argument;
             optind += 1;
@@ -526,7 +561,7 @@ Return Value:
         //      Arguments parameter is an array of constant pointers.
         //
 
-        for (Index = optind; Index <= (ClOptionEndIndex - 1); Index += 1) {
+        for (Index = optind; Index < ClOptionEndIndex; Index += 1) {
             if ((ClFirstNonOption == NULL) &&
                 (strcmp(Arguments[Index + 1], "--") == 0)) {
 
@@ -555,70 +590,71 @@ Return Value:
         Argument = Arguments[optind];
     }
 
-    Argument += 1;
-
-    //
-    // If the next option character is non-zero then this must be a short
-    // option. Try to find the next short option.
-    //
-
-    if (ClNextOptionCharacter > 0) {
-        Result = ClpGetShortOption(ArgumentCount, Arguments, Options);
-        goto GetOptionEnd;
-    }
-
-    //
-    // If the argument is "--", then this marks the end of the arguments.
-    //
-
-    if (strcmp(Argument, "-") == 0) {
+    if ((Argument[1] == '-') && (Argument[2] == '\0')) {
         optind += 1;
         Result = -1;
         goto GetOptionEnd;
     }
 
+    assert(ClNextOptionCharacter <= strlen(Argument));
+
     //
-    // If the next character is a dash, this is definitely a long argument.
+    // If there are long options, try to parse them if 1) the argument starts
+    // with -- or 2) It's a long_only call and either a) there are multiple
+    // characters in the argument or b) it's not in the short arguments string.
     //
 
     if (LongOptions != NULL) {
-        if (*Argument == '-') {
-            Argument += 1;
+        if ((Argument[1] == '-') ||
+            ((ShortLongOptions != FALSE) &&
+             ((Argument[2] != '\0') ||
+              (strchr(Options, Argument[ClNextOptionCharacter]) == NULL)))) {
+
+            if ((ClNextOptionCharacter == 1) && (Argument[1] == '-')) {
+                ClNextOptionCharacter += 1;
+            }
+
             Result = ClpGetLongOption(ArgumentCount,
                                       Arguments,
+                                      Argument + ClNextOptionCharacter,
                                       Options,
                                       LongOptions,
                                       LongIndex,
-                                      TRUE);
-
-            goto GetOptionEnd;
-
-        //
-        // The next character is not a dash. If allowed, try to parse a long
-        // argument, but don't freak out if it doesn't work.
-        //
-
-        } else if (ShortLongOptions != FALSE) {
-            Result = ClpGetLongOption(ArgumentCount,
-                                      Arguments,
-                                      Options,
-                                      LongOptions,
-                                      LongIndex,
-                                      FALSE);
+                                      &Error);
 
             if (Result != '?') {
+                ClNextOptionCharacter = 1;
                 goto GetOptionEnd;
             }
+
+            if ((Error.Type != GetOptionErrorUnknownOption) ||
+                (ShortLongOptions == FALSE)) {
+
+                goto GetOptionEnd;
+            }
+
+            optind -= 1;
         }
     }
 
     //
-    // Try to parse a short option.
+    // Try for a short option.
     //
 
-    Result = ClpGetShortOption(ArgumentCount, Arguments, Options);
+    Result = ClpGetShortOption(ArgumentCount,
+                               Arguments,
+                               Options,
+                               LongOptions,
+                               LongIndex,
+                               &Error);
 
 GetOptionEnd:
+    if ((Error.Type != GetOptionErrorNone) &&
+        (opterr != 0) && ((Options == NULL) || (*Options != ':'))) {
+
+        ClpPrintGetOptionError(&Error);
+    }
+
     ClOptionIndexCopy = optind;
     return Result;
 }
@@ -627,7 +663,10 @@ int
 ClpGetShortOption (
     int ArgumentCount,
     char *const Arguments[],
-    const char *Options
+    const char *Options,
+    const struct option *LongOptions,
+    int *LongIndex,
+    PGET_OPTION_ERROR Error
     )
 
 /*++
@@ -645,6 +684,14 @@ Arguments:
     Options - Supplies the short options string, which defines the set of legal
         short options.
 
+    LongOptions - Supplies a pointer to an array of long option structures
+        containing the long options.
+
+    LongIndex - Supplies an optional pointer that if supplied will return the
+        index into the long options array of the found long option.
+
+    Error - Supplies a pointer where the error information is returned.
+
 Return Value:
 
     Returns the values appropriate to return from the getopt functions.
@@ -653,15 +700,12 @@ Return Value:
 
 {
 
-    PSTR Argument;
-    CHAR Option;
+    const char *Argument;
+    int Option;
     BOOL StartsWithColon;
 
     assert(optind < ArgumentCount);
-
-    if (ClNextOptionCharacter == 0) {
-        ClNextOptionCharacter = 1;
-    }
+    assert(ClNextOptionCharacter != 0);
 
     Argument = Arguments[optind] + ClNextOptionCharacter;
 
@@ -698,6 +742,43 @@ Return Value:
         Argument += 1;
 
         //
+        // If the option is W and it's followed by a semicolon, then treat
+        // -W foo as the long option --foo.
+        //
+
+        if ((Option == 'W') && (*Options == ';') && (LongOptions != NULL)) {
+            Options += 1;
+            ClNextOptionCharacter = 1;
+
+            //
+            // Use either the remainder of the argument or the next argument
+            // as the long option.
+            //
+
+            if (*Argument == '\0') {
+                optind += 1;
+                if (optind >= ArgumentCount) {
+                    optopt = Option;
+                    Error->Option = Option;
+                    Error->Type = GetOptionErrorMissingArgument;
+                    return '?';
+                }
+
+                Argument = Arguments[optind];
+            }
+
+            Option = ClpGetLongOption(ArgumentCount,
+                                      Arguments,
+                                      Argument,
+                                      Options,
+                                      LongOptions,
+                                      LongIndex,
+                                      Error);
+
+            return Option;
+        }
+
+        //
         // If no argument is required, then work here is done.
         //
 
@@ -709,11 +790,11 @@ Return Value:
             //
 
             if (*Argument == '\0') {
-                ClNextOptionCharacter = 0;
+                ClNextOptionCharacter = 1;
                 optind += 1;
             }
 
-            return Option;
+            goto GetShortOptionEnd;
         }
 
         Options += 1;
@@ -723,11 +804,11 @@ Return Value:
         // argument is not null, then the argument is the remainder.
         //
 
-        ClNextOptionCharacter = 0;
+        ClNextOptionCharacter = 1;
         if (*Argument != '\0') {
-            optarg = Argument;
+            optarg = (char *)Argument;
             optind += 1;
-            return Option;
+            goto GetShortOptionEnd;
         }
 
         //
@@ -738,7 +819,7 @@ Return Value:
 
         if (*Options == ':') {
             optind += 1;
-            return Option;
+            goto GetShortOptionEnd;
         }
 
         //
@@ -750,21 +831,21 @@ Return Value:
             optind += 1;
             optopt = Option;
             if (StartsWithColon != FALSE) {
-                return ':';
+                Option = ':';
+                goto GetShortOptionEnd;
             }
 
-            ClpPrintGetOptionError(Arguments[0],
-                                   Option,
-                                   NULL,
-                                   GetOptionErrorMissingArgument);
-
-            return '?';
+            Error->Option = Option;
+            Error->Type = GetOptionErrorMissingArgument;
+            Option = '?';
+            goto GetShortOptionEnd;
         }
 
         optind += 1;
         optarg = Arguments[optind];
         optind += 1;
-        return Option;
+        Error->Type = GetOptionErrorNone;
+        goto GetShortOptionEnd;
     }
 
     //
@@ -773,10 +854,8 @@ Return Value:
 
     optopt = *Argument;
     if (StartsWithColon == FALSE) {
-        ClpPrintGetOptionError(Arguments[0],
-                               *Argument,
-                               NULL,
-                               GetOptionErrorUnknownOption);
+        Error->Option = *Argument;
+        Error->Type = GetOptionErrorUnknownOption;
     }
 
     //
@@ -786,23 +865,37 @@ Return Value:
     Argument += 1;
     if (*Argument == '\0') {
         optind += 1;
-        ClNextOptionCharacter = 0;
+        ClNextOptionCharacter = 1;
 
     } else {
         ClNextOptionCharacter += 1;
     }
 
-    return '?';
+    Option = '?';
+
+GetShortOptionEnd:
+
+    //
+    // Clear the error if all is well. Returning ':' is not well, but no error
+    // should be printed, so it's effectively the same as a success case.
+    //
+
+    if ((Option != -1) && (Option != '?')) {
+        Error->Type = GetOptionErrorNone;
+    }
+
+    return Option;
 }
 
 int
 ClpGetLongOption (
     int ArgumentCount,
     char *const Arguments[],
+    const char *Argument,
     const char *Options,
     const struct option *LongOptions,
     int *LongIndex,
-    BOOL PrintUnknownOption
+    PGET_OPTION_ERROR Error
     )
 
 /*++
@@ -817,6 +910,9 @@ Arguments:
 
     Arguments - Supplies the argument array from main.
 
+    Argument - Supplies the argument to read, with any leading dashes stripped
+        away.
+
     Options - Supplies the short options string, which defines the set of legal
         short options.
 
@@ -826,8 +922,7 @@ Arguments:
     LongIndex - Supplies an optional pointer that if supplied will return the
         index into the long options array of the found long option.
 
-    PrintUnknownOption - Supplies a boolean indicating if an error should be
-        printed for an unknown option.
+    Error - Supplies a pointer where the error information will be returned.
 
 Return Value:
 
@@ -837,10 +932,7 @@ Return Value:
 
 {
 
-    PSTR Argument;
-    PSTR Copy;
     PSTR Equals;
-    GET_OPTION_ERROR Error;
     const struct option *Option;
     int OptionIndex;
 
@@ -849,18 +941,6 @@ Return Value:
     }
 
     assert(optind < ArgumentCount);
-
-    Argument = Arguments[optind];
-
-    assert(*Argument == '-');
-
-    Argument += 1;
-
-    assert((*Argument == '-') || (PrintUnknownOption == FALSE));
-
-    if (*Argument == '-') {
-        Argument += 1;
-    }
 
     //
     // The two valid forms are --option argument or --option=argument. Look for
@@ -873,37 +953,10 @@ Return Value:
     // Get the long option.
     //
 
-    OptionIndex = ClpMatchLongOption(Argument, LongOptions, &Error);
+    OptionIndex = ClpMatchLongOption(Argument, LongOptions, Error);
     if (OptionIndex == -1) {
-
-        //
-        // Printing unknown options indicates that this is a real search for a
-        // long argument. Advance the index if this failed.
-        //
-
-        if (PrintUnknownOption != FALSE) {
-            optind += 1;
-            optopt = 0;
-        }
-
-        if ((*Options != ':') &&
-            ((Error != GetOptionErrorUnknownOption) ||
-             (PrintUnknownOption != FALSE))) {
-
-            Copy = strdup(Argument);
-            if (Copy == NULL) {
-                return '?';
-            }
-
-            Equals = strchr(Copy, '=');
-            if (Equals != NULL) {
-                *Equals = '\0';
-            }
-
-            ClpPrintGetOptionError(Arguments[0], 0, Copy, Error);
-            free(Copy);
-        }
-
+        optind += 1;
+        optopt = 0;
         return '?';
     }
 
@@ -946,11 +999,8 @@ Return Value:
                     return ':';
                 }
 
-                ClpPrintGetOptionError(Arguments[0],
-                                       0,
-                                       Option->name,
-                                       GetOptionErrorMissingArgument);
-
+                Error->LongOption = Option->name;
+                Error->Type = GetOptionErrorMissingArgument;
                 return '?';
 
             //
@@ -970,10 +1020,9 @@ Return Value:
     } else {
         if (Equals != NULL) {
             if (*Options != ':') {
-                ClpPrintGetOptionError(Arguments[0],
-                                       0,
-                                       Option->name,
-                                       GetOptionErrorNoArgumentExpected);
+                optopt = Option->val;
+                Error->LongOption = Option->name;
+                Error->Type = GetOptionErrorNoArgumentExpected;
             }
 
             return '?';
@@ -995,7 +1044,7 @@ Return Value:
 
 int
 ClpMatchLongOption (
-    PSTR Argument,
+    const char *Argument,
     const struct option *Options,
     PGET_OPTION_ERROR Error
     )
@@ -1094,7 +1143,8 @@ Return Value:
     //
 
     if (WinnerCount == 0) {
-        *Error = GetOptionErrorUnknownOption;
+        Error->Type = GetOptionErrorUnknownOption;
+        Error->LongOption = Argument;
         WinnerIndex = -1;
 
     //
@@ -1103,11 +1153,12 @@ Return Value:
     //
 
     } else if (WinnerCount == RunnerUpCount) {
-        *Error = GetOptionErrorAmbiguousOption;
+        Error->Type = GetOptionErrorAmbiguousOption;
+        Error->LongOption = Argument;
         WinnerIndex = -1;
 
     } else {
-        *Error = GetOptionErrorInvalid;
+        Error->Type = GetOptionErrorNone;
     }
 
     return WinnerIndex;
@@ -1146,10 +1197,24 @@ Return Value:
 
     MatchCount = 0;
     while (TRUE) {
-        if ((*Argument == '\0') ||
-            (*OptionName == '\0') ||
-            (*Argument == '=')) {
 
+        //
+        // If the option name ended, stop. If the argument name keeps going,
+        // then it doesn't match at all.
+        //
+
+        if (*OptionName == '\0') {
+            if ((*Argument != '\0') && (*Argument != '=')) {
+                return 0;
+            }
+
+            break;
+
+        //
+        // If the argument ended, stop.
+        //
+
+        } else if ((*Argument == '\0') || (*Argument == '=')) {
             break;
         }
 
@@ -1171,10 +1236,7 @@ Return Value:
 
 void
 ClpPrintGetOptionError (
-    const char *CommandName,
-    CHAR Option,
-    const char *LongOption,
-    GET_OPTION_ERROR Error
+    PGET_OPTION_ERROR Error
     )
 
 /*++
@@ -1186,16 +1248,7 @@ Routine Description:
 
 Arguments:
 
-    CommandName - Supplies the first argument, the name of the command.
-
-    Option - Supplies the option that either was not recognized or required an
-        argument.
-
-    LongOption - Supplies an optional pointer to a string containing the long
-        option that either was not recognized or required an argument. If this
-        parameter is supplied, it is used instead of the option parameter.
-
-    Error - Supplies the error to print.
+    Error - Supplies a pointer to the error information.
 
 Return Value:
 
@@ -1206,28 +1259,33 @@ Return Value:
 {
 
     PSTR BaseName;
+    PSTR Copy;
     PSTR Dashes;
+    PSTR Equals;
     PSTR ErrorString;
     PSTR OptionString;
     CHAR ShortOption[2];
 
-    if (opterr == 0) {
-        return;
-    }
+    Copy = NULL;
+    BaseName = basename(Error->CommandName);
+    if (Error->LongOption != NULL) {
+        Copy = strdup(Error->LongOption);
+        Equals = strchr(Copy, '=');
+        if (Equals != NULL) {
+            *Equals = '\0';
+        }
 
-    BaseName = basename((char *)CommandName);
-    if (LongOption != NULL) {
-        OptionString = (PSTR)LongOption;
+        OptionString = Copy;
         Dashes = "--";
 
     } else {
-        ShortOption[0] = Option;
+        ShortOption[0] = Error->Option;
         ShortOption[1] = '\0';
         Dashes = "-";
         OptionString = ShortOption;
     }
 
-    switch (Error) {
+    switch (Error->Type) {
     case GetOptionErrorMissingArgument:
         ErrorString = "%s: Option %s%s requires an argument.\n";
         break;
@@ -1252,6 +1310,10 @@ Return Value:
     }
 
     fprintf(stderr, ErrorString, BaseName, Dashes, OptionString);
+    if (Copy != NULL) {
+        free(Copy);
+    }
+
     return;
 }
 
