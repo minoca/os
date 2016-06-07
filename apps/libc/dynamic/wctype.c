@@ -352,7 +352,8 @@ Return Value:
 
 {
 
-    if ((!(iswalpha(Character))) && (!(iswdigit(Character))) &&
+    if ((Character < 0x7F) &&
+        (!(iswalpha(Character))) && (!(iswdigit(Character))) &&
         (!(iswcntrl(Character))) && (Character != L' ')) {
 
         return 1;
