@@ -1420,7 +1420,7 @@ Return Value:
         KeGetSystemTime(&(FileObject->Properties.StatusChangeTime));
     }
 
-    if (FieldsToSet != 0) {
+    if (LockHeldExclusive != FALSE) {
         KeReleaseSharedExclusiveLockExclusive(FileObject->Lock);
         LockHeldExclusive = FALSE;
 
