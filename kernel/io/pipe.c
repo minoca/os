@@ -198,7 +198,7 @@ Return Value:
 
     Status = IopOpenPathPoint(&((*ReadHandle)->PathPoint),
                               IO_ACCESS_WRITE,
-                              0,
+                              OpenFlags,
                               WriteHandle);
 
     if (!KSUCCESS(Status)) {
