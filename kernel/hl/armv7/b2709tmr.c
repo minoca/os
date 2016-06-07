@@ -422,9 +422,9 @@ Return Value:
     //
 
     DefaultTimer = HlAllocateMemory(sizeof(BCM2709_TIMER),
-                               BCM2709_ALLOCATION_TAG,
-                               FALSE,
-                               NULL);
+                                    BCM2709_ALLOCATION_TAG,
+                                    FALSE,
+                                    NULL);
 
     if (DefaultTimer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;

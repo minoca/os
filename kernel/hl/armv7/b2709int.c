@@ -618,7 +618,8 @@ Return Value:
     }
 
     Context = HlAllocateMemory(AllocationSize,
-                               BCM2709_ALLOCATION_TAG, FALSE,
+                               BCM2709_ALLOCATION_TAG,
+                               FALSE,
                                NULL);
 
     if (Context == NULL) {
