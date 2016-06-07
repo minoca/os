@@ -683,7 +683,7 @@ Return Value:
     BOOL CompleteIrp;
     PSD_CONTROLLER Controller;
     PSD_DISK Disk;
-    ULONGLONG IoOffset;
+    IO_OFFSET IoOffset;
     ULONG IrpReadWriteFlags;
     KSTATUS IrpStatus;
     KSTATUS Status;

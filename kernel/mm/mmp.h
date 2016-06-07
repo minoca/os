@@ -1543,7 +1543,7 @@ MmpAddImageSection (
     UINTN Size,
     ULONG Flags,
     HANDLE ImageHandle,
-    ULONGLONG ImageOffset
+    IO_OFFSET ImageOffset
     );
 
 /*++

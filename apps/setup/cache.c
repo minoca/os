@@ -82,8 +82,8 @@ Members:
 typedef struct _SETUP_HANDLE {
     PVOID Handle;
     BOOL Cached;
-    ULONGLONG NextOffset;
-    ULONGLONG NextOsOffset;
+    LONGLONG NextOffset;
+    LONGLONG NextOsOffset;
     RED_BLACK_TREE Cache;
     LIST_ENTRY CacheLruList;
     UINTN CacheSize;
@@ -308,7 +308,7 @@ Return Value:
     size_t BytesThisRound;
     PSETUP_CACHE_DATA CacheData;
     size_t CacheDataOffset;
-    ULONGLONG CacheOffset;
+    LONGLONG CacheOffset;
     PSETUP_HANDLE IoHandle;
     PVOID ReadBuffer;
     size_t TotalBytesRead;
@@ -433,7 +433,7 @@ Return Value:
     size_t BytesThisRound;
     PSETUP_CACHE_DATA CacheData;
     size_t CacheDataOffset;
-    ULONGLONG CacheOffset;
+    LONGLONG CacheOffset;
     PSETUP_HANDLE IoHandle;
     PVOID ReadBuffer;
     size_t TotalBytesWritten;
@@ -537,10 +537,10 @@ Return Value:
     return TotalBytesWritten;
 }
 
-ULONGLONG
+LONGLONG
 SetupSeek (
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     )
 
 /*++

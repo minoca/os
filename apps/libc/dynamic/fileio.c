@@ -1169,7 +1169,7 @@ Return Value:
 
 {
 
-    ULONGLONG NewOffset;
+    IO_OFFSET NewOffset;
     SEEK_COMMAND SeekCommand;
     KSTATUS Status;
 
@@ -1197,11 +1197,6 @@ Return Value:
                     &NewOffset);
 
     if (!KSUCCESS(Status)) {
-        goto lseekEnd;
-    }
-
-    if (NewOffset > MAX_LONGLONG) {
-        Status = STATUS_INTEGER_OVERFLOW;
         goto lseekEnd;
     }
 
@@ -1523,16 +1518,15 @@ Arguments:
     Path - Supplies a pointer to the symbolic link path.
 
     LinkDestinationBuffer - Supplies a pointer to a buffer where the
-        destination of the link will be returned.
+        destination of the link will be returned. A null terminator is not
+        written.
 
     LinkDestinationBufferSize - Supplies the size of the link destination
         buffer in bytes.
 
 Return Value:
 
-    Returns the number of bytes placed into the buffer on success, except for
-    the null terminator (which is placed but not accounted for in this number
-    for compatibility).
+    Returns the number of bytes placed into the buffer on success.
 
     -1 on failure. The errno variable will be set to indicate the error, and
     the buffer will remain unchanged.
@@ -1576,16 +1570,15 @@ Arguments:
     Path - Supplies a pointer to the symbolic link path.
 
     LinkDestinationBuffer - Supplies a pointer to a buffer where the
-        destination of the link will be returned.
+        destination of the link will be returned. A null terminator is not
+        written.
 
     LinkDestinationBufferSize - Supplies the size of the link destination
         buffer in bytes.
 
 Return Value:
 
-    Returns the number of bytes placed into the buffer on success, except for
-    the null terminator (which is placed but not accounted for in this number
-    for compatibility).
+    Returns the number of bytes placed into the buffer on success.
 
     -1 on failure. The errno variable will be set to indicate the error, and
     the buffer will remain unchanged.
@@ -1613,10 +1606,6 @@ Return Value:
         }
 
         return -1;
-    }
-
-    if (LinkDestinationSize != 0) {
-        LinkDestinationSize -= 1;
     }
 
     return LinkDestinationSize;

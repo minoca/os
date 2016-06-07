@@ -2172,7 +2172,7 @@ KSTATUS
 IoReadAtOffset (
     PIO_HANDLE Handle,
     PIO_BUFFER IoBuffer,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN SizeInBytes,
     ULONG Flags,
     ULONG TimeoutInMilliseconds,
@@ -2230,7 +2230,7 @@ KSTATUS
 IoWriteAtOffset (
     PIO_HANDLE Handle,
     PIO_BUFFER IoBuffer,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN SizeInBytes,
     ULONG Flags,
     ULONG TimeoutInMilliseconds,
@@ -2606,7 +2606,7 @@ KERNEL_API
 KSTATUS
 IoFlush (
     PIO_HANDLE Handle,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     ULONGLONG Size,
     ULONG Flags
     )
@@ -2649,8 +2649,8 @@ KSTATUS
 IoSeek (
     PIO_HANDLE Handle,
     SEEK_COMMAND SeekCommand,
-    ULONGLONG Offset,
-    PULONGLONG NewOffset
+    IO_OFFSET Offset,
+    PIO_OFFSET NewOffset
     )
 
 /*++

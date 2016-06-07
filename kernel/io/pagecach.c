@@ -212,7 +212,7 @@ struct _PAGE_CACHE_ENTRY {
     RED_BLACK_TREE_NODE Node;
     LIST_ENTRY ListEntry;
     PFILE_OBJECT FileObject;
-    ULONGLONG Offset;
+    IO_OFFSET Offset;
     PHYSICAL_ADDRESS PhysicalAddress;
     PVOID VirtualAddress;
     PPAGE_CACHE_ENTRY BackingEntry;
@@ -229,7 +229,7 @@ IopCreatePageCacheEntry (
     PFILE_OBJECT FileObject,
     PVOID VirtualAddress,
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONGLONG Offset
+    IO_OFFSET Offset
     );
 
 VOID
@@ -251,7 +251,7 @@ IopInsertPageCacheEntry (
 PPAGE_CACHE_ENTRY
 IopLookupPageCacheEntryHelper (
     PFILE_OBJECT FileObject,
-    ULONGLONG Offset
+    IO_OFFSET Offset
     );
 
 VOID
@@ -288,7 +288,7 @@ BOOL
 IopIsIoBufferPageCacheBackedHelper (
     PFILE_OBJECT FileObject,
     PIO_BUFFER IoBuffer,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN SizeInBytes
     );
 
@@ -1133,7 +1133,7 @@ InitializePageCacheEnd:
 PPAGE_CACHE_ENTRY
 IopLookupPageCacheEntry (
     PFILE_OBJECT FileObject,
-    ULONGLONG Offset
+    IO_OFFSET Offset
     )
 
 /*++
@@ -1202,7 +1202,7 @@ IopCreateOrLookupPageCacheEntry (
     PFILE_OBJECT FileObject,
     PVOID VirtualAddress,
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     PPAGE_CACHE_ENTRY LinkEntry,
     PBOOL EntryCreated
     )
@@ -1335,7 +1335,7 @@ IopCreateAndInsertPageCacheEntry (
     PFILE_OBJECT FileObject,
     PVOID VirtualAddress,
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     PPAGE_CACHE_ENTRY LinkEntry
     )
 
@@ -1423,7 +1423,7 @@ CreateAndInsertPageCacheEntryEnd:
 KSTATUS
 IopCopyAndCacheIoBuffer (
     PFILE_OBJECT FileObject,
-    ULONGLONG FileOffset,
+    IO_OFFSET FileOffset,
     PIO_BUFFER Destination,
     UINTN CopySize,
     PIO_BUFFER Source,
@@ -1615,7 +1615,7 @@ CopyAndCacheIoBufferEnd:
 KSTATUS
 IopFlushPageCacheEntries (
     PFILE_OBJECT FileObject,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     ULONGLONG Size,
     ULONG Flags,
     PUINTN PageCount
@@ -1659,7 +1659,7 @@ Return Value:
     PPAGE_CACHE_ENTRY CacheEntry;
     UINTN CleanStreak;
     PIO_BUFFER FlushBuffer;
-    ULONGLONG FlushNextOffset;
+    IO_OFFSET FlushNextOffset;
     UINTN FlushSize;
     LIST_ENTRY LocalList;
     PRED_BLACK_TREE_NODE Node;
@@ -2105,7 +2105,7 @@ FlushPageCacheEntriesEnd:
 VOID
 IopEvictPageCacheEntries (
     PFILE_OBJECT FileObject,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     ULONG Flags
     )
 
@@ -2292,7 +2292,7 @@ BOOL
 IopIsIoBufferPageCacheBacked (
     PFILE_OBJECT FileObject,
     PIO_BUFFER IoBuffer,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN SizeInBytes
     )
 
@@ -2416,7 +2416,7 @@ Return Value:
     return;
 }
 
-ULONGLONG
+IO_OFFSET
 IopGetPageCacheEntryOffset (
     PPAGE_CACHE_ENTRY PageCacheEntry
     )
@@ -3243,7 +3243,7 @@ IopCreatePageCacheEntry (
     PFILE_OBJECT FileObject,
     PVOID VirtualAddress,
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONGLONG Offset
+    IO_OFFSET Offset
     )
 
 /*++
@@ -3607,7 +3607,7 @@ Return Value:
 PPAGE_CACHE_ENTRY
 IopLookupPageCacheEntryHelper (
     PFILE_OBJECT FileObject,
-    ULONGLONG Offset
+    IO_OFFSET Offset
     )
 
 /*++
@@ -3831,7 +3831,7 @@ Return Value:
     PPAGE_CACHE_ENTRY CacheEntry;
     BOOL Clean;
     PFILE_OBJECT FileObject;
-    ULONGLONG FileOffset;
+    IO_OFFSET FileOffset;
     ULONGLONG FileSize;
     IO_CONTEXT IoContext;
     BOOL MarkedClean;
@@ -4588,7 +4588,7 @@ BOOL
 IopIsIoBufferPageCacheBackedHelper (
     PFILE_OBJECT FileObject,
     PIO_BUFFER IoBuffer,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN SizeInBytes
     )
 

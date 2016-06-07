@@ -50,7 +50,7 @@ Environment:
 KSTATUS
 MmMapFileSection (
     HANDLE FileHandle,
-    ULONGLONG FileOffset,
+    IO_OFFSET FileOffset,
     UINTN SectionLength,
     ULONG Flags,
     BOOL KernelSpace,
@@ -502,7 +502,7 @@ Return Value:
 
     ULONG AccessPermissions;
     PKPROCESS CurrentProcess;
-    ULONGLONG FileOffset;
+    IO_OFFSET FileOffset;
     PIO_HANDLE IoHandle;
     ULONG MapFlags;
     ULONG OpenFlags;

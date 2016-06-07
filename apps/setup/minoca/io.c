@@ -113,13 +113,14 @@ Return Value:
         return errno;
     }
 
-    Size = readlink(Path, *LinkTarget, SETUP_SYMLINK_MAX);
+    Size = readlink(Path, *LinkTarget, SETUP_SYMLINK_MAX - 1);
     if (Size < 0) {
         free(*LinkTarget);
         *LinkTarget = NULL;
         return errno;
     }
 
+    (*LinkTarget)[Size] = '\0';
     *LinkTargetSize = Size;
     return 0;
 }
@@ -367,10 +368,10 @@ Return Value:
     return (ssize_t)BytesCompleted;
 }
 
-ULONGLONG
+LONGLONG
 SetupOsSeek (
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     )
 
 /*++
@@ -397,7 +398,7 @@ Return Value:
 {
 
     PSETUP_OS_HANDLE IoHandle;
-    ULONGLONG NewOffset;
+    IO_OFFSET NewOffset;
     SEEK_COMMAND SeekCommand;
     KSTATUS Status;
 
@@ -405,11 +406,6 @@ Return Value:
     SeekCommand = SeekCommandFromBeginning;
     Status = OsSeek(IoHandle->Handle, SeekCommand, Offset, &NewOffset);
     if (!KSUCCESS(Status)) {
-        goto OsSeekEnd;
-    }
-
-    if (NewOffset > MAX_LONGLONG) {
-        Status = STATUS_INTEGER_OVERFLOW;
         goto OsSeekEnd;
     }
 
@@ -422,7 +418,7 @@ OsSeekEnd:
     return NewOffset;
 }
 
-ULONGLONG
+LONGLONG
 SetupOsTell (
     PVOID Handle
     )
@@ -449,7 +445,7 @@ Return Value:
 {
 
     PSETUP_OS_HANDLE IoHandle;
-    ULONGLONG Offset;
+    LONGLONG Offset;
     KSTATUS Status;
 
     IoHandle = Handle;

@@ -2620,7 +2620,7 @@ Return Value:
     UINTN BlockCount;
     ULONGLONG BlockOffset;
     PDMA_INTERFACE Dma;
-    ULONGLONG IoOffset;
+    IO_OFFSET IoOffset;
     ULONGLONG IoSize;
     KSTATUS Status;
     BOOL Write;

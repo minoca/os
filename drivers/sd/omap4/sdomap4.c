@@ -2716,7 +2716,7 @@ Return Value:
 
     UINTN BlockCount;
     ULONGLONG BlockOffset;
-    ULONGLONG IoOffset;
+    IO_OFFSET IoOffset;
     ULONGLONG IoSize;
     KSTATUS Status;
     BOOL Write;

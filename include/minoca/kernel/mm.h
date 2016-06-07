@@ -260,6 +260,7 @@ Author:
 // ------------------------------------------------------ Data Type Definitions
 //
 
+typedef LONGLONG IO_OFFSET, *PIO_OFFSET;
 typedef struct _IMAGE_SECTION_LIST IMAGE_SECTION_LIST, *PIMAGE_SECTION_LIST;
 
 typedef enum _POOL_CORRUPTION_DETAIL {
@@ -478,7 +479,7 @@ Members:
 
 typedef struct _IMAGE_BACKING {
     HANDLE DeviceHandle;
-    ULONGLONG Offset;
+    IO_OFFSET Offset;
 } IMAGE_BACKING, *PIMAGE_BACKING;
 
 /*++
@@ -3139,7 +3140,7 @@ Return Value:
 KSTATUS
 MmMapFileSection (
     HANDLE FileHandle,
-    ULONGLONG FileOffset,
+    IO_OFFSET FileOffset,
     UINTN SectionLength,
     ULONG Flags,
     BOOL KernelSpace,
@@ -3385,7 +3386,7 @@ Return Value:
 KSTATUS
 MmUnmapImageSectionList (
     PIMAGE_SECTION_LIST ImageSectionList,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     ULONGLONG Size,
     ULONG Flags,
     PBOOL PageWasDirty

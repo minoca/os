@@ -512,7 +512,7 @@ Return Value:
     UINTN BytesToComplete;
     KSTATUS CompletionStatus;
     PRAM_DISK_DEVICE Disk;
-    ULONGLONG IoOffset;
+    IO_OFFSET IoOffset;
     ULONG IrpReadWriteFlags;
     BOOL ReadWriteIrpPrepared;
     KSTATUS Status;

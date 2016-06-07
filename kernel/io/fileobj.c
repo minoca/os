@@ -1230,7 +1230,7 @@ Return Value:
 KSTATUS
 IopFlushFileObject (
     PFILE_OBJECT FileObject,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     ULONGLONG Size,
     ULONG Flags,
     BOOL FlushExclusive,
@@ -1822,11 +1822,11 @@ Return Value:
 
     ULONG BlockSize;
     ULONG EvictionFlags;
-    ULONGLONG EvictionOffset;
+    IO_OFFSET EvictionOffset;
     ULONGLONG FileSize;
     ULONG PageSize;
     KSTATUS Status;
-    ULONGLONG UnmapOffset;
+    IO_OFFSET UnmapOffset;
     ULONGLONG UnmapSize;
 
     KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);

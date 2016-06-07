@@ -101,13 +101,14 @@ Return Value:
         return errno;
     }
 
-    Size = readlink(Path, *LinkTarget, SETUP_SYMLINK_MAX);
+    Size = readlink(Path, *LinkTarget, SETUP_SYMLINK_MAX - 1);
     if (Size < 0) {
         free(*LinkTarget);
         *LinkTarget = NULL;
         return errno;
     }
 
+    (*LinkTarget)[Size] = '\0';
     *LinkTargetSize = Size;
     return 0;
 }
@@ -288,10 +289,10 @@ Return Value:
     return write((INTN)Handle, Buffer, ByteCount);
 }
 
-ULONGLONG
+LONGLONG
 SetupOsSeek (
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     )
 
 /*++
@@ -320,7 +321,7 @@ Return Value:
     return lseek((INTN)Handle, Offset, SEEK_SET);
 }
 
-ULONGLONG
+LONGLONG
 SetupOsTell (
     PVOID Handle
     )

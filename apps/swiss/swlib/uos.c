@@ -206,13 +206,14 @@ Return Value:
         return ENOMEM;
     }
 
-    Result = readlink(LinkPath, DestinationBuffer, LINK_DESTINATION_SIZE);
+    Result = readlink(LinkPath, DestinationBuffer, LINK_DESTINATION_SIZE - 1);
     if (Result == -1) {
         free(DestinationBuffer);
         *Destination = NULL;
         return errno;
     }
 
+    DestinationBuffer[Result] = '\0';
     *Destination = DestinationBuffer;
     return 0;
 }

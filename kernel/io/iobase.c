@@ -97,7 +97,7 @@ IopPerformDirectoryIoOperation (
 KSTATUS
 IopAddRelativeDirectoryEntries (
     PIO_HANDLE Handle,
-    PULONGLONG Offset,
+    PIO_OFFSET Offset,
     PIO_BUFFER IoBuffer,
     UINTN BufferSize,
     PUINTN BytesConsumed
@@ -589,7 +589,7 @@ KSTATUS
 IoReadAtOffset (
     PIO_HANDLE Handle,
     PIO_BUFFER IoBuffer,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN SizeInBytes,
     ULONG Flags,
     ULONG TimeoutInMilliseconds,
@@ -704,7 +704,7 @@ KSTATUS
 IoWriteAtOffset (
     PIO_HANDLE Handle,
     PIO_BUFFER IoBuffer,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN SizeInBytes,
     ULONG Flags,
     ULONG TimeoutInMilliseconds,
@@ -812,7 +812,7 @@ KERNEL_API
 KSTATUS
 IoFlush (
     PIO_HANDLE Handle,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     ULONGLONG Size,
     ULONG Flags
     )
@@ -939,8 +939,8 @@ KSTATUS
 IoSeek (
     PIO_HANDLE Handle,
     SEEK_COMMAND SeekCommand,
-    ULONGLONG Offset,
-    PULONGLONG NewOffset
+    IO_OFFSET Offset,
+    PIO_OFFSET NewOffset
     )
 
 /*++
@@ -972,8 +972,10 @@ Return Value:
 {
 
     PFILE_OBJECT FileObject;
-    ULONGLONG FileSize;
-    ULONGLONG LocalNewOffset;
+    IO_OFFSET FileSize;
+    IO_OFFSET LocalNewOffset;
+    IO_OFFSET OldOffset;
+    IO_OFFSET PreviousOffset;
     KSTATUS Status;
 
     ASSERT(KeGetRunLevel() == RunLevelLow);
@@ -991,37 +993,60 @@ Return Value:
         return STATUS_NOT_SUPPORTED;
     }
 
-    Status = STATUS_SUCCESS;
-    switch (SeekCommand) {
-    case SeekCommandNop:
-        LocalNewOffset = RtlAtomicOr64(&(Handle->CurrentOffset), 0);
-        break;
-
-    case SeekCommandFromCurrentOffset:
-        LocalNewOffset = RtlAtomicAdd64(&(Handle->CurrentOffset), Offset);
-        LocalNewOffset += Offset;
-        break;
-
     //
-    // Add the file size to the offset and then fall through to handle seeking
-    // from the end the same as seeking from the beginning.
+    // Loop trying to perform the update atomically.
     //
 
-    case SeekCommandFromEnd:
-        READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
-        Offset += FileSize;
+    while (TRUE) {
+        OldOffset = RtlAtomicOr64((PULONGLONG)&(Handle->CurrentOffset), 0);
+        switch (SeekCommand) {
+        case SeekCommandNop:
+            LocalNewOffset = OldOffset;
+            Status = STATUS_SUCCESS;
+            goto SeekEnd;
 
-    case SeekCommandFromBeginning:
-        RtlAtomicExchange64(&(Handle->CurrentOffset), Offset);
-        LocalNewOffset = Offset;
-        break;
+        case SeekCommandFromCurrentOffset:
+            LocalNewOffset = OldOffset + Offset;
+            break;
 
-    default:
-        LocalNewOffset = 0;
-        Status = STATUS_INVALID_PARAMETER;
-        break;
+        //
+        // Add the file size to the offset and then fall through to handle
+        // seeking from the end the same as seeking from the beginning.
+        //
+
+        case SeekCommandFromEnd:
+            READ_INT64_SYNC(&(FileObject->Properties.FileSize), &FileSize);
+            LocalNewOffset = Offset + FileSize;
+            break;
+
+        case SeekCommandFromBeginning:
+            LocalNewOffset = Offset;
+            break;
+
+        default:
+            LocalNewOffset = 0;
+            Status = STATUS_INVALID_PARAMETER;
+            goto SeekEnd;
+        }
+
+        if (LocalNewOffset < 0) {
+            Status = STATUS_INVALID_PARAMETER;
+            goto SeekEnd;
+        }
+
+        PreviousOffset = RtlAtomicCompareExchange64(
+                                          (PULONGLONG)&(Handle->CurrentOffset),
+                                          (ULONGLONG)LocalNewOffset,
+                                          (ULONGLONG)OldOffset);
+
+        if (PreviousOffset == OldOffset) {
+            break;
+        }
     }
 
+    Status = STATUS_SUCCESS;
+
+SeekEnd:
     if (NewOffset != NULL) {
         *NewOffset = LocalNewOffset;
     }
@@ -1594,7 +1619,7 @@ Return Value:
     SourcePathPoint.PathEntry = NULL;
     SourceStartPathPoint = NULL;
     if ((SourcePathSize <= 1) || (DestinationPathSize <= 1)) {
-        Status = STATUS_INVALID_PARAMETER;
+        Status = STATUS_PATH_NOT_FOUND;
         goto RenameEnd;
     }
 
@@ -3047,7 +3072,13 @@ Return Value:
             if (((Access & (IO_ACCESS_WRITE | IO_ACCESS_EXECUTE)) != 0) ||
                 (TypeOverride != IoObjectInvalid)) {
 
-                Status = STATUS_FILE_IS_DIRECTORY;
+                if (TypeOverride == IoObjectSymbolicLink) {
+                    Status = STATUS_FILE_EXISTS;
+
+                } else {
+                    Status = STATUS_FILE_IS_DIRECTORY;
+                }
+
                 goto OpenEnd;
             }
         }
@@ -5499,7 +5530,8 @@ Return Value:
         Parameters.IoOffset = Context->Offset;
 
     } else {
-        Parameters.IoOffset = RtlAtomicOr64(&(Handle->CurrentOffset), 0);
+        Parameters.IoOffset =
+                        RtlAtomicOr64((PULONGLONG)&(Handle->CurrentOffset), 0);
     }
 
     Parameters.NewIoOffset = Parameters.IoOffset;
@@ -5570,7 +5602,7 @@ PerformDirectoryIoOperationEnd:
     //
 
     if (Context->Offset == IO_OFFSET_NONE) {
-        RtlAtomicExchange64(&(Handle->CurrentOffset),
+        RtlAtomicExchange64((PULONGLONG)&(Handle->CurrentOffset),
                             Parameters.NewIoOffset);
     }
 
@@ -5599,7 +5631,7 @@ PerformDirectoryIoOperationEnd:
 KSTATUS
 IopAddRelativeDirectoryEntries (
     PIO_HANDLE Handle,
-    PULONGLONG Offset,
+    PIO_OFFSET Offset,
     PIO_BUFFER IoBuffer,
     UINTN BufferSize,
     PUINTN BytesConsumed
@@ -5641,7 +5673,7 @@ Return Value:
     PDIRECTORY_ENTRY Entry;
     ULONG EntrySize;
     PFILE_OBJECT FileObject;
-    ULONGLONG FileOffset;
+    IO_OFFSET FileOffset;
     UCHAR LocalBuffer[sizeof(DIRECTORY_ENTRY) + sizeof("..") + 8];
     PATH_POINT Parent;
     PKPROCESS Process;

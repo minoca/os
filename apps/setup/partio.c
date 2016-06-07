@@ -206,11 +206,11 @@ Return Value:
     return SetupWrite(Handle, Buffer, ByteCount);
 }
 
-ULONGLONG
+LONGLONG
 SetupPartitionSeek (
     PSETUP_CONTEXT Context,
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     )
 
 /*++
@@ -238,7 +238,7 @@ Return Value:
 
 {
 
-    ULONGLONG NewOffset;
+    LONGLONG NewOffset;
 
     NewOffset = SetupSeek(
                 Handle,

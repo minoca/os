@@ -135,7 +135,7 @@ Return Value:
     PSTR LinkPath;
     INT Option;
     ULONG Options;
-    CHAR ResolvedPath[PATH_MAX];
+    CHAR ResolvedPath[PATH_MAX + 1];
     PSTR Result;
     int Status;
 
@@ -221,7 +221,7 @@ Return Value:
         }
 
     } else {
-        Status = readlink(LinkPath, ResolvedPath, sizeof(ResolvedPath));
+        Status = readlink(LinkPath, ResolvedPath, sizeof(ResolvedPath) - 1);
         if (Status < 0) {
             Status = 1;
             if ((Options & READLINK_OPTION_VERBOSE) != 0) {
@@ -230,6 +230,8 @@ Return Value:
 
             goto MainEnd;
         }
+
+        ResolvedPath[Status] = '\0';
     }
 
     ResolvedPath[sizeof(ResolvedPath) - 1] = '\0';

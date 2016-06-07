@@ -302,7 +302,7 @@ OS_API
 KSTATUS
 OsPerformIo (
     HANDLE Handle,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN Size,
     ULONG Flags,
     ULONG TimeoutInMilliseconds,
@@ -348,7 +348,7 @@ OS_API
 KSTATUS
 OsPerformVectoredIo (
     HANDLE Handle,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN Size,
     ULONG Flags,
     ULONG TimeoutInMilliseconds,
@@ -1237,8 +1237,8 @@ KSTATUS
 OsSeek (
     HANDLE Handle,
     SEEK_COMMAND SeekCommand,
-    ULONGLONG Offset,
-    PULONGLONG NewOffset
+    IO_OFFSET Offset,
+    PIO_OFFSET NewOffset
     );
 
 /*++
@@ -1879,7 +1879,7 @@ OS_API
 KSTATUS
 OsMemoryMap (
     HANDLE Handle,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN Size,
     ULONG Flags,
     PVOID *Address

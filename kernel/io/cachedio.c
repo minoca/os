@@ -79,13 +79,13 @@ Members:
 
 typedef struct _IO_WRITE_CONTEXT {
     ULONGLONG FileSize;
-    ULONGLONG FileOffset;
+    IO_OFFSET FileOffset;
     UINTN BytesRemaining;
     UINTN BytesCompleted;
     UINTN SourceOffset;
     PIO_BUFFER SourceBuffer;
     PIO_BUFFER CacheBuffer;
-    ULONGLONG CacheBufferOffset;
+    IO_OFFSET CacheBufferOffset;
     ULONG BytesThisRound;
     ULONG PageByteOffset;
     ULONG IoFlags;
@@ -196,9 +196,9 @@ Return Value:
     PFILE_OBJECT FileObject;
     UINTN FlushCount;
     BOOL LockHeldExclusive;
-    ULONGLONG OriginalOffset;
+    IO_OFFSET OriginalOffset;
     ULONG PageShift;
-    ULONGLONG StartOffset;
+    IO_OFFSET StartOffset;
     KSTATUS Status;
     FILE_OBJECT_TIME_TYPE TimeType;
     BOOL TimidTrim;
@@ -266,7 +266,9 @@ Return Value:
         KeAcquireSharedExclusiveLockExclusive(FileObject->Lock);
         LockHeldExclusive = TRUE;
         if (OriginalOffset == IO_OFFSET_NONE) {
-            IoContext->Offset = RtlAtomicOr64(&(Handle->CurrentOffset), 0);
+            IoContext->Offset =
+                        RtlAtomicOr64((PULONGLONG)&(Handle->CurrentOffset), 0);
+
             StartOffset = IoContext->Offset;
         }
 
@@ -298,7 +300,9 @@ Return Value:
     } else {
         KeAcquireSharedExclusiveLockShared(FileObject->Lock);
         if (OriginalOffset == IO_OFFSET_NONE) {
-            IoContext->Offset = RtlAtomicOr64(&(Handle->CurrentOffset), 0);
+            IoContext->Offset =
+                        RtlAtomicOr64((PULONGLONG)&(Handle->CurrentOffset), 0);
+
             StartOffset = IoContext->Offset;
         }
 
@@ -322,7 +326,7 @@ Return Value:
     //
 
     if (OriginalOffset == IO_OFFSET_NONE) {
-        RtlAtomicExchange64(&(Handle->CurrentOffset),
+        RtlAtomicExchange64((PULONGLONG)&(Handle->CurrentOffset),
                             StartOffset + IoContext->BytesCompleted);
     }
 
@@ -511,19 +515,19 @@ Return Value:
     UINTN BytesRemaining;
     UINTN BytesThisRound;
     BOOL CacheMiss;
-    ULONGLONG CacheMissOffset;
-    ULONGLONG CurrentOffset;
+    IO_OFFSET CacheMissOffset;
+    IO_OFFSET CurrentOffset;
     ULONG DestinationByteOffset;
     PIO_BUFFER DestinationIoBuffer;
     ULONGLONG FileSize;
     IO_CONTEXT MissContext;
     UINTN MissSize;
     PIO_BUFFER PageAlignedIoBuffer;
-    ULONGLONG PageAlignedOffset;
+    IO_OFFSET PageAlignedOffset;
     UINTN PageAlignedSize;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
-    ULONGLONG ReadEnd;
+    IO_OFFSET ReadEnd;
     UINTN SizeInBytes;
     KSTATUS Status;
     UINTN TotalBytesRead;
@@ -829,11 +833,11 @@ Return Value:
     UINTN AdjustedSize;
     BOOL CacheBacked;
     IO_CONTEXT CacheIoContext;
-    ULONGLONG EndOffset;
+    IO_OFFSET EndOffset;
     ULONGLONG FileSize;
     UINTN FullPageSize;
     ULONGLONG NewFileSize;
-    ULONGLONG PageAlignedOffset;
+    IO_OFFSET PageAlignedOffset;
     ULONG PageByteOffset;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
@@ -1148,7 +1152,7 @@ Return Value:
 {
 
     UINTN CacheBufferSize;
-    ULONGLONG FileOffset;
+    IO_OFFSET FileOffset;
     IO_CONTEXT MissContext;
     ULONG PageByteOffset;
     IO_BUFFER PageCacheBuffer;
@@ -1545,7 +1549,7 @@ Return Value:
 
 {
 
-    ULONGLONG BlockAlignedOffset;
+    IO_OFFSET BlockAlignedOffset;
     UINTN BlockAlignedSize;
     ULONG BlockByteOffset;
     ULONG BlockSize;
@@ -1740,7 +1744,7 @@ Return Value:
     UINTN BufferOffset;
     UINTN BytesRemaining;
     UINTN BytesThisRound;
-    ULONGLONG FileOffset;
+    IO_OFFSET FileOffset;
     PPAGE_CACHE_ENTRY PageCacheEntry;
     ULONG PageSize;
     KSTATUS Status;
@@ -1858,7 +1862,7 @@ Return Value:
 {
 
     PIO_BUFFER BlockAlignedIoBuffer;
-    ULONGLONG BlockAlignedOffset;
+    IO_OFFSET BlockAlignedOffset;
     UINTN BlockAlignedSize;
     ULONG BlockSize;
     UINTN BytesToCopy;
@@ -2032,13 +2036,13 @@ Return Value:
 
     PIO_BUFFER AlignedIoBuffer;
     UINTN AlignedIoBufferSize;
-    ULONGLONG AlignedOffset;
+    IO_OFFSET AlignedOffset;
     ULONG BlockSize;
     UINTN BytesToWrite;
     PDEVICE Device;
     ULONGLONG FileSize;
     UINTN IoBufferSize;
-    ULONGLONG Offset;
+    IO_OFFSET Offset;
     IRP_READ_WRITE Parameters;
     IO_CONTEXT PartialContext;
     KSTATUS Status;
@@ -2271,7 +2275,7 @@ Return Value:
 {
 
     PIO_BUFFER AlignedIoBuffer;
-    ULONGLONG AlignedOffset;
+    IO_OFFSET AlignedOffset;
     ULONG BlockSize;
     ULONG ByteOffset;
     PDEVICE Device;

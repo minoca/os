@@ -625,10 +625,10 @@ Return Value:
     return TotalBytesWritten;
 }
 
-ULONGLONG
+LONGLONG
 SetupWin32Seek (
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     )
 
 /*++
@@ -669,7 +669,7 @@ Return Value:
     return NewOffset.QuadPart;
 }
 
-ULONGLONG
+LONGLONG
 SetupWin32Tell (
     PVOID Handle
     )

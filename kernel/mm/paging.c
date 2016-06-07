@@ -1191,7 +1191,7 @@ Return Value:
     ULONG PageSize;
     UINTN SectionPageCount;
     KSTATUS Status;
-    ULONGLONG TotalOffset;
+    IO_OFFSET TotalOffset;
     ULONG UnmapFlags;
     PVOID VirtualAddress;
 
@@ -1203,7 +1203,7 @@ Return Value:
     PageShift = MmPageShift();
     PageSize = MmPageSize();
     *PagesPaged = 0;
-    TotalOffset = -1;
+    TotalOffset = -1LL;
 
     ASSERT((Section->VirtualAddress < KERNEL_VA_START) ||
            (Section->AddressSpace == MmKernelAddressSpace));
@@ -4036,7 +4036,7 @@ Return Value:
     ULONG PageShift;
     ULONG PageSize;
     PPROCESSOR_BLOCK ProcessorBlock;
-    ULONGLONG ReadOffset;
+    IO_OFFSET ReadOffset;
     PIMAGE_SECTION RootSection;
     KSTATUS Status;
     PVOID SwapSpace;
@@ -4641,7 +4641,7 @@ Return Value:
     PPAGE_FILE PageFile;
     ULONG PageShift;
     ULONG PageSize;
-    ULONGLONG ReadOffset;
+    IO_OFFSET ReadOffset;
     KSTATUS Status;
     PVOID SwapSpace;
 
@@ -4796,7 +4796,7 @@ Return Value:
     UINTN BytesRead;
     ULONG PageShift;
     ULONG PageSize;
-    ULONGLONG ReadOffset;
+    IO_OFFSET ReadOffset;
     UINTN ReadSize;
     KSTATUS Status;
 

@@ -556,7 +556,7 @@ struct _IO_HANDLE {
     volatile ULONG ReferenceCount;
     PVOID DeviceContext;
     PATH_POINT PathPoint;
-    ULONGLONG CurrentOffset;
+    IO_OFFSET CurrentOffset;
 };
 
 /*++
@@ -629,7 +629,7 @@ Members:
 
 typedef struct _IO_CONTEXT {
     PIO_BUFFER IoBuffer;
-    ULONGLONG Offset;
+    IO_OFFSET Offset;
     UINTN SizeInBytes;
     UINTN BytesCompleted;
     ULONG Flags;
@@ -2538,7 +2538,7 @@ Return Value:
 KSTATUS
 IopFlushFileObject (
     PFILE_OBJECT FileObject,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     ULONGLONG Size,
     ULONG Flags,
     BOOL FlushExclusive,

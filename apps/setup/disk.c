@@ -673,8 +673,8 @@ Return Value:
 {
 
     PSETUP_CONTEXT ApplicationContext;
-    ULONGLONG BytesRead;
-    ULONGLONG Result;
+    LONGLONG BytesRead;
+    LONGLONG Result;
 
     ApplicationContext = PARENT_STRUCTURE(Context,
                                           SETUP_CONTEXT,
@@ -728,8 +728,8 @@ Return Value:
 {
 
     PSETUP_CONTEXT ApplicationContext;
-    ULONGLONG BytesWritten;
-    ULONGLONG Result;
+    LONGLONG BytesWritten;
+    LONGLONG Result;
 
     ApplicationContext = PARENT_STRUCTURE(Context,
                                           SETUP_CONTEXT,

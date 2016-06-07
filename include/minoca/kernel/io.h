@@ -868,7 +868,7 @@ Author:
 // Define the offset to use to specify the current file offset.
 //
 
-#define IO_OFFSET_NONE (-1ULL)
+#define IO_OFFSET_NONE (-1LL)
 
 //
 // Define the set of flags used for read/write IRP preparation and completion.
@@ -1879,10 +1879,10 @@ typedef struct _IRP_READ_WRITE {
     IRP_IO_BUFFER_STATE IoBufferState;
     ULONG IoFlags;
     ULONG TimeoutInMilliseconds;
-    ULONGLONG IoOffset;
+    IO_OFFSET IoOffset;
     UINTN IoSizeInBytes;
     UINTN IoBytesCompleted;
-    ULONGLONG NewIoOffset;
+    IO_OFFSET NewIoOffset;
     PFILE_PROPERTIES FileProperties;
 } IRP_READ_WRITE, *PIRP_READ_WRITE;
 
@@ -4017,7 +4017,7 @@ KSTATUS
 IoReadAtOffset (
     PIO_HANDLE Handle,
     PIO_BUFFER IoBuffer,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN SizeInBytes,
     ULONG Flags,
     ULONG TimeoutInMilliseconds,
@@ -4068,7 +4068,7 @@ KSTATUS
 IoWriteAtOffset (
     PIO_HANDLE Handle,
     PIO_BUFFER IoBuffer,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN SizeInBytes,
     ULONG Flags,
     ULONG TimeoutInMilliseconds,
@@ -4117,7 +4117,7 @@ KERNEL_API
 KSTATUS
 IoFlush (
     PIO_HANDLE Handle,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     ULONGLONG Size,
     ULONG Flags
     );
@@ -4153,8 +4153,8 @@ KSTATUS
 IoSeek (
     PIO_HANDLE Handle,
     SEEK_COMMAND SeekCommand,
-    ULONGLONG Offset,
-    PULONGLONG NewOffset
+    IO_OFFSET Offset,
+    PIO_OFFSET NewOffset
     );
 
 /*++

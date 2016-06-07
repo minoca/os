@@ -551,7 +551,7 @@ Return Value:
 
 {
 
-    ULONGLONG Offset;
+    IO_OFFSET Offset;
     KSTATUS Status;
 
     Status = OsSeek((HANDLE)(UINTN)(Directory->Descriptor),

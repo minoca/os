@@ -2257,7 +2257,7 @@ Return Value:
     UINTN FragmentOffset;
     PIO_BUFFER IoBuffer;
     UINTN IoBufferOffset;
-    ULONGLONG IoOffset;
+    IO_OFFSET IoOffset;
     BOOL Lba48;
     UINTN MaxTransferSize;
     RUNLEVEL OldRunLevel;

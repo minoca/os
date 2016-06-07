@@ -504,7 +504,7 @@ typedef struct _SYSTEM_CALL_PERFORM_IO {
     PVOID Buffer;
     ULONG Flags;
     ULONG TimeoutInMilliseconds;
-    ULONGLONG Offset;
+    IO_OFFSET Offset;
     UINTN Size;
     KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_PERFORM_IO, *PSYSTEM_CALL_PERFORM_IO;
@@ -548,7 +548,7 @@ typedef struct _SYSTEM_CALL_PERFORM_VECTORED_IO {
     PVOID Buffer;
     ULONG Flags;
     ULONG TimeoutInMilliseconds;
-    ULONGLONG Offset;
+    IO_OFFSET Offset;
     UINTN Size;
     PIO_VECTOR VectorArray;
     UINTN VectorCount;
@@ -1403,7 +1403,7 @@ Members:
 typedef struct _SYSTEM_CALL_SEEK {
     HANDLE Handle;
     SEEK_COMMAND Command;
-    ULONGLONG Offset;
+    IO_OFFSET Offset;
     KSTATUS Status;
 } SYSCALL_STRUCT SYSTEM_CALL_SEEK, *PSYSTEM_CALL_SEEK;
 
@@ -1464,14 +1464,15 @@ Members:
         the null terminator.
 
     LinkDestinationBuffer - Stores a pointer to a buffer where the destination
-        of the link will be returned.
+        of the link will be returned. A null terminator is not written.
 
     LinkDestinationBufferSize - Stores the size of the link destination
         buffer in bytes.
 
     LinkDestinationSize - Stores a pointer where the actual size of the link
         destination will be returned on either success or a
-        STATUS_BUFFER_TOO_SMALL case. On failure, 0 will be returned here.
+        STATUS_BUFFER_TOO_SMALL case. On failure, 0 will be returned here. This
+        size does not include a null terminator.
 
     Status - Stores the resulting status code from the kernel.
 

@@ -685,7 +685,7 @@ Return Value:
     PSD_RK32_CHILD Child;
     BOOL CompleteIrp;
     PSD_CONTROLLER Controller;
-    ULONGLONG IoOffset;
+    IO_OFFSET IoOffset;
     ULONG IrpReadWriteFlags;
     KSTATUS IrpStatus;
     KSTATUS Status;
@@ -2224,7 +2224,7 @@ Return Value:
     UINTN BlockCount;
     ULONGLONG BlockOffset;
     PSD_RK32_CHILD Child;
-    ULONGLONG IoOffset;
+    IO_OFFSET IoOffset;
     UINTN IoSize;
     PIRP Irp;
     BOOL Write;

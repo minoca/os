@@ -98,7 +98,7 @@ Return Value:
 PPAGE_CACHE_ENTRY
 IopLookupPageCacheEntry (
     PFILE_OBJECT FileObject,
-    ULONGLONG Offset
+    IO_OFFSET Offset
     );
 
 /*++
@@ -126,7 +126,7 @@ IopCreateOrLookupPageCacheEntry (
     PFILE_OBJECT FileObject,
     PVOID VirtualAddress,
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     PPAGE_CACHE_ENTRY LinkEntry,
     PBOOL EntryCreated
     );
@@ -170,7 +170,7 @@ IopCreateAndInsertPageCacheEntry (
     PFILE_OBJECT FileObject,
     PVOID VirtualAddress,
     PHYSICAL_ADDRESS PhysicalAddress,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     PPAGE_CACHE_ENTRY LinkEntry
     );
 
@@ -207,7 +207,7 @@ Return Value:
 KSTATUS
 IopCopyAndCacheIoBuffer (
     PFILE_OBJECT FileObject,
-    ULONGLONG FileOffset,
+    IO_OFFSET FileOffset,
     PIO_BUFFER Destination,
     UINTN CopySize,
     PIO_BUFFER Source,
@@ -258,7 +258,7 @@ Return Value:
 KSTATUS
 IopFlushPageCacheEntries (
     PFILE_OBJECT FileObject,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     ULONGLONG Size,
     ULONG Flags,
     PUINTN PageCount
@@ -298,7 +298,7 @@ Return Value:
 VOID
 IopEvictPageCacheEntries (
     PFILE_OBJECT FileObject,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     ULONG Flags
     );
 
@@ -330,7 +330,7 @@ BOOL
 IopIsIoBufferPageCacheBacked (
     PFILE_OBJECT FileObject,
     PIO_BUFFER IoBuffer,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     UINTN SizeInBytes
     );
 
@@ -383,7 +383,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+IO_OFFSET
 IopGetPageCacheEntryOffset (
     PPAGE_CACHE_ENTRY PageCacheEntry
     );

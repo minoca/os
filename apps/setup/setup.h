@@ -269,7 +269,7 @@ Members:
 typedef struct _SETUP_CONTEXT {
     ULONG Flags;
     PARTITION_CONTEXT PartitionContext;
-    ULONGLONG CurrentPartitionOffset;
+    LONGLONG CurrentPartitionOffset;
     ULONGLONG CurrentPartitionSize;
     PSETUP_DESTINATION DiskPath;
     PSETUP_DESTINATION PartitionPath;
@@ -582,10 +582,10 @@ Return Value:
 
 --*/
 
-ULONGLONG
+LONGLONG
 SetupOsSeek (
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     );
 
 /*++
@@ -609,7 +609,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+LONGLONG
 SetupOsTell (
     PVOID Handle
     );
@@ -1001,10 +1001,10 @@ Return Value:
 
 --*/
 
-ULONGLONG
+LONGLONG
 SetupSeek (
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     );
 
 /*++
@@ -1388,10 +1388,10 @@ Return Value:
 
 --*/
 
-ULONGLONG
+LONGLONG
 SetupFileSeek (
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     );
 
 /*++
@@ -1718,11 +1718,11 @@ Return Value:
 
 --*/
 
-ULONGLONG
+LONGLONG
 SetupPartitionSeek (
     PSETUP_CONTEXT Context,
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     );
 
 /*++

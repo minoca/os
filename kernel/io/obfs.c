@@ -78,7 +78,7 @@ Return Value:
 
 {
 
-    ULONGLONG AdvanceCount;
+    LONGLONG AdvanceCount;
     UINTN BytesRead;
     POBJECT_HEADER Child;
     PFILE_OBJECT ChildFileObject;
@@ -88,7 +88,7 @@ Return Value:
     ULONG EntrySize;
     FILE_ID FileId;
     PFILE_OBJECT FileObject;
-    ULONGLONG Index;
+    LONGLONG Index;
     PSTR Name;
     PSTR NameBuffer;
     ULONG NameBufferSize;
@@ -113,7 +113,7 @@ Return Value:
         Index = IoContext->Offset;
 
     } else {
-        Index = RtlAtomicOr64(&(IoHandle->CurrentOffset), 0);
+        Index = RtlAtomicOr64((PULONGLONG)&(IoHandle->CurrentOffset), 0);
     }
 
     BytesRead = 0;
@@ -231,7 +231,7 @@ Return Value:
 
         OldRunLevel = KeRaiseRunLevel(RunLevelDispatch);
         KeAcquireSpinLock(&(Object->WaitQueue.Lock));
-        while (AdvanceCount != 0) {
+        while (AdvanceCount > 0) {
             CurrentEntry = CurrentEntry->Next;
             while (CurrentEntry != &(Object->ChildListHead)) {
                 Child = LIST_VALUE(CurrentEntry, OBJECT_HEADER, SiblingEntry);
@@ -406,7 +406,7 @@ PerformObjectIoOperationEnd:
     }
 
     if (IoContext->Offset == IO_OFFSET_NONE) {
-        RtlAtomicExchange64(&(IoHandle->CurrentOffset), Index);
+        RtlAtomicExchange64((PULONGLONG)&(IoHandle->CurrentOffset), Index);
     }
 
     IoContext->BytesCompleted = BytesRead;

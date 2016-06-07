@@ -1952,7 +1952,7 @@ Return Value:
             goto SysFileControlEnd;
         }
 
-        if (LocalParameters.DuplicateDescriptor > (HANDLE)OB_MAX_HANDLES) {
+        if (LocalParameters.DuplicateDescriptor >= (HANDLE)OB_MAX_HANDLES) {
             Status = STATUS_INVALID_PARAMETER;
             goto SysFileControlEnd;
         }
@@ -2649,6 +2649,10 @@ Return Value:
 
     if (!KSUCCESS(Status)) {
         goto SysReadSymbolicLinkEnd;
+    }
+
+    if (LinkTargetSize != 0) {
+        LinkTargetSize -= 1;
     }
 
     if (Parameters->LinkDestinationBufferSize < LinkTargetSize) {

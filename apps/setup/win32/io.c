@@ -423,10 +423,10 @@ Return Value:
     return TotalBytesWritten;
 }
 
-ULONGLONG
+LONGLONG
 SetupOsSeek (
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     )
 
 /*++
@@ -453,7 +453,7 @@ Return Value:
 {
 
     PSETUP_OS_HANDLE IoHandle;
-    ULONGLONG NewOffset;
+    LONGLONG NewOffset;
 
     IoHandle = Handle;
     if (IoHandle->WinHandle != NULL) {
@@ -464,7 +464,7 @@ Return Value:
     return NewOffset;
 }
 
-ULONGLONG
+LONGLONG
 SetupOsTell (
     PVOID Handle
     )

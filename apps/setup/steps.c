@@ -146,7 +146,7 @@ Return Value:
     ULONG Index;
     PSETUP_PARTITION_CONFIGURATION Partition;
     ULONG PartitionCount;
-    ULONGLONG PreviousOffset;
+    LONGLONG PreviousOffset;
     ULONGLONG PreviousSize;
     INT Result;
 
@@ -276,7 +276,7 @@ Return Value:
     PSETUP_DESTINATION Destination;
     PARTITION_DEVICE_INFORMATION PartitionInformation;
     INT Result;
-    ULONGLONG SeekResult;
+    LONGLONG SeekResult;
     PVOID Volume;
     BOOL WriteLbaOffset;
 
@@ -1323,12 +1323,12 @@ Return Value:
     PUCHAR BootCodeSizePointer;
     ULONG ByteIndex;
     ssize_t BytesDone;
-    ULONGLONG DiskOffset;
+    LONGLONG DiskOffset;
     PUCHAR FileData;
     ULONG FileSize;
     ULONG Offset;
     INT Result;
-    ULONGLONG SeekResult;
+    LONGLONG SeekResult;
     PVOID Source;
 
     Block = NULL;

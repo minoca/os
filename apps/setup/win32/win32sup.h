@@ -216,10 +216,10 @@ Return Value:
 
 --*/
 
-ULONGLONG
+LONGLONG
 SetupWin32Seek (
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     );
 
 /*++
@@ -243,7 +243,7 @@ Return Value:
 
 --*/
 
-ULONGLONG
+LONGLONG
 SetupWin32Tell (
     PVOID Handle
     );

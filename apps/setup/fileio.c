@@ -911,10 +911,10 @@ Return Value:
     return (ssize_t)BytesComplete;
 }
 
-ULONGLONG
+LONGLONG
 SetupFileSeek (
     PVOID Handle,
-    ULONGLONG Offset
+    LONGLONG Offset
     )
 
 /*++

@@ -67,7 +67,7 @@ MmpAllocateImageSection (
     UINTN Size,
     ULONG Flags,
     HANDLE ImageHandle,
-    ULONGLONG ImageOffset,
+    IO_OFFSET ImageOffset,
     PIMAGE_SECTION *AllocatedSection
     );
 
@@ -324,7 +324,7 @@ Return Value:
 KSTATUS
 MmUnmapImageSectionList (
     PIMAGE_SECTION_LIST ImageSectionList,
-    ULONGLONG Offset,
+    IO_OFFSET Offset,
     ULONGLONG Size,
     ULONG Flags,
     PBOOL PageWasDirty
@@ -365,15 +365,15 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PIMAGE_SECTION CurrentSection;
     BOOL Dirty;
-    ULONGLONG EndOffset;
+    IO_OFFSET EndOffset;
     UINTN PageCount;
     UINTN PageOffset;
     ULONG PageShift;
     PIMAGE_SECTION ReleaseSection;
-    ULONGLONG StartOffset;
+    IO_OFFSET StartOffset;
     KSTATUS Status;
-    ULONGLONG UnmapEndOffset;
-    ULONGLONG UnmapStartOffset;
+    IO_OFFSET UnmapEndOffset;
+    IO_OFFSET UnmapStartOffset;
 
     if (PageWasDirty != NULL) {
         *PageWasDirty = FALSE;
@@ -993,7 +993,7 @@ MmpAddImageSection (
     UINTN Size,
     ULONG Flags,
     HANDLE ImageHandle,
-    ULONGLONG ImageOffset
+    IO_OFFSET ImageOffset
     )
 
 /*++
@@ -1588,7 +1588,7 @@ Return Value:
     ULONG LastDirtyPage;
     BOOL LockHeld;
     BOOL MarkedDirty;
-    ULONGLONG Offset;
+    IO_OFFSET Offset;
     ULONG PageAttributes;
     ULONG PageIndex;
     ULONG PageShift;
@@ -2491,7 +2491,7 @@ MmpAllocateImageSection (
     UINTN Size,
     ULONG Flags,
     HANDLE ImageHandle,
-    ULONGLONG ImageOffset,
+    IO_OFFSET ImageOffset,
     PIMAGE_SECTION *AllocatedSection
     )
 
@@ -2854,7 +2854,7 @@ Return Value:
     UINTN PageOffset;
     UINTN PageShift;
     PVOID RegionEnd;
-    ULONGLONG RemainderOffset;
+    IO_OFFSET RemainderOffset;
     UINTN RemainderPages;
     PIMAGE_SECTION RemainderSection;
     UINTN RemainderSize;
