@@ -1499,23 +1499,15 @@ Return Value:
     ProcessorBlock = KeGetCurrentProcessorBlockForDebugger();
 
     //
-    // Bail out if this is an expected spurious request.
+    // If there is no freeze owner or no processors are frozen, this may be a
+    // real NMI. Crash here unless NMIs are maskable.
     //
 
-    if (ProcessorBlock->ExpectingSpuriousFreeze != 0) {
-        ProcessorBlock->ExpectingSpuriousFreeze -= 1;
-        return;
-    }
-
-    //
-    // If there is no freeze owner or no processors are frozen, this is a real
-    // NMI. Crash here.
-    //
-
-    if ((KdFreezeOwner == MAX_ULONG) || (KdProcessorsFrozen == 0) ||
+    if ((KdFreezeOwner == MAX_ULONG) ||
+        (KdProcessorsFrozen == 0) ||
         (KdProcessorsFrozen >= KeActiveProcessorCount)) {
 
-        ASSERT(FALSE);
+        ASSERT(KdFreezesAreMaskable != FALSE);
 
         return;
     }
@@ -3571,7 +3563,6 @@ Return Value:
             (KdNmiBroadcastAllowed != FALSE)) {
 
             KdNmiHandler(TrapFrame);
-            ProcessorBlock->ExpectingSpuriousFreeze += 1;
         }
 
     } while (LockValue != ProcessorNumber);

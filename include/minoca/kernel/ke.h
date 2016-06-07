@@ -599,9 +599,6 @@ Members:
     PendingDispatchInterrupt - Stores a boolean indicating whether or not a
         dispatch level software interrupt is pending.
 
-    ExpectingSpuriousFreeze - Stores a boolean used by the debugger to indicate
-        that a spurious freeze request is expected to come in soon.
-
     DpcInProgress - Stores a pointer to the currently executing DPC.
 
     DpcLock - Stores the spin lock protecting the DPC list.
@@ -663,7 +660,6 @@ struct _PROCESSOR_BLOCK {
     ULONG PendingInterruptCount;
     PENDING_INTERRUPT PendingInterrupts[RunLevelCount];
     UCHAR PendingDispatchInterrupt;
-    UCHAR ExpectingSpuriousFreeze;
     PDPC DpcInProgress;
     KSPIN_LOCK DpcLock;
     LIST_ENTRY DpcList;
