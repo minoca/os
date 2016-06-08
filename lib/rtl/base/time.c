@@ -1699,7 +1699,9 @@ Return Value:
     // Skip the days for now as they're tricky. Get the month into range.
     //
 
-    if (CalendarTime->Month >= MONTHS_PER_YEAR) {
+    if ((CalendarTime->Month >= MONTHS_PER_YEAR) ||
+        (CalendarTime->Month < 0)) {
+
         CalendarTime->Year += CalendarTime->Month / MONTHS_PER_YEAR;
         CalendarTime->Month %= MONTHS_PER_YEAR;
         if (CalendarTime->Month < 0) {
