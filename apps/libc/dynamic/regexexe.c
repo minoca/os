@@ -830,58 +830,27 @@ Return Value:
                 }
 
                 //
-                // Go back clearing out subexpressions until the wrong choice
-                // is found.
+                // Restore the subexpression match values to what they were
+                // before the choice.
                 //
 
-                while (Entry != NULL) {
-                    if (Entry->Type == RegexEntrySubexpression) {
+                Entry = CurrentChoice->Node;
+                if (Entry->Type == RegexEntrySubexpression) {
+                    SubexpressionNumber = Entry->U.SubexpressionNumber;
+                    if ((SubexpressionNumber < Context->MatchSize) &&
+                        ((Context->Expression->Flags & REG_NOSUB) == 0)) {
 
-                        assert(Entry == CurrentChoice->Node);
-
-                        SubexpressionNumber = Entry->U.SubexpressionNumber;
-                        if ((SubexpressionNumber < Context->MatchSize) &&
-                            ((Context->Expression->Flags & REG_NOSUB) == 0)) {
-
-                            Match = &(Context->Match[SubexpressionNumber]);
-                            Match->rm_so = CurrentChoice->U.SavedMatchStart;
-                            Match->rm_eo = CurrentChoice->U.SavedMatchEnd;
-                        }
-
-                        if (SubexpressionNumber < REGEX_INTERNAL_MATCH_COUNT) {
-                            Match =
-                                &(Context->InternalMatch[SubexpressionNumber]);
-
-                            Match->rm_so = CurrentChoice->U.SavedMatchStart;
-                            Match->rm_eo = CurrentChoice->U.SavedMatchEnd;
-                        }
+                        Match = &(Context->Match[SubexpressionNumber]);
+                        Match->rm_so = CurrentChoice->U.SavedMatchStart;
+                        Match->rm_eo = CurrentChoice->U.SavedMatchEnd;
                     }
 
-                    if (Entry == CurrentChoice->Node) {
-                        break;
-                    }
+                    if (SubexpressionNumber < REGEX_INTERNAL_MATCH_COUNT) {
+                        Match =
+                            &(Context->InternalMatch[SubexpressionNumber]);
 
-                    //
-                    // Go back one entry, which is either to the previous
-                    // sibling and down all the way, or up to the parent.
-                    //
-
-                    if ((Entry->Type != RegexEntryBranchOption) &&
-                        (Entry->ListEntry.Previous !=
-                         &(Entry->Parent->ChildList))) {
-
-                        Entry = LIST_VALUE(Entry->ListEntry.Previous,
-                                           REGULAR_EXPRESSION_ENTRY,
-                                           ListEntry);
-
-                        while (LIST_EMPTY(&(Entry->ChildList)) == FALSE) {
-                            Entry = LIST_VALUE(Entry->ChildList.Previous,
-                                               REGULAR_EXPRESSION_ENTRY,
-                                               ListEntry);
-                        }
-
-                    } else {
-                        Entry = Entry->Parent;
+                        Match->rm_so = CurrentChoice->U.SavedMatchStart;
+                        Match->rm_eo = CurrentChoice->U.SavedMatchEnd;
                     }
                 }
 
