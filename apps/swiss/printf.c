@@ -338,8 +338,8 @@ Return Value:
 
                         } else {
                             Integer = strtol(Argument, &AfterScan, 0);
-                            if (((Integer == -1) && (errno != 0)) ||
-                                (AfterScan == Argument)) {
+                            if ((AfterScan == Argument) ||
+                                (*AfterScan != '\0')) {
 
                                 SwPrintError(0, Argument, "Invalid number");
                                 ReturnValue = errno;

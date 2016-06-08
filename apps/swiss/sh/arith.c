@@ -645,10 +645,7 @@ Return Value:
         Value = 0;
         if (ValueString != NULL) {
             Value = strtol(ValueString, &AfterScan, 0);
-            if (((Value == -1) && (errno != 0)) ||
-                ((UINTN)AfterScan !=
-                 (UINTN)ValueString + ValueStringSize - 1)) {
-
+            if ((UINTN)AfterScan != (UINTN)ValueString + ValueStringSize - 1) {
                 Result = FALSE;
                 return FALSE;
             }

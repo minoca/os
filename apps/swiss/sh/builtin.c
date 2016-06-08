@@ -825,6 +825,7 @@ Return Value:
 
 {
 
+    PSTR AfterScan;
     PLIST_ENTRY CurrentEntry;
     PSHELL_EXECUTION_NODE DestinationLoop;
     ULONG LoopCount;
@@ -839,8 +840,9 @@ Return Value:
         return 1;
 
     } else if (ArgumentCount == 2) {
-        LoopCount = strtoul(Arguments[1], NULL, 10);
-        if ((LoopCount <= 1) || (errno != 0)) {
+        LoopCount = strtoul(Arguments[1], &AfterScan, 10);
+        if ((LoopCount < 1) || (*AfterScan != '\0')) {
+            PRINT_ERROR("sh: break: Invalid count\n");
             return 1;
         }
     }
@@ -957,6 +959,7 @@ Return Value:
 
 {
 
+    PSTR AfterScan;
     PLIST_ENTRY CurrentEntry;
     PSHELL_EXECUTION_NODE Node;
     LONG ReturnValue;
@@ -967,8 +970,9 @@ Return Value:
 
     ReturnValue = Shell->LastReturnValue;
     if (ArgumentCount >= 2) {
-        ReturnValue = strtoul(Arguments[1], NULL, 10);
-        if ((ReturnValue == -1) && (errno != 0)) {
+        ReturnValue = strtoul(Arguments[1], &AfterScan, 10);
+        if (*AfterScan != '\0') {
+            PRINT_ERROR("sh: return: invalid argument '%s'\n", Arguments[1]);
             ReturnValue = Shell->LastReturnValue;
         }
     }
@@ -1731,7 +1735,7 @@ Return Value:
     ShiftCount = 1;
     if (ArgumentCount > 1) {
         ShiftCount = strtol(Arguments[1], &AfterScan, 10);
-        if (AfterScan == Arguments[1]) {
+        if ((AfterScan == Arguments[1]) || (*AfterScan != '\0')) {
             PRINT_ERROR("shift: Illegal number %s.\n", Arguments[1]);
             return 1;
         }
