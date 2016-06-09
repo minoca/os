@@ -434,6 +434,7 @@ Return Value:
 
         ClockInterrupt = HlpInterruptGetClockKInterrupt();
         ClockInterrupt->InterruptServiceRoutine = HlpEarlyClockInterruptHandler;
+        HlClockTimer->InterruptRunLevel = ClockInterrupt->RunLevel;
         Status = HlpInterruptSetLineState(&(HlClockTimer->Interrupt.Line),
                                           &State,
                                           ClockInterrupt,
@@ -602,14 +603,8 @@ Return Value:
 
 {
 
-    PTIMER_ACKNOWLEDGE_INTERRUPT AcknowledgeInterrupt;
-
     HlEarlyClockInterruptCount += 1;
-    AcknowledgeInterrupt = HlClockTimer->FunctionTable.AcknowledgeInterrupt;
-    if (AcknowledgeInterrupt != NULL) {
-        AcknowledgeInterrupt(HlClockTimer->PrivateContext);
-    }
-
+    HlpTimerAcknowledgeInterrupt(HlClockTimer);
     return InterruptStatusClaimed;
 }
 
@@ -636,7 +631,6 @@ Return Value:
 
 {
 
-    PTIMER_ACKNOWLEDGE_INTERRUPT AcknowledgeInterrupt;
     ULONGLONG ClockTicks;
     ULONGLONG CurrentTime;
     ULONG Processor;
@@ -652,10 +646,7 @@ Return Value:
     if ((Processor == 0) ||
         ((HlClockTimer->Features & TIMER_FEATURE_PER_PROCESSOR) != 0)) {
 
-        AcknowledgeInterrupt = HlClockTimer->FunctionTable.AcknowledgeInterrupt;
-        if (AcknowledgeInterrupt != NULL) {
-            AcknowledgeInterrupt(HlClockTimer->PrivateContext);
-        }
+        HlpTimerAcknowledgeInterrupt(HlClockTimer);
 
         //
         // If it's not a per-processor timer, the next hard deadline may

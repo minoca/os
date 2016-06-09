@@ -48,8 +48,9 @@ Environment:
 // Find timer options.
 //
 
-#define FIND_TIMER_OPTION_INCLUDE_USED_FOR_INTERRUPT 0x00000001
-#define FIND_TIMER_OPTION_INCLUDE_USED_FOR_COUNTER   0x00000002
+#define FIND_TIMER_OPTION_INCLUDE_USED_FOR_INTERRUPT_ANY      0x00000001
+#define FIND_TIMER_OPTION_INCLUDE_USED_FOR_COUNTER            0x00000002
+#define FIND_TIMER_OPTION_INCLUDE_USED_FOR_INTERRUPT_ABSOLUTE 0x00000004
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -589,8 +590,12 @@ Return Value:
 
 {
 
+    UINTN AbsoluteArrayOffset;
     UINTN AllocationSize;
-    BOOL CounterArrayNeeded;
+    ULONG ArmFlags;
+    UINTN CounterArrayOffset;
+    ULONG DisarmFlags;
+    ULONG InterruptFlags;
     ULONG ProcessorCount;
     KSTATUS Status;
     PHARDWARE_TIMER Timer;
@@ -613,6 +618,32 @@ Return Value:
     if (TimerDescription->FunctionTable.Initialize == NULL) {
         Status = STATUS_INVALID_PARAMETER;
         goto TimerRegisterHardwareEnd;
+    }
+
+    //
+    // Non-periodic, absolute timers must be readable and per-processor.
+    //
+
+    if (((TimerDescription->Features & TIMER_FEATURE_ABSOLUTE) != 0) &&
+        ((TimerDescription->Features & TIMER_FEATURE_PERIODIC) == 0)) {
+
+        if ((TimerDescription->Features & TIMER_FEATURE_READABLE) == 0) {
+            Status = STATUS_INVALID_PARAMETER;
+            goto TimerRegisterHardwareEnd;
+        }
+
+        //
+        // The requirement that non-periodic absolute timers must be
+        // per-processor stems from the difficulty of synchronizing rearming
+        // the timer during acknowledge interrupt. Handling races between one
+        // core arming the timer and another core acknowledging the timer's
+        // interrupt adds complexity that is not yet worth including.
+        //
+
+        if ((TimerDescription->Features & TIMER_FEATURE_PER_PROCESSOR) == 0) {
+            Status = STATUS_INVALID_PARAMETER;
+            goto TimerRegisterHardwareEnd;
+        }
     }
 
     //
@@ -639,12 +670,15 @@ Return Value:
     }
 
     //
-    // If the one-shot or periodic features are set then the arm timer routine
-    // is required.
+    // If the one-shot, periodic or absolute deadline features are set then the
+    // arm timer routine is required.
     //
 
-    if (((TimerDescription->Features &
-          (TIMER_FEATURE_ONE_SHOT | TIMER_FEATURE_PERIODIC)) != 0) &&
+    ArmFlags = TIMER_FEATURE_ONE_SHOT |
+               TIMER_FEATURE_PERIODIC |
+               TIMER_FEATURE_ABSOLUTE;
+
+    if (((TimerDescription->Features & ArmFlags) != 0) &&
         (TimerDescription->FunctionTable.Arm == NULL)) {
 
         Status = STATUS_INVALID_PARAMETER;
@@ -652,10 +686,12 @@ Return Value:
     }
 
     //
-    // If the periodic feature is set then the disarm timer routine is required.
+    // If the periodic or absolute deadline features are set then the disarm
+    // timer routine is required.
     //
 
-    if (((TimerDescription->Features & TIMER_FEATURE_PERIODIC) != 0) &&
+    DisarmFlags = TIMER_FEATURE_PERIODIC | TIMER_FEATURE_ABSOLUTE;
+    if (((TimerDescription->Features & DisarmFlags) != 0) &&
         (TimerDescription->FunctionTable.Disarm == NULL)) {
 
         Status = STATUS_INVALID_PARAMETER;
@@ -676,8 +712,11 @@ Return Value:
     // its interrupt.
     //
 
-    if (((TimerDescription->Features &
-          (TIMER_FEATURE_PERIODIC | TIMER_FEATURE_ONE_SHOT)) != 0) &&
+    InterruptFlags = TIMER_FEATURE_ONE_SHOT |
+                     TIMER_FEATURE_PERIODIC |
+                     TIMER_FEATURE_ABSOLUTE;
+
+    if (((TimerDescription->Features & InterruptFlags) != 0) &&
         (TimerDescription->Interrupt.Line.Type == InterruptLineInvalid)) {
 
         Status = STATUS_INVALID_PARAMETER;
@@ -692,14 +731,13 @@ Return Value:
     // That will be created later.
     //
 
-    CounterArrayNeeded = FALSE;
+    CounterArrayOffset = 0;
     AllocationSize = sizeof(HARDWARE_TIMER);
     if (((TimerDescription->Features & TIMER_FEATURE_VARIANT) != 0) &&
         ((TimerDescription->Features & TIMER_FEATURE_PER_PROCESSOR) != 0)) {
 
         ProcessorCount = HlGetMaximumProcessorCount();
-        if (ProcessorCount != 0) {
-            CounterArrayNeeded = TRUE;
+        if (ProcessorCount > 1) {
 
             //
             // Align the allocation size so that the array of 64-bit integers is
@@ -708,8 +746,29 @@ Return Value:
             //
 
             AllocationSize = ALIGN_RANGE_UP(AllocationSize, sizeof(ULONGLONG));
+            CounterArrayOffset = AllocationSize;
             AllocationSize += ProcessorCount * sizeof(ULONGLONG);
         }
+    }
+
+    //
+    // Non-periodic, absolute timers require extra data in order to fake
+    // periodic support.
+    //
+
+    AbsoluteArrayOffset = 0;
+    if (((TimerDescription->Features & TIMER_FEATURE_ABSOLUTE) != 0) &&
+        ((TimerDescription->Features & TIMER_FEATURE_PERIODIC) == 0)) {
+
+        ASSERT((TimerDescription->Features & TIMER_FEATURE_PER_PROCESSOR) != 0);
+
+        ProcessorCount = HlGetMaximumProcessorCount();
+
+        ASSERT(ProcessorCount != 0);
+
+        AllocationSize = ALIGN_RANGE_UP(AllocationSize, sizeof(ULONGLONG));
+        AbsoluteArrayOffset = AllocationSize;
+        AllocationSize += ProcessorCount * sizeof(HARDWARE_TIMER_ABSOLUTE_DATA);
     }
 
     Timer = HlAllocateMemory(AllocationSize, HL_POOL_TAG, FALSE, NULL);
@@ -735,10 +794,13 @@ Return Value:
     Timer->CounterFrequency = TimerDescription->CounterFrequency;
     Timer->Flags = 0;
     Timer->Interrupt = TimerDescription->Interrupt;
-    if (CounterArrayNeeded != FALSE) {
-        Timer->CurrentCounts =
-                (volatile ULONGLONG *)(UINTN)ALIGN_RANGE_UP((UINTN)(Timer + 1),
-                                                            sizeof(ULONGLONG));
+    Timer->InterruptRunLevel = RunLevelCount;
+    if (CounterArrayOffset != 0) {
+        Timer->CurrentCounts = (PVOID)Timer + CounterArrayOffset;
+    }
+
+    if (AbsoluteArrayOffset != 0) {
+        Timer->AbsoluteData = (PVOID)Timer + AbsoluteArrayOffset;
     }
 
     //
@@ -771,8 +833,9 @@ Arguments:
 
     Mode - Supplies whether or not this should be a recurring timer or not.
 
-    TickCount - Supplies the number of timer ticks from now the timer should
-        fire in.
+    TickCount - Supplies the number of timer ticks from now for the timer to
+        fire in. In absolute mode, this supplies the time in timer ticks at
+        which to fire an interrupt.
 
 Return Value:
 
@@ -786,32 +849,144 @@ Return Value:
 
 {
 
+    PHARDWARE_TIMER_ABSOLUTE_DATA AbsoluteData;
+    ULONG AbsoluteIndex;
+    ULONGLONG CurrentTime;
+    ULONGLONG DueTime;
+    ULONGLONG HalfRolloverTicks;
+    RUNLEVEL OldRunLevel;
+    PVOID PrivateContext;
     KSTATUS Status;
 
     //
-    // Fail if the timer doesn't support the requested mode.
+    // Non-periodic, absolute timers require a little extra massaging in order
+    // to support periodic requests - they need to be converted to absolute
+    // requests.
     //
 
-    switch (Mode) {
-    case TimerModePeriodic:
-        if ((Timer->Features & TIMER_FEATURE_PERIODIC) == 0) {
-            Status = STATUS_NOT_SUPPORTED;
+    OldRunLevel = RunLevelCount;
+    if (((Timer->Features & TIMER_FEATURE_ABSOLUTE) != 0) &&
+        ((Timer->Features & TIMER_FEATURE_PERIODIC) == 0)) {
+
+        ASSERT((Timer->Features & TIMER_FEATURE_PER_PROCESSOR) != 0);
+        ASSERT(Timer->InterruptRunLevel != RunLevelCount);
+
+        //
+        // Raise to the interrupt's run level in order to synchronize rearming
+        // the timer during acknowledge interrupt with this new call to arm the
+        // timer.
+        //
+
+        AbsoluteIndex = KeGetCurrentProcessorNumber();
+        AbsoluteData = &(Timer->AbsoluteData[AbsoluteIndex]);
+        OldRunLevel = KeRaiseRunLevel(Timer->InterruptRunLevel);
+        switch (Mode) {
+
+        //
+        // Periodic mode is faked for non-periodic absolute timers, by having
+        // acknowledge interrupt rearm the timer. Convert the tick count to an
+        // absolute deadline and save the period so that the timer can be
+        // rearmed during interrupt handling.
+        //
+
+        case TimerModePeriodic:
+
+            //
+            // Make sure the tick count is less than half the rollover rate.
+            // Absolute timers need to be able to differentiate between a time
+            // shortly in the past and a time in the far future.
+            //
+
+            HalfRolloverTicks = 1ULL << (Timer->CounterBitWidth - 1);
+            if (TickCount > HalfRolloverTicks) {
+                TickCount = HalfRolloverTicks;
+            }
+
+            //
+            // Calculate the absolute due time, only sending the hardware bits
+            // it knows about.
+            //
+
+            PrivateContext = Timer->PrivateContext;
+            CurrentTime = Timer->FunctionTable.ReadCounter(PrivateContext);
+            DueTime = CurrentTime + TickCount;
+            DueTime &= (1ULL << Timer->CounterBitWidth) - 1;
+
+            //
+            // Save the periodic state so acknowledge interrupt can rearm the
+            // timer.
+            //
+
+            AbsoluteData->Period = TickCount;
+            AbsoluteData->LastDueTime = DueTime;
+
+            //
+            // Convert from periodic mode to absolute mode.
+            //
+
+            TickCount = DueTime;
+            Mode = TimerModeAbsolute;
+            break;
+
+        //
+        // For both one-shot and absolute modes, set the period to 0 so that
+        // acknowledge interrupt does not rearm the timer.
+        //
+
+        case TimerModeOneShot:
+            if ((Timer->Features & TIMER_FEATURE_ONE_SHOT) == 0) {
+                Status = STATUS_NOT_SUPPORTED;
+                goto TimerArmEnd;
+            }
+
+            //
+            // Fall through.
+            //
+
+        case TimerModeAbsolute:
+            AbsoluteData->Period = 0;
+            break;
+
+        default:
+            Status = STATUS_INVALID_PARAMETER;
             goto TimerArmEnd;
         }
 
-        break;
+    //
+    // Otherwise, all periodic requests take relative tick counts and there is
+    // no extra work to do.
+    //
 
-    case TimerModeOneShot:
-        if ((Timer->Features & TIMER_FEATURE_ONE_SHOT) == 0) {
-            Status = STATUS_NOT_SUPPORTED;
+    } else {
+        switch (Mode) {
+        case TimerModePeriodic:
+            if ((Timer->Features & TIMER_FEATURE_PERIODIC) == 0) {
+                Status = STATUS_NOT_SUPPORTED;
+                goto TimerArmEnd;
+            }
+
+            break;
+
+        case TimerModeOneShot:
+            if ((Timer->Features & TIMER_FEATURE_ONE_SHOT) == 0) {
+                Status = STATUS_NOT_SUPPORTED;
+                goto TimerArmEnd;
+            }
+
+            break;
+
+        case TimerModeAbsolute:
+            if ((Timer->Features & TIMER_FEATURE_ABSOLUTE) == 0) {
+                Status = STATUS_NOT_SUPPORTED;
+                goto TimerArmEnd;
+            }
+
+            break;
+
+        default:
+            Status = STATUS_INVALID_PARAMETER;
             goto TimerArmEnd;
         }
-
-        break;
-
-    default:
-        Status = STATUS_INVALID_PARAMETER;
-        goto TimerArmEnd;
     }
 
     //
@@ -826,6 +1001,10 @@ Return Value:
 TimerArmEnd:
 
     ASSERT(KSUCCESS(Status));
+
+    if (OldRunLevel != RunLevelCount) {
+        KeLowerRunLevel(OldRunLevel);
+    }
 
     return Status;
 }
@@ -853,13 +1032,102 @@ Return Value:
 
 {
 
+    PHARDWARE_TIMER_ABSOLUTE_DATA AbsoluteData;
+    ULONG AbsoluteIndex;
+    RUNLEVEL OldRunLevel;
+
     ASSERT(Timer != NULL);
+
+    //
+    // If this is a non-periodic absolute timer, raise to the interrupt's run
+    // level and set the period to 0 so that acknowledge interrupt does not
+    // rearm the timer.
+    //
+
+    OldRunLevel = RunLevelCount;
+    if (((Timer->Features & TIMER_FEATURE_ABSOLUTE) != 0) &&
+        ((Timer->Features & TIMER_FEATURE_PERIODIC) == 0)) {
+
+        ASSERT((Timer->Features & TIMER_FEATURE_PER_PROCESSOR) != 0);
+        ASSERT(Timer->InterruptRunLevel != RunLevelCount);
+
+        AbsoluteIndex = KeGetCurrentProcessorNumber();
+        AbsoluteData = &(Timer->AbsoluteData[AbsoluteIndex]);
+        OldRunLevel = KeRaiseRunLevel(Timer->InterruptRunLevel);
+        AbsoluteData->Period = 0;
+    }
 
     //
     // Disarm the timer.
     //
 
     Timer->FunctionTable.Disarm(Timer->PrivateContext);
+    if (OldRunLevel != RunLevelCount) {
+        KeLowerRunLevel(OldRunLevel);
+    }
+
+    return;
+}
+
+VOID
+HlpTimerAcknowledgeInterrupt (
+    PHARDWARE_TIMER Timer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine acknowledges a timer interrupt. If the timer is a non-periodic
+    absolute timer, this will rearm the timer if it is still in periodic mode.
+
+Arguments:
+
+    Timer - Supplies a pointer to the timer whose interrupt is to be
+        acknowledged.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PHARDWARE_TIMER_ABSOLUTE_DATA AbsoluteData;
+    ULONG AbsoluteIndex;
+    PTIMER_ACKNOWLEDGE_INTERRUPT AcknowledgeInterrupt;
+    ULONGLONG DueTime;
+    ULONGLONG Period;
+
+    AcknowledgeInterrupt = Timer->FunctionTable.AcknowledgeInterrupt;
+    if (AcknowledgeInterrupt != NULL) {
+        AcknowledgeInterrupt(Timer->PrivateContext);
+    }
+
+    //
+    // If it's an non-periodic absolute timer, then rearm it if necessary.
+    //
+
+    if (((Timer->Features & TIMER_FEATURE_ABSOLUTE) != 0) &&
+        ((Timer->Features & TIMER_FEATURE_PERIODIC) == 0)) {
+
+        ASSERT((Timer->Features & TIMER_FEATURE_PER_PROCESSOR) != 0);
+        ASSERT(KeGetRunLevel() == Timer->InterruptRunLevel);
+
+        AbsoluteIndex = KeGetCurrentProcessorNumber();
+        AbsoluteData = &(Timer->AbsoluteData[AbsoluteIndex]);
+        Period = AbsoluteData->Period;
+        if (Period != 0) {
+            DueTime = AbsoluteData->LastDueTime + Period;
+            DueTime &= (1ULL << Timer->CounterBitWidth) - 1;
+            AbsoluteData->LastDueTime = DueTime;
+            Timer->FunctionTable.Arm(Timer->PrivateContext,
+                                     TimerModeAbsolute,
+                                     DueTime);
+        }
+    }
+
     return;
 }
 
@@ -1011,6 +1279,7 @@ Return Value:
 
 {
 
+    ULONGLONG HalfRolloverTicks;
     ULONGLONG MaxTimerValue;
     ULONGLONG TickCount;
 
@@ -1032,7 +1301,23 @@ Return Value:
     if (Timer->CounterBitWidth < 64) {
         MaxTimerValue = (1ULL << Timer->CounterBitWidth) - 1;
         if (TickCount > MaxTimerValue) {
-            return MaxTimerValue;
+            TickCount = MaxTimerValue;
+        }
+    }
+
+    //
+    // If this is a non-periodic absolute timer, then the tick count needs to
+    // be truncated to half the rollover rate. Otherwise it is difficult for
+    // the timer to detect if an absolute time is shortly in the past or
+    // far in the future.
+    //
+
+    if (((Timer->Features & TIMER_FEATURE_ABSOLUTE) != 0) &&
+        ((Timer->Features & TIMER_FEATURE_PERIODIC) == 0)) {
+
+        HalfRolloverTicks = 1ULL << (Timer->CounterBitWidth - 1);
+        if (TickCount > HalfRolloverTicks) {
+            TickCount = HalfRolloverTicks;
         }
     }
 
@@ -1405,6 +1690,12 @@ Return Value:
         return Timer;
     }
 
+    RequiredFeatures = TIMER_FEATURE_ABSOLUTE | TIMER_FEATURE_PER_PROCESSOR;
+    Timer = HlpTimerFind(RequiredFeatures, 0, 0);
+    if (Timer != NULL) {
+        return Timer;
+    }
+
     Timer = HlpTimerFind(TIMER_FEATURE_PERIODIC, 0, 0);
     if (Timer != NULL) {
         return Timer;
@@ -1478,6 +1769,7 @@ Return Value:
 
 {
 
+    ULONG Options;
     ULONG RequiredFeatures;
     PHARDWARE_TIMER Timer;
 
@@ -1485,8 +1777,9 @@ Return Value:
     // Attempt to find a per-processor timer for fastest access.
     //
 
+    Options = FIND_TIMER_OPTION_INCLUDE_USED_FOR_INTERRUPT_ABSOLUTE;
     RequiredFeatures = TIMER_FEATURE_PER_PROCESSOR | TIMER_FEATURE_READABLE;
-    Timer = HlpTimerFind(RequiredFeatures, TIMER_FEATURE_VARIANT, 0);
+    Timer = HlpTimerFind(RequiredFeatures, TIMER_FEATURE_VARIANT, Options);
     if (Timer != NULL) {
         return Timer;
     }
@@ -1495,7 +1788,8 @@ Return Value:
     // Attempt to find any readable timer.
     //
 
-    Timer = HlpTimerFind(TIMER_FEATURE_READABLE, TIMER_FEATURE_VARIANT, 0);
+    RequiredFeatures = TIMER_FEATURE_READABLE;
+    Timer = HlpTimerFind(RequiredFeatures, TIMER_FEATURE_VARIANT, Options);
     if (Timer != NULL) {
         return Timer;
     }
@@ -1531,16 +1825,17 @@ Return Value:
 
 {
 
+    ULONG Options;
     PHARDWARE_TIMER Timer;
 
     //
     // Attempt to find the processor counter.
     //
 
-    Timer = HlpTimerFind(TIMER_FEATURE_PROCESSOR_COUNTER,
-                         0,
-                         FIND_TIMER_OPTION_INCLUDE_USED_FOR_COUNTER);
+    Options = FIND_TIMER_OPTION_INCLUDE_USED_FOR_COUNTER |
+              FIND_TIMER_OPTION_INCLUDE_USED_FOR_INTERRUPT_ABSOLUTE;
 
+    Timer = HlpTimerFind(TIMER_FEATURE_PROCESSOR_COUNTER, 0, Options);
     if (Timer != NULL) {
         return Timer;
     }
@@ -1619,8 +1914,17 @@ Return Value:
         // already marked as in use.
         //
 
-        if ((FindOptions & FIND_TIMER_OPTION_INCLUDE_USED_FOR_INTERRUPT) == 0) {
-            if ((Timer->Flags & TIMER_FLAG_IN_USE_FOR_INTERRUPT) != 0) {
+        if (((Timer->Flags & TIMER_FLAG_IN_USE_FOR_INTERRUPT) != 0) &&
+            ((FindOptions &
+              FIND_TIMER_OPTION_INCLUDE_USED_FOR_INTERRUPT_ANY) == 0)) {
+
+            if ((FindOptions &
+                 FIND_TIMER_OPTION_INCLUDE_USED_FOR_INTERRUPT_ABSOLUTE) == 0) {
+
+                continue;
+            }
+
+            if ((Timer->Features & TIMER_FEATURE_ABSOLUTE) == 0) {
                 continue;
             }
         }

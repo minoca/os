@@ -73,8 +73,28 @@ Author:
 
 Structure Description:
 
-    This structure store information about a timer that has been registered with
-    the system.
+    This structure defines the data necessary to make a periodic timer out of
+    a non-periodic, absolute timer.
+
+Members:
+
+    LastDueTime - Stores the last absolute time the timer was due to interrupt.
+
+    Period - Stores the periodic rate, in time ticks, at which the timer should
+        interrupt.
+
+--*/
+
+typedef struct _HARDWARE_TIMER_ABSOLUTE_DATA {
+    ULONGLONG LastDueTime;
+    ULONGLONG Period;
+} HARDWARE_TIMER_ABSOLUTE_DATA, *PHARDWARE_TIMER_ABSOLUTE_DATA;
+
+/*++
+
+Structure Description:
+
+    This structure defines a timer that has been registered with the system.
 
 Members:
 
@@ -110,7 +130,13 @@ Members:
 
     Interrupt - Stores information about the timer's interrupt, if applicable.
 
+    InterruptRunLevel - Stores the execution run level for the ISR of the
+        interrupt associated with this timer.
+
     SoftwareOffset - Stores a 64-bit software bias to apply to all readings.
+
+    AbsoluteData - Stores an optional array of data for non-periodic absolute
+        timers. There is one array entry of absolute data for each processor.
 
 --*/
 
@@ -126,7 +152,9 @@ typedef struct _HARDWARE_TIMER {
     ULONGLONG CounterFrequency;
     ULONG CounterBitWidth;
     TIMER_INTERRUPT Interrupt;
+    RUNLEVEL InterruptRunLevel;
     INT64_SYNC SoftwareOffset;
+    PHARDWARE_TIMER_ABSOLUTE_DATA AbsoluteData;
 } HARDWARE_TIMER, *PHARDWARE_TIMER;
 
 //
@@ -187,8 +215,9 @@ Arguments:
 
     Mode - Supplies whether or not this should be a recurring timer or not.
 
-    TickCount - Supplies the number of timer ticks from now the timer should
-        fire in.
+    TickCount - Supplies the number of timer ticks from now for the timer to
+        fire in. In absolute mode, this supplies the time in timer ticks at
+        which to fire an interrupt.
 
 Return Value:
 
@@ -214,6 +243,29 @@ Routine Description:
 Arguments:
 
     Timer - Supplies a pointer to the timer to disarm.
+
+Return Value:
+
+    None.
+
+--*/
+
+VOID
+HlpTimerAcknowledgeInterrupt (
+    PHARDWARE_TIMER Timer
+    );
+
+/*++
+
+Routine Description:
+
+    This routine acknowledges a timer interrupt. If the timer is a non-periodic
+    absolute timer, this will rearm the timer if it is still in periodic mode.
+
+Arguments:
+
+    Timer - Supplies a pointer to the timer whose interrupt is to be
+        acknowledged.
 
 Return Value:
 

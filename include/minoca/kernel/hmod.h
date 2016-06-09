@@ -175,6 +175,13 @@ Author:
 #define TIMER_FEATURE_PROCESSOR_COUNTER 0x00000080
 
 //
+// Set this flag if the timer is capable of generating interrupts based on an
+// absolute timer value.
+//
+
+#define TIMER_FEATURE_ABSOLUTE 0x00000100
+
+//
 // Define calendar timer features.
 //
 
@@ -270,7 +277,8 @@ typedef enum _HARDWARE_MODULE_TYPE {
 typedef enum _TIMER_MODE {
     TimerModeInvalid,
     TimerModePeriodic,
-    TimerModeOneShot
+    TimerModeOneShot,
+    TimerModeAbsolute
 } TIMER_MODE, *PTIMER_MODE;
 
 typedef enum _INTERRUPT_MODE {

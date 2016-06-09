@@ -187,6 +187,7 @@ Return Value:
         State.Flags = INTERRUPT_LINE_STATE_FLAG_ENABLED;
         HlpInterruptGetStandardCpuLine(&(State.Output));
         ProfilerInterrupt = HlpInterruptGetProfilerKInterrupt();
+        HlProfilerTimer->InterruptRunLevel = ProfilerInterrupt->RunLevel;
         Status = HlpInterruptSetLineState(&(HlProfilerTimer->Interrupt.Line),
                                           &State,
                                           ProfilerInterrupt,
@@ -238,7 +239,6 @@ Return Value:
 
 {
 
-    PTIMER_ACKNOWLEDGE_INTERRUPT AcknowledgeInterrupt;
     ULONG Processor;
     PROCESSOR_SET Processors;
 
@@ -251,13 +251,7 @@ Return Value:
 
     Processor = KeGetCurrentProcessorNumber();
     if (Processor == 0) {
-        AcknowledgeInterrupt =
-                           HlProfilerTimer->FunctionTable.AcknowledgeInterrupt;
-
-        if (AcknowledgeInterrupt != NULL) {
-            AcknowledgeInterrupt(HlProfilerTimer->PrivateContext);
-        }
-
+        HlpTimerAcknowledgeInterrupt(HlProfilerTimer);
         if (HlBroadcastProfilerInterrupts != FALSE) {
             Processors.Target = ProcessorTargetAllExcludingSelf;
             HlSendIpi(IpiTypeProfiler, &Processors);
