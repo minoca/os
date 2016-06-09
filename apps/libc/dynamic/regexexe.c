@@ -79,18 +79,11 @@ Members:
 
     Iteration - Stores the iteration number for repeat choices.
 
-    DuplicateMax - Stores the maximum number of iterations for repeat choices.
-
-    DuplicateMaxFound - Stores the maximum duplicate size found so far for
-        unlimited repeated entries.
-
     SavedMatchStart - Stores the match start value to use if this choice is
         reactivated from an old path.
 
     SavedMatchEnd - Stores the match end value to use if this choice is
         reactivated from a revised choice.
-
-    BaseRepeat - Stores the zeroth iteration of this string of repeats.
 
     Choice - Stores a pointer to the branch option for branch choices.
 
@@ -107,11 +100,8 @@ struct _REGULAR_EXPRESSION_CHOICE {
     union {
         struct {
             ULONG Iteration;
-            ULONG DuplicateMax;
-            ULONG DuplicateMaxFound;
             ULONG SavedMatchStart;
             ULONG SavedMatchEnd;
-            PREGULAR_EXPRESSION_CHOICE BaseRepeat;
         };
 
         PREGULAR_EXPRESSION_ENTRY Choice;
@@ -209,13 +199,18 @@ ClpRegularExpressionMatchBracketExpression (
     PREGULAR_EXPRESSION_ENTRY Entry
     );
 
+VOID
+ClpRegularExpressionMarkEnd (
+    PREGULAR_EXPRESSION_EXECUTION Context,
+    PREGULAR_EXPRESSION_ENTRY Entry
+    );
+
 PREGULAR_EXPRESSION_CHOICE
 ClpRegularExpressionCreateChoice (
     PREGULAR_EXPRESSION_EXECUTION Context,
     PREGULAR_EXPRESSION_CHOICE Parent,
     PREGULAR_EXPRESSION_ENTRY Entry,
-    ULONG Iteration,
-    ULONG DuplicateMax
+    ULONG Iteration
     );
 
 VOID
@@ -486,7 +481,6 @@ Return Value:
 
 {
 
-    PREGULAR_EXPRESSION_CHOICE BaseRepeat;
     PREGULAR_EXPRESSION_ENTRY BranchOption;
     PREGULAR_EXPRESSION_CHOICE CurrentChoice;
     ULONG DuplicateMax;
@@ -513,11 +507,6 @@ Return Value:
         Parent = Entry->Parent;
         DuplicateMin = Entry->DuplicateMin;
         DuplicateMax = Entry->DuplicateMax;
-        if (DuplicateMin != DuplicateMax) {
-            if ((CurrentChoice != NULL) && (CurrentChoice->Node == Entry)) {
-                DuplicateMax = CurrentChoice->U.DuplicateMax;
-            }
-        }
 
         //
         // Try to match this entry if it needs more iterations.
@@ -541,8 +530,7 @@ Return Value:
                                                                  Context,
                                                                  CurrentChoice,
                                                                  Entry,
-                                                                 Iteration,
-                                                                 DuplicateMax);
+                                                                 Iteration);
 
                     if (CurrentChoice == NULL) {
                         Status = RegexStatusNoMemory;
@@ -614,8 +602,7 @@ Return Value:
                 CurrentChoice = ClpRegularExpressionCreateChoice(Context,
                                                                  CurrentChoice,
                                                                  Entry->Parent,
-                                                                 Iteration,
-                                                                 DuplicateMax);
+                                                                 Iteration);
 
                 if (CurrentChoice == NULL) {
                     Status = RegexStatusNoMemory;
@@ -662,8 +649,7 @@ Return Value:
                                                                  Context,
                                                                  CurrentChoice,
                                                                  Entry,
-                                                                 Iteration,
-                                                                 DuplicateMax);
+                                                                 Iteration);
 
                         if (CurrentChoice == NULL) {
                             Status = RegexStatusNoMemory;
@@ -729,25 +715,7 @@ Return Value:
                 // subexpression, mark its ending.
                 //
 
-                if (Entry->Type == RegexEntrySubexpression) {
-
-                    assert(CurrentChoice->Node == Entry);
-
-                    SubexpressionNumber = Entry->U.SubexpressionNumber;
-                    if ((SubexpressionNumber < Context->MatchSize) &&
-                        ((Context->Expression->Flags & REG_NOSUB) == 0)) {
-
-                        Match = &(Context->Match[SubexpressionNumber]);
-                        CurrentChoice->U.SavedMatchEnd = Match->rm_eo;
-                        Match->rm_eo = Context->NextInput;
-                    }
-
-                    if (SubexpressionNumber < REGEX_INTERNAL_MATCH_COUNT) {
-                        Match = &(Context->InternalMatch[SubexpressionNumber]);
-                        CurrentChoice->U.SavedMatchEnd = Match->rm_eo;
-                        Match->rm_eo = Context->NextInput;
-                    }
-                }
+                ClpRegularExpressionMarkEnd(Context, Entry);
 
                 //
                 // Whether the next entry is the sibling or the parent, move the
@@ -801,7 +769,7 @@ Return Value:
 
                 } else {
                     Iteration = CurrentChoice->U.Iteration;
-                    DuplicateMax = CurrentChoice->U.DuplicateMax;
+                    DuplicateMax = Entry->DuplicateMax;
                 }
             }
 
@@ -879,79 +847,58 @@ Return Value:
                     }
 
                 //
-                // If this is the last optional repeat, try to shorten the
-                // max. If the max can't be shortened, then keep popping.
+                // Try to pop the last repeat off and keep going.
                 //
 
                 } else {
-
-                    //
-                    // If the max is -1, then the goal here is to find the real
-                    // max. Zip back to the first repeat and update the max.
-                    //
-
-                    if (CurrentChoice->U.DuplicateMax == -1) {
-                        BaseRepeat = CurrentChoice->U.BaseRepeat;
-
-                        assert((BaseRepeat->Node == Entry) &&
-                               (BaseRepeat->U.Iteration == 0));
-
-                        if (BaseRepeat->U.DuplicateMaxFound <
-                            CurrentChoice->U.Iteration) {
-
-                            BaseRepeat->U.DuplicateMaxFound =
-                                                    CurrentChoice->U.Iteration;
-                        }
-                    }
-
-                    //
-                    // If this is the last optional repeat, all possibilities
-                    // were tried. If the max is already zero, it's time to
-                    // abandon this path altogether.
-                    //
-
-                    if ((CurrentChoice->U.Iteration == 0) &&
-                        (CurrentChoice->U.DuplicateMax != 0)) {
+                    if (CurrentChoice->U.Iteration + 1 > Entry->DuplicateMin) {
+                        Context->NextInput = CurrentChoice->SavedNextIndex;
+                        NextChoice = CurrentChoice;
 
                         //
-                        // If the max was negative one, this work so far was all
-                        // to see what the maximum size is (to really be
-                        // as greedy as possible).
+                        // Move to the next entry.
                         //
 
-                        if (CurrentChoice->U.DuplicateMax == -1) {
-                            CurrentChoice->U.DuplicateMax =
-                                            CurrentChoice->U.DuplicateMaxFound;
+                        while ((Entry->Parent != NULL) &&
+                               ((Entry->Type == RegexEntryBranchOption) ||
+                                (Entry->ListEntry.Next ==
+                                 &(Entry->Parent->ChildList)))) {
 
-                        //
-                        // Nothing could match the rest of the expression with
-                        // this maximum length. Give a little ground and try
-                        // all the combinations again.
-                        //
+                            if (Entry->Type == RegexEntryBranchOption) {
+                                Entry = Entry->Parent;
+                                continue;
+                            }
 
-                        } else if (CurrentChoice->U.DuplicateMax != 0) {
-                            CurrentChoice->U.DuplicateMax -= 1;
+                            ClpRegularExpressionMarkEnd(Context, Entry);
+                            Entry = Entry->Parent;
+                            NextChoice = NextChoice->Parent;
                         }
 
+                        ClpRegularExpressionMarkEnd(Context, Entry);
+
                         //
-                        // If it's still at or above the minimum, continue
-                        // trying to make this entry work.
+                        // If this was the last element, then popping this
+                        // failing iteration causes the expression to pass.
                         //
 
-                        if (CurrentChoice->U.DuplicateMax >=
-                            Entry->DuplicateMin) {
+                        if (Entry->Parent == NULL) {
+                            Entry = NULL;
+                            Status = RegexStatusSuccess;
 
-                            Context->NextInput = CurrentChoice->SavedNextIndex;
-                            Iteration = 0;
-
-                            //
-                            // Set the flag to tell the loop not to create a
-                            // new choice entry, but to use this one.
-                            //
-
-                            UseThisEntry = TRUE;
-                            break;
+                        } else {
+                            Entry = LIST_VALUE(Entry->ListEntry.Next,
+                                               REGULAR_EXPRESSION_ENTRY,
+                                               ListEntry);
                         }
+
+                        NextChoice = NextChoice->Parent;
+                        LIST_REMOVE(&(CurrentChoice->ListEntry));
+                        ClpRegularExpressionDestroyChoice(Context,
+                                                          CurrentChoice);
+
+                        CurrentChoice = NextChoice;
+                        Iteration = 0;
+                        break;
                     }
                 }
 
@@ -995,15 +942,6 @@ Return Value:
                 } else {
                     goto RegularExpressionMatchEnd;
                 }
-            }
-
-            //
-            // If there are no more choices to revise and it didn't match, then
-            // this whole expression simply doesn't match.
-            //
-
-            if (CurrentChoice == NULL) {
-                goto RegularExpressionMatchEnd;
             }
 
             continue;
@@ -1580,13 +1518,63 @@ RegularExpressionMatchBracketExpressionEnd:
     return Status;
 }
 
+VOID
+ClpRegularExpressionMarkEnd (
+    PREGULAR_EXPRESSION_EXECUTION Context,
+    PREGULAR_EXPRESSION_ENTRY Entry
+    )
+
+/*++
+
+Routine Description:
+
+    This routine marks the end of a subexpression match for a subexpression
+    that just finished matching.
+
+Arguments:
+
+    Context - Supplies a pointer to the execution context.
+
+    Entry - Supplies a pointer to the regular expression entry that just
+        finished matching.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    regmatch_t *Match;
+    ULONG SubexpressionNumber;
+
+    if (Entry->Type != RegexEntrySubexpression) {
+        return;
+    }
+
+    SubexpressionNumber = Entry->U.SubexpressionNumber;
+    if ((SubexpressionNumber < Context->MatchSize) &&
+        ((Context->Expression->Flags & REG_NOSUB) == 0)) {
+
+        Match = &(Context->Match[SubexpressionNumber]);
+        Match->rm_eo = Context->NextInput;
+    }
+
+    if (SubexpressionNumber < REGEX_INTERNAL_MATCH_COUNT) {
+        Match = &(Context->InternalMatch[SubexpressionNumber]);
+        Match->rm_eo = Context->NextInput;
+    }
+
+    return;
+}
+
 PREGULAR_EXPRESSION_CHOICE
 ClpRegularExpressionCreateChoice (
     PREGULAR_EXPRESSION_EXECUTION Context,
     PREGULAR_EXPRESSION_CHOICE Parent,
     PREGULAR_EXPRESSION_ENTRY Entry,
-    ULONG Iteration,
-    ULONG DuplicateMax
+    ULONG Iteration
     )
 
 /*++
@@ -1612,8 +1600,6 @@ Arguments:
         (presumably the previous duplicate is the previous entry in the list,
         which is an assumption taken when backtracking).
 
-    DuplicateMax - Supplies the maximum number of needed duplications.
-
 Return Value:
 
     Returns a pointer to the choice structure on success.
@@ -1625,7 +1611,6 @@ Return Value:
 {
 
     PREGULAR_EXPRESSION_CHOICE NewChoice;
-    PREGULAR_EXPRESSION_CHOICE Previous;
 
     //
     // Attempt to use one from the free list if there is any, or allocate one
@@ -1652,7 +1637,6 @@ Return Value:
     NewChoice->Node = Entry;
     NewChoice->SavedNextIndex = Context->NextInput;
     NewChoice->U.Iteration = Iteration;
-    NewChoice->U.DuplicateMax = DuplicateMax;
     if (Iteration != 0) {
 
         //
@@ -1662,15 +1646,9 @@ Return Value:
         assert((Parent != NULL) && (Parent->Parent != NULL));
 
         NewChoice->Parent = Parent->Parent;
-        Previous = LIST_VALUE(Parent->Parent->ChildList.Previous,
-                              REGULAR_EXPRESSION_CHOICE,
-                              ListEntry);
-
-        NewChoice->U.BaseRepeat = Previous->U.BaseRepeat;
         INSERT_BEFORE(&(NewChoice->ListEntry), &(Parent->Parent->ChildList));
 
     } else {
-        NewChoice->U.BaseRepeat = NewChoice;
         if (Parent != NULL) {
             INSERT_BEFORE(&(NewChoice->ListEntry), &(Parent->ChildList));
 
