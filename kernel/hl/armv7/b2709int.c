@@ -30,6 +30,7 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
+#include <minoca/kernel/arm.h>
 #include "bcm2709.h"
 
 //
@@ -147,12 +148,6 @@ Environment:
 //
 
 #define BCM2709_INTERRUPT_PRIORITY_COUNT 16
-
-//
-// Define which bits of the MPIDR are valid processor ID bits.
-//
-
-#define ARM_PROCESSOR_ID_MASK 0x00FFFFFF
 
 //
 // Define which bits of the MPIDR are valid processor ID bits for the local
@@ -404,11 +399,6 @@ typedef struct _BCM2709_INTERRUPT_CONTROLLER {
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-ULONG
-HlpBcm2709GetProcessorIdRegister (
-    VOID
-    );
 
 KSTATUS
 HlpBcm2709InterruptEnumerateProcessors (
@@ -842,9 +832,7 @@ Return Value:
 
     *Identifier = 0;
     if (Controller->ProcessorCount > 1) {
-        ProcessorId = HlpBcm2709GetProcessorIdRegister() &
-                      ARM_PROCESSOR_ID_MASK;
-
+        ProcessorId = ArGetMultiprocessorIdRegister() & ARM_PROCESSOR_ID_MASK;
         *Identifier = ProcessorId;
         ProcessorId &= BCM2709_INTERRUPT_PROCESSOR_ID_MASK;
         WRITE_LOCAL_IPI_REGISTER(Bcm2709LocalIpiPending,
@@ -968,7 +956,7 @@ Return Value:
     KSTATUS Status;
     UCHAR ThisProcessorTarget;
 
-    ThisProcessorTarget = HlpBcm2709GetProcessorIdRegister() &
+    ThisProcessorTarget = ArGetMultiprocessorIdRegister() &
                           ARM_PROCESSOR_ID_MASK;
 
     switch (Target->Addressing) {
@@ -1066,8 +1054,8 @@ Return Value:
     Controller = (PBCM2709_INTERRUPT_CONTROLLER)Context;
     ProcessorId = 0;
     if (Controller->ProcessorCount > 1) {
-        ProcessorId = HlpBcm2709GetProcessorIdRegister();
-        ProcessorId &= BCM2709_INTERRUPT_PROCESSOR_ID_MASK;
+        ProcessorId = ArGetMultiprocessorIdRegister() &
+                      BCM2709_INTERRUPT_PROCESSOR_ID_MASK;
     }
 
     Processor = &(Controller->Processor[ProcessorId]);
@@ -1271,8 +1259,8 @@ Return Value:
     Controller = (PBCM2709_INTERRUPT_CONTROLLER)Context;
     ProcessorId = 0;
     if (Controller->ProcessorCount > 1) {
-        ProcessorId = HlpBcm2709GetProcessorIdRegister();
-        ProcessorId &= BCM2709_INTERRUPT_PROCESSOR_ID_MASK;
+        ProcessorId = ArGetMultiprocessorIdRegister() &
+                      BCM2709_INTERRUPT_PROCESSOR_ID_MASK;
     }
 
     //
@@ -1379,7 +1367,7 @@ Return Value:
         break;
 
     case InterruptAddressingSelf:
-        ProcessorId = HlpBcm2709GetProcessorIdRegister();
+        ProcessorId = ArGetMultiprocessorIdRegister();
         ProcessorId &= BCM2709_INTERRUPT_PROCESSOR_ID_MASK;
         ProcessorMask = 1 << ProcessorId;
         break;
@@ -1389,7 +1377,7 @@ Return Value:
         break;
 
     case InterruptAddressingAllExcludingSelf:
-        ProcessorId = HlpBcm2709GetProcessorIdRegister();
+        ProcessorId = ArGetMultiprocessorIdRegister();
         ProcessorId &= BCM2709_INTERRUPT_PROCESSOR_ID_MASK;
         ProcessorMask = (1 << Controller->ProcessorCount) - 1;
         ProcessorMask &= ~(1 << ProcessorId);

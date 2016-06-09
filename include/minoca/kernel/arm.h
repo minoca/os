@@ -547,6 +547,12 @@ Author:
 #define EXCEPTION_STACK_COUNT 4
 
 //
+// Define which bits of the MPIDR are valid processor ID bits.
+//
+
+#define ARM_PROCESSOR_ID_MASK 0x00FFFFFF
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

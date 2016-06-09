@@ -143,12 +143,6 @@ Environment:
 #define GIC_CPU_INTERFACE_ACKNOWLEDGE_LINE_MASK 0x3FF
 
 //
-// Define which bits of the MPIDR are valid processor ID bits.
-//
-
-#define ARM_PROCESSOR_ID_MASK 0x00FFFFFF
-
-//
 // Define the priority assigned to all enabled interrupts.
 //
 

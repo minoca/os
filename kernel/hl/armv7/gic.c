@@ -31,6 +31,7 @@ Environment:
 //
 
 #include <minoca/kernel/kernel.h>
+#include <minoca/kernel/arm.h>
 
 //
 // --------------------------------------------------------------------- Macros
@@ -226,12 +227,6 @@ Environment:
 #define GIC_CPU_INTERFACE_ACKNOWLEDGE_LINE_MASK 0x3FF
 
 //
-// Define which bits of the MPIDR are valid processor ID bits.
-//
-
-#define ARM_PROCESSOR_ID_MASK 0x00FFFFFF
-
-//
 // Define which bits of the MPIDR are valid processor ID bits for the local
 // GIC.
 //
@@ -320,11 +315,6 @@ typedef struct _GIC_DISTRIBUTOR_DATA {
 //
 // ----------------------------------------------- Internal Function Prototypes
 //
-
-ULONG
-HlpGicGetProcessorIdRegister (
-    VOID
-    );
 
 KSTATUS
 HlpGicEnumerateProcessors (
@@ -779,7 +769,7 @@ Return Value:
         goto GicInitializeLocalUnitEnd;
     }
 
-    ProcessorId = HlpGicGetProcessorIdRegister();
+    ProcessorId = ArGetMultiprocessorIdRegister();
     *Identifier = ProcessorId & ARM_PROCESSOR_ID_MASK;
 
 GicInitializeLocalUnitEnd:
@@ -895,8 +885,8 @@ Return Value:
     KSTATUS Status;
     ULONG ThisProcessorTarget;
 
-    ThisProcessorTarget =
-                        HlpGicGetProcessorIdRegister() & ARM_PROCESSOR_ID_MASK;
+    ThisProcessorTarget = ArGetMultiprocessorIdRegister() &
+                          ARM_PROCESSOR_ID_MASK;
 
     switch (Target->Addressing) {
     case InterruptAddressingLogicalClustered:
@@ -1287,7 +1277,7 @@ Return Value:
         break;
 
     case InterruptAddressingSelf:
-        Target = 1 << (HlpGicGetProcessorIdRegister() & GIC_PROCESSOR_ID_MASK);
+        Target = 1 << (ArGetMultiprocessorIdRegister() & GIC_PROCESSOR_ID_MASK);
         break;
 
     case InterruptAddressingAll:
@@ -1295,7 +1285,7 @@ Return Value:
         break;
 
     case InterruptAddressingAllExcludingSelf:
-        ThisProcessorTarget = 1 << (HlpGicGetProcessorIdRegister() &
+        ThisProcessorTarget = 1 << (ArGetMultiprocessorIdRegister() &
                                     GIC_PROCESSOR_ID_MASK);
 
         Target = 0xFF & (~ThisProcessorTarget);

@@ -60,7 +60,6 @@ ARMV7_OBJS = armv7/am335int.o \
              armv7/cyccnt.o   \
              armv7/cycsupc.o  \
              armv7/gic.o      \
-             armv7/gicid.o    \
              armv7/gt.o       \
              armv7/gta.o      \
              armv7/omapintr.o \
@@ -75,7 +74,6 @@ ARMV7_OBJS = armv7/am335int.o \
              armv7/sp804tmr.o \
              armv7/uartpl11.o \
              armv7/uartomap.o \
-             armv7/b2709id.o  \
              armv7/b2709int.o \
              armv7/b2709tmr.o \
              ns16550.o        \

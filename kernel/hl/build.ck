@@ -68,7 +68,6 @@ function build() {
             "armv7/cyccnt.c",
             "armv7/cycsupc.c",
             "armv7/gic.c",
-            "armv7/gicid.S",
             "armv7/gt.c",
             "armv7/gta.S",
             "armv7/omapintr.c",
@@ -83,7 +82,6 @@ function build() {
             "armv7/sp804tmr.c",
             "armv7/uartpl11.c",
             "armv7/uartomap.c",
-            "armv7/b2709id.S",
             "armv7/b2709int.c",
             "armv7/b2709tmr.c"
         ];
