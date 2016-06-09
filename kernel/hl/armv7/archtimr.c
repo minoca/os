@@ -89,6 +89,11 @@ HlpRk32TimerModuleEntry (
     VOID
     );
 
+VOID
+HlpGtModuleEntry (
+    VOID
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
@@ -112,7 +117,8 @@ PHARDWARE_MODULE_ENTRY HlBuiltinTimerModules[] = {
     HlpOmap4TimerModuleEntry,
     HlpAm335TimerModuleEntry,
     HlpBcm2709TimerModuleEntry,
-    HlpRk32TimerModuleEntry
+    HlpRk32TimerModuleEntry,
+    HlpGtModuleEntry
 };
 
 //

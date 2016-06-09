@@ -61,6 +61,8 @@ ARMV7_OBJS = armv7/am335int.o \
              armv7/cycsupc.o  \
              armv7/gic.o      \
              armv7/gicid.o    \
+             armv7/gt.o       \
+             armv7/gta.o      \
              armv7/omapintr.o \
              armv7/omap3pwr.o \
              armv7/omap3tmr.o \

@@ -34,6 +34,7 @@ Author:
 #define DSDT_SIGNATURE 0x54445344 // 'DSDT'
 #define SSDT_SIGNATURE 0x54445353 // 'SSDT'
 #define DBG2_SIGNATURE 0x32474244 // 'DBG2'
+#define GTDT_SIGNATURE 0x54445447 // 'GTDT'
 
 #define ACPI_20_RSDP_REVISION 0x02
 #define ACPI_30_RSDT_REVISION 0x01
@@ -751,6 +752,26 @@ typedef enum _MADT_ENTRY_TYPE {
 #define ACPI_OSC_INTEL_PSTATE_ACNT_MCNT (1 << 11)
 #define ACPI_OSC_INTEL_PSTATE_COLLABORATIVE (1 << 12)
 #define ACPI_OSC_INTEL_HARDWARE_DUTY_CYCLING (1 << 13)
+
+//
+// Define the generic timer global flags.
+//
+
+#define GTDT_GLOBAL_FLAG_MEMORY_MAPPED_BLOCK_PRESENT 0x00000001
+#define GTDT_GLOBAL_FLAG_INTERRUPT_MODE_MASK         0x00000002
+#define GTDT_GLOBAL_FLAG_INTERRUPT_MODE_EDGE         0x00000002
+#define GTDT_GLOBAL_FLAG_INTERRUPT_MODE_LEVEL        0x00000000
+
+//
+// Define the generic timer flags.
+//
+
+#define GTDT_TIMER_FLAG_INTERRUPT_MODE_MASK            0x00000001
+#define GTDT_TIMER_FLAG_INTERRUPT_MODE_EDGE            0x00000001
+#define GTDT_TIMER_FLAG_INTERRUPT_MODE_LEVEL           0x00000000
+#define GTDT_TIMER_FLAG_INTERRUPT_POLARITY_MASK        0x00000002
+#define GTDT_TIMER_FLAG_INTERRUPT_POLARITY_ACTIVE_LOW  0x00000002
+#define GTDT_TIMER_FLAG_INTERRUPT_POLARITY_ACTIVE_HIGH 0x00000000
 
 //
 // ------------------------------------------------------ Data Type Definitions
@@ -1584,6 +1605,58 @@ typedef struct _DEBUG_PORT_16550_OEM_DATA {
     USHORT RegisterShift;
     ULONG Flags;
 } PACKED DEBUG_PORT_16550_OEM_DATA, *PDEBUG_PORT_16550_OEM_DATA;
+
+/*++
+
+Structure Description:
+
+    This structure defines the system's Generic Timer information.
+
+Members:
+
+    Header - Stores the table header, including the signature, 'GTDT'.
+
+    CounterBlockAddress - Stores the physical address of the counter block.
+
+    GlobalFlags - Stores a bitmask of global GTDT flags. See GTDT_GLOBAL_FLAG_*
+        for definitions.
+
+    SecurePl1Gsi - Stores the optional GSI of the secure PL1 physical timer.
+        Stores 0 if not provided.
+
+    SecurePl1Flags - Stores a bitmask of timer flags. See GTDT_TIMER_FLAG_* for
+        definitions.
+
+    NonSecurePl1Gsi - Stores the GSI of the non-secure PL1 physical timer.
+
+    NonSecurePl1Flags - Stores a bitmask of timer flags. See GTDT_TIMER_FLAG_*
+        for definitions.
+
+    VirtualTimerGsi - Stores the GSI of the virtual timer.
+
+    VirtualTimerFlags - Stores a bitmask of timer flags. See GTDT_TIMER_FLAG_*
+        for definitions.
+
+    NonSecurePl2Gsi - Stores the GSI of the non-secure PL2 physical timer.
+
+    NonSecurePl2Flags - Stores a bitmask of timer flags. See GTDT_TIMER_FLAG_*
+        for definitions.
+
+--*/
+
+typedef struct _GTDT {
+    DESCRIPTION_HEADER Header;
+    ULONGLONG CounterBlockAddress;
+    ULONG GlobalFlags;
+    ULONG SecurePl1Gsi;
+    ULONG SecurePl1Flags;
+    ULONG NonSecurePl1Gsi;
+    ULONG NonSecurePl1Flags;
+    ULONG VirtualTimerGsi;
+    ULONG VirtualTimerFlags;
+    ULONG NonSecurePl2Gsi;
+    ULONG NonSecurePl2Flags;
+} PACKED GTDT, *PGTDT;
 
 //
 // -------------------------------------------------------------------- Globals
