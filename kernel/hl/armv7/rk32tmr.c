@@ -193,7 +193,7 @@ Return Value:
         Timer.FunctionTable.Arm = HlpRk32TimerArm;
         Timer.FunctionTable.Disarm = HlpRk32TimerDisarm;
         Timer.FunctionTable.AcknowledgeInterrupt =
-                                             HlpRk32TimerAcknowledgeInterrupt;
+                                              HlpRk32TimerAcknowledgeInterrupt;
 
         TimerData = HlAllocateMemory(sizeof(RK32_TIMER_DATA),
                                      RK32_ALLOCATION_TAG,
@@ -382,8 +382,9 @@ Arguments:
         system will never request a mode not supported by the timer's feature
         bits.
 
-    TickCount - Supplies the interval, in ticks, from now for the timer to fire
-        in.
+    TickCount - Supplies the number of timer ticks from now for the timer to
+        fire in. In absolute mode, this supplies the time in timer ticks at
+        which to fire an interrupt.
 
 Return Value:
 

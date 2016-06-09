@@ -502,8 +502,9 @@ Arguments:
         system will never request a mode not supported by the timer's feature
         bits.
 
-    TickCount - Supplies the interval, in ticks, from now for the timer to fire
-        in.
+    TickCount - Supplies the number of timer ticks from now for the timer to
+        fire in. In absolute mode, this supplies the time in timer ticks at
+        which to fire an interrupt.
 
 Return Value:
 
