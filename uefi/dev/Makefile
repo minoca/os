@@ -30,6 +30,7 @@ ifeq ($(ARCH), armv7)
 
 DIRS += bcm2709     \
         gic         \
+        gt          \
         ns16550     \
         omap4       \
         omapuart    \
