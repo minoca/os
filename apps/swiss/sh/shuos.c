@@ -325,7 +325,7 @@ int
 ShPushInputText (
     char *Text,
     unsigned long TextSize,
-    int Pipe
+    int Pipe[2]
     )
 
 /*++
@@ -342,8 +342,8 @@ Arguments:
 
     TextSize - Supplies the number of bytes to write.
 
-    Pipe - Supplies the pipe to write it into. The caller may (and is
-        responsible for) closing the pipe after this routine returns.
+    Pipe - Supplies the pipe to write into. This routine is responsible for
+        closing the write end of the pipe.
 
 Return Value:
 
@@ -369,8 +369,8 @@ Return Value:
 
     fflush(NULL);
     Child = fork();
-    if (Child == -1) {
-        return 0;
+    if (Child < 0) {
+        return -1;
     }
 
     //
@@ -378,6 +378,8 @@ Return Value:
     //
 
     if (Child != 0) {
+        close(Pipe[1]);
+        Pipe[1] = -1;
         return Child;
     }
 
@@ -385,6 +387,7 @@ Return Value:
     // This is the child process. Loop writing to the file descriptor.
     //
 
+    close(Pipe[0]);
     TotalBytesWritten = 0;
     while (TotalBytesWritten != TextSize) {
         BytesToWrite = SHELL_INPUT_CHUNK_SIZE;
@@ -392,7 +395,7 @@ Return Value:
             BytesToWrite = TextSize - TotalBytesWritten;
         }
 
-        BytesWritten = write(Pipe,
+        BytesWritten = write(Pipe[1],
                              Text + TotalBytesWritten,
                              BytesToWrite);
 

@@ -2250,6 +2250,7 @@ Return Value:
     BOOL Result;
     INT SourceFileNumber;
     SHELL_IO_REDIRECTION_TYPE Type;
+    INT WriteCopy;
 
     ActiveRedirect = NULL;
     ExpandedFileName = NULL;
@@ -2478,9 +2479,17 @@ Return Value:
                 goto ApplyRedirectionsEnd;
             }
 
-            ShDup2(Shell, Pipe[0], Redirect->FileNumber);
-            ShClose(Shell, Pipe[0]);
-            Pipe[0] = -1;
+            //
+            // Copy the write descriptor out of range of the shell standard
+            // descriptors, since on Windows the write side is just a thread,
+            // so it stays open.
+            //
+
+            if (SwForkSupported == 0) {
+                WriteCopy = ShDup(Shell, Pipe[1], 0);
+                ShClose(Shell, Pipe[1]);
+                Pipe[1] = WriteCopy;
+            }
 
             //
             // Launch the subprocess or thread to feed the document text into
@@ -2490,17 +2499,18 @@ Return Value:
             assert(DocumentTextSize != 0);
 
             DocumentTextSize -= 1;
-            Result = ShPushInputText(DocumentText, DocumentTextSize, Pipe[1]);
+            Result = ShPushInputText(DocumentText, DocumentTextSize, Pipe);
             if (Result < 0) {
                 goto ApplyRedirectionsEnd;
             }
 
+            Pipe[1] = -1;
+            ShDup2(Shell, Pipe[0], Redirect->FileNumber);
+            ShClose(Shell, Pipe[0]);
+            Pipe[0] = -1;
             if (Result > 0) {
                 ActiveRedirect->ChildProcessId = Result;
             }
-
-            ShClose(Shell, Pipe[1]);
-            Pipe[1] = -1;
 
         } else {
 

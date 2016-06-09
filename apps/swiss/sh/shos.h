@@ -324,7 +324,7 @@ int
 ShPushInputText (
     char *Text,
     unsigned long TextSize,
-    int Pipe
+    int Pipe[2]
     );
 
 /*++
@@ -341,8 +341,8 @@ Arguments:
 
     TextSize - Supplies the number of bytes to write.
 
-    Pipe - Supplies the pipe to write it into. The caller may (and is
-        responsible for) closing the pipe after this routine returns.
+    Pipe - Supplies the pipe to write into. This routine is responsible for
+        closing the write end of the pipe.
 
 Return Value:
 

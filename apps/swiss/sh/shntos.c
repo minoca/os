@@ -408,7 +408,7 @@ int
 ShPushInputText (
     char *Text,
     unsigned long TextSize,
-    int Pipe
+    int Pipe[2]
     )
 
 /*++
@@ -425,8 +425,8 @@ Arguments:
 
     TextSize - Supplies the number of bytes to write.
 
-    Pipe - Supplies the pipe to write it into. The caller may (and is
-        responsible for) closing the pipe after this routine returns.
+    Pipe - Supplies the pipe to write into. This routine is responsible for
+        closing the write end of the pipe.
 
 Return Value:
 
@@ -464,7 +464,7 @@ Return Value:
 
     memcpy(Context->Buffer, Text, TextSize);
     Context->BufferSize = TextSize;
-    Context->Handle = dup(Pipe);
+    Context->Handle = Pipe[1];
     if (Context->Handle == -1) {
         goto PushInputTextEnd;
     }
