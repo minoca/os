@@ -1300,9 +1300,9 @@ Arguments:
     Context - Supplies the pointer to the timer's context, provided by the
         hardware module upon initialization.
 
-    Mode - Supplies the mode to arm the timer in (periodic or one-shot). The
-        system will never request a mode not supported by the timer's feature
-        bits.
+    Mode - Supplies the mode to arm the timer in. The system will never request
+        a mode not supported by the timer's feature bits. The mode dictates
+        how the tick count argument is interpreted.
 
     TickCount - Supplies the interval, in ticks, from now for the timer to fire
         in.

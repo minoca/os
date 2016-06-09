@@ -918,7 +918,7 @@ Return Value:
             //
 
             AbsoluteData->Period = TickCount;
-            AbsoluteData->LastDueTime = DueTime;
+            AbsoluteData->DueTime = DueTime;
 
             //
             // Convert from periodic mode to absolute mode.
@@ -1119,9 +1119,9 @@ Return Value:
         AbsoluteData = &(Timer->AbsoluteData[AbsoluteIndex]);
         Period = AbsoluteData->Period;
         if (Period != 0) {
-            DueTime = AbsoluteData->LastDueTime + Period;
+            DueTime = AbsoluteData->DueTime + Period;
             DueTime &= (1ULL << Timer->CounterBitWidth) - 1;
-            AbsoluteData->LastDueTime = DueTime;
+            AbsoluteData->DueTime = DueTime;
             Timer->FunctionTable.Arm(Timer->PrivateContext,
                                      TimerModeAbsolute,
                                      DueTime);

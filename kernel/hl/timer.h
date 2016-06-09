@@ -78,7 +78,7 @@ Structure Description:
 
 Members:
 
-    LastDueTime - Stores the last absolute time the timer was due to interrupt.
+    DueTime - Stores the current absolute time the timer is due to interrupt.
 
     Period - Stores the periodic rate, in time ticks, at which the timer should
         interrupt.
@@ -86,7 +86,7 @@ Members:
 --*/
 
 typedef struct _HARDWARE_TIMER_ABSOLUTE_DATA {
-    ULONGLONG LastDueTime;
+    ULONGLONG DueTime;
     ULONGLONG Period;
 } HARDWARE_TIMER_ABSOLUTE_DATA, *PHARDWARE_TIMER_ABSOLUTE_DATA;
 
@@ -213,7 +213,9 @@ Arguments:
 
     Timer - Supplies a pointer to the timer to arm.
 
-    Mode - Supplies whether or not this should be a recurring timer or not.
+    Mode - Supplies the mode to arm the timer in. The system will never request
+        a mode not supported by the timer's feature bits. The mode dictates
+        how the tick count argument is interpreted.
 
     TickCount - Supplies the number of timer ticks from now for the timer to
         fire in. In absolute mode, this supplies the time in timer ticks at
