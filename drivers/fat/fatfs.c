@@ -1096,6 +1096,10 @@ Return Value:
         ((Irp->MinorCode != IrpMinorIoWrite) ||
          (Status != STATUS_END_OF_FILE))) {
 
+        if (Status == STATUS_OUT_OF_BOUNDS) {
+            Status = STATUS_END_OF_FILE;
+        }
+
         goto DispatchIoEnd;
     }
 
