@@ -130,7 +130,7 @@ Return Value:
     INT Index;
     INT Status;
 
-    if (ArgumentCount == 2) {
+    if (ArgumentCount == 1) {
         SwPrintError(0, NULL, "Invalid argument count");
         Status = EINVAL;
         goto MainEnd;
