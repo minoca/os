@@ -339,27 +339,7 @@ Return Value:
 
         InputEntry->File = fopen(Argument, "r");
         if (InputEntry->File != NULL) {
-
-            //
-            // If there's stuff there (or the operation is not support), so
-            // reset the file pointer back to the beginning and add this entry
-            // to the list.
-            //
-
-            if ((fseek(InputEntry->File, 0, SEEK_END) == 0) &&
-                (ftell(InputEntry->File) != 0)) {
-
-                fseek(InputEntry->File, 0, SEEK_SET);
-                INSERT_BEFORE(&(InputEntry->ListEntry), &(Context.InputList));
-
-            //
-            // This file is empty, skip it.
-            //
-
-            } else {
-                fclose(InputEntry->File);
-                free(InputEntry);
-            }
+            INSERT_BEFORE(&(InputEntry->ListEntry), &(Context.InputList));
 
         } else {
             free(InputEntry);
@@ -569,12 +549,16 @@ Return Value:
             }
 
             //
-            // If this is not the last file and no input was received yet, keep
-            // going.
+            // If no input was received yet, keep going.
             //
 
-            if ((Context->LastLine == FALSE) && (Pattern->Size == 1)) {
-                continue;
+            if (Pattern->Size == 1) {
+                if (Context->LastLine != FALSE) {
+                    Context->Done = TRUE;
+
+                } else {
+                    continue;
+                }
             }
 
             Context->LineTerminator = EOF;
