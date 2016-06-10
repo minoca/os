@@ -56,8 +56,11 @@ Environment:
     "for.\n"                                                                   \
     "  -f, --file pattern_file -- Specifies a file containing patterns to \n"  \
     "      search for.\n"                                                      \
+    "  -H, --with-filename -- Print the filename for each match.\n"            \
+    "  -h, --no-filename -- Do not print the filename for each match.\n"       \
     "  -i, --ignore-case -- Ignore case when searching.\n"                     \
-    "  -l, --files-with-matches -- Write the names of the files searched.\n"   \
+    "  -l, --files-with-matches -- Write only the names of the files \n"       \
+    "      searched and matched.\n"                                            \
     "  -n, --line-number -- Write the line number before each match.\n"        \
     "  -q, --quiet, --silent -- Quiet, write nothing to standad out.\n"        \
     "  -R, -r, --recursive -- Scan the contents of any directories found.\n"   \
@@ -70,7 +73,8 @@ Environment:
     "  --help -- Show this help.\n"                                            \
     "  --version -- Show the version information.\n"
 
-#define GREP_OPTIONS_STRING "EFce:f:ilnqRrsvxhV"
+#define GREP_OPTIONS_STRING "EFce:f:HhilnqRrsvxV"
+#define GREP_HELP 256
 
 //
 // Define the chunk size grep reads in.
@@ -109,8 +113,7 @@ Environment:
 #define GREP_OPTION_IGNORE_CASE 0x00000008
 
 //
-// Set this option to write the names of the files searched (only once per
-// file).
+// Set this option to print the file name with each match.
 //
 
 #define GREP_OPTION_PRINT_FILE_NAMES 0x00000010
@@ -151,6 +154,12 @@ Environment:
 //
 
 #define GREP_OPTION_RECURSIVE 0x00000400
+
+//
+// Set this option to suppress printing the match itself.
+//
+
+#define GREP_OPTION_SUPPRESS_MATCH_PRINT 0x00000800
 
 //
 // Define the maximum recursion depth for traversing into directories.
@@ -306,6 +315,8 @@ struct option GrepLongOptions[] = {
     {"count", no_argument, 0, 'c'},
     {"regexp", required_argument, 0, 'e'},
     {"file", required_argument, 0, 'f'},
+    {"with-filename", no_argument, 0, 'H'},
+    {"no-filename", no_argument, 0, 'h'},
     {"ignore-case", no_argument, 0, 'i'},
     {"files-with-matches", no_argument, 0, 'l'},
     {"line-number", no_argument, 0, 'n'},
@@ -315,7 +326,7 @@ struct option GrepLongOptions[] = {
     {"no-messages", no_argument, 0, 's'},
     {"invert-match", no_argument, 0, 'v'},
     {"line-regexp", no_argument, 0, 'x'},
-    {"help", no_argument, 0, 'h'},
+    {"help", no_argument, 0, GREP_HELP},
     {"version", no_argument, 0, 'V'},
     {NULL, 0, 0, 0}
 };
@@ -365,6 +376,7 @@ Return Value:
     BOOL ReadFromStandardIn;
     PSTR SecondSource;
     INT Status;
+    BOOL SuppressFileName;
 
     memset(&Context, 0, sizeof(GREP_CONTEXT));
     INITIALIZE_LIST_HEAD(&(Context.InputList));
@@ -378,6 +390,7 @@ Return Value:
     FirstSource = NULL;
     SecondSource = NULL;
     PatternsRead = FALSE;
+    SuppressFileName = FALSE;
     while (TRUE) {
         Option = getopt_long(ArgumentCount,
                              Arguments,
@@ -447,12 +460,23 @@ Return Value:
 
             break;
 
+        case 'h':
+            Context.Options &= ~GREP_OPTION_PRINT_FILE_NAMES;
+            SuppressFileName = TRUE;
+            break;
+
+        case 'H':
+            Context.Options |= GREP_OPTION_PRINT_FILE_NAMES;
+            break;
+
         case 'i':
             Context.Options |= GREP_OPTION_IGNORE_CASE;
             break;
 
         case 'l':
-            Context.Options |= GREP_OPTION_PRINT_FILE_NAMES;
+            Context.Options |= GREP_OPTION_PRINT_FILE_NAMES |
+                               GREP_OPTION_SUPPRESS_MATCH_PRINT;
+
             break;
 
         case 'n':
@@ -484,7 +508,7 @@ Return Value:
             SwPrintVersion(GREP_VERSION_MAJOR, GREP_VERSION_MINOR);
             return 1;
 
-        case 'h':
+        case GREP_HELP:
             printf(GREP_USAGE);
             return 1;
 
@@ -581,6 +605,17 @@ Return Value:
         if (Status != 0) {
             goto MainEnd;
         }
+    }
+
+    //
+    // If there are multiple files, print the file names, unless explicitly
+    // told not to.
+    //
+
+    if ((Context.InputList.Next != Context.InputList.Previous) &&
+        (SuppressFileName == FALSE)) {
+
+        Context.Options |= GREP_OPTION_PRINT_FILE_NAMES;
     }
 
     //
@@ -1336,16 +1371,11 @@ Return Value:
     ULONG LineNumber;
     BOOL Match;
     ULONG MatchCount;
-    BOOL MultipleInputs;
     PGREP_PATTERN Pattern;
     INT Status;
 
     LineNumber = 1;
     MatchCount = 0;
-    MultipleInputs = TRUE;
-    if (Context->InputList.Next == Context->InputList.Previous) {
-        MultipleInputs = FALSE;
-    }
 
     //
     // Loop across every line.
@@ -1383,13 +1413,20 @@ Return Value:
             }
 
             //
-            // If the "print file name" option is present, print the file name
-            // and suppress normal output.
+            // If there are more than one file elements and the file name was
+            // not already printed, precede the match with the file name.
             //
 
             if ((Context->Options & GREP_OPTION_PRINT_FILE_NAMES) != 0) {
-                printf("%s\n", Input->FileName);
-                break;
+                if ((Context->Options &
+                     GREP_OPTION_SUPPRESS_MATCH_PRINT) != 0) {
+
+                    printf("%s\n", Input->FileName);
+                    break;
+
+                } else {
+                    printf("%s:", Input->FileName);
+                }
             }
 
             //
@@ -1403,15 +1440,6 @@ Return Value:
             if (Input->Binary != FALSE) {
                 printf("Binary file %s matches.\n", Input->FileName);
                 break;
-            }
-
-            //
-            // If there are more than one file elements and the file name was
-            // not already printed, precede the match with the file name.
-            //
-
-            if (MultipleInputs != FALSE) {
-                printf("%s:", Input->FileName);
             }
 
             //
@@ -1432,7 +1460,7 @@ Return Value:
         LineNumber += 1;
         if ((MatchCount != 0) &&
             ((Input->Binary != FALSE) ||
-             ((Context->Options & GREP_OPTION_PRINT_FILE_NAMES) != 0))) {
+             ((Context->Options & GREP_OPTION_SUPPRESS_MATCH_PRINT) != 0))) {
 
             break;
         }
@@ -1443,13 +1471,8 @@ Return Value:
     //
 
     if (((Context->Options & GREP_OPTION_LINE_COUNT) != 0) &&
-        ((Context->Options & GREP_OPTION_QUIET) == 0)) {
-
-        if ((MultipleInputs != FALSE) &&
-            ((Context->Options & GREP_OPTION_PRINT_FILE_NAMES) == 0)) {
-
-            printf("%s:", Input->FileName);
-        }
+        ((Context->Options & GREP_OPTION_QUIET) == 0) &&
+        ((Context->Options & GREP_OPTION_SUPPRESS_MATCH_PRINT) == 0)) {
 
         printf("%d\n", MatchCount);
     }
