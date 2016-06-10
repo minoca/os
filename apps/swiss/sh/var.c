@@ -230,7 +230,7 @@ Return Value:
         // Skip variables that shouldn't be initialized from the environment.
         //
 
-        if (strncmp(Name, SHELL_IFS, NameSize - 1) == 0) {
+        if ((NameSize == 4) && (strncmp(Name, SHELL_IFS, NameSize - 1) == 0)) {
             free(Name);
             continue;
         }

@@ -426,7 +426,7 @@ Return Value:
                 Command[0] = '\0';
                 Byte = -1;
 
-            } else if (!isprint(Byte)) {
+            } else if (iscntrl(Byte)) {
                 Byte = -1;
             }
 

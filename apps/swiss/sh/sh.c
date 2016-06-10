@@ -459,7 +459,10 @@ Return Value:
 
     Result = ShExecute(Shell, &ReturnValue);
     if (Result == FALSE) {
-        ReturnValue = EINVAL;
+        ReturnValue = errno;
+        if (ReturnValue == 0) {
+            ReturnValue = EINVAL;
+        }
     }
 
     Shell->Exited = TRUE;
