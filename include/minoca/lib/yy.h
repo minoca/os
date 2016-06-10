@@ -91,7 +91,8 @@ typedef enum _YY_STATUS {
     YyStatusTooManyItems,
     YyStatusInvalidSpecification,
     YyStatusInvalidParameter,
-    YyStatusParseError
+    YyStatusParseError,
+    YyStatusLexError,
 } YY_STATUS, *PYY_STATUS;
 
 typedef SHORT YY_VALUE, *PYY_VALUE;
@@ -99,6 +100,7 @@ typedef SHORT YY_VALUE, *PYY_VALUE;
 typedef
 PVOID
 (*PYY_REALLOCATE) (
+    PVOID Context,
     PVOID Allocation,
     UINTN Size
     );
@@ -110,6 +112,8 @@ Routine Description:
     This routine is called to allocate, reallocate, or free memory.
 
 Arguments:
+
+    Context - Supplies a pointer to the context passed into the parser.
 
     Allocation - Supplies an optional pointer to an existing allocation to
         either reallocate or free. If NULL, then a new allocation is being
@@ -170,10 +174,10 @@ Return Value:
 --*/
 
 typedef
-INT
+YY_STATUS
 (*PYY_PARSER_ERROR) (
     PVOID Context,
-    PSTR Message
+    YY_STATUS Status
     );
 
 /*++
@@ -186,7 +190,7 @@ Arguments:
 
     Context - Supplies the context pointer supplied to the parse function.
 
-    Message - Supplies the error message.
+    Status - Supplies the error that occurred, probably a parse error.
 
 Return Value:
 
@@ -746,7 +750,8 @@ typedef struct _PARSER {
 // LALR parser functions.
 //
 
-INT
+YY_API
+YY_STATUS
 YyParseGrammar (
     PYY_PARSER Parser
     );

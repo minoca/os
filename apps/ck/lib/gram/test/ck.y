@@ -57,7 +57,7 @@ primary_expression
 
 postfix_expression
     : primary_expression
-    | postfix_expression '.' IDENTIFIER
+    | postfix_expression '.' IDENTIFIER '(' argument_expression_list ')'
     | postfix_expression '[' expression ']'
     | postfix_expression '(' argument_expression_list ')'
     | postfix_expression INC_OP
@@ -265,7 +265,7 @@ class_body
 
 class_definition
     : CLASS IDENTIFIER class_body
-    | CLASS IDENTIFIER IS IDENTIFIER class_body
+    | CLASS IDENTIFIER IS expression class_body
     ;
 
 module_name

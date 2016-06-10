@@ -41,6 +41,9 @@ Environment:
 #define YY_SYMBOL_NAME(_Parser, _Value) \
     ((_Parser)->Grammar->Names[YY_SYMBOL_NAME_INDEX((_Parser), (_Value))])
 
+#define YypReallocate(_Parser, _Memory, _NewSize) \
+    (_Parser)->Reallocate((_Parser)->Context, (_Memory), (_NewSize))
+
 //
 // ---------------------------------------------------------------- Definitions
 //
@@ -110,7 +113,8 @@ YypGrowStack (
 // ------------------------------------------------------------------ Functions
 //
 
-INT
+YY_API
+YY_STATUS
 YyParseGrammar (
     PYY_PARSER Parser
     )
@@ -138,7 +142,6 @@ Return Value:
 
     PSTR DebugPrefix;
     INT ErrorFlag;
-    PSTR ErrorMessage;
     PVOID FirstElement;
     PYY_GRAMMAR Grammar;
     YY_VALUE LeftSide;
@@ -154,7 +157,6 @@ Return Value:
     YY_VALUE TableIndex;
     INT ValueSize;
 
-    ErrorMessage = "Parser stack overflow";
     NewValue = NULL;
     Stack.ValueBase = NULL;
     Stack.ValueTop = NULL;
@@ -186,7 +188,7 @@ Return Value:
     Stack.ValueTop = Stack.ValueBase;
     Stack.StateTop = Stack.StateBase;
     *((PYY_VALUE)Stack.StateTop) = 0;
-    NewValue = Parser->Reallocate(NULL, (ValueSize * 2));
+    NewValue = YypReallocate(Parser, NULL, (ValueSize * 2));
     if (NewValue == NULL) {
         Status = YyStatusNoMemory;
         goto ParseGrammarEnd;
@@ -223,6 +225,7 @@ Return Value:
             if (Symbol < 0) {
                 Status = Parser->GetToken(Parser->Lexer, LexValue);
                 if (Status != 0) {
+                    Status = YyStatusLexError;
                     goto ParseGrammarEnd;
                 }
 
@@ -303,12 +306,13 @@ Return Value:
 
             if (ErrorFlag == 0) {
                 Parser->ErrorCount += 1;
+                Status = YyStatusParseError;
                 if (Parser->Error != NULL) {
-                    Status = Parser->Error(Parser->Context, "Syntax error");
-                    if (Status != 0) {
-                        ErrorMessage = NULL;
-                        goto ParseGrammarEnd;
-                    }
+                    Status = Parser->Error(Parser->Context, Status);
+                }
+
+                if (Status != 0) {
+                    goto ParseGrammarEnd;
                 }
             }
 
@@ -432,7 +436,6 @@ Return Value:
                                   NewValue);
 
         if (Status != 0) {
-            ErrorMessage = NULL;
             goto ParseGrammarEnd;
         }
 
@@ -528,18 +531,12 @@ Return Value:
     Status = 0;
 
 ParseGrammarEnd:
-    if (Status != 0) {
-        if ((ErrorMessage != NULL) && (Parser->Error != NULL)) {
-            Parser->Error(Parser->Context, ErrorMessage);
-        }
-    }
-
     if ((Status == 0) && (Parser->ErrorCount != 0)) {
         Status = YyStatusParseError;
     }
 
     if (NewValue != NULL) {
-        Parser->Reallocate(NewValue, 0);
+        YypReallocate(Parser, NewValue, 0);
     }
 
     //
@@ -547,7 +544,11 @@ ParseGrammarEnd:
     //
 
     if (Stack.ValueBase != NULL) {
-        Parser->Reallocate(Stack.ValueBase, 0);
+        YypReallocate(Parser, Stack.ValueBase, 0);
+    }
+
+    if (Stack.StateBase != NULL) {
+        YypReallocate(Parser, Stack.StateBase, 0);
     }
 
     return Status;
@@ -608,7 +609,7 @@ Return Value:
 
     Offset = Stack->ValueTop - Stack->ValueBase;
     AllocationSize = NewCount * ValueSize;
-    NewBuffer = Parser->Reallocate(Stack->ValueBase, AllocationSize);
+    NewBuffer = YypReallocate(Parser, Stack->ValueBase, AllocationSize);
     if (NewBuffer == NULL) {
         return YyStatusNoMemory;
     }
@@ -623,7 +624,7 @@ Return Value:
 
     Offset = (PVOID)(Stack->StateTop) - (PVOID)(Stack->StateBase);
     AllocationSize = NewCount * sizeof(YY_VALUE);
-    NewBuffer = Parser->Reallocate(Stack->StateBase, AllocationSize);
+    NewBuffer = YypReallocate(Parser, Stack->StateBase, AllocationSize);
     if (NewBuffer == NULL) {
         return YyStatusNoMemory;
     }

@@ -26,12 +26,13 @@ Environment:
 // ------------------------------------------------------------------- Includes
 //
 
-#include <minoca/lib/types.h>
+#include "../chalkp.h"
+
 #include <minoca/lib/status.h>
-#include "../lang.h"
 #include <minoca/lib/yy.h>
 #include <stdio.h>
 #include <minoca/lib/yygen.h>
+#include "../lang.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -117,7 +118,10 @@ YY_VALUE CkgPrimaryExpression[] = {
 
 YY_VALUE CkgPostfixExpression[] = {
     CkNodePrimaryExpression, -1,
-    CkNodePostfixExpression, CkTokenDot, CkTokenIdentifier, -1,
+    CkNodePostfixExpression, CkTokenDot, CkTokenIdentifier,
+        CkTokenOpenParentheses, CkNodeArgumentExpressionList,
+        CkTokenCloseParentheses, -1,
+
     CkNodePostfixExpression, CkTokenOpenBracket, CkNodeExpression,
         CkTokenCloseBracket, -1,
 
@@ -417,7 +421,7 @@ YY_VALUE CkgClassBody[] = {
 
 YY_VALUE CkgClassDefinition[] = {
     CkTokenClass, CkTokenIdentifier, CkNodeClassBody, -1,
-    CkTokenClass, CkTokenIdentifier, CkTokenIs, CkTokenIdentifier,
+    CkTokenClass, CkTokenIdentifier, CkTokenIs, CkNodeExpression,
         CkNodeClassBody, -1,
 
     0,

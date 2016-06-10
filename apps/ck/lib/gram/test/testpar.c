@@ -26,12 +26,12 @@ Environment:
 
 #define YY_API
 
-#include <minoca/lib/types.h>
+#include "../../chalkp.h"
 #include <minoca/lib/status.h>
-#include "../../lang.h"
 #include <minoca/lib/yy.h>
 #include <stdio.h>
 #include <minoca/lib/yygen.h>
+#include "../../lang.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -55,20 +55,6 @@ Environment:
 //
 // ------------------------------------------------------ Data Type Definitions
 //
-
-typedef struct _CK_NODE {
-    CK_SYMBOL Symbol;
-    ULONG Children;
-    ULONG Descendants;
-    ULONG Depth;
-    ULONG ChildIndex;
-} CK_NODE, *PCK_NODE;
-
-typedef union _CK_SYMBOL_UNION {
-    CK_SYMBOL Symbol;
-    LEXER_TOKEN Token;
-    CK_NODE Node;
-} CK_SYMBOL_UNION, *PCK_SYMBOL_UNION;
 
 //
 // ----------------------------------------------- Internal Function Prototypes
@@ -95,10 +81,23 @@ CkgpPrintToken (
     PLEXER_TOKEN Token
     );
 
+VOID
+CkgpPrintSymbol (
+    PCK_SYMBOL_UNION Value,
+    PLEXER Lexer,
+    ULONG Depth
+    );
+
+PVOID
+CkgpReallocate (
+    PVOID Context,
+    PVOID Allocation,
+    UINTN Size
+    );
+
 //
 // -------------------------------------------------------------------- Globals
 //
-
 
 PSTR CkLexerExpressions[] = {
     "break",
@@ -124,7 +123,7 @@ PSTR CkLexerExpressions[] = {
     "from",
     YY_NAME0 "(" YY_NAME0 "|" YY_DIGITS ")*", // identifier
     YY_DIGITS "+", // decimal integer
-    "L?\"(\\\\.|[^\\\"])*\"", // string literal
+    "\"(\\\\.|[^\\\"])*\"", // string literal
     ">>=",
     "<<=",
     "\\+=",
@@ -308,7 +307,7 @@ extern YY_GRAMMAR CkGrammar;
 
 YY_PARSER CkParser = {
     &CkGrammar,
-    realloc,
+    CkgpReallocate,
     CkgpProcessSymbol,
     NULL,
     NULL,
@@ -434,9 +433,11 @@ Return Value:
         goto ParseScriptEnd;
     }
 
-    if (CkSymbolsCount == 0) {
-        goto ParseScriptEnd;
-    }
+    //
+    // Account for the final translation unit.
+    //
+
+    CkSymbolsCount += 1;
 
     //
     // Print the abstract syntax tree.
@@ -444,42 +445,7 @@ Return Value:
 
     printf("\n");
     Value = CkSymbols + CkSymbolsCount - 1;
-    while (Value >= CkSymbols) {
-        if (Value->Symbol < CkNodeStart) {
-            Value -= 1;
-            continue;
-        }
-
-        assert(Value->Node.Depth <= CkMaxDepth);
-
-        printf("%*s (%2d/%2d/%2d): ",
-               CkMaxDepth - Value->Node.Depth + 20,
-               CkNodeNames[Value->Symbol - CkNodeStart],
-               Value->Node.Children,
-               Value->Node.Descendants,
-               Value->Node.Depth);
-
-        ChildNode = 1;
-        Child = CkSymbols + Value->Node.ChildIndex;
-        for (ChildIndex = 0;
-             ChildIndex < Value->Node.Children;
-             ChildIndex += 1) {
-
-            if (Child->Symbol < CkNodeStart) {
-                CkgpPrintToken(&Lexer, &(Child->Token));
-                printf(" ");
-
-            } else {
-                printf("$%d ", ChildNode);
-                ChildNode += 1;
-            }
-
-            Child += 1;
-        }
-
-        printf("\n");
-        Value -= 1;
-    }
+    CkgpPrintSymbol(Value, &Lexer, 0);
 
 ParseScriptEnd:
     if (CkSymbols != NULL) {
@@ -592,9 +558,9 @@ Return Value:
     ULONG ChildIndex;
     PVOID NewBuffer;
     ULONG NewCapacity;
-    PCK_NODE NewNode;
+    PCK_AST_NODE NewNode;
 
-    if (CkSymbolsCount + ElementCount >= CkSymbolsCapacity) {
+    if (CkSymbolsCount + ElementCount + 1 >= CkSymbolsCapacity) {
         if (CkSymbolsCapacity == 0) {
             NewCapacity = 16;
 
@@ -602,7 +568,7 @@ Return Value:
             NewCapacity = CkSymbolsCapacity * 2;
         }
 
-        while (NewCapacity < CkSymbolsCount + ElementCount) {
+        while (NewCapacity < CkSymbolsCount + ElementCount + 1) {
             NewCapacity *= 2;
         }
 
@@ -664,6 +630,18 @@ Return Value:
            NewNode->Descendants,
            NewNode->Depth);
 
+    //
+    // Copy the current node as well in case it ends up being the last
+    // translation unit. Don't update the symbols count, which means this node
+    // gets overwritten if there are more elements.
+    //
+
+    if (Symbol == CkNodeTranslationUnit) {
+        memcpy(CkSymbols + CkSymbolsCount,
+               NewNode,
+               sizeof(CK_SYMBOL_UNION));
+    }
+
     return 0;
 }
 
@@ -703,5 +681,118 @@ Return Value:
     Buffer[Size] = '\0';
     printf("%s (%d:%d)", Buffer, Token->Line, Token->Column);
     return;
+}
+
+VOID
+CkgpPrintSymbol (
+    PCK_SYMBOL_UNION Value,
+    PLEXER Lexer,
+    ULONG Depth
+    )
+
+/*++
+
+Routine Description:
+
+    This routine recursively prints the given symbol.
+
+Arguments:
+
+    Value - Supplies a pointer to the symbol to print the subtree of.
+
+    Lexer - Supplies a pointer to the lexer.
+
+    Depth - Supplies the current recursion depth.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    PCK_SYMBOL_UNION Child;
+    ULONG ChildIndex;
+    ULONG ChildNode;
+
+    printf("%*s%s (%2d/%2d/%2d): ",
+           Depth,
+           "",
+           CkNodeNames[Value->Symbol - CkNodeStart],
+           Value->Node.Children,
+           Value->Node.Descendants,
+           Value->Node.Depth);
+
+    ChildNode = 1;
+    Child = CkSymbols + Value->Node.ChildIndex;
+    for (ChildIndex = 0;
+         ChildIndex < Value->Node.Children;
+         ChildIndex += 1) {
+
+        if (Child->Symbol < CkNodeStart) {
+            CkgpPrintToken(Lexer, &(Child->Token));
+            printf(" ");
+
+        } else {
+            printf("$%d ", ChildNode);
+            ChildNode += 1;
+        }
+
+        Child += 1;
+    }
+
+    printf("\n");
+    Child = CkSymbols + Value->Node.ChildIndex;
+    for (ChildIndex = 0;
+         ChildIndex < Value->Node.Children;
+         ChildIndex += 1) {
+
+        if (Child->Symbol >= CkNodeStart) {
+            CkgpPrintSymbol(Child, Lexer, Depth + 1);
+        }
+
+        Child += 1;
+    }
+
+    return;
+}
+
+PVOID
+CkgpReallocate (
+    PVOID Context,
+    PVOID Allocation,
+    UINTN Size
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called to allocate, reallocate, or free memory.
+
+Arguments:
+
+    Context - Supplies a pointer to the context passed into the parser.
+
+    Allocation - Supplies an optional pointer to an existing allocation to
+        either reallocate or free. If NULL, then a new allocation is being
+        requested.
+
+    Size - Supplies the size of the allocation request, in bytes. If this is
+        non-zero, then an allocation or reallocation is being requested. If
+        this is is 0, then the given memory should be freed.
+
+Return Value:
+
+    Returns a pointer to the allocated memory on success.
+
+    NULL on allocation failure or free.
+
+--*/
+
+{
+
+    return realloc(Allocation, Size);
 }
 

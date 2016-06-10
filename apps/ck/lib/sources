@@ -1,0 +1,37 @@
+################################################################################
+#
+#   Copyright (c) 2016 Minoca Corp. All Rights Reserved
+#
+#   Binary Name:
+#
+#       Chalk Sources
+#
+#   Abstract:
+#
+#       This file describes the common Chalk source files.
+#
+#   Author:
+#
+#       Evan Green 9-Jun-2016
+#
+#   Environment:
+#
+#       POSIX
+#
+################################################################################
+
+OBJS = compexpr.o    \
+       compiler.o    \
+       compio.o      \
+       compvar.o     \
+       core.o        \
+       dict.o        \
+       gram.o        \
+       lex.o         \
+       module.o      \
+       string.o      \
+       utils.o       \
+       value.o       \
+       vm.o          \
+       vmsys.o       \
+
