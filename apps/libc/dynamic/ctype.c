@@ -254,7 +254,7 @@ Return Value:
 
 {
 
-    return (isalnum(Character) || ispunct(Character));
+    return ((Character >= '!') && (Character < 0x7F));
 }
 
 LIBC_API
@@ -314,7 +314,7 @@ Return Value:
 
 {
 
-    return ((isalnum(Character)) || (ispunct(Character)) || (Character == ' '));
+    return ((Character >= ' ') && (Character < 0x7F));
 }
 
 LIBC_API
@@ -345,8 +345,8 @@ Return Value:
 
 {
 
-    if ((!(isalpha(Character))) && (!(isdigit(Character))) &&
-        (!(iscntrl(Character))) && (Character != ' ')) {
+    if ((isprint(Character)) &&
+        (!isalnum(Character)) && (!isspace(Character))) {
 
         return 1;
     }

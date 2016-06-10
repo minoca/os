@@ -255,7 +255,7 @@ Return Value:
 
 {
 
-    return (iswalnum(Character) || iswpunct(Character));
+    return ((Character >= L'!') && (Character < 0x7F));
 }
 
 LIBC_API
@@ -315,13 +315,7 @@ Return Value:
 
 {
 
-    if ((iswalnum(Character)) || (iswpunct(Character)) ||
-        (Character == L' ')) {
-
-        return 1;
-    }
-
-    return 0;
+    return ((Character >= L' ') && (Character < 0x7F));
 }
 
 LIBC_API
@@ -352,9 +346,8 @@ Return Value:
 
 {
 
-    if ((Character < 0x7F) &&
-        (!(iswalpha(Character))) && (!(iswdigit(Character))) &&
-        (!(iswcntrl(Character))) && (Character != L' ')) {
+    if ((iswprint(Character)) &&
+        (!iswalnum(Character)) && (!iswspace(Character))) {
 
         return 1;
     }
