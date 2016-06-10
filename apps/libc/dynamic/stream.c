@@ -1945,7 +1945,7 @@ Return Value:
     }
 
     Buffer[Index] = '\0';
-    if (Character == EOF) {
+    if (Index == 0) {
         return NULL;
     }
 
