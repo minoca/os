@@ -134,7 +134,7 @@ int ClpStatusToErrorNumber[] = {
     EWOULDBLOCK,
     EAGAIN,
     EILSEQ,         /* 50 */
-    EOVERFLOW,
+    ERANGE,
     EAGAIN,
     EAGAIN,
     EILSEQ,

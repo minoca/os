@@ -1443,8 +1443,8 @@ Return Value:
     ULONG CharacterCount;
     CHAR MaxDigit;
     CHAR MaxLetter;
-    ULONGLONG MaxValue;
     BOOL Negative;
+    ULONGLONG NewValue;
     BOOL Result;
     KSTATUS Status;
     BOOL ValidCharacterFound;
@@ -1579,7 +1579,7 @@ Return Value:
         MaxLetter = 'A' + Base - 1 - 10;
     }
 
-    MaxValue = 0;
+    Status = STATUS_SUCCESS;
     Value = 0;
 
     //
@@ -1605,7 +1605,7 @@ Return Value:
                 break;
             }
 
-            Value = (Value * Base) + (Character - '0');
+            Character -= '0';
 
         //
         // It could also be a letter digit.
@@ -1616,7 +1616,7 @@ Return Value:
                 break;
             }
 
-            Value = (Value * Base) + (Character - 'A' + 10);
+            Character -= 'A' - 0xA;
 
         //
         // Or it could be something entirely different, in which case the
@@ -1627,10 +1627,16 @@ Return Value:
             break;
         }
 
-        if (Value > MaxValue) {
-            MaxValue = Value;
+        //
+        // Check for overflow by dividing back out.
+        //
+
+        NewValue = (Value * Base) + Character;
+        if (((NewValue - Character) / Base) != Value) {
+            Status = STATUS_INTEGER_OVERFLOW;
         }
 
+        Value = NewValue;
         ValidCharacterFound = TRUE;
         CharacterCount += 1;
         FieldSize -= 1;
@@ -1668,8 +1674,7 @@ Return Value:
     // Handle overflow.
     //
 
-    if (Value != MaxValue) {
-        Status = STATUS_INTEGER_OVERFLOW;
+    if (Status == STATUS_INTEGER_OVERFLOW) {
         if (Signed != FALSE) {
             if (Negative != FALSE) {
                 *Integer = MIN_LONGLONG;
@@ -1683,7 +1688,6 @@ Return Value:
         }
 
     } else {
-        Status = STATUS_SUCCESS;
         if (Negative != FALSE) {
             Value = -Value;
         }

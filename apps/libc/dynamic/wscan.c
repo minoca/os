@@ -640,6 +640,7 @@ Return Value:
     }
 
     if (!KSUCCESS(Status)) {
+        errno = ClConvertKstatusToErrorNumber(Status);
 
         //
         // On integer overflow, set errno to ERANGE, but still return the
@@ -647,7 +648,6 @@ Return Value:
         //
 
         if (Status == STATUS_INTEGER_OVERFLOW) {
-            errno = ERANGE;
             if (Integer == LLONG_MAX) {
                 return LONG_MAX;
             }
@@ -655,7 +655,6 @@ Return Value:
             return LONG_MIN;
 
         } else {
-            errno = ClConvertKstatusToErrorNumber(Status);
             return 0;
         }
     }
@@ -811,12 +810,11 @@ Return Value:
     }
 
     if (!KSUCCESS(Status)) {
+        errno = ClConvertKstatusToErrorNumber(Status);
         if (Status == STATUS_INTEGER_OVERFLOW) {
-            errno = ERANGE;
             return ULONG_MAX;
 
         } else {
-            errno = ClConvertKstatusToErrorNumber(Status);
             return 0;
         }
     }
