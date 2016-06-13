@@ -68,9 +68,7 @@ _start:
     ##
 
     mrc     p15, 0, %r0, %cr1, %cr0, 1
-    ldr     %r1, =InitialAuxOrMask
-    ldr     %r1, [%r1]
-    orr     %r0, %r0, %r1
+    orr     %r0, %r0, #ARMV6_AUX_16K_CACHE_SIZE
     mcr     p15, 0, %r0, %cr1, %cr0, 1
 
     ##
@@ -78,12 +76,8 @@ _start:
     ##
 
     mrc     p15, 0, %r0, %cr1, %cr0, 0
-    ldr     %r1, =InitialMmuAndMask
-    ldr     %r1, [%r1]
-    and     %r0, %r0, %r1
-    ldr     %r1, =InitialMmuOrMask
-    ldr     %r1, [%r1]
-    orr     %r0, %r0, %r1
+    bic     %r0, %r0, #MMU_ALIGNMENT_FAULT_ENABLED
+    orr     %r0, %r0, #MMU_UNALIGNED_ACCESS_ENABLED
     mcr     p15, 0, %r0, %cr1, %cr0, 0
 
     ##
@@ -115,6 +109,3 @@ BssZeroLoop:
 LoopForever:
     b       LoopForever
 
-InitialMmuAndMask: .word ~(MMU_ALIGNMENT_FAULT_ENABLED)
-InitialMmuOrMask: .word MMU_UNALIGNED_ACCESS_ENABLED
-InitialAuxOrMask: .word ARMV6_AUX_16K_CACHE_SIZE

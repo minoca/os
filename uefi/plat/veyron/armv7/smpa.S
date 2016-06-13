@@ -136,8 +136,8 @@ EfipRk32ProcessorStartup:
     ldr     %r2, =EfiRk32ProcessorJumpAddress @ Get the jump destination.
     ldr     %r4, [%r2]                        @ Get the value.
     str     %r3, [%r2]                        @ Clear the value.
-    ldr     %r3, =0xFFFFF000                  @ Get the page mask.
-    and     %r1, %r4, %r3                     @ Set the parking location.
+    bic     %r1, %r4, #0xF00                  @ Set the parking location.
+    bic     %r1, %r1, #0x0FF
     bx      %r4                               @ Jump to the destination.
 
 .ltorg

@@ -229,8 +229,8 @@ EfipBcm2836ProcessorStartupEnd:
     ldr     %r1, =EfiBcm2836JumpAddress     @ Get the jump address.
     ldr     %r2, [%r1]                      @ Get the value.
     str     %r3, [%r1]                      @ Store zero into jump address.
-    ldr     %r3, =0xFFFFF000                @ Get the page mask.
-    and     %r1, %r2, %r3                   @ Set the parking location.
+    bic     %r1, %r2, #0xF00                @ Set the parking location.
+    bic     %r1, %r1, #0x0FF
     DSB                                     @ One final breath, then...
     bx      %r2                             @ Jump head first into the abyss.
 

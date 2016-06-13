@@ -146,14 +146,14 @@ Return Value:
 
 .arm
 EfipOmap4ProcessorStartup:
-    mov     %r3, #0                         @ Clear out R3.
     ldr     %r2, =EfiOmap4ProcessorId       @ Get the processor ID address.
     ldr     %r0, [%r2]                      @ Get the value.
     ldr     %r2, =EfiOmap4ProcessorJumpAddress  @ Get the jump destination.
     ldr     %r4, [%r2]                      @ Get the value.
+    mov     %r3, #0                         @ Clear out R3.
     str     %r3, [%r2]                      @ Clear the value.
-    ldr     %r3, =0xFFFFF000                @ Get the page mask.
-    and     %r1, %r4, %r3                   @ Set the parking location.
+    bic     %r1, %r4, #0xF00                @ Set the parking location.
+    bic     %r1, %r1, #0x0FF
     bx      %r4                             @ Jump to the destination.
 
 .ltorg
