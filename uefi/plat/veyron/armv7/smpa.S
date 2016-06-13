@@ -26,6 +26,7 @@ Environment:
 ##
 
 #include <minoca/kernel/arm.inc>
+#include "smp.inc"
 
 ##
 ## --------------------------------------------------------------- Definitions
@@ -107,15 +108,10 @@ Return Value:
 EfipRk32ProcessorStartup:
 
     ##
-    ## Set the SMP bit in the auxiliary control register on this core.
+    ## Perform initialization steps that must be taken on each core.
     ##
 
-    mrc     p15, 0, %r0, %cr1, %cr0, 1
-    ldr     %r1, =CORTEX_A17_AUX_SMP_ENABLE
-    orr     %r0, %r0, %r1
-    mcr     p15, 0, %r0, %cr1, %cr0, 1
-    DSB
-    ISB
+    RK32_SMP_INIT
 
     ##
     ## Initialize the local GIC CPU interface by setting the lowest priority

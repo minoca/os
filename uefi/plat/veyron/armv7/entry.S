@@ -26,6 +26,7 @@ Environment:
 ##
 
 #include <minoca/kernel/arm.inc>
+#include "smp.inc"
 
 ##
 ## ---------------------------------------------------------------- Definitions
@@ -81,14 +82,10 @@ _start:
     mcr     p15, 0, %r0, %cr1, %cr0, 0
 
     ##
-    ## Set the SMP bit in the auxiliary control register.
+    ## Perform initialization steps that must be taken on each core.
     ##
 
-    mrc     p15, 0, %r0, %cr1, %cr0, 1
-    ldr     %r1, =InitialAuxOrMask
-    ldr     %r1, [%r1]
-    orr     %r0, %r0, %r1
-    mcr     p15, 0, %r0, %cr1, %cr0, 1
+    RK32_SMP_INIT
 
     ##
     ## Zero out the BSS section.
@@ -123,5 +120,4 @@ LoopForever:
 
 InitialMmuAndMask: .word ~(MMU_ALIGNMENT_FAULT_ENABLED)
 InitialMmuOrMask: .word MMU_UNALIGNED_ACCESS_ENABLED
-InitialAuxOrMask: .word CORTEX_A17_AUX_SMP_ENABLE
 

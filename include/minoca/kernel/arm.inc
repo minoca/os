@@ -62,6 +62,7 @@ Environment:
 #define ARM_MODE_FIQ    0x00000011
 #define ARM_MODE_IRQ    0x00000012
 #define ARM_MODE_SVC    0x00000013
+#define ARM_MODE_MON    0x00000016
 #define ARM_MODE_ABORT  0x00000017
 #define ARM_MODE_HYP    0x0000001A
 #define ARM_MODE_UNDEF  0x0000001B
@@ -135,6 +136,21 @@ Environment:
 ##
 
 #define MMU_TLB_LOCKING_ENABLE          0x00020000
+
+##
+## Secure Configuration Register bits (SCR).
+##
+
+#define SCR_NON_SECURE                            0x00000001
+#define SCR_MONITOR_MODE_IRQ                      0x00000002
+#define SCR_MONITOR_MODE_FIQ                      0x00000004
+#define SCR_MONITOR_MODE_EXTERNAL_ABORT           0x00000008
+#define SCR_CPSR_FIQ_WRITABLE                     0x00000010
+#define SCR_CPSR_ASYNC_ABORT_WRITABLE             0x00000020
+#define SCR_EARLY_TERMINATION_DISABLED            0x00000040
+#define SCR_NON_SECURE_SMC_DISABLED               0x00000080
+#define SCR_NON_SECURE_HVC_ENABLED                0x00000100
+#define SCR_NON_SECURE_INSTRUCTION_FETCH_DISABLED 0x00000200
 
 ##
 ## Definition for the structure on the exception stacks.

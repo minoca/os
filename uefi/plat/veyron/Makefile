@@ -51,8 +51,9 @@ OBJS += debug.o                 \
         veyronfwv.o             \
         video.o                 \
 
-ARMV7_OBJS = armv7/entry.o  \
-             armv7/smpa.o   \
+ARMV7_OBJS = armv7/entry.o   \
+             armv7/minttbl.o \
+             armv7/smpa.o    \
 
 TEXT_ADDRESS = 0x020000A4
 

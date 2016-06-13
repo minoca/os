@@ -27,6 +27,7 @@ function build() {
         "dsdt.asl",
         "facp.asl",
         "facs.asl",
+        "gtdt.asl",
         "rk32.asl"
     ];
 

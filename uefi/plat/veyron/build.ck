@@ -26,6 +26,7 @@ function build() {
     text_address = "0x020000A4";
     sources = [
         "armv7/entry.S",
+        "armv7/minttbl.S",
         "armv7/smpa.S",
         "debug.c",
         "fwvol.c",

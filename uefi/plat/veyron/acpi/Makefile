@@ -35,6 +35,7 @@ OBJS += apic.aml     \
         dsdt.aml     \
         facp.aml     \
         facs.aml     \
+        gtdt.aml     \
         rk32.aml     \
 
 include $(SRCROOT)/os/minoca.mk
