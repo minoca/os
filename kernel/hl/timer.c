@@ -1097,7 +1097,11 @@ Return Value:
     PHARDWARE_TIMER_ABSOLUTE_DATA AbsoluteData;
     ULONG AbsoluteIndex;
     PTIMER_ACKNOWLEDGE_INTERRUPT AcknowledgeInterrupt;
+    PVOID Context;
+    ULONGLONG CurrentTime;
     ULONGLONG DueTime;
+    ULONGLONG ExtendedCurrentTime;
+    ULONGLONG ExtendedDueTime;
     ULONGLONG Period;
 
     AcknowledgeInterrupt = Timer->FunctionTable.AcknowledgeInterrupt;
@@ -1106,7 +1110,7 @@ Return Value:
     }
 
     //
-    // If it's an non-periodic absolute timer, then rearm it if necessary.
+    // If it's a non-periodic absolute timer, then attempt to rearm it.
     //
 
     if (((Timer->Features & TIMER_FEATURE_ABSOLUTE) != 0) &&
@@ -1119,12 +1123,25 @@ Return Value:
         AbsoluteData = &(Timer->AbsoluteData[AbsoluteIndex]);
         Period = AbsoluteData->Period;
         if (Period != 0) {
+            Context = Timer->PrivateContext;
             DueTime = AbsoluteData->DueTime + Period;
             DueTime &= (1ULL << Timer->CounterBitWidth) - 1;
+            CurrentTime = Timer->FunctionTable.ReadCounter(Context);
+
+            //
+            // If the current time is already ahead of the calculated due time,
+            // then this timer got behind (likely due to a debug break). Catch
+            // it up by programming a time in the future.
+            //
+
+            ExtendedDueTime = DueTime << (64 - Timer->CounterBitWidth);
+            ExtendedCurrentTime = CurrentTime << (64 - Timer->CounterBitWidth);
+            if ((LONGLONG)(ExtendedDueTime - ExtendedCurrentTime) < 0) {
+                DueTime = CurrentTime + Period;
+            }
+
             AbsoluteData->DueTime = DueTime;
-            Timer->FunctionTable.Arm(Timer->PrivateContext,
-                                     TimerModeAbsolute,
-                                     DueTime);
+            Timer->FunctionTable.Arm(Context, TimerModeAbsolute, DueTime);
         }
     }
 
