@@ -30,6 +30,7 @@ Environment:
 #include "../hlp.h"
 #include "../intrupt.h"
 #include "../profiler.h"
+#include "../clock.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -122,10 +123,10 @@ Return Value:
     //
 
     HlClockKInterrupt = HlpCreateAndConnectInternalInterrupt(
-                                                        VECTOR_CLOCK_INTERRUPT,
-                                                        RunLevelClock,
-                                                        NULL,
-                                                        NULL);
+                                                 VECTOR_CLOCK_INTERRUPT,
+                                                 RunLevelClock,
+                                                 HlpEarlyClockInterruptHandler,
+                                                 NULL);
 
     if (HlClockKInterrupt == NULL) {
         Status = STATUS_UNSUCCESSFUL;

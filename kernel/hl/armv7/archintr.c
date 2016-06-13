@@ -30,6 +30,7 @@ Environment:
 #include "../hlp.h"
 #include "../intrupt.h"
 #include "../profiler.h"
+#include "../clock.h"
 
 //
 // ---------------------------------------------------------------- Definitions
@@ -121,6 +122,13 @@ PHARDWARE_MODULE_ENTRY HlBuiltinModules[] = {
 ULONG HlFirstConfigurableVector = MINIMUM_VECTOR;
 
 //
+// Stores a pointer to the internal clock interrupt. This is different from the
+// clock IPI.
+//
+
+PKINTERRUPT HlClockKInterrupt;
+
+//
 // ------------------------------------------------------------------ Functions
 //
 
@@ -208,12 +216,23 @@ Return Value:
 
     LineIndex = HlpInterruptGetIpiLineIndex(IpiTypeClock);
     HlIpiKInterrupt[LineIndex] = HlpCreateAndConnectInternalInterrupt(
-                                                        VECTOR_CLOCK_INTERRUPT,
-                                                        RunLevelClock,
-                                                        NULL,
-                                                        NULL);
+                                                            VECTOR_CLOCK_IPI,
+                                                            RunLevelClock,
+                                                            HlpClockIpiHandler,
+                                                            NULL);
 
     if (HlIpiKInterrupt[LineIndex] == NULL) {
+        Status = STATUS_UNSUCCESSFUL;
+        goto ArchInitializeInterruptsEnd;
+    }
+
+    HlClockKInterrupt = HlpCreateAndConnectInternalInterrupt(
+                                                 VECTOR_CLOCK_INTERRUPT,
+                                                 RunLevelClock,
+                                                 HlpEarlyClockInterruptHandler,
+                                                 NULL);
+
+    if (HlClockKInterrupt == NULL) {
         Status = STATUS_UNSUCCESSFUL;
         goto ArchInitializeInterruptsEnd;
     }
@@ -518,10 +537,7 @@ Return Value:
 
 {
 
-    ULONG LineIndex;
-
-    LineIndex = HlpInterruptGetIpiLineIndex(IpiTypeClock);
-    return HlIpiKInterrupt[LineIndex];
+    return HlClockKInterrupt;
 }
 
 PKINTERRUPT

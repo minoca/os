@@ -433,7 +433,6 @@ Return Value:
         //
 
         ClockInterrupt = HlpInterruptGetClockKInterrupt();
-        ClockInterrupt->InterruptServiceRoutine = HlpEarlyClockInterruptHandler;
         HlClockTimer->InterruptRunLevel = ClockInterrupt->RunLevel;
         Status = HlpInterruptSetLineState(&(HlClockTimer->Interrupt.Line),
                                           &State,
@@ -617,7 +616,9 @@ HlpClockInterruptHandler (
 
 Routine Description:
 
-    This routine is the main clock ISR.
+    This routine is the main clock ISR. This should only be called if there was
+    a real clock interrupt on the current processor. IPIs do not count and
+    should not run through this routine.
 
 Arguments:
 
@@ -633,92 +634,119 @@ Return Value:
 
     ULONGLONG ClockTicks;
     ULONGLONG CurrentTime;
-    ULONG Processor;
     PROCESSOR_SET Processors;
     TIMER_MODE SupportedMode;
 
     //
-    // Acknowledge the timer interrupt if it's a per-processor timer or this is
-    // P0.
+    // Always acknowledge the interrupt. A real clock interrupt came in on this
+    // processor and must be acknowledged.
     //
 
-    Processor = KeGetCurrentProcessorNumber();
-    if ((Processor == 0) ||
-        ((HlClockTimer->Features & TIMER_FEATURE_PER_PROCESSOR) != 0)) {
+    HlpTimerAcknowledgeInterrupt(HlClockTimer);
 
-        HlpTimerAcknowledgeInterrupt(HlClockTimer);
+    //
+    // If it's not a per-processor timer and this is P0, then the next hard
+    // deadline may require the timer to be rearmed differently and the clock
+    // interrupt needs to be broadcast to the other cores.
+    //
+
+    if (((HlClockTimer->Features & TIMER_FEATURE_PER_PROCESSOR) == 0) &&
+        (HlMaxProcessors > 1) &&
+        (KeGetCurrentProcessorNumber() == 0)) {
 
         //
-        // If it's not a per-processor timer, the next hard deadline may
-        // require the timer to be rearmed differently.
+        // If running in periodic mode with a hard deadline coming up, see if
+        // the timer needs to be rearmed.
         //
 
-        if (((HlClockTimer->Features & TIMER_FEATURE_PER_PROCESSOR) == 0) &&
-            (HlMaxProcessors > 1)) {
+        if ((HlClockMode == TimerModePeriodic) &&
+            (HlClockAnyHardDeadlines != FALSE)) {
 
-            //
-            // If running in periodic mode with a hard deadline coming up, see
-            // if the timer needs to be rearmed.
-            //
+            KeAcquireSpinLock(&HlClockDataLock);
+            CurrentTime = HlQueryTimeCounter();
+            if (CurrentTime + HlClockRateInTimeCounterTicks >
+                HlClockNextHardDeadline) {
 
-            if ((HlClockMode == TimerModePeriodic) &&
-                (HlClockAnyHardDeadlines != FALSE)) {
-
-                KeAcquireSpinLock(&HlClockDataLock);
-                CurrentTime = HlQueryTimeCounter();
-                if (CurrentTime + HlClockRateInTimeCounterTicks >
-                    HlClockNextHardDeadline) {
-
-                    if (CurrentTime > HlClockNextHardDeadline) {
-                        CurrentTime = HlClockNextHardDeadline;
-                    }
-
-                    ClockTicks = (HlClockNextHardDeadline - CurrentTime) *
-                                 HlClockTimer->CounterFrequency /
-                                 HlTimeCounter->CounterFrequency;
-
-                    SupportedMode = TimerModeOneShot;
-                    if ((HlClockTimer->Features &
-                         TIMER_FEATURE_ONE_SHOT) == 0) {
-
-                        SupportedMode = TimerModePeriodic;
-                    }
-
-                    HlpTimerArm(HlClockTimer, SupportedMode, ClockTicks);
-                    HlClockMode = TimerModeOneShot;
-                    HlClockLastProgrammedValue = ClockTicks;
-                    HlClockLastDueTime = HlClockNextHardDeadline;
+                if (CurrentTime > HlClockNextHardDeadline) {
+                    CurrentTime = HlClockNextHardDeadline;
                 }
 
-                KeReleaseSpinLock(&HlClockDataLock);
+                ClockTicks = (HlClockNextHardDeadline - CurrentTime) *
+                             HlClockTimer->CounterFrequency /
+                             HlTimeCounter->CounterFrequency;
 
-            //
-            // If the timer is in one-shot mode but there are periodic souls,
-            // go back to periodic. Whoever called for the one-shot should
-            // send down an updated mandate soon.
-            //
+                SupportedMode = TimerModeOneShot;
+                if ((HlClockTimer->Features &
+                     TIMER_FEATURE_ONE_SHOT) == 0) {
 
-            } else if ((HlClockMode == TimerModeOneShot) &&
-                       (HlClockAnyPeriodic != FALSE)) {
+                    SupportedMode = TimerModePeriodic;
+                }
 
-                KeAcquireSpinLock(&HlClockDataLock);
-                HlpTimerArm(HlClockTimer, TimerModePeriodic, HlClockRate);
-                HlClockMode = TimerModePeriodic;
-                HlClockLastProgrammedValue = HlClockRate;
-                HlClockLastDueTime = -1ULL;
-                KeReleaseSpinLock(&HlClockDataLock);
+                HlpTimerArm(HlClockTimer, SupportedMode, ClockTicks);
+                HlClockMode = TimerModeOneShot;
+                HlClockLastProgrammedValue = ClockTicks;
+                HlClockLastDueTime = HlClockNextHardDeadline;
             }
+
+            KeReleaseSpinLock(&HlClockDataLock);
+
+        //
+        // If the timer is in one-shot mode but there are periodic souls,
+        // go back to periodic. Whoever called for the one-shot should
+        // send down an updated mandate soon.
+        //
+
+        } else if ((HlClockMode == TimerModeOneShot) &&
+                   (HlClockAnyPeriodic != FALSE)) {
+
+            KeAcquireSpinLock(&HlClockDataLock);
+            HlpTimerArm(HlClockTimer, TimerModePeriodic, HlClockRate);
+            HlClockMode = TimerModePeriodic;
+            HlClockLastProgrammedValue = HlClockRate;
+            HlClockLastDueTime = -1ULL;
+            KeReleaseSpinLock(&HlClockDataLock);
+        }
+
+        //
+        // Broadcast the clock interrupt if needed.
+        //
+
+        if (HlBroadcastClockInterrupts != FALSE) {
+            Processors.Target = ProcessorTargetAllExcludingSelf;
+            HlSendIpi(IpiTypeClock, &Processors);
         }
     }
 
-    //
-    // Broadcast the clock interrupt if needed (and this is P0).
-    //
+    KeClockInterrupt();
+    return InterruptStatusClaimed;
+}
 
-    if ((Processor == 0) && (HlBroadcastClockInterrupts != FALSE)) {
-        Processors.Target = ProcessorTargetAllExcludingSelf;
-        HlSendIpi(IpiTypeClock, &Processors);
-    }
+INTERRUPT_STATUS
+HlpClockIpiHandler (
+    PVOID Context
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is the ISR for clock IPIs. The main difference being that it
+    does not need to acknowledge the clock interrupt in the hardware module as
+    this interrupt is software generated. The second difference is that it does
+    not need to broadcast the interrupt to other cores; that is only required
+    for real clock ticks.
+
+Arguments:
+
+    Context - Supplies a context pointer. Currently unused.
+
+Return Value:
+
+    Claimed always.
+
+--*/
+
+{
 
     KeClockInterrupt();
     return InterruptStatusClaimed;

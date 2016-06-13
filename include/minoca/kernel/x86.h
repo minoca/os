@@ -71,6 +71,7 @@ Author:
 #define VECTOR_DEBUG_SERVICE        0x21
 #define VECTOR_SYSTEM_CALL          0x2F
 #define VECTOR_CLOCK_INTERRUPT      0xD0
+#define VECTOR_CLOCK_IPI            0xD1
 #define VECTOR_IPI_INTERRUPT        0xE0
 #define VECTOR_TLB_IPI              0xE1
 #define VECTOR_PROFILER_INTERRUPT   0xF0

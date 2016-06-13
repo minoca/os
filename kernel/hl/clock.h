@@ -51,6 +51,29 @@ Return Value:
 
 --*/
 
+INTERRUPT_STATUS
+HlpClockIpiHandler (
+    PVOID Context
+    );
+
+/*++
+
+Routine Description:
+
+    This routine is the ISR for clock IPIs. The main difference being that it
+    does not need to acknowledge the clock interrupt in the hardware module as
+    this interrupt is software generated.
+
+Arguments:
+
+    Context - Supplies a context pointer. Currently unused.
+
+Return Value:
+
+    Claimed always.
+
+--*/
+
 KSTATUS
 HlpTimerInitializeClock (
     VOID
