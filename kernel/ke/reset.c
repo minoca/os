@@ -164,34 +164,35 @@ Return Value:
                       ProcessCount - 1);
 
         PsSignalAllProcesses(SIGNAL_KILL);
-    }
+        Timeout = KeGetRecentTimeCounter() +
+                  (Frequency * RESET_SYSTEM_PROCESS_SIGNAL_TIMEOUT);
 
-    Timeout = KeGetRecentTimeCounter() +
-              (Frequency * RESET_SYSTEM_PROCESS_SIGNAL_TIMEOUT);
+        //
+        // Wait for the number of processes to drop to one (just the kernel
+        // process).
+        //
 
-    //
-    // Wait for the number of processes to drop to one (just the kernel
-    // process).
-    //
+        do {
+            ProcessCount = PsGetProcessCount();
+            if (ProcessCount <= 1) {
+                break;
+            }
 
-    do {
+            KeDelayExecution(TRUE, FALSE, RESET_SYSTEM_SIGNAL_POLL_INTERVAL);
+
+        } while (KeGetRecentTimeCounter() <= Timeout);
+
         ProcessCount = PsGetProcessCount();
-        if (ProcessCount <= 1) {
-            break;
+        if (ProcessCount != 1) {
+            RtlDebugPrint("Warning: Still %d processes alive after kill "
+                          "signal!\n",
+                          ProcessCount - 1);
+
+            RtlDebugPrint("Data loss is possible. Proceeding with reset "
+                          "anyway.\n");
+
+            ASSERT(FALSE);
         }
-
-        KeDelayExecution(TRUE, FALSE, RESET_SYSTEM_SIGNAL_POLL_INTERVAL);
-
-    } while (KeGetRecentTimeCounter() <= Timeout);
-
-    ProcessCount = PsGetProcessCount();
-    if (ProcessCount != 1) {
-        RtlDebugPrint("Warning: Still %d processes alive after kill signal!\n",
-                      ProcessCount - 1);
-
-        RtlDebugPrint("Data loss is possible. Proceeding with reset anyway.\n");
-
-        ASSERT(FALSE);
     }
 
     Status = IoFlush(INVALID_HANDLE, 0, 0, FLUSH_FLAG_ALL_SYNCHRONOUS);
