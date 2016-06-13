@@ -422,7 +422,8 @@ Return Value:
         while (CurrentEntry != &HlTimers) {
             Timer = LIST_VALUE(CurrentEntry, HARDWARE_TIMER, ListEntry);
             CurrentEntry = CurrentEntry->Next;
-            if (((Timer->Features & TIMER_FEATURE_VARIANT) != 0) &&
+            if ((Timer->CounterBitWidth < 64) &&
+                ((Timer->Features & TIMER_FEATURE_VARIANT) != 0) &&
                 ((Timer->Features & TIMER_FEATURE_PER_PROCESSOR) != 0)) {
 
                 AllocationSize = ProcessorCount * sizeof(ULONGLONG);
@@ -733,7 +734,8 @@ Return Value:
 
     CounterArrayOffset = 0;
     AllocationSize = sizeof(HARDWARE_TIMER);
-    if (((TimerDescription->Features & TIMER_FEATURE_VARIANT) != 0) &&
+    if ((TimerDescription->CounterBitWidth < 64) &&
+        ((TimerDescription->Features & TIMER_FEATURE_VARIANT) != 0) &&
         ((TimerDescription->Features & TIMER_FEATURE_PER_PROCESSOR) != 0)) {
 
         ProcessorCount = HlGetMaximumProcessorCount();
