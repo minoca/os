@@ -126,8 +126,18 @@ Environment:
 // Define the status bitmask for the pending IRQ local register.
 //
 
-#define BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_IPI 0x00000010
-#define BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_GPU 0x00000100
+#define BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_CT_SECURE     0x00000001
+#define BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_CT_NON_SECURE 0x00000002
+#define BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_CT_HYPERVISOR 0x00000004
+#define BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_CT_VIRTUAL    0x00000008
+#define BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_IPI           0x00000010
+#define BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_GPU           0x00000100
+
+#define BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_CORE_TIMER_MASK   \
+    (BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_CT_SECURE |     \
+     BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_CT_NON_SECURE | \
+     BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_CT_HYPERVISOR | \
+     BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_CT_VIRTUAL)
 
 //
 // Define the number of software lines.
@@ -136,11 +146,34 @@ Environment:
 #define BCM2709_INTERRUPT_SOFTWARE_LINE_COUNT 32
 
 //
+// Define the base for the software lines.
+//
+
+#define BCM2709_INTERRUPT_SOFTWARE_LINE_BASE     \
+    (Bcm2709InterruptHardwareLineCount +         \
+     BCM2709_INTERRUPT_PER_PROCESSOR_LINE_COUNT)
+
+//
+// Define the number of per-processor interrupt lines.
+//
+
+#define BCM2709_INTERRUPT_PER_PROCESSOR_LINE_COUNT 32
+
+//
+// Define the base for the per-processor interrupt lines.
+//
+
+#define BCM2709_INTERRUPT_PER_PROCESSOR_LINE_BASE \
+    Bcm2709InterruptHardwareLineCount
+
+//
 // Define the total number of interrupt lines.
 //
 
-#define BCM2709_INTERRUPT_MAX_LINE_COUNT \
-    (Bcm2709InterruptHardwareLineCount + BCM2709_INTERRUPT_SOFTWARE_LINE_COUNT)
+#define BCM2709_INTERRUPT_MAX_LINE_COUNT         \
+    (Bcm2709InterruptHardwareLineCount +         \
+     BCM2709_INTERRUPT_SOFTWARE_LINE_COUNT +     \
+     BCM2709_INTERRUPT_PER_PROCESSOR_LINE_COUNT)
 
 //
 // Define the number of soft priorities implemented in the interrrupt
@@ -264,36 +297,37 @@ typedef enum _BCM2709_INTERRUPT_REGISTER {
 //
 
 typedef enum _BCM2836_LOCAL_REGISTER {
-    Bcm2709LocalTimerInterruptControlCpu0   = 0x40,
-    Bcm2709LocalTimerInterruptControlCpu1   = 0x44,
-    Bcm2709LocalTimerInterruptControlCpu2   = 0x48,
-    Bcm2709LocalTimerInterruptControlCpu4   = 0x4C,
-    Bcm2709LocalMailboxInterruptControl     = 0x50,
-    Bcm2709LocalMailboxInterruptControlCpu0 = 0x50,
-    Bcm2709LocalMailboxInterruptControlCpu1 = 0x54,
-    Bcm2709LocalMailboxInterruptControlCpu2 = 0x58,
-    Bcm2709LocalMailboxInterruptControlCpu3 = 0x5C,
-    Bcm2709LocalIrqPending                  = 0x60,
-    Bcm2709LocalIrqPendingCpu0              = 0x60,
-    Bcm2709LocalIrqPendingCpu1              = 0x64,
-    Bcm2709LocalIrqPendingCpu2              = 0x68,
-    Bcm2709LocalIrqPendingCpu3              = 0x6C,
-    Bcm2709LocalFiqPending                  = 0x70,
-    Bcm2709LocalFiqPendingCpu0              = 0x70,
-    Bcm2709LocalFiqPendingCpu1              = 0x74,
-    Bcm2709LocalFiqPendingCpu2              = 0x78,
-    Bcm2709LocalFiqPendingCpu3              = 0x7C,
-    Bcm2709LocalRequestIpi                  = 0x80,
-    Bcm2709LocalRequestIpiCpu0              = 0x80,
-    Bcm2709LocalRequestIpiCpu1              = 0x90,
-    Bcm2709LocalRequestIpiCpu2              = 0xA0,
-    Bcm2709LocalRequestIpiCpu3              = 0xB0,
-    Bcm2709LocalIpiPending                  = 0xC0,
-    Bcm2709LocalIpiPendingCpu0              = 0xC0,
-    Bcm2709LocalIpiPendingCpu1              = 0xD0,
-    Bcm2709LocalIpiPendingCpu2              = 0xE0,
-    Bcm2709LocalIpiPendingCpu3              = 0xF0,
-    Bcm2709LocalInterruptSize               = 0x100
+    Bcm2709LocalCoreTimerInterruptControl     = 0x40,
+    Bcm2709LocalCoreTimerInterruptControlCpu0 = 0x40,
+    Bcm2709LocalCoreTimerInterruptControlCpu1 = 0x44,
+    Bcm2709LocalCoreTimerInterruptControlCpu2 = 0x48,
+    Bcm2709LocalCoreTimerInterruptControlCpu4 = 0x4C,
+    Bcm2709LocalMailboxInterruptControl       = 0x50,
+    Bcm2709LocalMailboxInterruptControlCpu0   = 0x50,
+    Bcm2709LocalMailboxInterruptControlCpu1   = 0x54,
+    Bcm2709LocalMailboxInterruptControlCpu2   = 0x58,
+    Bcm2709LocalMailboxInterruptControlCpu3   = 0x5C,
+    Bcm2709LocalIrqPending                    = 0x60,
+    Bcm2709LocalIrqPendingCpu0                = 0x60,
+    Bcm2709LocalIrqPendingCpu1                = 0x64,
+    Bcm2709LocalIrqPendingCpu2                = 0x68,
+    Bcm2709LocalIrqPendingCpu3                = 0x6C,
+    Bcm2709LocalFiqPending                    = 0x70,
+    Bcm2709LocalFiqPendingCpu0                = 0x70,
+    Bcm2709LocalFiqPendingCpu1                = 0x74,
+    Bcm2709LocalFiqPendingCpu2                = 0x78,
+    Bcm2709LocalFiqPendingCpu3                = 0x7C,
+    Bcm2709LocalRequestIpi                    = 0x80,
+    Bcm2709LocalRequestIpiCpu0                = 0x80,
+    Bcm2709LocalRequestIpiCpu1                = 0x90,
+    Bcm2709LocalRequestIpiCpu2                = 0xA0,
+    Bcm2709LocalRequestIpiCpu3                = 0xB0,
+    Bcm2709LocalIpiPending                    = 0xC0,
+    Bcm2709LocalIpiPendingCpu0                = 0xC0,
+    Bcm2709LocalIpiPendingCpu1                = 0xD0,
+    Bcm2709LocalIpiPendingCpu2                = 0xE0,
+    Bcm2709LocalIpiPendingCpu3                = 0xF0,
+    Bcm2709LocalInterruptSize                 = 0x100
 } BCM2709_LOCAL_REGISTER, *PBCM2709_LOCAL_REGISTER;
 
 //
@@ -309,8 +343,19 @@ typedef enum _BCM2709_CPU_INTERRUPT_LINE {
     Bcm2709InterruptGpu1Halted        = 69,
     Bcm2709InterruptIllegalAccess1    = 70,
     Bcm2709InterruptIllegalAccess0    = 71,
-    Bcm2709InterruptHardwareLineCount = 72
+    Bcm2709InterruptHardwareLineCount = 96
 } BCM2709_CPU_INTERRUPT_LINE, *PBCM2709_CPU_INTERRUPT_LINE;
+
+//
+// Define the interrupt lines for the per-processor interrupts.
+//
+
+typedef enum _BCM2709_PPI_INTERRUPT_LINE {
+    Bcm2709PpiCoreTimerSecure     = 96,
+    Bcm2709PpiCoreTimerNonSecure  = 97,
+    Bcm2709PpiCoreTimerHypervisor = 98,
+    Bcm2709PpiCoreTimerVirtual    = 99,
+} BCM2709_PPI_INTERRUPT_LINE, *PBCM2709_PPI_INTERRUPT_LINE;
 
 /*++
 
@@ -329,8 +374,11 @@ Members:
     IrqMask2 - Stores the mask for all register 2 interrupts that operate at
         the priority level.
 
-    IrqMaskLocal - Stores the mask for all local interrupts that operate at the
-        priority level.
+    IrqMaskPpi - Stores the mask for all PPIs that operate at the priority
+        level.
+
+    IrqMaskSgi - Stores the mask for all SGIs that operate at the priority
+        level.
 
 --*/
 
@@ -338,7 +386,8 @@ typedef struct _BCM2709_INTERRUPT_MASK {
     ULONG IrqMaskBasic;
     ULONG IrqMask1;
     ULONG IrqMask2;
-    ULONG IrqMaskLocal;
+    ULONG IrqMaskPpi;
+    ULONG IrqMaskSgi;
 } BCM2709_INTERRUPT_MASK, *PBCM2709_INTERRUPT_MASK;
 
 /*++
@@ -910,7 +959,8 @@ Return Value:
     Controller->EnabledMask.IrqMaskBasic = 0;
     Controller->EnabledMask.IrqMask1 = 0;
     Controller->EnabledMask.IrqMask2 = 0;
-    Controller->EnabledMask.IrqMaskLocal = 0;
+    Controller->EnabledMask.IrqMaskPpi = 0;
+    Controller->EnabledMask.IrqMaskSgi = 0;
     for (Index = 0; Index < Controller->ProcessorCount; Index += 1) {
         Controller->Processor[Index].CurrentPriority = 0;
         Controller->Processor[Index].PendingIpis = 0;
@@ -1034,6 +1084,8 @@ Return Value:
     ULONG BasicMask;
     BOOL CheckGpu;
     PBCM2709_INTERRUPT_CONTROLLER Controller;
+    BOOL Disabled;
+    ULONG DisableMask;
     BOOL HandleInterrupt;
     ULONG Line;
     PBCM2709_INTERRUPT_MASK Mask;
@@ -1089,7 +1141,7 @@ Return Value:
                 //
 
                 Mask = &(Controller->Masks[Processor->CurrentPriority]);
-                if ((PendingIpi & Mask->IrqMaskLocal) != 0) {
+                if ((PendingIpi & Mask->IrqMaskSgi) != 0) {
                     Processor->PendingIpis |= PendingIpi;
                     return InterruptCauseSpuriousInterrupt;
                 }
@@ -1101,7 +1153,21 @@ Return Value:
 
                 CheckGpu = FALSE;
                 HandleInterrupt = TRUE;
-                Line += Bcm2709InterruptHardwareLineCount;
+                Line += BCM2709_INTERRUPT_SOFTWARE_LINE_BASE;
+            }
+
+        } else if ((PendingIrq &
+                    BCM2709_INTERRUPT_LOCAL_IRQ_PENDING_CORE_TIMER_MASK) != 0) {
+
+            PendingIrq = READ_LOCAL_REGISTER(
+                                         Bcm2709LocalCoreTimerInterruptControl,
+                                         ProcessorId);
+
+            if (PendingIrq != 0) {
+                Line = RtlCountTrailingZeros32(PendingIrq);
+                Line += BCM2709_INTERRUPT_PER_PROCESSOR_LINE_BASE;
+                CheckGpu = FALSE;
+                HandleInterrupt = TRUE;
             }
         }
     }
@@ -1169,13 +1235,12 @@ Return Value:
     }
 
     //
-    // If the interrupt came in on processor zero, then all interrupts
-    // configured at or below the current priority need to be disabled. This
-    // only happens on processor zero because IPIs cannot be individually
-    // disabled on the other cores and only processor zero gets non-IPI
-    // interrupts.
+    // Processor zero is the only core that receives interrupts that are not
+    // IPIs and PPIs. So, if this is processor 0, mask all of the interrupts
+    // at or below the firing line's priority level.
     //
 
+    Disabled = FALSE;
     Priority = Controller->LinePriority[Line];
     if (ProcessorId == 0) {
         Mask = &(Controller->Masks[Priority]);
@@ -1184,19 +1249,36 @@ Return Value:
 
         WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqDisable1, Mask->IrqMask1);
         WRITE_INTERRUPT_REGISTER(Bcm2709InterruptIrqDisable2, Mask->IrqMask2);
+        Disabled = TRUE;
+    }
 
-        //
-        // Now that the interrupt is disabled, if the firing interrupt's
-        // priority is less than the current priority, treat it as spurious.
-        // This can happen if another core enables an interrupt line while core
-        // zero is running at a higher priority. This spurious interrupt will
-        // be re-enabled when core zero lowers its priority. It should fire
-        // again at that point.
-        //
+    //
+    // If there is more than one core, then PPIs may be enabled. Disable all of
+    // the PPIs enabled at or below the firing line's priority level. IPIs
+    // cannot be disabled in the hardware, so even those are per-processor,
+    // they are treated separately.
+    //
 
-        if (Priority < Processor->CurrentPriority) {
-            return InterruptCauseSpuriousInterrupt;
-        }
+    if (Controller->ProcessorCount > 1) {
+        Mask = &(Controller->Masks[Priority]);
+        DisableMask = ~Mask->IrqMaskPpi & Controller->EnabledMask.IrqMaskPpi;
+        WRITE_LOCAL_REGISTER(Bcm2709LocalCoreTimerInterruptControl,
+                             ProcessorId,
+                             DisableMask);
+
+        Disabled = TRUE;
+    }
+
+    //
+    // Now that the interrupt is disabled, if the firing interrupt's priority
+    // is less than the current priority, treat it as spurious. This can happen
+    // if another core enables an interrupt line while core zero is running at
+    // a higher priority. This spurious interrupt will be re-enabled when core
+    // zero lowers its priority. It should fire again at that point.
+    //
+
+    if ((Disabled != FALSE) && (Priority < Processor->CurrentPriority)) {
+        return InterruptCauseSpuriousInterrupt;
     }
 
     //
@@ -1283,13 +1365,20 @@ Return Value:
     }
 
     //
-    // Check the local interrupt (IPI) mask on all cores to see if the lowering
-    // of the priority re-enables some IPIs. If there were any pending IPIs in
-    // the re-enabled set, replay those interrupts.
+    // Check the PPI and IPI masks on all cores to see if the lowering of the
+    // priority re-enables some per-processor interrupts. If there were any
+    // pending IPIs in the re-enabled set, replay those interrupts.
     //
 
     if (Controller->ProcessorCount > 1) {
-        EnableMask = ~Mask->IrqMaskLocal & Controller->EnabledMask.IrqMaskLocal;
+        EnableMask = ~Mask->IrqMaskPpi & Controller->EnabledMask.IrqMaskPpi;
+        if (EnableMask != 0) {
+            WRITE_LOCAL_REGISTER(Bcm2709LocalCoreTimerInterruptControl,
+                                 ProcessorId,
+                                 EnableMask);
+        }
+
+        EnableMask = ~Mask->IrqMaskSgi & Controller->EnabledMask.IrqMaskSgi;
         if (EnableMask != 0) {
             Processor = &(Controller->Processor[ProcessorId]);
             PendingIpis = EnableMask & Processor->PendingIpis;
@@ -1354,7 +1443,7 @@ Return Value:
     // will probably have to be added when deep power management comes online.
     //
 
-    if (Line->U.Local.Line < Bcm2709InterruptHardwareLineCount) {
+    if (Line->U.Local.Line < BCM2709_INTERRUPT_SOFTWARE_LINE_BASE) {
         Status = STATUS_NOT_IMPLEMENTED;
         goto Bcm2709InterruptRequestInterruptEnd;
     }
@@ -1402,8 +1491,8 @@ Return Value:
         goto Bcm2709InterruptRequestInterruptEnd;
     }
 
-    InterruptValue = 1 <<
-                     (Line->U.Local.Line - Bcm2709InterruptHardwareLineCount);
+    InterruptValue =
+              1 << (Line->U.Local.Line - BCM2709_INTERRUPT_SOFTWARE_LINE_BASE);
 
     //
     // Write the command out to the software interrupt register for each
@@ -1469,7 +1558,7 @@ Return Value:
 
     Line.Type = InterruptLineControllerSpecified;
     Line.U.Local.Controller = 0;
-    Line.U.Local.Line = Bcm2709InterruptHardwareLineCount;
+    Line.U.Local.Line = BCM2709_INTERRUPT_SOFTWARE_LINE_BASE;
     Target.Addressing = InterruptAddressingPhysical;
     Target.U.PhysicalId = Identifier;
     Status = HlpBcm2709InterruptRequestInterrupt(Context, &Line, 0, &Target);
@@ -1519,6 +1608,7 @@ Return Value:
     ULONG LineNumber;
     BOOL LocalInterrupt;
     BCM2709_INTERRUPT_MASK Mask;
+    BOOL PpiInterrupt;
     UCHAR Priority;
     BCM2709_INTERRUPT_REGISTER Register;
     ULONG RegisterValue;
@@ -1545,6 +1635,7 @@ Return Value:
 
     RtlZeroMemory(&Mask, sizeof(BCM2709_INTERRUPT_MASK));
     LocalInterrupt = FALSE;
+    PpiInterrupt = FALSE;
 
     //
     // If the line is a GPU line, then determine which of the two
@@ -1607,13 +1698,24 @@ Return Value:
         Mask.IrqMaskBasic |= RegisterValue;
 
     //
+    // If this is a per-processor interrupt, prepare to enable/disable on each
+    // core.
+    //
+
+    } else if (LineNumber < BCM2709_INTERRUPT_SOFTWARE_LINE_BASE) {
+        PpiInterrupt = TRUE;
+        Register = Bcm2709LocalCoreTimerInterruptControl;
+        Shift = LineNumber - BCM2709_INTERRUPT_PER_PROCESSOR_LINE_BASE;
+        Mask.IrqMaskPpi |= 1 << Shift;
+
+    //
     // Otherwise this is a software interrupt.
     //
 
     } else {
         LocalInterrupt = TRUE;
-        Shift = LineNumber - Bcm2709InterruptHardwareLineCount;
-        Mask.IrqMaskLocal |= 1 << Shift;
+        Shift = LineNumber - BCM2709_INTERRUPT_SOFTWARE_LINE_BASE;
+        Mask.IrqMaskSgi |= 1 << Shift;
     }
 
     //
@@ -1625,7 +1727,8 @@ Return Value:
         Controller->EnabledMask.IrqMaskBasic |= Mask.IrqMaskBasic;
         Controller->EnabledMask.IrqMask1 |= Mask.IrqMask1;
         Controller->EnabledMask.IrqMask2 |= Mask.IrqMask2;
-        Controller->EnabledMask.IrqMaskLocal |= Mask.IrqMaskLocal;
+        Controller->EnabledMask.IrqMaskPpi |= Mask.IrqMaskPpi;
+        Controller->EnabledMask.IrqMaskSgi |= Mask.IrqMaskSgi;
         Priority = State->HardwarePriority;
         Controller->LinePriority[LineNumber] = Priority;
 
@@ -1640,17 +1743,39 @@ Return Value:
             Controller->Masks[Index].IrqMaskBasic |= Mask.IrqMaskBasic;
             Controller->Masks[Index].IrqMask1 |= Mask.IrqMask1;
             Controller->Masks[Index].IrqMask2 |= Mask.IrqMask2;
-            Controller->Masks[Index].IrqMaskLocal |= Mask.IrqMaskLocal;
+            Controller->Masks[Index].IrqMaskPpi |= Mask.IrqMaskPpi;
+            Controller->Masks[Index].IrqMaskSgi |= Mask.IrqMaskSgi;
         }
     }
 
     //
     // Change the state of the interrupt based on the register and the value
-    // determined above. This is nothing to do for local interrupts.
+    // determined above. There is nothing to do for IPIs, but for regular PPIs
+    // the interrupt must be enabled/disabled on each core.
     //
 
     if (LocalInterrupt == FALSE) {
-        WRITE_INTERRUPT_REGISTER(Register, RegisterValue);
+        if (PpiInterrupt == FALSE) {
+            WRITE_INTERRUPT_REGISTER(Register, RegisterValue);
+
+        } else {
+            for (Index = 0; Index < Controller->ProcessorCount; Index += 1) {
+                RegisterValue = READ_LOCAL_REGISTER(
+                                         Bcm2709LocalCoreTimerInterruptControl,
+                                         Index);
+
+                if ((State->Flags & INTERRUPT_LINE_STATE_FLAG_ENABLED) == 0) {
+                    RegisterValue &= ~Mask.IrqMaskPpi;
+
+                } else {
+                    RegisterValue |= Mask.IrqMaskPpi;
+                }
+
+                WRITE_LOCAL_REGISTER(Bcm2709LocalCoreTimerInterruptControl,
+                                     Index,
+                                     RegisterValue);
+            }
+        }
     }
 
     //
@@ -1662,7 +1787,8 @@ Return Value:
         Controller->EnabledMask.IrqMaskBasic &= ~Mask.IrqMaskBasic;
         Controller->EnabledMask.IrqMask1 &= ~Mask.IrqMask1;
         Controller->EnabledMask.IrqMask2 &= ~Mask.IrqMask2;
-        Controller->EnabledMask.IrqMaskLocal &= ~Mask.IrqMaskLocal;
+        Controller->EnabledMask.IrqMaskPpi &= ~Mask.IrqMaskPpi;
+        Controller->EnabledMask.IrqMaskSgi &= ~Mask.IrqMaskSgi;
 
         //
         // Remove the mask for this interrupt at any priority.
@@ -1675,7 +1801,8 @@ Return Value:
             Controller->Masks[Index].IrqMaskBasic &= ~Mask.IrqMaskBasic;
             Controller->Masks[Index].IrqMask1 &= ~Mask.IrqMask1;
             Controller->Masks[Index].IrqMask2 &= ~Mask.IrqMask2;
-            Controller->Masks[Index].IrqMaskLocal &= ~Mask.IrqMaskLocal;
+            Controller->Masks[Index].IrqMaskPpi &= ~Mask.IrqMaskPpi;
+            Controller->Masks[Index].IrqMaskSgi &= ~Mask.IrqMaskSgi;
         }
     }
 
@@ -1719,67 +1846,95 @@ Return Value:
 
 {
 
+    PBCM2709_INTERRUPT_CONTROLLER Controller;
+    ULONG Index;
     ULONG LineNumber;
+    ULONG Mask;
     BCM2709_INTERRUPT_REGISTER Register;
     ULONG RegisterValue;
     ULONG Shift;
 
+    Controller = (PBCM2709_INTERRUPT_CONTROLLER)Context;
     LineNumber = Line->U.Local.Line;
 
     //
-    // Masking software lines is not allowed.
+    // Handle GPU interrupts.
     //
 
-    if (LineNumber >= Bcm2709InterruptHardwareLineCount) {
-        return;
-    }
+    if (LineNumber < Bcm2709InterruptHardwareLineCount) {
 
-    //
-    // If the line is a GPU line, then determine which of the two
-    // disable/enable registers it belongs to.
-    //
+        //
+        // If the line is a GPU line, then determine which of the two
+        // disable/enable registers it belongs to.
+        //
 
-    if (LineNumber < BCM2709_INTERRUPT_GPU_LINE_COUNT) {
-        Shift = LineNumber;
-        if (LineNumber >= 32) {
-            Shift -= 32;
-        }
-
-        RegisterValue = 1 << Shift;
-        if (Enable == FALSE) {
-            if (LineNumber < 32) {
-                Register = Bcm2709InterruptIrqDisable1;
-
-            } else {
-                Register = Bcm2709InterruptIrqDisable2;
+        if (LineNumber < BCM2709_INTERRUPT_GPU_LINE_COUNT) {
+            Shift = LineNumber;
+            if (LineNumber >= 32) {
+                Shift -= 32;
             }
 
-        } else {
-            if (LineNumber < 32) {
-                Register = Bcm2709InterruptIrqEnable1;
+            RegisterValue = 1 << Shift;
+            if (Enable == FALSE) {
+                if (LineNumber < 32) {
+                    Register = Bcm2709InterruptIrqDisable1;
+
+                } else {
+                    Register = Bcm2709InterruptIrqDisable2;
+                }
 
             } else {
-                Register = Bcm2709InterruptIrqEnable2;
+                if (LineNumber < 32) {
+                    Register = Bcm2709InterruptIrqEnable1;
+
+                } else {
+                    Register = Bcm2709InterruptIrqEnable2;
+                }
+            }
+
+        //
+        // Otherwise the interrupt belongs to the basic enable and disable
+        // registers.
+        //
+
+        } else {
+            Shift = LineNumber - BCM2709_INTERRUPT_GPU_LINE_COUNT;
+            RegisterValue = 1 << Shift;
+            if (Enable == FALSE) {
+                Register = Bcm2709InterruptIrqDisableBasic;
+
+            } else {
+                Register = Bcm2709InterruptIrqEnableBasic;
             }
         }
 
+        WRITE_INTERRUPT_REGISTER(Register, RegisterValue);
+
     //
-    // Otherwise the interrupt belongs to the basic enable and disable
-    // registers.
+    // Handle per-processor interrupts.
     //
 
-    } else {
-        Shift = LineNumber - BCM2709_INTERRUPT_GPU_LINE_COUNT;
-        RegisterValue = 1 << Shift;
-        if (Enable == FALSE) {
-            Register = Bcm2709InterruptIrqDisableBasic;
+    } else if (LineNumber < BCM2709_INTERRUPT_SOFTWARE_LINE_BASE) {
+        LineNumber -= BCM2709_INTERRUPT_PER_PROCESSOR_LINE_BASE;
+        Mask = 1 << LineNumber;
+        for (Index = 0; Index < Controller->ProcessorCount; Index += 1) {
+            RegisterValue = READ_LOCAL_REGISTER(
+                                         Bcm2709LocalCoreTimerInterruptControl,
+                                         Index);
 
-        } else {
-            Register = Bcm2709InterruptIrqEnableBasic;
+            if (Enable == FALSE) {
+                RegisterValue &= ~Mask;
+
+            } else {
+                RegisterValue |= Mask;
+            }
+
+            WRITE_LOCAL_REGISTER(Bcm2709LocalCoreTimerInterruptControl,
+                                 Index,
+                                 RegisterValue);
         }
     }
 
-    WRITE_INTERRUPT_REGISTER(Register, RegisterValue);
     return;
 }
 
@@ -1894,9 +2049,28 @@ Return Value:
     }
 
     //
+    // Describe the per-processor interrupt lines.
+    //
+
+    ASSERT(Lines.LineEnd == BCM2709_INTERRUPT_PER_PROCESSOR_LINE_BASE);
+
+    Lines.Type = InterruptLinesProcessorLocal;
+    Lines.LineStart = Lines.LineEnd;
+    Lines.LineEnd = Lines.LineStart +
+                    BCM2709_INTERRUPT_PER_PROCESSOR_LINE_COUNT;
+
+    Lines.Gsi = Lines.Gsi + Bcm2709InterruptHardwareLineCount;
+    Status = HlRegisterHardware(HardwareModuleInterruptLines, &Lines);
+    if (!KSUCCESS(Status)) {
+        goto Bcm2709InterruptDescribeLinesEnd;
+    }
+
+    //
     // Describe the SGIs. These are fake and actually tied up to GSI 100 for
     // the ARM local mailbox 0, but that particular mailbox can express 32 bits.
     //
+
+    ASSERT(Lines.LineEnd == BCM2709_INTERRUPT_SOFTWARE_LINE_BASE);
 
     Lines.Type = InterruptLinesSoftwareOnly;
     Lines.LineStart = Lines.LineEnd;

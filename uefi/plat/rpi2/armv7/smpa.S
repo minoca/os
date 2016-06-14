@@ -145,16 +145,25 @@ FUNCTION EfipBcm2836SwitchToSvcMode
     ##
 
     mrs     %r0, CPSR
-    and     %r0, %r0, #ARM_MODE_MASK
-    cmp     %r0, #ARM_MODE_HYP
+    and     %r1, %r0, #ARM_MODE_MASK
+    cmp     %r1, #ARM_MODE_HYP
     bne     EfipBcm2836SwitchToSvcModeEnd
+
+    ##
+    ## While in HYP mode, zero out the Generic Timer's virtual offset. Assume
+    ## that if the core is not in HYP mode that some other source appropriately
+    ## set the virtual offset.
+    ##
+
+    mov     %r2, #0
+    mov     %r3, #0
+    mcrr    p15, 4, %r2, %r3, %c14
 
     ##
     ## Trasition to SVC mode with the ERET.
     ##
 
     msr     ELR_hyp, %lr
-    mrs     %r0, CPSR
     and     %r0, %r0, #~(ARM_MODE_MASK)
     orr     %r0, %r0, #ARM_MODE_SVC
     msr     SPSR_hyp, %r0
@@ -166,8 +175,8 @@ EfipBcm2836SwitchToSvcModeEnd:
     ## The core was not in HYP mode. Switch to SVC mode the easy way.
     ##
 
-    mov     %r2, #(PSR_FLAG_IRQ | ARM_MODE_SVC)
-    msr     CPSR_c, %r2
+    mov     %r0, #(PSR_FLAG_IRQ | ARM_MODE_SVC)
+    msr     CPSR_c, %r0
     bx      %lr
 
 END_FUNCTION EfipBcm2836SwitchToSvcMode

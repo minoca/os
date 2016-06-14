@@ -26,7 +26,8 @@ function build() {
         "dbg2.asl",
         "dsdt.asl",
         "facp.asl",
-        "facs.asl"
+        "facs.asl",
+        "gtdt.asl"
     ];
 
     asl = compiled_asl(sources);

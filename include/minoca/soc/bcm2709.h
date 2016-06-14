@@ -410,6 +410,22 @@ Author:
 #define BCM2836_LOCAL_BASE 0x40000000
 
 //
+// Define the core timer register addresses.
+//
+
+#define BCM2836_CORE_TIMER_CONTROL    (BCM2836_LOCAL_BASE + 0x00)
+#define BCM2836_CORE_TIMER_PRE_SCALER (BCM2836_LOCAL_BASE + 0x08)
+
+//
+// Define the bits for the core timer control register.
+//
+
+#define BCM2836_CORE_TIMER_CONTROL_INCREMENT_BY_2 0x00000200
+#define BCM2836_CORE_TIMER_CONTROL_INCREMENT_BY_1 0x00000000
+#define BCM2836_CORE_TIMER_CONTROL_APB_CLOCK      0x00000100
+#define BCM2836_CORE_TIMER_CONTROL_CRYSTAL_CLOCK  0x00000000
+
+//
 // Define the timer interrupt control registers for each CPU.
 //
 

@@ -49,6 +49,7 @@ OBJS += debug.o              \
 
 ARMV7_OBJS = armv7/entry.o  \
              armv7/smpa.o   \
+             armv7/timera.o \
 
 TEXT_ADDRESS = 0x00008000
 

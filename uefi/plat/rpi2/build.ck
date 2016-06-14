@@ -26,6 +26,7 @@ function build() {
     sources = [
         "armv7/entry.S",
         "armv7/smpa.S",
+        "armv7/timera.S",
         "debug.c",
         "fwvol.c",
         "intr.c",

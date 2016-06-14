@@ -1595,6 +1595,7 @@ Return Value:
 {
 
     PINTERRUPT_CONTROLLER Controller;
+    ULONG HardwarePriority;
     BOOL InterruptEnabled;
     ULONG LineOffset;
     PINTERRUPT_LINES Lines;
@@ -1681,11 +1682,11 @@ Return Value:
                                             ~INTERRUPT_LINE_STATE_FLAG_ENABLED;
 
         Status = Controller->FunctionTable.SetLineState(
-                                  Controller->PrivateContext,
-                                  &SourceLine,
-                                  &(Lines->State[LineOffset].PublicState),
-                                  ResourceData,
-                                  ResourceDataSize);
+                                       Controller->PrivateContext,
+                                       &SourceLine,
+                                       &(Lines->State[LineOffset].PublicState),
+                                       ResourceData,
+                                       ResourceDataSize);
 
         if (!KSUCCESS(Status)) {
             goto InterruptSetLineStateEnd;
@@ -1699,10 +1700,10 @@ Return Value:
     }
 
     //
-    // If this is a primary interrupt controller (like the APIC or the
-    // GIC), then the run-level is a function of the vector. If this is a
-    // secondary interrupt controller, then this interrupt comes in at the
-    // same run-level as its parent.
+    // If this is a primary interrupt controller (like the APIC or the GIC),
+    // then the run-level is a function of the vector. If this is a secondary
+    // interrupt controller, then this interrupt comes in at the same run-level
+    // as its parent.
     //
 
     if (Controller->RunLevel == RunLevelCount) {
@@ -1755,16 +1756,16 @@ Return Value:
     Lines->State[LineOffset].PublicState.Mode = State->Mode;
     Lines->State[LineOffset].PublicState.Polarity = State->Polarity;
     Lines->State[LineOffset].Flags |=
-                               INTERRUPT_LINE_INTERNAL_STATE_FLAG_RESERVED;
+                                   INTERRUPT_LINE_INTERNAL_STATE_FLAG_RESERVED;
 
     //
     // Figure out the output pin this interrupt line should go to.
     //
 
     Status = HlpInterruptDetermineRouting(
-                           Controller,
-                           &(State->Output),
-                           &(Lines->State[LineOffset].PublicState.Output));
+                               Controller,
+                               &(State->Output),
+                               &(Lines->State[LineOffset].PublicState.Output));
 
     if (!KSUCCESS(Status)) {
         goto InterruptSetLineStateEnd;
@@ -1776,8 +1777,8 @@ Return Value:
     //
 
     Status = HlpInterruptConvertProcessorSetToInterruptTarget(
-                           Target,
-                           &(Lines->State[LineOffset].PublicState.Target));
+                               Target,
+                               &(Lines->State[LineOffset].PublicState.Target));
 
     if (!KSUCCESS(Status)) {
         goto InterruptSetLineStateEnd;
@@ -1788,21 +1789,22 @@ Return Value:
     // (inferred from the vector).
     //
 
-    Lines->State[LineOffset].PublicState.HardwarePriority =
-                        HlpInterruptConvertRunLevelToHardwarePriority(
-                                                      Controller,
-                                                      Interrupt->RunLevel);
+    HardwarePriority = HlpInterruptConvertRunLevelToHardwarePriority(
+                                                          Controller,
+                                                          Interrupt->RunLevel);
+
+    Lines->State[LineOffset].PublicState.HardwarePriority = HardwarePriority;
 
     //
     // Program the line state.
     //
 
     Status = Controller->FunctionTable.SetLineState(
-                                  Controller->PrivateContext,
-                                  &SourceLine,
-                                  &(Lines->State[LineOffset].PublicState),
-                                  ResourceData,
-                                  ResourceDataSize);
+                                       Controller->PrivateContext,
+                                       &SourceLine,
+                                       &(Lines->State[LineOffset].PublicState),
+                                       ResourceData,
+                                       ResourceDataSize);
 
     if (!KSUCCESS(Status)) {
         goto InterruptSetLineStateEnd;
@@ -1816,7 +1818,7 @@ Return Value:
     ModifiedState = FALSE;
 
     ASSERT(Lines->State[LineOffset].PublicState.Output.Type ==
-                                         InterruptLineControllerSpecified);
+           InterruptLineControllerSpecified);
 
     Status = STATUS_SUCCESS;
 

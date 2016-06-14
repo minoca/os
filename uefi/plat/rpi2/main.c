@@ -38,6 +38,18 @@ Environment:
 #define FIRMWARE_IMAGE_NAME "rpi2fw.elf"
 
 //
+// Define the core timer's crystal clock frequency: 19.2 MHz.
+//
+
+#define BCM2836_CORE_TIMER_CRYSTAL_CLOCK_FREQUENCY 19200000
+
+//
+// Define the maximum pre-scaler value.
+//
+
+#define BCM2836_CORE_TIMER_MAX_PRE_SCALER 0x80000000
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
@@ -80,7 +92,17 @@ EfipBcm2836InitializeArmClock (
     );
 
 EFI_STATUS
-EfiBcm2836InitializeApbClock (
+EfipBcm2836InitializeApbClock (
+    VOID
+    );
+
+EFI_STATUS
+EfipBcm2836InitializeCoreTimerClock (
+    VOID
+    );
+
+UINT32
+EfipBcm2836GetGtFrequency (
     VOID
     );
 
@@ -269,7 +291,12 @@ Return Value:
             goto PlatformInitializeEnd;
         }
 
-        Status = EfiBcm2836InitializeApbClock();
+        Status = EfipBcm2836InitializeApbClock();
+        if (EFI_ERROR(Status)) {
+            goto PlatformInitializeEnd;
+        }
+
+        Status = EfipBcm2836InitializeCoreTimerClock();
         if (EFI_ERROR(Status)) {
             goto PlatformInitializeEnd;
         }
@@ -442,7 +469,7 @@ Return Value:
 }
 
 EFI_STATUS
-EfiBcm2836InitializeApbClock (
+EfipBcm2836InitializeApbClock (
     VOID
     )
 
@@ -508,5 +535,65 @@ Return Value:
 
 InitializeApbClockEnd:
     return Status;
+}
+
+EFI_STATUS
+EfipBcm2836InitializeCoreTimerClock (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine initializes the ARM core's timer clock. This backs the ARM
+    Generic Timer.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    EFI status code.
+
+--*/
+
+{
+
+    UINT32 Divider;
+    UINT32 Frequency;
+    UINT32 PreScaler;
+    UINT32 TimerControl;
+
+    //
+    // Use the 19.2 MHz crystal clock to back the ARM Generic Timer.
+    //
+
+    TimerControl = BCM2836_CORE_TIMER_CONTROL_INCREMENT_BY_1 |
+                   BCM2836_CORE_TIMER_CONTROL_CRYSTAL_CLOCK;
+
+    EfiWriteRegister32((VOID*)BCM2836_CORE_TIMER_CONTROL, TimerControl);
+
+    //
+    // Get the programmed frequency and try to match the pre-scaler so the
+    // clock runs at the targeted frequency.
+    //
+
+    Frequency = EfipBcm2836GetGtFrequency();
+    if (Frequency > BCM2836_CORE_TIMER_CRYSTAL_CLOCK_FREQUENCY) {
+        return EFI_UNSUPPORTED;
+    }
+
+    //
+    // The frequency is obtained by dividing 19.2 MHz by the divider. The
+    // divider is obtained by dividing 2^31 by the pre-scaler. Determine the
+    // appropriate pre-scaler for the frequency.
+    //
+
+    Divider = BCM2836_CORE_TIMER_CRYSTAL_CLOCK_FREQUENCY / Frequency;
+    PreScaler = BCM2836_CORE_TIMER_MAX_PRE_SCALER / Divider;
+    EfiWriteRegister32((VOID*)BCM2836_CORE_TIMER_PRE_SCALER, PreScaler);
+    return EFI_SUCCESS;
 }
 
