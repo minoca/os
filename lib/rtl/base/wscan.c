@@ -1513,7 +1513,7 @@ Return Value:
                 break;
             }
 
-            Value -= L'A' - 0xA;
+            Character -= L'A' - 0xA;
 
         //
         // Or it could be something entirely different, in which case the
@@ -1533,6 +1533,7 @@ Return Value:
             Status = STATUS_INTEGER_OVERFLOW;
         }
 
+        Value = NewValue;
         ValidCharacterFound = TRUE;
         CharacterCount += 1;
         FieldSize -= 1;

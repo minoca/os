@@ -54,7 +54,7 @@ Environment:
                          0x12345678ABCDDCBAULL, 'h', "ello %s there!", \
                          'X', "str", 0x123456789ABCDEF0ULL
 
-#define FORMATTED_STRING_RESULT "10203.+0x8888432a. 7 0     #-0012   " \
+#define FORMATTED_STRING_RESULT "10203.+0x8888432a. 07 0     #-0012   " \
                                 "+0xABCD\n" \
                                 "12345678ABCDDCBAhello %s there!" \
                                 "X            str%123456789abcdef0"
@@ -153,7 +153,7 @@ Environment:
                               0x12345678ABCDDCBAULL, L'h', L"ello %s there!", \
                               L'X', L"str", 0x123456789ABCDEF0ULL
 
-#define FORMATTED_STRING_RESULT_WIDE L"10203.+0x8888432a. 7 0     #-0012   " \
+#define FORMATTED_STRING_RESULT_WIDE L"10203.+0x8888432a. 07 0     #-0012   " \
                                      L"+0xABCD\n" \
                                      L"12345678ABCDDCBAhello %s there!" \
                                      L"X            str%123456789abcdef0"

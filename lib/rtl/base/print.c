@@ -1302,17 +1302,25 @@ Return Value:
         PrefixSize += 1;
     }
 
-    if ((Properties->PrintRadix != FALSE) && (Properties->Radix == 16)) {
-        Prefix[PrefixSize] = '0';
-        PrefixSize += 1;
-        if (Properties->PrintUpperCase != 0) {
-            Prefix[PrefixSize] = 'X';
+    if (Properties->PrintRadix != FALSE) {
+        if (Properties->Radix == 8) {
+            if (LocalBuffer[0] != '0') {
+                Prefix[PrefixSize] = '0';
+                PrefixSize += 1;
+            }
 
-        } else {
-            Prefix[PrefixSize] = 'x';
+        } else if (Properties->Radix == 16) {
+            Prefix[PrefixSize] = '0';
+            PrefixSize += 1;
+            if (Properties->PrintUpperCase != 0) {
+                Prefix[PrefixSize] = 'X';
+
+            } else {
+                Prefix[PrefixSize] = 'x';
+            }
+
+            PrefixSize += 1;
         }
-
-        PrefixSize += 1;
     }
 
     //
