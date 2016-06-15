@@ -700,7 +700,7 @@ Return Value:
             Base = 10;
         }
 
-        *Value = strtoll(State->String, (PCHAR *)&CurrentPosition, Base);
+        *Value = strtoull(State->String, (PCHAR *)&CurrentPosition, Base);
         if (CurrentPosition == State->String) {
             Result = EINVAL;
             goto GetNextTokenEnd;
