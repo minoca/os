@@ -2194,7 +2194,6 @@ Return Value:
             ASSERT(RenameRequest.SourceFileHardLinkDelta == (ULONG)-1);
 
             IopFileObjectDecrementHardLinkCount(SourceFileObject);
-            IopPathUnlink(SourcePathPoint.PathEntry);
             IopUpdateFileObjectTime(SourceDirectoryFileObject,
                                     FileObjectModifiedTime);
         }
@@ -2207,7 +2206,6 @@ Return Value:
     //
 
     } else if (KSUCCESS(Status)) {
-        IopPathUnlink(SourcePathPoint.PathEntry);
 
         //
         // Also update the size of the destination directory.
@@ -2237,6 +2235,10 @@ RenameEnd:
             KeReleaseSharedExclusiveLockExclusive(
                                          DestinationDirectoryFileObject->Lock);
         }
+    }
+
+    if (KSUCCESS(Status)) {
+        IopPathCleanCache(SourcePathPoint.PathEntry);
     }
 
     if (SourcePathPoint.PathEntry != NULL) {
