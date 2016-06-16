@@ -2940,6 +2940,7 @@ Return Value:
     DEBUG_PACKET_HEADER Acknowledge;
     USHORT Checksum;
     ULONG HeaderSize;
+    UCHAR Payload;
     ULONG Retries;
     BOOL Status;
     BOOL TimeoutOccurred;
@@ -2977,11 +2978,20 @@ Return Value:
                                            5000,
                                            &TimeoutOccurred);
 
-        if ((Status != FALSE) &&
-            (Acknowledge.Command == DbgPacketAcknowledge)) {
+        if (Status != FALSE) {
+            if (Acknowledge.Command == DbgPacketAcknowledge) {
+                Status = TRUE;
+                break;
 
-            Status = TRUE;
-            break;
+            } else {
+                while (Acknowledge.PayloadSize != 0) {
+                    if (DbgpKdReceiveBytes(&Payload, 1) == FALSE) {
+                        break;
+                    }
+
+                    Acknowledge.PayloadSize -= 1;
+                }
+            }
         }
 
         //
@@ -2990,6 +3000,9 @@ Return Value:
 
         Retries -= 1;
         Status = FALSE;
+        if (DbgpKdSynchronize() != 0) {
+            break;
+        }
     }
 
     return Status;

@@ -1019,6 +1019,7 @@ Return Value:
     BOOL SingleStepHandled;
     KSTATUS Status;
 
+    BreakInRequested = FALSE;
     PreviousSingleStepAddress = NULL;
     ProcessorBlock = NULL;
     SingleStepHandled = FALSE;
@@ -1186,10 +1187,8 @@ Return Value:
 
     } else if (Exception == EXCEPTION_PRINT) {
         KD_TRACE(KdTracePrinting);
-        Status = KdpPrint((PPRINT_PARAMETERS)Parameter, &BreakInRequested);
-        if ((KSUCCESS(Status) && (BreakInRequested == FALSE)) ||
-            (!KSUCCESS(Status))) {
-
+        KdpPrint((PPRINT_PARAMETERS)Parameter, &BreakInRequested);
+        if (BreakInRequested == FALSE) {
             goto DebugExceptionHandlerEnd;
         }
 
@@ -1202,10 +1201,8 @@ Return Value:
 
     } else if (Exception == EXCEPTION_PROFILER) {
         KD_TRACE(KdTraceSendingProfilingData);
-        Status = KdpSendProfilingData(&BreakInRequested);
-        if ((KSUCCESS(Status) && (BreakInRequested == FALSE)) ||
-            (!KSUCCESS(Status))) {
-
+        KdpSendProfilingData(&BreakInRequested);
+        if (BreakInRequested == FALSE) {
             goto DebugExceptionHandlerEnd;
         }
 
