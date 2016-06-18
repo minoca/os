@@ -296,7 +296,7 @@
         {
             "name": "Make Python",
             "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/Python-2.7.5"
+            "parameter": "src/os/tasks/build/make.sh third-party/build/Python-2.7.11"
         },
         {
             "name": "Make openssh",
@@ -387,6 +387,16 @@
             "name": "Make dejagnu",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/dejagnu-1.6"
+        },
+        {
+            "name": "Make python-setuptools",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/setuptools-23.0.0"
+        },
+        {
+            "name": "Make python-pip",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/pip-8.1.2"
         },
         {
             "name": "Setup Distribution",
