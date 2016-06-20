@@ -1725,6 +1725,10 @@ Return Value:
     //
 
     if ((Cluster < FAT_CLUSTER_BEGIN) || (Cluster >= FatVolume->ClusterBad)) {
+
+        ASSERT((FileNameSize != 3) ||
+               (RtlAreStringsEqual(FileName, "..", FileNameSize) == FALSE));
+
         Status = FatpAllocateClusterForEmptyFile(Volume,
                                                  &DirectoryContext,
                                                  DirectoryFileId,
@@ -3121,12 +3125,14 @@ Return Value:
            (NewProperties->Type == IoObjectSymbolicLink) ||
            ((DirectoryEntry.FileAttributes & FAT_SUBDIRECTORY) != 0));
 
-    READ_INT64_SYNC(&(NewProperties->FileSize), &FileSize);
-    if (FileSize > MAX_ULONG) {
-        DirectoryEntry.FileSizeInBytes = MAX_ULONG;
+    if ((DirectoryEntry.FileAttributes & FAT_SUBDIRECTORY) == 0) {
+        READ_INT64_SYNC(&(NewProperties->FileSize), &FileSize);
+        if (FileSize > MAX_ULONG) {
+            DirectoryEntry.FileSizeInBytes = MAX_ULONG;
 
-    } else {
-        DirectoryEntry.FileSizeInBytes = (ULONG)FileSize;
+        } else {
+            DirectoryEntry.FileSizeInBytes = (ULONG)FileSize;
+        }
     }
 
     FatpConvertSystemTimeToFatTime(&(NewProperties->ModifiedTime),

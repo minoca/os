@@ -3527,13 +3527,15 @@ Return Value:
     PVOID Directory;
     FAT_DIRECTORY_CONTEXT DirectoryContext;
     BOOL DirectoryContextInitialized;
-    FAT_DIRECTORY_ENTRY DirectoryEntries[3];
+    FAT_DIRECTORY_ENTRY DirectoryEntries[2];
     ULONG EntriesWritten;
+    PFAT_VOLUME FatVolume;
     ULONG NameIndex;
     KSTATUS Status;
 
     Directory = NULL;
     DirectoryContextInitialized = FALSE;
+    FatVolume = Volume;
     Cluster = ((ULONG)(Entry->ClusterHigh) << 16) | Entry->ClusterLow;
     Status = FatOpenFileId(Volume,
                            Cluster,
@@ -3546,11 +3548,13 @@ Return Value:
     }
 
     //
-    // Create the initial directory file with the dot, dot dot and NULL
+    // Create the initial directory file with the dot and dot dot
     // directory entries. Start with the dot entry.
     //
 
     RtlCopyMemory(&(DirectoryEntries[0]), Entry, sizeof(FAT_DIRECTORY_ENTRY));
+    DirectoryEntries[0].FileAttributes = FAT_SUBDIRECTORY;
+    DirectoryEntries[0].CaseInformation = 0;
     for (NameIndex = 0; NameIndex < FAT_FILE_LENGTH; NameIndex += 1) {
         DirectoryEntries[0].DosName[NameIndex] = ' ';
     }
@@ -3563,7 +3567,8 @@ Return Value:
     DirectoryEntries[0].FileAttributes = FAT_SUBDIRECTORY;
 
     //
-    // Now create dot dot, which is a modified version of dot.
+    // Now create dot dot, which is a modified version of dot. The cluster ID
+    // is set to zero if its parent is the root directory.
     //
 
     RtlCopyMemory(&(DirectoryEntries[1]),
@@ -3571,17 +3576,17 @@ Return Value:
                   sizeof(FAT_DIRECTORY_ENTRY));
 
     DirectoryEntries[1].DosName[1] = '.';
-    DirectoryEntries[1].ClusterHigh =
-                             (USHORT)((ParentDirectoryFileId >> 16) & 0xFFFF);
+    if (ParentDirectoryFileId == FatVolume->RootDirectoryCluster) {
+        DirectoryEntries[1].ClusterHigh = 0;
+        DirectoryEntries[1].ClusterLow = 0;
 
-    DirectoryEntries[1].ClusterLow = (USHORT)(ParentDirectoryFileId & 0xFFFF);
+    } else {
+        DirectoryEntries[1].ClusterHigh =
+                              (USHORT)((ParentDirectoryFileId >> 16) & 0xFFFF);
 
-    //
-    // Now add the NULL entry.
-    //
-
-    RtlZeroMemory(&(DirectoryEntries[2]), sizeof(FAT_DIRECTORY_ENTRY));
-    DirectoryEntries[2].DosName[0] = FAT_DIRECTORY_ENTRY_END;
+        DirectoryEntries[1].ClusterLow =
+                                      (USHORT)(ParentDirectoryFileId & 0xFFFF);
+    }
 
     //
     // Write all three out at once.
@@ -3596,17 +3601,25 @@ Return Value:
 
     Status = FatpWriteDirectory(&DirectoryContext,
                                 DirectoryEntries,
-                                3,
+                                2,
                                 &EntriesWritten);
 
     if (!KSUCCESS(Status)) {
         goto InitializeDirectoryEnd;
     }
 
-    if (EntriesWritten != 3) {
+    if (EntriesWritten != 2) {
         Status = STATUS_VOLUME_CORRUPT;
         goto InitializeDirectoryEnd;
     }
+
+    //
+    // Zero out the remainder of the cluster.
+    //
+
+    FatZeroIoBuffer(DirectoryContext.ClusterBuffer,
+                    sizeof(FAT_DIRECTORY_ENTRY) * 2,
+                    FatVolume->ClusterSize - (sizeof(FAT_DIRECTORY_ENTRY) * 2));
 
     //
     // Flush the directory.
