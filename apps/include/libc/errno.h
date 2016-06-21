@@ -547,6 +547,12 @@ extern "C" {
 #define EPFNOSUPPORT 83
 
 //
+// Cannot send after endpoint shutdown.
+//
+
+#define ESHUTDOWN 84
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 

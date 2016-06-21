@@ -137,6 +137,7 @@ PSTR ClpErrorStrings[] = {
     "Quota exceeded",
     "Operation canceled",
     "Protocol family not supported",
+    "Cannot send after endpoint shutdown",
 };
 
 //
