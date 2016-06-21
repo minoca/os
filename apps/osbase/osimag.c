@@ -2358,6 +2358,10 @@ Return Value:
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
+    if (OsImModuleNumberBitmap == &OsImStaticModuleNumberBitmap) {
+        NewBuffer[0] = OsImModuleNumberBitmap[0];
+    }
+
     RtlZeroMemory(NewBuffer + OsImModuleNumberBitmapSize,
                   (NewCapacity - OsImModuleNumberBitmapSize) * sizeof(UINTN));
 
