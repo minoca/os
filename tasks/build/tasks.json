@@ -399,6 +399,26 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/pip-8.1.2"
         },
         {
+            "name": "Make pcre",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/pcre-8.39"
+        },
+        {
+            "name": "Make pcre2",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/pcre2-10.21"
+        },
+        {
+            "name": "Make libxml2",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/libxml2-2.9.4"
+        },
+        {
+            "name": "Make apache",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/httpd-2.4.20"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"
