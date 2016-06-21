@@ -2480,6 +2480,7 @@ Return Value:
                 KeSignalEvent(Process->StopEvent, SignalOptionUnsignal);
             }
 
+            Command->PreviousCommand = Command->Command;
             Command->Command = DebugCommandInvalid;
             KeSignalEvent(DebugData->DebugCommandCompleteEvent,
                           SignalOptionSignalAll);

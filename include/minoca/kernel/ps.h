@@ -870,6 +870,9 @@ Members:
     Command - Stores the debug command that the application would like to
         perform.
 
+    PreviousCommand - Stores the previous debug command executed by the
+        application.
+
     Address - Stores the address parameter of the command, used for commands
         like read and write.
 
@@ -891,6 +894,7 @@ Members:
 
 typedef struct _PROCESS_DEBUG_COMMAND {
     DEBUG_COMMAND_TYPE Command;
+    DEBUG_COMMAND_TYPE PreviousCommand;
     union {
         PVOID Address;
         THREAD_ID Thread;

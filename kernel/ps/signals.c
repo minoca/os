@@ -2977,23 +2977,22 @@ Return Value:
     ASSERT(DebugData->DebugLeaderThread == NULL);
 
     //
-    // If the previous command was a single step, clear single step mode now.
+    // If it's a trap signal coming in and the previous command was a single
+    // step or range step, clear single step mode now.
     //
 
     if ((Signal->SignalNumber == SIGNAL_TRAP) &&
-        ((DebugData->DebugCommand.Command == DebugCommandSingleStep) ||
-         (DebugData->DebugCommand.Command == DebugCommandRangeStep))) {
+        ((DebugData->DebugCommand.PreviousCommand == DebugCommandSingleStep) ||
+         (DebugData->DebugCommand.PreviousCommand == DebugCommandRangeStep))) {
 
         PspArchSetOrClearSingleStep(TrapFrame, FALSE);
 
         //
-        // If it's a trap signal coming in and it was a range step command,
-        // evaluate whether this trap fits the range.
+        // If it was a range step command, evaluate whether this trap fits the
+        // range.
         //
 
-        if ((DebugData->DebugCommand.Command == DebugCommandRangeStep) &&
-            (Signal->SignalNumber == SIGNAL_TRAP)) {
-
+        if (DebugData->DebugCommand.PreviousCommand == DebugCommandRangeStep) {
             BreakRange = &(DebugData->BreakRange);
             InstructionPointer = ArGetInstructionPointer(TrapFrame);
 
