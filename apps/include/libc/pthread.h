@@ -1674,6 +1674,38 @@ Return Value:
 --*/
 
 PTHREAD_API
+int
+pthread_once (
+    pthread_once_t *Once,
+    void (*Routine)(void)
+    );
+
+/*++
+
+Routine Description:
+
+    This routine can be called by any thread in the process. The first call
+    to this routine will execute the given method. All others calls will do
+    nothing. On return from this routine, the routine will have completed
+    executing. If the routine is a cancellation point and is canceled, then
+    the effect will be as if the routine was never called.
+
+Arguments:
+
+    Once - Supplies a pointer to the initialized once object. Initialize it
+        with the value PTHREAD_ONCE_INIT.
+
+    Routine - Supplies a pointer to the routine to be called exactly once.
+
+Return Value:
+
+    0 on success.
+
+    EINVAL if the given once object or routine is invalid.
+
+--*/
+
+PTHREAD_API
 pid_t
 pthread_gettid_np (
     pthread_t ThreadId
