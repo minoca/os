@@ -138,6 +138,7 @@ PSTR ClpErrorStrings[] = {
     "Operation canceled",
     "Protocol family not supported",
     "Cannot send after endpoint shutdown",
+    "Host is down",
 };
 
 //

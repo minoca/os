@@ -553,6 +553,12 @@ extern "C" {
 #define ESHUTDOWN 84
 
 //
+// Host is down.
+//
+
+#define EHOSTDOWN 85
+
+//
 // ------------------------------------------------------ Data Type Definitions
 //
 
