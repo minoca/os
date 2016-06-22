@@ -1377,7 +1377,7 @@ Return Value:
         goto RelocateImagesEnd;
     }
 
-    CurrentEntry = ListHead->Next;
+    CurrentEntry = ListHead->Previous;
     while (CurrentEntry != ListHead) {
         CurrentImage = LIST_VALUE(CurrentEntry, LOADED_IMAGE, ListEntry);
         if ((CurrentImage->Flags & IMAGE_FLAG_RELOCATED) == 0) {
@@ -1400,7 +1400,7 @@ Return Value:
             ImpElfFreeContext(CurrentImage);
         }
 
-        CurrentEntry = CurrentEntry->Next;
+        CurrentEntry = CurrentEntry->Previous;
     }
 
     Status = STATUS_SUCCESS;
