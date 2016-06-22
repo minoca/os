@@ -1093,7 +1093,9 @@ Return Value:
     BOOL MapRequired;
     KSTATUS Status;
 
-    ASSERT(IoBuffer->FragmentCount >= 1);
+    if (IoBuffer->FragmentCount == 0) {
+        return STATUS_SUCCESS;
+    }
 
     //
     // Check to see if the I/O buffer is already virtually contiguous. Note
