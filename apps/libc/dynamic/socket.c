@@ -1734,6 +1734,57 @@ Return Value:
     return Status;
 }
 
+LIBC_API
+struct cmsghdr *
+__cmsg_nxthdr (
+    struct msghdr *Message,
+    struct cmsghdr *ControlMessage
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the next control message in the buffer of ancillary data.
+
+Arguments:
+
+    Message - Supplies a pointer to the beginning of the ancillary data.
+
+    ControlMessage - Supplies the previous control message. This routine
+        returns the next control message after this one.
+
+Return Value:
+
+    Returns a pointer to the control message after the given control message.
+
+    NULL if there are no more messages or the buffer does not contain enough
+    space.
+
+--*/
+
+{
+
+    PUCHAR End;
+    struct cmsghdr *Result;
+
+    if (ControlMessage->cmsg_len < sizeof(struct cmsghdr)) {
+        return NULL;
+    }
+
+    Result = (struct cmsghdr *)((PUCHAR)ControlMessage +
+                                CMSG_ALIGN(ControlMessage->cmsg_len));
+
+    End = (PUCHAR)(Message->msg_control) + Message->msg_controllen;
+    if (((PUCHAR)(Result + 1) > End) ||
+        ((PUCHAR)Result + CMSG_ALIGN(Result->cmsg_len) > End)) {
+
+        return NULL;
+    }
+
+    return Result;
+}
+
 //
 // --------------------------------------------------------- Internal Functions
 //

@@ -43,24 +43,7 @@ Author:
 // msghdr.
 //
 
-#define CMSG_NXTHDR(_Message, _Control)                                        \
-    if ((_Control)->cmsg_len < sizeof(struct cmsghdr)) {                       \
-        (_Control) = NULL;                                                     \
-                                                                               \
-    } else {                                                                   \
-        (_Control) = (struct cmsghdr *)((unsigned char *)(_Control) +          \
-                                        CMSG_ALIGN((_Control)->cmsg_len));     \
-                                                                               \
-        if (((unsigned char *)((_Control) + 1) >                               \
-             (unsigned char *)(_Message)->msg_control +                        \
-             (_Message)->msg_controllen) ||                                    \
-            ((unsigned char *)(_Control) + CMSG_ALIGN((_Control)->cmsg_len) >  \
-             ((unsigned char *)(_Message)->msg_control +                       \
-              (_Message)->msg_controllen))) {                                  \
-                                                                               \
-            (_Control) = NULL;                                                 \
-        }                                                                      \
-    }
+#define CMSG_NXTHDR(_Message, _Control) __cmsg_nxthdr((_Message), (_Control))
 
 //
 // This macro evaluates to the first cmsghdr given a msghdr structure, or
@@ -1286,6 +1269,35 @@ Return Value:
     0 on success.
 
     -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+LIBC_API
+struct cmsghdr *
+__cmsg_nxthdr (
+    struct msghdr *Message,
+    struct cmsghdr *ControlMessage
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the next control message in the buffer of ancillary data.
+
+Arguments:
+
+    Message - Supplies a pointer to the beginning of the ancillary data.
+
+    ControlMessage - Supplies the previous control message. This routine
+        returns the next control message after this one.
+
+Return Value:
+
+    Returns a pointer to the control message after the given control message.
+
+    NULL if there are no more messages or the buffer does not contain enough
+    space.
 
 --*/
 
