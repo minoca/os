@@ -515,6 +515,7 @@ Return Value:
     PFILE_LOCK_ENTRY SplitEntry;
     KSTATUS Status;
 
+    LocksRemoved = FALSE;
     NewEnd = NewEntry->Offset + NewEntry->Size;
     Process = PsGetCurrentProcess();
     Status = STATUS_SUCCESS;
