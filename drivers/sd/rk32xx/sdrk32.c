@@ -4600,6 +4600,15 @@ Return Value:
     ULONGLONG Timeout;
     ULONG Value;
 
+    //
+    // TODO: Figure out why the RockChip SD fails occasionally and needs to be
+    // slowed down here.
+    //
+
+    if (ClockSpeed > SdClock25MHz) {
+        ClockSpeed = SdClock25MHz;
+    }
+
     if (Device->FundamentalClock == 0) {
         return STATUS_INVALID_CONFIGURATION;
     }
