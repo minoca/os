@@ -202,6 +202,7 @@ extern "C" {
 //
 
 #define SIGPOLL 28
+#define SIGIO SIGPOLL
 
 //
 // Bad system call
