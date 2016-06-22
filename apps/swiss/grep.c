@@ -62,7 +62,7 @@ Environment:
     "  -l, --files-with-matches -- Write only the names of the files \n"       \
     "      searched and matched.\n"                                            \
     "  -n, --line-number -- Write the line number before each match.\n"        \
-    "  -q, --quiet, --silent -- Quiet, write nothing to standad out.\n"        \
+    "  -q, --quiet, --silent -- Quiet, write nothing to standard out.\n"       \
     "  -R, -r, --recursive -- Scan the contents of any directories found.\n"   \
     "  -s, --no-messages -- Suppress errors for nonexistant and unreadable "   \
     "files.\n"                                                                 \
