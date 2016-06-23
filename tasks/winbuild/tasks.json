@@ -300,6 +300,11 @@
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/bzip2-1.0.6"
         },
         {
+            "name": "Make pcre",
+            "type": "execute",
+            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/pcre-8.39"
+        },
+        {
             "name": "Make wget",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/wget-1.15"
@@ -378,11 +383,6 @@
             "name": "Make tcl",
             "type": "execute",
             "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/tcl8.6.5"
-        },
-        {
-            "name": "Make pcre",
-            "type": "execute",
-            "parameter": "$SRCROOT/os/tasks/winbuild/make.sh $SRCROOT/third-party/build/pcre-8.39"
         },
         {
             "name": "Make pcre2",

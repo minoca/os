@@ -284,6 +284,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/bzip2-1.0.6"
         },
         {
+            "name": "Make pcre",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/pcre-8.39"
+        },
+        {
             "name": "Make wget",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/wget-1.15"
@@ -397,11 +402,6 @@
             "name": "Make python-pip",
             "type": "execute",
             "parameter": "src/os/tasks/build/make.sh third-party/build/pip-8.1.2"
-        },
-        {
-            "name": "Make pcre",
-            "type": "execute",
-            "parameter": "src/os/tasks/build/make.sh third-party/build/pcre-8.39"
         },
         {
             "name": "Make pcre2",
