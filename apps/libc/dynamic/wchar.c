@@ -252,6 +252,23 @@ Return Value:
 
 {
 
+    CHARACTER_ENCODING Encoding;
+
+    if (WideCharacter == NULL) {
+        RtlResetMultibyteState((PMULTIBYTE_STATE)&ClMultibyteConversionState);
+
+        //
+        // This should really get the LC_CTYPE encoding.
+        //
+
+        Encoding = RtlGetDefaultCharacterEncoding();
+        if (RtlIsCharacterEncodingStateDependent(Encoding, FALSE) != FALSE) {
+            return 1;
+        }
+
+        return 0;
+    }
+
     return mbrtowc(WideCharacter, MultibyteCharacter, ByteCount, NULL);
 }
 
@@ -315,11 +332,6 @@ Return Value:
     }
 
     if (MultibyteCharacter == NULL) {
-        if (ByteCount != 0) {
-            errno = EILSEQ;
-            return -1;
-        }
-
         memset(State, 0, sizeof(mbstate_t));
         return 0;
     }
@@ -391,10 +403,24 @@ Return Value:
 
 {
 
-    mbstate_t State;
+    CHARACTER_ENCODING Encoding;
 
-    memset(&State, 0, sizeof(State));
-    return wcrtomb(MultibyteCharacter, WideCharacter, &State);
+    if (MultibyteCharacter == NULL) {
+        RtlResetMultibyteState((PMULTIBYTE_STATE)&ClMultibyteConversionState);
+
+        //
+        // This should really get the LC_CTYPE encoding.
+        //
+
+        Encoding = RtlGetDefaultCharacterEncoding();
+        if (RtlIsCharacterEncodingStateDependent(Encoding, TRUE) != FALSE) {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    return wcrtomb(MultibyteCharacter, WideCharacter, NULL);
 }
 
 LIBC_API
@@ -449,6 +475,10 @@ Return Value:
         State = &ClMultibyteConversionState;
     }
 
+    if (MultibyteCharacter == NULL) {
+        WideCharacter = L'\0';
+    }
+
     MultibyteState = (PMULTIBYTE_STATE)State;
     Size = MULTIBYTE_MAX;
     Status = RtlConvertWideCharacterToMultibyte(WideCharacter,
@@ -467,9 +497,9 @@ Return Value:
 LIBC_API
 size_t
 mbstowcs (
-    wchar_t *WideString,
-    const char *MultibyteString,
-    size_t WideStringSize
+    wchar_t *Destination,
+    const char *Source,
+    size_t DestinationSize
     )
 
 /*++
@@ -481,13 +511,13 @@ Routine Description:
 
 Arguments:
 
-    WideString - Supplies an optional pointer where the wide character string
+    Destination - Supplies an optional pointer where the wide character string
         will be returned.
 
-    MultibyteString - Supplies a pointer to the null-terminated multibyte
-        string. No characters are examined after a null terminator is found.
+    Source - Supplies a pointer to the null-terminated multibyte string. No
+        characters are examined after a null terminator is found.
 
-    WideStringSize - Supplies the maximum number of elements to place in the
+    DestinationSize - Supplies the maximum number of elements to place in the
         wide string.
 
 Return Value:
@@ -505,15 +535,15 @@ Return Value:
     mbstate_t State;
 
     memset(&State, 0, sizeof(mbstate_t));
-    return mbsrtowcs(WideString, MultibyteString, WideStringSize, &State);
+    return mbsrtowcs(Destination, &Source, DestinationSize, &State);
 }
 
 LIBC_API
 size_t
 mbsrtowcs (
-    wchar_t *WideString,
-    const char *MultibyteString,
-    size_t WideStringSize,
+    wchar_t *Destination,
+    const char **Source,
+    size_t DestinationSize,
     mbstate_t *State
     )
 
@@ -526,13 +556,19 @@ Routine Description:
 
 Arguments:
 
-    WideString - Supplies an optional pointer where the wide character string
+    Destination - Supplies an optional pointer where the wide character string
         will be returned.
 
-    MultibyteString - Supplies a pointer to the null-terminated multibyte
-        string. No characters are examined after a null terminator is found.
+    Source - Supplies a pointer that upon input contains a pointer to the null
+        terminated multibyte string to convert. On output, this will contain
+        one of two values. If the null terminator was encountered in the
+        multibyte string, then the value returned here will be NULL. If the
+        conversion stopped because it would exceed the wide string size, then
+        the value returned here will be a pointer to the character one after
+        the last character successfully converted. If the wide string is NULL,
+        the pointer will remained unchanged on ouput.
 
-    WideStringSize - Supplies the maximum number of elements to place in the
+    DestinationSize - Supplies the maximum number of elements to place in the
         wide string.
 
     State - Supplies an optional pointer to a multibyte shift state object to
@@ -553,11 +589,14 @@ Return Value:
 {
 
     size_t ElementsConverted;
+    const char *MultibyteString;
     size_t Result;
+    wchar_t WideCharacter;
 
     ElementsConverted = 0;
-    while (TRUE) {
-        Result = mbrtowc(WideString, MultibyteString, MB_LEN_MAX, State);
+    MultibyteString = *Source;
+    while ((Destination == NULL) || (DestinationSize > 0)) {
+        Result = mbrtowc(&WideCharacter, MultibyteString, MB_LEN_MAX, State);
         if (Result < 0) {
             return -1;
         }
@@ -566,12 +605,23 @@ Return Value:
             break;
         }
 
-        MultibyteString += Result;
-        if (WideString != NULL) {
-            WideString += 1;
+        if (Destination != NULL) {
+            *Destination = WideCharacter;
+            Destination += 1;
+            DestinationSize -= 1;
         }
 
+        if (WideCharacter == L'\0') {
+            MultibyteString = NULL;
+            break;
+        }
+
+        MultibyteString += Result;
         ElementsConverted += 1;
+    }
+
+    if (Destination != NULL) {
+        *Source = MultibyteString;
     }
 
     return ElementsConverted;
@@ -579,9 +629,53 @@ Return Value:
 
 LIBC_API
 size_t
+wcstombs (
+    char *Destination,
+    const wchar_t *Source,
+    size_t DestinationSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine converts a string of wide characters into a multibyte string,
+    up to and including a wide null terminator.
+
+Arguments:
+
+    Destination - Supplies an optional pointer to a destination where the
+        multibyte characters will be returned.
+
+    Source - Supplies a pointer to the null terminated wide character string to
+        convert.
+
+    DestinationSize - Supplies the number of bytes in the destination buffer
+        (or the theoretical destination buffer if one was not supplied).
+
+Return Value:
+
+    Returns the number of bytes in the resulting character sequence, not
+    including the null terminator (if any).
+
+    -1 if an invalid wide character is encountered. The errno variable may be
+    set to provide more information.
+
+--*/
+
+{
+
+    mbstate_t State;
+
+    memset(&State, 0, sizeof(State));
+    return wcsrtombs(Destination, &Source, DestinationSize, &State);
+}
+
+LIBC_API
+size_t
 wcsrtombs (
     char *Destination,
-    wchar_t **Source,
+    const wchar_t **Source,
     size_t DestinationSize,
     mbstate_t *State
     )
@@ -604,7 +698,8 @@ Arguments:
         the source string, then the value returned here will be NULL. If the
         conversion stopped because it would exceed the destination size,
         then the value returned here will be a pointer to the character one
-        after the last character successfully converted.
+        after the last character successfully converted. If the destination
+        is NULL, the pointer will remained unchanged on ouput.
 
     DestinationSize - Supplies the number of bytes in the destination buffer
         (or the theoretical destination buffer if one was not supplied).
@@ -630,7 +725,7 @@ Return Value:
     mbstate_t PreviousState;
     size_t Result;
     size_t TotalWritten;
-    wchar_t *WideString;
+    const wchar_t *WideString;
 
     if (State == NULL) {
         State = &ClMultibyteConversionState;
@@ -639,34 +734,34 @@ Return Value:
     Result = 0;
     TotalWritten = 0;
     WideString = *Source;
-    while (DestinationSize > 0) {
+    while ((Destination == NULL) || (DestinationSize > 0)) {
         PreviousState = *State;
         Result = wcrtomb(HoldingBuffer, *WideString, State);
         if (Result == -1) {
             errno = EILSEQ;
             break;
 
-        //
-        // Copy the holding buffer to the destination if there's enough room.
-        //
+        } else if (Destination != NULL) {
 
-        } else if (Result <= DestinationSize) {
-            if (Destination != NULL) {
+            //
+            // Copy the holding buffer to the destination if there's enough
+            // room.
+            //
+
+            if (Result <= DestinationSize) {
                 memcpy(Destination, HoldingBuffer, Result);
+                Destination += Result;
+                DestinationSize -= Result;
+
+            //
+            // The remaining size is not big enough to hold the character. Back
+            // out the state advancement.
+            //
+
+            } else {
+                *State = PreviousState;
+                break;
             }
-
-            Destination += Result;
-            DestinationSize -= Result;
-            TotalWritten += Result;
-
-        //
-        // The remaining size is not big enough to hold the character. Back
-        // out the state advancement.
-        //
-
-        } else {
-            *State = PreviousState;
-            break;
         }
 
         //
@@ -679,6 +774,13 @@ Return Value:
         }
 
         //
+        // Update the total bytes written. This never includes the null
+        // terminator.
+        //
+
+        TotalWritten += Result;
+
+        //
         // Advance the source string and continue.
         //
 
@@ -689,7 +791,10 @@ Return Value:
     // Return the source string.
     //
 
-    *Source = WideString;
+    if (Destination != NULL) {
+        *Source = WideString;
+    }
+
     if (Result == -1) {
         return -1;
     }

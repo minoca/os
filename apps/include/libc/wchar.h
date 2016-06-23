@@ -305,9 +305,9 @@ Return Value:
 LIBC_API
 size_t
 mbstowcs (
-    wchar_t *WideString,
-    const char *MultibyteString,
-    size_t WideStringSize
+    wchar_t *Destination,
+    const char *Source,
+    size_t DestinationSize
     );
 
 /*++
@@ -319,13 +319,13 @@ Routine Description:
 
 Arguments:
 
-    WideString - Supplies an optional pointer where the wide character string
+    Destination - Supplies an optional pointer where the wide character string
         will be returned.
 
-    MultibyteString - Supplies a pointer to the null-terminated multibyte
-        string. No characters are examined after a null terminator is found.
+    Source - Supplies a pointer to the null-terminated multibyte string. No
+        characters are examined after a null terminator is found.
 
-    WideStringSize - Supplies the maximum number of elements to place in the
+    DestinationSize - Supplies the maximum number of elements to place in the
         wide string.
 
 Return Value:
@@ -341,9 +341,9 @@ Return Value:
 LIBC_API
 size_t
 mbsrtowcs (
-    wchar_t *WideString,
-    const char *MultibyteString,
-    size_t WideStringSize,
+    wchar_t *Destination,
+    const char **Source,
+    size_t DestinationSize,
     mbstate_t *State
     );
 
@@ -356,13 +356,19 @@ Routine Description:
 
 Arguments:
 
-    WideString - Supplies an optional pointer where the wide character string
+    Destination - Supplies an optional pointer where the wide character string
         will be returned.
 
-    MultibyteString - Supplies a pointer to the null-terminated multibyte
-        string. No characters are examined after a null terminator is found.
+    Source - Supplies a pointer that upon input contains a pointer to the null
+        terminated multibyte string to convert. On output, this will contain
+        one of two values. If the null terminator was encountered in the
+        multibyte string, then the value returned here will be NULL. If the
+        conversion stopped because it would exceed the wide string size, then
+        the value returned here will be a pointer to the character one after
+        the last character successfully converted. If the wide string is NULL,
+        the pointer will remained unchanged on ouput.
 
-    WideStringSize - Supplies the maximum number of elements to place in the
+    DestinationSize - Supplies the maximum number of elements to place in the
         wide string.
 
     State - Supplies an optional pointer to a multibyte shift state object to
@@ -382,9 +388,45 @@ Return Value:
 
 LIBC_API
 size_t
+wcstombs (
+    char *Destination,
+    const wchar_t *Source,
+    size_t DestinationSize
+    );
+
+/*++
+
+Routine Description:
+
+    This routine converts a string of wide characters into a multibyte string,
+    up to and including a wide null terminator.
+
+Arguments:
+
+    Destination - Supplies an optional pointer to a destination where the
+        multibyte characters will be returned.
+
+    Source - Supplies a pointer to the null terminated wide character string to
+        convert.
+
+    DestinationSize - Supplies the number of bytes in the destination buffer
+        (or the theoretical destination buffer if one was not supplied).
+
+Return Value:
+
+    Returns the number of bytes in the resulting character sequence, not
+    including the null terminator (if any).
+
+    -1 if an invalid wide character is encountered. The errno variable may be
+    set to provide more information.
+
+--*/
+
+LIBC_API
+size_t
 wcsrtombs (
     char *Destination,
-    wchar_t **Source,
+    const wchar_t **Source,
     size_t DestinationSize,
     mbstate_t *State
     );
@@ -407,7 +449,8 @@ Arguments:
         the source string, then the value returned here will be NULL. If the
         conversion stopped because it would exceed the destination size,
         then the value returned here will be a pointer to the character one
-        after the last character successfully converted.
+        after the last character successfully converted. If the destination
+        is NULL, the pointer will remained unchanged on ouput.
 
     DestinationSize - Supplies the number of bytes in the destination buffer
         (or the theoretical destination buffer if one was not supplied).

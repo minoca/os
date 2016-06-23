@@ -109,6 +109,7 @@ Return Value:
 RTL_API
 CHARACTER_ENCODING
 RtlGetDefaultCharacterEncoding (
+    VOID
     )
 
 /*++
@@ -210,6 +211,57 @@ Return Value:
     }
 
     return FALSE;
+}
+
+RTL_API
+BOOL
+RtlIsCharacterEncodingStateDependent (
+    CHARACTER_ENCODING Encoding,
+    BOOL ToMultibyte
+    )
+
+/*++
+
+Routine Description:
+
+    This routine determines if the given character encoding is state-dependent
+    when converting between multibyte sequences and wide characters.
+
+Arguments:
+
+    Encoding - Supplies the encoding to query.
+
+    ToMultibyte - Supplies a boolean indicating the direction of the character
+        encoding. State-dependence can vary between converting to multibyte and
+        converting to wide character.
+
+Return Value:
+
+    TRUE if the given encoding is valid and state-dependent.
+
+    FALSE if the given encoding is invalid or not state-dependent.
+
+--*/
+
+{
+
+    BOOL Result;
+
+    if (Encoding == CharacterEncodingDefault) {
+        Encoding = RtlDefaultEncoding;
+    }
+
+    switch (Encoding) {
+    case CharacterEncodingAscii:
+        Result = FALSE;
+        break;
+
+    default:
+        Result = FALSE;
+        break;
+    }
+
+    return Result;
 }
 
 RTL_API
