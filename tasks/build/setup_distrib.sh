@@ -75,7 +75,7 @@ fi
 ## Perform an offline install of distributed.
 ##
 
-PACKAGES="opkg gzip tar wget nano"
+PACKAGES="opkg gzip tar wget nano libpcre"
 mkdir -p "$APPSROOT/usr/lib/opkg/"
 
 opkg --conf=$PWD/myopkg.conf --offline-root="$APPSROOT" update

@@ -419,6 +419,11 @@
             "parameter": "src/os/tasks/build/make.sh third-party/build/httpd-2.4.20"
         },
         {
+            "name": "Make nginx",
+            "type": "execute",
+            "parameter": "src/os/tasks/build/make.sh third-party/build/nginx-1.10.1"
+        },
+        {
             "name": "Setup Distribution",
             "type": "execute",
             "parameter": "src/os/tasks/build/setup_distrib.sh"

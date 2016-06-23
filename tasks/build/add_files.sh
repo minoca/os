@@ -152,6 +152,7 @@ libiconv
 libncurses
 libreadline
 libopenssl
+libpcre
 ca-certificates"
 
 mkdir -p "$DEST/usr/lib/opkg/"
