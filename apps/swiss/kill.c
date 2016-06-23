@@ -453,7 +453,7 @@ Return Value:
                 printf("%d) SIGRTMAX\n", Signal);
 
             } else {
-                printf("%d) SIGRTMIN+%d\n", Signal - SIGRTMIN);
+                printf("%d) SIGRTMIN+%d\n", Signal, Signal - SIGRTMIN);
             }
 
         } else {
