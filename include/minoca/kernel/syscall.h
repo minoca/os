@@ -294,6 +294,7 @@ typedef enum _SYSTEM_CALL_NUMBER {
     SystemCallSetUmask,
     SystemCallDuplicateHandle,
     SystemCallPerformVectoredIo,
+    SystemCallSetITimer,
     SystemCallCount
 } SYSTEM_CALL_NUMBER, *PSYSTEM_CALL_NUMBER;
 
@@ -374,6 +375,13 @@ typedef enum _TIMER_OPERATION {
     TimerOperationGetTimer,
     TimerOperationSetTimer
 } TIMER_OPERATION, *PTIMER_OPERATION;
+
+typedef enum _ITIMER_TYPE {
+    ITimerReal,
+    ITimerVirtual,
+    ITimerProfile,
+    ITimerTypeCount
+} ITIMER_TYPE, *PITIMER_TYPE;
 
 typedef enum _RESOURCE_USAGE_REQUEST {
     ResourceUsageRequestInvalid,
@@ -2671,6 +2679,42 @@ typedef struct _SYSTEM_CALL_DUPLICATE_HANDLE {
 
 Structure Description:
 
+    This structure defines the system call parameters for getting or setting an
+    interval timer.
+
+Members:
+
+    Type - Stores the type of timer to get or set.
+
+    Set - Stores a boolean indicating whether to get the current timer
+        expiration information (FALSE) or set it (TRUE).
+
+    DueTime - Stores the relative due time to set for a set operation. For both
+        get and set operations, returns the previous due time. Zero means
+        disabled. The units here are processor counter ticks for profile and
+        virtual timers, or time counter ticks for real timers.
+
+    Period - Stores the periodic interval to set for a set operation. For both
+        get and set operations, returns the previous interval period. Zero
+        means non-periodic. Units here are processor counter ticks for profile
+        and virtual timers, or time counter ticks for real timers.
+
+    Status - Stores the resulting status code returned by the kernel.
+
+--*/
+
+typedef struct _SYSTEM_CALL_SET_ITIMER {
+    ITIMER_TYPE Type;
+    BOOL Set;
+    ULONGLONG DueTime;
+    ULONGLONG Period;
+    KSTATUS Status;
+} SYSCALL_STRUCT SYSTEM_CALL_SET_ITIMER, *PSYSTEM_CALL_SET_ITIMER;
+
+/*++
+
+Structure Description:
+
     This structure defines a union of all possible system call parameter
     structures. The size of this structure acts as an upper bound for the
     required space neede to make a stack local copy of the user mode parameters.
@@ -2749,6 +2793,7 @@ typedef union _SYSTEM_CALL_PARAMETER_UNION {
     SYSTEM_CALL_SET_THREAD_ID_POINTER SetThreadIdPointer;
     SYSTEM_CALL_SET_UMASK SetUmask;
     SYSTEM_CALL_DUPLICATE_HANDLE DuplicateHandle;
+    SYSTEM_CALL_SET_ITIMER SetITimer;
 } SYSCALL_STRUCT SYSTEM_CALL_PARAMETER_UNION, *PSYSTEM_CALL_PARAMETER_UNION;
 
 typedef

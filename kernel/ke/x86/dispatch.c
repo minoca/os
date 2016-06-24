@@ -124,6 +124,7 @@ Return Value:
         ArEnableInterrupts();
         Thread = KeGetCurrentThread();
         PsSignalThread(Thread, SIGNAL_TRAP, NULL);
+        PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         ArDisableInterrupts();
 
@@ -193,6 +194,7 @@ Return Value:
         ArEnableInterrupts();
         Thread = KeGetCurrentThread();
         PsSignalThread(Thread, SIGNAL_TRAP, NULL);
+        PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         ArDisableInterrupts();
         KeBeginCycleAccounting(PreviousPeriod);
@@ -295,6 +297,7 @@ Return Value:
         ArEnableInterrupts();
         Thread = KeGetCurrentThread();
         PsSignalThread(Thread, SIGNAL_TRAP, NULL);
+        PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         ArDisableInterrupts();
         KeBeginCycleAccounting(PreviousPeriod);
@@ -340,6 +343,7 @@ Return Value:
         ArEnableInterrupts();
         Thread = KeGetCurrentThread();
         PsSignalThread(Thread, SIGNAL_MATH_ERROR, NULL);
+        PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         KeBeginCycleAccounting(PreviousPeriod);
 
@@ -484,6 +488,7 @@ Return Value:
                               TrapFrame,
                               Thread->OwningProcess);
 
+        PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         KeBeginCycleAccounting(PreviousPeriod);
 
@@ -534,6 +539,7 @@ Return Value:
         ArEnableInterrupts();
         Thread = KeGetCurrentThread();
         PsSignalThread(Thread, SIGNAL_MATH_ERROR, NULL);
+        PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         KeBeginCycleAccounting(PreviousPeriod);
 

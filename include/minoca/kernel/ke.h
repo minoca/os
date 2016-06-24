@@ -941,6 +941,11 @@ Members:
     TimeCounterFrequency - Stores the frequency of the time counter. This value
         won't change once the system is booted.
 
+    ProcessorCounterFrequency - Stores the frequency of the processor counter
+        on the boot processor. This is roughly related to the processor speed,
+        but not exactly. For example, on ARM, it may the the processor speed
+        divided by 64.
+
     TimeOffset - Stores the system time when the time counter was zero.
 
     TimeCounter - Stores the number of ticks since the system was started. This
@@ -972,6 +977,7 @@ typedef struct _USER_SHARED_DATA {
     ULONG SystemVersionSerial;
     ULONGLONG BuildTime;
     ULONGLONG TimeCounterFrequency;
+    ULONGLONG ProcessorCounterFrequency;
     volatile SYSTEM_TIME TimeOffset;
     volatile ULONGLONG TimeCounter;
     volatile SYSTEM_TIME SystemTime;

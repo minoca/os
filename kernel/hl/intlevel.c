@@ -358,6 +358,7 @@ Return Value:
         (ArIsTrapFrameFromPrivilegedMode(TrapFrame) == FALSE)) {
 
         ArEnableInterrupts();
+        PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         ArDisableInterrupts();
     }

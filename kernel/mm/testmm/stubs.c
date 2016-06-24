@@ -741,6 +741,32 @@ Return Value:
 }
 
 VOID
+PsEvaluateRuntimeTimers (
+    PKTHREAD Thread
+    )
+
+/*++
+
+Routine Description:
+
+    This routine checks the runtime timers for expiration on the current thread.
+
+Arguments:
+
+    Thread - Supplies a pointer to the current thread.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    return;
+}
+
+VOID
 ArProcessorYield (
     VOID
     )

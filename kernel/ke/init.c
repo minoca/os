@@ -528,6 +528,9 @@ Return Value:
     UserSharedData->SystemVersionSerial = KeVersionSerial;
     UserSharedData->BuildTime = KeBuildTime;
     UserSharedData->TimeCounterFrequency = HlQueryTimeCounterFrequency();
+    UserSharedData->ProcessorCounterFrequency =
+                                            HlQueryProcessorCounterFrequency();
+
     RtlGetTimeZoneData(NULL,
                        (PULONG)&(UserSharedData->CurrentTimeZoneDataSize));
 

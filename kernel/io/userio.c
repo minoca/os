@@ -1691,6 +1691,7 @@ PollEnd:
         // Queue up signals before resetting the mask.
         //
 
+        PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         PsSetSignalMask(&OldSignalSet, NULL);
     }

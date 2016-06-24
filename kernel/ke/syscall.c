@@ -151,6 +151,7 @@ SYSTEM_CALL_TABLE_ENTRY KeSystemCallTable[SystemCallCount] = {
     {PsSysSetUmask, sizeof(SYSTEM_CALL_SET_UMASK)},
     {IoSysDuplicateHandle, sizeof(SYSTEM_CALL_DUPLICATE_HANDLE)},
     {IoSysPerformVectoredIo, sizeof(SYSTEM_CALL_PERFORM_VECTORED_IO)},
+    {PsSysSetITimer, sizeof(SYSTEM_CALL_SET_ITIMER)},
 };
 
 //
@@ -273,6 +274,7 @@ SystemCallHandlerEnd:
         ArSetSingleStep(TrapFrame);
     }
 
+    PsCheckRuntimeTimers(Thread);
     PsDispatchPendingSignals(Thread, TrapFrame);
     Thread->Flags &= ~THREAD_FLAG_IN_SYSTEM_CALL;
 

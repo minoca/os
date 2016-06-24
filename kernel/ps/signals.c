@@ -839,6 +839,7 @@ Return Value:
         // pending, resulting in indefinite suspension.
         //
 
+        PsCheckRuntimeTimers(Thread);
         SignalNumber = PsDispatchPendingSignals(Thread, TrapFrame);
 
         //
@@ -1002,6 +1003,7 @@ Return Value:
     //
 
     while (TRUE) {
+        PsCheckRuntimeTimers(Thread);
         SignalNumber = PsDispatchPendingSignals(Thread, TrapFrame);
         if (SignalNumber != -1) {
             break;

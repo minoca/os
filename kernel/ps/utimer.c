@@ -96,6 +96,20 @@ typedef struct _PROCESS_TIMER {
 //
 
 KSTATUS
+PspCreateTimer (
+    PKPROCESS Process,
+    PPROCESS_TIMER *Timer
+    );
+
+KSTATUS
+PspSetTimer (
+    PKPROCESS Process,
+    PPROCESS_TIMER Timer,
+    PULONGLONG DueTime,
+    PULONGLONG Period
+    );
+
+KSTATUS
 PspCreateProcessTimer (
     PKPROCESS Process,
     PPROCESS_TIMER *Timer
@@ -135,6 +149,14 @@ PspProcessTimerWorkRoutine (
 VOID
 PspProcessTimerSignalCompletion (
     PSIGNAL_QUEUE_ENTRY SignalQueueEntry
+    );
+
+VOID
+PspExpireRuntimeTimer (
+    PKTHREAD Thread,
+    PRUNTIME_TIMER Timer,
+    ULONG Signal,
+    ULONGLONG CurrentTime
     );
 
 //
@@ -232,9 +254,7 @@ Return Value:
     PLIST_ENTRY CurrentEntry;
     PPROCESS_TIMER CurrentTimer;
     BOOL LockHeld;
-    TIMER_INFORMATION OriginalInformation;
     PSYSTEM_CALL_TIMER_CONTROL Parameters;
-    PPROCESS_TIMER PreviousTimer;
     PKPROCESS Process;
     KSTATUS Status;
     PPROCESS_TIMER Timer;
@@ -281,7 +301,7 @@ Return Value:
     //
 
     case TimerOperationCreateTimer:
-        Status = PspCreateProcessTimer(Process, &Timer);
+        Status = PspCreateTimer(Process, &Timer);
         if (!KSUCCESS(Status)) {
             goto SysTimerControlEnd;
         }
@@ -289,39 +309,14 @@ Return Value:
         Timer->SignalQueueEntry.Parameters.SignalNumber =
                                                       Parameters->SignalNumber;
 
-        Timer->SignalQueueEntry.Parameters.SignalCode = SIGNAL_CODE_TIMER;
-        Timer->SignalQueueEntry.Parameters.Parameter = Parameters->SignalValue;
-
-        //
-        // Take a reference on the process to avoid a situation where the
-        // process is destroyed before the work item gets around to running.
-        //
-
-        ObAddReference(Process);
-
-        //
-        // Insert this timer in the process. Assign the timer the ID of the
-        // last timer in the list plus one.
-        //
-
-        KeAcquireQueuedLock(Process->QueuedLock);
-        if (LIST_EMPTY(&(Process->TimerList)) != FALSE) {
-            Timer->TimerNumber = 1;
-
-        } else {
-            PreviousTimer = LIST_VALUE(Process->TimerList.Previous,
-                                       PROCESS_TIMER,
-                                       ListEntry);
-
-            Timer->TimerNumber = PreviousTimer->TimerNumber + 1;
-        }
-
         if (Parameters->UseTimerNumber != FALSE) {
             Timer->SignalQueueEntry.Parameters.Parameter = Timer->TimerNumber;
+
+        } else {
+            Timer->SignalQueueEntry.Parameters.Parameter =
+                                                       Parameters->SignalValue;
         }
 
-        INSERT_BEFORE(&(Timer->ListEntry), &(Process->TimerList));
-        KeReleaseQueuedLock(Process->QueuedLock);
         Parameters->TimerNumber = Timer->TimerNumber;
         break;
 
@@ -352,35 +347,15 @@ Return Value:
     //
 
     case TimerOperationSetTimer:
-        OriginalInformation.DueTime = KeGetTimerDueTime(Timer->Timer);
-        OriginalInformation.Period = Timer->Interval;
-        OriginalInformation.OverflowCount = 0;
-        if (Timer->DueTime != 0) {
-            KeCancelTimer(Timer->Timer);
+        Parameters->TimerInformation.OverflowCount = 0;
+        Status = PspSetTimer(Process,
+                             Timer,
+                             &(Parameters->TimerInformation.DueTime),
+                             &(Parameters->TimerInformation.Period));
+
+        if (!KSUCCESS(Status)) {
+            goto SysTimerControlEnd;
         }
-
-        Timer->DueTime = Parameters->TimerInformation.DueTime;
-        Timer->Interval = Parameters->TimerInformation.Period;
-        if ((Timer->DueTime != 0) || (Timer->Interval != 0)) {
-            if (Timer->DueTime == 0) {
-                Timer->DueTime = HlQueryTimeCounter();
-            }
-
-            Status = KeQueueTimer(Timer->Timer,
-                                  TimerQueueSoftWake,
-                                  Timer->DueTime,
-                                  Timer->Interval,
-                                  0,
-                                  Timer->Dpc);
-
-            if (!KSUCCESS(Status)) {
-                goto SysTimerControlEnd;
-            }
-        }
-
-        RtlCopyMemory(&(Parameters->TimerInformation),
-                      &OriginalInformation,
-                      sizeof(TIMER_INFORMATION));
 
         break;
 
@@ -398,6 +373,283 @@ SysTimerControlEnd:
     }
 
     Parameters->Status = Status;
+    return;
+}
+
+VOID
+PsSysSetITimer (
+    ULONG SystemCallNumber,
+    PVOID SystemCallParameter,
+    PTRAP_FRAME TrapFrame,
+    PULONG ResultSize
+    )
+
+/*++
+
+Routine Description:
+
+    This routine performs gets or sets a thread interval timer.
+
+Arguments:
+
+    SystemCallNumber - Supplies the system call number that was requested.
+
+    SystemCallParameter - Supplies a pointer to the parameters supplied with
+        the system call. This structure will be a stack-local copy of the
+        actual parameters passed from user-mode.
+
+    TrapFrame - Supplies a pointer to the trap frame generated by this jump
+        from user mode to kernel mode.
+
+    ResultSize - Supplies a pointer where the system call routine returns the
+        size of the parameter structure to be copied back to user mode. The
+        value returned here must be no larger than the original parameter
+        structure size. The default is the original size of the parameters.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONGLONG CurrentCycles;
+    ULONGLONG CurrentTime;
+    ULONGLONG DueTime;
+    ULONGLONG OldPeriod;
+    PKPROCESS Process;
+    PPROCESS_TIMER RealTimer;
+    PSYSTEM_CALL_SET_ITIMER Request;
+    KSTATUS Status;
+    PKTHREAD Thread;
+    RESOURCE_USAGE Usage;
+    PRUNTIME_TIMER UserTimer;
+
+    ASSERT(SystemCallNumber == SystemCallSetITimer);
+
+    Thread = KeGetCurrentThread();
+    Process = Thread->OwningProcess;
+    Request = SystemCallParameter;
+    if (Request->Type >= ITimerTypeCount) {
+        Status = STATUS_INVALID_PARAMETER;
+        goto SysSetITimerEnd;
+    }
+
+    if (Request->Set == FALSE) {
+        switch (Request->Type) {
+        case ITimerReal:
+            RealTimer = Thread->RealTimer;
+            if (RealTimer == NULL) {
+                Request->DueTime = 0;
+                Request->Period = 0;
+                break;
+            }
+
+            Request->DueTime = KeGetTimerDueTime(RealTimer->Timer);
+            CurrentTime = HlQueryTimeCounter();
+            if (Request->DueTime > CurrentTime) {
+                Request->DueTime -= CurrentTime;
+
+            } else {
+                Request->DueTime = 0;
+            }
+
+            Request->Period = RealTimer->Interval;
+            break;
+
+        case ITimerVirtual:
+        case ITimerProfile:
+            PspGetThreadResourceUsage(Thread, &Usage);
+            UserTimer = &(Thread->UserTimer);
+            CurrentCycles = Usage.UserCycles;
+            if (Request->Type == ITimerProfile) {
+                CurrentCycles += Usage.KernelCycles;
+                UserTimer = &(Thread->ProfileTimer);
+            }
+
+            Request->Period = UserTimer->Period;
+            Request->DueTime = UserTimer->DueTime;
+            if (Request->DueTime > CurrentCycles) {
+                Request->DueTime -= CurrentCycles;
+
+            } else {
+                Request->DueTime = 0;
+            }
+
+            break;
+
+        default:
+
+            ASSERT(FALSE);
+
+            break;
+        }
+
+        Status = STATUS_SUCCESS;
+        goto SysSetITimerEnd;
+    }
+
+    //
+    // This is a set timer request.
+    //
+
+    switch (Request->Type) {
+    case ITimerReal:
+        if (Thread->RealTimer == NULL) {
+            Status = PspCreateTimer(Process, &RealTimer);
+            if (!KSUCCESS(Status)) {
+                goto SysSetITimerEnd;
+            }
+
+            RealTimer->SignalQueueEntry.Parameters.SignalNumber = SIGNAL_TIMER;
+            Thread->RealTimer = RealTimer;
+        }
+
+        //
+        // Set the new real timer. The due time in the request is always
+        // relative, so convert it to absolute and back.
+        //
+
+        CurrentTime = HlQueryTimeCounter();
+        KeAcquireQueuedLock(Process->QueuedLock);
+        DueTime = Request->DueTime;
+        if (DueTime != 0) {
+            DueTime += CurrentTime;
+        }
+
+        Status = PspSetTimer(Process,
+                             Thread->RealTimer,
+                             &DueTime,
+                             &(Request->Period));
+
+        KeReleaseQueuedLock(Process->QueuedLock);
+        if (!KSUCCESS(Status)) {
+            goto SysSetITimerEnd;
+        }
+
+        if (DueTime > CurrentTime) {
+            DueTime -= CurrentTime;
+
+        } else {
+            DueTime = 0;
+        }
+
+        break;
+
+    case ITimerVirtual:
+    case ITimerProfile:
+        PspGetThreadResourceUsage(Thread, &Usage);
+        UserTimer = &(Thread->UserTimer);
+        CurrentCycles = Usage.UserCycles;
+        if (Request->Type == ITimerProfile) {
+            CurrentCycles += Usage.KernelCycles;
+            UserTimer = &(Thread->ProfileTimer);
+        }
+
+        DueTime = Request->DueTime;
+        if (DueTime != 0) {
+            DueTime += CurrentCycles;
+        }
+
+        OldPeriod = UserTimer->Period;
+        Request->DueTime = UserTimer->Period;
+        if (Request->DueTime > CurrentCycles) {
+            Request->DueTime -= CurrentCycles;
+
+        } else {
+            Request->DueTime = 0;
+        }
+
+        UserTimer->DueTime = DueTime;
+        UserTimer->Period = Request->Period;
+        Request->Period = OldPeriod;
+        break;
+
+    default:
+
+        ASSERT(FALSE);
+
+        Status = STATUS_INVALID_PARAMETER;
+        goto SysSetITimerEnd;
+    }
+
+    Status = STATUS_SUCCESS;
+
+SysSetITimerEnd:
+    Request->Status = Status;
+}
+
+VOID
+PsEvaluateRuntimeTimers (
+    PKTHREAD Thread
+    )
+
+/*++
+
+Routine Description:
+
+    This routine checks the runtime timers for expiration on the current thread.
+
+Arguments:
+
+    Thread - Supplies a pointer to the current thread.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONGLONG CurrentCycles;
+    RESOURCE_USAGE Usage;
+
+    //
+    // If they're both zero, return.
+    //
+
+    if ((Thread->UserTimer.DueTime | Thread->ProfileTimer.DueTime) == 0) {
+        return;
+    }
+
+    //
+    // Potentially expire the user timer. This read can never tear since user
+    // mode can't sneak in and run a bit more.
+    //
+
+    if ((Thread->UserTimer.DueTime != 0) &&
+        (Thread->ResourceUsage.UserCycles >= Thread->UserTimer.DueTime)) {
+
+        PspExpireRuntimeTimer(Thread,
+                              &(Thread->UserTimer),
+                              SIGNAL_EXECUTION_TIMER_EXPIRED,
+                              Thread->ResourceUsage.UserCycles);
+    }
+
+    //
+    // Potentially expire the profiling timer. The kernel time might tear, so
+    // do a torn read and if it succeeds, do a legit read. If the torn read
+    // results in a false negative then the timer will be a little late, but
+    // will expire on the next check.
+    //
+
+    if ((Thread->ProfileTimer.DueTime != 0) &&
+        ((Thread->ResourceUsage.UserCycles +
+          Thread->ResourceUsage.KernelCycles) >=
+         Thread->ProfileTimer.DueTime)) {
+
+        PspGetThreadResourceUsage(Thread, &Usage);
+        CurrentCycles = Usage.UserCycles + Usage.KernelCycles;
+        if (CurrentCycles >= Thread->ProfileTimer.DueTime) {
+            PspExpireRuntimeTimer(Thread,
+                                  &(Thread->ProfileTimer),
+                                  SIGNAL_PROFILE_TIMER,
+                                  CurrentCycles);
+        }
+    }
+
     return;
 }
 
@@ -452,6 +704,147 @@ Return Value:
 //
 // --------------------------------------------------------- Internal Functions
 //
+
+KSTATUS
+PspCreateTimer (
+    PKPROCESS Process,
+    PPROCESS_TIMER *Timer
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to create and add a new process timer.
+
+Arguments:
+
+    Process - Supplies a pointer to the process that owns the timer.
+
+    Timer - Supplies a pointer where a pointer to the new timer is returned on
+        success.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    PPROCESS_TIMER PreviousTimer;
+    PPROCESS_TIMER ProcessTimer;
+    KSTATUS Status;
+
+    Status = PspCreateProcessTimer(Process, &ProcessTimer);
+    if (!KSUCCESS(Status)) {
+        goto CreateTimerEnd;
+    }
+
+    ProcessTimer->SignalQueueEntry.Parameters.SignalCode = SIGNAL_CODE_TIMER;
+
+    //
+    // Take a reference on the process to avoid a situation where the
+    // process is destroyed before the work item gets around to running.
+    //
+
+    ObAddReference(Process);
+
+    //
+    // Insert this timer in the process. Assign the timer the ID of the
+    // last timer in the list plus one.
+    //
+
+    KeAcquireQueuedLock(Process->QueuedLock);
+    if (LIST_EMPTY(&(Process->TimerList)) != FALSE) {
+        ProcessTimer->TimerNumber = 1;
+
+    } else {
+        PreviousTimer = LIST_VALUE(Process->TimerList.Previous,
+                                   PROCESS_TIMER,
+                                   ListEntry);
+
+        ProcessTimer->TimerNumber = PreviousTimer->TimerNumber + 1;
+    }
+
+    INSERT_BEFORE(&(ProcessTimer->ListEntry), &(Process->TimerList));
+    KeReleaseQueuedLock(Process->QueuedLock);
+
+CreateTimerEnd:
+    *Timer = ProcessTimer;
+    return Status;
+}
+
+KSTATUS
+PspSetTimer (
+    PKPROCESS Process,
+    PPROCESS_TIMER Timer,
+    PULONGLONG DueTime,
+    PULONGLONG Period
+    )
+
+/*++
+
+Routine Description:
+
+    This routine attempts to arm a process timer. This routien assumes the
+    process lock is already held.
+
+Arguments:
+
+    Process - Supplies a pointer to the process that owns the timer.
+
+    Timer - Supplies a pointer where a pointer to the new timer is returned on
+        success.
+
+    DueTime - Supplies the new due time in time counter ticks. Returns the
+        previous due time.
+
+    Period - Supplies the new interval in time counter ticks. Returns the
+        previous interval.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    ULONGLONG OriginalDueTime;
+    ULONGLONG OriginalPeriod;
+    KSTATUS Status;
+
+    ASSERT(KeIsQueuedLockHeld(Process->QueuedLock) != FALSE);
+
+    OriginalDueTime = KeGetTimerDueTime(Timer->Timer);
+    OriginalPeriod = Timer->Interval;
+    if (Timer->DueTime != 0) {
+        KeCancelTimer(Timer->Timer);
+    }
+
+    Timer->DueTime = *DueTime;
+    Timer->Interval = *Period;
+    if (Timer->DueTime != 0) {
+        Status = KeQueueTimer(Timer->Timer,
+                              TimerQueueSoftWake,
+                              Timer->DueTime,
+                              Timer->Interval,
+                              0,
+                              Timer->Dpc);
+
+        if (!KSUCCESS(Status)) {
+            goto SetTimerEnd;
+        }
+    }
+
+    Status = STATUS_SUCCESS;
+
+SetTimerEnd:
+    *DueTime = OriginalDueTime;
+    *Period = OriginalPeriod;
+    return Status;
+}
 
 KSTATUS
 PspCreateProcessTimer (
@@ -858,3 +1251,72 @@ Return Value:
 
     return;
 }
+
+VOID
+PspExpireRuntimeTimer (
+    PKTHREAD Thread,
+    PRUNTIME_TIMER Timer,
+    ULONG Signal,
+    ULONGLONG CurrentTime
+    )
+
+/*++
+
+Routine Description:
+
+    This routine is called when a runtime timer expires.
+
+Arguments:
+
+    Thread - Supplies a pointer to the current thread.
+
+    Timer - Supplies a pointer to the thread's runtime timer that expired.
+
+    Signal - Supplies the signal to send the current process.
+
+    CurrentTime - Supplies the current user or user/kernel time, for rearming
+        of periodic timers.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    ULONGLONG NextTime;
+
+    //
+    // Fire off a signal to the process as a whole.
+    //
+
+    PsSignalProcess(Thread->OwningProcess, Signal, NULL);
+
+    //
+    // Rearm the timer if it's periodic.
+    //
+
+    if (Timer->Period != 0) {
+        NextTime = Timer->DueTime + Timer->Period;
+        while ((NextTime > Timer->DueTime) && (NextTime <= CurrentTime)) {
+            NextTime += Timer->Period;
+        }
+
+        if (NextTime <= Timer->DueTime) {
+            NextTime = 0;
+        }
+
+        Timer->DueTime = NextTime;
+
+    //
+    // This was a one-shot timer. Disable it now.
+    //
+
+    } else {
+        Timer->DueTime = 0;
+    }
+
+    return;
+}
+

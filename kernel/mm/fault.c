@@ -326,6 +326,7 @@ HandleFaultEnd:
     // (such as perhaps a segmentation fault signal).
     //
 
+    PsCheckRuntimeTimers(Thread);
     PsDispatchPendingSignals(Thread, TrapFrame);
     return;
 }

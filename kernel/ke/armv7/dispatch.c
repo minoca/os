@@ -285,6 +285,7 @@ Return Value:
             PsSignalThread(Thread, SIGNAL_TRAP, NULL);
         }
 
+        PsCheckRuntimeTimers(Thread);
         PsDispatchPendingSignals(Thread, TrapFrame);
         KeBeginCycleAccounting(PreviousPeriod);
 

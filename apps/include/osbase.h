@@ -2925,6 +2925,29 @@ Return Value:
 --*/
 
 OS_API
+ULONGLONG
+OsGetProcessorCounterFrequency (
+    VOID
+    );
+
+/*++
+
+Routine Description:
+
+    This routine returns the frequency of the boot processor counter.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the frequency, in Hertz (ticks per second) of the boot processor
+    counter.
+
+--*/
+
+OS_API
 VOID
 OsConvertSystemTimeToTimeCounter (
     PSYSTEM_TIME SystemTime,
@@ -3249,6 +3272,84 @@ Arguments:
     Timer - Supplies the timer to set.
 
     Information - Supplies a pointer to the information to set.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+OS_API
+KSTATUS
+OsGetITimer (
+    ITIMER_TYPE Type,
+    PULONGLONG DueTime,
+    PULONGLONG Period
+    );
+
+/*++
+
+Routine Description:
+
+    This routine gets the current value of one of the per-thread interval
+    timers.
+
+Arguments:
+
+    Type - Supplies the timer type. Valid values are ITimerReal, which tracks
+        wall clock time, ITimerVirtual, which tracks user mode CPU cycles
+        spent in this thread, and ITimerProfile, which tracks user and kernel
+        CPU cycles spent in this thread.
+
+    DueTime - Supplies a pointer where the relative due time will be returned
+        for this timer. Zero will be returned if the timer is not currently
+        armed or has already expired. The units here are time counter ticks for
+        the real timer, and processor counter ticks for the virtual and profile
+        timers.
+
+    Period - Supplies a pointer where the periodic interval of the timer
+        will be returned. Zero indicates the timer is not set to rearm itself.
+        The units here are time counter ticks for the real timer, and processor
+        counter ticks for the firtual and profile timers.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+OS_API
+KSTATUS
+OsSetITimer (
+    ITIMER_TYPE Type,
+    PULONGLONG DueTime,
+    PULONGLONG Period
+    );
+
+/*++
+
+Routine Description:
+
+    This routine sets the current value of one of the per-thread interval
+    timers.
+
+Arguments:
+
+    Type - Supplies the timer type. Valid values are ITimerReal, which tracks
+        wall clock time, ITimerVirtual, which tracks user mode CPU cycles
+        spent in this thread, and ITimerProfile, which tracks user and kernel
+        CPU cycles spent in this thread.
+
+    DueTime - Supplies a pointer to the relative time to set in the timer.
+        Supply zero to disable the timer. The units here are time counter ticks
+        for the real timer, and processor counter ticks for the virtual and
+        profile timers. On output, this will contain the remaining time left on
+        the previously set value for the timer.
+
+    Period - Supplies a pointer to the periodic interval to set. Set zero to
+        make the timer only fire once. The units here are time counter ticks
+        for the real timer, and processor counter ticks for the firtual and
+        profile timers. On output, the previous period will be returned.
 
 Return Value:
 

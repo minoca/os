@@ -58,6 +58,14 @@ OspTimerControl (
     PTIMER_INFORMATION Information
     );
 
+KSTATUS
+OspSetITimer (
+    BOOL Set,
+    ITIMER_TYPE Type,
+    PULONGLONG DueTime,
+    PULONGLONG Period
+    );
+
 VOID
 OspGetTimeOffset (
     PSYSTEM_TIME TimeOffset
@@ -174,6 +182,37 @@ Return Value:
 
     UserSharedData = OspGetUserSharedData();
     return UserSharedData->TimeCounterFrequency;
+}
+
+OS_API
+ULONGLONG
+OsGetProcessorCounterFrequency (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine returns the frequency of the boot processor counter.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the frequency, in Hertz (ticks per second) of the boot processor
+    counter.
+
+--*/
+
+{
+
+    PUSER_SHARED_DATA UserSharedData;
+
+    UserSharedData = OspGetUserSharedData();
+    return UserSharedData->ProcessorCounterFrequency;
 }
 
 OS_API
@@ -819,6 +858,94 @@ Return Value:
 
 OS_API
 KSTATUS
+OsGetITimer (
+    ITIMER_TYPE Type,
+    PULONGLONG DueTime,
+    PULONGLONG Period
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the current value of one of the per-thread interval
+    timers.
+
+Arguments:
+
+    Type - Supplies the timer type. Valid values are ITimerReal, which tracks
+        wall clock time, ITimerVirtual, which tracks user mode CPU cycles
+        spent in this thread, and ITimerProfile, which tracks user and kernel
+        CPU cycles spent in this thread.
+
+    DueTime - Supplies a pointer where the relative due time will be returned
+        for this timer. Zero will be returned if the timer is not currently
+        armed or has already expired. The units here are time counter ticks for
+        the real timer, and processor counter ticks for the virtual and profile
+        timers.
+
+    Period - Supplies a pointer where the periodic interval of the timer
+        will be returned. Zero indicates the timer is not set to rearm itself.
+        The units here are time counter ticks for the real timer, and processor
+        counter ticks for the firtual and profile timers.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    return OspSetITimer(FALSE, Type, DueTime, Period);
+}
+
+OS_API
+KSTATUS
+OsSetITimer (
+    ITIMER_TYPE Type,
+    PULONGLONG DueTime,
+    PULONGLONG Period
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the current value of one of the per-thread interval
+    timers.
+
+Arguments:
+
+    Type - Supplies the timer type. Valid values are ITimerReal, which tracks
+        wall clock time, ITimerVirtual, which tracks user mode CPU cycles
+        spent in this thread, and ITimerProfile, which tracks user and kernel
+        CPU cycles spent in this thread.
+
+    DueTime - Supplies a pointer to the relative time to set in the timer.
+        Supply zero to disable the timer. The units here are time counter ticks
+        for the real timer, and processor counter ticks for the virtual and
+        profile timers. On output, this will contain the remaining time left on
+        the previously set value for the timer.
+
+    Period - Supplies a pointer to the periodic interval to set. Set zero to
+        make the timer only fire once. The units here are time counter ticks
+        for the real timer, and processor counter ticks for the firtual and
+        profile timers. On output, the previous period will be returned.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    return OspSetITimer(TRUE, Type, DueTime, Period);
+}
+
+OS_API
+KSTATUS
 OsDelayExecution (
     BOOL TimeTicks,
     ULONGLONG Interval
@@ -1009,6 +1136,56 @@ Return Value:
     }
 
     return Parameters.Status;
+}
+
+KSTATUS
+OspSetITimer (
+    BOOL Set,
+    ITIMER_TYPE Type,
+    PULONGLONG DueTime,
+    PULONGLONG Period
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets or sets the current value of one of the per-thread
+    interval timers.
+
+Arguments:
+
+    Set - Supplies a boolean indicating whether to get or set the interval
+        timer.
+
+    Type - Supplies the timer type.
+
+    DueTime - Supplies a pointer that for set operations takes the relative
+        due time in ticks (either time counter or processor counter). On
+        output, returns the previous due time relative to now.
+
+    Period - Supplies a pointer that for set operations take the periodic
+        interval to set. On output, returns the previous period for both get
+        and set operations.
+
+Return Value:
+
+    Status code.
+
+--*/
+
+{
+
+    SYSTEM_CALL_SET_ITIMER Request;
+
+    Request.Set = Set;
+    Request.Type = Type;
+    Request.DueTime = *DueTime;
+    Request.Period = *Period;
+    OsSystemCall(SystemCallSetITimer, &Request);
+    *DueTime = Request.DueTime;
+    *Period = Request.Period;
+    return Request.Status;
 }
 
 VOID
