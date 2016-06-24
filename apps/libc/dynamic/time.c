@@ -61,6 +61,11 @@ Environment:
 
 #define IS_PROCESS_CPUTIME_ID(_ClockId) ((pid_t)(_ClockId) < 0)
 
+#define ASSERT_ITIMER_TYPES_EQUIVALENT()        \
+    assert((ITIMER_REAL == ITimerReal) &&       \
+           (ITIMER_VIRTUAL == ITimerVirtual) && \
+           (ITIMER_PROF == ITimerProfile))
+
 //
 // ---------------------------------------------------------------- Definitions
 //
@@ -2093,6 +2098,141 @@ Return Value:
     }
 
     return Information.OverflowCount;
+}
+
+LIBC_API
+int
+getitimer (
+    int Type,
+    struct itimerval *CurrentValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine gets the current value of one of the interval timers.
+
+Arguments:
+
+    Type - Supplies the timer type to get information for. See ITIMER_*
+        definitions for details.
+
+    CurrentValue - Supplies a pointer where the current due time and period of
+        the timer will be returned, in relative seconds from now. Zero will
+        be returned in the value portion if the timer is not currently armed
+        or has already expired.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+{
+
+    ULONGLONG DueTime;
+    ULONGLONG Frequency;
+    ULONGLONG Period;
+    KSTATUS Status;
+
+    ASSERT_ITIMER_TYPES_EQUIVALENT();
+
+    if (Type == ITIMER_REAL) {
+        Frequency = OsGetTimeCounterFrequency();
+
+    } else {
+        Frequency = OsGetProcessorCounterFrequency();
+    }
+
+    Status = OsGetITimer(Type, &DueTime, &Period);
+    if (!KSUCCESS(Status)) {
+        errno = ClConvertKstatusToErrorNumber(Status);
+        return -1;
+    }
+
+    ClpConvertCounterToTimeValue(DueTime, Frequency, &(CurrentValue->it_value));
+    ClpConvertCounterToTimeValue(Period,
+                                 Frequency,
+                                 &(CurrentValue->it_interval));
+
+    return 0;
+}
+
+LIBC_API
+int
+setitimer (
+    int Type,
+    const struct itimerval *NewValue,
+    struct itimerval *OldValue
+    )
+
+/*++
+
+Routine Description:
+
+    This routine sets the current value of one of the interval timers.
+
+Arguments:
+
+    Type - Supplies the timer type to get information for. See ITIMER_*
+        definitions for details.
+
+    NewValue - Supplies a pointer to the new relative value and period to set
+        in the timer.
+
+    OldValue - Supplies an optional pointer where the remaining time left
+        on the timer and the period before the set operation will be returned.
+
+Return Value:
+
+    0 on success.
+
+    -1 on failure, and errno will be set to contain more information.
+
+--*/
+
+{
+
+    ULONGLONG DueTime;
+    ULONGLONG Frequency;
+    ULONGLONG Period;
+    KSTATUS Status;
+
+    ASSERT_ITIMER_TYPES_EQUIVALENT();
+
+    if ((NewValue->it_value.tv_usec >= MICROSECONDS_PER_SECOND) ||
+        (NewValue->it_interval.tv_usec >= MICROSECONDS_PER_SECOND)) {
+
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (Type == ITIMER_REAL) {
+        Frequency = OsGetTimeCounterFrequency();
+
+    } else {
+        Frequency = OsGetProcessorCounterFrequency();
+    }
+
+    ClpConvertTimeValueToCounter(&DueTime, Frequency, &(NewValue->it_value));
+    ClpConvertTimeValueToCounter(&Period, Frequency, &(NewValue->it_interval));
+    Status = OsSetITimer(Type, &DueTime, &Period);
+    if (!KSUCCESS(Status)) {
+        errno = ClConvertKstatusToErrorNumber(Status);
+        return -1;
+    }
+
+    if (OldValue != NULL) {
+        ClpConvertCounterToTimeValue(DueTime, Frequency, &(OldValue->it_value));
+        ClpConvertCounterToTimeValue(Period,
+                                     Frequency,
+                                     &(OldValue->it_interval));
+    }
+
+    return 0;
 }
 
 LIBC_API

@@ -32,6 +32,7 @@ Environment:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -91,10 +92,22 @@ Environment:
 
 ULONG
 RunAllTimerTests (
+    VOID
     );
 
 ULONG
 RunTimerTest (
+    VOID
+    );
+
+ULONG
+RunITimerTest (
+    VOID
+    );
+
+VOID
+ITimerTestSignalHandler (
+    INT SignalNumber
     );
 
 VOID
@@ -120,6 +133,19 @@ BOOL TimerTestVerbose = TRUE;
 
 timer_t TestTimers[TEST_TIMER_COUNT];
 volatile int TestTimerCount[TEST_TIMER_COUNT];
+
+volatile int TestTimerSignals[NSIG];
+int TestITimerTypes[3] = {
+    ITIMER_REAL,
+    ITIMER_VIRTUAL,
+    ITIMER_PROF
+};
+
+int TestITimerTypeSignals[3] = {
+    SIGALRM,
+    SIGVTALRM,
+    SIGPROF
+};
 
 //
 // ------------------------------------------------------------------ Functions
@@ -170,6 +196,7 @@ Return Value:
 
 ULONG
 RunAllTimerTests (
+    VOID
     )
 
 /*++
@@ -196,8 +223,14 @@ Return Value:
     Failures += RunTimerTest();
     if (Failures != 0) {
         PRINT_ERROR("*** %d failures in timer test. ***\n", Failures);
+    }
 
-    } else {
+    Failures += RunITimerTest();
+    if (Failures != 0) {
+        PRINT_ERROR("*** %d failures in itimer test. ***\n", Failures);
+    }
+
+    if (Failures == 0) {
         DEBUG_PRINT("All timer tests pass.\n");
     }
 
@@ -206,6 +239,7 @@ Return Value:
 
 ULONG
 RunTimerTest (
+    VOID
     )
 
 /*++
@@ -371,6 +405,270 @@ Return Value:
     }
 
     return Failures;
+}
+
+ULONG
+RunITimerTest (
+    VOID
+    )
+
+/*++
+
+Routine Description:
+
+    This routine tests user mode interval timers.
+
+Arguments:
+
+    None.
+
+Return Value:
+
+    Returns the number of failures in the test.
+
+--*/
+
+{
+
+    struct sigaction Action;
+    int Actual;
+    struct timespec EndTime;
+    int Expected;
+    ULONG Failures;
+    struct sigaction OldAlarm;
+    struct sigaction OldProfile;
+    struct sigaction OldVirtualAlarm;
+    int Signal;
+    struct timespec Time;
+    int Tolerance;
+    int Type;
+    struct itimerval Value;
+
+    Failures = 0;
+    memset((void *)TestTimerSignals, 0, sizeof(TestTimerSignals));
+    memset(&Action, 0, sizeof(Action));
+    Action.sa_handler = ITimerTestSignalHandler;
+    if ((sigaction(SIGALRM, &Action, &OldAlarm) != 0) ||
+        (sigaction(SIGVTALRM, &Action, &OldVirtualAlarm) != 0) ||
+        (sigaction(SIGPROF, &Action, &OldProfile) != 0)) {
+
+        PRINT_ERROR("TimerTest: Failed to set signal handlers: %s.\n",
+                    strerror(errno));
+
+        return 1;
+    }
+
+    //
+    // Ensure that wacky values don't work.
+    //
+
+    memset(&Value, 0, sizeof(Value));
+    if ((setitimer(33, &Value, NULL) != -1) || (errno != EINVAL)) {
+        PRINT_ERROR("TimerTest: Wacky itimer type succeeded.\n");
+        Failures += 1;
+    }
+
+    Value.it_value.tv_usec = 1000001;
+    if ((setitimer(ITIMER_REAL, &Value, NULL) != -1) || (errno != EINVAL)) {
+        PRINT_ERROR("TimerTest: Wacky itimer value succeeded.\n");
+        Failures += 1;
+    }
+
+    Value.it_value.tv_sec = 2;
+    Value.it_value.tv_usec = 500000;
+    Value.it_interval.tv_usec = 1000001;
+    if ((setitimer(ITIMER_REAL, &Value, NULL) != -1) || (errno != EINVAL)) {
+        PRINT_ERROR("TimerTest: Wacky itimer period succeeded.\n");
+        Failures += 1;
+    }
+
+    //
+    // Getting the timers before setting them should return zero.
+    //
+
+    for (Type = 0; Type < 3; Type += 1) {
+        if (getitimer(TestITimerTypes[Type], &Value) != 0) {
+            PRINT_ERROR("TimerTest: getitimer failed.\n");
+            Failures += 1;
+        }
+
+        if ((Value.it_value.tv_sec | Value.it_value.tv_usec) != 0) {
+            PRINT_ERROR("TimerTest: getitimer had a value!\n");
+            Failures += 1;
+        }
+    }
+
+    //
+    // Create timers with a period.
+    //
+
+    for (Type = 0; Type < 3; Type += 1) {
+        Value.it_value.tv_sec = 2;
+        Value.it_value.tv_usec = 500000;
+        Value.it_interval.tv_sec = 1;
+        Value.it_interval.tv_usec = 250000;
+
+        //
+        // Get aligned to a one second boundary.
+        //
+
+        if (clock_gettime(CLOCK_REALTIME, &Time) != 0) {
+            PRINT_ERROR("TimerTest: clock_gettime(CLOCK_REALTIME) failed.\n");
+            Failures += 1;
+        }
+
+        do {
+            clock_gettime(CLOCK_REALTIME, &EndTime);
+
+        } while (Time.tv_sec == EndTime.tv_sec);
+
+        //
+        // Set the timer.
+        //
+
+        if (setitimer(TestITimerTypes[Type], &Value, NULL) != 0) {
+            PRINT_ERROR("TimerTest: setitimer failed.\n");
+            Failures += 1;
+        }
+
+        if (getitimer(TestITimerTypes[Type], &Value) != 0) {
+            PRINT_ERROR("TimerTest: getitimer failed.\n");
+            Failures += 1;
+        }
+
+        if ((Value.it_value.tv_sec != 2) ||
+            (Value.it_value.tv_usec >= 500000) ||
+            (Value.it_interval.tv_sec != 1) ||
+            (abs(Value.it_interval.tv_usec - 250000) > 1000)) {
+
+            PRINT_ERROR("TimerTest: getitimer value was off: "
+                        "%lld.%d %lld.%d.\n",
+                        (LONGLONG)Value.it_value.tv_sec,
+                        Value.it_value.tv_usec,
+                        (LONGLONG)Value.it_interval.tv_sec,
+                        Value.it_interval.tv_usec);
+
+            Failures += 1;
+        }
+
+        //
+        // 2.5 + (4 * 1.25) = 7.5. So wait 8 seconds. Sleep for the first 3,
+        // which should not affect the real timer but should delay the virtual
+        // ones.
+        //
+
+        sleep(3);
+        clock_gettime(CLOCK_REALTIME, &Time);
+        if (TestITimerTypes[Type] == ITIMER_REAL) {
+            if (Time.tv_sec != EndTime.tv_sec + 2) {
+                PRINT_ERROR("TimerTest: RealTime itimer did not interrupt "
+                            "sleep.\n");
+
+                Failures += 1;
+            }
+
+        } else {
+            if (Time.tv_sec != EndTime.tv_sec + 3) {
+                PRINT_ERROR("TimerTest: Virtual itimer interrupted sleep.\n");
+                Failures += 1;
+            }
+        }
+
+        //
+        // Busy spin for the remaining 5 or 5.5 seconds.
+        //
+
+        EndTime.tv_sec += 8;
+        do {
+            clock_gettime(CLOCK_REALTIME, &Time);
+
+        } while (Time.tv_sec < EndTime.tv_sec);
+
+        //
+        // Now stop the timer and see how many signals came in.
+        //
+
+        memset(&Value, 0, sizeof(Value));
+        if (setitimer(TestITimerTypes[Type], &Value, NULL) != 0) {
+            PRINT_ERROR("TimerTest: setitimer failed.\n");
+            Failures += 1;
+        }
+
+        Signal = TestITimerTypeSignals[Type];
+        Actual = TestTimerSignals[Signal];
+        TestTimerSignals[Signal] = 0;
+        if (TestITimerTypes[Type] == ITIMER_REAL) {
+            Expected = 5;
+            Tolerance = 0;
+
+        } else if (TestITimerTypes[Type] == ITIMER_PROF) {
+            Expected = 3;
+            Tolerance = 1;
+
+        } else {
+            Expected = 3;
+            Tolerance = 2;
+        }
+
+        if (!((Actual >= Expected - Tolerance) &&
+              (Actual <= Expected + Tolerance))) {
+
+            PRINT_ERROR("TimerTest: Expected %d interrupts for timer type "
+                        "%d (tolerance %d), got %d.\n",
+                        Expected,
+                        TestITimerTypes[Type],
+                        Tolerance,
+                        Actual);
+
+            Failures += 1;
+        }
+    }
+
+    //
+    // Ensure that there are no extra signals.
+    //
+
+    for (Signal = 0; Signal < NSIG; Signal += 1) {
+        if (TestTimerSignals[Signal] != 0) {
+            PRINT_ERROR("TimerTest: %d extra %d signals.\n",
+                        TestTimerSignals[Signal],
+                        Signal);
+
+            Failures += 1;
+        }
+    }
+
+    sigaction(SIGALRM, &OldAlarm, NULL);
+    sigaction(SIGVTALRM, &OldVirtualAlarm, NULL);
+    sigaction(SIGPROF, &OldProfile, NULL);
+    return Failures;
+}
+
+VOID
+ITimerTestSignalHandler (
+    INT SignalNumber
+    )
+
+/*++
+
+Routine Description:
+
+    This routine implements the signal handler for the interval timer test.
+
+Arguments:
+
+    SignalNumber - Supplies the incoming signal, always SIGALRM in this case.
+
+Return Value:
+
+    None.
+
+--*/
+
+{
+
+    TestTimerSignals[SignalNumber] += 1;
+    return;
 }
 
 VOID
